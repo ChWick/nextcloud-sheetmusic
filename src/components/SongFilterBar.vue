@@ -107,10 +107,10 @@ function clearAllFilters() {
 
 <style module>
 .filterBar {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)) auto;
+	display: flex;
+	flex-direction: row;
 	gap: 16px;
-	align-items: end;
+	align-items: flex-end;
 	padding: 12px 16px;
 	margin-bottom: 16px;
 	background-color: var(--color-background-hover);
@@ -122,6 +122,7 @@ function clearAllFilters() {
 	display: flex;
 	flex-direction: column;
 	gap: 4px;
+	flex: 1 1 0;
 	min-width: 0;
 }
 
@@ -138,12 +139,7 @@ function clearAllFilters() {
 .actions {
 	display: flex;
 	align-items: center;
+	flex-shrink: 0;
 	padding-bottom: 2px;
-}
-
-@media (max-width: 768px) {
-	.filterBar {
-		grid-template-columns: 1fr;
-	}
 }
 </style>
