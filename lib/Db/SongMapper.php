@@ -130,4 +130,132 @@ class SongMapper {
 	public function findSongs(string $databasePath): array {
 		return $this->findLibraryData($databasePath)['songs'];
 	}
+
+	/**
+	 * @param list<int> $composerIds
+	 * @param list<int> $bookIds
+	 * @param list<int> $collectionIds
+	 */
+	public function updateSong(
+		string $databasePath,
+		int $songId,
+		string $title,
+		array $composerIds,
+		array $bookIds,
+		array $collectionIds,
+	): void {
+		$database = new PDO('sqlite:' . $databasePath, options: [
+			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+		]);
+
+		$tablesStatement = $database->query("SELECT name FROM sqlite_master WHERE type='table'");
+		/** @var list<string> $existingTables */
+		$existingTables = $tablesStatement !== false ? $tablesStatement->fetchAll(PDO::FETCH_COLUMN) : [];
+
+		// Update Song Title and SortTitle
+		$stmt = $database->prepare('UPDATE Songs SET Title = :title, SortTitle = :sortTitle WHERE Id = :id');
+		$stmt->execute([
+			':title' => $title,
+			':sortTitle' => $title,
+			':id' => $songId,
+		]);
+
+		// Update Composers
+		if (in_array('ComposerSongs', $existingTables, true)) {
+			$delStmt = $database->prepare('DELETE FROM ComposerSongs WHERE SongId = :songId');
+			$delStmt->execute([':songId' => $songId]);
+
+			$insStmt = $database->prepare('INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (:composerId, :songId)');
+			foreach ($composerIds as $composerId) {
+				$insStmt->execute([
+					':composerId' => $composerId,
+					':songId' => $songId,
+				]);
+			}
+		}
+
+		// Update Books
+		if (in_array('BookSongs', $existingTables, true)) {
+			$delStmt = $database->prepare('DELETE FROM BookSongs WHERE SongId = :songId');
+			$delStmt->execute([':songId' => $songId]);
+
+			$insStmt = $database->prepare('INSERT INTO BookSongs (BookId, SongId) VALUES (:bookId, :songId)');
+			foreach ($bookIds as $bookId) {
+				$insStmt->execute([
+					':bookId' => $bookId,
+					':songId' => $songId,
+				]);
+			}
+		}
+
+		// Update Collections
+		if (in_array('CollectionSong', $existingTables, true)) {
+			$delStmt = $database->prepare('DELETE FROM CollectionSong WHERE SongId = :songId');
+			$delStmt->execute([':songId' => $songId]);
+
+			$insStmt = $database->prepare('INSERT INTO CollectionSong (CollectionId, SongId) VALUES (:collectionId, :songId)');
+			foreach ($collectionIds as $collectionId) {
+				$insStmt->execute([
+					':collectionId' => $collectionId,
+					':songId' => $songId,
+				]);
+			}
+		}
+	}
+
+	public function setSongFile(string $databasePath, int $songId, string $filePath): void {
+		$database = new PDO('sqlite:' . $databasePath, options: [
+			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+		]);
+
+		$checkStmt = $database->prepare('SELECT Id FROM Files WHERE SongId = :songId LIMIT 1');
+		$checkStmt->execute([':songId' => $songId]);
+		$existing = $checkStmt->fetch();
+
+		if ($existing !== false) {
+			$updateStmt = $database->prepare('UPDATE Files SET Path = :path WHERE SongId = :songId');
+			$updateStmt->execute([
+				':path' => $filePath,
+				':songId' => $songId,
+			]);
+		} else {
+			$insertStmt = $database->prepare('INSERT INTO Files (SongId, Path) VALUES (:songId, :path)');
+			$insertStmt->execute([
+				':songId' => $songId,
+				':path' => $filePath,
+			]);
+		}
+	}
+
+	public function createComposer(string $databasePath, string $name): int {
+		$database = new PDO('sqlite:' . $databasePath, options: [
+			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+		]);
+		$stmt = $database->prepare('INSERT INTO Composer (Name) VALUES (:name)');
+		$stmt->execute([':name' => $name]);
+		return (int)$database->lastInsertId();
+	}
+
+	public function createBook(string $databasePath, string $title): int {
+		$database = new PDO('sqlite:' . $databasePath, options: [
+			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+		]);
+		$stmt = $database->prepare('INSERT INTO Books (Title) VALUES (:title)');
+		$stmt->execute([':title' => $title]);
+		return (int)$database->lastInsertId();
+	}
+
+	public function createCollection(string $databasePath, string $name): int {
+		$database = new PDO('sqlite:' . $databasePath, options: [
+			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+		]);
+		$stmt = $database->prepare('INSERT INTO Collections (Name) VALUES (:name)');
+		$stmt->execute([':name' => $name]);
+		return (int)$database->lastInsertId();
+	}
 }

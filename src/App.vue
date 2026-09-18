@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { INode } from '@nextcloud/files'
-import type { Book, Collection, Composer, Song } from './types/song'
+import type { Book, Collection, Composer, LibraryData, Song } from './types/song'
 
 import axios from '@nextcloud/axios'
 import { FilePickerClosed, getFilePickerBuilder } from '@nextcloud/dialogs'
@@ -62,6 +62,21 @@ const filteredSongs = computed(() => {
 	})
 })
 
+function handleLibraryDataUpdate(data: LibraryData) {
+	songs.value = data.songs ?? []
+	composers.value = data.composers ?? []
+	books.value = data.books ?? []
+	collections.value = data.collections ?? []
+
+	if (selectedSong.value) {
+		const currentId = selectedSong.value.id
+		const updatedSong = songs.value.find((s) => s.id === currentId)
+		if (updatedSong) {
+			selectedSong.value = updatedSong
+		}
+	}
+}
+
 async function selectLibrary(library: string) {
 	selectedLibrary.value = library
 	songs.value = []
@@ -79,10 +94,7 @@ async function selectLibrary(library: string) {
 		const response = await axios.get(generateOcsUrl('/apps/mobilesheetsmanager/api/songs'), {
 			params: { path: library },
 		})
-		songs.value = response.data.ocs.data.songs ?? []
-		composers.value = response.data.ocs.data.composers ?? []
-		books.value = response.data.ocs.data.books ?? []
-		collections.value = response.data.ocs.data.collections ?? []
+		handleLibraryDataUpdate(response.data.ocs.data as LibraryData)
 	} catch {
 		fileError.value = t('mobilesheetsmanager', 'Could not load the songs in this library.')
 	} finally {
@@ -199,9 +211,11 @@ async function addLibrary() {
 					</ul>
 					<SongViewer
 						:song="selectedSong"
+						:library-path="selectedLibrary"
 						:composers="composers"
 						:books="books"
-						:collections="collections" />
+						:collections="collections"
+						@saved="handleLibraryDataUpdate" />
 				</div>
 			</template>
 			<p v-if="fileError" :class="$style.error" role="alert">{{ fileError }}</p>

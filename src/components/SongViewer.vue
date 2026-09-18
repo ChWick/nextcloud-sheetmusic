@@ -1,33 +1,42 @@
 <script setup lang="ts">
-import type { Book, Collection, Composer, Song } from '../types/song'
+import type { Book, Collection, Composer, LibraryData, Song } from '../types/song'
 
 import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
+import NcButton from '@nextcloud/vue/components/NcButton'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist'
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { computed, nextTick, ref, watch } from 'vue'
+import SongEditor from './SongEditor.vue'
 
 const props = withDefaults(
 	defineProps<{
 		song?: Song | null
+		libraryPath?: string
 		composers?: Composer[]
 		books?: Book[]
 		collections?: Collection[]
 	}>(),
 	{
 		song: null,
+		libraryPath: '',
 		composers: () => [],
 		books: () => [],
 		collections: () => [],
 	},
 )
 
+const emit = defineEmits<{
+	saved: [data: LibraryData]
+}>()
+
 GlobalWorkerOptions.workerSrc = pdfWorker
 
 const pdfContainer = ref<HTMLElement>()
 const isLoading = ref(false)
 const errorMessage = ref('')
+const isEditing = ref(false)
 let currentLoadId = 0
 
 const songComposers = computed(() => {
@@ -51,9 +60,15 @@ const songCollections = computed(() => {
 	return props.collections.filter((c) => props.song?.collectionIds?.includes(c.id))
 })
 
+function handleSaved(data: LibraryData) {
+	isEditing.value = false
+	emit('saved', data)
+}
+
 watch(
 	() => props.song,
 	async (newSong) => {
+		isEditing.value = false
 		const loadId = ++currentLoadId
 		errorMessage.value = ''
 
@@ -127,8 +142,17 @@ watch(
 <template>
 	<div :class="$style.container">
 		<header v-if="song" :class="$style.header">
-			<h3 :class="$style.title">{{ song.title }}</h3>
-			<div v-if="songComposers.length > 0 || songBooks.length > 0 || songCollections.length > 0" :class="$style.metadata">
+			<div :class="$style.headerTop">
+				<h3 :class="$style.title">{{ song.title }}</h3>
+				<NcButton
+					v-if="!isEditing"
+					variant="secondary"
+					@click="isEditing = true">
+					{{ t('mobilesheetsmanager', 'Edit song') }}
+				</NcButton>
+			</div>
+
+			<div v-if="!isEditing && (songComposers.length > 0 || songBooks.length > 0 || songCollections.length > 0)" :class="$style.metadata">
 				<div v-if="songComposers.length > 0" :class="$style.metaItem">
 					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Composer:') }}</span>
 					<span>{{ songComposers.map((c) => c.name).join(', ') }}</span>
@@ -144,23 +168,37 @@ watch(
 			</div>
 		</header>
 
-		<div v-if="isLoading" :class="$style.loading">
-			<NcLoadingIcon :size="32" :name="t('mobilesheetsmanager', 'Loading song...')" />
-		</div>
+		<!-- Song Editor View -->
+		<SongEditor
+			v-if="song && isEditing"
+			:song="song"
+			:library-path="libraryPath"
+			:composers="composers"
+			:books="books"
+			:collections="collections"
+			@saved="handleSaved"
+			@cancel="isEditing = false" />
 
-		<p v-if="errorMessage" :class="$style.error" role="alert">
-			{{ errorMessage }}
-		</p>
+		<!-- PDF Viewer View -->
+		<template v-else>
+			<div v-if="isLoading" :class="$style.loading">
+				<NcLoadingIcon :size="32" :name="t('mobilesheetsmanager', 'Loading song...')" />
+			</div>
 
-		<div
-			v-show="song && !isLoading && !errorMessage"
-			ref="pdfContainer"
-			:class="$style.pdfViewer"
-			:aria-label="song?.title" />
+			<p v-if="errorMessage" :class="$style.error" role="alert">
+				{{ errorMessage }}
+			</p>
 
-		<div v-if="!song" :class="$style.emptyState">
-			<p>{{ t('mobilesheetsmanager', 'Select a song to view.') }}</p>
-		</div>
+			<div
+				v-show="song && !isLoading && !errorMessage"
+				ref="pdfContainer"
+				:class="$style.pdfViewer"
+				:aria-label="song?.title" />
+
+			<div v-if="!song" :class="$style.emptyState">
+				<p>{{ t('mobilesheetsmanager', 'Select a song to view.') }}</p>
+			</div>
+		</template>
 	</div>
 </template>
 
@@ -176,8 +214,16 @@ watch(
 	margin-bottom: 16px;
 }
 
+.headerTop {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 16px;
+	margin-bottom: 8px;
+}
+
 .title {
-	margin: 0 0 8px;
+	margin: 0;
 	font-size: 1.2rem;
 	font-weight: 600;
 }

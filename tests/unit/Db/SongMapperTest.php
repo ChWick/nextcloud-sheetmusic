@@ -82,4 +82,43 @@ final class SongMapperTest extends TestCase {
 			['id' => 1000, 'name' => 'Jazz Standards'],
 		], $data['collections']);
 	}
+
+	public function testUpdateSongAndAssociations(): void {
+		$mapper = new SongMapper();
+		$mapper->updateSong($this->databasePath, 2, 'Alpha (Updated)', [10], [100], [1000]);
+
+		$data = $mapper->findLibraryData($this->databasePath);
+		$updatedSong = array_values(array_filter($data['songs'], fn($s) => $s['id'] === 2))[0];
+
+		$this->assertSame('Alpha (Updated)', $updatedSong['title']);
+		$this->assertSame([10], $updatedSong['composerIds']);
+		$this->assertSame([100], $updatedSong['bookIds']);
+		$this->assertSame([1000], $updatedSong['collectionIds']);
+	}
+
+	public function testSetSongFile(): void {
+		$mapper = new SongMapper();
+		$mapper->setSongFile($this->databasePath, 2, '/remote.php/dav/files/admin/Noten/AlphaNew.pdf');
+
+		$data = $mapper->findLibraryData($this->databasePath);
+		$updatedSong = array_values(array_filter($data['songs'], fn($s) => $s['id'] === 2))[0];
+
+		$this->assertSame('/remote.php/dav/files/admin/Noten/AlphaNew.pdf', $updatedSong['filePath']);
+	}
+
+	public function testCreateEntities(): void {
+		$mapper = new SongMapper();
+		$composerId = $mapper->createComposer($this->databasePath, 'Mozart');
+		$bookId = $mapper->createBook($this->databasePath, 'Real Book 2');
+		$collectionId = $mapper->createCollection($this->databasePath, 'Classical');
+
+		$this->assertGreaterThan(0, $composerId);
+		$this->assertGreaterThan(0, $bookId);
+		$this->assertGreaterThan(0, $collectionId);
+
+		$data = $mapper->findLibraryData($this->databasePath);
+		$this->assertCount(3, $data['composers']);
+		$this->assertCount(2, $data['books']);
+		$this->assertCount(2, $data['collections']);
+	}
 }
