@@ -317,6 +317,57 @@ class ApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/songs/{id}/file/{fileId}/delete')]
+	public function deleteSongFile(int $id, int $fileId, ?string $path = null): DataResponse {
+		$path = $path ?? (string)$this->request->getParam('path', '');
+		if ($path === '') {
+			return new DataResponse([], Http::STATUS_BAD_REQUEST);
+		}
+		$path = '/' . ltrim($path, '/');
+
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		if (!$this->libraryMapper->findForUser($user->getUID(), $path)) {
+			return new DataResponse([], Http::STATUS_NOT_FOUND);
+		}
+
+		try {
+			$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+			$libraryNode = $userFolder->get(ltrim($path, '/'));
+			$databasePath = $libraryNode->getStorage()->getLocalFile($libraryNode->getInternalPath());
+			if ($databasePath === false) {
+				return new DataResponse([], Http::STATUS_NOT_FOUND);
+			}
+
+			$filePath = $this->songMapper->removeSongFile($databasePath, $id, $fileId);
+
+			if ($filePath !== null) {
+				$prefix = '/remote.php/dav/files/' . $user->getUID() . '/';
+				if (str_starts_with($filePath, $prefix)) {
+					$relPath = substr($filePath, strlen($prefix));
+					if ($userFolder->nodeExists($relPath)) {
+						$fileNode = $userFolder->get($relPath);
+						$fileNode->delete();
+					}
+				}
+			}
+
+			return new DataResponse($this->songMapper->findLibraryData($databasePath));
+		} catch (\Throwable $exception) {
+			$this->logger->error('Could not delete file for song', [
+				'exception' => $exception,
+				'path' => $path,
+				'songId' => $id,
+				'fileId' => $fileId,
+			]);
+			return new DataResponse([], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	#[NoAdminRequired]
 	#[ApiRoute(verb: 'POST', url: '/api/composers')]
 	public function createComposer(?string $path = null, ?string $name = null): DataResponse {
 		$path = $path ?? (string)$this->request->getParam('path', '');

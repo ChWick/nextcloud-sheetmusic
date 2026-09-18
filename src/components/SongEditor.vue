@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { INode } from '@nextcloud/files'
-import type { Book, Collection, Composer, LibraryData, Song } from '../types/song'
+import type { Book, Collection, Composer, LibraryData, Song, SongFile } from '../types/song'
 
 import axios from '@nextcloud/axios'
 import { FilePickerClosed, getFilePickerBuilder } from '@nextcloud/dialogs'
@@ -11,7 +11,7 @@ import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 
 const props = defineProps<{
 	song: Song
@@ -37,6 +37,31 @@ const selectedCollections = ref<Array<Collection | { name: string, id?: number }
 	props.collections.filter((c) => props.song.collectionIds?.includes(c.id)),
 )
 
+function getInitialFiles(s: Song): SongFile[] {
+	if (s.files && s.files.length > 0) {
+		return [...s.files]
+	}
+	if (s.filePath) {
+		return [{ id: 0, path: s.filePath }]
+	}
+	return []
+}
+
+const currentFiles = ref<SongFile[]>(getInitialFiles(props.song))
+const pendingDeleteFiles = ref<SongFile[]>([])
+
+watch(
+	() => props.song,
+	(newSong) => {
+		title.value = newSong.title
+		selectedComposers.value = props.composers.filter((c) => newSong.composerIds?.includes(c.id))
+		selectedBooks.value = props.books.filter((b) => newSong.bookIds?.includes(b.id))
+		selectedCollections.value = props.collections.filter((c) => newSong.collectionIds?.includes(c.id))
+		currentFiles.value = getInitialFiles(newSong)
+		pendingDeleteFiles.value = []
+	},
+)
+
 const isSaving = ref(false)
 const errorMessage = ref('')
 const successMessage = ref('')
@@ -48,6 +73,10 @@ const selectedNextcloudNode = ref<INode>()
 const attachAction = ref<'copy' | 'move'>('copy')
 const isAttachingFile = ref(false)
 
+function getFileName(filePath: string): string {
+	return filePath.split('/').pop() ?? filePath
+}
+
 function createComposerTag(newTag: string) {
 	return { name: newTag }
 }
@@ -58,6 +87,20 @@ function createBookTag(newTag: string) {
 
 function createCollectionTag(newTag: string) {
 	return { name: newTag }
+}
+
+function stageDeleteFile(file: SongFile) {
+	currentFiles.value = currentFiles.value.filter((f) => f.id !== file.id || f.path !== file.path)
+	if (!pendingDeleteFiles.value.some((f) => f.id === file.id && f.path === file.path)) {
+		pendingDeleteFiles.value.push(file)
+	}
+}
+
+function restoreDeletedFile(file: SongFile) {
+	pendingDeleteFiles.value = pendingDeleteFiles.value.filter((f) => f.id !== file.id || f.path !== file.path)
+	if (!currentFiles.value.some((f) => f.id === file.id && f.path === file.path)) {
+		currentFiles.value.push(file)
+	}
 }
 
 async function handleFileUpload(event: Event) {
@@ -88,7 +131,12 @@ async function handleFileUpload(event: Event) {
 			},
 		)
 		successMessage.value = t('mobilesheetsmanager', 'File uploaded successfully.')
-		emit('saved', response.data.ocs.data as LibraryData)
+		const data = response.data.ocs.data as LibraryData
+		const updated = data.songs.find((s) => s.id === props.song.id)
+		if (updated) {
+			currentFiles.value = getInitialFiles(updated)
+		}
+		emit('saved', data)
 	} catch {
 		errorMessage.value = t('mobilesheetsmanager', 'Failed to upload PDF file.')
 	} finally {
@@ -149,7 +197,12 @@ async function confirmAttachNextcloudFile() {
 		isAttachDialogOpen.value = false
 		selectedNextcloudNode.value = undefined
 		successMessage.value = t('mobilesheetsmanager', 'PDF file attached successfully.')
-		emit('saved', response.data.ocs.data as LibraryData)
+		const data = response.data.ocs.data as LibraryData
+		const updated = data.songs.find((s) => s.id === props.song.id)
+		if (updated) {
+			currentFiles.value = getInitialFiles(updated)
+		}
+		emit('saved', data)
 	} catch {
 		errorMessage.value = t('mobilesheetsmanager', 'Failed to attach PDF file.')
 	} finally {
@@ -167,6 +220,21 @@ async function saveSong() {
 	isSaving.value = true
 
 	try {
+		// Process pending file deletions
+		if (pendingDeleteFiles.value.length > 0) {
+			for (const file of pendingDeleteFiles.value) {
+				if (file.id > 0) {
+					await axios.post(
+						generateOcsUrl(`/apps/mobilesheetsmanager/api/songs/${props.song.id}/file/${file.id}/delete`),
+						{
+							path: props.libraryPath,
+						},
+					)
+				}
+			}
+			pendingDeleteFiles.value = []
+		}
+
 		// Resolve or create composers
 		const composerIds: number[] = []
 		for (const comp of selectedComposers.value) {
@@ -289,11 +357,48 @@ async function saveSong() {
 			</div>
 
 			<div :class="$style.fileSection">
-				<label :class="$style.label">{{ t('mobilesheetsmanager', 'PDF File') }}</label>
-				<p :class="$style.filePath">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Current file:') }}</span>
-					{{ song.filePath ?? t('mobilesheetsmanager', 'No file attached') }}
+				<label :class="$style.label">{{ t('mobilesheetsmanager', 'Attached PDF Files') }}</label>
+
+				<ul v-if="currentFiles.length > 0" :class="$style.fileList">
+					<li v-for="file in currentFiles" :key="file.id" :class="$style.fileItem">
+						<div :class="$style.fileInfo">
+							<span :class="$style.fileName">{{ getFileName(file.path) }}</span>
+							<span :class="$style.filePathText">{{ file.path }}</span>
+						</div>
+						<NcButton
+							type="button"
+							variant="error"
+							:class="$style.deleteButton"
+							:disabled="isSaving"
+							:aria-label="t('mobilesheetsmanager', 'Delete file {file}', { file: getFileName(file.path) })"
+							@click="stageDeleteFile(file)">
+							{{ t('mobilesheetsmanager', 'Delete') }}
+						</NcButton>
+					</li>
+				</ul>
+				<p v-else :class="$style.noFiles">
+					{{ t('mobilesheetsmanager', 'No PDF files attached to this song.') }}
 				</p>
+
+				<!-- Staged deletions notice -->
+				<div v-if="pendingDeleteFiles.length > 0" :class="$style.deletionWarning">
+					<div :class="$style.warningText">
+						<strong>{{ t('mobilesheetsmanager', 'Notice:') }}</strong>
+						{{ t('mobilesheetsmanager', '{count} file(s) marked for removal will be permanently deleted from the song and moved to your Nextcloud trash bin when you click "Save changes".', { count: pendingDeleteFiles.length }) }}
+					</div>
+					<ul :class="$style.pendingList">
+						<li v-for="file in pendingDeleteFiles" :key="file.id" :class="$style.pendingItem">
+							<span :class="$style.pendingName">{{ getFileName(file.path) }}</span>
+							<NcButton
+								type="button"
+								variant="tertiary"
+								size="small"
+								@click="restoreDeletedFile(file)">
+								{{ t('mobilesheetsmanager', 'Restore') }}
+							</NcButton>
+						</li>
+					</ul>
+				</div>
 
 				<div :class="$style.fileButtons">
 					<input
@@ -388,10 +493,12 @@ async function saveSong() {
 	display: flex;
 	flex-direction: column;
 	width: 100%;
+	box-sizing: border-box;
 	padding: 16px;
 	background: var(--color-main-background);
 	border: 1px solid var(--color-border);
 	border-radius: var(--border-radius-large, 8px);
+	min-width: 0;
 }
 
 .header {
@@ -409,12 +516,14 @@ async function saveSong() {
 	display: flex;
 	flex-direction: column;
 	gap: 16px;
+	min-width: 0;
 }
 
 .formGroup {
 	display: flex;
 	flex-direction: column;
 	gap: 6px;
+	min-width: 0;
 }
 
 .label {
@@ -423,26 +532,116 @@ async function saveSong() {
 	color: var(--color-text-maxcontrast);
 }
 
-.metaLabel {
-	font-weight: 600;
-	margin-right: 4px;
-}
-
 .fileSection {
 	display: flex;
 	flex-direction: column;
-	gap: 8px;
+	gap: 10px;
 	padding: 16px;
 	background-color: var(--color-background-hover);
 	border-radius: var(--border-radius, 4px);
 	margin-top: 8px;
+	min-width: 0;
+	box-sizing: border-box;
 }
 
-.filePath {
+.fileList {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	min-width: 0;
+}
+
+.fileItem {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 16px;
+	padding: 8px 12px;
+	background: var(--color-main-background);
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius, 4px);
+	min-width: 0;
+	box-sizing: border-box;
+}
+
+.fileInfo {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	flex: 1 1 0;
+	min-width: 0;
+	overflow: hidden;
+}
+
+.fileName {
+	font-weight: 600;
+	font-size: 0.95rem;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.filePathText {
+	font-size: 0.8rem;
+	color: var(--color-text-maxcontrast);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.deleteButton {
+	flex-shrink: 0;
+	min-width: 70px;
+	background-color: var(--color-error, #e9322d) !important;
+	color: var(--color-primary-text, #ffffff) !important;
+	border-color: transparent !important;
+}
+
+.deleteButton:hover {
+	opacity: 0.9;
+}
+
+.deletionWarning {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 12px;
+	background: var(--color-background-dark);
+	border-left: 4px solid var(--color-warning);
+	border-radius: var(--border-radius, 4px);
+}
+
+.warningText {
+	font-size: 0.9rem;
+}
+
+.pendingList {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.pendingItem {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	font-size: 0.85rem;
+	color: var(--color-text-maxcontrast);
+	text-decoration: line-through;
+}
+
+.noFiles {
 	margin: 0;
 	font-size: 0.9rem;
-	word-break: break-all;
 	color: var(--color-text-maxcontrast);
+	font-style: italic;
 }
 
 .fileButtons {

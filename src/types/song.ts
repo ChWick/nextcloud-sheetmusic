@@ -13,10 +13,16 @@ export interface Collection {
 	name: string
 }
 
+export interface SongFile {
+	id: number
+	path: string
+}
+
 export interface Song {
 	id: number
 	title: string
 	filePath: string | null
+	files?: SongFile[]
 	composerIds?: number[]
 	bookIds?: number[]
 	collectionIds?: number[]

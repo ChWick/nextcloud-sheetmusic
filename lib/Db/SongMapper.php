@@ -14,7 +14,7 @@ use PDO;
 class SongMapper {
 	/**
 	 * @return array{
-	 *     songs: list<array{id: int, title: string, filePath: ?string, composerIds: list<int>, bookIds: list<int>, collectionIds: list<int>}>,
+	 *     songs: list<array{id: int, title: string, filePath: ?string, files: list<array{id: int, path: string}>, composerIds: list<int>, bookIds: list<int>, collectionIds: list<int>}>,
 	 *     composers: list<array{id: int, name: string}>,
 	 *     books: list<array{id: int, title: string}>,
 	 *     collections: list<array{id: int, name: string}>
@@ -60,16 +60,33 @@ class SongMapper {
 			}
 		}
 
-		$statement = $database->query('SELECT Songs.Id, Songs.Title, Files.Path AS FilePath FROM Songs LEFT JOIN Files ON Files.SongId = Songs.Id ORDER BY Songs.SortTitle, Songs.Title');
+		$songFiles = [];
+		if (in_array('Files', $existingTables, true)) {
+			$stmt = $database->query('SELECT Id, SongId, Path FROM Files');
+			if ($stmt !== false) {
+				while ($row = $stmt->fetch()) {
+					$songFiles[(int)$row['SongId']][] = [
+						'id' => (int)$row['Id'],
+						'path' => (string)$row['Path'],
+					];
+				}
+			}
+		}
+
+		$statement = $database->query('SELECT Songs.Id, Songs.Title FROM Songs ORDER BY Songs.SortTitle, Songs.Title');
 
 		$songs = [];
 		if ($statement !== false) {
 			while ($row = $statement->fetch()) {
 				$songId = (int)$row['Id'];
+				$files = $songFiles[$songId] ?? [];
+				$filePath = count($files) > 0 ? $files[0]['path'] : null;
+
 				$songs[] = [
 					'id' => $songId,
 					'title' => (string)$row['Title'],
-					'filePath' => $row['FilePath'] !== null ? (string)$row['FilePath'] : null,
+					'filePath' => $filePath,
+					'files' => $files,
 					'composerIds' => $songComposers[$songId] ?? [],
 					'bookIds' => $songBooks[$songId] ?? [],
 					'collectionIds' => $songCollections[$songId] ?? [],
@@ -125,7 +142,7 @@ class SongMapper {
 	}
 
 	/**
-	 * @return list<array{id: int, title: string, filePath: ?string, composerIds: list<int>, bookIds: list<int>, collectionIds: list<int>}>
+	 * @return list<array{id: int, title: string, filePath: ?string, files: list<array{id: int, path: string}>, composerIds: list<int>, bookIds: list<int>, collectionIds: list<int>}>
 	 */
 	public function findSongs(string $databasePath): array {
 		return $this->findLibraryData($databasePath)['songs'];
@@ -210,23 +227,30 @@ class SongMapper {
 			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
 		]);
 
-		$checkStmt = $database->prepare('SELECT Id FROM Files WHERE SongId = :songId LIMIT 1');
-		$checkStmt->execute([':songId' => $songId]);
-		$existing = $checkStmt->fetch();
+		$insertStmt = $database->prepare('INSERT INTO Files (SongId, Path) VALUES (:songId, :path)');
+		$insertStmt->execute([
+			':songId' => $songId,
+			':path' => $filePath,
+		]);
+	}
 
-		if ($existing !== false) {
-			$updateStmt = $database->prepare('UPDATE Files SET Path = :path WHERE SongId = :songId');
-			$updateStmt->execute([
-				':path' => $filePath,
-				':songId' => $songId,
-			]);
-		} else {
-			$insertStmt = $database->prepare('INSERT INTO Files (SongId, Path) VALUES (:songId, :path)');
-			$insertStmt->execute([
-				':songId' => $songId,
-				':path' => $filePath,
-			]);
+	public function removeSongFile(string $databasePath, int $songId, int $fileId): ?string {
+		$database = new PDO('sqlite:' . $databasePath, options: [
+			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+		]);
+
+		$stmt = $database->prepare('SELECT Path FROM Files WHERE SongId = :songId AND Id = :fileId');
+		$stmt->execute([':songId' => $songId, ':fileId' => $fileId]);
+		$row = $stmt->fetch();
+		if ($row === false) {
+			return null;
 		}
+
+		$delStmt = $database->prepare('DELETE FROM Files WHERE SongId = :songId AND Id = :fileId');
+		$delStmt->execute([':songId' => $songId, ':fileId' => $fileId]);
+
+		return (string)$row['Path'];
 	}
 
 	public function createComposer(string $databasePath, string $name): int {
