@@ -1,32 +1,76 @@
 <script setup lang="ts">
 import type { INode } from '@nextcloud/files'
-import type { Song } from './types/song'
+import type { Book, Collection, Composer, Song } from './types/song'
 
 import axios from '@nextcloud/axios'
 import { FilePickerClosed, getFilePickerBuilder } from '@nextcloud/dialogs'
 import { translate as t } from '@nextcloud/l10n'
 import { generateOcsUrl } from '@nextcloud/router'
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import NcAppNavigation from '@nextcloud/vue/components/NcAppNavigation'
 import NcAppContent from '@nextcloud/vue/components/NcAppContent'
 import NcAppNavigationItem from '@nextcloud/vue/components/NcAppNavigationItem'
 import NcContent from '@nextcloud/vue/components/NcContent'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
+import SongFilterBar from './components/SongFilterBar.vue'
 import SongViewer from './components/SongViewer.vue'
 
 const isDialogOpen = ref(false)
 const selectedFile = ref<INode>()
 const libraries = ref<string[]>([])
 const selectedLibrary = ref<string>()
+
 const songs = ref<Song[]>([])
+const composers = ref<Composer[]>([])
+const books = ref<Book[]>([])
+const collections = ref<Collection[]>([])
+
+const selectedComposers = ref<Composer[]>([])
+const selectedBooks = ref<Book[]>([])
+const selectedCollections = ref<Collection[]>([])
+
 const selectedSong = ref<Song>()
 const fileError = ref('')
 const isLoadingSongs = ref(false)
 
+const filteredSongs = computed(() => {
+	const selectedComposerIds = new Set(selectedComposers.value.map((c) => c.id))
+	const selectedBookIds = new Set(selectedBooks.value.map((b) => b.id))
+	const selectedCollectionIds = new Set(selectedCollections.value.map((c) => c.id))
+
+	return songs.value.filter((song) => {
+		if (selectedComposerIds.size > 0) {
+			const matchComposer = song.composerIds?.some((id) => selectedComposerIds.has(id))
+			if (!matchComposer) {
+				return false
+			}
+		}
+		if (selectedBookIds.size > 0) {
+			const matchBook = song.bookIds?.some((id) => selectedBookIds.has(id))
+			if (!matchBook) {
+				return false
+			}
+		}
+		if (selectedCollectionIds.size > 0) {
+			const matchCollection = song.collectionIds?.some((id) => selectedCollectionIds.has(id))
+			if (!matchCollection) {
+				return false
+			}
+		}
+		return true
+	})
+})
+
 async function selectLibrary(library: string) {
 	selectedLibrary.value = library
 	songs.value = []
+	composers.value = []
+	books.value = []
+	collections.value = []
+	selectedComposers.value = []
+	selectedBooks.value = []
+	selectedCollections.value = []
 	selectedSong.value = undefined
 	fileError.value = ''
 	isLoadingSongs.value = true
@@ -35,7 +79,10 @@ async function selectLibrary(library: string) {
 		const response = await axios.get(generateOcsUrl('/apps/mobilesheetsmanager/api/songs'), {
 			params: { path: library },
 		})
-		songs.value = response.data.ocs.data.songs
+		songs.value = response.data.ocs.data.songs ?? []
+		composers.value = response.data.ocs.data.composers ?? []
+		books.value = response.data.ocs.data.books ?? []
+		collections.value = response.data.ocs.data.collections ?? []
 	} catch {
 		fileError.value = t('mobilesheetsmanager', 'Could not load the songs in this library.')
 	} finally {
@@ -133,15 +180,30 @@ async function addLibrary() {
 
 		<NcAppContent :class="$style.content">
 			<h2>{{ selectedLibrary ?? t('mobilesheetsmanager', 'MobileSheets Manager') }}</h2>
-			<div v-if="selectedLibrary" :class="$style.songArea">
-				<ul :class="$style.songList">
-					<li v-for="song in songs" :key="song.id">
-						<button type="button" :class="$style.songButton" :aria-pressed="selectedSong?.id === song.id" @click="selectSong(song)">{{ song.title }}</button>
-					</li>
-					<li v-if="!isLoadingSongs && !fileError && songs.length === 0">{{ t('mobilesheetsmanager', 'No songs found in this library.') }}</li>
-				</ul>
-				<SongViewer :song="selectedSong" />
-			</div>
+			<template v-if="selectedLibrary">
+				<SongFilterBar
+					v-model:selected-composers="selectedComposers"
+					v-model:selected-books="selectedBooks"
+					v-model:selected-collections="selectedCollections"
+					:composers="composers"
+					:books="books"
+					:collections="collections" />
+
+				<div :class="$style.songArea">
+					<ul :class="$style.songList">
+						<li v-for="song in filteredSongs" :key="song.id">
+							<button type="button" :class="$style.songButton" :aria-pressed="selectedSong?.id === song.id" @click="selectSong(song)">{{ song.title }}</button>
+						</li>
+						<li v-if="!isLoadingSongs && !fileError && songs.length === 0">{{ t('mobilesheetsmanager', 'No songs found in this library.') }}</li>
+						<li v-else-if="!isLoadingSongs && !fileError && songs.length > 0 && filteredSongs.length === 0">{{ t('mobilesheetsmanager', 'No songs match the selected filters.') }}</li>
+					</ul>
+					<SongViewer
+						:song="selectedSong"
+						:composers="composers"
+						:books="books"
+						:collections="collections" />
+				</div>
+			</template>
 			<p v-if="fileError" :class="$style.error" role="alert">{{ fileError }}</p>
 		</NcAppContent>
 
@@ -202,7 +264,7 @@ async function addLibrary() {
 }
 
 .songList {
-	margin: 24px 0 0;
+	margin: 0;
 	padding: 0;
 	list-style: none;
 }

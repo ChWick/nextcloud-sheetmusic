@@ -1,16 +1,27 @@
 <script setup lang="ts">
-import type { Song } from '../types/song'
+import type { Book, Collection, Composer, Song } from '../types/song'
 
 import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist'
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
-import { nextTick, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 
-const props = defineProps<{
-	song?: Song | null
-}>()
+const props = withDefaults(
+	defineProps<{
+		song?: Song | null
+		composers?: Composer[]
+		books?: Book[]
+		collections?: Collection[]
+	}>(),
+	{
+		song: null,
+		composers: () => [],
+		books: () => [],
+		collections: () => [],
+	},
+)
 
 GlobalWorkerOptions.workerSrc = pdfWorker
 
@@ -18,6 +29,27 @@ const pdfContainer = ref<HTMLElement>()
 const isLoading = ref(false)
 const errorMessage = ref('')
 let currentLoadId = 0
+
+const songComposers = computed(() => {
+	if (!props.song?.composerIds || props.song.composerIds.length === 0) {
+		return []
+	}
+	return props.composers.filter((c) => props.song?.composerIds?.includes(c.id))
+})
+
+const songBooks = computed(() => {
+	if (!props.song?.bookIds || props.song.bookIds.length === 0) {
+		return []
+	}
+	return props.books.filter((b) => props.song?.bookIds?.includes(b.id))
+})
+
+const songCollections = computed(() => {
+	if (!props.song?.collectionIds || props.song.collectionIds.length === 0) {
+		return []
+	}
+	return props.collections.filter((c) => props.song?.collectionIds?.includes(c.id))
+})
 
 watch(
 	() => props.song,
@@ -96,6 +128,20 @@ watch(
 	<div :class="$style.container">
 		<header v-if="song" :class="$style.header">
 			<h3 :class="$style.title">{{ song.title }}</h3>
+			<div v-if="songComposers.length > 0 || songBooks.length > 0 || songCollections.length > 0" :class="$style.metadata">
+				<div v-if="songComposers.length > 0" :class="$style.metaItem">
+					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Composer:') }}</span>
+					<span>{{ songComposers.map((c) => c.name).join(', ') }}</span>
+				</div>
+				<div v-if="songBooks.length > 0" :class="$style.metaItem">
+					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Book:') }}</span>
+					<span>{{ songBooks.map((b) => b.title).join(', ') }}</span>
+				</div>
+				<div v-if="songCollections.length > 0" :class="$style.metaItem">
+					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Collection:') }}</span>
+					<span>{{ songCollections.map((c) => c.name).join(', ') }}</span>
+				</div>
+			</div>
 		</header>
 
 		<div v-if="isLoading" :class="$style.loading">
@@ -127,12 +173,29 @@ watch(
 }
 
 .header {
-	margin-bottom: 12px;
+	margin-bottom: 16px;
 }
 
 .title {
-	margin: 0;
+	margin: 0 0 8px;
 	font-size: 1.2rem;
+	font-weight: 600;
+}
+
+.metadata {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 16px;
+	font-size: 0.9rem;
+	color: var(--color-text-maxcontrast);
+}
+
+.metaItem {
+	display: inline-flex;
+	gap: 4px;
+}
+
+.metaLabel {
 	font-weight: 600;
 }
 
