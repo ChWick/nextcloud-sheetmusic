@@ -13,20 +13,25 @@ use PDO;
 
 class SongMapper {
 	/**
-	 * @return list<string>
+	 * @return list<array{id: int, title: string}>
 	 */
-	public function findTitles(string $databasePath): array {
+	public function findSongs(string $databasePath): array {
 		$database = new PDO('sqlite:' . $databasePath, options: [
 			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
 			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
 		]);
-		$statement = $database->query('SELECT Title FROM Songs ORDER BY SortTitle, Title');
+		$statement = $database->query('SELECT Songs.Id, Songs.Title, Files.Path AS FilePath FROM Songs LEFT JOIN Files ON Files.SongId = Songs.Id ORDER BY Songs.SortTitle, Songs.Title');
 
-		$titles = [];
+		$songs = [];
 		while ($row = $statement->fetch()) {
-			$titles[] = (string)$row['Title'];
+			$songs[] = [
+				'id' => (int)$row['Id'],
+				'title' => (string)$row['Title'],
+				'filePath' => $row['FilePath'] !== null ? (string)$row['FilePath'] : null,
+			];
 		}
 
-		return $titles;
+		return $songs;
 	}
+
 }

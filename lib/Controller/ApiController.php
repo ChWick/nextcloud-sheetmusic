@@ -103,7 +103,7 @@ class ApiController extends OCSController {
 				return new DataResponse([], Http::STATUS_NOT_FOUND);
 			}
 
-			return new DataResponse(['songs' => $this->songMapper->findTitles($databasePath)]);
+			return new DataResponse(['songs' => $this->songMapper->findSongs($databasePath)]);
 		} catch (\Throwable $exception) {
 			$this->logger->error('Could not load songs from MobileSheets library', [
 				'exception' => $exception,
@@ -113,4 +113,5 @@ class ApiController extends OCSController {
 			return new DataResponse([], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
+
 }

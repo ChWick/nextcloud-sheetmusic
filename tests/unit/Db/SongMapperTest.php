@@ -21,14 +21,19 @@ final class SongMapperTest extends TestCase {
 		$this->databasePath = $databasePath;
 		$database = new \PDO('sqlite:' . $this->databasePath);
 		$database->exec('CREATE TABLE Songs(Id INTEGER PRIMARY KEY, Title VARCHAR(255), SortTitle VARCHAR(255))');
+		$database->exec('CREATE TABLE Files(Id INTEGER PRIMARY KEY, SongId INTEGER, Path VARCHAR(255))');
 		$database->exec("INSERT INTO Songs (Title, SortTitle) VALUES ('Zebra', 'Zebra'), ('Alpha', 'Alpha')");
+		$database->exec("INSERT INTO Files (SongId, Path) VALUES (1, '/remote.php/dav/files/admin/Noten/Zebra.pdf'), (2, '/remote.php/dav/files/admin/Noten/Alpha.pdf')");
 	}
 
 	protected function tearDown(): void {
 		unlink($this->databasePath);
 	}
 
-	public function testFindTitlesReturnsSortedSongTitles(): void {
-		$this->assertSame(['Alpha', 'Zebra'], (new SongMapper())->findTitles($this->databasePath));
+	public function testFindSongsReturnsSortedSongs(): void {
+		$this->assertSame([
+			['id' => 2, 'title' => 'Alpha', 'filePath' => '/remote.php/dav/files/admin/Noten/Alpha.pdf'],
+			['id' => 1, 'title' => 'Zebra', 'filePath' => '/remote.php/dav/files/admin/Noten/Zebra.pdf'],
+		], (new SongMapper())->findSongs($this->databasePath));
 	}
 }

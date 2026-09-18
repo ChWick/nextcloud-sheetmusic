@@ -19,6 +19,7 @@
     "@nextcloud/files": "^4.0.0",
     "@nextcloud/router": "^3.2.0",
     "@nextcloud/vue": "^9.8.2",
+    "pdfjs-dist": "^6.3.289",
     "vue": "^3.5.35"
   },
   "devDependencies": {
