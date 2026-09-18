@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import type { INode } from '@nextcloud/files'
 
+import axios from '@nextcloud/axios'
 import { FilePickerClosed, getFilePickerBuilder } from '@nextcloud/dialogs'
 import { translate as t } from '@nextcloud/l10n'
-import { ref } from 'vue'
+import { generateOcsUrl } from '@nextcloud/router'
+import { onMounted, ref } from 'vue'
 import NcAppNavigation from '@nextcloud/vue/components/NcAppNavigation'
 import NcAppContent from '@nextcloud/vue/components/NcAppContent'
 import NcAppNavigationItem from '@nextcloud/vue/components/NcAppNavigationItem'
@@ -15,6 +17,15 @@ const isDialogOpen = ref(false)
 const selectedFile = ref<INode>()
 const libraries = ref<string[]>([])
 const fileError = ref('')
+
+onMounted(async () => {
+	try {
+		const response = await axios.get(generateOcsUrl('/apps/mobilesheetsmanager/api/libraries'))
+		libraries.value = response.data.ocs.data.libraries
+	} catch {
+		fileError.value = t('mobilesheetsmanager', 'Could not load your MobileSheets libraries.')
+	}
+})
 
 function openDialog() {
 	selectedFile.value = undefined
@@ -48,15 +59,24 @@ async function openFilePicker() {
 	}
 }
 
-function addLibrary() {
+async function addLibrary() {
 	if (!selectedFile.value) {
 		fileError.value = t('mobilesheetsmanager', 'Please select a .db file first.')
 		return
 	}
 
-	libraries.value.push(selectedFile.value.path)
-	selectedFile.value = undefined
-	isDialogOpen.value = false
+	try {
+		const response = await axios.post(generateOcsUrl('/apps/mobilesheetsmanager/api/libraries'), {
+			path: selectedFile.value.path,
+		})
+		if (!libraries.value.includes(response.data.ocs.data.path)) {
+			libraries.value.push(response.data.ocs.data.path)
+		}
+		selectedFile.value = undefined
+		isDialogOpen.value = false
+	} catch {
+		fileError.value = t('mobilesheetsmanager', 'Could not save the MobileSheets library.')
+	}
 }
 </script>
 
