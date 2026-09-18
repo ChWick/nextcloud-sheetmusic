@@ -1,31 +1,28 @@
 <script setup lang="ts">
 import type { INode } from '@nextcloud/files'
+import type { Song } from './types/song'
 
 import axios from '@nextcloud/axios'
 import { FilePickerClosed, getFilePickerBuilder } from '@nextcloud/dialogs'
 import { translate as t } from '@nextcloud/l10n'
 import { generateOcsUrl } from '@nextcloud/router'
-import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist'
-import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
-import { nextTick, onMounted, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import NcAppNavigation from '@nextcloud/vue/components/NcAppNavigation'
 import NcAppContent from '@nextcloud/vue/components/NcAppContent'
 import NcAppNavigationItem from '@nextcloud/vue/components/NcAppNavigationItem'
 import NcContent from '@nextcloud/vue/components/NcContent'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
+import SongViewer from './components/SongViewer.vue'
 
 const isDialogOpen = ref(false)
 const selectedFile = ref<INode>()
 const libraries = ref<string[]>([])
 const selectedLibrary = ref<string>()
-const songs = ref<Array<{ id: number, title: string, filePath: string | null }>>([])
-const selectedSong = ref<{ id: number, title: string, filePath: string | null }>()
-const pdfContainer = ref<HTMLElement>()
+const songs = ref<Song[]>([])
+const selectedSong = ref<Song>()
 const fileError = ref('')
 const isLoadingSongs = ref(false)
-
-GlobalWorkerOptions.workerSrc = pdfWorker
 
 async function selectLibrary(library: string) {
 	selectedLibrary.value = library
@@ -46,40 +43,8 @@ async function selectLibrary(library: string) {
 	}
 }
 
-function selectSong(song: { id: number, title: string, filePath: string | null }) {
+function selectSong(song: Song) {
 	selectedSong.value = song
-	void loadSongFile(song)
-}
-
-async function loadSongFile(song: { id: number, title: string, filePath: string | null }) {
-	await nextTick()
-	if (!pdfContainer.value) {
-		return
-	}
-	pdfContainer.value.replaceChildren()
-
-	try {
-		if (!song.filePath) {
-			throw new Error('No file path')
-		}
-		const response = await axios.get(song.filePath, {
-			responseType: 'arraybuffer',
-		})
-		const pdf = await getDocument({ data: response.data }).promise
-		await nextTick()
-		for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
-			const page = await pdf.getPage(pageNumber)
-			const viewport = page.getViewport({ scale: 1.25 })
-			const canvas = document.createElement('canvas')
-			canvas.width = viewport.width
-			canvas.height = viewport.height
-			canvas.className = 'mobilesheetsmanager-pdf-page'
-			pdfContainer.value?.append(canvas)
-			await page.render({ canvas, viewport }).promise
-		}
-	} catch {
-		fileError.value = t('mobilesheetsmanager', 'Could not load the selected song.')
-	}
 }
 
 onMounted(async () => {
@@ -175,7 +140,7 @@ async function addLibrary() {
 					</li>
 					<li v-if="!isLoadingSongs && !fileError && songs.length === 0">{{ t('mobilesheetsmanager', 'No songs found in this library.') }}</li>
 				</ul>
-				<div v-if="selectedSong" ref="pdfContainer" :class="$style.pdfViewer" :aria-label="selectedSong.title" />
+				<SongViewer :song="selectedSong" />
 			</div>
 			<p v-if="fileError" :class="$style.error" role="alert">{{ fileError }}</p>
 		</NcAppContent>
@@ -259,23 +224,6 @@ async function addLibrary() {
 
 .songButton[aria-pressed='true'] {
 	background: var(--color-background-hover);
-}
-
-.pdfViewer {
-	width: 100%;
-	height: 75vh;
-	overflow: auto;
-	border: 1px solid var(--color-border);
-	background: var(--color-background-dark);
-	padding: 16px;
-}
-
-.pdfViewer :global(.mobilesheetsmanager-pdf-page) {
-	display: block;
-	max-width: 100%;
-	height: auto;
-	margin: 0 auto 16px;
-	background: white;
 }
 
 @media (max-width: 800px) {
