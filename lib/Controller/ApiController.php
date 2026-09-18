@@ -30,7 +30,6 @@ class ApiController extends OCSController {
 		private IUserSession $userSession,
 	) {
 		parent::__construct($appName, $request);
-		$this->request = $request;
 	}
 
 	/**
@@ -90,26 +89,17 @@ class ApiController extends OCSController {
 		}
 
 		if (!$this->libraryMapper->findForUser($user->getUID(), $path)) {
-			$this->logger->warning('MobileSheets library is not registered for user', [
-				'path' => $path,
-				'userId' => $user->getUID(),
-			]);
 			return new DataResponse([], Http::STATUS_NOT_FOUND);
 		}
 
 		try {
 			$node = $this->rootFolder->getUserFolder($user->getUID())->get(ltrim($path, '/'));
 			if ($node->getType() !== 'file') {
-				$this->logger->warning('MobileSheets library path is not a file', ['path' => $path]);
 				return new DataResponse([], Http::STATUS_NOT_FOUND);
 			}
 
 			$databasePath = $node->getStorage()->getLocalFile($node->getInternalPath());
 			if ($databasePath === false) {
-				$this->logger->warning('MobileSheets library has no local file path', [
-					'path' => $path,
-					'internalPath' => $node->getInternalPath(),
-				]);
 				return new DataResponse([], Http::STATUS_NOT_FOUND);
 			}
 
