@@ -7,9 +7,12 @@ namespace Controller;
 use OCA\MobileSheetsManager\AppInfo\Application;
 use OCA\MobileSheetsManager\Controller\ApiController;
 use OCA\MobileSheetsManager\Db\LibraryMapper;
+use OCA\MobileSheetsManager\Db\SongMapper;
+use OCP\Files\IRootFolder;
 use OCP\IRequest;
 use OCP\IUserSession;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\LoggerInterface;
 
 final class ApiTest extends TestCase {
 	public function testIndex(): void {
@@ -18,6 +21,9 @@ final class ApiTest extends TestCase {
 			Application::APP_ID,
 			$request,
 			$this->createMock(LibraryMapper::class),
+			$this->createMock(SongMapper::class),
+			$this->createMock(IRootFolder::class),
+			$this->createMock(LoggerInterface::class),
 			$this->createMock(IUserSession::class),
 		);
 

@@ -56,4 +56,15 @@ class LibraryMapper {
 			->setValue('path', $qb->createNamedParameter($path, IQueryBuilder::PARAM_STR));
 		$qb->executeStatement();
 	}
+
+	public function findForUser(string $userId, string $path): bool {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('path')
+			->from(self::TABLE_NAME)
+			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId, IQueryBuilder::PARAM_STR)))
+			->andWhere($qb->expr()->eq('path', $qb->createNamedParameter($path, IQueryBuilder::PARAM_STR)))
+			->setMaxResults(1);
+
+		return $qb->executeQuery()->fetchOne() !== false;
+	}
 }

@@ -16,7 +16,28 @@ import NcDialog from '@nextcloud/vue/components/NcDialog'
 const isDialogOpen = ref(false)
 const selectedFile = ref<INode>()
 const libraries = ref<string[]>([])
+const selectedLibrary = ref<string>()
+const songs = ref<string[]>([])
 const fileError = ref('')
+const isLoadingSongs = ref(false)
+
+async function selectLibrary(library: string) {
+	selectedLibrary.value = library
+	songs.value = []
+	fileError.value = ''
+	isLoadingSongs.value = true
+
+	try {
+		const response = await axios.get(generateOcsUrl('/apps/mobilesheetsmanager/api/songs'), {
+			params: { path: library },
+		})
+		songs.value = response.data.ocs.data.songs
+	} catch {
+		fileError.value = t('mobilesheetsmanager', 'Could not load the songs in this library.')
+	} finally {
+		isLoadingSongs.value = false
+	}
+}
 
 onMounted(async () => {
 	try {
@@ -85,7 +106,9 @@ async function addLibrary() {
 		<NcAppNavigation :aria-label="t('mobilesheetsmanager', 'MobileSheets libraries')">
 			<ul :class="$style.libraryList">
 				<li v-for="library in libraries" :key="library" :class="$style.libraryItem">
-					{{ library }}
+					<button type="button" :class="$style.libraryButton" :aria-pressed="selectedLibrary === library" @click="selectLibrary(library)">
+						{{ library }}
+					</button>
 				</li>
 			</ul>
 
@@ -101,7 +124,12 @@ async function addLibrary() {
 		</NcAppNavigation>
 
 		<NcAppContent :class="$style.content">
-			<h2>{{ t('mobilesheetsmanager', 'MobileSheets Manager') }}</h2>
+			<h2>{{ selectedLibrary ?? t('mobilesheetsmanager', 'MobileSheets Manager') }}</h2>
+			<ul v-if="selectedLibrary" :class="$style.songList">
+				<li v-for="(song, index) in songs" :key="`${song}-${index}`">{{ song }}</li>
+				<li v-if="!isLoadingSongs && !fileError && songs.length === 0">{{ t('mobilesheetsmanager', 'No songs found in this library.') }}</li>
+			</ul>
+			<p v-if="fileError" :class="$style.error" role="alert">{{ fileError }}</p>
 		</NcAppContent>
 
 		<NcDialog
@@ -131,14 +159,38 @@ async function addLibrary() {
 }
 
 .libraryItem {
-	padding: 8px 16px;
 	word-break: break-word;
 }
 
+.libraryButton {
+	width: 100%;
+	padding: 8px 16px;
+	border: 0;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	text-align: start;
+	cursor: pointer;
+}
+
+.libraryButton[aria-pressed='true'] {
+	background: var(--color-background-hover);
+}
+
 .content {
-	display: flex;
-	justify-content: center;
 	margin: 16px;
+}
+
+.songList {
+	max-width: 720px;
+	margin: 24px 0 0;
+	padding: 0;
+	list-style: none;
+}
+
+.songList li {
+	padding: 10px 0;
+	border-bottom: 1px solid var(--color-border);
 }
 
 .dialogActions {
