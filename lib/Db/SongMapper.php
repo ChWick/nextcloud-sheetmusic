@@ -73,7 +73,7 @@ class SongMapper {
 			}
 		}
 
-		$statement = $database->query('SELECT Songs.Id, Songs.Title FROM Songs ORDER BY Songs.SortTitle, Songs.Title');
+		$statement = $database->query('SELECT Songs.Id, Songs.Title FROM Songs ORDER BY Songs.Title COLLATE NOCASE ASC');
 
 		$songs = [];
 		if ($statement !== false) {
