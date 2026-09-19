@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Book, Collection, Composer, LibraryData, Song } from '../types/song'
+import type { Artist, Book, Collection, Composer, LibraryData, Song } from '../types/song'
 
 import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
@@ -17,6 +17,7 @@ const props = withDefaults(
 		composers?: Composer[]
 		books?: Book[]
 		collections?: Collection[]
+		artists?: Artist[]
 	}>(),
 	{
 		song: null,
@@ -24,6 +25,7 @@ const props = withDefaults(
 		composers: () => [],
 		books: () => [],
 		collections: () => [],
+		artists: () => [],
 	},
 )
 
@@ -58,6 +60,13 @@ const songCollections = computed(() => {
 		return []
 	}
 	return props.collections.filter((c) => props.song?.collectionIds?.includes(c.id))
+})
+
+const songArtists = computed(() => {
+	if (!props.song?.artistIds || props.song.artistIds.length === 0) {
+		return []
+	}
+	return props.artists.filter((a) => props.song?.artistIds?.includes(a.id))
 })
 
 function handleSaved(data: LibraryData) {
@@ -165,6 +174,10 @@ watch(
 					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Collection:') }}</span>
 					<span>{{ songCollections.map((c) => c.name).join(', ') }}</span>
 				</div>
+				<div v-if="songArtists.length > 0" :class="$style.metaItem">
+					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Artist:') }}</span>
+					<span>{{ songArtists.map((a) => a.name).join(', ') }}</span>
+				</div>
 			</div>
 		</header>
 
@@ -176,6 +189,7 @@ watch(
 			:composers="composers"
 			:books="books"
 			:collections="collections"
+            :artists="artists"
 			@saved="handleSaved"
 			@cancel="isEditing = false" />
 

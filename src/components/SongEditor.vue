@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { INode } from '@nextcloud/files'
-import type { Book, Collection, Composer, LibraryData, Song, SongFile } from '../types/song'
+import type { Artist, Book, Collection, Composer, LibraryData, Song, SongFile } from '../types/song'
 
 import axios from '@nextcloud/axios'
 import { FilePickerClosed, getFilePickerBuilder } from '@nextcloud/dialogs'
@@ -19,6 +19,7 @@ const props = defineProps<{
 	composers: Composer[]
 	books: Book[]
 	collections: Collection[]
+	artists: Artist[]
 }>()
 
 const emit = defineEmits<{
@@ -35,6 +36,9 @@ const selectedBooks = ref<Array<Book | { title: string, id?: number }>>(
 )
 const selectedCollections = ref<Array<Collection | { name: string, id?: number }>>(
 	props.collections.filter((c) => props.song.collectionIds?.includes(c.id)),
+)
+const selectedArtists = ref<Array<Artist | { name: string, id?: number }>>(
+	props.artists.filter((a) => props.song.artistIds?.includes(a.id)),
 )
 
 function getInitialFiles(s: Song): SongFile[] {
@@ -57,6 +61,7 @@ watch(
 		selectedComposers.value = props.composers.filter((c) => newSong.composerIds?.includes(c.id))
 		selectedBooks.value = props.books.filter((b) => newSong.bookIds?.includes(b.id))
 		selectedCollections.value = props.collections.filter((c) => newSong.collectionIds?.includes(c.id))
+		selectedArtists.value = props.artists.filter((a) => newSong.artistIds?.includes(a.id))
 		currentFiles.value = getInitialFiles(newSong)
 		pendingDeleteFiles.value = []
 	},
@@ -86,6 +91,10 @@ function createBookTag(newTag: string) {
 }
 
 function createCollectionTag(newTag: string) {
+	return { name: newTag }
+}
+
+function createArtistTag(newTag: string) {
 	return { name: newTag }
 }
 
@@ -277,6 +286,20 @@ async function saveSong() {
 			}
 		}
 
+		// Resolve or create artists
+		const artistIds: number[] = []
+		for (const art of selectedArtists.value) {
+			if ('id' in art && typeof art.id === 'number') {
+				artistIds.push(art.id)
+			} else {
+				const createRes = await axios.post(generateOcsUrl('/apps/mobilesheetsmanager/api/artists'), {
+					path: props.libraryPath,
+					name: art.name,
+				})
+				artistIds.push(createRes.data.ocs.data.id)
+			}
+		}
+
 		const response = await axios.post(
 			generateOcsUrl(`/apps/mobilesheetsmanager/api/songs/${props.song.id}`),
 			{
@@ -354,6 +377,20 @@ async function saveSong() {
 					label="name"
 					track-by="name"
 					:placeholder="t('mobilesheetsmanager', 'Select or type a collection…')" />
+			</div>
+
+			<div :class="$style.formGroup">
+				<label :class="$style.label">{{ t('mobilesheetsmanager', 'Artists') }}</label>
+				<NcSelect
+					v-model="selectedArtists"
+					:options="artists"
+					:multiple="true"
+					:taggable="true"
+					:create-option="createArtistTag"
+					:close-on-select="false"
+					label="name"
+					track-by="name"
+					:placeholder="t('mobilesheetsmanager', 'Select or type an artist…')" />
 			</div>
 
 			<div :class="$style.fileSection">
