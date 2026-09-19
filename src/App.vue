@@ -198,29 +198,17 @@ async function addLibrary() {
   <NcContent app-name="mobilesheetsmanager">
     <!-- Sidebar (navigation) -->
     <NcAppNavigation :aria-label="t('mobilesheetsmanager', 'MobileSheets libraries')">
-      <ul :class="$style.libraryList">
-        <li v-for="library in libraries" :key="library" :class="$style.libraryItem">
-          <button type="button"
-                  :class="$style.libraryButton"
-                  :aria-pressed="selectedLibrary === library"
-                  @click="navigateToLibrary(library)">
-            {{ library }}
-          </button>
-        </li>
-      </ul>
+      <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Library')">
+        <select v-model="selectedLibrary" @change="navigateToLibrary(selectedLibrary)" class="$style.librarySelect">
+          <option disabled value="">{{ t('mobilesheetsmanager', 'Select library') }}</option>
+          <option v-for="library in libraries" :key="library" :value="library">{{ library }}</option>
+        </select>
+      </NcAppNavigationItem>
 
       <!-- view toggle – only for the selected library -->
       <template v-if="selectedLibrary">
-        <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Views')">
-          <div :class="$style.viewToggle">
-            <NcButton :type="selectedView === 'songs' ? 'primary' : 'secondary'" @click="goToView('songs')">
-              {{ t('mobilesheetsmanager', 'Songs') }}
-            </NcButton>
-            <NcButton :type="selectedView === 'files' ? 'primary' : 'secondary'" @click="goToView('files')">
-              {{ t('mobilesheetsmanager', 'Files') }}
-            </NcButton>
-          </div>
-        </NcAppNavigationItem>
+        <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Songs')" :active="selectedView === 'songs'" @click="goToView('songs')" />
+        <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Files')" :active="selectedView === 'files'" @click="goToView('files')" />
       </template>
 
       <template #footer>
@@ -300,6 +288,7 @@ async function addLibrary() {
 .libraryItem { word-break: break-word; }
 .libraryButton { width: 100%; padding: 8px 16px; border: 0; background: transparent; color: inherit; font: inherit; text-align: start; cursor: pointer; }
 .libraryButton[aria-pressed='true'] { background: var(--color-background-hover); }
+.librarySelect { width: 100%; padding: 8px; margin: 8px 0; }
 .content { margin: 16px; }
 .songArea { display: grid; grid-template-columns: minmax(220px, 320px) minmax(0, 1fr); gap: 24px; align-items: start; }
 .songList { margin: 0; padding: 0; list-style: none; }
