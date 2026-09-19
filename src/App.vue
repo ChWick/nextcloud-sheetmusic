@@ -139,6 +139,10 @@ onMounted(async () => {
   try {
     const response = await axios.get(generateOcsUrl('/apps/mobilesheetsmanager/api/libraries'))
     libraries.value = response.data.ocs.data.libraries
+    // Auto-select first library and load its songs
+    if (libraries.value.length > 0 && !selectedLibrary.value) {
+      await loadLibraryData(libraries.value[0])
+    }
   } catch {
     fileError.value = t('mobilesheetsmanager', 'Could not load your MobileSheets libraries.')
   }
