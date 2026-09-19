@@ -150,7 +150,7 @@ async function addLibrary() {
   <SongsView :selectedLibrary="selectedLibrary" />
 </template>
 <template v-else>
-  <FilesView />
+  <FilesView :selectedLibrary="selectedLibrary" />
 </template>
       </template>
 

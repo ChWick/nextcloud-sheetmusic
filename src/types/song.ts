@@ -13,6 +13,11 @@ export interface Collection {
 	name: string
 }
 
+export interface Artist {
+	id: number
+	name: string
+}
+
 export interface SongFile {
 	id: number
 	path: string
@@ -33,4 +38,5 @@ export interface LibraryData {
 	composers: Composer[]
 	books: Book[]
 	collections: Collection[]
+	artists: Artist[]
 }

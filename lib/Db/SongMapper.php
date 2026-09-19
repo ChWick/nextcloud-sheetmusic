@@ -72,6 +72,16 @@ class SongMapper {
 				}
 			}
 		}
+		
+		$songArtists = [];
+		if (in_array('ArtistSongs', $existingTables, true)) {
+			$stmt = $database->query('SELECT ArtistId, SongId FROM ArtistSongs');
+			if ($stmt !== false) {
+				while ($row = $stmt->fetch()) {
+					$songArtists[(int)$row['SongId']][] = (int)$row['ArtistId'];
+				}
+			}
+		}
 
 		$statement = $database->query('SELECT Songs.Id, Songs.Title FROM Songs ORDER BY Songs.Title COLLATE NOCASE ASC');
 
@@ -90,6 +100,7 @@ class SongMapper {
 					'composerIds' => $songComposers[$songId] ?? [],
 					'bookIds' => $songBooks[$songId] ?? [],
 					'collectionIds' => $songCollections[$songId] ?? [],
+					'artistIds' => $songArtists[$songId] ?? [],
 				];
 			}
 		}
@@ -133,11 +144,25 @@ class SongMapper {
 			}
 		}
 
+		$artists = [];
+		if (in_array('Artists', $existingTables, true)) {
+			$stmt = $database->query('SELECT Id, Name FROM Artists ORDER BY Name');
+			if ($stmt !== false) {
+				while ($row = $stmt->fetch()) {
+					$artists[] = [
+						'id' => (int)$row['Id'],
+						'name' => (string)$row['Name'],
+					];
+				}
+			}
+		}
+
 		return [
 			'songs' => $songs,
 			'composers' => $composers,
 			'books' => $books,
 			'collections' => $collections,
+			'artists' => $artists,
 		];
 	}
 
