@@ -124,6 +124,7 @@ class ApiController extends OCSController {
 		array $composerIds = [],
 		array $bookIds = [],
 		array $collectionIds = [],
+		array $artistIds = []
 	): DataResponse {
 		$path = $path ?? (string)$this->request->getParam('path', '');
 		$title = $title ?? (string)$this->request->getParam('title', '');
@@ -148,11 +149,7 @@ class ApiController extends OCSController {
 				return new DataResponse([], Http::STATUS_NOT_FOUND);
 			}
 
-			$composerIds = array_map('intval', (array)($composerIds ?: $this->request->getParam('composerIds', [])));
-			$bookIds = array_map('intval', (array)($bookIds ?: $this->request->getParam('bookIds', [])));
-			$collectionIds = array_map('intval', (array)($collectionIds ?: $this->request->getParam('collectionIds', [])));
-
-			$this->songMapper->updateSong($databasePath, $id, $title, $composerIds, $bookIds, $collectionIds);
+			$this->songMapper->updateSong($databasePath, $id, $title, $composerIds, $bookIds, $collectionIds, $artistIds);
 
 			return new DataResponse($this->songMapper->findLibraryData($databasePath));
 		} catch (\Throwable $exception) {
@@ -451,4 +448,31 @@ class ApiController extends OCSController {
 		}
 	}
 
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/artists')]
+	public function createArtist(?string $path = null, ?string $name = null): DataResponse {
+		$path = $path ?? (string)$this->request->getParam('path', '');
+		$name = $name ?? (string)$this->request->getParam('name', '');
+		if ($path === '' || trim($name) === '') {
+			return new DataResponse([], Http::STATUS_BAD_REQUEST);
+		}
+		$path = '/' . ltrim($path, '/');
+		$user = $this->userSession->getUser();
+		if ($user === null || !$this->libraryMapper->findForUser($user->getUID(), $path)) {
+			return new DataResponse([], Http::STATUS_NOT_FOUND);
+		}
+
+		try {
+			$node = $this->rootFolder->getUserFolder($user->getUID())->get(ltrim($path, '/'));
+			$databasePath = $node->getStorage()->getLocalFile($node->getInternalPath());
+			if ($databasePath === false) {
+				return new DataResponse([], Http::STATUS_NOT_FOUND);
+			}
+
+			$id = $this->songMapper->createArtist($databasePath, trim($name));
+			return new DataResponse(['id' => $id, 'name' => trim($name)], Http::STATUS_CREATED);
+		} catch (\Throwable $exception) {
+			return new DataResponse([], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
 }

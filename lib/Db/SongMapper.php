@@ -18,6 +18,7 @@ class SongMapper {
 	 *     composers: list<array{id: int, name: string}>,
 	 *     books: list<array{id: int, title: string}>,
 	 *     collections: list<array{id: int, name: string}>
+	 *     artists: list<array{id: int, name: string}>
 	 * }
 	 */
 	public function findLibraryData(string $databasePath): array {
@@ -74,8 +75,8 @@ class SongMapper {
 		}
 		
 		$songArtists = [];
-		if (in_array('ArtistSongs', $existingTables, true)) {
-			$stmt = $database->query('SELECT ArtistId, SongId FROM ArtistSongs');
+		if (in_array('ArtistsSongs', $existingTables, true)) {
+			$stmt = $database->query('SELECT ArtistId, SongId FROM ArtistsSongs');
 			if ($stmt !== false) {
 				while ($row = $stmt->fetch()) {
 					$songArtists[(int)$row['SongId']][] = (int)$row['ArtistId'];
@@ -185,6 +186,7 @@ class SongMapper {
 		array $composerIds,
 		array $bookIds,
 		array $collectionIds,
+		array $artistIds
 	): void {
 		$database = new PDO('sqlite:' . $databasePath, options: [
 			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
@@ -240,6 +242,20 @@ class SongMapper {
 			foreach ($collectionIds as $collectionId) {
 				$insStmt->execute([
 					':collectionId' => $collectionId,
+					':songId' => $songId,
+				]);
+			}
+		}
+
+		// Update Artists
+		if (in_array('ArtistsSongs', $existingTables, true)) {
+			$delStmt = $database->prepare('DELETE FROM ArtistsSongs WHERE SongId =	 :songId');
+			$delStmt->execute([':songId' => $songId]);
+
+			$insStmt = $database->prepare('INSERT INTO ArtistsSongs (ArtistId, SongId) VALUES (:artistId, :songId)');
+			foreach ($artistIds as $artistId) {
+				$insStmt->execute([
+					':artistId' => $artistId,
 					':songId' => $songId,
 				]);
 			}
@@ -304,6 +320,16 @@ class SongMapper {
 			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
 		]);
 		$stmt = $database->prepare('INSERT INTO Collections (Name) VALUES (:name)');
+		$stmt->execute([':name' => $name]);
+		return (int)$database->lastInsertId();
+	}
+
+	public function createArtist(string $databasePath, string $name): int {
+		$database = new PDO('sqlite:' . $databasePath, options: [
+			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+		]);
+		$stmt = $database->prepare('INSERT INTO Artists (Name) VALUES (:name)');
 		$stmt->execute([':name' => $name]);
 		return (int)$database->lastInsertId();
 	}

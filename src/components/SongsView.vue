@@ -4,9 +4,11 @@
       v-model:selected-composers="selectedComposers"
       v-model:selected-books="selectedBooks"
       v-model:selected-collections="selectedCollections"
+      v-model:selected-artists="selectedArtists"
       :composers="composers"
       :books="books"
-      :collections="collections"/>
+      :collections="collections"
+      :artists="artists"/>
     </div>
     <ul :class="$style.songList">
       <li v-for="song in filteredSongs" :key="song.id">
@@ -30,6 +32,7 @@
                   :composers="composers"
                   :books="books"
                   :collections="collections"
+                  :artists="artists"
                   @saved="handleLibraryDataUpdate" />
     </div>
   </div>
@@ -42,7 +45,7 @@ import { generateOcsUrl } from '@nextcloud/router';
 import { ref, computed, watch } from 'vue';
 import SongFilterBar from '../components/SongFilterBar.vue';
 import SongViewer from '../components/SongViewer.vue';
-import type { Song, Composer, Book, Collection, LibraryData } from '../types/song';
+import type { Artist, Song, Composer, Book, Collection, LibraryData } from '../types/song';
 
 // Props from parent (App.vue)
 const props = defineProps<{ selectedLibrary: string }>();
@@ -52,10 +55,12 @@ const songs = ref<Song[]>([]);
 const composers = ref<Composer[]>([]);
 const books = ref<Book[]>([]);
 const collections = ref<Collection[]>([]);
+const artists = ref<Artist[]>([]);
 
 const selectedComposers = ref<Composer[]>([]);
 const selectedBooks = ref<Book[]>([]);
 const selectedCollections = ref<Collection[]>([]);
+const selectedArtists = ref<Artist[]>([]);
 
 const selectedSong = ref<Song | null>(null);
 const fileError = ref('');
@@ -66,10 +71,12 @@ const filteredSongs = computed(() => {
   const composerIds = new Set(selectedComposers.value.map(c => c.id));
   const bookIds = new Set(selectedBooks.value.map(b => b.id));
   const collectionIds = new Set(selectedCollections.value.map(c => c.id));
+  const artistIds = new Set(selectedArtists.value.map(a => a.id));
   return songs.value.filter(song => {
     if (composerIds.size && !(song.composerIds?.some(id => composerIds.has(id)))) return false;
     if (bookIds.size && !(song.bookIds?.some(id => bookIds.has(id)))) return false;
     if (collectionIds.size && !(song.collectionIds?.some(id => collectionIds.has(id)))) return false;
+    if (artistIds.size && !(song.artistIds?.some(id => artistIds.has(id)))) return false;
     return true;
   });
 });
@@ -79,6 +86,7 @@ function handleLibraryDataUpdate(data: LibraryData) {
   composers.value = data.composers ?? [];
   books.value = data.books ?? [];
   collections.value = data.collections ?? [];
+  artists.value = data.artists ?? [];
   // Preserve selected song if still present
   if (selectedSong.value) {
     const updated = songs.value.find(s => s.id === selectedSong.value?.id);

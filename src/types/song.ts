@@ -31,6 +31,7 @@ export interface Song {
 	composerIds?: number[]
 	bookIds?: number[]
 	collectionIds?: number[]
+	artistIds?: number[]
 }
 
 export interface LibraryData {

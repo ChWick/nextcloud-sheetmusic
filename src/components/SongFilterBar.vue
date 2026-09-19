@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Book, Collection, Composer } from '../types/song'
+import type { Artist, Book, Collection, Composer } from '../types/song'
 
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
@@ -11,9 +11,11 @@ const props = withDefaults(
 		composers?: Composer[]
 		books?: Book[]
 		collections?: Collection[]
+		artists?: Artist[]
 		selectedComposers?: Composer[]
 		selectedBooks?: Book[]
 		selectedCollections?: Collection[]
+		selectedArtists?: Artist[]
 	}>(),
 	{
 		composers: () => [],
@@ -22,6 +24,7 @@ const props = withDefaults(
 		selectedComposers: () => [],
 		selectedBooks: () => [],
 		selectedCollections: () => [],
+		selectedArtists: () => [],
 	},
 )
 
@@ -29,6 +32,7 @@ const emit = defineEmits<{
 	'update:selectedComposers': [composers: Composer[]]
 	'update:selectedBooks': [books: Book[]]
 	'update:selectedCollections': [collections: Collection[]]
+	'update:selectedArtists': [artists: Artist[]]
 	'clear': []
 }>()
 
@@ -37,6 +41,7 @@ const hasActiveFilters = computed(() => {
 		props.selectedComposers.length > 0
 		|| props.selectedBooks.length > 0
 		|| props.selectedCollections.length > 0
+		|| props.selectedArtists.length > 0
 	)
 })
 
@@ -44,6 +49,7 @@ function clearAllFilters() {
 	emit('update:selectedComposers', [])
 	emit('update:selectedBooks', [])
 	emit('update:selectedCollections', [])
+	emit('update:selectedArtists', [])
 	emit('clear')
 }
 </script>
@@ -93,6 +99,21 @@ function clearAllFilters() {
 				track-by="id"
 				:class="$style.select"
 				@update:model-value="emit('update:selectedCollections', $event)" />
+		</div>
+
+		<div :class="$style.filterGroup">
+			<label :class="$style.label">{{ t('mobilesheetsmanager', 'Artists') }}</label>
+			<NcSelect
+				:model-value="selectedArtists"
+				:options="artists"
+				:multiple="true"
+				:close-on-select="false"
+				:placeholder="t('mobilesheetsmanager', 'Filter by artist…')"
+				:input-label="t('mobilesheetsmanager', 'Filter by artist')"
+				label="name"
+				track-by="id"
+				:class="$style.select"
+				@update:model-value="emit('update:selectedArtists', $event)" />
 		</div>
 
 		<div v-if="hasActiveFilters" :class="$style.actions">
