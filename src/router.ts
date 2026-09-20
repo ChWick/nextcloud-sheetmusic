@@ -1,8 +1,9 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import App from './App.vue'
+import { generateUrl } from '@nextcloud/router'
 
 export const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHistory(generateUrl('/apps/mobilesheetsmanager/')),
   routes: [
     {
       path: '/apps/mobilesheetsmanager/:library/:view?',

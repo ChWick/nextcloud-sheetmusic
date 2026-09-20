@@ -5,7 +5,7 @@ import type { Book, Collection, Composer, LibraryData, Song } from './types/song
 import axios from '@nextcloud/axios'
 import { FilePickerClosed, getFilePickerBuilder } from '@nextcloud/dialogs'
 import { translate as t } from '@nextcloud/l10n'
-import { generateOcsUrl } from '@nextcloud/router'
+import { generateOcsUrl, generateUrl } from '@nextcloud/router'
 import { onMounted, ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import NcAppNavigation from '@nextcloud/vue/components/NcAppNavigation'
@@ -31,7 +31,7 @@ const route = useRoute()
 
 /** Navigation helpers **/
 function navigateToLibrary(library: string) {
-  router.push({ name: 'LibraryView', params: { library, view: 'songs' } })
+  router.push(generateUrl({ name: 'LibraryView', params: { library, view: 'songs' } }))
 }
 function goToView(view: 'songs' | 'files') {
   if (!selectedLibrary.value) return
