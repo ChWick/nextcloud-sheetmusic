@@ -146,7 +146,7 @@ async function addLibrary() {
 
     <!-- Main content -->
     <NcAppContent :class="$style.content">
-      <template v-if="selectedLibrary">
+      <template v-if="selectedLibrary >= 0">
         <template v-if="selectedView === 'songs'">
   <SongsView :selectedLibrary="selectedLibrary" />
 </template>
