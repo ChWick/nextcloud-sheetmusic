@@ -31,7 +31,7 @@ const route = useRoute()
 
 /** Navigation helpers **/
 function navigateToLibrary(library: string) {
-  router.push(generateUrl({ name: 'LibraryView', params: { library, view: 'songs' } }))
+  router.push({ name: 'LibraryView', params: { library, view: 'songs' } })
 }
 function goToView(view: 'songs' | 'files') {
   if (!selectedLibrary.value) return
