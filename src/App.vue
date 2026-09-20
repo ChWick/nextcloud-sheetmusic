@@ -37,7 +37,6 @@ function navigateToLibrary(library: string | number) {
 }
 function goToView(view: 'songs' | 'files') {
   if (selectedLibrary.value < 0) return
-  console.log('Navigating to view', view, 'for library', selectedLibrary.value, view)
   router.push({ name: 'LibraryView', params: { library: selectedLibrary.value, view } })
 }
 
@@ -45,10 +44,8 @@ function goToView(view: 'songs' | 'files') {
 watch(
   () => route.params,
   params => {
-    console.log('params.library', params.library)
     const lib = Array.isArray(params.library) ? parseInt(params.library[0]) : parseInt(params.library)
     const view = (params.view as string) ?? 'songs'
-    console.log('Route changed, library:', lib, 'view:', view)
     if (lib) {
       selectedLibrary.value = lib
       selectedView.value = view as any
@@ -65,15 +62,10 @@ onMounted(async () => {
   try {
     const response = await axios.get(generateOcsUrl('/apps/mobilesheetsmanager/api/libraries'))
     libraries.value = response.data.ocs.data.libraries
-
-    console.log("all libraries loaded:", libraries.value)
-    
-    // FIX: Look at the live route params directly before forcing a default choice!
     const activeRouteLibrary = route.params.library as string | undefined
 
     if (libraries.value.length > 0 && !activeRouteLibrary) {
       // Only set a default if the user landed on the root page matching no library
-      console.log('No library selected in route, defaulting to first library', libraries.value[0])
       navigateToLibrary(libraries.value[0].id)
     }
   } catch {
