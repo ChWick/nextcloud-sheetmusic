@@ -15,7 +15,7 @@ import { ref, watch } from 'vue'
 
 const props = defineProps<{
 	song: Song
-	libraryPath: string
+    libraryId: number
 	composers: Composer[]
 	books: Book[]
 	collections: Collection[]
@@ -130,7 +130,7 @@ async function handleFileUpload(event: Event) {
 	try {
 		const formData = new FormData()
 		formData.append('file', file)
-		formData.append('path', props.libraryPath)
+		formData.append('path', props.libraryId)
 
 		const response = await axios.post(
 			generateOcsUrl(`/apps/mobilesheetsmanager/api/songs/${props.song.id}/file/upload`),
@@ -198,7 +198,7 @@ async function confirmAttachNextcloudFile() {
 		const response = await axios.post(
 			generateOcsUrl(`/apps/mobilesheetsmanager/api/songs/${props.song.id}/file/attach`),
 			{
-				path: props.libraryPath,
+				path: props.libraryId,
 				sourcePath: selectedNextcloudNode.value.path,
 				action: attachAction.value,
 			},
@@ -236,7 +236,7 @@ async function saveSong() {
 					await axios.post(
 						generateOcsUrl(`/apps/mobilesheetsmanager/api/songs/${props.song.id}/file/${file.id}/delete`),
 						{
-							path: props.libraryPath,
+							path: props.libraryId,
 						},
 					)
 				}
@@ -251,7 +251,7 @@ async function saveSong() {
 				composerIds.push(comp.id)
 			} else {
 				const createRes = await axios.post(generateOcsUrl('/apps/mobilesheetsmanager/api/composers'), {
-					path: props.libraryPath,
+					path: props.libraryId,
 					name: comp.name,
 				})
 				composerIds.push(createRes.data.ocs.data.id)
@@ -265,7 +265,7 @@ async function saveSong() {
 				bookIds.push(bk.id)
 			} else {
 				const createRes = await axios.post(generateOcsUrl('/apps/mobilesheetsmanager/api/books'), {
-					path: props.libraryPath,
+					path: props.libraryId,
 					title: bk.title,
 				})
 				bookIds.push(createRes.data.ocs.data.id)
@@ -279,7 +279,7 @@ async function saveSong() {
 				collectionIds.push(col.id)
 			} else {
 				const createRes = await axios.post(generateOcsUrl('/apps/mobilesheetsmanager/api/collections'), {
-					path: props.libraryPath,
+					path: props.libraryId,
 					name: col.name,
 				})
 				collectionIds.push(createRes.data.ocs.data.id)
@@ -293,7 +293,7 @@ async function saveSong() {
 				artistIds.push(art.id)
 			} else {
 				const createRes = await axios.post(generateOcsUrl('/apps/mobilesheetsmanager/api/artists'), {
-					path: props.libraryPath,
+					path: props.libraryId,
 					name: art.name,
 				})
 				artistIds.push(createRes.data.ocs.data.id)
@@ -303,7 +303,7 @@ async function saveSong() {
 		const response = await axios.post(
 			generateOcsUrl(`/apps/mobilesheetsmanager/api/songs/${props.song.id}`),
 			{
-				path: props.libraryPath,
+				path: prop.libraryId,
 				title: title.value.trim(),
 				composerIds,
 				bookIds,

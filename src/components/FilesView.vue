@@ -12,13 +12,13 @@ import { generateOcsUrl } from '@nextcloud/router';
 import type { LibraryData, Song } from '../types/song';
 
 const props = defineProps<{
-	selectedLibrary: string;
+	selectedLibrary: number;
 }>();
 
 async function regenerateFilePaths() {
 	try {
 		const response = await axios.get(generateOcsUrl('/apps/mobilesheetsmanager/api/songs'), {
-			params: { path: props.selectedLibrary },
+			params: { id: props.selectedLibrary },
 		});
 
 		const data = response.data.ocs.data as LibraryData;
@@ -27,7 +27,7 @@ async function regenerateFilePaths() {
 		console.log(`Composers: ${data.composers.length}`);
 		console.log(`Books: ${data.books.length}`);
 		console.log(`Collections: ${data.collections.length}`);
-    console.log(`Artists: ${data.artists.length}`);
+        console.log(`Artists: ${data.artists.length}`);
 
 		data.songs.forEach((song: Song) => {
 			console.log(`Song: ${song.title}, Files:`, song.files);

@@ -77,21 +77,24 @@ class ApiController extends OCSController {
 
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'GET', url: '/api/songs')]
-	public function getSongs(?string $path = null): DataResponse {
-		$path = $path ?? (string)$this->request->getParam('path', '');
-		if ($path === '') {
+	public function getSongs(?string $id = null): DataResponse {
+		$id = +$id ?? (string)$this->request->getParam('id', -1);
+		if ($id < 0) {
 			return new DataResponse([], Http::STATUS_BAD_REQUEST);
 		}
-		$path = '/' . ltrim($path, '/');
 
 		$user = $this->userSession->getUser();
 		if ($user === null) {
 			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
 		}
 
-		if (!$this->libraryMapper->findForUser($user->getUID(), $path)) {
+		$library = $this->libraryMapper->findForUser($user->getUID(), $id);
+
+		if (!$library) {
 			return new DataResponse([], Http::STATUS_NOT_FOUND);
 		}
+
+		$path = $library['path'] ?? '';
 
 		try {
 			$node = $this->rootFolder->getUserFolder($user->getUID())->get(ltrim($path, '/'));

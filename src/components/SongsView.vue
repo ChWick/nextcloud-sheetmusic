@@ -28,7 +28,7 @@
     </ul>
     <div :class="$style.viewerArea">
       <SongViewer :song="selectedSong"
-                  :library-path="selectedLibrary"
+                  :library-id="selectedLibrary"
                   :composers="composers"
                   :books="books"
                   :collections="collections"
@@ -48,7 +48,7 @@ import SongViewer from '../components/SongViewer.vue';
 import type { Artist, Song, Composer, Book, Collection, LibraryData } from '../types/song';
 
 // Props from parent (App.vue)
-const props = defineProps<{ selectedLibrary: string }>();
+const props = defineProps<{ selectedLibrary: number }>();
 
 // Local state for this view
 const songs = ref<Song[]>([]);
@@ -94,11 +94,11 @@ function handleLibraryDataUpdate(data: LibraryData) {
   }
 }
 
-async function loadLibraryData(library: string) {
+async function loadLibraryData(id: number) {
   isLoadingSongs.value = true;
   fileError.value = '';
   try {
-    const response = await axios.get(generateOcsUrl('/apps/mobilesheetsmanager/api/songs'), { params: { path: library } });
+    const response = await axios.get(generateOcsUrl('/apps/mobilesheetsmanager/api/songs'), { params: { id } });
     handleLibraryDataUpdate(response.data.ocs.data as LibraryData);
   } catch {
     fileError.value = t('mobilesheetsmanager', 'Could not load the songs in this library.');

@@ -19,23 +19,23 @@ class LibraryMapper {
 	}
 
 	/**
-	 * @return list<string>
+	 * @return list<Library>
 	 */
 	public function findAllForUser(string $userId): array {
 		$qb = $this->db->getQueryBuilder();
-		$qb->select('path')
+		$qb->select('id', 'path')
 			->from(self::TABLE_NAME)
 			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId, IQueryBuilder::PARAM_STR)))
 			->orderBy('path', 'ASC');
 
 		$result = $qb->executeQuery();
-		$paths = [];
+		$results = [];
 		while ($row = $result->fetchAssociative()) {
-			$paths[] = (string)$row['path'];
+			$results[] = ['id' => (int)$row['id'], 'path' => (string)$row['path']];
 		}
 		$result->closeCursor();
 
-		return $paths;
+		return $results;
 	}
 
 	public function addForUser(string $userId, string $path): void {
@@ -57,14 +57,23 @@ class LibraryMapper {
 		$qb->executeStatement();
 	}
 
-	public function findForUser(string $userId, string $path): bool {
+	public function findForUser(string $userId, int $id): array {
 		$qb = $this->db->getQueryBuilder();
-		$qb->select('path')
+		$qb->select('id', 'path')
 			->from(self::TABLE_NAME)
 			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId, IQueryBuilder::PARAM_STR)))
-			->andWhere($qb->expr()->eq('path', $qb->createNamedParameter($path, IQueryBuilder::PARAM_STR)))
+			->andWhere($qb->expr()->eq('id', $qb->createNamedParameter($id, IQueryBuilder::PARAM_INT)))
 			->setMaxResults(1);
 
-		return $qb->executeQuery()->fetchOne() !== false;
+		$row = $qb->executeQuery()->fetchAssociative();
+
+		if ($row === false) {
+			return null;
+		}
+
+		return [
+			'id'   => (int)$row['id'],
+			'path' => (string)$row['path']
+		];
 	}
 }

@@ -13,7 +13,7 @@ import SongEditor from './SongEditor.vue'
 const props = withDefaults(
 	defineProps<{
 		song?: Song | null
-		libraryPath?: string
+		libraryId?: number
 		composers?: Composer[]
 		books?: Book[]
 		collections?: Collection[]
@@ -21,7 +21,7 @@ const props = withDefaults(
 	}>(),
 	{
 		song: null,
-		libraryPath: '',
+		libraryId: -1,
 		composers: () => [],
 		books: () => [],
 		collections: () => [],
@@ -185,7 +185,7 @@ watch(
 		<SongEditor
 			v-if="song && isEditing"
 			:song="song"
-			:library-path="libraryPath"
+			:library-id="libraryId"
 			:composers="composers"
 			:books="books"
 			:collections="collections"

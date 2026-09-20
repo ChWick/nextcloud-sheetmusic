@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { INode } from '@nextcloud/files'
 import type { Book, Collection, Composer, LibraryData, Song } from './types/song'
+import type { Library } from './types/library.ts'
 
 import axios from '@nextcloud/axios'
 import { FilePickerClosed, getFilePickerBuilder } from '@nextcloud/dialogs'
@@ -20,8 +21,8 @@ import FilesView from './components/FilesView.vue'
 /*** State ***/
 const isDialogOpen = ref(false)
 const selectedFile = ref<INode>()
-const libraries = ref<string[]>([])
-const selectedLibrary = ref<string>('')
+const libraries = ref<Library[]>([])
+const selectedLibrary = ref<number>(-1)
 const selectedView = ref<'songs' | 'files'>('songs')
 const fileError = ref('') // used for dialogs and library load errors
 
@@ -30,11 +31,12 @@ const router = useRouter()
 const route = useRoute()
 
 /** Navigation helpers **/
-function navigateToLibrary(library: string) {
+function navigateToLibrary(library: number) {
   router.push({ name: 'LibraryView', params: { library, view: 'songs' } })
 }
 function goToView(view: 'songs' | 'files') {
   if (!selectedLibrary.value) return
+  console.log('Navigating to view', view, 'for library', selectedLibrary.value, view)
   router.push({ name: 'LibraryView', params: { library: selectedLibrary.value, view } })
 }
 
@@ -42,13 +44,14 @@ function goToView(view: 'songs' | 'files') {
 watch(
   () => route.params,
   params => {
-    const lib = params.library as string | undefined
+    const lib = Array.isArray(params.library) ? parseInt(params.library[0]) : parseInt(params.library)
     const view = (params.view as string) ?? 'songs'
+    console.log('Route changed, library:', lib, 'view:', view)
     if (lib) {
       selectedLibrary.value = lib
       selectedView.value = view as any
     } else {
-      selectedLibrary.value = ''
+      selectedLibrary.value = -1
       selectedView.value = 'songs'
     }
   },
@@ -60,9 +63,16 @@ onMounted(async () => {
   try {
     const response = await axios.get(generateOcsUrl('/apps/mobilesheetsmanager/api/libraries'))
     libraries.value = response.data.ocs.data.libraries
-    // Auto‑select first library; SongsView will load its songs
-    if (libraries.value.length > 0 && !selectedLibrary.value) {
-      selectedLibrary.value = libraries.value[0]
+
+    console.log("all libraries loaded:", libraries.value)
+    
+    // FIX: Look at the live route params directly before forcing a default choice!
+    const activeRouteLibrary = route.params.library as string | undefined
+
+    if (libraries.value.length > 0 && !activeRouteLibrary) {
+      // Only set a default if the user landed on the root page matching no library
+      console.log('No library selected in route, defaulting to first library', libraries.value[0])
+      navigateToLibrary(libraries.value[0].id)
     }
   } catch {
     fileError.value = t('mobilesheetsmanager', 'Could not load your MobileSheets libraries.')
@@ -121,9 +131,9 @@ async function addLibrary() {
     <!-- Sidebar (navigation) -->
     <NcAppNavigation :aria-label="t('mobilesheetsmanager', 'MobileSheets libraries')">
       <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Library')">
-        <select v-model="selectedLibrary" @change="navigateToLibrary(selectedLibrary)" class="$style.librarySelect">
+        <select :value="selectedLibrary" @change="navigateToLibrary($event.target.value)" class="$style.librarySelect">
           <option disabled value="">{{ t('mobilesheetsmanager', 'Select library') }}</option>
-          <option v-for="library in libraries" :key="library" :value="library">{{ library }}</option>
+          <option v-for="library in libraries" :key="library.id" :value="library.id">{{ library.path }}</option>
         </select>
       </NcAppNavigationItem>
 
@@ -142,10 +152,7 @@ async function addLibrary() {
 
     <!-- Main content -->
     <NcAppContent :class="$style.content">
-      <h2>{{ selectedLibrary ?? t('mobilesheetsmanager', 'MobileSheets Manager') }}</h2>
       <template v-if="selectedLibrary">
-
-
         <template v-if="selectedView === 'songs'">
   <SongsView :selectedLibrary="selectedLibrary" />
 </template>
