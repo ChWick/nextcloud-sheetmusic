@@ -31,11 +31,12 @@ const router = useRouter()
 const route = useRoute()
 
 /** Navigation helpers **/
-function navigateToLibrary(library: number) {
-  router.push({ name: 'LibraryView', params: { library, view: 'songs' } })
+function navigateToLibrary(library: string | number) {
+  const libraryId = typeof library === 'string' ? parseInt(library, 10) : library
+  router.push({ name: 'LibraryView', params: { library: libraryId, view: 'songs' } })
 }
 function goToView(view: 'songs' | 'files') {
-  if (!selectedLibrary.value) return
+  if (selectedLibrary.value < 0) return
   console.log('Navigating to view', view, 'for library', selectedLibrary.value, view)
   router.push({ name: 'LibraryView', params: { library: selectedLibrary.value, view } })
 }
@@ -44,6 +45,7 @@ function goToView(view: 'songs' | 'files') {
 watch(
   () => route.params,
   params => {
+    console.log('params.library', params.library)
     const lib = Array.isArray(params.library) ? parseInt(params.library[0]) : parseInt(params.library)
     const view = (params.view as string) ?? 'songs'
     console.log('Route changed, library:', lib, 'view:', view)
@@ -131,16 +133,16 @@ async function addLibrary() {
     <!-- Sidebar (navigation) -->
     <NcAppNavigation :aria-label="t('mobilesheetsmanager', 'MobileSheets libraries')">
       <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Library')">
-        <select :value="selectedLibrary" @change="navigateToLibrary($event.target.value)" class="$style.librarySelect">
-          <option disabled value="">{{ t('mobilesheetsmanager', 'Select library') }}</option>
+        <select v-model="selectedLibrary" @change="navigateToLibrary(selectedLibrary)" class="$style.librarySelect">
+          <option disabled value="-1">{{ t('mobilesheetsmanager', 'Select library') }}</option>
           <option v-for="library in libraries" :key="library.id" :value="library.id">{{ library.path }}</option>
         </select>
       </NcAppNavigationItem>
 
       <!-- view toggle – only for the selected library -->
-      <template v-if="selectedLibrary">
-        <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Songs')" :active="selectedView === 'songs'" @click="goToView('songs')" />
-        <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Files')" :active="selectedView === 'files'" @click="goToView('files')" />
+      <template v-if="selectedLibrary >= 0">
+        <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Songs')" :active="selectedView === 'songs'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'songs' } }" " />
+        <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Files')" :active="selectedView === 'files'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'files' } }" " />
       </template>
 
       <template #footer>
