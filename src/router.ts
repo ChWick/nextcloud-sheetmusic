@@ -6,13 +6,13 @@ export const router = createRouter({
   history: createWebHistory(generateUrl('/apps/mobilesheetsmanager/')),
   routes: [
     {
-      path: '/apps/mobilesheetsmanager/:library/:view?',
+      path: '/library/:library/:view?',
       name: 'LibraryView',
       component: App,
       props: true,
     },
     {
-      path: '/apps/mobilesheetsmanager',
+      path: '/',
       name: 'Home',
       component: App,
     },
