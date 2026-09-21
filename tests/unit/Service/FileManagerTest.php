@@ -18,6 +18,7 @@ use OCA\MobileSheetsManager\Db\MobileSheetsFile;
 use OCA\MobileSheetsManager\Db\MobileSheetsSong;
 use OCA\MobileSheetsManager\Db\SongMapper;
 use OCA\MobileSheetsManager\Service\FileManager;
+use OCA\MobileSheetsManager\Service\MobileSheetsHashCodesFile;
 use OCA\MobileSheetsManager\Service\MobileSheetsPathResolver;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
@@ -52,6 +53,9 @@ final class FileManagerTest extends TestCase {
 	/** @var list<string> raw targets passed to move() */
 	private array $moveTargets = [];
 
+	/** @var list<string> temporary hash codes files to remove after each test */
+	private array $temporaryFiles = [];
+
 	/** @var list<string> folders created through newFolder() */
 	private array $createdFolders = [];
 
@@ -72,6 +76,7 @@ final class FileManagerTest extends TestCase {
 		$this->folders = ['Noten' => true, 'Noten/source' => true];
 		$this->moves = [];
 		$this->moveTargets = [];
+		$this->temporaryFiles = [];
 		$this->createdFolders = [];
 		$this->deletedFolders = [];
 		$this->updates = [];
@@ -85,12 +90,21 @@ final class FileManagerTest extends TestCase {
 		$this->rootFolder = $this->createMock(IRootFolder::class);
 		$this->rootFolder->method('getUserFolder')->with(self::UID)->willReturn($this->userFolder);
 
-		$this->libraryFolder = $this->fakeFolder('Noten');priteprite
+		$this->libraryFolder = $this->fakeFolder('Noten');
 		$this->libraryFolder->method('getPath')->willReturn(self::LIBRARY_DIR);
 
 		$this->songMapper = $this->makeRecordingSongMapper();
 
 		$this->fileManager = $this->makeFileManager($this->songMapper);
+	}
+
+	protected function tearDown(): void {
+		foreach ($this->temporaryFiles as $file) {
+			if (is_file($file)) {
+				unlink($file);
+			}
+		}
+		$this->temporaryFiles = [];
 	}
 
 	/** A FileManager wired to the fake tree and the given SongMapper. */
@@ -140,12 +154,35 @@ final class FileManagerTest extends TestCase {
 		);
 	}
 
+	/**
+	 * Write a temporary hash codes file in the MobileSheets format.
+	 *
+	 * @param list<array{0: string, 1: string, 2: string, 3: string}> $entries
+	 * @return string path of the written file
+	 */
+	private function writeHashCodesFile(array $entries): string {
+		$lines = [];
+		foreach ($entries as $entry) {
+			foreach ($entry as $line) {
+				$lines[] = $line;
+			}
+		}
+
+		$path = tempnam(sys_get_temp_dir(), 'msm-hash-');
+		self::assertNotFalse($path);
+		file_put_contents($path, implode("\n", $lines));
+		$this->temporaryFiles[] = $path;
+
+		return $path;
+	}
+
 	/** Run the method under test for a file stored at $sourceRelative. */
 	private function regenerate(
 		MobileSheetsSong $song,
 		string $sourceRelative,
 		int $fileId = 7,
 		string $databasePath = '/tmp/library.db',
+		?MobileSheetsHashCodesFile $hashCodes = null,
 	): void {
 		$this->fileManager->regenerateFilePath(
 			$song,
@@ -153,6 +190,7 @@ final class FileManagerTest extends TestCase {
 			$this->user(),
 			$this->libraryFolder,
 			$databasePath,
+			$hashCodes,
 		);
 	}
 
@@ -333,6 +371,82 @@ final class FileManagerTest extends TestCase {
 		self::assertSame([], $this->deletedFolders, 'a refused move must not tidy up folders');
 		self::assertArrayHasKey('Noten/A/B', $this->folders);
 		self::assertArrayHasKey('Noten/A', $this->folders);
+	}
+
+	public function testUpdatesTheHashCodesFileWhenAFileIsMoved(): void {
+		$hashFile = $this->writeHashCodesFile([
+			[$this->sourceWebdav('Noten/source/SomeFile.pdf'), '561292453', '1789312275000', '839797'],
+			[$this->sourceWebdav('Noten/other.pdf'), '-205429089', '1789249491000', '809049'],
+		]);
+
+		$hashCodes = MobileSheetsHashCodesFile::parse($hashFile, $this->createMock(LoggerInterface::class));
+		$this->regenerate($this->collectionSong(), 'Noten/source/SomeFile.pdf', hashCodes: $hashCodes);
+
+		// FileManager does not save; the caller does. Verify the in-memory edit.
+		self::assertTrue($hashCodes->isDirty());
+		self::assertFalse($hashCodes->hasPath($this->sourceWebdav('Noten/source/SomeFile.pdf')));
+
+		$target = $this->sourceWebdav('Noten/Jazz/Jazz - Take Five.pdf');
+		self::assertTrue($hashCodes->hasPath($target));
+
+		$entries = $hashCodes->entries();
+		self::assertSame($target, $entries[0]->path, 'the renamed entry must keep its position');
+		self::assertSame('561292453', $entries[0]->hashCode, 'hash must be preserved');
+		self::assertSame('1789312275000', $entries[0]->modifiedAt, 'mtime must be preserved');
+		self::assertSame('839797', $entries[0]->size, 'size must be preserved');
+		self::assertSame(2, count($entries), 'no entry may be added or lost');
+		self::assertSame('-205429089', $entries[1]->hashCode, 'unrelated entries must stay untouched');
+	}
+
+	public function testLeavesTheHashCodesEntryAloneWhenTheMoveIsRefused(): void {
+		$hashFile = $this->writeHashCodesFile([
+			[$this->sourceWebdav('Noten/A/B/SomeFile.pdf'), '1', '2', '3'],
+		]);
+		$this->files = [
+			'Noten/A/B/SomeFile.pdf' => 'PAYLOAD',
+			'Noten/Jazz/Jazz - Take Five.pdf' => 'EXISTING',
+		];
+		$this->folders = ['Noten' => true, 'Noten/A' => true, 'Noten/A/B' => true, 'Noten/Jazz' => true];
+
+		$hashCodes = MobileSheetsHashCodesFile::parse($hashFile, $this->createMock(LoggerInterface::class));
+
+		try {
+			$this->regenerate($this->collectionSong(), 'Noten/A/B/SomeFile.pdf', hashCodes: $hashCodes);
+			self::fail('Expected a RuntimeException because the target already exists');
+		} catch (\RuntimeException) {
+			// expected
+		}
+
+		self::assertFalse($hashCodes->isDirty(), 'a refused move must not dirty the hash codes file');
+		self::assertTrue($hashCodes->hasPath($this->sourceWebdav('Noten/A/B/SomeFile.pdf')));
+	}
+
+	public function testDoesNotDirtyTheHashCodesFileWhenNothingMoved(): void {
+		$alreadyThere = $this->sourceWebdav('Noten/Jazz/Jazz - Take Five.pdf');
+		$hashFile = $this->writeHashCodesFile([[$alreadyThere, '1', '2', '3']]);
+		$this->files = ['Noten/Jazz/Jazz - Take Five.pdf' => 'PAYLOAD'];
+		$this->folders = ['Noten' => true, 'Noten/Jazz' => true];
+
+		$hashCodes = MobileSheetsHashCodesFile::parse($hashFile, $this->createMock(LoggerInterface::class));
+		$this->regenerate($this->collectionSong(), 'Noten/Jazz/Jazz - Take Five.pdf', hashCodes: $hashCodes);
+
+		self::assertFalse($hashCodes->isDirty(), 'a no-op must not touch the hash codes file');
+	}
+
+	public function testSkipsTheHashCodesFileWhenAnEntryIsMissing(): void {
+		$hashFile = $this->writeHashCodesFile([
+			[$this->sourceWebdav('Noten/unrelated.pdf'), '1', '2', '3'],
+		]);
+
+		$hashCodes = MobileSheetsHashCodesFile::parse($hashFile, $this->createMock(LoggerInterface::class));
+		$this->regenerate($this->collectionSong(), 'Noten/source/SomeFile.pdf', hashCodes: $hashCodes);
+
+		// The move still happens; there is simply no entry to rename.
+		self::assertSame(
+			[['from' => 'Noten/source/SomeFile.pdf', 'to' => 'Noten/Jazz/Jazz - Take Five.pdf']],
+			$this->moves,
+		);
+		self::assertFalse($hashCodes->isDirty());
 	}
 
 	public function testRevertsTheMoveWhenTheDatabaseUpdateFails(): void {

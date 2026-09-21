@@ -111,10 +111,21 @@ class FileManager {
 		// database, so regenerated files belong in the database's parent folder.
 		$targetFolder = $node->getParent();
 
-		foreach ($songs as $song) {
-			foreach ($song->files as $file) {
-				$this->regenerateFilePath($song, $file, $user, $targetFolder, $databasePath);
+		// The hash codes file tracks each file by its WebDAV path, so the moves
+		// below have to be reflected there as well. It is parsed once, edited in
+		// memory and written back a single time.
+		$hashCodes = MobileSheetsHashCodesFile::forDatabase($databasePath, $this->logger);
+
+		try {
+			foreach ($songs as $song) {
+				foreach ($song->files as $file) {
+					$this->regenerateFilePath($song, $file, $user, $targetFolder, $databasePath, $hashCodes);
+				}
 			}
+		} finally {
+			// Save even when the run aborts, so the hash codes file keeps matching
+			// the moves that already happened.
+			$hashCodes?->save();
 		}
 	}
 
@@ -130,6 +141,7 @@ class FileManager {
 		IUser $user,
 		Folder $targetFolder,
 		string $databasePath,
+		?MobileSheetsHashCodesFile $hashCodes = null,
 	): void {
 		// Relative target as produced by the naming rules, e.g.
 		// "Miles/Miles - Real Book/Miles - Real Book - Blue.pdf".
@@ -219,6 +231,10 @@ class FileManager {
 		// earlier would break the revert above, which needs the source folder back.
 		$emptyFolderBoundary = $this->pathResolver->relativeToUserFolder($targetFolder->getPath(), $user) ?? '';
 		$removedFolders = $this->removeEmptyParentFolders($userFolder, $sourceRelative, $emptyFolderBoundary);
+
+		// The hash codes file keys files by their WebDAV path, so it needs the
+		// rename too. Hash, modification time and size are unchanged by a move.
+		$hashCodes?->updatePath($source->webdav, $target->webdav);
 
 		$this->logger->info('Moved MobileSheets file and updated the database', [
 			'fileId' => $file->id,
