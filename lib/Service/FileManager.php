@@ -187,8 +187,9 @@ class FileManager {
 		// TODO: resolve collisions (unique name or overwrite) instead of failing.
 		if ($userFolder->nodeExists($targetRelative)) {
 			throw new \RuntimeException(sprintf(
-				'Refusing to move file %d: target "%s" already exists',
+				'Refusing to move file %d (%s): target "%s" already exists',
 				$file->id,
+				$source->webdav,
 				$target->webdav,
 			));
 		}
