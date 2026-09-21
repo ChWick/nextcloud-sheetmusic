@@ -6,6 +6,7 @@ namespace OCA\MobileSheetsManager\Controller;
 
 use OCA\MobileSheetsManager\Db\LibraryMapper;
 use OCA\MobileSheetsManager\Db\SongMapper;
+use OCA\MobileSheetsManager\Service\FileManager;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\ApiRoute;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -29,6 +30,7 @@ class ApiController extends OCSController {
 		private IRootFolder $rootFolder,
 		private LoggerInterface $logger,
 		private IUserSession $userSession,
+		private FileManager $fileManager,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -366,6 +368,33 @@ class ApiController extends OCSController {
 			return new DataResponse([], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
+	
+	#[NoAdminRequired]
+    #[ApiRoute(verb: 'POST', url: '/regenerate-file-paths')]
+    public function regenerateFilePaths(int $libraryId): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse(
+				['message' => 'User not logged in'],
+				Http::STATUS_UNAUTHORIZED
+			);
+		} 
+
+		try {
+			$this->fileManager->regenerateFilePaths($libraryId, $user);
+			
+		} catch (\Exception $e) {
+			$this->logger->error("Error regenerating file paths for library ID $libraryId: " . $e->getMessage());
+			return new DataResponse(
+				['message' => "Error regenerating file paths for library ID $libraryId: " . $e->getMessage()],
+				Http::STATUS_INTERNAL_SERVER_ERROR
+			);
+		}
+		return new DataResponse(
+			['message' => 'File paths regenerated successfully'],
+			Http::STATUS_OK
+		);
+    }
 
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'POST', url: '/api/composers')]

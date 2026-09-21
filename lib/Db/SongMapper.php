@@ -293,6 +293,19 @@ class SongMapper {
 
 		return (string)$row['Path'];
 	}
+	
+	public function updateFile(string $databasePath, int $fileId, string $newPath): void {
+        $database = new PDO('sqlite:' . $databasePath, options: [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        ]);
+
+        $updateStmt = $database->prepare('UPDATE Files SET Path = :newPath WHERE Id = :fileId');
+        $updateStmt->execute([
+            ':newPath' => $newPath,
+            ':fileId' => $fileId,
+        ]);
+    }
 
 	public function createComposer(string $databasePath, string $name): int {
 		$database = new PDO('sqlite:' . $databasePath, options: [

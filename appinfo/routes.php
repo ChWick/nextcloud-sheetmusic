@@ -49,5 +49,10 @@ return [
 			'url' => '/api/collections',
 			'verb' => 'POST',
 		],
+		[
+			'name' => 'Api#regenerateFilePaths',
+			'url' => '/api/regenerate-file-paths',
+			'verb' => 'POST',
+		],
 	],
 ];

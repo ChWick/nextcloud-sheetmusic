@@ -38,6 +38,15 @@ class LibraryMapper {
 		return $results;
 	}
 
+	public function findById(int $libraryId): ?array {
+        $qb = $this->db->getQueryBuilder();
+        $qb->select('*')
+           ->from(self::TABLE_NAME)
+           ->where($qb->expr()->eq('id', $qb->createNamedParameter($libraryId)));
+
+        return $qb->executeQuery()->fetch();
+    }
+
 	public function addForUser(string $userId, string $path): void {
 		$check = $this->db->getQueryBuilder();
 		$check->select('path')
