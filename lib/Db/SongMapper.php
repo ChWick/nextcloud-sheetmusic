@@ -282,7 +282,9 @@ class SongMapper {
 			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
 		]);
 
-		$statement = $database->query('SELECT Id, Path FROM Files WHERE SongId = '.$songId);
+		// Ordered by Id so a song's files always come back in the same order: their
+		// position decides the numeric prefix in the regenerated file name.
+		$statement = $database->query('SELECT Id, Path FROM Files WHERE SongId = '.$songId.' ORDER BY Id ASC');
 
 		$files = [];
 		if ($statement !== false) {

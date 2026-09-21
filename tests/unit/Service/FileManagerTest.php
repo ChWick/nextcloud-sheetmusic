@@ -29,6 +29,9 @@ use OCP\IUser;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 
+use function OCA\MobileSheetsManager\Service\fileIndexOf;
+use function OCA\MobileSheetsManager\Service\fileIndexPrefix;
+
 /**
  * Covers FileManager::regenerateFilePath(), which moves a MobileSheets file to its
  * regenerated location and persists the new WebDAV path in the database.
@@ -371,6 +374,141 @@ final class FileManagerTest extends TestCase {
 		self::assertSame([], $this->deletedFolders, 'a refused move must not tidy up folders');
 		self::assertArrayHasKey('Noten/A/B', $this->folders);
 		self::assertArrayHasKey('Noten/A', $this->folders);
+	}
+
+	public function testDoesNotNumberASingleFileSong(): void {
+		$song = new MobileSheetsSong(
+			1,
+			'Take Five',
+			[new MobileSheetsFile(11, $this->sourceWebdav('Noten/source/SomeFile.pdf'))],
+			[],
+			[],
+			[new MobileSheetsCollection(1, 'Jazz')],
+			[],
+		);
+
+		$this->regenerate($song, 'Noten/source/SomeFile.pdf', 11);
+
+		self::assertSame(
+			[['from' => 'Noten/source/SomeFile.pdf', 'to' => 'Noten/Jazz/Jazz - Take Five.pdf']],
+			$this->moves,
+		);
+	}
+
+	public function testNumbersEachFileOfAMultiFileSongAndKeepsThemApart(): void {
+		$song = new MobileSheetsSong(
+			1,
+			'Take Five',
+			[
+				new MobileSheetsFile(11, $this->sourceWebdav('Noten/source/first.pdf')),
+				new MobileSheetsFile(12, $this->sourceWebdav('Noten/source/second.pdf')),
+			],
+			[],
+			[],
+			[new MobileSheetsCollection(1, 'Jazz')],
+			[],
+		);
+		$this->files = [
+			'Noten/source/first.pdf' => 'FIRST',
+			'Noten/source/second.pdf' => 'SECOND',
+		];
+
+		$this->regenerate($song, 'Noten/source/first.pdf', 11);
+		$this->regenerate($song, 'Noten/source/second.pdf', 12);
+
+		// The song's files would otherwise all map onto the same name.
+		self::assertSame([
+			['from' => 'Noten/source/first.pdf', 'to' => 'Noten/Jazz/001 Jazz - Take Five.pdf'],
+			['from' => 'Noten/source/second.pdf', 'to' => 'Noten/Jazz/002 Jazz - Take Five.pdf'],
+		], $this->moves);
+
+		self::assertSame([
+			['fileId' => 11, 'path' => '/remote.php/dav/files/admin/Noten/Jazz/001 Jazz - Take Five.pdf'],
+			['fileId' => 12, 'path' => '/remote.php/dav/files/admin/Noten/Jazz/002 Jazz - Take Five.pdf'],
+		], $this->updates);
+
+		// The prefix belongs on the file name, not on a folder.
+		self::assertSame(['Noten/Jazz'], $this->createdFolders);
+		self::assertSame('FIRST', $this->files['Noten/Jazz/001 Jazz - Take Five.pdf']);
+		self::assertSame('SECOND', $this->files['Noten/Jazz/002 Jazz - Take Five.pdf']);
+	}
+
+	public function testLeavesAFileUnnumberedWhenItIsNotPartOfTheSong(): void {
+		// A file that is not listed on the song cannot be numbered; leaving it
+		// unprefixed is safe because every listed file gets its own index.
+		$song = new MobileSheetsSong(
+			1,
+			'Take Five',
+			[
+				new MobileSheetsFile(11, $this->sourceWebdav('Noten/source/other.pdf')),
+				new MobileSheetsFile(12, $this->sourceWebdav('Noten/source/another.pdf')),
+			],
+			[],
+			[],
+			[new MobileSheetsCollection(1, 'Jazz')],
+			[],
+		);
+
+		$this->regenerate($song, 'Noten/source/SomeFile.pdf', 99);
+
+		self::assertSame(
+			[['from' => 'Noten/source/SomeFile.pdf', 'to' => 'Noten/Jazz/Jazz - Take Five.pdf']],
+			$this->moves,
+		);
+	}
+
+	public function testNumberPrefixIsZeroPaddedAndSurvivesMoreThanNineFiles(): void {
+		$files = [];
+		foreach (range(1, 12) as $position) {
+			$files[] = new MobileSheetsFile(100 + $position, $this->sourceWebdav("Noten/source/f$position.pdf"));
+		}
+		$song = new MobileSheetsSong(1, 'Take Five', $files, [], [], [new MobileSheetsCollection(1, 'Jazz')], []);
+
+		self::assertSame('001 ', fileIndexPrefix(fileIndexOf($song, $files[0]), count($files)));
+		self::assertSame('009 ', fileIndexPrefix(fileIndexOf($song, $files[8]), count($files)));
+		self::assertSame('010 ', fileIndexPrefix(fileIndexOf($song, $files[9]), count($files)));
+		self::assertSame('012 ', fileIndexPrefix(fileIndexOf($song, $files[11]), count($files)));
+
+		// Unused for a single-file song, and when the file is unknown.
+		self::assertSame('', fileIndexPrefix(1, 1));
+		self::assertSame('', fileIndexPrefix(1, 0));
+		self::assertSame('', fileIndexPrefix(null, 5));
+	}
+
+	public function testNumbersFilesOfAMultiFileSongWithAComposerAndBook(): void {
+		$song = new MobileSheetsSong(
+			2,
+			'Blue',
+			[
+				new MobileSheetsFile(21, $this->sourceWebdav('Noten/source/a.pdf')),
+				new MobileSheetsFile(22, $this->sourceWebdav('Noten/source/b.pdf')),
+			],
+			[new MobileSheetsComposer(10, 'Miles')],
+			[new MobileSheetsBook(100, 'Real Book')],
+			[],
+			[],
+		);
+		$this->files = [
+			'Noten/source/a.pdf' => 'A',
+			'Noten/source/b.pdf' => 'B',
+		];
+
+		$this->regenerate($song, 'Noten/source/a.pdf', 21);
+		$this->regenerate($song, 'Noten/source/b.pdf', 22);
+
+		// The index goes on the file name, below the composer/book folders.
+		self::assertSame([
+			['from' => 'Noten/source/a.pdf', 'to' => 'Noten/Miles/Miles - Real Book/001 Miles - Real Book - Blue.pdf'],
+			['from' => 'Noten/source/b.pdf', 'to' => 'Noten/Miles/Miles - Real Book/002 Miles - Real Book - Blue.pdf'],
+		], $this->moves);
+
+		self::assertSame(
+			['Noten/Miles', 'Noten/Miles/Miles - Real Book'],
+			$this->createdFolders,
+			'only the folders may be created; the index must not become one',
+		);
+		self::assertSame('A', $this->files['Noten/Miles/Miles - Real Book/001 Miles - Real Book - Blue.pdf']);
+		self::assertSame('B', $this->files['Noten/Miles/Miles - Real Book/002 Miles - Real Book - Blue.pdf']);
 	}
 
 	public function testUpdatesTheHashCodesFileWhenAFileIsMoved(): void {

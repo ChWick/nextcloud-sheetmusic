@@ -24,7 +24,32 @@ function getFileExtension(string $filename): string {
 	return $extension !== '' ? '.' . $extension : '';
 }
 
-function createWithComposerOrArtist(MobileSheetsSong $song, string $ext): string {
+/**
+ * Zero-padded index prefix used to tell the files of a multi-file song apart,
+ * e.g. "001 " producing "001 Miles - Real Book - Blue.pdf".
+ *
+ * A song with a single file keeps its plain, unprefixed name.
+ */
+function fileIndexPrefix(?int $fileIndex, int $fileCount): string {
+	if ($fileIndex === null || $fileCount < 2) {
+		return '';
+	}
+
+	return sprintf('%03d ', $fileIndex);
+}
+
+/** 1-based position of $file within $song, or null when it is not listed there. */
+function fileIndexOf(MobileSheetsSong $song, MobileSheetsFile $file): ?int {
+	foreach ($song->files as $position => $candidate) {
+		if ($candidate->id === $file->id) {
+			return $position + 1;
+		}
+	}
+
+	return null;
+}
+
+function createWithComposerOrArtist(MobileSheetsSong $song, string $ext, string $filePrefix = ''): string {
 	$composer = $song->composers[0]->name ?? '';
 	$artist = $song->artists[0]->name ?? '';
 
@@ -35,46 +60,50 @@ function createWithComposerOrArtist(MobileSheetsSong $song, string $ext): string
 	$compArtist = $composer !== '' ? $composer : $artist;
 	$book = $song->books[0]->title ?? '';
 	$collection = $song->collections[0]->name ?? '';
-	$ds = DIRECTORY_SEPARATOR;
-	$newPath = $compArtist;
 
 	if ($book !== '') {
-		$newPath .= $ds . "{$compArtist} - {$book}";
-		$newPath .= $ds . "{$compArtist} - {$book} - {$song->title}" . $ext;
+		$folder = $compArtist . DIRECTORY_SEPARATOR . "{$compArtist} - {$book}";
+		$fileName = "{$compArtist} - {$book} - {$song->title}";
 	} elseif ($collection !== '') {
-		$newPath .= $ds . "{$compArtist} - {$collection}";
-		$newPath .= $ds . "{$compArtist} - {$collection} - {$song->title}" . $ext;
+		$folder = $compArtist . DIRECTORY_SEPARATOR . "{$compArtist} - {$collection}";
+		$fileName = "{$compArtist} - {$collection} - {$song->title}";
 	} else {
-		$newPath .= $ds . "{$compArtist} - {$song->title}" . $ext;
+		$folder = $compArtist;
+		$fileName = "{$compArtist} - {$song->title}";
 	}
 
-	return $newPath;
+	return $folder . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext;
 }
 
-function createWithCollection(MobileSheetsSong $song, string $ext): string {
+function createWithCollection(MobileSheetsSong $song, string $ext, string $filePrefix = ''): string {
 	$collection = $song->collections[0]->name ?? '';
 
 	if ($collection === '') {
 		throw new \Exception('No collection');
 	}
 
-	$ds = DIRECTORY_SEPARATOR;
-	$newPath = $collection;
-	$newPath .= $ds . "{$collection} - {$song->title}" . $ext;
+	$fileName = "{$collection} - {$song->title}";
 
-	return $newPath;
+	return $collection . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext;
 }
 
-function createTargetPath(MobileSheetsSong $song, string $ext): string {
+function createTargetPath(
+	MobileSheetsSong $song,
+	string $ext,
+	?int $fileIndex = null,
+	int $fileCount = 1,
+): string {
+	$filePrefix = fileIndexPrefix($fileIndex, $fileCount);
+
 	$composer = $song->composers[0]->name ?? '';
 	$artist = $song->artists[0]->name ?? '';
 
 	if ($composer !== '' || $artist !== '') {
-		return createWithComposerOrArtist($song, $ext);
+		return createWithComposerOrArtist($song, $ext, $filePrefix);
 	}
 
 	if (($song->collections[0]->name ?? '') !== '') {
-		return createWithCollection($song, $ext);
+		return createWithCollection($song, $ext, $filePrefix);
 	}
 
 	throw new \Exception('No composer, artist, or collection');
@@ -144,8 +173,15 @@ class FileManager {
 		?MobileSheetsHashCodesFile $hashCodes = null,
 	): void {
 		// Relative target as produced by the naming rules, e.g.
-		// "Miles/Miles - Real Book/Miles - Real Book - Blue.pdf".
-		$relativeTarget = createTargetPath($song, getFileExtension($file->path));
+		// "Miles/Miles - Real Book/Miles - Real Book - Blue.pdf". Songs with more
+		// than one file would otherwise all map onto the same name, so each file
+		// gets its position as a prefix: "001 Miles - Real Book - Blue.pdf".
+		$relativeTarget = createTargetPath(
+			$song,
+			getFileExtension($file->path),
+			fileIndexOf($song, $file),
+			count($song->files),
+		);
 
 		// The four path variants:
 		//   sourceWebdav / sourceInternal  - where the database says the file is
