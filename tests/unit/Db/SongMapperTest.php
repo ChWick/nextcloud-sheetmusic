@@ -9,6 +9,8 @@ declare(strict_types=1);
 
 namespace Db;
 
+use OCA\MobileSheetsManager\Db\MobileSheetsFile;
+use OCA\MobileSheetsManager\Db\MobileSheetsSong;
 use OCA\MobileSheetsManager\Db\SongMapper;
 use PHPUnit\Framework\TestCase;
 
@@ -77,6 +79,7 @@ final class SongMapperTest extends TestCase {
 		$data = (new SongMapper())->findLibraryData($this->databasePath);
 
 		$this->assertCount(2, $data['songs']);
+		$this->assertContainsOnlyInstancesOf(MobileSheetsSong::class, $data['songs']);
 		$this->assertSame([
 			['id' => 20, 'name' => 'Bach'],
 			['id' => 10, 'name' => 'Beethoven'],
@@ -94,12 +97,12 @@ final class SongMapperTest extends TestCase {
 		$mapper->updateSong($this->databasePath, 2, 'Alpha (Updated)', [10], [100], [1000]);
 
 		$data = $mapper->findLibraryData($this->databasePath);
-		$updatedSong = array_values(array_filter($data['songs'], fn($s) => $s['id'] === 2))[0];
+		$updatedSong = array_values(array_filter($data['songs'], fn(MobileSheetsSong $s) => $s->id === 2))[0];
 
-		$this->assertSame('Alpha (Updated)', $updatedSong['title']);
-		$this->assertSame([10], $updatedSong['composerIds']);
-		$this->assertSame([100], $updatedSong['bookIds']);
-		$this->assertSame([1000], $updatedSong['collectionIds']);
+		$this->assertSame('Alpha (Updated)', $updatedSong->title);
+		$this->assertSame([10], $updatedSong->composerIds);
+		$this->assertSame([100], $updatedSong->bookIds);
+		$this->assertSame([1000], $updatedSong->collectionIds);
 	}
 
 	public function testSetSongFile(): void {
@@ -107,9 +110,10 @@ final class SongMapperTest extends TestCase {
 		$mapper->setSongFile($this->databasePath, 2, '/remote.php/dav/files/admin/Noten/AlphaNew.pdf');
 
 		$data = $mapper->findLibraryData($this->databasePath);
-		$updatedSong = array_values(array_filter($data['songs'], fn($s) => $s['id'] === 2))[0];
+		$updatedSong = array_values(array_filter($data['songs'], fn(MobileSheetsSong $s) => $s->id === 2))[0];
 
-		$this->assertCount(2, $updatedSong['files']);
+		$this->assertCount(2, $updatedSong->files);
+		$this->assertContainsOnlyInstancesOf(MobileSheetsFile::class, $updatedSong->files);
 	}
 
 	public function testRemoveSongFile(): void {
@@ -119,10 +123,10 @@ final class SongMapperTest extends TestCase {
 		$this->assertSame('/remote.php/dav/files/admin/Noten/Alpha.pdf', $deletedPath);
 
 		$data = $mapper->findLibraryData($this->databasePath);
-		$updatedSong = array_values(array_filter($data['songs'], fn($s) => $s['id'] === 2))[0];
+		$updatedSong = array_values(array_filter($data['songs'], fn(MobileSheetsSong $s) => $s->id === 2))[0];
 
-		$this->assertCount(0, $updatedSong['files']);
-		$this->assertNull($updatedSong['filePath']);
+		$this->assertCount(0, $updatedSong->files);
+		$this->assertNull($updatedSong->filePath);
 	}
 
 	public function testCreateEntities(): void {

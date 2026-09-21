@@ -10,14 +10,19 @@ declare(strict_types=1);
 namespace OCA\MobileSheetsManager\Db;
 
 use PDO;
+use Psr\Log\LoggerInterface;
 
 class SongMapper {
+	public function __construct(
+		private LoggerInterface $logger,
+    ) {}
+
 	/**
 	 * @return array{
-	 *     songs: list<array{id: int, title: string, filePath: ?string, files: list<array{id: int, path: string}>, composerIds: list<int>, bookIds: list<int>, collectionIds: list<int>}>,
+	 *     songs: list<MobileSheetsSong>,
 	 *     composers: list<array{id: int, name: string}>,
 	 *     books: list<array{id: int, title: string}>,
-	 *     collections: list<array{id: int, name: string}>
+	 *     collections: list<array{id: int, name: string}>,
 	 *     artists: list<array{id: int, name: string}>
 	 * }
 	 */
@@ -66,10 +71,10 @@ class SongMapper {
 			$stmt = $database->query('SELECT Id, SongId, Path FROM Files');
 			if ($stmt !== false) {
 				while ($row = $stmt->fetch()) {
-					$songFiles[(int)$row['SongId']][] = [
-						'id' => (int)$row['Id'],
-						'path' => (string)$row['Path'],
-					];
+					$songFiles[(int)$row['SongId']][] = new MobileSheetsFile(
+						(int)$row['Id'],
+						(string)$row['Path'],
+					);
 				}
 			}
 		}
@@ -91,18 +96,18 @@ class SongMapper {
 			while ($row = $statement->fetch()) {
 				$songId = (int)$row['Id'];
 				$files = $songFiles[$songId] ?? [];
-				$filePath = count($files) > 0 ? $files[0]['path'] : null;
+				$filePath = count($files) > 0 ? $files[0]->path : null;
 
-				$songs[] = [
-					'id' => $songId,
-					'title' => (string)$row['Title'],
-					'filePath' => $filePath,
-					'files' => $files,
-					'composerIds' => $songComposers[$songId] ?? [],
-					'bookIds' => $songBooks[$songId] ?? [],
-					'collectionIds' => $songCollections[$songId] ?? [],
-					'artistIds' => $songArtists[$songId] ?? [],
-				];
+				$songs[] = new MobileSheetsSong(
+					$songId,
+					(string)$row['Title'],
+					$filePath,
+					$files,
+					$songComposers[$songId] ?? [],
+					$songBooks[$songId] ?? [],
+					$songCollections[$songId] ?? [],
+					$songArtists[$songId] ?? [],
+				);
 			}
 		}
 
@@ -171,7 +176,53 @@ class SongMapper {
 	 * @return list<array{id: int, title: string, filePath: ?string, files: list<array{id: int, path: string}>, composerIds: list<int>, bookIds: list<int>, collectionIds: list<int>}>
 	 */
 	public function findSongs(string $databasePath): array {
-		return $this->findLibraryData($databasePath)['songs'];
+		$database = new PDO('sqlite:' . $databasePath, options: [
+			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+		]);
+        return $database->query('SELECT 
+            s.Title,
+			s.Id,
+            g.Type as Genre,
+            c.Name AS Composer,
+            coll.Name AS Collection,
+            books.Title AS Book,
+            artist.Name AS Artist
+        FROM Songs s
+        LEFT JOIN ComposerSongs cs ON s.Id = cs.SongId
+        LEFT JOIN Composer c ON cs.ComposerId = c.Id
+        LEFT JOIN CollectionSong colls ON s.Id = colls.SongId
+        LEFT JOIN Collections coll ON colls.CollectionId = coll.Id
+        LEFT JOIN GenresSongs gs ON s.Id = gs.SongId
+        LEFT JOIN Genres g ON gs.GenreId = g.Id
+        LEFT JOIN BookSongs bookSongs ON s.Id = bookSongs.SongId
+        LEFT JOIN Books books ON bookSongs.BookId = books.Id
+        LEFT JOIN ArtistsSongs artistsSongs ON artistsSongs.SongId = s.Id
+        LEFT JOIN Artists artist on artistsSongs.ArtistId = artist.Id')->fetchAll(PDO::FETCH_ASSOC);
+	}
+
+	/**
+	 * @return list<MobileSheetsFile>
+	 */
+	public function filesOfSong(string $databasePath, int $songId): array {
+		$database = new PDO('sqlite:' . $databasePath, options: [
+			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+		]);
+
+		$statement = $database->query('SELECT Id, Path FROM Files WHERE SongId = '.$songId);
+
+		$files = [];
+		if ($statement !== false) {
+			while ($row = $statement->fetch()) {
+				$files[] = new MobileSheetsFile(
+					(int)$row['Id'],
+					(string)$row['Path'],
+				);
+			}
+		}
+
+		return $files;
 	}
 
 	/**
