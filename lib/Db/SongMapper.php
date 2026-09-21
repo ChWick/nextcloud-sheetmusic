@@ -20,10 +20,10 @@ class SongMapper {
 	/**
 	 * @return array{
 	 *     songs: list<MobileSheetsSong>,
-	 *     composers: list<array{id: int, name: string}>,
-	 *     books: list<array{id: int, title: string}>,
-	 *     collections: list<array{id: int, name: string}>,
-	 *     artists: list<array{id: int, name: string}>
+	 *     composers: list<MobileSheetsComposer>,
+	 *     books: list<MobileSheetsBook>,
+	 *     collections: list<MobileSheetsCollection>,
+	 *     artists: list<MobileSheetsArtist>
 	 * }
 	 */
 	public function findLibraryData(string $databasePath): array {
@@ -35,6 +35,58 @@ class SongMapper {
 		$tablesStatement = $database->query("SELECT name FROM sqlite_master WHERE type='table'");
 		/** @var list<string> $existingTables */
 		$existingTables = $tablesStatement !== false ? $tablesStatement->fetchAll(PDO::FETCH_COLUMN) : [];
+
+		$composers = [];
+		$composersById = [];
+		if (in_array('Composer', $existingTables, true)) {
+			$stmt = $database->query('SELECT Id, Name FROM Composer ORDER BY Name');
+			if ($stmt !== false) {
+				while ($row = $stmt->fetch()) {
+					$composer = new MobileSheetsComposer((int)$row['Id'], (string)$row['Name']);
+					$composers[] = $composer;
+					$composersById[$composer->id] = $composer;
+				}
+			}
+		}
+
+		$books = [];
+		$booksById = [];
+		if (in_array('Books', $existingTables, true)) {
+			$stmt = $database->query('SELECT Id, Title FROM Books ORDER BY Title');
+			if ($stmt !== false) {
+				while ($row = $stmt->fetch()) {
+					$book = new MobileSheetsBook((int)$row['Id'], (string)$row['Title']);
+					$books[] = $book;
+					$booksById[$book->id] = $book;
+				}
+			}
+		}
+
+		$collections = [];
+		$collectionsById = [];
+		if (in_array('Collections', $existingTables, true)) {
+			$stmt = $database->query('SELECT Id, Name FROM Collections ORDER BY Name');
+			if ($stmt !== false) {
+				while ($row = $stmt->fetch()) {
+					$collection = new MobileSheetsCollection((int)$row['Id'], (string)$row['Name']);
+					$collections[] = $collection;
+					$collectionsById[$collection->id] = $collection;
+				}
+			}
+		}
+
+		$artists = [];
+		$artistsById = [];
+		if (in_array('Artists', $existingTables, true)) {
+			$stmt = $database->query('SELECT Id, Name FROM Artists ORDER BY Name');
+			if ($stmt !== false) {
+				while ($row = $stmt->fetch()) {
+					$artist = new MobileSheetsArtist((int)$row['Id'], (string)$row['Name']);
+					$artists[] = $artist;
+					$artistsById[$artist->id] = $artist;
+				}
+			}
+		}
 
 		$songComposers = [];
 		if (in_array('ComposerSongs', $existingTables, true)) {
@@ -95,69 +147,16 @@ class SongMapper {
 		if ($statement !== false) {
 			while ($row = $statement->fetch()) {
 				$songId = (int)$row['Id'];
-				$files = $songFiles[$songId] ?? [];
 
 				$songs[] = new MobileSheetsSong(
 					$songId,
 					(string)$row['Title'],
-					$files,
-					$songComposers[$songId] ?? [],
-					$songBooks[$songId] ?? [],
-					$songCollections[$songId] ?? [],
-					$songArtists[$songId] ?? [],
+					$songFiles[$songId] ?? [],
+					$this->resolveEntities($songComposers[$songId] ?? [], $composersById),
+					$this->resolveEntities($songBooks[$songId] ?? [], $booksById),
+					$this->resolveEntities($songCollections[$songId] ?? [], $collectionsById),
+					$this->resolveEntities($songArtists[$songId] ?? [], $artistsById),
 				);
-			}
-		}
-
-		$composers = [];
-		if (in_array('Composer', $existingTables, true)) {
-			$stmt = $database->query('SELECT Id, Name FROM Composer ORDER BY Name');
-			if ($stmt !== false) {
-				while ($row = $stmt->fetch()) {
-					$composers[] = [
-						'id' => (int)$row['Id'],
-						'name' => (string)$row['Name'],
-					];
-				}
-			}
-		}
-
-		$books = [];
-		if (in_array('Books', $existingTables, true)) {
-			$stmt = $database->query('SELECT Id, Title FROM Books ORDER BY Title');
-			if ($stmt !== false) {
-				while ($row = $stmt->fetch()) {
-					$books[] = [
-						'id' => (int)$row['Id'],
-						'title' => (string)$row['Title'],
-					];
-				}
-			}
-		}
-
-		$collections = [];
-		if (in_array('Collections', $existingTables, true)) {
-			$stmt = $database->query('SELECT Id, Name FROM Collections ORDER BY Name');
-			if ($stmt !== false) {
-				while ($row = $stmt->fetch()) {
-					$collections[] = [
-						'id' => (int)$row['Id'],
-						'name' => (string)$row['Name'],
-					];
-				}
-			}
-		}
-
-		$artists = [];
-		if (in_array('Artists', $existingTables, true)) {
-			$stmt = $database->query('SELECT Id, Name FROM Artists ORDER BY Name');
-			if ($stmt !== false) {
-				while ($row = $stmt->fetch()) {
-					$artists[] = [
-						'id' => (int)$row['Id'],
-						'name' => (string)$row['Name'],
-					];
-				}
 			}
 		}
 
@@ -212,30 +211,31 @@ class SongMapper {
 					$songs[$songId] = [
 						'id' => $songId,
 						'title' => (string)$row['Title'],
-						'composer' => null,
-						'artist' => null,
-						'book' => null,
-						'collection' => null,
-						'composerIds' => [],
-						'bookIds' => [],
-						'collectionIds' => [],
-						'artistIds' => [],
+						'composers' => [],
+						'books' => [],
+						'collections' => [],
+						'artists' => [],
 					];
 				}
 
-				foreach (['Composer' => 'composer', 'Artist' => 'artist', 'Book' => 'book', 'Collection' => 'collection'] as $column => $key) {
-					if ($songs[$songId][$key] === null && $row[$column] !== null && $row[$column] !== '') {
-						$songs[$songId][$key] = (string)$row[$column];
-					}
+				$composerId = $row['ComposerId'] !== null ? (int)$row['ComposerId'] : null;
+				if ($composerId !== null && !isset($songs[$songId]['composers'][$composerId])) {
+					$songs[$songId]['composers'][$composerId] = new MobileSheetsComposer($composerId, (string)($row['Composer'] ?? ''));
 				}
 
-				foreach (['ComposerId' => 'composerIds', 'BookId' => 'bookIds', 'CollectionId' => 'collectionIds', 'ArtistId' => 'artistIds'] as $column => $key) {
-					if ($row[$column] !== null) {
-						$id = (int)$row[$column];
-						if (!in_array($id, $songs[$songId][$key], true)) {
-							$songs[$songId][$key][] = $id;
-						}
-					}
+				$bookId = $row['BookId'] !== null ? (int)$row['BookId'] : null;
+				if ($bookId !== null && !isset($songs[$songId]['books'][$bookId])) {
+					$songs[$songId]['books'][$bookId] = new MobileSheetsBook($bookId, (string)($row['Book'] ?? ''));
+				}
+
+				$collectionId = $row['CollectionId'] !== null ? (int)$row['CollectionId'] : null;
+				if ($collectionId !== null && !isset($songs[$songId]['collections'][$collectionId])) {
+					$songs[$songId]['collections'][$collectionId] = new MobileSheetsCollection($collectionId, (string)($row['Collection'] ?? ''));
+				}
+
+				$artistId = $row['ArtistId'] !== null ? (int)$row['ArtistId'] : null;
+				if ($artistId !== null && !isset($songs[$songId]['artists'][$artistId])) {
+					$songs[$songId]['artists'][$artistId] = new MobileSheetsArtist($artistId, (string)($row['Artist'] ?? ''));
 				}
 			}
 		}
@@ -246,18 +246,31 @@ class SongMapper {
 				$song['id'],
 				$song['title'],
 				$this->filesOfSong($databasePath, $song['id']),
-				$song['composerIds'],
-				$song['bookIds'],
-				$song['collectionIds'],
-				$song['artistIds'],
-				$song['composer'],
-				$song['artist'],
-				$song['book'],
-				$song['collection'],
+				array_values($song['composers']),
+				array_values($song['books']),
+				array_values($song['collections']),
+				array_values($song['artists']),
 			);
 		}
 
 		return $result;
+	}
+
+	/**
+	 * @template T of object
+	 * @param list<int> $ids
+	 * @param array<int, T> $entitiesById
+	 * @return list<T>
+	 */
+	private function resolveEntities(array $ids, array $entitiesById): array {
+		$entities = [];
+		foreach ($ids as $id) {
+			if (isset($entitiesById[$id])) {
+				$entities[] = $entitiesById[$id];
+			}
+		}
+
+		return $entities;
 	}
 
 	/**

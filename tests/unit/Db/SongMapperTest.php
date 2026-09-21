@@ -9,6 +9,10 @@ declare(strict_types=1);
 
 namespace Db;
 
+use OCA\MobileSheetsManager\Db\MobileSheetsArtist;
+use OCA\MobileSheetsManager\Db\MobileSheetsBook;
+use OCA\MobileSheetsManager\Db\MobileSheetsCollection;
+use OCA\MobileSheetsManager\Db\MobileSheetsComposer;
 use OCA\MobileSheetsManager\Db\MobileSheetsFile;
 use OCA\MobileSheetsManager\Db\MobileSheetsSong;
 use OCA\MobileSheetsManager\Db\SongMapper;
@@ -55,7 +59,7 @@ final class SongMapperTest extends TestCase {
 		unlink($this->databasePath);
 	}
 
-	public function testFindSongsReturnsSongsWithResolvedNamesAndIds(): void {
+	public function testFindSongsReturnsSongsWithNestedEntities(): void {
 		$songs = (new SongMapper())->findSongs($this->databasePath);
 
 		$this->assertCount(2, $songs);
@@ -68,29 +72,31 @@ final class SongMapperTest extends TestCase {
 
 		$zebra = $byId[1];
 		$this->assertSame('Zebra', $zebra->title);
-		$this->assertSame('Beethoven', $zebra->composerName);
-		$this->assertSame('Coltrane', $zebra->artistName);
-		$this->assertNull($zebra->bookName);
-		$this->assertSame('Jazz Standards', $zebra->collectionName);
+		$this->assertSame(['Beethoven'], $this->names($zebra->composers));
+		$this->assertSame(['Coltrane'], $this->names($zebra->artists));
+		$this->assertSame([], $zebra->books);
+		$this->assertSame(['Jazz Standards'], $this->names($zebra->collections));
+		$this->assertContainsOnlyInstancesOf(MobileSheetsComposer::class, $zebra->composers);
+		$this->assertContainsOnlyInstancesOf(MobileSheetsArtist::class, $zebra->artists);
+		$this->assertContainsOnlyInstancesOf(MobileSheetsCollection::class, $zebra->collections);
 		$this->assertCount(1, $zebra->files);
 		$this->assertContainsOnlyInstancesOf(MobileSheetsFile::class, $zebra->files);
 		$this->assertSame(1, $zebra->files[0]->id);
 		$this->assertSame('/remote.php/dav/files/admin/Noten/Zebra.pdf', $zebra->files[0]->path);
-		$this->assertSame([10], $zebra->composerIds);
-		$this->assertSame([200], $zebra->artistIds);
-		$this->assertSame([], $zebra->bookIds);
-		$this->assertSame([1000], $zebra->collectionIds);
+		$this->assertSame(10, $zebra->composers[0]->id);
+		$this->assertSame(200, $zebra->artists[0]->id);
+		$this->assertSame(1000, $zebra->collections[0]->id);
 
 		$alpha = $byId[2];
 		$this->assertSame('Alpha', $alpha->title);
-		$this->assertSame('Bach', $alpha->composerName);
-		$this->assertNull($alpha->artistName);
-		$this->assertSame('Real Book 1', $alpha->bookName);
-		$this->assertSame('Jazz Standards', $alpha->collectionName);
-		$this->assertSame([20], $alpha->composerIds);
-		$this->assertSame([], $alpha->artistIds);
-		$this->assertSame([100], $alpha->bookIds);
-		$this->assertSame([1000], $alpha->collectionIds);
+		$this->assertSame(['Bach'], $this->names($alpha->composers));
+		$this->assertSame([], $alpha->artists);
+		$this->assertSame(['Real Book 1'], $this->titles($alpha->books));
+		$this->assertSame(['Jazz Standards'], $this->names($alpha->collections));
+		$this->assertContainsOnlyInstancesOf(MobileSheetsBook::class, $alpha->books);
+		$this->assertSame(20, $alpha->composers[0]->id);
+		$this->assertSame(100, $alpha->books[0]->id);
+		$this->assertSame(1000, $alpha->collections[0]->id);
 	}
 
 	public function testFindLibraryDataReturnsAllEntities(): void {
@@ -98,29 +104,36 @@ final class SongMapperTest extends TestCase {
 
 		$this->assertCount(2, $data['songs']);
 		$this->assertContainsOnlyInstancesOf(MobileSheetsSong::class, $data['songs']);
-		$this->assertSame([
-			['id' => 20, 'name' => 'Bach'],
-			['id' => 10, 'name' => 'Beethoven'],
-		], $data['composers']);
-		$this->assertSame([
-			['id' => 100, 'title' => 'Real Book 1'],
-		], $data['books']);
-		$this->assertSame([
-			['id' => 1000, 'name' => 'Jazz Standards'],
-		], $data['collections']);
+		$this->assertContainsOnlyInstancesOf(MobileSheetsComposer::class, $data['composers']);
+		$this->assertContainsOnlyInstancesOf(MobileSheetsBook::class, $data['books']);
+		$this->assertContainsOnlyInstancesOf(MobileSheetsCollection::class, $data['collections']);
+		$this->assertContainsOnlyInstancesOf(MobileSheetsArtist::class, $data['artists']);
+		$this->assertSame(['Bach', 'Beethoven'], $this->names($data['composers']));
+		$this->assertSame(['Real Book 1'], $this->titles($data['books']));
+		$this->assertSame(['Jazz Standards'], $this->names($data['collections']));
+		$this->assertSame(['Coltrane'], $this->names($data['artists']));
+
+		// Songs are ordered by title (Alpha, Zebra) and carry nested entities.
+		$alpha = $data['songs'][0];
+		$this->assertSame('Alpha', $alpha->title);
+		$this->assertSame(2, $alpha->composers[0]->id);
+		$this->assertSame('Bach', $alpha->composers[0]->name);
+		$this->assertSame(100, $alpha->books[0]->id);
+		$this->assertCount(1, $alpha->files);
 	}
 
 	public function testUpdateSongAndAssociations(): void {
 		$mapper = new SongMapper();
-		$mapper->updateSong($this->databasePath, 2, 'Alpha (Updated)', [10], [100], [1000]);
+		$mapper->updateSong($this->databasePath, 2, 'Alpha (Updated)', [10], [100], [1000], []);
 
 		$data = $mapper->findLibraryData($this->databasePath);
 		$updatedSong = array_values(array_filter($data['songs'], fn(MobileSheetsSong $s) => $s->id === 2))[0];
 
 		$this->assertSame('Alpha (Updated)', $updatedSong->title);
-		$this->assertSame([10], $updatedSong->composerIds);
-		$this->assertSame([100], $updatedSong->bookIds);
-		$this->assertSame([1000], $updatedSong->collectionIds);
+		$this->assertSame(['Beethoven'], $this->names($updatedSong->composers));
+		$this->assertSame(['Real Book 1'], $this->titles($updatedSong->books));
+		$this->assertSame(['Jazz Standards'], $this->names($updatedSong->collections));
+		$this->assertSame([], $updatedSong->artists);
 	}
 
 	public function testSetSongFile(): void {
@@ -160,5 +173,21 @@ final class SongMapperTest extends TestCase {
 		$this->assertCount(3, $data['composers']);
 		$this->assertCount(2, $data['books']);
 		$this->assertCount(2, $data['collections']);
+	}
+
+	/**
+	 * @param list<MobileSheetsComposer|MobileSheetsCollection|MobileSheetsArtist> $entities
+	 * @return list<string>
+	 */
+	private function names(array $entities): array {
+		return array_map(static fn ($entity) => $entity->name, $entities);
+	}
+
+	/**
+	 * @param list<MobileSheetsBook> $books
+	 * @return list<string>
+	 */
+	private function titles(array $books): array {
+		return array_map(static fn (MobileSheetsBook $book) => $book->title, $books);
 	}
 }

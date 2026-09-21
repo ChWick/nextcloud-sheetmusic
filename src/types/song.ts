@@ -27,10 +27,10 @@ export interface Song {
 	id: number
 	title: string
 	files?: SongFile[]
-	composerIds?: number[]
-	bookIds?: number[]
-	collectionIds?: number[]
-	artistIds?: number[]
+	composers?: Composer[]
+	books?: Book[]
+	collections?: Collection[]
+	artists?: Artist[]
 }
 
 export interface LibraryData {

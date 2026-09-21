@@ -12,23 +12,19 @@ namespace OCA\MobileSheetsManager\Db;
 class MobileSheetsSong {
 	/**
 	 * @param list<MobileSheetsFile> $files
-	 * @param list<int> $composerIds
-	 * @param list<int> $bookIds
-	 * @param list<int> $collectionIds
-	 * @param list<int> $artistIds
+	 * @param list<MobileSheetsComposer> $composers
+	 * @param list<MobileSheetsBook> $books
+	 * @param list<MobileSheetsCollection> $collections
+	 * @param list<MobileSheetsArtist> $artists
 	 */
 	public function __construct(
 		public readonly int $id,
 		public readonly string $title,
 		public readonly array $files = [],
-		public readonly array $composerIds = [],
-		public readonly array $bookIds = [],
-		public readonly array $collectionIds = [],
-		public readonly array $artistIds = [],
-		public readonly ?string $composerName = null,
-		public readonly ?string $artistName = null,
-		public readonly ?string $bookName = null,
-		public readonly ?string $collectionName = null,
+		public readonly array $composers = [],
+		public readonly array $books = [],
+		public readonly array $collections = [],
+		public readonly array $artists = [],
 	) {
 	}
 }

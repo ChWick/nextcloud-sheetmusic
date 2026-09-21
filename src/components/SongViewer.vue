@@ -41,33 +41,13 @@ const errorMessage = ref('')
 const isEditing = ref(false)
 let currentLoadId = 0
 
-const songComposers = computed(() => {
-	if (!props.song?.composerIds || props.song.composerIds.length === 0) {
-		return []
-	}
-	return props.composers.filter((c) => props.song?.composerIds?.includes(c.id))
-})
+const songComposers = computed(() => props.song?.composers ?? [])
 
-const songBooks = computed(() => {
-	if (!props.song?.bookIds || props.song.bookIds.length === 0) {
-		return []
-	}
-	return props.books.filter((b) => props.song?.bookIds?.includes(b.id))
-})
+const songBooks = computed(() => props.song?.books ?? [])
 
-const songCollections = computed(() => {
-	if (!props.song?.collectionIds || props.song.collectionIds.length === 0) {
-		return []
-	}
-	return props.collections.filter((c) => props.song?.collectionIds?.includes(c.id))
-})
+const songCollections = computed(() => props.song?.collections ?? [])
 
-const songArtists = computed(() => {
-	if (!props.song?.artistIds || props.song.artistIds.length === 0) {
-		return []
-	}
-	return props.artists.filter((a) => props.song?.artistIds?.includes(a.id))
-})
+const songArtists = computed(() => props.song?.artists ?? [])
 
 function handleSaved(data: LibraryData) {
 	isEditing.value = false

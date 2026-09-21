@@ -73,10 +73,10 @@ const filteredSongs = computed(() => {
   const collectionIds = new Set(selectedCollections.value.map(c => c.id));
   const artistIds = new Set(selectedArtists.value.map(a => a.id));
   return songs.value.filter(song => {
-    if (composerIds.size && !(song.composerIds?.some(id => composerIds.has(id)))) return false;
-    if (bookIds.size && !(song.bookIds?.some(id => bookIds.has(id)))) return false;
-    if (collectionIds.size && !(song.collectionIds?.some(id => collectionIds.has(id)))) return false;
-    if (artistIds.size && !(song.artistIds?.some(id => artistIds.has(id)))) return false;
+    if (composerIds.size && !(song.composers?.some(c => composerIds.has(c.id)))) return false;
+    if (bookIds.size && !(song.books?.some(b => bookIds.has(b.id)))) return false;
+    if (collectionIds.size && !(song.collections?.some(c => collectionIds.has(c.id)))) return false;
+    if (artistIds.size && !(song.artists?.some(a => artistIds.has(a.id)))) return false;
     return true;
   });
 });

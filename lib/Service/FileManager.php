@@ -24,16 +24,16 @@ function getFileExtension(string $filename): string {
 }
 
 function createWithComposerOrArtist(MobileSheetsSong $song, string $ext): string {
-	$composer = $song->composerName ?? '';
-	$artist = $song->artistName ?? '';
+	$composer = $song->composers[0]->name ?? '';
+	$artist = $song->artists[0]->name ?? '';
 
 	if ($composer === '' && $artist === '') {
 		throw new \Exception('No composer or artist');
 	}
 
 	$compArtist = $composer !== '' ? $composer : $artist;
-	$book = $song->bookName ?? '';
-	$collection = $song->collectionName ?? '';
+	$book = $song->books[0]->title ?? '';
+	$collection = $song->collections[0]->name ?? '';
 	$ds = DIRECTORY_SEPARATOR;
 	$newPath = $compArtist;
 
@@ -51,7 +51,7 @@ function createWithComposerOrArtist(MobileSheetsSong $song, string $ext): string
 }
 
 function createWithCollection(MobileSheetsSong $song, string $ext): string {
-	$collection = $song->collectionName ?? '';
+	$collection = $song->collections[0]->name ?? '';
 
 	if ($collection === '') {
 		throw new \Exception('No collection');
@@ -65,11 +65,14 @@ function createWithCollection(MobileSheetsSong $song, string $ext): string {
 }
 
 function createTargetPath(MobileSheetsSong $song, string $ext): string {
-	if (($song->composerName ?? '') !== '' || ($song->artistName ?? '') !== '') {
+	$composer = $song->composers[0]->name ?? '';
+	$artist = $song->artists[0]->name ?? '';
+
+	if ($composer !== '' || $artist !== '') {
 		return createWithComposerOrArtist($song, $ext);
 	}
 
-	if (($song->collectionName ?? '') !== '') {
+	if (($song->collections[0]->name ?? '') !== '') {
 		return createWithCollection($song, $ext);
 	}
 

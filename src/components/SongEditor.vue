@@ -27,18 +27,23 @@ const emit = defineEmits<{
 	cancel: []
 }>()
 
+function matchSelected<T extends { id: number }>(options: T[], selected?: { id: number }[]): T[] {
+	const ids = new Set((selected ?? []).map((item) => item.id))
+	return options.filter((option) => ids.has(option.id))
+}
+
 const title = ref(props.song.title)
 const selectedComposers = ref<Array<Composer | { name: string, id?: number }>>(
-	props.composers.filter((c) => props.song.composerIds?.includes(c.id)),
+	matchSelected(props.composers, props.song.composers),
 )
 const selectedBooks = ref<Array<Book | { title: string, id?: number }>>(
-	props.books.filter((b) => props.song.bookIds?.includes(b.id)),
+	matchSelected(props.books, props.song.books),
 )
 const selectedCollections = ref<Array<Collection | { name: string, id?: number }>>(
-	props.collections.filter((c) => props.song.collectionIds?.includes(c.id)),
+	matchSelected(props.collections, props.song.collections),
 )
 const selectedArtists = ref<Array<Artist | { name: string, id?: number }>>(
-	props.artists.filter((a) => props.song.artistIds?.includes(a.id)),
+	matchSelected(props.artists, props.song.artists),
 )
 
 function getInitialFiles(s: Song): SongFile[] {
@@ -55,10 +60,10 @@ watch(
 	() => props.song,
 	(newSong) => {
 		title.value = newSong.title
-		selectedComposers.value = props.composers.filter((c) => newSong.composerIds?.includes(c.id))
-		selectedBooks.value = props.books.filter((b) => newSong.bookIds?.includes(b.id))
-		selectedCollections.value = props.collections.filter((c) => newSong.collectionIds?.includes(c.id))
-		selectedArtists.value = props.artists.filter((a) => newSong.artistIds?.includes(a.id))
+		selectedComposers.value = matchSelected(props.composers, newSong.composers)
+		selectedBooks.value = matchSelected(props.books, newSong.books)
+		selectedCollections.value = matchSelected(props.collections, newSong.collections)
+		selectedArtists.value = matchSelected(props.artists, newSong.artists)
 		currentFiles.value = getInitialFiles(newSong)
 		pendingDeleteFiles.value = []
 	},
@@ -300,11 +305,12 @@ async function saveSong() {
 		const response = await axios.post(
 			generateOcsUrl(`/apps/mobilesheetsmanager/api/songs/${props.song.id}`),
 			{
-				path: prop.libraryId,
+				path: props.libraryId,
 				title: title.value.trim(),
 				composerIds,
 				bookIds,
 				collectionIds,
+				artistIds,
 			},
 		)
 
