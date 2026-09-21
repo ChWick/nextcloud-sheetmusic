@@ -96,12 +96,10 @@ class SongMapper {
 			while ($row = $statement->fetch()) {
 				$songId = (int)$row['Id'];
 				$files = $songFiles[$songId] ?? [];
-				$filePath = count($files) > 0 ? $files[0]->path : null;
 
 				$songs[] = new MobileSheetsSong(
 					$songId,
 					(string)$row['Title'],
-					$filePath,
 					$files,
 					$songComposers[$songId] ?? [],
 					$songBooks[$songId] ?? [],
@@ -173,32 +171,93 @@ class SongMapper {
 	}
 
 	/**
-	 * @return list<array{id: int, title: string, filePath: ?string, files: list<array{id: int, path: string}>, composerIds: list<int>, bookIds: list<int>, collectionIds: list<int>}>
+	 * @return list<MobileSheetsSong>
 	 */
 	public function findSongs(string $databasePath): array {
 		$database = new PDO('sqlite:' . $databasePath, options: [
 			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
 			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
 		]);
-        return $database->query('SELECT 
-            s.Title,
+
+		$statement = $database->query('SELECT 
+			s.Title,
 			s.Id,
-            g.Type as Genre,
-            c.Name AS Composer,
-            coll.Name AS Collection,
-            books.Title AS Book,
-            artist.Name AS Artist
-        FROM Songs s
-        LEFT JOIN ComposerSongs cs ON s.Id = cs.SongId
-        LEFT JOIN Composer c ON cs.ComposerId = c.Id
-        LEFT JOIN CollectionSong colls ON s.Id = colls.SongId
-        LEFT JOIN Collections coll ON colls.CollectionId = coll.Id
-        LEFT JOIN GenresSongs gs ON s.Id = gs.SongId
-        LEFT JOIN Genres g ON gs.GenreId = g.Id
-        LEFT JOIN BookSongs bookSongs ON s.Id = bookSongs.SongId
-        LEFT JOIN Books books ON bookSongs.BookId = books.Id
-        LEFT JOIN ArtistsSongs artistsSongs ON artistsSongs.SongId = s.Id
-        LEFT JOIN Artists artist on artistsSongs.ArtistId = artist.Id')->fetchAll(PDO::FETCH_ASSOC);
+			g.Type as Genre,
+			c.Name AS Composer,
+			cs.ComposerId AS ComposerId,
+			coll.Name AS Collection,
+			colls.CollectionId AS CollectionId,
+			books.Title AS Book,
+			bookSongs.BookId AS BookId,
+			artist.Name AS Artist,
+			artistsSongs.ArtistId AS ArtistId
+		FROM Songs s
+		LEFT JOIN ComposerSongs cs ON s.Id = cs.SongId
+		LEFT JOIN Composer c ON cs.ComposerId = c.Id
+		LEFT JOIN CollectionSong colls ON s.Id = colls.SongId
+		LEFT JOIN Collections coll ON colls.CollectionId = coll.Id
+		LEFT JOIN GenresSongs gs ON s.Id = gs.SongId
+		LEFT JOIN Genres g ON gs.GenreId = g.Id
+		LEFT JOIN BookSongs bookSongs ON s.Id = bookSongs.SongId
+		LEFT JOIN Books books ON bookSongs.BookId = books.Id
+		LEFT JOIN ArtistsSongs artistsSongs ON artistsSongs.SongId = s.Id
+		LEFT JOIN Artists artist on artistsSongs.ArtistId = artist.Id');
+
+		$songs = [];
+		if ($statement !== false) {
+			while ($row = $statement->fetch()) {
+				$songId = (int)$row['Id'];
+
+				if (!isset($songs[$songId])) {
+					$songs[$songId] = [
+						'id' => $songId,
+						'title' => (string)$row['Title'],
+						'composer' => null,
+						'artist' => null,
+						'book' => null,
+						'collection' => null,
+						'composerIds' => [],
+						'bookIds' => [],
+						'collectionIds' => [],
+						'artistIds' => [],
+					];
+				}
+
+				foreach (['Composer' => 'composer', 'Artist' => 'artist', 'Book' => 'book', 'Collection' => 'collection'] as $column => $key) {
+					if ($songs[$songId][$key] === null && $row[$column] !== null && $row[$column] !== '') {
+						$songs[$songId][$key] = (string)$row[$column];
+					}
+				}
+
+				foreach (['ComposerId' => 'composerIds', 'BookId' => 'bookIds', 'CollectionId' => 'collectionIds', 'ArtistId' => 'artistIds'] as $column => $key) {
+					if ($row[$column] !== null) {
+						$id = (int)$row[$column];
+						if (!in_array($id, $songs[$songId][$key], true)) {
+							$songs[$songId][$key][] = $id;
+						}
+					}
+				}
+			}
+		}
+
+		$result = [];
+		foreach ($songs as $song) {
+			$result[] = new MobileSheetsSong(
+				$song['id'],
+				$song['title'],
+				$this->filesOfSong($databasePath, $song['id']),
+				$song['composerIds'],
+				$song['bookIds'],
+				$song['collectionIds'],
+				$song['artistIds'],
+				$song['composer'],
+				$song['artist'],
+				$song['book'],
+				$song['collection'],
+			);
+		}
+
+		return $result;
 	}
 
 	/**

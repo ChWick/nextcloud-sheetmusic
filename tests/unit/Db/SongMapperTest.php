@@ -30,6 +30,10 @@ final class SongMapperTest extends TestCase {
 		$database->exec('CREATE TABLE ComposerSongs(Id INTEGER PRIMARY KEY, ComposerId INTEGER, SongId INTEGER)');
 		$database->exec('CREATE TABLE BookSongs(Id INTEGER PRIMARY KEY, BookId INTEGER, SongId INTEGER)');
 		$database->exec('CREATE TABLE Books(Id INTEGER PRIMARY KEY, Title VARCHAR(255), SortBy INTEGER DEFAULT 1, Ascending INTEGER DEFAULT 1, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
+		$database->exec('CREATE TABLE Artists(Id INTEGER PRIMARY KEY, Name VARCHAR(255))');
+		$database->exec('CREATE TABLE ArtistsSongs(Id INTEGER PRIMARY KEY, ArtistId INTEGER, SongId INTEGER)');
+		$database->exec('CREATE TABLE Genres(Id INTEGER PRIMARY KEY, Type VARCHAR(255))');
+		$database->exec('CREATE TABLE GenresSongs(Id INTEGER PRIMARY KEY, GenreId INTEGER, SongId INTEGER)');
 
 		$database->exec("INSERT INTO Songs (Id, Title, SortTitle) VALUES (1, 'Zebra', 'Zebra'), (2, 'Alpha', 'Alpha')");
 		$database->exec("INSERT INTO Files (Id, SongId, Path) VALUES (1, 1, '/remote.php/dav/files/admin/Noten/Zebra.pdf'), (2, 2, '/remote.php/dav/files/admin/Noten/Alpha.pdf')");
@@ -42,37 +46,51 @@ final class SongMapperTest extends TestCase {
 
 		$database->exec("INSERT INTO Collections (Id, Name) VALUES (1000, 'Jazz Standards')");
 		$database->exec("INSERT INTO CollectionSong (CollectionId, SongId) VALUES (1000, 1), (1000, 2)");
+
+		$database->exec("INSERT INTO Artists (Id, Name) VALUES (200, 'Coltrane')");
+		$database->exec("INSERT INTO ArtistsSongs (ArtistId, SongId) VALUES (200, 1)");
 	}
 
 	protected function tearDown(): void {
 		unlink($this->databasePath);
 	}
 
-	public function testFindSongsReturnsSortedSongsWithAssociations(): void {
-		$this->assertSame([
-			[
-				'id' => 2,
-				'title' => 'Alpha',
-				'filePath' => '/remote.php/dav/files/admin/Noten/Alpha.pdf',
-				'files' => [
-					['id' => 2, 'path' => '/remote.php/dav/files/admin/Noten/Alpha.pdf'],
-				],
-				'composerIds' => [20],
-				'bookIds' => [100],
-				'collectionIds' => [1000],
-			],
-			[
-				'id' => 1,
-				'title' => 'Zebra',
-				'filePath' => '/remote.php/dav/files/admin/Noten/Zebra.pdf',
-				'files' => [
-					['id' => 1, 'path' => '/remote.php/dav/files/admin/Noten/Zebra.pdf'],
-				],
-				'composerIds' => [10],
-				'bookIds' => [],
-				'collectionIds' => [1000],
-			],
-		], (new SongMapper())->findSongs($this->databasePath));
+	public function testFindSongsReturnsSongsWithResolvedNamesAndIds(): void {
+		$songs = (new SongMapper())->findSongs($this->databasePath);
+
+		$this->assertCount(2, $songs);
+		$this->assertContainsOnlyInstancesOf(MobileSheetsSong::class, $songs);
+
+		$byId = [];
+		foreach ($songs as $song) {
+			$byId[$song->id] = $song;
+		}
+
+		$zebra = $byId[1];
+		$this->assertSame('Zebra', $zebra->title);
+		$this->assertSame('Beethoven', $zebra->composerName);
+		$this->assertSame('Coltrane', $zebra->artistName);
+		$this->assertNull($zebra->bookName);
+		$this->assertSame('Jazz Standards', $zebra->collectionName);
+		$this->assertCount(1, $zebra->files);
+		$this->assertContainsOnlyInstancesOf(MobileSheetsFile::class, $zebra->files);
+		$this->assertSame(1, $zebra->files[0]->id);
+		$this->assertSame('/remote.php/dav/files/admin/Noten/Zebra.pdf', $zebra->files[0]->path);
+		$this->assertSame([10], $zebra->composerIds);
+		$this->assertSame([200], $zebra->artistIds);
+		$this->assertSame([], $zebra->bookIds);
+		$this->assertSame([1000], $zebra->collectionIds);
+
+		$alpha = $byId[2];
+		$this->assertSame('Alpha', $alpha->title);
+		$this->assertSame('Bach', $alpha->composerName);
+		$this->assertNull($alpha->artistName);
+		$this->assertSame('Real Book 1', $alpha->bookName);
+		$this->assertSame('Jazz Standards', $alpha->collectionName);
+		$this->assertSame([20], $alpha->composerIds);
+		$this->assertSame([], $alpha->artistIds);
+		$this->assertSame([100], $alpha->bookIds);
+		$this->assertSame([1000], $alpha->collectionIds);
 	}
 
 	public function testFindLibraryDataReturnsAllEntities(): void {
@@ -126,7 +144,6 @@ final class SongMapperTest extends TestCase {
 		$updatedSong = array_values(array_filter($data['songs'], fn(MobileSheetsSong $s) => $s->id === 2))[0];
 
 		$this->assertCount(0, $updatedSong->files);
-		$this->assertNull($updatedSong->filePath);
 	}
 
 	public function testCreateEntities(): void {

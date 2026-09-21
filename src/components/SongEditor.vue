@@ -45,9 +45,6 @@ function getInitialFiles(s: Song): SongFile[] {
 	if (s.files && s.files.length > 0) {
 		return [...s.files]
 	}
-	if (s.filePath) {
-		return [{ id: 0, path: s.filePath }]
-	}
 	return []
 }
 

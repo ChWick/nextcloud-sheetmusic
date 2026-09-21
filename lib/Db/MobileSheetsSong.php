@@ -20,12 +20,15 @@ class MobileSheetsSong {
 	public function __construct(
 		public readonly int $id,
 		public readonly string $title,
-		public readonly ?string $filePath,
-		public readonly array $files,
-		public readonly array $composerIds,
-		public readonly array $bookIds,
-		public readonly array $collectionIds,
-		public readonly array $artistIds,
+		public readonly array $files = [],
+		public readonly array $composerIds = [],
+		public readonly array $bookIds = [],
+		public readonly array $collectionIds = [],
+		public readonly array $artistIds = [],
+		public readonly ?string $composerName = null,
+		public readonly ?string $artistName = null,
+		public readonly ?string $bookName = null,
+		public readonly ?string $collectionName = null,
 	) {
 	}
 }

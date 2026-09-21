@@ -91,7 +91,8 @@ watch(
 			return
 		}
 
-		if (!newSong.filePath) {
+		const filePath = newSong.files?.[0]?.path
+		if (!filePath) {
 			isLoading.value = false
 			errorMessage.value = t('mobilesheetsmanager', 'No file available for this song.')
 			return
@@ -100,7 +101,7 @@ watch(
 		isLoading.value = true
 
 		try {
-			const response = await axios.get(newSong.filePath, {
+			const response = await axios.get(filePath, {
 				responseType: 'arraybuffer',
 			})
 

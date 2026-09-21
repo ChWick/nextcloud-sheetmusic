@@ -26,7 +26,6 @@ export interface SongFile {
 export interface Song {
 	id: number
 	title: string
-	filePath: string | null
 	files?: SongFile[]
 	composerIds?: number[]
 	bookIds?: number[]
