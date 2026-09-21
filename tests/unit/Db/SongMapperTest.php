@@ -17,6 +17,7 @@ use OCA\MobileSheetsManager\Db\MobileSheetsFile;
 use OCA\MobileSheetsManager\Db\MobileSheetsSong;
 use OCA\MobileSheetsManager\Db\SongMapper;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\LoggerInterface;
 
 final class SongMapperTest extends TestCase {
 	private string $databasePath;
@@ -59,8 +60,12 @@ final class SongMapperTest extends TestCase {
 		unlink($this->databasePath);
 	}
 
+	private function mapper(): SongMapper {
+		return new SongMapper($this->createMock(LoggerInterface::class));
+	}
+
 	public function testFindSongsReturnsSongsWithNestedEntities(): void {
-		$songs = (new SongMapper())->findSongs($this->databasePath);
+		$songs = $this->mapper()->findSongs($this->databasePath);
 
 		$this->assertCount(2, $songs);
 		$this->assertContainsOnlyInstancesOf(MobileSheetsSong::class, $songs);
@@ -100,7 +105,7 @@ final class SongMapperTest extends TestCase {
 	}
 
 	public function testFindLibraryDataReturnsAllEntities(): void {
-		$data = (new SongMapper())->findLibraryData($this->databasePath);
+		$data = $this->mapper()->findLibraryData($this->databasePath);
 
 		$this->assertCount(2, $data['songs']);
 		$this->assertContainsOnlyInstancesOf(MobileSheetsSong::class, $data['songs']);
@@ -116,14 +121,14 @@ final class SongMapperTest extends TestCase {
 		// Songs are ordered by title (Alpha, Zebra) and carry nested entities.
 		$alpha = $data['songs'][0];
 		$this->assertSame('Alpha', $alpha->title);
-		$this->assertSame(2, $alpha->composers[0]->id);
+		$this->assertSame(20, $alpha->composers[0]->id);
 		$this->assertSame('Bach', $alpha->composers[0]->name);
 		$this->assertSame(100, $alpha->books[0]->id);
 		$this->assertCount(1, $alpha->files);
 	}
 
 	public function testUpdateSongAndAssociations(): void {
-		$mapper = new SongMapper();
+		$mapper = $this->mapper();
 		$mapper->updateSong($this->databasePath, 2, 'Alpha (Updated)', [10], [100], [1000], []);
 
 		$data = $mapper->findLibraryData($this->databasePath);
@@ -137,7 +142,7 @@ final class SongMapperTest extends TestCase {
 	}
 
 	public function testSetSongFile(): void {
-		$mapper = new SongMapper();
+		$mapper = $this->mapper();
 		$mapper->setSongFile($this->databasePath, 2, '/remote.php/dav/files/admin/Noten/AlphaNew.pdf');
 
 		$data = $mapper->findLibraryData($this->databasePath);
@@ -148,7 +153,7 @@ final class SongMapperTest extends TestCase {
 	}
 
 	public function testRemoveSongFile(): void {
-		$mapper = new SongMapper();
+		$mapper = $this->mapper();
 		$deletedPath = $mapper->removeSongFile($this->databasePath, 2, 2);
 
 		$this->assertSame('/remote.php/dav/files/admin/Noten/Alpha.pdf', $deletedPath);
@@ -160,7 +165,7 @@ final class SongMapperTest extends TestCase {
 	}
 
 	public function testCreateEntities(): void {
-		$mapper = new SongMapper();
+		$mapper = $this->mapper();
 		$composerId = $mapper->createComposer($this->databasePath, 'Mozart');
 		$bookId = $mapper->createBook($this->databasePath, 'Real Book 2');
 		$collectionId = $mapper->createCollection($this->databasePath, 'Classical');

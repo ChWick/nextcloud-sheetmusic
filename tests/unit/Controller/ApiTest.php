@@ -8,6 +8,7 @@ use OCA\MobileSheetsManager\AppInfo\Application;
 use OCA\MobileSheetsManager\Controller\ApiController;
 use OCA\MobileSheetsManager\Db\LibraryMapper;
 use OCA\MobileSheetsManager\Db\SongMapper;
+use OCA\MobileSheetsManager\Service\FileManager;
 use OCP\Files\IRootFolder;
 use OCP\IRequest;
 use OCP\IUserSession;
@@ -25,6 +26,7 @@ final class ApiTest extends TestCase {
 			$this->createMock(IRootFolder::class),
 			$this->createMock(LoggerInterface::class),
 			$this->createMock(IUserSession::class),
+			$this->createMock(FileManager::class),
 		);
 
 		$this->assertEquals('Hello world!', $controller->index()->getData()['message']);
