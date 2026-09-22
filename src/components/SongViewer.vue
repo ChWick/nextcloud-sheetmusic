@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import type { Artist, Book, Collection, Composer, LibraryData, Song } from '../types/song'
+import type { Artist, Book, Collection, Composer, LibraryData, Song, SongFile } from '../types/song'
 
 import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
+import NcRadioGroup from '@nextcloud/vue/components/NcRadioGroup'
+import NcRadioGroupButton from '@nextcloud/vue/components/NcRadioGroupButton'
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist'
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { computed, nextTick, ref, watch } from 'vue'
@@ -39,6 +41,7 @@ const pdfContainer = ref<HTMLElement>()
 const isLoading = ref(false)
 const errorMessage = ref('')
 const isEditing = ref(false)
+const selectedFileId = ref('')
 let currentLoadId = 0
 
 const songComposers = computed(() => props.song?.composers ?? [])
@@ -49,81 +52,119 @@ const songCollections = computed(() => props.song?.collections ?? [])
 
 const songArtists = computed(() => props.song?.artists ?? [])
 
+const songFiles = computed(() => props.song?.files ?? [])
+
+/** The file of the active tab, falling back to the first file of the song. */
+const selectedFile = computed<SongFile | null>(() => {
+	const files = songFiles.value
+	return files.find((file) => String(file.id) === selectedFileId.value) ?? files[0] ?? null
+})
+
+function getFileName(filePath: string): string {
+	return filePath.split('/').pop() ?? filePath
+}
+
+/** Tab labels are kept short so that many files stay readable. */
+function getFileLabel(file: SongFile, index: number): string {
+	const name = getFileName(file.path).replace(/\.pdf$/i, '')
+	const truncated = name.length > 30 ? `${name.slice(0, 29)}…` : name
+	return `${index + 1}. ${truncated}`
+}
+
+function selectFile(fileId: string) {
+	if (fileId === selectedFileId.value) {
+		return
+	}
+	selectedFileId.value = fileId
+	renderSelectedFile()
+}
+
 function handleSaved(data: LibraryData) {
 	isEditing.value = false
 	emit('saved', data)
 }
 
-watch(
-	() => props.song,
-	async (newSong) => {
-		isEditing.value = false
-		const loadId = ++currentLoadId
-		errorMessage.value = ''
+async function renderSelectedFile() {
+	const loadId = ++currentLoadId
+	errorMessage.value = ''
+
+	await nextTick()
+	if (pdfContainer.value) {
+		pdfContainer.value.replaceChildren()
+	}
+
+	if (!props.song) {
+		isLoading.value = false
+		return
+	}
+
+	const filePath = selectedFile.value?.path
+	if (!filePath) {
+		isLoading.value = false
+		errorMessage.value = t('mobilesheetsmanager', 'No file available for this song.')
+		return
+	}
+
+	isLoading.value = true
+
+	try {
+		const response = await axios.get(filePath, {
+			responseType: 'arraybuffer',
+		})
+
+		if (loadId !== currentLoadId) {
+			return
+		}
+
+		const pdf = await getDocument({ data: response.data }).promise
+
+		if (loadId !== currentLoadId) {
+			return
+		}
 
 		await nextTick()
-		if (pdfContainer.value) {
-			pdfContainer.value.replaceChildren()
-		}
-
-		if (!newSong) {
-			isLoading.value = false
+		if (!pdfContainer.value || loadId !== currentLoadId) {
 			return
 		}
 
-		const filePath = newSong.files?.[0]?.path
-		if (!filePath) {
+		pdfContainer.value.replaceChildren()
+
+		for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
+			if (loadId !== currentLoadId) {
+				return
+			}
+			const page = await pdf.getPage(pageNumber)
+			const viewport = page.getViewport({ scale: 1.25 })
+			const canvas = document.createElement('canvas')
+			canvas.width = viewport.width
+			canvas.height = viewport.height
+			canvas.className = 'mobilesheetsmanager-pdf-page'
+			pdfContainer.value?.append(canvas)
+			await page.render({ canvas, viewport }).promise
+		}
+	} catch {
+		if (loadId === currentLoadId) {
+			errorMessage.value = t('mobilesheetsmanager', 'Could not load the selected song.')
+		}
+	} finally {
+		if (loadId === currentLoadId) {
 			isLoading.value = false
-			errorMessage.value = t('mobilesheetsmanager', 'No file available for this song.')
-			return
 		}
+	}
+}
 
-		isLoading.value = true
+watch(
+	() => props.song,
+	(newSong) => {
+		isEditing.value = false
 
-		try {
-			const response = await axios.get(filePath, {
-				responseType: 'arraybuffer',
-			})
+		const files = newSong?.files ?? []
+		// Keep the active tab when the very same file is still part of the song,
+		// e.g. after the editor refreshed the song data.
+		const keepsSelection = files.some((file) => String(file.id) === selectedFileId.value)
+		selectedFileId.value = keepsSelection ? selectedFileId.value : (files[0] ? String(files[0].id) : '')
 
-			if (loadId !== currentLoadId) {
-				return
-			}
-
-			const pdf = await getDocument({ data: response.data }).promise
-
-			if (loadId !== currentLoadId) {
-				return
-			}
-
-			await nextTick()
-			if (!pdfContainer.value || loadId !== currentLoadId) {
-				return
-			}
-
-			pdfContainer.value.replaceChildren()
-
-			for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
-				if (loadId !== currentLoadId) {
-					return
-				}
-				const page = await pdf.getPage(pageNumber)
-				const viewport = page.getViewport({ scale: 1.25 })
-				const canvas = document.createElement('canvas')
-				canvas.width = viewport.width
-				canvas.height = viewport.height
-				canvas.className = 'mobilesheetsmanager-pdf-page'
-				pdfContainer.value?.append(canvas)
-				await page.render({ canvas, viewport }).promise
-			}
-		} catch {
-			if (loadId === currentLoadId) {
-				errorMessage.value = t('mobilesheetsmanager', 'Could not load the selected song.')
-			}
-		} finally {
-			if (loadId === currentLoadId) {
-				isLoading.value = false
-			}
-		}
+		renderSelectedFile()
 	},
 	{ immediate: true },
 )
@@ -176,6 +217,21 @@ watch(
 
 		<!-- PDF Viewer View -->
 		<template v-else>
+			<div v-if="songFiles.length > 1" :class="$style.fileTabs">
+				<NcRadioGroup
+					:model-value="selectedFileId"
+					:label="t('mobilesheetsmanager', 'PDF files of this song')"
+					hide-label
+					@update:model-value="selectFile">
+					<NcRadioGroupButton
+						v-for="(file, index) in songFiles"
+						:key="file.id"
+						:value="String(file.id)"
+						:label="getFileLabel(file, index)"
+						:title="file.path" />
+				</NcRadioGroup>
+			</div>
+
 			<div v-if="isLoading" :class="$style.loading">
 				<NcLoadingIcon :size="32" :name="t('mobilesheetsmanager', 'Loading song...')" />
 			</div>
@@ -245,6 +301,14 @@ watch(
 	justify-content: center;
 	align-items: center;
 	min-height: 200px;
+}
+
+.fileTabs {
+	display: flex;
+	align-items: center;
+	margin-bottom: 12px;
+	padding: 2px;
+	overflow-x: auto;
 }
 
 .pdfViewer {
