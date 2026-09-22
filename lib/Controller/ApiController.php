@@ -16,6 +16,7 @@ use OCP\AppFramework\OCSController;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\Files\Node;
+use OCP\Files\NotFoundException;
 use OCP\IRequest;
 use OCP\IUser;
 use OCP\IUserSession;
@@ -209,8 +210,8 @@ class ApiController extends OCSController {
 				return new DataResponse([], Http::STATUS_NOT_FOUND);
 			}
 
-			$libraryDir = dirname(ltrim($libraryPath, '/'));
-			$targetFolder = ($libraryDir === '' || $libraryDir === '.') ? $userFolder : $userFolder->get($libraryDir);
+			$libraryDir = $this->libraryFolderPath($libraryPath);
+			$targetFolder = $libraryDir === '' ? $userFolder : $userFolder->get($libraryDir);
 			if (!($targetFolder instanceof Folder)) {
 				return new DataResponse([], Http::STATUS_NOT_FOUND);
 			}
@@ -223,7 +224,7 @@ class ApiController extends OCSController {
 			// The upload is stored next to the library database under its own name
 			// first. FileManager then moves it - together with the song's other files -
 			// to the location its naming rules produce.
-			$targetRelative = ($libraryDir === '' || $libraryDir === '.') ? $fileName : $libraryDir . '/' . $fileName;
+			$targetRelative = ($libraryDir === '' ? '' : $libraryDir . '/') . $fileName;
 			// An existing file at that name is overwritten, as the editor always did.
 			$targetFile = $userFolder->nodeExists($targetRelative)
 				? $userFolder->get($targetRelative)
@@ -290,8 +291,8 @@ class ApiController extends OCSController {
 				return new DataResponse([], Http::STATUS_NOT_FOUND);
 			}
 
-			$libraryDir = dirname(ltrim($libraryPath, '/'));
-			$targetFolder = ($libraryDir === '' || $libraryDir === '.') ? $userFolder : $userFolder->get($libraryDir);
+			$libraryDir = $this->libraryFolderPath($libraryPath);
+			$targetFolder = $libraryDir === '' ? $userFolder : $userFolder->get($libraryDir);
 			if (!($targetFolder instanceof Folder)) {
 				return new DataResponse([], Http::STATUS_NOT_FOUND);
 			}
@@ -300,7 +301,7 @@ class ApiController extends OCSController {
 			// first. FileManager then moves it - together with the song's other files -
 			// to the location its naming rules produce.
 			$targetName = $sourceNode->getName();
-			$targetRelative = ($libraryDir === '' || $libraryDir === '.') ? $targetName : $libraryDir . '/' . $targetName;
+			$targetRelative = ($libraryDir === '' ? '' : $libraryDir . '/') . $targetName;
 
 			if (ltrim($sourcePath, '/') !== $targetRelative) {
 				// Node::move() and Node::copy() resolve against the filesystem root, so
@@ -356,18 +357,27 @@ class ApiController extends OCSController {
 				return new DataResponse([], Http::STATUS_NOT_FOUND);
 			}
 
+			$libraryDir = $this->libraryFolderPath($libraryPath);
+			$targetFolder = $libraryDir === '' ? $userFolder : $userFolder->get($libraryDir);
+			if (!($targetFolder instanceof Folder)) {
+				return new DataResponse([], Http::STATUS_NOT_FOUND);
+			}
+
 			$filePath = $this->songMapper->removeSongFile($databasePath, $id, $fileId);
 
 			if ($filePath !== null) {
-				$prefix = '/remote.php/dav/files/' . $user->getUID() . '/';
-				if (str_starts_with($filePath, $prefix)) {
-					$relPath = substr($filePath, strlen($prefix));
-					if ($userFolder->nodeExists($relPath)) {
-						$fileNode = $userFolder->get($relPath);
-						$fileNode->delete();
-					}
+				// The stored path is a WebDAV path, so FileManager turns it into the node
+				// path the filesystem work needs. A path belonging to another user yields
+				// nothing to delete - the database row was the only thing to remove.
+				$deletedFile = $this->fileManager->pathOfStoredFile($filePath, $user);
+
+				if ($deletedFile !== null) {
+					$this->deleteFileNode($deletedFile->internal);
 				}
 			}
+
+			// Losing a file changes the numbering of the song's remaining files.
+			$this->relocateSongFiles($id, $databasePath, $targetFolder, $user, $filePath);
 
 			return new DataResponse($this->songMapper->findLibraryData($databasePath));
 		} catch (\Throwable $exception) {
@@ -380,6 +390,46 @@ class ApiController extends OCSController {
 			]);
 			return new DataResponse([], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
+	}
+
+	/**
+	 * Delete a file from the user's folder, ignoring one that is already gone.
+	 *
+	 * @param string $internalPath Nextcloud node path of the file
+	 */
+	private function deleteFileNode(string $internalPath): void {
+		try {
+			$node = $this->rootFolder->get($internalPath);
+		} catch (NotFoundException) {
+			// The file is already gone; there was only the database row left to remove.
+			return;
+		}
+
+		// Only ever a file: a corrupted path in the library must not take a folder -
+		// and everything in it - with it.
+		if ($node->getType() !== 'file') {
+			$this->logger->warning('Refusing to delete a stored MobileSheets path that is not a file', [
+				'internalPath' => $internalPath,
+			]);
+
+			return;
+		}
+
+		$node->delete();
+	}
+
+	/**
+	 * Folder of a library, relative to the user folder, e.g. "Noten" for a library at
+	 * "Noten/mobilesheets.db".
+	 *
+	 * MobileSheets stores absolute WebDAV paths that sit next to the library database,
+	 * so the database's folder is the base every file path is built on. '' means the
+	 * library sits directly in the user folder.
+	 */
+	private function libraryFolderPath(string $libraryPath): string {
+		$directory = dirname(ltrim($libraryPath, '/'));
+
+		return ($directory === '' || $directory === '.') ? '' : $directory;
 	}
 
 	/**
@@ -402,22 +452,38 @@ class ApiController extends OCSController {
 	}
 
 	/**
-	 * Move the song's files to the paths the FileManager naming rules produce.
+	 * Move the song's files to the paths the FileManager naming rules produce and keep
+	 * the hash codes file in sync.
 	 *
-	 * Adding a file changes the numbering of a multi-file song, so the song's files are
-	 * all regenerated, not just the new one. A song without a composer, artist or
-	 * collection has no naming rule to follow: its files keep their current location,
-	 * which for a freshly added file is the library folder.
+	 * Adding or removing a file changes the numbering of a multi-file song: the position
+	 * of a file decides its numeric prefix, and a song that drops back to one file loses
+	 * the prefix again. So the song's files are all regenerated, not just the new one.
+	 * A song without a composer, artist or collection has no naming rule to follow: its
+	 * files keep their current location, which for a freshly added file is the library
+	 * folder.
 	 *
-	 * @param Folder $targetFolder folder the regenerated files belong in, i.e. the
-	 *                             library database's parent
+	 * @param Folder      $targetFolder folder the regenerated files belong in, i.e. the
+	 *                                  library database's parent
+	 * @param string|null $removedPath  WebDAV path of a file that was just removed, whose
+	 *                                  hash codes entry has to go
 	 */
-	private function relocateSongFiles(int $songId, string $databasePath, Folder $targetFolder, IUser $user): void {
-		// The hash codes file tracks each file by its WebDAV path, so the moves below
-		// have to be reflected there as well. It is parsed once and written back once.
-		$hashCodes = MobileSheetsHashCodesFile::forDatabase($databasePath, $this->logger);
+	private function relocateSongFiles(
+		int $songId,
+		string $databasePath,
+		Folder $targetFolder,
+		IUser $user,
+		?string $removedPath = null,
+	): void {
+		// The hash codes file tracks each file by its WebDAV path, so the moves below -
+		// and a removed file - have to be reflected there as well. It is parsed once and
+		// written back once.
+		$hashCodes = $this->hashCodesFor($databasePath);
 
 		try {
+			if ($removedPath !== null) {
+				$hashCodes?->removePath($removedPath);
+			}
+
 			$this->fileManager->regenerateSongFilePaths($songId, $user, $targetFolder, $databasePath, $hashCodes);
 		} catch (\Throwable $exception) {
 			$this->logger->warning('Could not move the song files to their regenerated paths', [
@@ -425,10 +491,31 @@ class ApiController extends OCSController {
 				'databasePath' => $databasePath,
 				'songId' => $songId,
 			]);
-		} finally {
-			// Save even when a move failed, so the hash codes file keeps matching the
-			// moves that already happened.
+		}
+
+		// Persist the moves that happened - and the removed file - even when the run
+		// above aborted halfway.
+		try {
 			$hashCodes?->save();
+		} catch (\Throwable $exception) {
+			$this->logger->warning('Could not save the MobileSheets hash codes file', [
+				'exception' => $exception,
+				'databasePath' => $databasePath,
+			]);
+		}
+	}
+
+	/** Hash codes file of a library, or null when it is missing or cannot be read. */
+	private function hashCodesFor(string $databasePath): ?MobileSheetsHashCodesFile {
+		try {
+			return MobileSheetsHashCodesFile::forDatabase($databasePath, $this->logger);
+		} catch (\Throwable $exception) {
+			$this->logger->warning('Could not read the MobileSheets hash codes file', [
+				'exception' => $exception,
+				'databasePath' => $databasePath,
+			]);
+
+			return null;
 		}
 	}
 

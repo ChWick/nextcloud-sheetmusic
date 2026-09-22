@@ -142,6 +142,20 @@ class FileManager {
 		return $path;
 	}
 
+	/**
+	 * Both representations of a file that is stored in the MobileSheets database.
+	 *
+	 * Used for a file the database points at, e.g. when it has to be deleted from the
+	 * user's folder. Null when the stored path does not belong to this user: MobileSheets
+	 * keeps absolute WebDAV paths, so a library may reference files of another instance.
+	 *
+	 * @param string $webdavPath path as stored in the database,
+	 *                           e.g. "/remote.php/dav/files/admin/Noten/song.pdf"
+	 */
+	public function pathOfStoredFile(string $webdavPath, IUser $user): ?MobileSheetsPath {
+		return $this->pathResolver->fromStored($webdavPath, $user);
+	}
+
 	public function regenerateFilePaths(int $libraryId, IUser $user): void {
 		$library = $this->libraryMapper->findById($libraryId);
 		if ($library === null) {

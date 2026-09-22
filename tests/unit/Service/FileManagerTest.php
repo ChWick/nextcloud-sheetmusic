@@ -761,6 +761,29 @@ final class FileManagerTest extends TestCase {
 		$this->fileManager->pathOfExistingFile('/admin/files/../other/T-Pen 2_QG.pdf', $this->user());
 	}
 
+	/** The inverse conversion, needed to delete a file the database points at. */
+	public function testPathOfStoredFileBuildsTheNodePath(): void {
+		$path = $this->fileManager->pathOfStoredFile(
+			'/remote.php/dav/files/admin/Noten/Jazz/002 Jazz - Take Five.pdf',
+			$this->user(),
+		);
+
+		self::assertNotNull($path);
+		self::assertSame('/admin/files/Noten/Jazz/002 Jazz - Take Five.pdf', $path->internal);
+		self::assertSame('/remote.php/dav/files/admin/Noten/Jazz/002 Jazz - Take Five.pdf', $path->webdav);
+	}
+
+	public function testPathOfStoredFileReturnsNullForAnotherUser(): void {
+		self::assertNull(
+			$this->fileManager->pathOfStoredFile('/remote.php/dav/files/cwick/Noten/SomeFile.pdf', $this->user()),
+			'a library may legitimately reference the files of another user',
+		);
+	}
+
+	public function testPathOfStoredFileReturnsNullForAPathOutsideTheWebdavRoot(): void {
+		self::assertNull($this->fileManager->pathOfStoredFile('/Noten/SomeFile.pdf', $this->user()));
+	}
+
 	/** The song is read from the database, so a file that was just added takes part. */
 	public function testRegenerateSongFilePathsNumbersANewlyAddedFileLast(): void {
 		// One file was already regenerated, a second one was just uploaded next to the

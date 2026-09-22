@@ -7,8 +7,12 @@ namespace Controller;
 use OCA\MobileSheetsManager\AppInfo\Application;
 use OCA\MobileSheetsManager\Controller\ApiController;
 use OCA\MobileSheetsManager\Db\LibraryMapper;
+use OCA\MobileSheetsManager\Db\MobileSheetsCollection;
+use OCA\MobileSheetsManager\Db\MobileSheetsFile;
+use OCA\MobileSheetsManager\Db\MobileSheetsSong;
 use OCA\MobileSheetsManager\Db\SongMapper;
 use OCA\MobileSheetsManager\Service\FileManager;
+use OCA\MobileSheetsManager\Service\MobileSheetsHashCodesFile;
 use OCA\MobileSheetsManager\Service\MobileSheetsPathResolver;
 use OCP\AppFramework\Http;
 use OCP\Files\Folder;
@@ -24,6 +28,9 @@ use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 
 final class ApiTest extends TestCase {
+	/** @var list<string> temporary hash codes files to remove after each test */
+	private array $temporaryFiles = [];
+
 	public function testIndex(): void {
 		$controller = $this->createController();
 
@@ -146,6 +153,250 @@ final class ApiTest extends TestCase {
 
 		$this->assertEquals(Http::STATUS_OK, $response->getStatus());
 		$this->assertEquals(['songs' => []], $response->getData());
+	}
+
+	/**
+	 * Removing one file of a two-file song has to renumber the file that remains: the
+	 * song drops back to a single file and therefore loses its numeric prefix again. The
+	 * deleted file's hash code entry (and the rename of the remaining one) have to end up
+	 * in the hash codes file, too.
+	 */
+	public function testDeleteSongFileRenumbersTheRemainingFiles(): void {
+		$databasePath = '/tmp/mobilesheetsmanager-test-library.db';
+		$hashFile = MobileSheetsHashCodesFile::pathForDatabase($databasePath);
+		file_put_contents($hashFile, implode("\n", [
+			'/remote.php/dav/files/admin/Noten/Jazz/001 Jazz - Take Five.pdf', '1', '2', '3',
+			'/remote.php/dav/files/admin/Noten/Jazz/002 Jazz - Take Five.pdf', '561292453', '1789312275000', '839797',
+		]));
+		$this->temporaryFiles[] = $hashFile;
+
+		$storage = $this->createMock(IStorage::class);
+		$storage->method('getLocalFile')->willReturn($databasePath);
+
+		$databaseNode = $this->createMock(Node::class);
+		$databaseNode->method('getStorage')->willReturn($storage);
+		$databaseNode->method('getInternalPath')->willReturn('files/Noten/mobilesheets.db');
+
+		// The file the user deleted: it is gone from the database and from the filesystem.
+		$deletedFile = $this->createMock(Node::class);
+		$deletedFile->method('getType')->willReturn('file');
+		$deletedFile->expects($this->once())->method('delete');
+
+		// The file that remains; it is the only one left, so its name loses the prefix.
+		$remainingFile = $this->createMock(Node::class);
+		$remainingFile->expects($this->once())
+			->method('move')
+			->with('/admin/files/Noten/Jazz/Jazz - Take Five.pdf');
+
+		$libraryFolder = $this->createMock(Folder::class);
+		$libraryFolder->method('getPath')->willReturn('/admin/files/Noten');
+
+		// Still holds the moved file, so no folder may be cleaned up.
+		$jazzFolder = $this->createMock(Folder::class);
+		$jazzFolder->method('getDirectoryListing')->willReturn([$remainingFile]);
+
+		$userFolder = $this->createMock(IUserFolder::class);
+		$userFolder->method('getPath')->willReturn('/admin/files');
+		$userFolder->method('get')->willReturnCallback(
+			static function (string $path) use ($databaseNode, $libraryFolder, $remainingFile, $jazzFolder): Node {
+				return match ($path) {
+					'Noten/mobilesheets.db' => $databaseNode,
+					'Noten' => $libraryFolder,
+					'Noten/Jazz' => $jazzFolder,
+					'Noten/Jazz/001 Jazz - Take Five.pdf' => $remainingFile,
+					default => throw new NotFoundException($path),
+				};
+			},
+		);
+		$userFolder->method('nodeExists')->willReturnCallback(
+			static fn (string $path): bool => in_array(
+				$path,
+				['Noten', 'Noten/Jazz', 'Noten/Jazz/001 Jazz - Take Five.pdf'],
+				true,
+			),
+		);
+
+		$rootFolder = $this->createMock(IRootFolder::class);
+		$rootFolder->method('getUserFolder')->with('admin')->willReturn($userFolder);
+		$rootFolder->method('get')->willReturnCallback(
+			static function (string $path) use ($deletedFile): Node {
+				if ($path === '/admin/files/Noten/Jazz/002 Jazz - Take Five.pdf') {
+					return $deletedFile;
+				}
+
+				throw new NotFoundException($path);
+			},
+		);
+
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$libraryMapper->method('findForUser')
+			->with('admin', 7)
+			->willReturn(['id' => 7, 'path' => '/Noten/mobilesheets.db']);
+
+		$songMapper = $this->createMock(SongMapper::class);
+		$songMapper->expects($this->once())
+			->method('removeSongFile')
+			->with($databasePath, 42, 3)
+			->willReturn('/remote.php/dav/files/admin/Noten/Jazz/002 Jazz - Take Five.pdf');
+		// The song is read after the removal, so it lists the remaining file only.
+		$songMapper->method('findSong')->willReturn(new MobileSheetsSong(
+			42,
+			'Take Five',
+			[new MobileSheetsFile(11, '/remote.php/dav/files/admin/Noten/Jazz/001 Jazz - Take Five.pdf')],
+			[],
+			[],
+			[new MobileSheetsCollection(1, 'Jazz')],
+			[],
+		));
+		$songMapper->expects($this->once())
+			->method('updateFile')
+			->with($databasePath, 11, '/remote.php/dav/files/admin/Noten/Jazz/Jazz - Take Five.pdf');
+		$songMapper->method('findLibraryData')->willReturn(['songs' => []]);
+
+		$fileManager = new FileManager(
+			$libraryMapper,
+			$songMapper,
+			$rootFolder,
+			new MobileSheetsPathResolver($rootFolder),
+			$this->createMock(LoggerInterface::class),
+		);
+
+		$controller = $this->createController($libraryMapper, $songMapper, $rootFolder, $fileManager);
+
+		$response = $controller->deleteSongFile(42, 3, 7);
+
+		$this->assertEquals(Http::STATUS_OK, $response->getStatus());
+
+		$hashCodes = (string)file_get_contents($hashFile);
+		$this->assertStringNotContainsString('002 Jazz - Take Five.pdf', $hashCodes, 'the removed file must not keep an entry');
+		$this->assertStringNotContainsString('001 Jazz - Take Five.pdf', $hashCodes, 'the remaining file was renamed');
+		$this->assertStringContainsString(
+			"/remote.php/dav/files/admin/Noten/Jazz/Jazz - Take Five.pdf\n1\n2\n3",
+			$hashCodes,
+			'the renamed entry must keep its hash, modification time and size',
+		);
+	}
+
+	/** A stored path does not have to point into this user's tree. */
+	public function testDeleteSongFileIgnoresStoredFilesOfAnotherUser(): void {
+		$storage = $this->createMock(IStorage::class);
+		$storage->method('getLocalFile')->willReturn('/tmp/mobilesheetsmanager-test-library.db');
+
+		$databaseNode = $this->createMock(Node::class);
+		$databaseNode->method('getStorage')->willReturn($storage);
+		$databaseNode->method('getInternalPath')->willReturn('files/Noten/mobilesheets.db');
+
+		$libraryFolder = $this->createMock(Folder::class);
+		$libraryFolder->method('getPath')->willReturn('/admin/files/Noten');
+
+		$userFolder = $this->createMock(IUserFolder::class);
+		$userFolder->method('getPath')->willReturn('/admin/files');
+		$userFolder->method('get')->willReturnCallback(
+			static function (string $path) use ($databaseNode, $libraryFolder): Node {
+				return match ($path) {
+					'Noten/mobilesheets.db' => $databaseNode,
+					'Noten' => $libraryFolder,
+					default => throw new NotFoundException($path),
+				};
+			},
+		);
+		$userFolder->method('nodeExists')->willReturn(true);
+
+		$rootFolder = $this->createMock(IRootFolder::class);
+		$rootFolder->method('getUserFolder')->with('admin')->willReturn($userFolder);
+		// Nothing may be touched: the stored file belongs to another user's folder.
+		$rootFolder->expects($this->never())->method('get');
+
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$libraryMapper->method('findForUser')
+			->with('admin', 7)
+			->willReturn(['id' => 7, 'path' => '/Noten/mobilesheets.db']);
+
+		$songMapper = $this->createMock(SongMapper::class);
+		$songMapper->method('removeSongFile')
+			->willReturn('/remote.php/dav/files/cwick/Noten/Jazz/Jazz - Take Five.pdf');
+		$songMapper->method('findSong')->willReturn(null);
+		$songMapper->method('findLibraryData')->willReturn(['songs' => []]);
+
+		$fileManager = new FileManager(
+			$libraryMapper,
+			$songMapper,
+			$rootFolder,
+			new MobileSheetsPathResolver($rootFolder),
+			$this->createMock(LoggerInterface::class),
+		);
+
+		$controller = $this->createController($libraryMapper, $songMapper, $rootFolder, $fileManager);
+
+		$response = $controller->deleteSongFile(42, 3, 7);
+
+		$this->assertEquals(Http::STATUS_OK, $response->getStatus());
+	}
+
+	/** A corrupted path in the library must not make the endpoint delete a folder. */
+	public function testDeleteSongFileRefusesToDeleteAFolder(): void {
+		$storage = $this->createMock(IStorage::class);
+		$storage->method('getLocalFile')->willReturn('/tmp/mobilesheetsmanager-test-library.db');
+
+		$databaseNode = $this->createMock(Node::class);
+		$databaseNode->method('getStorage')->willReturn($storage);
+		$databaseNode->method('getInternalPath')->willReturn('files/Noten/mobilesheets.db');
+
+		// A folder behind a stored path, e.g. after someone edited the database by hand.
+		$storedFolder = $this->createMock(Folder::class);
+		$storedFolder->method('getType')->willReturn('dir');
+		$storedFolder->expects($this->never())->method('delete');
+
+		$libraryFolder = $this->createMock(Folder::class);
+		$libraryFolder->method('getPath')->willReturn('/admin/files/Noten');
+
+		$userFolder = $this->createMock(IUserFolder::class);
+		$userFolder->method('getPath')->willReturn('/admin/files');
+		$userFolder->method('get')->willReturnCallback(
+			static function (string $path) use ($databaseNode, $libraryFolder): Node {
+				return match ($path) {
+					'Noten/mobilesheets.db' => $databaseNode,
+					'Noten' => $libraryFolder,
+					default => throw new NotFoundException($path),
+				};
+			},
+		);
+		$userFolder->method('nodeExists')->willReturn(true);
+
+		$rootFolder = $this->createMock(IRootFolder::class);
+		$rootFolder->method('getUserFolder')->with('admin')->willReturn($userFolder);
+		$rootFolder->method('get')->willReturn($storedFolder);
+
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$libraryMapper->method('findForUser')
+			->with('admin', 7)
+			->willReturn(['id' => 7, 'path' => '/Noten/mobilesheets.db']);
+
+		$songMapper = $this->createMock(SongMapper::class);
+		$songMapper->method('removeSongFile')->willReturn('/remote.php/dav/files/admin/Noten');
+		$songMapper->method('findSong')->willReturn(null);
+		$songMapper->method('findLibraryData')->willReturn(['songs' => []]);
+
+		$fileManager = new FileManager(
+			$libraryMapper,
+			$songMapper,
+			$rootFolder,
+			new MobileSheetsPathResolver($rootFolder),
+			$this->createMock(LoggerInterface::class),
+		);
+
+		$controller = $this->createController($libraryMapper, $songMapper, $rootFolder, $fileManager);
+
+		$this->assertEquals(Http::STATUS_OK, $controller->deleteSongFile(42, 3, 7)->getStatus());
+	}
+
+	protected function tearDown(): void {
+		foreach ($this->temporaryFiles as $file) {
+			if (is_file($file)) {
+				unlink($file);
+			}
+		}
+		$this->temporaryFiles = [];
 	}
 
 	private function createController(
