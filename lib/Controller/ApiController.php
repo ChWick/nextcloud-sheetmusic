@@ -80,7 +80,7 @@ class ApiController extends OCSController {
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'GET', url: '/api/songs')]
 	public function getSongs(?string $id = null): DataResponse {
-		$id = +$id ?? (string)$this->request->getParam('id', -1);
+		$id = $id === null ? -1 : (int)$id;
 		if ($id < 0) {
 			return new DataResponse([], Http::STATUS_BAD_REQUEST);
 		}
@@ -124,31 +124,30 @@ class ApiController extends OCSController {
 	#[ApiRoute(verb: 'POST', url: '/api/songs/{id}')]
 	public function updateSong(
 		int $id,
-		?string $path = null,
+		?int $libraryId = null,
 		?string $title = null,
 		array $composerIds = [],
 		array $bookIds = [],
 		array $collectionIds = [],
 		array $artistIds = []
 	): DataResponse {
-		$path = $path ?? (string)$this->request->getParam('path', '');
-		$title = $title ?? (string)$this->request->getParam('title', '');
-		if ($path === '' || $title === '') {
+		$title = $title ?? '';
+		if ($libraryId === null || $title === '') {
 			return new DataResponse([], Http::STATUS_BAD_REQUEST);
 		}
-		$path = '/' . ltrim($path, '/');
 
 		$user = $this->userSession->getUser();
 		if ($user === null) {
 			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
 		}
 
-		if (!$this->libraryMapper->findForUser($user->getUID(), $path)) {
+		$libraryPath = $this->resolveLibraryPath($user->getUID(), $libraryId);
+		if ($libraryPath === null) {
 			return new DataResponse([], Http::STATUS_NOT_FOUND);
 		}
 
 		try {
-			$node = $this->rootFolder->getUserFolder($user->getUID())->get(ltrim($path, '/'));
+			$node = $this->rootFolder->getUserFolder($user->getUID())->get(ltrim($libraryPath, '/'));
 			$databasePath = $node->getStorage()->getLocalFile($node->getInternalPath());
 			if ($databasePath === false) {
 				return new DataResponse([], Http::STATUS_NOT_FOUND);
@@ -160,7 +159,8 @@ class ApiController extends OCSController {
 		} catch (\Throwable $exception) {
 			$this->logger->error('Could not update song in MobileSheets library', [
 				'exception' => $exception,
-				'path' => $path,
+				'libraryId' => $libraryId,
+				'path' => $libraryPath,
 				'songId' => $id,
 			]);
 			return new DataResponse([], Http::STATUS_INTERNAL_SERVER_ERROR);
@@ -169,19 +169,18 @@ class ApiController extends OCSController {
 
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'POST', url: '/api/songs/{id}/file/upload')]
-	public function uploadSongFile(int $id, ?string $path = null): DataResponse {
-		$path = $path ?? (string)$this->request->getParam('path', '');
-		if ($path === '') {
+	public function uploadSongFile(int $id, ?int $libraryId = null): DataResponse {
+		if ($libraryId === null) {
 			return new DataResponse([], Http::STATUS_BAD_REQUEST);
 		}
-		$path = '/' . ltrim($path, '/');
 
 		$user = $this->userSession->getUser();
 		if ($user === null) {
 			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
 		}
 
-		if (!$this->libraryMapper->findForUser($user->getUID(), $path)) {
+		$libraryPath = $this->resolveLibraryPath($user->getUID(), $libraryId);
+		if ($libraryPath === null) {
 			return new DataResponse([], Http::STATUS_NOT_FOUND);
 		}
 
@@ -201,13 +200,13 @@ class ApiController extends OCSController {
 
 		try {
 			$userFolder = $this->rootFolder->getUserFolder($user->getUID());
-			$libraryNode = $userFolder->get(ltrim($path, '/'));
+			$libraryNode = $userFolder->get(ltrim($libraryPath, '/'));
 			$databasePath = $libraryNode->getStorage()->getLocalFile($libraryNode->getInternalPath());
 			if ($databasePath === false) {
 				return new DataResponse([], Http::STATUS_NOT_FOUND);
 			}
 
-			$libraryDir = dirname(ltrim($path, '/'));
+			$libraryDir = dirname(ltrim($libraryPath, '/'));
 			$targetFolder = ($libraryDir === '' || $libraryDir === '.') ? $userFolder : $userFolder->get($libraryDir);
 			if (!($targetFolder instanceof Folder)) {
 				return new DataResponse([], Http::STATUS_NOT_FOUND);
@@ -235,7 +234,8 @@ class ApiController extends OCSController {
 		} catch (\Throwable $exception) {
 			$this->logger->error('Could not upload file for song', [
 				'exception' => $exception,
-				'path' => $path,
+				'libraryId' => $libraryId,
+				'path' => $libraryPath,
 				'songId' => $id,
 			]);
 			return new DataResponse([], Http::STATUS_INTERNAL_SERVER_ERROR);
@@ -246,18 +246,16 @@ class ApiController extends OCSController {
 	#[ApiRoute(verb: 'POST', url: '/api/songs/{id}/file/attach')]
 	public function attachNextcloudFile(
 		int $id,
-		?string $path = null,
+		?int $libraryId = null,
 		?string $sourcePath = null,
 		string $action = 'copy',
 	): DataResponse {
-		$path = $path ?? (string)$this->request->getParam('path', '');
 		$sourcePath = $sourcePath ?? (string)$this->request->getParam('sourcePath', '');
 		$action = (string)$this->request->getParam('action', $action);
 
-		if ($path === '' || $sourcePath === '') {
+		if ($libraryId === null || $sourcePath === '') {
 			return new DataResponse([], Http::STATUS_BAD_REQUEST);
 		}
-		$path = '/' . ltrim($path, '/');
 		$sourcePath = '/' . ltrim($sourcePath, '/');
 
 		if (!str_ends_with(strtolower($sourcePath), '.pdf')) {
@@ -269,13 +267,14 @@ class ApiController extends OCSController {
 			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
 		}
 
-		if (!$this->libraryMapper->findForUser($user->getUID(), $path)) {
+		$libraryPath = $this->resolveLibraryPath($user->getUID(), $libraryId);
+		if ($libraryPath === null) {
 			return new DataResponse([], Http::STATUS_NOT_FOUND);
 		}
 
 		try {
 			$userFolder = $this->rootFolder->getUserFolder($user->getUID());
-			$libraryNode = $userFolder->get(ltrim($path, '/'));
+			$libraryNode = $userFolder->get(ltrim($libraryPath, '/'));
 			$databasePath = $libraryNode->getStorage()->getLocalFile($libraryNode->getInternalPath());
 			if ($databasePath === false) {
 				return new DataResponse([], Http::STATUS_NOT_FOUND);
@@ -286,7 +285,7 @@ class ApiController extends OCSController {
 				return new DataResponse([], Http::STATUS_NOT_FOUND);
 			}
 
-			$libraryDir = dirname(ltrim($path, '/'));
+			$libraryDir = dirname(ltrim($libraryPath, '/'));
 			$targetFolder = ($libraryDir === '' || $libraryDir === '.') ? $userFolder : $userFolder->get($libraryDir);
 			if (!($targetFolder instanceof Folder)) {
 				return new DataResponse([], Http::STATUS_NOT_FOUND);
@@ -310,7 +309,8 @@ class ApiController extends OCSController {
 		} catch (\Throwable $exception) {
 			$this->logger->error('Could not attach Nextcloud file for song', [
 				'exception' => $exception,
-				'path' => $path,
+				'libraryId' => $libraryId,
+				'path' => $libraryPath,
 				'songId' => $id,
 				'sourcePath' => $sourcePath,
 			]);
@@ -320,25 +320,24 @@ class ApiController extends OCSController {
 
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'POST', url: '/api/songs/{id}/file/{fileId}/delete')]
-	public function deleteSongFile(int $id, int $fileId, ?string $path = null): DataResponse {
-		$path = $path ?? (string)$this->request->getParam('path', '');
-		if ($path === '') {
+	public function deleteSongFile(int $id, int $fileId, ?int $libraryId = null): DataResponse {
+		if ($libraryId === null) {
 			return new DataResponse([], Http::STATUS_BAD_REQUEST);
 		}
-		$path = '/' . ltrim($path, '/');
 
 		$user = $this->userSession->getUser();
 		if ($user === null) {
 			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
 		}
 
-		if (!$this->libraryMapper->findForUser($user->getUID(), $path)) {
+		$libraryPath = $this->resolveLibraryPath($user->getUID(), $libraryId);
+		if ($libraryPath === null) {
 			return new DataResponse([], Http::STATUS_NOT_FOUND);
 		}
 
 		try {
 			$userFolder = $this->rootFolder->getUserFolder($user->getUID());
-			$libraryNode = $userFolder->get(ltrim($path, '/'));
+			$libraryNode = $userFolder->get(ltrim($libraryPath, '/'));
 			$databasePath = $libraryNode->getStorage()->getLocalFile($libraryNode->getInternalPath());
 			if ($databasePath === false) {
 				return new DataResponse([], Http::STATUS_NOT_FOUND);
@@ -361,12 +360,27 @@ class ApiController extends OCSController {
 		} catch (\Throwable $exception) {
 			$this->logger->error('Could not delete file for song', [
 				'exception' => $exception,
-				'path' => $path,
+				'libraryId' => $libraryId,
+				'path' => $libraryPath,
 				'songId' => $id,
 				'fileId' => $fileId,
 			]);
 			return new DataResponse([], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
+	}
+
+	/**
+	 * Resolves the Nextcloud path of the MobileSheets library with the given id.
+	 *
+	 * @return string|null the path of the library, or null if it does not exist for the user
+	 */
+	private function resolveLibraryPath(string $userId, int $libraryId): ?string {
+		$library = $this->libraryMapper->findForUser($userId, $libraryId);
+		if ($library === null) {
+			return null;
+		}
+
+		return (string)($library['path'] ?? '');
 	}
 	
 	#[NoAdminRequired]
@@ -398,20 +412,22 @@ class ApiController extends OCSController {
 
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'POST', url: '/api/composers')]
-	public function createComposer(?string $path = null, ?string $name = null): DataResponse {
-		$path = $path ?? (string)$this->request->getParam('path', '');
+	public function createComposer(?int $libraryId = null, ?string $name = null): DataResponse {
 		$name = $name ?? (string)$this->request->getParam('name', '');
-		if ($path === '' || trim($name) === '') {
+		if ($libraryId === null || trim($name) === '') {
 			return new DataResponse([], Http::STATUS_BAD_REQUEST);
 		}
-		$path = '/' . ltrim($path, '/');
 		$user = $this->userSession->getUser();
-		if ($user === null || !$this->libraryMapper->findForUser($user->getUID(), $path)) {
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_NOT_FOUND);
+		}
+		$libraryPath = $this->resolveLibraryPath($user->getUID(), $libraryId);
+		if ($libraryPath === null) {
 			return new DataResponse([], Http::STATUS_NOT_FOUND);
 		}
 
 		try {
-			$node = $this->rootFolder->getUserFolder($user->getUID())->get(ltrim($path, '/'));
+			$node = $this->rootFolder->getUserFolder($user->getUID())->get(ltrim($libraryPath, '/'));
 			$databasePath = $node->getStorage()->getLocalFile($node->getInternalPath());
 			if ($databasePath === false) {
 				return new DataResponse([], Http::STATUS_NOT_FOUND);
@@ -426,20 +442,22 @@ class ApiController extends OCSController {
 
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'POST', url: '/api/books')]
-	public function createBook(?string $path = null, ?string $title = null): DataResponse {
-		$path = $path ?? (string)$this->request->getParam('path', '');
+	public function createBook(?int $libraryId = null, ?string $title = null): DataResponse {
 		$title = $title ?? (string)$this->request->getParam('title', '');
-		if ($path === '' || trim($title) === '') {
+		if ($libraryId === null || trim($title) === '') {
 			return new DataResponse([], Http::STATUS_BAD_REQUEST);
 		}
-		$path = '/' . ltrim($path, '/');
 		$user = $this->userSession->getUser();
-		if ($user === null || !$this->libraryMapper->findForUser($user->getUID(), $path)) {
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_NOT_FOUND);
+		}
+		$libraryPath = $this->resolveLibraryPath($user->getUID(), $libraryId);
+		if ($libraryPath === null) {
 			return new DataResponse([], Http::STATUS_NOT_FOUND);
 		}
 
 		try {
-			$node = $this->rootFolder->getUserFolder($user->getUID())->get(ltrim($path, '/'));
+			$node = $this->rootFolder->getUserFolder($user->getUID())->get(ltrim($libraryPath, '/'));
 			$databasePath = $node->getStorage()->getLocalFile($node->getInternalPath());
 			if ($databasePath === false) {
 				return new DataResponse([], Http::STATUS_NOT_FOUND);
@@ -454,20 +472,22 @@ class ApiController extends OCSController {
 
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'POST', url: '/api/collections')]
-	public function createCollection(?string $path = null, ?string $name = null): DataResponse {
-		$path = $path ?? (string)$this->request->getParam('path', '');
+	public function createCollection(?int $libraryId = null, ?string $name = null): DataResponse {
 		$name = $name ?? (string)$this->request->getParam('name', '');
-		if ($path === '' || trim($name) === '') {
+		if ($libraryId === null || trim($name) === '') {
 			return new DataResponse([], Http::STATUS_BAD_REQUEST);
 		}
-		$path = '/' . ltrim($path, '/');
 		$user = $this->userSession->getUser();
-		if ($user === null || !$this->libraryMapper->findForUser($user->getUID(), $path)) {
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_NOT_FOUND);
+		}
+		$libraryPath = $this->resolveLibraryPath($user->getUID(), $libraryId);
+		if ($libraryPath === null) {
 			return new DataResponse([], Http::STATUS_NOT_FOUND);
 		}
 
 		try {
-			$node = $this->rootFolder->getUserFolder($user->getUID())->get(ltrim($path, '/'));
+			$node = $this->rootFolder->getUserFolder($user->getUID())->get(ltrim($libraryPath, '/'));
 			$databasePath = $node->getStorage()->getLocalFile($node->getInternalPath());
 			if ($databasePath === false) {
 				return new DataResponse([], Http::STATUS_NOT_FOUND);
@@ -482,20 +502,22 @@ class ApiController extends OCSController {
 
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'POST', url: '/api/artists')]
-	public function createArtist(?string $path = null, ?string $name = null): DataResponse {
-		$path = $path ?? (string)$this->request->getParam('path', '');
+	public function createArtist(?int $libraryId = null, ?string $name = null): DataResponse {
 		$name = $name ?? (string)$this->request->getParam('name', '');
-		if ($path === '' || trim($name) === '') {
+		if ($libraryId === null || trim($name) === '') {
 			return new DataResponse([], Http::STATUS_BAD_REQUEST);
 		}
-		$path = '/' . ltrim($path, '/');
 		$user = $this->userSession->getUser();
-		if ($user === null || !$this->libraryMapper->findForUser($user->getUID(), $path)) {
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_NOT_FOUND);
+		}
+		$libraryPath = $this->resolveLibraryPath($user->getUID(), $libraryId);
+		if ($libraryPath === null) {
 			return new DataResponse([], Http::STATUS_NOT_FOUND);
 		}
 
 		try {
-			$node = $this->rootFolder->getUserFolder($user->getUID())->get(ltrim($path, '/'));
+			$node = $this->rootFolder->getUserFolder($user->getUID())->get(ltrim($libraryPath, '/'));
 			$databasePath = $node->getStorage()->getLocalFile($node->getInternalPath());
 			if ($databasePath === false) {
 				return new DataResponse([], Http::STATUS_NOT_FOUND);

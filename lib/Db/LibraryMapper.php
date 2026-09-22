@@ -66,7 +66,10 @@ class LibraryMapper {
 		$qb->executeStatement();
 	}
 
-	public function findForUser(string $userId, int $id): array {
+	/**
+	 * @return array{id: int, path: string}|null
+	 */
+	public function findForUser(string $userId, int $id): ?array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('id', 'path')
 			->from(self::TABLE_NAME)
