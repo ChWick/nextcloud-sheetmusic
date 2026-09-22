@@ -733,6 +733,132 @@ final class FileManagerTest extends TestCase {
 	}
 
 	/**
+	 * Both representations of a file that already exists, e.g. one that was just
+	 * uploaded into the library folder. The user folder prefix (uid *and* the
+	 * "files" segment) has to disappear from the WebDAV path.
+	 */
+	public function testPathOfExistingFileBuildsTheStoredWebdavPath(): void {
+		$path = $this->fileManager->pathOfExistingFile('/admin/files/Noten/T-Pen 2_QG.pdf', $this->user());
+
+		self::assertSame('/admin/files/Noten/T-Pen 2_QG.pdf', $path->internal);
+		self::assertSame(
+			'/remote.php/dav/files/admin/Noten/T-Pen 2_QG.pdf',
+			$path->webdav,
+			'the stored path must not repeat the "files" segment of the internal root',
+		);
+	}
+
+	public function testPathOfExistingFileRejectsPathsOutsideTheUserFolder(): void {
+		$this->expectException(\InvalidArgumentException::class);
+		$this->expectExceptionMessage('is not inside the user folder');
+
+		$this->fileManager->pathOfExistingFile('/admin/trashbin/Noten/T-Pen 2_QG.pdf', $this->user());
+	}
+
+	public function testPathOfExistingFileRejectsTraversalOutOfTheUserFolder(): void {
+		$this->expectException(\InvalidArgumentException::class);
+
+		$this->fileManager->pathOfExistingFile('/admin/files/../other/T-Pen 2_QG.pdf', $this->user());
+	}
+
+	/** The song is read from the database, so a file that was just added takes part. */
+	public function testRegenerateSongFilePathsNumbersANewlyAddedFileLast(): void {
+		// One file was already regenerated, a second one was just uploaded next to the
+		// library database and recorded with the highest Id.
+		$song = new MobileSheetsSong(
+			1,
+			'Take Five',
+			[
+				new MobileSheetsFile(11, $this->sourceWebdav('Noten/Jazz/Jazz - Take Five.pdf')),
+				new MobileSheetsFile(12, $this->sourceWebdav('Noten/uploaded.pdf')),
+			],
+			[],
+			[],
+			[new MobileSheetsCollection(1, 'Jazz')],
+			[],
+		);
+		$this->files = [
+			'Noten/Jazz/Jazz - Take Five.pdf' => 'FIRST',
+			'Noten/uploaded.pdf' => 'UPLOADED',
+		];
+		$this->folders = ['Noten' => true, 'Noten/Jazz' => true];
+		$this->songMapper->method('findSong')->with('/tmp/library.db', 1)->willReturn($song);
+
+		$this->fileManager->regenerateSongFilePaths(1, $this->user(), $this->libraryFolder, '/tmp/library.db');
+
+		// The single file's plain name becomes "001 ..." and the new file joins as
+		// "002 ...", so both now follow the rules for multi-file songs.
+		self::assertSame([
+			['from' => 'Noten/Jazz/Jazz - Take Five.pdf', 'to' => 'Noten/Jazz/001 Jazz - Take Five.pdf'],
+			['from' => 'Noten/uploaded.pdf', 'to' => 'Noten/Jazz/002 Jazz - Take Five.pdf'],
+		], $this->moves);
+		self::assertSame([
+			['fileId' => 11, 'path' => '/remote.php/dav/files/admin/Noten/Jazz/001 Jazz - Take Five.pdf'],
+			['fileId' => 12, 'path' => '/remote.php/dav/files/admin/Noten/Jazz/002 Jazz - Take Five.pdf'],
+		], $this->updates);
+		self::assertSame('UPLOADED', $this->files['Noten/Jazz/002 Jazz - Take Five.pdf']);
+	}
+
+	public function testRegenerateSongFilePathsUpdatesTheHashCodesFile(): void {
+		$source = $this->sourceWebdav('Noten/old/SomeFile.pdf');
+		$hashFile = $this->writeHashCodesFile([[$source, '1', '2', '3']]);
+		$hashCodes = MobileSheetsHashCodesFile::parse($hashFile, $this->createMock(LoggerInterface::class));
+
+		$song = new MobileSheetsSong(
+			1,
+			'Take Five',
+			[new MobileSheetsFile(11, $source)],
+			[],
+			[],
+			[new MobileSheetsCollection(1, 'Jazz')],
+			[],
+		);
+		$this->files = ['Noten/old/SomeFile.pdf' => 'PAYLOAD'];
+		$this->folders = ['Noten' => true, 'Noten/old' => true];
+		$this->songMapper->method('findSong')->willReturn($song);
+
+		$this->fileManager->regenerateSongFilePaths(1, $this->user(), $this->libraryFolder, '/tmp/library.db', $hashCodes);
+
+		self::assertFalse($hashCodes->hasPath($source));
+		self::assertTrue($hashCodes->hasPath($this->sourceWebdav('Noten/Jazz/Jazz - Take Five.pdf')));
+	}
+
+	/**
+	 * A song without a composer, artist or collection has no naming rule, so there is
+	 * nowhere to move its files to: the file that was just added stays in the library
+	 * folder and nothing else moves either.
+	 */
+	public function testRegenerateSongFilePathsLeavesFilesAloneWithoutANamingRule(): void {
+		$song = new MobileSheetsSong(
+			2,
+			'Untitled',
+			[new MobileSheetsFile(21, $this->sourceWebdav('Noten/T-Pen 2_QG.pdf'))],
+		);
+		$this->files = ['Noten/T-Pen 2_QG.pdf' => 'PAYLOAD'];
+		$this->songMapper->method('findSong')->willReturn($song);
+
+		try {
+			$this->fileManager->regenerateSongFilePaths(2, $this->user(), $this->libraryFolder, '/tmp/library.db');
+			self::fail('Expected an exception because the song offers no composer, artist or collection');
+		} catch (\Exception $exception) {
+			self::assertSame('No composer, artist, or collection', $exception->getMessage());
+		}
+
+		self::assertSame([], $this->moves, 'the failure has to happen before anything moves');
+		self::assertSame([], $this->updates);
+		self::assertSame('PAYLOAD', $this->files['Noten/T-Pen 2_QG.pdf']);
+	}
+
+	public function testRegenerateSongFilePathsThrowsWhenTheSongIsUnknown(): void {
+		$this->songMapper->method('findSong')->with('/tmp/library.db', 99)->willReturn(null);
+
+		$this->expectException(\RuntimeException::class);
+		$this->expectExceptionMessage('Song with ID 99 not found');
+
+		$this->fileManager->regenerateSongFilePaths(99, $this->user(), $this->libraryFolder, '/tmp/library.db');
+	}
+
+	/**
 	 * Build a Folder mock backed by the in-memory tree.
 	 *
 	 * IUserFolder is used for every folder because it extends Folder and is also

@@ -119,6 +119,29 @@ class FileManager {
 	) {
 	}
 
+	/**
+	 * Both representations of a file that already sits in the user's folder.
+	 *
+	 * Used for a file that was just uploaded or copied next to the library database:
+	 * the naming rules move it to its final location afterwards, but it has to be
+	 * recorded in the database under its current, real WebDAV path first.
+	 *
+	 * @param string $internalPath Nextcloud node path of the file, e.g. "/admin/files/Noten/song.pdf"
+	 * @throws \InvalidArgumentException when the path is not inside the user's folder
+	 */
+	public function pathOfExistingFile(string $internalPath, IUser $user): MobileSheetsPath {
+		$path = $this->pathResolver->fromInternal($internalPath, $user);
+		if ($path === null) {
+			throw new \InvalidArgumentException(sprintf(
+				"File '%s' is not inside the user folder '%s'",
+				$internalPath,
+				$this->pathResolver->internalRoot($user),
+			));
+		}
+
+		return $path;
+	}
+
 	public function regenerateFilePaths(int $libraryId, IUser $user): void {
 		$library = $this->libraryMapper->findById($libraryId);
 		if ($library === null) {
@@ -147,14 +170,54 @@ class FileManager {
 
 		try {
 			foreach ($songs as $song) {
-				foreach ($song->files as $file) {
-					$this->regenerateFilePath($song, $file, $user, $targetFolder, $databasePath, $hashCodes);
-				}
+				$this->regenerateSongFiles($song, $user, $targetFolder, $databasePath, $hashCodes);
 			}
 		} finally {
 			// Save even when the run aborts, so the hash codes file keeps matching
 			// the moves that already happened.
 			$hashCodes?->save();
+		}
+	}
+
+	/**
+	 * Move every file of one song to its regenerated location.
+	 *
+	 * The song is read from the database rather than passed in, so the file list is
+	 * up to date and ordered: the position of a file decides its numeric prefix, and a
+	 * file that was just added to the song has to take part in the numbering.
+	 *
+	 * @param Folder $targetFolder folder the regenerated files belong in, normally the
+	 *                             library database's parent
+	 * @throws \RuntimeException     when the song is not part of the library
+	 * @throws \Exception            when the song has no composer, artist or collection
+	 *
+	 * @see createTargetPath() for the naming rules
+	 */
+	public function regenerateSongFilePaths(
+		int $songId,
+		IUser $user,
+		Folder $targetFolder,
+		string $databasePath,
+		?MobileSheetsHashCodesFile $hashCodes = null,
+	): void {
+		$song = $this->songMapper->findSong($databasePath, $songId);
+		if ($song === null) {
+			throw new \RuntimeException("Song with ID $songId not found in the library '$databasePath'");
+		}
+
+		$this->regenerateSongFiles($song, $user, $targetFolder, $databasePath, $hashCodes);
+	}
+
+	/** Move each file the song lists, in the order that decides the numeric prefix. */
+	private function regenerateSongFiles(
+		MobileSheetsSong $song,
+		IUser $user,
+		Folder $targetFolder,
+		string $databasePath,
+		?MobileSheetsHashCodesFile $hashCodes,
+	): void {
+		foreach ($song->files as $file) {
+			$this->regenerateFilePath($song, $file, $user, $targetFolder, $databasePath, $hashCodes);
 		}
 	}
 

@@ -57,6 +57,26 @@ class MobileSheetsPathResolver {
 	}
 
 	/**
+	 * Build both representations for a file that already exists in the user's folder.
+	 *
+	 * Returns null when the internal path is outside the user folder.
+	 *
+	 * @param string $internalPath Nextcloud node path, e.g. "/admin/files/Noten/sub/file.pdf"
+	 */
+	public function fromInternal(string $internalPath, IUser $user): ?MobileSheetsPath {
+		$internal = $this->normalize($internalPath);
+		$relative = $this->relativeToUserFolder($internal, $user);
+		if ($relative === null) {
+			return null;
+		}
+
+		return new MobileSheetsPath(
+			$internal,
+			$relative === '' ? $this->webdavRoot($user) : $this->webdavRoot($user) . '/' . $relative,
+		);
+	}
+
+	/**
 	 * Build both representations for a target path relative to an internal folder.
 	 *
 	 * @param string $relativePath       path below $internalBaseFolder, e.g. "Miles/Miles - Book/Miles - Book - Blue.pdf"

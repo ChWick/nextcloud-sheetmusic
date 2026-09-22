@@ -170,15 +170,16 @@ class SongMapper {
 	}
 
 	/**
+	 * @param int|null $songId when given, only that song is returned
 	 * @return list<MobileSheetsSong>
 	 */
-	public function findSongs(string $databasePath): array {
+	public function findSongs(string $databasePath, ?int $songId = null): array {
 		$database = new PDO('sqlite:' . $databasePath, options: [
 			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
 			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
 		]);
 
-		$statement = $database->query('SELECT 
+		$statement = $database->prepare('SELECT 
 			s.Title,
 			s.Id,
 			g.Type as Genre,
@@ -200,43 +201,51 @@ class SongMapper {
 		LEFT JOIN BookSongs bookSongs ON s.Id = bookSongs.SongId
 		LEFT JOIN Books books ON bookSongs.BookId = books.Id
 		LEFT JOIN ArtistsSongs artistsSongs ON artistsSongs.SongId = s.Id
-		LEFT JOIN Artists artist on artistsSongs.ArtistId = artist.Id');
+		LEFT JOIN Artists artist on artistsSongs.ArtistId = artist.Id'
+			. ($songId === null ? '' : ' WHERE s.Id = :songId'));
+
+		if ($statement === false) {
+			return [];
+		}
+
+		if ($songId !== null) {
+			$statement->bindValue(':songId', $songId, PDO::PARAM_INT);
+		}
+		$statement->execute();
 
 		$songs = [];
-		if ($statement !== false) {
-			while ($row = $statement->fetch()) {
-				$songId = (int)$row['Id'];
+		while ($row = $statement->fetch()) {
+			$rowSongId = (int)$row['Id'];
 
-				if (!isset($songs[$songId])) {
-					$songs[$songId] = [
-						'id' => $songId,
-						'title' => (string)$row['Title'],
-						'composers' => [],
-						'books' => [],
-						'collections' => [],
-						'artists' => [],
-					];
-				}
+			if (!isset($songs[$rowSongId])) {
+				$songs[$rowSongId] = [
+					'id' => $rowSongId,
+					'title' => (string)$row['Title'],
+					'composers' => [],
+					'books' => [],
+					'collections' => [],
+					'artists' => [],
+				];
+			}
 
-				$composerId = $row['ComposerId'] !== null ? (int)$row['ComposerId'] : null;
-				if ($composerId !== null && !isset($songs[$songId]['composers'][$composerId])) {
-					$songs[$songId]['composers'][$composerId] = new MobileSheetsComposer($composerId, (string)($row['Composer'] ?? ''));
-				}
+			$composerId = $row['ComposerId'] !== null ? (int)$row['ComposerId'] : null;
+			if ($composerId !== null && !isset($songs[$rowSongId]['composers'][$composerId])) {
+				$songs[$rowSongId]['composers'][$composerId] = new MobileSheetsComposer($composerId, (string)($row['Composer'] ?? ''));
+			}
 
-				$bookId = $row['BookId'] !== null ? (int)$row['BookId'] : null;
-				if ($bookId !== null && !isset($songs[$songId]['books'][$bookId])) {
-					$songs[$songId]['books'][$bookId] = new MobileSheetsBook($bookId, (string)($row['Book'] ?? ''));
-				}
+			$bookId = $row['BookId'] !== null ? (int)$row['BookId'] : null;
+			if ($bookId !== null && !isset($songs[$rowSongId]['books'][$bookId])) {
+				$songs[$rowSongId]['books'][$bookId] = new MobileSheetsBook($bookId, (string)($row['Book'] ?? ''));
+			}
 
-				$collectionId = $row['CollectionId'] !== null ? (int)$row['CollectionId'] : null;
-				if ($collectionId !== null && !isset($songs[$songId]['collections'][$collectionId])) {
-					$songs[$songId]['collections'][$collectionId] = new MobileSheetsCollection($collectionId, (string)($row['Collection'] ?? ''));
-				}
+			$collectionId = $row['CollectionId'] !== null ? (int)$row['CollectionId'] : null;
+			if ($collectionId !== null && !isset($songs[$rowSongId]['collections'][$collectionId])) {
+				$songs[$rowSongId]['collections'][$collectionId] = new MobileSheetsCollection($collectionId, (string)($row['Collection'] ?? ''));
+			}
 
-				$artistId = $row['ArtistId'] !== null ? (int)$row['ArtistId'] : null;
-				if ($artistId !== null && !isset($songs[$songId]['artists'][$artistId])) {
-					$songs[$songId]['artists'][$artistId] = new MobileSheetsArtist($artistId, (string)($row['Artist'] ?? ''));
-				}
+			$artistId = $row['ArtistId'] !== null ? (int)$row['ArtistId'] : null;
+			if ($artistId !== null && !isset($songs[$rowSongId]['artists'][$artistId])) {
+				$songs[$rowSongId]['artists'][$artistId] = new MobileSheetsArtist($artistId, (string)($row['Artist'] ?? ''));
 			}
 		}
 
@@ -254,6 +263,18 @@ class SongMapper {
 		}
 
 		return $result;
+	}
+
+	/**
+	 * A single song with its nested entities and files, or null when it is unknown.
+	 *
+	 * Files come back ordered by Id, i.e. in the order that decides the numeric prefix
+	 * of their regenerated file names.
+	 */
+	public function findSong(string $databasePath, int $songId): ?MobileSheetsSong {
+		$songs = $this->findSongs($databasePath, $songId);
+
+		return $songs[0] ?? null;
 	}
 
 	/**

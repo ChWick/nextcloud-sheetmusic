@@ -104,6 +104,32 @@ final class SongMapperTest extends TestCase {
 		$this->assertSame(1000, $alpha->collections[0]->id);
 	}
 
+public function testFindSongReturnsOnlyTheRequestedSong(): void {
+		$song = $this->mapper()->findSong($this->databasePath, 1);
+
+		$this->assertNotNull($song);
+		$this->assertSame(1, $song->id);
+		$this->assertSame('Zebra', $song->title);
+		$this->assertSame(['Beethoven'], $this->names($song->composers));
+		$this->assertSame(['Coltrane'], $this->names($song->artists));
+		$this->assertSame(['Jazz Standards'], $this->names($song->collections));
+		$this->assertSame([], $song->books);
+		$this->assertCount(1, $song->files);
+		$this->assertSame(1, $song->files[0]->id);
+		$this->assertSame('/remote.php/dav/files/admin/Noten/Zebra.pdf', $song->files[0]->path);
+	}
+
+	public function testFindSongReturnsNullForAnUnknownSong(): void {
+		$this->assertNull($this->mapper()->findSong($this->databasePath, 999));
+	}
+
+	public function testFindSongsCanBeLimitedToOneSong(): void {
+		$songs = $this->mapper()->findSongs($this->databasePath, 2);
+
+		$this->assertCount(1, $songs);
+		$this->assertSame(2, $songs[0]->id);
+		$this->assertSame('Alpha', $songs[0]->title);
+	}
 	public function testFindLibraryDataReturnsAllEntities(): void {
 		$data = $this->mapper()->findLibraryData($this->databasePath);
 

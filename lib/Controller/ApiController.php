@@ -7,6 +7,7 @@ namespace OCA\MobileSheetsManager\Controller;
 use OCA\MobileSheetsManager\Db\LibraryMapper;
 use OCA\MobileSheetsManager\Db\SongMapper;
 use OCA\MobileSheetsManager\Service\FileManager;
+use OCA\MobileSheetsManager\Service\MobileSheetsHashCodesFile;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\ApiRoute;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -14,7 +15,9 @@ use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\OCSController;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
+use OCP\Files\Node;
 use OCP\IRequest;
+use OCP\IUser;
 use OCP\IUserSession;
 use Psr\Log\LoggerInterface;
 
@@ -212,23 +215,25 @@ class ApiController extends OCSController {
 				return new DataResponse([], Http::STATUS_NOT_FOUND);
 			}
 
-			// If file exists, find a unique name or overwrite
-			if ($targetFolder->nodeExists($fileName)) {
-				$targetFile = $targetFolder->get($fileName);
-			} else {
-				$targetFile = $targetFolder->newFile($fileName);
+			$content = file_get_contents($fileInfo['tmp_name']);
+			if ($content === false) {
+				return new DataResponse(['message' => 'Could not read the uploaded file'], Http::STATUS_BAD_REQUEST);
 			}
 
-			$targetFile->putContent(file_get_contents($fileInfo['tmp_name']));
+			// The upload is stored next to the library database under its own name
+			// first. FileManager then moves it - together with the song's other files -
+			// to the location its naming rules produce.
+			$targetRelative = ($libraryDir === '' || $libraryDir === '.') ? $fileName : $libraryDir . '/' . $fileName;
+			// An existing file at that name is overwritten, as the editor always did.
+			$targetFile = $userFolder->nodeExists($targetRelative)
+				? $userFolder->get($targetRelative)
+				: $userFolder->newFile($targetRelative);
+			$targetFile->putContent($content);
 
-			$targetRelativePath = '/' . ltrim($targetFile->getPath(), '/');
-			$userFolderPrefix = '/' . $user->getUID();
-			if (str_starts_with($targetRelativePath, $userFolderPrefix)) {
-				$targetRelativePath = substr($targetRelativePath, strlen($userFolderPrefix));
-			}
-
-			$webDavPath = '/remote.php/dav/files/' . $user->getUID() . '/' . ltrim($targetRelativePath, '/');
-			$this->songMapper->setSongFile($databasePath, $id, $webDavPath);
+			// FileManager owns both path representations, so the WebDAV path stored in
+			// the database is derived from the file's node path instead of being
+			// assembled here.
+			$this->recordSongFile($id, $databasePath, $targetFile, $targetFolder, $user);
 
 			return new DataResponse($this->songMapper->findLibraryData($databasePath));
 		} catch (\Throwable $exception) {
@@ -291,19 +296,27 @@ class ApiController extends OCSController {
 				return new DataResponse([], Http::STATUS_NOT_FOUND);
 			}
 
-			$targetFileName = $sourceNode->getName();
-			$targetFileRelative = ($libraryDir === '' || $libraryDir === '.') ? $targetFileName : $libraryDir . '/' . $targetFileName;
+			// The file is placed next to the library database under its own name
+			// first. FileManager then moves it - together with the song's other files -
+			// to the location its naming rules produce.
+			$targetName = $sourceNode->getName();
+			$targetRelative = ($libraryDir === '' || $libraryDir === '.') ? $targetName : $libraryDir . '/' . $targetName;
 
-			if (ltrim($sourcePath, '/') !== $targetFileRelative) {
+			if (ltrim($sourcePath, '/') !== $targetRelative) {
+				// Node::move() and Node::copy() resolve against the filesystem root, so
+				// they need the full internal path, not one relative to the user folder.
+				$targetInternalPath = $targetFolder->getPath() . '/' . $targetName;
 				if ($action === 'move') {
-					$sourceNode->move($targetFileRelative);
+					$sourceNode->move($targetInternalPath);
 				} else {
-					$sourceNode->copy($targetFileRelative);
+					$sourceNode->copy($targetInternalPath);
 				}
 			}
 
-			$webDavPath = '/remote.php/dav/files/' . $user->getUID() . '/' . ltrim($targetFileRelative, '/');
-			$this->songMapper->setSongFile($databasePath, $id, $webDavPath);
+			// The copy/move above replaced the node, so read the file that is now in the
+			// library folder to get its real path.
+			$attachedFile = $targetFolder->get($targetName);
+			$this->recordSongFile($id, $databasePath, $attachedFile, $targetFolder, $user);
 
 			return new DataResponse($this->songMapper->findLibraryData($databasePath));
 		} catch (\Throwable $exception) {
@@ -366,6 +379,56 @@ class ApiController extends OCSController {
 				'fileId' => $fileId,
 			]);
 			return new DataResponse([], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	/**
+	 * Record a file that was added to a song and move the song's files into place.
+	 *
+	 * The file already sits in the library folder under its own name. FileManager
+	 * derives the WebDAV path the database expects from the file's node path, so both
+	 * path representations always agree - a hand-built path used to repeat the "files"
+	 * segment of the user folder.
+	 *
+	 * @param Node   $file         the file as it sits in the library folder
+	 * @param Folder $targetFolder folder the regenerated files belong in, i.e. the
+	 *                             library database's parent
+	 */
+	private function recordSongFile(int $songId, string $databasePath, Node $file, Folder $targetFolder, IUser $user): void {
+		$storedPath = $this->fileManager->pathOfExistingFile($file->getPath(), $user);
+		$this->songMapper->setSongFile($databasePath, $songId, $storedPath->webdav);
+
+		$this->relocateSongFiles($songId, $databasePath, $targetFolder, $user);
+	}
+
+	/**
+	 * Move the song's files to the paths the FileManager naming rules produce.
+	 *
+	 * Adding a file changes the numbering of a multi-file song, so the song's files are
+	 * all regenerated, not just the new one. A song without a composer, artist or
+	 * collection has no naming rule to follow: its files keep their current location,
+	 * which for a freshly added file is the library folder.
+	 *
+	 * @param Folder $targetFolder folder the regenerated files belong in, i.e. the
+	 *                             library database's parent
+	 */
+	private function relocateSongFiles(int $songId, string $databasePath, Folder $targetFolder, IUser $user): void {
+		// The hash codes file tracks each file by its WebDAV path, so the moves below
+		// have to be reflected there as well. It is parsed once and written back once.
+		$hashCodes = MobileSheetsHashCodesFile::forDatabase($databasePath, $this->logger);
+
+		try {
+			$this->fileManager->regenerateSongFilePaths($songId, $user, $targetFolder, $databasePath, $hashCodes);
+		} catch (\Throwable $exception) {
+			$this->logger->warning('Could not move the song files to their regenerated paths', [
+				'exception' => $exception,
+				'databasePath' => $databasePath,
+				'songId' => $songId,
+			]);
+		} finally {
+			// Save even when a move failed, so the hash codes file keeps matching the
+			// moves that already happened.
+			$hashCodes?->save();
 		}
 	}
 
