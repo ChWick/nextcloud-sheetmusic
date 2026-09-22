@@ -23,7 +23,10 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
+	/** The song was saved; the editor closes. */
 	saved: [data: LibraryData]
+	/** The song's files changed (upload/attach); the editor stays open. */
+	updated: [data: LibraryData]
 	cancel: []
 }>()
 
@@ -46,11 +49,21 @@ const selectedArtists = ref<Array<Artist | { name: string, id?: number }>>(
 	matchSelected(props.artists, props.song.artists),
 )
 
-function getInitialFiles(s: Song): SongFile[] {
-	if (s.files && s.files.length > 0) {
-		return [...s.files]
-	}
-	return []
+function getServerFiles(s: Song): SongFile[] {
+	return s.files ? [...s.files] : []
+}
+
+/**
+ * The database id is what a deletion targets and it survives a rename, while the path of a
+ * file changes as soon as the song's files are renumbered.
+ */
+function isStagedForDeletion(file: SongFile, pending: SongFile[]): boolean {
+	return pending.some((candidate) => candidate.id === file.id)
+}
+
+/** Files of a song the editor shows, i.e. without the ones staged for deletion. */
+function getInitialFiles(s: Song, pending: SongFile[] = []): SongFile[] {
+	return getServerFiles(s).filter((file) => !isStagedForDeletion(file, pending))
 }
 
 const currentFiles = ref<SongFile[]>(getInitialFiles(props.song))
@@ -58,14 +71,25 @@ const pendingDeleteFiles = ref<SongFile[]>([])
 
 watch(
 	() => props.song,
-	(newSong) => {
+	(newSong, previousSong) => {
 		title.value = newSong.title
 		selectedComposers.value = matchSelected(props.composers, newSong.composers)
 		selectedBooks.value = matchSelected(props.books, newSong.books)
 		selectedCollections.value = matchSelected(props.collections, newSong.collections)
 		selectedArtists.value = matchSelected(props.artists, newSong.artists)
-		currentFiles.value = getInitialFiles(newSong)
-		pendingDeleteFiles.value = []
+
+		// A refresh in place keeps the deletions staged in this session: the editor stays
+		// open now, and uploading or attaching a file renumbers the song's files, so only
+		// the displayed path is taken from the fresh data. Editing another song starts from
+		// a clean slate instead.
+		const pending = newSong.id === previousSong?.id
+			? pendingDeleteFiles.value.map(
+				(file) => newSong.files?.find((candidate) => candidate.id === file.id) ?? file,
+			)
+			: []
+
+		pendingDeleteFiles.value = pending
+		currentFiles.value = getInitialFiles(newSong, pending)
 	},
 )
 
@@ -101,15 +125,15 @@ function createArtistTag(newTag: string) {
 }
 
 function stageDeleteFile(file: SongFile) {
-	currentFiles.value = currentFiles.value.filter((f) => f.id !== file.id || f.path !== file.path)
-	if (!pendingDeleteFiles.value.some((f) => f.id === file.id && f.path === file.path)) {
+	currentFiles.value = currentFiles.value.filter((f) => f.id !== file.id)
+	if (!isStagedForDeletion(file, pendingDeleteFiles.value)) {
 		pendingDeleteFiles.value.push(file)
 	}
 }
 
 function restoreDeletedFile(file: SongFile) {
-	pendingDeleteFiles.value = pendingDeleteFiles.value.filter((f) => f.id !== file.id || f.path !== file.path)
-	if (!currentFiles.value.some((f) => f.id === file.id && f.path === file.path)) {
+	pendingDeleteFiles.value = pendingDeleteFiles.value.filter((f) => f.id !== file.id)
+	if (!currentFiles.value.some((f) => f.id === file.id)) {
 		currentFiles.value.push(file)
 	}
 }
@@ -145,9 +169,11 @@ async function handleFileUpload(event: Event) {
 		const data = response.data.ocs.data as LibraryData
 		const updated = data.songs.find((s) => s.id === props.song.id)
 		if (updated) {
-			currentFiles.value = getInitialFiles(updated)
+			currentFiles.value = getInitialFiles(updated, pendingDeleteFiles.value)
 		}
-		emit('saved', data)
+		// Uploading is not saving: the editor stays open, so the parent only refreshes the
+		// song data around it instead of closing the editor through 'saved'.
+		emit('updated', data)
 	} catch {
 		errorMessage.value = t('mobilesheetsmanager', 'Failed to upload PDF file.')
 	} finally {
@@ -211,9 +237,10 @@ async function confirmAttachNextcloudFile() {
 		const data = response.data.ocs.data as LibraryData
 		const updated = data.songs.find((s) => s.id === props.song.id)
 		if (updated) {
-			currentFiles.value = getInitialFiles(updated)
+			currentFiles.value = getInitialFiles(updated, pendingDeleteFiles.value)
 		}
-		emit('saved', data)
+		// Attaching is not saving either, so the editor stays open here as well.
+		emit('updated', data)
 	} catch {
 		errorMessage.value = t('mobilesheetsmanager', 'Failed to attach PDF file.')
 	} finally {
@@ -424,7 +451,7 @@ async function saveSong() {
 				<div v-if="pendingDeleteFiles.length > 0" :class="$style.deletionWarning">
 					<div :class="$style.warningText">
 						<strong>{{ t('mobilesheetsmanager', 'Notice:') }}</strong>
-						{{ t('mobilesheetsmanager', '{count} file(s) marked for removal will be permanently deleted from the song and moved to your Nextcloud trash bin when you click "Save changes".', { count: pendingDeleteFiles.length }) }}
+						{{ t('mobilesheetsmanager', '{count} file(s) marked for removal will be permanently deleted from the song and moved to your Nextcloud trash bin when you click "Save and Close".', { count: pendingDeleteFiles.length }) }}
 					</div>
 					<ul :class="$style.pendingList">
 						<li v-for="file in pendingDeleteFiles" :key="file.id" :class="$style.pendingItem">
@@ -479,7 +506,7 @@ async function saveSong() {
 					<template v-if="isSaving">
 						<NcLoadingIcon :size="16" />
 					</template>
-					{{ t('mobilesheetsmanager', 'Save changes') }}
+					{{ t('mobilesheetsmanager', 'Save and Close') }}
 				</NcButton>
 			</div>
 		</form>

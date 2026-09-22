@@ -33,6 +33,7 @@ const props = withDefaults(
 
 const emit = defineEmits<{
 	saved: [data: LibraryData]
+	updated: [data: LibraryData]
 }>()
 
 GlobalWorkerOptions.workerSrc = pdfWorker
@@ -43,6 +44,8 @@ const errorMessage = ref('')
 const isEditing = ref(false)
 const selectedFileId = ref('')
 let currentLoadId = 0
+/** Set when the song changed while the editor covered the PDF view, which defers the render. */
+let renderDeferred = false
 
 const songComposers = computed(() => props.song?.composers ?? [])
 
@@ -79,9 +82,18 @@ function selectFile(fileId: string) {
 	renderSelectedFile()
 }
 
+/** Saving closes the editor; the parent data is refreshed on the way out. */
 function handleSaved(data: LibraryData) {
 	isEditing.value = false
 	emit('saved', data)
+}
+
+/**
+ * The editor changed the song's files without saving (upload/attach). The editor has to
+ * stay open, so the data is only passed on and 'saved' - which closes it - is not emitted.
+ */
+function handleUpdated(data: LibraryData) {
+	emit('updated', data)
 }
 
 async function renderSelectedFile() {
@@ -153,21 +165,47 @@ async function renderSelectedFile() {
 	}
 }
 
+// Picking another song leaves any open editing session behind.
+watch(
+	() => props.song?.id,
+	(newSongId, previousSongId) => {
+		if (newSongId !== previousSongId) {
+			isEditing.value = false
+		}
+	},
+)
+
+// The song the editor works on can be refreshed in place - a file was added, renamed or
+// removed - which must not close the editor. The listed files are still followed, so the
+// tabs and the PDF view catch up once the editor is closed.
 watch(
 	() => props.song,
 	(newSong) => {
-		isEditing.value = false
-
 		const files = newSong?.files ?? []
 		// Keep the active tab when the very same file is still part of the song,
 		// e.g. after the editor refreshed the song data.
 		const keepsSelection = files.some((file) => String(file.id) === selectedFileId.value)
 		selectedFileId.value = keepsSelection ? selectedFileId.value : (files[0] ? String(files[0].id) : '')
 
+		// The editor's form replaces the PDF view, so there is no container to render
+		// into while it is open; the render waits until it is visible again.
+		if (isEditing.value) {
+			renderDeferred = true
+			return
+		}
+
 		renderSelectedFile()
 	},
 	{ immediate: true },
 )
+
+// Catch up on the render that the open editor deferred, e.g. after a file was uploaded.
+watch(isEditing, (editing) => {
+	if (!editing && renderDeferred) {
+		renderDeferred = false
+		renderSelectedFile()
+	}
+})
 </script>
 
 <template>
@@ -213,6 +251,7 @@ watch(
 			:collections="collections"
             :artists="artists"
 			@saved="handleSaved"
+			@updated="handleUpdated"
 			@cancel="isEditing = false" />
 
 		<!-- PDF Viewer View -->

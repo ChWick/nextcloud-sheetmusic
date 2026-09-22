@@ -33,7 +33,8 @@
                   :books="books"
                   :collections="collections"
                   :artists="artists"
-                  @saved="handleLibraryDataUpdate" />
+                  @saved="handleLibraryDataUpdate"
+                  @updated="handleLibraryDataUpdate" />
     </div>
   </div>
 </template>
@@ -119,7 +120,11 @@ function selectSong(song: Song) {
 }
 
 // Emit events to parent
-const emit = defineEmits<{ (e: 'select-song', song: Song): void; (e: 'saved'): void }>();
+const emit = defineEmits<{
+	(e: 'select-song', song: Song): void
+	(e: 'saved'): void
+	(e: 'updated'): void
+}>();
 </script>
 
 <style module>
