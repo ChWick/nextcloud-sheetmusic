@@ -11,7 +11,7 @@ import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 const props = defineProps<{
 	song: Song
@@ -25,7 +25,7 @@ const props = defineProps<{
 const emit = defineEmits<{
 	/** The song was saved; the editor closes. */
 	saved: [data: LibraryData]
-	/** The song's files changed (upload/attach); the editor stays open. */
+	/** The song's data changed without saving; the editor stays open. */
 	updated: [data: LibraryData]
 	cancel: []
 }>()
@@ -79,14 +79,20 @@ watch(
 		selectedArtists.value = matchSelected(props.artists, newSong.artists)
 
 		// A refresh in place keeps the deletions staged in this session: the editor stays
-		// open now, and uploading or attaching a file renumbers the song's files, so only
-		// the displayed path is taken from the fresh data. Editing another song starts from
-		// a clean slate instead.
-		const pending = newSong.id === previousSong?.id
+		// open now, and the file list of the refreshed song is what the displayed paths
+		// are taken from. Editing another song starts from a clean slate instead, which
+		// also drops the additions staged for the song edited before.
+		const sameSong = newSong.id === previousSong?.id
+		const pending = sameSong
 			? pendingDeleteFiles.value.map(
 				(file) => newSong.files?.find((candidate) => candidate.id === file.id) ?? file,
 			)
 			: []
+
+		if (!sameSong) {
+			pendingAttachments.value = []
+			pendingUploads.value = []
+		}
 
 		pendingDeleteFiles.value = pending
 		currentFiles.value = getInitialFiles(newSong, pending)
@@ -102,7 +108,72 @@ const fileInput = ref<HTMLInputElement>()
 const isAttachDialogOpen = ref(false)
 const selectedNextcloudNode = ref<INode>()
 const attachAction = ref<'copy' | 'move'>('copy')
-const isAttachingFile = ref(false)
+
+/** A Nextcloud file the user picked: only moved/copied when the song is saved. */
+interface PendingAttachment {
+	key: string
+	/** Path of the file in the user's Nextcloud files */
+	path: string
+	name: string
+	action: 'copy' | 'move'
+}
+
+/** A file chosen on the computer: only uploaded when the song is saved. */
+interface PendingUpload {
+	key: string
+	file: File
+	name: string
+}
+
+/** Row of the pending additions notice; both kinds of additions share the display. */
+interface PendingAddition {
+	key: string
+	name: string
+	hint: string
+	remove: () => void
+}
+
+const pendingAttachments = ref<PendingAttachment[]>([])
+const pendingUploads = ref<PendingUpload[]>([])
+let pendingAdditionKey = 0
+
+function removePendingAttachment(attachment: PendingAttachment) {
+	pendingAttachments.value = pendingAttachments.value.filter((candidate) => candidate.key !== attachment.key)
+}
+
+function removePendingUpload(upload: PendingUpload) {
+	pendingUploads.value = pendingUploads.value.filter((candidate) => candidate.key !== upload.key)
+}
+
+/**
+ * Files that are added to the song when it is saved. Attaching and uploading only stage
+ * here: moving the file in the library folder and the database update happen on save, so
+ * cancelling leaves the library untouched.
+ */
+const pendingAdditions = computed<PendingAddition[]>(() => [
+	...pendingAttachments.value.map((attachment): PendingAddition => ({
+		key: attachment.key,
+		name: attachment.name,
+		hint: attachment.action === 'move'
+			? t('mobilesheetsmanager', 'Move from Nextcloud')
+			: t('mobilesheetsmanager', 'Copy from Nextcloud'),
+		remove: () => removePendingAttachment(attachment),
+	})),
+	...pendingUploads.value.map((upload): PendingAddition => ({
+		key: upload.key,
+		name: upload.name,
+		hint: t('mobilesheetsmanager', 'Upload from this computer'),
+		remove: () => removePendingUpload(upload),
+	})),
+])
+
+function stageAttachment(path: string, name: string, action: 'copy' | 'move') {
+	pendingAttachments.value.push({ key: `attachment-${++pendingAdditionKey}`, path, name, action })
+}
+
+function stageUpload(file: File) {
+	pendingUploads.value.push({ key: `upload-${++pendingAdditionKey}`, file, name: file.name })
+}
 
 function getFileName(filePath: string): string {
 	return filePath.split('/').pop() ?? filePath
@@ -138,9 +209,17 @@ function restoreDeletedFile(file: SongFile) {
 	}
 }
 
-async function handleFileUpload(event: Event) {
+/**
+ * Choosing a file on the computer only stages it. The upload - including the move into
+ * the library folder - runs when the song is saved, just like a staged deletion.
+ */
+function handleFileUpload(event: Event) {
 	const target = event.target as HTMLInputElement
 	const file = target.files?.[0]
+	if (fileInput.value) {
+		// Reset right away, so the same file can be picked again after removing it.
+		fileInput.value.value = ''
+	}
 	if (!file) {
 		return
 	}
@@ -151,37 +230,8 @@ async function handleFileUpload(event: Event) {
 	}
 
 	errorMessage.value = ''
-	isSaving.value = true
-
-	try {
-		const formData = new FormData()
-		formData.append('file', file)
-		formData.append('libraryId', props.libraryId)
-
-		const response = await axios.post(
-			generateOcsUrl(`/apps/mobilesheetsmanager/api/songs/${props.song.id}/file/upload`),
-			formData,
-			{
-				headers: { 'Content-Type': 'multipart/form-data' },
-			},
-		)
-		successMessage.value = t('mobilesheetsmanager', 'File uploaded successfully.')
-		const data = response.data.ocs.data as LibraryData
-		const updated = data.songs.find((s) => s.id === props.song.id)
-		if (updated) {
-			currentFiles.value = getInitialFiles(updated, pendingDeleteFiles.value)
-		}
-		// Uploading is not saving: the editor stays open, so the parent only refreshes the
-		// song data around it instead of closing the editor through 'saved'.
-		emit('updated', data)
-	} catch {
-		errorMessage.value = t('mobilesheetsmanager', 'Failed to upload PDF file.')
-	} finally {
-		isSaving.value = false
-		if (fileInput.value) {
-			fileInput.value.value = ''
-		}
-	}
+	stageUpload(file)
+	successMessage.value = t('mobilesheetsmanager', 'The file is added to the song when you save.')
 }
 
 async function openNextcloudPicker() {
@@ -214,38 +264,21 @@ async function openNextcloudPicker() {
 	}
 }
 
-async function confirmAttachNextcloudFile() {
-	if (!selectedNextcloudNode.value) {
+/**
+ * Attaching a Nextcloud file only stages it. The copy or move inside the library folder
+ * and the database entry are done when the song is saved, so cancelling changes nothing.
+ */
+function stageAttachNextcloudFile() {
+	const node = selectedNextcloudNode.value
+	if (!node) {
 		return
 	}
 
 	errorMessage.value = ''
-	isAttachingFile.value = true
-
-	try {
-		const response = await axios.post(
-			generateOcsUrl(`/apps/mobilesheetsmanager/api/songs/${props.song.id}/file/attach`),
-			{
-				libraryId: props.libraryId,
-				sourcePath: selectedNextcloudNode.value.path,
-				action: attachAction.value,
-			},
-		)
-		isAttachDialogOpen.value = false
-		selectedNextcloudNode.value = undefined
-		successMessage.value = t('mobilesheetsmanager', 'PDF file attached successfully.')
-		const data = response.data.ocs.data as LibraryData
-		const updated = data.songs.find((s) => s.id === props.song.id)
-		if (updated) {
-			currentFiles.value = getInitialFiles(updated, pendingDeleteFiles.value)
-		}
-		// Attaching is not saving either, so the editor stays open here as well.
-		emit('updated', data)
-	} catch {
-		errorMessage.value = t('mobilesheetsmanager', 'Failed to attach PDF file.')
-	} finally {
-		isAttachingFile.value = false
-	}
+	stageAttachment(node.path, node.basename, attachAction.value)
+	isAttachDialogOpen.value = false
+	selectedNextcloudNode.value = undefined
+	successMessage.value = t('mobilesheetsmanager', 'The file is added to the song when you save.')
 }
 
 async function saveSong() {
@@ -340,9 +373,44 @@ async function saveSong() {
 				artistIds,
 			},
 		)
+		let data = response.data.ocs.data as LibraryData
+
+		// Staged file additions are applied after the metadata: the naming rules of a song
+		// use its composers, artists and collections, so an attached or uploaded file has
+		// to be named with the values the user just saved. Each addition renumbers the
+		// song's files, so the data of the last one is what the parent gets.
+		for (const attachment of pendingAttachments.value) {
+			const attachResponse = await axios.post(
+				generateOcsUrl(`/apps/mobilesheetsmanager/api/songs/${props.song.id}/file/attach`),
+				{
+					libraryId: props.libraryId,
+					sourcePath: attachment.path,
+					action: attachment.action,
+				},
+			)
+			data = attachResponse.data.ocs.data as LibraryData
+		}
+
+		for (const upload of pendingUploads.value) {
+			const formData = new FormData()
+			formData.append('file', upload.file)
+			formData.append('libraryId', String(props.libraryId))
+
+			const uploadResponse = await axios.post(
+				generateOcsUrl(`/apps/mobilesheetsmanager/api/songs/${props.song.id}/file/upload`),
+				formData,
+				{
+					headers: { 'Content-Type': 'multipart/form-data' },
+				},
+			)
+			data = uploadResponse.data.ocs.data as LibraryData
+		}
+
+		pendingAttachments.value = []
+		pendingUploads.value = []
 
 		successMessage.value = t('mobilesheetsmanager', 'Song updated successfully.')
-		emit('saved', response.data.ocs.data as LibraryData)
+		emit('saved', data)
 	} catch {
 		errorMessage.value = t('mobilesheetsmanager', 'Failed to save song changes.')
 	} finally {
@@ -467,6 +535,29 @@ async function saveSong() {
 					</ul>
 				</div>
 
+				<!-- Staged additions notice -->
+				<div v-if="pendingAdditions.length > 0" :class="$style.additionNotice">
+					<div :class="$style.warningText">
+						<strong>{{ t('mobilesheetsmanager', 'Notice:') }}</strong>
+						{{ t('mobilesheetsmanager', '{count} file(s) will be added to the song when you click "Save and Close".', { count: pendingAdditions.length }) }}
+					</div>
+					<ul :class="$style.pendingList">
+						<li v-for="addition in pendingAdditions" :key="addition.key" :class="$style.pendingAdditionItem">
+							<span :class="$style.pendingAdditionText">
+								{{ addition.name }}
+								<span :class="$style.pendingAdditionHint">{{ addition.hint }}</span>
+							</span>
+							<NcButton
+								type="button"
+								variant="tertiary"
+								size="small"
+								@click="addition.remove()">
+								{{ t('mobilesheetsmanager', 'Remove') }}
+							</NcButton>
+						</li>
+					</ul>
+				</div>
+
 				<div :class="$style.fileButtons">
 					<input
 						ref="fileInput"
@@ -537,17 +628,14 @@ async function saveSong() {
 					{{ t('mobilesheetsmanager', 'Move file to library folder') }}
 				</label>
 			</div>
+			<p>{{ t('mobilesheetsmanager', 'The file is added to the song when you save it.') }}</p>
 			<div :class="$style.dialogActions">
-				<NcButton :disabled="isAttachingFile" @click="isAttachDialogOpen = false">
+				<NcButton @click="isAttachDialogOpen = false">
 					{{ t('mobilesheetsmanager', 'Cancel') }}
 				</NcButton>
 				<NcButton
 					variant="primary"
-					:disabled="isAttachingFile"
-					@click="confirmAttachNextcloudFile">
-					<template v-if="isAttachingFile">
-						<NcLoadingIcon :size="16" />
-					</template>
+					@click="stageAttachNextcloudFile">
 					{{ t('mobilesheetsmanager', 'Attach File') }}
 				</NcButton>
 			</div>
@@ -683,6 +771,38 @@ async function saveSong() {
 
 .warningText {
 	font-size: 0.9rem;
+}
+
+.additionNotice {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 12px;
+	background-color: var(--color-background-dark);
+	border-left: 4px solid var(--color-primary);
+	border-radius: var(--border-radius, 4px);
+}
+
+.pendingAdditionItem {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	font-size: 0.85rem;
+}
+
+.pendingAdditionText {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.pendingAdditionHint {
+	font-size: 0.8rem;
+	color: var(--color-text-maxcontrast);
 }
 
 .pendingList {
