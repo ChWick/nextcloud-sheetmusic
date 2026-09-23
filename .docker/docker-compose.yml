@@ -9,6 +9,8 @@ services:
       - ./nextcloud/config:/var/www/html/config
       - ./nextcloud/data:/var/www/html/data
       - ./init-dev-flags.sh:/docker-entrypoint-hooks.d/before-starting/init-dev-flags.sh:ro
+      # PHP changes (routes, controllers, mappers) take effect without a restart.
+      - ./opcache-dev.ini:/usr/local/etc/php/conf.d/zz-dev-opcache.ini:ro
     environment:
       - SQLITE_DATABASE=nextcloud_dev_db
       # - NEXTCLOUD_ADMIN_USER=admin
