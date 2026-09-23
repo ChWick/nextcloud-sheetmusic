@@ -7,7 +7,7 @@ import axios from '@nextcloud/axios'
 import { FilePickerClosed, getFilePickerBuilder } from '@nextcloud/dialogs'
 import { translate as t } from '@nextcloud/l10n'
 import { generateOcsUrl, generateUrl } from '@nextcloud/router'
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import NcAppNavigation from '@nextcloud/vue/components/NcAppNavigation'
 import NcAppContent from '@nextcloud/vue/components/NcAppContent'
@@ -25,6 +25,14 @@ const libraries = ref<Library[]>([])
 const selectedLibrary = ref<number>(-1)
 const selectedView = ref<'songs' | 'files'>('songs')
 const fileError = ref('') // used for dialogs and library load errors
+const isDeleteDialogOpen = ref(false)
+const isDeletingLibrary = ref(false)
+const deleteError = ref('')
+
+/** Path of the currently selected library, used to name it in the delete dialog */
+const selectedLibraryPath = computed(
+  () => libraries.value.find(library => library.id === selectedLibrary.value)?.path ?? '',
+)
 
 /*** Router ***/
 const router = useRouter()
@@ -57,19 +65,25 @@ watch(
   { immediate: true }
 )
 
-/*** Initial load of libraries list ***/
-onMounted(async () => {
+/*** Libraries ***/
+/** Load the user's libraries - also used to refresh the list after adding or removing one */
+async function loadLibraries() {
   try {
     const response = await axios.get(generateOcsUrl('/apps/mobilesheetsmanager/api/libraries'))
     libraries.value = response.data.ocs.data.libraries
-    const activeRouteLibrary = route.params.library as string | undefined
-
-    if (libraries.value.length > 0 && !activeRouteLibrary) {
-      // Only set a default if the user landed on the root page matching no library
-      navigateToLibrary(libraries.value[0].id)
-    }
   } catch {
     fileError.value = t('mobilesheetsmanager', 'Could not load your MobileSheets libraries.')
+  }
+}
+
+/*** Initial load of libraries list ***/
+onMounted(async () => {
+  await loadLibraries()
+  const activeRouteLibrary = route.params.library as string | undefined
+
+  if (libraries.value.length > 0 && !activeRouteLibrary) {
+    // Only set a default if the user landed on the root page matching no library
+    navigateToLibrary(libraries.value[0].id)
   }
 })
 
@@ -105,17 +119,64 @@ async function addLibrary() {
     fileError.value = t('mobilesheetsmanager', 'Please select a .db file first.')
     return
   }
+  const addedPath = selectedFile.value.path
   try {
-    const response = await axios.post(generateOcsUrl('/apps/mobilesheetsmanager/api/libraries'), {
-      path: selectedFile.value.path,
+    await axios.post(generateOcsUrl('/apps/mobilesheetsmanager/api/libraries'), {
+      path: addedPath,
     })
-    if (!libraries.value.includes(response.data.ocs.data.path)) {
-      libraries.value.push(response.data.ocs.data.path)
-    }
     selectedFile.value = undefined
     isDialogOpen.value = false
+
+    // Reload instead of adding the path locally: only the endpoint knows the id of
+    // the new library entry, and the list may have changed in another tab.
+    await loadLibraries()
+
+    const addedLibrary = libraries.value.find(library => library.path === addedPath)
+    if (addedLibrary && selectedLibrary.value < 0) {
+      navigateToLibrary(addedLibrary.id)
+    }
   } catch {
     fileError.value = t('mobilesheetsmanager', 'Could not save the MobileSheets library.')
+  }
+}
+
+/*** Deleting a library ***/
+function openDeleteDialog() {
+  if (selectedLibrary.value < 0) return
+  deleteError.value = ''
+  isDeleteDialogOpen.value = true
+}
+function closeDeleteDialog() {
+  isDeleteDialogOpen.value = false
+  deleteError.value = ''
+}
+/**
+ * Remove the currently selected library from the list. Only the library entry is
+ * removed on the server, its files stay in the Nextcloud files.
+ */
+async function deleteLibrary() {
+  if (selectedLibrary.value < 0) return
+  isDeletingLibrary.value = true
+  try {
+    await axios.delete(generateOcsUrl('/apps/mobilesheetsmanager/api/libraries/{id}', {
+      id: selectedLibrary.value,
+    }))
+
+    closeDeleteDialog()
+    await loadLibraries()
+
+    // Switch to another library, or back to the empty state when this was the last one
+    const nextLibrary = libraries.value[0]
+    if (nextLibrary) {
+      navigateToLibrary(nextLibrary.id)
+    } else {
+      selectedLibrary.value = -1
+      router.push({ name: 'Home' })
+    }
+  } catch {
+    deleteError.value = t('mobilesheetsmanager', 'Could not delete the library.')
+  } finally {
+    isDeletingLibrary.value = false
   }
 }
 </script>
@@ -135,6 +196,15 @@ async function addLibrary() {
       <template v-if="selectedLibrary >= 0">
         <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Songs')" :active="selectedView === 'songs'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'songs' } }" " />
         <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Files')" :active="selectedView === 'files'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'files' } }" " />
+
+        <div :class="$style.deleteLibraryArea">
+          <NcButton type="button"
+                    variant="error"
+                    :class="$style.deleteLibraryButton"
+                    @click="openDeleteDialog">
+            {{ t('mobilesheetsmanager', 'Delete library') }}
+          </NcButton>
+        </div>
       </template>
 
       <template #footer>
@@ -173,6 +243,20 @@ async function addLibrary() {
         </NcButton>
       </div>
     </NcDialog>
+
+    <NcDialog v-if="isDeleteDialogOpen"
+              :name="t('mobilesheetsmanager', 'Delete library')"
+              @close="closeDeleteDialog">
+      <p>{{ t('mobilesheetsmanager', 'Remove "{path}" from your libraries?', { path: selectedLibraryPath }) }}</p>
+      <p>{{ t('mobilesheetsmanager', 'Only the library entry is removed. The MobileSheets database and all files it references stay in your Nextcloud files, so you can add the library again whenever you want.') }}</p>
+      <p v-if="deleteError" :class="$style.error" role="alert">{{ deleteError }}</p>
+      <div :class="$style.dialogActions">
+        <NcButton @click="closeDeleteDialog">{{ t('mobilesheetsmanager', 'Cancel') }}</NcButton>
+        <NcButton variant="error" :disabled="isDeletingLibrary" @click="deleteLibrary">
+          {{ t('mobilesheetsmanager', 'Delete library') }}
+        </NcButton>
+      </div>
+    </NcDialog>
   </NcContent>
 </template>
 
@@ -190,6 +274,9 @@ async function addLibrary() {
 .songButton[aria-pressed='true'] { background: var(--color-background-hover); }
 @media (max-width: 800px) { .songArea { grid-template-columns: 1fr; } }
 .dialogActions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; }
+.deleteLibraryArea { padding: 8px 12px; }
+.deleteLibraryButton { width: 100%; justify-content: center; background-color: var(--color-error, #e9322d) !important; color: var(--color-primary-text, #ffffff) !important; border-color: transparent !important; }
+.deleteLibraryButton:hover { opacity: 0.9; }
 .error { color: var(--color-error); }
 .viewToggle { display: flex; gap: 8px; margin: 12px 0; }
 </style>

@@ -54,5 +54,10 @@ return [
 			'url' => '/api/regenerate-file-paths',
 			'verb' => 'POST',
 		],
+		[
+			'name' => 'Api#deleteLibrary',
+			'url' => '/api/libraries/{id}',
+			'verb' => 'DELETE',
+		],
 	],
 ];

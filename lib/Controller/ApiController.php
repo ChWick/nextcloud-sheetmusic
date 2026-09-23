@@ -81,6 +81,34 @@ class ApiController extends OCSController {
 		return new DataResponse(['path' => $path], Http::STATUS_CREATED);
 	}
 
+	/**
+	 * Remove a library from the user's list of libraries.
+	 *
+	 * Only the entry in this app's own table is removed. The MobileSheets database
+	 * and every file it references keep sitting in the user's folder, so nothing is
+	 * lost and the library can be added again at any time.
+	 */
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'DELETE', url: '/api/libraries/{id}')]
+	public function deleteLibrary(int $id): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		$libraryPath = $this->resolveLibraryPath($user->getUID(), $id);
+		if ($libraryPath === null) {
+			return new DataResponse([], Http::STATUS_NOT_FOUND);
+		}
+
+		$this->libraryMapper->deleteForUser($user->getUID(), $id);
+
+		return new DataResponse([
+			'id' => $id,
+			'path' => $libraryPath,
+		]);
+	}
+
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'GET', url: '/api/songs')]
 	public function getSongs(?string $id = null): DataResponse {

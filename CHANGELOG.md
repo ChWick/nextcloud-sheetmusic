@@ -10,3 +10,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - First release
+- Option to remove a MobileSheets library from the list. The library entry is removed
+  only, the MobileSheets database and all files it references stay in the Nextcloud
+  files, so the library can be added again at any time.

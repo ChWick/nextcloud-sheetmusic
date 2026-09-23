@@ -390,6 +390,46 @@ final class ApiTest extends TestCase {
 		$this->assertEquals(Http::STATUS_OK, $controller->deleteSongFile(42, 3, 7)->getStatus());
 	}
 
+	/**
+	 * Deleting a library may only remove its entry: the database file and the files
+	 * it references have to stay, so the library can be added again later.
+	 */
+	public function testDeleteLibraryRemovesOnlyTheEntryAndKeepsTheFiles(): void {
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$libraryMapper->expects($this->once())
+			->method('findForUser')
+			->with('admin', 7)
+			->willReturn(['id' => 7, 'path' => '/Noten/mobilesheets.db']);
+		$libraryMapper->expects($this->once())
+			->method('deleteForUser')
+			->with('admin', 7)
+			->willReturn(true);
+
+		// Nothing in the user's files may be touched by removing a library.
+		$rootFolder = $this->createMock(IRootFolder::class);
+		$rootFolder->expects($this->never())->method('getUserFolder');
+
+		$controller = $this->createController($libraryMapper, null, $rootFolder);
+
+		$response = $controller->deleteLibrary(7);
+
+		$this->assertEquals(Http::STATUS_OK, $response->getStatus());
+		$this->assertEquals(['id' => 7, 'path' => '/Noten/mobilesheets.db'], $response->getData());
+	}
+
+	public function testDeleteLibraryWithUnknownIdIsNotFound(): void {
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$libraryMapper->expects($this->once())
+			->method('findForUser')
+			->with('admin', 7)
+			->willReturn(null);
+		$libraryMapper->expects($this->never())->method('deleteForUser');
+
+		$controller = $this->createController($libraryMapper);
+
+		$this->assertEquals(Http::STATUS_NOT_FOUND, $controller->deleteLibrary(7)->getStatus());
+	}
+
 	protected function tearDown(): void {
 		foreach ($this->temporaryFiles as $file) {
 			if (is_file($file)) {

@@ -67,6 +67,24 @@ class LibraryMapper {
 	}
 
 	/**
+	 * Remove the entry of a library from the user's list of libraries.
+	 *
+	 * Only the row in this app's own table goes away. The MobileSheets database and
+	 * every file it references stay in the user's folder, so the library can be added
+	 * again at any time.
+	 *
+	 * @return bool whether an entry was removed
+	 */
+	public function deleteForUser(string $userId, int $libraryId): bool {
+		$qb = $this->db->getQueryBuilder();
+		$qb->delete(self::TABLE_NAME)
+			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId, IQueryBuilder::PARAM_STR)))
+			->andWhere($qb->expr()->eq('id', $qb->createNamedParameter($libraryId, IQueryBuilder::PARAM_INT)));
+
+		return $qb->executeStatement() > 0;
+	}
+
+	/**
 	 * @return array{id: int, path: string}|null
 	 */
 	public function findForUser(string $userId, int $id): ?array {
