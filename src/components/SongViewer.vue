@@ -3,7 +3,9 @@ import type { Artist, Book, Collection, Composer, LibraryData, Song, SongFile } 
 
 import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
+import { generateOcsUrl } from '@nextcloud/router'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcRadioGroup from '@nextcloud/vue/components/NcRadioGroup'
 import NcRadioGroupButton from '@nextcloud/vue/components/NcRadioGroupButton'
@@ -34,6 +36,8 @@ const props = withDefaults(
 const emit = defineEmits<{
 	saved: [data: LibraryData, songId?: number]
 	updated: [data: LibraryData]
+	/** The song was deleted; its files moved to the trash bin. */
+	deleted: [data: LibraryData | undefined, songId: number]
 }>()
 
 GlobalWorkerOptions.workerSrc = pdfWorker
@@ -42,6 +46,9 @@ const pdfContainer = ref<HTMLElement>()
 const isLoading = ref(false)
 const errorMessage = ref('')
 const isEditing = ref(false)
+const isDeleteDialogOpen = ref(false)
+const isDeletingSong = ref(false)
+const deleteError = ref('')
 const selectedFileId = ref('')
 let currentLoadId = 0
 /** Set when the song changed while the editor covered the PDF view, which defers the render. */
@@ -94,6 +101,42 @@ function handleSaved(data: LibraryData, songId?: number) {
  */
 function handleUpdated(data: LibraryData) {
 	emit('updated', data)
+}
+
+/**
+ * Delete the song: its files are moved to the Nextcloud trash bin by the server, so they
+ * can be restored, and the song with every row pointing at it leaves the database.
+ */
+async function confirmDeleteSong() {
+	if (!props.song || props.libraryId < 0) {
+		return
+	}
+
+	const songId = props.song.id
+	isDeletingSong.value = true
+	deleteError.value = ''
+
+	try {
+		const response = await axios.delete(
+			generateOcsUrl('/apps/mobilesheetsmanager/api/songs/{id}', { id: songId }),
+			{ params: { libraryId: props.libraryId } },
+		)
+		isDeleteDialogOpen.value = false
+		// The payload is only a convenience. It must never turn a successful deletion into
+		// an error, so a missing body is passed on as undefined and the parent asks the
+		// server for the library instead.
+		const data = (response.data as { ocs?: { data?: LibraryData } } | undefined)?.ocs?.data
+		emit('deleted', data, songId)
+	} catch (error) {
+		// A 404/405 means the server does not know the route yet, e.g. right after the app
+		// code changed on disk; saying so beats a generic failure message.
+		const status = (error as { response?: { status?: number } })?.response?.status
+		deleteError.value = (status === 404 || status === 405)
+			? t('mobilesheetsmanager', 'The server does not know this endpoint (HTTP {status}). If the app code was just changed, restart Nextcloud so it loads the new PHP files.', { status: String(status) })
+			: t('mobilesheetsmanager', 'Could not delete the song.')
+	} finally {
+		isDeletingSong.value = false
+	}
 }
 
 async function renderSelectedFile() {
@@ -213,12 +256,14 @@ watch(isEditing, (editing) => {
 		<header v-if="song" :class="$style.header">
 			<div :class="$style.headerTop">
 				<h3 :class="$style.title">{{ song.title }}</h3>
-				<NcButton
-					v-if="!isEditing"
-					variant="secondary"
-					@click="isEditing = true">
-					{{ t('mobilesheetsmanager', 'Edit song') }}
-				</NcButton>
+				<div v-if="!isEditing" :class="$style.headerActions">
+					<NcButton variant="secondary" @click="isEditing = true">
+						{{ t('mobilesheetsmanager', 'Edit song') }}
+					</NcButton>
+					<NcButton variant="error" @click="isDeleteDialogOpen = true">
+						{{ t('mobilesheetsmanager', 'Delete song') }}
+					</NcButton>
+				</div>
 			</div>
 
 			<div v-if="!isEditing && (songComposers.length > 0 || songBooks.length > 0 || songCollections.length > 0)" :class="$style.metadata">
@@ -289,6 +334,29 @@ watch(isEditing, (editing) => {
 				<p>{{ t('mobilesheetsmanager', 'Select a song to view.') }}</p>
 			</div>
 		</template>
+
+		<NcDialog
+			v-if="isDeleteDialogOpen"
+			:name="t('mobilesheetsmanager', 'Delete song')"
+			@close="isDeleteDialogOpen = false">
+			<p>{{ t('mobilesheetsmanager', 'Delete "{title}" from this library?', { title: song?.title ?? '' }) }}</p>
+			<p>{{ t('mobilesheetsmanager', 'The song and everything pointing at it is removed from the MobileSheets database. Its {count} attached file(s) are moved to the Nextcloud trash bin, so they can be restored from there.', { count: songFiles.length }) }}</p>
+			<p v-if="deleteError" :class="$style.error" role="alert">{{ deleteError }}</p>
+			<div :class="$style.dialogActions">
+				<NcButton @click="isDeleteDialogOpen = false">
+					{{ t('mobilesheetsmanager', 'Cancel') }}
+				</NcButton>
+				<NcButton
+					variant="error"
+					:disabled="isDeletingSong"
+					@click="confirmDeleteSong">
+					<template v-if="isDeletingSong">
+						<NcLoadingIcon :size="16" />
+					</template>
+					{{ t('mobilesheetsmanager', 'Delete song') }}
+				</NcButton>
+			</div>
+		</NcDialog>
 	</div>
 </template>
 
@@ -310,6 +378,12 @@ watch(isEditing, (editing) => {
 	align-items: center;
 	gap: 16px;
 	margin-bottom: 8px;
+}
+
+.headerActions {
+	display: flex;
+	flex-shrink: 0;
+	gap: 8px;
 }
 
 .title {
@@ -376,5 +450,12 @@ watch(isEditing, (editing) => {
 .error {
 	color: var(--color-error);
 	margin: 16px 0;
+}
+
+.dialogActions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 24px;
 }
 </style>

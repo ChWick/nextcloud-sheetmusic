@@ -25,6 +25,11 @@ return [
 			'verb' => 'POST',
 		],
 		[
+			'name' => 'Api#deleteSong',
+			'url' => '/api/songs/{id}',
+			'verb' => 'DELETE',
+		],
+		[
 			'name' => 'Api#uploadSongFile',
 			'url' => '/api/songs/{id}/file/upload',
 			'verb' => 'POST',

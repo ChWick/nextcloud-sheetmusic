@@ -447,6 +447,82 @@ class SongMapper {
 		}
 	}
 
+	/**
+	 * Delete a song together with everything that references it.
+	 *
+	 * MobileSheets spreads a song over many tables: its files, the links to composers,
+	 * books, collections and artists, but also settings such as its metronome, zoom or
+	 * annotations. The rows are therefore dropped from every table that has a SongId
+	 * column. The Songs row itself is removed by Id, because its own SongId column means
+	 * something else and must not take other songs with it.
+	 *
+	 * @return list<string> WebDAV paths of the song's files, read before the rows were
+	 *                      removed, so the caller can move them out of the user's folder
+	 */
+	public function deleteSong(string $databasePath, int $songId): array {
+		$database = new PDO('sqlite:' . $databasePath, options: [
+			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+		]);
+
+		$tablesStatement = $database->query("SELECT name FROM sqlite_master WHERE type='table'");
+		/** @var list<string> $existingTables */
+		$existingTables = $tablesStatement !== false ? $tablesStatement->fetchAll(PDO::FETCH_COLUMN) : [];
+
+		// Read the file list first: once the rows are gone, the database no longer knows
+		// which files belonged to the song.
+		$paths = [];
+		if (in_array('Files', $existingTables, true)) {
+			$fileStmt = $database->prepare('SELECT Path FROM Files WHERE SongId = :songId');
+			$fileStmt->execute([':songId' => $songId]);
+			while ($row = $fileStmt->fetch()) {
+				$paths[] = (string)$row['Path'];
+			}
+		}
+
+		$database->beginTransaction();
+		try {
+			foreach ($existingTables as $table) {
+				if ($table === 'Songs' || !$this->hasSongIdColumn($database, $table)) {
+					continue;
+				}
+
+				// Table names come from the schema itself, so quoting them is all that is
+				// needed; the song to delete stays a bound parameter.
+				$stmt = $database->prepare('DELETE FROM "' . $table . '" WHERE SongId = :songId');
+				$stmt->execute([':songId' => $songId]);
+			}
+
+			if (in_array('Songs', $existingTables, true)) {
+				$stmt = $database->prepare('DELETE FROM Songs WHERE Id = :songId');
+				$stmt->execute([':songId' => $songId]);
+			}
+
+			$database->commit();
+		} catch (\Throwable $exception) {
+			$database->rollBack();
+			throw $exception;
+		}
+
+		return $paths;
+	}
+
+	/** Whether a table links to songs, i.e. has a SongId column. */
+	private function hasSongIdColumn(PDO $database, string $table): bool {
+		$statement = $database->query('PRAGMA table_info("' . $table . '")');
+		if ($statement === false) {
+			return false;
+		}
+
+		foreach ($statement->fetchAll(PDO::FETCH_ASSOC) as $column) {
+			if (strtolower((string)$column['name']) === 'songid') {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
 	public function setSongFile(string $databasePath, int $songId, string $filePath): void {
 		$database = new PDO('sqlite:' . $databasePath, options: [
 			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,

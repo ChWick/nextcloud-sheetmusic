@@ -19,3 +19,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Option to create a new song from the songs view. The editor opens with an empty form,
   the song is only written to the MobileSheets database when the editor is saved, and
   files added before that are attached to the new song afterwards.
+- Option to delete a song from the song view. The confirmation dialog points out that the
+  attached files are moved to the Nextcloud trash bin, where they can be restored, while
+  the song and every row pointing at it is removed from the MobileSheets database.

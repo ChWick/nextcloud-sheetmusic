@@ -52,7 +52,8 @@
                   :collections="collections"
                   :artists="artists"
                   @saved="handleSaved"
-                  @updated="handleLibraryDataUpdate" />
+                  @updated="handleLibraryDataUpdate"
+                  @deleted="handleDeleted" />
     </div>
   </div>
 </template>
@@ -157,6 +158,20 @@ function handleSaved(data: LibraryData, songId?: number) {
   if (songId === undefined) return;
   const saved = songs.value.find(song => song.id === songId);
   if (saved) selectSong(saved);
+}
+
+/**
+ * The song was deleted. The refreshed data no longer contains it, so the selection has to
+ * be dropped explicitly: it would otherwise keep the removed song in the viewer.
+ */
+async function handleDeleted(data: LibraryData | undefined, songId: number) {
+  if (data) {
+    handleLibraryDataUpdate(data);
+  } else {
+    // The response carried no data, e.g. because it was empty; ask the server instead.
+    await loadLibraryData(props.selectedLibrary);
+  }
+  if (selectedSong.value?.id === songId) selectedSong.value = null;
 }
 
 // Emit events to parent

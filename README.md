@@ -23,3 +23,31 @@ upload it to the Appstore.
 
 - Official community chat: https://cloud.nextcloud.com/call/xs25tz5y
 - Official community forum: https://help.nextcloud.com/c/dev/11
+
+## Development
+
+The app is developed against the Nextcloud container in `.docker/docker-compose.yml`:
+
+```bash
+docker compose -f .docker/docker-compose.yml up -d
+docker compose -f .docker/docker-compose.yml exec nextcloud php occ app:enable mobilesheetsmanager
+npm install && npm run watch     # or: npm run build
+```
+
+The frontend is served straight from the mounted app folder, so a rebuild is enough for
+JavaScript changes. PHP files are different: the container keeps the code it loaded, so a
+new or changed API route (e.g. a new entry in `appinfo/routes.php`) is only known to the
+server after a restart - without it the app reports the request as `HTTP 404`/`405` even
+though the file on disk is up to date. `.docker/opcache-dev.ini` is mounted into the
+container to make PHP changes take effect immediately; apply it once with
+
+```bash
+docker compose -f .docker/docker-compose.yml up -d --force-recreate nextcloud
+```
+
+After changing PHP files without that mount, or whenever an endpoint unexpectedly answers
+with 404/405, restart the container:
+
+```bash
+docker compose -f .docker/docker-compose.yml restart nextcloud
+```

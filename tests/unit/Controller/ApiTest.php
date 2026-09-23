@@ -13,6 +13,7 @@ use OCA\MobileSheetsManager\Db\MobileSheetsSong;
 use OCA\MobileSheetsManager\Db\SongMapper;
 use OCA\MobileSheetsManager\Service\FileManager;
 use OCA\MobileSheetsManager\Service\MobileSheetsHashCodesFile;
+use OCA\MobileSheetsManager\Service\MobileSheetsPath;
 use OCA\MobileSheetsManager\Service\MobileSheetsPathResolver;
 use OCP\AppFramework\Http;
 use OCP\Files\Folder;
@@ -499,6 +500,100 @@ final class ApiTest extends TestCase {
 		$controller = $this->createController($libraryMapper, $songMapper);
 
 		$this->assertEquals(Http::STATUS_NOT_FOUND, $controller->createSong(7, 'New Song')->getStatus());
+	}
+
+	public function testDeleteSongWithoutLibraryIdIsBadRequest(): void {
+		$controller = $this->createController();
+
+		$this->assertEquals(
+			Http::STATUS_BAD_REQUEST,
+			$controller->deleteSong(1)->getStatus(),
+		);
+	}
+
+	public function testDeleteSongOfAnUnknownSongIsNotFound(): void {
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$libraryMapper->method('findForUser')
+			->with('admin', 7)
+			->willReturn(['id' => 7, 'path' => '/Noten/mobilesheets.db']);
+
+		$songMapper = $this->createMock(SongMapper::class);
+		$songMapper->method('findSong')
+			->with('/tmp/mobilesheetsmanager-test-library.db', 42)
+			->willReturn(null);
+		$songMapper->expects($this->never())->method('deleteSong');
+
+		$controller = $this->createController(
+			$libraryMapper,
+			$songMapper,
+			$this->createLibraryRootFolder(),
+		);
+
+		$this->assertEquals(Http::STATUS_NOT_FOUND, $controller->deleteSong(42, 7)->getStatus());
+	}
+
+	/**
+	 * Deleting a song has to move its files into the trash bin: the database rows are the
+	 * only thing that knows which files belong to the song, so they are read first.
+	 */
+	public function testDeleteSongMovesItsFilesToTheTrashBin(): void {
+		$storedPath = '/remote.php/dav/files/admin/Noten/Alpha.pdf';
+		$fileNode = $this->createMock(Node::class);
+		$fileNode->method('getType')->willReturn('file');
+		$fileNode->expects($this->once())->method('delete');
+
+		$songMapper = $this->createMock(SongMapper::class);
+		$songMapper->method('findSong')->willReturn(new MobileSheetsSong(
+			42,
+			'Alpha',
+			[new MobileSheetsFile(2, $storedPath)],
+		));
+		$songMapper->expects($this->once())
+			->method('deleteSong')
+			->with('/tmp/mobilesheetsmanager-test-library.db', 42)
+			->willReturn([$storedPath]);
+		$songMapper->method('findLibraryData')->willReturn(['songs' => []]);
+
+		$fileManager = $this->createMock(FileManager::class);
+		$fileManager->expects($this->once())
+			->method('pathOfStoredFile')
+			->with($storedPath)
+			->willReturn(new MobileSheetsPath('/admin/files/Noten/Alpha.pdf', $storedPath));
+
+		$rootFolder = $this->createLibraryRootFolder();
+		$rootFolder->method('get')
+			->with('/admin/files/Noten/Alpha.pdf')
+			->willReturn($fileNode);
+
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$libraryMapper->method('findForUser')
+			->with('admin', 7)
+			->willReturn(['id' => 7, 'path' => '/Noten/mobilesheets.db']);
+
+		$controller = $this->createController($libraryMapper, $songMapper, $rootFolder, $fileManager);
+
+		$response = $controller->deleteSong(42, 7);
+
+		$this->assertEquals(Http::STATUS_OK, $response->getStatus());
+		$this->assertEquals(['songs' => []], $response->getData());
+	}
+
+	/** Root folder whose user folder resolves the library database. */
+	private function createLibraryRootFolder(): IRootFolder {
+		$storage = $this->createMock(IStorage::class);
+		$storage->method('getLocalFile')->willReturn('/tmp/mobilesheetsmanager-test-library.db');
+
+		$databaseNode = $this->createMock(Node::class);
+		$databaseNode->method('getStorage')->willReturn($storage);
+		$databaseNode->method('getInternalPath')->willReturn('files/Noten/mobilesheets.db');
+
+		$userFolder = $this->createMock(IUserFolder::class);
+		$userFolder->method('get')->with('Noten/mobilesheets.db')->willReturn($databaseNode);
+
+		$rootFolder = $this->createMock(IRootFolder::class);
+		$rootFolder->method('getUserFolder')->with('admin')->willReturn($userFolder);
+
+		return $rootFolder;
 	}
 
 	protected function tearDown(): void {

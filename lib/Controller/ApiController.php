@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\MobileSheetsManager\Controller;
 
 use OCA\MobileSheetsManager\Db\LibraryMapper;
+use OCA\MobileSheetsManager\Db\MobileSheetsFile;
 use OCA\MobileSheetsManager\Db\SongMapper;
 use OCA\MobileSheetsManager\Service\FileManager;
 use OCA\MobileSheetsManager\Service\MobileSheetsHashCodesFile;
@@ -252,6 +253,80 @@ class ApiController extends OCSController {
 			return new DataResponse($this->songMapper->findLibraryData($databasePath));
 		} catch (\Throwable $exception) {
 			$this->logger->error('Could not update song in MobileSheets library', [
+				'exception' => $exception,
+				'libraryId' => $libraryId,
+				'path' => $libraryPath,
+				'songId' => $id,
+			]);
+			return new DataResponse([], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	/**
+	 * Delete a song from a library.
+	 *
+	 * The files of the song are moved into the Nextcloud trash bin, so deleting a song by
+	 * accident stays recoverable, and only then the song with every row that points at it
+	 * is removed from the MobileSheets database.
+	 */
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'DELETE', url: '/api/songs/{id}')]
+	public function deleteSong(int $id, ?int $libraryId = null): DataResponse {
+		if ($libraryId === null) {
+			return new DataResponse([], Http::STATUS_BAD_REQUEST);
+		}
+
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		$libraryPath = $this->resolveLibraryPath($user->getUID(), $libraryId);
+		if ($libraryPath === null) {
+			return new DataResponse([], Http::STATUS_NOT_FOUND);
+		}
+
+		try {
+			$node = $this->rootFolder->getUserFolder($user->getUID())->get(ltrim($libraryPath, '/'));
+			$databasePath = $node->getStorage()->getLocalFile($node->getInternalPath());
+			if ($databasePath === false) {
+				return new DataResponse([], Http::STATUS_NOT_FOUND);
+			}
+
+			$song = $this->songMapper->findSong($databasePath, $id);
+			if ($song === null) {
+				return new DataResponse([], Http::STATUS_NOT_FOUND);
+			}
+
+			// The files are handled while the database still lists them: a failure below
+			// leaves the library as it was, with the files restorable from the trash bin.
+			// A stored path belonging to another user yields nothing to delete there.
+			$filePaths = array_map(
+				static fn (MobileSheetsFile $file): string => $file->path,
+				$song->files,
+			);
+			$hashCodes = $this->hashCodesFor($databasePath);
+			foreach ($filePaths as $filePath) {
+				$storedFile = $this->fileManager->pathOfStoredFile($filePath, $user);
+				if ($storedFile !== null) {
+					$this->deleteFileNode($storedFile->internal);
+				}
+				$hashCodes?->removePath($filePath);
+			}
+			$hashCodes?->save();
+
+			$this->songMapper->deleteSong($databasePath, $id);
+
+			$this->logger->info('Deleted MobileSheets song', [
+				'libraryId' => $libraryId,
+				'songId' => $id,
+				'title' => $song->title,
+				'files' => count($filePaths),
+			]);
+
+			return new DataResponse($this->songMapper->findLibraryData($databasePath));
+		} catch (\Throwable $exception) {
+			$this->logger->error('Could not delete song from MobileSheets library', [
 				'exception' => $exception,
 				'libraryId' => $libraryId,
 				'path' => $libraryPath,

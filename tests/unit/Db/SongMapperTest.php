@@ -27,7 +27,7 @@ final class SongMapperTest extends TestCase {
 		self::assertNotFalse($databasePath);
 		$this->databasePath = $databasePath;
 		$database = new \PDO('sqlite:' . $this->databasePath);
-		$database->exec('CREATE TABLE Songs(Id INTEGER PRIMARY KEY, Title VARCHAR(255), SortTitle VARCHAR(255))');
+		$database->exec('CREATE TABLE Songs(Id INTEGER PRIMARY KEY, Title VARCHAR(255), SortTitle VARCHAR(255), SongId INTEGER)');
 		$database->exec('CREATE TABLE Files(Id INTEGER PRIMARY KEY, SongId INTEGER, Path VARCHAR(255))');
 		$database->exec('CREATE TABLE Collections(Id INTEGER PRIMARY KEY, Name VARCHAR(255), SortBy INTEGER DEFAULT 1, Ascending INTEGER DEFAULT 1, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
 		$database->exec('CREATE TABLE CollectionSong(Id INTEGER PRIMARY KEY, CollectionId INTEGER, SongId INTEGER)');
@@ -39,6 +39,7 @@ final class SongMapperTest extends TestCase {
 		$database->exec('CREATE TABLE ArtistsSongs(Id INTEGER PRIMARY KEY, ArtistId INTEGER, SongId INTEGER)');
 		$database->exec('CREATE TABLE Genres(Id INTEGER PRIMARY KEY, Type VARCHAR(255))');
 		$database->exec('CREATE TABLE GenresSongs(Id INTEGER PRIMARY KEY, GenreId INTEGER, SongId INTEGER)');
+		$database->exec('CREATE TABLE MetronomeSettings(Id INTEGER PRIMARY KEY, SongId INTEGER, Bpm INTEGER)');
 
 		$database->exec("INSERT INTO Songs (Id, Title, SortTitle) VALUES (1, 'Zebra', 'Zebra'), (2, 'Alpha', 'Alpha')");
 		$database->exec("INSERT INTO Files (Id, SongId, Path) VALUES (1, 1, '/remote.php/dav/files/admin/Noten/Zebra.pdf'), (2, 2, '/remote.php/dav/files/admin/Noten/Alpha.pdf')");
@@ -54,6 +55,12 @@ final class SongMapperTest extends TestCase {
 
 		$database->exec("INSERT INTO Artists (Id, Name) VALUES (200, 'Coltrane')");
 		$database->exec("INSERT INTO ArtistsSongs (ArtistId, SongId) VALUES (200, 1)");
+
+		// A song may point at another song through its own SongId column, and a song has
+		// more rows than its files and links: settings such as the metronome live in their
+		// own tables. Both matter when a song is deleted.
+		$database->exec('UPDATE Songs SET SongId = 2 WHERE Id = 1');
+		$database->exec('INSERT INTO MetronomeSettings (Id, SongId, Bpm) VALUES (300, 2, 120)');
 	}
 
 	protected function tearDown(): void {
@@ -196,6 +203,44 @@ public function testFindSongReturnsOnlyTheRequestedSong(): void {
 		$this->assertSame([], $created->books);
 		$this->assertSame([], $created->collections);
 		$this->assertSame([], $created->artists);
+	}
+
+	public function testDeleteSongRemovesTheSongItsFilesAndEveryReference(): void {
+		$mapper = $this->mapper();
+
+		// Another song links to the one that is deleted, which the sweep must not touch.
+		$database = new \PDO('sqlite:' . $this->databasePath);
+		$database->exec('INSERT INTO ArtistsSongs (ArtistId, SongId) VALUES (200, 2)');
+
+		$removedPaths = $mapper->deleteSong($this->databasePath, 2);
+
+		$this->assertSame(['/remote.php/dav/files/admin/Noten/Alpha.pdf'], $removedPaths);
+
+		foreach (['Files', 'ComposerSongs', 'BookSongs', 'CollectionSong', 'ArtistsSongs', 'MetronomeSettings'] as $table) {
+			$this->assertSame(
+				0,
+				(int)$database->query('SELECT COUNT(*) FROM ' . $table . ' WHERE SongId = 2')->fetchColumn(),
+				$table . ' still has rows pointing at the deleted song',
+			);
+		}
+		$this->assertSame(0, (int)$database->query('SELECT COUNT(*) FROM Songs WHERE Id = 2')->fetchColumn());
+
+		$songs = $mapper->findLibraryData($this->databasePath)['songs'];
+		$this->assertCount(1, $songs);
+		$this->assertSame(1, $songs[0]->id);
+		$this->assertSame('Zebra', $songs[0]->title);
+	}
+
+	/**
+	 * The Songs table has a SongId column of its own that means something else, so the row
+	 * of the deleted song has to go by Id - the songs pointing at it have to stay.
+	 */
+	public function testDeleteSongKeepsSongsPointingAtIt(): void {
+		$this->mapper()->deleteSong($this->databasePath, 2);
+
+		$database = new \PDO('sqlite:' . $this->databasePath);
+		$this->assertSame(1, (int)$database->query('SELECT COUNT(*) FROM Songs WHERE Id = 1')->fetchColumn());
+		$this->assertSame(2, (int)$database->query('SELECT SongId FROM Songs WHERE Id = 1')->fetchColumn());
 	}
 
 	public function testSetSongFile(): void {
