@@ -32,7 +32,7 @@ const props = withDefaults(
 )
 
 const emit = defineEmits<{
-	saved: [data: LibraryData]
+	saved: [data: LibraryData, songId?: number]
 	updated: [data: LibraryData]
 }>()
 
@@ -83,9 +83,9 @@ function selectFile(fileId: string) {
 }
 
 /** Saving closes the editor; the parent data is refreshed on the way out. */
-function handleSaved(data: LibraryData) {
+function handleSaved(data: LibraryData, songId?: number) {
 	isEditing.value = false
-	emit('saved', data)
+	emit('saved', data, songId)
 }
 
 /**

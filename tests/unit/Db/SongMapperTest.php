@@ -167,6 +167,37 @@ public function testFindSongReturnsOnlyTheRequestedSong(): void {
 		$this->assertSame([], $updatedSong->artists);
 	}
 
+	public function testCreateSongInsertsTheSongWithItsRelations(): void {
+		$mapper = $this->mapper();
+		$songId = $mapper->createSong($this->databasePath, 'New Song', [10], [100], [1000], [200]);
+
+		$this->assertGreaterThan(0, $songId);
+
+		$data = $mapper->findLibraryData($this->databasePath);
+		$created = array_values(array_filter($data['songs'], fn(MobileSheetsSong $s) => $s->id === $songId))[0];
+
+		$this->assertSame('New Song', $created->title);
+		$this->assertSame([], $created->files);
+		$this->assertSame(['Beethoven'], $this->names($created->composers));
+		$this->assertSame(['Real Book 1'], $this->titles($created->books));
+		$this->assertSame(['Jazz Standards'], $this->names($created->collections));
+		$this->assertSame(['Coltrane'], $this->names($created->artists));
+	}
+
+	public function testCreateSongWithoutRelations(): void {
+		$mapper = $this->mapper();
+		$songId = $mapper->createSong($this->databasePath, 'Bare Song', [], [], [], []);
+
+		$data = $mapper->findLibraryData($this->databasePath);
+		$created = array_values(array_filter($data['songs'], fn(MobileSheetsSong $s) => $s->id === $songId))[0];
+
+		$this->assertSame('Bare Song', $created->title);
+		$this->assertSame([], $created->composers);
+		$this->assertSame([], $created->books);
+		$this->assertSame([], $created->collections);
+		$this->assertSame([], $created->artists);
+	}
+
 	public function testSetSongFile(): void {
 		$mapper = $this->mapper();
 		$mapper->setSongFile($this->databasePath, 2, '/remote.php/dav/files/admin/Noten/AlphaNew.pdf');

@@ -40,3 +40,8 @@ export interface LibraryData {
 	collections: Collection[]
 	artists: Artist[]
 }
+
+/** Library data the API returns after a song was created, plus the id of that song. */
+export interface CreatedSongData extends LibraryData {
+	createdSongId: number
+}

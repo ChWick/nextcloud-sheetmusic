@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { INode } from '@nextcloud/files'
-import type { Artist, Book, Collection, Composer, LibraryData, Song, SongFile } from '../types/song'
+import type { Artist, Book, Collection, Composer, CreatedSongData, LibraryData, Song, SongFile } from '../types/song'
 
 import axios from '@nextcloud/axios'
 import { FilePickerClosed, getFilePickerBuilder } from '@nextcloud/dialogs'
@@ -13,44 +13,58 @@ import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import { computed, ref, watch } from 'vue'
 
-const props = defineProps<{
-	song: Song
-    libraryId: number
-	composers: Composer[]
-	books: Book[]
-	collections: Collection[]
-	artists: Artist[]
-}>()
+const props = withDefaults(
+	defineProps<{
+		/** The song to edit. Null opens the editor for a new song. */
+		song?: Song | null
+		libraryId: number
+		composers: Composer[]
+		books: Book[]
+		collections: Collection[]
+		artists: Artist[]
+	}>(),
+	{
+		song: null,
+	},
+)
 
 const emit = defineEmits<{
-	/** The song was saved; the editor closes. */
-	saved: [data: LibraryData]
+	/** The song was saved; the editor closes. The id of a created song is passed along. */
+	saved: [data: LibraryData, songId?: number]
 	/** The song's data changed without saving; the editor stays open. */
 	updated: [data: LibraryData]
 	cancel: []
 }>()
+
+/** A new song has no id yet: it is created in the library when the editor is saved. */
+const isNewSong = computed(() => !props.song)
+
+/** Label of the primary button, also used by the notices about staged file changes. */
+const saveActionLabel = computed(() => (isNewSong.value
+	? t('mobilesheetsmanager', 'Create song')
+	: t('mobilesheetsmanager', 'Save and Close')))
 
 function matchSelected<T extends { id: number }>(options: T[], selected?: { id: number }[]): T[] {
 	const ids = new Set((selected ?? []).map((item) => item.id))
 	return options.filter((option) => ids.has(option.id))
 }
 
-const title = ref(props.song.title)
+const title = ref(props.song?.title ?? '')
 const selectedComposers = ref<Array<Composer | { name: string, id?: number }>>(
-	matchSelected(props.composers, props.song.composers),
+	matchSelected(props.composers, props.song?.composers),
 )
 const selectedBooks = ref<Array<Book | { title: string, id?: number }>>(
-	matchSelected(props.books, props.song.books),
+	matchSelected(props.books, props.song?.books),
 )
 const selectedCollections = ref<Array<Collection | { name: string, id?: number }>>(
-	matchSelected(props.collections, props.song.collections),
+	matchSelected(props.collections, props.song?.collections),
 )
 const selectedArtists = ref<Array<Artist | { name: string, id?: number }>>(
-	matchSelected(props.artists, props.song.artists),
+	matchSelected(props.artists, props.song?.artists),
 )
 
-function getServerFiles(s: Song): SongFile[] {
-	return s.files ? [...s.files] : []
+function getServerFiles(song: Song | null): SongFile[] {
+	return song?.files ? [...song.files] : []
 }
 
 /**
@@ -62,8 +76,8 @@ function isStagedForDeletion(file: SongFile, pending: SongFile[]): boolean {
 }
 
 /** Files of a song the editor shows, i.e. without the ones staged for deletion. */
-function getInitialFiles(s: Song, pending: SongFile[] = []): SongFile[] {
-	return getServerFiles(s).filter((file) => !isStagedForDeletion(file, pending))
+function getInitialFiles(song: Song | null, pending: SongFile[] = []): SongFile[] {
+	return getServerFiles(song).filter((file) => !isStagedForDeletion(file, pending))
 }
 
 const currentFiles = ref<SongFile[]>(getInitialFiles(props.song))
@@ -72,17 +86,17 @@ const pendingDeleteFiles = ref<SongFile[]>([])
 watch(
 	() => props.song,
 	(newSong, previousSong) => {
-		title.value = newSong.title
-		selectedComposers.value = matchSelected(props.composers, newSong.composers)
-		selectedBooks.value = matchSelected(props.books, newSong.books)
-		selectedCollections.value = matchSelected(props.collections, newSong.collections)
-		selectedArtists.value = matchSelected(props.artists, newSong.artists)
+		title.value = newSong?.title ?? ''
+		selectedComposers.value = matchSelected(props.composers, newSong?.composers)
+		selectedBooks.value = matchSelected(props.books, newSong?.books)
+		selectedCollections.value = matchSelected(props.collections, newSong?.collections)
+		selectedArtists.value = matchSelected(props.artists, newSong?.artists)
 
 		// A refresh in place keeps the deletions staged in this session: the editor stays
 		// open now, and the file list of the refreshed song is what the displayed paths
-		// are taken from. Editing another song starts from a clean slate instead, which
-		// also drops the additions staged for the song edited before.
-		const sameSong = newSong.id === previousSong?.id
+		// are taken from. Editing another song - or starting a new one - begins with a
+		// clean slate, which also drops the additions staged for the song edited before.
+		const sameSong = !!newSong && newSong.id === previousSong?.id
 		const pending = sameSong
 			? pendingDeleteFiles.value.map(
 				(file) => newSong.files?.find((candidate) => candidate.id === file.id) ?? file,
@@ -281,6 +295,24 @@ function stageAttachNextcloudFile() {
 	successMessage.value = t('mobilesheetsmanager', 'The file is added to the song when you save.')
 }
 
+/**
+ * Turn a failed request into a message.
+ *
+ * A 404/405 on a song endpoint means the server does not know the route: the PHP files
+ * changed on disk, but the server still runs the code loaded earlier (Nextcloud does not
+ * re-read them on its own). Saying that is much more useful than a generic failure.
+ */
+function describeRequestFailure(error: unknown): string {
+	const status = (error as { response?: { status?: number } })?.response?.status
+	if (status === 404 || status === 405) {
+		return t('mobilesheetsmanager', 'The server does not know this endpoint (HTTP {status}). If the app code was just changed, restart Nextcloud so it loads the new PHP files.', { status: String(status) })
+	}
+
+	return isNewSong.value
+		? t('mobilesheetsmanager', 'Failed to create the song.')
+		: t('mobilesheetsmanager', 'Failed to save song changes.')
+}
+
 async function saveSong() {
 	if (!title.value.trim()) {
 		errorMessage.value = t('mobilesheetsmanager', 'Song title cannot be empty.')
@@ -290,13 +322,16 @@ async function saveSong() {
 	errorMessage.value = ''
 	isSaving.value = true
 
+	// Snapshot: props.song is null while a new song is being created.
+	const existingSong = props.song
+
 	try {
-		// Process pending file deletions
-		if (pendingDeleteFiles.value.length > 0) {
+		// Process pending file deletions - a new song has none, it has no id yet.
+		if (existingSong && pendingDeleteFiles.value.length > 0) {
 			for (const file of pendingDeleteFiles.value) {
 				if (file.id > 0) {
 					await axios.post(
-						generateOcsUrl(`/apps/mobilesheetsmanager/api/songs/${props.song.id}/file/${file.id}/delete`),
+						generateOcsUrl(`/apps/mobilesheetsmanager/api/songs/${existingSong.id}/file/${file.id}/delete`),
 						{
 							libraryId: props.libraryId,
 						},
@@ -362,57 +397,65 @@ async function saveSong() {
 			}
 		}
 
-		const response = await axios.post(
-			generateOcsUrl(`/apps/mobilesheetsmanager/api/songs/${props.song.id}`),
-			{
-				libraryId: props.libraryId,
-				title: title.value.trim(),
-				composerIds,
-				bookIds,
-				collectionIds,
-				artistIds,
-			},
-		)
-		let data = response.data.ocs.data as LibraryData
-
-		// Staged file additions are applied after the metadata: the naming rules of a song
-		// use its composers, artists and collections, so an attached or uploaded file has
-		// to be named with the values the user just saved. Each addition renumbers the
-		// song's files, so the data of the last one is what the parent gets.
-		for (const attachment of pendingAttachments.value) {
-			const attachResponse = await axios.post(
-				generateOcsUrl(`/apps/mobilesheetsmanager/api/songs/${props.song.id}/file/attach`),
-				{
-					libraryId: props.libraryId,
-					sourcePath: attachment.path,
-					action: attachment.action,
-				},
-			)
-			data = attachResponse.data.ocs.data as LibraryData
+		// The song is created or updated before the staged file additions: those need the
+		// song's id, and the naming rules use the composers, artists and collections the
+		// user just saved.
+		const payload = {
+			libraryId: props.libraryId,
+			title: title.value.trim(),
+			composerIds,
+			bookIds,
+			collectionIds,
+			artistIds,
 		}
+		const response = existingSong
+			? await axios.post(generateOcsUrl(`/apps/mobilesheetsmanager/api/songs/${existingSong.id}`), payload)
+			: await axios.post(generateOcsUrl('/apps/mobilesheetsmanager/api/songs'), payload)
 
-		for (const upload of pendingUploads.value) {
-			const formData = new FormData()
-			formData.append('file', upload.file)
-			formData.append('libraryId', String(props.libraryId))
+		let data = response.data.ocs.data as LibraryData
+		// A new song only has an id once the server created it.
+		const songId: number | undefined = existingSong?.id ?? (data as CreatedSongData).createdSongId
 
-			const uploadResponse = await axios.post(
-				generateOcsUrl(`/apps/mobilesheetsmanager/api/songs/${props.song.id}/file/upload`),
-				formData,
-				{
-					headers: { 'Content-Type': 'multipart/form-data' },
-				},
-			)
-			data = uploadResponse.data.ocs.data as LibraryData
+		// Staged file additions are applied to the song that now exists. Each addition
+		// renumbers the song's files, so the data of the last one is what the parent gets.
+		if (songId !== undefined) {
+			for (const attachment of pendingAttachments.value) {
+				const attachResponse = await axios.post(
+					generateOcsUrl(`/apps/mobilesheetsmanager/api/songs/${songId}/file/attach`),
+					{
+						libraryId: props.libraryId,
+						sourcePath: attachment.path,
+						action: attachment.action,
+					},
+				)
+				data = attachResponse.data.ocs.data as LibraryData
+			}
+
+			for (const upload of pendingUploads.value) {
+				const formData = new FormData()
+				formData.append('file', upload.file)
+				formData.append('libraryId', String(props.libraryId))
+
+				const uploadResponse = await axios.post(
+					generateOcsUrl(`/apps/mobilesheetsmanager/api/songs/${songId}/file/upload`),
+					formData,
+					{
+						headers: { 'Content-Type': 'multipart/form-data' },
+					},
+				)
+				data = uploadResponse.data.ocs.data as LibraryData
+			}
 		}
 
 		pendingAttachments.value = []
 		pendingUploads.value = []
 
-		successMessage.value = t('mobilesheetsmanager', 'Song updated successfully.')
-		emit('saved', data)
-	} catch {
-		errorMessage.value = t('mobilesheetsmanager', 'Failed to save song changes.')
+		successMessage.value = isNewSong.value
+			? t('mobilesheetsmanager', 'Song created successfully.')
+			: t('mobilesheetsmanager', 'Song updated successfully.')
+		emit('saved', data, songId)
+	} catch (error) {
+		errorMessage.value = describeRequestFailure(error)
 	} finally {
 		isSaving.value = false
 	}
@@ -422,7 +465,7 @@ async function saveSong() {
 <template>
 	<div :class="$style.editor">
 		<div :class="$style.header">
-			<h3>{{ t('mobilesheetsmanager', 'Edit Song') }}</h3>
+			<h3>{{ isNewSong ? t('mobilesheetsmanager', 'New Song') : t('mobilesheetsmanager', 'Edit Song') }}</h3>
 		</div>
 
 		<form :class="$style.form" @submit.prevent="saveSong">
@@ -519,7 +562,7 @@ async function saveSong() {
 				<div v-if="pendingDeleteFiles.length > 0" :class="$style.deletionWarning">
 					<div :class="$style.warningText">
 						<strong>{{ t('mobilesheetsmanager', 'Notice:') }}</strong>
-						{{ t('mobilesheetsmanager', '{count} file(s) marked for removal will be permanently deleted from the song and moved to your Nextcloud trash bin when you click "Save and Close".', { count: pendingDeleteFiles.length }) }}
+						{{ t('mobilesheetsmanager', '{count} file(s) marked for removal will be permanently deleted from the song and moved to your Nextcloud trash bin when you click "{action}".', { count: pendingDeleteFiles.length, action: saveActionLabel }) }}
 					</div>
 					<ul :class="$style.pendingList">
 						<li v-for="file in pendingDeleteFiles" :key="file.id" :class="$style.pendingItem">
@@ -539,7 +582,7 @@ async function saveSong() {
 				<div v-if="pendingAdditions.length > 0" :class="$style.additionNotice">
 					<div :class="$style.warningText">
 						<strong>{{ t('mobilesheetsmanager', 'Notice:') }}</strong>
-						{{ t('mobilesheetsmanager', '{count} file(s) will be added to the song when you click "Save and Close".', { count: pendingAdditions.length }) }}
+						{{ t('mobilesheetsmanager', '{count} file(s) will be added to the song when you click "{action}".', { count: pendingAdditions.length, action: saveActionLabel }) }}
 					</div>
 					<ul :class="$style.pendingList">
 						<li v-for="addition in pendingAdditions" :key="addition.key" :class="$style.pendingAdditionItem">
@@ -597,7 +640,7 @@ async function saveSong() {
 					<template v-if="isSaving">
 						<NcLoadingIcon :size="16" />
 					</template>
-					{{ t('mobilesheetsmanager', 'Save and Close') }}
+					{{ saveActionLabel }}
 				</NcButton>
 			</div>
 		</form>

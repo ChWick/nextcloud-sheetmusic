@@ -321,6 +321,45 @@ class SongMapper {
 	}
 
 	/**
+	 * Create a song in the MobileSheets database.
+	 *
+	 * MobileSheets keeps many more columns per song, but only the title is needed to make a
+	 * song show up in the library - the rest is filled in by the app the user syncs with.
+	 * The relations are written by updateSong(), so creating and editing a song share that
+	 * code.
+	 *
+	 * @param list<int> $composerIds
+	 * @param list<int> $bookIds
+	 * @param list<int> $collectionIds
+	 * @param list<int> $artistIds
+	 * @return int id of the created song
+	 */
+	public function createSong(
+		string $databasePath,
+		string $title,
+		array $composerIds,
+		array $bookIds,
+		array $collectionIds,
+		array $artistIds
+	): int {
+		$database = new PDO('sqlite:' . $databasePath, options: [
+			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+		]);
+
+		$insertStmt = $database->prepare('INSERT INTO Songs (Title, SortTitle) VALUES (:title, :sortTitle)');
+		$insertStmt->execute([
+			':title' => $title,
+			':sortTitle' => $title,
+		]);
+		$songId = (int)$database->lastInsertId();
+
+		$this->updateSong($databasePath, $songId, $title, $composerIds, $bookIds, $collectionIds, $artistIds);
+
+		return $songId;
+	}
+
+	/**
 	 * @param list<int> $composerIds
 	 * @param list<int> $bookIds
 	 * @param list<int> $collectionIds

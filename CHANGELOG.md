@@ -16,3 +16,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Files added in the song editor - uploaded from the computer or attached from the
   Nextcloud files - are staged and only applied when the song is saved, like a file
   removal, so cancelling the editor leaves the library untouched.
+- Option to create a new song from the songs view. The editor opens with an empty form,
+  the song is only written to the MobileSheets database when the editor is saved, and
+  files added before that are attached to the new song afterwards.

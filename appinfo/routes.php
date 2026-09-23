@@ -15,6 +15,11 @@ return [
 			'verb' => 'GET',
 		],
 		[
+			'name' => 'Api#createSong',
+			'url' => '/api/songs',
+			'verb' => 'POST',
+		],
+		[
 			'name' => 'Api#updateSong',
 			'url' => '/api/songs/{id}',
 			'verb' => 'POST',

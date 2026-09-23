@@ -430,6 +430,77 @@ final class ApiTest extends TestCase {
 		$this->assertEquals(Http::STATUS_NOT_FOUND, $controller->deleteLibrary(7)->getStatus());
 	}
 
+	public function testCreateSongWithoutLibraryIdIsBadRequest(): void {
+		$controller = $this->createController();
+
+		$this->assertEquals(
+			Http::STATUS_BAD_REQUEST,
+			$controller->createSong(null, 'Some title')->getStatus(),
+		);
+	}
+
+	public function testCreateSongWithoutTitleIsBadRequest(): void {
+		$controller = $this->createController();
+
+		$this->assertEquals(
+			Http::STATUS_BAD_REQUEST,
+			$controller->createSong(7, '   ')->getStatus(),
+		);
+	}
+
+	/**
+	 * The client has to know the id of the new song: creating it and adding a file to it
+	 * afterwards are separate requests.
+	 */
+	public function testCreateSongReturnsTheNewSongIdWithTheLibraryData(): void {
+		$storage = $this->createMock(IStorage::class);
+		$storage->method('getLocalFile')->willReturn('/tmp/mobilesheetsmanager-test-library.db');
+
+		$databaseNode = $this->createMock(Node::class);
+		$databaseNode->method('getStorage')->willReturn($storage);
+		$databaseNode->method('getInternalPath')->willReturn('files/Noten/mobilesheets.db');
+
+		$userFolder = $this->createMock(IUserFolder::class);
+		$userFolder->method('get')->with('Noten/mobilesheets.db')->willReturn($databaseNode);
+
+		$rootFolder = $this->createMock(IRootFolder::class);
+		$rootFolder->method('getUserFolder')->with('admin')->willReturn($userFolder);
+
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$libraryMapper->method('findForUser')
+			->with('admin', 7)
+			->willReturn(['id' => 7, 'path' => '/Noten/mobilesheets.db']);
+
+		$songMapper = $this->createMock(SongMapper::class);
+		$songMapper->expects($this->once())
+			->method('createSong')
+			->with('/tmp/mobilesheetsmanager-test-library.db', 'New Song', [10], [100], [1000], [200])
+			->willReturn(42);
+		$songMapper->method('findLibraryData')->willReturn(['songs' => [], 'composers' => []]);
+
+		$controller = $this->createController($libraryMapper, $songMapper, $rootFolder);
+
+		$response = $controller->createSong(7, 'New Song', [10], [100], [1000], [200]);
+
+		$this->assertEquals(Http::STATUS_CREATED, $response->getStatus());
+		$this->assertEquals(
+			['createdSongId' => 42, 'songs' => [], 'composers' => []],
+			$response->getData(),
+		);
+	}
+
+	public function testCreateSongOfAnUnknownLibraryIsNotFound(): void {
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$libraryMapper->method('findForUser')->with('admin', 7)->willReturn(null);
+
+		$songMapper = $this->createMock(SongMapper::class);
+		$songMapper->expects($this->never())->method('createSong');
+
+		$controller = $this->createController($libraryMapper, $songMapper);
+
+		$this->assertEquals(Http::STATUS_NOT_FOUND, $controller->createSong(7, 'New Song')->getStatus());
+	}
+
 	protected function tearDown(): void {
 		foreach ($this->temporaryFiles as $file) {
 			if (is_file($file)) {

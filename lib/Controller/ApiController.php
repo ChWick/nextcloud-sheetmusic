@@ -152,6 +152,68 @@ class ApiController extends OCSController {
 		}
 	}
 
+	/**
+	 * Create a song in a library.
+	 *
+	 * The response is the library data plus the id of the new song, so the client can add
+	 * files to the song right afterwards.
+	 */
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/songs')]
+	public function createSong(
+		?int $libraryId = null,
+		?string $title = null,
+		array $composerIds = [],
+		array $bookIds = [],
+		array $collectionIds = [],
+		array $artistIds = []
+	): DataResponse {
+		$title = $title ?? '';
+		if ($libraryId === null || trim($title) === '') {
+			return new DataResponse([], Http::STATUS_BAD_REQUEST);
+		}
+
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		$libraryPath = $this->resolveLibraryPath($user->getUID(), $libraryId);
+		if ($libraryPath === null) {
+			return new DataResponse([], Http::STATUS_NOT_FOUND);
+		}
+
+		try {
+			$node = $this->rootFolder->getUserFolder($user->getUID())->get(ltrim($libraryPath, '/'));
+			$databasePath = $node->getStorage()->getLocalFile($node->getInternalPath());
+			if ($databasePath === false) {
+				return new DataResponse([], Http::STATUS_NOT_FOUND);
+			}
+
+			$songId = $this->songMapper->createSong(
+				$databasePath,
+				trim($title),
+				$composerIds,
+				$bookIds,
+				$collectionIds,
+				$artistIds,
+			);
+
+			return new DataResponse(
+				['createdSongId' => $songId] + $this->songMapper->findLibraryData($databasePath),
+				Http::STATUS_CREATED,
+			);
+		} catch (\Throwable $exception) {
+			$this->logger->error('Could not create song in MobileSheets library', [
+				'exception' => $exception,
+				'libraryId' => $libraryId,
+				'path' => $libraryPath,
+				'title' => $title,
+			]);
+			return new DataResponse([], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'POST', url: '/api/songs/{id}')]
 	public function updateSong(

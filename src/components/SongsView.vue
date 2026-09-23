@@ -10,30 +10,48 @@
       :collections="collections"
       :artists="artists"/>
     </div>
-    <ul :class="$style.songList">
-      <li v-for="song in filteredSongs" :key="song.id">
-        <button type="button"
-                :class="$style.songButton"
-                :aria-pressed="selectedSong?.id === song.id"
-                @click="selectSong(song)">
-          {{ song.title }}
-        </button>
-      </li>
-      <li v-if="!isLoadingSongs && !fileError && songs.length === 0">
-        {{ t('mobilesheetsmanager', 'No songs found in this library.') }}
-      </li>
-      <li v-else-if="!isLoadingSongs && !fileError && songs.length > 0 && filteredSongs.length === 0">
-        {{ t('mobilesheetsmanager', 'No songs match the selected filters.') }}
-      </li>
-    </ul>
+    <div :class="$style.listColumn">
+      <NcButton
+        variant="primary"
+        :class="$style.newSongButton"
+        @click="startNewSong">
+        {{ t('mobilesheetsmanager', 'New song') }}
+      </NcButton>
+      <ul :class="$style.songList">
+        <li v-for="song in filteredSongs" :key="song.id">
+          <button type="button"
+                  :class="$style.songButton"
+                  :aria-pressed="selectedSong?.id === song.id"
+                  @click="selectSong(song)">
+            {{ song.title }}
+          </button>
+        </li>
+        <li v-if="!isLoadingSongs && !fileError && songs.length === 0">
+          {{ t('mobilesheetsmanager', 'No songs found in this library.') }}
+        </li>
+        <li v-else-if="!isLoadingSongs && !fileError && songs.length > 0 && filteredSongs.length === 0">
+          {{ t('mobilesheetsmanager', 'No songs match the selected filters.') }}
+        </li>
+      </ul>
+    </div>
     <div :class="$style.viewerArea">
-      <SongViewer :song="selectedSong"
+      <SongEditor v-if="isCreatingSong"
+                  :song="null"
                   :library-id="selectedLibrary"
                   :composers="composers"
                   :books="books"
                   :collections="collections"
                   :artists="artists"
-                  @saved="handleLibraryDataUpdate"
+                  @saved="handleSaved"
+                  @cancel="isCreatingSong = false" />
+      <SongViewer v-else
+                  :song="selectedSong"
+                  :library-id="selectedLibrary"
+                  :composers="composers"
+                  :books="books"
+                  :collections="collections"
+                  :artists="artists"
+                  @saved="handleSaved"
                   @updated="handleLibraryDataUpdate" />
     </div>
   </div>
@@ -44,6 +62,8 @@ import { t } from '@nextcloud/l10n';
 import axios from '@nextcloud/axios';
 import { generateOcsUrl } from '@nextcloud/router';
 import { ref, computed, watch } from 'vue';
+import NcButton from '@nextcloud/vue/components/NcButton';
+import SongEditor from '../components/SongEditor.vue';
 import SongFilterBar from '../components/SongFilterBar.vue';
 import SongViewer from '../components/SongViewer.vue';
 import type { Artist, Song, Composer, Book, Collection, LibraryData } from '../types/song';
@@ -66,6 +86,8 @@ const selectedArtists = ref<Artist[]>([]);
 const selectedSong = ref<Song | null>(null);
 const fileError = ref('');
 const isLoadingSongs = ref(false);
+/** The editor is open for a song that does not exist yet. */
+const isCreatingSong = ref(false);
 
 // Computed filtered list
 const filteredSongs = computed(() => {
@@ -114,9 +136,27 @@ watch(() => props.selectedLibrary, (newLib) => {
 }, { immediate: true });
 
 function selectSong(song: Song) {
+  // Selecting a song leaves the editor for a new song behind, like pressing Cancel.
+  isCreatingSong.value = false;
   selectedSong.value = song;
   // Emit to parent if needed (e.g., for other UI parts)
   emit('select-song', song);
+}
+
+/** Open the editor for a song that does not exist yet. Cancelling leaves no trace. */
+function startNewSong() {
+  selectedSong.value = null;
+  isCreatingSong.value = true;
+}
+
+/** The editor saved: refresh the library data and select the song that was saved. */
+function handleSaved(data: LibraryData, songId?: number) {
+  isCreatingSong.value = false;
+  handleLibraryDataUpdate(data);
+
+  if (songId === undefined) return;
+  const saved = songs.value.find(song => song.id === songId);
+  if (saved) selectSong(saved);
 }
 
 // Emit events to parent
@@ -166,10 +206,19 @@ const emit = defineEmits<{
   grid-row: 2;
 }
 
-.songList {
+.listColumn {
   grid-column: 1;
   grid-row: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
   overflow-y: auto;
+}
+
+.newSongButton {
+  width: 100%;
+  justify-content: center;
 }
 
 .viewerArea {
