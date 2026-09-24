@@ -157,6 +157,153 @@ final class ApiTest extends TestCase {
 	}
 
 	/**
+	 * A name that is already used in the library folder must not be overwritten when a
+	 * file is copied in: two songs with the same title would otherwise share one PDF.
+	 */
+	public function testAttachNextcloudFileCopiesToAUniqueNameWhenTheNameIsTaken(): void {
+		$storage = $this->createMock(IStorage::class);
+		$storage->method('getLocalFile')->willReturn('/tmp/mobilesheetsmanager-test-library.db');
+
+		$databaseNode = $this->createMock(Node::class);
+		$databaseNode->method('getStorage')->willReturn($storage);
+		$databaseNode->method('getInternalPath')->willReturn('files/Noten/mobilesheets.db');
+
+		$attachedFile = $this->createMock(Node::class);
+		$attachedFile->method('getPath')->willReturn('/admin/files/Noten/Shared (2).pdf');
+
+		$targetFolder = $this->createMock(Folder::class);
+		$targetFolder->method('getPath')->willReturn('/admin/files/Noten');
+		$targetFolder->method('get')->with('Shared (2).pdf')->willReturn($attachedFile);
+
+		$sourceNode = $this->createMock(Node::class);
+		$sourceNode->method('getType')->willReturn('file');
+		$sourceNode->method('getName')->willReturn('Shared.pdf');
+		$sourceNode->expects($this->once())
+			->method('copy')
+			->with('/admin/files/Noten/Shared (2).pdf');
+
+		$userFolder = $this->createMock(IUserFolder::class);
+		$userFolder->method('getPath')->willReturn('/admin/files');
+		$userFolder->method('get')->willReturnCallback(
+			static function (string $path) use ($databaseNode, $targetFolder, $sourceNode): Node {
+				return match ($path) {
+					'Noten/mobilesheets.db' => $databaseNode,
+					'Noten' => $targetFolder,
+					'Music/Shared.pdf' => $sourceNode,
+					default => throw new NotFoundException($path),
+				};
+			},
+		);
+		// The library folder already holds a file of that name, e.g. of another song.
+		$userFolder->method('nodeExists')->willReturnCallback(
+			static fn (string $path): bool => $path === 'Noten/Shared.pdf',
+		);
+
+		$rootFolder = $this->createMock(IRootFolder::class);
+		$rootFolder->method('getUserFolder')->with('admin')->willReturn($userFolder);
+
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$libraryMapper->method('findForUser')
+			->with('admin', 7)
+			->willReturn(['id' => 7, 'path' => '/Noten/mobilesheets.db']);
+
+		$songMapper = $this->createMock(SongMapper::class);
+		$songMapper->expects($this->once())
+			->method('setSongFile')
+			->with(
+				'/tmp/mobilesheetsmanager-test-library.db',
+				42,
+				'/remote.php/dav/files/admin/Noten/Shared (2).pdf',
+			);
+		$songMapper->method('findSong')->willReturn(null);
+		$songMapper->method('findLibraryData')->willReturn(['songs' => []]);
+
+		$fileManager = new FileManager(
+			$libraryMapper,
+			$songMapper,
+			$rootFolder,
+			new MobileSheetsPathResolver($rootFolder),
+			$this->createMock(LoggerInterface::class),
+		);
+
+		$controller = $this->createController($libraryMapper, $songMapper, $rootFolder, $fileManager);
+
+		$this->assertEquals(
+			Http::STATUS_OK,
+			$controller->attachNextcloudFile(42, 7, '/Music/Shared.pdf', 'copy')->getStatus(),
+		);
+	}
+
+	/** Attaching a file the song already lists must not add a second entry for it. */
+	public function testAttachNextcloudFileDoesNotListTheSameFileTwice(): void {
+		$storage = $this->createMock(IStorage::class);
+		$storage->method('getLocalFile')->willReturn('/tmp/mobilesheetsmanager-test-library.db');
+
+		$databaseNode = $this->createMock(Node::class);
+		$databaseNode->method('getStorage')->willReturn($storage);
+		$databaseNode->method('getInternalPath')->willReturn('files/Noten/mobilesheets.db');
+
+		$libraryFile = $this->createMock(Node::class);
+		$libraryFile->method('getPath')->willReturn('/admin/files/Noten/Shared.pdf');
+
+		$targetFolder = $this->createMock(Folder::class);
+		$targetFolder->method('getPath')->willReturn('/admin/files/Noten');
+		$targetFolder->method('get')->with('Shared.pdf')->willReturn($libraryFile);
+
+		// The library's own file is chosen as the source and already sits in place.
+		$sourceNode = $this->createMock(Node::class);
+		$sourceNode->method('getType')->willReturn('file');
+		$sourceNode->method('getName')->willReturn('Shared.pdf');
+		$sourceNode->expects($this->never())->method('copy');
+		$sourceNode->expects($this->never())->method('move');
+
+		$userFolder = $this->createMock(IUserFolder::class);
+		$userFolder->method('getPath')->willReturn('/admin/files');
+		$userFolder->method('get')->willReturnCallback(
+			static function (string $path) use ($databaseNode, $targetFolder, $sourceNode): Node {
+				return match ($path) {
+					'Noten/mobilesheets.db' => $databaseNode,
+					'Noten' => $targetFolder,
+					'Noten/Shared.pdf' => $sourceNode,
+					default => throw new NotFoundException($path),
+				};
+			},
+		);
+
+		$rootFolder = $this->createMock(IRootFolder::class);
+		$rootFolder->method('getUserFolder')->with('admin')->willReturn($userFolder);
+
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$libraryMapper->method('findForUser')
+			->with('admin', 7)
+			->willReturn(['id' => 7, 'path' => '/Noten/mobilesheets.db']);
+
+		$songMapper = $this->createMock(SongMapper::class);
+		$songMapper->method('findSong')->willReturn(new MobileSheetsSong(
+			42,
+			'Take Five',
+			[new MobileSheetsFile(2, '/remote.php/dav/files/admin/Noten/Shared.pdf')],
+		));
+		$songMapper->expects($this->never())->method('setSongFile');
+		$songMapper->method('findLibraryData')->willReturn(['songs' => []]);
+
+		$fileManager = new FileManager(
+			$libraryMapper,
+			$songMapper,
+			$rootFolder,
+			new MobileSheetsPathResolver($rootFolder),
+			$this->createMock(LoggerInterface::class),
+		);
+
+		$controller = $this->createController($libraryMapper, $songMapper, $rootFolder, $fileManager);
+
+		$this->assertEquals(
+			Http::STATUS_OK,
+			$controller->attachNextcloudFile(42, 7, '/Noten/Shared.pdf', 'copy')->getStatus(),
+		);
+	}
+
+	/**
 	 * Removing one file of a two-file song has to renumber the file that remains: the
 	 * song drops back to a single file and therefore loses its numeric prefix again. The
 	 * deleted file's hash code entry (and the rename of the remaining one) have to end up

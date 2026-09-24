@@ -110,6 +110,9 @@ function createTargetPath(
 }
 
 class FileManager {
+	/** Highest counter tried when a file name has to be made unique. */
+	private const MAX_UNIQUE_NAME_ATTEMPTS = 1000;
+
 	public function __construct(
 		private LibraryMapper $libraryMapper,
 		private SongMapper $songMapper,
@@ -154,6 +157,59 @@ class FileManager {
 	 */
 	public function pathOfStoredFile(string $webdavPath, IUser $user): ?MobileSheetsPath {
 		return $this->pathResolver->fromStored($webdavPath, $user);
+	}
+
+	/**
+	 * Path a file can take without replacing another one.
+	 *
+	 * MobileSheets names files after composer, book, collection and title, so two songs
+	 * that only share a title produce the same name - and an upload or attachment keeps
+	 * the name the file had at its source, which can be taken in the library folder as
+	 * well. Without this an added file would reuse the file of another song, or two
+	 * entries of one song would point at a single file.
+	 *
+	 * An occupied name gets a counter, "X.pdf" becoming "X (2).pdf", then "X (3).pdf".
+	 *
+	 * @param string      $targetRelative path relative to the user folder, e.g. "Noten/X.pdf"
+	 * @param string|null $keepRelative   path that counts as free because the file being
+	 *                                    handled already sits there; keeps repeated runs
+	 *                                    from renaming the same file again
+	 * @return string the given path, or the first free variant of it
+	 * @throws \RuntimeException when even the last variant is taken
+	 */
+	public function uniqueRelativePath(Folder $userFolder, string $targetRelative, ?string $keepRelative = null): string {
+		$targetRelative = ltrim($targetRelative, '/');
+		$keepRelative = $keepRelative === null ? null : ltrim($keepRelative, '/');
+
+		if ($targetRelative === $keepRelative || !$userFolder->nodeExists($targetRelative)) {
+			return $targetRelative;
+		}
+
+		// "X.pdf" -> "X (2).pdf", keeping the folder and the extension untouched.
+		$fileName = basename($targetRelative);
+		$extension = getFileExtension($fileName);
+		$base = $extension === '' ? $fileName : substr($fileName, 0, -strlen($extension));
+		if ($base === '') {
+			// Dot files such as ".hidden" have no name part to count up.
+			$base = $fileName;
+			$extension = '';
+		}
+		$directory = str_replace(DIRECTORY_SEPARATOR, '/', dirname($targetRelative));
+		$prefix = ($directory === '' || $directory === '.') ? '' : rtrim($directory, '/') . '/';
+
+		for ($counter = 2; $counter <= self::MAX_UNIQUE_NAME_ATTEMPTS; $counter++) {
+			$candidate = $prefix . $base . ' (' . $counter . ')' . $extension;
+			if ($candidate === $keepRelative || !$userFolder->nodeExists($candidate)) {
+				return $candidate;
+			}
+		}
+
+		throw new \RuntimeException(sprintf(
+			'Cannot find a free file name for "%s" in "%s": %d variants are taken',
+			$targetRelative,
+			$userFolder->getPath(),
+			self::MAX_UNIQUE_NAME_ATTEMPTS,
+		));
 	}
 
 	public function regenerateFilePaths(int $libraryId, IUser $user): void {
@@ -238,8 +294,11 @@ class FileManager {
 	/**
 	 * Move a song's file to its regenerated location and persist the new path.
 	 *
-	 * @throws \RuntimeException when the stored path cannot be resolved, when the
-	 *                           file is missing, or when the target already exists
+	 * A target that is already taken is not an error: the file gets a unique name so it
+	 * cannot replace or share another song's file.
+	 *
+	 * @throws \RuntimeException when the stored path cannot be resolved, when the source
+	 *                           file is missing, or when the database update failed
 	 */
 	public function regenerateFilePath(
 		MobileSheetsSong $song,
@@ -264,8 +323,6 @@ class FileManager {
 		//   sourceWebdav / sourceInternal  - where the database says the file is
 		//   targetWebdav / targetInternal  - where the naming rules want it
 		$source = $this->pathResolver->fromStored($file->path, $user);
-		$target = $this->pathResolver->forTarget($relativeTarget, $user, $targetFolder->getPath());
-
 		if ($source === null) {
 			throw new \RuntimeException(sprintf(
 				'Cannot regenerate file %d: stored path "%s" is not below "%s"',
@@ -275,36 +332,39 @@ class FileManager {
 			));
 		}
 
+		$sourceRelative = $this->pathResolver->relativeToUserFolder($source->internal, $user);
+		if ($sourceRelative === null) {
+			throw new \RuntimeException(sprintf(
+				'Cannot regenerate file %d: source "%s" escapes the user folder',
+				$file->id,
+				$source->internal,
+			));
+		}
+
 		// Filesystem work always happens on the internal path.
 		$userFolder = $this->rootFolder->getUserFolder($user->getUID());
 
+		// The naming rules produce paths below the library folder, while uniqueRelativePath()
+		// and the node lookups work with paths relative to the user folder - a target that
+		// is checked against the wrong base would look free and another song's file would
+		// be replaced. Two songs that share a title map onto the same target, so a taken
+		// name gets a counter instead.
+		$targetBaseRelative = $this->pathResolver->relativeToUserFolder($targetFolder->getPath(), $user) ?? '';
+		$targetRelative = $this->uniqueRelativePath(
+			$userFolder,
+			($targetBaseRelative === '' ? '' : rtrim($targetBaseRelative, '/') . '/') . $relativeTarget,
+			$sourceRelative,
+		);
+		$target = $this->pathResolver->forTarget($targetRelative, $user, $userFolder->getPath());
+
 		if ($source->internal === $target->internal) {
+			// Already in place. This also covers a file that already carries the counter
+			// this run would produce, so running twice does not rename it again.
 			$this->logger->debug('MobileSheets file already at its target path', [
 				'fileId' => $file->id,
 				'path' => $source->internal,
 			]);
 			return;
-		}
-
-		$sourceRelative = $this->pathResolver->relativeToUserFolder($source->internal, $user);
-		$targetRelative = $this->pathResolver->relativeToUserFolder($target->internal, $user);
-		if ($sourceRelative === null || $targetRelative === null) {
-			throw new \RuntimeException(sprintf(
-				'Cannot regenerate file %d: "%s" or "%s" escapes the user folder',
-				$file->id,
-				$source->internal,
-				$target->internal,
-			));
-		}
-
-		// TODO: resolve collisions (unique name or overwrite) instead of failing.
-		if ($userFolder->nodeExists($targetRelative)) {
-			throw new \RuntimeException(sprintf(
-				'Refusing to move file %d (%s): target "%s" already exists',
-				$file->id,
-				$source->webdav,
-				$target->webdav,
-			));
 		}
 
 		if (!$userFolder->nodeExists($sourceRelative)) {

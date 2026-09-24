@@ -390,10 +390,11 @@ class ApiController extends OCSController {
 			// first. FileManager then moves it - together with the song's other files -
 			// to the location its naming rules produce.
 			$targetRelative = ($libraryDir === '' ? '' : $libraryDir . '/') . $fileName;
-			// An existing file at that name is overwritten, as the editor always did.
-			$targetFile = $userFolder->nodeExists($targetRelative)
-				? $userFolder->get($targetRelative)
-				: $userFolder->newFile($targetRelative);
+			// Never replace a file that is already there. Uploading the same file twice,
+			// or to two songs that share a title, has to leave one file per song entry,
+			// so a taken name gets a counter ("X (2).pdf").
+			$targetRelative = $this->fileManager->uniqueRelativePath($userFolder, $targetRelative);
+			$targetFile = $userFolder->newFile($targetRelative);
 			$targetFile->putContent($content);
 
 			// FileManager owns both path representations, so the WebDAV path stored in
@@ -467,8 +468,15 @@ class ApiController extends OCSController {
 			// to the location its naming rules produce.
 			$targetName = $sourceNode->getName();
 			$targetRelative = ($libraryDir === '' ? '' : $libraryDir . '/') . $targetName;
+			$sourceRelative = ltrim($sourcePath, '/');
 
-			if (ltrim($sourcePath, '/') !== $targetRelative) {
+			if ($sourceRelative !== $targetRelative) {
+				// A taken name gets a counter: copying may not replace another song's
+				// file and moving may not take it away, and the song keeps its own file
+				// even when a name is used twice.
+				$targetRelative = $this->fileManager->uniqueRelativePath($userFolder, $targetRelative);
+				$targetName = basename($targetRelative);
+
 				// Node::move() and Node::copy() resolve against the filesystem root, so
 				// they need the full internal path, not one relative to the user folder.
 				$targetInternalPath = $targetFolder->getPath() . '/' . $targetName;
@@ -611,6 +619,19 @@ class ApiController extends OCSController {
 	 */
 	private function recordSongFile(int $songId, string $databasePath, Node $file, Folder $targetFolder, IUser $user): void {
 		$storedPath = $this->fileManager->pathOfExistingFile($file->getPath(), $user);
+
+		// A file may only be listed once per song: attaching a file that already belongs
+		// to it would otherwise add a second entry pointing at the same path.
+		foreach ($this->songMapper->findSong($databasePath, $songId)?->files ?? [] as $existing) {
+			if ($existing->path === $storedPath->webdav) {
+				$this->logger->debug('Song already lists this file, nothing to add', [
+					'songId' => $songId,
+					'path' => $storedPath->webdav,
+				]);
+				return;
+			}
+		}
+
 		$this->songMapper->setSongFile($databasePath, $songId, $storedPath->webdav);
 
 		$this->relocateSongFiles($songId, $databasePath, $targetFolder, $user);

@@ -238,24 +238,70 @@ final class FileManagerTest extends TestCase {
 		self::assertSame('PAYLOAD', $this->files['Noten/Jazz/Jazz - Take Five.pdf']);
 	}
 
-	public function testThrowsAndChangesNothingWhenTheTargetAlreadyExists(): void {
+	/**
+	 * The naming rules are built from composer, book, collection and title, so two songs
+	 * that share a title map onto the same target. The file of the other song must
+	 * neither be replaced nor shared, so the name gets a counter.
+	 */
+	public function testMovesToAUniqueNameWhenTheTargetAlreadyExists(): void {
 		$this->files = [
 			'Noten/source/SomeFile.pdf' => 'PAYLOAD',
 			'Noten/Jazz/Jazz - Take Five.pdf' => 'EXISTING',
 		];
 		$this->folders = ['Noten' => true, 'Noten/source' => true, 'Noten/Jazz' => true];
 
-		try {
-			$this->regenerate($this->collectionSong(), 'Noten/source/SomeFile.pdf');
-			self::fail('Expected a RuntimeException because the target already exists');
-		} catch (\RuntimeException $exception) {
-			self::assertStringContainsString('already exists', $exception->getMessage());
-		}
+		$this->regenerate($this->collectionSong(), 'Noten/source/SomeFile.pdf');
 
-		self::assertSame([], $this->moves, 'nothing may be moved when the target exists');
-		self::assertSame([], $this->updates, 'the database must stay untouched');
-		self::assertSame('PAYLOAD', $this->files['Noten/source/SomeFile.pdf'], 'the source must survive');
-		self::assertSame('EXISTING', $this->files['Noten/Jazz/Jazz - Take Five.pdf'], 'the target must not be overwritten');
+		self::assertSame(
+			[['from' => 'Noten/source/SomeFile.pdf', 'to' => 'Noten/Jazz/Jazz - Take Five (2).pdf']],
+			$this->moves,
+		);
+		self::assertSame(
+			[['fileId' => 7, 'path' => '/remote.php/dav/files/admin/Noten/Jazz/Jazz - Take Five (2).pdf']],
+			$this->updates,
+		);
+		self::assertSame('EXISTING', $this->files['Noten/Jazz/Jazz - Take Five.pdf'], 'the other song\'s file must survive');
+		self::assertSame('PAYLOAD', $this->files['Noten/Jazz/Jazz - Take Five (2).pdf']);
+		self::assertArrayNotHasKey('Noten/source/SomeFile.pdf', $this->files);
+	}
+
+	public function testCountsUpUntilItFindsAFreeName(): void {
+		$this->files = [
+			'Noten/source/SomeFile.pdf' => 'PAYLOAD',
+			'Noten/Jazz/Jazz - Take Five.pdf' => 'FIRST',
+			'Noten/Jazz/Jazz - Take Five (2).pdf' => 'SECOND',
+			'Noten/Jazz/Jazz - Take Five (3).pdf' => 'THIRD',
+		];
+		$this->folders = ['Noten' => true, 'Noten/source' => true, 'Noten/Jazz' => true];
+
+		$this->regenerate($this->collectionSong(), 'Noten/source/SomeFile.pdf');
+
+		self::assertSame(
+			[['from' => 'Noten/source/SomeFile.pdf', 'to' => 'Noten/Jazz/Jazz - Take Five (4).pdf']],
+			$this->moves,
+		);
+		self::assertSame('FIRST', $this->files['Noten/Jazz/Jazz - Take Five.pdf']);
+		self::assertSame('SECOND', $this->files['Noten/Jazz/Jazz - Take Five (2).pdf']);
+		self::assertSame('THIRD', $this->files['Noten/Jazz/Jazz - Take Five (3).pdf']);
+		self::assertSame('PAYLOAD', $this->files['Noten/Jazz/Jazz - Take Five (4).pdf']);
+	}
+
+	/**
+	 * A file that already carries the counter this run would produce has to stay where it
+	 * is, otherwise every run of "regenerate file paths" would rename it again.
+	 */
+	public function testKeepsAFileThatAlreadyCarriesTheCounter(): void {
+		$this->files = [
+			'Noten/Jazz/Jazz - Take Five.pdf' => 'EXISTING',
+			'Noten/Jazz/Jazz - Take Five (2).pdf' => 'PAYLOAD',
+		];
+		$this->folders = ['Noten' => true, 'Noten/Jazz' => true];
+
+		$this->regenerate($this->collectionSong(), 'Noten/Jazz/Jazz - Take Five (2).pdf');
+
+		self::assertSame([], $this->moves, 'a file that already has the unique name must not be renamed');
+		self::assertSame([], $this->updates);
+		self::assertSame('PAYLOAD', $this->files['Noten/Jazz/Jazz - Take Five (2).pdf']);
 	}
 
 	public function testThrowsWhenTheSourceFileDoesNotExist(): void {
@@ -357,23 +403,27 @@ final class FileManagerTest extends TestCase {
 		self::assertSame('KEEP', $this->files['Noten/A/B/keep.pdf']);
 	}
 
-	public function testNeverRemovesAnythingWhenTheMoveIsRefused(): void {
+	/**
+	 * A target name being taken is no reason to stop: the file gets a unique name and the
+	 * source folders are still tidied up afterwards.
+	 */
+	public function testTidiesUpSourceFoldersWhenTheTargetNameWasTaken(): void {
 		$this->files = [
 			'Noten/A/B/SomeFile.pdf' => 'PAYLOAD',
 			'Noten/Jazz/Jazz - Take Five.pdf' => 'EXISTING',
 		];
 		$this->folders = ['Noten' => true, 'Noten/A' => true, 'Noten/A/B' => true, 'Noten/Jazz' => true];
 
-		try {
-			$this->regenerate($this->collectionSong(), 'Noten/A/B/SomeFile.pdf');
-			self::fail('Expected a RuntimeException because the target already exists');
-		} catch (\RuntimeException) {
-			// expected
-		}
+		$this->regenerate($this->collectionSong(), 'Noten/A/B/SomeFile.pdf');
 
-		self::assertSame([], $this->deletedFolders, 'a refused move must not tidy up folders');
-		self::assertArrayHasKey('Noten/A/B', $this->folders);
-		self::assertArrayHasKey('Noten/A', $this->folders);
+		self::assertSame(
+			[['from' => 'Noten/A/B/SomeFile.pdf', 'to' => 'Noten/Jazz/Jazz - Take Five (2).pdf']],
+			$this->moves,
+		);
+		self::assertSame(['Noten/A/B', 'Noten/A'], $this->deletedFolders, 'deepest first');
+		self::assertArrayNotHasKey('Noten/A/B', $this->folders);
+		self::assertArrayNotHasKey('Noten/A', $this->folders);
+		self::assertSame('EXISTING', $this->files['Noten/Jazz/Jazz - Take Five.pdf']);
 	}
 
 	public function testDoesNotNumberASingleFileSong(): void {
@@ -536,7 +586,11 @@ final class FileManagerTest extends TestCase {
 		self::assertSame('-205429089', $entries[1]->hashCode, 'unrelated entries must stay untouched');
 	}
 
-	public function testLeavesTheHashCodesEntryAloneWhenTheMoveIsRefused(): void {
+	/**
+	 * The hash codes file keys files by their WebDAV path, so a file that was renamed to a
+	 * unique name has to be found there as well.
+	 */
+	public function testRenamesTheHashCodesEntryToTheUniqueName(): void {
 		$hashFile = $this->writeHashCodesFile([
 			[$this->sourceWebdav('Noten/A/B/SomeFile.pdf'), '1', '2', '3'],
 		]);
@@ -548,15 +602,17 @@ final class FileManagerTest extends TestCase {
 
 		$hashCodes = MobileSheetsHashCodesFile::parse($hashFile, $this->createMock(LoggerInterface::class));
 
-		try {
-			$this->regenerate($this->collectionSong(), 'Noten/A/B/SomeFile.pdf', hashCodes: $hashCodes);
-			self::fail('Expected a RuntimeException because the target already exists');
-		} catch (\RuntimeException) {
-			// expected
-		}
+		$this->regenerate($this->collectionSong(), 'Noten/A/B/SomeFile.pdf', hashCodes: $hashCodes);
 
-		self::assertFalse($hashCodes->isDirty(), 'a refused move must not dirty the hash codes file');
-		self::assertTrue($hashCodes->hasPath($this->sourceWebdav('Noten/A/B/SomeFile.pdf')));
+		$entries = $hashCodes->entries();
+
+		self::assertTrue($hashCodes->isDirty(), 'the renamed entry has to be persisted');
+		self::assertSame(
+			$this->sourceWebdav('Noten/Jazz/Jazz - Take Five (2).pdf'),
+			$entries[0]->path,
+		);
+		self::assertSame('1', $entries[0]->hashCode, 'the hash must be carried over');
+		self::assertFalse($hashCodes->hasPath($this->sourceWebdav('Noten/A/B/SomeFile.pdf')));
 	}
 
 	public function testDoesNotDirtyTheHashCodesFileWhenNothingMoved(): void {
@@ -879,6 +935,65 @@ final class FileManagerTest extends TestCase {
 		$this->expectExceptionMessage('Song with ID 99 not found');
 
 		$this->fileManager->regenerateSongFilePaths(99, $this->user(), $this->libraryFolder, '/tmp/library.db');
+	}
+
+	/**
+	 * The helper behind every unique name: an occupied path gets a counter before the
+	 * extension, so no file ever replaces another one.
+	 */
+	public function testUniqueRelativePathKeepsAFreeName(): void {
+		self::assertSame(
+			'Noten/Free.pdf',
+			$this->fileManager->uniqueRelativePath($this->userFolder, 'Noten/Free.pdf'),
+		);
+	}
+
+	public function testUniqueRelativePathCountsUpForTakenNames(): void {
+		$this->files = [
+			'Noten/Taken.pdf' => 'A',
+			'Noten/Taken (2).pdf' => 'B',
+		];
+		$this->folders = ['Noten' => true];
+
+		self::assertSame(
+			'Noten/Taken (3).pdf',
+			$this->fileManager->uniqueRelativePath($this->userFolder, 'Noten/Taken.pdf'),
+		);
+	}
+
+	public function testUniqueRelativePathKeepsTheSubfolderAndExtension(): void {
+		$this->files = ['Noten/Jazz/Jazz - Take Five.pdf' => 'A'];
+		$this->folders = ['Noten' => true, 'Noten/Jazz' => true];
+
+		self::assertSame(
+			'Noten/Jazz/Jazz - Take Five (2).pdf',
+			$this->fileManager->uniqueRelativePath($this->userFolder, 'Noten/Jazz/Jazz - Take Five.pdf'),
+		);
+	}
+
+	public function testUniqueRelativePathHandlesNamesWithoutAnExtension(): void {
+		$this->files = ['Noten/no-extension' => 'A'];
+		$this->folders = ['Noten' => true];
+
+		self::assertSame(
+			'Noten/no-extension (2)',
+			$this->fileManager->uniqueRelativePath($this->userFolder, 'Noten/no-extension'),
+		);
+	}
+
+	/** The file being handled may already sit at the target; that is not a collision. */
+	public function testUniqueRelativePathTreatsTheKeptPathAsFree(): void {
+		$this->files = ['Noten/Taken.pdf' => 'A'];
+		$this->folders = ['Noten' => true];
+
+		self::assertSame(
+			'Noten/Taken.pdf',
+			$this->fileManager->uniqueRelativePath($this->userFolder, 'Noten/Taken.pdf', 'Noten/Taken.pdf'),
+		);
+		self::assertSame(
+			'Noten/Taken.pdf',
+			$this->fileManager->uniqueRelativePath($this->userFolder, 'Noten/Taken.pdf', '/Noten/Taken.pdf'),
+		);
 	}
 
 	/**
