@@ -865,4 +865,76 @@ class ApiController extends OCSController {
 			return new DataResponse([], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'DELETE', url: '/api/composers/{id}')]
+	public function deleteComposer(int $id, ?int $libraryId = null): DataResponse {
+		return $this->deleteEntity('composers', $id, $libraryId);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'DELETE', url: '/api/books/{id}')]
+	public function deleteBook(int $id, ?int $libraryId = null): DataResponse {
+		return $this->deleteEntity('books', $id, $libraryId);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'DELETE', url: '/api/collections/{id}')]
+	public function deleteCollection(int $id, ?int $libraryId = null): DataResponse {
+		return $this->deleteEntity('collections', $id, $libraryId);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'DELETE', url: '/api/artists/{id}')]
+	public function deleteArtist(int $id, ?int $libraryId = null): DataResponse {
+		return $this->deleteEntity('artists', $id, $libraryId);
+	}
+
+	/**
+	 * Delete a composer, book, collection or artist from a library.
+	 *
+	 * The songs of the library are kept and only lose the deleted entry in their
+	 * composers, books, collections or artists, so the response is the refreshed
+	 * library data with the field removed from the songs.
+	 *
+	 * @param 'composers'|'books'|'collections'|'artists' $entityType
+	 */
+	private function deleteEntity(string $entityType, int $id, ?int $libraryId): DataResponse {
+		if ($libraryId === null) {
+			return new DataResponse([], Http::STATUS_BAD_REQUEST);
+		}
+
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		$libraryPath = $this->resolveLibraryPath($user->getUID(), $libraryId);
+		if ($libraryPath === null) {
+			return new DataResponse([], Http::STATUS_NOT_FOUND);
+		}
+
+		try {
+			$node = $this->rootFolder->getUserFolder($user->getUID())->get(ltrim($libraryPath, '/'));
+			$databasePath = $node->getStorage()->getLocalFile($node->getInternalPath());
+			if ($databasePath === false) {
+				return new DataResponse([], Http::STATUS_NOT_FOUND);
+			}
+
+			if (!$this->songMapper->deleteEntity($databasePath, $entityType, $id)) {
+				return new DataResponse([], Http::STATUS_NOT_FOUND);
+			}
+
+			return new DataResponse($this->songMapper->findLibraryData($databasePath));
+		} catch (\Throwable $exception) {
+			$this->logger->error('Could not delete entity from MobileSheets library', [
+				'exception' => $exception,
+				'entityType' => $entityType,
+				'entityId' => $id,
+				'libraryId' => $libraryId,
+				'path' => $libraryPath,
+			]);
+			return new DataResponse([], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
 }

@@ -60,6 +60,31 @@ return [
 			'verb' => 'POST',
 		],
 		[
+			'name' => 'Api#createArtist',
+			'url' => '/api/artists',
+			'verb' => 'POST',
+		],
+		[
+			'name' => 'Api#deleteComposer',
+			'url' => '/api/composers/{id}',
+			'verb' => 'DELETE',
+		],
+		[
+			'name' => 'Api#deleteBook',
+			'url' => '/api/books/{id}',
+			'verb' => 'DELETE',
+		],
+		[
+			'name' => 'Api#deleteCollection',
+			'url' => '/api/collections/{id}',
+			'verb' => 'DELETE',
+		],
+		[
+			'name' => 'Api#deleteArtist',
+			'url' => '/api/artists/{id}',
+			'verb' => 'DELETE',
+		],
+		[
 			'name' => 'Api#regenerateFilePaths',
 			'url' => '/api/regenerate-file-paths',
 			'verb' => 'POST',

@@ -26,3 +26,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Option to delete a song from the song view. The confirmation dialog points out that the
   attached files are moved to the Nextcloud trash bin, where they can be restored, while
   the song and every row pointing at it is removed from the MobileSheets database.
+- Views for composers, artists, books and collections, reachable as navigation entries
+  below the songs view. All four views share one implementation that is parameterized
+  with the filter it manages. Each view lists the entries of its kind together with the
+  songs using them, can create a new entry, and can delete an existing one. Deleting an
+  entry keeps every song and only removes the entry from the songs' composers, artists,
+  books or collections.
+- The song filter bar is a module of its own and is shown in the songs view as well as
+  in the composer, artist, book and collection views, where it filters both the listed
+  entries - an entry without a matching song disappears while filters are active - and
+  the songs shown for the selected entry. The selections are shared by all views and are
+  dropped when the library changes.

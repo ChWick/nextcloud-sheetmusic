@@ -283,6 +283,106 @@ public function testFindSongReturnsOnlyTheRequestedSong(): void {
 	}
 
 	/**
+	 * Deleting an entity removes only that entry and its links to songs. The songs
+	 * themselves stay, and so does everything else that is attached to them.
+	 */
+	public function testDeleteComposerKeepsTheSongsAndOnlyRemovesTheComposer(): void {
+		$mapper = $this->mapper();
+
+		$this->assertTrue($mapper->deleteEntity($this->databasePath, 'composers', 10));
+
+		$database = new \PDO('sqlite:' . $this->databasePath);
+		$this->assertSame(0, (int)$database->query('SELECT COUNT(*) FROM Composer WHERE Id = 10')->fetchColumn());
+		$this->assertSame(0, (int)$database->query('SELECT COUNT(*) FROM ComposerSongs WHERE ComposerId = 10')->fetchColumn());
+
+		// The songs survive, the untouched composer link stays, and song 1 keeps its
+		// other fields - only its composers are gone.
+		$this->assertSame(2, (int)$database->query('SELECT COUNT(*) FROM Songs')->fetchColumn());
+		$this->assertSame(1, (int)$database->query('SELECT COUNT(*) FROM ComposerSongs WHERE ComposerId = 20')->fetchColumn());
+		$this->assertSame(1, (int)$database->query('SELECT COUNT(*) FROM Files WHERE SongId = 1')->fetchColumn());
+
+		$data = $mapper->findLibraryData($this->databasePath);
+		$this->assertSame(['Bach'], $this->names($data['composers']));
+		$zebra = $data['songs'][1];
+		$this->assertSame(1, $zebra->id);
+		$this->assertSame([], $zebra->composers);
+		$this->assertSame(['Jazz Standards'], $this->names($zebra->collections));
+		$this->assertSame(['Coltrane'], $this->names($zebra->artists));
+		$this->assertCount(1, $zebra->files);
+	}
+
+	public function testDeleteBookKeepsTheSongsAndOnlyRemovesTheBook(): void {
+		$mapper = $this->mapper();
+
+		$this->assertTrue($mapper->deleteEntity($this->databasePath, 'books', 100));
+
+		$database = new \PDO('sqlite:' . $this->databasePath);
+		$this->assertSame(0, (int)$database->query('SELECT COUNT(*) FROM Books WHERE Id = 100')->fetchColumn());
+		$this->assertSame(0, (int)$database->query('SELECT COUNT(*) FROM BookSongs WHERE BookId = 100')->fetchColumn());
+		$this->assertSame(2, (int)$database->query('SELECT COUNT(*) FROM Songs')->fetchColumn());
+
+		$data = $mapper->findLibraryData($this->databasePath);
+		$alpha = $data['songs'][0];
+		$this->assertSame(2, $alpha->id);
+		$this->assertSame([], $alpha->books);
+		$this->assertSame(['Bach'], $this->names($alpha->composers));
+		$this->assertSame(['Jazz Standards'], $this->names($alpha->collections));
+	}
+
+	public function testDeleteCollectionKeepsTheSongsAndOnlyRemovesTheCollection(): void {
+		$mapper = $this->mapper();
+
+		$this->assertTrue($mapper->deleteEntity($this->databasePath, 'collections', 1000));
+
+		$database = new \PDO('sqlite:' . $this->databasePath);
+		$this->assertSame(0, (int)$database->query('SELECT COUNT(*) FROM Collections WHERE Id = 1000')->fetchColumn());
+		// Both songs were in the collection; both links go, both songs stay.
+		$this->assertSame(0, (int)$database->query('SELECT COUNT(*) FROM CollectionSong')->fetchColumn());
+		$this->assertSame(2, (int)$database->query('SELECT COUNT(*) FROM Songs')->fetchColumn());
+
+		$data = $mapper->findLibraryData($this->databasePath);
+		$this->assertSame([], $data['collections']);
+		foreach ($data['songs'] as $song) {
+			$this->assertSame([], $song->collections);
+			$this->assertNotEmpty($song->composers);
+		}
+	}
+
+	public function testDeleteArtistKeepsTheSongsAndOnlyRemovesTheArtist(): void {
+		$mapper = $this->mapper();
+
+		$this->assertTrue($mapper->deleteEntity($this->databasePath, 'artists', 200));
+
+		$database = new \PDO('sqlite:' . $this->databasePath);
+		$this->assertSame(0, (int)$database->query('SELECT COUNT(*) FROM Artists WHERE Id = 200')->fetchColumn());
+		$this->assertSame(0, (int)$database->query('SELECT COUNT(*) FROM ArtistsSongs WHERE ArtistId = 200')->fetchColumn());
+		$this->assertSame(2, (int)$database->query('SELECT COUNT(*) FROM Songs')->fetchColumn());
+
+		$data = $mapper->findLibraryData($this->databasePath);
+		$zebra = $data['songs'][1];
+		$this->assertSame(1, $zebra->id);
+		$this->assertSame([], $zebra->artists);
+		$this->assertSame(['Beethoven'], $this->names($zebra->composers));
+	}
+
+	public function testDeleteEntityOfAnUnknownIdRemovesNothing(): void {
+		$mapper = $this->mapper();
+
+		$this->assertFalse($mapper->deleteEntity($this->databasePath, 'composers', 999));
+
+		$database = new \PDO('sqlite:' . $this->databasePath);
+		$this->assertSame(2, (int)$database->query('SELECT COUNT(*) FROM Composer')->fetchColumn());
+		$this->assertSame(2, (int)$database->query('SELECT COUNT(*) FROM ComposerSongs')->fetchColumn());
+		$this->assertSame(2, (int)$database->query('SELECT COUNT(*) FROM Songs')->fetchColumn());
+	}
+
+	public function testDeleteEntityOfAnUnknownTypeIsRejected(): void {
+		$this->expectException(\InvalidArgumentException::class);
+
+		$this->mapper()->deleteEntity($this->databasePath, 'genres', 1);
+	}
+
+	/**
 	 * @param list<MobileSheetsComposer|MobileSheetsCollection|MobileSheetsArtist> $entities
 	 * @return list<string>
 	 */

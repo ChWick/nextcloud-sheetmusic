@@ -607,4 +607,67 @@ class SongMapper {
 		$stmt->execute([':name' => $name]);
 		return (int)$database->lastInsertId();
 	}
+
+	/**
+	 * Tables of the four entity kinds a song can carry, and how each of them links
+	 * to songs.
+	 *
+	 * @var array<string, array{table: string, linkTable: string, linkColumn: string}>
+	 */
+	private const ENTITY_TABLES = [
+		'composers' => ['table' => 'Composer', 'linkTable' => 'ComposerSongs', 'linkColumn' => 'ComposerId'],
+		'books' => ['table' => 'Books', 'linkTable' => 'BookSongs', 'linkColumn' => 'BookId'],
+		'collections' => ['table' => 'Collections', 'linkTable' => 'CollectionSong', 'linkColumn' => 'CollectionId'],
+		'artists' => ['table' => 'Artists', 'linkTable' => 'ArtistsSongs', 'linkColumn' => 'ArtistId'],
+	];
+
+	/**
+	 * Delete a composer, book, collection or artist from the library.
+	 *
+	 * The songs are kept: only the links to the deleted entry are removed, so it
+	 * disappears from the songs' composers, books, collections or artists while the
+	 * songs themselves stay untouched.
+	 *
+	 * @param 'composers'|'books'|'collections'|'artists' $entityType
+	 * @return bool whether the entry itself existed and was removed
+	 */
+	public function deleteEntity(string $databasePath, string $entityType, int $entityId): bool {
+		$tables = self::ENTITY_TABLES[$entityType] ?? null;
+		if ($tables === null) {
+			throw new \InvalidArgumentException('Unknown entity type: ' . $entityType);
+		}
+
+		$database = new PDO('sqlite:' . $databasePath, options: [
+			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+		]);
+
+		$tablesStatement = $database->query("SELECT name FROM sqlite_master WHERE type='table'");
+		/** @var list<string> $existingTables */
+		$existingTables = $tablesStatement !== false ? $tablesStatement->fetchAll(PDO::FETCH_COLUMN) : [];
+
+		$removed = 0;
+		$database->beginTransaction();
+		try {
+			// Table and column names come from the constant above, so quoting them is
+			// all that is needed; the entry to delete stays a bound parameter.
+			if (in_array($tables['linkTable'], $existingTables, true)) {
+				$stmt = $database->prepare('DELETE FROM "' . $tables['linkTable'] . '" WHERE ' . $tables['linkColumn'] . ' = :entityId');
+				$stmt->execute([':entityId' => $entityId]);
+			}
+
+			if (in_array($tables['table'], $existingTables, true)) {
+				$stmt = $database->prepare('DELETE FROM "' . $tables['table'] . '" WHERE Id = :entityId');
+				$stmt->execute([':entityId' => $entityId]);
+				$removed = $stmt->rowCount();
+			}
+
+			$database->commit();
+		} catch (\Throwable $exception) {
+			$database->rollBack();
+			throw $exception;
+		}
+
+		return $removed > 0;
+	}
 }

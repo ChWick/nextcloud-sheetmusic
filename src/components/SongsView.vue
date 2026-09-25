@@ -68,6 +68,7 @@ import SongEditor from '../components/SongEditor.vue';
 import SongFilterBar from '../components/SongFilterBar.vue';
 import SongViewer from '../components/SongViewer.vue';
 import type { Artist, Song, Composer, Book, Collection, LibraryData } from '../types/song';
+import { useSongFilters } from '../composables/useSongFilters';
 
 // Props from parent (App.vue)
 const props = defineProps<{ selectedLibrary: number }>();
@@ -79,10 +80,9 @@ const books = ref<Book[]>([]);
 const collections = ref<Collection[]>([]);
 const artists = ref<Artist[]>([]);
 
-const selectedComposers = ref<Composer[]>([]);
-const selectedBooks = ref<Book[]>([]);
-const selectedCollections = ref<Collection[]>([]);
-const selectedArtists = ref<Artist[]>([]);
+// The filter bar is a shared module: every view shows the same selections.
+const { selectedComposers, selectedBooks, selectedCollections, selectedArtists, filterSongs } =
+  useSongFilters(() => props.selectedLibrary);
 
 const selectedSong = ref<Song | null>(null);
 const fileError = ref('');
@@ -91,19 +91,7 @@ const isLoadingSongs = ref(false);
 const isCreatingSong = ref(false);
 
 // Computed filtered list
-const filteredSongs = computed(() => {
-  const composerIds = new Set(selectedComposers.value.map(c => c.id));
-  const bookIds = new Set(selectedBooks.value.map(b => b.id));
-  const collectionIds = new Set(selectedCollections.value.map(c => c.id));
-  const artistIds = new Set(selectedArtists.value.map(a => a.id));
-  return songs.value.filter(song => {
-    if (composerIds.size && !(song.composers?.some(c => composerIds.has(c.id)))) return false;
-    if (bookIds.size && !(song.books?.some(b => bookIds.has(b.id)))) return false;
-    if (collectionIds.size && !(song.collections?.some(c => collectionIds.has(c.id)))) return false;
-    if (artistIds.size && !(song.artists?.some(a => artistIds.has(a.id)))) return false;
-    return true;
-  });
-});
+const filteredSongs = computed(() => filterSongs(songs.value));
 
 function handleLibraryDataUpdate(data: LibraryData) {
   songs.value = data.songs ?? [];

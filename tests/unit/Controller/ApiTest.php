@@ -725,6 +725,70 @@ final class ApiTest extends TestCase {
 		$this->assertEquals(['songs' => []], $response->getData());
 	}
 
+	public function testDeleteEntityWithoutLibraryIdIsBadRequest(): void {
+		$controller = $this->createController();
+
+		$this->assertEquals(Http::STATUS_BAD_REQUEST, $controller->deleteComposer(10)->getStatus());
+		$this->assertEquals(Http::STATUS_BAD_REQUEST, $controller->deleteBook(100)->getStatus());
+		$this->assertEquals(Http::STATUS_BAD_REQUEST, $controller->deleteCollection(1000)->getStatus());
+		$this->assertEquals(Http::STATUS_BAD_REQUEST, $controller->deleteArtist(200)->getStatus());
+	}
+
+	public function testDeleteEntityResolvesTheLibraryById(): void {
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$libraryMapper->expects($this->once())
+			->method('findForUser')
+			->with('admin', 7)
+			->willReturn(null);
+
+		$songMapper = $this->createMock(SongMapper::class);
+		$songMapper->expects($this->never())->method('deleteEntity');
+
+		$controller = $this->createController($libraryMapper, $songMapper, $this->createLibraryRootFolder());
+
+		$this->assertEquals(Http::STATUS_NOT_FOUND, $controller->deleteComposer(10, 7)->getStatus());
+	}
+
+	/**
+	 * Deleting an entity returns the refreshed library data: the songs keep existing
+	 * and only lose the deleted entry in their field, which the client has to show.
+	 */
+	public function testDeleteEntityReturnsTheLibraryDataWithTheFieldRemoved(): void {
+		$songMapper = $this->createMock(SongMapper::class);
+		$songMapper->expects($this->once())
+			->method('deleteEntity')
+			->with('/tmp/mobilesheetsmanager-test-library.db', 'composers', 10)
+			->willReturn(true);
+		$songMapper->method('findLibraryData')->willReturn(['songs' => [], 'composers' => []]);
+
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$libraryMapper->method('findForUser')
+			->with('admin', 7)
+			->willReturn(['id' => 7, 'path' => '/Noten/mobilesheets.db']);
+
+		$controller = $this->createController($libraryMapper, $songMapper, $this->createLibraryRootFolder());
+
+		$response = $controller->deleteComposer(10, 7);
+
+		$this->assertEquals(Http::STATUS_OK, $response->getStatus());
+		$this->assertEquals(['songs' => [], 'composers' => []], $response->getData());
+	}
+
+	public function testDeleteEntityOfAnUnknownEntityIsNotFound(): void {
+		$songMapper = $this->createMock(SongMapper::class);
+		$songMapper->method('deleteEntity')->willReturn(false);
+		$songMapper->expects($this->never())->method('findLibraryData');
+
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$libraryMapper->method('findForUser')
+			->with('admin', 7)
+			->willReturn(['id' => 7, 'path' => '/Noten/mobilesheets.db']);
+
+		$controller = $this->createController($libraryMapper, $songMapper, $this->createLibraryRootFolder());
+
+		$this->assertEquals(Http::STATUS_NOT_FOUND, $controller->deleteArtist(200, 7)->getStatus());
+	}
+
 	/** Root folder whose user folder resolves the library database. */
 	private function createLibraryRootFolder(): IRootFolder {
 		$storage = $this->createMock(IStorage::class);

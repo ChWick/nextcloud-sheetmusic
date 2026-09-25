@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { INode } from '@nextcloud/files'
-import type { Book, Collection, Composer, LibraryData, Song } from './types/song'
+import type { Book, Collection, Composer, EntityType, LibraryData, Song } from './types/song'
 import type { Library } from './types/library.ts'
 
 import axios from '@nextcloud/axios'
@@ -17,13 +17,18 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import SongsView from './components/SongsView.vue'
 import FilesView from './components/FilesView.vue'
+import EntitiesView from './components/EntitiesView.vue'
+
+/** Views of a library: the song view, one view per song filter, and the files view. */
+type ViewName = 'songs' | 'files' | EntityType
+const VIEW_NAMES: ViewName[] = ['songs', 'composers', 'artists', 'books', 'collections', 'files']
 
 /*** State ***/
 const isDialogOpen = ref(false)
 const selectedFile = ref<INode>()
 const libraries = ref<Library[]>([])
 const selectedLibrary = ref<number>(-1)
-const selectedView = ref<'songs' | 'files'>('songs')
+const selectedView = ref<ViewName>('songs')
 const fileError = ref('') // used for dialogs and library load errors
 const isDeleteDialogOpen = ref(false)
 const isDeletingLibrary = ref(false)
@@ -43,7 +48,7 @@ function navigateToLibrary(library: string | number) {
   const libraryId = typeof library === 'string' ? parseInt(library, 10) : library
   router.push({ name: 'LibraryView', params: { library: libraryId, view: 'songs' } })
 }
-function goToView(view: 'songs' | 'files') {
+function goToView(view: ViewName) {
   if (selectedLibrary.value < 0) return
   router.push({ name: 'LibraryView', params: { library: selectedLibrary.value, view } })
 }
@@ -56,7 +61,7 @@ watch(
     const view = (params.view as string) ?? 'songs'
     if (lib) {
       selectedLibrary.value = lib
-      selectedView.value = view as any
+      selectedView.value = (VIEW_NAMES as string[]).includes(view) ? view as ViewName : 'songs'
     } else {
       selectedLibrary.value = -1
       selectedView.value = 'songs'
@@ -194,8 +199,12 @@ async function deleteLibrary() {
 
       <!-- view toggle – only for the selected library -->
       <template v-if="selectedLibrary >= 0">
-        <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Songs')" :active="selectedView === 'songs'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'songs' } }" " />
-        <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Files')" :active="selectedView === 'files'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'files' } }" " />
+        <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Songs')" :active="selectedView === 'songs'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'songs' } }" />
+        <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Composers')" :active="selectedView === 'composers'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'composers' } }" />
+        <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Artists')" :active="selectedView === 'artists'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'artists' } }" />
+        <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Books')" :active="selectedView === 'books'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'books' } }" />
+        <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Collections')" :active="selectedView === 'collections'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'collections' } }" />
+        <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Files')" :active="selectedView === 'files'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'files' } }" />
 
         <div :class="$style.deleteLibraryArea">
           <NcButton type="button"
@@ -217,12 +226,12 @@ async function deleteLibrary() {
     <!-- Main content -->
     <NcAppContent :class="$style.content">
       <template v-if="selectedLibrary >= 0">
-        <template v-if="selectedView === 'songs'">
-  <SongsView :selectedLibrary="selectedLibrary" />
-</template>
-<template v-else>
-  <FilesView :selectedLibrary="selectedLibrary" />
-</template>
+        <SongsView v-if="selectedView === 'songs'" :selectedLibrary="selectedLibrary" />
+        <FilesView v-else-if="selectedView === 'files'" :selectedLibrary="selectedLibrary" />
+        <EntitiesView v-else
+                      :key="selectedView"
+                      :selectedLibrary="selectedLibrary"
+                      :entity-type="selectedView" />
       </template>
 
       <p v-if="fileError" :class="$style.error" role="alert">{{ fileError }}</p>
