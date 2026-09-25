@@ -1,58 +1,66 @@
 import type { Artist, Book, Collection, Composer, EntityType, FilterEntity, Song } from '../types/song'
 
-import { computed, ref, watch } from 'vue'
+import { computed } from 'vue'
+import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
 
-/**
- * The state of the song filter bar, shared by every view that embeds it.
- *
- * The selections are module state so a pick in one view can hand its filter over to
- * the next: picking a book opens the songs view with that book as the only filter.
- * Choosing a view in the navigation instead starts it without any selections. The
- * selections name entries of one specific library - an id means something else in
- * another library - and are therefore dropped when the library changes.
- */
-const selectedComposers = ref<Composer[]>([])
-const selectedBooks = ref<Book[]>([])
-const selectedCollections = ref<Collection[]>([])
-const selectedArtists = ref<Artist[]>([])
-
-/** Library the current selections belong to; null before the first view binds one. */
-const filtersLibraryId = ref<number | null>(null)
-
-function clearFilters(): void {
-	selectedComposers.value = []
-	selectedBooks.value = []
-	selectedCollections.value = []
-	selectedArtists.value = []
+/** The entries the filters can select; they resolve the ids stored in the URL. */
+export interface FilterOptions {
+	composers: Composer[]
+	books: Book[]
+	collections: Collection[]
+	artists: Artist[]
 }
 
-/**
- * Filter state and logic for the song filter bar.
- *
- * @param libraryId the library the caller shows; the selections are cleared when it
- *                  changes and kept when the same library is bound again
- */
-export function useSongFilters(libraryId: () => number) {
-	watch(libraryId, (id) => {
-		if (filtersLibraryId.value !== id) {
-			filtersLibraryId.value = id
-			clearFilters()
-		}
-	}, { immediate: true })
+const FILTER_TYPES: EntityType[] = ['composers', 'artists', 'books', 'collections']
 
-	const hasActiveFilters = computed(() => (
-		selectedComposers.value.length > 0
-		|| selectedBooks.value.length > 0
-		|| selectedCollections.value.length > 0
-		|| selectedArtists.value.length > 0
-	))
+/**
+ * The state of the song filter bar, read from and written to the URL query
+ * ("…?composers=3&books=7"), so the browser history restores it: going back undoes
+ * a filter change or a view change, going forward redoes it, and a URL without a
+ * query shows the unfiltered view. The query stores only ids; the given options
+ * resolve them to the entries for display and matching. A URL always names the
+ * library it belongs to, so its ids can never be read against another library.
+ */
+export function useSongFilters(options: () => FilterOptions) {
+	const route = useRoute()
+	const router = useRouter()
+
+	/** The ids one filter parameter selects, e.g. "composers=3,7" or repeated params. */
+	function idsOf(entityType: EntityType): number[] {
+		const raw = route.query[entityType]
+		const values = (Array.isArray(raw) ? raw : [raw]).filter(value => value !== null && value !== undefined)
+		const ids = values
+			.flatMap(value => String(value).split(','))
+			.map(Number)
+			.filter(id => Number.isInteger(id) && id > 0)
+		return [...new Set(ids)]
+	}
+
+	/** The entries behind the ids of one filter parameter, in the order of the URL. */
+	function selectedOf(entityType: EntityType): FilterEntity[] {
+		const entries = options()[entityType] as FilterEntity[]
+		return idsOf(entityType).map(id => entries.find(entry => entry.id === id) ?? { id } as FilterEntity)
+	}
+
+	/** Replace one filter parameter; dropping every id removes it from the URL. */
+	function selectIds(entityType: EntityType, ids: number[]): void {
+		const query: LocationQueryRaw = { ...route.query }
+		if (ids.length === 0) {
+			delete query[entityType]
+		} else {
+			query[entityType] = ids.join(',')
+		}
+		router.push({ query })
+	}
+
+	const hasActiveFilters = computed(() => FILTER_TYPES.some(entityType => idsOf(entityType).length > 0))
 
 	/** Whether the song carries every active filter selection. */
 	function songMatchesFilters(song: Song): boolean {
-		const composerIds = new Set(selectedComposers.value.map(composer => composer.id))
-		const bookIds = new Set(selectedBooks.value.map(book => book.id))
-		const collectionIds = new Set(selectedCollections.value.map(collection => collection.id))
-		const artistIds = new Set(selectedArtists.value.map(artist => artist.id))
+		const composerIds = new Set(idsOf('composers'))
+		const bookIds = new Set(idsOf('books'))
+		const collectionIds = new Set(idsOf('collections'))
+		const artistIds = new Set(idsOf('artists'))
 
 		if (composerIds.size && !(song.composers?.some(composer => composerIds.has(composer.id)))) return false
 		if (bookIds.size && !(song.books?.some(book => bookIds.has(book.id)))) return false
@@ -66,23 +74,31 @@ export function useSongFilters(libraryId: () => number) {
 		return songs.filter(songMatchesFilters)
 	}
 
-	/**
-	 * Make one entry the only filter selection. Picking a composer, artist, book or
-	 * collection in its view shows exactly its songs: the songs view opens with this
-	 * one filter set, and every other selection is dropped.
-	 */
-	function filterTo(entityType: EntityType, entity: FilterEntity): void {
-		clearFilters()
-		if (entityType === 'composers') {
-			selectedComposers.value = [entity as Composer]
-		} else if (entityType === 'artists') {
-			selectedArtists.value = [entity as Artist]
-		} else if (entityType === 'books') {
-			selectedBooks.value = [entity as Book]
-		} else {
-			selectedCollections.value = [entity as Collection]
+	/** Drop every selection in one history entry, leaving the unfiltered view. */
+	function clearFilters(): void {
+		const query: LocationQueryRaw = { ...route.query }
+		for (const entityType of FILTER_TYPES) {
+			delete query[entityType]
 		}
+		router.push({ query })
 	}
+
+	const selectedComposers = computed({
+		get: () => selectedOf('composers') as Composer[],
+		set: (value: Composer[]) => selectIds('composers', value.map(entry => entry.id)),
+	})
+	const selectedBooks = computed({
+		get: () => selectedOf('books') as Book[],
+		set: (value: Book[]) => selectIds('books', value.map(entry => entry.id)),
+	})
+	const selectedCollections = computed({
+		get: () => selectedOf('collections') as Collection[],
+		set: (value: Collection[]) => selectIds('collections', value.map(entry => entry.id)),
+	})
+	const selectedArtists = computed({
+		get: () => selectedOf('artists') as Artist[],
+		set: (value: Artist[]) => selectIds('artists', value.map(entry => entry.id)),
+	})
 
 	return {
 		selectedComposers,
@@ -91,7 +107,6 @@ export function useSongFilters(libraryId: () => number) {
 		selectedArtists,
 		hasActiveFilters,
 		filterSongs,
-		filterTo,
 		clearFilters,
 	}
 }

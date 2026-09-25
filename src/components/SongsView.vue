@@ -8,7 +8,8 @@
       :composers="composers"
       :books="books"
       :collections="collections"
-      :artists="artists"/>
+      :artists="artists"
+      @clear="clearFilters"/>
     </div>
     <div :class="$style.listColumn">
       <NcButton
@@ -80,9 +81,10 @@ const books = ref<Book[]>([]);
 const collections = ref<Collection[]>([]);
 const artists = ref<Artist[]>([]);
 
-// The filter bar is a shared module: every view shows the same selections.
-const { selectedComposers, selectedBooks, selectedCollections, selectedArtists, filterSongs } =
-  useSongFilters(() => props.selectedLibrary);
+// The filter bar reads and writes its selections in the URL query, so the browser
+// history restores them when going back or forward.
+const { selectedComposers, selectedBooks, selectedCollections, selectedArtists, filterSongs, clearFilters } =
+  useSongFilters(() => ({ composers: composers.value, books: books.value, collections: collections.value, artists: artists.value }));
 
 const selectedSong = ref<Song | null>(null);
 const fileError = ref('');

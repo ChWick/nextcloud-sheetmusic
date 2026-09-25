@@ -18,7 +18,6 @@ import NcDialog from '@nextcloud/vue/components/NcDialog'
 import SongsView from './components/SongsView.vue'
 import FilesView from './components/FilesView.vue'
 import EntitiesView from './components/EntitiesView.vue'
-import { useSongFilters } from './composables/useSongFilters'
 
 /** Views of a library: the song view, one view per song filter, and the files view. */
 type ViewName = 'songs' | 'files' | EntityType
@@ -43,9 +42,6 @@ const selectedLibraryPath = computed(
 /*** Router ***/
 const router = useRouter()
 const route = useRoute()
-
-// Choosing a view in the navigation starts it without any filter selections.
-const { clearFilters } = useSongFilters(() => selectedLibrary.value)
 
 /** Navigation helpers **/
 function navigateToLibrary(library: string | number) {
@@ -201,13 +197,13 @@ async function deleteLibrary() {
         </select>
       </NcAppNavigationItem>
 
-      <!-- view toggle – only for the selected library; choosing one resets the filters -->
+      <!-- view toggle – only for the selected library; choosing one starts without filters -->
       <template v-if="selectedLibrary >= 0">
-        <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Songs')" :active="selectedView === 'songs'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'songs' } }" @click="clearFilters" />
-        <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Composers')" :active="selectedView === 'composers'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'composers' } }" @click="clearFilters" />
-        <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Artists')" :active="selectedView === 'artists'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'artists' } }" @click="clearFilters" />
-        <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Books')" :active="selectedView === 'books'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'books' } }" @click="clearFilters" />
-        <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Collections')" :active="selectedView === 'collections'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'collections' } }" @click="clearFilters" />
+        <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Songs')" :active="selectedView === 'songs'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'songs' } }" />
+        <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Composers')" :active="selectedView === 'composers'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'composers' } }" />
+        <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Artists')" :active="selectedView === 'artists'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'artists' } }" />
+        <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Books')" :active="selectedView === 'books'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'books' } }" />
+        <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Collections')" :active="selectedView === 'collections'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'collections' } }" />
         <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Files')" :active="selectedView === 'files'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'files' } }" />
 
         <div :class="$style.deleteLibraryArea">

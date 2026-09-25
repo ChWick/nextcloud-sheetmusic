@@ -46,10 +46,8 @@ const hasActiveFilters = computed(() => {
 })
 
 function clearAllFilters() {
-	emit('update:selectedComposers', [])
-	emit('update:selectedBooks', [])
-	emit('update:selectedCollections', [])
-	emit('update:selectedArtists', [])
+	// One atomic action: the views drop every selection in a single URL change, so
+	// the browser history gets one entry instead of one per filter.
 	emit('clear')
 }
 </script>

@@ -9,7 +9,8 @@
         :composers="composers"
         :books="books"
         :collections="collections"
-        :artists="artists" />
+        :artists="artists"
+        @clear="clearFilters" />
     </div>
     <div :class="$style.listColumn">
       <NcButton
@@ -160,9 +161,10 @@ const newEntityName = ref('')
 const createError = ref('')
 const deleteError = ref('')
 
-// The filter bar is a shared module: every view shows the same selections.
-const { selectedComposers, selectedBooks, selectedCollections, selectedArtists, hasActiveFilters, filterSongs, filterTo } =
-  useSongFilters(() => props.selectedLibrary)
+// The filter bar reads and writes its selections in the URL query, so the browser
+// history restores them when going back or forward.
+const { selectedComposers, selectedBooks, selectedCollections, selectedArtists, hasActiveFilters, filterSongs, clearFilters } =
+  useSongFilters(() => ({ composers: composers.value, books: books.value, collections: collections.value, artists: artists.value }))
 
 /** Books carry a title, every other entity kind a name. */
 function entityLabel(entity: FilterEntity): string {
@@ -225,12 +227,15 @@ watch(
 )
 
 /**
- * Picking an entry shows its songs: it becomes the only filter selection and the
- * songs view opens, where its songs are listed with everything a song offers.
+ * Picking an entry shows its songs: the songs view opens with this entry as the
+ * only filter, in one history entry so going back returns to this view again.
  */
 function showSongsOf(entity: FilterEntity) {
-  filterTo(props.entityType, entity)
-  router.push({ name: 'LibraryView', params: { library: props.selectedLibrary, view: 'songs' } })
+  router.push({
+    name: 'LibraryView',
+    params: { library: props.selectedLibrary, view: 'songs' },
+    query: { [props.entityType]: String(entity.id) },
+  })
 }
 
 /*** Creating an entity ***/

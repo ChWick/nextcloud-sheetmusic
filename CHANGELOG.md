@@ -41,3 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the filter set to exactly that entry, so its songs are listed right away with
   everything a song offers. The entry itself is deleted with the button in its row,
   which keeps the songs and only removes the entry from their field.
+- The filter selections are part of the URL ("…?composers=3&books=7"), so the browser
+  history restores them: going back undoes a filter change or a view change and going
+  forward redoes it. A URL can also be shared or bookmarked to open exactly the view it
+  shows, filters included.
