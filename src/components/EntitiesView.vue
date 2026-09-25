@@ -19,13 +19,20 @@
         {{ t('mobilesheetsmanager', 'New {entity}', { entity: config.singular }) }}
       </NcButton>
       <ul :class="$style.entityList">
-        <li v-for="entity in visibleEntities" :key="entity.id">
+        <li v-for="entity in visibleEntities" :key="entity.id" :class="$style.entityRow">
           <button type="button"
                   :class="$style.entityButton"
-                  :aria-pressed="selectedEntity?.id === entity.id"
-                  @click="selectEntity(entity)">
+                  :title="t('mobilesheetsmanager', 'Show the songs with this {entity}', { entity: config.singular })"
+                  @click="showSongsOf(entity)">
             {{ entityLabel(entity) }}
           </button>
+          <NcButton variant="error"
+                    size="small"
+                    :class="$style.deleteButton"
+                    :aria-label="t('mobilesheetsmanager', 'Delete {entity}', { entity: config.singular })"
+                    @click="openDeleteDialog(entity)">
+            {{ t('mobilesheetsmanager', 'Delete') }}
+          </NcButton>
         </li>
         <li v-if="!isLoading && !fileError && visibleEntities.length === 0">
           {{ hasActiveFilters && entities.length > 0
@@ -33,27 +40,6 @@
             : t('mobilesheetsmanager', 'No {entities} in this library yet.', { entities: config.plural.toLowerCase() }) }}
         </li>
       </ul>
-    </div>
-
-    <div :class="$style.detailArea">
-      <template v-if="selectedEntity">
-        <h2 :class="$style.detailTitle">{{ entityLabel(selectedEntity) }}</h2>
-        <h3 :class="$style.detailSubtitle">
-          {{ t('mobilesheetsmanager', 'Songs with this {entity}', { entity: config.singular }) }}
-        </h3>
-        <ul :class="$style.songList">
-          <li v-for="song in songsUsingEntity" :key="song.id">{{ song.title }}</li>
-          <li v-if="songsUsingEntity.length === 0">
-            {{ t('mobilesheetsmanager', 'No songs use this {entity}.', { entity: config.singular }) }}
-          </li>
-        </ul>
-        <NcButton variant="error" :class="$style.deleteButton" @click="openDeleteDialog">
-          {{ t('mobilesheetsmanager', 'Delete {entity}', { entity: config.singular }) }}
-        </NcButton>
-      </template>
-      <p v-else-if="!isLoading && !fileError">
-        {{ t('mobilesheetsmanager', 'Select a {entity} to see its songs.', { entity: config.singular }) }}
-      </p>
       <p v-if="fileError" :class="$style.error" role="alert">{{ fileError }}</p>
     </div>
 
@@ -79,7 +65,7 @@
     <NcDialog v-if="isDeleteDialogOpen"
               :name="t('mobilesheetsmanager', 'Delete {entity}', { entity: config.singular })"
               @close="closeDeleteDialog">
-      <p>{{ t('mobilesheetsmanager', 'Delete "{name}"?', { name: selectedEntity ? entityLabel(selectedEntity) : '' }) }}</p>
+      <p>{{ t('mobilesheetsmanager', 'Delete "{name}"?', { name: entityToDelete ? entityLabel(entityToDelete) : '' }) }}</p>
       <p>{{ t('mobilesheetsmanager', 'All songs stay in the library. Only the {entity} entry is removed from them.', { entity: config.singular }) }}</p>
       <p v-if="deleteError" :class="$style.error" role="alert">{{ deleteError }}</p>
       <div :class="$style.dialogActions">
@@ -99,6 +85,7 @@ import { translate as t } from '@nextcloud/l10n'
 import axios from '@nextcloud/axios'
 import { generateOcsUrl } from '@nextcloud/router'
 import { computed, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
@@ -110,6 +97,8 @@ const props = defineProps<{
   /** Which of the song filters this view manages: composers, artists, books or collections. */
   entityType: EntityType
 }>()
+
+const router = useRouter()
 
 /** Everything this shared view needs to know about the entity kind it shows. */
 interface EntityConfig {
@@ -159,7 +148,8 @@ const composers = ref<Composer[]>([])
 const books = ref<Book[]>([])
 const collections = ref<Collection[]>([])
 const artists = ref<Artist[]>([])
-const selectedEntity = ref<FilterEntity | null>(null)
+/** Entry whose delete dialog is open. */
+const entityToDelete = ref<FilterEntity | null>(null)
 const fileError = ref('')
 const isLoading = ref(false)
 const isCreateDialogOpen = ref(false)
@@ -171,7 +161,7 @@ const createError = ref('')
 const deleteError = ref('')
 
 // The filter bar is a shared module: every view shows the same selections.
-const { selectedComposers, selectedBooks, selectedCollections, selectedArtists, hasActiveFilters, filterSongs } =
+const { selectedComposers, selectedBooks, selectedCollections, selectedArtists, hasActiveFilters, filterSongs, filterTo } =
   useSongFilters(() => props.selectedLibrary)
 
 /** Books carry a title, every other entity kind a name. */
@@ -201,15 +191,6 @@ const visibleEntities = computed(() => {
   return entities.value.filter(entity => usedIds.has(entity.id))
 })
 
-/** Songs that carry the selected entity in the field this view manages. */
-const songsUsingEntity = computed(() => {
-  const entity = selectedEntity.value
-  if (!entity) return []
-  return visibleSongs.value.filter(song =>
-    entitiesOfSong(song).some(candidate => candidate.id === entity.id),
-  )
-})
-
 function handleLibraryDataUpdate(data: LibraryData) {
   songs.value = data.songs ?? []
   entities.value = data[props.entityType] ?? []
@@ -217,10 +198,6 @@ function handleLibraryDataUpdate(data: LibraryData) {
   books.value = data.books ?? []
   collections.value = data.collections ?? []
   artists.value = data.artists ?? []
-  // Keep the selection on the refreshed entry; it is gone after a deletion.
-  selectedEntity.value = selectedEntity.value
-    ? entities.value.find(entity => entity.id === selectedEntity.value?.id) ?? null
-    : null
 }
 
 async function loadLibraryData(id: number) {
@@ -240,22 +217,20 @@ async function loadLibraryData(id: number) {
 watch(
   [() => props.selectedLibrary, () => props.entityType],
   ([library]) => {
-    selectedEntity.value = null
+    // An open delete dialog belongs to the previous library or entity kind.
+    closeDeleteDialog()
     if (library) loadLibraryData(library)
   },
   { immediate: true },
 )
 
-// A filter can hide the selected entry: showing the songs of an entry that is not
-// in the list would be confusing, so the selection goes with it.
-watch(visibleEntities, visible => {
-  if (selectedEntity.value && !visible.some(entity => entity.id === selectedEntity.value?.id)) {
-    selectedEntity.value = null
-  }
-})
-
-function selectEntity(entity: FilterEntity) {
-  selectedEntity.value = entity
+/**
+ * Picking an entry shows its songs: it becomes the only filter selection and the
+ * songs view opens, where its songs are listed with everything a song offers.
+ */
+function showSongsOf(entity: FilterEntity) {
+  filterTo(props.entityType, entity)
+  router.push({ name: 'LibraryView', params: { library: props.selectedLibrary, view: 'songs' } })
 }
 
 /*** Creating an entity ***/
@@ -289,21 +264,23 @@ async function createEntity() {
 }
 
 /*** Deleting an entity ***/
-function openDeleteDialog() {
-  if (!selectedEntity.value) return
+function openDeleteDialog(entity: FilterEntity) {
+  entityToDelete.value = entity
   deleteError.value = ''
   isDeleteDialogOpen.value = true
 }
 function closeDeleteDialog() {
   isDeleteDialogOpen.value = false
   deleteError.value = ''
+  entityToDelete.value = null
 }
 /**
- * Remove the selected entry. The songs of the library stay and only lose this
- * entry in their field, which the refreshed library data of the response shows.
+ * Remove the entry the dialog was opened for. The songs of the library stay and
+ * only lose this entry in their field, which the refreshed library data of the
+ * response shows.
  */
 async function deleteEntity() {
-  const entity = selectedEntity.value
+  const entity = entityToDelete.value
   if (!entity || isDeleting.value) return
 
   isDeleting.value = true
@@ -314,7 +291,6 @@ async function deleteEntity() {
       { params: { libraryId: props.selectedLibrary } },
     )
     closeDeleteDialog()
-    selectedEntity.value = null
     handleLibraryDataUpdate(response.data.ocs.data as LibraryData)
   } catch {
     deleteError.value = t('mobilesheetsmanager', 'Could not delete the {entity}.', { entity: config.value.singular })
@@ -326,26 +302,26 @@ async function deleteEntity() {
 
 <style module>
 .entitiesArea {
-  display: grid;
-  grid-template-columns: minmax(220px, 320px) minmax(0, 1fr);
-  grid-template-rows: auto 1fr;
-  gap: 24px;
-  align-items: start;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 .filterBarWrapper {
-  grid-column: 1 / -1;
-  margin-bottom: 12px;
+  margin-bottom: 4px;
 }
 .entityList {
   margin: 0;
   padding: 0;
   list-style: none;
 }
-.entityList li {
+.entityRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   border-bottom: 1px solid var(--color-border);
 }
 .entityButton {
-  width: 100%;
+  flex: 1;
   padding: 10px 0;
   border: 0;
   background: transparent;
@@ -354,7 +330,7 @@ async function deleteEntity() {
   text-align: start;
   cursor: pointer;
 }
-.entityButton[aria-pressed="true"] {
+.entityButton:hover {
   background: var(--color-background-hover);
 }
 .listColumn {
@@ -362,34 +338,13 @@ async function deleteEntity() {
   flex-direction: column;
   gap: 8px;
   min-width: 0;
-  overflow-y: auto;
 }
 .newButton {
   width: 100%;
   justify-content: center;
 }
-.detailArea {
-  min-width: 0;
-  overflow-y: auto;
-}
-.detailTitle {
-  margin-top: 0;
-}
-.detailSubtitle {
-  margin-bottom: 8px;
-  color: var(--color-text-maxcontrast);
-}
-.songList {
-  margin: 0 0 16px;
-  padding: 0;
-  list-style: none;
-}
-.songList li {
-  padding: 6px 0;
-  border-bottom: 1px solid var(--color-border);
-}
 .deleteButton {
-  margin-top: 8px;
+  flex-shrink: 0;
 }
 .dialogActions {
   display: flex;

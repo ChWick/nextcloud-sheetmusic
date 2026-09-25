@@ -37,3 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   entries - an entry without a matching song disappears while filters are active - and
   the songs shown for the selected entry. The selections are shared by all views and are
   dropped when the library changes.
+- Picking a composer, artist, book or collection in its view opens the songs view with
+  the filter set to exactly that entry, so its songs are listed right away with
+  everything a song offers. The entry itself is deleted with the button in its row,
+  which keeps the songs and only removes the entry from their field.

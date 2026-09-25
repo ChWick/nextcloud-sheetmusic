@@ -1,4 +1,4 @@
-import type { Artist, Book, Collection, Composer, Song } from '../types/song'
+import type { Artist, Book, Collection, Composer, EntityType, FilterEntity, Song } from '../types/song'
 
 import { computed, ref, watch } from 'vue'
 
@@ -65,6 +65,24 @@ export function useSongFilters(libraryId: () => number) {
 		return songs.filter(songMatchesFilters)
 	}
 
+	/**
+	 * Make one entry the only filter selection. Picking a composer, artist, book or
+	 * collection in its view shows exactly its songs: the songs view opens with this
+	 * one filter set, and every other selection is dropped.
+	 */
+	function filterTo(entityType: EntityType, entity: FilterEntity): void {
+		clearFilters()
+		if (entityType === 'composers') {
+			selectedComposers.value = [entity as Composer]
+		} else if (entityType === 'artists') {
+			selectedArtists.value = [entity as Artist]
+		} else if (entityType === 'books') {
+			selectedBooks.value = [entity as Book]
+		} else {
+			selectedCollections.value = [entity as Collection]
+		}
+	}
+
 	return {
 		selectedComposers,
 		selectedBooks,
@@ -72,6 +90,7 @@ export function useSongFilters(libraryId: () => number) {
 		selectedArtists,
 		hasActiveFilters,
 		filterSongs,
+		filterTo,
 		clearFilters,
 	}
 }
