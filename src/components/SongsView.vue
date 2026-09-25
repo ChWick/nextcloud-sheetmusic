@@ -5,23 +5,36 @@
     :filter-bar-visible="songIdInUrl === null ? filterBarVisible : undefined"
     @create="startNewSong"
     @toggle-filters="toggleFilterBar" />
-  <!-- The URL opens one song full screen ("?song=12"); without it the list is shown. -->
+  <!-- The URL opens one song full screen ("?song=12"), for viewing it or - with the
+       edit flag - for editing it; without a song the list is shown. -->
   <div v-if="songIdInUrl !== null" :class="$style.fullscreenArea">
-    <div :class="$style.fullscreenHeader">
-      <NcButton @click="goBackToSongs">
-        {{ t('mobilesheetsmanager', 'Back to songs') }}
-      </NcButton>
-    </div>
-    <SongViewer
-      :song="openSong"
-      :library-id="selectedLibrary"
-      :composers="composers"
-      :books="books"
-      :collections="collections"
-      :artists="artists"
-      @saved="handleSaved"
-      @updated="handleLibraryDataUpdate"
-      @deleted="handleDeleted" />
+    <SongEditor v-if="isEditInUrl"
+                :song="openSong"
+                :library-id="selectedLibrary"
+                :composers="composers"
+                :books="books"
+                :collections="collections"
+                :artists="artists"
+                @saved="handleSaved"
+                @updated="handleLibraryDataUpdate"
+                @cancel="goBackToSongs" />
+    <template v-else>
+      <div :class="$style.fullscreenHeader">
+        <NcButton @click="goBackToSongs">
+          {{ t('mobilesheetsmanager', 'Back to songs') }}
+        </NcButton>
+      </div>
+      <SongViewer
+        :song="openSong"
+        :library-id="selectedLibrary"
+        :composers="composers"
+        :books="books"
+        :collections="collections"
+        :artists="artists"
+        @saved="handleSaved"
+        @updated="handleLibraryDataUpdate"
+        @deleted="handleDeleted" />
+    </template>
   </div>
   <div v-else :class="$style.songArea">
     <div v-if="filterBarVisible" :class="$style.filterBarWrapper"><SongFilterBar
@@ -35,44 +48,37 @@
       :artists="artists"
       @clear="clearFilters"/>
     </div>
-    <div :class="$style.listColumn">
-      <ul :class="$style.songList">
-        <li v-for="song in filteredSongs" :key="song.id">
-          <button type="button"
-                  :class="$style.songButton"
-                  @click="openSongView(song)">
-            {{ song.title }}
-          </button>
-        </li>
-        <li v-if="!isLoadingSongs && !fileError && songs.length === 0">
-          {{ t('mobilesheetsmanager', 'No songs found in this library.') }}
-        </li>
-        <li v-else-if="!isLoadingSongs && !fileError && songs.length > 0 && filteredSongs.length === 0">
-          {{ t('mobilesheetsmanager', 'No songs match the selected filters.') }}
-        </li>
-      </ul>
-    </div>
-    <div :class="$style.viewerArea">
-      <SongEditor v-if="isCreatingSong"
-                  :song="null"
-                  :library-id="selectedLibrary"
-                  :composers="composers"
-                  :books="books"
-                  :collections="collections"
-                  :artists="artists"
-                  @saved="handleSaved"
-                  @cancel="isCreatingSong = false" />
-      <SongViewer v-else
-                  :song="null"
-                  :library-id="selectedLibrary"
-                  :composers="composers"
-                  :books="books"
-                  :collections="collections"
-                  :artists="artists"
-                  @saved="handleSaved"
-                  @updated="handleLibraryDataUpdate"
-                  @deleted="handleDeleted" />
-    </div>
+    <SongEditor v-if="isCreatingSong"
+                :song="null"
+                :library-id="selectedLibrary"
+                :composers="composers"
+                :books="books"
+                :collections="collections"
+                :artists="artists"
+                @saved="handleSaved"
+                @cancel="isCreatingSong = false" />
+    <ul v-else :class="$style.songList">
+      <li v-for="song in filteredSongs" :key="song.id" :class="$style.songRow">
+        <button type="button"
+                :class="$style.songButton"
+                :title="t('mobilesheetsmanager', 'View this song')"
+                @click="openSongView(song)">
+          {{ song.title }}
+        </button>
+        <NcButton size="small" @click="openSongEdit(song)">
+          {{ t('mobilesheetsmanager', 'Edit') }}
+        </NcButton>
+        <NcButton size="small" @click="openSongView(song)">
+          {{ t('mobilesheetsmanager', 'View') }}
+        </NcButton>
+      </li>
+      <li v-if="!isLoadingSongs && !fileError && songs.length === 0">
+        {{ t('mobilesheetsmanager', 'No songs found in this library.') }}
+      </li>
+      <li v-else-if="!isLoadingSongs && !fileError && songs.length > 0 && filteredSongs.length === 0">
+        {{ t('mobilesheetsmanager', 'No songs match the selected filters.') }}
+      </li>
+    </ul>
   </div>
 </template>
 
@@ -116,6 +122,9 @@ const songIdInUrl = computed(() => {
 /** The open song, resolved against the loaded library data. */
 const openSong = computed(() => songs.value.find(song => song.id === songIdInUrl.value) ?? null);
 
+/** The URL asks for the editor of the open song ("?song=12&edit=1"). */
+const isEditInUrl = computed(() => route.query.edit !== undefined && route.query.edit !== null);
+
 // The filter bar reads and writes its selections in the URL query, so the browser
 // history restores them when going back or forward.
 const { selectedComposers, selectedBooks, selectedCollections, selectedArtists, filterSongs, clearFilters, filterBarVisible, toggleFilterBar } =
@@ -156,18 +165,26 @@ watch(() => props.selectedLibrary, (newLib) => {
 }, { immediate: true });
 
 /**
- * Open a song full screen. It becomes one history entry - the filters of the list
+ * View a song full screen. It becomes one history entry - the filters of the list
  * stay in the URL - so the browser back button returns to the song list as well.
  */
 function openSongView(song: Song) {
   // Opening a song leaves the editor for a new song behind, like pressing Cancel.
   isCreatingSong.value = false;
-  router.push({ query: { ...route.query, song: String(song.id) } });
+  router.push({ query: { ...queryWithoutOpenSong(), song: String(song.id) } });
 }
 
-function queryWithoutSong() {
+/** Edit a song right away: the URL opens its editor instead of the song view. */
+function openSongEdit(song: Song) {
+  isCreatingSong.value = false;
+  router.push({ query: { ...queryWithoutOpenSong(), song: String(song.id), edit: '1' } });
+}
+
+/** The query without the open song and its edit flag; the filters stay. */
+function queryWithoutOpenSong() {
   const query = { ...route.query };
   delete query.song;
+  delete query.edit;
   return query;
 }
 
@@ -177,7 +194,7 @@ function goBackToSongs() {
     router.back();
   } else {
     // A shared URL opened the song directly, so the list is entered anew.
-    router.push({ query: queryWithoutSong() });
+    router.push({ query: queryWithoutOpenSong() });
   }
 }
 
@@ -186,19 +203,26 @@ function startNewSong() {
   isCreatingSong.value = true;
   // The editor is part of the list view; leave an open song for it.
   if (songIdInUrl.value !== null) {
-    router.push({ query: queryWithoutSong() });
+    router.push({ query: queryWithoutOpenSong() });
   }
 }
 
-/** The editor saved: refresh the library data and open the song that was saved. */
+/** The editor saved: refresh the library data and show the song that was saved. */
 function handleSaved(data: LibraryData, songId?: number) {
   isCreatingSong.value = false;
   handleLibraryDataUpdate(data);
 
   if (songId === undefined) return;
   const saved = songs.value.find(song => song.id === songId);
-  // Saving a song that is already open keeps its URL; the push is a no-op then.
-  if (saved) openSongView(saved);
+  if (!saved) return;
+  if (songIdInUrl.value === saved.id) {
+    // Saving the open song keeps it open and only drops the edit flag. Replacing
+    // keeps the history clean: going back should leave the song, not re-open the
+    // editor.
+    router.replace({ query: { ...queryWithoutOpenSong(), song: String(saved.id) } });
+  } else {
+    openSongView(saved);
+  }
 }
 
 /**
@@ -219,11 +243,9 @@ async function handleDeleted(data: LibraryData | undefined, songId: number) {
 <style module>
 .songArea {
   margin: 16px;
-  display: grid;
-  grid-template-columns: minmax(220px, 320px) minmax(0, 1fr);
-  grid-template-rows: auto 1fr;
-  gap: 24px;
-  align-items: start;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 .songList {
   margin: 0;
@@ -233,8 +255,14 @@ async function handleDeleted(data: LibraryData | undefined, songId: number) {
 .songList li {
   border-bottom: 1px solid var(--color-border);
 }
+.songRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .songButton {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   padding: 10px 0;
   border: 0;
   background: transparent;
@@ -247,23 +275,7 @@ async function handleDeleted(data: LibraryData | undefined, songId: number) {
   background: var(--color-background-hover);
 }
 .filterBarWrapper {
-  grid-column: 1 / -1;
   margin-bottom: 12px;
-}
-
-.viewerArea {
-  grid-column: 2;
-  grid-row: 2;
-}
-
-.listColumn {
-  grid-column: 1;
-  grid-row: 2;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
-  overflow-y: auto;
 }
 
 .fullscreenArea {
@@ -276,9 +288,4 @@ async function handleDeleted(data: LibraryData | undefined, songId: number) {
 .fullscreenHeader {
   display: flex;
 }
-
-.viewerArea {
-  overflow-y: auto;
-}
-
 </style>

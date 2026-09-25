@@ -330,9 +330,6 @@ watch(isEditing, (editing) => {
 				:class="$style.pdfViewer"
 				:aria-label="song?.title" />
 
-			<div v-if="!song" :class="$style.emptyState">
-				<p>{{ t('mobilesheetsmanager', 'Select a song to view.') }}</p>
-			</div>
 		</template>
 
 		<NcDialog
@@ -439,12 +436,6 @@ watch(isEditing, (editing) => {
 	height: auto;
 	margin: 0 auto 16px;
 	background: white;
-}
-
-.emptyState {
-	padding: 32px 16px;
-	text-align: center;
-	color: var(--color-text-maxcontrast);
 }
 
 .error {
