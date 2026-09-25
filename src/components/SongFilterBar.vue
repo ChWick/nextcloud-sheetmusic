@@ -130,6 +130,8 @@ function clearAllFilters() {
 	flex-direction: row;
 	/* Filters wrap onto more rows on narrow screens instead of being squeezed. */
 	flex-wrap: wrap;
+	/* The bar is its own breakpoint: it reacts to its width, not the window's. */
+	container-type: inline-size;
 	gap: 12px 16px;
 	align-items: flex-end;
 	padding: 12px 16px;
@@ -164,5 +166,15 @@ function clearAllFilters() {
 	align-items: center;
 	flex-shrink: 0;
 	padding-bottom: 2px;
+}
+
+/* All four filters and the clear action fit on one row only beyond ~1100px. Below
+   that the filters wrap, and the action would end up squeezed next to the last
+   filter, so it gets a row of its own. */
+@container (max-width: 1100px) {
+	.actions {
+		flex-basis: 100%;
+		justify-content: flex-end;
+	}
 }
 </style>
