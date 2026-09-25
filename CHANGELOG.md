@@ -49,3 +49,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   viewer full screen, with a back button that returns to the song list. The browser back
   button behaves the same, and the filters of the list stay in the URL while a song is
   open, so the list comes back exactly as it was.
+- The song filter bar is responsive: its filters wrap onto more rows when the window
+  gets narrow, so every filter keeps a usable width down to small screens.

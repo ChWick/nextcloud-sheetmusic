@@ -128,7 +128,9 @@ function clearAllFilters() {
 .filterBar {
 	display: flex;
 	flex-direction: row;
-	gap: 16px;
+	/* Filters wrap onto more rows on narrow screens instead of being squeezed. */
+	flex-wrap: wrap;
+	gap: 12px 16px;
 	align-items: flex-end;
 	padding: 12px 16px;
 	margin-bottom: 16px;
@@ -141,7 +143,9 @@ function clearAllFilters() {
 	display: flex;
 	flex-direction: column;
 	gap: 4px;
-	flex: 1 1 0;
+	/* Each filter wants about 220px; it wraps to the next row when it does not get
+	   it and only shrinks below that when it is alone on a very narrow row. */
+	flex: 1 1 220px;
 	min-width: 0;
 }
 
