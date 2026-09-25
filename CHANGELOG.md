@@ -33,10 +33,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   entry keeps every song and only removes the entry from the songs' composers, artists,
   books or collections.
 - The song filter bar is a module of its own and is shown in the songs view as well as
-  in the composer, artist, book and collection views, where it filters both the listed
-  entries - an entry without a matching song disappears while filters are active - and
-  the songs shown for the selected entry. The selections are shared by all views and are
-  dropped when the library changes.
+  in the composer, artist, book and collection views, where it filters the listed
+  entries - an entry without a matching song disappears while filters are active. The
+  selections are dropped when the library changes and when a view is chosen in the
+  navigation, so every view starts without selections.
 - Picking a composer, artist, book or collection in its view opens the songs view with
   the filter set to exactly that entry, so its songs are listed right away with
   everything a song offers. The entry itself is deleted with the button in its row,

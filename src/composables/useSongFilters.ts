@@ -5,10 +5,11 @@ import { computed, ref, watch } from 'vue'
 /**
  * The state of the song filter bar, shared by every view that embeds it.
  *
- * The selections are module state on purpose: the filter bar is one bar that each
- * view shows, so filters set in one view are still active in the next. They name
- * entries of one specific library - an id means something else in another library -
- * and are therefore dropped when the library changes.
+ * The selections are module state so a pick in one view can hand its filter over to
+ * the next: picking a book opens the songs view with that book as the only filter.
+ * Choosing a view in the navigation instead starts it without any selections. The
+ * selections name entries of one specific library - an id means something else in
+ * another library - and are therefore dropped when the library changes.
  */
 const selectedComposers = ref<Composer[]>([])
 const selectedBooks = ref<Book[]>([])
