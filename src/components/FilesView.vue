@@ -1,4 +1,5 @@
 <template>
+  <ViewHeader :title="t('mobilesheetsmanager', 'Files')" />
   <div :class="$style.filesArea">
     {{ t('mobilesheetsmanager', 'Files view placeholder') }}
     <button type="button" @click="regenerateFilePaths">{{ t('mobilesheetsmanager', 'Regenerate File Paths') }}</button>
@@ -9,6 +10,7 @@
 import { t } from '@nextcloud/l10n';
 import axios from '@nextcloud/axios';
 import { generateOcsUrl } from '@nextcloud/router';
+import ViewHeader from './ViewHeader.vue';
 
 const props = defineProps<{
   selectedLibrary: number;
@@ -33,6 +35,6 @@ async function regenerateFilePaths() {
   grid-template-columns: minmax(220px, 320px) minmax(0, 1fr);
   gap: 24px;
   align-items: start;
-  padding: 16px;
+  margin: 16px;
 }
 </style>

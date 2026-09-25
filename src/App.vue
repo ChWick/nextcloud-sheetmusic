@@ -224,7 +224,7 @@ async function deleteLibrary() {
     </NcAppNavigation>
 
     <!-- Main content -->
-    <NcAppContent :class="$style.content">
+    <NcAppContent>
       <template v-if="selectedLibrary >= 0">
         <SongsView v-if="selectedView === 'songs'" :selectedLibrary="selectedLibrary" />
         <FilesView v-else-if="selectedView === 'files'" :selectedLibrary="selectedLibrary" />
@@ -234,7 +234,7 @@ async function deleteLibrary() {
                       :entity-type="selectedView" />
       </template>
 
-      <p v-if="fileError" :class="$style.error" role="alert">{{ fileError }}</p>
+      <p v-if="fileError" :class="$style.contentError" role="alert">{{ fileError }}</p>
     </NcAppContent>
 
     <NcDialog v-if="isDialogOpen"
@@ -275,7 +275,7 @@ async function deleteLibrary() {
 .libraryButton { width: 100%; padding: 8px 16px; border: 0; background: transparent; color: inherit; font: inherit; text-align: start; cursor: pointer; }
 .libraryButton[aria-pressed='true'] { background: var(--color-background-hover); }
 .librarySelect { width: 100%; padding: 8px; margin: 8px 0; }
-.content { margin: 16px; }
+.contentError { margin: 16px; color: var(--color-error); }
 .songArea { display: grid; grid-template-columns: minmax(220px, 320px) minmax(0, 1fr); gap: 24px; align-items: start; }
 .songList { margin: 0; padding: 0; list-style: none; }
 .songList li { border-bottom: 1px solid var(--color-border); }

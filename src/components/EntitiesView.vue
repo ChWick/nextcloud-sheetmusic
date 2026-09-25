@@ -1,6 +1,12 @@
 <template>
+  <ViewHeader
+    :title="config.plural"
+    :create-label="t('mobilesheetsmanager', 'New {entity}', { entity: config.singular })"
+    :filter-bar-visible="filterBarVisible"
+    @create="openCreateDialog"
+    @toggle-filters="toggleFilterBar" />
   <div :class="$style.entitiesArea">
-    <div :class="$style.filterBarWrapper">
+    <div v-if="filterBarVisible" :class="$style.filterBarWrapper">
       <SongFilterBar
         v-model:selected-composers="selectedComposers"
         v-model:selected-books="selectedBooks"
@@ -13,12 +19,6 @@
         @clear="clearFilters" />
     </div>
     <div :class="$style.listColumn">
-      <NcButton
-        variant="primary"
-        :class="$style.newButton"
-        @click="openCreateDialog">
-        {{ t('mobilesheetsmanager', 'New {entity}', { entity: config.singular }) }}
-      </NcButton>
       <ul :class="$style.entityList">
         <li v-for="entity in visibleEntities" :key="entity.id" :class="$style.entityRow">
           <button type="button"
@@ -91,6 +91,7 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import SongFilterBar from './SongFilterBar.vue'
+import ViewHeader from './ViewHeader.vue'
 import { useSongFilters } from '../composables/useSongFilters'
 
 const props = defineProps<{
@@ -163,7 +164,7 @@ const deleteError = ref('')
 
 // The filter bar reads and writes its selections in the URL query, so the browser
 // history restores them when going back or forward.
-const { selectedComposers, selectedBooks, selectedCollections, selectedArtists, hasActiveFilters, filterSongs, clearFilters } =
+const { selectedComposers, selectedBooks, selectedCollections, selectedArtists, hasActiveFilters, filterSongs, clearFilters, filterBarVisible, toggleFilterBar } =
   useSongFilters(() => ({ composers: composers.value, books: books.value, collections: collections.value, artists: artists.value }))
 
 /** Books carry a title, every other entity kind a name. */
@@ -307,6 +308,7 @@ async function deleteEntity() {
 
 <style module>
 .entitiesArea {
+  margin: 16px;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -343,10 +345,6 @@ async function deleteEntity() {
   flex-direction: column;
   gap: 8px;
   min-width: 0;
-}
-.newButton {
-  width: 100%;
-  justify-content: center;
 }
 .deleteButton {
   flex-shrink: 0;

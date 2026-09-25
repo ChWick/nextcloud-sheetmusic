@@ -52,3 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The song filter bar is responsive: its filters wrap onto more rows when the window
   gets narrow, so every filter keeps a usable width down to small screens. The clear
   action then gets a row of its own instead of ending up next to a filter.
+- Every view has a header bar at the top of the content area, like the Files app. It
+  holds the view's "New …" button and a button that shows or hides the filter bar, and
+  it takes up the strip where the button for the app navigation floats, so that button
+  no longer covers the filter bar.

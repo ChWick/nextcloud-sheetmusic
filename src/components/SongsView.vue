@@ -1,4 +1,10 @@
 <template>
+  <ViewHeader
+    :title="t('mobilesheetsmanager', 'Songs')"
+    :create-label="t('mobilesheetsmanager', 'New song')"
+    :filter-bar-visible="songIdInUrl === null ? filterBarVisible : undefined"
+    @create="startNewSong"
+    @toggle-filters="toggleFilterBar" />
   <!-- The URL opens one song full screen ("?song=12"); without it the list is shown. -->
   <div v-if="songIdInUrl !== null" :class="$style.fullscreenArea">
     <div :class="$style.fullscreenHeader">
@@ -18,7 +24,7 @@
       @deleted="handleDeleted" />
   </div>
   <div v-else :class="$style.songArea">
-    <div :class="$style.filterBarWrapper"><SongFilterBar
+    <div v-if="filterBarVisible" :class="$style.filterBarWrapper"><SongFilterBar
       v-model:selected-composers="selectedComposers"
       v-model:selected-books="selectedBooks"
       v-model:selected-collections="selectedCollections"
@@ -30,12 +36,6 @@
       @clear="clearFilters"/>
     </div>
     <div :class="$style.listColumn">
-      <NcButton
-        variant="primary"
-        :class="$style.newSongButton"
-        @click="startNewSong">
-        {{ t('mobilesheetsmanager', 'New song') }}
-      </NcButton>
       <ul :class="$style.songList">
         <li v-for="song in filteredSongs" :key="song.id">
           <button type="button"
@@ -86,6 +86,7 @@ import NcButton from '@nextcloud/vue/components/NcButton';
 import SongEditor from '../components/SongEditor.vue';
 import SongFilterBar from '../components/SongFilterBar.vue';
 import SongViewer from '../components/SongViewer.vue';
+import ViewHeader from '../components/ViewHeader.vue';
 import type { Artist, Song, Composer, Book, Collection, LibraryData } from '../types/song';
 import { useSongFilters } from '../composables/useSongFilters';
 
@@ -117,7 +118,7 @@ const openSong = computed(() => songs.value.find(song => song.id === songIdInUrl
 
 // The filter bar reads and writes its selections in the URL query, so the browser
 // history restores them when going back or forward.
-const { selectedComposers, selectedBooks, selectedCollections, selectedArtists, filterSongs, clearFilters } =
+const { selectedComposers, selectedBooks, selectedCollections, selectedArtists, filterSongs, clearFilters, filterBarVisible, toggleFilterBar } =
   useSongFilters(() => ({ composers: composers.value, books: books.value, collections: collections.value, artists: artists.value }));
 
 const fileError = ref('');
@@ -183,6 +184,10 @@ function goBackToSongs() {
 /** Open the editor for a song that does not exist yet. Cancelling leaves no trace. */
 function startNewSong() {
   isCreatingSong.value = true;
+  // The editor is part of the list view; leave an open song for it.
+  if (songIdInUrl.value !== null) {
+    router.push({ query: queryWithoutSong() });
+  }
 }
 
 /** The editor saved: refresh the library data and open the song that was saved. */
@@ -213,6 +218,7 @@ async function handleDeleted(data: LibraryData | undefined, songId: number) {
 
 <style module>
 .songArea {
+  margin: 16px;
   display: grid;
   grid-template-columns: minmax(220px, 320px) minmax(0, 1fr);
   grid-template-rows: auto 1fr;
@@ -260,12 +266,8 @@ async function handleDeleted(data: LibraryData | undefined, songId: number) {
   overflow-y: auto;
 }
 
-.newSongButton {
-  width: 100%;
-  justify-content: center;
-}
-
 .fullscreenArea {
+  margin: 16px;
   display: flex;
   flex-direction: column;
   gap: 12px;

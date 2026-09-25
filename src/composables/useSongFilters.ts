@@ -1,6 +1,6 @@
 import type { Artist, Book, Collection, Composer, EntityType, FilterEntity, Song } from '../types/song'
 
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
 
 /** The entries the filters can select; they resolve the ids stored in the URL. */
@@ -12,6 +12,13 @@ export interface FilterOptions {
 }
 
 const FILTER_TYPES: EntityType[] = ['composers', 'artists', 'books', 'collections']
+
+/** Whether the filter bar is shown; the choice is remembered across views. */
+const filterBarVisible = ref(true)
+
+function toggleFilterBar(): void {
+	filterBarVisible.value = !filterBarVisible.value
+}
 
 /**
  * The state of the song filter bar, read from and written to the URL query
@@ -108,5 +115,7 @@ export function useSongFilters(options: () => FilterOptions) {
 		hasActiveFilters,
 		filterSongs,
 		clearFilters,
+		filterBarVisible,
+		toggleFilterBar,
 	}
 }
