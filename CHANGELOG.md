@@ -45,3 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   history restores them: going back undoes a filter change or a view change and going
   forward redoes it. A URL can also be shared or bookmarked to open exactly the view it
   shows, filters included.
+- Opening a song in the songs view puts it in the URL ("…&song=12") and shows the song
+  viewer full screen, with a back button that returns to the song list. The browser back
+  button behaves the same, and the filters of the list stay in the URL while a song is
+  open, so the list comes back exactly as it was.

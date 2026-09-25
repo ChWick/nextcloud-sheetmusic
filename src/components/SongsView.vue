@@ -1,5 +1,23 @@
 <template>
-  <div :class="$style.songArea">
+  <!-- The URL opens one song full screen ("?song=12"); without it the list is shown. -->
+  <div v-if="songIdInUrl !== null" :class="$style.fullscreenArea">
+    <div :class="$style.fullscreenHeader">
+      <NcButton @click="goBackToSongs">
+        {{ t('mobilesheetsmanager', 'Back to songs') }}
+      </NcButton>
+    </div>
+    <SongViewer
+      :song="openSong"
+      :library-id="selectedLibrary"
+      :composers="composers"
+      :books="books"
+      :collections="collections"
+      :artists="artists"
+      @saved="handleSaved"
+      @updated="handleLibraryDataUpdate"
+      @deleted="handleDeleted" />
+  </div>
+  <div v-else :class="$style.songArea">
     <div :class="$style.filterBarWrapper"><SongFilterBar
       v-model:selected-composers="selectedComposers"
       v-model:selected-books="selectedBooks"
@@ -22,8 +40,7 @@
         <li v-for="song in filteredSongs" :key="song.id">
           <button type="button"
                   :class="$style.songButton"
-                  :aria-pressed="selectedSong?.id === song.id"
-                  @click="selectSong(song)">
+                  @click="openSongView(song)">
             {{ song.title }}
           </button>
         </li>
@@ -46,7 +63,7 @@
                   @saved="handleSaved"
                   @cancel="isCreatingSong = false" />
       <SongViewer v-else
-                  :song="selectedSong"
+                  :song="null"
                   :library-id="selectedLibrary"
                   :composers="composers"
                   :books="books"
@@ -64,6 +81,7 @@ import { t } from '@nextcloud/l10n';
 import axios from '@nextcloud/axios';
 import { generateOcsUrl } from '@nextcloud/router';
 import { ref, computed, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import NcButton from '@nextcloud/vue/components/NcButton';
 import SongEditor from '../components/SongEditor.vue';
 import SongFilterBar from '../components/SongFilterBar.vue';
@@ -81,12 +99,27 @@ const books = ref<Book[]>([]);
 const collections = ref<Collection[]>([]);
 const artists = ref<Artist[]>([]);
 
+// The open song lives in the URL query ("?song=12") like the filters do, so the
+// browser history restores it and going back returns to the song list.
+const route = useRoute();
+const router = useRouter();
+
+/** Id of the song the URL opens; null while the song list is shown. */
+const songIdInUrl = computed(() => {
+  const raw = route.query.song;
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  const id = Number(value);
+  return value === undefined || value === null || !Number.isInteger(id) || id <= 0 ? null : id;
+});
+
+/** The open song, resolved against the loaded library data. */
+const openSong = computed(() => songs.value.find(song => song.id === songIdInUrl.value) ?? null);
+
 // The filter bar reads and writes its selections in the URL query, so the browser
 // history restores them when going back or forward.
 const { selectedComposers, selectedBooks, selectedCollections, selectedArtists, filterSongs, clearFilters } =
   useSongFilters(() => ({ composers: composers.value, books: books.value, collections: collections.value, artists: artists.value }));
 
-const selectedSong = ref<Song | null>(null);
 const fileError = ref('');
 const isLoadingSongs = ref(false);
 /** The editor is open for a song that does not exist yet. */
@@ -101,11 +134,6 @@ function handleLibraryDataUpdate(data: LibraryData) {
   books.value = data.books ?? [];
   collections.value = data.collections ?? [];
   artists.value = data.artists ?? [];
-  // Preserve selected song if still present
-  if (selectedSong.value) {
-    const updated = songs.value.find(s => s.id === selectedSong.value?.id);
-    if (updated) selectedSong.value = updated;
-  }
 }
 
 async function loadLibraryData(id: number) {
@@ -126,33 +154,51 @@ watch(() => props.selectedLibrary, (newLib) => {
   if (newLib) loadLibraryData(newLib);
 }, { immediate: true });
 
-function selectSong(song: Song) {
-  // Selecting a song leaves the editor for a new song behind, like pressing Cancel.
+/**
+ * Open a song full screen. It becomes one history entry - the filters of the list
+ * stay in the URL - so the browser back button returns to the song list as well.
+ */
+function openSongView(song: Song) {
+  // Opening a song leaves the editor for a new song behind, like pressing Cancel.
   isCreatingSong.value = false;
-  selectedSong.value = song;
-  // Emit to parent if needed (e.g., for other UI parts)
-  emit('select-song', song);
+  router.push({ query: { ...route.query, song: String(song.id) } });
+}
+
+function queryWithoutSong() {
+  const query = { ...route.query };
+  delete query.song;
+  return query;
+}
+
+/** Return to the song list, which the URL keeps exactly as it was. */
+function goBackToSongs() {
+  if (window.history.state?.back) {
+    router.back();
+  } else {
+    // A shared URL opened the song directly, so the list is entered anew.
+    router.push({ query: queryWithoutSong() });
+  }
 }
 
 /** Open the editor for a song that does not exist yet. Cancelling leaves no trace. */
 function startNewSong() {
-  selectedSong.value = null;
   isCreatingSong.value = true;
 }
 
-/** The editor saved: refresh the library data and select the song that was saved. */
+/** The editor saved: refresh the library data and open the song that was saved. */
 function handleSaved(data: LibraryData, songId?: number) {
   isCreatingSong.value = false;
   handleLibraryDataUpdate(data);
 
   if (songId === undefined) return;
   const saved = songs.value.find(song => song.id === songId);
-  if (saved) selectSong(saved);
+  // Saving a song that is already open keeps its URL; the push is a no-op then.
+  if (saved) openSongView(saved);
 }
 
 /**
- * The song was deleted. The refreshed data no longer contains it, so the selection has to
- * be dropped explicitly: it would otherwise keep the removed song in the viewer.
+ * The song was deleted. The refreshed data no longer contains it, so the URL has to
+ * drop it explicitly: it would otherwise keep the removed song open.
  */
 async function handleDeleted(data: LibraryData | undefined, songId: number) {
   if (data) {
@@ -161,15 +207,8 @@ async function handleDeleted(data: LibraryData | undefined, songId: number) {
     // The response carried no data, e.g. because it was empty; ask the server instead.
     await loadLibraryData(props.selectedLibrary);
   }
-  if (selectedSong.value?.id === songId) selectedSong.value = null;
+  if (songIdInUrl.value === songId) goBackToSongs();
 }
-
-// Emit events to parent
-const emit = defineEmits<{
-	(e: 'select-song', song: Song): void
-	(e: 'saved'): void
-	(e: 'updated'): void
-}>();
 </script>
 
 <style module>
@@ -198,7 +237,7 @@ const emit = defineEmits<{
   text-align: start;
   cursor: pointer;
 }
-.songButton[aria-pressed="true"] {
+.songButton:hover {
   background: var(--color-background-hover);
 }
 .filterBarWrapper {
@@ -224,6 +263,16 @@ const emit = defineEmits<{
 .newSongButton {
   width: 100%;
   justify-content: center;
+}
+
+.fullscreenArea {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.fullscreenHeader {
+  display: flex;
 }
 
 .viewerArea {
