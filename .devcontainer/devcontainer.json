@@ -1,0 +1,17 @@
+{
+  "name": "Nextcloud App Dev (SQLite)",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "nextcloud",
+  "workspaceFolder": "/var/www/html/apps-extra/mobilesheetsmanager",
+  
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "bmewburn.vscode-intelephense-client",
+        "xdebug.php-debug"
+      ]
+    }
+  },
+
+  "remoteUser": "root"
+}
