@@ -59,3 +59,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The song list fills the width of the songs view - the side pane with "Select a song
   to view." is gone - and every song in it has an "Edit" button that opens its editor
   right away and a "View" button that opens the full screen song view.
+
+### Fixed
+
+- Creating a composer, book, collection or artist without being logged in answers
+  `401 Unauthorized` like every other endpoint, instead of `404 Not Found`.

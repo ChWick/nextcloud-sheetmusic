@@ -44,7 +44,9 @@ class LibraryMapper {
            ->from(self::TABLE_NAME)
            ->where($qb->expr()->eq('id', $qb->createNamedParameter($libraryId)));
 
-        return $qb->executeQuery()->fetch();
+        $row = $qb->executeQuery()->fetch();
+
+        return $row === false ? null : $row;
     }
 
 	public function addForUser(string $userId, string $path): void {

@@ -755,7 +755,7 @@ class ApiController extends OCSController {
 		}
 		$user = $this->userSession->getUser();
 		if ($user === null) {
-			return new DataResponse([], Http::STATUS_NOT_FOUND);
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
 		}
 		$libraryPath = $this->resolveLibraryPath($user->getUID(), $libraryId);
 		if ($libraryPath === null) {
@@ -785,7 +785,7 @@ class ApiController extends OCSController {
 		}
 		$user = $this->userSession->getUser();
 		if ($user === null) {
-			return new DataResponse([], Http::STATUS_NOT_FOUND);
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
 		}
 		$libraryPath = $this->resolveLibraryPath($user->getUID(), $libraryId);
 		if ($libraryPath === null) {
@@ -815,7 +815,7 @@ class ApiController extends OCSController {
 		}
 		$user = $this->userSession->getUser();
 		if ($user === null) {
-			return new DataResponse([], Http::STATUS_NOT_FOUND);
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
 		}
 		$libraryPath = $this->resolveLibraryPath($user->getUID(), $libraryId);
 		if ($libraryPath === null) {
@@ -845,7 +845,7 @@ class ApiController extends OCSController {
 		}
 		$user = $this->userSession->getUser();
 		if ($user === null) {
-			return new DataResponse([], Http::STATUS_NOT_FOUND);
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
 		}
 		$libraryPath = $this->resolveLibraryPath($user->getUID(), $libraryId);
 		if ($libraryPath === null) {

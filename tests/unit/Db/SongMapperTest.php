@@ -382,6 +382,102 @@ public function testFindSongReturnsOnlyTheRequestedSong(): void {
 		$this->mapper()->deleteEntity($this->databasePath, 'genres', 1);
 	}
 
+	public function testUpdateFileRenamesTheStoredPath(): void {
+		$mapper = $this->mapper();
+		$mapper->updateFile($this->databasePath, 2, '/remote.php/dav/files/admin/Noten/AlphaRenamed.pdf');
+
+		$alpha = $mapper->findSong($this->databasePath, 2);
+		self::assertNotNull($alpha);
+		self::assertSame(2, $alpha->files[0]->id);
+		self::assertSame('/remote.php/dav/files/admin/Noten/AlphaRenamed.pdf', $alpha->files[0]->path);
+	}
+
+	public function testRemoveSongFileOfAnUnknownFileChangesNothing(): void {
+		$mapper = $this->mapper();
+
+		self::assertNull($mapper->removeSongFile($this->databasePath, 2, 999));
+
+		$alpha = $mapper->findSong($this->databasePath, 2);
+		self::assertNotNull($alpha);
+		self::assertCount(1, $alpha->files);
+	}
+
+	/** The file of another song may not be removed through this song. */
+	public function testRemoveSongFileOfAnotherSongsFileChangesNothing(): void {
+		$mapper = $this->mapper();
+
+		self::assertNull($mapper->removeSongFile($this->databasePath, 2, 1));
+
+		$database = new \PDO('sqlite:' . $this->databasePath);
+		self::assertSame(1, (int)$database->query('SELECT COUNT(*) FROM Files WHERE Id = 1')->fetchColumn());
+	}
+
+	/** The order decides the numeric prefix of the regenerated file names. */
+	public function testFilesOfSongKeepsTheOrderOfTheIds(): void {
+		$database = new \PDO('sqlite:' . $this->databasePath);
+		$database->exec("INSERT INTO Files (Id, SongId, Path) VALUES (7, 2, '/b.pdf'), (5, 2, '/a.pdf')");
+
+		$files = $this->mapper()->filesOfSong($this->databasePath, 2);
+
+		self::assertSame([2, 5, 7], array_map(fn (MobileSheetsFile $file) => $file->id, $files));
+	}
+
+	/**
+	 * Link rows without their entry are leftovers of a broken database. They are
+	 * cleaned up, but nothing is reported as removed because the entry is gone.
+	 */
+	public function testDeleteEntityRemovesLeftoverLinksEvenWithoutTheEntry(): void {
+		$mapper = $this->mapper();
+		$database = new \PDO('sqlite:' . $this->databasePath);
+		$database->exec('DELETE FROM Composer WHERE Id = 10');
+
+		self::assertFalse($mapper->deleteEntity($this->databasePath, 'composers', 10));
+
+		self::assertSame(0, (int)$database->query('SELECT COUNT(*) FROM ComposerSongs WHERE ComposerId = 10')->fetchColumn());
+		self::assertSame(1, (int)$database->query('SELECT COUNT(*) FROM ComposerSongs WHERE ComposerId = 20')->fetchColumn());
+	}
+
+	public function testDeleteEntityWithoutItsTablesDoesNotFail(): void {
+		$barePath = $this->bareDatabase();
+
+		try {
+			self::assertFalse($this->mapper()->deleteEntity($barePath, 'composers', 10));
+		} finally {
+			unlink($barePath);
+		}
+	}
+
+	/** A library without the optional tables has no entities but still its songs. */
+	public function testFindLibraryDataOnADatabaseWithoutTheOptionalTables(): void {
+		$barePath = $this->bareDatabase();
+
+		try {
+			$data = $this->mapper()->findLibraryData($barePath);
+
+			self::assertCount(1, $data['songs']);
+			self::assertSame('Solo', $data['songs'][0]->title);
+			self::assertSame([], $data['songs'][0]->files);
+			self::assertSame([], $data['songs'][0]->composers);
+			self::assertSame([], $data['composers']);
+			self::assertSame([], $data['books']);
+			self::assertSame([], $data['collections']);
+			self::assertSame([], $data['artists']);
+		} finally {
+			unlink($barePath);
+		}
+	}
+
+	/** A database that only knows the Songs table, like a minimal export. */
+	private function bareDatabase(): string {
+		$path = tempnam(sys_get_temp_dir(), 'mobilesheetsmanager-');
+		self::assertNotFalse($path);
+		$database = new \PDO('sqlite:' . $path);
+		$database->exec('CREATE TABLE Songs(Id INTEGER PRIMARY KEY, Title VARCHAR(255), SortTitle VARCHAR(255), SongId INTEGER)');
+		$database->exec("INSERT INTO Songs (Id, Title, SortTitle) VALUES (1, 'Solo', 'Solo')");
+
+		return $path;
+	}
+
 	/**
 	 * @param list<MobileSheetsComposer|MobileSheetsCollection|MobileSheetsArtist> $entities
 	 * @return list<string>

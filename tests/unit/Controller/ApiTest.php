@@ -789,6 +789,250 @@ final class ApiTest extends TestCase {
 		$this->assertEquals(Http::STATUS_NOT_FOUND, $controller->deleteArtist(200, 7)->getStatus());
 	}
 
+	public function testGetSongsWithoutAnIdIsBadRequest(): void {
+		$controller = $this->createController();
+
+		self::assertEquals(Http::STATUS_BAD_REQUEST, $controller->getSongs(null)->getStatus());
+		self::assertEquals(Http::STATUS_BAD_REQUEST, $controller->getSongs('-3')->getStatus());
+	}
+
+	public function testGetSongsOfAnUnknownLibraryIsNotFound(): void {
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$libraryMapper->method('findForUser')->with('admin', 7)->willReturn(null);
+
+		$controller = $this->createController($libraryMapper);
+
+		self::assertEquals(Http::STATUS_NOT_FOUND, $controller->getSongs('7')->getStatus());
+	}
+
+	public function testGetSongsOfSomethingThatIsNotAFileIsNotFound(): void {
+		$node = $this->createMock(Node::class);
+		$node->method('getType')->willReturn('dir');
+
+		$userFolder = $this->createMock(IUserFolder::class);
+		$userFolder->method('get')->with('Noten/mobilesheets.db')->willReturn($node);
+
+		$rootFolder = $this->createMock(IRootFolder::class);
+		$rootFolder->method('getUserFolder')->with('admin')->willReturn($userFolder);
+
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$libraryMapper->method('findForUser')->willReturn(['id' => 7, 'path' => '/Noten/mobilesheets.db']);
+
+		$controller = $this->createController($libraryMapper, null, $rootFolder);
+
+		self::assertEquals(Http::STATUS_NOT_FOUND, $controller->getSongs('7')->getStatus());
+	}
+
+	public function testGetSongsReturnsTheLibraryData(): void {
+		$libraryData = ['songs' => [], 'composers' => [], 'books' => [], 'collections' => [], 'artists' => []];
+
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$libraryMapper->method('findForUser')->with('admin', 7)->willReturn(['id' => 7, 'path' => '/Noten/mobilesheets.db']);
+
+		$songMapper = $this->createMock(SongMapper::class);
+		$songMapper->expects(self::once())
+			->method('findLibraryData')
+			->with('/tmp/mobilesheetsmanager-test-library.db')
+			->willReturn($libraryData);
+
+		$controller = $this->createController($libraryMapper, $songMapper, $this->createLibraryRootFolder());
+
+		$response = $controller->getSongs('7');
+
+		self::assertEquals(Http::STATUS_OK, $response->getStatus());
+		self::assertEquals($libraryData, $response->getData());
+	}
+
+	public function testAddLibraryRejectsInvalidPaths(): void {
+		$controller = $this->createController();
+
+		self::assertEquals(Http::STATUS_BAD_REQUEST, $controller->addLibrary('Noten/mobilesheets.db')->getStatus());
+		self::assertEquals(Http::STATUS_BAD_REQUEST, $controller->addLibrary('/Noten/notes.txt')->getStatus());
+	}
+
+	public function testAddLibraryStoresThePath(): void {
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$libraryMapper->expects(self::once())
+			->method('addForUser')
+			->with('admin', '/Noten/mobilesheets.db');
+
+		$controller = $this->createController($libraryMapper);
+
+		$response = $controller->addLibrary('/Noten/mobilesheets.db');
+
+		self::assertEquals(Http::STATUS_CREATED, $response->getStatus());
+		self::assertEquals(['path' => '/Noten/mobilesheets.db'], $response->getData());
+	}
+
+	public function testUpdateSongWithoutATitleIsBadRequest(): void {
+		$controller = $this->createController();
+
+		self::assertEquals(Http::STATUS_BAD_REQUEST, $controller->updateSong(1, 7, '')->getStatus());
+		self::assertEquals(Http::STATUS_BAD_REQUEST, $controller->updateSong(1, 7, null)->getStatus());
+	}
+
+	public function testUpdateSongOfAnUnknownLibraryIsNotFound(): void {
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$libraryMapper->method('findForUser')->with('admin', 7)->willReturn(null);
+
+		$songMapper = $this->createMock(SongMapper::class);
+		$songMapper->expects(self::never())->method('updateSong');
+
+		$controller = $this->createController($libraryMapper, $songMapper, $this->createLibraryRootFolder());
+
+		self::assertEquals(Http::STATUS_NOT_FOUND, $controller->updateSong(1, 7, 'Alpha')->getStatus());
+	}
+
+	public function testUpdateSongReturnsTheLibraryData(): void {
+		$songMapper = $this->createMock(SongMapper::class);
+		$songMapper->expects(self::once())
+			->method('updateSong')
+			->with('/tmp/mobilesheetsmanager-test-library.db', 1, 'Alpha', [10], [100], [1000], [200]);
+		$songMapper->method('findLibraryData')->willReturn(['songs' => []]);
+
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$libraryMapper->method('findForUser')->with('admin', 7)->willReturn(['id' => 7, 'path' => '/Noten/mobilesheets.db']);
+
+		$controller = $this->createController($libraryMapper, $songMapper, $this->createLibraryRootFolder());
+
+		$response = $controller->updateSong(1, 7, 'Alpha', [10], [100], [1000], [200]);
+
+		self::assertEquals(Http::STATUS_OK, $response->getStatus());
+		self::assertEquals(['songs' => []], $response->getData());
+	}
+
+	public function testCreateEntityEndpointsRejectMissingValues(): void {
+		$controller = $this->createController();
+
+		self::assertEquals(Http::STATUS_BAD_REQUEST, $controller->createComposer(null, 'Bach')->getStatus());
+		self::assertEquals(Http::STATUS_BAD_REQUEST, $controller->createComposer(7, '   ')->getStatus());
+		self::assertEquals(Http::STATUS_BAD_REQUEST, $controller->createBook(null, 'Real Book')->getStatus());
+		self::assertEquals(Http::STATUS_BAD_REQUEST, $controller->createBook(7, null)->getStatus());
+		self::assertEquals(Http::STATUS_BAD_REQUEST, $controller->createCollection(null, 'Jazz')->getStatus());
+		self::assertEquals(Http::STATUS_BAD_REQUEST, $controller->createCollection(7, '')->getStatus());
+		self::assertEquals(Http::STATUS_BAD_REQUEST, $controller->createArtist(null, 'Coltrane')->getStatus());
+		self::assertEquals(Http::STATUS_BAD_REQUEST, $controller->createArtist(7, '   ')->getStatus());
+	}
+
+	public function testCreateEntityEndpointsRejectAnUnknownLibrary(): void {
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$libraryMapper->method('findForUser')->willReturn(null);
+
+		$songMapper = $this->createMock(SongMapper::class);
+		$songMapper->expects(self::never())->method('createComposer');
+		$songMapper->expects(self::never())->method('createBook');
+		$songMapper->expects(self::never())->method('createCollection');
+		$songMapper->expects(self::never())->method('createArtist');
+
+		$controller = $this->createController($libraryMapper, $songMapper, $this->createLibraryRootFolder());
+
+		self::assertEquals(Http::STATUS_NOT_FOUND, $controller->createComposer(7, 'Bach')->getStatus());
+		self::assertEquals(Http::STATUS_NOT_FOUND, $controller->createBook(7, 'Real Book')->getStatus());
+		self::assertEquals(Http::STATUS_NOT_FOUND, $controller->createCollection(7, 'Jazz')->getStatus());
+		self::assertEquals(Http::STATUS_NOT_FOUND, $controller->createArtist(7, 'Coltrane')->getStatus());
+	}
+
+	public function testCreateEntityEndpointsReturnTheCreatedEntry(): void {
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$libraryMapper->method('findForUser')->willReturn(['id' => 7, 'path' => '/Noten/mobilesheets.db']);
+
+		$songMapper = $this->createMock(SongMapper::class);
+		$songMapper->method('createComposer')->with('/tmp/mobilesheetsmanager-test-library.db', 'Bach')->willReturn(10);
+		$songMapper->method('createBook')->with('/tmp/mobilesheetsmanager-test-library.db', 'Real Book')->willReturn(100);
+		$songMapper->method('createCollection')->with('/tmp/mobilesheetsmanager-test-library.db', 'Jazz')->willReturn(1000);
+		$songMapper->method('createArtist')->with('/tmp/mobilesheetsmanager-test-library.db', 'Coltrane')->willReturn(200);
+
+		$controller = $this->createController($libraryMapper, $songMapper, $this->createLibraryRootFolder());
+
+		$composer = $controller->createComposer(7, 'Bach');
+		$book = $controller->createBook(7, 'Real Book');
+		$collection = $controller->createCollection(7, 'Jazz');
+		$artist = $controller->createArtist(7, 'Coltrane');
+
+		self::assertEquals(Http::STATUS_CREATED, $composer->getStatus());
+		self::assertEquals(['id' => 10, 'name' => 'Bach'], $composer->getData());
+		self::assertEquals(Http::STATUS_CREATED, $book->getStatus());
+		self::assertEquals(['id' => 100, 'title' => 'Real Book'], $book->getData());
+		self::assertEquals(Http::STATUS_CREATED, $collection->getStatus());
+		self::assertEquals(['id' => 1000, 'name' => 'Jazz'], $collection->getData());
+		self::assertEquals(Http::STATUS_CREATED, $artist->getStatus());
+		self::assertEquals(['id' => 200, 'name' => 'Coltrane'], $artist->getData());
+	}
+
+	/** Every delete endpoint hands its own entity type to the shared mapper method. */
+	public function testDeleteEntityEndpointsPassTheirEntityTypeToTheMapper(): void {
+		$calls = [];
+		$songMapper = $this->createMock(SongMapper::class);
+		$songMapper->method('deleteEntity')->willReturnCallback(
+			function (string $databasePath, string $entityType, int $entityId) use (&$calls): bool {
+				$calls[] = [$entityType, $entityId];
+
+				return true;
+			},
+		);
+		$songMapper->method('findLibraryData')->willReturn(['songs' => []]);
+
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$libraryMapper->method('findForUser')->willReturn(['id' => 7, 'path' => '/Noten/mobilesheets.db']);
+
+		$controller = $this->createController($libraryMapper, $songMapper, $this->createLibraryRootFolder());
+
+		$controller->deleteComposer(10, 7);
+		$controller->deleteBook(100, 7);
+		$controller->deleteCollection(1000, 7);
+		$controller->deleteArtist(200, 7);
+
+		self::assertSame(
+			[
+				['composers', 10],
+				['books', 100],
+				['collections', 1000],
+				['artists', 200],
+			],
+			$calls,
+		);
+	}
+
+	public function testUploadSongFileWithoutAFileIsBadRequest(): void {
+		unset($_FILES['file']);
+
+		$request = $this->createMock(IRequest::class);
+		$request->method('getUploadedFile')->with('file')->willReturn(null);
+
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$libraryMapper->method('findForUser')->willReturn(['id' => 7, 'path' => '/Noten/mobilesheets.db']);
+
+		$controller = $this->createController($libraryMapper, null, $this->createLibraryRootFolder(), null, $request);
+
+		$response = $controller->uploadSongFile(1, 7);
+
+		self::assertEquals(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		self::assertEquals(['message' => 'No file uploaded'], $response->getData());
+	}
+
+	public function testEveryEndpointRejectsALoggedOutUser(): void {
+		$controller = $this->createController(loggedIn: false);
+
+		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->getLibraries()->getStatus());
+		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->addLibrary('/Noten/mobilesheets.db')->getStatus());
+		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->deleteLibrary(1)->getStatus());
+		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->getSongs('1')->getStatus());
+		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->createSong(7, 'Title')->getStatus());
+		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->updateSong(1, 7, 'Title')->getStatus());
+		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->deleteSong(1, 7)->getStatus());
+		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->uploadSongFile(1, 7)->getStatus());
+		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->attachNextcloudFile(1, 7, '/Noten/file.pdf')->getStatus());
+		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->deleteSongFile(1, 2, 7)->getStatus());
+		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->createComposer(7, 'Bach')->getStatus());
+		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->createBook(7, 'Real Book')->getStatus());
+		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->createCollection(7, 'Jazz')->getStatus());
+		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->createArtist(7, 'Coltrane')->getStatus());
+		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->deleteComposer(1, 7)->getStatus());
+		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->deleteBook(1, 7)->getStatus());
+		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->deleteCollection(1, 7)->getStatus());
+		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->deleteArtist(1, 7)->getStatus());
+	}
+
 	/** Root folder whose user folder resolves the library database. */
 	private function createLibraryRootFolder(): IRootFolder {
 		$storage = $this->createMock(IStorage::class);
@@ -797,6 +1041,7 @@ final class ApiTest extends TestCase {
 		$databaseNode = $this->createMock(Node::class);
 		$databaseNode->method('getStorage')->willReturn($storage);
 		$databaseNode->method('getInternalPath')->willReturn('files/Noten/mobilesheets.db');
+		$databaseNode->method('getType')->willReturn('file');
 
 		$userFolder = $this->createMock(IUserFolder::class);
 		$userFolder->method('get')->with('Noten/mobilesheets.db')->willReturn($databaseNode);
@@ -821,16 +1066,18 @@ final class ApiTest extends TestCase {
 		?SongMapper $songMapper = null,
 		?IRootFolder $rootFolder = null,
 		?FileManager $fileManager = null,
+		?IRequest $request = null,
+		bool $loggedIn = true,
 	): ApiController {
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('admin');
 
 		$userSession = $this->createMock(IUserSession::class);
-		$userSession->method('getUser')->willReturn($user);
+		$userSession->method('getUser')->willReturn($loggedIn ? $user : null);
 
 		return new ApiController(
 			Application::APP_ID,
-			$this->createMock(IRequest::class),
+			$request ?? $this->createMock(IRequest::class),
 			$libraryMapper ?? $this->createMock(LibraryMapper::class),
 			$songMapper ?? $this->createMock(SongMapper::class),
 			$rootFolder ?? $this->createMock(IRootFolder::class),
