@@ -9,10 +9,20 @@ declare(strict_types=1);
 
 namespace OCA\MobileSheetsManager\Db;
 
+use OCA\MobileSheetsManager\Service\MobileSheetsFileFacts;
 use PDO;
 use Psr\Log\LoggerInterface;
 
 class SongMapper {
+	/** Source of a file that lives in the library folder. */
+	private const FILE_SOURCE_LOCAL = 1;
+
+	/** Type of a PDF file. */
+	private const FILE_TYPE_PDF = 1;
+
+	/** Width/Height of a file whose dimensions were not measured. */
+	private const FILE_DIMENSION_UNKNOWN = -1;
+
 	public function __construct(
 		private LoggerInterface $logger,
     ) {}
@@ -523,17 +533,42 @@ class SongMapper {
 		return false;
 	}
 
-	public function setSongFile(string $databasePath, int $songId, string $filePath): void {
+	/**
+	 * Record a file of a song, filling in every column MobileSheets keeps next to
+	 * the path: the file's size, its modification time (LastModified, in
+	 * milliseconds) and the derived content metadata.
+	 */
+	public function setSongFile(string $databasePath, int $songId, string $filePath, MobileSheetsFileFacts $facts): void {
 		$database = new PDO('sqlite:' . $databasePath, options: [
 			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
 			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
 		]);
 
-		$insertStmt = $database->prepare('INSERT INTO Files (SongId, Path) VALUES (:songId, :path)');
-		$insertStmt->execute([
-			':songId' => $songId,
-			':path' => $filePath,
-		]);
+		$values = [
+			'SongId' => $songId,
+			'Path' => $filePath,
+			'PageOrder' => $facts->pageOrder,
+			'FileSize' => $facts->fileSize,
+			'LastModified' => $facts->lastModified,
+			'Source' => self::FILE_SOURCE_LOCAL,
+			'Type' => self::FILE_TYPE_PDF,
+			'Password' => '',
+			'SourceFilePageCount' => $facts->sourceFilePageCount,
+			'FileHash' => $facts->fileHash,
+			'Width' => self::FILE_DIMENSION_UNKNOWN,
+			'Height' => self::FILE_DIMENSION_UNKNOWN,
+		];
+
+		$columns = [];
+		$params = [];
+		foreach ($this->existingColumns($database, $values) as $name => $value) {
+			$columns[] = $name;
+			$params[':' . $name] = $value;
+		}
+
+		$sql = 'INSERT INTO Files (' . implode(', ', $columns) . ') VALUES (' . implode(', ', array_keys($params)) . ')';
+		$insertStmt = $database->prepare($sql);
+		$insertStmt->execute($params);
 	}
 
 	public function removeSongFile(string $databasePath, int $songId, int $fileId): ?string {
@@ -555,18 +590,62 @@ class SongMapper {
 		return (string)$row['Path'];
 	}
 	
-	public function updateFile(string $databasePath, int $fileId, string $newPath): void {
-        $database = new PDO('sqlite:' . $databasePath, options: [
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        ]);
+	/**
+	 * Persist a file's new location and refresh the metadata that a change to the
+	 * file invalidates - notably LastModified, which must track the file's
+	 * modification time whenever the file is created or changed. Source, Type,
+	 * Password, Width and Height are fixed at creation and left untouched.
+	 */
+	public function updateFile(string $databasePath, int $fileId, string $newPath, MobileSheetsFileFacts $facts): void {
+		$database = new PDO('sqlite:' . $databasePath, options: [
+			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+		]);
 
-        $updateStmt = $database->prepare('UPDATE Files SET Path = :newPath WHERE Id = :fileId');
-        $updateStmt->execute([
-            ':newPath' => $newPath,
-            ':fileId' => $fileId,
-        ]);
-    }
+		$values = [
+			'Path' => $newPath,
+			'PageOrder' => $facts->pageOrder,
+			'FileSize' => $facts->fileSize,
+			'LastModified' => $facts->lastModified,
+			'SourceFilePageCount' => $facts->sourceFilePageCount,
+			'FileHash' => $facts->fileHash,
+		];
+
+		$assignments = [];
+		$params = [':fileId' => $fileId];
+		foreach ($this->existingColumns($database, $values) as $name => $value) {
+			$assignments[] = $name . ' = :' . $name;
+			$params[':' . $name] = $value;
+		}
+
+		$sql = 'UPDATE Files SET ' . implode(', ', $assignments) . ' WHERE Id = :fileId';
+		$updateStmt = $database->prepare($sql);
+		$updateStmt->execute($params);
+	}
+
+	/**
+	 * Keep only the wanted column => value pairs that the Files table actually
+	 * has, keyed by column name, so a database with a reduced or extended schema
+	 * still gets every column it knows filled in.
+	 *
+	 * @param array<string, mixed> $values
+	 * @return array<string, mixed>
+	 */
+	private function existingColumns(PDO $database, array $values): array {
+		$existing = [];
+		foreach ($database->query('PRAGMA table_info(Files)')->fetchAll(PDO::FETCH_ASSOC) as $column) {
+			$existing[strtolower((string)$column['name'])] = true;
+		}
+
+		$wanted = [];
+		foreach ($values as $name => $value) {
+			if (isset($existing[strtolower($name)])) {
+				$wanted[$name] = $value;
+			}
+		}
+
+		return $wanted;
+	}
 
 	public function createComposer(string $databasePath, string $name): int {
 		$database = new PDO('sqlite:' . $databasePath, options: [

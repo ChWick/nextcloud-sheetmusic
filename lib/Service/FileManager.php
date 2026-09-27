@@ -379,11 +379,15 @@ class FileManager {
 		$createdFolders = $this->ensureParentFolder($userFolder, $targetRelative);
 
 		// Node::move() resolves against the filesystem root, so it needs the full
-		// internal path rather than one relative to the user folder.
-		$userFolder->get($sourceRelative)->move($target->internal);
+		// internal path rather than one relative to the user folder. A move does not
+		// touch the file's content, so its metadata is read up front and used to
+		// refresh LastModified (and the derived fields) alongside the new path.
+		$sourceNode = $userFolder->get($sourceRelative);
+		$facts = MobileSheetsFileFacts::fromNode($sourceNode);
+		$sourceNode->move($target->internal);
 
 		try {
-			$this->songMapper->updateFile($databasePath, $file->id, $target->webdav);
+			$this->songMapper->updateFile($databasePath, $file->id, $target->webdav, $facts);
 		} catch (\Throwable $exception) {
 			$this->revertMove(
 				$userFolder,

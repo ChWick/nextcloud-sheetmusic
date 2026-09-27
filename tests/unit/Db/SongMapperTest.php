@@ -16,6 +16,7 @@ use OCA\MobileSheetsManager\Db\MobileSheetsComposer;
 use OCA\MobileSheetsManager\Db\MobileSheetsFile;
 use OCA\MobileSheetsManager\Db\MobileSheetsSong;
 use OCA\MobileSheetsManager\Db\SongMapper;
+use OCA\MobileSheetsManager\Service\MobileSheetsFileFacts;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 
@@ -28,7 +29,7 @@ final class SongMapperTest extends TestCase {
 		$this->databasePath = $databasePath;
 		$database = new \PDO('sqlite:' . $this->databasePath);
 		$database->exec('CREATE TABLE Songs(Id INTEGER PRIMARY KEY, Title VARCHAR(255), SortTitle VARCHAR(255), SongId INTEGER)');
-		$database->exec('CREATE TABLE Files(Id INTEGER PRIMARY KEY, SongId INTEGER, Path VARCHAR(255))');
+		$database->exec('CREATE TABLE Files(Id INTEGER PRIMARY KEY,SongId INTEGER,Path VARCHAR(255),PageOrder VARCHAR(255),FileSize INTEGER,LastModified INTEGER,Source INTEGER,Type INTEGER,Password VARCHAR(255) DEFAULT \'\',SourceFilePageCount INTEGER,FileHash INTEGER,Width INTEGER,Height INTEGER)');
 		$database->exec('CREATE TABLE Collections(Id INTEGER PRIMARY KEY, Name VARCHAR(255), SortBy INTEGER DEFAULT 1, Ascending INTEGER DEFAULT 1, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
 		$database->exec('CREATE TABLE CollectionSong(Id INTEGER PRIMARY KEY, CollectionId INTEGER, SongId INTEGER)');
 		$database->exec('CREATE TABLE Composer(Id INTEGER PRIMARY KEY, Name VARCHAR(255), SortBy INTEGER DEFAULT 1, Ascending INTEGER DEFAULT 1, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
@@ -245,13 +246,40 @@ public function testFindSongReturnsOnlyTheRequestedSong(): void {
 
 	public function testSetSongFile(): void {
 		$mapper = $this->mapper();
-		$mapper->setSongFile($this->databasePath, 2, '/remote.php/dav/files/admin/Noten/AlphaNew.pdf');
+		$mapper->setSongFile(
+			$this->databasePath,
+			2,
+			'/remote.php/dav/files/admin/Noten/AlphaNew.pdf',
+			new MobileSheetsFileFacts(
+				fileHash: -432302017,
+				fileSize: 138196,
+				lastModified: 1789222407000,
+				sourceFilePageCount: 2,
+				pageOrder: '1-2',
+			),
+		);
 
 		$data = $mapper->findLibraryData($this->databasePath);
 		$updatedSong = array_values(array_filter($data['songs'], fn(MobileSheetsSong $s) => $s->id === 2))[0];
 
 		$this->assertCount(2, $updatedSong->files);
 		$this->assertContainsOnlyInstancesOf(MobileSheetsFile::class, $updatedSong->files);
+
+		// Every column MobileSheets keeps next to the path is filled in.
+		$row = (new \PDO('sqlite:' . $this->databasePath))
+			->query("SELECT * FROM Files WHERE Path = '/remote.php/dav/files/admin/Noten/AlphaNew.pdf'")
+			->fetch();
+		self::assertSame(2, (int)$row['SongId']);
+		self::assertSame('1-2', (string)$row['PageOrder']);
+		self::assertSame(138196, (int)$row['FileSize']);
+		self::assertSame(1789222407000, (int)$row['LastModified']);
+		self::assertSame(1, (int)$row['Source']);
+		self::assertSame(1, (int)$row['Type']);
+		self::assertSame('', (string)$row['Password']);
+		self::assertSame(2, (int)$row['SourceFilePageCount']);
+		self::assertSame(-432302017, (int)$row['FileHash']);
+		self::assertSame(-1, (int)$row['Width']);
+		self::assertSame(-1, (int)$row['Height']);
 	}
 
 	public function testRemoveSongFile(): void {
@@ -384,12 +412,40 @@ public function testFindSongReturnsOnlyTheRequestedSong(): void {
 
 	public function testUpdateFileRenamesTheStoredPath(): void {
 		$mapper = $this->mapper();
-		$mapper->updateFile($this->databasePath, 2, '/remote.php/dav/files/admin/Noten/AlphaRenamed.pdf');
+
+		// The file carries a previous modification time, so a change has to move
+		// LastModified forward rather than leave the old timestamp in place.
+		$database = new \PDO('sqlite:' . $this->databasePath);
+		$database->exec('UPDATE Files SET LastModified = 1789222400000, FileSize = 100000, PageOrder = \'1-1\', SourceFilePageCount = 1, FileHash = 1 WHERE Id = 2');
+
+		$mapper->updateFile(
+			$this->databasePath,
+			2,
+			'/remote.php/dav/files/admin/Noten/AlphaRenamed.pdf',
+			new MobileSheetsFileFacts(
+				fileHash: 1058935524,
+				fileSize: 147100,
+				lastModified: 1789222408000,
+				sourceFilePageCount: 3,
+				pageOrder: '1-3',
+			),
+		);
 
 		$alpha = $mapper->findSong($this->databasePath, 2);
 		self::assertNotNull($alpha);
 		self::assertSame(2, $alpha->files[0]->id);
 		self::assertSame('/remote.php/dav/files/admin/Noten/AlphaRenamed.pdf', $alpha->files[0]->path);
+
+		// A change to the file refreshes LastModified and the derived metadata.
+		$row = (new \PDO('sqlite:' . $this->databasePath))
+			->query('SELECT * FROM Files WHERE Id = 2')
+			->fetch();
+		self::assertSame('/remote.php/dav/files/admin/Noten/AlphaRenamed.pdf', (string)$row['Path']);
+		self::assertSame(1789222408000, (int)$row['LastModified']);
+		self::assertSame(147100, (int)$row['FileSize']);
+		self::assertSame('1-3', (string)$row['PageOrder']);
+		self::assertSame(3, (int)$row['SourceFilePageCount']);
+		self::assertSame(1058935524, (int)$row['FileHash']);
 	}
 
 	public function testRemoveSongFileOfAnUnknownFileChangesNothing(): void {

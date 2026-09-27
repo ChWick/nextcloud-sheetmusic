@@ -8,6 +8,7 @@ use OCA\MobileSheetsManager\Db\LibraryMapper;
 use OCA\MobileSheetsManager\Db\MobileSheetsFile;
 use OCA\MobileSheetsManager\Db\SongMapper;
 use OCA\MobileSheetsManager\Service\FileManager;
+use OCA\MobileSheetsManager\Service\MobileSheetsFileFacts;
 use OCA\MobileSheetsManager\Service\MobileSheetsHashCodesFile;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\ApiRoute;
@@ -632,7 +633,9 @@ class ApiController extends OCSController {
 			}
 		}
 
-		$this->songMapper->setSongFile($databasePath, $songId, $storedPath->webdav);
+		// Fill in the file's metadata (size, LastModified, hash, page count) so the
+		// row looks exactly like one MobileSheets wrote itself.
+		$this->songMapper->setSongFile($databasePath, $songId, $storedPath->webdav, MobileSheetsFileFacts::fromNode($file));
 
 		$this->relocateSongFiles($songId, $databasePath, $targetFolder, $user);
 	}

@@ -12,6 +12,7 @@ use OCA\MobileSheetsManager\Db\MobileSheetsFile;
 use OCA\MobileSheetsManager\Db\MobileSheetsSong;
 use OCA\MobileSheetsManager\Db\SongMapper;
 use OCA\MobileSheetsManager\Service\FileManager;
+use OCA\MobileSheetsManager\Service\MobileSheetsFileFacts;
 use OCA\MobileSheetsManager\Service\MobileSheetsHashCodesFile;
 use OCA\MobileSheetsManager\Service\MobileSheetsPath;
 use OCA\MobileSheetsManager\Service\MobileSheetsPathResolver;
@@ -134,6 +135,7 @@ final class ApiTest extends TestCase {
 				'/tmp/mobilesheetsmanager-test-library.db',
 				42,
 				'/remote.php/dav/files/admin/Noten/T-Pen 2_QG.pdf',
+				$this->isInstanceOf(MobileSheetsFileFacts::class),
 			);
 		$songMapper->method('findLibraryData')->willReturn(['songs' => []]);
 		// Without a song fixture the regenerated paths cannot be resolved; the upload
@@ -214,6 +216,7 @@ final class ApiTest extends TestCase {
 				'/tmp/mobilesheetsmanager-test-library.db',
 				42,
 				'/remote.php/dav/files/admin/Noten/Shared (2).pdf',
+				$this->isInstanceOf(MobileSheetsFileFacts::class),
 			);
 		$songMapper->method('findSong')->willReturn(null);
 		$songMapper->method('findLibraryData')->willReturn(['songs' => []]);
@@ -398,7 +401,7 @@ final class ApiTest extends TestCase {
 		));
 		$songMapper->expects($this->once())
 			->method('updateFile')
-			->with($databasePath, 11, '/remote.php/dav/files/admin/Noten/Jazz/Jazz - Take Five.pdf');
+			->with($databasePath, 11, '/remote.php/dav/files/admin/Noten/Jazz/Jazz - Take Five.pdf', $this->isInstanceOf(MobileSheetsFileFacts::class));
 		$songMapper->method('findLibraryData')->willReturn(['songs' => []]);
 
 		$fileManager = new FileManager(
