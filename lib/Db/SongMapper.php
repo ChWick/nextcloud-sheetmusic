@@ -541,6 +541,9 @@ class SongMapper {
 			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
 		]);
 
+		// Files carries no creation date, but its LastModified is required.
+		$this->requireColumn($database, 'Files', 'LastModified');
+
 		$values = [
 			'SongId' => $songId,
 			'Path' => $filePath,
@@ -598,6 +601,9 @@ class SongMapper {
 			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
 			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
 		]);
+
+		// Files carries no creation date, but its LastModified is required.
+		$this->requireColumn($database, 'Files', 'LastModified');
 
 		$values = [
 			'Path' => $newPath,
@@ -662,9 +668,10 @@ class SongMapper {
 
 	/**
 	 * The creation and modification date columns of a table, set to the current
-	 * time. MobileSheets names these differently per table ("DateCreated" versus
-	 * "CreationDate"), and some tables carry none at all, so only the columns the
-	 * table really has are produced.
+	 * time. Songs and the entity tables each carry a creation date - named
+	 * "DateCreated" or "CreationDate" depending on the table - and a "LastModified"
+	 * column. Both are required: a table without them means the library schema has
+	 * changed, and writing anyway would leave inconsistent rows behind.
 	 *
 	 * @param bool $withCreation also set the creation date; an update must leave it
 	 *                           alone, so it is dropped there
@@ -674,23 +681,55 @@ class SongMapper {
 		$existing = $this->columnNames($database, $table);
 		$now = $this->nowMilliseconds();
 
-		$values = [];
-		if ($withCreation) {
-			foreach (['DateCreated', 'CreationDate', 'DateAdded'] as $created) {
-				if (isset($existing[strtolower($created)])) {
-					$values[$created] = $now;
-					break;
-				}
-			}
-		}
-		foreach (['LastModified', 'DateModified', 'ModifiedDate'] as $modified) {
-			if (isset($existing[strtolower($modified)])) {
-				$values[$modified] = $now;
+		// The creation date is named differently per table; one of the two has to exist.
+		$createdColumn = null;
+		foreach (['DateCreated', 'CreationDate'] as $created) {
+			if (isset($existing[strtolower($created)])) {
+				$createdColumn = $created;
 				break;
 			}
 		}
+		if ($createdColumn === null) {
+			$this->abortOnMissingColumn($table, 'DateCreated or CreationDate');
+		}
+		$this->requireColumn($database, $table, 'LastModified');
+
+		$values = [];
+		if ($withCreation) {
+			$values[$createdColumn] = $now;
+		}
+		$values['LastModified'] = $now;
 
 		return $values;
+	}
+
+	/**
+	 * Assert a table has an expected column, aborting loudly when it does not.
+	 */
+	private function requireColumn(PDO $database, string $table, string $column): void {
+		if (!isset($this->columnNames($database, $table)[strtolower($column)])) {
+			$this->abortOnMissingColumn($table, $column);
+		}
+	}
+
+	/**
+	 * Report a column the library table does not have and abort the run.
+	 *
+	 * Skipping a column we mean to write would silently drop data and leave the
+	 * library inconsistent with what MobileSheets expects, so a missing column is
+	 * logged and thrown instead - the app has to be updated to match the schema.
+	 */
+	private function abortOnMissingColumn(string $table, string $column): never {
+		$this->logger->error('MobileSheets library table is missing an expected column', [
+			'table' => $table,
+			'column' => $column,
+		]);
+
+		throw new \RuntimeException(sprintf(
+			"MobileSheets table '%s' is missing the expected %s column; the app must be updated to match the library schema",
+			$table,
+			$column,
+		));
 	}
 
 	/**

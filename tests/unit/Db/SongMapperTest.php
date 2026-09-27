@@ -28,7 +28,7 @@ final class SongMapperTest extends TestCase {
 		self::assertNotFalse($databasePath);
 		$this->databasePath = $databasePath;
 		$database = new \PDO('sqlite:' . $this->databasePath);
-		$database->exec('CREATE TABLE Songs(Id INTEGER PRIMARY KEY, Title VARCHAR(255), SortTitle VARCHAR(255), SongId INTEGER)');
+		$database->exec('CREATE TABLE Songs(Id INTEGER PRIMARY KEY, Title VARCHAR(255), SortTitle VARCHAR(255), SongId INTEGER, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
 		$database->exec('CREATE TABLE Files(Id INTEGER PRIMARY KEY,SongId INTEGER,Path VARCHAR(255),PageOrder VARCHAR(255),FileSize INTEGER,LastModified INTEGER,Source INTEGER,Type INTEGER,Password VARCHAR(255) DEFAULT \'\',SourceFilePageCount INTEGER,FileHash INTEGER,Width INTEGER,Height INTEGER)');
 		$database->exec('CREATE TABLE Collections(Id INTEGER PRIMARY KEY, Name VARCHAR(255), SortBy INTEGER DEFAULT 1, Ascending INTEGER DEFAULT 1, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
 		$database->exec('CREATE TABLE CollectionSong(Id INTEGER PRIMARY KEY, CollectionId INTEGER, SongId INTEGER)');
@@ -36,7 +36,7 @@ final class SongMapperTest extends TestCase {
 		$database->exec('CREATE TABLE ComposerSongs(Id INTEGER PRIMARY KEY, ComposerId INTEGER, SongId INTEGER)');
 		$database->exec('CREATE TABLE BookSongs(Id INTEGER PRIMARY KEY, BookId INTEGER, SongId INTEGER)');
 		$database->exec('CREATE TABLE Books(Id INTEGER PRIMARY KEY, Title VARCHAR(255), SortBy INTEGER DEFAULT 1, Ascending INTEGER DEFAULT 1, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
-		$database->exec('CREATE TABLE Artists(Id INTEGER PRIMARY KEY, Name VARCHAR(255))');
+		$database->exec('CREATE TABLE Artists(Id INTEGER PRIMARY KEY, Name VARCHAR(255), DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
 		$database->exec('CREATE TABLE ArtistsSongs(Id INTEGER PRIMARY KEY, ArtistId INTEGER, SongId INTEGER)');
 		$database->exec('CREATE TABLE Genres(Id INTEGER PRIMARY KEY, Type VARCHAR(255))');
 		$database->exec('CREATE TABLE GenresSongs(Id INTEGER PRIMARY KEY, GenreId INTEGER, SongId INTEGER)');
@@ -212,10 +212,11 @@ public function testFindSongReturnsOnlyTheRequestedSong(): void {
 		$composerId = $mapper->createComposer($this->databasePath, 'Vivaldi');
 		$bookId = $mapper->createBook($this->databasePath, 'Seasons');
 		$collectionId = $mapper->createCollection($this->databasePath, 'Baroque');
+		$artistId = $mapper->createArtist($this->databasePath, 'Vivaldi');
 		$after = (int)round(microtime(true) * 1000);
 
 		$database = new \PDO('sqlite:' . $this->databasePath);
-		foreach ([['Composer', $composerId], ['Books', $bookId], ['Collections', $collectionId]] as [$table, $id]) {
+		foreach ([['Composer', $composerId], ['Books', $bookId], ['Collections', $collectionId], ['Artists', $artistId]] as [$table, $id]) {
 			$row = $database->query('SELECT DateCreated, LastModified FROM ' . $table . ' WHERE Id = ' . $id)->fetch();
 			$created = (int)$row['DateCreated'];
 			self::assertSame($created, (int)$row['LastModified'], $table . ' creation and modification date');
@@ -265,6 +266,67 @@ public function testFindSongReturnsOnlyTheRequestedSong(): void {
 			$row = $database->query('SELECT CreationDate, LastModified FROM Songs WHERE Id = ' . $songId)->fetch();
 			self::assertSame(1000, (int)$row['CreationDate'], 'the creation date must survive an update');
 			self::assertGreaterThan(1000, (int)$row['LastModified'], 'LastModified must move forward on a change');
+		} finally {
+			unlink($databasePath);
+		}
+	}
+
+	/** A library without a creation-date column no longer matches the schema. */
+	public function testCreateSongRejectsALibraryWithoutACreationDate(): void {
+		$databasePath = $this->songsDatabase(null);
+
+		try {
+			$logger = $this->createMock(LoggerInterface::class);
+			$logger->expects($this->once())->method('error');
+			$mapper = new SongMapper($logger);
+
+			$this->expectException(\RuntimeException::class);
+			$this->expectExceptionMessage('DateCreated or CreationDate');
+			$mapper->createSong($databasePath, 'Cantata', [], [], [], []);
+		} finally {
+			unlink($databasePath);
+		}
+	}
+
+	/** A library without LastModified no longer matches the schema. */
+	public function testCreateSongRejectsALibraryWithoutLastModified(): void {
+		$databasePath = $this->songsDatabase('CreationDate', false);
+
+		try {
+			$logger = $this->createMock(LoggerInterface::class);
+			$logger->expects($this->once())->method('error');
+			$mapper = new SongMapper($logger);
+
+			$this->expectException(\RuntimeException::class);
+			$this->expectExceptionMessage('LastModified');
+			$mapper->createSong($databasePath, 'Cantata', [], [], [], []);
+		} finally {
+			unlink($databasePath);
+		}
+	}
+
+	/** Files has no creation date, but its LastModified is required. */
+	public function testSetSongFileRejectsAFilesTableWithoutLastModified(): void {
+		$databasePath = tempnam(sys_get_temp_dir(), 'mobilesheetsmanager-');
+		self::assertNotFalse($databasePath);
+		$database = new \PDO('sqlite:' . $databasePath);
+		$database->exec('CREATE TABLE Songs(Id INTEGER PRIMARY KEY, Title VARCHAR(255), SortTitle VARCHAR(255), SongId INTEGER, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
+		$database->exec('CREATE TABLE Files(Id INTEGER PRIMARY KEY, SongId INTEGER, Path VARCHAR(255))');
+
+		try {
+			$logger = $this->createMock(LoggerInterface::class);
+			$logger->expects($this->once())->method('error');
+			$mapper = new SongMapper($logger);
+
+			$this->expectException(\RuntimeException::class);
+			$this->expectExceptionMessage('LastModified');
+			$mapper->setSongFile($databasePath, 1, '/a.pdf', new MobileSheetsFileFacts(
+				fileHash: 0,
+				fileSize: 0,
+				lastModified: 0,
+				sourceFilePageCount: 1,
+				pageOrder: '1-1',
+			));
 		} finally {
 			unlink($databasePath);
 		}
@@ -598,12 +660,23 @@ public function testFindSongReturnsOnlyTheRequestedSong(): void {
 		return $path;
 	}
 
-	/** A library whose Songs table carries the given creation-date column. */
-	private function songsDatabase(string $createdColumn): string {
+	/**
+	 * A library whose Songs table carries the given creation-date column (or none
+	 * when null) and, optionally, a LastModified column.
+	 */
+	private function songsDatabase(?string $createdColumn, bool $lastModified = true): string {
 		$path = tempnam(sys_get_temp_dir(), 'mobilesheetsmanager-');
 		self::assertNotFalse($path);
 		$database = new \PDO('sqlite:' . $path);
-		$database->exec('CREATE TABLE Songs(Id INTEGER PRIMARY KEY, Title VARCHAR(255), SortTitle VARCHAR(255), SongId INTEGER, ' . $createdColumn . ' INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
+
+		$columns = 'Id INTEGER PRIMARY KEY, Title VARCHAR(255), SortTitle VARCHAR(255), SongId INTEGER';
+		if ($createdColumn !== null) {
+			$columns .= ', ' . $createdColumn . ' INTEGER DEFAULT 0';
+		}
+		if ($lastModified) {
+			$columns .= ', LastModified INTEGER DEFAULT 0';
+		}
+		$database->exec('CREATE TABLE Songs(' . $columns . ')');
 
 		return $path;
 	}
