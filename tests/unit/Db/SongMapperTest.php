@@ -206,6 +206,70 @@ public function testFindSongReturnsOnlyTheRequestedSong(): void {
 		$this->assertSame([], $created->artists);
 	}
 
+	public function testCreateEntitiesFillCreationAndModificationDates(): void {
+		$mapper = $this->mapper();
+		$before = (int)round(microtime(true) * 1000);
+		$composerId = $mapper->createComposer($this->databasePath, 'Vivaldi');
+		$bookId = $mapper->createBook($this->databasePath, 'Seasons');
+		$collectionId = $mapper->createCollection($this->databasePath, 'Baroque');
+		$after = (int)round(microtime(true) * 1000);
+
+		$database = new \PDO('sqlite:' . $this->databasePath);
+		foreach ([['Composer', $composerId], ['Books', $bookId], ['Collections', $collectionId]] as [$table, $id]) {
+			$row = $database->query('SELECT DateCreated, LastModified FROM ' . $table . ' WHERE Id = ' . $id)->fetch();
+			$created = (int)$row['DateCreated'];
+			self::assertSame($created, (int)$row['LastModified'], $table . ' creation and modification date');
+			self::assertGreaterThanOrEqual($before, $created, $table . ' creation date');
+			self::assertLessThanOrEqual($after, $created, $table . ' creation date');
+		}
+	}
+
+	/**
+	 * Songs name their creation date "CreationDate" rather than "DateCreated", and
+	 * it has to be filled in just the same.
+	 */
+	public function testCreateSongFillsTheDatesWhateverTheCreationColumnIsCalled(): void {
+		$databasePath = $this->songsDatabase('CreationDate');
+
+		try {
+			$mapper = $this->mapper();
+			$before = (int)round(microtime(true) * 1000);
+			$songId = $mapper->createSong($databasePath, 'Cantata', [], [], [], []);
+			$after = (int)round(microtime(true) * 1000);
+
+			$row = (new \PDO('sqlite:' . $databasePath))
+				->query('SELECT CreationDate, LastModified FROM Songs WHERE Id = ' . $songId)
+				->fetch();
+			foreach (['CreationDate', 'LastModified'] as $column) {
+				self::assertGreaterThanOrEqual($before, (int)$row[$column], $column);
+				self::assertLessThanOrEqual($after, (int)$row[$column], $column);
+			}
+		} finally {
+			unlink($databasePath);
+		}
+	}
+
+	public function testUpdateSongBumpsLastModifiedButKeepsTheCreationDate(): void {
+		$databasePath = $this->songsDatabase('CreationDate');
+
+		try {
+			$mapper = $this->mapper();
+			$songId = $mapper->createSong($databasePath, 'Cantata', [], [], [], []);
+
+			$database = new \PDO('sqlite:' . $databasePath);
+			// Backdate both so the effect of the update is visible.
+			$database->exec('UPDATE Songs SET CreationDate = 1000, LastModified = 1000 WHERE Id = ' . $songId);
+
+			$mapper->updateSong($databasePath, $songId, 'Cantata (rev)', [], [], [], []);
+
+			$row = $database->query('SELECT CreationDate, LastModified FROM Songs WHERE Id = ' . $songId)->fetch();
+			self::assertSame(1000, (int)$row['CreationDate'], 'the creation date must survive an update');
+			self::assertGreaterThan(1000, (int)$row['LastModified'], 'LastModified must move forward on a change');
+		} finally {
+			unlink($databasePath);
+		}
+	}
+
 	public function testDeleteSongRemovesTheSongItsFilesAndEveryReference(): void {
 		$mapper = $this->mapper();
 
@@ -530,6 +594,16 @@ public function testFindSongReturnsOnlyTheRequestedSong(): void {
 		$database = new \PDO('sqlite:' . $path);
 		$database->exec('CREATE TABLE Songs(Id INTEGER PRIMARY KEY, Title VARCHAR(255), SortTitle VARCHAR(255), SongId INTEGER)');
 		$database->exec("INSERT INTO Songs (Id, Title, SortTitle) VALUES (1, 'Solo', 'Solo')");
+
+		return $path;
+	}
+
+	/** A library whose Songs table carries the given creation-date column. */
+	private function songsDatabase(string $createdColumn): string {
+		$path = tempnam(sys_get_temp_dir(), 'mobilesheetsmanager-');
+		self::assertNotFalse($path);
+		$database = new \PDO('sqlite:' . $path);
+		$database->exec('CREATE TABLE Songs(Id INTEGER PRIMARY KEY, Title VARCHAR(255), SortTitle VARCHAR(255), SongId INTEGER, ' . $createdColumn . ' INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
 
 		return $path;
 	}

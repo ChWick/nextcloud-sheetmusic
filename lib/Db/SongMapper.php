@@ -357,12 +357,10 @@ class SongMapper {
 			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
 		]);
 
-		$insertStmt = $database->prepare('INSERT INTO Songs (Title, SortTitle) VALUES (:title, :sortTitle)');
-		$insertStmt->execute([
-			':title' => $title,
-			':sortTitle' => $title,
-		]);
-		$songId = (int)$database->lastInsertId();
+		$songId = $this->insertRow($database, 'Songs', [
+			'Title' => $title,
+			'SortTitle' => $title,
+		] + $this->dateColumns($database, 'Songs'));
 
 		$this->updateSong($databasePath, $songId, $title, $composerIds, $bookIds, $collectionIds, $artistIds);
 
@@ -392,13 +390,12 @@ class SongMapper {
 		/** @var list<string> $existingTables */
 		$existingTables = $tablesStatement !== false ? $tablesStatement->fetchAll(PDO::FETCH_COLUMN) : [];
 
-		// Update Song Title and SortTitle
-		$stmt = $database->prepare('UPDATE Songs SET Title = :title, SortTitle = :sortTitle WHERE Id = :id');
-		$stmt->execute([
-			':title' => $title,
-			':sortTitle' => $title,
-			':id' => $songId,
-		]);
+		// Update Song Title and SortTitle, stamping the change on LastModified. The
+		// creation date is set when the song is created and left alone by an update.
+		$this->updateRowById($database, 'Songs', [
+			'Title' => $title,
+			'SortTitle' => $title,
+		] + $this->dateColumns($database, 'Songs', withCreation: false), $songId);
 
 		// Update Composers
 		if (in_array('ComposerSongs', $existingTables, true)) {
@@ -561,7 +558,7 @@ class SongMapper {
 
 		$columns = [];
 		$params = [];
-		foreach ($this->existingColumns($database, $values) as $name => $value) {
+		foreach ($this->existingColumns($database, 'Files', $values) as $name => $value) {
 			$columns[] = $name;
 			$params[':' . $name] = $value;
 		}
@@ -612,30 +609,46 @@ class SongMapper {
 		];
 
 		$assignments = [];
-		$params = [':fileId' => $fileId];
-		foreach ($this->existingColumns($database, $values) as $name => $value) {
+		$params = [':id' => $fileId];
+		foreach ($this->existingColumns($database, 'Files', $values) as $name => $value) {
 			$assignments[] = $name . ' = :' . $name;
 			$params[':' . $name] = $value;
 		}
 
-		$sql = 'UPDATE Files SET ' . implode(', ', $assignments) . ' WHERE Id = :fileId';
+		$sql = 'UPDATE Files SET ' . implode(', ', $assignments) . ' WHERE Id = :id';
 		$updateStmt = $database->prepare($sql);
 		$updateStmt->execute($params);
 	}
 
+	/** Current time in milliseconds, the unit MobileSheets stores its dates in. */
+	private function nowMilliseconds(): int {
+		return (int)round(microtime(true) * 1000);
+	}
+
 	/**
-	 * Keep only the wanted column => value pairs that the Files table actually
-	 * has, keyed by column name, so a database with a reduced or extended schema
-	 * still gets every column it knows filled in.
+	 * Lower-cased names of the columns a table has.
+	 *
+	 * @return array<string, true>
+	 */
+	private function columnNames(PDO $database, string $table): array {
+		$names = [];
+		foreach ($database->query('PRAGMA table_info(' . $table . ')')->fetchAll(PDO::FETCH_ASSOC) as $column) {
+			$names[strtolower((string)$column['name'])] = true;
+		}
+
+		return $names;
+	}
+
+	/**
+	 * Keep only the wanted column => value pairs the table actually has, keyed by
+	 * column name, so a database with a reduced or extended schema still gets every
+	 * column it knows filled in.
 	 *
 	 * @param array<string, mixed> $values
 	 * @return array<string, mixed>
 	 */
-	private function existingColumns(PDO $database, array $values): array {
-		$existing = [];
-		foreach ($database->query('PRAGMA table_info(Files)')->fetchAll(PDO::FETCH_ASSOC) as $column) {
-			$existing[strtolower((string)$column['name'])] = true;
-		}
+	private function existingColumns(PDO $database, string $table, array $values): array {
+		$existing = $this->columnNames($database, $table);
 
 		$wanted = [];
 		foreach ($values as $name => $value) {
@@ -647,14 +660,83 @@ class SongMapper {
 		return $wanted;
 	}
 
+	/**
+	 * The creation and modification date columns of a table, set to the current
+	 * time. MobileSheets names these differently per table ("DateCreated" versus
+	 * "CreationDate"), and some tables carry none at all, so only the columns the
+	 * table really has are produced.
+	 *
+	 * @param bool $withCreation also set the creation date; an update must leave it
+	 *                           alone, so it is dropped there
+	 * @return array<string, int> column name => timestamp in milliseconds
+	 */
+	private function dateColumns(PDO $database, string $table, bool $withCreation = true): array {
+		$existing = $this->columnNames($database, $table);
+		$now = $this->nowMilliseconds();
+
+		$values = [];
+		if ($withCreation) {
+			foreach (['DateCreated', 'CreationDate', 'DateAdded'] as $created) {
+				if (isset($existing[strtolower($created)])) {
+					$values[$created] = $now;
+					break;
+				}
+			}
+		}
+		foreach (['LastModified', 'DateModified', 'ModifiedDate'] as $modified) {
+			if (isset($existing[strtolower($modified)])) {
+				$values[$modified] = $now;
+				break;
+			}
+		}
+
+		return $values;
+	}
+
+	/**
+	 * Insert a row, filling in the columns the table has, and return its id.
+	 *
+	 * @param array<string, mixed> $values
+	 */
+	private function insertRow(PDO $database, string $table, array $values): int {
+		$columns = [];
+		$params = [];
+		foreach ($this->existingColumns($database, $table, $values) as $name => $value) {
+			$columns[] = $name;
+			$params[':' . $name] = $value;
+		}
+
+		$sql = 'INSERT INTO ' . $table . ' (' . implode(', ', $columns) . ') VALUES (' . implode(', ', array_keys($params)) . ')';
+		$database->prepare($sql)->execute($params);
+
+		return (int)$database->lastInsertId();
+	}
+
+	/**
+	 * Update a row by id, touching only the columns the table has.
+	 *
+	 * @param array<string, mixed> $values
+	 */
+	private function updateRowById(PDO $database, string $table, array $values, int $id): void {
+		$assignments = [];
+		$params = [':id' => $id];
+		foreach ($this->existingColumns($database, $table, $values) as $name => $value) {
+			$assignments[] = $name . ' = :' . $name;
+			$params[':' . $name] = $value;
+		}
+
+		$sql = 'UPDATE ' . $table . ' SET ' . implode(', ', $assignments) . ' WHERE Id = :id';
+		$database->prepare($sql)->execute($params);
+	}
+
 	public function createComposer(string $databasePath, string $name): int {
 		$database = new PDO('sqlite:' . $databasePath, options: [
 			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
 			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
 		]);
-		$stmt = $database->prepare('INSERT INTO Composer (Name) VALUES (:name)');
-		$stmt->execute([':name' => $name]);
-		return (int)$database->lastInsertId();
+		return $this->insertRow($database, 'Composer', [
+			'Name' => $name,
+		] + $this->dateColumns($database, 'Composer'));
 	}
 
 	public function createBook(string $databasePath, string $title): int {
@@ -662,9 +744,9 @@ class SongMapper {
 			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
 			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
 		]);
-		$stmt = $database->prepare('INSERT INTO Books (Title) VALUES (:title)');
-		$stmt->execute([':title' => $title]);
-		return (int)$database->lastInsertId();
+		return $this->insertRow($database, 'Books', [
+			'Title' => $title,
+		] + $this->dateColumns($database, 'Books'));
 	}
 
 	public function createCollection(string $databasePath, string $name): int {
@@ -672,9 +754,9 @@ class SongMapper {
 			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
 			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
 		]);
-		$stmt = $database->prepare('INSERT INTO Collections (Name) VALUES (:name)');
-		$stmt->execute([':name' => $name]);
-		return (int)$database->lastInsertId();
+		return $this->insertRow($database, 'Collections', [
+			'Name' => $name,
+		] + $this->dateColumns($database, 'Collections'));
 	}
 
 	public function createArtist(string $databasePath, string $name): int {
@@ -682,9 +764,9 @@ class SongMapper {
 			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
 			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
 		]);
-		$stmt = $database->prepare('INSERT INTO Artists (Name) VALUES (:name)');
-		$stmt->execute([':name' => $name]);
-		return (int)$database->lastInsertId();
+		return $this->insertRow($database, 'Artists', [
+			'Name' => $name,
+		] + $this->dateColumns($database, 'Artists'));
 	}
 
 	/**
