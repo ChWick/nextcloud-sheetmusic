@@ -729,6 +729,45 @@ final class ApiTest extends TestCase {
 		$this->assertEquals(['songs' => []], $response->getData());
 	}
 
+	/**
+	 * With "Delete all attached files" unchecked the files stay where they are: only the
+	 * song and the rows pointing at it leave the database.
+	 */
+	public function testDeleteSongKeepsItsFilesWhenNotRequested(): void {
+		$storedPath = '/remote.php/dav/files/admin/Noten/Alpha.pdf';
+
+		$songMapper = $this->createMock(SongMapper::class);
+		$songMapper->method('findSong')->willReturn(new MobileSheetsSong(
+			42,
+			'Alpha',
+			[new MobileSheetsFile(2, $storedPath)],
+		));
+		$songMapper->expects($this->once())
+			->method('deleteSong')
+			->with('/tmp/mobilesheetsmanager-test-library.db', 42)
+			->willReturn([$storedPath]);
+		$songMapper->method('findLibraryData')->willReturn(['songs' => []]);
+
+		$fileManager = $this->createMock(FileManager::class);
+		$fileManager->expects($this->never())->method('pathOfStoredFile');
+
+		$rootFolder = $this->createLibraryRootFolder();
+		// No file node is ever looked up, so nothing is deleted from the user's folder.
+		$rootFolder->expects($this->never())->method('get');
+
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$libraryMapper->method('findForUser')
+			->with('admin', 7)
+			->willReturn(['id' => 7, 'path' => '/Noten/mobilesheets.db']);
+
+		$controller = $this->createController($libraryMapper, $songMapper, $rootFolder, $fileManager);
+
+		$response = $controller->deleteSong(42, 7, false);
+
+		$this->assertEquals(Http::STATUS_OK, $response->getStatus());
+		$this->assertEquals(['songs' => []], $response->getData());
+	}
+
 	public function testDeleteEntityWithoutLibraryIdIsBadRequest(): void {
 		$controller = $this->createController();
 

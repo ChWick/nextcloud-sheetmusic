@@ -5,6 +5,7 @@ import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
 import { generateOcsUrl } from '@nextcloud/router'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcRadioGroup from '@nextcloud/vue/components/NcRadioGroup'
@@ -36,7 +37,7 @@ const props = withDefaults(
 const emit = defineEmits<{
 	saved: [data: LibraryData, songId?: number]
 	updated: [data: LibraryData]
-	/** The song was deleted; its files moved to the trash bin. */
+	/** The song was deleted; its files went to the trash bin or stayed, per the chosen option. */
 	deleted: [data: LibraryData | undefined, songId: number]
 }>()
 
@@ -49,6 +50,8 @@ const isEditing = ref(false)
 const isDeleteDialogOpen = ref(false)
 const isDeletingSong = ref(false)
 const deleteError = ref('')
+/** Whether the attached files are deleted along with the song. */
+const deleteFiles = ref(true)
 const selectedFileId = ref('')
 let currentLoadId = 0
 /** Set when the song changed while the editor covered the PDF view, which defers the render. */
@@ -104,8 +107,8 @@ function handleUpdated(data: LibraryData) {
 }
 
 /**
- * Delete the song: its files are moved to the Nextcloud trash bin by the server, so they
- * can be restored, and the song with every row pointing at it leaves the database.
+ * Delete the song: the song with every row pointing at it leaves the database, and its
+ * files go with it to the Nextcloud trash bin when "Delete all attached files" is set.
  */
 async function confirmDeleteSong() {
 	if (!props.song || props.libraryId < 0) {
@@ -119,7 +122,7 @@ async function confirmDeleteSong() {
 	try {
 		const response = await axios.delete(
 			generateOcsUrl('/apps/mobilesheetsmanager/api/songs/{id}', { id: songId }),
-			{ params: { libraryId: props.libraryId } },
+			{ params: { libraryId: props.libraryId, deleteFiles: deleteFiles.value } },
 		)
 		isDeleteDialogOpen.value = false
 		// The payload is only a convenience. It must never turn a successful deletion into
@@ -337,7 +340,16 @@ watch(isEditing, (editing) => {
 			:name="t('mobilesheetsmanager', 'Delete song')"
 			@close="isDeleteDialogOpen = false">
 			<p>{{ t('mobilesheetsmanager', 'Delete "{title}" from this library?', { title: song?.title ?? '' }) }}</p>
-			<p>{{ t('mobilesheetsmanager', 'The song and everything pointing at it is removed from the MobileSheets database. Its {count} attached file(s) are moved to the Nextcloud trash bin, so they can be restored from there.', { count: songFiles.length }) }}</p>
+			<p>{{ t('mobilesheetsmanager', 'The song and everything pointing at it is removed from the MobileSheets database.') }}</p>
+			<NcCheckboxRadioSwitch v-model="deleteFiles" type="checkbox">
+				{{ t('mobilesheetsmanager', 'Delete all attached files') }}
+			</NcCheckboxRadioSwitch>
+			<p v-if="deleteFiles">
+				{{ t('mobilesheetsmanager', 'The {count} attached file(s) are moved to the Nextcloud trash bin, so they can be restored from there.', { count: songFiles.length }) }}
+			</p>
+			<p v-else>
+				{{ t('mobilesheetsmanager', 'The {count} attached file(s) are kept in your Nextcloud files.', { count: songFiles.length }) }}
+			</p>
 			<p v-if="deleteError" :class="$style.error" role="alert">{{ deleteError }}</p>
 			<div :class="$style.dialogActions">
 				<NcButton @click="isDeleteDialogOpen = false">

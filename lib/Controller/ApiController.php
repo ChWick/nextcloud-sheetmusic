@@ -267,13 +267,14 @@ class ApiController extends OCSController {
 	/**
 	 * Delete a song from a library.
 	 *
-	 * The files of the song are moved into the Nextcloud trash bin, so deleting a song by
-	 * accident stays recoverable, and only then the song with every row that points at it
-	 * is removed from the MobileSheets database.
+	 * The song with every row that points at it is removed from the MobileSheets
+	 * database. Its attached files can go with it - moved into the Nextcloud trash
+	 * bin, so deleting a song by accident stays recoverable - or stay in place,
+	 * based on $deleteFiles.
 	 */
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'DELETE', url: '/api/songs/{id}')]
-	public function deleteSong(int $id, ?int $libraryId = null): DataResponse {
+	public function deleteSong(int $id, ?int $libraryId = null, bool $deleteFiles = true): DataResponse {
 		if ($libraryId === null) {
 			return new DataResponse([], Http::STATUS_BAD_REQUEST);
 		}
@@ -300,22 +301,24 @@ class ApiController extends OCSController {
 				return new DataResponse([], Http::STATUS_NOT_FOUND);
 			}
 
-			// The files are handled while the database still lists them: a failure below
-			// leaves the library as it was, with the files restorable from the trash bin.
-			// A stored path belonging to another user yields nothing to delete there.
 			$filePaths = array_map(
 				static fn (MobileSheetsFile $file): string => $file->path,
 				$song->files,
 			);
-			$hashCodes = $this->hashCodesFor($databasePath);
-			foreach ($filePaths as $filePath) {
-				$storedFile = $this->fileManager->pathOfStoredFile($filePath, $user);
-				if ($storedFile !== null) {
-					$this->deleteFileNode($storedFile->internal);
+			if ($deleteFiles) {
+				// The files are handled while the database still lists them: a failure below
+				// leaves the library as it was, with the files restorable from the trash bin.
+				// A stored path belonging to another user yields nothing to delete there.
+				$hashCodes = $this->hashCodesFor($databasePath);
+				foreach ($filePaths as $filePath) {
+					$storedFile = $this->fileManager->pathOfStoredFile($filePath, $user);
+					if ($storedFile !== null) {
+						$this->deleteFileNode($storedFile->internal);
+					}
+					$hashCodes?->removePath($filePath);
 				}
-				$hashCodes?->removePath($filePath);
+				$hashCodes?->save();
 			}
-			$hashCodes?->save();
 
 			$this->songMapper->deleteSong($databasePath, $id);
 
@@ -324,6 +327,7 @@ class ApiController extends OCSController {
 				'songId' => $id,
 				'title' => $song->title,
 				'files' => count($filePaths),
+				'filesDeleted' => $deleteFiles,
 			]);
 
 			return new DataResponse($this->songMapper->findLibraryData($databasePath));
