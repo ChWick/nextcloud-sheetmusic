@@ -11,11 +11,13 @@ use OCA\MobileSheetsManager\Service\FileManager;
 use OCA\MobileSheetsManager\Service\MobileSheetsFileFacts;
 use OCA\MobileSheetsManager\Service\MobileSheetsFileLogEntry;
 use OCA\MobileSheetsManager\Service\MobileSheetsHashCodesFile;
+use OCA\MobileSheetsManager\Service\MobileSheetsPdfMetadata;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\ApiRoute;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\OCSController;
+use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\Files\Node;
@@ -251,6 +253,10 @@ class ApiController extends OCSController {
 			}
 
 			$this->songMapper->updateSong($databasePath, $id, $title, $composerIds, $bookIds, $collectionIds, $artistIds);
+
+			// Best-effort: the song is saved even when one of its files refuses
+			// the metadata write (an exotic or encrypted PDF).
+			$this->syncSongFileMetadata($user, $databasePath, $id);
 
 			return new DataResponse($this->songMapper->findLibraryData($databasePath));
 		} catch (\Throwable $exception) {
@@ -696,6 +702,57 @@ class ApiController extends OCSController {
 				'exception' => $exception,
 				'databasePath' => $databasePath,
 			]);
+		}
+	}
+
+	/**
+	 * Write the song's metadata into its attached PDFs so importing one of them
+	 * back into MobileSheets recreates the song, and refresh the file facts the
+	 * changed bytes invalidate.
+	 *
+	 * Best-effort per file: an unreadable or exotic PDF is reported and skipped,
+	 * it must not fail the song edit the metadata is meant to accompany.
+	 */
+	private function syncSongFileMetadata(IUser $user, string $databasePath, int $songId): void {
+		$song = $this->songMapper->findSong($databasePath, $songId);
+		if ($song === null) {
+			return;
+		}
+
+		$info = MobileSheetsPdfMetadata::fieldsFor($song);
+		foreach ($song->files as $file) {
+			if (!str_ends_with(strtolower($file->path), '.pdf')) {
+				continue;
+			}
+
+			try {
+				$path = $this->fileManager->pathOfStoredFile($file->path, $user);
+				if ($path === null) {
+					continue;
+				}
+
+				$node = $this->rootFolder->get($path->internal);
+				if (!($node instanceof File)) {
+					continue;
+				}
+
+				$content = $node->getContent();
+				if (!is_string($content) || $content === '') {
+					continue;
+				}
+
+				$node->putContent(MobileSheetsPdfMetadata::withInfo($content, $info));
+				// The bytes changed, so the hash, size and timestamp stored for
+				// the file have to follow them.
+				$this->songMapper->updateFile($databasePath, $file->id, $file->path, MobileSheetsFileFacts::fromNode($node));
+			} catch (\Throwable $exception) {
+				$this->logger->warning('Could not write the song metadata into an attached PDF', [
+					'exception' => $exception,
+					'songId' => $songId,
+					'fileId' => $file->id,
+					'path' => $file->path,
+				]);
+			}
 		}
 	}
 
