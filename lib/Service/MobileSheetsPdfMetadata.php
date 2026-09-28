@@ -35,6 +35,13 @@ class MobileSheetsPdfMetadata {
 	 */
 	private const PRESERVED_INFO_KEYS = ['Creator', 'Producer', 'CreationDate', 'ModDate'];
 
+	/**
+	 * Info dictionary keys read back for a new song: the names fieldsFor()
+	 * writes, plus "Album" - the field MobileSheets maps "Books" to on import,
+	 * so a file that came back out of MobileSheets is read just as well.
+	 */
+	private const READ_KEYS = ['Title', 'Author', 'Composer', 'Artist', 'Books', 'Album', 'Collection'];
+
 	private function __construct() {
 	}
 
@@ -232,5 +239,115 @@ class MobileSheetsPdfMetadata {
 			'infoGeneration' => $infoGeneration,
 			'id' => $id,
 		];
+	}
+
+	/**
+	 * The information a new song can be prefilled with, read from a PDF's
+	 * document properties. The values a song holds several of - composers,
+	 * books, collections, artists - come back as one entry per name, because
+	 * that is how the editor turns them into entities.
+	 *
+	 * @return array{title: string, composers: list<string>, books: list<string>, collections: list<string>, artists: list<string>}
+	 * @throws \RuntimeException when the file is not a readable PDF
+	 */
+	public static function prefillFor(string $content): array {
+		$fields = self::readFields($content);
+
+		// Author and Composer both spell the composers; a file carries one or
+		// the other depending on who wrote it, so both are read back together.
+		$composers = self::splitNames(($fields['Composer'] ?? '') . ';' . ($fields['Author'] ?? ''));
+
+		return [
+			'title' => $fields['Title'] ?? '',
+			'composers' => $composers,
+			// "Books" travels to the album on import, so either name is a book.
+			'books' => self::splitNames($fields['Books'] ?? $fields['Album'] ?? ''),
+			'collections' => self::splitNames($fields['Collection'] ?? ''),
+			'artists' => self::splitNames($fields['Artist'] ?? ''),
+		];
+	}
+
+	/**
+	 * Split a document property holding several names into the individual ones,
+	 * dropping blanks and repeats.
+	 *
+	 * @return list<string>
+	 */
+	private static function splitNames(string $value): array {
+		$names = [];
+		foreach (preg_split('/\s*;\s*/', $value) ?: [] as $part) {
+			$part = trim($part);
+			if ($part !== '' && !in_array($part, $names, true)) {
+				$names[] = $part;
+			}
+		}
+
+		return $names;
+	}
+
+	/**
+	 * The Info dictionary entries of a PDF, decoded to text.
+	 *
+	 * @return array<string, string> Info dictionary key => value
+	 */
+	private static function readFields(string $content): array {
+		$body = self::infoBody($content, self::trailer($content));
+		if ($body === null) {
+			return [];
+		}
+
+		$fields = [];
+		foreach (self::READ_KEYS as $key) {
+			// The values we are after are strings; anything else is left out.
+			$pattern = '#/' . preg_quote($key, '#') . '\s*(\((?:[^()\\\\]|\\\\.)*\)|<[^>]*>)#';
+			if (preg_match($pattern, $body, $match) === 1) {
+				$fields[$key] = self::pdfTextDecode($match[1]);
+			}
+		}
+
+		return $fields;
+	}
+
+	/**
+	 * Text of a PDF string, whether it is written as a hex string or a literal
+	 * one, and whether it is UTF-16 with a byte order mark or plain bytes.
+	 */
+	private static function pdfTextDecode(string $raw): string {
+		if (str_starts_with($raw, '<')) {
+			$hex = preg_replace('/\s+/', '', substr($raw, 1, -1)) ?? '';
+			$bytes = hex2bin($hex);
+			if ($bytes === false) {
+				return '';
+			}
+		} else {
+			$bytes = self::unescapeLiteral(substr($raw, 1, -1));
+		}
+
+		if (str_starts_with($bytes, "\xFE\xFF")) {
+			return mb_convert_encoding(substr($bytes, 2), 'UTF-8', 'UTF-16BE');
+		}
+
+		return mb_convert_encoding($bytes, 'UTF-8', 'ISO-8859-1');
+	}
+
+	/** Body of a PDF literal string with its backslash escapes resolved. */
+	private static function unescapeLiteral(string $body): string {
+		return preg_replace_callback(
+			'/\\\\([nrtbf()\\\\]|[0-7]{1,3})/',
+			static function (array $match): string {
+				return match ($match[1]) {
+					'n' => "\n",
+					'r' => "\r",
+					't' => "\t",
+					'b' => "\x08",
+					'f' => "\x0C",
+					'(' => '(',
+					')' => ')',
+					'\\' => '\\',
+					default => chr(octdec($match[1])),
+				};
+			},
+			$body,
+		) ?? $body;
 	}
 }

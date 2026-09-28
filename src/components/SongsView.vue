@@ -2,9 +2,19 @@
   <ViewHeader
     :title="t('mobilesheetsmanager', 'Songs')"
     :create-label="t('mobilesheetsmanager', 'New song')"
+    :import-label="t('mobilesheetsmanager', 'Import')"
     :filter-bar-visible="songIdInUrl === null ? filterBarVisible : undefined"
     @create="startNewSong"
+    @import="startImport"
     @toggle-filters="toggleFilterBar" />
+  <!-- Import reuses the create editor: the picked PDF is read for its metadata and
+       staged as the new song's file. -->
+  <input
+    ref="importInput"
+    type="file"
+    accept="application/pdf,.pdf"
+    hidden
+    @change="handleImportFile">
   <!-- The URL opens one song full screen ("?song=12"), for viewing it or - with the
        edit flag - for editing it; without a song the list is shown. -->
   <div v-if="songIdInUrl !== null" :class="$style.fullscreenArea">
@@ -55,6 +65,8 @@
                 :books="books"
                 :collections="collections"
                 :artists="artists"
+                :prefill="importPrefill"
+                :imported-file="importedFile"
                 @saved="handleSaved"
                 @cancel="isCreatingSong = false" />
     <ul v-else :class="$style.songList">
@@ -93,7 +105,7 @@ import SongEditor from '../components/SongEditor.vue';
 import SongFilterBar from '../components/SongFilterBar.vue';
 import SongViewer from '../components/SongViewer.vue';
 import ViewHeader from '../components/ViewHeader.vue';
-import type { Artist, Song, Composer, Book, Collection, LibraryData } from '../types/song';
+import type { Artist, Song, Composer, Book, Collection, LibraryData, SongPrefill } from '../types/song';
 import { useSongFilters } from '../composables/useSongFilters';
 
 // Props from parent (App.vue)
@@ -134,6 +146,11 @@ const fileError = ref('');
 const isLoadingSongs = ref(false);
 /** The editor is open for a song that does not exist yet. */
 const isCreatingSong = ref(false);
+/** Metadata read from the PDF an import picked, prefilled into the new song. */
+const importPrefill = ref<SongPrefill | null>(null);
+/** The PDF an import picked, staged as the new song's file. */
+const importedFile = ref<File | null>(null);
+const importInput = ref<HTMLInputElement>();
 
 // Computed filtered list
 const filteredSongs = computed(() => filterSongs(songs.value));
@@ -200,12 +217,59 @@ function goBackToSongs() {
 
 /** Open the editor for a song that does not exist yet. Cancelling leaves no trace. */
 function startNewSong() {
+  // A plain create starts empty; anything an import staged before is dropped.
+  importPrefill.value = null;
+  importedFile.value = null;
+  openNewSong();
+}
+
+/** Open the create editor. */
+function openNewSong() {
   isCreatingSong.value = true;
   // The editor is part of the list view; leave an open song for it.
   if (songIdInUrl.value !== null) {
     router.push({ query: queryWithoutOpenSong() });
   }
 }
+
+/** Open the file picker: the PDF picked here seeds a new song with its metadata. */
+function startImport() {
+  importInput.value?.click();
+}
+
+/**
+ * Read the picked PDF's document properties and open a new song prefilled from them.
+ * The file itself is staged as that song's file. A PDF without readable metadata still
+ * imports - the form just starts out empty and the file is attached on save.
+ */
+async function handleImportFile(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = '';
+  if (!file) return;
+
+  let prefill: SongPrefill | null = null;
+  try {
+    const form = new FormData();
+    form.append('file', file);
+    const response = await axios.post(generateOcsUrl('/apps/mobilesheetsmanager/api/import-metadata'), form);
+    prefill = (response.data as { ocs?: { data?: SongPrefill } })?.ocs?.data ?? null;
+  } catch {
+    prefill = null;
+  }
+
+  importPrefill.value = prefill;
+  importedFile.value = file;
+  openNewSong();
+}
+
+/** Leaving the create editor drops whatever an import staged for it. */
+watch(isCreatingSong, (creating) => {
+  if (!creating) {
+    importPrefill.value = null;
+    importedFile.value = null;
+  }
+});
 
 /** The editor saved: refresh the library data and show the song that was saved. */
 function handleSaved(data: LibraryData, songId?: number) {

@@ -348,6 +348,44 @@ class ApiController extends OCSController {
 		}
 	}
 
+	/**
+	 * Read the document properties of an uploaded PDF so a new song can be
+	 * prefilled from them before it is created.
+	 */
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/import-metadata')]
+	public function importSongMetadata(): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		$fileInfo = $this->request->getUploadedFile('file');
+		if ($fileInfo === null && isset($_FILES['file'])) {
+			$fileInfo = $_FILES['file'];
+		}
+
+		if ($fileInfo === null || !isset($fileInfo['tmp_name']) || !is_uploaded_file($fileInfo['tmp_name'])) {
+			return new DataResponse(['message' => 'No file uploaded'], Http::STATUS_BAD_REQUEST);
+		}
+
+		$content = file_get_contents($fileInfo['tmp_name']);
+		if ($content === false || $content === '') {
+			return new DataResponse(['message' => 'Could not read the uploaded file'], Http::STATUS_BAD_REQUEST);
+		}
+
+		try {
+			return new DataResponse(MobileSheetsPdfMetadata::prefillFor($content));
+		} catch (\Throwable $exception) {
+			// Not a readable PDF: the form is still opened, just not prefilled.
+			$this->logger->info('Could not read the metadata of an imported PDF', [
+				'exception' => $exception,
+			]);
+
+			return new DataResponse(['message' => 'Could not read the PDF metadata'], Http::STATUS_BAD_REQUEST);
+		}
+	}
+
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'POST', url: '/api/songs/{id}/file/upload')]
 	public function uploadSongFile(int $id, ?int $libraryId = null): DataResponse {

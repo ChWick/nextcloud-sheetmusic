@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { INode } from '@nextcloud/files'
-import type { Artist, Book, Collection, Composer, CreatedSongData, LibraryData, Song, SongFile } from '../types/song'
+import type { Artist, Book, Collection, Composer, CreatedSongData, LibraryData, Song, SongFile, SongPrefill } from '../types/song'
 
 import axios from '@nextcloud/axios'
 import { FilePickerClosed, getFilePickerBuilder } from '@nextcloud/dialogs'
@@ -22,9 +22,15 @@ const props = withDefaults(
 		books: Book[]
 		collections: Collection[]
 		artists: Artist[]
+		/** Metadata read from an imported PDF, prefilled into a new song. */
+		prefill?: SongPrefill | null
+		/** The imported PDF itself, staged as the new song's file. */
+		importedFile?: File | null
 	}>(),
 	{
 		song: null,
+		prefill: null,
+		importedFile: null,
 	},
 )
 
@@ -49,18 +55,41 @@ function matchSelected<T extends { id: number }>(options: T[], selected?: { id: 
 	return options.filter((option) => ids.has(option.id))
 }
 
-const title = ref(props.song?.title ?? '')
+/**
+ * Turn the names read from a PDF into the selected entities: an existing one when its
+ * name matches, a new tag otherwise - which the editor creates when the song is saved.
+ */
+function prefillByName<T extends { id: number }, TTag>(
+	names: string[] | undefined,
+	options: T[],
+	nameOf: (item: T) => string,
+	makeTag: (name: string) => TTag,
+): Array<T | TTag> {
+	return (names ?? []).map((name) =>
+		options.find((option) => nameOf(option).toLowerCase() === name.toLowerCase()) ?? makeTag(name),
+	)
+}
+
+const title = ref(props.song?.title ?? props.prefill?.title ?? '')
 const selectedComposers = ref<Array<Composer | { name: string, id?: number }>>(
-	matchSelected(props.composers, props.song?.composers),
+	props.song
+		? matchSelected(props.composers, props.song.composers)
+		: prefillByName(props.prefill?.composers, props.composers, (composer) => composer.name, createComposerTag),
 )
 const selectedBooks = ref<Array<Book | { title: string, id?: number }>>(
-	matchSelected(props.books, props.song?.books),
+	props.song
+		? matchSelected(props.books, props.song.books)
+		: prefillByName(props.prefill?.books, props.books, (book) => book.title, createBookTag),
 )
 const selectedCollections = ref<Array<Collection | { name: string, id?: number }>>(
-	matchSelected(props.collections, props.song?.collections),
+	props.song
+		? matchSelected(props.collections, props.song.collections)
+		: prefillByName(props.prefill?.collections, props.collections, (collection) => collection.name, createCollectionTag),
 )
 const selectedArtists = ref<Array<Artist | { name: string, id?: number }>>(
-	matchSelected(props.artists, props.song?.artists),
+	props.song
+		? matchSelected(props.artists, props.song.artists)
+		: prefillByName(props.prefill?.artists, props.artists, (artist) => artist.name, createArtistTag),
 )
 
 function getServerFiles(song: Song | null): SongFile[] {
@@ -187,6 +216,12 @@ function stageAttachment(path: string, name: string, action: 'copy' | 'move') {
 
 function stageUpload(file: File) {
 	pendingUploads.value.push({ key: `upload-${++pendingAdditionKey}`, file, name: file.name })
+}
+
+// An imported PDF is the new song's file right away; it is uploaded on save like
+// any other staged addition.
+if (props.importedFile) {
+	stageUpload(props.importedFile)
 }
 
 function getFileName(filePath: string): string {

@@ -7,6 +7,10 @@
                 @click="emit('create')">
         {{ createLabel }}
       </NcButton>
+      <NcButton v-if="importLabel"
+                @click="emit('import')">
+        {{ importLabel }}
+      </NcButton>
       <NcButton v-if="filterBarVisible !== undefined"
                 :aria-pressed="filterBarVisible"
                 @click="emit('toggle-filters')">
@@ -25,6 +29,8 @@ defineProps<{
   title: string
   /** Label of the view's create button; the button is hidden when unset. */
   createLabel?: string
+  /** Label of the view's import button; the button is hidden when unset. */
+  importLabel?: string
   /** Whether the filter bar is shown; the toggle is hidden when unset. */
   filterBarVisible?: boolean
 }>()
@@ -32,6 +38,8 @@ defineProps<{
 const emit = defineEmits<{
   /** The view's create button was pressed. */
   create: []
+  /** The view's import button was pressed. */
+  import: []
   /** The filter bar should be shown or hidden. */
   'toggle-filters': []
 }>()

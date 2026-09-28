@@ -63,3 +63,16 @@ export interface FileLogEntry {
 	message: string
 	level: FileLogLevel
 }
+
+/**
+ * Metadata read from an imported PDF: the information a new song is prefilled
+ * with. The entity fields hold names, which the editor turns into entities -
+ * existing ones when a name matches, new ones otherwise.
+ */
+export interface SongPrefill {
+	title: string
+	composers: string[]
+	books: string[]
+	collections: string[]
+	artists: string[]
+}

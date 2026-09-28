@@ -103,12 +103,70 @@ final class MobileSheetsPdfMetadataTest extends TestCase {
 		MobileSheetsPdfMetadata::withInfo(self::minimalPdf(' /Encrypt 9 0 R'), ['Title' => 'X']);
 	}
 
-	/** A tiny but structurally valid PDF: catalog, one page, a trailer and a startxref. */
-	private static function minimalPdf(string $trailerExtra = ''): string {
+	public function testPrefillForReadsBackWhatWithInfoWrote(): void {
+		$song = new MobileSheetsSong(
+			42,
+			'Blue Bossa',
+			[],
+			[new MobileSheetsComposer(1, 'Joe Henderson')],
+			[new MobileSheetsBook(2, 'Real Book')],
+			[new MobileSheetsCollection(3, 'Jazz')],
+			[new MobileSheetsArtist(4, 'Miles Davis')],
+		);
+
+		$updated = MobileSheetsPdfMetadata::withInfo(self::minimalPdf(), MobileSheetsPdfMetadata::fieldsFor($song));
+
+		self::assertSame([
+			'title' => 'Blue Bossa',
+			'composers' => ['Joe Henderson'],
+			'books' => ['Real Book'],
+			'collections' => ['Jazz'],
+			'artists' => ['Miles Davis'],
+		], MobileSheetsPdfMetadata::prefillFor($updated));
+	}
+
+	public function testPrefillForReadsTheStandardSpellingsAndSplitsTheNames(): void {
+		// A file written by another tool: plain literal strings, "Author" for the
+		// composers and "Album" for what MobileSheets calls a book.
+		$pdf = self::minimalPdf('', '/Title (Imported) /Author (A; B) /Album (Real Book) /Artist (Solo) /Collection (Jazz)');
+
+		self::assertSame([
+			'title' => 'Imported',
+			'composers' => ['A', 'B'],
+			'books' => ['Real Book'],
+			'collections' => ['Jazz'],
+			'artists' => ['Solo'],
+		], MobileSheetsPdfMetadata::prefillFor($pdf));
+	}
+
+	public function testPrefillForLeavesOutTheFieldsTheFileDoesNotCarry(): void {
+		self::assertSame([
+			'title' => 'Solo',
+			'composers' => [],
+			'books' => [],
+			'collections' => [],
+			'artists' => [],
+		], MobileSheetsPdfMetadata::prefillFor(self::minimalPdf('', '/Title (Solo)')));
+	}
+
+	public function testPrefillForRejectsAFileThatIsNotAPdf(): void {
+		$this->expectException(\RuntimeException::class);
+
+		MobileSheetsPdfMetadata::prefillFor('just some text');
+	}
+
+	/**
+	 * A tiny but structurally valid PDF: catalog, one page, a trailer and a startxref.
+	 * Object 4 is its Info dictionary, whose entries $infoBody supplies.
+	 */
+	private static function minimalPdf(
+		string $trailerExtra = '',
+		string $infoBody = '/Title (Old title) /Creator (Unit test)',
+	): string {
 		$objects = "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n"
 			. "2 0 obj << /Type /Pages /Count 1 /Kids [3 0 R] >> endobj\n"
 			. "3 0 obj << /Type /Page /Parent 2 0 R >> endobj\n"
-			. "4 0 obj << /Title (Old title) /Creator (Unit test) >> endobj\n";
+			. '4 0 obj << ' . $infoBody . " >> endobj\n";
 
 		$xrefOffset = strlen("%PDF-1.4\n" . $objects);
 
