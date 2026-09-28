@@ -18,6 +18,7 @@ use OCA\MobileSheetsManager\Db\MobileSheetsFile;
 use OCA\MobileSheetsManager\Db\MobileSheetsSong;
 use OCA\MobileSheetsManager\Db\SongMapper;
 use OCA\MobileSheetsManager\Service\FileManager;
+use OCA\MobileSheetsManager\Service\MobileSheetsFileLogEntry;
 use OCA\MobileSheetsManager\Service\MobileSheetsHashCodesFile;
 use OCA\MobileSheetsManager\Service\MobileSheetsPathResolver;
 use OCP\Files\Folder;
@@ -696,7 +697,13 @@ final class FileManagerTest extends TestCase {
 	 * The public entry point: resolve the library, read its songs and regenerate
 	 * every file they reference.
 	 */
-	public function testRegenerateFilePathsProcessesEverySongFile(): void {
+	/**
+	 * A FileManager wired for the bulk regenerateFilePaths(): the library node
+	 * resolves from the fake tree and findSongs() serves the given songs.
+	 *
+	 * @param list<MobileSheetsSong> $songs
+	 */
+	private function makeBulkFileManager(array $songs, ?LoggerInterface $logger = null): FileManager {
 		$storage = $this->createMock(IStorage::class);
 		$storage->method('getLocalFile')->willReturn('/tmp/mobilesheets.db');
 
@@ -724,7 +731,19 @@ final class FileManagerTest extends TestCase {
 		$libraryMapper = $this->createMock(LibraryMapper::class);
 		$libraryMapper->method('findById')->with(1)->willReturn(['id' => 1, 'path' => '/Noten/mobilesheets.db']);
 
-		$this->songMapper->method('findSongs')->with('/tmp/mobilesheets.db')->willReturn([
+		$this->songMapper->method('findSongs')->with('/tmp/mobilesheets.db')->willReturn($songs);
+
+		return new FileManager(
+			$libraryMapper,
+			$this->songMapper,
+			$rootFolder,
+			new MobileSheetsPathResolver($rootFolder),
+			$logger ?? $this->createMock(LoggerInterface::class),
+		);
+	}
+
+	public function testRegenerateFilePathsProcessesEverySongFile(): void {
+		$fileManager = $this->makeBulkFileManager([
 			new MobileSheetsSong(
 				1,
 				'Take Five',
@@ -736,14 +755,6 @@ final class FileManagerTest extends TestCase {
 			),
 		]);
 
-		$fileManager = new FileManager(
-			$libraryMapper,
-			$this->songMapper,
-			$rootFolder,
-			new MobileSheetsPathResolver($rootFolder),
-			$this->createMock(LoggerInterface::class),
-		);
-
 		$fileManager->regenerateFilePaths(1, $this->user());
 
 		self::assertSame(
@@ -754,6 +765,107 @@ final class FileManagerTest extends TestCase {
 			[['fileId' => 11, 'path' => '/remote.php/dav/files/admin/Noten/Jazz/Jazz - Take Five.pdf']],
 			$this->updates,
 		);
+	}
+
+	/**
+	 * A file that cannot be moved is logged and does not stop the run: the next
+	 * song's file is still relocated, and every file the run touched is reported.
+	 */
+	public function testRegenerateFilePathsLogsEveryFileAndKeepsGoing(): void {
+		$fileManager = $this->makeBulkFileManager([
+			// Missing on disk, so this one fails...
+			new MobileSheetsSong(
+				1,
+				'Broken',
+				[new MobileSheetsFile(11, $this->sourceWebdav('Noten/source/MissingFile.pdf'))],
+				[],
+				[],
+				[new MobileSheetsCollection(1, 'Jazz')],
+				[],
+			),
+			// ...and must not stop this one from being moved.
+			new MobileSheetsSong(
+				2,
+				'Take Five',
+				[new MobileSheetsFile(22, $this->sourceWebdav('Noten/source/SomeFile.pdf'))],
+				[],
+				[],
+				[new MobileSheetsCollection(1, 'Jazz')],
+				[],
+			),
+		]);
+
+		$log = $fileManager->regenerateFilePaths(1, $this->user());
+
+		// The run continued: the second file still reached its regenerated path.
+		self::assertSame(
+			[['from' => 'Noten/source/SomeFile.pdf', 'to' => 'Noten/Jazz/Jazz - Take Five.pdf']],
+			$this->moves,
+		);
+		self::assertSame(
+			[['fileId' => 22, 'path' => '/remote.php/dav/files/admin/Noten/Jazz/Jazz - Take Five.pdf']],
+			$this->updates,
+		);
+
+		// Every file touched is in the log: the failure with its reason, then the move.
+		self::assertCount(2, $log);
+		[$failed, $moved] = $log;
+		self::assertSame(MobileSheetsFileLogEntry::LEVEL_ERROR, $failed->level);
+		self::assertSame(1, $failed->songId);
+		self::assertSame('Broken', $failed->songTitle);
+		self::assertSame($this->sourceWebdav('Noten/source/MissingFile.pdf'), $failed->filePath);
+		self::assertStringContainsString('does not exist', $failed->message);
+		self::assertSame(MobileSheetsFileLogEntry::LEVEL_INFO, $moved->level);
+		self::assertSame(2, $moved->songId);
+		self::assertStringContainsString('Moved to', $moved->message);
+	}
+
+	/**
+	 * Expected failures (a song with no naming rule, a missing source) are reported
+	 * to the user through the returned list, so they must not clutter the Nextcloud
+	 * log with a warning and a stack trace per file.
+	 */
+	/**
+	 * A song with no composer, artist or collection keeps its file name on purpose,
+	 * so it is reported as a warning rather than an error.
+	 */
+	public function testRegenerateFilePathsGradesANoNamingRuleAsAWarning(): void {
+		$fileManager = $this->makeBulkFileManager([
+			new MobileSheetsSong(
+				1,
+				'Untitled',
+				[new MobileSheetsFile(11, $this->sourceWebdav('Noten/source/SomeFile.pdf'))],
+			),
+		]);
+
+		$log = $fileManager->regenerateFilePaths(1, $this->user());
+
+		self::assertSame([], $this->moves, 'nothing may move without a naming rule');
+		self::assertCount(1, $log);
+		self::assertSame(MobileSheetsFileLogEntry::LEVEL_WARNING, $log[0]->level);
+		self::assertStringContainsString('No composer', $log[0]->message);
+	}
+
+	public function testRegenerateFilePathsDoesNotLogExpectedFailures(): void {
+		$logger = $this->createMock(LoggerInterface::class);
+		$logger->expects($this->never())->method('warning');
+		$logger->expects($this->never())->method('error');
+
+		$fileManager = $this->makeBulkFileManager([
+			new MobileSheetsSong(
+				1,
+				'Broken',
+				[new MobileSheetsFile(11, $this->sourceWebdav('Noten/source/MissingFile.pdf'))],
+				[],
+				[],
+				[new MobileSheetsCollection(1, 'Jazz')],
+				[],
+			),
+		], $logger);
+
+		$errors = $fileManager->regenerateFilePaths(1, $this->user());
+
+		self::assertCount(1, $errors);
 	}
 
 	public function testRegenerateFilePathsThrowsWhenTheLibraryIsUnknown(): void {

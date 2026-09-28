@@ -9,6 +9,7 @@ use OCA\MobileSheetsManager\Db\MobileSheetsFile;
 use OCA\MobileSheetsManager\Db\SongMapper;
 use OCA\MobileSheetsManager\Service\FileManager;
 use OCA\MobileSheetsManager\Service\MobileSheetsFileFacts;
+use OCA\MobileSheetsManager\Service\MobileSheetsFileLogEntry;
 use OCA\MobileSheetsManager\Service\MobileSheetsHashCodesFile;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\ApiRoute;
@@ -734,7 +735,7 @@ class ApiController extends OCSController {
 		} 
 
 		try {
-			$this->fileManager->regenerateFilePaths($libraryId, $user);
+			$log = $this->fileManager->regenerateFilePaths($libraryId, $user);
 			
 		} catch (\Exception $e) {
 			$this->logger->error("Error regenerating file paths for library ID $libraryId: " . $e->getMessage());
@@ -743,8 +744,17 @@ class ApiController extends OCSController {
 				Http::STATUS_INTERNAL_SERVER_ERROR
 			);
 		}
+		// Per-file failures do not fail the request: the whole log - what happened to
+		// every file - is sent back so the client can show the user how the run went.
+		$failures = count(array_filter($log, static fn ($entry) => $entry->level !== MobileSheetsFileLogEntry::LEVEL_INFO));
+
 		return new DataResponse(
-			['message' => 'File paths regenerated successfully'],
+			[
+				'message' => $failures === 0
+					? 'File paths regenerated successfully'
+					: sprintf('File paths regenerated, but %d file(s) could not be updated', $failures),
+				'log' => $log,
+			],
 			Http::STATUS_OK
 		);
     }

@@ -54,7 +54,7 @@ function createWithComposerOrArtist(MobileSheetsSong $song, string $ext, string 
 	$artist = $song->artists[0]->name ?? '';
 
 	if ($composer === '' && $artist === '') {
-		throw new \Exception('No composer or artist');
+		throw new NoNamingRuleException('No composer or artist');
 	}
 
 	$compArtist = $composer !== '' ? $composer : $artist;
@@ -79,7 +79,7 @@ function createWithCollection(MobileSheetsSong $song, string $ext, string $fileP
 	$collection = $song->collections[0]->name ?? '';
 
 	if ($collection === '') {
-		throw new \Exception('No collection');
+		throw new NoNamingRuleException('No collection');
 	}
 
 	$fileName = "{$collection} - {$song->title}";
@@ -106,7 +106,7 @@ function createTargetPath(
 		return createWithCollection($song, $ext, $filePrefix);
 	}
 
-	throw new \Exception('No composer, artist, or collection');
+	throw new NoNamingRuleException('No composer, artist, or collection');
 }
 
 class FileManager {
@@ -212,7 +212,19 @@ class FileManager {
 		));
 	}
 
-	public function regenerateFilePaths(int $libraryId, IUser $user): void {
+	/**
+	 * Move every file of the library to its regenerated path.
+	 *
+	 * The run is best-effort: a file that cannot be moved - because its target is
+	 * taken, its source is gone, or the database rejects the update - is recorded
+	 * and the run continues with the remaining files, so one bad file cannot lose
+	 * the work done for the rest of the library. A line is collected for every file
+	 * the run touches and returned, so the caller can show the user a log of what
+	 * happened.
+	 *
+	 * @return list<MobileSheetsFileLogEntry> one line per file the run touched
+	 */
+	public function regenerateFilePaths(int $libraryId, IUser $user): array {
 		$library = $this->libraryMapper->findById($libraryId);
 		if ($library === null) {
 			throw new \Exception("Library with ID $libraryId not found");
@@ -238,15 +250,18 @@ class FileManager {
 		// memory and written back a single time.
 		$hashCodes = MobileSheetsHashCodesFile::forDatabase($databasePath, $this->logger);
 
+		$log = [];
 		try {
 			foreach ($songs as $song) {
-				$this->regenerateSongFiles($song, $user, $targetFolder, $databasePath, $hashCodes);
+				$this->regenerateSongFiles($song, $user, $targetFolder, $databasePath, $hashCodes, $log);
 			}
 		} finally {
 			// Save even when the run aborts, so the hash codes file keeps matching
 			// the moves that already happened.
 			$hashCodes?->save();
 		}
+
+		return $log;
 	}
 
 	/**
@@ -278,17 +293,61 @@ class FileManager {
 		$this->regenerateSongFiles($song, $user, $targetFolder, $databasePath, $hashCodes);
 	}
 
-	/** Move each file the song lists, in the order that decides the numeric prefix. */
+	/**
+	 * Move each file the song lists, in the order that decides the numeric prefix.
+	 *
+	 * When $log is given, a line is recorded for every file the song lists - moved,
+	 * already in place, or failed - and the run continues past failures; otherwise
+	 * a failure is thrown, which suits the single-song relocations that have no
+	 * report to fill in.
+	 *
+	 * @param list<MobileSheetsFileLogEntry>|null $log collects a line per file when given
+	 */
 	private function regenerateSongFiles(
 		MobileSheetsSong $song,
 		IUser $user,
 		Folder $targetFolder,
 		string $databasePath,
 		?MobileSheetsHashCodesFile $hashCodes,
+		?array &$log = null,
 	): void {
 		foreach ($song->files as $file) {
-			$this->regenerateFilePath($song, $file, $user, $targetFolder, $databasePath, $hashCodes);
+			try {
+				$message = $this->regenerateFilePath($song, $file, $user, $targetFolder, $databasePath, $hashCodes);
+				if ($log !== null) {
+					$log[] = $this->logEntry($song, $file, $message, MobileSheetsFileLogEntry::LEVEL_INFO);
+				}
+			} catch (\Throwable $exception) {
+				if ($log === null) {
+					throw $exception;
+				}
+				// A song with no naming rule keeps its name on purpose, so it is only a
+				// warning; anything else that stops the move is a real error.
+				$level = $exception instanceof NoNamingRuleException
+					? MobileSheetsFileLogEntry::LEVEL_WARNING
+					: MobileSheetsFileLogEntry::LEVEL_ERROR;
+				$log[] = $this->logEntry($song, $file, $exception->getMessage(), $level);
+			}
 		}
+	}
+
+	/**
+	 * Build one line of the run's log.
+	 *
+	 * Lines are shown to the user in a dialog, so they are deliberately not written
+	 * to the Nextcloud log as well: a per-file entry there would only restate what
+	 * the user already sees, and logging the exception would repeat the whole
+	 * accumulated report in its arguments for every single file. Genuine recovery
+	 * problems are still logged where they happen, i.e. when a move is reverted.
+	 */
+	private function logEntry(MobileSheetsSong $song, MobileSheetsFile $file, string $message, string $level): MobileSheetsFileLogEntry {
+		return new MobileSheetsFileLogEntry(
+			$song->id,
+			$song->title,
+			$file->path,
+			$message,
+			$level,
+		);
 	}
 
 	/**
@@ -297,6 +356,7 @@ class FileManager {
 	 * A target that is already taken is not an error: the file gets a unique name so it
 	 * cannot replace or share another song's file.
 	 *
+	 * @return string a one-line description of what happened to the file
 	 * @throws \RuntimeException when the stored path cannot be resolved, when the source
 	 *                           file is missing, or when the database update failed
 	 */
@@ -307,7 +367,7 @@ class FileManager {
 		Folder $targetFolder,
 		string $databasePath,
 		?MobileSheetsHashCodesFile $hashCodes = null,
-	): void {
+	): string {
 		// Relative target as produced by the naming rules, e.g.
 		// "Miles/Miles - Real Book/Miles - Real Book - Blue.pdf". Songs with more
 		// than one file would otherwise all map onto the same name, so each file
@@ -364,7 +424,7 @@ class FileManager {
 				'fileId' => $file->id,
 				'path' => $source->internal,
 			]);
-			return;
+			return 'Already at its regenerated path';
 		}
 
 		if (!$userFolder->nodeExists($sourceRelative)) {
@@ -422,6 +482,8 @@ class FileManager {
 			'createdFolders' => $createdFolders,
 			'removedEmptyFolders' => $removedFolders,
 		]);
+
+		return sprintf('Moved to "%s"', $targetRelative);
 	}
 
 	/**

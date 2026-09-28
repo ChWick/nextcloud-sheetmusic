@@ -51,3 +51,15 @@ export interface LibraryData {
 export interface CreatedSongData extends LibraryData {
 	createdSongId: number
 }
+
+/** Severity of a log line, so the user can filter the log down. */
+export type FileLogLevel = 'info' | 'warning' | 'error'
+
+/** One line of the log a bulk run produces: what happened to one file of a song. */
+export interface FileLogEntry {
+	songId: number
+	songTitle: string
+	filePath: string
+	message: string
+	level: FileLogLevel
+}

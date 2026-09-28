@@ -12,6 +12,7 @@ use OCA\MobileSheetsManager\Db\MobileSheetsFile;
 use OCA\MobileSheetsManager\Db\MobileSheetsSong;
 use OCA\MobileSheetsManager\Db\SongMapper;
 use OCA\MobileSheetsManager\Service\FileManager;
+use OCA\MobileSheetsManager\Service\MobileSheetsFileLogEntry;
 use OCA\MobileSheetsManager\Service\MobileSheetsFileFacts;
 use OCA\MobileSheetsManager\Service\MobileSheetsHashCodesFile;
 use OCA\MobileSheetsManager\Service\MobileSheetsPath;
@@ -1062,6 +1063,49 @@ final class ApiTest extends TestCase {
 			}
 		}
 		$this->temporaryFiles = [];
+	}
+
+	/**
+	 * Per-file failures are not fatal: the whole log - one line per file touched -
+	 * is sent back to the client so the user can follow the run.
+	 */
+	public function testRegenerateFilePathsReportsTheLog(): void {
+		$fileManager = $this->createMock(FileManager::class);
+		$fileManager->method('regenerateFilePaths')->willReturn([
+			new MobileSheetsFileLogEntry(1, 'Take Five', '/remote.php/dav/files/admin/Noten/a.pdf', 'Moved to "Noten/Jazz/Take Five.pdf"', MobileSheetsFileLogEntry::LEVEL_INFO),
+			new MobileSheetsFileLogEntry(2, 'Broken', '/remote.php/dav/files/admin/Noten/b.pdf', 'No composer, artist, or collection', MobileSheetsFileLogEntry::LEVEL_WARNING),
+		]);
+
+		$controller = $this->createController(fileManager: $fileManager);
+
+		$response = $controller->regenerateFilePaths(1);
+
+		self::assertEquals(Http::STATUS_OK, $response->getStatus());
+		$data = $response->getData();
+		self::assertCount(2, $data['log']);
+		self::assertSame(MobileSheetsFileLogEntry::LEVEL_INFO, $data['log'][0]->level);
+		self::assertSame('Take Five', $data['log'][0]->songTitle);
+		self::assertSame(MobileSheetsFileLogEntry::LEVEL_WARNING, $data['log'][1]->level);
+		self::assertSame('No composer, artist, or collection', $data['log'][1]->message);
+		self::assertStringContainsString('could not be updated', $data['message']);
+	}
+
+	/** A clean run reports no failures and the success message. */
+	public function testRegenerateFilePathsReportsSuccessWhenNothingFails(): void {
+		$fileManager = $this->createMock(FileManager::class);
+		$fileManager->method('regenerateFilePaths')->willReturn([
+			new MobileSheetsFileLogEntry(1, 'Take Five', '/remote.php/dav/files/admin/Noten/a.pdf', 'Moved to "Noten/Jazz/Take Five.pdf"', MobileSheetsFileLogEntry::LEVEL_INFO),
+		]);
+
+		$controller = $this->createController(fileManager: $fileManager);
+
+		$response = $controller->regenerateFilePaths(1);
+
+		self::assertEquals(Http::STATUS_OK, $response->getStatus());
+		$data = $response->getData();
+		self::assertCount(1, $data['log']);
+		self::assertSame(MobileSheetsFileLogEntry::LEVEL_INFO, $data['log'][0]->level);
+		self::assertSame('File paths regenerated successfully', $data['message']);
 	}
 
 	private function createController(

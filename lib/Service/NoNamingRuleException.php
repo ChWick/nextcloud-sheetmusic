@@ -1,0 +1,20 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * SPDX-FileCopyrightText: 2026 Nextcloud GmbH and Nextcloud contributors
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ */
+
+namespace OCA\MobileSheetsManager\Service;
+
+/**
+ * A song has no composer, artist or collection to build a file name from.
+ *
+ * This is a warning rather than an error: the file simply keeps its current name
+ * because there is nothing to derive a new one from. Nothing is broken, so the
+ * run keeps going and only reports it.
+ */
+class NoNamingRuleException extends \Exception {
+}
