@@ -10,6 +10,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - First release
+- Maintenance tool in the files view: "Sync file paths and metadata" replaces the
+  former "Regenerate File Paths" button and checks the selected library end to
+  end. One run moves every file to the path its song's naming rules produce,
+  writes every attached PDF's document properties (title, composers, artists,
+  books, collections) from the song data - files that already match are left
+  untouched instead of being rewritten - and keeps the file facts and the
+  MobileSheets hash codes file in step with both. The report dialog lists every
+  file that was checked with summary counts and level filters (all / warnings /
+  errors), and every entry carries a stable error code that is shown as a
+  localized message and links straight to its file in the Nextcloud files - or
+  to the file's folder when the file itself does not exist - and to the song in
+  the editor, so a warning can be acted on with one click. Problems that belong
+  to no single file, such as an unreadable hash codes file, appear as
+  library-level entries in the same report.
 - Option to view the PDF of a song in an external viewer. The "Open in external viewer"
   button in the song viewer opens the selected file in a new browser tab, where it is
   shown by the browser's own PDF viewer or the system's PDF application instead of the

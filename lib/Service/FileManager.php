@@ -13,6 +13,7 @@ use OCA\MobileSheetsManager\Db\LibraryMapper;
 use OCA\MobileSheetsManager\Db\MobileSheetsFile;
 use OCA\MobileSheetsManager\Db\MobileSheetsSong;
 use OCA\MobileSheetsManager\Db\SongMapper;
+use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\IUser;
@@ -170,10 +171,10 @@ class FileManager {
 	 *
 	 * An occupied name gets a counter, "X.pdf" becoming "X (2).pdf", then "X (3).pdf".
 	 *
-	 * @param string      $targetRelative path relative to the user folder, e.g. "Noten/X.pdf"
-	 * @param string|null $keepRelative   path that counts as free because the file being
-	 *                                    handled already sits there; keeps repeated runs
-	 *                                    from renaming the same file again
+	 * @param string $targetRelative path relative to the user folder, e.g. "Noten/X.pdf"
+	 * @param string|null $keepRelative path that counts as free because the file being
+	 *                                  handled already sits there; keeps repeated runs
+	 *                                  from renaming the same file again
 	 * @return string the given path, or the first free variant of it
 	 * @throws \RuntimeException when even the last variant is taken
 	 */
@@ -225,25 +226,13 @@ class FileManager {
 	 * @return list<MobileSheetsFileLogEntry> one line per file the run touched
 	 */
 	public function regenerateFilePaths(int $libraryId, IUser $user): array {
-		$library = $this->libraryMapper->findById($libraryId);
-		if ($library === null) {
-			throw new \Exception("Library with ID $libraryId not found");
-		}
-
-		$userFolder = $this->rootFolder->getUserFolder($user->getUID());
-
-		$path = $library['path'] ?? '';
-		$node = $userFolder->get(ltrim($path, '/'));
-		$databasePath = $node->getStorage()->getLocalFile($node->getInternalPath());
-		if ($databasePath === false) {
-			throw new \Exception("Could not retrieve local file path for library with ID $libraryId");
-		}
+		['databasePath' => $databasePath, 'targetFolder' => $targetFolder] = $this->libraryContext($libraryId, $user);
 
 		$songs = $this->songMapper->findSongs($databasePath);
 
 		// MobileSheets stores absolute WebDAV paths that sit next to the library
-		// database, so regenerated files belong in the database's parent folder.
-		$targetFolder = $node->getParent();
+		// database, so regenerated files belong in the database's parent folder -
+		// which libraryContext() hands over as the target folder.
 
 		// The hash codes file tracks each file by its WebDAV path, so the moves
 		// below have to be reflected there as well. It is parsed once, edited in
@@ -265,6 +254,37 @@ class FileManager {
 	}
 
 	/**
+	 * Resolve the library database file and the folder its files belong in.
+	 *
+	 * Both phases of a library sync need the same context: the local path of the
+	 * library database to read songs from, and the database's parent folder as
+	 * the base the naming rules produce paths against.
+	 *
+	 * @return array{databasePath: string, targetFolder: Folder}
+	 * @throws \Exception when the library is unknown or its path cannot be resolved
+	 */
+	public function libraryContext(int $libraryId, IUser $user): array {
+		$library = $this->libraryMapper->findById($libraryId);
+		if ($library === null) {
+			throw new \Exception("Library with ID $libraryId not found");
+		}
+
+		$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+
+		$path = $library['path'] ?? '';
+		$node = $userFolder->get(ltrim($path, '/'));
+		$databasePath = $node->getStorage()->getLocalFile($node->getInternalPath());
+		if ($databasePath === false) {
+			throw new \Exception("Could not retrieve local file path for library with ID $libraryId");
+		}
+
+		return [
+			'databasePath' => $databasePath,
+			'targetFolder' => $node->getParent(),
+		];
+	}
+
+	/**
 	 * Move every file of one song to its regenerated location.
 	 *
 	 * The song is read from the database rather than passed in, so the file list is
@@ -273,8 +293,8 @@ class FileManager {
 	 *
 	 * @param Folder $targetFolder folder the regenerated files belong in, normally the
 	 *                             library database's parent
-	 * @throws \RuntimeException     when the song is not part of the library
-	 * @throws \Exception            when the song has no composer, artist or collection
+	 * @throws \RuntimeException when the song is not part of the library
+	 * @throws \Exception when the song has no composer, artist or collection
 	 *
 	 * @see createTargetPath() for the naming rules
 	 */
@@ -301,6 +321,9 @@ class FileManager {
 	 * a failure is thrown, which suits the single-song relocations that have no
 	 * report to fill in.
 	 *
+	 * Failures are graded and coded by the exception that caused them, so the
+	 * report can both filter them and link to the file they are about.
+	 *
 	 * @param list<MobileSheetsFileLogEntry>|null $log collects a line per file when given
 	 */
 	private function regenerateSongFiles(
@@ -313,20 +336,32 @@ class FileManager {
 	): void {
 		foreach ($song->files as $file) {
 			try {
-				$message = $this->regenerateFilePath($song, $file, $user, $targetFolder, $databasePath, $hashCodes);
+				$entry = $this->regenerateFilePath($song, $file, $user, $targetFolder, $databasePath, $hashCodes);
 				if ($log !== null) {
-					$log[] = $this->logEntry($song, $file, $message, MobileSheetsFileLogEntry::LEVEL_INFO);
+					$log[] = $entry;
 				}
 			} catch (\Throwable $exception) {
 				if ($log === null) {
 					throw $exception;
 				}
 				// A song with no naming rule keeps its name on purpose, so it is only a
-				// warning; anything else that stops the move is a real error.
-				$level = $exception instanceof NoNamingRuleException
-					? MobileSheetsFileLogEntry::LEVEL_WARNING
+				// warning; anything else that stops the move is a real error. Known
+				// problems grade and code themselves, anything unexpected is an error
+				// with the generic path-failed code.
+				$level = $exception instanceof SyncException
+					? $exception->errorLevel()
 					: MobileSheetsFileLogEntry::LEVEL_ERROR;
-				$log[] = $this->logEntry($song, $file, $exception->getMessage(), $level);
+				$code = $exception instanceof SyncException
+					? $exception->errorCode()
+					: MobileSheetsFileLogEntry::CODE_PATH_FAILED;
+				$log[] = $this->logEntry(
+					$song,
+					$file,
+					$exception->getMessage(),
+					$level,
+					$code,
+					$this->nodeIdOfStoredFile($file->path, $user),
+				);
 			}
 		}
 	}
@@ -334,20 +369,57 @@ class FileManager {
 	/**
 	 * Build one line of the run's log.
 	 *
-	 * Lines are shown to the user in a dialog, so they are deliberately not written
-	 * to the Nextcloud log as well: a per-file entry there would only restate what
-	 * the user already sees, and logging the exception would repeat the whole
-	 * accumulated report in its arguments for every single file. Genuine recovery
-	 * problems are still logged where they happen, i.e. when a move is reverted.
+	 * Lines are shown to the user in the report, so they are deliberately not
+	 * written to the Nextcloud log as well: a per-file entry there would only
+	 * restate what the user already sees, and logging the exception would repeat
+	 * the whole accumulated report in its arguments for every single file.
+	 * Genuine recovery problems are still logged where they happen, i.e. when a
+	 * move is reverted.
 	 */
-	private function logEntry(MobileSheetsSong $song, MobileSheetsFile $file, string $message, string $level): MobileSheetsFileLogEntry {
+	private function logEntry(
+		MobileSheetsSong $song,
+		MobileSheetsFile $file,
+		string $message,
+		string $level,
+		string $code = '',
+		?int $fileId = null,
+	): MobileSheetsFileLogEntry {
 		return new MobileSheetsFileLogEntry(
 			$song->id,
 			$song->title,
 			$file->path,
 			$message,
 			$level,
+			$code,
+			$fileId,
 		);
+	}
+
+	/**
+	 * The Nextcloud node id of a stored file, for linking straight to it.
+	 *
+	 * Null when the path belongs to another user or the file does not exist -
+	 * which is exactly the case where the report has to offer a folder link
+	 * instead of a file link.
+	 */
+	public function nodeIdOfStoredFile(string $webdavPath, IUser $user): ?int {
+		$path = $this->pathResolver->fromStored($webdavPath, $user);
+		if ($path === null) {
+			return null;
+		}
+
+		$relative = $this->pathResolver->relativeToUserFolder($path->internal, $user);
+		if ($relative === null || $relative === '') {
+			return null;
+		}
+
+		try {
+			$id = $this->rootFolder->getUserFolder($user->getUID())->get($relative)->getId();
+		} catch (\Throwable) {
+			return null;
+		}
+
+		return $id > 0 ? $id : null;
 	}
 
 	/**
@@ -356,9 +428,12 @@ class FileManager {
 	 * A target that is already taken is not an error: the file gets a unique name so it
 	 * cannot replace or share another song's file.
 	 *
-	 * @return string a one-line description of what happened to the file
-	 * @throws \RuntimeException when the stored path cannot be resolved, when the source
-	 *                           file is missing, or when the database update failed
+	 * @return MobileSheetsFileLogEntry the report line for the file: "moved" or
+	 *                                  "already in place", with the node id of the
+	 *                                  file where it now lives
+	 * @throws SyncException when the stored path cannot be resolved, when the source
+	 *                       file is missing, or when the database update failed -
+	 *                       carrying the code the report shows
 	 */
 	public function regenerateFilePath(
 		MobileSheetsSong $song,
@@ -367,7 +442,7 @@ class FileManager {
 		Folder $targetFolder,
 		string $databasePath,
 		?MobileSheetsHashCodesFile $hashCodes = null,
-	): string {
+	): MobileSheetsFileLogEntry {
 		// Relative target as produced by the naming rules, e.g.
 		// "Miles/Miles - Real Book/Miles - Real Book - Blue.pdf". Songs with more
 		// than one file would otherwise all map onto the same name, so each file
@@ -384,7 +459,7 @@ class FileManager {
 		//   targetWebdav / targetInternal  - where the naming rules want it
 		$source = $this->pathResolver->fromStored($file->path, $user);
 		if ($source === null) {
-			throw new \RuntimeException(sprintf(
+			throw new SyncException(MobileSheetsFileLogEntry::CODE_SOURCE_OUTSIDE_LIBRARY, sprintf(
 				'Cannot regenerate file %d: stored path "%s" is not below "%s"',
 				$file->id,
 				$file->path,
@@ -394,7 +469,7 @@ class FileManager {
 
 		$sourceRelative = $this->pathResolver->relativeToUserFolder($source->internal, $user);
 		if ($sourceRelative === null) {
-			throw new \RuntimeException(sprintf(
+			throw new SyncException(MobileSheetsFileLogEntry::CODE_SOURCE_OUTSIDE_LIBRARY, sprintf(
 				'Cannot regenerate file %d: source "%s" escapes the user folder',
 				$file->id,
 				$source->internal,
@@ -424,11 +499,19 @@ class FileManager {
 				'fileId' => $file->id,
 				'path' => $source->internal,
 			]);
-			return 'Already at its regenerated path';
+
+			return $this->logEntry(
+				$song,
+				$file,
+				'Already at its regenerated path',
+				MobileSheetsFileLogEntry::LEVEL_INFO,
+				MobileSheetsFileLogEntry::CODE_PATH_CURRENT,
+				$this->nodeIdOfStoredFile($file->path, $user),
+			);
 		}
 
 		if (!$userFolder->nodeExists($sourceRelative)) {
-			throw new \RuntimeException(sprintf(
+			throw new SyncException(MobileSheetsFileLogEntry::CODE_SOURCE_MISSING, sprintf(
 				'Cannot regenerate file %d: source "%s" does not exist',
 				$file->id,
 				$source->webdav,
@@ -459,10 +542,14 @@ class FileManager {
 				$exception,
 			);
 
-			throw new \RuntimeException(sprintf(
-				'Could not persist the new path for file %d; the move was reverted',
-				$file->id,
-			), 0, $exception);
+			throw new SyncException(
+				MobileSheetsFileLogEntry::CODE_PATH_PERSIST_FAILED,
+				sprintf(
+					'Could not persist the new path for file %d; the move was reverted',
+					$file->id,
+				),
+				$exception,
+			);
 		}
 
 		// Only tidy up once the move and the database update both succeeded: doing it
@@ -483,7 +570,139 @@ class FileManager {
 			'removedEmptyFolders' => $removedFolders,
 		]);
 
-		return sprintf('Moved to "%s"', $targetRelative);
+		return $this->logEntry(
+			$song,
+			$file,
+			sprintf('Moved to "%s"', $targetRelative),
+			MobileSheetsFileLogEntry::LEVEL_INFO,
+			MobileSheetsFileLogEntry::CODE_PATH_MOVED,
+			$this->nodeIdOfStoredFile($target->webdav, $user),
+		);
+	}
+
+	/**
+	 * Bring one attached file's document properties up to date with the song.
+	 *
+	 * The PDF's Info dictionary is (re)written with the song's data - title,
+	 * composers, artists, books, collections - so importing the file back into
+	 * MobileSheets recreates the song, and the file facts the changed bytes
+	 * invalidate are refreshed in the Files table and the hash codes file.
+	 *
+	 * The write is skipped when the file already carries exactly the song's
+	 * properties ({@see MobileSheetsPdfMetadata::matchesSong()}), which keeps
+	 * repeated runs from piling up incremental revisions in a file that is
+	 * already up to date.
+	 *
+	 * @param MobileSheetsHashCodesFile|null $hashCodes parsed hash codes file to
+	 *                                                  keep in step, or null when
+	 *                                                  the library has none
+	 *
+	 * @return string one of MobileSheetsFileLogEntry::CODE_METADATA_UPDATED,
+	 *                CODE_METADATA_CURRENT or CODE_NOT_PDF
+	 * @throws SyncException carrying the code the report shows
+	 */
+	public function syncMetadataIntoFile(
+		MobileSheetsSong $song,
+		MobileSheetsFile $file,
+		IUser $user,
+		string $databasePath,
+		?MobileSheetsHashCodesFile $hashCodes = null,
+	): string {
+		if (!str_ends_with(strtolower($file->path), '.pdf')) {
+			return MobileSheetsFileLogEntry::CODE_NOT_PDF;
+		}
+
+		$path = $this->pathOfStoredFile($file->path, $user);
+		if ($path === null) {
+			throw new SyncException(MobileSheetsFileLogEntry::CODE_SOURCE_OUTSIDE_LIBRARY, sprintf(
+				'Cannot sync the metadata of file %d: stored path "%s" is not below "%s"',
+				$file->id,
+				$file->path,
+				$this->pathResolver->webdavRoot($user),
+			));
+		}
+
+		$relative = $this->pathResolver->relativeToUserFolder($path->internal, $user) ?? '';
+		$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+
+		try {
+			$node = $userFolder->get($relative);
+		} catch (\Throwable) {
+			throw new SyncException(
+				MobileSheetsFileLogEntry::CODE_METADATA_FILE_MISSING,
+				sprintf('Cannot sync the metadata of file %d: "%s" does not exist', $file->id, $file->path),
+			);
+		}
+
+		if (!($node instanceof File)) {
+			throw new SyncException(
+				MobileSheetsFileLogEntry::CODE_METADATA_NOT_A_FILE,
+				sprintf('Cannot sync the metadata of file %d: "%s" is not a file', $file->id, $file->path),
+			);
+		}
+
+		try {
+			$content = $node->getContent();
+		} catch (\Throwable $exception) {
+			throw new SyncException(
+				MobileSheetsFileLogEntry::CODE_METADATA_UNREADABLE,
+				sprintf('Cannot sync the metadata of file %d: "%s" could not be read', $file->id, $file->path),
+				$exception,
+			);
+		}
+		if (!is_string($content) || $content === '') {
+			throw new SyncException(
+				MobileSheetsFileLogEntry::CODE_METADATA_UNREADABLE,
+				sprintf('Cannot sync the metadata of file %d: "%s" is empty', $file->id, $file->path),
+			);
+		}
+
+		try {
+			$upToDate = MobileSheetsPdfMetadata::matchesSong($content, $song);
+		} catch (\Throwable) {
+			// Properties that cannot be read are worth rewriting: writing may
+			// repair what reading could not make sense of.
+			$upToDate = false;
+		}
+		if ($upToDate) {
+			return MobileSheetsFileLogEntry::CODE_METADATA_CURRENT;
+		}
+
+		try {
+			$node->putContent(
+				MobileSheetsPdfMetadata::withInfo($content, MobileSheetsPdfMetadata::fieldsFor($song)),
+			);
+		} catch (\Throwable $exception) {
+			throw new SyncException(
+				MobileSheetsFileLogEntry::CODE_METADATA_WRITE_FAILED,
+				sprintf('Cannot sync the metadata of file %d: "%s" could not be written', $file->id, $file->path),
+				$exception,
+			);
+		}
+
+		try {
+			// The bytes changed, so the hash, size and timestamp stored for
+			// the file have to follow them - everywhere they are kept.
+			$facts = MobileSheetsFileFacts::fromNode($node);
+			$this->songMapper->updateFile($databasePath, $file->id, $file->path, $facts);
+			$hashCodes?->updateFacts(
+				$file->path,
+				(string)$facts->fileHash,
+				(string)$facts->lastModified,
+				(string)$facts->fileSize,
+			);
+		} catch (\Throwable $exception) {
+			throw new SyncException(
+				MobileSheetsFileLogEntry::CODE_METADATA_FACTS_FAILED,
+				sprintf(
+					'The metadata of file %d was written, but the database was not refreshed',
+					$file->id,
+				),
+				$exception,
+			);
+		}
+
+		return MobileSheetsFileLogEntry::CODE_METADATA_UPDATED;
 	}
 
 	/**
@@ -493,7 +712,7 @@ class FileManager {
 	 * has content and never touching $boundaryRelative itself, so the library folder
 	 * (and anything above it) is safe.
 	 *
-	 * @param string $sourceRelative   path relative to the user folder
+	 * @param string $sourceRelative path relative to the user folder
 	 * @param string $boundaryRelative folder to stop at, relative to the user folder
 	 *                                 ('' means the user folder itself)
 	 * @return list<string> the relative paths that were deleted, deepest first
@@ -583,7 +802,7 @@ class FileManager {
 	/**
 	 * Undo a move whose database update failed, so the tree and database stay in sync.
 	 *
-	 * @param string $sourceInternal  full internal path the file came from
+	 * @param string $sourceInternal full internal path the file came from
 	 * @param list<string> $createdFolders
 	 */
 	private function revertMove(

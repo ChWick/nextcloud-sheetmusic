@@ -46,16 +46,16 @@ final class SongMapperTest extends TestCase {
 		$database->exec("INSERT INTO Files (Id, SongId, Path) VALUES (1, 1, '/remote.php/dav/files/admin/Noten/Zebra.pdf'), (2, 2, '/remote.php/dav/files/admin/Noten/Alpha.pdf')");
 
 		$database->exec("INSERT INTO Composer (Id, Name) VALUES (10, 'Beethoven'), (20, 'Bach')");
-		$database->exec("INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (10, 1), (20, 2)");
+		$database->exec('INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (10, 1), (20, 2)');
 
 		$database->exec("INSERT INTO Books (Id, Title) VALUES (100, 'Real Book 1')");
-		$database->exec("INSERT INTO BookSongs (BookId, SongId) VALUES (100, 2)");
+		$database->exec('INSERT INTO BookSongs (BookId, SongId) VALUES (100, 2)');
 
 		$database->exec("INSERT INTO Collections (Id, Name) VALUES (1000, 'Jazz Standards')");
-		$database->exec("INSERT INTO CollectionSong (CollectionId, SongId) VALUES (1000, 1), (1000, 2)");
+		$database->exec('INSERT INTO CollectionSong (CollectionId, SongId) VALUES (1000, 1), (1000, 2)');
 
 		$database->exec("INSERT INTO Artists (Id, Name) VALUES (200, 'Coltrane')");
-		$database->exec("INSERT INTO ArtistsSongs (ArtistId, SongId) VALUES (200, 1)");
+		$database->exec('INSERT INTO ArtistsSongs (ArtistId, SongId) VALUES (200, 1)');
 
 		// A song may point at another song through its own SongId column, and a song has
 		// more rows than its files and links: settings such as the metronome live in their
@@ -112,7 +112,7 @@ final class SongMapperTest extends TestCase {
 		$this->assertSame(1000, $alpha->collections[0]->id);
 	}
 
-public function testFindSongReturnsOnlyTheRequestedSong(): void {
+	public function testFindSongReturnsOnlyTheRequestedSong(): void {
 		$song = $this->mapper()->findSong($this->databasePath, 1);
 
 		$this->assertNotNull($song);
@@ -166,7 +166,7 @@ public function testFindSongReturnsOnlyTheRequestedSong(): void {
 		$mapper->updateSong($this->databasePath, 2, 'Alpha (Updated)', [10], [100], [1000], []);
 
 		$data = $mapper->findLibraryData($this->databasePath);
-		$updatedSong = array_values(array_filter($data['songs'], fn(MobileSheetsSong $s) => $s->id === 2))[0];
+		$updatedSong = array_values(array_filter($data['songs'], fn (MobileSheetsSong $s) => $s->id === 2))[0];
 
 		$this->assertSame('Alpha (Updated)', $updatedSong->title);
 		$this->assertSame(['Beethoven'], $this->names($updatedSong->composers));
@@ -182,7 +182,7 @@ public function testFindSongReturnsOnlyTheRequestedSong(): void {
 		$this->assertGreaterThan(0, $songId);
 
 		$data = $mapper->findLibraryData($this->databasePath);
-		$created = array_values(array_filter($data['songs'], fn(MobileSheetsSong $s) => $s->id === $songId))[0];
+		$created = array_values(array_filter($data['songs'], fn (MobileSheetsSong $s) => $s->id === $songId))[0];
 
 		$this->assertSame('New Song', $created->title);
 		$this->assertSame([], $created->files);
@@ -197,7 +197,7 @@ public function testFindSongReturnsOnlyTheRequestedSong(): void {
 		$songId = $mapper->createSong($this->databasePath, 'Bare Song', [], [], [], []);
 
 		$data = $mapper->findLibraryData($this->databasePath);
-		$created = array_values(array_filter($data['songs'], fn(MobileSheetsSong $s) => $s->id === $songId))[0];
+		$created = array_values(array_filter($data['songs'], fn (MobileSheetsSong $s) => $s->id === $songId))[0];
 
 		$this->assertSame('Bare Song', $created->title);
 		$this->assertSame([], $created->composers);
@@ -386,7 +386,7 @@ public function testFindSongReturnsOnlyTheRequestedSong(): void {
 		);
 
 		$data = $mapper->findLibraryData($this->databasePath);
-		$updatedSong = array_values(array_filter($data['songs'], fn(MobileSheetsSong $s) => $s->id === 2))[0];
+		$updatedSong = array_values(array_filter($data['songs'], fn (MobileSheetsSong $s) => $s->id === 2))[0];
 
 		$this->assertCount(2, $updatedSong->files);
 		$this->assertContainsOnlyInstancesOf(MobileSheetsFile::class, $updatedSong->files);
@@ -415,7 +415,7 @@ public function testFindSongReturnsOnlyTheRequestedSong(): void {
 		$this->assertSame('/remote.php/dav/files/admin/Noten/Alpha.pdf', $deletedPath);
 
 		$data = $mapper->findLibraryData($this->databasePath);
-		$updatedSong = array_values(array_filter($data['songs'], fn(MobileSheetsSong $s) => $s->id === 2))[0];
+		$updatedSong = array_values(array_filter($data['songs'], fn (MobileSheetsSong $s) => $s->id === 2))[0];
 
 		$this->assertCount(0, $updatedSong->files);
 	}

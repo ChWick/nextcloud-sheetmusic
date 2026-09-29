@@ -25,7 +25,8 @@ class SongMapper {
 
 	public function __construct(
 		private LoggerInterface $logger,
-    ) {}
+	) {
+	}
 
 	/**
 	 * @return array{
@@ -140,7 +141,7 @@ class SongMapper {
 				}
 			}
 		}
-		
+
 		$songArtists = [];
 		if (in_array('ArtistsSongs', $existingTables, true)) {
 			$stmt = $database->query('SELECT ArtistId, SongId FROM ArtistsSongs');
@@ -315,7 +316,7 @@ class SongMapper {
 
 		// Ordered by Id so a song's files always come back in the same order: their
 		// position decides the numeric prefix in the regenerated file name.
-		$statement = $database->query('SELECT Id, Path FROM Files WHERE SongId = '.$songId.' ORDER BY Id ASC');
+		$statement = $database->query('SELECT Id, Path FROM Files WHERE SongId = ' . $songId . ' ORDER BY Id ASC');
 
 		$files = [];
 		if ($statement !== false) {
@@ -350,7 +351,7 @@ class SongMapper {
 		array $composerIds,
 		array $bookIds,
 		array $collectionIds,
-		array $artistIds
+		array $artistIds,
 	): int {
 		$database = new PDO('sqlite:' . $databasePath, options: [
 			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
@@ -379,7 +380,7 @@ class SongMapper {
 		array $composerIds,
 		array $bookIds,
 		array $collectionIds,
-		array $artistIds
+		array $artistIds,
 	): void {
 		$database = new PDO('sqlite:' . $databasePath, options: [
 			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
@@ -589,7 +590,7 @@ class SongMapper {
 
 		return (string)$row['Path'];
 	}
-	
+
 	/**
 	 * Persist a file's new location and refresh the metadata that a change to the
 	 * file invalidates - notably LastModified, which must track the file's

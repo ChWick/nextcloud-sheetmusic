@@ -297,6 +297,45 @@ class MobileSheetsPdfMetadata {
 	}
 
 	/**
+	 * Whether the PDF already carries exactly the document properties of $song.
+	 *
+	 * Both sides are normalized the way a write/read round trip normalizes them -
+	 * values joined with "; ", then split, trimmed and deduplicated - so a file
+	 * that was written from this song before compares equal and is not written
+	 * again. That keeps repeated sync runs from piling up incremental revisions
+	 * in a file that is already up to date.
+	 *
+	 * @throws \RuntimeException when the file is not a readable PDF
+	 */
+	public static function matchesSong(string $content, MobileSheetsSong $song): bool {
+		return self::prefillFor($content) === [
+			'title' => $song->title,
+			'composers' => self::normalizedNames($song->composers, 'name'),
+			'books' => self::normalizedNames($song->books, 'title'),
+			'collections' => self::normalizedNames($song->collections, 'name'),
+			'artists' => self::normalizedNames($song->artists, 'name'),
+		];
+	}
+
+	/**
+	 * The names of the song's entities, normalized like a value that travels
+	 * through the document properties: joined, then split, trimmed and deduped.
+	 *
+	 * @param list<object> $entities the song's composers, books, collections or artists
+	 * @param string $property the property holding the name: "name" or "title"
+	 *
+	 * @return list<string>
+	 */
+	private static function normalizedNames(array $entities, string $property): array {
+		$values = array_map(
+			static fn (object $entity): string => (string)$entity->$property,
+			$entities,
+		);
+
+		return self::splitNames(self::join($values));
+	}
+
+	/**
 	 * Split a document property holding several names into the individual ones,
 	 * dropping blanks and repeats.
 	 *

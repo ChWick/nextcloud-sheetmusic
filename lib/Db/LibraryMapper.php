@@ -15,7 +15,9 @@ use OCP\IDBConnection;
 class LibraryMapper {
 	public const TABLE_NAME = 'mobilesheets_libraries';
 
-	public function __construct(private IDBConnection $db) {
+	public function __construct(
+		private IDBConnection $db,
+	) {
 	}
 
 	/**
@@ -39,15 +41,15 @@ class LibraryMapper {
 	}
 
 	public function findById(int $libraryId): ?array {
-        $qb = $this->db->getQueryBuilder();
-        $qb->select('*')
-           ->from(self::TABLE_NAME)
-           ->where($qb->expr()->eq('id', $qb->createNamedParameter($libraryId)));
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from(self::TABLE_NAME)
+			->where($qb->expr()->eq('id', $qb->createNamedParameter($libraryId)));
 
-        $row = $qb->executeQuery()->fetch();
+		$row = $qb->executeQuery()->fetch();
 
-        return $row === false ? null : $row;
-    }
+		return $row === false ? null : $row;
+	}
 
 	public function addForUser(string $userId, string $path): void {
 		$check = $this->db->getQueryBuilder();
@@ -104,7 +106,7 @@ class LibraryMapper {
 		}
 
 		return [
-			'id'   => (int)$row['id'],
+			'id' => (int)$row['id'],
 			'path' => (string)$row['path']
 		];
 	}

@@ -21,6 +21,9 @@ use OCA\MobileSheetsManager\Service\FileManager;
 use OCA\MobileSheetsManager\Service\MobileSheetsFileLogEntry;
 use OCA\MobileSheetsManager\Service\MobileSheetsHashCodesFile;
 use OCA\MobileSheetsManager\Service\MobileSheetsPathResolver;
+use OCA\MobileSheetsManager\Service\MobileSheetsPdfMetadata;
+use OCA\MobileSheetsManager\Service\SyncException;
+use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\Files\IUserFolder;
@@ -29,7 +32,6 @@ use OCP\Files\Storage\IStorage;
 use OCP\IUser;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
-
 use function OCA\MobileSheetsManager\Service\fileIndexOf;
 use function OCA\MobileSheetsManager\Service\fileIndexPrefix;
 
@@ -69,6 +71,9 @@ final class FileManagerTest extends TestCase {
 	/** @var list<array{fileId: int, path: string}> recorded updateFile() calls */
 	private array $updates = [];
 
+	/** @var array<string, int> relative path => assigned node id */
+	private array $nodeIds = [];
+
 	private Folder $libraryFolder;
 	private FileManager $fileManager;
 	private IRootFolder $rootFolder;
@@ -84,6 +89,7 @@ final class FileManagerTest extends TestCase {
 		$this->createdFolders = [];
 		$this->deletedFolders = [];
 		$this->updates = [];
+		$this->nodeIds = [];
 
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn(self::UID);
@@ -811,11 +817,15 @@ final class FileManagerTest extends TestCase {
 		self::assertCount(2, $log);
 		[$failed, $moved] = $log;
 		self::assertSame(MobileSheetsFileLogEntry::LEVEL_ERROR, $failed->level);
+		self::assertSame(MobileSheetsFileLogEntry::CODE_SOURCE_MISSING, $failed->code);
+		self::assertNull($failed->fileId, 'a file that does not exist has no node to link to');
 		self::assertSame(1, $failed->songId);
 		self::assertSame('Broken', $failed->songTitle);
 		self::assertSame($this->sourceWebdav('Noten/source/MissingFile.pdf'), $failed->filePath);
 		self::assertStringContainsString('does not exist', $failed->message);
 		self::assertSame(MobileSheetsFileLogEntry::LEVEL_INFO, $moved->level);
+		self::assertSame(MobileSheetsFileLogEntry::CODE_PATH_MOVED, $moved->code);
+		self::assertNotNull($moved->fileId, 'the report links to the file where it now lives');
 		self::assertSame(2, $moved->songId);
 		self::assertStringContainsString('Moved to', $moved->message);
 	}
@@ -843,6 +853,8 @@ final class FileManagerTest extends TestCase {
 		self::assertSame([], $this->moves, 'nothing may move without a naming rule');
 		self::assertCount(1, $log);
 		self::assertSame(MobileSheetsFileLogEntry::LEVEL_WARNING, $log[0]->level);
+		self::assertSame(MobileSheetsFileLogEntry::CODE_NO_NAMING_RULE, $log[0]->code);
+		self::assertNotNull($log[0]->fileId, 'the file that kept its name is still linkable');
 		self::assertStringContainsString('No composer', $log[0]->message);
 	}
 
@@ -866,6 +878,156 @@ final class FileManagerTest extends TestCase {
 		$errors = $fileManager->regenerateFilePaths(1, $this->user());
 
 		self::assertCount(1, $errors);
+	}
+
+	/**
+	 * The metadata phase of a sync run: syncMetadataIntoFile() brings one
+	 * attached file's document properties up to date with its song.
+	 */
+	public function testSyncMetadataWritesTheDocumentProperties(): void {
+		$this->files = ['Noten/song.pdf' => self::minimalPdf()];
+		$this->folders = ['Noten' => true];
+		$song = $this->collectionSong();
+
+		$code = $this->fileManager->syncMetadataIntoFile(
+			$song,
+			new MobileSheetsFile(7, $this->sourceWebdav('Noten/song.pdf')),
+			$this->user(),
+			'/tmp/library.db',
+		);
+
+		self::assertSame(MobileSheetsFileLogEntry::CODE_METADATA_UPDATED, $code);
+		self::assertSame([
+			'title' => 'Take Five',
+			'composers' => [],
+			'books' => [],
+			'collections' => ['Jazz'],
+			'artists' => [],
+		], MobileSheetsPdfMetadata::prefillFor($this->files['Noten/song.pdf']));
+		// The bytes changed, so the file facts have to follow them.
+		self::assertSame(
+			[['fileId' => 7, 'path' => $this->sourceWebdav('Noten/song.pdf')]],
+			$this->updates,
+		);
+	}
+
+	/** A file that already carries the song's properties must not be written again. */
+	public function testSyncMetadataSkipsAFileThatAlreadyMatchesTheSong(): void {
+		$song = $this->collectionSong();
+		$this->files = [
+			'Noten/song.pdf' => MobileSheetsPdfMetadata::withInfo(
+				self::minimalPdf(),
+				MobileSheetsPdfMetadata::fieldsFor($song),
+			),
+		];
+		$this->folders = ['Noten' => true];
+
+		$code = $this->fileManager->syncMetadataIntoFile(
+			$song,
+			new MobileSheetsFile(7, $this->sourceWebdav('Noten/song.pdf')),
+			$this->user(),
+			'/tmp/library.db',
+		);
+
+		self::assertSame(MobileSheetsFileLogEntry::CODE_METADATA_CURRENT, $code);
+		self::assertSame([], $this->updates, 'unchanged bytes need no database refresh');
+	}
+
+	/** Files without document properties are reported as checked, and skipped. */
+	public function testSyncMetadataSkipsFilesThatAreNotPdfs(): void {
+		$this->files = ['Noten/track.mp3' => 'AUDIO'];
+		$this->folders = ['Noten' => true];
+
+		$code = $this->fileManager->syncMetadataIntoFile(
+			$this->collectionSong(),
+			new MobileSheetsFile(7, $this->sourceWebdav('Noten/track.mp3')),
+			$this->user(),
+			'/tmp/library.db',
+		);
+
+		self::assertSame(MobileSheetsFileLogEntry::CODE_NOT_PDF, $code);
+		self::assertSame([], $this->updates);
+	}
+
+	/** The database points at a file that is not there: a coded error to link from. */
+	public function testSyncMetadataReportsAMissingFile(): void {
+		$this->files = [];
+		$this->folders = ['Noten' => true];
+
+		self::assertSame(
+			MobileSheetsFileLogEntry::CODE_METADATA_FILE_MISSING,
+			$this->syncMetadataFailure(new MobileSheetsFile(7, $this->sourceWebdav('Noten/gone.pdf'))),
+		);
+	}
+
+	/** A stored path of another instance or user cannot be synced from here. */
+	public function testSyncMetadataReportsAStoredPathOfAnotherUser(): void {
+		self::assertSame(
+			MobileSheetsFileLogEntry::CODE_SOURCE_OUTSIDE_LIBRARY,
+			$this->syncMetadataFailure(new MobileSheetsFile(7, '/remote.php/dav/files/other/Noten/song.pdf')),
+		);
+	}
+
+	/** A folder where a file should be is a broken reference, not a silent skip. */
+	public function testSyncMetadataReportsAPathThatIsNotAFile(): void {
+		$this->files = [];
+		$this->folders = ['Noten' => true, 'Noten/folder.pdf' => true];
+
+		self::assertSame(
+			MobileSheetsFileLogEntry::CODE_METADATA_NOT_A_FILE,
+			$this->syncMetadataFailure(new MobileSheetsFile(7, $this->sourceWebdav('Noten/folder.pdf'))),
+		);
+	}
+
+	/** An existing but empty file cannot carry properties - reported, not fatal. */
+	public function testSyncMetadataReportsAnUnreadableFile(): void {
+		$this->files = ['Noten/empty.pdf' => ''];
+		$this->folders = ['Noten' => true];
+
+		self::assertSame(
+			MobileSheetsFileLogEntry::CODE_METADATA_UNREADABLE,
+			$this->syncMetadataFailure(new MobileSheetsFile(7, $this->sourceWebdav('Noten/empty.pdf'))),
+		);
+	}
+
+	/**
+	 * Run the metadata sync for one file, expecting a failure.
+	 *
+	 * @return string the stable code the failure carries
+	 */
+	private function syncMetadataFailure(MobileSheetsFile $file): string {
+		try {
+			$this->fileManager->syncMetadataIntoFile(
+				$this->collectionSong(),
+				$file,
+				$this->user(),
+				'/tmp/library.db',
+			);
+		} catch (SyncException $exception) {
+			return $exception->errorCode();
+		}
+
+		self::fail('Expected the metadata sync to report a problem');
+	}
+
+	/**
+	 * A tiny but structurally valid PDF: catalog, one page, a trailer and a
+	 * startxref. Its Info dictionary holds properties of some other song, so
+	 * the metadata sync always has something to write.
+	 */
+	private static function minimalPdf(): string {
+		$objects = "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n"
+			. "2 0 obj << /Type /Pages /Count 1 /Kids [3 0 R] >> endobj\n"
+			. "3 0 obj << /Type /Page /Parent 2 0 R >> endobj\n"
+			. "4 0 obj << /Title (Old title) /Creator (Unit test) >> endobj\n";
+
+		$xrefOffset = strlen("%PDF-1.4\n" . $objects);
+
+		return "%PDF-1.4\n"
+			. $objects
+			. "xref\n0 5\n0000000000 65535 f \n"
+			. "trailer << /Size 5 /Root 1 0 R /Info 4 0 R >>\n"
+			. "startxref\n{$xrefOffset}\n%%EOF\n";
 	}
 
 	public function testRegenerateFilePathsThrowsWhenTheLibraryIsUnknown(): void {
@@ -1166,9 +1328,15 @@ final class FileManagerTest extends TestCase {
 		return $folder;
 	}
 
-	/** Build a file Node mock that records and applies move() calls. */
-	private function fakeFileNode(string $relative): Node {
-		$node = $this->createMock(Node::class);
+	/**
+	 * Build a file Node mock that records and applies move() calls.
+	 *
+	 * Content reads and writes go to the in-memory tree, so the metadata sync
+	 * sees the same bytes the tests put in, and every node gets a stable id,
+	 * so the report's file links can be asserted.
+	 */
+	private function fakeFileNode(string $relative): File {
+		$node = $this->createMock(File::class);
 
 		$node->method('move')->willReturnCallback(function (string $targetInternal) use ($relative): Node {
 			$this->moveTargets[] = $targetInternal;
@@ -1191,6 +1359,26 @@ final class FileManagerTest extends TestCase {
 
 			return $this->fakeFileNode($targetRelative);
 		});
+
+		$node->method('getContent')->willReturnCallback(
+			fn (): string => $this->files[$relative] ?? '',
+		);
+
+		$node->method('putContent')->willReturnCallback(
+			function (string $content) use ($relative): int {
+				$this->files[$relative] = $content;
+
+				return strlen($content);
+			},
+		);
+
+		$node->method('getId')->willReturnCallback(
+			function () use ($relative): int {
+				return $this->nodeIds[$relative] ??= count($this->nodeIds) + 1;
+			},
+		);
+
+		$node->method('getMTime')->willReturn(1700000000);
 
 		return $node;
 	}

@@ -13,8 +13,9 @@ use OCA\MobileSheetsManager\Db\MobileSheetsFile;
 use OCA\MobileSheetsManager\Db\MobileSheetsSong;
 use OCA\MobileSheetsManager\Db\SongMapper;
 use OCA\MobileSheetsManager\Service\FileManager;
-use OCA\MobileSheetsManager\Service\MobileSheetsFileLogEntry;
+use OCA\MobileSheetsManager\Service\LibrarySyncService;
 use OCA\MobileSheetsManager\Service\MobileSheetsFileFacts;
+use OCA\MobileSheetsManager\Service\MobileSheetsFileLogEntry;
 use OCA\MobileSheetsManager\Service\MobileSheetsHashCodesFile;
 use OCA\MobileSheetsManager\Service\MobileSheetsPath;
 use OCA\MobileSheetsManager\Service\MobileSheetsPathResolver;
@@ -948,20 +949,21 @@ final class ApiTest extends TestCase {
 		$songMapper->expects($this->once())->method('updateFile');
 		$songMapper->method('findLibraryData')->willReturn(['songs' => []]);
 
-		$fileManager = $this->createMock(FileManager::class);
-		$fileManager->method('pathOfStoredFile')
-			->with($storedPath)
-			->willReturn(new MobileSheetsPath('/admin/files/Noten/Alpha.pdf', $storedPath));
-
-		$rootFolder = $this->createLibraryRootFolder();
-		$rootFolder->method('get')
-			->with('/admin/files/Noten/Alpha.pdf')
-			->willReturn($fileNode);
-
 		$libraryMapper = $this->createMock(LibraryMapper::class);
 		$libraryMapper->method('findForUser')
 			->with('admin', 7)
 			->willReturn(['id' => 7, 'path' => '/Noten/mobilesheets.db']);
+
+		// The real FileManager writes the metadata - only its path relocation
+		// would have to be faked, and updateSong does not relocate anything.
+		$rootFolder = $this->createLibraryRootFolder(['Noten/Alpha.pdf' => $fileNode]);
+		$fileManager = new FileManager(
+			$libraryMapper,
+			$songMapper,
+			$rootFolder,
+			new MobileSheetsPathResolver($rootFolder),
+			$this->createMock(LoggerInterface::class),
+		);
 
 		$controller = $this->createController($libraryMapper, $songMapper, $rootFolder, $fileManager);
 
@@ -1145,10 +1147,16 @@ final class ApiTest extends TestCase {
 		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->deleteBook(1, 7)->getStatus());
 		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->deleteCollection(1, 7)->getStatus());
 		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->deleteArtist(1, 7)->getStatus());
+		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->syncLibrary(1)->getStatus());
 	}
 
-	/** Root folder whose user folder resolves the library database. */
-	private function createLibraryRootFolder(): IRootFolder {
+	/**
+	 * Root folder whose user folder resolves the library database.
+	 *
+	 * @param array<string, Node> $nodes extra nodes by user-folder-relative path,
+	 *                                   e.g. the PDF of the metadata sync test
+	 */
+	private function createLibraryRootFolder(array $nodes = []): IRootFolder {
 		$storage = $this->createMock(IStorage::class);
 		$storage->method('getLocalFile')->willReturn('/tmp/mobilesheetsmanager-test-library.db');
 
@@ -1158,7 +1166,19 @@ final class ApiTest extends TestCase {
 		$databaseNode->method('getType')->willReturn('file');
 
 		$userFolder = $this->createMock(IUserFolder::class);
-		$userFolder->method('get')->with('Noten/mobilesheets.db')->willReturn($databaseNode);
+		$userFolder->method('getPath')->willReturn('/admin/files');
+		$userFolder->method('get')->willReturnCallback(
+			static function (string $path) use ($databaseNode, $nodes): Node {
+				if ($path === 'Noten/mobilesheets.db') {
+					return $databaseNode;
+				}
+				if (isset($nodes[$path])) {
+					return $nodes[$path];
+				}
+
+				throw new NotFoundException($path);
+			},
+		);
 
 		$rootFolder = $this->createMock(IRootFolder::class);
 		$rootFolder->method('getUserFolder')->with('admin')->willReturn($userFolder);
@@ -1179,43 +1199,69 @@ final class ApiTest extends TestCase {
 	 * Per-file failures are not fatal: the whole log - one line per file touched -
 	 * is sent back to the client so the user can follow the run.
 	 */
-	public function testRegenerateFilePathsReportsTheLog(): void {
-		$fileManager = $this->createMock(FileManager::class);
-		$fileManager->method('regenerateFilePaths')->willReturn([
-			new MobileSheetsFileLogEntry(1, 'Take Five', '/remote.php/dav/files/admin/Noten/a.pdf', 'Moved to "Noten/Jazz/Take Five.pdf"', MobileSheetsFileLogEntry::LEVEL_INFO),
-			new MobileSheetsFileLogEntry(2, 'Broken', '/remote.php/dav/files/admin/Noten/b.pdf', 'No composer, artist, or collection', MobileSheetsFileLogEntry::LEVEL_WARNING),
+	public function testSyncLibraryReportsTheLog(): void {
+		$librarySync = $this->createMock(LibrarySyncService::class);
+		$librarySync->method('syncLibrary')->willReturn([
+			new MobileSheetsFileLogEntry(
+				1,
+				'Take Five',
+				'/remote.php/dav/files/admin/Noten/a.pdf',
+				'Moved to "Noten/Jazz/Take Five.pdf"',
+				MobileSheetsFileLogEntry::LEVEL_INFO,
+				MobileSheetsFileLogEntry::CODE_PATH_MOVED,
+				11,
+			),
+			new MobileSheetsFileLogEntry(
+				2,
+				'Broken',
+				'/remote.php/dav/files/admin/Noten/b.pdf',
+				'No composer, artist, or collection',
+				MobileSheetsFileLogEntry::LEVEL_WARNING,
+				MobileSheetsFileLogEntry::CODE_NO_NAMING_RULE,
+				22,
+			),
 		]);
 
-		$controller = $this->createController(fileManager: $fileManager);
+		$controller = $this->createController(librarySync: $librarySync);
 
-		$response = $controller->regenerateFilePaths(1);
+		$response = $controller->syncLibrary(1);
 
 		self::assertEquals(Http::STATUS_OK, $response->getStatus());
 		$data = $response->getData();
 		self::assertCount(2, $data['log']);
 		self::assertSame(MobileSheetsFileLogEntry::LEVEL_INFO, $data['log'][0]->level);
+		self::assertSame(MobileSheetsFileLogEntry::CODE_PATH_MOVED, $data['log'][0]->code);
+		self::assertSame(11, $data['log'][0]->fileId);
 		self::assertSame('Take Five', $data['log'][0]->songTitle);
 		self::assertSame(MobileSheetsFileLogEntry::LEVEL_WARNING, $data['log'][1]->level);
-		self::assertSame('No composer, artist, or collection', $data['log'][1]->message);
-		self::assertStringContainsString('could not be updated', $data['message']);
+		self::assertSame(MobileSheetsFileLogEntry::CODE_NO_NAMING_RULE, $data['log'][1]->code);
+		self::assertStringContainsString('need attention', $data['message']);
 	}
 
 	/** A clean run reports no failures and the success message. */
-	public function testRegenerateFilePathsReportsSuccessWhenNothingFails(): void {
-		$fileManager = $this->createMock(FileManager::class);
-		$fileManager->method('regenerateFilePaths')->willReturn([
-			new MobileSheetsFileLogEntry(1, 'Take Five', '/remote.php/dav/files/admin/Noten/a.pdf', 'Moved to "Noten/Jazz/Take Five.pdf"', MobileSheetsFileLogEntry::LEVEL_INFO),
+	public function testSyncLibraryReportsSuccessWhenNothingFails(): void {
+		$librarySync = $this->createMock(LibrarySyncService::class);
+		$librarySync->method('syncLibrary')->willReturn([
+			new MobileSheetsFileLogEntry(
+				1,
+				'Take Five',
+				'/remote.php/dav/files/admin/Noten/a.pdf',
+				'Moved to "Noten/Jazz/Take Five.pdf"',
+				MobileSheetsFileLogEntry::LEVEL_INFO,
+				MobileSheetsFileLogEntry::CODE_PATH_MOVED,
+				11,
+			),
 		]);
 
-		$controller = $this->createController(fileManager: $fileManager);
+		$controller = $this->createController(librarySync: $librarySync);
 
-		$response = $controller->regenerateFilePaths(1);
+		$response = $controller->syncLibrary(1);
 
 		self::assertEquals(Http::STATUS_OK, $response->getStatus());
 		$data = $response->getData();
 		self::assertCount(1, $data['log']);
 		self::assertSame(MobileSheetsFileLogEntry::LEVEL_INFO, $data['log'][0]->level);
-		self::assertSame('File paths regenerated successfully', $data['message']);
+		self::assertSame('File paths and metadata are up to date', $data['message']);
 	}
 
 	private function createController(
@@ -1225,6 +1271,7 @@ final class ApiTest extends TestCase {
 		?FileManager $fileManager = null,
 		?IRequest $request = null,
 		bool $loggedIn = true,
+		?LibrarySyncService $librarySync = null,
 	): ApiController {
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('admin');
@@ -1241,6 +1288,7 @@ final class ApiTest extends TestCase {
 			$this->createMock(LoggerInterface::class),
 			$userSession,
 			$fileManager ?? $this->createMock(FileManager::class),
+			$librarySync ?? $this->createMock(LibrarySyncService::class),
 		);
 	}
 }

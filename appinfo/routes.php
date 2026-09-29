@@ -85,8 +85,8 @@ return [
 			'verb' => 'DELETE',
 		],
 		[
-			'name' => 'Api#regenerateFilePaths',
-			'url' => '/api/regenerate-file-paths',
+			'name' => 'Api#syncLibrary',
+			'url' => '/api/sync-library',
 			'verb' => 'POST',
 		],
 		[

@@ -14,7 +14,11 @@ namespace OCA\MobileSheetsManager\Service;
  *
  * This is a warning rather than an error: the file simply keeps its current name
  * because there is nothing to derive a new one from. Nothing is broken, so the
- * run keeps going and only reports it.
+ * run keeps going and only reports it - with the stable code every report maps
+ * to its localized wording.
  */
-class NoNamingRuleException extends \Exception {
+class NoNamingRuleException extends SyncException {
+	public function __construct(string $message) {
+		parent::__construct(MobileSheetsFileLogEntry::CODE_NO_NAMING_RULE, $message);
+	}
 }

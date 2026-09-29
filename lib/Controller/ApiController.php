@@ -8,6 +8,7 @@ use OCA\MobileSheetsManager\Db\LibraryMapper;
 use OCA\MobileSheetsManager\Db\MobileSheetsFile;
 use OCA\MobileSheetsManager\Db\SongMapper;
 use OCA\MobileSheetsManager\Service\FileManager;
+use OCA\MobileSheetsManager\Service\LibrarySyncService;
 use OCA\MobileSheetsManager\Service\MobileSheetsFileFacts;
 use OCA\MobileSheetsManager\Service\MobileSheetsFileLogEntry;
 use OCA\MobileSheetsManager\Service\MobileSheetsHashCodesFile;
@@ -17,7 +18,6 @@ use OCP\AppFramework\Http\Attribute\ApiRoute;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\OCSController;
-use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\Files\Node;
@@ -40,6 +40,7 @@ class ApiController extends OCSController {
 		private LoggerInterface $logger,
 		private IUserSession $userSession,
 		private FileManager $fileManager,
+		private LibrarySyncService $librarySync,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -171,7 +172,7 @@ class ApiController extends OCSController {
 		array $composerIds = [],
 		array $bookIds = [],
 		array $collectionIds = [],
-		array $artistIds = []
+		array $artistIds = [],
 	): DataResponse {
 		$title = $title ?? '';
 		if ($libraryId === null || trim($title) === '') {
@@ -228,7 +229,7 @@ class ApiController extends OCSController {
 		array $composerIds = [],
 		array $bookIds = [],
 		array $collectionIds = [],
-		array $artistIds = []
+		array $artistIds = [],
 	): DataResponse {
 		$title = $title ?? '';
 		if ($libraryId === null || $title === '') {
@@ -664,7 +665,7 @@ class ApiController extends OCSController {
 	 * path representations always agree - a hand-built path used to repeat the "files"
 	 * segment of the user folder.
 	 *
-	 * @param Node   $file         the file as it sits in the library folder
+	 * @param Node $file the file as it sits in the library folder
 	 * @param Folder $targetFolder folder the regenerated files belong in, i.e. the
 	 *                             library database's parent
 	 */
@@ -701,10 +702,10 @@ class ApiController extends OCSController {
 	 * files keep their current location, which for a freshly added file is the library
 	 * folder.
 	 *
-	 * @param Folder      $targetFolder folder the regenerated files belong in, i.e. the
-	 *                                  library database's parent
-	 * @param string|null $removedPath  WebDAV path of a file that was just removed, whose
-	 *                                  hash codes entry has to go
+	 * @param Folder $targetFolder folder the regenerated files belong in, i.e. the
+	 *                             library database's parent
+	 * @param string|null $removedPath WebDAV path of a file that was just removed, whose
+	 *                                 hash codes entry has to go
 	 */
 	private function relocateSongFiles(
 		int $songId,
@@ -745,18 +746,20 @@ class ApiController extends OCSController {
 	}
 
 	/**
-	 * Write the song's metadata into its attached PDFs so importing one of them
+	 * Write the song's metadata into its attached files so importing one of them
 	 * back into MobileSheets recreates the song, and refresh the file facts the
 	 * changed bytes invalidate - in the Files table and in the hash codes file,
 	 * which MobileSheets compares its files against.
 	 *
 	 * Best-effort per file: an unreadable or exotic PDF is reported and skipped,
-	 * it must not fail the song edit the metadata is meant to accompany.
+	 * it must not fail the song edit the metadata is meant to accompany. Files
+	 * that already carry the song's properties are left alone - the write is
+	 * skipped rather than repeated.
 	 */
 	private function syncSongFileMetadata(IUser $user, string $databasePath, int $songId): void {
 		$song = $this->songMapper->findSong($databasePath, $songId);
 		if ($song === null) {
-			$this->logger->warning('Could not find the song to sync its metadata into attached PDFs', [
+			$this->logger->warning('Could not find the song to sync its metadata into attached files', [
 				'databasePath' => $databasePath,
 				'songId' => $songId,
 			]);
@@ -764,57 +767,17 @@ class ApiController extends OCSController {
 		}
 
 		$hashCodes = $this->hashCodesFor($databasePath);
-		$info = MobileSheetsPdfMetadata::fieldsFor($song);
 		foreach ($song->files as $file) {
-			if (!str_ends_with(strtolower($file->path), '.pdf')) {
-				continue;
-			}
-
-			$this->logger->debug('Syncing song metadata into attached PDF', [
+			$this->logger->debug('Syncing song metadata into an attached file', [
 				'songId' => $songId,
 				'fileId' => $file->id,
 				'path' => $file->path,
 			]);
 
 			try {
-				$path = $this->fileManager->pathOfStoredFile($file->path, $user);
-				if ($path === null) {
-					$this->logger->warning('Could not find the attached PDF in the user folder', [
-						'songId' => $songId,
-						'fileId' => $file->id,
-						'path' => $file->path,
-					]);
-					continue;
-				}
-
-				$node = $this->rootFolder->get($path->internal);
-				if (!($node instanceof File)) {
-					$this->logger->warning('The attached PDF is not a file', [
-						'songId' => $songId,
-						'fileId' => $file->id,
-						'path' => $file->path,
-					]);
-					continue;
-				}
-
-				$content = $node->getContent();
-				if (!is_string($content) || $content === '') {
-					$this->logger->warning('Could not read the attached PDF content', [
-						'songId' => $songId,
-						'fileId' => $file->id,
-						'path' => $file->path,
-					]);
-					continue;
-				}
-
-				$node->putContent(MobileSheetsPdfMetadata::withInfo($content, $info));
-				// The bytes changed, so the hash, size and timestamp stored for
-				// the file have to follow them - everywhere they are kept.
-				$facts = MobileSheetsFileFacts::fromNode($node);
-				$this->songMapper->updateFile($databasePath, $file->id, $file->path, $facts);
-				$hashCodes?->updateFacts($file->path, (string)$facts->fileHash, (string)$facts->lastModified, (string)$facts->fileSize);
+				$this->fileManager->syncMetadataIntoFile($song, $file, $user, $databasePath, $hashCodes);
 			} catch (\Throwable $exception) {
-				$this->logger->warning('Could not write the song metadata into an attached PDF', [
+				$this->logger->warning('Could not write the song metadata into an attached file', [
 					'exception' => $exception,
 					'songId' => $songId,
 					'fileId' => $file->id,
@@ -863,42 +826,42 @@ class ApiController extends OCSController {
 
 		return (string)($library['path'] ?? '');
 	}
-	
+
 	#[NoAdminRequired]
-    #[ApiRoute(verb: 'POST', url: '/regenerate-file-paths')]
-    public function regenerateFilePaths(int $libraryId): DataResponse {
+	#[ApiRoute(verb: 'POST', url: '/api/sync-library')]
+	public function syncLibrary(int $libraryId): DataResponse {
 		$user = $this->userSession->getUser();
 		if ($user === null) {
 			return new DataResponse(
 				['message' => 'User not logged in'],
 				Http::STATUS_UNAUTHORIZED
 			);
-		} 
+		}
 
 		try {
-			$log = $this->fileManager->regenerateFilePaths($libraryId, $user);
-			
+			$log = $this->librarySync->syncLibrary($libraryId, $user);
 		} catch (\Exception $e) {
-			$this->logger->error("Error regenerating file paths for library ID $libraryId: " . $e->getMessage());
+			$this->logger->error("Error syncing library ID $libraryId: " . $e->getMessage());
 			return new DataResponse(
-				['message' => "Error regenerating file paths for library ID $libraryId: " . $e->getMessage()],
+				['message' => "Error syncing library ID $libraryId: " . $e->getMessage()],
 				Http::STATUS_INTERNAL_SERVER_ERROR
 			);
 		}
-		// Per-file failures do not fail the request: the whole log - what happened to
-		// every file - is sent back so the client can show the user how the run went.
+		// Per-file failures do not fail the request: the whole log - what happened
+		// to every file - is sent back so the client can show the user how the run
+		// went and link to the files that need attention.
 		$failures = count(array_filter($log, static fn ($entry) => $entry->level !== MobileSheetsFileLogEntry::LEVEL_INFO));
 
 		return new DataResponse(
 			[
 				'message' => $failures === 0
-					? 'File paths regenerated successfully'
-					: sprintf('File paths regenerated, but %d file(s) could not be updated', $failures),
+					? 'File paths and metadata are up to date'
+					: sprintf('Library synced, but %d file(s) need attention', $failures),
 				'log' => $log,
 			],
 			Http::STATUS_OK
 		);
-    }
+	}
 
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'POST', url: '/api/composers')]

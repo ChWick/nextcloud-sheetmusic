@@ -218,6 +218,57 @@ final class MobileSheetsPdfMetadataTest extends TestCase {
 		MobileSheetsPdfMetadata::prefillFor('just some text');
 	}
 
+	/** A file written from a song compares equal to that song afterwards. */
+	public function testMatchesSongForAFileWrittenFromTheSong(): void {
+		$song = new MobileSheetsSong(
+			42,
+			'Blue Bossa',
+			[],
+			[new MobileSheetsComposer(1, 'Joe Henderson')],
+			[new MobileSheetsBook(2, 'Real Book')],
+			[new MobileSheetsCollection(3, 'Jazz')],
+			[new MobileSheetsArtist(4, 'Miles Davis')],
+		);
+		$content = MobileSheetsPdfMetadata::withInfo(
+			self::minimalPdf(),
+			MobileSheetsPdfMetadata::fieldsFor($song),
+		);
+
+		self::assertTrue(MobileSheetsPdfMetadata::matchesSong($content, $song));
+	}
+
+	/**
+	 * The comparison normalizes both sides like the round trip does, so names
+	 * that repeat in the song match the deduplicated document properties.
+	 */
+	public function testMatchesSongNormalizesNamesLikeTheRoundTrip(): void {
+		$song = new MobileSheetsSong(
+			42,
+			'Air on the G String',
+			[],
+			[new MobileSheetsComposer(1, 'J.S. Bach'), new MobileSheetsComposer(2, 'J.S. Bach')],
+		);
+		$content = MobileSheetsPdfMetadata::withInfo(
+			self::minimalPdf(),
+			MobileSheetsPdfMetadata::fieldsFor($song),
+		);
+
+		self::assertTrue(MobileSheetsPdfMetadata::matchesSong($content, $song));
+	}
+
+	/** The old properties of the fixture are not the song's, so this is false. */
+	public function testMatchesSongIsFalseWhenTheFileCarriesOtherProperties(): void {
+		$song = new MobileSheetsSong(42, 'Blue Bossa', []);
+
+		self::assertFalse(MobileSheetsPdfMetadata::matchesSong(self::minimalPdf(), $song));
+	}
+
+	public function testMatchesSongRejectsAFileThatIsNotAPdf(): void {
+		$this->expectException(\RuntimeException::class);
+
+		MobileSheetsPdfMetadata::matchesSong('just some text', new MobileSheetsSong(42, 'Blue Bossa', []));
+	}
+
 	/**
 	 * A tiny but structurally valid PDF: catalog, one page, a trailer and a startxref.
 	 * Object 4 is its Info dictionary, whose entries $infoBody supplies.

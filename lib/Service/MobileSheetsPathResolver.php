@@ -79,7 +79,7 @@ class MobileSheetsPathResolver {
 	/**
 	 * Build both representations for a target path relative to an internal folder.
 	 *
-	 * @param string $relativePath       path below $internalBaseFolder, e.g. "Miles/Miles - Book/Miles - Book - Blue.pdf"
+	 * @param string $relativePath path below $internalBaseFolder, e.g. "Miles/Miles - Book/Miles - Book - Blue.pdf"
 	 * @param string $internalBaseFolder internal node path of the base folder, e.g. "/admin/files/Noten"
 	 */
 	public function forTarget(string $relativePath, IUser $user, string $internalBaseFolder): MobileSheetsPath {

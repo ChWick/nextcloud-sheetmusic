@@ -55,13 +55,23 @@ export interface CreatedSongData extends LibraryData {
 /** Severity of a log line, so the user can filter the log down. */
 export type FileLogLevel = 'info' | 'warning' | 'error'
 
-/** One line of the log a bulk run produces: what happened to one file of a song. */
+/**
+ * One line of the report a library sync run produces: what happened to one file
+ * of a song, or to the library as a whole (songId 0).
+ *
+ * `code` is the stable outcome code the report maps to a localized message and
+ * to its actions; `fileId` is the Nextcloud node id of the file behind the entry
+ * when it can be resolved, so the report can link straight to it. When it is
+ * null the report falls back to opening the file's folder in the Files app.
+ */
 export interface FileLogEntry {
 	songId: number
 	songTitle: string
 	filePath: string
 	message: string
 	level: FileLogLevel
+	code: string
+	fileId: number | null
 }
 
 /**
