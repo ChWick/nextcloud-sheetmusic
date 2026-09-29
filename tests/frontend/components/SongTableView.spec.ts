@@ -73,4 +73,20 @@ describe('SongTableView.vue', () => {
 		const toggledRows = wrapper.findAll('tbody tr')
 		expect(toggledRows[0].text()).toContain('Symphony No. 5')
 	})
+
+	it('emits filter-entity when metadata chip is clicked and applies active class', async () => {
+		const isFilteredMock = vi.fn((type: string, id: number) => type === 'composers' && id === 1)
+		const wrapper = mount(SongTableView, {
+			props: { songs, isFiltered: isFilteredMock },
+		})
+
+		const beethovenBtn = wrapper.findAll('button').find((btn) => btn.text() === 'Beethoven')
+		const bachBtn = wrapper.findAll('button').find((btn) => btn.text() === 'Bach')
+
+		expect(beethovenBtn?.classes().some((c) => c.includes('activeChip'))).toBe(true)
+		expect(bachBtn?.classes().some((c) => c.includes('activeChip'))).toBe(false)
+
+		await beethovenBtn?.trigger('click')
+		expect(wrapper.emitted('filter-entity')?.[0]).toEqual(['composers', { id: 1, name: 'Beethoven' }])
+	})
 })

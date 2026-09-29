@@ -90,4 +90,35 @@ describe('useSongFilters composable with unassigned matching', () => {
 			query: { composers: '-1' },
 		})
 	})
+
+	it('checks if an entity is filtered using isFiltered', () => {
+		mockRoute.query = { composers: '10,20', books: '5' }
+
+		const { isFiltered } = useSongFilters(options)
+
+		expect(isFiltered('composers', 10)).toBe(true)
+		expect(isFiltered('composers', 20)).toBe(true)
+		expect(isFiltered('composers', 30)).toBe(false)
+		expect(isFiltered('books', 5)).toBe(true)
+		expect(isFiltered('books', 10)).toBe(false)
+		expect(isFiltered('artists', 1)).toBe(false)
+	})
+
+	it('toggles filter correctly adding and removing entity ids', () => {
+		mockRoute.query = { composers: '10' }
+
+		const { toggleFilter } = useSongFilters(options)
+
+		// Toggle adding Bach (id: 20)
+		toggleFilter('composers', { id: 20, name: 'Bach' })
+		expect(mockRouter.push).toHaveBeenLastCalledWith({
+			query: { composers: '10,20' },
+		})
+
+		// Toggle removing Mozart (id: 10)
+		toggleFilter('composers', { id: 10, name: 'Mozart' })
+		expect(mockRouter.push).toHaveBeenLastCalledWith({
+			query: {},
+		})
+	})
 })

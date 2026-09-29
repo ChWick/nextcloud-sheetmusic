@@ -36,4 +36,17 @@ describe('SongCardView.vue', () => {
 		await titleBtn.trigger('click')
 		expect(wrapper.emitted('view-song')?.[0]).toEqual([songs[0]])
 	})
+
+	it('emits filter-entity when metadata chip is clicked in card view', async () => {
+		const isFilteredMock = vi.fn((type: string, id: number) => type === 'composers' && id === 1)
+		const wrapper = mount(SongCardView, {
+			props: { songs, isFiltered: isFilteredMock },
+		})
+
+		const mozartBtn = wrapper.findAll('button').find((btn) => btn.text() === 'Mozart')
+		expect(mozartBtn?.classes().some((c) => c.includes('activeChip'))).toBe(true)
+
+		await mozartBtn?.trigger('click')
+		expect(wrapper.emitted('filter-entity')?.[0]).toEqual(['composers', { id: 1, name: 'Mozart' }])
+	})
 })
