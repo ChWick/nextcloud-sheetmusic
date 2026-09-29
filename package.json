@@ -8,6 +8,7 @@
     "dev": "vite --mode development build",
     "lint": "eslint src",
     "stylelint": "stylelint src/**/*.vue src/**/*.scss src/**/*.css",
+    "test:frontend": "vitest run",
     "watch": "vite --mode development build --watch"
   },
   "browserslist": [
@@ -29,9 +30,12 @@
     "@nextcloud/eslint-config": "^8.4.2",
     "@nextcloud/stylelint-config": "^3.1.1",
     "@nextcloud/vite-config": "^2.5.2",
+    "@vue/test-utils": "^2.5.1",
     "@vue/tsconfig": "^0.9.1",
+    "happy-dom": "^20.14.5",
     "typescript": "^5.9.3",
-    "vite": "^7.3.2"
+    "vite": "^7.3.2",
+    "vitest": "^5.0.2"
   },
   "engines": {
     "node": "^24.0.0",
