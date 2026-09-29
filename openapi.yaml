@@ -1,0 +1,889 @@
+openapi: 3.0.3
+info:
+  title: MobileSheets Manager API
+  description: API specification connecting PHP backend endpoints with TypeScript frontend types.
+  version: 1.0.0
+
+paths:
+  /api/libraries:
+    get:
+      summary: Get all libraries for the current user
+      responses:
+        '200':
+          description: List of libraries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OcsEnvelopeLibraries'
+    post:
+      summary: Register a MobileSheets library file (.db)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - path
+              properties:
+                path:
+                  type: string
+                  example: /Noten/MobileSheets.db
+      responses:
+        '201':
+          description: Library added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OcsEnvelopeAddedLibrary'
+
+  /api/libraries/{id}:
+    delete:
+      summary: Remove a library entry
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Library removed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OcsEnvelopeDeletedLibrary'
+
+  /api/songs:
+    get:
+      summary: Load all songs and filter entities for a library
+      parameters:
+        - name: id
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Library data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OcsEnvelopeLibraryData'
+    post:
+      summary: Create a song in a library
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - libraryId
+                - title
+              properties:
+                libraryId:
+                  type: integer
+                title:
+                  type: string
+                composerIds:
+                  type: array
+                  items:
+                    type: integer
+                bookIds:
+                  type: array
+                  items:
+                    type: integer
+                collectionIds:
+                  type: array
+                  items:
+                    type: integer
+                artistIds:
+                  type: array
+                  items:
+                    type: integer
+      responses:
+        '200':
+          description: Created song data with library data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OcsEnvelopeCreatedSongData'
+
+  /api/songs/{id}:
+    post:
+      summary: Update a song in a library
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - libraryId
+                - title
+              properties:
+                libraryId:
+                  type: integer
+                title:
+                  type: string
+                composerIds:
+                  type: array
+                  items:
+                    type: integer
+                bookIds:
+                  type: array
+                  items:
+                    type: integer
+                collectionIds:
+                  type: array
+                  items:
+                    type: integer
+                artistIds:
+                  type: array
+                  items:
+                    type: integer
+      responses:
+        '200':
+          description: Updated library data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OcsEnvelopeLibraryData'
+    delete:
+      summary: Delete a song from a library
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: libraryId
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: deleteFiles
+          in: query
+          required: false
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Refreshed library data after deletion
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OcsEnvelopeLibraryData'
+
+  /api/songs/{id}/file/upload:
+    post:
+      summary: Upload a PDF file to attach to a song
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+                - libraryId
+              properties:
+                file:
+                  type: string
+                  format: binary
+                libraryId:
+                  type: integer
+      responses:
+        '200':
+          description: Refreshed library data after file upload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OcsEnvelopeLibraryData'
+
+  /api/songs/{id}/file/attach:
+    post:
+      summary: Attach a Nextcloud file to a song (copy or move)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - libraryId
+                - sourcePath
+              properties:
+                libraryId:
+                  type: integer
+                sourcePath:
+                  type: string
+                action:
+                  type: string
+                  enum: [copy, move]
+      responses:
+        '200':
+          description: Refreshed library data after file attachment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OcsEnvelopeLibraryData'
+
+  /api/songs/{id}/file/{fileId}/delete:
+    post:
+      summary: Delete an attached PDF file from a song
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: fileId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - libraryId
+              properties:
+                libraryId:
+                  type: integer
+      responses:
+        '200':
+          description: Refreshed library data after file deletion
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OcsEnvelopeLibraryData'
+
+  /api/composers:
+    post:
+      summary: Create a composer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - libraryId
+                - name
+              properties:
+                libraryId:
+                  type: integer
+                name:
+                  type: string
+      responses:
+        '200':
+          description: Created composer ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OcsEnvelopeCreatedEntity'
+
+  /api/composers/{id}:
+    delete:
+      summary: Delete a composer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: libraryId
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Refreshed library data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OcsEnvelopeLibraryData'
+
+  /api/books:
+    post:
+      summary: Create a book
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - libraryId
+                - title
+              properties:
+                libraryId:
+                  type: integer
+                title:
+                  type: string
+      responses:
+        '200':
+          description: Created book ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OcsEnvelopeCreatedEntity'
+
+  /api/books/{id}:
+    delete:
+      summary: Delete a book
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: libraryId
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Refreshed library data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OcsEnvelopeLibraryData'
+
+  /api/collections:
+    post:
+      summary: Create a collection
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - libraryId
+                - name
+              properties:
+                libraryId:
+                  type: integer
+                name:
+                  type: string
+      responses:
+        '200':
+          description: Created collection ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OcsEnvelopeCreatedEntity'
+
+  /api/collections/{id}:
+    delete:
+      summary: Delete a collection
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: libraryId
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Refreshed library data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OcsEnvelopeLibraryData'
+
+  /api/artists:
+    post:
+      summary: Create an artist
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - libraryId
+                - name
+              properties:
+                libraryId:
+                  type: integer
+                name:
+                  type: string
+      responses:
+        '200':
+          description: Created artist ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OcsEnvelopeCreatedEntity'
+
+  /api/artists/{id}:
+    delete:
+      summary: Delete an artist
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: libraryId
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Refreshed library data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OcsEnvelopeLibraryData'
+
+  /api/sync-library:
+    post:
+      summary: Sync file paths and metadata for a library
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - libraryId
+              properties:
+                libraryId:
+                  type: integer
+      responses:
+        '200':
+          description: Sync report log
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OcsEnvelopeSyncLog'
+
+  /api/import-metadata:
+    post:
+      summary: Read metadata prefill from an uploaded PDF
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Extracted metadata prefill
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OcsEnvelopeSongPrefill'
+
+components:
+  schemas:
+    Library:
+      type: object
+      required:
+        - id
+        - path
+      properties:
+        id:
+          type: integer
+        path:
+          type: string
+
+    Composer:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+
+    Book:
+      type: object
+      required:
+        - id
+        - title
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+
+    Collection:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+
+    Artist:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+
+    SongFile:
+      type: object
+      required:
+        - id
+        - path
+      properties:
+        id:
+          type: integer
+        path:
+          type: string
+
+    Song:
+      type: object
+      required:
+        - id
+        - title
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        files:
+          type: array
+          items:
+            $ref: '#/components/schemas/SongFile'
+        composers:
+          type: array
+          items:
+            $ref: '#/components/schemas/Composer'
+        books:
+          type: array
+          items:
+            $ref: '#/components/schemas/Book'
+        collections:
+          type: array
+          items:
+            $ref: '#/components/schemas/Collection'
+        artists:
+          type: array
+          items:
+            $ref: '#/components/schemas/Artist'
+
+    LibraryData:
+      type: object
+      required:
+        - songs
+        - composers
+        - books
+        - collections
+        - artists
+      properties:
+        songs:
+          type: array
+          items:
+            $ref: '#/components/schemas/Song'
+        composers:
+          type: array
+          items:
+            $ref: '#/components/schemas/Composer'
+        books:
+          type: array
+          items:
+            $ref: '#/components/schemas/Book'
+        collections:
+          type: array
+          items:
+            $ref: '#/components/schemas/Collection'
+        artists:
+          type: array
+          items:
+            $ref: '#/components/schemas/Artist'
+
+    CreatedSongData:
+      allOf:
+        - $ref: '#/components/schemas/LibraryData'
+        - type: object
+          required:
+            - createdSongId
+          properties:
+            createdSongId:
+              type: integer
+
+    FileLogLevel:
+      type: string
+      enum:
+        - info
+        - warning
+        - error
+
+    FileLogEntry:
+      type: object
+      required:
+        - songId
+        - songTitle
+        - filePath
+        - message
+        - level
+        - code
+      properties:
+        songId:
+          type: integer
+        songTitle:
+          type: string
+        filePath:
+          type: string
+        message:
+          type: string
+        level:
+          $ref: '#/components/schemas/FileLogLevel'
+        code:
+          type: string
+        fileId:
+          type: integer
+          nullable: true
+
+    SongPrefill:
+      type: object
+      required:
+        - title
+        - composers
+        - books
+        - collections
+        - artists
+      properties:
+        title:
+          type: string
+        composers:
+          type: array
+          items:
+            type: string
+        books:
+          type: array
+          items:
+            type: string
+        collections:
+          type: array
+          items:
+            type: string
+        artists:
+          type: array
+          items:
+            type: string
+
+    OcsMeta:
+      type: object
+      required:
+        - status
+        - statuscode
+      properties:
+        status:
+          type: string
+        statuscode:
+          type: integer
+        message:
+          type: string
+          nullable: true
+
+    OcsEnvelopeLibraries:
+      type: object
+      required:
+        - ocs
+      properties:
+        ocs:
+          type: object
+          required:
+            - meta
+            - data
+          properties:
+            meta:
+              $ref: '#/components/schemas/OcsMeta'
+            data:
+              type: object
+              required:
+                - libraries
+              properties:
+                libraries:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Library'
+
+    OcsEnvelopeAddedLibrary:
+      type: object
+      required:
+        - ocs
+      properties:
+        ocs:
+          type: object
+          required:
+            - meta
+            - data
+          properties:
+            meta:
+              $ref: '#/components/schemas/OcsMeta'
+            data:
+              type: object
+              required:
+                - path
+              properties:
+                path:
+                  type: string
+
+    OcsEnvelopeDeletedLibrary:
+      type: object
+      required:
+        - ocs
+      properties:
+        ocs:
+          type: object
+          required:
+            - meta
+            - data
+          properties:
+            meta:
+              $ref: '#/components/schemas/OcsMeta'
+            data:
+              type: object
+              required:
+                - id
+                - path
+              properties:
+                id:
+                  type: integer
+                path:
+                  type: string
+
+    OcsEnvelopeLibraryData:
+      type: object
+      required:
+        - ocs
+      properties:
+        ocs:
+          type: object
+          required:
+            - meta
+            - data
+          properties:
+            meta:
+              $ref: '#/components/schemas/OcsMeta'
+            data:
+              $ref: '#/components/schemas/LibraryData'
+
+    OcsEnvelopeCreatedSongData:
+      type: object
+      required:
+        - ocs
+      properties:
+        ocs:
+          type: object
+          required:
+            - meta
+            - data
+          properties:
+            meta:
+              $ref: '#/components/schemas/OcsMeta'
+            data:
+              $ref: '#/components/schemas/CreatedSongData'
+
+    OcsEnvelopeCreatedEntity:
+      type: object
+      required:
+        - ocs
+      properties:
+        ocs:
+          type: object
+          required:
+            - meta
+            - data
+          properties:
+            meta:
+              $ref: '#/components/schemas/OcsMeta'
+            data:
+              type: object
+              required:
+                - id
+              properties:
+                id:
+                  type: integer
+
+    OcsEnvelopeSyncLog:
+      type: object
+      required:
+        - ocs
+      properties:
+        ocs:
+          type: object
+          required:
+            - meta
+            - data
+          properties:
+            meta:
+              $ref: '#/components/schemas/OcsMeta'
+            data:
+              type: object
+              required:
+                - log
+              properties:
+                log:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/FileLogEntry'
+
+    OcsEnvelopeSongPrefill:
+      type: object
+      required:
+        - ocs
+      properties:
+        ocs:
+          type: object
+          required:
+            - meta
+            - data
+          properties:
+            meta:
+              $ref: '#/components/schemas/OcsMeta'
+            data:
+              $ref: '#/components/schemas/SongPrefill'

@@ -1,4 +1,3 @@
-export interface Library {
-    id: number
-    path: string
-}
+import type { components } from './api.generated'
+
+export type Library = components['schemas']['Library']
