@@ -154,12 +154,18 @@ const {
   artists,
   fileError,
   isLoading,
-  handleLibraryDataUpdate: updateBaseLibraryData,
+  handleLibraryDataUpdate,
   loadLibraryData,
 } = useLibraryData()
 
-// Local state for this view
-const entities = ref<FilterEntity[]>([])
+const entities = computed<FilterEntity[]>(() => {
+  if (props.entityType === 'composers') return composers.value
+  if (props.entityType === 'artists') return artists.value
+  if (props.entityType === 'books') return books.value
+  if (props.entityType === 'collections') return collections.value
+  return []
+})
+
 /** Entry whose delete dialog is open. */
 const entityToDelete = ref<FilterEntity | null>(null)
 const isCreateDialogOpen = ref(false)
@@ -201,11 +207,6 @@ const visibleEntities = computed(() => {
   const usedIds = new Set(visibleSongs.value.flatMap(song => entitiesOfSong(song).map(entity => entity.id)))
   return entities.value.filter(entity => usedIds.has(entity.id))
 })
-
-function handleLibraryDataUpdate(data: LibraryData) {
-  updateBaseLibraryData(data)
-  entities.value = data[props.entityType] ?? []
-}
 
 // Watch for library or entity kind changes
 watch(
