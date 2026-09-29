@@ -5,6 +5,7 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 
 defineProps<{
 	songs: Song[]
+	selectedSongIds?: number[]
 	isFiltered?: (entityType: EntityType, id: number) => boolean
 }>()
 
@@ -12,12 +13,22 @@ const emit = defineEmits<{
 	'view-song': [song: Song]
 	'edit-song': [song: Song]
 	'filter-entity': [entityType: EntityType, entity: FilterEntity]
+	'toggle-select-song': [songId: number]
 }>()
 </script>
 
 <template>
 	<ul :class="$style.songList">
-		<li v-for="song in songs" :key="song.id" :class="$style.songRow">
+		<li
+			v-for="song in songs"
+			:key="song.id"
+			:class="[$style.songRow, selectedSongIds?.includes(song.id) && $style.selectedRow]">
+			<input
+				type="checkbox"
+				:checked="selectedSongIds?.includes(song.id)"
+				:title="t('mobilesheetsmanager', 'Select song')"
+				@click.stop
+				@change="emit('toggle-select-song', song.id)">
 			<div :class="$style.songInfo">
 				<button
 					type="button"
@@ -190,5 +201,10 @@ const emit = defineEmits<{
 .actions {
 	display: flex;
 	gap: 8px;
+}
+
+.selectedRow {
+	border-color: var(--color-primary-element);
+	background-color: var(--color-background-hover);
 }
 </style>

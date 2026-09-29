@@ -217,6 +217,53 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/songs-batch-update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Batch update multiple songs in a library */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        libraryId: number;
+                        songIds: number[];
+                        composers?: Record<string, never>;
+                        books?: Record<string, never>;
+                        collections?: Record<string, never>;
+                        artists?: Record<string, never>;
+                    };
+                };
+            };
+            responses: {
+                /** @description Updated library data */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["OcsEnvelopeLibraryData"];
+                    };
+                };
+            };
+        };
         /** Delete a song from a library */
         delete: {
             parameters: {

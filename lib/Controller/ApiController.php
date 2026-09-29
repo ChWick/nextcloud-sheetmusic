@@ -272,6 +272,62 @@ class ApiController extends OCSController {
 		}
 	}
 
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/songs-batch-update')]
+	public function batchUpdateSongs(
+		?int $libraryId = null,
+		array $songIds = [],
+		?array $composers = null,
+		?array $books = null,
+		?array $collections = null,
+		?array $artists = null,
+	): DataResponse {
+		if ($libraryId === null || empty($songIds)) {
+			return new DataResponse([], Http::STATUS_BAD_REQUEST);
+		}
+
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		$libraryPath = $this->resolveLibraryPath($user->getUID(), $libraryId);
+		if ($libraryPath === null) {
+			return new DataResponse([], Http::STATUS_NOT_FOUND);
+		}
+
+		try {
+			$node = $this->rootFolder->getUserFolder($user->getUID())->get(ltrim($libraryPath, '/'));
+			$databasePath = $node->getStorage()->getLocalFile($node->getInternalPath());
+			if ($databasePath === false) {
+				return new DataResponse([], Http::STATUS_NOT_FOUND);
+			}
+
+			$this->songMapper->batchUpdateSongs(
+				$databasePath,
+				$songIds,
+				$composers,
+				$books,
+				$collections,
+				$artists,
+			);
+
+			foreach ($songIds as $songId) {
+				$this->syncSongFileMetadata($user, $databasePath, (int)$songId);
+			}
+
+			return new DataResponse($this->songMapper->findLibraryData($databasePath));
+		} catch (\Throwable $exception) {
+			$this->logger->error('Could not batch update songs in MobileSheets library', [
+				'exception' => $exception,
+				'libraryId' => $libraryId,
+				'path' => $libraryPath,
+				'songIds' => $songIds,
+			]);
+			return new DataResponse([], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
 	/**
 	 * Delete a song from a library.
 	 *

@@ -7,6 +7,7 @@ import { sortSongs, type SortKey, type SortOrder } from '../../utils/song-format
 
 const props = defineProps<{
 	songs: Song[]
+	selectedSongIds?: number[]
 	isFiltered?: (entityType: EntityType, id: number) => boolean
 }>()
 
@@ -14,6 +15,8 @@ const emit = defineEmits<{
 	'view-song': [song: Song]
 	'edit-song': [song: Song]
 	'filter-entity': [entityType: EntityType, entity: FilterEntity]
+	'toggle-select-song': [songId: number]
+	'select-all': [songIds: number[]]
 }>()
 
 const sortKey = ref<SortKey>('title')
@@ -41,6 +44,13 @@ const sortedSongs = computed(() => sortSongs(props.songs, sortKey.value, sortOrd
 		<table :class="$style.songTable">
 			<thead>
 				<tr>
+					<th :class="$style.checkboxCell">
+						<input
+							type="checkbox"
+							:checked="songs.length > 0 && songs.every((s) => selectedSongIds?.includes(s.id))"
+							:title="t('mobilesheetsmanager', 'Select all songs')"
+							@change="emit('select-all', songs.map((s) => s.id))">
+					</th>
 					<th :class="$style.sortableHeader" @click="toggleSort('title')">
 						{{ t('mobilesheetsmanager', 'Title') }}{{ sortIndicator('title') }}
 					</th>
@@ -62,7 +72,15 @@ const sortedSongs = computed(() => sortSongs(props.songs, sortKey.value, sortOrd
 				</tr>
 			</thead>
 			<tbody>
-				<tr v-for="song in sortedSongs" :key="song.id" :class="$style.tableRow">
+				<tr v-for="song in sortedSongs" :key="song.id" :class="[$style.tableRow, selectedSongIds?.includes(song.id) && $style.selectedRow]">
+					<td :class="$style.checkboxCell">
+						<input
+							type="checkbox"
+							:checked="selectedSongIds?.includes(song.id)"
+							:title="t('mobilesheetsmanager', 'Select song')"
+							@click.stop
+							@change="emit('toggle-select-song', song.id)">
+					</td>
 					<td :class="$style.titleCell">
 						<button
 							type="button"
@@ -314,5 +332,14 @@ const sortedSongs = computed(() => sortSongs(props.songs, sortKey.value, sortOrd
 .actionsGroup {
 	display: inline-flex;
 	gap: 6px;
+}
+
+.checkboxCell {
+	width: 36px;
+	text-align: center;
+}
+
+.selectedRow {
+	background-color: var(--color-background-hover);
 }
 </style>

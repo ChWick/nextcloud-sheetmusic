@@ -681,6 +681,29 @@ final class SongMapperTest extends TestCase {
 		return $path;
 	}
 
+	public function testBatchUpdateSongsAddsAndReplacesMetadata(): void {
+		$mapper = $this->mapper();
+
+		// Batch add Bach (id 20) to song 1, replace books for song 1 with book 100
+		$mapper->batchUpdateSongs(
+			$this->databasePath,
+			[1, 2],
+			composerUpdate: ['action' => 'add', 'ids' => [20]],
+			bookUpdate: ['action' => 'replace', 'ids' => [100]],
+		);
+
+		$song1 = $mapper->findSong($this->databasePath, 1);
+		self::assertNotNull($song1);
+		self::assertCount(2, $song1->composers);
+		self::assertSame(['Beethoven', 'Bach'], $this->names($song1->composers));
+		self::assertSame(['Real Book 1'], $this->titles($song1->books));
+
+		$song2 = $mapper->findSong($this->databasePath, 2);
+		self::assertNotNull($song2);
+		self::assertSame(['Bach'], $this->names($song2->composers));
+		self::assertSame(['Real Book 1'], $this->titles($song2->books));
+	}
+
 	/**
 	 * @param list<MobileSheetsComposer|MobileSheetsCollection|MobileSheetsArtist> $entities
 	 * @return list<string>

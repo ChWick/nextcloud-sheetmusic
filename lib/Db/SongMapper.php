@@ -456,6 +456,99 @@ class SongMapper {
 	}
 
 	/**
+	 * Batch update metadata for multiple songs.
+	 *
+	 * @param list<int> $songIds
+	 * @param array{action?: string, ids?: list<int>}|null $composerUpdate
+	 * @param array{action?: string, ids?: list<int>}|null $bookUpdate
+	 * @param array{action?: string, ids?: list<int>}|null $collectionUpdate
+	 * @param array{action?: string, ids?: list<int>}|null $artistUpdate
+	 */
+	public function batchUpdateSongs(
+		string $databasePath,
+		array $songIds,
+		?array $composerUpdate = null,
+		?array $bookUpdate = null,
+		?array $collectionUpdate = null,
+		?array $artistUpdate = null,
+	): void {
+		if (empty($songIds)) {
+			return;
+		}
+
+		$database = new PDO('sqlite:' . $databasePath, options: [
+			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+		]);
+
+		$tablesStatement = $database->query("SELECT name FROM sqlite_master WHERE type='table'");
+		/** @var list<string> $existingTables */
+		$existingTables = $tablesStatement !== false ? $tablesStatement->fetchAll(PDO::FETCH_COLUMN) : [];
+
+		$database->beginTransaction();
+		try {
+			foreach ($songIds as $songId) {
+				$this->updateRowById($database, 'Songs', $this->dateColumns($database, 'Songs', withCreation: false), $songId);
+
+				if ($composerUpdate !== null && in_array('ComposerSongs', $existingTables, true)) {
+					$this->updateCategoryRelations($database, 'ComposerSongs', 'ComposerId', $songId, $composerUpdate);
+				}
+				if ($bookUpdate !== null && in_array('BookSongs', $existingTables, true)) {
+					$this->updateCategoryRelations($database, 'BookSongs', 'BookId', $songId, $bookUpdate);
+				}
+				if ($collectionUpdate !== null && in_array('CollectionSong', $existingTables, true)) {
+					$this->updateCategoryRelations($database, 'CollectionSong', 'CollectionId', $songId, $collectionUpdate);
+				}
+				if ($artistUpdate !== null && in_array('ArtistsSongs', $existingTables, true)) {
+					$this->updateCategoryRelations($database, 'ArtistsSongs', 'ArtistId', $songId, $artistUpdate);
+				}
+			}
+			$database->commit();
+		} catch (\Throwable $e) {
+			$database->rollBack();
+			throw $e;
+		}
+	}
+
+	private function updateCategoryRelations(
+		PDO $database,
+		string $tableName,
+		string $entityIdCol,
+		int $songId,
+		array $updateSpec,
+	): void {
+		$action = $updateSpec['action'] ?? 'add';
+		$targetIds = array_map('intval', $updateSpec['ids'] ?? []);
+
+		if ($action === 'replace') {
+			$delStmt = $database->prepare('DELETE FROM "' . $tableName . '" WHERE SongId = :songId');
+			$delStmt->execute([':songId' => $songId]);
+
+			$insStmt = $database->prepare('INSERT INTO "' . $tableName . '" (' . $entityIdCol . ', SongId) VALUES (:entityId, :songId)');
+			foreach ($targetIds as $entityId) {
+				$insStmt->execute([':entityId' => $entityId, ':songId' => $songId]);
+			}
+		} elseif ($action === 'add') {
+			$existingStmt = $database->prepare('SELECT ' . $entityIdCol . ' FROM "' . $tableName . '" WHERE SongId = :songId');
+			$existingStmt->execute([':songId' => $songId]);
+			$existing = array_map('intval', $existingStmt->fetchAll(PDO::FETCH_COLUMN));
+
+			$insStmt = $database->prepare('INSERT INTO "' . $tableName . '" (' . $entityIdCol . ', SongId) VALUES (:entityId, :songId)');
+			foreach ($targetIds as $entityId) {
+				if (!in_array($entityId, $existing, true)) {
+					$insStmt->execute([':entityId' => $entityId, ':songId' => $songId]);
+				}
+			}
+		} elseif ($action === 'remove') {
+			if (!empty($targetIds)) {
+				$inClause = implode(',', array_fill(0, count($targetIds), '?'));
+				$delStmt = $database->prepare('DELETE FROM "' . $tableName . '" WHERE SongId = ? AND ' . $entityIdCol . ' IN (' . $inClause . ')');
+				$delStmt->execute(array_merge([$songId], $targetIds));
+			}
+		}
+	}
+
+	/**
 	 * Delete a song together with everything that references it.
 	 *
 	 * MobileSheets spreads a song over many tables: its files, the links to composers,

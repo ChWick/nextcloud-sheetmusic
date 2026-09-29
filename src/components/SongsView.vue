@@ -49,6 +49,16 @@
     </template>
   </div>
   <div v-else :class="$style.songArea">
+    <div v-if="selectedCount > 0" :class="$style.selectionBanner">
+      <span :class="$style.selectionCount">{{ t('mobilesheetsmanager', '{count} songs selected', { count: selectedCount }) }}</span>
+      <NcButton size="small" variant="primary" @click="isBatchEditorOpen = true">
+        {{ t('mobilesheetsmanager', 'Edit selected ({count})', { count: selectedCount }) }}
+      </NcButton>
+      <NcButton size="small" @click="clearSelection">
+        {{ t('mobilesheetsmanager', 'Clear selection') }}
+      </NcButton>
+    </div>
+
     <div v-if="filterBarVisible" :class="$style.filterBarWrapper"><SongFilterBar
       v-model:selected-composers="selectedComposers"
       v-model:selected-books="selectedBooks"
@@ -81,26 +91,42 @@
       <SongTableView
         v-if="viewMode === 'table'"
         :songs="filteredSongs"
+        :selected-song-ids="selectedSongIds"
         :is-filtered="isFiltered"
         @view-song="openSongView"
         @edit-song="openSongEdit"
-        @filter-entity="toggleFilter" />
+        @filter-entity="toggleFilter"
+        @toggle-select-song="toggleSelect"
+        @select-all="selectAll" />
       <SongCardView
         v-else-if="viewMode === 'cards'"
         :songs="filteredSongs"
+        :selected-song-ids="selectedSongIds"
         :is-filtered="isFiltered"
         @view-song="openSongView"
         @edit-song="openSongEdit"
-        @filter-entity="toggleFilter" />
+        @filter-entity="toggleFilter"
+        @toggle-select-song="toggleSelect" />
       <SongSimpleListView
         v-else
         :songs="filteredSongs"
+        :selected-song-ids="selectedSongIds"
         :is-filtered="isFiltered"
         @view-song="openSongView"
         @edit-song="openSongEdit"
-        @filter-entity="toggleFilter" />
+        @filter-entity="toggleFilter"
+        @toggle-select-song="toggleSelect" />
     </template>
   </div>
+
+  <BatchSongEditorDialog
+    v-model:open="isBatchEditorOpen"
+    :selected-count="selectedCount"
+    :composers="composers"
+    :books="books"
+    :collections="collections"
+    :artists="artists"
+    @apply="handleApplyBatchUpdate" />
 </template>
 
 <script setup lang="ts">
@@ -114,8 +140,10 @@ import SongEditor from '../components/SongEditor.vue';
 import SongFilterBar from '../components/SongFilterBar.vue';
 import SongViewer from '../components/SongViewer.vue';
 import ViewHeader from '../components/ViewHeader.vue';
+import BatchSongEditorDialog, { type BatchUpdatePayload } from '../components/song-editor/BatchSongEditorDialog.vue';
 import type { Artist, Song, Composer, Book, Collection, LibraryData, SongPrefill } from '../types/song';
 import { useSongFilters } from '../composables/useSongFilters';
+import { useSongSelection } from '../composables/useSongSelection';
 import { useLibraryData } from '../composables/useLibraryData';
 import { apiPost } from '../api/client';
 import SongViewToggle, { type ViewMode } from './songs/SongViewToggle.vue';
@@ -169,6 +197,27 @@ const isEditInUrl = computed(() => route.query.edit !== undefined && route.query
 // history restores them when going back or forward.
 const { selectedComposers, selectedBooks, selectedCollections, selectedArtists, filterSongs, clearFilters, filterBarVisible, toggleFilterBar, isFiltered, toggleFilter } =
   useSongFilters(() => ({ composers: composers.value, books: books.value, collections: collections.value, artists: artists.value }));
+
+const { selectedSongIds, selectedCount, isSelected, toggleSelect, selectAll, isAllSelected, clearSelection } = useSongSelection();
+const isBatchEditorOpen = ref(false);
+
+async function handleApplyBatchUpdate(payload: BatchUpdatePayload) {
+  if (selectedSongIds.value.length === 0) return;
+  try {
+    const response = await apiPost('/api/songs-batch-update', {
+      libraryId: props.selectedLibrary,
+      songIds: selectedSongIds.value,
+      ...payload,
+    });
+    isBatchEditorOpen.value = false;
+    clearSelection();
+    if (response.data?.ocs?.data) {
+      handleLibraryDataUpdate(response.data.ocs.data);
+    }
+  } catch (error) {
+    console.error('Failed to batch update songs:', error);
+  }
+}
 
 /** The editor is open for a song that does not exist yet. */
 const isCreatingSong = ref(false);
@@ -358,5 +407,22 @@ async function handleDeleted(data: LibraryData | undefined, songId: number) {
 
 .fullscreenHeader {
   display: flex;
+}
+
+.selectionBanner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background-color: var(--color-background-hover);
+  border: 1px solid var(--color-primary-element);
+  border-radius: var(--border-radius-large, 8px);
+}
+
+.selectionCount {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--color-main-text);
+  margin-right: auto;
 }
 </style>

@@ -67,8 +67,8 @@ describe('SongTableView.vue', () => {
 		expect(initialRows[0].text()).toContain('Air on the G String')
 
 		// Click Title header to toggle desc
-		const titleHeader = wrapper.find('th')
-		await titleHeader.trigger('click')
+		const titleHeader = wrapper.findAll('th').find((th) => th.text().includes('Title'))
+		await titleHeader?.trigger('click')
 
 		const toggledRows = wrapper.findAll('tbody tr')
 		expect(toggledRows[0].text()).toContain('Symphony No. 5')
