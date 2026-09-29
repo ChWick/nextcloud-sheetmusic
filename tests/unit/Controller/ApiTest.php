@@ -1147,7 +1147,89 @@ final class ApiTest extends TestCase {
 		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->deleteBook(1, 7)->getStatus());
 		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->deleteCollection(1, 7)->getStatus());
 		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->deleteArtist(1, 7)->getStatus());
+		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->importSongMetadata()->getStatus());
 		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->syncLibrary(1)->getStatus());
+	}
+
+	public function testImportSongMetadataFromNextcloudPath(): void {
+		$pdf = "%PDF-1.4\n"
+			. "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n"
+			. "2 0 obj << /Type /Pages /Count 1 /Kids [3 0 R] >> endobj\n"
+			. "3 0 obj << /Type /Page /Parent 2 0 R >> endobj\n"
+			. "xref\n0 4\n0000000000 65535 f \n"
+			. "trailer << /Size 4 /Root 1 0 R >>\n"
+			. "startxref\n9\n%%EOF\n";
+
+		$fileNode = $this->createMock(File::class);
+		$fileNode->method('getContent')->willReturn($pdf);
+
+		$userFolder = $this->createMock(IUserFolder::class);
+		$userFolder->method('get')->with('Music/Take Five.pdf')->willReturn($fileNode);
+
+		$rootFolder = $this->createMock(IRootFolder::class);
+		$rootFolder->method('getUserFolder')->with('admin')->willReturn($userFolder);
+
+		$request = $this->createMock(IRequest::class);
+		$request->method('getUploadedFile')->with('file')->willReturn(null);
+		$request->method('getParam')->with('path')->willReturn('/Music/Take Five.pdf');
+
+		$controller = $this->createController(rootFolder: $rootFolder, request: $request);
+
+		$response = $controller->importSongMetadata();
+
+		self::assertEquals(Http::STATUS_OK, $response->getStatus());
+		$data = $response->getData();
+		self::assertArrayHasKey('title', $data);
+	}
+
+	public function testImportSongMetadataFromNextcloudPathWithDavPrefix(): void {
+		$pdf = "%PDF-1.4\n"
+			. "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n"
+			. "2 0 obj << /Type /Pages /Count 1 /Kids [3 0 R] >> endobj\n"
+			. "3 0 obj << /Type /Page /Parent 2 0 R >> endobj\n"
+			. "xref\n0 4\n0000000000 65535 f \n"
+			. "trailer << /Size 4 /Root 1 0 R >>\n"
+			. "startxref\n9\n%%EOF\n";
+
+		$fileNode = $this->createMock(File::class);
+		$fileNode->method('getContent')->willReturn($pdf);
+
+		$userFolder = $this->createMock(IUserFolder::class);
+		$userFolder->method('get')->with('Music/Take Five.pdf')->willReturn($fileNode);
+
+		$rootFolder = $this->createMock(IRootFolder::class);
+		$rootFolder->method('getUserFolder')->with('admin')->willReturn($userFolder);
+
+		$request = $this->createMock(IRequest::class);
+		$request->method('getUploadedFile')->with('file')->willReturn(null);
+		$request->method('getParam')->with('path')->willReturn('remote.php/dav/files/admin/Music/Take%20Five.pdf');
+
+		$controller = $this->createController(rootFolder: $rootFolder, request: $request);
+
+		$response = $controller->importSongMetadata();
+
+		self::assertEquals(Http::STATUS_OK, $response->getStatus());
+		$data = $response->getData();
+		self::assertArrayHasKey('title', $data);
+	}
+
+	public function testImportSongMetadataWithMissingFileReturnsBadRequest(): void {
+		$userFolder = $this->createMock(IUserFolder::class);
+		$userFolder->method('get')->willThrowException(new NotFoundException('Not found'));
+
+		$rootFolder = $this->createMock(IRootFolder::class);
+		$rootFolder->method('getUserFolder')->with('admin')->willReturn($userFolder);
+
+		$request = $this->createMock(IRequest::class);
+		$request->method('getUploadedFile')->with('file')->willReturn(null);
+		$request->method('getParam')->with('path')->willReturn('/Music/NonExistent.pdf');
+
+		$controller = $this->createController(rootFolder: $rootFolder, request: $request);
+
+		$response = $controller->importSongMetadata();
+
+		self::assertEquals(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		self::assertEquals(['message' => 'Could not read file content'], $response->getData());
 	}
 
 	/**
