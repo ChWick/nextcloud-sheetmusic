@@ -108,6 +108,7 @@ import ViewHeader from '../components/ViewHeader.vue';
 import type { Artist, Song, Composer, Book, Collection, LibraryData, SongPrefill } from '../types/song';
 import { useSongFilters } from '../composables/useSongFilters';
 import { useLibraryData } from '../composables/useLibraryData';
+import { apiPost } from '../api/client';
 
 // Props from parent (App.vue)
 const props = defineProps<{ selectedLibrary: number }>();
@@ -235,8 +236,8 @@ async function handleImportFile(event: Event) {
   try {
     const form = new FormData();
     form.append('file', file);
-    const response = await axios.post(generateOcsUrl('/apps/mobilesheetsmanager/api/import-metadata'), form);
-    prefill = (response.data as { ocs?: { data?: SongPrefill } })?.ocs?.data ?? null;
+    const response = await apiPost('/api/import-metadata', form as any);
+    prefill = response.data?.ocs?.data ?? null;
   } catch {
     prefill = null;
   }

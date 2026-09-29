@@ -1,7 +1,6 @@
 import type { Artist, Book, Collection, Composer, LibraryData, Song } from '../types/song'
-import axios from '@nextcloud/axios'
+import { apiGet } from '../api/client'
 import { translate as t } from '@nextcloud/l10n'
-import { generateOcsUrl } from '@nextcloud/router'
 import { ref } from 'vue'
 
 export function useLibraryData() {
@@ -25,11 +24,8 @@ export function useLibraryData() {
 		isLoading.value = true
 		fileError.value = ''
 		try {
-			const response = await axios.get(
-				generateOcsUrl('/apps/mobilesheetsmanager/api/songs'),
-				{ params: { id } },
-			)
-			handleLibraryDataUpdate(response.data.ocs.data as LibraryData)
+			const response = await apiGet('/api/songs', { queryParams: { id } })
+			handleLibraryDataUpdate(response.data.ocs.data)
 		} catch {
 			fileError.value = t('mobilesheetsmanager', 'Could not load this library.')
 		} finally {

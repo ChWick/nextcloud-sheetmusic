@@ -10,6 +10,7 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
+import { apiPost } from '../api/client'
 import { describeRequestFailure } from '../utils/api'
 import { openFileExternally } from '../utils/file'
 import { computed, ref, watch } from 'vue'
@@ -332,12 +333,11 @@ async function saveSong(closeAfter: boolean) {
 		if (existingSong && pendingDeleteFiles.value.length > 0) {
 			for (const file of pendingDeleteFiles.value) {
 				if (file.id > 0) {
-					await axios.post(
-						generateOcsUrl(`/apps/mobilesheetsmanager/api/songs/${existingSong.id}/file/${file.id}/delete`),
-						{
-							libraryId: props.libraryId,
-						},
-					)
+					await apiPost('/api/songs/{id}/file/{fileId}/delete', {
+						libraryId: props.libraryId,
+					}, {
+						pathParams: { id: existingSong.id, fileId: file.id },
+					})
 				}
 			}
 			pendingDeleteFiles.value = []
@@ -349,7 +349,7 @@ async function saveSong(closeAfter: boolean) {
 			if ('id' in comp && typeof comp.id === 'number') {
 				composerIds.push(comp.id)
 			} else {
-				const createRes = await axios.post(generateOcsUrl('/apps/mobilesheetsmanager/api/composers'), {
+				const createRes = await apiPost('/api/composers', {
 					libraryId: props.libraryId,
 					name: comp.name,
 				})
@@ -363,7 +363,7 @@ async function saveSong(closeAfter: boolean) {
 			if ('id' in bk && typeof bk.id === 'number') {
 				bookIds.push(bk.id)
 			} else {
-				const createRes = await axios.post(generateOcsUrl('/apps/mobilesheetsmanager/api/books'), {
+				const createRes = await apiPost('/api/books', {
 					libraryId: props.libraryId,
 					title: bk.title,
 				})
@@ -377,7 +377,7 @@ async function saveSong(closeAfter: boolean) {
 			if ('id' in col && typeof col.id === 'number') {
 				collectionIds.push(col.id)
 			} else {
-				const createRes = await axios.post(generateOcsUrl('/apps/mobilesheetsmanager/api/collections'), {
+				const createRes = await apiPost('/api/collections', {
 					libraryId: props.libraryId,
 					name: col.name,
 				})
@@ -391,7 +391,7 @@ async function saveSong(closeAfter: boolean) {
 			if ('id' in art && typeof art.id === 'number') {
 				artistIds.push(art.id)
 			} else {
-				const createRes = await axios.post(generateOcsUrl('/apps/mobilesheetsmanager/api/artists'), {
+				const createRes = await apiPost('/api/artists', {
 					libraryId: props.libraryId,
 					name: art.name,
 				})
@@ -411,8 +411,8 @@ async function saveSong(closeAfter: boolean) {
 			artistIds,
 		}
 		const response = existingSong
-			? await axios.post(generateOcsUrl(`/apps/mobilesheetsmanager/api/songs/${existingSong.id}`), payload)
-			: await axios.post(generateOcsUrl('/apps/mobilesheetsmanager/api/songs'), payload)
+			? await apiPost('/api/songs/{id}', payload, { pathParams: { id: existingSong.id } })
+			: await apiPost('/api/songs', payload)
 
 		let data = response.data.ocs.data as LibraryData
 		// A new song only has an id once the server created it.
@@ -422,14 +422,13 @@ async function saveSong(closeAfter: boolean) {
 		// renumbers the song's files, so the data of the last one is what the parent gets.
 		if (songId !== undefined) {
 			for (const attachment of pendingAttachments.value) {
-				const attachResponse = await axios.post(
-					generateOcsUrl(`/apps/mobilesheetsmanager/api/songs/${songId}/file/attach`),
-					{
-						libraryId: props.libraryId,
-						sourcePath: attachment.path,
-						action: attachment.action,
-					},
-				)
+				const attachResponse = await apiPost('/api/songs/{id}/file/attach', {
+					libraryId: props.libraryId,
+					sourcePath: attachment.path,
+					action: attachment.action,
+				}, {
+					pathParams: { id: songId },
+				})
 				data = attachResponse.data.ocs.data as LibraryData
 			}
 
@@ -438,13 +437,12 @@ async function saveSong(closeAfter: boolean) {
 				formData.append('file', upload.file)
 				formData.append('libraryId', String(props.libraryId))
 
-				const uploadResponse = await axios.post(
-					generateOcsUrl(`/apps/mobilesheetsmanager/api/songs/${songId}/file/upload`),
-					formData,
-					{
+				const uploadResponse = await apiPost('/api/songs/{id}/file/upload', formData as any, {
+					pathParams: { id: songId },
+					config: {
 						headers: { 'Content-Type': 'multipart/form-data' },
 					},
-				)
+				})
 				data = uploadResponse.data.ocs.data as LibraryData
 			}
 		}

@@ -94,6 +94,7 @@ import SongFilterBar from './SongFilterBar.vue'
 import ViewHeader from './ViewHeader.vue'
 import { useSongFilters } from '../composables/useSongFilters'
 import { useLibraryData } from '../composables/useLibraryData'
+import { apiDelete, apiPost } from '../api/client'
 
 const props = defineProps<{
   selectedLibrary: number
@@ -105,9 +106,8 @@ const router = useRouter()
 
 /** Everything this shared view needs to know about the entity kind it shows. */
 interface EntityConfig {
-  /** OCS endpoint that creates and deletes this kind of entity. */
-  endpoint: string
-  /** Property holding the display name: books are titled, everything else named. */
+  createEndpoint: '/api/composers' | '/api/artists' | '/api/books' | '/api/collections'
+  deleteEndpoint: '/api/composers/{id}' | '/api/artists/{id}' | '/api/books/{id}' | '/api/collections/{id}'
   nameKey: 'name' | 'title'
   singular: string
   plural: string
@@ -115,25 +115,29 @@ interface EntityConfig {
 
 const entityConfigs: Record<EntityType, EntityConfig> = {
   composers: {
-    endpoint: '/apps/mobilesheetsmanager/api/composers',
+    createEndpoint: '/api/composers',
+    deleteEndpoint: '/api/composers/{id}',
     nameKey: 'name',
     singular: t('mobilesheetsmanager', 'composer'),
     plural: t('mobilesheetsmanager', 'Composers'),
   },
   artists: {
-    endpoint: '/apps/mobilesheetsmanager/api/artists',
+    createEndpoint: '/api/artists',
+    deleteEndpoint: '/api/artists/{id}',
     nameKey: 'name',
     singular: t('mobilesheetsmanager', 'artist'),
     plural: t('mobilesheetsmanager', 'Artists'),
   },
   books: {
-    endpoint: '/apps/mobilesheetsmanager/api/books',
+    createEndpoint: '/api/books',
+    deleteEndpoint: '/api/books/{id}',
     nameKey: 'title',
     singular: t('mobilesheetsmanager', 'book'),
     plural: t('mobilesheetsmanager', 'Books'),
   },
   collections: {
-    endpoint: '/apps/mobilesheetsmanager/api/collections',
+    createEndpoint: '/api/collections',
+    deleteEndpoint: '/api/collections/{id}',
     nameKey: 'name',
     singular: t('mobilesheetsmanager', 'collection'),
     plural: t('mobilesheetsmanager', 'Collections'),
@@ -243,10 +247,12 @@ async function createEntity() {
   isCreating.value = true
   createError.value = ''
   try {
-    await axios.post(generateOcsUrl(config.value.endpoint), {
-      libraryId: props.selectedLibrary,
-      [config.value.nameKey]: name,
-    })
+    const postEndpoint = config.value.createEndpoint
+    const body = config.value.nameKey === 'title'
+      ? { libraryId: props.selectedLibrary, title: name }
+      : { libraryId: props.selectedLibrary, name }
+
+    await apiPost(postEndpoint as any, body as any)
     closeCreateDialog()
     await loadLibraryData(props.selectedLibrary)
   } catch {
@@ -279,12 +285,13 @@ async function deleteEntity() {
   isDeleting.value = true
   deleteError.value = ''
   try {
-    const response = await axios.delete(
-      generateOcsUrl(`${config.value.endpoint}/{id}`, { id: entity.id }),
-      { params: { libraryId: props.selectedLibrary } },
-    )
+    const deleteEndpoint = config.value.deleteEndpoint
+    const response = await apiDelete(deleteEndpoint as any, {
+      pathParams: { id: entity.id },
+      queryParams: { libraryId: props.selectedLibrary },
+    })
     closeDeleteDialog()
-    handleLibraryDataUpdate(response.data.ocs.data as LibraryData)
+    handleLibraryDataUpdate(response.data.ocs.data)
   } catch {
     deleteError.value = t('mobilesheetsmanager', 'Could not delete the {entity}.', { entity: config.value.singular })
   } finally {

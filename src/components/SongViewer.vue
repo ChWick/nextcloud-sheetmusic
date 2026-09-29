@@ -14,6 +14,7 @@ import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist'
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { getFileName, openFileExternally } from '../utils/file'
 import { describeRequestFailure } from '../utils/api'
+import { apiDelete } from '../api/client'
 import { computed, nextTick, ref, watch } from 'vue'
 import SongEditor from './SongEditor.vue'
 
@@ -131,15 +132,15 @@ async function confirmDeleteSong() {
 	deleteError.value = ''
 
 	try {
-		const response = await axios.delete(
-			generateOcsUrl('/apps/mobilesheetsmanager/api/songs/{id}', { id: songId }),
-			{ params: { libraryId: props.libraryId, deleteFiles: deleteFiles.value } },
-		)
+		const response = await apiDelete('/api/songs/{id}', {
+			pathParams: { id: songId },
+			queryParams: { libraryId: props.libraryId, deleteFiles: deleteFiles.value },
+		})
 		isDeleteDialogOpen.value = false
 		// The payload is only a convenience. It must never turn a successful deletion into
 		// an error, so a missing body is passed on as undefined and the parent asks the
 		// server for the library instead.
-		const data = (response.data as { ocs?: { data?: LibraryData } } | undefined)?.ocs?.data
+		const data = response.data?.ocs?.data
 		emit('deleted', data, songId)
 	} catch (error) {
 		deleteError.value = describeRequestFailure(error, t('mobilesheetsmanager', 'Could not delete the song.'))

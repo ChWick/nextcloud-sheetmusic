@@ -12,7 +12,15 @@ vi.mock('@nextcloud/axios', () => ({
 }))
 
 vi.mock('@nextcloud/router', () => ({
-	generateOcsUrl: vi.fn((path: string) => `/ocs/v2.php${path}`),
+	generateOcsUrl: vi.fn((path: string, params?: Record<string, any>) => {
+		let res = path
+		if (params) {
+			for (const [k, v] of Object.entries(params)) {
+				res = res.replace(`{${k}}`, String(v))
+			}
+		}
+		return `/ocs/v2.php${res}`
+	}),
 }))
 
 vi.mock('@nextcloud/l10n', async (importOriginal) => {

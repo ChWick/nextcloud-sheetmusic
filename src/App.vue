@@ -70,11 +70,13 @@ watch(
   { immediate: true }
 )
 
+import { apiDelete, apiGet, apiPost } from './api/client'
+
 /*** Libraries ***/
 /** Load the user's libraries - also used to refresh the list after adding or removing one */
 async function loadLibraries() {
   try {
-    const response = await axios.get(generateOcsUrl('/apps/mobilesheetsmanager/api/libraries'))
+    const response = await apiGet('/api/libraries')
     libraries.value = response.data.ocs.data.libraries
   } catch {
     fileError.value = t('mobilesheetsmanager', 'Could not load your MobileSheets libraries.')
@@ -126,7 +128,7 @@ async function addLibrary() {
   }
   const addedPath = selectedFile.value.path
   try {
-    await axios.post(generateOcsUrl('/apps/mobilesheetsmanager/api/libraries'), {
+    await apiPost('/api/libraries', {
       path: addedPath,
     })
     selectedFile.value = undefined
@@ -163,9 +165,9 @@ async function deleteLibrary() {
   if (selectedLibrary.value < 0) return
   isDeletingLibrary.value = true
   try {
-    await axios.delete(generateOcsUrl('/apps/mobilesheetsmanager/api/libraries/{id}', {
-      id: selectedLibrary.value,
-    }))
+    await apiDelete('/api/libraries/{id}', {
+      pathParams: { id: selectedLibrary.value },
+    })
 
     closeDeleteDialog()
     await loadLibraries()

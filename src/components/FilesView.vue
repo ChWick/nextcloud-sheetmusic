@@ -1,8 +1,8 @@
 <script setup lang="ts">
+import { apiPost } from '../api/client'
 import type { FileLogEntry, FileLogLevel } from '../types/song'
 import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
-import { generateOcsUrl } from '@nextcloud/router'
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import FilesSyncReportDialog from './files/FilesSyncReportDialog.vue'
@@ -30,7 +30,7 @@ async function runSync() {
 	filter.value = 'info'
 
 	try {
-		const response = await axios.post(generateOcsUrl('/apps/mobilesheetsmanager/api/sync-library'), {
+		const response = await apiPost('/api/sync-library', {
 			libraryId: props.selectedLibrary,
 		})
 
