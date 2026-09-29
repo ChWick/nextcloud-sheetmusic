@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   shown by the browser's own PDF viewer or the system's PDF application instead of the
   embedded view. For a song with several files the file of the active tab is opened.
   The song editor offers the same for every attached file, next to its delete button.
+- Option to save a song in the song editor without closing it. The "Save without
+  closing" button writes all changes - including the staged file additions and
+  removals - and keeps the editor open, so more edits can follow right away. It is
+  offered while editing an existing song; "Save and Close" works as before.
 - Option to remove a MobileSheets library from the list. The library entry is removed
   only, the MobileSheets database and all files it references stay in the Nextcloud
   files, so the library can be added again at any time.

@@ -37,7 +37,7 @@ const props = withDefaults(
 const emit = defineEmits<{
 	/** The song was saved; the editor closes. The id of a created song is passed along. */
 	saved: [data: LibraryData, songId?: number]
-	/** The song's data changed without saving; the editor stays open. */
+	/** The song's data changed and the editor stays open, e.g. after saving without closing. */
 	updated: [data: LibraryData]
 	cancel: []
 }>()
@@ -357,7 +357,7 @@ function describeRequestFailure(error: unknown): string {
 		: t('mobilesheetsmanager', 'Failed to save song changes.')
 }
 
-async function saveSong() {
+async function saveSong(closeAfter: boolean) {
 	if (!title.value.trim()) {
 		errorMessage.value = t('mobilesheetsmanager', 'Song title cannot be empty.')
 		return
@@ -497,7 +497,14 @@ async function saveSong() {
 		successMessage.value = isNewSong.value
 			? t('mobilesheetsmanager', 'Song created successfully.')
 			: t('mobilesheetsmanager', 'Song updated successfully.')
-		emit('saved', data, songId)
+		if (closeAfter) {
+			emit('saved', data, songId)
+		} else {
+			// The editor stays open: the refreshed data flows back in and the editor
+			// updates in place, so the file list shows the saved files and the form
+			// holds what was just written to the song.
+			emit('updated', data)
+		}
 	} catch (error) {
 		errorMessage.value = describeRequestFailure(error)
 	} finally {
@@ -512,7 +519,7 @@ async function saveSong() {
 			<h3>{{ isNewSong ? t('mobilesheetsmanager', 'New Song') : t('mobilesheetsmanager', 'Edit Song') }}</h3>
 		</div>
 
-		<form :class="$style.form" @submit.prevent="saveSong">
+		<form :class="$style.form" @submit.prevent="saveSong(true)">
 			<div :class="$style.formGroup">
 				<label :class="$style.label" for="song-title-input">{{ t('mobilesheetsmanager', 'Song Title') }}</label>
 				<NcTextField
@@ -686,6 +693,17 @@ async function saveSong() {
 			<div :class="$style.actions">
 				<NcButton :disabled="isSaving" @click="emit('cancel')">
 					{{ t('mobilesheetsmanager', 'Cancel') }}
+				</NcButton>
+				<!-- Only an existing song can be saved again: a new song has no id until it
+				     is created, so saving it twice would write a second song. -->
+				<NcButton
+					v-if="!isNewSong"
+					type="button"
+					variant="secondary"
+					:disabled="isSaving"
+					:title="t('mobilesheetsmanager', 'Save the changes and keep the editor open')"
+					@click="saveSong(false)">
+					{{ t('mobilesheetsmanager', 'Save without closing') }}
 				</NcButton>
 				<NcButton
 					variant="primary"
