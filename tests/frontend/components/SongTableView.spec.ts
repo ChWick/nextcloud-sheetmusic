@@ -48,8 +48,8 @@ describe('SongTableView.vue', () => {
 		})
 
 		// Sorted by title asc: 'Air on the G String' (songs[1]) is first row
-		const titleBtn = wrapper.find('button')
-		await titleBtn.trigger('click')
+		const row = wrapper.findAll('tbody tr')[0]
+		await row.trigger('click')
 		expect(wrapper.emitted('view-song')?.[0]).toEqual([songs[1]])
 
 		const editBtn = wrapper.findAll('button').find((btn) => btn.text() === 'Edit')

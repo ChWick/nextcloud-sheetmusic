@@ -37,6 +37,62 @@ function sortIndicator(key: SortKey): string {
 }
 
 const sortedSongs = computed(() => sortSongs(props.songs, sortKey.value, sortOrder.value))
+
+let touchTimer: ReturnType<typeof setTimeout> | null = null
+let touchStartPos = { x: 0, y: 0 }
+const isLongPressing = ref(false)
+
+function handleTouchStart(songId: number, e: TouchEvent) {
+	if (e.touches.length !== 1) return
+	isLongPressing.value = false
+	touchStartPos = { x: e.touches[0].clientX, y: e.touches[0].clientY }
+	touchTimer = setTimeout(() => {
+		isLongPressing.value = true
+		if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+			try {
+				navigator.vibrate(40)
+			} catch {
+				// ignore
+			}
+		}
+		emit('toggle-select-song', songId)
+	}, 500)
+}
+
+function handleTouchMove(e: TouchEvent) {
+	if (!touchTimer || e.touches.length !== 1) return
+	const touch = e.touches[0]
+	const dx = Math.abs(touch.clientX - touchStartPos.x)
+	const dy = Math.abs(touch.clientY - touchStartPos.y)
+	if (dx > 10 || dy > 10) {
+		clearTimeout(touchTimer)
+		touchTimer = null
+	}
+}
+
+function handleTouchEnd() {
+	if (touchTimer) {
+		clearTimeout(touchTimer)
+		touchTimer = null
+	}
+}
+
+function handleTouchCancel() {
+	if (touchTimer) {
+		clearTimeout(touchTimer)
+		touchTimer = null
+	}
+}
+
+function handleSongClick(song: Song, e: Event) {
+	if (isLongPressing.value) {
+		e.preventDefault()
+		e.stopPropagation()
+		isLongPressing.value = false
+		return
+	}
+	emit('view-song', song)
+}
 </script>
 
 <template>
@@ -72,7 +128,15 @@ const sortedSongs = computed(() => sortSongs(props.songs, sortKey.value, sortOrd
 				</tr>
 			</thead>
 			<tbody>
-				<tr v-for="song in sortedSongs" :key="song.id" :class="[$style.tableRow, selectedSongIds?.includes(song.id) && $style.selectedRow]">
+				<tr
+					v-for="song in sortedSongs"
+					:key="song.id"
+					:class="[$style.tableRow, selectedSongIds?.includes(song.id) && $style.selectedRow]"
+					@click="handleSongClick(song, $event)"
+					@touchstart="handleTouchStart(song.id, $event)"
+					@touchmove="handleTouchMove($event)"
+					@touchend="handleTouchEnd"
+					@touchcancel="handleTouchCancel">
 					<td :class="$style.checkboxCell">
 						<input
 							type="checkbox"
@@ -82,13 +146,9 @@ const sortedSongs = computed(() => sortSongs(props.songs, sortKey.value, sortOrd
 							@change="emit('toggle-select-song', song.id)">
 					</td>
 					<td :class="$style.titleCell">
-						<button
-							type="button"
-							:class="$style.songTitleBtn"
-							:title="t('mobilesheetsmanager', 'View this song')"
-							@click="emit('view-song', song)">
+						<span :class="$style.songTitle">
 							{{ song.title }}
-						</button>
+						</span>
 					</td>
 					<td :class="$style.metaCell">
 						<template v-if="song.composers && song.composers.length > 0">
@@ -150,7 +210,7 @@ const sortedSongs = computed(() => sortSongs(props.songs, sortKey.value, sortOrd
 						</template>
 						<span v-else :class="$style.emptyText">—</span>
 					</td>
-					<td :class="$style.actionsCell">
+					<td :class="$style.actionsCell" @click.stop>
 						<div :class="$style.actionsGroup">
 							<NcButton size="small" @click="emit('edit-song', song)">
 								{{ t('mobilesheetsmanager', 'Edit') }}
@@ -233,6 +293,7 @@ const sortedSongs = computed(() => sortSongs(props.songs, sortKey.value, sortOrd
 
 .tableRow {
 	border-bottom: 1px solid var(--color-border);
+	cursor: pointer;
 }
 
 .tableRow:hover {
@@ -241,6 +302,10 @@ const sortedSongs = computed(() => sortSongs(props.songs, sortKey.value, sortOrd
 
 .tableRow:hover .actionsCell {
 	background-color: var(--color-background-hover);
+}
+
+.tableRow:hover .songTitle {
+	color: var(--color-primary-element-hover, var(--color-primary-element));
 }
 
 .songTable td {
@@ -252,19 +317,9 @@ const sortedSongs = computed(() => sortSongs(props.songs, sortKey.value, sortOrd
 	font-weight: 600;
 }
 
-.songTitleBtn {
-	background: none;
-	border: none;
-	padding: 0;
-	font: inherit;
+.songTitle {
 	color: var(--color-primary-element);
-	cursor: pointer;
-	text-align: left;
 	text-decoration: underline;
-}
-
-.songTitleBtn:hover {
-	color: var(--color-primary-element-hover, var(--color-primary-element));
 }
 
 .metaCell {
@@ -341,5 +396,17 @@ const sortedSongs = computed(() => sortSongs(props.songs, sortKey.value, sortOrd
 
 .selectedRow {
 	background-color: var(--color-background-hover);
+}
+
+@media (max-width: 768px) {
+	.actionsHeader,
+	.actionsCell,
+	.checkboxCell {
+		display: none;
+	}
+
+	.songTable {
+		min-width: 100%;
+	}
 }
 </style>

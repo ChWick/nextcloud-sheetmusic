@@ -80,6 +80,7 @@ function handleSongClick(song: Song, e: Event) {
 			v-for="song in songs"
 			:key="song.id"
 			:class="[$style.songRow, selectedSongIds?.includes(song.id) && $style.selectedRow]"
+			@click="handleSongClick(song, $event)"
 			@touchstart="handleTouchStart(song.id, $event)"
 			@touchmove="handleTouchMove($event)"
 			@touchend="handleTouchEnd"
@@ -93,13 +94,9 @@ function handleSongClick(song: Song, e: Event) {
 					@click.stop
 					@change="emit('toggle-select-song', song.id)">
 				<div :class="$style.songInfo">
-					<button
-						type="button"
-						:class="$style.songButton"
-						:title="t('mobilesheetsmanager', 'View this song')"
-						@click="handleSongClick(song, $event)">
+					<span :class="$style.songTitle">
 						{{ song.title }}
-					</button>
+					</span>
 					<span :class="$style.subtitle">
 						<template v-if="song.composers && song.composers.length > 0">
 							<template v-for="(c, idx) in song.composers" :key="c.id">
@@ -155,7 +152,7 @@ function handleSongClick(song: Song, e: Event) {
 					</span>
 				</div>
 			</div>
-			<div :class="$style.actions">
+			<div :class="$style.actions" @click.stop>
 				<NcButton size="small" @click="emit('edit-song', song)">
 					{{ t('mobilesheetsmanager', 'Edit') }}
 				</NcButton>
@@ -186,6 +183,7 @@ function handleSongClick(song: Song, e: Event) {
 	border-radius: var(--border-radius-large, 8px);
 	background-color: var(--color-main-background);
 	gap: 16px;
+	cursor: pointer;
 }
 
 .songRow:hover {
@@ -209,12 +207,6 @@ function handleSongClick(song: Song, e: Event) {
 	accent-color: var(--color-primary-element);
 }
 
-@media (max-width: 768px) {
-	.selectCheckbox {
-		display: none;
-	}
-}
-
 .songInfo {
 	display: flex;
 	flex-direction: column;
@@ -223,18 +215,14 @@ function handleSongClick(song: Song, e: Event) {
 	min-width: 0;
 }
 
-.songButton {
-	background: none;
-	border: none;
-	padding: 0;
+.songTitle {
 	font-weight: 600;
 	font-size: 0.95rem;
 	color: var(--color-main-text);
-	cursor: pointer;
 	text-align: left;
 }
 
-.songButton:hover {
+.songRow:hover .songTitle {
 	color: var(--color-primary-element);
 }
 
@@ -297,5 +285,15 @@ function handleSongClick(song: Song, e: Event) {
 .selectedRow {
 	border-color: var(--color-primary-element);
 	background-color: var(--color-background-hover);
+}
+
+@media (max-width: 768px) {
+	.selectCheckbox {
+		display: none;
+	}
+
+	.actions {
+		display: none;
+	}
 }
 </style>

@@ -2,6 +2,7 @@
 import type { EntityType, FilterEntity, Song } from '../../types/song'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import { ref } from 'vue'
 
 defineProps<{
 	songs: Song[]
@@ -15,6 +16,62 @@ const emit = defineEmits<{
 	'filter-entity': [entityType: EntityType, entity: FilterEntity]
 	'toggle-select-song': [songId: number]
 }>()
+
+let touchTimer: ReturnType<typeof setTimeout> | null = null
+let touchStartPos = { x: 0, y: 0 }
+const isLongPressing = ref(false)
+
+function handleTouchStart(songId: number, e: TouchEvent) {
+	if (e.touches.length !== 1) return
+	isLongPressing.value = false
+	touchStartPos = { x: e.touches[0].clientX, y: e.touches[0].clientY }
+	touchTimer = setTimeout(() => {
+		isLongPressing.value = true
+		if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+			try {
+				navigator.vibrate(40)
+			} catch {
+				// ignore
+			}
+		}
+		emit('toggle-select-song', songId)
+	}, 500)
+}
+
+function handleTouchMove(e: TouchEvent) {
+	if (!touchTimer || e.touches.length !== 1) return
+	const touch = e.touches[0]
+	const dx = Math.abs(touch.clientX - touchStartPos.x)
+	const dy = Math.abs(touch.clientY - touchStartPos.y)
+	if (dx > 10 || dy > 10) {
+		clearTimeout(touchTimer)
+		touchTimer = null
+	}
+}
+
+function handleTouchEnd() {
+	if (touchTimer) {
+		clearTimeout(touchTimer)
+		touchTimer = null
+	}
+}
+
+function handleTouchCancel() {
+	if (touchTimer) {
+		clearTimeout(touchTimer)
+		touchTimer = null
+	}
+}
+
+function handleSongClick(song: Song, e: Event) {
+	if (isLongPressing.value) {
+		e.preventDefault()
+		e.stopPropagation()
+		isLongPressing.value = false
+		return
+	}
+	emit('view-song', song)
+}
 </script>
 
 <template>
@@ -22,21 +79,23 @@ const emit = defineEmits<{
 		<div
 			v-for="song in songs"
 			:key="song.id"
-			:class="[$style.songCard, selectedSongIds?.includes(song.id) && $style.selectedCard]">
+			:class="[$style.songCard, selectedSongIds?.includes(song.id) && $style.selectedCard]"
+			@click="handleSongClick(song, $event)"
+			@touchstart="handleTouchStart(song.id, $event)"
+			@touchmove="handleTouchMove($event)"
+			@touchend="handleTouchEnd"
+			@touchcancel="handleTouchCancel">
 			<div :class="$style.cardHeader">
 				<input
 					type="checkbox"
 					:checked="selectedSongIds?.includes(song.id)"
+					:class="$style.selectCheckbox"
 					:title="t('mobilesheetsmanager', 'Select song')"
 					@click.stop
 					@change="emit('toggle-select-song', song.id)">
-				<button
-					type="button"
-					:class="$style.cardTitleBtn"
-					:title="t('mobilesheetsmanager', 'View this song')"
-					@click="emit('view-song', song)">
+				<span :class="$style.cardTitle">
 					{{ song.title }}
-				</button>
+				</span>
 			</div>
 
 			<div :class="$style.cardBody">
@@ -105,7 +164,7 @@ const emit = defineEmits<{
 				</div>
 			</div>
 
-			<div :class="$style.cardActions">
+			<div :class="$style.cardActions" @click.stop>
 				<NcButton size="small" @click="emit('edit-song', song)">
 					{{ t('mobilesheetsmanager', 'Edit') }}
 				</NcButton>
@@ -132,6 +191,7 @@ const emit = defineEmits<{
 	border-radius: var(--border-radius-large, 8px);
 	padding: 16px;
 	gap: 12px;
+	cursor: pointer;
 }
 
 .songCard:hover {
@@ -151,17 +211,21 @@ const emit = defineEmits<{
 	font-size: 1.05rem;
 }
 
-.cardTitleBtn {
-	background: none;
-	border: none;
-	padding: 0;
-	font: inherit;
-	color: var(--color-main-text);
+.selectCheckbox {
+	width: 18px;
+	height: 18px;
+	margin: 0;
 	cursor: pointer;
+	flex-shrink: 0;
+	accent-color: var(--color-primary-element);
+}
+
+.cardTitle {
+	color: var(--color-main-text);
 	text-align: left;
 }
 
-.cardTitleBtn:hover {
+.songCard:hover .cardTitle {
 	color: var(--color-primary-element);
 }
 
@@ -241,5 +305,15 @@ const emit = defineEmits<{
 	margin-top: 8px;
 	padding-top: 8px;
 	border-top: 1px solid var(--color-border);
+}
+
+@media (max-width: 768px) {
+	.selectCheckbox {
+		display: none;
+	}
+
+	.cardActions {
+		display: none;
+	}
 }
 </style>

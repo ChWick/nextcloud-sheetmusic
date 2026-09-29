@@ -32,8 +32,8 @@ describe('SongCardView.vue', () => {
 			props: { songs },
 		})
 
-		const titleBtn = wrapper.find('button')
-		await titleBtn.trigger('click')
+		const card = wrapper.find('div[class*="songCard"]')
+		await card.trigger('click')
 		expect(wrapper.emitted('view-song')?.[0]).toEqual([songs[0]])
 	})
 
