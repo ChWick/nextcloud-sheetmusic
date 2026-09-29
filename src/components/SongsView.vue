@@ -69,28 +69,30 @@
                 :imported-file="importedFile"
                 @saved="handleSaved"
                 @cancel="isCreatingSong = false" />
-    <ul v-else :class="$style.songList">
-      <li v-for="song in filteredSongs" :key="song.id" :class="$style.songRow">
-        <button type="button"
-                :class="$style.songButton"
-                :title="t('mobilesheetsmanager', 'View this song')"
-                @click="openSongView(song)">
-          {{ song.title }}
-        </button>
-        <NcButton size="small" @click="openSongEdit(song)">
-          {{ t('mobilesheetsmanager', 'Edit') }}
-        </NcButton>
-        <NcButton size="small" @click="openSongView(song)">
-          {{ t('mobilesheetsmanager', 'View') }}
-        </NcButton>
-      </li>
-      <li v-if="!isLoading && !fileError && songs.length === 0">
-        {{ t('mobilesheetsmanager', 'No songs found in this library.') }}
-      </li>
-      <li v-else-if="!isLoading && !fileError && songs.length > 0 && filteredSongs.length === 0">
-        {{ t('mobilesheetsmanager', 'No songs match the selected filters.') }}
-      </li>
-    </ul>
+    <div v-if="!isLoading && !fileError && songs.length === 0" :class="$style.emptyNotice">
+      {{ t('mobilesheetsmanager', 'No songs found in this library.') }}
+    </div>
+    <div v-else-if="!isLoading && !fileError && songs.length > 0 && filteredSongs.length === 0" :class="$style.emptyNotice">
+      {{ t('mobilesheetsmanager', 'No songs match the selected filters.') }}
+    </div>
+    <template v-else>
+      <SongViewToggle v-model:view-mode="viewMode" />
+      <SongTableView
+        v-if="viewMode === 'table'"
+        :songs="filteredSongs"
+        @view-song="openSongView"
+        @edit-song="openSongEdit" />
+      <SongCardView
+        v-else-if="viewMode === 'cards'"
+        :songs="filteredSongs"
+        @view-song="openSongView"
+        @edit-song="openSongEdit" />
+      <SongSimpleListView
+        v-else
+        :songs="filteredSongs"
+        @view-song="openSongView"
+        @edit-song="openSongEdit" />
+    </template>
   </div>
 </template>
 
@@ -109,9 +111,21 @@ import type { Artist, Song, Composer, Book, Collection, LibraryData, SongPrefill
 import { useSongFilters } from '../composables/useSongFilters';
 import { useLibraryData } from '../composables/useLibraryData';
 import { apiPost } from '../api/client';
+import SongViewToggle, { type ViewMode } from './songs/SongViewToggle.vue';
+import SongTableView from './songs/SongTableView.vue';
+import SongCardView from './songs/SongCardView.vue';
+import SongSimpleListView from './songs/SongSimpleListView.vue';
 
 // Props from parent (App.vue)
 const props = defineProps<{ selectedLibrary: number }>();
+
+const viewMode = ref<ViewMode>(
+  (localStorage.getItem('mobilesheetsmanager_song_view_mode') as ViewMode) || 'table'
+);
+
+watch(viewMode, (newMode) => {
+  localStorage.setItem('mobilesheetsmanager_song_view_mode', newMode);
+});
 
 const {
   songs,
