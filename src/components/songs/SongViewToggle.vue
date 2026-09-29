@@ -1,11 +1,16 @@
 <script setup lang="ts">
+import type { Component } from 'vue'
+import { computed } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
-import NcRadioGroup from '@nextcloud/vue/components/NcRadioGroup'
-import NcRadioGroupButton from '@nextcloud/vue/components/NcRadioGroupButton'
+import NcActions from '@nextcloud/vue/components/NcActions'
+import NcActionButton from '@nextcloud/vue/components/NcActionButton'
+import TableIcon from 'vue-material-design-icons/Table.vue'
+import ViewGridIcon from 'vue-material-design-icons/ViewGrid.vue'
+import ViewListIcon from 'vue-material-design-icons/ViewList.vue'
 
 export type ViewMode = 'table' | 'cards' | 'list'
 
-defineProps<{
+const props = defineProps<{
 	viewMode: ViewMode
 }>()
 
@@ -13,27 +18,36 @@ const emit = defineEmits<{
 	'update:viewMode': [mode: ViewMode]
 }>()
 
-const viewOptions: { value: ViewMode; label: string }[] = [
-	{ value: 'table', label: t('mobilesheetsmanager', 'Table') },
-	{ value: 'cards', label: t('mobilesheetsmanager', 'Cards') },
-	{ value: 'list', label: t('mobilesheetsmanager', 'List') },
+const viewOptions: { value: ViewMode; label: string; icon: Component }[] = [
+	{ value: 'table', label: t('mobilesheetsmanager', 'Table view'), icon: TableIcon },
+	{ value: 'cards', label: t('mobilesheetsmanager', 'Card view'), icon: ViewGridIcon },
+	{ value: 'list', label: t('mobilesheetsmanager', 'List view'), icon: ViewListIcon },
 ]
+
+const activeOption = computed(() => {
+	return viewOptions.find((opt) => opt.value === props.viewMode) ?? viewOptions[0]
+})
 </script>
 
 <template>
 	<div :class="$style.toggleWrapper">
-		<span :class="$style.label">{{ t('mobilesheetsmanager', 'View:') }}</span>
-		<NcRadioGroup
-			:model-value="viewMode"
-			:label="t('mobilesheetsmanager', 'Songs view mode')"
-			hide-label
-			@update:model-value="emit('update:viewMode', $event as ViewMode)">
-			<NcRadioGroupButton
+		<NcActions
+			:aria-label="activeOption.label"
+			:title="activeOption.label">
+			<template #icon>
+				<component :is="activeOption.icon" :size="20" />
+			</template>
+			<NcActionButton
 				v-for="option in viewOptions"
 				:key="option.value"
-				:value="option.value"
-				:label="option.label" />
-		</NcRadioGroup>
+				:active="viewMode === option.value"
+				@click="emit('update:viewMode', option.value)">
+				<template #icon>
+					<component :is="option.icon" :size="20" />
+				</template>
+				{{ option.label }}
+			</NcActionButton>
+		</NcActions>
 	</div>
 </template>
 
@@ -41,13 +55,6 @@ const viewOptions: { value: ViewMode; label: string }[] = [
 .toggleWrapper {
 	display: flex;
 	align-items: center;
-	gap: 8px;
 	margin-bottom: 0;
-}
-
-.label {
-	font-size: 0.85rem;
-	font-weight: 600;
-	color: var(--color-text-maxcontrast);
 }
 </style>

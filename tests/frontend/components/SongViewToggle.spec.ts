@@ -4,15 +4,18 @@ import SongViewToggle from '../../../src/components/songs/SongViewToggle.vue'
 
 vi.mock('@nextcloud/l10n', () => ({
 	translate: (_app: string, text: string) => text,
+	getLanguage: () => 'en',
+	isRTL: () => false,
 }))
 
 describe('SongViewToggle.vue', () => {
-	it('renders view options and emits update event when changed', async () => {
+	it('renders view options dropdown menu and manages viewMode props', async () => {
 		const wrapper = mount(SongViewToggle, {
 			props: { viewMode: 'table' },
 		})
 
-		expect(wrapper.text()).toContain('View:')
-		expect(wrapper.findComponent({ name: 'NcRadioGroup' }).exists()).toBe(true)
+		const actions = wrapper.findComponent({ name: 'NcActions' })
+		expect(actions.exists()).toBe(true)
+		expect(actions.props('ariaLabel')).toBe('Table view')
 	})
 })
