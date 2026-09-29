@@ -306,4 +306,37 @@ final class MobileSheetsHashCodesFileTest extends TestCase {
 
 		self::assertSame($contents, file_get_contents($path), 'the file must be left untouched');
 	}
+
+	public function testUpdateFactsRefreshesTheEntryOfARewrittenFile(): void {
+		$path = $this->writeFile($this->contentsFor([
+			['/dav/a.pdf', '111', '222', '333'],
+			['/dav/b.pdf', '444', '555', '666'],
+		]));
+
+		$file = MobileSheetsHashCodesFile::parse($path, $this->logger);
+		self::assertTrue($file->updateFacts('/dav/a.pdf', '-1847195323', '1790676483000', '79948'));
+		self::assertTrue($file->isDirty());
+		$file->save();
+
+		$entries = MobileSheetsHashCodesFile::parse($path, $this->logger)->entries();
+		self::assertSame('/dav/a.pdf', $entries[0]->path);
+		self::assertSame('-1847195323', $entries[0]->hashCode);
+		self::assertSame('1790676483000', $entries[0]->modifiedAt);
+		self::assertSame('79948', $entries[0]->size);
+		// The entry of the untouched file is kept as it was.
+		self::assertSame('444', $entries[1]->hashCode);
+		self::assertSame('555', $entries[1]->modifiedAt);
+		self::assertSame('666', $entries[1]->size);
+	}
+
+	public function testUpdateFactsLeavesTheFileAloneForAnUnknownPath(): void {
+		$contents = $this->contentsFor([['/dav/a.pdf', '111', '222', '333']]);
+		$path = $this->writeFile($contents);
+
+		$file = MobileSheetsHashCodesFile::parse($path, $this->logger);
+		self::assertFalse($file->updateFacts('/dav/other.pdf', '1', '2', '3'));
+		self::assertFalse($file->isDirty());
+
+		self::assertSame($contents, file_get_contents($path), 'the file must be left untouched');
+	}
 }

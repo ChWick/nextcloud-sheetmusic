@@ -255,7 +255,8 @@ class ApiController extends OCSController {
 			$this->songMapper->updateSong($databasePath, $id, $title, $composerIds, $bookIds, $collectionIds, $artistIds);
 
 			// Best-effort: the song is saved even when one of its files refuses
-			// the metadata write (an exotic or encrypted PDF).
+			// the metadata write (an exotic PDF, or one encrypted with a user
+			// password).
 			$this->syncSongFileMetadata($user, $databasePath, $id);
 
 			return new DataResponse($this->songMapper->findLibraryData($databasePath));
@@ -746,7 +747,8 @@ class ApiController extends OCSController {
 	/**
 	 * Write the song's metadata into its attached PDFs so importing one of them
 	 * back into MobileSheets recreates the song, and refresh the file facts the
-	 * changed bytes invalidate.
+	 * changed bytes invalidate - in the Files table and in the hash codes file,
+	 * which MobileSheets compares its files against.
 	 *
 	 * Best-effort per file: an unreadable or exotic PDF is reported and skipped,
 	 * it must not fail the song edit the metadata is meant to accompany.
@@ -761,6 +763,7 @@ class ApiController extends OCSController {
 			return;
 		}
 
+		$hashCodes = $this->hashCodesFor($databasePath);
 		$info = MobileSheetsPdfMetadata::fieldsFor($song);
 		foreach ($song->files as $file) {
 			if (!str_ends_with(strtolower($file->path), '.pdf')) {
@@ -806,8 +809,10 @@ class ApiController extends OCSController {
 
 				$node->putContent(MobileSheetsPdfMetadata::withInfo($content, $info));
 				// The bytes changed, so the hash, size and timestamp stored for
-				// the file have to follow them.
-				$this->songMapper->updateFile($databasePath, $file->id, $file->path, MobileSheetsFileFacts::fromNode($node));
+				// the file have to follow them - everywhere they are kept.
+				$facts = MobileSheetsFileFacts::fromNode($node);
+				$this->songMapper->updateFile($databasePath, $file->id, $file->path, $facts);
+				$hashCodes?->updateFacts($file->path, (string)$facts->fileHash, (string)$facts->lastModified, (string)$facts->fileSize);
 			} catch (\Throwable $exception) {
 				$this->logger->warning('Could not write the song metadata into an attached PDF', [
 					'exception' => $exception,
@@ -816,6 +821,18 @@ class ApiController extends OCSController {
 					'path' => $file->path,
 				]);
 			}
+		}
+
+		// Writing the hash codes file back is best-effort like the loop above:
+		// a failure must not fail the song edit the metadata accompanies.
+		try {
+			$hashCodes?->save();
+		} catch (\Throwable $exception) {
+			$this->logger->warning('Could not refresh the MobileSheets hash codes file', [
+				'exception' => $exception,
+				'databasePath' => $databasePath,
+				'songId' => $songId,
+			]);
 		}
 	}
 

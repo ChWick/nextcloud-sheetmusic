@@ -214,6 +214,34 @@ class MobileSheetsHashCodesFile {
 		return $removed;
 	}
 
+	/**
+	 * Point an entry at new content facts, used after a file has been rewritten
+	 * in place. A rewrite changes the hash, modification time and size of the
+	 * content - unlike a rename, which leaves them alone.
+	 *
+	 * @return bool whether an entry was updated
+	 */
+	public function updateFacts(string $path, string $hashCode, string $modifiedAt, string $size): bool {
+		$kept = [];
+		$updated = false;
+
+		foreach ($this->entries as $entry) {
+			if (!$updated && $entry->path === $path) {
+				$kept[] = new MobileSheetsHashCode($path, $hashCode, $modifiedAt, $size);
+				$updated = true;
+				continue;
+			}
+			$kept[] = $entry;
+		}
+
+		if ($updated) {
+			$this->entries = $kept;
+			$this->dirty = true;
+		}
+
+		return $updated;
+	}
+
 	/** Write the file back, atomically so a failure cannot truncate it. */
 	public function save(): void {
 		if (!$this->dirty) {

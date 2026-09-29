@@ -71,5 +71,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Saving a song no longer floods the server log with zlib "data error" warnings.
+  Streams that cannot be unpacked - the ciphertext of an encrypted PDF, or any stream
+  that is not Flate compressed - are skipped silently when the page count is derived.
+  The hash, size and timestamp of a rewritten file are also refreshed in the
+  MobileSheets hash codes file from now on, so MobileSheets does not mistake the
+  metadata write for an external change to the file.
+- Saving a song now also writes the metadata into PDFs that carry the "restrictions"
+  protection of published files (the Standard security handler with an empty user
+  password). The document properties are encrypted the way the file encrypts its
+  strings - and the file's own Info object is reused, so the stamps it already had stay
+  readable - which makes importing such a file into MobileSheets again yield the same
+  song. Files with a user password or an unsupported protection are still skipped and
+  reported in the log, as before.
 - Creating a composer, book, collection or artist without being logged in answers
   `401 Unauthorized` like every other endpoint, instead of `404 Not Found`.

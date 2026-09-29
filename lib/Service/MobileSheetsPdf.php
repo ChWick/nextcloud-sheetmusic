@@ -88,21 +88,47 @@ class MobileSheetsPdf {
 	 * compressed simply fail to unpack and are skipped.
 	 */
 	private static function inflatedStreams(string $content): string {
+		// Every stream body of an encrypted document is ciphertext - there is
+		// nothing to unpack and trying would only raise errors.
+		if (preg_match('#/Encrypt\s+\d+\s+\d+\s+R#', $content) === 1) {
+			return '';
+		}
+
 		if (preg_match_all(self::STREAM_BODY, $content, $matches) === false) {
 			return '';
 		}
 
 		$extra = '';
 		foreach ($matches[1] as $body) {
-			$inflated = @gzuncompress($body);
-			if ($inflated === false) {
-				$inflated = @gzinflate($body);
-			}
-			if ($inflated !== false && $inflated !== '') {
+			$inflated = self::inflate($body);
+			if ($inflated !== '') {
 				$extra .= $inflated;
 			}
 		}
 
 		return $extra;
+	}
+
+	/**
+	 * The decompressed $body, or '' when it holds no Flate data.
+	 *
+	 * The zlib functions report undecompressible data through a PHP warning -
+	 * an expected outcome here, since every stream body is offered to them. The
+	 * warning must not reach the server log, so the calls run under their own
+	 * error handler that drops it; the "@" suppression operator is not enough,
+	 * an installed error handler still receives the warning.
+	 */
+	private static function inflate(string $body): string {
+		set_error_handler(static fn (): bool => true);
+		try {
+			$inflated = gzuncompress($body);
+			if ($inflated === false) {
+				$inflated = gzinflate($body);
+			}
+		} finally {
+			restore_error_handler();
+		}
+
+		return $inflated === false ? '' : $inflated;
 	}
 }

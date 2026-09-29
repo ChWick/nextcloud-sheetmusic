@@ -2,6 +2,12 @@
 
 declare(strict_types=1);
 
+// The tests need no other app of the server. Loading them all boots apps that
+// do not survive the CLI bootstrap - admin_audit fails to resolve its audit
+// logger there and logs "Could not boot admin_audit" on every run - so the
+// switch the server bootstrap understands is set before it is pulled in.
+putenv('TEST_DONT_LOAD_APPS=1');
+
 require_once __DIR__ . '/../../../tests/bootstrap.php';
 require_once __DIR__ . '/../vendor/autoload.php';
 

@@ -99,25 +99,35 @@ class MobileSheetsPdfMetadata {
 	 * The PDF with $info written into its Info dictionary.
 	 *
 	 * @param array<string, string> $info Info dictionary key => value
-	 * @throws \RuntimeException when the file is not an unencrypted PDF whose
-	 *                          trailer can be read
+	 * @throws \RuntimeException when the file is not a PDF whose trailer can be
+	 *                           read or whose protection cannot be handled
 	 */
 	public static function withInfo(string $content, array $info): string {
 		$trailer = self::trailer($content);
-		$body = self::mergedBody(self::infoBody($content, $trailer), $info);
+		$security = $trailer['security'];
 
-		// The first free object number is the trailer's /Size, so a fresh Info
-		// object never collides with one the file already defines.
-		$objectNumber = $trailer['size'];
+		// In an encrypted file every string is encrypted with the key of the
+		// object it lives in, so the update redefines the file's own Info
+		// object: the stamp entries copied over keep their key and stay
+		// readable, where a fresh object number would leave them encrypted with
+		// the wrong key. An unencrypted file gets a fresh Info object at the
+		// trailer's /Size, which never collides with one it already defines.
+		$redefinesInfo = $security !== null && $trailer['infoNumber'] !== null;
+		$objectNumber = $redefinesInfo ? (int)$trailer['infoNumber'] : $trailer['size'];
+		$objectGeneration = $redefinesInfo ? $trailer['infoGeneration'] : 0;
+
+		$body = self::mergedBody(self::infoBody($content, $trailer), $info, $security, $objectNumber, $objectGeneration);
+
 		$objectOffset = strlen($content);
-		$object = $objectNumber . " 0 obj\n<<\n" . $body . ">>\nendobj\n";
+		$object = $objectNumber . ' ' . $objectGeneration . " obj\n<<\n" . $body . ">>\nendobj\n";
 
 		$trailerOffset = $objectOffset + strlen($object);
-		$entry = sprintf('%010d 00000 n ', $objectOffset) . "\n";
-		$dict = '<< /Size ' . ($objectNumber + 1)
+		$entry = sprintf('%010d %05d n ', $objectOffset, $objectGeneration) . "\n";
+		$dict = '<< /Size ' . ($redefinesInfo ? $trailer['size'] : $objectNumber + 1)
 			. ' /Root ' . $trailer['root']
-			. ' /Info ' . $objectNumber . ' 0 R'
+			. ' /Info ' . $objectNumber . ' ' . $objectGeneration . ' R'
 			. ($trailer['id'] !== null ? ' /ID ' . $trailer['id'] : '')
+			. ($trailer['encrypt'] !== null ? ' /Encrypt ' . $trailer['encrypt'] : '')
 			. ' /Prev ' . $trailer['xrefOffset']
 			. ' >>';
 
@@ -155,11 +165,12 @@ class MobileSheetsPdfMetadata {
 
 	/**
 	 * The Info dictionary body to write: our fields, keeping the stamp entries
-	 * the file already had so an edit does not erase them.
+	 * the file already had so an edit does not erase them. In an encrypted file
+	 * the values are encrypted for the object the body ends up in.
 	 *
 	 * @param array<string, string> $info
 	 */
-	private static function mergedBody(?string $existing, array $info): string {
+	private static function mergedBody(?string $existing, array $info, ?MobileSheetsPdfSecurity $security, int $objectNumber, int $objectGeneration): string {
 		$kept = '';
 		if ($existing !== null) {
 			foreach (self::PRESERVED_INFO_KEYS as $key) {
@@ -175,28 +186,37 @@ class MobileSheetsPdfMetadata {
 
 		$written = '';
 		foreach ($info as $key => $value) {
-			$written .= '/' . $key . ' ' . self::pdfText((string)$value) . "\n";
+			$bytes = self::pdfTextBytes((string)$value);
+			if ($security !== null) {
+				$bytes = $security->encryptBytes($bytes, $objectNumber, $objectGeneration);
+			}
+			$written .= '/' . $key . ' ' . self::pdfStringToken($bytes) . "\n";
 		}
 
 		return $kept . $written;
 	}
 
 	/**
-	 * A PDF string for arbitrary text: UTF-16BE with a byte order mark, the
-	 * encoding a PDF reader must accept for non-ASCII document properties.
+	 * The bytes of a PDF string for arbitrary text: UTF-16BE with a byte order
+	 * mark, the encoding a PDF reader must accept for non-ASCII document
+	 * properties.
 	 */
-	private static function pdfText(string $text): string {
-		$utf16 = mb_convert_encoding($text, 'UTF-16BE', 'UTF-8');
+	private static function pdfTextBytes(string $text): string {
+		return "\xFE\xFF" . mb_convert_encoding($text, 'UTF-16BE', 'UTF-8');
+	}
 
-		return '<FEFF' . strtoupper(bin2hex($utf16)) . '>';
+	/** The PDF string token for given bytes: a hex string. */
+	private static function pdfStringToken(string $bytes): string {
+		return '<' . strtoupper(bin2hex($bytes)) . '>';
 	}
 
 	/**
 	 * The trailer the file currently ends on, which tells us where to append the
 	 * incremental update and which entries to carry over.
 	 *
-	 * @return array{xrefOffset: int, size: int, root: string, info: ?string, infoNumber: ?int, infoGeneration: int, id: ?string}
-	 * @throws \RuntimeException when the file is not an unencrypted, readable PDF
+	 * @return array{xrefOffset: int, size: int, root: string, info: ?string, infoNumber: ?int, infoGeneration: int, id: ?string, encrypt: ?string, security: ?MobileSheetsPdfSecurity}
+	 * @throws \RuntimeException when the file is not a PDF whose metadata can be
+	 *                           read and written
 	 */
 	private static function trailer(string $content): array {
 		if (preg_match_all('#startxref\s+(\d+)#', $content, $matches) === false || $matches[1] === []) {
@@ -212,9 +232,16 @@ class MobileSheetsPdfMetadata {
 		if (preg_match('#/Root\s+(\d+)\s+(\d+)\s+R#', $region, $root) !== 1) {
 			throw new \RuntimeException('Not a readable PDF: no trailer /Root');
 		}
-		if (preg_match('#/Encrypt\b#', $region) === 1) {
-			throw new \RuntimeException('Encrypted PDF: metadata cannot be updated');
+
+		// An encrypted file is handled as far as its protection allows: the
+		// security either yields the key to read and write its strings with, or
+		// throws - a protection we cannot handle keeps being refused instead of
+		// producing a corrupt file.
+		$encrypt = null;
+		if (preg_match('#/Encrypt\s+(\d+)\s+(\d+)\s+R#', $region, $encryptMatch) === 1) {
+			$encrypt = $encryptMatch[1] . ' ' . $encryptMatch[2] . ' R';
 		}
+		$security = MobileSheetsPdfSecurity::forTrailer($content, $region);
 
 		$info = null;
 		$infoNumber = null;
@@ -238,6 +265,8 @@ class MobileSheetsPdfMetadata {
 			'infoNumber' => $infoNumber,
 			'infoGeneration' => $infoGeneration,
 			'id' => $id,
+			'encrypt' => $encrypt,
+			'security' => $security,
 		];
 	}
 
@@ -291,38 +320,46 @@ class MobileSheetsPdfMetadata {
 	 * @return array<string, string> Info dictionary key => value
 	 */
 	private static function readFields(string $content): array {
-		$body = self::infoBody($content, self::trailer($content));
-		if ($body === null) {
+		$trailer = self::trailer($content);
+		$body = self::infoBody($content, $trailer);
+		if ($body === null || $trailer['infoNumber'] === null) {
 			return [];
 		}
 
+		$security = $trailer['security'];
 		$fields = [];
 		foreach (self::READ_KEYS as $key) {
 			// The values we are after are strings; anything else is left out.
 			$pattern = '#/' . preg_quote($key, '#') . '\s*(\((?:[^()\\\\]|\\\\.)*\)|<[^>]*>)#';
 			if (preg_match($pattern, $body, $match) === 1) {
-				$fields[$key] = self::pdfTextDecode($match[1]);
+				$bytes = self::pdfStringBytes($match[1]);
+				if ($security !== null) {
+					$bytes = $security->decryptBytes($bytes, $trailer['infoNumber'], $trailer['infoGeneration']);
+				}
+				$fields[$key] = self::pdfBytesText($bytes);
 			}
 		}
 
 		return $fields;
 	}
 
-	/**
-	 * Text of a PDF string, whether it is written as a hex string or a literal
-	 * one, and whether it is UTF-16 with a byte order mark or plain bytes.
-	 */
-	private static function pdfTextDecode(string $raw): string {
+	/** The bytes of a PDF string, whether it is written as a hex string or a literal one. */
+	private static function pdfStringBytes(string $raw): string {
 		if (str_starts_with($raw, '<')) {
 			$hex = preg_replace('/\s+/', '', substr($raw, 1, -1)) ?? '';
 			$bytes = hex2bin($hex);
-			if ($bytes === false) {
-				return '';
-			}
-		} else {
-			$bytes = self::unescapeLiteral(substr($raw, 1, -1));
+
+			return $bytes === false ? '' : $bytes;
 		}
 
+		return self::unescapeLiteral(substr($raw, 1, -1));
+	}
+
+	/**
+	 * Text of the bytes of a PDF string, whether they are UTF-16 with a byte
+	 * order mark or plain bytes.
+	 */
+	private static function pdfBytesText(string $bytes): string {
 		if (str_starts_with($bytes, "\xFE\xFF")) {
 			return mb_convert_encoding(substr($bytes, 2), 'UTF-8', 'UTF-16BE');
 		}

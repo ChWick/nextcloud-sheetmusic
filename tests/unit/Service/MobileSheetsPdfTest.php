@@ -61,6 +61,61 @@ final class MobileSheetsPdfTest extends TestCase {
 		self::assertSame(1, MobileSheetsPdf::pageCount('not a pdf at all'));
 	}
 
+	public function testPageCountSkipsStreamsItCannotUnpackWithoutRaisingErrors(): void {
+		// A stream body that is not Flate compressed data - like the image
+		// streams of a PDF or the ciphertext of an encrypted one - is skipped
+		// silently instead of raising a PHP warning per stream.
+		$pdf = "1 0 obj << /Type /Pages /Count 3 /Kids [] >> endobj\n"
+			. "2 0 obj << /Length 11 /Filter /FlateDecode >>\n"
+			. "stream\nnot compressed\nendstream\nendobj\n";
+
+		$count = 0;
+		$errors = self::collectErrors(static function () use ($pdf, &$count): void {
+			$count = MobileSheetsPdf::pageCount($pdf);
+		});
+
+		self::assertSame(3, $count);
+		self::assertSame([], $errors);
+	}
+
+	public function testPageCountLeavesTheStreamsOfAnEncryptedDocumentAlone(): void {
+		// The two pages hide in a compressed object stream, but the document is
+		// encrypted - its stream bodies are ciphertext and cannot be unpacked,
+		// so the count falls back to the page tree's /Count.
+		$objects = '<< /Type /Page /Parent 2 0 R >> << /Type /Page /Parent 2 0 R >>';
+		$stream = gzcompress($objects, 9);
+		self::assertNotFalse($stream);
+
+		$pdf = '2 0 obj << /Type /ObjStm /N 2 /Filter /FlateDecode /Length ' . strlen($stream) . " >>\n"
+			. "stream\n" . $stream . "\nendstream\nendobj\n"
+			. "1 0 obj << /Type /Pages /Count 5 /Kids [] >> endobj\n"
+			. "trailer << /Size 3 /Root 1 0 R /Encrypt 9 0 R >>\n";
+
+		$count = 0;
+		$errors = self::collectErrors(static function () use ($pdf, &$count): void {
+			$count = MobileSheetsPdf::pageCount($pdf);
+		});
+
+		self::assertSame(5, $count);
+		self::assertSame([], $errors);
+	}
+
+	/** The PHP errors $call raises, so tests can insist on silence. */
+	private static function collectErrors(callable $call): array {
+		$errors = [];
+		set_error_handler(static function (int $level, string $message) use (&$errors): bool {
+			$errors[] = $message;
+			return true;
+		});
+		try {
+			$call();
+		} finally {
+			restore_error_handler();
+		}
+
+		return $errors;
+	}
+
 	public function testPageOrderCoversTheWholeFile(): void {
 		self::assertSame('1-1', MobileSheetsPdf::pageOrder(1));
 		self::assertSame('1-7', MobileSheetsPdf::pageOrder(7));
