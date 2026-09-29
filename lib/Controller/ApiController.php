@@ -754,6 +754,10 @@ class ApiController extends OCSController {
 	private function syncSongFileMetadata(IUser $user, string $databasePath, int $songId): void {
 		$song = $this->songMapper->findSong($databasePath, $songId);
 		if ($song === null) {
+			$this->logger->warning('Could not find the song to sync its metadata into attached PDFs', [
+				'databasePath' => $databasePath,
+				'songId' => $songId,
+			]);
 			return;
 		}
 
@@ -763,19 +767,40 @@ class ApiController extends OCSController {
 				continue;
 			}
 
+			$this->logger->debug('Syncing song metadata into attached PDF', [
+				'songId' => $songId,
+				'fileId' => $file->id,
+				'path' => $file->path,
+			]);
+
 			try {
 				$path = $this->fileManager->pathOfStoredFile($file->path, $user);
 				if ($path === null) {
+					$this->logger->warning('Could not find the attached PDF in the user folder', [
+						'songId' => $songId,
+						'fileId' => $file->id,
+						'path' => $file->path,
+					]);
 					continue;
 				}
 
 				$node = $this->rootFolder->get($path->internal);
 				if (!($node instanceof File)) {
+					$this->logger->warning('The attached PDF is not a file', [
+						'songId' => $songId,
+						'fileId' => $file->id,
+						'path' => $file->path,
+					]);
 					continue;
 				}
 
 				$content = $node->getContent();
 				if (!is_string($content) || $content === '') {
+					$this->logger->warning('Could not read the attached PDF content', [
+						'songId' => $songId,
+						'fileId' => $file->id,
+						'path' => $file->path,
+					]);
 					continue;
 				}
 
