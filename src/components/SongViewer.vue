@@ -99,6 +99,19 @@ function handleSaved(data: LibraryData, songId?: number) {
 }
 
 /**
+ * Open the selected file in an external viewer: the file's URL goes to a new browser
+ * tab, where the PDF is shown by the browser's own viewer or handed to the system's
+ * PDF application - instead of the embedded view of this app.
+ */
+function openInExternalViewer() {
+	const filePath = selectedFile.value?.path
+	if (!filePath) {
+		return
+	}
+	window.open(filePath, '_blank', 'noopener,noreferrer')
+}
+
+/**
  * The editor changed the song's files without saving (upload/attach). The editor has to
  * stay open, so the data is only passed on and 'saved' - which closes it - is not emitted.
  */
@@ -260,6 +273,13 @@ watch(isEditing, (editing) => {
 			<div :class="$style.headerTop">
 				<h3 :class="$style.title">{{ song.title }}</h3>
 				<div v-if="!isEditing" :class="$style.headerActions">
+					<NcButton
+						v-if="selectedFile"
+						variant="secondary"
+						:title="t('mobilesheetsmanager', 'Open the selected PDF in a new browser tab')"
+						@click="openInExternalViewer">
+						{{ t('mobilesheetsmanager', 'Open in external viewer') }}
+					</NcButton>
 					<NcButton variant="secondary" @click="isEditing = true">
 						{{ t('mobilesheetsmanager', 'Edit song') }}
 					</NcButton>

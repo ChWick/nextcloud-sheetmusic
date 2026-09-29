@@ -251,6 +251,15 @@ function stageDeleteFile(file: SongFile) {
 	}
 }
 
+/**
+ * Open an attached file in an external viewer: the file's URL goes to a new browser
+ * tab, where the PDF is shown by the browser's own viewer or handed to the system's
+ * PDF application.
+ */
+function openInExternalViewer(file: SongFile) {
+	window.open(file.path, '_blank', 'noopener,noreferrer')
+}
+
 function restoreDeletedFile(file: SongFile) {
 	pendingDeleteFiles.value = pendingDeleteFiles.value.filter((f) => f.id !== file.id)
 	if (!currentFiles.value.some((f) => f.id === file.id)) {
@@ -578,15 +587,25 @@ async function saveSong() {
 							<span :class="$style.fileName">{{ getFileName(file.path) }}</span>
 							<span :class="$style.filePathText">{{ file.path }}</span>
 						</div>
-						<NcButton
-							type="button"
-							variant="error"
-							:class="$style.deleteButton"
-							:disabled="isSaving"
-							:aria-label="t('mobilesheetsmanager', 'Delete file {file}', { file: getFileName(file.path) })"
-							@click="stageDeleteFile(file)">
-							{{ t('mobilesheetsmanager', 'Delete') }}
-						</NcButton>
+						<div :class="$style.fileActions">
+							<NcButton
+								type="button"
+								variant="secondary"
+								:aria-label="t('mobilesheetsmanager', 'Open {file} in external viewer', { file: getFileName(file.path) })"
+								:title="t('mobilesheetsmanager', 'Open the PDF in a new browser tab')"
+								@click="openInExternalViewer(file)">
+								{{ t('mobilesheetsmanager', 'Open in external viewer') }}
+							</NcButton>
+							<NcButton
+								type="button"
+								variant="error"
+								:class="$style.deleteButton"
+								:disabled="isSaving"
+								:aria-label="t('mobilesheetsmanager', 'Delete file {file}', { file: getFileName(file.path) })"
+								@click="stageDeleteFile(file)">
+								{{ t('mobilesheetsmanager', 'Delete') }}
+							</NcButton>
+						</div>
 					</li>
 				</ul>
 				<p v-else :class="$style.noFiles">
@@ -823,6 +842,13 @@ async function saveSong() {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.fileActions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-shrink: 0;
 }
 
 .deleteButton {

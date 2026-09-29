@@ -8,6 +8,7 @@ use OCA\MobileSheetsManager\AppInfo\Application;
 use OCA\MobileSheetsManager\Controller\ApiController;
 use OCA\MobileSheetsManager\Db\LibraryMapper;
 use OCA\MobileSheetsManager\Db\MobileSheetsCollection;
+use OCA\MobileSheetsManager\Db\MobileSheetsComposer;
 use OCA\MobileSheetsManager\Db\MobileSheetsFile;
 use OCA\MobileSheetsManager\Db\MobileSheetsSong;
 use OCA\MobileSheetsManager\Db\SongMapper;
@@ -17,7 +18,9 @@ use OCA\MobileSheetsManager\Service\MobileSheetsFileFacts;
 use OCA\MobileSheetsManager\Service\MobileSheetsHashCodesFile;
 use OCA\MobileSheetsManager\Service\MobileSheetsPath;
 use OCA\MobileSheetsManager\Service\MobileSheetsPathResolver;
+use OCA\MobileSheetsManager\Service\MobileSheetsPdfMetadata;
 use OCP\AppFramework\Http;
+use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\Files\IUserFolder;
@@ -905,6 +908,74 @@ final class ApiTest extends TestCase {
 
 		self::assertEquals(Http::STATUS_CREATED, $response->getStatus());
 		self::assertEquals(['path' => '/Noten/mobilesheets.db'], $response->getData());
+	}
+
+	/**
+	 * Saving a song writes its metadata into the attached PDF, so the file can be
+	 * imported into MobileSheets later and yield the same song again.
+	 */
+	public function testUpdateSongWritesTheMetadataIntoTheAttachedPdf(): void {
+		$storedPath = '/remote.php/dav/files/admin/Noten/Alpha.pdf';
+		// A structurally valid PDF: catalog, one page, a trailer with a startxref.
+		$pdf = "%PDF-1.4\n"
+			. "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n"
+			. "2 0 obj << /Type /Pages /Count 1 /Kids [3 0 R] >> endobj\n"
+			. "3 0 obj << /Type /Page /Parent 2 0 R >> endobj\n"
+			. "xref\n0 4\n0000000000 65535 f \n"
+			. "trailer << /Size 4 /Root 1 0 R >>\n"
+			. "startxref\n9\n%%EOF\n";
+
+		$written = null;
+		$fileNode = $this->createMock(File::class);
+		$fileNode->method('getType')->willReturn('file');
+		$fileNode->method('getContent')->willReturn($pdf);
+		$fileNode->method('getMTime')->willReturn(1700000000);
+		$fileNode->expects($this->once())
+			->method('putContent')
+			->with($this->callback(static function (string $content) use (&$written): bool {
+				$written = $content;
+				return true;
+			}));
+
+		$songMapper = $this->createMock(SongMapper::class);
+		$songMapper->method('findSong')->willReturn(new MobileSheetsSong(
+			42,
+			'Blue Bossa',
+			[new MobileSheetsFile(2, $storedPath)],
+			[new MobileSheetsComposer(1, 'Joe Henderson')],
+		));
+		$songMapper->expects($this->once())->method('updateSong');
+		$songMapper->expects($this->once())->method('updateFile');
+		$songMapper->method('findLibraryData')->willReturn(['songs' => []]);
+
+		$fileManager = $this->createMock(FileManager::class);
+		$fileManager->method('pathOfStoredFile')
+			->with($storedPath)
+			->willReturn(new MobileSheetsPath('/admin/files/Noten/Alpha.pdf', $storedPath));
+
+		$rootFolder = $this->createLibraryRootFolder();
+		$rootFolder->method('get')
+			->with('/admin/files/Noten/Alpha.pdf')
+			->willReturn($fileNode);
+
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$libraryMapper->method('findForUser')
+			->with('admin', 7)
+			->willReturn(['id' => 7, 'path' => '/Noten/mobilesheets.db']);
+
+		$controller = $this->createController($libraryMapper, $songMapper, $rootFolder, $fileManager);
+
+		$response = $controller->updateSong(42, 7, 'Blue Bossa', [1]);
+
+		$this->assertEquals(Http::STATUS_OK, $response->getStatus());
+		self::assertIsString($written);
+		self::assertSame([
+			'title' => 'Blue Bossa',
+			'composers' => ['Joe Henderson'],
+			'books' => [],
+			'collections' => [],
+			'artists' => [],
+		], MobileSheetsPdfMetadata::prefillFor($written));
 	}
 
 	public function testUpdateSongWithoutATitleIsBadRequest(): void {

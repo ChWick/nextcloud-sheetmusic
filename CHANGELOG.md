@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - First release
+- Option to view the PDF of a song in an external viewer. The "Open in external viewer"
+  button in the song viewer opens the selected file in a new browser tab, where it is
+  shown by the browser's own PDF viewer or the system's PDF application instead of the
+  embedded view. For a song with several files the file of the active tab is opened.
+  The song editor offers the same for every attached file, next to its delete button.
 - Option to remove a MobileSheets library from the list. The library entry is removed
   only, the MobileSheets database and all files it references stay in the Nextcloud
   files, so the library can be added again at any time.
