@@ -1,5 +1,5 @@
 import type { Artist, Book, Collection, Composer, EntityType, FilterEntity, Song } from '../types/song'
-
+import { translate as t } from '@nextcloud/l10n'
 import { computed, ref } from 'vue'
 import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
 
@@ -12,6 +12,22 @@ export interface FilterOptions {
 }
 
 const FILTER_TYPES: EntityType[] = ['composers', 'artists', 'books', 'collections']
+
+export const UNASSIGNED_ID = -1
+
+/** The special filter entry for songs without an assigned entity in that category. */
+export function noneEntryOf(entityType: EntityType): FilterEntity {
+	switch (entityType) {
+		case 'composers':
+			return { id: UNASSIGNED_ID, name: t('mobilesheetsmanager', '(No composer)') }
+		case 'books':
+			return { id: UNASSIGNED_ID, title: t('mobilesheetsmanager', '(No book)') }
+		case 'collections':
+			return { id: UNASSIGNED_ID, name: t('mobilesheetsmanager', '(No collection)') }
+		case 'artists':
+			return { id: UNASSIGNED_ID, name: t('mobilesheetsmanager', '(No artist)') }
+	}
+}
 
 /** Whether the filter bar is shown; the choice is remembered across views. */
 const filterBarVisible = ref(true)
@@ -32,21 +48,27 @@ export function useSongFilters(options: () => FilterOptions) {
 	const route = useRoute()
 	const router = useRouter()
 
-	/** The ids one filter parameter selects, e.g. "composers=3,7" or repeated params. */
+	/** The ids one filter parameter selects, e.g. "composers=3,7" or "composers=-1". */
 	function idsOf(entityType: EntityType): number[] {
 		const raw = route.query[entityType]
 		const values = (Array.isArray(raw) ? raw : [raw]).filter(value => value !== null && value !== undefined)
 		const ids = values
 			.flatMap(value => String(value).split(','))
 			.map(Number)
-			.filter(id => Number.isInteger(id) && id > 0)
+			.filter(id => Number.isInteger(id) && id !== 0)
 		return [...new Set(ids)]
 	}
 
 	/** The entries behind the ids of one filter parameter, in the order of the URL. */
 	function selectedOf(entityType: EntityType): FilterEntity[] {
 		const entries = options()[entityType] as FilterEntity[]
-		return idsOf(entityType).map(id => entries.find(entry => entry.id === id) ?? { id } as FilterEntity)
+		const noneEntry = noneEntryOf(entityType)
+		return idsOf(entityType).map(id => {
+			if (id === UNASSIGNED_ID) {
+				return noneEntry
+			}
+			return entries.find(entry => entry.id === id) ?? ({ id } as FilterEntity)
+		})
 	}
 
 	/** Replace one filter parameter; dropping every id removes it from the URL. */
@@ -62,6 +84,15 @@ export function useSongFilters(options: () => FilterOptions) {
 
 	const hasActiveFilters = computed(() => FILTER_TYPES.some(entityType => idsOf(entityType).length > 0))
 
+	function matchesCategory<T extends { id: number }>(songItems: T[] | undefined, selectedIds: Set<number>): boolean {
+		if (selectedIds.size === 0) return true
+		const hasUnassignedSelected = selectedIds.has(UNASSIGNED_ID)
+		const isUnassigned = !songItems || songItems.length === 0
+		if (hasUnassignedSelected && isUnassigned) return true
+		if (songItems && songItems.some(item => selectedIds.has(item.id))) return true
+		return false
+	}
+
 	/** Whether the song carries every active filter selection. */
 	function songMatchesFilters(song: Song): boolean {
 		const composerIds = new Set(idsOf('composers'))
@@ -69,10 +100,10 @@ export function useSongFilters(options: () => FilterOptions) {
 		const collectionIds = new Set(idsOf('collections'))
 		const artistIds = new Set(idsOf('artists'))
 
-		if (composerIds.size && !(song.composers?.some(composer => composerIds.has(composer.id)))) return false
-		if (bookIds.size && !(song.books?.some(book => bookIds.has(book.id)))) return false
-		if (collectionIds.size && !(song.collections?.some(collection => collectionIds.has(collection.id)))) return false
-		if (artistIds.size && !(song.artists?.some(artist => artistIds.has(artist.id)))) return false
+		if (!matchesCategory(song.composers, composerIds)) return false
+		if (!matchesCategory(song.books, bookIds)) return false
+		if (!matchesCategory(song.collections, collectionIds)) return false
+		if (!matchesCategory(song.artists, artistIds)) return false
 		return true
 	}
 

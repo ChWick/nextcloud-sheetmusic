@@ -5,6 +5,7 @@ import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
 import { computed } from 'vue'
+import { noneEntryOf } from '../composables/useSongFilters'
 
 const props = withDefaults(
 	defineProps<{
@@ -36,6 +37,26 @@ const emit = defineEmits<{
 	'clear': []
 }>()
 
+const composerOptions = computed(() => [
+	noneEntryOf('composers') as Composer,
+	...props.composers,
+])
+
+const bookOptions = computed(() => [
+	noneEntryOf('books') as Book,
+	...props.books,
+])
+
+const collectionOptions = computed(() => [
+	noneEntryOf('collections') as Collection,
+	...props.collections,
+])
+
+const artistOptions = computed(() => [
+	noneEntryOf('artists') as Artist,
+	...props.artists,
+])
+
 const hasActiveFilters = computed(() => {
 	return (
 		props.selectedComposers.length > 0
@@ -58,7 +79,7 @@ function clearAllFilters() {
 			<label :class="$style.label">{{ t('mobilesheetsmanager', 'Composers') }}</label>
 			<NcSelect
 				:model-value="selectedComposers"
-				:options="composers"
+				:options="composerOptions"
 				:multiple="true"
 				:close-on-select="false"
 				:placeholder="t('mobilesheetsmanager', 'Filter by composer…')"
@@ -73,7 +94,7 @@ function clearAllFilters() {
 			<label :class="$style.label">{{ t('mobilesheetsmanager', 'Books') }}</label>
 			<NcSelect
 				:model-value="selectedBooks"
-				:options="books"
+				:options="bookOptions"
 				:multiple="true"
 				:close-on-select="false"
 				:placeholder="t('mobilesheetsmanager', 'Filter by book…')"
@@ -88,7 +109,7 @@ function clearAllFilters() {
 			<label :class="$style.label">{{ t('mobilesheetsmanager', 'Collections') }}</label>
 			<NcSelect
 				:model-value="selectedCollections"
-				:options="collections"
+				:options="collectionOptions"
 				:multiple="true"
 				:close-on-select="false"
 				:placeholder="t('mobilesheetsmanager', 'Filter by collection…')"
@@ -103,7 +124,7 @@ function clearAllFilters() {
 			<label :class="$style.label">{{ t('mobilesheetsmanager', 'Artists') }}</label>
 			<NcSelect
 				:model-value="selectedArtists"
-				:options="artists"
+				:options="artistOptions"
 				:multiple="true"
 				:close-on-select="false"
 				:placeholder="t('mobilesheetsmanager', 'Filter by artist…')"
