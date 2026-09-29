@@ -54,16 +54,39 @@ describe('BatchSongEditorDialog.vue', () => {
 			attachTo: document.body,
 		})
 
-		const checkbox = wrapper.findComponent({ name: 'NcCheckboxRadioSwitch' })
-		expect(checkbox.exists()).toBe(true)
+		const checkboxes = wrapper.findAllComponents({ name: 'NcCheckboxRadioSwitch' })
+		expect(checkboxes.length).toBe(4)
 
-		await checkbox.setValue(true)
+		// Enable composers and books
+		await checkboxes[0].setValue(true)
+		await checkboxes[1].setValue(true)
 		await wrapper.vm.$nextTick()
 
 		const applyButton = wrapper.findAllComponents({ name: 'NcButton' }).find(b => b.text().includes('Apply to 3 songs'))
 		expect(applyButton?.props('disabled')).toBe(false)
 
 		await applyButton?.trigger('click')
-		expect(wrapper.emitted('apply')).toBeTruthy()
+		expect(wrapper.emitted('apply')?.[0]).toEqual([{
+			composers: { action: 'add', ids: [] },
+			books: { action: 'add', ids: [] },
+		}])
+	})
+
+	it('emits update:open false when cancelled or closed', async () => {
+		const wrapper = mount(BatchSongEditorDialog, {
+			props: {
+				open: true,
+				selectedCount: 2,
+				composers,
+				books,
+				collections,
+				artists,
+			},
+			attachTo: document.body,
+		})
+
+		const cancelButton = wrapper.findAllComponents({ name: 'NcButton' }).find(b => b.text().includes('Cancel'))
+		await cancelButton?.trigger('click')
+		expect(wrapper.emitted('update:open')?.[0]).toEqual([false])
 	})
 })

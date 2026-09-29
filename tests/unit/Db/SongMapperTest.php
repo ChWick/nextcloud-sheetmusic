@@ -704,6 +704,42 @@ final class SongMapperTest extends TestCase {
 		self::assertSame(['Real Book 1'], $this->titles($song2->books));
 	}
 
+	public function testBatchUpdateSongsRemovesMetadata(): void {
+		$mapper = $this->mapper();
+
+		// Remove Beethoven (id 10) from song 1, remove Jazz Standards (id 1000) from songs 1 and 2
+		$mapper->batchUpdateSongs(
+			$this->databasePath,
+			[1, 2],
+			composerUpdate: ['action' => 'remove', 'ids' => [10]],
+			collectionUpdate: ['action' => 'remove', 'ids' => [1000]],
+		);
+
+		$song1 = $mapper->findSong($this->databasePath, 1);
+		self::assertNotNull($song1);
+		self::assertSame([], $song1->composers);
+		self::assertSame([], $song1->collections);
+
+		$song2 = $mapper->findSong($this->databasePath, 2);
+		self::assertNotNull($song2);
+		self::assertSame(['Bach'], $this->names($song2->composers));
+		self::assertSame([], $song2->collections);
+	}
+
+	public function testBatchUpdateSongsWithEmptySelectionDoesNothing(): void {
+		$mapper = $this->mapper();
+
+		$mapper->batchUpdateSongs(
+			$this->databasePath,
+			[],
+			composerUpdate: ['action' => 'add', 'ids' => [20]],
+		);
+
+		$song1 = $mapper->findSong($this->databasePath, 1);
+		self::assertNotNull($song1);
+		self::assertSame(['Beethoven'], $this->names($song1->composers));
+	}
+
 	/**
 	 * @param list<MobileSheetsComposer|MobileSheetsCollection|MobileSheetsArtist> $entities
 	 * @return list<string>
