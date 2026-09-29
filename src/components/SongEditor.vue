@@ -10,6 +10,8 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
+import { describeRequestFailure } from '../utils/api'
+import { openFileExternally } from '../utils/file'
 import { computed, ref, watch } from 'vue'
 import AttachNextcloudFileDialog from './song-editor/AttachNextcloudFileDialog.vue'
 import SongFileListItem from './song-editor/SongFileListItem.vue'
@@ -231,7 +233,7 @@ function stageDeleteFile(file: SongFile) {
  * PDF application.
  */
 function openInExternalViewer(file: SongFile) {
-	window.open(file.path, '_blank', 'noopener,noreferrer')
+	openFileExternally(file.path)
 }
 
 function restoreDeletedFile(file: SongFile) {
@@ -311,24 +313,6 @@ function stageAttachNextcloudFile() {
 	isAttachDialogOpen.value = false
 	selectedNextcloudNode.value = undefined
 	successMessage.value = t('mobilesheetsmanager', 'The file is added to the song when you save.')
-}
-
-/**
- * Turn a failed request into a message.
- *
- * A 404/405 on a song endpoint means the server does not know the route: the PHP files
- * changed on disk, but the server still runs the code loaded earlier (Nextcloud does not
- * re-read them on its own). Saying that is much more useful than a generic failure.
- */
-function describeRequestFailure(error: unknown): string {
-	const status = (error as { response?: { status?: number } })?.response?.status
-	if (status === 404 || status === 405) {
-		return t('mobilesheetsmanager', 'The server does not know this endpoint (HTTP {status}). If the app code was just changed, restart Nextcloud so it loads the new PHP files.', { status: String(status) })
-	}
-
-	return isNewSong.value
-		? t('mobilesheetsmanager', 'Failed to create the song.')
-		: t('mobilesheetsmanager', 'Failed to save song changes.')
 }
 
 async function saveSong(closeAfter: boolean) {
@@ -480,7 +464,10 @@ async function saveSong(closeAfter: boolean) {
 			emit('updated', data)
 		}
 	} catch (error) {
-		errorMessage.value = describeRequestFailure(error)
+		const fallback = isNewSong.value
+			? t('mobilesheetsmanager', 'Failed to create the song.')
+			: t('mobilesheetsmanager', 'Failed to save song changes.')
+		errorMessage.value = describeRequestFailure(error, fallback)
 	} finally {
 		isSaving.value = false
 	}

@@ -93,6 +93,7 @@ import NcTextField from '@nextcloud/vue/components/NcTextField'
 import SongFilterBar from './SongFilterBar.vue'
 import ViewHeader from './ViewHeader.vue'
 import { useSongFilters } from '../composables/useSongFilters'
+import { useLibraryData } from '../composables/useLibraryData'
 
 const props = defineProps<{
   selectedLibrary: number
@@ -141,19 +142,22 @@ const entityConfigs: Record<EntityType, EntityConfig> = {
 
 const config = computed<EntityConfig>(() => entityConfigs[props.entityType])
 
+const {
+  songs,
+  composers,
+  books,
+  collections,
+  artists,
+  fileError,
+  isLoading,
+  handleLibraryDataUpdate: updateBaseLibraryData,
+  loadLibraryData,
+} = useLibraryData()
+
 // Local state for this view
 const entities = ref<FilterEntity[]>([])
-const songs = ref<Song[]>([])
-// Option lists of the filter bar: it filters by all four kinds, not just the one
-// this view manages.
-const composers = ref<Composer[]>([])
-const books = ref<Book[]>([])
-const collections = ref<Collection[]>([])
-const artists = ref<Artist[]>([])
 /** Entry whose delete dialog is open. */
 const entityToDelete = ref<FilterEntity | null>(null)
-const fileError = ref('')
-const isLoading = ref(false)
 const isCreateDialogOpen = ref(false)
 const isDeleteDialogOpen = ref(false)
 const isCreating = ref(false)
@@ -195,25 +199,8 @@ const visibleEntities = computed(() => {
 })
 
 function handleLibraryDataUpdate(data: LibraryData) {
-  songs.value = data.songs ?? []
+  updateBaseLibraryData(data)
   entities.value = data[props.entityType] ?? []
-  composers.value = data.composers ?? []
-  books.value = data.books ?? []
-  collections.value = data.collections ?? []
-  artists.value = data.artists ?? []
-}
-
-async function loadLibraryData(id: number) {
-  isLoading.value = true
-  fileError.value = ''
-  try {
-    const response = await axios.get(generateOcsUrl('/apps/mobilesheetsmanager/api/songs'), { params: { id } })
-    handleLibraryDataUpdate(response.data.ocs.data as LibraryData)
-  } catch {
-    fileError.value = t('mobilesheetsmanager', 'Could not load this library.')
-  } finally {
-    isLoading.value = false
-  }
 }
 
 // Watch for library or entity kind changes

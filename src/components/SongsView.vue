@@ -84,10 +84,10 @@
           {{ t('mobilesheetsmanager', 'View') }}
         </NcButton>
       </li>
-      <li v-if="!isLoadingSongs && !fileError && songs.length === 0">
+      <li v-if="!isLoading && !fileError && songs.length === 0">
         {{ t('mobilesheetsmanager', 'No songs found in this library.') }}
       </li>
-      <li v-else-if="!isLoadingSongs && !fileError && songs.length > 0 && filteredSongs.length === 0">
+      <li v-else-if="!isLoading && !fileError && songs.length > 0 && filteredSongs.length === 0">
         {{ t('mobilesheetsmanager', 'No songs match the selected filters.') }}
       </li>
     </ul>
@@ -107,16 +107,22 @@ import SongViewer from '../components/SongViewer.vue';
 import ViewHeader from '../components/ViewHeader.vue';
 import type { Artist, Song, Composer, Book, Collection, LibraryData, SongPrefill } from '../types/song';
 import { useSongFilters } from '../composables/useSongFilters';
+import { useLibraryData } from '../composables/useLibraryData';
 
 // Props from parent (App.vue)
 const props = defineProps<{ selectedLibrary: number }>();
 
-// Local state for this view
-const songs = ref<Song[]>([]);
-const composers = ref<Composer[]>([]);
-const books = ref<Book[]>([]);
-const collections = ref<Collection[]>([]);
-const artists = ref<Artist[]>([]);
+const {
+  songs,
+  composers,
+  books,
+  collections,
+  artists,
+  fileError,
+  isLoading,
+  handleLibraryDataUpdate,
+  loadLibraryData,
+} = useLibraryData();
 
 // The open song lives in the URL query ("?song=12") like the filters do, so the
 // browser history restores it and going back returns to the song list.
@@ -142,8 +148,6 @@ const isEditInUrl = computed(() => route.query.edit !== undefined && route.query
 const { selectedComposers, selectedBooks, selectedCollections, selectedArtists, filterSongs, clearFilters, filterBarVisible, toggleFilterBar } =
   useSongFilters(() => ({ composers: composers.value, books: books.value, collections: collections.value, artists: artists.value }));
 
-const fileError = ref('');
-const isLoadingSongs = ref(false);
 /** The editor is open for a song that does not exist yet. */
 const isCreatingSong = ref(false);
 /** Metadata read from the PDF an import picked, prefilled into the new song. */
@@ -154,27 +158,6 @@ const importInput = ref<HTMLInputElement>();
 
 // Computed filtered list
 const filteredSongs = computed(() => filterSongs(songs.value));
-
-function handleLibraryDataUpdate(data: LibraryData) {
-  songs.value = data.songs ?? [];
-  composers.value = data.composers ?? [];
-  books.value = data.books ?? [];
-  collections.value = data.collections ?? [];
-  artists.value = data.artists ?? [];
-}
-
-async function loadLibraryData(id: number) {
-  isLoadingSongs.value = true;
-  fileError.value = '';
-  try {
-    const response = await axios.get(generateOcsUrl('/apps/mobilesheetsmanager/api/songs'), { params: { id } });
-    handleLibraryDataUpdate(response.data.ocs.data as LibraryData);
-  } catch {
-    fileError.value = t('mobilesheetsmanager', 'Could not load the songs in this library.');
-  } finally {
-    isLoadingSongs.value = false;
-  }
-}
 
 // Watch for library prop changes
 watch(() => props.selectedLibrary, (newLib) => {

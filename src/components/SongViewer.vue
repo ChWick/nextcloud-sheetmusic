@@ -12,6 +12,8 @@ import NcRadioGroup from '@nextcloud/vue/components/NcRadioGroup'
 import NcRadioGroupButton from '@nextcloud/vue/components/NcRadioGroupButton'
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist'
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+import { getFileName, openFileExternally } from '../utils/file'
+import { describeRequestFailure } from '../utils/api'
 import { computed, nextTick, ref, watch } from 'vue'
 import SongEditor from './SongEditor.vue'
 
@@ -73,10 +75,6 @@ const selectedFile = computed<SongFile | null>(() => {
 	return files.find((file) => String(file.id) === selectedFileId.value) ?? files[0] ?? null
 })
 
-function getFileName(filePath: string): string {
-	return filePath.split('/').pop() ?? filePath
-}
-
 /** Tab labels are kept short so that many files stay readable. */
 function getFileLabel(file: SongFile, index: number): string {
 	const name = getFileName(file.path).replace(/\.pdf$/i, '')
@@ -108,7 +106,7 @@ function openInExternalViewer() {
 	if (!filePath) {
 		return
 	}
-	window.open(filePath, '_blank', 'noopener,noreferrer')
+	openFileExternally(filePath)
 }
 
 /**
@@ -144,12 +142,7 @@ async function confirmDeleteSong() {
 		const data = (response.data as { ocs?: { data?: LibraryData } } | undefined)?.ocs?.data
 		emit('deleted', data, songId)
 	} catch (error) {
-		// A 404/405 means the server does not know the route yet, e.g. right after the app
-		// code changed on disk; saying so beats a generic failure message.
-		const status = (error as { response?: { status?: number } })?.response?.status
-		deleteError.value = (status === 404 || status === 405)
-			? t('mobilesheetsmanager', 'The server does not know this endpoint (HTTP {status}). If the app code was just changed, restart Nextcloud so it loads the new PHP files.', { status: String(status) })
-			: t('mobilesheetsmanager', 'Could not delete the song.')
+		deleteError.value = describeRequestFailure(error, t('mobilesheetsmanager', 'Could not delete the song.'))
 	} finally {
 		isDeletingSong.value = false
 	}
