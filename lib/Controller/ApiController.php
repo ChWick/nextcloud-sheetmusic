@@ -418,18 +418,40 @@ class ApiController extends OCSController {
 			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
 		}
 
+		$content = null;
+
 		$fileInfo = $this->request->getUploadedFile('file');
 		if ($fileInfo === null && isset($_FILES['file'])) {
 			$fileInfo = $_FILES['file'];
 		}
 
-		if ($fileInfo === null || !isset($fileInfo['tmp_name']) || !is_uploaded_file($fileInfo['tmp_name'])) {
-			return new DataResponse(['message' => 'No file uploaded'], Http::STATUS_BAD_REQUEST);
+		if ($fileInfo !== null && isset($fileInfo['tmp_name']) && is_uploaded_file($fileInfo['tmp_name'])) {
+			$content = file_get_contents($fileInfo['tmp_name']);
+		} else {
+			$path = $this->request->getParam('path');
+			if (!empty($path)) {
+				try {
+					$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+					$relativePath = ltrim((string)$path, '/');
+					$davPrefix = 'remote.php/dav/files/' . $user->getUID() . '/';
+					if (str_starts_with($relativePath, $davPrefix)) {
+						$relativePath = substr($relativePath, strlen($davPrefix));
+					}
+					$node = $userFolder->get(rawurldecode($relativePath));
+					if ($node instanceof \OCP\Files\File) {
+						$content = $node->getContent();
+					}
+				} catch (\Throwable $e) {
+					$this->logger->info('Could not resolve Nextcloud file for metadata import', [
+						'path' => $path,
+						'exception' => $e,
+					]);
+				}
+			}
 		}
 
-		$content = file_get_contents($fileInfo['tmp_name']);
-		if ($content === false || $content === '') {
-			return new DataResponse(['message' => 'Could not read the uploaded file'], Http::STATUS_BAD_REQUEST);
+		if ($content === false || $content === null || $content === '') {
+			return new DataResponse(['message' => 'Could not read file content'], Http::STATUS_BAD_REQUEST);
 		}
 
 		try {

@@ -3,9 +3,11 @@
     :title="t('mobilesheetsmanager', 'Songs')"
     :create-label="t('mobilesheetsmanager', 'New song')"
     :import-label="t('mobilesheetsmanager', 'Import')"
+    :import-nextcloud-label="t('mobilesheetsmanager', 'Import from Nextcloud')"
     :filter-bar-visible="songIdInUrl === null ? filterBarVisible : undefined"
     @create="startNewSong"
     @import="startImport"
+    @import-nextcloud="startImportNextcloud"
     @toggle-filters="toggleFilterBar">
     <SongViewToggle v-if="songIdInUrl === null" v-model:view-mode="viewMode" />
   </ViewHeader>
@@ -79,6 +81,7 @@
                 :artists="artists"
                 :prefill="importPrefill"
                 :imported-file="importedFile"
+                :imported-nextcloud-node="importedNextcloudNode"
                 @saved="handleSaved"
                 @cancel="isCreatingSong = false" />
     <div v-if="!isLoading && !fileError && songs.length === 0" :class="$style.emptyNotice">
@@ -133,6 +136,7 @@
 import { t } from '@nextcloud/l10n';
 import axios from '@nextcloud/axios';
 import { generateOcsUrl } from '@nextcloud/router';
+import { FilePickerClosed, getFilePickerBuilder } from '@nextcloud/dialogs';
 import { ref, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import NcButton from '@nextcloud/vue/components/NcButton';
@@ -223,8 +227,10 @@ async function handleApplyBatchUpdate(payload: BatchUpdatePayload) {
 const isCreatingSong = ref(false);
 /** Metadata read from the PDF an import picked, prefilled into the new song. */
 const importPrefill = ref<SongPrefill | null>(null);
-/** The PDF an import picked, staged as the new song's file. */
+/** The PDF an import picked from local computer, staged as the new song's file. */
 const importedFile = ref<File | null>(null);
+/** The PDF an import picked from Nextcloud internal storage, staged as the new song's file attachment. */
+const importedNextcloudNode = ref<{ path: string; name: string } | null>(null);
 const importInput = ref<HTMLInputElement>();
 
 // Computed filtered list
@@ -274,6 +280,7 @@ function startNewSong() {
   // A plain create starts empty; anything an import staged before is dropped.
   importPrefill.value = null;
   importedFile.value = null;
+  importedNextcloudNode.value = null;
   openNewSong();
 }
 
@@ -289,6 +296,45 @@ function openNewSong() {
 /** Open the file picker: the PDF picked here seeds a new song with its metadata. */
 function startImport() {
   importInput.value?.click();
+}
+
+/** Open Nextcloud file picker to import a PDF from internal storage. */
+async function startImportNextcloud() {
+  const picker = getFilePickerBuilder(t('mobilesheetsmanager', 'Select a PDF from Nextcloud'))
+    .setMultiSelect(false)
+    .setFilter((node) => node.type !== 'file' || node.basename.toLowerCase().endsWith('.pdf'))
+    .setCanPick((node) => node.type === 'file' && node.basename.toLowerCase().endsWith('.pdf'))
+    .setButtonFactory(([node]) => [{
+      label: node
+        ? t('mobilesheetsmanager', 'Import {file}', { file: node.basename })
+        : t('mobilesheetsmanager', 'Import a PDF'),
+      callback: () => {},
+      disabled: !node || node.type !== 'file' || !node.basename.toLowerCase().endsWith('.pdf'),
+      variant: 'primary',
+    }])
+    .build();
+
+  try {
+    const [picked] = await picker.pickNodes();
+    if (!picked) return;
+
+    let prefill: SongPrefill | null = null;
+    try {
+      const response = await apiPost('/api/import-metadata', { path: picked.path });
+      prefill = response.data?.ocs?.data ?? null;
+    } catch {
+      prefill = null;
+    }
+
+    importPrefill.value = prefill;
+    importedFile.value = null;
+    importedNextcloudNode.value = { path: picked.path, name: picked.basename };
+    openNewSong();
+  } catch (error) {
+    if (!(error instanceof FilePickerClosed)) {
+      console.error('Failed to import file from Nextcloud:', error);
+    }
+  }
 }
 
 /**
@@ -314,6 +360,7 @@ async function handleImportFile(event: Event) {
 
   importPrefill.value = prefill;
   importedFile.value = file;
+  importedNextcloudNode.value = null;
   openNewSong();
 }
 
@@ -322,6 +369,7 @@ watch(isCreatingSong, (creating) => {
   if (!creating) {
     importPrefill.value = null;
     importedFile.value = null;
+    importedNextcloudNode.value = null;
   }
 });
 

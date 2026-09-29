@@ -13,7 +13,7 @@
         </template>
       </NcButton>
       <NcActions
-        v-if="createLabel || importLabel"
+        v-if="createLabel || importLabel || importNextcloudLabel"
         :name="t('mobilesheetsmanager', 'Add or import song')"
         :aria-label="t('mobilesheetsmanager', 'Add or import song')">
         <template #icon>
@@ -31,6 +31,12 @@
           </template>
           {{ importLabel }}
         </NcActionButton>
+        <NcActionButton v-if="importNextcloudLabel" @click="emit('import-nextcloud')">
+          <template #icon>
+            <FolderIcon :size="20" />
+          </template>
+          {{ importNextcloudLabel }}
+        </NcActionButton>
       </NcActions>
     </div>
   </header>
@@ -43,6 +49,7 @@ import NcActions from '@nextcloud/vue/components/NcActions'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import PlusIcon from 'vue-material-design-icons/Plus.vue'
 import UploadIcon from 'vue-material-design-icons/Upload.vue'
+import FolderIcon from 'vue-material-design-icons/Folder.vue'
 import FilterVariantIcon from 'vue-material-design-icons/FilterVariant.vue'
 
 defineProps<{
@@ -52,6 +59,8 @@ defineProps<{
   createLabel?: string
   /** Label of the view's import button; the button is hidden when unset. */
   importLabel?: string
+  /** Label of the view's import from Nextcloud button; the button is hidden when unset. */
+  importNextcloudLabel?: string
   /** Whether the filter bar is shown; the toggle is hidden when unset. */
   filterBarVisible?: boolean
 }>()
@@ -61,6 +70,8 @@ const emit = defineEmits<{
   create: []
   /** The view's import button was pressed. */
   import: []
+  /** The view's import from Nextcloud button was pressed. */
+  'import-nextcloud': []
   /** The filter bar should be shown or hidden. */
   'toggle-filters': []
 }>()
