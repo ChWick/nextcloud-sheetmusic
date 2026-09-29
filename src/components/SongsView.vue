@@ -6,7 +6,9 @@
     :filter-bar-visible="songIdInUrl === null ? filterBarVisible : undefined"
     @create="startNewSong"
     @import="startImport"
-    @toggle-filters="toggleFilterBar" />
+    @toggle-filters="toggleFilterBar">
+    <SongViewToggle v-if="songIdInUrl === null" v-model:view-mode="viewMode" />
+  </ViewHeader>
   <!-- Import reuses the create editor: the picked PDF is read for its metadata and
        staged as the new song's file. -->
   <input
@@ -76,7 +78,6 @@
       {{ t('mobilesheetsmanager', 'No songs match the selected filters.') }}
     </div>
     <template v-else>
-      <SongViewToggle v-model:view-mode="viewMode" />
       <SongTableView
         v-if="viewMode === 'table'"
         :songs="filteredSongs"

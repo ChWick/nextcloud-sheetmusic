@@ -2,6 +2,7 @@
   <header :class="$style.headerBar">
     <h2 :class="$style.title">{{ title }}</h2>
     <div :class="$style.actions">
+      <slot />
       <NcButton v-if="createLabel"
                 variant="primary"
                 @click="emit('create')">

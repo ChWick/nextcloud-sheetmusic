@@ -42,7 +42,7 @@ const viewOptions: { value: ViewMode; label: string }[] = [
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	margin-bottom: 12px;
+	margin-bottom: 0;
 }
 
 .label {
