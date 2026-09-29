@@ -49,4 +49,31 @@ describe('SongSimpleListView.vue', () => {
 		await chopinBtn?.trigger('click')
 		expect(wrapper.emitted('filter-entity')?.[0]).toEqual(['composers', { id: 10, name: 'Chopin' }])
 	})
+
+	it('emits toggle-select-song when checkbox is clicked', async () => {
+		const wrapper = mount(SongSimpleListView, {
+			props: { songs, selectedSongIds: [1] },
+		})
+
+		const checkbox = wrapper.find('input[type="checkbox"]')
+		expect(checkbox.exists()).toBe(true)
+		await checkbox.trigger('change')
+		expect(wrapper.emitted('toggle-select-song')?.[0]).toEqual([1])
+	})
+
+	it('emits toggle-select-song on long press touch event', async () => {
+		vi.useFakeTimers()
+		const wrapper = mount(SongSimpleListView, {
+			props: { songs },
+		})
+
+		const row = wrapper.find('li')
+		await row.trigger('touchstart', {
+			touches: [{ clientX: 50, clientY: 50 }],
+		})
+
+		vi.advanceTimersByTime(500)
+		expect(wrapper.emitted('toggle-select-song')?.[0]).toEqual([1])
+		vi.useRealTimers()
+	})
 })
