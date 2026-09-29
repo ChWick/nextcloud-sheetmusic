@@ -151,14 +151,36 @@ const sortedSongs = computed(() => sortSongs(props.songs, sortKey.value, sortOrd
 <style module>
 .tableContainer {
 	width: 100%;
+	max-width: 100%;
+	min-width: 0;
 	overflow-x: auto;
+	scrollbar-width: thin;
+	scrollbar-color: var(--color-border) transparent;
 	border: 1px solid var(--color-border);
 	border-radius: var(--border-radius-large, 8px);
 	background-color: var(--color-main-background);
 }
 
+.tableContainer::-webkit-scrollbar {
+	height: 8px;
+}
+
+.tableContainer::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+.tableContainer::-webkit-scrollbar-thumb {
+	background: var(--color-border);
+	border-radius: 4px;
+}
+
+.tableContainer::-webkit-scrollbar-thumb:hover {
+	background: var(--color-text-maxcontrast);
+}
+
 .songTable {
 	width: 100%;
+	min-width: 800px;
 	border-collapse: collapse;
 	text-align: left;
 	font-size: 0.9rem;
@@ -184,6 +206,11 @@ const sortedSongs = computed(() => sortSongs(props.songs, sortKey.value, sortOrd
 
 .actionsHeader {
 	text-align: right;
+	position: sticky;
+	right: 0;
+	background-color: var(--color-background-hover);
+	z-index: 2;
+	box-shadow: -2px 0 6px -2px rgba(0, 0, 0, 0.12);
 }
 
 .tableRow {
@@ -191,6 +218,10 @@ const sortedSongs = computed(() => sortSongs(props.songs, sortKey.value, sortOrd
 }
 
 .tableRow:hover {
+	background-color: var(--color-background-hover);
+}
+
+.tableRow:hover .actionsCell {
 	background-color: var(--color-background-hover);
 }
 
@@ -273,6 +304,11 @@ const sortedSongs = computed(() => sortSongs(props.songs, sortKey.value, sortOrd
 .actionsCell {
 	text-align: right;
 	white-space: nowrap;
+	position: sticky;
+	right: 0;
+	background-color: var(--color-main-background);
+	z-index: 1;
+	box-shadow: -2px 0 6px -2px rgba(0, 0, 0, 0.12);
 }
 
 .actionsGroup {

@@ -314,6 +314,8 @@ async function handleDeleted(data: LibraryData | undefined, songId: number) {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  min-width: 0;
+  max-width: calc(100% - 32px);
 }
 .songList {
   margin: 0;
