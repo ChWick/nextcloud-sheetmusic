@@ -1,17 +1,19 @@
 <script setup lang="ts">
-import type { Song } from '../../types/song'
+import type { EntityType, FilterEntity, Song } from '../../types/song'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import { computed, ref } from 'vue'
-import { formatArtists, formatBooks, formatCollections, formatComposers, sortSongs, type SortKey, type SortOrder } from '../../utils/song-formatter'
+import { sortSongs, type SortKey, type SortOrder } from '../../utils/song-formatter'
 
 const props = defineProps<{
 	songs: Song[]
+	isFiltered?: (entityType: EntityType, id: number) => boolean
 }>()
 
 const emit = defineEmits<{
 	'view-song': [song: Song]
 	'edit-song': [song: Song]
+	'filter-entity': [entityType: EntityType, entity: FilterEntity]
 }>()
 
 const sortKey = ref<SortKey>('title')
@@ -70,10 +72,66 @@ const sortedSongs = computed(() => sortSongs(props.songs, sortKey.value, sortOrd
 							{{ song.title }}
 						</button>
 					</td>
-					<td :class="$style.metaCell">{{ formatComposers(song) }}</td>
-					<td :class="$style.metaCell">{{ formatBooks(song) }}</td>
-					<td :class="$style.metaCell">{{ formatCollections(song) }}</td>
-					<td :class="$style.metaCell">{{ formatArtists(song) }}</td>
+					<td :class="$style.metaCell">
+						<template v-if="song.composers && song.composers.length > 0">
+							<span v-for="(comp, idx) in song.composers" :key="comp.id">
+								<button
+									type="button"
+									:class="[$style.filterChip, isFiltered?.('composers', comp.id) && $style.activeChip]"
+									:title="t('mobilesheetsmanager', 'Toggle filter for composer {name}', { name: comp.name })"
+									@click.stop="emit('filter-entity', 'composers', comp)">
+									{{ comp.name }}
+								</button>
+								<template v-if="idx < song.composers.length - 1">, </template>
+							</span>
+						</template>
+						<span v-else :class="$style.emptyText">—</span>
+					</td>
+					<td :class="$style.metaCell">
+						<template v-if="song.books && song.books.length > 0">
+							<span v-for="(bk, idx) in song.books" :key="bk.id">
+								<button
+									type="button"
+									:class="[$style.filterChip, isFiltered?.('books', bk.id) && $style.activeChip]"
+									:title="t('mobilesheetsmanager', 'Toggle filter for book {title}', { title: bk.title })"
+									@click.stop="emit('filter-entity', 'books', bk)">
+									{{ bk.title }}
+								</button>
+								<template v-if="idx < song.books.length - 1">, </template>
+							</span>
+						</template>
+						<span v-else :class="$style.emptyText">—</span>
+					</td>
+					<td :class="$style.metaCell">
+						<template v-if="song.collections && song.collections.length > 0">
+							<span v-for="(col, idx) in song.collections" :key="col.id">
+								<button
+									type="button"
+									:class="[$style.filterChip, isFiltered?.('collections', col.id) && $style.activeChip]"
+									:title="t('mobilesheetsmanager', 'Toggle filter for collection {name}', { name: col.name })"
+									@click.stop="emit('filter-entity', 'collections', col)">
+									{{ col.name }}
+								</button>
+								<template v-if="idx < song.collections.length - 1">, </template>
+							</span>
+						</template>
+						<span v-else :class="$style.emptyText">—</span>
+					</td>
+					<td :class="$style.metaCell">
+						<template v-if="song.artists && song.artists.length > 0">
+							<span v-for="(art, idx) in song.artists" :key="art.id">
+								<button
+									type="button"
+									:class="[$style.filterChip, isFiltered?.('artists', art.id) && $style.activeChip]"
+									:title="t('mobilesheetsmanager', 'Toggle filter for artist {name}', { name: art.name })"
+									@click.stop="emit('filter-entity', 'artists', art)">
+									{{ art.name }}
+								</button>
+								<template v-if="idx < song.artists.length - 1">, </template>
+							</span>
+						</template>
+						<span v-else :class="$style.emptyText">—</span>
+					</td>
 					<td :class="$style.actionsCell">
 						<div :class="$style.actionsGroup">
 							<NcButton size="small" @click="emit('edit-song', song)">
@@ -161,6 +219,54 @@ const sortedSongs = computed(() => sortSongs(props.songs, sortKey.value, sortOrd
 }
 
 .metaCell {
+	color: var(--color-text-maxcontrast);
+}
+
+.filterChip {
+	appearance: none;
+	-webkit-appearance: none;
+	background: transparent !important;
+	border: none !important;
+	border-radius: 0 !important;
+	box-shadow: none !important;
+	outline: none !important;
+	padding: 0 !important;
+	margin: 0 !important;
+	font: inherit;
+	color: var(--color-text-maxcontrast);
+	cursor: pointer;
+	text-align: left;
+	display: inline;
+	text-decoration: none;
+	transition: color 0.15s ease;
+}
+
+.filterChip:hover,
+.filterChip:focus,
+.filterChip:active {
+	background: transparent !important;
+	border: none !important;
+	box-shadow: none !important;
+	color: var(--color-primary-element) !important;
+	text-decoration: underline;
+}
+
+.activeChip {
+	color: var(--color-primary-element) !important;
+	font-weight: 600;
+	text-decoration: underline;
+}
+
+.activeChip:hover,
+.activeChip:focus,
+.activeChip:active {
+	background: transparent !important;
+	border: none !important;
+	box-shadow: none !important;
+	color: var(--color-primary-element-hover, var(--color-primary-element)) !important;
+}
+
+.emptyText {
 	color: var(--color-text-maxcontrast);
 }
 

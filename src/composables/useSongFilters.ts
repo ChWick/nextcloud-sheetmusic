@@ -59,6 +59,19 @@ export function useSongFilters(options: () => FilterOptions) {
 		return [...new Set(ids)]
 	}
 
+	function isFiltered(entityType: EntityType, id: number): boolean {
+		return idsOf(entityType).includes(id)
+	}
+
+	function toggleFilter(entityType: EntityType, entity: FilterEntity): void {
+		const currentIds = idsOf(entityType)
+		if (currentIds.includes(entity.id)) {
+			selectIds(entityType, currentIds.filter(i => i !== entity.id))
+		} else {
+			selectIds(entityType, [...currentIds, entity.id])
+		}
+	}
+
 	/** The entries behind the ids of one filter parameter, in the order of the URL. */
 	function selectedOf(entityType: EntityType): FilterEntity[] {
 		const entries = options()[entityType] as FilterEntity[]
@@ -144,6 +157,8 @@ export function useSongFilters(options: () => FilterOptions) {
 		selectedCollections,
 		selectedArtists,
 		hasActiveFilters,
+		isFiltered,
+		toggleFilter,
 		filterSongs,
 		clearFilters,
 		filterBarVisible,

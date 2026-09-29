@@ -80,18 +80,24 @@
       <SongTableView
         v-if="viewMode === 'table'"
         :songs="filteredSongs"
+        :is-filtered="isFiltered"
         @view-song="openSongView"
-        @edit-song="openSongEdit" />
+        @edit-song="openSongEdit"
+        @filter-entity="toggleFilter" />
       <SongCardView
         v-else-if="viewMode === 'cards'"
         :songs="filteredSongs"
+        :is-filtered="isFiltered"
         @view-song="openSongView"
-        @edit-song="openSongEdit" />
+        @edit-song="openSongEdit"
+        @filter-entity="toggleFilter" />
       <SongSimpleListView
         v-else
         :songs="filteredSongs"
+        :is-filtered="isFiltered"
         @view-song="openSongView"
-        @edit-song="openSongEdit" />
+        @edit-song="openSongEdit"
+        @filter-entity="toggleFilter" />
     </template>
   </div>
 </template>
@@ -160,7 +166,7 @@ const isEditInUrl = computed(() => route.query.edit !== undefined && route.query
 
 // The filter bar reads and writes its selections in the URL query, so the browser
 // history restores them when going back or forward.
-const { selectedComposers, selectedBooks, selectedCollections, selectedArtists, filterSongs, clearFilters, filterBarVisible, toggleFilterBar } =
+const { selectedComposers, selectedBooks, selectedCollections, selectedArtists, filterSongs, clearFilters, filterBarVisible, toggleFilterBar, isFiltered, toggleFilter } =
   useSongFilters(() => ({ composers: composers.value, books: books.value, collections: collections.value, artists: artists.value }));
 
 /** The editor is open for a song that does not exist yet. */
