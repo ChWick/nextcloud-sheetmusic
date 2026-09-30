@@ -23,10 +23,12 @@ export function formatArtists(song: Song, fallback = '—'): string {
 export function formatDateTimestamp(timestamp?: number | null, fallback = '—'): string {
 	if (!timestamp || timestamp <= 0) return fallback
 	try {
-		return new Date(timestamp).toLocaleDateString(undefined, {
+		return new Date(timestamp).toLocaleString(undefined, {
 			year: 'numeric',
 			month: 'short',
 			day: 'numeric',
+			hour: '2-digit',
+			minute: '2-digit',
 		})
 	} catch {
 		return fallback
