@@ -82,24 +82,22 @@ function clearAllFilters() {
 <template>
 	<div :class="$style.filterBar" role="region" :aria-label="t('mobilesheetsmanager', 'Song filters')">
 		<div :class="$style.filterGroup">
-			<label :class="$style.label">{{ t('mobilesheetsmanager', 'Search title') }}</label>
 			<NcTextField
 				:model-value="searchTitle"
 				:placeholder="t('mobilesheetsmanager', 'Search by title…')"
-				:input-label="t('mobilesheetsmanager', 'Search by title')"
+				:input-label="t('mobilesheetsmanager', 'Search title')"
 				:class="$style.input"
 				@update:model-value="emit('update:searchTitle', $event)" />
 		</div>
 
 		<div :class="$style.filterGroup">
-			<label :class="$style.label">{{ t('mobilesheetsmanager', 'Composers') }}</label>
 			<NcSelect
 				:model-value="selectedComposers"
 				:options="composerOptions"
 				:multiple="true"
 				:close-on-select="false"
 				:placeholder="t('mobilesheetsmanager', 'Filter by composer…')"
-				:input-label="t('mobilesheetsmanager', 'Filter by composer')"
+				:input-label="t('mobilesheetsmanager', 'Composers')"
 				label="name"
 				track-by="id"
 				:class="$style.select"
@@ -107,14 +105,13 @@ function clearAllFilters() {
 		</div>
 
 		<div :class="$style.filterGroup">
-			<label :class="$style.label">{{ t('mobilesheetsmanager', 'Books') }}</label>
 			<NcSelect
 				:model-value="selectedBooks"
 				:options="bookOptions"
 				:multiple="true"
 				:close-on-select="false"
 				:placeholder="t('mobilesheetsmanager', 'Filter by book…')"
-				:input-label="t('mobilesheetsmanager', 'Filter by book')"
+				:input-label="t('mobilesheetsmanager', 'Books')"
 				label="title"
 				track-by="id"
 				:class="$style.select"
@@ -122,14 +119,13 @@ function clearAllFilters() {
 		</div>
 
 		<div :class="$style.filterGroup">
-			<label :class="$style.label">{{ t('mobilesheetsmanager', 'Collections') }}</label>
 			<NcSelect
 				:model-value="selectedCollections"
 				:options="collectionOptions"
 				:multiple="true"
 				:close-on-select="false"
 				:placeholder="t('mobilesheetsmanager', 'Filter by collection…')"
-				:input-label="t('mobilesheetsmanager', 'Filter by collection')"
+				:input-label="t('mobilesheetsmanager', 'Collections')"
 				label="name"
 				track-by="id"
 				:class="$style.select"
@@ -137,14 +133,13 @@ function clearAllFilters() {
 		</div>
 
 		<div :class="$style.filterGroup">
-			<label :class="$style.label">{{ t('mobilesheetsmanager', 'Artists') }}</label>
 			<NcSelect
 				:model-value="selectedArtists"
 				:options="artistOptions"
 				:multiple="true"
 				:close-on-select="false"
 				:placeholder="t('mobilesheetsmanager', 'Filter by artist…')"
-				:input-label="t('mobilesheetsmanager', 'Filter by artist')"
+				:input-label="t('mobilesheetsmanager', 'Artists')"
 				label="name"
 				track-by="id"
 				:class="$style.select"
@@ -188,12 +183,6 @@ function clearAllFilters() {
 
 .filterGroup:focus-within {
 	z-index: 10;
-}
-
-.label {
-	font-size: 0.85rem;
-	font-weight: 600;
-	color: var(--color-text-maxcontrast);
 }
 
 .input {
