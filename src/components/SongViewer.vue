@@ -81,9 +81,18 @@ const selectedFile = computed<SongFile | null>(() => {
 	return files.find((file) => String(file.id) === selectedFileId.value) ?? files[0] ?? null
 })
 
-const isNonPdfFile = computed(() => {
+const isPdfFile = computed(() => {
 	const path = selectedFile.value?.path ?? ''
-	return !path.toLowerCase().endsWith('.pdf')
+	return path.toLowerCase().endsWith('.pdf')
+})
+
+const isImageFile = computed(() => {
+	const path = (selectedFile.value?.path ?? '').toLowerCase()
+	return path.endsWith('.png') || path.endsWith('.jpg') || path.endsWith('.jpeg') || path.endsWith('.webp') || path.endsWith('.gif') || path.endsWith('.svg') || path.endsWith('.bmp')
+})
+
+const isUnsupportedFile = computed(() => {
+	return !isPdfFile.value && !isImageFile.value
 })
 
 /** Tab labels are kept short so that many files stay readable. */
@@ -180,7 +189,7 @@ async function renderSelectedFile() {
 		return
 	}
 
-	if (isNonPdfFile.value) {
+	if (!isPdfFile.value) {
 		isLoading.value = false
 		return
 	}
@@ -404,7 +413,13 @@ watch(isEditing, (editing) => {
 			</p>
 
 			<div
-				v-if="song && !isLoading && !errorMessage && isNonPdfFile"
+				v-if="song && !isLoading && !errorMessage && isImageFile"
+				:class="$style.imageViewer">
+				<img :src="selectedFile?.path" :alt="song?.title" :class="$style.viewerImage" />
+			</div>
+
+			<div
+				v-if="song && !isLoading && !errorMessage && isUnsupportedFile"
 				:class="$style.nonPdfContainer">
 				<p>{{ t('mobilesheetsmanager', 'This file format cannot be rendered in the embedded viewer.') }}</p>
 				<NcButton
@@ -420,7 +435,7 @@ watch(isEditing, (editing) => {
 			</div>
 
 			<div
-				v-show="song && !isLoading && !errorMessage && !isNonPdfFile"
+				v-show="song && !isLoading && !errorMessage && isPdfFile"
 				ref="pdfContainer"
 				:class="$style.pdfViewer"
 				:aria-label="song?.title" />
@@ -531,7 +546,8 @@ watch(isEditing, (editing) => {
 	overflow-x: auto;
 }
 
-.pdfViewer {
+.pdfViewer,
+.imageViewer {
 	width: 100%;
 	height: 75vh;
 	overflow: auto;
@@ -539,6 +555,17 @@ watch(isEditing, (editing) => {
 	border: 1px solid var(--color-border);
 	background: var(--color-background-dark);
 	padding: 16px;
+	box-sizing: border-box;
+	display: flex;
+	justify-content: center;
+	align-items: flex-start;
+}
+
+.viewerImage {
+	max-width: 100%;
+	height: auto;
+	margin: 0 auto;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .nonPdfContainer {
