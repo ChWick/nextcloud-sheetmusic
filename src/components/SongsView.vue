@@ -32,23 +32,18 @@
                 @saved="handleSaved"
                 @updated="handleLibraryDataUpdate"
                 @cancel="goBackToSongs" />
-    <template v-else>
-      <div :class="$style.fullscreenHeader">
-        <NcButton @click="goBackToSongs">
-          {{ t('mobilesheetsmanager', 'Back to songs') }}
-        </NcButton>
-      </div>
-      <SongViewer
-        :song="openSong"
-        :library-id="selectedLibrary"
-        :composers="composers"
-        :books="books"
-        :collections="collections"
-        :artists="artists"
-        @saved="handleSaved"
-        @updated="handleLibraryDataUpdate"
-        @deleted="handleDeleted" />
-    </template>
+    <SongViewer
+      v-else
+      :song="openSong"
+      :library-id="selectedLibrary"
+      :composers="composers"
+      :books="books"
+      :collections="collections"
+      :artists="artists"
+      @back="goBackToSongs"
+      @saved="handleSaved"
+      @updated="handleLibraryDataUpdate"
+      @deleted="handleDeleted" />
   </div>
   <div v-else :class="$style.songArea">
     <div v-if="selectedCount > 0" :class="$style.selectionBanner">

@@ -15,6 +15,10 @@ import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { getFileName, openFileExternally } from '../utils/file'
 import { describeRequestFailure } from '../utils/api'
 import { apiDelete } from '../api/client'
+import ArrowLeftIcon from 'vue-material-design-icons/ArrowLeft.vue'
+import DeleteIcon from 'vue-material-design-icons/Delete.vue'
+import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
+import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import { computed, nextTick, ref, watch } from 'vue'
 import SongEditor from './SongEditor.vue'
 
@@ -38,6 +42,7 @@ const props = withDefaults(
 )
 
 const emit = defineEmits<{
+	back: []
 	saved: [data: LibraryData, songId?: number]
 	updated: [data: LibraryData]
 	/** The song was deleted; its files went to the trash bin or stayed, per the chosen option. */
@@ -265,20 +270,43 @@ watch(isEditing, (editing) => {
 	<div :class="$style.container">
 		<header v-if="song" :class="$style.header">
 			<div :class="$style.headerTop">
+				<NcButton
+					:title="t('mobilesheetsmanager', 'Back to songs')"
+					:aria-label="t('mobilesheetsmanager', 'Back to songs')"
+					@click="emit('back')">
+					<template #icon>
+						<ArrowLeftIcon :size="20" />
+					</template>
+				</NcButton>
 				<h3 :class="$style.title">{{ song.title }}</h3>
 				<div v-if="!isEditing" :class="$style.headerActions">
 					<NcButton
 						v-if="selectedFile"
 						variant="secondary"
-						:title="t('mobilesheetsmanager', 'Open the selected PDF in a new browser tab')"
+						:title="t('mobilesheetsmanager', 'Open in external viewer')"
+						:aria-label="t('mobilesheetsmanager', 'Open in external viewer')"
 						@click="openInExternalViewer">
-						{{ t('mobilesheetsmanager', 'Open in external viewer') }}
+						<template #icon>
+							<OpenInNewIcon :size="20" />
+						</template>
 					</NcButton>
-					<NcButton variant="secondary" @click="isEditing = true">
-						{{ t('mobilesheetsmanager', 'Edit song') }}
+					<NcButton
+						variant="secondary"
+						:title="t('mobilesheetsmanager', 'Edit song')"
+						:aria-label="t('mobilesheetsmanager', 'Edit song')"
+						@click="isEditing = true">
+						<template #icon>
+							<PencilIcon :size="20" />
+						</template>
 					</NcButton>
-					<NcButton variant="error" @click="isDeleteDialogOpen = true">
-						{{ t('mobilesheetsmanager', 'Delete song') }}
+					<NcButton
+						variant="error"
+						:title="t('mobilesheetsmanager', 'Delete song')"
+						:aria-label="t('mobilesheetsmanager', 'Delete song')"
+						@click="isDeleteDialogOpen = true">
+						<template #icon>
+							<DeleteIcon :size="20" />
+						</template>
 					</NcButton>
 				</div>
 			</div>
@@ -414,6 +442,7 @@ watch(isEditing, (editing) => {
 	margin: 0;
 	font-size: 1.2rem;
 	font-weight: 600;
+	flex: 1;
 	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
