@@ -20,38 +20,64 @@ export function formatArtists(song: Song, fallback = '—'): string {
 	return song.artists.map(a => a.name).join(', ')
 }
 
-export type SortKey = 'title' | 'composer' | 'book' | 'collection' | 'artist'
+export function formatDateTimestamp(timestamp?: number | null, fallback = '—'): string {
+	if (!timestamp || timestamp <= 0) return fallback
+	try {
+		return new Date(timestamp).toLocaleDateString(undefined, {
+			year: 'numeric',
+			month: 'short',
+			day: 'numeric',
+		})
+	} catch {
+		return fallback
+	}
+}
+
+export type SortKey = 'title' | 'composer' | 'book' | 'collection' | 'artist' | 'lastModified' | 'dateCreated'
 export type SortOrder = 'asc' | 'desc'
 
 export function sortSongs(songs: Song[], sortKey: SortKey, sortOrder: SortOrder): Song[] {
 	return [...songs].sort((a, b) => {
-		let valA = ''
-		let valB = ''
+		let cmp = 0
 
-		switch (sortKey) {
-			case 'title':
-				valA = a.title ?? ''
-				valB = b.title ?? ''
-				break
-			case 'composer':
-				valA = formatComposers(a, '')
-				valB = formatComposers(b, '')
-				break
-			case 'book':
-				valA = formatBooks(a, '')
-				valB = formatBooks(b, '')
-				break
-			case 'collection':
-				valA = formatCollections(a, '')
-				valB = formatCollections(b, '')
-				break
-			case 'artist':
-				valA = formatArtists(a, '')
-				valB = formatArtists(b, '')
-				break
+		if (sortKey === 'lastModified') {
+			const valA = a.lastModified ?? 0
+			const valB = b.lastModified ?? 0
+			cmp = valA - valB
+		} else if (sortKey === 'dateCreated') {
+			const valA = a.dateCreated ?? 0
+			const valB = b.dateCreated ?? 0
+			cmp = valA - valB
+		} else {
+			let valA = ''
+			let valB = ''
+
+			switch (sortKey) {
+				case 'title':
+					valA = a.title ?? ''
+					valB = b.title ?? ''
+					break
+				case 'composer':
+					valA = formatComposers(a, '')
+					valB = formatComposers(b, '')
+					break
+				case 'book':
+					valA = formatBooks(a, '')
+					valB = formatBooks(b, '')
+					break
+				case 'collection':
+					valA = formatCollections(a, '')
+					valB = formatCollections(b, '')
+					break
+				case 'artist':
+					valA = formatArtists(a, '')
+					valB = formatArtists(b, '')
+					break
+			}
+
+			cmp = valA.localeCompare(valB, undefined, { sensitivity: 'base', numeric: true })
 		}
 
-		const cmp = valA.localeCompare(valB, undefined, { sensitivity: 'base', numeric: true })
 		return sortOrder === 'asc' ? cmp : -cmp
 	})
 }

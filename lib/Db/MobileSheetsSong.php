@@ -25,6 +25,8 @@ class MobileSheetsSong {
 		public readonly array $books = [],
 		public readonly array $collections = [],
 		public readonly array $artists = [],
+		public readonly ?int $lastModified = null,
+		public readonly ?int $dateCreated = null,
 	) {
 	}
 }

@@ -152,7 +152,19 @@ class SongMapper {
 			}
 		}
 
-		$statement = $database->query('SELECT Songs.Id, Songs.Title FROM Songs ORDER BY Songs.Title COLLATE NOCASE ASC');
+		$songCols = $this->columnNames($database, 'Songs');
+		$hasLastModified = isset($songCols['lastmodified']);
+		$createdCol = isset($songCols['datecreated']) ? 'DateCreated' : (isset($songCols['creationdate']) ? 'CreationDate' : null);
+
+		$selectFields = ['Songs.Id', 'Songs.Title'];
+		if ($hasLastModified) {
+			$selectFields[] = 'Songs.LastModified';
+		}
+		if ($createdCol !== null) {
+			$selectFields[] = 'Songs.' . $createdCol . ' AS DateCreated';
+		}
+
+		$statement = $database->query('SELECT ' . implode(', ', $selectFields) . ' FROM Songs ORDER BY Songs.Title COLLATE NOCASE ASC');
 
 		$songs = [];
 		if ($statement !== false) {
@@ -167,6 +179,8 @@ class SongMapper {
 					$this->resolveEntities($songBooks[$songId] ?? [], $booksById),
 					$this->resolveEntities($songCollections[$songId] ?? [], $collectionsById),
 					$this->resolveEntities($songArtists[$songId] ?? [], $artistsById),
+					isset($row['LastModified']) && $row['LastModified'] !== null ? (int)$row['LastModified'] : null,
+					isset($row['DateCreated']) && $row['DateCreated'] !== null ? (int)$row['DateCreated'] : null,
 				);
 			}
 		}
@@ -190,18 +204,33 @@ class SongMapper {
 			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
 		]);
 
-		$statement = $database->prepare('SELECT 
-			s.Title,
-			s.Id,
-			g.Type as Genre,
-			c.Name AS Composer,
-			cs.ComposerId AS ComposerId,
-			coll.Name AS Collection,
-			colls.CollectionId AS CollectionId,
-			books.Title AS Book,
-			bookSongs.BookId AS BookId,
-			artist.Name AS Artist,
-			artistsSongs.ArtistId AS ArtistId
+		$songCols = $this->columnNames($database, 'Songs');
+		$hasLastModified = isset($songCols['lastmodified']);
+		$createdCol = isset($songCols['datecreated']) ? 'DateCreated' : (isset($songCols['creationdate']) ? 'CreationDate' : null);
+
+		$selectFields = [
+			's.Title',
+			's.Id',
+		];
+		if ($hasLastModified) {
+			$selectFields[] = 's.LastModified';
+		}
+		if ($createdCol !== null) {
+			$selectFields[] = 's.' . $createdCol . ' AS DateCreated';
+		}
+		$selectFields = array_merge($selectFields, [
+			'g.Type as Genre',
+			'c.Name AS Composer',
+			'cs.ComposerId AS ComposerId',
+			'coll.Name AS Collection',
+			'colls.CollectionId AS CollectionId',
+			'books.Title AS Book',
+			'bookSongs.BookId AS BookId',
+			'artist.Name AS Artist',
+			'artistsSongs.ArtistId AS ArtistId',
+		]);
+
+		$statement = $database->prepare('SELECT ' . implode(",\n\t\t\t", $selectFields) . '
 		FROM Songs s
 		LEFT JOIN ComposerSongs cs ON s.Id = cs.SongId
 		LEFT JOIN Composer c ON cs.ComposerId = c.Id
@@ -232,6 +261,8 @@ class SongMapper {
 				$songs[$rowSongId] = [
 					'id' => $rowSongId,
 					'title' => (string)$row['Title'],
+					'lastModified' => isset($row['LastModified']) && $row['LastModified'] !== null ? (int)$row['LastModified'] : null,
+					'dateCreated' => isset($row['DateCreated']) && $row['DateCreated'] !== null ? (int)$row['DateCreated'] : null,
 					'composers' => [],
 					'books' => [],
 					'collections' => [],
@@ -270,6 +301,8 @@ class SongMapper {
 				array_values($song['books']),
 				array_values($song['collections']),
 				array_values($song['artists']),
+				$song['lastModified'],
+				$song['dateCreated'],
 			);
 		}
 

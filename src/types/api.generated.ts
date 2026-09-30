@@ -886,6 +886,8 @@ export interface components {
             books?: components["schemas"]["Book"][];
             collections?: components["schemas"]["Collection"][];
             artists?: components["schemas"]["Artist"][];
+            lastModified?: number | null;
+            dateCreated?: number | null;
         };
         LibraryData: {
             songs: components["schemas"]["Song"][];

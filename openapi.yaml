@@ -612,6 +612,12 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Artist'
+        lastModified:
+          type: integer
+          nullable: true
+        dateCreated:
+          type: integer
+          nullable: true
 
     LibraryData:
       type: object

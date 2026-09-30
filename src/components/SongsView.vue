@@ -9,7 +9,10 @@
     @import="startImport"
     @import-nextcloud="startImportNextcloud"
     @toggle-filters="toggleFilterBar">
-    <SongViewToggle v-if="songIdInUrl === null" v-model:view-mode="viewMode" />
+    <div v-if="songIdInUrl === null" :class="$style.headerControls">
+      <SongSortControl v-model:sort-key="sortKey" v-model:sort-order="sortOrder" />
+      <SongViewToggle v-model:view-mode="viewMode" />
+    </div>
   </ViewHeader>
   <!-- Import reuses the create editor: the picked PDF is read for its metadata and
        staged as the new song's file. -->
@@ -105,6 +108,8 @@
         :songs="filteredSongs"
         :selected-song-ids="selectedSongIds"
         :is-filtered="isFiltered"
+        v-model:sort-key="sortKey"
+        v-model:sort-order="sortOrder"
         @view-song="openSongView"
         @edit-song="openSongEdit"
         @filter-entity="toggleFilter"
@@ -112,7 +117,7 @@
         @select-all="selectAll" />
       <SongCardView
         v-else-if="viewMode === 'cards'"
-        :songs="filteredSongs"
+        :songs="sortedSongs"
         :selected-song-ids="selectedSongIds"
         :is-filtered="isFiltered"
         @view-song="openSongView"
@@ -121,7 +126,7 @@
         @toggle-select-song="toggleSelect" />
       <SongSimpleListView
         v-else
-        :songs="filteredSongs"
+        :songs="sortedSongs"
         :selected-song-ids="selectedSongIds"
         :is-filtered="isFiltered"
         @view-song="openSongView"
@@ -157,10 +162,12 @@ import SongViewer from '../components/SongViewer.vue';
 import ViewHeader from '../components/ViewHeader.vue';
 import BatchSongEditorDialog, { type BatchUpdatePayload } from '../components/song-editor/BatchSongEditorDialog.vue';
 import type { Artist, Song, Composer, Book, Collection, LibraryData, SongPrefill } from '../types/song';
+import { sortSongs, type SortKey, type SortOrder } from '../utils/song-formatter';
 import { useSongFilters } from '../composables/useSongFilters';
 import { useSongSelection } from '../composables/useSongSelection';
 import { useLibraryData } from '../composables/useLibraryData';
 import { apiPost } from '../api/client';
+import SongSortControl from './songs/SongSortControl.vue';
 import SongViewToggle, { type ViewMode } from './songs/SongViewToggle.vue';
 import SongTableView from './songs/SongTableView.vue';
 import SongCardView from './songs/SongCardView.vue';
@@ -175,6 +182,22 @@ const viewMode = ref<ViewMode>(
 
 watch(viewMode, (newMode) => {
   localStorage.setItem('mobilesheetsmanager_song_view_mode', newMode);
+});
+
+const sortKey = ref<SortKey>(
+  (localStorage.getItem('mobilesheetsmanager_song_sort_key') as SortKey) || 'title'
+);
+
+const sortOrder = ref<SortOrder>(
+  (localStorage.getItem('mobilesheetsmanager_song_sort_order') as SortOrder) || 'asc'
+);
+
+watch(sortKey, (newKey) => {
+  localStorage.setItem('mobilesheetsmanager_song_sort_key', newKey);
+});
+
+watch(sortOrder, (newOrder) => {
+  localStorage.setItem('mobilesheetsmanager_song_sort_order', newOrder);
 });
 
 const {
@@ -246,6 +269,7 @@ const importInput = ref<HTMLInputElement>();
 
 // Computed filtered list
 const filteredSongs = computed(() => filterSongs(songs.value));
+const sortedSongs = computed(() => sortSongs(filteredSongs.value, sortKey.value, sortOrder.value));
 
 // Watch for library prop changes
 watch(() => props.selectedLibrary, (newLib) => {
@@ -484,5 +508,11 @@ async function handleDeleted(data: LibraryData | undefined, songId: number) {
   font-size: 0.9rem;
   color: var(--color-main-text);
   margin-right: auto;
+}
+
+.headerControls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 </style>

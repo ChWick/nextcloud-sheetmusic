@@ -4,14 +4,22 @@ import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import EyeIcon from 'vue-material-design-icons/Eye.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
-import { computed, ref } from 'vue'
-import { sortSongs, type SortKey, type SortOrder } from '../../utils/song-formatter'
+import { computed, ref, watch } from 'vue'
+import { formatDateTimestamp, sortSongs, type SortKey, type SortOrder } from '../../utils/song-formatter'
 
-const props = defineProps<{
-	songs: Song[]
-	selectedSongIds?: number[]
-	isFiltered?: (entityType: EntityType, id: number) => boolean
-}>()
+const props = withDefaults(
+	defineProps<{
+		songs: Song[]
+		selectedSongIds?: number[]
+		isFiltered?: (entityType: EntityType, id: number) => boolean
+		sortKey?: SortKey
+		sortOrder?: SortOrder
+	}>(),
+	{
+		sortKey: 'title',
+		sortOrder: 'asc',
+	}
+)
 
 const emit = defineEmits<{
 	'view-song': [song: Song]
@@ -19,26 +27,50 @@ const emit = defineEmits<{
 	'filter-entity': [entityType: EntityType, entity: FilterEntity]
 	'toggle-select-song': [songId: number]
 	'select-all': [songIds: number[]]
+	'update:sortKey': [key: SortKey]
+	'update:sortOrder': [order: SortOrder]
 }>()
 
-const sortKey = ref<SortKey>('title')
-const sortOrder = ref<SortOrder>('asc')
+const localSortKey = ref<SortKey>(props.sortKey)
+const localSortOrder = ref<SortOrder>(props.sortOrder)
+
+watch(
+	() => props.sortKey,
+	(newVal) => {
+		localSortKey.value = newVal
+	}
+)
+
+watch(
+	() => props.sortOrder,
+	(newVal) => {
+		localSortOrder.value = newVal
+	}
+)
 
 function toggleSort(key: SortKey) {
-	if (sortKey.value === key) {
-		sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
+	let newKey = key
+	let newOrder: SortOrder = 'asc'
+
+	if (localSortKey.value === key) {
+		newOrder = localSortOrder.value === 'asc' ? 'desc' : 'asc'
 	} else {
-		sortKey.value = key
-		sortOrder.value = 'asc'
+		newKey = key
+		newOrder = 'asc'
 	}
+
+	localSortKey.value = newKey
+	localSortOrder.value = newOrder
+	emit('update:sortKey', newKey)
+	emit('update:sortOrder', newOrder)
 }
 
 function sortIndicator(key: SortKey): string {
-	if (sortKey.value !== key) return ''
-	return sortOrder.value === 'asc' ? ' ▲' : ' ▼'
+	if (localSortKey.value !== key) return ''
+	return localSortOrder.value === 'asc' ? ' ▲' : ' ▼'
 }
 
-const sortedSongs = computed(() => sortSongs(props.songs, sortKey.value, sortOrder.value))
+const sortedSongs = computed(() => sortSongs(props.songs, localSortKey.value, localSortOrder.value))
 
 let touchTimer: ReturnType<typeof setTimeout> | null = null
 let touchStartPos = { x: 0, y: 0 }
@@ -123,6 +155,12 @@ function handleSongClick(song: Song, e: Event) {
 					</th>
 					<th :class="$style.sortableHeader" @click="toggleSort('artist')">
 						{{ t('mobilesheetsmanager', 'Artist') }}{{ sortIndicator('artist') }}
+					</th>
+					<th :class="$style.sortableHeader" @click="toggleSort('lastModified')">
+						{{ t('mobilesheetsmanager', 'Last modified') }}{{ sortIndicator('lastModified') }}
+					</th>
+					<th :class="$style.sortableHeader" @click="toggleSort('dateCreated')">
+						{{ t('mobilesheetsmanager', 'Created') }}{{ sortIndicator('dateCreated') }}
 					</th>
 					<th :class="$style.actionsHeader">
 						{{ t('mobilesheetsmanager', 'Actions') }}
@@ -211,6 +249,12 @@ function handleSongClick(song: Song, e: Event) {
 							</span>
 						</template>
 						<span v-else :class="$style.emptyText">—</span>
+					</td>
+					<td :class="$style.dateCell">
+						{{ formatDateTimestamp(song.lastModified) }}
+					</td>
+					<td :class="$style.dateCell">
+						{{ formatDateTimestamp(song.dateCreated) }}
 					</td>
 					<td :class="$style.actionsCell" @click.stop>
 						<div :class="$style.actionsGroup">
@@ -339,6 +383,12 @@ function handleSongClick(song: Song, e: Event) {
 
 .metaCell {
 	color: var(--color-text-maxcontrast);
+}
+
+.dateCell {
+	color: var(--color-text-maxcontrast);
+	white-space: nowrap;
+	font-size: 0.85rem;
 }
 
 .filterChip {

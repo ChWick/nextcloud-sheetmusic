@@ -61,4 +61,21 @@ describe('song-formatter utilities', () => {
 		const sorted = sortSongs(songs, 'composer', 'asc')
 		expect(sorted[0].id).toBe(2) // Bach comes before Mozart
 	})
+
+	it('sorts songs by lastModified and dateCreated', () => {
+		const songs: Song[] = [
+			{ id: 1, title: 'Song 1', lastModified: 2000, dateCreated: 100 },
+			{ id: 2, title: 'Song 2', lastModified: 1000, dateCreated: 300 },
+			{ id: 3, title: 'Song 3', lastModified: 3000, dateCreated: 200 },
+		]
+
+		const sortedByModAsc = sortSongs(songs, 'lastModified', 'asc')
+		expect(sortedByModAsc.map(s => s.id)).toEqual([2, 1, 3])
+
+		const sortedByModDesc = sortSongs(songs, 'lastModified', 'desc')
+		expect(sortedByModDesc.map(s => s.id)).toEqual([3, 1, 2])
+
+		const sortedByCreatedAsc = sortSongs(songs, 'dateCreated', 'asc')
+		expect(sortedByCreatedAsc.map(s => s.id)).toEqual([1, 3, 2])
+	})
 })
