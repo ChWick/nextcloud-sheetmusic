@@ -70,10 +70,7 @@ class SongFileService {
 			throw new \InvalidArgumentException('No file uploaded');
 		}
 
-		$fileName = basename((string)($fileInfo['name'] ?? 'song.pdf'));
-		if (!str_ends_with(strtolower($fileName), '.pdf')) {
-			throw new \InvalidArgumentException('Only PDF files are supported');
-		}
+		$fileName = basename((string)($fileInfo['name'] ?? 'song.file'));
 
 		$paths = $this->libraryService->getLibraryAndDatabasePath($user->getUID(), $libraryId);
 		if ($paths === null) {
@@ -114,10 +111,6 @@ class SongFileService {
 			throw new \InvalidArgumentException('Source path cannot be empty');
 		}
 		$sourcePath = '/' . ltrim($sourcePath, '/');
-
-		if (!str_ends_with(strtolower($sourcePath), '.pdf')) {
-			throw new \InvalidArgumentException('Only PDF files are supported');
-		}
 
 		$paths = $this->libraryService->getLibraryAndDatabasePath($user->getUID(), $libraryId);
 		if ($paths === null) {

@@ -242,7 +242,7 @@ describe('SongEditor.vue', () => {
 		expect(wrapper.text()).toContain('uploaded.pdf')
 	})
 
-	it('shows error when non-pdf file is selected for upload', async () => {
+	it('stages non-pdf files (e.g., .txt or .sib) on file input change', async () => {
 		const wrapper = mount(SongEditor, {
 			props: {
 				libraryId: 1,
@@ -263,7 +263,8 @@ describe('SongEditor.vue', () => {
 
 		await fileInput.trigger('change')
 
-		expect(wrapper.text()).toContain('Only PDF files are supported.')
+		expect(wrapper.text()).toContain('The file is added to the song when you save.')
+		expect(wrapper.text()).toContain('document.txt')
 	})
 
 	it('saves new song with existing entities and staged upload', async () => {

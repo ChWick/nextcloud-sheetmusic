@@ -81,9 +81,14 @@ const selectedFile = computed<SongFile | null>(() => {
 	return files.find((file) => String(file.id) === selectedFileId.value) ?? files[0] ?? null
 })
 
+const isNonPdfFile = computed(() => {
+	const path = selectedFile.value?.path ?? ''
+	return !path.toLowerCase().endsWith('.pdf')
+})
+
 /** Tab labels are kept short so that many files stay readable. */
 function getFileLabel(file: SongFile, index: number): string {
-	const name = getFileName(file.path).replace(/\.pdf$/i, '')
+	const name = getFileName(file.path)
 	const truncated = name.length > 30 ? `${name.slice(0, 29)}…` : name
 	return `${index + 1}. ${truncated}`
 }
@@ -175,6 +180,11 @@ async function renderSelectedFile() {
 		return
 	}
 
+	if (isNonPdfFile.value) {
+		isLoading.value = false
+		return
+	}
+
 	isLoading.value = true
 
 	try {
@@ -236,7 +246,7 @@ async function renderSelectedFile() {
 	} catch (error) {
 		console.error('Failed to load or render PDF:', error)
 		if (loadId === currentLoadId) {
-			errorMessage.value = t('mobilesheetsmanager', 'Could not load the selected song.')
+			errorMessage.value = t('mobilesheetsmanager', 'Could not load the selected file.')
 		}
 	} finally {
 		if (loadId === currentLoadId) {
@@ -368,12 +378,12 @@ watch(isEditing, (editing) => {
 			@updated="handleUpdated"
 			@cancel="isEditing = false" />
 
-		<!-- PDF Viewer View -->
+		<!-- PDF / File Viewer View -->
 		<template v-else>
 			<div v-if="songFiles.length > 1" :class="$style.fileTabs">
 				<NcRadioGroup
 					:model-value="selectedFileId"
-					:label="t('mobilesheetsmanager', 'PDF files of this song')"
+					:label="t('mobilesheetsmanager', 'Files of this song')"
 					hide-label
 					@update:model-value="selectFile">
 					<NcRadioGroupButton
@@ -394,7 +404,23 @@ watch(isEditing, (editing) => {
 			</p>
 
 			<div
-				v-show="song && !isLoading && !errorMessage"
+				v-if="song && !isLoading && !errorMessage && isNonPdfFile"
+				:class="$style.nonPdfContainer">
+				<p>{{ t('mobilesheetsmanager', 'This file format cannot be rendered in the embedded viewer.') }}</p>
+				<NcButton
+					variant="secondary"
+					:title="t('mobilesheetsmanager', 'Open in external viewer')"
+					:aria-label="t('mobilesheetsmanager', 'Open in external viewer')"
+					@click="openInExternalViewer">
+					<template #icon>
+						<OpenInNewIcon :size="20" />
+					</template>
+					{{ t('mobilesheetsmanager', 'Open file') }}
+				</NcButton>
+			</div>
+
+			<div
+				v-show="song && !isLoading && !errorMessage && !isNonPdfFile"
 				ref="pdfContainer"
 				:class="$style.pdfViewer"
 				:aria-label="song?.title" />
@@ -513,6 +539,21 @@ watch(isEditing, (editing) => {
 	border: 1px solid var(--color-border);
 	background: var(--color-background-dark);
 	padding: 16px;
+}
+
+.nonPdfContainer {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 16px;
+	height: 40vh;
+	border: 1px dashed var(--color-border);
+	border-radius: var(--border-radius-large, 8px);
+	background: var(--color-main-background);
+	color: var(--color-text-maxcontrast);
+	text-align: center;
+	padding: 24px;
 }
 
 .pdfViewer :global(.mobilesheetsmanager-pdf-page) {

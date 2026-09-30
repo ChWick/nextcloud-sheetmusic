@@ -20,7 +20,6 @@
   <input
     ref="importInput"
     type="file"
-    accept="application/pdf,.pdf"
     hidden
     @change="handleImportFile">
   <!-- The URL opens one song full screen ("?song=12"), for viewing it or - with the
@@ -359,16 +358,16 @@ function startImport() {
 
 /** Open Nextcloud file picker to import a PDF from internal storage. */
 async function startImportNextcloud() {
-  const picker = getFilePickerBuilder(t('mobilesheetsmanager', 'Select a PDF from Nextcloud'))
+  const picker = getFilePickerBuilder(t('mobilesheetsmanager', 'Select a file from Nextcloud'))
     .setMultiSelect(false)
-    .setFilter((node) => node.type !== 'file' || node.basename.toLowerCase().endsWith('.pdf'))
-    .setCanPick((node) => node.type === 'file' && node.basename.toLowerCase().endsWith('.pdf'))
+    .setFilter((node) => node.type !== 'file')
+    .setCanPick((node) => node.type === 'file')
     .setButtonFactory(([node]) => [{
       label: node
         ? t('mobilesheetsmanager', 'Import {file}', { file: node.basename })
-        : t('mobilesheetsmanager', 'Import a PDF'),
+        : t('mobilesheetsmanager', 'Import a file'),
       callback: () => {},
-      disabled: !node || node.type !== 'file' || !node.basename.toLowerCase().endsWith('.pdf'),
+      disabled: !node || node.type !== 'file',
       variant: 'primary',
     }])
     .build();

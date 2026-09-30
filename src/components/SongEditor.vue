@@ -271,11 +271,6 @@ function handleFileUpload(event: Event) {
 		return
 	}
 
-	if (!file.name.toLowerCase().endsWith('.pdf')) {
-		errorMessage.value = t('mobilesheetsmanager', 'Only PDF files are supported.')
-		return
-	}
-
 	errorMessage.value = ''
 	stageUpload(file)
 	successMessage.value = t('mobilesheetsmanager', 'The file is added to the song when you save.')
@@ -283,16 +278,16 @@ function handleFileUpload(event: Event) {
 
 async function openNextcloudPicker() {
 	errorMessage.value = ''
-	const picker = getFilePickerBuilder(t('mobilesheetsmanager', 'Select a PDF file for this song'))
+	const picker = getFilePickerBuilder(t('mobilesheetsmanager', 'Select a file for this song'))
 		.setMultiSelect(false)
-		.setFilter((node) => node.type !== 'file' || node.basename.toLowerCase().endsWith('.pdf'))
-		.setCanPick((node) => node.type === 'file' && node.basename.toLowerCase().endsWith('.pdf'))
+		.setFilter((node) => node.type !== 'file')
+		.setCanPick((node) => node.type === 'file')
 		.setButtonFactory(([node]) => [{
 			label: node
 				? t('mobilesheetsmanager', 'Select {file}', { file: node.basename })
-				: t('mobilesheetsmanager', 'Select a PDF'),
+				: t('mobilesheetsmanager', 'Select a file'),
 			callback: () => {},
-			disabled: !node || node.type !== 'file' || !node.basename.toLowerCase().endsWith('.pdf'),
+			disabled: !node || node.type !== 'file',
 			variant: 'primary',
 		}])
 		.build()
@@ -556,7 +551,7 @@ async function saveSong(closeAfter: boolean) {
 			</div>
 
 			<div :class="$style.fileSection">
-				<label :class="$style.label">{{ t('mobilesheetsmanager', 'Attached PDF Files') }}</label>
+				<label :class="$style.label">{{ t('mobilesheetsmanager', 'Attached Files') }}</label>
 
 				<ul v-if="currentFiles.length > 0" :class="$style.fileList">
 					<SongFileListItem
@@ -568,7 +563,7 @@ async function saveSong(closeAfter: boolean) {
 						@delete="stageDeleteFile" />
 				</ul>
 				<p v-else :class="$style.noFiles">
-					{{ t('mobilesheetsmanager', 'No PDF files attached to this song.') }}
+					{{ t('mobilesheetsmanager', 'No files attached to this song.') }}
 				</p>
 
 				<SongPendingNotice
@@ -582,15 +577,14 @@ async function saveSong(closeAfter: boolean) {
 					<input
 						ref="fileInput"
 						type="file"
-						accept=".pdf,application/pdf"
 						style="display: none;"
 						@change="handleFileUpload">
 					<NcButton
 						type="button"
 						variant="secondary"
 						:disabled="isSaving"
-						:title="t('mobilesheetsmanager', 'Upload PDF from computer')"
-						:aria-label="t('mobilesheetsmanager', 'Upload PDF from computer')"
+						:title="t('mobilesheetsmanager', 'Upload file from computer')"
+						:aria-label="t('mobilesheetsmanager', 'Upload file from computer')"
 						@click="fileInput?.click()">
 						<template #icon>
 							<UploadIcon :size="20" />
@@ -601,8 +595,8 @@ async function saveSong(closeAfter: boolean) {
 						type="button"
 						variant="secondary"
 						:disabled="isSaving"
-						:title="t('mobilesheetsmanager', 'Choose PDF from Nextcloud')"
-						:aria-label="t('mobilesheetsmanager', 'Choose PDF from Nextcloud')"
+						:title="t('mobilesheetsmanager', 'Choose file from Nextcloud')"
+						:aria-label="t('mobilesheetsmanager', 'Choose file from Nextcloud')"
 						@click="openNextcloudPicker">
 						<template #icon>
 							<FolderIcon :size="20" />

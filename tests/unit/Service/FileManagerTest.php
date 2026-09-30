@@ -568,6 +568,33 @@ final class FileManagerTest extends TestCase {
 		self::assertSame('B', $this->files['Noten/Miles/Miles - Real Book/002 Miles - Real Book - Blue.pdf']);
 	}
 
+	public function testDoesNotPrependNumberPrefixIfFileExtensionsDiffer(): void {
+		$song = new MobileSheetsSong(
+			3,
+			'Blue',
+			[
+				new MobileSheetsFile(31, $this->sourceWebdav('Noten/source/sheet.pdf')),
+				new MobileSheetsFile(32, $this->sourceWebdav('Noten/source/audio.mid')),
+			],
+			[new MobileSheetsComposer(10, 'Miles')],
+			[new MobileSheetsBook(100, 'Real Book')],
+			[],
+			[],
+		);
+		$this->files = [
+			'Noten/source/sheet.pdf' => 'PDF Content',
+			'Noten/source/audio.mid' => 'MIDI Content',
+		];
+
+		$this->regenerate($song, 'Noten/source/sheet.pdf', 31);
+		$this->regenerate($song, 'Noten/source/audio.mid', 32);
+
+		self::assertSame([
+			['from' => 'Noten/source/sheet.pdf', 'to' => 'Noten/Miles/Miles - Real Book/Miles - Real Book - Blue.pdf'],
+			['from' => 'Noten/source/audio.mid', 'to' => 'Noten/Miles/Miles - Real Book/Miles - Real Book - Blue.mid'],
+		], $this->moves);
+	}
+
 	public function testUpdatesTheHashCodesFileWhenAFileIsMoved(): void {
 		$hashFile = $this->writeHashCodesFile([
 			[$this->sourceWebdav('Noten/source/SomeFile.pdf'), '561292453', '1789312275000', '839797'],

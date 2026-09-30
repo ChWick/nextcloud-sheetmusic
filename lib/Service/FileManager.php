@@ -29,7 +29,10 @@ function getFileExtension(string $filename): string {
  * Zero-padded index prefix used to tell the files of a multi-file song apart,
  * e.g. "001 " producing "001 Miles - Real Book - Blue.pdf".
  *
- * A song with a single file keeps its plain, unprefixed name.
+ * Files with different extensions (e.g. .pdf and .mid) do not compete for the
+ * same file name and keep their plain, unprefixed name.
+ *
+ * A song with a single file (or only one file for given extension) keeps its plain, unprefixed name.
  */
 function fileIndexPrefix(?int $fileIndex, int $fileCount): string {
 	if ($fileIndex === null || $fileCount < 2) {
@@ -39,15 +42,36 @@ function fileIndexPrefix(?int $fileIndex, int $fileCount): string {
 	return sprintf('%03d ', $fileIndex);
 }
 
-/** 1-based position of $file within $song, or null when it is not listed there. */
+/**
+ * 1-based position of $file within $song among files sharing the same extension,
+ * or null when it is not listed there.
+ */
 function fileIndexOf(MobileSheetsSong $song, MobileSheetsFile $file): ?int {
-	foreach ($song->files as $position => $candidate) {
-		if ($candidate->id === $file->id) {
-			return $position + 1;
+	$ext = strtolower(getFileExtension($file->path));
+	$position = 0;
+	foreach ($song->files as $candidate) {
+		if (strtolower(getFileExtension($candidate->path)) === $ext) {
+			$position++;
+			if ($candidate->id === $file->id) {
+				return $position;
+			}
 		}
 	}
 
 	return null;
+}
+
+/** Number of files in $song sharing the same extension as $file. */
+function fileCountForExtension(MobileSheetsSong $song, MobileSheetsFile $file): int {
+	$ext = strtolower(getFileExtension($file->path));
+	$count = 0;
+	foreach ($song->files as $candidate) {
+		if (strtolower(getFileExtension($candidate->path)) === $ext) {
+			$count++;
+		}
+	}
+
+	return $count;
 }
 
 function createWithComposerOrArtist(MobileSheetsSong $song, string $ext, string $filePrefix = ''): string {
@@ -451,7 +475,7 @@ class FileManager {
 			$song,
 			getFileExtension($file->path),
 			fileIndexOf($song, $file),
-			count($song->files),
+			fileCountForExtension($song, $file),
 		);
 
 		// The four path variants:
