@@ -1,0 +1,125 @@
+<?php
+
+declare(strict_types=1);
+
+namespace OCA\MobileSheetsManager\Controller;
+
+use OCA\MobileSheetsManager\Service\EntityService;
+use OCP\AppFramework\Http;
+use OCP\AppFramework\Http\Attribute\ApiRoute;
+use OCP\AppFramework\Http\Attribute\NoAdminRequired;
+use OCP\AppFramework\Http\DataResponse;
+use OCP\AppFramework\OCSController;
+use OCP\IRequest;
+use OCP\IUserSession;
+
+class EntityController extends OCSController {
+	public function __construct(
+		string $appName,
+		IRequest $request,
+		private EntityService $entityService,
+		private IUserSession $userSession,
+	) {
+		parent::__construct($appName, $request);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/composers')]
+	public function createComposer(?int $libraryId = null, ?string $name = null): DataResponse {
+		$name = $name ?? (string)$this->request->getParam('name', '');
+		return $this->handleCreate('composer', $libraryId, $name);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/books')]
+	public function createBook(?int $libraryId = null, ?string $title = null): DataResponse {
+		$title = $title ?? (string)$this->request->getParam('title', '');
+		return $this->handleCreate('book', $libraryId, $title);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/collections')]
+	public function createCollection(?int $libraryId = null, ?string $name = null): DataResponse {
+		$name = $name ?? (string)$this->request->getParam('name', '');
+		return $this->handleCreate('collection', $libraryId, $name);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/artists')]
+	public function createArtist(?int $libraryId = null, ?string $name = null): DataResponse {
+		$name = $name ?? (string)$this->request->getParam('name', '');
+		return $this->handleCreate('artist', $libraryId, $name);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'DELETE', url: '/api/composers/{id}')]
+	public function deleteComposer(int $id, ?int $libraryId = null): DataResponse {
+		return $this->handleDelete('composers', $id, $libraryId);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'DELETE', url: '/api/books/{id}')]
+	public function deleteBook(int $id, ?int $libraryId = null): DataResponse {
+		return $this->handleDelete('books', $id, $libraryId);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'DELETE', url: '/api/collections/{id}')]
+	public function deleteCollection(int $id, ?int $libraryId = null): DataResponse {
+		return $this->handleDelete('collections', $id, $libraryId);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'DELETE', url: '/api/artists/{id}')]
+	public function deleteArtist(int $id, ?int $libraryId = null): DataResponse {
+		return $this->handleDelete('artists', $id, $libraryId);
+	}
+
+	private function handleCreate(string $type, ?int $libraryId, string $value): DataResponse {
+		if ($libraryId === null || trim($value) === '') {
+			return new DataResponse([], Http::STATUS_BAD_REQUEST);
+		}
+
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		try {
+			$result = $this->entityService->createEntity($user, $libraryId, $type, $value);
+			if ($result === null) {
+				return new DataResponse([], Http::STATUS_NOT_FOUND);
+			}
+
+			return new DataResponse($result, Http::STATUS_CREATED);
+		} catch (\Throwable $e) {
+			return new DataResponse([], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	/**
+	 * @param 'composers'|'books'|'collections'|'artists' $type
+	 */
+	private function handleDelete(string $type, int $id, ?int $libraryId): DataResponse {
+		if ($libraryId === null) {
+			return new DataResponse([], Http::STATUS_BAD_REQUEST);
+		}
+
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		try {
+			$result = $this->entityService->deleteEntity($user, $libraryId, $type, $id);
+			if ($result === null) {
+				return new DataResponse([], Http::STATUS_NOT_FOUND);
+			}
+
+			return new DataResponse($result);
+		} catch (\Throwable $e) {
+			return new DataResponse([], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+}
+
