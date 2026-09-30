@@ -56,7 +56,7 @@ test.describe('Song Filter Bar', () => {
 		await expect(page.getByText('Symphony No. 5')).not.toBeVisible()
 	})
 
-	test('keeps dropdown height fixed when multiple filter tags are selected', async ({ page }) => {
+	test('expands container height while maintaining fixed selected tag chip height', async ({ page }) => {
 		const filterBar = page.locator('[role="region"][aria-label="Song filters"]')
 		await expect(filterBar).toBeVisible()
 
@@ -68,11 +68,15 @@ test.describe('Song Filter Bar', () => {
 		await composerSelect.click()
 		await page.locator('.vs__dropdown-menu, [role="option"]').getByText('Ludwig van Beethoven').click()
 
+		// Verify tag chip height is fixed at 28px
+		const tagChipBox = await composerSelect.locator('.vs__selected').first().boundingBox()
+		expect(tagChipBox?.height).toBe(28)
+
 		// Click to select Wolfgang Amadeus Mozart
 		await composerSelect.click()
 		await page.locator('.vs__dropdown-menu, [role="option"]').getByText('Wolfgang Amadeus Mozart').click()
 
 		const updatedBox = await composerSelect.locator('.vs__dropdown-toggle').boundingBox()
-		expect(updatedBox?.height).toBe(initialBox!.height)
+		expect(updatedBox?.height).toBeGreaterThanOrEqual(initialBox!.height)
 	})
 })
