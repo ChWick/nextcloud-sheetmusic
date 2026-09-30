@@ -3,7 +3,7 @@ import type { Artist, Book, Collection, Composer, LibraryData, Song, SongFile } 
 
 import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
-import { generateOcsUrl } from '@nextcloud/router'
+import { generateFilePath, generateOcsUrl } from '@nextcloud/router'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
@@ -186,7 +186,18 @@ async function renderSelectedFile() {
 			return
 		}
 
-		const pdf = await getDocument({ data: response.data }).promise
+		const pdfData = response.data instanceof ArrayBuffer ? new Uint8Array(response.data) : response.data
+		const wasmUrl = typeof generateFilePath === 'function' ? generateFilePath('mobilesheetsmanager', 'js', 'pdfjs/wasm/') : new URL('pdfjs-dist/wasm/', import.meta.url).href
+		const cMapUrl = typeof generateFilePath === 'function' ? generateFilePath('mobilesheetsmanager', 'js', 'pdfjs/cmaps/') : new URL('pdfjs-dist/cmaps/', import.meta.url).href
+		const standardFontDataUrl = typeof generateFilePath === 'function' ? generateFilePath('mobilesheetsmanager', 'js', 'pdfjs/standard_fonts/') : new URL('pdfjs-dist/standard_fonts/', import.meta.url).href
+
+		const pdf = await getDocument({
+			data: pdfData,
+			cMapUrl,
+			cMapPacked: true,
+			standardFontDataUrl,
+			wasmUrl,
+		}).promise
 
 		if (loadId !== currentLoadId) {
 			return
@@ -206,13 +217,24 @@ async function renderSelectedFile() {
 			const page = await pdf.getPage(pageNumber)
 			const viewport = page.getViewport({ scale: 1.25 })
 			const canvas = document.createElement('canvas')
-			canvas.width = viewport.width
-			canvas.height = viewport.height
+			canvas.width = Math.floor(viewport.width)
+			canvas.height = Math.floor(viewport.height)
 			canvas.className = 'mobilesheetsmanager-pdf-page'
 			pdfContainer.value?.append(canvas)
-			await page.render({ canvas, viewport }).promise
+
+			const canvasContext = canvas.getContext('2d')
+			if (canvasContext) {
+				canvasContext.fillStyle = '#ffffff'
+				canvasContext.fillRect(0, 0, canvas.width, canvas.height)
+				await page.render({
+					canvasContext,
+					viewport,
+					background: 'rgb(255, 255, 255)',
+				}).promise
+			}
 		}
-	} catch {
+	} catch (error) {
+		console.error('Failed to load or render PDF:', error)
 		if (loadId === currentLoadId) {
 			errorMessage.value = t('mobilesheetsmanager', 'Could not load the selected song.')
 		}
@@ -496,7 +518,7 @@ watch(isEditing, (editing) => {
 	max-width: 100%;
 	height: auto;
 	margin: 0 auto 16px;
-	background: white;
+	background-color: #ffffff !important;
 }
 
 .error {
