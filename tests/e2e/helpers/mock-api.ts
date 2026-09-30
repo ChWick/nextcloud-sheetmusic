@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test'
 
 export const mockLibraries = [
 	{ id: 1, path: '/dav/files/admin/Noten/MobileSheets.db' },
+	{ id: 2, path: '/dav/files/admin/Noten/Secondary.db' },
 ]
 
 export const mockComposers = [
@@ -45,32 +46,25 @@ export const mockSongs = [
 	},
 ]
 
+export const mockSyncLog = [
+	{ songId: 5, level: 'info', message: 'Checked 1 file for Symphony No. 5.' },
+	{ songId: 6, level: 'warning', message: 'Found extra file path Requiem.pdf.' },
+	{ songId: 0, level: 'error', message: 'Missing file on disk: Beethoven - Missing.pdf' },
+]
+
 export async function setupMockApi(page: Page) {
 	// Mock libraries list endpoint
-	await page.route('**/api/libraries', async (route) => {
-		if (route.request().method() === 'GET') {
-			await route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
-					ocs: {
-						meta: { status: 'ok', statuscode: 200 },
-						data: { libraries: mockLibraries },
-					},
-				}),
-			})
-		} else {
-			await route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
-					ocs: {
-						meta: { status: 'ok', statuscode: 200 },
-						data: { libraries: mockLibraries },
-					},
-				}),
-			})
-		}
+	await page.route('**/api/libraries**', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				ocs: {
+					meta: { status: 'ok', statuscode: 200 },
+					data: { libraries: mockLibraries },
+				},
+			}),
+		})
 	})
 
 	// Mock songs / library data endpoint
@@ -87,7 +81,56 @@ export async function setupMockApi(page: Page) {
 						books: mockBooks,
 						collections: mockCollections,
 						artists: mockArtists,
+						createdSongId: 99,
 					},
+				},
+			}),
+		})
+	})
+
+	// Mock sync library endpoint
+	await page.route('**/api/sync-library', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				ocs: {
+					meta: { status: 'ok', statuscode: 200 },
+					data: { log: mockSyncLog },
+				},
+			}),
+		})
+	})
+
+	// Mock batch update songs endpoint
+	await page.route('**/api/batch-update-songs', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				ocs: {
+					meta: { status: 'ok', statuscode: 200 },
+					data: {
+						songs: mockSongs,
+						composers: mockComposers,
+						books: mockBooks,
+						collections: mockCollections,
+						artists: mockArtists,
+					},
+				},
+			}),
+		})
+	})
+
+	// Mock entity creation endpoints
+	await page.route('**/api/composers', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				ocs: {
+					meta: { status: 'ok', statuscode: 200 },
+					data: { id: 999 },
 				},
 			}),
 		})

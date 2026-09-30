@@ -95,7 +95,8 @@ onMounted(async () => {
 })
 
 /*** Dialog helpers ***/
-function openDialog() {
+function openDialog(event?: Event) {
+  event?.preventDefault()
   selectedFile.value = undefined
   fileError.value = ''
   isDialogOpen.value = true
@@ -189,55 +190,57 @@ async function deleteLibrary() {
 </script>
 
 <template>
-  <NcContent app-name="mobilesheetsmanager">
-    <!-- Sidebar (navigation) -->
-    <NcAppNavigation :aria-label="t('mobilesheetsmanager', 'MobileSheets libraries')">
-      <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Library')">
-        <select v-model="selectedLibrary" :class="$style.librarySelect" @change="navigateToLibrary(selectedLibrary)">
-          <option disabled value="-1">{{ t('mobilesheetsmanager', 'Select library') }}</option>
-          <option v-for="library in libraries" :key="library.id" :value="library.id">{{ library.path }}</option>
-        </select>
-      </NcAppNavigationItem>
-
-      <!-- view toggle – only for the selected library; choosing one starts without filters -->
-      <template v-if="selectedLibrary >= 0">
-        <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Songs')" :active="selectedView === 'songs'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'songs' } }" />
-        <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Composers')" :active="selectedView === 'composers'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'composers' } }" />
-        <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Artists')" :active="selectedView === 'artists'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'artists' } }" />
-        <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Books')" :active="selectedView === 'books'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'books' } }" />
-        <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Collections')" :active="selectedView === 'collections'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'collections' } }" />
-        <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Files')" :active="selectedView === 'files'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'files' } }" />
-
-        <div :class="$style.deleteLibraryArea">
-          <NcButton type="button"
-                    variant="error"
-                    :class="$style.deleteLibraryButton"
-                    @click="openDeleteDialog">
-            {{ t('mobilesheetsmanager', 'Delete library') }}
-          </NcButton>
-        </div>
-      </template>
-
-      <template #footer>
-        <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Add MobileSheets Library')" @click="openDialog">
-          <template #icon><span aria-hidden="true">+</span></template>
+  <div id="mobilesheetsmanager">
+    <NcContent app-name="mobilesheetsmanager">
+      <!-- Sidebar (navigation) -->
+      <NcAppNavigation :aria-label="t('mobilesheetsmanager', 'MobileSheets libraries')">
+        <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Library')">
+          <select v-model="selectedLibrary" :class="$style.librarySelect" @change="navigateToLibrary(selectedLibrary)">
+            <option disabled value="-1">{{ t('mobilesheetsmanager', 'Select library') }}</option>
+            <option v-for="library in libraries" :key="library.id" :value="library.id">{{ library.path }}</option>
+          </select>
         </NcAppNavigationItem>
-      </template>
-    </NcAppNavigation>
 
-    <!-- Main content -->
-    <NcAppContent>
-      <template v-if="selectedLibrary >= 0">
-        <SongsView v-if="selectedView === 'songs'" :selectedLibrary="selectedLibrary" />
-        <FilesView v-else-if="selectedView === 'files'" :selectedLibrary="selectedLibrary" />
-        <EntitiesView v-else
-                      :key="selectedView"
-                      :selectedLibrary="selectedLibrary"
-                      :entity-type="selectedView" />
-      </template>
+        <!-- view toggle – only for the selected library; choosing one starts without filters -->
+        <template v-if="selectedLibrary >= 0">
+          <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Songs')" :active="selectedView === 'songs'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'songs' } }" />
+          <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Composers')" :active="selectedView === 'composers'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'composers' } }" />
+          <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Artists')" :active="selectedView === 'artists'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'artists' } }" />
+          <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Books')" :active="selectedView === 'books'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'books' } }" />
+          <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Collections')" :active="selectedView === 'collections'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'collections' } }" />
+          <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Files')" :active="selectedView === 'files'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'files' } }" />
 
-      <p v-if="fileError" :class="$style.contentError" role="alert">{{ fileError }}</p>
-    </NcAppContent>
+          <div :class="$style.deleteLibraryArea">
+            <NcButton type="button"
+                      variant="error"
+                      :class="$style.deleteLibraryButton"
+                      @click="openDeleteDialog">
+              {{ t('mobilesheetsmanager', 'Delete library') }}
+            </NcButton>
+          </div>
+        </template>
+
+        <template #footer>
+          <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Add MobileSheets Library')" @click="openDialog">
+            <template #icon><span aria-hidden="true">+</span></template>
+          </NcAppNavigationItem>
+        </template>
+      </NcAppNavigation>
+
+      <!-- Main content -->
+      <NcAppContent>
+        <template v-if="selectedLibrary >= 0">
+          <SongsView v-if="selectedView === 'songs'" :selectedLibrary="selectedLibrary" />
+          <FilesView v-else-if="selectedView === 'files'" :selectedLibrary="selectedLibrary" />
+          <EntitiesView v-else
+                        :key="selectedView"
+                        :selectedLibrary="selectedLibrary"
+                        :entity-type="selectedView" />
+        </template>
+
+        <p v-if="fileError" :class="$style.contentError" role="alert">{{ fileError }}</p>
+      </NcAppContent>
+    </NcContent>
 
     <NcDialog v-if="isDialogOpen"
               :name="t('mobilesheetsmanager', 'Add MobileSheets Library')"
@@ -268,7 +271,7 @@ async function deleteLibrary() {
         </NcButton>
       </div>
     </NcDialog>
-  </NcContent>
+  </div>
 </template>
 
 <style module>
