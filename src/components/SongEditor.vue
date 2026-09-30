@@ -18,6 +18,7 @@ import CheckIcon from 'vue-material-design-icons/Check.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 import ContentSaveOutlineIcon from 'vue-material-design-icons/ContentSaveOutline.vue'
 import FolderIcon from 'vue-material-design-icons/Folder.vue'
+import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import UploadIcon from 'vue-material-design-icons/Upload.vue'
 import AttachNextcloudFileDialog from './song-editor/AttachNextcloudFileDialog.vue'
 import SongFileListItem from './song-editor/SongFileListItem.vue'
@@ -485,22 +486,20 @@ async function saveSong(closeAfter: boolean) {
 
 <template>
 	<div :class="$style.editor">
-		<div :class="$style.header">
-			<h3>{{ isNewSong ? t('mobilesheetsmanager', 'New Song') : t('mobilesheetsmanager', 'Edit Song') }}</h3>
-		</div>
-
 		<form :class="$style.form" @submit.prevent="saveSong(true)">
-			<div :class="$style.formGroup">
-				<label :class="$style.label" for="song-title-input">{{ t('mobilesheetsmanager', 'Song Title') }}</label>
-				<NcTextField
-					id="song-title-input"
-					v-model="title"
-					:placeholder="t('mobilesheetsmanager', 'Enter song title')"
-					required />
+			<div :class="$style.header">
+				<PencilIcon v-if="!isNewSong" :size="20" :class="$style.editIndicator" />
+				<div :class="$style.titleInputWrapper">
+					<NcTextField
+						id="song-title-input"
+						v-model="title"
+						:placeholder="isNewSong ? t('mobilesheetsmanager', 'New Song') : t('mobilesheetsmanager', 'Enter song title')"
+						:label="t('mobilesheetsmanager', 'Song Title')"
+						required />
+				</div>
 			</div>
 
 			<div :class="$style.formGroup">
-				<label :class="$style.label">{{ t('mobilesheetsmanager', 'Composers') }}</label>
 				<NcSelect
 					v-model="selectedComposers"
 					:options="composers"
@@ -515,7 +514,6 @@ async function saveSong(closeAfter: boolean) {
 			</div>
 
 			<div :class="$style.formGroup">
-				<label :class="$style.label">{{ t('mobilesheetsmanager', 'Books / Albums') }}</label>
 				<NcSelect
 					v-model="selectedBooks"
 					:options="books"
@@ -530,7 +528,6 @@ async function saveSong(closeAfter: boolean) {
 			</div>
 
 			<div :class="$style.formGroup">
-				<label :class="$style.label">{{ t('mobilesheetsmanager', 'Collections') }}</label>
 				<NcSelect
 					v-model="selectedCollections"
 					:options="collections"
@@ -545,7 +542,6 @@ async function saveSong(closeAfter: boolean) {
 			</div>
 
 			<div :class="$style.formGroup">
-				<label :class="$style.label">{{ t('mobilesheetsmanager', 'Artists') }}</label>
 				<NcSelect
 					v-model="selectedArtists"
 					:options="artists"
@@ -679,14 +675,24 @@ async function saveSong(closeAfter: boolean) {
 }
 
 .header {
+	display: flex;
+	align-items: center;
+	gap: 12px;
 	margin-bottom: 20px;
 	padding-bottom: 10px;
 	border-bottom: 1px solid var(--color-border);
 }
 
-.header h3 {
-	margin: 0;
-	font-size: 1.3rem;
+.titleInputWrapper {
+	flex: 1;
+	min-width: 0;
+}
+
+.editIndicator {
+	color: var(--color-text-maxcontrast);
+	display: inline-flex;
+	align-items: center;
+	flex-shrink: 0;
 }
 
 .form {

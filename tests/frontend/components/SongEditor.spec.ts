@@ -69,7 +69,7 @@ describe('SongEditor.vue', () => {
 					props: ['disabled', 'type', 'variant', 'title', 'ariaLabel'],
 				},
 				NcTextField: {
-					template: '<input :id="id" :value="value !== undefined ? value : modelValue" @input="$emit(\'update:value\', $event.target.value); $emit(\'update:modelValue\', $event.target.value)" />',
+					template: '<input :id="id" :placeholder="placeholder" :value="value !== undefined ? value : modelValue" @input="$emit(\'update:value\', $event.target.value); $emit(\'update:modelValue\', $event.target.value)" />',
 					props: ['id', 'value', 'modelValue', 'placeholder', 'required'],
 				},
 				NcSelect: {
@@ -90,7 +90,7 @@ describe('SongEditor.vue', () => {
 		vi.resetAllMocks()
 	})
 
-	it('renders header for New Song when song prop is null', () => {
+	it('renders title input for New Song when song prop is null', () => {
 		const wrapper = mount(SongEditor, {
 			props: {
 				libraryId: 1,
@@ -102,11 +102,13 @@ describe('SongEditor.vue', () => {
 			...globalStubs,
 		})
 
-		expect(wrapper.find('h3').text()).toBe('New Song')
+		const input = wrapper.find('input#song-title-input')
+		expect(input.exists()).toBe(true)
+		expect(input.attributes('placeholder')).toBe('New Song')
 		expect(wrapper.html()).toContain('Create song')
 	})
 
-	it('renders header for Edit Song when song prop is provided', () => {
+	it('renders title input with song title when song prop is provided', () => {
 		const wrapper = mount(SongEditor, {
 			props: {
 				song: mockExistingSong,
@@ -119,7 +121,9 @@ describe('SongEditor.vue', () => {
 			...globalStubs,
 		})
 
-		expect(wrapper.find('h3').text()).toBe('Edit Song')
+		const input = wrapper.find('input#song-title-input')
+		expect(input.exists()).toBe(true)
+		expect((input.element as HTMLInputElement).value).toBe('Symphony No. 5')
 		expect(wrapper.html()).toContain('Save and Close')
 		expect(wrapper.text()).toContain('Beethoven - Symphony 5.pdf')
 	})
