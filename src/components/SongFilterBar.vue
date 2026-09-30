@@ -85,7 +85,7 @@ function clearAllFilters() {
 			<NcTextField
 				:model-value="searchTitle"
 				:placeholder="t('mobilesheetsmanager', 'Search by title…')"
-				:input-label="t('mobilesheetsmanager', 'Search title')"
+				:label="t('mobilesheetsmanager', 'Search title')"
 				:class="$style.input"
 				@update:model-value="emit('update:searchTitle', $event)" />
 		</div>
