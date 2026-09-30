@@ -231,8 +231,8 @@ function clearAllFilters() {
 }
 
 .filterBar .select :global(.vs__dropdown-toggle) {
-	height: var(--default-clickable-area, 44px);
 	min-height: var(--default-clickable-area, 44px);
+	height: auto;
 	box-sizing: border-box;
 }
 

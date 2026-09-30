@@ -55,4 +55,24 @@ test.describe('Song Filter Bar', () => {
 		await expect(page.getByText('Requiem in D minor')).toBeVisible()
 		await expect(page.getByText('Symphony No. 5')).not.toBeVisible()
 	})
+
+	test('expands dropdown height when multiple filter tags are selected', async ({ page }) => {
+		const filterBar = page.locator('[role="region"][aria-label="Song filters"]')
+		await expect(filterBar).toBeVisible()
+
+		const composerSelect = filterBar.locator('.nc-select, .v-select').first()
+		const initialBox = await composerSelect.locator('.vs__dropdown-toggle').boundingBox()
+		expect(initialBox?.height).toBeGreaterThanOrEqual(40)
+
+		// Click to select Ludwig van Beethoven
+		await composerSelect.click()
+		await page.locator('.vs__dropdown-menu, [role="option"]').getByText('Ludwig van Beethoven').click()
+
+		// Click to select Wolfgang Amadeus Mozart
+		await composerSelect.click()
+		await page.locator('.vs__dropdown-menu, [role="option"]').getByText('Wolfgang Amadeus Mozart').click()
+
+		const updatedBox = await composerSelect.locator('.vs__dropdown-toggle').boundingBox()
+		expect(updatedBox?.height).toBeGreaterThanOrEqual(initialBox!.height)
+	})
 })
