@@ -279,9 +279,11 @@ watch(
 	{ immediate: true },
 )
 
-// Catch up on the render that the open editor deferred, e.g. after a file was uploaded.
+// The v-if that hides the PDF while editing destroys every rendered canvas, so the
+// viewer must always re-render when the editor closes - not only for deferred song
+// changes.
 watch(isEditing, (editing) => {
-	if (!editing && renderDeferred) {
+	if (!editing) {
 		renderDeferred = false
 		renderSelectedFile()
 	}
