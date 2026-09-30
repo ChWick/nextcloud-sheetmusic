@@ -193,7 +193,7 @@ async function deleteLibrary() {
     <!-- Sidebar (navigation) -->
     <NcAppNavigation :aria-label="t('mobilesheetsmanager', 'MobileSheets libraries')">
       <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Library')">
-        <select v-model="selectedLibrary" @change="navigateToLibrary(selectedLibrary)" class="$style.librarySelect">
+        <select v-model="selectedLibrary" :class="$style.librarySelect" @change="navigateToLibrary(selectedLibrary)">
           <option disabled value="-1">{{ t('mobilesheetsmanager', 'Select library') }}</option>
           <option v-for="library in libraries" :key="library.id" :value="library.id">{{ library.path }}</option>
         </select>

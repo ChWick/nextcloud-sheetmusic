@@ -232,6 +232,7 @@ function handleSongClick(song: Song, e: Event) {
 	max-width: 100%;
 	min-width: 0;
 	overflow-x: auto;
+	scrollbar-gutter: stable;
 	scrollbar-width: thin;
 	scrollbar-color: var(--color-border) transparent;
 	border: 1px solid var(--color-border);

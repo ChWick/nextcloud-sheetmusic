@@ -307,6 +307,7 @@ async function deleteEntity() {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  min-width: 0;
 }
 .filterBarWrapper {
   margin-bottom: 4px;
@@ -321,6 +322,7 @@ async function deleteEntity() {
   align-items: center;
   gap: 8px;
   border-bottom: 1px solid var(--color-border);
+  min-width: 0;
 }
 .entityButton {
   flex: 1;
@@ -331,6 +333,10 @@ async function deleteEntity() {
   font: inherit;
   text-align: start;
   cursor: pointer;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .entityButton:hover {
   background: var(--color-background-hover);

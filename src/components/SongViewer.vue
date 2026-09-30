@@ -401,6 +401,7 @@ watch(isEditing, (editing) => {
 	align-items: center;
 	gap: 16px;
 	margin-bottom: 8px;
+	min-width: 0;
 }
 
 .headerActions {
@@ -413,6 +414,10 @@ watch(isEditing, (editing) => {
 	margin: 0;
 	font-size: 1.2rem;
 	font-weight: 600;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .metadata {
@@ -451,6 +456,7 @@ watch(isEditing, (editing) => {
 	width: 100%;
 	height: 75vh;
 	overflow: auto;
+	scrollbar-gutter: stable;
 	border: 1px solid var(--color-border);
 	background: var(--color-background-dark);
 	padding: 16px;

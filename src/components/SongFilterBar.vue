@@ -149,10 +149,7 @@ function clearAllFilters() {
 .filterBar {
 	display: flex;
 	flex-direction: row;
-	/* Filters wrap onto more rows on narrow screens instead of being squeezed. */
 	flex-wrap: wrap;
-	/* The bar is its own breakpoint: it reacts to its width, not the window's. */
-	container-type: inline-size;
 	gap: 12px 16px;
 	align-items: flex-end;
 	padding: 12px 16px;
@@ -160,16 +157,21 @@ function clearAllFilters() {
 	background-color: var(--color-background-hover);
 	border: 1px solid var(--color-border);
 	border-radius: var(--border-radius-large, 8px);
+	position: relative;
+	z-index: 2;
 }
 
 .filterGroup {
 	display: flex;
 	flex-direction: column;
 	gap: 4px;
-	/* Each filter wants about 220px; it wraps to the next row when it does not get
-	   it and only shrinks below that when it is alone on a very narrow row. */
-	flex: 1 1 220px;
+	flex: 1 1 240px;
 	min-width: 0;
+	position: relative;
+}
+
+.filterGroup:focus-within {
+	z-index: 10;
 }
 
 .label {
@@ -180,6 +182,38 @@ function clearAllFilters() {
 
 .select {
 	width: 100%;
+	min-width: 0;
+	max-width: 100%;
+}
+
+.filterBar .select:global(.nc-select.v-select.select),
+.filterBar .select :global(.nc-select.v-select.select) {
+	min-width: 0;
+	width: 100%;
+	margin: 0;
+}
+
+.filterBar .select :global(.vs__dropdown-toggle),
+.filterBar .select :global(.vs__selected-options),
+.filterBar .select :global(.vs__selected) {
+	min-width: 0;
+	max-width: 100%;
+	box-sizing: border-box;
+}
+
+.filterBar .select :global(.multiselect__single),
+.filterBar .select :global(.multiselect__input),
+.filterBar .select :global(.multiselect__tags) {
+	min-width: 0;
+	max-width: 100%;
+	box-sizing: border-box;
+}
+
+.filterBar .select :global(.vs__dropdown-menu),
+.filterBar .select :global(.multiselect__content-wrapper) {
+	z-index: 100;
+	max-width: 100%;
+	box-sizing: border-box;
 }
 
 .actions {
@@ -187,12 +221,10 @@ function clearAllFilters() {
 	align-items: center;
 	flex-shrink: 0;
 	padding-bottom: 2px;
+	margin-inline-start: auto;
 }
 
-/* All four filters and the clear action fit on one row only beyond ~1100px. Below
-   that the filters wrap, and the action would end up squeezed next to the last
-   filter, so it gets a row of its own. */
-@container (max-width: 1100px) {
+@media (max-width: 768px) {
 	.actions {
 		flex-basis: 100%;
 		justify-content: flex-end;

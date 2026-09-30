@@ -158,6 +158,7 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 						:options="composers"
 						:multiple="true"
 						:close-on-select="false"
+						:input-label="t('mobilesheetsmanager', 'Composers')"
 						:placeholder="t('mobilesheetsmanager', 'Select composers…')"
 						label="name"
 						track-by="id" />
@@ -189,6 +190,7 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 						:options="books"
 						:multiple="true"
 						:close-on-select="false"
+						:input-label="t('mobilesheetsmanager', 'Books')"
 						:placeholder="t('mobilesheetsmanager', 'Select books…')"
 						label="title"
 						track-by="id" />
@@ -220,6 +222,7 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 						:options="collections"
 						:multiple="true"
 						:close-on-select="false"
+						:input-label="t('mobilesheetsmanager', 'Collections')"
 						:placeholder="t('mobilesheetsmanager', 'Select collections…')"
 						label="name"
 						track-by="id" />
@@ -251,6 +254,7 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 						:options="artists"
 						:multiple="true"
 						:close-on-select="false"
+						:input-label="t('mobilesheetsmanager', 'Artists')"
 						:placeholder="t('mobilesheetsmanager', 'Select artists…')"
 						label="name"
 						track-by="id" />
@@ -291,6 +295,11 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 	border-radius: var(--border-radius-large, 8px);
 	padding: 12px;
 	background-color: var(--color-main-background);
+	position: relative;
+}
+
+.fieldGroup:focus-within {
+	z-index: 10;
 }
 
 .fieldHeader {

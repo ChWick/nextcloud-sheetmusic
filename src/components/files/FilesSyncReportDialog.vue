@@ -104,6 +104,7 @@ const stats = computed(() => computeSyncStats(props.log))
 	margin: 0;
 	padding: 0;
 	overflow-y: auto;
+	scrollbar-gutter: stable;
 	list-style: none;
 }
 

@@ -192,6 +192,7 @@ function handleSongClick(song: Song, e: Event) {
 	padding: 16px;
 	gap: 12px;
 	cursor: pointer;
+	min-width: 0;
 }
 
 .songCard:hover {
@@ -209,6 +210,7 @@ function handleSongClick(song: Song, e: Event) {
 	gap: 8px;
 	font-weight: 600;
 	font-size: 1.05rem;
+	min-width: 0;
 }
 
 .selectCheckbox {
@@ -223,6 +225,8 @@ function handleSongClick(song: Song, e: Event) {
 .cardTitle {
 	color: var(--color-main-text);
 	text-align: left;
+	min-width: 0;
+	word-break: break-word;
 }
 
 .songCard:hover .cardTitle {

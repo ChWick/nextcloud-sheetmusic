@@ -503,6 +503,7 @@ async function saveSong(closeAfter: boolean) {
 					:taggable="true"
 					:create-option="createComposerTag"
 					:close-on-select="false"
+					:input-label="t('mobilesheetsmanager', 'Composers')"
 					label="name"
 					track-by="name"
 					:placeholder="t('mobilesheetsmanager', 'Select or type a composer…')" />
@@ -517,6 +518,7 @@ async function saveSong(closeAfter: boolean) {
 					:taggable="true"
 					:create-option="createBookTag"
 					:close-on-select="false"
+					:input-label="t('mobilesheetsmanager', 'Books / Albums')"
 					label="title"
 					track-by="title"
 					:placeholder="t('mobilesheetsmanager', 'Select or type a book/album…')" />
@@ -531,6 +533,7 @@ async function saveSong(closeAfter: boolean) {
 					:taggable="true"
 					:create-option="createCollectionTag"
 					:close-on-select="false"
+					:input-label="t('mobilesheetsmanager', 'Collections')"
 					label="name"
 					track-by="name"
 					:placeholder="t('mobilesheetsmanager', 'Select or type a collection…')" />
@@ -545,6 +548,7 @@ async function saveSong(closeAfter: boolean) {
 					:taggable="true"
 					:create-option="createArtistTag"
 					:close-on-select="false"
+					:input-label="t('mobilesheetsmanager', 'Artists')"
 					label="name"
 					track-by="name"
 					:placeholder="t('mobilesheetsmanager', 'Select or type an artist…')" />
@@ -673,6 +677,11 @@ async function saveSong(closeAfter: boolean) {
 	flex-direction: column;
 	gap: 6px;
 	min-width: 0;
+	position: relative;
+}
+
+.formGroup:focus-within {
+	z-index: 10;
 }
 
 .label {

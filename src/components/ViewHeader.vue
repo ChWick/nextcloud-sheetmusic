@@ -86,12 +86,17 @@ const emit = defineEmits<{
   padding: 4px 16px 4px calc(var(--default-clickable-area, 44px) + 16px);
   border-bottom: 1px solid var(--color-border);
   flex-wrap: wrap;
+  min-width: 0;
 }
 
 .title {
   margin: 0;
   font-size: 1.2rem;
   font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .actions {
@@ -100,5 +105,6 @@ const emit = defineEmits<{
   gap: 8px;
   margin-inline-start: auto;
   flex-wrap: wrap;
+  min-width: 0;
 }
 </style>
