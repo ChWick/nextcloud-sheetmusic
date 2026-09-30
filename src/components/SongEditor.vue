@@ -14,6 +14,11 @@ import { apiPost } from '../api/client'
 import { describeRequestFailure } from '../utils/api'
 import { openFileExternally } from '../utils/file'
 import { computed, ref, watch } from 'vue'
+import CheckIcon from 'vue-material-design-icons/Check.vue'
+import CloseIcon from 'vue-material-design-icons/Close.vue'
+import ContentSaveOutlineIcon from 'vue-material-design-icons/ContentSaveOutline.vue'
+import FolderIcon from 'vue-material-design-icons/Folder.vue'
+import UploadIcon from 'vue-material-design-icons/Upload.vue'
 import AttachNextcloudFileDialog from './song-editor/AttachNextcloudFileDialog.vue'
 import SongFileListItem from './song-editor/SongFileListItem.vue'
 import SongPendingNotice from './song-editor/SongPendingNotice.vue'
@@ -588,16 +593,24 @@ async function saveSong(closeAfter: boolean) {
 						type="button"
 						variant="secondary"
 						:disabled="isSaving"
+						:title="t('mobilesheetsmanager', 'Upload PDF from computer')"
+						:aria-label="t('mobilesheetsmanager', 'Upload PDF from computer')"
 						@click="fileInput?.click()">
-						{{ t('mobilesheetsmanager', 'Upload PDF from computer') }}
+						<template #icon>
+							<UploadIcon :size="20" />
+						</template>
 					</NcButton>
 
 					<NcButton
 						type="button"
 						variant="secondary"
 						:disabled="isSaving"
+						:title="t('mobilesheetsmanager', 'Choose PDF from Nextcloud')"
+						:aria-label="t('mobilesheetsmanager', 'Choose PDF from Nextcloud')"
 						@click="openNextcloudPicker">
-						{{ t('mobilesheetsmanager', 'Choose PDF from Nextcloud') }}
+						<template #icon>
+							<FolderIcon :size="20" />
+						</template>
 					</NcButton>
 				</div>
 			</div>
@@ -606,8 +619,14 @@ async function saveSong(closeAfter: boolean) {
 			<p v-if="successMessage" :class="$style.success" role="status">{{ successMessage }}</p>
 
 			<div :class="$style.actions">
-				<NcButton :disabled="isSaving" @click="emit('cancel')">
-					{{ t('mobilesheetsmanager', 'Cancel') }}
+				<NcButton
+					:disabled="isSaving"
+					:title="t('mobilesheetsmanager', 'Cancel')"
+					:aria-label="t('mobilesheetsmanager', 'Cancel')"
+					@click="emit('cancel')">
+					<template #icon>
+						<CloseIcon :size="20" />
+					</template>
 				</NcButton>
 				<!-- Only an existing song can be saved again: a new song has no id until it
 				     is created, so saving it twice would write a second song. -->
@@ -616,18 +635,23 @@ async function saveSong(closeAfter: boolean) {
 					type="button"
 					variant="secondary"
 					:disabled="isSaving"
-					:title="t('mobilesheetsmanager', 'Save the changes and keep the editor open')"
+					:title="t('mobilesheetsmanager', 'Save without closing')"
+					:aria-label="t('mobilesheetsmanager', 'Save without closing')"
 					@click="saveSong(false)">
-					{{ t('mobilesheetsmanager', 'Save without closing') }}
+					<template #icon>
+						<ContentSaveOutlineIcon :size="20" />
+					</template>
 				</NcButton>
 				<NcButton
 					variant="primary"
 					type="submit"
-					:disabled="isSaving">
-					<template v-if="isSaving">
-						<NcLoadingIcon :size="16" />
+					:disabled="isSaving"
+					:title="saveActionLabel"
+					:aria-label="saveActionLabel">
+					<template #icon>
+						<NcLoadingIcon v-if="isSaving" :size="16" />
+						<CheckIcon v-else :size="20" />
 					</template>
-					{{ saveActionLabel }}
 				</NcButton>
 			</div>
 		</form>

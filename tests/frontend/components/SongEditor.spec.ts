@@ -65,8 +65,8 @@ describe('SongEditor.vue', () => {
 		global: {
 			stubs: {
 				NcButton: {
-					template: '<button :disabled="disabled" :type="type"><slot /></button>',
-					props: ['disabled', 'type', 'variant'],
+					template: '<button :disabled="disabled" :type="type" :title="title" :aria-label="ariaLabel"><slot /></button>',
+					props: ['disabled', 'type', 'variant', 'title', 'ariaLabel'],
 				},
 				NcTextField: {
 					template: '<input :id="id" :value="value !== undefined ? value : modelValue" @input="$emit(\'update:value\', $event.target.value); $emit(\'update:modelValue\', $event.target.value)" />',
@@ -103,7 +103,7 @@ describe('SongEditor.vue', () => {
 		})
 
 		expect(wrapper.find('h3').text()).toBe('New Song')
-		expect(wrapper.text()).toContain('Create song')
+		expect(wrapper.html()).toContain('Create song')
 	})
 
 	it('renders header for Edit Song when song prop is provided', () => {
@@ -120,7 +120,7 @@ describe('SongEditor.vue', () => {
 		})
 
 		expect(wrapper.find('h3').text()).toBe('Edit Song')
-		expect(wrapper.text()).toContain('Save and Close')
+		expect(wrapper.html()).toContain('Save and Close')
 		expect(wrapper.text()).toContain('Beethoven - Symphony 5.pdf')
 	})
 
@@ -160,7 +160,7 @@ describe('SongEditor.vue', () => {
 		})
 
 		const buttons = wrapper.findAll('button')
-		const cancelBtn = buttons.find((btn) => btn.text() === 'Cancel')
+		const cancelBtn = buttons.find((btn) => btn.text() === 'Cancel' || btn.attributes('aria-label') === 'Cancel' || btn.attributes('title') === 'Cancel')
 		expect(cancelBtn).toBeDefined()
 		await cancelBtn!.trigger('click')
 
@@ -196,8 +196,8 @@ describe('SongEditor.vue', () => {
 			...globalStubs,
 		})
 
-		// Find delete button on file list item (second button inside file actions)
-		const deleteBtn = wrapper.findAll('button').find((btn) => btn.text() === 'Delete')
+		// Find delete button on file list item
+		const deleteBtn = wrapper.findAll('button').find((btn) => btn.text() === 'Delete' || btn.attributes('aria-label')?.includes('Delete') || btn.attributes('title')?.includes('Delete'))
 		expect(deleteBtn).toBeDefined()
 		await deleteBtn!.trigger('click')
 

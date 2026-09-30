@@ -2,6 +2,8 @@
 import type { SongFile } from '../../types/song'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import DeleteIcon from 'vue-material-design-icons/Delete.vue'
+import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import { getFileName } from '../../utils/file'
 
 defineProps<{
@@ -26,18 +28,22 @@ const emit = defineEmits<{
 				type="button"
 				variant="secondary"
 				:aria-label="t('mobilesheetsmanager', 'Open {file} in external viewer', { file: getFileName(file.path) })"
-				:title="t('mobilesheetsmanager', 'Open the PDF in a new browser tab')"
+				:title="t('mobilesheetsmanager', 'Open in external viewer')"
 				@click="emit('openExternal', file)">
-				{{ t('mobilesheetsmanager', 'Open in external viewer') }}
+				<template #icon>
+					<OpenInNewIcon :size="20" />
+				</template>
 			</NcButton>
 			<NcButton
 				type="button"
 				variant="error"
-				:class="$style.deleteButton"
 				:disabled="disabled"
 				:aria-label="t('mobilesheetsmanager', 'Delete file {file}', { file: getFileName(file.path) })"
+				:title="t('mobilesheetsmanager', 'Delete file')"
 				@click="emit('delete', file)">
-				{{ t('mobilesheetsmanager', 'Delete') }}
+				<template #icon>
+					<DeleteIcon :size="20" />
+				</template>
 			</NcButton>
 		</div>
 	</li>
@@ -87,17 +93,5 @@ const emit = defineEmits<{
 	align-items: center;
 	gap: 8px;
 	flex-shrink: 0;
-}
-
-.deleteButton {
-	flex-shrink: 0;
-	min-width: 70px;
-	background-color: var(--color-error, #e9322d) !important;
-	color: var(--color-primary-text, #ffffff) !important;
-	border-color: transparent !important;
-}
-
-.deleteButton:hover {
-	opacity: 0.9;
 }
 </style>
