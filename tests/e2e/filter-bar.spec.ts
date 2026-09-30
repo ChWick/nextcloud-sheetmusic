@@ -1,0 +1,43 @@
+import { expect, test } from '@playwright/test'
+import { setupMockApi } from './helpers/mock-api'
+
+test.describe('Song Filter Bar', () => {
+	test.beforeEach(async ({ page }) => {
+		await setupMockApi(page)
+		await page.goto('/#/library/1/songs')
+	})
+
+	test('renders all filter dropdowns without horizontal overlap', async ({ page }) => {
+		const filterBar = page.locator('[role="region"][aria-label="Song filters"]')
+		await expect(filterBar).toBeVisible()
+
+		// Locate the select elements inside the filter groups
+		const selects = filterBar.locator('.nc-select, .v-select')
+		const count = await selects.count()
+		expect(count).toBeGreaterThanOrEqual(4)
+
+		// Check bounding boxes for adjacent selects to ensure no overlap
+		for (let i = 0; i < count - 1; i++) {
+			const box1 = await selects.nth(i).boundingBox()
+			const box2 = await selects.nth(i + 1).boundingBox()
+
+			if (box1 && box2 && box1.y === box2.y) {
+				// If on the same row, ensure right edge of box1 does not overlap box2
+				expect(box1.x + box1.width).toBeLessThanOrEqual(box2.x + 1)
+			}
+		}
+	})
+
+	test('filters list options when dropdown is clicked', async ({ page }) => {
+		const filterBar = page.locator('[role="region"][aria-label="Song filters"]')
+		await expect(filterBar).toBeVisible()
+
+		// Click the first select (Composers)
+		const composerSelect = filterBar.locator('.nc-select, .v-select').first()
+		await composerSelect.click()
+
+		// Expect dropdown list options to show mock composers
+		const dropdownOption = page.locator('.vs__dropdown-menu, .multiselect__content, [role="option"]').getByText('Ludwig van Beethoven')
+		await expect(dropdownOption).toBeVisible()
+	})
+})
