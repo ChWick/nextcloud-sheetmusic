@@ -4,11 +4,13 @@ import type { Artist, Book, Collection, Composer } from '../types/song'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
+import NcTextField from '@nextcloud/vue/components/NcTextField'
 import { computed } from 'vue'
 import { noneEntryOf } from '../composables/useSongFilters'
 
 const props = withDefaults(
 	defineProps<{
+		searchTitle?: string
 		composers?: Composer[]
 		books?: Book[]
 		collections?: Collection[]
@@ -19,9 +21,11 @@ const props = withDefaults(
 		selectedArtists?: Artist[]
 	}>(),
 	{
+		searchTitle: '',
 		composers: () => [],
 		books: () => [],
 		collections: () => [],
+		artists: () => [],
 		selectedComposers: () => [],
 		selectedBooks: () => [],
 		selectedCollections: () => [],
@@ -30,6 +34,7 @@ const props = withDefaults(
 )
 
 const emit = defineEmits<{
+	'update:searchTitle': [title: string]
 	'update:selectedComposers': [composers: Composer[]]
 	'update:selectedBooks': [books: Book[]]
 	'update:selectedCollections': [collections: Collection[]]
@@ -59,7 +64,8 @@ const artistOptions = computed(() => [
 
 const hasActiveFilters = computed(() => {
 	return (
-		props.selectedComposers.length > 0
+		Boolean(props.searchTitle?.trim())
+		|| props.selectedComposers.length > 0
 		|| props.selectedBooks.length > 0
 		|| props.selectedCollections.length > 0
 		|| props.selectedArtists.length > 0
@@ -75,6 +81,16 @@ function clearAllFilters() {
 
 <template>
 	<div :class="$style.filterBar" role="region" :aria-label="t('mobilesheetsmanager', 'Song filters')">
+		<div :class="$style.filterGroup">
+			<label :class="$style.label">{{ t('mobilesheetsmanager', 'Search title') }}</label>
+			<NcTextField
+				:model-value="searchTitle"
+				:placeholder="t('mobilesheetsmanager', 'Search by title…')"
+				:input-label="t('mobilesheetsmanager', 'Search by title')"
+				:class="$style.input"
+				@update:model-value="emit('update:searchTitle', $event)" />
+		</div>
+
 		<div :class="$style.filterGroup">
 			<label :class="$style.label">{{ t('mobilesheetsmanager', 'Composers') }}</label>
 			<NcSelect
@@ -151,7 +167,7 @@ function clearAllFilters() {
 	flex-direction: row;
 	flex-wrap: wrap;
 	gap: 12px 16px;
-	align-items: flex-end;
+	align-items: flex-start;
 	padding: 12px 16px;
 	margin-bottom: 16px;
 	background-color: var(--color-background-hover);
@@ -178,6 +194,43 @@ function clearAllFilters() {
 	font-size: 0.85rem;
 	font-weight: 600;
 	color: var(--color-text-maxcontrast);
+}
+
+.input {
+	width: 100%;
+	min-width: 0;
+	max-width: 100%;
+}
+
+.filterBar .input:global(.input-field),
+.filterBar .input :global(.input-field) {
+	min-width: 0;
+	width: 100%;
+	margin: 0 !important;
+	margin-block-start: 0 !important;
+	padding: 0 !important;
+}
+
+.filterBar .input :global(.input-field__main-wrapper) {
+	height: auto;
+	padding: 0;
+}
+
+.filterBar .input :global(.input-field__helper-text-message) {
+	display: none;
+}
+
+.filterBar .input :global(.input-field__input),
+.filterBar .input:global(.input-field__input) {
+	min-height: 34px;
+	height: 34px;
+	box-sizing: border-box;
+	margin: 0 !important;
+	box-shadow: 0 0 0 1px var(--color-border) !important;
+}
+
+.filterBar .input :global(.input-field__input:hover:not([disabled])) {
+	box-shadow: 0 0 0 1px var(--color-border-maxcontrast) !important;
 }
 
 .select {
@@ -219,6 +272,7 @@ function clearAllFilters() {
 .actions {
 	display: flex;
 	align-items: center;
+	align-self: flex-end;
 	flex-shrink: 0;
 	padding-bottom: 2px;
 	margin-inline-start: auto;

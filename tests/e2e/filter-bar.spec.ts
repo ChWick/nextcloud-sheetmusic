@@ -40,4 +40,19 @@ test.describe('Song Filter Bar', () => {
 		const dropdownOption = page.locator('.vs__dropdown-menu, .multiselect__content, [role="option"]').getByText('Ludwig van Beethoven')
 		await expect(dropdownOption).toBeVisible()
 	})
+
+	test('filters songs by title search query', async ({ page }) => {
+		const filterBar = page.locator('[role="region"][aria-label="Song filters"]')
+		await expect(filterBar).toBeVisible()
+
+		const titleInput = filterBar.getByPlaceholder('Search by title…')
+		await expect(titleInput).toBeVisible()
+
+		// Type "requiem" to filter songs
+		await titleInput.fill('requiem')
+
+		// Verify table only shows Requiem in D minor
+		await expect(page.getByText('Requiem in D minor')).toBeVisible()
+		await expect(page.getByText('Symphony No. 5')).not.toBeVisible()
+	})
 })

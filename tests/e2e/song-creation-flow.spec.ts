@@ -17,7 +17,7 @@ test.describe('Song Creation & End-to-End Editing Flow', () => {
 		await page.getByText('New song').click()
 
 		// Verify editor opens in creation mode
-		const titleInput = page.getByLabel('Title')
+		const titleInput = page.locator('#song-title-input')
 		await expect(titleInput).toBeVisible()
 		await expect(page.getByRole('button', { name: 'Create song' })).toBeVisible()
 

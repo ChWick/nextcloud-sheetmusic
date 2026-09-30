@@ -48,6 +48,27 @@ export function useSongFilters(options: () => FilterOptions) {
 	const route = useRoute()
 	const router = useRouter()
 
+	function titleFilterOf(): string {
+		const raw = route.query.title ?? route.query.search ?? ''
+		const value = Array.isArray(raw) ? raw[0] : raw
+		return typeof value === 'string' ? value : ''
+	}
+
+	const searchTitle = computed({
+		get: () => titleFilterOf(),
+		set: (val: string) => {
+			const query: LocationQueryRaw = { ...route.query }
+			const trimmed = val ? val.trim() : ''
+			if (!trimmed) {
+				delete query.title
+				delete query.search
+			} else {
+				query.title = val
+			}
+			router.replace({ query })
+		},
+	})
+
 	/** The ids one filter parameter selects, e.g. "composers=3,7" or "composers=-1". */
 	function idsOf(entityType: EntityType): number[] {
 		const raw = route.query[entityType]
@@ -95,7 +116,9 @@ export function useSongFilters(options: () => FilterOptions) {
 		router.push({ query })
 	}
 
-	const hasActiveFilters = computed(() => FILTER_TYPES.some(entityType => idsOf(entityType).length > 0))
+	const hasActiveFilters = computed(() =>
+		Boolean(titleFilterOf().trim()) || FILTER_TYPES.some(entityType => idsOf(entityType).length > 0)
+	)
 
 	function matchesCategory<T extends { id: number }>(songItems: T[] | undefined, selectedIds: Set<number>): boolean {
 		if (selectedIds.size === 0) return true
@@ -108,6 +131,11 @@ export function useSongFilters(options: () => FilterOptions) {
 
 	/** Whether the song carries every active filter selection. */
 	function songMatchesFilters(song: Song): boolean {
+		const titleQuery = titleFilterOf().trim().toLowerCase()
+		if (titleQuery && !song.title.toLowerCase().includes(titleQuery)) {
+			return false
+		}
+
 		const composerIds = new Set(idsOf('composers'))
 		const bookIds = new Set(idsOf('books'))
 		const collectionIds = new Set(idsOf('collections'))
@@ -128,6 +156,8 @@ export function useSongFilters(options: () => FilterOptions) {
 	/** Drop every selection in one history entry, leaving the unfiltered view. */
 	function clearFilters(): void {
 		const query: LocationQueryRaw = { ...route.query }
+		delete query.title
+		delete query.search
 		for (const entityType of FILTER_TYPES) {
 			delete query[entityType]
 		}
@@ -152,6 +182,7 @@ export function useSongFilters(options: () => FilterOptions) {
 	})
 
 	return {
+		searchTitle,
 		selectedComposers,
 		selectedBooks,
 		selectedCollections,
