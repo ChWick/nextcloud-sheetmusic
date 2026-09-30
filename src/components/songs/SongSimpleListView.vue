@@ -1,15 +1,17 @@
 <script setup lang="ts">
-import type { EntityType, FilterEntity, Song } from '../../types/song'
+import type { EntityType, FilterEntity, Song, SongColumn } from '../../types/song'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import EyeIcon from 'vue-material-design-icons/Eye.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import { ref } from 'vue'
+import { formatDateTimestamp } from '../../utils/song-formatter'
 
-defineProps<{
+const props = defineProps<{
 	songs: Song[]
 	selectedSongIds?: number[]
 	isFiltered?: (entityType: EntityType, id: number) => boolean
+	visibleColumns?: SongColumn[]
 }>()
 
 const emit = defineEmits<{
@@ -18,6 +20,11 @@ const emit = defineEmits<{
 	'filter-entity': [entityType: EntityType, entity: FilterEntity]
 	'toggle-select-song': [songId: number]
 }>()
+
+function isColVisible(col: SongColumn): boolean {
+	if (!props.visibleColumns) return true
+	return props.visibleColumns.includes(col)
+}
 
 let touchTimer: ReturnType<typeof setTimeout> | null = null
 let touchStartPos = { x: 0, y: 0 }
@@ -96,11 +103,11 @@ function handleSongClick(song: Song, e: Event) {
 					@click.stop
 					@change="emit('toggle-select-song', song.id)">
 				<div :class="$style.songInfo">
-					<span :class="$style.songTitle">
+					<span v-if="isColVisible('title')" :class="$style.songTitle">
 						{{ song.title }}
 					</span>
 					<span :class="$style.subtitle">
-						<template v-if="song.composers && song.composers.length > 0">
+						<template v-if="isColVisible('composer') && song.composers && song.composers.length > 0">
 							<template v-for="(c, idx) in song.composers" :key="c.id">
 								<button
 									type="button"
@@ -112,8 +119,8 @@ function handleSongClick(song: Song, e: Event) {
 								<template v-if="idx < song.composers.length - 1">, </template>
 							</template>
 						</template>
-						<template v-if="song.composers?.length && song.books?.length"> • </template>
-						<template v-if="song.books && song.books.length > 0">
+						<template v-if="isColVisible('composer') && song.composers?.length && isColVisible('book') && song.books?.length"> • </template>
+						<template v-if="isColVisible('book') && song.books && song.books.length > 0">
 							<template v-for="(b, idx) in song.books" :key="b.id">
 								<button
 									type="button"
@@ -125,8 +132,8 @@ function handleSongClick(song: Song, e: Event) {
 								<template v-if="idx < song.books.length - 1">, </template>
 							</template>
 						</template>
-						<template v-if="(song.composers?.length || song.books?.length) && song.collections?.length"> • </template>
-						<template v-if="song.collections && song.collections.length > 0">
+						<template v-if="(isColVisible('composer') && song.composers?.length || isColVisible('book') && song.books?.length) && isColVisible('collection') && song.collections?.length"> • </template>
+						<template v-if="isColVisible('collection') && song.collections && song.collections.length > 0">
 							<template v-for="(col, idx) in song.collections" :key="col.id">
 								<button
 									type="button"
@@ -138,8 +145,8 @@ function handleSongClick(song: Song, e: Event) {
 								<template v-if="idx < song.collections.length - 1">, </template>
 							</template>
 						</template>
-						<template v-if="(song.composers?.length || song.books?.length || song.collections?.length) && song.artists?.length"> • </template>
-						<template v-if="song.artists && song.artists.length > 0">
+						<template v-if="(isColVisible('composer') && song.composers?.length || isColVisible('book') && song.books?.length || isColVisible('collection') && song.collections?.length) && isColVisible('artist') && song.artists?.length"> • </template>
+						<template v-if="isColVisible('artist') && song.artists && song.artists.length > 0">
 							<template v-for="(art, idx) in song.artists" :key="art.id">
 								<button
 									type="button"
@@ -150,6 +157,14 @@ function handleSongClick(song: Song, e: Event) {
 								</button>
 								<template v-if="idx < song.artists.length - 1">, </template>
 							</template>
+						</template>
+						<template v-if="isColVisible('lastModified') && song.lastModified">
+							<template v-if="isColVisible('composer') && song.composers?.length || isColVisible('book') && song.books?.length || isColVisible('collection') && song.collections?.length || isColVisible('artist') && song.artists?.length"> • </template>
+							<span>{{ t('mobilesheetsmanager', 'Modified: {date}', { date: formatDateTimestamp(song.lastModified) }) }}</span>
+						</template>
+						<template v-if="isColVisible('dateCreated') && song.dateCreated">
+							<template v-if="isColVisible('composer') && song.composers?.length || isColVisible('book') && song.books?.length || isColVisible('collection') && song.collections?.length || isColVisible('artist') && song.artists?.length || isColVisible('lastModified') && song.lastModified"> • </template>
+							<span>{{ t('mobilesheetsmanager', 'Created: {date}', { date: formatDateTimestamp(song.dateCreated) }) }}</span>
 						</template>
 					</span>
 				</div>

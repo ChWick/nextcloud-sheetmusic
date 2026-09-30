@@ -18,6 +18,19 @@ export type EntityType = 'composers' | 'artists' | 'books' | 'collections'
 /** Any of the entities a song can carry. Books are titled, everything else named. */
 export type FilterEntity = Composer | Artist | Book | Collection
 
+/** The columns/fields of a song that can be toggled visible in song views. */
+export type SongColumn = 'title' | 'composer' | 'book' | 'collection' | 'artist' | 'lastModified' | 'dateCreated'
+
+export const DEFAULT_VISIBLE_COLUMNS: SongColumn[] = [
+	'title',
+	'composer',
+	'book',
+	'collection',
+	'artist',
+	'lastModified',
+	'dateCreated',
+]
+
 /** Staged attachment from Nextcloud files before saving */
 export interface PendingAttachment {
 	key: string

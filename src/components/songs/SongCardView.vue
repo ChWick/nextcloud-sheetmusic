@@ -1,15 +1,17 @@
 <script setup lang="ts">
-import type { EntityType, FilterEntity, Song } from '../../types/song'
+import type { EntityType, FilterEntity, Song, SongColumn } from '../../types/song'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import EyeIcon from 'vue-material-design-icons/Eye.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import { ref } from 'vue'
+import { formatDateTimestamp } from '../../utils/song-formatter'
 
-defineProps<{
+const props = defineProps<{
 	songs: Song[]
 	selectedSongIds?: number[]
 	isFiltered?: (entityType: EntityType, id: number) => boolean
+	visibleColumns?: SongColumn[]
 }>()
 
 const emit = defineEmits<{
@@ -18,6 +20,11 @@ const emit = defineEmits<{
 	'filter-entity': [entityType: EntityType, entity: FilterEntity]
 	'toggle-select-song': [songId: number]
 }>()
+
+function isColVisible(col: SongColumn): boolean {
+	if (!props.visibleColumns) return true
+	return props.visibleColumns.includes(col)
+}
 
 let touchTimer: ReturnType<typeof setTimeout> | null = null
 let touchStartPos = { x: 0, y: 0 }
@@ -95,13 +102,13 @@ function handleSongClick(song: Song, e: Event) {
 					:title="t('mobilesheetsmanager', 'Select song')"
 					@click.stop
 					@change="emit('toggle-select-song', song.id)">
-				<span :class="$style.cardTitle">
+				<span v-if="isColVisible('title')" :class="$style.cardTitle">
 					{{ song.title }}
 				</span>
 			</div>
 
 			<div :class="$style.cardBody">
-				<div v-if="song.composers && song.composers.length > 0" :class="$style.metaRow">
+				<div v-if="isColVisible('composer') && song.composers && song.composers.length > 0" :class="$style.metaRow">
 					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Composer:') }}</span>
 					<div :class="$style.chipGroup">
 						<template v-for="(c, idx) in song.composers" :key="c.id">
@@ -117,7 +124,7 @@ function handleSongClick(song: Song, e: Event) {
 					</div>
 				</div>
 
-				<div v-if="song.books && song.books.length > 0" :class="$style.metaRow">
+				<div v-if="isColVisible('book') && song.books && song.books.length > 0" :class="$style.metaRow">
 					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Book:') }}</span>
 					<div :class="$style.chipGroup">
 						<template v-for="(b, idx) in song.books" :key="b.id">
@@ -133,7 +140,7 @@ function handleSongClick(song: Song, e: Event) {
 					</div>
 				</div>
 
-				<div v-if="song.collections && song.collections.length > 0" :class="$style.metaRow">
+				<div v-if="isColVisible('collection') && song.collections && song.collections.length > 0" :class="$style.metaRow">
 					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Collection:') }}</span>
 					<div :class="$style.chipGroup">
 						<template v-for="(col, idx) in song.collections" :key="col.id">
@@ -149,7 +156,7 @@ function handleSongClick(song: Song, e: Event) {
 					</div>
 				</div>
 
-				<div v-if="song.artists && song.artists.length > 0" :class="$style.metaRow">
+				<div v-if="isColVisible('artist') && song.artists && song.artists.length > 0" :class="$style.metaRow">
 					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Artist:') }}</span>
 					<div :class="$style.chipGroup">
 						<template v-for="(art, idx) in song.artists" :key="art.id">
@@ -163,6 +170,16 @@ function handleSongClick(song: Song, e: Event) {
 							<template v-if="idx < song.artists.length - 1">, </template>
 						</template>
 					</div>
+				</div>
+
+				<div v-if="isColVisible('lastModified') && song.lastModified" :class="$style.metaRow">
+					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Last modified:') }}</span>
+					<span>{{ formatDateTimestamp(song.lastModified) }}</span>
+				</div>
+
+				<div v-if="isColVisible('dateCreated') && song.dateCreated" :class="$style.metaRow">
+					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Created:') }}</span>
+					<span>{{ formatDateTimestamp(song.dateCreated) }}</span>
 				</div>
 			</div>
 

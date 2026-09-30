@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { EntityType, FilterEntity, Song } from '../../types/song'
+import type { EntityType, FilterEntity, Song, SongColumn } from '../../types/song'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import EyeIcon from 'vue-material-design-icons/Eye.vue'
@@ -14,6 +14,7 @@ const props = withDefaults(
 		isFiltered?: (entityType: EntityType, id: number) => boolean
 		sortKey?: SortKey
 		sortOrder?: SortOrder
+		visibleColumns?: SongColumn[]
 	}>(),
 	{
 		sortKey: 'title',
@@ -30,6 +31,11 @@ const emit = defineEmits<{
 	'update:sortKey': [key: SortKey]
 	'update:sortOrder': [order: SortOrder]
 }>()
+
+function isColVisible(col: SongColumn): boolean {
+	if (!props.visibleColumns) return true
+	return props.visibleColumns.includes(col)
+}
 
 const localSortKey = ref<SortKey>(props.sortKey)
 const localSortOrder = ref<SortOrder>(props.sortOrder)
@@ -141,25 +147,25 @@ function handleSongClick(song: Song, e: Event) {
 							:title="t('mobilesheetsmanager', 'Select all songs')"
 							@change="emit('select-all', songs.map((s) => s.id))">
 					</th>
-					<th :class="$style.sortableHeader" @click="toggleSort('title')">
+					<th v-if="isColVisible('title')" :class="$style.sortableHeader" @click="toggleSort('title')">
 						{{ t('mobilesheetsmanager', 'Title') }}{{ sortIndicator('title') }}
 					</th>
-					<th :class="$style.sortableHeader" @click="toggleSort('composer')">
+					<th v-if="isColVisible('composer')" :class="$style.sortableHeader" @click="toggleSort('composer')">
 						{{ t('mobilesheetsmanager', 'Composer') }}{{ sortIndicator('composer') }}
 					</th>
-					<th :class="$style.sortableHeader" @click="toggleSort('book')">
+					<th v-if="isColVisible('book')" :class="$style.sortableHeader" @click="toggleSort('book')">
 						{{ t('mobilesheetsmanager', 'Book') }}{{ sortIndicator('book') }}
 					</th>
-					<th :class="$style.sortableHeader" @click="toggleSort('collection')">
+					<th v-if="isColVisible('collection')" :class="$style.sortableHeader" @click="toggleSort('collection')">
 						{{ t('mobilesheetsmanager', 'Collection') }}{{ sortIndicator('collection') }}
 					</th>
-					<th :class="$style.sortableHeader" @click="toggleSort('artist')">
+					<th v-if="isColVisible('artist')" :class="$style.sortableHeader" @click="toggleSort('artist')">
 						{{ t('mobilesheetsmanager', 'Artist') }}{{ sortIndicator('artist') }}
 					</th>
-					<th :class="$style.sortableHeader" @click="toggleSort('lastModified')">
+					<th v-if="isColVisible('lastModified')" :class="$style.sortableHeader" @click="toggleSort('lastModified')">
 						{{ t('mobilesheetsmanager', 'Last modified') }}{{ sortIndicator('lastModified') }}
 					</th>
-					<th :class="$style.sortableHeader" @click="toggleSort('dateCreated')">
+					<th v-if="isColVisible('dateCreated')" :class="$style.sortableHeader" @click="toggleSort('dateCreated')">
 						{{ t('mobilesheetsmanager', 'Created') }}{{ sortIndicator('dateCreated') }}
 					</th>
 					<th :class="$style.actionsHeader">
@@ -185,12 +191,12 @@ function handleSongClick(song: Song, e: Event) {
 							@click.stop
 							@change="emit('toggle-select-song', song.id)">
 					</td>
-					<td :class="$style.titleCell">
+					<td v-if="isColVisible('title')" :class="$style.titleCell">
 						<span :class="$style.songTitle">
 							{{ song.title }}
 						</span>
 					</td>
-					<td :class="$style.metaCell">
+					<td v-if="isColVisible('composer')" :class="$style.metaCell">
 						<template v-if="song.composers && song.composers.length > 0">
 							<span v-for="(comp, idx) in song.composers" :key="comp.id">
 								<button
@@ -205,7 +211,7 @@ function handleSongClick(song: Song, e: Event) {
 						</template>
 						<span v-else :class="$style.emptyText">—</span>
 					</td>
-					<td :class="$style.metaCell">
+					<td v-if="isColVisible('book')" :class="$style.metaCell">
 						<template v-if="song.books && song.books.length > 0">
 							<span v-for="(bk, idx) in song.books" :key="bk.id">
 								<button
@@ -220,7 +226,7 @@ function handleSongClick(song: Song, e: Event) {
 						</template>
 						<span v-else :class="$style.emptyText">—</span>
 					</td>
-					<td :class="$style.metaCell">
+					<td v-if="isColVisible('collection')" :class="$style.metaCell">
 						<template v-if="song.collections && song.collections.length > 0">
 							<span v-for="(col, idx) in song.collections" :key="col.id">
 								<button
@@ -235,7 +241,7 @@ function handleSongClick(song: Song, e: Event) {
 						</template>
 						<span v-else :class="$style.emptyText">—</span>
 					</td>
-					<td :class="$style.metaCell">
+					<td v-if="isColVisible('artist')" :class="$style.metaCell">
 						<template v-if="song.artists && song.artists.length > 0">
 							<span v-for="(art, idx) in song.artists" :key="art.id">
 								<button
@@ -250,10 +256,10 @@ function handleSongClick(song: Song, e: Event) {
 						</template>
 						<span v-else :class="$style.emptyText">—</span>
 					</td>
-					<td :class="$style.dateCell">
+					<td v-if="isColVisible('lastModified')" :class="$style.dateCell">
 						{{ formatDateTimestamp(song.lastModified) }}
 					</td>
-					<td :class="$style.dateCell">
+					<td v-if="isColVisible('dateCreated')" :class="$style.dateCell">
 						{{ formatDateTimestamp(song.dateCreated) }}
 					</td>
 					<td :class="$style.actionsCell" @click.stop>

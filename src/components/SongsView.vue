@@ -10,6 +10,7 @@
     @import-nextcloud="startImportNextcloud"
     @toggle-filters="toggleFilterBar">
     <div v-if="songIdInUrl === null" :class="$style.headerControls">
+      <SongColumnToggle v-model:visible-columns="visibleColumns" />
       <SongSortControl v-model:sort-key="sortKey" v-model:sort-order="sortOrder" />
       <SongViewToggle v-model:view-mode="viewMode" />
     </div>
@@ -108,6 +109,7 @@
         :songs="filteredSongs"
         :selected-song-ids="selectedSongIds"
         :is-filtered="isFiltered"
+        :visible-columns="visibleColumns"
         v-model:sort-key="sortKey"
         v-model:sort-order="sortOrder"
         @view-song="openSongView"
@@ -120,6 +122,7 @@
         :songs="sortedSongs"
         :selected-song-ids="selectedSongIds"
         :is-filtered="isFiltered"
+        :visible-columns="visibleColumns"
         @view-song="openSongView"
         @edit-song="openSongEdit"
         @filter-entity="toggleFilter"
@@ -129,6 +132,7 @@
         :songs="sortedSongs"
         :selected-song-ids="selectedSongIds"
         :is-filtered="isFiltered"
+        :visible-columns="visibleColumns"
         @view-song="openSongView"
         @edit-song="openSongEdit"
         @filter-entity="toggleFilter"
@@ -162,11 +166,13 @@ import SongViewer from '../components/SongViewer.vue';
 import ViewHeader from '../components/ViewHeader.vue';
 import BatchSongEditorDialog, { type BatchUpdatePayload } from '../components/song-editor/BatchSongEditorDialog.vue';
 import type { Artist, Song, Composer, Book, Collection, LibraryData, SongPrefill } from '../types/song';
+import { DEFAULT_VISIBLE_COLUMNS, type SongColumn } from '../types/song';
 import { sortSongs, type SortKey, type SortOrder } from '../utils/song-formatter';
 import { useSongFilters } from '../composables/useSongFilters';
 import { useSongSelection } from '../composables/useSongSelection';
 import { useLibraryData } from '../composables/useLibraryData';
 import { apiPost } from '../api/client';
+import SongColumnToggle from './songs/SongColumnToggle.vue';
 import SongSortControl from './songs/SongSortControl.vue';
 import SongViewToggle, { type ViewMode } from './songs/SongViewToggle.vue';
 import SongTableView from './songs/SongTableView.vue';
@@ -199,6 +205,24 @@ watch(sortKey, (newKey) => {
 watch(sortOrder, (newOrder) => {
   localStorage.setItem('mobilesheetsmanager_song_sort_order', newOrder);
 });
+
+const visibleColumns = ref<SongColumn[]>(
+  (() => {
+    const stored = localStorage.getItem('mobilesheetsmanager_song_visible_columns');
+    if (!stored) return DEFAULT_VISIBLE_COLUMNS;
+    try {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    } catch {
+      // fallback
+    }
+    return DEFAULT_VISIBLE_COLUMNS;
+  })()
+);
+
+watch(visibleColumns, (newCols) => {
+  localStorage.setItem('mobilesheetsmanager_song_visible_columns', JSON.stringify(newCols));
+}, { deep: true });
 
 const {
   songs,
