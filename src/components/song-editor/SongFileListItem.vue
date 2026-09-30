@@ -1,12 +1,21 @@
 <script setup lang="ts">
 import type { SongFile } from '../../types/song'
+import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
+import { generateFilePath } from '@nextcloud/router'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist'
+import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
+import FileIcon from 'vue-material-design-icons/File.vue'
+import MusicIcon from 'vue-material-design-icons/Music.vue'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { getFileName } from '../../utils/file'
 
-defineProps<{
+GlobalWorkerOptions.workerSrc = pdfWorker
+
+const props = defineProps<{
 	file: SongFile
 	disabled?: boolean
 }>()
@@ -15,10 +24,101 @@ const emit = defineEmits<{
 	openExternal: [file: SongFile]
 	delete: [file: SongFile]
 }>()
+
+const isPdf = computed(() => props.file.path.toLowerCase().endsWith('.pdf'))
+const isImage = computed(() => {
+	const path = props.file.path.toLowerCase()
+	return path.endsWith('.png') || path.endsWith('.jpg') || path.endsWith('.jpeg') || path.endsWith('.webp') || path.endsWith('.gif') || path.endsWith('.svg') || path.endsWith('.bmp')
+})
+const isAudio = computed(() => {
+	const path = props.file.path.toLowerCase()
+	return path.endsWith('.mp3') || path.endsWith('.wav') || path.endsWith('.ogg') || path.endsWith('.flac') || path.endsWith('.mid') || path.endsWith('.midi')
+})
+
+async function loadPdfThumbnail() {
+	if (!isPdf.value || !thumbnailContainer.value) {
+		return
+	}
+
+	thumbnailContainer.value.replaceChildren()
+
+	try {
+		const response = await axios.get(props.file.path, {
+			responseType: 'arraybuffer',
+		})
+
+		const pdfData = response.data instanceof ArrayBuffer ? new Uint8Array(response.data) : response.data
+		const wasmUrl = typeof generateFilePath === 'function' ? generateFilePath('mobilesheetsmanager', 'js', 'pdfjs/wasm/') : new URL('pdfjs-dist/wasm/', import.meta.url).href
+		const cMapUrl = typeof generateFilePath === 'function' ? generateFilePath('mobilesheetsmanager', 'js', 'pdfjs/cmaps/') : new URL('pdfjs-dist/cmaps/', import.meta.url).href
+		const standardFontDataUrl = typeof generateFilePath === 'function' ? generateFilePath('mobilesheetsmanager', 'js', 'pdfjs/standard_fonts/') : new URL('pdfjs-dist/standard_fonts/', import.meta.url).href
+
+		const pdf = await getDocument({
+			data: pdfData,
+			cMapUrl,
+			cMapPacked: true,
+			standardFontDataUrl,
+			wasmUrl,
+		}).promise
+
+		if (pdf.numPages < 1) {
+			return
+		}
+
+		const page = await pdf.getPage(1)
+		const unscaledViewport = page.getViewport({ scale: 1.0 })
+		// Target width 44px
+		const scale = 44 / unscaledViewport.width
+		const viewport = page.getViewport({ scale })
+
+		const canvas = document.createElement('canvas')
+		canvas.width = Math.floor(viewport.width)
+		canvas.height = Math.floor(viewport.height)
+		canvas.className = 'mobilesheetsmanager-file-thumb'
+
+		const canvasContext = canvas.getContext('2d')
+		if (canvasContext) {
+			canvasContext.fillStyle = '#ffffff'
+			canvasContext.fillRect(0, 0, canvas.width, canvas.height)
+			await page.render({
+				canvasContext,
+				viewport,
+				background: 'rgb(255, 255, 255)',
+			}).promise
+
+			if (thumbnailContainer.value) {
+				thumbnailContainer.value.replaceChildren(canvas)
+			}
+		}
+	} catch {
+		// If thumbnail rendering fails, fallback icon stays visible
+	}
+}
+
+onMounted(() => {
+	nextTick(() => loadPdfThumbnail())
+})
+
+watch(() => props.file.path, () => {
+	nextTick(() => loadPdfThumbnail())
+})
 </script>
 
 <template>
 	<li :class="$style.fileItem">
+		<div :class="$style.previewBadge">
+			<div v-if="isPdf" ref="thumbnailContainer" :class="$style.thumbSlot">
+				<FileIcon :size="24" :class="$style.fallbackIcon" />
+			</div>
+			<div v-else-if="isImage" :class="$style.thumbSlot">
+				<img :src="file.path" :alt="getFileName(file.path)" :class="$style.imgThumb" />
+			</div>
+			<div v-else-if="isAudio" :class="$style.thumbSlot">
+				<MusicIcon :size="24" :class="$style.fallbackIcon" />
+			</div>
+			<div v-else :class="$style.thumbSlot">
+				<FileIcon :size="24" :class="$style.fallbackIcon" />
+			</div>
+		</div>
 		<div :class="$style.fileInfo">
 			<span :class="$style.fileName">{{ getFileName(file.path) }}</span>
 			<span :class="$style.filePathText">{{ file.path }}</span>
@@ -54,13 +154,47 @@ const emit = defineEmits<{
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
-	gap: 16px;
+	gap: 12px;
 	padding: 8px 12px;
 	background: var(--color-main-background);
 	border: 1px solid var(--color-border);
 	border-radius: var(--border-radius, 4px);
 	min-width: 0;
 	box-sizing: border-box;
+}
+
+.previewBadge {
+	flex-shrink: 0;
+	width: 44px;
+	height: 56px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: var(--color-background-hover);
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius, 4px);
+	overflow: hidden;
+}
+
+.thumbSlot {
+	width: 100%;
+	height: 100%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.thumbSlot :global(.mobilesheetsmanager-file-thumb),
+.imgThumb {
+	display: block;
+	max-width: 100%;
+	max-height: 100%;
+	object-fit: contain;
+	background-color: #ffffff;
+}
+
+.fallbackIcon {
+	color: var(--color-text-maxcontrast);
 }
 
 .fileInfo {
