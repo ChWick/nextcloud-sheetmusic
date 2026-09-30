@@ -48,11 +48,24 @@
   <div v-else :class="$style.songArea">
     <div v-if="selectedCount > 0" :class="$style.selectionBanner">
       <span :class="$style.selectionCount">{{ t('mobilesheetsmanager', '{count} songs selected', { count: selectedCount }) }}</span>
-      <NcButton size="small" variant="primary" @click="isBatchEditorOpen = true">
-        {{ t('mobilesheetsmanager', 'Edit selected ({count})', { count: selectedCount }) }}
+      <NcButton
+        size="small"
+        variant="primary"
+        :title="t('mobilesheetsmanager', 'Edit selected ({count})', { count: selectedCount })"
+        :aria-label="t('mobilesheetsmanager', 'Edit selected ({count})', { count: selectedCount })"
+        @click="isBatchEditorOpen = true">
+        <template #icon>
+          <PencilIcon :size="18" />
+        </template>
       </NcButton>
-      <NcButton size="small" @click="clearSelection">
-        {{ t('mobilesheetsmanager', 'Clear selection') }}
+      <NcButton
+        size="small"
+        :title="t('mobilesheetsmanager', 'Clear selection')"
+        :aria-label="t('mobilesheetsmanager', 'Clear selection')"
+        @click="clearSelection">
+        <template #icon>
+          <CloseIcon :size="18" />
+        </template>
       </NcButton>
     </div>
 
@@ -136,6 +149,8 @@ import { FilePickerClosed, getFilePickerBuilder } from '@nextcloud/dialogs';
 import { ref, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import NcButton from '@nextcloud/vue/components/NcButton';
+import CloseIcon from 'vue-material-design-icons/Close.vue';
+import PencilIcon from 'vue-material-design-icons/Pencil.vue';
 import SongEditor from '../components/SongEditor.vue';
 import SongFilterBar from '../components/SongFilterBar.vue';
 import SongViewer from '../components/SongViewer.vue';

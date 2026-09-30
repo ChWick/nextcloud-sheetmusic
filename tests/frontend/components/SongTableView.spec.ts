@@ -52,7 +52,7 @@ describe('SongTableView.vue', () => {
 		await row.trigger('click')
 		expect(wrapper.emitted('view-song')?.[0]).toEqual([songs[1]])
 
-		const editBtn = wrapper.findAll('button').find((btn) => btn.text() === 'Edit')
+		const editBtn = wrapper.findAll('button').find((btn) => btn.attributes('title') === 'Edit song' || btn.attributes('aria-label') === 'Edit song')
 		await editBtn?.trigger('click')
 		expect(wrapper.emitted('edit-song')?.[0]).toEqual([songs[1]])
 	})

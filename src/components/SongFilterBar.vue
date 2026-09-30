@@ -5,6 +5,7 @@ import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
+import FilterOffIcon from 'vue-material-design-icons/FilterOff.vue'
 import { computed } from 'vue'
 import { noneEntryOf } from '../composables/useSongFilters'
 
@@ -149,8 +150,12 @@ function clearAllFilters() {
 		<div v-if="hasActiveFilters" :class="$style.actions">
 			<NcButton
 				type="tertiary"
+				:title="t('mobilesheetsmanager', 'Clear filters')"
+				:aria-label="t('mobilesheetsmanager', 'Clear filters')"
 				@click="clearAllFilters">
-				{{ t('mobilesheetsmanager', 'Clear filters') }}
+				<template #icon>
+					<FilterOffIcon :size="20" />
+				</template>
 			</NcButton>
 		</div>
 	</div>

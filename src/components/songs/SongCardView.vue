@@ -2,6 +2,8 @@
 import type { EntityType, FilterEntity, Song } from '../../types/song'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import EyeIcon from 'vue-material-design-icons/Eye.vue'
+import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import { ref } from 'vue'
 
 defineProps<{
@@ -165,11 +167,23 @@ function handleSongClick(song: Song, e: Event) {
 			</div>
 
 			<div :class="$style.cardActions" @click.stop>
-				<NcButton size="small" @click="emit('edit-song', song)">
-					{{ t('mobilesheetsmanager', 'Edit') }}
+				<NcButton
+					size="small"
+					:title="t('mobilesheetsmanager', 'Edit song')"
+					:aria-label="t('mobilesheetsmanager', 'Edit song')"
+					@click="emit('edit-song', song)">
+					<template #icon>
+						<PencilIcon :size="18" />
+					</template>
 				</NcButton>
-				<NcButton size="small" @click="emit('view-song', song)">
-					{{ t('mobilesheetsmanager', 'View') }}
+				<NcButton
+					size="small"
+					:title="t('mobilesheetsmanager', 'View song')"
+					:aria-label="t('mobilesheetsmanager', 'View song')"
+					@click="emit('view-song', song)">
+					<template #icon>
+						<EyeIcon :size="18" />
+					</template>
 				</NcButton>
 			</div>
 		</div>
