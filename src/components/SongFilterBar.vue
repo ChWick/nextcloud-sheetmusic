@@ -162,7 +162,7 @@ function clearAllFilters() {
 	flex-direction: row;
 	flex-wrap: wrap;
 	gap: 12px 16px;
-	align-items: flex-start;
+	align-items: stretch;
 	padding: 12px 16px;
 	margin-bottom: 16px;
 	background-color: var(--color-background-hover);
@@ -189,20 +189,22 @@ function clearAllFilters() {
 	width: 100%;
 	min-width: 0;
 	max-width: 100%;
+	height: 100%;
 }
 
 .filterBar .input:global(.input-field),
 .filterBar .input :global(.input-field) {
 	min-width: 0;
 	width: 100%;
+	height: 100%;
 	margin: 0 !important;
 	margin-block-start: 0 !important;
 	padding: 0 !important;
 }
 
 .filterBar .input :global(.input-field__main-wrapper) {
-	height: var(--default-clickable-area, 44px);
 	min-height: var(--default-clickable-area, 44px);
+	height: 100%;
 	padding: 0 !important;
 	margin: 0 !important;
 }
@@ -212,8 +214,8 @@ function clearAllFilters() {
 }
 
 .filterBar .input :global(.input-field__input) {
-	height: var(--default-clickable-area, 44px) !important;
 	min-height: var(--default-clickable-area, 44px) !important;
+	height: 100% !important;
 	box-sizing: border-box !important;
 }
 
@@ -221,18 +223,20 @@ function clearAllFilters() {
 	width: 100%;
 	min-width: 0;
 	max-width: 100%;
+	height: 100%;
 }
 
 .filterBar .select:global(.nc-select.v-select.select),
 .filterBar .select :global(.nc-select.v-select.select) {
 	min-width: 0;
 	width: 100%;
+	height: 100%;
 	margin: 0 !important;
 }
 
 .filterBar .select :global(.vs__dropdown-toggle) {
 	min-height: var(--default-clickable-area, 44px);
-	height: auto;
+	height: 100%;
 	box-sizing: border-box;
 }
 
