@@ -11,13 +11,13 @@ test.describe('Song Editor UI & Action Buttons', () => {
 
 	test('renders icon-only action buttons for file attachments and form actions', async ({ page }) => {
 		// File attachment action buttons
-		const uploadBtn = page.getByRole('button', { name: 'Upload PDF from computer' })
-		const chooseNcBtn = page.getByRole('button', { name: 'Choose PDF from Nextcloud' })
+		const uploadBtn = page.getByRole('button', { name: 'Upload file from computer' })
+		const chooseNcBtn = page.getByRole('button', { name: 'Choose file from Nextcloud' })
 
 		await expect(uploadBtn).toBeVisible()
 		await expect(chooseNcBtn).toBeVisible()
-		await expect(uploadBtn).toHaveAttribute('title', 'Upload PDF from computer')
-		await expect(chooseNcBtn).toHaveAttribute('title', 'Choose PDF from Nextcloud')
+		await expect(uploadBtn).toHaveAttribute('title', 'Upload file from computer')
+		await expect(chooseNcBtn).toHaveAttribute('title', 'Choose file from Nextcloud')
 		await expect(uploadBtn.locator('svg')).toBeVisible()
 		await expect(chooseNcBtn.locator('svg')).toBeVisible()
 

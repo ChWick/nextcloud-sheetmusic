@@ -16,10 +16,19 @@ import { getFileName, openFileExternally } from '../utils/file'
 import { describeRequestFailure } from '../utils/api'
 import { apiDelete } from '../api/client'
 import ArrowLeftIcon from 'vue-material-design-icons/ArrowLeft.vue'
+import ChevronLeft from 'vue-material-design-icons/ChevronLeft.vue'
+import ChevronRight from 'vue-material-design-icons/ChevronRight.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
+import FitToScreenOutline from 'vue-material-design-icons/FitToScreenOutline.vue'
+import MagnifyMinus from 'vue-material-design-icons/MagnifyMinus.vue'
+import MagnifyPlus from 'vue-material-design-icons/MagnifyPlus.vue'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
-import { computed, nextTick, ref, watch } from 'vue'
+import RotateRight from 'vue-material-design-icons/RotateRight.vue'
+import ViewColumn from 'vue-material-design-icons/ViewColumn.vue'
+import ViewDay from 'vue-material-design-icons/ViewDay.vue'
+import ViewStream from 'vue-material-design-icons/ViewStream.vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import SongEditor from './SongEditor.vue'
 
 const props = withDefaults(
@@ -62,8 +71,27 @@ const deleteError = ref('')
 const deleteFiles = ref(true)
 const selectedFileId = ref('')
 let currentLoadId = 0
+let currentRenderId = 0
 /** Set when the song changed while the editor covered the PDF view, which defers the render. */
 let renderDeferred = false
+
+// Cached loaded PDF document to allow rapid local re-rendering on zoom/page/layout changes
+const loadedPdf = shallowRef<any>(null)
+const totalPages = ref(1)
+const currentPage = ref(1)
+
+// Viewer controls: layout, zoom, rotation
+type PageLayoutMode = 'continuous' | 'single' | 'double'
+type ZoomMode = 'fit-width' | 'fit-page' | 'custom'
+
+const pageLayout = ref<PageLayoutMode>('continuous')
+const zoomMode = ref<ZoomMode>('fit-width')
+const customScale = ref(1.0)
+const effectiveScale = ref(1.0)
+const rotation = ref(0)
+const imageScale = ref(1.0)
+
+const zoomSteps = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 4.0]
 
 const songComposers = computed(() => props.song?.composers ?? [])
 
@@ -95,6 +123,35 @@ const isUnsupportedFile = computed(() => {
 	return !isPdfFile.value && !isImageFile.value
 })
 
+const currentPageDisplay = computed(() => {
+	if (pageLayout.value === 'double') {
+		const next = Math.min(currentPage.value + 1, totalPages.value)
+		return currentPage.value === next ? `${currentPage.value}` : `${currentPage.value}–${next}`
+	}
+	if (pageLayout.value === 'continuous') {
+		return `1–${totalPages.value || 1}`
+	}
+	return `${currentPage.value}`
+})
+
+const zoomSelectValue = computed(() => {
+	if (zoomMode.value === 'fit-width') return 'fit-width'
+	if (zoomMode.value === 'fit-page') return 'fit-page'
+	const matches = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0].some((val) => Math.abs(val - customScale.value) < 0.01)
+	return matches ? String(customScale.value) : 'custom'
+})
+
+const isCustomZoom = computed(() => {
+	if (zoomMode.value === 'fit-width' || zoomMode.value === 'fit-page') return false
+	return ![0.5, 0.75, 1.0, 1.25, 1.5, 2.0].some((val) => Math.abs(val - customScale.value) < 0.01)
+})
+
+const imageStyle = computed(() => ({
+	transform: `rotate(${rotation.value}deg) scale(${imageScale.value})`,
+	transformOrigin: 'center center',
+	transition: 'transform 0.15s ease-out',
+}))
+
 /** Tab labels are kept short so that many files stay readable. */
 function getFileLabel(file: SongFile, index: number): string {
 	const name = getFileName(file.path)
@@ -117,9 +174,7 @@ function handleSaved(data: LibraryData, songId?: number) {
 }
 
 /**
- * Open the selected file in an external viewer: the file's URL goes to a new browser
- * tab, where the PDF is shown by the browser's own viewer or handed to the system's
- * PDF application - instead of the embedded view of this app.
+ * Open the selected file in an external viewer.
  */
 function openInExternalViewer() {
 	const filePath = selectedFile.value?.path
@@ -130,16 +185,14 @@ function openInExternalViewer() {
 }
 
 /**
- * The editor changed the song's files without saving (upload/attach). The editor has to
- * stay open, so the data is only passed on and 'saved' - which closes it - is not emitted.
+ * The editor changed the song's files without saving (upload/attach).
  */
 function handleUpdated(data: LibraryData) {
 	emit('updated', data)
 }
 
 /**
- * Delete the song: the song with every row pointing at it leaves the database, and its
- * files go with it to the Nextcloud trash bin when "Delete all attached files" is set.
+ * Delete the song.
  */
 async function confirmDeleteSong() {
 	if (!props.song || props.libraryId < 0) {
@@ -156,9 +209,6 @@ async function confirmDeleteSong() {
 			queryParams: { libraryId: props.libraryId, deleteFiles: deleteFiles.value },
 		})
 		isDeleteDialogOpen.value = false
-		// The payload is only a convenience. It must never turn a successful deletion into
-		// an error, so a missing body is passed on as undefined and the parent asks the
-		// server for the library instead.
 		const data = response.data?.ocs?.data
 		emit('deleted', data, songId)
 	} catch (error) {
@@ -168,9 +218,176 @@ async function confirmDeleteSong() {
 	}
 }
 
+function prevPage() {
+	if (pageLayout.value === 'double') {
+		currentPage.value = Math.max(1, currentPage.value - 2)
+	} else {
+		currentPage.value = Math.max(1, currentPage.value - 1)
+	}
+	renderCurrentView()
+}
+
+function nextPage() {
+	if (pageLayout.value === 'double') {
+		if (currentPage.value + 2 <= totalPages.value) {
+			currentPage.value += 2
+		} else if (currentPage.value + 1 <= totalPages.value) {
+			currentPage.value += 1
+		}
+	} else {
+		currentPage.value = Math.min(totalPages.value, currentPage.value + 1)
+	}
+	renderCurrentView()
+}
+
+function setPageLayout(mode: PageLayoutMode) {
+	if (pageLayout.value === mode) return
+	pageLayout.value = mode
+	renderCurrentView()
+}
+
+function setZoomMode(mode: ZoomMode) {
+	zoomMode.value = mode
+	if (isImageFile.value) {
+		imageScale.value = mode === 'fit-width' ? 1.0 : 0.75
+		return
+	}
+	renderCurrentView()
+}
+
+function onZoomSelect(event: Event) {
+	const val = (event.target as HTMLSelectElement).value
+	if (val === 'fit-width' || val === 'fit-page') {
+		setZoomMode(val)
+	} else if (val !== 'custom') {
+		const scale = parseFloat(val)
+		if (!Number.isNaN(scale) && scale > 0) {
+			zoomMode.value = 'custom'
+			customScale.value = scale
+			if (isImageFile.value) {
+				imageScale.value = scale
+			} else {
+				renderCurrentView()
+			}
+		}
+	}
+}
+
+function zoomIn() {
+	if (isImageFile.value) {
+		imageScale.value = Math.min(4.0, +(imageScale.value + 0.25).toFixed(2))
+		return
+	}
+	const current = effectiveScale.value
+	const next = zoomSteps.find((s) => s > current + 0.05) ?? Math.min(4.0, +(current + 0.25).toFixed(2))
+	zoomMode.value = 'custom'
+	customScale.value = next
+	renderCurrentView()
+}
+
+function zoomOut() {
+	if (isImageFile.value) {
+		imageScale.value = Math.max(0.25, +(imageScale.value - 0.25).toFixed(2))
+		return
+	}
+	const current = effectiveScale.value
+	const prev = [...zoomSteps].reverse().find((s) => s < current - 0.05) ?? Math.max(0.25, +(current - 0.25).toFixed(2))
+	zoomMode.value = 'custom'
+	customScale.value = prev
+	renderCurrentView()
+}
+
+function rotateClockwise() {
+	rotation.value = (rotation.value + 90) % 360
+	if (isPdfFile.value) {
+		renderCurrentView()
+	}
+}
+
+async function renderCurrentView() {
+	if (!loadedPdf.value || !pdfContainer.value) {
+		return
+	}
+
+	const renderId = ++currentRenderId
+	const pdf = loadedPdf.value
+	const total = pdf.numPages
+
+	await nextTick()
+	if (!pdfContainer.value || renderId !== currentRenderId) {
+		return
+	}
+
+	pdfContainer.value.replaceChildren()
+
+	// Determine which pages to render based on layout
+	let pagesToRender: number[] = []
+	if (pageLayout.value === 'single') {
+		pagesToRender = [Math.min(Math.max(1, currentPage.value), total)]
+	} else if (pageLayout.value === 'double') {
+		const start = Math.min(Math.max(1, currentPage.value), total)
+		pagesToRender = [start]
+		if (start + 1 <= total) {
+			pagesToRender.push(start + 1)
+		}
+	} else {
+		// Continuous: render all pages
+		pagesToRender = Array.from({ length: total }, (_, i) => i + 1)
+	}
+
+	for (const pageNumber of pagesToRender) {
+		if (renderId !== currentRenderId) {
+			return
+		}
+
+		const page = await pdf.getPage(pageNumber)
+		const unscaledViewport = page.getViewport({ scale: 1.0, rotation: rotation.value })
+
+		let scale = 1.25
+		if (zoomMode.value === 'fit-width') {
+			const containerW = (pdfContainer.value?.clientWidth && pdfContainer.value.clientWidth > 100)
+				? pdfContainer.value.clientWidth - 48
+				: 800
+			const targetW = pageLayout.value === 'double' ? (containerW - 24) / 2 : containerW
+			scale = targetW / unscaledViewport.width
+		} else if (zoomMode.value === 'fit-page') {
+			const containerH = (pdfContainer.value?.clientHeight && pdfContainer.value.clientHeight > 100)
+				? pdfContainer.value.clientHeight - 48
+				: 700
+			scale = containerH / unscaledViewport.height
+		} else {
+			scale = customScale.value
+		}
+
+		scale = Math.max(0.2, Math.min(scale, 4.0))
+		effectiveScale.value = scale
+
+		const viewport = page.getViewport({ scale, rotation: rotation.value })
+		const canvas = document.createElement('canvas')
+		canvas.width = Math.floor(viewport.width)
+		canvas.height = Math.floor(viewport.height)
+		canvas.className = 'mobilesheetsmanager-pdf-page'
+		pdfContainer.value?.append(canvas)
+
+		const canvasContext = canvas.getContext('2d')
+		if (canvasContext) {
+			canvasContext.fillStyle = '#ffffff'
+			canvasContext.fillRect(0, 0, canvas.width, canvas.height)
+			await page.render({
+				canvasContext,
+				viewport,
+				background: 'rgb(255, 255, 255)',
+			}).promise
+		}
+	}
+}
+
 async function renderSelectedFile() {
 	const loadId = ++currentLoadId
 	errorMessage.value = ''
+	loadedPdf.value = null
+	totalPages.value = 1
+	currentPage.value = 1
 
 	await nextTick()
 	if (pdfContainer.value) {
@@ -222,36 +439,11 @@ async function renderSelectedFile() {
 			return
 		}
 
-		await nextTick()
-		if (!pdfContainer.value || loadId !== currentLoadId) {
-			return
-		}
+		loadedPdf.value = pdf
+		totalPages.value = pdf.numPages
+		currentPage.value = 1
 
-		pdfContainer.value.replaceChildren()
-
-		for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
-			if (loadId !== currentLoadId) {
-				return
-			}
-			const page = await pdf.getPage(pageNumber)
-			const viewport = page.getViewport({ scale: 1.25 })
-			const canvas = document.createElement('canvas')
-			canvas.width = Math.floor(viewport.width)
-			canvas.height = Math.floor(viewport.height)
-			canvas.className = 'mobilesheetsmanager-pdf-page'
-			pdfContainer.value?.append(canvas)
-
-			const canvasContext = canvas.getContext('2d')
-			if (canvasContext) {
-				canvasContext.fillStyle = '#ffffff'
-				canvasContext.fillRect(0, 0, canvas.width, canvas.height)
-				await page.render({
-					canvasContext,
-					viewport,
-					background: 'rgb(255, 255, 255)',
-				}).promise
-			}
-		}
+		await renderCurrentView()
 	} catch (error) {
 		console.error('Failed to load or render PDF:', error)
 		if (loadId === currentLoadId) {
@@ -264,6 +456,20 @@ async function renderSelectedFile() {
 	}
 }
 
+function handleResize() {
+	if (zoomMode.value === 'fit-width' || zoomMode.value === 'fit-page') {
+		renderCurrentView()
+	}
+}
+
+onMounted(() => {
+	window.addEventListener('resize', handleResize)
+})
+
+onUnmounted(() => {
+	window.removeEventListener('resize', handleResize)
+})
+
 // Picking another song leaves any open editing session behind.
 watch(
 	() => props.song?.id,
@@ -274,20 +480,14 @@ watch(
 	},
 )
 
-// The song the editor works on can be refreshed in place - a file was added, renamed or
-// removed - which must not close the editor. The listed files are still followed, so the
-// tabs and the PDF view catch up once the editor is closed.
+// The song the editor works on can be refreshed in place.
 watch(
 	() => props.song,
 	(newSong) => {
 		const files = newSong?.files ?? []
-		// Keep the active tab when the very same file is still part of the song,
-		// e.g. after the editor refreshed the song data.
 		const keepsSelection = files.some((file) => String(file.id) === selectedFileId.value)
 		selectedFileId.value = keepsSelection ? selectedFileId.value : (files[0] ? String(files[0].id) : '')
 
-		// The editor's form replaces the PDF view, so there is no container to render
-		// into while it is open; the render waits until it is visible again.
 		if (isEditing.value) {
 			renderDeferred = true
 			return
@@ -299,8 +499,7 @@ watch(
 )
 
 // The v-if that hides the PDF while editing destroys every rendered canvas, so the
-// viewer must always re-render when the editor closes - not only for deferred song
-// changes.
+// viewer must always re-render when the editor closes.
 watch(isEditing, (editing) => {
 	if (!editing) {
 		renderDeferred = false
@@ -404,6 +603,143 @@ watch(isEditing, (editing) => {
 				</NcRadioGroup>
 			</div>
 
+			<!-- PDF / Image Viewer Toolbar -->
+			<div v-if="song && !isLoading && !errorMessage && (isPdfFile || isImageFile)" :class="$style.toolbar">
+				<!-- Left: Page navigation (for multi-page PDFs) -->
+				<div :class="$style.toolbarGroup">
+					<template v-if="isPdfFile">
+						<NcButton
+							variant="secondary"
+							size="small"
+							:disabled="currentPage <= 1 || pageLayout === 'continuous'"
+							:title="t('mobilesheetsmanager', 'Previous page')"
+							:aria-label="t('mobilesheetsmanager', 'Previous page')"
+							@click="prevPage">
+							<template #icon>
+								<ChevronLeft :size="20" />
+							</template>
+						</NcButton>
+						<span :class="$style.pageIndicator">
+							{{ t('mobilesheetsmanager', 'Page {current} of {total}', { current: currentPageDisplay, total: totalPages || 1 }) }}
+						</span>
+						<NcButton
+							variant="secondary"
+							size="small"
+							:disabled="currentPage >= totalPages || pageLayout === 'continuous'"
+							:title="t('mobilesheetsmanager', 'Next page')"
+							:aria-label="t('mobilesheetsmanager', 'Next page')"
+							@click="nextPage">
+							<template #icon>
+								<ChevronRight :size="20" />
+							</template>
+						</NcButton>
+					</template>
+				</div>
+
+				<!-- Center: Multi-page Layout Selector (for PDFs) -->
+				<div v-if="isPdfFile" :class="$style.toolbarGroup">
+					<div :class="$style.segmentedGroup">
+						<NcButton
+							size="small"
+							:variant="pageLayout === 'continuous' ? 'primary' : 'secondary'"
+							:title="t('mobilesheetsmanager', 'Continuous scroll (All pages)')"
+							:aria-label="t('mobilesheetsmanager', 'Continuous scroll (All pages)')"
+							@click="setPageLayout('continuous')">
+							<template #icon>
+								<ViewStream :size="18" />
+							</template>
+						</NcButton>
+						<NcButton
+							size="small"
+							:variant="pageLayout === 'single' ? 'primary' : 'secondary'"
+							:title="t('mobilesheetsmanager', 'Single page')"
+							:aria-label="t('mobilesheetsmanager', 'Single page')"
+							@click="setPageLayout('single')">
+							<template #icon>
+								<ViewDay :size="18" />
+							</template>
+						</NcButton>
+						<NcButton
+							size="small"
+							:variant="pageLayout === 'double' ? 'primary' : 'secondary'"
+							:title="t('mobilesheetsmanager', 'Two pages side-by-side')"
+							:aria-label="t('mobilesheetsmanager', 'Two pages side-by-side')"
+							@click="setPageLayout('double')">
+							<template #icon>
+								<ViewColumn :size="18" />
+							</template>
+						</NcButton>
+					</div>
+				</div>
+
+				<!-- Right: Zoom & Rotate Controls -->
+				<div :class="$style.toolbarGroup">
+					<NcButton
+						variant="secondary"
+						size="small"
+						:title="t('mobilesheetsmanager', 'Zoom out')"
+						:aria-label="t('mobilesheetsmanager', 'Zoom out')"
+						@click="zoomOut">
+						<template #icon>
+							<MagnifyMinus :size="18" />
+						</template>
+					</NcButton>
+
+					<div :class="$style.zoomSelector">
+						<select
+							:value="zoomSelectValue"
+							:aria-label="t('mobilesheetsmanager', 'Zoom level')"
+							:class="$style.zoomDropdown"
+							@change="onZoomSelect">
+							<option value="fit-width">{{ t('mobilesheetsmanager', 'Fit width') }}</option>
+							<option value="fit-page">{{ t('mobilesheetsmanager', 'Fit page') }}</option>
+							<option value="0.5">50%</option>
+							<option value="0.75">75%</option>
+							<option value="1.0">100%</option>
+							<option value="1.25">125%</option>
+							<option value="1.5">150%</option>
+							<option value="2.0">200%</option>
+							<option v-if="isCustomZoom" value="custom">
+								{{ Math.round((isImageFile ? imageScale : effectiveScale) * 100) }}%
+							</option>
+						</select>
+					</div>
+
+					<NcButton
+						variant="secondary"
+						size="small"
+						:title="t('mobilesheetsmanager', 'Zoom in')"
+						:aria-label="t('mobilesheetsmanager', 'Zoom in')"
+						@click="zoomIn">
+						<template #icon>
+							<MagnifyPlus :size="18" />
+						</template>
+					</NcButton>
+
+					<NcButton
+						variant="secondary"
+						size="small"
+						:title="t('mobilesheetsmanager', 'Fit to width')"
+						:aria-label="t('mobilesheetsmanager', 'Fit to width')"
+						@click="setZoomMode('fit-width')">
+						<template #icon>
+							<FitToScreenOutline :size="18" />
+						</template>
+					</NcButton>
+
+					<NcButton
+						variant="secondary"
+						size="small"
+						:title="t('mobilesheetsmanager', 'Rotate clockwise')"
+						:aria-label="t('mobilesheetsmanager', 'Rotate clockwise')"
+						@click="rotateClockwise">
+						<template #icon>
+							<RotateRight :size="18" />
+						</template>
+					</NcButton>
+				</div>
+			</div>
+
 			<div v-if="isLoading" :class="$style.loading">
 				<NcLoadingIcon :size="32" :name="t('mobilesheetsmanager', 'Loading song...')" />
 			</div>
@@ -415,7 +751,11 @@ watch(isEditing, (editing) => {
 			<div
 				v-if="song && !isLoading && !errorMessage && isImageFile"
 				:class="$style.imageViewer">
-				<img :src="selectedFile?.path" :alt="song?.title" :class="$style.viewerImage" />
+				<img
+					:src="selectedFile?.path"
+					:alt="song?.title"
+					:class="$style.viewerImage"
+					:style="imageStyle" />
 			</div>
 
 			<div
@@ -437,7 +777,12 @@ watch(isEditing, (editing) => {
 			<div
 				v-show="song && !isLoading && !errorMessage && isPdfFile"
 				ref="pdfContainer"
-				:class="$style.pdfViewer"
+				:class="[
+					$style.pdfViewer,
+					pageLayout === 'continuous' ? $style.layoutContinuous : '',
+					pageLayout === 'single' ? $style.layoutSingle : '',
+					pageLayout === 'double' ? $style.layoutDouble : '',
+				]"
 				:aria-label="song?.title" />
 
 		</template>
@@ -541,30 +886,113 @@ watch(isEditing, (editing) => {
 .fileTabs {
 	display: flex;
 	align-items: center;
-	margin-bottom: 12px;
+	margin-bottom: 8px;
 	padding: 2px;
 	overflow-x: auto;
+}
+
+.toolbar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 8px 12px;
+	background: var(--color-main-background);
+	border: 1px solid var(--color-border);
+	border-bottom: 0;
+	border-radius: var(--border-radius-large, 8px) var(--border-radius-large, 8px) 0 0;
+	box-sizing: border-box;
+}
+
+.toolbarGroup {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.segmentedGroup {
+	display: inline-flex;
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius, 4px);
+	overflow: hidden;
+}
+
+.segmentedGroup button {
+	border-radius: 0 !important;
+	border: 0 !important;
+}
+
+.segmentedGroup button:not(:last-child) {
+	border-right: 1px solid var(--color-border) !important;
+}
+
+.pageIndicator {
+	font-size: 0.85rem;
+	font-weight: 500;
+	color: var(--color-text-maxcontrast);
+	padding: 0 4px;
+	white-space: nowrap;
+}
+
+.zoomSelector {
+	display: inline-flex;
+	align-items: center;
+}
+
+.zoomDropdown {
+	background: var(--color-main-background);
+	color: var(--color-main-text);
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius, 4px);
+	padding: 4px 8px;
+	font-size: 0.85rem;
+	height: 34px;
+	cursor: pointer;
 }
 
 .pdfViewer,
 .imageViewer {
 	width: 100%;
-	height: 75vh;
+	height: 80vh;
 	overflow: auto;
 	scrollbar-gutter: stable;
 	border: 1px solid var(--color-border);
+	border-radius: 0 0 var(--border-radius-large, 8px) var(--border-radius-large, 8px);
 	background: var(--color-background-dark);
 	padding: 16px;
 	box-sizing: border-box;
 	display: flex;
+}
+
+.pdfViewer.layoutContinuous {
+	flex-direction: column;
+	align-items: center;
+	gap: 16px;
+}
+
+.pdfViewer.layoutSingle {
+	justify-content: center;
+	align-items: center;
+}
+
+.pdfViewer.layoutDouble {
+	flex-direction: row;
 	justify-content: center;
 	align-items: flex-start;
+	flex-wrap: wrap;
+	gap: 16px;
+}
+
+.imageViewer {
+	justify-content: center;
+	align-items: center;
 }
 
 .viewerImage {
 	max-width: 100%;
-	height: auto;
-	margin: 0 auto;
+	max-height: 100%;
+	object-fit: contain;
 	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
@@ -587,8 +1015,8 @@ watch(isEditing, (editing) => {
 	display: block;
 	max-width: 100%;
 	height: auto;
-	margin: 0 auto 16px;
 	background-color: #ffffff !important;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
 }
 
 .error {

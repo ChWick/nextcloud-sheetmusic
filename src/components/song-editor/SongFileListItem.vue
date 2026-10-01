@@ -25,6 +25,7 @@ const emit = defineEmits<{
 	delete: [file: SongFile]
 }>()
 
+const thumbnailContainer = ref<HTMLElement>()
 const isPdf = computed(() => props.file.path.toLowerCase().endsWith('.pdf'))
 const isImage = computed(() => {
 	const path = props.file.path.toLowerCase()

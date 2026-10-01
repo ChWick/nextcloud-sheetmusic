@@ -89,7 +89,7 @@ const globalStubs = {
 	global: {
 		stubs: {
 			NcButton: {
-				template: '<button :disabled="disabled" :title="title" :aria-label="ariaLabel" @click="$emit(\'click\')"><slot /><slot name="icon" /></button>',
+				template: '<button :disabled="disabled" :type="type" :title="title" :aria-label="ariaLabel"><slot /><slot name="icon" /></button>',
 				props: ['disabled', 'type', 'variant', 'title', 'ariaLabel'],
 			},
 			NcTextField: {
@@ -233,5 +233,119 @@ describe('SongViewer.vue', () => {
 
 		expect(wrapper.text()).toContain('No file available for this song.')
 		expect(pdfCanvasCount(wrapper)).toBe(0)
+	})
+
+	it('renders PDF toolbar with page navigation, layout modes, zoom and rotate buttons', async () => {
+		const wrapper = mount(SongViewer, {
+			props: { song: mockSong, libraryId: 1 },
+			...globalStubs,
+		})
+
+		await settle()
+
+		// Page indicator
+		expect(wrapper.text()).toContain('Page 1–1 of 1')
+
+		const buttons = wrapper.findAll('button')
+		const zoomInBtn = buttons.find((btn) => btn.attributes('title') === 'Zoom in')
+		const zoomOutBtn = buttons.find((btn) => btn.attributes('title') === 'Zoom out')
+		const fitWidthBtn = buttons.find((btn) => btn.attributes('title') === 'Fit to width')
+		const rotateBtn = buttons.find((btn) => btn.attributes('title') === 'Rotate clockwise')
+		const continuousBtn = buttons.find((btn) => btn.attributes('title') === 'Continuous scroll (All pages)')
+		const singlePageBtn = buttons.find((btn) => btn.attributes('title') === 'Single page')
+		const doublePageBtn = buttons.find((btn) => btn.attributes('title') === 'Two pages side-by-side')
+
+		expect(zoomInBtn).toBeDefined()
+		expect(zoomOutBtn).toBeDefined()
+		expect(fitWidthBtn).toBeDefined()
+		expect(rotateBtn).toBeDefined()
+		expect(continuousBtn).toBeDefined()
+		expect(singlePageBtn).toBeDefined()
+		expect(doublePageBtn).toBeDefined()
+
+		// Zoom select dropdown
+		const select = wrapper.find('select')
+		expect(select.exists()).toBe(true)
+	})
+
+	it('switches layout modes (single page, double page, continuous) and updates zoom & rotation', async () => {
+		const wrapper = mount(SongViewer, {
+			props: { song: mockSong, libraryId: 1 },
+			...globalStubs,
+		})
+
+		await settle()
+
+		// Switch to single page
+		const singlePageBtn = wrapper.findAll('button').find((btn) => btn.attributes('title') === 'Single page')
+		await singlePageBtn!.trigger('click')
+		await settle()
+		expect(wrapper.text()).toContain('Page 1 of 1')
+
+		// Switch to double page
+		const doublePageBtn = wrapper.findAll('button').find((btn) => btn.attributes('title') === 'Two pages side-by-side')
+		await doublePageBtn!.trigger('click')
+		await settle()
+		expect(wrapper.text()).toContain('Page 1 of 1')
+
+		// Switch back to continuous
+		const continuousBtn = wrapper.findAll('button').find((btn) => btn.attributes('title') === 'Continuous scroll (All pages)')
+		await continuousBtn!.trigger('click')
+		await settle()
+		expect(wrapper.text()).toContain('Page 1–1 of 1')
+
+		// Click zoom in
+		const zoomInBtn = wrapper.findAll('button').find((btn) => btn.attributes('title') === 'Zoom in')
+		await zoomInBtn!.trigger('click')
+		await settle()
+
+		// Click zoom out
+		const zoomOutBtn = wrapper.findAll('button').find((btn) => btn.attributes('title') === 'Zoom out')
+		await zoomOutBtn!.trigger('click')
+		await settle()
+
+		// Click rotate clockwise
+		const rotateBtn = wrapper.findAll('button').find((btn) => btn.attributes('title') === 'Rotate clockwise')
+		await rotateBtn!.trigger('click')
+		await settle()
+
+		// Select zoom preset
+		const select = wrapper.find('select')
+		await select.setValue('1.5')
+		await select.trigger('change')
+		await settle()
+
+		expect(pdfCanvasCount(wrapper)).toBe(1)
+	})
+
+	it('renders inline image and toolbar for image files', async () => {
+		const imageSong: Song = {
+			...mockSong,
+			files: [{ id: 101, path: '/dav/files/admin/Noten/sheet.png' }],
+		}
+		const wrapper = mount(SongViewer, {
+			props: { song: imageSong, libraryId: 1 },
+			...globalStubs,
+		})
+
+		await settle()
+
+		const img = wrapper.find('img')
+		expect(img.exists()).toBe(true)
+		expect(img.attributes('src')).toBe('/dav/files/admin/Noten/sheet.png')
+
+		// Toolbar should be visible with zoom and rotate
+		const zoomInBtn = wrapper.findAll('button').find((btn) => btn.attributes('title') === 'Zoom in')
+		expect(zoomInBtn).toBeDefined()
+		await zoomInBtn!.trigger('click')
+		await settle()
+
+		const rotateBtn = wrapper.findAll('button').find((btn) => btn.attributes('title') === 'Rotate clockwise')
+		expect(rotateBtn).toBeDefined()
+		await rotateBtn!.trigger('click')
+		await settle()
+
+		// Image should have transform applied
+		expect(img.attributes('style')).toContain('rotate(90deg)')
 	})
 })
