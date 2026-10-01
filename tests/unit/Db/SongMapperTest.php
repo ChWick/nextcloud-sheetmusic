@@ -28,7 +28,7 @@ final class SongMapperTest extends TestCase {
 		self::assertNotFalse($databasePath);
 		$this->databasePath = $databasePath;
 		$database = new \PDO('sqlite:' . $this->databasePath);
-		$database->exec('CREATE TABLE Songs(Id INTEGER PRIMARY KEY, Title VARCHAR(255), SortTitle VARCHAR(255), SongId INTEGER, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
+		$database->exec('CREATE TABLE Songs(Id INTEGER PRIMARY KEY, Title VARCHAR(255), SortTitle VARCHAR(255), Stars INTEGER DEFAULT 0, Difficulty INTEGER DEFAULT 0, Duration INTEGER DEFAULT 0, Keywords VARCHAR(255) DEFAULT \'\', Custom VARCHAR(255) DEFAULT \'\', Custom2 VARCHAR(255) DEFAULT \'\', SongId INTEGER, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
 		$database->exec('CREATE TABLE Files(Id INTEGER PRIMARY KEY,SongId INTEGER,Path VARCHAR(255),PageOrder VARCHAR(255),FileSize INTEGER,LastModified INTEGER,Source INTEGER,Type INTEGER,Password VARCHAR(255) DEFAULT \'\',SourceFilePageCount INTEGER,FileHash INTEGER,Width INTEGER,Height INTEGER)');
 		$database->exec('CREATE TABLE Collections(Id INTEGER PRIMARY KEY, Name VARCHAR(255), SortBy INTEGER DEFAULT 1, Ascending INTEGER DEFAULT 1, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
 		$database->exec('CREATE TABLE CollectionSong(Id INTEGER PRIMARY KEY, CollectionId INTEGER, SongId INTEGER)');
@@ -42,7 +42,7 @@ final class SongMapperTest extends TestCase {
 		$database->exec('CREATE TABLE GenresSongs(Id INTEGER PRIMARY KEY, GenreId INTEGER, SongId INTEGER)');
 		$database->exec('CREATE TABLE MetronomeSettings(Id INTEGER PRIMARY KEY, SongId INTEGER, Bpm INTEGER)');
 
-		$database->exec("INSERT INTO Songs (Id, Title, SortTitle) VALUES (1, 'Zebra', 'Zebra'), (2, 'Alpha', 'Alpha')");
+		$database->exec("INSERT INTO Songs (Id, Title, SortTitle, Stars, Difficulty, Duration, Keywords, Custom, Custom2) VALUES (1, 'Zebra', 'Zebra', 5, 3, 240, 'jazz, fast', 'Key C', 'Arrangement A'), (2, 'Alpha', 'Alpha', 0, 0, 0, '', '', '')");
 		$database->exec("INSERT INTO Files (Id, SongId, Path) VALUES (1, 1, '/remote.php/dav/files/admin/Noten/Zebra.pdf'), (2, 2, '/remote.php/dav/files/admin/Noten/Alpha.pdf')");
 
 		$database->exec("INSERT INTO Composer (Id, Name) VALUES (10, 'Beethoven'), (20, 'Bach')");
@@ -761,6 +761,63 @@ final class SongMapperTest extends TestCase {
 		$stmt = $database->query("SELECT Type FROM Files WHERE Path = '/remote.php/dav/files/admin/Noten/image.png'");
 		$row = $stmt->fetch();
 		self::assertSame(SongMapper::FILE_TYPE_IMAGE, (int)$row['Type']);
+	}
+
+	public function testSongAttributesAreLoadedAndSaved(): void {
+		$mapper = $this->mapper();
+		$song1 = $mapper->findSong($this->databasePath, 1);
+		self::assertNotNull($song1);
+		self::assertSame(5, $song1->stars);
+		self::assertSame(3, $song1->difficulty);
+		self::assertSame(240, $song1->duration);
+		self::assertSame('jazz, fast', $song1->keywords);
+		self::assertSame('Key C', $song1->custom);
+		self::assertSame('Arrangement A', $song1->custom2);
+
+		$createdId = $mapper->createSong(
+			$this->databasePath,
+			'New Piece',
+			[], [], [], [],
+			stars: 4,
+			difficulty: 2,
+			duration: 180,
+			keywords: 'baroque',
+			custom: 'Solo',
+			custom2: 'Op. 1',
+		);
+
+		$createdSong = $mapper->findSong($this->databasePath, $createdId);
+		self::assertNotNull($createdSong);
+		self::assertSame('New Piece', $createdSong->title);
+		self::assertSame(4, $createdSong->stars);
+		self::assertSame(2, $createdSong->difficulty);
+		self::assertSame(180, $createdSong->duration);
+		self::assertSame('baroque', $createdSong->keywords);
+		self::assertSame('Solo', $createdSong->custom);
+		self::assertSame('Op. 1', $createdSong->custom2);
+
+		$mapper->updateSong(
+			$this->databasePath,
+			$createdId,
+			'Updated Piece',
+			[], [], [], [],
+			stars: 5,
+			difficulty: 4,
+			duration: 210,
+			keywords: 'baroque, revised',
+			custom: 'Duo',
+			custom2: 'Op. 1b',
+		);
+
+		$updatedSong = $mapper->findSong($this->databasePath, $createdId);
+		self::assertNotNull($updatedSong);
+		self::assertSame('Updated Piece', $updatedSong->title);
+		self::assertSame(5, $updatedSong->stars);
+		self::assertSame(4, $updatedSong->difficulty);
+		self::assertSame(210, $updatedSong->duration);
+		self::assertSame('baroque, revised', $updatedSong->keywords);
+		self::assertSame('Duo', $updatedSong->custom);
+		self::assertSame('Op. 1b', $updatedSong->custom2);
 	}
 
 	/**

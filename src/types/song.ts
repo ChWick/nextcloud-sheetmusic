@@ -5,9 +5,21 @@ export type Book = components['schemas']['Book']
 export type Collection = components['schemas']['Collection']
 export type Artist = components['schemas']['Artist']
 export type SongFile = components['schemas']['SongFile']
-export type Song = components['schemas']['Song']
-export type LibraryData = components['schemas']['LibraryData']
-export type CreatedSongData = components['schemas']['CreatedSongData']
+export type Song = components['schemas']['Song'] & {
+	stars?: number
+	difficulty?: number
+	duration?: number
+	keywords?: string
+	custom?: string
+	custom2?: string
+	sortTitle?: string
+}
+export type LibraryData = components['schemas']['LibraryData'] & {
+	songs: Song[]
+}
+export type CreatedSongData = components['schemas']['CreatedSongData'] & {
+	songs: Song[]
+}
 export type FileLogLevel = components['schemas']['FileLogLevel']
 export type FileLogEntry = components['schemas']['FileLogEntry']
 export type SongPrefill = components['schemas']['SongPrefill']
@@ -19,7 +31,7 @@ export type EntityType = 'composers' | 'artists' | 'books' | 'collections'
 export type FilterEntity = Composer | Artist | Book | Collection
 
 /** The columns/fields of a song that can be toggled visible in song views. */
-export type SongColumn = 'title' | 'composer' | 'book' | 'collection' | 'artist' | 'lastModified' | 'dateCreated'
+export type SongColumn = 'title' | 'composer' | 'book' | 'collection' | 'artist' | 'stars' | 'difficulty' | 'duration' | 'keywords' | 'custom' | 'custom2' | 'lastModified' | 'dateCreated'
 
 export const DEFAULT_VISIBLE_COLUMNS: SongColumn[] = [
 	'title',

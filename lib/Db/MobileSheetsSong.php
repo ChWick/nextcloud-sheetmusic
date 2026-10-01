@@ -27,6 +27,13 @@ class MobileSheetsSong {
 		public readonly array $artists = [],
 		public readonly ?int $lastModified = null,
 		public readonly ?int $dateCreated = null,
+		public readonly int $stars = 0,
+		public readonly int $difficulty = 0,
+		public readonly int $duration = 0,
+		public readonly string $keywords = '',
+		public readonly string $custom = '',
+		public readonly string $custom2 = '',
+		public readonly string $sortTitle = '',
 	) {
 	}
 }

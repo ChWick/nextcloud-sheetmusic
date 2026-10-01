@@ -14,6 +14,7 @@ import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist'
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { getFileName, openFileExternally } from '../utils/file'
 import { describeRequestFailure } from '../utils/api'
+import { formatDifficulty, formatDuration, formatStars } from '../utils/song-formatter'
 import { apiDelete } from '../api/client'
 import ArrowLeftIcon from 'vue-material-design-icons/ArrowLeft.vue'
 import ChevronLeft from 'vue-material-design-icons/ChevronLeft.vue'
@@ -562,7 +563,7 @@ defineExpose({
 				</div>
 			</div>
 
-			<div v-if="!isEditing && (songComposers.length > 0 || songBooks.length > 0 || songCollections.length > 0 || songArtists.length > 0)" :class="$style.metadata">
+			<div v-if="!isEditing && (songComposers.length > 0 || songBooks.length > 0 || songCollections.length > 0 || songArtists.length > 0 || song.stars || song.difficulty || song.duration || song.keywords || song.custom || song.custom2)" :class="$style.metadata">
 				<div v-if="songComposers.length > 0" :class="$style.metaItem">
 					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Composer:') }}</span>
 					<span>{{ songComposers.map((c) => c.name).join(', ') }}</span>
@@ -579,11 +580,35 @@ defineExpose({
 					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Artist:') }}</span>
 					<span>{{ songArtists.map((a) => a.name).join(', ') }}</span>
 				</div>
+				<div v-if="song.stars" :class="$style.metaItem">
+					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Rating:') }}</span>
+					<span>{{ formatStars(song.stars) }}</span>
+				</div>
+				<div v-if="song.difficulty" :class="$style.metaItem">
+					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Difficulty:') }}</span>
+					<span>{{ formatDifficulty(song.difficulty) }}</span>
+				</div>
+				<div v-if="song.duration" :class="$style.metaItem">
+					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Duration:') }}</span>
+					<span>{{ formatDuration(song.duration) }}</span>
+				</div>
+				<div v-if="song.keywords" :class="$style.metaItem">
+					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Keywords:') }}</span>
+					<span>{{ song.keywords }}</span>
+				</div>
+				<div v-if="song.custom" :class="$style.metaItem">
+					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Custom:') }}</span>
+					<span>{{ song.custom }}</span>
+				</div>
+				<div v-if="song.custom2" :class="$style.metaItem">
+					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Custom 2:') }}</span>
+					<span>{{ song.custom2 }}</span>
+				</div>
 			</div>
 		</header>
 
 		<!-- Metadata bar when header is integrated into top bar -->
-		<div v-if="song && hideHeader && !isEditing && (songComposers.length > 0 || songBooks.length > 0 || songCollections.length > 0 || songArtists.length > 0)" :class="$style.metadata">
+		<div v-if="song && hideHeader && !isEditing && (songComposers.length > 0 || songBooks.length > 0 || songCollections.length > 0 || songArtists.length > 0 || song.stars || song.difficulty || song.duration || song.keywords || song.custom || song.custom2)" :class="$style.metadata">
 			<div v-if="songComposers.length > 0" :class="$style.metaItem">
 				<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Composer:') }}</span>
 				<span>{{ songComposers.map((c) => c.name).join(', ') }}</span>
@@ -599,6 +624,30 @@ defineExpose({
 			<div v-if="songArtists.length > 0" :class="$style.metaItem">
 				<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Artist:') }}</span>
 				<span>{{ songArtists.map((a) => a.name).join(', ') }}</span>
+			</div>
+			<div v-if="song.stars" :class="$style.metaItem">
+				<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Rating:') }}</span>
+				<span>{{ formatStars(song.stars) }}</span>
+			</div>
+			<div v-if="song.difficulty" :class="$style.metaItem">
+				<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Difficulty:') }}</span>
+				<span>{{ formatDifficulty(song.difficulty) }}</span>
+			</div>
+			<div v-if="song.duration" :class="$style.metaItem">
+				<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Duration:') }}</span>
+				<span>{{ formatDuration(song.duration) }}</span>
+			</div>
+			<div v-if="song.keywords" :class="$style.metaItem">
+				<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Keywords:') }}</span>
+				<span>{{ song.keywords }}</span>
+			</div>
+			<div v-if="song.custom" :class="$style.metaItem">
+				<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Custom:') }}</span>
+				<span>{{ song.custom }}</span>
+			</div>
+			<div v-if="song.custom2" :class="$style.metaItem">
+				<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Custom 2:') }}</span>
+				<span>{{ song.custom2 }}</span>
 			</div>
 		</div>
 

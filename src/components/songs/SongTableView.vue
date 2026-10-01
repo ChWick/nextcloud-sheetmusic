@@ -5,7 +5,7 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import EyeIcon from 'vue-material-design-icons/Eye.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import { computed, ref, watch } from 'vue'
-import { formatDateTimestamp, sortSongs, type SortKey, type SortOrder } from '../../utils/song-formatter'
+import { formatDateTimestamp, formatDifficulty, formatDuration, formatStars, sortSongs, type SortKey, type SortOrder } from '../../utils/song-formatter'
 
 const props = withDefaults(
 	defineProps<{
@@ -162,6 +162,24 @@ function handleSongClick(song: Song, e: Event) {
 					<th v-if="isColVisible('artist')" :class="$style.sortableHeader" @click="toggleSort('artist')">
 						{{ t('mobilesheetsmanager', 'Artist') }}{{ sortIndicator('artist') }}
 					</th>
+					<th v-if="isColVisible('stars')" :class="$style.sortableHeader" @click="toggleSort('stars')">
+						{{ t('mobilesheetsmanager', 'Rating') }}{{ sortIndicator('stars') }}
+					</th>
+					<th v-if="isColVisible('difficulty')" :class="$style.sortableHeader" @click="toggleSort('difficulty')">
+						{{ t('mobilesheetsmanager', 'Difficulty') }}{{ sortIndicator('difficulty') }}
+					</th>
+					<th v-if="isColVisible('duration')" :class="$style.sortableHeader" @click="toggleSort('duration')">
+						{{ t('mobilesheetsmanager', 'Duration') }}{{ sortIndicator('duration') }}
+					</th>
+					<th v-if="isColVisible('keywords')" :class="$style.sortableHeader" @click="toggleSort('keywords')">
+						{{ t('mobilesheetsmanager', 'Keywords') }}{{ sortIndicator('keywords') }}
+					</th>
+					<th v-if="isColVisible('custom')" :class="$style.sortableHeader" @click="toggleSort('custom')">
+						{{ t('mobilesheetsmanager', 'Custom') }}{{ sortIndicator('custom') }}
+					</th>
+					<th v-if="isColVisible('custom2')" :class="$style.sortableHeader" @click="toggleSort('custom2')">
+						{{ t('mobilesheetsmanager', 'Custom 2') }}{{ sortIndicator('custom2') }}
+					</th>
 					<th v-if="isColVisible('lastModified')" :class="$style.sortableHeader" @click="toggleSort('lastModified')">
 						{{ t('mobilesheetsmanager', 'Last modified') }}{{ sortIndicator('lastModified') }}
 					</th>
@@ -255,6 +273,24 @@ function handleSongClick(song: Song, e: Event) {
 							</span>
 						</template>
 						<span v-else :class="$style.emptyText">—</span>
+					</td>
+					<td v-if="isColVisible('stars')" :class="$style.metaCell">
+						{{ formatStars(song.stars) }}
+					</td>
+					<td v-if="isColVisible('difficulty')" :class="$style.metaCell">
+						{{ formatDifficulty(song.difficulty) }}
+					</td>
+					<td v-if="isColVisible('duration')" :class="$style.metaCell">
+						{{ formatDuration(song.duration) }}
+					</td>
+					<td v-if="isColVisible('keywords')" :class="$style.metaCell">
+						{{ song.keywords || '—' }}
+					</td>
+					<td v-if="isColVisible('custom')" :class="$style.metaCell">
+						{{ song.custom || '—' }}
+					</td>
+					<td v-if="isColVisible('custom2')" :class="$style.metaCell">
+						{{ song.custom2 || '—' }}
 					</td>
 					<td v-if="isColVisible('lastModified')" :class="$style.dateCell">
 						{{ formatDateTimestamp(song.lastModified) }}

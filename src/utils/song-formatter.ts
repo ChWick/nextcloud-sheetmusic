@@ -20,6 +20,23 @@ export function formatArtists(song: Song, fallback = '—'): string {
 	return song.artists.map(a => a.name).join(', ')
 }
 
+export function formatDuration(seconds?: number | null, fallback = '—'): string {
+	if (!seconds || seconds <= 0) return fallback
+	const mins = Math.floor(seconds / 60)
+	const secs = seconds % 60
+	return `${mins}:${secs.toString().padStart(2, '0')}`
+}
+
+export function formatStars(stars?: number | null, fallback = '—'): string {
+	if (!stars || stars <= 0) return fallback
+	return '★'.repeat(Math.min(5, stars)) + '☆'.repeat(Math.max(0, 5 - stars))
+}
+
+export function formatDifficulty(difficulty?: number | null, fallback = '—'): string {
+	if (!difficulty || difficulty <= 0) return fallback
+	return `${difficulty}/5`
+}
+
 export function formatDateTimestamp(timestamp?: number | null, fallback = '—'): string {
 	if (!timestamp || timestamp <= 0) return fallback
 	try {
@@ -35,7 +52,7 @@ export function formatDateTimestamp(timestamp?: number | null, fallback = '—')
 	}
 }
 
-export type SortKey = 'title' | 'composer' | 'book' | 'collection' | 'artist' | 'lastModified' | 'dateCreated'
+export type SortKey = 'title' | 'composer' | 'book' | 'collection' | 'artist' | 'stars' | 'difficulty' | 'duration' | 'keywords' | 'custom' | 'custom2' | 'lastModified' | 'dateCreated'
 export type SortOrder = 'asc' | 'desc'
 
 export function sortSongs(songs: Song[], sortKey: SortKey, sortOrder: SortOrder): Song[] {
@@ -49,6 +66,18 @@ export function sortSongs(songs: Song[], sortKey: SortKey, sortOrder: SortOrder)
 		} else if (sortKey === 'dateCreated') {
 			const valA = a.dateCreated ?? 0
 			const valB = b.dateCreated ?? 0
+			cmp = valA - valB
+		} else if (sortKey === 'stars') {
+			const valA = a.stars ?? 0
+			const valB = b.stars ?? 0
+			cmp = valA - valB
+		} else if (sortKey === 'difficulty') {
+			const valA = a.difficulty ?? 0
+			const valB = b.difficulty ?? 0
+			cmp = valA - valB
+		} else if (sortKey === 'duration') {
+			const valA = a.duration ?? 0
+			const valB = b.duration ?? 0
 			cmp = valA - valB
 		} else {
 			let valA = ''
@@ -74,6 +103,18 @@ export function sortSongs(songs: Song[], sortKey: SortKey, sortOrder: SortOrder)
 				case 'artist':
 					valA = formatArtists(a, '')
 					valB = formatArtists(b, '')
+					break
+				case 'keywords':
+					valA = a.keywords ?? ''
+					valB = b.keywords ?? ''
+					break
+				case 'custom':
+					valA = a.custom ?? ''
+					valB = b.custom ?? ''
+					break
+				case 'custom2':
+					valA = a.custom2 ?? ''
+					valB = b.custom2 ?? ''
 					break
 			}
 

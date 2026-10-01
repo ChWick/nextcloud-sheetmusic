@@ -313,6 +313,12 @@ describe('SongEditor.vue', () => {
 				bookIds: [],
 				collectionIds: [],
 				artistIds: [],
+				stars: 0,
+				difficulty: 0,
+				duration: 0,
+				keywords: '',
+				custom: '',
+				custom2: '',
 			},
 		)
 
@@ -327,5 +333,61 @@ describe('SongEditor.vue', () => {
 
 		expect(wrapper.emitted('saved')).toBeTruthy()
 		expect(wrapper.emitted('saved')![0][1]).toBe(99)
+	})
+
+	it('binds and submits song attributes (stars, difficulty, duration, keywords, custom)', async () => {
+		const wrapper = mount(SongEditor, {
+			props: {
+				song: {
+					id: 10,
+					title: 'Existing Song',
+					stars: 4,
+					difficulty: 3,
+					duration: 240,
+					keywords: 'allegro',
+					custom: 'Opus 5',
+					custom2: 'No. 2',
+					files: [],
+					composers: [],
+					books: [],
+					collections: [],
+					artists: [],
+				},
+				libraryId: 1,
+				composers: [],
+				books: [],
+				collections: [],
+				artists: [],
+			},
+			...globalStubs,
+		})
+
+		const starsInput = wrapper.find('input#song-rating-input')
+		expect((starsInput.element as HTMLInputElement).value).toBe('4')
+		await starsInput.setValue('5')
+
+		const keywordsInput = wrapper.find('input#song-keywords-input')
+		expect((keywordsInput.element as HTMLInputElement).value).toBe('allegro')
+		await keywordsInput.setValue('allegro, vivace')
+
+		await wrapper.find('form').trigger('submit.prevent')
+
+		expect(axios.post).toHaveBeenCalledWith(
+			'/ocs/v2.php/apps/mobilesheetsmanager/api/songs/10',
+			{
+				libraryId: 1,
+				title: 'Existing Song',
+				composerIds: [],
+				bookIds: [],
+				collectionIds: [],
+				artistIds: [],
+				stars: 5,
+				difficulty: 3,
+				duration: 240,
+				keywords: 'allegro, vivace',
+				custom: 'Opus 5',
+				custom2: 'No. 2',
+			},
+		)
 	})
 })

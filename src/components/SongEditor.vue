@@ -106,6 +106,13 @@ const selectedArtists = ref<Array<Artist | { name: string, id?: number }>>(
 		: prefillByName(props.prefill?.artists, props.artists, (artist) => artist.name, createArtistTag),
 )
 
+const stars = ref<number>(props.song?.stars ?? 0)
+const difficulty = ref<number>(props.song?.difficulty ?? 0)
+const duration = ref<number>(props.song?.duration ?? 0)
+const keywords = ref<string>(props.song?.keywords ?? '')
+const custom = ref<string>(props.song?.custom ?? '')
+const custom2 = ref<string>(props.song?.custom2 ?? '')
+
 function getServerFiles(song: Song | null): SongFile[] {
 	return song?.files ? [...song.files] : []
 }
@@ -134,6 +141,12 @@ watch(
 		selectedBooks.value = matchSelected(props.books, newSong?.books)
 		selectedCollections.value = matchSelected(props.collections, newSong?.collections)
 		selectedArtists.value = matchSelected(props.artists, newSong?.artists)
+		stars.value = newSong?.stars ?? 0
+		difficulty.value = newSong?.difficulty ?? 0
+		duration.value = newSong?.duration ?? 0
+		keywords.value = newSong?.keywords ?? ''
+		custom.value = newSong?.custom ?? ''
+		custom2.value = newSong?.custom2 ?? ''
 
 		// A refresh in place keeps the deletions staged in this session: the editor stays
 		// open now, and the file list of the refreshed song is what the displayed paths
@@ -416,6 +429,12 @@ async function saveSong(closeAfter: boolean) {
 			bookIds,
 			collectionIds,
 			artistIds,
+			stars: Number(stars.value) || 0,
+			difficulty: Number(difficulty.value) || 0,
+			duration: Number(duration.value) || 0,
+			keywords: keywords.value.trim(),
+			custom: custom.value.trim(),
+			custom2: custom2.value.trim(),
 		}
 		const response = existingSong
 			? await apiPost('/api/songs/{id}', payload, { pathParams: { id: existingSong.id } })
@@ -548,6 +567,59 @@ async function saveSong(closeAfter: boolean) {
 					label="name"
 					track-by="name"
 					:placeholder="t('mobilesheetsmanager', 'Select or type an artist…')" />
+			</div>
+
+			<div :class="$style.attributesGrid">
+				<div :class="$style.formGroup">
+					<NcTextField
+						id="song-rating-input"
+						v-model.number="stars"
+						type="number"
+						:min="0"
+						:max="5"
+						:placeholder="t('mobilesheetsmanager', '0-5')"
+						:label="t('mobilesheetsmanager', 'Rating (Stars 0-5)')" />
+				</div>
+				<div :class="$style.formGroup">
+					<NcTextField
+						id="song-difficulty-input"
+						v-model.number="difficulty"
+						type="number"
+						:min="0"
+						:max="5"
+						:placeholder="t('mobilesheetsmanager', '0-5')"
+						:label="t('mobilesheetsmanager', 'Difficulty (0-5)')" />
+				</div>
+				<div :class="$style.formGroup">
+					<NcTextField
+						id="song-duration-input"
+						v-model.number="duration"
+						type="number"
+						:min="0"
+						:placeholder="t('mobilesheetsmanager', 'Seconds (e.g. 180)')"
+						:label="t('mobilesheetsmanager', 'Duration (seconds)')" />
+				</div>
+				<div :class="$style.formGroup">
+					<NcTextField
+						id="song-keywords-input"
+						v-model="keywords"
+						:placeholder="t('mobilesheetsmanager', 'Keywords / tags…')"
+						:label="t('mobilesheetsmanager', 'Keywords')" />
+				</div>
+				<div :class="$style.formGroup">
+					<NcTextField
+						id="song-custom-input"
+						v-model="custom"
+						:placeholder="t('mobilesheetsmanager', 'Custom field…')"
+						:label="t('mobilesheetsmanager', 'Custom')" />
+				</div>
+				<div :class="$style.formGroup">
+					<NcTextField
+						id="song-custom2-input"
+						v-model="custom2"
+						:placeholder="t('mobilesheetsmanager', 'Custom field 2…')"
+						:label="t('mobilesheetsmanager', 'Custom 2')" />
+				</div>
 			</div>
 
 			<div :class="$style.fileSection">
@@ -702,6 +774,12 @@ async function saveSong(closeAfter: boolean) {
 	gap: 6px;
 	min-width: 0;
 	position: relative;
+}
+
+.attributesGrid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+	gap: 12px;
 }
 
 .formGroup:focus-within {

@@ -173,6 +173,13 @@ class SongMapper {
 		$songCols = $this->columnNames($database, 'Songs');
 		$hasLastModified = isset($songCols['lastmodified']);
 		$createdCol = isset($songCols['datecreated']) ? 'DateCreated' : (isset($songCols['creationdate']) ? 'CreationDate' : null);
+		$hasStars = isset($songCols['stars']);
+		$hasDifficulty = isset($songCols['difficulty']);
+		$hasDuration = isset($songCols['duration']);
+		$hasKeywords = isset($songCols['keywords']);
+		$hasCustom = isset($songCols['custom']);
+		$hasCustom2 = isset($songCols['custom2']);
+		$hasSortTitle = isset($songCols['sorttitle']);
 
 		$selectFields = ['Songs.Id', 'Songs.Title'];
 		if ($hasLastModified) {
@@ -180,6 +187,27 @@ class SongMapper {
 		}
 		if ($createdCol !== null) {
 			$selectFields[] = 'Songs.' . $createdCol . ' AS DateCreated';
+		}
+		if ($hasStars) {
+			$selectFields[] = 'Songs.Stars';
+		}
+		if ($hasDifficulty) {
+			$selectFields[] = 'Songs.Difficulty';
+		}
+		if ($hasDuration) {
+			$selectFields[] = 'Songs.Duration';
+		}
+		if ($hasKeywords) {
+			$selectFields[] = 'Songs.Keywords';
+		}
+		if ($hasCustom) {
+			$selectFields[] = 'Songs.Custom';
+		}
+		if ($hasCustom2) {
+			$selectFields[] = 'Songs.Custom2';
+		}
+		if ($hasSortTitle) {
+			$selectFields[] = 'Songs.SortTitle';
 		}
 
 		$statement = $database->query('SELECT ' . implode(', ', $selectFields) . ' FROM Songs ORDER BY Songs.Title COLLATE NOCASE ASC');
@@ -199,6 +227,13 @@ class SongMapper {
 					$this->resolveEntities($songArtists[$songId] ?? [], $artistsById),
 					isset($row['LastModified']) && $row['LastModified'] !== null ? (int)$row['LastModified'] : null,
 					isset($row['DateCreated']) && $row['DateCreated'] !== null ? (int)$row['DateCreated'] : null,
+					isset($row['Stars']) ? (int)$row['Stars'] : 0,
+					isset($row['Difficulty']) ? (int)$row['Difficulty'] : 0,
+					isset($row['Duration']) ? (int)$row['Duration'] : 0,
+					isset($row['Keywords']) ? (string)$row['Keywords'] : '',
+					isset($row['Custom']) ? (string)$row['Custom'] : '',
+					isset($row['Custom2']) ? (string)$row['Custom2'] : '',
+					isset($row['SortTitle']) ? (string)$row['SortTitle'] : '',
 				);
 			}
 		}
@@ -225,6 +260,13 @@ class SongMapper {
 		$songCols = $this->columnNames($database, 'Songs');
 		$hasLastModified = isset($songCols['lastmodified']);
 		$createdCol = isset($songCols['datecreated']) ? 'DateCreated' : (isset($songCols['creationdate']) ? 'CreationDate' : null);
+		$hasStars = isset($songCols['stars']);
+		$hasDifficulty = isset($songCols['difficulty']);
+		$hasDuration = isset($songCols['duration']);
+		$hasKeywords = isset($songCols['keywords']);
+		$hasCustom = isset($songCols['custom']);
+		$hasCustom2 = isset($songCols['custom2']);
+		$hasSortTitle = isset($songCols['sorttitle']);
 
 		$selectFields = [
 			's.Title',
@@ -235,6 +277,27 @@ class SongMapper {
 		}
 		if ($createdCol !== null) {
 			$selectFields[] = 's.' . $createdCol . ' AS DateCreated';
+		}
+		if ($hasStars) {
+			$selectFields[] = 's.Stars';
+		}
+		if ($hasDifficulty) {
+			$selectFields[] = 's.Difficulty';
+		}
+		if ($hasDuration) {
+			$selectFields[] = 's.Duration';
+		}
+		if ($hasKeywords) {
+			$selectFields[] = 's.Keywords';
+		}
+		if ($hasCustom) {
+			$selectFields[] = 's.Custom';
+		}
+		if ($hasCustom2) {
+			$selectFields[] = 's.Custom2';
+		}
+		if ($hasSortTitle) {
+			$selectFields[] = 's.SortTitle';
 		}
 		$selectFields = array_merge($selectFields, [
 			'g.Type as Genre',
@@ -281,6 +344,13 @@ class SongMapper {
 					'title' => (string)$row['Title'],
 					'lastModified' => isset($row['LastModified']) && $row['LastModified'] !== null ? (int)$row['LastModified'] : null,
 					'dateCreated' => isset($row['DateCreated']) && $row['DateCreated'] !== null ? (int)$row['DateCreated'] : null,
+					'stars' => isset($row['Stars']) ? (int)$row['Stars'] : 0,
+					'difficulty' => isset($row['Difficulty']) ? (int)$row['Difficulty'] : 0,
+					'duration' => isset($row['Duration']) ? (int)$row['Duration'] : 0,
+					'keywords' => isset($row['Keywords']) ? (string)$row['Keywords'] : '',
+					'custom' => isset($row['Custom']) ? (string)$row['Custom'] : '',
+					'custom2' => isset($row['Custom2']) ? (string)$row['Custom2'] : '',
+					'sortTitle' => isset($row['SortTitle']) ? (string)$row['SortTitle'] : '',
 					'composers' => [],
 					'books' => [],
 					'collections' => [],
@@ -321,6 +391,13 @@ class SongMapper {
 				array_values($song['artists']),
 				$song['lastModified'],
 				$song['dateCreated'],
+				$song['stars'] ?? 0,
+				$song['difficulty'] ?? 0,
+				$song['duration'] ?? 0,
+				$song['keywords'] ?? '',
+				$song['custom'] ?? '',
+				$song['custom2'] ?? '',
+				$song['sortTitle'] ?? '',
 			);
 		}
 
@@ -385,11 +462,6 @@ class SongMapper {
 	/**
 	 * Create a song in the MobileSheets database.
 	 *
-	 * MobileSheets keeps many more columns per song, but only the title is needed to make a
-	 * song show up in the library - the rest is filled in by the app the user syncs with.
-	 * The relations are written by updateSong(), so creating and editing a song share that
-	 * code.
-	 *
 	 * @param list<int> $composerIds
 	 * @param list<int> $bookIds
 	 * @param list<int> $collectionIds
@@ -399,10 +471,17 @@ class SongMapper {
 	public function createSong(
 		string $databasePath,
 		string $title,
-		array $composerIds,
-		array $bookIds,
-		array $collectionIds,
-		array $artistIds,
+		array $composerIds = [],
+		array $bookIds = [],
+		array $collectionIds = [],
+		array $artistIds = [],
+		int $stars = 0,
+		int $difficulty = 0,
+		int $duration = 0,
+		string $keywords = '',
+		string $custom = '',
+		string $custom2 = '',
+		string $sortTitle = '',
 	): int {
 		$database = new PDO('sqlite:' . $databasePath, options: [
 			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
@@ -411,10 +490,31 @@ class SongMapper {
 
 		$songId = $this->insertRow($database, 'Songs', [
 			'Title' => $title,
-			'SortTitle' => $title,
+			'SortTitle' => $sortTitle !== '' ? $sortTitle : $title,
+			'Stars' => $stars,
+			'Difficulty' => $difficulty,
+			'Duration' => $duration,
+			'Keywords' => $keywords,
+			'Custom' => $custom,
+			'Custom2' => $custom2,
 		] + $this->dateColumns($database, 'Songs'));
 
-		$this->updateSong($databasePath, $songId, $title, $composerIds, $bookIds, $collectionIds, $artistIds);
+		$this->updateSong(
+			$databasePath,
+			$songId,
+			$title,
+			$composerIds,
+			$bookIds,
+			$collectionIds,
+			$artistIds,
+			$stars,
+			$difficulty,
+			$duration,
+			$keywords,
+			$custom,
+			$custom2,
+			$sortTitle,
+		);
 
 		return $songId;
 	}
@@ -428,10 +528,17 @@ class SongMapper {
 		string $databasePath,
 		int $songId,
 		string $title,
-		array $composerIds,
-		array $bookIds,
-		array $collectionIds,
-		array $artistIds,
+		array $composerIds = [],
+		array $bookIds = [],
+		array $collectionIds = [],
+		array $artistIds = [],
+		int $stars = 0,
+		int $difficulty = 0,
+		int $duration = 0,
+		string $keywords = '',
+		string $custom = '',
+		string $custom2 = '',
+		string $sortTitle = '',
 	): void {
 		$database = new PDO('sqlite:' . $databasePath, options: [
 			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
@@ -442,11 +549,16 @@ class SongMapper {
 		/** @var list<string> $existingTables */
 		$existingTables = $tablesStatement !== false ? $tablesStatement->fetchAll(PDO::FETCH_COLUMN) : [];
 
-		// Update Song Title and SortTitle, stamping the change on LastModified. The
-		// creation date is set when the song is created and left alone by an update.
+		// Update Song Title, SortTitle, attributes, stamping the change on LastModified.
 		$this->updateRowById($database, 'Songs', [
 			'Title' => $title,
-			'SortTitle' => $title,
+			'SortTitle' => $sortTitle !== '' ? $sortTitle : $title,
+			'Stars' => $stars,
+			'Difficulty' => $difficulty,
+			'Duration' => $duration,
+			'Keywords' => $keywords,
+			'Custom' => $custom,
+			'Custom2' => $custom2,
 		] + $this->dateColumns($database, 'Songs', withCreation: false), $songId);
 
 		// Update Composers

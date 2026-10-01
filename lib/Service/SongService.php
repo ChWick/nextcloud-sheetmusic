@@ -46,6 +46,13 @@ class SongService {
 		array $bookIds = [],
 		array $collectionIds = [],
 		array $artistIds = [],
+		int $stars = 0,
+		int $difficulty = 0,
+		int $duration = 0,
+		string $keywords = '',
+		string $custom = '',
+		string $custom2 = '',
+		string $sortTitle = '',
 	): ?array {
 		$title = trim($title);
 		if ($title === '') {
@@ -65,6 +72,13 @@ class SongService {
 				$bookIds,
 				$collectionIds,
 				$artistIds,
+				$stars,
+				$difficulty,
+				$duration,
+				$keywords,
+				$custom,
+				$custom2,
+				$sortTitle,
 			);
 
 			return ['createdSongId' => $songId] + $this->songMapper->findLibraryData($databasePath);
@@ -88,6 +102,13 @@ class SongService {
 		array $bookIds = [],
 		array $collectionIds = [],
 		array $artistIds = [],
+		int $stars = 0,
+		int $difficulty = 0,
+		int $duration = 0,
+		string $keywords = '',
+		string $custom = '',
+		string $custom2 = '',
+		string $sortTitle = '',
 	): ?array {
 		if ($title === '') {
 			return null;
@@ -99,7 +120,22 @@ class SongService {
 		}
 
 		try {
-			$this->songMapper->updateSong($databasePath, $songId, $title, $composerIds, $bookIds, $collectionIds, $artistIds);
+			$this->songMapper->updateSong(
+				$databasePath,
+				$songId,
+				$title,
+				$composerIds,
+				$bookIds,
+				$collectionIds,
+				$artistIds,
+				$stars,
+				$difficulty,
+				$duration,
+				$keywords,
+				$custom,
+				$custom2,
+				$sortTitle,
+			);
 			$this->songFileService->syncSongFileMetadata($user, $databasePath, $songId);
 
 			return $this->songMapper->findLibraryData($databasePath);

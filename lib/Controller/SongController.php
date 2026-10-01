@@ -57,6 +57,13 @@ class SongController extends OCSController {
 		array $bookIds = [],
 		array $collectionIds = [],
 		array $artistIds = [],
+		int $stars = 0,
+		int $difficulty = 0,
+		int $duration = 0,
+		string $keywords = '',
+		string $custom = '',
+		string $custom2 = '',
+		string $sortTitle = '',
 	): DataResponse {
 		$title = $title ?? '';
 		if ($libraryId === null || trim($title) === '') {
@@ -77,6 +84,13 @@ class SongController extends OCSController {
 				$bookIds,
 				$collectionIds,
 				$artistIds,
+				$stars,
+				$difficulty,
+				$duration,
+				$keywords,
+				$custom,
+				$custom2,
+				$sortTitle,
 			);
 
 			if ($result === null) {
@@ -99,6 +113,13 @@ class SongController extends OCSController {
 		array $bookIds = [],
 		array $collectionIds = [],
 		array $artistIds = [],
+		int $stars = 0,
+		int $difficulty = 0,
+		int $duration = 0,
+		string $keywords = '',
+		string $custom = '',
+		string $custom2 = '',
+		string $sortTitle = '',
 	): DataResponse {
 		$title = $title ?? '';
 		if ($libraryId === null || $title === '') {
@@ -120,6 +141,13 @@ class SongController extends OCSController {
 				$bookIds,
 				$collectionIds,
 				$artistIds,
+				$stars,
+				$difficulty,
+				$duration,
+				$keywords,
+				$custom,
+				$custom2,
+				$sortTitle,
 			);
 
 			if ($result === null) {

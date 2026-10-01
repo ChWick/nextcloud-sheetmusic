@@ -5,7 +5,7 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import EyeIcon from 'vue-material-design-icons/Eye.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import { ref } from 'vue'
-import { formatDateTimestamp } from '../../utils/song-formatter'
+import { formatDateTimestamp, formatDifficulty, formatDuration, formatStars } from '../../utils/song-formatter'
 
 const props = defineProps<{
 	songs: Song[]
@@ -170,6 +170,36 @@ function handleSongClick(song: Song, e: Event) {
 							<template v-if="idx < song.artists.length - 1">, </template>
 						</template>
 					</div>
+				</div>
+
+				<div v-if="isColVisible('stars') && song.stars" :class="$style.metaRow">
+					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Rating:') }}</span>
+					<span>{{ formatStars(song.stars) }}</span>
+				</div>
+
+				<div v-if="isColVisible('difficulty') && song.difficulty" :class="$style.metaRow">
+					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Difficulty:') }}</span>
+					<span>{{ formatDifficulty(song.difficulty) }}</span>
+				</div>
+
+				<div v-if="isColVisible('duration') && song.duration" :class="$style.metaRow">
+					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Duration:') }}</span>
+					<span>{{ formatDuration(song.duration) }}</span>
+				</div>
+
+				<div v-if="isColVisible('keywords') && song.keywords" :class="$style.metaRow">
+					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Keywords:') }}</span>
+					<span>{{ song.keywords }}</span>
+				</div>
+
+				<div v-if="isColVisible('custom') && song.custom" :class="$style.metaRow">
+					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Custom:') }}</span>
+					<span>{{ song.custom }}</span>
+				</div>
+
+				<div v-if="isColVisible('custom2') && song.custom2" :class="$style.metaRow">
+					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Custom 2:') }}</span>
+					<span>{{ song.custom2 }}</span>
 				</div>
 
 				<div v-if="isColVisible('lastModified') && song.lastModified" :class="$style.metaRow">

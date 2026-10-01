@@ -5,7 +5,7 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import EyeIcon from 'vue-material-design-icons/Eye.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import { ref } from 'vue'
-import { formatDateTimestamp } from '../../utils/song-formatter'
+import { formatDateTimestamp, formatDifficulty, formatDuration, formatStars } from '../../utils/song-formatter'
 
 const props = defineProps<{
 	songs: Song[]
@@ -158,13 +158,29 @@ function handleSongClick(song: Song, e: Event) {
 								<template v-if="idx < song.artists.length - 1">, </template>
 							</template>
 						</template>
+						<template v-if="isColVisible('stars') && song.stars">
+							<span> • {{ formatStars(song.stars) }}</span>
+						</template>
+						<template v-if="isColVisible('difficulty') && song.difficulty">
+							<span> • {{ t('mobilesheetsmanager', 'Diff: {val}', { val: formatDifficulty(song.difficulty) }) }}</span>
+						</template>
+						<template v-if="isColVisible('duration') && song.duration">
+							<span> • {{ formatDuration(song.duration) }}</span>
+						</template>
+						<template v-if="isColVisible('keywords') && song.keywords">
+							<span> • {{ song.keywords }}</span>
+						</template>
+						<template v-if="isColVisible('custom') && song.custom">
+							<span> • {{ song.custom }}</span>
+						</template>
+						<template v-if="isColVisible('custom2') && song.custom2">
+							<span> • {{ song.custom2 }}</span>
+						</template>
 						<template v-if="isColVisible('lastModified') && song.lastModified">
-							<template v-if="isColVisible('composer') && song.composers?.length || isColVisible('book') && song.books?.length || isColVisible('collection') && song.collections?.length || isColVisible('artist') && song.artists?.length"> • </template>
-							<span>{{ t('mobilesheetsmanager', 'Modified: {date}', { date: formatDateTimestamp(song.lastModified) }) }}</span>
+							<span> • {{ t('mobilesheetsmanager', 'Modified: {date}', { date: formatDateTimestamp(song.lastModified) }) }}</span>
 						</template>
 						<template v-if="isColVisible('dateCreated') && song.dateCreated">
-							<template v-if="isColVisible('composer') && song.composers?.length || isColVisible('book') && song.books?.length || isColVisible('collection') && song.collections?.length || isColVisible('artist') && song.artists?.length || isColVisible('lastModified') && song.lastModified"> • </template>
-							<span>{{ t('mobilesheetsmanager', 'Created: {date}', { date: formatDateTimestamp(song.dateCreated) }) }}</span>
+							<span> • {{ t('mobilesheetsmanager', 'Created: {date}', { date: formatDateTimestamp(song.dateCreated) }) }}</span>
 						</template>
 					</span>
 				</div>
