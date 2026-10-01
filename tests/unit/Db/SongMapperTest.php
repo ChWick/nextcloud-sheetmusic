@@ -14,6 +14,7 @@ use OCA\MobileSheetsManager\Db\MobileSheetsBook;
 use OCA\MobileSheetsManager\Db\MobileSheetsCollection;
 use OCA\MobileSheetsManager\Db\MobileSheetsComposer;
 use OCA\MobileSheetsManager\Db\MobileSheetsFile;
+use OCA\MobileSheetsManager\Db\MobileSheetsGenre;
 use OCA\MobileSheetsManager\Db\MobileSheetsSong;
 use OCA\MobileSheetsManager\Db\SongMapper;
 use OCA\MobileSheetsManager\Service\MobileSheetsFileFacts;
@@ -38,7 +39,7 @@ final class SongMapperTest extends TestCase {
 		$database->exec('CREATE TABLE Books(Id INTEGER PRIMARY KEY, Title VARCHAR(255), SortBy INTEGER DEFAULT 1, Ascending INTEGER DEFAULT 1, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
 		$database->exec('CREATE TABLE Artists(Id INTEGER PRIMARY KEY, Name VARCHAR(255), DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
 		$database->exec('CREATE TABLE ArtistsSongs(Id INTEGER PRIMARY KEY, ArtistId INTEGER, SongId INTEGER)');
-		$database->exec('CREATE TABLE Genres(Id INTEGER PRIMARY KEY, Type VARCHAR(255))');
+		$database->exec('CREATE TABLE Genres(Id INTEGER PRIMARY KEY, Type VARCHAR(255), DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
 		$database->exec('CREATE TABLE GenresSongs(Id INTEGER PRIMARY KEY, GenreId INTEGER, SongId INTEGER)');
 		$database->exec('CREATE TABLE MetronomeSettings(Id INTEGER PRIMARY KEY, SongId INTEGER, Bpm INTEGER)');
 
@@ -56,6 +57,9 @@ final class SongMapperTest extends TestCase {
 
 		$database->exec("INSERT INTO Artists (Id, Name) VALUES (200, 'Coltrane')");
 		$database->exec('INSERT INTO ArtistsSongs (ArtistId, SongId) VALUES (200, 1)');
+
+		$database->exec("INSERT INTO Genres (Id, Type) VALUES (50, 'Jazz')");
+		$database->exec('INSERT INTO GenresSongs (GenreId, SongId) VALUES (50, 1)');
 
 		// A song may point at another song through its own SongId column, and a song has
 		// more rows than its files and links: settings such as the metronome live in their
@@ -87,23 +91,27 @@ final class SongMapperTest extends TestCase {
 		$this->assertSame('Zebra', $zebra->title);
 		$this->assertSame(['Beethoven'], $this->names($zebra->composers));
 		$this->assertSame(['Coltrane'], $this->names($zebra->artists));
+		$this->assertSame(['Jazz'], $this->names($zebra->genres));
 		$this->assertSame([], $zebra->books);
 		$this->assertSame(['Jazz Standards'], $this->names($zebra->collections));
 		$this->assertContainsOnlyInstancesOf(MobileSheetsComposer::class, $zebra->composers);
 		$this->assertContainsOnlyInstancesOf(MobileSheetsArtist::class, $zebra->artists);
 		$this->assertContainsOnlyInstancesOf(MobileSheetsCollection::class, $zebra->collections);
+		$this->assertContainsOnlyInstancesOf(MobileSheetsGenre::class, $zebra->genres);
 		$this->assertCount(1, $zebra->files);
 		$this->assertContainsOnlyInstancesOf(MobileSheetsFile::class, $zebra->files);
 		$this->assertSame(1, $zebra->files[0]->id);
 		$this->assertSame('/remote.php/dav/files/admin/Noten/Zebra.pdf', $zebra->files[0]->path);
 		$this->assertSame(10, $zebra->composers[0]->id);
 		$this->assertSame(200, $zebra->artists[0]->id);
+		$this->assertSame(50, $zebra->genres[0]->id);
 		$this->assertSame(1000, $zebra->collections[0]->id);
 
 		$alpha = $byId[2];
 		$this->assertSame('Alpha', $alpha->title);
 		$this->assertSame(['Bach'], $this->names($alpha->composers));
 		$this->assertSame([], $alpha->artists);
+		$this->assertSame([], $alpha->genres);
 		$this->assertSame(['Real Book 1'], $this->titles($alpha->books));
 		$this->assertSame(['Jazz Standards'], $this->names($alpha->collections));
 		$this->assertContainsOnlyInstancesOf(MobileSheetsBook::class, $alpha->books);
@@ -425,15 +433,18 @@ final class SongMapperTest extends TestCase {
 		$composerId = $mapper->createComposer($this->databasePath, 'Mozart');
 		$bookId = $mapper->createBook($this->databasePath, 'Real Book 2');
 		$collectionId = $mapper->createCollection($this->databasePath, 'Classical');
+		$genreId = $mapper->createGenre($this->databasePath, 'Swing');
 
 		$this->assertGreaterThan(0, $composerId);
 		$this->assertGreaterThan(0, $bookId);
 		$this->assertGreaterThan(0, $collectionId);
+		$this->assertGreaterThan(0, $genreId);
 
 		$data = $mapper->findLibraryData($this->databasePath);
 		$this->assertCount(3, $data['composers']);
 		$this->assertCount(2, $data['books']);
 		$this->assertCount(2, $data['collections']);
+		$this->assertCount(2, $data['genres']);
 	}
 
 	/**
@@ -519,6 +530,23 @@ final class SongMapperTest extends TestCase {
 		$this->assertSame(['Beethoven'], $this->names($zebra->composers));
 	}
 
+	public function testDeleteGenreKeepsTheSongsAndOnlyRemovesTheGenre(): void {
+		$mapper = $this->mapper();
+
+		$this->assertTrue($mapper->deleteEntity($this->databasePath, 'genres', 50));
+
+		$database = new \PDO('sqlite:' . $this->databasePath);
+		$this->assertSame(0, (int)$database->query('SELECT COUNT(*) FROM Genres WHERE Id = 50')->fetchColumn());
+		$this->assertSame(0, (int)$database->query('SELECT COUNT(*) FROM GenresSongs WHERE GenreId = 50')->fetchColumn());
+		$this->assertSame(2, (int)$database->query('SELECT COUNT(*) FROM Songs')->fetchColumn());
+
+		$data = $mapper->findLibraryData($this->databasePath);
+		$zebra = $data['songs'][1];
+		$this->assertSame(1, $zebra->id);
+		$this->assertSame([], $zebra->genres);
+		$this->assertSame(['Beethoven'], $this->names($zebra->composers));
+	}
+
 	public function testDeleteEntityOfAnUnknownIdRemovesNothing(): void {
 		$mapper = $this->mapper();
 
@@ -533,7 +561,7 @@ final class SongMapperTest extends TestCase {
 	public function testDeleteEntityOfAnUnknownTypeIsRejected(): void {
 		$this->expectException(\InvalidArgumentException::class);
 
-		$this->mapper()->deleteEntity($this->databasePath, 'genres', 1);
+		$this->mapper()->deleteEntity($this->databasePath, 'unknown_type', 1);
 	}
 
 	public function testUpdateFileRenamesTheStoredPath(): void {
@@ -644,6 +672,7 @@ final class SongMapperTest extends TestCase {
 			self::assertSame([], $data['books']);
 			self::assertSame([], $data['collections']);
 			self::assertSame([], $data['artists']);
+			self::assertSame([], $data['genres']);
 		} finally {
 			unlink($barePath);
 		}

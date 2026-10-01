@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Artist, Book, Collection, Composer, LibraryData, Song, SongFile } from '../types/song'
+import type { Artist, Book, Collection, Composer, Genre, LibraryData, Song, SongFile } from '../types/song'
 
 import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
@@ -40,6 +40,7 @@ const props = withDefaults(
 		books?: Book[]
 		collections?: Collection[]
 		artists?: Artist[]
+		genres?: Genre[]
 		hideHeader?: boolean
 	}>(),
 	{
@@ -49,6 +50,7 @@ const props = withDefaults(
 		books: () => [],
 		collections: () => [],
 		artists: () => [],
+		genres: () => [],
 		hideHeader: false,
 	},
 )
@@ -103,6 +105,8 @@ const songBooks = computed(() => props.song?.books ?? [])
 const songCollections = computed(() => props.song?.collections ?? [])
 
 const songArtists = computed(() => props.song?.artists ?? [])
+
+const songGenres = computed(() => props.song?.genres ?? [])
 
 const songFiles = computed(() => props.song?.files ?? [])
 
@@ -563,7 +567,7 @@ defineExpose({
 				</div>
 			</div>
 
-			<div v-if="!isEditing && (songComposers.length > 0 || songBooks.length > 0 || songCollections.length > 0 || songArtists.length > 0 || song.stars || song.difficulty || song.duration || song.keywords || song.custom || song.custom2)" :class="$style.metadata">
+			<div v-if="!isEditing && (songComposers.length > 0 || songBooks.length > 0 || songCollections.length > 0 || songArtists.length > 0 || songGenres.length > 0 || song.stars || song.difficulty || song.duration || song.keywords || song.custom || song.custom2)" :class="$style.metadata">
 				<div v-if="songComposers.length > 0" :class="$style.metaItem">
 					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Composer:') }}</span>
 					<span>{{ songComposers.map((c) => c.name).join(', ') }}</span>
@@ -579,6 +583,10 @@ defineExpose({
 				<div v-if="songArtists.length > 0" :class="$style.metaItem">
 					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Artist:') }}</span>
 					<span>{{ songArtists.map((a) => a.name).join(', ') }}</span>
+				</div>
+				<div v-if="songGenres.length > 0" :class="$style.metaItem">
+					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Genre:') }}</span>
+					<span>{{ songGenres.map((g) => g.name).join(', ') }}</span>
 				</div>
 				<div v-if="song.stars" :class="$style.metaItem">
 					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Rating:') }}</span>
@@ -608,7 +616,7 @@ defineExpose({
 		</header>
 
 		<!-- Metadata bar when header is integrated into top bar -->
-		<div v-if="song && hideHeader && !isEditing && (songComposers.length > 0 || songBooks.length > 0 || songCollections.length > 0 || songArtists.length > 0 || song.stars || song.difficulty || song.duration || song.keywords || song.custom || song.custom2)" :class="$style.metadata">
+		<div v-if="song && hideHeader && !isEditing && (songComposers.length > 0 || songBooks.length > 0 || songCollections.length > 0 || songArtists.length > 0 || songGenres.length > 0 || song.stars || song.difficulty || song.duration || song.keywords || song.custom || song.custom2)" :class="$style.metadata">
 			<div v-if="songComposers.length > 0" :class="$style.metaItem">
 				<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Composer:') }}</span>
 				<span>{{ songComposers.map((c) => c.name).join(', ') }}</span>
@@ -624,6 +632,10 @@ defineExpose({
 			<div v-if="songArtists.length > 0" :class="$style.metaItem">
 				<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Artist:') }}</span>
 				<span>{{ songArtists.map((a) => a.name).join(', ') }}</span>
+			</div>
+			<div v-if="songGenres.length > 0" :class="$style.metaItem">
+				<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Genre:') }}</span>
+				<span>{{ songGenres.map((g) => g.name).join(', ') }}</span>
 			</div>
 			<div v-if="song.stars" :class="$style.metaItem">
 				<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Rating:') }}</span>
@@ -659,7 +671,8 @@ defineExpose({
 			:composers="composers"
 			:books="books"
 			:collections="collections"
-            :artists="artists"
+			:artists="artists"
+			:genres="genres"
 			@saved="handleSaved"
 			@updated="handleUpdated"
 			@cancel="isEditing = false" />

@@ -52,6 +52,13 @@ class EntityController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/genres')]
+	public function createGenre(?int $libraryId = null, ?string $name = null): DataResponse {
+		$name = $name ?? (string)$this->request->getParam('name', '');
+		return $this->handleCreate('genre', $libraryId, $name);
+	}
+
+	#[NoAdminRequired]
 	#[ApiRoute(verb: 'DELETE', url: '/api/composers/{id}')]
 	public function deleteComposer(int $id, ?int $libraryId = null): DataResponse {
 		return $this->handleDelete('composers', $id, $libraryId);
@@ -73,6 +80,12 @@ class EntityController extends OCSController {
 	#[ApiRoute(verb: 'DELETE', url: '/api/artists/{id}')]
 	public function deleteArtist(int $id, ?int $libraryId = null): DataResponse {
 		return $this->handleDelete('artists', $id, $libraryId);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'DELETE', url: '/api/genres/{id}')]
+	public function deleteGenre(int $id, ?int $libraryId = null): DataResponse {
+		return $this->handleDelete('genres', $id, $libraryId);
 	}
 
 	private function handleCreate(string $type, ?int $libraryId, string $value): DataResponse {
@@ -98,7 +111,7 @@ class EntityController extends OCSController {
 	}
 
 	/**
-	 * @param 'composers'|'books'|'collections'|'artists' $type
+	 * @param 'composers'|'books'|'collections'|'artists'|'genres' $type
 	 */
 	private function handleDelete(string $type, int $id, ?int $libraryId): DataResponse {
 		if ($libraryId === null) {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Artist, Book, Collection, Composer, FilterEntity } from '../../types/song'
+import type { Artist, Book, Collection, Composer, Genre } from '../../types/song'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
@@ -19,6 +19,7 @@ export interface BatchUpdatePayload {
 	books?: CategoryBatchUpdate
 	collections?: CategoryBatchUpdate
 	artists?: CategoryBatchUpdate
+	genres?: CategoryBatchUpdate
 }
 
 const props = defineProps<{
@@ -28,6 +29,7 @@ const props = defineProps<{
 	books: Book[]
 	collections: Collection[]
 	artists: Artist[]
+	genres?: Genre[]
 }>()
 
 const emit = defineEmits<{
@@ -40,34 +42,40 @@ const enableComposers = ref(false)
 const enableBooks = ref(false)
 const enableCollections = ref(false)
 const enableArtists = ref(false)
+const enableGenres = ref(false)
 
 // Actions
 const composerAction = ref<BatchAction>('add')
 const bookAction = ref<BatchAction>('add')
 const collectionAction = ref<BatchAction>('add')
 const artistAction = ref<BatchAction>('add')
+const genreAction = ref<BatchAction>('add')
 
 // Selected entity arrays
 const selectedComposers = ref<Composer[]>([])
 const selectedBooks = ref<Book[]>([])
 const selectedCollections = ref<Collection[]>([])
 const selectedArtists = ref<Artist[]>([])
+const selectedGenres = ref<Genre[]>([])
 
 function resetForm() {
 	enableComposers.value = false
 	enableBooks.value = false
 	enableCollections.value = false
 	enableArtists.value = false
+	enableGenres.value = false
 
 	composerAction.value = 'add'
 	bookAction.value = 'add'
 	collectionAction.value = 'add'
 	artistAction.value = 'add'
+	genreAction.value = 'add'
 
 	selectedComposers.value = []
 	selectedBooks.value = []
 	selectedCollections.value = []
 	selectedArtists.value = []
+	selectedGenres.value = []
 }
 
 watch(() => props.open, (isOpen) => {
@@ -75,7 +83,7 @@ watch(() => props.open, (isOpen) => {
 })
 
 const isAnythingEnabled = computed(() => {
-	return enableComposers.value || enableBooks.value || enableCollections.value || enableArtists.value
+	return enableComposers.value || enableBooks.value || enableCollections.value || enableArtists.value || enableGenres.value
 })
 
 function handleApply() {
@@ -105,6 +113,12 @@ function handleApply() {
 		payload.artists = {
 			action: artistAction.value,
 			ids: selectedArtists.value.map((a) => a.id),
+		}
+	}
+	if (enableGenres.value) {
+		payload.genres = {
+			action: genreAction.value,
+			ids: selectedGenres.value.map((g) => g.id),
 		}
 	}
 
@@ -256,6 +270,38 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 						:close-on-select="false"
 						:input-label="t('mobilesheetsmanager', 'Artists')"
 						:placeholder="t('mobilesheetsmanager', 'Select artists…')"
+						label="name"
+						track-by="id" />
+				</div>
+			</div>
+
+			<!-- Genres Section -->
+			<div :class="$style.fieldGroup">
+				<div :class="$style.fieldHeader">
+					<NcCheckboxRadioSwitch
+						v-model="enableGenres"
+						type="checkbox">
+						{{ t('mobilesheetsmanager', 'Genres') }}
+					</NcCheckboxRadioSwitch>
+				</div>
+				<div v-if="enableGenres" :class="$style.fieldBody">
+					<div :class="$style.actionSelector">
+						<label v-for="opt in actionOptions" :key="opt.value" :class="$style.radioLabel">
+							<input
+								v-model="genreAction"
+								type="radio"
+								:name="'genre-action'"
+								:value="opt.value">
+							{{ opt.label }}
+						</label>
+					</div>
+					<NcSelect
+						v-model="selectedGenres"
+						:options="genres || []"
+						:multiple="true"
+						:close-on-select="false"
+						:input-label="t('mobilesheetsmanager', 'Genres')"
+						:placeholder="t('mobilesheetsmanager', 'Select genres…')"
 						label="name"
 						track-by="id" />
 				</div>

@@ -12,10 +12,12 @@
         v-model:selected-books="selectedBooks"
         v-model:selected-collections="selectedCollections"
         v-model:selected-artists="selectedArtists"
+        v-model:selected-genres="selectedGenres"
         :composers="composers"
         :books="books"
         :collections="collections"
         :artists="artists"
+        :genres="genres"
         @clear="clearFilters" />
     </div>
     <div :class="$style.listColumn">
@@ -80,7 +82,7 @@
 </template>
 
 <script setup lang="ts">
-import type { Artist, Book, Collection, Composer, EntityType, FilterEntity, LibraryData, Song } from '../types/song'
+import type { Artist, Book, Collection, Composer, EntityType, FilterEntity, Genre, LibraryData, Song } from '../types/song'
 
 import { translate as t } from '@nextcloud/l10n'
 import axios from '@nextcloud/axios'
@@ -98,7 +100,7 @@ import { apiDelete, apiPost } from '../api/client'
 
 const props = defineProps<{
   selectedLibrary: number
-  /** Which of the song filters this view manages: composers, artists, books or collections. */
+  /** Which of the song filters this view manages: composers, artists, books, collections or genres. */
   entityType: EntityType
 }>()
 
@@ -106,8 +108,8 @@ const router = useRouter()
 
 /** Everything this shared view needs to know about the entity kind it shows. */
 interface EntityConfig {
-  createEndpoint: '/api/composers' | '/api/artists' | '/api/books' | '/api/collections'
-  deleteEndpoint: '/api/composers/{id}' | '/api/artists/{id}' | '/api/books/{id}' | '/api/collections/{id}'
+  createEndpoint: '/api/composers' | '/api/artists' | '/api/books' | '/api/collections' | '/api/genres'
+  deleteEndpoint: '/api/composers/{id}' | '/api/artists/{id}' | '/api/books/{id}' | '/api/collections/{id}' | '/api/genres/{id}'
   nameKey: 'name' | 'title'
   singular: string
   plural: string
@@ -142,6 +144,13 @@ const entityConfigs: Record<EntityType, EntityConfig> = {
     singular: t('mobilesheetsmanager', 'collection'),
     plural: t('mobilesheetsmanager', 'Collections'),
   },
+  genres: {
+    createEndpoint: '/api/genres',
+    deleteEndpoint: '/api/genres/{id}',
+    nameKey: 'name',
+    singular: t('mobilesheetsmanager', 'genre'),
+    plural: t('mobilesheetsmanager', 'Genres'),
+  },
 }
 
 const config = computed<EntityConfig>(() => entityConfigs[props.entityType])
@@ -152,6 +161,7 @@ const {
   books,
   collections,
   artists,
+  genres,
   fileError,
   isLoading,
   handleLibraryDataUpdate,
@@ -163,6 +173,7 @@ const entities = computed<FilterEntity[]>(() => {
   if (props.entityType === 'artists') return artists.value
   if (props.entityType === 'books') return books.value
   if (props.entityType === 'collections') return collections.value
+  if (props.entityType === 'genres') return genres.value
   return []
 })
 
@@ -178,8 +189,8 @@ const deleteError = ref('')
 
 // The filter bar reads and writes its selections in the URL query, so the browser
 // history restores them when going back or forward.
-const { selectedComposers, selectedBooks, selectedCollections, selectedArtists, hasActiveFilters, filterSongs, clearFilters, filterBarVisible, toggleFilterBar } =
-  useSongFilters(() => ({ composers: composers.value, books: books.value, collections: collections.value, artists: artists.value }))
+const { selectedComposers, selectedBooks, selectedCollections, selectedArtists, selectedGenres, hasActiveFilters, filterSongs, clearFilters, filterBarVisible, toggleFilterBar } =
+  useSongFilters(() => ({ composers: composers.value, books: books.value, collections: collections.value, artists: artists.value, genres: genres.value }))
 
 /** Books carry a title, every other entity kind a name. */
 function entityLabel(entity: FilterEntity): string {

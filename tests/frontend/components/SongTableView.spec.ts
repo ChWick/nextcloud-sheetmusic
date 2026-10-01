@@ -16,6 +16,7 @@ describe('SongTableView.vue', () => {
 			books: [{ id: 10, title: 'Classics Vol 1' }],
 			collections: [{ id: 100, name: 'Symphonies' }],
 			artists: [{ id: 5, name: 'Berlin Phil' }],
+			genres: [{ id: 7, name: 'Classical' }],
 		},
 		{
 			id: 2,
@@ -34,12 +35,14 @@ describe('SongTableView.vue', () => {
 		expect(wrapper.text()).toContain('Book')
 		expect(wrapper.text()).toContain('Collection')
 		expect(wrapper.text()).toContain('Artist')
+		expect(wrapper.text()).toContain('Genre')
 
 		expect(wrapper.text()).toContain('Symphony No. 5')
 		expect(wrapper.text()).toContain('Beethoven')
 		expect(wrapper.text()).toContain('Classics Vol 1')
 		expect(wrapper.text()).toContain('Symphonies')
 		expect(wrapper.text()).toContain('Berlin Phil')
+		expect(wrapper.text()).toContain('Classical')
 	})
 
 	it('emits view-song and edit-song events when buttons are clicked', async () => {

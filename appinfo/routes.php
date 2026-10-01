@@ -65,6 +65,11 @@ return [
 			'verb' => 'POST',
 		],
 		[
+			'name' => 'Api#createGenre',
+			'url' => '/api/genres',
+			'verb' => 'POST',
+		],
+		[
 			'name' => 'Api#deleteComposer',
 			'url' => '/api/composers/{id}',
 			'verb' => 'DELETE',
@@ -82,6 +87,11 @@ return [
 		[
 			'name' => 'Api#deleteArtist',
 			'url' => '/api/artists/{id}',
+			'verb' => 'DELETE',
+		],
+		[
+			'name' => 'Api#deleteGenre',
+			'url' => '/api/genres/{id}',
 			'verb' => 'DELETE',
 		],
 		[

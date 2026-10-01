@@ -197,6 +197,12 @@ class ApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/genres')]
+	public function createGenre(?int $libraryId = null, ?string $name = null): DataResponse {
+		return $this->entityController->createGenre($libraryId, $name);
+	}
+
+	#[NoAdminRequired]
 	#[ApiRoute(verb: 'DELETE', url: '/api/composers/{id}')]
 	public function deleteComposer(int $id, ?int $libraryId = null): DataResponse {
 		return $this->entityController->deleteComposer($id, $libraryId);
@@ -218,5 +224,11 @@ class ApiController extends OCSController {
 	#[ApiRoute(verb: 'DELETE', url: '/api/artists/{id}')]
 	public function deleteArtist(int $id, ?int $libraryId = null): DataResponse {
 		return $this->entityController->deleteArtist($id, $libraryId);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'DELETE', url: '/api/genres/{id}')]
+	public function deleteGenre(int $id, ?int $libraryId = null): DataResponse {
+		return $this->entityController->deleteGenre($id, $libraryId);
 	}
 }

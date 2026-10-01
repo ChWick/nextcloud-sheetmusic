@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Artist, Book, Collection, Composer } from '../types/song'
+import type { Artist, Book, Collection, Composer, Genre } from '../types/song'
 
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
@@ -16,10 +16,12 @@ const props = withDefaults(
 		books?: Book[]
 		collections?: Collection[]
 		artists?: Artist[]
+		genres?: Genre[]
 		selectedComposers?: Composer[]
 		selectedBooks?: Book[]
 		selectedCollections?: Collection[]
 		selectedArtists?: Artist[]
+		selectedGenres?: Genre[]
 	}>(),
 	{
 		searchTitle: '',
@@ -27,10 +29,12 @@ const props = withDefaults(
 		books: () => [],
 		collections: () => [],
 		artists: () => [],
+		genres: () => [],
 		selectedComposers: () => [],
 		selectedBooks: () => [],
 		selectedCollections: () => [],
 		selectedArtists: () => [],
+		selectedGenres: () => [],
 	},
 )
 
@@ -40,6 +44,7 @@ const emit = defineEmits<{
 	'update:selectedBooks': [books: Book[]]
 	'update:selectedCollections': [collections: Collection[]]
 	'update:selectedArtists': [artists: Artist[]]
+	'update:selectedGenres': [genres: Genre[]]
 	'clear': []
 }>()
 
@@ -63,6 +68,11 @@ const artistOptions = computed(() => [
 	...props.artists,
 ])
 
+const genreOptions = computed(() => [
+	noneEntryOf('genres') as Genre,
+	...props.genres,
+])
+
 const hasActiveFilters = computed(() => {
 	return (
 		Boolean(props.searchTitle?.trim())
@@ -70,6 +80,7 @@ const hasActiveFilters = computed(() => {
 		|| props.selectedBooks.length > 0
 		|| props.selectedCollections.length > 0
 		|| props.selectedArtists.length > 0
+		|| props.selectedGenres.length > 0
 	)
 })
 
@@ -145,6 +156,20 @@ function clearAllFilters() {
 				track-by="id"
 				:class="$style.select"
 				@update:model-value="emit('update:selectedArtists', $event)" />
+		</div>
+
+		<div :class="$style.filterGroup">
+			<NcSelect
+				:model-value="selectedGenres"
+				:options="genreOptions"
+				:multiple="true"
+				:close-on-select="false"
+				:placeholder="t('mobilesheetsmanager', 'Filter by genre…')"
+				:input-label="t('mobilesheetsmanager', 'Genres')"
+				label="name"
+				track-by="id"
+				:class="$style.select"
+				@update:model-value="emit('update:selectedGenres', $event)" />
 		</div>
 
 		<div v-if="hasActiveFilters" :class="$style.actions">

@@ -172,6 +172,22 @@ function handleSongClick(song: Song, e: Event) {
 					</div>
 				</div>
 
+				<div v-if="isColVisible('genre') && song.genres && song.genres.length > 0" :class="$style.metaRow">
+					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Genre:') }}</span>
+					<div :class="$style.chipGroup">
+						<template v-for="(g, idx) in song.genres" :key="g.id">
+							<button
+								type="button"
+								:class="[$style.filterChip, isFiltered?.('genres', g.id) && $style.activeChip]"
+								:title="t('mobilesheetsmanager', 'Toggle filter for genre {name}', { name: g.name })"
+								@click.stop="emit('filter-entity', 'genres', g)">
+								{{ g.name }}
+							</button>
+							<template v-if="idx < song.genres.length - 1">, </template>
+						</template>
+					</div>
+				</div>
+
 				<div v-if="isColVisible('stars') && song.stars" :class="$style.metaRow">
 					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Rating:') }}</span>
 					<span>{{ formatStars(song.stars) }}</span>

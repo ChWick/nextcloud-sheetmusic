@@ -1,4 +1,4 @@
-import type { Artist, Book, Collection, Composer, EntityType, FilterEntity, Song } from '../types/song'
+import type { Artist, Book, Collection, Composer, EntityType, FilterEntity, Genre, Song } from '../types/song'
 import { translate as t } from '@nextcloud/l10n'
 import { computed, ref } from 'vue'
 import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
@@ -9,9 +9,10 @@ export interface FilterOptions {
 	books: Book[]
 	collections: Collection[]
 	artists: Artist[]
+	genres: Genre[]
 }
 
-const FILTER_TYPES: EntityType[] = ['composers', 'artists', 'books', 'collections']
+const FILTER_TYPES: EntityType[] = ['composers', 'artists', 'books', 'collections', 'genres']
 
 export const UNASSIGNED_ID = -1
 
@@ -26,6 +27,8 @@ export function noneEntryOf(entityType: EntityType): FilterEntity {
 			return { id: UNASSIGNED_ID, name: t('mobilesheetsmanager', '(No collection)') }
 		case 'artists':
 			return { id: UNASSIGNED_ID, name: t('mobilesheetsmanager', '(No artist)') }
+		case 'genres':
+			return { id: UNASSIGNED_ID, name: t('mobilesheetsmanager', '(No genre)') }
 	}
 }
 
@@ -95,7 +98,7 @@ export function useSongFilters(options: () => FilterOptions) {
 
 	/** The entries behind the ids of one filter parameter, in the order of the URL. */
 	function selectedOf(entityType: EntityType): FilterEntity[] {
-		const entries = options()[entityType] as FilterEntity[]
+		const entries = (options()[entityType] ?? []) as FilterEntity[]
 		const noneEntry = noneEntryOf(entityType)
 		return idsOf(entityType).map(id => {
 			if (id === UNASSIGNED_ID) {
@@ -140,11 +143,13 @@ export function useSongFilters(options: () => FilterOptions) {
 		const bookIds = new Set(idsOf('books'))
 		const collectionIds = new Set(idsOf('collections'))
 		const artistIds = new Set(idsOf('artists'))
+		const genreIds = new Set(idsOf('genres'))
 
 		if (!matchesCategory(song.composers, composerIds)) return false
 		if (!matchesCategory(song.books, bookIds)) return false
 		if (!matchesCategory(song.collections, collectionIds)) return false
 		if (!matchesCategory(song.artists, artistIds)) return false
+		if (!matchesCategory(song.genres, genreIds)) return false
 		return true
 	}
 
@@ -180,6 +185,10 @@ export function useSongFilters(options: () => FilterOptions) {
 		get: () => selectedOf('artists') as Artist[],
 		set: (value: Artist[]) => selectIds('artists', value.map(entry => entry.id)),
 	})
+	const selectedGenres = computed({
+		get: () => selectedOf('genres') as Genre[],
+		set: (value: Genre[]) => selectIds('genres', value.map(entry => entry.id)),
+	})
 
 	return {
 		searchTitle,
@@ -187,6 +196,7 @@ export function useSongFilters(options: () => FilterOptions) {
 		selectedBooks,
 		selectedCollections,
 		selectedArtists,
+		selectedGenres,
 		hasActiveFilters,
 		isFiltered,
 		toggleFilter,

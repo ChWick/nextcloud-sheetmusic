@@ -57,6 +57,7 @@ class SongController extends OCSController {
 		array $bookIds = [],
 		array $collectionIds = [],
 		array $artistIds = [],
+		array $genreIds = [],
 		int $stars = 0,
 		int $difficulty = 0,
 		int $duration = 0,
@@ -84,6 +85,7 @@ class SongController extends OCSController {
 				$bookIds,
 				$collectionIds,
 				$artistIds,
+				$genreIds,
 				$stars,
 				$difficulty,
 				$duration,
@@ -113,6 +115,7 @@ class SongController extends OCSController {
 		array $bookIds = [],
 		array $collectionIds = [],
 		array $artistIds = [],
+		array $genreIds = [],
 		int $stars = 0,
 		int $difficulty = 0,
 		int $duration = 0,
@@ -141,6 +144,7 @@ class SongController extends OCSController {
 				$bookIds,
 				$collectionIds,
 				$artistIds,
+				$genreIds,
 				$stars,
 				$difficulty,
 				$duration,
@@ -169,6 +173,7 @@ class SongController extends OCSController {
 		?array $books = null,
 		?array $collections = null,
 		?array $artists = null,
+		?array $genres = null,
 	): DataResponse {
 		if ($libraryId === null || empty($songIds)) {
 			return new DataResponse([], Http::STATUS_BAD_REQUEST);
@@ -188,6 +193,7 @@ class SongController extends OCSController {
 				$books,
 				$collections,
 				$artists,
+				$genres,
 			);
 
 			if ($result === null) {
