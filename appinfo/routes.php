@@ -65,26 +65,6 @@ return [
 			'verb' => 'POST',
 		],
 		[
-			'name' => 'Api#createGenre',
-			'url' => '/api/genres',
-			'verb' => 'POST',
-		],
-		[
-			'name' => 'Api#createKey',
-			'url' => '/api/keys',
-			'verb' => 'POST',
-		],
-		[
-			'name' => 'Api#createCustomGroup',
-			'url' => '/api/customgroups',
-			'verb' => 'POST',
-		],
-		[
-			'name' => 'Api#createYear',
-			'url' => '/api/years',
-			'verb' => 'POST',
-		],
-		[
 			'name' => 'Api#deleteComposer',
 			'url' => '/api/composers/{id}',
 			'verb' => 'DELETE',
@@ -105,26 +85,6 @@ return [
 			'verb' => 'DELETE',
 		],
 		[
-			'name' => 'Api#deleteGenre',
-			'url' => '/api/genres/{id}',
-			'verb' => 'DELETE',
-		],
-		[
-			'name' => 'Api#deleteKey',
-			'url' => '/api/keys/{id}',
-			'verb' => 'DELETE',
-		],
-		[
-			'name' => 'Api#deleteCustomGroup',
-			'url' => '/api/customgroups/{id}',
-			'verb' => 'DELETE',
-		],
-		[
-			'name' => 'Api#deleteYear',
-			'url' => '/api/years/{id}',
-			'verb' => 'DELETE',
-		],
-		[
 			'name' => 'Api#syncLibrary',
 			'url' => '/api/sync-library',
 			'verb' => 'POST',
@@ -132,6 +92,16 @@ return [
 		[
 			'name' => 'Api#deleteLibrary',
 			'url' => '/api/libraries/{id}',
+			'verb' => 'DELETE',
+		],
+		[
+			'name' => 'Api#createSignature',
+			'url' => '/api/signatures',
+			'verb' => 'POST',
+		],
+		[
+			'name' => 'Api#deleteSignature',
+			'url' => '/api/signatures/{id}',
 			'verb' => 'DELETE',
 		],
 	],

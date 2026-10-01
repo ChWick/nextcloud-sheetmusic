@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Artist, Book, Collection, Composer, CustomGroup, Genre, Key, Year } from '../../types/song'
+import type { Artist, Book, Collection, Composer, CustomGroup, Genre, Key, Signature, Year } from '../../types/song'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
@@ -23,6 +23,7 @@ export interface BatchUpdatePayload {
 	keys?: CategoryBatchUpdate
 	customGroups?: CategoryBatchUpdate
 	years?: CategoryBatchUpdate
+	signatures?: CategoryBatchUpdate
 }
 
 const props = defineProps<{
@@ -36,6 +37,7 @@ const props = defineProps<{
 	keys?: Key[]
 	customGroups?: CustomGroup[]
 	years?: Year[]
+	signatures?: Signature[]
 }>()
 
 const emit = defineEmits<{
@@ -52,6 +54,7 @@ const enableGenres = ref(false)
 const enableKeys = ref(false)
 const enableCustomGroups = ref(false)
 const enableYears = ref(false)
+const enableSignatures = ref(false)
 
 // Actions
 const composerAction = ref<BatchAction>('add')
@@ -62,6 +65,7 @@ const genreAction = ref<BatchAction>('add')
 const keyAction = ref<BatchAction>('add')
 const customGroupAction = ref<BatchAction>('add')
 const yearAction = ref<BatchAction>('add')
+const signatureAction = ref<BatchAction>('add')
 
 // Selected entity arrays
 const selectedComposers = ref<Composer[]>([])
@@ -72,6 +76,7 @@ const selectedGenres = ref<Genre[]>([])
 const selectedKeys = ref<Key[]>([])
 const selectedCustomGroups = ref<CustomGroup[]>([])
 const selectedYears = ref<Year[]>([])
+const selectedSignatures = ref<Signature[]>([])
 
 function resetForm() {
 	enableComposers.value = false
@@ -82,6 +87,7 @@ function resetForm() {
 	enableKeys.value = false
 	enableCustomGroups.value = false
 	enableYears.value = false
+	enableSignatures.value = false
 
 	composerAction.value = 'add'
 	bookAction.value = 'add'
@@ -91,6 +97,7 @@ function resetForm() {
 	keyAction.value = 'add'
 	customGroupAction.value = 'add'
 	yearAction.value = 'add'
+	signatureAction.value = 'add'
 
 	selectedComposers.value = []
 	selectedBooks.value = []
@@ -100,6 +107,7 @@ function resetForm() {
 	selectedKeys.value = []
 	selectedCustomGroups.value = []
 	selectedYears.value = []
+	selectedSignatures.value = []
 }
 
 watch(() => props.open, (isOpen) => {
@@ -107,7 +115,7 @@ watch(() => props.open, (isOpen) => {
 })
 
 const isAnythingEnabled = computed(() => {
-	return enableComposers.value || enableBooks.value || enableCollections.value || enableArtists.value || enableGenres.value || enableKeys.value || enableCustomGroups.value || enableYears.value
+	return enableComposers.value || enableBooks.value || enableCollections.value || enableArtists.value || enableGenres.value || enableKeys.value || enableCustomGroups.value || enableYears.value || enableSignatures.value
 })
 
 function handleApply() {
@@ -161,6 +169,12 @@ function handleApply() {
 		payload.years = {
 			action: yearAction.value,
 			ids: selectedYears.value.map((y) => y.id),
+		}
+	}
+	if (enableSignatures.value) {
+		payload.signatures = {
+			action: signatureAction.value,
+			ids: selectedSignatures.value.map((s) => s.id),
 		}
 	}
 
@@ -440,6 +454,38 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 						:close-on-select="false"
 						:input-label="t('mobilesheetsmanager', 'Years')"
 						:placeholder="t('mobilesheetsmanager', 'Select years…')"
+						label="name"
+						track-by="id" />
+				</div>
+			</div>
+
+			<!-- Time Signatures Section -->
+			<div :class="$style.fieldGroup">
+				<div :class="$style.fieldHeader">
+					<NcCheckboxRadioSwitch
+						v-model="enableSignatures"
+						type="checkbox">
+						{{ t('mobilesheetsmanager', 'Time Signatures') }}
+					</NcCheckboxRadioSwitch>
+				</div>
+				<div v-if="enableSignatures" :class="$style.fieldBody">
+					<div :class="$style.actionSelector">
+						<label v-for="opt in actionOptions" :key="opt.value" :class="$style.radioLabel">
+							<input
+								v-model="signatureAction"
+								type="radio"
+								:name="'signature-action'"
+								:value="opt.value">
+							{{ opt.label }}
+						</label>
+					</div>
+					<NcSelect
+						v-model="selectedSignatures"
+						:options="signatures || []"
+						:multiple="true"
+						:close-on-select="false"
+						:input-label="t('mobilesheetsmanager', 'Time Signatures')"
+						:placeholder="t('mobilesheetsmanager', 'Select time signatures…')"
 						label="name"
 						track-by="id" />
 				</div>

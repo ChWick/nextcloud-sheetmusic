@@ -1057,10 +1057,6 @@ final class ApiTest extends TestCase {
 		$songMapper->method('createBook')->with('/tmp/mobilesheetsmanager-test-library.db', 'Real Book')->willReturn(100);
 		$songMapper->method('createCollection')->with('/tmp/mobilesheetsmanager-test-library.db', 'Jazz')->willReturn(1000);
 		$songMapper->method('createArtist')->with('/tmp/mobilesheetsmanager-test-library.db', 'Coltrane')->willReturn(200);
-		$songMapper->method('createGenre')->with('/tmp/mobilesheetsmanager-test-library.db', 'Swing')->willReturn(50);
-		$songMapper->method('createKey')->with('/tmp/mobilesheetsmanager-test-library.db', 'C Major')->willReturn(70);
-		$songMapper->method('createCustomGroup')->with('/tmp/mobilesheetsmanager-test-library.db', 'Band')->willReturn(90);
-		$songMapper->method('createYear')->with('/tmp/mobilesheetsmanager-test-library.db', '1960')->willReturn(80);
 
 		$controller = $this->createController($libraryMapper, $songMapper, $this->createLibraryRootFolder());
 
@@ -1068,10 +1064,6 @@ final class ApiTest extends TestCase {
 		$book = $controller->createBook(7, 'Real Book');
 		$collection = $controller->createCollection(7, 'Jazz');
 		$artist = $controller->createArtist(7, 'Coltrane');
-		$genre = $controller->createGenre(7, 'Swing');
-		$key = $controller->createKey(7, 'C Major');
-		$customGroup = $controller->createCustomGroup(7, 'Band');
-		$year = $controller->createYear(7, '1960');
 
 		self::assertEquals(Http::STATUS_CREATED, $composer->getStatus());
 		self::assertEquals(['id' => 10, 'name' => 'Bach'], $composer->getData());
@@ -1081,14 +1073,6 @@ final class ApiTest extends TestCase {
 		self::assertEquals(['id' => 1000, 'name' => 'Jazz'], $collection->getData());
 		self::assertEquals(Http::STATUS_CREATED, $artist->getStatus());
 		self::assertEquals(['id' => 200, 'name' => 'Coltrane'], $artist->getData());
-		self::assertEquals(Http::STATUS_CREATED, $genre->getStatus());
-		self::assertEquals(['id' => 50, 'name' => 'Swing'], $genre->getData());
-		self::assertEquals(Http::STATUS_CREATED, $key->getStatus());
-		self::assertEquals(['id' => 70, 'name' => 'C Major'], $key->getData());
-		self::assertEquals(Http::STATUS_CREATED, $customGroup->getStatus());
-		self::assertEquals(['id' => 90, 'name' => 'Band'], $customGroup->getData());
-		self::assertEquals(Http::STATUS_CREATED, $year->getStatus());
-		self::assertEquals(['id' => 80, 'name' => '1960', 'year' => 1960], $year->getData());
 	}
 
 	/** Every delete endpoint hands its own entity type to the shared mapper method. */
@@ -1113,10 +1097,6 @@ final class ApiTest extends TestCase {
 		$controller->deleteBook(100, 7);
 		$controller->deleteCollection(1000, 7);
 		$controller->deleteArtist(200, 7);
-		$controller->deleteGenre(50, 7);
-		$controller->deleteKey(70, 7);
-		$controller->deleteCustomGroup(90, 7);
-		$controller->deleteYear(80, 7);
 
 		self::assertSame(
 			[
@@ -1124,10 +1104,6 @@ final class ApiTest extends TestCase {
 				['books', 100],
 				['collections', 1000],
 				['artists', 200],
-				['genres', 50],
-				['keys', 70],
-				['customgroups', 90],
-				['years', 80],
 			],
 			$calls,
 		);
@@ -1167,10 +1143,12 @@ final class ApiTest extends TestCase {
 		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->createBook(7, 'Real Book')->getStatus());
 		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->createCollection(7, 'Jazz')->getStatus());
 		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->createArtist(7, 'Coltrane')->getStatus());
+		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->createSignature(7, '4/4')->getStatus());
 		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->deleteComposer(1, 7)->getStatus());
 		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->deleteBook(1, 7)->getStatus());
 		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->deleteCollection(1, 7)->getStatus());
 		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->deleteArtist(1, 7)->getStatus());
+		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->deleteSignature(1, 7)->getStatus());
 		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->importSongMetadata()->getStatus());
 		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->syncLibrary(1)->getStatus());
 	}

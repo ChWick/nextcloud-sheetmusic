@@ -37,6 +37,7 @@ class EntityService {
 				'key' => $this->songMapper->createKey($databasePath, $nameOrTitle),
 				'customgroup' => $this->songMapper->createCustomGroup($databasePath, $nameOrTitle),
 				'year' => $this->songMapper->createYear($databasePath, $nameOrTitle),
+				'signature' => $this->songMapper->createSignature($databasePath, $nameOrTitle),
 				default => null,
 			};
 
@@ -63,7 +64,7 @@ class EntityService {
 	}
 
 	/**
-	 * @param 'composers'|'books'|'collections'|'artists'|'genres'|'keys'|'customgroups'|'years' $entityType
+	 * @param 'composers'|'books'|'collections'|'artists'|'genres'|'keys'|'customgroups'|'years'|'signatures' $entityType
 	 */
 	public function deleteEntity(IUser $user, int $libraryId, string $entityType, int $id): ?array {
 		$databasePath = $this->libraryService->getDatabasePath($user->getUID(), $libraryId);

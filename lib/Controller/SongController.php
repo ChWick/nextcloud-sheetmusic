@@ -61,15 +61,9 @@ class SongController extends OCSController {
 		array $keyIds = [],
 		array $customGroupIds = [],
 		array $yearIds = [],
-		int $stars = 0,
-		int $difficulty = 0,
-		int $duration = 0,
-		string $keywords = '',
-		string $custom = '',
-		string $custom2 = '',
-		string $sortTitle = '',
+		array $signatureIds = [],
 	): DataResponse {
-		$title = $title ?? '';
+		$title = $title ?? (string)$this->request->getParam('title', '');
 		if ($libraryId === null || trim($title) === '') {
 			return new DataResponse([], Http::STATUS_BAD_REQUEST);
 		}
@@ -78,6 +72,19 @@ class SongController extends OCSController {
 		if ($user === null) {
 			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
 		}
+
+		$genreIds = !empty($genreIds) ? $genreIds : (array)$this->request->getParam('genreIds', []);
+		$keyIds = !empty($keyIds) ? $keyIds : (array)$this->request->getParam('keyIds', []);
+		$customGroupIds = !empty($customGroupIds) ? $customGroupIds : (array)$this->request->getParam('customGroupIds', []);
+		$yearIds = !empty($yearIds) ? $yearIds : (array)$this->request->getParam('yearIds', []);
+		$signatureIds = !empty($signatureIds) ? $signatureIds : (array)$this->request->getParam('signatureIds', []);
+		$stars = (int)$this->request->getParam('stars', 0);
+		$difficulty = (int)$this->request->getParam('difficulty', 0);
+		$duration = (int)$this->request->getParam('duration', 0);
+		$keywords = (string)$this->request->getParam('keywords', '');
+		$custom = (string)$this->request->getParam('custom', '');
+		$custom2 = (string)$this->request->getParam('custom2', '');
+		$sortTitle = (string)$this->request->getParam('sortTitle', '');
 
 		try {
 			$result = $this->songService->createSong(
@@ -92,6 +99,7 @@ class SongController extends OCSController {
 				$keyIds,
 				$customGroupIds,
 				$yearIds,
+				$signatureIds,
 				$stars,
 				$difficulty,
 				$duration,
@@ -125,15 +133,9 @@ class SongController extends OCSController {
 		array $keyIds = [],
 		array $customGroupIds = [],
 		array $yearIds = [],
-		int $stars = 0,
-		int $difficulty = 0,
-		int $duration = 0,
-		string $keywords = '',
-		string $custom = '',
-		string $custom2 = '',
-		string $sortTitle = '',
+		array $signatureIds = [],
 	): DataResponse {
-		$title = $title ?? '';
+		$title = $title ?? (string)$this->request->getParam('title', '');
 		if ($libraryId === null || $title === '') {
 			return new DataResponse([], Http::STATUS_BAD_REQUEST);
 		}
@@ -142,6 +144,19 @@ class SongController extends OCSController {
 		if ($user === null) {
 			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
 		}
+
+		$genreIds = !empty($genreIds) ? $genreIds : (array)$this->request->getParam('genreIds', []);
+		$keyIds = !empty($keyIds) ? $keyIds : (array)$this->request->getParam('keyIds', []);
+		$customGroupIds = !empty($customGroupIds) ? $customGroupIds : (array)$this->request->getParam('customGroupIds', []);
+		$yearIds = !empty($yearIds) ? $yearIds : (array)$this->request->getParam('yearIds', []);
+		$signatureIds = !empty($signatureIds) ? $signatureIds : (array)$this->request->getParam('signatureIds', []);
+		$stars = (int)$this->request->getParam('stars', 0);
+		$difficulty = (int)$this->request->getParam('difficulty', 0);
+		$duration = (int)$this->request->getParam('duration', 0);
+		$keywords = (string)$this->request->getParam('keywords', '');
+		$custom = (string)$this->request->getParam('custom', '');
+		$custom2 = (string)$this->request->getParam('custom2', '');
+		$sortTitle = (string)$this->request->getParam('sortTitle', '');
 
 		try {
 			$result = $this->songService->updateSong(
@@ -157,6 +172,7 @@ class SongController extends OCSController {
 				$keyIds,
 				$customGroupIds,
 				$yearIds,
+				$signatureIds,
 				$stars,
 				$difficulty,
 				$duration,
@@ -189,6 +205,7 @@ class SongController extends OCSController {
 		?array $keys = null,
 		?array $customGroups = null,
 		?array $years = null,
+		?array $signatures = null,
 	): DataResponse {
 		if ($libraryId === null || empty($songIds)) {
 			return new DataResponse([], Http::STATUS_BAD_REQUEST);
@@ -198,6 +215,12 @@ class SongController extends OCSController {
 		if ($user === null) {
 			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
 		}
+
+		$genres = $genres ?? $this->request->getParam('genres');
+		$keys = $keys ?? $this->request->getParam('keys');
+		$customGroups = $customGroups ?? $this->request->getParam('customGroups');
+		$years = $years ?? $this->request->getParam('years');
+		$signatures = $signatures ?? $this->request->getParam('signatures');
 
 		try {
 			$result = $this->songService->batchUpdateSongs(
@@ -212,6 +235,7 @@ class SongController extends OCSController {
 				$keys,
 				$customGroups,
 				$years,
+				$signatures,
 			);
 
 			if ($result === null) {

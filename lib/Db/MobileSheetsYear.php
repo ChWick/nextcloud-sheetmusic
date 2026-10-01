@@ -9,15 +9,14 @@ declare(strict_types=1);
 
 namespace OCA\MobileSheetsManager\Db;
 
-use JsonSerializable;
-
 class MobileSheetsYear {
 	public readonly string $name;
 
 	public function __construct(
 		public readonly int $id,
 		public readonly int $year,
+		?string $name = null,
 	) {
-		$this->name = (string)$this->year;
+		$this->name = $name ?? (string)$year;
 	}
 }

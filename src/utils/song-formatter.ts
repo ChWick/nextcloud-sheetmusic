@@ -40,6 +40,11 @@ export function formatYears(song: Song, fallback = '—'): string {
 	return song.years.map(y => y.name).join(', ')
 }
 
+export function formatSignatures(song: Song, fallback = '—'): string {
+	if (!song.signatures || song.signatures.length === 0) return fallback
+	return song.signatures.map(s => s.name).join(', ')
+}
+
 export function formatDuration(seconds?: number | null, fallback = '—'): string {
 	if (!seconds || seconds <= 0) return fallback
 	const mins = Math.floor(seconds / 60)
@@ -72,7 +77,7 @@ export function formatDateTimestamp(timestamp?: number | null, fallback = '—')
 	}
 }
 
-export type SortKey = 'title' | 'composer' | 'book' | 'collection' | 'artist' | 'genre' | 'key' | 'customGroup' | 'year' | 'stars' | 'difficulty' | 'duration' | 'keywords' | 'custom' | 'custom2' | 'lastModified' | 'dateCreated'
+export type SortKey = 'title' | 'composer' | 'book' | 'collection' | 'artist' | 'genre' | 'key' | 'customGroup' | 'year' | 'signature' | 'stars' | 'difficulty' | 'duration' | 'keywords' | 'custom' | 'custom2' | 'lastModified' | 'dateCreated'
 export type SortOrder = 'asc' | 'desc'
 
 export function sortSongs(songs: Song[], sortKey: SortKey, sortOrder: SortOrder): Song[] {
@@ -139,6 +144,10 @@ export function sortSongs(songs: Song[], sortKey: SortKey, sortOrder: SortOrder)
 				case 'year':
 					valA = formatYears(a, '')
 					valB = formatYears(b, '')
+					break
+				case 'signature':
+					valA = formatSignatures(a, '')
+					valB = formatSignatures(b, '')
 					break
 				case 'keywords':
 					valA = a.keywords ?? ''

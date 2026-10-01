@@ -236,6 +236,22 @@ function handleSongClick(song: Song, e: Event) {
 					</div>
 				</div>
 
+				<div v-if="isColVisible('signature') && song.signatures && song.signatures.length > 0" :class="$style.metaRow">
+					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Time Signature:') }}</span>
+					<div :class="$style.chipGroup">
+						<template v-for="(s, idx) in song.signatures" :key="s.id">
+							<button
+								type="button"
+								:class="[$style.filterChip, isFiltered?.('signatures', s.id) && $style.activeChip]"
+								:title="t('mobilesheetsmanager', 'Toggle filter for signature {name}', { name: s.name })"
+								@click.stop="emit('filter-entity', 'signatures', s)">
+								{{ s.name }}
+							</button>
+							<template v-if="idx < song.signatures.length - 1">, </template>
+						</template>
+					</div>
+				</div>
+
 				<div v-if="isColVisible('stars') && song.stars" :class="$style.metaRow">
 					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Rating:') }}</span>
 					<span>{{ formatStars(song.stars) }}</span>

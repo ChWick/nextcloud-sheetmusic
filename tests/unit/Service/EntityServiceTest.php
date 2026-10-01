@@ -41,10 +41,7 @@ final class EntityServiceTest extends TestCase {
 		$songMapper->expects($this->once())->method('createBook')->with('/tmp/mobilesheets.db', 'Real Book')->willReturn(100);
 		$songMapper->expects($this->once())->method('createCollection')->with('/tmp/mobilesheets.db', 'Jazz')->willReturn(1000);
 		$songMapper->expects($this->once())->method('createArtist')->with('/tmp/mobilesheets.db', 'Miles')->willReturn(200);
-		$songMapper->expects($this->once())->method('createGenre')->with('/tmp/mobilesheets.db', 'Swing')->willReturn(50);
-		$songMapper->expects($this->once())->method('createKey')->with('/tmp/mobilesheets.db', 'C Major')->willReturn(70);
-		$songMapper->expects($this->once())->method('createCustomGroup')->with('/tmp/mobilesheets.db', 'Band')->willReturn(90);
-		$songMapper->expects($this->once())->method('createYear')->with('/tmp/mobilesheets.db', '1960')->willReturn(80);
+		$songMapper->expects($this->once())->method('createSignature')->with('/tmp/mobilesheets.db', '3/4')->willReturn(60);
 
 		$service = new EntityService(
 			$libraryService,
@@ -56,10 +53,7 @@ final class EntityServiceTest extends TestCase {
 		$this->assertSame(['id' => 100, 'title' => 'Real Book'], $service->createEntity($user, 1, 'book', 'Real Book'));
 		$this->assertSame(['id' => 1000, 'name' => 'Jazz'], $service->createEntity($user, 1, 'collection', 'Jazz'));
 		$this->assertSame(['id' => 200, 'name' => 'Miles'], $service->createEntity($user, 1, 'artist', 'Miles'));
-		$this->assertSame(['id' => 50, 'name' => 'Swing'], $service->createEntity($user, 1, 'genre', 'Swing'));
-		$this->assertSame(['id' => 70, 'name' => 'C Major'], $service->createEntity($user, 1, 'key', 'C Major'));
-		$this->assertSame(['id' => 90, 'name' => 'Band'], $service->createEntity($user, 1, 'customgroup', 'Band'));
-		$this->assertSame(['id' => 80, 'name' => '1960', 'year' => 1960], $service->createEntity($user, 1, 'year', '1960'));
+		$this->assertSame(['id' => 60, 'name' => '3/4'], $service->createEntity($user, 1, 'signature', '3/4'));
 	}
 
 	public function testDeleteEntityPassesTypeToMapper(): void {

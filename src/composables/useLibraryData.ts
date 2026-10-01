@@ -1,4 +1,4 @@
-import type { Artist, Book, Collection, Composer, CustomGroup, Genre, Key, LibraryData, Song, Year } from '../types/song'
+import type { Artist, Book, Collection, Composer, CustomGroup, Genre, Key, LibraryData, Signature, Song, Year } from '../types/song'
 import { apiGet } from '../api/client'
 import { translate as t } from '@nextcloud/l10n'
 import { ref } from 'vue'
@@ -13,6 +13,7 @@ export function useLibraryData() {
 	const keys = ref<Key[]>([])
 	const customGroups = ref<CustomGroup[]>([])
 	const years = ref<Year[]>([])
+	const signatures = ref<Signature[]>([])
 	const fileError = ref('')
 	const isLoading = ref(false)
 
@@ -26,6 +27,7 @@ export function useLibraryData() {
 		keys.value = data.keys ?? []
 		customGroups.value = data.customGroups ?? []
 		years.value = data.years ?? []
+		signatures.value = data.signatures ?? []
 	}
 
 	async function loadLibraryData(id: number) {
@@ -51,6 +53,7 @@ export function useLibraryData() {
 		keys,
 		customGroups,
 		years,
+		signatures,
 		fileError,
 		isLoading,
 		handleLibraryDataUpdate,

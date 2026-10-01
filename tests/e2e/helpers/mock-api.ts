@@ -45,6 +45,11 @@ export const mockYears = [
 	{ id: 5001, year: 1808, name: '1808' },
 ]
 
+export const mockSignatures = [
+	{ id: 6000, name: '4/4' },
+	{ id: 6001, name: '3/4' },
+]
+
 export const mockSongs = [
 	{
 		id: 5,
@@ -57,6 +62,7 @@ export const mockSongs = [
 		keys: [mockKeys[0]],
 		customGroups: [mockCustomGroups[0]],
 		years: [mockYears[1]],
+		signatures: [mockSignatures[0]],
 		files: [{ id: 50, path: '/dav/files/admin/Noten/Beethoven - Symphony 5.pdf' }],
 	},
 	{
@@ -70,6 +76,7 @@ export const mockSongs = [
 		keys: [mockKeys[1]],
 		customGroups: [mockCustomGroups[1]],
 		years: [mockYears[0]],
+		signatures: [mockSignatures[1]],
 		files: [{ id: 51, path: '/dav/files/admin/Noten/Mozart - Requiem.pdf' }],
 	},
 ]
@@ -113,6 +120,7 @@ export async function setupMockApi(page: Page) {
 						keys: mockKeys,
 						customGroups: mockCustomGroups,
 						years: mockYears,
+						signatures: mockSignatures,
 						createdSongId: 99,
 					},
 				},
@@ -148,7 +156,11 @@ export async function setupMockApi(page: Page) {
 						books: mockBooks,
 						collections: mockCollections,
 						artists: mockArtists,
+						genres: mockGenres,
+						keys: mockKeys,
+						customGroups: mockCustomGroups,
 						years: mockYears,
+						signatures: mockSignatures,
 					},
 				},
 			}),

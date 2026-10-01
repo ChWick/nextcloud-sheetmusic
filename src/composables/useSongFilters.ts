@@ -1,4 +1,4 @@
-import type { Artist, Book, Collection, Composer, CustomGroup, EntityType, FilterEntity, Genre, Key, Song, Year } from '../types/song'
+import type { Artist, Book, Collection, Composer, CustomGroup, EntityType, FilterEntity, Genre, Key, Signature, Song, Year } from '../types/song'
 import { translate as t } from '@nextcloud/l10n'
 import { computed, ref } from 'vue'
 import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
@@ -14,9 +14,10 @@ export interface FilterOptions {
 	customGroups?: CustomGroup[]
 	customgroups?: CustomGroup[]
 	years?: Year[]
+	signatures?: Signature[]
 }
 
-const FILTER_TYPES: EntityType[] = ['composers', 'artists', 'books', 'collections', 'genres', 'keys', 'customgroups', 'years']
+const FILTER_TYPES: EntityType[] = ['composers', 'artists', 'books', 'collections', 'genres', 'keys', 'customgroups', 'years', 'signatures']
 
 export const UNASSIGNED_ID = -1
 
@@ -39,6 +40,8 @@ export function noneEntryOf(entityType: EntityType): FilterEntity {
 			return { id: UNASSIGNED_ID, name: t('mobilesheetsmanager', '(No custom group)') }
 		case 'years':
 			return { id: UNASSIGNED_ID, name: t('mobilesheetsmanager', '(No year)'), year: 0 }
+		case 'signatures':
+			return { id: UNASSIGNED_ID, name: t('mobilesheetsmanager', '(No time signature)') }
 	}
 }
 
@@ -158,6 +161,7 @@ export function useSongFilters(options: () => FilterOptions) {
 		const keyIds = new Set(idsOf('keys'))
 		const customGroupIds = new Set(idsOf('customgroups'))
 		const yearIds = new Set(idsOf('years'))
+		const signatureIds = new Set(idsOf('signatures'))
 
 		if (!matchesCategory(song.composers, composerIds)) return false
 		if (!matchesCategory(song.books, bookIds)) return false
@@ -167,6 +171,7 @@ export function useSongFilters(options: () => FilterOptions) {
 		if (!matchesCategory(song.keys, keyIds)) return false
 		if (!matchesCategory(song.customGroups, customGroupIds)) return false
 		if (!matchesCategory(song.years, yearIds)) return false
+		if (!matchesCategory(song.signatures, signatureIds)) return false
 		return true
 	}
 
@@ -218,6 +223,10 @@ export function useSongFilters(options: () => FilterOptions) {
 		get: () => selectedOf('years') as Year[],
 		set: (value: Year[]) => selectIds('years', value.map(entry => entry.id)),
 	})
+	const selectedSignatures = computed({
+		get: () => selectedOf('signatures') as Signature[],
+		set: (value: Signature[]) => selectIds('signatures', value.map(entry => entry.id)),
+	})
 
 	return {
 		searchTitle,
@@ -229,6 +238,7 @@ export function useSongFilters(options: () => FilterOptions) {
 		selectedKeys,
 		selectedCustomGroups,
 		selectedYears,
+		selectedSignatures,
 		hasActiveFilters,
 		isFiltered,
 		toggleFilter,

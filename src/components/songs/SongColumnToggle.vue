@@ -25,10 +25,13 @@ const columnOptions: { key: SongColumn; label: string }[] = [
 	{ key: 'key', label: t('mobilesheetsmanager', 'Key') },
 	{ key: 'customGroup', label: t('mobilesheetsmanager', 'Custom Group') },
 	{ key: 'year', label: t('mobilesheetsmanager', 'Year') },
+	{ key: 'signature', label: t('mobilesheetsmanager', 'Time Signature') },
 	{ key: 'stars', label: t('mobilesheetsmanager', 'Rating') },
 	{ key: 'difficulty', label: t('mobilesheetsmanager', 'Difficulty') },
 	{ key: 'duration', label: t('mobilesheetsmanager', 'Duration') },
 	{ key: 'keywords', label: t('mobilesheetsmanager', 'Keywords') },
+	{ key: 'custom', label: t('mobilesheetsmanager', 'Custom') },
+	{ key: 'custom2', label: t('mobilesheetsmanager', 'Custom 2') },
 	{ key: 'lastModified', label: t('mobilesheetsmanager', 'Last modified') },
 	{ key: 'dateCreated', label: t('mobilesheetsmanager', 'Date created') },
 ]

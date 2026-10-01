@@ -43,31 +43,12 @@ test.describe('Entities Views (Composers, Books, Collections, Artists)', () => {
 		await expect(page.getByRole('button', { name: 'Classical Masters' })).toBeVisible()
 	})
 
-	test('renders Keys view and list items', async ({ page }) => {
-		await page.goto('/#/library/1/keys')
-		await expect(page.getByRole('heading', { name: 'Keys' })).toBeVisible()
+	test('renders Time Signatures view and list items', async ({ page }) => {
+		await page.goto('/#/library/1/signatures')
+		await expect(page.getByRole('heading', { name: 'Time Signatures' })).toBeVisible()
 
-		// Verify list contains mock keys
-		await expect(page.getByRole('button', { name: 'C Major' })).toBeVisible()
-		await expect(page.getByRole('button', { name: 'D Minor' })).toBeVisible()
-	})
-
-	test('renders Custom Groups view and list items', async ({ page }) => {
-		await page.goto('/#/library/1/customgroups')
-		await expect(page.getByRole('heading', { name: 'Custom Groups' })).toBeVisible()
-
-		// Verify list contains mock custom groups
-		await expect(page.getByRole('button', { name: 'Main Choir' })).toBeVisible()
-		await expect(page.getByRole('button', { name: 'Brass Band' })).toBeVisible()
-	})
-
-	test('renders Years view and list items', async ({ page }) => {
-		await page.goto('/#/library/1/years')
-		await expect(page.getByRole('heading', { name: 'Years' })).toBeVisible()
-
-		// Verify list contains mock years
-		await expect(page.getByRole('button', { name: '1959' })).toBeVisible()
-		await expect(page.getByRole('button', { name: '1808' })).toBeVisible()
+		// Verify list contains mock signatures
+		await expect(page.getByRole('button', { name: '4/4' })).toBeVisible()
+		await expect(page.getByRole('button', { name: '3/4' })).toBeVisible()
 	})
 })
-

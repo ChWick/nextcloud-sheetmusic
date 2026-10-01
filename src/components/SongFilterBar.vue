@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Artist, Book, Collection, Composer, CustomGroup, Genre, Key, Year } from '../types/song'
+import type { Artist, Book, Collection, Composer, CustomGroup, Genre, Key, Signature, Year } from '../types/song'
 
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
@@ -20,6 +20,7 @@ const props = withDefaults(
 		keys?: Key[]
 		customGroups?: CustomGroup[]
 		years?: Year[]
+		signatures?: Signature[]
 		selectedComposers?: Composer[]
 		selectedBooks?: Book[]
 		selectedCollections?: Collection[]
@@ -28,6 +29,7 @@ const props = withDefaults(
 		selectedKeys?: Key[]
 		selectedCustomGroups?: CustomGroup[]
 		selectedYears?: Year[]
+		selectedSignatures?: Signature[]
 	}>(),
 	{
 		searchTitle: '',
@@ -39,6 +41,7 @@ const props = withDefaults(
 		keys: () => [],
 		customGroups: () => [],
 		years: () => [],
+		signatures: () => [],
 		selectedComposers: () => [],
 		selectedBooks: () => [],
 		selectedCollections: () => [],
@@ -47,6 +50,7 @@ const props = withDefaults(
 		selectedKeys: () => [],
 		selectedCustomGroups: () => [],
 		selectedYears: () => [],
+		selectedSignatures: () => [],
 	},
 )
 
@@ -60,6 +64,7 @@ const emit = defineEmits<{
 	'update:selectedKeys': [keys: Key[]]
 	'update:selectedCustomGroups': [customGroups: CustomGroup[]]
 	'update:selectedYears': [years: Year[]]
+	'update:selectedSignatures': [signatures: Signature[]]
 	'clear': []
 }>()
 
@@ -103,6 +108,11 @@ const yearOptions = computed(() => [
 	...props.years,
 ])
 
+const signatureOptions = computed(() => [
+	noneEntryOf('signatures') as Signature,
+	...props.signatures,
+])
+
 const hasActiveFilters = computed(() => {
 	return (
 		Boolean(props.searchTitle?.trim())
@@ -114,6 +124,7 @@ const hasActiveFilters = computed(() => {
 		|| props.selectedKeys.length > 0
 		|| props.selectedCustomGroups.length > 0
 		|| props.selectedYears.length > 0
+		|| props.selectedSignatures.length > 0
 	)
 })
 
@@ -245,6 +256,20 @@ function clearAllFilters() {
 				track-by="id"
 				:class="$style.select"
 				@update:model-value="emit('update:selectedYears', $event)" />
+		</div>
+
+		<div :class="$style.filterGroup">
+			<NcSelect
+				:model-value="selectedSignatures"
+				:options="signatureOptions"
+				:multiple="true"
+				:close-on-select="false"
+				:placeholder="t('mobilesheetsmanager', 'Filter by time signature…')"
+				:input-label="t('mobilesheetsmanager', 'Time Signatures')"
+				label="name"
+				track-by="id"
+				:class="$style.select"
+				@update:model-value="emit('update:selectedSignatures', $event)" />
 		</div>
 
 		<div v-if="hasActiveFilters" :class="$style.actions">

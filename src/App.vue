@@ -21,7 +21,7 @@ import EntitiesView from './components/EntitiesView.vue'
 
 /** Views of a library: the song view, one view per song filter, and the files view. */
 type ViewName = 'songs' | 'files' | EntityType
-const VIEW_NAMES: ViewName[] = ['songs', 'composers', 'artists', 'books', 'collections', 'genres', 'keys', 'customgroups', 'years', 'files']
+const VIEW_NAMES: ViewName[] = ['songs', 'composers', 'artists', 'books', 'collections', 'genres', 'keys', 'customgroups', 'years', 'signatures', 'files']
 
 /*** State ***/
 const isDialogOpen = ref(false)
@@ -212,6 +212,7 @@ async function deleteLibrary() {
           <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Keys')" :active="selectedView === 'keys'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'keys' } }" />
           <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Custom Groups')" :active="selectedView === 'customgroups'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'customgroups' } }" />
           <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Years')" :active="selectedView === 'years'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'years' } }" />
+          <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Time Signatures')" :active="selectedView === 'signatures'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'signatures' } }" />
           <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Files')" :active="selectedView === 'files'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'files' } }" />
 
           <div :class="$style.deleteLibraryArea">

@@ -56,7 +56,8 @@ class SongMapper {
 	 *     genres: list<MobileSheetsGenre>,
 	 *     keys: list<MobileSheetsKey>,
 	 *     customGroups: list<MobileSheetsCustomGroup>,
-	 *     years: list<MobileSheetsYear>
+	 *     years: list<MobileSheetsYear>,
+	 *     signatures: list<MobileSheetsSignature>
 	 * }
 	 */
 	public function findLibraryData(string $databasePath): array {
@@ -173,6 +174,19 @@ class SongMapper {
 			}
 		}
 
+		$signatures = [];
+		$signaturesById = [];
+		if (in_array('Signature', $existingTables, true)) {
+			$stmt = $database->query('SELECT Id, Name FROM Signature ORDER BY Name');
+			if ($stmt !== false) {
+				while ($row = $stmt->fetch()) {
+					$signature = new MobileSheetsSignature((int)$row['Id'], (string)$row['Name']);
+					$signatures[] = $signature;
+					$signaturesById[$signature->id] = $signature;
+				}
+			}
+		}
+
 		$songComposers = [];
 		if (in_array('ComposerSongs', $existingTables, true)) {
 			$stmt = $database->query('SELECT ComposerId, SongId FROM ComposerSongs');
@@ -266,6 +280,16 @@ class SongMapper {
 			}
 		}
 
+		$songSignatures = [];
+		if (in_array('SignatureSongs', $existingTables, true)) {
+			$stmt = $database->query('SELECT SignatureId, SongId FROM SignatureSongs');
+			if ($stmt !== false) {
+				while ($row = $stmt->fetch()) {
+					$songSignatures[(int)$row['SongId']][] = (int)$row['SignatureId'];
+				}
+			}
+		}
+
 		$songCols = $this->columnNames($database, 'Songs');
 		$hasLastModified = isset($songCols['lastmodified']);
 		$createdCol = isset($songCols['datecreated']) ? 'DateCreated' : (isset($songCols['creationdate']) ? 'CreationDate' : null);
@@ -325,6 +349,7 @@ class SongMapper {
 					$this->resolveEntities($songKeys[$songId] ?? [], $keysById),
 					$this->resolveEntities($songCustomGroups[$songId] ?? [], $customGroupsById),
 					$this->resolveEntities($songYears[$songId] ?? [], $yearsById),
+					$this->resolveEntities($songSignatures[$songId] ?? [], $signaturesById),
 					isset($row['LastModified']) && $row['LastModified'] !== null ? (int)$row['LastModified'] : null,
 					isset($row['DateCreated']) && $row['DateCreated'] !== null ? (int)$row['DateCreated'] : null,
 					isset($row['Stars']) ? (int)$row['Stars'] : 0,
@@ -348,6 +373,7 @@ class SongMapper {
 			'keys' => $keys,
 			'customGroups' => $customGroups,
 			'years' => $years,
+			'signatures' => $signatures,
 		];
 	}
 
@@ -412,6 +438,8 @@ class SongMapper {
 			'cg.Name AS CustomGroup',
 			'ys.YearId AS YearId',
 			'y.Year AS Year',
+			'sigs.SignatureId AS SignatureId',
+			'sig.Name AS Signature',
 			'c.Name AS Composer',
 			'cs.ComposerId AS ComposerId',
 			'coll.Name AS Collection',
@@ -436,6 +464,8 @@ class SongMapper {
 		LEFT JOIN CustomGroup cg ON cgs.GroupId = cg.Id
 		LEFT JOIN YearsSongs ys ON s.Id = ys.SongId
 		LEFT JOIN Years y ON ys.YearId = y.Id
+		LEFT JOIN SignatureSongs sigs ON s.Id = sigs.SongId
+		LEFT JOIN Signature sig ON sigs.SignatureId = sig.Id
 		LEFT JOIN BookSongs bookSongs ON s.Id = bookSongs.SongId
 		LEFT JOIN Books books ON bookSongs.BookId = books.Id
 		LEFT JOIN ArtistsSongs artistsSongs ON artistsSongs.SongId = s.Id
@@ -476,6 +506,7 @@ class SongMapper {
 					'keys' => [],
 					'customGroups' => [],
 					'years' => [],
+					'signatures' => [],
 				];
 			}
 
@@ -518,6 +549,11 @@ class SongMapper {
 			if ($yearId !== null && !isset($songs[$rowSongId]['years'][$yearId])) {
 				$songs[$rowSongId]['years'][$yearId] = new MobileSheetsYear($yearId, (int)($row['Year'] ?? 0));
 			}
+
+			$signatureId = $row['SignatureId'] !== null ? (int)$row['SignatureId'] : null;
+			if ($signatureId !== null && !isset($songs[$rowSongId]['signatures'][$signatureId])) {
+				$songs[$rowSongId]['signatures'][$signatureId] = new MobileSheetsSignature($signatureId, (string)($row['Signature'] ?? ''));
+			}
 		}
 
 		$result = [];
@@ -534,6 +570,7 @@ class SongMapper {
 				array_values($song['keys']),
 				array_values($song['customGroups']),
 				array_values($song['years']),
+				array_values($song['signatures']),
 				$song['lastModified'],
 				$song['dateCreated'],
 				$song['stars'] ?? 0,
@@ -615,6 +652,7 @@ class SongMapper {
 	 * @param list<int> $keyIds
 	 * @param list<int> $customGroupIds
 	 * @param list<int> $yearIds
+	 * @param list<int> $signatureIds
 	 * @return int id of the created song
 	 */
 	public function createSong(
@@ -628,6 +666,7 @@ class SongMapper {
 		array $keyIds = [],
 		array $customGroupIds = [],
 		array $yearIds = [],
+		array $signatureIds = [],
 		int $stars = 0,
 		int $difficulty = 0,
 		int $duration = 0,
@@ -664,6 +703,7 @@ class SongMapper {
 			$keyIds,
 			$customGroupIds,
 			$yearIds,
+			$signatureIds,
 			$stars,
 			$difficulty,
 			$duration,
@@ -685,6 +725,7 @@ class SongMapper {
 	 * @param list<int> $keyIds
 	 * @param list<int> $customGroupIds
 	 * @param list<int> $yearIds
+	 * @param list<int> $signatureIds
 	 */
 	public function updateSong(
 		string $databasePath,
@@ -698,6 +739,7 @@ class SongMapper {
 		array $keyIds = [],
 		array $customGroupIds = [],
 		array $yearIds = [],
+		array $signatureIds = [],
 		int $stars = 0,
 		int $difficulty = 0,
 		int $duration = 0,
@@ -838,6 +880,20 @@ class SongMapper {
 				]);
 			}
 		}
+
+		// Update Signatures
+		if (in_array('SignatureSongs', $existingTables, true)) {
+			$delStmt = $database->prepare('DELETE FROM SignatureSongs WHERE SongId = :songId');
+			$delStmt->execute([':songId' => $songId]);
+
+			$insStmt = $database->prepare('INSERT INTO SignatureSongs (SignatureId, SongId) VALUES (:signatureId, :songId)');
+			foreach ($signatureIds as $signatureId) {
+				$insStmt->execute([
+					':signatureId' => $signatureId,
+					':songId' => $songId,
+				]);
+			}
+		}
 	}
 
 	/**
@@ -852,6 +908,7 @@ class SongMapper {
 	 * @param array{action?: string, ids?: list<int>}|null $keyUpdate
 	 * @param array{action?: string, ids?: list<int>}|null $customGroupUpdate
 	 * @param array{action?: string, ids?: list<int>}|null $yearUpdate
+	 * @param array{action?: string, ids?: list<int>}|null $signatureUpdate
 	 */
 	public function batchUpdateSongs(
 		string $databasePath,
@@ -864,6 +921,7 @@ class SongMapper {
 		?array $keyUpdate = null,
 		?array $customGroupUpdate = null,
 		?array $yearUpdate = null,
+		?array $signatureUpdate = null,
 	): void {
 		if (empty($songIds)) {
 			return;
@@ -906,6 +964,9 @@ class SongMapper {
 				}
 				if ($yearUpdate !== null && in_array('YearsSongs', $existingTables, true)) {
 					$this->updateCategoryRelations($database, 'YearsSongs', 'YearId', $songId, $yearUpdate);
+				}
+				if ($signatureUpdate !== null && in_array('SignatureSongs', $existingTables, true)) {
+					$this->updateCategoryRelations($database, 'SignatureSongs', 'SignatureId', $songId, $signatureUpdate);
 				}
 			}
 			$database->commit();
@@ -1349,6 +1410,16 @@ class SongMapper {
 		] + $this->dateColumns($database, 'Years'));
 	}
 
+	public function createSignature(string $databasePath, string $name): int {
+		$database = new PDO('sqlite:' . $databasePath, options: [
+			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+		]);
+		return $this->insertRow($database, 'Signature', [
+			'Name' => $name,
+		] + $this->dateColumns($database, 'Signature'));
+	}
+
 	/**
 	 * Tables of the entity kinds a song can carry, and how each of them links
 	 * to songs.
@@ -1364,16 +1435,17 @@ class SongMapper {
 		'keys' => ['table' => 'Keys', 'linkTable' => 'KeySongs', 'linkColumn' => 'KeyId'],
 		'customgroups' => ['table' => 'CustomGroup', 'linkTable' => 'CustomGroupSongs', 'linkColumn' => 'GroupId'],
 		'years' => ['table' => 'Years', 'linkTable' => 'YearsSongs', 'linkColumn' => 'YearId'],
+		'signatures' => ['table' => 'Signature', 'linkTable' => 'SignatureSongs', 'linkColumn' => 'SignatureId'],
 	];
 
 	/**
-	 * Delete a composer, book, collection, artist, genre, key, custom group or year from the library.
+	 * Delete a composer, book, collection, artist, genre, key, custom group, year or signature from the library.
 	 *
 	 * The songs are kept: only the links to the deleted entry are removed, so it
-	 * disappears from the songs' composers, books, collections, artists, genres, keys, custom groups or years while the
+	 * disappears from the songs' composers, books, collections, artists, genres, keys, custom groups, years or signatures while the
 	 * songs themselves stay untouched.
 	 *
-	 * @param 'composers'|'books'|'collections'|'artists'|'genres'|'keys'|'customgroups'|'years' $entityType
+	 * @param 'composers'|'books'|'collections'|'artists'|'genres'|'keys'|'customgroups'|'years'|'signatures' $entityType
 	 * @return bool whether the entry itself existed and was removed
 	 */
 	public function deleteEntity(string $databasePath, string $entityType, int $entityId): bool {
