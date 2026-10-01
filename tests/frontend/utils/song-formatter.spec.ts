@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Song } from '../../../src/types/song'
-import { formatArtists, formatBooks, formatCollections, formatComposers, formatCustomGroups, formatGenres, formatKeys, formatSignatures, formatYears, sortSongs } from '../../../src/utils/song-formatter'
+import { formatArtists, formatBooks, formatCollections, formatComposers, formatCustomGroups, formatGenres, formatKeys, formatSignatures, formatSourceTypes, formatYears, sortSongs } from '../../../src/utils/song-formatter'
 
 describe('song-formatter utilities', () => {
 	const sampleSong: Song = {
@@ -15,6 +15,7 @@ describe('song-formatter utilities', () => {
 		customGroups: [{ id: 4, name: 'Orchestra' }],
 		years: [{ id: 8, name: '1808', year: 1808 }],
 		signatures: [{ id: 9, name: '2/4' }],
+		sourceTypes: [{ id: 11, name: 'Sheet Music', type: 'Sheet Music' }],
 	}
 
 	const emptySong: Song = {
@@ -66,6 +67,11 @@ describe('song-formatter utilities', () => {
 	it('formats time signatures correctly', () => {
 		expect(formatSignatures(sampleSong)).toBe('2/4')
 		expect(formatSignatures(emptySong)).toBe('—')
+	})
+
+	it('formats source types correctly', () => {
+		expect(formatSourceTypes(sampleSong)).toBe('Sheet Music')
+		expect(formatSourceTypes(emptySong)).toBe('—')
 	})
 
 	it('sorts songs by title ascending and descending', () => {

@@ -87,6 +87,13 @@ class EntityController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/sourcetypes')]
+	public function createSourceType(?int $libraryId = null, ?string $name = null): DataResponse {
+		$name = $name ?? (string)$this->request->getParam('name', (string)$this->request->getParam('type', ''));
+		return $this->handleCreate('sourcetype', $libraryId, $name);
+	}
+
+	#[NoAdminRequired]
 	#[ApiRoute(verb: 'DELETE', url: '/api/composers/{id}')]
 	public function deleteComposer(int $id, ?int $libraryId = null): DataResponse {
 		return $this->handleDelete('composers', $id, $libraryId);
@@ -138,6 +145,12 @@ class EntityController extends OCSController {
 	#[ApiRoute(verb: 'DELETE', url: '/api/signatures/{id}')]
 	public function deleteSignature(int $id, ?int $libraryId = null): DataResponse {
 		return $this->handleDelete('signatures', $id, $libraryId);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'DELETE', url: '/api/sourcetypes/{id}')]
+	public function deleteSourceType(int $id, ?int $libraryId = null): DataResponse {
+		return $this->handleDelete('sourcetypes', $id, $libraryId);
 	}
 
 	private function handleCreate(string $type, ?int $libraryId, string $value): DataResponse {

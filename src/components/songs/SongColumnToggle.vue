@@ -26,6 +26,7 @@ const columnOptions: { key: SongColumn; label: string }[] = [
 	{ key: 'customGroup', label: t('mobilesheetsmanager', 'Custom Group') },
 	{ key: 'year', label: t('mobilesheetsmanager', 'Year') },
 	{ key: 'signature', label: t('mobilesheetsmanager', 'Time Signature') },
+	{ key: 'sourceType', label: t('mobilesheetsmanager', 'Source Type') },
 	{ key: 'stars', label: t('mobilesheetsmanager', 'Rating') },
 	{ key: 'difficulty', label: t('mobilesheetsmanager', 'Difficulty') },
 	{ key: 'duration', label: t('mobilesheetsmanager', 'Duration') },

@@ -69,6 +69,7 @@
                 :custom-groups="customGroups"
                 :years="years"
                 :signatures="signatures"
+                :source-types="sourceTypes"
                 @saved="handleSaved"
                 @updated="handleLibraryDataUpdate"
                 @cancel="goBackToSongs" />
@@ -87,6 +88,7 @@
       :custom-groups="customGroups"
       :years="years"
       :signatures="signatures"
+      :source-types="sourceTypes"
       @back="goBackToSongs"
       @saved="handleSaved"
       @updated="handleLibraryDataUpdate"
@@ -127,6 +129,7 @@
       v-model:selected-custom-groups="selectedCustomGroups"
       v-model:selected-years="selectedYears"
       v-model:selected-signatures="selectedSignatures"
+      v-model:selected-source-types="selectedSourceTypes"
       :composers="composers"
       :books="books"
       :collections="collections"
@@ -136,6 +139,7 @@
       :custom-groups="customGroups"
       :years="years"
       :signatures="signatures"
+      :source-types="sourceTypes"
       @clear="clearFilters"/>
     </div>
     <SongEditor v-if="isCreatingSong"
@@ -150,6 +154,7 @@
                 :custom-groups="customGroups"
                 :years="years"
                 :signatures="signatures"
+                :source-types="sourceTypes"
                 :prefill="importPrefill"
                 :imported-file="importedFile"
                 :imported-nextcloud-node="importedNextcloudNode"
@@ -210,6 +215,7 @@
     :custom-groups="customGroups"
     :years="years"
     :signatures="signatures"
+    :source-types="sourceTypes"
     @apply="handleApplyBatchUpdate" />
 </template>
 
@@ -230,7 +236,7 @@ import SongFilterBar from '../components/SongFilterBar.vue';
 import SongViewer from '../components/SongViewer.vue';
 import ViewHeader from '../components/ViewHeader.vue';
 import BatchSongEditorDialog, { type BatchUpdatePayload } from '../components/song-editor/BatchSongEditorDialog.vue';
-import type { Artist, Song, Composer, Book, Collection, CustomGroup, Genre, Key, LibraryData, Signature, SongPrefill, Year } from '../types/song';
+import type { Artist, Song, Composer, Book, Collection, CustomGroup, Genre, Key, LibraryData, Signature, SongPrefill, SourceType, Year } from '../types/song';
 import { DEFAULT_VISIBLE_COLUMNS, type SongColumn } from '../types/song';
 import { sortSongs, type SortKey, type SortOrder } from '../utils/song-formatter';
 import { useSongFilters } from '../composables/useSongFilters';
@@ -302,6 +308,7 @@ const {
   customGroups,
   years,
   signatures,
+  sourceTypes,
   fileError,
   isLoading,
   handleLibraryDataUpdate,
@@ -329,8 +336,8 @@ const isEditInUrl = computed(() => route.query.edit !== undefined && route.query
 
 // The filter bar reads and writes its selections in the URL query, so the browser
 // history restores them when going back or forward.
-const { searchTitle, selectedComposers, selectedBooks, selectedCollections, selectedArtists, selectedGenres, selectedKeys, selectedCustomGroups, selectedYears, selectedSignatures, filterSongs, clearFilters, filterBarVisible, toggleFilterBar, isFiltered, toggleFilter } =
-  useSongFilters(() => ({ composers: composers.value, books: books.value, collections: collections.value, artists: artists.value, genres: genres.value, keys: keys.value, customGroups: customGroups.value, years: years.value, signatures: signatures.value }));
+const { searchTitle, selectedComposers, selectedBooks, selectedCollections, selectedArtists, selectedGenres, selectedKeys, selectedCustomGroups, selectedYears, selectedSignatures, selectedSourceTypes, filterSongs, clearFilters, filterBarVisible, toggleFilterBar, isFiltered, toggleFilter } =
+  useSongFilters(() => ({ composers: composers.value, books: books.value, collections: collections.value, artists: artists.value, genres: genres.value, keys: keys.value, customGroups: customGroups.value, years: years.value, signatures: signatures.value, sourceTypes: sourceTypes.value }));
 
 const { selectedSongIds, selectedCount, isSelected, toggleSelect, selectAll, isAllSelected, clearSelection } = useSongSelection();
 const isBatchEditorOpen = ref(false);

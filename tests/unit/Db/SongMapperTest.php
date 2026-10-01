@@ -19,6 +19,7 @@ use OCA\MobileSheetsManager\Db\MobileSheetsGenre;
 use OCA\MobileSheetsManager\Db\MobileSheetsKey;
 use OCA\MobileSheetsManager\Db\MobileSheetsSignature;
 use OCA\MobileSheetsManager\Db\MobileSheetsSong;
+use OCA\MobileSheetsManager\Db\MobileSheetsSourceType;
 use OCA\MobileSheetsManager\Db\MobileSheetsYear;
 use OCA\MobileSheetsManager\Db\SongMapper;
 use OCA\MobileSheetsManager\Service\MobileSheetsFileFacts;
@@ -53,6 +54,8 @@ final class SongMapperTest extends TestCase {
 		$database->exec('CREATE TABLE YearsSongs(Id INTEGER PRIMARY KEY, YearId INTEGER, SongId INTEGER)');
 		$database->exec('CREATE TABLE Signature(Id INTEGER PRIMARY KEY, Name VARCHAR(255), DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
 		$database->exec('CREATE TABLE SignatureSongs(Id INTEGER PRIMARY KEY, SignatureId INTEGER, SongId INTEGER)');
+		$database->exec('CREATE TABLE SourceTypes(Id INTEGER PRIMARY KEY, Type VARCHAR(255), DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
+		$database->exec('CREATE TABLE SourceTypeSongs(Id INTEGER PRIMARY KEY, SourceTypeId INTEGER, SongId INTEGER)');
 		$database->exec('CREATE TABLE MetronomeSettings(Id INTEGER PRIMARY KEY, SongId INTEGER, Bpm INTEGER)');
 
 		$database->exec("INSERT INTO Songs (Id, Title, SortTitle, Stars, Difficulty, Duration, Keywords, Custom, Custom2) VALUES (1, 'Zebra', 'Zebra', 5, 3, 240, 'jazz, fast', 'Key C', 'Arrangement A'), (2, 'Alpha', 'Alpha', 0, 0, 0, '', '', '')");
@@ -84,6 +87,9 @@ final class SongMapperTest extends TestCase {
 
 		$database->exec("INSERT INTO Signature (Id, Name) VALUES (60, '4/4')");
 		$database->exec('INSERT INTO SignatureSongs (SignatureId, SongId) VALUES (60, 1)');
+
+		$database->exec("INSERT INTO SourceTypes (Id, Type) VALUES (40, 'Sheet Music')");
+		$database->exec('INSERT INTO SourceTypeSongs (SourceTypeId, SongId) VALUES (40, 1)');
 
 		// A song may point at another song through its own SongId column, and a song has
 		// more rows than its files and links: settings such as the metronome live in their
@@ -985,8 +991,31 @@ final class SongMapperTest extends TestCase {
 		self::assertSame([], $song->signatures);
 	}
 
+	public function testSourceTypeOperations(): void {
+		$mapper = $this->mapper();
+		$sourceTypeId = $mapper->createSourceType($this->databasePath, 'Lead Sheet');
+		self::assertGreaterThan(0, $sourceTypeId);
+
+		$songId = $mapper->createSong($this->databasePath, 'SourceType Test Song', sourceTypeIds: [$sourceTypeId]);
+		$song = $mapper->findSong($this->databasePath, $songId);
+		self::assertNotNull($song);
+		self::assertSame(['Lead Sheet'], $this->names($song->sourceTypes));
+
+		// Batch update with replace
+		$sourceTypeId2 = $mapper->createSourceType($this->databasePath, 'Chord Chart');
+		$mapper->batchUpdateSongs($this->databasePath, [$songId], sourceTypeUpdate: ['action' => 'replace', 'ids' => [$sourceTypeId2]]);
+		$song = $mapper->findSong($this->databasePath, $songId);
+		self::assertSame(['Chord Chart'], $this->names($song->sourceTypes));
+
+		// Delete source type entity
+		$deleted = $mapper->deleteEntity($this->databasePath, 'sourcetypes', $sourceTypeId2);
+		self::assertTrue($deleted);
+		$song = $mapper->findSong($this->databasePath, $songId);
+		self::assertSame([], $song->sourceTypes);
+	}
+
 	/**
-	 * @param list<MobileSheetsComposer|MobileSheetsCollection|MobileSheetsArtist|MobileSheetsGenre|MobileSheetsKey|MobileSheetsCustomGroup|MobileSheetsYear|MobileSheetsSignature> $entities
+	 * @param list<MobileSheetsComposer|MobileSheetsCollection|MobileSheetsArtist|MobileSheetsGenre|MobileSheetsKey|MobileSheetsCustomGroup|MobileSheetsYear|MobileSheetsSignature|MobileSheetsSourceType> $entities
 	 * @return list<string>
 	 */
 	private function names(array $entities): array {

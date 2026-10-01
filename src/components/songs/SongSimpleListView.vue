@@ -223,6 +223,19 @@ function handleSongClick(song: Song, e: Event) {
 								<template v-if="idx < song.signatures.length - 1">, </template>
 							</template>
 						</template>
+						<template v-if="(isColVisible('composer') && song.composers?.length || isColVisible('book') && song.books?.length || isColVisible('collection') && song.collections?.length || isColVisible('artist') && song.artists?.length || isColVisible('genre') && song.genres?.length || isColVisible('key') && song.keys?.length || isColVisible('customGroup') && song.customGroups?.length || isColVisible('year') && song.years?.length || isColVisible('signature') && song.signatures?.length) && isColVisible('sourceType') && song.sourceTypes?.length"> • </template>
+						<template v-if="isColVisible('sourceType') && song.sourceTypes && song.sourceTypes.length > 0">
+							<template v-for="(st, idx) in song.sourceTypes" :key="st.id">
+								<button
+									type="button"
+									:class="[$style.filterChip, isFiltered?.('sourcetypes', st.id) && $style.activeChip]"
+									:title="t('mobilesheetsmanager', 'Toggle filter for source type {name}', { name: st.name })"
+									@click.stop="emit('filter-entity', 'sourcetypes', st)">
+									{{ st.name }}
+								</button>
+								<template v-if="idx < song.sourceTypes.length - 1">, </template>
+							</template>
+						</template>
 						<template v-if="isColVisible('stars') && song.stars">
 							<span> • {{ formatStars(song.stars) }}</span>
 						</template>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Artist, Book, Collection, Composer, CustomGroup, Genre, Key, Signature, Year } from '../types/song'
+import type { Artist, Book, Collection, Composer, CustomGroup, Genre, Key, Signature, SourceType, Year } from '../types/song'
 
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
@@ -21,6 +21,7 @@ const props = withDefaults(
 		customGroups?: CustomGroup[]
 		years?: Year[]
 		signatures?: Signature[]
+		sourceTypes?: SourceType[]
 		selectedComposers?: Composer[]
 		selectedBooks?: Book[]
 		selectedCollections?: Collection[]
@@ -30,6 +31,7 @@ const props = withDefaults(
 		selectedCustomGroups?: CustomGroup[]
 		selectedYears?: Year[]
 		selectedSignatures?: Signature[]
+		selectedSourceTypes?: SourceType[]
 	}>(),
 	{
 		searchTitle: '',
@@ -42,6 +44,7 @@ const props = withDefaults(
 		customGroups: () => [],
 		years: () => [],
 		signatures: () => [],
+		sourceTypes: () => [],
 		selectedComposers: () => [],
 		selectedBooks: () => [],
 		selectedCollections: () => [],
@@ -51,6 +54,7 @@ const props = withDefaults(
 		selectedCustomGroups: () => [],
 		selectedYears: () => [],
 		selectedSignatures: () => [],
+		selectedSourceTypes: () => [],
 	},
 )
 
@@ -65,6 +69,7 @@ const emit = defineEmits<{
 	'update:selectedCustomGroups': [customGroups: CustomGroup[]]
 	'update:selectedYears': [years: Year[]]
 	'update:selectedSignatures': [signatures: Signature[]]
+	'update:selectedSourceTypes': [sourceTypes: SourceType[]]
 	'clear': []
 }>()
 
@@ -113,6 +118,11 @@ const signatureOptions = computed(() => [
 	...props.signatures,
 ])
 
+const sourceTypeOptions = computed(() => [
+	noneEntryOf('sourcetypes') as SourceType,
+	...props.sourceTypes,
+])
+
 const hasActiveFilters = computed(() => {
 	return (
 		Boolean(props.searchTitle?.trim())
@@ -125,6 +135,7 @@ const hasActiveFilters = computed(() => {
 		|| props.selectedCustomGroups.length > 0
 		|| props.selectedYears.length > 0
 		|| props.selectedSignatures.length > 0
+		|| props.selectedSourceTypes.length > 0
 	)
 })
 
@@ -270,6 +281,20 @@ function clearAllFilters() {
 				track-by="id"
 				:class="$style.select"
 				@update:model-value="emit('update:selectedSignatures', $event)" />
+		</div>
+
+		<div :class="$style.filterGroup">
+			<NcSelect
+				:model-value="selectedSourceTypes"
+				:options="sourceTypeOptions"
+				:multiple="true"
+				:close-on-select="false"
+				:placeholder="t('mobilesheetsmanager', 'Filter by source type…')"
+				:input-label="t('mobilesheetsmanager', 'Source Types')"
+				label="name"
+				track-by="id"
+				:class="$style.select"
+				@update:model-value="emit('update:selectedSourceTypes', $event)" />
 		</div>
 
 		<div v-if="hasActiveFilters" :class="$style.actions">

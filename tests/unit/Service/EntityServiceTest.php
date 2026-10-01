@@ -42,6 +42,7 @@ final class EntityServiceTest extends TestCase {
 		$songMapper->expects($this->once())->method('createCollection')->with('/tmp/mobilesheets.db', 'Jazz')->willReturn(1000);
 		$songMapper->expects($this->once())->method('createArtist')->with('/tmp/mobilesheets.db', 'Miles')->willReturn(200);
 		$songMapper->expects($this->once())->method('createSignature')->with('/tmp/mobilesheets.db', '3/4')->willReturn(60);
+		$songMapper->expects($this->once())->method('createSourceType')->with('/tmp/mobilesheets.db', 'Lead Sheet')->willReturn(40);
 
 		$service = new EntityService(
 			$libraryService,
@@ -54,6 +55,7 @@ final class EntityServiceTest extends TestCase {
 		$this->assertSame(['id' => 1000, 'name' => 'Jazz'], $service->createEntity($user, 1, 'collection', 'Jazz'));
 		$this->assertSame(['id' => 200, 'name' => 'Miles'], $service->createEntity($user, 1, 'artist', 'Miles'));
 		$this->assertSame(['id' => 60, 'name' => '3/4'], $service->createEntity($user, 1, 'signature', '3/4'));
+		$this->assertSame(['id' => 40, 'name' => 'Lead Sheet', 'type' => 'Lead Sheet'], $service->createEntity($user, 1, 'sourcetype', 'Lead Sheet'));
 	}
 
 	public function testDeleteEntityPassesTypeToMapper(): void {

@@ -177,6 +177,9 @@ function handleSongClick(song: Song, e: Event) {
 					<th v-if="isColVisible('signature')" :class="$style.sortableHeader" @click="toggleSort('signature')">
 						{{ t('mobilesheetsmanager', 'Time Signature') }}{{ sortIndicator('signature') }}
 					</th>
+					<th v-if="isColVisible('sourceType')" :class="$style.sortableHeader" @click="toggleSort('sourceType')">
+						{{ t('mobilesheetsmanager', 'Source Type') }}{{ sortIndicator('sourceType') }}
+					</th>
 					<th v-if="isColVisible('stars')" :class="$style.sortableHeader" @click="toggleSort('stars')">
 						{{ t('mobilesheetsmanager', 'Rating') }}{{ sortIndicator('stars') }}
 					</th>
@@ -360,6 +363,21 @@ function handleSongClick(song: Song, e: Event) {
 									{{ s.name }}
 								</button>
 								<template v-if="idx < song.signatures.length - 1">, </template>
+							</span>
+						</template>
+						<span v-else :class="$style.emptyText">—</span>
+					</td>
+					<td v-if="isColVisible('sourceType')" :class="$style.metaCell">
+						<template v-if="song.sourceTypes && song.sourceTypes.length > 0">
+							<span v-for="(st, idx) in song.sourceTypes" :key="st.id">
+								<button
+									type="button"
+									:class="[$style.filterChip, isFiltered?.('sourcetypes', st.id) && $style.activeChip]"
+									:title="t('mobilesheetsmanager', 'Toggle filter for source type {name}', { name: st.name })"
+									@click.stop="emit('filter-entity', 'sourcetypes', st)">
+									{{ st.name }}
+								</button>
+								<template v-if="idx < song.sourceTypes.length - 1">, </template>
 							</span>
 						</template>
 						<span v-else :class="$style.emptyText">—</span>

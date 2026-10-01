@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Artist, Book, Collection, Composer, CustomGroup, Genre, Key, Signature, Year } from '../../types/song'
+import type { Artist, Book, Collection, Composer, CustomGroup, Genre, Key, Signature, SourceType, Year } from '../../types/song'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
@@ -24,6 +24,7 @@ export interface BatchUpdatePayload {
 	customGroups?: CategoryBatchUpdate
 	years?: CategoryBatchUpdate
 	signatures?: CategoryBatchUpdate
+	sourceTypes?: CategoryBatchUpdate
 }
 
 const props = defineProps<{
@@ -38,6 +39,7 @@ const props = defineProps<{
 	customGroups?: CustomGroup[]
 	years?: Year[]
 	signatures?: Signature[]
+	sourceTypes?: SourceType[]
 }>()
 
 const emit = defineEmits<{
@@ -55,6 +57,7 @@ const enableKeys = ref(false)
 const enableCustomGroups = ref(false)
 const enableYears = ref(false)
 const enableSignatures = ref(false)
+const enableSourceTypes = ref(false)
 
 // Actions
 const composerAction = ref<BatchAction>('add')
@@ -66,6 +69,7 @@ const keyAction = ref<BatchAction>('add')
 const customGroupAction = ref<BatchAction>('add')
 const yearAction = ref<BatchAction>('add')
 const signatureAction = ref<BatchAction>('add')
+const sourceTypeAction = ref<BatchAction>('add')
 
 // Selected entity arrays
 const selectedComposers = ref<Composer[]>([])
@@ -77,6 +81,7 @@ const selectedKeys = ref<Key[]>([])
 const selectedCustomGroups = ref<CustomGroup[]>([])
 const selectedYears = ref<Year[]>([])
 const selectedSignatures = ref<Signature[]>([])
+const selectedSourceTypes = ref<SourceType[]>([])
 
 function resetForm() {
 	enableComposers.value = false
@@ -88,6 +93,7 @@ function resetForm() {
 	enableCustomGroups.value = false
 	enableYears.value = false
 	enableSignatures.value = false
+	enableSourceTypes.value = false
 
 	composerAction.value = 'add'
 	bookAction.value = 'add'
@@ -98,6 +104,7 @@ function resetForm() {
 	customGroupAction.value = 'add'
 	yearAction.value = 'add'
 	signatureAction.value = 'add'
+	sourceTypeAction.value = 'add'
 
 	selectedComposers.value = []
 	selectedBooks.value = []
@@ -108,6 +115,7 @@ function resetForm() {
 	selectedCustomGroups.value = []
 	selectedYears.value = []
 	selectedSignatures.value = []
+	selectedSourceTypes.value = []
 }
 
 watch(() => props.open, (isOpen) => {
@@ -115,7 +123,7 @@ watch(() => props.open, (isOpen) => {
 })
 
 const isAnythingEnabled = computed(() => {
-	return enableComposers.value || enableBooks.value || enableCollections.value || enableArtists.value || enableGenres.value || enableKeys.value || enableCustomGroups.value || enableYears.value || enableSignatures.value
+	return enableComposers.value || enableBooks.value || enableCollections.value || enableArtists.value || enableGenres.value || enableKeys.value || enableCustomGroups.value || enableYears.value || enableSignatures.value || enableSourceTypes.value
 })
 
 function handleApply() {
@@ -175,6 +183,12 @@ function handleApply() {
 		payload.signatures = {
 			action: signatureAction.value,
 			ids: selectedSignatures.value.map((s) => s.id),
+		}
+	}
+	if (enableSourceTypes.value) {
+		payload.sourceTypes = {
+			action: sourceTypeAction.value,
+			ids: selectedSourceTypes.value.map((st) => st.id),
 		}
 	}
 
@@ -486,6 +500,38 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 						:close-on-select="false"
 						:input-label="t('mobilesheetsmanager', 'Time Signatures')"
 						:placeholder="t('mobilesheetsmanager', 'Select time signatures…')"
+						label="name"
+						track-by="id" />
+				</div>
+			</div>
+
+			<!-- Source Types Section -->
+			<div :class="$style.fieldGroup">
+				<div :class="$style.fieldHeader">
+					<NcCheckboxRadioSwitch
+						v-model="enableSourceTypes"
+						type="checkbox">
+						{{ t('mobilesheetsmanager', 'Source Types') }}
+					</NcCheckboxRadioSwitch>
+				</div>
+				<div v-if="enableSourceTypes" :class="$style.fieldBody">
+					<div :class="$style.actionSelector">
+						<label v-for="opt in actionOptions" :key="opt.value" :class="$style.radioLabel">
+							<input
+								v-model="sourceTypeAction"
+								type="radio"
+								:name="'source-type-action'"
+								:value="opt.value">
+							{{ opt.label }}
+						</label>
+					</div>
+					<NcSelect
+						v-model="selectedSourceTypes"
+						:options="sourceTypes || []"
+						:multiple="true"
+						:close-on-select="false"
+						:input-label="t('mobilesheetsmanager', 'Source Types')"
+						:placeholder="t('mobilesheetsmanager', 'Select source types…')"
 						label="name"
 						track-by="id" />
 				</div>

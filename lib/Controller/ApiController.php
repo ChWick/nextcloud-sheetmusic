@@ -111,8 +111,9 @@ class ApiController extends OCSController {
 		array $customGroupIds = [],
 		array $yearIds = [],
 		array $signatureIds = [],
+		array $sourceTypeIds = [],
 	): DataResponse {
-		return $this->songController->createSong($libraryId, $title, $composerIds, $bookIds, $collectionIds, $artistIds, $genreIds, $keyIds, $customGroupIds, $yearIds, $signatureIds);
+		return $this->songController->createSong($libraryId, $title, $composerIds, $bookIds, $collectionIds, $artistIds, $genreIds, $keyIds, $customGroupIds, $yearIds, $signatureIds, $sourceTypeIds);
 	}
 
 	#[NoAdminRequired]
@@ -130,8 +131,9 @@ class ApiController extends OCSController {
 		array $customGroupIds = [],
 		array $yearIds = [],
 		array $signatureIds = [],
+		array $sourceTypeIds = [],
 	): DataResponse {
-		return $this->songController->updateSong($id, $libraryId, $title, $composerIds, $bookIds, $collectionIds, $artistIds, $genreIds, $keyIds, $customGroupIds, $yearIds, $signatureIds);
+		return $this->songController->updateSong($id, $libraryId, $title, $composerIds, $bookIds, $collectionIds, $artistIds, $genreIds, $keyIds, $customGroupIds, $yearIds, $signatureIds, $sourceTypeIds);
 	}
 
 	#[NoAdminRequired]
@@ -148,8 +150,9 @@ class ApiController extends OCSController {
 		?array $customGroups = null,
 		?array $years = null,
 		?array $signatures = null,
+		?array $sourceTypes = null,
 	): DataResponse {
-		return $this->songController->batchUpdateSongs($libraryId, $songIds, $composers, $books, $collections, $artists, $genres, $keys, $customGroups, $years, $signatures);
+		return $this->songController->batchUpdateSongs($libraryId, $songIds, $composers, $books, $collections, $artists, $genres, $keys, $customGroups, $years, $signatures, $sourceTypes);
 	}
 
 	#[NoAdminRequired]
@@ -242,6 +245,12 @@ class ApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/sourcetypes')]
+	public function createSourceType(?int $libraryId = null, ?string $name = null): DataResponse {
+		return $this->entityController->createSourceType($libraryId, $name);
+	}
+
+	#[NoAdminRequired]
 	#[ApiRoute(verb: 'DELETE', url: '/api/composers/{id}')]
 	public function deleteComposer(int $id, ?int $libraryId = null): DataResponse {
 		return $this->entityController->deleteComposer($id, $libraryId);
@@ -293,5 +302,11 @@ class ApiController extends OCSController {
 	#[ApiRoute(verb: 'DELETE', url: '/api/signatures/{id}')]
 	public function deleteSignature(int $id, ?int $libraryId = null): DataResponse {
 		return $this->entityController->deleteSignature($id, $libraryId);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'DELETE', url: '/api/sourcetypes/{id}')]
+	public function deleteSourceType(int $id, ?int $libraryId = null): DataResponse {
+		return $this->entityController->deleteSourceType($id, $libraryId);
 	}
 }

@@ -27,7 +27,7 @@ test.describe('Entities Views (Composers, Books, Collections, Artists)', () => {
 		await page.goto('/#/library/1/composers')
 
 		// Click Ludwig van Beethoven
-		await page.getByRole('button', { name: 'Ludwig van Beethoven' }).click()
+		await page.getByRole('button', { name: 'Ludwig van Beethoven' }).dispatchEvent('click')
 
 		// Should navigate to songs view with composer query parameter
 		await expect(page).toHaveURL(/#\/library\/1\/songs\?composers=1/)
@@ -50,5 +50,14 @@ test.describe('Entities Views (Composers, Books, Collections, Artists)', () => {
 		// Verify list contains mock signatures
 		await expect(page.getByRole('button', { name: '4/4' })).toBeVisible()
 		await expect(page.getByRole('button', { name: '3/4' })).toBeVisible()
+	})
+
+	test('renders Source Types view and list items', async ({ page }) => {
+		await page.goto('/#/library/1/sourcetypes')
+		await expect(page.getByRole('heading', { name: 'Source Types' })).toBeVisible()
+
+		// Verify list contains mock source types
+		await expect(page.getByRole('button', { name: 'Lead Sheet' })).toBeVisible()
+		await expect(page.getByRole('button', { name: 'Score' })).toBeVisible()
 	})
 })

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { INode } from '@nextcloud/files'
-import type { Artist, Book, Collection, Composer, CreatedSongData, CustomGroup, Genre, Key, LibraryData, PendingAddition, PendingAttachment, PendingUpload, Signature, Song, SongFile, SongPrefill, Year } from '../types/song'
+import type { Artist, Book, Collection, Composer, CreatedSongData, CustomGroup, Genre, Key, LibraryData, PendingAddition, PendingAttachment, PendingUpload, Signature, Song, SongFile, SongPrefill, SourceType, Year } from '../types/song'
 
 import axios from '@nextcloud/axios'
 import { FilePickerClosed, getFilePickerBuilder } from '@nextcloud/dialogs'
@@ -38,6 +38,7 @@ const props = withDefaults(
 		customGroups?: CustomGroup[]
 		years?: Year[]
 		signatures?: Signature[]
+		sourceTypes?: SourceType[]
 		/** Metadata read from an imported PDF, prefilled into a new song. */
 		prefill?: SongPrefill | null
 		/** The imported PDF itself, staged as the new song's file. */
@@ -52,6 +53,7 @@ const props = withDefaults(
 		customGroups: () => [],
 		years: () => [],
 		signatures: () => [],
+		sourceTypes: () => [],
 		prefill: null,
 		importedFile: null,
 		importedNextcloudNode: null,
@@ -140,6 +142,11 @@ const selectedSignatures = ref<Array<Signature | { name: string, id?: number }>>
 		? matchSelected(props.signatures, props.song.signatures)
 		: [],
 )
+const selectedSourceTypes = ref<Array<SourceType | { name: string, id?: number }>>(
+	props.song
+		? matchSelected(props.sourceTypes, props.song.sourceTypes)
+		: [],
+)
 
 const stars = ref<number>(props.song?.stars ?? 0)
 const difficulty = ref<number>(props.song?.difficulty ?? 0)
@@ -181,6 +188,7 @@ watch(
 		selectedCustomGroups.value = matchSelected(props.customGroups, newSong?.customGroups)
 		selectedYears.value = matchSelected(props.years, newSong?.years)
 		selectedSignatures.value = matchSelected(props.signatures, newSong?.signatures)
+		selectedSourceTypes.value = matchSelected(props.sourceTypes, newSong?.sourceTypes)
 		stars.value = newSong?.stars ?? 0
 		difficulty.value = newSong?.difficulty ?? 0
 		duration.value = newSong?.duration ?? 0
@@ -303,6 +311,10 @@ function createYearTag(newTag: string) {
 }
 
 function createSignatureTag(newTag: string) {
+	return { name: newTag }
+}
+
+function createSourceTypeTag(newTag: string) {
 	return { name: newTag }
 }
 
@@ -549,6 +561,20 @@ async function saveSong(closeAfter: boolean) {
 			}
 		}
 
+		// Resolve or create source types
+		const sourceTypeIds: number[] = []
+		for (const st of selectedSourceTypes.value) {
+			if ('id' in st && typeof st.id === 'number') {
+				sourceTypeIds.push(st.id)
+			} else {
+				const createRes = await apiPost('/api/sourcetypes', {
+					libraryId: props.libraryId,
+					name: st.name,
+				})
+				sourceTypeIds.push(createRes.data.ocs.data.id)
+			}
+		}
+
 		// The song is created or updated before the staged file additions: those need the
 		// song's id, and the naming rules use the composers, artists and collections the
 		// user just saved.
@@ -564,6 +590,7 @@ async function saveSong(closeAfter: boolean) {
 			customGroupIds,
 			yearIds,
 			signatureIds,
+			sourceTypeIds,
 			stars: Number(stars.value) || 0,
 			difficulty: Number(difficulty.value) || 0,
 			duration: Number(duration.value) || 0,
@@ -772,6 +799,20 @@ async function saveSong(closeAfter: boolean) {
 					label="name"
 					track-by="name"
 					:placeholder="t('mobilesheetsmanager', 'Select or type a time signature (e.g. 4/4)…')" />
+			</div>
+
+			<div :class="$style.formGroup">
+				<NcSelect
+					v-model="selectedSourceTypes"
+					:options="sourceTypes"
+					:multiple="true"
+					:taggable="true"
+					:create-option="createSourceTypeTag"
+					:close-on-select="false"
+					:input-label="t('mobilesheetsmanager', 'Source Types')"
+					label="name"
+					track-by="name"
+					:placeholder="t('mobilesheetsmanager', 'Select or type a source type…')" />
 			</div>
 
 			<div :class="$style.attributesGrid">

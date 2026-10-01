@@ -21,6 +21,7 @@ class MobileSheetsSong {
 	 * @param list<MobileSheetsCustomGroup> $customGroups
 	 * @param list<MobileSheetsYear> $years
 	 * @param list<MobileSheetsSignature> $signatures
+	 * @param list<MobileSheetsSourceType> $sourceTypes
 	 */
 	public function __construct(
 		public readonly int $id,
@@ -35,6 +36,7 @@ class MobileSheetsSong {
 		public readonly array $customGroups = [],
 		public readonly array $years = [],
 		public readonly array $signatures = [],
+		public readonly array $sourceTypes = [],
 		public readonly ?int $lastModified = null,
 		public readonly ?int $dateCreated = null,
 		public readonly int $stars = 0,

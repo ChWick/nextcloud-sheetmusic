@@ -187,6 +187,19 @@ class SongMapper {
 			}
 		}
 
+		$sourceTypes = [];
+		$sourceTypesById = [];
+		if (in_array('SourceTypes', $existingTables, true)) {
+			$stmt = $database->query('SELECT Id, Type FROM SourceTypes ORDER BY Type');
+			if ($stmt !== false) {
+				while ($row = $stmt->fetch()) {
+					$sourceType = new MobileSheetsSourceType((int)$row['Id'], (string)$row['Type']);
+					$sourceTypes[] = $sourceType;
+					$sourceTypesById[$sourceType->id] = $sourceType;
+				}
+			}
+		}
+
 		$songComposers = [];
 		if (in_array('ComposerSongs', $existingTables, true)) {
 			$stmt = $database->query('SELECT ComposerId, SongId FROM ComposerSongs');
@@ -290,6 +303,16 @@ class SongMapper {
 			}
 		}
 
+		$songSourceTypes = [];
+		if (in_array('SourceTypeSongs', $existingTables, true)) {
+			$stmt = $database->query('SELECT SourceTypeId, SongId FROM SourceTypeSongs');
+			if ($stmt !== false) {
+				while ($row = $stmt->fetch()) {
+					$songSourceTypes[(int)$row['SongId']][] = (int)$row['SourceTypeId'];
+				}
+			}
+		}
+
 		$songCols = $this->columnNames($database, 'Songs');
 		$hasLastModified = isset($songCols['lastmodified']);
 		$createdCol = isset($songCols['datecreated']) ? 'DateCreated' : (isset($songCols['creationdate']) ? 'CreationDate' : null);
@@ -350,6 +373,7 @@ class SongMapper {
 					$this->resolveEntities($songCustomGroups[$songId] ?? [], $customGroupsById),
 					$this->resolveEntities($songYears[$songId] ?? [], $yearsById),
 					$this->resolveEntities($songSignatures[$songId] ?? [], $signaturesById),
+					$this->resolveEntities($songSourceTypes[$songId] ?? [], $sourceTypesById),
 					isset($row['LastModified']) && $row['LastModified'] !== null ? (int)$row['LastModified'] : null,
 					isset($row['DateCreated']) && $row['DateCreated'] !== null ? (int)$row['DateCreated'] : null,
 					isset($row['Stars']) ? (int)$row['Stars'] : 0,
@@ -374,6 +398,7 @@ class SongMapper {
 			'customGroups' => $customGroups,
 			'years' => $years,
 			'signatures' => $signatures,
+			'sourceTypes' => $sourceTypes,
 		];
 	}
 
@@ -440,6 +465,8 @@ class SongMapper {
 			'y.Year AS Year',
 			'sigs.SignatureId AS SignatureId',
 			'sig.Name AS Signature',
+			'srctypes.SourceTypeId AS SourceTypeId',
+			'srctype.Type AS SourceType',
 			'c.Name AS Composer',
 			'cs.ComposerId AS ComposerId',
 			'coll.Name AS Collection',
@@ -466,6 +493,8 @@ class SongMapper {
 		LEFT JOIN Years y ON ys.YearId = y.Id
 		LEFT JOIN SignatureSongs sigs ON s.Id = sigs.SongId
 		LEFT JOIN Signature sig ON sigs.SignatureId = sig.Id
+		LEFT JOIN SourceTypeSongs srctypes ON s.Id = srctypes.SongId
+		LEFT JOIN SourceTypes srctype ON srctypes.SourceTypeId = srctype.Id
 		LEFT JOIN BookSongs bookSongs ON s.Id = bookSongs.SongId
 		LEFT JOIN Books books ON bookSongs.BookId = books.Id
 		LEFT JOIN ArtistsSongs artistsSongs ON artistsSongs.SongId = s.Id
@@ -507,6 +536,7 @@ class SongMapper {
 					'customGroups' => [],
 					'years' => [],
 					'signatures' => [],
+					'sourceTypes' => [],
 				];
 			}
 
@@ -554,6 +584,11 @@ class SongMapper {
 			if ($signatureId !== null && !isset($songs[$rowSongId]['signatures'][$signatureId])) {
 				$songs[$rowSongId]['signatures'][$signatureId] = new MobileSheetsSignature($signatureId, (string)($row['Signature'] ?? ''));
 			}
+
+			$sourceTypeId = $row['SourceTypeId'] !== null ? (int)$row['SourceTypeId'] : null;
+			if ($sourceTypeId !== null && !isset($songs[$rowSongId]['sourceTypes'][$sourceTypeId])) {
+				$songs[$rowSongId]['sourceTypes'][$sourceTypeId] = new MobileSheetsSourceType($sourceTypeId, (string)($row['SourceType'] ?? ''));
+			}
 		}
 
 		$result = [];
@@ -571,6 +606,7 @@ class SongMapper {
 				array_values($song['customGroups']),
 				array_values($song['years']),
 				array_values($song['signatures']),
+				array_values($song['sourceTypes']),
 				$song['lastModified'],
 				$song['dateCreated'],
 				$song['stars'] ?? 0,
@@ -653,6 +689,7 @@ class SongMapper {
 	 * @param list<int> $customGroupIds
 	 * @param list<int> $yearIds
 	 * @param list<int> $signatureIds
+	 * @param list<int> $sourceTypeIds
 	 * @return int id of the created song
 	 */
 	public function createSong(
@@ -667,6 +704,7 @@ class SongMapper {
 		array $customGroupIds = [],
 		array $yearIds = [],
 		array $signatureIds = [],
+		array $sourceTypeIds = [],
 		int $stars = 0,
 		int $difficulty = 0,
 		int $duration = 0,
@@ -704,6 +742,7 @@ class SongMapper {
 			$customGroupIds,
 			$yearIds,
 			$signatureIds,
+			$sourceTypeIds,
 			$stars,
 			$difficulty,
 			$duration,
@@ -726,6 +765,7 @@ class SongMapper {
 	 * @param list<int> $customGroupIds
 	 * @param list<int> $yearIds
 	 * @param list<int> $signatureIds
+	 * @param list<int> $sourceTypeIds
 	 */
 	public function updateSong(
 		string $databasePath,
@@ -740,6 +780,7 @@ class SongMapper {
 		array $customGroupIds = [],
 		array $yearIds = [],
 		array $signatureIds = [],
+		array $sourceTypeIds = [],
 		int $stars = 0,
 		int $difficulty = 0,
 		int $duration = 0,
@@ -894,6 +935,20 @@ class SongMapper {
 				]);
 			}
 		}
+
+		// Update SourceTypes
+		if (in_array('SourceTypeSongs', $existingTables, true)) {
+			$delStmt = $database->prepare('DELETE FROM SourceTypeSongs WHERE SongId = :songId');
+			$delStmt->execute([':songId' => $songId]);
+
+			$insStmt = $database->prepare('INSERT INTO SourceTypeSongs (SourceTypeId, SongId) VALUES (:sourceTypeId, :songId)');
+			foreach ($sourceTypeIds as $sourceTypeId) {
+				$insStmt->execute([
+					':sourceTypeId' => $sourceTypeId,
+					':songId' => $songId,
+				]);
+			}
+		}
 	}
 
 	/**
@@ -909,6 +964,7 @@ class SongMapper {
 	 * @param array{action?: string, ids?: list<int>}|null $customGroupUpdate
 	 * @param array{action?: string, ids?: list<int>}|null $yearUpdate
 	 * @param array{action?: string, ids?: list<int>}|null $signatureUpdate
+	 * @param array{action?: string, ids?: list<int>}|null $sourceTypeUpdate
 	 */
 	public function batchUpdateSongs(
 		string $databasePath,
@@ -922,6 +978,7 @@ class SongMapper {
 		?array $customGroupUpdate = null,
 		?array $yearUpdate = null,
 		?array $signatureUpdate = null,
+		?array $sourceTypeUpdate = null,
 	): void {
 		if (empty($songIds)) {
 			return;
@@ -967,6 +1024,9 @@ class SongMapper {
 				}
 				if ($signatureUpdate !== null && in_array('SignatureSongs', $existingTables, true)) {
 					$this->updateCategoryRelations($database, 'SignatureSongs', 'SignatureId', $songId, $signatureUpdate);
+				}
+				if ($sourceTypeUpdate !== null && in_array('SourceTypeSongs', $existingTables, true)) {
+					$this->updateCategoryRelations($database, 'SourceTypeSongs', 'SourceTypeId', $songId, $sourceTypeUpdate);
 				}
 			}
 			$database->commit();
@@ -1420,6 +1480,16 @@ class SongMapper {
 		] + $this->dateColumns($database, 'Signature'));
 	}
 
+	public function createSourceType(string $databasePath, string $name): int {
+		$database = new PDO('sqlite:' . $databasePath, options: [
+			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+		]);
+		return $this->insertRow($database, 'SourceTypes', [
+			'Type' => $name,
+		] + $this->dateColumns($database, 'SourceTypes'));
+	}
+
 	/**
 	 * Tables of the entity kinds a song can carry, and how each of them links
 	 * to songs.
@@ -1436,16 +1506,17 @@ class SongMapper {
 		'customgroups' => ['table' => 'CustomGroup', 'linkTable' => 'CustomGroupSongs', 'linkColumn' => 'GroupId'],
 		'years' => ['table' => 'Years', 'linkTable' => 'YearsSongs', 'linkColumn' => 'YearId'],
 		'signatures' => ['table' => 'Signature', 'linkTable' => 'SignatureSongs', 'linkColumn' => 'SignatureId'],
+		'sourcetypes' => ['table' => 'SourceTypes', 'linkTable' => 'SourceTypeSongs', 'linkColumn' => 'SourceTypeId'],
 	];
 
 	/**
-	 * Delete a composer, book, collection, artist, genre, key, custom group, year or signature from the library.
+	 * Delete a composer, book, collection, artist, genre, key, custom group, year, signature or source type from the library.
 	 *
 	 * The songs are kept: only the links to the deleted entry are removed, so it
-	 * disappears from the songs' composers, books, collections, artists, genres, keys, custom groups, years or signatures while the
+	 * disappears from the songs' composers, books, collections, artists, genres, keys, custom groups, years, signatures or source types while the
 	 * songs themselves stay untouched.
 	 *
-	 * @param 'composers'|'books'|'collections'|'artists'|'genres'|'keys'|'customgroups'|'years'|'signatures' $entityType
+	 * @param 'composers'|'books'|'collections'|'artists'|'genres'|'keys'|'customgroups'|'years'|'signatures'|'sourcetypes' $entityType
 	 * @return bool whether the entry itself existed and was removed
 	 */
 	public function deleteEntity(string $databasePath, string $entityType, int $entityId): bool {

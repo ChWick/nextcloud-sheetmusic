@@ -1,4 +1,4 @@
-import type { Artist, Book, Collection, Composer, CustomGroup, EntityType, FilterEntity, Genre, Key, Signature, Song, Year } from '../types/song'
+import type { Artist, Book, Collection, Composer, CustomGroup, EntityType, FilterEntity, Genre, Key, Signature, Song, SourceType, Year } from '../types/song'
 import { translate as t } from '@nextcloud/l10n'
 import { computed, ref } from 'vue'
 import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
@@ -15,9 +15,11 @@ export interface FilterOptions {
 	customgroups?: CustomGroup[]
 	years?: Year[]
 	signatures?: Signature[]
+	sourceTypes?: SourceType[]
+	sourcetypes?: SourceType[]
 }
 
-const FILTER_TYPES: EntityType[] = ['composers', 'artists', 'books', 'collections', 'genres', 'keys', 'customgroups', 'years', 'signatures']
+const FILTER_TYPES: EntityType[] = ['composers', 'artists', 'books', 'collections', 'genres', 'keys', 'customgroups', 'years', 'signatures', 'sourcetypes']
 
 export const UNASSIGNED_ID = -1
 
@@ -42,6 +44,8 @@ export function noneEntryOf(entityType: EntityType): FilterEntity {
 			return { id: UNASSIGNED_ID, name: t('mobilesheetsmanager', '(No year)'), year: 0 }
 		case 'signatures':
 			return { id: UNASSIGNED_ID, name: t('mobilesheetsmanager', '(No time signature)') }
+		case 'sourcetypes':
+			return { id: UNASSIGNED_ID, name: t('mobilesheetsmanager', '(No source type)'), type: t('mobilesheetsmanager', '(No source type)') }
 	}
 }
 
@@ -112,7 +116,7 @@ export function useSongFilters(options: () => FilterOptions) {
 	/** The entries behind the ids of one filter parameter, in the order of the URL. */
 	function selectedOf(entityType: EntityType): FilterEntity[] {
 		const opts = options()
-		const entries = ((opts[entityType] ?? (entityType === 'customgroups' ? opts.customGroups : [])) ?? []) as FilterEntity[]
+		const entries = ((opts[entityType] ?? (entityType === 'customgroups' ? opts.customGroups : entityType === 'sourcetypes' ? opts.sourceTypes : [])) ?? []) as FilterEntity[]
 		const noneEntry = noneEntryOf(entityType)
 		return idsOf(entityType).map(id => {
 			if (id === UNASSIGNED_ID) {
@@ -162,6 +166,7 @@ export function useSongFilters(options: () => FilterOptions) {
 		const customGroupIds = new Set(idsOf('customgroups'))
 		const yearIds = new Set(idsOf('years'))
 		const signatureIds = new Set(idsOf('signatures'))
+		const sourceTypeIds = new Set(idsOf('sourcetypes'))
 
 		if (!matchesCategory(song.composers, composerIds)) return false
 		if (!matchesCategory(song.books, bookIds)) return false
@@ -172,6 +177,7 @@ export function useSongFilters(options: () => FilterOptions) {
 		if (!matchesCategory(song.customGroups, customGroupIds)) return false
 		if (!matchesCategory(song.years, yearIds)) return false
 		if (!matchesCategory(song.signatures, signatureIds)) return false
+		if (!matchesCategory(song.sourceTypes, sourceTypeIds)) return false
 		return true
 	}
 
@@ -227,6 +233,10 @@ export function useSongFilters(options: () => FilterOptions) {
 		get: () => selectedOf('signatures') as Signature[],
 		set: (value: Signature[]) => selectIds('signatures', value.map(entry => entry.id)),
 	})
+	const selectedSourceTypes = computed({
+		get: () => selectedOf('sourcetypes') as SourceType[],
+		set: (value: SourceType[]) => selectIds('sourcetypes', value.map(entry => entry.id)),
+	})
 
 	return {
 		searchTitle,
@@ -239,6 +249,7 @@ export function useSongFilters(options: () => FilterOptions) {
 		selectedCustomGroups,
 		selectedYears,
 		selectedSignatures,
+		selectedSourceTypes,
 		hasActiveFilters,
 		isFiltered,
 		toggleFilter,

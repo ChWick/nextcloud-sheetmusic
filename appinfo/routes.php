@@ -104,5 +104,15 @@ return [
 			'url' => '/api/signatures/{id}',
 			'verb' => 'DELETE',
 		],
+		[
+			'name' => 'Api#createSourceType',
+			'url' => '/api/sourcetypes',
+			'verb' => 'POST',
+		],
+		[
+			'name' => 'Api#deleteSourceType',
+			'url' => '/api/sourcetypes/{id}',
+			'verb' => 'DELETE',
+		],
 	],
 ];

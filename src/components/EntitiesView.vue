@@ -17,6 +17,7 @@
         v-model:selected-custom-groups="selectedCustomGroups"
         v-model:selected-years="selectedYears"
         v-model:selected-signatures="selectedSignatures"
+        v-model:selected-source-types="selectedSourceTypes"
         :composers="composers"
         :books="books"
         :collections="collections"
@@ -26,6 +27,7 @@
         :custom-groups="customGroups"
         :years="years"
         :signatures="signatures"
+        :source-types="sourceTypes"
         @clear="clearFilters" />
     </div>
     <div :class="$style.listColumn">
@@ -90,7 +92,7 @@
 </template>
 
 <script setup lang="ts">
-import type { Artist, Book, Collection, Composer, CustomGroup, EntityType, FilterEntity, Genre, Key, LibraryData, Signature, Song, Year } from '../types/song'
+import type { Artist, Book, Collection, Composer, CustomGroup, EntityType, FilterEntity, Genre, Key, LibraryData, Signature, Song, SourceType, Year } from '../types/song'
 
 import { translate as t } from '@nextcloud/l10n'
 import axios from '@nextcloud/axios'
@@ -108,7 +110,7 @@ import { apiDelete, apiPost } from '../api/client'
 
 const props = defineProps<{
   selectedLibrary: number
-  /** Which of the song filters this view manages: composers, artists, books, collections, genres, keys, customgroups, years or signatures. */
+  /** Which of the song filters this view manages: composers, artists, books, collections, genres, keys, customgroups, years, signatures or sourcetypes. */
   entityType: EntityType
 }>()
 
@@ -116,8 +118,8 @@ const router = useRouter()
 
 /** Everything this shared view needs to know about the entity kind it shows. */
 interface EntityConfig {
-  createEndpoint: '/api/composers' | '/api/artists' | '/api/books' | '/api/collections' | '/api/genres' | '/api/keys' | '/api/customgroups' | '/api/years' | '/api/signatures'
-  deleteEndpoint: '/api/composers/{id}' | '/api/artists/{id}' | '/api/books/{id}' | '/api/collections/{id}' | '/api/genres/{id}' | '/api/keys/{id}' | '/api/customgroups/{id}' | '/api/years/{id}' | '/api/signatures/{id}'
+  createEndpoint: '/api/composers' | '/api/artists' | '/api/books' | '/api/collections' | '/api/genres' | '/api/keys' | '/api/customgroups' | '/api/years' | '/api/signatures' | '/api/sourcetypes'
+  deleteEndpoint: '/api/composers/{id}' | '/api/artists/{id}' | '/api/books/{id}' | '/api/collections/{id}' | '/api/genres/{id}' | '/api/keys/{id}' | '/api/customgroups/{id}' | '/api/years/{id}' | '/api/signatures/{id}' | '/api/sourcetypes/{id}'
   nameKey: 'name' | 'title'
   singular: string
   plural: string
@@ -187,6 +189,13 @@ const entityConfigs: Record<EntityType, EntityConfig> = {
     singular: t('mobilesheetsmanager', 'time signature'),
     plural: t('mobilesheetsmanager', 'Time Signatures'),
   },
+  sourcetypes: {
+    createEndpoint: '/api/sourcetypes',
+    deleteEndpoint: '/api/sourcetypes/{id}',
+    nameKey: 'name',
+    singular: t('mobilesheetsmanager', 'source type'),
+    plural: t('mobilesheetsmanager', 'Source Types'),
+  },
 }
 
 const config = computed<EntityConfig>(() => entityConfigs[props.entityType])
@@ -202,6 +211,7 @@ const {
   customGroups,
   years,
   signatures,
+  sourceTypes,
   fileError,
   isLoading,
   handleLibraryDataUpdate,
@@ -218,6 +228,7 @@ const entities = computed<FilterEntity[]>(() => {
   if (props.entityType === 'customgroups') return customGroups.value
   if (props.entityType === 'years') return years.value
   if (props.entityType === 'signatures') return signatures.value
+  if (props.entityType === 'sourcetypes') return sourceTypes.value
   return []
 })
 
@@ -233,8 +244,8 @@ const deleteError = ref('')
 
 // The filter bar reads and writes its selections in the URL query, so the browser
 // history restores them when going back or forward.
-const { selectedComposers, selectedBooks, selectedCollections, selectedArtists, selectedGenres, selectedKeys, selectedCustomGroups, selectedYears, selectedSignatures, hasActiveFilters, filterSongs, clearFilters, filterBarVisible, toggleFilterBar } =
-  useSongFilters(() => ({ composers: composers.value, books: books.value, collections: collections.value, artists: artists.value, genres: genres.value, keys: keys.value, customGroups: customGroups.value, years: years.value, signatures: signatures.value }))
+const { selectedComposers, selectedBooks, selectedCollections, selectedArtists, selectedGenres, selectedKeys, selectedCustomGroups, selectedYears, selectedSignatures, selectedSourceTypes, hasActiveFilters, filterSongs, clearFilters, filterBarVisible, toggleFilterBar } =
+  useSongFilters(() => ({ composers: composers.value, books: books.value, collections: collections.value, artists: artists.value, genres: genres.value, keys: keys.value, customGroups: customGroups.value, years: years.value, signatures: signatures.value, sourceTypes: sourceTypes.value }))
 
 /** Books carry a title, every other entity kind a name. */
 function entityLabel(entity: FilterEntity): string {
@@ -251,6 +262,9 @@ const namePlaceholder = computed(() => {
   if (props.entityType === 'signatures') {
     return t('mobilesheetsmanager', 'Enter a time signature (e.g. 4/4)')
   }
+  if (props.entityType === 'sourcetypes') {
+    return t('mobilesheetsmanager', 'Enter a source type')
+  }
   return t('mobilesheetsmanager', 'Enter a name')
 })
 
@@ -258,6 +272,9 @@ const namePlaceholder = computed(() => {
 function entitiesOfSong(song: Song): FilterEntity[] {
   if (props.entityType === 'customgroups') {
     return song.customGroups ?? []
+  }
+  if (props.entityType === 'sourcetypes') {
+    return song.sourceTypes ?? []
   }
   return song[props.entityType] ?? []
 }
