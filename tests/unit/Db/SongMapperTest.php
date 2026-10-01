@@ -740,6 +740,29 @@ final class SongMapperTest extends TestCase {
 		self::assertSame(['Beethoven'], $this->names($song1->composers));
 	}
 
+	public function testDetermineFileType(): void {
+		self::assertSame(SongMapper::FILE_TYPE_PDF, SongMapper::determineFileType('/path/to/song.pdf'));
+		self::assertSame(SongMapper::FILE_TYPE_IMAGE, SongMapper::determineFileType('/path/to/image.PNG'));
+		self::assertSame(SongMapper::FILE_TYPE_IMAGE, SongMapper::determineFileType('/path/to/photo.jpg'));
+		self::assertSame(SongMapper::FILE_TYPE_TEXT, SongMapper::determineFileType('/path/to/lyrics.txt'));
+		self::assertSame(SongMapper::FILE_TYPE_TEXT, SongMapper::determineFileType('/path/to/chords.cho'));
+		self::assertSame(SongMapper::FILE_TYPE_ABC, SongMapper::determineFileType('/path/to/tune.abc'));
+		self::assertSame(SongMapper::FILE_TYPE_OTHER, SongMapper::determineFileType('/path/to/track.mp3'));
+		self::assertSame(SongMapper::FILE_TYPE_OTHER, SongMapper::determineFileType('/path/to/score.sib'));
+	}
+
+	public function testSetSongFileRecordsCorrectFileType(): void {
+		$mapper = $this->mapper();
+		$facts = new MobileSheetsFileFacts(12345, 1024, 1600000000000, 1, '1');
+
+		$mapper->setSongFile($this->databasePath, 1, '/remote.php/dav/files/admin/Noten/image.png', $facts);
+
+		$database = new \PDO('sqlite:' . $this->databasePath);
+		$stmt = $database->query("SELECT Type FROM Files WHERE Path = '/remote.php/dav/files/admin/Noten/image.png'");
+		$row = $stmt->fetch();
+		self::assertSame(SongMapper::FILE_TYPE_IMAGE, (int)$row['Type']);
+	}
+
 	/**
 	 * @param list<MobileSheetsComposer|MobileSheetsCollection|MobileSheetsArtist> $entities
 	 * @return list<string>

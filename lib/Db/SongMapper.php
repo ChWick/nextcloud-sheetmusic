@@ -17,11 +17,29 @@ class SongMapper {
 	/** Source of a file that lives in the library folder. */
 	private const FILE_SOURCE_LOCAL = 1;
 
-	/** Type of a PDF file. */
-	private const FILE_TYPE_PDF = 1;
+	/** Type constants for MobileSheets Files.Type column */
+	public const FILE_TYPE_OTHER = 0;
+	public const FILE_TYPE_PDF = 1;
+	public const FILE_TYPE_IMAGE = 2;
+	public const FILE_TYPE_TEXT = 3;
+	public const FILE_TYPE_ABC = 4;
 
 	/** Width/Height of a file whose dimensions were not measured. */
 	private const FILE_DIMENSION_UNKNOWN = -1;
+
+	/**
+	 * Map a file path's extension to MobileSheets Files.Type.
+	 */
+	public static function determineFileType(string $path): int {
+		$extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+		return match ($extension) {
+			'pdf' => self::FILE_TYPE_PDF,
+			'png', 'jpg', 'jpeg', 'bmp', 'gif', 'webp', 'svg' => self::FILE_TYPE_IMAGE,
+			'txt', 'cho', 'chopro', 'crd', 'chordpro' => self::FILE_TYPE_TEXT,
+			'abc' => self::FILE_TYPE_ABC,
+			default => self::FILE_TYPE_OTHER,
+		};
+	}
 
 	public function __construct(
 		private LoggerInterface $logger,
@@ -678,7 +696,7 @@ class SongMapper {
 			'FileSize' => $facts->fileSize,
 			'LastModified' => $facts->lastModified,
 			'Source' => self::FILE_SOURCE_LOCAL,
-			'Type' => self::FILE_TYPE_PDF,
+			'Type' => self::determineFileType($filePath),
 			'Password' => '',
 			'SourceFilePageCount' => $facts->sourceFilePageCount,
 			'FileHash' => $facts->fileHash,
@@ -720,8 +738,9 @@ class SongMapper {
 	/**
 	 * Persist a file's new location and refresh the metadata that a change to the
 	 * file invalidates - notably LastModified, which must track the file's
-	 * modification time whenever the file is created or changed. Source, Type,
-	 * Password, Width and Height are fixed at creation and left untouched.
+	 * modification time whenever the file is created or changed. Source, Password,
+	 * Width and Height are fixed at creation and left untouched. Type is updated
+	 * if the file extension changed.
 	 */
 	public function updateFile(string $databasePath, int $fileId, string $newPath, MobileSheetsFileFacts $facts): void {
 		$database = new PDO('sqlite:' . $databasePath, options: [
@@ -734,6 +753,7 @@ class SongMapper {
 
 		$values = [
 			'Path' => $newPath,
+			'Type' => self::determineFileType($newPath),
 			'PageOrder' => $facts->pageOrder,
 			'FileSize' => $facts->fileSize,
 			'LastModified' => $facts->lastModified,
