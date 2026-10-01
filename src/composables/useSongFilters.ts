@@ -1,4 +1,4 @@
-import type { Artist, Book, Collection, Composer, EntityType, FilterEntity, Genre, Song } from '../types/song'
+import type { Artist, Book, Collection, Composer, EntityType, FilterEntity, Genre, Key, Song } from '../types/song'
 import { translate as t } from '@nextcloud/l10n'
 import { computed, ref } from 'vue'
 import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
@@ -10,9 +10,10 @@ export interface FilterOptions {
 	collections: Collection[]
 	artists: Artist[]
 	genres: Genre[]
+	keys: Key[]
 }
 
-const FILTER_TYPES: EntityType[] = ['composers', 'artists', 'books', 'collections', 'genres']
+const FILTER_TYPES: EntityType[] = ['composers', 'artists', 'books', 'collections', 'genres', 'keys']
 
 export const UNASSIGNED_ID = -1
 
@@ -29,6 +30,8 @@ export function noneEntryOf(entityType: EntityType): FilterEntity {
 			return { id: UNASSIGNED_ID, name: t('mobilesheetsmanager', '(No artist)') }
 		case 'genres':
 			return { id: UNASSIGNED_ID, name: t('mobilesheetsmanager', '(No genre)') }
+		case 'keys':
+			return { id: UNASSIGNED_ID, name: t('mobilesheetsmanager', '(No key)') }
 	}
 }
 
@@ -144,12 +147,14 @@ export function useSongFilters(options: () => FilterOptions) {
 		const collectionIds = new Set(idsOf('collections'))
 		const artistIds = new Set(idsOf('artists'))
 		const genreIds = new Set(idsOf('genres'))
+		const keyIds = new Set(idsOf('keys'))
 
 		if (!matchesCategory(song.composers, composerIds)) return false
 		if (!matchesCategory(song.books, bookIds)) return false
 		if (!matchesCategory(song.collections, collectionIds)) return false
 		if (!matchesCategory(song.artists, artistIds)) return false
 		if (!matchesCategory(song.genres, genreIds)) return false
+		if (!matchesCategory(song.keys, keyIds)) return false
 		return true
 	}
 
@@ -189,6 +194,10 @@ export function useSongFilters(options: () => FilterOptions) {
 		get: () => selectedOf('genres') as Genre[],
 		set: (value: Genre[]) => selectIds('genres', value.map(entry => entry.id)),
 	})
+	const selectedKeys = computed({
+		get: () => selectedOf('keys') as Key[],
+		set: (value: Key[]) => selectIds('keys', value.map(entry => entry.id)),
+	})
 
 	return {
 		searchTitle,
@@ -197,6 +206,7 @@ export function useSongFilters(options: () => FilterOptions) {
 		selectedCollections,
 		selectedArtists,
 		selectedGenres,
+		selectedKeys,
 		hasActiveFilters,
 		isFiltered,
 		toggleFilter,

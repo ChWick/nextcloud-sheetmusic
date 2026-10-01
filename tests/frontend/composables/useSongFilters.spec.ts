@@ -47,6 +47,7 @@ describe('useSongFilters composable with unassigned matching', () => {
 		collections: [{ id: 100, name: 'Jazz' }],
 		artists: [],
 		genres: [{ id: 50, name: 'Rock' }],
+		keys: [{ id: 60, name: 'C Major' }],
 	})
 
 	it('returns noneEntryOf correctly for all entity types', () => {
@@ -55,6 +56,7 @@ describe('useSongFilters composable with unassigned matching', () => {
 		expect(noneEntryOf('collections')).toEqual({ id: UNASSIGNED_ID, name: '(No collection)' })
 		expect(noneEntryOf('artists')).toEqual({ id: UNASSIGNED_ID, name: '(No artist)' })
 		expect(noneEntryOf('genres')).toEqual({ id: UNASSIGNED_ID, name: '(No genre)' })
+		expect(noneEntryOf('keys')).toEqual({ id: UNASSIGNED_ID, name: '(No key)' })
 	})
 
 	it('filters songs without composer in specific collection', () => {

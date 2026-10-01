@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Artist, Book, Collection, Composer, Genre } from '../types/song'
+import type { Artist, Book, Collection, Composer, Genre, Key } from '../types/song'
 
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
@@ -17,11 +17,13 @@ const props = withDefaults(
 		collections?: Collection[]
 		artists?: Artist[]
 		genres?: Genre[]
+		keys?: Key[]
 		selectedComposers?: Composer[]
 		selectedBooks?: Book[]
 		selectedCollections?: Collection[]
 		selectedArtists?: Artist[]
 		selectedGenres?: Genre[]
+		selectedKeys?: Key[]
 	}>(),
 	{
 		searchTitle: '',
@@ -30,11 +32,13 @@ const props = withDefaults(
 		collections: () => [],
 		artists: () => [],
 		genres: () => [],
+		keys: () => [],
 		selectedComposers: () => [],
 		selectedBooks: () => [],
 		selectedCollections: () => [],
 		selectedArtists: () => [],
 		selectedGenres: () => [],
+		selectedKeys: () => [],
 	},
 )
 
@@ -45,6 +49,7 @@ const emit = defineEmits<{
 	'update:selectedCollections': [collections: Collection[]]
 	'update:selectedArtists': [artists: Artist[]]
 	'update:selectedGenres': [genres: Genre[]]
+	'update:selectedKeys': [keys: Key[]]
 	'clear': []
 }>()
 
@@ -73,6 +78,11 @@ const genreOptions = computed(() => [
 	...props.genres,
 ])
 
+const keyOptions = computed(() => [
+	noneEntryOf('keys') as Key,
+	...props.keys,
+])
+
 const hasActiveFilters = computed(() => {
 	return (
 		Boolean(props.searchTitle?.trim())
@@ -81,6 +91,7 @@ const hasActiveFilters = computed(() => {
 		|| props.selectedCollections.length > 0
 		|| props.selectedArtists.length > 0
 		|| props.selectedGenres.length > 0
+		|| props.selectedKeys.length > 0
 	)
 })
 
@@ -170,6 +181,20 @@ function clearAllFilters() {
 				track-by="id"
 				:class="$style.select"
 				@update:model-value="emit('update:selectedGenres', $event)" />
+		</div>
+
+		<div :class="$style.filterGroup">
+			<NcSelect
+				:model-value="selectedKeys"
+				:options="keyOptions"
+				:multiple="true"
+				:close-on-select="false"
+				:placeholder="t('mobilesheetsmanager', 'Filter by key…')"
+				:input-label="t('mobilesheetsmanager', 'Keys')"
+				label="name"
+				track-by="id"
+				:class="$style.select"
+				@update:model-value="emit('update:selectedKeys', $event)" />
 		</div>
 
 		<div v-if="hasActiveFilters" :class="$style.actions">

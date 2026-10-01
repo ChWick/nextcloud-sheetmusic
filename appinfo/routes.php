@@ -70,6 +70,11 @@ return [
 			'verb' => 'POST',
 		],
 		[
+			'name' => 'Api#createKey',
+			'url' => '/api/keys',
+			'verb' => 'POST',
+		],
+		[
 			'name' => 'Api#deleteComposer',
 			'url' => '/api/composers/{id}',
 			'verb' => 'DELETE',
@@ -92,6 +97,11 @@ return [
 		[
 			'name' => 'Api#deleteGenre',
 			'url' => '/api/genres/{id}',
+			'verb' => 'DELETE',
+		],
+		[
+			'name' => 'Api#deleteKey',
+			'url' => '/api/keys/{id}',
 			'verb' => 'DELETE',
 		],
 		[

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Artist, Book, Collection, Composer, Genre } from '../../types/song'
+import type { Artist, Book, Collection, Composer, Genre, Key } from '../../types/song'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
@@ -20,6 +20,7 @@ export interface BatchUpdatePayload {
 	collections?: CategoryBatchUpdate
 	artists?: CategoryBatchUpdate
 	genres?: CategoryBatchUpdate
+	keys?: CategoryBatchUpdate
 }
 
 const props = defineProps<{
@@ -30,6 +31,7 @@ const props = defineProps<{
 	collections: Collection[]
 	artists: Artist[]
 	genres?: Genre[]
+	keys?: Key[]
 }>()
 
 const emit = defineEmits<{
@@ -43,6 +45,7 @@ const enableBooks = ref(false)
 const enableCollections = ref(false)
 const enableArtists = ref(false)
 const enableGenres = ref(false)
+const enableKeys = ref(false)
 
 // Actions
 const composerAction = ref<BatchAction>('add')
@@ -50,6 +53,7 @@ const bookAction = ref<BatchAction>('add')
 const collectionAction = ref<BatchAction>('add')
 const artistAction = ref<BatchAction>('add')
 const genreAction = ref<BatchAction>('add')
+const keyAction = ref<BatchAction>('add')
 
 // Selected entity arrays
 const selectedComposers = ref<Composer[]>([])
@@ -57,6 +61,7 @@ const selectedBooks = ref<Book[]>([])
 const selectedCollections = ref<Collection[]>([])
 const selectedArtists = ref<Artist[]>([])
 const selectedGenres = ref<Genre[]>([])
+const selectedKeys = ref<Key[]>([])
 
 function resetForm() {
 	enableComposers.value = false
@@ -64,18 +69,21 @@ function resetForm() {
 	enableCollections.value = false
 	enableArtists.value = false
 	enableGenres.value = false
+	enableKeys.value = false
 
 	composerAction.value = 'add'
 	bookAction.value = 'add'
 	collectionAction.value = 'add'
 	artistAction.value = 'add'
 	genreAction.value = 'add'
+	keyAction.value = 'add'
 
 	selectedComposers.value = []
 	selectedBooks.value = []
 	selectedCollections.value = []
 	selectedArtists.value = []
 	selectedGenres.value = []
+	selectedKeys.value = []
 }
 
 watch(() => props.open, (isOpen) => {
@@ -83,7 +91,7 @@ watch(() => props.open, (isOpen) => {
 })
 
 const isAnythingEnabled = computed(() => {
-	return enableComposers.value || enableBooks.value || enableCollections.value || enableArtists.value || enableGenres.value
+	return enableComposers.value || enableBooks.value || enableCollections.value || enableArtists.value || enableGenres.value || enableKeys.value
 })
 
 function handleApply() {
@@ -119,6 +127,12 @@ function handleApply() {
 		payload.genres = {
 			action: genreAction.value,
 			ids: selectedGenres.value.map((g) => g.id),
+		}
+	}
+	if (enableKeys.value) {
+		payload.keys = {
+			action: keyAction.value,
+			ids: selectedKeys.value.map((k) => k.id),
 		}
 	}
 
@@ -302,6 +316,38 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 						:close-on-select="false"
 						:input-label="t('mobilesheetsmanager', 'Genres')"
 						:placeholder="t('mobilesheetsmanager', 'Select genres…')"
+						label="name"
+						track-by="id" />
+				</div>
+			</div>
+
+			<!-- Keys Section -->
+			<div :class="$style.fieldGroup">
+				<div :class="$style.fieldHeader">
+					<NcCheckboxRadioSwitch
+						v-model="enableKeys"
+						type="checkbox">
+						{{ t('mobilesheetsmanager', 'Keys') }}
+					</NcCheckboxRadioSwitch>
+				</div>
+				<div v-if="enableKeys" :class="$style.fieldBody">
+					<div :class="$style.actionSelector">
+						<label v-for="opt in actionOptions" :key="opt.value" :class="$style.radioLabel">
+							<input
+								v-model="keyAction"
+								type="radio"
+								:name="'key-action'"
+								:value="opt.value">
+							{{ opt.label }}
+						</label>
+					</div>
+					<NcSelect
+						v-model="selectedKeys"
+						:options="keys || []"
+						:multiple="true"
+						:close-on-select="false"
+						:input-label="t('mobilesheetsmanager', 'Keys')"
+						:placeholder="t('mobilesheetsmanager', 'Select keys…')"
 						label="name"
 						track-by="id" />
 				</div>

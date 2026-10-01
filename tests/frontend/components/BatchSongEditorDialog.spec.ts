@@ -21,6 +21,7 @@ describe('BatchSongEditorDialog.vue', () => {
 	const collections = [{ id: 100, name: 'Jazz' }]
 	const artists = [{ id: 5, name: 'Miles Davis' }]
 	const genres = [{ id: 2, name: 'Classical' }]
+	const keys = [{ id: 3, name: 'C Major' }]
 
 	it('renders dialog with multi-song editing options', () => {
 		const wrapper = mount(BatchSongEditorDialog, {
@@ -32,6 +33,7 @@ describe('BatchSongEditorDialog.vue', () => {
 				collections,
 				artists,
 				genres,
+				keys,
 			},
 			attachTo: document.body,
 		})
@@ -42,6 +44,7 @@ describe('BatchSongEditorDialog.vue', () => {
 		expect(document.body.textContent).toContain('Collections')
 		expect(document.body.textContent).toContain('Artists')
 		expect(document.body.textContent).toContain('Genres')
+		expect(document.body.textContent).toContain('Keys')
 	})
 
 	it('toggles field checkboxes and emits apply payload', async () => {
@@ -54,12 +57,13 @@ describe('BatchSongEditorDialog.vue', () => {
 				collections,
 				artists,
 				genres,
+				keys,
 			},
 			attachTo: document.body,
 		})
 
 		const checkboxes = wrapper.findAllComponents({ name: 'NcCheckboxRadioSwitch' })
-		expect(checkboxes.length).toBe(5)
+		expect(checkboxes.length).toBe(6)
 
 		// Enable composers and books
 		await checkboxes[0].setValue(true)

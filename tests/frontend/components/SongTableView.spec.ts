@@ -17,6 +17,7 @@ describe('SongTableView.vue', () => {
 			collections: [{ id: 100, name: 'Symphonies' }],
 			artists: [{ id: 5, name: 'Berlin Phil' }],
 			genres: [{ id: 7, name: 'Classical' }],
+			keys: [{ id: 4, name: 'C Minor' }],
 		},
 		{
 			id: 2,
@@ -36,6 +37,7 @@ describe('SongTableView.vue', () => {
 		expect(wrapper.text()).toContain('Collection')
 		expect(wrapper.text()).toContain('Artist')
 		expect(wrapper.text()).toContain('Genre')
+		expect(wrapper.text()).toContain('Key')
 
 		expect(wrapper.text()).toContain('Symphony No. 5')
 		expect(wrapper.text()).toContain('Beethoven')
@@ -43,6 +45,7 @@ describe('SongTableView.vue', () => {
 		expect(wrapper.text()).toContain('Symphonies')
 		expect(wrapper.text()).toContain('Berlin Phil')
 		expect(wrapper.text()).toContain('Classical')
+		expect(wrapper.text()).toContain('C Minor')
 	})
 
 	it('emits view-song and edit-song events when buttons are clicked', async () => {

@@ -52,7 +52,9 @@ class SongMapper {
 	 *     composers: list<MobileSheetsComposer>,
 	 *     books: list<MobileSheetsBook>,
 	 *     collections: list<MobileSheetsCollection>,
-	 *     artists: list<MobileSheetsArtist>
+	 *     artists: list<MobileSheetsArtist>,
+	 *     genres: list<MobileSheetsGenre>,
+	 *     keys: list<MobileSheetsKey>
 	 * }
 	 */
 	public function findLibraryData(string $databasePath): array {
@@ -130,6 +132,19 @@ class SongMapper {
 			}
 		}
 
+		$keys = [];
+		$keysById = [];
+		if (in_array('Keys', $existingTables, true)) {
+			$stmt = $database->query('SELECT Id, Name FROM Keys ORDER BY Name');
+			if ($stmt !== false) {
+				while ($row = $stmt->fetch()) {
+					$key = new MobileSheetsKey((int)$row['Id'], (string)$row['Name']);
+					$keys[] = $key;
+					$keysById[$key->id] = $key;
+				}
+			}
+		}
+
 		$songComposers = [];
 		if (in_array('ComposerSongs', $existingTables, true)) {
 			$stmt = $database->query('SELECT ComposerId, SongId FROM ComposerSongs');
@@ -193,6 +208,16 @@ class SongMapper {
 			}
 		}
 
+		$songKeys = [];
+		if (in_array('KeySongs', $existingTables, true)) {
+			$stmt = $database->query('SELECT KeyId, SongId FROM KeySongs');
+			if ($stmt !== false) {
+				while ($row = $stmt->fetch()) {
+					$songKeys[(int)$row['SongId']][] = (int)$row['KeyId'];
+				}
+			}
+		}
+
 		$songCols = $this->columnNames($database, 'Songs');
 		$hasLastModified = isset($songCols['lastmodified']);
 		$createdCol = isset($songCols['datecreated']) ? 'DateCreated' : (isset($songCols['creationdate']) ? 'CreationDate' : null);
@@ -249,6 +274,7 @@ class SongMapper {
 					$this->resolveEntities($songCollections[$songId] ?? [], $collectionsById),
 					$this->resolveEntities($songArtists[$songId] ?? [], $artistsById),
 					$this->resolveEntities($songGenres[$songId] ?? [], $genresById),
+					$this->resolveEntities($songKeys[$songId] ?? [], $keysById),
 					isset($row['LastModified']) && $row['LastModified'] !== null ? (int)$row['LastModified'] : null,
 					isset($row['DateCreated']) && $row['DateCreated'] !== null ? (int)$row['DateCreated'] : null,
 					isset($row['Stars']) ? (int)$row['Stars'] : 0,
@@ -269,6 +295,7 @@ class SongMapper {
 			'collections' => $collections,
 			'artists' => $artists,
 			'genres' => $genres,
+			'keys' => $keys,
 		];
 	}
 
@@ -327,6 +354,8 @@ class SongMapper {
 		$selectFields = array_merge($selectFields, [
 			'gs.GenreId AS GenreId',
 			'g.Type AS Genre',
+			'ks.KeyId AS KeyId',
+			'k.Name AS Key',
 			'c.Name AS Composer',
 			'cs.ComposerId AS ComposerId',
 			'coll.Name AS Collection',
@@ -345,6 +374,8 @@ class SongMapper {
 		LEFT JOIN Collections coll ON colls.CollectionId = coll.Id
 		LEFT JOIN GenresSongs gs ON s.Id = gs.SongId
 		LEFT JOIN Genres g ON gs.GenreId = g.Id
+		LEFT JOIN KeySongs ks ON s.Id = ks.SongId
+		LEFT JOIN Keys k ON ks.KeyId = k.Id
 		LEFT JOIN BookSongs bookSongs ON s.Id = bookSongs.SongId
 		LEFT JOIN Books books ON bookSongs.BookId = books.Id
 		LEFT JOIN ArtistsSongs artistsSongs ON artistsSongs.SongId = s.Id
@@ -382,6 +413,7 @@ class SongMapper {
 					'collections' => [],
 					'artists' => [],
 					'genres' => [],
+					'keys' => [],
 				];
 			}
 
@@ -409,6 +441,11 @@ class SongMapper {
 			if ($genreId !== null && !isset($songs[$rowSongId]['genres'][$genreId])) {
 				$songs[$rowSongId]['genres'][$genreId] = new MobileSheetsGenre($genreId, (string)($row['Genre'] ?? ''));
 			}
+
+			$keyId = $row['KeyId'] !== null ? (int)$row['KeyId'] : null;
+			if ($keyId !== null && !isset($songs[$rowSongId]['keys'][$keyId])) {
+				$songs[$rowSongId]['keys'][$keyId] = new MobileSheetsKey($keyId, (string)($row['Key'] ?? ''));
+			}
 		}
 
 		$result = [];
@@ -422,6 +459,7 @@ class SongMapper {
 				array_values($song['collections']),
 				array_values($song['artists']),
 				array_values($song['genres']),
+				array_values($song['keys']),
 				$song['lastModified'],
 				$song['dateCreated'],
 				$song['stars'] ?? 0,
@@ -499,6 +537,8 @@ class SongMapper {
 	 * @param list<int> $bookIds
 	 * @param list<int> $collectionIds
 	 * @param list<int> $artistIds
+	 * @param list<int> $genreIds
+	 * @param list<int> $keyIds
 	 * @return int id of the created song
 	 */
 	public function createSong(
@@ -509,6 +549,7 @@ class SongMapper {
 		array $collectionIds = [],
 		array $artistIds = [],
 		array $genreIds = [],
+		array $keyIds = [],
 		int $stars = 0,
 		int $difficulty = 0,
 		int $duration = 0,
@@ -542,6 +583,7 @@ class SongMapper {
 			$collectionIds,
 			$artistIds,
 			$genreIds,
+			$keyIds,
 			$stars,
 			$difficulty,
 			$duration,
@@ -560,6 +602,7 @@ class SongMapper {
 	 * @param list<int> $collectionIds
 	 * @param list<int> $artistIds
 	 * @param list<int> $genreIds
+	 * @param list<int> $keyIds
 	 */
 	public function updateSong(
 		string $databasePath,
@@ -570,6 +613,7 @@ class SongMapper {
 		array $collectionIds = [],
 		array $artistIds = [],
 		array $genreIds = [],
+		array $keyIds = [],
 		int $stars = 0,
 		int $difficulty = 0,
 		int $duration = 0,
@@ -668,6 +712,20 @@ class SongMapper {
 				]);
 			}
 		}
+
+		// Update Keys
+		if (in_array('KeySongs', $existingTables, true)) {
+			$delStmt = $database->prepare('DELETE FROM KeySongs WHERE SongId = :songId');
+			$delStmt->execute([':songId' => $songId]);
+
+			$insStmt = $database->prepare('INSERT INTO KeySongs (KeyId, SongId) VALUES (:keyId, :songId)');
+			foreach ($keyIds as $keyId) {
+				$insStmt->execute([
+					':keyId' => $keyId,
+					':songId' => $songId,
+				]);
+			}
+		}
 	}
 
 	/**
@@ -679,6 +737,7 @@ class SongMapper {
 	 * @param array{action?: string, ids?: list<int>}|null $collectionUpdate
 	 * @param array{action?: string, ids?: list<int>}|null $artistUpdate
 	 * @param array{action?: string, ids?: list<int>}|null $genreUpdate
+	 * @param array{action?: string, ids?: list<int>}|null $keyUpdate
 	 */
 	public function batchUpdateSongs(
 		string $databasePath,
@@ -688,6 +747,7 @@ class SongMapper {
 		?array $collectionUpdate = null,
 		?array $artistUpdate = null,
 		?array $genreUpdate = null,
+		?array $keyUpdate = null,
 	): void {
 		if (empty($songIds)) {
 			return;
@@ -721,6 +781,9 @@ class SongMapper {
 				}
 				if ($genreUpdate !== null && in_array('GenresSongs', $existingTables, true)) {
 					$this->updateCategoryRelations($database, 'GenresSongs', 'GenreId', $songId, $genreUpdate);
+				}
+				if ($keyUpdate !== null && in_array('KeySongs', $existingTables, true)) {
+					$this->updateCategoryRelations($database, 'KeySongs', 'KeyId', $songId, $keyUpdate);
 				}
 			}
 			$database->commit();
@@ -1134,6 +1197,16 @@ class SongMapper {
 		] + $this->dateColumns($database, 'Genres'));
 	}
 
+	public function createKey(string $databasePath, string $name): int {
+		$database = new PDO('sqlite:' . $databasePath, options: [
+			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+		]);
+		return $this->insertRow($database, 'Keys', [
+			'Name' => $name,
+		] + $this->dateColumns($database, 'Keys'));
+	}
+
 	/**
 	 * Tables of the entity kinds a song can carry, and how each of them links
 	 * to songs.
@@ -1146,16 +1219,17 @@ class SongMapper {
 		'collections' => ['table' => 'Collections', 'linkTable' => 'CollectionSong', 'linkColumn' => 'CollectionId'],
 		'artists' => ['table' => 'Artists', 'linkTable' => 'ArtistsSongs', 'linkColumn' => 'ArtistId'],
 		'genres' => ['table' => 'Genres', 'linkTable' => 'GenresSongs', 'linkColumn' => 'GenreId'],
+		'keys' => ['table' => 'Keys', 'linkTable' => 'KeySongs', 'linkColumn' => 'KeyId'],
 	];
 
 	/**
-	 * Delete a composer, book, collection, artist or genre from the library.
+	 * Delete a composer, book, collection, artist, genre or key from the library.
 	 *
 	 * The songs are kept: only the links to the deleted entry are removed, so it
-	 * disappears from the songs' composers, books, collections, artists or genres while the
+	 * disappears from the songs' composers, books, collections, artists, genres or keys while the
 	 * songs themselves stay untouched.
 	 *
-	 * @param 'composers'|'books'|'collections'|'artists'|'genres' $entityType
+	 * @param 'composers'|'books'|'collections'|'artists'|'genres'|'keys' $entityType
 	 * @return bool whether the entry itself existed and was removed
 	 */
 	public function deleteEntity(string $databasePath, string $entityType, int $entityId): bool {

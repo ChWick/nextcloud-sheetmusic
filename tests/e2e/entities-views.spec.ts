@@ -42,4 +42,13 @@ test.describe('Entities Views (Composers, Books, Collections, Artists)', () => {
 		await expect(page.getByRole('button', { name: 'Real Book Vol 1' })).toBeVisible()
 		await expect(page.getByRole('button', { name: 'Classical Masters' })).toBeVisible()
 	})
+
+	test('renders Keys view and list items', async ({ page }) => {
+		await page.goto('/#/library/1/keys')
+		await expect(page.getByRole('heading', { name: 'Keys' })).toBeVisible()
+
+		// Verify list contains mock keys
+		await expect(page.getByRole('button', { name: 'C Major' })).toBeVisible()
+		await expect(page.getByRole('button', { name: 'D Minor' })).toBeVisible()
+	})
 })

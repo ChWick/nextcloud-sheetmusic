@@ -171,6 +171,19 @@ function handleSongClick(song: Song, e: Event) {
 								<template v-if="idx < song.genres.length - 1">, </template>
 							</template>
 						</template>
+						<template v-if="(isColVisible('composer') && song.composers?.length || isColVisible('book') && song.books?.length || isColVisible('collection') && song.collections?.length || isColVisible('artist') && song.artists?.length || isColVisible('genre') && song.genres?.length) && isColVisible('key') && song.keys?.length"> • </template>
+						<template v-if="isColVisible('key') && song.keys && song.keys.length > 0">
+							<template v-for="(k, idx) in song.keys" :key="k.id">
+								<button
+									type="button"
+									:class="[$style.filterChip, isFiltered?.('keys', k.id) && $style.activeChip]"
+									:title="t('mobilesheetsmanager', 'Toggle filter for key {name}', { name: k.name })"
+									@click.stop="emit('filter-entity', 'keys', k)">
+									{{ k.name }}
+								</button>
+								<template v-if="idx < song.keys.length - 1">, </template>
+							</template>
+						</template>
 						<template v-if="isColVisible('stars') && song.stars">
 							<span> • {{ formatStars(song.stars) }}</span>
 						</template>

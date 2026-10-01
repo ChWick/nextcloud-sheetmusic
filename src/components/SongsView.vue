@@ -65,6 +65,7 @@
                 :collections="collections"
                 :artists="artists"
                 :genres="genres"
+                :keys="keys"
                 @saved="handleSaved"
                 @updated="handleLibraryDataUpdate"
                 @cancel="goBackToSongs" />
@@ -79,6 +80,7 @@
       :collections="collections"
       :artists="artists"
       :genres="genres"
+      :keys="keys"
       @back="goBackToSongs"
       @saved="handleSaved"
       @updated="handleLibraryDataUpdate"
@@ -115,11 +117,13 @@
       v-model:selected-collections="selectedCollections"
       v-model:selected-artists="selectedArtists"
       v-model:selected-genres="selectedGenres"
+      v-model:selected-keys="selectedKeys"
       :composers="composers"
       :books="books"
       :collections="collections"
       :artists="artists"
       :genres="genres"
+      :keys="keys"
       @clear="clearFilters"/>
     </div>
     <SongEditor v-if="isCreatingSong"
@@ -130,6 +134,7 @@
                 :collections="collections"
                 :artists="artists"
                 :genres="genres"
+                :keys="keys"
                 :prefill="importPrefill"
                 :imported-file="importedFile"
                 :imported-nextcloud-node="importedNextcloudNode"
@@ -186,6 +191,7 @@
     :collections="collections"
     :artists="artists"
     :genres="genres"
+    :keys="keys"
     @apply="handleApplyBatchUpdate" />
 </template>
 
@@ -206,7 +212,7 @@ import SongFilterBar from '../components/SongFilterBar.vue';
 import SongViewer from '../components/SongViewer.vue';
 import ViewHeader from '../components/ViewHeader.vue';
 import BatchSongEditorDialog, { type BatchUpdatePayload } from '../components/song-editor/BatchSongEditorDialog.vue';
-import type { Artist, Song, Composer, Book, Collection, Genre, LibraryData, SongPrefill } from '../types/song';
+import type { Artist, Song, Composer, Book, Collection, Genre, Key, LibraryData, SongPrefill } from '../types/song';
 import { DEFAULT_VISIBLE_COLUMNS, type SongColumn } from '../types/song';
 import { sortSongs, type SortKey, type SortOrder } from '../utils/song-formatter';
 import { useSongFilters } from '../composables/useSongFilters';
@@ -274,6 +280,7 @@ const {
   collections,
   artists,
   genres,
+  keys,
   fileError,
   isLoading,
   handleLibraryDataUpdate,
@@ -301,8 +308,8 @@ const isEditInUrl = computed(() => route.query.edit !== undefined && route.query
 
 // The filter bar reads and writes its selections in the URL query, so the browser
 // history restores them when going back or forward.
-const { searchTitle, selectedComposers, selectedBooks, selectedCollections, selectedArtists, selectedGenres, filterSongs, clearFilters, filterBarVisible, toggleFilterBar, isFiltered, toggleFilter } =
-  useSongFilters(() => ({ composers: composers.value, books: books.value, collections: collections.value, artists: artists.value, genres: genres.value }));
+const { searchTitle, selectedComposers, selectedBooks, selectedCollections, selectedArtists, selectedGenres, selectedKeys, filterSongs, clearFilters, filterBarVisible, toggleFilterBar, isFiltered, toggleFilter } =
+  useSongFilters(() => ({ composers: composers.value, books: books.value, collections: collections.value, artists: artists.value, genres: genres.value, keys: keys.value }));
 
 const { selectedSongIds, selectedCount, isSelected, toggleSelect, selectAll, isAllSelected, clearSelection } = useSongSelection();
 const isBatchEditorOpen = ref(false);

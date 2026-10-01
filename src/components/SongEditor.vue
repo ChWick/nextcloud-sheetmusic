@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { INode } from '@nextcloud/files'
-import type { Artist, Book, Collection, Composer, CreatedSongData, Genre, LibraryData, PendingAddition, PendingAttachment, PendingUpload, Song, SongFile, SongPrefill } from '../types/song'
+import type { Artist, Book, Collection, Composer, CreatedSongData, Genre, Key, LibraryData, PendingAddition, PendingAttachment, PendingUpload, Song, SongFile, SongPrefill } from '../types/song'
 
 import axios from '@nextcloud/axios'
 import { FilePickerClosed, getFilePickerBuilder } from '@nextcloud/dialogs'
@@ -34,6 +34,7 @@ const props = withDefaults(
 		collections: Collection[]
 		artists: Artist[]
 		genres?: Genre[]
+		keys?: Key[]
 		/** Metadata read from an imported PDF, prefilled into a new song. */
 		prefill?: SongPrefill | null
 		/** The imported PDF itself, staged as the new song's file. */
@@ -44,6 +45,7 @@ const props = withDefaults(
 	{
 		song: null,
 		genres: () => [],
+		keys: () => [],
 		prefill: null,
 		importedFile: null,
 		importedNextcloudNode: null,
@@ -110,6 +112,11 @@ const selectedArtists = ref<Array<Artist | { name: string, id?: number }>>(
 const selectedGenres = ref<Array<Genre | { name: string, id?: number }>>(
 	props.song
 		? matchSelected(props.genres, props.song.genres)
+		: [],
+)
+const selectedKeys = ref<Array<Key | { name: string, id?: number }>>(
+	props.song
+		? matchSelected(props.keys, props.song.keys)
 		: [],
 )
 
@@ -255,6 +262,10 @@ function createArtistTag(newTag: string) {
 }
 
 function createGenreTag(newTag: string) {
+	return { name: newTag }
+}
+
+function createKeyTag(newTag: string) {
 	return { name: newTag }
 }
 
@@ -445,6 +456,20 @@ async function saveSong(closeAfter: boolean) {
 			}
 		}
 
+		// Resolve or create keys
+		const keyIds: number[] = []
+		for (const k of selectedKeys.value) {
+			if ('id' in k && typeof k.id === 'number') {
+				keyIds.push(k.id)
+			} else {
+				const createRes = await apiPost('/api/keys', {
+					libraryId: props.libraryId,
+					name: k.name,
+				})
+				keyIds.push(createRes.data.ocs.data.id)
+			}
+		}
+
 		// The song is created or updated before the staged file additions: those need the
 		// song's id, and the naming rules use the composers, artists and collections the
 		// user just saved.
@@ -456,6 +481,7 @@ async function saveSong(closeAfter: boolean) {
 			collectionIds,
 			artistIds,
 			genreIds,
+			keyIds,
 			stars: Number(stars.value) || 0,
 			difficulty: Number(difficulty.value) || 0,
 			duration: Number(duration.value) || 0,
@@ -608,6 +634,20 @@ async function saveSong(closeAfter: boolean) {
 					label="name"
 					track-by="name"
 					:placeholder="t('mobilesheetsmanager', 'Select or type a genre…')" />
+			</div>
+
+			<div :class="$style.formGroup">
+				<NcSelect
+					v-model="selectedKeys"
+					:options="keys"
+					:multiple="true"
+					:taggable="true"
+					:create-option="createKeyTag"
+					:close-on-select="false"
+					:input-label="t('mobilesheetsmanager', 'Keys')"
+					label="name"
+					track-by="name"
+					:placeholder="t('mobilesheetsmanager', 'Select or type a key…')" />
 			</div>
 
 			<div :class="$style.attributesGrid">

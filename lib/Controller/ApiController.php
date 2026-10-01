@@ -106,8 +106,10 @@ class ApiController extends OCSController {
 		array $bookIds = [],
 		array $collectionIds = [],
 		array $artistIds = [],
+		array $genreIds = [],
+		array $keyIds = [],
 	): DataResponse {
-		return $this->songController->createSong($libraryId, $title, $composerIds, $bookIds, $collectionIds, $artistIds);
+		return $this->songController->createSong($libraryId, $title, $composerIds, $bookIds, $collectionIds, $artistIds, $genreIds, $keyIds);
 	}
 
 	#[NoAdminRequired]
@@ -120,8 +122,10 @@ class ApiController extends OCSController {
 		array $bookIds = [],
 		array $collectionIds = [],
 		array $artistIds = [],
+		array $genreIds = [],
+		array $keyIds = [],
 	): DataResponse {
-		return $this->songController->updateSong($id, $libraryId, $title, $composerIds, $bookIds, $collectionIds, $artistIds);
+		return $this->songController->updateSong($id, $libraryId, $title, $composerIds, $bookIds, $collectionIds, $artistIds, $genreIds, $keyIds);
 	}
 
 	#[NoAdminRequired]
@@ -133,8 +137,10 @@ class ApiController extends OCSController {
 		?array $books = null,
 		?array $collections = null,
 		?array $artists = null,
+		?array $genres = null,
+		?array $keys = null,
 	): DataResponse {
-		return $this->songController->batchUpdateSongs($libraryId, $songIds, $composers, $books, $collections, $artists);
+		return $this->songController->batchUpdateSongs($libraryId, $songIds, $composers, $books, $collections, $artists, $genres, $keys);
 	}
 
 	#[NoAdminRequired]
@@ -203,6 +209,12 @@ class ApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/keys')]
+	public function createKey(?int $libraryId = null, ?string $name = null): DataResponse {
+		return $this->entityController->createKey($libraryId, $name);
+	}
+
+	#[NoAdminRequired]
 	#[ApiRoute(verb: 'DELETE', url: '/api/composers/{id}')]
 	public function deleteComposer(int $id, ?int $libraryId = null): DataResponse {
 		return $this->entityController->deleteComposer($id, $libraryId);
@@ -230,5 +242,11 @@ class ApiController extends OCSController {
 	#[ApiRoute(verb: 'DELETE', url: '/api/genres/{id}')]
 	public function deleteGenre(int $id, ?int $libraryId = null): DataResponse {
 		return $this->entityController->deleteGenre($id, $libraryId);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'DELETE', url: '/api/keys/{id}')]
+	public function deleteKey(int $id, ?int $libraryId = null): DataResponse {
+		return $this->entityController->deleteKey($id, $libraryId);
 	}
 }

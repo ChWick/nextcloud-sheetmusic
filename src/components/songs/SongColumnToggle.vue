@@ -22,6 +22,7 @@ const columnOptions: { key: SongColumn; label: string }[] = [
 	{ key: 'collection', label: t('mobilesheetsmanager', 'Collection') },
 	{ key: 'artist', label: t('mobilesheetsmanager', 'Artist') },
 	{ key: 'genre', label: t('mobilesheetsmanager', 'Genre') },
+	{ key: 'key', label: t('mobilesheetsmanager', 'Key') },
 	{ key: 'stars', label: t('mobilesheetsmanager', 'Rating') },
 	{ key: 'difficulty', label: t('mobilesheetsmanager', 'Difficulty') },
 	{ key: 'duration', label: t('mobilesheetsmanager', 'Duration') },
