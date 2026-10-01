@@ -35,6 +35,11 @@ export const mockKeys = [
 	{ id: 3001, name: 'D Minor' },
 ]
 
+export const mockCustomGroups = [
+	{ id: 4000, name: 'Main Choir' },
+	{ id: 4001, name: 'Brass Band' },
+]
+
 export const mockSongs = [
 	{
 		id: 5,
@@ -45,6 +50,7 @@ export const mockSongs = [
 		artists: [mockArtists[0]],
 		genres: [mockGenres[0]],
 		keys: [mockKeys[0]],
+		customGroups: [mockCustomGroups[0]],
 		files: [{ id: 50, path: '/dav/files/admin/Noten/Beethoven - Symphony 5.pdf' }],
 	},
 	{
@@ -56,6 +62,7 @@ export const mockSongs = [
 		artists: [mockArtists[1]],
 		genres: [mockGenres[0]],
 		keys: [mockKeys[1]],
+		customGroups: [mockCustomGroups[1]],
 		files: [{ id: 51, path: '/dav/files/admin/Noten/Mozart - Requiem.pdf' }],
 	},
 ]
@@ -97,6 +104,7 @@ export async function setupMockApi(page: Page) {
 						artists: mockArtists,
 						genres: mockGenres,
 						keys: mockKeys,
+						customGroups: mockCustomGroups,
 						createdSongId: 99,
 					},
 				},

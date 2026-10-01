@@ -75,6 +75,11 @@ return [
 			'verb' => 'POST',
 		],
 		[
+			'name' => 'Api#createCustomGroup',
+			'url' => '/api/customgroups',
+			'verb' => 'POST',
+		],
+		[
 			'name' => 'Api#deleteComposer',
 			'url' => '/api/composers/{id}',
 			'verb' => 'DELETE',
@@ -102,6 +107,11 @@ return [
 		[
 			'name' => 'Api#deleteKey',
 			'url' => '/api/keys/{id}',
+			'verb' => 'DELETE',
+		],
+		[
+			'name' => 'Api#deleteCustomGroup',
+			'url' => '/api/customgroups/{id}',
 			'verb' => 'DELETE',
 		],
 		[

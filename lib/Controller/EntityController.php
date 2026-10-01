@@ -66,6 +66,13 @@ class EntityController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/customgroups')]
+	public function createCustomGroup(?int $libraryId = null, ?string $name = null): DataResponse {
+		$name = $name ?? (string)$this->request->getParam('name', '');
+		return $this->handleCreate('customgroup', $libraryId, $name);
+	}
+
+	#[NoAdminRequired]
 	#[ApiRoute(verb: 'DELETE', url: '/api/composers/{id}')]
 	public function deleteComposer(int $id, ?int $libraryId = null): DataResponse {
 		return $this->handleDelete('composers', $id, $libraryId);
@@ -99,6 +106,12 @@ class EntityController extends OCSController {
 	#[ApiRoute(verb: 'DELETE', url: '/api/keys/{id}')]
 	public function deleteKey(int $id, ?int $libraryId = null): DataResponse {
 		return $this->handleDelete('keys', $id, $libraryId);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'DELETE', url: '/api/customgroups/{id}')]
+	public function deleteCustomGroup(int $id, ?int $libraryId = null): DataResponse {
+		return $this->handleDelete('customgroups', $id, $libraryId);
 	}
 
 	private function handleCreate(string $type, ?int $libraryId, string $value): DataResponse {

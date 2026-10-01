@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Artist, Book, Collection, Composer, Genre, Key, LibraryData, Song, SongFile } from '../types/song'
+import type { Artist, Book, Collection, Composer, CustomGroup, Genre, Key, LibraryData, Song, SongFile } from '../types/song'
 
 import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
@@ -42,6 +42,7 @@ const props = withDefaults(
 		artists?: Artist[]
 		genres?: Genre[]
 		keys?: Key[]
+		customGroups?: CustomGroup[]
 		hideHeader?: boolean
 	}>(),
 	{
@@ -53,6 +54,7 @@ const props = withDefaults(
 		artists: () => [],
 		genres: () => [],
 		keys: () => [],
+		customGroups: () => [],
 		hideHeader: false,
 	},
 )
@@ -111,6 +113,8 @@ const songArtists = computed(() => props.song?.artists ?? [])
 const songGenres = computed(() => props.song?.genres ?? [])
 
 const songKeys = computed(() => props.song?.keys ?? [])
+
+const songCustomGroups = computed(() => props.song?.customGroups ?? [])
 
 const songFiles = computed(() => props.song?.files ?? [])
 
@@ -571,7 +575,7 @@ defineExpose({
 				</div>
 			</div>
 
-			<div v-if="!isEditing && (songComposers.length > 0 || songBooks.length > 0 || songCollections.length > 0 || songArtists.length > 0 || songGenres.length > 0 || songKeys.length > 0 || song.stars || song.difficulty || song.duration || song.keywords || song.custom || song.custom2)" :class="$style.metadata">
+			<div v-if="!isEditing && (songComposers.length > 0 || songBooks.length > 0 || songCollections.length > 0 || songArtists.length > 0 || songGenres.length > 0 || songKeys.length > 0 || songCustomGroups.length > 0 || song.stars || song.difficulty || song.duration || song.keywords || song.custom || song.custom2)" :class="$style.metadata">
 				<div v-if="songComposers.length > 0" :class="$style.metaItem">
 					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Composer:') }}</span>
 					<span>{{ songComposers.map((c) => c.name).join(', ') }}</span>
@@ -595,6 +599,10 @@ defineExpose({
 				<div v-if="songKeys.length > 0" :class="$style.metaItem">
 					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Key:') }}</span>
 					<span>{{ songKeys.map((k) => k.name).join(', ') }}</span>
+				</div>
+				<div v-if="songCustomGroups.length > 0" :class="$style.metaItem">
+					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Custom Group:') }}</span>
+					<span>{{ songCustomGroups.map((cg) => cg.name).join(', ') }}</span>
 				</div>
 				<div v-if="song.stars" :class="$style.metaItem">
 					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Rating:') }}</span>
@@ -624,7 +632,7 @@ defineExpose({
 		</header>
 
 		<!-- Metadata bar when header is integrated into top bar -->
-		<div v-if="song && hideHeader && !isEditing && (songComposers.length > 0 || songBooks.length > 0 || songCollections.length > 0 || songArtists.length > 0 || songGenres.length > 0 || songKeys.length > 0 || song.stars || song.difficulty || song.duration || song.keywords || song.custom || song.custom2)" :class="$style.metadata">
+		<div v-if="song && hideHeader && !isEditing && (songComposers.length > 0 || songBooks.length > 0 || songCollections.length > 0 || songArtists.length > 0 || songGenres.length > 0 || songKeys.length > 0 || songCustomGroups.length > 0 || song.stars || song.difficulty || song.duration || song.keywords || song.custom || song.custom2)" :class="$style.metadata">
 			<div v-if="songComposers.length > 0" :class="$style.metaItem">
 				<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Composer:') }}</span>
 				<span>{{ songComposers.map((c) => c.name).join(', ') }}</span>
@@ -648,6 +656,10 @@ defineExpose({
 			<div v-if="songKeys.length > 0" :class="$style.metaItem">
 				<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Key:') }}</span>
 				<span>{{ songKeys.map((k) => k.name).join(', ') }}</span>
+			</div>
+			<div v-if="songCustomGroups.length > 0" :class="$style.metaItem">
+				<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Custom Group:') }}</span>
+				<span>{{ songCustomGroups.map((cg) => cg.name).join(', ') }}</span>
 			</div>
 			<div v-if="song.stars" :class="$style.metaItem">
 				<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Rating:') }}</span>
@@ -686,6 +698,7 @@ defineExpose({
 			:artists="artists"
 			:genres="genres"
 			:keys="keys"
+			:custom-groups="customGroups"
 			@saved="handleSaved"
 			@updated="handleUpdated"
 			@cancel="isEditing = false" />

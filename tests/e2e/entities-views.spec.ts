@@ -51,4 +51,13 @@ test.describe('Entities Views (Composers, Books, Collections, Artists)', () => {
 		await expect(page.getByRole('button', { name: 'C Major' })).toBeVisible()
 		await expect(page.getByRole('button', { name: 'D Minor' })).toBeVisible()
 	})
+
+	test('renders Custom Groups view and list items', async ({ page }) => {
+		await page.goto('/#/library/1/customgroups')
+		await expect(page.getByRole('heading', { name: 'Custom Groups' })).toBeVisible()
+
+		// Verify list contains mock custom groups
+		await expect(page.getByRole('button', { name: 'Main Choir' })).toBeVisible()
+		await expect(page.getByRole('button', { name: 'Brass Band' })).toBeVisible()
+	})
 })

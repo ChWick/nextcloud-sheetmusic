@@ -30,6 +30,11 @@ export function formatKeys(song: Song, fallback = '—'): string {
 	return song.keys.map(k => k.name).join(', ')
 }
 
+export function formatCustomGroups(song: Song, fallback = '—'): string {
+	if (!song.customGroups || song.customGroups.length === 0) return fallback
+	return song.customGroups.map(cg => cg.name).join(', ')
+}
+
 export function formatDuration(seconds?: number | null, fallback = '—'): string {
 	if (!seconds || seconds <= 0) return fallback
 	const mins = Math.floor(seconds / 60)
@@ -62,7 +67,7 @@ export function formatDateTimestamp(timestamp?: number | null, fallback = '—')
 	}
 }
 
-export type SortKey = 'title' | 'composer' | 'book' | 'collection' | 'artist' | 'genre' | 'key' | 'stars' | 'difficulty' | 'duration' | 'keywords' | 'custom' | 'custom2' | 'lastModified' | 'dateCreated'
+export type SortKey = 'title' | 'composer' | 'book' | 'collection' | 'artist' | 'genre' | 'key' | 'customGroup' | 'stars' | 'difficulty' | 'duration' | 'keywords' | 'custom' | 'custom2' | 'lastModified' | 'dateCreated'
 export type SortOrder = 'asc' | 'desc'
 
 export function sortSongs(songs: Song[], sortKey: SortKey, sortOrder: SortOrder): Song[] {
@@ -121,6 +126,10 @@ export function sortSongs(songs: Song[], sortKey: SortKey, sortOrder: SortOrder)
 				case 'key':
 					valA = formatKeys(a, '')
 					valB = formatKeys(b, '')
+					break
+				case 'customGroup':
+					valA = formatCustomGroups(a, '')
+					valB = formatCustomGroups(b, '')
 					break
 				case 'keywords':
 					valA = a.keywords ?? ''

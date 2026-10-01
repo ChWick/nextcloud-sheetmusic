@@ -48,6 +48,7 @@ class SongService {
 		array $artistIds = [],
 		array $genreIds = [],
 		array $keyIds = [],
+		array $customGroupIds = [],
 		int $stars = 0,
 		int $difficulty = 0,
 		int $duration = 0,
@@ -76,6 +77,7 @@ class SongService {
 				$artistIds,
 				$genreIds,
 				$keyIds,
+				$customGroupIds,
 				$stars,
 				$difficulty,
 				$duration,
@@ -108,6 +110,7 @@ class SongService {
 		array $artistIds = [],
 		array $genreIds = [],
 		array $keyIds = [],
+		array $customGroupIds = [],
 		int $stars = 0,
 		int $difficulty = 0,
 		int $duration = 0,
@@ -136,6 +139,7 @@ class SongService {
 				$artistIds,
 				$genreIds,
 				$keyIds,
+				$customGroupIds,
 				$stars,
 				$difficulty,
 				$duration,
@@ -168,6 +172,7 @@ class SongService {
 		?array $artists = null,
 		?array $genres = null,
 		?array $keys = null,
+		?array $customGroups = null,
 	): ?array {
 		if (empty($songIds)) {
 			return null;
@@ -188,6 +193,7 @@ class SongService {
 				$artists,
 				$genres,
 				$keys,
+				$customGroups,
 			);
 
 			foreach ($songIds as $songId) {

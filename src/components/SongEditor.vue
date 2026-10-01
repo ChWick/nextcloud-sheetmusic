@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { INode } from '@nextcloud/files'
-import type { Artist, Book, Collection, Composer, CreatedSongData, Genre, Key, LibraryData, PendingAddition, PendingAttachment, PendingUpload, Song, SongFile, SongPrefill } from '../types/song'
+import type { Artist, Book, Collection, Composer, CreatedSongData, CustomGroup, Genre, Key, LibraryData, PendingAddition, PendingAttachment, PendingUpload, Song, SongFile, SongPrefill } from '../types/song'
 
 import axios from '@nextcloud/axios'
 import { FilePickerClosed, getFilePickerBuilder } from '@nextcloud/dialogs'
@@ -35,6 +35,7 @@ const props = withDefaults(
 		artists: Artist[]
 		genres?: Genre[]
 		keys?: Key[]
+		customGroups?: CustomGroup[]
 		/** Metadata read from an imported PDF, prefilled into a new song. */
 		prefill?: SongPrefill | null
 		/** The imported PDF itself, staged as the new song's file. */
@@ -46,6 +47,7 @@ const props = withDefaults(
 		song: null,
 		genres: () => [],
 		keys: () => [],
+		customGroups: () => [],
 		prefill: null,
 		importedFile: null,
 		importedNextcloudNode: null,
@@ -119,6 +121,11 @@ const selectedKeys = ref<Array<Key | { name: string, id?: number }>>(
 		? matchSelected(props.keys, props.song.keys)
 		: [],
 )
+const selectedCustomGroups = ref<Array<CustomGroup | { name: string, id?: number }>>(
+	props.song
+		? matchSelected(props.customGroups, props.song.customGroups)
+		: [],
+)
 
 const stars = ref<number>(props.song?.stars ?? 0)
 const difficulty = ref<number>(props.song?.difficulty ?? 0)
@@ -156,6 +163,8 @@ watch(
 		selectedCollections.value = matchSelected(props.collections, newSong?.collections)
 		selectedArtists.value = matchSelected(props.artists, newSong?.artists)
 		selectedGenres.value = matchSelected(props.genres, newSong?.genres)
+		selectedKeys.value = matchSelected(props.keys, newSong?.keys)
+		selectedCustomGroups.value = matchSelected(props.customGroups, newSong?.customGroups)
 		stars.value = newSong?.stars ?? 0
 		difficulty.value = newSong?.difficulty ?? 0
 		duration.value = newSong?.duration ?? 0
@@ -266,6 +275,10 @@ function createGenreTag(newTag: string) {
 }
 
 function createKeyTag(newTag: string) {
+	return { name: newTag }
+}
+
+function createCustomGroupTag(newTag: string) {
 	return { name: newTag }
 }
 
@@ -470,6 +483,20 @@ async function saveSong(closeAfter: boolean) {
 			}
 		}
 
+		// Resolve or create custom groups
+		const customGroupIds: number[] = []
+		for (const cg of selectedCustomGroups.value) {
+			if ('id' in cg && typeof cg.id === 'number') {
+				customGroupIds.push(cg.id)
+			} else {
+				const createRes = await apiPost('/api/customgroups', {
+					libraryId: props.libraryId,
+					name: cg.name,
+				})
+				customGroupIds.push(createRes.data.ocs.data.id)
+			}
+		}
+
 		// The song is created or updated before the staged file additions: those need the
 		// song's id, and the naming rules use the composers, artists and collections the
 		// user just saved.
@@ -482,6 +509,7 @@ async function saveSong(closeAfter: boolean) {
 			artistIds,
 			genreIds,
 			keyIds,
+			customGroupIds,
 			stars: Number(stars.value) || 0,
 			difficulty: Number(difficulty.value) || 0,
 			duration: Number(duration.value) || 0,
@@ -648,6 +676,20 @@ async function saveSong(closeAfter: boolean) {
 					label="name"
 					track-by="name"
 					:placeholder="t('mobilesheetsmanager', 'Select or type a key…')" />
+			</div>
+
+			<div :class="$style.formGroup">
+				<NcSelect
+					v-model="selectedCustomGroups"
+					:options="customGroups"
+					:multiple="true"
+					:taggable="true"
+					:create-option="createCustomGroupTag"
+					:close-on-select="false"
+					:input-label="t('mobilesheetsmanager', 'Custom Groups')"
+					label="name"
+					track-by="name"
+					:placeholder="t('mobilesheetsmanager', 'Select or type a custom group…')" />
 			</div>
 
 			<div :class="$style.attributesGrid">

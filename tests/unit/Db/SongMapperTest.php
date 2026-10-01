@@ -13,6 +13,7 @@ use OCA\MobileSheetsManager\Db\MobileSheetsArtist;
 use OCA\MobileSheetsManager\Db\MobileSheetsBook;
 use OCA\MobileSheetsManager\Db\MobileSheetsCollection;
 use OCA\MobileSheetsManager\Db\MobileSheetsComposer;
+use OCA\MobileSheetsManager\Db\MobileSheetsCustomGroup;
 use OCA\MobileSheetsManager\Db\MobileSheetsFile;
 use OCA\MobileSheetsManager\Db\MobileSheetsGenre;
 use OCA\MobileSheetsManager\Db\MobileSheetsKey;
@@ -44,6 +45,8 @@ final class SongMapperTest extends TestCase {
 		$database->exec('CREATE TABLE GenresSongs(Id INTEGER PRIMARY KEY, GenreId INTEGER, SongId INTEGER)');
 		$database->exec('CREATE TABLE Keys(Id INTEGER PRIMARY KEY, Name VARCHAR(255), DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
 		$database->exec('CREATE TABLE KeySongs(Id INTEGER PRIMARY KEY, KeyId INTEGER, SongId INTEGER)');
+		$database->exec('CREATE TABLE CustomGroup(Id INTEGER PRIMARY KEY, Name VARCHAR(255), DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
+		$database->exec('CREATE TABLE CustomGroupSongs(Id INTEGER PRIMARY KEY, GroupId INTEGER, SongId INTEGER)');
 		$database->exec('CREATE TABLE MetronomeSettings(Id INTEGER PRIMARY KEY, SongId INTEGER, Bpm INTEGER)');
 
 		$database->exec("INSERT INTO Songs (Id, Title, SortTitle, Stars, Difficulty, Duration, Keywords, Custom, Custom2) VALUES (1, 'Zebra', 'Zebra', 5, 3, 240, 'jazz, fast', 'Key C', 'Arrangement A'), (2, 'Alpha', 'Alpha', 0, 0, 0, '', '', '')");
@@ -66,6 +69,9 @@ final class SongMapperTest extends TestCase {
 
 		$database->exec("INSERT INTO Keys (Id, Name) VALUES (70, 'C Major')");
 		$database->exec('INSERT INTO KeySongs (KeyId, SongId) VALUES (70, 1)');
+
+		$database->exec("INSERT INTO CustomGroup (Id, Name) VALUES (90, 'Ensemble A')");
+		$database->exec('INSERT INTO CustomGroupSongs (GroupId, SongId) VALUES (90, 1)');
 
 		// A song may point at another song through its own SongId column, and a song has
 		// more rows than its files and links: settings such as the metronome live in their
@@ -99,6 +105,7 @@ final class SongMapperTest extends TestCase {
 		$this->assertSame(['Coltrane'], $this->names($zebra->artists));
 		$this->assertSame(['Jazz'], $this->names($zebra->genres));
 		$this->assertSame(['C Major'], $this->names($zebra->keys));
+		$this->assertSame(['Ensemble A'], $this->names($zebra->customGroups));
 		$this->assertSame([], $zebra->books);
 		$this->assertSame(['Jazz Standards'], $this->names($zebra->collections));
 		$this->assertContainsOnlyInstancesOf(MobileSheetsComposer::class, $zebra->composers);
@@ -886,8 +893,31 @@ final class SongMapperTest extends TestCase {
 		self::assertSame([], $song->keys);
 	}
 
+	public function testCustomGroupOperations(): void {
+		$mapper = $this->mapper();
+		$groupId = $mapper->createCustomGroup($this->databasePath, 'Choir');
+		self::assertGreaterThan(0, $groupId);
+
+		$songId = $mapper->createSong($this->databasePath, 'Group Test Song', customGroupIds: [$groupId]);
+		$song = $mapper->findSong($this->databasePath, $songId);
+		self::assertNotNull($song);
+		self::assertSame(['Choir'], $this->names($song->customGroups));
+
+		// Batch update with replace
+		$groupId2 = $mapper->createCustomGroup($this->databasePath, 'Orchestra');
+		$mapper->batchUpdateSongs($this->databasePath, [$songId], customGroupUpdate: ['action' => 'replace', 'ids' => [$groupId2]]);
+		$song = $mapper->findSong($this->databasePath, $songId);
+		self::assertSame(['Orchestra'], $this->names($song->customGroups));
+
+		// Delete customgroup entity
+		$deleted = $mapper->deleteEntity($this->databasePath, 'customgroups', $groupId2);
+		self::assertTrue($deleted);
+		$song = $mapper->findSong($this->databasePath, $songId);
+		self::assertSame([], $song->customGroups);
+	}
+
 	/**
-	 * @param list<MobileSheetsComposer|MobileSheetsCollection|MobileSheetsArtist|MobileSheetsGenre|MobileSheetsKey> $entities
+	 * @param list<MobileSheetsComposer|MobileSheetsCollection|MobileSheetsArtist|MobileSheetsGenre|MobileSheetsKey|MobileSheetsCustomGroup> $entities
 	 * @return list<string>
 	 */
 	private function names(array $entities): array {

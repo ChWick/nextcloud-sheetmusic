@@ -57,6 +57,7 @@ describe('useSongFilters composable with unassigned matching', () => {
 		expect(noneEntryOf('artists')).toEqual({ id: UNASSIGNED_ID, name: '(No artist)' })
 		expect(noneEntryOf('genres')).toEqual({ id: UNASSIGNED_ID, name: '(No genre)' })
 		expect(noneEntryOf('keys')).toEqual({ id: UNASSIGNED_ID, name: '(No key)' })
+		expect(noneEntryOf('customgroups')).toEqual({ id: UNASSIGNED_ID, name: '(No custom group)' })
 	})
 
 	it('filters songs without composer in specific collection', () => {

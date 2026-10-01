@@ -1,4 +1,4 @@
-import type { Artist, Book, Collection, Composer, EntityType, FilterEntity, Genre, Key, Song } from '../types/song'
+import type { Artist, Book, Collection, Composer, CustomGroup, EntityType, FilterEntity, Genre, Key, Song } from '../types/song'
 import { translate as t } from '@nextcloud/l10n'
 import { computed, ref } from 'vue'
 import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
@@ -11,9 +11,11 @@ export interface FilterOptions {
 	artists: Artist[]
 	genres: Genre[]
 	keys: Key[]
+	customGroups?: CustomGroup[]
+	customgroups?: CustomGroup[]
 }
 
-const FILTER_TYPES: EntityType[] = ['composers', 'artists', 'books', 'collections', 'genres', 'keys']
+const FILTER_TYPES: EntityType[] = ['composers', 'artists', 'books', 'collections', 'genres', 'keys', 'customgroups']
 
 export const UNASSIGNED_ID = -1
 
@@ -32,6 +34,8 @@ export function noneEntryOf(entityType: EntityType): FilterEntity {
 			return { id: UNASSIGNED_ID, name: t('mobilesheetsmanager', '(No genre)') }
 		case 'keys':
 			return { id: UNASSIGNED_ID, name: t('mobilesheetsmanager', '(No key)') }
+		case 'customgroups':
+			return { id: UNASSIGNED_ID, name: t('mobilesheetsmanager', '(No custom group)') }
 	}
 }
 
@@ -101,7 +105,8 @@ export function useSongFilters(options: () => FilterOptions) {
 
 	/** The entries behind the ids of one filter parameter, in the order of the URL. */
 	function selectedOf(entityType: EntityType): FilterEntity[] {
-		const entries = (options()[entityType] ?? []) as FilterEntity[]
+		const opts = options()
+		const entries = ((opts[entityType] ?? (entityType === 'customgroups' ? opts.customGroups : [])) ?? []) as FilterEntity[]
 		const noneEntry = noneEntryOf(entityType)
 		return idsOf(entityType).map(id => {
 			if (id === UNASSIGNED_ID) {
@@ -148,6 +153,7 @@ export function useSongFilters(options: () => FilterOptions) {
 		const artistIds = new Set(idsOf('artists'))
 		const genreIds = new Set(idsOf('genres'))
 		const keyIds = new Set(idsOf('keys'))
+		const customGroupIds = new Set(idsOf('customgroups'))
 
 		if (!matchesCategory(song.composers, composerIds)) return false
 		if (!matchesCategory(song.books, bookIds)) return false
@@ -155,6 +161,7 @@ export function useSongFilters(options: () => FilterOptions) {
 		if (!matchesCategory(song.artists, artistIds)) return false
 		if (!matchesCategory(song.genres, genreIds)) return false
 		if (!matchesCategory(song.keys, keyIds)) return false
+		if (!matchesCategory(song.customGroups, customGroupIds)) return false
 		return true
 	}
 
@@ -198,6 +205,10 @@ export function useSongFilters(options: () => FilterOptions) {
 		get: () => selectedOf('keys') as Key[],
 		set: (value: Key[]) => selectIds('keys', value.map(entry => entry.id)),
 	})
+	const selectedCustomGroups = computed({
+		get: () => selectedOf('customgroups') as CustomGroup[],
+		set: (value: CustomGroup[]) => selectIds('customgroups', value.map(entry => entry.id)),
+	})
 
 	return {
 		searchTitle,
@@ -207,6 +218,7 @@ export function useSongFilters(options: () => FilterOptions) {
 		selectedArtists,
 		selectedGenres,
 		selectedKeys,
+		selectedCustomGroups,
 		hasActiveFilters,
 		isFiltered,
 		toggleFilter,

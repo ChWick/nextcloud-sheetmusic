@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Artist, Book, Collection, Composer, Genre, Key } from '../../types/song'
+import type { Artist, Book, Collection, Composer, CustomGroup, Genre, Key } from '../../types/song'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
@@ -21,6 +21,7 @@ export interface BatchUpdatePayload {
 	artists?: CategoryBatchUpdate
 	genres?: CategoryBatchUpdate
 	keys?: CategoryBatchUpdate
+	customGroups?: CategoryBatchUpdate
 }
 
 const props = defineProps<{
@@ -32,6 +33,7 @@ const props = defineProps<{
 	artists: Artist[]
 	genres?: Genre[]
 	keys?: Key[]
+	customGroups?: CustomGroup[]
 }>()
 
 const emit = defineEmits<{
@@ -46,6 +48,7 @@ const enableCollections = ref(false)
 const enableArtists = ref(false)
 const enableGenres = ref(false)
 const enableKeys = ref(false)
+const enableCustomGroups = ref(false)
 
 // Actions
 const composerAction = ref<BatchAction>('add')
@@ -54,6 +57,7 @@ const collectionAction = ref<BatchAction>('add')
 const artistAction = ref<BatchAction>('add')
 const genreAction = ref<BatchAction>('add')
 const keyAction = ref<BatchAction>('add')
+const customGroupAction = ref<BatchAction>('add')
 
 // Selected entity arrays
 const selectedComposers = ref<Composer[]>([])
@@ -62,6 +66,7 @@ const selectedCollections = ref<Collection[]>([])
 const selectedArtists = ref<Artist[]>([])
 const selectedGenres = ref<Genre[]>([])
 const selectedKeys = ref<Key[]>([])
+const selectedCustomGroups = ref<CustomGroup[]>([])
 
 function resetForm() {
 	enableComposers.value = false
@@ -70,6 +75,7 @@ function resetForm() {
 	enableArtists.value = false
 	enableGenres.value = false
 	enableKeys.value = false
+	enableCustomGroups.value = false
 
 	composerAction.value = 'add'
 	bookAction.value = 'add'
@@ -77,6 +83,7 @@ function resetForm() {
 	artistAction.value = 'add'
 	genreAction.value = 'add'
 	keyAction.value = 'add'
+	customGroupAction.value = 'add'
 
 	selectedComposers.value = []
 	selectedBooks.value = []
@@ -84,6 +91,7 @@ function resetForm() {
 	selectedArtists.value = []
 	selectedGenres.value = []
 	selectedKeys.value = []
+	selectedCustomGroups.value = []
 }
 
 watch(() => props.open, (isOpen) => {
@@ -91,7 +99,7 @@ watch(() => props.open, (isOpen) => {
 })
 
 const isAnythingEnabled = computed(() => {
-	return enableComposers.value || enableBooks.value || enableCollections.value || enableArtists.value || enableGenres.value || enableKeys.value
+	return enableComposers.value || enableBooks.value || enableCollections.value || enableArtists.value || enableGenres.value || enableKeys.value || enableCustomGroups.value
 })
 
 function handleApply() {
@@ -133,6 +141,12 @@ function handleApply() {
 		payload.keys = {
 			action: keyAction.value,
 			ids: selectedKeys.value.map((k) => k.id),
+		}
+	}
+	if (enableCustomGroups.value) {
+		payload.customGroups = {
+			action: customGroupAction.value,
+			ids: selectedCustomGroups.value.map((cg) => cg.id),
 		}
 	}
 
@@ -348,6 +362,38 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 						:close-on-select="false"
 						:input-label="t('mobilesheetsmanager', 'Keys')"
 						:placeholder="t('mobilesheetsmanager', 'Select keys…')"
+						label="name"
+						track-by="id" />
+				</div>
+			</div>
+
+			<!-- Custom Groups Section -->
+			<div :class="$style.fieldGroup">
+				<div :class="$style.fieldHeader">
+					<NcCheckboxRadioSwitch
+						v-model="enableCustomGroups"
+						type="checkbox">
+						{{ t('mobilesheetsmanager', 'Custom Groups') }}
+					</NcCheckboxRadioSwitch>
+				</div>
+				<div v-if="enableCustomGroups" :class="$style.fieldBody">
+					<div :class="$style.actionSelector">
+						<label v-for="opt in actionOptions" :key="opt.value" :class="$style.radioLabel">
+							<input
+								v-model="customGroupAction"
+								type="radio"
+								:name="'custom-group-action'"
+								:value="opt.value">
+							{{ opt.label }}
+						</label>
+					</div>
+					<NcSelect
+						v-model="selectedCustomGroups"
+						:options="customGroups || []"
+						:multiple="true"
+						:close-on-select="false"
+						:input-label="t('mobilesheetsmanager', 'Custom Groups')"
+						:placeholder="t('mobilesheetsmanager', 'Select custom groups…')"
 						label="name"
 						track-by="id" />
 				</div>

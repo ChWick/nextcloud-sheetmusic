@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Artist, Book, Collection, Composer, Genre, Key } from '../types/song'
+import type { Artist, Book, Collection, Composer, CustomGroup, Genre, Key } from '../types/song'
 
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
@@ -18,12 +18,14 @@ const props = withDefaults(
 		artists?: Artist[]
 		genres?: Genre[]
 		keys?: Key[]
+		customGroups?: CustomGroup[]
 		selectedComposers?: Composer[]
 		selectedBooks?: Book[]
 		selectedCollections?: Collection[]
 		selectedArtists?: Artist[]
 		selectedGenres?: Genre[]
 		selectedKeys?: Key[]
+		selectedCustomGroups?: CustomGroup[]
 	}>(),
 	{
 		searchTitle: '',
@@ -33,12 +35,14 @@ const props = withDefaults(
 		artists: () => [],
 		genres: () => [],
 		keys: () => [],
+		customGroups: () => [],
 		selectedComposers: () => [],
 		selectedBooks: () => [],
 		selectedCollections: () => [],
 		selectedArtists: () => [],
 		selectedGenres: () => [],
 		selectedKeys: () => [],
+		selectedCustomGroups: () => [],
 	},
 )
 
@@ -50,6 +54,7 @@ const emit = defineEmits<{
 	'update:selectedArtists': [artists: Artist[]]
 	'update:selectedGenres': [genres: Genre[]]
 	'update:selectedKeys': [keys: Key[]]
+	'update:selectedCustomGroups': [customGroups: CustomGroup[]]
 	'clear': []
 }>()
 
@@ -83,6 +88,11 @@ const keyOptions = computed(() => [
 	...props.keys,
 ])
 
+const customGroupOptions = computed(() => [
+	noneEntryOf('customgroups') as CustomGroup,
+	...props.customGroups,
+])
+
 const hasActiveFilters = computed(() => {
 	return (
 		Boolean(props.searchTitle?.trim())
@@ -92,6 +102,7 @@ const hasActiveFilters = computed(() => {
 		|| props.selectedArtists.length > 0
 		|| props.selectedGenres.length > 0
 		|| props.selectedKeys.length > 0
+		|| props.selectedCustomGroups.length > 0
 	)
 })
 
@@ -195,6 +206,20 @@ function clearAllFilters() {
 				track-by="id"
 				:class="$style.select"
 				@update:model-value="emit('update:selectedKeys', $event)" />
+		</div>
+
+		<div :class="$style.filterGroup">
+			<NcSelect
+				:model-value="selectedCustomGroups"
+				:options="customGroupOptions"
+				:multiple="true"
+				:close-on-select="false"
+				:placeholder="t('mobilesheetsmanager', 'Filter by custom group…')"
+				:input-label="t('mobilesheetsmanager', 'Custom Groups')"
+				label="name"
+				track-by="id"
+				:class="$style.select"
+				@update:model-value="emit('update:selectedCustomGroups', $event)" />
 		</div>
 
 		<div v-if="hasActiveFilters" :class="$style.actions">

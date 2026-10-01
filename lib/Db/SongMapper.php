@@ -54,7 +54,8 @@ class SongMapper {
 	 *     collections: list<MobileSheetsCollection>,
 	 *     artists: list<MobileSheetsArtist>,
 	 *     genres: list<MobileSheetsGenre>,
-	 *     keys: list<MobileSheetsKey>
+	 *     keys: list<MobileSheetsKey>,
+	 *     customGroups: list<MobileSheetsCustomGroup>
 	 * }
 	 */
 	public function findLibraryData(string $databasePath): array {
@@ -145,6 +146,19 @@ class SongMapper {
 			}
 		}
 
+		$customGroups = [];
+		$customGroupsById = [];
+		if (in_array('CustomGroup', $existingTables, true)) {
+			$stmt = $database->query('SELECT Id, Name FROM CustomGroup ORDER BY Name');
+			if ($stmt !== false) {
+				while ($row = $stmt->fetch()) {
+					$customGroup = new MobileSheetsCustomGroup((int)$row['Id'], (string)$row['Name']);
+					$customGroups[] = $customGroup;
+					$customGroupsById[$customGroup->id] = $customGroup;
+				}
+			}
+		}
+
 		$songComposers = [];
 		if (in_array('ComposerSongs', $existingTables, true)) {
 			$stmt = $database->query('SELECT ComposerId, SongId FROM ComposerSongs');
@@ -218,6 +232,16 @@ class SongMapper {
 			}
 		}
 
+		$songCustomGroups = [];
+		if (in_array('CustomGroupSongs', $existingTables, true)) {
+			$stmt = $database->query('SELECT GroupId, SongId FROM CustomGroupSongs');
+			if ($stmt !== false) {
+				while ($row = $stmt->fetch()) {
+					$songCustomGroups[(int)$row['SongId']][] = (int)$row['GroupId'];
+				}
+			}
+		}
+
 		$songCols = $this->columnNames($database, 'Songs');
 		$hasLastModified = isset($songCols['lastmodified']);
 		$createdCol = isset($songCols['datecreated']) ? 'DateCreated' : (isset($songCols['creationdate']) ? 'CreationDate' : null);
@@ -275,6 +299,7 @@ class SongMapper {
 					$this->resolveEntities($songArtists[$songId] ?? [], $artistsById),
 					$this->resolveEntities($songGenres[$songId] ?? [], $genresById),
 					$this->resolveEntities($songKeys[$songId] ?? [], $keysById),
+					$this->resolveEntities($songCustomGroups[$songId] ?? [], $customGroupsById),
 					isset($row['LastModified']) && $row['LastModified'] !== null ? (int)$row['LastModified'] : null,
 					isset($row['DateCreated']) && $row['DateCreated'] !== null ? (int)$row['DateCreated'] : null,
 					isset($row['Stars']) ? (int)$row['Stars'] : 0,
@@ -296,6 +321,7 @@ class SongMapper {
 			'artists' => $artists,
 			'genres' => $genres,
 			'keys' => $keys,
+			'customGroups' => $customGroups,
 		];
 	}
 
@@ -356,6 +382,8 @@ class SongMapper {
 			'g.Type AS Genre',
 			'ks.KeyId AS KeyId',
 			'k.Name AS Key',
+			'cgs.GroupId AS CustomGroupId',
+			'cg.Name AS CustomGroup',
 			'c.Name AS Composer',
 			'cs.ComposerId AS ComposerId',
 			'coll.Name AS Collection',
@@ -376,6 +404,8 @@ class SongMapper {
 		LEFT JOIN Genres g ON gs.GenreId = g.Id
 		LEFT JOIN KeySongs ks ON s.Id = ks.SongId
 		LEFT JOIN Keys k ON ks.KeyId = k.Id
+		LEFT JOIN CustomGroupSongs cgs ON s.Id = cgs.SongId
+		LEFT JOIN CustomGroup cg ON cgs.GroupId = cg.Id
 		LEFT JOIN BookSongs bookSongs ON s.Id = bookSongs.SongId
 		LEFT JOIN Books books ON bookSongs.BookId = books.Id
 		LEFT JOIN ArtistsSongs artistsSongs ON artistsSongs.SongId = s.Id
@@ -414,6 +444,7 @@ class SongMapper {
 					'artists' => [],
 					'genres' => [],
 					'keys' => [],
+					'customGroups' => [],
 				];
 			}
 
@@ -446,6 +477,11 @@ class SongMapper {
 			if ($keyId !== null && !isset($songs[$rowSongId]['keys'][$keyId])) {
 				$songs[$rowSongId]['keys'][$keyId] = new MobileSheetsKey($keyId, (string)($row['Key'] ?? ''));
 			}
+
+			$customGroupId = $row['CustomGroupId'] !== null ? (int)$row['CustomGroupId'] : null;
+			if ($customGroupId !== null && !isset($songs[$rowSongId]['customGroups'][$customGroupId])) {
+				$songs[$rowSongId]['customGroups'][$customGroupId] = new MobileSheetsCustomGroup($customGroupId, (string)($row['CustomGroup'] ?? ''));
+			}
 		}
 
 		$result = [];
@@ -460,6 +496,7 @@ class SongMapper {
 				array_values($song['artists']),
 				array_values($song['genres']),
 				array_values($song['keys']),
+				array_values($song['customGroups']),
 				$song['lastModified'],
 				$song['dateCreated'],
 				$song['stars'] ?? 0,
@@ -539,6 +576,7 @@ class SongMapper {
 	 * @param list<int> $artistIds
 	 * @param list<int> $genreIds
 	 * @param list<int> $keyIds
+	 * @param list<int> $customGroupIds
 	 * @return int id of the created song
 	 */
 	public function createSong(
@@ -550,6 +588,7 @@ class SongMapper {
 		array $artistIds = [],
 		array $genreIds = [],
 		array $keyIds = [],
+		array $customGroupIds = [],
 		int $stars = 0,
 		int $difficulty = 0,
 		int $duration = 0,
@@ -584,6 +623,7 @@ class SongMapper {
 			$artistIds,
 			$genreIds,
 			$keyIds,
+			$customGroupIds,
 			$stars,
 			$difficulty,
 			$duration,
@@ -603,6 +643,7 @@ class SongMapper {
 	 * @param list<int> $artistIds
 	 * @param list<int> $genreIds
 	 * @param list<int> $keyIds
+	 * @param list<int> $customGroupIds
 	 */
 	public function updateSong(
 		string $databasePath,
@@ -614,6 +655,7 @@ class SongMapper {
 		array $artistIds = [],
 		array $genreIds = [],
 		array $keyIds = [],
+		array $customGroupIds = [],
 		int $stars = 0,
 		int $difficulty = 0,
 		int $duration = 0,
@@ -726,6 +768,20 @@ class SongMapper {
 				]);
 			}
 		}
+
+		// Update Custom Groups
+		if (in_array('CustomGroupSongs', $existingTables, true)) {
+			$delStmt = $database->prepare('DELETE FROM CustomGroupSongs WHERE SongId = :songId');
+			$delStmt->execute([':songId' => $songId]);
+
+			$insStmt = $database->prepare('INSERT INTO CustomGroupSongs (GroupId, SongId) VALUES (:groupId, :songId)');
+			foreach ($customGroupIds as $groupId) {
+				$insStmt->execute([
+					':groupId' => $groupId,
+					':songId' => $songId,
+				]);
+			}
+		}
 	}
 
 	/**
@@ -738,6 +794,7 @@ class SongMapper {
 	 * @param array{action?: string, ids?: list<int>}|null $artistUpdate
 	 * @param array{action?: string, ids?: list<int>}|null $genreUpdate
 	 * @param array{action?: string, ids?: list<int>}|null $keyUpdate
+	 * @param array{action?: string, ids?: list<int>}|null $customGroupUpdate
 	 */
 	public function batchUpdateSongs(
 		string $databasePath,
@@ -748,6 +805,7 @@ class SongMapper {
 		?array $artistUpdate = null,
 		?array $genreUpdate = null,
 		?array $keyUpdate = null,
+		?array $customGroupUpdate = null,
 	): void {
 		if (empty($songIds)) {
 			return;
@@ -784,6 +842,9 @@ class SongMapper {
 				}
 				if ($keyUpdate !== null && in_array('KeySongs', $existingTables, true)) {
 					$this->updateCategoryRelations($database, 'KeySongs', 'KeyId', $songId, $keyUpdate);
+				}
+				if ($customGroupUpdate !== null && in_array('CustomGroupSongs', $existingTables, true)) {
+					$this->updateCategoryRelations($database, 'CustomGroupSongs', 'GroupId', $songId, $customGroupUpdate);
 				}
 			}
 			$database->commit();
@@ -1207,6 +1268,16 @@ class SongMapper {
 		] + $this->dateColumns($database, 'Keys'));
 	}
 
+	public function createCustomGroup(string $databasePath, string $name): int {
+		$database = new PDO('sqlite:' . $databasePath, options: [
+			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+		]);
+		return $this->insertRow($database, 'CustomGroup', [
+			'Name' => $name,
+		] + $this->dateColumns($database, 'CustomGroup'));
+	}
+
 	/**
 	 * Tables of the entity kinds a song can carry, and how each of them links
 	 * to songs.
@@ -1220,16 +1291,17 @@ class SongMapper {
 		'artists' => ['table' => 'Artists', 'linkTable' => 'ArtistsSongs', 'linkColumn' => 'ArtistId'],
 		'genres' => ['table' => 'Genres', 'linkTable' => 'GenresSongs', 'linkColumn' => 'GenreId'],
 		'keys' => ['table' => 'Keys', 'linkTable' => 'KeySongs', 'linkColumn' => 'KeyId'],
+		'customgroups' => ['table' => 'CustomGroup', 'linkTable' => 'CustomGroupSongs', 'linkColumn' => 'GroupId'],
 	];
 
 	/**
-	 * Delete a composer, book, collection, artist, genre or key from the library.
+	 * Delete a composer, book, collection, artist, genre, key or custom group from the library.
 	 *
 	 * The songs are kept: only the links to the deleted entry are removed, so it
-	 * disappears from the songs' composers, books, collections, artists, genres or keys while the
+	 * disappears from the songs' composers, books, collections, artists, genres, keys or custom groups while the
 	 * songs themselves stay untouched.
 	 *
-	 * @param 'composers'|'books'|'collections'|'artists'|'genres'|'keys' $entityType
+	 * @param 'composers'|'books'|'collections'|'artists'|'genres'|'keys'|'customgroups' $entityType
 	 * @return bool whether the entry itself existed and was removed
 	 */
 	public function deleteEntity(string $databasePath, string $entityType, int $entityId): bool {
