@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Artist, Book, Collection, Composer, CustomGroup, Genre, Key } from '../../types/song'
+import type { Artist, Book, Collection, Composer, CustomGroup, Genre, Key, Year } from '../../types/song'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
@@ -22,6 +22,7 @@ export interface BatchUpdatePayload {
 	genres?: CategoryBatchUpdate
 	keys?: CategoryBatchUpdate
 	customGroups?: CategoryBatchUpdate
+	years?: CategoryBatchUpdate
 }
 
 const props = defineProps<{
@@ -34,6 +35,7 @@ const props = defineProps<{
 	genres?: Genre[]
 	keys?: Key[]
 	customGroups?: CustomGroup[]
+	years?: Year[]
 }>()
 
 const emit = defineEmits<{
@@ -49,6 +51,7 @@ const enableArtists = ref(false)
 const enableGenres = ref(false)
 const enableKeys = ref(false)
 const enableCustomGroups = ref(false)
+const enableYears = ref(false)
 
 // Actions
 const composerAction = ref<BatchAction>('add')
@@ -58,6 +61,7 @@ const artistAction = ref<BatchAction>('add')
 const genreAction = ref<BatchAction>('add')
 const keyAction = ref<BatchAction>('add')
 const customGroupAction = ref<BatchAction>('add')
+const yearAction = ref<BatchAction>('add')
 
 // Selected entity arrays
 const selectedComposers = ref<Composer[]>([])
@@ -67,6 +71,7 @@ const selectedArtists = ref<Artist[]>([])
 const selectedGenres = ref<Genre[]>([])
 const selectedKeys = ref<Key[]>([])
 const selectedCustomGroups = ref<CustomGroup[]>([])
+const selectedYears = ref<Year[]>([])
 
 function resetForm() {
 	enableComposers.value = false
@@ -76,6 +81,7 @@ function resetForm() {
 	enableGenres.value = false
 	enableKeys.value = false
 	enableCustomGroups.value = false
+	enableYears.value = false
 
 	composerAction.value = 'add'
 	bookAction.value = 'add'
@@ -84,6 +90,7 @@ function resetForm() {
 	genreAction.value = 'add'
 	keyAction.value = 'add'
 	customGroupAction.value = 'add'
+	yearAction.value = 'add'
 
 	selectedComposers.value = []
 	selectedBooks.value = []
@@ -92,6 +99,7 @@ function resetForm() {
 	selectedGenres.value = []
 	selectedKeys.value = []
 	selectedCustomGroups.value = []
+	selectedYears.value = []
 }
 
 watch(() => props.open, (isOpen) => {
@@ -99,7 +107,7 @@ watch(() => props.open, (isOpen) => {
 })
 
 const isAnythingEnabled = computed(() => {
-	return enableComposers.value || enableBooks.value || enableCollections.value || enableArtists.value || enableGenres.value || enableKeys.value || enableCustomGroups.value
+	return enableComposers.value || enableBooks.value || enableCollections.value || enableArtists.value || enableGenres.value || enableKeys.value || enableCustomGroups.value || enableYears.value
 })
 
 function handleApply() {
@@ -147,6 +155,12 @@ function handleApply() {
 		payload.customGroups = {
 			action: customGroupAction.value,
 			ids: selectedCustomGroups.value.map((cg) => cg.id),
+		}
+	}
+	if (enableYears.value) {
+		payload.years = {
+			action: yearAction.value,
+			ids: selectedYears.value.map((y) => y.id),
 		}
 	}
 
@@ -394,6 +408,38 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 						:close-on-select="false"
 						:input-label="t('mobilesheetsmanager', 'Custom Groups')"
 						:placeholder="t('mobilesheetsmanager', 'Select custom groups…')"
+						label="name"
+						track-by="id" />
+				</div>
+			</div>
+
+			<!-- Years Section -->
+			<div :class="$style.fieldGroup">
+				<div :class="$style.fieldHeader">
+					<NcCheckboxRadioSwitch
+						v-model="enableYears"
+						type="checkbox">
+						{{ t('mobilesheetsmanager', 'Years') }}
+					</NcCheckboxRadioSwitch>
+				</div>
+				<div v-if="enableYears" :class="$style.fieldBody">
+					<div :class="$style.actionSelector">
+						<label v-for="opt in actionOptions" :key="opt.value" :class="$style.radioLabel">
+							<input
+								v-model="yearAction"
+								type="radio"
+								:name="'year-action'"
+								:value="opt.value">
+							{{ opt.label }}
+						</label>
+					</div>
+					<NcSelect
+						v-model="selectedYears"
+						:options="years || []"
+						:multiple="true"
+						:close-on-select="false"
+						:input-label="t('mobilesheetsmanager', 'Years')"
+						:placeholder="t('mobilesheetsmanager', 'Select years…')"
 						label="name"
 						track-by="id" />
 				</div>

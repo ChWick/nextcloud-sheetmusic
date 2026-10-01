@@ -80,6 +80,11 @@ return [
 			'verb' => 'POST',
 		],
 		[
+			'name' => 'Api#createYear',
+			'url' => '/api/years',
+			'verb' => 'POST',
+		],
+		[
 			'name' => 'Api#deleteComposer',
 			'url' => '/api/composers/{id}',
 			'verb' => 'DELETE',
@@ -112,6 +117,11 @@ return [
 		[
 			'name' => 'Api#deleteCustomGroup',
 			'url' => '/api/customgroups/{id}',
+			'verb' => 'DELETE',
+		],
+		[
+			'name' => 'Api#deleteYear',
+			'url' => '/api/years/{id}',
 			'verb' => 'DELETE',
 		],
 		[

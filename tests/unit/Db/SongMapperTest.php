@@ -18,6 +18,7 @@ use OCA\MobileSheetsManager\Db\MobileSheetsFile;
 use OCA\MobileSheetsManager\Db\MobileSheetsGenre;
 use OCA\MobileSheetsManager\Db\MobileSheetsKey;
 use OCA\MobileSheetsManager\Db\MobileSheetsSong;
+use OCA\MobileSheetsManager\Db\MobileSheetsYear;
 use OCA\MobileSheetsManager\Db\SongMapper;
 use OCA\MobileSheetsManager\Service\MobileSheetsFileFacts;
 use PHPUnit\Framework\TestCase;
@@ -47,6 +48,8 @@ final class SongMapperTest extends TestCase {
 		$database->exec('CREATE TABLE KeySongs(Id INTEGER PRIMARY KEY, KeyId INTEGER, SongId INTEGER)');
 		$database->exec('CREATE TABLE CustomGroup(Id INTEGER PRIMARY KEY, Name VARCHAR(255), DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
 		$database->exec('CREATE TABLE CustomGroupSongs(Id INTEGER PRIMARY KEY, GroupId INTEGER, SongId INTEGER)');
+		$database->exec('CREATE TABLE Years(Id INTEGER PRIMARY KEY, Year INTEGER, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
+		$database->exec('CREATE TABLE YearsSongs(Id INTEGER PRIMARY KEY, YearId INTEGER, SongId INTEGER)');
 		$database->exec('CREATE TABLE MetronomeSettings(Id INTEGER PRIMARY KEY, SongId INTEGER, Bpm INTEGER)');
 
 		$database->exec("INSERT INTO Songs (Id, Title, SortTitle, Stars, Difficulty, Duration, Keywords, Custom, Custom2) VALUES (1, 'Zebra', 'Zebra', 5, 3, 240, 'jazz, fast', 'Key C', 'Arrangement A'), (2, 'Alpha', 'Alpha', 0, 0, 0, '', '', '')");
@@ -72,6 +75,9 @@ final class SongMapperTest extends TestCase {
 
 		$database->exec("INSERT INTO CustomGroup (Id, Name) VALUES (90, 'Ensemble A')");
 		$database->exec('INSERT INTO CustomGroupSongs (GroupId, SongId) VALUES (90, 1)');
+
+		$database->exec("INSERT INTO Years (Id, Year) VALUES (80, 1959)");
+		$database->exec('INSERT INTO YearsSongs (YearId, SongId) VALUES (80, 1)');
 
 		// A song may point at another song through its own SongId column, and a song has
 		// more rows than its files and links: settings such as the metronome live in their
@@ -106,6 +112,7 @@ final class SongMapperTest extends TestCase {
 		$this->assertSame(['Jazz'], $this->names($zebra->genres));
 		$this->assertSame(['C Major'], $this->names($zebra->keys));
 		$this->assertSame(['Ensemble A'], $this->names($zebra->customGroups));
+		$this->assertSame(['1959'], $this->names($zebra->years));
 		$this->assertSame([], $zebra->books);
 		$this->assertSame(['Jazz Standards'], $this->names($zebra->collections));
 		$this->assertContainsOnlyInstancesOf(MobileSheetsComposer::class, $zebra->composers);
@@ -113,6 +120,8 @@ final class SongMapperTest extends TestCase {
 		$this->assertContainsOnlyInstancesOf(MobileSheetsCollection::class, $zebra->collections);
 		$this->assertContainsOnlyInstancesOf(MobileSheetsGenre::class, $zebra->genres);
 		$this->assertContainsOnlyInstancesOf(MobileSheetsKey::class, $zebra->keys);
+		$this->assertContainsOnlyInstancesOf(MobileSheetsCustomGroup::class, $zebra->customGroups);
+		$this->assertContainsOnlyInstancesOf(MobileSheetsYear::class, $zebra->years);
 		$this->assertCount(1, $zebra->files);
 		$this->assertContainsOnlyInstancesOf(MobileSheetsFile::class, $zebra->files);
 		$this->assertSame(1, $zebra->files[0]->id);
@@ -121,6 +130,9 @@ final class SongMapperTest extends TestCase {
 		$this->assertSame(200, $zebra->artists[0]->id);
 		$this->assertSame(50, $zebra->genres[0]->id);
 		$this->assertSame(70, $zebra->keys[0]->id);
+		$this->assertSame(90, $zebra->customGroups[0]->id);
+		$this->assertSame(80, $zebra->years[0]->id);
+		$this->assertSame(1959, $zebra->years[0]->year);
 		$this->assertSame(1000, $zebra->collections[0]->id);
 
 		$alpha = $byId[2];
@@ -129,6 +141,8 @@ final class SongMapperTest extends TestCase {
 		$this->assertSame([], $alpha->artists);
 		$this->assertSame([], $alpha->genres);
 		$this->assertSame([], $alpha->keys);
+		$this->assertSame([], $alpha->customGroups);
+		$this->assertSame([], $alpha->years);
 		$this->assertSame(['Real Book 1'], $this->titles($alpha->books));
 		$this->assertSame(['Jazz Standards'], $this->names($alpha->collections));
 		$this->assertContainsOnlyInstancesOf(MobileSheetsBook::class, $alpha->books);
@@ -916,8 +930,31 @@ final class SongMapperTest extends TestCase {
 		self::assertSame([], $song->customGroups);
 	}
 
+	public function testYearOperations(): void {
+		$mapper = $this->mapper();
+		$yearId = $mapper->createYear($this->databasePath, 1960);
+		self::assertGreaterThan(0, $yearId);
+
+		$songId = $mapper->createSong($this->databasePath, 'Year Test Song', yearIds: [$yearId]);
+		$song = $mapper->findSong($this->databasePath, $songId);
+		self::assertNotNull($song);
+		self::assertSame(['1960'], $this->names($song->years));
+
+		// Batch update with replace
+		$yearId2 = $mapper->createYear($this->databasePath, 1975);
+		$mapper->batchUpdateSongs($this->databasePath, [$songId], yearUpdate: ['action' => 'replace', 'ids' => [$yearId2]]);
+		$song = $mapper->findSong($this->databasePath, $songId);
+		self::assertSame(['1975'], $this->names($song->years));
+
+		// Delete year entity
+		$deleted = $mapper->deleteEntity($this->databasePath, 'years', $yearId2);
+		self::assertTrue($deleted);
+		$song = $mapper->findSong($this->databasePath, $songId);
+		self::assertSame([], $song->years);
+	}
+
 	/**
-	 * @param list<MobileSheetsComposer|MobileSheetsCollection|MobileSheetsArtist|MobileSheetsGenre|MobileSheetsKey|MobileSheetsCustomGroup> $entities
+	 * @param list<MobileSheetsComposer|MobileSheetsCollection|MobileSheetsArtist|MobileSheetsGenre|MobileSheetsKey|MobileSheetsCustomGroup|MobileSheetsYear> $entities
 	 * @return list<string>
 	 */
 	private function names(array $entities): array {

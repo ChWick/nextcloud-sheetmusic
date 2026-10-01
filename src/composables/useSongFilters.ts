@@ -1,4 +1,4 @@
-import type { Artist, Book, Collection, Composer, CustomGroup, EntityType, FilterEntity, Genre, Key, Song } from '../types/song'
+import type { Artist, Book, Collection, Composer, CustomGroup, EntityType, FilterEntity, Genre, Key, Song, Year } from '../types/song'
 import { translate as t } from '@nextcloud/l10n'
 import { computed, ref } from 'vue'
 import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
@@ -13,9 +13,10 @@ export interface FilterOptions {
 	keys: Key[]
 	customGroups?: CustomGroup[]
 	customgroups?: CustomGroup[]
+	years?: Year[]
 }
 
-const FILTER_TYPES: EntityType[] = ['composers', 'artists', 'books', 'collections', 'genres', 'keys', 'customgroups']
+const FILTER_TYPES: EntityType[] = ['composers', 'artists', 'books', 'collections', 'genres', 'keys', 'customgroups', 'years']
 
 export const UNASSIGNED_ID = -1
 
@@ -36,6 +37,8 @@ export function noneEntryOf(entityType: EntityType): FilterEntity {
 			return { id: UNASSIGNED_ID, name: t('mobilesheetsmanager', '(No key)') }
 		case 'customgroups':
 			return { id: UNASSIGNED_ID, name: t('mobilesheetsmanager', '(No custom group)') }
+		case 'years':
+			return { id: UNASSIGNED_ID, name: t('mobilesheetsmanager', '(No year)'), year: 0 }
 	}
 }
 
@@ -154,6 +157,7 @@ export function useSongFilters(options: () => FilterOptions) {
 		const genreIds = new Set(idsOf('genres'))
 		const keyIds = new Set(idsOf('keys'))
 		const customGroupIds = new Set(idsOf('customgroups'))
+		const yearIds = new Set(idsOf('years'))
 
 		if (!matchesCategory(song.composers, composerIds)) return false
 		if (!matchesCategory(song.books, bookIds)) return false
@@ -162,6 +166,7 @@ export function useSongFilters(options: () => FilterOptions) {
 		if (!matchesCategory(song.genres, genreIds)) return false
 		if (!matchesCategory(song.keys, keyIds)) return false
 		if (!matchesCategory(song.customGroups, customGroupIds)) return false
+		if (!matchesCategory(song.years, yearIds)) return false
 		return true
 	}
 
@@ -209,6 +214,10 @@ export function useSongFilters(options: () => FilterOptions) {
 		get: () => selectedOf('customgroups') as CustomGroup[],
 		set: (value: CustomGroup[]) => selectIds('customgroups', value.map(entry => entry.id)),
 	})
+	const selectedYears = computed({
+		get: () => selectedOf('years') as Year[],
+		set: (value: Year[]) => selectIds('years', value.map(entry => entry.id)),
+	})
 
 	return {
 		searchTitle,
@@ -219,6 +228,7 @@ export function useSongFilters(options: () => FilterOptions) {
 		selectedGenres,
 		selectedKeys,
 		selectedCustomGroups,
+		selectedYears,
 		hasActiveFilters,
 		isFiltered,
 		toggleFilter,

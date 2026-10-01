@@ -60,4 +60,14 @@ test.describe('Entities Views (Composers, Books, Collections, Artists)', () => {
 		await expect(page.getByRole('button', { name: 'Main Choir' })).toBeVisible()
 		await expect(page.getByRole('button', { name: 'Brass Band' })).toBeVisible()
 	})
+
+	test('renders Years view and list items', async ({ page }) => {
+		await page.goto('/#/library/1/years')
+		await expect(page.getByRole('heading', { name: 'Years' })).toBeVisible()
+
+		// Verify list contains mock years
+		await expect(page.getByRole('button', { name: '1959' })).toBeVisible()
+		await expect(page.getByRole('button', { name: '1808' })).toBeVisible()
+	})
 })
+

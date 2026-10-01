@@ -36,6 +36,7 @@ class EntityService {
 				'genre' => $this->songMapper->createGenre($databasePath, $nameOrTitle),
 				'key' => $this->songMapper->createKey($databasePath, $nameOrTitle),
 				'customgroup' => $this->songMapper->createCustomGroup($databasePath, $nameOrTitle),
+				'year' => $this->songMapper->createYear($databasePath, $nameOrTitle),
 				default => null,
 			};
 
@@ -44,7 +45,11 @@ class EntityService {
 			}
 
 			$key = $entityType === 'book' ? 'title' : 'name';
-			return ['id' => $id, $key => $nameOrTitle];
+			$result = ['id' => $id, $key => $nameOrTitle];
+			if ($entityType === 'year') {
+				$result['year'] = (int)$nameOrTitle;
+			}
+			return $result;
 		} catch (\Throwable $e) {
 			$this->logger->error('Could not create entity in MobileSheets library', [
 				'exception' => $e,
@@ -58,7 +63,7 @@ class EntityService {
 	}
 
 	/**
-	 * @param 'composers'|'books'|'collections'|'artists'|'genres'|'keys'|'customgroups' $entityType
+	 * @param 'composers'|'books'|'collections'|'artists'|'genres'|'keys'|'customgroups'|'years' $entityType
 	 */
 	public function deleteEntity(IUser $user, int $libraryId, string $entityType, int $id): ?array {
 		$databasePath = $this->libraryService->getDatabasePath($user->getUID(), $libraryId);

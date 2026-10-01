@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Artist, Book, Collection, Composer, CustomGroup, Genre, Key } from '../types/song'
+import type { Artist, Book, Collection, Composer, CustomGroup, Genre, Key, Year } from '../types/song'
 
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
@@ -19,6 +19,7 @@ const props = withDefaults(
 		genres?: Genre[]
 		keys?: Key[]
 		customGroups?: CustomGroup[]
+		years?: Year[]
 		selectedComposers?: Composer[]
 		selectedBooks?: Book[]
 		selectedCollections?: Collection[]
@@ -26,6 +27,7 @@ const props = withDefaults(
 		selectedGenres?: Genre[]
 		selectedKeys?: Key[]
 		selectedCustomGroups?: CustomGroup[]
+		selectedYears?: Year[]
 	}>(),
 	{
 		searchTitle: '',
@@ -36,6 +38,7 @@ const props = withDefaults(
 		genres: () => [],
 		keys: () => [],
 		customGroups: () => [],
+		years: () => [],
 		selectedComposers: () => [],
 		selectedBooks: () => [],
 		selectedCollections: () => [],
@@ -43,6 +46,7 @@ const props = withDefaults(
 		selectedGenres: () => [],
 		selectedKeys: () => [],
 		selectedCustomGroups: () => [],
+		selectedYears: () => [],
 	},
 )
 
@@ -55,6 +59,7 @@ const emit = defineEmits<{
 	'update:selectedGenres': [genres: Genre[]]
 	'update:selectedKeys': [keys: Key[]]
 	'update:selectedCustomGroups': [customGroups: CustomGroup[]]
+	'update:selectedYears': [years: Year[]]
 	'clear': []
 }>()
 
@@ -93,6 +98,11 @@ const customGroupOptions = computed(() => [
 	...props.customGroups,
 ])
 
+const yearOptions = computed(() => [
+	noneEntryOf('years') as Year,
+	...props.years,
+])
+
 const hasActiveFilters = computed(() => {
 	return (
 		Boolean(props.searchTitle?.trim())
@@ -103,6 +113,7 @@ const hasActiveFilters = computed(() => {
 		|| props.selectedGenres.length > 0
 		|| props.selectedKeys.length > 0
 		|| props.selectedCustomGroups.length > 0
+		|| props.selectedYears.length > 0
 	)
 })
 
@@ -220,6 +231,20 @@ function clearAllFilters() {
 				track-by="id"
 				:class="$style.select"
 				@update:model-value="emit('update:selectedCustomGroups', $event)" />
+		</div>
+
+		<div :class="$style.filterGroup">
+			<NcSelect
+				:model-value="selectedYears"
+				:options="yearOptions"
+				:multiple="true"
+				:close-on-select="false"
+				:placeholder="t('mobilesheetsmanager', 'Filter by year…')"
+				:input-label="t('mobilesheetsmanager', 'Years')"
+				label="name"
+				track-by="id"
+				:class="$style.select"
+				@update:model-value="emit('update:selectedYears', $event)" />
 		</div>
 
 		<div v-if="hasActiveFilters" :class="$style.actions">

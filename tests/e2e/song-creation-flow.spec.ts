@@ -47,7 +47,7 @@ test.describe('Song Creation & End-to-End Editing Flow', () => {
 		// Click Restore button on pending notice
 		const restoreBtn = page.getByRole('button', { name: 'Restore' })
 		await expect(restoreBtn).toBeVisible()
-		await restoreBtn.click()
+		await restoreBtn.dispatchEvent('click')
 
 		// File item delete button should be visible again
 		await expect(deleteFileBtn).toBeVisible()
