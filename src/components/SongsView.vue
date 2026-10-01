@@ -1,10 +1,12 @@
 <template>
   <ViewHeader
-    :title="t('mobilesheetsmanager', 'Songs')"
-    :create-label="t('mobilesheetsmanager', 'New song')"
-    :import-label="t('mobilesheetsmanager', 'Import')"
-    :import-nextcloud-label="t('mobilesheetsmanager', 'Import from Nextcloud')"
+    :title="songIdInUrl !== null ? (isEditInUrl ? (openSong?.title ? t('mobilesheetsmanager', 'Edit: {title}', { title: openSong.title }) : t('mobilesheetsmanager', 'Edit song')) : (openSong?.title ?? t('mobilesheetsmanager', 'Songs'))) : t('mobilesheetsmanager', 'Songs')"
+    :show-back="songIdInUrl !== null"
+    :create-label="songIdInUrl === null ? t('mobilesheetsmanager', 'New song') : undefined"
+    :import-label="songIdInUrl === null ? t('mobilesheetsmanager', 'Import') : undefined"
+    :import-nextcloud-label="songIdInUrl === null ? t('mobilesheetsmanager', 'Import from Nextcloud') : undefined"
     :filter-bar-visible="songIdInUrl === null ? filterBarVisible : undefined"
+    @back="goBackToSongs"
     @create="startNewSong"
     @import="startImport"
     @import-nextcloud="startImportNextcloud"
@@ -14,6 +16,36 @@
       <SongSortControl v-model:sort-key="sortKey" v-model:sort-order="sortOrder" />
       <SongViewToggle v-model:view-mode="viewMode" />
     </div>
+    <template v-else-if="!isEditInUrl">
+      <NcButton
+        v-if="songViewerRef?.selectedFile"
+        variant="secondary"
+        :title="t('mobilesheetsmanager', 'Open in external viewer')"
+        :aria-label="t('mobilesheetsmanager', 'Open in external viewer')"
+        @click="songViewerRef?.openInExternalViewer">
+        <template #icon>
+          <OpenInNewIcon :size="20" />
+        </template>
+      </NcButton>
+      <NcButton
+        variant="secondary"
+        :title="t('mobilesheetsmanager', 'Edit song')"
+        :aria-label="t('mobilesheetsmanager', 'Edit song')"
+        @click="openSong && openSongEdit(openSong)">
+        <template #icon>
+          <PencilIcon :size="20" />
+        </template>
+      </NcButton>
+      <NcButton
+        variant="error"
+        :title="t('mobilesheetsmanager', 'Delete song')"
+        :aria-label="t('mobilesheetsmanager', 'Delete song')"
+        @click="songViewerRef?.promptDelete">
+        <template #icon>
+          <DeleteIcon :size="20" />
+        </template>
+      </NcButton>
+    </template>
   </ViewHeader>
   <!-- Import reuses the create editor: the picked PDF is read for its metadata and
        staged as the new song's file. -->
@@ -37,6 +69,8 @@
                 @cancel="goBackToSongs" />
     <SongViewer
       v-else
+      ref="songViewerRef"
+      :hide-header="true"
       :song="openSong"
       :library-id="selectedLibrary"
       :composers="composers"
@@ -158,6 +192,8 @@ import { ref, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import NcButton from '@nextcloud/vue/components/NcButton';
 import CloseIcon from 'vue-material-design-icons/Close.vue';
+import DeleteIcon from 'vue-material-design-icons/Delete.vue';
+import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue';
 import PencilIcon from 'vue-material-design-icons/Pencil.vue';
 import SongEditor from '../components/SongEditor.vue';
 import SongFilterBar from '../components/SongFilterBar.vue';
@@ -180,6 +216,8 @@ import SongSimpleListView from './songs/SongSimpleListView.vue';
 
 // Props from parent (App.vue)
 const props = defineProps<{ selectedLibrary: number }>();
+
+const songViewerRef = ref<InstanceType<typeof SongViewer> | null>(null);
 
 const viewMode = ref<ViewMode>(
   (localStorage.getItem('mobilesheetsmanager_song_view_mode') as ViewMode) || 'table'
@@ -505,7 +543,8 @@ async function handleDeleted(data: LibraryData | undefined, songId: number) {
 }
 
 .fullscreenArea {
-  margin: 16px;
+  margin: 0;
+  padding: 8px 16px 16px;
   display: flex;
   flex-direction: column;
   gap: 12px;

@@ -1,6 +1,16 @@
 <template>
   <header :class="$style.headerBar">
-    <h2 :class="$style.title">{{ title }}</h2>
+    <div :class="$style.titleArea">
+      <NcButton v-if="showBack"
+                :title="backTitle || t('mobilesheetsmanager', 'Back to songs')"
+                :aria-label="backTitle || t('mobilesheetsmanager', 'Back to songs')"
+                @click="emit('back')">
+        <template #icon>
+          <ArrowLeftIcon :size="20" />
+        </template>
+      </NcButton>
+      <h2 :class="$style.title">{{ title }}</h2>
+    </div>
     <div :class="$style.actions">
       <slot />
       <NcButton v-if="filterBarVisible !== undefined"
@@ -47,6 +57,7 @@ import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
+import ArrowLeftIcon from 'vue-material-design-icons/ArrowLeft.vue'
 import PlusIcon from 'vue-material-design-icons/Plus.vue'
 import UploadIcon from 'vue-material-design-icons/Upload.vue'
 import FolderIcon from 'vue-material-design-icons/Folder.vue'
@@ -55,6 +66,10 @@ import FilterVariantIcon from 'vue-material-design-icons/FilterVariant.vue'
 defineProps<{
   /** Title of the view, at the left of the header bar. */
   title: string
+  /** Whether to show a back button to the left of the title. */
+  showBack?: boolean
+  /** Accessible label/tooltip for the back button. */
+  backTitle?: string
   /** Label of the view's create button; the button is hidden when unset. */
   createLabel?: string
   /** Label of the view's import button; the button is hidden when unset. */
@@ -66,6 +81,8 @@ defineProps<{
 }>()
 
 const emit = defineEmits<{
+  /** The back button was pressed. */
+  back: []
   /** The view's create button was pressed. */
   create: []
   /** The view's import button was pressed. */
@@ -87,6 +104,14 @@ const emit = defineEmits<{
   border-bottom: 1px solid var(--color-border);
   flex-wrap: wrap;
   min-width: 0;
+}
+
+.titleArea {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
 }
 
 .title {

@@ -39,6 +39,7 @@ const props = withDefaults(
 		books?: Book[]
 		collections?: Collection[]
 		artists?: Artist[]
+		hideHeader?: boolean
 	}>(),
 	{
 		song: null,
@@ -47,6 +48,7 @@ const props = withDefaults(
 		books: () => [],
 		collections: () => [],
 		artists: () => [],
+		hideHeader: false,
 	},
 )
 
@@ -506,11 +508,18 @@ watch(isEditing, (editing) => {
 		renderSelectedFile()
 	}
 })
+
+defineExpose({
+	openInExternalViewer,
+	promptDelete: () => { isDeleteDialogOpen.value = true },
+	startEditing: () => { isEditing.value = true },
+	selectedFile,
+})
 </script>
 
 <template>
 	<div :class="$style.container">
-		<header v-if="song" :class="$style.header">
+		<header v-if="song && !hideHeader" :class="$style.header">
 			<div :class="$style.headerTop">
 				<NcButton
 					:title="t('mobilesheetsmanager', 'Back to songs')"
@@ -553,7 +562,7 @@ watch(isEditing, (editing) => {
 				</div>
 			</div>
 
-			<div v-if="!isEditing && (songComposers.length > 0 || songBooks.length > 0 || songCollections.length > 0)" :class="$style.metadata">
+			<div v-if="!isEditing && (songComposers.length > 0 || songBooks.length > 0 || songCollections.length > 0 || songArtists.length > 0)" :class="$style.metadata">
 				<div v-if="songComposers.length > 0" :class="$style.metaItem">
 					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Composer:') }}</span>
 					<span>{{ songComposers.map((c) => c.name).join(', ') }}</span>
@@ -572,6 +581,26 @@ watch(isEditing, (editing) => {
 				</div>
 			</div>
 		</header>
+
+		<!-- Metadata bar when header is integrated into top bar -->
+		<div v-if="song && hideHeader && !isEditing && (songComposers.length > 0 || songBooks.length > 0 || songCollections.length > 0 || songArtists.length > 0)" :class="$style.metadata">
+			<div v-if="songComposers.length > 0" :class="$style.metaItem">
+				<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Composer:') }}</span>
+				<span>{{ songComposers.map((c) => c.name).join(', ') }}</span>
+			</div>
+			<div v-if="songBooks.length > 0" :class="$style.metaItem">
+				<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Book:') }}</span>
+				<span>{{ songBooks.map((b) => b.title).join(', ') }}</span>
+			</div>
+			<div v-if="songCollections.length > 0" :class="$style.metaItem">
+				<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Collection:') }}</span>
+				<span>{{ songCollections.map((c) => c.name).join(', ') }}</span>
+			</div>
+			<div v-if="songArtists.length > 0" :class="$style.metaItem">
+				<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Artist:') }}</span>
+				<span>{{ songArtists.map((a) => a.name).join(', ') }}</span>
+			</div>
+		</div>
 
 		<!-- Song Editor View -->
 		<SongEditor
