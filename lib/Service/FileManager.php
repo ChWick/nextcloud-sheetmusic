@@ -557,6 +557,22 @@ class FileManager {
 		}
 
 		if (!$userFolder->nodeExists($sourceRelative)) {
+			if ($userFolder->nodeExists($targetRelative)) {
+				$targetNode = $userFolder->get($targetRelative);
+				$facts = MobileSheetsFileFacts::fromNode($targetNode);
+				$this->songMapper->updateFile($databasePath, $file->id, $target->webdav, $facts);
+				$hashCodes?->updatePath($source->webdav, $target->webdav);
+
+				return $this->logEntry(
+					$song,
+					$file,
+					sprintf('Linked to existing target file at "%s"', $targetRelative),
+					MobileSheetsFileLogEntry::LEVEL_INFO,
+					MobileSheetsFileLogEntry::CODE_PATH_MOVED,
+					$this->nodeIdOfStoredFile($target->webdav, $user),
+				);
+			}
+
 			throw new SyncException(MobileSheetsFileLogEntry::CODE_SOURCE_MISSING, sprintf(
 				'Cannot regenerate file %d: source "%s" does not exist',
 				$file->id,
