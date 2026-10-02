@@ -55,7 +55,7 @@ class ApiController extends OCSController {
 
 		$libService = $libraryService ?? new LibraryService($libraryMapper, $songMapper, $rootFolder, $logger, $librarySync);
 		$pathResolver = new MobileSheetsPathResolver($rootFolder);
-		$integritySvc = $libraryIntegrityService ?? new LibraryIntegrityService($libService, $songMapper, $fileManager, $rootFolder, $pathResolver);
+		$integritySvc = $libraryIntegrityService ?? new LibraryIntegrityService($libService, $songMapper, $fileManager, $rootFolder, $pathResolver, $logger);
 		$fileSvc = $songFileService ?? new SongFileService($libService, $songMapper, $fileManager, $rootFolder, $logger);
 		$sngService = $songService ?? new SongService($libService, $songMapper, $fileSvc, $fileManager, $logger);
 		$entService = $entityService ?? new EntityService($libService, $songMapper, $logger);

@@ -50,7 +50,8 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$targetFolder->method('nodeExists')->willReturn(false);
 		$targetFolder->method('getDirectoryListing')->willReturn([]);
 
-		$service = new LibraryIntegrityService($libraryService, $songMapper, $fileManager, $rootFolder, $pathResolver);
+		$logger = $this->createMock(\Psr\Log\LoggerInterface::class);
+		$service = new LibraryIntegrityService($libraryService, $songMapper, $fileManager, $rootFolder, $pathResolver, $logger);
 		$issues = $service->checkIntegrity(1, 'user1');
 
 		self::assertCount(1, $issues);

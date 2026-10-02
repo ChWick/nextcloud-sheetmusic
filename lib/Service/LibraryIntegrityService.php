@@ -14,6 +14,7 @@ use OCA\MobileSheetsManager\Db\SongMapper;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\Files\Node;
+use Psr\Log\LoggerInterface;
 
 class LibraryIntegrityService {
 	public function __construct(
@@ -22,6 +23,7 @@ class LibraryIntegrityService {
 		private FileManager $fileManager,
 		private IRootFolder $rootFolder,
 		private MobileSheetsPathResolver $pathResolver,
+		private LoggerInterface $logger,
 	) {
 	}
 
@@ -166,7 +168,7 @@ class LibraryIntegrityService {
 
 		if ($issueType === IntegrityIssue::TYPE_INVALID_NAMING_RULE && $songId !== null) {
 			['databasePath' => $databasePath, 'targetFolder' => $targetFolder] = $this->fileManager->libraryContext($libraryId, $user);
-			$hashCodes = MobileSheetsHashCodesFile::forDatabase($databasePath);
+			$hashCodes = MobileSheetsHashCodesFile::forDatabase($databasePath, $this->logger);
 
 			$this->fileManager->regenerateSongFilePaths($songId, $user, $targetFolder, $databasePath, $hashCodes);
 			$hashCodes?->save();
@@ -176,7 +178,7 @@ class LibraryIntegrityService {
 
 		if ($issueType === IntegrityIssue::TYPE_DUPLICATE_FILE_PATH && $songId !== null) {
 			['databasePath' => $databasePath, 'targetFolder' => $targetFolder] = $this->fileManager->libraryContext($libraryId, $user);
-			$hashCodes = MobileSheetsHashCodesFile::forDatabase($databasePath);
+			$hashCodes = MobileSheetsHashCodesFile::forDatabase($databasePath, $this->logger);
 
 			$this->fileManager->regenerateSongFilePaths($songId, $user, $targetFolder, $databasePath, $hashCodes);
 			$hashCodes?->save();
