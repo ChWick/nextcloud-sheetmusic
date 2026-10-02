@@ -42,9 +42,10 @@ class LibraryIntegrityService {
 		['databasePath' => $databasePath, 'targetFolder' => $targetFolder] = $this->fileManager->libraryContext($libraryId, $user);
 
 		$songs = $this->songMapper->findSongs($databasePath);
+		$targetFolderPath = (string) $targetFolder->getPath();
 
 		$issues = [];
-		$referencedRelativePaths = []; // relativePath => list<array{songId: int, fileId: int}>
+		$referencedRelativePaths = []; // relativeToTarget => list<array{songId: int, songTitle: string, fileId: int}>
 
 		foreach ($songs as $song) {
 			foreach ($song->files as $file) {
@@ -63,8 +64,16 @@ class LibraryIntegrityService {
 					continue;
 				}
 
-				$relative = $this->pathResolver->relativeToUserFolder($pathObj->internal, $user);
-				if ($relative === null || !$targetFolder->nodeExists($relative)) {
+				// Compute path relative to the library target folder
+				$internalPath = $pathObj->internal;
+				$relativeToTarget = null;
+				if ($internalPath === $targetFolderPath) {
+					$relativeToTarget = '';
+				} elseif (str_starts_with($internalPath, $targetFolderPath . '/')) {
+					$relativeToTarget = substr($internalPath, strlen($targetFolderPath) + 1);
+				}
+
+				if ($relativeToTarget === null || !$targetFolder->nodeExists($relativeToTarget)) {
 					$issues[] = new IntegrityIssue(
 						type: IntegrityIssue::TYPE_MISSING_FILE,
 						severity: IntegrityIssue::SEVERITY_ERROR,
@@ -72,18 +81,18 @@ class LibraryIntegrityService {
 						songId: $song->id,
 						songTitle: $song->title,
 						fileId: $file->id,
-						path: $file->path,
+						path: $relativeToTarget ?? $file->path,
 						fixable: false,
 					);
 				} else {
-					$referencedRelativePaths[$relative][] = [
+					$referencedRelativePaths[$relativeToTarget][] = [
 						'songId' => $song->id,
 						'songTitle' => $song->title,
 						'fileId' => $file->id,
 					];
 				}
 
-				// Check naming rule compliance
+				// Check naming rule compliance against relative path in target folder
 				try {
 					$expectedRelative = createTargetPath(
 						$song,
@@ -92,7 +101,7 @@ class LibraryIntegrityService {
 						fileCountForExtension($song, $file),
 					);
 
-					if ($relative !== null && strtolower(ltrim($relative, '/')) !== strtolower(ltrim($expectedRelative, '/'))) {
+					if ($relativeToTarget !== null && strtolower(ltrim($relativeToTarget, '/')) !== strtolower(ltrim($expectedRelative, '/'))) {
 						$issues[] = new IntegrityIssue(
 							type: IntegrityIssue::TYPE_INVALID_NAMING_RULE,
 							severity: IntegrityIssue::SEVERITY_WARNING,
@@ -100,7 +109,7 @@ class LibraryIntegrityService {
 							songId: $song->id,
 							songTitle: $song->title,
 							fileId: $file->id,
-							path: $file->path,
+							path: $relativeToTarget,
 							suggestedPath: $expectedRelative,
 							fixable: true,
 						);
@@ -130,7 +139,7 @@ class LibraryIntegrityService {
 		}
 
 		// Scan folder for orphan files (files in storage not in DB)
-		$this->scanOrphans($targetFolder, $referencedRelativePaths, $user, $issues);
+		$this->scanOrphans($targetFolder, $targetFolderPath, $referencedRelativePaths, $issues);
 
 		return $issues;
 	}
@@ -173,13 +182,16 @@ class LibraryIntegrityService {
 	 * @param array<string, mixed> $referencedRelativePaths
 	 * @param list<IntegrityIssue> $issues
 	 */
-	private function scanOrphans(Folder $folder, array $referencedRelativePaths, \OCP\IUser $user, array &$issues): void {
+	private function scanOrphans(Folder $folder, string $targetFolderPath, array $referencedRelativePaths, array &$issues): void {
 		$nodes = $folder->getDirectoryListing();
 		foreach ($nodes as $node) {
 			if ($node instanceof Folder) {
-				$this->scanOrphans($node, $referencedRelativePaths, $user, $issues);
+				$this->scanOrphans($node, $targetFolderPath, $referencedRelativePaths, $issues);
 			} elseif ($node instanceof Node) {
-				$relative = $this->pathResolver->relativeToUserFolder($node->getPath(), $user);
+				$nodePath = $node->getPath();
+				$relativeToTarget = str_starts_with($nodePath, $targetFolderPath . '/')
+					? substr($nodePath, strlen($targetFolderPath) + 1)
+					: $node->getName();
 				$filename = $node->getName();
 
 				// Ignore database file and hash codes file
@@ -187,12 +199,12 @@ class LibraryIntegrityService {
 					continue;
 				}
 
-				if ($relative !== null && !isset($referencedRelativePaths[$relative])) {
+				if (!isset($referencedRelativePaths[$relativeToTarget])) {
 					$issues[] = new IntegrityIssue(
 						type: IntegrityIssue::TYPE_ORPHAN_FILE,
 						severity: IntegrityIssue::SEVERITY_WARNING,
 						message: sprintf('File "%s" exists in library storage but is not linked to any song.', $filename),
-						path: $relative,
+						path: $relativeToTarget,
 						fixable: false,
 					);
 				}

@@ -95,16 +95,6 @@ return [
 			'verb' => 'DELETE',
 		],
 		[
-			'name' => 'Api#getIntegrity',
-			'url' => '/api/libraries/{id}/integrity',
-			'verb' => 'GET',
-		],
-		[
-			'name' => 'Api#fixIntegrityIssue',
-			'url' => '/api/libraries/{id}/integrity/fix',
-			'verb' => 'POST',
-		],
-		[
 			'name' => 'Api#createSignature',
 			'url' => '/api/signatures',
 			'verb' => 'POST',
