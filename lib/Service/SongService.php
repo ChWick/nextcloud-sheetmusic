@@ -478,7 +478,20 @@ class SongService {
 				foreach ($issues as $issue) {
 					if ($issue->type === \OCA\MobileSheetsManager\Service\IntegrityIssue::TYPE_DUPLICATE_FILE_PATH) {
 						$issueSongIds = $issue->details['songIds'] ?? [];
+						$this->logger->warning('Integrity audit found TYPE_DUPLICATE_FILE_PATH during resolveBothSongs', [
+							'libraryId' => $libraryId,
+							'songAId' => $songAId,
+							'songBId' => $songBId,
+							'issueSongIds' => $issueSongIds,
+							'filePath' => $issue->details['path'] ?? null,
+						]);
 						if (in_array($songAId, $issueSongIds, true) && in_array($songBId, $issueSongIds, true)) {
+							$this->logger->error('Conflict cannot be resolved: Song A and Song B still share duplicate file path', [
+								'libraryId' => $libraryId,
+								'songAId' => $songAId,
+								'songBId' => $songBId,
+								'issueDetails' => $issue->details,
+							]);
 							return ['error' => 'Conflict cannot be resolved: Song A and Song B still share the same physical file or path in storage. Adapt titles or detach shared files.'];
 						}
 					}
