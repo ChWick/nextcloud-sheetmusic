@@ -54,10 +54,12 @@ const props = withDefaults(
 		libraryData: LibraryData
 		isMerging?: boolean
 		initialMode?: MergeMode
+		error?: string
 	}>(),
 	{
 		isMerging: false,
 		initialMode: 'merge',
+		error: '',
 	},
 )
 
@@ -429,6 +431,15 @@ function submit() {
 				{{ t('mobilesheetsmanager', 'Keep both songs in your library as separate entries. Adapt titles, metadata, or detach files to resolve path conflicts.') }}
 			</template>
 		</p>
+
+		<!-- Server Error Banner -->
+		<div v-if="error" :class="$style.conflictWarning">
+			<AlertIcon :size="20" />
+			<div :class="$style.warningText">
+				<strong>{{ t('mobilesheetsmanager', 'Error') }}</strong>
+				<p>{{ error }}</p>
+			</div>
+		</div>
 
 		<!-- Mode 2 Conflict Warning Banner -->
 		<div v-if="wouldCollide" :class="$style.conflictWarning">

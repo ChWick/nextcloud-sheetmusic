@@ -239,6 +239,7 @@ function openSong(entry: FileLogEntry | number) {
 			:library-data="libraryData"
 			:is-merging="isMerging"
 			:initial-mode="initialMergeMode"
+			:error="integrityError"
 			@merge="executeMerge"
 			@resolve-both="executeResolveBoth" />
 	</div>
