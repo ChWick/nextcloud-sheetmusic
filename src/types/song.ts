@@ -52,18 +52,6 @@ export type FileLogLevel = components['schemas']['FileLogLevel']
 export type FileLogEntry = components['schemas']['FileLogEntry']
 export type SongPrefill = components['schemas']['SongPrefill']
 
-export interface IntegrityIssue {
-	type: 'missing_file' | 'orphan_file' | 'duplicate_file_path' | 'invalid_naming_rule'
-	severity: 'error' | 'warning' | 'info'
-	message: string
-	songId?: number | null
-	songTitle?: string | null
-	fileId?: number | null
-	path?: string | null
-	suggestedPath?: string | null
-	fixable: boolean
-}
-
 /** The entity kinds a song can carry, i.e. the filters of the song view. */
 export type EntityType = 'composers' | 'artists' | 'books' | 'collections' | 'genres' | 'keys' | 'customgroups' | 'years' | 'signatures' | 'sourcetypes'
 
