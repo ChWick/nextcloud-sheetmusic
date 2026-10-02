@@ -63,26 +63,12 @@ async function runSync() {
 	}
 }
 
-/** Run integrity check audit */
-async function auditIntegrity() {
-	isIntegrityDialogOpen.value = true
-	isCheckingIntegrity.value = true
-	integrityError.value = ''
-	integrityIssues.value = []
-
-	try {
-		const response = await apiGet(`/api/libraries/${props.selectedLibrary}/integrity`)
-		integrityIssues.value = response.data.ocs.data.issues ?? []
-	} catch (error) {
-		console.error('Failed to audit library integrity:', error)
-		const serverMessage = axios.isAxiosError(error)
-			? error.response?.data?.ocs?.data?.message
-			: undefined
-		integrityError.value = serverMessage
-			?? t('mobilesheetsmanager', 'Failed to audit library integrity. Please try again.')
-	} finally {
-		isCheckingIntegrity.value = false
-	}
+/** Redirect to the full-page Integrity Audit view */
+function auditIntegrity() {
+	router.push({
+		name: 'LibraryView',
+		params: { library: String(props.selectedLibrary), view: 'integrity' },
+	})
 }
 
 /** Automatically fix a specific integrity issue */
