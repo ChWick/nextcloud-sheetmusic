@@ -94,14 +94,25 @@ class LibraryIntegrityService {
 
 				// Check naming rule compliance against relative path in target folder
 				try {
-					$expectedRelative = createTargetPath(
+					$validTargetPaths = createTargetPaths(
 						$song,
 						getFileExtension($file->path),
 						fileIndexOf($song, $file),
 						fileCountForExtension($song, $file),
 					);
 
-					if ($relativeToTarget !== null && strtolower(ltrim($relativeToTarget, '/')) !== strtolower(ltrim($expectedRelative, '/'))) {
+					$isCompliant = false;
+					if ($relativeToTarget !== null) {
+						$normalizedRelative = strtolower(ltrim($relativeToTarget, '/'));
+						foreach ($validTargetPaths as $validPath) {
+							if ($normalizedRelative === strtolower(ltrim($validPath, '/'))) {
+								$isCompliant = true;
+								break;
+							}
+						}
+					}
+
+					if ($relativeToTarget !== null && !$isCompliant) {
 						$issues[] = new IntegrityIssue(
 							type: IntegrityIssue::TYPE_INVALID_NAMING_RULE,
 							severity: IntegrityIssue::SEVERITY_WARNING,
@@ -110,7 +121,7 @@ class LibraryIntegrityService {
 							songTitle: $song->title,
 							fileId: $file->id,
 							path: $relativeToTarget,
-							suggestedPath: $expectedRelative,
+							suggestedPath: $validTargetPaths[0],
 							fixable: true,
 						);
 					}

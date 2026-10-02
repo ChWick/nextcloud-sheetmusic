@@ -74,42 +74,68 @@ function fileCountForExtension(MobileSheetsSong $song, MobileSheetsFile $file): 
 	return $count;
 }
 
-function createWithComposerOrArtist(MobileSheetsSong $song, string $ext, string $filePrefix = ''): string {
-	$composer = $song->composers[0]->name ?? '';
-	$artist = $song->artists[0]->name ?? '';
+/**
+ * @return list<string> all valid target paths for a song given its composers, artists, books, and collections
+ */
+function createTargetPaths(
+	MobileSheetsSong $song,
+	string $ext,
+	?int $fileIndex = null,
+	int $fileCount = 1,
+): array {
+	$filePrefix = fileIndexPrefix($fileIndex, $fileCount);
 
-	if ($composer === '' && $artist === '') {
-		throw new NoNamingRuleException('No composer or artist');
+	$compArtists = [];
+	foreach ($song->composers as $c) {
+		if ($c->name !== '') {
+			$compArtists[] = $c->name;
+		}
+	}
+	if (empty($compArtists)) {
+		foreach ($song->artists as $a) {
+			if ($a->name !== '') {
+				$compArtists[] = $a->name;
+			}
+		}
 	}
 
-	$compArtist = $composer !== '' ? $composer : $artist;
-	$book = $song->books[0]->title ?? '';
-	$collection = $song->collections[0]->name ?? '';
+	$books = array_values(array_filter(array_map(static fn($b) => $b->title, $song->books), static fn($t) => $t !== ''));
+	$collections = array_values(array_filter(array_map(static fn($c) => $c->name, $song->collections), static fn($n) => $n !== ''));
 
-	if ($book !== '') {
-		$folder = $compArtist . DIRECTORY_SEPARATOR . "{$compArtist} - {$book}";
-		$fileName = "{$compArtist} - {$book} - {$song->title}";
-	} elseif ($collection !== '') {
-		$folder = $compArtist . DIRECTORY_SEPARATOR . "{$compArtist} - {$collection}";
-		$fileName = "{$compArtist} - {$collection} - {$song->title}";
-	} else {
-		$folder = $compArtist;
-		$fileName = "{$compArtist} - {$song->title}";
+	$paths = [];
+
+	if (!empty($compArtists)) {
+		foreach ($compArtists as $compArtist) {
+			if (!empty($books)) {
+				foreach ($books as $book) {
+					$folder = $compArtist . DIRECTORY_SEPARATOR . "{$compArtist} - {$book}";
+					$fileName = "{$compArtist} - {$book} - {$song->title}";
+					$paths[] = $folder . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext;
+				}
+			} elseif (!empty($collections)) {
+				foreach ($collections as $collection) {
+					$folder = $compArtist . DIRECTORY_SEPARATOR . "{$compArtist} - {$collection}";
+					$fileName = "{$compArtist} - {$collection} - {$song->title}";
+					$paths[] = $folder . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext;
+				}
+			} else {
+				$folder = $compArtist;
+				$fileName = "{$compArtist} - {$song->title}";
+				$paths[] = $folder . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext;
+			}
+		}
+	} elseif (!empty($collections)) {
+		foreach ($collections as $collection) {
+			$fileName = "{$collection} - {$song->title}";
+			$paths[] = $collection . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext;
+		}
 	}
 
-	return $folder . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext;
-}
-
-function createWithCollection(MobileSheetsSong $song, string $ext, string $filePrefix = ''): string {
-	$collection = $song->collections[0]->name ?? '';
-
-	if ($collection === '') {
-		throw new NoNamingRuleException('No collection');
+	if (empty($paths)) {
+		throw new NoNamingRuleException('No composer, artist, or collection');
 	}
 
-	$fileName = "{$collection} - {$song->title}";
-
-	return $collection . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext;
+	return array_values(array_unique($paths));
 }
 
 function createTargetPath(
@@ -118,20 +144,9 @@ function createTargetPath(
 	?int $fileIndex = null,
 	int $fileCount = 1,
 ): string {
-	$filePrefix = fileIndexPrefix($fileIndex, $fileCount);
+	$paths = createTargetPaths($song, $ext, $fileIndex, $fileCount);
 
-	$composer = $song->composers[0]->name ?? '';
-	$artist = $song->artists[0]->name ?? '';
-
-	if ($composer !== '' || $artist !== '') {
-		return createWithComposerOrArtist($song, $ext, $filePrefix);
-	}
-
-	if (($song->collections[0]->name ?? '') !== '') {
-		return createWithCollection($song, $ext, $filePrefix);
-	}
-
-	throw new NoNamingRuleException('No composer, artist, or collection');
+	return $paths[0];
 }
 
 class FileManager {
