@@ -69,6 +69,7 @@ export const mockSongs = [
 		years: [mockYears[1]],
 		signatures: [mockSignatures[0]],
 		sourceTypes: [mockSourceTypes[0]],
+		notes: [{ id: 1, songId: 5, note: 'Play allegro con brio', title: 'Tempo note' }],
 		files: [{ id: 50, path: '/dav/files/admin/Noten/Beethoven - Symphony 5.pdf' }],
 	},
 	{
@@ -84,6 +85,7 @@ export const mockSongs = [
 		years: [mockYears[0]],
 		signatures: [mockSignatures[1]],
 		sourceTypes: [mockSourceTypes[1]],
+		notes: [],
 		files: [{ id: 51, path: '/dav/files/admin/Noten/Mozart - Requiem.pdf' }],
 	},
 ]

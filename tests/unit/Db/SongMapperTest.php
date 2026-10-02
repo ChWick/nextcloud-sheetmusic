@@ -56,10 +56,13 @@ final class SongMapperTest extends TestCase {
 		$database->exec('CREATE TABLE SignatureSongs(Id INTEGER PRIMARY KEY, SignatureId INTEGER, SongId INTEGER)');
 		$database->exec('CREATE TABLE SourceTypes(Id INTEGER PRIMARY KEY, Type VARCHAR(255), DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
 		$database->exec('CREATE TABLE SourceTypeSongs(Id INTEGER PRIMARY KEY, SourceTypeId INTEGER, SongId INTEGER)');
+		$database->exec('CREATE TABLE SongNotes(Id INTEGER PRIMARY KEY, SongId INTEGER, Note TEXT, Title VARCHAR(255) DEFAULT \'\', DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
+		$database->exec('CREATE INDEX song_notes_id_idx ON SongNotes(SongId)');
 		$database->exec('CREATE TABLE MetronomeSettings(Id INTEGER PRIMARY KEY, SongId INTEGER, Bpm INTEGER)');
 
 		$database->exec("INSERT INTO Songs (Id, Title, SortTitle, Stars, Difficulty, Duration, Keywords, Custom, Custom2) VALUES (1, 'Zebra', 'Zebra', 5, 3, 240, 'jazz, fast', 'Key C', 'Arrangement A'), (2, 'Alpha', 'Alpha', 0, 0, 0, '', '', '')");
 		$database->exec("INSERT INTO Files (Id, SongId, Path) VALUES (1, 1, '/remote.php/dav/files/admin/Noten/Zebra.pdf'), (2, 2, '/remote.php/dav/files/admin/Noten/Alpha.pdf')");
+		$database->exec("INSERT INTO SongNotes (Id, SongId, Note, Title) VALUES (1, 1, 'Practice coda slowly', 'Rehearsal')");
 
 		$database->exec("INSERT INTO Composer (Id, Name) VALUES (10, 'Beethoven'), (20, 'Bach')");
 		$database->exec('INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (10, 1), (20, 2)');
@@ -1012,6 +1015,52 @@ final class SongMapperTest extends TestCase {
 		self::assertTrue($deleted);
 		$song = $mapper->findSong($this->databasePath, $songId);
 		self::assertSame([], $song->sourceTypes);
+	}
+
+	public function testSongNoteOperations(): void {
+		$mapper = $this->mapper();
+
+		// Check preloaded note for song 1
+		$song1 = $mapper->findSong($this->databasePath, 1);
+		self::assertNotNull($song1);
+		self::assertCount(1, $song1->notes);
+		self::assertSame('Practice coda slowly', $song1->notes[0]->note);
+		self::assertSame('Rehearsal', $song1->notes[0]->title);
+
+		// Create new song with notes
+		$songId = $mapper->createSong($this->databasePath, 'Note Test Song', notes: [
+			['note' => 'Intro in 4/4', 'title' => 'Form'],
+			'Solo section improvising',
+		]);
+		$song = $mapper->findSong($this->databasePath, $songId);
+		self::assertNotNull($song);
+		self::assertCount(2, $song->notes);
+		self::assertSame('Intro in 4/4', $song->notes[0]->note);
+		self::assertSame('Form', $song->notes[0]->title);
+		self::assertSame('Solo section improvising', $song->notes[1]->note);
+
+		// Update notes (keep first note, update second note, add third note)
+		$firstNoteId = $song->notes[0]->id;
+		$secondNoteId = $song->notes[1]->id;
+
+		$mapper->updateSong($this->databasePath, $songId, 'Note Test Song', notes: [
+			['id' => $firstNoteId, 'note' => 'Intro in 4/4', 'title' => 'Form'],
+			['id' => $secondNoteId, 'note' => 'Solo on D minor scale', 'title' => 'Solo'],
+			['note' => 'Ending with ritardando', 'title' => 'Outro'],
+		]);
+
+		$updatedSong = $mapper->findSong($this->databasePath, $songId);
+		self::assertNotNull($updatedSong);
+		self::assertCount(3, $updatedSong->notes);
+		self::assertSame('Solo on D minor scale', $updatedSong->notes[1]->note);
+		self::assertSame('Solo', $updatedSong->notes[1]->title);
+		self::assertSame('Ending with ritardando', $updatedSong->notes[2]->note);
+
+		// Remove notes by passing empty array
+		$mapper->updateSong($this->databasePath, $songId, 'Note Test Song', notes: []);
+		$clearedSong = $mapper->findSong($this->databasePath, $songId);
+		self::assertNotNull($clearedSong);
+		self::assertCount(0, $clearedSong->notes);
 	}
 
 	/**

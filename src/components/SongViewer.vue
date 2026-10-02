@@ -128,6 +128,8 @@ const songSignatures = computed(() => props.song?.signatures ?? [])
 
 const songSourceTypes = computed(() => props.song?.sourceTypes ?? [])
 
+const songNotes = computed(() => props.song?.notes ?? [])
+
 const songFiles = computed(() => props.song?.files ?? [])
 
 /** The file of the active tab, falling back to the first file of the song. */
@@ -587,7 +589,7 @@ defineExpose({
 				</div>
 			</div>
 
-			<div v-if="!isEditing && (songComposers.length > 0 || songBooks.length > 0 || songCollections.length > 0 || songArtists.length > 0 || songGenres.length > 0 || songKeys.length > 0 || songCustomGroups.length > 0 || songYears.length > 0 || songSignatures.length > 0 || songSourceTypes.length > 0 || song.stars || song.difficulty || song.duration || song.keywords || song.custom || song.custom2)" :class="$style.metadata">
+			<div v-if="!isEditing && (songComposers.length > 0 || songBooks.length > 0 || songCollections.length > 0 || songArtists.length > 0 || songGenres.length > 0 || songKeys.length > 0 || songCustomGroups.length > 0 || songYears.length > 0 || songSignatures.length > 0 || songSourceTypes.length > 0 || songNotes.length > 0 || song.stars || song.difficulty || song.duration || song.keywords || song.custom || song.custom2)" :class="$style.metadata">
 				<div v-if="songComposers.length > 0" :class="$style.metaItem">
 					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Composer:') }}</span>
 					<span>{{ songComposers.map((c) => c.name).join(', ') }}</span>
@@ -627,6 +629,10 @@ defineExpose({
 				<div v-if="songSourceTypes.length > 0" :class="$style.metaItem">
 					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Source Type:') }}</span>
 					<span>{{ songSourceTypes.map((st) => st.name).join(', ') }}</span>
+				</div>
+				<div v-if="songNotes.length > 0" :class="$style.metaItem">
+					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Notes:') }}</span>
+					<span>{{ songNotes.map((n) => n.title ? `${n.title}: ${n.note}` : n.note).join(' | ') }}</span>
 				</div>
 				<div v-if="song.stars" :class="$style.metaItem">
 					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Rating:') }}</span>

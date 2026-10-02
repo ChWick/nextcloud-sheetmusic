@@ -325,6 +325,7 @@ describe('SongEditor.vue', () => {
 				keywords: '',
 				custom: '',
 				custom2: '',
+				notes: [],
 			},
 		)
 
@@ -399,6 +400,7 @@ describe('SongEditor.vue', () => {
 				keywords: 'allegro, vivace',
 				custom: 'Opus 5',
 				custom2: 'No. 2',
+				notes: [],
 			},
 		)
 	})

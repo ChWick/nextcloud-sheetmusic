@@ -155,6 +155,18 @@ const keywords = ref<string>(props.song?.keywords ?? '')
 const custom = ref<string>(props.song?.custom ?? '')
 const custom2 = ref<string>(props.song?.custom2 ?? '')
 
+const notes = ref<Array<{ id?: number, note: string, title?: string }>>(
+	(props.song?.notes ?? []).map((n) => ({ id: n.id, note: n.note, title: n.title ?? '' })),
+)
+
+function addNote() {
+	notes.value.push({ note: '', title: '' })
+}
+
+function removeNote(index: number) {
+	notes.value.splice(index, 1)
+}
+
 function getServerFiles(song: Song | null): SongFile[] {
 	return song?.files ? [...song.files] : []
 }
@@ -195,6 +207,7 @@ watch(
 		keywords.value = newSong?.keywords ?? ''
 		custom.value = newSong?.custom ?? ''
 		custom2.value = newSong?.custom2 ?? ''
+		notes.value = (newSong?.notes ?? []).map((n) => ({ id: n.id, note: n.note, title: n.title ?? '' }))
 
 		// A refresh in place keeps the deletions staged in this session: the editor stays
 		// open now, and the file list of the refreshed song is what the displayed paths
@@ -597,6 +610,7 @@ async function saveSong(closeAfter: boolean) {
 			keywords: keywords.value.trim(),
 			custom: custom.value.trim(),
 			custom2: custom2.value.trim(),
+			notes: notes.value.filter((n) => n.note.trim() !== '' || (n.title && n.title.trim() !== '')),
 		}
 		const response = existingSong
 			? await apiPost('/api/songs/{id}', payload, { pathParams: { id: existingSong.id } })
@@ -868,6 +882,37 @@ async function saveSong(closeAfter: boolean) {
 				</div>
 			</div>
 
+			<div :class="$style.notesSection">
+				<label :class="$style.label">{{ t('mobilesheetsmanager', 'Notes') }}</label>
+				<div v-for="(noteItem, index) in notes" :key="index" :class="$style.noteRow">
+					<NcTextField
+						v-model="noteItem.title"
+						:placeholder="t('mobilesheetsmanager', 'Title (optional)')"
+						:class="$style.noteTitleInput" />
+					<NcTextField
+						v-model="noteItem.note"
+						:placeholder="t('mobilesheetsmanager', 'Note text…')"
+						:class="$style.noteTextInput" />
+					<NcButton
+						type="button"
+						variant="tertiary"
+						:title="t('mobilesheetsmanager', 'Remove note')"
+						:aria-label="t('mobilesheetsmanager', 'Remove note')"
+						@click="removeNote(index)">
+						<template #icon>
+							<CloseIcon :size="16" />
+						</template>
+					</NcButton>
+				</div>
+				<NcButton
+					type="button"
+					variant="secondary"
+					size="small"
+					@click="addNote">
+					{{ t('mobilesheetsmanager', 'Add Note') }}
+				</NcButton>
+			</div>
+
 			<div :class="$style.fileSection">
 				<label :class="$style.label">{{ t('mobilesheetsmanager', 'Attached Files') }}</label>
 
@@ -1091,5 +1136,27 @@ async function saveSong(closeAfter: boolean) {
 .success {
 	color: var(--color-success);
 	margin: 8px 0;
+}
+
+.notesSection {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	margin-top: 8px;
+}
+
+.noteRow {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.noteTitleInput {
+	flex: 0 0 160px;
+}
+
+.noteTextInput {
+	flex: 1;
+	min-width: 0;
 }
 </style>

@@ -59,6 +59,7 @@ class SongService {
 		string $custom = '',
 		string $custom2 = '',
 		string $sortTitle = '',
+		?array $notes = null,
 	): ?array {
 		$title = trim($title);
 		if ($title === '') {
@@ -91,6 +92,7 @@ class SongService {
 				$custom,
 				$custom2,
 				$sortTitle,
+				$notes,
 			);
 
 			return ['createdSongId' => $songId] + $this->songMapper->findLibraryData($databasePath);
@@ -127,6 +129,7 @@ class SongService {
 		string $custom = '',
 		string $custom2 = '',
 		string $sortTitle = '',
+		?array $notes = null,
 	): ?array {
 		if ($title === '') {
 			return null;
@@ -159,6 +162,7 @@ class SongService {
 				$custom,
 				$custom2,
 				$sortTitle,
+				$notes,
 			);
 			$this->songFileService->syncSongFileMetadata($user, $databasePath, $songId);
 
