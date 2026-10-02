@@ -313,23 +313,6 @@ class SongMapper {
 			}
 		}
 
-		$songNotes = [];
-		if (in_array('SongNotes', $existingTables, true)) {
-			$stmt = $database->query('SELECT Id, SongId, Note, Title, DateCreated, LastModified FROM SongNotes ORDER BY Id ASC');
-			if ($stmt !== false) {
-				while ($row = $stmt->fetch()) {
-					$songNotes[(int)$row['SongId']][] = new MobileSheetsSongNote(
-						(int)$row['Id'],
-						(int)$row['SongId'],
-						(string)$row['Note'],
-						isset($row['Title']) ? (string)$row['Title'] : '',
-						isset($row['DateCreated']) && $row['DateCreated'] !== null ? (int)$row['DateCreated'] : null,
-						isset($row['LastModified']) && $row['LastModified'] !== null ? (int)$row['LastModified'] : null,
-					);
-				}
-			}
-		}
-
 		$songCols = $this->columnNames($database, 'Songs');
 		$hasLastModified = isset($songCols['lastmodified']);
 		$createdCol = isset($songCols['datecreated']) ? 'DateCreated' : (isset($songCols['creationdate']) ? 'CreationDate' : null);
@@ -391,7 +374,6 @@ class SongMapper {
 					$this->resolveEntities($songYears[$songId] ?? [], $yearsById),
 					$this->resolveEntities($songSignatures[$songId] ?? [], $signaturesById),
 					$this->resolveEntities($songSourceTypes[$songId] ?? [], $sourceTypesById),
-					$songNotes[$songId] ?? [],
 					isset($row['LastModified']) && $row['LastModified'] !== null ? (int)$row['LastModified'] : null,
 					isset($row['DateCreated']) && $row['DateCreated'] !== null ? (int)$row['DateCreated'] : null,
 					isset($row['Stars']) ? (int)$row['Stars'] : 0,
@@ -625,7 +607,6 @@ class SongMapper {
 				array_values($song['years']),
 				array_values($song['signatures']),
 				array_values($song['sourceTypes']),
-				$this->notesOfSong($databasePath, $song['id']),
 				$song['lastModified'],
 				$song['dateCreated'],
 				$song['stars'] ?? 0,
@@ -671,38 +652,6 @@ class SongMapper {
 	}
 
 	/**
-	 * @return list<MobileSheetsSongNote>
-	 */
-	public function notesOfSong(string $databasePath, int $songId): array {
-		$database = new PDO('sqlite:' . $databasePath, options: [
-			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-		]);
-
-		$tablesStatement = $database->query("SELECT name FROM sqlite_master WHERE type='table' AND name='SongNotes'");
-		if ($tablesStatement === false || empty($tablesStatement->fetchAll())) {
-			return [];
-		}
-
-		$statement = $database->prepare('SELECT Id, SongId, Note, Title, DateCreated, LastModified FROM SongNotes WHERE SongId = :songId ORDER BY Id ASC');
-		$statement->execute([':songId' => $songId]);
-
-		$notes = [];
-		while ($row = $statement->fetch()) {
-			$notes[] = new MobileSheetsSongNote(
-				(int)$row['Id'],
-				(int)$row['SongId'],
-				(string)$row['Note'],
-				isset($row['Title']) ? (string)$row['Title'] : '',
-				isset($row['DateCreated']) && $row['DateCreated'] !== null ? (int)$row['DateCreated'] : null,
-				isset($row['LastModified']) && $row['LastModified'] !== null ? (int)$row['LastModified'] : null,
-			);
-		}
-
-		return $notes;
-	}
-
-	/**
 	 * @return list<MobileSheetsFile>
 	 */
 	public function filesOfSong(string $databasePath, int $songId): array {
@@ -741,7 +690,6 @@ class SongMapper {
 	 * @param list<int> $yearIds
 	 * @param list<int> $signatureIds
 	 * @param list<int> $sourceTypeIds
-	 * @param list<array{id?: int, note?: string, title?: string}|string>|null $notes
 	 * @return int id of the created song
 	 */
 	public function createSong(
@@ -764,7 +712,6 @@ class SongMapper {
 		string $custom = '',
 		string $custom2 = '',
 		string $sortTitle = '',
-		?array $notes = null,
 	): int {
 		$database = new PDO('sqlite:' . $databasePath, options: [
 			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
@@ -803,7 +750,6 @@ class SongMapper {
 			$custom,
 			$custom2,
 			$sortTitle,
-			$notes,
 		);
 
 		return $songId;
@@ -820,7 +766,6 @@ class SongMapper {
 	 * @param list<int> $yearIds
 	 * @param list<int> $signatureIds
 	 * @param list<int> $sourceTypeIds
-	 * @param list<array{id?: int, note?: string, title?: string}|string>|null $notes
 	 */
 	public function updateSong(
 		string $databasePath,
@@ -843,7 +788,6 @@ class SongMapper {
 		string $custom = '',
 		string $custom2 = '',
 		string $sortTitle = '',
-		?array $notes = null,
 	): void {
 		$database = new PDO('sqlite:' . $databasePath, options: [
 			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
@@ -950,7 +894,7 @@ class SongMapper {
 			}
 		}
 
-		// Update CustomGroups
+		// Update Custom Groups
 		if (in_array('CustomGroupSongs', $existingTables, true)) {
 			$delStmt = $database->prepare('DELETE FROM CustomGroupSongs WHERE SongId = :songId');
 			$delStmt->execute([':songId' => $songId]);
@@ -1003,70 +947,6 @@ class SongMapper {
 					':sourceTypeId' => $sourceTypeId,
 					':songId' => $songId,
 				]);
-			}
-		}
-
-		// Update SongNotes
-		if (in_array('SongNotes', $existingTables, true) && $notes !== null) {
-			$existingNotesStmt = $database->prepare('SELECT Id FROM SongNotes WHERE SongId = :songId');
-			$existingNotesStmt->execute([':songId' => $songId]);
-			$existingNoteIds = array_map('intval', $existingNotesStmt->fetchAll(PDO::FETCH_COLUMN));
-
-			$keptNoteIds = [];
-			$insStmt = $database->prepare('INSERT INTO SongNotes (SongId, Note, Title, DateCreated, LastModified) VALUES (:songId, :note, :title, :dateCreated, :lastModified)');
-			$updStmt = $database->prepare('UPDATE SongNotes SET Note = :note, Title = :title, LastModified = :lastModified WHERE Id = :id AND SongId = :songId');
-
-			$now = time();
-			foreach ($notes as $noteData) {
-				if (is_string($noteData)) {
-					$noteText = trim($noteData);
-					if ($noteText === '') {
-						continue;
-					}
-					$insStmt->execute([
-						':songId' => $songId,
-						':note' => $noteText,
-						':title' => '',
-						':dateCreated' => $now,
-						':lastModified' => $now,
-					]);
-					$keptNoteIds[] = (int)$database->lastInsertId();
-				} elseif (is_array($noteData)) {
-					$noteText = isset($noteData['note']) ? (string)$noteData['note'] : '';
-					$noteTitle = isset($noteData['title']) ? (string)$noteData['title'] : '';
-					if (trim($noteText) === '' && trim($noteTitle) === '') {
-						continue;
-					}
-
-					$noteId = isset($noteData['id']) ? (int)$noteData['id'] : 0;
-					if ($noteId > 0 && in_array($noteId, $existingNoteIds, true)) {
-						$updStmt->execute([
-							':note' => $noteText,
-							':title' => $noteTitle,
-							':lastModified' => $now,
-							':id' => $noteId,
-							':songId' => $songId,
-						]);
-						$keptNoteIds[] = $noteId;
-					} else {
-						$dateCreated = isset($noteData['dateCreated']) && (int)$noteData['dateCreated'] > 0 ? (int)$noteData['dateCreated'] : $now;
-						$insStmt->execute([
-							':songId' => $songId,
-							':note' => $noteText,
-							':title' => $noteTitle,
-							':dateCreated' => $dateCreated,
-							':lastModified' => $now,
-						]);
-						$keptNoteIds[] = (int)$database->lastInsertId();
-					}
-				}
-			}
-
-			$notesToDelete = array_diff($existingNoteIds, $keptNoteIds);
-			if (!empty($notesToDelete)) {
-				$inClause = implode(',', array_fill(0, count($notesToDelete), '?'));
-				$delStmt = $database->prepare('DELETE FROM SongNotes WHERE SongId = ? AND Id IN (' . $inClause . ')');
-				$delStmt->execute(array_merge([$songId], array_values($notesToDelete)));
 			}
 		}
 	}

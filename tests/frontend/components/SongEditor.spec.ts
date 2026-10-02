@@ -326,6 +326,7 @@ describe('SongEditor.vue', () => {
 				custom: '',
 				custom2: '',
 				notes: [],
+				tempos: [],
 			},
 		)
 
@@ -401,6 +402,7 @@ describe('SongEditor.vue', () => {
 				custom: 'Opus 5',
 				custom2: 'No. 2',
 				notes: [],
+				tempos: [],
 			},
 		)
 	})
