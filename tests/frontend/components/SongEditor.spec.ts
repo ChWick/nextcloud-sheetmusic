@@ -8,6 +8,7 @@ import SongEditor from '../../../src/components/SongEditor.vue'
 vi.mock('@nextcloud/axios', () => ({
 	default: {
 		post: vi.fn(),
+		delete: vi.fn(),
 	},
 }))
 
@@ -409,5 +410,49 @@ describe('SongEditor.vue', () => {
 				audioFiles: [],
 			},
 		)
+	})
+
+	it('prompts and executes song deletion when delete button is clicked', async () => {
+		const mockDelete = vi.mocked(axios.delete)
+		mockDelete.mockResolvedValueOnce({
+			data: { ocs: { data: { songs: [] } } },
+		})
+
+		const wrapper = mount(SongEditor, {
+			props: {
+				song: mockExistingSong,
+				libraryId: 1,
+				composers: mockComposers,
+				books: mockBooks,
+				collections: mockCollections,
+				artists: mockArtists,
+			},
+			...globalStubs,
+		})
+
+		// Click the delete button in editor actions
+		const deleteBtn = wrapper.findAll('button').find((b) => b.attributes('aria-label') === 'Delete song')
+		expect(deleteBtn?.exists()).toBe(true)
+		await deleteBtn?.trigger('click')
+
+		// NcDialog modal should open
+		expect(wrapper.find('.nc-dialog-stub').exists()).toBe(true)
+
+		// Click confirm delete in dialog
+		const confirmBtn = wrapper.findAll('.nc-dialog-stub button').find((b) => b.text().includes('Delete song'))
+		await confirmBtn?.trigger('click')
+
+		expect(axios.delete).toHaveBeenCalledWith(
+			'/ocs/v2.php/apps/mobilesheetsmanager/api/songs/5',
+			{
+				params: {
+					libraryId: 1,
+					deleteFiles: true,
+				},
+			},
+		)
+
+		expect(wrapper.emitted('deleted')).toBeTruthy()
+		expect(wrapper.emitted('deleted')?.[0]).toEqual([{ songs: [] }, 5])
 	})
 })

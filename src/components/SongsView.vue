@@ -72,6 +72,7 @@
                 :source-types="sourceTypes"
                 @saved="handleSaved"
                 @updated="handleLibraryDataUpdate"
+                @deleted="handleDeleted"
                 @cancel="goBackToSongs" />
     <SongViewer
       v-else

@@ -6,17 +6,19 @@ import axios from '@nextcloud/axios'
 import { FilePickerClosed, getFilePickerBuilder } from '@nextcloud/dialogs'
 import { translate as t } from '@nextcloud/l10n'
 import { generateOcsUrl } from '@nextcloud/router'
-import NcButton from '@nextcloud/vue/components/NcButton'
+import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
+import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
-import { apiPost } from '../api/client'
+import { apiDelete, apiPost } from '../api/client'
 import { describeRequestFailure } from '../utils/api'
 import { openFileExternally } from '../utils/file'
 import { computed, ref, watch } from 'vue'
 import CheckIcon from 'vue-material-design-icons/Check.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 import ContentSaveOutlineIcon from 'vue-material-design-icons/ContentSaveOutline.vue'
+import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import FolderIcon from 'vue-material-design-icons/Folder.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import UploadIcon from 'vue-material-design-icons/Upload.vue'
@@ -65,6 +67,8 @@ const emit = defineEmits<{
 	saved: [data: LibraryData, songId?: number]
 	/** The song's data changed and the editor stays open, e.g. after saving without closing. */
 	updated: [data: LibraryData]
+	/** The song was deleted. */
+	deleted: [data: LibraryData | undefined, songId: number]
 	cancel: []
 }>()
 
@@ -676,6 +680,32 @@ async function saveSong(closeAfter: boolean) {
 		isSaving.value = false
 	}
 }
+
+const isDeleteDialogOpen = ref(false)
+const isDeletingSong = ref(false)
+const deleteFiles = ref(true)
+const deleteError = ref('')
+
+async function confirmDeleteSong() {
+	if (!props.song || props.libraryId < 0) return
+	const songId = props.song.id
+	isDeletingSong.value = true
+	deleteError.value = ''
+
+	try {
+		const response = await apiDelete('/api/songs/{id}', {
+			pathParams: { id: songId },
+			queryParams: { libraryId: props.libraryId, deleteFiles: deleteFiles.value },
+		})
+		isDeleteDialogOpen.value = false
+		const data = response.data?.ocs?.data as LibraryData | undefined
+		emit('deleted', data, songId)
+	} catch (error) {
+		deleteError.value = describeRequestFailure(error, t('mobilesheetsmanager', 'Failed to delete the song.'))
+	} finally {
+		isDeletingSong.value = false
+	}
+}
 </script>
 
 <template>
@@ -955,6 +985,18 @@ async function saveSong(closeAfter: boolean) {
 
 			<div :class="$style.actions">
 				<NcButton
+					v-if="!isNewSong"
+					type="button"
+					variant="error"
+					:disabled="isSaving || isDeletingSong"
+					:title="t('mobilesheetsmanager', 'Delete song')"
+					:aria-label="t('mobilesheetsmanager', 'Delete song')"
+					@click="isDeleteDialogOpen = true">
+					<template #icon>
+						<DeleteIcon :size="20" />
+					</template>
+				</NcButton>
+				<NcButton
 					:disabled="isSaving"
 					:title="t('mobilesheetsmanager', 'Cancel')"
 					:aria-label="t('mobilesheetsmanager', 'Cancel')"
@@ -997,6 +1039,39 @@ async function saveSong(closeAfter: boolean) {
 			v-model:action="attachAction"
 			:filename="selectedNextcloudNode?.basename"
 			@confirm="stageAttachNextcloudFile" />
+
+		<!-- Delete Song Confirmation Modal -->
+		<NcDialog
+			v-if="isDeleteDialogOpen"
+			:name="t('mobilesheetsmanager', 'Delete song')"
+			@close="isDeleteDialogOpen = false">
+			<p>{{ t('mobilesheetsmanager', 'Delete "{title}" from this library?', { title: song?.title ?? '' }) }}</p>
+			<p>{{ t('mobilesheetsmanager', 'The song and everything pointing at it is removed from the MobileSheets database.') }}</p>
+			<NcCheckboxRadioSwitch v-model="deleteFiles" type="checkbox">
+				{{ t('mobilesheetsmanager', 'Delete all attached files') }}
+			</NcCheckboxRadioSwitch>
+			<p v-if="deleteFiles">
+				{{ t('mobilesheetsmanager', 'The {count} attached file(s) are moved to the Nextcloud trash bin, so they can be restored from there.', { count: currentFiles.length }) }}
+			</p>
+			<p v-else>
+				{{ t('mobilesheetsmanager', 'The {count} attached file(s) are kept in your Nextcloud files.', { count: currentFiles.length }) }}
+			</p>
+			<p v-if="deleteError" :class="$style.error" role="alert">{{ deleteError }}</p>
+			<div :class="$style.dialogActions">
+				<NcButton @click="isDeleteDialogOpen = false">
+					{{ t('mobilesheetsmanager', 'Cancel') }}
+				</NcButton>
+				<NcButton
+					variant="error"
+					:disabled="isDeletingSong"
+					@click="confirmDeleteSong">
+					<template v-if="isDeletingSong">
+						<NcLoadingIcon :size="16" />
+					</template>
+					{{ t('mobilesheetsmanager', 'Delete song') }}
+				</NcButton>
+			</div>
+		</NcDialog>
 	</div>
 </template>
 
@@ -1118,5 +1193,12 @@ async function saveSong(closeAfter: boolean) {
 .success {
 	color: var(--color-success);
 	margin: 8px 0;
+}
+
+.dialogActions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 12px;
+	margin-top: 24px;
 }
 </style>
