@@ -369,7 +369,8 @@ class LibraryIntegrityService {
 					continue;
 				}
 
-				if (!isset($referencedRelativePaths[$relativeToTarget])) {
+				$cleanRelative = strtolower(ltrim($relativeToTarget, '/'));
+				if (!isset($referencedRelativePaths[$cleanRelative])) {
 					$issues[] = new IntegrityIssue(
 						type: IntegrityIssue::TYPE_ORPHAN_FILE,
 						severity: IntegrityIssue::SEVERITY_WARNING,
