@@ -313,6 +313,24 @@ class SongMapper {
 			}
 		}
 
+		$songBookmarks = [];
+		if (in_array('Bookmarks', $existingTables, true)) {
+			$cols = $this->columnNames($database, 'Bookmarks');
+			$hasShowInLibrary = isset($cols['showinlibrary']);
+			$stmt = $database->query('SELECT Id, SongId, Name, PageNum' . ($hasShowInLibrary ? ', ShowInLibrary' : '') . ' FROM Bookmarks ORDER BY PageNum ASC, Name ASC');
+			if ($stmt !== false) {
+				while ($row = $stmt->fetch()) {
+					$songBookmarks[(int)$row['SongId']][] = new MobileSheetsBookmark(
+						(int)$row['Id'],
+						(int)$row['SongId'],
+						(string)$row['Name'],
+						(int)$row['PageNum'],
+						isset($row['ShowInLibrary']) ? (int)$row['ShowInLibrary'] : 0,
+					);
+				}
+			}
+		}
+
 		$songCols = $this->columnNames($database, 'Songs');
 		$hasLastModified = isset($songCols['lastmodified']);
 		$createdCol = isset($songCols['datecreated']) ? 'DateCreated' : (isset($songCols['creationdate']) ? 'CreationDate' : null);
@@ -374,6 +392,7 @@ class SongMapper {
 					$this->resolveEntities($songYears[$songId] ?? [], $yearsById),
 					$this->resolveEntities($songSignatures[$songId] ?? [], $signaturesById),
 					$this->resolveEntities($songSourceTypes[$songId] ?? [], $sourceTypesById),
+					$songBookmarks[$songId] ?? [],
 					isset($row['LastModified']) && $row['LastModified'] !== null ? (int)$row['LastModified'] : null,
 					isset($row['DateCreated']) && $row['DateCreated'] !== null ? (int)$row['DateCreated'] : null,
 					isset($row['Stars']) ? (int)$row['Stars'] : 0,
@@ -607,6 +626,7 @@ class SongMapper {
 				array_values($song['years']),
 				array_values($song['signatures']),
 				array_values($song['sourceTypes']),
+				$this->bookmarksOfSong($databasePath, $song['id']),
 				$song['lastModified'],
 				$song['dateCreated'],
 				$song['stars'] ?? 0,
@@ -675,6 +695,80 @@ class SongMapper {
 		}
 
 		return $files;
+	}
+
+	/**
+	 * @return list<MobileSheetsBookmark>
+	 */
+	public function bookmarksOfSong(string $databasePath, int $songId): array {
+		$database = new PDO('sqlite:' . $databasePath, options: [
+			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+		]);
+
+		$tablesStatement = $database->query("SELECT name FROM sqlite_master WHERE type='table'");
+		/** @var list<string> $existingTables */
+		$existingTables = $tablesStatement !== false ? $tablesStatement->fetchAll(PDO::FETCH_COLUMN) : [];
+
+		if (!in_array('Bookmarks', $existingTables, true)) {
+			return [];
+		}
+
+		$cols = $this->columnNames($database, 'Bookmarks');
+		$hasShowInLibrary = isset($cols['showinlibrary']);
+
+		$stmt = $database->prepare('SELECT Id, SongId, Name, PageNum' . ($hasShowInLibrary ? ', ShowInLibrary' : '') . ' FROM Bookmarks WHERE SongId = :songId ORDER BY PageNum ASC, Name ASC');
+		$stmt->execute([':songId' => $songId]);
+
+		$bookmarks = [];
+		while ($row = $stmt->fetch()) {
+			$bookmarks[] = new MobileSheetsBookmark(
+				(int)$row['Id'],
+				(int)$row['SongId'],
+				(string)$row['Name'],
+				(int)$row['PageNum'],
+				isset($row['ShowInLibrary']) ? (int)$row['ShowInLibrary'] : 0,
+			);
+		}
+
+		return $bookmarks;
+	}
+
+	/**
+	 * @param list<array{name: string, pageNum: int, showInLibrary?: int}> $bookmarks
+	 */
+	public function updateBookmarks(string $databasePath, int $songId, array $bookmarks): void {
+		$database = new PDO('sqlite:' . $databasePath, options: [
+			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+		]);
+
+		$tablesStatement = $database->query("SELECT name FROM sqlite_master WHERE type='table'");
+		/** @var list<string> $existingTables */
+		$existingTables = $tablesStatement !== false ? $tablesStatement->fetchAll(PDO::FETCH_COLUMN) : [];
+
+		if (!in_array('Bookmarks', $existingTables, true)) {
+			return;
+		}
+
+		$stmt = $database->prepare('DELETE FROM Bookmarks WHERE SongId = :songId');
+		$stmt->execute([':songId' => $songId]);
+
+		foreach ($bookmarks as $bm) {
+			$name = trim((string)($bm['name'] ?? ''));
+			if ($name === '') {
+				continue;
+			}
+			$pageNum = (int)($bm['pageNum'] ?? 1);
+			$showInLibrary = (int)($bm['showInLibrary'] ?? 0);
+
+			$this->insertRow($database, 'Bookmarks', [
+				'SongId' => $songId,
+				'Name' => $name,
+				'PageNum' => $pageNum,
+				'ShowInLibrary' => $showInLibrary,
+			] + $this->dateColumns($database, 'Bookmarks'));
+		}
 	}
 
 	/**

@@ -10,6 +10,7 @@ export type CustomGroup = { id: number; name: string }
 export type Year = { id: number; year: number; name: string }
 export type Signature = { id: number; name: string }
 export type SourceType = { id: number; type: string; name: string }
+export type Bookmark = { id: number; songId: number; name: string; pageNum: number; showInLibrary?: number }
 export type SongFile = components['schemas']['SongFile']
 export type Song = components['schemas']['Song'] & {
 	genres?: Genre[]
@@ -18,6 +19,7 @@ export type Song = components['schemas']['Song'] & {
 	years?: Year[]
 	signatures?: Signature[]
 	sourceTypes?: SourceType[]
+	bookmarks?: Bookmark[]
 	stars?: number
 	difficulty?: number
 	duration?: number
