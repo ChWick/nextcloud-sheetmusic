@@ -130,6 +130,8 @@ const songSourceTypes = computed(() => props.song?.sourceTypes ?? [])
 
 const songBookmarks = computed(() => props.song?.bookmarks ?? [])
 
+const songAudioFiles = computed(() => props.song?.audioFiles ?? [])
+
 const songFiles = computed(() => props.song?.files ?? [])
 
 /** The file of the active tab, falling back to the first file of the song. */
@@ -633,6 +635,10 @@ defineExpose({
 				<div v-if="songBookmarks.length > 0" :class="$style.metaItem">
 					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Bookmarks:') }}</span>
 					<span>{{ songBookmarks.map((b) => `${b.name} (p. ${b.pageNum})`).join(', ') }}</span>
+				</div>
+				<div v-if="songAudioFiles.length > 0" :class="$style.metaItem">
+					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Audio Files:') }}</span>
+					<span>{{ songAudioFiles.map((a) => a.title || a.file).join(', ') }}</span>
 				</div>
 				<div v-if="song.stars" :class="$style.metaItem">
 					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Rating:') }}</span>

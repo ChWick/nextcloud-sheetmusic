@@ -88,6 +88,7 @@ class SongController extends OCSController {
 		$custom2 = (string)$this->request->getParam('custom2', '');
 		$sortTitle = (string)$this->request->getParam('sortTitle', '');
 		$bookmarks = (array)$this->request->getParam('bookmarks', []);
+		$audioFiles = (array)$this->request->getParam('audioFiles', []);
 
 		try {
 			$result = $this->songService->createSong(
@@ -112,6 +113,7 @@ class SongController extends OCSController {
 				$custom2,
 				$sortTitle,
 				$bookmarks,
+				$audioFiles,
 			);
 
 			if ($result === null) {
@@ -165,6 +167,7 @@ class SongController extends OCSController {
 		$custom2 = (string)$this->request->getParam('custom2', '');
 		$sortTitle = (string)$this->request->getParam('sortTitle', '');
 		$bookmarks = (array)$this->request->getParam('bookmarks', []);
+		$audioFiles = (array)$this->request->getParam('audioFiles', []);
 
 		try {
 			$result = $this->songService->updateSong(
@@ -190,6 +193,7 @@ class SongController extends OCSController {
 				$custom2,
 				$sortTitle,
 				$bookmarks,
+				$audioFiles,
 			);
 
 			if ($result === null) {

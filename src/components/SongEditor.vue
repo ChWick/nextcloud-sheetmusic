@@ -161,6 +161,9 @@ const notes = ref<Array<{ id?: number, note: string, title?: string }>>(
 const bookmarks = ref<Array<{ id?: number, name: string, pageNum: number }>>(
 	(props.song?.bookmarks ?? []).map((b) => ({ id: b.id, name: b.name, pageNum: b.pageNum })),
 )
+const audioFiles = ref<Array<{ id?: number, title?: string, file: string }>>(
+	(props.song?.audioFiles ?? []).map((a) => ({ id: a.id, title: a.title, file: a.file })),
+)
 
 function getServerFiles(song: Song | null): SongFile[] {
 	return song?.files ? [...song.files] : []
@@ -205,6 +208,7 @@ watch(
 		tempo.value = newSong?.tempos?.[0]?.tempo ?? 0
 		notes.value = (newSong?.notes ?? []).map((n) => ({ id: n.id, note: n.note, title: n.title ?? '' }))
 		bookmarks.value = (newSong?.bookmarks ?? []).map((b) => ({ id: b.id, name: b.name, pageNum: b.pageNum }))
+		audioFiles.value = (newSong?.audioFiles ?? []).map((a) => ({ id: a.id, title: a.title, file: a.file }))
 
 		// A refresh in place keeps the deletions staged in this session: the editor stays
 		// open now, and the file list of the refreshed song is what the displayed paths
@@ -610,6 +614,7 @@ async function saveSong(closeAfter: boolean) {
 			notes: notes.value.filter((n) => n.note.trim() !== '' || (n.title && n.title.trim() !== '')),
 			tempos: Number(tempo.value) > 0 ? [Number(tempo.value)] : [],
 			bookmarks: bookmarks.value.filter((b) => b.name.trim() !== ''),
+			audioFiles: audioFiles.value.filter((a) => a.file.trim() !== ''),
 		}
 		const response = existingSong
 			? await apiPost('/api/songs/{id}', payload, { pathParams: { id: existingSong.id } })

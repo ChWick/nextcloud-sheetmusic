@@ -331,6 +331,24 @@ class SongMapper {
 			}
 		}
 
+		$songAudioFiles = [];
+		if (in_array('AudioFiles', $existingTables, true)) {
+			$cols = $this->columnNames($database, 'AudioFiles');
+			$titleCol = isset($cols['title']) ? 'Title' : (isset($cols['name']) ? 'Name' : 'Title');
+			$fileCol = isset($cols['file']) ? 'File' : (isset($cols['path']) ? 'Path' : 'File');
+			$stmt = $database->query('SELECT Id, SongId, ' . $titleCol . ' AS Title, ' . $fileCol . ' AS File FROM AudioFiles ORDER BY Id ASC');
+			if ($stmt !== false) {
+				while ($row = $stmt->fetch()) {
+					$songAudioFiles[(int)$row['SongId']][] = new MobileSheetsAudioFile(
+						(int)$row['Id'],
+						(int)$row['SongId'],
+						(string)($row['Title'] ?? ''),
+						(string)($row['File'] ?? ''),
+					);
+				}
+			}
+		}
+
 		$songCols = $this->columnNames($database, 'Songs');
 		$hasLastModified = isset($songCols['lastmodified']);
 		$createdCol = isset($songCols['datecreated']) ? 'DateCreated' : (isset($songCols['creationdate']) ? 'CreationDate' : null);
@@ -393,6 +411,7 @@ class SongMapper {
 					$this->resolveEntities($songSignatures[$songId] ?? [], $signaturesById),
 					$this->resolveEntities($songSourceTypes[$songId] ?? [], $sourceTypesById),
 					$songBookmarks[$songId] ?? [],
+					$songAudioFiles[$songId] ?? [],
 					isset($row['LastModified']) && $row['LastModified'] !== null ? (int)$row['LastModified'] : null,
 					isset($row['DateCreated']) && $row['DateCreated'] !== null ? (int)$row['DateCreated'] : null,
 					isset($row['Stars']) ? (int)$row['Stars'] : 0,
@@ -627,6 +646,7 @@ class SongMapper {
 				array_values($song['signatures']),
 				array_values($song['sourceTypes']),
 				$this->bookmarksOfSong($databasePath, $song['id']),
+				$this->audioFilesOfSong($databasePath, $song['id']),
 				$song['lastModified'],
 				$song['dateCreated'],
 				$song['stars'] ?? 0,
@@ -768,6 +788,78 @@ class SongMapper {
 				'PageNum' => $pageNum,
 				'ShowInLibrary' => $showInLibrary,
 			] + $this->dateColumns($database, 'Bookmarks'));
+		}
+	}
+
+	/**
+	 * @return list<MobileSheetsAudioFile>
+	 */
+	public function audioFilesOfSong(string $databasePath, int $songId): array {
+		$database = new PDO('sqlite:' . $databasePath, options: [
+			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+		]);
+
+		$tablesStatement = $database->query("SELECT name FROM sqlite_master WHERE type='table'");
+		/** @var list<string> $existingTables */
+		$existingTables = $tablesStatement !== false ? $tablesStatement->fetchAll(PDO::FETCH_COLUMN) : [];
+
+		if (!in_array('AudioFiles', $existingTables, true)) {
+			return [];
+		}
+
+		$cols = $this->columnNames($database, 'AudioFiles');
+		$titleCol = isset($cols['title']) ? 'Title' : (isset($cols['name']) ? 'Name' : 'Title');
+		$fileCol = isset($cols['file']) ? 'File' : (isset($cols['path']) ? 'Path' : 'File');
+
+		$stmt = $database->prepare('SELECT Id, SongId, ' . $titleCol . ' AS Title, ' . $fileCol . ' AS File FROM AudioFiles WHERE SongId = :songId ORDER BY Id ASC');
+		$stmt->execute([':songId' => $songId]);
+
+		$audioFiles = [];
+		while ($row = $stmt->fetch()) {
+			$audioFiles[] = new MobileSheetsAudioFile(
+				(int)$row['Id'],
+				(int)$row['SongId'],
+				(string)($row['Title'] ?? ''),
+				(string)($row['File'] ?? ''),
+			);
+		}
+
+		return $audioFiles;
+	}
+
+	/**
+	 * @param list<array{title?: string, file: string}> $audioFiles
+	 */
+	public function updateAudioFiles(string $databasePath, int $songId, array $audioFiles): void {
+		$database = new PDO('sqlite:' . $databasePath, options: [
+			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+		]);
+
+		$tablesStatement = $database->query("SELECT name FROM sqlite_master WHERE type='table'");
+		/** @var list<string> $existingTables */
+		$existingTables = $tablesStatement !== false ? $tablesStatement->fetchAll(PDO::FETCH_COLUMN) : [];
+
+		if (!in_array('AudioFiles', $existingTables, true)) {
+			return;
+		}
+
+		$stmt = $database->prepare('DELETE FROM AudioFiles WHERE SongId = :songId');
+		$stmt->execute([':songId' => $songId]);
+
+		foreach ($audioFiles as $af) {
+			$file = trim((string)($af['file'] ?? ''));
+			if ($file === '') {
+				continue;
+			}
+			$title = trim((string)($af['title'] ?? ''));
+
+			$this->insertRow($database, 'AudioFiles', [
+				'SongId' => $songId,
+				'Title' => $title !== '' ? $title : pathinfo($file, PATHINFO_FILENAME),
+				'File' => $file,
+			] + $this->dateColumns($database, 'AudioFiles'));
 		}
 	}
 

@@ -57,11 +57,13 @@ final class SongMapperTest extends TestCase {
 		$database->exec('CREATE TABLE SourceTypes(Id INTEGER PRIMARY KEY, Type VARCHAR(255), DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
 		$database->exec('CREATE TABLE SourceTypeSongs(Id INTEGER PRIMARY KEY, SourceTypeId INTEGER, SongId INTEGER)');
 		$database->exec('CREATE TABLE Bookmarks(Id INTEGER PRIMARY KEY, SongId INTEGER, Name VARCHAR(255), PageNum INTEGER, ShowInLibrary INTEGER DEFAULT 0, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
+		$database->exec('CREATE TABLE AudioFiles(Id INTEGER PRIMARY KEY, SongId INTEGER, Title VARCHAR(255), File VARCHAR(255), DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
 		$database->exec('CREATE TABLE MetronomeSettings(Id INTEGER PRIMARY KEY, SongId INTEGER, Bpm INTEGER)');
 
 		$database->exec("INSERT INTO Songs (Id, Title, SortTitle, Stars, Difficulty, Duration, Keywords, Custom, Custom2) VALUES (1, 'Zebra', 'Zebra', 5, 3, 240, 'jazz, fast', 'Key C', 'Arrangement A'), (2, 'Alpha', 'Alpha', 0, 0, 0, '', '', '')");
 		$database->exec("INSERT INTO Files (Id, SongId, Path) VALUES (1, 1, '/remote.php/dav/files/admin/Noten/Zebra.pdf'), (2, 2, '/remote.php/dav/files/admin/Noten/Alpha.pdf')");
 		$database->exec("INSERT INTO Bookmarks (Id, SongId, Name, PageNum, ShowInLibrary) VALUES (1, 1, 'Chorus', 2, 1)");
+		$database->exec("INSERT INTO AudioFiles (Id, SongId, Title, File) VALUES (1, 1, 'Audio Track', 'track1.mp3')");
 
 		$database->exec("INSERT INTO Composer (Id, Name) VALUES (10, 'Beethoven'), (20, 'Bach')");
 		$database->exec('INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (10, 1), (20, 2)');
@@ -1035,6 +1037,24 @@ final class SongMapperTest extends TestCase {
 		self::assertSame(1, $updatedBookmarks[0]->pageNum);
 		self::assertSame('Outro', $updatedBookmarks[1]->name);
 		self::assertSame(4, $updatedBookmarks[1]->pageNum);
+	}
+
+	public function testAudioFilesOfSongAndUpdateAudioFiles(): void {
+		$mapper = new SongMapper(self::createMock(LoggerInterface::class));
+
+		$audioFiles = $mapper->audioFilesOfSong($this->databasePath, 1);
+		self::assertCount(1, $audioFiles);
+		self::assertSame('Audio Track', $audioFiles[0]->title);
+		self::assertSame('track1.mp3', $audioFiles[0]->file);
+
+		$mapper->updateAudioFiles($this->databasePath, 1, [
+			['title' => 'Backing Track', 'file' => 'backing.mp3'],
+		]);
+
+		$updatedAudioFiles = $mapper->audioFilesOfSong($this->databasePath, 1);
+		self::assertCount(1, $updatedAudioFiles);
+		self::assertSame('Backing Track', $updatedAudioFiles[0]->title);
+		self::assertSame('backing.mp3', $updatedAudioFiles[0]->file);
 	}
 
 	/**
