@@ -149,7 +149,7 @@ describe('SongMergeDialog.vue', () => {
 		expect(wrapper.text()).toContain('Keep both songs in your library as separate entries')
 
 		const updatedButtons = wrapper.findAll('button')
-		const saveBothBtn = updatedButtons.find(b => b.text().includes('Save Both Songs'))
+		const saveBothBtn = updatedButtons.find(b => b.text().includes('Save & Resolve Conflicts'))
 		expect(saveBothBtn).toBeDefined()
 		await saveBothBtn?.trigger('click')
 

@@ -155,4 +155,17 @@ class SongFileMapper extends AbstractDatabaseMapper {
 		$updateStmt = $database->prepare($sql);
 		$updateStmt->execute($params);
 	}
+
+	public function isPathReferencedByOtherSong(string $databasePath, string $filePath, int $songId): bool {
+		$database = $this->openConnection($databasePath);
+
+		if (!$this->hasTable($database, 'Files')) {
+			return false;
+		}
+
+		$stmt = $database->prepare('SELECT COUNT(*) FROM Files WHERE Path = :path AND SongId != :songId');
+		$stmt->execute([':path' => $filePath, ':songId' => $songId]);
+		return ((int)$stmt->fetchColumn()) > 0;
+	}
 }
+

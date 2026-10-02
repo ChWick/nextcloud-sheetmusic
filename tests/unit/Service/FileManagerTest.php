@@ -74,6 +74,9 @@ final class FileManagerTest extends TestCase {
 	/** @var array<string, int> relative path => assigned node id */
 	private array $nodeIds = [];
 
+	/** @var array<string, int> webdav path => song id referencing it */
+	private array $referencedPaths = [];
+
 	private Folder $libraryFolder;
 	private FileManager $fileManager;
 	private IRootFolder $rootFolder;
@@ -115,6 +118,7 @@ final class FileManagerTest extends TestCase {
 			}
 		}
 		$this->temporaryFiles = [];
+		$this->referencedPaths = [];
 	}
 
 	/** A FileManager wired to the fake tree and the given SongMapper. */
@@ -134,6 +138,11 @@ final class FileManagerTest extends TestCase {
 		$songMapper->method('updateFile')->willReturnCallback(
 			function (string $databasePath, int $fileId, string $newPath): void {
 				$this->updates[] = ['fileId' => $fileId, 'path' => $newPath];
+			},
+		);
+		$songMapper->method('isPathReferencedByOtherSong')->willReturnCallback(
+			function (string $databasePath, string $filePath, int $songId): bool {
+				return isset($this->referencedPaths[$filePath]) && $this->referencedPaths[$filePath] !== $songId;
 			},
 		);
 
@@ -345,6 +354,27 @@ final class FileManagerTest extends TestCase {
 		self::assertCount(1, $this->updates);
 		self::assertSame('/remote.php/dav/files/admin/Noten/Jazz/Jazz - Take Five.pdf', $this->updates[0]['path']);
 		self::assertStringContainsString('Linked to existing target file', $entry->message);
+	}
+
+	public function testDuplicatesFileWhenTargetIsReferencedByAnotherSong(): void {
+		$this->files = [
+			'Noten/Jazz/Jazz - Take Five.pdf' => 'TARGET_PAYLOAD',
+		];
+		$this->folders = ['Noten' => true, 'Noten/Jazz' => true, 'Noten/source' => true];
+		// Target path is referenced by song 10 (different song ID than our test song)
+		$this->referencedPaths['/remote.php/dav/files/admin/Noten/Jazz/Jazz - Take Five.pdf'] = 10;
+
+		$entry = $this->fileManager->regenerateFilePath(
+			$this->collectionSong(),
+			new MobileSheetsFile(7, '/remote.php/dav/files/admin/Noten/source/MissingOldFile.pdf'),
+			$this->user(),
+			$this->libraryFolder,
+			'/tmp/library.db',
+		);
+
+		self::assertCount(1, $this->updates);
+		self::assertSame('/remote.php/dav/files/admin/Noten/Jazz/Jazz - Take Five (2).pdf', $this->updates[0]['path']);
+		self::assertStringContainsString('Copied file for separate song', $entry->message);
 	}
 
 	public function testThrowsWhenTheStoredPathBelongsToAnotherUser(): void {
@@ -1445,6 +1475,11 @@ final class FileManagerTest extends TestCase {
 			$this->files[$targetRelative] = $this->files[$relative];
 			unset($this->files[$relative]);
 
+			return $this->fakeFileNode($targetRelative);
+		});
+
+		$node->method('copy')->willReturnCallback(function (string $targetRelative) use ($relative): Node {
+			$this->files[$targetRelative] = $this->files[$relative] ?? 'COPY_PAYLOAD';
 			return $this->fakeFileNode($targetRelative);
 		});
 

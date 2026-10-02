@@ -1,4 +1,4 @@
-import type { FileLogEntry } from '../../../src/types/song'
+import type { FileLogEntry, IntegrityIssue, LibraryData } from '../../../src/types/song'
 
 import axios from '@nextcloud/axios'
 import { mount } from '@vue/test-utils'
@@ -7,6 +7,7 @@ import FilesView from '../../../src/components/FilesView.vue'
 
 vi.mock('@nextcloud/axios', () => ({
 	default: {
+		get: vi.fn(),
 		post: vi.fn(),
 		isAxiosError: vi.fn((err: any) => err?.isAxiosError === true),
 	},
@@ -151,5 +152,79 @@ describe('FilesView.vue', () => {
 			params: { library: '1', view: 'songs' },
 			query: { song: '12', edit: '1' },
 		})
+	})
+
+	it('executes resolveBoth with file detaches, song updates, and sync recheck', async () => {
+		vi.mocked(axios.post).mockResolvedValue({
+			data: { ocs: { data: { success: true, issues: [] } } },
+		})
+
+		const wrapper = mount(FilesView, {
+			props: { selectedLibrary: 2 },
+			...globalStubs,
+		})
+
+		// Directly invoke executeResolveBoth logic via component methods
+		const vm = wrapper.vm as any
+		await vm.executeResolveBoth({
+			songA: {
+				id: 60,
+				title: 'Nachspiel A',
+				composerIds: [1],
+				bookIds: [],
+				collectionIds: [],
+				artistIds: [],
+				genreIds: [],
+				keyIds: [],
+				keywords: 'organ',
+				sortTitle: 'Nachspiel A',
+				detachFileIds: [207],
+			},
+			songB: {
+				id: 61,
+				title: 'Nachspiel B',
+				composerIds: [1],
+				bookIds: [],
+				collectionIds: [],
+				artistIds: [],
+				genreIds: [],
+				keyIds: [],
+				keywords: 'organ',
+				sortTitle: 'Nachspiel B',
+				detachFileIds: [],
+			},
+		})
+
+		// Verify API calls
+		// 1. File detach for song A
+		expect(axios.post).toHaveBeenCalledWith(
+			'/ocs/v2.php/apps/mobilesheetsmanager/api/songs/60/file/207/delete',
+			undefined,
+			{ params: { libraryId: 2 } },
+		)
+
+		// 2. Song A update
+		expect(axios.post).toHaveBeenCalledWith(
+			'/ocs/v2.php/apps/mobilesheetsmanager/api/songs/60',
+			expect.objectContaining({
+				libraryId: 2,
+				title: 'Nachspiel A',
+			}),
+		)
+
+		// 3. Song B update
+		expect(axios.post).toHaveBeenCalledWith(
+			'/ocs/v2.php/apps/mobilesheetsmanager/api/songs/61',
+			expect.objectContaining({
+				libraryId: 2,
+				title: 'Nachspiel B',
+			}),
+		)
+
+		// 4. Library sync recheck
+		expect(axios.post).toHaveBeenCalledWith(
+			'/ocs/v2.php/apps/mobilesheetsmanager/api/sync-library',
+			{ libraryId: 2 },
+		)
 	})
 })

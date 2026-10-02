@@ -165,14 +165,14 @@ async function executeResolveBoth(payload: {
 		// 1. Detach marked files for Song A
 		for (const fileId of payload.songA.detachFileIds) {
 			await apiPost(`/api/songs/${payload.songA.id}/file/${fileId}/delete`, undefined, {
-				queryParams: { libraryId: props.selectedLibrary },
+				config: { params: { libraryId: props.selectedLibrary } },
 			} as any)
 		}
 
 		// 2. Detach marked files for Song B
 		for (const fileId of payload.songB.detachFileIds) {
 			await apiPost(`/api/songs/${payload.songB.id}/file/${fileId}/delete`, undefined, {
-				queryParams: { libraryId: props.selectedLibrary },
+				config: { params: { libraryId: props.selectedLibrary } },
 			} as any)
 		}
 

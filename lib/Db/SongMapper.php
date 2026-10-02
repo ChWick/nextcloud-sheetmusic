@@ -1321,4 +1321,9 @@ class SongMapper extends AbstractDatabaseMapper {
 	public function deleteEntity(string $databasePath, string $entityType, int $entityId): bool {
 		return $this->entityMapper->deleteEntity($databasePath, $entityType, $entityId);
 	}
+
+	public function isPathReferencedByOtherSong(string $databasePath, string $filePath, int $songId): bool {
+		return $this->fileMapper->isPathReferencedByOtherSong($databasePath, $filePath, $songId);
+	}
 }
+

@@ -543,6 +543,32 @@ class FileManager {
 				$candRel = ($targetBaseRelative === '' ? '' : rtrim($targetBaseRelative, '/') . '/') . $cand;
 				if ($userFolder->nodeExists($candRel)) {
 					$candTarget = $this->pathResolver->forTarget($candRel, $user, $userFolder->getPath());
+
+					// If candidate target file is ALREADY referenced by another song in DB,
+					// duplicate the file so this song gets its own distinct file copy.
+					if ($this->songMapper->isPathReferencedByOtherSong($databasePath, $candTarget->webdav, $song->id)) {
+						$existingNode = $userFolder->get($candRel);
+						if ($existingNode instanceof \OCP\Files\File) {
+							$targetRelative = $this->uniqueRelativePath($userFolder, $candRel, '');
+							$this->ensureParentFolder($userFolder, $targetRelative);
+							$copiedNode = $existingNode->copy($targetRelative);
+							$copiedTarget = $this->pathResolver->forTarget($targetRelative, $user, $userFolder->getPath());
+							$facts = MobileSheetsFileFacts::fromNode($copiedNode);
+							$this->songMapper->updateFile($databasePath, $file->id, $copiedTarget->webdav, $facts);
+							$hashCodes?->updatePath($source->webdav, $copiedTarget->webdav);
+
+							return $this->logEntry(
+								$song,
+								$file,
+								sprintf('Copied file for separate song to "%s"', $targetRelative),
+								MobileSheetsFileLogEntry::LEVEL_INFO,
+								MobileSheetsFileLogEntry::CODE_PATH_MOVED,
+								$this->nodeIdOfStoredFile($copiedTarget->webdav, $user),
+							);
+						}
+						continue;
+					}
+
 					$targetNode = $userFolder->get($candRel);
 					$facts = MobileSheetsFileFacts::fromNode($targetNode);
 					$this->songMapper->updateFile($databasePath, $file->id, $candTarget->webdav, $facts);
