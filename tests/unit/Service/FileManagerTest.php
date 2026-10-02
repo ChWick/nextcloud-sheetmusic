@@ -254,6 +254,22 @@ final class FileManagerTest extends TestCase {
 		self::assertSame('PAYLOAD', $this->files['Noten/Jazz/Jazz - Take Five.pdf']);
 	}
 
+	public function testDuplicatesSharedFileWhenAlreadyAtTargetPath(): void {
+		$this->files = ['Noten/Jazz/Jazz - Take Five.pdf' => 'PAYLOAD'];
+		$this->folders = ['Noten' => true, 'Noten/Jazz' => true];
+		$webdavPath = $this->sourceWebdav('Noten/Jazz/Jazz - Take Five.pdf');
+		// Mark path as referenced by song ID 99 (different from song 1)
+		$this->referencedPaths[$webdavPath] = 99;
+
+		$this->regenerate($this->collectionSong(), 'Noten/Jazz/Jazz - Take Five.pdf');
+
+		self::assertArrayHasKey('Noten/Jazz/Jazz - Take Five (2).pdf', $this->files);
+		self::assertSame(
+			[['fileId' => 7, 'path' => '/remote.php/dav/files/admin/Noten/Jazz/Jazz - Take Five (2).pdf']],
+			$this->updates,
+		);
+	}
+
 	/**
 	 * The naming rules are built from composer, book, collection and title, so two songs
 	 * that share a title map onto the same target. The file of the other song must

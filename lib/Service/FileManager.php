@@ -600,6 +600,29 @@ class FileManager {
 		$target = $this->pathResolver->forTarget($targetRelative, $user, $userFolder->getPath());
 
 		if ($source->internal === $target->internal) {
+			// Check if this path is shared/referenced by another song in DB
+			if ($this->songMapper->isPathReferencedByOtherSong($databasePath, $source->webdav, $song->id)) {
+				$existingNode = $userFolder->get($sourceRelative);
+				if ($existingNode instanceof \OCP\Files\File) {
+					$targetRelative = $this->uniqueRelativePath($userFolder, $sourceRelative, '');
+					$this->ensureParentFolder($userFolder, $targetRelative);
+					$copiedNode = $existingNode->copy($targetRelative);
+					$copiedTarget = $this->pathResolver->forTarget($targetRelative, $user, $userFolder->getPath());
+					$facts = MobileSheetsFileFacts::fromNode($copiedNode);
+					$this->songMapper->updateFile($databasePath, $file->id, $copiedTarget->webdav, $facts);
+					$hashCodes?->updatePath($source->webdav, $copiedTarget->webdav);
+
+					return $this->logEntry(
+						$song,
+						$file,
+						sprintf('Copied file for separate song to "%s"', $targetRelative),
+						MobileSheetsFileLogEntry::LEVEL_INFO,
+						MobileSheetsFileLogEntry::CODE_PATH_MOVED,
+						$this->nodeIdOfStoredFile($copiedTarget->webdav, $user),
+					);
+				}
+			}
+
 			// Already in place. This also covers a file that already carries the counter
 			// this run would produce, so running twice does not rename it again.
 			$this->logger->debug('MobileSheets file already at its target path', [
