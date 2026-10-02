@@ -43,6 +43,7 @@ class SongNoteMapper extends AbstractDatabaseMapper {
 				(int)$row['Id'],
 				(int)$row['SongId'],
 				(string)($row['Note'] ?? ''),
+				(string)($row['Title'] ?? ''),
 				isset($row['DateCreated']) && $row['DateCreated'] !== null ? (int)$row['DateCreated'] : null,
 				isset($row['LastModified']) && $row['LastModified'] !== null ? (int)$row['LastModified'] : null,
 			);
