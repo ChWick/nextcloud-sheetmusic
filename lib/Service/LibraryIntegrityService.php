@@ -99,7 +99,8 @@ class LibraryIntegrityService {
 							$targetExists = true;
 							if (!$sourceExists) {
 								// Mark target file as referenced by song so it is not flagged as an orphan
-								$referencedRelativePaths[$cleanValid][] = [
+								$cleanKey = strtolower(ltrim($cleanValid, '/'));
+								$referencedRelativePaths[$cleanKey][] = [
 									'songId' => $song->id,
 									'songTitle' => $song->title,
 									'fileId' => $file->id,
@@ -111,7 +112,8 @@ class LibraryIntegrityService {
 				}
 
 				if ($sourceExists) {
-					$referencedRelativePaths[$relativeToTarget][] = [
+					$cleanRel = strtolower(ltrim($relativeToTarget, '/'));
+					$referencedRelativePaths[$cleanRel][] = [
 						'songId' => $song->id,
 						'songTitle' => $song->title,
 						'fileId' => $file->id,

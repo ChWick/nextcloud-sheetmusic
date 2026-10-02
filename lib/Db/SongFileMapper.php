@@ -163,8 +163,9 @@ class SongFileMapper extends AbstractDatabaseMapper {
 			return false;
 		}
 
-		$stmt = $database->prepare('SELECT COUNT(*) FROM Files WHERE Path = :path AND SongId != :songId');
-		$stmt->execute([':path' => $filePath, ':songId' => $songId]);
+		$cleanPath = strtolower(ltrim($filePath, '/'));
+		$stmt = $database->prepare('SELECT COUNT(*) FROM Files WHERE LOWER(LTRIM(Path, "/")) = :path AND SongId != :songId');
+		$stmt->execute([':path' => $cleanPath, ':songId' => $songId]);
 		return ((int)$stmt->fetchColumn()) > 0;
 	}
 }
