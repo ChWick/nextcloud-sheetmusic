@@ -13,149 +13,38 @@ use OCA\MobileSheetsManager\Service\MobileSheetsFileFacts;
 use PDO;
 use Psr\Log\LoggerInterface;
 
-class SongMapper {
-	/** Source of a file that lives in the library folder. */
-	private const FILE_SOURCE_LOCAL = 1;
-
+class SongMapper extends AbstractDatabaseMapper {
 	/** Type constants for MobileSheets Files.Type column */
-	public const FILE_TYPE_OTHER = 0;
-	public const FILE_TYPE_PDF = 1;
-	public const FILE_TYPE_IMAGE = 2;
-	public const FILE_TYPE_TEXT = 3;
-	public const FILE_TYPE_ABC = 4;
+	public const FILE_TYPE_OTHER = SongFileMapper::FILE_TYPE_OTHER;
+	public const FILE_TYPE_PDF = SongFileMapper::FILE_TYPE_PDF;
+	public const FILE_TYPE_IMAGE = SongFileMapper::FILE_TYPE_IMAGE;
+	public const FILE_TYPE_TEXT = SongFileMapper::FILE_TYPE_TEXT;
+	public const FILE_TYPE_ABC = SongFileMapper::FILE_TYPE_ABC;
 
-	/** Width/Height of a file whose dimensions were not measured. */
-	private const FILE_DIMENSION_UNKNOWN = -1;
-
-	/**
-	 * Map a file path's extension to MobileSheets Files.Type.
-	 */
-	public static function determineFileType(string $path): int {
-		$extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
-		return match ($extension) {
-			'pdf' => self::FILE_TYPE_PDF,
-			'png', 'jpg', 'jpeg', 'bmp', 'gif', 'webp', 'svg' => self::FILE_TYPE_IMAGE,
-			'txt', 'cho', 'chopro', 'crd', 'chordpro' => self::FILE_TYPE_TEXT,
-			'abc' => self::FILE_TYPE_ABC,
-			default => self::FILE_TYPE_OTHER,
-		};
-	}
+	private SongFileMapper $fileMapper;
+	private SongBookmarkMapper $bookmarkMapper;
+	private SongAudioMapper $audioMapper;
+	private LibraryEntityMapper $entityMapper;
+	private SongNoteMapper $noteMapper;
 
 	public function __construct(
-		private LoggerInterface $logger,
+		LoggerInterface $logger,
+		?SongFileMapper $fileMapper = null,
+		?SongBookmarkMapper $bookmarkMapper = null,
+		?SongAudioMapper $audioMapper = null,
+		?LibraryEntityMapper $entityMapper = null,
+		?SongNoteMapper $noteMapper = null,
 	) {
+		parent::__construct($logger);
+		$this->fileMapper = $fileMapper ?? new SongFileMapper($logger);
+		$this->bookmarkMapper = $bookmarkMapper ?? new SongBookmarkMapper($logger);
+		$this->audioMapper = $audioMapper ?? new SongAudioMapper($logger);
+		$this->entityMapper = $entityMapper ?? new LibraryEntityMapper($logger);
+		$this->noteMapper = $noteMapper ?? new SongNoteMapper($logger);
 	}
 
-	/**
-	 * Cache of connection handle -> schema information:
-	 * [
-	 *     'tables' => array<string, string>, // lowercase_table_name => exact_table_name
-	 *     'columns' => array<string, array<string, string>> // lowercase_table_name => array<lowercase_column_name, exact_column_name>
-	 * ]
-	 *
-	 * @var array<string, array{
-	 *     tables: array<string, string>,
-	 *     columns: array<string, array<string, string>>
-	 * }>
-	 */
-	private array $schemaMapCache = [];
-
-	/**
-	 * @return array{
-	 *     tables: array<string, string>,
-	 *     columns: array<string, array<string, string>>
-	 * }
-	 */
-	private function getSchemaMap(PDO $database): array {
-		$hash = spl_object_hash($database);
-		if (isset($this->schemaMapCache[$hash])) {
-			return $this->schemaMapCache[$hash];
-		}
-
-		$tables = [];
-		$tablesStmt = $database->query("SELECT name FROM sqlite_master WHERE type='table'");
-		if ($tablesStmt !== false) {
-			/** @var list<string> $rawTables */
-			$rawTables = $tablesStmt->fetchAll(PDO::FETCH_COLUMN);
-			foreach ($rawTables as $tableName) {
-				$tables[strtolower($tableName)] = $tableName;
-			}
-		}
-
-		$this->schemaMapCache[$hash] = [
-			'tables' => $tables,
-			'columns' => [],
-		];
-
-		return $this->schemaMapCache[$hash];
-	}
-
-	private function hasTable(PDO $database, string $table): bool {
-		$schema = $this->getSchemaMap($database);
-		return isset($schema['tables'][strtolower($table)]);
-	}
-
-	/**
-	 * @param list<string> $candidates
-	 */
-	private function resolveTable(PDO $database, array $candidates): ?string {
-		$schema = $this->getSchemaMap($database);
-		foreach ($candidates as $candidate) {
-			$lower = strtolower($candidate);
-			if (isset($schema['tables'][$lower])) {
-				return $schema['tables'][$lower];
-			}
-		}
-		return null;
-	}
-
-	/**
-	 * @param list<string> $candidates
-	 */
-	private function resolveColumn(PDO $database, ?string $table, array $candidates, string $default): string {
-		if ($table === null) {
-			return $default;
-		}
-
-		$cols = $this->columnNames($database, $table);
-		foreach ($candidates as $candidate) {
-			$lower = strtolower($candidate);
-			if (isset($cols[$lower])) {
-				return $cols[$lower];
-			}
-		}
-
-		return $default;
-	}
-
-	/**
-	 * Lower-cased names of the columns a table has => exact column name.
-	 *
-	 * @return array<string, string>
-	 */
-	private function columnNames(PDO $database, string $table): array {
-		$hash = spl_object_hash($database);
-		$schema = $this->getSchemaMap($database);
-		$tableLower = strtolower($table);
-
-		if (isset($schema['columns'][$tableLower])) {
-			return $schema['columns'][$tableLower];
-		}
-
-		$names = [];
-		if (isset($schema['tables'][$tableLower])) {
-			$exactTable = $schema['tables'][$tableLower];
-			$stmt = $database->query('PRAGMA table_info("' . $exactTable . '")');
-			if ($stmt !== false) {
-				foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $column) {
-					$colName = (string)$column['name'];
-					$names[strtolower($colName)] = $colName;
-				}
-			}
-		}
-
-		$this->schemaMapCache[$hash]['columns'][$tableLower] = $names;
-		return $names;
+	public static function determineFileType(string $path): int {
+		return SongFileMapper::determineFileType($path);
 	}
 
 	/**
@@ -173,10 +62,7 @@ class SongMapper {
 	 * }
 	 */
 	public function findLibraryData(string $databasePath): array {
-		$database = new PDO('sqlite:' . $databasePath, options: [
-			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-		]);
+		$database = $this->openConnection($databasePath);
 
 		$composers = [];
 		$composersById = [];
@@ -558,10 +444,7 @@ class SongMapper {
 	 * @return list<MobileSheetsSong>
 	 */
 	public function findSongs(string $databasePath, ?int $songId = null): array {
-		$database = new PDO('sqlite:' . $databasePath, options: [
-			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-		]);
+		$database = $this->openConnection($databasePath);
 
 		$songCols = $this->columnNames($database, 'Songs');
 		$hasLastModified = isset($songCols['lastmodified']);
@@ -801,12 +684,6 @@ class SongMapper {
 		return $result;
 	}
 
-	/**
-	 * A single song with its nested entities and files, or null when it is unknown.
-	 *
-	 * Files come back ordered by Id, i.e. in the order that decides the numeric prefix
-	 * of their regenerated file names.
-	 */
 	public function findSong(string $databasePath, int $songId): ?MobileSheetsSong {
 		$songs = $this->findSongs($databasePath, $songId);
 
@@ -834,180 +711,49 @@ class SongMapper {
 	 * @return list<MobileSheetsFile>
 	 */
 	public function filesOfSong(string $databasePath, int $songId): array {
-		$database = new PDO('sqlite:' . $databasePath, options: [
-			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-		]);
-
-		$tablesStatement = $database->query("SELECT name FROM sqlite_master WHERE type='table'");
-		/** @var list<string> $existingTables */
-		$existingTables = $tablesStatement !== false ? $tablesStatement->fetchAll(PDO::FETCH_COLUMN) : [];
-
-		if (!in_array('Files', $existingTables, true)) {
-			return [];
-		}
-
-		// Ordered by Id so a song's files always come back in the same order: their
-		// position decides the numeric prefix in the regenerated file name.
-		$statement = $database->query('SELECT Id, Path FROM Files WHERE SongId = ' . $songId . ' ORDER BY Id ASC');
-
-		$files = [];
-		if ($statement !== false) {
-			while ($row = $statement->fetch()) {
-				$files[] = new MobileSheetsFile(
-					(int)$row['Id'],
-					(string)$row['Path'],
-				);
-			}
-		}
-
-		return $files;
+		return $this->fileMapper->filesOfSong($databasePath, $songId);
 	}
 
 	/**
 	 * @return list<MobileSheetsBookmark>
 	 */
 	public function bookmarksOfSong(string $databasePath, int $songId): array {
-		$database = new PDO('sqlite:' . $databasePath, options: [
-			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-		]);
-
-		$tablesStatement = $database->query("SELECT name FROM sqlite_master WHERE type='table'");
-		/** @var list<string> $existingTables */
-		$existingTables = $tablesStatement !== false ? $tablesStatement->fetchAll(PDO::FETCH_COLUMN) : [];
-
-		if (!in_array('Bookmarks', $existingTables, true)) {
-			return [];
-		}
-
-		$cols = $this->columnNames($database, 'Bookmarks');
-		$hasShowInLibrary = isset($cols['showinlibrary']);
-
-		$stmt = $database->prepare('SELECT Id, SongId, Name, PageNum' . ($hasShowInLibrary ? ', ShowInLibrary' : '') . ' FROM Bookmarks WHERE SongId = :songId ORDER BY PageNum ASC, Name ASC');
-		$stmt->execute([':songId' => $songId]);
-
-		$bookmarks = [];
-		while ($row = $stmt->fetch()) {
-			$bookmarks[] = new MobileSheetsBookmark(
-				(int)$row['Id'],
-				(int)$row['SongId'],
-				(string)$row['Name'],
-				(int)$row['PageNum'],
-				isset($row['ShowInLibrary']) ? (int)$row['ShowInLibrary'] : 0,
-			);
-		}
-
-		return $bookmarks;
+		return $this->bookmarkMapper->bookmarksOfSong($databasePath, $songId);
 	}
 
 	/**
 	 * @param list<array{name: string, pageNum: int, showInLibrary?: int}> $bookmarks
 	 */
 	public function updateBookmarks(string $databasePath, int $songId, array $bookmarks): void {
-		$database = new PDO('sqlite:' . $databasePath, options: [
-			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-		]);
-
-		$tablesStatement = $database->query("SELECT name FROM sqlite_master WHERE type='table'");
-		/** @var list<string> $existingTables */
-		$existingTables = $tablesStatement !== false ? $tablesStatement->fetchAll(PDO::FETCH_COLUMN) : [];
-
-		if (!in_array('Bookmarks', $existingTables, true)) {
-			return;
-		}
-
-		$stmt = $database->prepare('DELETE FROM Bookmarks WHERE SongId = :songId');
-		$stmt->execute([':songId' => $songId]);
-
-		foreach ($bookmarks as $bm) {
-			$name = trim((string)($bm['name'] ?? ''));
-			if ($name === '') {
-				continue;
-			}
-			$pageNum = (int)($bm['pageNum'] ?? 1);
-			$showInLibrary = (int)($bm['showInLibrary'] ?? 0);
-
-			$this->insertRow($database, 'Bookmarks', [
-				'SongId' => $songId,
-				'Name' => $name,
-				'PageNum' => $pageNum,
-				'ShowInLibrary' => $showInLibrary,
-			] + $this->dateColumns($database, 'Bookmarks'));
-		}
+		$this->bookmarkMapper->updateBookmarks($databasePath, $songId, $bookmarks);
 	}
 
 	/**
 	 * @return list<MobileSheetsAudioFile>
 	 */
 	public function audioFilesOfSong(string $databasePath, int $songId): array {
-		$database = new PDO('sqlite:' . $databasePath, options: [
-			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-		]);
-
-		$tablesStatement = $database->query("SELECT name FROM sqlite_master WHERE type='table'");
-		/** @var list<string> $existingTables */
-		$existingTables = $tablesStatement !== false ? $tablesStatement->fetchAll(PDO::FETCH_COLUMN) : [];
-
-		if (!in_array('AudioFiles', $existingTables, true)) {
-			return [];
-		}
-
-		$cols = $this->columnNames($database, 'AudioFiles');
-		$titleCol = isset($cols['title']) ? 'Title' : (isset($cols['name']) ? 'Name' : 'Title');
-		$fileCol = isset($cols['file']) ? 'File' : (isset($cols['path']) ? 'Path' : 'File');
-
-		$stmt = $database->prepare('SELECT Id, SongId, ' . $titleCol . ' AS Title, ' . $fileCol . ' AS File FROM AudioFiles WHERE SongId = :songId ORDER BY Id ASC');
-		$stmt->execute([':songId' => $songId]);
-
-		$audioFiles = [];
-		while ($row = $stmt->fetch()) {
-			$audioFiles[] = new MobileSheetsAudioFile(
-				(int)$row['Id'],
-				(int)$row['SongId'],
-				(string)($row['Title'] ?? ''),
-				(string)($row['File'] ?? ''),
-			);
-		}
-
-		return $audioFiles;
+		return $this->audioMapper->audioFilesOfSong($databasePath, $songId);
 	}
 
 	/**
 	 * @param list<array{title?: string, file: string}> $audioFiles
 	 */
 	public function updateAudioFiles(string $databasePath, int $songId, array $audioFiles): void {
-		$database = new PDO('sqlite:' . $databasePath, options: [
-			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-		]);
+		$this->audioMapper->updateAudioFiles($databasePath, $songId, $audioFiles);
+	}
 
-		$tablesStatement = $database->query("SELECT name FROM sqlite_master WHERE type='table'");
-		/** @var list<string> $existingTables */
-		$existingTables = $tablesStatement !== false ? $tablesStatement->fetchAll(PDO::FETCH_COLUMN) : [];
+	/**
+	 * @return list<MobileSheetsSongNote>
+	 */
+	public function notesOfSong(string $databasePath, int $songId): array {
+		return $this->noteMapper->notesOfSong($databasePath, $songId);
+	}
 
-		if (!in_array('AudioFiles', $existingTables, true)) {
-			return;
-		}
-
-		$stmt = $database->prepare('DELETE FROM AudioFiles WHERE SongId = :songId');
-		$stmt->execute([':songId' => $songId]);
-
-		foreach ($audioFiles as $af) {
-			$file = trim((string)($af['file'] ?? ''));
-			if ($file === '') {
-				continue;
-			}
-			$title = trim((string)($af['title'] ?? ''));
-
-			$this->insertRow($database, 'AudioFiles', [
-				'SongId' => $songId,
-				'Title' => $title !== '' ? $title : pathinfo($file, PATHINFO_FILENAME),
-				'File' => $file,
-			] + $this->dateColumns($database, 'AudioFiles'));
-		}
+	/**
+	 * @param list<array{note?: string, text?: string}> $notes
+	 */
+	public function updateNotes(string $databasePath, int $songId, array $notes): void {
+		$this->noteMapper->updateNotes($databasePath, $songId, $notes);
 	}
 
 	/**
@@ -1046,10 +792,7 @@ class SongMapper {
 		string $custom2 = '',
 		string $sortTitle = '',
 	): int {
-		$database = new PDO('sqlite:' . $databasePath, options: [
-			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-		]);
+		$database = $this->openConnection($databasePath);
 
 		$songId = $this->insertRow($database, 'Songs', [
 			'Title' => $title,
@@ -1122,10 +865,7 @@ class SongMapper {
 		string $custom2 = '',
 		string $sortTitle = '',
 	): void {
-		$database = new PDO('sqlite:' . $databasePath, options: [
-			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-		]);
+		$database = $this->openConnection($databasePath);
 
 		$tablesStatement = $database->query("SELECT name FROM sqlite_master WHERE type='table'");
 		/** @var list<string> $existingTables */
@@ -1144,7 +884,7 @@ class SongMapper {
 		] + $this->dateColumns($database, 'Songs', withCreation: false), $songId);
 
 		// Update Composers
-		if (in_array('ComposerSongs', $existingTables, true)) {
+		if ($this->hasTable($database, 'ComposerSongs')) {
 			$delStmt = $database->prepare('DELETE FROM ComposerSongs WHERE SongId = :songId');
 			$delStmt->execute([':songId' => $songId]);
 
@@ -1158,7 +898,7 @@ class SongMapper {
 		}
 
 		// Update Books
-		if (in_array('BookSongs', $existingTables, true)) {
+		if ($this->hasTable($database, 'BookSongs')) {
 			$delStmt = $database->prepare('DELETE FROM BookSongs WHERE SongId = :songId');
 			$delStmt->execute([':songId' => $songId]);
 
@@ -1172,7 +912,7 @@ class SongMapper {
 		}
 
 		// Update Collections
-		if (in_array('CollectionSong', $existingTables, true)) {
+		if ($this->hasTable($database, 'CollectionSong')) {
 			$delStmt = $database->prepare('DELETE FROM CollectionSong WHERE SongId = :songId');
 			$delStmt->execute([':songId' => $songId]);
 
@@ -1186,7 +926,7 @@ class SongMapper {
 		}
 
 		// Update Artists
-		if (in_array('ArtistsSongs', $existingTables, true)) {
+		if ($this->hasTable($database, 'ArtistsSongs')) {
 			$delStmt = $database->prepare('DELETE FROM ArtistsSongs WHERE SongId = :songId');
 			$delStmt->execute([':songId' => $songId]);
 
@@ -1200,7 +940,7 @@ class SongMapper {
 		}
 
 		// Update Genres
-		if (in_array('GenresSongs', $existingTables, true)) {
+		if ($this->hasTable($database, 'GenresSongs')) {
 			$delStmt = $database->prepare('DELETE FROM GenresSongs WHERE SongId = :songId');
 			$delStmt->execute([':songId' => $songId]);
 
@@ -1214,7 +954,7 @@ class SongMapper {
 		}
 
 		// Update Keys
-		if (in_array('KeySongs', $existingTables, true)) {
+		if ($this->hasTable($database, 'KeySongs')) {
 			$delStmt = $database->prepare('DELETE FROM KeySongs WHERE SongId = :songId');
 			$delStmt->execute([':songId' => $songId]);
 
@@ -1228,7 +968,7 @@ class SongMapper {
 		}
 
 		// Update Custom Groups
-		if (in_array('CustomGroupSongs', $existingTables, true)) {
+		if ($this->hasTable($database, 'CustomGroupSongs')) {
 			$delStmt = $database->prepare('DELETE FROM CustomGroupSongs WHERE SongId = :songId');
 			$delStmt->execute([':songId' => $songId]);
 
@@ -1242,7 +982,7 @@ class SongMapper {
 		}
 
 		// Update Years
-		if (in_array('YearsSongs', $existingTables, true)) {
+		if ($this->hasTable($database, 'YearsSongs')) {
 			$delStmt = $database->prepare('DELETE FROM YearsSongs WHERE SongId = :songId');
 			$delStmt->execute([':songId' => $songId]);
 
@@ -1256,7 +996,7 @@ class SongMapper {
 		}
 
 		// Update Signatures
-		if (in_array('SignatureSongs', $existingTables, true)) {
+		if ($this->hasTable($database, 'SignatureSongs')) {
 			$delStmt = $database->prepare('DELETE FROM SignatureSongs WHERE SongId = :songId');
 			$delStmt->execute([':songId' => $songId]);
 
@@ -1270,7 +1010,7 @@ class SongMapper {
 		}
 
 		// Update SourceTypes
-		if (in_array('SourceTypeSongs', $existingTables, true)) {
+		if ($this->hasTable($database, 'SourceTypeSongs')) {
 			$delStmt = $database->prepare('DELETE FROM SourceTypeSongs WHERE SongId = :songId');
 			$delStmt->execute([':songId' => $songId]);
 
@@ -1317,48 +1057,41 @@ class SongMapper {
 			return;
 		}
 
-		$database = new PDO('sqlite:' . $databasePath, options: [
-			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-		]);
-
-		$tablesStatement = $database->query("SELECT name FROM sqlite_master WHERE type='table'");
-		/** @var list<string> $existingTables */
-		$existingTables = $tablesStatement !== false ? $tablesStatement->fetchAll(PDO::FETCH_COLUMN) : [];
+		$database = $this->openConnection($databasePath);
 
 		$database->beginTransaction();
 		try {
 			foreach ($songIds as $songId) {
 				$this->updateRowById($database, 'Songs', $this->dateColumns($database, 'Songs', withCreation: false), $songId);
 
-				if ($composerUpdate !== null && in_array('ComposerSongs', $existingTables, true)) {
+				if ($composerUpdate !== null && $this->hasTable($database, 'ComposerSongs')) {
 					$this->updateCategoryRelations($database, 'ComposerSongs', 'ComposerId', $songId, $composerUpdate);
 				}
-				if ($bookUpdate !== null && in_array('BookSongs', $existingTables, true)) {
+				if ($bookUpdate !== null && $this->hasTable($database, 'BookSongs')) {
 					$this->updateCategoryRelations($database, 'BookSongs', 'BookId', $songId, $bookUpdate);
 				}
-				if ($collectionUpdate !== null && in_array('CollectionSong', $existingTables, true)) {
+				if ($collectionUpdate !== null && $this->hasTable($database, 'CollectionSong')) {
 					$this->updateCategoryRelations($database, 'CollectionSong', 'CollectionId', $songId, $collectionUpdate);
 				}
-				if ($artistUpdate !== null && in_array('ArtistsSongs', $existingTables, true)) {
+				if ($artistUpdate !== null && $this->hasTable($database, 'ArtistsSongs')) {
 					$this->updateCategoryRelations($database, 'ArtistsSongs', 'ArtistId', $songId, $artistUpdate);
 				}
-				if ($genreUpdate !== null && in_array('GenresSongs', $existingTables, true)) {
+				if ($genreUpdate !== null && $this->hasTable($database, 'GenresSongs')) {
 					$this->updateCategoryRelations($database, 'GenresSongs', 'GenreId', $songId, $genreUpdate);
 				}
-				if ($keyUpdate !== null && in_array('KeySongs', $existingTables, true)) {
+				if ($keyUpdate !== null && $this->hasTable($database, 'KeySongs')) {
 					$this->updateCategoryRelations($database, 'KeySongs', 'KeyId', $songId, $keyUpdate);
 				}
-				if ($customGroupUpdate !== null && in_array('CustomGroupSongs', $existingTables, true)) {
+				if ($customGroupUpdate !== null && $this->hasTable($database, 'CustomGroupSongs')) {
 					$this->updateCategoryRelations($database, 'CustomGroupSongs', 'GroupId', $songId, $customGroupUpdate);
 				}
-				if ($yearUpdate !== null && in_array('YearsSongs', $existingTables, true)) {
+				if ($yearUpdate !== null && $this->hasTable($database, 'YearsSongs')) {
 					$this->updateCategoryRelations($database, 'YearsSongs', 'YearId', $songId, $yearUpdate);
 				}
-				if ($signatureUpdate !== null && in_array('SignatureSongs', $existingTables, true)) {
+				if ($signatureUpdate !== null && $this->hasTable($database, 'SignatureSongs')) {
 					$this->updateCategoryRelations($database, 'SignatureSongs', 'SignatureId', $songId, $signatureUpdate);
 				}
-				if ($sourceTypeUpdate !== null && in_array('SourceTypeSongs', $existingTables, true)) {
+				if ($sourceTypeUpdate !== null && $this->hasTable($database, 'SourceTypeSongs')) {
 					$this->updateCategoryRelations($database, 'SourceTypeSongs', 'SourceTypeId', $songId, $sourceTypeUpdate);
 				}
 			}
@@ -1407,32 +1140,14 @@ class SongMapper {
 		}
 	}
 
-	/**
-	 * Delete a song together with everything that references it.
-	 *
-	 * MobileSheets spreads a song over many tables: its files, the links to composers,
-	 * books, collections and artists, but also settings such as its metronome, zoom or
-	 * annotations. The rows are therefore dropped from every table that has a SongId
-	 * column. The Songs row itself is removed by Id, because its own SongId column means
-	 * something else and must not take other songs with it.
-	 *
-	 * @return list<string> WebDAV paths of the song's files, read before the rows were
-	 *                      removed, so the caller can move them out of the user's folder
-	 */
 	public function deleteSong(string $databasePath, int $songId): array {
-		$database = new PDO('sqlite:' . $databasePath, options: [
-			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-		]);
+		$database = $this->openConnection($databasePath);
 
-		$tablesStatement = $database->query("SELECT name FROM sqlite_master WHERE type='table'");
-		/** @var list<string> $existingTables */
-		$existingTables = $tablesStatement !== false ? $tablesStatement->fetchAll(PDO::FETCH_COLUMN) : [];
+		$schema = $this->getSchemaMap($database);
+		$existingTables = array_values($schema['tables']);
 
-		// Read the file list first: once the rows are gone, the database no longer knows
-		// which files belonged to the song.
 		$paths = [];
-		if (in_array('Files', $existingTables, true)) {
+		if ($this->hasTable($database, 'Files')) {
 			$fileStmt = $database->prepare('SELECT Path FROM Files WHERE SongId = :songId');
 			$fileStmt->execute([':songId' => $songId]);
 			while ($row = $fileStmt->fetch()) {
@@ -1443,17 +1158,15 @@ class SongMapper {
 		$database->beginTransaction();
 		try {
 			foreach ($existingTables as $table) {
-				if ($table === 'Songs' || !$this->hasSongIdColumn($database, $table)) {
+				if (strtolower($table) === 'songs' || !$this->hasSongIdColumn($database, $table)) {
 					continue;
 				}
 
-				// Table names come from the schema itself, so quoting them is all that is
-				// needed; the song to delete stays a bound parameter.
 				$stmt = $database->prepare('DELETE FROM "' . $table . '" WHERE SongId = :songId');
 				$stmt->execute([':songId' => $songId]);
 			}
 
-			if (in_array('Songs', $existingTables, true)) {
+			if ($this->hasTable($database, 'Songs')) {
 				$stmt = $database->prepare('DELETE FROM Songs WHERE Id = :songId');
 				$stmt->execute([':songId' => $songId]);
 			}
@@ -1467,418 +1180,64 @@ class SongMapper {
 		return $paths;
 	}
 
-	/** Whether a table links to songs, i.e. has a SongId column. */
 	private function hasSongIdColumn(PDO $database, string $table): bool {
-		$statement = $database->query('PRAGMA table_info("' . $table . '")');
-		if ($statement === false) {
-			return false;
-		}
-
-		foreach ($statement->fetchAll(PDO::FETCH_ASSOC) as $column) {
-			if (strtolower((string)$column['name']) === 'songid') {
-				return true;
-			}
-		}
-
-		return false;
+		$cols = $this->columnNames($database, $table);
+		return isset($cols['songid']);
 	}
 
-	/**
-	 * Record a file of a song, filling in every column MobileSheets keeps next to
-	 * the path: the file's size, its modification time (LastModified, in
-	 * milliseconds) and the derived content metadata.
-	 */
 	public function setSongFile(string $databasePath, int $songId, string $filePath, MobileSheetsFileFacts $facts): void {
-		$database = new PDO('sqlite:' . $databasePath, options: [
-			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-		]);
-
-		// Files carries no creation date, but its LastModified is required.
-		$this->requireColumn($database, 'Files', 'LastModified');
-
-		$values = [
-			'SongId' => $songId,
-			'Path' => $filePath,
-			'PageOrder' => $facts->pageOrder,
-			'FileSize' => $facts->fileSize,
-			'LastModified' => $facts->lastModified,
-			'Source' => self::FILE_SOURCE_LOCAL,
-			'Type' => self::determineFileType($filePath),
-			'Password' => '',
-			'SourceFilePageCount' => $facts->sourceFilePageCount,
-			'FileHash' => $facts->fileHash,
-			'Width' => self::FILE_DIMENSION_UNKNOWN,
-			'Height' => self::FILE_DIMENSION_UNKNOWN,
-		];
-
-		$columns = [];
-		$params = [];
-		foreach ($this->existingColumns($database, 'Files', $values) as $name => $value) {
-			$columns[] = $name;
-			$params[':' . $name] = $value;
-		}
-
-		$sql = 'INSERT INTO Files (' . implode(', ', $columns) . ') VALUES (' . implode(', ', array_keys($params)) . ')';
-		$insertStmt = $database->prepare($sql);
-		$insertStmt->execute($params);
+		$this->fileMapper->setSongFile($databasePath, $songId, $filePath, $facts);
 	}
 
 	public function removeSongFile(string $databasePath, int $songId, int $fileId): ?string {
-		$database = new PDO('sqlite:' . $databasePath, options: [
-			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-		]);
-
-		$stmt = $database->prepare('SELECT Path FROM Files WHERE SongId = :songId AND Id = :fileId');
-		$stmt->execute([':songId' => $songId, ':fileId' => $fileId]);
-		$row = $stmt->fetch();
-		if ($row === false) {
-			return null;
-		}
-
-		$delStmt = $database->prepare('DELETE FROM Files WHERE SongId = :songId AND Id = :fileId');
-		$delStmt->execute([':songId' => $songId, ':fileId' => $fileId]);
-
-		return (string)$row['Path'];
+		return $this->fileMapper->removeSongFile($databasePath, $songId, $fileId);
 	}
 
-	/**
-	 * Persist a file's new location and refresh the metadata that a change to the
-	 * file invalidates - notably LastModified, which must track the file's
-	 * modification time whenever the file is created or changed. Source, Password,
-	 * Width and Height are fixed at creation and left untouched. Type is updated
-	 * if the file extension changed.
-	 */
 	public function updateFile(string $databasePath, int $fileId, string $newPath, MobileSheetsFileFacts $facts): void {
-		$database = new PDO('sqlite:' . $databasePath, options: [
-			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-		]);
-
-		// Files carries no creation date, but its LastModified is required.
-		$this->requireColumn($database, 'Files', 'LastModified');
-
-		$values = [
-			'Path' => $newPath,
-			'Type' => self::determineFileType($newPath),
-			'PageOrder' => $facts->pageOrder,
-			'FileSize' => $facts->fileSize,
-			'LastModified' => $facts->lastModified,
-			'SourceFilePageCount' => $facts->sourceFilePageCount,
-			'FileHash' => $facts->fileHash,
-		];
-
-		$assignments = [];
-		$params = [':id' => $fileId];
-		foreach ($this->existingColumns($database, 'Files', $values) as $name => $value) {
-			$assignments[] = $name . ' = :' . $name;
-			$params[':' . $name] = $value;
-		}
-
-		$sql = 'UPDATE Files SET ' . implode(', ', $assignments) . ' WHERE Id = :id';
-		$updateStmt = $database->prepare($sql);
-		$updateStmt->execute($params);
-	}
-
-	/** Current time in milliseconds, the unit MobileSheets stores its dates in. */
-	private function nowMilliseconds(): int {
-		return (int)round(microtime(true) * 1000);
-	}
-
-	/**
-	 * Keep only the wanted column => value pairs the table actually has, keyed by
-	 * column name, so a database with a reduced or extended schema still gets every
-	 * column it knows filled in.
-	 *
-	 * @param array<string, mixed> $values
-	 * @return array<string, mixed>
-	 */
-	private function existingColumns(PDO $database, string $table, array $values): array {
-		$existing = $this->columnNames($database, $table);
-
-		$wanted = [];
-		foreach ($values as $name => $value) {
-			if (isset($existing[strtolower($name)])) {
-				$wanted[$name] = $value;
-			}
-		}
-
-		return $wanted;
-	}
-
-	/**
-	 * The creation and modification date columns of a table, set to the current
-	 * time. Songs and the entity tables each carry a creation date - named
-	 * "DateCreated" or "CreationDate" depending on the table - and a "LastModified"
-	 * column. Both are required: a table without them means the library schema has
-	 * changed, and writing anyway would leave inconsistent rows behind.
-	 *
-	 * @param bool $withCreation also set the creation date; an update must leave it
-	 *                           alone, so it is dropped there
-	 * @return array<string, int> column name => timestamp in milliseconds
-	 */
-	private function dateColumns(PDO $database, string $table, bool $withCreation = true): array {
-		$existing = $this->columnNames($database, $table);
-		$now = $this->nowMilliseconds();
-
-		// The creation date is named differently per table; one of the two has to exist.
-		$createdColumn = null;
-		foreach (['DateCreated', 'CreationDate'] as $created) {
-			if (isset($existing[strtolower($created)])) {
-				$createdColumn = $created;
-				break;
-			}
-		}
-		if ($createdColumn === null) {
-			$this->abortOnMissingColumn($table, 'DateCreated or CreationDate');
-		}
-		$this->requireColumn($database, $table, 'LastModified');
-
-		$values = [];
-		if ($withCreation) {
-			$values[$createdColumn] = $now;
-		}
-		$values['LastModified'] = $now;
-
-		return $values;
-	}
-
-	/**
-	 * Assert a table has an expected column, aborting loudly when it does not.
-	 */
-	private function requireColumn(PDO $database, string $table, string $column): void {
-		if (!isset($this->columnNames($database, $table)[strtolower($column)])) {
-			$this->abortOnMissingColumn($table, $column);
-		}
-	}
-
-	/**
-	 * Report a column the library table does not have and abort the run.
-	 *
-	 * Skipping a column we mean to write would silently drop data and leave the
-	 * library inconsistent with what MobileSheets expects, so a missing column is
-	 * logged and thrown instead - the app has to be updated to match the schema.
-	 */
-	private function abortOnMissingColumn(string $table, string $column): never {
-		$this->logger->error('MobileSheets library table is missing an expected column', [
-			'table' => $table,
-			'column' => $column,
-		]);
-
-		throw new \RuntimeException(sprintf(
-			"MobileSheets table '%s' is missing the expected %s column; the app must be updated to match the library schema",
-			$table,
-			$column,
-		));
-	}
-
-	/**
-	 * Insert a row, filling in the columns the table has, and return its id.
-	 *
-	 * @param array<string, mixed> $values
-	 */
-	private function insertRow(PDO $database, string $table, array $values): int {
-		$columns = [];
-		$params = [];
-		foreach ($this->existingColumns($database, $table, $values) as $name => $value) {
-			$columns[] = $name;
-			$params[':' . $name] = $value;
-		}
-
-		$sql = 'INSERT INTO ' . $table . ' (' . implode(', ', $columns) . ') VALUES (' . implode(', ', array_keys($params)) . ')';
-		$database->prepare($sql)->execute($params);
-
-		return (int)$database->lastInsertId();
-	}
-
-	/**
-	 * Update a row by id, touching only the columns the table has.
-	 *
-	 * @param array<string, mixed> $values
-	 */
-	private function updateRowById(PDO $database, string $table, array $values, int $id): void {
-		$assignments = [];
-		$params = [':id' => $id];
-		foreach ($this->existingColumns($database, $table, $values) as $name => $value) {
-			$assignments[] = $name . ' = :' . $name;
-			$params[':' . $name] = $value;
-		}
-
-		$sql = 'UPDATE ' . $table . ' SET ' . implode(', ', $assignments) . ' WHERE Id = :id';
-		$database->prepare($sql)->execute($params);
+		$this->fileMapper->updateFile($databasePath, $fileId, $newPath, $facts);
 	}
 
 	public function createComposer(string $databasePath, string $name): int {
-		$database = new PDO('sqlite:' . $databasePath, options: [
-			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-		]);
-		return $this->insertRow($database, 'Composer', [
-			'Name' => $name,
-		] + $this->dateColumns($database, 'Composer'));
+		return $this->entityMapper->createComposer($databasePath, $name);
 	}
 
 	public function createBook(string $databasePath, string $title): int {
-		$database = new PDO('sqlite:' . $databasePath, options: [
-			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-		]);
-		return $this->insertRow($database, 'Books', [
-			'Title' => $title,
-		] + $this->dateColumns($database, 'Books'));
+		return $this->entityMapper->createBook($databasePath, $title);
 	}
 
 	public function createCollection(string $databasePath, string $name): int {
-		$database = new PDO('sqlite:' . $databasePath, options: [
-			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-		]);
-		return $this->insertRow($database, 'Collections', [
-			'Name' => $name,
-		] + $this->dateColumns($database, 'Collections'));
+		return $this->entityMapper->createCollection($databasePath, $name);
 	}
 
 	public function createArtist(string $databasePath, string $name): int {
-		$database = new PDO('sqlite:' . $databasePath, options: [
-			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-		]);
-		return $this->insertRow($database, 'Artists', [
-			'Name' => $name,
-		] + $this->dateColumns($database, 'Artists'));
+		return $this->entityMapper->createArtist($databasePath, $name);
 	}
 
 	public function createGenre(string $databasePath, string $name): int {
-		$database = new PDO('sqlite:' . $databasePath, options: [
-			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-		]);
-		return $this->insertRow($database, 'Genres', [
-			'Type' => $name,
-		] + $this->dateColumns($database, 'Genres'));
+		return $this->entityMapper->createGenre($databasePath, $name);
 	}
 
 	public function createKey(string $databasePath, string $name): int {
-		$database = new PDO('sqlite:' . $databasePath, options: [
-			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-		]);
-		$table = $this->resolveTable($database, ['Key', 'Keys']) ?? 'Keys';
-		$col = $this->resolveColumn($database, $table, ['Name', 'Key'], 'Name');
-		return $this->insertRow($database, $table, [
-			$col => $name,
-		] + $this->dateColumns($database, $table));
+		return $this->entityMapper->createKey($databasePath, $name);
 	}
 
 	public function createCustomGroup(string $databasePath, string $name): int {
-		$database = new PDO('sqlite:' . $databasePath, options: [
-			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-		]);
-		return $this->insertRow($database, 'CustomGroup', [
-			'Name' => $name,
-		] + $this->dateColumns($database, 'CustomGroup'));
+		return $this->entityMapper->createCustomGroup($databasePath, $name);
 	}
 
 	public function createYear(string $databasePath, int|string $year): int {
-		$database = new PDO('sqlite:' . $databasePath, options: [
-			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-		]);
-		$col = $this->resolveColumn($database, 'Years', ['Year', 'Name'], 'Year');
-		$val = ($col === 'Year') ? (int)$year : (string)$year;
-		return $this->insertRow($database, 'Years', [
-			$col => $val,
-		] + $this->dateColumns($database, 'Years'));
+		return $this->entityMapper->createYear($databasePath, $year);
 	}
 
 	public function createSignature(string $databasePath, string $name): int {
-		$database = new PDO('sqlite:' . $databasePath, options: [
-			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-		]);
-		return $this->insertRow($database, 'Signature', [
-			'Name' => $name,
-		] + $this->dateColumns($database, 'Signature'));
+		return $this->entityMapper->createSignature($databasePath, $name);
 	}
 
 	public function createSourceType(string $databasePath, string $name): int {
-		$database = new PDO('sqlite:' . $databasePath, options: [
-			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-		]);
-		$table = $this->resolveTable($database, ['SourceType', 'SourceTypes']) ?? 'SourceTypes';
-		$col = $this->resolveColumn($database, $table, ['Type', 'Name'], 'Type');
-		return $this->insertRow($database, $table, [
-			$col => $name,
-		] + $this->dateColumns($database, $table));
+		return $this->entityMapper->createSourceType($databasePath, $name);
 	}
 
-	/**
-	 * Tables of the entity kinds a song can carry, and how each of them links
-	 * to songs.
-	 *
-	 * @var array<string, array{table: string, linkTable: string, linkColumn: string}>
-	 */
-	private const ENTITY_TABLES = [
-		'composers' => ['table' => 'Composer', 'linkTable' => 'ComposerSongs', 'linkColumn' => 'ComposerId'],
-		'books' => ['table' => 'Books', 'linkTable' => 'BookSongs', 'linkColumn' => 'BookId'],
-		'collections' => ['table' => 'Collections', 'linkTable' => 'CollectionSong', 'linkColumn' => 'CollectionId'],
-		'artists' => ['table' => 'Artists', 'linkTable' => 'ArtistsSongs', 'linkColumn' => 'ArtistId'],
-		'genres' => ['table' => 'Genres', 'linkTable' => 'GenresSongs', 'linkColumn' => 'GenreId'],
-		'keys' => ['table' => 'Keys', 'linkTable' => 'KeySongs', 'linkColumn' => 'KeyId'],
-		'customgroups' => ['table' => 'CustomGroup', 'linkTable' => 'CustomGroupSongs', 'linkColumn' => 'GroupId'],
-		'years' => ['table' => 'Years', 'linkTable' => 'YearsSongs', 'linkColumn' => 'YearId'],
-		'signatures' => ['table' => 'Signature', 'linkTable' => 'SignatureSongs', 'linkColumn' => 'SignatureId'],
-		'sourcetypes' => ['table' => 'SourceTypes', 'linkTable' => 'SourceTypeSongs', 'linkColumn' => 'SourceTypeId'],
-	];
-
-	/**
-	 * Delete a composer, book, collection, artist, genre, key, custom group, year, signature or source type from the library.
-	 *
-	 * The songs are kept: only the links to the deleted entry are removed, so it
-	 * disappears from the songs' composers, books, collections, artists, genres, keys, custom groups, years, signatures or source types while the
-	 * songs themselves stay untouched.
-	 *
-	 * @param 'composers'|'books'|'collections'|'artists'|'genres'|'keys'|'customgroups'|'years'|'signatures'|'sourcetypes' $entityType
-	 * @return bool whether the entry itself existed and was removed
-	 */
 	public function deleteEntity(string $databasePath, string $entityType, int $entityId): bool {
-		$tables = self::ENTITY_TABLES[$entityType] ?? null;
-		if ($tables === null) {
-			throw new \InvalidArgumentException('Unknown entity type: ' . $entityType);
-		}
-
-		$database = new PDO('sqlite:' . $databasePath, options: [
-			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-		]);
-
-		$targetTable = $this->resolveTable($database, [$tables['table'], $tables['table'] . 's', rtrim($tables['table'], 's')]);
-
-		$removed = 0;
-		$database->beginTransaction();
-		try {
-			// Table and column names come from the constant above, so quoting them is
-			// all that is needed; the entry to delete stays a bound parameter.
-			if ($this->hasTable($database, $tables['linkTable'])) {
-				$stmt = $database->prepare('DELETE FROM "' . $tables['linkTable'] . '" WHERE ' . $tables['linkColumn'] . ' = :entityId');
-				$stmt->execute([':entityId' => $entityId]);
-			}
-
-			if ($targetTable !== null) {
-				$stmt = $database->prepare('DELETE FROM "' . $targetTable . '" WHERE Id = :entityId');
-				$stmt->execute([':entityId' => $entityId]);
-				$removed = $stmt->rowCount();
-			}
-
-			$database->commit();
-		} catch (\Throwable $exception) {
-			$database->rollBack();
-			throw $exception;
-		}
-
-		return $removed > 0;
+		return $this->entityMapper->deleteEntity($databasePath, $entityType, $entityId);
 	}
 }
