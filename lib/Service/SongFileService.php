@@ -171,7 +171,7 @@ class SongFileService {
 		if ($filePath !== null) {
 			$deletedFile = $this->fileManager->pathOfStoredFile($filePath, $user);
 
-			if ($deletedFile !== null) {
+			if ($deletedFile !== null && !$this->songMapper->isPathReferencedByOtherSong($databasePath, $filePath, $songId)) {
 				$this->deleteFileNode($deletedFile->internal);
 			}
 		}
