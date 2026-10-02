@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { apiGet, apiPost } from '../api/client'
 import type { FileLogEntry, FileLogLevel, IntegrityIssue, LibraryData } from '../types/song'
+import type { ResolveBothSongData } from './song-editor/SongMergeDialog.vue'
 import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
 import { ref } from 'vue'
@@ -32,6 +33,7 @@ const integrityIssues = ref<IntegrityIssue[]>([])
 // Merge dialog state
 const isMergeDialogOpen = ref(false)
 const isMerging = ref(false)
+const initialMergeMode = ref<'merge' | 'keepBoth'>('merge')
 const mergeIssue = ref<IntegrityIssue | null>(null)
 const libraryData = ref<LibraryData | null>(null)
 
@@ -108,9 +110,9 @@ async function fixIntegrityIssue(issue: IntegrityIssue) {
 }
 
 /** Open the merge dialog for duplicate-file-path issues that span distinct songs */
-async function openMergeDialog(issue: IntegrityIssue) {
+async function openMergeDialog(issue: IntegrityIssue, mode: 'merge' | 'keepBoth' = 'merge') {
 	mergeIssue.value = issue
-	// Ensure we have fresh library data (songs list) for the dialog
+	initialMergeMode.value = mode
 	try {
 		const response = await apiGet('/api/songs', { queryParams: { id: String(props.selectedLibrary) } })
 		libraryData.value = response.data.ocs.data as LibraryData
@@ -120,7 +122,7 @@ async function openMergeDialog(issue: IntegrityIssue) {
 	isMergeDialogOpen.value = true
 }
 
-/** Execute merge via API and refresh integrity audit */
+/** Execute merge (1 song) via API and refresh integrity audit */
 async function executeMerge(payload: {
 	keepId: number
 	droppedId: number
@@ -129,7 +131,6 @@ async function executeMerge(payload: {
 	isMerging.value = true
 	try {
 		await axios.post(
-			// Using raw axios because the generated types don't yet include this endpoint
 			`/ocs/v2.php/apps/mobilesheetsmanager/api/songs/merge`,
 			{
 				libraryId: props.selectedLibrary,
@@ -149,6 +150,75 @@ async function executeMerge(payload: {
 			: undefined
 		integrityError.value = serverMessage
 			?? t('mobilesheetsmanager', 'Failed to merge songs. Please try again.')
+	} finally {
+		isMerging.value = false
+	}
+}
+
+/** Execute resolveBoth (keep both songs as separate entities with adapted titles/metadata/files) */
+async function executeResolveBoth(payload: {
+	songA: ResolveBothSongData
+	songB: ResolveBothSongData
+}) {
+	isMerging.value = true
+	try {
+		// 1. Detach marked files for Song A
+		for (const fileId of payload.songA.detachFileIds) {
+			await apiPost(`/api/songs/${payload.songA.id}/file/${fileId}/delete`, undefined, {
+				queryParams: { libraryId: props.selectedLibrary },
+			} as any)
+		}
+
+		// 2. Detach marked files for Song B
+		for (const fileId of payload.songB.detachFileIds) {
+			await apiPost(`/api/songs/${payload.songB.id}/file/${fileId}/delete`, undefined, {
+				queryParams: { libraryId: props.selectedLibrary },
+			} as any)
+		}
+
+		// 3. Update Song A
+		await apiPost(`/api/songs/${payload.songA.id}`, {
+			libraryId: props.selectedLibrary,
+			title: payload.songA.title,
+			composerIds: payload.songA.composerIds,
+			bookIds: payload.songA.bookIds,
+			collectionIds: payload.songA.collectionIds,
+			artistIds: payload.songA.artistIds,
+			genreIds: payload.songA.genreIds,
+			keyIds: payload.songA.keyIds,
+			keywords: payload.songA.keywords,
+			sortTitle: payload.songA.sortTitle,
+		})
+
+		// 4. Update Song B
+		await apiPost(`/api/songs/${payload.songB.id}`, {
+			libraryId: props.selectedLibrary,
+			title: payload.songB.title,
+			composerIds: payload.songB.composerIds,
+			bookIds: payload.songB.bookIds,
+			collectionIds: payload.songB.collectionIds,
+			artistIds: payload.songB.artistIds,
+			genreIds: payload.songB.genreIds,
+			keyIds: payload.songB.keyIds,
+			keywords: payload.songB.keywords,
+			sortTitle: payload.songB.sortTitle,
+		})
+
+		// 5. Run sync/file regeneration so both songs get their updated naming-rule paths
+		await apiPost('/api/sync-library', {
+			libraryId: props.selectedLibrary,
+		})
+
+		isMergeDialogOpen.value = false
+		mergeIssue.value = null
+		await auditIntegrity()
+	} catch (error) {
+		console.error('Failed to resolve both songs:', error)
+		const serverMessage = axios.isAxiosError(error)
+			? error.response?.data?.ocs?.data?.message ?? error.response?.data?.message
+			: undefined
+		integrityError.value = serverMessage
+			?? t('mobilesheetsmanager', 'Failed to save updated songs. Please try again.')
 	} finally {
 		isMerging.value = false
 	}
@@ -206,7 +276,9 @@ function openSong(entry: FileLogEntry | number) {
 			:issue="mergeIssue"
 			:library-data="libraryData"
 			:is-merging="isMerging"
-			@merge="executeMerge" />
+			:initial-mode="initialMergeMode"
+			@merge="executeMerge"
+			@resolve-both="executeResolveBoth" />
 	</div>
 </template>
 

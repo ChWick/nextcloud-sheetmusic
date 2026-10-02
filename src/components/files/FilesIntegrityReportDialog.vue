@@ -18,7 +18,7 @@ const emit = defineEmits<{
 	'update:open': [value: boolean]
 	openSong: [songId: number]
 	fixIssue: [issue: IntegrityIssue]
-	mergeSongs: [issue: IntegrityIssue]
+	mergeSongs: [issue: IntegrityIssue, mode?: 'merge' | 'keepBoth']
 	recheck: []
 }>()
 
@@ -34,9 +34,9 @@ function handleFix(issue: IntegrityIssue) {
 	emit('fixIssue', issue)
 }
 
-function handleMerge(issue: IntegrityIssue) {
+function handleMerge(issue: IntegrityIssue, mode?: 'merge' | 'keepBoth') {
 	mergingKey.value = keyForIssue(issue)
-	emit('mergeSongs', issue)
+	emit('mergeSongs', issue, mode)
 }
 
 /** Called by parent after merge dialog closes to clear the merging state. */
@@ -100,7 +100,6 @@ defineExpose({ clearMergingState })
 		</div>
 	</NcDialog>
 </template>
-
 
 <style module>
 .loading {

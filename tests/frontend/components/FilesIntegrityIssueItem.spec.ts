@@ -4,7 +4,7 @@ import FilesIntegrityIssueItem from '../../../src/components/files/FilesIntegrit
 import type { IntegrityIssue } from '../../../src/types/song'
 
 describe('FilesIntegrityIssueItem.vue', () => {
-	it('renders Merge Songs button when duplicate issue has multiple songIds', () => {
+	it('renders Merge Songs and Keep as Two buttons when duplicate issue has multiple songIds', () => {
 		const issue: IntegrityIssue = {
 			type: 'duplicate_file_path',
 			severity: 'error',
@@ -25,6 +25,7 @@ describe('FilesIntegrityIssueItem.vue', () => {
 		})
 
 		expect(wrapper.text()).toContain('Merge Songs')
+		expect(wrapper.text()).toContain('Keep as Two')
 		expect(wrapper.text()).not.toContain('Auto-Fix Issue')
 	})
 
@@ -47,5 +48,6 @@ describe('FilesIntegrityIssueItem.vue', () => {
 
 		expect(wrapper.text()).toContain('Auto-Fix Issue')
 		expect(wrapper.text()).not.toContain('Merge Songs')
+		expect(wrapper.text()).not.toContain('Keep as Two')
 	})
 })

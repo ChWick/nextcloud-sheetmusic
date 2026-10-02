@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import type { IntegrityIssue } from '../../types/song'
 import { computed } from 'vue'
-import NcButton from '@nextcloud/vue/components/NcButton'
 import { translate as t } from '@nextcloud/l10n'
+import NcButton from '@nextcloud/vue/components/NcButton'
 import AlertCircleIcon from 'vue-material-design-icons/AlertCircle.vue'
 import AlertIcon from 'vue-material-design-icons/Alert.vue'
+import FileMultipleIcon from 'vue-material-design-icons/FileMultiple.vue'
 import InformationIcon from 'vue-material-design-icons/Information.vue'
 import MergeIcon from 'vue-material-design-icons/Merge.vue'
 import WrenchIcon from 'vue-material-design-icons/Wrench.vue'
@@ -17,7 +18,7 @@ const props = defineProps<{
 const emit = defineEmits<{
 	openSong: [songId: number]
 	fixIssue: [issue: IntegrityIssue]
-	mergeSongs: [issue: IntegrityIssue]
+	mergeSongs: [issue: IntegrityIssue, mode?: 'merge' | 'keepBoth']
 }>()
 
 /** True when this is a duplicate between distinct songs (needs merge dialog, not auto-fix) */
@@ -64,16 +65,27 @@ const isDuplicateBetweenSongs = computed(() =>
 				{{ t('mobilesheetsmanager', 'Edit Song') }}
 			</NcButton>
 
-			<NcButton
-				v-if="isDuplicateBetweenSongs"
-				variant="primary"
-				:disabled="isFixing"
-				@click="emit('mergeSongs', issue)">
-				<template #icon>
-					<MergeIcon :size="16" />
-				</template>
-				{{ isFixing ? t('mobilesheetsmanager', 'Merging…') : t('mobilesheetsmanager', 'Merge Songs') }}
-			</NcButton>
+			<template v-if="isDuplicateBetweenSongs">
+				<NcButton
+					variant="secondary"
+					:disabled="isFixing"
+					@click="emit('mergeSongs', issue, 'keepBoth')">
+					<template #icon>
+						<FileMultipleIcon :size="16" />
+					</template>
+					{{ t('mobilesheetsmanager', 'Keep as Two') }}
+				</NcButton>
+
+				<NcButton
+					variant="primary"
+					:disabled="isFixing"
+					@click="emit('mergeSongs', issue, 'merge')">
+					<template #icon>
+						<MergeIcon :size="16" />
+					</template>
+					{{ isFixing ? t('mobilesheetsmanager', 'Merging…') : t('mobilesheetsmanager', 'Merge Songs') }}
+				</NcButton>
+			</template>
 
 			<NcButton
 				v-else-if="issue.fixable"
@@ -88,7 +100,6 @@ const isDuplicateBetweenSongs = computed(() =>
 		</div>
 	</li>
 </template>
-
 
 <style module>
 .item {
