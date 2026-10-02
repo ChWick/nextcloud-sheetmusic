@@ -58,6 +58,7 @@
 
     <NcDialog v-if="isCreateDialogOpen"
               :name="t('mobilesheetsmanager', 'New {entity}', { entity: config.singular })"
+              size="normal"
               @close="closeCreateDialog">
       <p>{{ t('mobilesheetsmanager', 'The new {entity} can be assigned to songs right afterwards.', { entity: config.singular }) }}</p>
       <NcTextField
@@ -65,28 +66,29 @@
         :placeholder="namePlaceholder"
         @keyup.enter="createEntity" />
       <p v-if="createError" :class="$style.error" role="alert">{{ createError }}</p>
-      <div :class="$style.dialogActions">
+      <template #actions>
         <NcButton @click="closeCreateDialog">{{ t('mobilesheetsmanager', 'Cancel') }}</NcButton>
         <NcButton variant="primary"
                   :disabled="isCreating || !newEntityName.trim()"
                   @click="createEntity">
           {{ t('mobilesheetsmanager', 'Create {entity}', { entity: config.singular }) }}
         </NcButton>
-      </div>
+      </template>
     </NcDialog>
 
     <NcDialog v-if="isDeleteDialogOpen"
               :name="t('mobilesheetsmanager', 'Delete {entity}', { entity: config.singular })"
+              size="normal"
               @close="closeDeleteDialog">
       <p>{{ t('mobilesheetsmanager', 'Delete "{name}"?', { name: entityToDelete ? entityLabel(entityToDelete) : '' }) }}</p>
       <p>{{ t('mobilesheetsmanager', 'All songs stay in the library. Only the {entity} entry is removed from them.', { entity: config.singular }) }}</p>
       <p v-if="deleteError" :class="$style.error" role="alert">{{ deleteError }}</p>
-      <div :class="$style.dialogActions">
+      <template #actions>
         <NcButton @click="closeDeleteDialog">{{ t('mobilesheetsmanager', 'Cancel') }}</NcButton>
         <NcButton variant="error" :disabled="isDeleting" @click="deleteEntity">
           {{ t('mobilesheetsmanager', 'Delete {entity}', { entity: config.singular }) }}
         </NcButton>
-      </div>
+      </template>
     </NcDialog>
   </div>
 </template>

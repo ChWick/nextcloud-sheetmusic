@@ -105,7 +105,6 @@ describe('SongEditor.vue', () => {
 		const input = wrapper.find('input#song-title-input')
 		expect(input.exists()).toBe(true)
 		expect(input.attributes('placeholder')).toBe('New Song')
-		expect(wrapper.html()).toContain('Create song')
 	})
 
 	it('renders title input with song title when song prop is provided', () => {
@@ -124,7 +123,6 @@ describe('SongEditor.vue', () => {
 		const input = wrapper.find('input#song-title-input')
 		expect(input.exists()).toBe(true)
 		expect((input.element as HTMLInputElement).value).toBe('Symphony No. 5')
-		expect(wrapper.html()).toContain('Save and Close')
 		expect(wrapper.text()).toContain('Beethoven - Symphony 5.pdf')
 	})
 
@@ -149,26 +147,6 @@ describe('SongEditor.vue', () => {
 
 		const titleInput = wrapper.find('input#song-title-input')
 		expect((titleInput.element as HTMLInputElement).value).toBe('Prefilled Title')
-	})
-
-	it('emits cancel event when Cancel button is clicked', async () => {
-		const wrapper = mount(SongEditor, {
-			props: {
-				libraryId: 1,
-				composers: mockComposers,
-				books: mockBooks,
-				collections: mockCollections,
-				artists: mockArtists,
-			},
-			...globalStubs,
-		})
-
-		const buttons = wrapper.findAll('button')
-		const cancelBtn = buttons.find((btn) => btn.text() === 'Cancel' || btn.attributes('aria-label') === 'Cancel' || btn.attributes('title') === 'Cancel')
-		expect(cancelBtn).toBeDefined()
-		await cancelBtn!.trigger('click')
-
-		expect(wrapper.emitted('cancel')).toBeTruthy()
 	})
 
 	it('shows error when submitting empty title', async () => {

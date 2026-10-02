@@ -250,32 +250,34 @@ async function deleteLibrary() {
 
     <NcDialog v-if="isDialogOpen"
               :name="t('mobilesheetsmanager', 'Add MobileSheets Library')"
+              size="normal"
               @close="isDialogOpen = false">
       <p>{{ t('mobilesheetsmanager', 'Select a MobileSheets .db file from your Nextcloud files.') }}</p>
       <NcButton variant="primary" @click="openFilePicker">
         {{ selectedFile?.path ?? t('mobilesheetsmanager', 'Choose .db file from Nextcloud') }}
       </NcButton>
       <p v-if="fileError" :class="$style.error" role="alert">{{ fileError }}</p>
-      <div :class="$style.dialogActions">
+      <template #actions>
         <NcButton @click="isDialogOpen = false">{{ t('mobilesheetsmanager', 'Cancel') }}</NcButton>
         <NcButton variant="primary" :disabled="!selectedFile" @click="addLibrary">
           {{ t('mobilesheetsmanager', 'Add library') }}
         </NcButton>
-      </div>
+      </template>
     </NcDialog>
 
     <NcDialog v-if="isDeleteDialogOpen"
               :name="t('mobilesheetsmanager', 'Delete library')"
+              size="normal"
               @close="closeDeleteDialog">
       <p>{{ t('mobilesheetsmanager', 'Remove "{path}" from your libraries?', { path: selectedLibraryPath }) }}</p>
       <p>{{ t('mobilesheetsmanager', 'Only the library entry is removed. The MobileSheets database and all files it references stay in your Nextcloud files, so you can add the library again whenever you want.') }}</p>
       <p v-if="deleteError" :class="$style.error" role="alert">{{ deleteError }}</p>
-      <div :class="$style.dialogActions">
+      <template #actions>
         <NcButton @click="closeDeleteDialog">{{ t('mobilesheetsmanager', 'Cancel') }}</NcButton>
         <NcButton variant="error" :disabled="isDeletingLibrary" @click="deleteLibrary">
           {{ t('mobilesheetsmanager', 'Delete library') }}
         </NcButton>
-      </div>
+      </template>
     </NcDialog>
   </div>
 </template>

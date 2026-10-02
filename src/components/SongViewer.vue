@@ -31,6 +31,7 @@ import ViewDay from 'vue-material-design-icons/ViewDay.vue'
 import ViewStream from 'vue-material-design-icons/ViewStream.vue'
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import SongEditor from './SongEditor.vue'
+import DeleteSongDialog from './DeleteSongDialog.vue'
 
 const props = withDefaults(
 	defineProps<{
@@ -222,31 +223,8 @@ function handleUpdated(data: LibraryData) {
 	emit('updated', data)
 }
 
-/**
- * Delete the song.
- */
-async function confirmDeleteSong() {
-	if (!props.song || props.libraryId < 0) {
-		return
-	}
-
-	const songId = props.song.id
-	isDeletingSong.value = true
-	deleteError.value = ''
-
-	try {
-		const response = await apiDelete('/api/songs/{id}', {
-			pathParams: { id: songId },
-			queryParams: { libraryId: props.libraryId, deleteFiles: deleteFiles.value },
-		})
-		isDeleteDialogOpen.value = false
-		const data = response.data?.ocs?.data
-		emit('deleted', data, songId)
-	} catch (error) {
-		deleteError.value = describeRequestFailure(error, t('mobilesheetsmanager', 'Could not delete the song.'))
-	} finally {
-		isDeletingSong.value = false
-	}
+function handleSongDeleted(data: LibraryData | undefined, songId: number) {
+	emit('deleted', data, songId)
 }
 
 function prevPage() {
@@ -955,37 +933,12 @@ defineExpose({
 
 		</template>
 
-		<NcDialog
-			v-if="isDeleteDialogOpen"
-			:name="t('mobilesheetsmanager', 'Delete song')"
-			@close="isDeleteDialogOpen = false">
-			<p>{{ t('mobilesheetsmanager', 'Delete "{title}" from this library?', { title: song?.title ?? '' }) }}</p>
-			<p>{{ t('mobilesheetsmanager', 'The song and everything pointing at it is removed from the MobileSheets database.') }}</p>
-			<NcCheckboxRadioSwitch v-model="deleteFiles" type="checkbox">
-				{{ t('mobilesheetsmanager', 'Delete all attached files') }}
-			</NcCheckboxRadioSwitch>
-			<p v-if="deleteFiles">
-				{{ t('mobilesheetsmanager', 'The {count} attached file(s) are moved to the Nextcloud trash bin, so they can be restored from there.', { count: songFiles.length }) }}
-			</p>
-			<p v-else>
-				{{ t('mobilesheetsmanager', 'The {count} attached file(s) are kept in your Nextcloud files.', { count: songFiles.length }) }}
-			</p>
-			<p v-if="deleteError" :class="$style.error" role="alert">{{ deleteError }}</p>
-			<div :class="$style.dialogActions">
-				<NcButton @click="isDeleteDialogOpen = false">
-					{{ t('mobilesheetsmanager', 'Cancel') }}
-				</NcButton>
-				<NcButton
-					variant="error"
-					:disabled="isDeletingSong"
-					@click="confirmDeleteSong">
-					<template v-if="isDeletingSong">
-						<NcLoadingIcon :size="16" />
-					</template>
-					{{ t('mobilesheetsmanager', 'Delete song') }}
-				</NcButton>
-			</div>
-		</NcDialog>
+		<DeleteSongDialog
+			v-model:open="isDeleteDialogOpen"
+			:song="song"
+			:library-id="libraryId ?? -1"
+			:file-count="songFiles.length"
+			@deleted="handleSongDeleted" />
 	</div>
 </template>
 

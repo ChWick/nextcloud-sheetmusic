@@ -16,30 +16,32 @@
       <SongSortControl v-model:sort-key="sortKey" v-model:sort-order="sortOrder" />
       <SongViewToggle v-model:view-mode="viewMode" />
     </div>
-    <template v-else-if="isEditInUrl && openSong">
+    <template v-else-if="(isEditInUrl && openSong) || isCreatingSong">
       <NcButton
+        v-if="isEditInUrl && openSong"
         variant="error"
         :title="t('mobilesheetsmanager', 'Delete song')"
         :aria-label="t('mobilesheetsmanager', 'Delete song')"
-        @click="songEditorRef?.promptDelete()">
+        @click="(songEditorRef || createSongEditorRef)?.promptDelete()">
         <template #icon>
           <DeleteIcon :size="20" />
         </template>
       </NcButton>
       <NcButton
+        v-if="isEditInUrl && openSong"
         variant="secondary"
         :title="t('mobilesheetsmanager', 'Save without closing')"
         :aria-label="t('mobilesheetsmanager', 'Save without closing')"
-        @click="songEditorRef?.saveSong(false)">
+        @click="(songEditorRef || createSongEditorRef)?.saveSong(false)">
         <template #icon>
           <ContentSaveOutlineIcon :size="20" />
         </template>
       </NcButton>
       <NcButton
         variant="primary"
-        :title="t('mobilesheetsmanager', 'Save and Close')"
-        :aria-label="t('mobilesheetsmanager', 'Save and Close')"
-        @click="songEditorRef?.saveSong(true)">
+        :title="isCreatingSong ? t('mobilesheetsmanager', 'Create song') : t('mobilesheetsmanager', 'Save and Close')"
+        :aria-label="isCreatingSong ? t('mobilesheetsmanager', 'Create song') : t('mobilesheetsmanager', 'Save and Close')"
+        @click="(songEditorRef || createSongEditorRef)?.saveSong(true)">
         <template #icon>
           <CheckIcon :size="20" />
         </template>
@@ -102,6 +104,7 @@
                 :source-types="sourceTypes"
                 @saved="handleSaved"
                 @updated="handleLibraryDataUpdate"
+                @deleted="handleDeleted"
                 @cancel="goBackToSongs" />
     <SongViewer
       v-else
@@ -173,6 +176,7 @@
       @clear="clearFilters"/>
     </div>
     <SongEditor v-if="isCreatingSong"
+                ref="createSongEditorRef"
                 :song="null"
                 :library-id="selectedLibrary"
                 :composers="composers"

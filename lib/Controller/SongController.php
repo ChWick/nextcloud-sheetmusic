@@ -268,8 +268,14 @@ class SongController extends OCSController {
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'DELETE', url: '/api/songs/{id}')]
 	public function deleteSong(int $id, ?int $libraryId = null, bool $deleteFiles = true): DataResponse {
+		$libraryId = $libraryId ?? ((int)$this->request->getParam('libraryId', 0) ?: null);
+		$deleteFilesParam = $this->request->getParam('deleteFiles');
+		if ($deleteFilesParam !== null) {
+			$deleteFiles = filter_var($deleteFilesParam, FILTER_VALIDATE_BOOLEAN);
+		}
+
 		if ($libraryId === null) {
-			return new DataResponse([], Http::STATUS_BAD_REQUEST);
+			return new DataResponse(['message' => 'libraryId parameter is required'], Http::STATUS_BAD_REQUEST);
 		}
 
 		$user = $this->userSession->getUser();
@@ -280,12 +286,12 @@ class SongController extends OCSController {
 		try {
 			$result = $this->songService->deleteSong($user, $id, $libraryId, $deleteFiles);
 			if ($result === null) {
-				return new DataResponse([], Http::STATUS_NOT_FOUND);
+				return new DataResponse(['message' => 'Song or library not found'], Http::STATUS_NOT_FOUND);
 			}
 
 			return new DataResponse($result);
 		} catch (\Throwable $e) {
-			return new DataResponse([], Http::STATUS_INTERNAL_SERVER_ERROR);
+			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
 

@@ -200,6 +200,12 @@ class ApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/songs/{id}/delete')]
+	public function deleteSongPost(int $id, ?int $libraryId = null, bool $deleteFiles = true): DataResponse {
+		return $this->songController->deleteSong($id, $libraryId, $deleteFiles);
+	}
+
+	#[NoAdminRequired]
 	#[ApiRoute(verb: 'POST', url: '/api/import-metadata')]
 	public function importSongMetadata(): DataResponse {
 		return $this->songFileController->importSongMetadata();
