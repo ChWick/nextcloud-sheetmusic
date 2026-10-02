@@ -101,19 +101,8 @@ class LibraryController extends OCSController {
 
 		try {
 			$issues = $this->integrityService->checkIntegrity($id, $user->getUID());
-			$arrayIssues = array_map(static fn($issue) => [
-				'type' => $issue->type,
-				'severity' => $issue->severity,
-				'message' => $issue->message,
-				'songId' => $issue->songId,
-				'songTitle' => $issue->songTitle,
-				'fileId' => $issue->fileId,
-				'path' => $issue->path,
-				'suggestedPath' => $issue->suggestedPath,
-				'fixable' => $issue->fixable,
-			], $issues);
 
-			return new DataResponse(['issues' => $arrayIssues], Http::STATUS_OK);
+			return new DataResponse(['issues' => array_map(static fn($issue) => $issue->jsonSerialize(), $issues)], Http::STATUS_OK);
 		} catch (\Throwable $e) {
 			return new DataResponse(
 				['message' => 'Error auditing library integrity: ' . $e->getMessage()],

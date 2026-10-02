@@ -327,6 +327,26 @@ final class FileManagerTest extends TestCase {
 		self::assertArrayNotHasKey('Noten/Jazz/Jazz - Take Five.pdf', $this->files);
 	}
 
+	public function testLinksToExistingTargetFileWhenSourceIsMissing(): void {
+		$this->files = [
+			'Noten/Jazz/Jazz - Take Five.pdf' => 'TARGET_PAYLOAD',
+		];
+		$this->folders = ['Noten' => true, 'Noten/Jazz' => true, 'Noten/source' => true];
+
+		$entry = $this->fileManager->regenerateFilePath(
+			$this->collectionSong(),
+			new MobileSheetsFile(7, '/remote.php/dav/files/admin/Noten/source/MissingOldFile.pdf'),
+			$this->user(),
+			$this->libraryFolder,
+			'/tmp/library.db',
+		);
+
+		self::assertSame([], $this->moves);
+		self::assertCount(1, $this->updates);
+		self::assertSame('/remote.php/dav/files/admin/Noten/Jazz/Jazz - Take Five.pdf', $this->updates[0]['path']);
+		self::assertStringContainsString('Linked to existing target file', $entry->message);
+	}
+
 	public function testThrowsWhenTheStoredPathBelongsToAnotherUser(): void {
 		$this->expectException(\RuntimeException::class);
 		$this->expectExceptionMessageMatches('/not below/');

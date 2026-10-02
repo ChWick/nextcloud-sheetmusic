@@ -58,4 +58,36 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		self::assertSame(IntegrityIssue::TYPE_MISSING_FILE, $issues[0]->type);
 		self::assertSame('Test Song', $issues[0]->songTitle);
 	}
+
+	public function testScanOrphansIgnoresHashcodeFiles(): void {
+		$libraryService = $this->createMock(LibraryService::class);
+		$songMapper = $this->createMock(SongMapper::class);
+		$fileManager = $this->createMock(FileManager::class);
+		$rootFolder = $this->createMock(IRootFolder::class);
+		$pathResolver = new MobileSheetsPathResolver($rootFolder);
+
+		$targetFolder = $this->createMock(Folder::class);
+		$userFolder = $this->createMock(\OCP\Files\IUserFolder::class);
+		$user = $this->createMock(\OCP\IUser::class);
+		$userFolder->method('getOwner')->willReturn($user);
+		$rootFolder->method('getUserFolder')->with('user1')->willReturn($userFolder);
+
+		$fileManager->method('libraryContext')->willReturn([
+			'databasePath' => '/tmp/dummy.db',
+			'targetFolder' => $targetFolder,
+		]);
+
+		$targetFolder->method('getPath')->willReturn('/tmp');
+		$songMapper->method('findSongs')->willReturn([]);
+		$hashcodeNode = $this->createMock(\OCP\Files\Node::class);
+		$hashcodeNode->method('getName')->willReturn('mobilesheets_hashcodes.txt');
+		$hashcodeNode->method('getPath')->willReturn('/tmp/mobilesheets_hashcodes.txt');
+		$targetFolder->method('getDirectoryListing')->willReturn([$hashcodeNode]);
+
+		$logger = $this->createMock(\Psr\Log\LoggerInterface::class);
+		$service = new LibraryIntegrityService($libraryService, $songMapper, $fileManager, $rootFolder, $pathResolver, $logger);
+		$issues = $service->checkIntegrity(1, 'user1');
+
+		self::assertCount(0, $issues);
+	}
 }

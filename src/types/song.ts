@@ -93,3 +93,22 @@ export interface PendingAddition {
 	hint: string
 	remove: () => void
 }
+
+/** A single issue from the library integrity audit. */
+export interface IntegrityIssue {
+	type: string
+	severity: 'error' | 'warning' | 'info'
+	message: string
+	songId?: number | null
+	songTitle?: string | null
+	fileId?: number | null
+	path?: string | null
+	suggestedPath?: string | null
+	fixable: boolean
+	details?: {
+		songIds?: number[]
+		exactDuplicate?: boolean
+		[key: string]: unknown
+	} | null
+}
+

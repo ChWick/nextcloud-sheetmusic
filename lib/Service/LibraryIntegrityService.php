@@ -97,12 +97,14 @@ class LibraryIntegrityService {
 						$cleanValid = ltrim($validPath, '/');
 						if ($targetFolder->nodeExists($cleanValid)) {
 							$targetExists = true;
-							// Mark target file as referenced by song so it is not flagged as an orphan
-							$referencedRelativePaths[$cleanValid][] = [
-								'songId' => $song->id,
-								'songTitle' => $song->title,
-								'fileId' => $file->id,
-							];
+							if (!$sourceExists) {
+								// Mark target file as referenced by song so it is not flagged as an orphan
+								$referencedRelativePaths[$cleanValid][] = [
+									'songId' => $song->id,
+									'songTitle' => $song->title,
+									'fileId' => $file->id,
+								];
+							}
 							break;
 						}
 					}
@@ -170,19 +172,42 @@ class LibraryIntegrityService {
 			}
 		}
 
+		// Index songs by ID for duplicate checks
+		$songsById = [];
+		foreach ($songs as $s) {
+			$songsById[$s->id] = $s;
+		}
+
 		// Check for duplicate physical file references
 		foreach ($referencedRelativePaths as $relPath => $references) {
 			if (count($references) > 1) {
-				foreach ($references as $ref) {
+				$songIds = array_values(array_unique(array_column($references, 'songId')));
+
+				if (count($songIds) > 1) {
+					$referencingSongs = array_values(array_filter(
+						array_map(fn($id) => $songsById[$id] ?? null, $songIds)
+					));
+
+					$areExactDuplicates = $this->areSongsExactDuplicates($referencingSongs);
+					$songTitles = array_map(fn($s) => sprintf('"%s" (ID %d)', $s->title, $s->id), $referencingSongs);
+
 					$issues[] = new IntegrityIssue(
 						type: IntegrityIssue::TYPE_DUPLICATE_FILE_PATH,
 						severity: IntegrityIssue::SEVERITY_ERROR,
-						message: sprintf('Multiple database entries point to the same file path "%s".', basename($relPath)),
-						songId: $ref['songId'],
-						songTitle: $ref['songTitle'],
-						fileId: $ref['fileId'],
+						message: sprintf(
+							'Multiple database entries point to the same file path "%s" (%s).',
+							basename($relPath),
+							implode(', ', $songTitles)
+						),
+						songId: $referencingSongs[0]->id ?? $references[0]['songId'],
+						songTitle: $referencingSongs[0]->title ?? $references[0]['songTitle'],
+						fileId: $references[0]['fileId'],
 						path: $relPath,
-						fixable: true,
+						fixable: $areExactDuplicates,
+						details: [
+							'songIds' => $songIds,
+							'exactDuplicate' => $areExactDuplicates,
+						],
 					);
 				}
 			}
@@ -222,16 +247,101 @@ class LibraryIntegrityService {
 			$hashCodes = MobileSheetsHashCodesFile::forDatabase($databasePath, $this->logger);
 
 			try {
-				$this->fileManager->regenerateSongFilePaths($songId, $user, $targetFolder, $databasePath, $hashCodes);
+				$song = $this->songMapper->findSong($databasePath, $songId);
+				if ($song === null) {
+					return ['success' => false, 'message' => sprintf('Song ID %d not found.', $songId)];
+				}
+
+				$allSongs = $this->songMapper->findSongs($databasePath);
+				$duplicateSongIds = [];
+				foreach ($song->files as $f) {
+					$cleanF = strtolower(ltrim($f->path, '/'));
+					foreach ($allSongs as $otherSong) {
+						foreach ($otherSong->files as $otherFile) {
+							if ($cleanF === strtolower(ltrim($otherFile->path, '/'))) {
+								$duplicateSongIds[] = $otherSong->id;
+							}
+						}
+					}
+				}
+				$duplicateSongIds = array_values(array_unique($duplicateSongIds));
+
+				if (count($duplicateSongIds) < 2) {
+					return ['success' => false, 'message' => 'No duplicate songs found for this file path.'];
+				}
+
+				sort($duplicateSongIds);
+				$targetSongId = $duplicateSongIds[0];
+				$mergedCount = 0;
+
+				for ($i = 1; $i < count($duplicateSongIds); $i++) {
+					$droppedId = $duplicateSongIds[$i];
+					$this->songMapper->mergeSongs($databasePath, $targetSongId, $droppedId);
+					$mergedCount++;
+				}
+
 				$hashCodes?->save();
 
-				return ['success' => true, 'message' => sprintf('Assigned unique file path to duplicate entry for song ID %d.', $songId)];
+				return [
+					'success' => true,
+					'message' => sprintf('Merged %d duplicate song(s) into song ID %d.', $mergedCount, $targetSongId),
+				];
 			} catch (\Throwable $e) {
 				return ['success' => false, 'message' => sprintf('Cannot resolve duplicate path for song ID %d: %s', $songId, $e->getMessage())];
 			}
 		}
 
 		return ['success' => false, 'message' => 'Unrecognized or unfixable issue type.'];
+	}
+
+	/**
+	 * @param list<\OCA\MobileSheetsManager\Db\MobileSheetsSong> $songs
+	 */
+	private function areSongsExactDuplicates(array $songs): bool {
+		if (count($songs) <= 1) {
+			return true;
+		}
+
+		$first = $songs[0];
+		$extractNames = static function (array $entities): array {
+			$names = array_map(static fn($e) => $e->name ?? $e->title ?? (string)$e->id, $entities);
+			sort($names, SORT_STRING);
+			return $names;
+		};
+
+		$firstComposers = $extractNames($first->composers);
+		$firstArtists = $extractNames($first->artists);
+		$firstBooks = $extractNames($first->books);
+		$firstCollections = $extractNames($first->collections);
+		$firstGenres = $extractNames($first->genres);
+		$firstKeys = $extractNames($first->keys);
+
+		for ($i = 1; $i < count($songs); $i++) {
+			$s = $songs[$i];
+			if (trim(strtolower($s->title)) !== trim(strtolower($first->title))) {
+				return false;
+			}
+			if ($extractNames($s->composers) !== $firstComposers) {
+				return false;
+			}
+			if ($extractNames($s->artists) !== $firstArtists) {
+				return false;
+			}
+			if ($extractNames($s->books) !== $firstBooks) {
+				return false;
+			}
+			if ($extractNames($s->collections) !== $firstCollections) {
+				return false;
+			}
+			if ($extractNames($s->genres) !== $firstGenres) {
+				return false;
+			}
+			if ($extractNames($s->keys) !== $firstKeys) {
+				return false;
+			}
+		}
+
+		return true;
 	}
 
 	/**
@@ -253,7 +363,7 @@ class LibraryIntegrityService {
 				$filename = $node->getName();
 
 				// Ignore database file and hash codes file
-				if ($filename === 'mobilesheets.db' || str_ends_with($filename, '.db') || $filename === 'hashcodes.txt') {
+				if ($filename === 'mobilesheets.db' || str_ends_with($filename, '.db') || str_ends_with($filename, 'hashcodes.txt')) {
 					continue;
 				}
 

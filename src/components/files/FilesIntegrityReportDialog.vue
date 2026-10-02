@@ -18,10 +18,12 @@ const emit = defineEmits<{
 	'update:open': [value: boolean]
 	openSong: [songId: number]
 	fixIssue: [issue: IntegrityIssue]
+	mergeSongs: [issue: IntegrityIssue]
 	recheck: []
 }>()
 
 const fixingKey = ref<string | null>(null)
+const mergingKey = ref<string | null>(null)
 
 function keyForIssue(issue: IntegrityIssue): string {
 	return `${issue.type}-${issue.songId ?? 0}-${issue.fileId ?? 0}-${issue.path ?? ''}`
@@ -31,6 +33,18 @@ function handleFix(issue: IntegrityIssue) {
 	fixingKey.value = keyForIssue(issue)
 	emit('fixIssue', issue)
 }
+
+function handleMerge(issue: IntegrityIssue) {
+	mergingKey.value = keyForIssue(issue)
+	emit('mergeSongs', issue)
+}
+
+/** Called by parent after merge dialog closes to clear the merging state. */
+function clearMergingState() {
+	mergingKey.value = null
+}
+
+defineExpose({ clearMergingState })
 </script>
 
 <template>
@@ -71,9 +85,10 @@ function handleFix(issue: IntegrityIssue) {
 						v-for="issue in issues"
 						:key="keyForIssue(issue)"
 						:issue="issue"
-						:is-fixing="fixingKey === keyForIssue(issue)"
+						:is-fixing="fixingKey === keyForIssue(issue) || mergingKey === keyForIssue(issue)"
 						@open-song="emit('openSong', $event)"
-						@fix-issue="handleFix" />
+						@fix-issue="handleFix"
+						@merge-songs="handleMerge" />
 				</ul>
 			</template>
 		</template>
@@ -85,6 +100,7 @@ function handleFix(issue: IntegrityIssue) {
 		</div>
 	</NcDialog>
 </template>
+
 
 <style module>
 .loading {

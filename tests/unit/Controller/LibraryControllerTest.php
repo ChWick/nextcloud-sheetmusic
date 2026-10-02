@@ -100,5 +100,55 @@ final class LibraryControllerTest extends TestCase {
 		$this->assertSame(Http::STATUS_OK, $response->getStatus());
 		$this->assertSame(['id' => 1, 'path' => '/Noten/mobilesheets.db'], $response->getData());
 	}
+
+	public function testGetIntegrityIncludesIssueDetails(): void {
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('admin');
+
+		$userSession = $this->createMock(IUserSession::class);
+		$userSession->method('getUser')->willReturn($user);
+
+		$libraryService = $this->createMock(LibraryService::class);
+		$integrityService = $this->createMock(\OCA\MobileSheetsManager\Service\LibraryIntegrityService::class);
+
+		$issue = new \OCA\MobileSheetsManager\Service\IntegrityIssue(
+			type: \OCA\MobileSheetsManager\Service\IntegrityIssue::TYPE_DUPLICATE_FILE_PATH,
+			severity: \OCA\MobileSheetsManager\Service\IntegrityIssue::SEVERITY_ERROR,
+			message: 'Multiple database entries point to the same file path',
+			songId: 60,
+			songTitle: 'Nachspiel',
+			fileId: 207,
+			path: 'Noten/Nachspiel.pdf',
+			suggestedPath: null,
+			fixable: false,
+			details: [
+				'songIds' => [60, 61],
+				'exactDuplicate' => false,
+			],
+		);
+
+		$integrityService->expects($this->once())
+			->method('checkIntegrity')
+			->with(1, 'admin')
+			->willReturn([$issue]);
+
+		$controller = new LibraryController(
+			'mobilesheetsmanager',
+			$this->createMock(IRequest::class),
+			$libraryService,
+			$userSession,
+			$integrityService,
+		);
+
+		$response = $controller->getIntegrity(1);
+		$this->assertSame(Http::STATUS_OK, $response->getStatus());
+		$data = $response->getData();
+		$this->assertArrayHasKey('issues', $data);
+		$this->assertCount(1, $data['issues']);
+		$this->assertSame([
+			'songIds' => [60, 61],
+			'exactDuplicate' => false,
+		], $data['issues'][0]['details']);
+	}
 }
 

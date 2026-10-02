@@ -34,6 +34,7 @@ class IntegrityIssue implements JsonSerializable {
 		public readonly ?string $path = null,
 		public readonly ?string $suggestedPath = null,
 		public readonly bool $fixable = false,
+		public readonly ?array $details = null,
 	) {
 	}
 
@@ -47,7 +48,8 @@ class IntegrityIssue implements JsonSerializable {
 	 *     fileId: ?int,
 	 *     path: ?string,
 	 *     suggestedPath: ?string,
-	 *     fixable: bool
+	 *     fixable: bool,
+	 *     details: ?array
 	 * }
 	 */
 	public function jsonSerialize(): array {
@@ -61,6 +63,7 @@ class IntegrityIssue implements JsonSerializable {
 			'path' => $this->path,
 			'suggestedPath' => $this->suggestedPath,
 			'fixable' => $this->fixable,
+			'details' => $this->details,
 		];
 	}
 }

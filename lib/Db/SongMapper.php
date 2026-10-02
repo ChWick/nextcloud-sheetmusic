@@ -1140,6 +1140,87 @@ class SongMapper extends AbstractDatabaseMapper {
 		}
 	}
 
+	/**
+	 * Merge two songs: re-point all SongId references from $droppedId to $keepId,
+	 * de-duplicate relation rows, then delete the dropped song row.
+	 *
+	 * All tables that have a SongId column (except Songs itself) are updated.
+	 * The Songs row for $keepId is left untouched – the caller is responsible for
+	 * updating its fields beforehand with updateSong() if needed.
+	 */
+	public function mergeSongs(string $databasePath, int $keepId, int $droppedId): void {
+		if ($keepId === $droppedId) {
+			return;
+		}
+
+		$database = $this->openConnection($databasePath);
+		$schema = $this->getSchemaMap($database);
+		$existingTables = array_values($schema['tables']);
+
+		$database->beginTransaction();
+		try {
+			foreach ($existingTables as $table) {
+				$lc = strtolower($table);
+				if ($lc === 'songs' || !$this->hasSongIdColumn($database, $table)) {
+					continue;
+				}
+
+				// Fetch all columns so we can build a unique-key check for relation tables
+				$cols = array_values($this->columnNames($database, $table));
+
+				// For pure relation tables (2 columns: SongId + entity FK) we move
+				// only the rows that are not already present for $keepId.
+				if (count($cols) === 2) {
+					$otherCol = strtolower($cols[0]) === 'songid' ? $cols[1] : $cols[0];
+
+					// Find entity IDs already linked to $keepId
+					$existStmt = $database->prepare(
+						'SELECT "' . $otherCol . '" FROM "' . $table . '" WHERE SongId = :keepId'
+					);
+					$existStmt->execute([':keepId' => $keepId]);
+					$existing = array_map('intval', $existStmt->fetchAll(PDO::FETCH_COLUMN));
+
+					// Move references that are not yet linked to $keepId
+					$moveStmt = $database->prepare(
+						'UPDATE "' . $table . '" SET SongId = :keepId'
+						. ' WHERE SongId = :droppedId AND "' . $otherCol . '" NOT IN ('
+						. 'SELECT "' . $otherCol . '" FROM "' . $table . '" WHERE SongId = :keepId2'
+						. ')'
+					);
+					$moveStmt->execute([
+						':keepId' => $keepId,
+						':droppedId' => $droppedId,
+						':keepId2' => $keepId,
+					]);
+
+					// Remove remaining (duplicate) rows for $droppedId
+					$delStmt = $database->prepare(
+						'DELETE FROM "' . $table . '" WHERE SongId = :droppedId'
+					);
+					$delStmt->execute([':droppedId' => $droppedId]);
+				} else {
+					// Other tables (e.g. Files, Bookmarks, AudioFiles, Notes…)
+					// just reassign the SongId.
+					$updateStmt = $database->prepare(
+						'UPDATE "' . $table . '" SET SongId = :keepId WHERE SongId = :droppedId'
+					);
+					$updateStmt->execute([':keepId' => $keepId, ':droppedId' => $droppedId]);
+				}
+			}
+
+			// Delete the dropped Songs row
+			if ($this->hasTable($database, 'Songs')) {
+				$stmt = $database->prepare('DELETE FROM Songs WHERE Id = :droppedId');
+				$stmt->execute([':droppedId' => $droppedId]);
+			}
+
+			$database->commit();
+		} catch (\Throwable $exception) {
+			$database->rollBack();
+			throw $exception;
+		}
+	}
+
 	public function deleteSong(string $databasePath, int $songId): array {
 		$database = $this->openConnection($databasePath);
 

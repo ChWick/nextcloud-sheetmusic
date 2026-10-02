@@ -293,5 +293,86 @@ class SongService {
 			throw $e;
 		}
 	}
-}
 
+	/**
+	 * Merge song $droppedId into song $keepId.
+	 *
+	 * All entity relations, files, bookmarks, and audio files from $droppedId
+	 * are re-pointed to $keepId (with de-duplication for relation tables).
+	 * The Songs row for $keepId is then overwritten with the fields supplied
+	 * in $merged. The $droppedId Songs row is deleted.
+	 *
+	 * @param array{
+	 *     title: string,
+	 *     composerIds?: list<int>,
+	 *     bookIds?: list<int>,
+	 *     collectionIds?: list<int>,
+	 *     artistIds?: list<int>,
+	 *     genreIds?: list<int>,
+	 *     keyIds?: list<int>,
+	 *     customGroupIds?: list<int>,
+	 *     yearIds?: list<int>,
+	 *     signatureIds?: list<int>,
+	 *     sourceTypeIds?: list<int>,
+	 *     stars?: int,
+	 *     difficulty?: int,
+	 *     duration?: int,
+	 *     keywords?: string,
+	 *     custom?: string,
+	 *     custom2?: string,
+	 *     sortTitle?: string,
+	 * } $merged
+	 */
+	public function mergeSong(IUser $user, int $libraryId, int $keepId, int $droppedId, array $merged): ?array {
+		$databasePath = $this->libraryService->getDatabasePath($user->getUID(), $libraryId);
+		if ($databasePath === null) {
+			return null;
+		}
+
+		try {
+			// 1. Apply the merged metadata to the song that is being kept.
+			$this->songMapper->updateSong(
+				$databasePath,
+				$keepId,
+				$merged['title'] ?? '',
+				array_map('intval', $merged['composerIds'] ?? []),
+				array_map('intval', $merged['bookIds'] ?? []),
+				array_map('intval', $merged['collectionIds'] ?? []),
+				array_map('intval', $merged['artistIds'] ?? []),
+				array_map('intval', $merged['genreIds'] ?? []),
+				array_map('intval', $merged['keyIds'] ?? []),
+				array_map('intval', $merged['customGroupIds'] ?? []),
+				array_map('intval', $merged['yearIds'] ?? []),
+				array_map('intval', $merged['signatureIds'] ?? []),
+				array_map('intval', $merged['sourceTypeIds'] ?? []),
+				(int)($merged['stars'] ?? 0),
+				(int)($merged['difficulty'] ?? 0),
+				(int)($merged['duration'] ?? 0),
+				(string)($merged['keywords'] ?? ''),
+				(string)($merged['custom'] ?? ''),
+				(string)($merged['custom2'] ?? ''),
+				(string)($merged['sortTitle'] ?? ''),
+			);
+
+			// 2. Move all references (files, relations, …) and delete the dropped song row.
+			$this->songMapper->mergeSongs($databasePath, $keepId, $droppedId);
+
+			$this->logger->info('Merged MobileSheets songs', [
+				'libraryId' => $libraryId,
+				'keepId' => $keepId,
+				'droppedId' => $droppedId,
+			]);
+
+			return $this->songMapper->findLibraryData($databasePath);
+		} catch (\Throwable $e) {
+			$this->logger->error('Could not merge songs in MobileSheets library', [
+				'exception' => $e,
+				'libraryId' => $libraryId,
+				'keepId' => $keepId,
+				'droppedId' => $droppedId,
+			]);
+
+			throw $e;
+		}
+	}
+}

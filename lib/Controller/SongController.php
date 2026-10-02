@@ -288,5 +288,33 @@ class SongController extends OCSController {
 			return new DataResponse([], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
-}
 
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/songs/merge')]
+	public function mergeSong(
+		?int $libraryId = null,
+		?int $keepId = null,
+		?int $droppedId = null,
+		array $merged = [],
+	): DataResponse {
+		if ($libraryId === null || $keepId === null || $droppedId === null) {
+			return new DataResponse(['message' => 'libraryId, keepId and droppedId are required'], Http::STATUS_BAD_REQUEST);
+		}
+
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		try {
+			$result = $this->songService->mergeSong($user, $libraryId, $keepId, $droppedId, $merged);
+			if ($result === null) {
+				return new DataResponse(['message' => 'Library not found'], Http::STATUS_NOT_FOUND);
+			}
+
+			return new DataResponse($result);
+		} catch (\Throwable $e) {
+			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+}

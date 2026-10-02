@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import type { IntegrityIssue } from '../../types/song'
+import { computed } from 'vue'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import { translate as t } from '@nextcloud/l10n'
 import AlertCircleIcon from 'vue-material-design-icons/AlertCircle.vue'
 import AlertIcon from 'vue-material-design-icons/Alert.vue'
 import InformationIcon from 'vue-material-design-icons/Information.vue'
+import MergeIcon from 'vue-material-design-icons/Merge.vue'
 import WrenchIcon from 'vue-material-design-icons/Wrench.vue'
 
 const props = defineProps<{
@@ -15,7 +17,14 @@ const props = defineProps<{
 const emit = defineEmits<{
 	openSong: [songId: number]
 	fixIssue: [issue: IntegrityIssue]
+	mergeSongs: [issue: IntegrityIssue]
 }>()
+
+/** True when this is a duplicate between distinct songs (needs merge dialog, not auto-fix) */
+const isDuplicateBetweenSongs = computed(() =>
+	props.issue.type === 'duplicate_file_path'
+	&& (props.issue.details?.songIds?.length ?? 0) > 1,
+)
 </script>
 
 <template>
@@ -48,7 +57,7 @@ const emit = defineEmits<{
 
 		<div :class="$style.actions">
 			<NcButton
-				v-if="issue.songId"
+				v-if="issue.songId && !isDuplicateBetweenSongs"
 				variant="secondary"
 				type="tertiary"
 				@click="emit('openSong', issue.songId!)">
@@ -56,7 +65,18 @@ const emit = defineEmits<{
 			</NcButton>
 
 			<NcButton
-				v-if="issue.fixable"
+				v-if="isDuplicateBetweenSongs"
+				variant="primary"
+				:disabled="isFixing"
+				@click="emit('mergeSongs', issue)">
+				<template #icon>
+					<MergeIcon :size="16" />
+				</template>
+				{{ isFixing ? t('mobilesheetsmanager', 'Merging…') : t('mobilesheetsmanager', 'Merge Songs') }}
+			</NcButton>
+
+			<NcButton
+				v-else-if="issue.fixable"
 				variant="primary"
 				:disabled="isFixing"
 				@click="emit('fixIssue', issue)">
@@ -68,6 +88,7 @@ const emit = defineEmits<{
 		</div>
 	</li>
 </template>
+
 
 <style module>
 .item {

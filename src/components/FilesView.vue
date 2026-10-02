@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { apiGet, apiPost } from '../api/client'
-import type { FileLogEntry, FileLogLevel, IntegrityIssue } from '../types/song'
+import type { FileLogEntry, FileLogLevel, IntegrityIssue, LibraryData } from '../types/song'
 import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
 import { ref } from 'vue'
@@ -8,6 +8,7 @@ import { useRouter } from 'vue-router'
 import FilesIntegrityReportDialog from './files/FilesIntegrityReportDialog.vue'
 import FilesSyncReportDialog from './files/FilesSyncReportDialog.vue'
 import FilesSyncToolCard from './files/FilesSyncToolCard.vue'
+import SongMergeDialog from './song-editor/SongMergeDialog.vue'
 import ViewHeader from './ViewHeader.vue'
 
 const props = defineProps<{
@@ -27,6 +28,12 @@ const isIntegrityDialogOpen = ref(false)
 const isCheckingIntegrity = ref(false)
 const integrityError = ref('')
 const integrityIssues = ref<IntegrityIssue[]>([])
+
+// Merge dialog state
+const isMergeDialogOpen = ref(false)
+const isMerging = ref(false)
+const mergeIssue = ref<IntegrityIssue | null>(null)
+const libraryData = ref<LibraryData | null>(null)
 
 /** Run the sync tool and show its report. */
 async function runSync() {
@@ -100,6 +107,53 @@ async function fixIntegrityIssue(issue: IntegrityIssue) {
 	}
 }
 
+/** Open the merge dialog for duplicate-file-path issues that span distinct songs */
+async function openMergeDialog(issue: IntegrityIssue) {
+	mergeIssue.value = issue
+	// Ensure we have fresh library data (songs list) for the dialog
+	try {
+		const response = await apiGet('/api/songs', { queryParams: { id: String(props.selectedLibrary) } })
+		libraryData.value = response.data.ocs.data as LibraryData
+	} catch {
+		// fall back to showing the dialog without fresh data; songs still visible
+	}
+	isMergeDialogOpen.value = true
+}
+
+/** Execute merge via API and refresh integrity audit */
+async function executeMerge(payload: {
+	keepId: number
+	droppedId: number
+	merged: Record<string, unknown>
+}) {
+	isMerging.value = true
+	try {
+		await axios.post(
+			// Using raw axios because the generated types don't yet include this endpoint
+			`/ocs/v2.php/apps/mobilesheetsmanager/api/songs/merge`,
+			{
+				libraryId: props.selectedLibrary,
+				keepId: payload.keepId,
+				droppedId: payload.droppedId,
+				merged: payload.merged,
+			},
+			{ headers: { 'OCS-APIREQUEST': 'true', Accept: 'application/json' } },
+		)
+		isMergeDialogOpen.value = false
+		mergeIssue.value = null
+		await auditIntegrity()
+	} catch (error) {
+		console.error('Failed to merge songs:', error)
+		const serverMessage = axios.isAxiosError(error)
+			? error.response?.data?.ocs?.data?.message ?? error.response?.data?.message
+			: undefined
+		integrityError.value = serverMessage
+			?? t('mobilesheetsmanager', 'Failed to merge songs. Please try again.')
+	} finally {
+		isMerging.value = false
+	}
+}
+
 /** Open the song an entry belongs to in the editor, right where it can be fixed. */
 function openSong(entry: FileLogEntry | number) {
 	const songId = typeof entry === 'number' ? entry : entry.songId
@@ -143,7 +197,16 @@ function openSong(entry: FileLogEntry | number) {
 			:issues="integrityIssues"
 			@open-song="openSong"
 			@fix-issue="fixIntegrityIssue"
+			@merge-songs="openMergeDialog"
 			@recheck="auditIntegrity" />
+
+		<SongMergeDialog
+			v-if="mergeIssue && libraryData"
+			v-model:open="isMergeDialogOpen"
+			:issue="mergeIssue"
+			:library-data="libraryData"
+			:is-merging="isMerging"
+			@merge="executeMerge" />
 	</div>
 </template>
 

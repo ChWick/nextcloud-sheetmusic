@@ -531,6 +531,41 @@ class FileManager {
 		// be replaced. Two songs that share a title map onto the same target, so a taken
 		// name gets a counter instead.
 		$targetBaseRelative = $this->pathResolver->relativeToUserFolder($targetFolder->getPath(), $user) ?? '';
+
+		if (!$userFolder->nodeExists($sourceRelative)) {
+			$candidates = createTargetPaths(
+				$song,
+				getFileExtension($file->path),
+				fileIndexOf($song, $file),
+				fileCountForExtension($song, $file),
+			);
+			foreach ($candidates as $cand) {
+				$candRel = ($targetBaseRelative === '' ? '' : rtrim($targetBaseRelative, '/') . '/') . $cand;
+				if ($userFolder->nodeExists($candRel)) {
+					$candTarget = $this->pathResolver->forTarget($candRel, $user, $userFolder->getPath());
+					$targetNode = $userFolder->get($candRel);
+					$facts = MobileSheetsFileFacts::fromNode($targetNode);
+					$this->songMapper->updateFile($databasePath, $file->id, $candTarget->webdav, $facts);
+					$hashCodes?->updatePath($source->webdav, $candTarget->webdav);
+
+					return $this->logEntry(
+						$song,
+						$file,
+						sprintf('Linked to existing target file at "%s"', $candRel),
+						MobileSheetsFileLogEntry::LEVEL_INFO,
+						MobileSheetsFileLogEntry::CODE_PATH_MOVED,
+						$this->nodeIdOfStoredFile($candTarget->webdav, $user),
+					);
+				}
+			}
+
+			throw new SyncException(MobileSheetsFileLogEntry::CODE_SOURCE_MISSING, sprintf(
+				'Cannot regenerate file %d: source "%s" does not exist',
+				$file->id,
+				$source->webdav,
+			));
+		}
+
 		$targetRelative = $this->uniqueRelativePath(
 			$userFolder,
 			($targetBaseRelative === '' ? '' : rtrim($targetBaseRelative, '/') . '/') . $relativeTarget,
@@ -554,30 +589,6 @@ class FileManager {
 				MobileSheetsFileLogEntry::CODE_PATH_CURRENT,
 				$this->nodeIdOfStoredFile($file->path, $user),
 			);
-		}
-
-		if (!$userFolder->nodeExists($sourceRelative)) {
-			if ($userFolder->nodeExists($targetRelative)) {
-				$targetNode = $userFolder->get($targetRelative);
-				$facts = MobileSheetsFileFacts::fromNode($targetNode);
-				$this->songMapper->updateFile($databasePath, $file->id, $target->webdav, $facts);
-				$hashCodes?->updatePath($source->webdav, $target->webdav);
-
-				return $this->logEntry(
-					$song,
-					$file,
-					sprintf('Linked to existing target file at "%s"', $targetRelative),
-					MobileSheetsFileLogEntry::LEVEL_INFO,
-					MobileSheetsFileLogEntry::CODE_PATH_MOVED,
-					$this->nodeIdOfStoredFile($target->webdav, $user),
-				);
-			}
-
-			throw new SyncException(MobileSheetsFileLogEntry::CODE_SOURCE_MISSING, sprintf(
-				'Cannot regenerate file %d: source "%s" does not exist',
-				$file->id,
-				$source->webdav,
-			));
 		}
 
 		// Regenerated paths usually live in folders that do not exist yet.
