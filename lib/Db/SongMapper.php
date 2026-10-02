@@ -47,6 +47,118 @@ class SongMapper {
 	}
 
 	/**
+	 * Cache of connection handle -> schema information:
+	 * [
+	 *     'tables' => array<string, string>, // lowercase_table_name => exact_table_name
+	 *     'columns' => array<string, array<string, string>> // lowercase_table_name => array<lowercase_column_name, exact_column_name>
+	 * ]
+	 *
+	 * @var array<string, array{
+	 *     tables: array<string, string>,
+	 *     columns: array<string, array<string, string>>
+	 * }>
+	 */
+	private array $schemaMapCache = [];
+
+	/**
+	 * @return array{
+	 *     tables: array<string, string>,
+	 *     columns: array<string, array<string, string>>
+	 * }
+	 */
+	private function getSchemaMap(PDO $database): array {
+		$hash = spl_object_hash($database);
+		if (isset($this->schemaMapCache[$hash])) {
+			return $this->schemaMapCache[$hash];
+		}
+
+		$tables = [];
+		$tablesStmt = $database->query("SELECT name FROM sqlite_master WHERE type='table'");
+		if ($tablesStmt !== false) {
+			/** @var list<string> $rawTables */
+			$rawTables = $tablesStmt->fetchAll(PDO::FETCH_COLUMN);
+			foreach ($rawTables as $tableName) {
+				$tables[strtolower($tableName)] = $tableName;
+			}
+		}
+
+		$this->schemaMapCache[$hash] = [
+			'tables' => $tables,
+			'columns' => [],
+		];
+
+		return $this->schemaMapCache[$hash];
+	}
+
+	private function hasTable(PDO $database, string $table): bool {
+		$schema = $this->getSchemaMap($database);
+		return isset($schema['tables'][strtolower($table)]);
+	}
+
+	/**
+	 * @param list<string> $candidates
+	 */
+	private function resolveTable(PDO $database, array $candidates): ?string {
+		$schema = $this->getSchemaMap($database);
+		foreach ($candidates as $candidate) {
+			$lower = strtolower($candidate);
+			if (isset($schema['tables'][$lower])) {
+				return $schema['tables'][$lower];
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * @param list<string> $candidates
+	 */
+	private function resolveColumn(PDO $database, ?string $table, array $candidates, string $default): string {
+		if ($table === null) {
+			return $default;
+		}
+
+		$cols = $this->columnNames($database, $table);
+		foreach ($candidates as $candidate) {
+			$lower = strtolower($candidate);
+			if (isset($cols[$lower])) {
+				return $cols[$lower];
+			}
+		}
+
+		return $default;
+	}
+
+	/**
+	 * Lower-cased names of the columns a table has => exact column name.
+	 *
+	 * @return array<string, string>
+	 */
+	private function columnNames(PDO $database, string $table): array {
+		$hash = spl_object_hash($database);
+		$schema = $this->getSchemaMap($database);
+		$tableLower = strtolower($table);
+
+		if (isset($schema['columns'][$tableLower])) {
+			return $schema['columns'][$tableLower];
+		}
+
+		$names = [];
+		if (isset($schema['tables'][$tableLower])) {
+			$exactTable = $schema['tables'][$tableLower];
+			$stmt = $database->query('PRAGMA table_info("' . $exactTable . '")');
+			if ($stmt !== false) {
+				foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $column) {
+					$colName = (string)$column['name'];
+					$names[strtolower($colName)] = $colName;
+				}
+			}
+		}
+
+		$this->schemaMapCache[$hash]['columns'][$tableLower] = $names;
+		return $names;
+	}
+
+	/**
 	 * @return array{
 	 *     songs: list<MobileSheetsSong>,
 	 *     composers: list<MobileSheetsComposer>,
@@ -66,13 +178,9 @@ class SongMapper {
 			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
 		]);
 
-		$tablesStatement = $database->query("SELECT name FROM sqlite_master WHERE type='table'");
-		/** @var list<string> $existingTables */
-		$existingTables = $tablesStatement !== false ? $tablesStatement->fetchAll(PDO::FETCH_COLUMN) : [];
-
 		$composers = [];
 		$composersById = [];
-		if (in_array('Composer', $existingTables, true)) {
+		if ($this->hasTable($database, 'Composer')) {
 			$stmt = $database->query('SELECT Id, Name FROM Composer ORDER BY Name');
 			if ($stmt !== false) {
 				while ($row = $stmt->fetch()) {
@@ -85,7 +193,7 @@ class SongMapper {
 
 		$books = [];
 		$booksById = [];
-		if (in_array('Books', $existingTables, true)) {
+		if ($this->hasTable($database, 'Books')) {
 			$stmt = $database->query('SELECT Id, Title FROM Books ORDER BY Title');
 			if ($stmt !== false) {
 				while ($row = $stmt->fetch()) {
@@ -98,7 +206,7 @@ class SongMapper {
 
 		$collections = [];
 		$collectionsById = [];
-		if (in_array('Collections', $existingTables, true)) {
+		if ($this->hasTable($database, 'Collections')) {
 			$stmt = $database->query('SELECT Id, Name FROM Collections ORDER BY Name');
 			if ($stmt !== false) {
 				while ($row = $stmt->fetch()) {
@@ -111,7 +219,7 @@ class SongMapper {
 
 		$artists = [];
 		$artistsById = [];
-		if (in_array('Artists', $existingTables, true)) {
+		if ($this->hasTable($database, 'Artists')) {
 			$stmt = $database->query('SELECT Id, Name FROM Artists ORDER BY Name');
 			if ($stmt !== false) {
 				while ($row = $stmt->fetch()) {
@@ -124,9 +232,8 @@ class SongMapper {
 
 		$genres = [];
 		$genresById = [];
-		if (in_array('Genres', $existingTables, true)) {
-			$cols = $this->columnNames($database, 'Genres');
-			$genreCol = isset($cols['type']) ? 'Type' : (isset($cols['name']) ? 'Name' : 'Type');
+		if ($this->hasTable($database, 'Genres')) {
+			$genreCol = $this->resolveColumn($database, 'Genres', ['Type', 'Name'], 'Type');
 			$stmt = $database->query('SELECT Id, ' . $genreCol . ' AS Type FROM Genres ORDER BY ' . $genreCol);
 			if ($stmt !== false) {
 				while ($row = $stmt->fetch()) {
@@ -139,10 +246,9 @@ class SongMapper {
 
 		$keys = [];
 		$keysById = [];
-		$keyTable = in_array('Key', $existingTables, true) ? 'Key' : (in_array('Keys', $existingTables, true) ? 'Keys' : null);
+		$keyTable = $this->resolveTable($database, ['Key', 'Keys']);
 		if ($keyTable !== null) {
-			$cols = $this->columnNames($database, $keyTable);
-			$keyCol = isset($cols['name']) ? 'Name' : (isset($cols['key']) ? 'Key' : 'Name');
+			$keyCol = $this->resolveColumn($database, $keyTable, ['Name', 'Key'], 'Name');
 			$stmt = $database->query('SELECT Id, ' . $keyCol . ' AS Name FROM "' . $keyTable . '" ORDER BY ' . $keyCol);
 			if ($stmt !== false) {
 				while ($row = $stmt->fetch()) {
@@ -155,7 +261,7 @@ class SongMapper {
 
 		$customGroups = [];
 		$customGroupsById = [];
-		if (in_array('CustomGroup', $existingTables, true)) {
+		if ($this->hasTable($database, 'CustomGroup')) {
 			$stmt = $database->query('SELECT Id, Name FROM CustomGroup ORDER BY Name');
 			if ($stmt !== false) {
 				while ($row = $stmt->fetch()) {
@@ -168,9 +274,8 @@ class SongMapper {
 
 		$years = [];
 		$yearsById = [];
-		if (in_array('Years', $existingTables, true)) {
-			$cols = $this->columnNames($database, 'Years');
-			$yearCol = isset($cols['year']) ? 'Year' : (isset($cols['name']) ? 'Name' : 'Year');
+		if ($this->hasTable($database, 'Years')) {
+			$yearCol = $this->resolveColumn($database, 'Years', ['Year', 'Name'], 'Year');
 			$stmt = $database->query('SELECT Id, ' . $yearCol . ' AS Year FROM Years ORDER BY ' . $yearCol . ' ASC');
 			if ($stmt !== false) {
 				while ($row = $stmt->fetch()) {
@@ -183,7 +288,7 @@ class SongMapper {
 
 		$signatures = [];
 		$signaturesById = [];
-		if (in_array('Signature', $existingTables, true)) {
+		if ($this->hasTable($database, 'Signature')) {
 			$stmt = $database->query('SELECT Id, Name FROM Signature ORDER BY Name');
 			if ($stmt !== false) {
 				while ($row = $stmt->fetch()) {
@@ -196,10 +301,9 @@ class SongMapper {
 
 		$sourceTypes = [];
 		$sourceTypesById = [];
-		$sourceTypeTable = in_array('SourceType', $existingTables, true) ? 'SourceType' : (in_array('SourceTypes', $existingTables, true) ? 'SourceTypes' : null);
+		$sourceTypeTable = $this->resolveTable($database, ['SourceType', 'SourceTypes']);
 		if ($sourceTypeTable !== null) {
-			$cols = $this->columnNames($database, $sourceTypeTable);
-			$sourceTypeCol = isset($cols['type']) ? 'Type' : (isset($cols['name']) ? 'Name' : 'Type');
+			$sourceTypeCol = $this->resolveColumn($database, $sourceTypeTable, ['Type', 'Name'], 'Type');
 			$stmt = $database->query('SELECT Id, ' . $sourceTypeCol . ' AS Type FROM "' . $sourceTypeTable . '" ORDER BY ' . $sourceTypeCol);
 			if ($stmt !== false) {
 				while ($row = $stmt->fetch()) {
@@ -211,7 +315,7 @@ class SongMapper {
 		}
 
 		$songComposers = [];
-		if (in_array('ComposerSongs', $existingTables, true)) {
+		if ($this->hasTable($database, 'ComposerSongs')) {
 			$stmt = $database->query('SELECT ComposerId, SongId FROM ComposerSongs');
 			if ($stmt !== false) {
 				while ($row = $stmt->fetch()) {
@@ -221,7 +325,7 @@ class SongMapper {
 		}
 
 		$songBooks = [];
-		if (in_array('BookSongs', $existingTables, true)) {
+		if ($this->hasTable($database, 'BookSongs')) {
 			$stmt = $database->query('SELECT BookId, SongId FROM BookSongs');
 			if ($stmt !== false) {
 				while ($row = $stmt->fetch()) {
@@ -231,7 +335,7 @@ class SongMapper {
 		}
 
 		$songCollections = [];
-		if (in_array('CollectionSong', $existingTables, true)) {
+		if ($this->hasTable($database, 'CollectionSong')) {
 			$stmt = $database->query('SELECT CollectionId, SongId FROM CollectionSong');
 			if ($stmt !== false) {
 				while ($row = $stmt->fetch()) {
@@ -241,7 +345,7 @@ class SongMapper {
 		}
 
 		$songFiles = [];
-		if (in_array('Files', $existingTables, true)) {
+		if ($this->hasTable($database, 'Files')) {
 			$stmt = $database->query('SELECT Id, SongId, Path FROM Files');
 			if ($stmt !== false) {
 				while ($row = $stmt->fetch()) {
@@ -254,7 +358,7 @@ class SongMapper {
 		}
 
 		$songArtists = [];
-		if (in_array('ArtistsSongs', $existingTables, true)) {
+		if ($this->hasTable($database, 'ArtistsSongs')) {
 			$stmt = $database->query('SELECT ArtistId, SongId FROM ArtistsSongs');
 			if ($stmt !== false) {
 				while ($row = $stmt->fetch()) {
@@ -264,7 +368,7 @@ class SongMapper {
 		}
 
 		$songGenres = [];
-		if (in_array('GenresSongs', $existingTables, true)) {
+		if ($this->hasTable($database, 'GenresSongs')) {
 			$stmt = $database->query('SELECT GenreId, SongId FROM GenresSongs');
 			if ($stmt !== false) {
 				while ($row = $stmt->fetch()) {
@@ -274,7 +378,7 @@ class SongMapper {
 		}
 
 		$songKeys = [];
-		if (in_array('KeySongs', $existingTables, true)) {
+		if ($this->hasTable($database, 'KeySongs')) {
 			$stmt = $database->query('SELECT KeyId, SongId FROM KeySongs');
 			if ($stmt !== false) {
 				while ($row = $stmt->fetch()) {
@@ -284,7 +388,7 @@ class SongMapper {
 		}
 
 		$songCustomGroups = [];
-		if (in_array('CustomGroupSongs', $existingTables, true)) {
+		if ($this->hasTable($database, 'CustomGroupSongs')) {
 			$stmt = $database->query('SELECT GroupId, SongId FROM CustomGroupSongs');
 			if ($stmt !== false) {
 				while ($row = $stmt->fetch()) {
@@ -294,7 +398,7 @@ class SongMapper {
 		}
 
 		$songYears = [];
-		if (in_array('YearsSongs', $existingTables, true)) {
+		if ($this->hasTable($database, 'YearsSongs')) {
 			$stmt = $database->query('SELECT YearId, SongId FROM YearsSongs');
 			if ($stmt !== false) {
 				while ($row = $stmt->fetch()) {
@@ -304,7 +408,7 @@ class SongMapper {
 		}
 
 		$songSignatures = [];
-		if (in_array('SignatureSongs', $existingTables, true)) {
+		if ($this->hasTable($database, 'SignatureSongs')) {
 			$stmt = $database->query('SELECT SignatureId, SongId FROM SignatureSongs');
 			if ($stmt !== false) {
 				while ($row = $stmt->fetch()) {
@@ -314,7 +418,7 @@ class SongMapper {
 		}
 
 		$songSourceTypes = [];
-		if (in_array('SourceTypeSongs', $existingTables, true)) {
+		if ($this->hasTable($database, 'SourceTypeSongs')) {
 			$stmt = $database->query('SELECT SourceTypeId, SongId FROM SourceTypeSongs');
 			if ($stmt !== false) {
 				while ($row = $stmt->fetch()) {
@@ -324,7 +428,7 @@ class SongMapper {
 		}
 
 		$songBookmarks = [];
-		if (in_array('Bookmarks', $existingTables, true)) {
+		if ($this->hasTable($database, 'Bookmarks')) {
 			$cols = $this->columnNames($database, 'Bookmarks');
 			$hasShowInLibrary = isset($cols['showinlibrary']);
 			$stmt = $database->query('SELECT Id, SongId, Name, PageNum' . ($hasShowInLibrary ? ', ShowInLibrary' : '') . ' FROM Bookmarks ORDER BY PageNum ASC, Name ASC');
@@ -342,10 +446,9 @@ class SongMapper {
 		}
 
 		$songAudioFiles = [];
-		if (in_array('AudioFiles', $existingTables, true)) {
-			$cols = $this->columnNames($database, 'AudioFiles');
-			$titleCol = isset($cols['title']) ? 'Title' : (isset($cols['name']) ? 'Name' : 'Title');
-			$fileCol = isset($cols['file']) ? 'File' : (isset($cols['path']) ? 'Path' : 'File');
+		if ($this->hasTable($database, 'AudioFiles')) {
+			$titleCol = $this->resolveColumn($database, 'AudioFiles', ['Title', 'Name'], 'Title');
+			$fileCol = $this->resolveColumn($database, 'AudioFiles', ['File', 'Path'], 'File');
 			$stmt = $database->query('SELECT Id, SongId, ' . $titleCol . ' AS Title, ' . $fileCol . ' AS File FROM AudioFiles ORDER BY Id ASC');
 			if ($stmt !== false) {
 				while ($row = $stmt->fetch()) {
@@ -460,10 +563,6 @@ class SongMapper {
 			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
 		]);
 
-		$tablesStatement = $database->query("SELECT name FROM sqlite_master WHERE type='table'");
-		/** @var list<string> $existingTables */
-		$existingTables = $tablesStatement !== false ? $tablesStatement->fetchAll(PDO::FETCH_COLUMN) : [];
-
 		$songCols = $this->columnNames($database, 'Songs');
 		$hasLastModified = isset($songCols['lastmodified']);
 		$createdCol = isset($songCols['datecreated']) ? 'DateCreated' : (isset($songCols['creationdate']) ? 'CreationDate' : null);
@@ -506,78 +605,71 @@ class SongMapper {
 		if ($hasSortTitle) {
 			$selectFields[] = 's.SortTitle';
 		}
-		$keyTable = in_array('Key', $existingTables, true) ? 'Key' : (in_array('Keys', $existingTables, true) ? 'Keys' : null);
-		$sourceTypeTable = in_array('SourceType', $existingTables, true) ? 'SourceType' : (in_array('SourceTypes', $existingTables, true) ? 'SourceTypes' : null);
+		$keyTable = $this->resolveTable($database, ['Key', 'Keys']);
+		$sourceTypeTable = $this->resolveTable($database, ['SourceType', 'SourceTypes']);
 
-		$keyCols = $keyTable !== null ? $this->columnNames($database, $keyTable) : [];
-		$keyCol = isset($keyCols['name']) ? 'Name' : (isset($keyCols['key']) ? 'Key' : 'Name');
-
-		$sourceTypeCols = $sourceTypeTable !== null ? $this->columnNames($database, $sourceTypeTable) : [];
-		$sourceTypeCol = isset($sourceTypeCols['type']) ? 'Type' : (isset($sourceTypeCols['name']) ? 'Name' : 'Type');
-
-		$yearsCols = in_array('Years', $existingTables, true) ? $this->columnNames($database, 'Years') : [];
-		$yearCol = isset($yearsCols['year']) ? 'Year' : (isset($yearsCols['name']) ? 'Name' : 'Year');
-
-		$genreCols = in_array('Genres', $existingTables, true) ? $this->columnNames($database, 'Genres') : [];
-		$genreCol = isset($genreCols['type']) ? 'Type' : (isset($genreCols['name']) ? 'Name' : 'Type');
+		$keyCol = $this->resolveColumn($database, $keyTable, ['Name', 'Key'], 'Name');
+		$sourceTypeCol = $this->resolveColumn($database, $sourceTypeTable, ['Type', 'Name'], 'Type');
+		$yearCol = $this->resolveColumn($database, 'Years', ['Year', 'Name'], 'Year');
+		$genreCol = $this->resolveColumn($database, 'Genres', ['Type', 'Name'], 'Type');
 
 		$joins = [];
 
-		if (in_array('ComposerSongs', $existingTables, true) && in_array('Composer', $existingTables, true)) {
+		if ($this->hasTable($database, 'ComposerSongs') && $this->hasTable($database, 'Composer')) {
 			$selectFields[] = 'c.Name AS Composer';
 			$selectFields[] = 'cs.ComposerId AS ComposerId';
 			$joins[] = 'LEFT JOIN ComposerSongs cs ON s.Id = cs.SongId LEFT JOIN Composer c ON cs.ComposerId = c.Id';
 		}
 
-		if (in_array('CollectionSong', $existingTables, true) && in_array('Collections', $existingTables, true)) {
+		if ($this->hasTable($database, 'CollectionSong') && $this->hasTable($database, 'Collections')) {
 			$selectFields[] = 'coll.Name AS Collection';
 			$selectFields[] = 'colls.CollectionId AS CollectionId';
 			$joins[] = 'LEFT JOIN CollectionSong colls ON s.Id = colls.SongId LEFT JOIN Collections coll ON colls.CollectionId = coll.Id';
 		}
 
-		if (in_array('GenresSongs', $existingTables, true) && in_array('Genres', $existingTables, true)) {
+		if ($this->hasTable($database, 'GenresSongs') && $this->hasTable($database, 'Genres')) {
 			$selectFields[] = 'gs.GenreId AS GenreId';
 			$selectFields[] = 'g.' . $genreCol . ' AS Genre';
 			$joins[] = 'LEFT JOIN GenresSongs gs ON s.Id = gs.SongId LEFT JOIN Genres g ON gs.GenreId = g.Id';
 		}
 
-		if (in_array('KeySongs', $existingTables, true) && $keyTable !== null) {
+		if ($this->hasTable($database, 'KeySongs') && $keyTable !== null) {
 			$selectFields[] = 'ks.KeyId AS KeyId';
 			$selectFields[] = 'k.' . $keyCol . ' AS Key';
 			$joins[] = 'LEFT JOIN KeySongs ks ON s.Id = ks.SongId LEFT JOIN "' . $keyTable . '" k ON ks.KeyId = k.Id';
 		}
 
-		if (in_array('CustomGroupSongs', $existingTables, true) && in_array('CustomGroup', $existingTables, true)) {
+		if ($this->hasTable($database, 'CustomGroupSongs') && $this->hasTable($database, 'CustomGroup')) {
 			$selectFields[] = 'cgs.GroupId AS CustomGroupId';
 			$selectFields[] = 'cg.Name AS CustomGroup';
 			$joins[] = 'LEFT JOIN CustomGroupSongs cgs ON s.Id = cgs.SongId LEFT JOIN CustomGroup cg ON cgs.GroupId = cg.Id';
 		}
 
-		if (in_array('YearsSongs', $existingTables, true) && in_array('Years', $existingTables, true)) {
+		if ($this->hasTable($database, 'YearsSongs') && $this->hasTable($database, 'Years')) {
 			$selectFields[] = 'ys.YearId AS YearId';
 			$selectFields[] = 'y.' . $yearCol . ' AS Year';
 			$joins[] = 'LEFT JOIN YearsSongs ys ON s.Id = ys.SongId LEFT JOIN Years y ON ys.YearId = y.Id';
 		}
 
-		if (in_array('SignatureSongs', $existingTables, true) && in_array('Signature', $existingTables, true)) {
+		if ($this->hasTable($database, 'SignatureSongs') && $this->hasTable($database, 'Signature')) {
 			$selectFields[] = 'sigs.SignatureId AS SignatureId';
 			$selectFields[] = 'sig.Name AS Signature';
 			$joins[] = 'LEFT JOIN SignatureSongs sigs ON s.Id = sigs.SongId LEFT JOIN Signature sig ON sigs.SignatureId = sig.Id';
 		}
 
-		if (in_array('SourceTypeSongs', $existingTables, true) && $sourceTypeTable !== null) {
+		if ($this->hasTable($database, 'SourceTypeSongs') && $sourceTypeTable !== null) {
 			$selectFields[] = 'srctypes.SourceTypeId AS SourceTypeId';
 			$selectFields[] = 'srctype.' . $sourceTypeCol . ' AS SourceType';
 			$joins[] = 'LEFT JOIN SourceTypeSongs srctypes ON s.Id = srctypes.SongId LEFT JOIN "' . $sourceTypeTable . '" srctype ON srctypes.SourceTypeId = srctype.Id';
 		}
 
-		if (in_array('BookSongs', $existingTables, true) && in_array('Books', $existingTables, true)) {
+		if ($this->hasTable($database, 'BookSongs') && $this->hasTable($database, 'Books')) {
 			$selectFields[] = 'books.Title AS Book';
 			$selectFields[] = 'bookSongs.BookId AS BookId';
 			$joins[] = 'LEFT JOIN BookSongs bookSongs ON s.Id = bookSongs.SongId LEFT JOIN Books books ON bookSongs.BookId = books.Id';
 		}
 
-		if (in_array('ArtistsSongs', $existingTables, true) && in_array('Artists', $existingTables, true)) {
+		if ($this->hasTable($database, 'ArtistsSongs') && $this->hasTable($database, 'Artists')) {
 			$selectFields[] = 'artist.Name AS Artist';
 			$selectFields[] = 'artistsSongs.ArtistId AS ArtistId';
 			$joins[] = 'LEFT JOIN ArtistsSongs artistsSongs ON artistsSongs.SongId = s.Id LEFT JOIN Artists artist on artistsSongs.ArtistId = artist.Id';
@@ -1495,20 +1587,6 @@ class SongMapper {
 	}
 
 	/**
-	 * Lower-cased names of the columns a table has.
-	 *
-	 * @return array<string, true>
-	 */
-	private function columnNames(PDO $database, string $table): array {
-		$names = [];
-		foreach ($database->query('PRAGMA table_info(' . $table . ')')->fetchAll(PDO::FETCH_ASSOC) as $column) {
-			$names[strtolower((string)$column['name'])] = true;
-		}
-
-		return $names;
-	}
-
-	/**
 	 * Keep only the wanted column => value pairs the table actually has, keyed by
 	 * column name, so a database with a reduced or extended schema still gets every
 	 * column it knows filled in.
@@ -1686,9 +1764,11 @@ class SongMapper {
 			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
 			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
 		]);
-		return $this->insertRow($database, 'Keys', [
-			'Name' => $name,
-		] + $this->dateColumns($database, 'Keys'));
+		$table = $this->resolveTable($database, ['Key', 'Keys']) ?? 'Keys';
+		$col = $this->resolveColumn($database, $table, ['Name', 'Key'], 'Name');
+		return $this->insertRow($database, $table, [
+			$col => $name,
+		] + $this->dateColumns($database, $table));
 	}
 
 	public function createCustomGroup(string $databasePath, string $name): int {
@@ -1706,8 +1786,10 @@ class SongMapper {
 			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
 			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
 		]);
+		$col = $this->resolveColumn($database, 'Years', ['Year', 'Name'], 'Year');
+		$val = ($col === 'Year') ? (int)$year : (string)$year;
 		return $this->insertRow($database, 'Years', [
-			'Year' => (int)$year,
+			$col => $val,
 		] + $this->dateColumns($database, 'Years'));
 	}
 
@@ -1726,9 +1808,11 @@ class SongMapper {
 			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
 			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
 		]);
-		return $this->insertRow($database, 'SourceTypes', [
-			'Type' => $name,
-		] + $this->dateColumns($database, 'SourceTypes'));
+		$table = $this->resolveTable($database, ['SourceType', 'SourceTypes']) ?? 'SourceTypes';
+		$col = $this->resolveColumn($database, $table, ['Type', 'Name'], 'Type');
+		return $this->insertRow($database, $table, [
+			$col => $name,
+		] + $this->dateColumns($database, $table));
 	}
 
 	/**
@@ -1771,22 +1855,20 @@ class SongMapper {
 			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
 		]);
 
-		$tablesStatement = $database->query("SELECT name FROM sqlite_master WHERE type='table'");
-		/** @var list<string> $existingTables */
-		$existingTables = $tablesStatement !== false ? $tablesStatement->fetchAll(PDO::FETCH_COLUMN) : [];
+		$targetTable = $this->resolveTable($database, [$tables['table'], $tables['table'] . 's', rtrim($tables['table'], 's')]);
 
 		$removed = 0;
 		$database->beginTransaction();
 		try {
 			// Table and column names come from the constant above, so quoting them is
 			// all that is needed; the entry to delete stays a bound parameter.
-			if (in_array($tables['linkTable'], $existingTables, true)) {
+			if ($this->hasTable($database, $tables['linkTable'])) {
 				$stmt = $database->prepare('DELETE FROM "' . $tables['linkTable'] . '" WHERE ' . $tables['linkColumn'] . ' = :entityId');
 				$stmt->execute([':entityId' => $entityId]);
 			}
 
-			if (in_array($tables['table'], $existingTables, true)) {
-				$stmt = $database->prepare('DELETE FROM "' . $tables['table'] . '" WHERE Id = :entityId');
+			if ($targetTable !== null) {
+				$stmt = $database->prepare('DELETE FROM "' . $targetTable . '" WHERE Id = :entityId');
 				$stmt->execute([':entityId' => $entityId]);
 				$removed = $stmt->rowCount();
 			}
