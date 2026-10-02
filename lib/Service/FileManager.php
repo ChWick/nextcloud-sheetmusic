@@ -85,57 +85,64 @@ function createTargetPaths(
 ): array {
 	$filePrefix = fileIndexPrefix($fileIndex, $fileCount);
 
-	$compArtists = [];
+	// 1. Composers and Artists: sort alphabetically and join full list
+	$compArtistNames = [];
 	foreach ($song->composers as $c) {
 		if ($c->name !== '') {
-			$compArtists[] = $c->name;
+			$compArtistNames[] = $c->name;
 		}
 	}
-	if (empty($compArtists)) {
+	if (empty($compArtistNames)) {
 		foreach ($song->artists as $a) {
 			if ($a->name !== '') {
-				$compArtists[] = $a->name;
+				$compArtistNames[] = $a->name;
 			}
 		}
 	}
+	sort($compArtistNames, SORT_STRING);
+	$compArtist = implode(', ', $compArtistNames);
 
-	$books = array_values(array_filter(array_map(static fn($b) => $b->title, $song->books), static fn($t) => $t !== ''));
-	$collections = array_values(array_filter(array_map(static fn($c) => $c->name, $song->collections), static fn($n) => $n !== ''));
-
-	$paths = [];
-
-	if (!empty($compArtists)) {
-		foreach ($compArtists as $compArtist) {
-			if (!empty($books)) {
-				foreach ($books as $book) {
-					$folder = $compArtist . DIRECTORY_SEPARATOR . "{$compArtist} - {$book}";
-					$fileName = "{$compArtist} - {$book} - {$song->title}";
-					$paths[] = $folder . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext;
-				}
-			} elseif (!empty($collections)) {
-				foreach ($collections as $collection) {
-					$folder = $compArtist . DIRECTORY_SEPARATOR . "{$compArtist} - {$collection}";
-					$fileName = "{$compArtist} - {$collection} - {$song->title}";
-					$paths[] = $folder . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext;
-				}
-			} else {
-				$folder = $compArtist;
-				$fileName = "{$compArtist} - {$song->title}";
-				$paths[] = $folder . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext;
+	// 2. Books and Collections: sort by length descending (longest string first), then alphabetically ascending
+	$sortByNameStability = static function (array $items): array {
+		usort($items, static function (string $a, string $b): int {
+			$lenA = mb_strlen($a);
+			$lenB = mb_strlen($b);
+			if ($lenA !== $lenB) {
+				return $lenB <=> $lenA;
 			}
-		}
-	} elseif (!empty($collections)) {
-		foreach ($collections as $collection) {
-			$fileName = "{$collection} - {$song->title}";
-			$paths[] = $collection . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext;
-		}
-	}
+			return strcmp($a, $b);
+		});
+		return $items;
+	};
 
-	if (empty($paths)) {
+	$bookTitles = array_values(array_filter(array_map(static fn($b) => $b->title, $song->books), static fn($t) => $t !== ''));
+	$bookTitles = $sortByNameStability($bookTitles);
+
+	$collectionNames = array_values(array_filter(array_map(static fn($c) => $c->name, $song->collections), static fn($n) => $n !== ''));
+	$collectionNames = $sortByNameStability($collectionNames);
+
+	$book = $bookTitles[0] ?? '';
+	$collection = $collectionNames[0] ?? '';
+
+	if ($compArtist !== '') {
+		if ($book !== '') {
+			$folder = $compArtist . DIRECTORY_SEPARATOR . "{$compArtist} - {$book}";
+			$fileName = "{$compArtist} - {$book} - {$song->title}";
+		} elseif ($collection !== '') {
+			$folder = $compArtist . DIRECTORY_SEPARATOR . "{$compArtist} - {$collection}";
+			$fileName = "{$compArtist} - {$collection} - {$song->title}";
+		} else {
+			$folder = $compArtist;
+			$fileName = "{$compArtist} - {$song->title}";
+		}
+	} elseif ($collection !== '') {
+		$folder = $collection;
+		$fileName = "{$collection} - {$song->title}";
+	} else {
 		throw new NoNamingRuleException('No composer, artist, or collection');
 	}
 
-	return array_values(array_unique($paths));
+	return [$folder . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext];
 }
 
 function createTargetPath(

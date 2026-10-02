@@ -532,6 +532,47 @@ final class FileManagerTest extends TestCase {
 		self::assertSame('', fileIndexPrefix(null, 5));
 	}
 
+	public function testSortsAndJoinsMultipleComposersAlphabetically(): void {
+		$song = new MobileSheetsSong(
+			10,
+			'Postludium',
+			[],
+			[new MobileSheetsComposer(2, 'W.A. Mozart'), new MobileSheetsComposer(1, 'J.S. Bach')],
+			[],
+			[new MobileSheetsCollection(1, 'Short'), new MobileSheetsCollection(2, 'Longer Collection Name')],
+			[],
+		);
+
+		$this->regenerate($song, 'Noten/source/SomeFile.pdf');
+
+		self::assertSame(
+			[['from' => 'Noten/source/SomeFile.pdf', 'to' => 'Noten/J.S. Bach, W.A. Mozart/J.S. Bach, W.A. Mozart - Longer Collection Name/J.S. Bach, W.A. Mozart - Longer Collection Name - Postludium.pdf']],
+			$this->moves,
+		);
+	}
+
+	public function testSelectsLongestCollectionNameForStableFilePath(): void {
+		$song = new MobileSheetsSong(
+			11,
+			'Postludium',
+			[],
+			[new MobileSheetsComposer(1, 'Moritz Brosig')],
+			[],
+			[
+				new MobileSheetsCollection(1, 'Freie Orgelmusik aus vier Jahrhunderten'),
+				new MobileSheetsCollection(2, 'Freie Orgelmusik aus vier Jahrhunderten - Grün'),
+			],
+			[],
+		);
+
+		$this->regenerate($song, 'Noten/source/SomeFile.pdf');
+
+		self::assertSame(
+			[['from' => 'Noten/source/SomeFile.pdf', 'to' => 'Noten/Moritz Brosig/Moritz Brosig - Freie Orgelmusik aus vier Jahrhunderten - Grün/Moritz Brosig - Freie Orgelmusik aus vier Jahrhunderten - Grün - Postludium.pdf']],
+			$this->moves,
+		);
+	}
+
 	public function testNumbersFilesOfAMultiFileSongWithAComposerAndBook(): void {
 		$song = new MobileSheetsSong(
 			2,
