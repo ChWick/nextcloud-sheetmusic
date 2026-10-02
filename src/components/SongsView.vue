@@ -16,6 +16,35 @@
       <SongSortControl v-model:sort-key="sortKey" v-model:sort-order="sortOrder" />
       <SongViewToggle v-model:view-mode="viewMode" />
     </div>
+    <template v-else-if="isEditInUrl && openSong">
+      <NcButton
+        variant="error"
+        :title="t('mobilesheetsmanager', 'Delete song')"
+        :aria-label="t('mobilesheetsmanager', 'Delete song')"
+        @click="songEditorRef?.promptDelete()">
+        <template #icon>
+          <DeleteIcon :size="20" />
+        </template>
+      </NcButton>
+      <NcButton
+        variant="secondary"
+        :title="t('mobilesheetsmanager', 'Save without closing')"
+        :aria-label="t('mobilesheetsmanager', 'Save without closing')"
+        @click="songEditorRef?.saveSong(false)">
+        <template #icon>
+          <ContentSaveOutlineIcon :size="20" />
+        </template>
+      </NcButton>
+      <NcButton
+        variant="primary"
+        :title="t('mobilesheetsmanager', 'Save and Close')"
+        :aria-label="t('mobilesheetsmanager', 'Save and Close')"
+        @click="songEditorRef?.saveSong(true)">
+        <template #icon>
+          <CheckIcon :size="20" />
+        </template>
+      </NcButton>
+    </template>
     <template v-else-if="!isEditInUrl">
       <NcButton
         v-if="songViewerRef?.selectedFile"
@@ -58,6 +87,7 @@
        edit flag - for editing it; without a song the list is shown. -->
   <div v-if="songIdInUrl !== null" :class="$style.fullscreenArea">
     <SongEditor v-if="isEditInUrl"
+                ref="songEditorRef"
                 :song="openSong"
                 :library-id="selectedLibrary"
                 :composers="composers"
@@ -72,7 +102,6 @@
                 :source-types="sourceTypes"
                 @saved="handleSaved"
                 @updated="handleLibraryDataUpdate"
-                @deleted="handleDeleted"
                 @cancel="goBackToSongs" />
     <SongViewer
       v-else
@@ -228,7 +257,9 @@ import { FilePickerClosed, getFilePickerBuilder } from '@nextcloud/dialogs';
 import { ref, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import NcButton from '@nextcloud/vue/components/NcButton';
+import CheckIcon from 'vue-material-design-icons/Check.vue';
 import CloseIcon from 'vue-material-design-icons/Close.vue';
+import ContentSaveOutlineIcon from 'vue-material-design-icons/ContentSaveOutline.vue';
 import DeleteIcon from 'vue-material-design-icons/Delete.vue';
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue';
 import PencilIcon from 'vue-material-design-icons/Pencil.vue';
@@ -255,6 +286,7 @@ import SongSimpleListView from './songs/SongSimpleListView.vue';
 const props = defineProps<{ selectedLibrary: number }>();
 
 const songViewerRef = ref<InstanceType<typeof SongViewer> | null>(null);
+const songEditorRef = ref<InstanceType<typeof SongEditor> | null>(null);
 
 const viewMode = ref<ViewMode>(
   (localStorage.getItem('mobilesheetsmanager_song_view_mode') as ViewMode) || 'table'

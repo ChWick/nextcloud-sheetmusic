@@ -706,6 +706,11 @@ async function confirmDeleteSong() {
 		isDeletingSong.value = false
 	}
 }
+
+defineExpose({
+	saveSong,
+	promptDelete: () => { isDeleteDialogOpen.value = true },
+})
 </script>
 
 <template>
@@ -995,6 +1000,7 @@ async function confirmDeleteSong() {
 					<template #icon>
 						<DeleteIcon :size="20" />
 					</template>
+					{{ t('mobilesheetsmanager', 'Delete') }}
 				</NcButton>
 				<NcButton
 					:disabled="isSaving"
@@ -1004,6 +1010,7 @@ async function confirmDeleteSong() {
 					<template #icon>
 						<CloseIcon :size="20" />
 					</template>
+					{{ t('mobilesheetsmanager', 'Cancel') }}
 				</NcButton>
 				<!-- Only an existing song can be saved again: a new song has no id until it
 				     is created, so saving it twice would write a second song. -->
@@ -1018,6 +1025,7 @@ async function confirmDeleteSong() {
 					<template #icon>
 						<ContentSaveOutlineIcon :size="20" />
 					</template>
+					{{ t('mobilesheetsmanager', 'Save') }}
 				</NcButton>
 				<NcButton
 					variant="primary"
@@ -1029,6 +1037,7 @@ async function confirmDeleteSong() {
 						<NcLoadingIcon v-if="isSaving" :size="16" />
 						<CheckIcon v-else :size="20" />
 					</template>
+					{{ saveActionLabel }}
 				</NcButton>
 			</div>
 		</form>
