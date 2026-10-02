@@ -174,4 +174,18 @@ describe('SongMergeDialog.vue', () => {
 
 		expect(wrapper.text()).toContain('Keep both songs in your library as separate entries')
 	})
+
+	it('renders server error banner when error prop is provided', () => {
+		const wrapper = mount(SongMergeDialog, {
+			props: {
+				open: true,
+				issue: mockIssue,
+				libraryData: mockLibraryData,
+				error: 'Conflict cannot be resolved: Song A and Song B still share the same physical file or path in storage.',
+			},
+			...globalStubs,
+		})
+
+		expect(wrapper.text()).toContain('Conflict cannot be resolved: Song A and Song B still share the same physical file or path in storage.')
+	})
 })

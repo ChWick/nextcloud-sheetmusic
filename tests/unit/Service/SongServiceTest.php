@@ -119,5 +119,49 @@ final class SongServiceTest extends TestCase {
 
 		$this->assertSame(['songs' => []], $service->batchUpdateSongs($user, 1, [42, 43], [10]));
 	}
+
+	public function testResolveBothSongsPreservesSharedFileOnDetach(): void {
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('admin');
+
+		$libraryService = $this->createMock(LibraryService::class);
+		$libraryService->method('getDatabasePath')->with('admin', 1)->willReturn('/tmp/mobilesheets.db');
+
+		$songMapper = $this->createMock(SongMapper::class);
+		$songMapper->method('findLibraryData')->willReturn(['songs' => []]);
+
+		$songFileService = $this->createMock(SongFileService::class);
+		$songFileService->expects($this->once())
+			->method('deleteSongFile')
+			->with($user, 60, 207, 1);
+
+		$fileManager = $this->createMock(FileManager::class);
+		$targetFolder = $this->createMock(\OCP\Files\Folder::class);
+		$fileManager->method('libraryContext')->willReturn([
+			'databasePath' => '/tmp/mobilesheets.db',
+			'targetFolder' => $targetFolder,
+		]);
+
+		$integrityService = $this->createMock(\OCA\MobileSheetsManager\Service\LibraryIntegrityService::class);
+		$integrityService->method('checkIntegrity')->willReturn([]);
+
+		$service = new SongService(
+			$libraryService,
+			$songMapper,
+			$songFileService,
+			$fileManager,
+			$this->createMock(LoggerInterface::class),
+			$integrityService,
+		);
+
+		$res = $service->resolveBothSongs(
+			$user,
+			1,
+			['id' => 60, 'title' => 'Song A', 'detachFileIds' => [207]],
+			['id' => 61, 'title' => 'Song B', 'detachFileIds' => []],
+		);
+
+		$this->assertSame(['songs' => []], $res);
+	}
 }
 

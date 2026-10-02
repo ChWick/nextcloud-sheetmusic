@@ -1388,6 +1388,30 @@ final class FileManagerTest extends TestCase {
 		);
 	}
 
+	public function testRegenerateFilePathDuplicatesPhysicalFileWhenTargetBelongsToAnotherSong(): void {
+		$this->files = [
+			'Noten/Miles/Miles - Blue.pdf' => 'PHYSICAL_PDF_CONTENT',
+		];
+		$this->folders = ['Noten' => true, 'Noten/Miles' => true];
+		$this->referencedPaths['/remote.php/dav/files/admin/Noten/Miles/Miles - Blue.pdf'] = 99; // song 99 owns this path
+
+		$song = new MobileSheetsSong(
+			id: 100, // different song
+			title: 'Blue',
+			composers: [new MobileSheetsComposer(1, 'Miles')],
+			files: [new MobileSheetsFile(5, '/remote.php/dav/files/admin/Noten/source/missing.pdf')],
+		);
+		$file = $song->files[0];
+
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn(self::UID);
+
+		$entry = $this->fileManager->regenerateFilePath($song, $file, $user, $this->libraryFolder, '/tmp/db.sqlite');
+
+		self::assertSame(MobileSheetsFileLogEntry::CODE_PATH_MOVED, $entry->code);
+		self::assertArrayHasKey('Noten/Miles/Miles - Blue (2).pdf', $this->files);
+	}
+
 	/**
 	 * Build a Folder mock backed by the in-memory tree.
 	 *
