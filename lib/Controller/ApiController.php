@@ -32,6 +32,7 @@ class ApiController extends OCSController {
 	private SongController $songController;
 	private SongFileController $songFileController;
 	private EntityController $entityController;
+	private \OCA\MobileSheetsManager\Service\LibraryIntegrityService $integrityService;
 
 	public function __construct(
 		string $appName,
@@ -47,6 +48,7 @@ class ApiController extends OCSController {
 		?SongService $songService = null,
 		?SongFileService $songFileService = null,
 		?EntityService $entityService = null,
+		?\OCA\MobileSheetsManager\Service\LibraryIntegrityService $integrityService = null,
 	) {
 		parent::__construct($appName, $request);
 
@@ -54,6 +56,8 @@ class ApiController extends OCSController {
 		$fileSvc = $songFileService ?? new SongFileService($libService, $songMapper, $fileManager, $rootFolder, $logger);
 		$sngService = $songService ?? new SongService($libService, $songMapper, $fileSvc, $fileManager, $logger);
 		$entService = $entityService ?? new EntityService($libService, $songMapper, $logger);
+		$pathResolver = new \OCA\MobileSheetsManager\Service\MobileSheetsPathResolver($rootFolder);
+		$this->integrityService = $integrityService ?? new \OCA\MobileSheetsManager\Service\LibraryIntegrityService($libService, $songMapper, $fileManager, $rootFolder, $pathResolver);
 
 		$this->libraryController = new LibraryController($appName, $request, $libService, $userSession);
 		$this->songController = new SongController($appName, $request, $sngService, $userSession);
@@ -89,6 +93,18 @@ class ApiController extends OCSController {
 	#[ApiRoute(verb: 'POST', url: '/api/sync-library')]
 	public function syncLibrary(int $libraryId): DataResponse {
 		return $this->libraryController->syncLibrary($libraryId);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'GET', url: '/api/libraries/{libraryId}/integrity')]
+	public function checkIntegrity(int $libraryId): DataResponse {
+		return $this->libraryController->checkIntegrity($libraryId, $this->integrityService);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/libraries/{libraryId}/integrity/fix')]
+	public function fixIntegrity(int $libraryId, ?string $issueType = null, ?int $songId = null, ?int $fileId = null): DataResponse {
+		return $this->libraryController->fixIntegrity($libraryId, $issueType, $songId, $fileId, $this->integrityService);
 	}
 
 	#[NoAdminRequired]
