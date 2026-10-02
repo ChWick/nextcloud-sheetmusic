@@ -133,7 +133,7 @@ final class SongServiceTest extends TestCase {
 		$songFileService = $this->createMock(SongFileService::class);
 		$songFileService->expects($this->once())
 			->method('deleteSongFile')
-			->with($user, 60, 207, 1);
+			->with($user, 1, 60, 207);
 
 		$fileManager = $this->createMock(FileManager::class);
 		$targetFolder = $this->createMock(\OCP\Files\Folder::class);

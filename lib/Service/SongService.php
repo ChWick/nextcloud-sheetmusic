@@ -398,14 +398,14 @@ class SongService {
 			// 1. Detach files requested for Song A
 			if (!empty($songAData['detachFileIds']) && is_array($songAData['detachFileIds'])) {
 				foreach ($songAData['detachFileIds'] as $fileId) {
-					$this->songFileService->deleteSongFile($user, $songAId, (int)$fileId, $libraryId);
+					$this->songFileService->deleteSongFile($user, $libraryId, $songAId, (int)$fileId);
 				}
 			}
 
 			// 2. Detach files requested for Song B
 			if (!empty($songBData['detachFileIds']) && is_array($songBData['detachFileIds'])) {
 				foreach ($songBData['detachFileIds'] as $fileId) {
-					$this->songFileService->deleteSongFile($user, $songBId, (int)$fileId, $libraryId);
+					$this->songFileService->deleteSongFile($user, $libraryId, $songBId, (int)$fileId);
 				}
 			}
 
