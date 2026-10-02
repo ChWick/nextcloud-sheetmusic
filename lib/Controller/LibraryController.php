@@ -84,51 +84,5 @@ class LibraryController extends OCSController {
 			);
 		}
 	}
-
-	#[NoAdminRequired]
-	#[ApiRoute(verb: 'GET', url: '/api/libraries/{libraryId}/integrity')]
-	public function checkIntegrity(int $libraryId, ?\OCA\MobileSheetsManager\Service\LibraryIntegrityService $integrityService = null): DataResponse {
-		$user = $this->userSession->getUser();
-		if ($user === null) {
-			return new DataResponse(['message' => 'User not logged in'], Http::STATUS_UNAUTHORIZED);
-		}
-
-		if ($integrityService === null) {
-			return new DataResponse(['message' => 'Integrity service unavailable'], Http::STATUS_INTERNAL_SERVER_ERROR);
-		}
-
-		try {
-			$issues = $integrityService->checkIntegrity($libraryId, $user->getUID());
-			return new DataResponse(['issues' => $issues], Http::STATUS_OK);
-		} catch (\Throwable $e) {
-			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
-		}
-	}
-
-	#[NoAdminRequired]
-	#[ApiRoute(verb: 'POST', url: '/api/libraries/{libraryId}/integrity/fix')]
-	public function fixIntegrity(
-		int $libraryId,
-		?string $issueType = null,
-		?int $songId = null,
-		?int $fileId = null,
-		?\OCA\MobileSheetsManager\Service\LibraryIntegrityService $integrityService = null,
-	): DataResponse {
-		$user = $this->userSession->getUser();
-		if ($user === null) {
-			return new DataResponse(['message' => 'User not logged in'], Http::STATUS_UNAUTHORIZED);
-		}
-
-		if ($integrityService === null || $issueType === null) {
-			return new DataResponse(['message' => 'Invalid parameters'], Http::STATUS_BAD_REQUEST);
-		}
-
-		try {
-			$result = $integrityService->fixIssue($libraryId, $user->getUID(), $issueType, $songId, $fileId);
-			return new DataResponse($result, $result['success'] ? Http::STATUS_OK : Http::STATUS_BAD_REQUEST);
-		} catch (\Throwable $e) {
-			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
-		}
-	}
 }
 

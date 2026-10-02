@@ -1,0 +1,147 @@
+<script setup lang="ts">
+import type { IntegrityIssue } from '../../types/song'
+import NcButton from '@nextcloud/vue/components/NcButton'
+import { translate as t } from '@nextcloud/l10n'
+import AlertCircleIcon from 'vue-material-design-icons/AlertCircle.vue'
+import AlertIcon from 'vue-material-design-icons/Alert.vue'
+import InformationIcon from 'vue-material-design-icons/Information.vue'
+import WrenchIcon from 'vue-material-design-icons/Wrench.vue'
+
+const props = defineProps<{
+	issue: IntegrityIssue
+	isFixing?: boolean
+}>()
+
+const emit = defineEmits<{
+	openSong: [songId: number]
+	fixIssue: [issue: IntegrityIssue]
+}>()
+</script>
+
+<template>
+	<li :class="[$style.item, $style[issue.severity]]">
+		<div :class="$style.header">
+			<span :class="$style.badge">
+				<AlertCircleIcon v-if="issue.severity === 'error'" :size="18" />
+				<AlertIcon v-else-if="issue.severity === 'warning'" :size="18" />
+				<InformationIcon v-else :size="18" />
+				{{ issue.type.replace(/_/g, ' ') }}
+			</span>
+
+			<span v-if="issue.songTitle" :class="$style.songTitle">
+				{{ issue.songTitle }}
+			</span>
+		</div>
+
+		<p :class="$style.message">{{ issue.message }}</p>
+
+		<div v-if="issue.path || issue.suggestedPath" :class="$style.paths">
+			<div v-if="issue.path" :class="$style.pathLine">
+				<span :class="$style.pathLabel">{{ t('mobilesheetsmanager', 'Current Path:') }}</span>
+				<code>{{ issue.path }}</code>
+			</div>
+			<div v-if="issue.suggestedPath" :class="$style.pathLine">
+				<span :class="$style.pathLabel">{{ t('mobilesheetsmanager', 'Suggested Path:') }}</span>
+				<code>{{ issue.suggestedPath }}</code>
+			</div>
+		</div>
+
+		<div :class="$style.actions">
+			<NcButton
+				v-if="issue.songId"
+				variant="secondary"
+				type="tertiary"
+				@click="emit('openSong', issue.songId!)">
+				{{ t('mobilesheetsmanager', 'Edit Song') }}
+			</NcButton>
+
+			<NcButton
+				v-if="issue.fixable"
+				variant="primary"
+				:disabled="isFixing"
+				@click="emit('fixIssue', issue)">
+				<template #icon>
+					<WrenchIcon :size="16" />
+				</template>
+				{{ isFixing ? t('mobilesheetsmanager', 'Fixing…') : t('mobilesheetsmanager', 'Auto-Fix Issue') }}
+			</NcButton>
+		</div>
+	</li>
+</template>
+
+<style module>
+.item {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 12px 16px;
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius-large, 8px);
+	background: var(--color-main-background);
+}
+
+.error {
+	border-left: 4px solid var(--color-error);
+}
+
+.warning {
+	border-left: 4px solid var(--color-warning);
+}
+
+.info {
+	border-left: 4px solid var(--color-primary-element);
+}
+
+.header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+
+.badge {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 0.85rem;
+	font-weight: 600;
+	text-transform: capitalize;
+}
+
+.songTitle {
+	font-weight: 600;
+	color: var(--color-main-text);
+}
+
+.message {
+	margin: 0;
+	color: var(--color-text-maxcontrast);
+}
+
+.paths {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 8px 12px;
+	border-radius: var(--border-radius, 4px);
+	background-color: var(--color-background-hover);
+	font-size: 0.85rem;
+}
+
+.pathLine {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+}
+
+.pathLabel {
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.actions {
+	display: flex;
+	gap: 8px;
+	justify-content: flex-end;
+	margin-top: 4px;
+}
+</style>

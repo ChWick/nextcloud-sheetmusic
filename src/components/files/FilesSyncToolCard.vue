@@ -9,6 +9,7 @@ defineProps<{
 
 const emit = defineEmits<{
 	sync: []
+	auditIntegrity: []
 }>()
 </script>
 
@@ -29,6 +30,12 @@ const emit = defineEmits<{
 				:disabled="isRunning || disabled"
 				@click="emit('sync')">
 				{{ isRunning ? t('mobilesheetsmanager', 'Syncing…') : t('mobilesheetsmanager', 'Check and sync now') }}
+			</NcButton>
+			<NcButton
+				variant="secondary"
+				:disabled="isRunning || disabled"
+				@click="emit('auditIntegrity')">
+				{{ t('mobilesheetsmanager', 'Audit Library Integrity') }}
 			</NcButton>
 			<span v-if="disabled" :class="$style.hint">
 				{{ t('mobilesheetsmanager', 'Select a library first.') }}
