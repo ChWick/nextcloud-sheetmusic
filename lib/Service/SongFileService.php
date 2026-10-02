@@ -139,6 +139,9 @@ class SongFileService {
 			$targetName = basename($targetRelative);
 
 			$targetInternalPath = $targetFolder->getPath() . '/' . $targetName;
+			if ($userFolder->nodeExists($targetRelative)) {
+				throw new \RuntimeException(sprintf('Cannot attach file: target path "%s" already exists.', $targetRelative));
+			}
 			if ($action === 'move') {
 				$sourceNode->move($targetInternalPath);
 			} else {

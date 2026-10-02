@@ -968,6 +968,19 @@ class FileManager {
 		\Throwable $cause,
 	): void {
 		try {
+			$userFolderPath = $userFolder->getPath();
+			if ($sourceInternal === $userFolderPath) {
+				$sourceRelative = '';
+			} elseif (str_starts_with($sourceInternal, $userFolderPath . '/')) {
+				$sourceRelative = substr($sourceInternal, strlen($userFolderPath) + 1);
+			} else {
+				$sourceRelative = null;
+			}
+
+			if ($sourceRelative !== null && $userFolder->nodeExists($sourceRelative) && $sourceRelative !== $targetRelative) {
+				$sourceRelative = $this->uniqueRelativePath($userFolder, $sourceRelative, $targetRelative);
+				$sourceInternal = $userFolderPath . '/' . $sourceRelative;
+			}
 			$userFolder->get($targetRelative)->move($sourceInternal);
 		} catch (\Throwable $revertException) {
 			$this->logger->error('Could not revert the file move; file and database are now inconsistent', [

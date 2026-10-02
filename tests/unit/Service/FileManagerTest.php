@@ -1511,6 +1511,10 @@ final class FileManagerTest extends TestCase {
 				throw new \OCP\Files\NotFoundException($parent);
 			}
 
+			if (isset($this->files[$targetRelative]) && $targetRelative !== $relative) {
+				self::fail('Attempted to overwrite an existing file at: ' . $targetRelative);
+			}
+
 			$this->moves[] = ['from' => $relative, 'to' => $targetRelative];
 			$this->files[$targetRelative] = $this->files[$relative];
 			unset($this->files[$relative]);
@@ -1519,6 +1523,9 @@ final class FileManagerTest extends TestCase {
 		});
 
 		$node->method('copy')->willReturnCallback(function (string $targetRelative) use ($relative): Node {
+			if (isset($this->files[$targetRelative]) && $targetRelative !== $relative) {
+				self::fail('Attempted to overwrite an existing file at: ' . $targetRelative);
+			}
 			$this->files[$targetRelative] = $this->files[$relative] ?? 'COPY_PAYLOAD';
 			return $this->fakeFileNode($targetRelative);
 		});
