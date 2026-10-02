@@ -205,27 +205,46 @@ watch(() => props.open, open => {
 	}
 }, { immediate: true })
 
-// Conflict detector for Mode 2
+// Conflict detector for Mode 2: checks if saving Song A & Song B in their current state would trigger a library integrity audit issue.
 const wouldCollide = computed(() => {
 	if (mode.value !== 'keepBoth') return false
 
-	// If titles differ, they will generate unique filenames
+	// Check 1: Duplicate physical file path reference collision
+	// If both songs still share active attached file paths and have identical folder-defining metadata (composers, artists, books, collections) + title
 	const sameTitle = songA_title.value.trim().toLowerCase() === songB_title.value.trim().toLowerCase()
-	if (!sameTitle) return false
+	const sameComposers = areEntitiesEqual(songA_composers.value, songB_composers.value)
+	const sameArtists = areEntitiesEqual(songA_artists.value, songB_artists.value)
+	const sameBooks = areEntitiesEqual(songA_books.value, songB_books.value)
+	const sameCollections = areEntitiesEqual(songA_collections.value, songB_collections.value)
 
-	// If composers, books, or collections differ, target folders will differ
-	if (!areEntitiesEqual(songA_composers.value, songB_composers.value)) return false
-	if (!areEntitiesEqual(songA_books.value, songB_books.value)) return false
-	if (!areEntitiesEqual(songA_collections.value, songB_collections.value)) return false
-
-	// Check if both songs still share active attached file paths
 	const activeFilesA = (songA.value?.files ?? []).filter(f => !songA_detachedFiles.value.includes(f.id))
 	const activeFilesB = (songB.value?.files ?? []).filter(f => !songB_detachedFiles.value.includes(f.id))
 
-	if (activeFilesA.length === 0 || activeFilesB.length === 0) return false
+	if (activeFilesA.length > 0 && activeFilesB.length > 0) {
+		const pathsA = new Set(activeFilesA.map(f => f.path))
+		const sharesPhysicalFile = activeFilesB.some(f => pathsA.has(f.path))
+		if (sharesPhysicalFile && sameTitle && sameComposers && sameArtists && sameBooks && sameCollections) {
+			return true
+		}
+	}
 
-	const pathsA = new Set(activeFilesA.map(f => f.path))
-	return activeFilesB.some(f => pathsA.has(f.path))
+	// Check 2: Naming rule collision / file overwriting conflict between Song A and Song B
+	// When both songs have active files with matching file extensions in the same computed folder structure and title
+	if (sameTitle && sameComposers && sameArtists && sameBooks && sameCollections && activeFilesA.length > 0 && activeFilesB.length > 0) {
+		const extsA = new Set(activeFilesA.map(f => {
+			const ext = f.path.split('.').pop()
+			return ext ? ext.toLowerCase() : ''
+		}))
+		const hasOverlappingExtension = activeFilesB.some(f => {
+			const ext = f.path.split('.').pop()
+			return extsA.has(ext ? ext.toLowerCase() : '')
+		})
+		if (hasOverlappingExtension) {
+			return true
+		}
+	}
+
+	return false
 })
 
 function differentiateTitles() {
@@ -413,7 +432,7 @@ function submit() {
 			<AlertIcon :size="20" />
 			<div :class="$style.warningText">
 				<strong>{{ t('mobilesheetsmanager', 'Conflict Not Resolved') }}</strong>
-				<p>{{ t('mobilesheetsmanager', 'Both songs still have identical titles and share the same attached file. Adapt at least one title or detach a file to differentiate them.') }}</p>
+				<p>{{ t('mobilesheetsmanager', 'Saving would recreate a duplicate file path or naming conflict in the library audit. Adapt at least one title, metadata field, or detach a file to differentiate them.') }}</p>
 			</div>
 			<NcButton variant="primary" type="tertiary" @click="differentiateTitles">
 				{{ t('mobilesheetsmanager', 'Differentiate Titles') }}
