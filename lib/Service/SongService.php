@@ -458,22 +458,19 @@ class SongService {
 			);
 
 			// 5. Regenerate file paths according to naming rules (best effort for remaining files)
-			$userObj = $this->fileManager->userFromId($user->getUID());
-			if ($userObj !== null) {
-				['targetFolder' => $targetFolder] = $this->fileManager->libraryContext($libraryId, $userObj);
-				$hashCodes = $this->songFileService->hashCodesFor($databasePath);
-				try {
-					$this->fileManager->regenerateSongFilePaths($songAId, $userObj, $targetFolder, $databasePath, $hashCodes);
-				} catch (\Throwable $e) {
-					// Ignore if song A now has 0 files or path cannot be regenerated
-				}
-				try {
-					$this->fileManager->regenerateSongFilePaths($songBId, $userObj, $targetFolder, $databasePath, $hashCodes);
-				} catch (\Throwable $e) {
-					// Ignore if song B now has 0 files or path cannot be regenerated
-				}
-				$hashCodes?->save();
+			['targetFolder' => $targetFolder] = $this->fileManager->libraryContext($libraryId, $user);
+			$hashCodes = $this->songFileService->hashCodesFor($databasePath);
+			try {
+				$this->fileManager->regenerateSongFilePaths($songAId, $user, $targetFolder, $databasePath, $hashCodes);
+			} catch (\Throwable $e) {
+				// Ignore if song A now has 0 files or path cannot be regenerated
 			}
+			try {
+				$this->fileManager->regenerateSongFilePaths($songBId, $user, $targetFolder, $databasePath, $hashCodes);
+			} catch (\Throwable $e) {
+				// Ignore if song B now has 0 files or path cannot be regenerated
+			}
+			$hashCodes?->save();
 
 			// 6. Server-side audit check: Verify that no duplicate file path issues remain between song A & song B
 			if ($this->libraryIntegrityService !== null) {
