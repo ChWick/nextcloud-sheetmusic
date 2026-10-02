@@ -317,4 +317,35 @@ class SongController extends OCSController {
 			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/songs/resolve-both')]
+	public function resolveBothSongs(
+		?int $libraryId = null,
+		?array $songA = null,
+		?array $songB = null,
+	): DataResponse {
+		if ($libraryId === null || $songA === null || $songB === null) {
+			return new DataResponse(['message' => 'libraryId, songA, and songB are required'], Http::STATUS_BAD_REQUEST);
+		}
+
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		try {
+			$result = $this->songService->resolveBothSongs($user, $libraryId, $songA, $songB);
+			if (isset($result['error'])) {
+				return new DataResponse(['message' => $result['error']], Http::STATUS_CONFLICT);
+			}
+			if ($result === null) {
+				return new DataResponse(['message' => 'Library not found'], Http::STATUS_NOT_FOUND);
+			}
+
+			return new DataResponse($result);
+		} catch (\Throwable $e) {
+			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
 }

@@ -57,7 +57,7 @@ class ApiController extends OCSController {
 		$pathResolver = new MobileSheetsPathResolver($rootFolder);
 		$integritySvc = $libraryIntegrityService ?? new LibraryIntegrityService($libService, $songMapper, $fileManager, $rootFolder, $pathResolver, $logger);
 		$fileSvc = $songFileService ?? new SongFileService($libService, $songMapper, $fileManager, $rootFolder, $logger);
-		$sngService = $songService ?? new SongService($libService, $songMapper, $fileSvc, $fileManager, $logger);
+		$sngService = $songService ?? new SongService($libService, $songMapper, $fileSvc, $fileManager, $logger, $integritySvc);
 		$entService = $entityService ?? new EntityService($libService, $songMapper, $logger);
 
 		$this->libraryController = new LibraryController($appName, $request, $libService, $userSession, $integritySvc);
@@ -170,6 +170,27 @@ class ApiController extends OCSController {
 		?array $sourceTypes = null,
 	): DataResponse {
 		return $this->songController->batchUpdateSongs($libraryId, $songIds, $composers, $books, $collections, $artists, $genres, $keys, $customGroups, $years, $signatures, $sourceTypes);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/songs/merge')]
+	public function mergeSong(
+		?int $libraryId = null,
+		?int $keepId = null,
+		?int $droppedId = null,
+		array $merged = [],
+	): DataResponse {
+		return $this->songController->mergeSong($libraryId, $keepId, $droppedId, $merged);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/songs/resolve-both')]
+	public function resolveBothSongs(
+		?int $libraryId = null,
+		?array $songA = null,
+		?array $songB = null,
+	): DataResponse {
+		return $this->songController->resolveBothSongs($libraryId, $songA, $songB);
 	}
 
 	#[NoAdminRequired]

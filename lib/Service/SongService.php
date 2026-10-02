@@ -16,6 +16,7 @@ class SongService {
 		private SongFileService $songFileService,
 		private FileManager $fileManager,
 		private LoggerInterface $logger,
+		private ?LibraryIntegrityService $libraryIntegrityService = null,
 	) {
 	}
 
@@ -370,6 +371,122 @@ class SongService {
 				'libraryId' => $libraryId,
 				'keepId' => $keepId,
 				'droppedId' => $droppedId,
+			]);
+
+			throw $e;
+		}
+	}
+
+	/**
+	 * Resolve conflicts for keeping two separate songs.
+	 * Detaches requested files, updates metadata for both songs, and verifies via LibraryIntegrityService
+	 * that no duplicate physical paths or naming rule conflicts remain between them.
+	 */
+	public function resolveBothSongs(IUser $user, int $libraryId, array $songAData, array $songBData): ?array {
+		$databasePath = $this->libraryService->getDatabasePath($user->getUID(), $libraryId);
+		if ($databasePath === null) {
+			return null;
+		}
+
+		$songAId = (int)($songAData['id'] ?? 0);
+		$songBId = (int)($songBData['id'] ?? 0);
+		if ($songAId <= 0 || $songBId <= 0) {
+			return ['error' => 'Invalid song IDs provided for conflict resolution.'];
+		}
+
+		try {
+			// 1. Detach files requested for Song A
+			if (!empty($songAData['detachFileIds']) && is_array($songAData['detachFileIds'])) {
+				foreach ($songAData['detachFileIds'] as $fileId) {
+					$this->songFileService->deleteSongFile($user, $songAId, (int)$fileId, $libraryId);
+				}
+			}
+
+			// 2. Detach files requested for Song B
+			if (!empty($songBData['detachFileIds']) && is_array($songBData['detachFileIds'])) {
+				foreach ($songBData['detachFileIds'] as $fileId) {
+					$this->songFileService->deleteSongFile($user, $songBId, (int)$fileId, $libraryId);
+				}
+			}
+
+			// 3. Update Song A metadata
+			$this->songMapper->updateSong(
+				$databasePath,
+				$songAId,
+				(string)($songAData['title'] ?? ''),
+				array_map('intval', $songAData['composerIds'] ?? []),
+				array_map('intval', $songAData['bookIds'] ?? []),
+				array_map('intval', $songAData['collectionIds'] ?? []),
+				array_map('intval', $songAData['artistIds'] ?? []),
+				array_map('intval', $songAData['genreIds'] ?? []),
+				array_map('intval', $songAData['keyIds'] ?? []),
+				array_map('intval', $songAData['customGroupIds'] ?? []),
+				array_map('intval', $songAData['yearIds'] ?? []),
+				array_map('intval', $songAData['signatureIds'] ?? []),
+				array_map('intval', $songAData['sourceTypeIds'] ?? []),
+				(int)($songAData['stars'] ?? 0),
+				(int)($songAData['difficulty'] ?? 0),
+				(int)($songAData['duration'] ?? 0),
+				(string)($songAData['keywords'] ?? ''),
+				(string)($songAData['custom'] ?? ''),
+				(string)($songAData['custom2'] ?? ''),
+				(string)($songAData['sortTitle'] ?? ''),
+			);
+
+			// 4. Update Song B metadata
+			$this->songMapper->updateSong(
+				$databasePath,
+				$songBId,
+				(string)($songBData['title'] ?? ''),
+				array_map('intval', $songBData['composerIds'] ?? []),
+				array_map('intval', $songBData['bookIds'] ?? []),
+				array_map('intval', $songBData['collectionIds'] ?? []),
+				array_map('intval', $songBData['artistIds'] ?? []),
+				array_map('intval', $songBData['genreIds'] ?? []),
+				array_map('intval', $songBData['keyIds'] ?? []),
+				array_map('intval', $songBData['customGroupIds'] ?? []),
+				array_map('intval', $songBData['yearIds'] ?? []),
+				array_map('intval', $songBData['signatureIds'] ?? []),
+				array_map('intval', $songBData['sourceTypeIds'] ?? []),
+				(int)($songBData['stars'] ?? 0),
+				(int)($songBData['difficulty'] ?? 0),
+				(int)($songBData['duration'] ?? 0),
+				(string)($songBData['keywords'] ?? ''),
+				(string)($songBData['custom'] ?? ''),
+				(string)($songBData['custom2'] ?? ''),
+				(string)($songBData['sortTitle'] ?? ''),
+			);
+
+			// 5. Regenerate file paths according to naming rules
+			$userObj = $this->fileManager->userFromId($user->getUID());
+			if ($userObj !== null) {
+				['targetFolder' => $targetFolder] = $this->fileManager->libraryContext($libraryId, $userObj);
+				$hashCodes = $this->songFileService->hashCodesFor($databasePath);
+				$this->fileManager->regenerateSongFilePaths($songAId, $userObj, $targetFolder, $databasePath, $hashCodes);
+				$this->fileManager->regenerateSongFilePaths($songBId, $userObj, $targetFolder, $databasePath, $hashCodes);
+				$hashCodes?->save();
+			}
+
+			// 6. Server-side audit check: Verify that no duplicate file path issues remain between song A & song B
+			if ($this->libraryIntegrityService !== null) {
+				$issues = $this->libraryIntegrityService->checkIntegrity($libraryId, $user->getUID());
+				foreach ($issues as $issue) {
+					if ($issue->type === \OCA\MobileSheetsManager\Service\IntegrityIssue::TYPE_DUPLICATE_FILE_PATH) {
+						$issueSongIds = $issue->details['songIds'] ?? [];
+						if (in_array($songAId, $issueSongIds, true) && in_array($songBId, $issueSongIds, true)) {
+							return ['error' => 'Conflict cannot be resolved: Song A and Song B still share the same physical file or path in storage. Adapt titles or detach shared files.'];
+						}
+					}
+				}
+			}
+
+			return $this->songMapper->findLibraryData($databasePath);
+		} catch (\Throwable $e) {
+			$this->logger->error('Could not resolve both songs in MobileSheets library', [
+				'exception' => $e,
+				'libraryId' => $libraryId,
+				'songAId' => $songAId,
+				'songBId' => $songBId,
 			]);
 
 			throw $e;

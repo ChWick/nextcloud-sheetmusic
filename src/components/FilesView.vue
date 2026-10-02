@@ -160,53 +160,15 @@ async function executeResolveBoth(payload: {
 	songA: ResolveBothSongData
 	songB: ResolveBothSongData
 }) {
+	if (props.selectedLibrary < 0) return
+
 	isMerging.value = true
+	integrityError.value = ''
 	try {
-		// 1. Detach marked files for Song A
-		for (const fileId of payload.songA.detachFileIds) {
-			await apiPost(`/api/songs/${payload.songA.id}/file/${fileId}/delete`, undefined, {
-				config: { params: { libraryId: props.selectedLibrary } },
-			} as any)
-		}
-
-		// 2. Detach marked files for Song B
-		for (const fileId of payload.songB.detachFileIds) {
-			await apiPost(`/api/songs/${payload.songB.id}/file/${fileId}/delete`, undefined, {
-				config: { params: { libraryId: props.selectedLibrary } },
-			} as any)
-		}
-
-		// 3. Update Song A
-		await apiPost(`/api/songs/${payload.songA.id}`, {
+		await apiPost('/api/songs/resolve-both', {
 			libraryId: props.selectedLibrary,
-			title: payload.songA.title,
-			composerIds: payload.songA.composerIds,
-			bookIds: payload.songA.bookIds,
-			collectionIds: payload.songA.collectionIds,
-			artistIds: payload.songA.artistIds,
-			genreIds: payload.songA.genreIds,
-			keyIds: payload.songA.keyIds,
-			keywords: payload.songA.keywords,
-			sortTitle: payload.songA.sortTitle,
-		})
-
-		// 4. Update Song B
-		await apiPost(`/api/songs/${payload.songB.id}`, {
-			libraryId: props.selectedLibrary,
-			title: payload.songB.title,
-			composerIds: payload.songB.composerIds,
-			bookIds: payload.songB.bookIds,
-			collectionIds: payload.songB.collectionIds,
-			artistIds: payload.songB.artistIds,
-			genreIds: payload.songB.genreIds,
-			keyIds: payload.songB.keyIds,
-			keywords: payload.songB.keywords,
-			sortTitle: payload.songB.sortTitle,
-		})
-
-		// 5. Run sync/file regeneration so both songs get their updated naming-rule paths
-		await apiPost('/api/sync-library', {
-			libraryId: props.selectedLibrary,
+			songA: payload.songA,
+			songB: payload.songB,
 		})
 
 		isMergeDialogOpen.value = false

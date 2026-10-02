@@ -195,36 +195,14 @@ describe('FilesView.vue', () => {
 			},
 		})
 
-		// Verify API calls
-		// 1. File detach for song A
+		// Verify API call to resolve-both endpoint
 		expect(axios.post).toHaveBeenCalledWith(
-			'/ocs/v2.php/apps/mobilesheetsmanager/api/songs/60/file/207/delete',
-			undefined,
-			{ params: { libraryId: 2 } },
-		)
-
-		// 2. Song A update
-		expect(axios.post).toHaveBeenCalledWith(
-			'/ocs/v2.php/apps/mobilesheetsmanager/api/songs/60',
+			'/ocs/v2.php/apps/mobilesheetsmanager/api/songs/resolve-both',
 			expect.objectContaining({
 				libraryId: 2,
-				title: 'Nachspiel A',
+				songA: expect.objectContaining({ id: 60, title: 'Nachspiel A' }),
+				songB: expect.objectContaining({ id: 61, title: 'Nachspiel B' }),
 			}),
-		)
-
-		// 3. Song B update
-		expect(axios.post).toHaveBeenCalledWith(
-			'/ocs/v2.php/apps/mobilesheetsmanager/api/songs/61',
-			expect.objectContaining({
-				libraryId: 2,
-				title: 'Nachspiel B',
-			}),
-		)
-
-		// 4. Library sync recheck
-		expect(axios.post).toHaveBeenCalledWith(
-			'/ocs/v2.php/apps/mobilesheetsmanager/api/sync-library',
-			{ libraryId: 2 },
 		)
 	})
 })
