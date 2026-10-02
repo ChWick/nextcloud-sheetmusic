@@ -79,14 +79,24 @@ async function auditIntegrity() {
 /** Automatically fix a specific integrity issue */
 async function fixIntegrityIssue(issue: IntegrityIssue) {
 	try {
-		await apiPost(`/api/libraries/${props.selectedLibrary}/integrity/fix`, {
+		const response = await apiPost(`/api/libraries/${props.selectedLibrary}/integrity/fix`, {
 			issueType: issue.type,
 			songId: issue.songId,
 			fileId: issue.fileId,
 		})
-		await auditIntegrity()
+		const result = response.data?.ocs?.data
+		if (result && !result.success) {
+			integrityError.value = result.message ?? t('mobilesheetsmanager', 'Failed to fix integrity issue.')
+		} else {
+			await auditIntegrity()
+		}
 	} catch (error) {
 		console.error('Failed to fix integrity issue:', error)
+		const serverMessage = axios.isAxiosError(error)
+			? error.response?.data?.ocs?.data?.message
+			: undefined
+		integrityError.value = serverMessage
+			?? t('mobilesheetsmanager', 'Failed to fix integrity issue. Please try again.')
 	}
 }
 

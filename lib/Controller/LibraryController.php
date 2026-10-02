@@ -136,11 +136,13 @@ class LibraryController extends OCSController {
 
 		try {
 			$result = $this->integrityService->fixIssue($id, $user->getUID(), $issueType, $songId, $fileId);
-			return new DataResponse($result, Http::STATUS_OK);
+			$status = ($result['success'] ?? false) ? Http::STATUS_OK : Http::STATUS_BAD_REQUEST;
+
+			return new DataResponse($result, $status);
 		} catch (\Throwable $e) {
 			return new DataResponse(
-				['message' => 'Error fixing integrity issue: ' . $e->getMessage()],
-				Http::STATUS_INTERNAL_SERVER_ERROR
+				['success' => false, 'message' => 'Error fixing integrity issue: ' . $e->getMessage()],
+				Http::STATUS_BAD_REQUEST
 			);
 		}
 	}

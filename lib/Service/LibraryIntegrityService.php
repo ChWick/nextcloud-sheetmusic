@@ -170,20 +170,28 @@ class LibraryIntegrityService {
 			['databasePath' => $databasePath, 'targetFolder' => $targetFolder] = $this->fileManager->libraryContext($libraryId, $user);
 			$hashCodes = MobileSheetsHashCodesFile::forDatabase($databasePath, $this->logger);
 
-			$this->fileManager->regenerateSongFilePaths($songId, $user, $targetFolder, $databasePath, $hashCodes);
-			$hashCodes?->save();
+			try {
+				$this->fileManager->regenerateSongFilePaths($songId, $user, $targetFolder, $databasePath, $hashCodes);
+				$hashCodes?->save();
 
-			return ['success' => true, 'message' => sprintf('Regenerated file path for song ID %d.', $songId)];
+				return ['success' => true, 'message' => sprintf('Regenerated file path for song ID %d.', $songId)];
+			} catch (\Throwable $e) {
+				return ['success' => false, 'message' => sprintf('Cannot fix naming rule for song ID %d: %s', $songId, $e->getMessage())];
+			}
 		}
 
 		if ($issueType === IntegrityIssue::TYPE_DUPLICATE_FILE_PATH && $songId !== null) {
 			['databasePath' => $databasePath, 'targetFolder' => $targetFolder] = $this->fileManager->libraryContext($libraryId, $user);
 			$hashCodes = MobileSheetsHashCodesFile::forDatabase($databasePath, $this->logger);
 
-			$this->fileManager->regenerateSongFilePaths($songId, $user, $targetFolder, $databasePath, $hashCodes);
-			$hashCodes?->save();
+			try {
+				$this->fileManager->regenerateSongFilePaths($songId, $user, $targetFolder, $databasePath, $hashCodes);
+				$hashCodes?->save();
 
-			return ['success' => true, 'message' => sprintf('Assigned unique file path to duplicate entry for song ID %d.', $songId)];
+				return ['success' => true, 'message' => sprintf('Assigned unique file path to duplicate entry for song ID %d.', $songId)];
+			} catch (\Throwable $e) {
+				return ['success' => false, 'message' => sprintf('Cannot resolve duplicate path for song ID %d: %s', $songId, $e->getMessage())];
+			}
 		}
 
 		return ['success' => false, 'message' => 'Unrecognized or unfixable issue type.'];
