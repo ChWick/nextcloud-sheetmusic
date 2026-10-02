@@ -8,6 +8,7 @@
   <div :class="$style.entitiesArea">
     <div v-if="filterBarVisible" :class="$style.filterBarWrapper">
       <SongFilterBar
+        v-model:without-files="withoutFiles"
         v-model:selected-composers="selectedComposers"
         v-model:selected-books="selectedBooks"
         v-model:selected-collections="selectedCollections"
@@ -246,7 +247,7 @@ const deleteError = ref('')
 
 // The filter bar reads and writes its selections in the URL query, so the browser
 // history restores them when going back or forward.
-const { selectedComposers, selectedBooks, selectedCollections, selectedArtists, selectedGenres, selectedKeys, selectedCustomGroups, selectedYears, selectedSignatures, selectedSourceTypes, hasActiveFilters, filterSongs, clearFilters, filterBarVisible, toggleFilterBar } =
+const { selectedComposers, selectedBooks, selectedCollections, selectedArtists, selectedGenres, selectedKeys, selectedCustomGroups, selectedYears, selectedSignatures, selectedSourceTypes, withoutFiles, hasActiveFilters, filterSongs, clearFilters, filterBarVisible, toggleFilterBar } =
   useSongFilters(() => ({ composers: composers.value, books: books.value, collections: collections.value, artists: artists.value, genres: genres.value, keys: keys.value, customGroups: customGroups.value, years: years.value, signatures: signatures.value, sourceTypes: sourceTypes.value }))
 
 /** Books carry a title, every other entity kind a name. */

@@ -74,6 +74,12 @@ export function useSongFilters(options: () => FilterOptions) {
 		return typeof value === 'string' ? value : ''
 	}
 
+	function withoutFilesFilterOf(): boolean {
+		const raw = route.query.withoutFiles ?? route.query.without_files ?? route.query.noFiles ?? route.query.no_files
+		const value = Array.isArray(raw) ? raw[0] : raw
+		return value === 'true' || value === '1' || value === 'yes'
+	}
+
 	const searchTitle = computed({
 		get: () => titleFilterOf(),
 		set: (val: string) => {
@@ -86,6 +92,22 @@ export function useSongFilters(options: () => FilterOptions) {
 				query.title = val
 			}
 			router.replace({ query })
+		},
+	})
+
+	const withoutFiles = computed({
+		get: () => withoutFilesFilterOf(),
+		set: (val: boolean) => {
+			const query: LocationQueryRaw = { ...route.query }
+			if (!val) {
+				delete query.withoutFiles
+				delete query.without_files
+				delete query.noFiles
+				delete query.no_files
+			} else {
+				query.withoutFiles = '1'
+			}
+			router.push({ query })
 		},
 	})
 
@@ -138,7 +160,7 @@ export function useSongFilters(options: () => FilterOptions) {
 	}
 
 	const hasActiveFilters = computed(() =>
-		Boolean(titleFilterOf().trim()) || FILTER_TYPES.some(entityType => idsOf(entityType).length > 0)
+		Boolean(titleFilterOf().trim()) || withoutFilesFilterOf() || FILTER_TYPES.some(entityType => idsOf(entityType).length > 0)
 	)
 
 	function matchesCategory<T extends { id: number }>(songItems: T[] | undefined, selectedIds: Set<number>): boolean {
@@ -155,6 +177,12 @@ export function useSongFilters(options: () => FilterOptions) {
 		const titleQuery = titleFilterOf().trim().toLowerCase()
 		if (titleQuery && !song.title.toLowerCase().includes(titleQuery)) {
 			return false
+		}
+
+		if (withoutFilesFilterOf()) {
+			if (song.files && song.files.length > 0) {
+				return false
+			}
 		}
 
 		const composerIds = new Set(idsOf('composers'))
@@ -191,6 +219,10 @@ export function useSongFilters(options: () => FilterOptions) {
 		const query: LocationQueryRaw = { ...route.query }
 		delete query.title
 		delete query.search
+		delete query.withoutFiles
+		delete query.without_files
+		delete query.noFiles
+		delete query.no_files
 		for (const entityType of FILTER_TYPES) {
 			delete query[entityType]
 		}
@@ -240,6 +272,7 @@ export function useSongFilters(options: () => FilterOptions) {
 
 	return {
 		searchTitle,
+		withoutFiles,
 		selectedComposers,
 		selectedBooks,
 		selectedCollections,

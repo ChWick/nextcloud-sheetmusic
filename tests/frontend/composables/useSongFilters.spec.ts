@@ -122,4 +122,40 @@ describe('useSongFilters composable with unassigned matching', () => {
 			query: {},
 		})
 	})
+
+	it('filters songs without files', () => {
+		const songsWithAndWithoutFiles: Song[] = [
+			{ id: 1, title: 'Song with file', files: [{ id: 1, path: 'song1.pdf' }] },
+			{ id: 2, title: 'Song with empty files array', files: [] },
+			{ id: 3, title: 'Song without files property' },
+		]
+
+		mockRoute.query = { withoutFiles: '1' }
+		const { filterSongs, withoutFiles, hasActiveFilters } = useSongFilters(options)
+
+		expect(withoutFiles.value).toBe(true)
+		expect(hasActiveFilters.value).toBe(true)
+
+		const result = filterSongs(songsWithAndWithoutFiles)
+		expect(result.map(s => s.id)).toEqual([2, 3])
+	})
+
+	it('updates query when setting withoutFiles filter', () => {
+		const { withoutFiles } = useSongFilters(options)
+		withoutFiles.value = true
+
+		expect(mockRouter.push).toHaveBeenCalledWith({
+			query: { withoutFiles: '1' },
+		})
+	})
+
+	it('clears withoutFiles when clearFilters is called', () => {
+		mockRoute.query = { withoutFiles: '1', composers: '10' }
+		const { clearFilters } = useSongFilters(options)
+
+		clearFilters()
+		expect(mockRouter.push).toHaveBeenCalledWith({
+			query: {},
+		})
+	})
 })

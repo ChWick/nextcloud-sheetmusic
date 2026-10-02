@@ -3,6 +3,7 @@ import type { Artist, Book, Collection, Composer, CustomGroup, Genre, Key, Signa
 
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import FilterOffIcon from 'vue-material-design-icons/FilterOff.vue'
@@ -12,6 +13,7 @@ import { noneEntryOf } from '../composables/useSongFilters'
 const props = withDefaults(
 	defineProps<{
 		searchTitle?: string
+		withoutFiles?: boolean
 		composers?: Composer[]
 		books?: Book[]
 		collections?: Collection[]
@@ -35,6 +37,7 @@ const props = withDefaults(
 	}>(),
 	{
 		searchTitle: '',
+		withoutFiles: false,
 		composers: () => [],
 		books: () => [],
 		collections: () => [],
@@ -60,6 +63,7 @@ const props = withDefaults(
 
 const emit = defineEmits<{
 	'update:searchTitle': [title: string]
+	'update:withoutFiles': [withoutFiles: boolean]
 	'update:selectedComposers': [composers: Composer[]]
 	'update:selectedBooks': [books: Book[]]
 	'update:selectedCollections': [collections: Collection[]]
@@ -72,6 +76,11 @@ const emit = defineEmits<{
 	'update:selectedSourceTypes': [sourceTypes: SourceType[]]
 	'clear': []
 }>()
+
+const withoutFilesModel = computed({
+	get: () => props.withoutFiles,
+	set: (val: boolean) => emit('update:withoutFiles', val),
+})
 
 const composerOptions = computed(() => [
 	noneEntryOf('composers') as Composer,
@@ -126,6 +135,7 @@ const sourceTypeOptions = computed(() => [
 const hasActiveFilters = computed(() => {
 	return (
 		Boolean(props.searchTitle?.trim())
+		|| props.withoutFiles
 		|| props.selectedComposers.length > 0
 		|| props.selectedBooks.length > 0
 		|| props.selectedCollections.length > 0
@@ -155,6 +165,14 @@ function clearAllFilters() {
 				:label="t('mobilesheetsmanager', 'Search title')"
 				:class="$style.input"
 				@update:model-value="emit('update:searchTitle', $event)" />
+		</div>
+
+		<div :class="[$style.filterGroup, $style.checkboxGroup]">
+			<NcCheckboxRadioSwitch
+				v-model="withoutFilesModel"
+				type="checkbox">
+				{{ t('mobilesheetsmanager', 'Without files') }}
+			</NcCheckboxRadioSwitch>
 		</div>
 
 		<div :class="$style.filterGroup">
@@ -334,6 +352,13 @@ function clearAllFilters() {
 	flex: 1 1 240px;
 	min-width: 0;
 	position: relative;
+}
+
+.checkboxGroup {
+	flex: 0 0 auto;
+	justify-content: center;
+	align-items: flex-start;
+	padding: 0 8px;
 }
 
 .filterGroup:focus-within {

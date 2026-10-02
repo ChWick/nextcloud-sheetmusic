@@ -153,6 +153,7 @@
 
     <div v-if="filterBarVisible" :class="$style.filterBarWrapper"><SongFilterBar
       v-model:search-title="searchTitle"
+      v-model:without-files="withoutFiles"
       v-model:selected-composers="selectedComposers"
       v-model:selected-books="selectedBooks"
       v-model:selected-collections="selectedCollections"
@@ -373,7 +374,7 @@ const isEditInUrl = computed(() => route.query.edit !== undefined && route.query
 
 // The filter bar reads and writes its selections in the URL query, so the browser
 // history restores them when going back or forward.
-const { searchTitle, selectedComposers, selectedBooks, selectedCollections, selectedArtists, selectedGenres, selectedKeys, selectedCustomGroups, selectedYears, selectedSignatures, selectedSourceTypes, filterSongs, clearFilters, filterBarVisible, toggleFilterBar, isFiltered, toggleFilter } =
+const { searchTitle, withoutFiles, selectedComposers, selectedBooks, selectedCollections, selectedArtists, selectedGenres, selectedKeys, selectedCustomGroups, selectedYears, selectedSignatures, selectedSourceTypes, filterSongs, clearFilters, filterBarVisible, toggleFilterBar, isFiltered, toggleFilter } =
   useSongFilters(() => ({ composers: composers.value, books: books.value, collections: collections.value, artists: artists.value, genres: genres.value, keys: keys.value, customGroups: customGroups.value, years: years.value, signatures: signatures.value, sourceTypes: sourceTypes.value }));
 
 const { selectedSongIds, selectedCount, isSelected, toggleSelect, selectAll, isAllSelected, clearSelection } = useSongSelection();
