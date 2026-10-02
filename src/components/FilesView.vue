@@ -174,11 +174,11 @@ async function executeResolveBoth(payload: {
 		isMergeDialogOpen.value = false
 		mergeIssue.value = null
 		await auditIntegrity()
-	} catch (error) {
+	} catch (error: any) {
 		console.error('Failed to resolve both songs:', error)
-		const serverMessage = axios.isAxiosError(error)
-			? error.response?.data?.ocs?.data?.message ?? error.response?.data?.message
-			: undefined
+		const serverMessage = error?.response?.data?.ocs?.data?.message
+			?? error?.response?.data?.message
+			?? error?.message
 		integrityError.value = serverMessage
 			?? t('mobilesheetsmanager', 'Failed to save updated songs. Please try again.')
 	} finally {
