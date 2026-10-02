@@ -209,27 +209,27 @@ watch(() => props.open, open => {
 const wouldCollide = computed(() => {
 	if (mode.value !== 'keepBoth') return false
 
-	// Check 1: Duplicate physical file path reference collision
-	// If both songs still share active attached file paths and have identical folder-defining metadata (composers, artists, books, collections) + title
+	const activeFilesA = (songA.value?.files ?? []).filter(f => !songA_detachedFiles.value.includes(f.id))
+	const activeFilesB = (songB.value?.files ?? []).filter(f => !songB_detachedFiles.value.includes(f.id))
+
+	// Check 1: Shared physical file path collision
+	// If both songs still share active attached file paths (even if titles or metadata differ), keeping both will cause duplicate file path conflicts or cross-song file dependencies
+	if (activeFilesA.length > 0 && activeFilesB.length > 0) {
+		const pathsA = new Set(activeFilesA.map(f => f.path))
+		const sharesPhysicalFile = activeFilesB.some(f => pathsA.has(f.path))
+		if (sharesPhysicalFile) {
+			return true
+		}
+	}
+
+	// Check 2: Naming rule / target path collision
+	// When both songs have identical titles and folder-defining metadata + matching active file extensions
 	const sameTitle = songA_title.value.trim().toLowerCase() === songB_title.value.trim().toLowerCase()
 	const sameComposers = areEntitiesEqual(songA_composers.value, songB_composers.value)
 	const sameArtists = areEntitiesEqual(songA_artists.value, songB_artists.value)
 	const sameBooks = areEntitiesEqual(songA_books.value, songB_books.value)
 	const sameCollections = areEntitiesEqual(songA_collections.value, songB_collections.value)
 
-	const activeFilesA = (songA.value?.files ?? []).filter(f => !songA_detachedFiles.value.includes(f.id))
-	const activeFilesB = (songB.value?.files ?? []).filter(f => !songB_detachedFiles.value.includes(f.id))
-
-	if (activeFilesA.length > 0 && activeFilesB.length > 0) {
-		const pathsA = new Set(activeFilesA.map(f => f.path))
-		const sharesPhysicalFile = activeFilesB.some(f => pathsA.has(f.path))
-		if (sharesPhysicalFile && sameTitle && sameComposers && sameArtists && sameBooks && sameCollections) {
-			return true
-		}
-	}
-
-	// Check 2: Naming rule collision / file overwriting conflict between Song A and Song B
-	// When both songs have active files with matching file extensions in the same computed folder structure and title
 	if (sameTitle && sameComposers && sameArtists && sameBooks && sameCollections && activeFilesA.length > 0 && activeFilesB.length > 0) {
 		const extsA = new Set(activeFilesA.map(f => {
 			const ext = f.path.split('.').pop()
@@ -345,6 +345,9 @@ function submit() {
 			},
 		})
 	} else {
+		if (wouldCollide.value) {
+			return
+		}
 		emit('resolveBoth', {
 			songA: {
 				id: songA.value?.id ?? 0,
