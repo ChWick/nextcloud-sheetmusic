@@ -125,7 +125,9 @@ class SongMapper {
 		$genres = [];
 		$genresById = [];
 		if (in_array('Genres', $existingTables, true)) {
-			$stmt = $database->query('SELECT Id, Type FROM Genres ORDER BY Type');
+			$cols = $this->columnNames($database, 'Genres');
+			$genreCol = isset($cols['type']) ? 'Type' : (isset($cols['name']) ? 'Name' : 'Type');
+			$stmt = $database->query('SELECT Id, ' . $genreCol . ' AS Type FROM Genres ORDER BY ' . $genreCol);
 			if ($stmt !== false) {
 				while ($row = $stmt->fetch()) {
 					$genre = new MobileSheetsGenre((int)$row['Id'], (string)$row['Type']);
@@ -137,8 +139,11 @@ class SongMapper {
 
 		$keys = [];
 		$keysById = [];
-		if (in_array('Keys', $existingTables, true)) {
-			$stmt = $database->query('SELECT Id, Name FROM Keys ORDER BY Name');
+		$keyTable = in_array('Key', $existingTables, true) ? 'Key' : (in_array('Keys', $existingTables, true) ? 'Keys' : null);
+		if ($keyTable !== null) {
+			$cols = $this->columnNames($database, $keyTable);
+			$keyCol = isset($cols['name']) ? 'Name' : (isset($cols['key']) ? 'Key' : 'Name');
+			$stmt = $database->query('SELECT Id, ' . $keyCol . ' AS Name FROM "' . $keyTable . '" ORDER BY ' . $keyCol);
 			if ($stmt !== false) {
 				while ($row = $stmt->fetch()) {
 					$key = new MobileSheetsKey((int)$row['Id'], (string)$row['Name']);
@@ -164,7 +169,9 @@ class SongMapper {
 		$years = [];
 		$yearsById = [];
 		if (in_array('Years', $existingTables, true)) {
-			$stmt = $database->query('SELECT Id, Year FROM Years ORDER BY Year ASC');
+			$cols = $this->columnNames($database, 'Years');
+			$yearCol = isset($cols['year']) ? 'Year' : (isset($cols['name']) ? 'Name' : 'Year');
+			$stmt = $database->query('SELECT Id, ' . $yearCol . ' AS Year FROM Years ORDER BY ' . $yearCol . ' ASC');
 			if ($stmt !== false) {
 				while ($row = $stmt->fetch()) {
 					$year = new MobileSheetsYear((int)$row['Id'], (int)$row['Year']);
@@ -189,8 +196,11 @@ class SongMapper {
 
 		$sourceTypes = [];
 		$sourceTypesById = [];
-		if (in_array('SourceTypes', $existingTables, true)) {
-			$stmt = $database->query('SELECT Id, Type FROM SourceTypes ORDER BY Type');
+		$sourceTypeTable = in_array('SourceType', $existingTables, true) ? 'SourceType' : (in_array('SourceTypes', $existingTables, true) ? 'SourceTypes' : null);
+		if ($sourceTypeTable !== null) {
+			$cols = $this->columnNames($database, $sourceTypeTable);
+			$sourceTypeCol = isset($cols['type']) ? 'Type' : (isset($cols['name']) ? 'Name' : 'Type');
+			$stmt = $database->query('SELECT Id, ' . $sourceTypeCol . ' AS Type FROM "' . $sourceTypeTable . '" ORDER BY ' . $sourceTypeCol);
 			if ($stmt !== false) {
 				while ($row = $stmt->fetch()) {
 					$sourceType = new MobileSheetsSourceType((int)$row['Id'], (string)$row['Type']);
@@ -450,6 +460,10 @@ class SongMapper {
 			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
 		]);
 
+		$tablesStatement = $database->query("SELECT name FROM sqlite_master WHERE type='table'");
+		/** @var list<string> $existingTables */
+		$existingTables = $tablesStatement !== false ? $tablesStatement->fetchAll(PDO::FETCH_COLUMN) : [];
+
 		$songCols = $this->columnNames($database, 'Songs');
 		$hasLastModified = isset($songCols['lastmodified']);
 		$createdCol = isset($songCols['datecreated']) ? 'DateCreated' : (isset($songCols['creationdate']) ? 'CreationDate' : null);
@@ -492,52 +506,85 @@ class SongMapper {
 		if ($hasSortTitle) {
 			$selectFields[] = 's.SortTitle';
 		}
-		$selectFields = array_merge($selectFields, [
-			'gs.GenreId AS GenreId',
-			'g.Type AS Genre',
-			'ks.KeyId AS KeyId',
-			'k.Name AS Key',
-			'cgs.GroupId AS CustomGroupId',
-			'cg.Name AS CustomGroup',
-			'ys.YearId AS YearId',
-			'y.Year AS Year',
-			'sigs.SignatureId AS SignatureId',
-			'sig.Name AS Signature',
-			'srctypes.SourceTypeId AS SourceTypeId',
-			'srctype.Type AS SourceType',
-			'c.Name AS Composer',
-			'cs.ComposerId AS ComposerId',
-			'coll.Name AS Collection',
-			'colls.CollectionId AS CollectionId',
-			'books.Title AS Book',
-			'bookSongs.BookId AS BookId',
-			'artist.Name AS Artist',
-			'artistsSongs.ArtistId AS ArtistId',
-		]);
+		$keyTable = in_array('Key', $existingTables, true) ? 'Key' : (in_array('Keys', $existingTables, true) ? 'Keys' : null);
+		$sourceTypeTable = in_array('SourceType', $existingTables, true) ? 'SourceType' : (in_array('SourceTypes', $existingTables, true) ? 'SourceTypes' : null);
 
-		$statement = $database->prepare('SELECT ' . implode(",\n\t\t\t", $selectFields) . '
-		FROM Songs s
-		LEFT JOIN ComposerSongs cs ON s.Id = cs.SongId
-		LEFT JOIN Composer c ON cs.ComposerId = c.Id
-		LEFT JOIN CollectionSong colls ON s.Id = colls.SongId
-		LEFT JOIN Collections coll ON colls.CollectionId = coll.Id
-		LEFT JOIN GenresSongs gs ON s.Id = gs.SongId
-		LEFT JOIN Genres g ON gs.GenreId = g.Id
-		LEFT JOIN KeySongs ks ON s.Id = ks.SongId
-		LEFT JOIN Keys k ON ks.KeyId = k.Id
-		LEFT JOIN CustomGroupSongs cgs ON s.Id = cgs.SongId
-		LEFT JOIN CustomGroup cg ON cgs.GroupId = cg.Id
-		LEFT JOIN YearsSongs ys ON s.Id = ys.SongId
-		LEFT JOIN Years y ON ys.YearId = y.Id
-		LEFT JOIN SignatureSongs sigs ON s.Id = sigs.SongId
-		LEFT JOIN Signature sig ON sigs.SignatureId = sig.Id
-		LEFT JOIN SourceTypeSongs srctypes ON s.Id = srctypes.SongId
-		LEFT JOIN SourceTypes srctype ON srctypes.SourceTypeId = srctype.Id
-		LEFT JOIN BookSongs bookSongs ON s.Id = bookSongs.SongId
-		LEFT JOIN Books books ON bookSongs.BookId = books.Id
-		LEFT JOIN ArtistsSongs artistsSongs ON artistsSongs.SongId = s.Id
-		LEFT JOIN Artists artist on artistsSongs.ArtistId = artist.Id'
-			. ($songId === null ? '' : ' WHERE s.Id = :songId'));
+		$keyCols = $keyTable !== null ? $this->columnNames($database, $keyTable) : [];
+		$keyCol = isset($keyCols['name']) ? 'Name' : (isset($keyCols['key']) ? 'Key' : 'Name');
+
+		$sourceTypeCols = $sourceTypeTable !== null ? $this->columnNames($database, $sourceTypeTable) : [];
+		$sourceTypeCol = isset($sourceTypeCols['type']) ? 'Type' : (isset($sourceTypeCols['name']) ? 'Name' : 'Type');
+
+		$yearsCols = in_array('Years', $existingTables, true) ? $this->columnNames($database, 'Years') : [];
+		$yearCol = isset($yearsCols['year']) ? 'Year' : (isset($yearsCols['name']) ? 'Name' : 'Year');
+
+		$genreCols = in_array('Genres', $existingTables, true) ? $this->columnNames($database, 'Genres') : [];
+		$genreCol = isset($genreCols['type']) ? 'Type' : (isset($genreCols['name']) ? 'Name' : 'Type');
+
+		$joins = [];
+
+		if (in_array('ComposerSongs', $existingTables, true) && in_array('Composer', $existingTables, true)) {
+			$selectFields[] = 'c.Name AS Composer';
+			$selectFields[] = 'cs.ComposerId AS ComposerId';
+			$joins[] = 'LEFT JOIN ComposerSongs cs ON s.Id = cs.SongId LEFT JOIN Composer c ON cs.ComposerId = c.Id';
+		}
+
+		if (in_array('CollectionSong', $existingTables, true) && in_array('Collections', $existingTables, true)) {
+			$selectFields[] = 'coll.Name AS Collection';
+			$selectFields[] = 'colls.CollectionId AS CollectionId';
+			$joins[] = 'LEFT JOIN CollectionSong colls ON s.Id = colls.SongId LEFT JOIN Collections coll ON colls.CollectionId = coll.Id';
+		}
+
+		if (in_array('GenresSongs', $existingTables, true) && in_array('Genres', $existingTables, true)) {
+			$selectFields[] = 'gs.GenreId AS GenreId';
+			$selectFields[] = 'g.' . $genreCol . ' AS Genre';
+			$joins[] = 'LEFT JOIN GenresSongs gs ON s.Id = gs.SongId LEFT JOIN Genres g ON gs.GenreId = g.Id';
+		}
+
+		if (in_array('KeySongs', $existingTables, true) && $keyTable !== null) {
+			$selectFields[] = 'ks.KeyId AS KeyId';
+			$selectFields[] = 'k.' . $keyCol . ' AS Key';
+			$joins[] = 'LEFT JOIN KeySongs ks ON s.Id = ks.SongId LEFT JOIN "' . $keyTable . '" k ON ks.KeyId = k.Id';
+		}
+
+		if (in_array('CustomGroupSongs', $existingTables, true) && in_array('CustomGroup', $existingTables, true)) {
+			$selectFields[] = 'cgs.GroupId AS CustomGroupId';
+			$selectFields[] = 'cg.Name AS CustomGroup';
+			$joins[] = 'LEFT JOIN CustomGroupSongs cgs ON s.Id = cgs.SongId LEFT JOIN CustomGroup cg ON cgs.GroupId = cg.Id';
+		}
+
+		if (in_array('YearsSongs', $existingTables, true) && in_array('Years', $existingTables, true)) {
+			$selectFields[] = 'ys.YearId AS YearId';
+			$selectFields[] = 'y.' . $yearCol . ' AS Year';
+			$joins[] = 'LEFT JOIN YearsSongs ys ON s.Id = ys.SongId LEFT JOIN Years y ON ys.YearId = y.Id';
+		}
+
+		if (in_array('SignatureSongs', $existingTables, true) && in_array('Signature', $existingTables, true)) {
+			$selectFields[] = 'sigs.SignatureId AS SignatureId';
+			$selectFields[] = 'sig.Name AS Signature';
+			$joins[] = 'LEFT JOIN SignatureSongs sigs ON s.Id = sigs.SongId LEFT JOIN Signature sig ON sigs.SignatureId = sig.Id';
+		}
+
+		if (in_array('SourceTypeSongs', $existingTables, true) && $sourceTypeTable !== null) {
+			$selectFields[] = 'srctypes.SourceTypeId AS SourceTypeId';
+			$selectFields[] = 'srctype.' . $sourceTypeCol . ' AS SourceType';
+			$joins[] = 'LEFT JOIN SourceTypeSongs srctypes ON s.Id = srctypes.SongId LEFT JOIN "' . $sourceTypeTable . '" srctype ON srctypes.SourceTypeId = srctype.Id';
+		}
+
+		if (in_array('BookSongs', $existingTables, true) && in_array('Books', $existingTables, true)) {
+			$selectFields[] = 'books.Title AS Book';
+			$selectFields[] = 'bookSongs.BookId AS BookId';
+			$joins[] = 'LEFT JOIN BookSongs bookSongs ON s.Id = bookSongs.SongId LEFT JOIN Books books ON bookSongs.BookId = books.Id';
+		}
+
+		if (in_array('ArtistsSongs', $existingTables, true) && in_array('Artists', $existingTables, true)) {
+			$selectFields[] = 'artist.Name AS Artist';
+			$selectFields[] = 'artistsSongs.ArtistId AS ArtistId';
+			$joins[] = 'LEFT JOIN ArtistsSongs artistsSongs ON artistsSongs.SongId = s.Id LEFT JOIN Artists artist on artistsSongs.ArtistId = artist.Id';
+		}
+
+		$sql = 'SELECT ' . implode(",\n\t\t\t", $selectFields) . "\n\t\tFROM Songs s\n\t\t" . implode("\n\t\t", $joins) . ($songId === null ? '' : ' WHERE s.Id = :songId');
+		$statement = $database->prepare($sql);
 
 		if ($statement === false) {
 			return [];
@@ -578,52 +625,52 @@ class SongMapper {
 				];
 			}
 
-			$composerId = $row['ComposerId'] !== null ? (int)$row['ComposerId'] : null;
+			$composerId = isset($row['ComposerId']) && $row['ComposerId'] !== null ? (int)$row['ComposerId'] : null;
 			if ($composerId !== null && !isset($songs[$rowSongId]['composers'][$composerId])) {
 				$songs[$rowSongId]['composers'][$composerId] = new MobileSheetsComposer($composerId, (string)($row['Composer'] ?? ''));
 			}
 
-			$bookId = $row['BookId'] !== null ? (int)$row['BookId'] : null;
+			$bookId = isset($row['BookId']) && $row['BookId'] !== null ? (int)$row['BookId'] : null;
 			if ($bookId !== null && !isset($songs[$rowSongId]['books'][$bookId])) {
 				$songs[$rowSongId]['books'][$bookId] = new MobileSheetsBook($bookId, (string)($row['Book'] ?? ''));
 			}
 
-			$collectionId = $row['CollectionId'] !== null ? (int)$row['CollectionId'] : null;
+			$collectionId = isset($row['CollectionId']) && $row['CollectionId'] !== null ? (int)$row['CollectionId'] : null;
 			if ($collectionId !== null && !isset($songs[$rowSongId]['collections'][$collectionId])) {
 				$songs[$rowSongId]['collections'][$collectionId] = new MobileSheetsCollection($collectionId, (string)($row['Collection'] ?? ''));
 			}
 
-			$artistId = $row['ArtistId'] !== null ? (int)$row['ArtistId'] : null;
+			$artistId = isset($row['ArtistId']) && $row['ArtistId'] !== null ? (int)$row['ArtistId'] : null;
 			if ($artistId !== null && !isset($songs[$rowSongId]['artists'][$artistId])) {
 				$songs[$rowSongId]['artists'][$artistId] = new MobileSheetsArtist($artistId, (string)($row['Artist'] ?? ''));
 			}
 
-			$genreId = $row['GenreId'] !== null ? (int)$row['GenreId'] : null;
+			$genreId = isset($row['GenreId']) && $row['GenreId'] !== null ? (int)$row['GenreId'] : null;
 			if ($genreId !== null && !isset($songs[$rowSongId]['genres'][$genreId])) {
 				$songs[$rowSongId]['genres'][$genreId] = new MobileSheetsGenre($genreId, (string)($row['Genre'] ?? ''));
 			}
 
-			$keyId = $row['KeyId'] !== null ? (int)$row['KeyId'] : null;
+			$keyId = isset($row['KeyId']) && $row['KeyId'] !== null ? (int)$row['KeyId'] : null;
 			if ($keyId !== null && !isset($songs[$rowSongId]['keys'][$keyId])) {
 				$songs[$rowSongId]['keys'][$keyId] = new MobileSheetsKey($keyId, (string)($row['Key'] ?? ''));
 			}
 
-			$customGroupId = $row['CustomGroupId'] !== null ? (int)$row['CustomGroupId'] : null;
+			$customGroupId = isset($row['CustomGroupId']) && $row['CustomGroupId'] !== null ? (int)$row['CustomGroupId'] : null;
 			if ($customGroupId !== null && !isset($songs[$rowSongId]['customGroups'][$customGroupId])) {
 				$songs[$rowSongId]['customGroups'][$customGroupId] = new MobileSheetsCustomGroup($customGroupId, (string)($row['CustomGroup'] ?? ''));
 			}
 
-			$yearId = $row['YearId'] !== null ? (int)$row['YearId'] : null;
+			$yearId = isset($row['YearId']) && $row['YearId'] !== null ? (int)$row['YearId'] : null;
 			if ($yearId !== null && !isset($songs[$rowSongId]['years'][$yearId])) {
 				$songs[$rowSongId]['years'][$yearId] = new MobileSheetsYear($yearId, (int)($row['Year'] ?? 0));
 			}
 
-			$signatureId = $row['SignatureId'] !== null ? (int)$row['SignatureId'] : null;
+			$signatureId = isset($row['SignatureId']) && $row['SignatureId'] !== null ? (int)$row['SignatureId'] : null;
 			if ($signatureId !== null && !isset($songs[$rowSongId]['signatures'][$signatureId])) {
 				$songs[$rowSongId]['signatures'][$signatureId] = new MobileSheetsSignature($signatureId, (string)($row['Signature'] ?? ''));
 			}
 
-			$sourceTypeId = $row['SourceTypeId'] !== null ? (int)$row['SourceTypeId'] : null;
+			$sourceTypeId = isset($row['SourceTypeId']) && $row['SourceTypeId'] !== null ? (int)$row['SourceTypeId'] : null;
 			if ($sourceTypeId !== null && !isset($songs[$rowSongId]['sourceTypes'][$sourceTypeId])) {
 				$songs[$rowSongId]['sourceTypes'][$sourceTypeId] = new MobileSheetsSourceType($sourceTypeId, (string)($row['SourceType'] ?? ''));
 			}
@@ -699,6 +746,14 @@ class SongMapper {
 			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
 			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
 		]);
+
+		$tablesStatement = $database->query("SELECT name FROM sqlite_master WHERE type='table'");
+		/** @var list<string> $existingTables */
+		$existingTables = $tablesStatement !== false ? $tablesStatement->fetchAll(PDO::FETCH_COLUMN) : [];
+
+		if (!in_array('Files', $existingTables, true)) {
+			return [];
+		}
 
 		// Ordered by Id so a song's files always come back in the same order: their
 		// position decides the numeric prefix in the regenerated file name.

@@ -1057,6 +1057,42 @@ final class SongMapperTest extends TestCase {
 		self::assertSame('backing.mp3', $updatedAudioFiles[0]->file);
 	}
 
+	public function testSchemaVariationsKeySingularAndYearsNameColumn(): void {
+		$dbPath = tempnam(sys_get_temp_dir(), 'mobilesheetsmanager-schema-test-');
+		self::assertNotFalse($dbPath);
+		$db = new \PDO('sqlite:' . $dbPath);
+		$db->exec('CREATE TABLE Songs(Id INTEGER PRIMARY KEY, Title VARCHAR(255))');
+		$db->exec('CREATE TABLE "Key"(Id INTEGER PRIMARY KEY, Name VARCHAR(255), DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
+		$db->exec('CREATE TABLE KeySongs(Id INTEGER PRIMARY KEY, KeyId INTEGER, SongId INTEGER)');
+		$db->exec('CREATE TABLE Years(Id INTEGER PRIMARY KEY, Name VARCHAR(255), DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
+		$db->exec('CREATE TABLE YearsSongs(Id INTEGER PRIMARY KEY, YearId INTEGER, SongId INTEGER)');
+		$db->exec('CREATE TABLE SourceType(Id INTEGER PRIMARY KEY, Type VARCHAR(255), DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
+		$db->exec('CREATE TABLE SourceTypeSongs(Id INTEGER PRIMARY KEY, SourceTypeId INTEGER, SongId INTEGER)');
+
+		$db->exec("INSERT INTO Songs (Id, Title) VALUES (1, 'Test Song')");
+		$db->exec("INSERT INTO \"Key\" (Id, Name) VALUES (1, 'C Major')");
+		$db->exec("INSERT INTO KeySongs (KeyId, SongId) VALUES (1, 1)");
+		$db->exec("INSERT INTO Years (Id, Name) VALUES (1, '1999')");
+		$db->exec("INSERT INTO YearsSongs (YearId, SongId) VALUES (1, 1)");
+		$db->exec("INSERT INTO SourceType (Id, Type) VALUES (1, 'Score')");
+		$db->exec("INSERT INTO SourceTypeSongs (SourceTypeId, SongId) VALUES (1, 1)");
+
+		$mapper = new SongMapper(self::createMock(LoggerInterface::class));
+		$data = $mapper->findLibraryData($dbPath);
+		self::assertCount(1, $data['songs']);
+		self::assertSame('C Major', $data['keys'][0]->name);
+		self::assertSame(1999, $data['years'][0]->year);
+		self::assertSame('Score', $data['sourceTypes'][0]->type);
+
+		$songs = $mapper->findSongs($dbPath);
+		self::assertCount(1, $songs);
+		self::assertSame('C Major', $songs[0]->keys[0]->name);
+		self::assertSame(1999, $songs[0]->years[0]->year);
+		self::assertSame('Score', $songs[0]->sourceTypes[0]->name);
+
+		unlink($dbPath);
+	}
+
 	/**
 	 * @param list<MobileSheetsComposer|MobileSheetsCollection|MobileSheetsArtist|MobileSheetsGenre|MobileSheetsKey|MobileSheetsCustomGroup|MobileSheetsYear|MobileSheetsSignature|MobileSheetsSourceType> $entities
 	 * @return list<string>
