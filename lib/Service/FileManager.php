@@ -128,21 +128,29 @@ function createTargetPaths(
 		if ($book !== '') {
 			$folder = $compArtist . DIRECTORY_SEPARATOR . "{$compArtist} - {$book}";
 			$fileName = "{$compArtist} - {$book} - {$song->title}";
-		} elseif ($collection !== '') {
+			return [$folder . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext];
+		}
+		if ($collection !== '') {
 			$folder = $compArtist . DIRECTORY_SEPARATOR . "{$compArtist} - {$collection}";
 			$fileName = "{$compArtist} - {$collection} - {$song->title}";
-		} else {
-			$folder = $compArtist;
-			$fileName = "{$compArtist} - {$song->title}";
+			return [$folder . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext];
 		}
-	} elseif ($collection !== '') {
+		$folder = $compArtist;
+		$fileName = "{$compArtist} - {$song->title}";
+		return [
+			$folder . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext,
+			$filePrefix . $fileName . $ext,
+		];
+	}
+	if ($collection !== '') {
 		$folder = $collection;
 		$fileName = "{$collection} - {$song->title}";
-	} else {
-		throw new NoNamingRuleException('No composer, artist, or collection');
+		return [
+			$folder . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext,
+			$filePrefix . $fileName . $ext,
+		];
 	}
-
-	return [$folder . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext];
+	throw new NoNamingRuleException('No composer, artist, or collection');
 }
 
 function createTargetPath(
@@ -599,7 +607,30 @@ class FileManager {
 		);
 		$target = $this->pathResolver->forTarget($targetRelative, $user, $userFolder->getPath());
 
-		if ($source->internal === $target->internal) {
+		$validTargetPaths = createTargetPaths(
+			$song,
+			getFileExtension($file->path),
+			fileIndexOf($song, $file),
+			fileCountForExtension($song, $file),
+		);
+
+		$isAlreadyInPlace = ($source->internal === $target->internal);
+		if (!$isAlreadyInPlace) {
+			foreach ($validTargetPaths as $validRel) {
+				$validInternal = $this->pathResolver->forTarget(
+					($targetBaseRelative === '' ? '' : rtrim($targetBaseRelative, '/') . '/') . $validRel,
+					$user,
+					$userFolder->getPath()
+				)->internal;
+
+				if ($source->internal === $validInternal) {
+					$isAlreadyInPlace = true;
+					break;
+				}
+			}
+		}
+
+		if ($isAlreadyInPlace) {
 			// Check if this path is shared/referenced by another song in DB
 			if ($this->songMapper->isPathReferencedByOtherSong($databasePath, $source->webdav, $song->id)) {
 				$existingNode = $userFolder->get($sourceRelative);

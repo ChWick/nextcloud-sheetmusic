@@ -90,4 +90,49 @@ final class LibraryIntegrityServiceTest extends TestCase {
 
 		self::assertCount(0, $issues);
 	}
+
+	public function testCheckIntegrityAllowsComposerTitleFlatPath(): void {
+		$libraryService = $this->createMock(LibraryService::class);
+		$songMapper = $this->createMock(SongMapper::class);
+		$fileManager = $this->createMock(FileManager::class);
+		$rootFolder = $this->createMock(IRootFolder::class);
+
+		$user = $this->createMock(\OCP\IUser::class);
+		$user->method('getUID')->willReturn('user1');
+
+		$userFolder = $this->createMock(\OCP\Files\IUserFolder::class);
+		$userFolder->method('getOwner')->willReturn($user);
+		$userFolder->method('getPath')->willReturn('/user1/files');
+		$rootFolder->method('getUserFolder')->with('user1')->willReturn($userFolder);
+
+		$pathResolver = new MobileSheetsPathResolver($rootFolder);
+
+		$targetFolder = $this->createMock(Folder::class);
+		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
+		$targetFolder->method('nodeExists')->willReturn(true);
+		$targetFolder->method('getDirectoryListing')->willReturn([]);
+
+		$fileManager->method('libraryContext')->willReturn([
+			'databasePath' => '/tmp/dummy.db',
+			'targetFolder' => $targetFolder,
+		]);
+
+		$song = new \OCA\MobileSheetsManager\Db\MobileSheetsSong(
+			id: 1,
+			title: 'Joshua',
+			files: [
+				new \OCA\MobileSheetsManager\Db\MobileSheetsFile(10, '/remote.php/dav/files/user1/Noten/Georg Friedrich Händel - Joshua.pdf'),
+			],
+			composers: [
+				new \OCA\MobileSheetsManager\Db\MobileSheetsComposer(1, 'Georg Friedrich Händel'),
+			],
+		);
+		$songMapper->method('findSongs')->willReturn([$song]);
+
+		$logger = $this->createMock(\Psr\Log\LoggerInterface::class);
+		$service = new LibraryIntegrityService($libraryService, $songMapper, $fileManager, $rootFolder, $pathResolver, $logger);
+		$issues = $service->checkIntegrity(1, 'user1');
+
+		self::assertCount(0, $issues);
+	}
 }
