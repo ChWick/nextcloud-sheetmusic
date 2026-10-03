@@ -6,6 +6,9 @@ import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import RefreshIcon from 'vue-material-design-icons/Refresh.vue'
+import ChevronDownIcon from 'vue-material-design-icons/ChevronDown.vue'
+import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
+import WrenchIcon from 'vue-material-design-icons/Wrench.vue'
 import { apiGet, apiPost } from '../api/client'
 import type { IntegrityIssue, LibraryData } from '../types/song'
 import ViewHeader from './ViewHeader.vue'
@@ -19,13 +22,20 @@ const props = defineProps<{
 
 const router = useRouter()
 
-import WrenchIcon from 'vue-material-design-icons/Wrench.vue'
-
 // Integrity Audit state
 const isCheckingIntegrity = ref(false)
 const isBatchFixing = ref(false)
 const integrityError = ref('')
 const integrityIssues = ref<IntegrityIssue[]>([])
+const collapsedGroups = ref<Record<string, boolean>>({})
+
+function toggleGroup(groupType: string) {
+	collapsedGroups.value[groupType] = !collapsedGroups.value[groupType]
+}
+
+function isGroupCollapsed(groupType: string): boolean {
+	return !!collapsedGroups.value[groupType]
+}
 
 const fixableCount = computed(() => integrityIssues.value.filter(i => i.fixable).length)
 
@@ -291,7 +301,16 @@ function openSong(songId: number) {
 
 					<div v-for="group in groupedIssues" :key="group.type" :class="$style.groupCard">
 						<div :class="$style.groupHeader">
-							<div :class="$style.groupTitleArea">
+							<div :class="$style.groupTitleArea" @click="toggleGroup(group.type)">
+								<NcButton
+									variant="tertiary"
+									size="small"
+									:aria-label="isGroupCollapsed(group.type) ? t('mobilesheetsmanager', 'Expand group') : t('mobilesheetsmanager', 'Collapse group')">
+									<template #icon>
+										<ChevronRightIcon v-if="isGroupCollapsed(group.type)" :size="20" />
+										<ChevronDownIcon v-else :size="20" />
+									</template>
+								</NcButton>
 								<h3 :class="$style.groupTitle">{{ group.title }}</h3>
 								<span :class="$style.groupBadge">{{ group.issues.length }}</span>
 							</div>
@@ -300,7 +319,7 @@ function openSong(songId: number) {
 								variant="secondary"
 								size="small"
 								:disabled="isBatchFixing"
-								@click="fixAllIssues(group.type)">
+								@click.stop="fixAllIssues(group.type)">
 								<template #icon>
 									<WrenchIcon :size="16" />
 								</template>
@@ -308,7 +327,7 @@ function openSong(songId: number) {
 							</NcButton>
 						</div>
 
-						<ul :class="$style.issueList">
+						<ul v-if="!isGroupCollapsed(group.type)" :class="$style.issueList">
 							<FilesIntegrityIssueItem
 								v-for="issue in group.issues"
 								:key="keyForIssue(issue)"
@@ -426,6 +445,8 @@ function openSong(songId: number) {
 	display: flex;
 	align-items: center;
 	gap: 8px;
+	cursor: pointer;
+	user-select: none;
 }
 
 .groupTitle {
