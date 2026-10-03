@@ -1,6 +1,7 @@
 import type { Artist, Book, Collection, Composer, Song } from '../../../src/types/song'
 
 import axios from '@nextcloud/axios'
+import { showSuccess } from '@nextcloud/dialogs'
 import { mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import SongEditor from '../../../src/components/SongEditor.vue'
@@ -43,6 +44,7 @@ vi.mock('@nextcloud/l10n', async (importOriginal) => {
 vi.mock('@nextcloud/dialogs', () => ({
 	FilePickerClosed: class FilePickerClosed extends Error {},
 	getFilePickerBuilder: vi.fn(),
+	showSuccess: vi.fn(),
 }))
 
 describe('SongEditor.vue', () => {
@@ -193,6 +195,40 @@ describe('SongEditor.vue', () => {
 
 		// Notice disappears
 		expect(wrapper.text()).not.toContain('1 file(s) marked for removal')
+	})
+
+	it('detaches a file on save and confirms it stays in storage', async () => {
+		vi.mocked(axios.post).mockResolvedValue({
+			data: { ocs: { data: { songs: [] } } },
+		})
+
+		const wrapper = mount(SongEditor, {
+			props: {
+				song: mockExistingSong,
+				libraryId: 1,
+				composers: mockComposers,
+				books: mockBooks,
+				collections: mockCollections,
+				artists: mockArtists,
+			},
+			...globalStubs,
+		})
+
+		const detachButton = wrapper.findAll('button').find((button) =>
+			button.attributes('title') === 'Detach file from song (keep file in storage)',
+		)
+		expect(detachButton).toBeDefined()
+		await detachButton!.trigger('click')
+
+		expect(wrapper.text()).toContain('1 file(s) will be detached from the song (kept in storage)')
+		await wrapper.find('form').trigger('submit.prevent')
+
+		expect(axios.post).toHaveBeenCalledWith(
+			'/ocs/v2.php/apps/mobilesheetsmanager/api/songs/5/file/50/detach',
+			{ libraryId: 1 },
+		)
+		expect(wrapper.text()).toContain('1 file(s) detached and kept in storage.')
+		expect(showSuccess).toHaveBeenCalledWith('Song updated successfully. 1 file(s) detached and kept in storage.')
 	})
 
 	it('stages uploaded computer file on file input change', async () => {

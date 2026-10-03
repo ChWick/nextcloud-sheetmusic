@@ -136,5 +136,29 @@ class SongFileController extends OCSController {
 			return new DataResponse([], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/songs/{id}/file/{fileId}/detach')]
+	public function detachSongFile(int $id, int $fileId, ?int $libraryId = null): DataResponse {
+		if ($libraryId === null) {
+			return new DataResponse([], Http::STATUS_BAD_REQUEST);
+		}
+
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		try {
+			$result = $this->songFileService->detachSongFile($user, $libraryId, $id, $fileId);
+			if ($result === null) {
+				return new DataResponse([], Http::STATUS_NOT_FOUND);
+			}
+
+			return new DataResponse($result);
+		} catch (\Throwable $e) {
+			return new DataResponse([], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
 }
 

@@ -81,5 +81,29 @@ final class SongFileControllerTest extends TestCase {
 		$this->assertSame(Http::STATUS_OK, $res->getStatus());
 		$this->assertSame(['songs' => []], $res->getData());
 	}
-}
 
+	public function testDetachSongFileDelegatesToService(): void {
+		$user = $this->createMock(IUser::class);
+		$userSession = $this->createMock(IUserSession::class);
+		$userSession->method('getUser')->willReturn($user);
+
+		$songFileService = $this->createMock(SongFileService::class);
+		$songFileService->expects($this->once())
+			->method('detachSongFile')
+			->with($user, 1, 42, 2)
+			->willReturn(['songs' => []]);
+
+		$controller = new SongFileController(
+			'mobilesheetsmanager',
+			$this->createMock(IRequest::class),
+			$songFileService,
+			$userSession,
+		);
+
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $controller->detachSongFile(42, 2, null)->getStatus());
+
+		$response = $controller->detachSongFile(42, 2, 1);
+		$this->assertSame(Http::STATUS_OK, $response->getStatus());
+		$this->assertSame(['songs' => []], $response->getData());
+	}
+}

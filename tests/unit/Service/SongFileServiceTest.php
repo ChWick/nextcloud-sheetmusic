@@ -232,4 +232,34 @@ final class SongFileServiceTest extends TestCase {
 		self::assertArrayHasKey('Noten/uploaded (2).pdf', $this->files);
 		self::assertSame('UPLOADED_CONTENT', $this->files['Noten/uploaded (2).pdf']);
 	}
+
+	public function testDetachSongFileKeepsThePhysicalFile(): void {
+		$this->files['Noten/score.pdf'] = 'DETACHED_CONTENT';
+		$emptySong = new \OCA\MobileSheetsManager\Db\MobileSheetsSong(
+			10,
+			'score',
+			[],
+			[],
+			[],
+			[],
+			[],
+		);
+		$this->songMapper->expects(self::once())
+			->method('removeSongFile')
+			->with('/tmp/library.db', 10, 1)
+			->willReturn('/remote.php/dav/files/user1/Noten/score.pdf');
+		$this->songMapper->expects(self::once())
+			->method('findSong')
+			->with('/tmp/library.db', 10)
+			->willReturn($emptySong);
+		$this->songMapper->expects(self::once())
+			->method('findLibraryData')
+			->with('/tmp/library.db')
+			->willReturn(['songs' => []]);
+
+		$result = $this->service->detachSongFile($this->user(), 1, 10, 1);
+
+		self::assertSame(['songs' => []], $result);
+		self::assertSame('DETACHED_CONTENT', $this->files['Noten/score.pdf']);
+	}
 }

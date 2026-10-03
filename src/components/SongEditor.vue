@@ -3,7 +3,7 @@ import type { INode } from '@nextcloud/files'
 import type { Artist, Book, Collection, Composer, CreatedSongData, CustomGroup, Genre, Key, LibraryData, PendingAddition, PendingAttachment, PendingUpload, Signature, Song, SongFile, SongPrefill, SourceType, Year } from '../types/song'
 
 import axios from '@nextcloud/axios'
-import { FilePickerClosed, getFilePickerBuilder } from '@nextcloud/dialogs'
+import { FilePickerClosed, getFilePickerBuilder, showSuccess } from '@nextcloud/dialogs'
 import { translate as t } from '@nextcloud/l10n'
 import { generateOcsUrl } from '@nextcloud/router'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
@@ -459,6 +459,7 @@ async function saveSong(closeAfter: boolean) {
 
 	// Snapshot: props.song is null while a new song is being created.
 	const existingSong = props.song
+	const detachedFileCount = existingSong ? pendingDetachFiles.value.length : 0
 
 	try {
 		// Process pending file deletions - a new song has none, it has no id yet.
@@ -696,9 +697,14 @@ async function saveSong(closeAfter: boolean) {
 		pendingAttachments.value = []
 		pendingUploads.value = []
 
-		successMessage.value = isNewSong.value
-			? t('mobilesheetsmanager', 'Song created successfully.')
-			: t('mobilesheetsmanager', 'Song updated successfully.')
+		if (detachedFileCount > 0) {
+			successMessage.value = t('mobilesheetsmanager', 'Song updated successfully. {count} file(s) detached and kept in storage.', { count: detachedFileCount })
+			showSuccess(successMessage.value)
+		} else {
+			successMessage.value = isNewSong.value
+				? t('mobilesheetsmanager', 'Song created successfully.')
+				: t('mobilesheetsmanager', 'Song updated successfully.')
+		}
 		if (closeAfter) {
 			emit('saved', data, songId)
 		} else {

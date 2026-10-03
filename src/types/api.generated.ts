@@ -433,6 +433,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/songs/{id}/file/{fileId}/detach": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Detach a file from a song without deleting it */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                    fileId: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        libraryId: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description Refreshed library data after file detachment */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["OcsEnvelopeLibraryData"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/composers": {
         parameters: {
             query?: never;

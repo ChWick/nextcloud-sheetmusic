@@ -184,6 +184,42 @@ class SongFileService {
 		return $this->songMapper->findLibraryData($databasePath);
 	}
 
+	public function detachSongFile(IUser $user, int $libraryId, int $songId, int $fileId): ?array {
+		try {
+			$paths = $this->libraryService->getLibraryAndDatabasePath($user->getUID(), $libraryId);
+			if ($paths === null) {
+				return null;
+			}
+			[$libraryPath, $databasePath] = $paths;
+
+			$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+			$libraryDir = $this->libraryFolderPath($libraryPath);
+			$targetFolder = $libraryDir === '' ? $userFolder : $userFolder->get($libraryDir);
+			if (!($targetFolder instanceof Folder)) {
+				return null;
+			}
+
+			$filePath = $this->songMapper->removeSongFile($databasePath, $songId, $fileId);
+			if ($filePath === null) {
+				return null;
+			}
+
+			// Keep the physical file, but update paths of the song's remaining files.
+			$this->relocateSongFiles($songId, $databasePath, $targetFolder, $user, $filePath);
+
+			return $this->songMapper->findLibraryData($databasePath);
+		} catch (\Throwable $exception) {
+			$this->logger->error('Could not detach a file from a song', [
+				'exception' => $exception,
+				'userId' => $user->getUID(),
+				'libraryId' => $libraryId,
+				'songId' => $songId,
+				'fileId' => $fileId,
+			]);
+			throw $exception;
+		}
+	}
+
 	public function syncSongFileMetadata(IUser $user, string $databasePath, int $songId): void {
 		$song = $this->songMapper->findSong($databasePath, $songId);
 		if ($song === null) {
@@ -313,4 +349,3 @@ class SongFileService {
 		}
 	}
 }
-

@@ -235,6 +235,12 @@ class ApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/songs/{id}/file/{fileId}/detach')]
+	public function detachSongFile(int $id, int $fileId, ?int $libraryId = null): DataResponse {
+		return $this->songFileController->detachSongFile($id, $fileId, $libraryId);
+	}
+
+	#[NoAdminRequired]
 	#[ApiRoute(verb: 'POST', url: '/api/composers')]
 	public function createComposer(?int $libraryId = null, ?string $name = null): DataResponse {
 		return $this->entityController->createComposer($libraryId, $name);

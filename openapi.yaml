@@ -281,6 +281,39 @@ paths:
               schema:
                 $ref: '#/components/schemas/OcsEnvelopeLibraryData'
 
+  /api/songs/{id}/file/{fileId}/detach:
+    post:
+      summary: Detach a file from a song without deleting it
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: fileId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - libraryId
+              properties:
+                libraryId:
+                  type: integer
+      responses:
+        '200':
+          description: Refreshed library data after file detachment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OcsEnvelopeLibraryData'
+
   /api/composers:
     post:
       summary: Create a composer

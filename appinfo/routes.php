@@ -45,6 +45,11 @@ return [
 			'verb' => 'POST',
 		],
 		[
+			'name' => 'Api#detachSongFile',
+			'url' => '/api/songs/{id}/file/{fileId}/detach',
+			'verb' => 'POST',
+		],
+		[
 			'name' => 'Api#createComposer',
 			'url' => '/api/composers',
 			'verb' => 'POST',
