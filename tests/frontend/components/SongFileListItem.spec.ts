@@ -42,26 +42,41 @@ describe('SongFileListItem', () => {
 		expect(wrapper.emitted('openExternal')![0]).toEqual([mockFile])
 	})
 
+	it('emits detach event when detach button is clicked', async () => {
+		const wrapper = mount(SongFileListItem, {
+			props: { file: mockFile },
+			...globalStubs,
+		})
+
+		const detachBtn = wrapper.findAll('button')[1]
+		await detachBtn.trigger('click')
+
+		expect(wrapper.emitted('detach')).toBeTruthy()
+		expect(wrapper.emitted('detach')![0]).toEqual([mockFile])
+	})
+
 	it('emits delete event when delete button is clicked', async () => {
 		const wrapper = mount(SongFileListItem, {
 			props: { file: mockFile },
 			...globalStubs,
 		})
 
-		const deleteBtn = wrapper.findAll('button')[1]
+		const deleteBtn = wrapper.findAll('button')[2]
 		await deleteBtn.trigger('click')
 
 		expect(wrapper.emitted('delete')).toBeTruthy()
 		expect(wrapper.emitted('delete')![0]).toEqual([mockFile])
 	})
 
-	it('disables delete button when disabled prop is true', () => {
+	it('disables action buttons when disabled prop is true', () => {
 		const wrapper = mount(SongFileListItem, {
 			props: { file: mockFile, disabled: true },
 			...globalStubs,
 		})
 
-		const deleteBtn = wrapper.findAll('button')[1]
+		const detachBtn = wrapper.findAll('button')[1]
+		const deleteBtn = wrapper.findAll('button')[2]
+		expect(detachBtn.attributes('disabled')).toBeDefined()
 		expect(deleteBtn.attributes('disabled')).toBeDefined()
 	})
 })

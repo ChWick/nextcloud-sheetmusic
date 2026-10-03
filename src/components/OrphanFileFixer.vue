@@ -6,6 +6,7 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import ArrowLeftIcon from 'vue-material-design-icons/ArrowLeft.vue'
+import ContentSaveOutlineIcon from 'vue-material-design-icons/ContentSaveOutline.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import MagnifyIcon from 'vue-material-design-icons/Magnify.vue'
 import PlusIcon from 'vue-material-design-icons/Plus.vue'
@@ -27,6 +28,7 @@ const emit = defineEmits<{
 	resolved: []
 }>()
 
+const songEditorRef = ref<InstanceType<typeof SongEditor> | null>(null)
 const isCreatingSong = ref(false)
 const isSelectDialogOpen = ref(false)
 const isConfirmDeleteDialogOpen = ref(false)
@@ -35,6 +37,10 @@ const isDeleting = ref(false)
 const isLoadingLibraryData = ref(false)
 const errorMessage = ref('')
 const libraryData = ref<LibraryData | null>(null)
+
+function handleSaveCreatedSong() {
+	songEditorRef.value?.saveSong(true)
+}
 
 const filename = computed(() => {
 	if (props.issue?.details?.filename) {
@@ -158,13 +164,29 @@ onMounted(() => {
 	<div :class="$style.container">
 		<ViewHeader :title="isCreatingSong ? t('mobilesheetsmanager', 'Create Song for Orphan File') : t('mobilesheetsmanager', 'Fix Orphan File: {filename}', { filename })">
 			<template #actions>
+				<template v-if="isCreatingSong">
+					<NcButton
+						variant="secondary"
+						@click="isCreatingSong = false">
+						{{ t('mobilesheetsmanager', 'Cancel') }}
+					</NcButton>
+					<NcButton
+						variant="primary"
+						@click="handleSaveCreatedSong">
+						<template #icon>
+							<ContentSaveOutlineIcon :size="20" />
+						</template>
+						{{ t('mobilesheetsmanager', 'Save Song') }}
+					</NcButton>
+				</template>
 				<NcButton
+					v-else
 					variant="secondary"
-					@click="isCreatingSong ? (isCreatingSong = false) : emit('back')">
+					@click="emit('back')">
 					<template #icon>
 						<ArrowLeftIcon :size="20" />
 					</template>
-					{{ isCreatingSong ? t('mobilesheetsmanager', 'Back to Orphan Fixer') : t('mobilesheetsmanager', 'Back to Integrity Audit') }}
+					{{ t('mobilesheetsmanager', 'Back to Integrity Audit') }}
 				</NcButton>
 			</template>
 		</ViewHeader>
@@ -177,6 +199,7 @@ onMounted(() => {
 			<!-- Full song creation editor with preattached orphan file -->
 			<SongEditor
 				v-if="isCreatingSong"
+				ref="songEditorRef"
 				:song="null"
 				:library-id="selectedLibrary"
 				:composers="libraryData?.composers ?? []"

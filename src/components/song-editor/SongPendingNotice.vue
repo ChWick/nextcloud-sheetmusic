@@ -6,23 +6,25 @@ import { getFileName } from '../../utils/file'
 
 defineProps<{
 	pendingDeleteFiles: SongFile[]
+	pendingDetachFiles?: SongFile[]
 	pendingAdditions: PendingAddition[]
 	saveActionLabel: string
 }>()
 
 const emit = defineEmits<{
 	restoreDelete: [file: SongFile]
+	restoreDetach: [file: SongFile]
 	removeAddition: [addition: PendingAddition]
 }>()
 </script>
 
 <template>
-	<div v-if="pendingDeleteFiles.length > 0 || pendingAdditions.length > 0">
+	<div v-if="pendingDeleteFiles.length > 0 || (pendingDetachFiles && pendingDetachFiles.length > 0) || pendingAdditions.length > 0">
 		<!-- Staged deletions notice -->
 		<div v-if="pendingDeleteFiles.length > 0" :class="$style.deletionWarning">
 			<div :class="$style.warningText">
 				<strong>{{ t('mobilesheetsmanager', 'Notice:') }}</strong>
-				{{ t('mobilesheetsmanager', '{count} file(s) marked for removal will be permanently deleted from the song and moved to your Nextcloud trash bin when you click "{action}".', { count: pendingDeleteFiles.length, action: saveActionLabel }) }}
+				{{ t('mobilesheetsmanager', '{count} file(s) marked for removal will be permanently deleted from storage when you click "{action}".', { count: pendingDeleteFiles.length, action: saveActionLabel }) }}
 			</div>
 			<ul :class="$style.pendingList">
 				<li v-for="file in pendingDeleteFiles" :key="file.id" :class="$style.pendingItem">
@@ -32,6 +34,26 @@ const emit = defineEmits<{
 						variant="tertiary"
 						size="small"
 						@click="emit('restoreDelete', file)">
+						{{ t('mobilesheetsmanager', 'Restore') }}
+					</NcButton>
+				</li>
+			</ul>
+		</div>
+
+		<!-- Staged detachments notice -->
+		<div v-if="pendingDetachFiles && pendingDetachFiles.length > 0" :class="$style.detachNotice">
+			<div :class="$style.warningText">
+				<strong>{{ t('mobilesheetsmanager', 'Notice:') }}</strong>
+				{{ t('mobilesheetsmanager', '{count} file(s) will be detached from the song (kept in storage) when you click "{action}".', { count: pendingDetachFiles.length, action: saveActionLabel }) }}
+			</div>
+			<ul :class="$style.pendingList">
+				<li v-for="file in pendingDetachFiles" :key="file.id" :class="$style.pendingItem">
+					<span :class="$style.pendingName">{{ getFileName(file.path) }}</span>
+					<NcButton
+						type="button"
+						variant="tertiary"
+						size="small"
+						@click="emit('restoreDetach', file)">
 						{{ t('mobilesheetsmanager', 'Restore') }}
 					</NcButton>
 				</li>
@@ -71,6 +93,17 @@ const emit = defineEmits<{
 	padding: 12px;
 	background: var(--color-background-dark);
 	border-left: 4px solid var(--color-warning);
+	border-radius: var(--border-radius, 4px);
+	margin-bottom: 10px;
+}
+
+.detachNotice {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 12px;
+	background: var(--color-background-dark);
+	border-left: 4px solid var(--color-primary-element);
 	border-radius: var(--border-radius, 4px);
 	margin-bottom: 10px;
 }

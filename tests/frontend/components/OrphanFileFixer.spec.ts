@@ -94,6 +94,8 @@ describe('OrphanFileFixer.vue', () => {
 		await createBtn?.trigger('click')
 
 		expect(wrapper.text()).toContain('Create Song for Orphan File')
+		expect(wrapper.text()).toContain('Save Song')
+		expect(wrapper.text()).toContain('Cancel')
 	})
 
 	it('opens select song dialog when option a is clicked', async () => {

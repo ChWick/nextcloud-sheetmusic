@@ -189,6 +189,7 @@ function getInitialFiles(song: Song | null, pending: SongFile[] = []): SongFile[
 
 const currentFiles = ref<SongFile[]>(getInitialFiles(props.song))
 const pendingDeleteFiles = ref<SongFile[]>([])
+const pendingDetachFiles = ref<SongFile[]>([])
 
 watch(
 	() => props.song,
@@ -215,13 +216,15 @@ watch(
 		bookmarks.value = (newSong?.bookmarks ?? []).map((b) => ({ id: b.id, name: b.name, pageNum: b.pageNum }))
 		audioFiles.value = (newSong?.audioFiles ?? []).map((a) => ({ id: a.id, title: a.title, file: a.file }))
 
-		// A refresh in place keeps the deletions staged in this session: the editor stays
-		// open now, and the file list of the refreshed song is what the displayed paths
-		// are taken from. Editing another song - or starting a new one - begins with a
-		// clean slate, which also drops the additions staged for the song edited before.
+		// A refresh in place keeps the deletions and detachments staged in this session.
 		const sameSong = !!newSong && newSong.id === previousSong?.id
-		const pending = sameSong
+		const pendingDel = sameSong
 			? pendingDeleteFiles.value.map(
+				(file) => newSong.files?.find((candidate) => candidate.id === file.id) ?? file,
+			)
+			: []
+		const pendingDet = sameSong
+			? pendingDetachFiles.value.map(
 				(file) => newSong.files?.find((candidate) => candidate.id === file.id) ?? file,
 			)
 			: []
@@ -231,8 +234,10 @@ watch(
 			pendingUploads.value = []
 		}
 
-		pendingDeleteFiles.value = pending
-		currentFiles.value = getInitialFiles(newSong, pending)
+		pendingDeleteFiles.value = pendingDel
+		pendingDetachFiles.value = pendingDet
+		const allStaged = [...pendingDel, ...pendingDet]
+		currentFiles.value = getInitialFiles(newSong, allStaged)
 	},
 )
 
@@ -339,8 +344,17 @@ function createSourceTypeTag(newTag: string) {
 
 function stageDeleteFile(file: SongFile) {
 	currentFiles.value = currentFiles.value.filter((f) => f.id !== file.id)
+	pendingDetachFiles.value = pendingDetachFiles.value.filter((f) => f.id !== file.id)
 	if (!isStagedForDeletion(file, pendingDeleteFiles.value)) {
 		pendingDeleteFiles.value.push(file)
+	}
+}
+
+function stageDetachFile(file: SongFile) {
+	currentFiles.value = currentFiles.value.filter((f) => f.id !== file.id)
+	pendingDeleteFiles.value = pendingDeleteFiles.value.filter((f) => f.id !== file.id)
+	if (!isStagedForDeletion(file, pendingDetachFiles.value)) {
+		pendingDetachFiles.value.push(file)
 	}
 }
 
@@ -355,6 +369,13 @@ function openInExternalViewer(file: SongFile) {
 
 function restoreDeletedFile(file: SongFile) {
 	pendingDeleteFiles.value = pendingDeleteFiles.value.filter((f) => f.id !== file.id)
+	if (!currentFiles.value.some((f) => f.id === file.id)) {
+		currentFiles.value.push(file)
+	}
+}
+
+function restoreDetachedFile(file: SongFile) {
+	pendingDetachFiles.value = pendingDetachFiles.value.filter((f) => f.id !== file.id)
 	if (!currentFiles.value.some((f) => f.id === file.id)) {
 		currentFiles.value.push(file)
 	}
@@ -452,6 +473,20 @@ async function saveSong(closeAfter: boolean) {
 				}
 			}
 			pendingDeleteFiles.value = []
+		}
+
+		// Process pending file detachments
+		if (existingSong && pendingDetachFiles.value.length > 0) {
+			for (const file of pendingDetachFiles.value) {
+				if (file.id > 0) {
+					await apiPost('/api/songs/{id}/file/{fileId}/detach', {
+						libraryId: props.libraryId,
+					}, {
+						pathParams: { id: existingSong.id, fileId: file.id },
+					})
+				}
+			}
+			pendingDetachFiles.value = []
 		}
 
 		// Resolve or create composers
@@ -921,6 +956,7 @@ defineExpose({
 						:file="file"
 						:disabled="isSaving"
 						@open-external="openInExternalViewer"
+						@detach="stageDetachFile"
 						@delete="stageDeleteFile" />
 				</ul>
 				<p v-else :class="$style.noFiles">
@@ -929,9 +965,11 @@ defineExpose({
 
 				<SongPendingNotice
 					:pending-delete-files="pendingDeleteFiles"
+					:pending-detach-files="pendingDetachFiles"
 					:pending-additions="pendingAdditions"
 					:save-action-label="saveActionLabel"
 					@restore-delete="restoreDeletedFile"
+					@restore-detach="restoreDetachedFile"
 					@remove-addition="(addition) => addition.remove()" />
 
 				<div :class="$style.fileButtons">
@@ -969,7 +1007,25 @@ defineExpose({
 			<p v-if="errorMessage" :class="$style.error" role="alert">{{ errorMessage }}</p>
 			<p v-if="successMessage" :class="$style.success" role="status">{{ successMessage }}</p>
 
+			<div :class="$style.actions">
+				<NcButton
+					type="button"
+					variant="secondary"
+					:disabled="isSaving"
+					@click="emit('cancel')">
+					{{ t('mobilesheetsmanager', 'Cancel') }}
+				</NcButton>
 
+				<NcButton
+					type="submit"
+					variant="primary"
+					:disabled="isSaving">
+					<template #icon>
+						<ContentSaveOutlineIcon :size="20" />
+					</template>
+					{{ saveActionLabel }}
+				</NcButton>
+			</div>
 		</form>
 
 		<!-- Nextcloud File Choice Modal (Copy vs Move) -->

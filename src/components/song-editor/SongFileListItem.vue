@@ -7,6 +7,7 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist'
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
+import EjectIcon from 'vue-material-design-icons/Eject.vue'
 import FileIcon from 'vue-material-design-icons/File.vue'
 import MusicIcon from 'vue-material-design-icons/Music.vue'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
@@ -22,6 +23,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
 	openExternal: [file: SongFile]
+	detach: [file: SongFile]
 	delete: [file: SongFile]
 }>()
 
@@ -137,10 +139,21 @@ watch(() => props.file.path, () => {
 			</NcButton>
 			<NcButton
 				type="button"
+				variant="tertiary"
+				:disabled="disabled"
+				:aria-label="t('mobilesheetsmanager', 'Detach file {file} from song', { file: getFileName(file.path) })"
+				:title="t('mobilesheetsmanager', 'Detach file from song (keep file in storage)')"
+				@click="emit('detach', file)">
+				<template #icon>
+					<EjectIcon :size="20" />
+				</template>
+			</NcButton>
+			<NcButton
+				type="button"
 				variant="error"
 				:disabled="disabled"
 				:aria-label="t('mobilesheetsmanager', 'Delete file {file}', { file: getFileName(file.path) })"
-				:title="t('mobilesheetsmanager', 'Delete file')"
+				:title="t('mobilesheetsmanager', 'Delete file from storage')"
 				@click="emit('delete', file)">
 				<template #icon>
 					<DeleteIcon :size="20" />
