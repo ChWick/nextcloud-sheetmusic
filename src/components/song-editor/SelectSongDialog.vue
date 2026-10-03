@@ -4,9 +4,7 @@ import { computed, ref } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
-import NcTextField from '@nextcloud/vue/components/NcTextField'
 import SongFilterBar from '../SongFilterBar.vue'
-import FilterIcon from 'vue-material-design-icons/Filter.vue'
 import MusicIcon from 'vue-material-design-icons/Music.vue'
 import PaperclipIcon from 'vue-material-design-icons/Paperclip.vue'
 import { noneEntryOf } from '../../composables/useSongFilters'
@@ -27,7 +25,6 @@ const emit = defineEmits<{
 
 const searchTitle = ref('')
 const withoutFiles = ref(false)
-const filterBarVisible = ref(false)
 
 const selectedComposers = ref<Composer[]>([])
 const selectedBooks = ref<Book[]>([])
@@ -130,24 +127,7 @@ function getSongSubtext(song: Song): string {
 				{{ t('mobilesheetsmanager', 'Search and select an existing song to link with "{filename}".', { filename }) }}
 			</p>
 
-			<div :class="$style.searchBar">
-				<NcTextField
-					v-model:value="searchTitle"
-					:placeholder="t('mobilesheetsmanager', 'Search by song title…')"
-					:aria-label="t('mobilesheetsmanager', 'Search song by title')" />
-
-				<NcButton
-					variant="secondary"
-					:title="t('mobilesheetsmanager', 'Toggle filters')"
-					@click="filterBarVisible = !filterBarVisible">
-					<template #icon>
-						<FilterIcon :size="18" />
-					</template>
-					{{ t('mobilesheetsmanager', 'Filters') }}
-				</NcButton>
-			</div>
-
-			<div v-if="filterBarVisible" :class="$style.filterSection">
+			<div :class="$style.filterSection">
 				<SongFilterBar
 					v-model:search-title="searchTitle"
 					v-model:without-files="withoutFiles"
@@ -228,12 +208,6 @@ function getSongSubtext(song: Song): string {
 	margin: 0;
 	color: var(--color-text-maxcontrast);
 	font-size: 0.95rem;
-}
-
-.searchBar {
-	display: flex;
-	align-items: center;
-	gap: 12px;
 }
 
 .filterSection {

@@ -36,7 +36,8 @@ describe('SelectSongDialog.vue', () => {
 					props: ['value'],
 				},
 				SongFilterBar: {
-					template: '<div class="song-filter-bar-stub" />',
+					template: '<div class="song-filter-bar-stub"><input :value="searchTitle" aria-label="Search title" @input="$emit(\'update:searchTitle\', $event.target.value)" /></div>',
+					props: ['searchTitle'],
 				},
 			},
 		},
@@ -55,6 +56,8 @@ describe('SelectSongDialog.vue', () => {
 		})
 
 		const songList = wrapper.find('ul')
+		expect(wrapper.find('.song-filter-bar-stub').exists()).toBe(true)
+		expect(wrapper.findAll('input')).toHaveLength(1)
 		expect(songList.text()).toContain('Joshua')
 		expect(songList.text()).toContain('Messiah')
 		expect(songList.text()).toContain('Toccata')
