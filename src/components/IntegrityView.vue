@@ -14,6 +14,7 @@ import type { IntegrityIssue, LibraryData } from '../types/song'
 import ViewHeader from './ViewHeader.vue'
 import FilesIntegrityIssueItem from './files/FilesIntegrityIssueItem.vue'
 import SongMergeDialog, { type ResolveBothSongData } from './song-editor/SongMergeDialog.vue'
+import OrphanFileFixer from './OrphanFileFixer.vue'
 import { keyForIssue } from '../utils/integrity'
 
 const props = defineProps<{
@@ -28,6 +29,16 @@ const isBatchFixing = ref(false)
 const integrityError = ref('')
 const integrityIssues = ref<IntegrityIssue[]>([])
 const collapsedGroups = ref<Record<string, boolean>>({})
+const activeOrphanIssue = ref<IntegrityIssue | null>(null)
+
+function openOrphanFixer(issue: IntegrityIssue) {
+	activeOrphanIssue.value = issue
+}
+
+function handleOrphanResolved() {
+	activeOrphanIssue.value = null
+	auditIntegrity()
+}
 
 function toggleGroup(groupType: string) {
 	collapsedGroups.value[groupType] = !collapsedGroups.value[groupType]
@@ -252,95 +263,106 @@ function openSong(songId: number) {
 
 <template>
 	<div :class="$style.container">
-		<ViewHeader :title="t('mobilesheetsmanager', 'Integrity Audit')">
-			<template #actions>
-				<NcButton
-					variant="secondary"
-					:disabled="isCheckingIntegrity"
-					@click="auditIntegrity">
-					<template #icon>
-						<RefreshIcon :size="20" />
-					</template>
-					{{ t('mobilesheetsmanager', 'Re-audit Library') }}
-				</NcButton>
-			</template>
-		</ViewHeader>
+		<OrphanFileFixer
+			v-if="activeOrphanIssue"
+			:selected-library="selectedLibrary"
+			:orphan-path="activeOrphanIssue.path"
+			:issue="activeOrphanIssue"
+			@back="activeOrphanIssue = null"
+			@resolved="handleOrphanResolved" />
 
-		<div :class="$style.content">
-			<div v-if="isCheckingIntegrity" :class="$style.loading">
-				<NcLoadingIcon :size="36" />
-				<span>{{ t('mobilesheetsmanager', 'Auditing library files and database integrity…') }}</span>
-			</div>
+		<template v-else>
+			<ViewHeader :title="t('mobilesheetsmanager', 'Integrity Audit')">
+				<template #actions>
+					<NcButton
+						variant="secondary"
+						:disabled="isCheckingIntegrity"
+						@click="auditIntegrity">
+						<template #icon>
+							<RefreshIcon :size="20" />
+						</template>
+						{{ t('mobilesheetsmanager', 'Re-audit Library') }}
+					</NcButton>
+				</template>
+			</ViewHeader>
 
-			<template v-else>
-				<div v-if="integrityError" :class="$style.error" role="alert">
-					{{ integrityError }}
+			<div :class="$style.content">
+				<div v-if="isCheckingIntegrity" :class="$style.loading">
+					<NcLoadingIcon :size="36" />
+					<span>{{ t('mobilesheetsmanager', 'Auditing library files and database integrity…') }}</span>
 				</div>
 
-				<div v-if="integrityIssues.length === 0 && !integrityError" :class="$style.cleanNotice">
-					<h2>{{ t('mobilesheetsmanager', 'All System Checks Passed!') }}</h2>
-					<p>{{ t('mobilesheetsmanager', 'No missing files, orphan database records, or duplicate path conflicts were detected in this MobileSheets library.') }}</p>
-				</div>
-
-				<div v-else-if="integrityIssues.length > 0" :class="$style.issueContainer">
-					<div :class="$style.summaryHeader">
-						<span :class="$style.issueCount">
-							{{ t('mobilesheetsmanager', '{count} issue(s) detected requiring attention', { count: integrityIssues.length }) }}
-						</span>
-						<NcButton
-							v-if="fixableCount > 0"
-							variant="primary"
-							:disabled="isBatchFixing"
-							@click="fixAllIssues()">
-							<template #icon>
-								<WrenchIcon :size="18" />
-							</template>
-							{{ isBatchFixing ? t('mobilesheetsmanager', 'Fixing All…') : t('mobilesheetsmanager', 'Fix All Fixable Issues ({count})', { count: fixableCount }) }}
-						</NcButton>
+				<template v-else>
+					<div v-if="integrityError" :class="$style.error" role="alert">
+						{{ integrityError }}
 					</div>
 
-					<div v-for="group in groupedIssues" :key="group.type" :class="$style.groupCard">
-						<div :class="$style.groupHeader">
-							<div :class="$style.groupTitleArea" @click="toggleGroup(group.type)">
-								<NcButton
-									variant="tertiary"
-									size="small"
-									:aria-label="isGroupCollapsed(group.type) ? t('mobilesheetsmanager', 'Expand group') : t('mobilesheetsmanager', 'Collapse group')">
-									<template #icon>
-										<ChevronRightIcon v-if="isGroupCollapsed(group.type)" :size="20" />
-										<ChevronDownIcon v-else :size="20" />
-									</template>
-								</NcButton>
-								<h3 :class="$style.groupTitle">{{ group.title }}</h3>
-								<span :class="$style.groupBadge">{{ group.issues.length }}</span>
-							</div>
+					<div v-if="integrityIssues.length === 0 && !integrityError" :class="$style.cleanNotice">
+						<h2>{{ t('mobilesheetsmanager', 'All System Checks Passed!') }}</h2>
+						<p>{{ t('mobilesheetsmanager', 'No missing files, orphan database records, or duplicate path conflicts were detected in this MobileSheets library.') }}</p>
+					</div>
+
+					<div v-else-if="integrityIssues.length > 0" :class="$style.issueContainer">
+						<div :class="$style.summaryHeader">
+							<span :class="$style.issueCount">
+								{{ t('mobilesheetsmanager', '{count} issue(s) detected requiring attention', { count: integrityIssues.length }) }}
+							</span>
 							<NcButton
-								v-if="group.fixableCount > 0"
-								variant="secondary"
-								size="small"
+								v-if="fixableCount > 0"
+								variant="primary"
 								:disabled="isBatchFixing"
-								@click.stop="fixAllIssues(group.type)">
+								@click="fixAllIssues()">
 								<template #icon>
-									<WrenchIcon :size="16" />
+									<WrenchIcon :size="18" />
 								</template>
-								{{ t('mobilesheetsmanager', 'Fix All in Group ({count})', { count: group.fixableCount }) }}
+								{{ isBatchFixing ? t('mobilesheetsmanager', 'Fixing All…') : t('mobilesheetsmanager', 'Fix All Fixable Issues ({count})', { count: fixableCount }) }}
 							</NcButton>
 						</div>
 
-						<ul v-if="!isGroupCollapsed(group.type)" :class="$style.issueList">
-							<FilesIntegrityIssueItem
-								v-for="issue in group.issues"
-								:key="keyForIssue(issue)"
-								:issue="issue"
-								:is-fixing="fixingKey === keyForIssue(issue) || mergingKey === keyForIssue(issue)"
-								@open-song="openSong"
-								@fix-issue="fixIntegrityIssue"
-								@merge-songs="openMergeDialog" />
-						</ul>
+						<div v-for="group in groupedIssues" :key="group.type" :class="$style.groupCard">
+							<div :class="$style.groupHeader">
+								<div :class="$style.groupTitleArea" @click="toggleGroup(group.type)">
+									<NcButton
+										variant="tertiary"
+										size="small"
+										:aria-label="isGroupCollapsed(group.type) ? t('mobilesheetsmanager', 'Expand group') : t('mobilesheetsmanager', 'Collapse group')">
+										<template #icon>
+											<ChevronRightIcon v-if="isGroupCollapsed(group.type)" :size="20" />
+											<ChevronDownIcon v-else :size="20" />
+										</template>
+									</NcButton>
+									<h3 :class="$style.groupTitle">{{ group.title }}</h3>
+									<span :class="$style.groupBadge">{{ group.issues.length }}</span>
+								</div>
+								<NcButton
+									v-if="group.fixableCount > 0"
+									variant="secondary"
+									size="small"
+									:disabled="isBatchFixing"
+									@click.stop="fixAllIssues(group.type)">
+									<template #icon>
+										<WrenchIcon :size="16" />
+									</template>
+									{{ t('mobilesheetsmanager', 'Fix All in Group ({count})', { count: group.fixableCount }) }}
+								</NcButton>
+							</div>
+
+							<ul v-if="!isGroupCollapsed(group.type)" :class="$style.issueList">
+								<FilesIntegrityIssueItem
+									v-for="issue in group.issues"
+									:key="keyForIssue(issue)"
+									:issue="issue"
+									:is-fixing="fixingKey === keyForIssue(issue) || mergingKey === keyForIssue(issue)"
+									@open-song="openSong"
+									@fix-issue="fixIntegrityIssue"
+									@merge-songs="openMergeDialog"
+									@fix-orphan-file="openOrphanFixer" />
+							</ul>
+						</div>
 					</div>
-				</div>
-			</template>
-		</div>
+				</template>
+			</div>
+		</template>
 
 		<SongMergeDialog
 			v-if="mergeIssue && libraryData"

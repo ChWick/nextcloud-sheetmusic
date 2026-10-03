@@ -216,7 +216,7 @@ class LibraryIntegrityService {
 		}
 
 		// Scan folder for orphan files (files in storage not in DB)
-		$this->scanOrphans($targetFolder, $targetFolderPath, $referencedRelativePaths, $issues);
+		$this->scanOrphans($targetFolder, $targetFolderPath, $referencedRelativePaths, $issues, $user);
 
 		// Check for songs with identical metadata (informational)
 		$groupedByMetadata = [];
@@ -433,11 +433,11 @@ class LibraryIntegrityService {
 	 * @param array<string, mixed> $referencedRelativePaths
 	 * @param list<IntegrityIssue> $issues
 	 */
-	private function scanOrphans(Folder $folder, string $targetFolderPath, array $referencedRelativePaths, array &$issues): void {
+	private function scanOrphans(Folder $folder, string $targetFolderPath, array $referencedRelativePaths, array &$issues, \OCP\IUser $user): void {
 		$nodes = $folder->getDirectoryListing();
 		foreach ($nodes as $node) {
 			if ($node instanceof Folder) {
-				$this->scanOrphans($node, $targetFolderPath, $referencedRelativePaths, $issues);
+				$this->scanOrphans($node, $targetFolderPath, $referencedRelativePaths, $issues, $user);
 			} elseif ($node instanceof Node) {
 				$nodePath = $node->getPath();
 				$relativeToTarget = str_starts_with($nodePath, $targetFolderPath . '/')
@@ -452,12 +452,24 @@ class LibraryIntegrityService {
 
 				$cleanRelative = strtolower(ltrim($relativeToTarget, '/'));
 				if (!isset($referencedRelativePaths[$cleanRelative])) {
+					$storedPath = null;
+					try {
+						$storedPath = $this->fileManager->pathOfExistingFile($node->getPath(), $user);
+					} catch (\Throwable) {
+						// ignore if path cannot be resolved
+					}
+
 					$issues[] = new IntegrityIssue(
 						type: IntegrityIssue::TYPE_ORPHAN_FILE,
 						severity: IntegrityIssue::SEVERITY_WARNING,
 						message: sprintf('File "%s" exists in library storage but is not linked to any song.', $filename),
 						path: $relativeToTarget,
 						fixable: false,
+						details: [
+							'webdavPath' => $storedPath?->webdav,
+							'userRelativePath' => $storedPath?->userRelative,
+							'filename' => $filename,
+						],
 					);
 				}
 			}

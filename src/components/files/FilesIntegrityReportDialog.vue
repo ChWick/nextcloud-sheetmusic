@@ -20,6 +20,7 @@ const emit = defineEmits<{
 	openSong: [songId: number]
 	fixIssue: [issue: IntegrityIssue]
 	mergeSongs: [issue: IntegrityIssue, mode?: 'merge' | 'keepBoth']
+	fixOrphanFile: [issue: IntegrityIssue]
 	recheck: []
 }>()
 
@@ -85,7 +86,8 @@ defineExpose({ clearMergingState })
 						:is-fixing="fixingKey === keyForIssue(issue) || mergingKey === keyForIssue(issue)"
 						@open-song="emit('openSong', $event)"
 						@fix-issue="handleFix"
-						@merge-songs="handleMerge" />
+						@merge-songs="handleMerge"
+						@fix-orphan-file="emit('fixOrphanFile', $event)" />
 				</ul>
 			</template>
 		</template>

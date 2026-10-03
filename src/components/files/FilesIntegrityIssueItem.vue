@@ -19,6 +19,7 @@ const emit = defineEmits<{
 	openSong: [songId: number]
 	fixIssue: [issue: IntegrityIssue]
 	mergeSongs: [issue: IntegrityIssue, mode?: 'merge' | 'keepBoth']
+	fixOrphanFile: [issue: IntegrityIssue]
 }>()
 
 /** True when this is a duplicate or identical song issue between distinct songs (needs merge dialog, not auto-fix) */
@@ -65,7 +66,17 @@ const isDuplicateBetweenSongs = computed(() =>
 				{{ t('mobilesheetsmanager', 'Edit Song') }}
 			</NcButton>
 
-			<template v-if="isDuplicateBetweenSongs">
+			<NcButton
+				v-if="issue.type === 'orphan_file'"
+				variant="primary"
+				@click="emit('fixOrphanFile', issue)">
+				<template #icon>
+					<WrenchIcon :size="16" />
+				</template>
+				{{ t('mobilesheetsmanager', 'Fix Orphan File') }}
+			</NcButton>
+
+			<template v-else-if="isDuplicateBetweenSongs">
 				<NcButton
 					variant="secondary"
 					:disabled="isFixing"
