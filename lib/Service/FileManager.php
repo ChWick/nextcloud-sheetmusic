@@ -75,6 +75,55 @@ function fileCountForExtension(MobileSheetsSong $song, MobileSheetsFile $file): 
 }
 
 /**
+ * Normalize a generated path for Windows, Linux, and Nextcloud's 250-byte
+ * filename limit before it is used for a folder or file operation.
+ */
+function normalizeGeneratedPath(string $path): string {
+	$path = str_replace('\\', '/', $path);
+	$segments = array_map(
+		static fn (string $segment): string => normalizeGeneratedPathSegment($segment),
+		explode('/', trim($path, '/')),
+	);
+
+	return implode('/', $segments);
+}
+
+function normalizeGeneratedPathSegment(string $segment): string {
+	$segment = str_replace(['<', '>', ':', '"', '/', '\\', '|', '?', '*'], '-', $segment);
+	$segment = preg_replace('/[\x00-\x1F\x7F]/', '-', $segment) ?? '';
+	$segment = rtrim($segment, " .");
+
+	if ($segment === '' || $segment === '.' || $segment === '..') {
+		$segment = 'untitled';
+	}
+
+	// Windows treats these device names as reserved, even when an extension follows.
+	$windowsBasename = rtrim(explode('.', $segment, 2)[0], " .");
+	if (preg_match('/^(CON|PRN|AUX|NUL|CONIN\$|CONOUT\$|COM[1-9¹²³]|LPT[1-9¹²³])$/iu', $windowsBasename) === 1
+		|| strcasecmp($segment, '.htaccess') === 0) {
+		$segment = '_' . $segment;
+	}
+
+	// Nextcloud reserves these suffixes for incomplete uploads.
+	foreach (['.filepart', '.part'] as $forbiddenExtension) {
+		if (str_ends_with(strtolower($segment), $forbiddenExtension)) {
+			$segment = substr($segment, 0, -strlen($forbiddenExtension)) . '-' . substr($forbiddenExtension, 1);
+			break;
+		}
+	}
+
+	// Nextcloud's file cache permits at most 250 bytes per filename; keep a file
+	// extension intact when shortening long generated file names.
+	$extension = getFileExtension($segment);
+	$name = $extension === '' ? $segment : substr($segment, 0, -strlen($extension));
+	$extensionBytes = min(strlen($extension), 250);
+	$extension = mb_strcut($extension, 0, $extensionBytes, 'UTF-8');
+	$name = mb_strcut($name, 0, 250 - strlen($extension), 'UTF-8');
+
+	return rtrim($name . $extension, " .") ?: 'untitled';
+}
+
+/**
  * @return list<string> all valid target paths for a song given its composers, artists, books, and collections
  */
 function createTargetPaths(
@@ -84,6 +133,7 @@ function createTargetPaths(
 	int $fileCount = 1,
 ): array {
 	$filePrefix = fileIndexPrefix($fileIndex, $fileCount);
+	$ext = $ext === '' ? '' : normalizeGeneratedPathSegment($ext);
 
 	// 1. Composers and Artists: sort alphabetically and join full list
 	$compArtistNames = [];
@@ -100,7 +150,10 @@ function createTargetPaths(
 		}
 	}
 	sort($compArtistNames, SORT_STRING);
-	$compArtist = implode(', ', $compArtistNames);
+	$compArtist = implode(', ', array_map(
+		static fn (string $name): string => normalizeGeneratedPathSegment($name),
+		$compArtistNames,
+	));
 
 	// 2. Books and Collections: sort by length descending (longest string first), then alphabetically ascending
 	$sortByNameStability = static function (array $items): array {
@@ -121,39 +174,43 @@ function createTargetPaths(
 	$collectionNames = array_values(array_filter(array_map(static fn($c) => $c->name, $song->collections), static fn($n) => $n !== ''));
 	$collectionNames = $sortByNameStability($collectionNames);
 
-	$book = $bookTitles[0] ?? '';
-	$collection = $collectionNames[0] ?? '';
+	$book = $bookTitles === [] ? '' : normalizeGeneratedPathSegment($bookTitles[0]);
+	$collection = $collectionNames === [] ? '' : normalizeGeneratedPathSegment($collectionNames[0]);
 
 	$keyNames = array_values(array_filter(array_map(static fn($k) => $k->name, $song->keys), static fn($n) => $n !== ''));
 	sort($keyNames, SORT_STRING);
-	$keyString = implode(', ', $keyNames);
+	$keyString = implode(', ', array_map(
+		static fn (string $name): string => normalizeGeneratedPathSegment($name),
+		$keyNames,
+	));
 
-	$songTitlePart = $keyString !== '' ? "{$song->title} in {$keyString}" : $song->title;
+	$songTitle = normalizeGeneratedPathSegment($song->title);
+	$songTitlePart = $keyString !== '' ? "{$songTitle} in {$keyString}" : $songTitle;
 
 	if ($compArtist !== '') {
 		if ($book !== '') {
 			$folder = $compArtist . DIRECTORY_SEPARATOR . "{$compArtist} - {$book}";
 			$fileName = "{$compArtist} - {$book} - {$songTitlePart}";
-			return [$folder . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext];
+			return [normalizeGeneratedPath($folder . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext)];
 		}
 		if ($collection !== '') {
 			$folder = $compArtist . DIRECTORY_SEPARATOR . "{$compArtist} - {$collection}";
 			$fileName = "{$compArtist} - {$collection} - {$songTitlePart}";
-			return [$folder . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext];
+			return [normalizeGeneratedPath($folder . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext)];
 		}
 		$folder = $compArtist;
 		$fileName = "{$compArtist} - {$songTitlePart}";
 		return [
-			$folder . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext,
-			$filePrefix . $fileName . $ext,
+			normalizeGeneratedPath($folder . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext),
+			normalizeGeneratedPath($filePrefix . $fileName . $ext),
 		];
 	}
 	if ($collection !== '') {
 		$folder = $collection;
 		$fileName = "{$collection} - {$songTitlePart}";
 		return [
-			$folder . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext,
-			$filePrefix . $fileName . $ext,
+			normalizeGeneratedPath($folder . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext),
+			normalizeGeneratedPath($filePrefix . $fileName . $ext),
 		];
 	}
 	throw new NoNamingRuleException('No composer, artist, or collection');

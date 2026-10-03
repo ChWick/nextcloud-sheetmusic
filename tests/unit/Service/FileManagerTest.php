@@ -193,6 +193,71 @@ final class FileManagerTest extends TestCase {
 		self::assertSame('Dave Brubeck - Take Five in Ebm.pdf', $paths[1]);
 	}
 
+	public function testCreateTargetPathsNormalizesCrossPlatformInvalidNames(): void {
+		$song = new MobileSheetsSong(
+			1,
+			'Song * Name. ',
+			[],
+			[new MobileSheetsComposer(1, 'Bad/Composer. ')],
+			[new MobileSheetsBook(1, 'Book?.')],
+		);
+
+		$path = \OCA\MobileSheetsManager\Service\createTargetPath($song, '.pdf');
+
+		self::assertSame('Bad-Composer/Bad-Composer - Book-/Bad-Composer - Book- - Song - Name.pdf', $path);
+		foreach (explode('/', $path) as $segment) {
+			self::assertDoesNotMatchRegularExpression('/[ .]$/', $segment);
+			self::assertDoesNotMatchRegularExpression('/[<>:"\/\\\\|?*\x00-\x1F\x7F]/', $segment);
+			self::assertLessThanOrEqual(250, strlen($segment));
+		}
+	}
+
+	public function testCreateTargetPathsPrefixesWindowsReservedDirectoryNames(): void {
+		$song = new MobileSheetsSong(
+			1,
+			'Take Five',
+			[],
+			[new MobileSheetsComposer(1, 'CON')],
+		);
+
+		self::assertSame(
+			'_CON/_CON - Take Five.pdf',
+			\OCA\MobileSheetsManager\Service\createTargetPath($song, '.pdf'),
+		);
+	}
+
+	public function testCreateTargetPathsShortensLongNamesWithoutCuttingTheExtension(): void {
+		$song = new MobileSheetsSong(
+			1,
+			str_repeat('é', 150),
+			[],
+			[new MobileSheetsComposer(1, 'Miles')],
+		);
+
+		$path = \OCA\MobileSheetsManager\Service\createTargetPath($song, '.pdf');
+		$fileName = basename($path);
+
+		self::assertLessThanOrEqual(250, strlen($fileName));
+		self::assertStringEndsWith('.pdf', $fileName);
+		self::assertTrue(mb_check_encoding($fileName, 'UTF-8'));
+	}
+
+	public function testCreateTargetPathsAvoidsNextcloudReservedUploadSuffixes(): void {
+		$song = new MobileSheetsSong(
+			1,
+			'Take Five',
+			[new MobileSheetsFile(1, '/remote.php/dav/files/admin/Noten/source/song.part')],
+			[],
+			[],
+			[new MobileSheetsCollection(1, 'Jazz')],
+		);
+
+		$path = \OCA\MobileSheetsManager\Service\createTargetPath($song, '.part');
+
+		self::assertStringEndsWith('Take Five-part', $path);
+		self::assertFalse(str_ends_with($path, '.part'));
+	}
+
 	/**
 	 * Write a temporary hash codes file in the MobileSheets format.
 	 *
@@ -261,6 +326,25 @@ final class FileManagerTest extends TestCase {
 			$this->moveTargets,
 			'move() must receive the full internal path, not a user-relative one',
 		);
+	}
+
+	public function testMovesToNormalizedGeneratedPathBeforeCreatingFolders(): void {
+		$song = new MobileSheetsSong(
+			1,
+			'Take Five',
+			[],
+			[],
+			[],
+			[new MobileSheetsCollection(1, 'Jazz.')],
+		);
+
+		$this->regenerate($song, 'Noten/source/SomeFile.pdf');
+
+		self::assertSame(
+			[['from' => 'Noten/source/SomeFile.pdf', 'to' => 'Noten/Jazz/Jazz - Take Five.pdf']],
+			$this->moves,
+		);
+		self::assertSame(['Noten/Jazz'], $this->createdFolders);
 	}
 
 	public function testDoesNothingWhenTheFileIsAlreadyAtItsTargetPath(): void {
