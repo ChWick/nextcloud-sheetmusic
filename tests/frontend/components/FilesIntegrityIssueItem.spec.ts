@@ -50,4 +50,27 @@ describe('FilesIntegrityIssueItem.vue', () => {
 		expect(wrapper.text()).not.toContain('Merge Songs')
 		expect(wrapper.text()).not.toContain('Keep as Two')
 	})
+
+	it('renders merge and keep as two buttons for identical_song issue', () => {
+		const issue: IntegrityIssue = {
+			type: 'identical_song',
+			severity: 'info',
+			message: 'Found 2 songs with identical metadata.',
+			songId: 10,
+			songTitle: 'Identical Song',
+			fixable: true,
+			details: {
+				songIds: [10, 20],
+				exactDuplicate: true,
+			},
+		}
+
+		const wrapper = mount(FilesIntegrityIssueItem, {
+			props: { issue },
+		})
+
+		expect(wrapper.text()).toContain('Found 2 songs with identical metadata.')
+		expect(wrapper.text()).toContain('Merge Songs')
+		expect(wrapper.text()).toContain('Keep as Two')
+	})
 })

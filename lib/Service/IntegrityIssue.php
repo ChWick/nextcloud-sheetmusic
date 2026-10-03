@@ -19,6 +19,7 @@ class IntegrityIssue implements JsonSerializable {
 	public const TYPE_ORPHAN_FILE = 'orphan_file';
 	public const TYPE_DUPLICATE_FILE_PATH = 'duplicate_file_path';
 	public const TYPE_INVALID_NAMING_RULE = 'invalid_naming_rule';
+	public const TYPE_IDENTICAL_SONG = 'identical_song';
 
 	public const SEVERITY_ERROR = 'error';
 	public const SEVERITY_WARNING = 'warning';

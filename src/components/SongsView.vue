@@ -131,6 +131,18 @@
     <div v-if="selectedCount > 0" :class="$style.selectionBanner">
       <span :class="$style.selectionCount">{{ t('mobilesheetsmanager', '{count} songs selected', { count: selectedCount }) }}</span>
       <NcButton
+        v-if="selectedCount === 2"
+        size="small"
+        variant="secondary"
+        :title="t('mobilesheetsmanager', 'Compare & Merge selected 2 songs')"
+        :aria-label="t('mobilesheetsmanager', 'Compare & Merge selected 2 songs')"
+        @click="openCompareMergeDialog">
+        <template #icon>
+          <MergeIcon :size="18" />
+        </template>
+        {{ t('mobilesheetsmanager', 'Compare / Merge') }}
+      </NcButton>
+      <NcButton
         size="small"
         variant="primary"
         :title="t('mobilesheetsmanager', 'Edit selected ({count})', { count: selectedCount })"
@@ -252,6 +264,16 @@
     :signatures="signatures"
     :source-types="sourceTypes"
     @apply="handleApplyBatchUpdate" />
+
+  <SongMergeDialog
+    v-if="isMergeDialogOpen && mergeIssue && currentLibraryData"
+    v-model:open="isMergeDialogOpen"
+    :issue="mergeIssue"
+    :library-data="currentLibraryData"
+    :is-merging="isMerging"
+    :error="mergeError"
+    @merge="executeMerge"
+    @resolve-both="executeResolveBoth" />
 </template>
 
 <script setup lang="ts">
@@ -266,6 +288,7 @@ import CheckIcon from 'vue-material-design-icons/Check.vue';
 import CloseIcon from 'vue-material-design-icons/Close.vue';
 import ContentSaveOutlineIcon from 'vue-material-design-icons/ContentSaveOutline.vue';
 import DeleteIcon from 'vue-material-design-icons/Delete.vue';
+import MergeIcon from 'vue-material-design-icons/Merge.vue';
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue';
 import PencilIcon from 'vue-material-design-icons/Pencil.vue';
 import SongEditor from '../components/SongEditor.vue';
@@ -273,7 +296,8 @@ import SongFilterBar from '../components/SongFilterBar.vue';
 import SongViewer from '../components/SongViewer.vue';
 import ViewHeader from '../components/ViewHeader.vue';
 import BatchSongEditorDialog, { type BatchUpdatePayload } from '../components/song-editor/BatchSongEditorDialog.vue';
-import type { Artist, Song, Composer, Book, Collection, CustomGroup, Genre, Key, LibraryData, Signature, SongPrefill, SourceType, Year } from '../types/song';
+import SongMergeDialog, { type MergedSongData, type ResolveBothSongData } from '../components/song-editor/SongMergeDialog.vue';
+import type { Artist, Song, Composer, Book, Collection, CustomGroup, Genre, IntegrityIssue, Key, LibraryData, Signature, SongPrefill, SourceType, Year } from '../types/song';
 import { DEFAULT_VISIBLE_COLUMNS, type SongColumn } from '../types/song';
 import { sortSongs, type SortKey, type SortOrder } from '../utils/song-formatter';
 import { useSongFilters } from '../composables/useSongFilters';
@@ -379,6 +403,121 @@ const { searchTitle, withoutFiles, selectedComposers, selectedBooks, selectedCol
 
 const { selectedSongIds, selectedCount, isSelected, toggleSelect, selectAll, isAllSelected, clearSelection } = useSongSelection();
 const isBatchEditorOpen = ref(false);
+
+// Compare & Merge dialog state
+const isMergeDialogOpen = ref(false);
+const isMerging = ref(false);
+const mergeError = ref('');
+const mergeIssue = ref<IntegrityIssue | null>(null);
+
+const currentLibraryData = computed<LibraryData>(() => ({
+  composers: composers.value,
+  books: books.value,
+  collections: collections.value,
+  artists: artists.value,
+  genres: genres.value,
+  keys: keys.value,
+  customGroups: customGroups.value,
+  years: years.value,
+  signatures: signatures.value,
+  sourceTypes: sourceTypes.value,
+  songs: songs.value,
+}));
+
+function openCompareMergeDialog() {
+  if (selectedSongIds.value.length !== 2) return;
+  const songA = songs.value.find(s => s.id === selectedSongIds.value[0]);
+  const songB = songs.value.find(s => s.id === selectedSongIds.value[1]);
+  if (!songA || !songB) return;
+
+  mergeIssue.value = {
+    type: 'identical_song',
+    severity: 'info',
+    message: t('mobilesheetsmanager', 'Comparing 2 selected songs for merge or conflict resolution.'),
+    songId: songA.id,
+    songTitle: songA.title,
+    fixable: true,
+    details: {
+      songIds: [songA.id, songB.id],
+      exactDuplicate: false,
+    },
+  };
+  mergeError.value = '';
+  isMergeDialogOpen.value = true;
+}
+
+async function executeMerge(payload: {
+  keepId: number
+  droppedId: number
+  merged: Record<string, unknown>
+}) {
+  isMerging.value = true;
+  mergeError.value = '';
+  try {
+    const response = await axios.post(
+      `/ocs/v2.php/apps/mobilesheetsmanager/api/songs/merge`,
+      {
+        libraryId: props.selectedLibrary,
+        keepId: payload.keepId,
+        droppedId: payload.droppedId,
+        merged: payload.merged,
+      },
+      { headers: { 'OCS-APIREQUEST': 'true', Accept: 'application/json' } },
+    );
+    isMergeDialogOpen.value = false;
+    mergeIssue.value = null;
+    clearSelection();
+    if (response.data?.ocs?.data) {
+      handleLibraryDataUpdate(response.data.ocs.data);
+    } else {
+      await loadLibraryData(props.selectedLibrary);
+    }
+  } catch (error) {
+    console.error('Failed to merge songs:', error);
+    const serverMessage = axios.isAxiosError(error)
+      ? error.response?.data?.ocs?.data?.message ?? error.response?.data?.message
+      : undefined;
+    mergeError.value = serverMessage
+      ?? t('mobilesheetsmanager', 'Failed to merge songs. Please try again.');
+  } finally {
+    isMerging.value = false;
+  }
+}
+
+async function executeResolveBoth(payload: {
+  songA: ResolveBothSongData
+  songB: ResolveBothSongData
+}) {
+  if (props.selectedLibrary < 0) return;
+
+  isMerging.value = true;
+  mergeError.value = '';
+  try {
+    const response = await apiPost('/api/songs/resolve-both', {
+      libraryId: props.selectedLibrary,
+      songA: payload.songA,
+      songB: payload.songB,
+    });
+
+    isMergeDialogOpen.value = false;
+    mergeIssue.value = null;
+    clearSelection();
+    if (response.data?.ocs?.data) {
+      handleLibraryDataUpdate(response.data.ocs.data);
+    } else {
+      await loadLibraryData(props.selectedLibrary);
+    }
+  } catch (error: any) {
+    console.error('Failed to resolve both songs:', error);
+    const serverMessage = error?.response?.data?.ocs?.data?.message
+      ?? error?.response?.data?.message
+      ?? error?.message;
+    mergeError.value = serverMessage
+      ?? t('mobilesheetsmanager', 'Failed to save updated songs. Please try again.');
+  } finally {
+    isMerging.value = false;
+  }
+}
 
 async function handleApplyBatchUpdate(payload: BatchUpdatePayload) {
   if (selectedSongIds.value.length === 0) return;

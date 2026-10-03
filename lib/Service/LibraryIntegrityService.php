@@ -218,6 +218,37 @@ class LibraryIntegrityService {
 		// Scan folder for orphan files (files in storage not in DB)
 		$this->scanOrphans($targetFolder, $targetFolderPath, $referencedRelativePaths, $issues);
 
+		// Check for songs with identical metadata (informational)
+		$groupedByMetadata = [];
+		foreach ($songs as $s) {
+			$metaKey = $this->getCanonicalSongMetadataKey($s);
+			$groupedByMetadata[$metaKey][] = $s;
+		}
+
+		foreach ($groupedByMetadata as $identicalSongs) {
+			if (count($identicalSongs) > 1) {
+				$identicalIds = array_map(fn($s) => $s->id, $identicalSongs);
+				$songTitles = array_map(fn($s) => sprintf('"%s" (ID %d)', $s->title, $s->id), $identicalSongs);
+
+				$issues[] = new IntegrityIssue(
+					type: IntegrityIssue::TYPE_IDENTICAL_SONG,
+					severity: IntegrityIssue::SEVERITY_INFO,
+					message: sprintf(
+						'Found %d songs with identical metadata (%s). Propose to merge or keep separate.',
+						count($identicalSongs),
+						implode(', ', $songTitles)
+					),
+					songId: $identicalSongs[0]->id,
+					songTitle: $identicalSongs[0]->title,
+					fixable: true,
+					details: [
+						'songIds' => $identicalIds,
+						'exactDuplicate' => true,
+					],
+				);
+			}
+		}
+
 		return $issues;
 	}
 
@@ -244,7 +275,7 @@ class LibraryIntegrityService {
 			}
 		}
 
-		if ($issueType === IntegrityIssue::TYPE_DUPLICATE_FILE_PATH && $songId !== null) {
+		if (($issueType === IntegrityIssue::TYPE_DUPLICATE_FILE_PATH || $issueType === IntegrityIssue::TYPE_IDENTICAL_SONG) && $songId !== null) {
 			['databasePath' => $databasePath, 'targetFolder' => $targetFolder] = $this->fileManager->libraryContext($libraryId, $user);
 			$hashCodes = MobileSheetsHashCodesFile::forDatabase($databasePath, $this->logger);
 
@@ -256,20 +287,31 @@ class LibraryIntegrityService {
 
 				$allSongs = $this->songMapper->findSongs($databasePath);
 				$duplicateSongIds = [];
-				foreach ($song->files as $f) {
-					$cleanF = strtolower(ltrim($f->path, '/'));
-					foreach ($allSongs as $otherSong) {
-						foreach ($otherSong->files as $otherFile) {
-							if ($cleanF === strtolower(ltrim($otherFile->path, '/'))) {
-								$duplicateSongIds[] = $otherSong->id;
+
+				if ($issueType === IntegrityIssue::TYPE_DUPLICATE_FILE_PATH) {
+					foreach ($song->files as $f) {
+						$cleanF = strtolower(ltrim($f->path, '/'));
+						foreach ($allSongs as $otherSong) {
+							foreach ($otherSong->files as $otherFile) {
+								if ($cleanF === strtolower(ltrim($otherFile->path, '/'))) {
+									$duplicateSongIds[] = $otherSong->id;
+								}
 							}
 						}
 					}
+				} else {
+					$targetMetaKey = $this->getCanonicalSongMetadataKey($song);
+					foreach ($allSongs as $otherSong) {
+						if ($this->getCanonicalSongMetadataKey($otherSong) === $targetMetaKey) {
+							$duplicateSongIds[] = $otherSong->id;
+						}
+					}
 				}
+
 				$duplicateSongIds = array_values(array_unique($duplicateSongIds));
 
 				if (count($duplicateSongIds) < 2) {
-					return ['success' => false, 'message' => 'No duplicate songs found for this file path.'];
+					return ['success' => false, 'message' => 'No duplicate songs found for this issue.'];
 				}
 
 				sort($duplicateSongIds);
@@ -289,11 +331,38 @@ class LibraryIntegrityService {
 					'message' => sprintf('Merged %d duplicate song(s) into song ID %d.', $mergedCount, $targetSongId),
 				];
 			} catch (\Throwable $e) {
-				return ['success' => false, 'message' => sprintf('Cannot resolve duplicate path for song ID %d: %s', $songId, $e->getMessage())];
+				return ['success' => false, 'message' => sprintf('Cannot resolve duplicate for song ID %d: %s', $songId, $e->getMessage())];
 			}
 		}
 
 		return ['success' => false, 'message' => 'Unrecognized or unfixable issue type.'];
+	}
+
+	/**
+	 * Computes a canonical metadata string for a song to detect identical metadata duplicates.
+	 */
+	private function getCanonicalSongMetadataKey(\OCA\MobileSheetsManager\Db\MobileSheetsSong $song): string {
+		$extractNames = static function (array $entities): array {
+			$names = array_map(static fn($e) => $e->name ?? $e->title ?? (string)($e->id ?? ''), $entities);
+			sort($names, SORT_STRING);
+			return $names;
+		};
+
+		$parts = [
+			'title:' => trim(strtolower($song->title)),
+			'composers:' => implode('|', $extractNames($song->composers)),
+			'artists:' => implode('|', $extractNames($song->artists)),
+			'books:' => implode('|', $extractNames($song->books)),
+			'collections:' => implode('|', $extractNames($song->collections)),
+			'genres:' => implode('|', $extractNames($song->genres)),
+			'keys:' => implode('|', $extractNames($song->keys)),
+			'customGroups:' => implode('|', $extractNames($song->customGroups)),
+			'years:' => implode('|', $extractNames($song->years)),
+			'signatures:' => implode('|', $extractNames($song->signatures)),
+			'sourceTypes:' => implode('|', $extractNames($song->sourceTypes)),
+		];
+
+		return json_encode($parts);
 	}
 
 	/**

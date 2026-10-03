@@ -21,9 +21,9 @@ const emit = defineEmits<{
 	mergeSongs: [issue: IntegrityIssue, mode?: 'merge' | 'keepBoth']
 }>()
 
-/** True when this is a duplicate between distinct songs (needs merge dialog, not auto-fix) */
+/** True when this is a duplicate or identical song issue between distinct songs (needs merge dialog, not auto-fix) */
 const isDuplicateBetweenSongs = computed(() =>
-	props.issue.type === 'duplicate_file_path'
+	(props.issue.type === 'duplicate_file_path' || props.issue.type === 'identical_song')
 	&& (props.issue.details?.songIds?.length ?? 0) > 1,
 )
 </script>

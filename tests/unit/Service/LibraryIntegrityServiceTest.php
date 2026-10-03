@@ -135,4 +135,59 @@ final class LibraryIntegrityServiceTest extends TestCase {
 
 		self::assertCount(0, $issues);
 	}
+
+	public function testCheckIntegrityDetectsIdenticalSongs(): void {
+		$libraryService = $this->createMock(LibraryService::class);
+		$songMapper = $this->createMock(SongMapper::class);
+		$fileManager = $this->createMock(FileManager::class);
+		$rootFolder = $this->createMock(IRootFolder::class);
+
+		$user = $this->createMock(\OCP\IUser::class);
+		$user->method('getUID')->willReturn('user1');
+
+		$userFolder = $this->createMock(\OCP\Files\IUserFolder::class);
+		$userFolder->method('getOwner')->willReturn($user);
+		$userFolder->method('getPath')->willReturn('/user1/files');
+		$rootFolder->method('getUserFolder')->with('user1')->willReturn($userFolder);
+
+		$pathResolver = new MobileSheetsPathResolver($rootFolder);
+
+		$targetFolder = $this->createMock(Folder::class);
+		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
+		$targetFolder->method('nodeExists')->willReturn(true);
+		$targetFolder->method('getDirectoryListing')->willReturn([]);
+
+		$fileManager->method('libraryContext')->willReturn([
+			'databasePath' => '/tmp/dummy.db',
+			'targetFolder' => $targetFolder,
+		]);
+
+		$song1 = new \OCA\MobileSheetsManager\Db\MobileSheetsSong(
+			id: 1,
+			title: 'Identical Song',
+			files: [],
+			composers: [
+				new \OCA\MobileSheetsManager\Db\MobileSheetsComposer(1, 'Bach'),
+			],
+		);
+		$song2 = new \OCA\MobileSheetsManager\Db\MobileSheetsSong(
+			id: 2,
+			title: 'Identical Song',
+			files: [],
+			composers: [
+				new \OCA\MobileSheetsManager\Db\MobileSheetsComposer(1, 'Bach'),
+			],
+		);
+		$songMapper->method('findSongs')->willReturn([$song1, $song2]);
+
+		$logger = $this->createMock(\Psr\Log\LoggerInterface::class);
+		$service = new LibraryIntegrityService($libraryService, $songMapper, $fileManager, $rootFolder, $pathResolver, $logger);
+		$issues = $service->checkIntegrity(1, 'user1');
+
+		self::assertCount(1, $issues);
+		self::assertSame(IntegrityIssue::TYPE_IDENTICAL_SONG, $issues[0]->type);
+		self::assertSame(IntegrityIssue::SEVERITY_INFO, $issues[0]->severity);
+		self::assertTrue($issues[0]->fixable);
+		self::assertEquals([1, 2], $issues[0]->details['songIds']);
+	}
 }
