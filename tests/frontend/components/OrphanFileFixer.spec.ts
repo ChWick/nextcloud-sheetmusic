@@ -37,7 +37,7 @@ describe('OrphanFileFixer.vue', () => {
 		global: {
 			stubs: {
 				ViewHeader: {
-					template: '<header><h1>{{ title }}</h1><slot name="actions" /></header>',
+					template: '<header><h1>{{ title }}</h1><slot /></header>',
 					props: ['title'],
 				},
 				FilePreviewer: {
@@ -48,8 +48,8 @@ describe('OrphanFileFixer.vue', () => {
 					template: '<div class="select-song-dialog-stub" />',
 				},
 				NcButton: {
-					template: '<button :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
-					props: ['disabled', 'variant'],
+					template: '<button :disabled="disabled" :title="title" :aria-label="ariaLabel" @click="$emit(\'click\')"><slot /></button>',
+					props: ['disabled', 'variant', 'title', 'ariaLabel'],
 				},
 			},
 		},
@@ -94,8 +94,9 @@ describe('OrphanFileFixer.vue', () => {
 		await createBtn?.trigger('click')
 
 		expect(wrapper.text()).toContain('Create Song for Orphan File')
-		expect(wrapper.text()).toContain('Save Song')
-		expect(wrapper.text()).toContain('Cancel')
+		const iconButtons = wrapper.findAll('button')
+		expect(iconButtons.some(b => b.attributes('title')?.includes('Create song'))).toBe(true)
+		expect(iconButtons.some(b => b.attributes('title')?.includes('Back to Orphan Fixer'))).toBe(true)
 	})
 
 	it('opens select song dialog when option a is clicked', async () => {

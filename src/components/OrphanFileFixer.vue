@@ -163,32 +163,36 @@ onMounted(() => {
 <template>
 	<div :class="$style.container">
 		<ViewHeader :title="isCreatingSong ? t('mobilesheetsmanager', 'Create Song for Orphan File') : t('mobilesheetsmanager', 'Fix Orphan File: {filename}', { filename })">
-			<template #actions>
-				<template v-if="isCreatingSong">
-					<NcButton
-						variant="secondary"
-						@click="isCreatingSong = false">
-						{{ t('mobilesheetsmanager', 'Cancel') }}
-					</NcButton>
-					<NcButton
-						variant="primary"
-						@click="handleSaveCreatedSong">
-						<template #icon>
-							<ContentSaveOutlineIcon :size="20" />
-						</template>
-						{{ t('mobilesheetsmanager', 'Save Song') }}
-					</NcButton>
-				</template>
+			<template v-if="isCreatingSong">
 				<NcButton
-					v-else
 					variant="secondary"
-					@click="emit('back')">
+					:title="t('mobilesheetsmanager', 'Back to Orphan Fixer')"
+					:aria-label="t('mobilesheetsmanager', 'Back to Orphan Fixer')"
+					@click="isCreatingSong = false">
 					<template #icon>
 						<ArrowLeftIcon :size="20" />
 					</template>
-					{{ t('mobilesheetsmanager', 'Back to Integrity Audit') }}
+				</NcButton>
+				<NcButton
+					variant="primary"
+					:title="t('mobilesheetsmanager', 'Create song')"
+					:aria-label="t('mobilesheetsmanager', 'Create song')"
+					@click="handleSaveCreatedSong">
+					<template #icon>
+						<PlusIcon :size="20" />
+					</template>
 				</NcButton>
 			</template>
+			<NcButton
+				v-else
+				variant="secondary"
+				:title="t('mobilesheetsmanager', 'Back to Integrity Audit')"
+				:aria-label="t('mobilesheetsmanager', 'Back to Integrity Audit')"
+				@click="emit('back')">
+				<template #icon>
+					<ArrowLeftIcon :size="20" />
+				</template>
+			</NcButton>
 		</ViewHeader>
 
 		<div :class="$style.content">
