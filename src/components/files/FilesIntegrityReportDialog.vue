@@ -6,6 +6,7 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import FilesIntegrityIssueItem from './FilesIntegrityIssueItem.vue'
+import { keyForIssue } from '../../utils/integrity'
 
 const props = defineProps<{
 	open: boolean
@@ -24,10 +25,6 @@ const emit = defineEmits<{
 
 const fixingKey = ref<string | null>(null)
 const mergingKey = ref<string | null>(null)
-
-function keyForIssue(issue: IntegrityIssue): string {
-	return `${issue.type}-${issue.songId ?? 0}-${issue.fileId ?? 0}-${issue.path ?? ''}`
-}
 
 function handleFix(issue: IntegrityIssue) {
 	fixingKey.value = keyForIssue(issue)

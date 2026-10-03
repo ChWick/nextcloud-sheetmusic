@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
@@ -11,6 +11,7 @@ import type { IntegrityIssue, LibraryData } from '../types/song'
 import ViewHeader from './ViewHeader.vue'
 import FilesIntegrityIssueItem from './files/FilesIntegrityIssueItem.vue'
 import SongMergeDialog, { type ResolveBothSongData } from './song-editor/SongMergeDialog.vue'
+import { keyForIssue } from '../utils/integrity'
 
 const props = defineProps<{
 	selectedLibrary: number
@@ -18,25 +19,45 @@ const props = defineProps<{
 
 const router = useRouter()
 
+import WrenchIcon from 'vue-material-design-icons/Wrench.vue'
+
 // Integrity Audit state
 const isCheckingIntegrity = ref(false)
+const isBatchFixing = ref(false)
 const integrityError = ref('')
 const integrityIssues = ref<IntegrityIssue[]>([])
 
-// Item action loading trackers
-const fixingKey = ref<string | null>(null)
-const mergingKey = ref<string | null>(null)
+const fixableCount = computed(() => integrityIssues.value.filter(i => i.fixable).length)
 
-// Merge dialog state
-const isMergeDialogOpen = ref(false)
-const isMerging = ref(false)
-const initialMergeMode = ref<'merge' | 'keepBoth'>('merge')
-const mergeIssue = ref<IntegrityIssue | null>(null)
-const libraryData = ref<LibraryData | null>(null)
+const groupedIssues = computed(() => {
+	const groups: Record<string, { type: string; title: string; issues: IntegrityIssue[]; fixableCount: number }> = {}
 
-function keyForIssue(issue: IntegrityIssue): string {
-	return `${issue.type}-${issue.songId ?? 0}-${issue.fileId ?? 0}-${issue.path ?? ''}`
-}
+	for (const issue of integrityIssues.value) {
+		const type = issue.type
+		if (!groups[type]) {
+			let title = type.replace(/_/g, ' ')
+			if (type === 'invalid_naming_rule') title = t('mobilesheetsmanager', 'Invalid Naming Rules')
+			else if (type === 'duplicate_file_path') title = t('mobilesheetsmanager', 'Duplicate File Paths')
+			else if (type === 'missing_file') title = t('mobilesheetsmanager', 'Missing Files')
+			else if (type === 'orphan_file') title = t('mobilesheetsmanager', 'Orphan Files')
+			else if (type === 'identical_song') title = t('mobilesheetsmanager', 'Identical Songs (Duplicates)')
+
+			groups[type] = {
+				type,
+				title,
+				issues: [],
+				fixableCount: 0,
+			}
+		}
+
+		groups[type].issues.push(issue)
+		if (issue.fixable) {
+			groups[type].fixableCount++
+		}
+	}
+
+	return Object.values(groups)
+})
 
 /** Run integrity audit check for the selected library */
 async function auditIntegrity() {
@@ -66,6 +87,35 @@ watch(() => props.selectedLibrary, (newLib) => {
 		auditIntegrity()
 	}
 }, { immediate: true })
+
+/** Automatically fix all fixable issues (optionally filtered by type) */
+async function fixAllIssues(issueType?: string) {
+	if (props.selectedLibrary < 0) return
+
+	isBatchFixing.value = true
+	integrityError.value = ''
+
+	try {
+		const response = await apiPost(`/api/libraries/${props.selectedLibrary}/integrity/fix-all`, {
+			issueType,
+		})
+		const result = response.data?.ocs?.data
+		if (result && !result.success) {
+			integrityError.value = result.message ?? t('mobilesheetsmanager', 'Failed to fix integrity issues.')
+		} else {
+			await auditIntegrity()
+		}
+	} catch (error) {
+		console.error('Failed to batch fix integrity issues:', error)
+		const serverMessage = axios.isAxiosError(error)
+			? error.response?.data?.ocs?.data?.message
+			: undefined
+		integrityError.value = serverMessage
+			?? t('mobilesheetsmanager', 'Failed to batch fix integrity issues. Please try again.')
+	} finally {
+		isBatchFixing.value = false
+	}
+}
 
 /** Automatically fix a specific fixable integrity issue */
 async function fixIntegrityIssue(issue: IntegrityIssue) {
@@ -227,18 +277,48 @@ function openSong(songId: number) {
 						<span :class="$style.issueCount">
 							{{ t('mobilesheetsmanager', '{count} issue(s) detected requiring attention', { count: integrityIssues.length }) }}
 						</span>
+						<NcButton
+							v-if="fixableCount > 0"
+							variant="primary"
+							:disabled="isBatchFixing"
+							@click="fixAllIssues()">
+							<template #icon>
+								<WrenchIcon :size="18" />
+							</template>
+							{{ isBatchFixing ? t('mobilesheetsmanager', 'Fixing All…') : t('mobilesheetsmanager', 'Fix All Fixable Issues ({count})', { count: fixableCount }) }}
+						</NcButton>
 					</div>
 
-					<ul :class="$style.issueList">
-						<FilesIntegrityIssueItem
-							v-for="issue in integrityIssues"
-							:key="keyForIssue(issue)"
-							:issue="issue"
-							:is-fixing="fixingKey === keyForIssue(issue) || mergingKey === keyForIssue(issue)"
-							@open-song="openSong"
-							@fix-issue="fixIntegrityIssue"
-							@merge-songs="openMergeDialog" />
-					</ul>
+					<div v-for="group in groupedIssues" :key="group.type" :class="$style.groupCard">
+						<div :class="$style.groupHeader">
+							<div :class="$style.groupTitleArea">
+								<h3 :class="$style.groupTitle">{{ group.title }}</h3>
+								<span :class="$style.groupBadge">{{ group.issues.length }}</span>
+							</div>
+							<NcButton
+								v-if="group.fixableCount > 0"
+								variant="secondary"
+								size="small"
+								:disabled="isBatchFixing"
+								@click="fixAllIssues(group.type)">
+								<template #icon>
+									<WrenchIcon :size="16" />
+								</template>
+								{{ t('mobilesheetsmanager', 'Fix All in Group ({count})', { count: group.fixableCount }) }}
+							</NcButton>
+						</div>
+
+						<ul :class="$style.issueList">
+							<FilesIntegrityIssueItem
+								v-for="issue in group.issues"
+								:key="keyForIssue(issue)"
+								:issue="issue"
+								:is-fixing="fixingKey === keyForIssue(issue) || mergingKey === keyForIssue(issue)"
+								@open-song="openSong"
+								@fix-issue="fixIntegrityIssue"
+								@merge-songs="openMergeDialog" />
+						</ul>
+					</div>
 				</div>
 			</template>
 		</div>
@@ -326,10 +406,44 @@ function openSong(songId: number) {
 	justify-content: space-between;
 }
 
-.issueCount {
-	font-weight: 600;
+.groupCard {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	padding: 16px;
+	background-color: var(--color-main-background);
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius-large, 8px);
+}
+
+.groupHeader {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+
+.groupTitleArea {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.groupTitle {
+	margin: 0;
 	font-size: 1.05rem;
+	font-weight: 600;
 	color: var(--color-main-text);
+}
+
+.groupBadge {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 2px 8px;
+	border-radius: 12px;
+	background-color: var(--color-background-hover);
+	font-size: 0.85rem;
+	font-weight: 600;
 }
 
 .issueList {

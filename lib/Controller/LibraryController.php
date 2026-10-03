@@ -134,5 +134,29 @@ class LibraryController extends OCSController {
 			);
 		}
 	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/libraries/{id}/integrity/fix-all')]
+	public function fixAllIntegrityIssues(int $id, ?string $issueType = null): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse(['message' => 'User not logged in'], Http::STATUS_UNAUTHORIZED);
+		}
+
+		if ($this->integrityService === null) {
+			return new DataResponse(['success' => false, 'message' => 'Integrity service not available.'], Http::STATUS_OK);
+		}
+
+		try {
+			$result = $this->integrityService->fixAllIssues($id, $user->getUID(), $issueType);
+
+			return new DataResponse($result, Http::STATUS_OK);
+		} catch (\Throwable $e) {
+			return new DataResponse(
+				['success' => false, 'message' => 'Error batch-fixing integrity issues: ' . $e->getMessage()],
+				Http::STATUS_OK
+			);
+		}
+	}
 }
 

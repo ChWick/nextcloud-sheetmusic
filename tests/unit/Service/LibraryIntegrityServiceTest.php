@@ -190,4 +190,55 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		self::assertTrue($issues[0]->fixable);
 		self::assertEquals([1, 2], $issues[0]->details['songIds']);
 	}
+
+	public function testFixAllIssuesBatchFixesInvalidNamingRules(): void {
+		$libraryService = $this->createMock(LibraryService::class);
+		$songMapper = $this->createMock(SongMapper::class);
+		$fileManager = $this->createMock(FileManager::class);
+		$rootFolder = $this->createMock(IRootFolder::class);
+
+		$user = $this->createMock(\OCP\IUser::class);
+		$user->method('getUID')->willReturn('user1');
+
+		$userFolder = $this->createMock(\OCP\Files\IUserFolder::class);
+		$userFolder->method('getOwner')->willReturn($user);
+		$userFolder->method('getPath')->willReturn('/user1/files');
+		$rootFolder->method('getUserFolder')->with('user1')->willReturn($userFolder);
+
+		$pathResolver = new MobileSheetsPathResolver($rootFolder);
+
+		$targetFolder = $this->createMock(Folder::class);
+		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
+		$targetFolder->method('nodeExists')->willReturn(true);
+		$targetFolder->method('getDirectoryListing')->willReturn([]);
+
+		$fileManager->method('libraryContext')->willReturn([
+			'databasePath' => '/tmp/dummy.db',
+			'targetFolder' => $targetFolder,
+		]);
+
+		$song1 = new \OCA\MobileSheetsManager\Db\MobileSheetsSong(
+			id: 10,
+			title: 'Song 1',
+			files: [
+				new \OCA\MobileSheetsManager\Db\MobileSheetsFile(100, '/remote.php/dav/files/user1/Noten/OldPath.pdf'),
+			],
+			composers: [
+				new \OCA\MobileSheetsManager\Db\MobileSheetsComposer(1, 'Bach'),
+			],
+		);
+		$songMapper->method('findSongs')->willReturn([$song1]);
+
+		$fileManager->expects($this->once())
+			->method('regenerateSongFilePaths')
+			->with(10, $user, $targetFolder, '/tmp/dummy.db', $this->anything());
+
+		$logger = $this->createMock(\Psr\Log\LoggerInterface::class);
+		$service = new LibraryIntegrityService($libraryService, $songMapper, $fileManager, $rootFolder, $pathResolver, $logger);
+
+		$result = $service->fixAllIssues(1, 'user1', IntegrityIssue::TYPE_INVALID_NAMING_RULE);
+
+		self::assertTrue($result['success']);
+		self::assertSame(1, $result['fixedCount']);
+	}
 }

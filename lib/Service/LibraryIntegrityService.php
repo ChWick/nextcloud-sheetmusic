@@ -253,89 +253,101 @@ class LibraryIntegrityService {
 	}
 
 	/**
-	 * Automatically resolve/fix a specific integrity issue.
+	 * Automatically resolve/fix all fixable issues of a specific type (or all fixable types).
 	 *
-	 * @return array{success: bool, message: string}
+	 * @return array{success: bool, fixedCount: int, message: string}
 	 */
-	public function fixIssue(int $libraryId, string $userId, string $issueType, ?int $songId = null, ?int $fileId = null): array {
+	public function fixAllIssues(int $libraryId, string $userId, ?string $issueType = null): array {
 		$userFolder = $this->rootFolder->getUserFolder($userId);
 		$user = $userFolder->getOwner();
+		['databasePath' => $databasePath, 'targetFolder' => $targetFolder] = $this->fileManager->libraryContext($libraryId, $user);
 
-		if ($issueType === IntegrityIssue::TYPE_INVALID_NAMING_RULE && $songId !== null) {
-			['databasePath' => $databasePath, 'targetFolder' => $targetFolder] = $this->fileManager->libraryContext($libraryId, $user);
-			$hashCodes = MobileSheetsHashCodesFile::forDatabase($databasePath, $this->logger);
+		$issues = $this->checkIntegrity($libraryId, $userId);
+		$hashCodes = MobileSheetsHashCodesFile::forDatabase($databasePath, $this->logger);
 
-			try {
-				$this->fileManager->regenerateSongFilePaths($songId, $user, $targetFolder, $databasePath, $hashCodes);
-				$hashCodes?->save();
+		$fixedCount = 0;
+		$processedSongs = [];
 
-				return ['success' => true, 'message' => sprintf('Regenerated file path for song ID %d.', $songId)];
-			} catch (\Throwable $e) {
-				return ['success' => false, 'message' => sprintf('Cannot fix naming rule for song ID %d: %s', $songId, $e->getMessage())];
+		foreach ($issues as $issue) {
+			if (!$issue->fixable) {
+				continue;
 			}
-		}
+			if ($issueType !== null && $issueType !== '' && $issue->type !== $issueType) {
+				continue;
+			}
 
-		if (($issueType === IntegrityIssue::TYPE_DUPLICATE_FILE_PATH || $issueType === IntegrityIssue::TYPE_IDENTICAL_SONG) && $songId !== null) {
-			['databasePath' => $databasePath, 'targetFolder' => $targetFolder] = $this->fileManager->libraryContext($libraryId, $user);
-			$hashCodes = MobileSheetsHashCodesFile::forDatabase($databasePath, $this->logger);
-
-			try {
-				$song = $this->songMapper->findSong($databasePath, $songId);
-				if ($song === null) {
-					return ['success' => false, 'message' => sprintf('Song ID %d not found.', $songId)];
+			if ($issue->type === IntegrityIssue::TYPE_INVALID_NAMING_RULE && $issue->songId !== null) {
+				if (isset($processedSongs[$issue->songId])) {
+					continue;
 				}
+				try {
+					$this->fileManager->regenerateSongFilePaths($issue->songId, $user, $targetFolder, $databasePath, $hashCodes);
+					$processedSongs[$issue->songId] = true;
+					$fixedCount++;
+				} catch (\Throwable $e) {
+					$this->logger->warning(sprintf('Cannot auto-fix naming rule for song ID %d during batch fix: %s', $issue->songId, $e->getMessage()));
+				}
+			} elseif (($issue->type === IntegrityIssue::TYPE_DUPLICATE_FILE_PATH || $issue->type === IntegrityIssue::TYPE_IDENTICAL_SONG) && $issue->songId !== null) {
+				if (isset($processedSongs[$issue->songId])) {
+					continue;
+				}
+				try {
+					$song = $this->songMapper->findSong($databasePath, $issue->songId);
+					if ($song === null) {
+						continue;
+					}
 
-				$allSongs = $this->songMapper->findSongs($databasePath);
-				$duplicateSongIds = [];
+					$allSongs = $this->songMapper->findSongs($databasePath);
+					$duplicateSongIds = [];
 
-				if ($issueType === IntegrityIssue::TYPE_DUPLICATE_FILE_PATH) {
-					foreach ($song->files as $f) {
-						$cleanF = strtolower(ltrim($f->path, '/'));
-						foreach ($allSongs as $otherSong) {
-							foreach ($otherSong->files as $otherFile) {
-								if ($cleanF === strtolower(ltrim($otherFile->path, '/'))) {
-									$duplicateSongIds[] = $otherSong->id;
+					if ($issue->type === IntegrityIssue::TYPE_DUPLICATE_FILE_PATH) {
+						foreach ($song->files as $f) {
+							$cleanF = strtolower(ltrim($f->path, '/'));
+							foreach ($allSongs as $otherSong) {
+								foreach ($otherSong->files as $otherFile) {
+									if ($cleanF === strtolower(ltrim($otherFile->path, '/'))) {
+										$duplicateSongIds[] = $otherSong->id;
+									}
 								}
 							}
 						}
-					}
-				} else {
-					$targetMetaKey = $this->getCanonicalSongMetadataKey($song);
-					foreach ($allSongs as $otherSong) {
-						if ($this->getCanonicalSongMetadataKey($otherSong) === $targetMetaKey) {
-							$duplicateSongIds[] = $otherSong->id;
+					} else {
+						$targetMetaKey = $this->getCanonicalSongMetadataKey($song);
+						foreach ($allSongs as $otherSong) {
+							if ($this->getCanonicalSongMetadataKey($otherSong) === $targetMetaKey) {
+								$duplicateSongIds[] = $otherSong->id;
+							}
 						}
 					}
+
+					$duplicateSongIds = array_values(array_unique($duplicateSongIds));
+					if (count($duplicateSongIds) >= 2) {
+						sort($duplicateSongIds);
+						$targetSongId = $duplicateSongIds[0];
+
+						for ($i = 1; $i < count($duplicateSongIds); $i++) {
+							$droppedId = $duplicateSongIds[$i];
+							$this->songMapper->mergeSongs($databasePath, $targetSongId, $droppedId);
+							$processedSongs[$droppedId] = true;
+						}
+						$processedSongs[$targetSongId] = true;
+						$fixedCount++;
+					}
+				} catch (\Throwable $e) {
+					$this->logger->warning(sprintf('Cannot auto-fix duplicate/identical songs for song ID %d during batch fix: %s', $issue->songId, $e->getMessage()));
 				}
-
-				$duplicateSongIds = array_values(array_unique($duplicateSongIds));
-
-				if (count($duplicateSongIds) < 2) {
-					return ['success' => false, 'message' => 'No duplicate songs found for this issue.'];
-				}
-
-				sort($duplicateSongIds);
-				$targetSongId = $duplicateSongIds[0];
-				$mergedCount = 0;
-
-				for ($i = 1; $i < count($duplicateSongIds); $i++) {
-					$droppedId = $duplicateSongIds[$i];
-					$this->songMapper->mergeSongs($databasePath, $targetSongId, $droppedId);
-					$mergedCount++;
-				}
-
-				$hashCodes?->save();
-
-				return [
-					'success' => true,
-					'message' => sprintf('Merged %d duplicate song(s) into song ID %d.', $mergedCount, $targetSongId),
-				];
-			} catch (\Throwable $e) {
-				return ['success' => false, 'message' => sprintf('Cannot resolve duplicate for song ID %d: %s', $songId, $e->getMessage())];
 			}
 		}
 
-		return ['success' => false, 'message' => 'Unrecognized or unfixable issue type.'];
+		if ($fixedCount > 0) {
+			$hashCodes?->save();
+		}
+
+		return [
+			'success' => true,
+			'fixedCount' => $fixedCount,
+			'message' => sprintf('Applied autofix to %d issue(s).', $fixedCount),
+		];
 	}
 
 	/**
