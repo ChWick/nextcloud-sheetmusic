@@ -459,6 +459,13 @@ class LibraryIntegrityService {
 						// ignore if path cannot be resolved
 					}
 
+					$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+					$userFolderPath = (string) $userFolder->getPath();
+					$nodePath = (string) $node->getPath();
+					$userRelativePath = str_starts_with($nodePath, $userFolderPath . '/')
+						? substr($nodePath, strlen($userFolderPath) + 1)
+						: ltrim($relativeToTarget, '/');
+
 					$issues[] = new IntegrityIssue(
 						type: IntegrityIssue::TYPE_ORPHAN_FILE,
 						severity: IntegrityIssue::SEVERITY_WARNING,
@@ -467,12 +474,60 @@ class LibraryIntegrityService {
 						fixable: false,
 						details: [
 							'webdavPath' => $storedPath?->webdav,
-							'userRelativePath' => $storedPath?->userRelative,
+							'userRelativePath' => $userRelativePath,
 							'filename' => $filename,
 						],
 					);
 				}
 			}
 		}
+	}
+
+	/**
+	 * Permanently delete an orphan file from library storage.
+	 *
+	 * @return array{success: bool, message: string}
+	 */
+	public function deleteOrphanFile(int $libraryId, string $userId, string $orphanPath): array {
+		if (trim($orphanPath) === '') {
+			return ['success' => false, 'message' => 'Orphan file path cannot be empty.'];
+		}
+
+		$userFolder = $this->rootFolder->getUserFolder($userId);
+		$user = $userFolder->getOwner();
+		['targetFolder' => $targetFolder] = $this->fileManager->libraryContext($libraryId, $user);
+
+		$cleanPath = ltrim($orphanPath, '/');
+		$node = null;
+
+		try {
+			if ($userFolder->nodeExists($cleanPath)) {
+				$node = $userFolder->get($cleanPath);
+			}
+		} catch (\Throwable) {
+			// ignore
+		}
+
+		if ($node === null) {
+			try {
+				if ($targetFolder->nodeExists($cleanPath)) {
+					$node = $targetFolder->get($cleanPath);
+				}
+			} catch (\Throwable) {
+				// ignore
+			}
+		}
+
+		if ($node === null) {
+			return ['success' => false, 'message' => sprintf('Orphan file "%s" was not found.', basename($orphanPath))];
+		}
+
+		$filename = $node->getName();
+		$node->delete();
+
+		return [
+			'success' => true,
+			'message' => sprintf('Deleted orphan file "%s".', $filename),
+		];
 	}
 }

@@ -76,8 +76,9 @@ describe('OrphanFileFixer.vue', () => {
 		})
 
 		expect(wrapper.text()).toContain('How would you like to fix this orphan file?')
-		expect(wrapper.text()).toContain('a) Find Existing Song')
-		expect(wrapper.text()).toContain('b) Create a New Song')
+		expect(wrapper.text()).toContain('Find Existing Song')
+		expect(wrapper.text()).toContain('Create a New Song')
+		expect(wrapper.text()).toContain('Delete File')
 	})
 
 	it('switches to create song mode when option b is clicked', async () => {

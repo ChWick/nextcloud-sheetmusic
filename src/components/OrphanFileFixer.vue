@@ -3,8 +3,10 @@ import type { IntegrityIssue, LibraryData } from '../types/song'
 import { computed, onMounted, ref } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import ArrowLeftIcon from 'vue-material-design-icons/ArrowLeft.vue'
+import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import MagnifyIcon from 'vue-material-design-icons/Magnify.vue'
 import PlusIcon from 'vue-material-design-icons/Plus.vue'
 import { apiGet, apiPost } from '../api/client'
@@ -27,7 +29,9 @@ const emit = defineEmits<{
 
 const isCreatingSong = ref(false)
 const isSelectDialogOpen = ref(false)
+const isConfirmDeleteDialogOpen = ref(false)
 const isAttaching = ref(false)
+const isDeleting = ref(false)
 const isLoadingLibraryData = ref(false)
 const errorMessage = ref('')
 const libraryData = ref<LibraryData | null>(null)
@@ -95,7 +99,7 @@ async function handleAttachToSong(songId: number) {
 		await apiPost(`/api/songs/${songId}/file/attach`, {
 			libraryId: props.selectedLibrary,
 			sourcePath: userRelativePath.value,
-			action: 'copy',
+			action: 'move',
 		})
 
 		isSelectDialogOpen.value = false
@@ -108,6 +112,35 @@ async function handleAttachToSong(songId: number) {
 		errorMessage.value = serverMsg
 	} finally {
 		isAttaching.value = false
+	}
+}
+
+async function handleConfirmDelete() {
+	if (props.selectedLibrary < 0) return
+
+	isDeleting.value = true
+	errorMessage.value = ''
+
+	try {
+		const response = await apiPost(`/api/libraries/${props.selectedLibrary}/integrity/delete-orphan`, {
+			orphanPath: userRelativePath.value,
+		})
+
+		const result = response.data?.ocs?.data
+		if (result && !result.success) {
+			errorMessage.value = result.message ?? t('mobilesheetsmanager', 'Could not delete orphan file.')
+		} else {
+			isConfirmDeleteDialogOpen.value = false
+			emit('resolved')
+		}
+	} catch (error: any) {
+		console.error('Failed to delete orphan file:', error)
+		const serverMsg = error?.response?.data?.ocs?.data?.message
+			?? error?.response?.data?.message
+			?? t('mobilesheetsmanager', 'Could not delete orphan file.')
+		errorMessage.value = serverMsg
+	} finally {
+		isDeleting.value = false
 	}
 }
 
@@ -156,7 +189,7 @@ onMounted(() => {
 				:years="libraryData?.years ?? []"
 				:signatures="libraryData?.signatures ?? []"
 				:source-types="libraryData?.sourceTypes ?? []"
-				:imported-nextcloud-node="{ path: userRelativePath, name: filename }"
+				:imported-nextcloud-node="{ path: userRelativePath, name: filename, action: 'move' }"
 				:prefill="{ title: suggestedTitle }"
 				@saved="handleSongSaved"
 				@cancel="isCreatingSong = false" />
@@ -177,7 +210,7 @@ onMounted(() => {
 							<template #icon>
 								<MagnifyIcon :size="18" />
 							</template>
-							{{ t('mobilesheetsmanager', 'a) Find Existing Song') }}
+							{{ t('mobilesheetsmanager', 'Find Existing Song') }}
 						</NcButton>
 
 						<NcButton
@@ -187,7 +220,17 @@ onMounted(() => {
 							<template #icon>
 								<PlusIcon :size="18" />
 							</template>
-							{{ t('mobilesheetsmanager', 'b) Create a New Song') }}
+							{{ t('mobilesheetsmanager', 'Create a New Song') }}
+						</NcButton>
+
+						<NcButton
+							variant="error"
+							:disabled="isLoadingLibraryData || isDeleting"
+							@click="isConfirmDeleteDialogOpen = true">
+							<template #icon>
+								<DeleteIcon :size="18" />
+							</template>
+							{{ t('mobilesheetsmanager', 'Delete File') }}
 						</NcButton>
 					</div>
 				</div>
@@ -209,6 +252,27 @@ onMounted(() => {
 			:library-data="libraryData"
 			:is-attaching="isAttaching"
 			@select-song="handleAttachToSong" />
+
+		<!-- Dialog for confirming orphan file deletion -->
+		<NcDialog
+			v-if="isConfirmDeleteDialogOpen"
+			:name="t('mobilesheetsmanager', 'Delete Orphan File')"
+			size="normal"
+			@close="isConfirmDeleteDialogOpen = false">
+			<p>{{ t('mobilesheetsmanager', 'Are you sure you want to permanently delete "{filename}" from library storage?', { filename }) }}</p>
+			<p>{{ t('mobilesheetsmanager', 'This file is not linked to any song. Once deleted, it cannot be recovered.') }}</p>
+			<template #actions>
+				<NcButton @click="isConfirmDeleteDialogOpen = false">
+					{{ t('mobilesheetsmanager', 'Cancel') }}
+				</NcButton>
+				<NcButton
+					variant="error"
+					:disabled="isDeleting"
+					@click="handleConfirmDelete">
+					{{ isDeleting ? t('mobilesheetsmanager', 'Deleting…') : t('mobilesheetsmanager', 'Delete File') }}
+				</NcButton>
+			</template>
+		</NcDialog>
 	</div>
 </template>
 

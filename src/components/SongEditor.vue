@@ -47,7 +47,7 @@ const props = withDefaults(
 		/** The imported PDF itself, staged as the new song's file. */
 		importedFile?: File | null
 		/** An imported Nextcloud PDF file, staged as the new song's file attachment. */
-		importedNextcloudNode?: { path: string, name: string } | null
+		importedNextcloudNode?: { path: string, name: string, action?: 'copy' | 'move' } | null
 	}>(),
 	{
 		song: null,
@@ -294,7 +294,7 @@ if (props.importedFile) {
 	stageUpload(props.importedFile)
 }
 if (props.importedNextcloudNode) {
-	stageAttachment(props.importedNextcloudNode.path, props.importedNextcloudNode.name, 'copy')
+	stageAttachment(props.importedNextcloudNode.path, props.importedNextcloudNode.name, props.importedNextcloudNode.action ?? 'copy')
 }
 
 function createComposerTag(newTag: string) {
