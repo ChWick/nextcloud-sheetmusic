@@ -124,19 +124,25 @@ function createTargetPaths(
 	$book = $bookTitles[0] ?? '';
 	$collection = $collectionNames[0] ?? '';
 
+	$keyNames = array_values(array_filter(array_map(static fn($k) => $k->name, $song->keys), static fn($n) => $n !== ''));
+	sort($keyNames, SORT_STRING);
+	$keyString = implode(', ', $keyNames);
+
+	$songTitlePart = $keyString !== '' ? "{$song->title} in {$keyString}" : $song->title;
+
 	if ($compArtist !== '') {
 		if ($book !== '') {
 			$folder = $compArtist . DIRECTORY_SEPARATOR . "{$compArtist} - {$book}";
-			$fileName = "{$compArtist} - {$book} - {$song->title}";
+			$fileName = "{$compArtist} - {$book} - {$songTitlePart}";
 			return [$folder . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext];
 		}
 		if ($collection !== '') {
 			$folder = $compArtist . DIRECTORY_SEPARATOR . "{$compArtist} - {$collection}";
-			$fileName = "{$compArtist} - {$collection} - {$song->title}";
+			$fileName = "{$compArtist} - {$collection} - {$songTitlePart}";
 			return [$folder . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext];
 		}
 		$folder = $compArtist;
-		$fileName = "{$compArtist} - {$song->title}";
+		$fileName = "{$compArtist} - {$songTitlePart}";
 		return [
 			$folder . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext,
 			$filePrefix . $fileName . $ext,
@@ -144,7 +150,7 @@ function createTargetPaths(
 	}
 	if ($collection !== '') {
 		$folder = $collection;
-		$fileName = "{$collection} - {$song->title}";
+		$fileName = "{$collection} - {$songTitlePart}";
 		return [
 			$folder . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext,
 			$filePrefix . $fileName . $ext,
