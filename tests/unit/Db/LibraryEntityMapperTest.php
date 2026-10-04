@@ -152,4 +152,140 @@ final class LibraryEntityMapperTest extends TestCase {
 			);
 		}
 	}
+
+	public function testFindsAndMergesDuplicateEntitiesAcrossAllSupportedTypes(): void {
+		$entities = [
+			'composers' => ['Composer', 'Name', 'ComposerSongs', 'ComposerId', 'Bach'],
+			'books' => ['Books', 'Title', 'BookSongs', 'BookId', 'Sonatas'],
+			'collections' => ['Collections', 'Name', 'CollectionSong', 'CollectionId', 'Jazz'],
+			'artists' => ['Artists', 'Name', 'ArtistsSongs', 'ArtistId', 'Miles Davis'],
+			'genres' => ['Genres', 'Type', 'GenresSongs', 'GenreId', 'Jazz'],
+			'keys' => ['Keys', 'Name', 'KeySongs', 'KeyId', 'C'],
+			'customgroups' => ['CustomGroup', 'Name', 'CustomGroupSongs', 'GroupId', 'Favorites'],
+			'years' => ['Years', 'Year', 'YearsSongs', 'YearId', '1960'],
+			'signatures' => ['Signature', 'Name', 'SignatureSongs', 'SignatureId', '4/4'],
+			'sourcetypes' => ['SourceTypes', 'Type', 'SourceTypeSongs', 'SourceTypeId', 'Score'],
+		];
+		$database = new \PDO('sqlite:' . $this->databasePath);
+		foreach ($entities as $entityType => [$entityTable, $labelColumn, $linkTable, $linkColumn, $label]) {
+			$insertEntity = $database->prepare(sprintf(
+				'INSERT INTO "%s" (Id, "%s") VALUES (:id, :name)',
+				$entityTable,
+				$labelColumn,
+			));
+			$insertEntity->execute([':id' => 2, ':name' => $label]);
+			$insertEntity->execute([':id' => 9, ':name' => ' ' . mb_strtolower($label, 'UTF-8') . ' ']);
+			$insertEntity->execute([':id' => 15, ':name' => $label . ' distinct']);
+
+			$insertLink = $database->prepare(sprintf(
+				'INSERT INTO "%s" ("%s", SongId) VALUES (:entityId, :songId)',
+				$linkTable,
+				$linkColumn,
+			));
+			$insertLink->execute([':entityId' => 2, ':songId' => 100]);
+			$insertLink->execute([':entityId' => 9, ':songId' => 100]);
+			$insertLink->execute([':entityId' => 9, ':songId' => 101]);
+		}
+
+		$duplicates = $this->entityMapper->findDuplicateEntities($this->databasePath);
+		self::assertCount(count($entities), $duplicates);
+		foreach ($duplicates as $duplicate) {
+			self::assertSame(2, $duplicate['keepId']);
+			self::assertSame([9], $duplicate['duplicateIds']);
+		}
+
+		foreach ($duplicates as $duplicate) {
+			self::assertSame(
+				1,
+				$this->entityMapper->mergeDuplicateEntities(
+					$this->databasePath,
+					$duplicate['entityType'],
+					$duplicate['keepId'],
+					$duplicate['duplicateIds'],
+				),
+				sprintf('Expected one duplicate entity to be removed for %s', $duplicate['entityType']),
+			);
+		}
+
+		self::assertSame([], $this->entityMapper->findDuplicateEntities($this->databasePath));
+		foreach ($entities as $entityType => [$entityTable, $labelColumn, $linkTable, $linkColumn, $label]) {
+			$entityCount = (int)$database->query(sprintf('SELECT COUNT(*) FROM "%s"', $entityTable))->fetchColumn();
+			self::assertSame(2, $entityCount, sprintf('Expected one canonical %s entity and one distinct entity', $entityType));
+			$distinctEntityId = (int)$database->query(sprintf(
+				'SELECT Id FROM "%s" WHERE "%s" = %s',
+				$entityTable,
+				$labelColumn,
+				$database->quote($label . ' distinct'),
+			))->fetchColumn();
+			self::assertSame(15, $distinctEntityId, sprintf('Expected distinct %s entity to be retained', $entityType));
+
+			$statement = $database->prepare(sprintf(
+				'SELECT SongId, "%s" AS EntityId, COUNT(*) AS AssignmentCount FROM "%s" '
+				. 'GROUP BY SongId, "%s" ORDER BY SongId',
+				$linkColumn,
+				$linkTable,
+				$linkColumn,
+			));
+			$statement->execute();
+			self::assertSame(
+				[
+					['SongId' => 100, 'EntityId' => 2, 'AssignmentCount' => 1],
+					['SongId' => 101, 'EntityId' => 2, 'AssignmentCount' => 1],
+				],
+				array_map(
+					static fn (array $row): array => [
+						'SongId' => (int)$row['SongId'],
+						'EntityId' => (int)$row['EntityId'],
+						'AssignmentCount' => (int)$row['AssignmentCount'],
+					],
+					$statement->fetchAll(\PDO::FETCH_ASSOC),
+				),
+				sprintf('Expected song assignments to be redirected to canonical %s', $entityType),
+			);
+		}
+	}
+
+	public function testFindsDuplicateKeysInSingularKeyTableUsingNameColumn(): void {
+		$database = new \PDO('sqlite:' . $this->databasePath);
+		$database->exec('DROP TABLE Keys');
+		$database->exec('CREATE TABLE "Key"(Id INTEGER PRIMARY KEY, Name VARCHAR(255), DateCreated INTEGER, LastModified INTEGER)');
+		$database->exec("INSERT INTO \"Key\" (Id, Name) VALUES (35, 'C'), (36, 'F'), (37, 'C'), (38, 'F')");
+
+		self::assertSame([
+			[
+				'entityType' => 'keys',
+				'name' => 'C',
+				'keepId' => 35,
+				'duplicateIds' => [37],
+			],
+			[
+				'entityType' => 'keys',
+				'name' => 'F',
+				'keepId' => 36,
+				'duplicateIds' => [38],
+			],
+		], $this->entityMapper->findDuplicateEntities($this->databasePath));
+	}
+
+	public function testSchemaCacheDoesNotLeakBetweenLibraryDatabases(): void {
+		$otherDatabasePath = tempnam(sys_get_temp_dir(), 'mobilesheetsmanager-entity-schema-test-');
+		self::assertNotFalse($otherDatabasePath);
+		try {
+			$otherDatabase = new \PDO('sqlite:' . $otherDatabasePath);
+			$otherDatabase->exec('CREATE TABLE "Key"(Id INTEGER PRIMARY KEY, Name VARCHAR(255))');
+			$otherDatabase->exec("INSERT INTO \"Key\" (Id, Name) VALUES (35, 'C'), (37, 'C')");
+
+			self::assertSame([], $this->entityMapper->findDuplicateEntities($this->databasePath));
+			self::assertSame([
+				[
+					'entityType' => 'keys',
+					'name' => 'C',
+					'keepId' => 35,
+					'duplicateIds' => [37],
+				],
+			], $this->entityMapper->findDuplicateEntities($otherDatabasePath));
+		} finally {
+			unlink($otherDatabasePath);
+		}
+	}
 }

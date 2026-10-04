@@ -104,8 +104,15 @@ class ApiController extends OCSController {
 
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'POST', url: '/api/libraries/{id}/integrity/fix')]
-	public function fixIntegrityIssue(int $id, string $issueType, ?int $songId = null, ?int $fileId = null): DataResponse {
-		return $this->libraryController->fixIntegrityIssue($id, $issueType, $songId, $fileId);
+	public function fixIntegrityIssue(
+		int $id,
+		string $issueType,
+		?int $songId = null,
+		?int $fileId = null,
+		?string $entityType = null,
+		?int $entityId = null,
+	): DataResponse {
+		return $this->libraryController->fixIntegrityIssue($id, $issueType, $songId, $fileId, $entityType, $entityId);
 	}
 
 	#[NoAdminRequired]

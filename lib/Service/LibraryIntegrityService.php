@@ -94,6 +94,34 @@ class LibraryIntegrityService {
 				details: ['duplicates' => $assignments],
 			);
 		}
+		$entityTypeLabels = [
+			'composers' => 'composer',
+			'books' => 'book',
+			'collections' => 'collection',
+			'artists' => 'artist',
+			'genres' => 'genre',
+			'keys' => 'key',
+			'customgroups' => 'custom group',
+			'years' => 'year',
+			'signatures' => 'time signature',
+			'sourcetypes' => 'source type',
+		];
+		foreach ($this->songMapper->findDuplicateEntities($databasePath) as $duplicateEntity) {
+			$label = $entityTypeLabels[$duplicateEntity['entityType']] ?? $duplicateEntity['entityType'];
+			$issues[] = new IntegrityIssue(
+				type: IntegrityIssue::TYPE_DUPLICATE_ENTITY,
+				severity: IntegrityIssue::SEVERITY_WARNING,
+				message: sprintf(
+					'Duplicate %s "%s" entries found (IDs %s). Auto-fix will keep ID %d and reassign songs.',
+					$label,
+					$duplicateEntity['name'],
+					implode(', ', array_merge([$duplicateEntity['keepId']], $duplicateEntity['duplicateIds'])),
+					$duplicateEntity['keepId'],
+				),
+				fixable: true,
+				details: $duplicateEntity,
+			);
+		}
 
 		foreach ($songs as $song) {
 			foreach ($song->files as $file) {
@@ -363,7 +391,45 @@ class LibraryIntegrityService {
 	 *
 	 * @return array{success: bool, fixedCount: int, message: string}
 	 */
-	public function fixIssue(int $libraryId, string $userId, string $issueType, ?int $songId = null, ?int $fileId = null): array {
+	public function fixIssue(
+		int $libraryId,
+		string $userId,
+		string $issueType,
+		?int $songId = null,
+		?int $fileId = null,
+		?string $entityType = null,
+		?int $entityId = null,
+	): array {
+		if ($issueType === IntegrityIssue::TYPE_DUPLICATE_ENTITY && $entityType !== null && $entityId !== null) {
+			$user = $this->rootFolder->getUserFolder($userId)->getOwner();
+			['databasePath' => $databasePath] = $this->fileManager->libraryContext($libraryId, $user);
+			foreach ($this->songMapper->findDuplicateEntities($databasePath) as $duplicateEntity) {
+				if ($duplicateEntity['entityType'] !== $entityType || $duplicateEntity['keepId'] !== $entityId) {
+					continue;
+				}
+
+				$merged = $this->songMapper->mergeDuplicateEntities(
+					$databasePath,
+					$entityType,
+					$entityId,
+					$duplicateEntity['duplicateIds'],
+				);
+				return [
+					'success' => $merged > 0,
+					'fixedCount' => $merged > 0 ? 1 : 0,
+					'message' => $merged > 0
+						? sprintf('Merged %d duplicate entity record(s) into ID %d.', $merged, $entityId)
+						: 'No duplicate entity records remained to fix.',
+				];
+			}
+
+			return [
+				'success' => false,
+				'fixedCount' => 0,
+				'message' => 'The duplicate entity records were not found in the current library audit.',
+			];
+		}
+
 		if ($issueType === IntegrityIssue::TYPE_DUPLICATE_ENTITY_ASSIGNMENT && $songId !== null) {
 			$user = $this->rootFolder->getUserFolder($userId)->getOwner();
 			['databasePath' => $databasePath] = $this->fileManager->libraryContext($libraryId, $user);
@@ -396,7 +462,7 @@ class LibraryIntegrityService {
 			return [
 				'success' => false,
 				'fixedCount' => 0,
-				'message' => 'Only a specific PDF metadata mismatch can be fixed automatically.',
+				'message' => 'This issue does not include the information required for an automatic fix.',
 			];
 		}
 
@@ -469,6 +535,34 @@ class LibraryIntegrityService {
 					$this->logger->warning('Cannot auto-fix duplicate entity assignments', [
 						'exception' => $e,
 						'songId' => $issue->songId,
+					]);
+				}
+			} elseif ($issue->type === IntegrityIssue::TYPE_DUPLICATE_ENTITY) {
+				$details = $issue->details;
+				if (!is_array($details)
+					|| !isset($details['entityType'], $details['keepId'], $details['duplicateIds'])
+					|| !is_string($details['entityType'])
+					|| !is_int($details['keepId'])
+					|| !is_array($details['duplicateIds'])) {
+					$this->logger->warning('Cannot auto-fix duplicate entity: audit issue details are invalid');
+					continue;
+				}
+
+				try {
+					$merged = $this->songMapper->mergeDuplicateEntities(
+						$databasePath,
+						$details['entityType'],
+						$details['keepId'],
+						array_values(array_filter($details['duplicateIds'], 'is_int')),
+					);
+					if ($merged > 0) {
+						$fixedCount++;
+					}
+				} catch (\Throwable $e) {
+					$this->logger->warning('Cannot auto-fix duplicate entity records', [
+						'exception' => $e,
+						'entityType' => $details['entityType'],
+						'keepId' => $details['keepId'],
 					]);
 				}
 			} elseif ($issue->type === IntegrityIssue::TYPE_PDF_METADATA_MISMATCH) {

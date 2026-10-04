@@ -113,7 +113,14 @@ class LibraryController extends OCSController {
 
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'POST', url: '/api/libraries/{id}/integrity/fix')]
-	public function fixIntegrityIssue(int $id, string $issueType, ?int $songId = null, ?int $fileId = null): DataResponse {
+	public function fixIntegrityIssue(
+		int $id,
+		string $issueType,
+		?int $songId = null,
+		?int $fileId = null,
+		?string $entityType = null,
+		?int $entityId = null,
+	): DataResponse {
 		$user = $this->userSession->getUser();
 		if ($user === null) {
 			return new DataResponse(['message' => 'User not logged in'], Http::STATUS_UNAUTHORIZED);
@@ -124,7 +131,7 @@ class LibraryController extends OCSController {
 		}
 
 		try {
-			$result = $this->integrityService->fixIssue($id, $user->getUID(), $issueType, $songId, $fileId);
+			$result = $this->integrityService->fixIssue($id, $user->getUID(), $issueType, $songId, $fileId, $entityType, $entityId);
 
 			return new DataResponse($result, Http::STATUS_OK);
 		} catch (\Throwable $e) {
@@ -159,4 +166,3 @@ class LibraryController extends OCSController {
 		}
 	}
 }
-

@@ -108,7 +108,9 @@ export interface IntegrityIssue {
 	details?: {
 		songIds?: number[]
 		exactDuplicate?: boolean
+		entityType?: string
+		keepId?: number
+		duplicateIds?: number[]
 		[key: string]: unknown
 	} | null
 }
-

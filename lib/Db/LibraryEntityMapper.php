@@ -31,6 +31,22 @@ class LibraryEntityMapper extends AbstractDatabaseMapper {
 		'sourcetypes' => ['table' => 'SourceTypes', 'linkTable' => 'SourceTypeSongs', 'linkColumn' => 'SourceTypeId'],
 	];
 
+	/**
+	 * @var array<string, array{tables: list<string>, columns: list<string>}>
+	 */
+	private const ENTITY_LABELS = [
+		'composers' => ['tables' => ['Composer'], 'columns' => ['Name']],
+		'books' => ['tables' => ['Books'], 'columns' => ['Title']],
+		'collections' => ['tables' => ['Collections'], 'columns' => ['Name']],
+		'artists' => ['tables' => ['Artists'], 'columns' => ['Name']],
+		'genres' => ['tables' => ['Genres'], 'columns' => ['Type', 'Name']],
+		'keys' => ['tables' => ['Key', 'Keys'], 'columns' => ['Name', 'Key']],
+		'customgroups' => ['tables' => ['CustomGroup'], 'columns' => ['Name']],
+		'years' => ['tables' => ['Years'], 'columns' => ['Year', 'Name']],
+		'signatures' => ['tables' => ['Signature'], 'columns' => ['Name']],
+		'sourcetypes' => ['tables' => ['SourceType', 'SourceTypes'], 'columns' => ['Type', 'Name']],
+	];
+
 	public function createComposer(string $databasePath, string $name): int {
 		$database = $this->openConnection($databasePath);
 		return $this->insertRow($database, 'Composer', [
@@ -231,5 +247,153 @@ class LibraryEntityMapper extends AbstractDatabaseMapper {
 		}
 
 		return $removed;
+	}
+
+	/**
+	 * Find entity records with the same non-empty label, ignoring case and
+	 * surrounding whitespace. The lowest ID is the canonical record.
+	 *
+	 * @return list<array{entityType: string, name: string, keepId: int, duplicateIds: list<int>}>
+	 */
+	public function findDuplicateEntities(string $databasePath): array {
+		$database = $this->openConnection($databasePath);
+		$duplicates = [];
+
+		foreach (self::ENTITY_LABELS as $entityType => $definition) {
+			$table = $this->resolveTable($database, $definition['tables']);
+			if ($table === null) {
+				continue;
+			}
+
+			$columns = $this->columnNames($database, $table);
+			$labelColumn = null;
+			foreach ($definition['columns'] as $candidate) {
+				if (isset($columns[strtolower($candidate)])) {
+					$labelColumn = $columns[strtolower($candidate)];
+					break;
+				}
+			}
+			if ($labelColumn === null || !isset($columns['id'])) {
+				continue;
+			}
+
+			$statement = $database->query(sprintf(
+				'SELECT "%s" AS EntityId, CAST("%s" AS TEXT) AS EntityName FROM "%s"',
+				$columns['id'],
+				$labelColumn,
+				$table,
+			));
+			if ($statement === false) {
+				throw new \RuntimeException(sprintf('Could not inspect duplicate %s records.', $entityType));
+			}
+
+			$groups = [];
+			while ($row = $statement->fetch()) {
+				$name = trim((string)$row['EntityName']);
+				if ($name === '') {
+					continue;
+				}
+
+				$groups[mb_strtolower($name, 'UTF-8')][(int)$row['EntityId']] = $name;
+			}
+
+			foreach ($groups as $group) {
+				$ids = array_keys($group);
+				if (count($ids) < 2) {
+					continue;
+				}
+				sort($ids, SORT_NUMERIC);
+
+				$duplicates[] = [
+					'entityType' => $entityType,
+					'name' => $group[$ids[0]],
+					'keepId' => $ids[0],
+					'duplicateIds' => array_slice($ids, 1),
+				];
+			}
+		}
+
+		return $duplicates;
+	}
+
+	/**
+	 * Redirect songs from duplicate entity records to the lowest-ID record and
+	 * remove the duplicate records as one transaction.
+	 *
+	 * @param list<int> $duplicateIds
+	 */
+	public function mergeDuplicateEntities(string $databasePath, string $entityType, int $keepId, array $duplicateIds): int {
+		$tables = self::ENTITY_TABLES[$entityType] ?? null;
+		if ($tables === null) {
+			throw new \InvalidArgumentException('Unknown entity type: ' . $entityType);
+		}
+
+		$ids = array_values(array_unique(array_map('intval', $duplicateIds)));
+		$ids = array_values(array_filter($ids, static fn (int $id): bool => $id > $keepId));
+		sort($ids, SORT_NUMERIC);
+		if ($ids === []) {
+			return 0;
+		}
+
+		$database = $this->openConnection($databasePath);
+		$entityTable = $this->resolveTable($database, self::ENTITY_LABELS[$entityType]['tables']);
+		if ($entityTable === null) {
+			throw new \RuntimeException(sprintf('Entity table for "%s" was not found.', $entityType));
+		}
+
+		$merged = 0;
+		$database->beginTransaction();
+		try {
+			$linkTable = $this->resolveTable($database, [$tables['linkTable']]);
+			if ($linkTable !== null) {
+				$linkColumns = $this->columnNames($database, $linkTable);
+				$songIdColumn = $linkColumns['songid'] ?? null;
+				$entityIdColumn = $linkColumns[strtolower($tables['linkColumn'])] ?? null;
+				if ($songIdColumn !== null && $entityIdColumn !== null) {
+					$insert = $database->prepare(sprintf(
+						'INSERT INTO "%s" ("%s", "%s") '
+						. 'SELECT :keepId, duplicateSongs."%s" FROM ('
+						. 'SELECT DISTINCT "%s" FROM "%s" WHERE "%s" = :duplicateId AND "%s" IS NOT NULL'
+						. ') AS duplicateSongs WHERE NOT EXISTS ('
+						. 'SELECT 1 FROM "%s" AS existing WHERE existing."%s" = duplicateSongs."%s" AND existing."%s" = :keepId'
+						. ')',
+						$linkTable,
+						$entityIdColumn,
+						$songIdColumn,
+						$songIdColumn,
+						$songIdColumn,
+						$linkTable,
+						$entityIdColumn,
+						$songIdColumn,
+						$linkTable,
+						$songIdColumn,
+						$songIdColumn,
+						$entityIdColumn,
+					));
+					$deleteLinks = $database->prepare(sprintf(
+						'DELETE FROM "%s" WHERE "%s" = :duplicateId',
+						$linkTable,
+						$entityIdColumn,
+					));
+					foreach ($ids as $duplicateId) {
+						$insert->execute([':keepId' => $keepId, ':duplicateId' => $duplicateId]);
+						$deleteLinks->execute([':duplicateId' => $duplicateId]);
+					}
+				}
+			}
+
+			$deleteEntity = $database->prepare(sprintf('DELETE FROM "%s" WHERE Id = :duplicateId', $entityTable));
+			foreach ($ids as $duplicateId) {
+				$deleteEntity->execute([':duplicateId' => $duplicateId]);
+				$merged += $deleteEntity->rowCount();
+			}
+
+			$database->commit();
+		} catch (\Throwable $exception) {
+			$database->rollBack();
+			throw $exception;
+		}
+
+		return $merged;
 	}
 }

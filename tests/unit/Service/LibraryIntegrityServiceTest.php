@@ -334,6 +334,116 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		self::assertSame(1, $batchResult['fixedCount']);
 	}
 
+	public function testCheckIntegrityReportsAndFixesDuplicateEntities(): void {
+		$songMapper = $this->createMock(SongMapper::class);
+		$fileManager = $this->createMock(FileManager::class);
+		$rootFolder = $this->createMock(IRootFolder::class);
+		$user = $this->createMock(\OCP\IUser::class);
+		$user->method('getUID')->willReturn('user1');
+
+		$userFolder = $this->createMock(\OCP\Files\IUserFolder::class);
+		$userFolder->method('getOwner')->willReturn($user);
+		$userFolder->method('getPath')->willReturn('/user1/files');
+		$rootFolder->method('getUserFolder')->with('user1')->willReturn($userFolder);
+
+		$targetFolder = $this->createMock(Folder::class);
+		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
+		$targetFolder->method('getDirectoryListing')->willReturn([]);
+		$fileManager->method('libraryContext')->with(1, $user)->willReturn([
+			'databasePath' => '/tmp/dummy.db',
+			'targetFolder' => $targetFolder,
+		]);
+
+		$duplicates = [[
+			'entityType' => 'keys',
+			'name' => 'C',
+			'keepId' => 2,
+			'duplicateIds' => [9],
+		]];
+		$songMapper->method('findSongs')->with('/tmp/dummy.db')->willReturn([]);
+		$songMapper->method('findDuplicateEntities')->with('/tmp/dummy.db')->willReturn($duplicates);
+		$songMapper->expects(self::exactly(2))
+			->method('mergeDuplicateEntities')
+			->with('/tmp/dummy.db', 'keys', 2, [9])
+			->willReturn(1);
+
+		$service = new LibraryIntegrityService(
+			$this->createMock(LibraryService::class),
+			$songMapper,
+			$fileManager,
+			$rootFolder,
+			new MobileSheetsPathResolver($rootFolder),
+			$this->createMock(\Psr\Log\LoggerInterface::class),
+		);
+
+		$issues = $service->checkIntegrity(1, 'user1');
+		self::assertCount(1, $issues);
+		self::assertSame(IntegrityIssue::TYPE_DUPLICATE_ENTITY, $issues[0]->type);
+		self::assertTrue($issues[0]->fixable);
+		self::assertSame($duplicates[0], $issues[0]->details);
+
+		$result = $service->fixIssue(1, 'user1', IntegrityIssue::TYPE_DUPLICATE_ENTITY, entityType: 'keys', entityId: 2);
+		self::assertTrue($result['success']);
+		self::assertSame(1, $result['fixedCount']);
+
+		$batchResult = $service->fixAllIssues(1, 'user1', IntegrityIssue::TYPE_DUPLICATE_ENTITY);
+		self::assertTrue($batchResult['success']);
+		self::assertSame(1, $batchResult['fixedCount']);
+	}
+
+	public function testCheckIntegrityFindsDuplicateKeysFromSingularKeyTable(): void {
+		$databasePath = tempnam(sys_get_temp_dir(), 'mobilesheetsmanager-integrity-keys-');
+		self::assertNotFalse($databasePath);
+		try {
+			$database = new \PDO('sqlite:' . $databasePath);
+			$database->exec('CREATE TABLE Songs(Id INTEGER PRIMARY KEY, Title VARCHAR(255))');
+			$database->exec('CREATE TABLE "Key"(Id INTEGER PRIMARY KEY, Name VARCHAR(255), DateCreated INTEGER, LastModified INTEGER)');
+			$database->exec('CREATE TABLE KeySongs(Id INTEGER PRIMARY KEY, KeyId INTEGER, SongId INTEGER)');
+			$database->exec("INSERT INTO Songs (Id, Title) VALUES (1, 'First C'), (2, 'Second C')");
+			$database->exec("INSERT INTO \"Key\" (Id, Name) VALUES (35, 'C'), (36, 'F'), (37, 'C'), (38, 'F')");
+			$database->exec('INSERT INTO KeySongs (KeyId, SongId) VALUES (35, 1), (37, 2)');
+
+			$rootFolder = $this->createMock(IRootFolder::class);
+			$user = $this->createMock(\OCP\IUser::class);
+			$userFolder = $this->createMock(\OCP\Files\IUserFolder::class);
+			$userFolder->method('getOwner')->willReturn($user);
+			$rootFolder->method('getUserFolder')->with('user1')->willReturn($userFolder);
+
+			$targetFolder = $this->createMock(Folder::class);
+			$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
+			$targetFolder->method('getDirectoryListing')->willReturn([]);
+			$fileManager = $this->createMock(FileManager::class);
+			$fileManager->method('libraryContext')->with(1, $user)->willReturn([
+				'databasePath' => $databasePath,
+				'targetFolder' => $targetFolder,
+			]);
+
+			$service = new LibraryIntegrityService(
+				$this->createMock(LibraryService::class),
+				new SongMapper($this->createMock(\Psr\Log\LoggerInterface::class)),
+				$fileManager,
+				$rootFolder,
+				new MobileSheetsPathResolver($rootFolder),
+				$this->createMock(\Psr\Log\LoggerInterface::class),
+			);
+			$issues = $service->checkIntegrity(1, 'user1');
+
+			$duplicateKeyIssues = array_values(array_filter(
+				$issues,
+				static fn (IntegrityIssue $issue): bool => $issue->type === IntegrityIssue::TYPE_DUPLICATE_ENTITY,
+			));
+			self::assertCount(2, $duplicateKeyIssues);
+			self::assertSame('C', $duplicateKeyIssues[0]->details['name']);
+			self::assertSame(35, $duplicateKeyIssues[0]->details['keepId']);
+			self::assertSame([37], $duplicateKeyIssues[0]->details['duplicateIds']);
+			self::assertSame('F', $duplicateKeyIssues[1]->details['name']);
+			self::assertSame(36, $duplicateKeyIssues[1]->details['keepId']);
+			self::assertSame([38], $duplicateKeyIssues[1]->details['duplicateIds']);
+		} finally {
+			unlink($databasePath);
+		}
+	}
+
 	public function testFixAllIssuesBatchFixesInvalidNamingRules(): void {
 		$libraryService = $this->createMock(LibraryService::class);
 		$songMapper = $this->createMock(SongMapper::class);
