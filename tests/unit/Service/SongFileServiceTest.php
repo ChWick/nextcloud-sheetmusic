@@ -233,6 +233,82 @@ final class SongFileServiceTest extends TestCase {
 		self::assertSame('UPLOADED_CONTENT', $this->files['Noten/uploaded (2).pdf']);
 	}
 
+	public function testUploadSongFileSyncsMetadataAfterAttachingItToTheSong(): void {
+		$user = $this->user();
+		$userFolder = $this->createMock(IUserFolder::class);
+		$targetFolder = $this->createMock(Folder::class);
+		$rootFolder = $this->createMock(IRootFolder::class);
+		$rootFolder->method('getUserFolder')->with(self::UID)->willReturn($userFolder);
+		$userFolder->method('get')->with('Noten')->willReturn($targetFolder);
+		$userFolder->method('nodeExists')->willReturn(false);
+
+		$file = $this->createMock(File::class);
+		$file->method('getPath')->willReturn('/user1/files/Noten/new.pdf');
+		$file->method('getContent')->willReturn('%PDF-1.4');
+		$file->method('getMTime')->willReturn(1);
+		$file->method('putContent')->willReturnCallback(static fn (string $content): int => strlen($content));
+		$userFolder->method('newFile')->with('Noten/new.pdf')->willReturn($file);
+
+		$songFile = new \OCA\MobileSheetsManager\Db\MobileSheetsFile(
+			20,
+			'/remote.php/dav/files/user1/Noten/new.pdf',
+		);
+		$songWithoutFiles = new \OCA\MobileSheetsManager\Db\MobileSheetsSong(10, 'New Song', []);
+		$songWithFile = new \OCA\MobileSheetsManager\Db\MobileSheetsSong(10, 'New Song', [$songFile]);
+		$songMapper = $this->createMock(SongMapper::class);
+		$songMapper->expects(self::exactly(2))
+			->method('findSong')
+			->with('/tmp/library.db', 10)
+			->willReturnOnConsecutiveCalls($songWithoutFiles, $songWithFile);
+		$songMapper->expects(self::once())
+			->method('setSongFile')
+			->with('/tmp/library.db', 10, $songFile->path, self::isInstanceOf(\OCA\MobileSheetsManager\Service\MobileSheetsFileFacts::class));
+		$songMapper->method('findLibraryData')->willReturn([]);
+
+		$fileManager = $this->createMock(FileManager::class);
+		$fileManager->expects(self::once())
+			->method('uniqueRelativePath')
+			->with($userFolder, 'Noten/new.pdf')
+			->willReturn('Noten/new.pdf');
+		$fileManager->expects(self::once())
+			->method('pathOfExistingFile')
+			->with($file->getPath(), $user)
+			->willReturn(new \OCA\MobileSheetsManager\Service\MobileSheetsPath(
+				'/user1/files/Noten/new.pdf',
+				$songFile->path,
+			));
+		$fileManager->expects(self::once())->method('regenerateSongFilePaths');
+		$fileManager->expects(self::once())
+			->method('syncMetadataIntoFile')
+			->with($songWithFile, $songFile, $user, '/tmp/library.db', self::anything())
+			->willReturn(\OCA\MobileSheetsManager\Service\MobileSheetsFileLogEntry::CODE_METADATA_UPDATED);
+
+		$libraryService = $this->createMock(LibraryService::class);
+		$libraryService->method('getLibraryAndDatabasePath')->with(self::UID, 1)->willReturn([
+			'/Noten/library.db',
+			'/tmp/library.db',
+		]);
+
+		$service = new SongFileService(
+			$libraryService,
+			$songMapper,
+			$fileManager,
+			$rootFolder,
+			$this->createMock(LoggerInterface::class),
+		);
+		$tmpFile = tempnam(sys_get_temp_dir(), 'test_upload_');
+		file_put_contents($tmpFile, '%PDF-1.4');
+
+		try {
+			$service->uploadSongFile($user, 1, 10, [
+				'tmp_name' => $tmpFile,
+				'name' => 'new.pdf',
+			]);
+		} finally {
+			unlink($tmpFile);
+		}
+	}
+
 	public function testDetachSongFileKeepsThePhysicalFile(): void {
 		$this->files['Noten/score.pdf'] = 'DETACHED_CONTENT';
 		$emptySong = new \OCA\MobileSheetsManager\Db\MobileSheetsSong(

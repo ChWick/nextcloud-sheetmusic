@@ -307,6 +307,7 @@ class SongFileService {
 					'songId' => $songId,
 					'path' => $storedPath->webdav,
 				]);
+				$this->syncSongFileMetadata($user, $databasePath, $songId);
 				return;
 			}
 		}
@@ -314,6 +315,7 @@ class SongFileService {
 		$this->songMapper->setSongFile($databasePath, $songId, $storedPath->webdav, MobileSheetsFileFacts::fromNode($file));
 
 		$this->relocateSongFiles($songId, $databasePath, $targetFolder, $user);
+		$this->syncSongFileMetadata($user, $databasePath, $songId);
 	}
 
 	private function relocateSongFiles(
