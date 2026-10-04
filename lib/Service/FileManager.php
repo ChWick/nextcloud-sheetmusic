@@ -89,6 +89,7 @@ function normalizeGeneratedPath(string $path): string {
 }
 
 function normalizeGeneratedPathSegment(string $segment): string {
+	$segment = mb_scrub($segment, 'UTF-8');
 	$segment = str_replace(['<', '>', ':', '"', '/', '\\', '|', '?', '*'], '-', $segment);
 	$segment = preg_replace('/[\x00-\x1F\x7F]/', '-', $segment) ?? '';
 	$segment = rtrim($segment, " .");

@@ -31,6 +31,7 @@ use OCP\Files\Node;
 use OCP\Files\Storage\IStorage;
 use OCP\IUser;
 use PHPUnit\Framework\TestCase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Psr\Log\LoggerInterface;
 use function OCA\MobileSheetsManager\Service\fileIndexOf;
 use function OCA\MobileSheetsManager\Service\fileIndexPrefix;
@@ -256,6 +257,173 @@ final class FileManagerTest extends TestCase {
 
 		self::assertStringEndsWith('Take Five-part', $path);
 		self::assertFalse(str_ends_with($path, '.part'));
+	}
+
+	/**
+	 * @return array<string, array{string}>
+	 */
+	public static function hostilePathNameCases(): array {
+		return [
+			'empty' => [''],
+			'one dot' => ['.'],
+			'two dots' => ['..'],
+			'only dots' => ['.....'],
+			'only spaces' => ['     '],
+			'trailing spaces and dots' => ["  Song title...   "],
+			'leading dots' => ['...Song'],
+			'path separators' => ['../folder\\song'],
+			'windows reserved characters' => ['a<b>c:d"e/f\\g|h?i*j'],
+			'control characters' => ["line\nbreak\tand\x00null\x7F"],
+			'windows device name' => ['CON'],
+			'windows device name with extension' => ['LPT1.pdf'],
+			'windows device name with trailing dot' => ['NUL.'],
+			'reserved Nextcloud upload suffix' => ['name.filepart'],
+			'reserved Nextcloud part suffix' => ['name.part'],
+			'htaccess' => ['.htaccess'],
+			'comma and separator-like punctuation' => ['A, B / C'],
+			'non-ASCII Latin' => ['Georg Friedrich Händel'],
+			'non-Latin scripts' => ['東京の音楽'],
+			'emoji and supplementary Unicode' => ['🎼🎹🎻'],
+			'combining marks' => ["e\u{0301}"],
+			'long ASCII name' => [str_repeat('a', 500)],
+			'long multibyte name' => [str_repeat('é🎼', 200)],
+			'invalid UTF-8 leading byte' => ["\xC3"],
+			'invalid UTF-8 continuation byte' => ["\x80"],
+			'invalid UTF-8 mixed with text' => ["title\xFFbroken"],
+		];
+	}
+
+	#[DataProvider('hostilePathNameCases')]
+	public function testCreateTargetPathsHandlesHostileNamesInEveryComponent(string $name): void {
+		$cases = [
+			'title' => new MobileSheetsSong(1, $name, [], [new MobileSheetsComposer(1, 'Bach')]),
+			'composer' => new MobileSheetsSong(1, 'Take Five', [], [new MobileSheetsComposer(1, $name)]),
+			'artist fallback' => new MobileSheetsSong(1, 'Take Five', [], [], [], [], [new MobileSheetsArtist(1, $name)]),
+			'book' => new MobileSheetsSong(1, 'Take Five', [], [new MobileSheetsComposer(1, 'Bach')], [new MobileSheetsBook(1, $name)]),
+			'collection' => new MobileSheetsSong(1, 'Take Five', [], [], [], [new MobileSheetsCollection(1, $name)]),
+			'key' => new MobileSheetsSong(1, 'Take Five', [], [new MobileSheetsComposer(1, 'Bach')], [], [], [], [], [new \OCA\MobileSheetsManager\Db\MobileSheetsKey(1, $name)]),
+		];
+
+		foreach ($cases as $component => $song) {
+			try {
+				$paths = \OCA\MobileSheetsManager\Service\createTargetPaths($song, '.pdf');
+			} catch (\OCA\MobileSheetsManager\Service\NoNamingRuleException $exception) {
+				// An empty composer, artist, and collection is intentionally not a
+				// naming rule; callers already handle this domain exception.
+				self::assertSame('', $name, sprintf('Unexpected missing naming rule for %s', $component));
+				self::assertContains($component, ['composer', 'artist fallback', 'collection']);
+				continue;
+			}
+
+			self::assertNotEmpty($paths, sprintf('No path was generated for %s', $component));
+			foreach ($paths as $path) {
+				self::assertNotSame('', $path, sprintf('Empty path generated for %s', $component));
+				foreach (explode('/', $path) as $segment) {
+					self::assertNotSame('', $segment, sprintf('Empty path segment generated for %s', $component));
+					self::assertNotContains($segment, ['.', '..'], sprintf('Unsafe dot segment generated for %s', $component));
+					self::assertDoesNotMatchRegularExpression('/[ .]$/', $segment, sprintf('Trailing dot/space in %s', $component));
+					self::assertDoesNotMatchRegularExpression('/[<>:"\/\\\\|?*\x00-\x1F\x7F]/', $segment, sprintf('Invalid path character in %s', $component));
+					self::assertLessThanOrEqual(250, strlen($segment), sprintf('Overlong segment generated for %s', $component));
+					self::assertTrue(mb_check_encoding($segment, 'UTF-8'), sprintf('Invalid UTF-8 generated for %s', $component));
+				}
+			}
+		}
+	}
+
+	public function testCreateTargetPathsHandlesSeveralBrokenNamesTogether(): void {
+		$song = new MobileSheetsSong(
+			1,
+			"...\xFF Song. ",
+			[],
+			[new MobileSheetsComposer(1, "CON\x00")],
+			[new MobileSheetsBook(1, str_repeat('é', 200)), new MobileSheetsBook(2, "\xFF")],
+			[new MobileSheetsCollection(1, '...'), new MobileSheetsCollection(2, "\xFF")],
+			[new MobileSheetsArtist(1, 'Artist/Name')],
+			[],
+			[new \OCA\MobileSheetsManager\Db\MobileSheetsKey(1, "Key\tName")],
+		);
+
+		$paths = \OCA\MobileSheetsManager\Service\createTargetPaths($song, '.pdf');
+
+		self::assertNotEmpty($paths);
+		foreach ($paths as $path) {
+			foreach (explode('/', $path) as $segment) {
+				self::assertNotSame('', $segment);
+				self::assertNotContains($segment, ['.', '..']);
+				self::assertDoesNotMatchRegularExpression('/[ .]$/', $segment);
+				self::assertLessThanOrEqual(250, strlen($segment));
+				self::assertTrue(mb_check_encoding($segment, 'UTF-8'));
+			}
+		}
+
+		$this->regenerate($song, 'Noten/source/SomeFile.pdf');
+		self::assertCount(1, $this->moves);
+		self::assertContains(substr($this->moves[0]['to'], strlen('Noten/')), $paths);
+		self::assertArrayHasKey($this->moves[0]['to'], $this->files);
+	}
+
+	public function testCreateTargetPathsHandlesEverySingleByteInEveryComponent(): void {
+		for ($byte = 0; $byte <= 0xFF; $byte++) {
+			$name = chr($byte);
+			$cases = [
+				new MobileSheetsSong(1, $name, [], [new MobileSheetsComposer(1, 'Composer')]),
+				new MobileSheetsSong(1, 'Title', [], [new MobileSheetsComposer(1, $name)]),
+				new MobileSheetsSong(1, 'Title', [], [], [], [], [new MobileSheetsArtist(1, $name)]),
+				new MobileSheetsSong(1, 'Title', [], [new MobileSheetsComposer(1, 'Composer')], [new MobileSheetsBook(1, $name)]),
+				new MobileSheetsSong(1, 'Title', [], [], [], [new MobileSheetsCollection(1, $name)]),
+				new MobileSheetsSong(1, 'Title', [], [new MobileSheetsComposer(1, 'Composer')], [], [], [], [], [new \OCA\MobileSheetsManager\Db\MobileSheetsKey(1, $name)]),
+			];
+
+			foreach ($cases as $song) {
+				$paths = \OCA\MobileSheetsManager\Service\createTargetPaths($song, '.pdf');
+				self::assertNotEmpty($paths, sprintf('No path generated for byte 0x%02X', $byte));
+				foreach ($paths as $path) {
+					foreach (explode('/', $path) as $segment) {
+						self::assertNotSame('', $segment);
+						self::assertNotContains($segment, ['.', '..']);
+						self::assertDoesNotMatchRegularExpression('/[ .]$/', $segment);
+						self::assertDoesNotMatchRegularExpression('/[<>:"\/\\\\|?*\x00-\x1F\x7F]/', $segment);
+						self::assertLessThanOrEqual(250, strlen($segment));
+						self::assertTrue(mb_check_encoding($segment, 'UTF-8'));
+					}
+				}
+			}
+		}
+	}
+
+	public function testCreateTargetPathsHandlesBrokenExtensions(): void {
+		$song = new MobileSheetsSong(
+			1,
+			'Take Five',
+			[],
+			[new MobileSheetsComposer(1, 'Bach')],
+		);
+		$extensions = [
+			'',
+			'.',
+			'..',
+			'.pdf',
+			'.part',
+			'.filepart',
+			'.verylong' . str_repeat('x', 300),
+			".pdf\x00",
+			".\xFF",
+			'.音楽',
+		];
+
+		foreach ($extensions as $extension) {
+			$paths = \OCA\MobileSheetsManager\Service\createTargetPaths($song, $extension);
+			self::assertNotEmpty($paths, 'No path generated for extension ' . bin2hex($extension));
+			foreach ($paths as $path) {
+				foreach (explode('/', $path) as $segment) {
+					self::assertNotSame('', $segment);
+					self::assertNotContains($segment, ['.', '..']);
+					self::assertDoesNotMatchRegularExpression('/[ .]$/', $segment);
+					self::assertLessThanOrEqual(250, strlen($segment));
+					self::assertTrue(mb_check_encoding($segment, 'UTF-8'));
+				}
+			}
+		}
 	}
 
 	/**
