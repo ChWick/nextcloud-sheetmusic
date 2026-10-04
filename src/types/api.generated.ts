@@ -297,7 +297,9 @@ export interface paths {
     };
     "/api/songs/{id}/file/upload": {
         parameters: {
-            query?: never;
+            query?: {
+                libraryId?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -307,7 +309,9 @@ export interface paths {
         /** Upload a PDF file to attach to a song */
         post: {
             parameters: {
-                query?: never;
+                query: {
+                    libraryId: number;
+                };
                 header?: never;
                 path: {
                     id: number;
@@ -319,7 +323,6 @@ export interface paths {
                     "multipart/form-data": {
                         /** Format: binary */
                         file: string;
-                        libraryId: number;
                     };
                 };
             };

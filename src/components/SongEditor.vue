@@ -693,12 +693,11 @@ async function saveSong(closeAfter: boolean) {
 			for (const upload of pendingUploads.value) {
 				const formData = new FormData()
 				formData.append('file', upload.file)
-				formData.append('libraryId', String(props.libraryId))
 
 				const uploadResponse = await apiPost('/api/songs/{id}/file/upload', formData as any, {
 					pathParams: { id: songId },
 					config: {
-						headers: { 'Content-Type': 'multipart/form-data' },
+						params: { libraryId: props.libraryId },
 					},
 				})
 				data = uploadResponse.data.ocs.data as LibraryData

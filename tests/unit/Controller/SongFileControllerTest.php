@@ -35,7 +35,40 @@ final class SongFileControllerTest extends TestCase {
 			$this->createMock(IUserSession::class),
 		);
 
-		$this->assertSame(Http::STATUS_BAD_REQUEST, $controller->uploadSongFile(42, null)->getStatus());
+		$response = $controller->uploadSongFile(42, null);
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		$this->assertSame(['message' => 'libraryId parameter is required'], $response->getData());
+	}
+
+	public function testUploadSongFileReadsLibraryIdFromRequestWhenNotBound(): void {
+		$user = $this->createMock(IUser::class);
+		$userSession = $this->createMock(IUserSession::class);
+		$userSession->method('getUser')->willReturn($user);
+
+		$tmpFile = tempnam(sys_get_temp_dir(), 'song-upload-controller-test-');
+		self::assertNotFalse($tmpFile);
+		$fileInfo = ['tmp_name' => $tmpFile, 'name' => 'score.pdf'];
+		$request = $this->createMock(IRequest::class);
+		$request->method('getParam')->willReturnCallback(
+			static fn (string $key, mixed $default = null): mixed => $key === 'libraryId' ? '7' : $default,
+		);
+		$request->method('getUploadedFile')->with('file')->willReturn($fileInfo);
+
+		$songFileService = $this->createMock(SongFileService::class);
+		$songFileService->expects(self::once())
+			->method('uploadSongFile')
+			->with($user, 7, 42, $fileInfo)
+			->willReturn(['songs' => []]);
+
+		try {
+			$controller = new SongFileController('mobilesheetsmanager', $request, $songFileService, $userSession);
+			$response = $controller->uploadSongFile(42);
+
+			self::assertSame(Http::STATUS_OK, $response->getStatus());
+			self::assertSame(['songs' => []], $response->getData());
+		} finally {
+			unlink($tmpFile);
+		}
 	}
 
 	public function testAttachNextcloudFileValidatesParameters(): void {

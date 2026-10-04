@@ -410,7 +410,7 @@ describe('SongEditor.vue', () => {
 			'/ocs/v2.php/apps/mobilesheetsmanager/api/songs/99/file/upload',
 			expect.any(FormData),
 			expect.objectContaining({
-				headers: { 'Content-Type': 'multipart/form-data' },
+				params: { libraryId: 1 },
 			}),
 		)
 

@@ -191,6 +191,11 @@ paths:
           required: true
           schema:
             type: integer
+        - name: libraryId
+          in: query
+          required: true
+          schema:
+            type: integer
       requestBody:
         required: true
         content:
@@ -199,13 +204,10 @@ paths:
               type: object
               required:
                 - file
-                - libraryId
               properties:
                 file:
                   type: string
                   format: binary
-                libraryId:
-                  type: integer
       responses:
         '200':
           description: Refreshed library data after file upload
