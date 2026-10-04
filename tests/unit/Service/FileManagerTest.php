@@ -190,8 +190,53 @@ final class FileManagerTest extends TestCase {
 		$paths = \OCA\MobileSheetsManager\Service\createTargetPaths($song, '.pdf');
 
 		self::assertCount(2, $paths);
-		self::assertSame('Dave Brubeck/Dave Brubeck - Take Five in Ebm.pdf', $paths[0]);
-		self::assertSame('Dave Brubeck - Take Five in Ebm.pdf', $paths[1]);
+		self::assertSame('Dave Brubeck/Dave Brubeck - Take Five in E♭m.pdf', $paths[0]);
+		self::assertSame('Dave Brubeck - Take Five in E♭m.pdf', $paths[1]);
+	}
+
+	public function testCreateTargetPathsUsesUnicodeSharpAndFlatSymbolsForKeys(): void {
+		$keys = ['C#m', 'Db', 'F#', 'Bb', 'Gbm', 'C# minor', 'Eb major', 'A♯m', 'D♭'];
+		$expected = ['C♯m', 'D♭', 'F♯', 'B♭', 'G♭m', 'C♯ minor', 'E♭ major', 'A♯m', 'D♭'];
+
+		foreach ($keys as $index => $keyName) {
+			$song = new MobileSheetsSong(
+				1,
+				'Take Five',
+				[],
+				[new MobileSheetsComposer(1, 'Bach')],
+				[],
+				[],
+				[],
+				[],
+				[new \OCA\MobileSheetsManager\Db\MobileSheetsKey(1, $keyName)],
+			);
+
+			$path = \OCA\MobileSheetsManager\Service\createTargetPath($song, '.pdf');
+			self::assertSame(
+				'Bach/Bach - Take Five in ' . $expected[$index] . '.pdf',
+				$path,
+				sprintf('Unexpected generated key spelling for "%s"', $keyName),
+			);
+		}
+	}
+
+	public function testCreateTargetPathsDoesNotRewriteAccidentalLettersInOtherNames(): void {
+		$song = new MobileSheetsSong(
+			1,
+			'Blue',
+			[],
+			[new MobileSheetsComposer(1, 'Bach')],
+			[],
+			[],
+			[],
+			[],
+			[new \OCA\MobileSheetsManager\Db\MobileSheetsKey(1, 'Blues')],
+		);
+
+		self::assertSame(
+			'Bach/Bach - Blue in Blues.pdf',
+			\OCA\MobileSheetsManager\Service\createTargetPath($song, '.pdf'),
+		);
 	}
 
 	public function testCreateTargetPathsNormalizesCrossPlatformInvalidNames(): void {

@@ -124,6 +124,13 @@ function normalizeGeneratedPathSegment(string $segment): string {
 	return rtrim($name . $extension, " .") ?: 'untitled';
 }
 
+function normalizeKeyNameForGeneratedPath(string $name): string {
+	$name = mb_scrub($name, 'UTF-8');
+	$name = preg_replace('/([A-Ga-g])#(?=(?:m|M)?(?:\s|$|[,0-9]))/u', '$1♯', $name) ?? $name;
+
+	return preg_replace('/([A-Ga-g])b(?=(?:m|M)?(?:\s|$|[,0-9]))/u', '$1♭', $name) ?? $name;
+}
+
 /**
  * @return list<string> all valid target paths for a song given its composers, artists, books, and collections
  */
@@ -181,7 +188,7 @@ function createTargetPaths(
 	$keyNames = array_values(array_filter(array_map(static fn($k) => $k->name, $song->keys), static fn($n) => $n !== ''));
 	sort($keyNames, SORT_STRING);
 	$keyString = implode(', ', array_map(
-		static fn (string $name): string => normalizeGeneratedPathSegment($name),
+		static fn (string $name): string => normalizeGeneratedPathSegment(normalizeKeyNameForGeneratedPath($name)),
 		$keyNames,
 	));
 
