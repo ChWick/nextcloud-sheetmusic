@@ -361,6 +361,25 @@ onMounted(() => {
 	gap: 12px;
 }
 
+@media (max-width: 768px) {
+	.content {
+		padding: 12px;
+	}
+
+	.actionCard {
+		align-items: stretch;
+		padding: 16px;
+		gap: 16px;
+	}
+
+	.buttonGroup {
+		width: 100%;
+		flex-direction: column;
+		align-items: stretch;
+		gap: 8px;
+	}
+}
+
 .previewContainer {
 	display: flex;
 	flex-direction: column;

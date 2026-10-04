@@ -79,6 +79,8 @@ describe('OrphanFileFixer.vue', () => {
 		expect(wrapper.text()).toContain('Find Existing Song')
 		expect(wrapper.text()).toContain('Create a New Song')
 		expect(wrapper.text()).toContain('Delete File')
+		expect(wrapper.find('[class*="buttonGroup"]').exists()).toBe(true)
+		expect(wrapper.findAll('[class*="buttonGroup"] button')).toHaveLength(3)
 	})
 
 	it('switches to create song mode when option b is clicked', async () => {
