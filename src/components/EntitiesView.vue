@@ -33,7 +33,12 @@
     </div>
     <div :class="$style.listColumn">
       <ul :class="$style.entityList">
-        <li v-for="entity in visibleEntities" :key="entity.id" :class="$style.entityRow">
+        <li v-for="entity in visibleEntities"
+            :key="entity.id"
+            :class="[$style.entityRow, revealedDeleteEntityId === entity.id && $style.deleteRevealed]"
+            @touchstart="handleRowTouchStart($event)"
+            @touchend="handleRowTouchEnd(entity, $event)"
+            @touchcancel="handleRowTouchCancel">
           <button type="button"
                   :class="$style.entityButton"
                   :title="t('mobilesheetsmanager', 'Show the songs with this {entity}', { entity: config.singular })"
@@ -45,8 +50,11 @@
                     size="small"
                     :class="$style.deleteButton"
                     :aria-label="t('mobilesheetsmanager', 'Delete {entity}', { entity: config.singular })"
+                    :title="t('mobilesheetsmanager', 'Delete {entity}', { entity: config.singular })"
                     @click="openDeleteDialog(entity)">
-            {{ t('mobilesheetsmanager', 'Delete') }}
+            <template #icon>
+              <DeleteIcon :size="18" />
+            </template>
           </NcButton>
         </li>
         <li v-if="!isLoading && !fileError && visibleEntities.length === 0">
@@ -106,6 +114,7 @@ import { useRouter } from 'vue-router'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
+import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import SongFilterBar from './SongFilterBar.vue'
 import ViewHeader from './ViewHeader.vue'
 import { useSongFilters } from '../composables/useSongFilters'
@@ -242,9 +251,11 @@ const isCreateDialogOpen = ref(false)
 const isDeleteDialogOpen = ref(false)
 const isCreating = ref(false)
 const isDeleting = ref(false)
+const revealedDeleteEntityId = ref<number | null>(null)
 const newEntityName = ref('')
 const createError = ref('')
 const deleteError = ref('')
+let rowTouchStart: { x: number; y: number } | null = null
 
 // The filter bar reads and writes its selections in the URL query, so the browser
 // history restores them when going back or forward.
@@ -301,6 +312,30 @@ function songCountLabel(entity: FilterEntity): string {
     ? t('mobilesheetsmanager', 'song')
     : t('mobilesheetsmanager', 'songs')
   return `${count} ${unit}`
+}
+
+function handleRowTouchStart(event: TouchEvent) {
+  const touch = event.touches[0]
+  rowTouchStart = touch ? { x: touch.clientX, y: touch.clientY } : null
+}
+
+function handleRowTouchEnd(entity: FilterEntity, event: TouchEvent) {
+  const start = rowTouchStart
+  rowTouchStart = null
+  const touch = event.changedTouches[0]
+  if (!start || !touch) return
+
+  const deltaX = touch.clientX - start.x
+  const deltaY = touch.clientY - start.y
+  if (Math.abs(deltaX) < 40 || Math.abs(deltaX) <= Math.abs(deltaY)) return
+
+  revealedDeleteEntityId.value = deltaX < 0
+    ? entity.id
+    : revealedDeleteEntityId.value === entity.id ? null : revealedDeleteEntityId.value
+}
+
+function handleRowTouchCancel() {
+  rowTouchStart = null
 }
 
 /** Songs that match the filter bar selections. */
@@ -439,6 +474,9 @@ async function deleteEntity() {
 .entityList > li:not(.entityRow) {
   grid-column: 1 / -1;
 }
+.entityList > li:not(.entityRow) {
+  grid-column: 1 / -1;
+}
 .entityButton {
   flex: 1;
   padding: 10px 0;
@@ -468,6 +506,14 @@ async function deleteEntity() {
 }
 .deleteButton {
   flex-shrink: 0;
+}
+@media (max-width: 768px) {
+  .deleteButton {
+    visibility: hidden;
+  }
+  .deleteRevealed .deleteButton {
+    visibility: visible;
+  }
 }
 .dialogActions {
   display: flex;
