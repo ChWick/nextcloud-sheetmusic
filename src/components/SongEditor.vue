@@ -31,6 +31,8 @@ const props = withDefaults(
 	defineProps<{
 		/** The song to edit. Null opens the editor for a new song. */
 		song?: Song | null
+		/** The source metadata when creating a copy; its attached files are deliberately excluded. */
+		duplicateSong?: Song | null
 		libraryId: number
 		composers: Composer[]
 		books: Book[]
@@ -53,6 +55,7 @@ const props = withDefaults(
 	}>(),
 	{
 		song: null,
+		duplicateSong: null,
 		genres: () => [],
 		keys: () => [],
 		customGroups: () => [],
@@ -89,6 +92,32 @@ function matchSelected<T extends { id: number }>(options: T[], selected?: { id: 
 	return options.filter((option) => ids.has(option.id))
 }
 
+function findExistingEntity<T extends { id: number }>(
+	options: T[],
+	label: string,
+	labelOf: (entity: T) => string,
+): T | undefined {
+	const normalizedLabel = label.trim().toLocaleLowerCase()
+	if (normalizedLabel === '') {
+		return undefined
+	}
+	return options.find((option) => labelOf(option).trim().toLocaleLowerCase() === normalizedLabel)
+}
+
+function resolveExistingEntityId<T extends { id: number }>(
+	selected: { id?: number },
+	label: string,
+	options: T[],
+	labelOf: (entity: T) => string,
+): number | undefined {
+	if (typeof selected.id === 'number') {
+		return selected.id
+	}
+	return findExistingEntity(options, label, labelOf)?.id
+}
+
+const sourceSong = computed(() => props.song ?? props.duplicateSong)
+
 /**
  * Turn the names read from a PDF into the selected entities: an existing one when its
  * name matches, a new tag otherwise - which the editor creates when the song is saved.
@@ -104,73 +133,73 @@ function prefillByName<T extends { id: number }, TTag>(
 	)
 }
 
-const title = ref(props.song?.title ?? props.prefill?.title ?? '')
+const title = ref(sourceSong.value?.title ?? props.prefill?.title ?? '')
 const selectedComposers = ref<Array<Composer | { name: string, id?: number }>>(
-	props.song
-		? matchSelected(props.composers, props.song.composers)
+	sourceSong.value
+		? matchSelected(props.composers, sourceSong.value.composers)
 		: prefillByName(props.prefill?.composers, props.composers, (composer) => composer.name, createComposerTag),
 )
 const selectedBooks = ref<Array<Book | { title: string, id?: number }>>(
-	props.song
-		? matchSelected(props.books, props.song.books)
+	sourceSong.value
+		? matchSelected(props.books, sourceSong.value.books)
 		: prefillByName(props.prefill?.books, props.books, (book) => book.title, createBookTag),
 )
 const selectedCollections = ref<Array<Collection | { name: string, id?: number }>>(
-	props.song
-		? matchSelected(props.collections, props.song.collections)
+	sourceSong.value
+		? matchSelected(props.collections, sourceSong.value.collections)
 		: prefillByName(props.prefill?.collections, props.collections, (collection) => collection.name, createCollectionTag),
 )
 const selectedArtists = ref<Array<Artist | { name: string, id?: number }>>(
-	props.song
-		? matchSelected(props.artists, props.song.artists)
+	sourceSong.value
+		? matchSelected(props.artists, sourceSong.value.artists)
 		: prefillByName(props.prefill?.artists, props.artists, (artist) => artist.name, createArtistTag),
 )
 const selectedGenres = ref<Array<Genre | { name: string, id?: number }>>(
-	props.song
-		? matchSelected(props.genres, props.song.genres)
+	sourceSong.value
+		? matchSelected(props.genres, sourceSong.value.genres)
 		: [],
 )
 const selectedKeys = ref<Array<Key | { name: string, id?: number }>>(
-	props.song
-		? matchSelected(props.keys, props.song.keys)
+	sourceSong.value
+		? matchSelected(props.keys, sourceSong.value.keys)
 		: [],
 )
 const selectedCustomGroups = ref<Array<CustomGroup | { name: string, id?: number }>>(
-	props.song
-		? matchSelected(props.customGroups, props.song.customGroups)
+	sourceSong.value
+		? matchSelected(props.customGroups, sourceSong.value.customGroups)
 		: [],
 )
 const selectedYears = ref<Array<Year | { name: string, id?: number }>>(
-	props.song
-		? matchSelected(props.years, props.song.years)
+	sourceSong.value
+		? matchSelected(props.years, sourceSong.value.years)
 		: [],
 )
 const selectedSignatures = ref<Array<Signature | { name: string, id?: number }>>(
-	props.song
-		? matchSelected(props.signatures, props.song.signatures)
+	sourceSong.value
+		? matchSelected(props.signatures, sourceSong.value.signatures)
 		: [],
 )
 const selectedSourceTypes = ref<Array<SourceType | { name: string, id?: number }>>(
-	props.song
-		? matchSelected(props.sourceTypes, props.song.sourceTypes)
+	sourceSong.value
+		? matchSelected(props.sourceTypes, sourceSong.value.sourceTypes)
 		: [],
 )
 
-const stars = ref<number>(props.song?.stars ?? 0)
-const difficulty = ref<number>(props.song?.difficulty ?? 0)
-const duration = ref<number>(props.song?.duration ?? 0)
-const keywords = ref<string>(props.song?.keywords ?? '')
-const custom = ref<string>(props.song?.custom ?? '')
-const custom2 = ref<string>(props.song?.custom2 ?? '')
-const tempo = ref<number>(props.song?.tempos?.[0]?.tempo ?? 0)
+const stars = ref<number>(sourceSong.value?.stars ?? 0)
+const difficulty = ref<number>(sourceSong.value?.difficulty ?? 0)
+const duration = ref<number>(sourceSong.value?.duration ?? 0)
+const keywords = ref<string>(sourceSong.value?.keywords ?? '')
+const custom = ref<string>(sourceSong.value?.custom ?? '')
+const custom2 = ref<string>(sourceSong.value?.custom2 ?? '')
+const tempo = ref<number>(sourceSong.value?.tempos?.[0]?.tempo ?? 0)
 const notes = ref<Array<{ id?: number, note: string, title?: string }>>(
-	(props.song?.notes ?? []).map((n) => ({ id: n.id, note: n.note, title: n.title ?? '' })),
+	(sourceSong.value?.notes ?? []).map((n) => ({ note: n.note, title: n.title ?? '' })),
 )
 const bookmarks = ref<Array<{ id?: number, name: string, pageNum: number }>>(
-	(props.song?.bookmarks ?? []).map((b) => ({ id: b.id, name: b.name, pageNum: b.pageNum })),
+	(sourceSong.value?.bookmarks ?? []).map((b) => ({ name: b.name, pageNum: b.pageNum })),
 )
 const audioFiles = ref<Array<{ id?: number, title?: string, file: string }>>(
-	(props.song?.audioFiles ?? []).map((a) => ({ id: a.id, title: a.title, file: a.file })),
+	(sourceSong.value?.audioFiles ?? []).map((a) => ({ title: a.title, file: a.file })),
 )
 
 function getServerFiles(song: Song | null): SongFile[] {
@@ -195,7 +224,7 @@ const pendingDeleteFiles = ref<SongFile[]>([])
 const pendingDetachFiles = ref<SongFile[]>([])
 
 watch(
-	() => props.song,
+	sourceSong,
 	(newSong, previousSong) => {
 		title.value = newSong?.title ?? ''
 		selectedComposers.value = matchSelected(props.composers, newSong?.composers)
@@ -215,12 +244,24 @@ watch(
 		custom.value = newSong?.custom ?? ''
 		custom2.value = newSong?.custom2 ?? ''
 		tempo.value = newSong?.tempos?.[0]?.tempo ?? 0
-		notes.value = (newSong?.notes ?? []).map((n) => ({ id: n.id, note: n.note, title: n.title ?? '' }))
-		bookmarks.value = (newSong?.bookmarks ?? []).map((b) => ({ id: b.id, name: b.name, pageNum: b.pageNum }))
-		audioFiles.value = (newSong?.audioFiles ?? []).map((a) => ({ id: a.id, title: a.title, file: a.file }))
+		notes.value = (newSong?.notes ?? []).map((n) => ({
+			...(props.song ? { id: n.id } : {}),
+			note: n.note,
+			title: n.title ?? '',
+		}))
+		bookmarks.value = (newSong?.bookmarks ?? []).map((b) => ({
+			...(props.song ? { id: b.id } : {}),
+			name: b.name,
+			pageNum: b.pageNum,
+		}))
+		audioFiles.value = (newSong?.audioFiles ?? []).map((a) => ({
+			...(props.song ? { id: a.id } : {}),
+			title: a.title,
+			file: a.file,
+		}))
 
 		// A refresh in place keeps the deletions and detachments staged in this session.
-		const sameSong = !!newSong && newSong.id === previousSong?.id
+		const sameSong = !!props.song && newSong?.id === previousSong?.id
 		const pendingDel = sameSong
 			? pendingDeleteFiles.value.map(
 				(file) => newSong.files?.find((candidate) => candidate.id === file.id) ?? file,
@@ -240,7 +281,7 @@ watch(
 		pendingDeleteFiles.value = pendingDel
 		pendingDetachFiles.value = pendingDet
 		const allStaged = [...pendingDel, ...pendingDet]
-		currentFiles.value = getInitialFiles(newSong, allStaged)
+		currentFiles.value = getInitialFiles(props.song, allStaged)
 	},
 )
 
@@ -306,43 +347,43 @@ if (props.importedNextcloudNode) {
 }
 
 function createComposerTag(newTag: string) {
-	return { name: newTag }
+	return findExistingEntity(props.composers, newTag, (composer) => composer.name) ?? { name: newTag }
 }
 
 function createBookTag(newTag: string) {
-	return { title: newTag }
+	return findExistingEntity(props.books, newTag, (book) => book.title) ?? { title: newTag }
 }
 
 function createCollectionTag(newTag: string) {
-	return { name: newTag }
+	return findExistingEntity(props.collections, newTag, (collection) => collection.name) ?? { name: newTag }
 }
 
 function createArtistTag(newTag: string) {
-	return { name: newTag }
+	return findExistingEntity(props.artists, newTag, (artist) => artist.name) ?? { name: newTag }
 }
 
 function createGenreTag(newTag: string) {
-	return { name: newTag }
+	return findExistingEntity(props.genres, newTag, (genre) => genre.name) ?? { name: newTag }
 }
 
 function createKeyTag(newTag: string) {
-	return { name: newTag }
+	return findExistingEntity(props.keys, newTag, (key) => key.name) ?? { name: newTag }
 }
 
 function createCustomGroupTag(newTag: string) {
-	return { name: newTag }
+	return findExistingEntity(props.customGroups, newTag, (group) => group.name) ?? { name: newTag }
 }
 
 function createYearTag(newTag: string) {
-	return { name: newTag }
+	return findExistingEntity(props.years, newTag, (year) => year.name) ?? { name: newTag }
 }
 
 function createSignatureTag(newTag: string) {
-	return { name: newTag }
+	return findExistingEntity(props.signatures, newTag, (signature) => signature.name) ?? { name: newTag }
 }
 
 function createSourceTypeTag(newTag: string) {
-	return { name: newTag }
+	return findExistingEntity(props.sourceTypes, newTag, (sourceType) => sourceType.name) ?? { name: newTag }
 }
 
 function stageDeleteFile(file: SongFile) {
@@ -504,8 +545,9 @@ async function saveSong(closeAfter: boolean) {
 		// Resolve or create composers
 		const composerIds: number[] = []
 		for (const comp of selectedComposers.value) {
-			if ('id' in comp && typeof comp.id === 'number') {
-				composerIds.push(comp.id)
+			const existingId = resolveExistingEntityId(comp, comp.name, props.composers, (composer) => composer.name)
+			if (existingId !== undefined) {
+				composerIds.push(existingId)
 			} else {
 				const createRes = await apiPost('/api/composers', {
 					libraryId: props.libraryId,
@@ -518,8 +560,9 @@ async function saveSong(closeAfter: boolean) {
 		// Resolve or create books
 		const bookIds: number[] = []
 		for (const bk of selectedBooks.value) {
-			if ('id' in bk && typeof bk.id === 'number') {
-				bookIds.push(bk.id)
+			const existingId = resolveExistingEntityId(bk, bk.title, props.books, (book) => book.title)
+			if (existingId !== undefined) {
+				bookIds.push(existingId)
 			} else {
 				const createRes = await apiPost('/api/books', {
 					libraryId: props.libraryId,
@@ -532,8 +575,9 @@ async function saveSong(closeAfter: boolean) {
 		// Resolve or create collections
 		const collectionIds: number[] = []
 		for (const col of selectedCollections.value) {
-			if ('id' in col && typeof col.id === 'number') {
-				collectionIds.push(col.id)
+			const existingId = resolveExistingEntityId(col, col.name, props.collections, (collection) => collection.name)
+			if (existingId !== undefined) {
+				collectionIds.push(existingId)
 			} else {
 				const createRes = await apiPost('/api/collections', {
 					libraryId: props.libraryId,
@@ -546,8 +590,9 @@ async function saveSong(closeAfter: boolean) {
 		// Resolve or create artists
 		const artistIds: number[] = []
 		for (const art of selectedArtists.value) {
-			if ('id' in art && typeof art.id === 'number') {
-				artistIds.push(art.id)
+			const existingId = resolveExistingEntityId(art, art.name, props.artists, (artist) => artist.name)
+			if (existingId !== undefined) {
+				artistIds.push(existingId)
 			} else {
 				const createRes = await apiPost('/api/artists', {
 					libraryId: props.libraryId,
@@ -560,8 +605,9 @@ async function saveSong(closeAfter: boolean) {
 		// Resolve or create genres
 		const genreIds: number[] = []
 		for (const gen of selectedGenres.value) {
-			if ('id' in gen && typeof gen.id === 'number') {
-				genreIds.push(gen.id)
+			const existingId = resolveExistingEntityId(gen, gen.name, props.genres, (genre) => genre.name)
+			if (existingId !== undefined) {
+				genreIds.push(existingId)
 			} else {
 				const createRes = await apiPost('/api/genres', {
 					libraryId: props.libraryId,
@@ -574,8 +620,9 @@ async function saveSong(closeAfter: boolean) {
 		// Resolve or create keys
 		const keyIds: number[] = []
 		for (const k of selectedKeys.value) {
-			if ('id' in k && typeof k.id === 'number') {
-				keyIds.push(k.id)
+			const existingId = resolveExistingEntityId(k, k.name, props.keys, (key) => key.name)
+			if (existingId !== undefined) {
+				keyIds.push(existingId)
 			} else {
 				const createRes = await apiPost('/api/keys', {
 					libraryId: props.libraryId,
@@ -588,8 +635,9 @@ async function saveSong(closeAfter: boolean) {
 		// Resolve or create custom groups
 		const customGroupIds: number[] = []
 		for (const cg of selectedCustomGroups.value) {
-			if ('id' in cg && typeof cg.id === 'number') {
-				customGroupIds.push(cg.id)
+			const existingId = resolveExistingEntityId(cg, cg.name, props.customGroups, (group) => group.name)
+			if (existingId !== undefined) {
+				customGroupIds.push(existingId)
 			} else {
 				const createRes = await apiPost('/api/customgroups', {
 					libraryId: props.libraryId,
@@ -602,8 +650,9 @@ async function saveSong(closeAfter: boolean) {
 		// Resolve or create years
 		const yearIds: number[] = []
 		for (const yr of selectedYears.value) {
-			if ('id' in yr && typeof yr.id === 'number') {
-				yearIds.push(yr.id)
+			const existingId = resolveExistingEntityId(yr, yr.name, props.years, (year) => year.name)
+			if (existingId !== undefined) {
+				yearIds.push(existingId)
 			} else {
 				const createRes = await apiPost('/api/years', {
 					libraryId: props.libraryId,
@@ -616,8 +665,9 @@ async function saveSong(closeAfter: boolean) {
 		// Resolve or create signatures
 		const signatureIds: number[] = []
 		for (const sig of selectedSignatures.value) {
-			if ('id' in sig && typeof sig.id === 'number') {
-				signatureIds.push(sig.id)
+			const existingId = resolveExistingEntityId(sig, sig.name, props.signatures, (signature) => signature.name)
+			if (existingId !== undefined) {
+				signatureIds.push(existingId)
 			} else {
 				const createRes = await apiPost('/api/signatures', {
 					libraryId: props.libraryId,
@@ -630,8 +680,9 @@ async function saveSong(closeAfter: boolean) {
 		// Resolve or create source types
 		const sourceTypeIds: number[] = []
 		for (const st of selectedSourceTypes.value) {
-			if ('id' in st && typeof st.id === 'number') {
-				sourceTypeIds.push(st.id)
+			const existingId = resolveExistingEntityId(st, st.name, props.sourceTypes, (sourceType) => sourceType.name)
+			if (existingId !== undefined) {
+				sourceTypeIds.push(existingId)
 			} else {
 				const createRes = await apiPost('/api/sourcetypes', {
 					libraryId: props.libraryId,

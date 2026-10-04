@@ -76,7 +76,7 @@ describe('SongEditor.vue', () => {
 				},
 				NcSelect: {
 					template: '<div class="nc-select-stub"></div>',
-					props: ['modelValue', 'options'],
+					props: ['modelValue', 'options', 'label', 'createOption'],
 				},
 				NcLoadingIcon: {
 					template: '<div class="nc-loading-stub"></div>',
@@ -166,6 +166,98 @@ describe('SongEditor.vue', () => {
 			title: 'New Song',
 		}))
 		expect(wrapper.emitted('saved')).toHaveLength(1)
+	})
+
+	it('reuses existing entities when a typed tag matches their label', async () => {
+		vi.mocked(axios.post).mockResolvedValue({
+			data: { ocs: { data: { songs: [], createdSongId: 99 } } },
+		})
+		const entityOptions = {
+			composers: mockComposers,
+			books: mockBooks,
+			collections: mockCollections,
+			artists: mockArtists,
+			genres: [{ id: 2, name: 'Jazz' }],
+			keys: [{ id: 3, name: 'C' }],
+			customGroups: [{ id: 4, name: 'Favorites' }],
+			years: [{ id: 5, year: 2020, name: '2020' }],
+			signatures: [{ id: 6, name: '4/4' }],
+			sourceTypes: [{ id: 7, type: 'Digital', name: 'Digital' }],
+		}
+		const wrapper = mount(SongEditor, {
+			props: {
+				libraryId: 1,
+				...entityOptions,
+			},
+			global: {
+				stubs: {
+					...globalStubs.global.stubs,
+					NcSelect: {
+						template: '<button class="create-matching-tag" @click="$emit(\'update:modelValue\', [createOption(\'  \' + options[0][label].toLowerCase() + \'  \')])">{{ label }}</button>',
+						props: ['modelValue', 'options', 'label', 'createOption'],
+					},
+				},
+			},
+		})
+
+		await wrapper.find('input#song-title-input').setValue('Song with existing entities')
+		for (const selector of wrapper.findAll('.create-matching-tag')) {
+			await selector.trigger('click')
+		}
+		await wrapper.find('form').trigger('submit.prevent')
+
+		expect(axios.post).toHaveBeenCalledTimes(1)
+		expect(axios.post).toHaveBeenCalledWith('/ocs/v2.php/apps/mobilesheetsmanager/api/songs', expect.objectContaining({
+			composerIds: [1],
+			bookIds: [10],
+			collectionIds: [100],
+			artistIds: [1000],
+			genreIds: [2],
+			keyIds: [3],
+			customGroupIds: [4],
+			yearIds: [5],
+			signatureIds: [6],
+			sourceTypeIds: [7],
+		}))
+	})
+
+	it('creates an entity when a typed tag does not match an existing option', async () => {
+		vi.mocked(axios.post)
+			.mockResolvedValueOnce({ data: { ocs: { data: { id: 77 } } } })
+			.mockResolvedValueOnce({ data: { ocs: { data: { songs: [], createdSongId: 99 } } } })
+		const wrapper = mount(SongEditor, {
+			props: {
+				libraryId: 1,
+				composers: mockComposers,
+				books: [],
+				collections: [],
+				artists: [],
+			},
+			global: {
+				stubs: {
+					...globalStubs.global.stubs,
+					NcSelect: {
+						template: '<button v-if="label === \'name\' && options.length" class="create-new-tag" @click="$emit(\'update:modelValue\', [createOption(\'New Composer\')])">Create tag</button>',
+						props: ['modelValue', 'options', 'label', 'createOption'],
+					},
+				},
+			},
+		})
+
+		await wrapper.find('input#song-title-input').setValue('Song with a new composer')
+		await wrapper.get('.create-new-tag').trigger('click')
+		await wrapper.find('form').trigger('submit.prevent')
+
+		expect(axios.post).toHaveBeenNthCalledWith(
+			1,
+			'/ocs/v2.php/apps/mobilesheetsmanager/api/composers',
+			{ libraryId: 1, name: 'New Composer' },
+		)
+		expect(axios.post).toHaveBeenNthCalledWith(
+			2,
+			'/ocs/v2.php/apps/mobilesheetsmanager/api/songs',
+			expect.objectContaining({ composerIds: [77] }),
+		)
 	})
 
 	it('renders title input with song title when song prop is provided', () => {
@@ -413,6 +505,78 @@ describe('SongEditor.vue', () => {
 
 		expect(wrapper.emitted('saved')).toBeTruthy()
 		expect(wrapper.emitted('saved')![0][1]).toBe(99)
+	})
+
+	it('duplicates song metadata into a new song without copying attached files', async () => {
+		vi.mocked(axios.post).mockResolvedValue({
+			data: { ocs: { data: { songs: [], createdSongId: 99 } } },
+		})
+		const duplicateSong = {
+			...mockExistingSong,
+			genres: [{ id: 2, name: 'Classical' }],
+			keys: [{ id: 3, name: 'C' }],
+			customGroups: [{ id: 4, name: 'Practice' }],
+			years: [{ id: 5, year: 1808, name: '1808' }],
+			signatures: [{ id: 6, name: '4/4' }],
+			sourceTypes: [{ id: 7, type: 'Score', name: 'Score' }],
+			stars: 4,
+			difficulty: 3,
+			duration: 240,
+			keywords: 'allegro',
+			custom: 'Opus 5',
+			custom2: 'No. 2',
+			tempos: [{ tempo: 120 }],
+			notes: [{ id: 51, note: 'Practice slowly', title: 'Practice' }],
+			bookmarks: [{ id: 52, songId: 5, name: 'Coda', pageNum: 8 }],
+			audioFiles: [{ id: 53, songId: 5, title: 'Backing', file: 'backing.mp3' }],
+		} as Song
+		const wrapper = mount(SongEditor, {
+			props: {
+				libraryId: 1,
+				duplicateSong,
+				composers: mockComposers,
+				books: mockBooks,
+				collections: mockCollections,
+				artists: mockArtists,
+				genres: duplicateSong.genres,
+				keys: duplicateSong.keys,
+				customGroups: duplicateSong.customGroups,
+				years: duplicateSong.years,
+				signatures: duplicateSong.signatures,
+				sourceTypes: duplicateSong.sourceTypes,
+			},
+			...globalStubs,
+		})
+
+		expect(wrapper.find('input#song-title-input').exists()).toBe(true)
+		expect(wrapper.text()).not.toContain('Beethoven - Symphony 5.pdf')
+		await wrapper.find('form').trigger('submit.prevent')
+
+		expect(axios.post).toHaveBeenCalledWith('/ocs/v2.php/apps/mobilesheetsmanager/api/songs', expect.objectContaining({
+			libraryId: 1,
+			title: 'Symphony No. 5',
+			composerIds: [1],
+			bookIds: [10],
+			collectionIds: [100],
+			artistIds: [1000],
+			genreIds: [2],
+			keyIds: [3],
+			customGroupIds: [4],
+			yearIds: [5],
+			signatureIds: [6],
+			sourceTypeIds: [7],
+			stars: 4,
+			difficulty: 3,
+			duration: 240,
+			keywords: 'allegro',
+			custom: 'Opus 5',
+			custom2: 'No. 2',
+			notes: [{ note: 'Practice slowly', title: 'Practice' }],
+			tempos: [120],
+			bookmarks: [{ name: 'Coda', pageNum: 8 }],
+			audioFiles: [{ title: 'Backing', file: 'backing.mp3' }],
+		}))
+		expect(axios.post).toHaveBeenCalledTimes(1)
 	})
 
 	it('binds and submits song attributes (stars, difficulty, duration, keywords, custom)', async () => {

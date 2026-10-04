@@ -1,6 +1,6 @@
 <template>
   <ViewHeader
-    :title="standaloneCreate ? t('mobilesheetsmanager', 'Create Song') : songIdInUrl !== null ? (isEditInUrl ? (openSong?.title ? t('mobilesheetsmanager', 'Edit: {title}', { title: openSong.title }) : t('mobilesheetsmanager', 'Edit song')) : (openSong?.title ?? t('mobilesheetsmanager', 'Songs'))) : t('mobilesheetsmanager', 'Songs')"
+    :title="standaloneCreate ? (duplicateSourceSong ? t('mobilesheetsmanager', 'Duplicate: {title}', { title: duplicateSourceSong.title }) : t('mobilesheetsmanager', 'Create Song')) : songIdInUrl !== null ? (isEditInUrl ? (openSong?.title ? t('mobilesheetsmanager', 'Edit: {title}', { title: openSong.title }) : t('mobilesheetsmanager', 'Edit song')) : (openSong?.title ?? t('mobilesheetsmanager', 'Songs'))) : t('mobilesheetsmanager', 'Songs')"
     :show-back="songIdInUrl !== null || standaloneCreate"
     :create-label="songIdInUrl === null && !standaloneCreate ? t('mobilesheetsmanager', 'New song') : undefined"
     :import-label="songIdInUrl === null && !standaloneCreate ? t('mobilesheetsmanager', 'Import') : undefined"
@@ -67,6 +67,16 @@
         @click="songViewerRef?.openInExternalViewer">
         <template #icon>
           <OpenInNewIcon :size="20" />
+        </template>
+      </NcButton>
+      <NcButton
+        v-if="openSong"
+        variant="secondary"
+        :title="t('mobilesheetsmanager', 'Duplicate song')"
+        :aria-label="t('mobilesheetsmanager', 'Duplicate song')"
+        @click="duplicateSong(openSong)">
+        <template #icon>
+          <ContentCopyIcon :size="20" />
         </template>
       </NcButton>
       <NcButton
@@ -214,6 +224,7 @@
                 :years="years"
                 :signatures="signatures"
                 :source-types="sourceTypes"
+                :duplicate-song="duplicateSourceSong"
                 :prefill="importPrefill"
                 :imported-file="importedFile"
                 :imported-nextcloud-node="importedNextcloudNode"
@@ -299,6 +310,7 @@ import NcButton from '@nextcloud/vue/components/NcButton';
 import CheckIcon from 'vue-material-design-icons/Check.vue';
 import CloseIcon from 'vue-material-design-icons/Close.vue';
 import ContentSaveOutlineIcon from 'vue-material-design-icons/ContentSaveOutline.vue';
+import ContentCopyIcon from 'vue-material-design-icons/ContentCopy.vue';
 import DeleteIcon from 'vue-material-design-icons/Delete.vue';
 import MergeIcon from 'vue-material-design-icons/Merge.vue';
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue';
@@ -407,6 +419,18 @@ const songIdInUrl = computed(() => {
 
 /** The open song, resolved against the loaded library data. */
 const openSong = computed(() => songs.value.find(song => song.id === songIdInUrl.value) ?? null);
+
+const duplicateSourceId = computed(() => {
+  const raw = route.query.duplicate;
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  const id = Number(value);
+  return value === undefined || value === null || !Number.isInteger(id) || id <= 0 ? null : id;
+});
+const duplicateSourceSong = computed(() =>
+  props.standaloneCreate && duplicateSourceId.value !== null
+    ? songs.value.find(song => song.id === duplicateSourceId.value) ?? null
+    : null,
+);
 
 /** The URL asks for the editor of the open song ("?song=12&edit=1"). */
 const isEditInUrl = computed(() => route.query.edit !== undefined && route.query.edit !== null);
@@ -604,6 +628,7 @@ function queryWithoutOpenSong() {
   const query = { ...route.query };
   delete query.song;
   delete query.edit;
+  delete query.duplicate;
   return query;
 }
 
@@ -642,6 +667,19 @@ function openNewSong() {
     name: 'LibraryView',
     params: { library: props.selectedLibrary, view: 'new-song' },
     query: queryWithoutOpenSong(),
+  });
+}
+
+/** Open the new-song editor prefilled with the selected song, without its attached files. */
+function duplicateSong(song: Song) {
+  isCreatingSong.value = true;
+  importPrefill.value = null;
+  importedFile.value = null;
+  importedNextcloudNode.value = null;
+  router.push({
+    name: 'LibraryView',
+    params: { library: props.selectedLibrary, view: 'new-song' },
+    query: { ...queryWithoutOpenSong(), duplicate: String(song.id) },
   });
 }
 
