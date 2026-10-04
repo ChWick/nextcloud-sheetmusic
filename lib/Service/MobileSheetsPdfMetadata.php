@@ -318,6 +318,25 @@ class MobileSheetsPdfMetadata {
 	}
 
 	/**
+	 * Info dictionary fields that differ from the exact values this app writes
+	 * for a song. Alternate import spellings such as Album are reported because
+	 * they are not part of the generated metadata.
+	 *
+	 * @return list<string>
+	 * @throws \RuntimeException when the file is not a readable PDF
+	 */
+	public static function mismatchedFields(string $content, MobileSheetsSong $song): array {
+		$actual = self::readFields($content);
+		$expected = self::fieldsFor($song);
+		$keys = array_unique([...array_keys($expected), ...array_keys($actual)]);
+
+		return array_values(array_filter(
+			$keys,
+			static fn (string $key): bool => ($actual[$key] ?? null) !== ($expected[$key] ?? null),
+		));
+	}
+
+	/**
 	 * The names of the song's entities, normalized like a value that travels
 	 * through the document properties: joined, then split, trimmed and deduped.
 	 *

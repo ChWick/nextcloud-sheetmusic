@@ -20,6 +20,8 @@ class IntegrityIssue implements JsonSerializable {
 	public const TYPE_DUPLICATE_FILE_PATH = 'duplicate_file_path';
 	public const TYPE_INVALID_NAMING_RULE = 'invalid_naming_rule';
 	public const TYPE_IDENTICAL_SONG = 'identical_song';
+	public const TYPE_PDF_METADATA_MISMATCH = 'pdf_metadata_mismatch';
+	public const TYPE_PDF_METADATA_UNREADABLE = 'pdf_metadata_unreadable';
 
 	public const SEVERITY_ERROR = 'error';
 	public const SEVERITY_WARNING = 'warning';

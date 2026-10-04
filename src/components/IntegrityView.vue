@@ -62,6 +62,8 @@ const groupedIssues = computed(() => {
 			else if (type === 'missing_file') title = t('mobilesheetsmanager', 'Missing Files')
 			else if (type === 'orphan_file') title = t('mobilesheetsmanager', 'Orphan Files')
 			else if (type === 'identical_song') title = t('mobilesheetsmanager', 'Identical Songs (Duplicates)')
+			else if (type === 'pdf_metadata_mismatch') title = t('mobilesheetsmanager', 'PDF Metadata Mismatches')
+			else if (type === 'pdf_metadata_unreadable') title = t('mobilesheetsmanager', 'PDF Metadata Could Not Be Verified')
 
 			groups[type] = {
 				type,

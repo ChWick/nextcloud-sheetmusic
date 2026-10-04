@@ -11,6 +11,7 @@ namespace OCA\MobileSheetsManager\Service;
 
 use OCA\MobileSheetsManager\Db\LibraryMapper;
 use OCA\MobileSheetsManager\Db\SongMapper;
+use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\Files\Node;
@@ -76,6 +77,7 @@ class LibraryIntegrityService {
 				}
 
 				$sourceExists = ($relativeToTarget !== null && $targetFolder->nodeExists($relativeToTarget));
+				$existingPdfPath = $sourceExists ? $relativeToTarget : null;
 
 				// Calculate valid target paths (naming rules)
 				$validTargetPaths = [];
@@ -97,6 +99,7 @@ class LibraryIntegrityService {
 						$cleanValid = ltrim($validPath, '/');
 						if ($targetFolder->nodeExists($cleanValid)) {
 							$targetExists = true;
+							$existingPdfPath ??= $cleanValid;
 							if (!$sourceExists) {
 								// Mark target file as referenced by song so it is not flagged as an orphan
 								$cleanKey = strtolower(ltrim($cleanValid, '/'));
@@ -108,6 +111,13 @@ class LibraryIntegrityService {
 							}
 							break;
 						}
+					}
+				}
+
+				if ($existingPdfPath !== null && str_ends_with(strtolower($file->path), '.pdf')) {
+					$pdfIssue = $this->checkPdfMetadata($targetFolder, $existingPdfPath, $song, $file->id);
+					if ($pdfIssue !== null) {
+						$issues[] = $pdfIssue;
 					}
 				}
 
@@ -250,6 +260,62 @@ class LibraryIntegrityService {
 		}
 
 		return $issues;
+	}
+
+	private function checkPdfMetadata(
+		Folder $targetFolder,
+		string $relativePath,
+		\OCA\MobileSheetsManager\Db\MobileSheetsSong $song,
+		int $fileId,
+	): ?IntegrityIssue {
+		try {
+			$node = $targetFolder->get($relativePath);
+			if (!$node instanceof File) {
+				throw new \RuntimeException('The attached PDF path does not point to a file.');
+			}
+
+			$content = $node->getContent();
+			if (!is_string($content) || $content === '') {
+				throw new \RuntimeException('The attached PDF is empty or unreadable.');
+			}
+
+			$mismatchedFields = MobileSheetsPdfMetadata::mismatchedFields($content, $song);
+		} catch (\Throwable $exception) {
+			$this->logger->warning('Could not verify PDF metadata during library integrity audit', [
+				'exception' => $exception,
+				'fileId' => $fileId,
+				'path' => $relativePath,
+				'songId' => $song->id,
+			]);
+
+			return new IntegrityIssue(
+				type: IntegrityIssue::TYPE_PDF_METADATA_UNREADABLE,
+				severity: IntegrityIssue::SEVERITY_WARNING,
+				message: sprintf('Could not verify PDF metadata for "%s".', basename($relativePath)),
+				songId: $song->id,
+				songTitle: $song->title,
+				fileId: $fileId,
+				path: $relativePath,
+			);
+		}
+
+		if ($mismatchedFields === []) {
+			return null;
+		}
+
+		return new IntegrityIssue(
+			type: IntegrityIssue::TYPE_PDF_METADATA_MISMATCH,
+			severity: IntegrityIssue::SEVERITY_WARNING,
+			message: sprintf(
+				'PDF metadata fields do not match the expected song values: %s.',
+				implode(', ', $mismatchedFields),
+			),
+			songId: $song->id,
+			songTitle: $song->title,
+			fileId: $fileId,
+			path: $relativePath,
+			details: ['mismatchedFields' => $mismatchedFields],
+		);
 	}
 
 	/**

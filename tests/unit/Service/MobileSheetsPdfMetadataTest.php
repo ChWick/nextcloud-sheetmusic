@@ -263,6 +263,26 @@ final class MobileSheetsPdfMetadataTest extends TestCase {
 		self::assertFalse(MobileSheetsPdfMetadata::matchesSong(self::minimalPdf(), $song));
 	}
 
+	public function testMismatchedFieldsComparesAgainstTheExactGeneratedInfoFields(): void {
+		$song = new MobileSheetsSong(
+			42,
+			'Blue Bossa',
+			[],
+			[new MobileSheetsComposer(1, 'Joe Henderson')],
+		);
+		$expected = MobileSheetsPdfMetadata::withInfo(
+			self::minimalPdf(),
+			MobileSheetsPdfMetadata::fieldsFor($song),
+		);
+		$alternate = MobileSheetsPdfMetadata::withInfo(
+			self::minimalPdf(),
+			['Title' => 'Blue Bossa', 'Author' => 'Joe Henderson'],
+		);
+
+		self::assertSame([], MobileSheetsPdfMetadata::mismatchedFields($expected, $song));
+		self::assertSame(['Composer'], MobileSheetsPdfMetadata::mismatchedFields($alternate, $song));
+	}
+
 	public function testMatchesSongRejectsAFileThatIsNotAPdf(): void {
 		$this->expectException(\RuntimeException::class);
 
