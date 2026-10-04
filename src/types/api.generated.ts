@@ -295,13 +295,14 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/songs/{id}/file/upload": {
+    "/api/libraries/{libraryId}/songs/{id}/file/upload": {
         parameters: {
-            query?: {
-                libraryId?: number;
-            };
+            query?: never;
             header?: never;
-            path?: never;
+            path: {
+                libraryId: number;
+                id: number;
+            };
             cookie?: never;
         };
         get?: never;
@@ -309,11 +310,10 @@ export interface paths {
         /** Upload a PDF file to attach to a song */
         post: {
             parameters: {
-                query: {
-                    libraryId: number;
-                };
+                query?: never;
                 header?: never;
                 path: {
+                    libraryId: number;
                     id: number;
                 };
                 cookie?: never;

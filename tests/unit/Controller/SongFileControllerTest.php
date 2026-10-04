@@ -27,20 +27,7 @@ final class SongFileControllerTest extends TestCase {
 		$this->assertSame(Http::STATUS_UNAUTHORIZED, $controller->importSongMetadata()->getStatus());
 	}
 
-	public function testUploadSongFileValidatesLibraryId(): void {
-		$controller = new SongFileController(
-			'mobilesheetsmanager',
-			$this->createMock(IRequest::class),
-			$this->createMock(SongFileService::class),
-			$this->createMock(IUserSession::class),
-		);
-
-		$response = $controller->uploadSongFile(42, null);
-		$this->assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
-		$this->assertSame(['message' => 'libraryId parameter is required'], $response->getData());
-	}
-
-	public function testUploadSongFileReadsLibraryIdFromRequestWhenNotBound(): void {
+	public function testUploadSongFileUsesLibraryIdFromLibraryScopedRoute(): void {
 		$user = $this->createMock(IUser::class);
 		$userSession = $this->createMock(IUserSession::class);
 		$userSession->method('getUser')->willReturn($user);
@@ -49,9 +36,6 @@ final class SongFileControllerTest extends TestCase {
 		self::assertNotFalse($tmpFile);
 		$fileInfo = ['tmp_name' => $tmpFile, 'name' => 'score.pdf'];
 		$request = $this->createMock(IRequest::class);
-		$request->method('getParam')->willReturnCallback(
-			static fn (string $key, mixed $default = null): mixed => $key === 'libraryId' ? '7' : $default,
-		);
 		$request->method('getUploadedFile')->with('file')->willReturn($fileInfo);
 
 		$songFileService = $this->createMock(SongFileService::class);
@@ -62,7 +46,7 @@ final class SongFileControllerTest extends TestCase {
 
 		try {
 			$controller = new SongFileController('mobilesheetsmanager', $request, $songFileService, $userSession);
-			$response = $controller->uploadSongFile(42);
+			$response = $controller->uploadSongFile(42, 7);
 
 			self::assertSame(Http::STATUS_OK, $response->getStatus());
 			self::assertSame(['songs' => []], $response->getData());
@@ -89,7 +73,7 @@ final class SongFileControllerTest extends TestCase {
 			$this->createMock(SongFileService::class),
 			$userSession,
 		);
-		$response = $controller->uploadSongFile(42);
+		$response = $controller->uploadSongFile(42, 7);
 
 		self::assertSame(Http::STATUS_REQUEST_ENTITY_TOO_LARGE, $response->getStatus());
 		self::assertStringContainsString('upload_max_filesize', $response->getData()['message']);
@@ -113,7 +97,7 @@ final class SongFileControllerTest extends TestCase {
 				$this->createMock(SongFileService::class),
 				$userSession,
 			);
-			$response = $controller->uploadSongFile(42);
+			$response = $controller->uploadSongFile(42, 7);
 
 			self::assertSame(Http::STATUS_REQUEST_ENTITY_TOO_LARGE, $response->getStatus());
 			self::assertStringContainsString('post_max_size', $response->getData()['message']);

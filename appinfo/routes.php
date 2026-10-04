@@ -31,7 +31,7 @@ return [
 		],
 		[
 			'name' => 'Api#uploadSongFile',
-			'url' => '/api/songs/{id}/file/upload',
+			'url' => '/api/libraries/{libraryId}/songs/{id}/file/upload',
 			'verb' => 'POST',
 		],
 		[

@@ -182,17 +182,17 @@ paths:
               schema:
                 $ref: '#/components/schemas/OcsEnvelopeLibraryData'
 
-  /api/songs/{id}/file/upload:
+  /api/libraries/{libraryId}/songs/{id}/file/upload:
     post:
       summary: Upload a PDF file to attach to a song
       parameters:
-        - name: id
+        - name: libraryId
           in: path
           required: true
           schema:
             type: integer
-        - name: libraryId
-          in: query
+        - name: id
+          in: path
           required: true
           schema:
             type: integer

@@ -219,8 +219,8 @@ class ApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
-	#[ApiRoute(verb: 'POST', url: '/api/songs/{id}/file/upload')]
-	public function uploadSongFile(int $id, ?int $libraryId = null): DataResponse {
+	#[ApiRoute(verb: 'POST', url: '/api/libraries/{libraryId}/songs/{id}/file/upload')]
+	public function uploadSongFile(int $id, int $libraryId): DataResponse {
 		return $this->songFileController->uploadSongFile($id, $libraryId);
 	}
 

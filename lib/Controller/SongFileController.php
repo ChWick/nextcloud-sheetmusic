@@ -49,13 +49,8 @@ class SongFileController extends OCSController {
 	}
 
 	#[NoAdminRequired]
-	#[ApiRoute(verb: 'POST', url: '/api/songs/{id}/file/upload')]
-	public function uploadSongFile(int $id, ?int $libraryId = null): DataResponse {
-		$libraryId = $libraryId ?? ((int)$this->request->getParam('libraryId', 0) ?: null);
-		if ($libraryId === null) {
-			return new DataResponse(['message' => 'libraryId parameter is required'], Http::STATUS_BAD_REQUEST);
-		}
-
+	#[ApiRoute(verb: 'POST', url: '/api/libraries/{libraryId}/songs/{id}/file/upload')]
+	public function uploadSongFile(int $id, int $libraryId): DataResponse {
 		$user = $this->userSession->getUser();
 		if ($user === null) {
 			return new DataResponse([], Http::STATUS_UNAUTHORIZED);

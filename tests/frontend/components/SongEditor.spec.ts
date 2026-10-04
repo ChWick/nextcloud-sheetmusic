@@ -407,11 +407,8 @@ describe('SongEditor.vue', () => {
 
 		// Upload endpoint call
 		expect(axios.post).toHaveBeenCalledWith(
-			'/ocs/v2.php/apps/mobilesheetsmanager/api/songs/99/file/upload',
+			'/ocs/v2.php/apps/mobilesheetsmanager/api/libraries/1/songs/99/file/upload',
 			expect.any(FormData),
-			expect.objectContaining({
-				params: { libraryId: 1 },
-			}),
 		)
 
 		expect(wrapper.emitted('saved')).toBeTruthy()
