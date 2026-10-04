@@ -26,6 +26,7 @@ const router = useRouter()
 // Integrity Audit state
 const isCheckingIntegrity = ref(false)
 const isBatchFixing = ref(false)
+const fixingKey = ref<string | null>(null)
 const integrityError = ref('')
 const integrityIssues = ref<IntegrityIssue[]>([])
 const collapsedGroups = ref<Record<string, boolean>>({})

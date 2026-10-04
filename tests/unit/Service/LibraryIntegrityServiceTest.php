@@ -177,6 +177,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 			],
 		);
 		$songMapper->method('findSongs')->willReturn([$song]);
+		$songMapper->method('findSong')->with('/tmp/dummy.db', 1)->willReturn($song);
 
 		$pdf = $this->createMock(\OCP\Files\File::class);
 		$pdf->method('getContent')->willReturn(MobileSheetsPdfMetadata::withInfo(
@@ -184,6 +185,10 @@ final class LibraryIntegrityServiceTest extends TestCase {
 			['Title' => 'Wrong title', 'Author' => 'Bach', 'Composer' => 'Bach'],
 		));
 		$targetFolder->method('get')->with('Bach - Joshua.pdf')->willReturn($pdf);
+		$fileManager->expects(self::once())
+			->method('syncMetadataIntoFile')
+			->with($song, $song->files[0], $user, '/tmp/dummy.db', self::anything())
+			->willReturn(\OCA\MobileSheetsManager\Service\MobileSheetsFileLogEntry::CODE_METADATA_UPDATED);
 
 		$service = new LibraryIntegrityService(
 			$this->createMock(LibraryService::class),
@@ -202,6 +207,11 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		self::assertCount(1, $metadataIssues);
 		self::assertSame(['Title'], $metadataIssues[0]->details['mismatchedFields']);
 		self::assertSame(10, $metadataIssues[0]->fileId);
+		self::assertTrue($metadataIssues[0]->fixable);
+
+		$result = $service->fixIssue(1, 'user1', IntegrityIssue::TYPE_PDF_METADATA_MISMATCH, 1, 10);
+		self::assertTrue($result['success']);
+		self::assertSame(1, $result['fixedCount']);
 	}
 
 	public function testCheckIntegrityDetectsIdenticalSongs(): void {

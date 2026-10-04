@@ -314,8 +314,46 @@ class LibraryIntegrityService {
 			songTitle: $song->title,
 			fileId: $fileId,
 			path: $relativePath,
+			fixable: true,
 			details: ['mismatchedFields' => $mismatchedFields],
 		);
+	}
+
+	/**
+	 * Automatically repair one PDF metadata mismatch.
+	 *
+	 * @return array{success: bool, fixedCount: int, message: string}
+	 */
+	public function fixIssue(int $libraryId, string $userId, string $issueType, ?int $songId = null, ?int $fileId = null): array {
+		if ($issueType !== IntegrityIssue::TYPE_PDF_METADATA_MISMATCH || $songId === null || $fileId === null) {
+			return [
+				'success' => false,
+				'fixedCount' => 0,
+				'message' => 'Only a specific PDF metadata mismatch can be fixed automatically.',
+			];
+		}
+
+		$userFolder = $this->rootFolder->getUserFolder($userId);
+		$user = $userFolder->getOwner();
+		['databasePath' => $databasePath] = $this->fileManager->libraryContext($libraryId, $user);
+		$issue = $this->findPdfMetadataMismatch($libraryId, $userId, $songId, $fileId);
+		if ($issue === null) {
+			return [
+				'success' => false,
+				'fixedCount' => 0,
+				'message' => 'The PDF metadata mismatch was not found in the current library audit.',
+			];
+		}
+
+		$hashCodes = MobileSheetsHashCodesFile::forDatabase($databasePath, $this->logger);
+		$this->fixPdfMetadataMismatch($issue, $databasePath, $user, $hashCodes);
+		$hashCodes?->save();
+
+		return [
+			'success' => true,
+			'fixedCount' => 1,
+			'message' => 'Updated the PDF metadata to match its song.',
+		];
 	}
 
 	/**
@@ -352,6 +390,18 @@ class LibraryIntegrityService {
 					$fixedCount++;
 				} catch (\Throwable $e) {
 					$this->logger->warning(sprintf('Cannot auto-fix naming rule for song ID %d during batch fix: %s', $issue->songId, $e->getMessage()));
+				}
+			} elseif ($issue->type === IntegrityIssue::TYPE_PDF_METADATA_MISMATCH) {
+				try {
+					$this->fixPdfMetadataMismatch($issue, $databasePath, $user, $hashCodes);
+					$fixedCount++;
+				} catch (\Throwable $e) {
+					$this->logger->warning('Cannot auto-fix PDF metadata during batch fix', [
+						'exception' => $e,
+						'songId' => $issue->songId,
+						'fileId' => $issue->fileId,
+						'path' => $issue->path,
+					]);
 				}
 			} elseif (($issue->type === IntegrityIssue::TYPE_DUPLICATE_FILE_PATH || $issue->type === IntegrityIssue::TYPE_IDENTICAL_SONG) && $issue->songId !== null) {
 				if (isset($processedSongs[$issue->songId])) {
@@ -414,6 +464,47 @@ class LibraryIntegrityService {
 			'fixedCount' => $fixedCount,
 			'message' => sprintf('Applied autofix to %d issue(s).', $fixedCount),
 		];
+	}
+
+	private function findPdfMetadataMismatch(int $libraryId, string $userId, int $songId, int $fileId): ?IntegrityIssue {
+		foreach ($this->checkIntegrity($libraryId, $userId) as $issue) {
+			if ($issue->type === IntegrityIssue::TYPE_PDF_METADATA_MISMATCH
+				&& $issue->songId === $songId
+				&& $issue->fileId === $fileId) {
+				return $issue;
+			}
+		}
+
+		return null;
+	}
+
+	private function fixPdfMetadataMismatch(
+		IntegrityIssue $issue,
+		string $databasePath,
+		\OCP\IUser $user,
+		?MobileSheetsHashCodesFile $hashCodes,
+	): void {
+		if ($issue->songId === null || $issue->fileId === null) {
+			throw new \RuntimeException('The PDF metadata issue does not identify a song and file.');
+		}
+
+		$song = $this->songMapper->findSong($databasePath, $issue->songId);
+		if ($song === null) {
+			throw new \RuntimeException(sprintf('Song %d was not found while fixing PDF metadata.', $issue->songId));
+		}
+
+		foreach ($song->files as $file) {
+			if ($file->id === $issue->fileId) {
+				$this->fileManager->syncMetadataIntoFile($song, $file, $user, $databasePath, $hashCodes);
+				return;
+			}
+		}
+
+		throw new \RuntimeException(sprintf(
+			'File %d is no longer attached to song %d.',
+			$issue->fileId,
+			$issue->songId,
+		));
 	}
 
 	/**
