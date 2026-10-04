@@ -60,6 +60,7 @@ const groupedIssues = computed(() => {
 			let title = type.replace(/_/g, ' ')
 			if (type === 'invalid_naming_rule') title = t('mobilesheetsmanager', 'Invalid Naming Rules')
 			else if (type === 'duplicate_file_path') title = t('mobilesheetsmanager', 'Duplicate File Paths')
+			else if (type === 'duplicate_entity_assignment') title = t('mobilesheetsmanager', 'Duplicate Song Assignments')
 			else if (type === 'missing_file') title = t('mobilesheetsmanager', 'Missing Files')
 			else if (type === 'orphan_file') title = t('mobilesheetsmanager', 'Orphan Files')
 			else if (type === 'identical_song') title = t('mobilesheetsmanager', 'Identical Songs (Duplicates)')

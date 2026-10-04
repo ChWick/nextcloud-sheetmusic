@@ -269,6 +269,71 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		self::assertEquals([1, 2], $issues[0]->details['songIds']);
 	}
 
+	public function testCheckIntegrityReportsAndFixesDuplicateEntityAssignments(): void {
+		$songMapper = $this->createMock(SongMapper::class);
+		$fileManager = $this->createMock(FileManager::class);
+		$rootFolder = $this->createMock(IRootFolder::class);
+		$user = $this->createMock(\OCP\IUser::class);
+		$user->method('getUID')->willReturn('user1');
+
+		$userFolder = $this->createMock(\OCP\Files\IUserFolder::class);
+		$userFolder->method('getOwner')->willReturn($user);
+		$userFolder->method('getPath')->willReturn('/user1/files');
+		$rootFolder->method('getUserFolder')->with('user1')->willReturn($userFolder);
+
+		$targetFolder = $this->createMock(Folder::class);
+		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
+		$targetFolder->method('getDirectoryListing')->willReturn([]);
+		$fileManager->method('libraryContext')->with(1, $user)->willReturn([
+			'databasePath' => '/tmp/dummy.db',
+			'targetFolder' => $targetFolder,
+		]);
+
+		$song = new \OCA\MobileSheetsManager\Db\MobileSheetsSong(
+			id: 7,
+			title: 'Take Five',
+			keys: [new \OCA\MobileSheetsManager\Db\MobileSheetsKey(3, 'C#m')],
+			collections: [new \OCA\MobileSheetsManager\Db\MobileSheetsCollection(4, 'Jazz')],
+		);
+		$songMapper->method('findSongs')->with('/tmp/dummy.db')->willReturn([$song]);
+		$songMapper->method('findDuplicateEntityAssignments')->with('/tmp/dummy.db')->willReturn([
+			['songId' => 7, 'entityType' => 'keys', 'entityId' => 3, 'count' => 2],
+			['songId' => 7, 'entityType' => 'collections', 'entityId' => 4, 'count' => 3],
+		]);
+		$songMapper->expects(self::exactly(2))
+			->method('removeDuplicateEntityAssignments')
+			->with('/tmp/dummy.db', 7)
+			->willReturnOnConsecutiveCalls(3, 3);
+
+		$service = new LibraryIntegrityService(
+			$this->createMock(LibraryService::class),
+			$songMapper,
+			$fileManager,
+			$rootFolder,
+			new MobileSheetsPathResolver($rootFolder),
+			$this->createMock(\Psr\Log\LoggerInterface::class),
+		);
+
+		$issues = $service->checkIntegrity(1, 'user1');
+		self::assertCount(1, $issues);
+		self::assertSame(IntegrityIssue::TYPE_DUPLICATE_ENTITY_ASSIGNMENT, $issues[0]->type);
+		self::assertSame(7, $issues[0]->songId);
+		self::assertTrue($issues[0]->fixable);
+		self::assertSame(
+			'Song "Take Five" has repeated entity assignments: 1 duplicate keys assignment(s), 2 duplicate collections assignment(s).',
+			$issues[0]->message,
+		);
+		self::assertSame(2, count($issues[0]->details['duplicates']));
+
+		$result = $service->fixIssue(1, 'user1', IntegrityIssue::TYPE_DUPLICATE_ENTITY_ASSIGNMENT, 7);
+		self::assertTrue($result['success']);
+		self::assertSame(1, $result['fixedCount']);
+
+		$batchResult = $service->fixAllIssues(1, 'user1', IntegrityIssue::TYPE_DUPLICATE_ENTITY_ASSIGNMENT);
+		self::assertTrue($batchResult['success']);
+		self::assertSame(1, $batchResult['fixedCount']);
+	}
+
 	public function testFixAllIssuesBatchFixesInvalidNamingRules(): void {
 		$libraryService = $this->createMock(LibraryService::class);
 		$songMapper = $this->createMock(SongMapper::class);

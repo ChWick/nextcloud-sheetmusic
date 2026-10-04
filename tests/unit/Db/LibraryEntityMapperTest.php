@@ -92,4 +92,64 @@ final class LibraryEntityMapperTest extends TestCase {
 		$deleteNonExistent = $this->entityMapper->deleteEntity($this->databasePath, 'composers', 9999);
 		self::assertFalse($deleteNonExistent);
 	}
+
+	public function testFindsAndRemovesDuplicateSongEntityAssignmentsAcrossEntityTables(): void {
+		$relations = [
+			'ComposerSongs' => 'ComposerId',
+			'BookSongs' => 'BookId',
+			'CollectionSong' => 'CollectionId',
+			'ArtistsSongs' => 'ArtistId',
+			'GenresSongs' => 'GenreId',
+			'KeySongs' => 'KeyId',
+			'CustomGroupSongs' => 'GroupId',
+			'YearsSongs' => 'YearId',
+			'SignatureSongs' => 'SignatureId',
+			'SourceTypeSongs' => 'SourceTypeId',
+		];
+		$database = new \PDO('sqlite:' . $this->databasePath);
+		foreach ($relations as $table => $entityColumn) {
+			$insert = $database->prepare(sprintf('INSERT INTO "%s" ("%s", SongId) VALUES (:entityId, :songId)', $table, $entityColumn));
+			$insert->execute([':entityId' => 5, ':songId' => 10]);
+			$insert->execute([':entityId' => 5, ':songId' => 10]);
+			$insert->execute([':entityId' => 6, ':songId' => 10]);
+			$insert->execute([':entityId' => 5, ':songId' => 11]);
+			$insert->execute([':entityId' => 5, ':songId' => 11]);
+		}
+
+		$duplicates = $this->entityMapper->findDuplicateSongEntityAssignments($this->databasePath);
+		self::assertCount(count($relations) * 2, $duplicates);
+		$songTenDuplicates = array_values(array_filter(
+			$duplicates,
+			static fn (array $duplicate): bool => $duplicate['songId'] === 10,
+		));
+		self::assertCount(count($relations), $songTenDuplicates);
+		self::assertSame(2, $songTenDuplicates[0]['count']);
+
+		self::assertSame(count($relations), $this->entityMapper->removeDuplicateSongEntityAssignments($this->databasePath, 10));
+
+		$remaining = $this->entityMapper->findDuplicateSongEntityAssignments($this->databasePath);
+		self::assertCount(count($relations), $remaining);
+		self::assertSame(
+			[11],
+			array_values(array_unique(array_column($remaining, 'songId'))),
+		);
+		foreach ($relations as $table => $entityColumn) {
+			$statement = $database->prepare(sprintf(
+				'SELECT "%s", COUNT(*) AS AssignmentCount FROM "%s" WHERE SongId = 10 GROUP BY "%s" ORDER BY "%s"',
+				$entityColumn,
+				$table,
+				$entityColumn,
+				$entityColumn,
+			));
+			$statement->execute();
+			self::assertSame(
+				[['entityId' => 5, 'count' => 1], ['entityId' => 6, 'count' => 1]],
+				array_map(
+					static fn (array $row): array => ['entityId' => (int)$row[$entityColumn], 'count' => (int)$row['AssignmentCount']],
+					$statement->fetchAll(\PDO::FETCH_ASSOC),
+				),
+				sprintf('Unexpected remaining assignments in %s', $table),
+			);
+		}
+	}
 }

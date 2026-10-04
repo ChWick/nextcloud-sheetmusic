@@ -144,4 +144,92 @@ class LibraryEntityMapper extends AbstractDatabaseMapper {
 
 		return $removed > 0;
 	}
+
+	/**
+	 * Find repeated links from songs to the same entity.
+	 *
+	 * @return list<array{songId: int, entityType: string, entityId: int, count: int}>
+	 */
+	public function findDuplicateSongEntityAssignments(string $databasePath): array {
+		$database = $this->openConnection($databasePath);
+		$duplicates = [];
+
+		foreach (self::ENTITY_TABLES as $entityType => $tables) {
+			$linkTable = $this->resolveTable($database, [$tables['linkTable']]);
+			if ($linkTable === null) {
+				continue;
+			}
+
+			$columns = $this->columnNames($database, $linkTable);
+			$songIdColumn = $columns['songid'] ?? null;
+			$entityIdColumn = $columns[strtolower($tables['linkColumn'])] ?? null;
+			if ($songIdColumn === null || $entityIdColumn === null) {
+				continue;
+			}
+
+			$sql = 'SELECT "' . $songIdColumn . '" AS SongId, "'
+				. $entityIdColumn . '" AS EntityId, COUNT(*) AS AssignmentCount'
+				. ' FROM "' . $linkTable . '" WHERE "' . $songIdColumn . '" IS NOT NULL AND "'
+				. $entityIdColumn . '" IS NOT NULL GROUP BY "' . $songIdColumn . '", "'
+				. $entityIdColumn . '" HAVING COUNT(*) > 1';
+			$statement = $database->query($sql);
+			if ($statement === false) {
+				throw new \RuntimeException(sprintf('Could not inspect duplicate assignments in "%s".', $linkTable));
+			}
+
+			while ($row = $statement->fetch()) {
+				$duplicates[] = [
+					'songId' => (int)$row['SongId'],
+					'entityType' => $entityType,
+					'entityId' => (int)$row['EntityId'],
+					'count' => (int)$row['AssignmentCount'],
+				];
+			}
+		}
+
+		return $duplicates;
+	}
+
+	/**
+	 * Remove repeated song-to-entity links while preserving one row per pair.
+	 *
+	 * @return int number of removed relation rows
+	 */
+	public function removeDuplicateSongEntityAssignments(string $databasePath, int $songId): int {
+		$database = $this->openConnection($databasePath);
+		$removed = 0;
+
+		$database->beginTransaction();
+		try {
+			foreach (self::ENTITY_TABLES as $tables) {
+				$linkTable = $this->resolveTable($database, [$tables['linkTable']]);
+				if ($linkTable === null) {
+					continue;
+				}
+
+				$columns = $this->columnNames($database, $linkTable);
+				$songIdColumn = $columns['songid'] ?? null;
+				$entityIdColumn = $columns[strtolower($tables['linkColumn'])] ?? null;
+				if ($songIdColumn === null || $entityIdColumn === null) {
+					continue;
+				}
+
+				$sql = 'DELETE FROM "' . $linkTable . '" WHERE rowid NOT IN ('
+					. 'SELECT MIN(rowid) FROM "' . $linkTable . '" WHERE "' . $songIdColumn
+					. '" = :songId AND "' . $entityIdColumn . '" IS NOT NULL GROUP BY "'
+					. $entityIdColumn . '") AND "' . $songIdColumn . '" = :songId AND "'
+					. $entityIdColumn . '" IS NOT NULL';
+				$statement = $database->prepare($sql);
+				$statement->execute([':songId' => $songId]);
+				$removed += $statement->rowCount();
+			}
+
+			$database->commit();
+		} catch (\Throwable $exception) {
+			$database->rollBack();
+			throw $exception;
+		}
+
+		return $removed;
+	}
 }

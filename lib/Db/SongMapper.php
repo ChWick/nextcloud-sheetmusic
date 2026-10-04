@@ -691,6 +691,18 @@ class SongMapper extends AbstractDatabaseMapper {
 	}
 
 	/**
+	 * @return list<array{songId: int, entityType: string, entityId: int, count: int}>
+	 */
+	public function findDuplicateEntityAssignments(string $databasePath): array {
+		return $this->entityMapper->findDuplicateSongEntityAssignments($databasePath);
+	}
+
+	/** Remove repeated song-to-entity relation rows, preserving one assignment each. */
+	public function removeDuplicateEntityAssignments(string $databasePath, int $songId): int {
+		return $this->entityMapper->removeDuplicateSongEntityAssignments($databasePath, $songId);
+	}
+
+	/**
 	 * @template T of object
 	 * @param list<int> $ids
 	 * @param array<int, T> $entitiesById
@@ -1326,4 +1338,3 @@ class SongMapper extends AbstractDatabaseMapper {
 		return $this->fileMapper->isPathReferencedByOtherSong($databasePath, $filePath, $songId);
 	}
 }
-

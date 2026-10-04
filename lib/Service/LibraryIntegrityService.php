@@ -49,6 +49,51 @@ class LibraryIntegrityService {
 
 		$issues = [];
 		$referencedRelativePaths = []; // relativeToTarget => list<array{songId: int, songTitle: string, fileId: int}>
+		$songsById = [];
+		foreach ($songs as $song) {
+			$songsById[$song->id] = $song;
+		}
+
+		$descriptionByType = [
+			'composers' => 'composers',
+			'books' => 'books',
+			'collections' => 'collections',
+			'artists' => 'artists',
+			'genres' => 'genres',
+			'keys' => 'keys',
+			'customgroups' => 'custom groups',
+			'years' => 'years',
+			'signatures' => 'time signatures',
+			'sourcetypes' => 'source types',
+		];
+		$duplicateAssignmentsBySong = [];
+		foreach ($this->songMapper->findDuplicateEntityAssignments($databasePath) as $assignment) {
+			$duplicateAssignmentsBySong[$assignment['songId']][] = $assignment;
+		}
+		foreach ($duplicateAssignmentsBySong as $songId => $assignments) {
+			$song = $songsById[$songId] ?? null;
+			$assignmentDescriptions = array_map(
+				static fn (array $assignment): string => sprintf(
+					'%d duplicate %s assignment(s)',
+					$assignment['count'] - 1,
+					$descriptionByType[$assignment['entityType']] ?? $assignment['entityType'],
+				),
+				$assignments,
+			);
+			$issues[] = new IntegrityIssue(
+				type: IntegrityIssue::TYPE_DUPLICATE_ENTITY_ASSIGNMENT,
+				severity: IntegrityIssue::SEVERITY_WARNING,
+				message: sprintf(
+					'Song "%s" has repeated entity assignments: %s.',
+					$song?->title ?? sprintf('ID %d', $songId),
+					implode(', ', $assignmentDescriptions),
+				),
+				songId: (int)$songId,
+				songTitle: $song?->title,
+				fixable: true,
+				details: ['duplicates' => $assignments],
+			);
+		}
 
 		foreach ($songs as $song) {
 			foreach ($song->files as $file) {
@@ -182,12 +227,6 @@ class LibraryIntegrityService {
 					}
 				}
 			}
-		}
-
-		// Index songs by ID for duplicate checks
-		$songsById = [];
-		foreach ($songs as $s) {
-			$songsById[$s->id] = $s;
 		}
 
 		// Check for duplicate physical file references
@@ -325,6 +364,34 @@ class LibraryIntegrityService {
 	 * @return array{success: bool, fixedCount: int, message: string}
 	 */
 	public function fixIssue(int $libraryId, string $userId, string $issueType, ?int $songId = null, ?int $fileId = null): array {
+		if ($issueType === IntegrityIssue::TYPE_DUPLICATE_ENTITY_ASSIGNMENT && $songId !== null) {
+			$user = $this->rootFolder->getUserFolder($userId)->getOwner();
+			['databasePath' => $databasePath] = $this->fileManager->libraryContext($libraryId, $user);
+			$isCurrentIssue = false;
+			foreach ($this->checkIntegrity($libraryId, $userId) as $issue) {
+				if ($issue->type === IntegrityIssue::TYPE_DUPLICATE_ENTITY_ASSIGNMENT && $issue->songId === $songId) {
+					$isCurrentIssue = true;
+					break;
+				}
+			}
+			if (!$isCurrentIssue) {
+				return [
+					'success' => false,
+					'fixedCount' => 0,
+					'message' => 'The duplicate entity assignments were not found in the current library audit.',
+				];
+			}
+
+			$removed = $this->songMapper->removeDuplicateEntityAssignments($databasePath, $songId);
+			return [
+				'success' => $removed > 0,
+				'fixedCount' => $removed > 0 ? 1 : 0,
+				'message' => $removed > 0
+					? sprintf('Removed %d duplicate entity assignment(s).', $removed)
+					: 'No duplicate entity assignments remained to fix.',
+			];
+		}
+
 		if ($issueType !== IntegrityIssue::TYPE_PDF_METADATA_MISMATCH || $songId === null || $fileId === null) {
 			return [
 				'success' => false,
@@ -390,6 +457,19 @@ class LibraryIntegrityService {
 					$fixedCount++;
 				} catch (\Throwable $e) {
 					$this->logger->warning(sprintf('Cannot auto-fix naming rule for song ID %d during batch fix: %s', $issue->songId, $e->getMessage()));
+				}
+			} elseif ($issue->type === IntegrityIssue::TYPE_DUPLICATE_ENTITY_ASSIGNMENT && $issue->songId !== null) {
+				try {
+					$removed = $this->songMapper->removeDuplicateEntityAssignments($databasePath, $issue->songId);
+					if ($removed > 0) {
+						$fixedCount++;
+					}
+					$processedSongs[$issue->songId] = true;
+				} catch (\Throwable $e) {
+					$this->logger->warning('Cannot auto-fix duplicate entity assignments', [
+						'exception' => $e,
+						'songId' => $issue->songId,
+					]);
 				}
 			} elseif ($issue->type === IntegrityIssue::TYPE_PDF_METADATA_MISMATCH) {
 				try {
