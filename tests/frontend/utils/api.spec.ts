@@ -17,6 +17,24 @@ describe('api utils', () => {
 			expect(describeRequestFailure(error, 'Fallback message')).toBe('Fallback message')
 		})
 
+		it('returns the server message from an OCS error response', () => {
+			const error = {
+				response: {
+					status: 413,
+					data: {
+						ocs: {
+							data: {
+								message: 'The uploaded file exceeds PHP upload_max_filesize (2M).',
+							},
+						},
+					},
+				},
+			}
+			expect(describeRequestFailure(error, 'Fallback message')).toBe(
+				'The uploaded file exceeds PHP upload_max_filesize (2M).',
+			)
+		})
+
 		it('returns special message for HTTP 404', () => {
 			const error = { response: { status: 404 } }
 			const result = describeRequestFailure(error, 'Fallback message')

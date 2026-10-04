@@ -71,6 +71,61 @@ final class SongFileControllerTest extends TestCase {
 		}
 	}
 
+	public function testUploadSongFileReportsPhpUploadSizeLimit(): void {
+		$userSession = $this->createMock(IUserSession::class);
+		$userSession->method('getUser')->willReturn($this->createMock(IUser::class));
+		$request = $this->createMock(IRequest::class);
+		$request->method('getParam')->willReturnCallback(
+			static fn (string $key, mixed $default = null): mixed => $key === 'libraryId' ? '7' : $default,
+		);
+		$request->method('getUploadedFile')->with('file')->willReturn([
+			'tmp_name' => '',
+			'error' => UPLOAD_ERR_INI_SIZE,
+		]);
+
+		$controller = new SongFileController(
+			'mobilesheetsmanager',
+			$request,
+			$this->createMock(SongFileService::class),
+			$userSession,
+		);
+		$response = $controller->uploadSongFile(42);
+
+		self::assertSame(Http::STATUS_REQUEST_ENTITY_TOO_LARGE, $response->getStatus());
+		self::assertStringContainsString('upload_max_filesize', $response->getData()['message']);
+	}
+
+	public function testUploadSongFileDetectsPhpPostMaxSizeWhenFilesAreMissing(): void {
+		$userSession = $this->createMock(IUserSession::class);
+		$userSession->method('getUser')->willReturn($this->createMock(IUser::class));
+		$request = $this->createMock(IRequest::class);
+		$request->method('getParam')->willReturnCallback(
+			static fn (string $key, mixed $default = null): mixed => $key === 'libraryId' ? '7' : $default,
+		);
+		$request->method('getUploadedFile')->with('file')->willReturn(null);
+
+		$previousContentLength = $_SERVER['CONTENT_LENGTH'] ?? null;
+		$_SERVER['CONTENT_LENGTH'] = '999999999999';
+		try {
+			$controller = new SongFileController(
+				'mobilesheetsmanager',
+				$request,
+				$this->createMock(SongFileService::class),
+				$userSession,
+			);
+			$response = $controller->uploadSongFile(42);
+
+			self::assertSame(Http::STATUS_REQUEST_ENTITY_TOO_LARGE, $response->getStatus());
+			self::assertStringContainsString('post_max_size', $response->getData()['message']);
+		} finally {
+			if ($previousContentLength === null) {
+				unset($_SERVER['CONTENT_LENGTH']);
+			} else {
+				$_SERVER['CONTENT_LENGTH'] = $previousContentLength;
+			}
+		}
+	}
+
 	public function testAttachNextcloudFileValidatesParameters(): void {
 		$user = $this->createMock(IUser::class);
 		$userSession = $this->createMock(IUserSession::class);

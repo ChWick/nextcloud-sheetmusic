@@ -6,7 +6,8 @@ import { translate as t } from '@nextcloud/l10n'
  * updated PHP files yet.
  */
 export function describeRequestFailure(error: unknown, fallback: string): string {
-	const status = (error as { response?: { status?: number } })?.response?.status
+	const response = record(record(error)?.response)
+	const status = response?.status
 	if (status === 404 || status === 405) {
 		return t(
 			'mobilesheetsmanager',
@@ -14,5 +15,19 @@ export function describeRequestFailure(error: unknown, fallback: string): string
 			{ status: String(status) },
 		)
 	}
+
+	const responseData = record(response?.data)
+	const ocsData = record(record(responseData?.ocs)?.data)
+	const message = ocsData?.message ?? responseData?.message
+	if (typeof message === 'string' && message !== '') {
+		return message
+	}
+
 	return fallback
+}
+
+function record(value: unknown): Record<string, unknown> | null {
+	return typeof value === 'object' && value !== null && !Array.isArray(value)
+		? value as Record<string, unknown>
+		: null
 }
