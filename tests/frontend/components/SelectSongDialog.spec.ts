@@ -28,8 +28,9 @@ describe('SelectSongDialog.vue', () => {
 					props: ['name', 'open'],
 				},
 				NcButton: {
-					template: '<button :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
-					props: ['disabled', 'variant'],
+					template: '<button :disabled="disabled" :aria-expanded="ariaExpanded" :aria-controls="ariaControls" @click="$emit(\'click\')"><slot /></button>',
+					props: ['disabled', 'variant', 'ariaExpanded', 'ariaControls'],
+					emits: ['click'],
 				},
 				NcTextField: {
 					template: '<input :value="value" @input="$emit(\'update:value\', $event.target.value)" />',
@@ -67,6 +68,33 @@ describe('SelectSongDialog.vue', () => {
 
 		expect(songList.text()).not.toContain('Joshua')
 		expect(songList.text()).toContain('Toccata')
+	})
+
+	it('allows mobile users to expand and collapse the filters', async () => {
+		const wrapper = mount(SelectSongDialog, {
+			props: {
+				open: true,
+				orphanPath: '/MobileSheets/Joshua.pdf',
+				filename: 'Joshua.pdf',
+				libraryId: 1,
+				libraryData: mockLibraryData as any,
+			},
+			...globalStubs,
+		})
+
+		const filterPanel = wrapper.find('#select-song-filter-panel')
+		const toggle = wrapper.find('[aria-controls="select-song-filter-panel"]')
+
+		expect(toggle.attributes('aria-expanded')).toBe('false')
+		expect(filterPanel.classes().some(className => className.includes('filtersCollapsed'))).toBe(true)
+
+		await toggle.trigger('click')
+		expect(toggle.attributes('aria-expanded')).toBe('true')
+		expect(filterPanel.classes().some(className => className.includes('filtersCollapsed'))).toBe(false)
+
+		await toggle.trigger('click')
+		expect(toggle.attributes('aria-expanded')).toBe('false')
+		expect(filterPanel.classes().some(className => className.includes('filtersCollapsed'))).toBe(true)
 	})
 
 	it('emits selectSong when Select & Attach is clicked', async () => {

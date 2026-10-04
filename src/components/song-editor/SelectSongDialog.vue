@@ -7,6 +7,8 @@ import NcDialog from '@nextcloud/vue/components/NcDialog'
 import SongFilterBar from '../SongFilterBar.vue'
 import MusicIcon from 'vue-material-design-icons/Music.vue'
 import PaperclipIcon from 'vue-material-design-icons/Paperclip.vue'
+import ChevronDownIcon from 'vue-material-design-icons/ChevronDown.vue'
+import ChevronUpIcon from 'vue-material-design-icons/ChevronUp.vue'
 import { noneEntryOf } from '../../composables/useSongFilters'
 
 const props = defineProps<{
@@ -24,7 +26,12 @@ const emit = defineEmits<{
 }>()
 
 const searchTitle = ref('')
+const filtersExpanded = ref(false)
 const withoutFiles = ref(false)
+
+function toggleFilters() {
+	filtersExpanded.value = !filtersExpanded.value
+}
 
 const selectedComposers = ref<Composer[]>([])
 const selectedBooks = ref<Book[]>([])
@@ -127,7 +134,22 @@ function getSongSubtext(song: Song): string {
 				{{ t('mobilesheetsmanager', 'Search and select an existing song to link with "{filename}".', { filename }) }}
 			</p>
 
-			<div :class="$style.filterSection">
+			<NcButton
+				:class="$style.filterToggle"
+				variant="secondary"
+				:aria-expanded="filtersExpanded"
+				aria-controls="select-song-filter-panel"
+				@click="toggleFilters">
+				<template #icon>
+					<ChevronUpIcon v-if="filtersExpanded" :size="18" />
+					<ChevronDownIcon v-else :size="18" />
+				</template>
+				{{ filtersExpanded ? t('mobilesheetsmanager', 'Hide filters') : t('mobilesheetsmanager', 'Show filters') }}
+			</NcButton>
+
+			<div
+				id="select-song-filter-panel"
+				:class="[$style.filterSection, !filtersExpanded && $style.filtersCollapsed]">
 				<SongFilterBar
 					v-model:search-title="searchTitle"
 					v-model:without-files="withoutFiles"
@@ -286,5 +308,67 @@ function getSongSubtext(song: Song): string {
 	gap: 4px;
 	font-size: 0.78rem;
 	color: var(--color-text-maxcontrast);
+}
+
+@media (max-width: 768px) {
+	.dialogContent {
+		width: 100%;
+		min-width: 0;
+		max-width: 100%;
+		max-height: calc(100dvh - 140px);
+		overflow-y: auto;
+		gap: 12px;
+		box-sizing: border-box;
+	}
+
+	.filterSection {
+		min-width: 0;
+		max-height: none;
+		overflow: visible;
+	}
+
+	.filterToggle {
+		display: inline-flex;
+		align-self: flex-start;
+	}
+
+	.filtersCollapsed {
+		display: none;
+	}
+
+	.resultsCount {
+		flex: 0 0 auto;
+	}
+
+	.songListContainer {
+		flex: 1 1 auto;
+		min-width: 0;
+		min-height: 120px;
+		max-height: 30dvh;
+		overflow: auto;
+	}
+
+	.songItem {
+		align-items: flex-start;
+		flex-wrap: wrap;
+		gap: 8px;
+		padding: 12px;
+	}
+
+	.songInfo {
+		width: 100%;
+		overflow-wrap: anywhere;
+	}
+
+	.songItem > :global(button) {
+		width: 100%;
+		justify-content: center;
+	}
+}
+
+@media (min-width: 769px) {
+	.filterToggle {
+		display: none;
+	}
 }
 </style>
