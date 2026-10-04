@@ -84,6 +84,12 @@ describe('SongEditor.vue', () => {
 				NcDialog: {
 					template: '<div class="nc-dialog-stub"><slot /></div>',
 				},
+				UploadIcon: {
+					template: '<span class="upload-icon-stub" />',
+				},
+				FolderIcon: {
+					template: '<span class="folder-icon-stub" />',
+				},
 			},
 		},
 	}
@@ -107,6 +113,28 @@ describe('SongEditor.vue', () => {
 		const input = wrapper.find('input#song-title-input')
 		expect(input.exists()).toBe(true)
 		expect(input.attributes('placeholder')).toBe('New Song')
+	})
+
+	it('shows upload and Nextcloud attach actions in Attached Files', () => {
+		const wrapper = mount(SongEditor, {
+			props: {
+				libraryId: 1,
+				composers: mockComposers,
+				books: mockBooks,
+				collections: mockCollections,
+				artists: mockArtists,
+			},
+			...globalStubs,
+		})
+
+		const uploadButton = wrapper.get('button[aria-label="Upload file from computer"]')
+		const nextcloudButton = wrapper.get('button[aria-label="Choose file from Nextcloud"]')
+		expect(uploadButton.text()).toContain('Upload')
+		expect(nextcloudButton.text()).toContain('Choose from Nextcloud')
+		expect(uploadButton.classes().some((className) => className.includes('fileActionButton'))).toBe(true)
+		expect(nextcloudButton.classes().some((className) => className.includes('fileActionButton'))).toBe(true)
+		expect(uploadButton.find('.upload-icon-stub').exists()).toBe(true)
+		expect(nextcloudButton.find('.folder-icon-stub').exists()).toBe(true)
 	})
 
 	it('creates a new song from the accessible, colored Create icon button', async () => {

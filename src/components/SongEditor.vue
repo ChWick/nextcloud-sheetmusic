@@ -451,6 +451,10 @@ function stageAttachNextcloudFile() {
 	successMessage.value = t('mobilesheetsmanager', 'The file is added to the song when you save.')
 }
 
+function openUploadPicker() {
+	fileInput.value?.click()
+}
+
 async function saveSong(closeAfter: boolean) {
 	if (isSaving.value) {
 		return
@@ -739,6 +743,8 @@ function handleSongDeleted(data: LibraryData | undefined, songId: number) {
 defineExpose({
 	saveSong,
 	promptDelete: () => { isDeleteDialogOpen.value = true },
+	openUploadPicker,
+	openNextcloudPicker,
 })
 </script>
 
@@ -960,7 +966,37 @@ defineExpose({
 			</div>
 
 			<div :class="$style.fileSection">
-				<label :class="$style.label">{{ t('mobilesheetsmanager', 'Attached Files') }}</label>
+				<div :class="$style.fileSectionHeader">
+					<label :class="$style.label">{{ t('mobilesheetsmanager', 'Attached Files') }}</label>
+					<div :class="$style.fileButtons">
+						<input
+							ref="fileInput"
+							type="file"
+							style="display: none;"
+							@change="handleFileUpload">
+						<button
+							type="button"
+							:class="$style.fileActionButton"
+							:disabled="isSaving"
+							:title="t('mobilesheetsmanager', 'Upload file from computer')"
+							:aria-label="t('mobilesheetsmanager', 'Upload file from computer')"
+							@click="openUploadPicker">
+							<UploadIcon :size="20" aria-hidden="true" />
+							{{ t('mobilesheetsmanager', 'Upload') }}
+						</button>
+
+						<button
+							type="button"
+							:class="$style.fileActionButton"
+							:disabled="isSaving"
+							:title="t('mobilesheetsmanager', 'Choose file from Nextcloud')"
+							:aria-label="t('mobilesheetsmanager', 'Choose file from Nextcloud')"
+							@click="openNextcloudPicker">
+							<FolderIcon :size="20" aria-hidden="true" />
+							{{ t('mobilesheetsmanager', 'Choose from Nextcloud') }}
+						</button>
+					</div>
+				</div>
 
 				<ul v-if="currentFiles.length > 0" :class="$style.fileList">
 					<SongFileListItem
@@ -985,36 +1021,6 @@ defineExpose({
 					@restore-detach="restoreDetachedFile"
 					@remove-addition="(addition) => addition.remove()" />
 
-				<div :class="$style.fileButtons">
-					<input
-						ref="fileInput"
-						type="file"
-						style="display: none;"
-						@change="handleFileUpload">
-					<NcButton
-						type="button"
-						variant="secondary"
-						:disabled="isSaving"
-						:title="t('mobilesheetsmanager', 'Upload file from computer')"
-						:aria-label="t('mobilesheetsmanager', 'Upload file from computer')"
-						@click="fileInput?.click()">
-						<template #icon>
-							<UploadIcon :size="20" />
-						</template>
-					</NcButton>
-
-					<NcButton
-						type="button"
-						variant="secondary"
-						:disabled="isSaving"
-						:title="t('mobilesheetsmanager', 'Choose file from Nextcloud')"
-						:aria-label="t('mobilesheetsmanager', 'Choose file from Nextcloud')"
-						@click="openNextcloudPicker">
-						<template #icon>
-							<FolderIcon :size="20" />
-						</template>
-					</NcButton>
-				</div>
 			</div>
 
 			<p v-if="errorMessage" :class="$style.error" role="alert">{{ errorMessage }}</p>
@@ -1142,6 +1148,13 @@ defineExpose({
 	box-sizing: border-box;
 }
 
+.fileSectionHeader {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+}
+
 .fileList {
 	margin: 0;
 	padding: 0;
@@ -1161,9 +1174,37 @@ defineExpose({
 
 .fileButtons {
 	display: flex;
-	flex-wrap: wrap;
-	gap: 12px;
-	margin-top: 8px;
+	gap: 4px;
+}
+
+.fileActionButton {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	min-height: var(--default-clickable-area, 44px);
+	padding: 6px 12px;
+	border: 1px solid var(--color-primary-element-hover, var(--color-primary-element));
+	border-radius: var(--border-radius-element, var(--border-radius, 4px));
+	background: var(--color-primary-element);
+	color: var(--color-primary-element-text, #fff);
+	font: inherit;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.fileActionButton:hover:not(:disabled) {
+	background: var(--color-primary-element-hover, var(--color-primary-element));
+}
+
+.fileActionButton:focus-visible {
+	outline: 2px solid var(--color-main-text);
+	outline-offset: 2px;
+}
+
+.fileActionButton:disabled {
+	opacity: 0.6;
+	cursor: default;
 }
 
 .actions {
