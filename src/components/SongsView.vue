@@ -1,28 +1,28 @@
 <template>
   <ViewHeader
-    :title="songIdInUrl !== null ? (isEditInUrl ? (openSong?.title ? t('mobilesheetsmanager', 'Edit: {title}', { title: openSong.title }) : t('mobilesheetsmanager', 'Edit song')) : (openSong?.title ?? t('mobilesheetsmanager', 'Songs'))) : t('mobilesheetsmanager', 'Songs')"
-    :show-back="songIdInUrl !== null"
-    :create-label="songIdInUrl === null ? t('mobilesheetsmanager', 'New song') : undefined"
-    :import-label="songIdInUrl === null ? t('mobilesheetsmanager', 'Import') : undefined"
-    :import-nextcloud-label="songIdInUrl === null ? t('mobilesheetsmanager', 'Import from Nextcloud') : undefined"
-    :filter-bar-visible="songIdInUrl === null ? filterBarVisible : undefined"
+    :title="standaloneCreate ? t('mobilesheetsmanager', 'Create Song') : songIdInUrl !== null ? (isEditInUrl ? (openSong?.title ? t('mobilesheetsmanager', 'Edit: {title}', { title: openSong.title }) : t('mobilesheetsmanager', 'Edit song')) : (openSong?.title ?? t('mobilesheetsmanager', 'Songs'))) : t('mobilesheetsmanager', 'Songs')"
+    :show-back="songIdInUrl !== null || standaloneCreate"
+    :create-label="songIdInUrl === null && !standaloneCreate ? t('mobilesheetsmanager', 'New song') : undefined"
+    :import-label="songIdInUrl === null && !standaloneCreate ? t('mobilesheetsmanager', 'Import') : undefined"
+    :import-nextcloud-label="songIdInUrl === null && !standaloneCreate ? t('mobilesheetsmanager', 'Import from Nextcloud') : undefined"
+    :filter-bar-visible="songIdInUrl === null && !standaloneCreate ? filterBarVisible : undefined"
     @back="goBackToSongs"
     @create="startNewSong"
     @import="startImport"
     @import-nextcloud="startImportNextcloud"
     @toggle-filters="toggleFilterBar">
-    <div v-if="songIdInUrl === null" :class="$style.headerControls">
+    <div v-if="songIdInUrl === null && !standaloneCreate" :class="$style.headerControls">
       <SongColumnToggle v-model:visible-columns="visibleColumns" />
       <SongSortControl v-model:sort-key="sortKey" v-model:sort-order="sortOrder" />
       <SongViewToggle v-model:view-mode="viewMode" />
     </div>
-    <template v-else-if="(isEditInUrl && openSong) || isCreatingSong">
+    <template v-else-if="isEditInUrl && openSong">
       <NcButton
         v-if="isEditInUrl && openSong"
         variant="error"
         :title="t('mobilesheetsmanager', 'Delete song')"
         :aria-label="t('mobilesheetsmanager', 'Delete song')"
-        @click="(songEditorRef || createSongEditorRef)?.promptDelete()">
+        @click="songEditorRef?.promptDelete()">
         <template #icon>
           <DeleteIcon :size="20" />
         </template>
@@ -32,22 +32,33 @@
         variant="secondary"
         :title="t('mobilesheetsmanager', 'Save without closing')"
         :aria-label="t('mobilesheetsmanager', 'Save without closing')"
-        @click="(songEditorRef || createSongEditorRef)?.saveSong(false)">
+        @click="songEditorRef?.saveSong(false)">
         <template #icon>
           <ContentSaveOutlineIcon :size="20" />
         </template>
       </NcButton>
+    </template>
+    <template v-else-if="standaloneCreate">
+      <NcButton
+        variant="secondary"
+        :title="t('mobilesheetsmanager', 'Cancel')"
+        :aria-label="t('mobilesheetsmanager', 'Cancel')"
+        @click="goBackToSongs">
+        <template #icon>
+          <CloseIcon :size="20" />
+        </template>
+      </NcButton>
       <NcButton
         variant="primary"
-        :title="isCreatingSong ? t('mobilesheetsmanager', 'Create song') : t('mobilesheetsmanager', 'Save and Close')"
-        :aria-label="isCreatingSong ? t('mobilesheetsmanager', 'Create song') : t('mobilesheetsmanager', 'Save and Close')"
-        @click="(songEditorRef || createSongEditorRef)?.saveSong(true)">
+        :title="t('mobilesheetsmanager', 'Create song')"
+        :aria-label="t('mobilesheetsmanager', 'Create song')"
+        @click="createSongEditorRef?.saveSong(true)">
         <template #icon>
           <CheckIcon :size="20" />
         </template>
       </NcButton>
     </template>
-    <template v-else-if="!isEditInUrl">
+    <template v-else-if="!standaloneCreate && !isEditInUrl">
       <NcButton
         v-if="songViewerRef?.selectedFile"
         variant="secondary"
@@ -127,8 +138,8 @@
       @updated="handleLibraryDataUpdate"
       @deleted="handleDeleted" />
   </div>
-  <div v-else :class="$style.songArea">
-    <div v-if="selectedCount > 0" :class="$style.selectionBanner">
+  <div v-else :class="[$style.songArea, standaloneCreate && $style.createSongArea]">
+    <div v-if="!standaloneCreate && selectedCount > 0" :class="$style.selectionBanner">
       <span :class="$style.selectionCount">{{ t('mobilesheetsmanager', '{count} songs selected', { count: selectedCount }) }}</span>
       <NcButton
         v-if="selectedCount === 2"
@@ -163,7 +174,7 @@
       </NcButton>
     </div>
 
-    <div v-if="filterBarVisible" :class="$style.filterBarWrapper"><SongFilterBar
+    <div v-if="!standaloneCreate && filterBarVisible" :class="$style.filterBarWrapper"><SongFilterBar
       v-model:search-title="searchTitle"
       v-model:without-files="withoutFiles"
       v-model:selected-composers="selectedComposers"
@@ -192,6 +203,7 @@
                 ref="createSongEditorRef"
                 :song="null"
                 :library-id="selectedLibrary"
+                :hide-actions="standaloneCreate"
                 :composers="composers"
                 :books="books"
                 :collections="collections"
@@ -207,13 +219,13 @@
                 :imported-nextcloud-node="importedNextcloudNode"
                 @saved="handleSaved"
                 @cancel="isCreatingSong = false" />
-    <div v-if="!isLoading && !fileError && songs.length === 0" :class="$style.emptyNotice">
+    <div v-if="!standaloneCreate && !isLoading && !fileError && songs.length === 0" :class="$style.emptyNotice">
       {{ t('mobilesheetsmanager', 'No songs found in this library.') }}
     </div>
-    <div v-else-if="!isLoading && !fileError && songs.length > 0 && filteredSongs.length === 0" :class="$style.emptyNotice">
+    <div v-else-if="!standaloneCreate && !isLoading && !fileError && songs.length > 0 && filteredSongs.length === 0" :class="$style.emptyNotice">
       {{ t('mobilesheetsmanager', 'No songs match the selected filters.') }}
     </div>
-    <template v-else>
+    <template v-else-if="!standaloneCreate">
       <SongTableView
         v-if="viewMode === 'table'"
         :songs="filteredSongs"
@@ -312,10 +324,13 @@ import SongCardView from './songs/SongCardView.vue';
 import SongSimpleListView from './songs/SongSimpleListView.vue';
 
 // Props from parent (App.vue)
-const props = defineProps<{ selectedLibrary: number }>();
+const props = withDefaults(defineProps<{ selectedLibrary: number; standaloneCreate?: boolean }>(), {
+  standaloneCreate: false,
+});
 
 const songViewerRef = ref<InstanceType<typeof SongViewer> | null>(null);
 const songEditorRef = ref<InstanceType<typeof SongEditor> | null>(null);
+const createSongEditorRef = ref<InstanceType<typeof SongEditor> | null>(null);
 
 const viewMode = ref<ViewMode>(
   (localStorage.getItem('mobilesheetsmanager_song_view_mode') as ViewMode) || 'table'
@@ -538,7 +553,7 @@ async function handleApplyBatchUpdate(payload: BatchUpdatePayload) {
 }
 
 /** The editor is open for a song that does not exist yet. */
-const isCreatingSong = ref(false);
+const isCreatingSong = ref(props.standaloneCreate);
 /** Metadata read from the PDF an import picked, prefilled into the new song. */
 const importPrefill = ref<SongPrefill | null>(null);
 /** The PDF an import picked from local computer, staged as the new song's file. */
@@ -556,6 +571,10 @@ watch(() => props.selectedLibrary, (newLib) => {
   if (newLib) loadLibraryData(newLib);
 }, { immediate: true });
 
+watch(() => props.standaloneCreate, (standaloneCreate) => {
+  isCreatingSong.value = standaloneCreate;
+}, { immediate: true });
+
 /**
  * View a song full screen. It becomes one history entry - the filters of the list
  * stay in the URL - so the browser back button returns to the song list as well.
@@ -563,13 +582,21 @@ watch(() => props.selectedLibrary, (newLib) => {
 function openSongView(song: Song) {
   // Opening a song leaves the editor for a new song behind, like pressing Cancel.
   isCreatingSong.value = false;
-  router.push({ query: { ...queryWithoutOpenSong(), song: String(song.id) } });
+  router.push({
+    name: 'LibraryView',
+    params: { library: props.selectedLibrary, view: 'songs' },
+    query: { ...queryWithoutOpenSong(), song: String(song.id) },
+  });
 }
 
 /** Edit a song right away: the URL opens its editor instead of the song view. */
 function openSongEdit(song: Song) {
   isCreatingSong.value = false;
-  router.push({ query: { ...queryWithoutOpenSong(), song: String(song.id), edit: '1' } });
+  router.push({
+    name: 'LibraryView',
+    params: { library: props.selectedLibrary, view: 'songs' },
+    query: { ...queryWithoutOpenSong(), song: String(song.id), edit: '1' },
+  });
 }
 
 /** The query without the open song and its edit flag; the filters stay. */
@@ -582,6 +609,15 @@ function queryWithoutOpenSong() {
 
 /** Return to the song list, which the URL keeps exactly as it was. */
 function goBackToSongs() {
+  if (props.standaloneCreate) {
+    router.push({
+      name: 'LibraryView',
+      params: { library: props.selectedLibrary, view: 'songs' },
+      query: queryWithoutOpenSong(),
+    });
+    return;
+  }
+
   if (window.history.state?.back) {
     router.back();
   } else {
@@ -602,10 +638,11 @@ function startNewSong() {
 /** Open the create editor. */
 function openNewSong() {
   isCreatingSong.value = true;
-  // The editor is part of the list view; leave an open song for it.
-  if (songIdInUrl.value !== null) {
-    router.push({ query: queryWithoutOpenSong() });
-  }
+  router.push({
+    name: 'LibraryView',
+    params: { library: props.selectedLibrary, view: 'new-song' },
+    query: queryWithoutOpenSong(),
+  });
 }
 
 /** Open the file picker: the PDF picked here seeds a new song with its metadata. */
@@ -690,12 +727,31 @@ watch(isCreatingSong, (creating) => {
 
 /** The editor saved: refresh the library data and show the song that was saved. */
 function handleSaved(data: LibraryData, songId?: number) {
+  const wasCreatingSong = isCreatingSong.value;
   isCreatingSong.value = false;
   handleLibraryDataUpdate(data);
 
-  if (songId === undefined) return;
+  if (songId === undefined) {
+    if (wasCreatingSong) {
+      router.push({
+        name: 'LibraryView',
+        params: { library: props.selectedLibrary, view: 'songs' },
+        query: queryWithoutOpenSong(),
+      });
+    }
+    return;
+  }
   const saved = songs.value.find(song => song.id === songId);
-  if (!saved) return;
+  if (!saved) {
+    if (wasCreatingSong) {
+      router.push({
+        name: 'LibraryView',
+        params: { library: props.selectedLibrary, view: 'songs' },
+        query: queryWithoutOpenSong(),
+      });
+    }
+    return;
+  }
   if (songIdInUrl.value === saved.id) {
     // Saving the open song keeps it open and only drops the edit flag. Replacing
     // keeps the history clean: going back should leave the song, not re-open the
@@ -729,6 +785,9 @@ async function handleDeleted(data: LibraryData | undefined, songId: number) {
   gap: 16px;
   min-width: 0;
   max-width: calc(100% - 32px);
+}
+.createSongArea {
+  display: block;
 }
 .songList {
   margin: 0;

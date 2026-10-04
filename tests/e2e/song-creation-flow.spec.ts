@@ -19,6 +19,10 @@ test.describe('Song Creation & End-to-End Editing Flow', () => {
 		// Verify editor opens in creation mode
 		const titleInput = page.locator('#song-title-input')
 		await expect(titleInput).toBeVisible()
+		await expect(page).toHaveURL(/#\/library\/1\/new-song/)
+		await expect(page.getByRole('heading', { name: 'Create Song' })).toBeVisible()
+		await expect(page.getByRole('heading', { name: 'Songs' })).toHaveCount(0)
+		await expect(page.getByRole('button', { name: 'Cancel' })).toBeVisible()
 		await expect(page.getByRole('button', { name: 'Create song' })).toBeVisible()
 
 		// Fill in title
@@ -26,9 +30,10 @@ test.describe('Song Creation & End-to-End Editing Flow', () => {
 
 		// Save new song
 		const createBtn = page.getByRole('button', { name: 'Create song' })
-		await createBtn.dispatchEvent('click')
+		await createBtn.click()
 
 		// Should exit editor back to songs view
+		await expect(page).toHaveURL(/#\/library\/1\/songs/)
 		await expect(page.getByRole('heading', { name: 'Songs' })).toBeVisible()
 	})
 

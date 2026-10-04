@@ -48,6 +48,8 @@ const props = withDefaults(
 		importedFile?: File | null
 		/** An imported Nextcloud PDF file, staged as the new song's file attachment. */
 		importedNextcloudNode?: { path: string, name: string, action?: 'copy' | 'move' } | null
+		/** Hide the in-form buttons when the view provides persistent header actions. */
+		hideActions?: boolean
 	}>(),
 	{
 		song: null,
@@ -60,6 +62,7 @@ const props = withDefaults(
 		prefill: null,
 		importedFile: null,
 		importedNextcloudNode: null,
+		hideActions: false,
 	},
 )
 
@@ -449,6 +452,10 @@ function stageAttachNextcloudFile() {
 }
 
 async function saveSong(closeAfter: boolean) {
+	if (isSaving.value) {
+		return
+	}
+
 	if (!title.value.trim()) {
 		errorMessage.value = t('mobilesheetsmanager', 'Song title cannot be empty.')
 		return
@@ -1013,23 +1020,30 @@ defineExpose({
 			<p v-if="errorMessage" :class="$style.error" role="alert">{{ errorMessage }}</p>
 			<p v-if="successMessage" :class="$style.success" role="status">{{ successMessage }}</p>
 
-			<div :class="$style.actions">
+			<div v-if="!hideActions" :class="$style.actions">
 				<NcButton
 					type="button"
 					variant="secondary"
 					:disabled="isSaving"
+					:title="t('mobilesheetsmanager', 'Cancel')"
+					:aria-label="t('mobilesheetsmanager', 'Cancel')"
 					@click="emit('cancel')">
-					{{ t('mobilesheetsmanager', 'Cancel') }}
+					<template #icon>
+						<CloseIcon :size="20" />
+					</template>
 				</NcButton>
 
 				<NcButton
-					type="submit"
+					type="button"
 					variant="primary"
-					:disabled="isSaving">
+					:disabled="isSaving"
+					:title="saveActionLabel"
+					:aria-label="saveActionLabel"
+					@click="saveSong(true)">
 					<template #icon>
-						<ContentSaveOutlineIcon :size="20" />
+						<CheckIcon v-if="isNewSong" :size="20" />
+						<ContentSaveOutlineIcon v-else :size="20" />
 					</template>
-					{{ saveActionLabel }}
 				</NcButton>
 			</div>
 		</form>

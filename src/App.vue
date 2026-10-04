@@ -21,8 +21,8 @@ import IntegrityView from './components/IntegrityView.vue'
 import EntitiesView from './components/EntitiesView.vue'
 
 /** Views of a library: the song view, one view per song filter, the files view, and integrity audit. */
-type ViewName = 'songs' | 'files' | 'integrity' | EntityType
-const VIEW_NAMES: ViewName[] = ['songs', 'composers', 'artists', 'books', 'collections', 'genres', 'keys', 'customgroups', 'years', 'signatures', 'sourcetypes', 'files', 'integrity']
+type ViewName = 'songs' | 'new-song' | 'files' | 'integrity' | EntityType
+const VIEW_NAMES: ViewName[] = ['songs', 'new-song', 'composers', 'artists', 'books', 'collections', 'genres', 'keys', 'customgroups', 'years', 'signatures', 'sourcetypes', 'files', 'integrity']
 
 /*** State ***/
 const isDialogOpen = ref(false)
@@ -204,7 +204,7 @@ async function deleteLibrary() {
 
         <!-- view toggle – only for the selected library; choosing one starts without filters -->
         <template v-if="selectedLibrary >= 0">
-          <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Songs')" :active="selectedView === 'songs'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'songs' } }" />
+          <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Songs')" :active="selectedView === 'songs' || selectedView === 'new-song'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'songs' } }" />
           <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Composers')" :active="selectedView === 'composers'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'composers' } }" />
           <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Artists')" :active="selectedView === 'artists'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'artists' } }" />
           <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Books')" :active="selectedView === 'books'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'books' } }" />
@@ -238,7 +238,9 @@ async function deleteLibrary() {
       <!-- Main content -->
       <NcAppContent>
         <template v-if="selectedLibrary >= 0">
-          <SongsView v-if="selectedView === 'songs'" :selectedLibrary="selectedLibrary" />
+          <SongsView v-if="selectedView === 'songs' || selectedView === 'new-song'"
+                     :selectedLibrary="selectedLibrary"
+                     :standalone-create="selectedView === 'new-song'" />
           <FilesView v-else-if="selectedView === 'files'" :selectedLibrary="selectedLibrary" />
           <IntegrityView v-else-if="selectedView === 'integrity'" :selectedLibrary="selectedLibrary" />
           <EntitiesView v-else

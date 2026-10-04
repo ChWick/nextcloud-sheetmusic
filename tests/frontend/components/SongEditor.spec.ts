@@ -67,7 +67,7 @@ describe('SongEditor.vue', () => {
 		global: {
 			stubs: {
 				NcButton: {
-					template: '<button :disabled="disabled" :type="type" :title="title" :aria-label="ariaLabel"><slot /></button>',
+					template: '<button :disabled="disabled" :type="type" :title="title" :aria-label="ariaLabel" :data-variant="variant"><slot name="icon" /><slot /></button>',
 					props: ['disabled', 'type', 'variant', 'title', 'ariaLabel'],
 				},
 				NcTextField: {
@@ -107,6 +107,37 @@ describe('SongEditor.vue', () => {
 		const input = wrapper.find('input#song-title-input')
 		expect(input.exists()).toBe(true)
 		expect(input.attributes('placeholder')).toBe('New Song')
+	})
+
+	it('creates a new song from the accessible, colored Create icon button', async () => {
+		vi.mocked(axios.post).mockResolvedValue({
+			data: { ocs: { data: { songs: [], createdSongId: 99 } } },
+		})
+		const wrapper = mount(SongEditor, {
+			props: {
+				libraryId: 1,
+				composers: mockComposers,
+				books: mockBooks,
+				collections: mockCollections,
+				artists: mockArtists,
+			},
+			...globalStubs,
+		})
+
+		await wrapper.find('input#song-title-input').setValue('New Song')
+
+		const cancelButton = wrapper.get('button[aria-label="Cancel"]')
+		const createButton = wrapper.get('button[aria-label="Create song"]')
+		expect(cancelButton.attributes('data-variant')).toBe('secondary')
+		expect(createButton.attributes('data-variant')).toBe('primary')
+		expect(createButton.attributes('type')).toBe('button')
+		await createButton.trigger('click')
+
+		expect(axios.post).toHaveBeenCalledWith('/ocs/v2.php/apps/mobilesheetsmanager/api/songs', expect.objectContaining({
+			libraryId: 1,
+			title: 'New Song',
+		}))
+		expect(wrapper.emitted('saved')).toHaveLength(1)
 	})
 
 	it('renders title input with song title when song prop is provided', () => {
