@@ -40,6 +40,7 @@
                   @click="showSongsOf(entity)">
             {{ entityLabel(entity) }}
           </button>
+          <span :class="$style.entitySongCount">{{ songCountLabel(entity) }}</span>
           <NcButton variant="error"
                     size="small"
                     :class="$style.deleteButton"
@@ -282,6 +283,26 @@ function entitiesOfSong(song: Song): FilterEntity[] {
   return song[props.entityType] ?? []
 }
 
+/** Number of distinct songs carrying each entry in this view. */
+const entitySongCounts = computed(() => {
+  const counts = new Map<number, number>()
+  for (const song of songs.value) {
+    const attachedEntityIds = new Set(entitiesOfSong(song).map(entity => entity.id))
+    for (const id of attachedEntityIds) {
+      counts.set(id, (counts.get(id) ?? 0) + 1)
+    }
+  }
+  return counts
+})
+
+function songCountLabel(entity: FilterEntity): string {
+  const count = entitySongCounts.value.get(entity.id) ?? 0
+  const unit = count === 1
+    ? t('mobilesheetsmanager', 'song')
+    : t('mobilesheetsmanager', 'songs')
+  return `${count} ${unit}`
+}
+
 /** Songs that match the filter bar selections. */
 const visibleSongs = computed(() => filterSongs(songs.value))
 
@@ -400,16 +421,23 @@ async function deleteEntity() {
   margin-bottom: 4px;
 }
 .entityList {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content auto;
+  column-gap: 8px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 .entityRow {
-  display: flex;
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
   align-items: center;
-  gap: 8px;
   border-bottom: 1px solid var(--color-border);
   min-width: 0;
+}
+.entityList > li:not(.entityRow) {
+  grid-column: 1 / -1;
 }
 .entityButton {
   flex: 1;
@@ -427,6 +455,10 @@ async function deleteEntity() {
 }
 .entityButton:hover {
   background: var(--color-background-hover);
+}
+.entitySongCount {
+  color: var(--color-text-maxcontrast);
+  white-space: nowrap;
 }
 .listColumn {
   display: flex;

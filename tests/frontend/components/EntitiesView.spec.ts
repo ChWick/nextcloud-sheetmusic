@@ -50,7 +50,11 @@ describe('EntitiesView.vue', () => {
 			data: {
 				ocs: {
 					data: {
-						songs: [],
+						songs: [
+							{ id: 1, title: 'Symphony', composers: [{ id: 1, name: 'Beethoven' }] },
+							{ id: 2, title: 'Concerto', composers: [{ id: 2, name: 'Bach' }] },
+							{ id: 3, title: 'Fugue', composers: [{ id: 2, name: 'Bach' }] },
+						],
 						composers: [
 							{ id: 1, name: 'Beethoven' },
 							{ id: 2, name: 'Bach' },
@@ -76,6 +80,8 @@ describe('EntitiesView.vue', () => {
 
 		expect(wrapper.text()).toContain('Beethoven')
 		expect(wrapper.text()).toContain('Bach')
+		expect(wrapper.text()).toContain('1 song')
+		expect(wrapper.text()).toContain('2 songs')
 	})
 
 	it('loads and displays books correctly', async () => {
@@ -83,7 +89,9 @@ describe('EntitiesView.vue', () => {
 			data: {
 				ocs: {
 					data: {
-						songs: [],
+						songs: [
+							{ id: 1, title: 'Symphony', books: [{ id: 10, title: 'Real Book Vol 1' }] },
+						],
 						composers: [],
 						books: [{ id: 10, title: 'Real Book Vol 1' }],
 						collections: [],
@@ -100,5 +108,30 @@ describe('EntitiesView.vue', () => {
 		await new Promise((r) => setTimeout(r, 10))
 
 		expect(wrapper.text()).toContain('Real Book Vol 1')
+		expect(wrapper.text()).toContain('1 song')
+	})
+
+	it('shows zero songs for entries without attached songs', async () => {
+		vi.mocked(axios.get).mockResolvedValueOnce({
+			data: {
+				ocs: {
+					data: {
+						songs: [],
+						composers: [{ id: 1, name: 'Beethoven' }],
+						books: [],
+						collections: [],
+						artists: [],
+					},
+				},
+			},
+		})
+
+		const wrapper = mount(EntitiesView, {
+			props: { selectedLibrary: 1, entityType: 'composers' },
+		})
+
+		await new Promise((r) => setTimeout(r, 10))
+
+		expect(wrapper.text()).toContain('0 songs')
 	})
 })
