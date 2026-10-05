@@ -10,6 +10,7 @@ putenv('TEST_DONT_LOAD_APPS=1');
 
 require_once __DIR__ . '/../../../tests/bootstrap.php';
 require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/TestSupport/MobileSheetsTestDatabase.php';
 
 \OC_App::loadApp(OCA\MobileSheetsManager\AppInfo\Application::APP_ID);
 OC_Hook::clear();
