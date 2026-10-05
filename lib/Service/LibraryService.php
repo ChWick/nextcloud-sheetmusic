@@ -7,7 +7,6 @@ namespace OCA\MobileSheetsManager\Service;
 use OCA\MobileSheetsManager\Db\LibraryMapper;
 use OCA\MobileSheetsManager\Db\SongMapper;
 use OCP\Files\IRootFolder;
-use OCP\IUser;
 use Psr\Log\LoggerInterface;
 
 class LibraryService {
@@ -16,7 +15,6 @@ class LibraryService {
 		private SongMapper $songMapper,
 		private IRootFolder $rootFolder,
 		private LoggerInterface $logger,
-		private LibrarySyncService $librarySync,
 	) {
 	}
 
@@ -89,16 +87,4 @@ class LibraryService {
 		];
 	}
 
-	public function syncLibrary(int $libraryId, IUser $user): array {
-		$log = $this->librarySync->syncLibrary($libraryId, $user);
-		$failures = count(array_filter($log, static fn ($entry) => $entry->level !== MobileSheetsFileLogEntry::LEVEL_INFO));
-
-		return [
-			'message' => $failures === 0
-				? 'File paths and metadata are up to date'
-				: sprintf('Library synced, but %d file(s) need attention', $failures),
-			'log' => $log,
-		];
-	}
 }
-

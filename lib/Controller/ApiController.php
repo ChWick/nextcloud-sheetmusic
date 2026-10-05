@@ -11,7 +11,6 @@ use OCA\MobileSheetsManager\Db\SongMapper;
 use OCA\MobileSheetsManager\Service\EntityService;
 use OCA\MobileSheetsManager\Service\FileManager;
 use OCA\MobileSheetsManager\Service\LibraryService;
-use OCA\MobileSheetsManager\Service\LibrarySyncService;
 use OCA\MobileSheetsManager\Service\SongFileService;
 use OCA\MobileSheetsManager\Service\SongService;
 use OCP\AppFramework\Http;
@@ -44,7 +43,6 @@ class ApiController extends OCSController {
 		LoggerInterface $logger,
 		IUserSession $userSession,
 		FileManager $fileManager,
-		LibrarySyncService $librarySync,
 		?LibraryService $libraryService = null,
 		?SongService $songService = null,
 		?SongFileService $songFileService = null,
@@ -53,7 +51,7 @@ class ApiController extends OCSController {
 	) {
 		parent::__construct($appName, $request);
 
-		$libService = $libraryService ?? new LibraryService($libraryMapper, $songMapper, $rootFolder, $logger, $librarySync);
+		$libService = $libraryService ?? new LibraryService($libraryMapper, $songMapper, $rootFolder, $logger);
 		$pathResolver = new MobileSheetsPathResolver($rootFolder);
 		$integritySvc = $libraryIntegrityService ?? new LibraryIntegrityService($libService, $songMapper, $fileManager, $rootFolder, $pathResolver, $logger);
 		$fileSvc = $songFileService ?? new SongFileService($libService, $songMapper, $fileManager, $rootFolder, $logger);

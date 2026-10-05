@@ -13,7 +13,6 @@ use OCA\MobileSheetsManager\Db\MobileSheetsFile;
 use OCA\MobileSheetsManager\Db\MobileSheetsSong;
 use OCA\MobileSheetsManager\Db\SongMapper;
 use OCA\MobileSheetsManager\Service\FileManager;
-use OCA\MobileSheetsManager\Service\LibrarySyncService;
 use OCA\MobileSheetsManager\Service\MobileSheetsFileFacts;
 use OCA\MobileSheetsManager\Service\MobileSheetsFileLogEntry;
 use OCA\MobileSheetsManager\Service\MobileSheetsHashCodesFile;
@@ -1285,7 +1284,6 @@ final class ApiTest extends TestCase {
 		?FileManager $fileManager = null,
 		?IRequest $request = null,
 		bool $loggedIn = true,
-		?LibrarySyncService $librarySync = null,
 	): ApiController {
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('admin');
@@ -1302,7 +1300,6 @@ final class ApiTest extends TestCase {
 			$this->createMock(LoggerInterface::class),
 			$userSession,
 			$fileManager ?? $this->createMock(FileManager::class),
-			$librarySync ?? $this->createMock(LibrarySyncService::class),
 		);
 	}
 }

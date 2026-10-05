@@ -92,12 +92,6 @@ export const mockSongs = [
 	},
 ]
 
-export const mockSyncLog = [
-	{ songId: 5, level: 'info', message: 'Checked 1 file for Symphony No. 5.' },
-	{ songId: 6, level: 'warning', message: 'Found extra file path Requiem.pdf.' },
-	{ songId: 0, level: 'error', message: 'Missing file on disk: Beethoven - Missing.pdf' },
-]
-
 export async function setupMockApi(page: Page) {
 	// Mock libraries list endpoint
 	await page.route('**/api/libraries**', async (route) => {
@@ -135,20 +129,6 @@ export async function setupMockApi(page: Page) {
 						sourceTypes: mockSourceTypes,
 						createdSongId: 99,
 					},
-				},
-			}),
-		})
-	})
-
-	// Mock sync library endpoint
-	await page.route('**/api/sync-library', async (route) => {
-		await route.fulfill({
-			status: 200,
-			contentType: 'application/json',
-			body: JSON.stringify({
-				ocs: {
-					meta: { status: 'ok', statuscode: 200 },
-					data: { log: mockSyncLog },
 				},
 			}),
 		})
