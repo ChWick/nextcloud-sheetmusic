@@ -435,7 +435,6 @@ async function openNextcloudPicker() {
 	errorMessage.value = ''
 	const picker = getFilePickerBuilder(t('mobilesheetsmanager', 'Select a file for this song'))
 		.setMultiSelect(false)
-		.setFilter((node) => node.type !== 'file')
 		.setCanPick((node) => node.type === 'file')
 		.setButtonFactory(([node]) => [{
 			label: node

@@ -1,7 +1,7 @@
 import type { Artist, Book, Collection, Composer, Song } from '../../../src/types/song'
 
 import axios from '@nextcloud/axios'
-import { showSuccess } from '@nextcloud/dialogs'
+import { getFilePickerBuilder, showSuccess } from '@nextcloud/dialogs'
 import { mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import SongEditor from '../../../src/components/SongEditor.vue'
@@ -135,6 +135,39 @@ describe('SongEditor.vue', () => {
 		expect(nextcloudButton.classes().some((className) => className.includes('fileActionButton'))).toBe(true)
 		expect(uploadButton.find('.upload-icon-stub').exists()).toBe(true)
 		expect(nextcloudButton.find('.folder-icon-stub').exists()).toBe(true)
+	})
+
+	it('keeps files visible in the Nextcloud attachment picker', async () => {
+		const picker = { pickNodes: vi.fn().mockResolvedValue([]) }
+		let canPickPredicate: ((node: { type: string }) => boolean) | undefined
+		const builder = {
+			setMultiSelect: vi.fn(() => builder),
+			setCanPick: vi.fn((predicate: (node: { type: string }) => boolean) => {
+				canPickPredicate = predicate
+				return builder
+			}),
+			setButtonFactory: vi.fn(() => builder),
+			build: vi.fn(() => picker),
+		}
+		vi.mocked(getFilePickerBuilder).mockReturnValue(builder as never)
+
+		const wrapper = mount(SongEditor, {
+			props: {
+				libraryId: 1,
+				composers: mockComposers,
+				books: mockBooks,
+				collections: mockCollections,
+				artists: mockArtists,
+			},
+			...globalStubs,
+		})
+
+		await (wrapper.vm as unknown as { openNextcloudPicker: () => Promise<void> }).openNextcloudPicker()
+
+		expect(builder.setCanPick).toHaveBeenCalledOnce()
+		expect(canPickPredicate?.({ type: 'file' })).toBe(true)
+		expect(canPickPredicate?.({ type: 'folder' })).toBe(false)
+		expect(picker.pickNodes).toHaveBeenCalledOnce()
 	})
 
 	it('creates a new song from the accessible, colored Create icon button', async () => {
