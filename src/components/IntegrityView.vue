@@ -122,6 +122,13 @@ watch(() => props.selectedLibrary, (newLib) => {
 	}
 }, { immediate: true })
 
+watch(isMergeDialogOpen, (isOpen) => {
+	if (!isOpen && !isMerging.value) {
+		mergingKey.value = null
+		mergeIssue.value = null
+	}
+})
+
 /** Automatically fix all fixable issues (optionally filtered by type) */
 async function fixAllIssues(issueType?: string) {
 	if (props.selectedLibrary < 0) return
