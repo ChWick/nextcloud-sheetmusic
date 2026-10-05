@@ -6,6 +6,7 @@ import EyeIcon from 'vue-material-design-icons/Eye.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import { computed, ref, watch } from 'vue'
 import { formatDateTimestamp, formatDifficulty, formatDuration, formatStars, sortSongs, type SortKey, type SortOrder } from '../../utils/song-formatter'
+import { useSongRowInteraction } from '../../composables/useSongRowInteraction'
 
 const props = withDefaults(
 	defineProps<{
@@ -78,61 +79,16 @@ function sortIndicator(key: SortKey): string {
 
 const sortedSongs = computed(() => sortSongs(props.songs, localSortKey.value, localSortOrder.value))
 
-let touchTimer: ReturnType<typeof setTimeout> | null = null
-let touchStartPos = { x: 0, y: 0 }
-const isLongPressing = ref(false)
-
-function handleTouchStart(songId: number, e: TouchEvent) {
-	if (e.touches.length !== 1) return
-	isLongPressing.value = false
-	touchStartPos = { x: e.touches[0].clientX, y: e.touches[0].clientY }
-	touchTimer = setTimeout(() => {
-		isLongPressing.value = true
-		if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-			try {
-				navigator.vibrate(40)
-			} catch {
-				// ignore
-			}
-		}
-		emit('toggle-select-song', songId)
-	}, 500)
-}
-
-function handleTouchMove(e: TouchEvent) {
-	if (!touchTimer || e.touches.length !== 1) return
-	const touch = e.touches[0]
-	const dx = Math.abs(touch.clientX - touchStartPos.x)
-	const dy = Math.abs(touch.clientY - touchStartPos.y)
-	if (dx > 10 || dy > 10) {
-		clearTimeout(touchTimer)
-		touchTimer = null
-	}
-}
-
-function handleTouchEnd() {
-	if (touchTimer) {
-		clearTimeout(touchTimer)
-		touchTimer = null
-	}
-}
-
-function handleTouchCancel() {
-	if (touchTimer) {
-		clearTimeout(touchTimer)
-		touchTimer = null
-	}
-}
-
-function handleSongClick(song: Song, e: Event) {
-	if (isLongPressing.value) {
-		e.preventDefault()
-		e.stopPropagation()
-		isLongPressing.value = false
-		return
-	}
-	emit('view-song', song)
-}
+const {
+	handleTouchStart,
+	handleTouchMove,
+	handleTouchEnd,
+	handleTouchCancel,
+	handleSongClick,
+} = useSongRowInteraction({
+	onToggleSelect: (songId) => emit('toggle-select-song', songId),
+	onViewSong: (song) => emit('view-song', song),
+})
 </script>
 
 <template>
