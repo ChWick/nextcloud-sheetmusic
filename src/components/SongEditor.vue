@@ -6,10 +6,8 @@ import axios from '@nextcloud/axios'
 import { FilePickerClosed, getFilePickerBuilder, showSuccess } from '@nextcloud/dialogs'
 import { translate as t } from '@nextcloud/l10n'
 import { generateOcsUrl } from '@nextcloud/router'
-import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
-import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import { apiDelete, apiPost } from '../api/client'
 import { describeRequestFailure } from '../utils/api'
@@ -19,12 +17,10 @@ import CheckIcon from 'vue-material-design-icons/Check.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 import ContentSaveOutlineIcon from 'vue-material-design-icons/ContentSaveOutline.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
-import FolderIcon from 'vue-material-design-icons/Folder.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
-import UploadIcon from 'vue-material-design-icons/Upload.vue'
 import AttachNextcloudFileDialog from './song-editor/AttachNextcloudFileDialog.vue'
-import SongFileListItem from './song-editor/SongFileListItem.vue'
-import SongPendingNotice from './song-editor/SongPendingNotice.vue'
+import SongFileSection from './song-editor/SongFileSection.vue'
+import SongMetadataFields from './song-editor/SongMetadataFields.vue'
 import DeleteSongDialog from './DeleteSongDialog.vue'
 
 const props = withDefaults(
@@ -288,7 +284,7 @@ watch(
 const isSaving = ref(false)
 const errorMessage = ref('')
 const successMessage = ref('')
-const fileInput = ref<HTMLInputElement>()
+const fileSection = ref<{ openUploadPicker: () => void }>()
 
 // Nextcloud file attach dialog state
 const isAttachDialogOpen = ref(false)
@@ -429,17 +425,7 @@ function restoreDetachedFile(file: SongFile) {
  * Choosing a file on the computer only stages it. The upload - including the move into
  * the library folder - runs when the song is saved, just like a staged deletion.
  */
-function handleFileUpload(event: Event) {
-	const target = event.target as HTMLInputElement
-	const file = target.files?.[0]
-	if (fileInput.value) {
-		// Reset right away, so the same file can be picked again after removing it.
-		fileInput.value.value = ''
-	}
-	if (!file) {
-		return
-	}
-
+function handleFileUpload(file: File) {
 	errorMessage.value = ''
 	stageUpload(file)
 	successMessage.value = t('mobilesheetsmanager', 'The file is added to the song when you save.')
@@ -493,7 +479,7 @@ function stageAttachNextcloudFile() {
 }
 
 function openUploadPicker() {
-	fileInput.value?.click()
+	fileSection.value?.openUploadPicker()
 }
 
 async function saveSong(closeAfter: boolean) {
@@ -810,265 +796,61 @@ defineExpose({
 				</div>
 			</div>
 
-			<div :class="$style.formGroup">
-				<NcSelect
-					v-model="selectedComposers"
-					:options="composers"
-					:multiple="true"
-					:taggable="true"
-					:create-option="createComposerTag"
-					:close-on-select="false"
-					:input-label="t('mobilesheetsmanager', 'Composers')"
-					label="name"
-					track-by="name"
-					:placeholder="t('mobilesheetsmanager', 'Select or type a composer…')" />
-			</div>
+			<SongMetadataFields
+				v-model:selected-composers="selectedComposers"
+				v-model:selected-books="selectedBooks"
+				v-model:selected-collections="selectedCollections"
+				v-model:selected-artists="selectedArtists"
+				v-model:selected-genres="selectedGenres"
+				v-model:selected-keys="selectedKeys"
+				v-model:selected-custom-groups="selectedCustomGroups"
+				v-model:selected-years="selectedYears"
+				v-model:selected-signatures="selectedSignatures"
+				v-model:selected-source-types="selectedSourceTypes"
+				v-model:stars="stars"
+				v-model:difficulty="difficulty"
+				v-model:duration="duration"
+				v-model:keywords="keywords"
+				v-model:custom="custom"
+				v-model:custom2="custom2"
+				v-model:tempo="tempo"
+				:composers="composers"
+				:books="books"
+				:collections="collections"
+				:artists="artists"
+				:genres="genres"
+				:keys="keys"
+				:custom-groups="customGroups"
+				:years="years"
+				:signatures="signatures"
+				:source-types="sourceTypes"
+				:create-composer-tag="createComposerTag"
+				:create-book-tag="createBookTag"
+				:create-collection-tag="createCollectionTag"
+				:create-artist-tag="createArtistTag"
+				:create-genre-tag="createGenreTag"
+				:create-key-tag="createKeyTag"
+				:create-custom-group-tag="createCustomGroupTag"
+				:create-year-tag="createYearTag"
+				:create-signature-tag="createSignatureTag"
+				:create-source-type-tag="createSourceTypeTag" />
 
-			<div :class="$style.formGroup">
-				<NcSelect
-					v-model="selectedBooks"
-					:options="books"
-					:multiple="true"
-					:taggable="true"
-					:create-option="createBookTag"
-					:close-on-select="false"
-					:input-label="t('mobilesheetsmanager', 'Books / Albums')"
-					label="title"
-					track-by="title"
-					:placeholder="t('mobilesheetsmanager', 'Select or type a book/album…')" />
-			</div>
-
-			<div :class="$style.formGroup">
-				<NcSelect
-					v-model="selectedCollections"
-					:options="collections"
-					:multiple="true"
-					:taggable="true"
-					:create-option="createCollectionTag"
-					:close-on-select="false"
-					:input-label="t('mobilesheetsmanager', 'Collections')"
-					label="name"
-					track-by="name"
-					:placeholder="t('mobilesheetsmanager', 'Select or type a collection…')" />
-			</div>
-
-			<div :class="$style.formGroup">
-				<NcSelect
-					v-model="selectedArtists"
-					:options="artists"
-					:multiple="true"
-					:taggable="true"
-					:create-option="createArtistTag"
-					:close-on-select="false"
-					:input-label="t('mobilesheetsmanager', 'Artists')"
-					label="name"
-					track-by="name"
-					:placeholder="t('mobilesheetsmanager', 'Select or type an artist…')" />
-			</div>
-
-			<div :class="$style.formGroup">
-				<NcSelect
-					v-model="selectedGenres"
-					:options="genres"
-					:multiple="true"
-					:taggable="true"
-					:create-option="createGenreTag"
-					:close-on-select="false"
-					:input-label="t('mobilesheetsmanager', 'Genres')"
-					label="name"
-					track-by="name"
-					:placeholder="t('mobilesheetsmanager', 'Select or type a genre…')" />
-			</div>
-
-			<div :class="$style.formGroup">
-				<NcSelect
-					v-model="selectedKeys"
-					:options="keys"
-					:multiple="true"
-					:taggable="true"
-					:create-option="createKeyTag"
-					:close-on-select="false"
-					:input-label="t('mobilesheetsmanager', 'Keys')"
-					label="name"
-					track-by="name"
-					:placeholder="t('mobilesheetsmanager', 'Select or type a key…')" />
-			</div>
-
-			<div :class="$style.formGroup">
-				<NcSelect
-					v-model="selectedCustomGroups"
-					:options="customGroups"
-					:multiple="true"
-					:taggable="true"
-					:create-option="createCustomGroupTag"
-					:close-on-select="false"
-					:input-label="t('mobilesheetsmanager', 'Custom Groups')"
-					label="name"
-					track-by="name"
-					:placeholder="t('mobilesheetsmanager', 'Select or type a custom group…')" />
-			</div>
-
-			<div :class="$style.formGroup">
-				<NcSelect
-					v-model="selectedYears"
-					:options="years"
-					:multiple="true"
-					:taggable="true"
-					:create-option="createYearTag"
-					:close-on-select="false"
-					:input-label="t('mobilesheetsmanager', 'Years')"
-					label="name"
-					track-by="name"
-					:placeholder="t('mobilesheetsmanager', 'Select or type a year…')" />
-			</div>
-
-			<div :class="$style.formGroup">
-				<NcSelect
-					v-model="selectedSignatures"
-					:options="signatures"
-					:multiple="true"
-					:taggable="true"
-					:create-option="createSignatureTag"
-					:close-on-select="false"
-					:input-label="t('mobilesheetsmanager', 'Time Signatures')"
-					label="name"
-					track-by="name"
-					:placeholder="t('mobilesheetsmanager', 'Select or type a time signature (e.g. 4/4)…')" />
-			</div>
-
-			<div :class="$style.formGroup">
-				<NcSelect
-					v-model="selectedSourceTypes"
-					:options="sourceTypes"
-					:multiple="true"
-					:taggable="true"
-					:create-option="createSourceTypeTag"
-					:close-on-select="false"
-					:input-label="t('mobilesheetsmanager', 'Source Types')"
-					label="name"
-					track-by="name"
-					:placeholder="t('mobilesheetsmanager', 'Select or type a source type…')" />
-			</div>
-
-			<div :class="$style.attributesGrid">
-				<div :class="$style.formGroup">
-					<NcTextField
-						id="song-rating-input"
-						v-model.number="stars"
-						type="number"
-						:min="0"
-						:max="5"
-						:placeholder="t('mobilesheetsmanager', '0-5')"
-						:label="t('mobilesheetsmanager', 'Rating (Stars 0-5)')" />
-				</div>
-				<div :class="$style.formGroup">
-					<NcTextField
-						id="song-difficulty-input"
-						v-model.number="difficulty"
-						type="number"
-						:min="0"
-						:max="5"
-						:placeholder="t('mobilesheetsmanager', '0-5')"
-						:label="t('mobilesheetsmanager', 'Difficulty (0-5)')" />
-				</div>
-				<div :class="$style.formGroup">
-					<NcTextField
-						id="song-duration-input"
-						v-model.number="duration"
-						type="number"
-						:min="0"
-						:placeholder="t('mobilesheetsmanager', 'Seconds (e.g. 180)')"
-						:label="t('mobilesheetsmanager', 'Duration (seconds)')" />
-				</div>
-				<div :class="$style.formGroup">
-					<NcTextField
-						id="song-keywords-input"
-						v-model="keywords"
-						:placeholder="t('mobilesheetsmanager', 'Keywords / tags…')"
-						:label="t('mobilesheetsmanager', 'Keywords')" />
-				</div>
-				<div :class="$style.formGroup">
-					<NcTextField
-						id="song-custom-input"
-						v-model="custom"
-						:placeholder="t('mobilesheetsmanager', 'Custom field…')"
-						:label="t('mobilesheetsmanager', 'Custom')" />
-				</div>
-				<div :class="$style.formGroup">
-					<NcTextField
-						id="song-custom2-input"
-						v-model="custom2"
-						:placeholder="t('mobilesheetsmanager', 'Custom field 2…')"
-						:label="t('mobilesheetsmanager', 'Custom 2')" />
-				</div>
-				<div :class="$style.formGroup">
-					<NcTextField
-						id="song-tempo-input"
-						:model-value="tempo ? String(tempo) : ''"
-						type="number"
-						:placeholder="t('mobilesheetsmanager', 'Tempo (BPM)…')"
-						:label="t('mobilesheetsmanager', 'Tempo (BPM)')"
-						@update:model-value="tempo = Number($event) || 0" />
-				</div>
-			</div>
-
-			<div :class="$style.fileSection">
-				<div :class="$style.fileSectionHeader">
-					<label :class="$style.label">{{ t('mobilesheetsmanager', 'Attached Files') }}</label>
-					<div :class="$style.fileButtons">
-						<input
-							ref="fileInput"
-							type="file"
-							style="display: none;"
-							@change="handleFileUpload">
-						<button
-							type="button"
-							:class="$style.fileActionButton"
-							:disabled="isSaving"
-							:title="t('mobilesheetsmanager', 'Upload file from computer')"
-							:aria-label="t('mobilesheetsmanager', 'Upload file from computer')"
-							@click="openUploadPicker">
-							<UploadIcon :size="20" aria-hidden="true" />
-							{{ t('mobilesheetsmanager', 'Upload') }}
-						</button>
-
-						<button
-							type="button"
-							:class="$style.fileActionButton"
-							:disabled="isSaving"
-							:title="t('mobilesheetsmanager', 'Choose file from Nextcloud')"
-							:aria-label="t('mobilesheetsmanager', 'Choose file from Nextcloud')"
-							@click="openNextcloudPicker">
-							<FolderIcon :size="20" aria-hidden="true" />
-							{{ t('mobilesheetsmanager', 'Choose from Nextcloud') }}
-						</button>
-					</div>
-				</div>
-
-				<ul v-if="currentFiles.length > 0" :class="$style.fileList">
-					<SongFileListItem
-						v-for="file in currentFiles"
-						:key="file.id"
-						:file="file"
-						:disabled="isSaving"
-						@open-external="openInExternalViewer"
-						@detach="stageDetachFile"
-						@delete="stageDeleteFile" />
-				</ul>
-				<p v-else :class="$style.noFiles">
-					{{ t('mobilesheetsmanager', 'No files attached to this song.') }}
-				</p>
-
-				<SongPendingNotice
-					:pending-delete-files="pendingDeleteFiles"
-					:pending-detach-files="pendingDetachFiles"
-					:pending-additions="pendingAdditions"
-					:save-action-label="saveActionLabel"
-					@restore-delete="restoreDeletedFile"
-					@restore-detach="restoreDetachedFile"
-					@remove-addition="(addition) => addition.remove()" />
-
-			</div>
+			<SongFileSection
+				ref="fileSection"
+				:current-files="currentFiles"
+				:pending-delete-files="pendingDeleteFiles"
+				:pending-detach-files="pendingDetachFiles"
+				:pending-additions="pendingAdditions"
+				:save-action-label="saveActionLabel"
+				:is-saving="isSaving"
+				@upload-file="handleFileUpload"
+				@choose-nextcloud-file="openNextcloudPicker"
+				@open-external="openInExternalViewer"
+				@detach="stageDetachFile"
+				@delete="stageDeleteFile"
+				@restore-delete="restoreDeletedFile"
+				@restore-detach="restoreDetachedFile"
+				@remove-addition="(addition) => addition.remove()" />
 
 			<p v-if="errorMessage" :class="$style.error" role="alert">{{ errorMessage }}</p>
 			<p v-if="successMessage" :class="$style.success" role="status">{{ successMessage }}</p>
@@ -1157,101 +939,6 @@ defineExpose({
 	flex-direction: column;
 	gap: 16px;
 	min-width: 0;
-}
-
-.formGroup {
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-	min-width: 0;
-	position: relative;
-}
-
-.attributesGrid {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-	gap: 12px;
-}
-
-.formGroup:focus-within {
-	z-index: 10;
-}
-
-.label {
-	font-size: 0.9rem;
-	font-weight: 600;
-	color: var(--color-text-maxcontrast);
-}
-
-.fileSection {
-	display: flex;
-	flex-direction: column;
-	gap: 10px;
-	padding: 16px;
-	background-color: var(--color-background-hover);
-	border-radius: var(--border-radius, 4px);
-	margin-top: 8px;
-	min-width: 0;
-	box-sizing: border-box;
-}
-
-.fileSectionHeader {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 12px;
-}
-
-.fileList {
-	margin: 0;
-	padding: 0;
-	list-style: none;
-	display: flex;
-	flex-direction: column;
-	gap: 8px;
-	min-width: 0;
-}
-
-.noFiles {
-	margin: 0;
-	font-size: 0.9rem;
-	color: var(--color-text-maxcontrast);
-	font-style: italic;
-}
-
-.fileButtons {
-	display: flex;
-	gap: 4px;
-}
-
-.fileActionButton {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	gap: 8px;
-	min-height: var(--default-clickable-area, 44px);
-	padding: 6px 12px;
-	border: 1px solid var(--color-primary-element-hover, var(--color-primary-element));
-	border-radius: var(--border-radius-element, var(--border-radius, 4px));
-	background: var(--color-primary-element);
-	color: var(--color-primary-element-text, #fff);
-	font: inherit;
-	font-weight: 600;
-	cursor: pointer;
-}
-
-.fileActionButton:hover:not(:disabled) {
-	background: var(--color-primary-element-hover, var(--color-primary-element));
-}
-
-.fileActionButton:focus-visible {
-	outline: 2px solid var(--color-main-text);
-	outline-offset: 2px;
-}
-
-.fileActionButton:disabled {
-	opacity: 0.6;
-	cursor: default;
 }
 
 .actions {
