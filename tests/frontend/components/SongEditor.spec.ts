@@ -2,7 +2,7 @@ import type { Artist, Book, Collection, Composer, Song } from '../../../src/type
 
 import axios from '@nextcloud/axios'
 import { getFilePickerBuilder, showSuccess } from '@nextcloud/dialogs'
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import SongEditor from '../../../src/components/SongEditor.vue'
 
@@ -406,6 +406,7 @@ describe('SongEditor.vue', () => {
 
 		expect(wrapper.text()).toContain('1 file(s) will be detached from the song (kept in storage)')
 		await wrapper.find('form').trigger('submit.prevent')
+		await flushPromises()
 
 		expect(axios.post).toHaveBeenCalledWith(
 			'/ocs/v2.php/apps/mobilesheetsmanager/api/songs/5/file/50/detach',
