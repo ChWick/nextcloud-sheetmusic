@@ -16,8 +16,10 @@ use OCP\Files\Node;
 use OCP\IUser;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
+use TestSupport\TestUtils;
 
 final class SongFileServiceTest extends TestCase {
+	use TestUtils;
 	private const UID = 'user1';
 
 	private IRootFolder $rootFolder;
@@ -33,8 +35,12 @@ final class SongFileServiceTest extends TestCase {
 
 	/** @var array<string, true> relative path => true */
 	private array $folders = [];
+	private array $databaseFixture;
 
 	protected function setUp(): void {
+		$this->databaseFixture = \TestSupport\MobileSheetsTestDatabase::create();
+		$this->databaseFixture['connection']->exec("INSERT INTO Songs (Id, Title) VALUES (10, 'score')");
+		$this->databaseFixture['connection']->exec("INSERT INTO Files (Id, SongId, Path) VALUES (1, 10, '/remote.php/dav/files/user1/Noten/score (2).pdf')");
 		$this->files = [];
 		$this->folders = ['Noten' => true];
 
@@ -49,19 +55,9 @@ final class SongFileServiceTest extends TestCase {
 
 		$this->libraryService = $this->createMock(LibraryService::class);
 		$this->libraryService->method('getLibraryAndDatabasePath')
-			->willReturn(['/Noten/library.db', '/tmp/library.db']);
+			->willReturn(['/Noten/library.db', $this->databaseFixture['path']]);
 
-		$this->songMapper = $this->createMock(SongMapper::class);
-		$mockSong = new \OCA\MobileSheetsManager\Db\MobileSheetsSong(
-			10,
-			'score',
-			[new \OCA\MobileSheetsManager\Db\MobileSheetsFile(1, '/remote.php/dav/files/user1/Noten/score (2).pdf')],
-			[],
-			[],
-			[],
-			[],
-		);
-		$this->songMapper->method('findSong')->willReturn($mockSong);
+		$this->songMapper = $this->createSongMapper();
 		$this->logger = $this->createMock(LoggerInterface::class);
 		$pathResolver = new \OCA\MobileSheetsManager\Service\MobileSheetsPathResolver($this->rootFolder);
 		$this->fileManager = new FileManager(
@@ -101,6 +97,12 @@ final class SongFileServiceTest extends TestCase {
 			$this->files[$clean] = '';
 			return $this->fakeFileNode($clean);
 		});
+	}
+
+	protected function tearDown(): void {
+		if (isset($this->databaseFixture['path']) && is_file($this->databaseFixture['path'])) {
+			unlink($this->databaseFixture['path']);
+		}
 	}
 
 	private function fakeFolderNode(string $relative): Folder {
@@ -249,21 +251,9 @@ final class SongFileServiceTest extends TestCase {
 		$file->method('putContent')->willReturnCallback(static fn (string $content): int => strlen($content));
 		$userFolder->method('newFile')->with('Noten/new.pdf')->willReturn($file);
 
-		$songFile = new \OCA\MobileSheetsManager\Db\MobileSheetsFile(
-			20,
-			'/remote.php/dav/files/user1/Noten/new.pdf',
-		);
-		$songWithoutFiles = new \OCA\MobileSheetsManager\Db\MobileSheetsSong(10, 'New Song', []);
-		$songWithFile = new \OCA\MobileSheetsManager\Db\MobileSheetsSong(10, 'New Song', [$songFile]);
-		$songMapper = $this->createMock(SongMapper::class);
-		$songMapper->expects(self::exactly(2))
-			->method('findSong')
-			->with('/tmp/library.db', 10)
-			->willReturnOnConsecutiveCalls($songWithoutFiles, $songWithFile);
-		$songMapper->expects(self::once())
-			->method('setSongFile')
-			->with('/tmp/library.db', 10, $songFile->path, self::isInstanceOf(\OCA\MobileSheetsManager\Service\MobileSheetsFileFacts::class));
-		$songMapper->method('findLibraryData')->willReturn([]);
+		$this->databaseFixture['connection']->exec("UPDATE Songs SET Title = 'New Song' WHERE Id = 10");
+		$this->databaseFixture['connection']->exec('DELETE FROM Files WHERE Id = 1');
+		$songMapper = $this->createSongMapper();
 
 		$fileManager = $this->createMock(FileManager::class);
 		$fileManager->expects(self::once())
@@ -275,18 +265,24 @@ final class SongFileServiceTest extends TestCase {
 			->with($file->getPath(), $user)
 			->willReturn(new \OCA\MobileSheetsManager\Service\MobileSheetsPath(
 				'/user1/files/Noten/new.pdf',
-				$songFile->path,
+				'/remote.php/dav/files/user1/Noten/new.pdf',
 			));
 		$fileManager->expects(self::once())->method('regenerateSongFilePaths');
 		$fileManager->expects(self::once())
 			->method('syncMetadataIntoFile')
-			->with($songWithFile, $songFile, $user, '/tmp/library.db', self::anything())
+			->with(
+				self::callback(static fn ($song): bool => $song->title === 'New Song'),
+				self::callback(static fn ($songFile): bool => $songFile->path === '/remote.php/dav/files/user1/Noten/new.pdf'),
+				$user,
+				$this->databaseFixture['path'],
+				self::anything(),
+			)
 			->willReturn(\OCA\MobileSheetsManager\Service\MobileSheetsFileLogEntry::CODE_METADATA_UPDATED);
 
 		$libraryService = $this->createMock(LibraryService::class);
 		$libraryService->method('getLibraryAndDatabasePath')->with(self::UID, 1)->willReturn([
 			'/Noten/library.db',
-			'/tmp/library.db',
+			$this->databaseFixture['path'],
 		]);
 
 		$service = new SongFileService(
@@ -311,31 +307,12 @@ final class SongFileServiceTest extends TestCase {
 
 	public function testDetachSongFileKeepsThePhysicalFile(): void {
 		$this->files['Noten/score.pdf'] = 'DETACHED_CONTENT';
-		$emptySong = new \OCA\MobileSheetsManager\Db\MobileSheetsSong(
-			10,
-			'score',
-			[],
-			[],
-			[],
-			[],
-			[],
-		);
-		$this->songMapper->expects(self::once())
-			->method('removeSongFile')
-			->with('/tmp/library.db', 10, 1)
-			->willReturn('/remote.php/dav/files/user1/Noten/score.pdf');
-		$this->songMapper->expects(self::once())
-			->method('findSong')
-			->with('/tmp/library.db', 10)
-			->willReturn($emptySong);
-		$this->songMapper->expects(self::once())
-			->method('findLibraryData')
-			->with('/tmp/library.db')
-			->willReturn(['songs' => []]);
+		$this->databaseFixture['connection']->exec("UPDATE Files SET Path = '/remote.php/dav/files/user1/Noten/score.pdf' WHERE Id = 1");
 
 		$result = $this->service->detachSongFile($this->user(), 1, 10, 1);
 
-		self::assertSame(['songs' => []], $result);
+		self::assertSame([], $result['songs'][0]->files);
 		self::assertSame('DETACHED_CONTENT', $this->files['Noten/score.pdf']);
+		self::assertSame(0, (int)$this->databaseFixture['connection']->query('SELECT COUNT(*) FROM Files WHERE Id = 1')->fetchColumn());
 	}
 }

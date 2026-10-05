@@ -12,20 +12,19 @@ use OCA\MobileSheetsManager\Service\SongService;
 use OCP\IUser;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
+use TestSupport\TestUtils;
 
 final class SongServiceTest extends TestCase {
+	use TestUtils;
+
 	public function testGetSongsReturnsLibraryData(): void {
+		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('admin');
 
 		$libraryService = $this->createMock(LibraryService::class);
-		$libraryService->method('getDatabasePath')->with('admin', 1)->willReturn('/tmp/mobilesheets.db');
-
-		$songMapper = $this->createMock(SongMapper::class);
-		$songMapper->expects($this->once())
-			->method('findLibraryData')
-			->with('/tmp/mobilesheets.db')
-			->willReturn(['songs' => []]);
+		$libraryService->method('getDatabasePath')->with('admin', 1)->willReturn($fixture['path']);
+		$songMapper = $this->createSongMapper();
 
 		$service = new SongService(
 			$libraryService,
@@ -35,22 +34,21 @@ final class SongServiceTest extends TestCase {
 			$this->createMock(LoggerInterface::class),
 		);
 
-		$this->assertSame(['songs' => []], $service->getSongs($user, 1));
+		try {
+			self::assertSame([], $service->getSongs($user, 1)['songs']);
+		} finally {
+			unlink($fixture['path']);
+		}
 	}
 
 	public function testCreateSongReturnsCreatedIdAndData(): void {
+		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('admin');
 
 		$libraryService = $this->createMock(LibraryService::class);
-		$libraryService->method('getDatabasePath')->with('admin', 1)->willReturn('/tmp/mobilesheets.db');
-
-		$songMapper = $this->createMock(SongMapper::class);
-		$songMapper->expects($this->once())
-			->method('createSong')
-			->with('/tmp/mobilesheets.db', 'Take Five', [10], [], [], [])
-			->willReturn(42);
-		$songMapper->method('findLibraryData')->willReturn(['songs' => []]);
+		$libraryService->method('getDatabasePath')->with('admin', 1)->willReturn($fixture['path']);
+		$songMapper = $this->createSongMapper();
 
 		$service = new SongService(
 			$libraryService,
@@ -60,27 +58,29 @@ final class SongServiceTest extends TestCase {
 			$this->createMock(LoggerInterface::class),
 		);
 
-		$res = $service->createSong($user, 1, 'Take Five', [10]);
-		$this->assertSame(['createdSongId' => 42, 'songs' => []], $res);
+		try {
+			$res = $service->createSong($user, 1, 'Take Five');
+			self::assertSame(1, $res['createdSongId']);
+			self::assertSame('Take Five', $res['songs'][0]->title);
+		} finally {
+			unlink($fixture['path']);
+		}
 	}
 
 	public function testUpdateSongSyncsMetadata(): void {
+		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
+		$fixture['connection']->exec("INSERT INTO Songs (Id, Title) VALUES (42, 'Take Five')");
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('admin');
 
 		$libraryService = $this->createMock(LibraryService::class);
-		$libraryService->method('getDatabasePath')->with('admin', 1)->willReturn('/tmp/mobilesheets.db');
-
-		$songMapper = $this->createMock(SongMapper::class);
-		$songMapper->expects($this->once())
-			->method('updateSong')
-			->with('/tmp/mobilesheets.db', 42, 'Blue Bossa', [], [], [], []);
-		$songMapper->method('findLibraryData')->willReturn(['songs' => []]);
+		$libraryService->method('getDatabasePath')->with('admin', 1)->willReturn($fixture['path']);
+		$songMapper = $this->createSongMapper();
 
 		$songFileService = $this->createMock(SongFileService::class);
 		$songFileService->expects($this->once())
 			->method('syncSongFileMetadata')
-			->with($user, '/tmp/mobilesheets.db', 42);
+			->with($user, $fixture['path'], 42);
 
 		$service = new SongService(
 			$libraryService,
@@ -90,21 +90,25 @@ final class SongServiceTest extends TestCase {
 			$this->createMock(LoggerInterface::class),
 		);
 
-		$this->assertSame(['songs' => []], $service->updateSong($user, 42, 1, 'Blue Bossa'));
+		try {
+			$result = $service->updateSong($user, 42, 1, 'Blue Bossa');
+			self::assertSame('Blue Bossa', $result['songs'][0]->title);
+			self::assertSame('Blue Bossa', $fixture['connection']->query('SELECT Title FROM Songs WHERE Id = 42')->fetchColumn());
+		} finally {
+			unlink($fixture['path']);
+		}
 	}
 
 	public function testBatchUpdateSongsCallsBatchUpdateAndSyncsFiles(): void {
+		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
+		$fixture['connection']->exec("INSERT INTO Songs (Id, Title) VALUES (42, 'Take Five'), (43, 'Blue Bossa')");
+		$fixture['connection']->exec("INSERT INTO Composer (Id, Name) VALUES (10, 'Bach')");
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('admin');
 
 		$libraryService = $this->createMock(LibraryService::class);
-		$libraryService->method('getDatabasePath')->with('admin', 1)->willReturn('/tmp/mobilesheets.db');
-
-		$songMapper = $this->createMock(SongMapper::class);
-		$songMapper->expects($this->once())
-			->method('batchUpdateSongs')
-			->with('/tmp/mobilesheets.db', [42, 43], [10], null, null, null);
-		$songMapper->method('findLibraryData')->willReturn(['songs' => []]);
+		$libraryService->method('getDatabasePath')->with('admin', 1)->willReturn($fixture['path']);
+		$songMapper = $this->createSongMapper();
 
 		$songFileService = $this->createMock(SongFileService::class);
 		$songFileService->expects($this->exactly(2))->method('syncSongFileMetadata');
@@ -117,18 +121,25 @@ final class SongServiceTest extends TestCase {
 			$this->createMock(LoggerInterface::class),
 		);
 
-		$this->assertSame(['songs' => []], $service->batchUpdateSongs($user, 1, [42, 43], [10]));
+		try {
+			$result = $service->batchUpdateSongs($user, 1, [42, 43], ['action' => 'add', 'ids' => [10]]);
+			self::assertCount(2, $result['songs']);
+			self::assertSame(2, (int)$fixture['connection']->query('SELECT COUNT(*) FROM ComposerSongs WHERE ComposerId = 10')->fetchColumn());
+		} finally {
+			unlink($fixture['path']);
+		}
 	}
 
 	public function testResolveBothSongsPreservesSharedFileOnDetach(): void {
+		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
+		$fixture['connection']->exec("INSERT INTO Songs (Id, Title) VALUES (60, 'Song A'), (61, 'Song B')");
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('admin');
 
 		$libraryService = $this->createMock(LibraryService::class);
-		$libraryService->method('getDatabasePath')->with('admin', 1)->willReturn('/tmp/mobilesheets.db');
+		$libraryService->method('getDatabasePath')->with('admin', 1)->willReturn($fixture['path']);
 
-		$songMapper = $this->createMock(SongMapper::class);
-		$songMapper->method('findLibraryData')->willReturn(['songs' => []]);
+		$songMapper = $this->createSongMapper();
 
 		$songFileService = $this->createMock(SongFileService::class);
 		$songFileService->expects($this->once())
@@ -138,7 +149,7 @@ final class SongServiceTest extends TestCase {
 		$fileManager = $this->createMock(FileManager::class);
 		$targetFolder = $this->createMock(\OCP\Files\Folder::class);
 		$fileManager->method('libraryContext')->willReturn([
-			'databasePath' => '/tmp/mobilesheets.db',
+			'databasePath' => $fixture['path'],
 			'targetFolder' => $targetFolder,
 		]);
 
@@ -161,7 +172,9 @@ final class SongServiceTest extends TestCase {
 			['id' => 61, 'title' => 'Song B', 'detachFileIds' => []],
 		);
 
-		$this->assertSame(['songs' => []], $res);
+		self::assertCount(2, $res['songs']);
+		self::assertSame('Song A', $fixture['connection']->query('SELECT Title FROM Songs WHERE Id = 60')->fetchColumn());
+		unlink($fixture['path']);
 	}
 
 	public function testResolveBothSongsWithRealDatabaseIntegration(): void {

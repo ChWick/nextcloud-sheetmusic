@@ -33,6 +33,7 @@ use OCP\IUser;
 use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Psr\Log\LoggerInterface;
+use TestSupport\TestUtils;
 use function OCA\MobileSheetsManager\Service\fileIndexOf;
 use function OCA\MobileSheetsManager\Service\fileIndexPrefix;
 
@@ -44,6 +45,8 @@ use function OCA\MobileSheetsManager\Service\fileIndexPrefix;
  * assert the resulting state rather than the individual mock interactions.
  */
 final class FileManagerTest extends TestCase {
+	use TestUtils;
+
 	private const UID = 'admin';
 	private const USER_ROOT = '/admin/files';
 	private const LIBRARY_DIR = '/admin/files/Noten';
@@ -69,14 +72,15 @@ final class FileManagerTest extends TestCase {
 	/** @var list<string> folders removed through delete() */
 	private array $deletedFolders = [];
 
-	/** @var list<array{fileId: int, path: string}> recorded updateFile() calls */
-	private array $updates = [];
+	private array $databaseFixture;
 
 	/** @var array<string, int> relative path => assigned node id */
 	private array $nodeIds = [];
 
 	/** @var array<string, int> webdav path => song id referencing it */
 	private array $referencedPaths = [];
+	/** @var array<string, true> entity table/id pairs already stored in the fixture */
+	private array $storedEntityIds = [];
 
 	private Folder $libraryFolder;
 	private FileManager $fileManager;
@@ -85,6 +89,10 @@ final class FileManagerTest extends TestCase {
 	private IUserFolder $userFolder;
 
 	protected function setUp(): void {
+		$this->databaseFixture = \TestSupport\MobileSheetsTestDatabase::create();
+		$this->databaseFixture['connection']->exec("INSERT INTO Files (Id, SongId, Path, LastModified) VALUES (7, 999, '/remote.php/dav/files/admin/Noten/source/SomeFile.pdf', 0)");
+		$this->databaseFixture['connection']->exec('CREATE TABLE TestFileUpdates (fileId INTEGER, path TEXT)');
+		$this->databaseFixture['connection']->exec('CREATE TRIGGER RecordFileUpdate AFTER UPDATE OF Path ON Files BEGIN INSERT INTO TestFileUpdates (fileId, path) VALUES (NEW.Id, NEW.Path); END');
 		$this->files = ['Noten/source/SomeFile.pdf' => 'PAYLOAD'];
 		$this->folders = ['Noten' => true, 'Noten/source' => true];
 		$this->moves = [];
@@ -92,7 +100,6 @@ final class FileManagerTest extends TestCase {
 		$this->temporaryFiles = [];
 		$this->createdFolders = [];
 		$this->deletedFolders = [];
-		$this->updates = [];
 		$this->nodeIds = [];
 
 		$user = $this->createMock(IUser::class);
@@ -107,7 +114,7 @@ final class FileManagerTest extends TestCase {
 		$this->libraryFolder = $this->fakeFolder('Noten');
 		$this->libraryFolder->method('getPath')->willReturn(self::LIBRARY_DIR);
 
-		$this->songMapper = $this->makeRecordingSongMapper();
+		$this->songMapper = $this->createSongMapper();
 
 		$this->fileManager = $this->makeFileManager($this->songMapper);
 	}
@@ -120,6 +127,9 @@ final class FileManagerTest extends TestCase {
 		}
 		$this->temporaryFiles = [];
 		$this->referencedPaths = [];
+		if (isset($this->databaseFixture['path']) && is_file($this->databaseFixture['path'])) {
+			unlink($this->databaseFixture['path']);
+		}
 	}
 
 	/** A FileManager wired to the fake tree and the given SongMapper. */
@@ -133,21 +143,48 @@ final class FileManagerTest extends TestCase {
 		);
 	}
 
-	/** A SongMapper whose updateFile() calls are recorded instead of executed. */
-	private function makeRecordingSongMapper(): SongMapper {
-		$songMapper = $this->createMock(SongMapper::class);
-		$songMapper->method('updateFile')->willReturnCallback(
-			function (string $databasePath, int $fileId, string $newPath): void {
-				$this->updates[] = ['fileId' => $fileId, 'path' => $newPath];
-			},
-		);
-		$songMapper->method('isPathReferencedByOtherSong')->willReturnCallback(
-			function (string $databasePath, string $filePath, int $songId): bool {
-				return isset($this->referencedPaths[$filePath]) && $this->referencedPaths[$filePath] !== $songId;
-			},
-		);
+	/** @return list<array{fileId: int, path: string}> */
+	private function databaseUpdates(): array {
+		$updates = $this->databaseFixture['connection']
+			->query('SELECT fileId, path FROM TestFileUpdates ORDER BY rowid')
+			->fetchAll(\PDO::FETCH_ASSOC);
 
-		return $songMapper;
+		return array_map(
+			static fn (array $update): array => ['fileId' => (int)$update['fileId'], 'path' => (string)$update['path']],
+			$updates,
+		);
+	}
+
+	private function storeSong(MobileSheetsSong $song): void {
+		$db = $this->databaseFixture['connection'];
+		$db->prepare('INSERT OR REPLACE INTO Songs (Id, Title) VALUES (?, ?)')->execute([$song->id, $song->title]);
+		$entitySets = [
+			['composers', 'Composer', 'Name', 'ComposerSongs', 'ComposerId'],
+			['books', 'Books', 'Title', 'BookSongs', 'BookId'],
+			['collections', 'Collections', 'Name', 'CollectionSong', 'CollectionId'],
+			['artists', 'Artists', 'Name', 'ArtistsSongs', 'ArtistId'],
+		];
+		foreach ($entitySets as [$property, $table, $column, $linkTable, $linkColumn]) {
+			foreach ($song->$property as $entity) {
+				$key = "$table:{$entity->id}";
+				if (!isset($this->storedEntityIds[$key])) {
+					$db->prepare("INSERT OR IGNORE INTO \"$table\" (Id, \"$column\") VALUES (?, ?)")
+						->execute([$entity->id, $entity->name ?? $entity->title ?? '']);
+					$this->storedEntityIds[$key] = true;
+				}
+				$db->prepare("INSERT INTO \"$linkTable\" (\"$linkColumn\", SongId) VALUES (?, ?)")
+					->execute([$entity->id, $song->id]);
+			}
+		}
+		foreach ($song->files as $file) {
+			$db->prepare('INSERT OR REPLACE INTO Files (Id, SongId, Path, LastModified) VALUES (?, ?, ?, 0)')
+				->execute([$file->id, $song->id, $file->path]);
+		}
+	}
+
+	private function recordPathReference(string $path, int $songId): void {
+		$this->databaseFixture['connection']->prepare('INSERT INTO Files (SongId, Path, LastModified) VALUES (?, ?, 0)')
+			->execute([$songId, $path]);
 	}
 
 	private function user(): IUser {
@@ -498,15 +535,16 @@ final class FileManagerTest extends TestCase {
 		MobileSheetsSong $song,
 		string $sourceRelative,
 		int $fileId = 7,
-		string $databasePath = '/tmp/library.db',
+		?string $databasePath = null,
 		?MobileSheetsHashCodesFile $hashCodes = null,
 	): void {
+		$this->storeSong($song);
 		$this->fileManager->regenerateFilePath(
 			$song,
 			new MobileSheetsFile($fileId, $this->sourceWebdav($sourceRelative)),
 			$this->user(),
 			$this->libraryFolder,
-			$databasePath,
+			$databasePath ?? $this->databaseFixture['path'],
 			$hashCodes,
 		);
 	}
@@ -520,7 +558,7 @@ final class FileManagerTest extends TestCase {
 		);
 		self::assertSame(
 			[['fileId' => 7, 'path' => '/remote.php/dav/files/admin/Noten/Jazz/Jazz - Take Five.pdf']],
-			$this->updates,
+			$this->databaseUpdates(),
 		);
 		self::assertArrayHasKey('Noten/Jazz/Jazz - Take Five.pdf', $this->files);
 		self::assertSame('PAYLOAD', $this->files['Noten/Jazz/Jazz - Take Five.pdf']);
@@ -567,7 +605,7 @@ final class FileManagerTest extends TestCase {
 		$this->regenerate($this->collectionSong(), 'Noten/Jazz/Jazz - Take Five.pdf');
 
 		self::assertSame([], $this->moves, 'must not move a file that is already in place');
-		self::assertSame([], $this->updates, 'must not rewrite the database when nothing changed');
+		self::assertSame([], $this->databaseUpdates(), 'must not rewrite the database when nothing changed');
 		self::assertSame('PAYLOAD', $this->files['Noten/Jazz/Jazz - Take Five.pdf']);
 	}
 
@@ -577,13 +615,14 @@ final class FileManagerTest extends TestCase {
 		$webdavPath = $this->sourceWebdav('Noten/Jazz/Jazz - Take Five.pdf');
 		// Mark path as referenced by song ID 99 (different from song 1)
 		$this->referencedPaths[$webdavPath] = 99;
+		$this->recordPathReference($webdavPath, 99);
 
 		$this->regenerate($this->collectionSong(), 'Noten/Jazz/Jazz - Take Five.pdf');
 
 		self::assertArrayHasKey('Noten/Jazz/Jazz - Take Five (2).pdf', $this->files);
 		self::assertSame(
 			[['fileId' => 7, 'path' => '/remote.php/dav/files/admin/Noten/Jazz/Jazz - Take Five (2).pdf']],
-			$this->updates,
+			$this->databaseUpdates(),
 		);
 	}
 
@@ -607,7 +646,7 @@ final class FileManagerTest extends TestCase {
 		);
 		self::assertSame(
 			[['fileId' => 7, 'path' => '/remote.php/dav/files/admin/Noten/Jazz/Jazz - Take Five (2).pdf']],
-			$this->updates,
+			$this->databaseUpdates(),
 		);
 		self::assertSame('EXISTING', $this->files['Noten/Jazz/Jazz - Take Five.pdf'], 'the other song\'s file must survive');
 		self::assertSame('PAYLOAD', $this->files['Noten/Jazz/Jazz - Take Five (2).pdf']);
@@ -649,7 +688,7 @@ final class FileManagerTest extends TestCase {
 		$this->regenerate($this->collectionSong(), 'Noten/Jazz/Jazz - Take Five (2).pdf');
 
 		self::assertSame([], $this->moves, 'a file that already has the unique name must not be renamed');
-		self::assertSame([], $this->updates);
+		self::assertSame([], $this->databaseUpdates());
 		self::assertSame('PAYLOAD', $this->files['Noten/Jazz/Jazz - Take Five (2).pdf']);
 	}
 
@@ -665,7 +704,7 @@ final class FileManagerTest extends TestCase {
 		}
 
 		self::assertSame([], $this->moves);
-		self::assertSame([], $this->updates);
+		self::assertSame([], $this->databaseUpdates());
 		self::assertArrayNotHasKey('Noten/Jazz/Jazz - Take Five.pdf', $this->files);
 	}
 
@@ -680,12 +719,12 @@ final class FileManagerTest extends TestCase {
 			new MobileSheetsFile(7, '/remote.php/dav/files/admin/Noten/source/MissingOldFile.pdf'),
 			$this->user(),
 			$this->libraryFolder,
-			'/tmp/library.db',
+			$this->databaseFixture['path'],
 		);
 
 		self::assertSame([], $this->moves);
-		self::assertCount(1, $this->updates);
-		self::assertSame('/remote.php/dav/files/admin/Noten/Jazz/Jazz - Take Five.pdf', $this->updates[0]['path']);
+		self::assertCount(1, $this->databaseUpdates());
+		self::assertSame('/remote.php/dav/files/admin/Noten/Jazz/Jazz - Take Five.pdf', $this->databaseUpdates()[0]['path']);
 		self::assertStringContainsString('Linked to existing target file', $entry->message);
 	}
 
@@ -696,17 +735,18 @@ final class FileManagerTest extends TestCase {
 		$this->folders = ['Noten' => true, 'Noten/Jazz' => true, 'Noten/source' => true];
 		// Target path is referenced by song 10 (different song ID than our test song)
 		$this->referencedPaths['/remote.php/dav/files/admin/Noten/Jazz/Jazz - Take Five.pdf'] = 10;
+		$this->recordPathReference('/remote.php/dav/files/admin/Noten/Jazz/Jazz - Take Five.pdf', 10);
 
 		$entry = $this->fileManager->regenerateFilePath(
 			$this->collectionSong(),
 			new MobileSheetsFile(7, '/remote.php/dav/files/admin/Noten/source/MissingOldFile.pdf'),
 			$this->user(),
 			$this->libraryFolder,
-			'/tmp/library.db',
+			$this->databaseFixture['path'],
 		);
 
-		self::assertCount(1, $this->updates);
-		self::assertSame('/remote.php/dav/files/admin/Noten/Jazz/Jazz - Take Five (2).pdf', $this->updates[0]['path']);
+		self::assertCount(1, $this->databaseUpdates());
+		self::assertSame('/remote.php/dav/files/admin/Noten/Jazz/Jazz - Take Five (2).pdf', $this->databaseUpdates()[0]['path']);
 		self::assertStringContainsString('Copied file for separate song', $entry->message);
 	}
 
@@ -719,7 +759,7 @@ final class FileManagerTest extends TestCase {
 			new MobileSheetsFile(7, '/remote.php/dav/files/cwick/Familie/Noten/x.pdf'),
 			$this->user(),
 			$this->libraryFolder,
-			'/tmp/library.db',
+			$this->databaseFixture['path'],
 		);
 	}
 
@@ -865,7 +905,7 @@ final class FileManagerTest extends TestCase {
 		self::assertSame([
 			['fileId' => 11, 'path' => '/remote.php/dav/files/admin/Noten/Jazz/001 Jazz - Take Five.pdf'],
 			['fileId' => 12, 'path' => '/remote.php/dav/files/admin/Noten/Jazz/002 Jazz - Take Five.pdf'],
-		], $this->updates);
+		], $this->databaseUpdates());
 
 		// The prefix belongs on the file name, not on a folder.
 		self::assertSame(['Noten/Jazz'], $this->createdFolders);
@@ -1102,8 +1142,8 @@ final class FileManagerTest extends TestCase {
 	}
 
 	public function testRevertsTheMoveWhenTheDatabaseUpdateFails(): void {
-		$failing = $this->createMock(SongMapper::class);
-		$failing->method('updateFile')->willThrowException(new \RuntimeException('database gone'));
+		$this->databaseFixture['connection']->exec("CREATE TRIGGER FailFileUpdate BEFORE UPDATE OF Path ON Files BEGIN SELECT RAISE(ABORT, 'database gone'); END");
+		$failing = $this->createSongMapper();
 		$this->fileManager = $this->makeFileManager($failing);
 
 		try {
@@ -1146,7 +1186,7 @@ final class FileManagerTest extends TestCase {
 		);
 		self::assertSame(
 			[['fileId' => 7, 'path' => '/remote.php/dav/files/admin/Noten/Ed Sheeran/Ed Sheeran - Shape of You.pdf']],
-			$this->updates,
+			$this->databaseUpdates(),
 		);
 	}
 
@@ -1162,7 +1202,7 @@ final class FileManagerTest extends TestCase {
 	 */
 	private function makeBulkFileManager(array $songs, ?LoggerInterface $logger = null): FileManager {
 		$storage = $this->createMock(IStorage::class);
-		$storage->method('getLocalFile')->willReturn('/tmp/mobilesheets.db');
+		$storage->method('getLocalFile')->willReturn($this->databaseFixture['path']);
 
 		$databaseNode = $this->createMock(Node::class);
 		$databaseNode->method('getStorage')->willReturn($storage);
@@ -1188,7 +1228,9 @@ final class FileManagerTest extends TestCase {
 		$libraryMapper = $this->createMock(LibraryMapper::class);
 		$libraryMapper->method('findById')->with(1)->willReturn(['id' => 1, 'path' => '/Noten/mobilesheets.db']);
 
-		$this->songMapper->method('findSongs')->with('/tmp/mobilesheets.db')->willReturn($songs);
+		foreach ($songs as $song) {
+			$this->storeSong($song);
+		}
 
 		return new FileManager(
 			$libraryMapper,
@@ -1220,7 +1262,7 @@ final class FileManagerTest extends TestCase {
 		);
 		self::assertSame(
 			[['fileId' => 11, 'path' => '/remote.php/dav/files/admin/Noten/Jazz/Jazz - Take Five.pdf']],
-			$this->updates,
+			$this->databaseUpdates(),
 		);
 	}
 
@@ -1261,7 +1303,7 @@ final class FileManagerTest extends TestCase {
 		);
 		self::assertSame(
 			[['fileId' => 22, 'path' => '/remote.php/dav/files/admin/Noten/Jazz/Jazz - Take Five.pdf']],
-			$this->updates,
+			$this->databaseUpdates(),
 		);
 
 		// Every file touched is in the log: the failure with its reason, then the move.
@@ -1344,7 +1386,7 @@ final class FileManagerTest extends TestCase {
 			$song,
 			new MobileSheetsFile(7, $this->sourceWebdav('Noten/song.pdf')),
 			$this->user(),
-			'/tmp/library.db',
+			$this->databaseFixture['path'],
 		);
 
 		self::assertSame(MobileSheetsFileLogEntry::CODE_METADATA_UPDATED, $code);
@@ -1358,7 +1400,7 @@ final class FileManagerTest extends TestCase {
 		// The bytes changed, so the file facts have to follow them.
 		self::assertSame(
 			[['fileId' => 7, 'path' => $this->sourceWebdav('Noten/song.pdf')]],
-			$this->updates,
+			$this->databaseUpdates(),
 		);
 	}
 
@@ -1377,11 +1419,11 @@ final class FileManagerTest extends TestCase {
 			$song,
 			new MobileSheetsFile(7, $this->sourceWebdav('Noten/song.pdf')),
 			$this->user(),
-			'/tmp/library.db',
+			$this->databaseFixture['path'],
 		);
 
 		self::assertSame(MobileSheetsFileLogEntry::CODE_METADATA_CURRENT, $code);
-		self::assertSame([], $this->updates, 'unchanged bytes need no database refresh');
+		self::assertSame([], $this->databaseUpdates(), 'unchanged bytes need no database refresh');
 	}
 
 	/** Files without document properties are reported as checked, and skipped. */
@@ -1393,11 +1435,11 @@ final class FileManagerTest extends TestCase {
 			$this->collectionSong(),
 			new MobileSheetsFile(7, $this->sourceWebdav('Noten/track.mp3')),
 			$this->user(),
-			'/tmp/library.db',
+			$this->databaseFixture['path'],
 		);
 
 		self::assertSame(MobileSheetsFileLogEntry::CODE_NOT_PDF, $code);
-		self::assertSame([], $this->updates);
+		self::assertSame([], $this->databaseUpdates());
 	}
 
 	/** The database points at a file that is not there: a coded error to link from. */
@@ -1452,7 +1494,7 @@ final class FileManagerTest extends TestCase {
 				$this->collectionSong(),
 				$file,
 				$this->user(),
-				'/tmp/library.db',
+				$this->databaseFixture['path'],
 			);
 		} catch (SyncException $exception) {
 			return $exception->errorCode();
@@ -1586,9 +1628,9 @@ final class FileManagerTest extends TestCase {
 			'Noten/uploaded.pdf' => 'UPLOADED',
 		];
 		$this->folders = ['Noten' => true, 'Noten/Jazz' => true];
-		$this->songMapper->method('findSong')->with('/tmp/library.db', 1)->willReturn($song);
+		$this->storeSong($song);
 
-		$this->fileManager->regenerateSongFilePaths(1, $this->user(), $this->libraryFolder, '/tmp/library.db');
+		$this->fileManager->regenerateSongFilePaths(1, $this->user(), $this->libraryFolder, $this->databaseFixture['path']);
 
 		// The single file's plain name becomes "001 ..." and the new file joins as
 		// "002 ...", so both now follow the rules for multi-file songs.
@@ -1599,7 +1641,7 @@ final class FileManagerTest extends TestCase {
 		self::assertSame([
 			['fileId' => 11, 'path' => '/remote.php/dav/files/admin/Noten/Jazz/001 Jazz - Take Five.pdf'],
 			['fileId' => 12, 'path' => '/remote.php/dav/files/admin/Noten/Jazz/002 Jazz - Take Five.pdf'],
-		], $this->updates);
+		], $this->databaseUpdates());
 		self::assertSame('UPLOADED', $this->files['Noten/Jazz/002 Jazz - Take Five.pdf']);
 	}
 
@@ -1619,9 +1661,9 @@ final class FileManagerTest extends TestCase {
 		);
 		$this->files = ['Noten/old/SomeFile.pdf' => 'PAYLOAD'];
 		$this->folders = ['Noten' => true, 'Noten/old' => true];
-		$this->songMapper->method('findSong')->willReturn($song);
+		$this->storeSong($song);
 
-		$this->fileManager->regenerateSongFilePaths(1, $this->user(), $this->libraryFolder, '/tmp/library.db', $hashCodes);
+		$this->fileManager->regenerateSongFilePaths(1, $this->user(), $this->libraryFolder, $this->databaseFixture['path'], $hashCodes);
 
 		self::assertFalse($hashCodes->hasPath($source));
 		self::assertTrue($hashCodes->hasPath($this->sourceWebdav('Noten/Jazz/Jazz - Take Five.pdf')));
@@ -1639,27 +1681,25 @@ final class FileManagerTest extends TestCase {
 			[new MobileSheetsFile(21, $this->sourceWebdav('Noten/T-Pen 2_QG.pdf'))],
 		);
 		$this->files = ['Noten/T-Pen 2_QG.pdf' => 'PAYLOAD'];
-		$this->songMapper->method('findSong')->willReturn($song);
+		$this->storeSong($song);
 
 		try {
-			$this->fileManager->regenerateSongFilePaths(2, $this->user(), $this->libraryFolder, '/tmp/library.db');
+			$this->fileManager->regenerateSongFilePaths(2, $this->user(), $this->libraryFolder, $this->databaseFixture['path']);
 			self::fail('Expected an exception because the song offers no composer, artist or collection');
 		} catch (\Exception $exception) {
 			self::assertSame('No composer, artist, or collection', $exception->getMessage());
 		}
 
 		self::assertSame([], $this->moves, 'the failure has to happen before anything moves');
-		self::assertSame([], $this->updates);
+		self::assertSame([], $this->databaseUpdates());
 		self::assertSame('PAYLOAD', $this->files['Noten/T-Pen 2_QG.pdf']);
 	}
 
 	public function testRegenerateSongFilePathsThrowsWhenTheSongIsUnknown(): void {
-		$this->songMapper->method('findSong')->with('/tmp/library.db', 99)->willReturn(null);
-
 		$this->expectException(\RuntimeException::class);
 		$this->expectExceptionMessage('Song with ID 99 not found');
 
-		$this->fileManager->regenerateSongFilePaths(99, $this->user(), $this->libraryFolder, '/tmp/library.db');
+		$this->fileManager->regenerateSongFilePaths(99, $this->user(), $this->libraryFolder, $this->databaseFixture['path']);
 	}
 
 	/**
@@ -1739,7 +1779,9 @@ final class FileManagerTest extends TestCase {
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn(self::UID);
 
-		$entry = $this->fileManager->regenerateFilePath($song, $file, $user, $this->libraryFolder, '/tmp/db.sqlite');
+		$this->storeSong($song);
+		$this->recordPathReference('/remote.php/dav/files/admin/Noten/Miles/Miles - Blue.pdf', 99);
+		$entry = $this->fileManager->regenerateFilePath($song, $file, $user, $this->libraryFolder, $this->databaseFixture['path']);
 
 		self::assertSame(MobileSheetsFileLogEntry::CODE_PATH_MOVED, $entry->code);
 		self::assertArrayHasKey('Noten/Miles/Miles - Blue (2).pdf', $this->files);

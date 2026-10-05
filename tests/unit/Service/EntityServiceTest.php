@@ -4,14 +4,16 @@ declare(strict_types=1);
 
 namespace Service;
 
-use OCA\MobileSheetsManager\Db\SongMapper;
 use OCA\MobileSheetsManager\Service\EntityService;
 use OCA\MobileSheetsManager\Service\LibraryService;
 use OCP\IUser;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
+use TestSupport\TestUtils;
 
 final class EntityServiceTest extends TestCase {
+	use TestUtils;
+
 	public function testCreateEntityValidatesEmptyValueAndUnknownLibrary(): void {
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('admin');
@@ -21,7 +23,7 @@ final class EntityServiceTest extends TestCase {
 
 		$service = new EntityService(
 			$libraryService,
-			$this->createMock(SongMapper::class),
+			$this->createSongMapper(),
 			$this->createMock(LoggerInterface::class),
 		);
 
@@ -34,15 +36,10 @@ final class EntityServiceTest extends TestCase {
 		$user->method('getUID')->willReturn('admin');
 
 		$libraryService = $this->createMock(LibraryService::class);
-		$libraryService->method('getDatabasePath')->with('admin', 1)->willReturn('/tmp/mobilesheets.db');
-
-		$songMapper = $this->createMock(SongMapper::class);
-		$songMapper->expects($this->once())->method('createComposer')->with('/tmp/mobilesheets.db', 'Bach')->willReturn(10);
-		$songMapper->expects($this->once())->method('createBook')->with('/tmp/mobilesheets.db', 'Real Book')->willReturn(100);
-		$songMapper->expects($this->once())->method('createCollection')->with('/tmp/mobilesheets.db', 'Jazz')->willReturn(1000);
-		$songMapper->expects($this->once())->method('createArtist')->with('/tmp/mobilesheets.db', 'Miles')->willReturn(200);
-		$songMapper->expects($this->once())->method('createSignature')->with('/tmp/mobilesheets.db', '3/4')->willReturn(60);
-		$songMapper->expects($this->once())->method('createSourceType')->with('/tmp/mobilesheets.db', 'Lead Sheet')->willReturn(40);
+		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
+		$databasePath = $fixture['path'];
+		$libraryService->method('getDatabasePath')->with('admin', 1)->willReturn($databasePath);
+		$songMapper = $this->createSongMapper();
 
 		$service = new EntityService(
 			$libraryService,
@@ -50,12 +47,23 @@ final class EntityServiceTest extends TestCase {
 			$this->createMock(LoggerInterface::class),
 		);
 
-		$this->assertSame(['id' => 10, 'name' => 'Bach'], $service->createEntity($user, 1, 'composer', 'Bach'));
-		$this->assertSame(['id' => 100, 'title' => 'Real Book'], $service->createEntity($user, 1, 'book', 'Real Book'));
-		$this->assertSame(['id' => 1000, 'name' => 'Jazz'], $service->createEntity($user, 1, 'collection', 'Jazz'));
-		$this->assertSame(['id' => 200, 'name' => 'Miles'], $service->createEntity($user, 1, 'artist', 'Miles'));
-		$this->assertSame(['id' => 60, 'name' => '3/4'], $service->createEntity($user, 1, 'signature', '3/4'));
-		$this->assertSame(['id' => 40, 'name' => 'Lead Sheet', 'type' => 'Lead Sheet'], $service->createEntity($user, 1, 'sourcetype', 'Lead Sheet'));
+		try {
+			$composer = $service->createEntity($user, 1, 'composer', 'Bach');
+			$book = $service->createEntity($user, 1, 'book', 'Real Book');
+			$collection = $service->createEntity($user, 1, 'collection', 'Jazz');
+			$artist = $service->createEntity($user, 1, 'artist', 'Miles');
+			$signature = $service->createEntity($user, 1, 'signature', '3/4');
+			$sourceType = $service->createEntity($user, 1, 'sourcetype', 'Lead Sheet');
+
+			self::assertSame(['id' => 1, 'name' => 'Bach'], $composer);
+			self::assertSame(['id' => 1, 'title' => 'Real Book'], $book);
+			self::assertSame(['id' => 1, 'name' => 'Jazz'], $collection);
+			self::assertSame(['id' => 1, 'name' => 'Miles'], $artist);
+			self::assertSame(['id' => 1, 'name' => '3/4'], $signature);
+			self::assertSame(['id' => 1, 'name' => 'Lead Sheet', 'type' => 'Lead Sheet'], $sourceType);
+		} finally {
+			unlink($databasePath);
+		}
 	}
 
 	public function testDeleteEntityPassesTypeToMapper(): void {
@@ -63,14 +71,12 @@ final class EntityServiceTest extends TestCase {
 		$user->method('getUID')->willReturn('admin');
 
 		$libraryService = $this->createMock(LibraryService::class);
-		$libraryService->method('getDatabasePath')->with('admin', 1)->willReturn('/tmp/mobilesheets.db');
+		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
+		$databasePath = $fixture['path'];
+		$fixture['connection']->exec("INSERT INTO Composer (Id, Name) VALUES (10, 'Bach')");
+		$libraryService->method('getDatabasePath')->with('admin', 1)->willReturn($databasePath);
 
-		$songMapper = $this->createMock(SongMapper::class);
-		$songMapper->expects($this->once())
-			->method('deleteEntity')
-			->with('/tmp/mobilesheets.db', 'composers', 10)
-			->willReturn(true);
-		$songMapper->method('findLibraryData')->willReturn(['songs' => []]);
+		$songMapper = $this->createSongMapper();
 
 		$service = new EntityService(
 			$libraryService,
@@ -78,7 +84,12 @@ final class EntityServiceTest extends TestCase {
 			$this->createMock(LoggerInterface::class),
 		);
 
-		$this->assertSame(['songs' => []], $service->deleteEntity($user, 1, 'composers', 10));
+		try {
+			$result = $service->deleteEntity($user, 1, 'composers', 10);
+			self::assertSame([], $result['songs']);
+			self::assertSame(0, (int)$fixture['connection']->query('SELECT COUNT(*) FROM Composer')->fetchColumn());
+		} finally {
+			unlink($databasePath);
+		}
 	}
 }
-
