@@ -15,8 +15,14 @@ use OCA\MobileSheetsManager\Service\LibraryIntegrityService;
 use OCA\MobileSheetsManager\Service\MobileSheetsPathResolver;
 use OCA\MobileSheetsManager\Service\MobileSheetsPdfMetadata;
 use OCP\Files\Folder;
+use OCP\Files\File;
 use OCP\Files\IRootFolder;
+use OCP\Files\IUserFolder;
+use OCP\Files\Node;
+use OCP\Files\NotFoundException;
+use OCP\Files\Storage\IStorage;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\LoggerInterface;
 use TestSupport\TestUtils;
 
 final class LibraryIntegrityServiceTest extends TestCase {
@@ -30,25 +36,11 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$database->exec("INSERT INTO Songs (Id, Title) VALUES (1, 'Test Song')");
 		$database->exec("INSERT INTO Files (Id, SongId, Path) VALUES (10, 1, '/remote.php/dav/files/user1/Noten/missing.pdf')");
 		$songMapper = $this->createSongMapper();
-		$fileManager = $this->createMock(FileManager::class);
-		$rootFolder = $this->createMock(IRootFolder::class);
-		$pathResolver = new MobileSheetsPathResolver($rootFolder);
-
 		$targetFolder = $this->createMock(Folder::class);
-		$userFolder = $this->createMock(\OCP\Files\IUserFolder::class);
-		$user = $this->createMock(\OCP\IUser::class);
-		$user->method('getUID')->willReturn('user1');
-		$userFolder->method('getOwner')->willReturn($user);
-		$rootFolder->method('getUserFolder')->with('user1')->willReturn($userFolder);
-		$userFolder->method('getPath')->willReturn('/user1/files');
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
-
-		$fileManager->method('libraryContext')->willReturn([
-			'databasePath' => $databasePath,
-			'targetFolder' => $targetFolder,
-		]);
 		$targetFolder->method('nodeExists')->willReturn(false);
 		$targetFolder->method('getDirectoryListing')->willReturn([]);
+		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager($databasePath, $targetFolder);
 
 		try {
 			$logger = $this->createMock(\Psr\Log\LoggerInterface::class);
@@ -67,26 +59,13 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$libraryService = $this->createLibraryService();
 		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
 		$songMapper = $this->createSongMapper();
-		$fileManager = $this->createMock(FileManager::class);
-		$rootFolder = $this->createMock(IRootFolder::class);
-		$pathResolver = new MobileSheetsPathResolver($rootFolder);
-
 		$targetFolder = $this->createMock(Folder::class);
-		$userFolder = $this->createMock(\OCP\Files\IUserFolder::class);
-		$user = $this->createMock(\OCP\IUser::class);
-		$userFolder->method('getOwner')->willReturn($user);
-		$rootFolder->method('getUserFolder')->with('user1')->willReturn($userFolder);
-
-		$fileManager->method('libraryContext')->willReturn([
-			'databasePath' => $fixture['path'],
-			'targetFolder' => $targetFolder,
-		]);
-
 		$targetFolder->method('getPath')->willReturn('/tmp');
 		$hashcodeNode = $this->createMock(\OCP\Files\Node::class);
 		$hashcodeNode->method('getName')->willReturn('mobilesheets_hashcodes.txt');
 		$hashcodeNode->method('getPath')->willReturn('/tmp/mobilesheets_hashcodes.txt');
 		$targetFolder->method('getDirectoryListing')->willReturn([$hashcodeNode]);
+		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager($fixture['path'], $targetFolder);
 
 		$logger = $this->createMock(\Psr\Log\LoggerInterface::class);
 		$service = new LibraryIntegrityService($libraryService, $songMapper, $fileManager, $rootFolder, $pathResolver, $logger);
@@ -104,28 +83,10 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$fixture['connection']->exec("INSERT INTO Composer (Id, Name) VALUES (1, 'Georg Friedrich Händel')");
 		$fixture['connection']->exec('INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (1, 1)');
 		$songMapper = $this->createSongMapper();
-		$fileManager = $this->createMock(FileManager::class);
-		$rootFolder = $this->createMock(IRootFolder::class);
-
-		$user = $this->createMock(\OCP\IUser::class);
-		$user->method('getUID')->willReturn('user1');
-
-		$userFolder = $this->createMock(\OCP\Files\IUserFolder::class);
-		$userFolder->method('getOwner')->willReturn($user);
-		$userFolder->method('getPath')->willReturn('/user1/files');
-		$rootFolder->method('getUserFolder')->with('user1')->willReturn($userFolder);
-
-		$pathResolver = new MobileSheetsPathResolver($rootFolder);
-
 		$targetFolder = $this->createMock(Folder::class);
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
 		$targetFolder->method('nodeExists')->willReturn(true);
 		$targetFolder->method('getDirectoryListing')->willReturn([]);
-
-		$fileManager->method('libraryContext')->willReturn([
-			'databasePath' => $fixture['path'],
-			'targetFolder' => $targetFolder,
-		]);
 
 		$song = $songMapper->findSongs($fixture['path'])[0];
 		$pdf = $this->createMock(\OCP\Files\File::class);
@@ -134,6 +95,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 			MobileSheetsPdfMetadata::fieldsFor($song),
 		));
 		$targetFolder->method('get')->with('Georg Friedrich Händel - Joshua.pdf')->willReturn($pdf);
+		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager($fixture['path'], $targetFolder);
 
 		$logger = $this->createMock(\Psr\Log\LoggerInterface::class);
 		$service = new LibraryIntegrityService($libraryService, $songMapper, $fileManager, $rootFolder, $pathResolver, $logger);
@@ -150,39 +112,29 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$fixture['connection']->exec("INSERT INTO Composer (Id, Name) VALUES (1, 'Bach')");
 		$fixture['connection']->exec('INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (1, 1)');
 		$songMapper = $this->createSongMapper();
-		$fileManager = $this->createMock(FileManager::class);
-		$rootFolder = $this->createMock(IRootFolder::class);
-		$user = $this->createMock(\OCP\IUser::class);
-		$user->method('getUID')->willReturn('user1');
-
-		$userFolder = $this->createMock(\OCP\Files\IUserFolder::class);
-		$userFolder->method('getOwner')->willReturn($user);
-		$userFolder->method('getPath')->willReturn('/user1/files');
-		$rootFolder->method('getUserFolder')->with('user1')->willReturn($userFolder);
-
-		$pathResolver = new MobileSheetsPathResolver($rootFolder);
 		$targetFolder = $this->createMock(Folder::class);
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
 		$targetFolder->method('nodeExists')->willReturn(true);
 		$targetFolder->method('getDirectoryListing')->willReturn([]);
 
-		$fileManager->method('libraryContext')->willReturn([
-			'databasePath' => $fixture['path'],
-			'targetFolder' => $targetFolder,
-		]);
-
 		$song = $songMapper->findSongs($fixture['path'])[0];
-
 		$pdf = $this->createMock(\OCP\Files\File::class);
-		$pdf->method('getContent')->willReturn(MobileSheetsPdfMetadata::withInfo(
+		$pdfContent = MobileSheetsPdfMetadata::withInfo(
 			self::minimalPdf(),
 			['Title' => 'Wrong title', 'Author' => 'Bach', 'Composer' => 'Bach'],
-		));
+		);
+		$pdf->method('getContent')->willReturnCallback(static fn (): string => $pdfContent);
+		$pdf->method('putContent')->willReturnCallback(static function (string $content) use (&$pdfContent): int {
+			$pdfContent = $content;
+			return strlen($content);
+		});
+		$pdf->method('getMTime')->willReturn(1);
 		$targetFolder->method('get')->with('Bach - Joshua.pdf')->willReturn($pdf);
-		$fileManager->expects(self::once())
-			->method('syncMetadataIntoFile')
-			->with($song, $song->files[0], $user, $fixture['path'], self::anything())
-			->willReturn(\OCA\MobileSheetsManager\Service\MobileSheetsFileLogEntry::CODE_METADATA_UPDATED);
+		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager(
+			$fixture['path'],
+			$targetFolder,
+			['Noten/Bach - Joshua.pdf' => $pdf],
+		);
 
 		$service = new LibraryIntegrityService(
 			$this->createLibraryService(),
@@ -206,6 +158,8 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$result = $service->fixIssue(1, 'user1', IntegrityIssue::TYPE_PDF_METADATA_MISMATCH, 1, 10);
 		self::assertTrue($result['success']);
 		self::assertSame(1, $result['fixedCount']);
+		self::assertSame([], MobileSheetsPdfMetadata::mismatchedFields($pdfContent, $song));
+		self::assertGreaterThan(0, (int)$fixture['connection']->query('SELECT FileSize FROM Files WHERE Id = 10')->fetchColumn());
 		unlink($fixture['path']);
 	}
 
@@ -218,28 +172,11 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$database->exec("INSERT INTO Composer (Id, Name) VALUES (1, 'Bach')");
 		$database->exec('INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (1, 1), (1, 2)');
 		$songMapper = $this->createSongMapper();
-		$fileManager = $this->createMock(FileManager::class);
-		$rootFolder = $this->createMock(IRootFolder::class);
-
-		$user = $this->createMock(\OCP\IUser::class);
-		$user->method('getUID')->willReturn('user1');
-
-		$userFolder = $this->createMock(\OCP\Files\IUserFolder::class);
-		$userFolder->method('getOwner')->willReturn($user);
-		$userFolder->method('getPath')->willReturn('/user1/files');
-		$rootFolder->method('getUserFolder')->with('user1')->willReturn($userFolder);
-
-		$pathResolver = new MobileSheetsPathResolver($rootFolder);
-
 		$targetFolder = $this->createMock(Folder::class);
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
 		$targetFolder->method('nodeExists')->willReturn(true);
 		$targetFolder->method('getDirectoryListing')->willReturn([]);
-
-		$fileManager->method('libraryContext')->willReturn([
-			'databasePath' => $databasePath,
-			'targetFolder' => $targetFolder,
-		]);
+		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager($databasePath, $targetFolder);
 
 		try {
 			$logger = $this->createMock(\Psr\Log\LoggerInterface::class);
@@ -267,29 +204,17 @@ final class LibraryIntegrityServiceTest extends TestCase {
 			$database->exec('INSERT INTO KeySongs (KeyId, SongId) VALUES (3, 7), (3, 7), (3, 8), (3, 8)');
 			$database->exec('INSERT INTO CollectionSong (CollectionId, SongId) VALUES (4, 7), (4, 7), (4, 7)');
 
-			$user = $this->createMock(\OCP\IUser::class);
-			$user->method('getUID')->willReturn('user1');
-			$userFolder = $this->createMock(\OCP\Files\IUserFolder::class);
-			$userFolder->method('getOwner')->willReturn($user);
-			$userFolder->method('getPath')->willReturn('/user1/files');
-			$rootFolder = $this->createMock(IRootFolder::class);
-			$rootFolder->method('getUserFolder')->with('user1')->willReturn($userFolder);
-
 			$targetFolder = $this->createMock(Folder::class);
 			$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
 			$targetFolder->method('getDirectoryListing')->willReturn([]);
-			$fileManager = $this->createMock(FileManager::class);
-			$fileManager->method('libraryContext')->with(1, $user)->willReturn([
-				'databasePath' => $databasePath,
-				'targetFolder' => $targetFolder,
-			]);
+			[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager($databasePath, $targetFolder);
 
 			$service = new LibraryIntegrityService(
 				$this->createLibraryService(),
 				$this->createSongMapper(),
 				$fileManager,
 				$rootFolder,
-				new MobileSheetsPathResolver($rootFolder),
+				$pathResolver,
 				$this->createMock(\Psr\Log\LoggerInterface::class),
 			);
 
@@ -338,23 +263,10 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$database->exec("INSERT INTO Composer (Id, Name) VALUES (4, 'Bach'), (8, ' bach ')");
 		$database->exec('INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (8, 7), (8, 8)');
 		$songMapper = $this->createSongMapper();
-		$fileManager = $this->createMock(FileManager::class);
-		$rootFolder = $this->createMock(IRootFolder::class);
-		$user = $this->createMock(\OCP\IUser::class);
-		$user->method('getUID')->willReturn('user1');
-
-		$userFolder = $this->createMock(\OCP\Files\IUserFolder::class);
-		$userFolder->method('getOwner')->willReturn($user);
-		$userFolder->method('getPath')->willReturn('/user1/files');
-		$rootFolder->method('getUserFolder')->with('user1')->willReturn($userFolder);
-
 		$targetFolder = $this->createMock(Folder::class);
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
 		$targetFolder->method('getDirectoryListing')->willReturn([]);
-		$fileManager->method('libraryContext')->with(1, $user)->willReturn([
-			'databasePath' => $databasePath,
-			'targetFolder' => $targetFolder,
-		]);
+		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager($databasePath, $targetFolder);
 
 		try {
 			$service = new LibraryIntegrityService(
@@ -362,7 +274,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 				$songMapper,
 				$fileManager,
 				$rootFolder,
-				new MobileSheetsPathResolver($rootFolder),
+				$pathResolver,
 				$this->createMock(\Psr\Log\LoggerInterface::class),
 			);
 
@@ -412,27 +324,17 @@ final class LibraryIntegrityServiceTest extends TestCase {
 			$database->exec("INSERT INTO \"Key\" (Id, Name) VALUES (35, 'C'), (36, 'F'), (37, 'C'), (38, 'F')");
 			$database->exec('INSERT INTO KeySongs (KeyId, SongId) VALUES (35, 1), (37, 2)');
 
-			$rootFolder = $this->createMock(IRootFolder::class);
-			$user = $this->createMock(\OCP\IUser::class);
-			$userFolder = $this->createMock(\OCP\Files\IUserFolder::class);
-			$userFolder->method('getOwner')->willReturn($user);
-			$rootFolder->method('getUserFolder')->with('user1')->willReturn($userFolder);
-
 			$targetFolder = $this->createMock(Folder::class);
 			$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
 			$targetFolder->method('getDirectoryListing')->willReturn([]);
-			$fileManager = $this->createMock(FileManager::class);
-			$fileManager->method('libraryContext')->with(1, $user)->willReturn([
-				'databasePath' => $databasePath,
-				'targetFolder' => $targetFolder,
-			]);
+			[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager($databasePath, $targetFolder);
 
 			$service = new LibraryIntegrityService(
 				$this->createLibraryService(),
 				$this->createSongMapper(),
 				$fileManager,
 				$rootFolder,
-				new MobileSheetsPathResolver($rootFolder),
+				$pathResolver,
 				$this->createMock(\Psr\Log\LoggerInterface::class),
 			);
 			$issues = $service->checkIntegrity(1, 'user1');
@@ -463,41 +365,42 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$database->exec("INSERT INTO Composer (Id, Name) VALUES (1, 'Bach')");
 		$database->exec('INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (1, 10)');
 		$songMapper = $this->createSongMapper();
-		$fileManager = $this->createMock(FileManager::class);
-		$rootFolder = $this->createMock(IRootFolder::class);
-
-		$user = $this->createMock(\OCP\IUser::class);
-		$user->method('getUID')->willReturn('user1');
-
-		$userFolder = $this->createMock(\OCP\Files\IUserFolder::class);
-		$userFolder->method('getOwner')->willReturn($user);
-		$userFolder->method('getPath')->willReturn('/user1/files');
-		$rootFolder->method('getUserFolder')->with('user1')->willReturn($userFolder);
-
-		$pathResolver = new MobileSheetsPathResolver($rootFolder);
-
 		$targetFolder = $this->createMock(Folder::class);
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
-		$targetFolder->method('nodeExists')->willReturn(true);
+		$targetFolder->method('nodeExists')->willReturnCallback(static fn (string $path): bool => $path === 'OldPath.pdf');
 		$targetFolder->method('getDirectoryListing')->willReturn([]);
-
-		$fileManager->method('libraryContext')->willReturn([
-			'databasePath' => $databasePath,
-			'targetFolder' => $targetFolder,
-		]);
-
-		$fileManager->expects($this->once())
-			->method('regenerateSongFilePaths')
-			->with(10, $user, $targetFolder, $databasePath, $this->anything());
+		$sourceFile = $this->createMock(File::class);
+		$sourceFile->method('getContent')->willReturn('PDF');
+		$sourceFile->method('getMTime')->willReturn(1);
+		$sourceFile->expects($this->once())->method('move')->with('/user1/files/Noten/Bach/Bach - Song 1.pdf')->willReturn($sourceFile);
+		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager(
+			$databasePath,
+			$targetFolder,
+			['Noten/OldPath.pdf' => $sourceFile],
+		);
+		$userFolder = $rootFolder->getUserFolder('user1');
+		$userFolder->method('nodeExists')->willReturnCallback(
+			static fn (string $path): bool => in_array($path, ['Noten', 'Noten/OldPath.pdf'], true),
+		);
+		$userFolder->method('newFolder')->willReturn($this->createMock(Folder::class));
 
 		try {
 			$logger = $this->createMock(\Psr\Log\LoggerInterface::class);
 			$service = new LibraryIntegrityService($libraryService, $songMapper, $fileManager, $rootFolder, $pathResolver, $logger);
 
+			$issues = $service->checkIntegrity(1, 'user1');
+			self::assertContains(
+				IntegrityIssue::TYPE_INVALID_NAMING_RULE,
+				array_map(static fn (IntegrityIssue $issue): string => $issue->type, $issues),
+			);
 			$result = $service->fixAllIssues(1, 'user1', IntegrityIssue::TYPE_INVALID_NAMING_RULE);
 
 			self::assertTrue($result['success']);
 			self::assertSame(1, $result['fixedCount']);
+			self::assertSame(
+				'/remote.php/dav/files/user1/Noten/Bach/Bach - Song 1.pdf',
+				$database->query('SELECT Path FROM Files WHERE Id = 100')->fetchColumn(),
+			);
 		} finally {
 			unlink($databasePath);
 		}
@@ -507,19 +410,6 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$libraryService = $this->createLibraryService();
 		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
 		$songMapper = $this->createSongMapper();
-		$fileManager = $this->createMock(FileManager::class);
-		$rootFolder = $this->createMock(IRootFolder::class);
-
-		$user = $this->createMock(\OCP\IUser::class);
-		$user->method('getUID')->willReturn('user1');
-
-		$userFolder = $this->createMock(\OCP\Files\IUserFolder::class);
-		$userFolder->method('getOwner')->willReturn($user);
-		$userFolder->method('getPath')->willReturn('/user1/files');
-		$rootFolder->method('getUserFolder')->with('user1')->willReturn($userFolder);
-
-		$pathResolver = new MobileSheetsPathResolver($rootFolder);
-
 		$targetFolder = $this->createMock(Folder::class);
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
 		$targetFolder->method('nodeExists')->willReturn(true);
@@ -529,18 +419,10 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$orphanNode->method('getPath')->willReturn('/user1/files/Noten/OrphanScore.pdf');
 		$targetFolder->method('getDirectoryListing')->willReturn([$orphanNode]);
 
-		$fileManager->method('libraryContext')->willReturn([
-			'databasePath' => $fixture['path'],
-			'targetFolder' => $targetFolder,
-		]);
-		$fileManager->method('pathOfExistingFile')->willReturn(
-			new \OCA\MobileSheetsManager\Service\MobileSheetsPath(
-				internal: '/user1/files/Noten/OrphanScore.pdf',
-				webdav: '/remote.php/dav/files/user1/Noten/OrphanScore.pdf',
-			)
+		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager(
+			$fixture['path'],
+			$targetFolder,
 		);
-
-
 		$logger = $this->createMock(\Psr\Log\LoggerInterface::class);
 		$service = new LibraryIntegrityService($libraryService, $songMapper, $fileManager, $rootFolder, $pathResolver, $logger);
 
@@ -552,6 +434,62 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		self::assertSame('/remote.php/dav/files/user1/Noten/OrphanScore.pdf', $issues[0]->details['webdavPath']);
 		self::assertSame('Noten/OrphanScore.pdf', $issues[0]->details['userRelativePath']);
 		unlink($fixture['path']);
+	}
+
+	/**
+	 * @param array<string, File> $files paths relative to the user's files folder
+	 * @return array{FileManager, IRootFolder, MobileSheetsPathResolver}
+	 */
+	private function createIntegrityFileManager(
+		string $databasePath,
+		Folder $targetFolder,
+		array $files = [],
+	): array {
+		$user = $this->createMock(\OCP\IUser::class);
+		$user->method('getUID')->willReturn('user1');
+
+		$storage = $this->createMock(IStorage::class);
+		$storage->method('getLocalFile')->willReturn($databasePath);
+
+		$databaseNode = $this->createMock(Node::class);
+		$databaseNode->method('getStorage')->willReturn($storage);
+		$databaseNode->method('getInternalPath')->willReturn('files/Noten/library.db');
+		$databaseNode->method('getParent')->willReturn($targetFolder);
+
+		$userFolder = $this->createMock(IUserFolder::class);
+		$userFolder->method('getOwner')->willReturn($user);
+		$userFolder->method('getPath')->willReturn('/user1/files');
+		$userFolder->method('get')->willReturnCallback(
+			static function (string $path) use ($databaseNode, $files): Node {
+				if ($path === 'Noten/library.db') {
+					return $databaseNode;
+				}
+				if (isset($files[$path])) {
+					return $files[$path];
+				}
+				throw new NotFoundException($path);
+			},
+		);
+
+		$rootFolder = $this->createMock(IRootFolder::class);
+		$rootFolder->method('getUserFolder')->with('user1')->willReturn($userFolder);
+
+		$libraryMapper = $this->createMock(\OCA\MobileSheetsManager\Db\LibraryMapper::class);
+		$libraryMapper->method('findById')->with(1)->willReturn([
+			'id' => 1,
+			'path' => '/Noten/library.db',
+		]);
+
+		$pathResolver = new MobileSheetsPathResolver($rootFolder);
+		$fileManager = new FileManager(
+			$libraryMapper,
+			$this->createSongMapper(),
+			$rootFolder,
+			$pathResolver,
+			$this->createMock(LoggerInterface::class),
+		);
+
+		return [$fileManager, $rootFolder, $pathResolver];
 	}
 
 	private static function minimalPdf(): string {
