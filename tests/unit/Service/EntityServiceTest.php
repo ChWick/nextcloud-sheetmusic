@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Service;
 
+use OCA\MobileSheetsManager\Db\LibraryMapper;
 use OCA\MobileSheetsManager\Service\EntityService;
-use OCA\MobileSheetsManager\Service\LibraryService;
 use OCP\IUser;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
@@ -18,8 +18,9 @@ final class EntityServiceTest extends TestCase {
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('admin');
 
-		$libraryService = $this->createMock(LibraryService::class);
-		$libraryService->method('getDatabasePath')->with('admin', 99)->willReturn(null);
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$libraryMapper->method('findForUser')->with('admin', 99)->willReturn(null);
+		$libraryService = $this->createLibraryServiceWithMapper($libraryMapper);
 
 		$service = new EntityService(
 			$libraryService,
@@ -35,10 +36,14 @@ final class EntityServiceTest extends TestCase {
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('admin');
 
-		$libraryService = $this->createMock(LibraryService::class);
 		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
 		$databasePath = $fixture['path'];
-		$libraryService->method('getDatabasePath')->with('admin', 1)->willReturn($databasePath);
+		$libraryService = $this->createLibraryServiceForDatabase(
+			'admin',
+			1,
+			'/Noten/library.db',
+			$databasePath,
+		);
 		$songMapper = $this->createSongMapper();
 
 		$service = new EntityService(
@@ -70,11 +75,15 @@ final class EntityServiceTest extends TestCase {
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('admin');
 
-		$libraryService = $this->createMock(LibraryService::class);
 		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
 		$databasePath = $fixture['path'];
 		$fixture['connection']->exec("INSERT INTO Composer (Id, Name) VALUES (10, 'Bach')");
-		$libraryService->method('getDatabasePath')->with('admin', 1)->willReturn($databasePath);
+		$libraryService = $this->createLibraryServiceForDatabase(
+			'admin',
+			1,
+			'/Noten/library.db',
+			$databasePath,
+		);
 
 		$songMapper = $this->createSongMapper();
 

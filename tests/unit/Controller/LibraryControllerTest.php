@@ -5,14 +5,17 @@ declare(strict_types=1);
 namespace Controller;
 
 use OCA\MobileSheetsManager\Controller\LibraryController;
-use OCA\MobileSheetsManager\Service\LibraryService;
+use OCA\MobileSheetsManager\Db\LibraryMapper;
 use OCP\AppFramework\Http;
 use OCP\IRequest;
 use OCP\IUser;
 use OCP\IUserSession;
 use PHPUnit\Framework\TestCase;
+use TestSupport\TestUtils;
 
 final class LibraryControllerTest extends TestCase {
+	use TestUtils;
+
 	public function testGetLibrariesRejectsUnauthenticated(): void {
 		$userSession = $this->createMock(IUserSession::class);
 		$userSession->method('getUser')->willReturn(null);
@@ -20,7 +23,7 @@ final class LibraryControllerTest extends TestCase {
 		$controller = new LibraryController(
 			'mobilesheetsmanager',
 			$this->createMock(IRequest::class),
-			$this->createMock(LibraryService::class),
+			$this->createLibraryService(),
 			$userSession,
 		);
 
@@ -34,11 +37,12 @@ final class LibraryControllerTest extends TestCase {
 		$userSession = $this->createMock(IUserSession::class);
 		$userSession->method('getUser')->willReturn($user);
 
-		$libraryService = $this->createMock(LibraryService::class);
-		$libraryService->expects($this->once())
-			->method('getLibraries')
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$libraryMapper->expects($this->once())
+			->method('findAllForUser')
 			->with('admin')
 			->willReturn([['id' => 1, 'path' => '/Noten/mobilesheets.db']]);
+		$libraryService = $this->createLibraryServiceWithMapper($libraryMapper);
 
 		$controller = new LibraryController(
 			'mobilesheetsmanager',
@@ -59,9 +63,11 @@ final class LibraryControllerTest extends TestCase {
 		$userSession = $this->createMock(IUserSession::class);
 		$userSession->method('getUser')->willReturn($user);
 
-		$libraryService = $this->createMock(LibraryService::class);
-		$libraryService->method('addLibrary')
-			->willReturnCallback(fn (string $uid, string $path) => str_starts_with($path, '/') ? ['path' => $path] : null);
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$libraryMapper->expects($this->once())
+			->method('addForUser')
+			->with('admin', '/Noten/mobilesheets.db');
+		$libraryService = $this->createLibraryServiceWithMapper($libraryMapper);
 
 		$controller = new LibraryController(
 			'mobilesheetsmanager',
@@ -84,10 +90,16 @@ final class LibraryControllerTest extends TestCase {
 		$userSession = $this->createMock(IUserSession::class);
 		$userSession->method('getUser')->willReturn($user);
 
-		$libraryService = $this->createMock(LibraryService::class);
-		$libraryService->method('deleteLibrary')
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$libraryMapper->expects($this->once())
+			->method('findForUser')
 			->with('admin', 1)
 			->willReturn(['id' => 1, 'path' => '/Noten/mobilesheets.db']);
+		$libraryMapper->expects($this->once())
+			->method('deleteForUser')
+			->with('admin', 1)
+			->willReturn(true);
+		$libraryService = $this->createLibraryServiceWithMapper($libraryMapper);
 
 		$controller = new LibraryController(
 			'mobilesheetsmanager',
@@ -108,7 +120,7 @@ final class LibraryControllerTest extends TestCase {
 		$userSession = $this->createMock(IUserSession::class);
 		$userSession->method('getUser')->willReturn($user);
 
-		$libraryService = $this->createMock(LibraryService::class);
+		$libraryService = $this->createLibraryService();
 		$integrityService = $this->createMock(\OCA\MobileSheetsManager\Service\LibraryIntegrityService::class);
 
 		$issue = new \OCA\MobileSheetsManager\Service\IntegrityIssue(
@@ -151,4 +163,3 @@ final class LibraryControllerTest extends TestCase {
 		], $data['issues'][0]['details']);
 	}
 }
-

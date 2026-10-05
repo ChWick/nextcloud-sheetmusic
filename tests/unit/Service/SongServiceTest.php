@@ -6,7 +6,6 @@ namespace Service;
 
 use OCA\MobileSheetsManager\Db\SongMapper;
 use OCA\MobileSheetsManager\Service\FileManager;
-use OCA\MobileSheetsManager\Service\LibraryService;
 use OCA\MobileSheetsManager\Service\SongFileService;
 use OCA\MobileSheetsManager\Service\SongService;
 use OCP\IUser;
@@ -22,8 +21,7 @@ final class SongServiceTest extends TestCase {
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('admin');
 
-		$libraryService = $this->createMock(LibraryService::class);
-		$libraryService->method('getDatabasePath')->with('admin', 1)->willReturn($fixture['path']);
+		$libraryService = $this->createLibraryServiceForDatabase('admin', 1, '/Noten/library.db', $fixture['path']);
 		$songMapper = $this->createSongMapper();
 
 		$service = new SongService(
@@ -46,8 +44,7 @@ final class SongServiceTest extends TestCase {
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('admin');
 
-		$libraryService = $this->createMock(LibraryService::class);
-		$libraryService->method('getDatabasePath')->with('admin', 1)->willReturn($fixture['path']);
+		$libraryService = $this->createLibraryServiceForDatabase('admin', 1, '/Noten/library.db', $fixture['path']);
 		$songMapper = $this->createSongMapper();
 
 		$service = new SongService(
@@ -73,8 +70,7 @@ final class SongServiceTest extends TestCase {
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('admin');
 
-		$libraryService = $this->createMock(LibraryService::class);
-		$libraryService->method('getDatabasePath')->with('admin', 1)->willReturn($fixture['path']);
+		$libraryService = $this->createLibraryServiceForDatabase('admin', 1, '/Noten/library.db', $fixture['path']);
 		$songMapper = $this->createSongMapper();
 
 		$songFileService = $this->createMock(SongFileService::class);
@@ -106,8 +102,7 @@ final class SongServiceTest extends TestCase {
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('admin');
 
-		$libraryService = $this->createMock(LibraryService::class);
-		$libraryService->method('getDatabasePath')->with('admin', 1)->willReturn($fixture['path']);
+		$libraryService = $this->createLibraryServiceForDatabase('admin', 1, '/Noten/library.db', $fixture['path']);
 		$songMapper = $this->createSongMapper();
 
 		$songFileService = $this->createMock(SongFileService::class);
@@ -136,8 +131,7 @@ final class SongServiceTest extends TestCase {
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('admin');
 
-		$libraryService = $this->createMock(LibraryService::class);
-		$libraryService->method('getDatabasePath')->with('admin', 1)->willReturn($fixture['path']);
+		$libraryService = $this->createLibraryServiceForDatabase('admin', 1, '/Noten/library.db', $fixture['path']);
 
 		$songMapper = $this->createSongMapper();
 
@@ -188,9 +182,12 @@ final class SongServiceTest extends TestCase {
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('admin');
 
-		$libraryService = $this->createMock(LibraryService::class);
-		$libraryService->method('getDatabasePath')->with('admin', 1)->willReturn($databasePath);
-		$libraryService->method('getLibraryAndDatabasePath')->with('admin', 1)->willReturn(['Noten', $databasePath]);
+		$libraryService = $this->createLibraryServiceForDatabase(
+			'admin',
+			1,
+			'/Noten/library.db',
+			$databasePath,
+		);
 
 		$logger = $this->createMock(LoggerInterface::class);
 		$songMapper = new SongMapper($logger);
@@ -199,6 +196,7 @@ final class SongServiceTest extends TestCase {
 		$userFolder = $this->createMock(\OCP\Files\IUserFolder::class);
 		$userFolder->method('getOwner')->willReturn($user);
 		$userFolder->method('getPath')->willReturn('/admin/files');
+		$userFolder->method('get')->with('Noten')->willReturn($this->createMock(\OCP\Files\Folder::class));
 		$rootFolder->method('getUserFolder')->with('admin')->willReturn($userFolder);
 
 		$fileManager = $this->createMock(FileManager::class);

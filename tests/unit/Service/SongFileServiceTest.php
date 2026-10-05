@@ -53,9 +53,12 @@ final class SongFileServiceTest extends TestCase {
 		$this->rootFolder = $this->createMock(IRootFolder::class);
 		$this->rootFolder->method('getUserFolder')->with(self::UID)->willReturn($this->userFolder);
 
-		$this->libraryService = $this->createMock(LibraryService::class);
-		$this->libraryService->method('getLibraryAndDatabasePath')
-			->willReturn(['/Noten/library.db', $this->databaseFixture['path']]);
+		$this->libraryService = $this->createLibraryServiceForDatabase(
+			self::UID,
+			1,
+			'/Noten/library.db',
+			$this->databaseFixture['path'],
+		);
 
 		$this->songMapper = $this->createSongMapper();
 		$this->logger = $this->createMock(LoggerInterface::class);
@@ -279,11 +282,12 @@ final class SongFileServiceTest extends TestCase {
 			)
 			->willReturn(\OCA\MobileSheetsManager\Service\MobileSheetsFileLogEntry::CODE_METADATA_UPDATED);
 
-		$libraryService = $this->createMock(LibraryService::class);
-		$libraryService->method('getLibraryAndDatabasePath')->with(self::UID, 1)->willReturn([
+		$libraryService = $this->createLibraryServiceForDatabase(
+			self::UID,
+			1,
 			'/Noten/library.db',
 			$this->databaseFixture['path'],
-		]);
+		);
 
 		$service = new SongFileService(
 			$libraryService,
