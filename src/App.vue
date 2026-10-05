@@ -16,13 +16,12 @@ import NcContent from '@nextcloud/vue/components/NcContent'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import SongsView from './components/SongsView.vue'
-import FilesView from './components/FilesView.vue'
 import IntegrityView from './components/IntegrityView.vue'
 import EntitiesView from './components/EntitiesView.vue'
 
-/** Views of a library: the song view, one view per song filter, the files view, and integrity audit. */
-type ViewName = 'songs' | 'new-song' | 'files' | 'integrity' | EntityType
-const VIEW_NAMES: ViewName[] = ['songs', 'new-song', 'composers', 'artists', 'books', 'collections', 'genres', 'keys', 'customgroups', 'years', 'signatures', 'sourcetypes', 'files', 'integrity']
+/** Views of a library: the song view, one view per song filter, and integrity audit. */
+type ViewName = 'songs' | 'new-song' | 'integrity' | EntityType
+const VIEW_NAMES: ViewName[] = ['songs', 'new-song', 'composers', 'artists', 'books', 'collections', 'genres', 'keys', 'customgroups', 'years', 'signatures', 'sourcetypes', 'integrity']
 
 /*** State ***/
 const isDialogOpen = ref(false)
@@ -215,7 +214,6 @@ async function deleteLibrary() {
           <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Years')" :active="selectedView === 'years'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'years' } }" />
           <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Time Signatures')" :active="selectedView === 'signatures'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'signatures' } }" />
           <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Source Types')" :active="selectedView === 'sourcetypes'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'sourcetypes' } }" />
-          <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Files')" :active="selectedView === 'files'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'files' } }" />
           <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Integrity Audit')" :active="selectedView === 'integrity'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'integrity' } }" />
 
           <div :class="$style.deleteLibraryArea">
@@ -241,7 +239,6 @@ async function deleteLibrary() {
           <SongsView v-if="selectedView === 'songs' || selectedView === 'new-song'"
                      :selectedLibrary="selectedLibrary"
                      :standalone-create="selectedView === 'new-song'" />
-          <FilesView v-else-if="selectedView === 'files'" :selectedLibrary="selectedLibrary" />
           <IntegrityView v-else-if="selectedView === 'integrity'" :selectedLibrary="selectedLibrary" />
           <EntitiesView v-else
                         :key="selectedView"

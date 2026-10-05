@@ -32,6 +32,14 @@ const integrityIssues = ref<IntegrityIssue[]>([])
 const collapsedGroups = ref<Record<string, boolean>>({})
 const activeOrphanIssue = ref<IntegrityIssue | null>(null)
 
+// Song conflict resolution state
+const isMergeDialogOpen = ref(false)
+const isMerging = ref(false)
+const initialMergeMode = ref<'merge' | 'keepBoth'>('merge')
+const mergeIssue = ref<IntegrityIssue | null>(null)
+const libraryData = ref<LibraryData | null>(null)
+const mergingKey = ref<string | null>(null)
+
 function openOrphanFixer(issue: IntegrityIssue) {
 	activeOrphanIssue.value = issue
 }
