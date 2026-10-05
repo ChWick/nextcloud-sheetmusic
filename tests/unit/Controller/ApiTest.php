@@ -1150,7 +1150,6 @@ final class ApiTest extends TestCase {
 		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->deleteArtist(1, 7)->getStatus());
 		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->deleteSignature(1, 7)->getStatus());
 		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->importSongMetadata()->getStatus());
-		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->syncLibrary(1)->getStatus());
 	}
 
 	public function testImportSongMetadataFromNextcloudPath(): void {
@@ -1277,75 +1276,6 @@ final class ApiTest extends TestCase {
 			}
 		}
 		$this->temporaryFiles = [];
-	}
-
-	/**
-	 * Per-file failures are not fatal: the whole log - one line per file touched -
-	 * is sent back to the client so the user can follow the run.
-	 */
-	public function testSyncLibraryReportsTheLog(): void {
-		$librarySync = $this->createMock(LibrarySyncService::class);
-		$librarySync->method('syncLibrary')->willReturn([
-			new MobileSheetsFileLogEntry(
-				1,
-				'Take Five',
-				'/remote.php/dav/files/admin/Noten/a.pdf',
-				'Moved to "Noten/Jazz/Take Five.pdf"',
-				MobileSheetsFileLogEntry::LEVEL_INFO,
-				MobileSheetsFileLogEntry::CODE_PATH_MOVED,
-				11,
-			),
-			new MobileSheetsFileLogEntry(
-				2,
-				'Broken',
-				'/remote.php/dav/files/admin/Noten/b.pdf',
-				'No composer, artist, or collection',
-				MobileSheetsFileLogEntry::LEVEL_WARNING,
-				MobileSheetsFileLogEntry::CODE_NO_NAMING_RULE,
-				22,
-			),
-		]);
-
-		$controller = $this->createController(librarySync: $librarySync);
-
-		$response = $controller->syncLibrary(1);
-
-		self::assertEquals(Http::STATUS_OK, $response->getStatus());
-		$data = $response->getData();
-		self::assertCount(2, $data['log']);
-		self::assertSame(MobileSheetsFileLogEntry::LEVEL_INFO, $data['log'][0]->level);
-		self::assertSame(MobileSheetsFileLogEntry::CODE_PATH_MOVED, $data['log'][0]->code);
-		self::assertSame(11, $data['log'][0]->fileId);
-		self::assertSame('Take Five', $data['log'][0]->songTitle);
-		self::assertSame(MobileSheetsFileLogEntry::LEVEL_WARNING, $data['log'][1]->level);
-		self::assertSame(MobileSheetsFileLogEntry::CODE_NO_NAMING_RULE, $data['log'][1]->code);
-		self::assertStringContainsString('need attention', $data['message']);
-	}
-
-	/** A clean run reports no failures and the success message. */
-	public function testSyncLibraryReportsSuccessWhenNothingFails(): void {
-		$librarySync = $this->createMock(LibrarySyncService::class);
-		$librarySync->method('syncLibrary')->willReturn([
-			new MobileSheetsFileLogEntry(
-				1,
-				'Take Five',
-				'/remote.php/dav/files/admin/Noten/a.pdf',
-				'Moved to "Noten/Jazz/Take Five.pdf"',
-				MobileSheetsFileLogEntry::LEVEL_INFO,
-				MobileSheetsFileLogEntry::CODE_PATH_MOVED,
-				11,
-			),
-		]);
-
-		$controller = $this->createController(librarySync: $librarySync);
-
-		$response = $controller->syncLibrary(1);
-
-		self::assertEquals(Http::STATUS_OK, $response->getStatus());
-		$data = $response->getData();
-		self::assertCount(1, $data['log']);
-		self::assertSame(MobileSheetsFileLogEntry::LEVEL_INFO, $data['log'][0]->level);
-		self::assertSame('File paths and metadata are up to date', $data['message']);
 	}
 
 	private function createController(

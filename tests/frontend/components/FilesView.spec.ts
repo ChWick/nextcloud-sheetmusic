@@ -54,104 +54,15 @@ describe('FilesView.vue', () => {
 		vi.resetAllMocks()
 	})
 
-	it('renders header and sync tool card when no library is selected', () => {
+	it('renders files header without the sync tool section', () => {
 		const wrapper = mount(FilesView, {
 			props: { selectedLibrary: -1 },
 			...globalStubs,
 		})
 
 		expect(wrapper.find('h1').text()).toBe('Files')
-		expect(wrapper.text()).toContain('Sync file paths and metadata')
-		expect(wrapper.text()).toContain('Select a library first.')
-	})
-
-	it('triggers sync OCS request and opens report dialog when sync button clicked', async () => {
-		const mockLog: FileLogEntry[] = [
-			{ songId: 5, songTitle: 'Song 5', filePath: '/f5.pdf', message: 'Moved', level: 'info', code: 'path-moved', fileId: 50 },
-		]
-
-		vi.mocked(axios.post).mockResolvedValue({
-			data: {
-				ocs: {
-					data: {
-						log: mockLog,
-					},
-				},
-			},
-		})
-
-		const wrapper = mount(FilesView, {
-			props: { selectedLibrary: 2 },
-			...globalStubs,
-		})
-
-		const syncBtn = wrapper.find('button')
-		await syncBtn.trigger('click')
-
-		expect(axios.post).toHaveBeenCalledWith('/ocs/v2.php/apps/mobilesheetsmanager/api/sync-library', {
-			libraryId: 2,
-		})
-
-		expect(wrapper.find('.nc-dialog-stub').exists()).toBe(true)
-		expect(wrapper.text()).toContain('Song 5')
-	})
-
-	it('handles sync request error correctly', async () => {
-		vi.mocked(axios.post).mockRejectedValue({
-			isAxiosError: true,
-			response: {
-				data: {
-					ocs: {
-						data: {
-							message: 'Library database locked',
-						},
-					},
-				},
-			},
-		})
-
-		const wrapper = mount(FilesView, {
-			props: { selectedLibrary: 2 },
-			...globalStubs,
-		})
-
-		const syncBtn = wrapper.find('button')
-		await syncBtn.trigger('click')
-
-		expect(wrapper.text()).toContain('Library database locked')
-	})
-
-	it('navigates to song editor when song link in report log is clicked', async () => {
-		const mockLog: FileLogEntry[] = [
-			{ songId: 12, songTitle: 'Target Song', filePath: '/f12.pdf', message: 'Updated', level: 'info', code: 'metadata-updated', fileId: 120 },
-		]
-
-		vi.mocked(axios.post).mockResolvedValue({
-			data: {
-				ocs: {
-					data: {
-						log: mockLog,
-					},
-				},
-			},
-		})
-
-		const wrapper = mount(FilesView, {
-			props: { selectedLibrary: 1 },
-			...globalStubs,
-		})
-
-		await wrapper.find('button').trigger('click')
-
-		const songBtn = wrapper.findAll('button').find((btn) => btn.text().includes('Target Song'))
-		expect(songBtn).toBeDefined()
-		await songBtn!.trigger('click')
-
-		expect(mockRouterPush).toHaveBeenCalledWith({
-			name: 'LibraryView',
-			params: { library: '1', view: 'songs' },
-			query: { song: '12', edit: '1' },
-		})
+		expect(wrapper.text()).not.toContain('Sync file paths and metadata')
+		expect(wrapper.text()).not.toContain('Check and sync now')
 	})
 
 	it('executes resolveBoth with file detaches, song updates, and sync recheck', async () => {

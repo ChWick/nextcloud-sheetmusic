@@ -90,11 +90,6 @@ return [
 			'verb' => 'DELETE',
 		],
 		[
-			'name' => 'Api#syncLibrary',
-			'url' => '/api/sync-library',
-			'verb' => 'POST',
-		],
-		[
 			'name' => 'Api#deleteLibrary',
 			'url' => '/api/libraries/{id}',
 			'verb' => 'DELETE',

@@ -91,12 +91,6 @@ class ApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
-	#[ApiRoute(verb: 'POST', url: '/api/sync-library')]
-	public function syncLibrary(int $libraryId): DataResponse {
-		return $this->libraryController->syncLibrary($libraryId);
-	}
-
-	#[NoAdminRequired]
 	#[ApiRoute(verb: 'GET', url: '/api/libraries/{id}/integrity')]
 	public function getIntegrity(int $id): DataResponse {
 		return $this->libraryController->getIntegrity($id);

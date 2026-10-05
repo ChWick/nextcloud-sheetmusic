@@ -69,25 +69,6 @@ class LibraryController extends OCSController {
 	}
 
 	#[NoAdminRequired]
-	#[ApiRoute(verb: 'POST', url: '/api/sync-library')]
-	public function syncLibrary(int $libraryId): DataResponse {
-		$user = $this->userSession->getUser();
-		if ($user === null) {
-			return new DataResponse(['message' => 'User not logged in'], Http::STATUS_UNAUTHORIZED);
-		}
-
-		try {
-			$result = $this->libraryService->syncLibrary($libraryId, $user);
-			return new DataResponse($result, Http::STATUS_OK);
-		} catch (\Throwable $e) {
-			return new DataResponse(
-				['message' => "Error syncing library ID $libraryId: " . $e->getMessage()],
-				Http::STATUS_INTERNAL_SERVER_ERROR
-			);
-		}
-	}
-
-	#[NoAdminRequired]
 	#[ApiRoute(verb: 'GET', url: '/api/libraries/{id}/integrity')]
 	public function getIntegrity(int $id): DataResponse {
 		$user = $this->userSession->getUser();

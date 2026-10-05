@@ -813,48 +813,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/sync-library": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Sync file paths and metadata for a library */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": {
-                        libraryId: number;
-                    };
-                };
-            };
-            responses: {
-                /** @description Sync report log */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["OcsEnvelopeSyncLog"];
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/import-metadata": {
         parameters: {
             query?: never;
@@ -1012,14 +970,6 @@ export interface components {
                 meta: components["schemas"]["OcsMeta"];
                 data: {
                     id: number;
-                };
-            };
-        };
-        OcsEnvelopeSyncLog: {
-            ocs: {
-                meta: components["schemas"]["OcsMeta"];
-                data: {
-                    log: components["schemas"]["FileLogEntry"][];
                 };
             };
         };

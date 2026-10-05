@@ -1,14 +1,12 @@
 <script setup lang="ts">
 import { apiGet, apiPost } from '../api/client'
-import type { FileLogEntry, FileLogLevel, IntegrityIssue, LibraryData } from '../types/song'
+import type { FileLogEntry, IntegrityIssue, LibraryData } from '../types/song'
 import type { ResolveBothSongData } from './song-editor/SongMergeDialog.vue'
 import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import FilesIntegrityReportDialog from './files/FilesIntegrityReportDialog.vue'
-import FilesSyncReportDialog from './files/FilesSyncReportDialog.vue'
-import FilesSyncToolCard from './files/FilesSyncToolCard.vue'
 import SongMergeDialog from './song-editor/SongMergeDialog.vue'
 import ViewHeader from './ViewHeader.vue'
 
@@ -17,12 +15,6 @@ const props = defineProps<{
 }>()
 
 const router = useRouter()
-
-const isDialogOpen = ref(false)
-const isRunning = ref(false)
-const log = ref<FileLogEntry[]>([])
-const runError = ref('')
-const filter = ref<FileLogLevel>('info')
 
 // Integrity Audit State
 const isIntegrityDialogOpen = ref(false)
@@ -36,32 +28,6 @@ const isMerging = ref(false)
 const initialMergeMode = ref<'merge' | 'keepBoth'>('merge')
 const mergeIssue = ref<IntegrityIssue | null>(null)
 const libraryData = ref<LibraryData | null>(null)
-
-/** Run the sync tool and show its report. */
-async function runSync() {
-	isDialogOpen.value = true
-	isRunning.value = true
-	log.value = []
-	runError.value = ''
-	filter.value = 'info'
-
-	try {
-		const response = await apiPost('/api/sync-library', {
-			libraryId: props.selectedLibrary,
-		})
-
-		log.value = response.data.ocs.data.log ?? []
-	} catch (error) {
-		console.error('Failed to sync file paths and metadata:', error)
-		const serverMessage = axios.isAxiosError(error)
-			? error.response?.data?.ocs?.data?.message
-			: undefined
-		runError.value = serverMessage
-			?? t('mobilesheetsmanager', 'The sync run failed. Please try again.')
-	} finally {
-		isRunning.value = false
-	}
-}
 
 /** Redirect to the full-page Integrity Audit view */
 function auditIntegrity() {
@@ -179,7 +145,6 @@ function openSong(entry: FileLogEntry | number) {
 		return
 	}
 
-	isDialogOpen.value = false
 	isIntegrityDialogOpen.value = false
 	router.push({
 		name: 'LibraryView',
@@ -193,30 +158,16 @@ function openSong(entry: FileLogEntry | number) {
 	<div>
 		<ViewHeader :title="t('mobilesheetsmanager', 'Files')" />
 		<div :class="$style.filesArea">
-			<FilesSyncToolCard
-				:is-running="isRunning"
-				:disabled="selectedLibrary < 0"
-				@sync="runSync"
-				@audit-integrity="auditIntegrity" />
+			<FilesIntegrityReportDialog
+				v-model:open="isIntegrityDialogOpen"
+				:is-checking="isCheckingIntegrity"
+				:error="integrityError"
+				:issues="integrityIssues"
+				@open-song="openSong"
+				@fix-issue="fixIntegrityIssue"
+				@merge-songs="openMergeDialog"
+				@recheck="auditIntegrity" />
 		</div>
-
-		<FilesSyncReportDialog
-			v-model:open="isDialogOpen"
-			v-model:filter="filter"
-			:is-running="isRunning"
-			:run-error="runError"
-			:log="log"
-			@open-song="openSong" />
-
-		<FilesIntegrityReportDialog
-			v-model:open="isIntegrityDialogOpen"
-			:is-checking="isCheckingIntegrity"
-			:error="integrityError"
-			:issues="integrityIssues"
-			@open-song="openSong"
-			@fix-issue="fixIntegrityIssue"
-			@merge-songs="openMergeDialog"
-			@recheck="auditIntegrity" />
 
 		<SongMergeDialog
 			v-if="mergeIssue && libraryData"
