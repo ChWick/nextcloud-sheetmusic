@@ -25,6 +25,7 @@ import MagnifyMinus from 'vue-material-design-icons/MagnifyMinus.vue'
 import MagnifyPlus from 'vue-material-design-icons/MagnifyPlus.vue'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
+import FileDocumentEditOutline from 'vue-material-design-icons/FileDocumentEditOutline.vue'
 import RotateRight from 'vue-material-design-icons/RotateRight.vue'
 import ViewColumn from 'vue-material-design-icons/ViewColumn.vue'
 import ViewDay from 'vue-material-design-icons/ViewDay.vue'
@@ -69,6 +70,7 @@ const props = withDefaults(
 
 const emit = defineEmits<{
 	back: []
+	'modify-pdf': [song: Song, fileId?: string | number]
 	saved: [data: LibraryData, songId?: number]
 	updated: [data: LibraryData]
 	/** The song was deleted; its files went to the trash bin or stayed, per the chosen option. */
@@ -83,6 +85,11 @@ const isDeletingSong = ref(false)
 const deleteError = ref('')
 const deleteFiles = ref(true)
 const selectedFileId = ref('')
+
+const isSelectedFilePdf = computed(() => {
+	const path = selectedFile.value?.path?.toLowerCase() ?? ''
+	return path.endsWith('.pdf')
+})
 
 const songComposers = computed(() => props.song?.composers ?? [])
 const songBooks = computed(() => props.song?.books ?? [])
@@ -184,6 +191,16 @@ defineExpose({
 						@click="openInExternalViewer">
 						<template #icon>
 							<OpenInNewIcon :size="20" />
+						</template>
+					</NcButton>
+					<NcButton
+						v-if="song && isSelectedFilePdf"
+						variant="secondary"
+						:title="t('mobilesheetsmanager', 'Modify PDF (rotate, split)')"
+						:aria-label="t('mobilesheetsmanager', 'Modify PDF (rotate, split)')"
+						@click="emit('modify-pdf', song, selectedFile?.id)">
+						<template #icon>
+							<FileDocumentEditOutline :size="20" />
 						</template>
 					</NcButton>
 					<NcButton

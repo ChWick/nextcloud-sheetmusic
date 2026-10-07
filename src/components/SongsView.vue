@@ -1,6 +1,6 @@
 <template>
   <ViewHeader
-    :title="standaloneCreate ? (duplicateSourceSong ? t('mobilesheetsmanager', 'Duplicate: {title}', { title: duplicateSourceSong.title }) : t('mobilesheetsmanager', 'Create Song')) : songIdInUrl !== null ? (isEditInUrl ? (openSong?.title ? t('mobilesheetsmanager', 'Edit: {title}', { title: openSong.title }) : t('mobilesheetsmanager', 'Edit song')) : (openSong?.title ?? t('mobilesheetsmanager', 'Songs'))) : t('mobilesheetsmanager', 'Songs')"
+    :title="standaloneCreate ? (duplicateSourceSong ? t('mobilesheetsmanager', 'Duplicate: {title}', { title: duplicateSourceSong.title }) : t('mobilesheetsmanager', 'Create Song')) : songIdInUrl !== null ? (isModifyPdfInUrl ? (openSong?.title ? t('mobilesheetsmanager', 'Modify PDF: {title}', { title: openSong.title }) : t('mobilesheetsmanager', 'Modify PDF')) : (isEditInUrl ? (openSong?.title ? t('mobilesheetsmanager', 'Edit: {title}', { title: openSong.title }) : t('mobilesheetsmanager', 'Edit song')) : (openSong?.title ?? t('mobilesheetsmanager', 'Songs')))) : t('mobilesheetsmanager', 'Songs')"
     :show-back="songIdInUrl !== null || standaloneCreate"
     :create-label="songIdInUrl === null && !standaloneCreate ? t('mobilesheetsmanager', 'New song') : undefined"
     :import-label="songIdInUrl === null && !standaloneCreate ? t('mobilesheetsmanager', 'Import') : undefined"
@@ -58,7 +58,7 @@
         </template>
       </NcButton>
     </template>
-    <template v-else-if="!standaloneCreate && !isEditInUrl">
+    <template v-else-if="!standaloneCreate && !isEditInUrl && !isModifyPdfInUrl">
       <NcButton
         v-if="songViewerRef?.selectedFile"
         variant="secondary"
@@ -67,6 +67,16 @@
         @click="songViewerRef?.openInExternalViewer">
         <template #icon>
           <OpenInNewIcon :size="20" />
+        </template>
+      </NcButton>
+      <NcButton
+        v-if="openSong && songViewerRef?.selectedFile?.path?.toLowerCase().endsWith('.pdf')"
+        variant="secondary"
+        :title="t('mobilesheetsmanager', 'Modify PDF (rotate, split)')"
+        :aria-label="t('mobilesheetsmanager', 'Modify PDF (rotate, split)')"
+        @click="openSong && openModifyPdf(openSong, songViewerRef?.selectedFile?.id)">
+        <template #icon>
+          <FileDocumentEditOutline :size="20" />
         </template>
       </NcButton>
       <NcButton
@@ -127,6 +137,23 @@
                 @updated="handleLibraryDataUpdate"
                 @deleted="handleDeleted"
                 @cancel="goBackToSongs" />
+    <SongPdfModifier
+      v-else-if="isModifyPdfInUrl && openSong"
+      :song="openSong"
+      :file-id="route.query.fileId as string"
+      :library-id="selectedLibrary"
+      :composers="composers"
+      :books="books"
+      :collections="collections"
+      :artists="artists"
+      :genres="genres"
+      :keys="keys"
+      :custom-groups="customGroups"
+      :years="years"
+      :signatures="signatures"
+      :source-types="sourceTypes"
+      @saved="handlePdfModifierSaved"
+      @cancel="closeModifyPdf" />
     <SongViewer
       v-else
       ref="songViewerRef"
@@ -144,6 +171,7 @@
       :signatures="signatures"
       :source-types="sourceTypes"
       @back="goBackToSongs"
+      @modify-pdf="openModifyPdf"
       @saved="handleSaved"
       @updated="handleLibraryDataUpdate"
       @deleted="handleDeleted" />
@@ -310,6 +338,7 @@ import NcButton from '@nextcloud/vue/components/NcButton';
 import CheckIcon from 'vue-material-design-icons/Check.vue';
 import CloseIcon from 'vue-material-design-icons/Close.vue';
 import ContentSaveOutlineIcon from 'vue-material-design-icons/ContentSaveOutline.vue';
+import FileDocumentEditOutline from 'vue-material-design-icons/FileDocumentEditOutline.vue';
 import ContentCopyIcon from 'vue-material-design-icons/ContentCopy.vue';
 import DeleteIcon from 'vue-material-design-icons/Delete.vue';
 import MergeIcon from 'vue-material-design-icons/Merge.vue';
@@ -318,6 +347,7 @@ import PencilIcon from 'vue-material-design-icons/Pencil.vue';
 import SongEditor from '../components/SongEditor.vue';
 import SongFilterBar from '../components/SongFilterBar.vue';
 import SongViewer from '../components/SongViewer.vue';
+import SongPdfModifier from '../components/song-pdf/SongPdfModifier.vue';
 import ViewHeader from '../components/ViewHeader.vue';
 import BatchSongEditorDialog, { type BatchUpdatePayload } from '../components/song-editor/BatchSongEditorDialog.vue';
 import SongMergeDialog, { type MergedSongData, type ResolveBothSongData } from '../components/song-editor/SongMergeDialog.vue';
@@ -434,6 +464,9 @@ const duplicateSourceSong = computed(() =>
 
 /** The URL asks for the editor of the open song ("?song=12&edit=1"). */
 const isEditInUrl = computed(() => route.query.edit !== undefined && route.query.edit !== null);
+
+/** The URL asks for the PDF modifier view ("?song=12&modifyPdf=1"). */
+const isModifyPdfInUrl = computed(() => route.query.modifyPdf !== undefined && route.query.modifyPdf !== null);
 
 // The filter bar reads and writes its selections in the URL query, so the browser
 // history restores them when going back or forward.
@@ -623,12 +656,55 @@ function openSongEdit(song: Song) {
   });
 }
 
+/** Open the PDF modifier for a song. */
+function openModifyPdf(song: Song, fileId?: string | number) {
+  isCreatingSong.value = false;
+  router.push({
+    name: 'LibraryView',
+    params: { library: props.selectedLibrary, view: 'songs' },
+    query: {
+      ...queryWithoutOpenSong(),
+      song: String(song.id),
+      modifyPdf: '1',
+      ...(fileId ? { fileId: String(fileId) } : {}),
+    },
+  });
+}
+
+/** Close the PDF modifier and return to viewing the song. */
+function closeModifyPdf() {
+  if (openSong.value) {
+    router.push({
+      name: 'LibraryView',
+      params: { library: props.selectedLibrary, view: 'songs' },
+      query: { ...queryWithoutOpenSong(), song: String(openSong.value.id) },
+    });
+  } else {
+    goBackToSongs();
+  }
+}
+
+function handlePdfModifierSaved(data: LibraryData, songId?: number) {
+  handleLibraryDataUpdate(data);
+  if (songId) {
+    router.replace({
+      name: 'LibraryView',
+      params: { library: props.selectedLibrary, view: 'songs' },
+      query: { ...queryWithoutOpenSong(), song: String(songId) },
+    });
+  } else {
+    goBackToSongs();
+  }
+}
+
 /** The query without the open song and its edit flag; the filters stay. */
 function queryWithoutOpenSong() {
   const query = { ...route.query };
   delete query.song;
   delete query.edit;
   delete query.duplicate;
+  delete query.modifyPdf;
+  delete query.fileId;
   return query;
 }
 
