@@ -91,11 +91,18 @@ class SongFileService {
 		}
 
 		$targetRelative = ($libraryDir === '' ? '' : $libraryDir . '/') . $fileName;
-		$targetRelative = $this->fileManager->uniqueRelativePath($userFolder, $targetRelative);
+		$autoPaths = $this->libraryService->isAutoPathsEnabled($user->getUID(), $libraryId);
+		if (!$autoPaths) {
+			if ($userFolder->nodeExists($targetRelative)) {
+				throw new FileAlreadyExistsException(sprintf('File "%s" already exists.', $fileName));
+			}
+		} else {
+			$targetRelative = $this->fileManager->uniqueRelativePath($userFolder, $targetRelative);
+		}
 		$targetFile = $userFolder->newFile($targetRelative);
 		$targetFile->putContent($content);
 
-		$this->recordSongFile($songId, $databasePath, $targetFile, $targetFolder, $user);
+		$this->recordSongFile($songId, $databasePath, $targetFile, $targetFolder, $user, $autoPaths);
 
 		return $this->songMapper->findLibraryData($databasePath);
 	}
@@ -130,13 +137,20 @@ class SongFileService {
 			return null;
 		}
 
+		$autoPaths = $this->libraryService->isAutoPathsEnabled($user->getUID(), $libraryId);
 		$targetName = $sourceNode->getName();
 		$targetRelative = ($libraryDir === '' ? '' : $libraryDir . '/') . $targetName;
 		$sourceRelative = ltrim($sourcePath, '/');
 
 		if ($sourceRelative !== $targetRelative) {
-			$targetRelative = $this->fileManager->uniqueRelativePath($userFolder, $targetRelative);
-			$targetName = basename($targetRelative);
+			if (!$autoPaths) {
+				if ($userFolder->nodeExists($targetRelative)) {
+					throw new FileAlreadyExistsException(sprintf('File "%s" already exists.', $targetName));
+				}
+			} else {
+				$targetRelative = $this->fileManager->uniqueRelativePath($userFolder, $targetRelative);
+				$targetName = basename($targetRelative);
+			}
 
 			$targetInternalPath = $targetFolder->getPath() . '/' . $targetName;
 			if ($userFolder->nodeExists($targetRelative)) {
@@ -150,7 +164,7 @@ class SongFileService {
 		}
 
 		$attachedFile = $targetFolder->get($targetName);
-		$this->recordSongFile($songId, $databasePath, $attachedFile, $targetFolder, $user);
+		$this->recordSongFile($songId, $databasePath, $attachedFile, $targetFolder, $user, $autoPaths);
 
 		return $this->songMapper->findLibraryData($databasePath);
 	}
@@ -179,7 +193,8 @@ class SongFileService {
 			}
 		}
 
-		$this->relocateSongFiles($songId, $databasePath, $targetFolder, $user, $filePath);
+		$autoPaths = $this->libraryService->isAutoPathsEnabled($user->getUID(), $libraryId);
+		$this->relocateSongFiles($songId, $databasePath, $targetFolder, $user, $filePath, $autoPaths);
 
 		return $this->songMapper->findLibraryData($databasePath);
 	}
@@ -204,8 +219,9 @@ class SongFileService {
 				return null;
 			}
 
+			$autoPaths = $this->libraryService->isAutoPathsEnabled($user->getUID(), $libraryId);
 			// Keep the physical file, but update paths of the song's remaining files.
-			$this->relocateSongFiles($songId, $databasePath, $targetFolder, $user, $filePath);
+			$this->relocateSongFiles($songId, $databasePath, $targetFolder, $user, $filePath, $autoPaths);
 
 			return $this->songMapper->findLibraryData($databasePath);
 		} catch (\Throwable $exception) {
@@ -298,7 +314,7 @@ class SongFileService {
 		return ($directory === '' || $directory === '.') ? '' : $directory;
 	}
 
-	private function recordSongFile(int $songId, string $databasePath, Node $file, Folder $targetFolder, IUser $user): void {
+	private function recordSongFile(int $songId, string $databasePath, Node $file, Folder $targetFolder, IUser $user, bool $autoPaths = true): void {
 		$storedPath = $this->fileManager->pathOfExistingFile($file->getPath(), $user);
 
 		foreach ($this->songMapper->findSong($databasePath, $songId)?->files ?? [] as $existing) {
@@ -314,7 +330,7 @@ class SongFileService {
 
 		$this->songMapper->setSongFile($databasePath, $songId, $storedPath->webdav, MobileSheetsFileFacts::fromNode($file));
 
-		$this->relocateSongFiles($songId, $databasePath, $targetFolder, $user);
+		$this->relocateSongFiles($songId, $databasePath, $targetFolder, $user, null, $autoPaths);
 		$this->syncSongFileMetadata($user, $databasePath, $songId);
 	}
 
@@ -324,7 +340,12 @@ class SongFileService {
 		Folder $targetFolder,
 		IUser $user,
 		?string $removedPath = null,
+		bool $autoPaths = true,
 	): void {
+		if (!$autoPaths) {
+			return;
+		}
+
 		$hashCodes = $this->hashCodesFor($databasePath);
 
 		try {

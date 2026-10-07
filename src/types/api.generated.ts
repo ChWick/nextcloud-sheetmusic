@@ -863,6 +863,7 @@ export interface components {
         Library: {
             id: number;
             path: string;
+            autoPaths?: boolean;
         };
         Composer: {
             id: number;

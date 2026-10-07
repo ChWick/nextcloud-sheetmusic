@@ -87,4 +87,21 @@ class LibraryService {
 		];
 	}
 
+	public function isAutoPathsEnabled(string $userId, int $libraryId): bool {
+		$library = $this->libraryMapper->findForUser($userId, $libraryId);
+		if ($library === null) {
+			return true;
+		}
+
+		return LibraryMapper::autoPathsOf($library);
+	}
+
+	/**
+	 * @return array{id: int, path: string, autoPaths: bool}|null
+	 */
+	public function updateSettings(string $userId, int $libraryId, bool $autoPaths): ?array {
+		$this->libraryMapper->setAutoPathsForUser($userId, $libraryId, $autoPaths);
+		return $this->libraryMapper->findForUser($userId, $libraryId);
+	}
+
 }

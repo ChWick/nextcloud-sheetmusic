@@ -69,6 +69,22 @@ class LibraryController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	#[ApiRoute(verb: 'PUT', url: '/api/libraries/{id}/settings')]
+	public function updateSettings(int $id, bool $autoPaths = true): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		$result = $this->libraryService->updateSettings($user->getUID(), $id, $autoPaths);
+		if ($result === null) {
+			return new DataResponse([], Http::STATUS_NOT_FOUND);
+		}
+
+		return new DataResponse(['library' => $result]);
+	}
+
+	#[NoAdminRequired]
 	#[ApiRoute(verb: 'GET', url: '/api/libraries/{id}/integrity')]
 	public function getIntegrity(int $id): DataResponse {
 		$user = $this->userSession->getUser();

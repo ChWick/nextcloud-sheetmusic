@@ -21,11 +21,11 @@ class LibraryMapper {
 	}
 
 	/**
-	 * @return list<Library>
+	 * @return list<array{id: int, path: string, autoPaths: bool}>
 	 */
 	public function findAllForUser(string $userId): array {
 		$qb = $this->db->getQueryBuilder();
-		$qb->select('id', 'path')
+		$qb->select('id', 'path', 'auto_paths')
 			->from(self::TABLE_NAME)
 			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId, IQueryBuilder::PARAM_STR)))
 			->orderBy('path', 'ASC');
@@ -33,7 +33,11 @@ class LibraryMapper {
 		$result = $qb->executeQuery();
 		$results = [];
 		while ($row = $result->fetchAssociative()) {
-			$results[] = ['id' => (int)$row['id'], 'path' => (string)$row['path']];
+			$results[] = [
+				'id' => (int)$row['id'],
+				'path' => (string)$row['path'],
+				'autoPaths' => self::autoPathsOf($row),
+			];
 		}
 		$result->closeCursor();
 
@@ -66,7 +70,8 @@ class LibraryMapper {
 		$qb = $this->db->getQueryBuilder();
 		$qb->insert(self::TABLE_NAME)
 			->setValue('user_id', $qb->createNamedParameter($userId, IQueryBuilder::PARAM_STR))
-			->setValue('path', $qb->createNamedParameter($path, IQueryBuilder::PARAM_STR));
+			->setValue('path', $qb->createNamedParameter($path, IQueryBuilder::PARAM_STR))
+			->setValue('auto_paths', $qb->createNamedParameter(true, IQueryBuilder::PARAM_BOOL));
 		$qb->executeStatement();
 	}
 
@@ -89,11 +94,11 @@ class LibraryMapper {
 	}
 
 	/**
-	 * @return array{id: int, path: string}|null
+	 * @return array{id: int, path: string, autoPaths: bool}|null
 	 */
 	public function findForUser(string $userId, int $id): ?array {
 		$qb = $this->db->getQueryBuilder();
-		$qb->select('id', 'path')
+		$qb->select('id', 'path', 'auto_paths')
 			->from(self::TABLE_NAME)
 			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId, IQueryBuilder::PARAM_STR)))
 			->andWhere($qb->expr()->eq('id', $qb->createNamedParameter($id, IQueryBuilder::PARAM_INT)))
@@ -107,7 +112,31 @@ class LibraryMapper {
 
 		return [
 			'id' => (int)$row['id'],
-			'path' => (string)$row['path']
+			'path' => (string)$row['path'],
+			'autoPaths' => self::autoPathsOf($row),
 		];
+	}
+
+	public function setAutoPathsForUser(string $userId, int $id, bool $autoPaths): void {
+		$qb = $this->db->getQueryBuilder();
+		$qb->update(self::TABLE_NAME)
+			->set('auto_paths', $qb->createNamedParameter($autoPaths, IQueryBuilder::PARAM_BOOL))
+			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId, IQueryBuilder::PARAM_STR)))
+			->andWhere($qb->expr()->eq('id', $qb->createNamedParameter($id, IQueryBuilder::PARAM_INT)));
+
+		$qb->executeStatement();
+	}
+
+	/**
+	 * @param array<string, mixed> $library
+	 */
+	public static function autoPathsOf(array $library): bool {
+		if (array_key_exists('autoPaths', $library)) {
+			return (bool)$library['autoPaths'];
+		}
+		if (array_key_exists('auto_paths', $library) && $library['auto_paths'] !== null) {
+			return (bool)$library['auto_paths'];
+		}
+		return true;
 	}
 }

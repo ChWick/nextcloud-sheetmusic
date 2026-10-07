@@ -15,9 +15,11 @@ import NcAppNavigationItem from '@nextcloud/vue/components/NcAppNavigationItem'
 import NcContent from '@nextcloud/vue/components/NcContent'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
+import CogIcon from 'vue-material-design-icons/Cog.vue'
 import SongsView from './components/SongsView.vue'
 import IntegrityView from './components/IntegrityView.vue'
 import EntitiesView from './components/EntitiesView.vue'
+import LibrarySettingsDialog from './components/LibrarySettingsDialog.vue'
 
 /** Views of a library: the song view, one view per song filter, and integrity audit. */
 type ViewName = 'songs' | 'new-song' | 'integrity' | EntityType
@@ -25,6 +27,7 @@ const VIEW_NAMES: ViewName[] = ['songs', 'new-song', 'composers', 'artists', 'bo
 
 /*** State ***/
 const isDialogOpen = ref(false)
+const isSettingsDialogOpen = ref(false)
 const selectedFile = ref<INode>()
 const libraries = ref<Library[]>([])
 const selectedLibrary = ref<number>(-1)
@@ -227,9 +230,22 @@ async function deleteLibrary() {
         </template>
 
         <template #footer>
-          <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Add MobileSheets Library')" @click="openDialog">
-            <template #icon><span aria-hidden="true">+</span></template>
-          </NcAppNavigationItem>
+          <div :class="$style.footerArea">
+            <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Add MobileSheets Library')" :class="$style.addLibraryItem" @click="openDialog">
+              <template #icon><span aria-hidden="true">+</span></template>
+            </NcAppNavigationItem>
+            <NcButton v-if="selectedLibrary >= 0"
+                      type="button"
+                      variant="tertiary"
+                      :title="t('mobilesheetsmanager', 'Library Settings')"
+                      :aria-label="t('mobilesheetsmanager', 'Library Settings')"
+                      :class="$style.settingsButton"
+                      @click="isSettingsDialogOpen = true">
+              <template #icon>
+                <CogIcon :size="20" />
+              </template>
+            </NcButton>
+          </div>
         </template>
       </NcAppNavigation>
 
@@ -281,10 +297,30 @@ async function deleteLibrary() {
         </NcButton>
       </template>
     </NcDialog>
+
+    <LibrarySettingsDialog
+      v-if="isSettingsDialogOpen && selectedLibrary >= 0"
+      :selected-library="selectedLibrary"
+      :libraries="libraries"
+      @close="isSettingsDialogOpen = false"
+      @update:libraries="libraries = $event" />
   </div>
 </template>
 
 <style module>
+.footerArea {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+.addLibraryItem {
+  flex: 1;
+  min-width: 0;
+}
+.settingsButton {
+  margin-inline-end: 8px;
+  flex-shrink: 0;
+}
 .libraryList { margin: 0; padding: 0; }
 .libraryItem { word-break: break-word; }
 .libraryButton { width: 100%; padding: 8px 16px; border: 0; background: transparent; color: inherit; font: inherit; text-align: start; cursor: pointer; }

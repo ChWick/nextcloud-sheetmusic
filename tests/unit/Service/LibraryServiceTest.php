@@ -126,4 +126,66 @@ final class LibraryServiceTest extends TestCase {
 		$this->assertSame(['id' => 1, 'path' => '/Noten/mobilesheets.db'], $service->deleteLibrary('admin', 1));
 	}
 
+	public function testIsAutoPathsEnabledReturnsMapperValue(): void {
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$libraryMapper->expects($this->exactly(2))
+			->method('findForUser')
+			->willReturnMap([
+				['admin', 1, ['id' => 1, 'path' => '/Noten/mobilesheets.db', 'auto_paths' => 1]],
+				['admin', 2, ['id' => 2, 'path' => '/Noten/mobilesheets.db', 'auto_paths' => 0]],
+			]);
+
+		$service = new LibraryService(
+			$libraryMapper,
+			$this->createSongMapper(),
+			$this->createMock(IRootFolder::class),
+			$this->createMock(LoggerInterface::class),
+		);
+
+		$this->assertTrue($service->isAutoPathsEnabled('admin', 1));
+		$this->assertFalse($service->isAutoPathsEnabled('admin', 2));
+	}
+
+	public function testUpdateSettingsUpdatesAndReturnsLibrary(): void {
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$libraryMapper->expects($this->once())
+			->method('setAutoPathsForUser')
+			->with('admin', 1, false);
+		$libraryMapper->expects($this->once())
+			->method('findForUser')
+			->with('admin', 1)
+			->willReturn(['id' => 1, 'path' => '/Noten/mobilesheets.db', 'autoPaths' => false]);
+
+		$service = new LibraryService(
+			$libraryMapper,
+			$this->createSongMapper(),
+			$this->createMock(IRootFolder::class),
+			$this->createMock(LoggerInterface::class),
+		);
+
+		$result = $service->updateSettings('admin', 1, false);
+		$this->assertNotNull($result);
+		$this->assertFalse($result['autoPaths']);
+	}
+
+	public function testUpdateSettingsReturnsNullWhenLibraryNotFound(): void {
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$libraryMapper->expects($this->once())
+			->method('setAutoPathsForUser')
+			->with('admin', 99, true);
+		$libraryMapper->expects($this->once())
+			->method('findForUser')
+			->with('admin', 99)
+			->willReturn(null);
+
+		$service = new LibraryService(
+			$libraryMapper,
+			$this->createSongMapper(),
+			$this->createMock(IRootFolder::class),
+			$this->createMock(LoggerInterface::class),
+		);
+
+		$this->assertNull($service->updateSettings('admin', 99, true));
+	}
+
 }

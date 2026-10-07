@@ -62,8 +62,8 @@ final class LibraryMapperTest extends TestCase {
 
 		self::assertSame(
 			[
-				['id' => 3, 'path' => '/Noten/b.db'],
-				['id' => 7, 'path' => '/Noten/a.db'],
+				['id' => 3, 'path' => '/Noten/b.db', 'autoPaths' => true],
+				['id' => 7, 'path' => '/Noten/a.db', 'autoPaths' => true],
 			],
 			$mapper->findAllForUser('admin'),
 		);
@@ -111,6 +111,7 @@ final class LibraryMapperTest extends TestCase {
 		self::assertSame(1, $this->statements);
 		self::assertContains(['value' => 'admin', 'type' => IQueryBuilder::PARAM_STR], $this->parameters);
 		self::assertContains(['value' => '/Noten/a.db', 'type' => IQueryBuilder::PARAM_STR], $this->parameters);
+		self::assertContains(['value' => true, 'type' => IQueryBuilder::PARAM_BOOL], $this->parameters);
 	}
 
 	public function testAddForUserIgnoresAPathThatIsAlreadyThere(): void {
@@ -142,11 +143,11 @@ final class LibraryMapperTest extends TestCase {
 
 	public function testFindForUserReturnsTheRowWithTypedColumns(): void {
 		$result = $this->createMock(QueryResult::class);
-		$result->method('fetchAssociative')->willReturn(['id' => '7', 'path' => '/Noten/a.db']);
+		$result->method('fetchAssociative')->willReturn(['id' => '7', 'path' => '/Noten/a.db', 'auto_paths' => '1']);
 
 		$mapper = new LibraryMapper($this->connection($this->queryBuilder($result)));
 
-		self::assertSame(['id' => 7, 'path' => '/Noten/a.db'], $mapper->findForUser('admin', 7));
+		self::assertSame(['id' => 7, 'path' => '/Noten/a.db', 'autoPaths' => true], $mapper->findForUser('admin', 7));
 		self::assertContains(['value' => 'admin', 'type' => IQueryBuilder::PARAM_STR], $this->parameters);
 		self::assertContains(['value' => 7, 'type' => IQueryBuilder::PARAM_INT], $this->parameters);
 	}
@@ -158,6 +159,41 @@ final class LibraryMapperTest extends TestCase {
 		$mapper = new LibraryMapper($this->connection($this->queryBuilder($result)));
 
 		self::assertNull($mapper->findForUser('admin', 7));
+	}
+
+	public function testSetAutoPathsForUserUpdatesColumn(): void {
+		$qb = $this->createMock(IQueryBuilder::class);
+		$expr = $this->createMock(IExpressionBuilder::class);
+		$expr->method('eq')->willReturn('eq');
+
+		foreach (['update', 'set', 'where', 'andWhere'] as $method) {
+			$qb->method($method)->willReturnSelf();
+		}
+		$qb->method('expr')->willReturn($expr);
+		$qb->method('createNamedParameter')->willReturnCallback(function ($value, $type = null) {
+			$this->parameters[] = ['value' => $value, 'type' => $type];
+			return $this->createMock(IParameter::class);
+		});
+		$qb->expects(self::once())->method('executeStatement')->willReturn(1);
+
+		$db = $this->createMock(IDBConnection::class);
+		$db->method('getQueryBuilder')->willReturn($qb);
+
+		$mapper = new LibraryMapper($db);
+		$mapper->setAutoPathsForUser('admin', 7, false);
+
+		self::assertContains(['value' => false, 'type' => IQueryBuilder::PARAM_BOOL], $this->parameters);
+		self::assertContains(['value' => 'admin', 'type' => IQueryBuilder::PARAM_STR], $this->parameters);
+		self::assertContains(['value' => 7, 'type' => IQueryBuilder::PARAM_INT], $this->parameters);
+	}
+
+	public function testAutoPathsOfHandlesDefaultAndNull(): void {
+		self::assertTrue(LibraryMapper::autoPathsOf(['autoPaths' => true]));
+		self::assertFalse(LibraryMapper::autoPathsOf(['autoPaths' => false]));
+		self::assertTrue(LibraryMapper::autoPathsOf(['auto_paths' => 1]));
+		self::assertFalse(LibraryMapper::autoPathsOf(['auto_paths' => 0]));
+		self::assertTrue(LibraryMapper::autoPathsOf(['auto_paths' => null]));
+		self::assertTrue(LibraryMapper::autoPathsOf([]));
 	}
 
 	/**

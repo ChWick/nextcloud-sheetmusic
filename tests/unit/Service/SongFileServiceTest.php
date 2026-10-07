@@ -319,4 +319,148 @@ final class SongFileServiceTest extends TestCase {
 		self::assertSame('DETACHED_CONTENT', $this->files['Noten/score.pdf']);
 		self::assertSame(0, (int)$this->databaseFixture['connection']->query('SELECT COUNT(*) FROM Files WHERE Id = 1')->fetchColumn());
 	}
+
+	public function testUploadSongFileFailsWhenAutoPathsDisabledAndFileExists(): void {
+		$user = $this->user();
+		$userFolder = $this->createMock(IUserFolder::class);
+		$targetFolder = $this->createMock(Folder::class);
+		$rootFolder = $this->createMock(IRootFolder::class);
+		$rootFolder->method('getUserFolder')->with(self::UID)->willReturn($userFolder);
+		$userFolder->method('nodeExists')->with('Noten/existing.pdf')->willReturn(true);
+
+		$libraryMapper = $this->createMock(\OCA\MobileSheetsManager\Db\LibraryMapper::class);
+		$libraryMapper->method('findForUser')->with(self::UID, 1)->willReturn([
+			'id' => 1,
+			'path' => '/Noten/library.db',
+			'autoPaths' => false,
+		]);
+
+		$storage = $this->createMock(\OCP\Files\Storage\IStorage::class);
+		$storage->method('getLocalFile')->willReturn($this->databaseFixture['path']);
+
+		$databaseNode = $this->createMock(Node::class);
+		$databaseNode->method('getStorage')->willReturn($storage);
+		$databaseNode->method('getInternalPath')->willReturn('files/Noten/library.db');
+
+		$userFolder->method('get')->willReturnCallback(function (string $path) use ($databaseNode, $targetFolder): Node {
+			if ($path === 'Noten/library.db') {
+				return $databaseNode;
+			}
+			if ($path === 'Noten') {
+				return $targetFolder;
+			}
+			throw new \OCP\Files\NotFoundException($path);
+		});
+
+		$libraryService = new LibraryService(
+			$libraryMapper,
+			$this->songMapper,
+			$rootFolder,
+			$this->logger,
+		);
+
+		$service = new SongFileService(
+			$libraryService,
+			$this->songMapper,
+			$this->fileManager,
+			$rootFolder,
+			$this->logger,
+		);
+
+		$tmpFile = tempnam(sys_get_temp_dir(), 'test_upload_');
+		file_put_contents($tmpFile, '%PDF-1.4');
+
+		try {
+			$this->expectException(\OCA\MobileSheetsManager\Service\FileAlreadyExistsException::class);
+			$service->uploadSongFile($user, 1, 10, [
+				'tmp_name' => $tmpFile,
+				'name' => 'existing.pdf',
+			]);
+		} finally {
+			unlink($tmpFile);
+		}
+	}
+
+	public function testUploadSongFileSucceedsWithoutRelocationWhenAutoPathsDisabled(): void {
+		$user = $this->user();
+		$userFolder = $this->createMock(IUserFolder::class);
+		$targetFolder = $this->createMock(Folder::class);
+		$rootFolder = $this->createMock(IRootFolder::class);
+		$rootFolder->method('getUserFolder')->with(self::UID)->willReturn($userFolder);
+		$userFolder->method('nodeExists')->with('Noten/new.pdf')->willReturn(false);
+
+		$file = $this->createMock(File::class);
+		$file->method('getPath')->willReturn('/user1/files/Noten/new.pdf');
+		$file->method('getContent')->willReturn('%PDF-1.4');
+		$file->method('getMTime')->willReturn(1);
+		$file->method('putContent')->willReturnCallback(static fn (string $content): int => strlen($content));
+		$userFolder->method('newFile')->with('Noten/new.pdf')->willReturn($file);
+		$this->databaseFixture['connection']->exec('DELETE FROM Files WHERE Id = 1');
+
+		$libraryMapper = $this->createMock(\OCA\MobileSheetsManager\Db\LibraryMapper::class);
+		$libraryMapper->method('findForUser')->with(self::UID, 1)->willReturn([
+			'id' => 1,
+			'path' => '/Noten/library.db',
+			'autoPaths' => false,
+		]);
+
+		$storage = $this->createMock(\OCP\Files\Storage\IStorage::class);
+		$storage->method('getLocalFile')->willReturn($this->databaseFixture['path']);
+
+		$databaseNode = $this->createMock(Node::class);
+		$databaseNode->method('getStorage')->willReturn($storage);
+		$databaseNode->method('getInternalPath')->willReturn('files/Noten/library.db');
+
+		$userFolder->method('get')->willReturnCallback(function (string $path) use ($databaseNode, $targetFolder): Node {
+			if ($path === 'Noten/library.db') {
+				return $databaseNode;
+			}
+			if ($path === 'Noten') {
+				return $targetFolder;
+			}
+			throw new \OCP\Files\NotFoundException($path);
+		});
+
+		$libraryService = new LibraryService(
+			$libraryMapper,
+			$this->songMapper,
+			$rootFolder,
+			$this->logger,
+		);
+
+		$fileManager = $this->createMock(FileManager::class);
+		$fileManager->expects(self::never())->method('uniqueRelativePath');
+		$fileManager->expects(self::never())->method('regenerateSongFilePaths');
+		$fileManager->expects(self::once())
+			->method('pathOfExistingFile')
+			->with($file->getPath(), $user)
+			->willReturn(new \OCA\MobileSheetsManager\Service\MobileSheetsPath(
+				'/user1/files/Noten/new.pdf',
+				'/remote.php/dav/files/user1/Noten/new.pdf',
+			));
+		$fileManager->expects(self::once())
+			->method('syncMetadataIntoFile')
+			->willReturn(\OCA\MobileSheetsManager\Service\MobileSheetsFileLogEntry::CODE_METADATA_UPDATED);
+
+		$service = new SongFileService(
+			$libraryService,
+			$this->songMapper,
+			$fileManager,
+			$rootFolder,
+			$this->logger,
+		);
+
+		$tmpFile = tempnam(sys_get_temp_dir(), 'test_upload_');
+		file_put_contents($tmpFile, '%PDF-1.4');
+
+		try {
+			$result = $service->uploadSongFile($user, 1, 10, [
+				'tmp_name' => $tmpFile,
+				'name' => 'new.pdf',
+			]);
+			self::assertNotNull($result);
+		} finally {
+			unlink($tmpFile);
+		}
+	}
 }

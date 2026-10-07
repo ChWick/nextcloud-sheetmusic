@@ -81,6 +81,8 @@ class SongFileController extends OCSController {
 			}
 
 			return new DataResponse($result);
+		} catch (\OCA\MobileSheetsManager\Service\FileAlreadyExistsException $e) {
+			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_CONFLICT);
 		} catch (\InvalidArgumentException $e) {
 			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_BAD_REQUEST);
 		} catch (\Throwable $e) {

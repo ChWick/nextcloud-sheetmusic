@@ -160,6 +160,70 @@ final class LibraryControllerTest extends TestCase {
 		$this->assertSame([
 			'songIds' => [60, 61],
 			'exactDuplicate' => false,
-		], $data['issues'][0]['details']);
+ 		], $data['issues'][0]['details']);
+ 	}
+
+	public function testUpdateSettingsRejectsUnauthenticated(): void {
+		$userSession = $this->createMock(IUserSession::class);
+		$userSession->method('getUser')->willReturn(null);
+
+		$controller = new LibraryController(
+			'mobilesheetsmanager',
+			$this->createMock(IRequest::class),
+			$this->createLibraryService(),
+			$userSession,
+		);
+
+		$this->assertSame(Http::STATUS_UNAUTHORIZED, $controller->updateSettings(1, false)->getStatus());
+	}
+
+	public function testUpdateSettingsHandlesNotFound(): void {
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('admin');
+
+		$userSession = $this->createMock(IUserSession::class);
+		$userSession->method('getUser')->willReturn($user);
+
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$libraryMapper->method('findForUser')->with('admin', 99)->willReturn(null);
+		$libraryService = $this->createLibraryServiceWithMapper($libraryMapper);
+
+		$controller = new LibraryController(
+			'mobilesheetsmanager',
+			$this->createMock(IRequest::class),
+			$libraryService,
+			$userSession,
+		);
+
+		$this->assertSame(Http::STATUS_NOT_FOUND, $controller->updateSettings(99, false)->getStatus());
+	}
+
+	public function testUpdateSettingsSuccess(): void {
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('admin');
+
+		$userSession = $this->createMock(IUserSession::class);
+		$userSession->method('getUser')->willReturn($user);
+
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$libraryMapper->expects($this->once())
+			->method('setAutoPathsForUser')
+			->with('admin', 1, false);
+		$libraryMapper->expects($this->once())
+			->method('findForUser')
+			->with('admin', 1)
+			->willReturn(['id' => 1, 'path' => '/Noten/mobilesheets.db', 'autoPaths' => false]);
+		$libraryService = $this->createLibraryServiceWithMapper($libraryMapper);
+
+		$controller = new LibraryController(
+			'mobilesheetsmanager',
+			$this->createMock(IRequest::class),
+			$libraryService,
+			$userSession,
+		);
+
+		$response = $controller->updateSettings(1, false);
+		$this->assertSame(Http::STATUS_OK, $response->getStatus());
+		$this->assertSame(['library' => ['id' => 1, 'path' => '/Noten/mobilesheets.db', 'autoPaths' => false]], $response->getData());
 	}
 }

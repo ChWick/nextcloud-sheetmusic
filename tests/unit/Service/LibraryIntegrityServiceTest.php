@@ -436,6 +436,61 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		unlink($fixture['path']);
 	}
 
+	public function testCheckIntegrityWhenAutoPathsDisabledReportsNoNamingOrOrphanIssues(): void {
+		$libraryMapper = $this->createMock(\OCA\MobileSheetsManager\Db\LibraryMapper::class);
+		$libraryMapper->method('findForUser')->with('user1', 1)->willReturn([
+			'id' => 1,
+			'path' => '/Noten/library.db',
+			'autoPaths' => false,
+		]);
+		$libraryService = new \OCA\MobileSheetsManager\Service\LibraryService(
+			$libraryMapper,
+			$this->createSongMapper(),
+			$this->createMock(IRootFolder::class),
+			$this->createMock(LoggerInterface::class),
+		);
+
+		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
+		// Non-standard filename in root folder
+		$fixture['connection']->exec("INSERT INTO Songs (Id, Title) VALUES (1, 'Custom Song')");
+		$fixture['connection']->exec("INSERT INTO Files (Id, SongId, Path) VALUES (10, 1, '/remote.php/dav/files/user1/Noten/non_standard_name.pdf')");
+
+		$songMapper = $this->createSongMapper();
+		$targetFolder = $this->createMock(Folder::class);
+		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
+		$targetFolder->method('nodeExists')->willReturn(true);
+
+		// An unreferenced file in target folder (would normally be orphan)
+		$orphanNode = $this->createMock(\OCP\Files\Node::class);
+		$orphanNode->method('getName')->willReturn('other_unrelated_file.pdf');
+		$orphanNode->method('getPath')->willReturn('/user1/files/Noten/other_unrelated_file.pdf');
+		$targetFolder->method('getDirectoryListing')->willReturn([$orphanNode]);
+
+		$song = $songMapper->findSongs($fixture['path'])[0];
+		$pdf = $this->createMock(\OCP\Files\File::class);
+		$pdf->method('getContent')->willReturn(MobileSheetsPdfMetadata::withInfo(
+			self::minimalPdf(),
+			MobileSheetsPdfMetadata::fieldsFor($song),
+		));
+		$pdf->method('getMTime')->willReturn(1);
+		$targetFolder->method('get')->with('non_standard_name.pdf')->willReturn($pdf);
+
+		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager(
+			$fixture['path'],
+			$targetFolder,
+			['Noten/non_standard_name.pdf' => $pdf],
+		);
+
+		$logger = $this->createMock(\Psr\Log\LoggerInterface::class);
+		$service = new LibraryIntegrityService($libraryService, $songMapper, $fileManager, $rootFolder, $pathResolver, $logger);
+
+		$issues = $service->checkIntegrity(1, 'user1');
+
+		// Should not report TYPE_INVALID_NAMING_RULE nor TYPE_ORPHAN_FILE
+		self::assertCount(0, $issues);
+		unlink($fixture['path']);
+	}
+
 	/**
 	 * @param array<string, File> $files paths relative to the user's files folder
 	 * @return array{FileManager, IRootFolder, MobileSheetsPathResolver}

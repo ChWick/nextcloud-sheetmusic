@@ -351,6 +351,11 @@ class FileManager {
 	 * @return list<MobileSheetsFileLogEntry> one line per file the run touched
 	 */
 	public function regenerateFilePaths(int $libraryId, IUser $user): array {
+		$library = $this->libraryMapper->findById($libraryId);
+		if ($library !== null && !LibraryMapper::autoPathsOf($library)) {
+			return [];
+		}
+
 		['databasePath' => $databasePath, 'targetFolder' => $targetFolder] = $this->libraryContext($libraryId, $user);
 
 		$songs = $this->songMapper->findSongs($databasePath);

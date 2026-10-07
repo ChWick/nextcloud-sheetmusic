@@ -123,6 +123,8 @@ class LibraryIntegrityService {
 			);
 		}
 
+		$autoPaths = $this->libraryService->isAutoPathsEnabled($userId, $libraryId);
+
 		foreach ($songs as $song) {
 			foreach ($song->files as $file) {
 				$pathObj = $this->pathResolver->fromStored($file->path, $user);
@@ -154,15 +156,17 @@ class LibraryIntegrityService {
 
 				// Calculate valid target paths (naming rules)
 				$validTargetPaths = [];
-				try {
-					$validTargetPaths = createTargetPaths(
-						$song,
-						getFileExtension($file->path),
-						fileIndexOf($song, $file),
-						fileCountForExtension($song, $file),
-					);
-				} catch (NoNamingRuleException) {
-					// Song missing composer, artist, or collection - keeps existing name
+				if ($autoPaths) {
+					try {
+						$validTargetPaths = createTargetPaths(
+							$song,
+							getFileExtension($file->path),
+							fileIndexOf($song, $file),
+							fileCountForExtension($song, $file),
+						);
+					} catch (NoNamingRuleException) {
+						// Song missing composer, artist, or collection - keeps existing name
+					}
 				}
 
 				// Check if the expected target file already exists on disk
@@ -203,12 +207,14 @@ class LibraryIntegrityService {
 					];
 
 					// Check naming rule compliance
-					$isCompliant = false;
-					$normalizedRelative = strtolower(ltrim($relativeToTarget, '/'));
-					foreach ($validTargetPaths as $validPath) {
-						if ($normalizedRelative === strtolower(ltrim($validPath, '/'))) {
-							$isCompliant = true;
-							break;
+					$isCompliant = !$autoPaths;
+					if ($autoPaths) {
+						$normalizedRelative = strtolower(ltrim($relativeToTarget, '/'));
+						foreach ($validTargetPaths as $validPath) {
+							if ($normalizedRelative === strtolower(ltrim($validPath, '/'))) {
+								$isCompliant = true;
+								break;
+							}
 						}
 					}
 
@@ -228,7 +234,7 @@ class LibraryIntegrityService {
 				} else {
 					// Source file does not exist at stored path.
 					// If the target file ALREADY exists at the expected naming-rule path on disk:
-					if ($targetExists) {
+					if ($autoPaths && $targetExists) {
 						$issues[] = new IntegrityIssue(
 							type: IntegrityIssue::TYPE_INVALID_NAMING_RULE,
 							severity: IntegrityIssue::SEVERITY_WARNING,
@@ -293,7 +299,9 @@ class LibraryIntegrityService {
 		}
 
 		// Scan folder for orphan files (files in storage not in DB)
-		$this->scanOrphans($targetFolder, $targetFolderPath, $referencedRelativePaths, $issues, $user);
+		if ($autoPaths) {
+			$this->scanOrphans($targetFolder, $targetFolderPath, $referencedRelativePaths, $issues, $user);
+		}
 
 		// Check for songs with identical metadata (informational)
 		$groupedByMetadata = [];
