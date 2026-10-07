@@ -51,7 +51,7 @@ class MobileSheetsPathResolver {
 		}
 
 		$relative = substr($webdavPath, strlen($webdavRoot) + 1);
-		$internal = $this->normalize($this->internalRoot($user) . '/' . $relative);
+		$internal = $this->normalize($this->internalRoot($user) . '/' . rawurldecode($relative));
 
 		return new MobileSheetsPath($internal, $webdavPath);
 	}

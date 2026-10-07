@@ -406,6 +406,7 @@ defineExpose({
 
 			<FilePreviewer
 				v-if="selectedFile?.path"
+				:key="`${selectedFile.id}-${selectedFile.path}-${song?.lastModified ?? ''}`"
 				:file-path="selectedFile.path"
 				:show-external-button="false" />
 			<div v-else :class="$style.error">

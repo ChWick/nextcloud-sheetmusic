@@ -171,6 +171,16 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		expect(wrapper.text()).toContain('8 pages')
 		expect(wrapper.text()).toContain('p. 1')
 		expect(wrapper.text()).toContain('p. 8')
+
+		const axios = (await import('@nextcloud/axios')).default
+		expect(axios.get).toHaveBeenCalledWith('/files/nextcloud-guide.pdf', {
+			responseType: 'arraybuffer',
+			params: { t: expect.any(Number) },
+			headers: {
+				'Cache-Control': 'no-cache',
+				Pragma: 'no-cache',
+			},
+		})
 	})
 
 	it('successfully splits real PDF into multiple valid PDF documents even when worker detaches getDocument buffer', async () => {

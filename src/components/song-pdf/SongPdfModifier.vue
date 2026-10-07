@@ -122,6 +122,11 @@ async function loadPdf() {
 	try {
 		const response = await axios.get(targetFile.value.path, {
 			responseType: 'arraybuffer',
+			params: { t: Date.now() },
+			headers: {
+				'Cache-Control': 'no-cache',
+				Pragma: 'no-cache',
+			},
 		})
 		const bytes = response.data instanceof ArrayBuffer ? new Uint8Array(response.data) : new Uint8Array(response.data)
 		// Store an independent clone of bytes so pdfjs worker transfer does not detach the array buffer
@@ -308,8 +313,8 @@ async function saveRotations() {
 		for (let i = 0; i < pages.length; i++) {
 			const rot = pageRotations.value[i] ?? 0
 			if (rot !== 0) {
-				const currentAngle = pages[i].getRotation().angle
-				pages[i].setRotation(degrees((currentAngle + rot) % 360))
+				const currentAngle = pages[i].getRotation()?.angle ?? 0
+				pages[i].setRotation(degrees(((currentAngle + rot) % 360 + 360) % 360))
 				modified = true
 			}
 		}

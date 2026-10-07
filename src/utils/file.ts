@@ -1,5 +1,11 @@
 export function getFileName(filePath: string): string {
-	return filePath.split('/').pop() ?? filePath
+	const clean = filePath.split('?')[0]
+	const raw = clean.split('/').pop() ?? clean
+	try {
+		return decodeURIComponent(raw)
+	} catch {
+		return raw
+	}
 }
 
 export function openFileExternally(filePath: string): void {

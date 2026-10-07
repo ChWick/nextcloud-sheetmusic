@@ -58,6 +58,14 @@ final class MobileSheetsPathResolverTest extends TestCase {
 		self::assertSame(self::WEBDAV_ROOT . '/Noten/sub/file.pdf', $path->webdav);
 	}
 
+	public function testFromStoredDecodesUrlEncodedCharactersForInternalPath(): void {
+		$path = $this->resolver()->fromStored(self::WEBDAV_ROOT . '/Noten/My%20Song%20%281%29.pdf', $this->user());
+
+		self::assertInstanceOf(MobileSheetsPath::class, $path);
+		self::assertSame('/admin/files/Noten/My Song (1).pdf', $path->internal);
+		self::assertSame(self::WEBDAV_ROOT . '/Noten/My%20Song%20%281%29.pdf', $path->webdav);
+	}
+
 	public function testFromStoredReturnsNullForAPathOfAnotherUser(): void {
 		self::assertNull($this->resolver()->fromStored('/remote.php/dav/files/other/Noten/file.pdf', $this->user()));
 	}

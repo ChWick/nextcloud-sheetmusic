@@ -48,12 +48,12 @@ const imageScale = ref(1.0)
 const zoomSteps = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 4.0]
 
 const isPdfFile = computed(() => {
-	const path = props.filePath.toLowerCase()
+	const path = props.filePath.split('?')[0].toLowerCase()
 	return path.endsWith('.pdf')
 })
 
 const isImageFile = computed(() => {
-	const path = props.filePath.toLowerCase()
+	const path = props.filePath.split('?')[0].toLowerCase()
 	return path.endsWith('.png') || path.endsWith('.jpg') || path.endsWith('.jpeg') || path.endsWith('.webp') || path.endsWith('.gif') || path.endsWith('.svg') || path.endsWith('.bmp')
 })
 
@@ -210,7 +210,8 @@ async function renderCurrentView() {
 		if (renderId !== currentRenderId) return
 
 		const page = await pdf.getPage(pageNumber)
-		const unscaledViewport = page.getViewport({ scale: 1.0, rotation: rotation.value })
+		const pageRotation = (((page.rotate ?? 0) + rotation.value) % 360 + 360) % 360
+		const unscaledViewport = page.getViewport({ scale: 1.0, rotation: pageRotation })
 
 		let scale = 1.25
 		if (zoomMode.value === 'fit-width') {
@@ -231,7 +232,7 @@ async function renderCurrentView() {
 		scale = Math.max(0.2, Math.min(scale, 4.0))
 		effectiveScale.value = scale
 
-		const viewport = page.getViewport({ scale, rotation: rotation.value })
+		const viewport = page.getViewport({ scale, rotation: pageRotation })
 		const canvas = document.createElement('canvas')
 		canvas.width = Math.floor(viewport.width)
 		canvas.height = Math.floor(viewport.height)
@@ -257,6 +258,7 @@ async function loadAndRenderFile() {
 	loadedPdf.value = null
 	totalPages.value = 1
 	currentPage.value = 1
+	rotation.value = 0
 
 	await nextTick()
 	if (pdfContainer.value) {
@@ -279,6 +281,11 @@ async function loadAndRenderFile() {
 	try {
 		const response = await axios.get(props.filePath, {
 			responseType: 'arraybuffer',
+			params: { t: Date.now() },
+			headers: {
+				'Cache-Control': 'no-cache',
+				Pragma: 'no-cache',
+			},
 		})
 
 		if (loadId !== currentLoadId) return
