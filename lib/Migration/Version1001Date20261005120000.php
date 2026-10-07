@@ -32,6 +32,13 @@ class Version1001Date20261005120000 extends SimpleMigrationStep {
 			]);
 		}
 
+		if (!$table->hasColumn('auto_pdf_metadata')) {
+			$table->addColumn('auto_pdf_metadata', Types::BOOLEAN, [
+				'notnull' => false,
+				'default' => true,
+			]);
+		}
+
 		return $schema;
 	}
 }

@@ -21,11 +21,11 @@ class LibraryMapper {
 	}
 
 	/**
-	 * @return list<array{id: int, path: string, autoPaths: bool}>
+	 * @return list<array{id: int, path: string, autoPaths: bool, autoPdfMetadata: bool}>
 	 */
 	public function findAllForUser(string $userId): array {
 		$qb = $this->db->getQueryBuilder();
-		$qb->select('id', 'path', 'auto_paths')
+		$qb->select('id', 'path', 'auto_paths', 'auto_pdf_metadata')
 			->from(self::TABLE_NAME)
 			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId, IQueryBuilder::PARAM_STR)))
 			->orderBy('path', 'ASC');
@@ -37,6 +37,7 @@ class LibraryMapper {
 				'id' => (int)$row['id'],
 				'path' => (string)$row['path'],
 				'autoPaths' => self::autoPathsOf($row),
+				'autoPdfMetadata' => self::autoPdfMetadataOf($row),
 			];
 		}
 		$result->closeCursor();
@@ -71,7 +72,8 @@ class LibraryMapper {
 		$qb->insert(self::TABLE_NAME)
 			->setValue('user_id', $qb->createNamedParameter($userId, IQueryBuilder::PARAM_STR))
 			->setValue('path', $qb->createNamedParameter($path, IQueryBuilder::PARAM_STR))
-			->setValue('auto_paths', $qb->createNamedParameter(true, IQueryBuilder::PARAM_BOOL));
+			->setValue('auto_paths', $qb->createNamedParameter(true, IQueryBuilder::PARAM_BOOL))
+			->setValue('auto_pdf_metadata', $qb->createNamedParameter(true, IQueryBuilder::PARAM_BOOL));
 		$qb->executeStatement();
 	}
 
@@ -94,11 +96,11 @@ class LibraryMapper {
 	}
 
 	/**
-	 * @return array{id: int, path: string, autoPaths: bool}|null
+	 * @return array{id: int, path: string, autoPaths: bool, autoPdfMetadata: bool}|null
 	 */
 	public function findForUser(string $userId, int $id): ?array {
 		$qb = $this->db->getQueryBuilder();
-		$qb->select('id', 'path', 'auto_paths')
+		$qb->select('id', 'path', 'auto_paths', 'auto_pdf_metadata')
 			->from(self::TABLE_NAME)
 			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId, IQueryBuilder::PARAM_STR)))
 			->andWhere($qb->expr()->eq('id', $qb->createNamedParameter($id, IQueryBuilder::PARAM_INT)))
@@ -114,6 +116,7 @@ class LibraryMapper {
 			'id' => (int)$row['id'],
 			'path' => (string)$row['path'],
 			'autoPaths' => self::autoPathsOf($row),
+			'autoPdfMetadata' => self::autoPdfMetadataOf($row),
 		];
 	}
 
@@ -127,6 +130,27 @@ class LibraryMapper {
 		$qb->executeStatement();
 	}
 
+	public function setSettingsForUser(string $userId, int $id, ?bool $autoPaths = null, ?bool $autoPdfMetadata = null): void {
+		$qb = $this->db->getQueryBuilder();
+		$qb->update(self::TABLE_NAME)
+			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId, IQueryBuilder::PARAM_STR)))
+			->andWhere($qb->expr()->eq('id', $qb->createNamedParameter($id, IQueryBuilder::PARAM_INT)));
+
+		$hasChanges = false;
+		if ($autoPaths !== null) {
+			$qb->set('auto_paths', $qb->createNamedParameter($autoPaths, IQueryBuilder::PARAM_BOOL));
+			$hasChanges = true;
+		}
+		if ($autoPdfMetadata !== null) {
+			$qb->set('auto_pdf_metadata', $qb->createNamedParameter($autoPdfMetadata, IQueryBuilder::PARAM_BOOL));
+			$hasChanges = true;
+		}
+
+		if ($hasChanges) {
+			$qb->executeStatement();
+		}
+	}
+
 	/**
 	 * @param array<string, mixed> $library
 	 */
@@ -136,6 +160,19 @@ class LibraryMapper {
 		}
 		if (array_key_exists('auto_paths', $library) && $library['auto_paths'] !== null) {
 			return (bool)$library['auto_paths'];
+		}
+		return true;
+	}
+
+	/**
+	 * @param array<string, mixed> $library
+	 */
+	public static function autoPdfMetadataOf(array $library): bool {
+		if (array_key_exists('autoPdfMetadata', $library)) {
+			return (bool)$library['autoPdfMetadata'];
+		}
+		if (array_key_exists('auto_pdf_metadata', $library) && $library['auto_pdf_metadata'] !== null) {
+			return (bool)$library['auto_pdf_metadata'];
 		}
 		return true;
 	}

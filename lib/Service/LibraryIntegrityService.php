@@ -124,6 +124,7 @@ class LibraryIntegrityService {
 		}
 
 		$autoPaths = $this->libraryService->isAutoPathsEnabled($userId, $libraryId);
+		$autoPdfMetadata = $this->libraryService->isAutoPdfMetadataEnabled($userId, $libraryId);
 
 		foreach ($songs as $song) {
 			foreach ($song->files as $file) {
@@ -191,7 +192,7 @@ class LibraryIntegrityService {
 					}
 				}
 
-				if ($existingPdfPath !== null && str_ends_with(strtolower($file->path), '.pdf')) {
+				if ($autoPdfMetadata && $existingPdfPath !== null && str_ends_with(strtolower($file->path), '.pdf')) {
 					$pdfIssue = $this->checkPdfMetadata($targetFolder, $existingPdfPath, $song, $file->id);
 					if ($pdfIssue !== null) {
 						$issues[] = $pdfIssue;

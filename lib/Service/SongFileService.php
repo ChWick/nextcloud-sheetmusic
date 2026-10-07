@@ -191,7 +191,11 @@ class SongFileService {
 		}
 	}
 
-	public function syncSongFileMetadata(IUser $user, string $databasePath, int $songId): void {
+	public function syncSongFileMetadata(IUser $user, string $databasePath, int $songId, ?int $libraryId = null): void {
+		if ($libraryId !== null && !$this->libraryService->isAutoPdfMetadataEnabled($user->getUID(), $libraryId)) {
+			return;
+		}
+
 		$song = $this->songMapper->findSong($databasePath, $songId);
 		if ($song === null) {
 			$this->logger->warning('Could not find the song to sync its metadata into attached files', [
@@ -327,7 +331,7 @@ class SongFileService {
 					'songId' => $songId,
 					'path' => $storedPath->webdav,
 				]);
-				$this->syncSongFileMetadata($user, $databasePath, $songId);
+				$this->syncSongFileMetadata($user, $databasePath, $songId, $libraryId);
 				return;
 			}
 		}
@@ -335,7 +339,7 @@ class SongFileService {
 		$this->songMapper->setSongFile($databasePath, $songId, $storedPath->webdav, MobileSheetsFileFacts::fromNode($file));
 
 		$this->relocateSongFiles($songId, $databasePath, $targetFolder, $user, null, $libraryId);
-		$this->syncSongFileMetadata($user, $databasePath, $songId);
+		$this->syncSongFileMetadata($user, $databasePath, $songId, $libraryId);
 	}
 
 	private function relocateSongFiles(

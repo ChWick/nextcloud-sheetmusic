@@ -864,6 +864,7 @@ export interface components {
             id: number;
             path: string;
             autoPaths?: boolean;
+            autoPdfMetadata?: boolean;
         };
         Composer: {
             id: number;

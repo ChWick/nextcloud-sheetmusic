@@ -68,15 +68,15 @@ vi.mock('@nextcloud/vue/components/NcLoadingIcon', () => ({
 
 describe('LibrarySettingsDialog.vue', () => {
 	const mockLibraries: Library[] = [
-		{ id: 1, path: '/Noten/library.db', autoPaths: true },
-		{ id: 2, path: '/Noten/other.db', autoPaths: false },
+		{ id: 1, path: '/Noten/library.db', autoPaths: true, autoPdfMetadata: true },
+		{ id: 2, path: '/Noten/other.db', autoPaths: false, autoPdfMetadata: false },
 	]
 
 	beforeEach(() => {
 		vi.resetAllMocks()
 	})
 
-	it('renders dialog with autoPaths enabled for library 1', () => {
+	it('renders dialog with settings enabled for library 1', () => {
 		const wrapper = mount(LibrarySettingsDialog, {
 			props: {
 				selectedLibrary: 1,
@@ -84,12 +84,13 @@ describe('LibrarySettingsDialog.vue', () => {
 			},
 		})
 
-		const checkbox = wrapper.find('input[type="checkbox"]')
-		expect(checkbox.exists()).toBe(true)
-		expect((checkbox.element as HTMLInputElement).checked).toBe(true)
+		const checkboxes = wrapper.findAll('input[type="checkbox"]')
+		expect(checkboxes).toHaveLength(2)
+		expect((checkboxes[0].element as HTMLInputElement).checked).toBe(true)
+		expect((checkboxes[1].element as HTMLInputElement).checked).toBe(true)
 	})
 
-	it('renders dialog with autoPaths disabled for library 2', () => {
+	it('renders dialog with settings disabled for library 2', () => {
 		const wrapper = mount(LibrarySettingsDialog, {
 			props: {
 				selectedLibrary: 2,
@@ -97,9 +98,10 @@ describe('LibrarySettingsDialog.vue', () => {
 			},
 		})
 
-		const checkbox = wrapper.find('input[type="checkbox"]')
-		expect(checkbox.exists()).toBe(true)
-		expect((checkbox.element as HTMLInputElement).checked).toBe(false)
+		const checkboxes = wrapper.findAll('input[type="checkbox"]')
+		expect(checkboxes).toHaveLength(2)
+		expect((checkboxes[0].element as HTMLInputElement).checked).toBe(false)
+		expect((checkboxes[1].element as HTMLInputElement).checked).toBe(false)
 	})
 
 	it('toggles autoPaths and calls PUT endpoint, emitting updated libraries', async () => {
@@ -107,7 +109,7 @@ describe('LibrarySettingsDialog.vue', () => {
 			data: {
 				ocs: {
 					data: {
-						library: { id: 1, path: '/Noten/library.db', autoPaths: false },
+						library: { id: 1, path: '/Noten/library.db', autoPaths: false, autoPdfMetadata: true },
 					},
 				},
 			},
@@ -120,8 +122,8 @@ describe('LibrarySettingsDialog.vue', () => {
 			},
 		})
 
-		const checkbox = wrapper.find('input[type="checkbox"]')
-		await checkbox.setValue(false)
+		const checkboxes = wrapper.findAll('input[type="checkbox"]')
+		await checkboxes[0].setValue(false)
 
 		expect(axios.put).toHaveBeenCalledWith(
 			'/ocs/v2.php/apps/mobilesheetsmanager/api/libraries/1/settings',
@@ -134,6 +136,40 @@ describe('LibrarySettingsDialog.vue', () => {
 		expect(wrapper.emitted('update:libraries')).toBeTruthy()
 		const emittedLibs = wrapper.emitted('update:libraries')![0][0] as Library[]
 		expect(emittedLibs.find(l => l.id === 1)?.autoPaths).toBe(false)
+	})
+
+	it('toggles autoPdfMetadata and calls PUT endpoint, emitting updated libraries', async () => {
+		vi.mocked(axios.put).mockResolvedValueOnce({
+			data: {
+				ocs: {
+					data: {
+						library: { id: 1, path: '/Noten/library.db', autoPaths: true, autoPdfMetadata: false },
+					},
+				},
+			},
+		})
+
+		const wrapper = mount(LibrarySettingsDialog, {
+			props: {
+				selectedLibrary: 1,
+				libraries: mockLibraries,
+			},
+		})
+
+		const checkboxes = wrapper.findAll('input[type="checkbox"]')
+		await checkboxes[1].setValue(false)
+
+		expect(axios.put).toHaveBeenCalledWith(
+			'/ocs/v2.php/apps/mobilesheetsmanager/api/libraries/1/settings',
+			{ autoPdfMetadata: false },
+			expect.objectContaining({
+				headers: { 'OCS-APIREQUEST': 'true', Accept: 'application/json' },
+			}),
+		)
+
+		expect(wrapper.emitted('update:libraries')).toBeTruthy()
+		const emittedLibs = wrapper.emitted('update:libraries')![0][0] as Library[]
+		expect(emittedLibs.find(l => l.id === 1)?.autoPdfMetadata).toBe(false)
 	})
 
 	it('handles save errors gracefully', async () => {

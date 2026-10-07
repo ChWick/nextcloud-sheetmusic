@@ -175,7 +175,7 @@ class SongService {
 
 			$this->songMapper->updateBookmarks($databasePath, $songId, $bookmarks);
 			$this->songMapper->updateAudioFiles($databasePath, $songId, $audioFiles);
-			$this->songFileService->syncSongFileMetadata($user, $databasePath, $songId);
+			$this->songFileService->syncSongFileMetadata($user, $databasePath, $songId, $libraryId);
 
 			return $this->songMapper->findLibraryData($databasePath);
 		} catch (\Throwable $e) {
@@ -230,7 +230,7 @@ class SongService {
 			);
 
 			foreach ($songIds as $songId) {
-				$this->songFileService->syncSongFileMetadata($user, $databasePath, (int)$songId);
+				$this->songFileService->syncSongFileMetadata($user, $databasePath, (int)$songId, $libraryId);
 			}
 
 			return $this->songMapper->findLibraryData($databasePath);

@@ -70,13 +70,13 @@ class LibraryController extends OCSController {
 
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'PUT', url: '/api/libraries/{id}/settings')]
-	public function updateSettings(int $id, bool $autoPaths = true): DataResponse {
+	public function updateSettings(int $id, ?bool $autoPaths = null, ?bool $autoPdfMetadata = null): DataResponse {
 		$user = $this->userSession->getUser();
 		if ($user === null) {
 			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
 		}
 
-		$result = $this->libraryService->updateSettings($user->getUID(), $id, $autoPaths);
+		$result = $this->libraryService->updateSettings($user->getUID(), $id, $autoPaths, $autoPdfMetadata);
 		if ($result === null) {
 			return new DataResponse([], Http::STATUS_NOT_FOUND);
 		}

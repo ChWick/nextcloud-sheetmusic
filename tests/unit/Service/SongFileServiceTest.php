@@ -463,4 +463,28 @@ final class SongFileServiceTest extends TestCase {
 			unlink($tmpFile);
 		}
 	}
+
+	public function testSyncSongFileMetadataSkippedWhenAutoPdfMetadataDisabled(): void {
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn(self::UID);
+
+		$libraryService = $this->createMock(LibraryService::class);
+		$libraryService->expects(self::once())
+			->method('isAutoPdfMetadataEnabled')
+			->with(self::UID, 1)
+			->willReturn(false);
+
+		$fileManager = $this->createMock(FileManager::class);
+		$fileManager->expects(self::never())->method('syncMetadataIntoFile');
+
+		$service = new SongFileService(
+			$libraryService,
+			$this->songMapper,
+			$fileManager,
+			$this->rootFolder,
+			$this->logger,
+		);
+
+		$service->syncSongFileMetadata($user, $this->databaseFixture['path'], 10, 1);
+	}
 }

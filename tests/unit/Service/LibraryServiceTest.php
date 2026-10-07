@@ -146,15 +146,14 @@ final class LibraryServiceTest extends TestCase {
 		$this->assertFalse($service->isAutoPathsEnabled('admin', 2));
 	}
 
-	public function testUpdateSettingsUpdatesAndReturnsLibrary(): void {
+	public function testIsAutoPdfMetadataEnabledReturnsMapperValue(): void {
 		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->expects($this->once())
-			->method('setAutoPathsForUser')
-			->with('admin', 1, false);
-		$libraryMapper->expects($this->once())
+		$libraryMapper->expects($this->exactly(2))
 			->method('findForUser')
-			->with('admin', 1)
-			->willReturn(['id' => 1, 'path' => '/Noten/mobilesheets.db', 'autoPaths' => false]);
+			->willReturnMap([
+				['admin', 1, ['id' => 1, 'path' => '/Noten/mobilesheets.db', 'auto_pdf_metadata' => 1]],
+				['admin', 2, ['id' => 2, 'path' => '/Noten/mobilesheets.db', 'auto_pdf_metadata' => 0]],
+			]);
 
 		$service = new LibraryService(
 			$libraryMapper,
@@ -163,16 +162,38 @@ final class LibraryServiceTest extends TestCase {
 			$this->createMock(LoggerInterface::class),
 		);
 
-		$result = $service->updateSettings('admin', 1, false);
+		$this->assertTrue($service->isAutoPdfMetadataEnabled('admin', 1));
+		$this->assertFalse($service->isAutoPdfMetadataEnabled('admin', 2));
+	}
+
+	public function testUpdateSettingsUpdatesAndReturnsLibrary(): void {
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$libraryMapper->expects($this->once())
+			->method('setSettingsForUser')
+			->with('admin', 1, false, true);
+		$libraryMapper->expects($this->once())
+			->method('findForUser')
+			->with('admin', 1)
+			->willReturn(['id' => 1, 'path' => '/Noten/mobilesheets.db', 'autoPaths' => false, 'autoPdfMetadata' => true]);
+
+		$service = new LibraryService(
+			$libraryMapper,
+			$this->createSongMapper(),
+			$this->createMock(IRootFolder::class),
+			$this->createMock(LoggerInterface::class),
+		);
+
+		$result = $service->updateSettings('admin', 1, false, true);
 		$this->assertNotNull($result);
 		$this->assertFalse($result['autoPaths']);
+		$this->assertTrue($result['autoPdfMetadata']);
 	}
 
 	public function testUpdateSettingsReturnsNullWhenLibraryNotFound(): void {
 		$libraryMapper = $this->createMock(LibraryMapper::class);
 		$libraryMapper->expects($this->once())
-			->method('setAutoPathsForUser')
-			->with('admin', 99, true);
+			->method('setSettingsForUser')
+			->with('admin', 99, true, null);
 		$libraryMapper->expects($this->once())
 			->method('findForUser')
 			->with('admin', 99)

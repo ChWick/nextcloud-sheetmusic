@@ -62,8 +62,8 @@ final class LibraryMapperTest extends TestCase {
 
 		self::assertSame(
 			[
-				['id' => 3, 'path' => '/Noten/b.db', 'autoPaths' => true],
-				['id' => 7, 'path' => '/Noten/a.db', 'autoPaths' => true],
+				['id' => 3, 'path' => '/Noten/b.db', 'autoPaths' => true, 'autoPdfMetadata' => true],
+				['id' => 7, 'path' => '/Noten/a.db', 'autoPaths' => true, 'autoPdfMetadata' => true],
 			],
 			$mapper->findAllForUser('admin'),
 		);
@@ -147,7 +147,7 @@ final class LibraryMapperTest extends TestCase {
 
 		$mapper = new LibraryMapper($this->connection($this->queryBuilder($result)));
 
-		self::assertSame(['id' => 7, 'path' => '/Noten/a.db', 'autoPaths' => true], $mapper->findForUser('admin', 7));
+		self::assertSame(['id' => 7, 'path' => '/Noten/a.db', 'autoPaths' => true, 'autoPdfMetadata' => true], $mapper->findForUser('admin', 7));
 		self::assertContains(['value' => 'admin', 'type' => IQueryBuilder::PARAM_STR], $this->parameters);
 		self::assertContains(['value' => 7, 'type' => IQueryBuilder::PARAM_INT], $this->parameters);
 	}
@@ -187,6 +187,33 @@ final class LibraryMapperTest extends TestCase {
 		self::assertContains(['value' => 7, 'type' => IQueryBuilder::PARAM_INT], $this->parameters);
 	}
 
+	public function testSetSettingsForUserUpdatesColumns(): void {
+		$qb = $this->createMock(IQueryBuilder::class);
+		$expr = $this->createMock(IExpressionBuilder::class);
+		$expr->method('eq')->willReturn('eq');
+
+		foreach (['update', 'set', 'where', 'andWhere'] as $method) {
+			$qb->method($method)->willReturnSelf();
+		}
+		$qb->method('expr')->willReturn($expr);
+		$qb->method('createNamedParameter')->willReturnCallback(function ($value, $type = null) {
+			$this->parameters[] = ['value' => $value, 'type' => $type];
+			return $this->createMock(IParameter::class);
+		});
+		$qb->expects(self::once())->method('executeStatement')->willReturn(1);
+
+		$db = $this->createMock(IDBConnection::class);
+		$db->method('getQueryBuilder')->willReturn($qb);
+
+		$mapper = new LibraryMapper($db);
+		$mapper->setSettingsForUser('admin', 7, false, true);
+
+		self::assertContains(['value' => false, 'type' => IQueryBuilder::PARAM_BOOL], $this->parameters);
+		self::assertContains(['value' => true, 'type' => IQueryBuilder::PARAM_BOOL], $this->parameters);
+		self::assertContains(['value' => 'admin', 'type' => IQueryBuilder::PARAM_STR], $this->parameters);
+		self::assertContains(['value' => 7, 'type' => IQueryBuilder::PARAM_INT], $this->parameters);
+	}
+
 	public function testAutoPathsOfHandlesDefaultAndNull(): void {
 		self::assertTrue(LibraryMapper::autoPathsOf(['autoPaths' => true]));
 		self::assertFalse(LibraryMapper::autoPathsOf(['autoPaths' => false]));
@@ -194,6 +221,15 @@ final class LibraryMapperTest extends TestCase {
 		self::assertFalse(LibraryMapper::autoPathsOf(['auto_paths' => 0]));
 		self::assertTrue(LibraryMapper::autoPathsOf(['auto_paths' => null]));
 		self::assertTrue(LibraryMapper::autoPathsOf([]));
+	}
+
+	public function testAutoPdfMetadataOfHandlesDefaultAndNull(): void {
+		self::assertTrue(LibraryMapper::autoPdfMetadataOf(['autoPdfMetadata' => true]));
+		self::assertFalse(LibraryMapper::autoPdfMetadataOf(['autoPdfMetadata' => false]));
+		self::assertTrue(LibraryMapper::autoPdfMetadataOf(['auto_pdf_metadata' => 1]));
+		self::assertFalse(LibraryMapper::autoPdfMetadataOf(['auto_pdf_metadata' => 0]));
+		self::assertTrue(LibraryMapper::autoPdfMetadataOf(['auto_pdf_metadata' => null]));
+		self::assertTrue(LibraryMapper::autoPdfMetadataOf([]));
 	}
 
 	/**

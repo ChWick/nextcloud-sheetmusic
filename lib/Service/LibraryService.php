@@ -96,11 +96,25 @@ class LibraryService {
 		return LibraryMapper::autoPathsOf($library);
 	}
 
+	public function isAutoPdfMetadataEnabled(string $userId, int $libraryId): bool {
+		$library = $this->libraryMapper->findForUser($userId, $libraryId);
+		if ($library === null) {
+			return true;
+		}
+
+		return LibraryMapper::autoPdfMetadataOf($library);
+	}
+
 	/**
-	 * @return array{id: int, path: string, autoPaths: bool}|null
+	 * @return array{id: int, path: string, autoPaths: bool, autoPdfMetadata: bool}|null
 	 */
-	public function updateSettings(string $userId, int $libraryId, bool $autoPaths): ?array {
-		$this->libraryMapper->setAutoPathsForUser($userId, $libraryId, $autoPaths);
+	public function updateSettings(
+		string $userId,
+		int $libraryId,
+		?bool $autoPaths = null,
+		?bool $autoPdfMetadata = null,
+	): ?array {
+		$this->libraryMapper->setSettingsForUser($userId, $libraryId, $autoPaths, $autoPdfMetadata);
 		return $this->libraryMapper->findForUser($userId, $libraryId);
 	}
 

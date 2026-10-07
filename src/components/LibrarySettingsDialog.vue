@@ -25,18 +25,25 @@ const currentLibrary = computed(() => props.libraries.find(lib => lib.id === pro
 const autoPathsModel = computed({
 	get: () => currentLibrary.value?.autoPaths ?? true,
 	set: (val: boolean) => {
-		updateAutoPaths(val)
+		updateSetting({ autoPaths: val })
 	},
 })
 
-async function updateAutoPaths(enabled: boolean) {
+const autoPdfMetadataModel = computed({
+	get: () => currentLibrary.value?.autoPdfMetadata ?? true,
+	set: (val: boolean) => {
+		updateSetting({ autoPdfMetadata: val })
+	},
+})
+
+async function updateSetting(settings: { autoPaths?: boolean, autoPdfMetadata?: boolean }) {
 	if (props.selectedLibrary < 0) return
 	isSaving.value = true
 	saveError.value = ''
 	try {
 		const response = await axios.put(
 			`/ocs/v2.php/apps/mobilesheetsmanager/api/libraries/${props.selectedLibrary}/settings`,
-			{ autoPaths: enabled },
+			settings,
 			{ headers: { 'OCS-APIREQUEST': 'true', Accept: 'application/json' } },
 		)
 		const updatedLib = response.data?.ocs?.data?.library as Library | undefined
@@ -77,6 +84,24 @@ async function updateAutoPaths(enabled: boolean) {
 				{{ t('mobilesheetsmanager', 'When enabled, files are automatically organized and moved to subfolders based on song metadata (composer, artist, collection). When disabled, files remain in the library root folder and paths are never automatically changed.') }}
 			</p>
 
+			<h4 :class="[$style.sectionTitle, $style.sectionMargin]">
+				{{ t('mobilesheetsmanager', 'PDF Metadata') }}
+			</h4>
+
+			<div :class="$style.settingRow">
+				<NcCheckboxRadioSwitch
+					v-model="autoPdfMetadataModel"
+					type="switch"
+					:disabled="isSaving">
+					{{ t('mobilesheetsmanager', 'Automatic PDF metadata synchronization') }}
+				</NcCheckboxRadioSwitch>
+				<NcLoadingIcon v-if="isSaving" :size="20" :class="$style.loading" />
+			</div>
+
+			<p :class="$style.description">
+				{{ t('mobilesheetsmanager', 'When enabled, song metadata is automatically written to attached PDF files when saving songs. When disabled, PDF files are left unmodified.') }}
+			</p>
+
 			<p v-if="saveError" :class="$style.error" role="alert">
 				{{ saveError }}
 			</p>
@@ -99,6 +124,10 @@ async function updateAutoPaths(enabled: boolean) {
 	margin: 0 0 12px 0;
 	font-size: 1rem;
 	font-weight: 600;
+}
+
+.sectionMargin {
+	margin-top: 20px;
 }
 
 .settingRow {

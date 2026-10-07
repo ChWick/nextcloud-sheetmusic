@@ -163,6 +163,55 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		unlink($fixture['path']);
 	}
 
+	public function testCheckIntegritySkipsPdfMetadataWhenDisabled(): void {
+		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
+		$fixture['connection']->exec("INSERT INTO Songs (Id, Title) VALUES (1, 'Joshua')");
+		$fixture['connection']->exec("INSERT INTO Files (Id, SongId, Path) VALUES (10, 1, '/remote.php/dav/files/user1/Noten/Bach - Joshua.pdf')");
+		$fixture['connection']->exec("INSERT INTO Composer (Id, Name) VALUES (1, 'Bach')");
+		$fixture['connection']->exec('INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (1, 1)');
+		$songMapper = $this->createSongMapper();
+		$targetFolder = $this->createMock(Folder::class);
+		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
+		$targetFolder->method('nodeExists')->willReturn(true);
+		$targetFolder->method('getDirectoryListing')->willReturn([]);
+
+		$song = $songMapper->findSongs($fixture['path'])[0];
+		$pdf = $this->createMock(\OCP\Files\File::class);
+		$pdfContent = MobileSheetsPdfMetadata::withInfo(
+			self::minimalPdf(),
+			['Title' => 'Wrong title', 'Author' => 'Bach', 'Composer' => 'Bach'],
+		);
+		$pdf->method('getContent')->willReturnCallback(static fn (): string => $pdfContent);
+		$pdf->method('getMTime')->willReturn(1);
+		$targetFolder->method('get')->with('Bach - Joshua.pdf')->willReturn($pdf);
+		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager(
+			$fixture['path'],
+			$targetFolder,
+			['Noten/Bach - Joshua.pdf' => $pdf],
+		);
+
+		$libraryService = $this->createMock(\OCA\MobileSheetsManager\Service\LibraryService::class);
+		$libraryService->method('isAutoPathsEnabled')->willReturn(true);
+		$libraryService->method('isAutoPdfMetadataEnabled')->willReturn(false);
+
+		$service = new LibraryIntegrityService(
+			$libraryService,
+			$songMapper,
+			$fileManager,
+			$rootFolder,
+			$pathResolver,
+			$this->createMock(\Psr\Log\LoggerInterface::class),
+		);
+		$issues = $service->checkIntegrity(1, 'user1');
+		$metadataIssues = array_values(array_filter(
+			$issues,
+			static fn (IntegrityIssue $issue): bool => $issue->type === IntegrityIssue::TYPE_PDF_METADATA_MISMATCH,
+		));
+
+		self::assertCount(0, $metadataIssues);
+		unlink($fixture['path']);
+	}
+
 	public function testCheckIntegrityDetectsIdenticalSongs(): void {
 		$libraryService = $this->createLibraryService();
 		$fixture = \TestSupport\MobileSheetsTestDatabase::create();

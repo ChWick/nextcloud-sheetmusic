@@ -207,12 +207,12 @@ final class LibraryControllerTest extends TestCase {
 
 		$libraryMapper = $this->createMock(LibraryMapper::class);
 		$libraryMapper->expects($this->once())
-			->method('setAutoPathsForUser')
-			->with('admin', 1, false);
+			->method('setSettingsForUser')
+			->with('admin', 1, false, true);
 		$libraryMapper->expects($this->once())
 			->method('findForUser')
 			->with('admin', 1)
-			->willReturn(['id' => 1, 'path' => '/Noten/mobilesheets.db', 'autoPaths' => false]);
+			->willReturn(['id' => 1, 'path' => '/Noten/mobilesheets.db', 'autoPaths' => false, 'autoPdfMetadata' => true]);
 		$libraryService = $this->createLibraryServiceWithMapper($libraryMapper);
 
 		$controller = new LibraryController(
@@ -222,8 +222,8 @@ final class LibraryControllerTest extends TestCase {
 			$userSession,
 		);
 
-		$response = $controller->updateSettings(1, false);
+		$response = $controller->updateSettings(1, false, true);
 		$this->assertSame(Http::STATUS_OK, $response->getStatus());
-		$this->assertSame(['library' => ['id' => 1, 'path' => '/Noten/mobilesheets.db', 'autoPaths' => false]], $response->getData());
+		$this->assertSame(['library' => ['id' => 1, 'path' => '/Noten/mobilesheets.db', 'autoPaths' => false, 'autoPdfMetadata' => true]], $response->getData());
 	}
 }
