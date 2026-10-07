@@ -73,18 +73,11 @@ class SongFileService {
 
 		$fileName = basename((string)($fileInfo['name'] ?? 'song.file'));
 
-		$paths = $this->libraryService->getLibraryAndDatabasePath($user->getUID(), $libraryId);
-		if ($paths === null) {
+		$target = $this->resolveLibraryTarget($user, $libraryId);
+		if ($target === null) {
 			return null;
 		}
-		[$libraryPath, $databasePath] = $paths;
-
-		$userFolder = $this->rootFolder->getUserFolder($user->getUID());
-		$libraryDir = $this->libraryFolderPath($libraryPath);
-		$targetFolder = $libraryDir === '' ? $userFolder : $userFolder->get($libraryDir);
-		if (!($targetFolder instanceof Folder)) {
-			return null;
-		}
+		['databasePath' => $databasePath, 'userFolder' => $userFolder, 'targetFolder' => $targetFolder, 'libraryDir' => $libraryDir] = $target;
 
 		$content = file_get_contents($fileInfo['tmp_name']);
 		if ($content === false) {
@@ -113,21 +106,14 @@ class SongFileService {
 		}
 		$sourcePath = '/' . ltrim($sourcePath, '/');
 
-		$paths = $this->libraryService->getLibraryAndDatabasePath($user->getUID(), $libraryId);
-		if ($paths === null) {
+		$target = $this->resolveLibraryTarget($user, $libraryId);
+		if ($target === null) {
 			return null;
 		}
-		[$libraryPath, $databasePath] = $paths;
+		['databasePath' => $databasePath, 'userFolder' => $userFolder, 'targetFolder' => $targetFolder, 'libraryDir' => $libraryDir] = $target;
 
-		$userFolder = $this->rootFolder->getUserFolder($user->getUID());
 		$sourceNode = $userFolder->get(ltrim($sourcePath, '/'));
 		if ($sourceNode->getType() !== 'file') {
-			return null;
-		}
-
-		$libraryDir = $this->libraryFolderPath($libraryPath);
-		$targetFolder = $libraryDir === '' ? $userFolder : $userFolder->get($libraryDir);
-		if (!($targetFolder instanceof Folder)) {
 			return null;
 		}
 
@@ -139,11 +125,8 @@ class SongFileService {
 		if ($sourceRelative !== $targetRelative) {
 			$targetRelative = $this->resolveDestinationPath($userFolder, $libraryDir, $targetName, $autoPaths);
 			$targetName = basename($targetRelative);
-
 			$targetInternalPath = $targetFolder->getPath() . '/' . $targetName;
-			if ($userFolder->nodeExists($targetRelative)) {
-				throw new \RuntimeException(sprintf('Cannot attach file: target path "%s" already exists.', $targetRelative));
-			}
+
 			if ($action === 'move') {
 				$sourceNode->move($targetInternalPath);
 			} else {
@@ -158,18 +141,11 @@ class SongFileService {
 	}
 
 	public function deleteSongFile(IUser $user, int $libraryId, int $songId, int $fileId): ?array {
-		$paths = $this->libraryService->getLibraryAndDatabasePath($user->getUID(), $libraryId);
-		if ($paths === null) {
+		$target = $this->resolveLibraryTarget($user, $libraryId);
+		if ($target === null) {
 			return null;
 		}
-		[$libraryPath, $databasePath] = $paths;
-
-		$userFolder = $this->rootFolder->getUserFolder($user->getUID());
-		$libraryDir = $this->libraryFolderPath($libraryPath);
-		$targetFolder = $libraryDir === '' ? $userFolder : $userFolder->get($libraryDir);
-		if (!($targetFolder instanceof Folder)) {
-			return null;
-		}
+		['databasePath' => $databasePath, 'targetFolder' => $targetFolder] = $target;
 
 		$filePath = $this->songMapper->removeSongFile($databasePath, $songId, $fileId);
 
@@ -188,18 +164,11 @@ class SongFileService {
 
 	public function detachSongFile(IUser $user, int $libraryId, int $songId, int $fileId): ?array {
 		try {
-			$paths = $this->libraryService->getLibraryAndDatabasePath($user->getUID(), $libraryId);
-			if ($paths === null) {
+			$target = $this->resolveLibraryTarget($user, $libraryId);
+			if ($target === null) {
 				return null;
 			}
-			[$libraryPath, $databasePath] = $paths;
-
-			$userFolder = $this->rootFolder->getUserFolder($user->getUID());
-			$libraryDir = $this->libraryFolderPath($libraryPath);
-			$targetFolder = $libraryDir === '' ? $userFolder : $userFolder->get($libraryDir);
-			if (!($targetFolder instanceof Folder)) {
-				return null;
-			}
+			['databasePath' => $databasePath, 'targetFolder' => $targetFolder] = $target;
 
 			$filePath = $this->songMapper->removeSongFile($databasePath, $songId, $fileId);
 			if ($filePath === null) {
@@ -298,6 +267,31 @@ class SongFileService {
 		$directory = dirname(ltrim($libraryPath, '/'));
 
 		return ($directory === '' || $directory === '.') ? '' : $directory;
+	}
+
+	/**
+	 * @return array{databasePath: string, userFolder: IUserFolder, targetFolder: Folder, libraryDir: string}|null
+	 */
+	private function resolveLibraryTarget(IUser $user, int $libraryId): ?array {
+		$paths = $this->libraryService->getLibraryAndDatabasePath($user->getUID(), $libraryId);
+		if ($paths === null) {
+			return null;
+		}
+		[$libraryPath, $databasePath] = $paths;
+
+		$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+		$libraryDir = $this->libraryFolderPath($libraryPath);
+		$targetFolder = $libraryDir === '' ? $userFolder : $userFolder->get($libraryDir);
+		if (!($targetFolder instanceof Folder)) {
+			return null;
+		}
+
+		return [
+			'databasePath' => $databasePath,
+			'userFolder' => $userFolder,
+			'targetFolder' => $targetFolder,
+			'libraryDir' => $libraryDir,
+		];
 	}
 
 	private function resolveDestinationPath(
