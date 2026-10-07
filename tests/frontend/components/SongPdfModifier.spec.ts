@@ -10,10 +10,11 @@ import SongPdfModifier from '../../../src/components/song-pdf/SongPdfModifier.vu
 const realPdfPath = path.resolve(__dirname, '../../fixtures/sample.pdf')
 const realPdfBuffer = fs.readFileSync(realPdfPath)
 
-const { uploadedFiles, createdSongs, deletedFiles } = vi.hoisted(() => ({
+const { uploadedFiles, createdSongs, deletedFiles, deletedSongs } = vi.hoisted(() => ({
 	uploadedFiles: [] as { songId: number; file: File }[],
 	createdSongs: [] as any[],
 	deletedFiles: [] as { songId: number; fileId: number }[],
+	deletedSongs: [] as { songId: number; deleteFiles?: boolean }[],
 }))
 
 vi.mock('@nextcloud/axios', () => ({
@@ -60,14 +61,16 @@ vi.mock('@nextcloud/dialogs', () => ({
 vi.mock('@nextcloud/vue/components/NcCheckboxRadioSwitch', () => ({
 	default: {
 		name: 'NcCheckboxRadioSwitch',
-		props: ['modelValue', 'checked', 'type', 'disabled'],
+		props: ['modelValue', 'checked', 'type', 'disabled', 'name', 'value'],
 		emits: ['update:modelValue', 'update:checked'],
 		template: `
 			<label>
-				<input type="checkbox"
+				<input :type="type || 'checkbox'"
+					:name="name"
+					:value="value"
 					:checked="checked !== undefined ? checked : modelValue"
 					:disabled="disabled"
-					@change="$emit('update:checked', $event.target.checked); $emit('update:modelValue', $event.target.checked)" />
+					@change="$emit('update:checked', type === 'radio' ? true : $event.target.checked); $emit('update:modelValue', type === 'radio' ? value : $event.target.checked)" />
 				<slot />
 			</label>
 		`,
@@ -133,6 +136,15 @@ vi.mock('../../../src/api/client', () => ({
 		}
 		return Promise.resolve({ data: { ocs: { data: { songs: [] } } } })
 	}),
+	apiDelete: vi.fn((endpoint: string, options?: any) => {
+		if (endpoint === '/api/songs/{id}') {
+			deletedSongs.push({ songId: options?.pathParams?.id, deleteFiles: options?.queryParams?.deleteFiles })
+			return Promise.resolve({
+				data: { ocs: { data: { songs: [] } } },
+			})
+		}
+		return Promise.resolve({ data: { ocs: { data: { songs: [] } } } })
+	}),
 }))
 
 describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
@@ -155,6 +167,7 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		uploadedFiles.length = 0
 		createdSongs.length = 0
 		deletedFiles.length = 0
+		deletedSongs.length = 0
 	})
 
 	it('loads real PDF document and renders 8 pages', async () => {
@@ -267,12 +280,13 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 			}
 		}
 
-		// Since "Keep original PDF" was checked by default, original file 999 was NOT deleted
+		// By default "Do nothing" is selected, so neither file nor song is deleted
 		expect(deletedFiles).toHaveLength(0)
+		expect(deletedSongs).toHaveLength(0)
 		expect(wrapper.emitted('saved')).toBeTruthy()
 	})
 
-	it('splits real PDF and deletes original file when keepOriginalSongFile is unchecked', async () => {
+	it('splits real PDF and deletes original PDF file when delete-file option is selected', async () => {
 		const wrapper = mount(SongPdfModifier, {
 			props: {
 				song: mockSong,
@@ -286,10 +300,11 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		const splitTab = wrapper.findAll('button').find((b) => b.text().includes('Split PDF'))
 		await splitTab?.trigger('click')
 
-		// Uncheck "Keep original PDF on current song"
-		const keepCheckbox = wrapper.find('input[type="checkbox"]')
-		expect(keepCheckbox.exists()).toBe(true)
-		await keepCheckbox.setValue(false)
+		// Select option b: "Delete the PDF file from the original song"
+		const deleteFileRadio = wrapper.find('input[value="delete-file"]')
+		expect(deleteFileRadio.exists()).toBe(true)
+		await deleteFileRadio.setValue(true)
+		await deleteFileRadio.trigger('change')
 
 		// Split
 		const splitSubmitBtn = wrapper.findAll('button').find((b) => b.text().includes('Split & Create Songs'))
@@ -298,9 +313,74 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		await new Promise((r) => setTimeout(r, 50))
 		await flushPromises()
 
-		// Original file should be deleted
+		// Original PDF file should be deleted, song should NOT be deleted
 		expect(deletedFiles).toContainEqual({ songId: 42, fileId: 999 })
+		expect(deletedSongs).toHaveLength(0)
 		expect(wrapper.emitted('saved')).toBeTruthy()
+		// Saved event should pass original song ID
+		expect(wrapper.emitted('saved')?.[0]?.[1]).toBe(42)
+	})
+
+	it('splits real PDF and deletes original song and all files when delete-song option is selected', async () => {
+		const wrapper = mount(SongPdfModifier, {
+			props: {
+				song: mockSong, // has exactly 1 file (999)
+				libraryId: 1,
+			},
+		})
+
+		await flushPromises()
+
+		// Switch tab to Split PDF
+		const splitTab = wrapper.findAll('button').find((b) => b.text().includes('Split PDF'))
+		await splitTab?.trigger('click')
+
+		// Select option a: "Delete original song and all its attached files"
+		const deleteSongRadio = wrapper.find('input[value="delete-song"]')
+		expect(deleteSongRadio.exists()).toBe(true)
+		expect(deleteSongRadio.attributes('disabled')).toBeUndefined()
+		await deleteSongRadio.setValue(true)
+		await deleteSongRadio.trigger('change')
+
+		// Split
+		const splitSubmitBtn = wrapper.findAll('button').find((b) => b.text().includes('Split & Create Songs'))
+		await splitSubmitBtn?.trigger('click')
+		await flushPromises()
+		await new Promise((r) => setTimeout(r, 50))
+		await flushPromises()
+
+		// Original song should be deleted with deleteFiles: true
+		expect(deletedSongs).toContainEqual({ songId: 42, deleteFiles: true })
+		expect(wrapper.emitted('saved')).toBeTruthy()
+		// Saved event should pass undefined for songId so SongsView navigates to songs list
+		expect(wrapper.emitted('saved')?.[0]?.[1]).toBeUndefined()
+	})
+
+	it('disables delete-song option when song has multiple attached files', async () => {
+		const multiFileSong: Song = {
+			...mockSong,
+			files: [
+				{ id: 998, path: '/files/part1.pdf' },
+				{ id: 999, path: '/files/part2.pdf' },
+			],
+		}
+
+		const wrapper = mount(SongPdfModifier, {
+			props: {
+				song: multiFileSong,
+				libraryId: 1,
+			},
+		})
+
+		await flushPromises()
+
+		// Switch tab to Split PDF
+		const splitTab = wrapper.findAll('button').find((b) => b.text().includes('Split PDF'))
+		await splitTab?.trigger('click')
+
+		const deleteSongRadio = wrapper.find('input[value="delete-song"]')
+		expect(deleteSongRadio.exists()).toBe(true)
+		expect(deleteSongRadio.attributes('disabled')).toBeDefined()
 	})
 
 	it('rotates real PDF pages and saves a valid rotated PDF document', async () => {

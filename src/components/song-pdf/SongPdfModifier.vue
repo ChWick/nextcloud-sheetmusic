@@ -11,9 +11,10 @@ import NcTextField from '@nextcloud/vue/components/NcTextField'
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist'
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { PDFDocument, degrees } from 'pdf-lib'
-import { apiPost } from '../../api/client'
+import { apiDelete, apiPost } from '../../api/client'
 import { showError, showSuccess } from '@nextcloud/dialogs'
 import { getFileName } from '../../utils/file'
+import OriginalSongActionSelector, { type OriginalSongAction } from './OriginalSongActionSelector.vue'
 
 // Icons
 import RotateRight from 'vue-material-design-icons/RotateRight.vue'
@@ -99,7 +100,10 @@ const thumbnailCanvases = ref<Record<number, HTMLCanvasElement>>({})
 const thumbnailContainers = ref<Record<number, HTMLElement | null>>({})
 
 // Split state
-const keepOriginalSongFile = ref(true)
+export type { OriginalSongAction } from './OriginalSongActionSelector.vue'
+const originalSongAction = ref<OriginalSongAction>('keep')
+const attachedFilesCount = computed(() => props.song.files?.length ?? 0)
+const hasExactlyOneFile = computed(() => attachedFilesCount.value === 1)
 const splitSegments = ref<SplitSegment[]>([])
 let segmentCounter = 0
 
@@ -463,14 +467,27 @@ async function saveSplits() {
 			lastLibraryData = uploadRes.data.ocs.data as LibraryData
 		}
 
-		// If user chose NOT to keep original song file
-		if (!keepOriginalSongFile.value && targetFile.value) {
+		// Handle chosen action for original song / file
+		if (originalSongAction.value === 'delete-song' && hasExactlyOneFile.value) {
+			const delSongRes = await apiDelete('/api/songs/{id}', {
+				pathParams: { id: props.song.id },
+				queryParams: { libraryId: props.libraryId, deleteFiles: true },
+			})
+			lastLibraryData = (delSongRes.data?.ocs?.data as LibraryData) ?? lastLibraryData
+			showSuccess(t('mobilesheetsmanager', 'Successfully split PDF into {count} songs and deleted original song.', { count: splitSegments.value.length }))
+			if (lastLibraryData) {
+				emit('saved', lastLibraryData, undefined)
+			} else {
+				emit('cancel')
+			}
+			return
+		} else if (originalSongAction.value === 'delete-file' && targetFile.value) {
 			const delRes = await apiPost('/api/songs/{id}/file/{fileId}/delete', {
 				libraryId: props.libraryId,
 			}, {
 				pathParams: { id: props.song.id, fileId: targetFile.value.id },
 			})
-			lastLibraryData = delRes.data.ocs.data as LibraryData
+			lastLibraryData = (delRes.data?.ocs?.data as LibraryData) ?? lastLibraryData
 		}
 
 		showSuccess(t('mobilesheetsmanager', 'Successfully split PDF into {count} songs.', { count: splitSegments.value.length }))
@@ -776,22 +793,10 @@ watch(() => targetFile.value?.path, () => {
 					</div>
 				</div>
 
-				<!-- Options -->
-				<div :class="$style.sidebarOptions">
-					<h5>{{ t('mobilesheetsmanager', 'Options') }}</h5>
-					<NcCheckboxRadioSwitch
-						:checked="keepOriginalSongFile"
-						type="checkbox"
-						@update:checked="keepOriginalSongFile = $event">
-						{{ t('mobilesheetsmanager', 'Keep original PDF on current song') }}
-					</NcCheckboxRadioSwitch>
-					<span :class="$style.optionHint">
-						{{ keepOriginalSongFile
-							? t('mobilesheetsmanager', 'The current song retains its full PDF.')
-							: t('mobilesheetsmanager', 'The original PDF file will be removed from this song; only the split songs will keep their sliced PDFs.')
-						}}
-					</span>
-				</div>
+				<!-- Options for Original Song -->
+				<OriginalSongActionSelector
+					v-model="originalSongAction"
+					:attached-files-count="attachedFilesCount" />
 			</aside>
 		</div>
 	</div>
@@ -1163,25 +1168,6 @@ watch(() => targetFile.value?.path, () => {
 
 .assignBtn {
 	align-self: flex-start;
-}
-
-.sidebarOptions {
-	border-top: 1px solid var(--color-border);
-	padding-top: 12px;
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-}
-
-.sidebarOptions h5 {
-	margin: 0 0 4px 0;
-	font-size: 13px;
-}
-
-.optionHint {
-	font-size: 12px;
-	color: var(--color-text-maxcontrast);
-	margin-left: 28px;
 }
 </style>
 
