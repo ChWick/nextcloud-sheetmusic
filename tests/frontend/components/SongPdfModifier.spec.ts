@@ -675,4 +675,140 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		expect(cropBox.width).toBeCloseTo(595.28 * 0.8, 1)
 		expect(cropBox.height).toBeCloseTo(841.89 * 0.8, 1)
 	})
+
+	it('supports deleting a single page and saves PDF with page removed', async () => {
+		const wrapper = mount(SongPdfModifier, {
+			props: {
+				song: mockSong,
+				libraryId: 1,
+			},
+		})
+
+		await flushPromises()
+
+		// Initial state: 8 pages
+		expect(wrapper.text()).toContain('8 pages')
+
+		// Delete page 2
+		const delPage2Btn = wrapper.findAll('button').find((b) => b.attributes('title')?.includes('Delete page 2'))
+		expect(delPage2Btn).toBeDefined()
+		await delPage2Btn?.trigger('click')
+		await flushPromises()
+
+		// Verify page 2 is marked deleted and header shows remaining count
+		expect(wrapper.text()).toContain('Deleted')
+		expect(wrapper.text()).toContain('7 / 8 pages')
+
+		// Save button should be enabled
+		const saveBtn = wrapper.findAll('button').find((b) => b.text().includes('Save Changes') || b.text().includes('Save Rotations'))
+		expect(saveBtn).toBeDefined()
+		expect(saveBtn?.attributes('disabled')).toBeUndefined()
+
+		await saveBtn?.trigger('click')
+		await flushPromises()
+		await new Promise((r) => setTimeout(r, 50))
+		await flushPromises()
+
+		// Verify uploaded PDF has 7 pages
+		expect(uploadedFiles).toHaveLength(1)
+		const arrayBuffer = await uploadedFiles[0].file.arrayBuffer()
+		const savedPdf = await PDFDocument.load(arrayBuffer)
+		expect(savedPdf.getPageCount()).toBe(7)
+	})
+
+	it('supports restoring a deleted page before saving', async () => {
+		const wrapper = mount(SongPdfModifier, {
+			props: {
+				song: mockSong,
+				libraryId: 1,
+			},
+		})
+
+		await flushPromises()
+
+		// Delete page 2
+		const delPage2Btn = wrapper.findAll('button').find((b) => b.attributes('title')?.includes('Delete page 2'))
+		expect(delPage2Btn).toBeDefined()
+		await delPage2Btn?.trigger('click')
+		await flushPromises()
+
+		expect(wrapper.text()).toContain('Deleted')
+		expect(wrapper.text()).toContain('7 / 8 pages')
+
+		// Restore page 2
+		const restorePage2Btn = wrapper.findAll('button').find((b) => b.attributes('title')?.includes('Restore page 2'))
+		expect(restorePage2Btn).toBeDefined()
+		await restorePage2Btn?.trigger('click')
+		await flushPromises()
+
+		expect(wrapper.text()).not.toContain('Deleted')
+		expect(wrapper.text()).toContain('8 pages')
+
+		// Save button should now be disabled since no changes remain
+		const saveBtn = wrapper.findAll('button').find((b) => b.text().includes('Save Changes') || b.text().includes('Save Rotations'))
+		expect(saveBtn?.attributes('disabled')).toBeDefined()
+	})
+
+	it('supports deleting a page, rotating, and cropping other pages in a single step', async () => {
+		const wrapper = mount(SongPdfModifier, {
+			props: {
+				song: mockSong,
+				libraryId: 1,
+			},
+		})
+
+		await flushPromises()
+
+		// 1. In Rotate mode: rotate page 1 CW 90°
+		const rotatePage1CwBtn = wrapper.findAll('button').find((b) => b.attributes('title')?.includes('Rotate page 90° CW'))
+		await rotatePage1CwBtn?.trigger('click')
+
+		// 2. Delete page 2
+		const delPage2Btn = wrapper.findAll('button').find((b) => b.attributes('title')?.includes('Delete page 2'))
+		await delPage2Btn?.trigger('click')
+		await flushPromises()
+
+		// 3. Switch to Crop mode and crop page 3
+		const cropTab = wrapper.findAll('button').find((b) => b.text().includes('Crop Pages'))
+		await cropTab?.trigger('click')
+		await flushPromises()
+
+		const page3CropBtn = wrapper.findAll('button').find((b) => b.attributes('title')?.includes('Crop page 3'))
+		await page3CropBtn?.trigger('click')
+		await flushPromises()
+
+		const cropModal = wrapper.findComponent({ name: 'SongPdfCropModal' })
+		expect(cropModal.exists()).toBe(true)
+		cropModal.vm.$emit('apply', { left: 0.1, top: 0.1, width: 0.8, height: 0.8 }, 'current')
+		await flushPromises()
+
+		// 4. Save modifications
+		const saveBtn = wrapper.findAll('button').find((b) => b.text().includes('Save Changes') || b.text().includes('Save Crops') || b.text().includes('Save Rotations'))
+		expect(saveBtn?.attributes('disabled')).toBeUndefined()
+		await saveBtn?.trigger('click')
+		await flushPromises()
+		await new Promise((r) => setTimeout(r, 50))
+		await flushPromises()
+
+		// 5. Verify single upload containing deletions, rotations, and crops
+		expect(uploadedFiles).toHaveLength(1)
+		const arrayBuffer = await uploadedFiles[0].file.arrayBuffer()
+		const savedPdf = await PDFDocument.load(arrayBuffer)
+
+		// Page count was 8, page 2 was removed -> 7 pages left
+		expect(savedPdf.getPageCount()).toBe(7)
+
+		// Saved page 1 (original page 1): 90° rotation
+		const savedPage1 = savedPdf.getPage(0)
+		expect(savedPage1.getRotation().angle).toBe(90)
+
+		// Saved page 2 (original page 3, because original page 2 was removed): cropped box
+		// Note: Page 3 in sample.pdf is a spread with width 1190.55
+		const savedPage2 = savedPdf.getPage(1)
+		const cropBox = savedPage2.getCropBox()
+		expect(cropBox.x).toBeCloseTo(1190.55 * 0.1, 1)
+		expect(cropBox.y).toBeCloseTo(841.89 * (1 - 0.1 - 0.8), 1)
+		expect(cropBox.width).toBeCloseTo(1190.55 * 0.8, 1)
+		expect(cropBox.height).toBeCloseTo(841.89 * 0.8, 1)
+	})
 })

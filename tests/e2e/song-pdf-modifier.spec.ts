@@ -193,5 +193,66 @@ test.describe('Song PDF Modifier & Cropping E2E Flow', () => {
 		// 5. Verify success toast
 		await expect(page.getByText(/saved successfully/i).first()).toBeVisible()
 	})
+
+	test('supports deleting a single page, displaying deleted indicators, and saving updated PDF', async ({ page }) => {
+		await page.goto('/#/library/1/songs?song=5&modifyPdf=1')
+
+		// Header initially shows 8 pages
+		await expect(page.getByText(/8 pages/i)).toBeVisible()
+
+		// Delete page 2
+		const delPage2Btn = page.getByTitle('Delete page 2').first()
+		await expect(delPage2Btn).toBeVisible()
+		await delPage2Btn.click()
+
+		// Page 2 card should show Deleted indicator
+		await expect(page.getByText('Deleted').first()).toBeVisible()
+
+		// Header reflects 7 / 8 pages
+		await expect(page.getByText(/7 \/ 8 pages/i)).toBeVisible()
+
+		// Save button is now enabled
+		const saveBtn = page.getByRole('button', { name: /Save Changes|Save Rotations/i })
+		await expect(saveBtn).toBeEnabled()
+		await saveBtn.click()
+
+		// Verify success notification
+		await expect(page.getByText(/saved successfully/i).first()).toBeVisible()
+	})
+
+	test('supports restoring deleted pages via card button and toolbar', async ({ page }) => {
+		await page.goto('/#/library/1/songs?song=5&modifyPdf=1')
+
+		// Delete page 2
+		const delPage2Btn = page.getByTitle('Delete page 2').first()
+		await delPage2Btn.click()
+
+		await expect(page.getByText('Deleted').first()).toBeVisible()
+		await expect(page.getByRole('button', { name: /Restore Deleted \(1\)/i })).toBeVisible()
+
+		// Restore page 2 using the card restore button
+		const restorePage2Btn = page.getByTitle('Restore page 2').first()
+		await expect(restorePage2Btn).toBeVisible()
+		await restorePage2Btn.click()
+
+		// Deleted badge and toolbar restore button should disappear
+		await expect(page.getByText('Deleted')).toBeHidden()
+		await expect(page.getByRole('button', { name: /Restore Deleted/i })).toBeHidden()
+		await expect(page.getByText(/8 pages/i)).toBeVisible()
+
+		// Delete pages 2 and 3
+		await page.getByTitle('Delete page 2').first().click()
+		await page.getByTitle('Delete page 3').first().click()
+
+		const toolbarRestoreBtn = page.getByRole('button', { name: /Restore Deleted \(2\)/i })
+		await expect(toolbarRestoreBtn).toBeVisible()
+
+		// Click Restore in toolbar
+		await toolbarRestoreBtn.click()
+
+		await expect(page.getByText('Deleted')).toBeHidden()
+		await expect(page.getByRole('button', { name: /Restore Deleted/i })).toBeHidden()
+		await expect(page.getByText(/8 pages/i)).toBeVisible()
+	})
 })
 

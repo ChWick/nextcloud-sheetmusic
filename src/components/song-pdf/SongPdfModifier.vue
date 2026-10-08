@@ -25,6 +25,8 @@ import CloseIcon from 'vue-material-design-icons/Close.vue'
 import CallSplit from 'vue-material-design-icons/CallSplit.vue'
 import PlusIcon from 'vue-material-design-icons/Plus.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
+import DeleteOutline from 'vue-material-design-icons/DeleteOutline.vue'
+import DeleteRestore from 'vue-material-design-icons/DeleteRestore.vue'
 import CheckboxMarkedCircleOutline from 'vue-material-design-icons/CheckboxMarkedCircleOutline.vue'
 import CropIcon from 'vue-material-design-icons/Crop.vue'
 import ArrowRight from 'vue-material-design-icons/ArrowRight.vue'
@@ -103,6 +105,9 @@ const pageRotations = ref<number[]>([])
 // Page-specific crop state: Record<pageNum, PageCrop>
 const pageCrops = ref<Record<number, PageCrop>>({})
 
+// Deleted pages (1-indexed page numbers)
+const deletedPages = ref<Set<number>>(new Set())
+
 // Crop modal state
 const isCropModalOpen = ref(false)
 const cropModalPage = ref(1)
@@ -132,6 +137,8 @@ async function loadPdf() {
 	isLoading.value = true
 	errorMessage.value = ''
 	pageRotations.value = []
+	pageCrops.value = {}
+	deletedPages.value = new Set()
 	thumbnailCanvases.value = {}
 	selectedPages.value = []
 
@@ -424,7 +431,42 @@ function getCropIndicatorText(pageNum: number): string {
 	return `${top}% ${right}% ${bottom}% ${left}%`
 }
 
-// Saving Rotated and/or Cropped PDF
+// Page deletion helpers
+function isPageDeleted(pageNum: number): boolean {
+	return deletedPages.value.has(pageNum)
+}
+
+function toggleDeletePage(pageNum: number) {
+	const next = new Set(deletedPages.value)
+	if (next.has(pageNum)) {
+		next.delete(pageNum)
+	} else {
+		if (totalPages.value - next.size <= 1) {
+			showError(t('mobilesheetsmanager', 'Cannot delete page. A PDF document must have at least one page.'))
+			return
+		}
+		next.add(pageNum)
+	}
+	deletedPages.value = next
+}
+
+function restoreAllPages() {
+	deletedPages.value = new Set()
+}
+
+const hasAnyDeletion = computed(() => {
+	return deletedPages.value.size > 0
+})
+
+const remainingPagesCount = computed(() => {
+	return Math.max(0, totalPages.value - deletedPages.value.size)
+})
+
+const hasAnyChange = computed(() => {
+	return hasAnyRotation.value || hasAnyCrop.value || hasAnyDeletion.value
+})
+
+// Saving Rotated, Cropped, or Modified PDF
 async function saveRotationsAndCrops() {
 	if (!originalPdfBytes.value || !targetFile.value) return
 	isSaving.value = true
@@ -437,8 +479,12 @@ async function saveRotationsAndCrops() {
 		let modifiedRotations = false
 		let modifiedCrops = false
 		for (let i = 0; i < pages.length; i++) {
-			const page = pages[i]
 			const pageNum = i + 1
+			// Skip deleted pages from rotation/crop modifications
+			if (deletedPages.value.has(pageNum)) {
+				continue
+			}
+			const page = pages[i]
 
 			// 1. Calculate net rotation
 			const rotDelta = pageRotations.value[i] ?? 0
@@ -460,7 +506,26 @@ async function saveRotationsAndCrops() {
 			}
 		}
 
-		if (!modifiedRotations && !modifiedCrops) {
+		// 3. Remove deleted pages in descending order to avoid index shifts
+		let modifiedDeletions = false
+		if (deletedPages.value.size > 0) {
+			const indicesToDelete = Array.from(deletedPages.value)
+				.map((p) => p - 1)
+				.sort((a, b) => b - a)
+
+			for (const idx of indicesToDelete) {
+				if (idx >= 0 && idx < pdfDoc.getPageCount()) {
+					pdfDoc.removePage(idx)
+					modifiedDeletions = true
+				}
+			}
+		}
+
+		if (pdfDoc.getPageCount() === 0) {
+			throw new Error(t('mobilesheetsmanager', 'Cannot save a PDF with no pages.'))
+		}
+
+		if (!modifiedRotations && !modifiedCrops && !modifiedDeletions) {
 			showSuccess(t('mobilesheetsmanager', 'No changes to save.'))
 			isSaving.value = false
 			return
@@ -486,11 +551,14 @@ async function saveRotationsAndCrops() {
 		})
 
 		const data = uploadRes.data.ocs.data as LibraryData
-		const successMsg = (modifiedRotations && modifiedCrops)
+		const hasMultipleTypes = [modifiedRotations, modifiedCrops, modifiedDeletions].filter(Boolean).length > 1
+		const successMsg = hasMultipleTypes
 			? t('mobilesheetsmanager', 'PDF changes saved successfully.')
-			: modifiedRotations
-				? t('mobilesheetsmanager', 'Rotated PDF saved successfully.')
-				: t('mobilesheetsmanager', 'Cropped PDF saved successfully.')
+			: modifiedDeletions
+				? t('mobilesheetsmanager', 'Pages deleted and PDF saved successfully.')
+				: modifiedRotations
+					? t('mobilesheetsmanager', 'Rotated PDF saved successfully.')
+					: t('mobilesheetsmanager', 'Cropped PDF saved successfully.')
 		showSuccess(successMsg)
 		emit('saved', data, props.song.id)
 	} catch (err: any) {
@@ -689,7 +757,7 @@ watch(() => targetFile.value?.path, () => {
 				<div :class="$style.fileMeta">
 					<span :class="$style.songTitle">{{ song.title }}</span>
 					<span v-if="targetFile" :class="$style.fileName">
-						({{ getFileName(targetFile.path) }} — {{ totalPages }} {{ totalPages === 1 ? t('mobilesheetsmanager', 'page') : t('mobilesheetsmanager', 'pages') }})
+						({{ getFileName(targetFile.path) }} — {{ hasAnyDeletion ? `${remainingPagesCount} / ${totalPages}` : totalPages }} {{ totalPages === 1 ? t('mobilesheetsmanager', 'page') : t('mobilesheetsmanager', 'pages') }})
 					</span>
 				</div>
 			</div>
@@ -723,25 +791,25 @@ watch(() => targetFile.value?.path, () => {
 				<NcButton
 					v-if="activeMode === 'rotate'"
 					variant="primary"
-					:disabled="isSaving || isLoading || (!hasAnyRotation && !hasAnyCrop)"
-					:title="t('mobilesheetsmanager', 'Save rotated PDF')"
+					:disabled="isSaving || isLoading || !hasAnyChange || remainingPagesCount === 0"
+					:title="hasAnyDeletion && !hasAnyRotation ? t('mobilesheetsmanager', 'Save changes') : t('mobilesheetsmanager', 'Save rotated PDF')"
 					@click="saveRotations">
 					<template #icon>
 						<ContentSaveOutlineIcon :size="20" />
 					</template>
-					{{ isSaving ? t('mobilesheetsmanager', 'Saving…') : t('mobilesheetsmanager', 'Save Rotations') }}
+					{{ isSaving ? t('mobilesheetsmanager', 'Saving…') : (hasAnyDeletion && !hasAnyRotation ? t('mobilesheetsmanager', 'Save Changes') : t('mobilesheetsmanager', 'Save Rotations')) }}
 				</NcButton>
 
 				<NcButton
 					v-else-if="activeMode === 'crop'"
 					variant="primary"
-					:disabled="isSaving || isLoading || (!hasAnyCrop && !hasAnyRotation)"
-					:title="t('mobilesheetsmanager', 'Save cropped PDF')"
+					:disabled="isSaving || isLoading || !hasAnyChange || remainingPagesCount === 0"
+					:title="hasAnyDeletion && !hasAnyCrop ? t('mobilesheetsmanager', 'Save changes') : t('mobilesheetsmanager', 'Save cropped PDF')"
 					@click="saveCrops">
 					<template #icon>
 						<ContentSaveOutlineIcon :size="20" />
 					</template>
-					{{ isSaving ? t('mobilesheetsmanager', 'Saving…') : t('mobilesheetsmanager', 'Save Crops') }}
+					{{ isSaving ? t('mobilesheetsmanager', 'Saving…') : (hasAnyDeletion && !hasAnyCrop ? t('mobilesheetsmanager', 'Save Changes') : t('mobilesheetsmanager', 'Save Crops')) }}
 				</NcButton>
 
 				<NcButton
@@ -791,6 +859,17 @@ watch(() => targetFile.value?.path, () => {
 						<NcButton size="small" variant="tertiary" :disabled="!hasAnyRotation" @click="resetRotations">
 							{{ t('mobilesheetsmanager', 'Reset All') }}
 						</NcButton>
+						<NcButton
+							v-if="hasAnyDeletion"
+							size="small"
+							variant="tertiary"
+							:title="t('mobilesheetsmanager', 'Restore all deleted pages')"
+							@click="restoreAllPages">
+							<template #icon>
+								<DeleteRestore :size="16" />
+							</template>
+							{{ t('mobilesheetsmanager', 'Restore Deleted ({count})', { count: deletedPages.size }) }}
+						</NcButton>
 					</template>
 
 					<template v-else-if="activeMode === 'crop'">
@@ -814,6 +893,17 @@ watch(() => targetFile.value?.path, () => {
 							:title="t('mobilesheetsmanager', 'Reset all page crops to full page')"
 							@click="resetAllCrops">
 							{{ t('mobilesheetsmanager', 'Reset All Crops') }}
+						</NcButton>
+						<NcButton
+							v-if="hasAnyDeletion"
+							size="small"
+							variant="tertiary"
+							:title="t('mobilesheetsmanager', 'Restore all deleted pages')"
+							@click="restoreAllPages">
+							<template #icon>
+								<DeleteRestore :size="16" />
+							</template>
+							{{ t('mobilesheetsmanager', 'Restore Deleted ({count})', { count: deletedPages.size }) }}
 						</NcButton>
 					</template>
 
@@ -843,8 +933,9 @@ watch(() => targetFile.value?.path, () => {
 							$style.pageCard,
 							selectedPages.includes(pageNum) && $style.pageCardSelected,
 							activeMode === 'crop' && isPageCropped(pageNum) && $style.pageCardCropped,
+							isPageDeleted(pageNum) && $style.pageCardDeleted,
 						]"
-						@click="activeMode === 'split' ? togglePageSelection(pageNum) : activeMode === 'crop' ? openCropModal(pageNum) : undefined">
+						@click="activeMode === 'split' ? togglePageSelection(pageNum) : activeMode === 'crop' && !isPageDeleted(pageNum) ? openCropModal(pageNum) : undefined">
 						<!-- Segment color indicators bar -->
 						<div v-if="activeMode === 'split'" :class="$style.segmentPills">
 							<span
@@ -865,10 +956,14 @@ watch(() => targetFile.value?.path, () => {
 									transform: `rotate(${pageRotations[pageNum - 1] || 0}deg)`,
 									transition: 'transform 0.15s ease-out'
 								}"></div>
+							<div v-if="isPageDeleted(pageNum)" :class="$style.deletedOverlay">
+								<DeleteOutline :size="28" />
+								<span>{{ t('mobilesheetsmanager', 'Deleted') }}</span>
+							</div>
 						</div>
 
 						<div :class="$style.cardFooter">
-							<span :class="$style.pageNumLabel">
+							<span :class="[$style.pageNumLabel, isPageDeleted(pageNum) && $style.pageNumLabelDeleted]">
 								{{ t('mobilesheetsmanager', 'p. {page}', { page: pageNum }) }}
 								<span v-if="pageRotations[pageNum - 1]" :class="$style.rotationBadge">
 									{{ pageRotations[pageNum - 1] }}°
@@ -876,14 +971,19 @@ watch(() => targetFile.value?.path, () => {
 								<span v-if="activeMode === 'crop' && isPageCropped(pageNum)" :class="$style.cropBadge" :title="getCropIndicatorText(pageNum)">
 									{{ t('mobilesheetsmanager', 'Cropped') }}
 								</span>
+								<span v-if="isPageDeleted(pageNum)" :class="$style.deletedBadge">
+									{{ t('mobilesheetsmanager', 'Deleted') }}
+								</span>
 							</span>
 
-							<!-- Individual Page Rotate Buttons -->
+							<!-- Individual Page Rotate & Delete Buttons -->
 							<div v-if="activeMode === 'rotate'" :class="$style.cardActions">
 								<NcButton
 									size="small"
 									variant="tertiary"
+									:disabled="isPageDeleted(pageNum)"
 									:title="t('mobilesheetsmanager', 'Rotate page 90° CCW')"
+									:aria-label="t('mobilesheetsmanager', 'Rotate page 90° CCW')"
 									@click.stop="rotatePage(pageNum - 1, -90)">
 									<template #icon>
 										<RotateLeft :size="16" />
@@ -892,17 +992,32 @@ watch(() => targetFile.value?.path, () => {
 								<NcButton
 									size="small"
 									variant="tertiary"
+									:disabled="isPageDeleted(pageNum)"
 									:title="t('mobilesheetsmanager', 'Rotate page 90° CW')"
+									:aria-label="t('mobilesheetsmanager', 'Rotate page 90° CW')"
 									@click.stop="rotatePage(pageNum - 1, 90)">
 									<template #icon>
 										<RotateRight :size="16" />
 									</template>
 								</NcButton>
+								<NcButton
+									size="small"
+									:variant="isPageDeleted(pageNum) ? 'primary' : 'tertiary'"
+									:title="isPageDeleted(pageNum) ? t('mobilesheetsmanager', 'Restore page {page}', { page: pageNum }) : t('mobilesheetsmanager', 'Delete page {page}', { page: pageNum })"
+									:aria-label="isPageDeleted(pageNum) ? t('mobilesheetsmanager', 'Restore page {page}', { page: pageNum }) : t('mobilesheetsmanager', 'Delete page {page}', { page: pageNum })"
+									:disabled="!isPageDeleted(pageNum) && remainingPagesCount <= 1"
+									@click.stop="toggleDeletePage(pageNum)">
+									<template #icon>
+										<DeleteRestore v-if="isPageDeleted(pageNum)" :size="16" />
+										<DeleteOutline v-else :size="16" />
+									</template>
+								</NcButton>
 							</div>
 
-							<!-- Crop button in Crop mode -->
+							<!-- Crop and Delete buttons in Crop mode -->
 							<div v-else-if="activeMode === 'crop'" :class="$style.cardActions">
 								<NcButton
+									v-if="!isPageDeleted(pageNum)"
 									size="small"
 									:variant="isPageCropped(pageNum) ? 'primary' : 'tertiary'"
 									:title="t('mobilesheetsmanager', 'Crop page {page}', { page: pageNum })"
@@ -911,6 +1026,18 @@ watch(() => targetFile.value?.path, () => {
 										<CropIcon :size="16" />
 									</template>
 									{{ t('mobilesheetsmanager', 'Crop') }}
+								</NcButton>
+								<NcButton
+									size="small"
+									:variant="isPageDeleted(pageNum) ? 'primary' : 'tertiary'"
+									:title="isPageDeleted(pageNum) ? t('mobilesheetsmanager', 'Restore page {page}', { page: pageNum }) : t('mobilesheetsmanager', 'Delete page {page}', { page: pageNum })"
+									:aria-label="isPageDeleted(pageNum) ? t('mobilesheetsmanager', 'Restore page {page}', { page: pageNum }) : t('mobilesheetsmanager', 'Delete page {page}', { page: pageNum })"
+									:disabled="!isPageDeleted(pageNum) && remainingPagesCount <= 1"
+									@click.stop="toggleDeletePage(pageNum)">
+									<template #icon>
+										<DeleteRestore v-if="isPageDeleted(pageNum)" :size="16" />
+										<DeleteOutline v-else :size="16" />
+									</template>
 								</NcButton>
 							</div>
 
@@ -1211,6 +1338,12 @@ watch(() => targetFile.value?.path, () => {
 	border-color: #10b981;
 }
 
+.pageCardDeleted {
+	opacity: 0.6;
+	border-color: var(--color-error, #e53935);
+	background-color: var(--color-background-hover);
+}
+
 .cropBadge {
 	font-size: 11px;
 	color: #059669;
@@ -1219,6 +1352,21 @@ watch(() => targetFile.value?.path, () => {
 	border-radius: 10px;
 	font-weight: 600;
 	margin-left: 4px;
+}
+
+.deletedBadge {
+	font-size: 11px;
+	color: #b91c1c;
+	background-color: #fee2e2;
+	padding: 1px 6px;
+	border-radius: 10px;
+	font-weight: 600;
+	margin-left: 4px;
+}
+
+.pageNumLabelDeleted {
+	text-decoration: line-through;
+	color: var(--color-text-maxcontrast);
 }
 
 .segmentPills {
@@ -1244,6 +1392,7 @@ watch(() => targetFile.value?.path, () => {
 }
 
 .canvasWrapper {
+	position: relative;
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -1252,6 +1401,24 @@ watch(() => targetFile.value?.path, () => {
 	background-color: #f3f4f6;
 	border-radius: 4px;
 	overflow: hidden;
+}
+
+.deletedOverlay {
+	position: absolute;
+	inset: 0;
+	background-color: rgba(0, 0, 0, 0.6);
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 4px;
+	color: #ffffff;
+	font-size: 11px;
+	font-weight: bold;
+	text-align: center;
+	padding: 8px;
+	z-index: 1;
+	pointer-events: none;
 }
 
 .thumbnailSlot {
