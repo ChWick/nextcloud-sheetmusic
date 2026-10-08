@@ -172,5 +172,15 @@ describe('EntitiesView.vue', () => {
 		expect(wrapper.text()).toContain('Händel')
 		expect(wrapper.text()).not.toContain('Bach')
 		expect(wrapper.text()).not.toContain('Mozart')
+
+		// Diacritic-insensitive check 1: query without umlaut matches entity with umlaut
+		await searchInput.setValue('handel')
+		expect(wrapper.text()).toContain('Händel')
+		expect(wrapper.text()).not.toContain('Bach')
+
+		// Diacritic-insensitive check 2: query with accent on standard characters matches
+		await searchInput.setValue('Bách')
+		expect(wrapper.text()).toContain('Bach')
+		expect(wrapper.text()).not.toContain('Händel')
 	})
 })

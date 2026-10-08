@@ -2,6 +2,7 @@ import type { Artist, Book, Collection, Composer, CustomGroup, EntityType, Filte
 import { translate as t } from '@nextcloud/l10n'
 import { computed, ref } from 'vue'
 import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
+import { normalizeSearchString } from '../utils/string'
 
 /** The entries the filters can select; they resolve the ids stored in the URL. */
 export interface FilterOptions {
@@ -174,8 +175,8 @@ export function useSongFilters(options: () => FilterOptions) {
 
 	/** Whether the song carries every active filter selection. */
 	function songMatchesFilters(song: Song): boolean {
-		const titleQuery = titleFilterOf().trim().toLowerCase()
-		if (titleQuery && !song.title.toLowerCase().includes(titleQuery)) {
+		const titleQuery = normalizeSearchString(titleFilterOf())
+		if (titleQuery && !normalizeSearchString(song.title).includes(titleQuery)) {
 			return false
 		}
 

@@ -98,6 +98,7 @@ import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import ViewHeader from './ViewHeader.vue'
 import { useLibraryData } from '../composables/useLibraryData'
 import { apiDelete, apiPost } from '../api/client'
+import { normalizeSearchString } from '../utils/string'
 
 const props = defineProps<{
   selectedLibrary: number
@@ -316,9 +317,9 @@ function handleRowTouchCancel() {
  * The entries this view lists, filtered by the text search query.
  */
 const visibleEntities = computed(() => {
-  const query = searchQuery.value.trim().toLowerCase()
+  const query = normalizeSearchString(searchQuery.value)
   if (!query) return entities.value
-  return entities.value.filter(entity => entityLabel(entity).toLowerCase().includes(query))
+  return entities.value.filter(entity => normalizeSearchString(entityLabel(entity)).includes(query))
 })
 
 // Watch for library or entity kind changes

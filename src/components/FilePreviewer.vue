@@ -286,6 +286,17 @@ async function renderCurrentView() {
 	}
 
 	if (pageLayout.value === 'continuous') {
+		if (typeof IntersectionObserver === 'undefined') {
+			for (const pageNumber of pagesToRender) {
+				const placeholder = document.createElement('div')
+				placeholder.className = 'mobilesheetsmanager-page-placeholder'
+				placeholder.dataset.pageNum = String(pageNumber)
+				pdfContainer.value.append(placeholder)
+				await renderPage(pageNumber, placeholder)
+			}
+			return
+		}
+
 		intersectionObserver = new IntersectionObserver(
 			(entries) => {
 				for (const entry of entries) {
@@ -318,6 +329,11 @@ async function renderCurrentView() {
 
 			pdfContainer.value.append(placeholder)
 			intersectionObserver.observe(placeholder)
+
+			// Render the first page immediately so the user always sees content right away
+			if (pageNumber === pagesToRender[0]) {
+				renderPage(pageNumber, placeholder)
+			}
 		}
 	} else {
 		// Single or double page mode: render immediately

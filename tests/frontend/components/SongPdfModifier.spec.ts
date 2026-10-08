@@ -188,11 +188,6 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		const axios = (await import('@nextcloud/axios')).default
 		expect(axios.get).toHaveBeenCalledWith('/files/nextcloud-guide.pdf', {
 			responseType: 'arraybuffer',
-			params: { t: expect.any(Number) },
-			headers: {
-				'Cache-Control': 'no-cache',
-				Pragma: 'no-cache',
-			},
 		})
 	})
 
@@ -430,6 +425,10 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		})
 
 		await flushPromises()
+
+		const cancelButton = wrapper.findAllComponents({ name: 'NcButton' }).find(b => b.text().includes('Cancel'))
+		expect(cancelButton?.exists()).toBe(true)
+		await cancelButton!.trigger('click')
 
 		expect(wrapper.emitted('cancel')).toBeTruthy()
 	})

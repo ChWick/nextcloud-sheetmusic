@@ -158,4 +158,27 @@ describe('useSongFilters composable with unassigned matching', () => {
 			query: {},
 		})
 	})
+
+	it('filters songs by title with diacritic/accent insensitivity in both directions', () => {
+		const songsWithAccents: Song[] = [
+			{ id: 1, title: 'Sonata by Pierre' },
+			{ id: 2, title: 'Prélude by Frédéric' },
+			{ id: 3, title: 'Joshua by Händel' },
+		]
+
+		// Query has accent, target has no accent: "Piérre" -> matches "Pierre"
+		mockRoute.query = { search: 'Piérre' }
+		const { filterSongs: filter1 } = useSongFilters(options)
+		expect(filter1(songsWithAccents).map(s => s.id)).toEqual([1])
+
+		// Query has no accent, target has accent: "prelude" -> matches "Prélude"
+		mockRoute.query = { search: 'prelude' }
+		const { filterSongs: filter2 } = useSongFilters(options)
+		expect(filter2(songsWithAccents).map(s => s.id)).toEqual([2])
+
+		// Query has no umlaut, target has umlaut: "handel" -> matches "Händel"
+		mockRoute.query = { search: 'handel' }
+		const { filterSongs: filter3 } = useSongFilters(options)
+		expect(filter3(songsWithAccents).map(s => s.id)).toEqual([3])
+	})
 })
