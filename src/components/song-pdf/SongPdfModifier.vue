@@ -14,6 +14,7 @@ import { PDFDocument, degrees } from 'pdf-lib'
 import { apiDelete, apiPost } from '../../api/client'
 import { showError, showSuccess } from '@nextcloud/dialogs'
 import { getFileName } from '../../utils/file'
+import { describeRequestFailure } from '../../utils/api'
 import OriginalSongActionSelector, { type OriginalSongAction } from './OriginalSongActionSelector.vue'
 
 // Icons
@@ -404,8 +405,9 @@ async function saveRotations() {
 		emit('saved', data, props.song.id)
 	} catch (err: any) {
 		console.error('Failed to save rotated PDF:', err)
+		const detail = describeRequestFailure(err, err?.message ?? String(err))
 		errorMessage.value = t('mobilesheetsmanager', 'Failed to save rotated PDF: {error}', {
-			error: err?.message ?? String(err),
+			error: detail,
 		})
 		showError(errorMessage.value)
 	} finally {
@@ -557,8 +559,9 @@ async function saveSplits() {
 		}
 	} catch (err: any) {
 		console.error('Failed to split PDF:', err)
+		const detail = describeRequestFailure(err, err?.message ?? String(err))
 		errorMessage.value = t('mobilesheetsmanager', 'Failed to split PDF: {error}', {
-			error: err?.message ?? String(err),
+			error: detail,
 		})
 		showError(errorMessage.value)
 	} finally {

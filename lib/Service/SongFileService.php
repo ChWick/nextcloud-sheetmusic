@@ -23,6 +23,10 @@ class SongFileService {
 	) {
 	}
 
+	public function getLogger(): LoggerInterface {
+		return $this->logger;
+	}
+
 	public function importSongMetadata(?array $fileInfo, ?string $path, IUser $user): array {
 		$content = null;
 
@@ -86,6 +90,7 @@ class SongFileService {
 
 		$autoPaths = $this->libraryService->isAutoPathsEnabled($user->getUID(), $libraryId);
 		$targetRelative = $this->resolveDestinationPath($userFolder, $libraryDir, $fileName, $autoPaths);
+		$this->fileManager->ensureParentFolder($userFolder, $targetRelative);
 		$targetFile = $userFolder->newFile($targetRelative);
 		$targetFile->putContent($content);
 

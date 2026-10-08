@@ -446,4 +446,53 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		const thumbnailSlots = wrapper.findAll('.mobilesheetsmanager-pdf-thumbnail-canvas, div[data-page-num]')
 		expect(thumbnailSlots.length).toBeGreaterThan(0)
 	})
+
+	it('surfaces detailed server error message when split upload fails', async () => {
+		const apiClient = await import('../../../src/api/client')
+		const dialogs = await import('@nextcloud/dialogs')
+
+		vi.mocked(apiClient.apiPost).mockImplementation((endpoint: string) => {
+			if (endpoint === '/api/songs') {
+				return Promise.resolve({
+					data: { ocs: { data: { id: 201, createdSongId: 201, songs: [] } } },
+				} as any)
+			}
+			if (endpoint.includes('/file/upload')) {
+				const error: any = new Error('Request failed with status code 500')
+				error.response = {
+					status: 500,
+					data: {
+						ocs: {
+							data: {
+								message: 'Failed to create target folder in Nextcloud storage',
+							},
+						},
+					},
+				}
+				return Promise.reject(error)
+			}
+			return Promise.resolve({ data: { ocs: { data: { songs: [] } } } } as any)
+		})
+
+		const wrapper = mount(SongPdfModifier, {
+			props: {
+				song: mockSong,
+				libraryId: 1,
+			},
+		})
+
+		await flushPromises()
+
+		const splitTab = wrapper.findAll('button').find((b) => b.text().includes('Split PDF'))
+		await splitTab?.trigger('click')
+
+		const splitSubmitBtn = wrapper.findAll('button').find((b) => b.text().includes('Split & Create Songs'))
+		await splitSubmitBtn?.trigger('click')
+
+		await flushPromises()
+		await new Promise((r) => setTimeout(r, 50))
+		await flushPromises()
+
+		expect(dialogs.showError).toHaveBeenCalledWith(expect.stringContaining('Failed to create target folder in Nextcloud storage'))
+	})
 })

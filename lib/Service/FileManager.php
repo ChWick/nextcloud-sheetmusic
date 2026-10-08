@@ -1006,7 +1006,7 @@ class FileManager {
 	 * @param string $targetRelative path relative to the user folder
 	 * @return list<string> the relative paths that were created, shallowest first
 	 */
-	private function ensureParentFolder(Folder $userFolder, string $targetRelative): array {
+	public function ensureParentFolder(Folder $userFolder, string $targetRelative): array {
 		$parent = str_replace(DIRECTORY_SEPARATOR, '/', dirname($targetRelative));
 		if ($parent === '' || $parent === '.' || $parent === '/') {
 			return [];

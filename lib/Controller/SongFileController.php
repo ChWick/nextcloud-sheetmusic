@@ -86,7 +86,12 @@ class SongFileController extends OCSController {
 		} catch (\InvalidArgumentException $e) {
 			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_BAD_REQUEST);
 		} catch (\Throwable $e) {
-			return new DataResponse([], Http::STATUS_INTERNAL_SERVER_ERROR);
+			$this->songFileService->getLogger()->error('Failed to upload song file', [
+				'exception' => $e,
+				'songId' => $id,
+				'libraryId' => $libraryId,
+			]);
+			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
 
