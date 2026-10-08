@@ -136,6 +136,16 @@ function resetCrop() {
 	}
 }
 
+function applyPreset(marginPercent: number) {
+	const m = marginPercent / 100
+	cropBox.value = {
+		left: m,
+		top: m,
+		width: 1 - 2 * m,
+		height: 1 - 2 * m,
+	}
+}
+
 function handlePointerDown(handle: DragHandle, e: PointerEvent) {
 	e.preventDefault()
 	e.stopPropagation()
@@ -324,6 +334,20 @@ onUnmounted(() => {
 				<div :class="$style.toolActions">
 					<NcButton
 						size="small"
+						variant="secondary"
+						:title="t('mobilesheetsmanager', 'Trim 5% margin from all edges')"
+						@click="applyPreset(5)">
+						{{ t('mobilesheetsmanager', 'Trim 5%') }}
+					</NcButton>
+					<NcButton
+						size="small"
+						variant="secondary"
+						:title="t('mobilesheetsmanager', 'Trim 10% margin from all edges')"
+						@click="applyPreset(10)">
+						{{ t('mobilesheetsmanager', 'Trim 10%') }}
+					</NcButton>
+					<NcButton
+						size="small"
 						variant="tertiary"
 						:disabled="!isCustomCropped"
 						:title="t('mobilesheetsmanager', 'Reset to full page')"
@@ -387,7 +411,7 @@ onUnmounted(() => {
 						<div
 							:class="[$style.cropBox, isCustomCropped && $style.cropBoxActive]"
 							:style="overlayBoxStyle"
-							@pointerdown.stop="handlePointerDown('move', $event)">
+							@pointerdown.stop="handlePointerDown(isCustomCropped ? 'move' : 'create', $event)">
 							<!-- Crop Grid Guidelines (Rule of thirds) -->
 							<div :class="$style.gridH1" />
 							<div :class="$style.gridH2" />

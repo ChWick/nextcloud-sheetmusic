@@ -83,8 +83,8 @@
       <NcButton
         v-if="openSong && songViewerRef?.selectedFile?.path?.toLowerCase().endsWith('.pdf')"
         variant="secondary"
-        :title="t('mobilesheetsmanager', 'Modify PDF (rotate, split)')"
-        :aria-label="t('mobilesheetsmanager', 'Modify PDF (rotate, split)')"
+        :title="t('mobilesheetsmanager', 'Modify PDF (rotate, crop, split)')"
+        :aria-label="t('mobilesheetsmanager', 'Modify PDF (rotate, crop, split)')"
         @click="openSong && openModifyPdf(openSong, songViewerRef?.selectedFile?.id)">
         <template #icon>
           <FileDocumentEditOutline :size="20" />
