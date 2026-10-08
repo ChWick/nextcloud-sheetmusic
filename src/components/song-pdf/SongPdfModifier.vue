@@ -30,8 +30,11 @@ import DeleteRestore from 'vue-material-design-icons/DeleteRestore.vue'
 import CheckboxMarkedCircleOutline from 'vue-material-design-icons/CheckboxMarkedCircleOutline.vue'
 import CropIcon from 'vue-material-design-icons/Crop.vue'
 import ArrowRight from 'vue-material-design-icons/ArrowRight.vue'
+import TableMergeCells from 'vue-material-design-icons/TableMergeCells.vue'
 import SongPdfCropModal from './SongPdfCropModal.vue'
+import SongPdfJoinModal from './SongPdfJoinModal.vue'
 import { computeCropBoxForRotation, type PageCrop } from './crop-types'
+import { executeJoinTwoPages, type JoinLayout } from './pdf-join-engine'
 
 GlobalWorkerOptions.workerSrc = pdfWorker
 
@@ -112,6 +115,12 @@ const deletedPages = ref<Set<number>>(new Set())
 const isCropModalOpen = ref(false)
 const cropModalPage = ref(1)
 
+// Join modal state
+const isJoinModalOpen = ref(false)
+const joinModalPageA = ref(1)
+const joinModalPageB = ref(2)
+const hasAnyJoin = ref(false)
+
 // Thumbnails
 const thumbnailCanvases = ref<Record<number, HTMLCanvasElement>>({})
 const thumbnailContainers = ref<Record<number, HTMLElement | null>>({})
@@ -139,6 +148,7 @@ async function loadPdf() {
 	pageRotations.value = []
 	pageCrops.value = {}
 	deletedPages.value = new Set()
+	hasAnyJoin.value = false
 	thumbnailCanvases.value = {}
 	selectedPages.value = []
 
@@ -463,8 +473,122 @@ const remainingPagesCount = computed(() => {
 })
 
 const hasAnyChange = computed(() => {
-	return hasAnyRotation.value || hasAnyCrop.value || hasAnyDeletion.value
+	return hasAnyRotation.value || hasAnyCrop.value || hasAnyDeletion.value || hasAnyJoin.value
 })
+
+function openJoinModal(pageA: number, pageB?: number) {
+	joinModalPageA.value = pageA
+	joinModalPageB.value = pageB ?? (pageA < totalPages.value ? pageA + 1 : (pageA > 1 ? pageA - 1 : 1))
+	isJoinModalOpen.value = true
+}
+
+async function handleExecuteJoin(options: {
+	pageA: number
+	pageB: number
+	layout: JoinLayout
+	fitToStandardPage: boolean
+	scaleToFit: boolean
+	gap: number
+}) {
+	if (!originalPdfBytes.value) return
+	isLoading.value = true
+	errorMessage.value = ''
+
+	try {
+		const pdfDoc = await PDFDocument.load(originalPdfBytes.value)
+		const cropA = pageCrops.value[options.pageA]
+		const cropB = pageCrops.value[options.pageB]
+		const rotA = pageRotations.value[options.pageA - 1] ?? 0
+		const rotB = pageRotations.value[options.pageB - 1] ?? 0
+
+		await executeJoinTwoPages(pdfDoc, {
+			pageIdx1: options.pageA - 1,
+			pageIdx2: options.pageB - 1,
+			layout: options.layout,
+			fitToStandardPage: options.fitToStandardPage,
+			scaleToFit: options.scaleToFit,
+			gap: options.gap,
+			crop1: cropA,
+			crop2: cropB,
+			rotation1: rotA,
+			rotation2: rotB,
+		})
+
+		const newBytes = await pdfDoc.save()
+		originalPdfBytes.value = newBytes
+		hasAnyJoin.value = true
+
+		// Re-index / shift state for remaining pages
+		const lowerPage = Math.min(options.pageA, options.pageB)
+		const higherPage = Math.max(options.pageA, options.pageB)
+
+		// pageRotations: lowerPage - 1 becomes 0, higherPage - 1 is removed
+		const newRots = [...pageRotations.value]
+		newRots[lowerPage - 1] = 0
+		newRots.splice(higherPage - 1, 1)
+		pageRotations.value = newRots
+
+		// pageCrops: lowerPage crop is baked in, higherPage is removed, subsequent shift down
+		const newCrops: Record<number, PageCrop> = {}
+		for (const [kStr, crop] of Object.entries(pageCrops.value)) {
+			const k = Number(kStr)
+			if (k === lowerPage || k === higherPage) continue
+			if (k > higherPage) {
+				newCrops[k - 1] = crop
+			} else {
+				newCrops[k] = crop
+			}
+		}
+		pageCrops.value = newCrops
+
+		// deletedPages: shift down if needed
+		const newDeleted = new Set<number>()
+		for (const p of deletedPages.value) {
+			if (p === higherPage || p === lowerPage) continue
+			if (p > higherPage) {
+				newDeleted.add(p - 1)
+			} else {
+				newDeleted.add(p)
+			}
+		}
+		deletedPages.value = newDeleted
+
+		// Re-render PDF with pdfjs
+		const wasmUrl = typeof generateFilePath === 'function' ? generateFilePath('mobilesheetsmanager', 'js', 'pdfjs/wasm/') : new URL('pdfjs-dist/wasm/', import.meta.url).href
+		const cMapUrl = typeof generateFilePath === 'function' ? generateFilePath('mobilesheetsmanager', 'js', 'pdfjs/cmaps/') : new URL('pdfjs-dist/cmaps/', import.meta.url).href
+		const standardFontDataUrl = typeof generateFilePath === 'function' ? generateFilePath('mobilesheetsmanager', 'js', 'pdfjs/standard_fonts/') : new URL('pdfjs-dist/standard_fonts/', import.meta.url).href
+
+		const pdf = await getDocument({
+			data: newBytes.slice(),
+			cMapUrl,
+			cMapPacked: true,
+			standardFontDataUrl,
+			wasmUrl,
+		}).promise
+
+		activePdfDoc.value = pdf
+		totalPages.value = pdfDoc.getPageCount()
+
+		cleanupThumbnailObserver()
+		thumbnailCanvases.value = {}
+		await nextTick()
+		initThumbnailObserver(pdf)
+
+		showSuccess(t('mobilesheetsmanager', 'Joined pages {pageA} and {pageB} into a single page.', {
+			pageA: options.pageA,
+			pageB: options.pageB,
+		}))
+	} catch (err: any) {
+		console.error('Failed to join pages:', err)
+		const detail = describeRequestFailure(err, err?.message ?? String(err))
+		errorMessage.value = t('mobilesheetsmanager', 'Failed to join pages: {error}', {
+			error: detail,
+		})
+		showError(errorMessage.value)
+	} finally {
+		isLoading.value = false
+	}
+}
 
 // Saving Rotated, Cropped, or Modified PDF
 async function saveRotationsAndCrops() {
@@ -525,7 +649,7 @@ async function saveRotationsAndCrops() {
 			throw new Error(t('mobilesheetsmanager', 'Cannot save a PDF with no pages.'))
 		}
 
-		if (!modifiedRotations && !modifiedCrops && !modifiedDeletions) {
+		if (!modifiedRotations && !modifiedCrops && !modifiedDeletions && !hasAnyJoin.value) {
 			showSuccess(t('mobilesheetsmanager', 'No changes to save.'))
 			isSaving.value = false
 			return
@@ -551,8 +675,8 @@ async function saveRotationsAndCrops() {
 		})
 
 		const data = uploadRes.data.ocs.data as LibraryData
-		const hasMultipleTypes = [modifiedRotations, modifiedCrops, modifiedDeletions].filter(Boolean).length > 1
-		const successMsg = hasMultipleTypes
+		const hasMultipleTypes = [modifiedRotations, modifiedCrops, modifiedDeletions, hasAnyJoin.value].filter(Boolean).length > 1
+		const successMsg = hasMultipleTypes || hasAnyJoin.value
 			? t('mobilesheetsmanager', 'PDF changes saved successfully.')
 			: modifiedDeletions
 				? t('mobilesheetsmanager', 'Pages deleted and PDF saved successfully.')
@@ -792,24 +916,24 @@ watch(() => targetFile.value?.path, () => {
 					v-if="activeMode === 'rotate'"
 					variant="primary"
 					:disabled="isSaving || isLoading || !hasAnyChange || remainingPagesCount === 0"
-					:title="hasAnyDeletion && !hasAnyRotation ? t('mobilesheetsmanager', 'Save changes') : t('mobilesheetsmanager', 'Save rotated PDF')"
+					:title="(hasAnyDeletion || hasAnyCrop || hasAnyJoin) ? t('mobilesheetsmanager', 'Save changes') : t('mobilesheetsmanager', 'Save rotated PDF')"
 					@click="saveRotations">
 					<template #icon>
 						<ContentSaveOutlineIcon :size="20" />
 					</template>
-					{{ isSaving ? t('mobilesheetsmanager', 'Saving…') : (hasAnyDeletion && !hasAnyRotation ? t('mobilesheetsmanager', 'Save Changes') : t('mobilesheetsmanager', 'Save Rotations')) }}
+					{{ isSaving ? t('mobilesheetsmanager', 'Saving…') : ((hasAnyDeletion || hasAnyCrop || hasAnyJoin) ? t('mobilesheetsmanager', 'Save Changes') : t('mobilesheetsmanager', 'Save Rotations')) }}
 				</NcButton>
 
 				<NcButton
 					v-else-if="activeMode === 'crop'"
 					variant="primary"
 					:disabled="isSaving || isLoading || !hasAnyChange || remainingPagesCount === 0"
-					:title="hasAnyDeletion && !hasAnyCrop ? t('mobilesheetsmanager', 'Save changes') : t('mobilesheetsmanager', 'Save cropped PDF')"
+					:title="(hasAnyDeletion || hasAnyRotation || hasAnyJoin) ? t('mobilesheetsmanager', 'Save changes') : t('mobilesheetsmanager', 'Save cropped PDF')"
 					@click="saveCrops">
 					<template #icon>
 						<ContentSaveOutlineIcon :size="20" />
 					</template>
-					{{ isSaving ? t('mobilesheetsmanager', 'Saving…') : (hasAnyDeletion && !hasAnyCrop ? t('mobilesheetsmanager', 'Save Changes') : t('mobilesheetsmanager', 'Save Crops')) }}
+					{{ isSaving ? t('mobilesheetsmanager', 'Saving…') : ((hasAnyDeletion || hasAnyRotation || hasAnyJoin) ? t('mobilesheetsmanager', 'Save Changes') : t('mobilesheetsmanager', 'Save Crops')) }}
 				</NcButton>
 
 				<NcButton
@@ -860,6 +984,17 @@ watch(() => targetFile.value?.path, () => {
 							{{ t('mobilesheetsmanager', 'Reset All') }}
 						</NcButton>
 						<NcButton
+							v-if="totalPages >= 2"
+							size="small"
+							variant="secondary"
+							:title="t('mobilesheetsmanager', 'Join two pages into a single page')"
+							@click="openJoinModal(1, 2)">
+							<template #icon>
+								<TableMergeCells :size="16" />
+							</template>
+							{{ t('mobilesheetsmanager', 'Join Pages…') }}
+						</NcButton>
+						<NcButton
 							v-if="hasAnyDeletion"
 							size="small"
 							variant="tertiary"
@@ -893,6 +1028,17 @@ watch(() => targetFile.value?.path, () => {
 							:title="t('mobilesheetsmanager', 'Reset all page crops to full page')"
 							@click="resetAllCrops">
 							{{ t('mobilesheetsmanager', 'Reset All Crops') }}
+						</NcButton>
+						<NcButton
+							v-if="totalPages >= 2"
+							size="small"
+							variant="secondary"
+							:title="t('mobilesheetsmanager', 'Join two pages into a single page')"
+							@click="openJoinModal(1, 2)">
+							<template #icon>
+								<TableMergeCells :size="16" />
+							</template>
+							{{ t('mobilesheetsmanager', 'Join Pages…') }}
 						</NcButton>
 						<NcButton
 							v-if="hasAnyDeletion"
@@ -1001,6 +1147,17 @@ watch(() => targetFile.value?.path, () => {
 									</template>
 								</NcButton>
 								<NcButton
+									v-if="pageNum < totalPages && !isPageDeleted(pageNum)"
+									size="small"
+									variant="tertiary"
+									:title="t('mobilesheetsmanager', 'Join with page {p}', { p: pageNum + 1 })"
+									:aria-label="t('mobilesheetsmanager', 'Join with page {p}', { p: pageNum + 1 })"
+									@click.stop="openJoinModal(pageNum, pageNum + 1)">
+									<template #icon>
+										<TableMergeCells :size="16" />
+									</template>
+								</NcButton>
+								<NcButton
 									size="small"
 									:variant="isPageDeleted(pageNum) ? 'primary' : 'tertiary'"
 									:title="isPageDeleted(pageNum) ? t('mobilesheetsmanager', 'Restore page {page}', { page: pageNum }) : t('mobilesheetsmanager', 'Delete page {page}', { page: pageNum })"
@@ -1026,6 +1183,17 @@ watch(() => targetFile.value?.path, () => {
 										<CropIcon :size="16" />
 									</template>
 									{{ t('mobilesheetsmanager', 'Crop') }}
+								</NcButton>
+								<NcButton
+									v-if="pageNum < totalPages && !isPageDeleted(pageNum)"
+									size="small"
+									variant="tertiary"
+									:title="t('mobilesheetsmanager', 'Join with page {p}', { p: pageNum + 1 })"
+									:aria-label="t('mobilesheetsmanager', 'Join with page {p}', { p: pageNum + 1 })"
+									@click.stop="openJoinModal(pageNum, pageNum + 1)">
+									<template #icon>
+										<TableMergeCells :size="16" />
+									</template>
 								</NcButton>
 								<NcButton
 									size="small"
@@ -1154,6 +1322,17 @@ watch(() => targetFile.value?.path, () => {
 			:rotation="pageRotations[cropModalPage - 1]"
 			@apply="handleApplyCrop"
 			@change-page="cropModalPage = $event" />
+
+		<!-- Page Join Modal -->
+		<SongPdfJoinModal
+			v-model:open="isJoinModalOpen"
+			:pdf="activePdfDoc"
+			:total-pages="totalPages"
+			:initial-page-a="joinModalPageA"
+			:initial-page-b="joinModalPageB"
+			:page-crops="pageCrops"
+			:page-rotations="pageRotations"
+			@join="handleExecuteJoin" />
 	</div>
 </template>
 

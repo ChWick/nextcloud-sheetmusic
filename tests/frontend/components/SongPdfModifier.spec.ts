@@ -77,8 +77,7 @@ vi.mock('@nextcloud/vue/components/NcCheckboxRadioSwitch', () => ({
 	},
 }))
 
-// Emulate pdfjs-dist getDocument transferring/detaching the input data ArrayBuffer like a web worker does!
-const { mockGetDocument } = vi.hoisted(() => {
+const { mockGetDocument, mockPdf } = vi.hoisted(() => {
 	const mockPage = {
 		getViewport: vi.fn(() => ({ width: 200, height: 300 })),
 		render: vi.fn(() => ({ promise: Promise.resolve() })),
@@ -99,7 +98,7 @@ const { mockGetDocument } = vi.hoisted(() => {
 		}
 		return { promise: Promise.resolve(mockPdf) }
 	})
-	return { mockGetDocument }
+	return { mockGetDocument, mockPdf }
 })
 
 vi.mock('pdfjs-dist', () => ({
@@ -166,6 +165,7 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 
 	beforeEach(async () => {
 		vi.clearAllMocks()
+		mockPdf.numPages = 8
 		const apiClient = await import('../../../src/api/client')
 		vi.mocked(apiClient.apiPost).mockImplementation(defaultApiPostImplementation as any)
 		uploadedFiles.length = 0
@@ -810,5 +810,85 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		expect(cropBox.y).toBeCloseTo(841.89 * (1 - 0.1 - 0.8), 1)
 		expect(cropBox.width).toBeCloseTo(1190.55 * 0.8, 1)
 		expect(cropBox.height).toBeCloseTo(841.89 * 0.8, 1)
+	})
+
+	it('supports cropping page 1 and page 2, joining them into a single page, and saving the PDF', async () => {
+		const wrapper = mount(SongPdfModifier, {
+			props: {
+				song: mockSong,
+				libraryId: 1,
+			},
+		})
+
+		await flushPromises()
+		expect(wrapper.text()).toContain('8 pages')
+
+		// 1. Crop page 1: top half
+		const cropModal = wrapper.findComponent({ name: 'SongPdfCropModal' })
+		cropModal.vm.$emit('apply', { left: 0, top: 0, width: 1, height: 0.5 }, 'current')
+		await flushPromises()
+
+		// 2. Open join modal and trigger join
+		const joinModal = wrapper.findComponent({ name: 'SongPdfJoinModal' })
+		expect(joinModal.exists()).toBe(true)
+
+		mockPdf.numPages = 7
+		joinModal.vm.$emit('join', {
+			pageA: 1,
+			pageB: 2,
+			layout: 'vertical',
+			fitToStandardPage: true,
+			scaleToFit: true,
+			gap: 12,
+		})
+		await flushPromises()
+		await new Promise((r) => setTimeout(r, 60))
+		await flushPromises()
+
+		// 3. Document should now have 7 pages (pages 1 and 2 joined into page 1)
+		expect(wrapper.text()).toContain('7 pages')
+
+		// 4. Save Changes button should be enabled
+		const saveBtn = wrapper.findAll('button').find((b) => b.text().includes('Save Changes'))
+		expect(saveBtn).toBeDefined()
+		expect(saveBtn?.attributes('disabled')).toBeUndefined()
+
+		await saveBtn?.trigger('click')
+		await flushPromises()
+		await new Promise((r) => setTimeout(r, 60))
+		await flushPromises()
+
+		// 5. Verify single uploaded PDF with 7 pages
+		expect(uploadedFiles).toHaveLength(1)
+		const arrayBuffer = await uploadedFiles[0].file.arrayBuffer()
+		const savedPdf = await PDFDocument.load(arrayBuffer)
+		expect(savedPdf.getPageCount()).toBe(7)
+
+		// Page 1 is the joined single page with standard dimensions
+		const page1 = savedPdf.getPage(0)
+		expect(page1.getWidth()).toBeCloseTo(595.28, 1)
+		expect(page1.getHeight()).toBeCloseTo(841.89, 1)
+	})
+
+	it('opens join modal via card button on page 1 with pre-filled page numbers', async () => {
+		const wrapper = mount(SongPdfModifier, {
+			props: {
+				song: mockSong,
+				libraryId: 1,
+			},
+		})
+
+		await flushPromises()
+
+		// Find Join with page 2 button on page 1 card
+		const joinBtn = wrapper.findAll('button').find((b) => b.attributes('title')?.includes('Join with page 2'))
+		expect(joinBtn).toBeDefined()
+		await joinBtn?.trigger('click')
+		await flushPromises()
+
+		const joinModal = wrapper.findComponent({ name: 'SongPdfJoinModal' })
+		expect(joinModal.props('open')).toBe(true)
+		expect(joinModal.props('initialPageA')).toBe(1)
+		expect(joinModal.props('initialPageB')).toBe(2)
 	})
 })

@@ -254,5 +254,59 @@ test.describe('Song PDF Modifier & Cropping E2E Flow', () => {
 		await expect(page.getByRole('button', { name: /Restore Deleted/i })).toBeHidden()
 		await expect(page.getByText(/8 pages/i)).toBeVisible()
 	})
+
+	test('supports joining two pages into a single page and saving the updated PDF', async ({ page }) => {
+		await page.goto('/#/library/1/songs?song=5&modifyPdf=1')
+
+		// Header initially shows 8 pages
+		await expect(page.getByText(/8 pages/i)).toBeVisible()
+
+		// 1. Optionally crop page 1 first to test the combined crop + join workflow
+		const cropTab = page.getByRole('button', { name: 'Crop Pages' })
+		await cropTab.click()
+
+		const page1CropBtn = page.getByTitle('Crop page 1').first()
+		await expect(page1CropBtn).toBeVisible()
+		await page1CropBtn.click()
+
+		const cropDialog = page.getByRole('dialog')
+		await expect(cropDialog).toBeVisible()
+		await cropDialog.getByRole('button', { name: 'Trim 5%' }).click()
+		await cropDialog.getByRole('button', { name: 'Apply Crop' }).click()
+		await expect(cropDialog).toBeHidden()
+		await expect(page.getByText('Cropped').first()).toBeVisible()
+
+		// 2. Open Join modal via toolbar or card button
+		const joinPage1Btn = page.getByTitle('Join with page 2').first()
+		await expect(joinPage1Btn).toBeVisible()
+		await joinPage1Btn.click()
+
+		// Join dialog opens
+		const joinDialog = page.getByRole('dialog')
+		await expect(joinDialog).toBeVisible()
+		await expect(joinDialog.getByRole('heading', { name: /Join Two Pages/i })).toBeVisible()
+
+		// Verify layout buttons and fit indicator
+		await expect(joinDialog.getByRole('button', { name: /Top \/ Bottom/i })).toBeVisible()
+		await expect(joinDialog.getByRole('button', { name: /Join Pages/i })).toBeVisible()
+
+		// 3. Confirm Join
+		const confirmJoinBtn = joinDialog.getByRole('button', { name: 'Join Pages' })
+		await confirmJoinBtn.click()
+
+		// Verify join dialog closed
+		await expect(joinDialog).toBeHidden()
+
+		// Document now has 7 pages
+		await expect(page.getByText(/7 pages/i)).toBeVisible()
+
+		// 4. Save modifications
+		const saveBtn = page.getByRole('button', { name: /Save Changes|Save Crops|Save Rotations/i })
+		await expect(saveBtn).toBeEnabled()
+		await saveBtn.click()
+
+		// 5. Verify success notification
+		await expect(page.getByText(/saved successfully/i).first()).toBeVisible()
+	})
 })
 
