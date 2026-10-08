@@ -26,7 +26,10 @@ import CallSplit from 'vue-material-design-icons/CallSplit.vue'
 import PlusIcon from 'vue-material-design-icons/Plus.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import CheckboxMarkedCircleOutline from 'vue-material-design-icons/CheckboxMarkedCircleOutline.vue'
+import CropIcon from 'vue-material-design-icons/Crop.vue'
 import ArrowRight from 'vue-material-design-icons/ArrowRight.vue'
+import SongPdfCropModal from './SongPdfCropModal.vue'
+import type { PageCrop } from './crop-types'
 
 GlobalWorkerOptions.workerSrc = pdfWorker
 
@@ -83,7 +86,7 @@ const targetFile = computed<SongFile | undefined>(() => {
 })
 
 // State
-type Mode = 'rotate' | 'split'
+type Mode = 'rotate' | 'split' | 'crop'
 const activeMode = ref<Mode>('rotate')
 
 const isLoading = ref(false)
@@ -91,10 +94,18 @@ const isSaving = ref(false)
 const errorMessage = ref('')
 const totalPages = ref(0)
 const originalPdfBytes = shallowRef<Uint8Array | null>(null)
+const activePdfDoc = shallowRef<any>(null)
 
 // Page-specific state (1-indexed, size totalPages)
 // pageRotations[pageIdx] = 0 | 90 | 180 | 270 (relative rotation added)
 const pageRotations = ref<number[]>([])
+
+// Page-specific crop state: Record<pageNum, PageCrop>
+const pageCrops = ref<Record<number, PageCrop>>({})
+
+// Crop modal state
+const isCropModalOpen = ref(false)
+const cropModalPage = ref(1)
 
 // Thumbnails
 const thumbnailCanvases = ref<Record<number, HTMLCanvasElement>>({})
@@ -145,8 +156,10 @@ async function loadPdf() {
 			wasmUrl,
 		}).promise
 
+		activePdfDoc.value = pdf
 		totalPages.value = pdf.numPages
 		pageRotations.value = Array(pdf.numPages).fill(0)
+		pageCrops.value = {}
 
 		// Initialize split segments: default with 1 segment covering all pages
 		segmentCounter = 1
@@ -356,6 +369,61 @@ function getSegmentColor(segIndex: number): string {
 	return segmentColors[segIndex % segmentColors.length]
 }
 
+// Crop helpers
+function openCropModal(pageNum: number) {
+	cropModalPage.value = pageNum
+	isCropModalOpen.value = true
+}
+
+function handleApplyCrop(crop: PageCrop, scope: 'current' | 'all') {
+	if (scope === 'all') {
+		const updated: Record<number, PageCrop> = {}
+		for (let p = 1; p <= totalPages.value; p++) {
+			updated[p] = { ...crop }
+		}
+		pageCrops.value = updated
+	} else {
+		pageCrops.value = {
+			...pageCrops.value,
+			[cropModalPage.value]: { ...crop },
+		}
+	}
+}
+
+function resetAllCrops() {
+	pageCrops.value = {}
+}
+
+const hasAnyCrop = computed(() => {
+	return Object.values(pageCrops.value).some((c) => (
+		c.left > 0.005 ||
+		c.top > 0.005 ||
+		c.width < 0.995 ||
+		c.height < 0.995
+	))
+})
+
+function isPageCropped(pageNum: number): boolean {
+	const c = pageCrops.value[pageNum]
+	if (!c) return false
+	return (
+		c.left > 0.005 ||
+		c.top > 0.005 ||
+		c.width < 0.995 ||
+		c.height < 0.995
+	)
+}
+
+function getCropIndicatorText(pageNum: number): string {
+	const c = pageCrops.value[pageNum]
+	if (!c) return ''
+	const top = Math.round(c.top * 100)
+	const right = Math.round((1 - (c.left + c.width)) * 100)
+	const bottom = Math.round((1 - (c.top + c.height)) * 100)
+	const left = Math.round(c.left * 100)
+	return `${top}% ${right}% ${bottom}% ${left}%`
+}
+
 // Saving Rotated PDF
 async function saveRotations() {
 	if (!originalPdfBytes.value || !targetFile.value) return
@@ -408,6 +476,78 @@ async function saveRotations() {
 		console.error('Failed to save rotated PDF:', err)
 		const detail = describeRequestFailure(err, err?.message ?? String(err))
 		errorMessage.value = t('mobilesheetsmanager', 'Failed to save rotated PDF: {error}', {
+			error: detail,
+		})
+		showError(errorMessage.value)
+	} finally {
+		isSaving.value = false
+	}
+}
+
+// Saving Cropped PDF
+async function saveCrops() {
+	if (!originalPdfBytes.value || !targetFile.value) return
+	isSaving.value = true
+	errorMessage.value = ''
+
+	try {
+		const pdfDoc = await PDFDocument.load(originalPdfBytes.value)
+		const pages = pdfDoc.getPages()
+
+		let modified = false
+		for (let i = 0; i < pages.length; i++) {
+			const pageNum = i + 1
+			const crop = pageCrops.value[pageNum]
+			if (!crop) continue
+
+			if (crop.left > 0.005 || crop.top > 0.005 || crop.width < 0.995 || crop.height < 0.995) {
+				const page = pages[i]
+				const { x, y, width: origW, height: origH } = page.getCropBox()
+
+				// Normalized coordinates: left, top, width, height (top is 0 at top of displayed page)
+				// In PDF user space, y=0 is at bottom, so y_new = y + origH * (1 - top - height)
+				const newX = x + origW * crop.left
+				const newY = y + origH * (1 - crop.top - crop.height)
+				const newW = origW * crop.width
+				const newH = origH * crop.height
+
+				page.setCropBox(newX, newY, newW, newH)
+				modified = true
+			}
+		}
+
+		if (!modified) {
+			showSuccess(t('mobilesheetsmanager', 'No changes to crop.'))
+			isSaving.value = false
+			return
+		}
+
+		const modifiedBytes = await pdfDoc.save()
+		const fileName = getFileName(targetFile.value.path) || 'modified.pdf'
+		const modifiedFile = new File([modifiedBytes as Uint8Array<ArrayBuffer>], fileName, { type: 'application/pdf' })
+
+		// Upload the cropped file to replace / update
+		// 1. Delete original file
+		await apiPost('/api/songs/{id}/file/{fileId}/delete', {
+			libraryId: props.libraryId,
+		}, {
+			pathParams: { id: props.song.id, fileId: targetFile.value.id },
+		})
+
+		// 2. Upload replacement file
+		const formData = new FormData()
+		formData.append('file', modifiedFile)
+		const uploadRes = await apiPost('/api/libraries/{libraryId}/songs/{id}/file/upload', formData as any, {
+			pathParams: { libraryId: props.libraryId, id: props.song.id },
+		})
+
+		const data = uploadRes.data.ocs.data as LibraryData
+		showSuccess(t('mobilesheetsmanager', 'Cropped PDF saved successfully.'))
+		emit('saved', data, props.song.id)
+	} catch (err: any) {
+		console.error('Failed to save cropped PDF:', err)
+		const detail = describeRequestFailure(err, err?.message ?? String(err))
+		errorMessage.value = t('mobilesheetsmanager', 'Failed to save cropped PDF: {error}', {
 			error: detail,
 		})
 		showError(errorMessage.value)
@@ -613,6 +753,13 @@ watch(() => targetFile.value?.path, () => {
 				</button>
 				<button
 					type="button"
+					:class="[$style.tabButton, activeMode === 'crop' && $style.tabButtonActive]"
+					@click="activeMode = 'crop'">
+					<CropIcon :size="18" />
+					<span>{{ t('mobilesheetsmanager', 'Crop Pages') }}</span>
+				</button>
+				<button
+					type="button"
 					:class="[$style.tabButton, activeMode === 'split' && $style.tabButtonActive]"
 					@click="activeMode = 'split'">
 					<CallSplit :size="18" />
@@ -631,6 +778,18 @@ watch(() => targetFile.value?.path, () => {
 						<ContentSaveOutlineIcon :size="20" />
 					</template>
 					{{ isSaving ? t('mobilesheetsmanager', 'Saving…') : t('mobilesheetsmanager', 'Save Rotations') }}
+				</NcButton>
+
+				<NcButton
+					v-else-if="activeMode === 'crop'"
+					variant="primary"
+					:disabled="isSaving || isLoading || !hasAnyCrop"
+					:title="t('mobilesheetsmanager', 'Save cropped PDF')"
+					@click="saveCrops">
+					<template #icon>
+						<ContentSaveOutlineIcon :size="20" />
+					</template>
+					{{ isSaving ? t('mobilesheetsmanager', 'Saving…') : t('mobilesheetsmanager', 'Save Crops') }}
 				</NcButton>
 
 				<NcButton
@@ -682,6 +841,30 @@ watch(() => targetFile.value?.path, () => {
 						</NcButton>
 					</template>
 
+					<template v-else-if="activeMode === 'crop'">
+						<span :class="$style.toolbarTitle">
+							{{ t('mobilesheetsmanager', 'Click on any page or "Crop" button to adjust crop margins:') }}
+						</span>
+						<NcButton
+							size="small"
+							variant="secondary"
+							:title="t('mobilesheetsmanager', 'Crop first page and apply to all')"
+							@click="openCropModal(1)">
+							<template #icon>
+								<CropIcon :size="16" />
+							</template>
+							{{ t('mobilesheetsmanager', 'Crop All Pages…') }}
+						</NcButton>
+						<NcButton
+							size="small"
+							variant="tertiary"
+							:disabled="!hasAnyCrop"
+							:title="t('mobilesheetsmanager', 'Reset all page crops to full page')"
+							@click="resetAllCrops">
+							{{ t('mobilesheetsmanager', 'Reset All Crops') }}
+						</NcButton>
+					</template>
+
 					<template v-else-if="activeMode === 'split'">
 						<span :class="$style.toolbarTitle">
 							{{ t('mobilesheetsmanager', 'Select pages in grid to assign to segments:') }}
@@ -707,8 +890,9 @@ watch(() => targetFile.value?.path, () => {
 						:class="[
 							$style.pageCard,
 							selectedPages.includes(pageNum) && $style.pageCardSelected,
+							activeMode === 'crop' && isPageCropped(pageNum) && $style.pageCardCropped,
 						]"
-						@click="activeMode === 'split' ? togglePageSelection(pageNum) : undefined">
+						@click="activeMode === 'split' ? togglePageSelection(pageNum) : activeMode === 'crop' ? openCropModal(pageNum) : undefined">
 						<!-- Segment color indicators bar -->
 						<div v-if="activeMode === 'split'" :class="$style.segmentPills">
 							<span
@@ -737,6 +921,9 @@ watch(() => targetFile.value?.path, () => {
 								<span v-if="pageRotations[pageNum - 1]" :class="$style.rotationBadge">
 									{{ pageRotations[pageNum - 1] }}°
 								</span>
+								<span v-if="activeMode === 'crop' && isPageCropped(pageNum)" :class="$style.cropBadge" :title="getCropIndicatorText(pageNum)">
+									{{ t('mobilesheetsmanager', 'Cropped') }}
+								</span>
 							</span>
 
 							<!-- Individual Page Rotate Buttons -->
@@ -758,6 +945,20 @@ watch(() => targetFile.value?.path, () => {
 									<template #icon>
 										<RotateRight :size="16" />
 									</template>
+								</NcButton>
+							</div>
+
+							<!-- Crop button in Crop mode -->
+							<div v-else-if="activeMode === 'crop'" :class="$style.cardActions">
+								<NcButton
+									size="small"
+									:variant="isPageCropped(pageNum) ? 'primary' : 'tertiary'"
+									:title="t('mobilesheetsmanager', 'Crop page {page}', { page: pageNum })"
+									@click.stop="openCropModal(pageNum)">
+									<template #icon>
+										<CropIcon :size="16" />
+									</template>
+									{{ t('mobilesheetsmanager', 'Crop') }}
 								</NcButton>
 							</div>
 
@@ -862,6 +1063,18 @@ watch(() => targetFile.value?.path, () => {
 					:attached-files-count="attachedFilesCount" />
 			</aside>
 		</div>
+
+		<!-- Page Crop Modal -->
+		<SongPdfCropModal
+			v-model:open="isCropModalOpen"
+			:page-num="cropModalPage"
+			:total-pages="totalPages"
+			:pdf="activePdfDoc"
+			:initial-crop="pageCrops[cropModalPage]"
+			:all-pages-count="totalPages"
+			:rotation="pageRotations[cropModalPage - 1]"
+			@apply="handleApplyCrop"
+			@change-page="cropModalPage = $event" />
 	</div>
 </template>
 
@@ -1040,6 +1253,20 @@ watch(() => targetFile.value?.path, () => {
 .pageCardSelected {
 	border-color: var(--color-primary-element);
 	background-color: var(--color-background-hover);
+}
+
+.pageCardCropped {
+	border-color: #10b981;
+}
+
+.cropBadge {
+	font-size: 11px;
+	color: #059669;
+	background-color: #d1fae5;
+	padding: 1px 6px;
+	border-radius: 10px;
+	font-weight: 600;
+	margin-left: 4px;
 }
 
 .segmentPills {

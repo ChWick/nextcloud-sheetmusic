@@ -111,31 +111,33 @@ vi.mock('pdfjs-dist/build/pdf.worker.min.mjs?url', () => ({ default: '' }))
 
 // Real pdf-lib is intentionally UNMOCKED here so real PDF parsing, slicing, and rotation are thoroughly tested!
 
+const defaultApiPostImplementation = (endpoint: string, payload: any, options?: any) => {
+	if (endpoint === '/api/songs') {
+		const newId = 100 + createdSongs.length + 1
+		createdSongs.push({ id: newId, ...payload })
+		return Promise.resolve({
+			data: { ocs: { data: { id: newId, createdSongId: newId, songs: [] } } },
+		})
+	}
+	if (endpoint === '/api/libraries/{libraryId}/songs/{id}/file/upload') {
+		const songId = options?.pathParams?.id
+		const file = payload?.get?.('file')
+		uploadedFiles.push({ songId, file })
+		return Promise.resolve({
+			data: { ocs: { data: { songs: [] } } },
+		})
+	}
+	if (endpoint.includes('file') && endpoint.includes('delete')) {
+		deletedFiles.push({ songId: options?.pathParams?.id, fileId: options?.pathParams?.fileId })
+		return Promise.resolve({
+			data: { ocs: { data: { songs: [] } } },
+		})
+	}
+	return Promise.resolve({ data: { ocs: { data: { songs: [] } } } })
+}
+
 vi.mock('../../../src/api/client', () => ({
-	apiPost: vi.fn((endpoint: string, payload: any, options?: any) => {
-		if (endpoint === '/api/songs') {
-			const newId = 100 + createdSongs.length + 1
-			createdSongs.push({ id: newId, ...payload })
-			return Promise.resolve({
-				data: { ocs: { data: { id: newId, createdSongId: newId, songs: [] } } },
-			})
-		}
-		if (endpoint === '/api/libraries/{libraryId}/songs/{id}/file/upload') {
-			const songId = options?.pathParams?.id
-			const file = payload?.get?.('file')
-			uploadedFiles.push({ songId, file })
-			return Promise.resolve({
-				data: { ocs: { data: { songs: [] } } },
-			})
-		}
-		if (endpoint.includes('file') && endpoint.includes('delete')) {
-			deletedFiles.push({ songId: options?.pathParams?.id, fileId: options?.pathParams?.fileId })
-			return Promise.resolve({
-				data: { ocs: { data: { songs: [] } } },
-			})
-		}
-		return Promise.resolve({ data: { ocs: { data: { songs: [] } } } })
-	}),
+	apiPost: vi.fn((endpoint: string, payload: any, options?: any) => defaultApiPostImplementation(endpoint, payload, options)),
 	apiDelete: vi.fn((endpoint: string, options?: any) => {
 		if (endpoint === '/api/songs/{id}') {
 			deletedSongs.push({ songId: options?.pathParams?.id, deleteFiles: options?.queryParams?.deleteFiles })
@@ -162,8 +164,10 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		difficulty: 2,
 	}
 
-	beforeEach(() => {
+	beforeEach(async () => {
 		vi.clearAllMocks()
+		const apiClient = await import('../../../src/api/client')
+		vi.mocked(apiClient.apiPost).mockImplementation(defaultApiPostImplementation as any)
 		uploadedFiles.length = 0
 		createdSongs.length = 0
 		deletedFiles.length = 0
@@ -494,5 +498,113 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		await flushPromises()
 
 		expect(dialogs.showError).toHaveBeenCalledWith(expect.stringContaining('Failed to create target folder in Nextcloud storage'))
+	})
+
+	it('supports cropping pages and saves cropped PDF with updated CropBox', async () => {
+		const wrapper = mount(SongPdfModifier, {
+			props: {
+				song: mockSong,
+				libraryId: 1,
+			},
+		})
+
+		await flushPromises()
+
+		// Switch to Crop Pages mode
+		const cropTab = wrapper.findAll('button').find((b) => b.text().includes('Crop Pages'))
+		expect(cropTab).toBeDefined()
+		await cropTab?.trigger('click')
+
+		// Click Crop button on page 1
+		const page1CropBtn = wrapper.findAll('button').find((b) => b.attributes('title')?.includes('Crop page 1'))
+		expect(page1CropBtn).toBeDefined()
+		await page1CropBtn?.trigger('click')
+		await flushPromises()
+
+		// Verify modal is opened
+		const cropModal = wrapper.findComponent({ name: 'SongPdfCropModal' })
+		expect(cropModal.exists()).toBe(true)
+		expect(cropModal.props('open')).toBe(true)
+		expect(cropModal.props('pageNum')).toBe(1)
+
+		// Simulate applying a 10% margin crop to page 1
+		cropModal.vm.$emit('apply', { left: 0.1, top: 0.1, width: 0.8, height: 0.8 }, 'current')
+		await flushPromises()
+
+		// Verify crop badge is displayed on page 1 card
+		expect(wrapper.text()).toContain('Cropped')
+
+		// Click Save Crops button
+		const saveCropsBtn = wrapper.findAll('button').find((b) => b.text().includes('Save Crops'))
+		expect(saveCropsBtn).toBeDefined()
+		expect(saveCropsBtn?.attributes('disabled')).toBeUndefined()
+
+		await saveCropsBtn?.trigger('click')
+		await flushPromises()
+		await new Promise((r) => setTimeout(r, 50))
+		await flushPromises()
+
+		// Verify replacement cropped PDF was uploaded
+		expect(uploadedFiles).toHaveLength(1)
+		expect(uploadedFiles[0].songId).toBe(mockSong.id)
+
+		// Verify uploaded PDF has new CropBox applied
+		const arrayBuffer = await uploadedFiles[0].file.arrayBuffer()
+		const savedPdf = await PDFDocument.load(arrayBuffer)
+		const page1 = savedPdf.getPage(0)
+		const cropBox = page1.getCropBox()
+
+		// Original sample page size is 595.28 x 841.89
+		// With 0.1 normalized margins, width is 0.8 * 595.28 ~= 476.22, height is 0.8 * 841.89 ~= 673.51
+		expect(cropBox.width).toBeCloseTo(595.28 * 0.8, 1)
+		expect(cropBox.height).toBeCloseTo(841.89 * 0.8, 1)
+	})
+
+	it('supports applying crop to all pages in PDF', async () => {
+		const wrapper = mount(SongPdfModifier, {
+			props: {
+				song: mockSong,
+				libraryId: 1,
+			},
+		})
+
+		await flushPromises()
+
+		// Switch to Crop Pages mode
+		const cropTab = wrapper.findAll('button').find((b) => b.text().includes('Crop Pages'))
+		await cropTab?.trigger('click')
+
+		// Click 'Crop All Pages…' in toolbar
+		const cropAllBtn = wrapper.findAll('button').find((b) => b.text().includes('Crop All Pages…'))
+		expect(cropAllBtn).toBeDefined()
+		await cropAllBtn?.trigger('click')
+		await flushPromises()
+
+		const cropModal = wrapper.findComponent({ name: 'SongPdfCropModal' })
+		expect(cropModal.exists()).toBe(true)
+
+		// Apply to all pages
+		cropModal.vm.$emit('apply', { left: 0.05, top: 0.05, width: 0.9, height: 0.9 }, 'all')
+		await flushPromises()
+
+		// Save Crops
+		const saveCropsBtn = wrapper.findAll('button').find((b) => b.text().includes('Save Crops'))
+		await saveCropsBtn?.trigger('click')
+		await flushPromises()
+		await new Promise((r) => setTimeout(r, 50))
+		await flushPromises()
+
+		expect(uploadedFiles).toHaveLength(1)
+		const arrayBuffer = await uploadedFiles[0].file.arrayBuffer()
+		const savedPdf = await PDFDocument.load(arrayBuffer)
+
+		// All 8 pages should have the 0.9 dimension crop relative to their original dimensions
+		expect(savedPdf.getPageCount()).toBe(8)
+		for (let i = 0; i < 8; i++) {
+			const page = savedPdf.getPage(i)
+			const origWidth = (i === 0 || i === 7) ? 595.28 : 1190.55
+			expect(page.getCropBox().width).toBeCloseTo(origWidth * 0.9, 1)
+			expect(page.getCropBox().height).toBeCloseTo(841.89 * 0.9, 1)
+		}
 	})
 })
