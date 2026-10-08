@@ -891,4 +891,135 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		expect(joinModal.props('initialPageA')).toBe(1)
 		expect(joinModal.props('initialPageB')).toBe(2)
 	})
+
+	it('supports rotating a page by an arbitrary angle (e.g. 3.5°) and saving the rotated PDF', async () => {
+		const wrapper = mount(SongPdfModifier, {
+			props: {
+				song: mockSong,
+				libraryId: 1,
+			},
+		})
+
+		await flushPromises()
+
+		// Open custom rotation modal and apply 3.5°
+		const rotateModal = wrapper.findComponent({ name: 'SongPdfRotateModal' })
+		expect(rotateModal.exists()).toBe(true)
+
+		rotateModal.vm.$emit('apply', 3.5, 'current')
+		await flushPromises()
+
+		// Verify page 1 badge shows 3.5°
+		expect(wrapper.text()).toContain('3.5°')
+
+		// Click Save Rotations
+		const saveBtn = wrapper.findAll('button').find((b) => b.text().includes('Save Changes') || b.text().includes('Save Rotations'))
+		expect(saveBtn).toBeDefined()
+		await saveBtn?.trigger('click')
+		await flushPromises()
+		await new Promise((r) => setTimeout(r, 60))
+		await flushPromises()
+
+		// Verify uploaded PDF
+		expect(uploadedFiles).toHaveLength(1)
+		const arrayBuffer = await uploadedFiles[0].file.arrayBuffer()
+		const savedPdf = await PDFDocument.load(arrayBuffer)
+		expect(savedPdf.getPageCount()).toBe(8)
+
+		// Page 1 rotated by 3.5° has bounding box > original 595.28 x 841.89
+		const page1 = savedPdf.getPage(0)
+		expect(page1.getWidth()).toBeGreaterThan(595.28)
+		expect(page1.getHeight()).toBeGreaterThan(841.89)
+	})
+
+	it('opens rotate modal via card button on page 1 with pre-filled page number', async () => {
+		const wrapper = mount(SongPdfModifier, {
+			props: {
+				song: mockSong,
+				libraryId: 1,
+			},
+		})
+
+		await flushPromises()
+
+		// Find custom angle button on page 1 card
+		const rotateCustomBtn = wrapper.findAll('button').find((b) => b.attributes('title')?.includes('Rotate page 1 by custom angle'))
+		expect(rotateCustomBtn).toBeDefined()
+		await rotateCustomBtn?.trigger('click')
+		await flushPromises()
+
+		const rotateModal = wrapper.findComponent({ name: 'SongPdfRotateModal' })
+		expect(rotateModal.props('open')).toBe(true)
+		expect(rotateModal.props('pageNum')).toBe(1)
+	})
+
+	it('supports applying arbitrary rotation to all pages in PDF', async () => {
+		const wrapper = mount(SongPdfModifier, {
+			props: {
+				song: mockSong,
+				libraryId: 1,
+			},
+		})
+
+		await flushPromises()
+
+		const rotateModal = wrapper.findComponent({ name: 'SongPdfRotateModal' })
+		rotateModal.vm.$emit('apply', 2.5, 'all')
+		await flushPromises()
+
+		// All 8 page cards should reflect the 2.5° badge
+		const badges = wrapper.findAll('.mobilesheetsmanager-rotation-badge, span').filter((s) => s.text() === '2.5°')
+		expect(badges.length).toBeGreaterThanOrEqual(8)
+
+		// Click Save
+		const saveBtn = wrapper.findAll('button').find((b) => b.text().includes('Save Changes') || b.text().includes('Save Rotations'))
+		await saveBtn?.trigger('click')
+		await flushPromises()
+		await new Promise((r) => setTimeout(r, 60))
+		await flushPromises()
+
+		expect(uploadedFiles).toHaveLength(1)
+		const arrayBuffer = await uploadedFiles[0].file.arrayBuffer()
+		const savedPdf = await PDFDocument.load(arrayBuffer)
+		for (let i = 0; i < 8; i++) {
+			expect(savedPdf.getPage(i).getWidth()).toBeGreaterThan(595.28)
+			expect(savedPdf.getPage(i).getHeight()).toBeGreaterThan(841.89)
+		}
+	})
+
+	it('supports rotating a page with cropToOriginalSize option keeping original dimensions', async () => {
+		const wrapper = mount(SongPdfModifier, {
+			props: {
+				song: mockSong,
+				libraryId: 1,
+			},
+		})
+
+		await flushPromises()
+
+		// Apply 3.5° with cropToOriginalSize = true
+		const rotateModal = wrapper.findComponent({ name: 'SongPdfRotateModal' })
+		rotateModal.vm.$emit('apply', 3.5, 'current', true)
+		await flushPromises()
+
+		expect(wrapper.text()).toContain('3.5°')
+
+		// Click Save
+		const saveBtn = wrapper.findAll('button').find((b) => b.text().includes('Save Changes') || b.text().includes('Save Rotations'))
+		await saveBtn?.trigger('click')
+		await flushPromises()
+		await new Promise((r) => setTimeout(r, 60))
+		await flushPromises()
+
+		expect(uploadedFiles).toHaveLength(1)
+		const arrayBuffer = await uploadedFiles[0].file.arrayBuffer()
+		const savedPdf = await PDFDocument.load(arrayBuffer)
+
+		// Page 0 was rotated by 3.5° but cropped to original size:
+		// Dimensions must match the original 595.28 x 841.89
+		const page1 = savedPdf.getPage(0)
+		expect(page1.getWidth()).toBeCloseTo(595.28, 1)
+		expect(page1.getHeight()).toBeCloseTo(841.89, 1)
+	})
 })
+

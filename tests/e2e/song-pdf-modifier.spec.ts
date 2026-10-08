@@ -308,5 +308,57 @@ test.describe('Song PDF Modifier & Cropping E2E Flow', () => {
 		// 5. Verify success notification
 		await expect(page.getByText(/saved successfully/i).first()).toBeVisible()
 	})
+
+	test('supports rotating a page by any arbitrary angle (fine deskew) and saving the updated PDF', async ({ page }) => {
+		await page.goto('/#/library/1/songs?song=5&modifyPdf=1')
+
+		// 1. In Rotate mode, click Rotate by Angle… in toolbar or card
+		const rotateCustomBtn = page.getByRole('button', { name: /Rotate by Angle…/i })
+		await expect(rotateCustomBtn).toBeVisible()
+		await rotateCustomBtn.click()
+
+		// Verify Rotate modal is open
+		const rotateDialog = page.getByRole('dialog')
+		await expect(rotateDialog).toBeVisible()
+		await expect(rotateDialog.getByRole('heading', { name: /Rotate Page 1/i })).toBeVisible()
+
+		// Verify alignment grid button is present and toggles
+		const gridBtn = rotateDialog.getByRole('button', { name: /Alignment Grid/i })
+		await expect(gridBtn).toBeVisible()
+
+		// Click +1° twice and +0.5° once -> 2.5°
+		const plus1Btn = rotateDialog.getByRole('button', { name: '+1°' })
+		await plus1Btn.click()
+		await plus1Btn.click()
+		const plusHalfBtn = rotateDialog.getByRole('button', { name: '+0.5°' })
+		await plusHalfBtn.click()
+
+		// Verify number input reflects 2.5°
+		const angleInput = rotateDialog.locator('input[type="number"]')
+		await expect(angleInput).toHaveValue('2.5')
+
+		// Check "Crop page when rotating (keep original size)"
+		const cropCheckbox = rotateDialog.locator('input[data-test="crop-to-original-checkbox"]')
+		await expect(cropCheckbox).toBeVisible()
+		await cropCheckbox.check()
+		await expect(cropCheckbox).toBeChecked()
+
+		// 2. Click Apply Rotation
+		const applyBtn = rotateDialog.getByRole('button', { name: 'Apply Rotation' })
+		await applyBtn.click()
+		await expect(rotateDialog).toBeHidden()
+
+		// 3. Page 1 now displays 2.5° badge
+		await expect(page.getByText('2.5°').first()).toBeVisible()
+
+		// 4. Save modifications
+		const saveBtn = page.getByRole('button', { name: /Save Rotations|Save Changes/i })
+		await expect(saveBtn).toBeEnabled()
+		await saveBtn.click()
+
+		// 5. Verify success toast
+		await expect(page.getByText(/saved successfully/i).first()).toBeVisible()
+	})
 })
+
 

@@ -31,10 +31,13 @@ import CheckboxMarkedCircleOutline from 'vue-material-design-icons/CheckboxMarke
 import CropIcon from 'vue-material-design-icons/Crop.vue'
 import ArrowRight from 'vue-material-design-icons/ArrowRight.vue'
 import TableMergeCells from 'vue-material-design-icons/TableMergeCells.vue'
+import Rotate360 from 'vue-material-design-icons/Rotate360.vue'
 import SongPdfCropModal from './SongPdfCropModal.vue'
 import SongPdfJoinModal from './SongPdfJoinModal.vue'
+import SongPdfRotateModal from './SongPdfRotateModal.vue'
 import { computeCropBoxForRotation, type PageCrop } from './crop-types'
 import { executeJoinTwoPages, type JoinLayout } from './pdf-join-engine'
+import { executeRotatePage } from './pdf-rotate-engine'
 
 GlobalWorkerOptions.workerSrc = pdfWorker
 
@@ -115,6 +118,11 @@ const deletedPages = ref<Set<number>>(new Set())
 const isCropModalOpen = ref(false)
 const cropModalPage = ref(1)
 
+// Rotate modal state (arbitrary angle / deskew)
+const isRotateModalOpen = ref(false)
+const rotateModalPage = ref(1)
+const pageRotateCropToOriginal = ref<Record<number, boolean>>({})
+
 // Join modal state
 const isJoinModalOpen = ref(false)
 const joinModalPageA = ref(1)
@@ -146,6 +154,7 @@ async function loadPdf() {
 	isLoading.value = true
 	errorMessage.value = ''
 	pageRotations.value = []
+	pageRotateCropToOriginal.value = {}
 	pageCrops.value = {}
 	deletedPages.value = new Set()
 	hasAnyJoin.value = false
@@ -307,7 +316,7 @@ onUnmounted(() => {
 function rotatePage(pageIndex: number, deltaDeg: number) {
 	const current = pageRotations.value[pageIndex] ?? 0
 	const next = (current + deltaDeg) % 360
-	pageRotations.value[pageIndex] = (next + 360) % 360
+	pageRotations.value[pageIndex] = Math.round(((next + 360) % 360) * 10) / 10
 }
 
 function rotateAll(deltaDeg: number) {
@@ -320,10 +329,32 @@ function resetRotations() {
 	for (let i = 0; i < pageRotations.value.length; i++) {
 		pageRotations.value[i] = 0
 	}
+	pageRotateCropToOriginal.value = {}
+}
+
+function openRotateModal(pageNum: number) {
+	rotateModalPage.value = pageNum
+	isRotateModalOpen.value = true
+}
+
+function handleApplyCustomRotation(angle: number, scope: 'current' | 'all', cropToOriginalSize = false) {
+	const normalized = Math.round((((angle % 360) + 360) % 360) * 10) / 10
+	if (scope === 'all') {
+		for (let i = 0; i < pageRotations.value.length; i++) {
+			pageRotations.value[i] = normalized
+			pageRotateCropToOriginal.value[i + 1] = cropToOriginalSize
+		}
+	} else {
+		const idx = rotateModalPage.value - 1
+		if (idx >= 0 && idx < pageRotations.value.length) {
+			pageRotations.value[idx] = normalized
+			pageRotateCropToOriginal.value[rotateModalPage.value] = cropToOriginalSize
+		}
+	}
 }
 
 const hasAnyRotation = computed(() => {
-	return pageRotations.value.some((rot) => rot !== 0)
+	return pageRotations.value.some((rot) => Math.abs(rot) > 0.001)
 })
 
 // Split management
@@ -608,25 +639,44 @@ async function saveRotationsAndCrops() {
 			if (deletedPages.value.has(pageNum)) {
 				continue
 			}
-			const page = pages[i]
 
 			// 1. Calculate net rotation
 			const rotDelta = pageRotations.value[i] ?? 0
+			const crop = pageCrops.value[pageNum]
+			const hasCrop = crop && (crop.left > 0.005 || crop.top > 0.005 || crop.width < 0.995 || crop.height < 0.995)
+
+			const page = pdfDoc.getPage(i)
 			const currentAngle = page.getRotation()?.angle ?? 0
 			const netAngle = ((currentAngle + rotDelta) % 360 + 360) % 360
 
-			if (rotDelta !== 0) {
-				page.setRotation(degrees(netAngle))
-				modifiedRotations = true
-			}
+			const isMultipleOf90 = Math.abs(netAngle % 90) < 0.001 || Math.abs((netAngle % 90) - 90) < 0.001
 
-			// 2. Apply Crop if any, taking the net rotation into account
-			const crop = pageCrops.value[pageNum]
-			if (crop && (crop.left > 0.005 || crop.top > 0.005 || crop.width < 0.995 || crop.height < 0.995)) {
-				const { x: origX, y: origY, width: origW, height: origH } = page.getCropBox() ?? page.getMediaBox()
-				const box = computeCropBoxForRotation(origX, origY, origW, origH, crop, netAngle)
-				page.setCropBox(box.x, box.y, box.width, box.height)
-				modifiedCrops = true
+			if (!isMultipleOf90) {
+				const cropToOriginal = pageRotateCropToOriginal.value[pageNum] ?? false
+				// Arbitrary angle rotation via Form XObject embedding & transformation
+				await executeRotatePage(pdfDoc, {
+					pageIndex: i,
+					angleDegrees: rotDelta,
+					crop: hasCrop ? crop : undefined,
+					cropToOriginalSize: cropToOriginal,
+				})
+				modifiedRotations = true
+				if (hasCrop) {
+					modifiedCrops = true
+				}
+			} else {
+				if (rotDelta !== 0) {
+					page.setRotation(degrees(Math.round(netAngle / 90) * 90 % 360))
+					modifiedRotations = true
+				}
+
+				// 2. Apply Crop if any, taking the net rotation into account
+				if (hasCrop) {
+					const { x: origX, y: origY, width: origW, height: origH } = page.getCropBox() ?? page.getMediaBox()
+					const box = computeCropBoxForRotation(origX, origY, origW, origH, crop, netAngle)
+					page.setCropBox(box.x, box.y, box.width, box.height)
+					modifiedCrops = true
+				}
 			}
 		}
 
@@ -980,6 +1030,16 @@ watch(() => targetFile.value?.path, () => {
 							</template>
 							{{ t('mobilesheetsmanager', 'Rotate All 90° CCW') }}
 						</NcButton>
+						<NcButton
+							size="small"
+							variant="secondary"
+							:title="t('mobilesheetsmanager', 'Rotate by custom angle / fine deskew')"
+							@click="openRotateModal(1)">
+							<template #icon>
+								<Rotate360 :size="16" />
+							</template>
+							{{ t('mobilesheetsmanager', 'Rotate by Angle…') }}
+						</NcButton>
 						<NcButton size="small" variant="tertiary" :disabled="!hasAnyRotation" @click="resetRotations">
 							{{ t('mobilesheetsmanager', 'Reset All') }}
 						</NcButton>
@@ -1111,8 +1171,8 @@ watch(() => targetFile.value?.path, () => {
 						<div :class="$style.cardFooter">
 							<span :class="[$style.pageNumLabel, isPageDeleted(pageNum) && $style.pageNumLabelDeleted]">
 								{{ t('mobilesheetsmanager', 'p. {page}', { page: pageNum }) }}
-								<span v-if="pageRotations[pageNum - 1]" :class="$style.rotationBadge">
-									{{ pageRotations[pageNum - 1] }}°
+								<span v-if="Math.abs(pageRotations[pageNum - 1] || 0) > 0.001" :class="$style.rotationBadge">
+									{{ Math.round((pageRotations[pageNum - 1] || 0) * 10) / 10 }}°
 								</span>
 								<span v-if="activeMode === 'crop' && isPageCropped(pageNum)" :class="$style.cropBadge" :title="getCropIndicatorText(pageNum)">
 									{{ t('mobilesheetsmanager', 'Cropped') }}
@@ -1144,6 +1204,17 @@ watch(() => targetFile.value?.path, () => {
 									@click.stop="rotatePage(pageNum - 1, 90)">
 									<template #icon>
 										<RotateRight :size="16" />
+									</template>
+								</NcButton>
+								<NcButton
+									size="small"
+									variant="tertiary"
+									:disabled="isPageDeleted(pageNum)"
+									:title="t('mobilesheetsmanager', 'Rotate page {page} by custom angle', { page: pageNum })"
+									:aria-label="t('mobilesheetsmanager', 'Rotate page {page} by custom angle', { page: pageNum })"
+									@click.stop="openRotateModal(pageNum)">
+									<template #icon>
+										<Rotate360 :size="16" />
 									</template>
 								</NcButton>
 								<NcButton
@@ -1333,6 +1404,19 @@ watch(() => targetFile.value?.path, () => {
 			:page-crops="pageCrops"
 			:page-rotations="pageRotations"
 			@join="handleExecuteJoin" />
+
+		<!-- Custom Angle Rotate Modal -->
+		<SongPdfRotateModal
+			v-model:open="isRotateModalOpen"
+			:page-num="rotateModalPage"
+			:total-pages="totalPages"
+			:pdf="activePdfDoc"
+			:initial-angle="pageRotations[rotateModalPage - 1] || 0"
+			:initial-crop-to-original-size="pageRotateCropToOriginal[rotateModalPage] || false"
+			:all-pages-count="totalPages"
+			:crop="pageCrops[rotateModalPage]"
+			@apply="handleApplyCustomRotation"
+			@change-page="rotateModalPage = $event" />
 	</div>
 </template>
 
