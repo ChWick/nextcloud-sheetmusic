@@ -37,6 +37,16 @@
           <ContentSaveOutlineIcon :size="20" />
         </template>
       </NcButton>
+      <NcButton
+        v-if="isEditInUrl && openSong"
+        variant="primary"
+        :title="t('mobilesheetsmanager', 'Save and close')"
+        :aria-label="t('mobilesheetsmanager', 'Save and close')"
+        @click="songEditorRef?.saveSong(true)">
+        <template #icon>
+          <CheckIcon :size="20" />
+        </template>
+      </NcButton>
     </template>
     <template v-else-if="standaloneCreate">
       <NcButton

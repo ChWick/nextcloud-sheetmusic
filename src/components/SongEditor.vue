@@ -655,6 +655,19 @@ defineExpose({
 				</NcButton>
 
 				<NcButton
+					v-if="!isNewSong"
+					type="button"
+					variant="secondary"
+					:disabled="isSaving"
+					:title="t('mobilesheetsmanager', 'Save without closing')"
+					:aria-label="t('mobilesheetsmanager', 'Save without closing')"
+					@click="saveSong(false)">
+					<template #icon>
+						<ContentSaveOutlineIcon :size="20" />
+					</template>
+				</NcButton>
+
+				<NcButton
 					type="button"
 					variant="primary"
 					:disabled="isSaving"
@@ -662,8 +675,7 @@ defineExpose({
 					:aria-label="saveActionLabel"
 					@click="saveSong(true)">
 					<template #icon>
-						<CheckIcon v-if="isNewSong" :size="20" />
-						<ContentSaveOutlineIcon v-else :size="20" />
+						<CheckIcon :size="20" />
 					</template>
 				</NcButton>
 			</div>

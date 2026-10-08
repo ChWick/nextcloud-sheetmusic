@@ -678,4 +678,25 @@ describe('SongEditor.vue', () => {
 			},
 		)
 	})
+
+	it('renders both Save without closing and Save and Close buttons with proper titles for an existing song', async () => {
+		const wrapper = mount(SongEditor, {
+			props: {
+				song: mockExistingSong,
+				libraryId: 1,
+				composers: [],
+				books: [],
+				collections: [],
+				artists: [],
+			},
+			...globalStubs,
+		})
+
+		const buttons = wrapper.findAll('button')
+		const saveAndCloseBtn = buttons.find((b) => b.attributes('title')?.includes('Save and Close'))
+		const saveWithoutClosingBtn = buttons.find((b) => b.attributes('title')?.includes('Save without closing'))
+
+		expect(saveAndCloseBtn?.exists()).toBe(true)
+		expect(saveWithoutClosingBtn?.exists()).toBe(true)
+	})
 })
