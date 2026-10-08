@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Song, SongFile, Book, Composer, Collection, Artist, Genre, Key, CustomGroup, Year, Signature, SourceType, LibraryData } from '../../types/song'
-import { computed, nextTick, onMounted, ref, shallowRef, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
 import { generateFilePath } from '@nextcloud/router'
@@ -126,11 +126,6 @@ async function loadPdf() {
 	try {
 		const response = await axios.get(targetFile.value.path, {
 			responseType: 'arraybuffer',
-			params: { t: Date.now() },
-			headers: {
-				'Cache-Control': 'no-cache',
-				Pragma: 'no-cache',
-			},
 		})
 		const bytes = response.data instanceof ArrayBuffer ? new Uint8Array(response.data) : new Uint8Array(response.data)
 		// Store an independent clone of bytes so pdfjs worker transfer does not detach the array buffer
@@ -163,7 +158,7 @@ async function loadPdf() {
 		]
 
 		await nextTick()
-		await renderThumbnails(pdf)
+		initThumbnailObserver(pdf)
 	} catch (err: any) {
 		console.error('Failed to load PDF:', err)
 		errorMessage.value = t('mobilesheetsmanager', 'Failed to load PDF document: {error}', {
@@ -174,38 +169,87 @@ async function loadPdf() {
 	}
 }
 
-async function renderThumbnails(pdf: any) {
+let thumbnailObserver: IntersectionObserver | null = null
+const renderedThumbnails = new Set<number>()
+
+function cleanupThumbnailObserver() {
+	if (thumbnailObserver) {
+		thumbnailObserver.disconnect()
+		thumbnailObserver = null
+	}
+	renderedThumbnails.clear()
+}
+
+async function renderSingleThumbnail(pdf: any, pageNum: number) {
+	if (renderedThumbnails.has(pageNum)) return
+	renderedThumbnails.add(pageNum)
+
+	try {
+		const page = await pdf.getPage(pageNum)
+		const unscaledViewport = page.getViewport({ scale: 1.0 })
+		const targetWidth = 140
+		const scale = targetWidth / unscaledViewport.width
+		const viewport = page.getViewport({ scale })
+
+		const canvas = document.createElement('canvas')
+		canvas.width = Math.floor(viewport.width)
+		canvas.height = Math.floor(viewport.height)
+		canvas.className = 'mobilesheetsmanager-pdf-thumbnail-canvas'
+
+		const canvasContext = canvas.getContext('2d')
+		if (canvasContext) {
+			canvasContext.fillStyle = '#ffffff'
+			canvasContext.fillRect(0, 0, canvas.width, canvas.height)
+			await page.render({
+				canvasContext,
+				viewport,
+				background: 'rgb(255, 255, 255)',
+			}).promise
+		}
+		thumbnailCanvases.value[pageNum] = canvas
+
+		const container = thumbnailContainers.value[pageNum]
+		if (container) {
+			container.replaceChildren(canvas)
+		}
+	} catch (e) {
+		console.warn(`Could not render thumbnail for page ${pageNum}`, e)
+	}
+}
+
+function initThumbnailObserver(pdf: any) {
+	cleanupThumbnailObserver()
+
+	// If IntersectionObserver is not supported (e.g. basic mock test environment), render first 20 or all
+	if (typeof IntersectionObserver === 'undefined') {
+		for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+			renderSingleThumbnail(pdf, pageNum)
+		}
+		return
+	}
+
+	thumbnailObserver = new IntersectionObserver(
+		(entries) => {
+			for (const entry of entries) {
+				if (entry.isIntersecting) {
+					const pageNum = Number((entry.target as HTMLElement).dataset.pageNum)
+					if (pageNum && !renderedThumbnails.has(pageNum)) {
+						renderSingleThumbnail(pdf, pageNum)
+					}
+				}
+			}
+		},
+		{
+			rootMargin: '300px 0px 300px 0px', // preload ahead of scrolling
+		},
+	)
+
+	// Observe all registered containers that are currently attached
 	for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-		try {
-			const page = await pdf.getPage(pageNum)
-			const unscaledViewport = page.getViewport({ scale: 1.0 })
-			const targetWidth = 140
-			const scale = targetWidth / unscaledViewport.width
-			const viewport = page.getViewport({ scale })
-
-			const canvas = document.createElement('canvas')
-			canvas.width = Math.floor(viewport.width)
-			canvas.height = Math.floor(viewport.height)
-			canvas.className = 'mobilesheetsmanager-pdf-thumbnail-canvas'
-
-			const canvasContext = canvas.getContext('2d')
-			if (canvasContext) {
-				canvasContext.fillStyle = '#ffffff'
-				canvasContext.fillRect(0, 0, canvas.width, canvas.height)
-				await page.render({
-					canvasContext,
-					viewport,
-					background: 'rgb(255, 255, 255)',
-				}).promise
-			}
-			thumbnailCanvases.value[pageNum] = canvas
-
-			const container = thumbnailContainers.value[pageNum]
-			if (container) {
-				container.replaceChildren(canvas)
-			}
-		} catch (e) {
-			console.warn(`Could not render thumbnail for page ${pageNum}`, e)
+		const container = thumbnailContainers.value[pageNum]
+		if (container) {
+			container.dataset.pageNum = String(pageNum)
+			thumbnailObserver.observe(container)
 		}
 	}
 }
@@ -213,12 +257,19 @@ async function renderThumbnails(pdf: any) {
 function setContainerRef(pageNum: number, el: any) {
 	if (el) {
 		thumbnailContainers.value[pageNum] = el as HTMLElement
+		el.dataset.pageNum = String(pageNum)
 		const existingCanvas = thumbnailCanvases.value[pageNum]
 		if (existingCanvas && (!el.hasChildNodes() || el.firstChild !== existingCanvas)) {
 			el.replaceChildren(existingCanvas)
+		} else if (thumbnailObserver && !renderedThumbnails.has(pageNum)) {
+			thumbnailObserver.observe(el)
 		}
 	}
 }
+
+onUnmounted(() => {
+	cleanupThumbnailObserver()
+})
 
 // Rotation helpers
 function rotatePage(pageIndex: number, deltaDeg: number) {
