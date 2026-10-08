@@ -134,4 +134,43 @@ describe('EntitiesView.vue', () => {
 
 		expect(wrapper.text()).toContain('0 songs')
 	})
+
+	it('filters entities by text search input', async () => {
+		vi.mocked(axios.get).mockResolvedValueOnce({
+			data: {
+				ocs: {
+					data: {
+						songs: [],
+						composers: [
+							{ id: 1, name: 'Georg Friedrich Händel' },
+							{ id: 2, name: 'Johann Sebastian Bach' },
+							{ id: 3, name: 'Wolfgang Amadeus Mozart' },
+						],
+						books: [],
+						collections: [],
+						artists: [],
+					},
+				},
+			},
+		})
+
+		const wrapper = mount(EntitiesView, {
+			props: { selectedLibrary: 1, entityType: 'composers' },
+		})
+
+		await new Promise((r) => setTimeout(r, 10))
+
+		expect(wrapper.text()).toContain('Händel')
+		expect(wrapper.text()).toContain('Bach')
+		expect(wrapper.text()).toContain('Mozart')
+
+		const searchInput = wrapper.find('input')
+		expect(searchInput.exists()).toBe(true)
+
+		await searchInput.setValue('Händel')
+
+		expect(wrapper.text()).toContain('Händel')
+		expect(wrapper.text()).not.toContain('Bach')
+		expect(wrapper.text()).not.toContain('Mozart')
+	})
 })

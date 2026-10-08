@@ -2,34 +2,14 @@
   <ViewHeader
     :title="config.plural"
     :create-label="t('mobilesheetsmanager', 'New {entity}', { entity: config.singular })"
-    :filter-bar-visible="filterBarVisible"
-    @create="openCreateDialog"
-    @toggle-filters="toggleFilterBar" />
+    @create="openCreateDialog" />
   <div :class="$style.entitiesArea">
-    <div v-if="filterBarVisible" :class="$style.filterBarWrapper">
-      <SongFilterBar
-        v-model:without-files="withoutFiles"
-        v-model:selected-composers="selectedComposers"
-        v-model:selected-books="selectedBooks"
-        v-model:selected-collections="selectedCollections"
-        v-model:selected-artists="selectedArtists"
-        v-model:selected-genres="selectedGenres"
-        v-model:selected-keys="selectedKeys"
-        v-model:selected-custom-groups="selectedCustomGroups"
-        v-model:selected-years="selectedYears"
-        v-model:selected-signatures="selectedSignatures"
-        v-model:selected-source-types="selectedSourceTypes"
-        :composers="composers"
-        :books="books"
-        :collections="collections"
-        :artists="artists"
-        :genres="genres"
-        :keys="keys"
-        :custom-groups="customGroups"
-        :years="years"
-        :signatures="signatures"
-        :source-types="sourceTypes"
-        @clear="clearFilters" />
+    <div :class="$style.searchWrapper">
+      <NcTextField
+        v-model="searchQuery"
+        :placeholder="t('mobilesheetsmanager', 'Search {entities}…', { entities: config.plural.toLowerCase() })"
+        :label="t('mobilesheetsmanager', 'Search {entities}', { entities: config.plural.toLowerCase() })"
+        :class="$style.searchInput" />
     </div>
     <div :class="$style.listColumn">
       <ul :class="$style.entityList">
@@ -58,8 +38,8 @@
           </NcButton>
         </li>
         <li v-if="!isLoading && !fileError && visibleEntities.length === 0">
-          {{ hasActiveFilters && entities.length > 0
-            ? t('mobilesheetsmanager', 'No {entities} match the selected filters.', { entities: config.plural.toLowerCase() })
+          {{ searchQuery.trim() && entities.length > 0
+            ? t('mobilesheetsmanager', 'No {entities} match the search query.', { entities: config.plural.toLowerCase() })
             : t('mobilesheetsmanager', 'No {entities} in this library yet.', { entities: config.plural.toLowerCase() }) }}
         </li>
       </ul>
@@ -115,9 +95,7 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
-import SongFilterBar from './SongFilterBar.vue'
 import ViewHeader from './ViewHeader.vue'
-import { useSongFilters } from '../composables/useSongFilters'
 import { useLibraryData } from '../composables/useLibraryData'
 import { apiDelete, apiPost } from '../api/client'
 
@@ -252,15 +230,11 @@ const isDeleteDialogOpen = ref(false)
 const isCreating = ref(false)
 const isDeleting = ref(false)
 const revealedDeleteEntityId = ref<number | null>(null)
+const searchQuery = ref('')
 const newEntityName = ref('')
 const createError = ref('')
 const deleteError = ref('')
 let rowTouchStart: { x: number; y: number } | null = null
-
-// The filter bar reads and writes its selections in the URL query, so the browser
-// history restores them when going back or forward.
-const { selectedComposers, selectedBooks, selectedCollections, selectedArtists, selectedGenres, selectedKeys, selectedCustomGroups, selectedYears, selectedSignatures, selectedSourceTypes, withoutFiles, hasActiveFilters, filterSongs, clearFilters, filterBarVisible, toggleFilterBar } =
-  useSongFilters(() => ({ composers: composers.value, books: books.value, collections: collections.value, artists: artists.value, genres: genres.value, keys: keys.value, customGroups: customGroups.value, years: years.value, signatures: signatures.value, sourceTypes: sourceTypes.value }))
 
 /** Books carry a title, every other entity kind a name. */
 function entityLabel(entity: FilterEntity): string {
@@ -338,17 +312,13 @@ function handleRowTouchCancel() {
   rowTouchStart = null
 }
 
-/** Songs that match the filter bar selections. */
-const visibleSongs = computed(() => filterSongs(songs.value))
-
 /**
- * The entries this view lists. Filters hide the entries that no matching song
- * uses; without filters every entry is listed, even one not assigned to a song yet.
+ * The entries this view lists, filtered by the text search query.
  */
 const visibleEntities = computed(() => {
-  if (!hasActiveFilters.value) return entities.value
-  const usedIds = new Set(visibleSongs.value.flatMap(song => entitiesOfSong(song).map(entity => entity.id)))
-  return entities.value.filter(entity => usedIds.has(entity.id))
+  const query = searchQuery.value.trim().toLowerCase()
+  if (!query) return entities.value
+  return entities.value.filter(entity => entityLabel(entity).toLowerCase().includes(query))
 })
 
 // Watch for library or entity kind changes
@@ -452,8 +422,11 @@ async function deleteEntity() {
   gap: 16px;
   min-width: 0;
 }
-.filterBarWrapper {
-  margin-bottom: 4px;
+.searchWrapper {
+  max-width: 400px;
+}
+.searchInput {
+  width: 100%;
 }
 .entityList {
   display: grid;
