@@ -332,7 +332,8 @@ describe('SongViewer.vue', () => {
 
 		const img = wrapper.find('img')
 		expect(img.exists()).toBe(true)
-		expect(img.attributes('src')).toBe('/dav/files/admin/Noten/sheet.png')
+		expect(img.attributes('src')).toContain('/dav/files/admin/Noten/sheet.png')
+		expect(img.attributes('src')).toMatch(/\?t=101--\d+/)
 
 		// Toolbar should be visible with zoom and rotate
 		const zoomInBtn = wrapper.findAll('button').find((btn) => btn.attributes('title') === 'Zoom in')
@@ -347,5 +348,59 @@ describe('SongViewer.vue', () => {
 
 		// Image should have transform applied
 		expect(img.attributes('style')).toContain('rotate(90deg)')
+	})
+
+	it('updates preview cache-buster and requests fresh file after saving edited song', async () => {
+		const wrapper = mount(SongViewer, {
+			props: { song: mockSong, libraryId: 1 },
+			...globalStubs,
+		})
+
+		await settle()
+		expect(axios.get).toHaveBeenCalledTimes(1)
+		const initialUrl = vi.mocked(axios.get).mock.calls[0][0]
+		expect(initialUrl).toContain('/dav/files/admin/Noten/TestSonata.pdf')
+		expect(initialUrl).toMatch(/\?t=100--\d+/)
+
+		// Open editor
+		const editBtn = wrapper.findAll('button').find((btn) => btn.attributes('title') === 'Edit song')
+		await editBtn!.trigger('click')
+		await settle()
+
+		// Save editor
+		const saveBtn = wrapper.find('.save-btn')
+		await saveBtn.trigger('click')
+		await settle()
+
+		expect(axios.get).toHaveBeenCalledTimes(2)
+		const postSaveUrl = vi.mocked(axios.get).mock.calls[1][0]
+		expect(postSaveUrl).toContain('/dav/files/admin/Noten/TestSonata.pdf')
+		// The timestamp query parameter in postSaveUrl must be updated
+		expect(postSaveUrl).not.toBe(initialUrl)
+	})
+
+	it('updates preview cache-buster when song prop changes', async () => {
+		const wrapper = mount(SongViewer, {
+			props: { song: mockSong, libraryId: 1 },
+			...globalStubs,
+		})
+
+		await settle()
+		expect(axios.get).toHaveBeenCalledTimes(1)
+		const initialUrl = vi.mocked(axios.get).mock.calls[0][0]
+
+		// Update song prop with updated lastModified timestamp
+		await wrapper.setProps({
+			song: {
+				...mockSong,
+				lastModified: 1700000000,
+			},
+		})
+		await settle()
+
+		expect(axios.get).toHaveBeenCalledTimes(2)
+		const updatedUrl = vi.mocked(axios.get).mock.calls[1][0]
+		expect(updatedUrl).toContain('1700000000')
+		expect(updatedUrl).not.toBe(initialUrl)
 	})
 })

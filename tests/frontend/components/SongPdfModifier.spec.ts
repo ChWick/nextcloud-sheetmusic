@@ -186,7 +186,7 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		expect(wrapper.text()).toContain('p. 8')
 
 		const axios = (await import('@nextcloud/axios')).default
-		expect(axios.get).toHaveBeenCalledWith('/files/nextcloud-guide.pdf', {
+		expect(axios.get).toHaveBeenCalledWith(expect.stringContaining('/files/nextcloud-guide.pdf'), {
 			responseType: 'arraybuffer',
 		})
 	})
