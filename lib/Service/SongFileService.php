@@ -90,7 +90,7 @@ class SongFileService {
 
 		$autoPaths = $this->libraryService->isAutoPathsEnabled($user->getUID(), $libraryId);
 		$targetRelative = $this->resolveDestinationPath($userFolder, $libraryDir, $fileName, $autoPaths);
-		$this->fileManager->ensureParentFolder($userFolder, $targetRelative);
+		$this->ensureParentFolder($userFolder, $targetRelative);
 		$targetFile = $userFolder->newFile($targetRelative);
 		$targetFile->putContent($content);
 
@@ -279,7 +279,7 @@ class SongFileService {
 	}
 
 	/**
-	 * @return array{databasePath: string, userFolder: IUserFolder, targetFolder: Folder, libraryDir: string}|null
+	 * @return array{databasePath: string, userFolder: Folder, targetFolder: Folder, libraryDir: string}|null
 	 */
 	private function resolveLibraryTarget(IUser $user, int $libraryId): ?array {
 		$paths = $this->libraryService->getLibraryAndDatabasePath($user->getUID(), $libraryId);
@@ -304,7 +304,7 @@ class SongFileService {
 	}
 
 	private function resolveDestinationPath(
-		IUserFolder $userFolder,
+		Folder $userFolder,
 		string $libraryDir,
 		string $fileName,
 		bool $autoPaths,
@@ -318,6 +318,24 @@ class SongFileService {
 		}
 
 		return $this->fileManager->uniqueRelativePath($userFolder, $targetRelative);
+	}
+
+	private function ensureParentFolder(Folder $userFolder, string $targetRelative): void {
+		$parent = str_replace(DIRECTORY_SEPARATOR, '/', dirname($targetRelative));
+		if ($parent === '' || $parent === '.' || $parent === '/') {
+			return;
+		}
+
+		$current = '';
+		foreach (explode('/', $parent) as $segment) {
+			if ($segment === '') {
+				continue;
+			}
+			$current = $current === '' ? $segment : "$current/$segment";
+			if (!$userFolder->nodeExists($current)) {
+				$userFolder->newFolder($current);
+			}
+		}
 	}
 
 	private function recordSongFile(

@@ -92,6 +92,12 @@ final class SongFileServiceTest extends TestCase {
 			return $this->fakeFileNode($clean);
 		});
 
+		$this->userFolder->method('newFolder')->willReturnCallback(function (string $path): Folder {
+			$clean = ltrim($path, '/');
+			$this->folders[$clean] = true;
+			return $this->fakeFolderNode($clean);
+		});
+
 		$this->userFolder->method('newFile')->willReturnCallback(function (string $path): File {
 			$clean = ltrim($path, '/');
 			if (isset($this->files[$clean])) {
@@ -387,7 +393,12 @@ final class SongFileServiceTest extends TestCase {
 		$targetFolder = $this->createMock(Folder::class);
 		$rootFolder = $this->createMock(IRootFolder::class);
 		$rootFolder->method('getUserFolder')->with(self::UID)->willReturn($userFolder);
-		$userFolder->method('nodeExists')->with('Noten/new.pdf')->willReturn(false);
+		$userFolder->method('nodeExists')->willReturnCallback(function (string $path): bool {
+			if ($path === 'Noten') {
+				return true;
+			}
+			return false;
+		});
 
 		$file = $this->createMock(File::class);
 		$file->method('getPath')->willReturn('/user1/files/Noten/new.pdf');

@@ -7,6 +7,7 @@ namespace TestSupport;
 use OCA\MobileSheetsManager\Db\LibraryMapper;
 use OCA\MobileSheetsManager\Db\SongMapper;
 use OCA\MobileSheetsManager\Service\LibraryService;
+use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\Files\IUserFolder;
 use OCP\Files\Node;
@@ -54,7 +55,7 @@ trait TestUtils {
 		$databaseNode->method('getStorage')->willReturn($storage);
 		$databaseNode->method('getInternalPath')->willReturn('files/' . ltrim($libraryPath, '/'));
 
-		$userFolder = $this->createMock(IUserFolder::class);
+		$userFolder = $this->createMock(\OCP\Files\IUserFolder::class);
 		$userFolder->method('get')->with(ltrim($libraryPath, '/'))->willReturn($databaseNode);
 
 		$rootFolder = $this->createMock(IRootFolder::class);
