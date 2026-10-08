@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { PDFDocument, rgb } from 'pdf-lib'
+import { PDFDocument, rgb, degrees } from 'pdf-lib'
 import fs from 'node:fs'
 import path from 'node:path'
-import type { PageCrop } from '../../../src/components/song-pdf/crop-types'
+import { computeCropBoxForRotation, type PageCrop } from '../../../src/components/song-pdf/crop-types'
 
 /**
  * Pure PDF Crop Engine tests.
@@ -157,6 +157,52 @@ describe('PDF Crop Engine (Real PDF documents & zero mocks)', () => {
 		// MediaBox of all pages is unaltered
 		expect(p1.getMediaBox().width).toBeCloseTo(595.276, 1)
 		expect(p2.getMediaBox().width).toBeCloseTo(1190.55, 1)
+	})
+
+	it('supports cropping and rotating in one step across all 4 rotation angles', async () => {
+		const doc = await PDFDocument.create()
+		const p0 = doc.addPage([200, 400])
+		const p90 = doc.addPage([200, 400])
+		const p180 = doc.addPage([200, 400])
+		const p270 = doc.addPage([200, 400])
+
+		p0.setRotation(degrees(0))
+		p90.setRotation(degrees(90))
+		p180.setRotation(degrees(180))
+		p270.setRotation(degrees(270))
+
+		// User crops 10% left, 20% top, 60% width, 50% height on the displayed canvas
+		const crop: PageCrop = { left: 0.1, top: 0.2, width: 0.6, height: 0.5 }
+
+		for (const [page, rot] of [[p0, 0], [p90, 90], [p180, 180], [p270, 270]] as const) {
+			const { x, y, width: origW, height: origH } = page.getCropBox()
+			const box = computeCropBoxForRotation(x, y, origW, origH, crop, rot)
+			page.setCropBox(box.x, box.y, box.width, box.height)
+		}
+
+		const savedBytes = await doc.save()
+		const reloaded = await PDFDocument.load(savedBytes)
+		expect(reloaded.getPageCount()).toBe(4)
+
+		// Page 0 (rot 0):
+		const r0 = reloaded.getPage(0)
+		expect(r0.getRotation().angle).toBe(0)
+		expect(r0.getCropBox()).toEqual({ x: 20, y: 120, width: 120, height: 200 })
+
+		// Page 1 (rot 90):
+		const r90 = reloaded.getPage(1)
+		expect(r90.getRotation().angle).toBe(90)
+		expect(r90.getCropBox()).toEqual({ x: 40, y: 40, width: 100, height: 240 })
+
+		// Page 2 (rot 180):
+		const r180 = reloaded.getPage(2)
+		expect(r180.getRotation().angle).toBe(180)
+		expect(r180.getCropBox()).toEqual({ x: 60, y: 80, width: 120, height: 200 })
+
+		// Page 3 (rot 270):
+		const r270 = reloaded.getPage(3)
+		expect(r270.getRotation().angle).toBe(270)
+		expect(r270.getCropBox()).toEqual({ x: 60, y: 120, width: 100, height: 240 })
 	})
 })
 

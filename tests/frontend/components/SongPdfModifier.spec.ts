@@ -607,4 +607,72 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 			expect(page.getCropBox().height).toBeCloseTo(841.89 * 0.9, 1)
 		}
 	})
+
+	it('supports rotating and cropping simultaneously in one step and saves both modifications', async () => {
+		const wrapper = mount(SongPdfModifier, {
+			props: {
+				song: mockSong,
+				libraryId: 1,
+			},
+		})
+
+		await flushPromises()
+
+		// 1. In Rotate mode: Rotate page 1 by 90° CW
+		const rotateCwBtn = wrapper.findAll('button').find((b) => b.attributes('title')?.includes('Rotate page 90° CW'))
+		expect(rotateCwBtn).toBeDefined()
+		await rotateCwBtn?.trigger('click')
+		await flushPromises()
+
+		// 2. Switch to Crop mode
+		const cropTab = wrapper.findAll('button').find((b) => b.text().includes('Crop Pages'))
+		await cropTab?.trigger('click')
+		await flushPromises()
+
+		// 3. Open Crop modal for page 1
+		const page1CropBtn = wrapper.findAll('button').find((b) => b.attributes('title')?.includes('Crop page 1'))
+		expect(page1CropBtn).toBeDefined()
+		await page1CropBtn?.trigger('click')
+		await flushPromises()
+
+		const cropModal = wrapper.findComponent({ name: 'SongPdfCropModal' })
+		expect(cropModal.exists()).toBe(true)
+		// Verify rotation was passed to crop modal
+		expect(cropModal.props('rotation')).toBe(90)
+
+		// Apply crop with 10% margins to page 1
+		cropModal.vm.$emit('apply', { left: 0.1, top: 0.1, width: 0.8, height: 0.8 }, 'current')
+		await flushPromises()
+
+		// 4. Save modifications
+		const saveBtn = wrapper.findAll('button').find((b) => b.text().includes('Save Crops') || b.text().includes('Save Changes'))
+		expect(saveBtn).toBeDefined()
+		expect(saveBtn?.attributes('disabled')).toBeUndefined()
+
+		await saveBtn?.trigger('click')
+		await flushPromises()
+		await new Promise((r) => setTimeout(r, 50))
+		await flushPromises()
+
+		// 5. Verify single upload containing BOTH rotation and crop applied
+		expect(uploadedFiles).toHaveLength(1)
+		const arrayBuffer = await uploadedFiles[0].file.arrayBuffer()
+		const savedPdf = await PDFDocument.load(arrayBuffer)
+
+		const page1 = savedPdf.getPage(0)
+		// Check that page 1 has 90° rotation
+		expect(page1.getRotation().angle).toBe(90)
+
+		// Check that page 1 has rotation-aware CropBox applied
+		// For 90° rotation:
+		// x = origX + origW * crop.top = 0 + 595.276 * 0.1 = 59.5276
+		// y = origY + origH * crop.left = 0 + 841.89 * 0.1 = 84.189
+		// width = origW * crop.height = 595.276 * 0.8 = 476.2208
+		// height = origH * crop.width = 841.89 * 0.8 = 673.512
+		const cropBox = page1.getCropBox()
+		expect(cropBox.x).toBeCloseTo(595.28 * 0.1, 1)
+		expect(cropBox.y).toBeCloseTo(841.89 * 0.1, 1)
+		expect(cropBox.width).toBeCloseTo(595.28 * 0.8, 1)
+		expect(cropBox.height).toBeCloseTo(841.89 * 0.8, 1)
+	})
 })

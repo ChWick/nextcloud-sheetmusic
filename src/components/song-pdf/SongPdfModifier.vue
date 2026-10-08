@@ -29,7 +29,7 @@ import CheckboxMarkedCircleOutline from 'vue-material-design-icons/CheckboxMarke
 import CropIcon from 'vue-material-design-icons/Crop.vue'
 import ArrowRight from 'vue-material-design-icons/ArrowRight.vue'
 import SongPdfCropModal from './SongPdfCropModal.vue'
-import type { PageCrop } from './crop-types'
+import { computeCropBoxForRotation, type PageCrop } from './crop-types'
 
 GlobalWorkerOptions.workerSrc = pdfWorker
 
@@ -424,8 +424,8 @@ function getCropIndicatorText(pageNum: number): string {
 	return `${top}% ${right}% ${bottom}% ${left}%`
 }
 
-// Saving Rotated PDF
-async function saveRotations() {
+// Saving Rotated and/or Cropped PDF
+async function saveRotationsAndCrops() {
 	if (!originalPdfBytes.value || !targetFile.value) return
 	isSaving.value = true
 	errorMessage.value = ''
@@ -434,90 +434,34 @@ async function saveRotations() {
 		const pdfDoc = await PDFDocument.load(originalPdfBytes.value)
 		const pages = pdfDoc.getPages()
 
-		let modified = false
+		let modifiedRotations = false
+		let modifiedCrops = false
 		for (let i = 0; i < pages.length; i++) {
-			const rot = pageRotations.value[i] ?? 0
-			if (rot !== 0) {
-				const currentAngle = pages[i].getRotation()?.angle ?? 0
-				pages[i].setRotation(degrees(((currentAngle + rot) % 360 + 360) % 360))
-				modified = true
-			}
-		}
-
-		if (!modified) {
-			showSuccess(t('mobilesheetsmanager', 'No changes to rotate.'))
-			isSaving.value = false
-			return
-		}
-
-		const modifiedBytes = await pdfDoc.save()
-		const fileName = getFileName(targetFile.value.path) || 'modified.pdf'
-		const modifiedFile = new File([modifiedBytes as Uint8Array<ArrayBuffer>], fileName, { type: 'application/pdf' })
-
-		// Upload the rotated file to replace / update
-		// 1. Delete original file
-		await apiPost('/api/songs/{id}/file/{fileId}/delete', {
-			libraryId: props.libraryId,
-		}, {
-			pathParams: { id: props.song.id, fileId: targetFile.value.id },
-		})
-
-		// 2. Upload replacement file
-		const formData = new FormData()
-		formData.append('file', modifiedFile)
-		const uploadRes = await apiPost('/api/libraries/{libraryId}/songs/{id}/file/upload', formData as any, {
-			pathParams: { libraryId: props.libraryId, id: props.song.id },
-		})
-
-		const data = uploadRes.data.ocs.data as LibraryData
-		showSuccess(t('mobilesheetsmanager', 'Rotated PDF saved successfully.'))
-		emit('saved', data, props.song.id)
-	} catch (err: any) {
-		console.error('Failed to save rotated PDF:', err)
-		const detail = describeRequestFailure(err, err?.message ?? String(err))
-		errorMessage.value = t('mobilesheetsmanager', 'Failed to save rotated PDF: {error}', {
-			error: detail,
-		})
-		showError(errorMessage.value)
-	} finally {
-		isSaving.value = false
-	}
-}
-
-// Saving Cropped PDF
-async function saveCrops() {
-	if (!originalPdfBytes.value || !targetFile.value) return
-	isSaving.value = true
-	errorMessage.value = ''
-
-	try {
-		const pdfDoc = await PDFDocument.load(originalPdfBytes.value)
-		const pages = pdfDoc.getPages()
-
-		let modified = false
-		for (let i = 0; i < pages.length; i++) {
+			const page = pages[i]
 			const pageNum = i + 1
+
+			// 1. Calculate net rotation
+			const rotDelta = pageRotations.value[i] ?? 0
+			const currentAngle = page.getRotation()?.angle ?? 0
+			const netAngle = ((currentAngle + rotDelta) % 360 + 360) % 360
+
+			if (rotDelta !== 0) {
+				page.setRotation(degrees(netAngle))
+				modifiedRotations = true
+			}
+
+			// 2. Apply Crop if any, taking the net rotation into account
 			const crop = pageCrops.value[pageNum]
-			if (!crop) continue
-
-			if (crop.left > 0.005 || crop.top > 0.005 || crop.width < 0.995 || crop.height < 0.995) {
-				const page = pages[i]
-				const { x, y, width: origW, height: origH } = page.getCropBox()
-
-				// Normalized coordinates: left, top, width, height (top is 0 at top of displayed page)
-				// In PDF user space, y=0 is at bottom, so y_new = y + origH * (1 - top - height)
-				const newX = x + origW * crop.left
-				const newY = y + origH * (1 - crop.top - crop.height)
-				const newW = origW * crop.width
-				const newH = origH * crop.height
-
-				page.setCropBox(newX, newY, newW, newH)
-				modified = true
+			if (crop && (crop.left > 0.005 || crop.top > 0.005 || crop.width < 0.995 || crop.height < 0.995)) {
+				const { x: origX, y: origY, width: origW, height: origH } = page.getCropBox() ?? page.getMediaBox()
+				const box = computeCropBoxForRotation(origX, origY, origW, origH, crop, netAngle)
+				page.setCropBox(box.x, box.y, box.width, box.height)
+				modifiedCrops = true
 			}
 		}
 
-		if (!modified) {
-			showSuccess(t('mobilesheetsmanager', 'No changes to crop.'))
+		if (!modifiedRotations && !modifiedCrops) {
+			showSuccess(t('mobilesheetsmanager', 'No changes to save.'))
 			isSaving.value = false
 			return
 		}
@@ -526,7 +470,7 @@ async function saveCrops() {
 		const fileName = getFileName(targetFile.value.path) || 'modified.pdf'
 		const modifiedFile = new File([modifiedBytes as Uint8Array<ArrayBuffer>], fileName, { type: 'application/pdf' })
 
-		// Upload the cropped file to replace / update
+		// Upload the modified file to replace / update
 		// 1. Delete original file
 		await apiPost('/api/songs/{id}/file/{fileId}/delete', {
 			libraryId: props.libraryId,
@@ -542,12 +486,17 @@ async function saveCrops() {
 		})
 
 		const data = uploadRes.data.ocs.data as LibraryData
-		showSuccess(t('mobilesheetsmanager', 'Cropped PDF saved successfully.'))
+		const successMsg = (modifiedRotations && modifiedCrops)
+			? t('mobilesheetsmanager', 'PDF changes saved successfully.')
+			: modifiedRotations
+				? t('mobilesheetsmanager', 'Rotated PDF saved successfully.')
+				: t('mobilesheetsmanager', 'Cropped PDF saved successfully.')
+		showSuccess(successMsg)
 		emit('saved', data, props.song.id)
 	} catch (err: any) {
-		console.error('Failed to save cropped PDF:', err)
+		console.error('Failed to save modified PDF:', err)
 		const detail = describeRequestFailure(err, err?.message ?? String(err))
-		errorMessage.value = t('mobilesheetsmanager', 'Failed to save cropped PDF: {error}', {
+		errorMessage.value = t('mobilesheetsmanager', 'Failed to save PDF: {error}', {
 			error: detail,
 		})
 		showError(errorMessage.value)
@@ -555,6 +504,9 @@ async function saveCrops() {
 		isSaving.value = false
 	}
 }
+
+const saveRotations = saveRotationsAndCrops
+const saveCrops = saveRotationsAndCrops
 
 // Saving Split PDF Segments
 async function saveSplits() {
@@ -771,7 +723,7 @@ watch(() => targetFile.value?.path, () => {
 				<NcButton
 					v-if="activeMode === 'rotate'"
 					variant="primary"
-					:disabled="isSaving || isLoading || !hasAnyRotation"
+					:disabled="isSaving || isLoading || (!hasAnyRotation && !hasAnyCrop)"
 					:title="t('mobilesheetsmanager', 'Save rotated PDF')"
 					@click="saveRotations">
 					<template #icon>
@@ -783,7 +735,7 @@ watch(() => targetFile.value?.path, () => {
 				<NcButton
 					v-else-if="activeMode === 'crop'"
 					variant="primary"
-					:disabled="isSaving || isLoading || !hasAnyCrop"
+					:disabled="isSaving || isLoading || (!hasAnyCrop && !hasAnyRotation)"
 					:title="t('mobilesheetsmanager', 'Save cropped PDF')"
 					@click="saveCrops">
 					<template #icon>

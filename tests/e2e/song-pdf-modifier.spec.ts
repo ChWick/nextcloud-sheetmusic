@@ -153,5 +153,45 @@ test.describe('Song PDF Modifier & Cropping E2E Flow', () => {
 		// Header save button is active
 		await expect(page.getByRole('button', { name: 'Save Crops' })).toBeEnabled()
 	})
+
+	test('supports rotating and cropping simultaneously in one step and saves both', async ({ page }) => {
+		await page.goto('/#/library/1/songs?song=5&modifyPdf=1')
+
+		// 1. In Rotate mode: rotate page 1 clockwise 90°
+		const rotateCwBtn = page.getByTitle('Rotate page 90° CW').first()
+		await expect(rotateCwBtn).toBeVisible()
+		await rotateCwBtn.click()
+
+		// Verify 90° rotation badge is visible on page 1
+		await expect(page.getByText('90°').first()).toBeVisible()
+
+		// 2. Switch to Crop Pages tab
+		const cropTab = page.getByRole('button', { name: 'Crop Pages' })
+		await cropTab.click()
+
+		// 3. Open Crop modal for page 1
+		const page1CropBtn = page.getByTitle('Crop page 1').first()
+		await page1CropBtn.click()
+
+		const cropDialog = page.getByRole('dialog')
+		await expect(cropDialog).toBeVisible()
+
+		// Apply Trim 5% preset
+		await cropDialog.getByRole('button', { name: 'Trim 5%' }).click()
+		await cropDialog.getByRole('button', { name: 'Apply Crop' }).click()
+		await expect(cropDialog).toBeHidden()
+
+		// Verify both badges ("90°" and "Cropped") are visible on page 1
+		await expect(page.getByText('90°').first()).toBeVisible()
+		await expect(page.getByText('Cropped').first()).toBeVisible()
+
+		// 4. Save modifications
+		const saveBtn = page.getByRole('button', { name: /Save Crops|Save Changes/i })
+		await expect(saveBtn).toBeEnabled()
+		await saveBtn.click()
+
+		// 5. Verify success toast
+		await expect(page.getByText(/saved successfully/i).first()).toBeVisible()
+	})
 })
 
