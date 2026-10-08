@@ -12,7 +12,7 @@ import NcRadioGroup from '@nextcloud/vue/components/NcRadioGroup'
 import NcRadioGroupButton from '@nextcloud/vue/components/NcRadioGroupButton'
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist'
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
-import { getFileName, openFileExternally } from '../utils/file'
+import { getCacheBustedFileUrl, getFileName, openFileExternally } from '../utils/file'
 import { describeRequestFailure } from '../utils/api'
 import { formatDifficulty, formatDuration, formatStars } from '../utils/song-formatter'
 import { apiDelete } from '../api/client'
@@ -127,8 +127,13 @@ function handleSaved(data: LibraryData, songId?: number) {
 	emit('saved', data, songId)
 }
 
+const previewFilePath = computed(() => {
+	if (!selectedFile.value?.path) return ''
+	return getCacheBustedFileUrl(selectedFile.value.path, `${selectedFile.value.id}-${props.song?.lastModified ?? ''}`)
+})
+
 function openInExternalViewer() {
-	const filePath = selectedFile.value?.path
+	const filePath = previewFilePath.value || selectedFile.value?.path
 	if (filePath) {
 		openFileExternally(filePath)
 	}
@@ -407,7 +412,7 @@ defineExpose({
 			<FilePreviewer
 				v-if="selectedFile?.path"
 				:key="`${selectedFile.id}-${selectedFile.path}-${song?.lastModified ?? ''}`"
-				:file-path="selectedFile.path"
+				:file-path="previewFilePath"
 				:show-external-button="false" />
 			<div v-else :class="$style.error">
 				{{ t('mobilesheetsmanager', 'No file available for this song.') }}

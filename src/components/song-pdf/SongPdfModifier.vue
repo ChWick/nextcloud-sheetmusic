@@ -13,7 +13,7 @@ import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { PDFDocument, degrees } from 'pdf-lib'
 import { apiDelete, apiPost } from '../../api/client'
 import { showError, showSuccess } from '@nextcloud/dialogs'
-import { getFileName } from '../../utils/file'
+import { getCacheBustedFileUrl, getFileName } from '../../utils/file'
 import { describeRequestFailure } from '../../utils/api'
 import OriginalSongActionSelector, { type OriginalSongAction } from './OriginalSongActionSelector.vue'
 
@@ -125,7 +125,8 @@ async function loadPdf() {
 	selectedPages.value = []
 
 	try {
-		const response = await axios.get(targetFile.value.path, {
+		const targetUrl = getCacheBustedFileUrl(targetFile.value.path, `${targetFile.value.id}-${props.song.lastModified ?? ''}`)
+		const response = await axios.get(targetUrl, {
 			responseType: 'arraybuffer',
 		})
 		const bytes = response.data instanceof ArrayBuffer ? new Uint8Array(response.data) : new Uint8Array(response.data)

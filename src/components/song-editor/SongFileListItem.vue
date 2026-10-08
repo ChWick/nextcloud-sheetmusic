@@ -12,7 +12,7 @@ import FileIcon from 'vue-material-design-icons/File.vue'
 import MusicIcon from 'vue-material-design-icons/Music.vue'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import { getFileName } from '../../utils/file'
+import { getCacheBustedFileUrl, getFileName } from '../../utils/file'
 
 GlobalWorkerOptions.workerSrc = pdfWorker
 
@@ -46,7 +46,8 @@ async function loadPdfThumbnail() {
 	thumbnailContainer.value.replaceChildren()
 
 	try {
-		const response = await axios.get(props.file.path, {
+		const targetUrl = getCacheBustedFileUrl(props.file.path, props.file.id)
+		const response = await axios.get(targetUrl, {
 			responseType: 'arraybuffer',
 		})
 
@@ -113,7 +114,7 @@ watch(() => props.file.path, () => {
 				<FileIcon :size="24" :class="$style.fallbackIcon" />
 			</div>
 			<div v-else-if="isImage" :class="$style.thumbSlot">
-				<img :src="file.path" :alt="getFileName(file.path)" :class="$style.imgThumb" />
+				<img :src="getCacheBustedFileUrl(file.path, file.id)" :alt="getFileName(file.path)" :class="$style.imgThumb" />
 			</div>
 			<div v-else-if="isAudio" :class="$style.thumbSlot">
 				<MusicIcon :size="24" :class="$style.fallbackIcon" />

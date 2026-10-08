@@ -11,3 +11,15 @@ export function getFileName(filePath: string): string {
 export function openFileExternally(filePath: string): void {
 	window.open(filePath, '_blank', 'noopener,noreferrer')
 }
+
+/**
+ * Appends a cache-busting timestamp query parameter to a file path or URL.
+ */
+export function getCacheBustedFileUrl(filePath: string, version?: number | string | null): string {
+	if (!filePath) {
+		return filePath
+	}
+	const v = version ?? Date.now()
+	const separator = filePath.includes('?') ? '&' : '?'
+	return `${filePath}${separator}t=${v}`
+}

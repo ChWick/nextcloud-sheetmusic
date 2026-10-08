@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { getFileName, openFileExternally } from '../../../src/utils/file'
+import { getCacheBustedFileUrl, getFileName, openFileExternally } from '../../../src/utils/file'
 
 describe('file utils', () => {
 	describe('getFileName', () => {
@@ -32,4 +32,21 @@ describe('file utils', () => {
 			openSpy.mockRestore()
 		})
 	})
+
+	describe('getCacheBustedFileUrl', () => {
+		it('appends timestamp query parameter to path', () => {
+			const url = getCacheBustedFileUrl('/path/to/file.pdf', 12345)
+			expect(url).toBe('/path/to/file.pdf?t=12345')
+		})
+
+		it('appends with ampersand if url already has query parameters', () => {
+			const url = getCacheBustedFileUrl('/path/to/file.pdf?download=1', 'v2')
+			expect(url).toBe('/path/to/file.pdf?download=1&t=v2')
+		})
+
+		it('handles empty string gracefully', () => {
+			expect(getCacheBustedFileUrl('')).toBe('')
+		})
+	})
 })
+
