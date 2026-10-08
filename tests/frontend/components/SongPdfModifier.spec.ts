@@ -431,9 +431,20 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 
 		await flushPromises()
 
-		const cancelBtn = wrapper.findAll('button').find((b) => b.text().includes('Cancel'))
-		await cancelBtn?.trigger('click')
-
 		expect(wrapper.emitted('cancel')).toBeTruthy()
+	})
+
+	it('configures thumbnail containers with dataset pageNum for lazy observer loading', async () => {
+		const wrapper = mount(SongPdfModifier, {
+			props: {
+				song: mockSong,
+				libraryId: 1,
+			},
+		})
+
+		await flushPromises()
+
+		const thumbnailSlots = wrapper.findAll('.mobilesheetsmanager-pdf-thumbnail-canvas, div[data-page-num]')
+		expect(thumbnailSlots.length).toBeGreaterThan(0)
 	})
 })

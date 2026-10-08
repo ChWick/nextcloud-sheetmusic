@@ -54,7 +54,7 @@ describe('FilePreviewer.vue', () => {
 		openSpy.mockRestore()
 	})
 
-	it('fetches PDF with cache buster and no-cache headers', async () => {
+	it('fetches PDF with standard arraybuffer responseType without cache busting headers', async () => {
 		const axios = (await import('@nextcloud/axios')).default
 		mount(FilePreviewer, {
 			props: {
@@ -65,12 +65,58 @@ describe('FilePreviewer.vue', () => {
 
 		expect(axios.get).toHaveBeenCalledWith('/files/scores/Test.pdf', {
 			responseType: 'arraybuffer',
-			params: { t: expect.any(Number) },
-			headers: {
-				'Cache-Control': 'no-cache',
-				Pragma: 'no-cache',
+		})
+	})
+
+	it('automatically defaults to single page layout when PDF has more than 30 pages', async () => {
+		const pdfjs = await import('pdfjs-dist')
+		vi.mocked(pdfjs.getDocument).mockReturnValueOnce({
+			promise: Promise.resolve({
+				numPages: 160,
+				getPage: vi.fn().mockResolvedValue({
+					rotate: 0,
+					getViewport: vi.fn().mockReturnValue({ width: 600, height: 800 }),
+					render: vi.fn().mockReturnValue({ promise: Promise.resolve() }),
+				}),
+			}),
+		} as any)
+
+		const wrapper = mount(FilePreviewer, {
+			props: {
+				filePath: '/files/scores/LargeJoshua.pdf',
 			},
 		})
+		await flushPromises()
+
+		// Verify page display indicates single page mode (page 1 of 160)
+		expect(wrapper.text()).toContain('Page 1 of 160')
+	})
+
+	it('creates placeholders with IntersectionObserver for continuous layout mode', async () => {
+		const pdfjs = await import('pdfjs-dist')
+		vi.mocked(pdfjs.getDocument).mockReturnValueOnce({
+			promise: Promise.resolve({
+				numPages: 5,
+				getPage: vi.fn().mockResolvedValue({
+					rotate: 0,
+					getViewport: vi.fn().mockReturnValue({ width: 600, height: 800 }),
+					render: vi.fn().mockReturnValue({ promise: Promise.resolve() }),
+				}),
+			}),
+		} as any)
+
+		const wrapper = mount(FilePreviewer, {
+			props: {
+				filePath: '/files/scores/SmallScore.pdf',
+			},
+		})
+		await flushPromises()
+
+		// For continuous layout (<30 pages defaults to continuous), placeholders are created
+		const placeholders = wrapper.findAll('.mobilesheetsmanager-page-placeholder')
+		expect(placeholders.length).toBe(5)
+		expect(placeholders[0].attributes('data-page-num')).toBe('1')
+		expect(placeholders[4].attributes('data-page-num')).toBe('5')
 	})
 
 	it('recognizes PDF file path with query parameter', async () => {
