@@ -405,6 +405,7 @@ async function saveSplits() {
 		const sourceTypeIds = (props.song.sourceTypes ?? []).map((st) => st.id)
 
 		let lastLibraryData: LibraryData | null = null
+		let firstCreatedSongId: number | undefined = undefined
 
 		for (const seg of splitSegments.value) {
 			// Create sub-document
@@ -457,6 +458,10 @@ async function saveSplits() {
 				throw new Error(t('mobilesheetsmanager', 'Failed to retrieve ID for created split song: {title}', { title: seg.title }))
 			}
 
+			if (firstCreatedSongId === undefined) {
+				firstCreatedSongId = Number(newSongId)
+			}
+
 			// Upload split PDF file
 			const formData = new FormData()
 			formData.append('file', splitFile)
@@ -467,6 +472,9 @@ async function saveSplits() {
 			lastLibraryData = uploadRes.data.ocs.data as LibraryData
 		}
 
+		// Target song to open after splitting: the first newly created split song
+		const targetOpenSongId = firstCreatedSongId
+
 		// Handle chosen action for original song / file
 		if (originalSongAction.value === 'delete-song' && hasExactlyOneFile.value) {
 			const delSongRes = await apiDelete('/api/songs/{id}', {
@@ -476,7 +484,7 @@ async function saveSplits() {
 			lastLibraryData = (delSongRes.data?.ocs?.data as LibraryData) ?? lastLibraryData
 			showSuccess(t('mobilesheetsmanager', 'Successfully split PDF into {count} songs and deleted original song.', { count: splitSegments.value.length }))
 			if (lastLibraryData) {
-				emit('saved', lastLibraryData, undefined)
+				emit('saved', lastLibraryData, targetOpenSongId)
 			} else {
 				emit('cancel')
 			}
@@ -492,7 +500,7 @@ async function saveSplits() {
 
 		showSuccess(t('mobilesheetsmanager', 'Successfully split PDF into {count} songs.', { count: splitSegments.value.length }))
 		if (lastLibraryData) {
-			emit('saved', lastLibraryData, props.song.id)
+			emit('saved', lastLibraryData, targetOpenSongId)
 		} else {
 			emit('cancel')
 		}

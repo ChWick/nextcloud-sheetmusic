@@ -284,6 +284,7 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		expect(deletedFiles).toHaveLength(0)
 		expect(deletedSongs).toHaveLength(0)
 		expect(wrapper.emitted('saved')).toBeTruthy()
+		expect(wrapper.emitted('saved')?.[0]?.[1]).toBe(101)
 	})
 
 	it('splits real PDF and deletes original PDF file when delete-file option is selected', async () => {
@@ -317,8 +318,8 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		expect(deletedFiles).toContainEqual({ songId: 42, fileId: 999 })
 		expect(deletedSongs).toHaveLength(0)
 		expect(wrapper.emitted('saved')).toBeTruthy()
-		// Saved event should pass original song ID
-		expect(wrapper.emitted('saved')?.[0]?.[1]).toBe(42)
+		// Saved event should pass first newly created split song ID
+		expect(wrapper.emitted('saved')?.[0]?.[1]).toBe(101)
 	})
 
 	it('splits real PDF and deletes original song and all files when delete-song option is selected', async () => {
@@ -352,8 +353,8 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		// Original song should be deleted with deleteFiles: true
 		expect(deletedSongs).toContainEqual({ songId: 42, deleteFiles: true })
 		expect(wrapper.emitted('saved')).toBeTruthy()
-		// Saved event should pass undefined for songId so SongsView navigates to songs list
-		expect(wrapper.emitted('saved')?.[0]?.[1]).toBeUndefined()
+		// Saved event should pass the first newly created split song ID
+		expect(wrapper.emitted('saved')?.[0]?.[1]).toBe(101)
 	})
 
 	it('disables delete-song option when song has multiple attached files', async () => {

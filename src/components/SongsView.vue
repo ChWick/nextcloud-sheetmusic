@@ -687,7 +687,13 @@ function closeModifyPdf() {
 function handlePdfModifierSaved(data: LibraryData, songId?: number) {
   handleLibraryDataUpdate(data);
   if (songId) {
-    router.replace({
+    const targetSong = songs.value.find(s => s.id === songId)
+      ?? data.songs?.find(s => s.id === songId);
+    if (targetSong) {
+      openSongView(targetSong);
+      return;
+    }
+    router.push({
       name: 'LibraryView',
       params: { library: props.selectedLibrary, view: 'songs' },
       query: { ...queryWithoutOpenSong(), song: String(songId) },
