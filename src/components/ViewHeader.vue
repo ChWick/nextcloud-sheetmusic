@@ -13,7 +13,7 @@
     </div>
     <div :class="$style.actions">
       <slot />
-      <NcButton v-if="filterBarVisible !== undefined"
+      <NcButton v-if="showFilterToggle"
                 :aria-pressed="filterBarVisible"
                 :title="filterBarVisible ? t('mobilesheetsmanager', 'Hide filters') : t('mobilesheetsmanager', 'Show filters')"
                 :aria-label="filterBarVisible ? t('mobilesheetsmanager', 'Hide filters') : t('mobilesheetsmanager', 'Show filters')"
@@ -78,6 +78,8 @@ defineProps<{
   importNextcloudLabel?: string
   /** Whether the filter bar is shown; the toggle is hidden when unset. */
   filterBarVisible?: boolean
+  /** Explicit control to show or hide the filter toggle button. */
+  showFilterToggle?: boolean
 }>()
 
 const emit = defineEmits<{

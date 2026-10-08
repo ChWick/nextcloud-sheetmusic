@@ -6,6 +6,7 @@
     :import-label="songIdInUrl === null && !standaloneCreate ? t('mobilesheetsmanager', 'Import') : undefined"
     :import-nextcloud-label="songIdInUrl === null && !standaloneCreate ? t('mobilesheetsmanager', 'Import from Nextcloud') : undefined"
     :filter-bar-visible="songIdInUrl === null && !standaloneCreate ? filterBarVisible : undefined"
+    :show-filter-toggle="songIdInUrl === null && !standaloneCreate"
     @back="goBackToSongs"
     @create="startNewSong"
     @import="startImport"
