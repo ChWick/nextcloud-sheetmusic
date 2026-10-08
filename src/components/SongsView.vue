@@ -168,6 +168,7 @@
     <SongViewer
       v-else
       ref="songViewerRef"
+      :key="openSong ? `${openSong.id}-${openSong.lastModified ?? ''}` : 'no-song'"
       :hide-header="true"
       :song="openSong"
       :library-id="selectedLibrary"

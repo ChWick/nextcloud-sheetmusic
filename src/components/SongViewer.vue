@@ -122,14 +122,17 @@ function selectFile(fileId: string) {
 	selectedFileId.value = fileId
 }
 
+const previewVersion = ref(Date.now())
+
 function handleSaved(data: LibraryData, songId?: number) {
+	previewVersion.value = Date.now()
 	isEditing.value = false
 	emit('saved', data, songId)
 }
 
 const previewFilePath = computed(() => {
 	if (!selectedFile.value?.path) return ''
-	return getCacheBustedFileUrl(selectedFile.value.path, `${selectedFile.value.id}-${props.song?.lastModified ?? ''}`)
+	return getCacheBustedFileUrl(selectedFile.value.path, `${selectedFile.value.id}-${props.song?.lastModified ?? ''}-${previewVersion.value}`)
 })
 
 function openInExternalViewer() {
@@ -140,6 +143,7 @@ function openInExternalViewer() {
 }
 
 function handleUpdated(data: LibraryData) {
+	previewVersion.value = Date.now()
 	emit('updated', data)
 }
 
@@ -159,6 +163,7 @@ watch(
 watch(
 	() => props.song,
 	(newSong) => {
+		previewVersion.value = Date.now()
 		const files = newSong?.files ?? []
 		const keepsSelection = files.some((file) => String(file.id) === selectedFileId.value)
 		selectedFileId.value = keepsSelection ? selectedFileId.value : (files[0] ? String(files[0].id) : '')
@@ -411,7 +416,7 @@ defineExpose({
 
 			<FilePreviewer
 				v-if="selectedFile?.path"
-				:key="`${selectedFile.id}-${selectedFile.path}-${song?.lastModified ?? ''}`"
+				:key="`${selectedFile.id}-${selectedFile.path}-${song?.lastModified ?? ''}-${previewVersion}`"
 				:file-path="previewFilePath"
 				:show-external-button="false" />
 			<div v-else :class="$style.error">
