@@ -520,6 +520,8 @@ async function handleExecuteJoin(options: {
 	fitToStandardPage: boolean
 	scaleToFit: boolean
 	gap: number
+	scaleA?: number
+	scaleB?: number
 }) {
 	if (!originalPdfBytes.value) return
 	isLoading.value = true
@@ -543,6 +545,8 @@ async function handleExecuteJoin(options: {
 			crop2: cropB,
 			rotation1: rotA,
 			rotation2: rotB,
+			scale1: options.scaleA,
+			scale2: options.scaleB,
 		})
 
 		const newBytes = await pdfDoc.save()

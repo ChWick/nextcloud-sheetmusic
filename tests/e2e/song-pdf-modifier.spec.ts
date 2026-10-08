@@ -286,8 +286,11 @@ test.describe('Song PDF Modifier & Cropping E2E Flow', () => {
 		await expect(joinDialog).toBeVisible()
 		await expect(joinDialog.getByRole('heading', { name: /Join Two Pages/i })).toBeVisible()
 
-		// Verify layout buttons and fit indicator
+		// Verify layout buttons, alignment controls, and fit indicator
 		await expect(joinDialog.getByRole('button', { name: /Top \/ Bottom/i })).toBeVisible()
+		await expect(joinDialog.getByRole('button', { name: /Align Widths/i })).toBeVisible()
+		await expect(joinDialog.locator('[data-test="scale-a-slider"]')).toBeVisible()
+		await expect(joinDialog.locator('[data-test="scale-b-slider"]')).toBeVisible()
 		await expect(joinDialog.getByRole('button', { name: /Join Pages/i })).toBeVisible()
 
 		// 3. Confirm Join

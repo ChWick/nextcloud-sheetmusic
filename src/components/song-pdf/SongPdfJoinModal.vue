@@ -43,6 +43,8 @@ const emit = defineEmits<{
 		fitToStandardPage: boolean
 		scaleToFit: boolean
 		gap: number
+		scaleA: number
+		scaleB: number
 	}]
 }>()
 
@@ -52,6 +54,9 @@ const layout = ref<JoinLayout>('vertical')
 const fitToStandardPage = ref(true)
 const scaleToFit = ref(true)
 const gap = ref(12)
+
+const scaleA = ref(1.0)
+const scaleB = ref(1.0)
 
 const canvasARef = ref<HTMLCanvasElement>()
 const canvasBRef = ref<HTMLCanvasElement>()
@@ -73,8 +78,72 @@ const effectiveDimB = computed(() =>
 	getEffectivePageDimensions(pageDimB.value.width, pageDimB.value.height, cropB.value, rotB.value),
 )
 
+const scaledDimA = computed(() => ({
+	width: Math.round(effectiveDimA.value.width * scaleA.value),
+	height: Math.round(effectiveDimA.value.height * scaleA.value),
+}))
+
+const scaledDimB = computed(() => ({
+	width: Math.round(effectiveDimB.value.width * scaleB.value),
+	height: Math.round(effectiveDimB.value.height * scaleB.value),
+}))
+
+const isSizeAligned = computed(() => {
+	if (layout.value === 'vertical') {
+		return Math.abs(scaledDimA.value.width - scaledDimB.value.width) <= 1
+	} else {
+		return Math.abs(scaledDimA.value.height - scaledDimB.value.height) <= 1
+	}
+})
+
+function alignSizesToWider() {
+	if (effectiveDimA.value.width <= 0 || effectiveDimB.value.width <= 0) return
+	if (layout.value === 'vertical') {
+		if (effectiveDimA.value.width >= effectiveDimB.value.width) {
+			scaleA.value = 1.0
+			scaleB.value = Math.round((effectiveDimA.value.width / effectiveDimB.value.width) * 100) / 100
+		} else {
+			scaleB.value = 1.0
+			scaleA.value = Math.round((effectiveDimB.value.width / effectiveDimA.value.width) * 100) / 100
+		}
+	} else {
+		if (effectiveDimA.value.height >= effectiveDimB.value.height) {
+			scaleA.value = 1.0
+			scaleB.value = Math.round((effectiveDimA.value.height / effectiveDimB.value.height) * 100) / 100
+		} else {
+			scaleB.value = 1.0
+			scaleA.value = Math.round((effectiveDimB.value.height / effectiveDimA.value.height) * 100) / 100
+		}
+	}
+}
+
+function matchPageA() {
+	if (layout.value === 'vertical') {
+		if (effectiveDimB.value.width <= 0) return
+		scaleB.value = Math.round(((effectiveDimA.value.width * scaleA.value) / effectiveDimB.value.width) * 100) / 100
+	} else {
+		if (effectiveDimB.value.height <= 0) return
+		scaleB.value = Math.round(((effectiveDimA.value.height * scaleA.value) / effectiveDimB.value.height) * 100) / 100
+	}
+}
+
+function matchPageB() {
+	if (layout.value === 'vertical') {
+		if (effectiveDimA.value.width <= 0) return
+		scaleA.value = Math.round(((effectiveDimB.value.width * scaleB.value) / effectiveDimA.value.width) * 100) / 100
+	} else {
+		if (effectiveDimA.value.height <= 0) return
+		scaleA.value = Math.round(((effectiveDimB.value.height * scaleB.value) / effectiveDimA.value.height) * 100) / 100
+	}
+}
+
+function resetScales() {
+	scaleA.value = 1.0
+	scaleB.value = 1.0
+}
+
 const fitInfo = computed(() =>
-	computeJoinFitInfo(effectiveDimA.value, effectiveDimB.value, stdDim.value, layout.value, gap.value),
+	computeJoinFitInfo(effectiveDimA.value, effectiveDimB.value, stdDim.value, layout.value, gap.value, scaleA.value, scaleB.value),
 )
 
 async function renderThumbnails() {
@@ -93,12 +162,39 @@ async function renderThumbnails() {
 		if (canvasARef.value) {
 			const renderScale = Math.min(1.0, 320 / Math.max(vpA.width, vpA.height))
 			const renderVpA = pdfPageA.getViewport({ scale: renderScale, rotation: rotA.value })
-			canvasARef.value.width = renderVpA.width
-			canvasARef.value.height = renderVpA.height
-			const ctxA = canvasARef.value.getContext('2d')
-			if (ctxA) {
-				ctxA.clearRect(0, 0, renderVpA.width, renderVpA.height)
-				await pdfPageA.render({ canvasContext: ctxA, viewport: renderVpA }).promise
+			const cA = cropA.value
+			if (cA && (cA.left > 0.005 || cA.top > 0.005 || cA.width < 0.995 || cA.height < 0.995)) {
+				const offCanvas = typeof document !== 'undefined' ? document.createElement('canvas') : null
+				const offCtx = offCanvas?.getContext('2d')
+				if (offCtx && offCanvas) {
+					offCanvas.width = renderVpA.width
+					offCanvas.height = renderVpA.height
+					await pdfPageA.render({ canvasContext: offCtx, viewport: renderVpA }).promise
+					const sx = Math.round(cA.left * renderVpA.width)
+					const sy = Math.round(cA.top * renderVpA.height)
+					const sw = Math.round(cA.width * renderVpA.width)
+					const sh = Math.round(cA.height * renderVpA.height)
+					canvasARef.value.width = sw
+					canvasARef.value.height = sh
+					const ctxA = canvasARef.value.getContext('2d')
+					ctxA?.drawImage(offCanvas, sx, sy, sw, sh, 0, 0, sw, sh)
+				} else {
+					canvasARef.value.width = renderVpA.width
+					canvasARef.value.height = renderVpA.height
+					const ctxA = canvasARef.value.getContext('2d')
+					if (ctxA) {
+						ctxA.clearRect(0, 0, renderVpA.width, renderVpA.height)
+						await pdfPageA.render({ canvasContext: ctxA, viewport: renderVpA }).promise
+					}
+				}
+			} else {
+				canvasARef.value.width = renderVpA.width
+				canvasARef.value.height = renderVpA.height
+				const ctxA = canvasARef.value.getContext('2d')
+				if (ctxA) {
+					ctxA.clearRect(0, 0, renderVpA.width, renderVpA.height)
+					await pdfPageA.render({ canvasContext: ctxA, viewport: renderVpA }).promise
+				}
 			}
 		}
 
@@ -110,12 +206,39 @@ async function renderThumbnails() {
 		if (canvasBRef.value) {
 			const renderScale = Math.min(1.0, 320 / Math.max(vpB.width, vpB.height))
 			const renderVpB = pdfPageB.getViewport({ scale: renderScale, rotation: rotB.value })
-			canvasBRef.value.width = renderVpB.width
-			canvasBRef.value.height = renderVpB.height
-			const ctxB = canvasBRef.value.getContext('2d')
-			if (ctxB) {
-				ctxB.clearRect(0, 0, renderVpB.width, renderVpB.height)
-				await pdfPageB.render({ canvasContext: ctxB, viewport: renderVpB }).promise
+			const cB = cropB.value
+			if (cB && (cB.left > 0.005 || cB.top > 0.005 || cB.width < 0.995 || cB.height < 0.995)) {
+				const offCanvas = typeof document !== 'undefined' ? document.createElement('canvas') : null
+				const offCtx = offCanvas?.getContext('2d')
+				if (offCtx && offCanvas) {
+					offCanvas.width = renderVpB.width
+					offCanvas.height = renderVpB.height
+					await pdfPageB.render({ canvasContext: offCtx, viewport: renderVpB }).promise
+					const sx = Math.round(cB.left * renderVpB.width)
+					const sy = Math.round(cB.top * renderVpB.height)
+					const sw = Math.round(cB.width * renderVpB.width)
+					const sh = Math.round(cB.height * renderVpB.height)
+					canvasBRef.value.width = sw
+					canvasBRef.value.height = sh
+					const ctxB = canvasBRef.value.getContext('2d')
+					ctxB?.drawImage(offCanvas, sx, sy, sw, sh, 0, 0, sw, sh)
+				} else {
+					canvasBRef.value.width = renderVpB.width
+					canvasBRef.value.height = renderVpB.height
+					const ctxB = canvasBRef.value.getContext('2d')
+					if (ctxB) {
+						ctxB.clearRect(0, 0, renderVpB.width, renderVpB.height)
+						await pdfPageB.render({ canvasContext: ctxB, viewport: renderVpB }).promise
+					}
+				}
+			} else {
+				canvasBRef.value.width = renderVpB.width
+				canvasBRef.value.height = renderVpB.height
+				const ctxB = canvasBRef.value.getContext('2d')
+				if (ctxB) {
+					ctxB.clearRect(0, 0, renderVpB.width, renderVpB.height)
+					await pdfPageB.render({ canvasContext: ctxB, viewport: renderVpB }).promise
+				}
 			}
 		}
 	} catch (err) {
@@ -137,6 +260,14 @@ watch(
 )
 
 watch(
+	() => [pageA.value, pageB.value],
+	() => {
+		scaleA.value = 1.0
+		scaleB.value = 1.0
+	},
+)
+
+watch(
 	() => [props.initialPageA, props.initialPageB],
 	([initA, initB]) => {
 		if (initA) pageA.value = initA
@@ -152,6 +283,8 @@ function handleJoin() {
 		fitToStandardPage: fitToStandardPage.value,
 		scaleToFit: scaleToFit.value,
 		gap: gap.value,
+		scaleA: scaleA.value,
+		scaleB: scaleB.value,
 	})
 	emit('update:open', false)
 }
@@ -247,9 +380,119 @@ function handleClose() {
 						</div>
 					</div>
 
-					<!-- Sizing Options -->
+					<!-- Sizing Options & Alignment -->
 					<div :class="$style.sectionGroup">
-						<label :class="$style.sectionLabel">{{ t('mobilesheetsmanager', 'Page Sizing:') }}</label>
+						<div :class="$style.sectionHeaderRow">
+							<label :class="$style.sectionLabel">{{ t('mobilesheetsmanager', 'Page Sizing & Alignment:') }}</label>
+							<div :class="$style.alignQuickButtons">
+								<button
+									type="button"
+									:class="[$style.quickAlignBtn, isSizeAligned && $style.quickAlignBtnActive]"
+									:title="layout === 'vertical' ? t('mobilesheetsmanager', 'Scale narrower page to match wider page width') : t('mobilesheetsmanager', 'Scale shorter page to match taller page height')"
+									data-test="align-sizes-btn"
+									@click="alignSizesToWider">
+									{{ layout === 'vertical' ? t('mobilesheetsmanager', 'Align Widths') : t('mobilesheetsmanager', 'Align Heights') }}
+								</button>
+								<button
+									type="button"
+									:class="$style.resetScaleBtn"
+									:disabled="scaleA === 1.0 && scaleB === 1.0"
+									:title="t('mobilesheetsmanager', 'Reset both pages to 100%')"
+									data-test="reset-sizes-btn"
+									@click="resetScales">
+									{{ t('mobilesheetsmanager', 'Reset 100%') }}
+								</button>
+							</div>
+						</div>
+
+						<!-- Alignment Status Pill -->
+						<div :class="$style.alignmentStatusRow">
+							<span v-if="isSizeAligned" :class="$style.statusPillSuccess" data-test="aligned-status">
+								<CheckCircle :size="14" />
+								{{ layout === 'vertical' ? t('mobilesheetsmanager', 'Widths aligned ({w} pt)', { w: scaledDimA.width }) : t('mobilesheetsmanager', 'Heights aligned ({h} pt)', { h: scaledDimA.height }) }}
+							</span>
+							<span v-else :class="$style.statusPillDiff" data-test="diff-status">
+								{{ layout === 'vertical'
+									? t('mobilesheetsmanager', 'Width diff: Page {pA} is {wA} pt vs Page {pB} is {wB} pt', { pA: pageA, wA: scaledDimA.width, pB: pageB, wB: scaledDimB.width })
+									: t('mobilesheetsmanager', 'Height diff: Page {pA} is {hA} pt vs Page {pB} is {hB} pt', { pA: pageA, hA: scaledDimA.height, pB: pageB, hB: scaledDimB.height }) }}
+							</span>
+						</div>
+
+						<!-- Page A Scale Control -->
+						<div :class="$style.scaleControlRow">
+							<div :class="$style.scaleControlHeader">
+								<span :class="$style.scalePageName">{{ t('mobilesheetsmanager', 'Page {p} Size:', { p: pageA }) }}</span>
+								<span :class="$style.scaleDimInfo">{{ scaledDimA.width }} × {{ scaledDimA.height }} pt ({{ Math.round(scaleA * 100) }}%)</span>
+							</div>
+							<div :class="$style.sliderRow">
+								<input
+									v-model.number="scaleA"
+									type="range"
+									min="0.5"
+									max="2.0"
+									step="0.01"
+									:class="$style.scaleSlider"
+									data-test="scale-a-slider" />
+								<div :class="$style.scaleInputGroup">
+									<input
+										:value="Math.round(scaleA * 100)"
+										type="number"
+										min="50"
+										max="200"
+										:class="$style.scaleNumberInput"
+										data-test="scale-a-input"
+										@input="scaleA = Math.max(0.5, Math.min(2.0, (Number(($event.target as HTMLInputElement).value) || 100) / 100))" />
+									<span :class="$style.percentSign">%</span>
+								</div>
+								<button
+									type="button"
+									:class="$style.matchOtherBtn"
+									:title="t('mobilesheetsmanager', 'Scale Page {pA} to match Page {pB}', { pA: pageA, pB: pageB })"
+									data-test="match-b-btn"
+									@click="matchPageB">
+									{{ t('mobilesheetsmanager', 'Match p. {p}', { p: pageB }) }}
+								</button>
+							</div>
+						</div>
+
+						<!-- Page B Scale Control -->
+						<div :class="$style.scaleControlRow">
+							<div :class="$style.scaleControlHeader">
+								<span :class="$style.scalePageName">{{ t('mobilesheetsmanager', 'Page {p} Size:', { p: pageB }) }}</span>
+								<span :class="$style.scaleDimInfo">{{ scaledDimB.width }} × {{ scaledDimB.height }} pt ({{ Math.round(scaleB * 100) }}%)</span>
+							</div>
+							<div :class="$style.sliderRow">
+								<input
+									v-model.number="scaleB"
+									type="range"
+									min="0.5"
+									max="2.0"
+									step="0.01"
+									:class="$style.scaleSlider"
+									data-test="scale-b-slider" />
+								<div :class="$style.scaleInputGroup">
+									<input
+										:value="Math.round(scaleB * 100)"
+										type="number"
+										min="50"
+										max="200"
+										:class="$style.scaleNumberInput"
+										data-test="scale-b-input"
+										@input="scaleB = Math.max(0.5, Math.min(2.0, (Number(($event.target as HTMLInputElement).value) || 100) / 100))" />
+									<span :class="$style.percentSign">%</span>
+								</div>
+								<button
+									type="button"
+									:class="$style.matchOtherBtn"
+									:title="t('mobilesheetsmanager', 'Scale Page {pB} to match Page {pA}', { pA: pageA, pB: pageB })"
+									data-test="match-a-btn"
+									@click="matchPageA">
+									{{ t('mobilesheetsmanager', 'Match p. {p}', { p: pageA }) }}
+								</button>
+							</div>
+						</div>
+
+						<!-- Sizing Checkboxes -->
 						<div :class="$style.checkboxRow">
 							<label :class="$style.checkboxLabel">
 								<input v-model="fitToStandardPage" type="checkbox" />
@@ -275,7 +518,11 @@ function handleClose() {
 								layout === 'horizontal' ? $style.previewSheetHorizontal : $style.previewSheetVertical
 							]">
 							<!-- Page A Slot -->
-							<div :class="$style.previewSlot">
+							<div
+								:class="$style.previewSlot"
+								:style="layout === 'vertical'
+									? { width: `${Math.min(100, Math.max(20, (scaledDimA.width / Math.max(scaledDimA.width, scaledDimB.width)) * 100))}%` }
+									: { height: `${Math.min(100, Math.max(20, (scaledDimA.height / Math.max(scaledDimA.height, scaledDimB.height)) * 100))}%` }">
 								<span :class="$style.slotTag">{{ t('mobilesheetsmanager', 'p. {p}', { p: pageA }) }}</span>
 								<canvas ref="canvasARef" :class="$style.previewCanvas" />
 							</div>
@@ -284,7 +531,11 @@ function handleClose() {
 							<div :class="layout === 'horizontal' ? $style.previewDividerH : $style.previewDividerV" />
 
 							<!-- Page B Slot -->
-							<div :class="$style.previewSlot">
+							<div
+								:class="$style.previewSlot"
+								:style="layout === 'vertical'
+									? { width: `${Math.min(100, Math.max(20, (scaledDimB.width / Math.max(scaledDimA.width, scaledDimB.width)) * 100))}%` }
+									: { height: `${Math.min(100, Math.max(20, (scaledDimB.height / Math.max(scaledDimA.height, scaledDimB.height)) * 100))}%` }">
 								<span :class="$style.slotTag">{{ t('mobilesheetsmanager', 'p. {p}', { p: pageB }) }}</span>
 								<canvas ref="canvasBRef" :class="$style.previewCanvas" />
 							</div>
@@ -552,6 +803,163 @@ function handleClose() {
 	border-top: 1px solid var(--color-border);
 	padding-top: 12px;
 	margin-top: 8px;
+}
+
+.sectionHeaderRow {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+}
+
+.alignQuickButtons {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.quickAlignBtn {
+	font-size: 11px;
+	padding: 3px 8px;
+	border: 1px solid var(--color-primary-element, #0082c9);
+	border-radius: 4px;
+	background-color: var(--color-main-background);
+	color: var(--color-primary-element, #0082c9);
+	cursor: pointer;
+	font-weight: 600;
+	transition: all 0.15s ease;
+}
+
+.quickAlignBtn:hover {
+	background-color: var(--color-background-hover);
+}
+
+.quickAlignBtnActive {
+	background-color: var(--color-primary-element, #0082c9);
+	color: var(--color-primary-element-text, #ffffff);
+}
+
+.resetScaleBtn {
+	font-size: 11px;
+	padding: 3px 8px;
+	border: 1px solid var(--color-border);
+	border-radius: 4px;
+	background-color: var(--color-main-background);
+	color: var(--color-text-maxcontrast);
+	cursor: pointer;
+	transition: all 0.15s ease;
+}
+
+.resetScaleBtn:hover:not(:disabled) {
+	background-color: var(--color-background-hover);
+}
+
+.resetScaleBtn:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.alignmentStatusRow {
+	margin: 2px 0 4px;
+}
+
+.statusPillSuccess {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	font-size: 11px;
+	color: #047857;
+	font-weight: 500;
+}
+
+.statusPillDiff {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	font-size: 11px;
+	color: var(--color-text-maxcontrast);
+}
+
+.scaleControlRow {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	background-color: var(--color-background-hover);
+	padding: 6px 10px;
+	border-radius: 6px;
+	margin-bottom: 4px;
+}
+
+.scaleControlHeader {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	font-size: 12px;
+}
+
+.scalePageName {
+	font-weight: 600;
+	color: var(--color-main-text);
+}
+
+.scaleDimInfo {
+	font-size: 11px;
+	color: var(--color-text-maxcontrast);
+}
+
+.sliderRow {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+}
+
+.scaleSlider {
+	flex: 1;
+	cursor: pointer;
+	height: 5px;
+	accent-color: var(--color-primary-element, #0082c9);
+}
+
+.scaleInputGroup {
+	display: flex;
+	align-items: center;
+	background-color: var(--color-main-background);
+	border: 1px solid var(--color-border);
+	border-radius: 4px;
+	padding: 2px 6px;
+	width: 62px;
+}
+
+.scaleNumberInput {
+	width: 34px;
+	border: none;
+	background: transparent;
+	font-size: 12px;
+	text-align: right;
+	color: var(--color-main-text);
+	outline: none;
+}
+
+.percentSign {
+	font-size: 11px;
+	color: var(--color-text-maxcontrast);
+	margin-left: 2px;
+}
+
+.matchOtherBtn {
+	font-size: 11px;
+	padding: 3px 6px;
+	border: 1px solid var(--color-border);
+	border-radius: 4px;
+	background-color: var(--color-main-background);
+	color: var(--color-main-text);
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.matchOtherBtn:hover {
+	background-color: var(--color-background-hover);
 }
 </style>
 

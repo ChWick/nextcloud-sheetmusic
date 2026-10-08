@@ -73,6 +73,16 @@ describe('pdf-join-engine', () => {
 			expect(fit.contentHeight).toBe(750)
 			expect(fit.requiredScale).toBe(1)
 		})
+
+		it('applies individual page scales in fit calculation', () => {
+			const dimA = { width: 300, height: 200 }
+			const dimB = { width: 200, height: 200 }
+
+			// Scale page B up by 1.5 to match page A width (200 * 1.5 = 300)
+			const fit = computeJoinFitInfo(dimA, dimB, stdDim, 'vertical', 12, 1.0, 1.5)
+			expect(fit.contentWidth).toBe(300)
+			expect(fit.contentHeight).toBe(200 + 300 + 12) // 512
+		})
 	})
 
 	describe('executeJoinTwoPages (Real PDFDocument operations)', () => {
@@ -120,6 +130,34 @@ describe('pdf-join-engine', () => {
 			})
 
 			expect(doc.getPageCount()).toBe(7)
+			expect(res.targetWidth).toBeCloseTo(595.28, 1)
+			expect(res.targetHeight).toBeCloseTo(841.89, 1)
+
+			const savedBytes = await doc.save()
+			const reloadedDoc = await PDFDocument.load(savedBytes)
+			expect(reloadedDoc.getPageCount()).toBe(7)
+		})
+
+		it('applies custom scale1 and scale2 to align widths when pages have different crop sizes', async () => {
+			const doc = await PDFDocument.load(samplePdfBytes)
+
+			// Crop page 1: 80% width
+			const crop1 = { left: 0, top: 0, width: 0.8, height: 0.4 }
+			// Crop page 2: 40% width (narrower)
+			const crop2 = { left: 0, top: 0, width: 0.4, height: 0.4 }
+
+			// Scale page 2 by 2.0 so its effective width matches page 1 (0.4 * 2.0 = 0.8)
+			const res = await executeJoinTwoPages(doc, {
+				pageIdx1: 0,
+				pageIdx2: 1,
+				layout: 'vertical',
+				fitToStandardPage: true,
+				crop1,
+				crop2,
+				scale1: 1.0,
+				scale2: 2.0,
+			})
+
 			expect(res.targetWidth).toBeCloseTo(595.28, 1)
 			expect(res.targetHeight).toBeCloseTo(841.89, 1)
 

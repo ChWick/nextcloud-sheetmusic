@@ -102,7 +102,80 @@ describe('SongPdfJoinModal.vue', () => {
 			layout: 'vertical',
 			fitToStandardPage: true,
 			scaleToFit: true,
+			scaleA: 1.0,
+			scaleB: 1.0,
 		})
+	})
+
+	it('supports aligning widths between pages of different width and emits adjusted scales', async () => {
+		const wrapper = mount(SongPdfJoinModal, {
+			props: {
+				open: true,
+				pdf: mockPdf,
+				totalPages: 5,
+				initialPageA: 1,
+				initialPageB: 2,
+				// Page 1 is 80% wide, Page 2 is 40% wide
+				pageCrops: {
+					1: { left: 0, top: 0, width: 0.8, height: 0.4 },
+					2: { left: 0, top: 0.5, width: 0.4, height: 0.4 },
+				},
+				pageRotations: [0, 0, 0, 0, 0],
+			},
+		})
+
+		// Before alignment, diff status is displayed
+		expect(wrapper.find('[data-test="diff-status"]').exists()).toBe(true)
+
+		// Click Align Widths button
+		const alignBtn = wrapper.find('[data-test="align-sizes-btn"]')
+		expect(alignBtn.exists()).toBe(true)
+		await alignBtn.trigger('click')
+
+		// Now widths should be aligned
+		expect(wrapper.find('[data-test="aligned-status"]').exists()).toBe(true)
+
+		// Click Join Pages
+		const joinBtn = wrapper.findAll('button').find((b) => b.text().includes('Join Pages'))
+		await joinBtn?.trigger('click')
+
+		const eventPayload = wrapper.emitted('join')?.[0]?.[0] as any
+		expect(eventPayload.scaleA).toBe(1.0)
+		// Scale B should be scaled up by 2.0 (0.8 / 0.4)
+		expect(eventPayload.scaleB).toBeCloseTo(2.0, 1)
+	})
+
+	it('supports manually adjusting page scales and resetting to 100%', async () => {
+		const wrapper = mount(SongPdfJoinModal, {
+			props: {
+				open: true,
+				pdf: mockPdf,
+				totalPages: 5,
+				initialPageA: 1,
+				initialPageB: 2,
+				pageCrops: {},
+				pageRotations: [0, 0, 0, 0, 0],
+			},
+		})
+
+		// Adjust scale input for page A
+		const inputA = wrapper.find('[data-test="scale-a-input"]')
+		expect(inputA.exists()).toBe(true)
+		await inputA.setValue(120)
+		await inputA.trigger('input')
+
+		// Click Reset 100% button
+		const resetBtn = wrapper.find('[data-test="reset-sizes-btn"]')
+		expect(resetBtn.exists()).toBe(true)
+		await resetBtn.trigger('click')
+
+		// Click Join Pages
+		const joinBtn = wrapper.findAll('button').find((b) => b.text().includes('Join Pages'))
+		await joinBtn?.trigger('click')
+
+		const eventPayload = wrapper.emitted('join')?.[0]?.[0] as any
+		expect(eventPayload.scaleA).toBe(1.0)
+		expect(eventPayload.scaleB).toBe(1.0)
 	})
 })
 

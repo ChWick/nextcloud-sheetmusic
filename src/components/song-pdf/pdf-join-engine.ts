@@ -26,6 +26,8 @@ export interface JoinPagesOptions {
 	crop2?: PageCrop
 	rotation1?: number
 	rotation2?: number
+	scale1?: number // relative scale of pageIdx1 (default 1.0)
+	scale2?: number // relative scale of pageIdx2 (default 1.0)
 }
 
 /**
@@ -66,19 +68,26 @@ export function computeJoinFitInfo(
 	stdDim: { width: number; height: number },
 	layout: JoinLayout = 'vertical',
 	gap = 12,
+	scaleA = 1,
+	scaleB = 1,
 ): JoinFitInfo {
 	const stdW = stdDim.width || 595.28
 	const stdH = stdDim.height || 841.89
+
+	const wA = dimA.width * scaleA
+	const hA = dimA.height * scaleA
+	const wB = dimB.width * scaleB
+	const hB = dimB.height * scaleB
 
 	let contentWidth: number
 	let contentHeight: number
 
 	if (layout === 'vertical') {
-		contentWidth = Math.max(dimA.width, dimB.width)
-		contentHeight = dimA.height + dimB.height + gap
+		contentWidth = Math.max(wA, wB)
+		contentHeight = hA + hB + gap
 	} else {
-		contentWidth = dimA.width + dimB.width + gap
-		contentHeight = Math.max(dimA.height, dimB.height)
+		contentWidth = wA + wB + gap
+		contentHeight = Math.max(hA, hB)
 	}
 
 	const fitsOnStandardPage = contentWidth <= stdW && contentHeight <= stdH
@@ -122,6 +131,8 @@ export async function executeJoinTwoPages(
 		crop2,
 		rotation1 = 0,
 		rotation2 = 0,
+		scale1 = 1,
+		scale2 = 1,
 	} = options
 
 	const pageCount = pdfDoc.getPageCount()
@@ -137,6 +148,8 @@ export async function executeJoinTwoPages(
 	const cropB = isReversed ? crop1 : crop2
 	const rotA = isReversed ? rotation2 : rotation1
 	const rotB = isReversed ? rotation1 : rotation2
+	const sA = isReversed ? scale2 : scale1
+	const sB = isReversed ? scale1 : scale2
 
 	const pA = pdfDoc.getPage(idxA)
 	const pB = pdfDoc.getPage(idxB)
@@ -176,10 +189,10 @@ export async function executeJoinTwoPages(
 
 	const [embA, embB] = await pdfDoc.embedPages([pA, pB], [embedBoxA, embedBoxB])
 
-	const wA = embA.width
-	const hA = embA.height
-	const wB = embB.width
-	const hB = embB.height
+	const wA = embA.width * sA
+	const hA = embA.height * sA
+	const wB = embB.width * sB
+	const hB = embB.height * sB
 
 	let targetW: number
 	let targetH: number

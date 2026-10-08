@@ -870,6 +870,49 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		expect(page1.getHeight()).toBeCloseTo(841.89, 1)
 	})
 
+	it('supports joining two pages with custom page scales to align widths and saves PDF', async () => {
+		const wrapper = mount(SongPdfModifier, {
+			props: {
+				song: mockSong,
+				libraryId: 1,
+			},
+		})
+
+		await flushPromises()
+
+		const joinModal = wrapper.findComponent({ name: 'SongPdfJoinModal' })
+		expect(joinModal.exists()).toBe(true)
+
+		mockPdf.numPages = 7
+		joinModal.vm.$emit('join', {
+			pageA: 1,
+			pageB: 2,
+			layout: 'vertical',
+			fitToStandardPage: true,
+			scaleToFit: true,
+			gap: 12,
+			scaleA: 1.0,
+			scaleB: 1.4,
+		})
+		await flushPromises()
+		await new Promise((r) => setTimeout(r, 60))
+		await flushPromises()
+
+		expect(wrapper.text()).toContain('7 pages')
+
+		const saveBtn = wrapper.findAll('button').find((b) => b.text().includes('Save Changes'))
+		expect(saveBtn).toBeDefined()
+		await saveBtn?.trigger('click')
+		await flushPromises()
+		await new Promise((r) => setTimeout(r, 60))
+		await flushPromises()
+
+		expect(uploadedFiles).toHaveLength(1)
+		const arrayBuffer = await uploadedFiles[0].file.arrayBuffer()
+		const savedPdf = await PDFDocument.load(arrayBuffer)
+		expect(savedPdf.getPageCount()).toBe(7)
+	})
+
 	it('opens join modal via card button on page 1 with pre-filled page numbers', async () => {
 		const wrapper = mount(SongPdfModifier, {
 			props: {
