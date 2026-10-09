@@ -9,8 +9,8 @@ declare(strict_types=1);
 
 namespace Service;
 
-use OCA\MobileSheetsManager\Service\MobileSheetsPath;
-use OCA\MobileSheetsManager\Service\MobileSheetsPathResolver;
+use OCA\SheetMusic\Service\MobileSheetsPath;
+use OCA\SheetMusic\Service\MobileSheetsPathResolver;
 use OCP\Files\IRootFolder;
 use OCP\Files\IUserFolder;
 use OCP\IUser;

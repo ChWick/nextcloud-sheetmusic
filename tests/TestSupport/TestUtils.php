@@ -4,12 +4,10 @@ declare(strict_types=1);
 
 namespace TestSupport;
 
-use OCA\MobileSheetsManager\Db\LibraryMapper;
-use OCA\MobileSheetsManager\Db\SongMapper;
-use OCA\MobileSheetsManager\Service\LibraryService;
-use OCP\Files\Folder;
+use OCA\SheetMusic\Db\LibraryMapper;
+use OCA\SheetMusic\Db\SongMapper;
+use OCA\SheetMusic\Service\LibraryService;
 use OCP\Files\IRootFolder;
-use OCP\Files\IUserFolder;
 use OCP\Files\Node;
 use OCP\Files\Storage\IStorage;
 use Psr\Log\LoggerInterface;

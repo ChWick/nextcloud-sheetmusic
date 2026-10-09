@@ -16,7 +16,7 @@ vi.mock('@nextcloud/axios', () => ({
 }))
 
 vi.mock('@nextcloud/router', () => ({
-	generateFilePath: vi.fn((_app: string, _type: string, path: string) => `/apps-extra/mobilesheetsmanager/js/${path}`),
+	generateFilePath: vi.fn((_app: string, _type: string, path: string) => `/apps-extra/sheetmusic/js/${path}`),
 	generateOcsUrl: vi.fn((path: string, params?: Record<string, any>) => {
 		let res = path
 		if (params) {
@@ -141,7 +141,7 @@ function setupAxiosMock() {
 
 /** Count the PDF page canvases inside the wrapper. */
 function pdfCanvasCount(wrapper: ReturnType<typeof mount>): number {
-	return wrapper.element.querySelectorAll('canvas.mobilesheetsmanager-pdf-page').length
+	return wrapper.element.querySelectorAll('canvas.sheetmusic-pdf-page').length
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────────────

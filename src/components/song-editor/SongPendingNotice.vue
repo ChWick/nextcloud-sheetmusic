@@ -23,8 +23,8 @@ const emit = defineEmits<{
 		<!-- Staged deletions notice -->
 		<div v-if="pendingDeleteFiles.length > 0" :class="$style.deletionWarning">
 			<div :class="$style.warningText">
-				<strong>{{ t('mobilesheetsmanager', 'Notice:') }}</strong>
-				{{ t('mobilesheetsmanager', '{count} file(s) marked for removal will be permanently deleted from storage when you click "{action}".', { count: pendingDeleteFiles.length, action: saveActionLabel }) }}
+				<strong>{{ t('sheetmusic', 'Notice:') }}</strong>
+				{{ t('sheetmusic', '{count} file(s) marked for removal will be permanently deleted from storage when you click "{action}".', { count: pendingDeleteFiles.length, action: saveActionLabel }) }}
 			</div>
 			<ul :class="$style.pendingList">
 				<li v-for="file in pendingDeleteFiles" :key="file.id" :class="$style.pendingItem">
@@ -34,7 +34,7 @@ const emit = defineEmits<{
 						variant="tertiary"
 						size="small"
 						@click="emit('restoreDelete', file)">
-						{{ t('mobilesheetsmanager', 'Restore') }}
+						{{ t('sheetmusic', 'Restore') }}
 					</NcButton>
 				</li>
 			</ul>
@@ -43,8 +43,8 @@ const emit = defineEmits<{
 		<!-- Staged detachments notice -->
 		<div v-if="pendingDetachFiles && pendingDetachFiles.length > 0" :class="$style.detachNotice">
 			<div :class="$style.warningText">
-				<strong>{{ t('mobilesheetsmanager', 'Notice:') }}</strong>
-				{{ t('mobilesheetsmanager', '{count} file(s) will be detached from the song (kept in storage) when you click "{action}".', { count: pendingDetachFiles.length, action: saveActionLabel }) }}
+				<strong>{{ t('sheetmusic', 'Notice:') }}</strong>
+				{{ t('sheetmusic', '{count} file(s) will be detached from the song (kept in storage) when you click "{action}".', { count: pendingDetachFiles.length, action: saveActionLabel }) }}
 			</div>
 			<ul :class="$style.pendingList">
 				<li v-for="file in pendingDetachFiles" :key="file.id" :class="$style.pendingItem">
@@ -54,7 +54,7 @@ const emit = defineEmits<{
 						variant="tertiary"
 						size="small"
 						@click="emit('restoreDetach', file)">
-						{{ t('mobilesheetsmanager', 'Restore') }}
+						{{ t('sheetmusic', 'Restore') }}
 					</NcButton>
 				</li>
 			</ul>
@@ -63,8 +63,8 @@ const emit = defineEmits<{
 		<!-- Staged additions notice -->
 		<div v-if="pendingAdditions.length > 0" :class="$style.additionNotice">
 			<div :class="$style.warningText">
-				<strong>{{ t('mobilesheetsmanager', 'Notice:') }}</strong>
-				{{ t('mobilesheetsmanager', '{count} file(s) will be added to the song when you click "{action}".', { count: pendingAdditions.length, action: saveActionLabel }) }}
+				<strong>{{ t('sheetmusic', 'Notice:') }}</strong>
+				{{ t('sheetmusic', '{count} file(s) will be added to the song when you click "{action}".', { count: pendingAdditions.length, action: saveActionLabel }) }}
 			</div>
 			<ul :class="$style.pendingList">
 				<li v-for="addition in pendingAdditions" :key="addition.key" :class="$style.pendingAdditionItem">
@@ -77,7 +77,7 @@ const emit = defineEmits<{
 						variant="tertiary"
 						size="small"
 						@click="emit('removeAddition', addition)">
-						{{ t('mobilesheetsmanager', 'Remove') }}
+						{{ t('sheetmusic', 'Remove') }}
 					</NcButton>
 				</li>
 			</ul>

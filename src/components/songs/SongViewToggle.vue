@@ -19,9 +19,9 @@ const emit = defineEmits<{
 }>()
 
 const viewOptions: { value: ViewMode; label: string; icon: Component }[] = [
-	{ value: 'table', label: t('mobilesheetsmanager', 'Table view'), icon: TableIcon },
-	{ value: 'cards', label: t('mobilesheetsmanager', 'Card view'), icon: ViewGridIcon },
-	{ value: 'list', label: t('mobilesheetsmanager', 'List view'), icon: ViewListIcon },
+	{ value: 'table', label: t('sheetmusic', 'Table view'), icon: TableIcon },
+	{ value: 'cards', label: t('sheetmusic', 'Card view'), icon: ViewGridIcon },
+	{ value: 'list', label: t('sheetmusic', 'List view'), icon: ViewListIcon },
 ]
 
 const activeOption = computed(() => {

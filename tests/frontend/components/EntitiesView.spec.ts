@@ -91,7 +91,7 @@ describe('EntitiesView.vue', () => {
 		await new Promise((r) => setTimeout(r, 10))
 
 		expect(axios.get).toHaveBeenCalledWith(
-			'/ocs/v2.php/apps/mobilesheetsmanager/api/songs',
+			'/ocs/v2.php/apps/sheetmusic/api/songs',
 			{ params: { id: 1 } },
 		)
 
@@ -252,7 +252,7 @@ describe('EntitiesView.vue', () => {
 		await new Promise((r) => setTimeout(r, 20))
 
 		expect(axios.post).toHaveBeenCalledWith(
-			'/ocs/v2.php/apps/mobilesheetsmanager/api/composers',
+			'/ocs/v2.php/apps/sheetmusic/api/composers',
 			{ libraryId: 1, name: 'Brahms' },
 		)
 		expect(showSuccess).toHaveBeenCalledWith('composer "Brahms" created successfully.')
@@ -305,7 +305,7 @@ describe('EntitiesView.vue', () => {
 		await new Promise((r) => setTimeout(r, 20))
 
 		expect(axios.delete).toHaveBeenCalledWith(
-			'/ocs/v2.php/apps/mobilesheetsmanager/api/composers/1',
+			'/ocs/v2.php/apps/sheetmusic/api/composers/1',
 			{ params: { libraryId: 1 } },
 		)
 		expect(showSuccess).toHaveBeenCalledWith('composer "Beethoven" deleted successfully.')

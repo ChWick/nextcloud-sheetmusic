@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace OCA\MobileSheetsManager\Service;
+namespace OCA\SheetMusic\Service;
 
-use OCA\MobileSheetsManager\Db\SongMapper;
-use OCA\MobileSheetsManager\Storage\MobileSheetsHashCodesFile;
+use OCA\SheetMusic\Db\SongMapper;
+use OCA\SheetMusic\Storage\MobileSheetsHashCodesFile;
 use OCP\IUser;
 use Psr\Log\LoggerInterface;
 
@@ -166,4 +166,3 @@ class EntityService {
 		}
 	}
 }
-

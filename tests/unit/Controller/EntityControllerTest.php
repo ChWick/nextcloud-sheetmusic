@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Controller;
 
-use OCA\MobileSheetsManager\Controller\EntityController;
-use OCA\MobileSheetsManager\Service\EntityService;
+use OCA\SheetMusic\Controller\EntityController;
+use OCA\SheetMusic\Service\EntityService;
 use OCP\AppFramework\Http;
 use OCP\IRequest;
 use OCP\IUser;
@@ -21,7 +21,7 @@ final class EntityControllerTest extends TestCase {
 		$request->method('getParam')->willReturn('');
 
 		$controller = new EntityController(
-			'mobilesheetsmanager',
+			'sheetmusic',
 			$request,
 			$this->createMock(EntityService::class),
 			$userSession,
@@ -46,7 +46,7 @@ final class EntityControllerTest extends TestCase {
 			->willReturn(['id' => 10, 'name' => 'Bach']);
 
 		$controller = new EntityController(
-			'mobilesheetsmanager',
+			'sheetmusic',
 			$this->createMock(IRequest::class),
 			$entityService,
 			$userSession,
@@ -69,7 +69,7 @@ final class EntityControllerTest extends TestCase {
 			->willReturn(['songs' => []]);
 
 		$controller = new EntityController(
-			'mobilesheetsmanager',
+			'sheetmusic',
 			$this->createMock(IRequest::class),
 			$entityService,
 			$userSession,
@@ -87,7 +87,7 @@ final class EntityControllerTest extends TestCase {
 		$userSession->method('getUser')->willReturn($this->createMock(IUser::class));
 
 		$request = $this->createMock(IRequest::class);
-		$request->method('getParam')->willReturnCallback(fn(string $k) => match ($k) {
+		$request->method('getParam')->willReturnCallback(fn (string $k) => match ($k) {
 			'libraryId' => 0,
 			'entityType' => '',
 			'keepId' => 0,
@@ -96,7 +96,7 @@ final class EntityControllerTest extends TestCase {
 		});
 
 		$controller = new EntityController(
-			'mobilesheetsmanager',
+			'sheetmusic',
 			$request,
 			$this->createMock(EntityService::class),
 			$userSession,
@@ -119,7 +119,7 @@ final class EntityControllerTest extends TestCase {
 			->willReturn(['mergedCount' => 1, 'libraryData' => []]);
 
 		$controller = new EntityController(
-			'mobilesheetsmanager',
+			'sheetmusic',
 			$this->createMock(IRequest::class),
 			$entityService,
 			$userSession,
@@ -130,4 +130,3 @@ final class EntityControllerTest extends TestCase {
 		$this->assertSame(['mergedCount' => 1, 'libraryData' => []], $res->getData());
 	}
 }
-

@@ -113,7 +113,7 @@ describe('FilePreviewer.vue', () => {
 		await flushPromises()
 
 		// For continuous layout (<30 pages defaults to continuous), placeholders are created
-		const placeholders = wrapper.findAll('.mobilesheetsmanager-page-placeholder')
+		const placeholders = wrapper.findAll('.sheetmusic-page-placeholder')
 		expect(placeholders.length).toBe(5)
 		expect(placeholders[0].attributes('data-page-num')).toBe('1')
 		expect(placeholders[4].attributes('data-page-num')).toBe('5')

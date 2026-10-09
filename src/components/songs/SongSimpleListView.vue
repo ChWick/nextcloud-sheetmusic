@@ -54,7 +54,7 @@ const {
 					type="checkbox"
 					:checked="selectedSongIds?.includes(song.id)"
 					:class="$style.selectCheckbox"
-					:title="t('mobilesheetsmanager', 'Select song')"
+					:title="t('sheetmusic', 'Select song')"
 					@click.stop
 					@change="emit('toggle-select-song', song.id)">
 				<div :class="$style.songInfo">
@@ -67,7 +67,7 @@ const {
 								<button
 									type="button"
 									:class="[$style.filterChip, isFiltered?.('composers', c.id) && $style.activeChip]"
-									:title="t('mobilesheetsmanager', 'Toggle filter for composer {name}', { name: c.name })"
+									:title="t('sheetmusic', 'Toggle filter for composer {name}', { name: c.name })"
 									@click.stop="emit('filter-entity', 'composers', c)">
 									{{ c.name }}
 								</button>
@@ -80,7 +80,7 @@ const {
 								<button
 									type="button"
 									:class="[$style.filterChip, isFiltered?.('books', b.id) && $style.activeChip]"
-									:title="t('mobilesheetsmanager', 'Toggle filter for book {title}', { title: b.title })"
+									:title="t('sheetmusic', 'Toggle filter for book {title}', { title: b.title })"
 									@click.stop="emit('filter-entity', 'books', b)">
 									{{ b.title }}
 								</button>
@@ -93,7 +93,7 @@ const {
 								<button
 									type="button"
 									:class="[$style.filterChip, isFiltered?.('collections', col.id) && $style.activeChip]"
-									:title="t('mobilesheetsmanager', 'Toggle filter for collection {name}', { name: col.name })"
+									:title="t('sheetmusic', 'Toggle filter for collection {name}', { name: col.name })"
 									@click.stop="emit('filter-entity', 'collections', col)">
 									{{ col.name }}
 								</button>
@@ -106,7 +106,7 @@ const {
 								<button
 									type="button"
 									:class="[$style.filterChip, isFiltered?.('artists', art.id) && $style.activeChip]"
-									:title="t('mobilesheetsmanager', 'Toggle filter for artist {name}', { name: art.name })"
+									:title="t('sheetmusic', 'Toggle filter for artist {name}', { name: art.name })"
 									@click.stop="emit('filter-entity', 'artists', art)">
 									{{ art.name }}
 								</button>
@@ -119,7 +119,7 @@ const {
 								<button
 									type="button"
 									:class="[$style.filterChip, isFiltered?.('genres', g.id) && $style.activeChip]"
-									:title="t('mobilesheetsmanager', 'Toggle filter for genre {name}', { name: g.name })"
+									:title="t('sheetmusic', 'Toggle filter for genre {name}', { name: g.name })"
 									@click.stop="emit('filter-entity', 'genres', g)">
 									{{ g.name }}
 								</button>
@@ -132,7 +132,7 @@ const {
 								<button
 									type="button"
 									:class="[$style.filterChip, isFiltered?.('keys', k.id) && $style.activeChip]"
-									:title="t('mobilesheetsmanager', 'Toggle filter for key {name}', { name: k.name })"
+									:title="t('sheetmusic', 'Toggle filter for key {name}', { name: k.name })"
 									@click.stop="emit('filter-entity', 'keys', k)">
 									{{ k.name }}
 								</button>
@@ -145,7 +145,7 @@ const {
 								<button
 									type="button"
 									:class="[$style.filterChip, isFiltered?.('customgroups', cg.id) && $style.activeChip]"
-									:title="t('mobilesheetsmanager', 'Toggle filter for custom group {name}', { name: cg.name })"
+									:title="t('sheetmusic', 'Toggle filter for custom group {name}', { name: cg.name })"
 									@click.stop="emit('filter-entity', 'customgroups', cg)">
 									{{ cg.name }}
 								</button>
@@ -158,7 +158,7 @@ const {
 								<button
 									type="button"
 									:class="[$style.filterChip, isFiltered?.('years', y.id) && $style.activeChip]"
-									:title="t('mobilesheetsmanager', 'Toggle filter for year {name}', { name: y.name })"
+									:title="t('sheetmusic', 'Toggle filter for year {name}', { name: y.name })"
 									@click.stop="emit('filter-entity', 'years', y)">
 									{{ y.name }}
 								</button>
@@ -171,7 +171,7 @@ const {
 								<button
 									type="button"
 									:class="[$style.filterChip, isFiltered?.('signatures', s.id) && $style.activeChip]"
-									:title="t('mobilesheetsmanager', 'Toggle filter for signature {name}', { name: s.name })"
+									:title="t('sheetmusic', 'Toggle filter for signature {name}', { name: s.name })"
 									@click.stop="emit('filter-entity', 'signatures', s)">
 									{{ s.name }}
 								</button>
@@ -184,7 +184,7 @@ const {
 								<button
 									type="button"
 									:class="[$style.filterChip, isFiltered?.('sourcetypes', st.id) && $style.activeChip]"
-									:title="t('mobilesheetsmanager', 'Toggle filter for source type {name}', { name: st.name })"
+									:title="t('sheetmusic', 'Toggle filter for source type {name}', { name: st.name })"
 									@click.stop="emit('filter-entity', 'sourcetypes', st)">
 									{{ st.name }}
 								</button>
@@ -195,7 +195,7 @@ const {
 							<span> • {{ formatStars(song.stars) }}</span>
 						</template>
 						<template v-if="isColVisible('difficulty') && song.difficulty">
-							<span> • {{ t('mobilesheetsmanager', 'Diff: {val}', { val: formatDifficulty(song.difficulty) }) }}</span>
+							<span> • {{ t('sheetmusic', 'Diff: {val}', { val: formatDifficulty(song.difficulty) }) }}</span>
 						</template>
 						<template v-if="isColVisible('duration') && song.duration">
 							<span> • {{ formatDuration(song.duration) }}</span>
@@ -210,10 +210,10 @@ const {
 							<span> • {{ song.custom2 }}</span>
 						</template>
 						<template v-if="isColVisible('lastModified') && song.lastModified">
-							<span> • {{ t('mobilesheetsmanager', 'Modified: {date}', { date: formatDateTimestamp(song.lastModified) }) }}</span>
+							<span> • {{ t('sheetmusic', 'Modified: {date}', { date: formatDateTimestamp(song.lastModified) }) }}</span>
 						</template>
 						<template v-if="isColVisible('dateCreated') && song.dateCreated">
-							<span> • {{ t('mobilesheetsmanager', 'Created: {date}', { date: formatDateTimestamp(song.dateCreated) }) }}</span>
+							<span> • {{ t('sheetmusic', 'Created: {date}', { date: formatDateTimestamp(song.dateCreated) }) }}</span>
 						</template>
 					</span>
 				</div>
@@ -221,8 +221,8 @@ const {
 			<div :class="$style.actions" @click.stop>
 				<NcButton
 					size="small"
-					:title="t('mobilesheetsmanager', 'Edit song')"
-					:aria-label="t('mobilesheetsmanager', 'Edit song')"
+					:title="t('sheetmusic', 'Edit song')"
+					:aria-label="t('sheetmusic', 'Edit song')"
 					@click="emit('edit-song', song)">
 					<template #icon>
 						<PencilIcon :size="18" />
@@ -230,8 +230,8 @@ const {
 				</NcButton>
 				<NcButton
 					size="small"
-					:title="t('mobilesheetsmanager', 'View song')"
-					:aria-label="t('mobilesheetsmanager', 'View song')"
+					:title="t('sheetmusic', 'View song')"
+					:aria-label="t('sheetmusic', 'View song')"
 					@click="emit('view-song', song)">
 					<template #icon>
 						<EyeIcon :size="18" />

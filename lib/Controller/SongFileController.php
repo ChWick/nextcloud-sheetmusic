@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace OCA\MobileSheetsManager\Controller;
+namespace OCA\SheetMusic\Controller;
 
-use OCA\MobileSheetsManager\Service\SongFileService;
+use OCA\SheetMusic\Service\SongFileService;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\ApiRoute;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -81,7 +81,7 @@ class SongFileController extends OCSController {
 			}
 
 			return new DataResponse($result);
-		} catch (\OCA\MobileSheetsManager\Service\FileAlreadyExistsException $e) {
+		} catch (\OCA\SheetMusic\Service\FileAlreadyExistsException $e) {
 			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_CONFLICT);
 		} catch (\InvalidArgumentException $e) {
 			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_BAD_REQUEST);

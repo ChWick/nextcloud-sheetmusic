@@ -54,7 +54,7 @@ const {
 					type="checkbox"
 					:checked="selectedSongIds?.includes(song.id)"
 					:class="$style.selectCheckbox"
-					:title="t('mobilesheetsmanager', 'Select song')"
+					:title="t('sheetmusic', 'Select song')"
 					@click.stop
 					@change="emit('toggle-select-song', song.id)">
 				<span v-if="isColVisible('title')" :class="$style.cardTitle">
@@ -64,13 +64,13 @@ const {
 
 			<div :class="$style.cardBody">
 				<div v-if="isColVisible('composer') && song.composers && song.composers.length > 0" :class="$style.metaRow">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Composer:') }}</span>
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Composer:') }}</span>
 					<div :class="$style.chipGroup">
 						<template v-for="(c, idx) in song.composers" :key="c.id">
 							<button
 								type="button"
 								:class="[$style.filterChip, isFiltered?.('composers', c.id) && $style.activeChip]"
-								:title="t('mobilesheetsmanager', 'Toggle filter for composer {name}', { name: c.name })"
+								:title="t('sheetmusic', 'Toggle filter for composer {name}', { name: c.name })"
 								@click.stop="emit('filter-entity', 'composers', c)">
 								{{ c.name }}
 							</button>
@@ -80,13 +80,13 @@ const {
 				</div>
 
 				<div v-if="isColVisible('book') && song.books && song.books.length > 0" :class="$style.metaRow">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Book:') }}</span>
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Book:') }}</span>
 					<div :class="$style.chipGroup">
 						<template v-for="(b, idx) in song.books" :key="b.id">
 							<button
 								type="button"
 								:class="[$style.filterChip, isFiltered?.('books', b.id) && $style.activeChip]"
-								:title="t('mobilesheetsmanager', 'Toggle filter for book {title}', { title: b.title })"
+								:title="t('sheetmusic', 'Toggle filter for book {title}', { title: b.title })"
 								@click.stop="emit('filter-entity', 'books', b)">
 								{{ b.title }}
 							</button>
@@ -96,13 +96,13 @@ const {
 				</div>
 
 				<div v-if="isColVisible('collection') && song.collections && song.collections.length > 0" :class="$style.metaRow">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Collection:') }}</span>
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Collection:') }}</span>
 					<div :class="$style.chipGroup">
 						<template v-for="(col, idx) in song.collections" :key="col.id">
 							<button
 								type="button"
 								:class="[$style.filterChip, isFiltered?.('collections', col.id) && $style.activeChip]"
-								:title="t('mobilesheetsmanager', 'Toggle filter for collection {name}', { name: col.name })"
+								:title="t('sheetmusic', 'Toggle filter for collection {name}', { name: col.name })"
 								@click.stop="emit('filter-entity', 'collections', col)">
 								{{ col.name }}
 							</button>
@@ -112,13 +112,13 @@ const {
 				</div>
 
 				<div v-if="isColVisible('artist') && song.artists && song.artists.length > 0" :class="$style.metaRow">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Artist:') }}</span>
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Artist:') }}</span>
 					<div :class="$style.chipGroup">
 						<template v-for="(art, idx) in song.artists" :key="art.id">
 							<button
 								type="button"
 								:class="[$style.filterChip, isFiltered?.('artists', art.id) && $style.activeChip]"
-								:title="t('mobilesheetsmanager', 'Toggle filter for artist {name}', { name: art.name })"
+								:title="t('sheetmusic', 'Toggle filter for artist {name}', { name: art.name })"
 								@click.stop="emit('filter-entity', 'artists', art)">
 								{{ art.name }}
 							</button>
@@ -128,13 +128,13 @@ const {
 				</div>
 
 				<div v-if="isColVisible('genre') && song.genres && song.genres.length > 0" :class="$style.metaRow">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Genre:') }}</span>
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Genre:') }}</span>
 					<div :class="$style.chipGroup">
 						<template v-for="(g, idx) in song.genres" :key="g.id">
 							<button
 								type="button"
 								:class="[$style.filterChip, isFiltered?.('genres', g.id) && $style.activeChip]"
-								:title="t('mobilesheetsmanager', 'Toggle filter for genre {name}', { name: g.name })"
+								:title="t('sheetmusic', 'Toggle filter for genre {name}', { name: g.name })"
 								@click.stop="emit('filter-entity', 'genres', g)">
 								{{ g.name }}
 							</button>
@@ -144,13 +144,13 @@ const {
 				</div>
 
 				<div v-if="isColVisible('key') && song.keys && song.keys.length > 0" :class="$style.metaRow">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Key:') }}</span>
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Key:') }}</span>
 					<div :class="$style.chipGroup">
 						<template v-for="(k, idx) in song.keys" :key="k.id">
 							<button
 								type="button"
 								:class="[$style.filterChip, isFiltered?.('keys', k.id) && $style.activeChip]"
-								:title="t('mobilesheetsmanager', 'Toggle filter for key {name}', { name: k.name })"
+								:title="t('sheetmusic', 'Toggle filter for key {name}', { name: k.name })"
 								@click.stop="emit('filter-entity', 'keys', k)">
 								{{ k.name }}
 							</button>
@@ -160,13 +160,13 @@ const {
 				</div>
 
 				<div v-if="isColVisible('customGroup') && song.customGroups && song.customGroups.length > 0" :class="$style.metaRow">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Custom Group:') }}</span>
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Custom Group:') }}</span>
 					<div :class="$style.chipGroup">
 						<template v-for="(cg, idx) in song.customGroups" :key="cg.id">
 							<button
 								type="button"
 								:class="[$style.filterChip, isFiltered?.('customgroups', cg.id) && $style.activeChip]"
-								:title="t('mobilesheetsmanager', 'Toggle filter for custom group {name}', { name: cg.name })"
+								:title="t('sheetmusic', 'Toggle filter for custom group {name}', { name: cg.name })"
 								@click.stop="emit('filter-entity', 'customgroups', cg)">
 								{{ cg.name }}
 							</button>
@@ -176,13 +176,13 @@ const {
 				</div>
 
 				<div v-if="isColVisible('year') && song.years && song.years.length > 0" :class="$style.metaRow">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Year:') }}</span>
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Year:') }}</span>
 					<div :class="$style.chipGroup">
 						<template v-for="(y, idx) in song.years" :key="y.id">
 							<button
 								type="button"
 								:class="[$style.filterChip, isFiltered?.('years', y.id) && $style.activeChip]"
-								:title="t('mobilesheetsmanager', 'Toggle filter for year {name}', { name: y.name })"
+								:title="t('sheetmusic', 'Toggle filter for year {name}', { name: y.name })"
 								@click.stop="emit('filter-entity', 'years', y)">
 								{{ y.name }}
 							</button>
@@ -192,13 +192,13 @@ const {
 				</div>
 
 				<div v-if="isColVisible('signature') && song.signatures && song.signatures.length > 0" :class="$style.metaRow">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Time Signature:') }}</span>
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Time Signature:') }}</span>
 					<div :class="$style.chipGroup">
 						<template v-for="(s, idx) in song.signatures" :key="s.id">
 							<button
 								type="button"
 								:class="[$style.filterChip, isFiltered?.('signatures', s.id) && $style.activeChip]"
-								:title="t('mobilesheetsmanager', 'Toggle filter for signature {name}', { name: s.name })"
+								:title="t('sheetmusic', 'Toggle filter for signature {name}', { name: s.name })"
 								@click.stop="emit('filter-entity', 'signatures', s)">
 								{{ s.name }}
 							</button>
@@ -208,13 +208,13 @@ const {
 				</div>
 
 				<div v-if="isColVisible('sourceType') && song.sourceTypes && song.sourceTypes.length > 0" :class="$style.metaRow">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Source Type:') }}</span>
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Source Type:') }}</span>
 					<div :class="$style.chipGroup">
 						<template v-for="(st, idx) in song.sourceTypes" :key="st.id">
 							<button
 								type="button"
 								:class="[$style.filterChip, isFiltered?.('sourcetypes', st.id) && $style.activeChip]"
-								:title="t('mobilesheetsmanager', 'Toggle filter for source type {name}', { name: st.name })"
+								:title="t('sheetmusic', 'Toggle filter for source type {name}', { name: st.name })"
 								@click.stop="emit('filter-entity', 'sourcetypes', st)">
 								{{ st.name }}
 							</button>
@@ -224,42 +224,42 @@ const {
 				</div>
 
 				<div v-if="isColVisible('stars') && song.stars" :class="$style.metaRow">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Rating:') }}</span>
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Rating:') }}</span>
 					<span>{{ formatStars(song.stars) }}</span>
 				</div>
 
 				<div v-if="isColVisible('difficulty') && song.difficulty" :class="$style.metaRow">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Difficulty:') }}</span>
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Difficulty:') }}</span>
 					<span>{{ formatDifficulty(song.difficulty) }}</span>
 				</div>
 
 				<div v-if="isColVisible('duration') && song.duration" :class="$style.metaRow">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Duration:') }}</span>
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Duration:') }}</span>
 					<span>{{ formatDuration(song.duration) }}</span>
 				</div>
 
 				<div v-if="isColVisible('keywords') && song.keywords" :class="$style.metaRow">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Keywords:') }}</span>
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Keywords:') }}</span>
 					<span>{{ song.keywords }}</span>
 				</div>
 
 				<div v-if="isColVisible('custom') && song.custom" :class="$style.metaRow">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Custom:') }}</span>
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Custom:') }}</span>
 					<span>{{ song.custom }}</span>
 				</div>
 
 				<div v-if="isColVisible('custom2') && song.custom2" :class="$style.metaRow">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Custom 2:') }}</span>
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Custom 2:') }}</span>
 					<span>{{ song.custom2 }}</span>
 				</div>
 
 				<div v-if="isColVisible('lastModified') && song.lastModified" :class="$style.metaRow">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Last modified:') }}</span>
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Last modified:') }}</span>
 					<span>{{ formatDateTimestamp(song.lastModified) }}</span>
 				</div>
 
 				<div v-if="isColVisible('dateCreated') && song.dateCreated" :class="$style.metaRow">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Created:') }}</span>
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Created:') }}</span>
 					<span>{{ formatDateTimestamp(song.dateCreated) }}</span>
 				</div>
 			</div>
@@ -267,8 +267,8 @@ const {
 			<div :class="$style.cardActions" @click.stop>
 				<NcButton
 					size="small"
-					:title="t('mobilesheetsmanager', 'Edit song')"
-					:aria-label="t('mobilesheetsmanager', 'Edit song')"
+					:title="t('sheetmusic', 'Edit song')"
+					:aria-label="t('sheetmusic', 'Edit song')"
 					@click="emit('edit-song', song)">
 					<template #icon>
 						<PencilIcon :size="18" />
@@ -276,8 +276,8 @@ const {
 				</NcButton>
 				<NcButton
 					size="small"
-					:title="t('mobilesheetsmanager', 'View song')"
-					:aria-label="t('mobilesheetsmanager', 'View song')"
+					:title="t('sheetmusic', 'View song')"
+					:aria-label="t('sheetmusic', 'View song')"
 					@click="emit('view-song', song)">
 					<template #icon>
 						<EyeIcon :size="18" />

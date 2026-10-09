@@ -147,7 +147,7 @@ onMounted(() => {
 		:open="open"
 		size="large"
 		:can-close="true"
-		:name="t('mobilesheetsmanager', 'Rotate Page {page} of {total}', { page: pageNum, total: totalPages })"
+		:name="t('sheetmusic', 'Rotate Page {page} of {total}', { page: pageNum, total: totalPages })"
 		@update:open="emit('update:open', $event)">
 		<div :class="$style.dialogBody">
 			<!-- Header Toolbar -->
@@ -157,20 +157,20 @@ onMounted(() => {
 						size="small"
 						variant="secondary"
 						:disabled="pageNum <= 1"
-						:title="t('mobilesheetsmanager', 'Previous page')"
+						:title="t('sheetmusic', 'Previous page')"
 						@click="prevPage">
 						<template #icon>
 							<ArrowLeft :size="16" />
 						</template>
 					</NcButton>
 					<span :class="$style.pageIndicator">
-						{{ t('mobilesheetsmanager', 'Page {page} of {total}', { page: pageNum, total: totalPages }) }}
+						{{ t('sheetmusic', 'Page {page} of {total}', { page: pageNum, total: totalPages }) }}
 					</span>
 					<NcButton
 						size="small"
 						variant="secondary"
 						:disabled="pageNum >= totalPages"
-						:title="t('mobilesheetsmanager', 'Next page')"
+						:title="t('sheetmusic', 'Next page')"
 						@click="nextPage">
 						<template #icon>
 							<ArrowRight :size="16" />
@@ -182,23 +182,23 @@ onMounted(() => {
 					<NcButton
 						size="small"
 						:variant="showGrid ? 'primary' : 'tertiary'"
-						:title="t('mobilesheetsmanager', 'Toggle alignment grid for staff deskewing')"
+						:title="t('sheetmusic', 'Toggle alignment grid for staff deskewing')"
 						@click="showGrid = !showGrid">
 						<template #icon>
 							<Grid :size="16" />
 						</template>
-						{{ t('mobilesheetsmanager', 'Alignment Grid') }}
+						{{ t('sheetmusic', 'Alignment Grid') }}
 					</NcButton>
 					<NcButton
 						size="small"
 						variant="tertiary"
 						:disabled="currentAngle === 0"
-						:title="t('mobilesheetsmanager', 'Reset angle to 0°')"
+						:title="t('sheetmusic', 'Reset angle to 0°')"
 						@click="resetAngle">
 						<template #icon>
 							<RestoreIcon :size="16" />
 						</template>
-						{{ t('mobilesheetsmanager', 'Reset to 0°') }}
+						{{ t('sheetmusic', 'Reset to 0°') }}
 					</NcButton>
 				</div>
 			</div>
@@ -251,7 +251,7 @@ onMounted(() => {
 				<div :class="$style.angleDisplayRow">
 					<span :class="$style.angleLabel">
 						<Rotate360 :size="20" />
-						<strong>{{ t('mobilesheetsmanager', 'Rotation Angle:') }}</strong>
+						<strong>{{ t('sheetmusic', 'Rotation Angle:') }}</strong>
 					</span>
 					<div :class="$style.angleInputWrapper">
 						<input
@@ -261,11 +261,11 @@ onMounted(() => {
 							min="-360"
 							max="360"
 							:class="$style.numberInput"
-							:aria-label="t('mobilesheetsmanager', 'Rotation angle in degrees')">
+							:aria-label="t('sheetmusic', 'Rotation angle in degrees')">
 						<span :class="$style.degreeSign">°</span>
 					</div>
 					<span :class="$style.directionHint">
-						{{ currentAngle > 0 ? t('mobilesheetsmanager', '(Clockwise)') : currentAngle < 0 ? t('mobilesheetsmanager', '(Counter-Clockwise)') : '' }}
+						{{ currentAngle > 0 ? t('sheetmusic', '(Clockwise)') : currentAngle < 0 ? t('sheetmusic', '(Counter-Clockwise)') : '' }}
 					</span>
 				</div>
 
@@ -279,12 +279,12 @@ onMounted(() => {
 						:max="sliderMax"
 						step="0.1"
 						:class="$style.angleSlider"
-						:aria-label="t('mobilesheetsmanager', 'Angle slider')">
+						:aria-label="t('sheetmusic', 'Angle slider')">
 					<span :class="$style.sliderEdgeLabel">+{{ sliderMax }}°</span>
 					<button
 						type="button"
 						:class="$style.expandRangeBtn"
-						:title="sliderExpanded ? t('mobilesheetsmanager', 'Switch to fine slider range (±45°)') : t('mobilesheetsmanager', 'Expand slider range to full ±180°')"
+						:title="sliderExpanded ? t('sheetmusic', 'Switch to fine slider range (±45°)') : t('sheetmusic', 'Expand slider range to full ±180°')"
 						@click="sliderExpanded = !sliderExpanded">
 						{{ sliderExpanded ? '±45°' : '±180°' }}
 					</button>
@@ -293,7 +293,7 @@ onMounted(() => {
 				<!-- Quick Step Fine-Tuning Buttons -->
 				<div :class="$style.quickButtonsGroup">
 					<div :class="$style.fineTuneSubgroup">
-						<span :class="$style.subgroupTitle">{{ t('mobilesheetsmanager', 'Fine deskew:') }}</span>
+						<span :class="$style.subgroupTitle">{{ t('sheetmusic', 'Fine deskew:') }}</span>
 						<NcButton size="small" variant="secondary" @click="adjustAngle(-5)">-5°</NcButton>
 						<NcButton size="small" variant="secondary" @click="adjustAngle(-1)">-1°</NcButton>
 						<NcButton size="small" variant="secondary" @click="adjustAngle(-0.5)">-0.5°</NcButton>
@@ -306,7 +306,7 @@ onMounted(() => {
 					</div>
 
 					<div :class="$style.standardTurnsSubgroup">
-						<span :class="$style.subgroupTitle">{{ t('mobilesheetsmanager', '90° turns:') }}</span>
+						<span :class="$style.subgroupTitle">{{ t('sheetmusic', '90° turns:') }}</span>
 						<NcButton size="small" variant="secondary" @click="adjustAngle(-90)">
 							<template #icon>
 								<RotateLeft :size="16" />
@@ -333,12 +333,12 @@ onMounted(() => {
 							type="checkbox"
 							:class="$style.checkbox"
 							data-test="crop-to-original-checkbox">
-						<span>{{ t('mobilesheetsmanager', 'Crop page when rotating (keep original size)') }}</span>
+						<span>{{ t('sheetmusic', 'Crop page when rotating (keep original size)') }}</span>
 					</label>
 					<span :class="$style.optionHint">
 						{{ cropToOriginalSize
-							? t('mobilesheetsmanager', 'Keeps original page dimensions. Rotated corners outside the page bounds will be cropped.')
-							: t('mobilesheetsmanager', 'Expands page boundaries so no content is clipped.') }}
+							? t('sheetmusic', 'Keeps original page dimensions. Rotated corners outside the page bounds will be cropped.')
+							: t('sheetmusic', 'Expands page boundaries so no content is clipped.') }}
 					</span>
 				</div>
 			</div>
@@ -346,14 +346,14 @@ onMounted(() => {
 			<!-- Footer Settings & Actions -->
 			<div :class="$style.footer">
 				<div :class="$style.scopeSelector">
-					<span :class="$style.scopeLabel">{{ t('mobilesheetsmanager', 'Apply rotation to:') }}</span>
+					<span :class="$style.scopeLabel">{{ t('sheetmusic', 'Apply rotation to:') }}</span>
 					<label :class="$style.radioOption">
 						<input
 							v-model="applyScope"
 							type="radio"
 							value="current"
 							name="rotateScope">
-						<span>{{ t('mobilesheetsmanager', 'Page {page} only', { page: pageNum }) }}</span>
+						<span>{{ t('sheetmusic', 'Page {page} only', { page: pageNum }) }}</span>
 					</label>
 					<label :class="$style.radioOption">
 						<input
@@ -361,7 +361,7 @@ onMounted(() => {
 							type="radio"
 							value="all"
 							name="rotateScope">
-						<span>{{ t('mobilesheetsmanager', 'All pages ({count})', { count: allPagesCount }) }}</span>
+						<span>{{ t('sheetmusic', 'All pages ({count})', { count: allPagesCount }) }}</span>
 					</label>
 				</div>
 
@@ -369,7 +369,7 @@ onMounted(() => {
 					<NcButton
 						variant="secondary"
 						@click="handleClose">
-						{{ t('mobilesheetsmanager', 'Cancel') }}
+						{{ t('sheetmusic', 'Cancel') }}
 					</NcButton>
 					<NcButton
 						variant="primary"
@@ -377,7 +377,7 @@ onMounted(() => {
 						<template #icon>
 							<CheckIcon :size="18" />
 						</template>
-						{{ t('mobilesheetsmanager', 'Apply Rotation') }}
+						{{ t('sheetmusic', 'Apply Rotation') }}
 					</NcButton>
 				</div>
 			</div>

@@ -300,7 +300,7 @@ onUnmounted(() => {
 		:open="open"
 		size="large"
 		:can-close="true"
-		:name="t('mobilesheetsmanager', 'Crop Page {page} of {total}', { page: pageNum, total: totalPages })"
+		:name="t('sheetmusic', 'Crop Page {page} of {total}', { page: pageNum, total: totalPages })"
 		@update:open="emit('update:open', $event)">
 		<div :class="$style.dialogBody">
 			<!-- Header / Instruction Bar -->
@@ -310,20 +310,20 @@ onUnmounted(() => {
 						size="small"
 						variant="secondary"
 						:disabled="pageNum <= 1"
-						:title="t('mobilesheetsmanager', 'Previous page')"
+						:title="t('sheetmusic', 'Previous page')"
 						@click="prevPage">
 						<template #icon>
 							<ArrowLeft :size="16" />
 						</template>
 					</NcButton>
 					<span :class="$style.pageIndicator">
-						{{ t('mobilesheetsmanager', 'Page {page} of {total}', { page: pageNum, total: totalPages }) }}
+						{{ t('sheetmusic', 'Page {page} of {total}', { page: pageNum, total: totalPages }) }}
 					</span>
 					<NcButton
 						size="small"
 						variant="secondary"
 						:disabled="pageNum >= totalPages"
-						:title="t('mobilesheetsmanager', 'Next page')"
+						:title="t('sheetmusic', 'Next page')"
 						@click="nextPage">
 						<template #icon>
 							<ArrowRight :size="16" />
@@ -335,27 +335,27 @@ onUnmounted(() => {
 					<NcButton
 						size="small"
 						variant="secondary"
-						:title="t('mobilesheetsmanager', 'Trim 5% margin from all edges')"
+						:title="t('sheetmusic', 'Trim 5% margin from all edges')"
 						@click="applyPreset(5)">
-						{{ t('mobilesheetsmanager', 'Trim 5%') }}
+						{{ t('sheetmusic', 'Trim 5%') }}
 					</NcButton>
 					<NcButton
 						size="small"
 						variant="secondary"
-						:title="t('mobilesheetsmanager', 'Trim 10% margin from all edges')"
+						:title="t('sheetmusic', 'Trim 10% margin from all edges')"
 						@click="applyPreset(10)">
-						{{ t('mobilesheetsmanager', 'Trim 10%') }}
+						{{ t('sheetmusic', 'Trim 10%') }}
 					</NcButton>
 					<NcButton
 						size="small"
 						variant="tertiary"
 						:disabled="!isCustomCropped"
-						:title="t('mobilesheetsmanager', 'Reset to full page')"
+						:title="t('sheetmusic', 'Reset to full page')"
 						@click="resetCrop">
 						<template #icon>
 							<RestoreIcon :size="16" />
 						</template>
-						{{ t('mobilesheetsmanager', 'Reset to Full Page') }}
+						{{ t('sheetmusic', 'Reset to Full Page') }}
 					</NcButton>
 				</div>
 			</div>
@@ -453,14 +453,14 @@ onUnmounted(() => {
 			<!-- Footer Settings & Actions -->
 			<div :class="$style.footer">
 				<div :class="$style.scopeSelector">
-					<span :class="$style.scopeLabel">{{ t('mobilesheetsmanager', 'Apply crop to:') }}</span>
+					<span :class="$style.scopeLabel">{{ t('sheetmusic', 'Apply crop to:') }}</span>
 					<label :class="$style.radioOption">
 						<input
 							v-model="applyScope"
 							type="radio"
 							value="current"
 							name="cropScope">
-						<span>{{ t('mobilesheetsmanager', 'Page {page} only', { page: pageNum }) }}</span>
+						<span>{{ t('sheetmusic', 'Page {page} only', { page: pageNum }) }}</span>
 					</label>
 					<label :class="$style.radioOption">
 						<input
@@ -468,7 +468,7 @@ onUnmounted(() => {
 							type="radio"
 							value="all"
 							name="cropScope">
-						<span>{{ t('mobilesheetsmanager', 'All pages ({count})', { count: allPagesCount }) }}</span>
+						<span>{{ t('sheetmusic', 'All pages ({count})', { count: allPagesCount }) }}</span>
 					</label>
 				</div>
 
@@ -476,7 +476,7 @@ onUnmounted(() => {
 					<NcButton
 						variant="secondary"
 						@click="handleClose">
-						{{ t('mobilesheetsmanager', 'Cancel') }}
+						{{ t('sheetmusic', 'Cancel') }}
 					</NcButton>
 					<NcButton
 						variant="primary"
@@ -484,7 +484,7 @@ onUnmounted(() => {
 						<template #icon>
 							<CheckIcon :size="18" />
 						</template>
-						{{ t('mobilesheetsmanager', 'Apply Crop') }}
+						{{ t('sheetmusic', 'Apply Crop') }}
 					</NcButton>
 				</div>
 			</div>

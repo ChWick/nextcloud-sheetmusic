@@ -9,7 +9,7 @@ declare(strict_types=1);
 
 namespace Service;
 
-use OCA\MobileSheetsManager\Service\MobileSheetsPdf;
+use OCA\SheetMusic\Service\MobileSheetsPdf;
 use PHPUnit\Framework\TestCase;
 
 final class MobileSheetsPdfTest extends TestCase {

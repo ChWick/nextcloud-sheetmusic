@@ -21,11 +21,11 @@ const emit = defineEmits<{
 					v-if="entry.songId > 0"
 					type="button"
 					:class="$style.songLink"
-					:title="t('mobilesheetsmanager', 'Open this song in the editor')"
+					:title="t('sheetmusic', 'Open this song in the editor')"
 					@click="emit('openSong', entry)">
 					{{ entry.songTitle || '#' + entry.songId }}
 				</button>
-				<strong v-else>{{ t('mobilesheetsmanager', 'Library') }}</strong>
+				<strong v-else>{{ t('sheetmusic', 'Library') }}</strong>
 				<code v-if="displayPath(entry)" :class="$style.path">{{ displayPath(entry) }}</code>
 			</div>
 			<p :class="$style.message">{{ messageFor(entry) }}</p>
@@ -36,7 +36,7 @@ const emit = defineEmits<{
 			:class="$style.openLink"
 			target="_blank"
 			rel="noopener">
-			{{ t('mobilesheetsmanager', 'Open in Files') }}
+			{{ t('sheetmusic', 'Open in Files') }}
 		</a>
 	</li>
 </template>

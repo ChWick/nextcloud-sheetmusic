@@ -51,7 +51,7 @@ function handleOrphanResolved() {
 	if (activeOrphanIssue.value) {
 		const key = keyForIssue(activeOrphanIssue.value)
 		integrityIssues.value = integrityIssues.value.filter(i => keyForIssue(i) !== key)
-		showSuccess(t('mobilesheetsmanager', 'Orphan file resolved successfully.'))
+		showSuccess(t('sheetmusic', 'Orphan file resolved successfully.'))
 	}
 	activeOrphanIssue.value = null
 }
@@ -73,15 +73,15 @@ const groupedIssues = computed(() => {
 		const type = issue.type
 		if (!groups[type]) {
 			let title = type.replace(/_/g, ' ')
-			if (type === 'invalid_naming_rule') title = t('mobilesheetsmanager', 'Invalid Naming Rules')
-			else if (type === 'duplicate_file_path') title = t('mobilesheetsmanager', 'Duplicate File Paths')
-			else if (type === 'duplicate_entity_assignment') title = t('mobilesheetsmanager', 'Duplicate Song Assignments')
-			else if (type === 'duplicate_entity') title = t('mobilesheetsmanager', 'Duplicate Entities')
-			else if (type === 'missing_file') title = t('mobilesheetsmanager', 'Missing Files')
-			else if (type === 'orphan_file') title = t('mobilesheetsmanager', 'Orphan Files')
-			else if (type === 'identical_song') title = t('mobilesheetsmanager', 'Identical Songs (Duplicates)')
-			else if (type === 'pdf_metadata_mismatch') title = t('mobilesheetsmanager', 'PDF Metadata Mismatches')
-			else if (type === 'pdf_metadata_unreadable') title = t('mobilesheetsmanager', 'PDF Metadata Could Not Be Verified')
+			if (type === 'invalid_naming_rule') title = t('sheetmusic', 'Invalid Naming Rules')
+			else if (type === 'duplicate_file_path') title = t('sheetmusic', 'Duplicate File Paths')
+			else if (type === 'duplicate_entity_assignment') title = t('sheetmusic', 'Duplicate Song Assignments')
+			else if (type === 'duplicate_entity') title = t('sheetmusic', 'Duplicate Entities')
+			else if (type === 'missing_file') title = t('sheetmusic', 'Missing Files')
+			else if (type === 'orphan_file') title = t('sheetmusic', 'Orphan Files')
+			else if (type === 'identical_song') title = t('sheetmusic', 'Identical Songs (Duplicates)')
+			else if (type === 'pdf_metadata_mismatch') title = t('sheetmusic', 'PDF Metadata Mismatches')
+			else if (type === 'pdf_metadata_unreadable') title = t('sheetmusic', 'PDF Metadata Could Not Be Verified')
 
 			groups[type] = {
 				type,
@@ -115,7 +115,7 @@ async function auditIntegrity(keepCurrentIssues = false) {
 		integrityIssues.value = response.data?.ocs?.data?.issues ?? []
 	} catch (error) {
 		console.error('Failed to audit library integrity:', error)
-		const serverMessage = describeRequestFailure(error, t('mobilesheetsmanager', 'Failed to audit library integrity. Please try again.'))
+		const serverMessage = describeRequestFailure(error, t('sheetmusic', 'Failed to audit library integrity. Please try again.'))
 		integrityError.value = serverMessage
 		showError(serverMessage)
 	} finally {
@@ -149,7 +149,7 @@ async function fixAllIssues(issueType?: string) {
 		})
 		const result = response.data?.ocs?.data
 		if (result && !result.success) {
-			const errorMsg = result.message ?? t('mobilesheetsmanager', 'Failed to fix integrity issues.')
+			const errorMsg = result.message ?? t('sheetmusic', 'Failed to fix integrity issues.')
 			integrityError.value = errorMsg
 			showError(errorMsg)
 		} else {
@@ -164,12 +164,12 @@ async function fixAllIssues(issueType?: string) {
 			if (result?.message && result.message.includes('failed:')) {
 				showWarning(result.message)
 			} else {
-				showSuccess(t('mobilesheetsmanager', 'Fixed {count} integrity issue(s).', { count: fixedCount }))
+				showSuccess(t('sheetmusic', 'Fixed {count} integrity issue(s).', { count: fixedCount }))
 			}
 		}
 	} catch (error) {
 		console.error('Failed to batch fix integrity issues:', error)
-		const serverMessage = describeRequestFailure(error, t('mobilesheetsmanager', 'Failed to batch fix integrity issues. Please try again.'))
+		const serverMessage = describeRequestFailure(error, t('sheetmusic', 'Failed to batch fix integrity issues. Please try again.'))
 		integrityError.value = serverMessage
 		showError(serverMessage)
 	} finally {
@@ -193,23 +193,23 @@ async function fixIntegrityIssue(issue: IntegrityIssue) {
 		})
 		const result = response.data?.ocs?.data
 		if (result && !result.success) {
-			const errorMsg = result.message ?? t('mobilesheetsmanager', 'Failed to fix integrity issue.')
+			const errorMsg = result.message ?? t('sheetmusic', 'Failed to fix integrity issue.')
 			integrityError.value = errorMsg
 			showError(errorMsg)
 		} else {
 			integrityIssues.value = integrityIssues.value.filter(i => keyForIssue(i) !== key)
 			const songTitle = issue.songTitle
 			if (issue.type === 'invalid_naming_rule' && songTitle) {
-				showSuccess(t('mobilesheetsmanager', 'Naming rule applied for "{title}".', { title: songTitle }))
+				showSuccess(t('sheetmusic', 'Naming rule applied for "{title}".', { title: songTitle }))
 			} else if (songTitle) {
-				showSuccess(t('mobilesheetsmanager', 'Fixed integrity issue for "{title}".', { title: songTitle }))
+				showSuccess(t('sheetmusic', 'Fixed integrity issue for "{title}".', { title: songTitle }))
 			} else {
-				showSuccess(result?.message ?? t('mobilesheetsmanager', 'Integrity issue fixed successfully.'))
+				showSuccess(result?.message ?? t('sheetmusic', 'Integrity issue fixed successfully.'))
 			}
 		}
 	} catch (error) {
 		console.error('Failed to fix integrity issue:', error)
-		const serverMessage = describeRequestFailure(error, t('mobilesheetsmanager', 'Failed to fix integrity issue. Please try again.'))
+		const serverMessage = describeRequestFailure(error, t('sheetmusic', 'Failed to fix integrity issue. Please try again.'))
 		integrityError.value = serverMessage
 		showError(serverMessage)
 	} finally {
@@ -242,7 +242,7 @@ async function executeMerge(payload: {
 	integrityError.value = ''
 	try {
 		await axios.post(
-			`/ocs/v2.php/apps/mobilesheetsmanager/api/songs/merge`,
+			`/ocs/v2.php/apps/sheetmusic/api/songs/merge`,
 			{
 				libraryId: props.selectedLibrary,
 				keepId: payload.keepId,
@@ -259,13 +259,13 @@ async function executeMerge(payload: {
 		}
 		mergeIssue.value = null
 		if (keepTitle) {
-			showSuccess(t('mobilesheetsmanager', 'Songs merged successfully into "{title}".', { title: keepTitle }))
+			showSuccess(t('sheetmusic', 'Songs merged successfully into "{title}".', { title: keepTitle }))
 		} else {
-			showSuccess(t('mobilesheetsmanager', 'Songs merged successfully.'))
+			showSuccess(t('sheetmusic', 'Songs merged successfully.'))
 		}
 	} catch (error) {
 		console.error('Failed to merge songs:', error)
-		const serverMessage = describeRequestFailure(error, t('mobilesheetsmanager', 'Failed to merge songs. Please try again.'))
+		const serverMessage = describeRequestFailure(error, t('sheetmusic', 'Failed to merge songs. Please try again.'))
 		integrityError.value = serverMessage
 		showError(serverMessage)
 	} finally {
@@ -296,10 +296,10 @@ async function executeResolveBoth(payload: {
 			integrityIssues.value = integrityIssues.value.filter(i => keyForIssue(i) !== mKey)
 		}
 		mergeIssue.value = null
-		showSuccess(t('mobilesheetsmanager', 'Both songs saved successfully.'))
+		showSuccess(t('sheetmusic', 'Both songs saved successfully.'))
 	} catch (error: any) {
 		console.error('Failed to resolve both songs:', error)
-		const serverMessage = describeRequestFailure(error, t('mobilesheetsmanager', 'Failed to save updated songs. Please try again.'))
+		const serverMessage = describeRequestFailure(error, t('sheetmusic', 'Failed to save updated songs. Please try again.'))
 		integrityError.value = serverMessage
 		showError(serverMessage)
 	} finally {
@@ -330,7 +330,7 @@ function openSong(songId: number) {
 			@resolved="handleOrphanResolved" />
 
 		<template v-else>
-			<ViewHeader :title="t('mobilesheetsmanager', 'Integrity Audit')">
+			<ViewHeader :title="t('sheetmusic', 'Integrity Audit')">
 				<template #actions>
 					<NcButton
 						variant="secondary"
@@ -339,7 +339,7 @@ function openSong(songId: number) {
 						<template #icon>
 							<RefreshIcon :size="20" />
 						</template>
-						{{ t('mobilesheetsmanager', 'Re-audit Library') }}
+						{{ t('sheetmusic', 'Re-audit Library') }}
 					</NcButton>
 				</template>
 			</ViewHeader>
@@ -347,24 +347,24 @@ function openSong(songId: number) {
 			<div :class="$style.content">
 				<div v-if="isCheckingIntegrity && integrityIssues.length === 0" :class="$style.loading">
 					<NcLoadingIcon :size="36" />
-					<span>{{ t('mobilesheetsmanager', 'Auditing library files and database integrity…') }}</span>
+					<span>{{ t('sheetmusic', 'Auditing library files and database integrity…') }}</span>
 				</div>
 
 				<template v-else>
 					<div v-if="isCheckingIntegrity && integrityIssues.length > 0" :class="$style.reloadingNotice">
 						<NcLoadingIcon :size="20" />
-						<span>{{ t('mobilesheetsmanager', 'Auditing library files and database integrity…') }}</span>
+						<span>{{ t('sheetmusic', 'Auditing library files and database integrity…') }}</span>
 					</div>
 
 					<div v-if="integrityIssues.length === 0" :class="$style.cleanNotice">
-						<h2>{{ t('mobilesheetsmanager', 'All System Checks Passed!') }}</h2>
-						<p>{{ t('mobilesheetsmanager', 'No missing files, orphan database records, or duplicate path conflicts were detected in this MobileSheets library.') }}</p>
+						<h2>{{ t('sheetmusic', 'All System Checks Passed!') }}</h2>
+						<p>{{ t('sheetmusic', 'No missing files, orphan database records, or duplicate path conflicts were detected in this MobileSheets library.') }}</p>
 					</div>
 
 					<div v-else-if="integrityIssues.length > 0" :class="$style.issueContainer">
 						<div :class="$style.summaryHeader">
 							<span :class="$style.issueCount">
-								{{ t('mobilesheetsmanager', '{count} issue(s) detected requiring attention', { count: integrityIssues.length }) }}
+								{{ t('sheetmusic', '{count} issue(s) detected requiring attention', { count: integrityIssues.length }) }}
 							</span>
 							<NcButton
 								v-if="fixableCount > 0"
@@ -374,7 +374,7 @@ function openSong(songId: number) {
 								<template #icon>
 									<WrenchIcon :size="18" />
 								</template>
-								{{ isBatchFixing ? t('mobilesheetsmanager', 'Fixing All…') : t('mobilesheetsmanager', 'Fix All Fixable Issues ({count})', { count: fixableCount }) }}
+								{{ isBatchFixing ? t('sheetmusic', 'Fixing All…') : t('sheetmusic', 'Fix All Fixable Issues ({count})', { count: fixableCount }) }}
 							</NcButton>
 						</div>
 
@@ -384,7 +384,7 @@ function openSong(songId: number) {
 									<NcButton
 										variant="tertiary"
 										size="small"
-										:aria-label="isGroupCollapsed(group.type) ? t('mobilesheetsmanager', 'Expand group') : t('mobilesheetsmanager', 'Collapse group')">
+										:aria-label="isGroupCollapsed(group.type) ? t('sheetmusic', 'Expand group') : t('sheetmusic', 'Collapse group')">
 										<template #icon>
 											<ChevronRightIcon v-if="isGroupCollapsed(group.type)" :size="20" />
 											<ChevronDownIcon v-else :size="20" />
@@ -402,7 +402,7 @@ function openSong(songId: number) {
 									<template #icon>
 										<WrenchIcon :size="16" />
 									</template>
-									{{ t('mobilesheetsmanager', 'Fix All in Group ({count})', { count: group.fixableCount }) }}
+									{{ t('sheetmusic', 'Fix All in Group ({count})', { count: group.fixableCount }) }}
 								</NcButton>
 							</div>
 
@@ -436,11 +436,11 @@ function openSong(songId: number) {
 
 		<NcDialog
 			v-if="isBatchFixing"
-			:name="t('mobilesheetsmanager', 'Fixing issues…')"
+			:name="t('sheetmusic', 'Fixing issues…')"
 			size="small">
 			<div :class="$style.dialogLoading">
 				<NcLoadingIcon :size="36" />
-				<span>{{ t('mobilesheetsmanager', 'Fixing integrity issues in library…') }}</span>
+				<span>{{ t('sheetmusic', 'Fixing integrity issues in library…') }}</span>
 			</div>
 		</NcDialog>
 	</div>

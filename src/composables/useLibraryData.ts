@@ -41,7 +41,7 @@ export function useLibraryData() {
 			const response = await apiGet('/api/songs', { queryParams: { id } })
 			handleLibraryDataUpdate(response.data.ocs.data)
 		} catch (error) {
-			fileError.value = describeRequestFailure(error, t('mobilesheetsmanager', 'Could not load this library.'))
+			fileError.value = describeRequestFailure(error, t('sheetmusic', 'Could not load this library.'))
 			showError(fileError.value)
 		} finally {
 			isLoading.value = false

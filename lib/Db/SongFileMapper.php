@@ -7,10 +7,9 @@ declare(strict_types=1);
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-namespace OCA\MobileSheetsManager\Db;
+namespace OCA\SheetMusic\Db;
 
-use OCA\MobileSheetsManager\Service\MobileSheetsFileFacts;
-use PDO;
+use OCA\SheetMusic\Service\MobileSheetsFileFacts;
 
 class SongFileMapper extends AbstractDatabaseMapper {
 	/** Source of a file that lives in the library folder. */
@@ -169,4 +168,3 @@ class SongFileMapper extends AbstractDatabaseMapper {
 		return ((int)$stmt->fetchColumn()) > 0;
 	}
 }
-

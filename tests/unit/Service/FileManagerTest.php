@@ -9,20 +9,20 @@ declare(strict_types=1);
 
 namespace Service;
 
-use OCA\MobileSheetsManager\Db\LibraryMapper;
-use OCA\MobileSheetsManager\Db\MobileSheetsArtist;
-use OCA\MobileSheetsManager\Db\MobileSheetsBook;
-use OCA\MobileSheetsManager\Db\MobileSheetsCollection;
-use OCA\MobileSheetsManager\Db\MobileSheetsComposer;
-use OCA\MobileSheetsManager\Db\MobileSheetsFile;
-use OCA\MobileSheetsManager\Db\MobileSheetsSong;
-use OCA\MobileSheetsManager\Db\SongMapper;
-use OCA\MobileSheetsManager\Service\FileManager;
-use OCA\MobileSheetsManager\Service\MobileSheetsFileLogEntry;
-use OCA\MobileSheetsManager\Service\MobileSheetsHashCodesFile;
-use OCA\MobileSheetsManager\Service\MobileSheetsPathResolver;
-use OCA\MobileSheetsManager\Service\MobileSheetsPdfMetadata;
-use OCA\MobileSheetsManager\Service\SyncException;
+use OCA\SheetMusic\Db\LibraryMapper;
+use OCA\SheetMusic\Db\MobileSheetsArtist;
+use OCA\SheetMusic\Db\MobileSheetsBook;
+use OCA\SheetMusic\Db\MobileSheetsCollection;
+use OCA\SheetMusic\Db\MobileSheetsComposer;
+use OCA\SheetMusic\Db\MobileSheetsFile;
+use OCA\SheetMusic\Db\MobileSheetsSong;
+use OCA\SheetMusic\Db\SongMapper;
+use OCA\SheetMusic\Service\FileManager;
+use OCA\SheetMusic\Service\MobileSheetsFileLogEntry;
+use OCA\SheetMusic\Service\MobileSheetsHashCodesFile;
+use OCA\SheetMusic\Service\MobileSheetsPathResolver;
+use OCA\SheetMusic\Service\MobileSheetsPdfMetadata;
+use OCA\SheetMusic\Service\SyncException;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
@@ -30,12 +30,12 @@ use OCP\Files\IUserFolder;
 use OCP\Files\Node;
 use OCP\Files\Storage\IStorage;
 use OCP\IUser;
-use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 use TestSupport\TestUtils;
-use function OCA\MobileSheetsManager\Service\fileIndexOf;
-use function OCA\MobileSheetsManager\Service\fileIndexPrefix;
+use function OCA\SheetMusic\Service\fileIndexOf;
+use function OCA\SheetMusic\Service\fileIndexPrefix;
 
 /**
  * Covers FileManager::regenerateFilePath(), which moves a MobileSheets file to its
@@ -221,10 +221,10 @@ final class FileManagerTest extends TestCase {
 			[],
 			[],
 			[],
-			[new \OCA\MobileSheetsManager\Db\MobileSheetsKey(1, 'Ebm')],
+			[new \OCA\SheetMusic\Db\MobileSheetsKey(1, 'Ebm')],
 		);
 
-		$paths = \OCA\MobileSheetsManager\Service\createTargetPaths($song, '.pdf');
+		$paths = \OCA\SheetMusic\Service\createTargetPaths($song, '.pdf');
 
 		self::assertCount(2, $paths);
 		self::assertSame('Dave Brubeck/Dave Brubeck - Take Five in E♭m.pdf', $paths[0]);
@@ -245,10 +245,10 @@ final class FileManagerTest extends TestCase {
 				[],
 				[],
 				[],
-				[new \OCA\MobileSheetsManager\Db\MobileSheetsKey(1, $keyName)],
+				[new \OCA\SheetMusic\Db\MobileSheetsKey(1, $keyName)],
 			);
 
-			$path = \OCA\MobileSheetsManager\Service\createTargetPath($song, '.pdf');
+			$path = \OCA\SheetMusic\Service\createTargetPath($song, '.pdf');
 			self::assertSame(
 				'Bach/Bach - Take Five in ' . $expected[$index] . '.pdf',
 				$path,
@@ -267,12 +267,12 @@ final class FileManagerTest extends TestCase {
 			[],
 			[],
 			[],
-			[new \OCA\MobileSheetsManager\Db\MobileSheetsKey(1, 'Blues')],
+			[new \OCA\SheetMusic\Db\MobileSheetsKey(1, 'Blues')],
 		);
 
 		self::assertSame(
 			'Bach/Bach - Blue in Blues.pdf',
-			\OCA\MobileSheetsManager\Service\createTargetPath($song, '.pdf'),
+			\OCA\SheetMusic\Service\createTargetPath($song, '.pdf'),
 		);
 	}
 
@@ -285,7 +285,7 @@ final class FileManagerTest extends TestCase {
 			[new MobileSheetsBook(1, 'Book?.')],
 		);
 
-		$path = \OCA\MobileSheetsManager\Service\createTargetPath($song, '.pdf');
+		$path = \OCA\SheetMusic\Service\createTargetPath($song, '.pdf');
 
 		self::assertSame('Bad-Composer/Bad-Composer - Book-/Bad-Composer - Book- - Song - Name.pdf', $path);
 		foreach (explode('/', $path) as $segment) {
@@ -305,7 +305,7 @@ final class FileManagerTest extends TestCase {
 
 		self::assertSame(
 			'_CON/_CON - Take Five.pdf',
-			\OCA\MobileSheetsManager\Service\createTargetPath($song, '.pdf'),
+			\OCA\SheetMusic\Service\createTargetPath($song, '.pdf'),
 		);
 	}
 
@@ -317,7 +317,7 @@ final class FileManagerTest extends TestCase {
 			[new MobileSheetsComposer(1, 'Miles')],
 		);
 
-		$path = \OCA\MobileSheetsManager\Service\createTargetPath($song, '.pdf');
+		$path = \OCA\SheetMusic\Service\createTargetPath($song, '.pdf');
 		$fileName = basename($path);
 
 		self::assertLessThanOrEqual(250, strlen($fileName));
@@ -335,7 +335,7 @@ final class FileManagerTest extends TestCase {
 			[new MobileSheetsCollection(1, 'Jazz')],
 		);
 
-		$path = \OCA\MobileSheetsManager\Service\createTargetPath($song, '.part');
+		$path = \OCA\SheetMusic\Service\createTargetPath($song, '.part');
 
 		self::assertStringEndsWith('Take Five-part', $path);
 		self::assertFalse(str_ends_with($path, '.part'));
@@ -351,7 +351,7 @@ final class FileManagerTest extends TestCase {
 			'two dots' => ['..'],
 			'only dots' => ['.....'],
 			'only spaces' => ['     '],
-			'trailing spaces and dots' => ["  Song title...   "],
+			'trailing spaces and dots' => ['  Song title...   '],
 			'leading dots' => ['...Song'],
 			'path separators' => ['../folder\\song'],
 			'windows reserved characters' => ['a<b>c:d"e/f\\g|h?i*j'],
@@ -383,13 +383,13 @@ final class FileManagerTest extends TestCase {
 			'artist fallback' => new MobileSheetsSong(1, 'Take Five', [], [], [], [], [new MobileSheetsArtist(1, $name)]),
 			'book' => new MobileSheetsSong(1, 'Take Five', [], [new MobileSheetsComposer(1, 'Bach')], [new MobileSheetsBook(1, $name)]),
 			'collection' => new MobileSheetsSong(1, 'Take Five', [], [], [], [new MobileSheetsCollection(1, $name)]),
-			'key' => new MobileSheetsSong(1, 'Take Five', [], [new MobileSheetsComposer(1, 'Bach')], [], [], [], [], [new \OCA\MobileSheetsManager\Db\MobileSheetsKey(1, $name)]),
+			'key' => new MobileSheetsSong(1, 'Take Five', [], [new MobileSheetsComposer(1, 'Bach')], [], [], [], [], [new \OCA\SheetMusic\Db\MobileSheetsKey(1, $name)]),
 		];
 
 		foreach ($cases as $component => $song) {
 			try {
-				$paths = \OCA\MobileSheetsManager\Service\createTargetPaths($song, '.pdf');
-			} catch (\OCA\MobileSheetsManager\Service\NoNamingRuleException $exception) {
+				$paths = \OCA\SheetMusic\Service\createTargetPaths($song, '.pdf');
+			} catch (\OCA\SheetMusic\Service\NoNamingRuleException $exception) {
 				// An empty composer, artist, and collection is intentionally not a
 				// naming rule; callers already handle this domain exception.
 				self::assertSame('', $name, sprintf('Unexpected missing naming rule for %s', $component));
@@ -422,10 +422,10 @@ final class FileManagerTest extends TestCase {
 			[new MobileSheetsCollection(1, '...'), new MobileSheetsCollection(2, "\xFF")],
 			[new MobileSheetsArtist(1, 'Artist/Name')],
 			[],
-			[new \OCA\MobileSheetsManager\Db\MobileSheetsKey(1, "Key\tName")],
+			[new \OCA\SheetMusic\Db\MobileSheetsKey(1, "Key\tName")],
 		);
 
-		$paths = \OCA\MobileSheetsManager\Service\createTargetPaths($song, '.pdf');
+		$paths = \OCA\SheetMusic\Service\createTargetPaths($song, '.pdf');
 
 		self::assertNotEmpty($paths);
 		foreach ($paths as $path) {
@@ -453,11 +453,11 @@ final class FileManagerTest extends TestCase {
 				new MobileSheetsSong(1, 'Title', [], [], [], [], [new MobileSheetsArtist(1, $name)]),
 				new MobileSheetsSong(1, 'Title', [], [new MobileSheetsComposer(1, 'Composer')], [new MobileSheetsBook(1, $name)]),
 				new MobileSheetsSong(1, 'Title', [], [], [], [new MobileSheetsCollection(1, $name)]),
-				new MobileSheetsSong(1, 'Title', [], [new MobileSheetsComposer(1, 'Composer')], [], [], [], [], [new \OCA\MobileSheetsManager\Db\MobileSheetsKey(1, $name)]),
+				new MobileSheetsSong(1, 'Title', [], [new MobileSheetsComposer(1, 'Composer')], [], [], [], [], [new \OCA\SheetMusic\Db\MobileSheetsKey(1, $name)]),
 			];
 
 			foreach ($cases as $song) {
-				$paths = \OCA\MobileSheetsManager\Service\createTargetPaths($song, '.pdf');
+				$paths = \OCA\SheetMusic\Service\createTargetPaths($song, '.pdf');
 				self::assertNotEmpty($paths, sprintf('No path generated for byte 0x%02X', $byte));
 				foreach ($paths as $path) {
 					foreach (explode('/', $path) as $segment) {
@@ -494,7 +494,7 @@ final class FileManagerTest extends TestCase {
 		];
 
 		foreach ($extensions as $extension) {
-			$paths = \OCA\MobileSheetsManager\Service\createTargetPaths($song, $extension);
+			$paths = \OCA\SheetMusic\Service\createTargetPaths($song, $extension);
 			self::assertNotEmpty($paths, 'No path generated for extension ' . bin2hex($extension));
 			foreach ($paths as $path) {
 				foreach (explode('/', $path) as $segment) {

@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Controller;
 
-use OCA\MobileSheetsManager\Controller\LibraryController;
-use OCA\MobileSheetsManager\Db\LibraryMapper;
+use OCA\SheetMusic\Controller\LibraryController;
+use OCA\SheetMusic\Db\LibraryMapper;
 use OCP\AppFramework\Http;
 use OCP\IRequest;
 use OCP\IUser;
@@ -21,7 +21,7 @@ final class LibraryControllerTest extends TestCase {
 		$userSession->method('getUser')->willReturn(null);
 
 		$controller = new LibraryController(
-			'mobilesheetsmanager',
+			'sheetmusic',
 			$this->createMock(IRequest::class),
 			$this->createLibraryService(),
 			$userSession,
@@ -45,7 +45,7 @@ final class LibraryControllerTest extends TestCase {
 		$libraryService = $this->createLibraryServiceWithMapper($libraryMapper);
 
 		$controller = new LibraryController(
-			'mobilesheetsmanager',
+			'sheetmusic',
 			$this->createMock(IRequest::class),
 			$libraryService,
 			$userSession,
@@ -70,7 +70,7 @@ final class LibraryControllerTest extends TestCase {
 		$libraryService = $this->createLibraryServiceWithMapper($libraryMapper);
 
 		$controller = new LibraryController(
-			'mobilesheetsmanager',
+			'sheetmusic',
 			$this->createMock(IRequest::class),
 			$libraryService,
 			$userSession,
@@ -102,7 +102,7 @@ final class LibraryControllerTest extends TestCase {
 		$libraryService = $this->createLibraryServiceWithMapper($libraryMapper);
 
 		$controller = new LibraryController(
-			'mobilesheetsmanager',
+			'sheetmusic',
 			$this->createMock(IRequest::class),
 			$libraryService,
 			$userSession,
@@ -121,11 +121,11 @@ final class LibraryControllerTest extends TestCase {
 		$userSession->method('getUser')->willReturn($user);
 
 		$libraryService = $this->createLibraryService();
-		$integrityService = $this->createMock(\OCA\MobileSheetsManager\Service\LibraryIntegrityService::class);
+		$integrityService = $this->createMock(\OCA\SheetMusic\Service\LibraryIntegrityService::class);
 
-		$issue = new \OCA\MobileSheetsManager\Service\IntegrityIssue(
-			type: \OCA\MobileSheetsManager\Service\IntegrityIssue::TYPE_DUPLICATE_FILE_PATH,
-			severity: \OCA\MobileSheetsManager\Service\IntegrityIssue::SEVERITY_ERROR,
+		$issue = new \OCA\SheetMusic\Service\IntegrityIssue(
+			type: \OCA\SheetMusic\Service\IntegrityIssue::TYPE_DUPLICATE_FILE_PATH,
+			severity: \OCA\SheetMusic\Service\IntegrityIssue::SEVERITY_ERROR,
 			message: 'Multiple database entries point to the same file path',
 			songId: 60,
 			songTitle: 'Nachspiel',
@@ -145,7 +145,7 @@ final class LibraryControllerTest extends TestCase {
 			->willReturn([$issue]);
 
 		$controller = new LibraryController(
-			'mobilesheetsmanager',
+			'sheetmusic',
 			$this->createMock(IRequest::class),
 			$libraryService,
 			$userSession,
@@ -160,15 +160,15 @@ final class LibraryControllerTest extends TestCase {
 		$this->assertSame([
 			'songIds' => [60, 61],
 			'exactDuplicate' => false,
- 		], $data['issues'][0]['details']);
- 	}
+		], $data['issues'][0]['details']);
+	}
 
 	public function testUpdateSettingsRejectsUnauthenticated(): void {
 		$userSession = $this->createMock(IUserSession::class);
 		$userSession->method('getUser')->willReturn(null);
 
 		$controller = new LibraryController(
-			'mobilesheetsmanager',
+			'sheetmusic',
 			$this->createMock(IRequest::class),
 			$this->createLibraryService(),
 			$userSession,
@@ -189,7 +189,7 @@ final class LibraryControllerTest extends TestCase {
 		$libraryService = $this->createLibraryServiceWithMapper($libraryMapper);
 
 		$controller = new LibraryController(
-			'mobilesheetsmanager',
+			'sheetmusic',
 			$this->createMock(IRequest::class),
 			$libraryService,
 			$userSession,
@@ -216,7 +216,7 @@ final class LibraryControllerTest extends TestCase {
 		$libraryService = $this->createLibraryServiceWithMapper($libraryMapper);
 
 		$controller = new LibraryController(
-			'mobilesheetsmanager',
+			'sheetmusic',
 			$this->createMock(IRequest::class),
 			$libraryService,
 			$userSession,

@@ -44,7 +44,7 @@ async function updateSetting(settings: { autoPaths?: boolean, autoPdfMetadata?: 
 	saveError.value = ''
 	try {
 		const response = await axios.put(
-			`/ocs/v2.php/apps/mobilesheetsmanager/api/libraries/${props.selectedLibrary}/settings`,
+			`/ocs/v2.php/apps/sheetmusic/api/libraries/${props.selectedLibrary}/settings`,
 			settings,
 			{ headers: { 'OCS-APIREQUEST': 'true', Accept: 'application/json' } },
 		)
@@ -53,10 +53,10 @@ async function updateSetting(settings: { autoPaths?: boolean, autoPdfMetadata?: 
 			const updatedList = props.libraries.map(lib => lib.id === updatedLib.id ? { ...lib, ...updatedLib } : lib)
 			emit('update:libraries', updatedList)
 		}
-		showSuccess(t('mobilesheetsmanager', 'Library settings saved successfully.'))
+		showSuccess(t('sheetmusic', 'Library settings saved successfully.'))
 	} catch (error) {
 		console.error('Failed to update library settings:', error)
-		saveError.value = describeRequestFailure(error, t('mobilesheetsmanager', 'Could not save library settings.'))
+		saveError.value = describeRequestFailure(error, t('sheetmusic', 'Could not save library settings.'))
 		showError(saveError.value)
 	} finally {
 		isSaving.value = false
@@ -66,12 +66,12 @@ async function updateSetting(settings: { autoPaths?: boolean, autoPdfMetadata?: 
 
 <template>
 	<NcDialog
-		:name="t('mobilesheetsmanager', 'Library Settings')"
+		:name="t('sheetmusic', 'Library Settings')"
 		size="normal"
 		@close="emit('close')">
 		<div :class="$style.dialogBody">
 			<h4 :class="$style.sectionTitle">
-				{{ t('mobilesheetsmanager', 'File Management') }}
+				{{ t('sheetmusic', 'File Management') }}
 			</h4>
 
 			<div :class="$style.settingRow">
@@ -79,17 +79,17 @@ async function updateSetting(settings: { autoPaths?: boolean, autoPdfMetadata?: 
 					v-model="autoPathsModel"
 					type="switch"
 					:disabled="isSaving">
-					{{ t('mobilesheetsmanager', 'Automatic file path handling') }}
+					{{ t('sheetmusic', 'Automatic file path handling') }}
 				</NcCheckboxRadioSwitch>
 				<NcLoadingIcon v-if="isSaving" :size="20" :class="$style.loading" />
 			</div>
 
 			<p :class="$style.description">
-				{{ t('mobilesheetsmanager', 'When enabled, files are automatically organized and moved to subfolders based on song metadata (composer, artist, collection). When disabled, files remain in the library root folder and paths are never automatically changed.') }}
+				{{ t('sheetmusic', 'When enabled, files are automatically organized and moved to subfolders based on song metadata (composer, artist, collection). When disabled, files remain in the library root folder and paths are never automatically changed.') }}
 			</p>
 
 			<h4 :class="[$style.sectionTitle, $style.sectionMargin]">
-				{{ t('mobilesheetsmanager', 'PDF Metadata') }}
+				{{ t('sheetmusic', 'PDF Metadata') }}
 			</h4>
 
 			<div :class="$style.settingRow">
@@ -97,13 +97,13 @@ async function updateSetting(settings: { autoPaths?: boolean, autoPdfMetadata?: 
 					v-model="autoPdfMetadataModel"
 					type="switch"
 					:disabled="isSaving">
-					{{ t('mobilesheetsmanager', 'Automatic PDF metadata synchronization') }}
+					{{ t('sheetmusic', 'Automatic PDF metadata synchronization') }}
 				</NcCheckboxRadioSwitch>
 				<NcLoadingIcon v-if="isSaving" :size="20" :class="$style.loading" />
 			</div>
 
 			<p :class="$style.description">
-				{{ t('mobilesheetsmanager', 'When enabled, song metadata is automatically written to attached PDF files when saving songs. When disabled, PDF files are left unmodified.') }}
+				{{ t('sheetmusic', 'When enabled, song metadata is automatically written to attached PDF files when saving songs. When disabled, PDF files are left unmodified.') }}
 			</p>
 
 			<p v-if="saveError" :class="$style.error" role="alert">
@@ -113,7 +113,7 @@ async function updateSetting(settings: { autoPaths?: boolean, autoPdfMetadata?: 
 
 		<template #actions>
 			<NcButton @click="emit('close')">
-				{{ t('mobilesheetsmanager', 'Close') }}
+				{{ t('sheetmusic', 'Close') }}
 			</NcButton>
 		</template>
 	</NcDialog>

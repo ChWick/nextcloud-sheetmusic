@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace OCA\MobileSheetsManager\Controller;
+namespace OCA\SheetMusic\Controller;
 
-use OCA\MobileSheetsManager\Service\EntityService;
+use OCA\SheetMusic\Service\EntityService;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\ApiRoute;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -242,4 +242,3 @@ class EntityController extends OCSController {
 		}
 	}
 }
-

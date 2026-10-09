@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Service;
 
-use OCA\MobileSheetsManager\Db\SongMapper;
-use OCA\MobileSheetsManager\Service\FileManager;
-use OCA\MobileSheetsManager\Service\SongFileService;
-use OCA\MobileSheetsManager\Service\SongService;
+use OCA\SheetMusic\Db\SongMapper;
+use OCA\SheetMusic\Service\FileManager;
+use OCA\SheetMusic\Service\SongFileService;
+use OCA\SheetMusic\Service\SongService;
 use OCP\IUser;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
@@ -147,7 +147,7 @@ final class SongServiceTest extends TestCase {
 			'targetFolder' => $targetFolder,
 		]);
 
-		$integrityService = $this->createMock(\OCA\MobileSheetsManager\Service\LibraryIntegrityService::class);
+		$integrityService = $this->createMock(\OCA\SheetMusic\Service\LibraryIntegrityService::class);
 		$integrityService->method('checkIntegrity')->willReturn([]);
 
 		$service = new SongService(

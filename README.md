@@ -1,6 +1,6 @@
-# Mobile Sheets Manager
+# Sheet Music
 
-A template to get started with Nextcloud app development.
+A sheet music manager for Nextcloud.
 
 ## Usage
 
@@ -30,7 +30,7 @@ The app is developed against the Nextcloud container in `.docker/docker-compose.
 
 ```bash
 docker compose -f .docker/docker-compose.yml up -d
-docker compose -f .docker/docker-compose.yml exec nextcloud php occ app:enable mobilesheetsmanager
+docker compose -f .docker/docker-compose.yml exec nextcloud php occ app:enable sheetmusic
 npm install && npm run watch     # or: npm run build
 ```
 

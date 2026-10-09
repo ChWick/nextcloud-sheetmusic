@@ -9,7 +9,7 @@ declare(strict_types=1);
 
 namespace Db;
 
-use OCA\MobileSheetsManager\Db\LibraryEntityMapper;
+use OCA\SheetMusic\Db\LibraryEntityMapper;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 
@@ -18,7 +18,7 @@ final class LibraryEntityMapperTest extends TestCase {
 	private LibraryEntityMapper $entityMapper;
 
 	protected function setUp(): void {
-		$databasePath = tempnam(sys_get_temp_dir(), 'mobilesheetsmanager-entity-test-');
+		$databasePath = tempnam(sys_get_temp_dir(), 'sheetmusic-entity-test-');
 		self::assertNotFalse($databasePath);
 		$this->databasePath = $databasePath;
 
@@ -293,11 +293,11 @@ final class LibraryEntityMapperTest extends TestCase {
 		self::assertSame([
 			['SongId' => 10, 'Cnt' => 1],
 			['SongId' => 11, 'Cnt' => 1],
-		], array_map(static fn(array $r) => ['SongId' => (int)$r['SongId'], 'Cnt' => (int)$r['Cnt']], $links));
+		], array_map(static fn (array $r) => ['SongId' => (int)$r['SongId'], 'Cnt' => (int)$r['Cnt']], $links));
 	}
 
 	public function testSchemaCacheDoesNotLeakBetweenLibraryDatabases(): void {
-		$otherDatabasePath = tempnam(sys_get_temp_dir(), 'mobilesheetsmanager-entity-schema-test-');
+		$otherDatabasePath = tempnam(sys_get_temp_dir(), 'sheetmusic-entity-schema-test-');
 		self::assertNotFalse($otherDatabasePath);
 		try {
 			$otherDatabase = new \PDO('sqlite:' . $otherDatabasePath);

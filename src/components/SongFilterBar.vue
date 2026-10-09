@@ -157,12 +157,12 @@ function clearAllFilters() {
 </script>
 
 <template>
-	<div :class="$style.filterBar" role="region" :aria-label="t('mobilesheetsmanager', 'Song filters')">
+	<div :class="$style.filterBar" role="region" :aria-label="t('sheetmusic', 'Song filters')">
 		<div :class="$style.filterGroup">
 			<NcTextField
 				:model-value="searchTitle"
-				:placeholder="t('mobilesheetsmanager', 'Search by title…')"
-				:label="t('mobilesheetsmanager', 'Search title')"
+				:placeholder="t('sheetmusic', 'Search by title…')"
+				:label="t('sheetmusic', 'Search title')"
 				:class="$style.input"
 				@update:model-value="emit('update:searchTitle', $event)" />
 		</div>
@@ -171,7 +171,7 @@ function clearAllFilters() {
 			<NcCheckboxRadioSwitch
 				v-model="withoutFilesModel"
 				type="checkbox">
-				{{ t('mobilesheetsmanager', 'Without files') }}
+				{{ t('sheetmusic', 'Without files') }}
 			</NcCheckboxRadioSwitch>
 		</div>
 
@@ -181,8 +181,8 @@ function clearAllFilters() {
 				:options="composerOptions"
 				:multiple="true"
 				:close-on-select="false"
-				:placeholder="t('mobilesheetsmanager', 'Filter by composer…')"
-				:input-label="t('mobilesheetsmanager', 'Composers')"
+				:placeholder="t('sheetmusic', 'Filter by composer…')"
+				:input-label="t('sheetmusic', 'Composers')"
 				label="name"
 				track-by="id"
 				:class="$style.select"
@@ -195,8 +195,8 @@ function clearAllFilters() {
 				:options="bookOptions"
 				:multiple="true"
 				:close-on-select="false"
-				:placeholder="t('mobilesheetsmanager', 'Filter by book…')"
-				:input-label="t('mobilesheetsmanager', 'Books')"
+				:placeholder="t('sheetmusic', 'Filter by book…')"
+				:input-label="t('sheetmusic', 'Books')"
 				label="title"
 				track-by="id"
 				:class="$style.select"
@@ -209,8 +209,8 @@ function clearAllFilters() {
 				:options="collectionOptions"
 				:multiple="true"
 				:close-on-select="false"
-				:placeholder="t('mobilesheetsmanager', 'Filter by collection…')"
-				:input-label="t('mobilesheetsmanager', 'Collections')"
+				:placeholder="t('sheetmusic', 'Filter by collection…')"
+				:input-label="t('sheetmusic', 'Collections')"
 				label="name"
 				track-by="id"
 				:class="$style.select"
@@ -223,8 +223,8 @@ function clearAllFilters() {
 				:options="artistOptions"
 				:multiple="true"
 				:close-on-select="false"
-				:placeholder="t('mobilesheetsmanager', 'Filter by artist…')"
-				:input-label="t('mobilesheetsmanager', 'Artists')"
+				:placeholder="t('sheetmusic', 'Filter by artist…')"
+				:input-label="t('sheetmusic', 'Artists')"
 				label="name"
 				track-by="id"
 				:class="$style.select"
@@ -237,8 +237,8 @@ function clearAllFilters() {
 				:options="genreOptions"
 				:multiple="true"
 				:close-on-select="false"
-				:placeholder="t('mobilesheetsmanager', 'Filter by genre…')"
-				:input-label="t('mobilesheetsmanager', 'Genres')"
+				:placeholder="t('sheetmusic', 'Filter by genre…')"
+				:input-label="t('sheetmusic', 'Genres')"
 				label="name"
 				track-by="id"
 				:class="$style.select"
@@ -251,8 +251,8 @@ function clearAllFilters() {
 				:options="keyOptions"
 				:multiple="true"
 				:close-on-select="false"
-				:placeholder="t('mobilesheetsmanager', 'Filter by key…')"
-				:input-label="t('mobilesheetsmanager', 'Keys')"
+				:placeholder="t('sheetmusic', 'Filter by key…')"
+				:input-label="t('sheetmusic', 'Keys')"
 				label="name"
 				track-by="id"
 				:class="$style.select"
@@ -265,8 +265,8 @@ function clearAllFilters() {
 				:options="customGroupOptions"
 				:multiple="true"
 				:close-on-select="false"
-				:placeholder="t('mobilesheetsmanager', 'Filter by custom group…')"
-				:input-label="t('mobilesheetsmanager', 'Custom Groups')"
+				:placeholder="t('sheetmusic', 'Filter by custom group…')"
+				:input-label="t('sheetmusic', 'Custom Groups')"
 				label="name"
 				track-by="id"
 				:class="$style.select"
@@ -279,8 +279,8 @@ function clearAllFilters() {
 				:options="yearOptions"
 				:multiple="true"
 				:close-on-select="false"
-				:placeholder="t('mobilesheetsmanager', 'Filter by year…')"
-				:input-label="t('mobilesheetsmanager', 'Years')"
+				:placeholder="t('sheetmusic', 'Filter by year…')"
+				:input-label="t('sheetmusic', 'Years')"
 				label="name"
 				track-by="id"
 				:class="$style.select"
@@ -293,8 +293,8 @@ function clearAllFilters() {
 				:options="signatureOptions"
 				:multiple="true"
 				:close-on-select="false"
-				:placeholder="t('mobilesheetsmanager', 'Filter by time signature…')"
-				:input-label="t('mobilesheetsmanager', 'Time Signatures')"
+				:placeholder="t('sheetmusic', 'Filter by time signature…')"
+				:input-label="t('sheetmusic', 'Time Signatures')"
 				label="name"
 				track-by="id"
 				:class="$style.select"
@@ -307,8 +307,8 @@ function clearAllFilters() {
 				:options="sourceTypeOptions"
 				:multiple="true"
 				:close-on-select="false"
-				:placeholder="t('mobilesheetsmanager', 'Filter by source type…')"
-				:input-label="t('mobilesheetsmanager', 'Source Types')"
+				:placeholder="t('sheetmusic', 'Filter by source type…')"
+				:input-label="t('sheetmusic', 'Source Types')"
 				label="name"
 				track-by="id"
 				:class="$style.select"
@@ -318,8 +318,8 @@ function clearAllFilters() {
 		<div v-if="hasActiveFilters" :class="$style.actions">
 			<NcButton
 				type="tertiary"
-				:title="t('mobilesheetsmanager', 'Clear filters')"
-				:aria-label="t('mobilesheetsmanager', 'Clear filters')"
+				:title="t('sheetmusic', 'Clear filters')"
+				:aria-label="t('sheetmusic', 'Clear filters')"
 				@click="clearAllFilters">
 				<template #icon>
 					<FilterOffIcon :size="20" />

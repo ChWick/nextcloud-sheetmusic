@@ -7,10 +7,9 @@ declare(strict_types=1);
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-namespace OCA\MobileSheetsManager\Service;
+namespace OCA\SheetMusic\Service;
 
-use OCA\MobileSheetsManager\Db\LibraryMapper;
-use OCA\MobileSheetsManager\Db\SongMapper;
+use OCA\SheetMusic\Db\SongMapper;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
@@ -45,7 +44,7 @@ class LibraryIntegrityService {
 		['databasePath' => $databasePath, 'targetFolder' => $targetFolder] = $this->fileManager->libraryContext($libraryId, $user);
 
 		$songs = $this->songMapper->findSongs($databasePath);
-		$targetFolderPath = (string) $targetFolder->getPath();
+		$targetFolderPath = (string)$targetFolder->getPath();
 
 		$issues = [];
 		$referencedRelativePaths = []; // relativeToTarget => list<array{songId: int, songTitle: string, fileId: int}>
@@ -271,11 +270,11 @@ class LibraryIntegrityService {
 
 				if (count($songIds) > 1) {
 					$referencingSongs = array_values(array_filter(
-						array_map(fn($id) => $songsById[$id] ?? null, $songIds)
+						array_map(fn ($id) => $songsById[$id] ?? null, $songIds)
 					));
 
 					$areExactDuplicates = $this->areSongsExactDuplicates($referencingSongs);
-					$songTitles = array_map(fn($s) => sprintf('"%s" (ID %d)', $s->title, $s->id), $referencingSongs);
+					$songTitles = array_map(fn ($s) => sprintf('"%s" (ID %d)', $s->title, $s->id), $referencingSongs);
 
 					$issues[] = new IntegrityIssue(
 						type: IntegrityIssue::TYPE_DUPLICATE_FILE_PATH,
@@ -313,8 +312,8 @@ class LibraryIntegrityService {
 
 		foreach ($groupedByMetadata as $identicalSongs) {
 			if (count($identicalSongs) > 1) {
-				$identicalIds = array_map(fn($s) => $s->id, $identicalSongs);
-				$songTitles = array_map(fn($s) => sprintf('"%s" (ID %d)', $s->title, $s->id), $identicalSongs);
+				$identicalIds = array_map(fn ($s) => $s->id, $identicalSongs);
+				$songTitles = array_map(fn ($s) => sprintf('"%s" (ID %d)', $s->title, $s->id), $identicalSongs);
 
 				$issues[] = new IntegrityIssue(
 					type: IntegrityIssue::TYPE_IDENTICAL_SONG,
@@ -341,7 +340,7 @@ class LibraryIntegrityService {
 	private function checkPdfMetadata(
 		Folder $targetFolder,
 		string $relativePath,
-		\OCA\MobileSheetsManager\Db\MobileSheetsSong $song,
+		\OCA\SheetMusic\Db\MobileSheetsSong $song,
 		int $fileId,
 	): ?IntegrityIssue {
 		try {
@@ -738,9 +737,9 @@ class LibraryIntegrityService {
 	/**
 	 * Computes a canonical metadata string for a song to detect identical metadata duplicates.
 	 */
-	private function getCanonicalSongMetadataKey(\OCA\MobileSheetsManager\Db\MobileSheetsSong $song): string {
+	private function getCanonicalSongMetadataKey(\OCA\SheetMusic\Db\MobileSheetsSong $song): string {
 		$extractNames = static function (array $entities): array {
-			$names = array_map(static fn($e) => $e->name ?? $e->title ?? (string)($e->id ?? ''), $entities);
+			$names = array_map(static fn ($e) => $e->name ?? $e->title ?? (string)($e->id ?? ''), $entities);
 			sort($names, SORT_STRING);
 			return $names;
 		};
@@ -763,7 +762,7 @@ class LibraryIntegrityService {
 	}
 
 	/**
-	 * @param list<\OCA\MobileSheetsManager\Db\MobileSheetsSong> $songs
+	 * @param list<\OCA\SheetMusic\Db\MobileSheetsSong> $songs
 	 */
 	private function areSongsExactDuplicates(array $songs): bool {
 		if (count($songs) <= 1) {
@@ -772,7 +771,7 @@ class LibraryIntegrityService {
 
 		$first = $songs[0];
 		$extractNames = static function (array $entities): array {
-			$names = array_map(static fn($e) => $e->name ?? $e->title ?? (string)$e->id, $entities);
+			$names = array_map(static fn ($e) => $e->name ?? $e->title ?? (string)$e->id, $entities);
 			sort($names, SORT_STRING);
 			return $names;
 		};
@@ -845,8 +844,8 @@ class LibraryIntegrityService {
 					}
 
 					$userFolder = $this->rootFolder->getUserFolder($user->getUID());
-					$userFolderPath = (string) $userFolder->getPath();
-					$nodePath = (string) $node->getPath();
+					$userFolderPath = (string)$userFolder->getPath();
+					$nodePath = (string)$node->getPath();
 					$userRelativePath = str_starts_with($nodePath, $userFolderPath . '/')
 						? substr($nodePath, strlen($userFolderPath) + 1)
 						: ltrim($relativeToTarget, '/');

@@ -9,13 +9,13 @@ declare(strict_types=1);
 
 namespace Service;
 
-use OCA\MobileSheetsManager\Service\FileManager;
-use OCA\MobileSheetsManager\Service\IntegrityIssue;
-use OCA\MobileSheetsManager\Service\LibraryIntegrityService;
-use OCA\MobileSheetsManager\Service\MobileSheetsPathResolver;
-use OCA\MobileSheetsManager\Service\MobileSheetsPdfMetadata;
-use OCP\Files\Folder;
+use OCA\SheetMusic\Service\FileManager;
+use OCA\SheetMusic\Service\IntegrityIssue;
+use OCA\SheetMusic\Service\LibraryIntegrityService;
+use OCA\SheetMusic\Service\MobileSheetsPathResolver;
+use OCA\SheetMusic\Service\MobileSheetsPdfMetadata;
 use OCP\Files\File;
+use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\Files\IUserFolder;
 use OCP\Files\Node;
@@ -190,7 +190,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 			['Noten/Bach - Joshua.pdf' => $pdf],
 		);
 
-		$libraryService = $this->createMock(\OCA\MobileSheetsManager\Service\LibraryService::class);
+		$libraryService = $this->createMock(\OCA\SheetMusic\Service\LibraryService::class);
 		$libraryService->method('isAutoPathsEnabled')->willReturn(true);
 		$libraryService->method('isAutoPdfMetadataEnabled')->willReturn(false);
 
@@ -362,7 +362,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 	}
 
 	public function testCheckIntegrityFindsDuplicateKeysFromSingularKeyTable(): void {
-		$databasePath = tempnam(sys_get_temp_dir(), 'mobilesheetsmanager-integrity-keys-');
+		$databasePath = tempnam(sys_get_temp_dir(), 'sheetmusic-integrity-keys-');
 		self::assertNotFalse($databasePath);
 		try {
 			$database = new \PDO('sqlite:' . $databasePath);
@@ -532,13 +532,13 @@ final class LibraryIntegrityServiceTest extends TestCase {
 	}
 
 	public function testCheckIntegrityWhenAutoPathsDisabledReportsNoNamingOrOrphanIssues(): void {
-		$libraryMapper = $this->createMock(\OCA\MobileSheetsManager\Db\LibraryMapper::class);
+		$libraryMapper = $this->createMock(\OCA\SheetMusic\Db\LibraryMapper::class);
 		$libraryMapper->method('findForUser')->with('user1', 1)->willReturn([
 			'id' => 1,
 			'path' => '/Noten/library.db',
 			'autoPaths' => false,
 		]);
-		$libraryService = new \OCA\MobileSheetsManager\Service\LibraryService(
+		$libraryService = new \OCA\SheetMusic\Service\LibraryService(
 			$libraryMapper,
 			$this->createSongMapper(),
 			$this->createMock(IRootFolder::class),
@@ -624,7 +624,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$rootFolder = $this->createMock(IRootFolder::class);
 		$rootFolder->method('getUserFolder')->with('user1')->willReturn($userFolder);
 
-		$libraryMapper = $this->createMock(\OCA\MobileSheetsManager\Db\LibraryMapper::class);
+		$libraryMapper = $this->createMock(\OCA\SheetMusic\Db\LibraryMapper::class);
 		$libraryMapper->method('findById')->with(1)->willReturn([
 			'id' => 1,
 			'path' => '/Noten/library.db',

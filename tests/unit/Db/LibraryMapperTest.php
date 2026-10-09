@@ -9,7 +9,7 @@ declare(strict_types=1);
 
 namespace Db;
 
-use OCA\MobileSheetsManager\Db\LibraryMapper;
+use OCA\SheetMusic\Db\LibraryMapper;
 use OCP\DB\IResult;
 use OCP\DB\QueryBuilder\IExpressionBuilder;
 use OCP\DB\QueryBuilder\IParameter;

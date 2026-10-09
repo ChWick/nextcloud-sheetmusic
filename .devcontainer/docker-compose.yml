@@ -4,7 +4,7 @@ services:
     ports:
       - "8080:80"
     volumes:
-      - ..:/var/www/html/apps-extra/mobilesheetsmanager
+      - ..:/var/www/html/apps-extra/sheetmusic
       
     environment:
       - WITH_XDEBUG=true

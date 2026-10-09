@@ -9,7 +9,7 @@ declare(strict_types=1);
 
 namespace Db;
 
-use OCA\MobileSheetsManager\Db\SongAudioMapper;
+use OCA\SheetMusic\Db\SongAudioMapper;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 
@@ -18,7 +18,7 @@ final class SongAudioMapperTest extends TestCase {
 	private SongAudioMapper $audioMapper;
 
 	protected function setUp(): void {
-		$databasePath = tempnam(sys_get_temp_dir(), 'mobilesheetsmanager-audio-test-');
+		$databasePath = tempnam(sys_get_temp_dir(), 'sheetmusic-audio-test-');
 		self::assertNotFalse($databasePath);
 		$this->databasePath = $databasePath;
 

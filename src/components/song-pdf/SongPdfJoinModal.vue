@@ -300,7 +300,7 @@ function handleClose() {
 		:open="open"
 		size="large"
 		:can-close="true"
-		:name="t('mobilesheetsmanager', 'Join Two Pages into a Single Page')"
+		:name="t('sheetmusic', 'Join Two Pages into a Single Page')"
 		@update:open="emit('update:open', $event)">
 		<div :class="$style.dialogBody">
 			<div :class="$style.contentLayout">
@@ -308,24 +308,24 @@ function handleClose() {
 				<div :class="$style.controlsColumn">
 					<!-- Page Selection -->
 					<div :class="$style.sectionGroup">
-						<label :class="$style.sectionLabel">{{ t('mobilesheetsmanager', 'Select Pages to Join:') }}</label>
+						<label :class="$style.sectionLabel">{{ t('sheetmusic', 'Select Pages to Join:') }}</label>
 						<div :class="$style.pageSelectors">
 							<div :class="$style.selectorItem">
-								<span :class="$style.selectorItemLabel">{{ t('mobilesheetsmanager', 'First Page (Top / Left):') }}</span>
+								<span :class="$style.selectorItemLabel">{{ t('sheetmusic', 'First Page (Top / Left):') }}</span>
 								<select v-model.number="pageA" :class="$style.select">
 									<option v-for="p in totalPages" :key="p" :value="p" :disabled="p === pageB">
-										{{ t('mobilesheetsmanager', 'Page {p}', { p }) }}
-										{{ pageCrops[p] ? `(${t('mobilesheetsmanager', 'Cropped')})` : '' }}
+										{{ t('sheetmusic', 'Page {p}', { p }) }}
+										{{ pageCrops[p] ? `(${t('sheetmusic', 'Cropped')})` : '' }}
 									</option>
 								</select>
 							</div>
 
 							<div :class="$style.selectorItem">
-								<span :class="$style.selectorItemLabel">{{ t('mobilesheetsmanager', 'Second Page (Bottom / Right):') }}</span>
+								<span :class="$style.selectorItemLabel">{{ t('sheetmusic', 'Second Page (Bottom / Right):') }}</span>
 								<select v-model.number="pageB" :class="$style.select">
 									<option v-for="p in totalPages" :key="p" :value="p" :disabled="p === pageA">
-										{{ t('mobilesheetsmanager', 'Page {p}', { p }) }}
-										{{ pageCrops[p] ? `(${t('mobilesheetsmanager', 'Cropped')})` : '' }}
+										{{ t('sheetmusic', 'Page {p}', { p }) }}
+										{{ pageCrops[p] ? `(${t('sheetmusic', 'Cropped')})` : '' }}
 									</option>
 								</select>
 							</div>
@@ -334,21 +334,21 @@ function handleClose() {
 
 					<!-- Layout Orientation -->
 					<div :class="$style.sectionGroup">
-						<label :class="$style.sectionLabel">{{ t('mobilesheetsmanager', 'Layout Orientation:') }}</label>
+						<label :class="$style.sectionLabel">{{ t('sheetmusic', 'Layout Orientation:') }}</label>
 						<div :class="$style.layoutToggle">
 							<button
 								type="button"
 								:class="[$style.toggleBtn, layout === 'vertical' && $style.toggleBtnActive]"
 								@click="layout = 'vertical'">
 								<ViewAgendaOutline :size="18" />
-								<span>{{ t('mobilesheetsmanager', 'Vertical (Stacked Top / Bottom)') }}</span>
+								<span>{{ t('sheetmusic', 'Vertical (Stacked Top / Bottom)') }}</span>
 							</button>
 							<button
 								type="button"
 								:class="[$style.toggleBtn, layout === 'horizontal' && $style.toggleBtnActive]"
 								@click="layout = 'horizontal'">
 								<ViewSplitVertical :size="18" />
-								<span>{{ t('mobilesheetsmanager', 'Horizontal (Side by Side)') }}</span>
+								<span>{{ t('sheetmusic', 'Horizontal (Side by Side)') }}</span>
 							</button>
 						</div>
 					</div>
@@ -358,10 +358,10 @@ function handleClose() {
 						<div v-if="fitInfo.fitsOnStandardPage" :class="$style.fitBannerSuccess">
 							<CheckCircle :size="20" />
 							<div>
-								<strong>{{ t('mobilesheetsmanager', 'Pages fit on a single page!') }}</strong>
+								<strong>{{ t('sheetmusic', 'Pages fit on a single page!') }}</strong>
 								<div :class="$style.fitBannerSub">
-									{{ t('mobilesheetsmanager', 'Combined {dir}: {pct}% of standard page size.', {
-										dir: layout === 'vertical' ? t('mobilesheetsmanager', 'height') : t('mobilesheetsmanager', 'width'),
+									{{ t('sheetmusic', 'Combined {dir}: {pct}% of standard page size.', {
+										dir: layout === 'vertical' ? t('sheetmusic', 'height') : t('sheetmusic', 'width'),
 										pct: layout === 'vertical' ? fitInfo.heightPercentage : fitInfo.widthPercentage,
 									}) }}
 								</div>
@@ -370,11 +370,11 @@ function handleClose() {
 						<div v-else :class="$style.fitBannerWarning">
 							<AlertCircle :size="20" />
 							<div>
-								<strong>{{ t('mobilesheetsmanager', 'Content exceeds standard page size ({pct}%).', {
+								<strong>{{ t('sheetmusic', 'Content exceeds standard page size ({pct}%).', {
 									pct: layout === 'vertical' ? fitInfo.heightPercentage : fitInfo.widthPercentage,
 								}) }}</strong>
 								<div :class="$style.fitBannerSub">
-									{{ scaleToFit ? t('mobilesheetsmanager', 'Content will be scaled to fit within a single standard page.') : t('mobilesheetsmanager', 'Page canvas will expand to accommodate both pages.') }}
+									{{ scaleToFit ? t('sheetmusic', 'Content will be scaled to fit within a single standard page.') : t('sheetmusic', 'Page canvas will expand to accommodate both pages.') }}
 								</div>
 							</div>
 						</div>
@@ -383,24 +383,24 @@ function handleClose() {
 					<!-- Sizing Options & Alignment -->
 					<div :class="$style.sectionGroup">
 						<div :class="$style.sectionHeaderRow">
-							<label :class="$style.sectionLabel">{{ t('mobilesheetsmanager', 'Page Sizing & Alignment:') }}</label>
+							<label :class="$style.sectionLabel">{{ t('sheetmusic', 'Page Sizing & Alignment:') }}</label>
 							<div :class="$style.alignQuickButtons">
 								<button
 									type="button"
 									:class="[$style.quickAlignBtn, isSizeAligned && $style.quickAlignBtnActive]"
-									:title="layout === 'vertical' ? t('mobilesheetsmanager', 'Scale narrower page to match wider page width') : t('mobilesheetsmanager', 'Scale shorter page to match taller page height')"
+									:title="layout === 'vertical' ? t('sheetmusic', 'Scale narrower page to match wider page width') : t('sheetmusic', 'Scale shorter page to match taller page height')"
 									data-test="align-sizes-btn"
 									@click="alignSizesToWider">
-									{{ layout === 'vertical' ? t('mobilesheetsmanager', 'Align Widths') : t('mobilesheetsmanager', 'Align Heights') }}
+									{{ layout === 'vertical' ? t('sheetmusic', 'Align Widths') : t('sheetmusic', 'Align Heights') }}
 								</button>
 								<button
 									type="button"
 									:class="$style.resetScaleBtn"
 									:disabled="scaleA === 1.0 && scaleB === 1.0"
-									:title="t('mobilesheetsmanager', 'Reset both pages to 100%')"
+									:title="t('sheetmusic', 'Reset both pages to 100%')"
 									data-test="reset-sizes-btn"
 									@click="resetScales">
-									{{ t('mobilesheetsmanager', 'Reset 100%') }}
+									{{ t('sheetmusic', 'Reset 100%') }}
 								</button>
 							</div>
 						</div>
@@ -409,19 +409,19 @@ function handleClose() {
 						<div :class="$style.alignmentStatusRow">
 							<span v-if="isSizeAligned" :class="$style.statusPillSuccess" data-test="aligned-status">
 								<CheckCircle :size="14" />
-								{{ layout === 'vertical' ? t('mobilesheetsmanager', 'Widths aligned ({w} pt)', { w: scaledDimA.width }) : t('mobilesheetsmanager', 'Heights aligned ({h} pt)', { h: scaledDimA.height }) }}
+								{{ layout === 'vertical' ? t('sheetmusic', 'Widths aligned ({w} pt)', { w: scaledDimA.width }) : t('sheetmusic', 'Heights aligned ({h} pt)', { h: scaledDimA.height }) }}
 							</span>
 							<span v-else :class="$style.statusPillDiff" data-test="diff-status">
 								{{ layout === 'vertical'
-									? t('mobilesheetsmanager', 'Width diff: Page {pA} is {wA} pt vs Page {pB} is {wB} pt', { pA: pageA, wA: scaledDimA.width, pB: pageB, wB: scaledDimB.width })
-									: t('mobilesheetsmanager', 'Height diff: Page {pA} is {hA} pt vs Page {pB} is {hB} pt', { pA: pageA, hA: scaledDimA.height, pB: pageB, hB: scaledDimB.height }) }}
+									? t('sheetmusic', 'Width diff: Page {pA} is {wA} pt vs Page {pB} is {wB} pt', { pA: pageA, wA: scaledDimA.width, pB: pageB, wB: scaledDimB.width })
+									: t('sheetmusic', 'Height diff: Page {pA} is {hA} pt vs Page {pB} is {hB} pt', { pA: pageA, hA: scaledDimA.height, pB: pageB, hB: scaledDimB.height }) }}
 							</span>
 						</div>
 
 						<!-- Page A Scale Control -->
 						<div :class="$style.scaleControlRow">
 							<div :class="$style.scaleControlHeader">
-								<span :class="$style.scalePageName">{{ t('mobilesheetsmanager', 'Page {p} Size:', { p: pageA }) }}</span>
+								<span :class="$style.scalePageName">{{ t('sheetmusic', 'Page {p} Size:', { p: pageA }) }}</span>
 								<span :class="$style.scaleDimInfo">{{ scaledDimA.width }} × {{ scaledDimA.height }} pt ({{ Math.round(scaleA * 100) }}%)</span>
 							</div>
 							<div :class="$style.sliderRow">
@@ -447,10 +447,10 @@ function handleClose() {
 								<button
 									type="button"
 									:class="$style.matchOtherBtn"
-									:title="t('mobilesheetsmanager', 'Scale Page {pA} to match Page {pB}', { pA: pageA, pB: pageB })"
+									:title="t('sheetmusic', 'Scale Page {pA} to match Page {pB}', { pA: pageA, pB: pageB })"
 									data-test="match-b-btn"
 									@click="matchPageB">
-									{{ t('mobilesheetsmanager', 'Match p. {p}', { p: pageB }) }}
+									{{ t('sheetmusic', 'Match p. {p}', { p: pageB }) }}
 								</button>
 							</div>
 						</div>
@@ -458,7 +458,7 @@ function handleClose() {
 						<!-- Page B Scale Control -->
 						<div :class="$style.scaleControlRow">
 							<div :class="$style.scaleControlHeader">
-								<span :class="$style.scalePageName">{{ t('mobilesheetsmanager', 'Page {p} Size:', { p: pageB }) }}</span>
+								<span :class="$style.scalePageName">{{ t('sheetmusic', 'Page {p} Size:', { p: pageB }) }}</span>
 								<span :class="$style.scaleDimInfo">{{ scaledDimB.width }} × {{ scaledDimB.height }} pt ({{ Math.round(scaleB * 100) }}%)</span>
 							</div>
 							<div :class="$style.sliderRow">
@@ -484,10 +484,10 @@ function handleClose() {
 								<button
 									type="button"
 									:class="$style.matchOtherBtn"
-									:title="t('mobilesheetsmanager', 'Scale Page {pB} to match Page {pA}', { pA: pageA, pB: pageB })"
+									:title="t('sheetmusic', 'Scale Page {pB} to match Page {pA}', { pA: pageA, pB: pageB })"
 									data-test="match-a-btn"
 									@click="matchPageA">
-									{{ t('mobilesheetsmanager', 'Match p. {p}', { p: pageA }) }}
+									{{ t('sheetmusic', 'Match p. {p}', { p: pageA }) }}
 								</button>
 							</div>
 						</div>
@@ -496,13 +496,13 @@ function handleClose() {
 						<div :class="$style.checkboxRow">
 							<label :class="$style.checkboxLabel">
 								<input v-model="fitToStandardPage" type="checkbox" />
-								<span>{{ t('mobilesheetsmanager', 'Fit onto standard page dimensions') }}</span>
+								<span>{{ t('sheetmusic', 'Fit onto standard page dimensions') }}</span>
 							</label>
 						</div>
 						<div v-if="fitToStandardPage" :class="$style.checkboxRow">
 							<label :class="$style.checkboxLabel">
 								<input v-model="scaleToFit" type="checkbox" />
-								<span>{{ t('mobilesheetsmanager', 'Scale down content if it exceeds the page') }}</span>
+								<span>{{ t('sheetmusic', 'Scale down content if it exceeds the page') }}</span>
 							</label>
 						</div>
 					</div>
@@ -510,7 +510,7 @@ function handleClose() {
 
 				<!-- Right Column: Interactive Live Preview -->
 				<div :class="$style.previewColumn">
-					<div :class="$style.previewTitle">{{ t('mobilesheetsmanager', 'Preview Joined Page:') }}</div>
+					<div :class="$style.previewTitle">{{ t('sheetmusic', 'Preview Joined Page:') }}</div>
 					<div :class="$style.previewCanvasContainer">
 						<div
 							:class="[
@@ -523,7 +523,7 @@ function handleClose() {
 								:style="layout === 'vertical'
 									? { width: `${Math.min(100, Math.max(20, (scaledDimA.width / Math.max(scaledDimA.width, scaledDimB.width)) * 100))}%` }
 									: { height: `${Math.min(100, Math.max(20, (scaledDimA.height / Math.max(scaledDimA.height, scaledDimB.height)) * 100))}%` }">
-								<span :class="$style.slotTag">{{ t('mobilesheetsmanager', 'p. {p}', { p: pageA }) }}</span>
+								<span :class="$style.slotTag">{{ t('sheetmusic', 'p. {p}', { p: pageA }) }}</span>
 								<canvas ref="canvasARef" :class="$style.previewCanvas" />
 							</div>
 
@@ -536,7 +536,7 @@ function handleClose() {
 								:style="layout === 'vertical'
 									? { width: `${Math.min(100, Math.max(20, (scaledDimB.width / Math.max(scaledDimA.width, scaledDimB.width)) * 100))}%` }
 									: { height: `${Math.min(100, Math.max(20, (scaledDimB.height / Math.max(scaledDimA.height, scaledDimB.height)) * 100))}%` }">
-								<span :class="$style.slotTag">{{ t('mobilesheetsmanager', 'p. {p}', { p: pageB }) }}</span>
+								<span :class="$style.slotTag">{{ t('sheetmusic', 'p. {p}', { p: pageB }) }}</span>
 								<canvas ref="canvasBRef" :class="$style.previewCanvas" />
 							</div>
 						</div>
@@ -550,17 +550,17 @@ function handleClose() {
 					<template #icon>
 						<CloseIcon :size="18" />
 					</template>
-					{{ t('mobilesheetsmanager', 'Cancel') }}
+					{{ t('sheetmusic', 'Cancel') }}
 				</NcButton>
 
 				<NcButton
 					variant="primary"
-					:title="t('mobilesheetsmanager', 'Join pages {a} and {b} into one page', { a: pageA, b: pageB })"
+					:title="t('sheetmusic', 'Join pages {a} and {b} into one page', { a: pageA, b: pageB })"
 					@click="handleJoin">
 					<template #icon>
 						<TableMergeCells :size="18" />
 					</template>
-					{{ t('mobilesheetsmanager', 'Join Pages') }}
+					{{ t('sheetmusic', 'Join Pages') }}
 				</NcButton>
 			</div>
 		</div>

@@ -7,12 +7,12 @@ declare(strict_types=1);
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-namespace OCA\MobileSheetsManager\Service;
+namespace OCA\SheetMusic\Service;
 
-use OCA\MobileSheetsManager\Db\LibraryMapper;
-use OCA\MobileSheetsManager\Db\MobileSheetsFile;
-use OCA\MobileSheetsManager\Db\MobileSheetsSong;
-use OCA\MobileSheetsManager\Db\SongMapper;
+use OCA\SheetMusic\Db\LibraryMapper;
+use OCA\SheetMusic\Db\MobileSheetsFile;
+use OCA\SheetMusic\Db\MobileSheetsSong;
+use OCA\SheetMusic\Db\SongMapper;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
@@ -92,14 +92,14 @@ function normalizeGeneratedPathSegment(string $segment): string {
 	$segment = mb_scrub($segment, 'UTF-8');
 	$segment = str_replace(['<', '>', ':', '"', '/', '\\', '|', '?', '*'], '-', $segment);
 	$segment = preg_replace('/[\x00-\x1F\x7F]/', '-', $segment) ?? '';
-	$segment = rtrim($segment, " .");
+	$segment = rtrim($segment, ' .');
 
 	if ($segment === '' || $segment === '.' || $segment === '..') {
 		$segment = 'untitled';
 	}
 
 	// Windows treats these device names as reserved, even when an extension follows.
-	$windowsBasename = rtrim(explode('.', $segment, 2)[0], " .");
+	$windowsBasename = rtrim(explode('.', $segment, 2)[0], ' .');
 	if (preg_match('/^(CON|PRN|AUX|NUL|CONIN\$|CONOUT\$|COM[1-9¹²³]|LPT[1-9¹²³])$/iu', $windowsBasename) === 1
 		|| strcasecmp($segment, '.htaccess') === 0) {
 		$segment = '_' . $segment;
@@ -121,7 +121,7 @@ function normalizeGeneratedPathSegment(string $segment): string {
 	$extension = mb_strcut($extension, 0, $extensionBytes, 'UTF-8');
 	$name = mb_strcut($name, 0, 250 - strlen($extension), 'UTF-8');
 
-	return rtrim($name . $extension, " .") ?: 'untitled';
+	return rtrim($name . $extension, ' .') ?: 'untitled';
 }
 
 function normalizeKeyNameForGeneratedPath(string $name): string {
@@ -176,16 +176,16 @@ function createTargetPaths(
 		return $items;
 	};
 
-	$bookTitles = array_values(array_filter(array_map(static fn($b) => $b->title, $song->books), static fn($t) => $t !== ''));
+	$bookTitles = array_values(array_filter(array_map(static fn ($b) => $b->title, $song->books), static fn ($t) => $t !== ''));
 	$bookTitles = $sortByNameStability($bookTitles);
 
-	$collectionNames = array_values(array_filter(array_map(static fn($c) => $c->name, $song->collections), static fn($n) => $n !== ''));
+	$collectionNames = array_values(array_filter(array_map(static fn ($c) => $c->name, $song->collections), static fn ($n) => $n !== ''));
 	$collectionNames = $sortByNameStability($collectionNames);
 
 	$book = $bookTitles === [] ? '' : normalizeGeneratedPathSegment($bookTitles[0]);
 	$collection = $collectionNames === [] ? '' : normalizeGeneratedPathSegment($collectionNames[0]);
 
-	$keyNames = array_values(array_filter(array_map(static fn($k) => $k->name, $song->keys), static fn($n) => $n !== ''));
+	$keyNames = array_values(array_filter(array_map(static fn ($k) => $k->name, $song->keys), static fn ($n) => $n !== ''));
 	sort($keyNames, SORT_STRING);
 	$keyString = implode(', ', array_map(
 		static fn (string $name): string => normalizeGeneratedPathSegment(normalizeKeyNameForGeneratedPath($name)),

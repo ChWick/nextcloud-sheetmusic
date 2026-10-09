@@ -81,8 +81,8 @@ const isNewSong = computed(() => !props.song)
 
 /** Label of the primary button, also used by the notices about staged file changes. */
 const saveActionLabel = computed(() => (isNewSong.value
-	? t('mobilesheetsmanager', 'Create song')
-	: t('mobilesheetsmanager', 'Save and Close')))
+	? t('sheetmusic', 'Create song')
+	: t('sheetmusic', 'Save and Close')))
 
 const sourceSong = computed(() => props.song ?? props.duplicateSong)
 
@@ -281,14 +281,14 @@ const pendingAdditions = computed<PendingAddition[]>(() => [
 		key: attachment.key,
 		name: attachment.name,
 		hint: attachment.action === 'move'
-			? t('mobilesheetsmanager', 'Move from Nextcloud')
-			: t('mobilesheetsmanager', 'Copy from Nextcloud'),
+			? t('sheetmusic', 'Move from Nextcloud')
+			: t('sheetmusic', 'Copy from Nextcloud'),
 		remove: () => removePendingAttachment(attachment),
 	})),
 	...pendingUploads.value.map((upload): PendingAddition => ({
 		key: upload.key,
 		name: upload.name,
-		hint: t('mobilesheetsmanager', 'Upload from this computer'),
+		hint: t('sheetmusic', 'Upload from this computer'),
 		remove: () => removePendingUpload(upload),
 	})),
 ])
@@ -358,21 +358,21 @@ function handleFileUpload(file: File) {
 	stageUpload(file)
 	const songTitle = title.value?.trim()
 	const infoMsg = songTitle
-		? t('mobilesheetsmanager', 'The file will be added to "{title}" when you save.', { title: songTitle })
-		: t('mobilesheetsmanager', 'The file is added to the song when you save.')
+		? t('sheetmusic', 'The file will be added to "{title}" when you save.', { title: songTitle })
+		: t('sheetmusic', 'The file is added to the song when you save.')
 	successMessage.value = infoMsg
 	showInfo(infoMsg)
 }
 
 async function openNextcloudPicker() {
 	errorMessage.value = ''
-	const picker = getFilePickerBuilder(t('mobilesheetsmanager', 'Select a file for this song'))
+	const picker = getFilePickerBuilder(t('sheetmusic', 'Select a file for this song'))
 		.setMultiSelect(false)
 		.setCanPick((node) => node.type === 'file')
 		.setButtonFactory(([node]) => [{
 			label: node
-				? t('mobilesheetsmanager', 'Select {file}', { file: node.basename })
-				: t('mobilesheetsmanager', 'Select a file'),
+				? t('sheetmusic', 'Select {file}', { file: node.basename })
+				: t('sheetmusic', 'Select a file'),
 			callback: () => {},
 			disabled: !node || node.type !== 'file',
 			variant: 'primary',
@@ -388,7 +388,7 @@ async function openNextcloudPicker() {
 		}
 	} catch (error) {
 		if (!(error instanceof FilePickerClosed)) {
-			errorMessage.value = t('mobilesheetsmanager', 'Could not select a file from Nextcloud.')
+			errorMessage.value = t('sheetmusic', 'Could not select a file from Nextcloud.')
 			showError(errorMessage.value)
 		}
 	}
@@ -410,8 +410,8 @@ function stageAttachNextcloudFile() {
 	selectedNextcloudNode.value = undefined
 	const songTitle = title.value?.trim()
 	const infoMsg = songTitle
-		? t('mobilesheetsmanager', 'The file will be added to "{title}" when you save.', { title: songTitle })
-		: t('mobilesheetsmanager', 'The file is added to the song when you save.')
+		? t('sheetmusic', 'The file will be added to "{title}" when you save.', { title: songTitle })
+		: t('sheetmusic', 'The file is added to the song when you save.')
 	successMessage.value = infoMsg
 	showInfo(infoMsg)
 }
@@ -426,7 +426,7 @@ async function saveSong(closeAfter: boolean) {
 	}
 
 	if (!title.value.trim()) {
-		errorMessage.value = t('mobilesheetsmanager', 'Song title cannot be empty.')
+		errorMessage.value = t('sheetmusic', 'Song title cannot be empty.')
 		showError(errorMessage.value)
 		return
 	}
@@ -543,17 +543,17 @@ async function saveSong(closeAfter: boolean) {
 		const songTitle = title.value?.trim()
 		if (detachedFileCount > 0) {
 			successMessage.value = songTitle
-				? t('mobilesheetsmanager', 'Song "{title}" updated successfully. {count} file(s) detached and kept in storage.', { title: songTitle, count: detachedFileCount })
-				: t('mobilesheetsmanager', 'Song updated successfully. {count} file(s) detached and kept in storage.', { count: detachedFileCount })
+				? t('sheetmusic', 'Song "{title}" updated successfully. {count} file(s) detached and kept in storage.', { title: songTitle, count: detachedFileCount })
+				: t('sheetmusic', 'Song updated successfully. {count} file(s) detached and kept in storage.', { count: detachedFileCount })
 			showSuccess(successMessage.value)
 		} else {
 			successMessage.value = isNewSong.value
 				? songTitle
-					? t('mobilesheetsmanager', 'Song "{title}" created successfully.', { title: songTitle })
-					: t('mobilesheetsmanager', 'Song created successfully.')
+					? t('sheetmusic', 'Song "{title}" created successfully.', { title: songTitle })
+					: t('sheetmusic', 'Song created successfully.')
 				: songTitle
-					? t('mobilesheetsmanager', 'Song "{title}" updated successfully.', { title: songTitle })
-					: t('mobilesheetsmanager', 'Song updated successfully.')
+					? t('sheetmusic', 'Song "{title}" updated successfully.', { title: songTitle })
+					: t('sheetmusic', 'Song updated successfully.')
 			showSuccess(successMessage.value)
 		}
 		if (closeAfter) {
@@ -566,8 +566,8 @@ async function saveSong(closeAfter: boolean) {
 		}
 	} catch (error) {
 		const fallback = isNewSong.value
-			? t('mobilesheetsmanager', 'Failed to create the song.')
-			: t('mobilesheetsmanager', 'Failed to save song changes.')
+			? t('sheetmusic', 'Failed to create the song.')
+			: t('sheetmusic', 'Failed to save song changes.')
 		errorMessage.value = describeRequestFailure(error, fallback)
 		showError(errorMessage.value)
 	} finally {
@@ -598,8 +598,8 @@ defineExpose({
 					<NcTextField
 						id="song-title-input"
 						v-model="title"
-						:placeholder="isNewSong ? t('mobilesheetsmanager', 'New Song') : t('mobilesheetsmanager', 'Enter song title')"
-						:label="t('mobilesheetsmanager', 'Song Title')"
+						:placeholder="isNewSong ? t('sheetmusic', 'New Song') : t('sheetmusic', 'Enter song title')"
+						:label="t('sheetmusic', 'Song Title')"
 						required />
 				</div>
 			</div>
@@ -668,8 +668,8 @@ defineExpose({
 					type="button"
 					variant="secondary"
 					:disabled="isSaving"
-					:title="t('mobilesheetsmanager', 'Cancel')"
-					:aria-label="t('mobilesheetsmanager', 'Cancel')"
+					:title="t('sheetmusic', 'Cancel')"
+					:aria-label="t('sheetmusic', 'Cancel')"
 					@click="emit('cancel')">
 					<template #icon>
 						<CloseIcon :size="20" />
@@ -681,8 +681,8 @@ defineExpose({
 					type="button"
 					variant="secondary"
 					:disabled="isSaving"
-					:title="t('mobilesheetsmanager', 'Save without closing')"
-					:aria-label="t('mobilesheetsmanager', 'Save without closing')"
+					:title="t('sheetmusic', 'Save without closing')"
+					:aria-label="t('sheetmusic', 'Save without closing')"
 					@click="saveSong(false)">
 					<template #icon>
 						<ContentSaveOutlineIcon :size="20" />

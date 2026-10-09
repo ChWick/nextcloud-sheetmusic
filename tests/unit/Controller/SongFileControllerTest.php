@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Controller;
 
-use OCA\MobileSheetsManager\Controller\SongFileController;
-use OCA\MobileSheetsManager\Service\SongFileService;
+use OCA\SheetMusic\Controller\SongFileController;
+use OCA\SheetMusic\Service\SongFileService;
 use OCP\AppFramework\Http;
 use OCP\IRequest;
 use OCP\IUser;
@@ -18,7 +18,7 @@ final class SongFileControllerTest extends TestCase {
 		$userSession->method('getUser')->willReturn(null);
 
 		$controller = new SongFileController(
-			'mobilesheetsmanager',
+			'sheetmusic',
 			$this->createMock(IRequest::class),
 			$this->createMock(SongFileService::class),
 			$userSession,
@@ -45,7 +45,7 @@ final class SongFileControllerTest extends TestCase {
 			->willReturn(['songs' => []]);
 
 		try {
-			$controller = new SongFileController('mobilesheetsmanager', $request, $songFileService, $userSession);
+			$controller = new SongFileController('sheetmusic', $request, $songFileService, $userSession);
 			$response = $controller->uploadSongFile(42, 7);
 
 			self::assertSame(Http::STATUS_OK, $response->getStatus());
@@ -68,7 +68,7 @@ final class SongFileControllerTest extends TestCase {
 		]);
 
 		$controller = new SongFileController(
-			'mobilesheetsmanager',
+			'sheetmusic',
 			$request,
 			$this->createMock(SongFileService::class),
 			$userSession,
@@ -92,7 +92,7 @@ final class SongFileControllerTest extends TestCase {
 		$_SERVER['CONTENT_LENGTH'] = '999999999999';
 		try {
 			$controller = new SongFileController(
-				'mobilesheetsmanager',
+				'sheetmusic',
 				$request,
 				$this->createMock(SongFileService::class),
 				$userSession,
@@ -119,7 +119,7 @@ final class SongFileControllerTest extends TestCase {
 		$request->method('getParam')->willReturnCallback(fn ($key, $default) => $default ?? '');
 
 		$controller = new SongFileController(
-			'mobilesheetsmanager',
+			'sheetmusic',
 			$request,
 			$this->createMock(SongFileService::class),
 			$userSession,
@@ -141,7 +141,7 @@ final class SongFileControllerTest extends TestCase {
 			->willReturn(['songs' => []]);
 
 		$controller = new SongFileController(
-			'mobilesheetsmanager',
+			'sheetmusic',
 			$this->createMock(IRequest::class),
 			$songFileService,
 			$userSession,
@@ -166,7 +166,7 @@ final class SongFileControllerTest extends TestCase {
 			->willReturn(['songs' => []]);
 
 		$controller = new SongFileController(
-			'mobilesheetsmanager',
+			'sheetmusic',
 			$this->createMock(IRequest::class),
 			$songFileService,
 			$userSession,

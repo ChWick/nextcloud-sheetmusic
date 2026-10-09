@@ -7,9 +7,9 @@ declare(strict_types=1);
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-namespace OCA\MobileSheetsManager\Service;
+namespace OCA\SheetMusic\Service;
 
-use OCA\MobileSheetsManager\Db\MobileSheetsSong;
+use OCA\SheetMusic\Db\MobileSheetsSong;
 
 /**
  * Writes the metadata MobileSheets reads on import into a PDF.

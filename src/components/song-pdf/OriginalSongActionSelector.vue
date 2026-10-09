@@ -30,10 +30,10 @@ function select(val: OriginalSongAction) {
 <template>
 	<div :class="$style.container">
 		<h5 :class="$style.heading">
-			{{ t('mobilesheetsmanager', 'Original song') }}
+			{{ t('sheetmusic', 'Original song') }}
 		</h5>
 
-		<div :class="$style.optionsList" role="radiogroup" :aria-label="t('mobilesheetsmanager', 'Original song action')">
+		<div :class="$style.optionsList" role="radiogroup" :aria-label="t('sheetmusic', 'Original song action')">
 			<!-- Option c: Keep original song and PDF (default) -->
 			<div
 				:class="[$style.optionRow, modelValue === 'keep' && $style.optionRowActive]"
@@ -57,7 +57,7 @@ function select(val: OriginalSongAction) {
 					<RadioboxBlank v-else :size="18" :class="$style.uncheckedIcon" />
 				</div>
 				<span :class="$style.optionLabel">
-					{{ t('mobilesheetsmanager', 'Do nothing (default)') }}
+					{{ t('sheetmusic', 'Do nothing (default)') }}
 				</span>
 				<NcPopover
 					:triggers="['hover', 'focus']"
@@ -68,13 +68,13 @@ function select(val: OriginalSongAction) {
 						<button
 							type="button"
 							:class="$style.infoBtn"
-							:aria-label="t('mobilesheetsmanager', 'Info about keeping original song')"
+							:aria-label="t('sheetmusic', 'Info about keeping original song')"
 							@click.stop>
 							<InformationOutlineIcon :size="16" />
 						</button>
 					</template>
 					<div :class="$style.infoPopoverContent">
-						{{ t('mobilesheetsmanager', 'Keep original song and its PDF file untouched.') }}
+						{{ t('sheetmusic', 'Keep original song and its PDF file untouched.') }}
 					</div>
 				</NcPopover>
 			</div>
@@ -102,7 +102,7 @@ function select(val: OriginalSongAction) {
 					<RadioboxBlank v-else :size="18" :class="$style.uncheckedIcon" />
 				</div>
 				<span :class="$style.optionLabel">
-					{{ t('mobilesheetsmanager', 'Delete PDF from original song') }}
+					{{ t('sheetmusic', 'Delete PDF from original song') }}
 				</span>
 				<NcPopover
 					:triggers="['hover', 'focus']"
@@ -113,13 +113,13 @@ function select(val: OriginalSongAction) {
 						<button
 							type="button"
 							:class="$style.infoBtn"
-							:aria-label="t('mobilesheetsmanager', 'Info about deleting PDF file')"
+							:aria-label="t('sheetmusic', 'Info about deleting PDF file')"
 							@click.stop>
 							<InformationOutlineIcon :size="16" />
 						</button>
 					</template>
 					<div :class="$style.infoPopoverContent">
-						{{ t('mobilesheetsmanager', 'The PDF file will be removed from the original song, but the song itself is kept.') }}
+						{{ t('sheetmusic', 'The PDF file will be removed from the original song, but the song itself is kept.') }}
 					</div>
 				</NcPopover>
 			</div>
@@ -153,7 +153,7 @@ function select(val: OriginalSongAction) {
 					<RadioboxBlank v-else :size="18" :class="$style.uncheckedIcon" />
 				</div>
 				<span :class="$style.optionLabel">
-					{{ t('mobilesheetsmanager', 'Delete original song and attached files') }}
+					{{ t('sheetmusic', 'Delete original song and attached files') }}
 				</span>
 				<NcPopover
 					:triggers="['hover', 'focus']"
@@ -164,15 +164,15 @@ function select(val: OriginalSongAction) {
 						<button
 							type="button"
 							:class="$style.infoBtn"
-							:aria-label="t('mobilesheetsmanager', 'Info about deleting original song')"
+							:aria-label="t('sheetmusic', 'Info about deleting original song')"
 							@click.stop>
 							<InformationOutlineIcon :size="16" />
 						</button>
 					</template>
 					<div :class="$style.infoPopoverContent">
 						{{ hasExactlyOneFile
-							? t('mobilesheetsmanager', 'The original song and its file will be completely deleted.')
-							: t('mobilesheetsmanager', 'Only possible if the song has exactly one attached file ({count} files currently).', { count: attachedFilesCount })
+							? t('sheetmusic', 'The original song and its file will be completely deleted.')
+							: t('sheetmusic', 'Only possible if the song has exactly one attached file ({count} files currently).', { count: attachedFilesCount })
 						}}
 					</div>
 				</NcPopover>

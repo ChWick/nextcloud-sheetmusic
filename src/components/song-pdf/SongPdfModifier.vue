@@ -147,7 +147,7 @@ const selectedPages = ref<number[]>([])
 // Load PDF bytes and initialize
 async function loadPdf() {
 	if (!targetFile.value?.path) {
-		errorMessage.value = t('mobilesheetsmanager', 'No PDF file found for this song.')
+		errorMessage.value = t('sheetmusic', 'No PDF file found for this song.')
 		showError(errorMessage.value)
 		return
 	}
@@ -171,9 +171,9 @@ async function loadPdf() {
 		// Store an independent clone of bytes so pdfjs worker transfer does not detach the array buffer
 		originalPdfBytes.value = bytes.slice()
 
-		const wasmUrl = typeof generateFilePath === 'function' ? generateFilePath('mobilesheetsmanager', 'js', 'pdfjs/wasm/') : new URL('pdfjs-dist/wasm/', import.meta.url).href
-		const cMapUrl = typeof generateFilePath === 'function' ? generateFilePath('mobilesheetsmanager', 'js', 'pdfjs/cmaps/') : new URL('pdfjs-dist/cmaps/', import.meta.url).href
-		const standardFontDataUrl = typeof generateFilePath === 'function' ? generateFilePath('mobilesheetsmanager', 'js', 'pdfjs/standard_fonts/') : new URL('pdfjs-dist/standard_fonts/', import.meta.url).href
+		const wasmUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/wasm/') : new URL('pdfjs-dist/wasm/', import.meta.url).href
+		const cMapUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/cmaps/') : new URL('pdfjs-dist/cmaps/', import.meta.url).href
+		const standardFontDataUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/standard_fonts/') : new URL('pdfjs-dist/standard_fonts/', import.meta.url).href
 
 		const pdf = await getDocument({
 			data: bytes.slice(),
@@ -203,7 +203,7 @@ async function loadPdf() {
 		initThumbnailObserver(pdf)
 	} catch (err: any) {
 		console.error('Failed to load PDF:', err)
-		errorMessage.value = t('mobilesheetsmanager', 'Failed to load PDF document: {error}', {
+		errorMessage.value = t('sheetmusic', 'Failed to load PDF document: {error}', {
 			error: err?.message ?? String(err),
 		})
 		showError(errorMessage.value)
@@ -237,7 +237,7 @@ async function renderSingleThumbnail(pdf: any, pageNum: number) {
 		const canvas = document.createElement('canvas')
 		canvas.width = Math.floor(viewport.width)
 		canvas.height = Math.floor(viewport.height)
-		canvas.className = 'mobilesheetsmanager-pdf-thumbnail-canvas'
+		canvas.className = 'sheetmusic-pdf-thumbnail-canvas'
 
 		const canvasContext = canvas.getContext('2d')
 		if (canvasContext) {
@@ -332,7 +332,7 @@ function resetRotations() {
 		pageRotations.value[i] = 0
 	}
 	pageRotateCropToOriginal.value = {}
-	showInfo(t('mobilesheetsmanager', 'Reset all page rotations for "{title}".', { title: props.song.title }))
+	showInfo(t('sheetmusic', 'Reset all page rotations for "{title}".', { title: props.song.title }))
 }
 
 function openRotateModal(pageNum: number) {
@@ -443,7 +443,7 @@ function handleApplyCrop(crop: PageCrop, scope: 'current' | 'all') {
 
 function resetAllCrops() {
 	pageCrops.value = {}
-	showInfo(t('mobilesheetsmanager', 'Reset all page crops for "{title}".', { title: props.song.title }))
+	showInfo(t('sheetmusic', 'Reset all page crops for "{title}".', { title: props.song.title }))
 }
 
 const hasAnyCrop = computed(() => {
@@ -487,7 +487,7 @@ function toggleDeletePage(pageNum: number) {
 		next.delete(pageNum)
 	} else {
 		if (totalPages.value - next.size <= 1) {
-			showError(t('mobilesheetsmanager', 'Cannot delete page. A PDF document must have at least one page.'))
+			showError(t('sheetmusic', 'Cannot delete page. A PDF document must have at least one page.'))
 			return
 		}
 		next.add(pageNum)
@@ -593,9 +593,9 @@ async function handleExecuteJoin(options: {
 		deletedPages.value = newDeleted
 
 		// Re-render PDF with pdfjs
-		const wasmUrl = typeof generateFilePath === 'function' ? generateFilePath('mobilesheetsmanager', 'js', 'pdfjs/wasm/') : new URL('pdfjs-dist/wasm/', import.meta.url).href
-		const cMapUrl = typeof generateFilePath === 'function' ? generateFilePath('mobilesheetsmanager', 'js', 'pdfjs/cmaps/') : new URL('pdfjs-dist/cmaps/', import.meta.url).href
-		const standardFontDataUrl = typeof generateFilePath === 'function' ? generateFilePath('mobilesheetsmanager', 'js', 'pdfjs/standard_fonts/') : new URL('pdfjs-dist/standard_fonts/', import.meta.url).href
+		const wasmUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/wasm/') : new URL('pdfjs-dist/wasm/', import.meta.url).href
+		const cMapUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/cmaps/') : new URL('pdfjs-dist/cmaps/', import.meta.url).href
+		const standardFontDataUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/standard_fonts/') : new URL('pdfjs-dist/standard_fonts/', import.meta.url).href
 
 		const pdf = await getDocument({
 			data: newBytes.slice(),
@@ -613,7 +613,7 @@ async function handleExecuteJoin(options: {
 		await nextTick()
 		initThumbnailObserver(pdf)
 
-		showSuccess(t('mobilesheetsmanager', 'Joined pages {pageA} and {pageB} in "{title}".', {
+		showSuccess(t('sheetmusic', 'Joined pages {pageA} and {pageB} in "{title}".', {
 			pageA: options.pageA,
 			pageB: options.pageB,
 			title: props.song.title,
@@ -621,7 +621,7 @@ async function handleExecuteJoin(options: {
 	} catch (err: any) {
 		console.error('Failed to join pages:', err)
 		const detail = describeRequestFailure(err, err?.message ?? String(err))
-		errorMessage.value = t('mobilesheetsmanager', 'Failed to join pages: {error}', {
+		errorMessage.value = t('sheetmusic', 'Failed to join pages: {error}', {
 			error: detail,
 		})
 		showError(errorMessage.value)
@@ -705,11 +705,11 @@ async function saveRotationsAndCrops() {
 		}
 
 		if (pdfDoc.getPageCount() === 0) {
-			throw new Error(t('mobilesheetsmanager', 'Cannot save a PDF with no pages.'))
+			throw new Error(t('sheetmusic', 'Cannot save a PDF with no pages.'))
 		}
 
 		if (!modifiedRotations && !modifiedCrops && !modifiedDeletions && !hasAnyJoin.value) {
-			showSuccess(t('mobilesheetsmanager', 'No changes to save.'))
+			showSuccess(t('sheetmusic', 'No changes to save.'))
 			isSaving.value = false
 			return
 		}
@@ -734,21 +734,21 @@ async function saveRotationsAndCrops() {
 		})
 
 		const data = uploadRes.data.ocs.data as LibraryData
-		const songTitle = props.song.title || t('mobilesheetsmanager', 'Song')
+		const songTitle = props.song.title || t('sheetmusic', 'Song')
 		const hasMultipleTypes = [modifiedRotations, modifiedCrops, modifiedDeletions, hasAnyJoin.value].filter(Boolean).length > 1
 		const successMsg = hasMultipleTypes || hasAnyJoin.value
-			? t('mobilesheetsmanager', 'PDF changes saved successfully for "{title}".', { title: songTitle })
+			? t('sheetmusic', 'PDF changes saved successfully for "{title}".', { title: songTitle })
 			: modifiedDeletions
-				? t('mobilesheetsmanager', 'Pages deleted and PDF saved successfully for "{title}".', { title: songTitle })
+				? t('sheetmusic', 'Pages deleted and PDF saved successfully for "{title}".', { title: songTitle })
 				: modifiedRotations
-					? t('mobilesheetsmanager', 'Rotated PDF saved successfully for "{title}".', { title: songTitle })
-					: t('mobilesheetsmanager', 'Cropped PDF saved successfully for "{title}".', { title: songTitle })
+					? t('sheetmusic', 'Rotated PDF saved successfully for "{title}".', { title: songTitle })
+					: t('sheetmusic', 'Cropped PDF saved successfully for "{title}".', { title: songTitle })
 		showSuccess(successMsg)
 		emit('saved', data, props.song.id)
 	} catch (err: any) {
 		console.error('Failed to save modified PDF:', err)
 		const detail = describeRequestFailure(err, err?.message ?? String(err))
-		errorMessage.value = t('mobilesheetsmanager', 'Failed to save PDF: {error}', {
+		errorMessage.value = t('sheetmusic', 'Failed to save PDF: {error}', {
 			error: detail,
 		})
 		showError(errorMessage.value)
@@ -764,7 +764,7 @@ const saveCrops = saveRotationsAndCrops
 async function saveSplits() {
 	if (!originalPdfBytes.value || !targetFile.value) return
 	if (splitSegments.value.length === 0) {
-		errorMessage.value = t('mobilesheetsmanager', 'Please configure at least one segment to split.')
+		errorMessage.value = t('sheetmusic', 'Please configure at least one segment to split.')
 		showError(errorMessage.value)
 		return
 	}
@@ -772,12 +772,12 @@ async function saveSplits() {
 	// Validate segments
 	for (const seg of splitSegments.value) {
 		if (!seg.title.trim()) {
-			errorMessage.value = t('mobilesheetsmanager', 'All segments must have a title.')
+			errorMessage.value = t('sheetmusic', 'All segments must have a title.')
 			showError(errorMessage.value)
 			return
 		}
 		if (seg.startPage < 1 || seg.endPage > totalPages.value || seg.startPage > seg.endPage) {
-			errorMessage.value = t('mobilesheetsmanager', 'Invalid page range ({start}–{end}) for "{title}".', {
+			errorMessage.value = t('sheetmusic', 'Invalid page range ({start}–{end}) for "{title}".', {
 				start: seg.startPage,
 				end: seg.endPage,
 				title: seg.title,
@@ -856,7 +856,7 @@ async function saveSplits() {
 			const newSongId = createdData.createdSongId ?? createdData.id
 
 			if (!newSongId) {
-				throw new Error(t('mobilesheetsmanager', 'Failed to retrieve ID for created split song: {title}', { title: seg.title }))
+				throw new Error(t('sheetmusic', 'Failed to retrieve ID for created split song: {title}', { title: seg.title }))
 			}
 
 			if (firstCreatedSongId === undefined) {
@@ -883,7 +883,7 @@ async function saveSplits() {
 				queryParams: { libraryId: props.libraryId, deleteFiles: true },
 			})
 			lastLibraryData = (delSongRes.data?.ocs?.data as LibraryData) ?? lastLibraryData
-			showSuccess(t('mobilesheetsmanager', 'Successfully split "{title}" into {count} songs and deleted original song.', { title: props.song.title, count: splitSegments.value.length }))
+			showSuccess(t('sheetmusic', 'Successfully split "{title}" into {count} songs and deleted original song.', { title: props.song.title, count: splitSegments.value.length }))
 			if (lastLibraryData) {
 				emit('saved', lastLibraryData, targetOpenSongId)
 			} else {
@@ -899,7 +899,7 @@ async function saveSplits() {
 			lastLibraryData = (delRes.data?.ocs?.data as LibraryData) ?? lastLibraryData
 		}
 
-		showSuccess(t('mobilesheetsmanager', 'Successfully split "{title}" into {count} songs.', { title: props.song.title, count: splitSegments.value.length }))
+		showSuccess(t('sheetmusic', 'Successfully split "{title}" into {count} songs.', { title: props.song.title, count: splitSegments.value.length }))
 		if (lastLibraryData) {
 			emit('saved', lastLibraryData, targetOpenSongId)
 		} else {
@@ -908,7 +908,7 @@ async function saveSplits() {
 	} catch (err: any) {
 		console.error('Failed to split PDF:', err)
 		const detail = describeRequestFailure(err, err?.message ?? String(err))
-		errorMessage.value = t('mobilesheetsmanager', 'Failed to split PDF: {error}', {
+		errorMessage.value = t('sheetmusic', 'Failed to split PDF: {error}', {
 			error: detail,
 		})
 		showError(errorMessage.value)
@@ -933,18 +933,18 @@ watch(() => targetFile.value?.path, () => {
 			<div :class="$style.headerLeft">
 				<NcButton
 					variant="secondary"
-					:title="t('mobilesheetsmanager', 'Back to song')"
-					:aria-label="t('mobilesheetsmanager', 'Back to song')"
+					:title="t('sheetmusic', 'Back to song')"
+					:aria-label="t('sheetmusic', 'Back to song')"
 					@click="emit('cancel')">
 					<template #icon>
 						<CloseIcon :size="20" />
 					</template>
-					{{ t('mobilesheetsmanager', 'Cancel') }}
+					{{ t('sheetmusic', 'Cancel') }}
 				</NcButton>
 				<div :class="$style.fileMeta">
 					<span :class="$style.songTitle">{{ song.title }}</span>
 					<span v-if="targetFile" :class="$style.fileName">
-						({{ getFileName(targetFile.path) }} — {{ hasAnyDeletion ? `${remainingPagesCount} / ${totalPages}` : totalPages }} {{ totalPages === 1 ? t('mobilesheetsmanager', 'page') : t('mobilesheetsmanager', 'pages') }})
+						({{ getFileName(targetFile.path) }} — {{ hasAnyDeletion ? `${remainingPagesCount} / ${totalPages}` : totalPages }} {{ totalPages === 1 ? t('sheetmusic', 'page') : t('sheetmusic', 'pages') }})
 					</span>
 				</div>
 			</div>
@@ -956,21 +956,21 @@ watch(() => targetFile.value?.path, () => {
 					:class="[$style.tabButton, activeMode === 'rotate' && $style.tabButtonActive]"
 					@click="activeMode = 'rotate'">
 					<RotateRight :size="18" />
-					<span>{{ t('mobilesheetsmanager', 'Rotate Pages') }}</span>
+					<span>{{ t('sheetmusic', 'Rotate Pages') }}</span>
 				</button>
 				<button
 					type="button"
 					:class="[$style.tabButton, activeMode === 'crop' && $style.tabButtonActive]"
 					@click="activeMode = 'crop'">
 					<CropIcon :size="18" />
-					<span>{{ t('mobilesheetsmanager', 'Crop Pages') }}</span>
+					<span>{{ t('sheetmusic', 'Crop Pages') }}</span>
 				</button>
 				<button
 					type="button"
 					:class="[$style.tabButton, activeMode === 'split' && $style.tabButtonActive]"
 					@click="activeMode = 'split'">
 					<CallSplit :size="18" />
-					<span>{{ t('mobilesheetsmanager', 'Split PDF') }}</span>
+					<span>{{ t('sheetmusic', 'Split PDF') }}</span>
 				</button>
 			</div>
 
@@ -979,36 +979,36 @@ watch(() => targetFile.value?.path, () => {
 					v-if="activeMode === 'rotate'"
 					variant="primary"
 					:disabled="isSaving || isLoading || !hasAnyChange || remainingPagesCount === 0"
-					:title="(hasAnyDeletion || hasAnyCrop || hasAnyJoin) ? t('mobilesheetsmanager', 'Save changes') : t('mobilesheetsmanager', 'Save rotated PDF')"
+					:title="(hasAnyDeletion || hasAnyCrop || hasAnyJoin) ? t('sheetmusic', 'Save changes') : t('sheetmusic', 'Save rotated PDF')"
 					@click="saveRotations">
 					<template #icon>
 						<ContentSaveOutlineIcon :size="20" />
 					</template>
-					{{ isSaving ? t('mobilesheetsmanager', 'Saving…') : ((hasAnyDeletion || hasAnyCrop || hasAnyJoin) ? t('mobilesheetsmanager', 'Save Changes') : t('mobilesheetsmanager', 'Save Rotations')) }}
+					{{ isSaving ? t('sheetmusic', 'Saving…') : ((hasAnyDeletion || hasAnyCrop || hasAnyJoin) ? t('sheetmusic', 'Save Changes') : t('sheetmusic', 'Save Rotations')) }}
 				</NcButton>
 
 				<NcButton
 					v-else-if="activeMode === 'crop'"
 					variant="primary"
 					:disabled="isSaving || isLoading || !hasAnyChange || remainingPagesCount === 0"
-					:title="(hasAnyDeletion || hasAnyRotation || hasAnyJoin) ? t('mobilesheetsmanager', 'Save changes') : t('mobilesheetsmanager', 'Save cropped PDF')"
+					:title="(hasAnyDeletion || hasAnyRotation || hasAnyJoin) ? t('sheetmusic', 'Save changes') : t('sheetmusic', 'Save cropped PDF')"
 					@click="saveCrops">
 					<template #icon>
 						<ContentSaveOutlineIcon :size="20" />
 					</template>
-					{{ isSaving ? t('mobilesheetsmanager', 'Saving…') : ((hasAnyDeletion || hasAnyRotation || hasAnyJoin) ? t('mobilesheetsmanager', 'Save Changes') : t('mobilesheetsmanager', 'Save Crops')) }}
+					{{ isSaving ? t('sheetmusic', 'Saving…') : ((hasAnyDeletion || hasAnyRotation || hasAnyJoin) ? t('sheetmusic', 'Save Changes') : t('sheetmusic', 'Save Crops')) }}
 				</NcButton>
 
 				<NcButton
 					v-else-if="activeMode === 'split'"
 					variant="primary"
 					:disabled="isSaving || isLoading || splitSegments.length === 0"
-					:title="t('mobilesheetsmanager', 'Split and create songs')"
+					:title="t('sheetmusic', 'Split and create songs')"
 					@click="saveSplits">
 					<template #icon>
 						<CallSplit :size="20" />
 					</template>
-					{{ isSaving ? t('mobilesheetsmanager', 'Processing…') : t('mobilesheetsmanager', 'Split & Create Songs') }}
+					{{ isSaving ? t('sheetmusic', 'Processing…') : t('sheetmusic', 'Split & Create Songs') }}
 				</NcButton>
 			</div>
 		</header>
@@ -1021,7 +1021,7 @@ watch(() => targetFile.value?.path, () => {
 		<!-- Main Workspace Area -->
 		<div v-if="isLoading" :class="$style.loadingArea">
 			<NcLoadingIcon :size="48" />
-			<span>{{ t('mobilesheetsmanager', 'Loading PDF pages…') }}</span>
+			<span>{{ t('sheetmusic', 'Loading PDF pages…') }}</span>
 		</div>
 
 		<div v-else :class="$style.contentLayout">
@@ -1030,115 +1030,115 @@ watch(() => targetFile.value?.path, () => {
 				<!-- Global Toolbar for Active Mode -->
 				<div :class="$style.toolbar">
 					<template v-if="activeMode === 'rotate'">
-						<span :class="$style.toolbarTitle">{{ t('mobilesheetsmanager', 'Quick Actions:') }}</span>
+						<span :class="$style.toolbarTitle">{{ t('sheetmusic', 'Quick Actions:') }}</span>
 						<NcButton size="small" variant="secondary" @click="rotateAll(90)">
 							<template #icon>
 								<RotateRight :size="16" />
 							</template>
-							{{ t('mobilesheetsmanager', 'Rotate All 90° CW') }}
+							{{ t('sheetmusic', 'Rotate All 90° CW') }}
 						</NcButton>
 						<NcButton size="small" variant="secondary" @click="rotateAll(-90)">
 							<template #icon>
 								<RotateLeft :size="16" />
 							</template>
-							{{ t('mobilesheetsmanager', 'Rotate All 90° CCW') }}
+							{{ t('sheetmusic', 'Rotate All 90° CCW') }}
 						</NcButton>
 						<NcButton
 							size="small"
 							variant="secondary"
-							:title="t('mobilesheetsmanager', 'Rotate by custom angle / fine deskew')"
+							:title="t('sheetmusic', 'Rotate by custom angle / fine deskew')"
 							@click="openRotateModal(1)">
 							<template #icon>
 								<Rotate360 :size="16" />
 							</template>
-							{{ t('mobilesheetsmanager', 'Rotate by Angle…') }}
+							{{ t('sheetmusic', 'Rotate by Angle…') }}
 						</NcButton>
 						<NcButton size="small" variant="tertiary" :disabled="!hasAnyRotation" @click="resetRotations">
-							{{ t('mobilesheetsmanager', 'Reset All') }}
+							{{ t('sheetmusic', 'Reset All') }}
 						</NcButton>
 						<NcButton
 							v-if="totalPages >= 2"
 							size="small"
 							variant="secondary"
-							:title="t('mobilesheetsmanager', 'Join two pages into a single page')"
+							:title="t('sheetmusic', 'Join two pages into a single page')"
 							@click="openJoinModal(1, 2)">
 							<template #icon>
 								<TableMergeCells :size="16" />
 							</template>
-							{{ t('mobilesheetsmanager', 'Join Pages…') }}
+							{{ t('sheetmusic', 'Join Pages…') }}
 						</NcButton>
 						<NcButton
 							v-if="hasAnyDeletion"
 							size="small"
 							variant="tertiary"
-							:title="t('mobilesheetsmanager', 'Restore all deleted pages')"
+							:title="t('sheetmusic', 'Restore all deleted pages')"
 							@click="restoreAllPages">
 							<template #icon>
 								<DeleteRestore :size="16" />
 							</template>
-							{{ t('mobilesheetsmanager', 'Restore Deleted ({count})', { count: deletedPages.size }) }}
+							{{ t('sheetmusic', 'Restore Deleted ({count})', { count: deletedPages.size }) }}
 						</NcButton>
 					</template>
 
 					<template v-else-if="activeMode === 'crop'">
 						<span :class="$style.toolbarTitle">
-							{{ t('mobilesheetsmanager', 'Click on any page or "Crop" button to adjust crop margins:') }}
+							{{ t('sheetmusic', 'Click on any page or "Crop" button to adjust crop margins:') }}
 						</span>
 						<NcButton
 							size="small"
 							variant="secondary"
-							:title="t('mobilesheetsmanager', 'Crop first page and apply to all')"
+							:title="t('sheetmusic', 'Crop first page and apply to all')"
 							@click="openCropModal(1)">
 							<template #icon>
 								<CropIcon :size="16" />
 							</template>
-							{{ t('mobilesheetsmanager', 'Crop All Pages…') }}
+							{{ t('sheetmusic', 'Crop All Pages…') }}
 						</NcButton>
 						<NcButton
 							size="small"
 							variant="tertiary"
 							:disabled="!hasAnyCrop"
-							:title="t('mobilesheetsmanager', 'Reset all page crops to full page')"
+							:title="t('sheetmusic', 'Reset all page crops to full page')"
 							@click="resetAllCrops">
-							{{ t('mobilesheetsmanager', 'Reset All Crops') }}
+							{{ t('sheetmusic', 'Reset All Crops') }}
 						</NcButton>
 						<NcButton
 							v-if="totalPages >= 2"
 							size="small"
 							variant="secondary"
-							:title="t('mobilesheetsmanager', 'Join two pages into a single page')"
+							:title="t('sheetmusic', 'Join two pages into a single page')"
 							@click="openJoinModal(1, 2)">
 							<template #icon>
 								<TableMergeCells :size="16" />
 							</template>
-							{{ t('mobilesheetsmanager', 'Join Pages…') }}
+							{{ t('sheetmusic', 'Join Pages…') }}
 						</NcButton>
 						<NcButton
 							v-if="hasAnyDeletion"
 							size="small"
 							variant="tertiary"
-							:title="t('mobilesheetsmanager', 'Restore all deleted pages')"
+							:title="t('sheetmusic', 'Restore all deleted pages')"
 							@click="restoreAllPages">
 							<template #icon>
 								<DeleteRestore :size="16" />
 							</template>
-							{{ t('mobilesheetsmanager', 'Restore Deleted ({count})', { count: deletedPages.size }) }}
+							{{ t('sheetmusic', 'Restore Deleted ({count})', { count: deletedPages.size }) }}
 						</NcButton>
 					</template>
 
 					<template v-else-if="activeMode === 'split'">
 						<span :class="$style.toolbarTitle">
-							{{ t('mobilesheetsmanager', 'Select pages in grid to assign to segments:') }}
+							{{ t('sheetmusic', 'Select pages in grid to assign to segments:') }}
 						</span>
 						<span v-if="selectedPages.length > 0" :class="$style.selectionBadge">
-							{{ t('mobilesheetsmanager', '{count} pages selected', { count: selectedPages.length }) }}
+							{{ t('sheetmusic', '{count} pages selected', { count: selectedPages.length }) }}
 						</span>
 						<NcButton
 							v-if="selectedPages.length > 0"
 							size="small"
 							variant="tertiary"
 							@click="selectedPages = []">
-							{{ t('mobilesheetsmanager', 'Clear Selection') }}
+							{{ t('sheetmusic', 'Clear Selection') }}
 						</NcButton>
 					</template>
 				</div>
@@ -1177,21 +1177,21 @@ watch(() => targetFile.value?.path, () => {
 								}"></div>
 							<div v-if="isPageDeleted(pageNum)" :class="$style.deletedOverlay">
 								<DeleteOutline :size="28" />
-								<span>{{ t('mobilesheetsmanager', 'Deleted') }}</span>
+								<span>{{ t('sheetmusic', 'Deleted') }}</span>
 							</div>
 						</div>
 
 						<div :class="$style.cardFooter">
 							<span :class="[$style.pageNumLabel, isPageDeleted(pageNum) && $style.pageNumLabelDeleted]">
-								{{ t('mobilesheetsmanager', 'p. {page}', { page: pageNum }) }}
+								{{ t('sheetmusic', 'p. {page}', { page: pageNum }) }}
 								<span v-if="Math.abs(pageRotations[pageNum - 1] || 0) > 0.001" :class="$style.rotationBadge">
 									{{ Math.round((pageRotations[pageNum - 1] || 0) * 10) / 10 }}°
 								</span>
 								<span v-if="activeMode === 'crop' && isPageCropped(pageNum)" :class="$style.cropBadge" :title="getCropIndicatorText(pageNum)">
-									{{ t('mobilesheetsmanager', 'Cropped') }}
+									{{ t('sheetmusic', 'Cropped') }}
 								</span>
 								<span v-if="isPageDeleted(pageNum)" :class="$style.deletedBadge">
-									{{ t('mobilesheetsmanager', 'Deleted') }}
+									{{ t('sheetmusic', 'Deleted') }}
 								</span>
 							</span>
 
@@ -1201,8 +1201,8 @@ watch(() => targetFile.value?.path, () => {
 									size="small"
 									variant="tertiary"
 									:disabled="isPageDeleted(pageNum)"
-									:title="t('mobilesheetsmanager', 'Rotate page 90° CCW')"
-									:aria-label="t('mobilesheetsmanager', 'Rotate page 90° CCW')"
+									:title="t('sheetmusic', 'Rotate page 90° CCW')"
+									:aria-label="t('sheetmusic', 'Rotate page 90° CCW')"
 									@click.stop="rotatePage(pageNum - 1, -90)">
 									<template #icon>
 										<RotateLeft :size="16" />
@@ -1212,8 +1212,8 @@ watch(() => targetFile.value?.path, () => {
 									size="small"
 									variant="tertiary"
 									:disabled="isPageDeleted(pageNum)"
-									:title="t('mobilesheetsmanager', 'Rotate page 90° CW')"
-									:aria-label="t('mobilesheetsmanager', 'Rotate page 90° CW')"
+									:title="t('sheetmusic', 'Rotate page 90° CW')"
+									:aria-label="t('sheetmusic', 'Rotate page 90° CW')"
 									@click.stop="rotatePage(pageNum - 1, 90)">
 									<template #icon>
 										<RotateRight :size="16" />
@@ -1223,8 +1223,8 @@ watch(() => targetFile.value?.path, () => {
 									size="small"
 									variant="tertiary"
 									:disabled="isPageDeleted(pageNum)"
-									:title="t('mobilesheetsmanager', 'Rotate page {page} by custom angle', { page: pageNum })"
-									:aria-label="t('mobilesheetsmanager', 'Rotate page {page} by custom angle', { page: pageNum })"
+									:title="t('sheetmusic', 'Rotate page {page} by custom angle', { page: pageNum })"
+									:aria-label="t('sheetmusic', 'Rotate page {page} by custom angle', { page: pageNum })"
 									@click.stop="openRotateModal(pageNum)">
 									<template #icon>
 										<Rotate360 :size="16" />
@@ -1234,8 +1234,8 @@ watch(() => targetFile.value?.path, () => {
 									v-if="pageNum < totalPages && !isPageDeleted(pageNum)"
 									size="small"
 									variant="tertiary"
-									:title="t('mobilesheetsmanager', 'Join with page {p}', { p: pageNum + 1 })"
-									:aria-label="t('mobilesheetsmanager', 'Join with page {p}', { p: pageNum + 1 })"
+									:title="t('sheetmusic', 'Join with page {p}', { p: pageNum + 1 })"
+									:aria-label="t('sheetmusic', 'Join with page {p}', { p: pageNum + 1 })"
 									@click.stop="openJoinModal(pageNum, pageNum + 1)">
 									<template #icon>
 										<TableMergeCells :size="16" />
@@ -1244,8 +1244,8 @@ watch(() => targetFile.value?.path, () => {
 								<NcButton
 									size="small"
 									:variant="isPageDeleted(pageNum) ? 'primary' : 'tertiary'"
-									:title="isPageDeleted(pageNum) ? t('mobilesheetsmanager', 'Restore page {page}', { page: pageNum }) : t('mobilesheetsmanager', 'Delete page {page}', { page: pageNum })"
-									:aria-label="isPageDeleted(pageNum) ? t('mobilesheetsmanager', 'Restore page {page}', { page: pageNum }) : t('mobilesheetsmanager', 'Delete page {page}', { page: pageNum })"
+									:title="isPageDeleted(pageNum) ? t('sheetmusic', 'Restore page {page}', { page: pageNum }) : t('sheetmusic', 'Delete page {page}', { page: pageNum })"
+									:aria-label="isPageDeleted(pageNum) ? t('sheetmusic', 'Restore page {page}', { page: pageNum }) : t('sheetmusic', 'Delete page {page}', { page: pageNum })"
 									:disabled="!isPageDeleted(pageNum) && remainingPagesCount <= 1"
 									@click.stop="toggleDeletePage(pageNum)">
 									<template #icon>
@@ -1261,19 +1261,19 @@ watch(() => targetFile.value?.path, () => {
 									v-if="!isPageDeleted(pageNum)"
 									size="small"
 									:variant="isPageCropped(pageNum) ? 'primary' : 'tertiary'"
-									:title="t('mobilesheetsmanager', 'Crop page {page}', { page: pageNum })"
+									:title="t('sheetmusic', 'Crop page {page}', { page: pageNum })"
 									@click.stop="openCropModal(pageNum)">
 									<template #icon>
 										<CropIcon :size="16" />
 									</template>
-									{{ t('mobilesheetsmanager', 'Crop') }}
+									{{ t('sheetmusic', 'Crop') }}
 								</NcButton>
 								<NcButton
 									v-if="pageNum < totalPages && !isPageDeleted(pageNum)"
 									size="small"
 									variant="tertiary"
-									:title="t('mobilesheetsmanager', 'Join with page {p}', { p: pageNum + 1 })"
-									:aria-label="t('mobilesheetsmanager', 'Join with page {p}', { p: pageNum + 1 })"
+									:title="t('sheetmusic', 'Join with page {p}', { p: pageNum + 1 })"
+									:aria-label="t('sheetmusic', 'Join with page {p}', { p: pageNum + 1 })"
 									@click.stop="openJoinModal(pageNum, pageNum + 1)">
 									<template #icon>
 										<TableMergeCells :size="16" />
@@ -1282,8 +1282,8 @@ watch(() => targetFile.value?.path, () => {
 								<NcButton
 									size="small"
 									:variant="isPageDeleted(pageNum) ? 'primary' : 'tertiary'"
-									:title="isPageDeleted(pageNum) ? t('mobilesheetsmanager', 'Restore page {page}', { page: pageNum }) : t('mobilesheetsmanager', 'Delete page {page}', { page: pageNum })"
-									:aria-label="isPageDeleted(pageNum) ? t('mobilesheetsmanager', 'Restore page {page}', { page: pageNum }) : t('mobilesheetsmanager', 'Delete page {page}', { page: pageNum })"
+									:title="isPageDeleted(pageNum) ? t('sheetmusic', 'Restore page {page}', { page: pageNum }) : t('sheetmusic', 'Delete page {page}', { page: pageNum })"
+									:aria-label="isPageDeleted(pageNum) ? t('sheetmusic', 'Restore page {page}', { page: pageNum }) : t('sheetmusic', 'Delete page {page}', { page: pageNum })"
 									:disabled="!isPageDeleted(pageNum) && remainingPagesCount <= 1"
 									@click.stop="toggleDeletePage(pageNum)">
 									<template #icon>
@@ -1309,17 +1309,17 @@ watch(() => targetFile.value?.path, () => {
 			<!-- Right Sidebar: Split Segments Configuration -->
 			<aside v-if="activeMode === 'split'" :class="$style.splitSidebar">
 				<div :class="$style.sidebarHeader">
-					<h4>{{ t('mobilesheetsmanager', 'Split Segments') }}</h4>
+					<h4>{{ t('sheetmusic', 'Split Segments') }}</h4>
 					<NcButton size="small" variant="secondary" @click="addSegment">
 						<template #icon>
 							<PlusIcon :size="16" />
 						</template>
-						{{ t('mobilesheetsmanager', 'Add Part') }}
+						{{ t('sheetmusic', 'Add Part') }}
 					</NcButton>
 				</div>
 
 				<p :class="$style.sidebarHelp">
-					{{ t('mobilesheetsmanager', 'Each segment creates a new song in the same book, copying metadata from the original song.') }}
+					{{ t('sheetmusic', 'Each segment creates a new song in the same book, copying metadata from the original song.') }}
 				</p>
 
 				<!-- Segments list -->
@@ -1337,15 +1337,15 @@ watch(() => targetFile.value?.path, () => {
 							</span>
 							<NcTextField
 								v-model="seg.title"
-								:label="t('mobilesheetsmanager', 'Song Title')"
+								:label="t('sheetmusic', 'Song Title')"
 								hide-label
 								:class="$style.segmentTitleInput"
-								:placeholder="t('mobilesheetsmanager', 'Song title…')" />
+								:placeholder="t('sheetmusic', 'Song title…')" />
 							<NcButton
 								v-if="splitSegments.length > 1"
 								size="small"
 								variant="tertiary"
-								:title="t('mobilesheetsmanager', 'Remove part')"
+								:title="t('sheetmusic', 'Remove part')"
 								@click="removeSegment(idx)">
 								<template #icon>
 									<DeleteIcon :size="16" />
@@ -1355,14 +1355,14 @@ watch(() => targetFile.value?.path, () => {
 
 						<div :class="$style.segmentCardBody">
 							<div :class="$style.rangeGroup">
-								<label :class="$style.rangeLabel">{{ t('mobilesheetsmanager', 'Pages:') }}</label>
+								<label :class="$style.rangeLabel">{{ t('sheetmusic', 'Pages:') }}</label>
 								<input
 									v-model.number="seg.startPage"
 									type="number"
 									min="1"
 									:max="totalPages"
 									:class="$style.pageInput" />
-								<span>{{ t('mobilesheetsmanager', 'to') }}</span>
+								<span>{{ t('sheetmusic', 'to') }}</span>
 								<input
 									v-model.number="seg.endPage"
 									type="number"
@@ -1380,7 +1380,7 @@ watch(() => targetFile.value?.path, () => {
 								<template #icon>
 									<ArrowRight :size="14" />
 								</template>
-								{{ t('mobilesheetsmanager', 'Assign selected ({range})', {
+								{{ t('sheetmusic', 'Assign selected ({range})', {
 									range: `${Math.min(...selectedPages)}–${Math.max(...selectedPages)}`
 								}) }}
 							</NcButton>

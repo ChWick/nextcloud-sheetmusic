@@ -260,7 +260,7 @@ async function renderCurrentView() {
 			const canvas = document.createElement('canvas')
 			canvas.width = Math.floor(viewport.width)
 			canvas.height = Math.floor(viewport.height)
-			canvas.className = 'mobilesheetsmanager-pdf-page'
+			canvas.className = 'sheetmusic-pdf-page'
 			canvas.style.display = 'block'
 			canvas.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.2)'
 
@@ -289,7 +289,7 @@ async function renderCurrentView() {
 		if (typeof IntersectionObserver === 'undefined') {
 			for (const pageNumber of pagesToRender) {
 				const placeholder = document.createElement('div')
-				placeholder.className = 'mobilesheetsmanager-page-placeholder'
+				placeholder.className = 'sheetmusic-page-placeholder'
 				placeholder.dataset.pageNum = String(pageNumber)
 				pdfContainer.value.append(placeholder)
 				await renderPage(pageNumber, placeholder)
@@ -316,7 +316,7 @@ async function renderCurrentView() {
 
 		for (const pageNumber of pagesToRender) {
 			const placeholder = document.createElement('div')
-			placeholder.className = 'mobilesheetsmanager-page-placeholder'
+			placeholder.className = 'sheetmusic-page-placeholder'
 			placeholder.dataset.pageNum = String(pageNumber)
 			// Estimated placeholder size to stabilize scroll bar
 			placeholder.style.minWidth = '200px'
@@ -362,7 +362,7 @@ async function loadAndRenderFile() {
 
 	if (!props.filePath) {
 		isLoading.value = false
-		errorMessage.value = t('mobilesheetsmanager', 'No file available.')
+		errorMessage.value = t('sheetmusic', 'No file available.')
 		return
 	}
 
@@ -381,9 +381,9 @@ async function loadAndRenderFile() {
 		if (loadId !== currentLoadId) return
 
 		const pdfData = response.data instanceof ArrayBuffer ? new Uint8Array(response.data) : response.data
-		const wasmUrl = typeof generateFilePath === 'function' ? generateFilePath('mobilesheetsmanager', 'js', 'pdfjs/wasm/') : new URL('pdfjs-dist/wasm/', import.meta.url).href
-		const cMapUrl = typeof generateFilePath === 'function' ? generateFilePath('mobilesheetsmanager', 'js', 'pdfjs/cmaps/') : new URL('pdfjs-dist/cmaps/', import.meta.url).href
-		const standardFontDataUrl = typeof generateFilePath === 'function' ? generateFilePath('mobilesheetsmanager', 'js', 'pdfjs/standard_fonts/') : new URL('pdfjs-dist/standard_fonts/', import.meta.url).href
+		const wasmUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/wasm/') : new URL('pdfjs-dist/wasm/', import.meta.url).href
+		const cMapUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/cmaps/') : new URL('pdfjs-dist/cmaps/', import.meta.url).href
+		const standardFontDataUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/standard_fonts/') : new URL('pdfjs-dist/standard_fonts/', import.meta.url).href
 
 		const pdf = await getDocument({
 			data: pdfData,
@@ -408,7 +408,7 @@ async function loadAndRenderFile() {
 	} catch (error) {
 		console.error('Failed to load or render PDF:', error)
 		if (loadId === currentLoadId) {
-			errorMessage.value = t('mobilesheetsmanager', 'Could not load the selected file.')
+			errorMessage.value = t('sheetmusic', 'Could not load the selected file.')
 		}
 	} finally {
 		if (loadId === currentLoadId) {
@@ -464,7 +464,7 @@ defineExpose({
 			@open-external="openInExternalViewer" />
 
 		<div v-if="isLoading" :class="$style.loading">
-			<NcLoadingIcon :size="32" :name="t('mobilesheetsmanager', 'Loading file...')" />
+			<NcLoadingIcon :size="32" :name="t('sheetmusic', 'Loading file...')" />
 		</div>
 
 		<p v-if="errorMessage" :class="$style.error" role="alert">
@@ -485,7 +485,7 @@ defineExpose({
 			:class="[$style.pdfContainer, $style[`layout-${pageLayout}`]]" />
 
 		<div v-if="!isLoading && !errorMessage && isUnsupportedFile" :class="$style.unsupported">
-			<p>{{ t('mobilesheetsmanager', 'Preview is not available for this file type.') }}</p>
+			<p>{{ t('sheetmusic', 'Preview is not available for this file type.') }}</p>
 			<NcButton
 				v-if="showExternalButton"
 				variant="primary"
@@ -493,7 +493,7 @@ defineExpose({
 				<template #icon>
 					<OpenInNewIcon :size="18" />
 				</template>
-				{{ t('mobilesheetsmanager', 'Open File Externally') }}
+				{{ t('sheetmusic', 'Open File Externally') }}
 			</NcButton>
 		</div>
 	</div>

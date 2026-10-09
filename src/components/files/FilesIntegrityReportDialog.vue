@@ -48,12 +48,12 @@ defineExpose({ clearMergingState })
 <template>
 	<NcDialog
 		v-if="open"
-		:name="t('mobilesheetsmanager', 'Library Integrity & Health Check')"
+		:name="t('sheetmusic', 'Library Integrity & Health Check')"
 		size="large"
 		@close="emit('update:open', false)">
 		<div v-if="isChecking" :class="$style.loading">
 			<NcLoadingIcon :size="32" />
-			<span>{{ t('mobilesheetsmanager', 'Auditing library files and database integrity…') }}</span>
+			<span>{{ t('sheetmusic', 'Auditing library files and database integrity…') }}</span>
 		</div>
 
 		<template v-else>
@@ -62,18 +62,18 @@ defineExpose({ clearMergingState })
 			<template v-else>
 				<div :class="$style.summary">
 					<div v-if="issues.length === 0" :class="$style.cleanNotice">
-						<h3>{{ t('mobilesheetsmanager', 'All System Checks Passed!') }}</h3>
-						<p>{{ t('mobilesheetsmanager', 'No missing files, orphan records, or filename conflicts were detected in this library.') }}</p>
+						<h3>{{ t('sheetmusic', 'All System Checks Passed!') }}</h3>
+						<p>{{ t('sheetmusic', 'No missing files, orphan records, or filename conflicts were detected in this library.') }}</p>
 					</div>
 
 					<div v-else :class="$style.issueStats">
 						<span :class="$style.statChip">
-							<strong>{{ issues.length }}</strong> {{ t('mobilesheetsmanager', 'Issues Found') }}
+							<strong>{{ issues.length }}</strong> {{ t('sheetmusic', 'Issues Found') }}
 						</span>
 						<NcButton
 							variant="secondary"
 							@click="emit('recheck')">
-							{{ t('mobilesheetsmanager', 'Re-audit Library') }}
+							{{ t('sheetmusic', 'Re-audit Library') }}
 						</NcButton>
 					</div>
 				</div>
@@ -94,7 +94,7 @@ defineExpose({ clearMergingState })
 
 		<div :class="$style.dialogActions">
 			<NcButton @click="emit('update:open', false)">
-				{{ t('mobilesheetsmanager', 'Close') }}
+				{{ t('sheetmusic', 'Close') }}
 			</NcButton>
 		</div>
 	</NcDialog>

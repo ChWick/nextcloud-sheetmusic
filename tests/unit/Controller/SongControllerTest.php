@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Controller;
 
-use OCA\MobileSheetsManager\Controller\SongController;
-use OCA\MobileSheetsManager\Service\SongService;
+use OCA\SheetMusic\Controller\SongController;
+use OCA\SheetMusic\Service\SongService;
 use OCP\AppFramework\Http;
 use OCP\IRequest;
 use OCP\IUser;
@@ -18,7 +18,7 @@ final class SongControllerTest extends TestCase {
 		$userSession->method('getUser')->willReturn(null);
 
 		$controller = new SongController(
-			'mobilesheetsmanager',
+			'sheetmusic',
 			$this->createMock(IRequest::class),
 			$this->createMock(SongService::class),
 			$userSession,
@@ -41,7 +41,7 @@ final class SongControllerTest extends TestCase {
 			->willReturn(['songs' => []]);
 
 		$controller = new SongController(
-			'mobilesheetsmanager',
+			'sheetmusic',
 			$this->createMock(IRequest::class),
 			$songService,
 			$userSession,
@@ -57,7 +57,7 @@ final class SongControllerTest extends TestCase {
 		$userSession->method('getUser')->willReturn($this->createMock(IUser::class));
 
 		$controller = new SongController(
-			'mobilesheetsmanager',
+			'sheetmusic',
 			$this->createMock(IRequest::class),
 			$this->createMock(SongService::class),
 			$userSession,
@@ -79,7 +79,7 @@ final class SongControllerTest extends TestCase {
 			->willReturn(['songs' => []]);
 
 		$controller = new SongController(
-			'mobilesheetsmanager',
+			'sheetmusic',
 			$this->createMock(IRequest::class),
 			$songService,
 			$userSession,
@@ -92,4 +92,3 @@ final class SongControllerTest extends TestCase {
 		$this->assertSame(['songs' => []], $res->getData());
 	}
 }
-

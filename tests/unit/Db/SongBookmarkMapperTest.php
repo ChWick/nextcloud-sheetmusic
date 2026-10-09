@@ -9,7 +9,7 @@ declare(strict_types=1);
 
 namespace Db;
 
-use OCA\MobileSheetsManager\Db\SongBookmarkMapper;
+use OCA\SheetMusic\Db\SongBookmarkMapper;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 
@@ -18,7 +18,7 @@ final class SongBookmarkMapperTest extends TestCase {
 	private SongBookmarkMapper $bookmarkMapper;
 
 	protected function setUp(): void {
-		$databasePath = tempnam(sys_get_temp_dir(), 'mobilesheetsmanager-bookmark-test-');
+		$databasePath = tempnam(sys_get_temp_dir(), 'sheetmusic-bookmark-test-');
 		self::assertNotFalse($databasePath);
 		$this->databasePath = $databasePath;
 

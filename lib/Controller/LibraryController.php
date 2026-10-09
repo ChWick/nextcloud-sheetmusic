@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace OCA\MobileSheetsManager\Controller;
+namespace OCA\SheetMusic\Controller;
 
-use OCA\MobileSheetsManager\Service\LibraryIntegrityService;
-use OCA\MobileSheetsManager\Service\LibraryService;
+use OCA\SheetMusic\Service\LibraryIntegrityService;
+use OCA\SheetMusic\Service\LibraryService;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\ApiRoute;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
-	use OCP\AppFramework\Http\DataResponse;
+use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\OCSController;
 use OCP\IRequest;
 use OCP\IUserSession;
@@ -99,7 +99,7 @@ class LibraryController extends OCSController {
 		try {
 			$issues = $this->integrityService->checkIntegrity($id, $user->getUID());
 
-			return new DataResponse(['issues' => array_map(static fn($issue) => $issue->jsonSerialize(), $issues)], Http::STATUS_OK);
+			return new DataResponse(['issues' => array_map(static fn ($issue) => $issue->jsonSerialize(), $issues)], Http::STATUS_OK);
 		} catch (\Throwable $e) {
 			return new DataResponse(
 				['message' => 'Error auditing library integrity: ' . $e->getMessage()],

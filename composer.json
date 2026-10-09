@@ -1,6 +1,6 @@
 {
-	"name": "nextcloud/mobilesheetsmanager",
-	"description": "Bar",
+	"name": "nextcloud/sheetmusic",
+	"description": "Sheet music manager for Nextcloud",
 	"license": "AGPL-3.0-or-later",
 	"authors": [
 		{
@@ -10,7 +10,7 @@
 	],
 	"autoload": {
 		"psr-4": {
-			"OCA\\MobileSheetsManager\\": "lib/"
+			"OCA\\SheetMusic\\": "lib/"
 		}
 	},
 	"scripts": {

@@ -449,7 +449,7 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 
 		await flushPromises()
 
-		const thumbnailSlots = wrapper.findAll('.mobilesheetsmanager-pdf-thumbnail-canvas, div[data-page-num]')
+		const thumbnailSlots = wrapper.findAll('.sheetmusic-pdf-thumbnail-canvas, div[data-page-num]')
 		expect(thumbnailSlots.length).toBeGreaterThan(0)
 	})
 
@@ -1013,7 +1013,7 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		await flushPromises()
 
 		// All 8 page cards should reflect the 2.5° badge
-		const badges = wrapper.findAll('.mobilesheetsmanager-rotation-badge, span').filter((s) => s.text() === '2.5°')
+		const badges = wrapper.findAll('.sheetmusic-rotation-badge, span').filter((s) => s.text() === '2.5°')
 		expect(badges.length).toBeGreaterThanOrEqual(8)
 
 		// Click Save

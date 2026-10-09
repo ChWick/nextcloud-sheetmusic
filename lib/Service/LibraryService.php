@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace OCA\MobileSheetsManager\Service;
+namespace OCA\SheetMusic\Service;
 
-use OCA\MobileSheetsManager\Db\LibraryMapper;
-use OCA\MobileSheetsManager\Db\SongMapper;
+use OCA\SheetMusic\Db\LibraryMapper;
+use OCA\SheetMusic\Db\SongMapper;
 use OCP\Files\IRootFolder;
 use Psr\Log\LoggerInterface;
 

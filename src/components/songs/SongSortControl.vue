@@ -19,18 +19,18 @@ const emit = defineEmits<{
 }>()
 
 const sortOptions: { value: SortKey; label: string }[] = [
-	{ value: 'title', label: t('mobilesheetsmanager', 'Title') },
-	{ value: 'composer', label: t('mobilesheetsmanager', 'Composer') },
-	{ value: 'book', label: t('mobilesheetsmanager', 'Book') },
-	{ value: 'collection', label: t('mobilesheetsmanager', 'Collection') },
-	{ value: 'artist', label: t('mobilesheetsmanager', 'Artist') },
-	{ value: 'lastModified', label: t('mobilesheetsmanager', 'Last modified') },
-	{ value: 'dateCreated', label: t('mobilesheetsmanager', 'Date created') },
+	{ value: 'title', label: t('sheetmusic', 'Title') },
+	{ value: 'composer', label: t('sheetmusic', 'Composer') },
+	{ value: 'book', label: t('sheetmusic', 'Book') },
+	{ value: 'collection', label: t('sheetmusic', 'Collection') },
+	{ value: 'artist', label: t('sheetmusic', 'Artist') },
+	{ value: 'lastModified', label: t('sheetmusic', 'Last modified') },
+	{ value: 'dateCreated', label: t('sheetmusic', 'Date created') },
 ]
 
 const currentOptionLabel = computed(() => {
 	const opt = sortOptions.find(o => o.value === props.sortKey)
-	return opt ? opt.label : t('mobilesheetsmanager', 'Sort')
+	return opt ? opt.label : t('sheetmusic', 'Sort')
 })
 
 function toggleOrder() {
@@ -41,8 +41,8 @@ function toggleOrder() {
 <template>
 	<div :class="$style.sortControlWrapper">
 		<NcActions
-			:aria-label="t('mobilesheetsmanager', 'Sort by: {label}', { label: currentOptionLabel })"
-			:title="t('mobilesheetsmanager', 'Sort by: {label}', { label: currentOptionLabel })">
+			:aria-label="t('sheetmusic', 'Sort by: {label}', { label: currentOptionLabel })"
+			:title="t('sheetmusic', 'Sort by: {label}', { label: currentOptionLabel })">
 			<template #icon>
 				<component :is="sortOrder === 'asc' ? SortAscendingIcon : SortDescendingIcon" :size="20" />
 			</template>
@@ -56,8 +56,8 @@ function toggleOrder() {
 		</NcActions>
 		<NcButton
 			size="small"
-			:title="sortOrder === 'asc' ? t('mobilesheetsmanager', 'Ascending') : t('mobilesheetsmanager', 'Descending')"
-			:aria-label="sortOrder === 'asc' ? t('mobilesheetsmanager', 'Ascending') : t('mobilesheetsmanager', 'Descending')"
+			:title="sortOrder === 'asc' ? t('sheetmusic', 'Ascending') : t('sheetmusic', 'Descending')"
+			:aria-label="sortOrder === 'asc' ? t('sheetmusic', 'Ascending') : t('sheetmusic', 'Descending')"
 			@click="toggleOrder">
 			<template #icon>
 				<component :is="sortOrder === 'asc' ? SortAscendingIcon : SortDescendingIcon" :size="18" />

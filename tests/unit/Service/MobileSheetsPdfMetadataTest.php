@@ -9,13 +9,13 @@ declare(strict_types=1);
 
 namespace Service;
 
-use OCA\MobileSheetsManager\Db\MobileSheetsArtist;
-use OCA\MobileSheetsManager\Db\MobileSheetsBook;
-use OCA\MobileSheetsManager\Db\MobileSheetsCollection;
-use OCA\MobileSheetsManager\Db\MobileSheetsComposer;
-use OCA\MobileSheetsManager\Db\MobileSheetsSong;
-use OCA\MobileSheetsManager\Service\MobileSheetsPdf;
-use OCA\MobileSheetsManager\Service\MobileSheetsPdfMetadata;
+use OCA\SheetMusic\Db\MobileSheetsArtist;
+use OCA\SheetMusic\Db\MobileSheetsBook;
+use OCA\SheetMusic\Db\MobileSheetsCollection;
+use OCA\SheetMusic\Db\MobileSheetsComposer;
+use OCA\SheetMusic\Db\MobileSheetsSong;
+use OCA\SheetMusic\Service\MobileSheetsPdf;
+use OCA\SheetMusic\Service\MobileSheetsPdfMetadata;
 use PHPUnit\Framework\TestCase;
 
 final class MobileSheetsPdfMetadataTest extends TestCase {

@@ -9,8 +9,8 @@ declare(strict_types=1);
 
 namespace Db;
 
-use OCA\MobileSheetsManager\Db\SongFileMapper;
-use OCA\MobileSheetsManager\Service\MobileSheetsFileFacts;
+use OCA\SheetMusic\Db\SongFileMapper;
+use OCA\SheetMusic\Service\MobileSheetsFileFacts;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 
@@ -19,7 +19,7 @@ final class SongFileMapperTest extends TestCase {
 	private SongFileMapper $fileMapper;
 
 	protected function setUp(): void {
-		$databasePath = tempnam(sys_get_temp_dir(), 'mobilesheetsmanager-file-test-');
+		$databasePath = tempnam(sys_get_temp_dir(), 'sheetmusic-file-test-');
 		self::assertNotFalse($databasePath);
 		$this->databasePath = $databasePath;
 

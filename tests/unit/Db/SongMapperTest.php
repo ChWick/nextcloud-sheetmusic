@@ -9,20 +9,20 @@ declare(strict_types=1);
 
 namespace Db;
 
-use OCA\MobileSheetsManager\Db\MobileSheetsArtist;
-use OCA\MobileSheetsManager\Db\MobileSheetsBook;
-use OCA\MobileSheetsManager\Db\MobileSheetsCollection;
-use OCA\MobileSheetsManager\Db\MobileSheetsComposer;
-use OCA\MobileSheetsManager\Db\MobileSheetsCustomGroup;
-use OCA\MobileSheetsManager\Db\MobileSheetsFile;
-use OCA\MobileSheetsManager\Db\MobileSheetsGenre;
-use OCA\MobileSheetsManager\Db\MobileSheetsKey;
-use OCA\MobileSheetsManager\Db\MobileSheetsSignature;
-use OCA\MobileSheetsManager\Db\MobileSheetsSong;
-use OCA\MobileSheetsManager\Db\MobileSheetsSourceType;
-use OCA\MobileSheetsManager\Db\MobileSheetsYear;
-use OCA\MobileSheetsManager\Db\SongMapper;
-use OCA\MobileSheetsManager\Service\MobileSheetsFileFacts;
+use OCA\SheetMusic\Db\MobileSheetsArtist;
+use OCA\SheetMusic\Db\MobileSheetsBook;
+use OCA\SheetMusic\Db\MobileSheetsCollection;
+use OCA\SheetMusic\Db\MobileSheetsComposer;
+use OCA\SheetMusic\Db\MobileSheetsCustomGroup;
+use OCA\SheetMusic\Db\MobileSheetsFile;
+use OCA\SheetMusic\Db\MobileSheetsGenre;
+use OCA\SheetMusic\Db\MobileSheetsKey;
+use OCA\SheetMusic\Db\MobileSheetsSignature;
+use OCA\SheetMusic\Db\MobileSheetsSong;
+use OCA\SheetMusic\Db\MobileSheetsSourceType;
+use OCA\SheetMusic\Db\MobileSheetsYear;
+use OCA\SheetMusic\Db\SongMapper;
+use OCA\SheetMusic\Service\MobileSheetsFileFacts;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 
@@ -60,7 +60,7 @@ final class SongMapperTest extends TestCase {
 		$database->exec("INSERT INTO CustomGroup (Id, Name) VALUES (90, 'Ensemble A')");
 		$database->exec('INSERT INTO CustomGroupSongs (GroupId, SongId) VALUES (90, 1)');
 
-		$database->exec("INSERT INTO Years (Id, Year) VALUES (80, 1959)");
+		$database->exec('INSERT INTO Years (Id, Year) VALUES (80, 1959)');
 		$database->exec('INSERT INTO YearsSongs (YearId, SongId) VALUES (80, 1)');
 
 		$database->exec("INSERT INTO Signature (Id, Name) VALUES (60, '4/4')");
@@ -345,7 +345,7 @@ final class SongMapperTest extends TestCase {
 
 	/** Files has no creation date, but its LastModified is required. */
 	public function testSetSongFileRejectsAFilesTableWithoutLastModified(): void {
-		$databasePath = tempnam(sys_get_temp_dir(), 'mobilesheetsmanager-');
+		$databasePath = tempnam(sys_get_temp_dir(), 'sheetmusic-');
 		self::assertNotFalse($databasePath);
 		$database = new \PDO('sqlite:' . $databasePath);
 		$database->exec('CREATE TABLE Songs(Id INTEGER PRIMARY KEY, Title VARCHAR(255), SortTitle VARCHAR(255), SongId INTEGER, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
@@ -710,7 +710,7 @@ final class SongMapperTest extends TestCase {
 
 	/** A database that only knows the Songs table, like a minimal export. */
 	private function bareDatabase(): string {
-		$path = tempnam(sys_get_temp_dir(), 'mobilesheetsmanager-');
+		$path = tempnam(sys_get_temp_dir(), 'sheetmusic-');
 		self::assertNotFalse($path);
 		$database = new \PDO('sqlite:' . $path);
 		$database->exec('CREATE TABLE Songs(Id INTEGER PRIMARY KEY, Title VARCHAR(255), SortTitle VARCHAR(255), SongId INTEGER)');
@@ -724,7 +724,7 @@ final class SongMapperTest extends TestCase {
 	 * when null) and, optionally, a LastModified column.
 	 */
 	private function songsDatabase(?string $createdColumn, bool $lastModified = true): string {
-		$path = tempnam(sys_get_temp_dir(), 'mobilesheetsmanager-');
+		$path = tempnam(sys_get_temp_dir(), 'sheetmusic-');
 		self::assertNotFalse($path);
 		$database = new \PDO('sqlite:' . $path);
 
@@ -1032,7 +1032,7 @@ final class SongMapperTest extends TestCase {
 	}
 
 	public function testSchemaVariationsKeySingularAndYearsNameColumn(): void {
-		$dbPath = tempnam(sys_get_temp_dir(), 'mobilesheetsmanager-schema-test-');
+		$dbPath = tempnam(sys_get_temp_dir(), 'sheetmusic-schema-test-');
 		self::assertNotFalse($dbPath);
 		$db = new \PDO('sqlite:' . $dbPath);
 		$db->exec('CREATE TABLE Songs(Id INTEGER PRIMARY KEY, Title VARCHAR(255))');
@@ -1045,11 +1045,11 @@ final class SongMapperTest extends TestCase {
 
 		$db->exec("INSERT INTO Songs (Id, Title) VALUES (1, 'Test Song')");
 		$db->exec("INSERT INTO \"Key\" (Id, Name) VALUES (1, 'C Major')");
-		$db->exec("INSERT INTO KeySongs (KeyId, SongId) VALUES (1, 1)");
+		$db->exec('INSERT INTO KeySongs (KeyId, SongId) VALUES (1, 1)');
 		$db->exec("INSERT INTO Years (Id, Name) VALUES (1, '1999')");
-		$db->exec("INSERT INTO YearsSongs (YearId, SongId) VALUES (1, 1)");
+		$db->exec('INSERT INTO YearsSongs (YearId, SongId) VALUES (1, 1)');
 		$db->exec("INSERT INTO SourceType (Id, Type) VALUES (1, 'Score')");
-		$db->exec("INSERT INTO SourceTypeSongs (SourceTypeId, SongId) VALUES (1, 1)");
+		$db->exec('INSERT INTO SourceTypeSongs (SourceTypeId, SongId) VALUES (1, 1)');
 
 		$mapper = new SongMapper(self::createMock(LoggerInterface::class));
 		$data = $mapper->findLibraryData($dbPath);

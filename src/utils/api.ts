@@ -10,7 +10,7 @@ export function describeRequestFailure(error: unknown, fallback: string): string
 	const status = response?.status
 	if (status === 404 || status === 405) {
 		return t(
-			'mobilesheetsmanager',
+			'sheetmusic',
 			'The server does not know this endpoint (HTTP {status}). If the app code was just changed, restart Nextcloud so it loads the new PHP files.',
 			{ status: String(status) },
 		)

@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Service;
 
-use OCA\MobileSheetsManager\Db\LibraryMapper;
-use OCA\MobileSheetsManager\Service\EntityService;
+use OCA\SheetMusic\Db\LibraryMapper;
+use OCA\SheetMusic\Service\EntityService;
 use OCP\IUser;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;

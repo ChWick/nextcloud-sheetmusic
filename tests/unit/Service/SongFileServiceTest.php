@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Service;
 
-use OCA\MobileSheetsManager\Db\SongMapper;
-use OCA\MobileSheetsManager\Service\FileManager;
-use OCA\MobileSheetsManager\Service\LibraryService;
-use OCA\MobileSheetsManager\Service\SongFileService;
+use OCA\SheetMusic\Db\SongMapper;
+use OCA\SheetMusic\Service\FileManager;
+use OCA\SheetMusic\Service\LibraryService;
+use OCA\SheetMusic\Service\SongFileService;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
@@ -62,9 +62,9 @@ final class SongFileServiceTest extends TestCase {
 
 		$this->songMapper = $this->createSongMapper();
 		$this->logger = $this->createMock(LoggerInterface::class);
-		$pathResolver = new \OCA\MobileSheetsManager\Service\MobileSheetsPathResolver($this->rootFolder);
+		$pathResolver = new \OCA\SheetMusic\Service\MobileSheetsPathResolver($this->rootFolder);
 		$this->fileManager = new FileManager(
-			$this->createMock(\OCA\MobileSheetsManager\Db\LibraryMapper::class),
+			$this->createMock(\OCA\SheetMusic\Db\LibraryMapper::class),
 			$this->songMapper,
 			$this->rootFolder,
 			$pathResolver,
@@ -81,7 +81,7 @@ final class SongFileServiceTest extends TestCase {
 
 		// Wire nodeExists, get, and fake nodes to in-memory tree
 		$this->userFolder->method('nodeExists')->willReturnCallback(
-			fn(string $path) => isset($this->files[ltrim($path, '/')]) || isset($this->folders[ltrim($path, '/')])
+			fn (string $path) => isset($this->files[ltrim($path, '/')]) || isset($this->folders[ltrim($path, '/')])
 		);
 
 		$this->userFolder->method('get')->willReturnCallback(function (string $path): Node {
@@ -272,7 +272,7 @@ final class SongFileServiceTest extends TestCase {
 		$fileManager->expects(self::once())
 			->method('pathOfExistingFile')
 			->with($file->getPath(), $user)
-			->willReturn(new \OCA\MobileSheetsManager\Service\MobileSheetsPath(
+			->willReturn(new \OCA\SheetMusic\Service\MobileSheetsPath(
 				'/user1/files/Noten/new.pdf',
 				'/remote.php/dav/files/user1/Noten/new.pdf',
 			));
@@ -286,7 +286,7 @@ final class SongFileServiceTest extends TestCase {
 				$this->databaseFixture['path'],
 				self::anything(),
 			)
-			->willReturn(\OCA\MobileSheetsManager\Service\MobileSheetsFileLogEntry::CODE_METADATA_UPDATED);
+			->willReturn(\OCA\SheetMusic\Service\MobileSheetsFileLogEntry::CODE_METADATA_UPDATED);
 
 		$libraryService = $this->createLibraryServiceForDatabase(
 			self::UID,
@@ -334,7 +334,7 @@ final class SongFileServiceTest extends TestCase {
 		$rootFolder->method('getUserFolder')->with(self::UID)->willReturn($userFolder);
 		$userFolder->method('nodeExists')->with('Noten/existing.pdf')->willReturn(true);
 
-		$libraryMapper = $this->createMock(\OCA\MobileSheetsManager\Db\LibraryMapper::class);
+		$libraryMapper = $this->createMock(\OCA\SheetMusic\Db\LibraryMapper::class);
 		$libraryMapper->method('findForUser')->with(self::UID, 1)->willReturn([
 			'id' => 1,
 			'path' => '/Noten/library.db',
@@ -377,7 +377,7 @@ final class SongFileServiceTest extends TestCase {
 		file_put_contents($tmpFile, '%PDF-1.4');
 
 		try {
-			$this->expectException(\OCA\MobileSheetsManager\Service\FileAlreadyExistsException::class);
+			$this->expectException(\OCA\SheetMusic\Service\FileAlreadyExistsException::class);
 			$service->uploadSongFile($user, 1, 10, [
 				'tmp_name' => $tmpFile,
 				'name' => 'existing.pdf',
@@ -408,7 +408,7 @@ final class SongFileServiceTest extends TestCase {
 		$userFolder->method('newFile')->with('Noten/new.pdf')->willReturn($file);
 		$this->databaseFixture['connection']->exec('DELETE FROM Files WHERE Id = 1');
 
-		$libraryMapper = $this->createMock(\OCA\MobileSheetsManager\Db\LibraryMapper::class);
+		$libraryMapper = $this->createMock(\OCA\SheetMusic\Db\LibraryMapper::class);
 		$libraryMapper->method('findForUser')->with(self::UID, 1)->willReturn([
 			'id' => 1,
 			'path' => '/Noten/library.db',
@@ -445,13 +445,13 @@ final class SongFileServiceTest extends TestCase {
 		$fileManager->expects(self::once())
 			->method('pathOfExistingFile')
 			->with($file->getPath(), $user)
-			->willReturn(new \OCA\MobileSheetsManager\Service\MobileSheetsPath(
+			->willReturn(new \OCA\SheetMusic\Service\MobileSheetsPath(
 				'/user1/files/Noten/new.pdf',
 				'/remote.php/dav/files/user1/Noten/new.pdf',
 			));
 		$fileManager->expects(self::once())
 			->method('syncMetadataIntoFile')
-			->willReturn(\OCA\MobileSheetsManager\Service\MobileSheetsFileLogEntry::CODE_METADATA_UPDATED);
+			->willReturn(\OCA\SheetMusic\Service\MobileSheetsFileLogEntry::CODE_METADATA_UPDATED);
 
 		$service = new SongFileService(
 			$libraryService,

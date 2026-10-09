@@ -1,10 +1,10 @@
 <template>
   <ViewHeader
-    :title="standaloneCreate ? (duplicateSourceSong ? t('mobilesheetsmanager', 'Duplicate: {title}', { title: duplicateSourceSong.title }) : t('mobilesheetsmanager', 'Create Song')) : songIdInUrl !== null ? (isModifyPdfInUrl ? (openSong?.title ? t('mobilesheetsmanager', 'Modify PDF: {title}', { title: openSong.title }) : t('mobilesheetsmanager', 'Modify PDF')) : (isEditInUrl ? (openSong?.title ? t('mobilesheetsmanager', 'Edit: {title}', { title: openSong.title }) : t('mobilesheetsmanager', 'Edit song')) : (openSong?.title ?? t('mobilesheetsmanager', 'Songs')))) : t('mobilesheetsmanager', 'Songs')"
+    :title="standaloneCreate ? (duplicateSourceSong ? t('sheetmusic', 'Duplicate: {title}', { title: duplicateSourceSong.title }) : t('sheetmusic', 'Create Song')) : songIdInUrl !== null ? (isModifyPdfInUrl ? (openSong?.title ? t('sheetmusic', 'Modify PDF: {title}', { title: openSong.title }) : t('sheetmusic', 'Modify PDF')) : (isEditInUrl ? (openSong?.title ? t('sheetmusic', 'Edit: {title}', { title: openSong.title }) : t('sheetmusic', 'Edit song')) : (openSong?.title ?? t('sheetmusic', 'Songs')))) : t('sheetmusic', 'Songs')"
     :show-back="songIdInUrl !== null || standaloneCreate"
-    :create-label="songIdInUrl === null && !standaloneCreate ? t('mobilesheetsmanager', 'New song') : undefined"
-    :import-label="songIdInUrl === null && !standaloneCreate ? t('mobilesheetsmanager', 'Import') : undefined"
-    :import-nextcloud-label="songIdInUrl === null && !standaloneCreate ? t('mobilesheetsmanager', 'Import from Nextcloud') : undefined"
+    :create-label="songIdInUrl === null && !standaloneCreate ? t('sheetmusic', 'New song') : undefined"
+    :import-label="songIdInUrl === null && !standaloneCreate ? t('sheetmusic', 'Import') : undefined"
+    :import-nextcloud-label="songIdInUrl === null && !standaloneCreate ? t('sheetmusic', 'Import from Nextcloud') : undefined"
     :filter-bar-visible="songIdInUrl === null && !standaloneCreate ? filterBarVisible : undefined"
     :show-filter-toggle="songIdInUrl === null && !standaloneCreate"
     @back="goBackToSongs"
@@ -21,8 +21,8 @@
       <NcButton
         v-if="isEditInUrl && openSong"
         variant="error"
-        :title="t('mobilesheetsmanager', 'Delete song')"
-        :aria-label="t('mobilesheetsmanager', 'Delete song')"
+        :title="t('sheetmusic', 'Delete song')"
+        :aria-label="t('sheetmusic', 'Delete song')"
         @click="songEditorRef?.promptDelete()">
         <template #icon>
           <DeleteIcon :size="20" />
@@ -31,8 +31,8 @@
       <NcButton
         v-if="isEditInUrl && openSong"
         variant="secondary"
-        :title="t('mobilesheetsmanager', 'Save without closing')"
-        :aria-label="t('mobilesheetsmanager', 'Save without closing')"
+        :title="t('sheetmusic', 'Save without closing')"
+        :aria-label="t('sheetmusic', 'Save without closing')"
         @click="songEditorRef?.saveSong(false)">
         <template #icon>
           <ContentSaveOutlineIcon :size="20" />
@@ -41,8 +41,8 @@
       <NcButton
         v-if="isEditInUrl && openSong"
         variant="primary"
-        :title="t('mobilesheetsmanager', 'Save and close')"
-        :aria-label="t('mobilesheetsmanager', 'Save and close')"
+        :title="t('sheetmusic', 'Save and close')"
+        :aria-label="t('sheetmusic', 'Save and close')"
         @click="songEditorRef?.saveSong(true)">
         <template #icon>
           <CheckIcon :size="20" />
@@ -52,8 +52,8 @@
     <template v-else-if="standaloneCreate">
       <NcButton
         variant="secondary"
-        :title="t('mobilesheetsmanager', 'Cancel')"
-        :aria-label="t('mobilesheetsmanager', 'Cancel')"
+        :title="t('sheetmusic', 'Cancel')"
+        :aria-label="t('sheetmusic', 'Cancel')"
         @click="goBackToSongs">
         <template #icon>
           <CloseIcon :size="20" />
@@ -61,8 +61,8 @@
       </NcButton>
       <NcButton
         variant="primary"
-        :title="t('mobilesheetsmanager', 'Create song')"
-        :aria-label="t('mobilesheetsmanager', 'Create song')"
+        :title="t('sheetmusic', 'Create song')"
+        :aria-label="t('sheetmusic', 'Create song')"
         @click="createSongEditorRef?.saveSong(true)">
         <template #icon>
           <CheckIcon :size="20" />
@@ -73,8 +73,8 @@
       <NcButton
         v-if="songViewerRef?.selectedFile"
         variant="secondary"
-        :title="t('mobilesheetsmanager', 'Open in external viewer')"
-        :aria-label="t('mobilesheetsmanager', 'Open in external viewer')"
+        :title="t('sheetmusic', 'Open in external viewer')"
+        :aria-label="t('sheetmusic', 'Open in external viewer')"
         @click="songViewerRef?.openInExternalViewer">
         <template #icon>
           <OpenInNewIcon :size="20" />
@@ -83,8 +83,8 @@
       <NcButton
         v-if="openSong && songViewerRef?.selectedFile?.path?.toLowerCase().endsWith('.pdf')"
         variant="secondary"
-        :title="t('mobilesheetsmanager', 'Modify PDF (rotate, crop, split)')"
-        :aria-label="t('mobilesheetsmanager', 'Modify PDF (rotate, crop, split)')"
+        :title="t('sheetmusic', 'Modify PDF (rotate, crop, split)')"
+        :aria-label="t('sheetmusic', 'Modify PDF (rotate, crop, split)')"
         @click="openSong && openModifyPdf(openSong, songViewerRef?.selectedFile?.id)">
         <template #icon>
           <FileDocumentEditOutline :size="20" />
@@ -93,8 +93,8 @@
       <NcButton
         v-if="openSong"
         variant="secondary"
-        :title="t('mobilesheetsmanager', 'Duplicate song')"
-        :aria-label="t('mobilesheetsmanager', 'Duplicate song')"
+        :title="t('sheetmusic', 'Duplicate song')"
+        :aria-label="t('sheetmusic', 'Duplicate song')"
         @click="duplicateSong(openSong)">
         <template #icon>
           <ContentCopyIcon :size="20" />
@@ -102,8 +102,8 @@
       </NcButton>
       <NcButton
         variant="secondary"
-        :title="t('mobilesheetsmanager', 'Edit song')"
-        :aria-label="t('mobilesheetsmanager', 'Edit song')"
+        :title="t('sheetmusic', 'Edit song')"
+        :aria-label="t('sheetmusic', 'Edit song')"
         @click="openSong && openSongEdit(openSong)">
         <template #icon>
           <PencilIcon :size="20" />
@@ -111,8 +111,8 @@
       </NcButton>
       <NcButton
         variant="error"
-        :title="t('mobilesheetsmanager', 'Delete song')"
-        :aria-label="t('mobilesheetsmanager', 'Delete song')"
+        :title="t('sheetmusic', 'Delete song')"
+        :aria-label="t('sheetmusic', 'Delete song')"
         @click="songViewerRef?.promptDelete">
         <template #icon>
           <DeleteIcon :size="20" />
@@ -190,24 +190,24 @@
   </div>
   <div v-else :class="[$style.songArea, standaloneCreate && $style.createSongArea]">
     <div v-if="!standaloneCreate && selectedCount > 0" :class="$style.selectionBanner">
-      <span :class="$style.selectionCount">{{ t('mobilesheetsmanager', '{count} songs selected', { count: selectedCount }) }}</span>
+      <span :class="$style.selectionCount">{{ t('sheetmusic', '{count} songs selected', { count: selectedCount }) }}</span>
       <NcButton
         v-if="selectedCount === 2"
         size="small"
         variant="secondary"
-        :title="t('mobilesheetsmanager', 'Compare & Merge selected 2 songs')"
-        :aria-label="t('mobilesheetsmanager', 'Compare & Merge selected 2 songs')"
+        :title="t('sheetmusic', 'Compare & Merge selected 2 songs')"
+        :aria-label="t('sheetmusic', 'Compare & Merge selected 2 songs')"
         @click="openCompareMergeDialog">
         <template #icon>
           <MergeIcon :size="18" />
         </template>
-        {{ t('mobilesheetsmanager', 'Compare / Merge') }}
+        {{ t('sheetmusic', 'Compare / Merge') }}
       </NcButton>
       <NcButton
         size="small"
         variant="primary"
-        :title="t('mobilesheetsmanager', 'Edit selected ({count})', { count: selectedCount })"
-        :aria-label="t('mobilesheetsmanager', 'Edit selected ({count})', { count: selectedCount })"
+        :title="t('sheetmusic', 'Edit selected ({count})', { count: selectedCount })"
+        :aria-label="t('sheetmusic', 'Edit selected ({count})', { count: selectedCount })"
         @click="isBatchEditorOpen = true">
         <template #icon>
           <PencilIcon :size="18" />
@@ -215,8 +215,8 @@
       </NcButton>
       <NcButton
         size="small"
-        :title="t('mobilesheetsmanager', 'Clear selection')"
-        :aria-label="t('mobilesheetsmanager', 'Clear selection')"
+        :title="t('sheetmusic', 'Clear selection')"
+        :aria-label="t('sheetmusic', 'Clear selection')"
         @click="clearSelection">
         <template #icon>
           <CloseIcon :size="18" />
@@ -271,10 +271,10 @@
                 @saved="handleSaved"
                 @cancel="isCreatingSong = false" />
     <div v-if="!standaloneCreate && !isLoading && !fileError && songs.length === 0" :class="$style.emptyNotice">
-      {{ t('mobilesheetsmanager', 'No songs found in this library.') }}
+      {{ t('sheetmusic', 'No songs found in this library.') }}
     </div>
     <div v-else-if="!standaloneCreate && !isLoading && !fileError && songs.length > 0 && filteredSongs.length === 0" :class="$style.emptyNotice">
-      {{ t('mobilesheetsmanager', 'No songs match the selected filters.') }}
+      {{ t('sheetmusic', 'No songs match the selected filters.') }}
     </div>
     <template v-else-if="!standaloneCreate">
       <SongTableView
@@ -387,32 +387,32 @@ const songEditorRef = ref<InstanceType<typeof SongEditor> | null>(null);
 const createSongEditorRef = ref<InstanceType<typeof SongEditor> | null>(null);
 
 const viewMode = ref<ViewMode>(
-  (localStorage.getItem('mobilesheetsmanager_song_view_mode') as ViewMode) || 'table'
+  (localStorage.getItem('sheetmusic_song_view_mode') ?? localStorage.getItem('mobilesheetsmanager_song_view_mode')) as ViewMode || 'table'
 );
 
 watch(viewMode, (newMode) => {
-  localStorage.setItem('mobilesheetsmanager_song_view_mode', newMode);
+  localStorage.setItem('sheetmusic_song_view_mode', newMode);
 });
 
 const sortKey = ref<SortKey>(
-  (localStorage.getItem('mobilesheetsmanager_song_sort_key') as SortKey) || 'title'
+  (localStorage.getItem('sheetmusic_song_sort_key') ?? localStorage.getItem('mobilesheetsmanager_song_sort_key')) as SortKey || 'title'
 );
 
 const sortOrder = ref<SortOrder>(
-  (localStorage.getItem('mobilesheetsmanager_song_sort_order') as SortOrder) || 'asc'
+  (localStorage.getItem('sheetmusic_song_sort_order') ?? localStorage.getItem('mobilesheetsmanager_song_sort_order')) as SortOrder || 'asc'
 );
 
 watch(sortKey, (newKey) => {
-  localStorage.setItem('mobilesheetsmanager_song_sort_key', newKey);
+  localStorage.setItem('sheetmusic_song_sort_key', newKey);
 });
 
 watch(sortOrder, (newOrder) => {
-  localStorage.setItem('mobilesheetsmanager_song_sort_order', newOrder);
+  localStorage.setItem('sheetmusic_song_sort_order', newOrder);
 });
 
 const visibleColumns = ref<SongColumn[]>(
   (() => {
-    const stored = localStorage.getItem('mobilesheetsmanager_song_visible_columns');
+    const stored = localStorage.getItem('sheetmusic_song_visible_columns') ?? localStorage.getItem('mobilesheetsmanager_song_visible_columns');
     if (!stored) return DEFAULT_VISIBLE_COLUMNS;
     try {
       const parsed = JSON.parse(stored);
@@ -425,7 +425,7 @@ const visibleColumns = ref<SongColumn[]>(
 );
 
 watch(visibleColumns, (newCols) => {
-  localStorage.setItem('mobilesheetsmanager_song_visible_columns', JSON.stringify(newCols));
+  localStorage.setItem('sheetmusic_song_visible_columns', JSON.stringify(newCols));
 }, { deep: true });
 
 const {
@@ -517,7 +517,7 @@ function openCompareMergeDialog() {
   mergeIssue.value = {
     type: 'identical_song',
     severity: 'info',
-    message: t('mobilesheetsmanager', 'Comparing 2 selected songs for merge or conflict resolution.'),
+    message: t('sheetmusic', 'Comparing 2 selected songs for merge or conflict resolution.'),
     songId: songA.id,
     songTitle: songA.title,
     fixable: true,
@@ -539,7 +539,7 @@ async function executeMerge(payload: {
   mergeError.value = '';
   try {
     const response = await axios.post(
-      `/ocs/v2.php/apps/mobilesheetsmanager/api/songs/merge`,
+      `/ocs/v2.php/apps/sheetmusic/api/songs/merge`,
       {
         libraryId: props.selectedLibrary,
         keepId: payload.keepId,
@@ -559,9 +559,9 @@ async function executeMerge(payload: {
     }
     const targetTitle = targetSong?.title ?? '';
     if (targetTitle) {
-      showSuccess(t('mobilesheetsmanager', 'Songs merged successfully into "{title}".', { title: targetTitle }));
+      showSuccess(t('sheetmusic', 'Songs merged successfully into "{title}".', { title: targetTitle }));
     } else {
-      showSuccess(t('mobilesheetsmanager', 'Songs merged successfully.'));
+      showSuccess(t('sheetmusic', 'Songs merged successfully.'));
     }
   } catch (error) {
     console.error('Failed to merge songs:', error);
@@ -569,7 +569,7 @@ async function executeMerge(payload: {
       ? error.response?.data?.ocs?.data?.message ?? error.response?.data?.message
       : undefined;
     mergeError.value = serverMessage
-      ?? t('mobilesheetsmanager', 'Failed to merge songs. Please try again.');
+      ?? t('sheetmusic', 'Failed to merge songs. Please try again.');
     showError(mergeError.value);
   } finally {
     isMerging.value = false;
@@ -599,14 +599,14 @@ async function executeResolveBoth(payload: {
     } else {
       await loadLibraryData(props.selectedLibrary);
     }
-    showSuccess(t('mobilesheetsmanager', 'Both songs saved successfully.'));
+    showSuccess(t('sheetmusic', 'Both songs saved successfully.'));
   } catch (error: any) {
     console.error('Failed to resolve both songs:', error);
     const serverMessage = error?.response?.data?.ocs?.data?.message
       ?? error?.response?.data?.message
       ?? error?.message;
     mergeError.value = serverMessage
-      ?? t('mobilesheetsmanager', 'Failed to save updated songs. Please try again.');
+      ?? t('sheetmusic', 'Failed to save updated songs. Please try again.');
     showError(mergeError.value);
   } finally {
     isMerging.value = false;
@@ -627,10 +627,10 @@ async function handleApplyBatchUpdate(payload: BatchUpdatePayload) {
     if (response.data?.ocs?.data) {
       handleLibraryDataUpdate(response.data.ocs.data);
     }
-    showSuccess(t('mobilesheetsmanager', 'Successfully updated {count} songs.', { count }));
+    showSuccess(t('sheetmusic', 'Successfully updated {count} songs.', { count }));
   } catch (error) {
     console.error('Failed to batch update songs:', error);
-    showError(describeRequestFailure(error, t('mobilesheetsmanager', 'Failed to update selected songs.')));
+    showError(describeRequestFailure(error, t('sheetmusic', 'Failed to update selected songs.')));
   }
 }
 
@@ -797,13 +797,13 @@ function startImport() {
 
 /** Open Nextcloud file picker to import a PDF from internal storage. */
 async function startImportNextcloud() {
-  const picker = getFilePickerBuilder(t('mobilesheetsmanager', 'Select a file from Nextcloud'))
+  const picker = getFilePickerBuilder(t('sheetmusic', 'Select a file from Nextcloud'))
     .setMultiSelect(false)
     .setCanPick((node) => node.type === 'file')
     .setButtonFactory(([node]) => [{
       label: node
-        ? t('mobilesheetsmanager', 'Import {file}', { file: node.basename })
-        : t('mobilesheetsmanager', 'Import a file'),
+        ? t('sheetmusic', 'Import {file}', { file: node.basename })
+        : t('sheetmusic', 'Import a file'),
       callback: () => {},
       disabled: !node || node.type !== 'file',
       variant: 'primary',
@@ -920,9 +920,9 @@ async function handleDeleted(data: LibraryData | undefined, songId: number) {
     await loadLibraryData(props.selectedLibrary);
   }
   if (songTitle) {
-    showSuccess(t('mobilesheetsmanager', 'Song "{title}" deleted successfully.', { title: songTitle }));
+    showSuccess(t('sheetmusic', 'Song "{title}" deleted successfully.', { title: songTitle }));
   } else {
-    showSuccess(t('mobilesheetsmanager', 'Song deleted successfully.'));
+    showSuccess(t('sheetmusic', 'Song deleted successfully.'));
   }
   if (songIdInUrl.value === songId) goBackToSongs();
 }

@@ -13,5 +13,5 @@ require_once __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/TestSupport/MobileSheetsTestDatabase.php';
 require_once __DIR__ . '/TestSupport/TestUtils.php';
 
-\OC_App::loadApp(OCA\MobileSheetsManager\AppInfo\Application::APP_ID);
+\OC_App::loadApp(OCA\SheetMusic\AppInfo\Application::APP_ID);
 OC_Hook::clear();

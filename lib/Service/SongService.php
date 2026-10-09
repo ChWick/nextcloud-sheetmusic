@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace OCA\MobileSheetsManager\Service;
+namespace OCA\SheetMusic\Service;
 
-use OCA\MobileSheetsManager\Db\MobileSheetsFile;
-use OCA\MobileSheetsManager\Db\SongMapper;
+use OCA\SheetMusic\Db\MobileSheetsFile;
+use OCA\SheetMusic\Db\SongMapper;
 use OCP\IUser;
 use Psr\Log\LoggerInterface;
 
@@ -476,7 +476,7 @@ class SongService {
 			if ($this->libraryIntegrityService !== null) {
 				$issues = $this->libraryIntegrityService->checkIntegrity($libraryId, $user->getUID());
 				foreach ($issues as $issue) {
-					if ($issue->type === \OCA\MobileSheetsManager\Service\IntegrityIssue::TYPE_DUPLICATE_FILE_PATH) {
+					if ($issue->type === \OCA\SheetMusic\Service\IntegrityIssue::TYPE_DUPLICATE_FILE_PATH) {
 						$issueSongIds = $issue->details['songIds'] ?? [];
 						$this->logger->warning('Integrity audit found TYPE_DUPLICATE_FILE_PATH during resolveBothSongs', [
 							'libraryId' => $libraryId,

@@ -1,25 +1,25 @@
 <template>
   <NcDialog
     v-if="open"
-    :name="t('mobilesheetsmanager', 'Merge {entity}', { entity: singular }, { escape: false })"
+    :name="t('sheetmusic', 'Merge {entity}', { entity: singular }, { escape: false })"
     size="normal"
     @close="handleClose">
     <div :class="$style.dialogContent">
       <p :class="$style.description">
-        {{ t('mobilesheetsmanager', 'Choose which {entity} to keep. All songs attached to the duplicate {entities} will be reassigned to the kept {entity}, and the duplicates will be deleted.', { entity: singular, entities: plural.toLowerCase() }, { escape: false }) }}
+        {{ t('sheetmusic', 'Choose which {entity} to keep. All songs attached to the duplicate {entities} will be reassigned to the kept {entity}, and the duplicates will be deleted.', { entity: singular, entities: plural.toLowerCase() }, { escape: false }) }}
       </p>
 
       <div :class="$style.field">
         <label :class="$style.fieldLabel">
-          {{ t('mobilesheetsmanager', 'Keep {entity}', { entity: singular }, { escape: false }) }}
+          {{ t('sheetmusic', 'Keep {entity}', { entity: singular }, { escape: false }) }}
         </label>
         <NcSelect
           v-model="targetEntityOption"
           :options="availableTargetOptions"
           label="label"
           track-by="id"
-          :input-label="t('mobilesheetsmanager', 'Keep {entity}', { entity: singular }, { escape: false })"
-          :placeholder="t('mobilesheetsmanager', 'Select {entity} to keep…', { entity: singular }, { escape: false })"
+          :input-label="t('sheetmusic', 'Keep {entity}', { entity: singular }, { escape: false })"
+          :placeholder="t('sheetmusic', 'Select {entity} to keep…', { entity: singular }, { escape: false })"
           :class="$style.select" />
       </div>
 
@@ -28,18 +28,18 @@
           size="small"
           variant="secondary"
           :disabled="!canSwap"
-          :title="t('mobilesheetsmanager', 'Swap kept and duplicate')"
+          :title="t('sheetmusic', 'Swap kept and duplicate')"
           @click="swapEntities">
           <template #icon>
             <SwapVertical :size="18" />
           </template>
-          {{ t('mobilesheetsmanager', 'Swap') }}
+          {{ t('sheetmusic', 'Swap') }}
         </NcButton>
       </div>
 
       <div :class="$style.field">
         <label :class="$style.fieldLabel">
-          {{ t('mobilesheetsmanager', 'Merge and remove duplicate {entities}', { entities: plural.toLowerCase() }, { escape: false }) }}
+          {{ t('sheetmusic', 'Merge and remove duplicate {entities}', { entities: plural.toLowerCase() }, { escape: false }) }}
         </label>
         <NcSelect
           v-model="duplicateEntityOptions"
@@ -48,8 +48,8 @@
           :close-on-select="false"
           label="label"
           track-by="id"
-          :input-label="t('mobilesheetsmanager', 'Merge and remove duplicate {entities}', { entities: plural.toLowerCase() }, { escape: false })"
-          :placeholder="t('mobilesheetsmanager', 'Select duplicates to merge…')"
+          :input-label="t('sheetmusic', 'Merge and remove duplicate {entities}', { entities: plural.toLowerCase() }, { escape: false })"
+          :placeholder="t('sheetmusic', 'Select duplicates to merge…')"
           :class="$style.select" />
       </div>
 
@@ -64,7 +64,7 @@
 
     <template #actions>
       <NcButton :disabled="isSubmitting" @click="handleClose">
-        {{ t('mobilesheetsmanager', 'Cancel') }}
+        {{ t('sheetmusic', 'Cancel') }}
       </NcButton>
       <NcButton
         variant="primary"
@@ -73,7 +73,7 @@
         <template v-if="isSubmitting" #icon>
           <NcLoadingIcon :size="18" />
         </template>
-        {{ t('mobilesheetsmanager', 'Merge {entity}', { entity: singular }, { escape: false }) }}
+        {{ t('sheetmusic', 'Merge {entity}', { entity: singular }, { escape: false }) }}
       </NcButton>
     </template>
   </NcDialog>
@@ -127,8 +127,8 @@ function formatOption(entity: FilterEntity): EntityOption {
   const name = entityName(entity)
   const count = props.entitySongCounts.get(entity.id) ?? 0
   const unit = count === 1
-    ? t('mobilesheetsmanager', 'song')
-    : t('mobilesheetsmanager', 'songs')
+    ? t('sheetmusic', 'song')
+    : t('sheetmusic', 'songs')
   return {
     id: entity.id,
     name,
@@ -175,7 +175,7 @@ const summaryText = computed(() => {
   const targetName = `"${targetEntityOption.value.name}"`
 
   return t(
-    'mobilesheetsmanager',
+    'sheetmusic',
     'Songs linked to {duplicates} will be reassigned to {target}. Afterwards, the duplicate {entities} will be deleted.',
     {
       duplicates: duplicateNames,
@@ -227,13 +227,13 @@ async function submitMerge() {
     const data = (response as any)?.data?.ocs?.data
     emit('merged', data?.libraryData)
     showSuccess(
-      t('mobilesheetsmanager', 'Merged duplicates into "{name}".', {
+      t('sheetmusic', 'Merged duplicates into "{name}".', {
         name: targetEntityOption.value.name,
       }, { escape: false }),
     )
     emit('close')
   } catch (err: any) {
-    const msg = err?.response?.data?.ocs?.data?.error || err?.message || t('mobilesheetsmanager', 'Could not merge {entities}.', { entities: props.plural.toLowerCase() }, { escape: false })
+    const msg = err?.response?.data?.ocs?.data?.error || err?.message || t('sheetmusic', 'Could not merge {entities}.', { entities: props.plural.toLowerCase() }, { escape: false })
     errorMessage.value = msg
     showError(msg)
   } finally {

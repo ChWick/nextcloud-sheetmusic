@@ -48,11 +48,11 @@ const isDuplicateBetweenSongs = computed(() =>
 
 		<div v-if="issue.path || issue.suggestedPath" :class="$style.paths">
 			<div v-if="issue.path" :class="$style.pathLine">
-				<span :class="$style.pathLabel">{{ t('mobilesheetsmanager', 'Current Path:') }}</span>
+				<span :class="$style.pathLabel">{{ t('sheetmusic', 'Current Path:') }}</span>
 				<code>{{ issue.path }}</code>
 			</div>
 			<div v-if="issue.suggestedPath" :class="$style.pathLine">
-				<span :class="$style.pathLabel">{{ t('mobilesheetsmanager', 'Suggested Path:') }}</span>
+				<span :class="$style.pathLabel">{{ t('sheetmusic', 'Suggested Path:') }}</span>
 				<code>{{ issue.suggestedPath }}</code>
 			</div>
 		</div>
@@ -63,7 +63,7 @@ const isDuplicateBetweenSongs = computed(() =>
 				variant="secondary"
 				type="tertiary"
 				@click="emit('openSong', issue.songId!)">
-				{{ t('mobilesheetsmanager', 'Edit Song') }}
+				{{ t('sheetmusic', 'Edit Song') }}
 			</NcButton>
 
 			<NcButton
@@ -73,7 +73,7 @@ const isDuplicateBetweenSongs = computed(() =>
 				<template #icon>
 					<WrenchIcon :size="16" />
 				</template>
-				{{ t('mobilesheetsmanager', 'Fix Orphan File') }}
+				{{ t('sheetmusic', 'Fix Orphan File') }}
 			</NcButton>
 
 			<template v-else-if="isDuplicateBetweenSongs">
@@ -84,7 +84,7 @@ const isDuplicateBetweenSongs = computed(() =>
 					<template #icon>
 						<FileMultipleIcon :size="16" />
 					</template>
-					{{ t('mobilesheetsmanager', 'Keep as Two') }}
+					{{ t('sheetmusic', 'Keep as Two') }}
 				</NcButton>
 
 				<NcButton
@@ -94,7 +94,7 @@ const isDuplicateBetweenSongs = computed(() =>
 					<template #icon>
 						<MergeIcon :size="16" />
 					</template>
-					{{ isFixing ? t('mobilesheetsmanager', 'Merging…') : t('mobilesheetsmanager', 'Merge Songs') }}
+					{{ isFixing ? t('sheetmusic', 'Merging…') : t('sheetmusic', 'Merge Songs') }}
 				</NcButton>
 			</template>
 
@@ -106,7 +106,7 @@ const isDuplicateBetweenSongs = computed(() =>
 				<template #icon>
 					<WrenchIcon :size="16" />
 				</template>
-				{{ isFixing ? t('mobilesheetsmanager', 'Fixing…') : t('mobilesheetsmanager', 'Auto-Fix Issue') }}
+				{{ isFixing ? t('sheetmusic', 'Fixing…') : t('sheetmusic', 'Auto-Fix Issue') }}
 			</NcButton>
 		</div>
 	</li>

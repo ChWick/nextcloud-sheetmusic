@@ -2,8 +2,8 @@
   <header :class="$style.headerBar">
     <div :class="$style.titleArea">
       <NcButton v-if="showBack"
-                :title="backTitle || t('mobilesheetsmanager', 'Back to songs')"
-                :aria-label="backTitle || t('mobilesheetsmanager', 'Back to songs')"
+                :title="backTitle || t('sheetmusic', 'Back to songs')"
+                :aria-label="backTitle || t('sheetmusic', 'Back to songs')"
                 @click="emit('back')">
         <template #icon>
           <ArrowLeftIcon :size="20" />
@@ -15,8 +15,8 @@
       <slot />
       <NcButton v-if="showFilterToggle"
                 :aria-pressed="filterBarVisible"
-                :title="filterBarVisible ? t('mobilesheetsmanager', 'Hide filters') : t('mobilesheetsmanager', 'Show filters')"
-                :aria-label="filterBarVisible ? t('mobilesheetsmanager', 'Hide filters') : t('mobilesheetsmanager', 'Show filters')"
+                :title="filterBarVisible ? t('sheetmusic', 'Hide filters') : t('sheetmusic', 'Show filters')"
+                :aria-label="filterBarVisible ? t('sheetmusic', 'Hide filters') : t('sheetmusic', 'Show filters')"
                 @click="emit('toggle-filters')">
         <template #icon>
           <FilterVariantIcon :size="18" />
@@ -24,8 +24,8 @@
       </NcButton>
       <NcActions
         v-if="createLabel || importLabel || importNextcloudLabel"
-        :name="t('mobilesheetsmanager', 'Add or import song')"
-        :aria-label="t('mobilesheetsmanager', 'Add or import song')">
+        :name="t('sheetmusic', 'Add or import song')"
+        :aria-label="t('sheetmusic', 'Add or import song')">
         <template #icon>
           <PlusIcon :size="20" />
         </template>

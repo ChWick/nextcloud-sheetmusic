@@ -25,10 +25,10 @@ function onActionChange(event: Event) {
 <template>
 	<NcDialog
 		v-if="open"
-		:name="t('mobilesheetsmanager', 'Attach Nextcloud PDF')"
+		:name="t('sheetmusic', 'Attach Nextcloud PDF')"
 		@close="emit('update:open', false); emit('cancel')">
 		<p>
-			{{ t('mobilesheetsmanager', 'Attach {file} to this song?', { file: filename }) }}
+			{{ t('sheetmusic', 'Attach {file} to this song?', { file: filename }) }}
 		</p>
 		<div :class="$style.radioGroup">
 			<label :class="$style.radioLabel">
@@ -38,7 +38,7 @@ function onActionChange(event: Event) {
 					value="copy"
 					:checked="action === 'copy'"
 					@change="onActionChange">
-				{{ t('mobilesheetsmanager', 'Copy file to library folder (default)') }}
+				{{ t('sheetmusic', 'Copy file to library folder (default)') }}
 			</label>
 			<label :class="$style.radioLabel">
 				<input
@@ -47,18 +47,18 @@ function onActionChange(event: Event) {
 					value="move"
 					:checked="action === 'move'"
 					@change="onActionChange">
-				{{ t('mobilesheetsmanager', 'Move file to library folder') }}
+				{{ t('sheetmusic', 'Move file to library folder') }}
 			</label>
 		</div>
-		<p>{{ t('mobilesheetsmanager', 'The file is added to the song when you save it.') }}</p>
+		<p>{{ t('sheetmusic', 'The file is added to the song when you save it.') }}</p>
 		<div :class="$style.dialogActions">
 			<NcButton @click="emit('update:open', false); emit('cancel')">
-				{{ t('mobilesheetsmanager', 'Cancel') }}
+				{{ t('sheetmusic', 'Cancel') }}
 			</NcButton>
 			<NcButton
 				variant="primary"
 				@click="emit('confirm')">
-				{{ t('mobilesheetsmanager', 'Attach File') }}
+				{{ t('sheetmusic', 'Attach File') }}
 			</NcButton>
 		</div>
 	</NcDialog>

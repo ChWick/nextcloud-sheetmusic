@@ -4,13 +4,12 @@ declare(strict_types=1);
 
 namespace Service;
 
-use OCA\MobileSheetsManager\Db\LibraryMapper;
-use OCA\MobileSheetsManager\Service\LibraryService;
+use OCA\SheetMusic\Db\LibraryMapper;
+use OCA\SheetMusic\Service\LibraryService;
 use OCP\Files\IRootFolder;
 use OCP\Files\IUserFolder;
 use OCP\Files\Node;
 use OCP\Files\Storage\IStorage;
-use OCP\IUser;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 use TestSupport\TestUtils;

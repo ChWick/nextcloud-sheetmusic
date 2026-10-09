@@ -9,7 +9,7 @@ declare(strict_types=1);
 
 namespace Service;
 
-use OCA\MobileSheetsManager\Service\MobileSheetsHashCodesFile;
+use OCA\SheetMusic\Service\MobileSheetsHashCodesFile;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 

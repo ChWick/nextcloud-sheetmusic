@@ -200,21 +200,21 @@ function handleClose() {
 }
 
 const actionOptions: { value: BatchAction; label: string }[] = [
-	{ value: 'add', label: t('mobilesheetsmanager', 'Add to existing') },
-	{ value: 'replace', label: t('mobilesheetsmanager', 'Replace all existing') },
-	{ value: 'remove', label: t('mobilesheetsmanager', 'Remove from selected songs') },
+	{ value: 'add', label: t('sheetmusic', 'Add to existing') },
+	{ value: 'replace', label: t('sheetmusic', 'Replace all existing') },
+	{ value: 'remove', label: t('sheetmusic', 'Remove from selected songs') },
 ]
 </script>
 
 <template>
 	<NcDialog
 		v-if="open"
-		:name="t('mobilesheetsmanager', 'Batch edit {count} songs', { count: selectedCount })"
+		:name="t('sheetmusic', 'Batch edit {count} songs', { count: selectedCount })"
 		size="normal"
 		@close="handleClose">
 		<div :class="$style.dialogContent">
 			<p :class="$style.intro">
-				{{ t('mobilesheetsmanager', 'Select which metadata fields to update across all {count} selected songs.', { count: selectedCount }) }}
+				{{ t('sheetmusic', 'Select which metadata fields to update across all {count} selected songs.', { count: selectedCount }) }}
 			</p>
 
 			<!-- Composers Section -->
@@ -223,7 +223,7 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 					<NcCheckboxRadioSwitch
 						v-model="enableComposers"
 						type="checkbox">
-						{{ t('mobilesheetsmanager', 'Composers') }}
+						{{ t('sheetmusic', 'Composers') }}
 					</NcCheckboxRadioSwitch>
 				</div>
 				<div v-if="enableComposers" :class="$style.fieldBody">
@@ -242,8 +242,8 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 						:options="composers"
 						:multiple="true"
 						:close-on-select="false"
-						:input-label="t('mobilesheetsmanager', 'Composers')"
-						:placeholder="t('mobilesheetsmanager', 'Select composers…')"
+						:input-label="t('sheetmusic', 'Composers')"
+						:placeholder="t('sheetmusic', 'Select composers…')"
 						label="name"
 						track-by="id" />
 				</div>
@@ -255,7 +255,7 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 					<NcCheckboxRadioSwitch
 						v-model="enableBooks"
 						type="checkbox">
-						{{ t('mobilesheetsmanager', 'Books') }}
+						{{ t('sheetmusic', 'Books') }}
 					</NcCheckboxRadioSwitch>
 				</div>
 				<div v-if="enableBooks" :class="$style.fieldBody">
@@ -274,8 +274,8 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 						:options="books"
 						:multiple="true"
 						:close-on-select="false"
-						:input-label="t('mobilesheetsmanager', 'Books')"
-						:placeholder="t('mobilesheetsmanager', 'Select books…')"
+						:input-label="t('sheetmusic', 'Books')"
+						:placeholder="t('sheetmusic', 'Select books…')"
 						label="title"
 						track-by="id" />
 				</div>
@@ -287,7 +287,7 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 					<NcCheckboxRadioSwitch
 						v-model="enableCollections"
 						type="checkbox">
-						{{ t('mobilesheetsmanager', 'Collections') }}
+						{{ t('sheetmusic', 'Collections') }}
 					</NcCheckboxRadioSwitch>
 				</div>
 				<div v-if="enableCollections" :class="$style.fieldBody">
@@ -306,8 +306,8 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 						:options="collections"
 						:multiple="true"
 						:close-on-select="false"
-						:input-label="t('mobilesheetsmanager', 'Collections')"
-						:placeholder="t('mobilesheetsmanager', 'Select collections…')"
+						:input-label="t('sheetmusic', 'Collections')"
+						:placeholder="t('sheetmusic', 'Select collections…')"
 						label="name"
 						track-by="id" />
 				</div>
@@ -319,7 +319,7 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 					<NcCheckboxRadioSwitch
 						v-model="enableArtists"
 						type="checkbox">
-						{{ t('mobilesheetsmanager', 'Artists') }}
+						{{ t('sheetmusic', 'Artists') }}
 					</NcCheckboxRadioSwitch>
 				</div>
 				<div v-if="enableArtists" :class="$style.fieldBody">
@@ -338,8 +338,8 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 						:options="artists"
 						:multiple="true"
 						:close-on-select="false"
-						:input-label="t('mobilesheetsmanager', 'Artists')"
-						:placeholder="t('mobilesheetsmanager', 'Select artists…')"
+						:input-label="t('sheetmusic', 'Artists')"
+						:placeholder="t('sheetmusic', 'Select artists…')"
 						label="name"
 						track-by="id" />
 				</div>
@@ -351,7 +351,7 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 					<NcCheckboxRadioSwitch
 						v-model="enableGenres"
 						type="checkbox">
-						{{ t('mobilesheetsmanager', 'Genres') }}
+						{{ t('sheetmusic', 'Genres') }}
 					</NcCheckboxRadioSwitch>
 				</div>
 				<div v-if="enableGenres" :class="$style.fieldBody">
@@ -370,8 +370,8 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 						:options="genres || []"
 						:multiple="true"
 						:close-on-select="false"
-						:input-label="t('mobilesheetsmanager', 'Genres')"
-						:placeholder="t('mobilesheetsmanager', 'Select genres…')"
+						:input-label="t('sheetmusic', 'Genres')"
+						:placeholder="t('sheetmusic', 'Select genres…')"
 						label="name"
 						track-by="id" />
 				</div>
@@ -383,7 +383,7 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 					<NcCheckboxRadioSwitch
 						v-model="enableKeys"
 						type="checkbox">
-						{{ t('mobilesheetsmanager', 'Keys') }}
+						{{ t('sheetmusic', 'Keys') }}
 					</NcCheckboxRadioSwitch>
 				</div>
 				<div v-if="enableKeys" :class="$style.fieldBody">
@@ -402,8 +402,8 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 						:options="keys || []"
 						:multiple="true"
 						:close-on-select="false"
-						:input-label="t('mobilesheetsmanager', 'Keys')"
-						:placeholder="t('mobilesheetsmanager', 'Select keys…')"
+						:input-label="t('sheetmusic', 'Keys')"
+						:placeholder="t('sheetmusic', 'Select keys…')"
 						label="name"
 						track-by="id" />
 				</div>
@@ -415,7 +415,7 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 					<NcCheckboxRadioSwitch
 						v-model="enableCustomGroups"
 						type="checkbox">
-						{{ t('mobilesheetsmanager', 'Custom Groups') }}
+						{{ t('sheetmusic', 'Custom Groups') }}
 					</NcCheckboxRadioSwitch>
 				</div>
 				<div v-if="enableCustomGroups" :class="$style.fieldBody">
@@ -434,8 +434,8 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 						:options="customGroups || []"
 						:multiple="true"
 						:close-on-select="false"
-						:input-label="t('mobilesheetsmanager', 'Custom Groups')"
-						:placeholder="t('mobilesheetsmanager', 'Select custom groups…')"
+						:input-label="t('sheetmusic', 'Custom Groups')"
+						:placeholder="t('sheetmusic', 'Select custom groups…')"
 						label="name"
 						track-by="id" />
 				</div>
@@ -447,7 +447,7 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 					<NcCheckboxRadioSwitch
 						v-model="enableYears"
 						type="checkbox">
-						{{ t('mobilesheetsmanager', 'Years') }}
+						{{ t('sheetmusic', 'Years') }}
 					</NcCheckboxRadioSwitch>
 				</div>
 				<div v-if="enableYears" :class="$style.fieldBody">
@@ -466,8 +466,8 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 						:options="years || []"
 						:multiple="true"
 						:close-on-select="false"
-						:input-label="t('mobilesheetsmanager', 'Years')"
-						:placeholder="t('mobilesheetsmanager', 'Select years…')"
+						:input-label="t('sheetmusic', 'Years')"
+						:placeholder="t('sheetmusic', 'Select years…')"
 						label="name"
 						track-by="id" />
 				</div>
@@ -479,7 +479,7 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 					<NcCheckboxRadioSwitch
 						v-model="enableSignatures"
 						type="checkbox">
-						{{ t('mobilesheetsmanager', 'Time Signatures') }}
+						{{ t('sheetmusic', 'Time Signatures') }}
 					</NcCheckboxRadioSwitch>
 				</div>
 				<div v-if="enableSignatures" :class="$style.fieldBody">
@@ -498,8 +498,8 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 						:options="signatures || []"
 						:multiple="true"
 						:close-on-select="false"
-						:input-label="t('mobilesheetsmanager', 'Time Signatures')"
-						:placeholder="t('mobilesheetsmanager', 'Select time signatures…')"
+						:input-label="t('sheetmusic', 'Time Signatures')"
+						:placeholder="t('sheetmusic', 'Select time signatures…')"
 						label="name"
 						track-by="id" />
 				</div>
@@ -511,7 +511,7 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 					<NcCheckboxRadioSwitch
 						v-model="enableSourceTypes"
 						type="checkbox">
-						{{ t('mobilesheetsmanager', 'Source Types') }}
+						{{ t('sheetmusic', 'Source Types') }}
 					</NcCheckboxRadioSwitch>
 				</div>
 				<div v-if="enableSourceTypes" :class="$style.fieldBody">
@@ -530,8 +530,8 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 						:options="sourceTypes || []"
 						:multiple="true"
 						:close-on-select="false"
-						:input-label="t('mobilesheetsmanager', 'Source Types')"
-						:placeholder="t('mobilesheetsmanager', 'Select source types…')"
+						:input-label="t('sheetmusic', 'Source Types')"
+						:placeholder="t('sheetmusic', 'Select source types…')"
 						label="name"
 						track-by="id" />
 				</div>
@@ -539,13 +539,13 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 
 			<div :class="$style.dialogActions">
 				<NcButton @click="handleClose">
-					{{ t('mobilesheetsmanager', 'Cancel') }}
+					{{ t('sheetmusic', 'Cancel') }}
 				</NcButton>
 				<NcButton
 					variant="primary"
 					:disabled="!isAnythingEnabled"
 					@click="handleApply">
-					{{ t('mobilesheetsmanager', 'Apply to {count} songs', { count: selectedCount }) }}
+					{{ t('sheetmusic', 'Apply to {count} songs', { count: selectedCount }) }}
 				</NcButton>
 			</div>
 		</div>

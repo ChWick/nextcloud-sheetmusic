@@ -49,20 +49,20 @@ const emit = defineEmits<{
 					variant="secondary"
 					size="small"
 					:disabled="currentPage <= 1 || pageLayout === 'continuous'"
-					:title="t('mobilesheetsmanager', 'Previous page')"
-					:aria-label="t('mobilesheetsmanager', 'Previous page')"
+					:title="t('sheetmusic', 'Previous page')"
+					:aria-label="t('sheetmusic', 'Previous page')"
 					@click="emit('previousPage')">
 					<template #icon><ChevronLeft :size="20" /></template>
 				</NcButton>
 				<span :class="$style.pageIndicator">
-					{{ t('mobilesheetsmanager', 'Page {current} of {total}', { current: currentPageDisplay, total: totalPages || 1 }) }}
+					{{ t('sheetmusic', 'Page {current} of {total}', { current: currentPageDisplay, total: totalPages || 1 }) }}
 				</span>
 				<NcButton
 					variant="secondary"
 					size="small"
 					:disabled="currentPage >= totalPages || pageLayout === 'continuous'"
-					:title="t('mobilesheetsmanager', 'Next page')"
-					:aria-label="t('mobilesheetsmanager', 'Next page')"
+					:title="t('sheetmusic', 'Next page')"
+					:aria-label="t('sheetmusic', 'Next page')"
 					@click="emit('nextPage')">
 					<template #icon><ChevronRight :size="20" /></template>
 				</NcButton>
@@ -74,24 +74,24 @@ const emit = defineEmits<{
 				<NcButton
 					size="small"
 					:variant="pageLayout === 'continuous' ? 'primary' : 'secondary'"
-					:title="t('mobilesheetsmanager', 'Continuous scroll (All pages)')"
-					:aria-label="t('mobilesheetsmanager', 'Continuous scroll (All pages)')"
+					:title="t('sheetmusic', 'Continuous scroll (All pages)')"
+					:aria-label="t('sheetmusic', 'Continuous scroll (All pages)')"
 					@click="emit('pageLayout', 'continuous')">
 					<template #icon><ViewStream :size="18" /></template>
 				</NcButton>
 				<NcButton
 					size="small"
 					:variant="pageLayout === 'single' ? 'primary' : 'secondary'"
-					:title="t('mobilesheetsmanager', 'Single page')"
-					:aria-label="t('mobilesheetsmanager', 'Single page')"
+					:title="t('sheetmusic', 'Single page')"
+					:aria-label="t('sheetmusic', 'Single page')"
 					@click="emit('pageLayout', 'single')">
 					<template #icon><ViewDay :size="18" /></template>
 				</NcButton>
 				<NcButton
 					size="small"
 					:variant="pageLayout === 'double' ? 'primary' : 'secondary'"
-					:title="t('mobilesheetsmanager', 'Two pages side-by-side')"
-					:aria-label="t('mobilesheetsmanager', 'Two pages side-by-side')"
+					:title="t('sheetmusic', 'Two pages side-by-side')"
+					:aria-label="t('sheetmusic', 'Two pages side-by-side')"
 					@click="emit('pageLayout', 'double')">
 					<template #icon><ViewColumn :size="18" /></template>
 				</NcButton>
@@ -102,8 +102,8 @@ const emit = defineEmits<{
 			<NcButton
 				variant="secondary"
 				size="small"
-				:title="t('mobilesheetsmanager', 'Zoom out')"
-				:aria-label="t('mobilesheetsmanager', 'Zoom out')"
+				:title="t('sheetmusic', 'Zoom out')"
+				:aria-label="t('sheetmusic', 'Zoom out')"
 				@click="emit('zoomOut')">
 				<template #icon><MagnifyMinus :size="18" /></template>
 			</NcButton>
@@ -111,11 +111,11 @@ const emit = defineEmits<{
 			<div :class="$style.zoomSelector">
 				<select
 					:value="zoomSelectValue"
-					:aria-label="t('mobilesheetsmanager', 'Zoom level')"
+					:aria-label="t('sheetmusic', 'Zoom level')"
 					:class="$style.zoomDropdown"
 					@change="emit('zoomSelect', $event)">
-					<option value="fit-width">{{ t('mobilesheetsmanager', 'Fit width') }}</option>
-					<option value="fit-page">{{ t('mobilesheetsmanager', 'Fit page') }}</option>
+					<option value="fit-width">{{ t('sheetmusic', 'Fit width') }}</option>
+					<option value="fit-page">{{ t('sheetmusic', 'Fit page') }}</option>
 					<option value="0.5">50%</option>
 					<option value="0.75">75%</option>
 					<option value="1.0">100%</option>
@@ -131,8 +131,8 @@ const emit = defineEmits<{
 			<NcButton
 				variant="secondary"
 				size="small"
-				:title="t('mobilesheetsmanager', 'Zoom in')"
-				:aria-label="t('mobilesheetsmanager', 'Zoom in')"
+				:title="t('sheetmusic', 'Zoom in')"
+				:aria-label="t('sheetmusic', 'Zoom in')"
 				@click="emit('zoomIn')">
 				<template #icon><MagnifyPlus :size="18" /></template>
 			</NcButton>
@@ -140,8 +140,8 @@ const emit = defineEmits<{
 			<NcButton
 				variant="secondary"
 				size="small"
-				:title="t('mobilesheetsmanager', 'Fit to width')"
-				:aria-label="t('mobilesheetsmanager', 'Fit to width')"
+				:title="t('sheetmusic', 'Fit to width')"
+				:aria-label="t('sheetmusic', 'Fit to width')"
 				@click="emit('fitWidth')">
 				<template #icon><FitToScreenOutline :size="18" /></template>
 			</NcButton>
@@ -149,8 +149,8 @@ const emit = defineEmits<{
 			<NcButton
 				variant="secondary"
 				size="small"
-				:title="t('mobilesheetsmanager', 'Rotate clockwise')"
-				:aria-label="t('mobilesheetsmanager', 'Rotate clockwise')"
+				:title="t('sheetmusic', 'Rotate clockwise')"
+				:aria-label="t('sheetmusic', 'Rotate clockwise')"
 				@click="emit('rotate')">
 				<template #icon><RotateRight :size="18" /></template>
 			</NcButton>
@@ -159,8 +159,8 @@ const emit = defineEmits<{
 				v-if="showExternalButton"
 				variant="secondary"
 				size="small"
-				:title="t('mobilesheetsmanager', 'Open in external viewer')"
-				:aria-label="t('mobilesheetsmanager', 'Open in external viewer')"
+				:title="t('sheetmusic', 'Open in external viewer')"
+				:aria-label="t('sheetmusic', 'Open in external viewer')"
 				@click="emit('openExternal')">
 				<template #icon><OpenInNewIcon :size="18" /></template>
 			</NcButton>

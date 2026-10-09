@@ -9,7 +9,7 @@ declare(strict_types=1);
 
 namespace Db;
 
-use OCA\MobileSheetsManager\Db\SongNoteMapper;
+use OCA\SheetMusic\Db\SongNoteMapper;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 
@@ -18,7 +18,7 @@ final class SongNoteMapperTest extends TestCase {
 	private SongNoteMapper $noteMapper;
 
 	protected function setUp(): void {
-		$databasePath = tempnam(sys_get_temp_dir(), 'mobilesheetsmanager-note-test-');
+		$databasePath = tempnam(sys_get_temp_dir(), 'sheetmusic-note-test-');
 		self::assertNotFalse($databasePath);
 		$this->databasePath = $databasePath;
 

@@ -52,9 +52,9 @@ async function loadPdfThumbnail() {
 		})
 
 		const pdfData = response.data instanceof ArrayBuffer ? new Uint8Array(response.data) : response.data
-		const wasmUrl = typeof generateFilePath === 'function' ? generateFilePath('mobilesheetsmanager', 'js', 'pdfjs/wasm/') : new URL('pdfjs-dist/wasm/', import.meta.url).href
-		const cMapUrl = typeof generateFilePath === 'function' ? generateFilePath('mobilesheetsmanager', 'js', 'pdfjs/cmaps/') : new URL('pdfjs-dist/cmaps/', import.meta.url).href
-		const standardFontDataUrl = typeof generateFilePath === 'function' ? generateFilePath('mobilesheetsmanager', 'js', 'pdfjs/standard_fonts/') : new URL('pdfjs-dist/standard_fonts/', import.meta.url).href
+		const wasmUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/wasm/') : new URL('pdfjs-dist/wasm/', import.meta.url).href
+		const cMapUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/cmaps/') : new URL('pdfjs-dist/cmaps/', import.meta.url).href
+		const standardFontDataUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/standard_fonts/') : new URL('pdfjs-dist/standard_fonts/', import.meta.url).href
 
 		const pdf = await getDocument({
 			data: pdfData,
@@ -77,7 +77,7 @@ async function loadPdfThumbnail() {
 		const canvas = document.createElement('canvas')
 		canvas.width = Math.floor(viewport.width)
 		canvas.height = Math.floor(viewport.height)
-		canvas.className = 'mobilesheetsmanager-file-thumb'
+		canvas.className = 'sheetmusic-file-thumb'
 
 		const canvasContext = canvas.getContext('2d')
 		if (canvasContext) {
@@ -131,8 +131,8 @@ watch(() => props.file.path, () => {
 			<NcButton
 				type="button"
 				variant="secondary"
-				:aria-label="t('mobilesheetsmanager', 'Open {file} in external viewer', { file: getFileName(file.path) })"
-				:title="t('mobilesheetsmanager', 'Open in external viewer')"
+				:aria-label="t('sheetmusic', 'Open {file} in external viewer', { file: getFileName(file.path) })"
+				:title="t('sheetmusic', 'Open in external viewer')"
 				@click="emit('openExternal', file)">
 				<template #icon>
 					<OpenInNewIcon :size="20" />
@@ -142,8 +142,8 @@ watch(() => props.file.path, () => {
 				type="button"
 				variant="tertiary"
 				:disabled="disabled"
-				:aria-label="t('mobilesheetsmanager', 'Detach file {file} from song', { file: getFileName(file.path) })"
-				:title="t('mobilesheetsmanager', 'Detach file from song (keep file in storage)')"
+				:aria-label="t('sheetmusic', 'Detach file {file} from song', { file: getFileName(file.path) })"
+				:title="t('sheetmusic', 'Detach file from song (keep file in storage)')"
 				@click="emit('detach', file)">
 				<template #icon>
 					<EjectIcon :size="20" />
@@ -153,8 +153,8 @@ watch(() => props.file.path, () => {
 				type="button"
 				variant="error"
 				:disabled="disabled"
-				:aria-label="t('mobilesheetsmanager', 'Delete file {file}', { file: getFileName(file.path) })"
-				:title="t('mobilesheetsmanager', 'Delete file from storage')"
+				:aria-label="t('sheetmusic', 'Delete file {file}', { file: getFileName(file.path) })"
+				:title="t('sheetmusic', 'Delete file from storage')"
 				@click="emit('delete', file)">
 				<template #icon>
 					<DeleteIcon :size="20" />
@@ -199,7 +199,7 @@ watch(() => props.file.path, () => {
 	justify-content: center;
 }
 
-.thumbSlot :global(.mobilesheetsmanager-file-thumb),
+.thumbSlot :global(.sheetmusic-file-thumb),
 .imgThumb {
 	display: block;
 	max-width: 100%;

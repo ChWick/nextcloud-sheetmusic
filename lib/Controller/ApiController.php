@@ -2,18 +2,17 @@
 
 declare(strict_types=1);
 
-namespace OCA\MobileSheetsManager\Controller;
+namespace OCA\SheetMusic\Controller;
 
-use OCA\MobileSheetsManager\Service\LibraryIntegrityService;
-use OCA\MobileSheetsManager\Service\MobileSheetsPathResolver;
-use OCA\MobileSheetsManager\Db\LibraryMapper;
-use OCA\MobileSheetsManager\Db\SongMapper;
-use OCA\MobileSheetsManager\Service\EntityService;
-use OCA\MobileSheetsManager\Service\FileManager;
-use OCA\MobileSheetsManager\Service\LibraryService;
-use OCA\MobileSheetsManager\Service\SongFileService;
-use OCA\MobileSheetsManager\Service\SongService;
-use OCP\AppFramework\Http;
+use OCA\SheetMusic\Db\LibraryMapper;
+use OCA\SheetMusic\Db\SongMapper;
+use OCA\SheetMusic\Service\EntityService;
+use OCA\SheetMusic\Service\FileManager;
+use OCA\SheetMusic\Service\LibraryIntegrityService;
+use OCA\SheetMusic\Service\LibraryService;
+use OCA\SheetMusic\Service\MobileSheetsPathResolver;
+use OCA\SheetMusic\Service\SongFileService;
+use OCA\SheetMusic\Service\SongService;
 use OCP\AppFramework\Http\Attribute\ApiRoute;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\DataResponse;

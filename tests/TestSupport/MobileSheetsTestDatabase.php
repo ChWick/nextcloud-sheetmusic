@@ -9,7 +9,7 @@ final class MobileSheetsTestDatabase {
 	 * @return array{path: string, connection: \PDO}
 	 */
 	public static function create(): array {
-		$path = tempnam(sys_get_temp_dir(), 'mobilesheetsmanager-test-');
+		$path = tempnam(sys_get_temp_dir(), 'sheetmusic-test-');
 		if ($path === false) {
 			throw new \RuntimeException('Could not create a temporary MobileSheets test database.');
 		}

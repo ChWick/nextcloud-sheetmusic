@@ -100,68 +100,68 @@ const {
 						<input
 							type="checkbox"
 							:checked="songs.length > 0 && songs.every((s) => selectedSongIds?.includes(s.id))"
-							:title="t('mobilesheetsmanager', 'Select all songs')"
+							:title="t('sheetmusic', 'Select all songs')"
 							@change="emit('select-all', songs.map((s) => s.id))">
 					</th>
 					<th v-if="isColVisible('title')" :class="$style.sortableHeader" @click="toggleSort('title')">
-						{{ t('mobilesheetsmanager', 'Title') }}{{ sortIndicator('title') }}
+						{{ t('sheetmusic', 'Title') }}{{ sortIndicator('title') }}
 					</th>
 					<th v-if="isColVisible('composer')" :class="$style.sortableHeader" @click="toggleSort('composer')">
-						{{ t('mobilesheetsmanager', 'Composer') }}{{ sortIndicator('composer') }}
+						{{ t('sheetmusic', 'Composer') }}{{ sortIndicator('composer') }}
 					</th>
 					<th v-if="isColVisible('book')" :class="$style.sortableHeader" @click="toggleSort('book')">
-						{{ t('mobilesheetsmanager', 'Book') }}{{ sortIndicator('book') }}
+						{{ t('sheetmusic', 'Book') }}{{ sortIndicator('book') }}
 					</th>
 					<th v-if="isColVisible('collection')" :class="$style.sortableHeader" @click="toggleSort('collection')">
-						{{ t('mobilesheetsmanager', 'Collection') }}{{ sortIndicator('collection') }}
+						{{ t('sheetmusic', 'Collection') }}{{ sortIndicator('collection') }}
 					</th>
 					<th v-if="isColVisible('artist')" :class="$style.sortableHeader" @click="toggleSort('artist')">
-						{{ t('mobilesheetsmanager', 'Artist') }}{{ sortIndicator('artist') }}
+						{{ t('sheetmusic', 'Artist') }}{{ sortIndicator('artist') }}
 					</th>
 					<th v-if="isColVisible('genre')" :class="$style.sortableHeader" @click="toggleSort('genre')">
-						{{ t('mobilesheetsmanager', 'Genre') }}{{ sortIndicator('genre') }}
+						{{ t('sheetmusic', 'Genre') }}{{ sortIndicator('genre') }}
 					</th>
 					<th v-if="isColVisible('key')" :class="$style.sortableHeader" @click="toggleSort('key')">
-						{{ t('mobilesheetsmanager', 'Key') }}{{ sortIndicator('key') }}
+						{{ t('sheetmusic', 'Key') }}{{ sortIndicator('key') }}
 					</th>
 					<th v-if="isColVisible('customGroup')" :class="$style.sortableHeader" @click="toggleSort('customGroup')">
-						{{ t('mobilesheetsmanager', 'Custom Group') }}{{ sortIndicator('customGroup') }}
+						{{ t('sheetmusic', 'Custom Group') }}{{ sortIndicator('customGroup') }}
 					</th>
 					<th v-if="isColVisible('year')" :class="$style.sortableHeader" @click="toggleSort('year')">
-						{{ t('mobilesheetsmanager', 'Year') }}{{ sortIndicator('year') }}
+						{{ t('sheetmusic', 'Year') }}{{ sortIndicator('year') }}
 					</th>
 					<th v-if="isColVisible('signature')" :class="$style.sortableHeader" @click="toggleSort('signature')">
-						{{ t('mobilesheetsmanager', 'Time Signature') }}{{ sortIndicator('signature') }}
+						{{ t('sheetmusic', 'Time Signature') }}{{ sortIndicator('signature') }}
 					</th>
 					<th v-if="isColVisible('sourceType')" :class="$style.sortableHeader" @click="toggleSort('sourceType')">
-						{{ t('mobilesheetsmanager', 'Source Type') }}{{ sortIndicator('sourceType') }}
+						{{ t('sheetmusic', 'Source Type') }}{{ sortIndicator('sourceType') }}
 					</th>
 					<th v-if="isColVisible('stars')" :class="$style.sortableHeader" @click="toggleSort('stars')">
-						{{ t('mobilesheetsmanager', 'Rating') }}{{ sortIndicator('stars') }}
+						{{ t('sheetmusic', 'Rating') }}{{ sortIndicator('stars') }}
 					</th>
 					<th v-if="isColVisible('difficulty')" :class="$style.sortableHeader" @click="toggleSort('difficulty')">
-						{{ t('mobilesheetsmanager', 'Difficulty') }}{{ sortIndicator('difficulty') }}
+						{{ t('sheetmusic', 'Difficulty') }}{{ sortIndicator('difficulty') }}
 					</th>
 					<th v-if="isColVisible('duration')" :class="$style.sortableHeader" @click="toggleSort('duration')">
-						{{ t('mobilesheetsmanager', 'Duration') }}{{ sortIndicator('duration') }}
+						{{ t('sheetmusic', 'Duration') }}{{ sortIndicator('duration') }}
 					</th>
 					<th v-if="isColVisible('keywords')" :class="$style.sortableHeader" @click="toggleSort('keywords')">
-						{{ t('mobilesheetsmanager', 'Keywords') }}{{ sortIndicator('keywords') }}
+						{{ t('sheetmusic', 'Keywords') }}{{ sortIndicator('keywords') }}
 					</th>
 					<th v-if="isColVisible('custom')" :class="$style.sortableHeader" @click="toggleSort('custom')">
-						{{ t('mobilesheetsmanager', 'Custom') }}{{ sortIndicator('custom') }}
+						{{ t('sheetmusic', 'Custom') }}{{ sortIndicator('custom') }}
 					</th>
 					<th v-if="isColVisible('custom2')" :class="$style.sortableHeader" @click="toggleSort('custom2')">
-						{{ t('mobilesheetsmanager', 'Custom 2') }}{{ sortIndicator('custom2') }}
+						{{ t('sheetmusic', 'Custom 2') }}{{ sortIndicator('custom2') }}
 					</th>
 					<th v-if="isColVisible('lastModified')" :class="$style.sortableHeader" @click="toggleSort('lastModified')">
-						{{ t('mobilesheetsmanager', 'Last modified') }}{{ sortIndicator('lastModified') }}
+						{{ t('sheetmusic', 'Last modified') }}{{ sortIndicator('lastModified') }}
 					</th>
 					<th v-if="isColVisible('dateCreated')" :class="$style.sortableHeader" @click="toggleSort('dateCreated')">
-						{{ t('mobilesheetsmanager', 'Created') }}{{ sortIndicator('dateCreated') }}
+						{{ t('sheetmusic', 'Created') }}{{ sortIndicator('dateCreated') }}
 					</th>
 					<th :class="$style.actionsHeader">
-						{{ t('mobilesheetsmanager', 'Actions') }}
+						{{ t('sheetmusic', 'Actions') }}
 					</th>
 				</tr>
 			</thead>
@@ -179,7 +179,7 @@ const {
 						<input
 							type="checkbox"
 							:checked="selectedSongIds?.includes(song.id)"
-							:title="t('mobilesheetsmanager', 'Select song')"
+							:title="t('sheetmusic', 'Select song')"
 							@click.stop
 							@change="emit('toggle-select-song', song.id)">
 					</td>
@@ -194,7 +194,7 @@ const {
 								<button
 									type="button"
 									:class="[$style.filterChip, isFiltered?.('composers', comp.id) && $style.activeChip]"
-									:title="t('mobilesheetsmanager', 'Toggle filter for composer {name}', { name: comp.name })"
+									:title="t('sheetmusic', 'Toggle filter for composer {name}', { name: comp.name })"
 									@click.stop="emit('filter-entity', 'composers', comp)">
 									{{ comp.name }}
 								</button>
@@ -209,7 +209,7 @@ const {
 								<button
 									type="button"
 									:class="[$style.filterChip, isFiltered?.('books', bk.id) && $style.activeChip]"
-									:title="t('mobilesheetsmanager', 'Toggle filter for book {title}', { title: bk.title })"
+									:title="t('sheetmusic', 'Toggle filter for book {title}', { title: bk.title })"
 									@click.stop="emit('filter-entity', 'books', bk)">
 									{{ bk.title }}
 								</button>
@@ -224,7 +224,7 @@ const {
 								<button
 									type="button"
 									:class="[$style.filterChip, isFiltered?.('collections', col.id) && $style.activeChip]"
-									:title="t('mobilesheetsmanager', 'Toggle filter for collection {name}', { name: col.name })"
+									:title="t('sheetmusic', 'Toggle filter for collection {name}', { name: col.name })"
 									@click.stop="emit('filter-entity', 'collections', col)">
 									{{ col.name }}
 								</button>
@@ -239,7 +239,7 @@ const {
 								<button
 									type="button"
 									:class="[$style.filterChip, isFiltered?.('artists', art.id) && $style.activeChip]"
-									:title="t('mobilesheetsmanager', 'Toggle filter for artist {name}', { name: art.name })"
+									:title="t('sheetmusic', 'Toggle filter for artist {name}', { name: art.name })"
 									@click.stop="emit('filter-entity', 'artists', art)">
 									{{ art.name }}
 								</button>
@@ -254,7 +254,7 @@ const {
 								<button
 									type="button"
 									:class="[$style.filterChip, isFiltered?.('genres', g.id) && $style.activeChip]"
-									:title="t('mobilesheetsmanager', 'Toggle filter for genre {name}', { name: g.name })"
+									:title="t('sheetmusic', 'Toggle filter for genre {name}', { name: g.name })"
 									@click.stop="emit('filter-entity', 'genres', g)">
 									{{ g.name }}
 								</button>
@@ -269,7 +269,7 @@ const {
 								<button
 									type="button"
 									:class="[$style.filterChip, isFiltered?.('keys', k.id) && $style.activeChip]"
-									:title="t('mobilesheetsmanager', 'Toggle filter for key {name}', { name: k.name })"
+									:title="t('sheetmusic', 'Toggle filter for key {name}', { name: k.name })"
 									@click.stop="emit('filter-entity', 'keys', k)">
 									{{ k.name }}
 								</button>
@@ -284,7 +284,7 @@ const {
 								<button
 									type="button"
 									:class="[$style.filterChip, isFiltered?.('customgroups', cg.id) && $style.activeChip]"
-									:title="t('mobilesheetsmanager', 'Toggle filter for custom group {name}', { name: cg.name })"
+									:title="t('sheetmusic', 'Toggle filter for custom group {name}', { name: cg.name })"
 									@click.stop="emit('filter-entity', 'customgroups', cg)">
 									{{ cg.name }}
 								</button>
@@ -299,7 +299,7 @@ const {
 								<button
 									type="button"
 									:class="[$style.filterChip, isFiltered?.('years', y.id) && $style.activeChip]"
-									:title="t('mobilesheetsmanager', 'Toggle filter for year {name}', { name: y.name })"
+									:title="t('sheetmusic', 'Toggle filter for year {name}', { name: y.name })"
 									@click.stop="emit('filter-entity', 'years', y)">
 									{{ y.name }}
 								</button>
@@ -314,7 +314,7 @@ const {
 								<button
 									type="button"
 									:class="[$style.filterChip, isFiltered?.('signatures', s.id) && $style.activeChip]"
-									:title="t('mobilesheetsmanager', 'Toggle filter for signature {name}', { name: s.name })"
+									:title="t('sheetmusic', 'Toggle filter for signature {name}', { name: s.name })"
 									@click.stop="emit('filter-entity', 'signatures', s)">
 									{{ s.name }}
 								</button>
@@ -329,7 +329,7 @@ const {
 								<button
 									type="button"
 									:class="[$style.filterChip, isFiltered?.('sourcetypes', st.id) && $style.activeChip]"
-									:title="t('mobilesheetsmanager', 'Toggle filter for source type {name}', { name: st.name })"
+									:title="t('sheetmusic', 'Toggle filter for source type {name}', { name: st.name })"
 									@click.stop="emit('filter-entity', 'sourcetypes', st)">
 									{{ st.name }}
 								</button>
@@ -366,8 +366,8 @@ const {
 						<div :class="$style.actionsGroup">
 							<NcButton
 								size="small"
-								:title="t('mobilesheetsmanager', 'Edit song')"
-								:aria-label="t('mobilesheetsmanager', 'Edit song')"
+								:title="t('sheetmusic', 'Edit song')"
+								:aria-label="t('sheetmusic', 'Edit song')"
 								@click="emit('edit-song', song)">
 								<template #icon>
 									<PencilIcon :size="18" />
@@ -375,8 +375,8 @@ const {
 							</NcButton>
 							<NcButton
 								size="small"
-								:title="t('mobilesheetsmanager', 'View song')"
-								:aria-label="t('mobilesheetsmanager', 'View song')"
+								:title="t('sheetmusic', 'View song')"
+								:aria-label="t('sheetmusic', 'View song')"
 								@click="emit('view-song', song)">
 								<template #icon>
 									<EyeIcon :size="18" />

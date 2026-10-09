@@ -28,25 +28,25 @@ export const UNASSIGNED_ID = -1
 export function noneEntryOf(entityType: EntityType): FilterEntity {
 	switch (entityType) {
 		case 'composers':
-			return { id: UNASSIGNED_ID, name: t('mobilesheetsmanager', '(No composer)') }
+			return { id: UNASSIGNED_ID, name: t('sheetmusic', '(No composer)') }
 		case 'books':
-			return { id: UNASSIGNED_ID, title: t('mobilesheetsmanager', '(No book)') }
+			return { id: UNASSIGNED_ID, title: t('sheetmusic', '(No book)') }
 		case 'collections':
-			return { id: UNASSIGNED_ID, name: t('mobilesheetsmanager', '(No collection)') }
+			return { id: UNASSIGNED_ID, name: t('sheetmusic', '(No collection)') }
 		case 'artists':
-			return { id: UNASSIGNED_ID, name: t('mobilesheetsmanager', '(No artist)') }
+			return { id: UNASSIGNED_ID, name: t('sheetmusic', '(No artist)') }
 		case 'genres':
-			return { id: UNASSIGNED_ID, name: t('mobilesheetsmanager', '(No genre)') }
+			return { id: UNASSIGNED_ID, name: t('sheetmusic', '(No genre)') }
 		case 'keys':
-			return { id: UNASSIGNED_ID, name: t('mobilesheetsmanager', '(No key)') }
+			return { id: UNASSIGNED_ID, name: t('sheetmusic', '(No key)') }
 		case 'customgroups':
-			return { id: UNASSIGNED_ID, name: t('mobilesheetsmanager', '(No custom group)') }
+			return { id: UNASSIGNED_ID, name: t('sheetmusic', '(No custom group)') }
 		case 'years':
-			return { id: UNASSIGNED_ID, name: t('mobilesheetsmanager', '(No year)'), year: 0 }
+			return { id: UNASSIGNED_ID, name: t('sheetmusic', '(No year)'), year: 0 }
 		case 'signatures':
-			return { id: UNASSIGNED_ID, name: t('mobilesheetsmanager', '(No time signature)') }
+			return { id: UNASSIGNED_ID, name: t('sheetmusic', '(No time signature)') }
 		case 'sourcetypes':
-			return { id: UNASSIGNED_ID, name: t('mobilesheetsmanager', '(No source type)'), type: t('mobilesheetsmanager', '(No source type)') }
+			return { id: UNASSIGNED_ID, name: t('sheetmusic', '(No source type)'), type: t('sheetmusic', '(No source type)') }
 	}
 }
 

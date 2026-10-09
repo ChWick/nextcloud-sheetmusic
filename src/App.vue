@@ -83,7 +83,7 @@ async function loadLibraries() {
     const response = await apiGet('/api/libraries')
     libraries.value = response.data.ocs.data.libraries
   } catch (error) {
-    fileError.value = describeRequestFailure(error, t('mobilesheetsmanager', 'Could not load your MobileSheets libraries.'))
+    fileError.value = describeRequestFailure(error, t('sheetmusic', 'Could not load your MobileSheets libraries.'))
     showError(fileError.value)
   }
 }
@@ -108,12 +108,12 @@ function openDialog(event?: Event) {
 }
 async function openFilePicker() {
   fileError.value = ''
-  const picker = getFilePickerBuilder(t('mobilesheetsmanager', 'Select a MobileSheets file'))
+  const picker = getFilePickerBuilder(t('sheetmusic', 'Select a MobileSheets file'))
     .setMultiSelect(false)
     .setFilter(node => node.type !== 'file' || node.basename.toLowerCase().endsWith('.db'))
     .setCanPick(node => node.type === 'file' && node.basename.toLowerCase().endsWith('.db'))
     .setButtonFactory(([node]) => [{
-      label: node ? t('mobilesheetsmanager', 'Select {file}', { file: node.basename }) : t('mobilesheetsmanager', 'Select a .db file'),
+      label: node ? t('sheetmusic', 'Select {file}', { file: node.basename }) : t('sheetmusic', 'Select a .db file'),
       callback: () => {},
       disabled: !node || node.type !== 'file' || !node.basename.toLowerCase().endsWith('.db'),
       variant: 'primary',
@@ -123,14 +123,14 @@ async function openFilePicker() {
     ;[selectedFile.value] = await picker.pickNodes()
   } catch (error) {
     if (!(error instanceof FilePickerClosed)) {
-      fileError.value = t('mobilesheetsmanager', 'Could not select a MobileSheets file.')
+      fileError.value = t('sheetmusic', 'Could not select a MobileSheets file.')
       showError(fileError.value)
     }
   }
 }
 async function addLibrary() {
   if (!selectedFile.value) {
-    fileError.value = t('mobilesheetsmanager', 'Please select a .db file first.')
+    fileError.value = t('sheetmusic', 'Please select a .db file first.')
     showError(fileError.value)
     return
   }
@@ -150,9 +150,9 @@ async function addLibrary() {
     if (addedLibrary && selectedLibrary.value < 0) {
       navigateToLibrary(addedLibrary.id)
     }
-    showSuccess(t('mobilesheetsmanager', 'MobileSheets library added successfully.'))
+    showSuccess(t('sheetmusic', 'MobileSheets library added successfully.'))
   } catch (error) {
-    fileError.value = describeRequestFailure(error, t('mobilesheetsmanager', 'Could not save the MobileSheets library.'))
+    fileError.value = describeRequestFailure(error, t('sheetmusic', 'Could not save the MobileSheets library.'))
     showError(fileError.value)
   }
 }
@@ -181,7 +181,7 @@ async function deleteLibrary() {
 
     closeDeleteDialog()
     await loadLibraries()
-    showSuccess(t('mobilesheetsmanager', 'Library deleted successfully.'))
+    showSuccess(t('sheetmusic', 'Library deleted successfully.'))
 
     // Switch to another library, or back to the empty state when this was the last one
     const nextLibrary = libraries.value[0]
@@ -192,7 +192,7 @@ async function deleteLibrary() {
       router.push({ name: 'Home' })
     }
   } catch (error) {
-    deleteError.value = describeRequestFailure(error, t('mobilesheetsmanager', 'Could not delete the library.'))
+    deleteError.value = describeRequestFailure(error, t('sheetmusic', 'Could not delete the library.'))
     showError(deleteError.value)
   } finally {
     isDeletingLibrary.value = false
@@ -201,52 +201,52 @@ async function deleteLibrary() {
 </script>
 
 <template>
-  <div id="mobilesheetsmanager">
-    <NcContent app-name="mobilesheetsmanager">
+  <div id="sheetmusic">
+    <NcContent app-name="sheetmusic">
       <!-- Sidebar (navigation) -->
-      <NcAppNavigation :aria-label="t('mobilesheetsmanager', 'MobileSheets libraries')">
-        <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Library')">
+      <NcAppNavigation :aria-label="t('sheetmusic', 'Sheet Music libraries')">
+        <NcAppNavigationItem :name="t('sheetmusic', 'Library')">
           <select v-model="selectedLibrary" :class="$style.librarySelect" @change="navigateToLibrary(selectedLibrary)">
-            <option disabled value="-1">{{ t('mobilesheetsmanager', 'Select library') }}</option>
+            <option disabled value="-1">{{ t('sheetmusic', 'Select library') }}</option>
             <option v-for="library in libraries" :key="library.id" :value="library.id">{{ library.path }}</option>
           </select>
         </NcAppNavigationItem>
 
         <!-- view toggle – only for the selected library; choosing one starts without filters -->
         <template v-if="selectedLibrary >= 0">
-          <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Songs')" :active="selectedView === 'songs' || selectedView === 'new-song'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'songs' } }" />
-          <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Composers')" :active="selectedView === 'composers'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'composers' } }" />
-          <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Artists')" :active="selectedView === 'artists'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'artists' } }" />
-          <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Books')" :active="selectedView === 'books'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'books' } }" />
-          <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Collections')" :active="selectedView === 'collections'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'collections' } }" />
-          <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Genres')" :active="selectedView === 'genres'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'genres' } }" />
-          <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Keys')" :active="selectedView === 'keys'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'keys' } }" />
-          <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Custom Groups')" :active="selectedView === 'customgroups'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'customgroups' } }" />
-          <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Years')" :active="selectedView === 'years'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'years' } }" />
-          <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Time Signatures')" :active="selectedView === 'signatures'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'signatures' } }" />
-          <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Source Types')" :active="selectedView === 'sourcetypes'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'sourcetypes' } }" />
-          <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Integrity Audit')" :active="selectedView === 'integrity'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'integrity' } }" />
+          <NcAppNavigationItem :name="t('sheetmusic', 'Songs')" :active="selectedView === 'songs' || selectedView === 'new-song'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'songs' } }" />
+          <NcAppNavigationItem :name="t('sheetmusic', 'Composers')" :active="selectedView === 'composers'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'composers' } }" />
+          <NcAppNavigationItem :name="t('sheetmusic', 'Artists')" :active="selectedView === 'artists'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'artists' } }" />
+          <NcAppNavigationItem :name="t('sheetmusic', 'Books')" :active="selectedView === 'books'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'books' } }" />
+          <NcAppNavigationItem :name="t('sheetmusic', 'Collections')" :active="selectedView === 'collections'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'collections' } }" />
+          <NcAppNavigationItem :name="t('sheetmusic', 'Genres')" :active="selectedView === 'genres'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'genres' } }" />
+          <NcAppNavigationItem :name="t('sheetmusic', 'Keys')" :active="selectedView === 'keys'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'keys' } }" />
+          <NcAppNavigationItem :name="t('sheetmusic', 'Custom Groups')" :active="selectedView === 'customgroups'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'customgroups' } }" />
+          <NcAppNavigationItem :name="t('sheetmusic', 'Years')" :active="selectedView === 'years'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'years' } }" />
+          <NcAppNavigationItem :name="t('sheetmusic', 'Time Signatures')" :active="selectedView === 'signatures'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'signatures' } }" />
+          <NcAppNavigationItem :name="t('sheetmusic', 'Source Types')" :active="selectedView === 'sourcetypes'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'sourcetypes' } }" />
+          <NcAppNavigationItem :name="t('sheetmusic', 'Integrity Audit')" :active="selectedView === 'integrity'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'integrity' } }" />
 
           <div :class="$style.deleteLibraryArea">
             <NcButton type="button"
                       variant="error"
                       :class="$style.deleteLibraryButton"
                       @click="openDeleteDialog">
-              {{ t('mobilesheetsmanager', 'Delete library') }}
+              {{ t('sheetmusic', 'Delete library') }}
             </NcButton>
           </div>
         </template>
 
         <template #footer>
           <div :class="$style.footerArea">
-            <NcAppNavigationItem :name="t('mobilesheetsmanager', 'Add MobileSheets Library')" :class="$style.addLibraryItem" @click="openDialog">
+            <NcAppNavigationItem :name="t('sheetmusic', 'Add Library')" :class="$style.addLibraryItem" @click="openDialog">
               <template #icon><span aria-hidden="true">+</span></template>
             </NcAppNavigationItem>
             <NcButton v-if="selectedLibrary >= 0"
                       type="button"
                       variant="tertiary"
-                      :title="t('mobilesheetsmanager', 'Library Settings')"
-                      :aria-label="t('mobilesheetsmanager', 'Library Settings')"
+                      :title="t('sheetmusic', 'Library Settings')"
+                      :aria-label="t('sheetmusic', 'Library Settings')"
                       :class="$style.settingsButton"
                       @click="isSettingsDialogOpen = true">
               <template #icon>
@@ -275,33 +275,33 @@ async function deleteLibrary() {
     </NcContent>
 
     <NcDialog v-if="isDialogOpen"
-              :name="t('mobilesheetsmanager', 'Add MobileSheets Library')"
+              :name="t('sheetmusic', 'Add MobileSheets Library')"
               size="normal"
               @close="isDialogOpen = false">
-      <p>{{ t('mobilesheetsmanager', 'Select a MobileSheets .db file from your Nextcloud files.') }}</p>
+      <p>{{ t('sheetmusic', 'Select a MobileSheets .db file from your Nextcloud files.') }}</p>
       <NcButton variant="primary" @click="openFilePicker">
-        {{ selectedFile?.path ?? t('mobilesheetsmanager', 'Choose .db file from Nextcloud') }}
+        {{ selectedFile?.path ?? t('sheetmusic', 'Choose .db file from Nextcloud') }}
       </NcButton>
       <p v-if="fileError" :class="$style.error" role="alert">{{ fileError }}</p>
       <template #actions>
-        <NcButton @click="isDialogOpen = false">{{ t('mobilesheetsmanager', 'Cancel') }}</NcButton>
+        <NcButton @click="isDialogOpen = false">{{ t('sheetmusic', 'Cancel') }}</NcButton>
         <NcButton variant="primary" :disabled="!selectedFile" @click="addLibrary">
-          {{ t('mobilesheetsmanager', 'Add library') }}
+          {{ t('sheetmusic', 'Add library') }}
         </NcButton>
       </template>
     </NcDialog>
 
     <NcDialog v-if="isDeleteDialogOpen"
-              :name="t('mobilesheetsmanager', 'Delete library')"
+              :name="t('sheetmusic', 'Delete library')"
               size="normal"
               @close="closeDeleteDialog">
-      <p>{{ t('mobilesheetsmanager', 'Remove "{path}" from your libraries?', { path: selectedLibraryPath }) }}</p>
-      <p>{{ t('mobilesheetsmanager', 'Only the library entry is removed. The MobileSheets database and all files it references stay in your Nextcloud files, so you can add the library again whenever you want.') }}</p>
+      <p>{{ t('sheetmusic', 'Remove "{path}" from your libraries?', { path: selectedLibraryPath }) }}</p>
+      <p>{{ t('sheetmusic', 'Only the library entry is removed. The MobileSheets database and all files it references stay in your Nextcloud files, so you can add the library again whenever you want.') }}</p>
       <p v-if="deleteError" :class="$style.error" role="alert">{{ deleteError }}</p>
       <template #actions>
-        <NcButton @click="closeDeleteDialog">{{ t('mobilesheetsmanager', 'Cancel') }}</NcButton>
+        <NcButton @click="closeDeleteDialog">{{ t('sheetmusic', 'Cancel') }}</NcButton>
         <NcButton variant="error" :disabled="isDeletingLibrary" @click="deleteLibrary">
-          {{ t('mobilesheetsmanager', 'Delete library') }}
+          {{ t('sheetmusic', 'Delete library') }}
         </NcButton>
       </template>
     </NcDialog>

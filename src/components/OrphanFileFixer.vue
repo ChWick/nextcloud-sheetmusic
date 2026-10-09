@@ -114,7 +114,7 @@ async function handleAttachToSong(songId: number) {
 		emit('resolved')
 	} catch (error: any) {
 		console.error('Failed to attach orphan file to song:', error)
-		const serverMsg = describeRequestFailure(error, t('mobilesheetsmanager', 'Could not link file to selected song.'))
+		const serverMsg = describeRequestFailure(error, t('sheetmusic', 'Could not link file to selected song.'))
 		errorMessage.value = serverMsg
 		showError(serverMsg)
 	} finally {
@@ -135,7 +135,7 @@ async function handleConfirmDelete() {
 
 		const result = response.data?.ocs?.data
 		if (result && !result.success) {
-			errorMessage.value = result.message ?? t('mobilesheetsmanager', 'Could not delete orphan file.')
+			errorMessage.value = result.message ?? t('sheetmusic', 'Could not delete orphan file.')
 			showError(errorMessage.value)
 		} else {
 			isConfirmDeleteDialogOpen.value = false
@@ -143,7 +143,7 @@ async function handleConfirmDelete() {
 		}
 	} catch (error: any) {
 		console.error('Failed to delete orphan file:', error)
-		const serverMsg = describeRequestFailure(error, t('mobilesheetsmanager', 'Could not delete orphan file.'))
+		const serverMsg = describeRequestFailure(error, t('sheetmusic', 'Could not delete orphan file.'))
 		errorMessage.value = serverMsg
 		showError(serverMsg)
 	} finally {
@@ -163,12 +163,12 @@ onMounted(() => {
 
 <template>
 	<div :class="$style.container">
-		<ViewHeader :title="isCreatingSong ? t('mobilesheetsmanager', 'Create Song for Orphan File') : t('mobilesheetsmanager', 'Fix Orphan File: {filename}', { filename })">
+		<ViewHeader :title="isCreatingSong ? t('sheetmusic', 'Create Song for Orphan File') : t('sheetmusic', 'Fix Orphan File: {filename}', { filename })">
 			<template v-if="isCreatingSong">
 				<NcButton
 					variant="secondary"
-					:title="t('mobilesheetsmanager', 'Back to Orphan Fixer')"
-					:aria-label="t('mobilesheetsmanager', 'Back to Orphan Fixer')"
+					:title="t('sheetmusic', 'Back to Orphan Fixer')"
+					:aria-label="t('sheetmusic', 'Back to Orphan Fixer')"
 					@click="isCreatingSong = false">
 					<template #icon>
 						<ArrowLeftIcon :size="20" />
@@ -176,8 +176,8 @@ onMounted(() => {
 				</NcButton>
 				<NcButton
 					variant="primary"
-					:title="t('mobilesheetsmanager', 'Create song')"
-					:aria-label="t('mobilesheetsmanager', 'Create song')"
+					:title="t('sheetmusic', 'Create song')"
+					:aria-label="t('sheetmusic', 'Create song')"
 					@click="handleSaveCreatedSong">
 					<template #icon>
 						<PlusIcon :size="20" />
@@ -187,8 +187,8 @@ onMounted(() => {
 			<NcButton
 				v-else
 				variant="secondary"
-				:title="t('mobilesheetsmanager', 'Back to Integrity Audit')"
-				:aria-label="t('mobilesheetsmanager', 'Back to Integrity Audit')"
+				:title="t('sheetmusic', 'Back to Integrity Audit')"
+				:aria-label="t('sheetmusic', 'Back to Integrity Audit')"
 				@click="emit('back')">
 				<template #icon>
 					<ArrowLeftIcon :size="20" />
@@ -226,8 +226,8 @@ onMounted(() => {
 			<template v-else>
 				<div :class="$style.actionCard">
 					<div :class="$style.actionText">
-						<h3>{{ t('mobilesheetsmanager', 'How would you like to fix this orphan file?') }}</h3>
-						<p>{{ t('mobilesheetsmanager', 'This file exists in storage but is not connected to any song in your library. Choose an option below.') }}</p>
+						<h3>{{ t('sheetmusic', 'How would you like to fix this orphan file?') }}</h3>
+						<p>{{ t('sheetmusic', 'This file exists in storage but is not connected to any song in your library. Choose an option below.') }}</p>
 					</div>
 
 					<div :class="$style.buttonGroup">
@@ -238,7 +238,7 @@ onMounted(() => {
 							<template #icon>
 								<MagnifyIcon :size="18" />
 							</template>
-							{{ t('mobilesheetsmanager', 'Find Existing Song') }}
+							{{ t('sheetmusic', 'Find Existing Song') }}
 						</NcButton>
 
 						<NcButton
@@ -248,7 +248,7 @@ onMounted(() => {
 							<template #icon>
 								<PlusIcon :size="18" />
 							</template>
-							{{ t('mobilesheetsmanager', 'Create a New Song') }}
+							{{ t('sheetmusic', 'Create a New Song') }}
 						</NcButton>
 
 						<NcButton
@@ -258,7 +258,7 @@ onMounted(() => {
 							<template #icon>
 								<DeleteIcon :size="18" />
 							</template>
-							{{ t('mobilesheetsmanager', 'Delete File') }}
+							{{ t('sheetmusic', 'Delete File') }}
 						</NcButton>
 					</div>
 				</div>
@@ -284,20 +284,20 @@ onMounted(() => {
 		<!-- Dialog for confirming orphan file deletion -->
 		<NcDialog
 			v-if="isConfirmDeleteDialogOpen"
-			:name="t('mobilesheetsmanager', 'Delete Orphan File')"
+			:name="t('sheetmusic', 'Delete Orphan File')"
 			size="normal"
 			@close="isConfirmDeleteDialogOpen = false">
-			<p>{{ t('mobilesheetsmanager', 'Are you sure you want to permanently delete "{filename}" from library storage?', { filename }) }}</p>
-			<p>{{ t('mobilesheetsmanager', 'This file is not linked to any song. Once deleted, it cannot be recovered.') }}</p>
+			<p>{{ t('sheetmusic', 'Are you sure you want to permanently delete "{filename}" from library storage?', { filename }) }}</p>
+			<p>{{ t('sheetmusic', 'This file is not linked to any song. Once deleted, it cannot be recovered.') }}</p>
 			<template #actions>
 				<NcButton @click="isConfirmDeleteDialogOpen = false">
-					{{ t('mobilesheetsmanager', 'Cancel') }}
+					{{ t('sheetmusic', 'Cancel') }}
 				</NcButton>
 				<NcButton
 					variant="error"
 					:disabled="isDeleting"
 					@click="handleConfirmDelete">
-					{{ isDeleting ? t('mobilesheetsmanager', 'Deleting…') : t('mobilesheetsmanager', 'Delete File') }}
+					{{ isDeleting ? t('sheetmusic', 'Deleting…') : t('sheetmusic', 'Delete File') }}
 				</NcButton>
 			</template>
 		</NcDialog>

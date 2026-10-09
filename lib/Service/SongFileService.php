@@ -2,12 +2,11 @@
 
 declare(strict_types=1);
 
-namespace OCA\MobileSheetsManager\Service;
+namespace OCA\SheetMusic\Service;
 
-use OCA\MobileSheetsManager\Db\SongMapper;
+use OCA\SheetMusic\Db\SongMapper;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
-use OCP\Files\IUserFolder;
 use OCP\Files\Node;
 use OCP\Files\NotFoundException;
 use OCP\IUser;
