@@ -1,0 +1,65 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * SPDX-FileCopyrightText: 2026 Nextcloud GmbH and Nextcloud contributors
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ */
+
+namespace OCA\SheetMusic\Db;
+
+class InternalEntity {
+	public function __construct(
+		public ?int $id,
+		public string $uuid,
+		public int $libraryId,
+		public string $type,
+		public string $name,
+		public int $sortBy = 1,
+		public int $ascending = 1,
+		public ?int $clientId = null,
+		public int $createdAt = 0,
+		public int $updatedAt = 0,
+		public ?int $deletedAt = null,
+	) {
+	}
+
+	/**
+	 * @param array<string, mixed> $row
+	 */
+	public static function fromRow(array $row): self {
+		return new self(
+			id: isset($row['id']) ? (int)$row['id'] : null,
+			uuid: (string)$row['uuid'],
+			libraryId: (int)$row['library_id'],
+			type: (string)$row['type'],
+			name: (string)$row['name'],
+			sortBy: isset($row['sort_by']) ? (int)$row['sort_by'] : 1,
+			ascending: isset($row['ascending']) ? (int)$row['ascending'] : 1,
+			clientId: isset($row['client_id']) && $row['client_id'] !== null ? (int)$row['client_id'] : null,
+			createdAt: isset($row['created_at']) ? (int)$row['created_at'] : 0,
+			updatedAt: isset($row['updated_at']) ? (int)$row['updated_at'] : 0,
+			deletedAt: isset($row['deleted_at']) && $row['deleted_at'] !== null ? (int)$row['deleted_at'] : null,
+		);
+	}
+
+	/**
+	 * @return array<string, mixed>
+	 */
+	public function toRow(): array {
+		return [
+			'id' => $this->id,
+			'uuid' => $this->uuid,
+			'library_id' => $this->libraryId,
+			'type' => $this->type,
+			'name' => $this->name,
+			'sort_by' => $this->sortBy,
+			'ascending' => $this->ascending,
+			'client_id' => $this->clientId,
+			'created_at' => $this->createdAt,
+			'updated_at' => $this->updatedAt,
+			'deleted_at' => $this->deletedAt,
+		];
+	}
+}

@@ -13,7 +13,7 @@ use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\IDBConnection;
 
 class LibraryMapper {
-	public const TABLE_NAME = 'mobilesheets_libraries';
+	public const TABLE_NAME = 'sheetmusic_libraries';
 
 	public function __construct(
 		private IDBConnection $db,
@@ -68,12 +68,15 @@ class LibraryMapper {
 			return;
 		}
 
+		$now = time();
 		$qb = $this->db->getQueryBuilder();
 		$qb->insert(self::TABLE_NAME)
 			->setValue('user_id', $qb->createNamedParameter($userId, IQueryBuilder::PARAM_STR))
 			->setValue('path', $qb->createNamedParameter($path, IQueryBuilder::PARAM_STR))
 			->setValue('auto_paths', $qb->createNamedParameter(true, IQueryBuilder::PARAM_BOOL))
-			->setValue('auto_pdf_metadata', $qb->createNamedParameter(true, IQueryBuilder::PARAM_BOOL));
+			->setValue('auto_pdf_metadata', $qb->createNamedParameter(true, IQueryBuilder::PARAM_BOOL))
+			->setValue('created_at', $qb->createNamedParameter($now, IQueryBuilder::PARAM_INT))
+			->setValue('updated_at', $qb->createNamedParameter($now, IQueryBuilder::PARAM_INT));
 		$qb->executeStatement();
 	}
 
