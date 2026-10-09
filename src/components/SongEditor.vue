@@ -389,6 +389,7 @@ async function openNextcloudPicker() {
 	} catch (error) {
 		if (!(error instanceof FilePickerClosed)) {
 			errorMessage.value = t('mobilesheetsmanager', 'Could not select a file from Nextcloud.')
+			showError(errorMessage.value)
 		}
 	}
 }
@@ -426,6 +427,7 @@ async function saveSong(closeAfter: boolean) {
 
 	if (!title.value.trim()) {
 		errorMessage.value = t('mobilesheetsmanager', 'Song title cannot be empty.')
+		showError(errorMessage.value)
 		return
 	}
 

@@ -1,6 +1,8 @@
 import type { Artist, Book, Collection, Composer, CustomGroup, Genre, Key, LibraryData, Signature, Song, SourceType, Year } from '../types/song'
 import { apiGet } from '../api/client'
+import { showError } from '@nextcloud/dialogs'
 import { translate as t } from '@nextcloud/l10n'
+import { describeRequestFailure } from '../utils/api'
 import { ref } from 'vue'
 
 export function useLibraryData() {
@@ -38,8 +40,9 @@ export function useLibraryData() {
 		try {
 			const response = await apiGet('/api/songs', { queryParams: { id } })
 			handleLibraryDataUpdate(response.data.ocs.data)
-		} catch {
-			fileError.value = t('mobilesheetsmanager', 'Could not load this library.')
+		} catch (error) {
+			fileError.value = describeRequestFailure(error, t('mobilesheetsmanager', 'Could not load this library.'))
+			showError(fileError.value)
 		} finally {
 			isLoading.value = false
 		}

@@ -6,12 +6,13 @@ import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
-import { showError, showSuccess } from '@nextcloud/dialogs'
+import { showError, showSuccess, showWarning } from '@nextcloud/dialogs'
 import RefreshIcon from 'vue-material-design-icons/Refresh.vue'
 import ChevronDownIcon from 'vue-material-design-icons/ChevronDown.vue'
 import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
 import WrenchIcon from 'vue-material-design-icons/Wrench.vue'
 import { apiGet, apiPost } from '../api/client'
+import { describeRequestFailure } from '../utils/api'
 import type { IntegrityIssue, LibraryData } from '../types/song'
 import ViewHeader from './ViewHeader.vue'
 import FilesIntegrityIssueItem from './files/FilesIntegrityIssueItem.vue'
@@ -111,15 +112,12 @@ async function auditIntegrity(keepCurrentIssues = false) {
 
 	try {
 		const response = await apiGet(`/api/libraries/${props.selectedLibrary}/integrity`)
-		integrityIssues.value = response.data.ocs.data.issues ?? []
+		integrityIssues.value = response.data?.ocs?.data?.issues ?? []
 	} catch (error) {
 		console.error('Failed to audit library integrity:', error)
-		const serverMessage = axios.isAxiosError(error)
-			? error.response?.data?.ocs?.data?.message
-			: undefined
+		const serverMessage = describeRequestFailure(error, t('mobilesheetsmanager', 'Failed to audit library integrity. Please try again.'))
 		integrityError.value = serverMessage
-			?? t('mobilesheetsmanager', 'Failed to audit library integrity. Please try again.')
-		showError(integrityError.value)
+		showError(serverMessage)
 	} finally {
 		isCheckingIntegrity.value = false
 	}
@@ -151,25 +149,29 @@ async function fixAllIssues(issueType?: string) {
 		})
 		const result = response.data?.ocs?.data
 		if (result && !result.success) {
-			integrityError.value = result.message ?? t('mobilesheetsmanager', 'Failed to fix integrity issues.')
-			showError(integrityError.value)
+			const errorMsg = result.message ?? t('mobilesheetsmanager', 'Failed to fix integrity issues.')
+			integrityError.value = errorMsg
+			showError(errorMsg)
 		} else {
-			if (issueType) {
-				integrityIssues.value = integrityIssues.value.filter(i => i.type !== issueType)
-			} else {
-				integrityIssues.value = integrityIssues.value.filter(i => !i.fixable)
-			}
 			const fixedCount = result?.fixedCount ?? 0
-			showSuccess(t('mobilesheetsmanager', 'Fixed {count} integrity issue(s).', { count: fixedCount }))
+			if (fixedCount > 0) {
+				if (issueType) {
+					integrityIssues.value = integrityIssues.value.filter(i => i.type !== issueType)
+				} else {
+					integrityIssues.value = integrityIssues.value.filter(i => !i.fixable)
+				}
+			}
+			if (result?.message && result.message.includes('failed:')) {
+				showWarning(result.message)
+			} else {
+				showSuccess(t('mobilesheetsmanager', 'Fixed {count} integrity issue(s).', { count: fixedCount }))
+			}
 		}
 	} catch (error) {
 		console.error('Failed to batch fix integrity issues:', error)
-		const serverMessage = axios.isAxiosError(error)
-			? error.response?.data?.ocs?.data?.message
-			: undefined
+		const serverMessage = describeRequestFailure(error, t('mobilesheetsmanager', 'Failed to batch fix integrity issues. Please try again.'))
 		integrityError.value = serverMessage
-			?? t('mobilesheetsmanager', 'Failed to batch fix integrity issues. Please try again.')
-		showError(integrityError.value)
+		showError(serverMessage)
 	} finally {
 		isBatchFixing.value = false
 	}
@@ -191,8 +193,9 @@ async function fixIntegrityIssue(issue: IntegrityIssue) {
 		})
 		const result = response.data?.ocs?.data
 		if (result && !result.success) {
-			integrityError.value = result.message ?? t('mobilesheetsmanager', 'Failed to fix integrity issue.')
-			showError(integrityError.value)
+			const errorMsg = result.message ?? t('mobilesheetsmanager', 'Failed to fix integrity issue.')
+			integrityError.value = errorMsg
+			showError(errorMsg)
 		} else {
 			integrityIssues.value = integrityIssues.value.filter(i => keyForIssue(i) !== key)
 			const songTitle = issue.songTitle
@@ -206,12 +209,9 @@ async function fixIntegrityIssue(issue: IntegrityIssue) {
 		}
 	} catch (error) {
 		console.error('Failed to fix integrity issue:', error)
-		const serverMessage = axios.isAxiosError(error)
-			? error.response?.data?.ocs?.data?.message
-			: undefined
+		const serverMessage = describeRequestFailure(error, t('mobilesheetsmanager', 'Failed to fix integrity issue. Please try again.'))
 		integrityError.value = serverMessage
-			?? t('mobilesheetsmanager', 'Failed to fix integrity issue. Please try again.')
-		showError(integrityError.value)
+		showError(serverMessage)
 	} finally {
 		fixingKey.value = null
 	}
@@ -265,12 +265,9 @@ async function executeMerge(payload: {
 		}
 	} catch (error) {
 		console.error('Failed to merge songs:', error)
-		const serverMessage = axios.isAxiosError(error)
-			? error.response?.data?.ocs?.data?.message ?? error.response?.data?.message
-			: undefined
+		const serverMessage = describeRequestFailure(error, t('mobilesheetsmanager', 'Failed to merge songs. Please try again.'))
 		integrityError.value = serverMessage
-			?? t('mobilesheetsmanager', 'Failed to merge songs. Please try again.')
-		showError(integrityError.value)
+		showError(serverMessage)
 	} finally {
 		isMerging.value = false
 		mergingKey.value = null
@@ -302,12 +299,9 @@ async function executeResolveBoth(payload: {
 		showSuccess(t('mobilesheetsmanager', 'Both songs saved successfully.'))
 	} catch (error: any) {
 		console.error('Failed to resolve both songs:', error)
-		const serverMessage = error?.response?.data?.ocs?.data?.message
-			?? error?.response?.data?.message
-			?? error?.message
+		const serverMessage = describeRequestFailure(error, t('mobilesheetsmanager', 'Failed to save updated songs. Please try again.'))
 		integrityError.value = serverMessage
-			?? t('mobilesheetsmanager', 'Failed to save updated songs. Please try again.')
-		showError(integrityError.value)
+		showError(serverMessage)
 	} finally {
 		isMerging.value = false
 		mergingKey.value = null

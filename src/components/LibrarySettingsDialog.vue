@@ -6,6 +6,8 @@ import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
+import { showError, showSuccess } from '@nextcloud/dialogs'
+import { describeRequestFailure } from '../utils/api'
 import type { Library } from '../types/library'
 
 const props = defineProps<{
@@ -51,9 +53,11 @@ async function updateSetting(settings: { autoPaths?: boolean, autoPdfMetadata?: 
 			const updatedList = props.libraries.map(lib => lib.id === updatedLib.id ? { ...lib, ...updatedLib } : lib)
 			emit('update:libraries', updatedList)
 		}
+		showSuccess(t('mobilesheetsmanager', 'Library settings saved successfully.'))
 	} catch (error) {
 		console.error('Failed to update library settings:', error)
-		saveError.value = t('mobilesheetsmanager', 'Could not save library settings.')
+		saveError.value = describeRequestFailure(error, t('mobilesheetsmanager', 'Could not save library settings.'))
+		showError(saveError.value)
 	} finally {
 		isSaving.value = false
 	}

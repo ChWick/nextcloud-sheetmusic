@@ -538,6 +538,7 @@ class LibraryIntegrityService {
 
 		$fixedCount = 0;
 		$processedSongs = [];
+		$errors = [];
 
 		foreach ($issues as $issue) {
 			if (!$issue->fixable) {
@@ -557,6 +558,8 @@ class LibraryIntegrityService {
 					$fixedCount++;
 				} catch (\Throwable $e) {
 					$this->logger->warning(sprintf('Cannot auto-fix naming rule for song ID %d during batch fix: %s', $issue->songId, $e->getMessage()));
+					$songName = $issue->songTitle ?? ('song ID ' . $issue->songId);
+					$errors[] = sprintf('Failed to apply naming rule for "%s": %s', $songName, $e->getMessage());
 				}
 			} elseif ($issue->type === IntegrityIssue::TYPE_DUPLICATE_ENTITY_ASSIGNMENT && $issue->songId !== null) {
 				try {
@@ -570,6 +573,7 @@ class LibraryIntegrityService {
 						'exception' => $e,
 						'songId' => $issue->songId,
 					]);
+					$errors[] = sprintf('Failed to remove duplicate entity assignments: %s', $e->getMessage());
 				}
 			} elseif ($issue->type === IntegrityIssue::TYPE_DUPLICATE_ENTITY) {
 				$details = $issue->details;
@@ -598,6 +602,7 @@ class LibraryIntegrityService {
 						'entityType' => $details['entityType'],
 						'keepId' => $details['keepId'],
 					]);
+					$errors[] = sprintf('Failed to merge duplicate entity records: %s', $e->getMessage());
 				}
 			} elseif ($issue->type === IntegrityIssue::TYPE_PDF_METADATA_MISMATCH) {
 				try {
@@ -610,6 +615,7 @@ class LibraryIntegrityService {
 						'fileId' => $issue->fileId,
 						'path' => $issue->path,
 					]);
+					$errors[] = sprintf('Failed to update PDF metadata: %s', $e->getMessage());
 				}
 			} elseif (($issue->type === IntegrityIssue::TYPE_DUPLICATE_FILE_PATH || $issue->type === IntegrityIssue::TYPE_IDENTICAL_SONG) && $issue->songId !== null) {
 				if (isset($processedSongs[$issue->songId])) {
@@ -659,6 +665,7 @@ class LibraryIntegrityService {
 					}
 				} catch (\Throwable $e) {
 					$this->logger->warning(sprintf('Cannot auto-fix duplicate/identical songs for song ID %d during batch fix: %s', $issue->songId, $e->getMessage()));
+					$errors[] = sprintf('Failed to merge identical songs: %s', $e->getMessage());
 				}
 			}
 		}
@@ -667,10 +674,23 @@ class LibraryIntegrityService {
 			$hashCodes?->save();
 		}
 
+		if ($fixedCount === 0 && !empty($errors)) {
+			return [
+				'success' => false,
+				'fixedCount' => 0,
+				'message' => implode("\n", $errors),
+			];
+		}
+
+		$message = sprintf('Applied autofix to %d issue(s).', $fixedCount);
+		if (!empty($errors)) {
+			$message .= ' ' . sprintf('%d issue(s) failed: %s', count($errors), implode('; ', $errors));
+		}
+
 		return [
 			'success' => true,
 			'fixedCount' => $fixedCount,
-			'message' => sprintf('Applied autofix to %d issue(s).', $fixedCount),
+			'message' => $message,
 		];
 	}
 

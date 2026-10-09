@@ -196,5 +196,105 @@ describe('IntegrityView.vue', () => {
 		// All naming issues should be removed
 		expect(wrapper.text()).toContain('All System Checks Passed!')
 	})
+
+	it('shows error toast when fixing a single issue fails', async () => {
+		const failureMsg = 'Failed to apply naming rule: Cannot regenerate file 493: source "/remote.php/dav/files/admin/v2/Noten/Cruise Control.pdf" does not exist'
+
+		vi.mocked(apiGet).mockResolvedValueOnce({
+			data: {
+				ocs: {
+					data: {
+						issues: [mockNamingIssue],
+					},
+				},
+			},
+		} as any)
+
+		vi.mocked(apiPost).mockResolvedValueOnce({
+			data: {
+				ocs: {
+					data: {
+						success: false,
+						fixedCount: 0,
+						message: failureMsg,
+					},
+				},
+			},
+		} as any)
+
+		const wrapper = mount(IntegrityView, {
+			props: { selectedLibrary: 1 },
+		})
+		await flushPromises()
+
+		const autoFixBtn = wrapper.findAll('button').find(b => b.text().includes('Auto-Fix Issue'))
+		expect(autoFixBtn).toBeDefined()
+		await autoFixBtn!.trigger('click')
+		await flushPromises()
+
+		expect(showError).toHaveBeenCalledWith(failureMsg)
+		// The issue should NOT be removed if it failed
+		expect(wrapper.text()).toContain('Prelude in C')
+	})
+
+	it('shows error toast when batch fix returns a failure message', async () => {
+		const failureMsg = 'Failed to apply naming rule for "Prelude in C": Source does not exist'
+
+		vi.mocked(apiGet).mockResolvedValueOnce({
+			data: {
+				ocs: {
+					data: {
+						issues: [mockNamingIssue],
+					},
+				},
+			},
+		} as any)
+
+		vi.mocked(apiPost).mockResolvedValueOnce({
+			data: {
+				ocs: {
+					data: {
+						success: false,
+						fixedCount: 0,
+						message: failureMsg,
+					},
+				},
+			},
+		} as any)
+
+		const wrapper = mount(IntegrityView, {
+			props: { selectedLibrary: 1 },
+		})
+		await flushPromises()
+
+		const fixAllBtn = wrapper.findAll('button').find(b => b.text().includes('Fix All in Group (1)'))
+		expect(fixAllBtn).toBeDefined()
+		await fixAllBtn!.trigger('click')
+		await flushPromises()
+
+		expect(showError).toHaveBeenCalledWith(failureMsg)
+	})
+
+	it('shows error toast when audit integrity request rejects', async () => {
+		vi.mocked(apiGet).mockRejectedValueOnce({
+			response: {
+				status: 500,
+				data: {
+					ocs: {
+						meta: {
+							message: 'Database corrupted or locked',
+						},
+					},
+				},
+			},
+		})
+
+		mount(IntegrityView, {
+			props: { selectedLibrary: 1 },
+		})
+		await flushPromises()
+
+		expect(showError).toHaveBeenCalledWith('Database corrupted or locked')
+	})
 })
 

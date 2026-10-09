@@ -8,6 +8,8 @@ vi.mock('@nextcloud/router', () => ({
 }))
 vi.mock('@nextcloud/l10n', () => ({
 	translate: (_app: string, text: string) => text,
+	getLanguage: () => 'en',
+	isRTL: () => false,
 }))
 
 describe('useLibraryData composable', () => {

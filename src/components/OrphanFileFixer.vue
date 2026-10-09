@@ -10,7 +10,9 @@ import ContentSaveOutlineIcon from 'vue-material-design-icons/ContentSaveOutline
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import MagnifyIcon from 'vue-material-design-icons/Magnify.vue'
 import PlusIcon from 'vue-material-design-icons/Plus.vue'
+import { showError } from '@nextcloud/dialogs'
 import { apiGet, apiPost } from '../api/client'
+import { describeRequestFailure } from '../utils/api'
 import { getFileName } from '../utils/file'
 import FilePreviewer from './FilePreviewer.vue'
 import SongEditor from './SongEditor.vue'
@@ -112,10 +114,9 @@ async function handleAttachToSong(songId: number) {
 		emit('resolved')
 	} catch (error: any) {
 		console.error('Failed to attach orphan file to song:', error)
-		const serverMsg = error?.response?.data?.ocs?.data?.message
-			?? error?.response?.data?.message
-			?? t('mobilesheetsmanager', 'Could not link file to selected song.')
+		const serverMsg = describeRequestFailure(error, t('mobilesheetsmanager', 'Could not link file to selected song.'))
 		errorMessage.value = serverMsg
+		showError(serverMsg)
 	} finally {
 		isAttaching.value = false
 	}
@@ -135,16 +136,16 @@ async function handleConfirmDelete() {
 		const result = response.data?.ocs?.data
 		if (result && !result.success) {
 			errorMessage.value = result.message ?? t('mobilesheetsmanager', 'Could not delete orphan file.')
+			showError(errorMessage.value)
 		} else {
 			isConfirmDeleteDialogOpen.value = false
 			emit('resolved')
 		}
 	} catch (error: any) {
 		console.error('Failed to delete orphan file:', error)
-		const serverMsg = error?.response?.data?.ocs?.data?.message
-			?? error?.response?.data?.message
-			?? t('mobilesheetsmanager', 'Could not delete orphan file.')
+		const serverMsg = describeRequestFailure(error, t('mobilesheetsmanager', 'Could not delete orphan file.'))
 		errorMessage.value = serverMsg
+		showError(serverMsg)
 	} finally {
 		isDeleting.value = false
 	}

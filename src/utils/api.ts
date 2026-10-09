@@ -17,8 +17,10 @@ export function describeRequestFailure(error: unknown, fallback: string): string
 	}
 
 	const responseData = record(response?.data)
-	const ocsData = record(record(responseData?.ocs)?.data)
-	const message = ocsData?.message ?? responseData?.message
+	const ocs = record(responseData?.ocs)
+	const ocsData = record(ocs?.data)
+	const ocsMeta = record(ocs?.meta)
+	const message = ocsData?.message ?? ocsMeta?.message ?? responseData?.message
 	if (typeof message === 'string' && message !== '') {
 		return message
 	}

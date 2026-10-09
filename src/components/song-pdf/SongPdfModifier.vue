@@ -148,6 +148,7 @@ const selectedPages = ref<number[]>([])
 async function loadPdf() {
 	if (!targetFile.value?.path) {
 		errorMessage.value = t('mobilesheetsmanager', 'No PDF file found for this song.')
+		showError(errorMessage.value)
 		return
 	}
 
@@ -205,6 +206,7 @@ async function loadPdf() {
 		errorMessage.value = t('mobilesheetsmanager', 'Failed to load PDF document: {error}', {
 			error: err?.message ?? String(err),
 		})
+		showError(errorMessage.value)
 	} finally {
 		isLoading.value = false
 	}
@@ -763,6 +765,7 @@ async function saveSplits() {
 	if (!originalPdfBytes.value || !targetFile.value) return
 	if (splitSegments.value.length === 0) {
 		errorMessage.value = t('mobilesheetsmanager', 'Please configure at least one segment to split.')
+		showError(errorMessage.value)
 		return
 	}
 
@@ -770,6 +773,7 @@ async function saveSplits() {
 	for (const seg of splitSegments.value) {
 		if (!seg.title.trim()) {
 			errorMessage.value = t('mobilesheetsmanager', 'All segments must have a title.')
+			showError(errorMessage.value)
 			return
 		}
 		if (seg.startPage < 1 || seg.endPage > totalPages.value || seg.startPage > seg.endPage) {
@@ -778,6 +782,7 @@ async function saveSplits() {
 				end: seg.endPage,
 				title: seg.title,
 			})
+			showError(errorMessage.value)
 			return
 		}
 	}

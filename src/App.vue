@@ -4,9 +4,10 @@ import type { Book, Collection, Composer, EntityType, LibraryData, Song } from '
 import type { Library } from './types/library.ts'
 
 import axios from '@nextcloud/axios'
-import { FilePickerClosed, getFilePickerBuilder } from '@nextcloud/dialogs'
+import { FilePickerClosed, getFilePickerBuilder, showError, showSuccess } from '@nextcloud/dialogs'
 import { translate as t } from '@nextcloud/l10n'
 import { generateOcsUrl, generateUrl } from '@nextcloud/router'
+import { describeRequestFailure } from './utils/api'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import NcAppNavigation from '@nextcloud/vue/components/NcAppNavigation'
@@ -81,8 +82,9 @@ async function loadLibraries() {
   try {
     const response = await apiGet('/api/libraries')
     libraries.value = response.data.ocs.data.libraries
-  } catch {
-    fileError.value = t('mobilesheetsmanager', 'Could not load your MobileSheets libraries.')
+  } catch (error) {
+    fileError.value = describeRequestFailure(error, t('mobilesheetsmanager', 'Could not load your MobileSheets libraries.'))
+    showError(fileError.value)
   }
 }
 
@@ -122,12 +124,14 @@ async function openFilePicker() {
   } catch (error) {
     if (!(error instanceof FilePickerClosed)) {
       fileError.value = t('mobilesheetsmanager', 'Could not select a MobileSheets file.')
+      showError(fileError.value)
     }
   }
 }
 async function addLibrary() {
   if (!selectedFile.value) {
     fileError.value = t('mobilesheetsmanager', 'Please select a .db file first.')
+    showError(fileError.value)
     return
   }
   const addedPath = selectedFile.value.path
@@ -146,8 +150,10 @@ async function addLibrary() {
     if (addedLibrary && selectedLibrary.value < 0) {
       navigateToLibrary(addedLibrary.id)
     }
-  } catch {
-    fileError.value = t('mobilesheetsmanager', 'Could not save the MobileSheets library.')
+    showSuccess(t('mobilesheetsmanager', 'MobileSheets library added successfully.'))
+  } catch (error) {
+    fileError.value = describeRequestFailure(error, t('mobilesheetsmanager', 'Could not save the MobileSheets library.'))
+    showError(fileError.value)
   }
 }
 
@@ -175,6 +181,7 @@ async function deleteLibrary() {
 
     closeDeleteDialog()
     await loadLibraries()
+    showSuccess(t('mobilesheetsmanager', 'Library deleted successfully.'))
 
     // Switch to another library, or back to the empty state when this was the last one
     const nextLibrary = libraries.value[0]
@@ -184,8 +191,9 @@ async function deleteLibrary() {
       selectedLibrary.value = -1
       router.push({ name: 'Home' })
     }
-  } catch {
-    deleteError.value = t('mobilesheetsmanager', 'Could not delete the library.')
+  } catch (error) {
+    deleteError.value = describeRequestFailure(error, t('mobilesheetsmanager', 'Could not delete the library.'))
+    showError(deleteError.value)
   } finally {
     isDeletingLibrary.value = false
   }

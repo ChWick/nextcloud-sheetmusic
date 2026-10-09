@@ -9,7 +9,7 @@ export default defineConfig({
 		exclude: ['tests/e2e/**', 'node_modules/**'],
 		server: {
 			deps: {
-				inline: [/@nextcloud\/vue/],
+				inline: [/@nextcloud\/vue/, /@nextcloud\/dialogs/],
 			},
 		},
 	},
