@@ -356,11 +356,7 @@ function openSong(songId: number) {
 						<span>{{ t('mobilesheetsmanager', 'Auditing library files and database integrity…') }}</span>
 					</div>
 
-					<div v-if="integrityError" :class="$style.error" role="alert">
-						{{ integrityError }}
-					</div>
-
-					<div v-if="integrityIssues.length === 0 && !integrityError" :class="$style.cleanNotice">
+					<div v-if="integrityIssues.length === 0" :class="$style.cleanNotice">
 						<h2>{{ t('mobilesheetsmanager', 'All System Checks Passed!') }}</h2>
 						<p>{{ t('mobilesheetsmanager', 'No missing files, orphan database records, or duplicate path conflicts were detected in this MobileSheets library.') }}</p>
 					</div>
