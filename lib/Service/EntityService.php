@@ -41,12 +41,15 @@ class EntityService {
 				'year' => $this->songMapper->createYear($databasePath, $nameOrTitle),
 				'signature' => $this->songMapper->createSignature($databasePath, $nameOrTitle),
 				'sourcetype' => $this->songMapper->createSourceType($databasePath, $nameOrTitle),
+				'instrument' => $this->songMapper->createInstrument($databasePath, $nameOrTitle),
 				default => null,
 			};
 
 			if ($id === null) {
 				return null;
 			}
+
+			$this->libraryService->syncFromDatabase($user->getUID(), $libraryId);
 
 			$key = $entityType === 'book' ? 'title' : 'name';
 			$result = ['id' => $id, $key => $nameOrTitle];
@@ -70,7 +73,7 @@ class EntityService {
 	}
 
 	/**
-	 * @param 'composers'|'books'|'collections'|'artists'|'genres'|'keys'|'customgroups'|'years'|'signatures'|'sourcetypes' $entityType
+	 * @param 'composers'|'books'|'collections'|'artists'|'genres'|'keys'|'customgroups'|'years'|'signatures'|'sourcetypes'|'instruments' $entityType
 	 */
 	public function deleteEntity(IUser $user, int $libraryId, string $entityType, int $id): ?array {
 		$databasePath = $this->libraryService->getDatabasePath($user->getUID(), $libraryId);
@@ -82,6 +85,8 @@ class EntityService {
 			if (!$this->songMapper->deleteEntity($databasePath, $entityType, $id)) {
 				return null;
 			}
+
+			$this->libraryService->syncFromDatabase($user->getUID(), $libraryId);
 
 			return $this->songMapper->findLibraryData($databasePath);
 		} catch (\Throwable $e) {
@@ -148,6 +153,8 @@ class EntityService {
 					]);
 				}
 			}
+
+			$this->libraryService->syncFromDatabase($user->getUID(), $libraryId);
 
 			return [
 				'mergedCount' => $merged,

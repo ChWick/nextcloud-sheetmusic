@@ -94,9 +94,8 @@ final class LibraryServiceTest extends TestCase {
 
 	public function testAddLibraryValidatesPath(): void {
 		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->expects($this->once())
-			->method('addForUser')
-			->with('admin', '/Noten/mobilesheets.db');
+		$libraryMapper->expects($this->exactly(2))
+			->method('addForUser');
 
 		$service = new LibraryService(
 			$libraryMapper,
@@ -108,6 +107,7 @@ final class LibraryServiceTest extends TestCase {
 		$this->assertNull($service->addLibrary('admin', 'relative/path.db'));
 		$this->assertNull($service->addLibrary('admin', '/Noten/invalid.txt'));
 		$this->assertSame(['path' => '/Noten/mobilesheets.db'], $service->addLibrary('admin', '/Noten/mobilesheets.db'));
+		$this->assertSame(['path' => '/Noten'], $service->addLibrary('admin', '/Noten'));
 	}
 
 	public function testDeleteLibraryRemovesLibraryEntry(): void {

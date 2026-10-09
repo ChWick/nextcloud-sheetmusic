@@ -147,13 +147,32 @@ class SongMapper extends AbstractDatabaseMapper {
 
 		$customGroups = [];
 		$customGroupsById = [];
+		$instruments = [];
+		$instrumentsById = [];
+		$instrumentClientIds = [];
+		if ($this->hasTable($database, '_nc_sync_metadata')) {
+			$instStmt = $database->query("SELECT client_id FROM _nc_sync_metadata WHERE entity_type = 'instrument'");
+			if ($instStmt !== false) {
+				while ($irow = $instStmt->fetch()) {
+					$instrumentClientIds[(int)$irow['client_id']] = true;
+				}
+			}
+		}
+
 		if ($this->hasTable($database, 'CustomGroup')) {
 			$stmt = $database->query('SELECT Id, Name FROM CustomGroup ORDER BY Name');
 			if ($stmt !== false) {
 				while ($row = $stmt->fetch()) {
-					$customGroup = new MobileSheetsCustomGroup((int)$row['Id'], (string)$row['Name']);
-					$customGroups[] = $customGroup;
-					$customGroupsById[$customGroup->id] = $customGroup;
+					$cid = (int)$row['Id'];
+					if (isset($instrumentClientIds[$cid])) {
+						$instrument = new MobileSheetsCustomGroup($cid, (string)$row['Name']);
+						$instruments[] = $instrument;
+						$instrumentsById[$cid] = $instrument;
+					} else {
+						$customGroup = new MobileSheetsCustomGroup($cid, (string)$row['Name']);
+						$customGroups[] = $customGroup;
+						$customGroupsById[$customGroup->id] = $customGroup;
+					}
 				}
 			}
 		}
@@ -274,11 +293,18 @@ class SongMapper extends AbstractDatabaseMapper {
 		}
 
 		$songCustomGroups = [];
+		$songInstruments = [];
 		if ($this->hasTable($database, 'CustomGroupSongs')) {
 			$stmt = $database->query('SELECT GroupId, SongId FROM CustomGroupSongs');
 			if ($stmt !== false) {
 				while ($row = $stmt->fetch()) {
-					$songCustomGroups[(int)$row['SongId']][] = (int)$row['GroupId'];
+					$gid = (int)$row['GroupId'];
+					$sid = (int)$row['SongId'];
+					if (isset($instrumentClientIds[$gid])) {
+						$songInstruments[$sid][] = $gid;
+					} else {
+						$songCustomGroups[$sid][] = $gid;
+					}
 				}
 			}
 		}
@@ -387,6 +413,18 @@ class SongMapper extends AbstractDatabaseMapper {
 		if ($hasSortTitle) {
 			$selectFields[] = 'Songs.SortTitle';
 		}
+		$hasOpus = isset($songCols['opus']);
+		$hasCatalogNumber = isset($songCols['catalognumber']);
+		$hasSongNumber = isset($songCols['songnumber']);
+		if ($hasOpus) {
+			$selectFields[] = 'Songs.Opus';
+		}
+		if ($hasCatalogNumber) {
+			$selectFields[] = 'Songs.CatalogNumber';
+		}
+		if ($hasSongNumber) {
+			$selectFields[] = 'Songs.SongNumber';
+		}
 
 		$statement = $database->query('SELECT ' . implode(', ', $selectFields) . ' FROM Songs ORDER BY Songs.Title COLLATE NOCASE ASC');
 
@@ -420,6 +458,10 @@ class SongMapper extends AbstractDatabaseMapper {
 					isset($row['Custom']) ? (string)$row['Custom'] : '',
 					isset($row['Custom2']) ? (string)$row['Custom2'] : '',
 					isset($row['SortTitle']) ? (string)$row['SortTitle'] : '',
+					isset($row['Opus']) ? (string)$row['Opus'] : '',
+					isset($row['CatalogNumber']) ? (string)$row['CatalogNumber'] : '',
+					isset($row['SongNumber']) ? (string)$row['SongNumber'] : '',
+					$this->resolveEntities($songInstruments[$songId] ?? [], $instrumentsById),
 				);
 			}
 		}
@@ -436,6 +478,7 @@ class SongMapper extends AbstractDatabaseMapper {
 			'years' => $years,
 			'signatures' => $signatures,
 			'sourceTypes' => $sourceTypes,
+			'instruments' => $instruments,
 		];
 	}
 
@@ -487,6 +530,18 @@ class SongMapper extends AbstractDatabaseMapper {
 		}
 		if ($hasSortTitle) {
 			$selectFields[] = 's.SortTitle';
+		}
+		$hasOpus = isset($songCols['opus']);
+		$hasCatalogNumber = isset($songCols['catalognumber']);
+		$hasSongNumber = isset($songCols['songnumber']);
+		if ($hasOpus) {
+			$selectFields[] = 's.Opus';
+		}
+		if ($hasCatalogNumber) {
+			$selectFields[] = 's.CatalogNumber';
+		}
+		if ($hasSongNumber) {
+			$selectFields[] = 's.SongNumber';
 		}
 		$keyTable = $this->resolveTable($database, ['Key', 'Keys']);
 		$sourceTypeTable = $this->resolveTable($database, ['SourceType', 'SourceTypes']);
@@ -587,6 +642,9 @@ class SongMapper extends AbstractDatabaseMapper {
 					'custom' => isset($row['Custom']) ? (string)$row['Custom'] : '',
 					'custom2' => isset($row['Custom2']) ? (string)$row['Custom2'] : '',
 					'sortTitle' => isset($row['SortTitle']) ? (string)$row['SortTitle'] : '',
+					'opus' => isset($row['Opus']) ? (string)$row['Opus'] : '',
+					'catalogNumber' => isset($row['CatalogNumber']) ? (string)$row['CatalogNumber'] : '',
+					'songNumber' => isset($row['SongNumber']) ? (string)$row['SongNumber'] : '',
 					'composers' => [],
 					'books' => [],
 					'collections' => [],
@@ -597,6 +655,7 @@ class SongMapper extends AbstractDatabaseMapper {
 					'years' => [],
 					'signatures' => [],
 					'sourceTypes' => [],
+					'instruments' => [],
 				];
 			}
 
@@ -678,6 +737,10 @@ class SongMapper extends AbstractDatabaseMapper {
 				$song['custom'] ?? '',
 				$song['custom2'] ?? '',
 				$song['sortTitle'] ?? '',
+				$song['opus'] ?? '',
+				$song['catalogNumber'] ?? '',
+				$song['songNumber'] ?? '',
+				array_values($song['instruments'] ?? []),
 			);
 		}
 
@@ -823,10 +886,15 @@ class SongMapper extends AbstractDatabaseMapper {
 		string $custom = '',
 		string $custom2 = '',
 		string $sortTitle = '',
+		string $opus = '',
+		string $catalogNumber = '',
+		string $songNumber = '',
+		array $instrumentIds = [],
 	): int {
 		$database = $this->openConnection($databasePath);
 
-		$songId = $this->insertRow($database, 'Songs', [
+		$songCols = $this->columnNames($database, 'Songs');
+		$data = [
 			'Title' => $title,
 			'SortTitle' => $sortTitle !== '' ? $sortTitle : $title,
 			'Stars' => $stars,
@@ -835,7 +903,18 @@ class SongMapper extends AbstractDatabaseMapper {
 			'Keywords' => $keywords,
 			'Custom' => $custom,
 			'Custom2' => $custom2,
-		] + $this->dateColumns($database, 'Songs'));
+		];
+		if (isset($songCols['opus'])) {
+			$data['Opus'] = $opus;
+		}
+		if (isset($songCols['catalognumber'])) {
+			$data['CatalogNumber'] = $catalogNumber;
+		}
+		if (isset($songCols['songnumber'])) {
+			$data['SongNumber'] = $songNumber;
+		}
+
+		$songId = $this->insertRow($database, 'Songs', $data + $this->dateColumns($database, 'Songs'));
 
 		$this->updateSong(
 			$databasePath,
@@ -858,6 +937,10 @@ class SongMapper extends AbstractDatabaseMapper {
 			$custom,
 			$custom2,
 			$sortTitle,
+			$opus,
+			$catalogNumber,
+			$songNumber,
+			$instrumentIds,
 		);
 
 		return $songId;
@@ -874,6 +957,7 @@ class SongMapper extends AbstractDatabaseMapper {
 	 * @param list<int> $yearIds
 	 * @param list<int> $signatureIds
 	 * @param list<int> $sourceTypeIds
+	 * @param list<int> $instrumentIds
 	 */
 	public function updateSong(
 		string $databasePath,
@@ -896,15 +980,15 @@ class SongMapper extends AbstractDatabaseMapper {
 		string $custom = '',
 		string $custom2 = '',
 		string $sortTitle = '',
+		string $opus = '',
+		string $catalogNumber = '',
+		string $songNumber = '',
+		array $instrumentIds = [],
 	): void {
 		$database = $this->openConnection($databasePath);
 
-		$tablesStatement = $database->query("SELECT name FROM sqlite_master WHERE type='table'");
-		/** @var list<string> $existingTables */
-		$existingTables = $tablesStatement !== false ? $tablesStatement->fetchAll(PDO::FETCH_COLUMN) : [];
-
-		// Update Song Title, SortTitle, attributes, stamping the change on LastModified.
-		$this->updateRowById($database, 'Songs', [
+		$songCols = $this->columnNames($database, 'Songs');
+		$updateData = [
 			'Title' => $title,
 			'SortTitle' => $sortTitle !== '' ? $sortTitle : $title,
 			'Stars' => $stars,
@@ -913,7 +997,18 @@ class SongMapper extends AbstractDatabaseMapper {
 			'Keywords' => $keywords,
 			'Custom' => $custom,
 			'Custom2' => $custom2,
-		] + $this->dateColumns($database, 'Songs', withCreation: false), $songId);
+		];
+		if (isset($songCols['opus'])) {
+			$updateData['Opus'] = $opus;
+		}
+		if (isset($songCols['catalognumber'])) {
+			$updateData['CatalogNumber'] = $catalogNumber;
+		}
+		if (isset($songCols['songnumber'])) {
+			$updateData['SongNumber'] = $songNumber;
+		}
+
+		$this->updateRowById($database, 'Songs', $updateData + $this->dateColumns($database, 'Songs', withCreation: false), $songId);
 
 		// Update Composers
 		if ($this->hasTable($database, 'ComposerSongs')) {
@@ -999,13 +1094,14 @@ class SongMapper extends AbstractDatabaseMapper {
 			}
 		}
 
-		// Update Custom Groups
+		// Update Custom Groups & Instruments
 		if ($this->hasTable($database, 'CustomGroupSongs')) {
 			$delStmt = $database->prepare('DELETE FROM CustomGroupSongs WHERE SongId = :songId');
 			$delStmt->execute([':songId' => $songId]);
 
+			$allGroupIds = array_unique(array_merge($customGroupIds, $instrumentIds));
 			$insStmt = $database->prepare('INSERT INTO CustomGroupSongs (GroupId, SongId) VALUES (:groupId, :songId)');
-			foreach ($customGroupIds as $groupId) {
+			foreach ($allGroupIds as $groupId) {
 				$insStmt->execute([
 					':groupId' => $groupId,
 					':songId' => $songId,
@@ -1084,6 +1180,7 @@ class SongMapper extends AbstractDatabaseMapper {
 		?array $yearUpdate = null,
 		?array $signatureUpdate = null,
 		?array $sourceTypeUpdate = null,
+		?array $instrumentUpdate = null,
 	): void {
 		if (empty($songIds)) {
 			return;
@@ -1126,12 +1223,19 @@ class SongMapper extends AbstractDatabaseMapper {
 				if ($sourceTypeUpdate !== null && $this->hasTable($database, 'SourceTypeSongs')) {
 					$this->updateCategoryRelations($database, 'SourceTypeSongs', 'SourceTypeId', $songId, $sourceTypeUpdate);
 				}
+				if ($instrumentUpdate !== null && $this->hasTable($database, 'CustomGroupSongs')) {
+					$this->updateCategoryRelations($database, 'CustomGroupSongs', 'GroupId', $songId, $instrumentUpdate);
+				}
 			}
 			$database->commit();
 		} catch (\Throwable $e) {
 			$database->rollBack();
 			throw $e;
 		}
+	}
+
+	public function createInstrument(string $databasePath, string $name): int {
+		return $this->entityMapper->createInstrument($databasePath, $name);
 	}
 
 	private function updateCategoryRelations(

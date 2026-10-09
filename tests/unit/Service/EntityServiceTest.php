@@ -59,6 +59,7 @@ final class EntityServiceTest extends TestCase {
 			$artist = $service->createEntity($user, 1, 'artist', 'Miles');
 			$signature = $service->createEntity($user, 1, 'signature', '3/4');
 			$sourceType = $service->createEntity($user, 1, 'sourcetype', 'Lead Sheet');
+			$instrument = $service->createEntity($user, 1, 'instrument', 'Organ');
 
 			self::assertSame(['id' => 1, 'name' => 'Bach'], $composer);
 			self::assertSame(['id' => 1, 'title' => 'Real Book'], $book);
@@ -66,6 +67,7 @@ final class EntityServiceTest extends TestCase {
 			self::assertSame(['id' => 1, 'name' => 'Miles'], $artist);
 			self::assertSame(['id' => 1, 'name' => '3/4'], $signature);
 			self::assertSame(['id' => 1, 'name' => 'Lead Sheet', 'type' => 'Lead Sheet'], $sourceType);
+			self::assertSame(['id' => 1, 'name' => 'Organ'], $instrument);
 		} finally {
 			unlink($databasePath);
 		}
@@ -94,9 +96,13 @@ final class EntityServiceTest extends TestCase {
 		);
 
 		try {
+			$fixture['connection']->exec("INSERT INTO CustomGroup (Id, Name) VALUES (20, 'Piano')");
 			$result = $service->deleteEntity($user, 1, 'composers', 10);
 			self::assertSame([], $result['songs']);
 			self::assertSame(0, (int)$fixture['connection']->query('SELECT COUNT(*) FROM Composer')->fetchColumn());
+
+			$service->deleteEntity($user, 1, 'instruments', 20);
+			self::assertSame(0, (int)$fixture['connection']->query('SELECT COUNT(*) FROM CustomGroup WHERE Id = 20')->fetchColumn());
 		} finally {
 			unlink($databasePath);
 		}

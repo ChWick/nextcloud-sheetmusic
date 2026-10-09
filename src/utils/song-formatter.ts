@@ -50,6 +50,11 @@ export function formatSourceTypes(song: Song, fallback = '—'): string {
 	return song.sourceTypes.map(st => st.name).join(', ')
 }
 
+export function formatInstruments(song: Song, fallback = '—'): string {
+	if (!song.instruments || song.instruments.length === 0) return fallback
+	return song.instruments.map(i => i.name).join(', ')
+}
+
 export function formatDuration(seconds?: number | null, fallback = '—'): string {
 	if (!seconds || seconds <= 0) return fallback
 	const mins = Math.floor(seconds / 60)
@@ -82,7 +87,7 @@ export function formatDateTimestamp(timestamp?: number | null, fallback = '—')
 	}
 }
 
-export type SortKey = 'title' | 'composer' | 'book' | 'collection' | 'artist' | 'genre' | 'key' | 'customGroup' | 'year' | 'signature' | 'sourceType' | 'stars' | 'difficulty' | 'duration' | 'keywords' | 'custom' | 'custom2' | 'lastModified' | 'dateCreated'
+export type SortKey = 'title' | 'composer' | 'book' | 'collection' | 'artist' | 'genre' | 'key' | 'customGroup' | 'year' | 'signature' | 'sourceType' | 'instrument' | 'opus' | 'catalogNumber' | 'songNumber' | 'stars' | 'difficulty' | 'duration' | 'keywords' | 'custom' | 'custom2' | 'lastModified' | 'dateCreated'
 export type SortOrder = 'asc' | 'desc'
 
 export function sortSongs(songs: Song[], sortKey: SortKey, sortOrder: SortOrder): Song[] {
@@ -157,6 +162,22 @@ export function sortSongs(songs: Song[], sortKey: SortKey, sortOrder: SortOrder)
 				case 'sourceType':
 					valA = formatSourceTypes(a, '')
 					valB = formatSourceTypes(b, '')
+					break
+				case 'instrument':
+					valA = formatInstruments(a, '')
+					valB = formatInstruments(b, '')
+					break
+				case 'opus':
+					valA = a.opus ?? ''
+					valB = b.opus ?? ''
+					break
+				case 'catalogNumber':
+					valA = a.catalogNumber ?? ''
+					valB = b.catalogNumber ?? ''
+					break
+				case 'songNumber':
+					valA = a.songNumber ?? ''
+					valB = b.songNumber ?? ''
 					break
 				case 'keywords':
 					valA = a.keywords ?? ''

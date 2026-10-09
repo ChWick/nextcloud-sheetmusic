@@ -245,6 +245,7 @@ class FileManager {
 		private IRootFolder $rootFolder,
 		private MobileSheetsPathResolver $pathResolver,
 		private LoggerInterface $logger,
+		private ?LibraryService $libraryService = null,
 	) {
 	}
 
@@ -400,17 +401,39 @@ class FileManager {
 		}
 
 		$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+		$path = (string)($library['path'] ?? '');
 
-		$path = $library['path'] ?? '';
-		$node = $userFolder->get(ltrim($path, '/'));
-		$databasePath = $node->getStorage()->getLocalFile($node->getInternalPath());
-		if ($databasePath === false) {
+		// Try to resolve as physical file node first (for backward compatibility and test mocks)
+		try {
+			$node = $userFolder->get(ltrim($path, '/'));
+			if ($node instanceof Folder) {
+				$targetFolder = $node;
+				$databasePath = $this->libraryService?->getDatabasePath($user->getUID(), $libraryId);
+			} else {
+				$targetFolder = $node->getParent();
+				$databasePath = $node->getStorage()->getLocalFile($node->getInternalPath());
+			}
+		} catch (\Throwable $e) {
+			// Purely virtual: resolve folder and virtual database path
+			$folderPath = rtrim($path, '/');
+			if (str_ends_with(strtolower($folderPath), '.db')) {
+				$folderPath = dirname($folderPath);
+			}
+			$folderNode = $userFolder->get(ltrim($folderPath, '/'));
+			if (!($folderNode instanceof Folder)) {
+				throw new \Exception("Library folder not found for ID $libraryId", 0, $e);
+			}
+			$targetFolder = $folderNode;
+			$databasePath = $this->libraryService?->getDatabasePath($user->getUID(), $libraryId);
+		}
+
+		if ($databasePath === null || $databasePath === false) {
 			throw new \Exception("Could not retrieve local file path for library with ID $libraryId");
 		}
 
 		return [
 			'databasePath' => $databasePath,
-			'targetFolder' => $node->getParent(),
+			'targetFolder' => $targetFolder,
 		];
 	}
 

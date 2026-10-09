@@ -354,3 +354,4 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		return null;
 	}
 }
+

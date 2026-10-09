@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Artist, Book, Collection, Composer, CustomGroup, Genre, Key, Signature, SourceType, Year } from '../../types/song'
+import type { Artist, Book, Collection, Composer, CustomGroup, Genre, Instrument, Key, Signature, SourceType, Year } from '../../types/song'
 import { translate as t } from '@nextcloud/l10n'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
@@ -18,6 +18,7 @@ withDefaults(defineProps<{
 	years: Year[]
 	signatures: Signature[]
 	sourceTypes: SourceType[]
+	instruments?: Instrument[]
 	createComposerTag: (name: string) => Composer | NamedTag
 	createBookTag: (title: string) => Book | BookTag
 	createCollectionTag: (name: string) => Collection | NamedTag
@@ -28,6 +29,7 @@ withDefaults(defineProps<{
 	createYearTag: (name: string) => Year | NamedTag
 	createSignatureTag: (name: string) => Signature | NamedTag
 	createSourceTypeTag: (name: string) => SourceType | NamedTag
+	createInstrumentTag?: (name: string) => Instrument | NamedTag
 }>(), {
 	composers: () => [],
 	books: () => [],
@@ -39,6 +41,7 @@ withDefaults(defineProps<{
 	years: () => [],
 	signatures: () => [],
 	sourceTypes: () => [],
+	instruments: () => [],
 })
 
 const selectedComposers = defineModel<Array<Composer | NamedTag>>('selectedComposers', { required: true })
@@ -51,7 +54,11 @@ const selectedCustomGroups = defineModel<Array<CustomGroup | NamedTag>>('selecte
 const selectedYears = defineModel<Array<Year | NamedTag>>('selectedYears', { required: true })
 const selectedSignatures = defineModel<Array<Signature | NamedTag>>('selectedSignatures', { required: true })
 const selectedSourceTypes = defineModel<Array<SourceType | NamedTag>>('selectedSourceTypes', { required: true })
+const selectedInstruments = defineModel<Array<Instrument | NamedTag>>('selectedInstruments', { default: () => [] })
 
+const opus = defineModel<string>('opus', { default: '' })
+const catalogNumber = defineModel<string>('catalogNumber', { default: '' })
+const songNumber = defineModel<string>('songNumber', { default: '' })
 const stars = defineModel<number>('stars', { required: true })
 const difficulty = defineModel<number>('difficulty', { required: true })
 const duration = defineModel<number>('duration', { required: true })
@@ -203,7 +210,42 @@ const tempo = defineModel<number>('tempo', { required: true })
 				:placeholder="t('sheetmusic', 'Select or type a source type…')" />
 		</div>
 
+		<div :class="$style.formGroup">
+			<NcSelect
+				v-model="selectedInstruments"
+				:options="instruments"
+				:multiple="true"
+				:taggable="true"
+				:create-option="createInstrumentTag"
+				:close-on-select="false"
+				:input-label="t('sheetmusic', 'Instruments')"
+				label="name"
+				track-by="name"
+				:placeholder="t('sheetmusic', 'Select or type an instrument…')" />
+		</div>
+
 		<div :class="$style.attributesGrid">
+			<div :class="$style.formGroup">
+				<NcTextField
+					id="song-opus-input"
+					v-model="opus"
+					:placeholder="t('sheetmusic', 'Opus (e.g. Op. 28 No. 4)…')"
+					:label="t('sheetmusic', 'Opus')" />
+			</div>
+			<div :class="$style.formGroup">
+				<NcTextField
+					id="song-catalog-number-input"
+					v-model="catalogNumber"
+					:placeholder="t('sheetmusic', 'Catalog No. (BWV, KV, etc.)…')"
+					:label="t('sheetmusic', 'Catalog Number')" />
+			</div>
+			<div :class="$style.formGroup">
+				<NcTextField
+					id="song-song-number-input"
+					v-model="songNumber"
+					:placeholder="t('sheetmusic', 'Song No. (e.g. 88 or 104/5)…')"
+					:label="t('sheetmusic', 'Song Number')" />
+			</div>
 			<div :class="$style.formGroup">
 				<NcTextField
 					id="song-rating-input"

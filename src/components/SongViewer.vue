@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Artist, Book, Collection, Composer, CustomGroup, Genre, Key, LibraryData, Signature, Song, SongFile, SourceType, Year } from '../types/song'
+import type { Artist, Book, Collection, Composer, CustomGroup, Genre, Instrument, Key, LibraryData, Signature, Song, SongFile, SourceType, Year } from '../types/song'
 
 import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
@@ -49,6 +49,7 @@ const props = withDefaults(
 		years?: Year[]
 		signatures?: Signature[]
 		sourceTypes?: SourceType[]
+		instruments?: Instrument[]
 		hideHeader?: boolean
 	}>(),
 	{
@@ -64,6 +65,7 @@ const props = withDefaults(
 		years: () => [],
 		signatures: () => [],
 		sourceTypes: () => [],
+		instruments: () => [],
 		hideHeader: false,
 	},
 )
@@ -101,6 +103,7 @@ const songCustomGroups = computed(() => props.song?.customGroups ?? [])
 const songYears = computed(() => props.song?.years ?? [])
 const songSignatures = computed(() => props.song?.signatures ?? [])
 const songSourceTypes = computed(() => props.song?.sourceTypes ?? [])
+const songInstruments = computed(() => props.song?.instruments ?? [])
 const songBookmarks = computed(() => props.song?.bookmarks ?? [])
 const songAudioFiles = computed(() => props.song?.audioFiles ?? [])
 const songFiles = computed(() => props.song?.files ?? [])
@@ -352,6 +355,22 @@ defineExpose({
 				<span :class="$style.metaLabel">{{ t('sheetmusic', 'Source Type:') }}</span>
 				<span>{{ songSourceTypes.map((st) => st.name).join(', ') }}</span>
 			</div>
+			<div v-if="songInstruments.length > 0" :class="$style.metaItem">
+				<span :class="$style.metaLabel">{{ t('sheetmusic', 'Instrument:') }}</span>
+				<span>{{ songInstruments.map((i) => i.name).join(', ') }}</span>
+			</div>
+			<div v-if="song.opus" :class="$style.metaItem">
+				<span :class="$style.metaLabel">{{ t('sheetmusic', 'Opus:') }}</span>
+				<span>{{ song.opus }}</span>
+			</div>
+			<div v-if="song.catalogNumber" :class="$style.metaItem">
+				<span :class="$style.metaLabel">{{ t('sheetmusic', 'Catalog No.:') }}</span>
+				<span>{{ song.catalogNumber }}</span>
+			</div>
+			<div v-if="song.songNumber" :class="$style.metaItem">
+				<span :class="$style.metaLabel">{{ t('sheetmusic', 'Song No.:') }}</span>
+				<span>{{ song.songNumber }}</span>
+			</div>
 			<div v-if="song.stars" :class="$style.metaItem">
 				<span :class="$style.metaLabel">{{ t('sheetmusic', 'Rating:') }}</span>
 				<span>{{ formatStars(song.stars) }}</span>
@@ -393,6 +412,7 @@ defineExpose({
 			:years="years"
 			:signatures="signatures"
 			:source-types="sourceTypes"
+			:instruments="instruments"
 			@saved="handleSaved"
 			@updated="handleUpdated"
 			@cancel="isEditing = false" />

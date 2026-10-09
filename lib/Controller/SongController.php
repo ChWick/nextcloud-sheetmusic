@@ -89,6 +89,10 @@ class SongController extends OCSController {
 		$sortTitle = (string)$this->request->getParam('sortTitle', '');
 		$bookmarks = (array)$this->request->getParam('bookmarks', []);
 		$audioFiles = (array)$this->request->getParam('audioFiles', []);
+		$opus = (string)$this->request->getParam('opus', '');
+		$catalogNumber = (string)$this->request->getParam('catalogNumber', (string)$this->request->getParam('catalog_number', ''));
+		$songNumber = (string)$this->request->getParam('songNumber', (string)$this->request->getParam('song_number', ''));
+		$instrumentIds = (array)$this->request->getParam('instrumentIds', (array)$this->request->getParam('instrument_ids', []));
 
 		try {
 			$result = $this->songService->createSong(
@@ -114,6 +118,10 @@ class SongController extends OCSController {
 				$sortTitle,
 				$bookmarks,
 				$audioFiles,
+				$opus,
+				$catalogNumber,
+				$songNumber,
+				$instrumentIds,
 			);
 
 			if ($result === null) {
@@ -168,6 +176,10 @@ class SongController extends OCSController {
 		$sortTitle = (string)$this->request->getParam('sortTitle', '');
 		$bookmarks = (array)$this->request->getParam('bookmarks', []);
 		$audioFiles = (array)$this->request->getParam('audioFiles', []);
+		$opus = (string)$this->request->getParam('opus', '');
+		$catalogNumber = (string)$this->request->getParam('catalogNumber', (string)$this->request->getParam('catalog_number', ''));
+		$songNumber = (string)$this->request->getParam('songNumber', (string)$this->request->getParam('song_number', ''));
+		$instrumentIds = (array)$this->request->getParam('instrumentIds', (array)$this->request->getParam('instrument_ids', []));
 
 		try {
 			$result = $this->songService->updateSong(
@@ -194,6 +206,10 @@ class SongController extends OCSController {
 				$sortTitle,
 				$bookmarks,
 				$audioFiles,
+				$opus,
+				$catalogNumber,
+				$songNumber,
+				$instrumentIds,
 			);
 
 			if ($result === null) {
@@ -221,6 +237,7 @@ class SongController extends OCSController {
 		?array $years = null,
 		?array $signatures = null,
 		?array $sourceTypes = null,
+		?array $instruments = null,
 	): DataResponse {
 		if ($libraryId === null || empty($songIds)) {
 			return new DataResponse([], Http::STATUS_BAD_REQUEST);
@@ -230,6 +247,9 @@ class SongController extends OCSController {
 		if ($user === null) {
 			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
 		}
+
+		$instruments = $instruments ?? (array)$this->request->getParam('instruments', []);
+		$instruments = empty($instruments) ? null : $instruments;
 
 		$genres = $genres ?? $this->request->getParam('genres');
 		$keys = $keys ?? $this->request->getParam('keys');
@@ -253,6 +273,7 @@ class SongController extends OCSController {
 				$years,
 				$signatures,
 				$sourceTypes,
+				$instruments,
 			);
 
 			if ($result === null) {

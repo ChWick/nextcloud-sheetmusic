@@ -226,7 +226,7 @@ class MobileSheetsSqliteExporter {
 
 	private function initializeSchema(PDO $db, int $libraryId): void {
 		$statements = [
-			'CREATE TABLE Songs(Id INTEGER PRIMARY KEY, Title VARCHAR(255), SortTitle VARCHAR(255), Stars INTEGER DEFAULT 0, Difficulty INTEGER DEFAULT 0, Duration INTEGER DEFAULT 0, Keywords VARCHAR(255) DEFAULT \'\', Custom VARCHAR(255) DEFAULT \'\', Custom2 VARCHAR(255) DEFAULT \'\', SongId INTEGER, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)',
+			'CREATE TABLE Songs(Id INTEGER PRIMARY KEY, Title VARCHAR(255), SortTitle VARCHAR(255), Stars INTEGER DEFAULT 0, Difficulty INTEGER DEFAULT 0, Duration INTEGER DEFAULT 0, Keywords VARCHAR(255) DEFAULT \'\', Custom VARCHAR(255) DEFAULT \'\', Custom2 VARCHAR(255) DEFAULT \'\', SongId INTEGER, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0, Opus VARCHAR(255) DEFAULT \'\', CatalogNumber VARCHAR(255) DEFAULT \'\', SongNumber VARCHAR(255) DEFAULT \'\')',
 			'CREATE TABLE Files(Id INTEGER PRIMARY KEY, SongId INTEGER, Path VARCHAR(255), PageOrder VARCHAR(255), FileSize INTEGER, LastModified INTEGER, Source INTEGER, Type INTEGER, Password VARCHAR(255) DEFAULT \'\', SourceFilePageCount INTEGER, FileHash INTEGER, Width INTEGER DEFAULT -1, Height INTEGER DEFAULT -1)',
 			'CREATE TABLE Collections(Id INTEGER PRIMARY KEY, Name VARCHAR(255), SortBy INTEGER DEFAULT 1, Ascending INTEGER DEFAULT 1, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)',
 			'CREATE TABLE CollectionSong(Id INTEGER PRIMARY KEY, CollectionId INTEGER, SongId INTEGER)',
@@ -367,7 +367,7 @@ class MobileSheetsSqliteExporter {
 
 		$nextId = $maxId + 1;
 
-		$songStmt = $db->prepare('INSERT INTO Songs (Id, Title, SortTitle, Stars, Difficulty, Duration, Keywords, Custom, Custom2, SongId, DateCreated, LastModified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+		$songStmt = $db->prepare('INSERT INTO Songs (Id, Title, SortTitle, Stars, Difficulty, Duration, Keywords, Custom, Custom2, SongId, DateCreated, LastModified, Opus, CatalogNumber, SongNumber) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
 		$noteStmt = $db->prepare('INSERT INTO SongNotes (SongId, Note, Title, DateCreated, LastModified) VALUES (?, ?, ?, ?, ?)');
 		$metaStmt = $db->prepare('INSERT INTO _nc_sync_metadata (entity_type, uuid, client_id, updated_at, extra_json) VALUES (:type, :uuid, :client_id, :updated_at, :extra_json)');
 
@@ -401,6 +401,9 @@ class MobileSheetsSqliteExporter {
 				$clientId,
 				$song->createdAt * 1000,
 				$song->updatedAt * 1000,
+				$song->opus ?? '',
+				$song->catalogNumber ?? '',
+				$song->songNumber ?? '',
 			]);
 
 			if ($song->notes !== '') {

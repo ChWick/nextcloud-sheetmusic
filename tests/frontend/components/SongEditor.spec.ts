@@ -218,6 +218,7 @@ describe('SongEditor.vue', () => {
 			years: [{ id: 5, year: 2020, name: '2020' }],
 			signatures: [{ id: 6, name: '4/4' }],
 			sourceTypes: [{ id: 7, type: 'Digital', name: 'Digital' }],
+			instruments: [{ id: 8, name: 'Piano' }],
 		}
 		const wrapper = mount(SongEditor, {
 			props: {
@@ -253,6 +254,7 @@ describe('SongEditor.vue', () => {
 			yearIds: [5],
 			signatureIds: [6],
 			sourceTypeIds: [7],
+			instrumentIds: [8],
 		}))
 	})
 
@@ -522,6 +524,10 @@ describe('SongEditor.vue', () => {
 				yearIds: [],
 				signatureIds: [],
 				sourceTypeIds: [],
+				instrumentIds: [],
+				opus: '',
+				catalogNumber: '',
+				songNumber: '',
 				stars: 0,
 				difficulty: 0,
 				duration: 0,
@@ -669,6 +675,10 @@ describe('SongEditor.vue', () => {
 				yearIds: [],
 				signatureIds: [],
 				sourceTypeIds: [],
+				instrumentIds: [],
+				opus: '',
+				catalogNumber: '',
+				songNumber: '',
 				stars: 5,
 				difficulty: 3,
 				duration: 240,

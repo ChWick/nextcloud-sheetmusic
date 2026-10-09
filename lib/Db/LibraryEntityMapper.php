@@ -96,6 +96,28 @@ class LibraryEntityMapper extends AbstractDatabaseMapper {
 		] + $this->dateColumns($database, 'CustomGroup'));
 	}
 
+	public function createInstrument(string $databasePath, string $name): int {
+		$database = $this->openConnection($databasePath);
+		$id = $this->insertRow($database, 'CustomGroup', [
+			'Name' => $name,
+		] + $this->dateColumns($database, 'CustomGroup'));
+
+		if ($this->hasTable($database, '_nc_sync_metadata')) {
+			$uuid = self::generateUuid();
+			$stmt = $database->prepare('INSERT INTO _nc_sync_metadata (entity_type, uuid, client_id, updated_at) VALUES (?, ?, ?, ?)');
+			$stmt->execute(['instrument', $uuid, $id, time()]);
+		}
+
+		return $id;
+	}
+
+	private static function generateUuid(): string {
+		$data = random_bytes(16);
+		$data[6] = chr(ord($data[6]) & 0x0f | 0x40);
+		$data[8] = chr(ord($data[8]) & 0x3f | 0x80);
+		return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($data), 4));
+	}
+
 	public function createYear(string $databasePath, int|string $year): int {
 		$database = $this->openConnection($databasePath);
 		$col = $this->resolveColumn($database, 'Years', ['Year', 'Name'], 'Year');
@@ -325,6 +347,7 @@ class LibraryEntityMapper extends AbstractDatabaseMapper {
 			'genre' => 'genres',
 			'key' => 'keys',
 			'customgroup' => 'customgroups',
+			'instrument', 'instruments' => 'customgroups',
 			'year' => 'years',
 			'signature' => 'signatures',
 			'sourcetype' => 'sourcetypes',

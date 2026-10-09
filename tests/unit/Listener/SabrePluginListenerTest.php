@@ -39,3 +39,4 @@ final class SabrePluginListenerTest extends TestCase {
 		self::assertTrue(true);
 	}
 }
+

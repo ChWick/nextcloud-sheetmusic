@@ -434,3 +434,4 @@ final class MobileSheetsSqliteImporterTest extends TestCase {
 		self::assertSame(1, $deletedId);
 	}
 }
+

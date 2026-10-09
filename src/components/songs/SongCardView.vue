@@ -223,6 +223,37 @@ const {
 					</div>
 				</div>
 
+				<div v-if="isColVisible('instrument') && song.instruments && song.instruments.length > 0" :class="$style.metaRow">
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Instrument:') }}</span>
+					<div :class="$style.chipGroup">
+						<template v-for="(inst, idx) in song.instruments" :key="inst.id">
+							<button
+								type="button"
+								:class="[$style.filterChip, isFiltered?.('instruments', inst.id) && $style.activeChip]"
+								:title="t('sheetmusic', 'Toggle filter for instrument {name}', { name: inst.name })"
+								@click.stop="emit('filter-entity', 'instruments', inst)">
+								{{ inst.name }}
+							</button>
+							<template v-if="idx < song.instruments.length - 1">, </template>
+						</template>
+					</div>
+				</div>
+
+				<div v-if="isColVisible('opus') && song.opus" :class="$style.metaRow">
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Opus:') }}</span>
+					<span>{{ song.opus }}</span>
+				</div>
+
+				<div v-if="isColVisible('catalogNumber') && song.catalogNumber" :class="$style.metaRow">
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Catalog No.:') }}</span>
+					<span>{{ song.catalogNumber }}</span>
+				</div>
+
+				<div v-if="isColVisible('songNumber') && song.songNumber" :class="$style.metaRow">
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Song No.:') }}</span>
+					<span>{{ song.songNumber }}</span>
+				</div>
+
 				<div v-if="isColVisible('stars') && song.stars" :class="$style.metaRow">
 					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Rating:') }}</span>
 					<span>{{ formatStars(song.stars) }}</span>

@@ -1,4 +1,4 @@
-import type { Artist, Book, Collection, Composer, CustomGroup, EntityType, FilterEntity, Genre, Key, Signature, Song, SourceType, Year } from '../types/song'
+import type { Artist, Book, Collection, Composer, CustomGroup, EntityType, FilterEntity, Genre, Instrument, Key, Signature, Song, SourceType, Year } from '../types/song'
 import { translate as t } from '@nextcloud/l10n'
 import { computed, ref } from 'vue'
 import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
@@ -18,9 +18,10 @@ export interface FilterOptions {
 	signatures?: Signature[]
 	sourceTypes?: SourceType[]
 	sourcetypes?: SourceType[]
+	instruments?: Instrument[]
 }
 
-const FILTER_TYPES: EntityType[] = ['composers', 'artists', 'books', 'collections', 'genres', 'keys', 'customgroups', 'years', 'signatures', 'sourcetypes']
+const FILTER_TYPES: EntityType[] = ['composers', 'artists', 'books', 'collections', 'genres', 'keys', 'customgroups', 'years', 'signatures', 'sourcetypes', 'instruments']
 
 export const UNASSIGNED_ID = -1
 
@@ -47,6 +48,8 @@ export function noneEntryOf(entityType: EntityType): FilterEntity {
 			return { id: UNASSIGNED_ID, name: t('sheetmusic', '(No time signature)') }
 		case 'sourcetypes':
 			return { id: UNASSIGNED_ID, name: t('sheetmusic', '(No source type)'), type: t('sheetmusic', '(No source type)') }
+		case 'instruments':
+			return { id: UNASSIGNED_ID, name: t('sheetmusic', '(No instrument)') }
 	}
 }
 
@@ -196,6 +199,7 @@ export function useSongFilters(options: () => FilterOptions) {
 		const yearIds = new Set(idsOf('years'))
 		const signatureIds = new Set(idsOf('signatures'))
 		const sourceTypeIds = new Set(idsOf('sourcetypes'))
+		const instrumentIds = new Set(idsOf('instruments'))
 
 		if (!matchesCategory(song.composers, composerIds)) return false
 		if (!matchesCategory(song.books, bookIds)) return false
@@ -207,6 +211,7 @@ export function useSongFilters(options: () => FilterOptions) {
 		if (!matchesCategory(song.years, yearIds)) return false
 		if (!matchesCategory(song.signatures, signatureIds)) return false
 		if (!matchesCategory(song.sourceTypes, sourceTypeIds)) return false
+		if (!matchesCategory(song.instruments, instrumentIds)) return false
 		return true
 	}
 
@@ -270,6 +275,10 @@ export function useSongFilters(options: () => FilterOptions) {
 		get: () => selectedOf('sourcetypes') as SourceType[],
 		set: (value: SourceType[]) => selectIds('sourcetypes', value.map(entry => entry.id)),
 	})
+	const selectedInstruments = computed({
+		get: () => selectedOf('instruments') as Instrument[],
+		set: (value: Instrument[]) => selectIds('instruments', value.map(entry => entry.id)),
+	})
 
 	return {
 		searchTitle,
@@ -284,6 +293,7 @@ export function useSongFilters(options: () => FilterOptions) {
 		selectedYears,
 		selectedSignatures,
 		selectedSourceTypes,
+		selectedInstruments,
 		hasActiveFilters,
 		isFiltered,
 		toggleFilter,

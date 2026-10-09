@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Artist, Book, Collection, Composer, CustomGroup, Genre, Key, LibraryData, Signature, Song, SourceType, Year } from '../../types/song'
+import type { Artist, Book, Collection, Composer, CustomGroup, Genre, Instrument, Key, LibraryData, Signature, Song, SourceType, Year } from '../../types/song'
 import { computed, ref } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
@@ -43,6 +43,7 @@ const selectedCustomGroups = ref<CustomGroup[]>([])
 const selectedYears = ref<Year[]>([])
 const selectedSignatures = ref<Signature[]>([])
 const selectedSourceTypes = ref<SourceType[]>([])
+const selectedInstruments = ref<Instrument[]>([])
 
 const allSongs = computed<Song[]>(() => props.libraryData?.songs ?? [])
 const composers = computed<Composer[]>(() => props.libraryData?.composers ?? [])
@@ -55,6 +56,7 @@ const customGroups = computed<CustomGroup[]>(() => props.libraryData?.customGrou
 const years = computed<Year[]>(() => props.libraryData?.years ?? [])
 const signatures = computed<Signature[]>(() => props.libraryData?.signatures ?? [])
 const sourceTypes = computed<SourceType[]>(() => props.libraryData?.sourceTypes ?? [])
+const instruments = computed<Instrument[]>(() => props.libraryData?.instruments ?? [])
 
 function clearFilters() {
 	searchTitle.value = ''
@@ -69,6 +71,7 @@ function clearFilters() {
 	selectedYears.value = []
 	selectedSignatures.value = []
 	selectedSourceTypes.value = []
+	selectedInstruments.value = []
 }
 
 function matchesCategory<T extends { id: number }>(songItems: T[] | undefined, selected: T[]): boolean {
@@ -103,6 +106,7 @@ const filteredSongs = computed<Song[]>(() => {
 		if (!matchesCategory(song.years, selectedYears.value)) return false
 		if (!matchesCategory(song.signatures, selectedSignatures.value)) return false
 		if (!matchesCategory(song.sourceTypes, selectedSourceTypes.value)) return false
+		if (!matchesCategory(song.instruments, selectedInstruments.value)) return false
 
 		return true
 	})
@@ -163,6 +167,7 @@ function getSongSubtext(song: Song): string {
 					v-model:selected-years="selectedYears"
 					v-model:selected-signatures="selectedSignatures"
 					v-model:selected-source-types="selectedSourceTypes"
+					v-model:selected-instruments="selectedInstruments"
 					:composers="composers"
 					:books="books"
 					:collections="collections"
@@ -173,6 +178,7 @@ function getSongSubtext(song: Song): string {
 					:years="years"
 					:signatures="signatures"
 					:source-types="sourceTypes"
+					:instruments="instruments"
 					@clear="clearFilters" />
 			</div>
 

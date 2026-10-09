@@ -77,8 +77,8 @@ class ApiController extends OCSController {
 
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'POST', url: '/api/libraries')]
-	public function addLibrary(string $path): DataResponse {
-		return $this->libraryController->addLibrary($path);
+	public function addLibrary(string $path, bool $importExistingDb = true): DataResponse {
+		return $this->libraryController->addLibrary($path, $importExistingDb);
 	}
 
 	#[NoAdminRequired]
@@ -299,6 +299,12 @@ class ApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/instruments')]
+	public function createInstrument(?int $libraryId = null, ?string $name = null): DataResponse {
+		return $this->entityController->createInstrument($libraryId, $name);
+	}
+
+	#[NoAdminRequired]
 	#[ApiRoute(verb: 'DELETE', url: '/api/composers/{id}')]
 	public function deleteComposer(int $id, ?int $libraryId = null): DataResponse {
 		return $this->entityController->deleteComposer($id, $libraryId);
@@ -356,6 +362,12 @@ class ApiController extends OCSController {
 	#[ApiRoute(verb: 'DELETE', url: '/api/sourcetypes/{id}')]
 	public function deleteSourceType(int $id, ?int $libraryId = null): DataResponse {
 		return $this->entityController->deleteSourceType($id, $libraryId);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'DELETE', url: '/api/instruments/{id}')]
+	public function deleteInstrument(int $id, ?int $libraryId = null): DataResponse {
+		return $this->entityController->deleteInstrument($id, $libraryId);
 	}
 
 	#[NoAdminRequired]

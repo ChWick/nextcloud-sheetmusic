@@ -34,3 +34,4 @@ class SabrePluginListener implements IEventListener {
 		}
 	}
 }
+

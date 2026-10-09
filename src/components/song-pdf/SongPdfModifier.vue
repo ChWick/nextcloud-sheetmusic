@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Song, SongFile, Book, Composer, Collection, Artist, Genre, Key, CustomGroup, Year, Signature, SourceType, LibraryData } from '../../types/song'
+import type { Song, SongFile, Book, Composer, Collection, Artist, Genre, Instrument, Key, CustomGroup, Year, Signature, SourceType, LibraryData } from '../../types/song'
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
@@ -63,6 +63,7 @@ const props = withDefaults(
 		years?: Year[]
 		signatures?: Signature[]
 		sourceTypes?: SourceType[]
+		instruments?: Instrument[]
 	}>(),
 	{
 		books: () => [],
@@ -75,6 +76,7 @@ const props = withDefaults(
 		years: () => [],
 		signatures: () => [],
 		sourceTypes: () => [],
+		instruments: () => [],
 	},
 )
 
@@ -804,6 +806,7 @@ async function saveSplits() {
 		const yearIds = (props.song.years ?? []).map((y) => y.id)
 		const signatureIds = (props.song.signatures ?? []).map((s) => s.id)
 		const sourceTypeIds = (props.song.sourceTypes ?? []).map((st) => st.id)
+		const instrumentIds = (props.song.instruments ?? []).map((i) => i.id)
 
 		let lastLibraryData: LibraryData | null = null
 		let firstCreatedSongId: number | undefined = undefined
@@ -845,6 +848,10 @@ async function saveSplits() {
 				yearIds,
 				signatureIds,
 				sourceTypeIds,
+				instrumentIds,
+				opus: props.song.opus ?? '',
+				catalogNumber: props.song.catalogNumber ?? '',
+				songNumber: props.song.songNumber ?? '',
 				stars: props.song.stars ?? 0,
 				difficulty: props.song.difficulty ?? 0,
 				keywords: props.song.keywords ?? '',

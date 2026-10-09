@@ -15,6 +15,7 @@ import NcAppContent from '@nextcloud/vue/components/NcAppContent'
 import NcAppNavigationItem from '@nextcloud/vue/components/NcAppNavigationItem'
 import NcContent from '@nextcloud/vue/components/NcContent'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import CogIcon from 'vue-material-design-icons/Cog.vue'
 import SongsView from './components/SongsView.vue'
@@ -24,12 +25,13 @@ import LibrarySettingsDialog from './components/LibrarySettingsDialog.vue'
 
 /** Views of a library: the song view, one view per song filter, and integrity audit. */
 type ViewName = 'songs' | 'new-song' | 'integrity' | EntityType
-const VIEW_NAMES: ViewName[] = ['songs', 'new-song', 'composers', 'artists', 'books', 'collections', 'genres', 'keys', 'customgroups', 'years', 'signatures', 'sourcetypes', 'integrity']
+const VIEW_NAMES: ViewName[] = ['songs', 'new-song', 'composers', 'artists', 'books', 'collections', 'genres', 'keys', 'customgroups', 'years', 'signatures', 'sourcetypes', 'instruments', 'integrity']
 
 /*** State ***/
 const isDialogOpen = ref(false)
 const isSettingsDialogOpen = ref(false)
 const selectedFile = ref<INode>()
+const importMobileSheets = ref(true)
 const libraries = ref<Library[]>([])
 const selectedLibrary = ref<number>(-1)
 const selectedView = ref<ViewName>('songs')
@@ -108,14 +110,14 @@ function openDialog(event?: Event) {
 }
 async function openFilePicker() {
   fileError.value = ''
-  const picker = getFilePickerBuilder(t('sheetmusic', 'Select a MobileSheets file'))
+  const picker = getFilePickerBuilder(t('sheetmusic', 'Select a sheet music folder or MobileSheets database'))
     .setMultiSelect(false)
-    .setFilter(node => node.type !== 'file' || node.basename.toLowerCase().endsWith('.db'))
-    .setCanPick(node => node.type === 'file' && node.basename.toLowerCase().endsWith('.db'))
+    .setFilter(node => node.type === 'dir' || node.basename.toLowerCase().endsWith('.db'))
+    .setCanPick(node => node.type === 'dir' || node.basename.toLowerCase().endsWith('.db'))
     .setButtonFactory(([node]) => [{
-      label: node ? t('sheetmusic', 'Select {file}', { file: node.basename }) : t('sheetmusic', 'Select a .db file'),
+      label: node ? t('sheetmusic', 'Select {name}', { name: node.basename }) : t('sheetmusic', 'Select folder or .db file'),
       callback: () => {},
-      disabled: !node || node.type !== 'file' || !node.basename.toLowerCase().endsWith('.db'),
+      disabled: !node || (node.type !== 'dir' && !node.basename.toLowerCase().endsWith('.db')),
       variant: 'primary',
     }])
     .build()
@@ -123,14 +125,14 @@ async function openFilePicker() {
     ;[selectedFile.value] = await picker.pickNodes()
   } catch (error) {
     if (!(error instanceof FilePickerClosed)) {
-      fileError.value = t('sheetmusic', 'Could not select a MobileSheets file.')
+      fileError.value = t('sheetmusic', 'Could not select a file or folder.')
       showError(fileError.value)
     }
   }
 }
 async function addLibrary() {
   if (!selectedFile.value) {
-    fileError.value = t('sheetmusic', 'Please select a .db file first.')
+    fileError.value = t('sheetmusic', 'Please select a folder or .db file first.')
     showError(fileError.value)
     return
   }
@@ -138,6 +140,7 @@ async function addLibrary() {
   try {
     await apiPost('/api/libraries', {
       path: addedPath,
+      import_mobilesheets: importMobileSheets.value,
     })
     selectedFile.value = undefined
     isDialogOpen.value = false
@@ -150,9 +153,9 @@ async function addLibrary() {
     if (addedLibrary && selectedLibrary.value < 0) {
       navigateToLibrary(addedLibrary.id)
     }
-    showSuccess(t('sheetmusic', 'MobileSheets library added successfully.'))
+    showSuccess(t('sheetmusic', 'Library added successfully.'))
   } catch (error) {
-    fileError.value = describeRequestFailure(error, t('sheetmusic', 'Could not save the MobileSheets library.'))
+    fileError.value = describeRequestFailure(error, t('sheetmusic', 'Could not save the library.'))
     showError(fileError.value)
   }
 }
@@ -225,6 +228,7 @@ async function deleteLibrary() {
           <NcAppNavigationItem :name="t('sheetmusic', 'Years')" :active="selectedView === 'years'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'years' } }" />
           <NcAppNavigationItem :name="t('sheetmusic', 'Time Signatures')" :active="selectedView === 'signatures'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'signatures' } }" />
           <NcAppNavigationItem :name="t('sheetmusic', 'Source Types')" :active="selectedView === 'sourcetypes'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'sourcetypes' } }" />
+          <NcAppNavigationItem :name="t('sheetmusic', 'Instruments')" :active="selectedView === 'instruments'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'instruments' } }" />
           <NcAppNavigationItem :name="t('sheetmusic', 'Integrity Audit')" :active="selectedView === 'integrity'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'integrity' } }" />
 
           <div :class="$style.deleteLibraryArea">
@@ -275,13 +279,20 @@ async function deleteLibrary() {
     </NcContent>
 
     <NcDialog v-if="isDialogOpen"
-              :name="t('sheetmusic', 'Add MobileSheets Library')"
+              :name="t('sheetmusic', 'Add Sheet Music Library')"
               size="normal"
               @close="isDialogOpen = false">
-      <p>{{ t('sheetmusic', 'Select a MobileSheets .db file from your Nextcloud files.') }}</p>
+      <p>{{ t('sheetmusic', 'Select a sheet music folder or a MobileSheets .db file from your Nextcloud files.') }}</p>
       <NcButton variant="primary" @click="openFilePicker">
-        {{ selectedFile?.path ?? t('sheetmusic', 'Choose .db file from Nextcloud') }}
+        {{ selectedFile?.path ?? t('sheetmusic', 'Choose folder or .db file from Nextcloud') }}
       </NcButton>
+      <div v-if="selectedFile" style="margin-top: 12px;">
+        <NcCheckboxRadioSwitch
+          v-model="importMobileSheets"
+          type="checkbox">
+          {{ t('sheetmusic', 'Import existing MobileSheets library if present') }}
+        </NcCheckboxRadioSwitch>
+      </div>
       <p v-if="fileError" :class="$style.error" role="alert">{{ fileError }}</p>
       <template #actions>
         <NcButton @click="isDialogOpen = false">{{ t('sheetmusic', 'Cancel') }}</NcButton>

@@ -10,6 +10,7 @@ export type CustomGroup = { id: number; name: string }
 export type Year = { id: number; year: number; name: string }
 export type Signature = { id: number; name: string }
 export type SourceType = { id: number; type: string; name: string }
+export type Instrument = { id: number; name: string }
 export type Bookmark = { id: number; songId: number; name: string; pageNum: number; showInLibrary?: number }
 export type AudioFile = { id: number; songId: number; title: string; file: string }
 export type SongFile = components['schemas']['SongFile']
@@ -20,6 +21,7 @@ export type Song = components['schemas']['Song'] & {
 	years?: Year[]
 	signatures?: Signature[]
 	sourceTypes?: SourceType[]
+	instruments?: Instrument[]
 	bookmarks?: Bookmark[]
 	audioFiles?: AudioFile[]
 	stars?: number
@@ -29,6 +31,9 @@ export type Song = components['schemas']['Song'] & {
 	custom?: string
 	custom2?: string
 	sortTitle?: string
+	opus?: string
+	catalogNumber?: string
+	songNumber?: string
 }
 export type LibraryData = components['schemas']['LibraryData'] & {
 	genres?: Genre[]
@@ -37,6 +42,7 @@ export type LibraryData = components['schemas']['LibraryData'] & {
 	years?: Year[]
 	signatures?: Signature[]
 	sourceTypes?: SourceType[]
+	instruments?: Instrument[]
 	songs: Song[]
 }
 export type CreatedSongData = components['schemas']['CreatedSongData'] & {
@@ -46,6 +52,7 @@ export type CreatedSongData = components['schemas']['CreatedSongData'] & {
 	years?: Year[]
 	signatures?: Signature[]
 	sourceTypes?: SourceType[]
+	instruments?: Instrument[]
 	songs: Song[]
 }
 export type FileLogLevel = components['schemas']['FileLogLevel']
@@ -53,13 +60,13 @@ export type FileLogEntry = components['schemas']['FileLogEntry']
 export type SongPrefill = components['schemas']['SongPrefill']
 
 /** The entity kinds a song can carry, i.e. the filters of the song view. */
-export type EntityType = 'composers' | 'artists' | 'books' | 'collections' | 'genres' | 'keys' | 'customgroups' | 'years' | 'signatures' | 'sourcetypes'
+export type EntityType = 'composers' | 'artists' | 'books' | 'collections' | 'genres' | 'keys' | 'customgroups' | 'years' | 'signatures' | 'sourcetypes' | 'instruments'
 
 /** Any of the entities a song can carry. Books are titled, everything else named. */
-export type FilterEntity = Composer | Artist | Book | Collection | Genre | Key | CustomGroup | Year | Signature | SourceType
+export type FilterEntity = Composer | Artist | Book | Collection | Genre | Key | CustomGroup | Year | Signature | SourceType | Instrument
 
 /** The columns/fields of a song that can be toggled visible in song views. */
-export type SongColumn = 'title' | 'composer' | 'book' | 'collection' | 'artist' | 'genre' | 'key' | 'customGroup' | 'year' | 'signature' | 'sourceType' | 'stars' | 'difficulty' | 'duration' | 'keywords' | 'custom' | 'custom2' | 'lastModified' | 'dateCreated'
+export type SongColumn = 'title' | 'composer' | 'book' | 'collection' | 'artist' | 'genre' | 'key' | 'customGroup' | 'year' | 'signature' | 'sourceType' | 'stars' | 'difficulty' | 'duration' | 'keywords' | 'custom' | 'custom2' | 'lastModified' | 'dateCreated' | 'instrument' | 'opus' | 'catalogNumber' | 'songNumber'
 
 export const DEFAULT_VISIBLE_COLUMNS: SongColumn[] = [
 	'title',

@@ -62,6 +62,10 @@ class SongService {
 		string $sortTitle = '',
 		array $bookmarks = [],
 		array $audioFiles = [],
+		string $opus = '',
+		string $catalogNumber = '',
+		string $songNumber = '',
+		array $instrumentIds = [],
 	): ?array {
 		$title = trim($title);
 		if ($title === '') {
@@ -94,6 +98,10 @@ class SongService {
 				$custom,
 				$custom2,
 				$sortTitle,
+				$opus,
+				$catalogNumber,
+				$songNumber,
+				$instrumentIds,
 			);
 
 			if (!empty($bookmarks)) {
@@ -102,6 +110,8 @@ class SongService {
 			if (!empty($audioFiles)) {
 				$this->songMapper->updateAudioFiles($databasePath, $songId, $audioFiles);
 			}
+
+			$this->libraryService->syncFromDatabase($user->getUID(), $libraryId);
 
 			return ['createdSongId' => $songId] + $this->songMapper->findLibraryData($databasePath);
 		} catch (\Throwable $e) {
@@ -139,6 +149,10 @@ class SongService {
 		string $sortTitle = '',
 		array $bookmarks = [],
 		array $audioFiles = [],
+		string $opus = '',
+		string $catalogNumber = '',
+		string $songNumber = '',
+		array $instrumentIds = [],
 	): ?array {
 		if ($title === '') {
 			return null;
@@ -171,11 +185,17 @@ class SongService {
 				$custom,
 				$custom2,
 				$sortTitle,
+				$opus,
+				$catalogNumber,
+				$songNumber,
+				$instrumentIds,
 			);
 
 			$this->songMapper->updateBookmarks($databasePath, $songId, $bookmarks);
 			$this->songMapper->updateAudioFiles($databasePath, $songId, $audioFiles);
 			$this->songFileService->syncSongFileMetadata($user, $databasePath, $songId, $libraryId);
+
+			$this->libraryService->syncFromDatabase($user->getUID(), $libraryId);
 
 			return $this->songMapper->findLibraryData($databasePath);
 		} catch (\Throwable $e) {
@@ -203,6 +223,7 @@ class SongService {
 		?array $years = null,
 		?array $signatures = null,
 		?array $sourceTypes = null,
+		?array $instruments = null,
 	): ?array {
 		if (empty($songIds)) {
 			return null;
@@ -227,11 +248,14 @@ class SongService {
 				$years,
 				$signatures,
 				$sourceTypes,
+				$instruments,
 			);
 
 			foreach ($songIds as $songId) {
 				$this->songFileService->syncSongFileMetadata($user, $databasePath, (int)$songId, $libraryId);
 			}
+
+			$this->libraryService->syncFromDatabase($user->getUID(), $libraryId);
 
 			return $this->songMapper->findLibraryData($databasePath);
 		} catch (\Throwable $e) {
@@ -282,6 +306,8 @@ class SongService {
 				'files' => count($filePaths),
 				'filesDeleted' => $deleteFiles,
 			]);
+
+			$this->libraryService->syncFromDatabase($user->getUID(), $libraryId);
 
 			return $this->songMapper->findLibraryData($databasePath);
 		} catch (\Throwable $e) {

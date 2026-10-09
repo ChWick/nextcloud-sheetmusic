@@ -50,6 +50,10 @@ class MobileSheetsSong {
 		public readonly string $custom = '',
 		public readonly string $custom2 = '',
 		public readonly string $sortTitle = '',
+		public readonly string $opus = '',
+		public readonly string $catalogNumber = '',
+		public readonly string $songNumber = '',
+		public readonly array $instruments = [],
 	) {
 	}
 }

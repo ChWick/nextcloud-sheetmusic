@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Song } from '../../../src/types/song'
-import { formatArtists, formatBooks, formatCollections, formatComposers, formatCustomGroups, formatGenres, formatKeys, formatSignatures, formatSourceTypes, formatYears, sortSongs } from '../../../src/utils/song-formatter'
+import { formatArtists, formatBooks, formatCollections, formatComposers, formatCustomGroups, formatGenres, formatInstruments, formatKeys, formatSignatures, formatSourceTypes, formatYears, sortSongs } from '../../../src/utils/song-formatter'
 
 describe('song-formatter utilities', () => {
 	const sampleSong: Song = {
@@ -16,6 +16,7 @@ describe('song-formatter utilities', () => {
 		years: [{ id: 8, name: '1808', year: 1808 }],
 		signatures: [{ id: 9, name: '2/4' }],
 		sourceTypes: [{ id: 11, name: 'Sheet Music', type: 'Sheet Music' }],
+		instruments: [{ id: 12, name: 'Piano' }],
 	}
 
 	const emptySong: Song = {
@@ -72,6 +73,24 @@ describe('song-formatter utilities', () => {
 	it('formats source types correctly', () => {
 		expect(formatSourceTypes(sampleSong)).toBe('Sheet Music')
 		expect(formatSourceTypes(emptySong)).toBe('—')
+	})
+
+	it('formats instruments correctly', () => {
+		expect(formatInstruments(sampleSong)).toBe('Piano')
+		expect(formatInstruments(emptySong)).toBe('—')
+	})
+
+	it('sorts songs by instrument and opus', () => {
+		const songs: Song[] = [
+			{ id: 1, title: 'Song 1', instruments: [{ id: 1, name: 'Violin' }], opus: 'Op. 20' },
+			{ id: 2, title: 'Song 2', instruments: [{ id: 2, name: 'Cello' }], opus: 'Op. 5' },
+		]
+
+		const sortedByInst = sortSongs(songs, 'instrument', 'asc')
+		expect(sortedByInst[0].id).toBe(2) // Cello before Violin
+
+		const sortedByOpus = sortSongs(songs, 'opus', 'asc')
+		expect(sortedByOpus[0].id).toBe(2) // Op. 5 before Op. 20 with numeric sort
 	})
 
 	it('sorts songs by title ascending and descending', () => {

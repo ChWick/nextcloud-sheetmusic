@@ -15,6 +15,9 @@ class LibraryService {
 		private SongMapper $songMapper,
 		private IRootFolder $rootFolder,
 		private LoggerInterface $logger,
+		private ?MobileSheetsSqliteExporter $exporter = null,
+		private ?MobileSheetsSqliteImporter $importer = null,
+		private ?LibraryReconciler $reconciler = null,
 	) {
 	}
 
@@ -36,23 +39,79 @@ class LibraryService {
 			return null;
 		}
 
-		try {
-			$node = $this->rootFolder->getUserFolder($userId)->get(ltrim($libraryPath, '/'));
-			$databasePath = $node->getStorage()->getLocalFile($node->getInternalPath());
-			if ($databasePath === false) {
+		$userFolder = $this->rootFolder->getUserFolder($userId);
+
+		// 1. If physical .db file exists at $libraryPath, use it
+		if (str_ends_with(strtolower($libraryPath), '.db')) {
+			try {
+				$node = $userFolder->get(ltrim($libraryPath, '/'));
+				$localFile = $node->getStorage()->getLocalFile($node->getInternalPath());
+				if ($localFile !== false) {
+					return [$libraryPath, $localFile];
+				}
+			} catch (\Throwable $e) {
+				// Fall through to virtual export
+			}
+		}
+
+		// 2. Purely virtual library: generate/retrieve cached SQLite file
+		$databasePath = $this->getVirtualDatabasePath($userId, $libraryId);
+		if ($databasePath === null) {
+			return null;
+		}
+
+		return [$libraryPath, $databasePath];
+	}
+
+	public function getVirtualDatabasePath(string $userId, int $libraryId): ?string {
+		if ($this->exporter === null) {
+			return null;
+		}
+
+		$cacheDir = sys_get_temp_dir() . '/sheetmusic_cache';
+		if (!is_dir($cacheDir)) {
+			@mkdir($cacheDir, 0777, true);
+		}
+
+		$cacheFile = $cacheDir . '/lib_' . $libraryId . '.db';
+		$library = $this->libraryMapper->findById($libraryId);
+		if ($library === null) {
+			return null;
+		}
+
+		$updatedAt = (int)($library['updated_at'] ?? 0);
+		if (!file_exists($cacheFile) || filemtime($cacheFile) < $updatedAt) {
+			try {
+				$this->exporter->exportToFile($libraryId, $cacheFile, $userId);
+			} catch (\Throwable $e) {
+				$this->logger->error('Failed to export virtual SQLite database', [
+					'exception' => $e,
+					'libraryId' => $libraryId,
+					'userId' => $userId,
+				]);
 				return null;
 			}
+		}
 
-			return [$libraryPath, $databasePath];
-		} catch (\Throwable $e) {
-			$this->logger->error('Could not resolve database path for MobileSheets library', [
-				'exception' => $e,
-				'libraryId' => $libraryId,
-				'path' => $libraryPath,
-				'userId' => $userId,
-			]);
+		return $cacheFile;
+	}
 
-			return null;
+	public function syncFromDatabase(string $userId, int $libraryId): void {
+		if ($this->importer === null) {
+			return;
+		}
+
+		$databasePath = $this->getDatabasePath($userId, $libraryId);
+		if ($databasePath !== null && file_exists($databasePath)) {
+			try {
+				$this->importer->importFromFile($libraryId, $databasePath, $userId);
+			} catch (\Throwable $e) {
+				$this->logger->error('Failed to sync changes from SQLite database', [
+					'exception' => $e,
+					'libraryId' => $libraryId,
+					'userId' => $userId,
+				]);
+			}
 		}
 	}
 
@@ -65,12 +124,67 @@ class LibraryService {
 		return $this->libraryMapper->findAllForUser($userId);
 	}
 
-	public function addLibrary(string $userId, string $path): ?array {
-		if (!str_starts_with($path, '/') || !str_ends_with(strtolower($path), '.db')) {
+	public function addLibrary(string $userId, string $path, bool $importExistingDb = true): ?array {
+		if (!str_starts_with($path, '/')) {
+			return null;
+		}
+
+		$extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+		if ($extension !== '' && $extension !== 'db') {
 			return null;
 		}
 
 		$this->libraryMapper->addForUser($userId, $path);
+		$libraries = $this->libraryMapper->findAllForUser($userId);
+		$added = null;
+		foreach ($libraries as $lib) {
+			if ($lib['path'] === $path) {
+				$added = $lib;
+				break;
+			}
+		}
+
+		if ($added !== null) {
+			$libraryId = (int)$added['id'];
+
+			// Check for existing physical db file to import if requested
+			if ($importExistingDb && $this->importer !== null) {
+				try {
+					$userFolder = $this->rootFolder->getUserFolder($userId);
+					$targetDbRel = str_ends_with(strtolower($path), '.db')
+						? ltrim($path, '/')
+						: ltrim(rtrim($path, '/') . '/mobilesheets.db', '/');
+
+					if ($userFolder->nodeExists($targetDbRel)) {
+						$node = $userFolder->get($targetDbRel);
+						$localFile = $node->getStorage()->getLocalFile($node->getInternalPath());
+						if ($localFile !== false && file_exists($localFile)) {
+							$this->importer->importFromFile($libraryId, $localFile, $userId);
+						}
+					}
+				} catch (\Throwable $e) {
+					$this->logger->warning('Failed to import existing physical MobileSheets db', [
+						'exception' => $e,
+						'path' => $path,
+						'userId' => $userId,
+					]);
+				}
+			}
+
+			// Run initial folder reconciliation to register music files
+			if ($this->reconciler !== null) {
+				try {
+					$this->reconciler->reconcileLibrary($libraryId, $userId);
+				} catch (\Throwable $e) {
+					$this->logger->warning('Initial library reconciliation failed', [
+						'exception' => $e,
+						'libraryId' => $libraryId,
+						'userId' => $userId,
+					]);
+				}
+			}
+		}
+
 		return ['path' => $path];
 	}
 
@@ -81,6 +195,12 @@ class LibraryService {
 		}
 
 		$this->libraryMapper->deleteForUser($userId, $id);
+
+		$cacheFile = sys_get_temp_dir() . '/sheetmusic_cache/lib_' . $id . '.db';
+		if (file_exists($cacheFile)) {
+			@unlink($cacheFile);
+		}
+
 		return [
 			'id' => $id,
 			'path' => $libraryPath,
@@ -117,5 +237,4 @@ class LibraryService {
 		$this->libraryMapper->setSettingsForUser($userId, $libraryId, $autoPaths, $autoPdfMetadata);
 		return $this->libraryMapper->findForUser($userId, $libraryId);
 	}
-
 }

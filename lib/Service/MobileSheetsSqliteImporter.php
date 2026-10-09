@@ -570,13 +570,19 @@ class MobileSheetsSqliteImporter {
 						$existing->clientId = $clientId;
 						$existing->updatedAt = $lastModifiedSec;
 
-						if ($existing->opus === null && !empty($extra['opus'])) {
+						if (!empty($row['Opus'])) {
+							$existing->opus = (string)$row['Opus'];
+						} elseif ($existing->opus === null && !empty($extra['opus'])) {
 							$existing->opus = (string)$extra['opus'];
 						}
-						if ($existing->catalogNumber === null && !empty($extra['catalog_number'])) {
+						if (!empty($row['CatalogNumber'])) {
+							$existing->catalogNumber = (string)$row['CatalogNumber'];
+						} elseif ($existing->catalogNumber === null && !empty($extra['catalog_number'])) {
 							$existing->catalogNumber = (string)$extra['catalog_number'];
 						}
-						if ($existing->songNumber === null && !empty($extra['song_number'])) {
+						if (!empty($row['SongNumber'])) {
+							$existing->songNumber = (string)$row['SongNumber'];
+						} elseif ($existing->songNumber === null && !empty($extra['song_number'])) {
 							$existing->songNumber = (string)$extra['song_number'];
 						}
 
@@ -611,9 +617,9 @@ class MobileSheetsSqliteImporter {
 					duration: $duration,
 					keywords: $keywords,
 					notes: $noteText,
-					opus: isset($extra['opus']) ? (string)$extra['opus'] : null,
-					catalogNumber: isset($extra['catalog_number']) ? (string)$extra['catalog_number'] : null,
-					songNumber: isset($extra['song_number']) ? (string)$extra['song_number'] : null,
+					opus: !empty($row['Opus']) ? (string)$row['Opus'] : (isset($extra['opus']) ? (string)$extra['opus'] : null),
+					catalogNumber: !empty($row['CatalogNumber']) ? (string)$row['CatalogNumber'] : (isset($extra['catalog_number']) ? (string)$extra['catalog_number'] : null),
+					songNumber: !empty($row['SongNumber']) ? (string)$row['SongNumber'] : (isset($extra['song_number']) ? (string)$extra['song_number'] : null),
 					clientId: $clientId,
 					createdAt: $dateCreatedSec ?: time(),
 					updatedAt: $lastModifiedSec ?: time(),

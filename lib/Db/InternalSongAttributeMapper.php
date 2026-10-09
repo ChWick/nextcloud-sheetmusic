@@ -121,3 +121,4 @@ class InternalSongAttributeMapper {
 		return $map;
 	}
 }
+

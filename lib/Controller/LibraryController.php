@@ -38,13 +38,14 @@ class LibraryController extends OCSController {
 
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'POST', url: '/api/libraries')]
-	public function addLibrary(string $path): DataResponse {
+	public function addLibrary(string $path, bool $importExistingDb = true): DataResponse {
 		$user = $this->userSession->getUser();
 		if ($user === null) {
 			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
 		}
 
-		$result = $this->libraryService->addLibrary($user->getUID(), $path);
+		$import = (bool)$this->request->getParam('importExistingDb', $importExistingDb);
+		$result = $this->libraryService->addLibrary($user->getUID(), $path, $import);
 		if ($result === null) {
 			return new DataResponse([], Http::STATUS_BAD_REQUEST);
 		}

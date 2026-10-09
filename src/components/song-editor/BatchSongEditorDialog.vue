@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Artist, Book, Collection, Composer, CustomGroup, Genre, Key, Signature, SourceType, Year } from '../../types/song'
+import type { Artist, Book, Collection, Composer, CustomGroup, Genre, Instrument, Key, Signature, SourceType, Year } from '../../types/song'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
@@ -25,6 +25,7 @@ export interface BatchUpdatePayload {
 	years?: CategoryBatchUpdate
 	signatures?: CategoryBatchUpdate
 	sourceTypes?: CategoryBatchUpdate
+	instruments?: CategoryBatchUpdate
 }
 
 const props = defineProps<{
@@ -40,6 +41,7 @@ const props = defineProps<{
 	years?: Year[]
 	signatures?: Signature[]
 	sourceTypes?: SourceType[]
+	instruments?: Instrument[]
 }>()
 
 const emit = defineEmits<{
@@ -58,6 +60,7 @@ const enableCustomGroups = ref(false)
 const enableYears = ref(false)
 const enableSignatures = ref(false)
 const enableSourceTypes = ref(false)
+const enableInstruments = ref(false)
 
 // Actions
 const composerAction = ref<BatchAction>('add')
@@ -70,6 +73,7 @@ const customGroupAction = ref<BatchAction>('add')
 const yearAction = ref<BatchAction>('add')
 const signatureAction = ref<BatchAction>('add')
 const sourceTypeAction = ref<BatchAction>('add')
+const instrumentAction = ref<BatchAction>('add')
 
 // Selected entity arrays
 const selectedComposers = ref<Composer[]>([])
@@ -82,6 +86,7 @@ const selectedCustomGroups = ref<CustomGroup[]>([])
 const selectedYears = ref<Year[]>([])
 const selectedSignatures = ref<Signature[]>([])
 const selectedSourceTypes = ref<SourceType[]>([])
+const selectedInstruments = ref<Instrument[]>([])
 
 function resetForm() {
 	enableComposers.value = false
@@ -94,6 +99,7 @@ function resetForm() {
 	enableYears.value = false
 	enableSignatures.value = false
 	enableSourceTypes.value = false
+	enableInstruments.value = false
 
 	composerAction.value = 'add'
 	bookAction.value = 'add'
@@ -105,6 +111,7 @@ function resetForm() {
 	yearAction.value = 'add'
 	signatureAction.value = 'add'
 	sourceTypeAction.value = 'add'
+	instrumentAction.value = 'add'
 
 	selectedComposers.value = []
 	selectedBooks.value = []
@@ -116,6 +123,7 @@ function resetForm() {
 	selectedYears.value = []
 	selectedSignatures.value = []
 	selectedSourceTypes.value = []
+	selectedInstruments.value = []
 }
 
 watch(() => props.open, (isOpen) => {
@@ -123,7 +131,7 @@ watch(() => props.open, (isOpen) => {
 })
 
 const isAnythingEnabled = computed(() => {
-	return enableComposers.value || enableBooks.value || enableCollections.value || enableArtists.value || enableGenres.value || enableKeys.value || enableCustomGroups.value || enableYears.value || enableSignatures.value || enableSourceTypes.value
+	return enableComposers.value || enableBooks.value || enableCollections.value || enableArtists.value || enableGenres.value || enableKeys.value || enableCustomGroups.value || enableYears.value || enableSignatures.value || enableSourceTypes.value || enableInstruments.value
 })
 
 function handleApply() {
@@ -189,6 +197,12 @@ function handleApply() {
 		payload.sourceTypes = {
 			action: sourceTypeAction.value,
 			ids: selectedSourceTypes.value.map((st) => st.id),
+		}
+	}
+	if (enableInstruments.value) {
+		payload.instruments = {
+			action: instrumentAction.value,
+			ids: selectedInstruments.value.map((i) => i.id),
 		}
 	}
 
@@ -532,6 +546,38 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 						:close-on-select="false"
 						:input-label="t('sheetmusic', 'Source Types')"
 						:placeholder="t('sheetmusic', 'Select source types…')"
+						label="name"
+						track-by="id" />
+				</div>
+			</div>
+
+			<!-- Instruments Section -->
+			<div :class="$style.fieldGroup">
+				<div :class="$style.fieldHeader">
+					<NcCheckboxRadioSwitch
+						v-model="enableInstruments"
+						type="checkbox">
+						{{ t('sheetmusic', 'Instruments') }}
+					</NcCheckboxRadioSwitch>
+				</div>
+				<div v-if="enableInstruments" :class="$style.fieldBody">
+					<div :class="$style.actionSelector">
+						<label v-for="opt in actionOptions" :key="opt.value" :class="$style.radioLabel">
+							<input
+								v-model="instrumentAction"
+								type="radio"
+								:name="'instrument-action'"
+								:value="opt.value">
+							{{ opt.label }}
+						</label>
+					</div>
+					<NcSelect
+						v-model="selectedInstruments"
+						:options="instruments || []"
+						:multiple="true"
+						:close-on-select="false"
+						:input-label="t('sheetmusic', 'Instruments')"
+						:placeholder="t('sheetmusic', 'Select instruments…')"
 						label="name"
 						track-by="id" />
 				</div>

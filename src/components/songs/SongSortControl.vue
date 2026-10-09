@@ -24,6 +24,10 @@ const sortOptions: { value: SortKey; label: string }[] = [
 	{ value: 'book', label: t('sheetmusic', 'Book') },
 	{ value: 'collection', label: t('sheetmusic', 'Collection') },
 	{ value: 'artist', label: t('sheetmusic', 'Artist') },
+	{ value: 'instrument', label: t('sheetmusic', 'Instrument') },
+	{ value: 'opus', label: t('sheetmusic', 'Opus') },
+	{ value: 'catalogNumber', label: t('sheetmusic', 'Catalog Number') },
+	{ value: 'songNumber', label: t('sheetmusic', 'Song Number') },
 	{ value: 'lastModified', label: t('sheetmusic', 'Last modified') },
 	{ value: 'dateCreated', label: t('sheetmusic', 'Date created') },
 ]

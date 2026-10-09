@@ -136,6 +136,18 @@ const {
 					<th v-if="isColVisible('sourceType')" :class="$style.sortableHeader" @click="toggleSort('sourceType')">
 						{{ t('sheetmusic', 'Source Type') }}{{ sortIndicator('sourceType') }}
 					</th>
+					<th v-if="isColVisible('instrument')" :class="$style.sortableHeader" @click="toggleSort('instrument')">
+						{{ t('sheetmusic', 'Instrument') }}{{ sortIndicator('instrument') }}
+					</th>
+					<th v-if="isColVisible('opus')" :class="$style.sortableHeader" @click="toggleSort('opus')">
+						{{ t('sheetmusic', 'Opus') }}{{ sortIndicator('opus') }}
+					</th>
+					<th v-if="isColVisible('catalogNumber')" :class="$style.sortableHeader" @click="toggleSort('catalogNumber')">
+						{{ t('sheetmusic', 'Catalog No.') }}{{ sortIndicator('catalogNumber') }}
+					</th>
+					<th v-if="isColVisible('songNumber')" :class="$style.sortableHeader" @click="toggleSort('songNumber')">
+						{{ t('sheetmusic', 'Song No.') }}{{ sortIndicator('songNumber') }}
+					</th>
 					<th v-if="isColVisible('stars')" :class="$style.sortableHeader" @click="toggleSort('stars')">
 						{{ t('sheetmusic', 'Rating') }}{{ sortIndicator('stars') }}
 					</th>
@@ -337,6 +349,30 @@ const {
 							</span>
 						</template>
 						<span v-else :class="$style.emptyText">—</span>
+					</td>
+					<td v-if="isColVisible('instrument')" :class="$style.metaCell">
+						<template v-if="song.instruments && song.instruments.length > 0">
+							<span v-for="(inst, idx) in song.instruments" :key="inst.id">
+								<button
+									type="button"
+									:class="[$style.filterChip, isFiltered?.('instruments', inst.id) && $style.activeChip]"
+									:title="t('sheetmusic', 'Toggle filter for instrument {name}', { name: inst.name })"
+									@click.stop="emit('filter-entity', 'instruments', inst)">
+									{{ inst.name }}
+								</button>
+								<template v-if="idx < song.instruments.length - 1">, </template>
+							</span>
+						</template>
+						<span v-else :class="$style.emptyText">—</span>
+					</td>
+					<td v-if="isColVisible('opus')" :class="$style.metaCell">
+						{{ song.opus || '—' }}
+					</td>
+					<td v-if="isColVisible('catalogNumber')" :class="$style.metaCell">
+						{{ song.catalogNumber || '—' }}
+					</td>
+					<td v-if="isColVisible('songNumber')" :class="$style.metaCell">
+						{{ song.songNumber || '—' }}
 					</td>
 					<td v-if="isColVisible('stars')" :class="$style.metaCell">
 						{{ formatStars(song.stars) }}

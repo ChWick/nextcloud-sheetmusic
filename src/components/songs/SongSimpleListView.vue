@@ -191,6 +191,28 @@ const {
 								<template v-if="idx < song.sourceTypes.length - 1">, </template>
 							</template>
 						</template>
+						<template v-if="isColVisible('instrument') && song.instruments && song.instruments.length > 0">
+							<span> • </span>
+							<template v-for="(inst, idx) in song.instruments" :key="inst.id">
+								<button
+									type="button"
+									:class="[$style.filterChip, isFiltered?.('instruments', inst.id) && $style.activeChip]"
+									:title="t('sheetmusic', 'Toggle filter for instrument {name}', { name: inst.name })"
+									@click.stop="emit('filter-entity', 'instruments', inst)">
+									{{ inst.name }}
+								</button>
+								<template v-if="idx < song.instruments.length - 1">, </template>
+							</template>
+						</template>
+						<template v-if="isColVisible('opus') && song.opus">
+							<span> • {{ t('sheetmusic', 'Opus: {val}', { val: song.opus }) }}</span>
+						</template>
+						<template v-if="isColVisible('catalogNumber') && song.catalogNumber">
+							<span> • {{ song.catalogNumber }}</span>
+						</template>
+						<template v-if="isColVisible('songNumber') && song.songNumber">
+							<span> • {{ t('sheetmusic', 'No. {val}', { val: song.songNumber }) }}</span>
+						</template>
 						<template v-if="isColVisible('stars') && song.stars">
 							<span> • {{ formatStars(song.stars) }}</span>
 						</template>

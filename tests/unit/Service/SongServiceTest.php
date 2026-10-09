@@ -56,9 +56,19 @@ final class SongServiceTest extends TestCase {
 		);
 
 		try {
-			$res = $service->createSong($user, 1, 'Take Five');
+			$res = $service->createSong(
+				$user,
+				1,
+				'Take Five',
+				opus: 'Op. 27 No. 2',
+				catalogNumber: 'BWV 565',
+				songNumber: '88',
+			);
 			self::assertSame(1, $res['createdSongId']);
 			self::assertSame('Take Five', $res['songs'][0]->title);
+			self::assertSame('Op. 27 No. 2', $res['songs'][0]->opus);
+			self::assertSame('BWV 565', $res['songs'][0]->catalogNumber);
+			self::assertSame('88', $res['songs'][0]->songNumber);
 		} finally {
 			unlink($fixture['path']);
 		}

@@ -30,6 +30,10 @@ export interface MergedSongData {
 	yearIds: number[]
 	signatureIds: number[]
 	sourceTypeIds: number[]
+	instrumentIds?: number[]
+	opus?: string
+	catalogNumber?: string
+	songNumber?: string
 	stars: number
 	difficulty: number
 	duration: number

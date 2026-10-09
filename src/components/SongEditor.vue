@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { INode } from '@nextcloud/files'
-import type { Artist, Book, Collection, Composer, CreatedSongData, CustomGroup, Genre, Key, LibraryData, PendingAddition, PendingAttachment, PendingUpload, Signature, Song, SongFile, SongPrefill, SourceType, Year } from '../types/song'
+import type { Artist, Book, Collection, Composer, CreatedSongData, CustomGroup, Genre, Instrument, Key, LibraryData, PendingAddition, PendingAttachment, PendingUpload, Signature, Song, SongFile, SongPrefill, SourceType, Year } from '../types/song'
 
 import axios from '@nextcloud/axios'
 import { FilePickerClosed, getFilePickerBuilder, showError, showInfo, showSuccess } from '@nextcloud/dialogs'
@@ -41,6 +41,7 @@ const props = withDefaults(
 		years?: Year[]
 		signatures?: Signature[]
 		sourceTypes?: SourceType[]
+		instruments?: Instrument[]
 		/** Metadata read from an imported PDF, prefilled into a new song. */
 		prefill?: SongPrefill | null
 		/** The imported PDF itself, staged as the new song's file. */
@@ -59,6 +60,7 @@ const props = withDefaults(
 		years: () => [],
 		signatures: () => [],
 		sourceTypes: () => [],
+		instruments: () => [],
 		prefill: null,
 		importedFile: null,
 		importedNextcloudNode: null,
@@ -96,6 +98,7 @@ const createCustomGroupTag = createEntityTag(props.customGroups, (group) => grou
 const createYearTag = createEntityTag(props.years, (year) => year.name, (name) => ({ name }))
 const createSignatureTag = createEntityTag(props.signatures, (signature) => signature.name, (name) => ({ name }))
 const createSourceTypeTag = createEntityTag(props.sourceTypes, (sourceType) => sourceType.name, (name) => ({ name }))
+const createInstrumentTag = createEntityTag(props.instruments, (instrument) => instrument.name, (name) => ({ name }))
 
 const title = ref(sourceSong.value?.title ?? props.prefill?.title ?? '')
 const selectedComposers = ref<Array<Composer | { name: string, id?: number }>>(
@@ -148,7 +151,15 @@ const selectedSourceTypes = ref<Array<SourceType | { name: string, id?: number }
 		? matchSelected(props.sourceTypes, sourceSong.value.sourceTypes)
 		: [],
 )
+const selectedInstruments = ref<Array<Instrument | { name: string, id?: number }>>(
+	sourceSong.value
+		? matchSelected(props.instruments, sourceSong.value.instruments)
+		: [],
+)
 
+const opus = ref<string>(sourceSong.value?.opus ?? '')
+const catalogNumber = ref<string>(sourceSong.value?.catalogNumber ?? '')
+const songNumber = ref<string>(sourceSong.value?.songNumber ?? '')
 const stars = ref<number>(sourceSong.value?.stars ?? 0)
 const difficulty = ref<number>(sourceSong.value?.difficulty ?? 0)
 const duration = ref<number>(sourceSong.value?.duration ?? 0)
@@ -201,6 +212,10 @@ watch(
 		selectedYears.value = matchSelected(props.years, newSong?.years)
 		selectedSignatures.value = matchSelected(props.signatures, newSong?.signatures)
 		selectedSourceTypes.value = matchSelected(props.sourceTypes, newSong?.sourceTypes)
+		selectedInstruments.value = matchSelected(props.instruments, newSong?.instruments)
+		opus.value = newSong?.opus ?? ''
+		catalogNumber.value = newSong?.catalogNumber ?? ''
+		songNumber.value = newSong?.songNumber ?? ''
 		stars.value = newSong?.stars ?? 0
 		difficulty.value = newSong?.difficulty ?? 0
 		duration.value = newSong?.duration ?? 0
@@ -478,6 +493,7 @@ async function saveSong(closeAfter: boolean) {
 			{ idField: 'yearIds', endpoint: '/api/years', labelField: 'name', selected: selectedYears.value, options: props.years },
 			{ idField: 'signatureIds', endpoint: '/api/signatures', labelField: 'name', selected: selectedSignatures.value, options: props.signatures },
 			{ idField: 'sourceTypeIds', endpoint: '/api/sourcetypes', labelField: 'name', selected: selectedSourceTypes.value, options: props.sourceTypes },
+			{ idField: 'instrumentIds', endpoint: '/api/instruments', labelField: 'name', selected: selectedInstruments.value, options: props.instruments },
 		], async (endpoint, labelField, label) => {
 			const response = await apiPost(endpoint, {
 				libraryId: props.libraryId,
@@ -493,6 +509,9 @@ async function saveSong(closeAfter: boolean) {
 			libraryId: props.libraryId,
 			title: title.value.trim(),
 			...entityIds,
+			opus: opus.value.trim(),
+			catalogNumber: catalogNumber.value.trim(),
+			songNumber: songNumber.value.trim(),
 			stars: Number(stars.value) || 0,
 			difficulty: Number(difficulty.value) || 0,
 			duration: Number(duration.value) || 0,
@@ -615,6 +634,10 @@ defineExpose({
 				v-model:selected-years="selectedYears"
 				v-model:selected-signatures="selectedSignatures"
 				v-model:selected-source-types="selectedSourceTypes"
+				v-model:selected-instruments="selectedInstruments"
+				v-model:opus="opus"
+				v-model:catalog-number="catalogNumber"
+				v-model:song-number="songNumber"
 				v-model:stars="stars"
 				v-model:difficulty="difficulty"
 				v-model:duration="duration"
@@ -632,6 +655,7 @@ defineExpose({
 				:years="years"
 				:signatures="signatures"
 				:source-types="sourceTypes"
+				:instruments="instruments"
 				:create-composer-tag="createComposerTag"
 				:create-book-tag="createBookTag"
 				:create-collection-tag="createCollectionTag"
@@ -641,7 +665,8 @@ defineExpose({
 				:create-custom-group-tag="createCustomGroupTag"
 				:create-year-tag="createYearTag"
 				:create-signature-tag="createSignatureTag"
-				:create-source-type-tag="createSourceTypeTag" />
+				:create-source-type-tag="createSourceTypeTag"
+				:create-instrument-tag="createInstrumentTag" />
 
 			<SongFileSection
 				ref="fileSection"

@@ -144,6 +144,7 @@
                 :years="years"
                 :signatures="signatures"
                 :source-types="sourceTypes"
+                :instruments="instruments"
                 @saved="handleSaved"
                 @updated="handleLibraryDataUpdate"
                 @deleted="handleDeleted"
@@ -163,6 +164,7 @@
       :years="years"
       :signatures="signatures"
       :source-types="sourceTypes"
+      :instruments="instruments"
       @saved="handlePdfModifierSaved"
       @cancel="closeModifyPdf" />
     <SongViewer
@@ -182,6 +184,7 @@
       :years="years"
       :signatures="signatures"
       :source-types="sourceTypes"
+      :instruments="instruments"
       @back="goBackToSongs"
       @modify-pdf="openModifyPdf"
       @saved="handleSaved"
@@ -237,6 +240,7 @@
       v-model:selected-years="selectedYears"
       v-model:selected-signatures="selectedSignatures"
       v-model:selected-source-types="selectedSourceTypes"
+      v-model:selected-instruments="selectedInstruments"
       :composers="composers"
       :books="books"
       :collections="collections"
@@ -247,6 +251,7 @@
       :years="years"
       :signatures="signatures"
       :source-types="sourceTypes"
+      :instruments="instruments"
       @clear="clearFilters"/>
     </div>
     <SongEditor v-if="isCreatingSong"
@@ -264,6 +269,7 @@
                 :years="years"
                 :signatures="signatures"
                 :source-types="sourceTypes"
+                :instruments="instruments"
                 :duplicate-song="duplicateSourceSong"
                 :prefill="importPrefill"
                 :imported-file="importedFile"
@@ -326,6 +332,7 @@
     :years="years"
     :signatures="signatures"
     :source-types="sourceTypes"
+    :instruments="instruments"
     @apply="handleApplyBatchUpdate" />
 
   <SongMergeDialog
@@ -440,6 +447,7 @@ const {
   years,
   signatures,
   sourceTypes,
+  instruments,
   fileError,
   isLoading,
   handleLibraryDataUpdate,
@@ -482,8 +490,8 @@ const isModifyPdfInUrl = computed(() => route.query.modifyPdf !== undefined && r
 
 // The filter bar reads and writes its selections in the URL query, so the browser
 // history restores them when going back or forward.
-const { searchTitle, withoutFiles, selectedComposers, selectedBooks, selectedCollections, selectedArtists, selectedGenres, selectedKeys, selectedCustomGroups, selectedYears, selectedSignatures, selectedSourceTypes, filterSongs, clearFilters, filterBarVisible, toggleFilterBar, isFiltered, toggleFilter } =
-  useSongFilters(() => ({ composers: composers.value, books: books.value, collections: collections.value, artists: artists.value, genres: genres.value, keys: keys.value, customGroups: customGroups.value, years: years.value, signatures: signatures.value, sourceTypes: sourceTypes.value }));
+const { searchTitle, withoutFiles, selectedComposers, selectedBooks, selectedCollections, selectedArtists, selectedGenres, selectedKeys, selectedCustomGroups, selectedYears, selectedSignatures, selectedSourceTypes, selectedInstruments, filterSongs, clearFilters, filterBarVisible, toggleFilterBar, isFiltered, toggleFilter } =
+  useSongFilters(() => ({ composers: composers.value, books: books.value, collections: collections.value, artists: artists.value, genres: genres.value, keys: keys.value, customGroups: customGroups.value, years: years.value, signatures: signatures.value, sourceTypes: sourceTypes.value, instruments: instruments.value }));
 
 const { selectedSongIds, selectedCount, isSelected, toggleSelect, selectAll, isAllSelected, clearSelection } = useSongSelection();
 const isBatchEditorOpen = ref(false);
@@ -505,6 +513,7 @@ const currentLibraryData = computed<LibraryData>(() => ({
   years: years.value,
   signatures: signatures.value,
   sourceTypes: sourceTypes.value,
+  instruments: instruments.value,
   songs: songs.value,
 }));
 
