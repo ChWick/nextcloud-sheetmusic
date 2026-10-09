@@ -2,7 +2,17 @@
   <ViewHeader
     :title="config.plural"
     :create-label="t('mobilesheetsmanager', 'New {entity}', { entity: config.singular })"
-    @create="openCreateDialog" />
+    @create="openCreateDialog">
+    <NcButton
+      :title="t('mobilesheetsmanager', 'Merge duplicates')"
+      :aria-label="t('mobilesheetsmanager', 'Merge duplicates')"
+      @click="openMergeDialog()">
+      <template #icon>
+        <MergeIcon :size="20" />
+      </template>
+      {{ t('mobilesheetsmanager', 'Merge duplicates') }}
+    </NcButton>
+  </ViewHeader>
   <div :class="$style.entitiesArea">
     <div :class="$style.searchWrapper">
       <NcTextField
@@ -26,16 +36,28 @@
             {{ entityLabel(entity) }}
           </button>
           <span :class="$style.entitySongCount">{{ songCountLabel(entity) }}</span>
-          <NcButton variant="error"
-                    size="small"
-                    :class="$style.deleteButton"
-                    :aria-label="t('mobilesheetsmanager', 'Delete {entity}', { entity: config.singular })"
-                    :title="t('mobilesheetsmanager', 'Delete {entity}', { entity: config.singular })"
-                    @click="openDeleteDialog(entity)">
-            <template #icon>
-              <DeleteIcon :size="18" />
-            </template>
-          </NcButton>
+          <div :class="$style.rowActions">
+            <NcButton
+              size="small"
+              :class="$style.mergeButton"
+              :aria-label="t('mobilesheetsmanager', 'Merge {entity}', { entity: config.singular })"
+              :title="t('mobilesheetsmanager', 'Merge {entity}', { entity: config.singular })"
+              @click="openMergeDialog(entity)">
+              <template #icon>
+                <MergeIcon :size="18" />
+              </template>
+            </NcButton>
+            <NcButton variant="error"
+                      size="small"
+                      :class="$style.deleteButton"
+                      :aria-label="t('mobilesheetsmanager', 'Delete {entity}', { entity: config.singular })"
+                      :title="t('mobilesheetsmanager', 'Delete {entity}', { entity: config.singular })"
+                      @click="openDeleteDialog(entity)">
+              <template #icon>
+                <DeleteIcon :size="18" />
+              </template>
+            </NcButton>
+          </div>
         </li>
         <li v-if="!isLoading && !fileError && visibleEntities.length === 0">
           {{ searchQuery.trim() && entities.length > 0
@@ -67,19 +89,31 @@
     </NcDialog>
 
     <NcDialog v-if="isDeleteDialogOpen"
-              :name="t('mobilesheetsmanager', 'Delete {entity}', { entity: config.singular })"
+              :name="t('mobilesheetsmanager', 'Delete {entity}', { entity: config.singular }, { escape: false })"
               size="normal"
               @close="closeDeleteDialog">
-      <p>{{ t('mobilesheetsmanager', 'Delete "{name}"?', { name: entityToDelete ? entityLabel(entityToDelete) : '' }) }}</p>
-      <p>{{ t('mobilesheetsmanager', 'All songs stay in the library. Only the {entity} entry is removed from them.', { entity: config.singular }) }}</p>
+      <p>{{ t('mobilesheetsmanager', 'Delete "{name}"?', { name: entityToDelete ? entityLabel(entityToDelete) : '' }, { escape: false }) }}</p>
+      <p>{{ t('mobilesheetsmanager', 'All songs stay in the library. Only the {entity} entry is removed from them.', { entity: config.singular }, { escape: false }) }}</p>
       <p v-if="deleteError" :class="$style.error" role="alert">{{ deleteError }}</p>
       <template #actions>
         <NcButton @click="closeDeleteDialog">{{ t('mobilesheetsmanager', 'Cancel') }}</NcButton>
         <NcButton variant="error" :disabled="isDeleting" @click="deleteEntity">
-          {{ t('mobilesheetsmanager', 'Delete {entity}', { entity: config.singular }) }}
+          {{ t('mobilesheetsmanager', 'Delete {entity}', { entity: config.singular }, { escape: false }) }}
         </NcButton>
       </template>
     </NcDialog>
+
+    <EntityMergeDialog
+      :open="isMergeDialogOpen"
+      :selected-library="selectedLibrary"
+      :entity-type="entityType"
+      :singular="config.singular"
+      :plural="config.plural"
+      :entities="entities"
+      :entity-song-counts="entitySongCounts"
+      :initial-entity="entityToMerge"
+      @close="closeMergeDialog"
+      @merged="handleEntityMerged" />
   </div>
 </template>
 
@@ -95,7 +129,9 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
+import MergeIcon from 'vue-material-design-icons/Merge.vue'
 import ViewHeader from './ViewHeader.vue'
+import EntityMergeDialog from './EntityMergeDialog.vue'
 import { useLibraryData } from '../composables/useLibraryData'
 import { apiDelete, apiPost } from '../api/client'
 import { showError, showSuccess } from '@nextcloud/dialogs'
@@ -229,6 +265,8 @@ const entities = computed<FilterEntity[]>(() => {
 const entityToDelete = ref<FilterEntity | null>(null)
 const isCreateDialogOpen = ref(false)
 const isDeleteDialogOpen = ref(false)
+const isMergeDialogOpen = ref(false)
+const entityToMerge = ref<FilterEntity | null>(null)
 const isCreating = ref(false)
 const isDeleting = ref(false)
 const revealedDeleteEntityId = ref<number | null>(null)
@@ -327,8 +365,9 @@ const visibleEntities = computed(() => {
 watch(
   [() => props.selectedLibrary, () => props.entityType],
   ([library]) => {
-    // An open delete dialog belongs to the previous library or entity kind.
+    // An open delete or merge dialog belongs to the previous library or entity kind.
     closeDeleteDialog()
+    closeMergeDialog()
     if (library) loadLibraryData(library)
   },
   { immediate: true },
@@ -371,9 +410,9 @@ async function createEntity() {
     await apiPost(postEndpoint as any, body as any)
     closeCreateDialog()
     await loadLibraryData(props.selectedLibrary)
-    showSuccess(t('mobilesheetsmanager', '{entity} "{name}" created successfully.', { entity: config.value.singular, name }))
+    showSuccess(t('mobilesheetsmanager', '{entity} "{name}" created successfully.', { entity: config.value.singular, name }, { escape: false }))
   } catch {
-    createError.value = t('mobilesheetsmanager', 'Could not create the {entity}.', { entity: config.value.singular })
+    createError.value = t('mobilesheetsmanager', 'Could not create the {entity}.', { entity: config.value.singular }, { escape: false })
     showError(createError.value)
   } finally {
     isCreating.value = false
@@ -412,15 +451,34 @@ async function deleteEntity() {
     closeDeleteDialog()
     handleLibraryDataUpdate(response.data.ocs.data)
     if (entityName) {
-      showSuccess(t('mobilesheetsmanager', '{entity} "{name}" deleted successfully.', { entity: config.value.singular, name: entityName }))
+      showSuccess(t('mobilesheetsmanager', '{entity} "{name}" deleted successfully.', { entity: config.value.singular, name: entityName }, { escape: false }))
     } else {
-      showSuccess(t('mobilesheetsmanager', '{entity} deleted successfully.', { entity: config.value.singular }))
+      showSuccess(t('mobilesheetsmanager', '{entity} deleted successfully.', { entity: config.value.singular }, { escape: false }))
     }
   } catch {
-    deleteError.value = t('mobilesheetsmanager', 'Could not delete the {entity}.', { entity: config.value.singular })
+    deleteError.value = t('mobilesheetsmanager', 'Could not delete the {entity}.', { entity: config.value.singular }, { escape: false })
     showError(deleteError.value)
   } finally {
     isDeleting.value = false
+  }
+}
+
+/*** Merging entities ***/
+function openMergeDialog(entity?: FilterEntity) {
+  entityToMerge.value = entity ?? null
+  isMergeDialogOpen.value = true
+}
+
+function closeMergeDialog() {
+  isMergeDialogOpen.value = false
+  entityToMerge.value = null
+}
+
+function handleEntityMerged(newLibraryData?: LibraryData) {
+  if (newLibraryData) {
+    handleLibraryDataUpdate(newLibraryData)
+  } else {
+    loadLibraryData(props.selectedLibrary)
   }
 }
 </script>
@@ -488,6 +546,12 @@ async function deleteEntity() {
   gap: 8px;
   min-width: 0;
 }
+.rowActions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.mergeButton,
 .deleteButton {
   flex-shrink: 0;
 }

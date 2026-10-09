@@ -153,6 +153,48 @@ class EntityController extends OCSController {
 		return $this->handleDelete('sourcetypes', $id, $libraryId);
 	}
 
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/entities/merge')]
+	public function mergeEntities(
+		?int $libraryId = null,
+		?string $entityType = null,
+		?int $keepId = null,
+		mixed $duplicateIds = null,
+	): DataResponse {
+		$libraryId = $libraryId ?? (int)$this->request->getParam('libraryId', 0);
+		$entityType = $entityType ?? (string)$this->request->getParam('entityType', '');
+		$keepId = $keepId ?? (int)$this->request->getParam('keepId', 0);
+		$rawDuplicates = $duplicateIds ?? $this->request->getParam('duplicateIds', []);
+
+		if (is_string($rawDuplicates)) {
+			$rawDuplicates = explode(',', $rawDuplicates);
+		}
+		$duplicateIdsList = array_values(array_filter(
+			array_map('intval', (array)$rawDuplicates),
+			static fn (int $id): bool => $id > 0 && $id !== $keepId,
+		));
+
+		if ($libraryId <= 0 || trim($entityType) === '' || $keepId <= 0 || $duplicateIdsList === []) {
+			return new DataResponse(['error' => 'Missing or invalid parameters.'], Http::STATUS_BAD_REQUEST);
+		}
+
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		try {
+			$result = $this->entityService->mergeEntities($user, $libraryId, $entityType, $keepId, $duplicateIdsList);
+			if ($result === null) {
+				return new DataResponse(['error' => 'Entity not found or could not be merged.'], Http::STATUS_NOT_FOUND);
+			}
+
+			return new DataResponse($result, Http::STATUS_OK);
+		} catch (\Throwable $e) {
+			return new DataResponse(['error' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
 	private function handleCreate(string $type, ?int $libraryId, string $value): DataResponse {
 		if ($libraryId === null || trim($value) === '') {
 			return new DataResponse([], Http::STATUS_BAD_REQUEST);

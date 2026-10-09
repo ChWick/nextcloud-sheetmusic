@@ -101,4 +101,45 @@ final class EntityServiceTest extends TestCase {
 			unlink($databasePath);
 		}
 	}
+
+	public function testMergeEntitiesReassignsSongsAndDeletesDuplicates(): void {
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('admin');
+
+		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
+		$databasePath = $fixture['path'];
+		$fixture['connection']->exec("INSERT INTO Composer (Id, Name) VALUES (5, 'J. S. Bach'), (50, 'Johann Sebastian Bach')");
+		$fixture['connection']->exec("INSERT INTO Songs (Id, Title) VALUES (1, 'Air')");
+		$fixture['connection']->exec('INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (5, 1)');
+
+		$libraryService = $this->createLibraryServiceForDatabase(
+			'admin',
+			1,
+			'/Noten/library.db',
+			$databasePath,
+		);
+
+		$songMapper = $this->createSongMapper();
+
+		$service = new EntityService(
+			$libraryService,
+			$songMapper,
+			$this->createMock(LoggerInterface::class),
+		);
+
+		try {
+			$result = $service->mergeEntities($user, 1, 'composers', 50, [5]);
+			self::assertNotNull($result);
+			self::assertSame(1, $result['mergedCount']);
+			self::assertArrayHasKey('libraryData', $result);
+
+			self::assertSame(0, (int)$fixture['connection']->query('SELECT COUNT(*) FROM Composer WHERE Id = 5')->fetchColumn());
+			self::assertSame(1, (int)$fixture['connection']->query('SELECT COUNT(*) FROM Composer WHERE Id = 50')->fetchColumn());
+
+			$composerIds = $fixture['connection']->query('SELECT ComposerId FROM ComposerSongs WHERE SongId = 1')->fetchAll(\PDO::FETCH_COLUMN);
+			self::assertSame([50], array_map('intval', $composerIds));
+		} finally {
+			unlink($databasePath);
+		}
+	}
 }

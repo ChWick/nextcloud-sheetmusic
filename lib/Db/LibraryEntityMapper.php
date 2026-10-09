@@ -130,6 +130,7 @@ class LibraryEntityMapper extends AbstractDatabaseMapper {
 	 * @return bool whether the entry itself existed and was removed
 	 */
 	public function deleteEntity(string $databasePath, string $entityType, int $entityId): bool {
+		$entityType = self::normalizeEntityType($entityType);
 		$tables = self::ENTITY_TABLES[$entityType] ?? null;
 		if ($tables === null) {
 			throw new \InvalidArgumentException('Unknown entity type: ' . $entityType);
@@ -316,22 +317,94 @@ class LibraryEntityMapper extends AbstractDatabaseMapper {
 		return $duplicates;
 	}
 
+	public static function normalizeEntityType(string $entityType): string {
+		$lower = strtolower(trim($entityType));
+		return match ($lower) {
+			'composer' => 'composers',
+			'book' => 'books',
+			'collection' => 'collections',
+			'artist' => 'artists',
+			'genre' => 'genres',
+			'key' => 'keys',
+			'customgroup' => 'customgroups',
+			'year' => 'years',
+			'signature' => 'signatures',
+			'sourcetype' => 'sourcetypes',
+			default => $lower,
+		};
+	}
+
 	/**
-	 * Redirect songs from duplicate entity records to the lowest-ID record and
+	 * Find all song IDs associated with one or more entity IDs.
+	 *
+	 * @param int|list<int> $entityIds
+	 * @return list<int>
+	 */
+	public function getSongIdsForEntity(string $databasePath, string $entityType, int|array $entityIds): array {
+		$entityType = self::normalizeEntityType($entityType);
+		$tables = self::ENTITY_TABLES[$entityType] ?? null;
+		if ($tables === null) {
+			throw new \InvalidArgumentException('Unknown entity type: ' . $entityType);
+		}
+
+		$ids = is_array($entityIds)
+			? array_values(array_filter(array_map('intval', $entityIds), static fn (int $id): bool => $id > 0))
+			: array_values(array_filter([(int)$entityIds], static fn (int $id): bool => $id > 0));
+
+		if ($ids === []) {
+			return [];
+		}
+
+		$database = $this->openConnection($databasePath);
+		$linkTable = $this->resolveTable($database, [$tables['linkTable']]);
+		if ($linkTable === null) {
+			return [];
+		}
+
+		$columns = $this->columnNames($database, $linkTable);
+		$songIdColumn = $columns['songid'] ?? null;
+		$entityIdColumn = $columns[strtolower($tables['linkColumn'])] ?? null;
+		if ($songIdColumn === null || $entityIdColumn === null) {
+			return [];
+		}
+
+		$placeholders = implode(',', array_fill(0, count($ids), '?'));
+		$statement = $database->prepare(sprintf(
+			'SELECT DISTINCT "%s" AS SongId FROM "%s" WHERE "%s" IN (%s) AND "%s" IS NOT NULL',
+			$songIdColumn,
+			$linkTable,
+			$entityIdColumn,
+			$placeholders,
+			$songIdColumn,
+		));
+		$statement->execute($ids);
+
+		$songIds = [];
+		while ($row = $statement->fetch()) {
+			$songIds[] = (int)$row['SongId'];
+		}
+		sort($songIds, SORT_NUMERIC);
+
+		return $songIds;
+	}
+
+	/**
+	 * Redirect songs from duplicate entity records to the canonical record and
 	 * remove the duplicate records as one transaction.
 	 *
 	 * @param list<int> $duplicateIds
 	 */
 	public function mergeDuplicateEntities(string $databasePath, string $entityType, int $keepId, array $duplicateIds): int {
+		$entityType = self::normalizeEntityType($entityType);
 		$tables = self::ENTITY_TABLES[$entityType] ?? null;
 		if ($tables === null) {
 			throw new \InvalidArgumentException('Unknown entity type: ' . $entityType);
 		}
 
 		$ids = array_values(array_unique(array_map('intval', $duplicateIds)));
-		$ids = array_values(array_filter($ids, static fn (int $id): bool => $id > $keepId));
+		$ids = array_values(array_filter($ids, static fn (int $id): bool => $id !== $keepId && $id > 0));
 		sort($ids, SORT_NUMERIC);
-		if ($ids === []) {
+		if ($ids === [] || $keepId <= 0) {
 			return 0;
 		}
 

@@ -709,6 +709,14 @@ class SongMapper extends AbstractDatabaseMapper {
 		return $this->entityMapper->findDuplicateEntities($databasePath);
 	}
 
+	/**
+	 * @param int|list<int> $entityIds
+	 * @return list<int>
+	 */
+	public function getSongIdsForEntity(string $databasePath, string $entityType, int|array $entityIds): array {
+		return $this->entityMapper->getSongIdsForEntity($databasePath, $entityType, $entityIds);
+	}
+
 	/** @param list<int> $duplicateIds */
 	public function mergeDuplicateEntities(string $databasePath, string $entityType, int $keepId, array $duplicateIds): int {
 		return $this->entityMapper->mergeDuplicateEntities($databasePath, $entityType, $keepId, $duplicateIds);

@@ -56,7 +56,7 @@ class ApiController extends OCSController {
 		$integritySvc = $libraryIntegrityService ?? new LibraryIntegrityService($libService, $songMapper, $fileManager, $rootFolder, $pathResolver, $logger);
 		$fileSvc = $songFileService ?? new SongFileService($libService, $songMapper, $fileManager, $rootFolder, $logger);
 		$sngService = $songService ?? new SongService($libService, $songMapper, $fileSvc, $fileManager, $logger, $integritySvc);
-		$entService = $entityService ?? new EntityService($libService, $songMapper, $logger);
+		$entService = $entityService ?? new EntityService($libService, $songMapper, $logger, $fileManager);
 
 		$this->libraryController = new LibraryController($appName, $request, $libService, $userSession, $integritySvc);
 		$this->songController = new SongController($appName, $request, $sngService, $userSession);
@@ -357,5 +357,16 @@ class ApiController extends OCSController {
 	#[ApiRoute(verb: 'DELETE', url: '/api/sourcetypes/{id}')]
 	public function deleteSourceType(int $id, ?int $libraryId = null): DataResponse {
 		return $this->entityController->deleteSourceType($id, $libraryId);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/entities/merge')]
+	public function mergeEntities(
+		?int $libraryId = null,
+		?string $entityType = null,
+		?int $keepId = null,
+		mixed $duplicateIds = null,
+	): DataResponse {
+		return $this->entityController->mergeEntities($libraryId, $entityType, $keepId, $duplicateIds);
 	}
 }

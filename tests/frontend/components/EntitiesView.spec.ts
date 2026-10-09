@@ -310,4 +310,105 @@ describe('EntitiesView.vue', () => {
 		)
 		expect(showSuccess).toHaveBeenCalledWith('composer "Beethoven" deleted successfully.')
 	})
+
+	it('opens merge dialog from row and merges duplicates', async () => {
+		vi.mocked(axios.get).mockResolvedValueOnce({
+			data: {
+				ocs: {
+					data: {
+						songs: [],
+						composers: [
+							{ id: 1, name: 'Johann Sebastian Bach' },
+							{ id: 2, name: 'J. S. Bach' },
+						],
+						books: [],
+						collections: [],
+						artists: [],
+					},
+				},
+			},
+		})
+		vi.mocked(axios.post).mockResolvedValueOnce({
+			data: {
+				ocs: {
+					data: {
+						mergedCount: 1,
+						libraryData: {
+							songs: [],
+							composers: [{ id: 1, name: 'Johann Sebastian Bach' }],
+							books: [],
+							collections: [],
+							artists: [],
+						},
+					},
+				},
+			},
+		})
+
+		const wrapper = mount(EntitiesView, {
+			props: { selectedLibrary: 1, entityType: 'composers' },
+			attachTo: document.body,
+		})
+		await new Promise((r) => setTimeout(r, 10))
+
+		// Find merge buttons on rows
+		const mergeButtons = wrapper.findAll('button[aria-label="Merge composer"]')
+		expect(mergeButtons.length).toBe(2)
+
+		// Click merge button on second row (J. S. Bach)
+		await mergeButtons[1].trigger('click')
+		await wrapper.vm.$nextTick()
+
+		// Verify merge dialog is open
+		const mergeDialog = wrapper.findComponent({ name: 'EntityMergeDialog' })
+		expect(mergeDialog.exists()).toBe(true)
+		expect(mergeDialog.props('open')).toBe(true)
+		expect(mergeDialog.props('initialEntity')).toEqual({ id: 2, name: 'J. S. Bach' })
+
+		// Emit merged event
+		mergeDialog.vm.$emit('merged', {
+			songs: [],
+			composers: [{ id: 1, name: 'Johann Sebastian Bach' }],
+			books: [],
+			collections: [],
+			artists: [],
+		})
+		await wrapper.vm.$nextTick()
+
+		// Library data should now be updated (only 1 composer remaining)
+		expect(wrapper.text()).toContain('Johann Sebastian Bach')
+		expect(wrapper.text()).not.toContain('J. S. Bach')
+	})
+
+	it('opens merge dialog from header button', async () => {
+		vi.mocked(axios.get).mockResolvedValueOnce({
+			data: {
+				ocs: {
+					data: {
+						songs: [],
+						composers: [{ id: 1, name: 'Beethoven' }],
+						books: [],
+						collections: [],
+						artists: [],
+					},
+				},
+			},
+		})
+
+		const wrapper = mount(EntitiesView, {
+			props: { selectedLibrary: 1, entityType: 'composers' },
+		})
+		await new Promise((r) => setTimeout(r, 10))
+
+		// Find header merge button
+		const headerMergeBtn = wrapper.find('button[aria-label="Merge duplicates"]')
+		expect(headerMergeBtn.exists()).toBe(true)
+		await headerMergeBtn.trigger('click')
+		await wrapper.vm.$nextTick()
+
+		const mergeDialog = wrapper.findComponent({ name: 'EntityMergeDialog' })
+		expect(mergeDialog.exists()).toBe(true)
+		expect(mergeDialog.props('open')).toBe(true)
+		expect(mergeDialog.props('initialEntity')).toBeNull()
+	})
 })

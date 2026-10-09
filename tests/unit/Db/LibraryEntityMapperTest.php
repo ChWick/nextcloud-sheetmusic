@@ -267,6 +267,35 @@ final class LibraryEntityMapperTest extends TestCase {
 		], $this->entityMapper->findDuplicateEntities($this->databasePath));
 	}
 
+	public function testMergeDuplicateEntitiesAllowsKeepingHigherIdAndMergesSongLinks(): void {
+		$database = new \PDO('sqlite:' . $this->databasePath);
+		$database->exec("INSERT INTO Composer (Id, Name) VALUES (5, 'J. S. Bach'), (50, 'Johann Sebastian Bach')");
+		$database->exec('INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (5, 10), (50, 10), (5, 11)');
+
+		$affectedSongIds = $this->entityMapper->getSongIdsForEntity($this->databasePath, 'composers', 5);
+		self::assertSame([10, 11], $affectedSongIds);
+
+		$merged = $this->entityMapper->mergeDuplicateEntities($this->databasePath, 'composers', 50, [5]);
+		self::assertSame(1, $merged);
+
+		// Duplicate record (5) should be deleted
+		$remCount = (int)$database->query('SELECT COUNT(*) FROM Composer WHERE Id = 5')->fetchColumn();
+		self::assertSame(0, $remCount);
+
+		// Canonical record (50) should remain
+		$canonicalCount = (int)$database->query('SELECT COUNT(*) FROM Composer WHERE Id = 50')->fetchColumn();
+		self::assertSame(1, $canonicalCount);
+
+		// Songs 10 and 11 should be linked to ID 50, with no duplicates
+		$statement = $database->prepare('SELECT SongId, COUNT(*) AS Cnt FROM ComposerSongs WHERE ComposerId = 50 GROUP BY SongId ORDER BY SongId');
+		$statement->execute();
+		$links = $statement->fetchAll(\PDO::FETCH_ASSOC);
+		self::assertSame([
+			['SongId' => 10, 'Cnt' => 1],
+			['SongId' => 11, 'Cnt' => 1],
+		], array_map(static fn(array $r) => ['SongId' => (int)$r['SongId'], 'Cnt' => (int)$r['Cnt']], $links));
+	}
+
 	public function testSchemaCacheDoesNotLeakBetweenLibraryDatabases(): void {
 		$otherDatabasePath = tempnam(sys_get_temp_dir(), 'mobilesheetsmanager-entity-schema-test-');
 		self::assertNotFalse($otherDatabasePath);

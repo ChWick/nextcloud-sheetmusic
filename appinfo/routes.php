@@ -114,5 +114,10 @@ return [
 			'url' => '/api/sourcetypes/{id}',
 			'verb' => 'DELETE',
 		],
+		[
+			'name' => 'Api#mergeEntities',
+			'url' => '/api/entities/merge',
+			'verb' => 'POST',
+		],
 	],
 ];
