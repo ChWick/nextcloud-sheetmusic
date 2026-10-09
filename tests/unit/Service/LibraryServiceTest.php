@@ -110,6 +110,55 @@ final class LibraryServiceTest extends TestCase {
 		$this->assertSame(['path' => '/Noten'], $service->addLibrary('admin', '/Noten'));
 	}
 
+	public function testAddLibraryThrowsWhenDirectoryIsNotEmpty(): void {
+		$folderNode = $this->createMock(\OCP\Files\Folder::class);
+		$folderNode->method('getDirectoryListing')->willReturn([$this->createMock(\OCP\Files\File::class)]);
+
+		$userFolder = $this->createMock(IUserFolder::class);
+		$userFolder->method('nodeExists')->with('Noten')->willReturn(true);
+		$userFolder->method('get')->with('Noten')->willReturn($folderNode);
+
+		$rootFolder = $this->createMock(IRootFolder::class);
+		$rootFolder->method('getUserFolder')->with('admin')->willReturn($userFolder);
+
+		$service = new LibraryService(
+			$this->createMock(LibraryMapper::class),
+			$this->createSongMapper(),
+			$rootFolder,
+			$this->createMock(LoggerInterface::class),
+		);
+
+		$this->expectException(\InvalidArgumentException::class);
+		$this->expectExceptionMessage('The directory must be empty');
+		$service->addLibrary('admin', '/Noten');
+	}
+
+	public function testAddLibrarySucceedsWhenDirectoryIsEmpty(): void {
+		$folderNode = $this->createMock(\OCP\Files\Folder::class);
+		$folderNode->method('getDirectoryListing')->willReturn([]);
+
+		$userFolder = $this->createMock(IUserFolder::class);
+		$userFolder->method('nodeExists')->with('Noten')->willReturn(true);
+		$userFolder->method('get')->with('Noten')->willReturn($folderNode);
+
+		$rootFolder = $this->createMock(IRootFolder::class);
+		$rootFolder->method('getUserFolder')->with('admin')->willReturn($userFolder);
+
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$libraryMapper->expects($this->once())->method('addForUser')->with('admin', '/Noten');
+		$libraryMapper->method('findAllForUser')->with('admin')->willReturn([['id' => 10, 'path' => '/Noten']]);
+
+		$service = new LibraryService(
+			$libraryMapper,
+			$this->createSongMapper(),
+			$rootFolder,
+			$this->createMock(LoggerInterface::class),
+		);
+
+		$result = $service->addLibrary('admin', '/Noten');
+		$this->assertSame(['path' => '/Noten'], $result);
+	}
+
 	public function testDeleteLibraryRemovesLibraryEntry(): void {
 		$libraryMapper = $this->createMock(LibraryMapper::class);
 		$libraryMapper->method('findForUser')->with('admin', 1)->willReturn(['id' => 1, 'path' => '/Noten/mobilesheets.db']);

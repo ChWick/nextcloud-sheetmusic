@@ -134,6 +134,34 @@ class LibraryService {
 			return null;
 		}
 
+		$userFolder = null;
+		try {
+			$userFolder = $this->rootFolder->getUserFolder($userId);
+		} catch (\Throwable $e) {
+		}
+
+		if ($userFolder !== null) {
+			$relPath = ltrim($path, '/');
+			if ($extension === '') {
+				if ($userFolder->nodeExists($relPath)) {
+					$node = $userFolder->get($relPath);
+					if (!($node instanceof \OCP\Files\Folder)) {
+						throw new \InvalidArgumentException('Selected path is not a directory');
+					}
+					if (count($node->getDirectoryListing()) > 0) {
+						throw new \InvalidArgumentException('The directory must be empty');
+					}
+				}
+			} else {
+				if ($userFolder->nodeExists($relPath)) {
+					$node = $userFolder->get($relPath);
+					if (!($node instanceof \OCP\Files\File)) {
+						throw new \InvalidArgumentException('Selected path is not a database file');
+					}
+				}
+			}
+		}
+
 		$this->libraryMapper->addForUser($userId, $path);
 		$libraries = $this->libraryMapper->findAllForUser($userId);
 		$added = null;

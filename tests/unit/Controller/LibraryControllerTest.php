@@ -6,6 +6,7 @@ namespace Controller;
 
 use OCA\SheetMusic\Controller\LibraryController;
 use OCA\SheetMusic\Db\LibraryMapper;
+use OCA\SheetMusic\Service\LibraryService;
 use OCP\AppFramework\Http;
 use OCP\IRequest;
 use OCP\IUser;
@@ -81,6 +82,29 @@ final class LibraryControllerTest extends TestCase {
 		$okRes = $controller->addLibrary('/Noten/mobilesheets.db');
 		$this->assertSame(Http::STATUS_CREATED, $okRes->getStatus());
 		$this->assertSame(['path' => '/Noten/mobilesheets.db'], $okRes->getData());
+	}
+
+	public function testAddLibraryReturnsBadRequestOnInvalidArgumentException(): void {
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('admin');
+
+		$userSession = $this->createMock(IUserSession::class);
+		$userSession->method('getUser')->willReturn($user);
+
+		$libraryService = $this->createMock(LibraryService::class);
+		$libraryService->method('addLibrary')
+			->willThrowException(new \InvalidArgumentException('The directory must be empty'));
+
+		$controller = new LibraryController(
+			'sheetmusic',
+			$this->createMock(IRequest::class),
+			$libraryService,
+			$userSession,
+		);
+
+		$res = $controller->addLibrary('/Noten');
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $res->getStatus());
+		$this->assertSame(['message' => 'The directory must be empty'], $res->getData());
 	}
 
 	public function testDeleteLibraryHandlesNotFoundAndSuccess(): void {

@@ -44,13 +44,19 @@ class LibraryController extends OCSController {
 			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
 		}
 
-		$import = (bool)$this->request->getParam('importExistingDb', $importExistingDb);
-		$result = $this->libraryService->addLibrary($user->getUID(), $path, $import);
-		if ($result === null) {
-			return new DataResponse([], Http::STATUS_BAD_REQUEST);
-		}
+		$import = (bool)$this->request->getParam('importExistingDb', $this->request->getParam('import_mobilesheets', $importExistingDb));
+		try {
+			$result = $this->libraryService->addLibrary($user->getUID(), $path, $import);
+			if ($result === null) {
+				return new DataResponse(['message' => 'Invalid library path'], Http::STATUS_BAD_REQUEST);
+			}
 
-		return new DataResponse($result, Http::STATUS_CREATED);
+			return new DataResponse($result, Http::STATUS_CREATED);
+		} catch (\InvalidArgumentException $e) {
+			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_BAD_REQUEST);
+		} catch (\Throwable $e) {
+			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
 	}
 
 	#[NoAdminRequired]
