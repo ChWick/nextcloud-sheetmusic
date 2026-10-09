@@ -56,6 +56,20 @@ class LibraryMapper {
 		return $row === false ? null : $row;
 	}
 
+	public function findModelById(int $libraryId): ?InternalLibrary {
+		$row = $this->findById($libraryId);
+		return $row === null ? null : InternalLibrary::fromRow($row);
+	}
+
+	public function touch(int $libraryId, ?int $timestamp = null): void {
+		$now = $timestamp ?? time();
+		$qb = $this->db->getQueryBuilder();
+		$qb->update(self::TABLE_NAME)
+			->set('updated_at', $qb->createNamedParameter($now, IQueryBuilder::PARAM_INT))
+			->where($qb->expr()->eq('id', $qb->createNamedParameter($libraryId, IQueryBuilder::PARAM_INT)));
+		$qb->executeStatement();
+	}
+
 	public function addForUser(string $userId, string $path): void {
 		$check = $this->db->getQueryBuilder();
 		$check->select('path')

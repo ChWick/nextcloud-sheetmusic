@@ -1,0 +1,632 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * SPDX-FileCopyrightText: 2026 Nextcloud GmbH and Nextcloud contributors
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ */
+
+namespace OCA\SheetMusic\Service;
+
+use OCA\SheetMusic\Db\InternalEntity;
+use OCA\SheetMusic\Db\InternalEntityMapper;
+use OCA\SheetMusic\Db\InternalLibrary;
+use OCA\SheetMusic\Db\InternalMiscMapper;
+use OCA\SheetMusic\Db\InternalSong;
+use OCA\SheetMusic\Db\InternalSongAttributeMapper;
+use OCA\SheetMusic\Db\InternalSongFile;
+use OCA\SheetMusic\Db\InternalSongFileMapper;
+use OCA\SheetMusic\Db\InternalSongMapper;
+use OCA\SheetMusic\Db\LibraryMapper;
+use OCP\Files\File;
+use OCP\Files\IRootFolder;
+use OCP\IUser;
+use OCP\IUserManager;
+use PDO;
+use Psr\Log\LoggerInterface;
+
+class MobileSheetsSqliteExporter {
+	/**
+	 * Mapping of internal entity types to MobileSheets table specifications.
+	 *
+	 * @var array<string, array{table: string, nameCol: string, linkTable: string, linkCol: string, hasSort: bool}>
+	 */
+	public const ENTITY_TABLE_CONFIG = [
+		'composer' => [
+			'table' => 'Composer',
+			'nameCol' => 'Name',
+			'linkTable' => 'ComposerSongs',
+			'linkCol' => 'ComposerId',
+			'hasSort' => true,
+		],
+		'artist' => [
+			'table' => 'Artists',
+			'nameCol' => 'Name',
+			'linkTable' => 'ArtistsSongs',
+			'linkCol' => 'ArtistId',
+			'hasSort' => false,
+		],
+		'book' => [
+			'table' => 'Books',
+			'nameCol' => 'Title',
+			'linkTable' => 'BookSongs',
+			'linkCol' => 'BookId',
+			'hasSort' => true,
+		],
+		'collection' => [
+			'table' => 'Collections',
+			'nameCol' => 'Name',
+			'linkTable' => 'CollectionSong',
+			'linkCol' => 'CollectionId',
+			'hasSort' => true,
+		],
+		'genre' => [
+			'table' => 'Genres',
+			'nameCol' => 'Type',
+			'linkTable' => 'GenresSongs',
+			'linkCol' => 'GenreId',
+			'hasSort' => false,
+		],
+		'key' => [
+			'table' => 'Keys',
+			'nameCol' => 'Name',
+			'linkTable' => 'KeySongs',
+			'linkCol' => 'KeyId',
+			'hasSort' => false,
+		],
+		'customgroup' => [
+			'table' => 'CustomGroup',
+			'nameCol' => 'Name',
+			'linkTable' => 'CustomGroupSongs',
+			'linkCol' => 'GroupId',
+			'hasSort' => false,
+		],
+		'year' => [
+			'table' => 'Years',
+			'nameCol' => 'Year',
+			'linkTable' => 'YearsSongs',
+			'linkCol' => 'YearId',
+			'hasSort' => false,
+		],
+		'signature' => [
+			'table' => 'Signature',
+			'nameCol' => 'Name',
+			'linkTable' => 'SignatureSongs',
+			'linkCol' => 'SignatureId',
+			'hasSort' => false,
+		],
+		'sourcetype' => [
+			'table' => 'SourceTypes',
+			'nameCol' => 'Type',
+			'linkTable' => 'SourceTypeSongs',
+			'linkCol' => 'SourceTypeId',
+			'hasSort' => false,
+		],
+		'instrument' => [
+			'table' => 'CustomGroup',
+			'nameCol' => 'Name',
+			'linkTable' => 'CustomGroupSongs',
+			'linkCol' => 'GroupId',
+			'hasSort' => false,
+		],
+	];
+
+	public function __construct(
+		private InternalSongMapper $songMapper,
+		private InternalEntityMapper $entityMapper,
+		private InternalSongFileMapper $songFileMapper,
+		private InternalSongAttributeMapper $attributeMapper,
+		private InternalMiscMapper $miscMapper,
+		private LibraryMapper $libraryMapper,
+		private MobileSheetsPathResolver $pathResolver,
+		private IRootFolder $rootFolder,
+		private IUserManager $userManager,
+		private LoggerInterface $logger,
+	) {
+	}
+
+	/**
+	 * Export the entire library state to a MobileSheets-compatible SQLite database file.
+	 */
+	public function exportToFile(InternalLibrary|array|int $library, string $targetSqlitePath): void {
+		$lib = $this->resolveLibrary($library);
+		if ($lib->id === null) {
+			throw new \InvalidArgumentException('Library must have an ID to export');
+		}
+
+		$directory = dirname($targetSqlitePath);
+		if (!is_dir($directory)) {
+			mkdir($directory, 0777, true);
+		}
+		if (file_exists($targetSqlitePath)) {
+			@unlink($targetSqlitePath);
+		}
+
+		$db = new PDO('sqlite:' . $targetSqlitePath, options: [
+			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+		]);
+
+		$db->exec('PRAGMA synchronous = OFF');
+		$db->exec('PRAGMA journal_mode = MEMORY');
+
+		$this->initializeSchema($db, $lib->id);
+
+		$db->beginTransaction();
+		try {
+			$user = $this->userManager->get($lib->userId);
+
+			$this->exportEntities($db, $lib->id);
+			$this->exportSongs($db, $lib->id);
+			$this->exportSongEntityLinks($db, $lib->id);
+			$this->exportFiles($db, $lib, $user);
+			$this->exportMiscData($db, $lib->id);
+
+			$db->commit();
+		} catch (\Throwable $e) {
+			if ($db->inTransaction()) {
+				$db->rollBack();
+			}
+			$this->logger->error('Failed to export MobileSheets SQLite database: ' . $e->getMessage(), [
+				'exception' => $e,
+				'libraryId' => $lib->id,
+			]);
+			throw $e;
+		}
+	}
+
+	/**
+	 * Generate the dynamic content for mobilesheets_hashcodes.txt.
+	 */
+	public function generateHashcodes(InternalLibrary|array|int $library): string {
+		$lib = $this->resolveLibrary($library);
+		if ($lib->id === null) {
+			return '';
+		}
+
+		$user = $this->userManager->get($lib->userId);
+		$files = $this->songFileMapper->findAllForLibrary($lib->id, includeDeleted: false);
+
+		$lines = [];
+		foreach ($files as $file) {
+			$webdavPath = $this->resolveWebdavPathForFile($file, $lib, $user);
+			if ($webdavPath === '') {
+				continue;
+			}
+
+			$hash = $file->fileHash ?? 0;
+			$modifiedAtMs = $file->updatedAt * 1000;
+			$size = $file->fileSize ?? 0;
+
+			$lines[] = $webdavPath;
+			$lines[] = (string)$hash;
+			$lines[] = (string)$modifiedAtMs;
+			$lines[] = (string)$size;
+		}
+
+		return implode("\n", $lines);
+	}
+
+	private function resolveLibrary(InternalLibrary|array|int $library): InternalLibrary {
+		if ($library instanceof InternalLibrary) {
+			return $library;
+		}
+
+		if (is_int($library)) {
+			$model = $this->libraryMapper->findModelById($library);
+			if ($model === null) {
+				throw new \InvalidArgumentException('Library not found: ' . $library);
+			}
+			return $model;
+		}
+
+		return InternalLibrary::fromRow($library);
+	}
+
+	private function initializeSchema(PDO $db, int $libraryId): void {
+		$statements = [
+			'CREATE TABLE Songs(Id INTEGER PRIMARY KEY, Title VARCHAR(255), SortTitle VARCHAR(255), Stars INTEGER DEFAULT 0, Difficulty INTEGER DEFAULT 0, Duration INTEGER DEFAULT 0, Keywords VARCHAR(255) DEFAULT \'\', Custom VARCHAR(255) DEFAULT \'\', Custom2 VARCHAR(255) DEFAULT \'\', SongId INTEGER, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)',
+			'CREATE TABLE Files(Id INTEGER PRIMARY KEY, SongId INTEGER, Path VARCHAR(255), PageOrder VARCHAR(255), FileSize INTEGER, LastModified INTEGER, Source INTEGER, Type INTEGER, Password VARCHAR(255) DEFAULT \'\', SourceFilePageCount INTEGER, FileHash INTEGER, Width INTEGER DEFAULT -1, Height INTEGER DEFAULT -1)',
+			'CREATE TABLE Collections(Id INTEGER PRIMARY KEY, Name VARCHAR(255), SortBy INTEGER DEFAULT 1, Ascending INTEGER DEFAULT 1, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)',
+			'CREATE TABLE CollectionSong(Id INTEGER PRIMARY KEY, CollectionId INTEGER, SongId INTEGER)',
+			'CREATE TABLE Composer(Id INTEGER PRIMARY KEY, Name VARCHAR(255), SortBy INTEGER DEFAULT 1, Ascending INTEGER DEFAULT 1, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)',
+			'CREATE TABLE ComposerSongs(Id INTEGER PRIMARY KEY, ComposerId INTEGER, SongId INTEGER)',
+			'CREATE TABLE Books(Id INTEGER PRIMARY KEY, Title VARCHAR(255), SortBy INTEGER DEFAULT 1, Ascending INTEGER DEFAULT 1, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)',
+			'CREATE TABLE BookSongs(Id INTEGER PRIMARY KEY, BookId INTEGER, SongId INTEGER)',
+			'CREATE TABLE Artists(Id INTEGER PRIMARY KEY, Name VARCHAR(255), DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)',
+			'CREATE TABLE ArtistsSongs(Id INTEGER PRIMARY KEY, ArtistId INTEGER, SongId INTEGER)',
+			'CREATE TABLE Genres(Id INTEGER PRIMARY KEY, Type VARCHAR(255), DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)',
+			'CREATE TABLE GenresSongs(Id INTEGER PRIMARY KEY, GenreId INTEGER, SongId INTEGER)',
+			'CREATE TABLE Keys(Id INTEGER PRIMARY KEY, Name VARCHAR(255), DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)',
+			'CREATE TABLE KeySongs(Id INTEGER PRIMARY KEY, KeyId INTEGER, SongId INTEGER)',
+			'CREATE TABLE CustomGroup(Id INTEGER PRIMARY KEY, Name VARCHAR(255), DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)',
+			'CREATE TABLE CustomGroupSongs(Id INTEGER PRIMARY KEY, GroupId INTEGER, SongId INTEGER)',
+			'CREATE TABLE Years(Id INTEGER PRIMARY KEY, Year INTEGER, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)',
+			'CREATE TABLE YearsSongs(Id INTEGER PRIMARY KEY, YearId INTEGER, SongId INTEGER)',
+			'CREATE TABLE Signature(Id INTEGER PRIMARY KEY, Name VARCHAR(255), DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)',
+			'CREATE TABLE SignatureSongs(Id INTEGER PRIMARY KEY, SignatureId INTEGER, SongId INTEGER)',
+			'CREATE TABLE SourceTypes(Id INTEGER PRIMARY KEY, Type VARCHAR(255), DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)',
+			'CREATE TABLE SourceTypeSongs(Id INTEGER PRIMARY KEY, SourceTypeId INTEGER, SongId INTEGER)',
+			'CREATE TABLE Bookmarks(Id INTEGER PRIMARY KEY, SongId INTEGER, Name VARCHAR(255), PageNum INTEGER, ShowInLibrary INTEGER DEFAULT 0, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)',
+			'CREATE TABLE AudioFiles(Id INTEGER PRIMARY KEY, SongId INTEGER, Title VARCHAR(255), File VARCHAR(255), DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)',
+			'CREATE TABLE SongNotes(Id INTEGER PRIMARY KEY, SongId INTEGER, Note TEXT, Title VARCHAR(255) DEFAULT \'\', DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)',
+			'CREATE TABLE MetronomeSettings(Id INTEGER PRIMARY KEY, SongId INTEGER, Bpm INTEGER)',
+			'CREATE TABLE _nc_sync_metadata (entity_type TEXT NOT NULL, uuid TEXT NOT NULL, client_id INTEGER, updated_at INTEGER, extra_json TEXT, PRIMARY KEY (entity_type, uuid))',
+			'CREATE INDEX idx_nc_sync_client ON _nc_sync_metadata (entity_type, client_id)',
+		];
+
+		foreach ($statements as $sql) {
+			$db->exec($sql);
+		}
+
+		// Misc schemas for MobileSheets
+		$miscSchemas = $this->miscMapper->getMiscSchemas($libraryId, 'mobilesheets');
+		foreach ($miscSchemas as $tableName => $createSql) {
+			$check = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='" . str_replace("'", "''", $tableName) . "'");
+			if ($check === false || $check->fetch() === false) {
+				try {
+					$db->exec($createSql);
+				} catch (\Throwable $e) {
+					$this->logger->warning('Failed to execute misc schema DDL for table: ' . $tableName, ['exception' => $e]);
+				}
+			}
+		}
+	}
+
+	private function exportEntities(PDO $db, int $libraryId): void {
+		$entities = $this->entityMapper->findAllForLibrary($libraryId, includeDeleted: false);
+
+		// Determine highest clientId per table to assign new client IDs safely
+		$usedIds = [];
+		$maxId = 0;
+		foreach ($entities as $e) {
+			if ($e->clientId !== null && $e->clientId > 0) {
+				$usedIds[$e->clientId] = true;
+				if ($e->clientId > $maxId) {
+					$maxId = $e->clientId;
+				}
+			}
+		}
+
+		$nextId = $maxId + 1;
+
+		$metaStmt = $db->prepare('INSERT INTO _nc_sync_metadata (entity_type, uuid, client_id, updated_at, extra_json) VALUES (:type, :uuid, :client_id, :updated_at, :extra_json)');
+
+		foreach ($entities as $entity) {
+			$config = self::ENTITY_TABLE_CONFIG[$entity->type] ?? self::ENTITY_TABLE_CONFIG['customgroup'];
+
+			$clientId = $entity->clientId;
+			if ($clientId === null || $clientId <= 0) {
+				while (isset($usedIds[$nextId])) {
+					$nextId++;
+				}
+				$clientId = $nextId++;
+				$usedIds[$clientId] = true;
+
+				$entity->clientId = $clientId;
+				$this->entityMapper->update($entity);
+			}
+
+			$val = ($config['nameCol'] === 'Year') ? (int)$entity->name : $entity->name;
+
+			if ($config['hasSort']) {
+				$sql = sprintf(
+					'INSERT INTO "%s" (Id, "%s", SortBy, Ascending, DateCreated, LastModified) VALUES (?, ?, ?, ?, ?, ?)',
+					$config['table'],
+					$config['nameCol'],
+				);
+				$stmt = $db->prepare($sql);
+				$stmt->execute([
+					$clientId,
+					$val,
+					$entity->sortBy,
+					$entity->ascending,
+					$entity->createdAt * 1000,
+					$entity->updatedAt * 1000,
+				]);
+			} else {
+				$sql = sprintf(
+					'INSERT INTO "%s" (Id, "%s", DateCreated, LastModified) VALUES (?, ?, ?, ?)',
+					$config['table'],
+					$config['nameCol'],
+				);
+				$stmt = $db->prepare($sql);
+				$stmt->execute([
+					$clientId,
+					$val,
+					$entity->createdAt * 1000,
+					$entity->updatedAt * 1000,
+				]);
+			}
+
+			$metaStmt->execute([
+				':type' => 'entity:' . $entity->type,
+				':uuid' => $entity->uuid,
+				':client_id' => $clientId,
+				':updated_at' => $entity->updatedAt,
+				':extra_json' => json_encode(['original_type' => $entity->type, 'name' => $entity->name], JSON_THROW_ON_ERROR),
+			]);
+		}
+	}
+
+	private function exportSongs(PDO $db, int $libraryId): void {
+		$songs = $this->songMapper->findByLibrary($libraryId, includeDeleted: false);
+		$attributesBySong = $this->attributeMapper->findAllForLibrary($libraryId);
+
+		$usedIds = [];
+		$maxId = 0;
+		foreach ($songs as $s) {
+			if ($s->clientId !== null && $s->clientId > 0) {
+				$usedIds[$s->clientId] = true;
+				if ($s->clientId > $maxId) {
+					$maxId = $s->clientId;
+				}
+			}
+		}
+
+		$nextId = $maxId + 1;
+
+		$songStmt = $db->prepare('INSERT INTO Songs (Id, Title, SortTitle, Stars, Difficulty, Duration, Keywords, Custom, Custom2, SongId, DateCreated, LastModified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+		$noteStmt = $db->prepare('INSERT INTO SongNotes (SongId, Note, Title, DateCreated, LastModified) VALUES (?, ?, ?, ?, ?)');
+		$metaStmt = $db->prepare('INSERT INTO _nc_sync_metadata (entity_type, uuid, client_id, updated_at, extra_json) VALUES (:type, :uuid, :client_id, :updated_at, :extra_json)');
+
+		foreach ($songs as $song) {
+			$clientId = $song->clientId;
+			if ($clientId === null || $clientId <= 0) {
+				while (isset($usedIds[$nextId])) {
+					$nextId++;
+				}
+				$clientId = $nextId++;
+				$usedIds[$clientId] = true;
+
+				$song->clientId = $clientId;
+				$this->songMapper->update($song);
+			}
+
+			$attrs = $attributesBySong[$song->id] ?? [];
+			$custom = $attrs['custom'] ?? '';
+			$custom2 = $attrs['custom2'] ?? '';
+
+			$songStmt->execute([
+				$clientId,
+				$song->title,
+				$song->sortTitle,
+				$song->rating,
+				$song->difficulty,
+				$song->duration,
+				$song->keywords,
+				$custom,
+				$custom2,
+				$clientId,
+				$song->createdAt * 1000,
+				$song->updatedAt * 1000,
+			]);
+
+			if ($song->notes !== '') {
+				$noteStmt->execute([
+					$clientId,
+					$song->notes,
+					'',
+					$song->createdAt * 1000,
+					$song->updatedAt * 1000,
+				]);
+			}
+
+			$extra = [
+				'opus' => $song->opus,
+				'catalog_number' => $song->catalogNumber,
+				'song_number' => $song->songNumber,
+			];
+
+			$metaStmt->execute([
+				':type' => 'song',
+				':uuid' => $song->uuid,
+				':client_id' => $clientId,
+				':updated_at' => $song->updatedAt,
+				':extra_json' => json_encode($extra, JSON_THROW_ON_ERROR),
+			]);
+		}
+	}
+
+	private function exportSongEntityLinks(PDO $db, int $libraryId): void {
+		$links = $this->entityMapper->findAllSongEntityLinksForLibrary($libraryId);
+
+		$songs = $this->songMapper->findByLibrary($libraryId, includeDeleted: false);
+		$songClientMap = [];
+		foreach ($songs as $s) {
+			if ($s->clientId !== null) {
+				$songClientMap[$s->id] = $s->clientId;
+			}
+		}
+
+		$entities = $this->entityMapper->findAllForLibrary($libraryId, includeDeleted: false);
+		$entityClientMap = [];
+		foreach ($entities as $e) {
+			if ($e->clientId !== null) {
+				$entityClientMap[$e->id] = $e->clientId;
+			}
+		}
+
+		foreach ($links as $link) {
+			$songId = $link['song_id'];
+			$entityId = $link['entity_id'];
+			$type = $link['type'];
+
+			$songClientId = $songClientMap[$songId] ?? null;
+			$entityClientId = $entityClientMap[$entityId] ?? null;
+
+			if ($songClientId === null || $entityClientId === null) {
+				continue;
+			}
+
+			$config = self::ENTITY_TABLE_CONFIG[$type] ?? self::ENTITY_TABLE_CONFIG['customgroup'];
+			$sql = sprintf(
+				'INSERT INTO "%s" ("%s", SongId) VALUES (?, ?)',
+				$config['linkTable'],
+				$config['linkCol'],
+			);
+			$stmt = $db->prepare($sql);
+			$stmt->execute([$entityClientId, $songClientId]);
+		}
+	}
+
+	private function exportFiles(PDO $db, InternalLibrary $library, ?IUser $user): void {
+		$files = $this->songFileMapper->findAllForLibrary($library->id, includeDeleted: false);
+
+		$songs = $this->songMapper->findByLibrary($library->id, includeDeleted: false);
+		$songClientMap = [];
+		foreach ($songs as $s) {
+			if ($s->clientId !== null) {
+				$songClientMap[$s->id] = $s->clientId;
+			}
+		}
+
+		$usedIds = [];
+		$maxId = 0;
+		foreach ($files as $f) {
+			if ($f->clientId !== null && $f->clientId > 0) {
+				$usedIds[$f->clientId] = true;
+				if ($f->clientId > $maxId) {
+					$maxId = $f->clientId;
+				}
+			}
+		}
+
+		$nextId = $maxId + 1;
+
+		$fileStmt = $db->prepare('INSERT INTO Files (Id, SongId, Path, PageOrder, FileSize, LastModified, Source, Type, Password, SourceFilePageCount, FileHash, Width, Height) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+		$metaStmt = $db->prepare('INSERT INTO _nc_sync_metadata (entity_type, uuid, client_id, updated_at, extra_json) VALUES (:type, :uuid, :client_id, :updated_at, :extra_json)');
+
+		foreach ($files as $file) {
+			$songClientId = $songClientMap[$file->songId] ?? null;
+			if ($songClientId === null) {
+				continue;
+			}
+
+			$clientId = $file->clientId;
+			if ($clientId === null || $clientId <= 0) {
+				while (isset($usedIds[$nextId])) {
+					$nextId++;
+				}
+				$clientId = $nextId++;
+				$usedIds[$clientId] = true;
+
+				$file->clientId = $clientId;
+				$this->songFileMapper->update($file);
+			}
+
+			$webdavPath = $this->resolveWebdavPathForFile($file, $library, $user);
+
+			$hash = $file->fileHash ?? 0;
+			$size = $file->fileSize ?? 0;
+			$pageCount = $file->pageCount ?? 1;
+
+			$fileStmt->execute([
+				$clientId,
+				$songClientId,
+				$webdavPath,
+				$file->pageOrder,
+				$size,
+				$file->updatedAt * 1000,
+				1, // Source = 1 (local)
+				$file->type,
+				'',
+				$pageCount,
+				$hash,
+				-1,
+				-1,
+			]);
+
+			$metaStmt->execute([
+				':type' => 'file',
+				':uuid' => $file->uuid,
+				':client_id' => $clientId,
+				':updated_at' => $file->updatedAt,
+				':extra_json' => json_encode(['file_id' => $file->fileId], JSON_THROW_ON_ERROR),
+			]);
+		}
+	}
+
+	private function exportMiscData(PDO $db, int $libraryId): void {
+		$miscSchemas = $this->miscMapper->getMiscSchemas($libraryId, 'mobilesheets');
+		if ($miscSchemas === []) {
+			return;
+		}
+
+		$songs = $this->songMapper->findByLibrary($libraryId, includeDeleted: true);
+		$songClientByUuid = [];
+		foreach ($songs as $s) {
+			if ($s->clientId !== null) {
+				$songClientByUuid[$s->uuid] = $s->clientId;
+			}
+		}
+
+		foreach (array_keys($miscSchemas) as $tableName) {
+			$check = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='" . str_replace("'", "''", $tableName) . "'");
+			if ($check === false || $check->fetch() === false) {
+				continue;
+			}
+
+			$rows = $this->miscMapper->getMiscDataForTable($libraryId, 'mobilesheets', $tableName, includeDeleted: false);
+			foreach ($rows as $row) {
+				if (!is_array($row) || $row === []) {
+					continue;
+				}
+
+				$cols = array_keys($row);
+				$escapedCols = array_map(fn ($c) => '"' . str_replace('"', '""', (string)$c) . '"', $cols);
+				$placeholders = array_fill(0, count($cols), '?');
+
+				$sql = sprintf(
+					'INSERT OR REPLACE INTO "%s" (%s) VALUES (%s)',
+					$tableName,
+					implode(', ', $escapedCols),
+					implode(', ', $placeholders),
+				);
+
+				try {
+					$stmt = $db->prepare($sql);
+					$stmt->execute(array_values($row));
+				} catch (\Throwable $e) {
+					$this->logger->warning('Failed to insert misc row into table: ' . $tableName, ['exception' => $e]);
+				}
+			}
+		}
+	}
+
+	private function resolveWebdavPathForFile(InternalSongFile $file, InternalLibrary $library, ?IUser $user): string {
+		if ($user !== null) {
+			try {
+				$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+				$nodes = $userFolder->getById($file->fileId);
+				if ($nodes !== []) {
+					$nodePath = $nodes[0]->getPath();
+					$msPath = $this->pathResolver->fromInternal($nodePath, $user);
+					if ($msPath !== null) {
+						return $msPath->webdav;
+					}
+				}
+			} catch (\Throwable) {
+				// Fall through
+			}
+
+			try {
+				$rootNodes = $this->rootFolder->getById($file->fileId);
+				if ($rootNodes !== []) {
+					$nodePath = $rootNodes[0]->getPath();
+					$msPath = $this->pathResolver->fromInternal($nodePath, $user);
+					if ($msPath !== null) {
+						return $msPath->webdav;
+					}
+				}
+			} catch (\Throwable) {
+				// Fall through
+			}
+		}
+
+		// Fallback
+		$base = rtrim($library->path, '/');
+		return sprintf('/remote.php/dav/files/%s/%s/file_%d.pdf', $library->userId, ltrim($base, '/'), $file->fileId);
+	}
+}

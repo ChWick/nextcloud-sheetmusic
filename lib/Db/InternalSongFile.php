@@ -11,10 +11,10 @@ namespace OCA\SheetMusic\Db;
 
 class InternalSongFile {
 	public function __construct(
-		public ?int $id,
-		public string $uuid,
-		public int $songId,
-		public int $fileId,
+		public ?int $id = null,
+		public string $uuid = '',
+		public int $songId = 0,
+		public int $fileId = 0,
 		public ?string $pageOrder = null,
 		public int $pageCount = 0,
 		public int $fileSize = 0,

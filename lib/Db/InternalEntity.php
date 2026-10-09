@@ -11,11 +11,11 @@ namespace OCA\SheetMusic\Db;
 
 class InternalEntity {
 	public function __construct(
-		public ?int $id,
-		public string $uuid,
-		public int $libraryId,
-		public string $type,
-		public string $name,
+		public ?int $id = null,
+		public string $uuid = '',
+		public int $libraryId = 0,
+		public string $type = '',
+		public string $name = '',
 		public int $sortBy = 1,
 		public int $ascending = 1,
 		public ?int $clientId = null,

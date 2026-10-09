@@ -50,6 +50,23 @@ class InternalSongMapper {
 		return InternalSong::fromRow($row);
 	}
 
+	public function findByTitle(int $libraryId, string $title): ?InternalSong {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from(self::TABLE_NAME)
+			->where($qb->expr()->eq('library_id', $qb->createNamedParameter($libraryId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('title', $qb->createNamedParameter($title, IQueryBuilder::PARAM_STR)))
+			->andWhere($qb->expr()->isNull('deleted_at'))
+			->setMaxResults(1);
+
+		$row = $qb->executeQuery()->fetchAssociative();
+		if ($row === false) {
+			return null;
+		}
+
+		return InternalSong::fromRow($row);
+	}
+
 	/**
 	 * @return list<InternalSong>
 	 */
@@ -73,6 +90,13 @@ class InternalSongMapper {
 		$result->closeCursor();
 
 		return $songs;
+	}
+
+	/**
+	 * @return list<InternalSong>
+	 */
+	public function findByLibrary(int $libraryId, bool $includeDeleted = false): array {
+		return $this->findAllForLibrary($libraryId, $includeDeleted);
 	}
 
 	public function findByClientId(int $libraryId, int $clientId): ?InternalSong {
