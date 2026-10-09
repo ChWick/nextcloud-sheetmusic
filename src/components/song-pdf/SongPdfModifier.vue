@@ -12,7 +12,7 @@ import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist'
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { PDFDocument, degrees } from 'pdf-lib'
 import { apiDelete, apiPost } from '../../api/client'
-import { showError, showSuccess } from '@nextcloud/dialogs'
+import { showError, showInfo, showSuccess } from '@nextcloud/dialogs'
 import { getCacheBustedFileUrl, getFileName } from '../../utils/file'
 import { describeRequestFailure } from '../../utils/api'
 import OriginalSongActionSelector, { type OriginalSongAction } from './OriginalSongActionSelector.vue'
@@ -330,6 +330,7 @@ function resetRotations() {
 		pageRotations.value[i] = 0
 	}
 	pageRotateCropToOriginal.value = {}
+	showInfo(t('mobilesheetsmanager', 'Reset all page rotations for "{title}".', { title: props.song.title }))
 }
 
 function openRotateModal(pageNum: number) {
@@ -440,6 +441,7 @@ function handleApplyCrop(crop: PageCrop, scope: 'current' | 'all') {
 
 function resetAllCrops() {
 	pageCrops.value = {}
+	showInfo(t('mobilesheetsmanager', 'Reset all page crops for "{title}".', { title: props.song.title }))
 }
 
 const hasAnyCrop = computed(() => {
@@ -609,9 +611,10 @@ async function handleExecuteJoin(options: {
 		await nextTick()
 		initThumbnailObserver(pdf)
 
-		showSuccess(t('mobilesheetsmanager', 'Joined pages {pageA} and {pageB} into a single page.', {
+		showSuccess(t('mobilesheetsmanager', 'Joined pages {pageA} and {pageB} in "{title}".', {
 			pageA: options.pageA,
 			pageB: options.pageB,
+			title: props.song.title,
 		}))
 	} catch (err: any) {
 		console.error('Failed to join pages:', err)
@@ -729,14 +732,15 @@ async function saveRotationsAndCrops() {
 		})
 
 		const data = uploadRes.data.ocs.data as LibraryData
+		const songTitle = props.song.title || t('mobilesheetsmanager', 'Song')
 		const hasMultipleTypes = [modifiedRotations, modifiedCrops, modifiedDeletions, hasAnyJoin.value].filter(Boolean).length > 1
 		const successMsg = hasMultipleTypes || hasAnyJoin.value
-			? t('mobilesheetsmanager', 'PDF changes saved successfully.')
+			? t('mobilesheetsmanager', 'PDF changes saved successfully for "{title}".', { title: songTitle })
 			: modifiedDeletions
-				? t('mobilesheetsmanager', 'Pages deleted and PDF saved successfully.')
+				? t('mobilesheetsmanager', 'Pages deleted and PDF saved successfully for "{title}".', { title: songTitle })
 				: modifiedRotations
-					? t('mobilesheetsmanager', 'Rotated PDF saved successfully.')
-					: t('mobilesheetsmanager', 'Cropped PDF saved successfully.')
+					? t('mobilesheetsmanager', 'Rotated PDF saved successfully for "{title}".', { title: songTitle })
+					: t('mobilesheetsmanager', 'Cropped PDF saved successfully for "{title}".', { title: songTitle })
 		showSuccess(successMsg)
 		emit('saved', data, props.song.id)
 	} catch (err: any) {
@@ -874,7 +878,7 @@ async function saveSplits() {
 				queryParams: { libraryId: props.libraryId, deleteFiles: true },
 			})
 			lastLibraryData = (delSongRes.data?.ocs?.data as LibraryData) ?? lastLibraryData
-			showSuccess(t('mobilesheetsmanager', 'Successfully split PDF into {count} songs and deleted original song.', { count: splitSegments.value.length }))
+			showSuccess(t('mobilesheetsmanager', 'Successfully split "{title}" into {count} songs and deleted original song.', { title: props.song.title, count: splitSegments.value.length }))
 			if (lastLibraryData) {
 				emit('saved', lastLibraryData, targetOpenSongId)
 			} else {
@@ -890,7 +894,7 @@ async function saveSplits() {
 			lastLibraryData = (delRes.data?.ocs?.data as LibraryData) ?? lastLibraryData
 		}
 
-		showSuccess(t('mobilesheetsmanager', 'Successfully split PDF into {count} songs.', { count: splitSegments.value.length }))
+		showSuccess(t('mobilesheetsmanager', 'Successfully split "{title}" into {count} songs.', { title: props.song.title, count: splitSegments.value.length }))
 		if (lastLibraryData) {
 			emit('saved', lastLibraryData, targetOpenSongId)
 		} else {

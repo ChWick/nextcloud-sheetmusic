@@ -45,6 +45,8 @@ vi.mock('@nextcloud/dialogs', () => ({
 	FilePickerClosed: class FilePickerClosed extends Error {},
 	getFilePickerBuilder: vi.fn(),
 	showSuccess: vi.fn(),
+	showError: vi.fn(),
+	showInfo: vi.fn(),
 }))
 
 describe('SongEditor.vue', () => {
@@ -291,6 +293,8 @@ describe('SongEditor.vue', () => {
 			'/ocs/v2.php/apps/mobilesheetsmanager/api/songs',
 			expect.objectContaining({ composerIds: [77] }),
 		)
+		await flushPromises()
+		expect(showSuccess).toHaveBeenCalledWith('Song "Song with a new composer" created successfully.')
 	})
 
 	it('renders title input with song title when song prop is provided', () => {
@@ -413,7 +417,7 @@ describe('SongEditor.vue', () => {
 			{ libraryId: 1 },
 		)
 		expect(wrapper.text()).toContain('1 file(s) detached and kept in storage.')
-		expect(showSuccess).toHaveBeenCalledWith('Song updated successfully. 1 file(s) detached and kept in storage.')
+		expect(showSuccess).toHaveBeenCalledWith('Song "Symphony No. 5" updated successfully. 1 file(s) detached and kept in storage.')
 	})
 
 	it('stages uploaded computer file on file input change', async () => {

@@ -98,6 +98,7 @@ import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import ViewHeader from './ViewHeader.vue'
 import { useLibraryData } from '../composables/useLibraryData'
 import { apiDelete, apiPost } from '../api/client'
+import { showError, showSuccess } from '@nextcloud/dialogs'
 import { normalizeSearchString } from '../utils/string'
 
 const props = defineProps<{
@@ -370,8 +371,10 @@ async function createEntity() {
     await apiPost(postEndpoint as any, body as any)
     closeCreateDialog()
     await loadLibraryData(props.selectedLibrary)
+    showSuccess(t('mobilesheetsmanager', '{entity} "{name}" created successfully.', { entity: config.value.singular, name }))
   } catch {
     createError.value = t('mobilesheetsmanager', 'Could not create the {entity}.', { entity: config.value.singular })
+    showError(createError.value)
   } finally {
     isCreating.value = false
   }
@@ -400,6 +403,7 @@ async function deleteEntity() {
   isDeleting.value = true
   deleteError.value = ''
   try {
+    const entityName = (entity as any).name ?? (entity as any).title ?? ''
     const deleteEndpoint = config.value.deleteEndpoint
     const response = await apiDelete(deleteEndpoint as any, {
       pathParams: { id: entity.id },
@@ -407,8 +411,14 @@ async function deleteEntity() {
     })
     closeDeleteDialog()
     handleLibraryDataUpdate(response.data.ocs.data)
+    if (entityName) {
+      showSuccess(t('mobilesheetsmanager', '{entity} "{name}" deleted successfully.', { entity: config.value.singular, name: entityName }))
+    } else {
+      showSuccess(t('mobilesheetsmanager', '{entity} deleted successfully.', { entity: config.value.singular }))
+    }
   } catch {
     deleteError.value = t('mobilesheetsmanager', 'Could not delete the {entity}.', { entity: config.value.singular })
+    showError(deleteError.value)
   } finally {
     isDeleting.value = false
   }

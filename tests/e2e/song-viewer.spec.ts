@@ -92,6 +92,6 @@ test.describe('Song Viewer UI & Icon Buttons', () => {
 
 		// Verify editor title input or form action is visible
 		await expect(page.getByLabel('Song Title')).toBeVisible()
-		await expect(page.getByRole('button', { name: 'Save and Close' })).toBeVisible()
+		await expect(page.locator('form').getByRole('button', { name: 'Save and Close' })).toBeVisible()
 	})
 })

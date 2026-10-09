@@ -3,6 +3,8 @@ import { mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import EntitiesView from '../../../src/components/EntitiesView.vue'
 
+import { showError, showSuccess } from '@nextcloud/dialogs'
+
 vi.mock('@nextcloud/axios', () => ({
 	default: {
 		get: vi.fn(),
@@ -11,8 +13,23 @@ vi.mock('@nextcloud/axios', () => ({
 	},
 }))
 
+vi.mock('@nextcloud/dialogs', () => ({
+	showSuccess: vi.fn(),
+	showError: vi.fn(),
+	showInfo: vi.fn(),
+	showWarning: vi.fn(),
+}))
+
 vi.mock('@nextcloud/router', () => ({
-	generateOcsUrl: vi.fn((path: string) => `/ocs/v2.php${path}`),
+	generateOcsUrl: vi.fn((path: string, params?: Record<string, any>) => {
+		let res = path
+		if (params) {
+			for (const [k, v] of Object.entries(params)) {
+				res = res.replace(`{${k}}`, String(v))
+			}
+		}
+		return `/ocs/v2.php${res}`
+	}),
 	generateUrl: vi.fn((path: string) => path),
 }))
 
@@ -182,5 +199,115 @@ describe('EntitiesView.vue', () => {
 		await searchInput.setValue('Bách')
 		expect(wrapper.text()).toContain('Bach')
 		expect(wrapper.text()).not.toContain('Händel')
+	})
+
+	it('creates an entity and shows success notification with entity name', async () => {
+		vi.mocked(axios.get).mockResolvedValue({
+			data: {
+				ocs: {
+					data: {
+						songs: [],
+						composers: [{ id: 1, name: 'Beethoven' }],
+						books: [],
+						collections: [],
+						artists: [],
+					},
+				},
+			},
+		})
+		vi.mocked(axios.post).mockResolvedValueOnce({
+			data: {
+				ocs: {
+					data: { id: 2, name: 'Brahms' },
+				},
+			},
+		})
+
+		const wrapper = mount(EntitiesView, {
+			props: { selectedLibrary: 1, entityType: 'composers' },
+		})
+		await new Promise((r) => setTimeout(r, 10))
+
+		// Trigger create dialog
+		const viewHeader = wrapper.findComponent({ name: 'ViewHeader' })
+		viewHeader.vm.$emit('create')
+		await wrapper.vm.$nextTick()
+
+		// Find the text input in dialog and set value
+		const dialogInput = wrapper.findAll('input').find((el) => el.attributes('placeholder')?.includes('name'))
+			?? Array.from(document.body.querySelectorAll('input')).find((el) => el.getAttribute('placeholder')?.includes('name'))
+		expect(dialogInput).toBeDefined()
+		if ('setValue' in dialogInput!) {
+			await dialogInput.setValue('Brahms')
+		} else {
+			(dialogInput as HTMLInputElement).value = 'Brahms'
+			dialogInput.dispatchEvent(new Event('input'))
+		}
+		await wrapper.vm.$nextTick()
+
+		// Click Create button
+		const createButton = Array.from(document.body.querySelectorAll('button')).find((b) => b.textContent?.includes('Create composer'))
+		expect(createButton).toBeDefined()
+		createButton!.click()
+		await new Promise((r) => setTimeout(r, 20))
+
+		expect(axios.post).toHaveBeenCalledWith(
+			'/ocs/v2.php/apps/mobilesheetsmanager/api/composers',
+			{ libraryId: 1, name: 'Brahms' },
+		)
+		expect(showSuccess).toHaveBeenCalledWith('composer "Brahms" created successfully.')
+	})
+
+	it('deletes an entity and shows success notification with entity name', async () => {
+		vi.mocked(axios.get).mockResolvedValueOnce({
+			data: {
+				ocs: {
+					data: {
+						songs: [],
+						composers: [{ id: 1, name: 'Beethoven' }],
+						books: [],
+						collections: [],
+						artists: [],
+					},
+				},
+			},
+		})
+		vi.mocked(axios.delete).mockResolvedValueOnce({
+			data: {
+				ocs: {
+					data: {
+						songs: [],
+						composers: [],
+						books: [],
+						collections: [],
+						artists: [],
+					},
+				},
+			},
+		})
+
+		const wrapper = mount(EntitiesView, {
+			props: { selectedLibrary: 1, entityType: 'composers' },
+			attachTo: document.body,
+		})
+		await new Promise((r) => setTimeout(r, 10))
+
+		// Click delete button on the row
+		const deleteBtn = wrapper.find('button[aria-label="Delete composer"]')
+		expect(deleteBtn.exists()).toBe(true)
+		await deleteBtn.trigger('click')
+		await wrapper.vm.$nextTick()
+
+		// Confirm delete dialog button
+		const confirmDeleteBtn = Array.from(document.body.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Delete composer')
+		expect(confirmDeleteBtn).toBeDefined()
+		confirmDeleteBtn!.click()
+		await new Promise((r) => setTimeout(r, 20))
+
+		expect(axios.delete).toHaveBeenCalledWith(
+			'/ocs/v2.php/apps/mobilesheetsmanager/api/composers/1',
+			{ params: { libraryId: 1 } },
+		)
+		expect(showSuccess).toHaveBeenCalledWith('composer "Beethoven" deleted successfully.')
 	})
 })

@@ -31,10 +31,10 @@ test.describe('Navigation & Library Management', () => {
 		await expect(page).toHaveURL(/#\/library\/1\/artists/)
 		await expect(page.getByRole('heading', { name: 'Artists' })).toBeVisible()
 
-		// Navigate to Files Sync
-		await nav.locator('.app-navigation-entry__name').getByText('Files', { exact: true }).click()
-		await expect(page).toHaveURL(/#\/library\/1\/files/)
-		await expect(page.getByRole('heading', { name: 'Files' })).toBeVisible()
+		// Navigate to Integrity Audit
+		await nav.locator('.app-navigation-entry__name').getByText('Integrity Audit', { exact: true }).click()
+		await expect(page).toHaveURL(/#\/library\/1\/integrity/)
+		await expect(page.getByRole('heading', { name: 'Integrity Audit' })).toBeVisible()
 
 		// Navigate back to Songs
 		await nav.locator('.app-navigation-entry__name').getByText('Songs', { exact: true }).click()

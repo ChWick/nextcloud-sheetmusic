@@ -28,14 +28,15 @@ test.describe('Song Editor UI & Action Buttons', () => {
 		await expect(fileItemOpenBtn).toBeVisible()
 		await expect(fileItemDeleteBtn).toBeVisible()
 		await expect(fileItemOpenBtn).toHaveAttribute('title', 'Open in external viewer')
-		await expect(fileItemDeleteBtn).toHaveAttribute('title', 'Delete file')
+		await expect(fileItemDeleteBtn).toHaveAttribute('title', 'Delete file from storage')
 		await expect(fileItemOpenBtn.locator('svg')).toBeVisible()
 		await expect(fileItemDeleteBtn.locator('svg')).toBeVisible()
 
 		// Form bottom action buttons
-		const cancelBtn = page.getByRole('button', { name: 'Cancel' })
-		const saveKeepOpenBtn = page.getByRole('button', { name: 'Save without closing' })
-		const saveCloseBtn = page.getByRole('button', { name: 'Save and Close' })
+		const formActions = page.locator('form')
+		const cancelBtn = formActions.getByRole('button', { name: 'Cancel' })
+		const saveKeepOpenBtn = formActions.getByRole('button', { name: 'Save without closing' })
+		const saveCloseBtn = formActions.getByRole('button', { name: 'Save and Close' })
 
 		await expect(cancelBtn).toBeVisible()
 		await expect(saveKeepOpenBtn).toBeVisible()

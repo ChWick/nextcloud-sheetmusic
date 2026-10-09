@@ -3,8 +3,9 @@ import type { INode } from '@nextcloud/files'
 import type { Artist, Book, Collection, Composer, CreatedSongData, CustomGroup, Genre, Key, LibraryData, PendingAddition, PendingAttachment, PendingUpload, Signature, Song, SongFile, SongPrefill, SourceType, Year } from '../types/song'
 
 import axios from '@nextcloud/axios'
-import { FilePickerClosed, getFilePickerBuilder, showSuccess } from '@nextcloud/dialogs'
+import { FilePickerClosed, getFilePickerBuilder, showError, showInfo, showSuccess } from '@nextcloud/dialogs'
 import { translate as t } from '@nextcloud/l10n'
+import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
@@ -355,7 +356,12 @@ function restoreDetachedFile(file: SongFile) {
 function handleFileUpload(file: File) {
 	errorMessage.value = ''
 	stageUpload(file)
-	successMessage.value = t('mobilesheetsmanager', 'The file is added to the song when you save.')
+	const songTitle = title.value?.trim()
+	const infoMsg = songTitle
+		? t('mobilesheetsmanager', 'The file will be added to "{title}" when you save.', { title: songTitle })
+		: t('mobilesheetsmanager', 'The file is added to the song when you save.')
+	successMessage.value = infoMsg
+	showInfo(infoMsg)
 }
 
 async function openNextcloudPicker() {
@@ -401,7 +407,12 @@ function stageAttachNextcloudFile() {
 	stageAttachment(node.path, node.basename, attachAction.value)
 	isAttachDialogOpen.value = false
 	selectedNextcloudNode.value = undefined
-	successMessage.value = t('mobilesheetsmanager', 'The file is added to the song when you save.')
+	const songTitle = title.value?.trim()
+	const infoMsg = songTitle
+		? t('mobilesheetsmanager', 'The file will be added to "{title}" when you save.', { title: songTitle })
+		: t('mobilesheetsmanager', 'The file is added to the song when you save.')
+	successMessage.value = infoMsg
+	showInfo(infoMsg)
 }
 
 function openUploadPicker() {
@@ -527,13 +538,21 @@ async function saveSong(closeAfter: boolean) {
 		pendingAttachments.value = []
 		pendingUploads.value = []
 
+		const songTitle = title.value?.trim()
 		if (detachedFileCount > 0) {
-			successMessage.value = t('mobilesheetsmanager', 'Song updated successfully. {count} file(s) detached and kept in storage.', { count: detachedFileCount })
+			successMessage.value = songTitle
+				? t('mobilesheetsmanager', 'Song "{title}" updated successfully. {count} file(s) detached and kept in storage.', { title: songTitle, count: detachedFileCount })
+				: t('mobilesheetsmanager', 'Song updated successfully. {count} file(s) detached and kept in storage.', { count: detachedFileCount })
 			showSuccess(successMessage.value)
 		} else {
 			successMessage.value = isNewSong.value
-				? t('mobilesheetsmanager', 'Song created successfully.')
-				: t('mobilesheetsmanager', 'Song updated successfully.')
+				? songTitle
+					? t('mobilesheetsmanager', 'Song "{title}" created successfully.', { title: songTitle })
+					: t('mobilesheetsmanager', 'Song created successfully.')
+				: songTitle
+					? t('mobilesheetsmanager', 'Song "{title}" updated successfully.', { title: songTitle })
+					: t('mobilesheetsmanager', 'Song updated successfully.')
+			showSuccess(successMessage.value)
 		}
 		if (closeAfter) {
 			emit('saved', data, songId)
@@ -548,6 +567,7 @@ async function saveSong(closeAfter: boolean) {
 			? t('mobilesheetsmanager', 'Failed to create the song.')
 			: t('mobilesheetsmanager', 'Failed to save song changes.')
 		errorMessage.value = describeRequestFailure(error, fallback)
+		showError(errorMessage.value)
 	} finally {
 		isSaving.value = false
 	}

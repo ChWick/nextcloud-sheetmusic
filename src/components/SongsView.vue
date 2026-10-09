@@ -342,8 +342,8 @@
 <script setup lang="ts">
 import { t } from '@nextcloud/l10n';
 import axios from '@nextcloud/axios';
-import { generateOcsUrl } from '@nextcloud/router';
-import { FilePickerClosed, getFilePickerBuilder } from '@nextcloud/dialogs';
+import { FilePickerClosed, getFilePickerBuilder, showError, showInfo, showSuccess } from '@nextcloud/dialogs';
+import { describeRequestFailure } from '../utils/api';
 import { ref, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import NcButton from '@nextcloud/vue/components/NcButton';
@@ -548,6 +548,7 @@ async function executeMerge(payload: {
       },
       { headers: { 'OCS-APIREQUEST': 'true', Accept: 'application/json' } },
     );
+    const targetSong = songs.value.find(s => s.id === payload.targetSongId);
     isMergeDialogOpen.value = false;
     mergeIssue.value = null;
     clearSelection();
@@ -556,6 +557,12 @@ async function executeMerge(payload: {
     } else {
       await loadLibraryData(props.selectedLibrary);
     }
+    const targetTitle = targetSong?.title ?? '';
+    if (targetTitle) {
+      showSuccess(t('mobilesheetsmanager', 'Songs merged successfully into "{title}".', { title: targetTitle }));
+    } else {
+      showSuccess(t('mobilesheetsmanager', 'Songs merged successfully.'));
+    }
   } catch (error) {
     console.error('Failed to merge songs:', error);
     const serverMessage = axios.isAxiosError(error)
@@ -563,6 +570,7 @@ async function executeMerge(payload: {
       : undefined;
     mergeError.value = serverMessage
       ?? t('mobilesheetsmanager', 'Failed to merge songs. Please try again.');
+    showError(mergeError.value);
   } finally {
     isMerging.value = false;
   }
@@ -591,6 +599,7 @@ async function executeResolveBoth(payload: {
     } else {
       await loadLibraryData(props.selectedLibrary);
     }
+    showSuccess(t('mobilesheetsmanager', 'Both songs saved successfully.'));
   } catch (error: any) {
     console.error('Failed to resolve both songs:', error);
     const serverMessage = error?.response?.data?.ocs?.data?.message
@@ -598,6 +607,7 @@ async function executeResolveBoth(payload: {
       ?? error?.message;
     mergeError.value = serverMessage
       ?? t('mobilesheetsmanager', 'Failed to save updated songs. Please try again.');
+    showError(mergeError.value);
   } finally {
     isMerging.value = false;
   }
@@ -605,6 +615,7 @@ async function executeResolveBoth(payload: {
 
 async function handleApplyBatchUpdate(payload: BatchUpdatePayload) {
   if (selectedSongIds.value.length === 0) return;
+  const count = selectedSongIds.value.length;
   try {
     const response = await apiPost('/api/songs-batch-update', {
       libraryId: props.selectedLibrary,
@@ -616,8 +627,10 @@ async function handleApplyBatchUpdate(payload: BatchUpdatePayload) {
     if (response.data?.ocs?.data) {
       handleLibraryDataUpdate(response.data.ocs.data);
     }
+    showSuccess(t('mobilesheetsmanager', 'Successfully updated {count} songs.', { count }));
   } catch (error) {
     console.error('Failed to batch update songs:', error);
+    showError(describeRequestFailure(error, t('mobilesheetsmanager', 'Failed to update selected songs.')));
   }
 }
 
@@ -898,11 +911,18 @@ function handleSaved(data: LibraryData, songId?: number) {
  * drop it explicitly: it would otherwise keep the removed song open.
  */
 async function handleDeleted(data: LibraryData | undefined, songId: number) {
+  const deletedSong = songs.value.find(s => s.id === songId);
+  const songTitle = deletedSong?.title ?? openSong.value?.title;
   if (data) {
     handleLibraryDataUpdate(data);
   } else {
     // The response carried no data, e.g. because it was empty; ask the server instead.
     await loadLibraryData(props.selectedLibrary);
+  }
+  if (songTitle) {
+    showSuccess(t('mobilesheetsmanager', 'Song "{title}" deleted successfully.', { title: songTitle }));
+  } else {
+    showSuccess(t('mobilesheetsmanager', 'Song deleted successfully.'));
   }
   if (songIdInUrl.value === songId) goBackToSongs();
 }

@@ -56,6 +56,8 @@ vi.mock('@nextcloud/l10n', async (importOriginal) => {
 vi.mock('@nextcloud/dialogs', () => ({
 	showSuccess: vi.fn(),
 	showError: vi.fn(),
+	showInfo: vi.fn(),
+	showWarning: vi.fn(),
 }))
 
 vi.mock('@nextcloud/vue/components/NcCheckboxRadioSwitch', () => ({

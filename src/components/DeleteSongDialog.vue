@@ -5,6 +5,7 @@ import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
+import { showError } from '@nextcloud/dialogs'
 import type { LibraryData, Song } from '../types/song'
 import { apiDelete } from '../api/client'
 import { describeRequestFailure } from '../utils/api'
@@ -41,6 +42,7 @@ async function confirmDeleteSong() {
 		emit('deleted', data, songId)
 	} catch (error) {
 		deleteError.value = describeRequestFailure(error, t('mobilesheetsmanager', 'Failed to delete the song.'))
+		showError(deleteError.value)
 	} finally {
 		isDeletingSong.value = false
 	}
