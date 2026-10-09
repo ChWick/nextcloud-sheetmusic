@@ -455,6 +455,52 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		}
 	}
 
+	public function testFixIssueFixesSingleInvalidNamingRule(): void {
+		$libraryService = $this->createLibraryService();
+		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
+		$databasePath = $fixture['path'];
+		$database = $fixture['connection'];
+		$database->exec("INSERT INTO Songs (Id, Title) VALUES (10, 'Song 1')");
+		$database->exec("INSERT INTO Files (Id, SongId, Path) VALUES (100, 10, '/remote.php/dav/files/user1/Noten/OldPath.pdf')");
+		$database->exec("INSERT INTO Composer (Id, Name) VALUES (1, 'Bach')");
+		$database->exec('INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (1, 10)');
+		$songMapper = $this->createSongMapper();
+		$targetFolder = $this->createMock(Folder::class);
+		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
+		$targetFolder->method('nodeExists')->willReturnCallback(static fn (string $path): bool => $path === 'OldPath.pdf');
+		$targetFolder->method('getDirectoryListing')->willReturn([]);
+		$sourceFile = $this->createMock(File::class);
+		$sourceFile->method('getContent')->willReturn('PDF');
+		$sourceFile->method('getMTime')->willReturn(1);
+		$sourceFile->expects($this->once())->method('move')->with('/user1/files/Noten/Bach/Bach - Song 1.pdf')->willReturn($sourceFile);
+		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager(
+			$databasePath,
+			$targetFolder,
+			['Noten/OldPath.pdf' => $sourceFile],
+		);
+		$userFolder = $rootFolder->getUserFolder('user1');
+		$userFolder->method('nodeExists')->willReturnCallback(
+			static fn (string $path): bool => in_array($path, ['Noten', 'Noten/OldPath.pdf'], true),
+		);
+		$userFolder->method('newFolder')->willReturn($this->createMock(Folder::class));
+
+		try {
+			$logger = $this->createMock(\Psr\Log\LoggerInterface::class);
+			$service = new LibraryIntegrityService($libraryService, $songMapper, $fileManager, $rootFolder, $pathResolver, $logger);
+
+			$result = $service->fixIssue(1, 'user1', IntegrityIssue::TYPE_INVALID_NAMING_RULE, songId: 10, fileId: 100);
+
+			self::assertTrue($result['success']);
+			self::assertSame(1, $result['fixedCount']);
+			self::assertSame(
+				'/remote.php/dav/files/user1/Noten/Bach/Bach - Song 1.pdf',
+				$database->query('SELECT Path FROM Files WHERE Id = 100')->fetchColumn(),
+			);
+		} finally {
+			unlink($databasePath);
+		}
+	}
+
 	public function testCheckIntegrityPopulatesOrphanFileDetails(): void {
 		$libraryService = $this->createLibraryService();
 		$fixture = \TestSupport\MobileSheetsTestDatabase::create();

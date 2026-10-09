@@ -467,6 +467,31 @@ class LibraryIntegrityService {
 			];
 		}
 
+		if ($issueType === IntegrityIssue::TYPE_INVALID_NAMING_RULE && $songId !== null) {
+			$userFolder = $this->rootFolder->getUserFolder($userId);
+			$user = $userFolder->getOwner();
+			['databasePath' => $databasePath, 'targetFolder' => $targetFolder] = $this->fileManager->libraryContext($libraryId, $user);
+			$hashCodes = MobileSheetsHashCodesFile::forDatabase($databasePath, $this->logger);
+
+			try {
+				$this->fileManager->regenerateSongFilePaths($songId, $user, $targetFolder, $databasePath, $hashCodes);
+				$hashCodes?->save();
+
+				return [
+					'success' => true,
+					'fixedCount' => 1,
+					'message' => 'File path updated according to naming rules.',
+				];
+			} catch (\Throwable $e) {
+				$this->logger->warning(sprintf('Cannot auto-fix naming rule for song ID %d: %s', $songId, $e->getMessage()));
+				return [
+					'success' => false,
+					'fixedCount' => 0,
+					'message' => 'Failed to apply naming rule: ' . $e->getMessage(),
+				];
+			}
+		}
+
 		if ($issueType !== IntegrityIssue::TYPE_PDF_METADATA_MISMATCH || $songId === null || $fileId === null) {
 			return [
 				'success' => false,

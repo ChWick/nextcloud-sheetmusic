@@ -215,4 +215,68 @@ export async function setupMockApi(page: Page) {
 			body: Buffer.from(minimalPdf, 'utf-8'),
 		})
 	})
+
+	// Mock integrity audit endpoint
+	await page.route('**/api/libraries/*/integrity', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				ocs: {
+					meta: { status: 'ok', statuscode: 200 },
+					data: {
+						issues: [
+							{
+								type: 'invalid_naming_rule',
+								severity: 'warning',
+								message: 'File path does not match standard naming rule.',
+								songId: 5,
+								songTitle: 'Symphony No. 5',
+								fileId: 50,
+								path: 'Noten/OldPath.pdf',
+								suggestedPath: 'Noten/Beethoven/Beethoven - Symphony 5.pdf',
+								fixable: true,
+							},
+						],
+					},
+				},
+			}),
+		})
+	})
+
+	// Mock fix integrity issue endpoint
+	await page.route('**/api/libraries/*/integrity/fix', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				ocs: {
+					meta: { status: 'ok', statuscode: 200 },
+					data: {
+						success: true,
+						fixedCount: 1,
+						message: 'File path updated according to naming rules.',
+					},
+				},
+			}),
+		})
+	})
+
+	// Mock fix-all integrity issues endpoint
+	await page.route('**/api/libraries/*/integrity/fix-all', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				ocs: {
+					meta: { status: 'ok', statuscode: 200 },
+					data: {
+						success: true,
+						fixedCount: 1,
+						message: 'Applied autofix to 1 issue(s).',
+					},
+				},
+			}),
+		})
+	})
 }

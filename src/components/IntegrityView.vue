@@ -4,7 +4,9 @@ import { useRouter } from 'vue-router'
 import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
+import { showError, showSuccess } from '@nextcloud/dialogs'
 import RefreshIcon from 'vue-material-design-icons/Refresh.vue'
 import ChevronDownIcon from 'vue-material-design-icons/ChevronDown.vue'
 import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
@@ -45,8 +47,12 @@ function openOrphanFixer(issue: IntegrityIssue) {
 }
 
 function handleOrphanResolved() {
+	if (activeOrphanIssue.value) {
+		const key = keyForIssue(activeOrphanIssue.value)
+		integrityIssues.value = integrityIssues.value.filter(i => keyForIssue(i) !== key)
+		showSuccess(t('mobilesheetsmanager', 'Orphan file resolved successfully.'))
+	}
 	activeOrphanIssue.value = null
-	auditIntegrity()
 }
 
 function toggleGroup(groupType: string) {
@@ -94,12 +100,14 @@ const groupedIssues = computed(() => {
 })
 
 /** Run integrity audit check for the selected library */
-async function auditIntegrity() {
+async function auditIntegrity(keepCurrentIssues = false) {
 	if (props.selectedLibrary < 0) return
 
 	isCheckingIntegrity.value = true
 	integrityError.value = ''
-	integrityIssues.value = []
+	if (!keepCurrentIssues) {
+		integrityIssues.value = []
+	}
 
 	try {
 		const response = await apiGet(`/api/libraries/${props.selectedLibrary}/integrity`)
@@ -111,6 +119,7 @@ async function auditIntegrity() {
 			: undefined
 		integrityError.value = serverMessage
 			?? t('mobilesheetsmanager', 'Failed to audit library integrity. Please try again.')
+		showError(integrityError.value)
 	} finally {
 		isCheckingIntegrity.value = false
 	}
@@ -143,8 +152,15 @@ async function fixAllIssues(issueType?: string) {
 		const result = response.data?.ocs?.data
 		if (result && !result.success) {
 			integrityError.value = result.message ?? t('mobilesheetsmanager', 'Failed to fix integrity issues.')
+			showError(integrityError.value)
 		} else {
-			await auditIntegrity()
+			if (issueType) {
+				integrityIssues.value = integrityIssues.value.filter(i => i.type !== issueType)
+			} else {
+				integrityIssues.value = integrityIssues.value.filter(i => !i.fixable)
+			}
+			const fixedCount = result?.fixedCount ?? 0
+			showSuccess(t('mobilesheetsmanager', 'Fixed {count} integrity issue(s).', { count: fixedCount }))
 		}
 	} catch (error) {
 		console.error('Failed to batch fix integrity issues:', error)
@@ -153,6 +169,7 @@ async function fixAllIssues(issueType?: string) {
 			: undefined
 		integrityError.value = serverMessage
 			?? t('mobilesheetsmanager', 'Failed to batch fix integrity issues. Please try again.')
+		showError(integrityError.value)
 	} finally {
 		isBatchFixing.value = false
 	}
@@ -175,8 +192,17 @@ async function fixIntegrityIssue(issue: IntegrityIssue) {
 		const result = response.data?.ocs?.data
 		if (result && !result.success) {
 			integrityError.value = result.message ?? t('mobilesheetsmanager', 'Failed to fix integrity issue.')
+			showError(integrityError.value)
 		} else {
-			await auditIntegrity()
+			integrityIssues.value = integrityIssues.value.filter(i => keyForIssue(i) !== key)
+			const songTitle = issue.songTitle
+			if (issue.type === 'invalid_naming_rule' && songTitle) {
+				showSuccess(t('mobilesheetsmanager', 'Naming rule applied for "{title}".', { title: songTitle }))
+			} else if (songTitle) {
+				showSuccess(t('mobilesheetsmanager', 'Fixed integrity issue for "{title}".', { title: songTitle }))
+			} else {
+				showSuccess(result?.message ?? t('mobilesheetsmanager', 'Integrity issue fixed successfully.'))
+			}
 		}
 	} catch (error) {
 		console.error('Failed to fix integrity issue:', error)
@@ -185,6 +211,7 @@ async function fixIntegrityIssue(issue: IntegrityIssue) {
 			: undefined
 		integrityError.value = serverMessage
 			?? t('mobilesheetsmanager', 'Failed to fix integrity issue. Please try again.')
+		showError(integrityError.value)
 	} finally {
 		fixingKey.value = null
 	}
@@ -225,8 +252,17 @@ async function executeMerge(payload: {
 			{ headers: { 'OCS-APIREQUEST': 'true', Accept: 'application/json' } },
 		)
 		isMergeDialogOpen.value = false
+		const keepTitle = (payload.merged?.title as string | undefined) ?? mergeIssue.value?.songTitle
+		if (mergingKey.value) {
+			const mKey = mergingKey.value
+			integrityIssues.value = integrityIssues.value.filter(i => keyForIssue(i) !== mKey)
+		}
 		mergeIssue.value = null
-		await auditIntegrity()
+		if (keepTitle) {
+			showSuccess(t('mobilesheetsmanager', 'Songs merged successfully into "{title}".', { title: keepTitle }))
+		} else {
+			showSuccess(t('mobilesheetsmanager', 'Songs merged successfully.'))
+		}
 	} catch (error) {
 		console.error('Failed to merge songs:', error)
 		const serverMessage = axios.isAxiosError(error)
@@ -234,6 +270,7 @@ async function executeMerge(payload: {
 			: undefined
 		integrityError.value = serverMessage
 			?? t('mobilesheetsmanager', 'Failed to merge songs. Please try again.')
+		showError(integrityError.value)
 	} finally {
 		isMerging.value = false
 		mergingKey.value = null
@@ -257,8 +294,12 @@ async function executeResolveBoth(payload: {
 		})
 
 		isMergeDialogOpen.value = false
+		if (mergingKey.value) {
+			const mKey = mergingKey.value
+			integrityIssues.value = integrityIssues.value.filter(i => keyForIssue(i) !== mKey)
+		}
 		mergeIssue.value = null
-		await auditIntegrity()
+		showSuccess(t('mobilesheetsmanager', 'Both songs saved successfully.'))
 	} catch (error: any) {
 		console.error('Failed to resolve both songs:', error)
 		const serverMessage = error?.response?.data?.ocs?.data?.message
@@ -266,6 +307,7 @@ async function executeResolveBoth(payload: {
 			?? error?.message
 		integrityError.value = serverMessage
 			?? t('mobilesheetsmanager', 'Failed to save updated songs. Please try again.')
+		showError(integrityError.value)
 	} finally {
 		isMerging.value = false
 		mergingKey.value = null
@@ -299,7 +341,7 @@ function openSong(songId: number) {
 					<NcButton
 						variant="secondary"
 						:disabled="isCheckingIntegrity"
-						@click="auditIntegrity">
+						@click="auditIntegrity(true)">
 						<template #icon>
 							<RefreshIcon :size="20" />
 						</template>
@@ -309,12 +351,17 @@ function openSong(songId: number) {
 			</ViewHeader>
 
 			<div :class="$style.content">
-				<div v-if="isCheckingIntegrity" :class="$style.loading">
+				<div v-if="isCheckingIntegrity && integrityIssues.length === 0" :class="$style.loading">
 					<NcLoadingIcon :size="36" />
 					<span>{{ t('mobilesheetsmanager', 'Auditing library files and database integrity…') }}</span>
 				</div>
 
 				<template v-else>
+					<div v-if="isCheckingIntegrity && integrityIssues.length > 0" :class="$style.reloadingNotice">
+						<NcLoadingIcon :size="20" />
+						<span>{{ t('mobilesheetsmanager', 'Auditing library files and database integrity…') }}</span>
+					</div>
+
 					<div v-if="integrityError" :class="$style.error" role="alert">
 						{{ integrityError }}
 					</div>
@@ -396,10 +443,42 @@ function openSong(songId: number) {
 			:error="integrityError"
 			@merge="executeMerge"
 			@resolve-both="executeResolveBoth" />
+
+		<NcDialog
+			v-if="isBatchFixing"
+			:name="t('mobilesheetsmanager', 'Fixing issues…')"
+			size="small">
+			<div :class="$style.dialogLoading">
+				<NcLoadingIcon :size="36" />
+				<span>{{ t('mobilesheetsmanager', 'Fixing integrity issues in library…') }}</span>
+			</div>
+		</NcDialog>
 	</div>
 </template>
 
 <style module>
+.dialogLoading {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 16px;
+	padding: 24px;
+	text-align: center;
+}
+
+.reloadingNotice {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 10px 16px;
+	background-color: var(--color-background-hover);
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius-large, 8px);
+	color: var(--color-text-maxcontrast);
+	font-size: 0.95rem;
+}
+
 .container {
 	display: flex;
 	flex-direction: column;

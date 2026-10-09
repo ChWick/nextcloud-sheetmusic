@@ -1,0 +1,200 @@
+import { flushPromises, mount } from '@vue/test-utils'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import IntegrityView from '../../../src/components/IntegrityView.vue'
+import type { IntegrityIssue } from '../../../src/types/song'
+import { showError, showSuccess } from '@nextcloud/dialogs'
+import { apiGet, apiPost } from '../../../src/api/client'
+
+vi.mock('@nextcloud/axios', () => ({
+	default: {
+		get: vi.fn(),
+		post: vi.fn(),
+	},
+}))
+
+vi.mock('@nextcloud/dialogs', () => ({
+	showSuccess: vi.fn(),
+	showError: vi.fn(),
+	showInfo: vi.fn(),
+	showWarning: vi.fn(),
+}))
+
+vi.mock('@nextcloud/l10n', () => ({
+	translate: (_app: string, text: string, vars?: Record<string, any>) => {
+		if (!vars) return text
+		let res = text
+		for (const [k, v] of Object.entries(vars)) {
+			res = res.replace(`{${k}}`, String(v))
+		}
+		return res
+	},
+	getLanguage: () => 'en',
+	isRTL: () => false,
+}))
+
+vi.mock('vue-router', () => ({
+	useRouter: () => ({
+		push: vi.fn(),
+	}),
+	useRoute: () => ({
+		query: {},
+	}),
+}))
+
+vi.mock('../../../src/api/client', () => ({
+	apiGet: vi.fn(),
+	apiPost: vi.fn(),
+	apiDelete: vi.fn(),
+}))
+
+describe('IntegrityView.vue', () => {
+	const mockNamingIssue: IntegrityIssue = {
+		type: 'invalid_naming_rule',
+		severity: 'warning',
+		message: 'File path "OldName.pdf" does not match standard naming rule.',
+		songId: 10,
+		songTitle: 'Prelude in C',
+		fileId: 100,
+		path: 'Noten/OldName.pdf',
+		suggestedPath: 'Noten/Bach/Bach - Prelude in C.pdf',
+		fixable: true,
+	}
+
+	beforeEach(() => {
+		vi.clearAllMocks()
+	})
+
+	it('loads and renders integrity issues grouped by type', async () => {
+		vi.mocked(apiGet).mockResolvedValueOnce({
+			data: {
+				ocs: {
+					data: {
+						issues: [mockNamingIssue],
+					},
+				},
+			},
+		} as any)
+
+		const wrapper = mount(IntegrityView, {
+			props: { selectedLibrary: 1 },
+		})
+		await flushPromises()
+
+		expect(apiGet).toHaveBeenCalledWith('/api/libraries/1/integrity')
+		expect(wrapper.text()).toContain('Invalid Naming Rules')
+		expect(wrapper.text()).toContain('Prelude in C')
+		expect(wrapper.text()).toContain('Auto-Fix Issue')
+		expect(wrapper.text()).toContain('Fix All in Group (1)')
+	})
+
+	it('fixes a single invalid naming rule issue, shows success toast with song title, and updates issues locally without reloading', async () => {
+		vi.mocked(apiGet).mockResolvedValueOnce({
+			data: {
+				ocs: {
+					data: {
+						issues: [mockNamingIssue],
+					},
+				},
+			},
+		} as any)
+
+		vi.mocked(apiPost).mockResolvedValueOnce({
+			data: {
+				ocs: {
+					data: {
+						success: true,
+						fixedCount: 1,
+						message: 'File path updated according to naming rules.',
+					},
+				},
+			},
+		} as any)
+
+		const wrapper = mount(IntegrityView, {
+			props: { selectedLibrary: 1 },
+		})
+		await flushPromises()
+
+		// Find and click Auto-Fix Issue button
+		const autoFixBtn = wrapper.findAll('button').find(b => b.text().includes('Auto-Fix Issue'))
+		expect(autoFixBtn).toBeDefined()
+		await autoFixBtn!.trigger('click')
+		await flushPromises()
+
+		// Verify API was called with issue details
+		expect(apiPost).toHaveBeenCalledWith('/api/libraries/1/integrity/fix', {
+			issueType: 'invalid_naming_rule',
+			songId: 10,
+			fileId: 100,
+			entityType: undefined,
+			entityId: undefined,
+		})
+
+		// Verify success toast notification contains song title
+		expect(showSuccess).toHaveBeenCalledWith('Naming rule applied for "Prelude in C".')
+
+		// Verify apiGet was NOT called again (no full reload)
+		expect(apiGet).toHaveBeenCalledTimes(1)
+
+		// The issue should now be removed from the view
+		expect(wrapper.text()).not.toContain('Prelude in C')
+		expect(wrapper.text()).toContain('All System Checks Passed!')
+	})
+
+	it('batch fixes issues in a group, shows success toast with count, and updates issues locally without reloading', async () => {
+		const secondNamingIssue: IntegrityIssue = {
+			...mockNamingIssue,
+			songId: 11,
+			fileId: 101,
+			songTitle: 'Fugue in G',
+		}
+
+		vi.mocked(apiGet).mockResolvedValueOnce({
+			data: {
+				ocs: {
+					data: {
+						issues: [mockNamingIssue, secondNamingIssue],
+					},
+				},
+			},
+		} as any)
+
+		vi.mocked(apiPost).mockResolvedValueOnce({
+			data: {
+				ocs: {
+					data: {
+						success: true,
+						fixedCount: 2,
+						message: 'Applied autofix to 2 issue(s).',
+					},
+				},
+			},
+		} as any)
+
+		const wrapper = mount(IntegrityView, {
+			props: { selectedLibrary: 1 },
+		})
+		await flushPromises()
+
+		// Click Fix All in Group
+		const fixAllBtn = wrapper.findAll('button').find(b => b.text().includes('Fix All in Group (2)'))
+		expect(fixAllBtn).toBeDefined()
+		await fixAllBtn!.trigger('click')
+		await flushPromises()
+
+		// Verify API call
+		expect(apiPost).toHaveBeenCalledWith('/api/libraries/1/integrity/fix-all', {
+			issueType: 'invalid_naming_rule',
+		})
+
+		// Verify toast notification
+		expect(showSuccess).toHaveBeenCalledWith('Fixed 2 integrity issue(s).')
+
+		// Verify no full re-audit reload
+		expect(apiGet).toHaveBeenCalledTimes(1)
+
+		// All naming issues should be removed
+		expect(wrapper.text()).toContain('All System Checks Passed!')
+	})
+})
+
