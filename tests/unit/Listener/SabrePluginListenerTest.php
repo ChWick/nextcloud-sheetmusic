@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace Listener;
 
+use OCA\DAV\Events\SabrePluginAddEvent;
 use OCA\SheetMusic\Dav\SheetMusicDavPlugin;
 use OCA\SheetMusic\Listener\SabrePluginListener;
 use OCP\EventDispatcher\Event;
@@ -19,23 +20,38 @@ use Sabre\DAV\Server;
 final class SabrePluginListenerTest extends TestCase {
 	public function testHandleAddsDavPluginToServer(): void {
 		$davPlugin = $this->createMock(SheetMusicDavPlugin::class);
+		$davPlugin->method('getPluginName')->willReturn('sheetmusic-virtual-files');
 		$listener = new SabrePluginListener($davPlugin);
 
 		$server = $this->createMock(Server::class);
+		$server->method('getPlugin')->willReturn(null);
 		$server->expects(self::once())
 			->method('addPlugin')
 			->with($davPlugin);
 
-		$event = new SabrePluginEvent($server);
-		$listener->handle($event);
+		$listener->handle(new SabrePluginAddEvent($server));
+	}
+
+	public function testHandleDoesNotAddPluginTwice(): void {
+		$davPlugin = $this->createMock(SheetMusicDavPlugin::class);
+		$davPlugin->method('getPluginName')->willReturn('sheetmusic-virtual-files');
+		$listener = new SabrePluginListener($davPlugin);
+
+		$server = $this->createMock(Server::class);
+		$server->method('getPlugin')->willReturn($davPlugin);
+		$server->expects(self::never())->method('addPlugin');
+
+		$listener->handle(new SabrePluginAddEvent($server));
 	}
 
 	public function testHandleIgnoresOtherEvents(): void {
 		$davPlugin = $this->createMock(SheetMusicDavPlugin::class);
 		$listener = new SabrePluginListener($davPlugin);
 
-		$otherEvent = $this->createMock(Event::class);
-		$listener->handle($otherEvent);
-		self::assertTrue(true);
+		$server = $this->createMock(Server::class);
+		$server->expects(self::never())->method('addPlugin');
+
+		$listener->handle(new SabrePluginEvent($server));
+		$listener->handle($this->createMock(Event::class));
 	}
 }

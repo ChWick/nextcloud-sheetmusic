@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OCA\SheetMusic\AppInfo;
 
+use OCA\DAV\Events\SabrePluginAddEvent;
 use OCA\SheetMusic\Listener\SabrePluginListener;
 use OCA\SheetMusic\Listener\SheetMusicFileEventListener;
 use OCP\AppFramework\App;
@@ -13,7 +14,6 @@ use OCP\AppFramework\Bootstrap\IRegistrationContext;
 use OCP\Files\Events\Node\NodeCreatedEvent;
 use OCP\Files\Events\Node\NodeDeletedEvent;
 use OCP\Files\Events\Node\NodeRenamedEvent;
-use OCP\SabrePluginEvent;
 
 class Application extends App implements IBootstrap {
 	public const APP_ID = 'sheetmusic';
@@ -24,7 +24,8 @@ class Application extends App implements IBootstrap {
 	}
 
 	public function register(IRegistrationContext $context): void {
-		$context->registerEventListener(SabrePluginEvent::class, SabrePluginListener::class);
+		/** @psalm-suppress UndefinedClass OCA\DAV is part of the server, not of the OCP package */
+		$context->registerEventListener(SabrePluginAddEvent::class, SabrePluginListener::class);
 		$context->registerEventListener(NodeCreatedEvent::class, SheetMusicFileEventListener::class);
 		$context->registerEventListener(NodeRenamedEvent::class, SheetMusicFileEventListener::class);
 		$context->registerEventListener(NodeDeletedEvent::class, SheetMusicFileEventListener::class);

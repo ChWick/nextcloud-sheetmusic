@@ -9,13 +9,20 @@ declare(strict_types=1);
 
 namespace OCA\SheetMusic\Listener;
 
+use OCA\DAV\Events\SabrePluginAddEvent;
 use OCA\SheetMusic\Dav\SheetMusicDavPlugin;
 use OCP\EventDispatcher\Event;
 use OCP\EventDispatcher\IEventListener;
-use OCP\SabrePluginEvent;
 
 /**
- * @template-implements IEventListener<SabrePluginEvent>
+ * Adds the virtual MobileSheets files plugin to the WebDAV servers.
+ *
+ * {@see SabrePluginAddEvent} is dispatched as a typed event for both
+ * remote.php/dav and the legacy remote.php/webdav endpoint. (The older
+ * {@see \OCP\SabrePluginEvent} is only dispatched under a string name for
+ * remote.php/dav, so a typed listener for it never runs there.)
+ *
+ * @template-implements IEventListener<Event>
  */
 class SabrePluginListener implements IEventListener {
 	public function __construct(
@@ -24,12 +31,14 @@ class SabrePluginListener implements IEventListener {
 	}
 
 	public function handle(Event $event): void {
-		if (!$event instanceof SabrePluginEvent) {
+		/** @psalm-suppress UndefinedClass OCA\DAV is part of the server, not of the OCP package */
+		if (!$event instanceof SabrePluginAddEvent) {
 			return;
 		}
 
+		/** @psalm-suppress UndefinedClass */
 		$server = $event->getServer();
-		if ($server !== null) {
+		if ($server->getPlugin($this->davPlugin->getPluginName()) === null) {
 			$server->addPlugin($this->davPlugin);
 		}
 	}

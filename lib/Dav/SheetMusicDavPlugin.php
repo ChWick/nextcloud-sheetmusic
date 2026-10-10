@@ -13,32 +13,67 @@ use OCA\SheetMusic\Db\InternalLibrary;
 use OCA\SheetMusic\Db\LibraryMapper;
 use OCA\SheetMusic\Service\MobileSheetsSqliteExporter;
 use OCA\SheetMusic\Service\MobileSheetsSqliteImporter;
+use OCP\IUserSession;
 use Psr\Log\LoggerInterface;
+use Sabre\DAV\PropFind;
 use Sabre\DAV\Server;
 use Sabre\DAV\ServerPlugin;
 use Sabre\DAV\Xml\Property\GetLastModified;
 use Sabre\DAV\Xml\Property\ResourceType;
+use Sabre\DAV\Xml\Request\PropFind as PropFindRequest;
 use Sabre\HTTP\RequestInterface;
 use Sabre\HTTP\ResponseInterface;
 
+/**
+ * Exposes the MobileSheets library files ("mobilesheets.db" and
+ * "mobilesheets_hashcodes.txt") as virtual files inside every registered
+ * library folder.
+ *
+ * MobileSheets syncs a library by looking for these two files in the library
+ * folder. They are not stored in the user's file system: the database is
+ * exported on the fly from this app's tables, uploads of it are imported back,
+ * and the hash codes are generated from the known song files.
+ *
+ * Both the current endpoint (remote.php/dav/files/USER/...) and the legacy one
+ * (remote.php/webdav/...) are supported.
+ */
 class SheetMusicDavPlugin extends ServerPlugin {
 	public const VIRTUAL_DB_NAME = 'mobilesheets.db';
 	public const VIRTUAL_HASH_NAME = 'mobilesheets_hashcodes.txt';
 
+	private const DB_CONTENT_TYPE = 'application/x-sqlite3';
+	private const HASH_CONTENT_TYPE = 'text/plain; charset=utf-8';
+	private const OC_NS = 'http://owncloud.org/ns';
+
+	/**
+	 * Runs after the authentication plugin (priority 10) so that the user
+	 * session is set up, but before Nextcloud resolves the (non-existing) node.
+	 */
+	private const BEFORE_METHOD_PRIORITY = 20;
+
 	private ?Server $server = null;
+
+	/** Raw body of a PROPFIND request on a library folder, kept for afterPropfind. */
+	private ?string $propfindBody = null;
 
 	public function __construct(
 		private LibraryMapper $libraryMapper,
 		private MobileSheetsSqliteExporter $exporter,
 		private MobileSheetsSqliteImporter $importer,
 		private LoggerInterface $logger,
+		private ?IUserSession $userSession = null,
 	) {
+	}
+
+	#[\Override]
+	public function getPluginName(): string {
+		return 'sheetmusic-virtual-files';
 	}
 
 	#[\Override]
 	public function initialize(Server $server): void {
 		$this->server = $server;
-		$server->on('beforeMethod:*', [$this, 'beforeMethod'], 10);
+		$server->on('beforeMethod:*', [$this, 'beforeMethod'], self::BEFORE_METHOD_PRIORITY);
 		$server->on('afterMethod:PROPFIND', [$this, 'afterPropfind'], 10);
 	}
 
@@ -47,33 +82,34 @@ class SheetMusicDavPlugin extends ServerPlugin {
 	 */
 	public function beforeMethod(RequestInterface $request, ResponseInterface $response): bool {
 		$path = trim($request->getPath(), '/');
-		$match = $this->matchVirtualPath($path);
-		if ($match === null) {
-			return true;
-		}
-
-		$library = $match['library'];
-		$filename = $match['filename'];
 		$method = strtoupper($request->getMethod());
 
 		try {
-			if ($filename === self::VIRTUAL_DB_NAME) {
-				return match ($method) {
-					'GET', 'HEAD' => $this->handleGetDatabase($request, $response, $library, $method === 'HEAD'),
-					'PUT' => $this->handlePutDatabase($request, $response, $library),
-					'PROPFIND' => $this->handlePropfindFile($request, $response, $library, $filename, 'application/x-sqlite3'),
-					default => true,
-				};
+			$match = $this->matchVirtualPath($path);
+			if ($match === null) {
+				if ($method === 'PROPFIND') {
+					$this->rememberPropfindBody($request, $path);
+				}
+				return true;
 			}
 
-			if ($filename === self::VIRTUAL_HASH_NAME) {
-				return match ($method) {
-					'GET', 'HEAD' => $this->handleGetHashcodes($request, $response, $library, $method === 'HEAD'),
-					'PUT' => $this->handlePutHashcodes($request, $response, $library),
-					'PROPFIND' => $this->handlePropfindFile($request, $response, $library, $filename, 'text/plain; charset=utf-8'),
-					default => true,
-				};
-			}
+			$library = $match['library'];
+			$filename = $match['filename'];
+			$isDb = $filename === self::VIRTUAL_DB_NAME;
+
+			$handled = !match ($method) {
+				'GET', 'HEAD' => $isDb
+					? $this->handleGetDatabase($request, $response, $library, $method === 'HEAD')
+					: $this->handleGetHashcodes($request, $response, $library, $method === 'HEAD'),
+				'PUT' => $isDb
+					? $this->handlePutDatabase($request, $response, $library)
+					: $this->handlePutHashcodes($request, $response, $library),
+				'PROPFIND' => $this->handlePropfindFile($request, $response, $library, $path, $filename),
+				// The files cannot be removed; acknowledge so clients that delete
+				// before re-uploading keep going.
+				'DELETE' => $this->acknowledge($response),
+				default => true,
+			};
 		} catch (\Throwable $e) {
 			$this->logger->error('Error processing virtual WebDAV request: ' . $e->getMessage(), [
 				'exception' => $e,
@@ -81,86 +117,127 @@ class SheetMusicDavPlugin extends ServerPlugin {
 				'method' => $method,
 			]);
 			$response->setStatus(500);
-			return false;
+			$handled = true;
 		}
 
-		return true;
+		if (!$handled) {
+			return true;
+		}
+
+		// Sabre does not send the response when a beforeMethod listener stops
+		// the request, so it has to be sent here.
+		$this->sendResponse($response);
+		return false;
+	}
+
+	private function sendResponse(ResponseInterface $response): void {
+		if ($this->server === null) {
+			return;
+		}
+		$this->server->sapi->sendResponse($response);
+		$this->server->emit('afterResponse', [$this->server->httpRequest, $response]);
 	}
 
 	/**
 	 * Inject virtual files into PROPFIND directory listings of registered libraries.
 	 */
 	public function afterPropfind(RequestInterface $request, ResponseInterface $response): void {
+		$requestBody = $this->propfindBody;
+		$this->propfindBody = null;
+
 		$depth = $request->getHeader('Depth');
 		if ($depth === '0' || $response->getStatus() !== 207) {
 			return;
 		}
 
 		$path = trim($request->getPath(), '/');
-		$library = $this->findLibraryByFolderPath($path);
+
+		try {
+			$library = $this->findLibraryByFolderPath($path);
+		} catch (\Throwable $e) {
+			$this->logger->error('Failed to resolve library for PROPFIND: ' . $e->getMessage(), [
+				'exception' => $e,
+				'path' => $path,
+			]);
+			return;
+		}
 		if ($library === null || $library->id === null) {
 			return;
 		}
 
-		$body = (string)$response->getBody();
-		if ($body === '' || !str_contains($body, '</d:multistatus>')) {
+		$body = $response->getBody();
+		if (is_callable($body)) {
+			// Streamed multistatus (legacy endpoint): the listing is produced
+			// lazily while the response is sent, so it can only be consumed once.
+			$response->setBody(function () use ($body, $library, $path, $requestBody): void {
+				ob_start();
+				try {
+					$body();
+				} finally {
+					$xml = (string)ob_get_clean();
+				}
+				echo $this->injectVirtualEntries($xml, $library, $path, $requestBody);
+			});
+			$response->removeHeader('Content-Length');
 			return;
 		}
 
-		// Check if already injected
-		if (str_contains($body, self::VIRTUAL_DB_NAME)) {
-			return;
+		$xml = $response->getBodyAsString();
+		$newBody = $this->injectVirtualEntries($xml, $library, $path, $requestBody);
+		if ($newBody !== $xml) {
+			$response->setBody($newBody);
+			$response->setHeader('Content-Length', (string)strlen($newBody));
+		}
+	}
+
+	/**
+	 * Add multistatus entries for the virtual files to a folder listing.
+	 *
+	 * @return string the listing with the entries, or unchanged on failure
+	 */
+	private function injectVirtualEntries(string $xml, InternalLibrary $library, string $path, ?string $requestBody): string {
+		if ($xml === '') {
+			return $xml;
 		}
 
-		$baseUri = rtrim($this->server?->getBaseUri() ?? '', '/') . '/';
-		$folderUri = $baseUri . $path;
+		try {
+			$document = new \DOMDocument();
+			if (!@$document->loadXML($xml) || $document->documentElement === null) {
+				return $xml;
+			}
 
-		$dbHref = $folderUri . '/' . self::VIRTUAL_DB_NAME;
-		$hashHref = $folderUri . '/' . self::VIRTUAL_HASH_NAME;
+			$existing = $this->listedFilenames($document);
+			$entries = [];
+			foreach ([self::VIRTUAL_DB_NAME, self::VIRTUAL_HASH_NAME] as $filename) {
+				// A real file of that name takes precedence over the virtual one.
+				if (in_array($filename, $existing, true)) {
+					continue;
+				}
+				$entries[] = $this->buildPropfindEntry($library, $path . '/' . $filename, $filename, $requestBody);
+			}
+			if ($entries === []) {
+				return $xml;
+			}
 
-		$dbEtag = '"sm-db-' . $library->id . '-' . $library->updatedAt . '"';
-		$hashEtag = '"sm-hash-' . $library->id . '-' . $library->updatedAt . '"';
-		$lastMod = gmdate('D, d M Y H:i:s GMT', $library->updatedAt ?: time());
+			$virtual = new \DOMDocument();
+			if (!$virtual->loadXML($this->generateMultiStatus($entries)) || $virtual->documentElement === null) {
+				return $xml;
+			}
 
-		$injectedResponses = sprintf(
-			'
-  <d:response>
-    <d:href>%s</d:href>
-    <d:propstat>
-      <d:prop>
-        <d:getlastmodified>%s</d:getlastmodified>
-        <d:getcontentlength>0</d:getcontentlength>
-        <d:getcontenttype>application/x-sqlite3</d:getcontenttype>
-        <d:getetag>%s</d:getetag>
-        <d:resourcetype/>
-      </d:prop>
-      <d:status>HTTP/1.1 200 OK</d:status>
-    </d:propstat>
-  </d:response>
-  <d:response>
-    <d:href>%s</d:href>
-    <d:propstat>
-      <d:prop>
-        <d:getlastmodified>%s</d:getlastmodified>
-        <d:getcontentlength>0</d:getcontentlength>
-        <d:getcontenttype>text/plain; charset=utf-8</d:getcontenttype>
-        <d:getetag>%s</d:getetag>
-        <d:resourcetype/>
-      </d:prop>
-      <d:status>HTTP/1.1 200 OK</d:status>
-    </d:propstat>
-  </d:response>',
-			htmlspecialchars($dbHref, ENT_XML1),
-			$lastMod,
-			htmlspecialchars($dbEtag, ENT_XML1),
-			htmlspecialchars($hashHref, ENT_XML1),
-			$lastMod,
-			htmlspecialchars($hashEtag, ENT_XML1),
-		);
+			foreach ($virtual->documentElement->childNodes as $node) {
+				if ($node instanceof \DOMElement && $node->localName === 'response') {
+					$document->documentElement->appendChild($document->importNode($node, true));
+				}
+			}
 
-		$newBody = str_replace('</d:multistatus>', $injectedResponses . "\n</d:multistatus>", $body);
-		$response->setBody($newBody);
-		$response->setHeader('Content-Length', (string)strlen($newBody));
+			return (string)$document->saveXML();
+		} catch (\Throwable $e) {
+			$this->logger->error('Failed to add virtual MobileSheets files to PROPFIND response: ' . $e->getMessage(), [
+				'exception' => $e,
+				'path' => $path,
+			]);
+			return $xml;
+		}
 	}
 
 	private function handleGetDatabase(
@@ -169,33 +246,25 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		InternalLibrary $library,
 		bool $isHead,
 	): bool {
-		$etag = '"sm-db-' . $library->id . '-' . $library->updatedAt . '"';
+		$etag = $this->etagFor($library, self::VIRTUAL_DB_NAME);
 
 		if ($request->getHeader('If-None-Match') === $etag) {
 			$response->setStatus(304);
+			$response->setHeader('ETag', $etag);
 			return false;
 		}
 
-		$tempDir = sys_get_temp_dir() . '/sheetmusic_cache';
-		if (!is_dir($tempDir)) {
-			mkdir($tempDir, 0777, true);
-		}
-		$cachePath = $tempDir . '/sm_' . $library->id . '_' . $library->updatedAt . '.db';
-
-		if (!file_exists($cachePath)) {
-			$this->exporter->exportToFile($library, $cachePath);
-		}
+		$cachePath = $this->ensureDatabaseExport($library);
 
 		$size = (int)filesize($cachePath);
 		$response->setStatus(200);
-		$response->setHeader('Content-Type', 'application/x-sqlite3');
+		$response->setHeader('Content-Type', self::DB_CONTENT_TYPE);
 		$response->setHeader('Content-Length', (string)$size);
 		$response->setHeader('ETag', $etag);
-		$response->setHeader('Last-Modified', gmdate('D, d M Y H:i:s GMT', $library->updatedAt ?: time()));
+		$response->setHeader('Last-Modified', $this->httpDate($library));
 
 		if (!$isHead) {
-			$stream = fopen($cachePath, 'rb');
-			$response->setBody($stream);
+			$response->setBody(fopen($cachePath, 'rb'));
 		}
 
 		return false;
@@ -225,8 +294,12 @@ class SheetMusicDavPlugin extends ServerPlugin {
 			}
 		}
 
+		// The import changes the library; report the state clients will see next.
+		$updated = $library->id !== null ? $this->libraryMapper->findModelById($library->id) : null;
+		$updated ??= $library;
+
 		$response->setStatus(204);
-		$response->setHeader('ETag', '"sm-db-' . $library->id . '-' . time() . '"');
+		$response->setHeader('ETag', $this->etagFor($updated, self::VIRTUAL_DB_NAME));
 		return false;
 	}
 
@@ -236,20 +309,21 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		InternalLibrary $library,
 		bool $isHead,
 	): bool {
-		$etag = '"sm-hash-' . $library->id . '-' . $library->updatedAt . '"';
+		$etag = $this->etagFor($library, self::VIRTUAL_HASH_NAME);
 
 		if ($request->getHeader('If-None-Match') === $etag) {
 			$response->setStatus(304);
+			$response->setHeader('ETag', $etag);
 			return false;
 		}
 
 		$hashcodes = $this->exporter->generateHashcodes($library);
 
 		$response->setStatus(200);
-		$response->setHeader('Content-Type', 'text/plain; charset=utf-8');
+		$response->setHeader('Content-Type', self::HASH_CONTENT_TYPE);
 		$response->setHeader('Content-Length', (string)strlen($hashcodes));
 		$response->setHeader('ETag', $etag);
-		$response->setHeader('Last-Modified', gmdate('D, d M Y H:i:s GMT', $library->updatedAt ?: time()));
+		$response->setHeader('Last-Modified', $this->httpDate($library));
 
 		if (!$isHead) {
 			$response->setBody($hashcodes);
@@ -263,8 +337,10 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		ResponseInterface $response,
 		InternalLibrary $library,
 	): bool {
-		// Acknowledge hashcodes upload
+		// The hash codes are generated from the library; uploads are acknowledged
+		// but not stored.
 		$response->setStatus(204);
+		$response->setHeader('ETag', $this->etagFor($library, self::VIRTUAL_HASH_NAME));
 		return false;
 	}
 
@@ -272,84 +348,234 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		RequestInterface $request,
 		ResponseInterface $response,
 		InternalLibrary $library,
+		string $path,
 		string $filename,
-		string $contentType,
 	): bool {
+		$entry = $this->buildPropfindEntry($library, $path, $filename, $request->getBodyAsString());
+
+		$xml = $this->generateMultiStatus([$entry]);
 		$response->setStatus(207);
 		$response->setHeader('Content-Type', 'application/xml; charset=utf-8');
-
-		$etag = '"sm-' . ($filename === self::VIRTUAL_DB_NAME ? 'db' : 'hash') . '-' . $library->id . '-' . $library->updatedAt . '"';
-
-		$properties = [
-			'href' => $request->getPath(),
-			200 => [
-				'{DAV:}getlastmodified' => new GetLastModified($library->updatedAt ?: time()),
-				'{DAV:}getcontentlength' => 0,
-				'{DAV:}getcontenttype' => $contentType,
-				'{DAV:}getetag' => $etag,
-				'{DAV:}resourcetype' => new ResourceType(null),
-			],
-		];
-
-		$xml = $this->server?->generateMultiStatus([$properties]);
-		if ($xml !== null) {
-			$response->setBody($xml);
-		}
+		$response->setHeader('Vary', 'Brief,Prefer');
+		$response->setBody($xml);
 
 		return false;
+	}
+
+	private function acknowledge(ResponseInterface $response): bool {
+		$response->setStatus(204);
+		return false;
+	}
+
+	/**
+	 * Build a multistatus entry for a virtual file, honouring the properties
+	 * requested in the PROPFIND body.
+	 *
+	 * @return array<int|string, mixed>
+	 */
+	private function buildPropfindEntry(InternalLibrary $library, string $path, string $filename, ?string $requestBody): array {
+		$isDb = $filename === self::VIRTUAL_DB_NAME;
+
+		$requestType = PropFind::ALLPROPS;
+		$requested = [];
+		if ($requestBody !== null && trim($requestBody) !== '' && $this->server !== null) {
+			$propFindXml = $this->server->xml->expect('{DAV:}propfind', $requestBody);
+			if ($propFindXml instanceof PropFindRequest && !$propFindXml->allProp) {
+				$requestType = PropFind::NORMAL;
+				$requested = $propFindXml->properties;
+			}
+		}
+
+		$size = $isDb ? $this->databaseSize($library) : strlen($this->exporter->generateHashcodes($library));
+		$etag = $this->etagFor($library, $filename);
+
+		$propFind = new PropFind($path, $requested, 0, $requestType);
+		$propFind->set('{DAV:}displayname', $filename);
+		$propFind->set('{DAV:}getlastmodified', new GetLastModified($library->updatedAt ?: time()));
+		$propFind->set('{DAV:}getcontentlength', $size);
+		$propFind->set('{DAV:}getcontenttype', $isDb ? self::DB_CONTENT_TYPE : self::HASH_CONTENT_TYPE);
+		$propFind->set('{DAV:}getetag', $etag);
+		$propFind->set('{DAV:}resourcetype', new ResourceType());
+		$propFind->set('{' . self::OC_NS . '}size', $size);
+		$propFind->set('{' . self::OC_NS . '}permissions', 'RGDNVW');
+
+		$entry = $propFind->getResultForMultiStatus();
+		$entry['href'] = $path;
+		return $entry;
+	}
+
+	/**
+	 * @param list<array<int|string, mixed>> $entries
+	 */
+	private function generateMultiStatus(array $entries): string {
+		if ($this->server === null) {
+			throw new \RuntimeException('Plugin is not attached to a server');
+		}
+
+		$prefer = $this->server->getHTTPPrefer();
+		// Nextcloud streams multistatus responses on some endpoints; the
+		// entries built here are always needed as a string.
+		$streaming = Server::$streamMultiStatus;
+		Server::$streamMultiStatus = false;
+		try {
+			return (string)$this->server->generateMultiStatus($entries, $prefer['return'] === 'minimal');
+		} finally {
+			Server::$streamMultiStatus = $streaming;
+		}
+	}
+
+	/**
+	 * Names of the entries of a multistatus listing.
+	 *
+	 * @return list<string>
+	 */
+	private function listedFilenames(\DOMDocument $document): array {
+		$names = [];
+		foreach ($document->getElementsByTagNameNS('DAV:', 'href') as $href) {
+			$names[] = rawurldecode(basename(rtrim(trim($href->textContent), '/')));
+		}
+		return $names;
+	}
+
+	/**
+	 * Keep the body of a PROPFIND on a library folder so the injected entries
+	 * can return the same properties as the real ones.
+	 */
+	private function rememberPropfindBody(RequestInterface $request, string $path): void {
+		$this->propfindBody = null;
+		if ($request->getHeader('Depth') === '0' || $this->findLibraryByFolderPath($path) === null) {
+			return;
+		}
+
+		$body = $request->getBodyAsString();
+		$request->setBody($body);
+		$this->propfindBody = $body;
+	}
+
+	/**
+	 * Export the library to a cached SQLite file and return its path.
+	 */
+	private function ensureDatabaseExport(InternalLibrary $library): string {
+		// One directory per system user: a directory created by another user
+		// (e.g. occ running as root) would not be writable for the web server.
+		$owner = function_exists('posix_geteuid') ? (string)posix_geteuid() : get_current_user();
+		$tempDir = sys_get_temp_dir() . '/sheetmusic_dav_cache_' . $owner;
+		if (!is_dir($tempDir)) {
+			@mkdir($tempDir, 0700, true);
+		}
+		$prefix = $tempDir . '/sm_' . (int)$library->id . '_';
+		$cachePath = $prefix . $library->updatedAt . '.db';
+
+		if (!file_exists($cachePath)) {
+			$partPath = $cachePath . '.' . bin2hex(random_bytes(4)) . '.part';
+			try {
+				$this->exporter->exportToFile($library, $partPath);
+				rename($partPath, $cachePath);
+			} finally {
+				if (file_exists($partPath)) {
+					@unlink($partPath);
+				}
+			}
+
+			// Drop exports of older states of this library.
+			foreach (glob($prefix . '*.db') ?: [] as $stale) {
+				if ($stale !== $cachePath) {
+					@unlink($stale);
+				}
+			}
+		}
+
+		return $cachePath;
+	}
+
+	private function databaseSize(InternalLibrary $library): int {
+		try {
+			return (int)filesize($this->ensureDatabaseExport($library));
+		} catch (\Throwable $e) {
+			$this->logger->warning('Could not determine size of virtual MobileSheets database', [
+				'exception' => $e,
+				'libraryId' => $library->id,
+			]);
+			return 0;
+		}
+	}
+
+	private function etagFor(InternalLibrary $library, string $filename): string {
+		$kind = $filename === self::VIRTUAL_DB_NAME ? 'db' : 'hash';
+		return '"sm-' . $kind . '-' . (int)$library->id . '-' . $library->updatedAt . '"';
+	}
+
+	private function httpDate(InternalLibrary $library): string {
+		return gmdate('D, d M Y H:i:s \G\M\T', $library->updatedAt ?: time());
 	}
 
 	/**
 	 * @return array{library: InternalLibrary, filename: string}|null
 	 */
 	public function matchVirtualPath(string $path): ?array {
-		$parts = explode('/', trim($path, '/'));
-		if (count($parts) < 3 || $parts[0] !== 'files') {
-			return null;
-		}
-
-		$userId = $parts[1];
-		$filename = end($parts);
+		$path = trim($path, '/');
+		$filename = basename($path);
 		if ($filename !== self::VIRTUAL_DB_NAME && $filename !== self::VIRTUAL_HASH_NAME) {
 			return null;
 		}
 
-		// Relative folder path
-		$folderParts = array_slice($parts, 2, -1);
-		$folderPath = implode('/', $folderParts);
+		$folder = dirname($path);
+		$library = $this->findLibraryByFolderPath($folder === '.' ? '' : $folder);
+		if ($library === null) {
+			return null;
+		}
 
-		$libraries = $this->libraryMapper->findAllForUser($userId);
-		foreach ($libraries as $libData) {
-			$cleanLibPath = trim($libData['path'], '/');
-			if ($cleanLibPath === $folderPath || $cleanLibPath === '/' . $folderPath) {
-				$model = $this->libraryMapper->findModelById($libData['id']);
-				if ($model !== null) {
-					return ['library' => $model, 'filename' => $filename];
-				}
+		return ['library' => $library, 'filename' => $filename];
+	}
+
+	public function findLibraryByFolderPath(string $path): ?InternalLibrary {
+		$resolved = $this->resolveUserFolder($path);
+		if ($resolved === null) {
+			return null;
+		}
+		[$userId, $folderPath] = $resolved;
+
+		foreach ($this->libraryMapper->findAllForUser($userId) as $libData) {
+			if (trim($libData['path'], '/') === $folderPath) {
+				return $this->libraryMapper->findModelById($libData['id']);
 			}
 		}
 
 		return null;
 	}
 
-	public function findLibraryByFolderPath(string $path): ?InternalLibrary {
-		$parts = explode('/', trim($path, '/'));
-		if (count($parts) < 2 || $parts[0] !== 'files') {
+	/**
+	 * Split a request path into the owning user and the folder relative to the
+	 * user's files root.
+	 *
+	 * @return array{0: string, 1: string}|null
+	 */
+	private function resolveUserFolder(string $path): ?array {
+		$path = trim($path, '/');
+		$sessionUser = $this->userSession?->getUser()?->getUID();
+
+		// Legacy endpoint (remote.php/webdav): paths are relative to the files
+		// root of the authenticated user.
+		if ($this->isLegacyWebdav()) {
+			return $sessionUser === null ? null : [$sessionUser, $path];
+		}
+
+		$parts = explode('/', $path);
+		if (count($parts) < 2 || $parts[0] !== 'files' || $parts[1] === '') {
 			return null;
 		}
 
 		$userId = $parts[1];
-		$folderParts = array_slice($parts, 2);
-		$folderPath = implode('/', $folderParts);
-
-		$libraries = $this->libraryMapper->findAllForUser($userId);
-		foreach ($libraries as $libData) {
-			$cleanLibPath = trim($libData['path'], '/');
-			if ($cleanLibPath === $folderPath || $cleanLibPath === '/' . $folderPath) {
-				return $this->libraryMapper->findModelById($libData['id']);
-			}
+		// Never expose a library to anybody but its owner.
+		if ($this->userSession !== null && $sessionUser !== $userId) {
+			return null;
 		}
 
-		return null;
+		return [$userId, implode('/', array_slice($parts, 2))];
+	}
+
+	private function isLegacyWebdav(): bool {
+		$baseUri = $this->server?->getBaseUri() ?? '';
+		return str_ends_with(rtrim($baseUri, '/'), '/webdav');
 	}
 }
