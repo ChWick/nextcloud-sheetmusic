@@ -26,7 +26,6 @@ final class LibraryServiceTest extends TestCase {
 
 		$service = new LibraryService(
 			$libraryMapper,
-			$this->createSongMapper(),
 			$this->createMock(IRootFolder::class),
 			$this->createMock(LoggerInterface::class),
 		);
@@ -40,7 +39,6 @@ final class LibraryServiceTest extends TestCase {
 
 		$service = new LibraryService(
 			$libraryMapper,
-			$this->createSongMapper(),
 			$this->createMock(IRootFolder::class),
 			$this->createMock(LoggerInterface::class),
 		);
@@ -67,7 +65,6 @@ final class LibraryServiceTest extends TestCase {
 
 		$service = new LibraryService(
 			$libraryMapper,
-			$this->createSongMapper(),
 			$rootFolder,
 			$this->createMock(LoggerInterface::class),
 		);
@@ -84,7 +81,6 @@ final class LibraryServiceTest extends TestCase {
 
 		$service = new LibraryService(
 			$libraryMapper,
-			$this->createSongMapper(),
 			$this->createMock(IRootFolder::class),
 			$this->createMock(LoggerInterface::class),
 		);
@@ -99,7 +95,6 @@ final class LibraryServiceTest extends TestCase {
 
 		$service = new LibraryService(
 			$libraryMapper,
-			$this->createSongMapper(),
 			$this->createMock(IRootFolder::class),
 			$this->createMock(LoggerInterface::class),
 		);
@@ -123,7 +118,6 @@ final class LibraryServiceTest extends TestCase {
 
 		$service = new LibraryService(
 			$this->createMock(LibraryMapper::class),
-			$this->createSongMapper(),
 			$rootFolder,
 			$this->createMock(LoggerInterface::class),
 		);
@@ -150,7 +144,6 @@ final class LibraryServiceTest extends TestCase {
 
 		$service = new LibraryService(
 			$libraryMapper,
-			$this->createSongMapper(),
 			$rootFolder,
 			$this->createMock(LoggerInterface::class),
 		);
@@ -166,7 +159,6 @@ final class LibraryServiceTest extends TestCase {
 
 		$service = new LibraryService(
 			$libraryMapper,
-			$this->createSongMapper(),
 			$this->createMock(IRootFolder::class),
 			$this->createMock(LoggerInterface::class),
 		);
@@ -185,7 +177,6 @@ final class LibraryServiceTest extends TestCase {
 
 		$service = new LibraryService(
 			$libraryMapper,
-			$this->createSongMapper(),
 			$this->createMock(IRootFolder::class),
 			$this->createMock(LoggerInterface::class),
 		);
@@ -205,7 +196,6 @@ final class LibraryServiceTest extends TestCase {
 
 		$service = new LibraryService(
 			$libraryMapper,
-			$this->createSongMapper(),
 			$this->createMock(IRootFolder::class),
 			$this->createMock(LoggerInterface::class),
 		);
@@ -226,7 +216,6 @@ final class LibraryServiceTest extends TestCase {
 
 		$service = new LibraryService(
 			$libraryMapper,
-			$this->createSongMapper(),
 			$this->createMock(IRootFolder::class),
 			$this->createMock(LoggerInterface::class),
 		);
@@ -249,7 +238,6 @@ final class LibraryServiceTest extends TestCase {
 
 		$service = new LibraryService(
 			$libraryMapper,
-			$this->createSongMapper(),
 			$this->createMock(IRootFolder::class),
 			$this->createMock(LoggerInterface::class),
 		);

@@ -8,20 +8,17 @@ use OCA\SheetMusic\Db\InternalEntity;
 use OCA\SheetMusic\Db\InternalEntityMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
-use OCA\SheetMusic\Db\SongMapper;
-use OCA\SheetMusic\Storage\MobileSheetsHashCodesFile;
 use OCP\IUser;
 use Psr\Log\LoggerInterface;
 
 class EntityService {
 	public function __construct(
 		private LibraryService $libraryService,
-		private SongMapper $songMapper,
 		private LoggerInterface $logger,
+		private InternalEntityMapper $internalEntityMapper,
+		private InternalSongMapper $internalSongMapper,
+		private LibraryMapper $libraryMapper,
 		private ?FileManager $fileManager = null,
-		private ?InternalEntityMapper $internalEntityMapper = null,
-		private ?InternalSongMapper $internalSongMapper = null,
-		private ?LibraryMapper $libraryMapper = null,
 	) {
 	}
 
@@ -31,83 +28,39 @@ class EntityService {
 			return null;
 		}
 
-		if ($this->internalEntityMapper !== null) {
-			try {
-				$normType = InternalEntityMapper::normalizeType($entityType);
-				$entity = new InternalEntity(
-					id: null,
-					uuid: InternalEntity::generateUuid(),
-					libraryId: $libraryId,
-					type: $normType,
-					name: $nameOrTitle,
-				);
-				$created = $this->internalEntityMapper->insert($entity);
-				$this->libraryMapper?->touch($libraryId);
-
-				$key = $normType === 'book' ? 'title' : 'name';
-				$result = ['id' => $created->id, $key => $nameOrTitle];
-				if ($normType === 'year') {
-					$result['year'] = (int)$nameOrTitle;
-				}
-				if ($normType === 'sourcetype') {
-					$result['type'] = $nameOrTitle;
-				}
-				return $result;
-			} catch (\Throwable $e) {
-				$this->logger->error('Could not create entity in SheetMusic library', [
-					'exception' => $e,
-					'entityType' => $entityType,
-					'nameOrTitle' => $nameOrTitle,
-					'libraryId' => $libraryId,
-				]);
-				throw $e;
-			}
-		}
-
-		$databasePath = $this->libraryService->getDatabasePath($user->getUID(), $libraryId);
-		if ($databasePath === null) {
+		$library = $this->libraryMapper->findForUser($user->getUID(), $libraryId);
+		if ($library === null) {
 			return null;
 		}
 
 		try {
-			$id = match ($entityType) {
-				'composer' => $this->songMapper->createComposer($databasePath, $nameOrTitle),
-				'book' => $this->songMapper->createBook($databasePath, $nameOrTitle),
-				'collection' => $this->songMapper->createCollection($databasePath, $nameOrTitle),
-				'artist' => $this->songMapper->createArtist($databasePath, $nameOrTitle),
-				'genre' => $this->songMapper->createGenre($databasePath, $nameOrTitle),
-				'key' => $this->songMapper->createKey($databasePath, $nameOrTitle),
-				'customgroup' => $this->songMapper->createCustomGroup($databasePath, $nameOrTitle),
-				'year' => $this->songMapper->createYear($databasePath, $nameOrTitle),
-				'signature' => $this->songMapper->createSignature($databasePath, $nameOrTitle),
-				'sourcetype' => $this->songMapper->createSourceType($databasePath, $nameOrTitle),
-				'instrument' => $this->songMapper->createInstrument($databasePath, $nameOrTitle),
-				default => null,
-			};
+			$normType = InternalEntityMapper::normalizeType($entityType);
+			$entity = new InternalEntity(
+				id: null,
+				uuid: InternalEntity::generateUuid(),
+				libraryId: $libraryId,
+				type: $normType,
+				name: $nameOrTitle,
+			);
+			$created = $this->internalEntityMapper->insert($entity);
+			$this->libraryMapper->touch($libraryId);
 
-			if ($id === null) {
-				return null;
-			}
-
-			$this->libraryService->syncFromDatabase($user->getUID(), $libraryId);
-
-			$key = $entityType === 'book' ? 'title' : 'name';
-			$result = ['id' => $id, $key => $nameOrTitle];
-			if ($entityType === 'year') {
+			$key = $normType === 'book' ? 'title' : 'name';
+			$result = ['id' => $created->id, $key => $nameOrTitle];
+			if ($normType === 'year') {
 				$result['year'] = (int)$nameOrTitle;
 			}
-			if ($entityType === 'sourcetype') {
+			if ($normType === 'sourcetype') {
 				$result['type'] = $nameOrTitle;
 			}
 			return $result;
 		} catch (\Throwable $e) {
-			$this->logger->error('Could not create entity in MobileSheets library', [
+			$this->logger->error('Could not create entity in SheetMusic library', [
 				'exception' => $e,
 				'entityType' => $entityType,
 				'nameOrTitle' => $nameOrTitle,
 				'libraryId' => $libraryId,
 			]);
-
 			throw $e;
 		}
 	}
@@ -116,49 +69,26 @@ class EntityService {
 	 * @param 'composers'|'books'|'collections'|'artists'|'genres'|'keys'|'customgroups'|'years'|'signatures'|'sourcetypes'|'instruments' $entityType
 	 */
 	public function deleteEntity(IUser $user, int $libraryId, string $entityType, int $id): ?array {
-		if ($this->internalEntityMapper !== null) {
-			try {
-				if (!$this->internalEntityMapper->delete($id)) {
-					return null;
-				}
-
-				$this->libraryMapper?->touch($libraryId);
-
-				return $this->internalSongMapper !== null
-					? $this->internalSongMapper->findLibraryData($libraryId, $user)
-					: [];
-			} catch (\Throwable $e) {
-				$this->logger->error('Could not delete entity from SheetMusic library', [
-					'exception' => $e,
-					'entityType' => $entityType,
-					'entityId' => $id,
-					'libraryId' => $libraryId,
-				]);
-				throw $e;
-			}
-		}
-
-		$databasePath = $this->libraryService->getDatabasePath($user->getUID(), $libraryId);
-		if ($databasePath === null) {
+		$library = $this->libraryMapper->findForUser($user->getUID(), $libraryId);
+		if ($library === null) {
 			return null;
 		}
 
 		try {
-			if (!$this->songMapper->deleteEntity($databasePath, $entityType, $id)) {
+			if (!$this->internalEntityMapper->delete($id)) {
 				return null;
 			}
 
-			$this->libraryService->syncFromDatabase($user->getUID(), $libraryId);
+			$this->libraryMapper->touch($libraryId);
 
-			return $this->songMapper->findLibraryData($databasePath);
+			return $this->internalSongMapper->findLibraryData($libraryId, $user);
 		} catch (\Throwable $e) {
-			$this->logger->error('Could not delete entity from MobileSheets library', [
+			$this->logger->error('Could not delete entity from SheetMusic library', [
 				'exception' => $e,
 				'entityType' => $entityType,
 				'entityId' => $id,
 				'libraryId' => $libraryId,
 			]);
-
 			throw $e;
 		}
 	}
@@ -174,91 +104,32 @@ class EntityService {
 			return null;
 		}
 
-		if ($this->internalEntityMapper !== null) {
-			try {
-				$normType = InternalEntityMapper::normalizeType($entityType);
-				$merged = $this->internalEntityMapper->mergeEntities($libraryId, $normType, $keepId, $duplicateIds);
-				if ($merged <= 0) {
-					return null;
-				}
-
-				$this->libraryMapper?->touch($libraryId);
-
-				return [
-					'mergedCount' => $merged,
-					'libraryData' => $this->internalSongMapper !== null
-						? $this->internalSongMapper->findLibraryData($libraryId, $user)
-						: [],
-				];
-			} catch (\Throwable $e) {
-				$this->logger->error('Could not merge entities in SheetMusic library', [
-					'exception' => $e,
-					'entityType' => $entityType,
-					'keepId' => $keepId,
-					'duplicateIds' => $duplicateIds,
-					'libraryId' => $libraryId,
-				]);
-				throw $e;
-			}
-		}
-
-		$databasePath = $this->libraryService->getDatabasePath($user->getUID(), $libraryId);
-		if ($databasePath === null) {
+		$library = $this->libraryMapper->findForUser($user->getUID(), $libraryId);
+		if ($library === null) {
 			return null;
 		}
 
 		try {
-			// 1. Identify affected songs before merging for potential path regeneration
-			$affectedSongIds = $this->songMapper->getSongIdsForEntity($databasePath, $entityType, $duplicateIds);
-
-			// 2. Perform merge in database
-			$merged = $this->songMapper->mergeDuplicateEntities($databasePath, $entityType, $keepId, $duplicateIds);
+			$normType = InternalEntityMapper::normalizeType($entityType);
+			$merged = $this->internalEntityMapper->mergeEntities($libraryId, $normType, $keepId, $duplicateIds);
 			if ($merged <= 0) {
 				return null;
 			}
 
-			// 3. Regenerate file paths if autoPaths is enabled and songs were affected
-			if (
-				$this->fileManager !== null
-				&& $this->libraryService->isAutoPathsEnabled($user->getUID(), $libraryId)
-				&& $affectedSongIds !== []
-			) {
-				try {
-					['targetFolder' => $targetFolder] = $this->fileManager->libraryContext($libraryId, $user);
-					$hashCodes = MobileSheetsHashCodesFile::forDatabase($databasePath, $this->logger);
-					foreach ($affectedSongIds as $songId) {
-						try {
-							$this->fileManager->regenerateSongFilePaths($songId, $user, $targetFolder, $databasePath, $hashCodes);
-						} catch (\Throwable $e) {
-							// Best-effort: keep processing other songs
-						}
-					}
-					$hashCodes?->save();
-				} catch (\Throwable $e) {
-					$this->logger->warning('Could not regenerate file paths after merging entities', [
-						'exception' => $e,
-						'libraryId' => $libraryId,
-						'entityType' => $entityType,
-						'keepId' => $keepId,
-					]);
-				}
-			}
-
-			$this->libraryService->syncFromDatabase($user->getUID(), $libraryId);
+			$this->libraryMapper->touch($libraryId);
 
 			return [
 				'mergedCount' => $merged,
-				'libraryData' => $this->songMapper->findLibraryData($databasePath),
+				'libraryData' => $this->internalSongMapper->findLibraryData($libraryId, $user),
 			];
 		} catch (\Throwable $e) {
-			$this->logger->error('Could not merge entities in MobileSheets library', [
+			$this->logger->error('Could not merge entities in SheetMusic library', [
 				'exception' => $e,
 				'entityType' => $entityType,
 				'keepId' => $keepId,
 				'duplicateIds' => $duplicateIds,
 				'libraryId' => $libraryId,
 			]);
-
 			throw $e;
 		}
 	}

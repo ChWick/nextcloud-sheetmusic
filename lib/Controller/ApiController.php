@@ -4,26 +4,17 @@ declare(strict_types=1);
 
 namespace OCA\SheetMusic\Controller;
 
-use OCA\SheetMusic\Db\InternalEntityMapper;
-use OCA\SheetMusic\Db\InternalSongFileMapper;
-use OCA\SheetMusic\Db\InternalSongMapper;
-use OCA\SheetMusic\Db\LibraryMapper;
-use OCA\SheetMusic\Db\SongMapper;
 use OCA\SheetMusic\Service\EntityService;
-use OCA\SheetMusic\Service\FileManager;
 use OCA\SheetMusic\Service\LibraryIntegrityService;
 use OCA\SheetMusic\Service\LibraryService;
-use OCA\SheetMusic\Service\MobileSheetsPathResolver;
 use OCA\SheetMusic\Service\SongFileService;
 use OCA\SheetMusic\Service\SongService;
 use OCP\AppFramework\Http\Attribute\ApiRoute;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\OCSController;
-use OCP\Files\IRootFolder;
 use OCP\IRequest;
 use OCP\IUserSession;
-use Psr\Log\LoggerInterface;
 
 /**
  * Main API controller facade delegating to specialized domain controllers and services.
@@ -39,46 +30,19 @@ class ApiController extends OCSController {
 	public function __construct(
 		string $appName,
 		IRequest $request,
-		LibraryMapper $libraryMapper,
-		SongMapper $songMapper,
-		IRootFolder $rootFolder,
-		LoggerInterface $logger,
+		LibraryService $libraryService,
+		SongService $songService,
+		SongFileService $songFileService,
+		EntityService $entityService,
+		LibraryIntegrityService $libraryIntegrityService,
 		IUserSession $userSession,
-		FileManager $fileManager,
-		?LibraryService $libraryService = null,
-		?SongService $songService = null,
-		?SongFileService $songFileService = null,
-		?EntityService $entityService = null,
-		?LibraryIntegrityService $libraryIntegrityService = null,
-		?InternalEntityMapper $internalEntityMapper = null,
-		?InternalSongMapper $internalSongMapper = null,
-		?InternalSongFileMapper $internalSongFileMapper = null,
 	) {
 		parent::__construct($appName, $request);
 
-		$libService = $libraryService ?? new LibraryService($libraryMapper, $songMapper, $rootFolder, $logger);
-		$pathResolver = new MobileSheetsPathResolver($rootFolder);
-		$integritySvc = $libraryIntegrityService ?? new LibraryIntegrityService(
-			$libService, $songMapper, $fileManager, $rootFolder, $pathResolver, $logger,
-			$internalEntityMapper, $internalSongMapper, $internalSongFileMapper, $libraryMapper,
-		);
-		$fileSvc = $songFileService ?? new SongFileService(
-			$libService, $songMapper, $fileManager, $rootFolder, $logger,
-			$internalSongFileMapper, $internalSongMapper, $libraryMapper,
-		);
-		$sngService = $songService ?? new SongService(
-			$libService, $songMapper, $fileSvc, $fileManager, $logger, $integritySvc,
-			$internalSongMapper, $internalEntityMapper, $internalSongFileMapper, $libraryMapper, $rootFolder,
-		);
-		$entService = $entityService ?? new EntityService(
-			$libService, $songMapper, $logger, $fileManager,
-			$internalEntityMapper, $internalSongMapper, $libraryMapper,
-		);
-
-		$this->libraryController = new LibraryController($appName, $request, $libService, $userSession, $integritySvc);
-		$this->songController = new SongController($appName, $request, $sngService, $userSession);
-		$this->songFileController = new SongFileController($appName, $request, $fileSvc, $userSession);
-		$this->entityController = new EntityController($appName, $request, $entService, $userSession);
+		$this->libraryController = new LibraryController($appName, $request, $libraryService, $userSession, $libraryIntegrityService);
+		$this->songController = new SongController($appName, $request, $songService, $userSession);
+		$this->songFileController = new SongFileController($appName, $request, $songFileService, $userSession);
+		$this->entityController = new EntityController($appName, $request, $entityService, $userSession);
 	}
 
 	#[NoAdminRequired]

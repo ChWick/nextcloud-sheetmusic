@@ -10,6 +10,23 @@ declare(strict_types=1);
 namespace OCA\SheetMusic\Db;
 
 class InternalSongFile {
+	public const FILE_TYPE_OTHER = 0;
+	public const FILE_TYPE_PDF = 1;
+	public const FILE_TYPE_IMAGE = 2;
+	public const FILE_TYPE_TEXT = 3;
+	public const FILE_TYPE_ABC = 4;
+
+	public static function determineFileType(string $path): int {
+		$extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+		return match ($extension) {
+			'pdf' => self::FILE_TYPE_PDF,
+			'jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp' => self::FILE_TYPE_IMAGE,
+			'txt', 'text', 'chopro', 'chordpro', 'crd', 'pro' => self::FILE_TYPE_TEXT,
+			'abc' => self::FILE_TYPE_ABC,
+			default => self::FILE_TYPE_OTHER,
+		};
+	}
+
 	public function __construct(
 		public ?int $id = null,
 		public string $uuid = '',

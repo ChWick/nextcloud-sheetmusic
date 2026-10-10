@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace OCA\SheetMusic\Service;
 
 use OCA\SheetMusic\Db\InternalSongFileMapper;
+use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
 use OCA\SheetMusic\Db\MobileSheetsFile;
 use OCA\SheetMusic\Db\MobileSheetsSong;
@@ -242,12 +243,13 @@ class FileManager {
 
 	public function __construct(
 		private LibraryMapper $libraryMapper,
-		private SongMapper $songMapper,
 		private IRootFolder $rootFolder,
 		private MobileSheetsPathResolver $pathResolver,
 		private LoggerInterface $logger,
 		private ?LibraryService $libraryService = null,
 		private ?InternalSongFileMapper $internalSongFileMapper = null,
+		private ?InternalSongMapper $internalSongMapper = null,
+		private ?SongMapper $songMapper = null,
 	) {
 	}
 
@@ -361,7 +363,9 @@ class FileManager {
 
 		['databasePath' => $databasePath, 'targetFolder' => $targetFolder] = $this->libraryContext($libraryId, $user);
 
-		$songs = $this->songMapper->findSongs($databasePath);
+		$songs = $this->internalSongMapper !== null
+			? $this->internalSongMapper->findLibraryData($libraryId, $user)['songs']
+			: ($this->songMapper !== null ? $this->songMapper->findSongs($databasePath) : []);
 
 		// MobileSheets stores absolute WebDAV paths that sit next to the library
 		// database, so regenerated files belong in the database's parent folder -
@@ -457,12 +461,13 @@ class FileManager {
 		int $songId,
 		IUser $user,
 		Folder $targetFolder,
-		string $databasePath,
+		string $databasePath = '',
 		?MobileSheetsHashCodesFile $hashCodes = null,
 	): void {
-		$song = $this->songMapper->findSong($databasePath, $songId);
+		$song = $this->internalSongMapper?->findSong($songId, $user)
+			?? ($this->songMapper !== null && $databasePath !== '' ? $this->songMapper->findSong($databasePath, $songId) : null);
 		if ($song === null) {
-			throw new \RuntimeException("Song with ID $songId not found in the library '$databasePath'");
+			throw new \RuntimeException("Song with ID $songId not found");
 		}
 
 		$this->regenerateSongFiles($song, $user, $targetFolder, $databasePath, $hashCodes);
@@ -653,10 +658,27 @@ class FileManager {
 				if ($userFolder->nodeExists($candRel)) {
 					$candTarget = $this->pathResolver->forTarget($candRel, $user, $userFolder->getPath());
 
+					$isReferencedByOtherSong = false;
+					$existingNode = $userFolder->get($candRel);
+					if ($this->internalSongFileMapper !== null && $existingNode instanceof \OCP\Files\File) {
+						$others = $this->internalSongFileMapper->findByFileId((int)$existingNode->getId());
+						foreach ($others as $other) {
+							if ($other->songId !== $song->id && $other->deletedAt === null) {
+								$isReferencedByOtherSong = true;
+								break;
+							}
+						}
+					}
+
+					if (!$isReferencedByOtherSong && $this->songMapper !== null && $databasePath !== '' && file_exists($databasePath)) {
+						if ($this->songMapper->isPathReferencedByOtherSong($databasePath, $candTarget->webdav, $song->id)) {
+							$isReferencedByOtherSong = true;
+						}
+					}
+
 					// If candidate target file is ALREADY referenced by another song in DB,
 					// duplicate the file so this song gets its own distinct file copy.
-					if ($this->songMapper->isPathReferencedByOtherSong($databasePath, $candTarget->webdav, $song->id)) {
-						$existingNode = $userFolder->get($candRel);
+					if ($isReferencedByOtherSong) {
 						if ($existingNode instanceof \OCP\Files\File) {
 							$targetRelative = $this->uniqueRelativePath($userFolder, $candRel, '');
 							$this->ensureParentFolder($userFolder, $targetRelative);
@@ -672,7 +694,7 @@ class FileManager {
 									$this->internalSongFileMapper->update($internalSongFile);
 								}
 							}
-							if ($databasePath !== '' && file_exists($databasePath) && is_writable($databasePath)) {
+							if ($this->songMapper !== null && $databasePath !== '' && file_exists($databasePath) && is_writable($databasePath)) {
 								$this->songMapper->updateFile($databasePath, $file->id, $copiedTarget->webdav, $facts);
 							}
 							$hashCodes?->updatePath($source->webdav, $copiedTarget->webdav);
@@ -700,7 +722,7 @@ class FileManager {
 							$this->internalSongFileMapper->update($internalSongFile);
 						}
 					}
-					if ($databasePath !== '' && file_exists($databasePath) && is_writable($databasePath)) {
+					if ($this->songMapper !== null && $databasePath !== '' && file_exists($databasePath) && is_writable($databasePath)) {
 						$this->songMapper->updateFile($databasePath, $file->id, $candTarget->webdav, $facts);
 					}
 					$hashCodes?->updatePath($source->webdav, $candTarget->webdav);
@@ -754,9 +776,26 @@ class FileManager {
 		}
 
 		if ($isAlreadyInPlace) {
+			$isReferencedByOtherSong = false;
+			$existingNode = $userFolder->get($sourceRelative);
+			if ($this->internalSongFileMapper !== null && $existingNode instanceof \OCP\Files\File) {
+				$others = $this->internalSongFileMapper->findByFileId((int)$existingNode->getId());
+				foreach ($others as $other) {
+					if ($other->songId !== $song->id && $other->deletedAt === null) {
+						$isReferencedByOtherSong = true;
+						break;
+					}
+				}
+			}
+
+			if (!$isReferencedByOtherSong && $this->songMapper !== null && $databasePath !== '' && file_exists($databasePath)) {
+				if ($this->songMapper->isPathReferencedByOtherSong($databasePath, $source->webdav, $song->id)) {
+					$isReferencedByOtherSong = true;
+				}
+			}
+
 			// Check if this path is shared/referenced by another song in DB
-			if ($this->songMapper->isPathReferencedByOtherSong($databasePath, $source->webdav, $song->id)) {
-				$existingNode = $userFolder->get($sourceRelative);
+			if ($isReferencedByOtherSong) {
 				if ($existingNode instanceof \OCP\Files\File) {
 					$targetRelative = $this->uniqueRelativePath($userFolder, $sourceRelative, '');
 					$this->ensureParentFolder($userFolder, $targetRelative);
@@ -772,7 +811,7 @@ class FileManager {
 							$this->internalSongFileMapper->update($internalSongFile);
 						}
 					}
-					if ($databasePath !== '' && file_exists($databasePath) && is_writable($databasePath)) {
+					if ($this->songMapper !== null && $databasePath !== '' && file_exists($databasePath) && is_writable($databasePath)) {
 						$this->songMapper->updateFile($databasePath, $file->id, $copiedTarget->webdav, $facts);
 					}
 					$hashCodes?->updatePath($source->webdav, $copiedTarget->webdav);
@@ -825,7 +864,7 @@ class FileManager {
 					$this->internalSongFileMapper->update($internalSongFile);
 				}
 			}
-			if ($databasePath !== '' && file_exists($databasePath) && is_writable($databasePath)) {
+			if ($this->songMapper !== null && $databasePath !== '' && file_exists($databasePath) && is_writable($databasePath)) {
 				$this->songMapper->updateFile($databasePath, $file->id, $target->webdav, $facts);
 			}
 		} catch (\Throwable $exception) {
@@ -989,7 +1028,7 @@ class FileManager {
 					$this->internalSongFileMapper->update($internalSongFile);
 				}
 			}
-			if ($databasePath !== '' && file_exists($databasePath) && is_writable($databasePath)) {
+			if ($this->songMapper !== null && $databasePath !== '' && file_exists($databasePath) && is_writable($databasePath)) {
 				$this->songMapper->updateFile($databasePath, $file->id, $file->path, $facts);
 			}
 			$hashCodes?->updateFacts(

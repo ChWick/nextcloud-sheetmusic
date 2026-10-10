@@ -4,9 +4,14 @@ declare(strict_types=1);
 
 namespace Service;
 
-use OCA\SheetMusic\Db\SongMapper;
+use OCA\SheetMusic\Db\InternalSongFileMapper;
+use OCA\SheetMusic\Db\InternalSongMapper;
+use OCA\SheetMusic\Db\LibraryMapper;
+use OCA\SheetMusic\Db\MobileSheetsFile;
+use OCA\SheetMusic\Db\MobileSheetsSong;
 use OCA\SheetMusic\Service\FileManager;
 use OCA\SheetMusic\Service\LibraryService;
+use OCA\SheetMusic\Service\MobileSheetsPathResolver;
 use OCA\SheetMusic\Service\SongFileService;
 use OCP\Files\File;
 use OCP\Files\Folder;
@@ -25,7 +30,9 @@ final class SongFileServiceTest extends TestCase {
 	private IRootFolder $rootFolder;
 	private IUserFolder $userFolder;
 	private LibraryService $libraryService;
-	private SongMapper $songMapper;
+	private LibraryMapper $libraryMapper;
+	private InternalSongFileMapper $internalSongFileMapper;
+	private InternalSongMapper $internalSongMapper;
 	private FileManager $fileManager;
 	private LoggerInterface $logger;
 	private SongFileService $service;
@@ -35,12 +42,8 @@ final class SongFileServiceTest extends TestCase {
 
 	/** @var array<string, true> relative path => true */
 	private array $folders = [];
-	private array $databaseFixture;
 
 	protected function setUp(): void {
-		$this->databaseFixture = \TestSupport\MobileSheetsTestDatabase::create();
-		$this->databaseFixture['connection']->exec("INSERT INTO Songs (Id, Title) VALUES (10, 'score')");
-		$this->databaseFixture['connection']->exec("INSERT INTO Files (Id, SongId, Path) VALUES (1, 10, '/remote.php/dav/files/user1/Noten/score (2).pdf')");
 		$this->files = [];
 		$this->folders = ['Noten' => true];
 
@@ -53,30 +56,44 @@ final class SongFileServiceTest extends TestCase {
 		$this->rootFolder = $this->createMock(IRootFolder::class);
 		$this->rootFolder->method('getUserFolder')->with(self::UID)->willReturn($this->userFolder);
 
-		$this->libraryService = $this->createLibraryServiceForDatabase(
-			self::UID,
-			1,
-			'/Noten/library.db',
-			$this->databaseFixture['path'],
+		$this->libraryMapper = $this->createMock(LibraryMapper::class);
+		$this->libraryMapper->method('findForUser')->with(self::UID, 1)->willReturn([
+			'id' => 1,
+			'path' => '/Noten/library.db',
+			'autoPaths' => true,
+		]);
+
+		$this->internalSongFileMapper = $this->createMock(InternalSongFileMapper::class);
+		$this->internalSongMapper = $this->createMock(InternalSongMapper::class);
+		$this->internalSongMapper->method('findLibraryData')->willReturn(['songs' => []]);
+
+		$this->logger = $this->createMock(LoggerInterface::class);
+
+		$this->libraryService = new LibraryService(
+			$this->libraryMapper,
+			$this->rootFolder,
+			$this->logger,
 		);
 
-		$this->songMapper = $this->createSongMapper();
-		$this->logger = $this->createMock(LoggerInterface::class);
-		$pathResolver = new \OCA\SheetMusic\Service\MobileSheetsPathResolver($this->rootFolder);
+		$pathResolver = new MobileSheetsPathResolver($this->rootFolder);
 		$this->fileManager = new FileManager(
-			$this->createMock(\OCA\SheetMusic\Db\LibraryMapper::class),
-			$this->songMapper,
+			$this->libraryMapper,
 			$this->rootFolder,
 			$pathResolver,
 			$this->logger,
+			$this->libraryService,
+			$this->internalSongFileMapper,
+			$this->internalSongMapper,
 		);
 
 		$this->service = new SongFileService(
 			$this->libraryService,
-			$this->songMapper,
 			$this->fileManager,
 			$this->rootFolder,
 			$this->logger,
+			$this->internalSongFileMapper,
+			$this->internalSongMapper,
+			$this->libraryMapper,
 		);
 
 		// Wire nodeExists, get, and fake nodes to in-memory tree
@@ -108,10 +125,24 @@ final class SongFileServiceTest extends TestCase {
 		});
 	}
 
-	protected function tearDown(): void {
-		if (isset($this->databaseFixture['path']) && is_file($this->databaseFixture['path'])) {
-			unlink($this->databaseFixture['path']);
-		}
+	private function createSongFileService(
+		?LibraryService $libraryService = null,
+		?FileManager $fileManager = null,
+		?IRootFolder $rootFolder = null,
+		?LoggerInterface $logger = null,
+		?InternalSongFileMapper $internalSongFileMapper = null,
+		?InternalSongMapper $internalSongMapper = null,
+		?LibraryMapper $libraryMapper = null,
+	): SongFileService {
+		return new SongFileService(
+			$libraryService ?? $this->libraryService,
+			$fileManager ?? $this->fileManager,
+			$rootFolder ?? $this->rootFolder,
+			$logger ?? $this->logger,
+			$internalSongFileMapper ?? $this->internalSongFileMapper,
+			$internalSongMapper ?? $this->internalSongMapper,
+			$libraryMapper ?? $this->libraryMapper,
+		);
 	}
 
 	private function fakeFolderNode(string $relative): Folder {
@@ -126,6 +157,7 @@ final class SongFileServiceTest extends TestCase {
 
 	private function fakeFileNode(string $relative): File {
 		$file = $this->createMock(File::class);
+		$file->method('getId')->willReturn(1);
 		$file->method('getName')->willReturn(basename($relative));
 		$file->method('getPath')->willReturn('/' . self::UID . '/files/' . $relative);
 		$file->method('getType')->willReturn('file');
@@ -254,15 +286,13 @@ final class SongFileServiceTest extends TestCase {
 		$userFolder->method('nodeExists')->willReturn(false);
 
 		$file = $this->createMock(File::class);
+		$file->method('getId')->willReturn(1);
 		$file->method('getPath')->willReturn('/user1/files/Noten/new.pdf');
+		$file->method('getName')->willReturn('new.pdf');
 		$file->method('getContent')->willReturn('%PDF-1.4');
 		$file->method('getMTime')->willReturn(1);
 		$file->method('putContent')->willReturnCallback(static fn (string $content): int => strlen($content));
 		$userFolder->method('newFile')->with('Noten/new.pdf')->willReturn($file);
-
-		$this->databaseFixture['connection']->exec("UPDATE Songs SET Title = 'New Song' WHERE Id = 10");
-		$this->databaseFixture['connection']->exec('DELETE FROM Files WHERE Id = 1');
-		$songMapper = $this->createSongMapper();
 
 		$fileManager = $this->createMock(FileManager::class);
 		$fileManager->expects(self::once())
@@ -270,38 +300,44 @@ final class SongFileServiceTest extends TestCase {
 			->with($userFolder, 'Noten/new.pdf')
 			->willReturn('Noten/new.pdf');
 		$fileManager->expects(self::once())
-			->method('pathOfExistingFile')
-			->with($file->getPath(), $user)
-			->willReturn(new \OCA\SheetMusic\Service\MobileSheetsPath(
-				'/user1/files/Noten/new.pdf',
-				'/remote.php/dav/files/user1/Noten/new.pdf',
-			));
-		$fileManager->expects(self::once())->method('regenerateSongFilePaths');
-		$fileManager->expects(self::once())
 			->method('syncMetadataIntoFile')
 			->with(
 				self::callback(static fn ($song): bool => $song->title === 'New Song'),
 				self::callback(static fn ($songFile): bool => $songFile->path === '/remote.php/dav/files/user1/Noten/new.pdf'),
 				$user,
-				$this->databaseFixture['path'],
-				self::anything(),
+				'',
 			)
 			->willReturn(\OCA\SheetMusic\Service\MobileSheetsFileLogEntry::CODE_METADATA_UPDATED);
 
-		$libraryService = $this->createLibraryServiceForDatabase(
-			self::UID,
-			1,
-			'/Noten/library.db',
-			$this->databaseFixture['path'],
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$libraryMapper->method('findForUser')->with(self::UID, 1)->willReturn([
+			'id' => 1,
+			'path' => '/Noten/library.db',
+			'autoPaths' => true,
+		]);
+
+		$libraryService = new LibraryService(
+			$libraryMapper,
+			$rootFolder,
+			$this->logger,
 		);
 
-		$service = new SongFileService(
-			$libraryService,
-			$songMapper,
-			$fileManager,
-			$rootFolder,
-			$this->createMock(LoggerInterface::class),
+		$song = new MobileSheetsSong(
+			id: 10,
+			title: 'New Song',
+			files: [new MobileSheetsFile(1, '/remote.php/dav/files/user1/Noten/new.pdf')],
 		);
+		$internalSongMapper = $this->createMock(InternalSongMapper::class);
+		$internalSongMapper->method('findLibraryData')->willReturn(['songs' => [$song]]);
+
+		$service = $this->createSongFileService(
+			libraryService: $libraryService,
+			fileManager: $fileManager,
+			rootFolder: $rootFolder,
+			internalSongMapper: $internalSongMapper,
+			libraryMapper: $libraryMapper,
+		);
+
 		$tmpFile = tempnam(sys_get_temp_dir(), 'test_upload_');
 		file_put_contents($tmpFile, '%PDF-1.4');
 
@@ -317,13 +353,18 @@ final class SongFileServiceTest extends TestCase {
 
 	public function testDetachSongFileKeepsThePhysicalFile(): void {
 		$this->files['Noten/score.pdf'] = 'DETACHED_CONTENT';
-		$this->databaseFixture['connection']->exec("UPDATE Files SET Path = '/remote.php/dav/files/user1/Noten/score.pdf' WHERE Id = 1");
+
+		$this->internalSongFileMapper->expects(self::once())
+			->method('delete')
+			->with(1);
+		$this->libraryMapper->expects(self::once())
+			->method('touch')
+			->with(1);
 
 		$result = $this->service->detachSongFile($this->user(), 1, 10, 1);
 
-		self::assertSame([], $result['songs'][0]->files);
+		self::assertSame([], $result['songs']);
 		self::assertSame('DETACHED_CONTENT', $this->files['Noten/score.pdf']);
-		self::assertSame(0, (int)$this->databaseFixture['connection']->query('SELECT COUNT(*) FROM Files WHERE Id = 1')->fetchColumn());
 	}
 
 	public function testUploadSongFileFailsWhenAutoPathsDisabledAndFileExists(): void {
@@ -334,24 +375,14 @@ final class SongFileServiceTest extends TestCase {
 		$rootFolder->method('getUserFolder')->with(self::UID)->willReturn($userFolder);
 		$userFolder->method('nodeExists')->with('Noten/existing.pdf')->willReturn(true);
 
-		$libraryMapper = $this->createMock(\OCA\SheetMusic\Db\LibraryMapper::class);
+		$libraryMapper = $this->createMock(LibraryMapper::class);
 		$libraryMapper->method('findForUser')->with(self::UID, 1)->willReturn([
 			'id' => 1,
 			'path' => '/Noten/library.db',
 			'autoPaths' => false,
 		]);
 
-		$storage = $this->createMock(\OCP\Files\Storage\IStorage::class);
-		$storage->method('getLocalFile')->willReturn($this->databaseFixture['path']);
-
-		$databaseNode = $this->createMock(Node::class);
-		$databaseNode->method('getStorage')->willReturn($storage);
-		$databaseNode->method('getInternalPath')->willReturn('files/Noten/library.db');
-
-		$userFolder->method('get')->willReturnCallback(function (string $path) use ($databaseNode, $targetFolder): Node {
-			if ($path === 'Noten/library.db') {
-				return $databaseNode;
-			}
+		$userFolder->method('get')->willReturnCallback(function (string $path) use ($targetFolder): Node {
 			if ($path === 'Noten') {
 				return $targetFolder;
 			}
@@ -360,17 +391,14 @@ final class SongFileServiceTest extends TestCase {
 
 		$libraryService = new LibraryService(
 			$libraryMapper,
-			$this->songMapper,
 			$rootFolder,
 			$this->logger,
 		);
 
-		$service = new SongFileService(
-			$libraryService,
-			$this->songMapper,
-			$this->fileManager,
-			$rootFolder,
-			$this->logger,
+		$service = $this->createSongFileService(
+			libraryService: $libraryService,
+			rootFolder: $rootFolder,
+			libraryMapper: $libraryMapper,
 		);
 
 		$tmpFile = tempnam(sys_get_temp_dir(), 'test_upload_');
@@ -401,31 +429,22 @@ final class SongFileServiceTest extends TestCase {
 		});
 
 		$file = $this->createMock(File::class);
+		$file->method('getId')->willReturn(1);
+		$file->method('getName')->willReturn('new.pdf');
 		$file->method('getPath')->willReturn('/user1/files/Noten/new.pdf');
 		$file->method('getContent')->willReturn('%PDF-1.4');
 		$file->method('getMTime')->willReturn(1);
 		$file->method('putContent')->willReturnCallback(static fn (string $content): int => strlen($content));
 		$userFolder->method('newFile')->with('Noten/new.pdf')->willReturn($file);
-		$this->databaseFixture['connection']->exec('DELETE FROM Files WHERE Id = 1');
 
-		$libraryMapper = $this->createMock(\OCA\SheetMusic\Db\LibraryMapper::class);
+		$libraryMapper = $this->createMock(LibraryMapper::class);
 		$libraryMapper->method('findForUser')->with(self::UID, 1)->willReturn([
 			'id' => 1,
 			'path' => '/Noten/library.db',
 			'autoPaths' => false,
 		]);
 
-		$storage = $this->createMock(\OCP\Files\Storage\IStorage::class);
-		$storage->method('getLocalFile')->willReturn($this->databaseFixture['path']);
-
-		$databaseNode = $this->createMock(Node::class);
-		$databaseNode->method('getStorage')->willReturn($storage);
-		$databaseNode->method('getInternalPath')->willReturn('files/Noten/library.db');
-
-		$userFolder->method('get')->willReturnCallback(function (string $path) use ($databaseNode, $targetFolder): Node {
-			if ($path === 'Noten/library.db') {
-				return $databaseNode;
-			}
+		$userFolder->method('get')->willReturnCallback(function (string $path) use ($targetFolder): Node {
 			if ($path === 'Noten') {
 				return $targetFolder;
 			}
@@ -434,7 +453,6 @@ final class SongFileServiceTest extends TestCase {
 
 		$libraryService = new LibraryService(
 			$libraryMapper,
-			$this->songMapper,
 			$rootFolder,
 			$this->logger,
 		);
@@ -443,22 +461,23 @@ final class SongFileServiceTest extends TestCase {
 		$fileManager->expects(self::never())->method('uniqueRelativePath');
 		$fileManager->expects(self::never())->method('regenerateSongFilePaths');
 		$fileManager->expects(self::once())
-			->method('pathOfExistingFile')
-			->with($file->getPath(), $user)
-			->willReturn(new \OCA\SheetMusic\Service\MobileSheetsPath(
-				'/user1/files/Noten/new.pdf',
-				'/remote.php/dav/files/user1/Noten/new.pdf',
-			));
-		$fileManager->expects(self::once())
 			->method('syncMetadataIntoFile')
 			->willReturn(\OCA\SheetMusic\Service\MobileSheetsFileLogEntry::CODE_METADATA_UPDATED);
 
-		$service = new SongFileService(
-			$libraryService,
-			$this->songMapper,
-			$fileManager,
-			$rootFolder,
-			$this->logger,
+		$song = new MobileSheetsSong(
+			id: 10,
+			title: 'Song',
+			files: [new MobileSheetsFile(1, '/remote.php/dav/files/user1/Noten/new.pdf')],
+		);
+		$internalSongMapper = $this->createMock(InternalSongMapper::class);
+		$internalSongMapper->method('findLibraryData')->willReturn(['songs' => [$song]]);
+
+		$service = $this->createSongFileService(
+			libraryService: $libraryService,
+			fileManager: $fileManager,
+			rootFolder: $rootFolder,
+			internalSongMapper: $internalSongMapper,
+			libraryMapper: $libraryMapper,
 		);
 
 		$tmpFile = tempnam(sys_get_temp_dir(), 'test_upload_');
@@ -488,14 +507,11 @@ final class SongFileServiceTest extends TestCase {
 		$fileManager = $this->createMock(FileManager::class);
 		$fileManager->expects(self::never())->method('syncMetadataIntoFile');
 
-		$service = new SongFileService(
-			$libraryService,
-			$this->songMapper,
-			$fileManager,
-			$this->rootFolder,
-			$this->logger,
+		$service = $this->createSongFileService(
+			libraryService: $libraryService,
+			fileManager: $fileManager,
 		);
 
-		$service->syncSongFileMetadata($user, $this->databaseFixture['path'], 10, 1);
+		$service->syncSongFileMetadata($user, '', 10, 1);
 	}
 }

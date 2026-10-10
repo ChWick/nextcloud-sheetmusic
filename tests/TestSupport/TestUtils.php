@@ -29,7 +29,6 @@ trait TestUtils {
 	): LibraryService {
 		return new LibraryService(
 			$libraryMapper,
-			$this->createSongMapper(),
 			$rootFolder ?? $this->createMock(IRootFolder::class),
 			$this->createMock(LoggerInterface::class),
 		);

@@ -9,6 +9,8 @@ declare(strict_types=1);
 
 namespace Service;
 
+use OCA\SheetMusic\Db\InternalSongFileMapper;
+use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
 use OCA\SheetMusic\Db\MobileSheetsArtist;
 use OCA\SheetMusic\Db\MobileSheetsBook;
@@ -134,12 +136,38 @@ final class FileManagerTest extends TestCase {
 
 	/** A FileManager wired to the fake tree and the given SongMapper. */
 	private function makeFileManager(SongMapper $songMapper): FileManager {
+		$internalSongMapper = $this->createMock(InternalSongMapper::class);
+		$internalSongMapper->method('findSong')->willReturnCallback(function (int $songId, IUser $user) {
+			return $this->songMapper->findSong($this->databaseFixture['path'], $songId);
+		});
+		$internalSongMapper->method('findLibraryData')->willReturnCallback(function (int $libraryId, IUser $user) {
+			return ['songs' => $this->songMapper->findSongs($this->databaseFixture['path'])];
+		});
+
+		$internalSongFileMapper = $this->createMock(InternalSongFileMapper::class);
+		$internalSongFileMapper->method('findByFileId')->willReturnCallback(function (int $fileId) {
+			return [];
+		});
+
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$libraryMapper->method('findById')->with(1)->willReturn([
+			'id' => 1,
+			'path' => '/Noten/mobilesheets.db',
+		]);
+		$libraryMapper->method('findForUser')->willReturn([
+			'id' => 1,
+			'path' => '/Noten/mobilesheets.db',
+		]);
+
 		return new FileManager(
-			$this->createMock(LibraryMapper::class),
-			$songMapper,
+			$libraryMapper,
 			$this->rootFolder,
 			new MobileSheetsPathResolver($this->rootFolder),
 			$this->createMock(LoggerInterface::class),
+			null,
+			$internalSongFileMapper,
+			$internalSongMapper,
+			$songMapper,
 		);
 	}
 
@@ -1232,12 +1260,28 @@ final class FileManagerTest extends TestCase {
 			$this->storeSong($song);
 		}
 
+		$internalSongMapper = $this->createMock(InternalSongMapper::class);
+		$internalSongMapper->method('findSong')->willReturnCallback(function (int $songId, IUser $user) {
+			return $this->songMapper->findSong($this->databaseFixture['path'], $songId);
+		});
+		$internalSongMapper->method('findLibraryData')->willReturnCallback(function (int $libraryId, IUser $user) {
+			return ['songs' => $this->songMapper->findSongs($this->databaseFixture['path'])];
+		});
+
+		$internalSongFileMapper = $this->createMock(InternalSongFileMapper::class);
+		$internalSongFileMapper->method('findByFileId')->willReturnCallback(function (int $fileId) {
+			return [];
+		});
+
 		return new FileManager(
 			$libraryMapper,
-			$this->songMapper,
 			$rootFolder,
 			new MobileSheetsPathResolver($rootFolder),
 			$logger ?? $this->createMock(LoggerInterface::class),
+			null,
+			$internalSongFileMapper,
+			$internalSongMapper,
+			$this->songMapper,
 		);
 	}
 
@@ -1529,7 +1573,6 @@ final class FileManagerTest extends TestCase {
 
 		$fileManager = new FileManager(
 			$libraryMapper,
-			$this->songMapper,
 			$this->rootFolder,
 			new MobileSheetsPathResolver($this->rootFolder),
 			$this->createMock(LoggerInterface::class),

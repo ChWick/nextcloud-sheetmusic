@@ -73,6 +73,9 @@ class SongFileController extends OCSController {
 				),
 			], Http::STATUS_REQUEST_ENTITY_TOO_LARGE);
 		}
+		if ($fileInfo === null) {
+			return new DataResponse(['message' => 'No file uploaded'], Http::STATUS_BAD_REQUEST);
+		}
 
 		try {
 			$result = $this->songFileService->uploadSongFile($user, $libraryId, $id, $fileInfo);

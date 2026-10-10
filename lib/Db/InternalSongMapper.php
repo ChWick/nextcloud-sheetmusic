@@ -43,6 +43,22 @@ class InternalSongMapper {
 		return InternalSong::fromRow($row);
 	}
 
+	public function findSong(int $songId, ?IUser $user = null): ?MobileSheetsSong {
+		$internalSong = $this->findById($songId);
+		if ($internalSong === null) {
+			return null;
+		}
+
+		$data = $this->findLibraryData($internalSong->libraryId, $user);
+		foreach ($data['songs'] as $song) {
+			if ($song->id === $songId) {
+				return $song;
+			}
+		}
+
+		return null;
+	}
+
 	public function findByUuid(string $uuid): ?InternalSong {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')

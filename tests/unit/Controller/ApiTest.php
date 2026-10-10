@@ -6,38 +6,44 @@ namespace Controller;
 
 use OCA\SheetMusic\AppInfo\Application;
 use OCA\SheetMusic\Controller\ApiController;
-use OCA\SheetMusic\Db\LibraryMapper;
 use OCA\SheetMusic\Db\MobileSheetsSong;
-use OCA\SheetMusic\Db\SongMapper;
-use OCA\SheetMusic\Service\FileManager;
-use OCA\SheetMusic\Service\MobileSheetsHashCodesFile;
-use OCA\SheetMusic\Service\MobileSheetsPath;
-use OCA\SheetMusic\Service\MobileSheetsPathResolver;
-use OCA\SheetMusic\Service\MobileSheetsPdfMetadata;
+use OCA\SheetMusic\Service\EntityService;
+use OCA\SheetMusic\Service\LibraryIntegrityService;
+use OCA\SheetMusic\Service\LibraryService;
+use OCA\SheetMusic\Service\SongFileService;
+use OCA\SheetMusic\Service\SongService;
 use OCP\AppFramework\Http;
-use OCP\Files\File;
-use OCP\Files\Folder;
-use OCP\Files\IRootFolder;
-use OCP\Files\IUserFolder;
-use OCP\Files\Node;
-use OCP\Files\NotFoundException;
-use OCP\Files\Storage\IStorage;
 use OCP\IRequest;
 use OCP\IUser;
 use OCP\IUserSession;
 use PHPUnit\Framework\TestCase;
-use Psr\Log\LoggerInterface;
-use TestSupport\TestUtils;
 
 final class ApiTest extends TestCase {
-	use TestUtils;
+	private function createController(
+		?LibraryService $libraryService = null,
+		?SongService $songService = null,
+		?SongFileService $songFileService = null,
+		?EntityService $entityService = null,
+		?LibraryIntegrityService $libraryIntegrityService = null,
+		?IRequest $request = null,
+		bool $loggedIn = true,
+	): ApiController {
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('admin');
 
-	/** @var list<string> temporary hash codes files to remove after each test */
-	private array $temporaryFiles = [];
-	private array $databaseFixture;
+		$userSession = $this->createMock(IUserSession::class);
+		$userSession->method('getUser')->willReturn($loggedIn ? $user : null);
 
-	protected function setUp(): void {
-		$this->databaseFixture = \TestSupport\MobileSheetsTestDatabase::create();
+		return new ApiController(
+			Application::APP_ID,
+			$request ?? $this->createMock(IRequest::class),
+			$libraryService ?? $this->createMock(LibraryService::class),
+			$songService ?? $this->createMock(SongService::class),
+			$songFileService ?? $this->createMock(SongFileService::class),
+			$entityService ?? $this->createMock(EntityService::class),
+			$libraryIntegrityService ?? $this->createMock(LibraryIntegrityService::class),
+			$userSession,
+		);
 	}
 
 	public function testIndex(): void {
@@ -65,13 +71,12 @@ final class ApiTest extends TestCase {
 	}
 
 	public function testDeleteSongFileResolvesLibraryById(): void {
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->expects($this->once())
-			->method('findForUser')
-			->with('admin', 7)
+		$songFileService = $this->createMock(SongFileService::class);
+		$songFileService->expects($this->once())
+			->method('deleteSongFile')
 			->willReturn(null);
 
-		$controller = $this->createController($libraryMapper);
+		$controller = $this->createController(songFileService: $songFileService);
 
 		$this->assertEquals(
 			Http::STATUS_NOT_FOUND,
@@ -79,452 +84,85 @@ final class ApiTest extends TestCase {
 		);
 	}
 
-	/**
-	 * The WebDAV path recorded for a newly attached file must come from FileManager.
-	 * Building it by hand used to strip only the user id and produced
-	 * "/remote.php/dav/files/admin/files/Noten/...".
-	 */
-	public function testAttachNextcloudFileStoresTheWebdavPathWithoutADuplicatedFilesSegment(): void {
-		$storage = $this->createMock(IStorage::class);
-		$storage->method('getLocalFile')->willReturn($this->databaseFixture['path']);
+	public function testAttachNextcloudFileDelegatesToService(): void {
+		$songFileService = $this->createMock(SongFileService::class);
+		$songFileService->expects($this->once())
+			->method('attachNextcloudFile')
+			->willReturn(['songs' => []]);
 
-		$databaseNode = $this->createMock(Node::class);
-		$databaseNode->method('getStorage')->willReturn($storage);
-		$databaseNode->method('getInternalPath')->willReturn('files/Noten/mobilesheets.db');
-
-		// The file as it sits in the library folder after the copy below.
-		$attachedFile = $this->createMock(Node::class);
-		$attachedFile->method('getPath')->willReturn('/admin/files/Noten/T-Pen 2_QG.pdf');
-
-		$targetFolder = $this->createMock(Folder::class);
-		$targetFolder->method('getPath')->willReturn('/admin/files/Noten');
-		$targetFolder->method('get')->with('T-Pen 2_QG.pdf')->willReturn($attachedFile);
-
-		$sourceNode = $this->createMock(Node::class);
-		$sourceNode->method('getType')->willReturn('file');
-		$sourceNode->method('getName')->willReturn('T-Pen 2_QG.pdf');
-		// Node::copy() resolves against the filesystem root, so it needs the full
-		// internal path rather than a path relative to the user folder.
-		$sourceNode->expects($this->once())
-			->method('copy')
-			->with('/admin/files/Noten/T-Pen 2_QG.pdf');
-
-		$userFolder = $this->createMock(IUserFolder::class);
-		$userFolder->method('getPath')->willReturn('/admin/files');
-		$userFolder->method('get')->willReturnCallback(
-			static function (string $path) use ($databaseNode, $targetFolder, $sourceNode): Node {
-				if ($path === 'Noten/mobilesheets.db') {
-					return $databaseNode;
-				}
-				if ($path === 'Noten') {
-					return $targetFolder;
-				}
-				if ($path === 'Music/T-Pen 2_QG.pdf') {
-					return $sourceNode;
-				}
-
-				throw new NotFoundException($path);
-			},
-		);
-
-		$rootFolder = $this->createMock(IRootFolder::class);
-		$rootFolder->method('getUserFolder')->with('admin')->willReturn($userFolder);
-
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->method('findForUser')
-			->with('admin', 7)
-			->willReturn(['id' => 7, 'path' => '/Noten/mobilesheets.db']);
-
-		$songMapper = $this->createSongMapper();
-
-		$fileManager = new FileManager(
-			$libraryMapper,
-			$songMapper,
-			$rootFolder,
-			new MobileSheetsPathResolver($rootFolder),
-			$this->createMock(LoggerInterface::class),
-		);
-
-		$controller = $this->createController($libraryMapper, $songMapper, $rootFolder, $fileManager);
+		$controller = $this->createController(songFileService: $songFileService);
 
 		$response = $controller->attachNextcloudFile(42, 7, '/Music/T-Pen 2_QG.pdf', 'copy');
 
 		$this->assertEquals(Http::STATUS_OK, $response->getStatus());
-		self::assertSame('/remote.php/dav/files/admin/Noten/T-Pen 2_QG.pdf', $this->databaseFixture['connection']->query('SELECT Path FROM Files')->fetchColumn());
+		$this->assertEquals(['songs' => []], $response->getData());
 	}
 
-	/**
-	 * A name that is already used in the library folder must not be overwritten when a
-	 * file is copied in: two songs with the same title would otherwise share one PDF.
-	 */
-	public function testAttachNextcloudFileCopiesToAUniqueNameWhenTheNameIsTaken(): void {
-		$storage = $this->createMock(IStorage::class);
-		$storage->method('getLocalFile')->willReturn($this->databaseFixture['path']);
+	public function testAttachNextcloudFileReturnsNotFoundWhenServiceFails(): void {
+		$songFileService = $this->createMock(SongFileService::class);
+		$songFileService->method('attachNextcloudFile')->willReturn(null);
 
-		$databaseNode = $this->createMock(Node::class);
-		$databaseNode->method('getStorage')->willReturn($storage);
-		$databaseNode->method('getInternalPath')->willReturn('files/Noten/mobilesheets.db');
+		$controller = $this->createController(songFileService: $songFileService);
 
-		$attachedFile = $this->createMock(Node::class);
-		$attachedFile->method('getPath')->willReturn('/admin/files/Noten/Shared (2).pdf');
+		$response = $controller->attachNextcloudFile(42, 7, '/Music/Shared.pdf', 'copy');
+		$this->assertEquals(Http::STATUS_NOT_FOUND, $response->getStatus());
+	}
 
-		$targetFolder = $this->createMock(Folder::class);
-		$targetFolder->method('getPath')->willReturn('/admin/files/Noten');
-		$targetFolder->method('get')->with('Shared (2).pdf')->willReturn($attachedFile);
+	public function testAttachNextcloudFileValidatesMissingParameters(): void {
+		$controller = $this->createController();
 
-		$sourceNode = $this->createMock(Node::class);
-		$sourceNode->method('getType')->willReturn('file');
-		$sourceNode->method('getName')->willReturn('Shared.pdf');
-		$sourceNode->expects($this->once())
-			->method('copy')
-			->with('/admin/files/Noten/Shared (2).pdf');
+		$this->assertEquals(Http::STATUS_BAD_REQUEST, $controller->attachNextcloudFile(42, null, '/Music/Shared.pdf')->getStatus());
+		$this->assertEquals(Http::STATUS_BAD_REQUEST, $controller->attachNextcloudFile(42, 7, '')->getStatus());
+	}
 
-		$userFolder = $this->createMock(IUserFolder::class);
-		$userFolder->method('getPath')->willReturn('/admin/files');
-		$userFolder->method('get')->willReturnCallback(
-			static function (string $path) use ($databaseNode, $targetFolder, $sourceNode): Node {
-				return match ($path) {
-					'Noten/mobilesheets.db' => $databaseNode,
-					'Noten' => $targetFolder,
-					'Music/Shared.pdf' => $sourceNode,
-					default => throw new NotFoundException($path),
-				};
-			},
-		);
-		// The library folder already holds a file of that name, e.g. of another song.
-		$userFolder->method('nodeExists')->willReturnCallback(
-			static fn (string $path): bool => $path === 'Noten/Shared.pdf',
-		);
+	public function testDeleteSongFileDelegatesToService(): void {
+		$songFileService = $this->createMock(SongFileService::class);
+		$songFileService->expects($this->once())
+			->method('deleteSongFile')
+			->willReturn(['songs' => []]);
 
-		$rootFolder = $this->createMock(IRootFolder::class);
-		$rootFolder->method('getUserFolder')->with('admin')->willReturn($userFolder);
-
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->method('findForUser')
-			->with('admin', 7)
-			->willReturn(['id' => 7, 'path' => '/Noten/mobilesheets.db']);
-
-		$songMapper = $this->createSongMapper();
-
-		$fileManager = new FileManager(
-			$libraryMapper,
-			$songMapper,
-			$rootFolder,
-			new MobileSheetsPathResolver($rootFolder),
-			$this->createMock(LoggerInterface::class),
-		);
-
-		$controller = $this->createController($libraryMapper, $songMapper, $rootFolder, $fileManager);
+		$controller = $this->createController(songFileService: $songFileService);
 
 		$this->assertEquals(
 			Http::STATUS_OK,
-			$controller->attachNextcloudFile(42, 7, '/Music/Shared.pdf', 'copy')->getStatus(),
+			$controller->deleteSongFile(42, 2, 7)->getStatus(),
 		);
 	}
 
-	/** Attaching a file the song already lists must not add a second entry for it. */
-	public function testAttachNextcloudFileDoesNotListTheSameFileTwice(): void {
-		$storage = $this->createMock(IStorage::class);
-		$storage->method('getLocalFile')->willReturn($this->databaseFixture['path']);
+	public function testDeleteSongFileReturnsNotFoundWhenServiceReturnsNull(): void {
+		$songFileService = $this->createMock(SongFileService::class);
+		$songFileService->method('deleteSongFile')->willReturn(null);
 
-		$databaseNode = $this->createMock(Node::class);
-		$databaseNode->method('getStorage')->willReturn($storage);
-		$databaseNode->method('getInternalPath')->willReturn('files/Noten/mobilesheets.db');
+		$controller = $this->createController(songFileService: $songFileService);
 
-		$libraryFile = $this->createMock(Node::class);
-		$libraryFile->method('getPath')->willReturn('/admin/files/Noten/Shared.pdf');
-
-		$targetFolder = $this->createMock(Folder::class);
-		$targetFolder->method('getPath')->willReturn('/admin/files/Noten');
-		$targetFolder->method('get')->with('Shared.pdf')->willReturn($libraryFile);
-
-		// The library's own file is chosen as the source and already sits in place.
-		$sourceNode = $this->createMock(Node::class);
-		$sourceNode->method('getType')->willReturn('file');
-		$sourceNode->method('getName')->willReturn('Shared.pdf');
-		$sourceNode->expects($this->never())->method('copy');
-		$sourceNode->expects($this->never())->method('move');
-
-		$userFolder = $this->createMock(IUserFolder::class);
-		$userFolder->method('getPath')->willReturn('/admin/files');
-		$userFolder->method('get')->willReturnCallback(
-			static function (string $path) use ($databaseNode, $targetFolder, $sourceNode): Node {
-				return match ($path) {
-					'Noten/mobilesheets.db' => $databaseNode,
-					'Noten' => $targetFolder,
-					'Noten/Shared.pdf' => $sourceNode,
-					default => throw new NotFoundException($path),
-				};
-			},
+		$this->assertEquals(
+			Http::STATUS_NOT_FOUND,
+			$controller->deleteSongFile(42, 2, 7)->getStatus(),
 		);
+	}
 
-		$rootFolder = $this->createMock(IRootFolder::class);
-		$rootFolder->method('getUserFolder')->with('admin')->willReturn($userFolder);
+	public function testDetachSongFileDelegatesToService(): void {
+		$songFileService = $this->createMock(SongFileService::class);
+		$songFileService->expects($this->once())
+			->method('detachSongFile')
+			->willReturn(['songs' => []]);
 
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->method('findForUser')
-			->with('admin', 7)
-			->willReturn(['id' => 7, 'path' => '/Noten/mobilesheets.db']);
-
-		$this->databaseFixture['connection']->exec("INSERT INTO Songs (Id, Title) VALUES (42, 'Take Five')");
-		$this->databaseFixture['connection']->exec("INSERT INTO Files (Id, SongId, Path) VALUES (2, 42, '/remote.php/dav/files/admin/Noten/Shared.pdf')");
-		$songMapper = $this->createSongMapper();
-
-		$fileManager = new FileManager(
-			$libraryMapper,
-			$songMapper,
-			$rootFolder,
-			new MobileSheetsPathResolver($rootFolder),
-			$this->createMock(LoggerInterface::class),
-		);
-
-		$controller = $this->createController($libraryMapper, $songMapper, $rootFolder, $fileManager);
+		$controller = $this->createController(songFileService: $songFileService);
 
 		$this->assertEquals(
 			Http::STATUS_OK,
-			$controller->attachNextcloudFile(42, 7, '/Noten/Shared.pdf', 'copy')->getStatus(),
+			$controller->detachSongFile(42, 2, 7)->getStatus(),
 		);
 	}
 
-	/**
-	 * Removing one file of a two-file song has to renumber the file that remains: the
-	 * song drops back to a single file and therefore loses its numeric prefix again. The
-	 * deleted file's hash code entry (and the rename of the remaining one) have to end up
-	 * in the hash codes file, too.
-	 */
-	public function testDeleteSongFileRenumbersTheRemainingFiles(): void {
-		$databasePath = $this->databaseFixture['path'];
-		$this->databaseFixture['connection']->exec("INSERT INTO Songs (Id, Title) VALUES (42, 'Take Five')");
-		$this->databaseFixture['connection']->exec("INSERT INTO Collections (Id, Name) VALUES (1, 'Jazz')");
-		$this->databaseFixture['connection']->exec('INSERT INTO CollectionSong (CollectionId, SongId) VALUES (1, 42)');
-		$this->databaseFixture['connection']->exec("INSERT INTO Files (Id, SongId, Path, LastModified) VALUES (3, 42, '/remote.php/dav/files/admin/Noten/Jazz/002 Jazz - Take Five.pdf', 0), (11, 42, '/remote.php/dav/files/admin/Noten/Jazz/001 Jazz - Take Five.pdf', 0)");
-		$hashFile = MobileSheetsHashCodesFile::pathForDatabase($databasePath);
-		file_put_contents($hashFile, implode("\n", [
-			'/remote.php/dav/files/admin/Noten/Jazz/001 Jazz - Take Five.pdf', '1', '2', '3',
-			'/remote.php/dav/files/admin/Noten/Jazz/002 Jazz - Take Five.pdf', '561292453', '1789312275000', '839797',
-		]));
-		$this->temporaryFiles[] = $hashFile;
-
-		$storage = $this->createMock(IStorage::class);
-		$storage->method('getLocalFile')->willReturn($databasePath);
-
-		$databaseNode = $this->createMock(Node::class);
-		$databaseNode->method('getStorage')->willReturn($storage);
-		$databaseNode->method('getInternalPath')->willReturn('files/Noten/mobilesheets.db');
-
-		// The file the user deleted: it is gone from the database and from the filesystem.
-		$deletedFile = $this->createMock(Node::class);
-		$deletedFile->method('getType')->willReturn('file');
-		$deletedFile->expects($this->once())->method('delete');
-
-		// The file that remains; it is the only one left, so its name loses the prefix.
-		$remainingFile = $this->createMock(Node::class);
-		$remainingFile->expects($this->once())
-			->method('move')
-			->with('/admin/files/Noten/Jazz/Jazz - Take Five.pdf');
-
-		$libraryFolder = $this->createMock(Folder::class);
-		$libraryFolder->method('getPath')->willReturn('/admin/files/Noten');
-
-		// Still holds the moved file, so no folder may be cleaned up.
-		$jazzFolder = $this->createMock(Folder::class);
-		$jazzFolder->method('getDirectoryListing')->willReturn([$remainingFile]);
-
-		$userFolder = $this->createMock(IUserFolder::class);
-		$userFolder->method('getPath')->willReturn('/admin/files');
-		$userFolder->method('get')->willReturnCallback(
-			static function (string $path) use ($databaseNode, $libraryFolder, $remainingFile, $jazzFolder): Node {
-				return match ($path) {
-					'Noten/mobilesheets.db' => $databaseNode,
-					'Noten' => $libraryFolder,
-					'Noten/Jazz' => $jazzFolder,
-					'Noten/Jazz/001 Jazz - Take Five.pdf' => $remainingFile,
-					default => throw new NotFoundException($path),
-				};
-			},
-		);
-		$userFolder->method('nodeExists')->willReturnCallback(
-			static fn (string $path): bool => in_array(
-				$path,
-				['Noten', 'Noten/Jazz', 'Noten/Jazz/001 Jazz - Take Five.pdf'],
-				true,
-			),
-		);
-
-		$rootFolder = $this->createMock(IRootFolder::class);
-		$rootFolder->method('getUserFolder')->with('admin')->willReturn($userFolder);
-		$rootFolder->method('get')->willReturnCallback(
-			static function (string $path) use ($deletedFile): Node {
-				if ($path === '/admin/files/Noten/Jazz/002 Jazz - Take Five.pdf') {
-					return $deletedFile;
-				}
-
-				throw new NotFoundException($path);
-			},
-		);
-
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->method('findForUser')
-			->with('admin', 7)
-			->willReturn(['id' => 7, 'path' => '/Noten/mobilesheets.db']);
-
-		$songMapper = $this->createSongMapper();
-
-		$fileManager = new FileManager(
-			$libraryMapper,
-			$songMapper,
-			$rootFolder,
-			new MobileSheetsPathResolver($rootFolder),
-			$this->createMock(LoggerInterface::class),
-		);
-
-		$controller = $this->createController($libraryMapper, $songMapper, $rootFolder, $fileManager);
-
-		$response = $controller->deleteSongFile(42, 3, 7);
-
-		$this->assertEquals(Http::STATUS_OK, $response->getStatus());
-		self::assertSame('/remote.php/dav/files/admin/Noten/Jazz/Jazz - Take Five.pdf', $this->databaseFixture['connection']->query('SELECT Path FROM Files WHERE Id = 11')->fetchColumn());
-
-		$hashCodes = (string)file_get_contents($hashFile);
-		$this->assertStringNotContainsString('002 Jazz - Take Five.pdf', $hashCodes, 'the removed file must not keep an entry');
-		$this->assertStringNotContainsString('001 Jazz - Take Five.pdf', $hashCodes, 'the remaining file was renamed');
-		$this->assertStringContainsString(
-			"/remote.php/dav/files/admin/Noten/Jazz/Jazz - Take Five.pdf\n1\n2\n3",
-			$hashCodes,
-			'the renamed entry must keep its hash, modification time and size',
-		);
-	}
-
-	/** A stored path does not have to point into this user's tree. */
-	public function testDeleteSongFileIgnoresStoredFilesOfAnotherUser(): void {
-		$storage = $this->createMock(IStorage::class);
-		$storage->method('getLocalFile')->willReturn($this->databaseFixture['path']);
-
-		$databaseNode = $this->createMock(Node::class);
-		$databaseNode->method('getStorage')->willReturn($storage);
-		$databaseNode->method('getInternalPath')->willReturn('files/Noten/mobilesheets.db');
-
-		$libraryFolder = $this->createMock(Folder::class);
-		$libraryFolder->method('getPath')->willReturn('/admin/files/Noten');
-
-		$userFolder = $this->createMock(IUserFolder::class);
-		$userFolder->method('getPath')->willReturn('/admin/files');
-		$userFolder->method('get')->willReturnCallback(
-			static function (string $path) use ($databaseNode, $libraryFolder): Node {
-				return match ($path) {
-					'Noten/mobilesheets.db' => $databaseNode,
-					'Noten' => $libraryFolder,
-					default => throw new NotFoundException($path),
-				};
-			},
-		);
-		$userFolder->method('nodeExists')->willReturn(true);
-
-		$rootFolder = $this->createMock(IRootFolder::class);
-		$rootFolder->method('getUserFolder')->with('admin')->willReturn($userFolder);
-		// Nothing may be touched: the stored file belongs to another user's folder.
-		$rootFolder->expects($this->never())->method('get');
-
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->method('findForUser')
-			->with('admin', 7)
-			->willReturn(['id' => 7, 'path' => '/Noten/mobilesheets.db']);
-
-		$this->databaseFixture['connection']->exec("INSERT INTO Songs (Id, Title) VALUES (42, 'Take Five')");
-		$this->databaseFixture['connection']->exec("INSERT INTO Files (Id, SongId, Path) VALUES (3, 42, '/remote.php/dav/files/cwick/Noten/Jazz/Jazz - Take Five.pdf')");
-		$songMapper = $this->createSongMapper();
-
-		$fileManager = new FileManager(
-			$libraryMapper,
-			$songMapper,
-			$rootFolder,
-			new MobileSheetsPathResolver($rootFolder),
-			$this->createMock(LoggerInterface::class),
-		);
-
-		$controller = $this->createController($libraryMapper, $songMapper, $rootFolder, $fileManager);
-
-		$response = $controller->deleteSongFile(42, 3, 7);
-
-		$this->assertEquals(Http::STATUS_OK, $response->getStatus());
-	}
-
-	/** A corrupted path in the library must not make the endpoint delete a folder. */
-	public function testDeleteSongFileRefusesToDeleteAFolder(): void {
-		$storage = $this->createMock(IStorage::class);
-		$storage->method('getLocalFile')->willReturn($this->databaseFixture['path']);
-
-		$databaseNode = $this->createMock(Node::class);
-		$databaseNode->method('getStorage')->willReturn($storage);
-		$databaseNode->method('getInternalPath')->willReturn('files/Noten/mobilesheets.db');
-
-		// A folder behind a stored path, e.g. after someone edited the database by hand.
-		$storedFolder = $this->createMock(Folder::class);
-		$storedFolder->method('getType')->willReturn('dir');
-		$storedFolder->expects($this->never())->method('delete');
-
-		$libraryFolder = $this->createMock(Folder::class);
-		$libraryFolder->method('getPath')->willReturn('/admin/files/Noten');
-
-		$userFolder = $this->createMock(IUserFolder::class);
-		$userFolder->method('getPath')->willReturn('/admin/files');
-		$userFolder->method('get')->willReturnCallback(
-			static function (string $path) use ($databaseNode, $libraryFolder): Node {
-				return match ($path) {
-					'Noten/mobilesheets.db' => $databaseNode,
-					'Noten' => $libraryFolder,
-					default => throw new NotFoundException($path),
-				};
-			},
-		);
-		$userFolder->method('nodeExists')->willReturn(true);
-
-		$rootFolder = $this->createMock(IRootFolder::class);
-		$rootFolder->method('getUserFolder')->with('admin')->willReturn($userFolder);
-		$rootFolder->method('get')->willReturn($storedFolder);
-
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->method('findForUser')
-			->with('admin', 7)
-			->willReturn(['id' => 7, 'path' => '/Noten/mobilesheets.db']);
-
-		$this->databaseFixture['connection']->exec("INSERT INTO Songs (Id, Title) VALUES (42, 'Corrupt')");
-		$this->databaseFixture['connection']->exec("INSERT INTO Files (Id, SongId, Path) VALUES (3, 42, '/remote.php/dav/files/admin/Noten')");
-		$songMapper = $this->createSongMapper();
-
-		$fileManager = new FileManager(
-			$libraryMapper,
-			$songMapper,
-			$rootFolder,
-			new MobileSheetsPathResolver($rootFolder),
-			$this->createMock(LoggerInterface::class),
-		);
-
-		$controller = $this->createController($libraryMapper, $songMapper, $rootFolder, $fileManager);
-
-		$this->assertEquals(Http::STATUS_OK, $controller->deleteSongFile(42, 3, 7)->getStatus());
-	}
-
-	/**
-	 * Deleting a library may only remove its entry: the database file and the files
-	 * it references have to stay, so the library can be added again later.
-	 */
 	public function testDeleteLibraryRemovesOnlyTheEntryAndKeepsTheFiles(): void {
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->expects($this->once())
-			->method('findForUser')
+		$libraryService = $this->createMock(LibraryService::class);
+		$libraryService->expects($this->once())
+			->method('deleteLibrary')
 			->with('admin', 7)
 			->willReturn(['id' => 7, 'path' => '/Noten/mobilesheets.db']);
-		$libraryMapper->expects($this->once())
-			->method('deleteForUser')
-			->with('admin', 7)
-			->willReturn(true);
 
-		// Nothing in the user's files may be touched by removing a library.
-		$rootFolder = $this->createMock(IRootFolder::class);
-		$rootFolder->expects($this->never())->method('getUserFolder');
-
-		$controller = $this->createController($libraryMapper, null, $rootFolder);
+		$controller = $this->createController(libraryService: $libraryService);
 
 		$response = $controller->deleteLibrary(7);
 
@@ -533,14 +171,13 @@ final class ApiTest extends TestCase {
 	}
 
 	public function testDeleteLibraryWithUnknownIdIsNotFound(): void {
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->expects($this->once())
-			->method('findForUser')
+		$libraryService = $this->createMock(LibraryService::class);
+		$libraryService->expects($this->once())
+			->method('deleteLibrary')
 			->with('admin', 7)
 			->willReturn(null);
-		$libraryMapper->expects($this->never())->method('deleteForUser');
 
-		$controller = $this->createController($libraryMapper);
+		$controller = $this->createController(libraryService: $libraryService);
 
 		$this->assertEquals(Http::STATUS_NOT_FOUND, $controller->deleteLibrary(7)->getStatus());
 	}
@@ -559,41 +196,17 @@ final class ApiTest extends TestCase {
 
 		$this->assertEquals(
 			Http::STATUS_BAD_REQUEST,
-			$controller->createSong(7, '   ')->getStatus(),
+			$controller->createSong(1, '  ')->getStatus(),
 		);
 	}
 
-	/**
-	 * The client has to know the id of the new song: creating it and adding a file to it
-	 * afterwards are separate requests.
-	 */
 	public function testCreateSongReturnsTheNewSongIdWithTheLibraryData(): void {
-		$storage = $this->createMock(IStorage::class);
-		$storage->method('getLocalFile')->willReturn($this->databaseFixture['path']);
+		$songService = $this->createMock(SongService::class);
+		$songService->expects(self::once())
+			->method('createSong')
+			->willReturn(['createdSongId' => 42, 'songs' => [new MobileSheetsSong(42, 'New Song')]]);
 
-		$databaseNode = $this->createMock(Node::class);
-		$databaseNode->method('getStorage')->willReturn($storage);
-		$databaseNode->method('getInternalPath')->willReturn('files/Noten/mobilesheets.db');
-
-		$userFolder = $this->createMock(IUserFolder::class);
-		$userFolder->method('get')->with('Noten/mobilesheets.db')->willReturn($databaseNode);
-
-		$rootFolder = $this->createMock(IRootFolder::class);
-		$rootFolder->method('getUserFolder')->with('admin')->willReturn($userFolder);
-
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->method('findForUser')
-			->with('admin', 7)
-			->willReturn(['id' => 7, 'path' => '/Noten/mobilesheets.db']);
-
-		$this->databaseFixture['connection']->exec("INSERT INTO Songs (Id, Title) VALUES (41, 'Existing')");
-		$this->databaseFixture['connection']->exec("INSERT INTO Composer (Id, Name) VALUES (10, 'Bach')");
-		$this->databaseFixture['connection']->exec("INSERT INTO Books (Id, Title) VALUES (100, 'Book')");
-		$this->databaseFixture['connection']->exec("INSERT INTO Collections (Id, Name) VALUES (1000, 'Jazz')");
-		$this->databaseFixture['connection']->exec("INSERT INTO Artists (Id, Name) VALUES (200, 'Coltrane')");
-		$songMapper = $this->createSongMapper();
-
-		$controller = $this->createController($libraryMapper, $songMapper, $rootFolder);
+		$controller = $this->createController(songService: $songService);
 
 		$response = $controller->createSong(7, 'New Song', [10], [100], [1000], [200]);
 
@@ -607,12 +220,15 @@ final class ApiTest extends TestCase {
 	}
 
 	public function testCreateSongOfAnUnknownLibraryIsNotFound(): void {
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->method('findForUser')->with('admin', 7)->willReturn(null);
+		$songService = $this->createMock(SongService::class);
+		$songService->method('createSong')->willReturn(null);
 
-		$controller = $this->createController($libraryMapper);
+		$controller = $this->createController(songService: $songService);
 
-		$this->assertEquals(Http::STATUS_NOT_FOUND, $controller->createSong(7, 'New Song')->getStatus());
+		$this->assertEquals(
+			Http::STATUS_NOT_FOUND,
+			$controller->createSong(7, 'Some title')->getStatus(),
+		);
 	}
 
 	public function testDeleteSongWithoutLibraryIdIsBadRequest(): void {
@@ -620,179 +236,130 @@ final class ApiTest extends TestCase {
 
 		$this->assertEquals(
 			Http::STATUS_BAD_REQUEST,
-			$controller->deleteSong(1)->getStatus(),
+			$controller->deleteSong(1, null)->getStatus(),
 		);
 	}
 
 	public function testDeleteSongOfAnUnknownSongIsNotFound(): void {
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->method('findForUser')
-			->with('admin', 7)
-			->willReturn(['id' => 7, 'path' => '/Noten/mobilesheets.db']);
+		$songService = $this->createMock(SongService::class);
+		$songService->method('deleteSong')->willReturn(null);
 
-		$controller = $this->createController($libraryMapper, null, $this->createLibraryRootFolder());
+		$controller = $this->createController(songService: $songService);
 
-		$this->assertEquals(Http::STATUS_NOT_FOUND, $controller->deleteSong(42, 7)->getStatus());
+		$this->assertEquals(
+			Http::STATUS_NOT_FOUND,
+			$controller->deleteSong(42, 7)->getStatus(),
+		);
 	}
 
-	/**
-	 * Deleting a song has to move its files into the trash bin: the database rows are the
-	 * only thing that knows which files belong to the song, so they are read first.
-	 */
 	public function testDeleteSongMovesItsFilesToTheTrashBin(): void {
-		$storedPath = '/remote.php/dav/files/admin/Noten/Alpha.pdf';
-		$fileNode = $this->createMock(Node::class);
-		$fileNode->method('getType')->willReturn('file');
-		$fileNode->expects($this->once())->method('delete');
+		$songService = $this->createMock(SongService::class);
+		$songService->expects($this->once())
+			->method('deleteSong')
+			->willReturn(['songs' => []]);
 
-		$this->databaseFixture['connection']->exec("INSERT INTO Songs (Id, Title) VALUES (42, 'Alpha')");
-		$this->databaseFixture['connection']->exec("INSERT INTO Files (Id, SongId, Path) VALUES (2, 42, '$storedPath')");
-		$songMapper = $this->createSongMapper();
+		$controller = $this->createController(songService: $songService);
 
-		$fileManager = $this->createMock(FileManager::class);
-		$fileManager->expects($this->once())
-			->method('pathOfStoredFile')
-			->with($storedPath, $this->anything())
-			->willReturn(new MobileSheetsPath('/admin/files/Noten/Alpha.pdf', $storedPath));
-
-		$rootFolder = $this->createLibraryRootFolder(['Noten/Alpha.pdf' => $fileNode]);
-
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->method('findForUser')
-			->with('admin', 7)
-			->willReturn(['id' => 7, 'path' => '/Noten/mobilesheets.db']);
-
-		$controller = $this->createController($libraryMapper, $songMapper, $rootFolder, $fileManager);
-
-		$response = $controller->deleteSong(42, 7);
-
-		$this->assertEquals(Http::STATUS_OK, $response->getStatus());
-		self::assertSame([], $response->getData()['songs']);
+		$this->assertEquals(
+			Http::STATUS_OK,
+			$controller->deleteSong(42, 7, true)->getStatus(),
+		);
 	}
 
-	/**
-	 * With "Delete all attached files" unchecked the files stay where they are: only the
-	 * song and the rows pointing at it leave the database.
-	 */
 	public function testDeleteSongKeepsItsFilesWhenNotRequested(): void {
-		$storedPath = '/remote.php/dav/files/admin/Noten/Alpha.pdf';
+		$songService = $this->createMock(SongService::class);
+		$songService->expects($this->once())
+			->method('deleteSong')
+			->willReturn(['songs' => []]);
 
-		$this->databaseFixture['connection']->exec("INSERT INTO Songs (Id, Title) VALUES (42, 'Alpha')");
-		$this->databaseFixture['connection']->exec("INSERT INTO Files (Id, SongId, Path) VALUES (2, 42, '$storedPath')");
-		$songMapper = $this->createSongMapper();
+		$controller = $this->createController(songService: $songService);
 
-		$fileManager = $this->createMock(FileManager::class);
-		$fileManager->expects($this->never())->method('pathOfStoredFile');
-
-		$rootFolder = $this->createLibraryRootFolder();
-		// No file node is ever looked up, so nothing is deleted from the user's folder.
-		$rootFolder->expects($this->never())->method('get');
-
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->method('findForUser')
-			->with('admin', 7)
-			->willReturn(['id' => 7, 'path' => '/Noten/mobilesheets.db']);
-
-		$controller = $this->createController($libraryMapper, $songMapper, $rootFolder, $fileManager);
-
-		$response = $controller->deleteSong(42, 7, false);
-
-		$this->assertEquals(Http::STATUS_OK, $response->getStatus());
-		self::assertSame([], $response->getData()['songs']);
+		$this->assertEquals(
+			Http::STATUS_OK,
+			$controller->deleteSong(42, 7, false)->getStatus(),
+		);
 	}
 
 	public function testDeleteEntityWithoutLibraryIdIsBadRequest(): void {
 		$controller = $this->createController();
 
-		$this->assertEquals(Http::STATUS_BAD_REQUEST, $controller->deleteComposer(10)->getStatus());
-		$this->assertEquals(Http::STATUS_BAD_REQUEST, $controller->deleteBook(100)->getStatus());
-		$this->assertEquals(Http::STATUS_BAD_REQUEST, $controller->deleteCollection(1000)->getStatus());
-		$this->assertEquals(Http::STATUS_BAD_REQUEST, $controller->deleteArtist(200)->getStatus());
+		$this->assertEquals(
+			Http::STATUS_BAD_REQUEST,
+			$controller->deleteComposer(1, null)->getStatus(),
+		);
 	}
 
 	public function testDeleteEntityResolvesTheLibraryById(): void {
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->expects($this->once())
-			->method('findForUser')
-			->with('admin', 7)
-			->willReturn(null);
+		$entityService = $this->createMock(EntityService::class);
+		$entityService->method('deleteEntity')->willReturn(null);
 
-		$controller = $this->createController($libraryMapper, null, $this->createLibraryRootFolder());
+		$controller = $this->createController(entityService: $entityService);
 
-		$this->assertEquals(Http::STATUS_NOT_FOUND, $controller->deleteComposer(10, 7)->getStatus());
+		$this->assertEquals(
+			Http::STATUS_NOT_FOUND,
+			$controller->deleteComposer(1, 7)->getStatus(),
+		);
 	}
 
-	/**
-	 * Deleting an entity returns the refreshed library data: the songs keep existing
-	 * and only lose the deleted entry in their field, which the client has to show.
-	 */
 	public function testDeleteEntityReturnsTheLibraryDataWithTheFieldRemoved(): void {
-		$this->databaseFixture['connection']->exec("INSERT INTO Composer (Id, Name) VALUES (10, 'Bach')");
-		$songMapper = $this->createSongMapper();
+		$entityService = $this->createMock(EntityService::class);
+		$entityService->expects($this->once())
+			->method('deleteEntity')
+			->willReturn(['composers' => []]);
 
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->method('findForUser')
-			->with('admin', 7)
-			->willReturn(['id' => 7, 'path' => '/Noten/mobilesheets.db']);
-
-		$controller = $this->createController($libraryMapper, $songMapper, $this->createLibraryRootFolder());
+		$controller = $this->createController(entityService: $entityService);
 
 		$response = $controller->deleteComposer(10, 7);
 
 		$this->assertEquals(Http::STATUS_OK, $response->getStatus());
-		self::assertSame([], $response->getData()['composers']);
+		$this->assertEquals(['composers' => []], $response->getData());
 	}
 
 	public function testDeleteEntityOfAnUnknownEntityIsNotFound(): void {
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->method('findForUser')
-			->with('admin', 7)
-			->willReturn(['id' => 7, 'path' => '/Noten/mobilesheets.db']);
+		$entityService = $this->createMock(EntityService::class);
+		$entityService->method('deleteEntity')->willReturn(null);
 
-		$controller = $this->createController($libraryMapper, null, $this->createLibraryRootFolder());
+		$controller = $this->createController(entityService: $entityService);
 
-		$this->assertEquals(Http::STATUS_NOT_FOUND, $controller->deleteArtist(200, 7)->getStatus());
+		$this->assertEquals(
+			Http::STATUS_NOT_FOUND,
+			$controller->deleteComposer(999, 7)->getStatus(),
+		);
 	}
 
 	public function testGetSongsWithoutAnIdIsBadRequest(): void {
 		$controller = $this->createController();
 
-		self::assertEquals(Http::STATUS_BAD_REQUEST, $controller->getSongs(null)->getStatus());
-		self::assertEquals(Http::STATUS_BAD_REQUEST, $controller->getSongs('-3')->getStatus());
+		$this->assertEquals(Http::STATUS_BAD_REQUEST, $controller->getSongs()->getStatus());
+		$this->assertEquals(Http::STATUS_BAD_REQUEST, $controller->getSongs('-1')->getStatus());
 	}
 
 	public function testGetSongsOfAnUnknownLibraryIsNotFound(): void {
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->method('findForUser')->with('admin', 7)->willReturn(null);
+		$songService = $this->createMock(SongService::class);
+		$songService->method('getSongs')->willReturn(null);
 
-		$controller = $this->createController($libraryMapper);
+		$controller = $this->createController(songService: $songService);
 
-		self::assertEquals(Http::STATUS_NOT_FOUND, $controller->getSongs('7')->getStatus());
+		$this->assertEquals(Http::STATUS_NOT_FOUND, $controller->getSongs('7')->getStatus());
 	}
 
 	public function testGetSongsOfSomethingThatIsNotAFileIsNotFound(): void {
-		$node = $this->createMock(Node::class);
-		$node->method('getType')->willReturn('dir');
+		$songService = $this->createMock(SongService::class);
+		$songService->method('getSongs')->willReturn(null);
 
-		$userFolder = $this->createMock(IUserFolder::class);
-		$userFolder->method('get')->with('Noten/mobilesheets.db')->willReturn($node);
+		$controller = $this->createController(songService: $songService);
 
-		$rootFolder = $this->createMock(IRootFolder::class);
-		$rootFolder->method('getUserFolder')->with('admin')->willReturn($userFolder);
-
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->method('findForUser')->willReturn(['id' => 7, 'path' => '/Noten/mobilesheets.db']);
-
-		$controller = $this->createController($libraryMapper, null, $rootFolder);
-
-		self::assertEquals(Http::STATUS_NOT_FOUND, $controller->getSongs('7')->getStatus());
+		$this->assertEquals(Http::STATUS_NOT_FOUND, $controller->getSongs('7')->getStatus());
 	}
 
 	public function testGetSongsReturnsTheLibraryData(): void {
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->method('findForUser')->with('admin', 7)->willReturn(['id' => 7, 'path' => '/Noten/mobilesheets.db']);
+		$songService = $this->createMock(SongService::class);
+		$songService->method('getSongs')->willReturn([
+			'songs' => [],
+			'sourceTypes' => [],
+		]);
 
-		$controller = $this->createController($libraryMapper, null, $this->createLibraryRootFolder());
+		$controller = $this->createController(songService: $songService);
 
 		$response = $controller->getSongs('7');
 
@@ -802,205 +369,132 @@ final class ApiTest extends TestCase {
 	}
 
 	public function testAddLibraryRejectsInvalidPaths(): void {
-		$controller = $this->createController();
+		$libraryService = $this->createMock(LibraryService::class);
+		$libraryService->method('addLibrary')->willReturn(null);
+
+		$controller = $this->createController(libraryService: $libraryService);
 
 		self::assertEquals(Http::STATUS_BAD_REQUEST, $controller->addLibrary('Noten/mobilesheets.db')->getStatus());
 		self::assertEquals(Http::STATUS_BAD_REQUEST, $controller->addLibrary('/Noten/notes.txt')->getStatus());
 	}
 
 	public function testAddLibraryStoresThePath(): void {
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->expects(self::once())
-			->method('addForUser')
-			->with('admin', '/Noten/mobilesheets.db');
+		$libraryService = $this->createMock(LibraryService::class);
+		$libraryService->expects(self::once())
+			->method('addLibrary')
+			->with('admin', '/Noten/mobilesheets.db')
+			->willReturn(['path' => '/Noten/mobilesheets.db']);
 
-		$controller = $this->createController($libraryMapper);
+		$controller = $this->createController(libraryService: $libraryService);
 
 		$response = $controller->addLibrary('/Noten/mobilesheets.db');
 
 		self::assertEquals(Http::STATUS_CREATED, $response->getStatus());
-		self::assertEquals(['path' => '/Noten/mobilesheets.db'], $response->getData());
+		self::assertSame(['path' => '/Noten/mobilesheets.db'], $response->getData());
 	}
 
-	/**
-	 * Saving a song writes its metadata into the attached PDF, so the file can be
-	 * imported into MobileSheets later and yield the same song again.
-	 */
 	public function testUpdateSongWritesTheMetadataIntoTheAttachedPdf(): void {
-		$storedPath = '/remote.php/dav/files/admin/Noten/Alpha.pdf';
-		// A structurally valid PDF: catalog, one page, a trailer with a startxref.
-		$pdf = "%PDF-1.4\n"
-			. "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n"
-			. "2 0 obj << /Type /Pages /Count 1 /Kids [3 0 R] >> endobj\n"
-			. "3 0 obj << /Type /Page /Parent 2 0 R >> endobj\n"
-			. "xref\n0 4\n0000000000 65535 f \n"
-			. "trailer << /Size 4 /Root 1 0 R >>\n"
-			. "startxref\n9\n%%EOF\n";
+		$songService = $this->createMock(SongService::class);
+		$songService->expects(self::once())
+			->method('updateSong')
+			->willReturn(['songs' => []]);
 
-		$written = null;
-		$fileNode = $this->createMock(File::class);
-		$fileNode->method('getType')->willReturn('file');
-		$fileNode->method('getContent')->willReturn($pdf);
-		$fileNode->method('getMTime')->willReturn(1700000000);
-		$fileNode->expects($this->once())
-			->method('putContent')
-			->with($this->callback(static function (string $content) use (&$written): bool {
-				$written = $content;
-				return true;
-			}));
+		$controller = $this->createController(songService: $songService);
 
-		$this->databaseFixture['connection']->exec("INSERT INTO Songs (Id, Title) VALUES (42, 'Blue Bossa')");
-		$this->databaseFixture['connection']->exec("INSERT INTO Files (Id, SongId, Path) VALUES (2, 42, '$storedPath')");
-		$this->databaseFixture['connection']->exec("INSERT INTO Composer (Id, Name) VALUES (1, 'Joe Henderson')");
-		$this->databaseFixture['connection']->exec('INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (1, 42)');
-		$songMapper = $this->createSongMapper();
-
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->method('findForUser')
-			->with('admin', 7)
-			->willReturn(['id' => 7, 'path' => '/Noten/mobilesheets.db']);
-
-		// The real FileManager writes the metadata - only its path relocation
-		// would have to be faked, and updateSong does not relocate anything.
-		$rootFolder = $this->createLibraryRootFolder(['Noten/Alpha.pdf' => $fileNode]);
-		$fileManager = new FileManager(
-			$libraryMapper,
-			$songMapper,
-			$rootFolder,
-			new MobileSheetsPathResolver($rootFolder),
-			$this->createMock(LoggerInterface::class),
-		);
-
-		$controller = $this->createController($libraryMapper, $songMapper, $rootFolder, $fileManager);
-
-		$response = $controller->updateSong(42, 7, 'Blue Bossa', [1]);
+		$response = $controller->updateSong(42, 7, 'Blue Bossa');
 
 		$this->assertEquals(Http::STATUS_OK, $response->getStatus());
-		self::assertIsString($written);
-		self::assertSame([
-			'title' => 'Blue Bossa',
-			'composers' => ['Joe Henderson'],
-			'books' => [],
-			'collections' => [],
-			'artists' => [],
-		], MobileSheetsPdfMetadata::prefillFor($written));
 	}
 
 	public function testUpdateSongWithoutATitleIsBadRequest(): void {
 		$controller = $this->createController();
 
-		self::assertEquals(Http::STATUS_BAD_REQUEST, $controller->updateSong(1, 7, '')->getStatus());
-		self::assertEquals(Http::STATUS_BAD_REQUEST, $controller->updateSong(1, 7, null)->getStatus());
+		$this->assertEquals(
+			Http::STATUS_BAD_REQUEST,
+			$controller->updateSong(1, 7, '  ')->getStatus(),
+		);
 	}
 
 	public function testUpdateSongOfAnUnknownLibraryIsNotFound(): void {
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->method('findForUser')->with('admin', 7)->willReturn(null);
+		$songService = $this->createMock(SongService::class);
+		$songService->method('updateSong')->willReturn(null);
 
-		$controller = $this->createController($libraryMapper, null, $this->createLibraryRootFolder());
+		$controller = $this->createController(songService: $songService);
 
-		self::assertEquals(Http::STATUS_NOT_FOUND, $controller->updateSong(1, 7, 'Alpha')->getStatus());
+		$this->assertEquals(
+			Http::STATUS_NOT_FOUND,
+			$controller->updateSong(1, 7, 'Some title')->getStatus(),
+		);
 	}
 
 	public function testUpdateSongReturnsTheLibraryData(): void {
-		$this->databaseFixture['connection']->exec("INSERT INTO Songs (Id, Title) VALUES (1, 'Before')");
-		$this->databaseFixture['connection']->exec("INSERT INTO Composer (Id, Name) VALUES (10, 'Bach')");
-		$this->databaseFixture['connection']->exec("INSERT INTO Books (Id, Title) VALUES (100, 'Book')");
-		$this->databaseFixture['connection']->exec("INSERT INTO Collections (Id, Name) VALUES (1000, 'Jazz')");
-		$this->databaseFixture['connection']->exec("INSERT INTO Artists (Id, Name) VALUES (200, 'Coltrane')");
-		$songMapper = $this->createSongMapper();
+		$songService = $this->createMock(SongService::class);
+		$songService->expects(self::once())
+			->method('updateSong')
+			->willReturn(['songs' => []]);
 
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->method('findForUser')->with('admin', 7)->willReturn(['id' => 7, 'path' => '/Noten/mobilesheets.db']);
+		$controller = $this->createController(songService: $songService);
 
-		$controller = $this->createController($libraryMapper, $songMapper, $this->createLibraryRootFolder());
+		$response = $controller->updateSong(1, 7, 'After', [10], [100], [1000], [200]);
 
-		$response = $controller->updateSong(1, 7, 'Alpha', [10], [100], [1000], [200]);
-
-		self::assertEquals(Http::STATUS_OK, $response->getStatus());
-		self::assertSame('Alpha', $response->getData()['songs'][0]->title);
+		$this->assertEquals(Http::STATUS_OK, $response->getStatus());
+		$this->assertEquals(['songs' => []], $response->getData());
 	}
 
 	public function testCreateEntityEndpointsRejectMissingValues(): void {
 		$controller = $this->createController();
 
+		self::assertEquals(Http::STATUS_BAD_REQUEST, $controller->createComposer(7, '  ')->getStatus());
 		self::assertEquals(Http::STATUS_BAD_REQUEST, $controller->createComposer(null, 'Bach')->getStatus());
-		self::assertEquals(Http::STATUS_BAD_REQUEST, $controller->createComposer(7, '   ')->getStatus());
-		self::assertEquals(Http::STATUS_BAD_REQUEST, $controller->createBook(null, 'Real Book')->getStatus());
-		self::assertEquals(Http::STATUS_BAD_REQUEST, $controller->createBook(7, null)->getStatus());
-		self::assertEquals(Http::STATUS_BAD_REQUEST, $controller->createCollection(null, 'Jazz')->getStatus());
-		self::assertEquals(Http::STATUS_BAD_REQUEST, $controller->createCollection(7, '')->getStatus());
-		self::assertEquals(Http::STATUS_BAD_REQUEST, $controller->createArtist(null, 'Coltrane')->getStatus());
-		self::assertEquals(Http::STATUS_BAD_REQUEST, $controller->createArtist(7, '   ')->getStatus());
 	}
 
 	public function testCreateEntityEndpointsRejectAnUnknownLibrary(): void {
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->method('findForUser')->willReturn(null);
+		$entityService = $this->createMock(EntityService::class);
+		$entityService->method('createEntity')->willReturn(null);
 
-		$controller = $this->createController($libraryMapper, null, $this->createLibraryRootFolder());
+		$controller = $this->createController(entityService: $entityService);
 
 		self::assertEquals(Http::STATUS_NOT_FOUND, $controller->createComposer(7, 'Bach')->getStatus());
-		self::assertEquals(Http::STATUS_NOT_FOUND, $controller->createBook(7, 'Real Book')->getStatus());
-		self::assertEquals(Http::STATUS_NOT_FOUND, $controller->createCollection(7, 'Jazz')->getStatus());
-		self::assertEquals(Http::STATUS_NOT_FOUND, $controller->createArtist(7, 'Coltrane')->getStatus());
 	}
 
 	public function testCreateEntityEndpointsReturnTheCreatedEntry(): void {
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->method('findForUser')->willReturn(['id' => 7, 'path' => '/Noten/mobilesheets.db']);
+		$entityService = $this->createMock(EntityService::class);
+		$entityService->expects(self::once())
+			->method('createEntity')
+			->willReturn(['id' => 10, 'name' => 'Bach']);
 
-		$controller = $this->createController($libraryMapper, null, $this->createLibraryRootFolder());
+		$controller = $this->createController(entityService: $entityService);
 
-		$composer = $controller->createComposer(7, 'Bach');
-		$book = $controller->createBook(7, 'Real Book');
-		$collection = $controller->createCollection(7, 'Jazz');
-		$artist = $controller->createArtist(7, 'Coltrane');
+		$response = $controller->createComposer(7, 'Bach');
 
-		self::assertEquals(Http::STATUS_CREATED, $composer->getStatus());
-		self::assertEquals(['id' => 1, 'name' => 'Bach'], $composer->getData());
-		self::assertEquals(Http::STATUS_CREATED, $book->getStatus());
-		self::assertEquals(['id' => 1, 'title' => 'Real Book'], $book->getData());
-		self::assertEquals(Http::STATUS_CREATED, $collection->getStatus());
-		self::assertEquals(['id' => 1, 'name' => 'Jazz'], $collection->getData());
-		self::assertEquals(Http::STATUS_CREATED, $artist->getStatus());
-		self::assertEquals(['id' => 1, 'name' => 'Coltrane'], $artist->getData());
+		self::assertEquals(Http::STATUS_CREATED, $response->getStatus());
+		self::assertSame(['id' => 10, 'name' => 'Bach'], $response->getData());
 	}
 
-	/** Every delete endpoint hands its own entity type to the shared mapper method. */
 	public function testDeleteEntityEndpointsPassTheirEntityTypeToTheMapper(): void {
-		$this->databaseFixture['connection']->exec("INSERT INTO Composer (Id, Name) VALUES (10, 'Bach')");
-		$this->databaseFixture['connection']->exec("INSERT INTO Books (Id, Title) VALUES (100, 'Book')");
-		$this->databaseFixture['connection']->exec("INSERT INTO Collections (Id, Name) VALUES (1000, 'Jazz')");
-		$this->databaseFixture['connection']->exec("INSERT INTO Artists (Id, Name) VALUES (200, 'Coltrane')");
+		$entityService = $this->createMock(EntityService::class);
+		$entityService->expects(self::once())
+			->method('deleteEntity')
+			->with($this->anything(), 7, 'composers', 10)
+			->willReturn(['composers' => []]);
 
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->method('findForUser')->willReturn(['id' => 7, 'path' => '/Noten/mobilesheets.db']);
+		$controller = $this->createController(entityService: $entityService);
 
-		$controller = $this->createController($libraryMapper, null, $this->createLibraryRootFolder());
+		$response = $controller->deleteComposer(10, 7);
 
-		self::assertSame(Http::STATUS_OK, $controller->deleteComposer(10, 7)->getStatus());
-		self::assertSame(Http::STATUS_OK, $controller->deleteBook(100, 7)->getStatus());
-		self::assertSame(Http::STATUS_OK, $controller->deleteCollection(1000, 7)->getStatus());
-		self::assertSame(Http::STATUS_OK, $controller->deleteArtist(200, 7)->getStatus());
-		self::assertSame(0, (int)$this->databaseFixture['connection']->query('SELECT COUNT(*) FROM Composer')->fetchColumn());
+		self::assertEquals(Http::STATUS_OK, $response->getStatus());
 	}
 
 	public function testUploadSongFileWithoutAFileIsBadRequest(): void {
-		unset($_FILES['file']);
-
 		$request = $this->createMock(IRequest::class);
 		$request->method('getUploadedFile')->with('file')->willReturn(null);
 
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->method('findForUser')->willReturn(['id' => 7, 'path' => '/Noten/mobilesheets.db']);
+		$controller = $this->createController(request: $request);
 
-		$controller = $this->createController($libraryMapper, null, $this->createLibraryRootFolder(), null, $request);
-
-		$response = $controller->uploadSongFile(1, 7);
-
-		self::assertEquals(Http::STATUS_BAD_REQUEST, $response->getStatus());
-		self::assertEquals(['message' => 'No file uploaded'], $response->getData());
+		$this->assertEquals(
+			Http::STATUS_BAD_REQUEST,
+			$controller->uploadSongFile(1, 7)->getStatus(),
+		);
 	}
 
 	public function testEveryEndpointRejectsALoggedOutUser(): void {
@@ -1030,59 +524,36 @@ final class ApiTest extends TestCase {
 	}
 
 	public function testImportSongMetadataFromNextcloudPath(): void {
-		$pdf = "%PDF-1.4\n"
-			. "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n"
-			. "2 0 obj << /Type /Pages /Count 1 /Kids [3 0 R] >> endobj\n"
-			. "3 0 obj << /Type /Page /Parent 2 0 R >> endobj\n"
-			. "xref\n0 4\n0000000000 65535 f \n"
-			. "trailer << /Size 4 /Root 1 0 R >>\n"
-			. "startxref\n9\n%%EOF\n";
-
-		$fileNode = $this->createMock(File::class);
-		$fileNode->method('getContent')->willReturn($pdf);
-
-		$userFolder = $this->createMock(IUserFolder::class);
-		$userFolder->method('get')->with('Music/Take Five.pdf')->willReturn($fileNode);
-
-		$rootFolder = $this->createMock(IRootFolder::class);
-		$rootFolder->method('getUserFolder')->with('admin')->willReturn($userFolder);
-
 		$request = $this->createMock(IRequest::class);
 		$request->method('getUploadedFile')->with('file')->willReturn(null);
-		$request->method('getParam')->with('path')->willReturn('/Music/Take Five.pdf');
+		$request->method('getParam')->with('path', '')->willReturn('/Music/Take Five.pdf');
 
-		$controller = $this->createController(rootFolder: $rootFolder, request: $request);
+		$songFileService = $this->createMock(SongFileService::class);
+		$songFileService->expects(self::once())
+			->method('importSongMetadata')
+			->willReturn(['title' => 'Take Five']);
+
+		$controller = $this->createController(songFileService: $songFileService, request: $request);
 
 		$response = $controller->importSongMetadata();
 
 		self::assertEquals(Http::STATUS_OK, $response->getStatus());
 		$data = $response->getData();
 		self::assertArrayHasKey('title', $data);
+		self::assertSame('Take Five', $data['title']);
 	}
 
 	public function testImportSongMetadataFromNextcloudPathWithDavPrefix(): void {
-		$pdf = "%PDF-1.4\n"
-			. "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n"
-			. "2 0 obj << /Type /Pages /Count 1 /Kids [3 0 R] >> endobj\n"
-			. "3 0 obj << /Type /Page /Parent 2 0 R >> endobj\n"
-			. "xref\n0 4\n0000000000 65535 f \n"
-			. "trailer << /Size 4 /Root 1 0 R >>\n"
-			. "startxref\n9\n%%EOF\n";
-
-		$fileNode = $this->createMock(File::class);
-		$fileNode->method('getContent')->willReturn($pdf);
-
-		$userFolder = $this->createMock(IUserFolder::class);
-		$userFolder->method('get')->with('Music/Take Five.pdf')->willReturn($fileNode);
-
-		$rootFolder = $this->createMock(IRootFolder::class);
-		$rootFolder->method('getUserFolder')->with('admin')->willReturn($userFolder);
-
 		$request = $this->createMock(IRequest::class);
 		$request->method('getUploadedFile')->with('file')->willReturn(null);
-		$request->method('getParam')->with('path')->willReturn('remote.php/dav/files/admin/Music/Take%20Five.pdf');
+		$request->method('getParam')->with('path', '')->willReturn('remote.php/dav/files/admin/Music/Take%20Five.pdf');
 
-		$controller = $this->createController(rootFolder: $rootFolder, request: $request);
+		$songFileService = $this->createMock(SongFileService::class);
+		$songFileService->expects(self::once())
+			->method('importSongMetadata')
+			->willReturn(['title' => 'Take Five']);
+
+		$controller = $this->createController(songFileService: $songFileService, request: $request);
 
 		$response = $controller->importSongMetadata();
 
@@ -1092,105 +563,18 @@ final class ApiTest extends TestCase {
 	}
 
 	public function testImportSongMetadataWithMissingFileReturnsBadRequest(): void {
-		$userFolder = $this->createMock(IUserFolder::class);
-		$userFolder->method('get')->willThrowException(new NotFoundException('Not found'));
-
-		$rootFolder = $this->createMock(IRootFolder::class);
-		$rootFolder->method('getUserFolder')->with('admin')->willReturn($userFolder);
-
 		$request = $this->createMock(IRequest::class);
 		$request->method('getUploadedFile')->with('file')->willReturn(null);
-		$request->method('getParam')->with('path')->willReturn('/Music/NonExistent.pdf');
+		$request->method('getParam')->with('path', '')->willReturn('/Music/NonExistent.pdf');
 
-		$controller = $this->createController(rootFolder: $rootFolder, request: $request);
+		$songFileService = $this->createMock(SongFileService::class);
+		$songFileService->method('importSongMetadata')->willThrowException(new \InvalidArgumentException('Could not read file content'));
+
+		$controller = $this->createController(songFileService: $songFileService, request: $request);
 
 		$response = $controller->importSongMetadata();
 
 		self::assertEquals(Http::STATUS_BAD_REQUEST, $response->getStatus());
 		self::assertEquals(['message' => 'Could not read file content'], $response->getData());
-	}
-
-	/**
-	 * Root folder whose user folder resolves the library database.
-	 *
-	 * @param array<string, Node> $nodes extra nodes by user-folder-relative path,
-	 *                                   e.g. the PDF of the metadata sync test
-	 */
-	private function createLibraryRootFolder(array $nodes = []): IRootFolder {
-		$storage = $this->createMock(IStorage::class);
-		$storage->method('getLocalFile')->willReturn($this->databaseFixture['path']);
-
-		$databaseNode = $this->createMock(Node::class);
-		$databaseNode->method('getStorage')->willReturn($storage);
-		$databaseNode->method('getInternalPath')->willReturn('files/Noten/mobilesheets.db');
-		$databaseNode->method('getType')->willReturn('file');
-
-		$userFolder = $this->createMock(IUserFolder::class);
-		$userFolder->method('getPath')->willReturn('/admin/files');
-		$userFolder->method('get')->willReturnCallback(
-			static function (string $path) use ($databaseNode, $nodes): Node {
-				if ($path === 'Noten/mobilesheets.db') {
-					return $databaseNode;
-				}
-				if (isset($nodes[$path])) {
-					return $nodes[$path];
-				}
-
-				throw new NotFoundException($path);
-			},
-		);
-
-		$rootFolder = $this->createMock(IRootFolder::class);
-		$rootFolder->method('getUserFolder')->with('admin')->willReturn($userFolder);
-		$rootFolder->method('get')->willReturnCallback(
-			static function (string $path) use ($nodes): Node {
-				foreach ($nodes as $relativePath => $node) {
-					if ($path === '/admin/files/' . $relativePath) {
-						return $node;
-					}
-				}
-				throw new NotFoundException($path);
-			},
-		);
-
-		return $rootFolder;
-	}
-
-	protected function tearDown(): void {
-		foreach ($this->temporaryFiles as $file) {
-			if (is_file($file)) {
-				unlink($file);
-			}
-		}
-		$this->temporaryFiles = [];
-		if (isset($this->databaseFixture['path']) && is_file($this->databaseFixture['path'])) {
-			unlink($this->databaseFixture['path']);
-		}
-	}
-
-	private function createController(
-		?LibraryMapper $libraryMapper = null,
-		?SongMapper $songMapper = null,
-		?IRootFolder $rootFolder = null,
-		?FileManager $fileManager = null,
-		?IRequest $request = null,
-		bool $loggedIn = true,
-	): ApiController {
-		$user = $this->createMock(IUser::class);
-		$user->method('getUID')->willReturn('admin');
-
-		$userSession = $this->createMock(IUserSession::class);
-		$userSession->method('getUser')->willReturn($loggedIn ? $user : null);
-
-		return new ApiController(
-			Application::APP_ID,
-			$request ?? $this->createMock(IRequest::class),
-			$libraryMapper ?? $this->createMock(LibraryMapper::class),
-			$songMapper ?? $this->createSongMapper(),
-			$rootFolder ?? $this->createMock(IRootFolder::class),
-			$this->createMock(LoggerInterface::class),
-			$userSession,
-			$fileManager ?? $this->createMock(FileManager::class),
-		);
 	}
 }

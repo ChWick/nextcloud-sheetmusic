@@ -5,14 +5,12 @@ declare(strict_types=1);
 namespace OCA\SheetMusic\Service;
 
 use OCA\SheetMusic\Db\LibraryMapper;
-use OCA\SheetMusic\Db\SongMapper;
 use OCP\Files\IRootFolder;
 use Psr\Log\LoggerInterface;
 
 class LibraryService {
 	public function __construct(
 		private LibraryMapper $libraryMapper,
-		private SongMapper $songMapper,
 		private IRootFolder $rootFolder,
 		private LoggerInterface $logger,
 		private ?MobileSheetsSqliteExporter $exporter = null,

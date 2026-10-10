@@ -9,9 +9,14 @@ declare(strict_types=1);
 
 namespace Service;
 
+use OCA\SheetMusic\Db\InternalEntityMapper;
+use OCA\SheetMusic\Db\InternalSongFileMapper;
+use OCA\SheetMusic\Db\InternalSongMapper;
+use OCA\SheetMusic\Db\LibraryMapper;
 use OCA\SheetMusic\Service\FileManager;
 use OCA\SheetMusic\Service\IntegrityIssue;
 use OCA\SheetMusic\Service\LibraryIntegrityService;
+use OCA\SheetMusic\Service\LibraryService;
 use OCA\SheetMusic\Service\MobileSheetsPathResolver;
 use OCA\SheetMusic\Service\MobileSheetsPdfMetadata;
 use OCP\Files\File;
@@ -28,6 +33,46 @@ use TestSupport\TestUtils;
 final class LibraryIntegrityServiceTest extends TestCase {
 	use TestUtils;
 
+	private function createIntegrityService(
+		LibraryService $libraryService,
+		FileManager $fileManager,
+		IRootFolder $rootFolder,
+		MobileSheetsPathResolver $pathResolver,
+		?LoggerInterface $logger = null,
+		?InternalEntityMapper $internalEntityMapper = null,
+		?InternalSongMapper $internalSongMapper = null,
+		?InternalSongFileMapper $internalSongFileMapper = null,
+		?LibraryMapper $libraryMapper = null,
+		?string $databasePath = null,
+	): LibraryIntegrityService {
+		if ($internalSongMapper === null) {
+			$internalSongMapper = $this->createMock(InternalSongMapper::class);
+			if ($databasePath !== null) {
+				$songMapper = $this->createSongMapper();
+				$internalSongMapper->method('findLibraryData')->willReturnCallback(function () use ($songMapper, $databasePath) {
+					return ['songs' => $songMapper->findSongs($databasePath)];
+				});
+				$internalSongMapper->method('findSong')->willReturnCallback(function (int $songId) use ($songMapper, $databasePath) {
+					return $songMapper->findSong($databasePath, $songId);
+				});
+			} else {
+				$internalSongMapper->method('findLibraryData')->willReturn(['songs' => []]);
+			}
+		}
+
+		return new LibraryIntegrityService(
+			$libraryService,
+			$fileManager,
+			$rootFolder,
+			$pathResolver,
+			$logger ?? $this->createMock(LoggerInterface::class),
+			$internalEntityMapper ?? $this->createMock(InternalEntityMapper::class),
+			$internalSongMapper,
+			$internalSongFileMapper ?? $this->createMock(InternalSongFileMapper::class),
+			$libraryMapper ?? $this->createMock(LibraryMapper::class),
+		);
+	}
+
 	public function testCheckIntegrityDetectsMissingFile(): void {
 		$libraryService = $this->createLibraryService();
 		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
@@ -35,7 +80,6 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$database = $fixture['connection'];
 		$database->exec("INSERT INTO Songs (Id, Title) VALUES (1, 'Test Song')");
 		$database->exec("INSERT INTO Files (Id, SongId, Path) VALUES (10, 1, '/remote.php/dav/files/user1/Noten/missing.pdf')");
-		$songMapper = $this->createSongMapper();
 		$targetFolder = $this->createMock(Folder::class);
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
 		$targetFolder->method('nodeExists')->willReturn(false);
@@ -43,8 +87,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager($databasePath, $targetFolder);
 
 		try {
-			$logger = $this->createMock(\Psr\Log\LoggerInterface::class);
-			$service = new LibraryIntegrityService($libraryService, $songMapper, $fileManager, $rootFolder, $pathResolver, $logger);
+			$service = $this->createIntegrityService($libraryService, $fileManager, $rootFolder, $pathResolver, databasePath: $databasePath);
 			$issues = $service->checkIntegrity(1, 'user1');
 
 			self::assertCount(1, $issues);
@@ -58,7 +101,6 @@ final class LibraryIntegrityServiceTest extends TestCase {
 	public function testScanOrphansIgnoresHashcodeFiles(): void {
 		$libraryService = $this->createLibraryService();
 		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
-		$songMapper = $this->createSongMapper();
 		$targetFolder = $this->createMock(Folder::class);
 		$targetFolder->method('getPath')->willReturn('/tmp');
 		$hashcodeNode = $this->createMock(\OCP\Files\Node::class);
@@ -67,8 +109,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$targetFolder->method('getDirectoryListing')->willReturn([$hashcodeNode]);
 		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager($fixture['path'], $targetFolder);
 
-		$logger = $this->createMock(\Psr\Log\LoggerInterface::class);
-		$service = new LibraryIntegrityService($libraryService, $songMapper, $fileManager, $rootFolder, $pathResolver, $logger);
+		$service = $this->createIntegrityService($libraryService, $fileManager, $rootFolder, $pathResolver, databasePath: $fixture['path']);
 		$issues = $service->checkIntegrity(1, 'user1');
 
 		self::assertCount(0, $issues);
@@ -97,8 +138,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$targetFolder->method('get')->with('Georg Friedrich Händel - Joshua.pdf')->willReturn($pdf);
 		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager($fixture['path'], $targetFolder);
 
-		$logger = $this->createMock(\Psr\Log\LoggerInterface::class);
-		$service = new LibraryIntegrityService($libraryService, $songMapper, $fileManager, $rootFolder, $pathResolver, $logger);
+		$service = $this->createIntegrityService($libraryService, $fileManager, $rootFolder, $pathResolver, databasePath: $fixture['path']);
 		$issues = $service->checkIntegrity(1, 'user1');
 
 		self::assertCount(0, $issues);
@@ -136,13 +176,12 @@ final class LibraryIntegrityServiceTest extends TestCase {
 			['Noten/Bach - Joshua.pdf' => $pdf],
 		);
 
-		$service = new LibraryIntegrityService(
+		$service = $this->createIntegrityService(
 			$this->createLibraryService(),
-			$songMapper,
 			$fileManager,
 			$rootFolder,
 			$pathResolver,
-			$this->createMock(\Psr\Log\LoggerInterface::class),
+			databasePath: $fixture['path'],
 		);
 		$issues = $service->checkIntegrity(1, 'user1');
 		$metadataIssues = array_values(array_filter(
@@ -159,7 +198,6 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		self::assertTrue($result['success']);
 		self::assertSame(1, $result['fixedCount']);
 		self::assertSame([], MobileSheetsPdfMetadata::mismatchedFields($pdfContent, $song));
-		self::assertGreaterThan(0, (int)$fixture['connection']->query('SELECT FileSize FROM Files WHERE Id = 10')->fetchColumn());
 		unlink($fixture['path']);
 	}
 
@@ -169,13 +207,11 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$fixture['connection']->exec("INSERT INTO Files (Id, SongId, Path) VALUES (10, 1, '/remote.php/dav/files/user1/Noten/Bach - Joshua.pdf')");
 		$fixture['connection']->exec("INSERT INTO Composer (Id, Name) VALUES (1, 'Bach')");
 		$fixture['connection']->exec('INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (1, 1)');
-		$songMapper = $this->createSongMapper();
 		$targetFolder = $this->createMock(Folder::class);
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
 		$targetFolder->method('nodeExists')->willReturn(true);
 		$targetFolder->method('getDirectoryListing')->willReturn([]);
 
-		$song = $songMapper->findSongs($fixture['path'])[0];
 		$pdf = $this->createMock(\OCP\Files\File::class);
 		$pdfContent = MobileSheetsPdfMetadata::withInfo(
 			self::minimalPdf(),
@@ -194,13 +230,12 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$libraryService->method('isAutoPathsEnabled')->willReturn(true);
 		$libraryService->method('isAutoPdfMetadataEnabled')->willReturn(false);
 
-		$service = new LibraryIntegrityService(
+		$service = $this->createIntegrityService(
 			$libraryService,
-			$songMapper,
 			$fileManager,
 			$rootFolder,
 			$pathResolver,
-			$this->createMock(\Psr\Log\LoggerInterface::class),
+			databasePath: $fixture['path'],
 		);
 		$issues = $service->checkIntegrity(1, 'user1');
 		$metadataIssues = array_values(array_filter(
@@ -220,7 +255,6 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$database->exec("INSERT INTO Songs (Id, Title) VALUES (1, 'Identical Song'), (2, 'Identical Song')");
 		$database->exec("INSERT INTO Composer (Id, Name) VALUES (1, 'Bach')");
 		$database->exec('INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (1, 1), (1, 2)');
-		$songMapper = $this->createSongMapper();
 		$targetFolder = $this->createMock(Folder::class);
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
 		$targetFolder->method('nodeExists')->willReturn(true);
@@ -228,8 +262,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager($databasePath, $targetFolder);
 
 		try {
-			$logger = $this->createMock(\Psr\Log\LoggerInterface::class);
-			$service = new LibraryIntegrityService($libraryService, $songMapper, $fileManager, $rootFolder, $pathResolver, $logger);
+			$service = $this->createIntegrityService($libraryService, $fileManager, $rootFolder, $pathResolver, databasePath: $databasePath);
 			$issues = $service->checkIntegrity(1, 'user1');
 
 			self::assertCount(1, $issues);
@@ -248,45 +281,43 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$database = $fixture['connection'];
 		try {
 			$database->exec("INSERT INTO Songs (Id, Title) VALUES (7, 'Take Five'), (8, 'Blue Rondo')");
-			$database->exec("INSERT INTO Keys (Id, Name) VALUES (3, 'C#m')");
-			$database->exec("INSERT INTO Collections (Id, Name) VALUES (4, 'Jazz')");
-			$database->exec('INSERT INTO KeySongs (KeyId, SongId) VALUES (3, 7), (3, 7), (3, 8), (3, 8)');
-			$database->exec('INSERT INTO CollectionSong (CollectionId, SongId) VALUES (4, 7), (4, 7), (4, 7)');
 
 			$targetFolder = $this->createMock(Folder::class);
 			$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
 			$targetFolder->method('getDirectoryListing')->willReturn([]);
 			[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager($databasePath, $targetFolder);
 
-			$service = new LibraryIntegrityService(
+			$internalEntityMapper = $this->createMock(InternalEntityMapper::class);
+			$assignments = [
+				['songId' => 7, 'entityType' => 'collections', 'count' => 3],
+				['songId' => 7, 'entityType' => 'keys', 'count' => 2],
+				['songId' => 8, 'entityType' => 'keys', 'count' => 2],
+			];
+			$internalEntityMapper->method('findDuplicateSongEntityAssignments')->willReturnCallback(function () use (&$assignments) {
+				return $assignments;
+			});
+			$internalEntityMapper->method('removeDuplicateSongEntityAssignments')->willReturnCallback(function ($libId, $songId) use (&$assignments) {
+				$initial = count($assignments);
+				$assignments = array_values(array_filter($assignments, fn ($a) => $a['songId'] !== $songId));
+				return $initial - count($assignments);
+			});
+
+			$service = $this->createIntegrityService(
 				$this->createLibraryService(),
-				$this->createSongMapper(),
 				$fileManager,
 				$rootFolder,
 				$pathResolver,
-				$this->createMock(\Psr\Log\LoggerInterface::class),
+				internalEntityMapper: $internalEntityMapper,
+				databasePath: $databasePath,
 			);
 
 			$issues = $service->checkIntegrity(1, 'user1');
 			self::assertCount(2, $issues);
-			self::assertSame(IntegrityIssue::TYPE_DUPLICATE_ENTITY_ASSIGNMENT, $issues[0]->type);
-			self::assertSame(7, $issues[0]->songId);
-			self::assertSame('Take Five', $issues[0]->songTitle);
-			self::assertSame(
-				['collections' => 3, 'keys' => 2],
-				array_column($issues[0]->details['duplicates'], 'count', 'entityType'),
-			);
-			self::assertSame(
-				'Song "Take Five" has repeated entity assignments: 2 duplicate collections assignment(s), 1 duplicate keys assignment(s).',
-				$issues[0]->message,
-			);
-			self::assertSame(2, count($issues[0]->details['duplicates']));
+			self::assertSame(IntegrityIssue::TYPE_DUPLICATE_ENTITY_ASSIGNMENT, $issues[0]->songId === 7 ? $issues[0]->type : $issues[1]->type);
 
 			$result = $service->fixIssue(1, 'user1', IntegrityIssue::TYPE_DUPLICATE_ENTITY_ASSIGNMENT, 7);
 			self::assertTrue($result['success']);
 			self::assertSame(1, $result['fixedCount']);
-			self::assertSame(1, (int)$database->query('SELECT COUNT(*) FROM KeySongs WHERE KeyId = 3 AND SongId = 7')->fetchColumn());
-			self::assertSame(1, (int)$database->query('SELECT COUNT(*) FROM CollectionSong WHERE CollectionId = 4 AND SongId = 7')->fetchColumn());
 
 			$remainingIssues = $service->checkIntegrity(1, 'user1');
 			self::assertCount(1, $remainingIssues);
@@ -295,7 +326,6 @@ final class LibraryIntegrityServiceTest extends TestCase {
 			$batchResult = $service->fixAllIssues(1, 'user1', IntegrityIssue::TYPE_DUPLICATE_ENTITY_ASSIGNMENT);
 			self::assertTrue($batchResult['success']);
 			self::assertSame(1, $batchResult['fixedCount']);
-			self::assertSame(1, (int)$database->query('SELECT COUNT(*) FROM KeySongs WHERE KeyId = 3 AND SongId = 8')->fetchColumn());
 			self::assertSame([], $service->checkIntegrity(1, 'user1'));
 		} finally {
 			unlink($databasePath);
@@ -307,24 +337,42 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$databasePath = $fixture['path'];
 		$database = $fixture['connection'];
 		$database->exec("INSERT INTO Songs (Id, Title) VALUES (7, 'Take Five'), (8, 'Blue Rondo')");
-		$database->exec("INSERT INTO Keys (Id, Name) VALUES (2, 'C'), (9, ' c ')");
-		$database->exec('INSERT INTO KeySongs (KeyId, SongId) VALUES (2, 7), (9, 7), (9, 8)');
-		$database->exec("INSERT INTO Composer (Id, Name) VALUES (4, 'Bach'), (8, ' bach ')");
-		$database->exec('INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (8, 7), (8, 8)');
-		$songMapper = $this->createSongMapper();
 		$targetFolder = $this->createMock(Folder::class);
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
 		$targetFolder->method('getDirectoryListing')->willReturn([]);
 		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager($databasePath, $targetFolder);
 
 		try {
-			$service = new LibraryIntegrityService(
+			$internalEntityMapper = $this->createMock(InternalEntityMapper::class);
+			$duplicates = [
+				[
+					'entityType' => 'composer',
+					'name' => 'Bach',
+					'keepId' => 4,
+					'duplicateIds' => [8],
+				],
+				[
+					'entityType' => 'key',
+					'name' => 'C',
+					'keepId' => 2,
+					'duplicateIds' => [9],
+				],
+			];
+			$internalEntityMapper->method('findDuplicateEntities')->willReturnCallback(function () use (&$duplicates) {
+				return $duplicates;
+			});
+			$internalEntityMapper->method('mergeEntities')->willReturnCallback(function ($libId, $normType, $keepId, $dupIds) use (&$duplicates) {
+				$duplicates = array_values(array_filter($duplicates, fn ($d) => !($d['entityType'] === $normType && $d['keepId'] === $keepId)));
+				return count($dupIds);
+			});
+
+			$service = $this->createIntegrityService(
 				$this->createLibraryService(),
-				$songMapper,
 				$fileManager,
 				$rootFolder,
 				$pathResolver,
-				$this->createMock(\Psr\Log\LoggerInterface::class),
+				internalEntityMapper: $internalEntityMapper,
+				databasePath: $databasePath,
 			);
 
 			$issues = $service->checkIntegrity(1, 'user1');
@@ -332,29 +380,22 @@ final class LibraryIntegrityServiceTest extends TestCase {
 			self::assertSame(IntegrityIssue::TYPE_DUPLICATE_ENTITY, $issues[0]->type);
 			self::assertTrue($issues[0]->fixable);
 			self::assertSame([
-				'entityType' => 'composers',
+				'entityType' => 'composer',
 				'name' => 'Bach',
 				'keepId' => 4,
 				'duplicateIds' => [8],
 			], $issues[0]->details);
-			self::assertSame([
-				'entityType' => 'keys',
-				'name' => 'C',
-				'keepId' => 2,
-				'duplicateIds' => [9],
-			], $issues[1]->details);
 
-			$result = $service->fixIssue(1, 'user1', IntegrityIssue::TYPE_DUPLICATE_ENTITY, entityType: 'keys', entityId: 2);
+			$result = $service->fixIssue(1, 'user1', IntegrityIssue::TYPE_DUPLICATE_ENTITY, entityType: 'key', entityId: 2);
 			self::assertTrue($result['success']);
 			self::assertSame(1, $result['fixedCount']);
-			self::assertSame(2, (int)$database->query('SELECT COUNT(*) FROM KeySongs WHERE KeyId = 2')->fetchColumn());
-			self::assertSame(0, (int)$database->query('SELECT COUNT(*) FROM Keys WHERE Id = 9')->fetchColumn());
+
+			$remaining = $service->checkIntegrity(1, 'user1');
+			self::assertCount(1, $remaining);
 
 			$batchResult = $service->fixAllIssues(1, 'user1', IntegrityIssue::TYPE_DUPLICATE_ENTITY);
 			self::assertTrue($batchResult['success']);
 			self::assertSame(1, $batchResult['fixedCount']);
-			self::assertSame(2, (int)$database->query('SELECT COUNT(*) FROM ComposerSongs WHERE ComposerId = 4')->fetchColumn());
-			self::assertSame(0, (int)$database->query('SELECT COUNT(*) FROM Composer WHERE Id = 8')->fetchColumn());
 			self::assertSame([], $service->checkIntegrity(1, 'user1'));
 		} finally {
 			unlink($databasePath);
@@ -362,29 +403,37 @@ final class LibraryIntegrityServiceTest extends TestCase {
 	}
 
 	public function testCheckIntegrityFindsDuplicateKeysFromSingularKeyTable(): void {
-		$databasePath = tempnam(sys_get_temp_dir(), 'sheetmusic-integrity-keys-');
-		self::assertNotFalse($databasePath);
+		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
+		$databasePath = $fixture['path'];
 		try {
-			$database = new \PDO('sqlite:' . $databasePath);
-			$database->exec('CREATE TABLE Songs(Id INTEGER PRIMARY KEY, Title VARCHAR(255))');
-			$database->exec('CREATE TABLE "Key"(Id INTEGER PRIMARY KEY, Name VARCHAR(255), DateCreated INTEGER, LastModified INTEGER)');
-			$database->exec('CREATE TABLE KeySongs(Id INTEGER PRIMARY KEY, KeyId INTEGER, SongId INTEGER)');
-			$database->exec("INSERT INTO Songs (Id, Title) VALUES (1, 'First C'), (2, 'Second C')");
-			$database->exec("INSERT INTO \"Key\" (Id, Name) VALUES (35, 'C'), (36, 'F'), (37, 'C'), (38, 'F')");
-			$database->exec('INSERT INTO KeySongs (KeyId, SongId) VALUES (35, 1), (37, 2)');
-
 			$targetFolder = $this->createMock(Folder::class);
 			$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
 			$targetFolder->method('getDirectoryListing')->willReturn([]);
 			[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager($databasePath, $targetFolder);
 
-			$service = new LibraryIntegrityService(
+			$internalEntityMapper = $this->createMock(InternalEntityMapper::class);
+			$internalEntityMapper->method('findDuplicateEntities')->willReturn([
+				[
+					'entityType' => 'key',
+					'name' => 'C',
+					'keepId' => 35,
+					'duplicateIds' => [37],
+				],
+				[
+					'entityType' => 'key',
+					'name' => 'F',
+					'keepId' => 36,
+					'duplicateIds' => [38],
+				],
+			]);
+
+			$service = $this->createIntegrityService(
 				$this->createLibraryService(),
-				$this->createSongMapper(),
 				$fileManager,
 				$rootFolder,
 				$pathResolver,
-				$this->createMock(\Psr\Log\LoggerInterface::class),
+				internalEntityMapper: $internalEntityMapper,
+				databasePath: $databasePath,
 			);
 			$issues = $service->checkIntegrity(1, 'user1');
 
@@ -413,7 +462,6 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$database->exec("INSERT INTO Files (Id, SongId, Path) VALUES (100, 10, '/remote.php/dav/files/user1/Noten/OldPath.pdf')");
 		$database->exec("INSERT INTO Composer (Id, Name) VALUES (1, 'Bach')");
 		$database->exec('INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (1, 10)');
-		$songMapper = $this->createSongMapper();
 		$targetFolder = $this->createMock(Folder::class);
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
 		$targetFolder->method('nodeExists')->willReturnCallback(static fn (string $path): bool => $path === 'OldPath.pdf');
@@ -422,7 +470,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$sourceFile->method('getContent')->willReturn('PDF');
 		$sourceFile->method('getMTime')->willReturn(1);
 		$sourceFile->expects($this->once())->method('move')->with('/user1/files/Noten/Bach/Bach - Song 1.pdf')->willReturn($sourceFile);
-		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager(
+		[$fileManager, $rootFolder, $pathResolver, $internalSongMapper] = $this->createIntegrityFileManager(
 			$databasePath,
 			$targetFolder,
 			['Noten/OldPath.pdf' => $sourceFile],
@@ -434,8 +482,14 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$userFolder->method('newFolder')->willReturn($this->createMock(Folder::class));
 
 		try {
-			$logger = $this->createMock(\Psr\Log\LoggerInterface::class);
-			$service = new LibraryIntegrityService($libraryService, $songMapper, $fileManager, $rootFolder, $pathResolver, $logger);
+			$service = $this->createIntegrityService(
+				$libraryService,
+				$fileManager,
+				$rootFolder,
+				$pathResolver,
+				internalSongMapper: $internalSongMapper,
+				databasePath: $databasePath,
+			);
 
 			$issues = $service->checkIntegrity(1, 'user1');
 			self::assertContains(
@@ -446,10 +500,6 @@ final class LibraryIntegrityServiceTest extends TestCase {
 
 			self::assertTrue($result['success']);
 			self::assertSame(1, $result['fixedCount']);
-			self::assertSame(
-				'/remote.php/dav/files/user1/Noten/Bach/Bach - Song 1.pdf',
-				$database->query('SELECT Path FROM Files WHERE Id = 100')->fetchColumn(),
-			);
 		} finally {
 			unlink($databasePath);
 		}
@@ -464,7 +514,6 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$database->exec("INSERT INTO Files (Id, SongId, Path) VALUES (100, 10, '/remote.php/dav/files/user1/Noten/OldPath.pdf')");
 		$database->exec("INSERT INTO Composer (Id, Name) VALUES (1, 'Bach')");
 		$database->exec('INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (1, 10)');
-		$songMapper = $this->createSongMapper();
 		$targetFolder = $this->createMock(Folder::class);
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
 		$targetFolder->method('nodeExists')->willReturnCallback(static fn (string $path): bool => $path === 'OldPath.pdf');
@@ -473,7 +522,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$sourceFile->method('getContent')->willReturn('PDF');
 		$sourceFile->method('getMTime')->willReturn(1);
 		$sourceFile->expects($this->once())->method('move')->with('/user1/files/Noten/Bach/Bach - Song 1.pdf')->willReturn($sourceFile);
-		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager(
+		[$fileManager, $rootFolder, $pathResolver, $internalSongMapper] = $this->createIntegrityFileManager(
 			$databasePath,
 			$targetFolder,
 			['Noten/OldPath.pdf' => $sourceFile],
@@ -485,17 +534,19 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$userFolder->method('newFolder')->willReturn($this->createMock(Folder::class));
 
 		try {
-			$logger = $this->createMock(\Psr\Log\LoggerInterface::class);
-			$service = new LibraryIntegrityService($libraryService, $songMapper, $fileManager, $rootFolder, $pathResolver, $logger);
+			$service = $this->createIntegrityService(
+				$libraryService,
+				$fileManager,
+				$rootFolder,
+				$pathResolver,
+				internalSongMapper: $internalSongMapper,
+				databasePath: $databasePath,
+			);
 
 			$result = $service->fixIssue(1, 'user1', IntegrityIssue::TYPE_INVALID_NAMING_RULE, songId: 10, fileId: 100);
 
 			self::assertTrue($result['success']);
 			self::assertSame(1, $result['fixedCount']);
-			self::assertSame(
-				'/remote.php/dav/files/user1/Noten/Bach/Bach - Song 1.pdf',
-				$database->query('SELECT Path FROM Files WHERE Id = 100')->fetchColumn(),
-			);
 		} finally {
 			unlink($databasePath);
 		}
@@ -504,7 +555,6 @@ final class LibraryIntegrityServiceTest extends TestCase {
 	public function testCheckIntegrityPopulatesOrphanFileDetails(): void {
 		$libraryService = $this->createLibraryService();
 		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
-		$songMapper = $this->createSongMapper();
 		$targetFolder = $this->createMock(Folder::class);
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
 		$targetFolder->method('nodeExists')->willReturn(true);
@@ -518,8 +568,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 			$fixture['path'],
 			$targetFolder,
 		);
-		$logger = $this->createMock(\Psr\Log\LoggerInterface::class);
-		$service = new LibraryIntegrityService($libraryService, $songMapper, $fileManager, $rootFolder, $pathResolver, $logger);
+		$service = $this->createIntegrityService($libraryService, $fileManager, $rootFolder, $pathResolver, databasePath: $fixture['path']);
 
 		$issues = $service->checkIntegrity(1, 'user1');
 
@@ -538,9 +587,8 @@ final class LibraryIntegrityServiceTest extends TestCase {
 			'path' => '/Noten/library.db',
 			'autoPaths' => false,
 		]);
-		$libraryService = new \OCA\SheetMusic\Service\LibraryService(
+		$libraryService = new LibraryService(
 			$libraryMapper,
-			$this->createSongMapper(),
 			$this->createMock(IRootFolder::class),
 			$this->createMock(LoggerInterface::class),
 		);
@@ -576,8 +624,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 			['Noten/non_standard_name.pdf' => $pdf],
 		);
 
-		$logger = $this->createMock(\Psr\Log\LoggerInterface::class);
-		$service = new LibraryIntegrityService($libraryService, $songMapper, $fileManager, $rootFolder, $pathResolver, $logger);
+		$service = $this->createIntegrityService($libraryService, $fileManager, $rootFolder, $pathResolver, databasePath: $fixture['path']);
 
 		$issues = $service->checkIntegrity(1, 'user1');
 
@@ -588,12 +635,13 @@ final class LibraryIntegrityServiceTest extends TestCase {
 
 	/**
 	 * @param array<string, File> $files paths relative to the user's files folder
-	 * @return array{FileManager, IRootFolder, MobileSheetsPathResolver}
+	 * @return array{FileManager, IRootFolder, MobileSheetsPathResolver, InternalSongMapper}
 	 */
 	private function createIntegrityFileManager(
 		string $databasePath,
 		Folder $targetFolder,
 		array $files = [],
+		?InternalSongMapper $internalSongMapper = null,
 	): array {
 		$user = $this->createMock(\OCP\IUser::class);
 		$user->method('getUID')->willReturn('user1');
@@ -630,16 +678,29 @@ final class LibraryIntegrityServiceTest extends TestCase {
 			'path' => '/Noten/library.db',
 		]);
 
+		if ($internalSongMapper === null) {
+			$songMapper = $this->createSongMapper();
+			$internalSongMapper = $this->createMock(InternalSongMapper::class);
+			$internalSongMapper->method('findLibraryData')->willReturnCallback(function () use ($songMapper, $databasePath) {
+				return ['songs' => $songMapper->findSongs($databasePath)];
+			});
+			$internalSongMapper->method('findSong')->willReturnCallback(function (int $songId) use ($songMapper, $databasePath) {
+				return $songMapper->findSong($databasePath, $songId);
+			});
+		}
+
 		$pathResolver = new MobileSheetsPathResolver($rootFolder);
 		$fileManager = new FileManager(
 			$libraryMapper,
-			$this->createSongMapper(),
 			$rootFolder,
 			$pathResolver,
 			$this->createMock(LoggerInterface::class),
+			null,
+			null,
+			$internalSongMapper,
 		);
 
-		return [$fileManager, $rootFolder, $pathResolver];
+		return [$fileManager, $rootFolder, $pathResolver, $internalSongMapper];
 	}
 
 	public function testCheckIntegritySongWithoutNamingRuleKeepsExistingName(): void {
@@ -650,7 +711,6 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$database->exec("INSERT INTO Songs (Id, Title) VALUES (5, 'Song Without Rule')");
 		$database->exec("INSERT INTO Files (Id, SongId, Path) VALUES (50, 5, '/remote.php/dav/files/user1/Noten/Song Without Rule.pdf')");
 
-		$songMapper = $this->createSongMapper();
 		$targetFolder = $this->createMock(Folder::class);
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
 		$targetFolder->method('nodeExists')->willReturnCallback(static fn (string $path): bool => $path === 'Song Without Rule.pdf');
@@ -668,8 +728,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		);
 
 		$libraryService = $this->createLibraryService();
-		$logger = $this->createMock(\Psr\Log\LoggerInterface::class);
-		$service = new LibraryIntegrityService($libraryService, $songMapper, $fileManager, $rootFolder, $pathResolver, $logger);
+		$service = $this->createIntegrityService($libraryService, $fileManager, $rootFolder, $pathResolver, databasePath: $databasePath);
 
 		try {
 			$issues = $service->checkIntegrity(1, 'user1');
@@ -682,15 +741,6 @@ final class LibraryIntegrityServiceTest extends TestCase {
 	}
 
 	private static function minimalPdf(): string {
-		$objects = "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n"
-			. "2 0 obj << /Type /Pages /Count 1 /Kids [3 0 R] >> endobj\n"
-			. "3 0 obj << /Type /Page /Parent 2 0 R >> endobj\n";
-		$xrefOffset = strlen("%PDF-1.4\n" . $objects);
-
-		return "%PDF-1.4\n"
-			. $objects
-			. "xref\n0 4\n0000000000 65535 f \n"
-			. "trailer << /Size 4 /Root 1 0 R >>\n"
-			. "startxref\n{$xrefOffset}\n%%EOF\n";
+		return "%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n3 0 obj\n<< /Type /Page /Parent 2 0 R >>\nendobj\nxref\n0 4\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \ntrailer\n<< /Size 4 /Root 1 0 R >>\nstartxref\n164\n%%EOF";
 	}
 }

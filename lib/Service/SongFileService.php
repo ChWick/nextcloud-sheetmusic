@@ -9,7 +9,6 @@ use OCA\SheetMusic\Db\InternalSongFile;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
-use OCA\SheetMusic\Db\SongMapper;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\Files\Node;
@@ -20,13 +19,12 @@ use Psr\Log\LoggerInterface;
 class SongFileService {
 	public function __construct(
 		private LibraryService $libraryService,
-		private SongMapper $songMapper,
 		private FileManager $fileManager,
 		private IRootFolder $rootFolder,
 		private LoggerInterface $logger,
-		private ?InternalSongFileMapper $internalSongFileMapper = null,
-		private ?InternalSongMapper $internalSongMapper = null,
-		private ?LibraryMapper $libraryMapper = null,
+		private InternalSongFileMapper $internalSongFileMapper,
+		private InternalSongMapper $internalSongMapper,
+		private LibraryMapper $libraryMapper,
 	) {
 	}
 
@@ -88,7 +86,7 @@ class SongFileService {
 		if ($target === null) {
 			return null;
 		}
-		['databasePath' => $databasePath, 'userFolder' => $userFolder, 'targetFolder' => $targetFolder, 'libraryDir' => $libraryDir] = $target;
+		['userFolder' => $userFolder, 'targetFolder' => $targetFolder, 'libraryDir' => $libraryDir] = $target;
 
 		$content = file_get_contents($fileInfo['tmp_name']);
 		if ($content === false) {
@@ -101,11 +99,9 @@ class SongFileService {
 		$targetFile = $userFolder->newFile($targetRelative);
 		$targetFile->putContent($content);
 
-		$this->recordSongFile($songId, $databasePath, $targetFolder, $user, $targetFile, $libraryId);
+		$this->recordSongFile($songId, $user, $targetFile, $libraryId);
 
-		return $this->internalSongMapper !== null
-			? $this->internalSongMapper->findLibraryData($libraryId, $user)
-			: $this->songMapper->findLibraryData($databasePath);
+		return $this->internalSongMapper->findLibraryData($libraryId, $user);
 	}
 
 	public function attachNextcloudFile(
@@ -124,7 +120,7 @@ class SongFileService {
 		if ($target === null) {
 			return null;
 		}
-		['databasePath' => $databasePath, 'userFolder' => $userFolder, 'targetFolder' => $targetFolder, 'libraryDir' => $libraryDir] = $target;
+		['userFolder' => $userFolder, 'targetFolder' => $targetFolder, 'libraryDir' => $libraryDir] = $target;
 
 		$sourceNode = $userFolder->get(ltrim($sourcePath, '/'));
 		if ($sourceNode->getType() !== 'file') {
@@ -149,92 +145,48 @@ class SongFileService {
 		}
 
 		$attachedFile = $targetFolder->get($targetName);
-		$this->recordSongFile($songId, $databasePath, $targetFolder, $user, $attachedFile, $libraryId);
+		$this->recordSongFile($songId, $user, $attachedFile, $libraryId);
 
-		return $this->internalSongMapper !== null
-			? $this->internalSongMapper->findLibraryData($libraryId, $user)
-			: $this->songMapper->findLibraryData($databasePath);
+		return $this->internalSongMapper->findLibraryData($libraryId, $user);
 	}
 
 	public function deleteSongFile(IUser $user, int $libraryId, int $songId, int $fileId): ?array {
-		if ($this->internalSongFileMapper !== null) {
-			$fileRecord = $this->internalSongFileMapper->findById($fileId);
-			if ($fileRecord !== null) {
-				$targetFileId = $fileRecord->fileId;
-				$this->internalSongFileMapper->delete($fileId);
-				$this->libraryMapper?->touch($libraryId);
+		$fileRecord = $this->internalSongFileMapper->findById($fileId);
+		if ($fileRecord !== null) {
+			$targetFileId = $fileRecord->fileId;
+			$this->internalSongFileMapper->delete($fileId);
+			$this->libraryMapper->touch($libraryId);
 
-				$others = $this->internalSongFileMapper->findByFileId($targetFileId);
-				$activeOthers = array_filter($others, fn (InternalSongFile $f) => $f->id !== $fileId && $f->deletedAt === null);
+			$others = $this->internalSongFileMapper->findByFileId($targetFileId);
+			$activeOthers = array_filter($others, fn (InternalSongFile $f) => $f->id !== $fileId && $f->deletedAt === null);
 
-				if (empty($activeOthers)) {
-					try {
-						$userFolder = $this->rootFolder->getUserFolder($user->getUID());
-						$node = $userFolder->getById($targetFileId);
-						if (!empty($node) && $node[0] instanceof Node) {
-							$node[0]->delete();
-						}
-					} catch (\Throwable $e) {
-						$this->logger->warning('Could not delete physical file node', [
-							'fileId' => $targetFileId,
-							'exception' => $e,
-						]);
+			if (empty($activeOthers)) {
+				try {
+					$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+					$node = $userFolder->getById($targetFileId);
+					if (!empty($node) && $node[0] instanceof Node) {
+						$node[0]->delete();
 					}
+				} catch (\Throwable $e) {
+					$this->logger->warning('Could not delete physical file node', [
+						'fileId' => $targetFileId,
+						'exception' => $e,
+					]);
 				}
-
-				return $this->internalSongMapper !== null
-					? $this->internalSongMapper->findLibraryData($libraryId, $user)
-					: [];
 			}
+
+			return $this->internalSongMapper->findLibraryData($libraryId, $user);
 		}
 
-		$target = $this->resolveLibraryTarget($user, $libraryId);
-		if ($target === null) {
-			return null;
-		}
-		['databasePath' => $databasePath, 'targetFolder' => $targetFolder] = $target;
-
-		$filePath = $this->songMapper->removeSongFile($databasePath, $songId, $fileId);
-
-		if ($filePath !== null) {
-			$deletedFile = $this->fileManager->pathOfStoredFile($filePath, $user);
-
-			if ($deletedFile !== null && !$this->songMapper->isPathReferencedByOtherSong($databasePath, $filePath, $songId)) {
-				$this->deleteFileNode($deletedFile->internal);
-			}
-		}
-
-		$this->relocateSongFiles($songId, $databasePath, $targetFolder, $user, $filePath, $libraryId);
-
-		return $this->songMapper->findLibraryData($databasePath);
+		return null;
 	}
 
 	public function detachSongFile(IUser $user, int $libraryId, int $songId, int $fileId): ?array {
 		try {
-			if ($this->internalSongFileMapper !== null) {
-				$this->internalSongFileMapper->delete($fileId);
-				$this->libraryMapper?->touch($libraryId);
+			$this->internalSongFileMapper->delete($fileId);
+			$this->libraryMapper->touch($libraryId);
 
-				return $this->internalSongMapper !== null
-					? $this->internalSongMapper->findLibraryData($libraryId, $user)
-					: [];
-			}
-
-			$target = $this->resolveLibraryTarget($user, $libraryId);
-			if ($target === null) {
-				return null;
-			}
-			['databasePath' => $databasePath, 'targetFolder' => $targetFolder] = $target;
-
-			$filePath = $this->songMapper->removeSongFile($databasePath, $songId, $fileId);
-			if ($filePath === null) {
-				return null;
-			}
-
-			// Keep the physical file, but update paths of the song's remaining files.
-			$this->relocateSongFiles($songId, $databasePath, $targetFolder, $user, $filePath, $libraryId);
-
-			return $this->songMapper->findLibraryData($databasePath);
+			return $this->internalSongMapper->findLibraryData($libraryId, $user);
 		} catch (\Throwable $exception) {
 			$this->logger->error('Could not detach a file from a song', [
 				'exception' => $exception,
@@ -247,35 +199,32 @@ class SongFileService {
 		}
 	}
 
-	public function syncSongFileMetadata(IUser $user, string $databasePath, int $songId, ?int $libraryId = null): void {
+	public function syncSongFileMetadata(IUser $user, string $databasePath = '', int $songId = 0, ?int $libraryId = null): void {
 		if ($libraryId !== null && !$this->libraryService->isAutoPdfMetadataEnabled($user->getUID(), $libraryId)) {
 			return;
 		}
 
+		if ($libraryId === null) {
+			return;
+		}
+
 		$song = null;
-		if ($this->internalSongMapper !== null && $libraryId !== null) {
-			$data = $this->internalSongMapper->findLibraryData($libraryId, $user);
-			foreach ($data['songs'] as $s) {
-				if ($s->id === $songId) {
-					$song = $s;
-					break;
-				}
+		$data = $this->internalSongMapper->findLibraryData($libraryId, $user);
+		foreach ($data['songs'] as $s) {
+			if ($s->id === $songId) {
+				$song = $s;
+				break;
 			}
-		} elseif ($databasePath !== '' && file_exists($databasePath)) {
-			$song = $this->songMapper->findSong($databasePath, $songId);
 		}
 
 		if ($song === null) {
 			$this->logger->warning('Could not find the song to sync its metadata into attached files', [
-				'databasePath' => $databasePath,
+				'libraryId' => $libraryId,
 				'songId' => $songId,
 			]);
 			return;
 		}
 
-		$hashCodes = ($databasePath !== '' && file_exists($databasePath) && is_writable($databasePath))
-			? $this->hashCodesFor($databasePath)
-			: null;
 		foreach ($song->files as $file) {
 			$this->logger->debug('Syncing song metadata into an attached file', [
 				'songId' => $songId,
@@ -284,7 +233,7 @@ class SongFileService {
 			]);
 
 			try {
-				$this->fileManager->syncMetadataIntoFile($song, $file, $user, $databasePath, $hashCodes);
+				$this->fileManager->syncMetadataIntoFile($song, $file, $user, $databasePath);
 			} catch (\Throwable $exception) {
 				$this->logger->warning('Could not write the song metadata into an attached file', [
 					'exception' => $exception,
@@ -293,16 +242,6 @@ class SongFileService {
 					'path' => $file->path,
 				]);
 			}
-		}
-
-		try {
-			$hashCodes?->save();
-		} catch (\Throwable $exception) {
-			$this->logger->warning('Could not refresh the MobileSheets hash codes file', [
-				'exception' => $exception,
-				'databasePath' => $databasePath,
-				'songId' => $songId,
-			]);
 		}
 	}
 
@@ -344,14 +283,13 @@ class SongFileService {
 	}
 
 	/**
-	 * @return array{databasePath: string, userFolder: Folder, targetFolder: Folder, libraryDir: string}|null
+	 * @return array{userFolder: Folder, targetFolder: Folder, libraryDir: string}|null
 	 */
 	private function resolveLibraryTarget(IUser $user, int $libraryId): ?array {
-		$paths = $this->libraryService->getLibraryAndDatabasePath($user->getUID(), $libraryId);
-		if ($paths === null) {
+		$libraryPath = $this->libraryService->resolveLibraryPath($user->getUID(), $libraryId);
+		if ($libraryPath === null) {
 			return null;
 		}
-		[$libraryPath, $databasePath] = $paths;
 
 		$userFolder = $this->rootFolder->getUserFolder($user->getUID());
 		$libraryDir = $this->libraryFolderPath($libraryPath);
@@ -361,7 +299,6 @@ class SongFileService {
 		}
 
 		return [
-			'databasePath' => $databasePath,
 			'userFolder' => $userFolder,
 			'targetFolder' => $targetFolder,
 			'libraryDir' => $libraryDir,
@@ -405,98 +342,32 @@ class SongFileService {
 
 	private function recordSongFile(
 		int $songId,
-		string $databasePath,
-		Folder $targetFolder,
 		IUser $user,
 		Node $file,
 		int $libraryId,
 	): void {
-		if ($this->internalSongFileMapper !== null) {
-			$existingFiles = $this->internalSongFileMapper->findAllForSong($songId);
-			foreach ($existingFiles as $existing) {
-				if ($existing->fileId === (int)$file->getId()) {
-					$this->logger->debug('Song already lists this file, nothing to add', [
-						'songId' => $songId,
-						'fileId' => $file->getId(),
-					]);
-					$this->syncSongFileMetadata($user, $databasePath, $songId, $libraryId);
-					return;
-				}
-			}
-
-			$internalSongFile = new InternalSongFile(
-				id: null,
-				uuid: InternalEntity::generateUuid(),
-				songId: $songId,
-				fileId: (int)$file->getId(),
-				type: SongMapper::determineFileType($file->getName()),
-			);
-			$this->internalSongFileMapper->insert($internalSongFile);
-			$this->libraryMapper?->touch($libraryId);
-
-			$this->relocateSongFiles($songId, $databasePath, $targetFolder, $user, null, $libraryId);
-			$this->syncSongFileMetadata($user, $databasePath, $songId, $libraryId);
-			return;
-		}
-
-		$storedPath = $this->fileManager->pathOfExistingFile($file->getPath(), $user);
-
-		foreach ($this->songMapper->findSong($databasePath, $songId)?->files ?? [] as $existing) {
-			if ($existing->path === $storedPath->webdav) {
+		$existingFiles = $this->internalSongFileMapper->findAllForSong($songId);
+		foreach ($existingFiles as $existing) {
+			if ($existing->fileId === (int)$file->getId()) {
 				$this->logger->debug('Song already lists this file, nothing to add', [
 					'songId' => $songId,
-					'path' => $storedPath->webdav,
+					'fileId' => $file->getId(),
 				]);
-				$this->syncSongFileMetadata($user, $databasePath, $songId, $libraryId);
+				$this->syncSongFileMetadata($user, '', $songId, $libraryId);
 				return;
 			}
 		}
 
-		$this->songMapper->setSongFile($databasePath, $songId, $storedPath->webdav, MobileSheetsFileFacts::fromNode($file));
+		$internalSongFile = new InternalSongFile(
+			id: null,
+			uuid: InternalEntity::generateUuid(),
+			songId: $songId,
+			fileId: (int)$file->getId(),
+			type: InternalSongFile::determineFileType($file->getName()),
+		);
+		$this->internalSongFileMapper->insert($internalSongFile);
+		$this->libraryMapper->touch($libraryId);
 
-		$this->relocateSongFiles($songId, $databasePath, $targetFolder, $user, null, $libraryId);
-		$this->syncSongFileMetadata($user, $databasePath, $songId, $libraryId);
-	}
-
-	private function relocateSongFiles(
-		int $songId,
-		string $databasePath,
-		Folder $targetFolder,
-		IUser $user,
-		?string $removedPath,
-		int $libraryId,
-	): void {
-		if (!$this->libraryService->isAutoPathsEnabled($user->getUID(), $libraryId)) {
-			return;
-		}
-
-		if ($databasePath === '' || !file_exists($databasePath) || !is_writable($databasePath)) {
-			return;
-		}
-
-		$hashCodes = $this->hashCodesFor($databasePath);
-
-		try {
-			if ($removedPath !== null) {
-				$hashCodes?->removePath($removedPath);
-			}
-
-			$this->fileManager->regenerateSongFilePaths($songId, $user, $targetFolder, $databasePath, $hashCodes);
-		} catch (\Throwable $exception) {
-			$this->logger->warning('Could not move the song files to their regenerated paths', [
-				'exception' => $exception,
-				'databasePath' => $databasePath,
-				'songId' => $songId,
-			]);
-		}
-
-		try {
-			$hashCodes?->save();
-		} catch (\Throwable $exception) {
-			$this->logger->warning('Could not save the MobileSheets hash codes file', [
-				'exception' => $exception,
-				'databasePath' => $databasePath,
-			]);
-		}
+		$this->syncSongFileMetadata($user, '', $songId, $libraryId);
 	}
 }

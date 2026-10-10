@@ -152,7 +152,7 @@ class SongController extends OCSController {
 		array $sourceTypeIds = [],
 	): DataResponse {
 		$title = $title ?? (string)$this->request->getParam('title', '');
-		if ($libraryId === null || $title === '') {
+		if ($libraryId === null || trim($title) === '') {
 			return new DataResponse([], Http::STATUS_BAD_REQUEST);
 		}
 
