@@ -374,13 +374,16 @@ class MobileSheetsSqliteImporter {
 				$uuid = null;
 
 				// Look up in syncMeta
-				$meta = $syncMeta['byTypeAndId']['entity:' . $type][$clientId] ?? null;
+				$meta = $syncMeta['byTypeAndId']['entity:' . $type][$clientId]
+					?? $syncMeta['byTypeAndId'][$type][$clientId]
+					?? null;
 				if ($meta === null) {
 					// Check any entity:* in syncMeta for this clientId
 					foreach ($syncMeta['byTypeAndId'] as $metaType => $byClient) {
-						if (str_starts_with($metaType, 'entity:') && isset($byClient[$clientId])) {
+						$normType = str_starts_with($metaType, 'entity:') ? substr($metaType, strlen('entity:')) : $metaType;
+						if (isset($byClient[$clientId]) && ($normType === 'instrument' || str_starts_with($metaType, 'entity:'))) {
 							$meta = $byClient[$clientId];
-							$type = substr($metaType, strlen('entity:'));
+							$type = $normType;
 							break;
 						}
 					}
@@ -692,15 +695,28 @@ class MobileSheetsSqliteImporter {
 				}
 
 				$clientEntityIds = $linksBySongClientId[$songClientId] ?? [];
-				$internalEntityIds = [];
-				foreach ($clientEntityIds as $cId) {
-					$entId = $entityIdByClientAndType[$type . ':' . $cId] ?? null;
-					if ($entId !== null) {
-						$internalEntityIds[] = $entId;
+				if ($type === 'customgroup') {
+					$internalCustomGroupIds = [];
+					$internalInstrumentIds = [];
+					foreach ($clientEntityIds as $cId) {
+						if (isset($entityIdByClientAndType['instrument:' . $cId])) {
+							$internalInstrumentIds[] = $entityIdByClientAndType['instrument:' . $cId];
+						} elseif (isset($entityIdByClientAndType['customgroup:' . $cId])) {
+							$internalCustomGroupIds[] = $entityIdByClientAndType['customgroup:' . $cId];
+						}
 					}
+					$this->entityMapper->setSongEntitiesForType($song->id, 'customgroup', $internalCustomGroupIds);
+					$this->entityMapper->setSongEntitiesForType($song->id, 'instrument', $internalInstrumentIds);
+				} else {
+					$internalEntityIds = [];
+					foreach ($clientEntityIds as $cId) {
+						$entId = $entityIdByClientAndType[$type . ':' . $cId] ?? null;
+						if ($entId !== null) {
+							$internalEntityIds[] = $entId;
+						}
+					}
+					$this->entityMapper->setSongEntitiesForType($song->id, $type, $internalEntityIds);
 				}
-
-				$this->entityMapper->setSongEntitiesForType($song->id, $type, $internalEntityIds);
 			}
 		}
 	}
@@ -862,10 +878,7 @@ class MobileSheetsSqliteImporter {
 
 		// 2. Deleted Entities
 		foreach ($syncMeta['byTypeAndId'] as $entityType => $entries) {
-			if (!str_starts_with($entityType, 'entity:')) {
-				continue;
-			}
-			$type = substr($entityType, strlen('entity:'));
+			$type = str_starts_with($entityType, 'entity:') ? substr($entityType, strlen('entity:')) : $entityType;
 			$config = MobileSheetsSqliteExporter::ENTITY_TABLE_CONFIG[$type] ?? null;
 			if ($config === null) {
 				continue;

@@ -433,5 +433,87 @@ final class MobileSheetsSqliteImporterTest extends TestCase {
 		self::assertSame(1, $stats['songsDeleted']);
 		self::assertSame(1, $deletedId);
 	}
+
+	public function testImportDatabasePreservesInstrumentEntityTypeAndLinks(): void {
+		$db = $this->createTestDatabase();
+		$db->exec('CREATE TABLE CustomGroup (Id INTEGER PRIMARY KEY, Name VARCHAR(255), DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
+		$db->exec('CREATE TABLE CustomGroupSongs (Id INTEGER PRIMARY KEY, GroupId INTEGER, SongId INTEGER)');
+		$db->exec('CREATE TABLE _nc_sync_metadata (entity_type TEXT NOT NULL, uuid TEXT NOT NULL, client_id INTEGER, updated_at INTEGER, extra_json TEXT, PRIMARY KEY (entity_type, uuid))');
+
+		// Insert song
+		$db->exec("INSERT INTO Songs (Id, Title, SortTitle, SongId, DateCreated, LastModified) VALUES (1, 'Toccata', 'Toccata', 1, 1000, 1700000000000)");
+
+		// Insert CustomGroup: Organ (instrument) and Jazz Trio (customgroup)
+		$db->exec("INSERT INTO CustomGroup (Id, Name, DateCreated, LastModified) VALUES (10, 'Organ', 1000, 1700000000000)");
+		$db->exec("INSERT INTO CustomGroup (Id, Name, DateCreated, LastModified) VALUES (20, 'Jazz Trio', 1000, 1700000000000)");
+
+		// Insert links
+		$db->exec('INSERT INTO CustomGroupSongs (GroupId, SongId) VALUES (10, 1)');
+		$db->exec('INSERT INTO CustomGroupSongs (GroupId, SongId) VALUES (20, 1)');
+
+		// Insert sync metadata
+		$db->exec("INSERT INTO _nc_sync_metadata (entity_type, uuid, client_id, updated_at, extra_json) VALUES ('entity:instrument', 'uuid-organ', 10, 1700000, '{\"original_type\":\"instrument\",\"name\":\"Organ\"}')");
+		$db->exec("INSERT INTO _nc_sync_metadata (entity_type, uuid, client_id, updated_at, extra_json) VALUES ('entity:customgroup', 'uuid-trio', 20, 1700000, '{\"original_type\":\"customgroup\",\"name\":\"Jazz Trio\"}')");
+
+		$songMapper = $this->createMock(InternalSongMapper::class);
+		$entityMapper = $this->createMock(InternalEntityMapper::class);
+		$songFileMapper = $this->createMock(InternalSongFileMapper::class);
+		$attributeMapper = $this->createMock(InternalSongAttributeMapper::class);
+		$miscMapper = $this->createMock(InternalMiscMapper::class);
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$pathResolver = $this->createMock(MobileSheetsPathResolver::class);
+		$rootFolder = $this->createMock(IRootFolder::class);
+		$userManager = $this->createMock(IUserManager::class);
+		$logger = $this->createMock(LoggerInterface::class);
+
+		$library = new InternalLibrary(id: 1, userId: 'admin', path: 'Noten');
+
+		$createdEntities = [];
+		$nextId = 100;
+		$entityMapper->method('insert')->willReturnCallback(function (InternalEntity $e) use (&$createdEntities, &$nextId) {
+			$e->id = $nextId++;
+			$createdEntities[$e->clientId] = $e;
+			return $e;
+		});
+		$entityMapper->method('findAllForLibrary')->willReturnCallback(function () use (&$createdEntities) {
+			return array_values($createdEntities);
+		});
+
+		$song = new InternalSong(id: 1, uuid: 'song-uuid', libraryId: 1, title: 'Toccata', clientId: 1);
+		$songMapper->method('findByLibrary')->willReturn([$song]);
+
+		$setLinks = [];
+		$entityMapper->method('setSongEntitiesForType')->willReturnCallback(function ($songId, $type, $ids) use (&$setLinks) {
+			$setLinks[$type] = $ids;
+		});
+
+		$importer = new MobileSheetsSqliteImporter(
+			$songMapper,
+			$entityMapper,
+			$songFileMapper,
+			$attributeMapper,
+			$miscMapper,
+			$libraryMapper,
+			$pathResolver,
+			$rootFolder,
+			$userManager,
+			$logger,
+		);
+
+		$stats = $importer->importFromFile($library, $this->tempDbPath);
+
+		self::assertSame(2, $stats['entitiesCreated']);
+		self::assertNotNull($createdEntities[10] ?? null);
+		self::assertSame('instrument', $createdEntities[10]->type);
+		self::assertSame('Organ', $createdEntities[10]->name);
+
+		self::assertNotNull($createdEntities[20] ?? null);
+		self::assertSame('customgroup', $createdEntities[20]->type);
+		self::assertSame('Jazz Trio', $createdEntities[20]->name);
+
+		// Assert song links were properly set for both types
+		self::assertSame([100], $setLinks['instrument'] ?? []);
+		self::assertSame([101], $setLinks['customgroup'] ?? []);
+	}
 }
 

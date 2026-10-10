@@ -104,8 +104,20 @@ class LibraryEntityMapper extends AbstractDatabaseMapper {
 
 		if ($this->hasTable($database, '_nc_sync_metadata')) {
 			$uuid = self::generateUuid();
-			$stmt = $database->prepare('INSERT INTO _nc_sync_metadata (entity_type, uuid, client_id, updated_at) VALUES (?, ?, ?, ?)');
-			$stmt->execute(['instrument', $uuid, $id, time()]);
+			$cols = $this->columnNames($database, '_nc_sync_metadata');
+			if (isset($cols['extra_json'])) {
+				$stmt = $database->prepare('INSERT INTO _nc_sync_metadata (entity_type, uuid, client_id, updated_at, extra_json) VALUES (?, ?, ?, ?, ?)');
+				$stmt->execute([
+					'entity:instrument',
+					$uuid,
+					$id,
+					time(),
+					json_encode(['original_type' => 'instrument', 'name' => $name], JSON_THROW_ON_ERROR),
+				]);
+			} else {
+				$stmt = $database->prepare('INSERT INTO _nc_sync_metadata (entity_type, uuid, client_id, updated_at) VALUES (?, ?, ?, ?)');
+				$stmt->execute(['entity:instrument', $uuid, $id, time()]);
+			}
 		}
 
 		return $id;

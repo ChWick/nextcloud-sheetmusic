@@ -151,7 +151,7 @@ class SongMapper extends AbstractDatabaseMapper {
 		$instrumentsById = [];
 		$instrumentClientIds = [];
 		if ($this->hasTable($database, '_nc_sync_metadata')) {
-			$instStmt = $database->query("SELECT client_id FROM _nc_sync_metadata WHERE entity_type = 'instrument'");
+			$instStmt = $database->query("SELECT client_id FROM _nc_sync_metadata WHERE entity_type = 'instrument' OR entity_type = 'entity:instrument'");
 			if ($instStmt !== false) {
 				while ($irow = $instStmt->fetch()) {
 					$instrumentClientIds[(int)$irow['client_id']] = true;

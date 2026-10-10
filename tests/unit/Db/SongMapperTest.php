@@ -1067,6 +1067,47 @@ final class SongMapperTest extends TestCase {
 		unlink($dbPath);
 	}
 
+	public function testCreateInstrumentAndFindLibraryDataSeparatesInstrumentsFromCustomGroups(): void {
+		$database = new \PDO('sqlite:' . $this->databasePath);
+		$database->exec('CREATE TABLE IF NOT EXISTS _nc_sync_metadata (entity_type TEXT NOT NULL, uuid TEXT NOT NULL, client_id INTEGER, updated_at INTEGER, extra_json TEXT, PRIMARY KEY (entity_type, uuid))');
+
+		$mapper = $this->mapper();
+		$instrumentId = $mapper->createInstrument($this->databasePath, 'Pipe Organ');
+		$customGroupId = $mapper->createCustomGroup($this->databasePath, 'Jazz Ensemble');
+
+		// Link both to song 1
+		$database->exec("INSERT INTO CustomGroupSongs (GroupId, SongId) VALUES ($instrumentId, 1)");
+		$database->exec("INSERT INTO CustomGroupSongs (GroupId, SongId) VALUES ($customGroupId, 1)");
+
+		// Add another instrument with legacy entity_type = 'instrument'
+		$database->exec("INSERT INTO CustomGroup (Id, Name) VALUES (95, 'Harpsichord')");
+		$database->exec("INSERT INTO _nc_sync_metadata (entity_type, uuid, client_id, updated_at) VALUES ('instrument', 'uuid-harpsichord', 95, 12345)");
+		$database->exec("INSERT INTO CustomGroupSongs (GroupId, SongId) VALUES (95, 1)");
+
+		$data = $mapper->findLibraryData($this->databasePath);
+
+		$instrumentNames = $this->names($data['instruments']);
+		self::assertContains('Pipe Organ', $instrumentNames);
+		self::assertContains('Harpsichord', $instrumentNames);
+		self::assertNotContains('Jazz Ensemble', $instrumentNames);
+
+		$customGroupNames = $this->names($data['customGroups']);
+		self::assertContains('Jazz Ensemble', $customGroupNames);
+		self::assertNotContains('Pipe Organ', $customGroupNames);
+		self::assertNotContains('Harpsichord', $customGroupNames);
+
+		// Check song 1's resolved entities
+		$song = array_values(array_filter($data['songs'], static fn ($s) => $s->id === 1))[0];
+		$songInstrumentNames = $this->names($song->instruments);
+		self::assertContains('Pipe Organ', $songInstrumentNames);
+		self::assertContains('Harpsichord', $songInstrumentNames);
+		self::assertNotContains('Jazz Ensemble', $songInstrumentNames);
+
+		$songGroupNames = $this->names($song->customGroups);
+		self::assertContains('Jazz Ensemble', $songGroupNames);
+		self::assertNotContains('Pipe Organ', $songGroupNames);
+	}
+
 	/**
 	 * @param list<MobileSheetsComposer|MobileSheetsCollection|MobileSheetsArtist|MobileSheetsGenre|MobileSheetsKey|MobileSheetsCustomGroup|MobileSheetsYear|MobileSheetsSignature|MobileSheetsSourceType> $entities
 	 * @return list<string>

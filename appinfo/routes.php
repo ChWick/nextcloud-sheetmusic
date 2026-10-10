@@ -70,6 +70,31 @@ return [
 			'verb' => 'POST',
 		],
 		[
+			'name' => 'Api#createGenre',
+			'url' => '/api/genres',
+			'verb' => 'POST',
+		],
+		[
+			'name' => 'Api#createKey',
+			'url' => '/api/keys',
+			'verb' => 'POST',
+		],
+		[
+			'name' => 'Api#createCustomGroup',
+			'url' => '/api/customgroups',
+			'verb' => 'POST',
+		],
+		[
+			'name' => 'Api#createYear',
+			'url' => '/api/years',
+			'verb' => 'POST',
+		],
+		[
+			'name' => 'Api#createInstrument',
+			'url' => '/api/instruments',
+			'verb' => 'POST',
+		],
+		[
 			'name' => 'Api#deleteComposer',
 			'url' => '/api/composers/{id}',
 			'verb' => 'DELETE',
@@ -87,6 +112,31 @@ return [
 		[
 			'name' => 'Api#deleteArtist',
 			'url' => '/api/artists/{id}',
+			'verb' => 'DELETE',
+		],
+		[
+			'name' => 'Api#deleteGenre',
+			'url' => '/api/genres/{id}',
+			'verb' => 'DELETE',
+		],
+		[
+			'name' => 'Api#deleteKey',
+			'url' => '/api/keys/{id}',
+			'verb' => 'DELETE',
+		],
+		[
+			'name' => 'Api#deleteCustomGroup',
+			'url' => '/api/customgroups/{id}',
+			'verb' => 'DELETE',
+		],
+		[
+			'name' => 'Api#deleteYear',
+			'url' => '/api/years/{id}',
+			'verb' => 'DELETE',
+		],
+		[
+			'name' => 'Api#deleteInstrument',
+			'url' => '/api/instruments/{id}',
 			'verb' => 'DELETE',
 		],
 		[
