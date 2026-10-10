@@ -1037,7 +1037,15 @@ class MobileSheetsSqliteImporter {
 				return $userFolder->get($clean)->getId();
 			}
 
-			$libRel = rtrim($library->path, '/') . '/' . $clean;
+			$libPath = trim($library->path, '/');
+			if (str_ends_with(strtolower($libPath), '.db')) {
+				$libFolder = dirname($libPath);
+				$cleanLibFolder = $libFolder === '.' ? '' : $libFolder;
+			} else {
+				$cleanLibFolder = $libPath;
+			}
+
+			$libRel = $cleanLibFolder !== '' ? $cleanLibFolder . '/' . $clean : $clean;
 			if ($userFolder->nodeExists($libRel)) {
 				return $userFolder->get($libRel)->getId();
 			}

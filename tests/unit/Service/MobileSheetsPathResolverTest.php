@@ -66,6 +66,14 @@ final class MobileSheetsPathResolverTest extends TestCase {
 		self::assertSame(self::WEBDAV_ROOT . '/Noten/My%20Song%20%281%29.pdf', $path->webdav);
 	}
 
+	public function testFromStoredSupportsLegacyWebdavRoot(): void {
+		$path = $this->resolver()->fromStored('/remote.php/webdav/Noten/sub/file.pdf', $this->user());
+
+		self::assertInstanceOf(MobileSheetsPath::class, $path);
+		self::assertSame('/admin/files/Noten/sub/file.pdf', $path->internal);
+		self::assertSame(self::WEBDAV_ROOT . '/Noten/sub/file.pdf', $path->webdav);
+	}
+
 	public function testFromStoredReturnsNullForAPathOfAnotherUser(): void {
 		self::assertNull($this->resolver()->fromStored('/remote.php/dav/files/other/Noten/file.pdf', $this->user()));
 	}
@@ -73,6 +81,7 @@ final class MobileSheetsPathResolverTest extends TestCase {
 	/** The bare WebDAV root is no file of the user and must not be accepted. */
 	public function testFromStoredReturnsNullForTheRootItself(): void {
 		self::assertNull($this->resolver()->fromStored(self::WEBDAV_ROOT, $this->user()));
+		self::assertNull($this->resolver()->fromStored('/remote.php/webdav', $this->user()));
 	}
 
 	public function testFromStoredReturnsNullForAPrefixThatOnlyLooksLikeTheRoot(): void {

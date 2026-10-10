@@ -21,6 +21,7 @@ use OCP\IUser;
 class MobileSheetsPathResolver {
 	/** Every MobileSheets path is stored below this prefix. */
 	public const WEBDAV_ROOT = '/remote.php/dav/files';
+	public const LEGACY_WEBDAV_ROOT = '/remote.php/webdav';
 
 	public function __construct(
 		private IRootFolder $rootFolder,
@@ -46,14 +47,20 @@ class MobileSheetsPathResolver {
 	 */
 	public function fromStored(string $webdavPath, IUser $user): ?MobileSheetsPath {
 		$webdavRoot = $this->webdavRoot($user);
-		if (!str_starts_with($webdavPath, $webdavRoot . '/')) {
-			return null;
+		if (str_starts_with($webdavPath, $webdavRoot . '/')) {
+			$relative = substr($webdavPath, strlen($webdavRoot) + 1);
+			$internal = $this->normalize($this->internalRoot($user) . '/' . rawurldecode($relative));
+			return new MobileSheetsPath($internal, $webdavPath);
 		}
 
-		$relative = substr($webdavPath, strlen($webdavRoot) + 1);
-		$internal = $this->normalize($this->internalRoot($user) . '/' . rawurldecode($relative));
+		if (str_starts_with($webdavPath, self::LEGACY_WEBDAV_ROOT . '/')) {
+			$relative = substr($webdavPath, strlen(self::LEGACY_WEBDAV_ROOT) + 1);
+			$internal = $this->normalize($this->internalRoot($user) . '/' . rawurldecode($relative));
+			$canonicalWebdav = $this->webdavRoot($user) . '/' . $relative;
+			return new MobileSheetsPath($internal, $canonicalWebdav);
+		}
 
-		return new MobileSheetsPath($internal, $webdavPath);
+		return null;
 	}
 
 	/**
