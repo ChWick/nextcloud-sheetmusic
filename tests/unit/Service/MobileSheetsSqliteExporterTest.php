@@ -340,4 +340,59 @@ final class MobileSheetsSqliteExporterTest extends TestCase {
 
 		self::assertSame($expected, $hashcodes);
 	}
+
+	public function testMiscSchemaOverridesDefaultTableDefinitionAndFiltersExtraColumns(): void {
+		$songMapper = $this->createMock(InternalSongMapper::class);
+		$entityMapper = $this->createMock(InternalEntityMapper::class);
+		$songFileMapper = $this->createMock(InternalSongFileMapper::class);
+		$attributeMapper = $this->createMock(InternalSongAttributeMapper::class);
+		$miscMapper = $this->createMock(InternalMiscMapper::class);
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$pathResolver = $this->createMock(MobileSheetsPathResolver::class);
+		$rootFolder = $this->createMock(IRootFolder::class);
+		$userManager = $this->createMock(IUserManager::class);
+		$logger = $this->createMock(LoggerInterface::class);
+
+		$library = new InternalLibrary(id: 1, userId: 'admin', path: 'Noten');
+
+		$songMapper->method('findByLibrary')->willReturn([]);
+		$entityMapper->method('findAllForLibrary')->willReturn([]);
+		$entityMapper->method('findAllSongEntityLinksForLibrary')->willReturn([]);
+		$songFileMapper->method('findAllForLibrary')->willReturn([]);
+		$attributeMapper->method('findAllForLibrary')->willReturn([]);
+
+		// MobileSheets modern MetronomeSettings schema containing Sig1, Sig2 etc.
+		$miscMapper->method('getMiscSchemas')->with(1, 'mobilesheets')->willReturn([
+			'MetronomeSettings' => 'CREATE TABLE MetronomeSettings (Id INTEGER PRIMARY KEY, SongId INTEGER, Bpm INTEGER, Sig1 INTEGER, Sig2 INTEGER)',
+		]);
+		$miscMapper->method('getMiscDataForTable')->with(1, 'mobilesheets', 'MetronomeSettings', false)->willReturn([
+			['Id' => 1, 'SongId' => 10, 'Bpm' => 120, 'Sig1' => 4, 'Sig2' => 4, 'NonExistentColumn' => 'ShouldBeIgnored'],
+		]);
+
+		$exporter = new MobileSheetsSqliteExporter(
+			$songMapper,
+			$entityMapper,
+			$songFileMapper,
+			$attributeMapper,
+			$miscMapper,
+			$libraryMapper,
+			$pathResolver,
+			$rootFolder,
+			$userManager,
+			$logger,
+		);
+
+		$exporter->exportToFile($library, $this->tempDbPath);
+
+		self::assertFileExists($this->tempDbPath);
+
+		$db = new PDO('sqlite:' . $this->tempDbPath);
+		$rows = $db->query('SELECT * FROM MetronomeSettings')->fetchAll(PDO::FETCH_ASSOC);
+		self::assertCount(1, $rows);
+		self::assertSame(1, (int)$rows[0]['Id']);
+		self::assertSame(10, (int)$rows[0]['SongId']);
+		self::assertSame(120, (int)$rows[0]['Bpm']);
+		self::assertSame(4, (int)$rows[0]['Sig1']);
+		self::assertSame(4, (int)$rows[0]['Sig2']);
+	}
 }
