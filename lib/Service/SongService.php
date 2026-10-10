@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OCA\SheetMusic\Service;
 
+use OCA\SheetMusic\Db\InternalEntity;
 use OCA\SheetMusic\Db\InternalEntityMapper;
 use OCA\SheetMusic\Db\InternalSong;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
