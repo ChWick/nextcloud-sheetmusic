@@ -82,7 +82,8 @@ class InternalMiscMapper {
 		?string $songUuid = null,
 	): void {
 		$now = time();
-		$json = json_encode($data, JSON_THROW_ON_ERROR);
+		$cleanData = self::sanitizeBinaryData($data);
+		$json = json_encode($cleanData, JSON_THROW_ON_ERROR);
 
 		$qbCheck = $this->db->getQueryBuilder();
 		$qbCheck->select('id')
@@ -142,7 +143,7 @@ class InternalMiscMapper {
 			try {
 				/** @var array<string, mixed> $decoded */
 				$decoded = json_decode((string)$row['data_json'], true, 512, JSON_THROW_ON_ERROR);
-				$rows[] = $decoded;
+				$rows[] = self::restoreBinaryData($decoded);
 			} catch (\Throwable) {
 				// Skip malformed rows
 			}
@@ -150,6 +151,34 @@ class InternalMiscMapper {
 		$result->closeCursor();
 
 		return $rows;
+	}
+
+	private static function sanitizeBinaryData(mixed $value): mixed {
+		if (is_array($value)) {
+			$res = [];
+			foreach ($value as $k => $v) {
+				$res[$k] = self::sanitizeBinaryData($v);
+			}
+			return $res;
+		}
+		if (is_string($value) && !mb_check_encoding($value, 'UTF-8')) {
+			return '__b64:' . base64_encode($value);
+		}
+		return $value;
+	}
+
+	private static function restoreBinaryData(mixed $value): mixed {
+		if (is_array($value)) {
+			$res = [];
+			foreach ($value as $k => $v) {
+				$res[$k] = self::restoreBinaryData($v);
+			}
+			return $res;
+		}
+		if (is_string($value) && str_starts_with($value, '__b64:')) {
+			return base64_decode(substr($value, 6));
+		}
+		return $value;
 	}
 
 	public function deleteMiscData(int $libraryId, string $clientType, string $tableName, string $recordId, bool $hardDelete = false): bool {

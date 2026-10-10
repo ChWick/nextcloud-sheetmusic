@@ -102,22 +102,25 @@ class LibraryEntityMapper extends AbstractDatabaseMapper {
 			'Name' => $name,
 		] + $this->dateColumns($database, 'CustomGroup'));
 
-		if ($this->hasTable($database, '_nc_sync_metadata')) {
-			$uuid = self::generateUuid();
-			$cols = $this->columnNames($database, '_nc_sync_metadata');
-			if (isset($cols['extra_json'])) {
-				$stmt = $database->prepare('INSERT INTO _nc_sync_metadata (entity_type, uuid, client_id, updated_at, extra_json) VALUES (?, ?, ?, ?, ?)');
-				$stmt->execute([
-					'entity:instrument',
-					$uuid,
-					$id,
-					time(),
-					json_encode(['original_type' => 'instrument', 'name' => $name], JSON_THROW_ON_ERROR),
-				]);
-			} else {
-				$stmt = $database->prepare('INSERT INTO _nc_sync_metadata (entity_type, uuid, client_id, updated_at) VALUES (?, ?, ?, ?)');
-				$stmt->execute(['entity:instrument', $uuid, $id, time()]);
-			}
+		if (!$this->hasTable($database, '_nc_sync_metadata')) {
+			$database->exec('CREATE TABLE IF NOT EXISTS _nc_sync_metadata (entity_type TEXT NOT NULL, uuid TEXT NOT NULL, client_id INTEGER, updated_at INTEGER, extra_json TEXT, PRIMARY KEY (entity_type, uuid))');
+			$database->exec('CREATE INDEX IF NOT EXISTS idx_nc_sync_client ON _nc_sync_metadata (entity_type, client_id)');
+		}
+
+		$uuid = self::generateUuid();
+		$cols = $this->columnNames($database, '_nc_sync_metadata');
+		if (isset($cols['extra_json'])) {
+			$stmt = $database->prepare('INSERT INTO _nc_sync_metadata (entity_type, uuid, client_id, updated_at, extra_json) VALUES (?, ?, ?, ?, ?)');
+			$stmt->execute([
+				'entity:instrument',
+				$uuid,
+				$id,
+				time(),
+				json_encode(['original_type' => 'instrument', 'name' => $name], JSON_THROW_ON_ERROR),
+			]);
+		} else {
+			$stmt = $database->prepare('INSERT INTO _nc_sync_metadata (entity_type, uuid, client_id, updated_at) VALUES (?, ?, ?, ?)');
+			$stmt->execute(['entity:instrument', $uuid, $id, time()]);
 		}
 
 		return $id;

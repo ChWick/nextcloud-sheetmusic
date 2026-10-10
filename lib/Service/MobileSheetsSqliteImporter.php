@@ -180,7 +180,7 @@ class MobileSheetsSqliteImporter {
 	public function importFromFile(
 		InternalLibrary|array|int $library,
 		string $sqlitePath,
-		?IUser $user = null,
+		IUser|string|null $user = null,
 	): array {
 		$lib = $this->resolveLibrary($library);
 		if ($lib->id === null) {
@@ -196,6 +196,9 @@ class MobileSheetsSqliteImporter {
 			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
 		]);
 
+		if (is_string($user)) {
+			$user = $this->userManager->get($user);
+		}
 		$user = $user ?? $this->userManager->get($lib->userId);
 
 		$syncMeta = $this->loadSyncMetadata($db);
@@ -377,15 +380,12 @@ class MobileSheetsSqliteImporter {
 				$meta = $syncMeta['byTypeAndId']['entity:' . $type][$clientId]
 					?? $syncMeta['byTypeAndId'][$type][$clientId]
 					?? null;
-				if ($meta === null) {
-					// Check any entity:* in syncMeta for this clientId
-					foreach ($syncMeta['byTypeAndId'] as $metaType => $byClient) {
-						$normType = str_starts_with($metaType, 'entity:') ? substr($metaType, strlen('entity:')) : $metaType;
-						if (isset($byClient[$clientId]) && ($normType === 'instrument' || str_starts_with($metaType, 'entity:'))) {
-							$meta = $byClient[$clientId];
-							$type = $normType;
-							break;
-						}
+				if ($meta === null && $tableName === 'CustomGroup') {
+					$meta = $syncMeta['byTypeAndId']['entity:instrument'][$clientId]
+						?? $syncMeta['byTypeAndId']['instrument'][$clientId]
+						?? null;
+					if ($meta !== null) {
+						$type = 'instrument';
 					}
 				}
 
@@ -479,7 +479,22 @@ class MobileSheetsSqliteImporter {
 		$notesBySongId = [];
 		$noteCheck = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='SongNotes'");
 		if ($noteCheck !== false && $noteCheck->fetch() !== false) {
-			$notesStmt = $db->query('SELECT SongId, Note FROM SongNotes ORDER BY Id ASC');
+			$colStmt = $db->query("PRAGMA table_info('SongNotes')");
+			$noteCol = 'Note';
+			if ($colStmt !== false) {
+				while ($col = $colStmt->fetch()) {
+					$cName = strtolower((string)$col['name']);
+					if ($cName === 'notes') {
+						$noteCol = 'Notes';
+						break;
+					} elseif ($cName === 'note') {
+						$noteCol = 'Note';
+					} elseif ($cName === 'text') {
+						$noteCol = 'Text';
+					}
+				}
+			}
+			$notesStmt = $db->query('SELECT SongId, "' . $noteCol . '" AS Note FROM SongNotes ORDER BY Id ASC');
 			if ($notesStmt !== false) {
 				while ($nrow = $notesStmt->fetch()) {
 					$notesBySongId[(int)$nrow['SongId']] = (string)($nrow['Note'] ?? '');
