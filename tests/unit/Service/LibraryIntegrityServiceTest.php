@@ -642,6 +642,45 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		return [$fileManager, $rootFolder, $pathResolver];
 	}
 
+	public function testCheckIntegritySongWithoutNamingRuleKeepsExistingName(): void {
+		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
+		$databasePath = $fixture['path'];
+		$database = $fixture['connection'];
+		// Song with no composer, artist, or collection
+		$database->exec("INSERT INTO Songs (Id, Title) VALUES (5, 'Song Without Rule')");
+		$database->exec("INSERT INTO Files (Id, SongId, Path) VALUES (50, 5, '/remote.php/dav/files/user1/Noten/Song Without Rule.pdf')");
+
+		$songMapper = $this->createSongMapper();
+		$targetFolder = $this->createMock(Folder::class);
+		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
+		$targetFolder->method('nodeExists')->willReturnCallback(static fn (string $path): bool => $path === 'Song Without Rule.pdf');
+		$targetFolder->method('getDirectoryListing')->willReturn([]);
+
+		$pdf = $this->createMock(\OCP\Files\File::class);
+		$pdf->method('getContent')->willReturn(self::minimalPdf());
+		$pdf->method('getMTime')->willReturn(1);
+		$targetFolder->method('get')->with('Song Without Rule.pdf')->willReturn($pdf);
+
+		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager(
+			$databasePath,
+			$targetFolder,
+			['Noten/Song Without Rule.pdf' => $pdf],
+		);
+
+		$libraryService = $this->createLibraryService();
+		$logger = $this->createMock(\Psr\Log\LoggerInterface::class);
+		$service = new LibraryIntegrityService($libraryService, $songMapper, $fileManager, $rootFolder, $pathResolver, $logger);
+
+		try {
+			$issues = $service->checkIntegrity(1, 'user1');
+			// Should not report invalid_naming_rule
+			$namingIssues = array_filter($issues, static fn (IntegrityIssue $issue): bool => $issue->type === IntegrityIssue::TYPE_INVALID_NAMING_RULE);
+			self::assertCount(0, $namingIssues);
+		} finally {
+			unlink($databasePath);
+		}
+	}
+
 	private static function minimalPdf(): string {
 		$objects = "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n"
 			. "2 0 obj << /Type /Pages /Count 1 /Kids [3 0 R] >> endobj\n"

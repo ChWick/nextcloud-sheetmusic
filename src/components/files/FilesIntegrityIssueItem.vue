@@ -46,14 +46,18 @@ const isDuplicateBetweenSongs = computed(() =>
 
 		<p :class="$style.message">{{ issue.message }}</p>
 
-		<div v-if="issue.path || issue.suggestedPath" :class="$style.paths">
+		<div v-if="issue.path || issue.suggestedPath || issue.type === 'invalid_naming_rule'" :class="$style.paths">
 			<div v-if="issue.path" :class="$style.pathLine">
 				<span :class="$style.pathLabel">{{ t('sheetmusic', 'Current Path:') }}</span>
 				<code>{{ issue.path }}</code>
 			</div>
 			<div v-if="issue.suggestedPath" :class="$style.pathLine">
-				<span :class="$style.pathLabel">{{ t('sheetmusic', 'Suggested Path:') }}</span>
+				<span :class="$style.pathLabel">{{ t('sheetmusic', 'Expected Path:') }}</span>
 				<code>{{ issue.suggestedPath }}</code>
+			</div>
+			<div v-else-if="issue.type === 'invalid_naming_rule'" :class="$style.pathLine">
+				<span :class="$style.pathLabel">{{ t('sheetmusic', 'Expected Path:') }}</span>
+				<span :class="$style.pathNote">{{ t('sheetmusic', 'Cannot determine expected path: Song needs a Composer, Artist, or Collection.') }}</span>
 			</div>
 		</div>
 
@@ -179,6 +183,11 @@ const isDuplicateBetweenSongs = computed(() =>
 .pathLabel {
 	font-weight: 600;
 	white-space: nowrap;
+}
+
+.pathNote {
+	font-style: italic;
+	color: var(--color-text-maxcontrast);
 }
 
 .actions {

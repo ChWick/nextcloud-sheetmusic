@@ -16,7 +16,6 @@ use OCA\SheetMusic\Service\MobileSheetsSqliteExporter;
 use OCA\SheetMusic\Service\MobileSheetsSqliteImporter;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
-use Sabre\DAV\Server;
 use Sabre\HTTP\Request;
 use Sabre\HTTP\Response;
 

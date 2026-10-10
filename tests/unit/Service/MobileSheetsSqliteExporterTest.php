@@ -23,7 +23,6 @@ use OCA\SheetMusic\Service\MobileSheetsPath;
 use OCA\SheetMusic\Service\MobileSheetsPathResolver;
 use OCA\SheetMusic\Service\MobileSheetsSqliteExporter;
 use OCP\Files\File;
-use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\Files\IUserFolder;
 use OCP\IUser;

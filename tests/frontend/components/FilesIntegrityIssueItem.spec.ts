@@ -47,8 +47,35 @@ describe('FilesIntegrityIssueItem.vue', () => {
 		})
 
 		expect(wrapper.text()).toContain('Auto-Fix Issue')
+		expect(wrapper.text()).toContain('Current Path:')
+		expect(wrapper.text()).toContain('Noten/OldPath.pdf')
+		expect(wrapper.text()).toContain('Expected Path:')
+		expect(wrapper.text()).toContain('Noten/NewPath.pdf')
 		expect(wrapper.text()).not.toContain('Merge Songs')
 		expect(wrapper.text()).not.toContain('Keep as Two')
+	})
+
+	it('renders explanation when expected path cannot be determined for invalid naming rule', () => {
+		const issue: IntegrityIssue = {
+			type: 'invalid_naming_rule',
+			severity: 'warning',
+			message: 'File path does not match standard naming rule.',
+			songId: 60,
+			songTitle: 'Nachspiel',
+			fileId: 207,
+			path: 'Noten/OldPath.pdf',
+			suggestedPath: null,
+			fixable: false,
+		}
+
+		const wrapper = mount(FilesIntegrityIssueItem, {
+			props: { issue },
+		})
+
+		expect(wrapper.text()).toContain('Current Path:')
+		expect(wrapper.text()).toContain('Noten/OldPath.pdf')
+		expect(wrapper.text()).toContain('Expected Path:')
+		expect(wrapper.text()).toContain('Cannot determine expected path: Song needs a Composer, Artist, or Collection.')
 	})
 
 	it('renders merge and keep as two buttons for identical_song issue', () => {

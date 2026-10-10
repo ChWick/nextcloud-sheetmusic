@@ -163,4 +163,3 @@ class SheetMusicFileEventListener implements IEventListener {
 		return null;
 	}
 }
-

@@ -214,4 +214,3 @@ class InternalMiscMapper {
 		$qb2->executeStatement();
 	}
 }
-

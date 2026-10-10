@@ -97,4 +97,3 @@ final class InternalSongAttributeMapperTest extends TestCase {
 		self::assertTrue($mapper->removeAttribute(10, 'tuning'));
 	}
 }
-

@@ -11,7 +11,6 @@ namespace OCA\SheetMusic\Dav;
 
 use OCA\SheetMusic\Db\InternalLibrary;
 use OCA\SheetMusic\Db\LibraryMapper;
-use OCA\SheetMusic\Service\MobileSheetsHashCodesFile;
 use OCA\SheetMusic\Service\MobileSheetsSqliteExporter;
 use OCA\SheetMusic\Service\MobileSheetsSqliteImporter;
 use Psr\Log\LoggerInterface;
@@ -354,4 +353,3 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		return null;
 	}
 }
-

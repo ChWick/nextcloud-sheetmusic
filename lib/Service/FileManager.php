@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OCA\SheetMusic\Service;
 
+use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
 use OCA\SheetMusic\Db\MobileSheetsFile;
 use OCA\SheetMusic\Db\MobileSheetsSong;
@@ -246,6 +247,7 @@ class FileManager {
 		private MobileSheetsPathResolver $pathResolver,
 		private LoggerInterface $logger,
 		private ?LibraryService $libraryService = null,
+		private ?InternalSongFileMapper $internalSongFileMapper = null,
 	) {
 	}
 
@@ -661,7 +663,18 @@ class FileManager {
 							$copiedNode = $existingNode->copy($targetRelative);
 							$copiedTarget = $this->pathResolver->forTarget($targetRelative, $user, $userFolder->getPath());
 							$facts = MobileSheetsFileFacts::fromNode($copiedNode);
-							$this->songMapper->updateFile($databasePath, $file->id, $copiedTarget->webdav, $facts);
+							if ($this->internalSongFileMapper !== null) {
+								$internalSongFile = $this->internalSongFileMapper->findById($file->id);
+								if ($internalSongFile !== null) {
+									$internalSongFile->fileId = (int)$copiedNode->getId();
+									$internalSongFile->fileSize = $facts->fileSize;
+									$internalSongFile->fileHash = $facts->fileHash;
+									$this->internalSongFileMapper->update($internalSongFile);
+								}
+							}
+							if ($databasePath !== '' && file_exists($databasePath) && is_writable($databasePath)) {
+								$this->songMapper->updateFile($databasePath, $file->id, $copiedTarget->webdav, $facts);
+							}
 							$hashCodes?->updatePath($source->webdav, $copiedTarget->webdav);
 
 							return $this->logEntry(
@@ -678,7 +691,18 @@ class FileManager {
 
 					$targetNode = $userFolder->get($candRel);
 					$facts = MobileSheetsFileFacts::fromNode($targetNode);
-					$this->songMapper->updateFile($databasePath, $file->id, $candTarget->webdav, $facts);
+					if ($this->internalSongFileMapper !== null) {
+						$internalSongFile = $this->internalSongFileMapper->findById($file->id);
+						if ($internalSongFile !== null) {
+							$internalSongFile->fileId = (int)$targetNode->getId();
+							$internalSongFile->fileSize = $facts->fileSize;
+							$internalSongFile->fileHash = $facts->fileHash;
+							$this->internalSongFileMapper->update($internalSongFile);
+						}
+					}
+					if ($databasePath !== '' && file_exists($databasePath) && is_writable($databasePath)) {
+						$this->songMapper->updateFile($databasePath, $file->id, $candTarget->webdav, $facts);
+					}
 					$hashCodes?->updatePath($source->webdav, $candTarget->webdav);
 
 					return $this->logEntry(
@@ -739,7 +763,18 @@ class FileManager {
 					$copiedNode = $existingNode->copy($targetRelative);
 					$copiedTarget = $this->pathResolver->forTarget($targetRelative, $user, $userFolder->getPath());
 					$facts = MobileSheetsFileFacts::fromNode($copiedNode);
-					$this->songMapper->updateFile($databasePath, $file->id, $copiedTarget->webdav, $facts);
+					if ($this->internalSongFileMapper !== null) {
+						$internalSongFile = $this->internalSongFileMapper->findById($file->id);
+						if ($internalSongFile !== null) {
+							$internalSongFile->fileId = (int)$copiedNode->getId();
+							$internalSongFile->fileSize = $facts->fileSize;
+							$internalSongFile->fileHash = $facts->fileHash;
+							$this->internalSongFileMapper->update($internalSongFile);
+						}
+					}
+					if ($databasePath !== '' && file_exists($databasePath) && is_writable($databasePath)) {
+						$this->songMapper->updateFile($databasePath, $file->id, $copiedTarget->webdav, $facts);
+					}
 					$hashCodes?->updatePath($source->webdav, $copiedTarget->webdav);
 
 					return $this->logEntry(
@@ -782,7 +817,17 @@ class FileManager {
 		$sourceNode->move($target->internal);
 
 		try {
-			$this->songMapper->updateFile($databasePath, $file->id, $target->webdav, $facts);
+			if ($this->internalSongFileMapper !== null) {
+				$internalSongFile = $this->internalSongFileMapper->findById($file->id);
+				if ($internalSongFile !== null) {
+					$internalSongFile->fileSize = $facts->fileSize;
+					$internalSongFile->fileHash = $facts->fileHash;
+					$this->internalSongFileMapper->update($internalSongFile);
+				}
+			}
+			if ($databasePath !== '' && file_exists($databasePath) && is_writable($databasePath)) {
+				$this->songMapper->updateFile($databasePath, $file->id, $target->webdav, $facts);
+			}
 		} catch (\Throwable $exception) {
 			$this->revertMove(
 				$userFolder,
@@ -936,7 +981,17 @@ class FileManager {
 			// The bytes changed, so the hash, size and timestamp stored for
 			// the file have to follow them - everywhere they are kept.
 			$facts = MobileSheetsFileFacts::fromNode($node);
-			$this->songMapper->updateFile($databasePath, $file->id, $file->path, $facts);
+			if ($this->internalSongFileMapper !== null) {
+				$internalSongFile = $this->internalSongFileMapper->findById($file->id);
+				if ($internalSongFile !== null) {
+					$internalSongFile->fileSize = $facts->fileSize;
+					$internalSongFile->fileHash = $facts->fileHash;
+					$this->internalSongFileMapper->update($internalSongFile);
+				}
+			}
+			if ($databasePath !== '' && file_exists($databasePath) && is_writable($databasePath)) {
+				$this->songMapper->updateFile($databasePath, $file->id, $file->path, $facts);
+			}
 			$hashCodes?->updateFacts(
 				$file->path,
 				(string)$facts->fileHash,

@@ -145,4 +145,3 @@ final class LibraryReconcilerTest extends TestCase {
 		self::assertFalse($reconciler->isIgnoredFilename('Sonata.pdf'));
 	}
 }
-

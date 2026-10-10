@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace OCA\SheetMusic\Controller;
 
+use OCA\SheetMusic\Db\InternalEntityMapper;
+use OCA\SheetMusic\Db\InternalSongFileMapper;
+use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
 use OCA\SheetMusic\Db\SongMapper;
 use OCA\SheetMusic\Service\EntityService;
@@ -47,15 +50,30 @@ class ApiController extends OCSController {
 		?SongFileService $songFileService = null,
 		?EntityService $entityService = null,
 		?LibraryIntegrityService $libraryIntegrityService = null,
+		?InternalEntityMapper $internalEntityMapper = null,
+		?InternalSongMapper $internalSongMapper = null,
+		?InternalSongFileMapper $internalSongFileMapper = null,
 	) {
 		parent::__construct($appName, $request);
 
 		$libService = $libraryService ?? new LibraryService($libraryMapper, $songMapper, $rootFolder, $logger);
 		$pathResolver = new MobileSheetsPathResolver($rootFolder);
-		$integritySvc = $libraryIntegrityService ?? new LibraryIntegrityService($libService, $songMapper, $fileManager, $rootFolder, $pathResolver, $logger);
-		$fileSvc = $songFileService ?? new SongFileService($libService, $songMapper, $fileManager, $rootFolder, $logger);
-		$sngService = $songService ?? new SongService($libService, $songMapper, $fileSvc, $fileManager, $logger, $integritySvc);
-		$entService = $entityService ?? new EntityService($libService, $songMapper, $logger, $fileManager);
+		$integritySvc = $libraryIntegrityService ?? new LibraryIntegrityService(
+			$libService, $songMapper, $fileManager, $rootFolder, $pathResolver, $logger,
+			$internalEntityMapper, $internalSongMapper, $internalSongFileMapper, $libraryMapper,
+		);
+		$fileSvc = $songFileService ?? new SongFileService(
+			$libService, $songMapper, $fileManager, $rootFolder, $logger,
+			$internalSongFileMapper, $internalSongMapper, $libraryMapper,
+		);
+		$sngService = $songService ?? new SongService(
+			$libService, $songMapper, $fileSvc, $fileManager, $logger, $integritySvc,
+			$internalSongMapper, $internalEntityMapper, $internalSongFileMapper, $libraryMapper, $rootFolder,
+		);
+		$entService = $entityService ?? new EntityService(
+			$libService, $songMapper, $logger, $fileManager,
+			$internalEntityMapper, $internalSongMapper, $libraryMapper,
+		);
 
 		$this->libraryController = new LibraryController($appName, $request, $libService, $userSession, $integritySvc);
 		$this->songController = new SongController($appName, $request, $sngService, $userSession);

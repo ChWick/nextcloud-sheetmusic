@@ -373,4 +373,144 @@ class InternalEntityMapper {
 
 		return $links;
 	}
+
+	public static function normalizeType(string $type): string {
+		$t = strtolower(trim($type));
+		return match ($t) {
+			'composers' => 'composer',
+			'books' => 'book',
+			'collections' => 'collection',
+			'artists' => 'artist',
+			'genres' => 'genre',
+			'keys' => 'key',
+			'customgroups' => 'customgroup',
+			'years' => 'year',
+			'signatures' => 'signature',
+			'sourcetypes' => 'sourcetype',
+			'instruments' => 'instrument',
+			default => $t,
+		};
+	}
+
+	/**
+	 * Find active entity records with the same label (case-insensitive, trimmed) within the library.
+	 *
+	 * @return list<array{entityType: string, name: string, keepId: int, duplicateIds: list<int>}>
+	 */
+	public function findDuplicateEntities(int $libraryId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('id', 'type', 'name')
+			->from(self::TABLE_NAME)
+			->where($qb->expr()->eq('library_id', $qb->createNamedParameter($libraryId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->isNull('deleted_at'))
+			->orderBy('id', 'ASC');
+
+		$result = $qb->executeQuery();
+		$grouped = [];
+		while ($row = $result->fetchAssociative()) {
+			$type = self::normalizeType((string)$row['type']);
+			$cleanName = trim((string)$row['name']);
+			if ($cleanName === '') {
+				continue;
+			}
+			$key = mb_strtolower($cleanName);
+			$grouped[$type][$key][] = [
+				'id' => (int)$row['id'],
+				'name' => (string)$row['name'],
+			];
+		}
+		$result->closeCursor();
+
+		$duplicates = [];
+		foreach ($grouped as $type => $byName) {
+			foreach ($byName as $entries) {
+				if (count($entries) > 1) {
+					$keepId = $entries[0]['id'];
+					$duplicateIds = array_map(fn ($e) => $e['id'], array_slice($entries, 1));
+					$duplicates[] = [
+						'entityType' => $type,
+						'name' => $entries[0]['name'],
+						'keepId' => $keepId,
+						'duplicateIds' => $duplicateIds,
+					];
+				}
+			}
+		}
+
+		return $duplicates;
+	}
+
+	/**
+	 * Find repeated links from songs to the same entity.
+	 *
+	 * @return list<array{songId: int, entityType: string, entityId: int, count: int}>
+	 */
+	public function findDuplicateSongEntityAssignments(int $libraryId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('se.song_id', 'se.entity_id', 'e.type')
+			->selectAlias($qb->createFunction('COUNT(*)'), 'cnt')
+			->from(self::JUNCTION_TABLE_NAME, 'se')
+			->innerJoin('se', self::TABLE_NAME, 'e', $qb->expr()->eq('se.entity_id', 'e.id'))
+			->where($qb->expr()->eq('e.library_id', $qb->createNamedParameter($libraryId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->isNull('se.deleted_at'))
+			->andWhere($qb->expr()->isNull('e.deleted_at'))
+			->groupBy('se.song_id', 'se.entity_id', 'e.type')
+			->having($qb->expr()->gt($qb->createFunction('COUNT(*)'), $qb->createNamedParameter(1, IQueryBuilder::PARAM_INT)));
+
+		$result = $qb->executeQuery();
+		$duplicates = [];
+		while ($row = $result->fetchAssociative()) {
+			$duplicates[] = [
+				'songId' => (int)$row['song_id'],
+				'entityType' => self::normalizeType((string)$row['type']),
+				'entityId' => (int)$row['entity_id'],
+				'count' => (int)$row['cnt'],
+			];
+		}
+		$result->closeCursor();
+
+		return $duplicates;
+	}
+
+	/**
+	 * Remove repeated song-to-entity links while preserving one row per pair.
+	 *
+	 * @return int number of removed relation rows
+	 */
+	public function removeDuplicateSongEntityAssignments(int $libraryId, ?int $songId = null): int {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('se.song_id', 'se.entity_id', $qb->expr()->min('se.id', 'min_id'))
+			->addSelect($qb->expr()->count('se.id', 'cnt'))
+			->from(self::JUNCTION_TABLE_NAME, 'se')
+			->innerJoin('se', self::TABLE_NAME, 'e', $qb->expr()->eq('se.entity_id', 'e.id'))
+			->where($qb->expr()->eq('e.library_id', $qb->createNamedParameter($libraryId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->isNull('se.deleted_at'))
+			->andWhere($qb->expr()->isNull('e.deleted_at'));
+
+		if ($songId !== null) {
+			$qb->andWhere($qb->expr()->eq('se.song_id', $qb->createNamedParameter($songId, IQueryBuilder::PARAM_INT)));
+		}
+
+		$qb->groupBy('se.song_id', 'se.entity_id')
+			->having($qb->expr()->gt('cnt', $qb->createNamedParameter(1, IQueryBuilder::PARAM_INT)));
+
+		$duplicates = $qb->executeQuery()->fetchAllAssociative();
+		$removed = 0;
+
+		foreach ($duplicates as $dup) {
+			$sId = (int)$dup['song_id'];
+			$eId = (int)$dup['entity_id'];
+			$minId = (int)$dup['min_id'];
+
+			$qbDel = $this->db->getQueryBuilder();
+			$qbDel->delete(self::JUNCTION_TABLE_NAME)
+				->where($qbDel->expr()->eq('song_id', $qbDel->createNamedParameter($sId, IQueryBuilder::PARAM_INT)))
+				->andWhere($qbDel->expr()->eq('entity_id', $qbDel->createNamedParameter($eId, IQueryBuilder::PARAM_INT)))
+				->andWhere($qbDel->expr()->neq('id', $qbDel->createNamedParameter($minId, IQueryBuilder::PARAM_INT)));
+
+			$removed += $qbDel->executeStatement();
+		}
+
+		return $removed;
+	}
 }

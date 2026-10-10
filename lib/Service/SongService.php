@@ -4,8 +4,14 @@ declare(strict_types=1);
 
 namespace OCA\SheetMusic\Service;
 
+use OCA\SheetMusic\Db\InternalEntityMapper;
+use OCA\SheetMusic\Db\InternalSong;
+use OCA\SheetMusic\Db\InternalSongFileMapper;
+use OCA\SheetMusic\Db\InternalSongMapper;
+use OCA\SheetMusic\Db\LibraryMapper;
 use OCA\SheetMusic\Db\MobileSheetsFile;
 use OCA\SheetMusic\Db\SongMapper;
+use OCP\Files\IRootFolder;
 use OCP\IUser;
 use Psr\Log\LoggerInterface;
 
@@ -17,10 +23,29 @@ class SongService {
 		private FileManager $fileManager,
 		private LoggerInterface $logger,
 		private ?LibraryIntegrityService $libraryIntegrityService = null,
+		private ?InternalSongMapper $internalSongMapper = null,
+		private ?InternalEntityMapper $internalEntityMapper = null,
+		private ?InternalSongFileMapper $internalSongFileMapper = null,
+		private ?LibraryMapper $libraryMapper = null,
+		private ?IRootFolder $rootFolder = null,
 	) {
 	}
 
 	public function getSongs(IUser $user, int $libraryId): ?array {
+		if ($this->internalSongMapper !== null) {
+			try {
+				return $this->internalSongMapper->findLibraryData($libraryId, $user);
+			} catch (\Throwable $e) {
+				$this->logger->error('Could not load songs from SheetMusic library', [
+					'exception' => $e,
+					'libraryId' => $libraryId,
+					'userId' => $user->getUID(),
+				]);
+
+				throw $e;
+			}
+		}
+
 		$databasePath = $this->libraryService->getDatabasePath($user->getUID(), $libraryId);
 		if ($databasePath === null) {
 			return null;
@@ -70,6 +95,53 @@ class SongService {
 		$title = trim($title);
 		if ($title === '') {
 			return null;
+		}
+
+		if ($this->internalSongMapper !== null) {
+			try {
+				$song = new InternalSong(
+					id: null,
+					uuid: InternalEntity::generateUuid(),
+					libraryId: $libraryId,
+					title: $title,
+					sortTitle: $sortTitle !== '' ? $sortTitle : null,
+					rating: $stars,
+					difficulty: $difficulty,
+					duration: $duration,
+					keywords: $keywords !== '' ? $keywords : null,
+					notes: $custom !== '' ? $custom : null,
+					opus: $opus !== '' ? $opus : null,
+					catalogNumber: $catalogNumber !== '' ? $catalogNumber : null,
+					songNumber: $songNumber !== '' ? $songNumber : null,
+				);
+				$createdSong = $this->internalSongMapper->insert($song);
+				$songId = (int)$createdSong->id;
+
+				if ($this->internalEntityMapper !== null) {
+					$this->internalEntityMapper->setSongEntitiesForType($songId, 'composer', array_map('intval', $composerIds));
+					$this->internalEntityMapper->setSongEntitiesForType($songId, 'book', array_map('intval', $bookIds));
+					$this->internalEntityMapper->setSongEntitiesForType($songId, 'collection', array_map('intval', $collectionIds));
+					$this->internalEntityMapper->setSongEntitiesForType($songId, 'artist', array_map('intval', $artistIds));
+					$this->internalEntityMapper->setSongEntitiesForType($songId, 'genre', array_map('intval', $genreIds));
+					$this->internalEntityMapper->setSongEntitiesForType($songId, 'key', array_map('intval', $keyIds));
+					$this->internalEntityMapper->setSongEntitiesForType($songId, 'customgroup', array_map('intval', $customGroupIds));
+					$this->internalEntityMapper->setSongEntitiesForType($songId, 'year', array_map('intval', $yearIds));
+					$this->internalEntityMapper->setSongEntitiesForType($songId, 'signature', array_map('intval', $signatureIds));
+					$this->internalEntityMapper->setSongEntitiesForType($songId, 'sourcetype', array_map('intval', $sourceTypeIds));
+					$this->internalEntityMapper->setSongEntitiesForType($songId, 'instrument', array_map('intval', $instrumentIds));
+				}
+
+				$this->libraryMapper?->touch($libraryId);
+
+				return ['createdSongId' => $songId] + $this->internalSongMapper->findLibraryData($libraryId, $user);
+			} catch (\Throwable $e) {
+				$this->logger->error('Could not create song in SheetMusic library', [
+					'exception' => $e,
+					'libraryId' => $libraryId,
+					'title' => $title,
+				]);
+				throw $e;
+			}
 		}
 
 		$databasePath = $this->libraryService->getDatabasePath($user->getUID(), $libraryId);
@@ -158,6 +230,50 @@ class SongService {
 			return null;
 		}
 
+		if ($this->internalSongMapper !== null) {
+			try {
+				$song = $this->internalSongMapper->findById($songId);
+				if ($song !== null) {
+					$song->title = $title;
+					$song->sortTitle = $sortTitle !== '' ? $sortTitle : null;
+					$song->rating = $stars;
+					$song->difficulty = $difficulty;
+					$song->duration = $duration;
+					$song->keywords = $keywords !== '' ? $keywords : null;
+					$song->notes = $custom !== '' ? $custom : null;
+					$song->opus = $opus !== '' ? $opus : null;
+					$song->catalogNumber = $catalogNumber !== '' ? $catalogNumber : null;
+					$song->songNumber = $songNumber !== '' ? $songNumber : null;
+					$this->internalSongMapper->update($song);
+
+					if ($this->internalEntityMapper !== null) {
+						$this->internalEntityMapper->setSongEntitiesForType($songId, 'composer', array_map('intval', $composerIds));
+						$this->internalEntityMapper->setSongEntitiesForType($songId, 'book', array_map('intval', $bookIds));
+						$this->internalEntityMapper->setSongEntitiesForType($songId, 'collection', array_map('intval', $collectionIds));
+						$this->internalEntityMapper->setSongEntitiesForType($songId, 'artist', array_map('intval', $artistIds));
+						$this->internalEntityMapper->setSongEntitiesForType($songId, 'genre', array_map('intval', $genreIds));
+						$this->internalEntityMapper->setSongEntitiesForType($songId, 'key', array_map('intval', $keyIds));
+						$this->internalEntityMapper->setSongEntitiesForType($songId, 'customgroup', array_map('intval', $customGroupIds));
+						$this->internalEntityMapper->setSongEntitiesForType($songId, 'year', array_map('intval', $yearIds));
+						$this->internalEntityMapper->setSongEntitiesForType($songId, 'signature', array_map('intval', $signatureIds));
+						$this->internalEntityMapper->setSongEntitiesForType($songId, 'sourcetype', array_map('intval', $sourceTypeIds));
+						$this->internalEntityMapper->setSongEntitiesForType($songId, 'instrument', array_map('intval', $instrumentIds));
+					}
+
+					$this->libraryMapper?->touch($libraryId);
+
+					return $this->internalSongMapper->findLibraryData($libraryId, $user);
+				}
+			} catch (\Throwable $e) {
+				$this->logger->error('Could not update song in SheetMusic library', [
+					'exception' => $e,
+					'libraryId' => $libraryId,
+					'songId' => $songId,
+				]);
+				throw $e;
+			}
+		}
+
 		$databasePath = $this->libraryService->getDatabasePath($user->getUID(), $libraryId);
 		if ($databasePath === null) {
 			return null;
@@ -229,6 +345,57 @@ class SongService {
 			return null;
 		}
 
+		if ($this->internalSongMapper !== null && $this->internalEntityMapper !== null) {
+			try {
+				foreach ($songIds as $songId) {
+					$sid = (int)$songId;
+					if ($composers !== null) {
+						$this->internalEntityMapper->setSongEntitiesForType($sid, 'composer', array_map('intval', $composers));
+					}
+					if ($books !== null) {
+						$this->internalEntityMapper->setSongEntitiesForType($sid, 'book', array_map('intval', $books));
+					}
+					if ($collections !== null) {
+						$this->internalEntityMapper->setSongEntitiesForType($sid, 'collection', array_map('intval', $collections));
+					}
+					if ($artists !== null) {
+						$this->internalEntityMapper->setSongEntitiesForType($sid, 'artist', array_map('intval', $artists));
+					}
+					if ($genres !== null) {
+						$this->internalEntityMapper->setSongEntitiesForType($sid, 'genre', array_map('intval', $genres));
+					}
+					if ($keys !== null) {
+						$this->internalEntityMapper->setSongEntitiesForType($sid, 'key', array_map('intval', $keys));
+					}
+					if ($customGroups !== null) {
+						$this->internalEntityMapper->setSongEntitiesForType($sid, 'customgroup', array_map('intval', $customGroups));
+					}
+					if ($years !== null) {
+						$this->internalEntityMapper->setSongEntitiesForType($sid, 'year', array_map('intval', $years));
+					}
+					if ($signatures !== null) {
+						$this->internalEntityMapper->setSongEntitiesForType($sid, 'signature', array_map('intval', $signatures));
+					}
+					if ($sourceTypes !== null) {
+						$this->internalEntityMapper->setSongEntitiesForType($sid, 'sourcetype', array_map('intval', $sourceTypes));
+					}
+					if ($instruments !== null) {
+						$this->internalEntityMapper->setSongEntitiesForType($sid, 'instrument', array_map('intval', $instruments));
+					}
+				}
+				$this->libraryMapper?->touch($libraryId);
+
+				return $this->internalSongMapper->findLibraryData($libraryId, $user);
+			} catch (\Throwable $e) {
+				$this->logger->error('Could not batch update songs in SheetMusic library', [
+					'exception' => $e,
+					'libraryId' => $libraryId,
+					'songIds' => $songIds,
+				]);
+				throw $e;
+			}
+		}
+
 		$databasePath = $this->libraryService->getDatabasePath($user->getUID(), $libraryId);
 		if ($databasePath === null) {
 			return null;
@@ -270,6 +437,39 @@ class SongService {
 	}
 
 	public function deleteSong(IUser $user, int $songId, int $libraryId, bool $deleteFiles = true): ?array {
+		if ($this->internalSongMapper !== null) {
+			try {
+				if ($this->internalSongFileMapper !== null) {
+					$files = $this->internalSongFileMapper->findAllForSong($songId);
+					if ($deleteFiles && $this->rootFolder !== null) {
+						foreach ($files as $file) {
+							try {
+								$nodes = $this->rootFolder->getUserFolder($user->getUID())->getById($file->fileId);
+								if (!empty($nodes)) {
+									$nodes[0]->delete();
+								}
+							} catch (\Throwable) {
+							}
+						}
+					}
+					$this->internalSongFileMapper->deleteAllForSong($songId);
+				}
+
+				$this->internalSongMapper->delete($songId);
+				$this->libraryMapper?->touch($libraryId);
+
+				return $this->internalSongMapper->findLibraryData($libraryId, $user);
+			} catch (\Throwable $e) {
+				$this->logger->error('Could not delete song from SheetMusic library', [
+					'exception' => $e,
+					'libraryId' => $libraryId,
+					'songId' => $songId,
+				]);
+
+				throw $e;
+			}
+		}
+
 		$databasePath = $this->libraryService->getDatabasePath($user->getUID(), $libraryId);
 		if ($databasePath === null) {
 			return null;
@@ -351,6 +551,49 @@ class SongService {
 	 * } $merged
 	 */
 	public function mergeSong(IUser $user, int $libraryId, int $keepId, int $droppedId, array $merged): ?array {
+		if ($this->internalSongMapper !== null) {
+			try {
+				if (!empty($merged['title'])) {
+					$this->updateSong(
+						user: $user,
+						songId: $keepId,
+						libraryId: $libraryId,
+						title: $merged['title'],
+						composerIds: $merged['composerIds'] ?? [],
+						bookIds: $merged['bookIds'] ?? [],
+						collectionIds: $merged['collectionIds'] ?? [],
+						artistIds: $merged['artistIds'] ?? [],
+						genreIds: $merged['genreIds'] ?? [],
+						keyIds: $merged['keyIds'] ?? [],
+						customGroupIds: $merged['customGroupIds'] ?? [],
+						yearIds: $merged['yearIds'] ?? [],
+						signatureIds: $merged['signatureIds'] ?? [],
+						sourceTypeIds: $merged['sourceTypeIds'] ?? [],
+						stars: (int)($merged['stars'] ?? 0),
+						difficulty: (int)($merged['difficulty'] ?? 0),
+						duration: (int)($merged['duration'] ?? 0),
+						keywords: (string)($merged['keywords'] ?? ''),
+						custom: (string)($merged['custom'] ?? ''),
+						custom2: (string)($merged['custom2'] ?? ''),
+						sortTitle: (string)($merged['sortTitle'] ?? ''),
+					);
+				}
+				$this->internalSongMapper->mergeSongs($libraryId, $keepId, $droppedId);
+				$this->libraryMapper?->touch($libraryId);
+
+				return $this->internalSongMapper->findLibraryData($libraryId, $user);
+			} catch (\Throwable $e) {
+				$this->logger->error('Could not merge songs in SheetMusic library', [
+					'exception' => $e,
+					'libraryId' => $libraryId,
+					'keepId' => $keepId,
+					'droppedId' => $droppedId,
+				]);
+
+				throw $e;
+			}
+		}
+
 		$databasePath = $this->libraryService->getDatabasePath($user->getUID(), $libraryId);
 		if ($databasePath === null) {
 			return null;
@@ -436,9 +679,10 @@ class SongService {
 			}
 
 			// 3. Update Song A metadata
-			$this->songMapper->updateSong(
-				$databasePath,
+			$this->updateSong(
+				$user,
 				$songAId,
+				$libraryId,
 				(string)($songAData['title'] ?? ''),
 				array_map('intval', $songAData['composerIds'] ?? []),
 				array_map('intval', $songAData['bookIds'] ?? []),
@@ -457,12 +701,19 @@ class SongService {
 				(string)($songAData['custom'] ?? ''),
 				(string)($songAData['custom2'] ?? ''),
 				(string)($songAData['sortTitle'] ?? ''),
+				$songAData['bookmarks'] ?? [],
+				$songAData['audioFiles'] ?? [],
+				(string)($songAData['opus'] ?? ''),
+				(string)($songAData['catalogNumber'] ?? ''),
+				(string)($songAData['songNumber'] ?? ''),
+				array_map('intval', $songAData['instrumentIds'] ?? []),
 			);
 
 			// 4. Update Song B metadata
-			$this->songMapper->updateSong(
-				$databasePath,
+			$this->updateSong(
+				$user,
 				$songBId,
+				$libraryId,
 				(string)($songBData['title'] ?? ''),
 				array_map('intval', $songBData['composerIds'] ?? []),
 				array_map('intval', $songBData['bookIds'] ?? []),
@@ -481,22 +732,30 @@ class SongService {
 				(string)($songBData['custom'] ?? ''),
 				(string)($songBData['custom2'] ?? ''),
 				(string)($songBData['sortTitle'] ?? ''),
+				$songBData['bookmarks'] ?? [],
+				$songBData['audioFiles'] ?? [],
+				(string)($songBData['opus'] ?? ''),
+				(string)($songBData['catalogNumber'] ?? ''),
+				(string)($songBData['songNumber'] ?? ''),
+				array_map('intval', $songBData['instrumentIds'] ?? []),
 			);
 
 			// 5. Regenerate file paths according to naming rules (best effort for remaining files)
-			['targetFolder' => $targetFolder] = $this->fileManager->libraryContext($libraryId, $user);
-			$hashCodes = $this->songFileService->hashCodesFor($databasePath);
-			try {
-				$this->fileManager->regenerateSongFilePaths($songAId, $user, $targetFolder, $databasePath, $hashCodes);
-			} catch (\Throwable $e) {
-				// Ignore if song A now has 0 files or path cannot be regenerated
+			if ($databasePath !== null) {
+				['targetFolder' => $targetFolder] = $this->fileManager->libraryContext($libraryId, $user);
+				$hashCodes = $this->songFileService->hashCodesFor($databasePath);
+				try {
+					$this->fileManager->regenerateSongFilePaths($songAId, $user, $targetFolder, $databasePath, $hashCodes);
+				} catch (\Throwable $e) {
+					// Ignore if song A now has 0 files or path cannot be regenerated
+				}
+				try {
+					$this->fileManager->regenerateSongFilePaths($songBId, $user, $targetFolder, $databasePath, $hashCodes);
+				} catch (\Throwable $e) {
+					// Ignore if song B now has 0 files or path cannot be regenerated
+				}
+				$hashCodes?->save();
 			}
-			try {
-				$this->fileManager->regenerateSongFilePaths($songBId, $user, $targetFolder, $databasePath, $hashCodes);
-			} catch (\Throwable $e) {
-				// Ignore if song B now has 0 files or path cannot be regenerated
-			}
-			$hashCodes?->save();
 
 			// 6. Server-side audit check: Verify that no duplicate file path issues remain between song A & song B
 			if ($this->libraryIntegrityService !== null) {
@@ -524,7 +783,7 @@ class SongService {
 				}
 			}
 
-			return $this->songMapper->findLibraryData($databasePath);
+			return $this->getSongs($user, $libraryId);
 		} catch (\Throwable $e) {
 			$this->logger->error('Could not resolve both songs in MobileSheets library', [
 				'exception' => $e,

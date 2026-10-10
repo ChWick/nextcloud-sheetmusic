@@ -21,7 +21,6 @@ use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
 use OCP\Files\File;
 use OCP\Files\IRootFolder;
-use OCP\Files\Node;
 use OCP\IUser;
 use OCP\IUserManager;
 use PDO;

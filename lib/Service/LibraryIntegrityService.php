@@ -9,6 +9,10 @@ declare(strict_types=1);
 
 namespace OCA\SheetMusic\Service;
 
+use OCA\SheetMusic\Db\InternalEntityMapper;
+use OCA\SheetMusic\Db\InternalSongFileMapper;
+use OCA\SheetMusic\Db\InternalSongMapper;
+use OCA\SheetMusic\Db\LibraryMapper;
 use OCA\SheetMusic\Db\SongMapper;
 use OCP\Files\File;
 use OCP\Files\Folder;
@@ -24,6 +28,10 @@ class LibraryIntegrityService {
 		private IRootFolder $rootFolder,
 		private MobileSheetsPathResolver $pathResolver,
 		private LoggerInterface $logger,
+		private ?InternalEntityMapper $internalEntityMapper = null,
+		private ?InternalSongMapper $internalSongMapper = null,
+		private ?InternalSongFileMapper $internalSongFileMapper = null,
+		private ?LibraryMapper $libraryMapper = null,
 	) {
 	}
 
@@ -43,7 +51,9 @@ class LibraryIntegrityService {
 		$user = $userFolder->getOwner();
 		['databasePath' => $databasePath, 'targetFolder' => $targetFolder] = $this->fileManager->libraryContext($libraryId, $user);
 
-		$songs = $this->songMapper->findSongs($databasePath);
+		$songs = $this->internalSongMapper !== null
+			? $this->internalSongMapper->findLibraryData($libraryId, $user)['songs']
+			: $this->songMapper->findSongs($databasePath);
 		$targetFolderPath = (string)$targetFolder->getPath();
 
 		$issues = [];
@@ -55,18 +65,33 @@ class LibraryIntegrityService {
 
 		$descriptionByType = [
 			'composers' => 'composers',
+			'composer' => 'composers',
 			'books' => 'books',
+			'book' => 'books',
 			'collections' => 'collections',
+			'collection' => 'collections',
 			'artists' => 'artists',
+			'artist' => 'artists',
 			'genres' => 'genres',
+			'genre' => 'genres',
 			'keys' => 'keys',
+			'key' => 'keys',
 			'customgroups' => 'custom groups',
+			'customgroup' => 'custom groups',
 			'years' => 'years',
+			'year' => 'years',
 			'signatures' => 'time signatures',
+			'signature' => 'time signatures',
 			'sourcetypes' => 'source types',
+			'sourcetype' => 'source types',
+			'instruments' => 'instruments',
+			'instrument' => 'instruments',
 		];
 		$duplicateAssignmentsBySong = [];
-		foreach ($this->songMapper->findDuplicateEntityAssignments($databasePath) as $assignment) {
+		$assignmentsList = $this->internalEntityMapper !== null
+			? $this->internalEntityMapper->findDuplicateSongEntityAssignments($libraryId)
+			: $this->songMapper->findDuplicateEntityAssignments($databasePath);
+		foreach ($assignmentsList as $assignment) {
 			$duplicateAssignmentsBySong[$assignment['songId']][] = $assignment;
 		}
 		foreach ($duplicateAssignmentsBySong as $songId => $assignments) {
@@ -95,17 +120,32 @@ class LibraryIntegrityService {
 		}
 		$entityTypeLabels = [
 			'composers' => 'composer',
+			'composer' => 'composer',
 			'books' => 'book',
+			'book' => 'book',
 			'collections' => 'collection',
+			'collection' => 'collection',
 			'artists' => 'artist',
+			'artist' => 'artist',
 			'genres' => 'genre',
+			'genre' => 'genre',
 			'keys' => 'key',
+			'key' => 'key',
 			'customgroups' => 'custom group',
+			'customgroup' => 'custom group',
 			'years' => 'year',
+			'year' => 'year',
 			'signatures' => 'time signature',
+			'signature' => 'time signature',
 			'sourcetypes' => 'source type',
+			'sourcetype' => 'source type',
+			'instruments' => 'instrument',
+			'instrument' => 'instrument',
 		];
-		foreach ($this->songMapper->findDuplicateEntities($databasePath) as $duplicateEntity) {
+		$duplicatesList = $this->internalEntityMapper !== null
+			? $this->internalEntityMapper->findDuplicateEntities($libraryId)
+			: $this->songMapper->findDuplicateEntities($databasePath);
+		foreach ($duplicatesList as $duplicateEntity) {
 			$label = $entityTypeLabels[$duplicateEntity['entityType']] ?? $duplicateEntity['entityType'];
 			$issues[] = new IntegrityIssue(
 				type: IntegrityIssue::TYPE_DUPLICATE_ENTITY,
@@ -156,6 +196,7 @@ class LibraryIntegrityService {
 
 				// Calculate valid target paths (naming rules)
 				$validTargetPaths = [];
+				$hasNamingRule = true;
 				if ($autoPaths) {
 					try {
 						$validTargetPaths = createTargetPaths(
@@ -166,6 +207,7 @@ class LibraryIntegrityService {
 						);
 					} catch (NoNamingRuleException) {
 						// Song missing composer, artist, or collection - keeps existing name
+						$hasNamingRule = false;
 					}
 				}
 
@@ -207,8 +249,8 @@ class LibraryIntegrityService {
 					];
 
 					// Check naming rule compliance
-					$isCompliant = !$autoPaths;
-					if ($autoPaths) {
+					$isCompliant = !$autoPaths || !$hasNamingRule;
+					if ($autoPaths && $hasNamingRule) {
 						$normalizedRelative = strtolower(ltrim($relativeToTarget, '/'));
 						foreach ($validTargetPaths as $validPath) {
 							if ($normalizedRelative === strtolower(ltrim($validPath, '/'))) {
@@ -228,7 +270,7 @@ class LibraryIntegrityService {
 							fileId: $file->id,
 							path: $relativeToTarget,
 							suggestedPath: $validTargetPaths[0] ?? null,
-							fixable: true,
+							fixable: !empty($validTargetPaths),
 						);
 					}
 				} else {
@@ -409,6 +451,37 @@ class LibraryIntegrityService {
 		?int $entityId = null,
 	): array {
 		if ($issueType === IntegrityIssue::TYPE_DUPLICATE_ENTITY && $entityType !== null && $entityId !== null) {
+			if ($this->internalEntityMapper !== null) {
+				$normType = InternalEntityMapper::normalizeType($entityType);
+				foreach ($this->internalEntityMapper->findDuplicateEntities($libraryId) as $duplicateEntity) {
+					if ($duplicateEntity['entityType'] !== $normType || $duplicateEntity['keepId'] !== $entityId) {
+						continue;
+					}
+
+					$merged = $this->internalEntityMapper->mergeEntities(
+						$libraryId,
+						$normType,
+						$entityId,
+						$duplicateEntity['duplicateIds'],
+					);
+					$this->libraryMapper?->touch($libraryId);
+
+					return [
+						'success' => $merged > 0,
+						'fixedCount' => $merged > 0 ? 1 : 0,
+						'message' => $merged > 0
+							? sprintf('Merged %d duplicate entity record(s) into ID %d.', $merged, $entityId)
+							: 'No duplicate entity records remained to fix.',
+					];
+				}
+
+				return [
+					'success' => false,
+					'fixedCount' => 0,
+					'message' => 'The duplicate entity records were not found in the current library audit.',
+				];
+			}
+
 			$user = $this->rootFolder->getUserFolder($userId)->getOwner();
 			['databasePath' => $databasePath] = $this->fileManager->libraryContext($libraryId, $user);
 			foreach ($this->songMapper->findDuplicateEntities($databasePath) as $duplicateEntity) {
@@ -439,8 +512,6 @@ class LibraryIntegrityService {
 		}
 
 		if ($issueType === IntegrityIssue::TYPE_DUPLICATE_ENTITY_ASSIGNMENT && $songId !== null) {
-			$user = $this->rootFolder->getUserFolder($userId)->getOwner();
-			['databasePath' => $databasePath] = $this->fileManager->libraryContext($libraryId, $user);
 			$isCurrentIssue = false;
 			foreach ($this->checkIntegrity($libraryId, $userId) as $issue) {
 				if ($issue->type === IntegrityIssue::TYPE_DUPLICATE_ENTITY_ASSIGNMENT && $issue->songId === $songId) {
@@ -456,7 +527,15 @@ class LibraryIntegrityService {
 				];
 			}
 
-			$removed = $this->songMapper->removeDuplicateEntityAssignments($databasePath, $songId);
+			if ($this->internalEntityMapper !== null) {
+				$removed = $this->internalEntityMapper->removeDuplicateSongEntityAssignments($libraryId, $songId);
+				$this->libraryMapper?->touch($libraryId);
+			} else {
+				$user = $this->rootFolder->getUserFolder($userId)->getOwner();
+				['databasePath' => $databasePath] = $this->fileManager->libraryContext($libraryId, $user);
+				$removed = $this->songMapper->removeDuplicateEntityAssignments($databasePath, $songId);
+			}
+
 			return [
 				'success' => $removed > 0,
 				'fixedCount' => $removed > 0 ? 1 : 0,
@@ -512,7 +591,7 @@ class LibraryIntegrityService {
 		}
 
 		$hashCodes = MobileSheetsHashCodesFile::forDatabase($databasePath, $this->logger);
-		$this->fixPdfMetadataMismatch($issue, $databasePath, $user, $hashCodes);
+		$this->fixPdfMetadataMismatch($issue, $libraryId, $databasePath, $user, $hashCodes);
 		$hashCodes?->save();
 
 		return [
@@ -562,7 +641,12 @@ class LibraryIntegrityService {
 				}
 			} elseif ($issue->type === IntegrityIssue::TYPE_DUPLICATE_ENTITY_ASSIGNMENT && $issue->songId !== null) {
 				try {
-					$removed = $this->songMapper->removeDuplicateEntityAssignments($databasePath, $issue->songId);
+					if ($this->internalEntityMapper !== null) {
+						$removed = $this->internalEntityMapper->removeDuplicateSongEntityAssignments($libraryId, $issue->songId);
+						$this->libraryMapper?->touch($libraryId);
+					} else {
+						$removed = $this->songMapper->removeDuplicateEntityAssignments($databasePath, $issue->songId);
+					}
 					if ($removed > 0) {
 						$fixedCount++;
 					}
@@ -586,12 +670,23 @@ class LibraryIntegrityService {
 				}
 
 				try {
-					$merged = $this->songMapper->mergeDuplicateEntities(
-						$databasePath,
-						$details['entityType'],
-						$details['keepId'],
-						array_values(array_filter($details['duplicateIds'], 'is_int')),
-					);
+					if ($this->internalEntityMapper !== null) {
+						$normType = InternalEntityMapper::normalizeType($details['entityType']);
+						$merged = $this->internalEntityMapper->mergeEntities(
+							$libraryId,
+							$normType,
+							$details['keepId'],
+							array_values(array_filter($details['duplicateIds'], 'is_int')),
+						);
+						$this->libraryMapper?->touch($libraryId);
+					} else {
+						$merged = $this->songMapper->mergeDuplicateEntities(
+							$databasePath,
+							$details['entityType'],
+							$details['keepId'],
+							array_values(array_filter($details['duplicateIds'], 'is_int')),
+						);
+					}
 					if ($merged > 0) {
 						$fixedCount++;
 					}
@@ -605,7 +700,8 @@ class LibraryIntegrityService {
 				}
 			} elseif ($issue->type === IntegrityIssue::TYPE_PDF_METADATA_MISMATCH) {
 				try {
-					$this->fixPdfMetadataMismatch($issue, $databasePath, $user, $hashCodes);
+					$this->fixPdfMetadataMismatch($issue, $libraryId, $databasePath, $user, $hashCodes);
+					$this->libraryMapper?->touch($libraryId);
 					$fixedCount++;
 				} catch (\Throwable $e) {
 					$this->logger->warning('Cannot auto-fix PDF metadata during batch fix', [
@@ -621,12 +717,14 @@ class LibraryIntegrityService {
 					continue;
 				}
 				try {
-					$song = $this->songMapper->findSong($databasePath, $issue->songId);
+					$song = $this->internalSongMapper !== null
+						? array_values(array_filter($songs, static fn ($s) => $s->id === $issue->songId))[0] ?? null
+						: $this->songMapper->findSong($databasePath, $issue->songId);
 					if ($song === null) {
 						continue;
 					}
 
-					$allSongs = $this->songMapper->findSongs($databasePath);
+					$allSongs = $songs;
 					$duplicateSongIds = [];
 
 					if ($issue->type === IntegrityIssue::TYPE_DUPLICATE_FILE_PATH) {
@@ -656,7 +754,12 @@ class LibraryIntegrityService {
 
 						for ($i = 1; $i < count($duplicateSongIds); $i++) {
 							$droppedId = $duplicateSongIds[$i];
-							$this->songMapper->mergeSongs($databasePath, $targetSongId, $droppedId);
+							if ($this->internalSongMapper !== null) {
+								$this->internalSongMapper->mergeSongs($libraryId, $targetSongId, $droppedId);
+								$this->libraryMapper?->touch($libraryId);
+							} else {
+								$this->songMapper->mergeSongs($databasePath, $targetSongId, $droppedId);
+							}
 							$processedSongs[$droppedId] = true;
 						}
 						$processedSongs[$targetSongId] = true;
@@ -707,6 +810,7 @@ class LibraryIntegrityService {
 
 	private function fixPdfMetadataMismatch(
 		IntegrityIssue $issue,
+		int $libraryId,
 		string $databasePath,
 		\OCP\IUser $user,
 		?MobileSheetsHashCodesFile $hashCodes,
@@ -715,7 +819,18 @@ class LibraryIntegrityService {
 			throw new \RuntimeException('The PDF metadata issue does not identify a song and file.');
 		}
 
-		$song = $this->songMapper->findSong($databasePath, $issue->songId);
+		$song = null;
+		if ($this->internalSongMapper !== null) {
+			$data = $this->internalSongMapper->findLibraryData($libraryId, $user);
+			foreach ($data['songs'] as $s) {
+				if ($s->id === $issue->songId) {
+					$song = $s;
+					break;
+				}
+			}
+		} else {
+			$song = $this->songMapper->findSong($databasePath, $issue->songId);
+		}
 		if ($song === null) {
 			throw new \RuntimeException(sprintf('Song %d was not found while fixing PDF metadata.', $issue->songId));
 		}

@@ -110,4 +110,3 @@ final class InternalMiscMapperTest extends TestCase {
 		self::assertSame('Set 2', $data[1]['Name']);
 	}
 }
-

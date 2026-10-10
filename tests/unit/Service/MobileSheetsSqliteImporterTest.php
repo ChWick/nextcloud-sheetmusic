@@ -71,11 +71,11 @@ final class MobileSheetsSqliteImporterTest extends TestCase {
 		// Insert composer
 		$db->exec("INSERT INTO Composer (Id, Name, DateCreated, LastModified) VALUES (60, 'Claude Debussy', 1000000, 1700000000000)");
 		// Insert link
-		$db->exec("INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (60, 50)");
+		$db->exec('INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (60, 50)');
 		// Insert file
 		$db->exec("INSERT INTO Files (Id, SongId, Path, PageOrder, FileSize, LastModified, Source, Type, SourceFilePageCount, FileHash) VALUES (70, 50, '/remote.php/dav/files/admin/Noten/Debussy.pdf', '1-3', 204800, 1700000000000, 1, 1, 3, 555666)");
 		// Insert misc table Bookmarks
-		$db->exec("CREATE TABLE Bookmarks (Id INTEGER PRIMARY KEY, SongId INTEGER, Name VARCHAR(255), PageNum INTEGER)");
+		$db->exec('CREATE TABLE Bookmarks (Id INTEGER PRIMARY KEY, SongId INTEGER, Name VARCHAR(255), PageNum INTEGER)');
 		$db->exec("INSERT INTO Bookmarks (Id, SongId, Name, PageNum) VALUES (1, 50, 'Climactic Theme', 2)");
 
 		$songMapper = $this->createMock(InternalSongMapper::class);
@@ -516,4 +516,3 @@ final class MobileSheetsSqliteImporterTest extends TestCase {
 		self::assertSame([101], $setLinks['customgroup'] ?? []);
 	}
 }
-

@@ -442,4 +442,3 @@ class Version1002Date20261009120000 extends SimpleMigrationStep {
 		}
 	}
 }
-

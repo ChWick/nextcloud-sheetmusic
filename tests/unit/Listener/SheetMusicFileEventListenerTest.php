@@ -150,4 +150,3 @@ final class SheetMusicFileEventListenerTest extends TestCase {
 		$this->listener->handle($event);
 	}
 }
-

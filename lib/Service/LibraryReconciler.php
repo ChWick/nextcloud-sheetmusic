@@ -19,7 +19,6 @@ use OCA\SheetMusic\Db\SongFileMapper;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
-use OCP\Files\Node;
 use OCP\IUserManager;
 use Psr\Log\LoggerInterface;
 
@@ -233,4 +232,3 @@ class LibraryReconciler {
 		return InternalLibrary::fromRow($library);
 	}
 }
-

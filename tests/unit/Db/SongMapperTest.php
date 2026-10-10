@@ -1082,7 +1082,7 @@ final class SongMapperTest extends TestCase {
 		// Add another instrument with legacy entity_type = 'instrument'
 		$database->exec("INSERT INTO CustomGroup (Id, Name) VALUES (95, 'Harpsichord')");
 		$database->exec("INSERT INTO _nc_sync_metadata (entity_type, uuid, client_id, updated_at) VALUES ('instrument', 'uuid-harpsichord', 95, 12345)");
-		$database->exec("INSERT INTO CustomGroupSongs (GroupId, SongId) VALUES (95, 1)");
+		$database->exec('INSERT INTO CustomGroupSongs (GroupId, SongId) VALUES (95, 1)');
 
 		$data = $mapper->findLibraryData($this->databasePath);
 
