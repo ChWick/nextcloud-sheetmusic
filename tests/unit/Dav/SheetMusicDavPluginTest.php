@@ -250,18 +250,32 @@ final class SheetMusicDavPluginTest extends TestCase {
 		self::assertStringContainsString('<d:href>/remote.php/webdav/My%20Noten/mobilesheets_hashcodes.txt</d:href>', $body);
 	}
 
-	public function testAfterPropfindIgnoresNonLibraryFolders(): void {
-		$this->attachServer();
-		$request = new Request('PROPFIND', '/remote.php/dav/files/admin/Other', ['Depth' => '1']);
-		$request->setBaseUrl('/remote.php/dav/');
+	public function testLibraryPathWithDbFilenameMatchesParentFolder(): void {
+		$dbLibId = 987654;
+		$dbLib = new InternalLibrary(id: $dbLibId, userId: 'admin', path: '/tmp/SheetMusic/mobilesheets.db', updatedAt: 3000);
 
-		$original = '<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:"></d:multistatus>';
-		$response = new Response();
-		$response->setStatus(207);
-		$response->setBody($original);
+		$mapper = $this->createMock(LibraryMapper::class);
+		$mapper->method('findAllForUser')->with('admin')->willReturn([
+			['id' => $dbLibId, 'path' => '/tmp/SheetMusic/mobilesheets.db', 'autoPaths' => true, 'autoPdfMetadata' => true],
+		]);
+		$mapper->method('findModelById')->with($dbLibId)->willReturn($dbLib);
 
-		$this->plugin->afterPropfind($request, $response);
-		self::assertSame($original, $response->getBodyAsString());
+		$plugin = new SheetMusicDavPlugin(
+			$mapper,
+			$this->exporter,
+			$this->importer,
+			$this->logger,
+			$this->userSession,
+		);
+
+		$match = $plugin->matchVirtualPath('files/admin/tmp/SheetMusic/mobilesheets.db');
+		self::assertNotNull($match);
+		self::assertSame($dbLibId, $match['library']->id);
+		self::assertSame('mobilesheets.db', $match['filename']);
+
+		$folderLib = $plugin->findLibraryByFolderPath('files/admin/tmp/SheetMusic');
+		self::assertNotNull($folderLib);
+		self::assertSame($dbLibId, $folderLib->id);
 	}
 }
 

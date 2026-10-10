@@ -200,7 +200,7 @@ class LibraryService {
 			// Run initial folder reconciliation to register music files
 			if ($this->reconciler !== null) {
 				try {
-					$this->reconciler->reconcileLibrary($libraryId, $userId);
+					$this->reconciler->reconcile($libraryId);
 				} catch (\Throwable $e) {
 					$this->logger->warning('Initial library reconciliation failed', [
 						'exception' => $e,

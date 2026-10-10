@@ -536,7 +536,18 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		[$userId, $folderPath] = $resolved;
 
 		foreach ($this->libraryMapper->findAllForUser($userId) as $libData) {
-			if (trim($libData['path'], '/') === $folderPath) {
+			$libPath = trim($libData['path'], '/');
+			// Libraries may be registered with the path to the database file itself
+			// (e.g. "/tmp/SheetMusic/mobilesheets.db"). The enclosing folder is what
+			// MobileSheets queries over WebDAV.
+			if (str_ends_with(strtolower($libPath), '.db')) {
+				$libFolder = dirname($libPath);
+				$cleanLibFolder = $libFolder === '.' ? '' : $libFolder;
+			} else {
+				$cleanLibFolder = $libPath;
+			}
+
+			if ($cleanLibFolder === $folderPath) {
 				return $this->libraryMapper->findModelById($libData['id']);
 			}
 		}
