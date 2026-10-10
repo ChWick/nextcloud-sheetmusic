@@ -7,6 +7,7 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import { showError, showSuccess } from '@nextcloud/dialogs'
+import TrashCanOutline from 'vue-material-design-icons/TrashCanOutline.vue'
 import { describeRequestFailure } from '../utils/api'
 import type { Library } from '../types/library'
 
@@ -17,6 +18,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
 	close: []
+	delete: []
 	'update:libraries': [libraries: Library[]]
 }>()
 
@@ -62,6 +64,11 @@ async function updateSetting(settings: { autoPaths?: boolean, autoPdfMetadata?: 
 		isSaving.value = false
 	}
 }
+
+function handleDelete() {
+	emit('close')
+	emit('delete')
+}
 </script>
 
 <template>
@@ -106,6 +113,28 @@ async function updateSetting(settings: { autoPaths?: boolean, autoPdfMetadata?: 
 				{{ t('sheetmusic', 'When enabled, song metadata is automatically written to attached PDF files when saving songs. When disabled, PDF files are left unmodified.') }}
 			</p>
 
+			<h4 :class="[$style.sectionTitle, $style.dangerSectionMargin]">
+				{{ t('sheetmusic', 'Danger Zone') }}
+			</h4>
+
+			<div :class="$style.dangerBox">
+				<div :class="$style.dangerInfo">
+					<strong>{{ t('sheetmusic', 'Delete library') }}</strong>
+					<p :class="$style.dangerDescription">
+						{{ t('sheetmusic', 'Remove this library from Sheet Music. Files and databases in Nextcloud will not be deleted.') }}
+					</p>
+				</div>
+				<NcButton
+					type="button"
+					variant="error"
+					@click="handleDelete">
+					<template #icon>
+						<TrashCanOutline :size="20" />
+					</template>
+					{{ t('sheetmusic', 'Delete library') }}
+				</NcButton>
+			</div>
+
 			<p v-if="saveError" :class="$style.error" role="alert">
 				{{ saveError }}
 			</p>
@@ -132,6 +161,33 @@ async function updateSetting(settings: { autoPaths?: boolean, autoPdfMetadata?: 
 
 .sectionMargin {
 	margin-top: 20px;
+}
+
+.dangerSectionMargin {
+	margin-top: 28px;
+	color: var(--color-error);
+}
+
+.dangerBox {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	padding: 12px 16px;
+	border: 1px solid var(--color-error);
+	border-radius: var(--border-radius-large, 8px);
+	background-color: var(--color-background-hover);
+}
+
+.dangerInfo {
+	flex: 1;
+}
+
+.dangerDescription {
+	margin: 4px 0 0 0;
+	color: var(--color-text-maxcontrast);
+	font-size: 0.85rem;
+	line-height: 1.3;
 }
 
 .settingRow {

@@ -16,8 +16,11 @@ import NcAppNavigationItem from '@nextcloud/vue/components/NcAppNavigationItem'
 import NcContent from '@nextcloud/vue/components/NcContent'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
+import NcActions from '@nextcloud/vue/components/NcActions'
+import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import CogIcon from 'vue-material-design-icons/Cog.vue'
 import Plus from 'vue-material-design-icons/Plus.vue'
+import FolderPlusOutline from 'vue-material-design-icons/FolderPlusOutline.vue'
 import DatabaseImport from 'vue-material-design-icons/DatabaseImport.vue'
 import SongsView from './components/SongsView.vue'
 import IntegrityView from './components/IntegrityView.vue'
@@ -304,22 +307,31 @@ async function deleteLibrary() {
           <NcAppNavigationItem :name="t('sheetmusic', 'Instruments')" :active="selectedView === 'instruments'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'instruments' } }" />
           <NcAppNavigationItem :name="t('sheetmusic', 'Integrity Audit')" :active="selectedView === 'integrity'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'integrity' } }" />
 
-          <div :class="$style.deleteLibraryArea">
-            <NcButton type="button"
-                      variant="error"
-                      :class="$style.deleteLibraryButton"
-                      @click="openDeleteDialog">
-              {{ t('sheetmusic', 'Delete library') }}
-            </NcButton>
-          </div>
         </template>
 
         <template #footer>
           <div :class="$style.footerArea">
             <div :class="$style.footerRow">
-              <NcAppNavigationItem :name="t('sheetmusic', 'Add Library')" :class="$style.footerActionItem" @click="openAddDialog">
-                <template #icon><Plus :size="20" /></template>
-              </NcAppNavigationItem>
+              <NcActions
+                :class="$style.footerActionMenu"
+                :menu-name="t('sheetmusic', 'Add library')"
+                placement="top-start">
+                <template #icon>
+                  <Plus :size="20" />
+                </template>
+                <NcActionButton @click="openAddDialog">
+                  <template #icon>
+                    <FolderPlusOutline :size="20" />
+                  </template>
+                  {{ t('sheetmusic', 'Add Sheet Music library') }}
+                </NcActionButton>
+                <NcActionButton @click="openImportDialog">
+                  <template #icon>
+                    <DatabaseImport :size="20" />
+                  </template>
+                  {{ t('sheetmusic', 'Import MobileSheets library') }}
+                </NcActionButton>
+              </NcActions>
               <NcButton v-if="selectedLibrary >= 0"
                         type="button"
                         variant="tertiary"
@@ -332,9 +344,6 @@ async function deleteLibrary() {
                 </template>
               </NcButton>
             </div>
-            <NcAppNavigationItem :name="t('sheetmusic', 'Import MobileSheets')" :class="$style.footerActionItem" @click="openImportDialog">
-              <template #icon><DatabaseImport :size="20" /></template>
-            </NcAppNavigationItem>
           </div>
         </template>
       </NcAppNavigation>
@@ -410,6 +419,7 @@ async function deleteLibrary() {
       :selected-library="selectedLibrary"
       :libraries="libraries"
       @close="isSettingsDialogOpen = false"
+      @delete="openDeleteDialog"
       @update:libraries="libraries = $event" />
   </div>
 </template>
@@ -425,9 +435,15 @@ async function deleteLibrary() {
   align-items: center;
   width: 100%;
 }
-.footerActionItem {
+.footerActionMenu {
   flex: 1;
   min-width: 0;
+}
+.footerActionMenu :global(.action-item__menutoggle) {
+  width: 100%;
+  justify-content: flex-start;
+  padding: 10px 16px;
+  box-sizing: border-box;
 }
 .settingsButton {
   margin-inline-end: 8px;
@@ -446,9 +462,6 @@ async function deleteLibrary() {
 .songButton[aria-pressed='true'] { background: var(--color-background-hover); }
 @media (max-width: 800px) { .songArea { grid-template-columns: 1fr; } }
 .dialogActions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; }
-.deleteLibraryArea { padding: 8px 12px; }
-.deleteLibraryButton { width: 100%; justify-content: center; background-color: var(--color-error, #e9322d) !important; color: var(--color-primary-text, #ffffff) !important; border-color: transparent !important; }
-.deleteLibraryButton:hover { opacity: 0.9; }
 .error { color: var(--color-error); }
 .viewToggle { display: flex; gap: 8px; margin: 12px 0; }
 </style>
