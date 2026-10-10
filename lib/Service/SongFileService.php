@@ -165,7 +165,7 @@ class SongFileService {
 				$this->libraryMapper?->touch($libraryId);
 
 				$others = $this->internalSongFileMapper->findByFileId($targetFileId);
-				$activeOthers = array_filter($others, fn(InternalSongFile $f) => $f->id !== $fileId && $f->deletedAt === null);
+				$activeOthers = array_filter($others, fn (InternalSongFile $f) => $f->id !== $fileId && $f->deletedAt === null);
 
 				if (empty($activeOthers)) {
 					try {

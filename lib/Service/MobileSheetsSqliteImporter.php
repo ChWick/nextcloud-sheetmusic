@@ -399,12 +399,19 @@ class MobileSheetsSqliteImporter {
 				$existing = null;
 				if ($uuid !== null) {
 					$existing = $this->entityMapper->findByUuid($uuid);
+					if ($existing !== null && $existing->libraryId !== $libraryId) {
+						$existing = null;
+						$uuid = null;
+					}
 				}
 				if ($existing === null) {
 					$existing = $this->entityMapper->findByClientId($libraryId, $type, $clientId);
 				}
 				if ($existing === null) {
-					$existing = $this->entityMapper->findByName($libraryId, $type, $name);
+					$cand = $this->entityMapper->findByName($libraryId, $type, $name);
+					if ($cand !== null && ($cand->clientId === null || $cand->clientId === $clientId)) {
+						$existing = $cand;
+					}
 				}
 
 				if ($existing !== null) {
@@ -440,8 +447,11 @@ class MobileSheetsSqliteImporter {
 					}
 				} else {
 					// New entity
+					$entityUuid = ($uuid !== null && $this->entityMapper->findByUuid($uuid) === null)
+						? $uuid
+						: self::generateUuid();
 					$newEntity = new InternalEntity(
-						uuid: $uuid ?? self::generateUuid(),
+						uuid: $entityUuid,
 						libraryId: $libraryId,
 						type: $type,
 						name: $name,
@@ -535,12 +545,19 @@ class MobileSheetsSqliteImporter {
 			$existing = null;
 			if ($uuid !== null) {
 				$existing = $this->songMapper->findByUuid($uuid);
+				if ($existing !== null && $existing->libraryId !== $libraryId) {
+					$existing = null;
+					$uuid = null;
+				}
 			}
 			if ($existing === null) {
 				$existing = $this->songMapper->findByClientId($libraryId, $clientId);
 			}
 			if ($existing === null) {
-				$existing = $this->songMapper->findByTitle($libraryId, $title);
+				$cand = $this->songMapper->findByTitle($libraryId, $title);
+				if ($cand !== null && ($cand->clientId === null || $cand->clientId === $clientId)) {
+					$existing = $cand;
+				}
 			}
 
 			if ($existing !== null) {
@@ -624,8 +641,11 @@ class MobileSheetsSqliteImporter {
 				}
 			} else {
 				// New song created in MobileSheets
+				$songUuid = ($uuid !== null && $this->songMapper->findByUuid($uuid) === null)
+					? $uuid
+					: self::generateUuid();
 				$newSong = new InternalSong(
-					uuid: $uuid ?? self::generateUuid(),
+					uuid: $songUuid,
 					libraryId: $libraryId,
 					title: $title,
 					sortTitle: $sortTitle,
@@ -660,10 +680,6 @@ class MobileSheetsSqliteImporter {
 	 * @param array<int, bool> $updatedSongClientIds
 	 */
 	private function mergeSongEntityLinks(PDO $db, int $libraryId, array $updatedSongClientIds): void {
-		if ($updatedSongClientIds === []) {
-			return;
-		}
-
 		$songs = $this->songMapper->findByLibrary($libraryId, includeDeleted: false);
 		$songByClientId = [];
 		foreach ($songs as $s) {
@@ -702,7 +718,8 @@ class MobileSheetsSqliteImporter {
 				$linksBySongClientId[$sClientId][] = $eClientId;
 			}
 
-			foreach (array_keys($updatedSongClientIds) as $songClientId) {
+			$candidateSongClientIds = array_unique(array_merge(array_keys($updatedSongClientIds), array_keys($linksBySongClientId)));
+			foreach ($candidateSongClientIds as $songClientId) {
 				$song = $songByClientId[$songClientId] ?? null;
 				if ($song === null || $song->id === null) {
 					continue;
