@@ -4,8 +4,12 @@ declare(strict_types=1);
 
 namespace Service;
 
+use OCA\SheetMusic\Db\InternalEntity;
+use OCA\SheetMusic\Db\InternalEntityMapper;
+use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
 use OCA\SheetMusic\Service\EntityService;
+use OCA\SheetMusic\Service\LibraryService;
 use OCP\IUser;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
@@ -147,5 +151,134 @@ final class EntityServiceTest extends TestCase {
 		} finally {
 			unlink($databasePath);
 		}
+	}
+
+	public function testCreateEntityWithInternalMapper(): void {
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('admin');
+
+		$libraryService = $this->createMock(LibraryService::class);
+		$songMapper = $this->createSongMapper();
+		$logger = $this->createMock(LoggerInterface::class);
+		$internalEntityMapper = $this->createMock(InternalEntityMapper::class);
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+
+		$createdEntity = new InternalEntity(
+			id: 7,
+			uuid: 'entity-uuid-1',
+			libraryId: 1,
+			type: 'composer',
+			name: 'Chopin',
+		);
+
+		$internalEntityMapper->expects($this->once())
+			->method('insert')
+			->with($this->callback(function (InternalEntity $entity): bool {
+				return $entity->name === 'Chopin'
+					&& $entity->type === 'composer'
+					&& $entity->libraryId === 1
+					&& strlen($entity->uuid) === 36;
+			}))
+			->willReturn($createdEntity);
+
+		$libraryMapper->expects($this->once())
+			->method('touch')
+			->with(1);
+
+		$service = new EntityService(
+			$libraryService,
+			$songMapper,
+			$logger,
+			null,
+			$internalEntityMapper,
+			null,
+			$libraryMapper,
+		);
+
+		$result = $service->createEntity($user, 1, 'composer', 'Chopin');
+		self::assertSame([
+			'id' => 7,
+			'name' => 'Chopin',
+		], $result);
+	}
+
+	public function testDeleteEntityWithInternalMapper(): void {
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('admin');
+
+		$libraryService = $this->createMock(LibraryService::class);
+		$songMapper = $this->createSongMapper();
+		$logger = $this->createMock(LoggerInterface::class);
+		$internalEntityMapper = $this->createMock(InternalEntityMapper::class);
+		$internalSongMapper = $this->createMock(InternalSongMapper::class);
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+
+		$internalEntityMapper->expects($this->once())
+			->method('delete')
+			->with(7)
+			->willReturn(true);
+
+		$libraryMapper->expects($this->once())
+			->method('touch')
+			->with(1);
+
+		$internalSongMapper->expects($this->once())
+			->method('findLibraryData')
+			->with(1, $user)
+			->willReturn(['songs' => []]);
+
+		$service = new EntityService(
+			$libraryService,
+			$songMapper,
+			$logger,
+			null,
+			$internalEntityMapper,
+			$internalSongMapper,
+			$libraryMapper,
+		);
+
+		$result = $service->deleteEntity($user, 1, 'composers', 7);
+		self::assertSame(['songs' => []], $result);
+	}
+
+	public function testMergeEntitiesWithInternalMapper(): void {
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('admin');
+
+		$libraryService = $this->createMock(LibraryService::class);
+		$songMapper = $this->createSongMapper();
+		$logger = $this->createMock(LoggerInterface::class);
+		$internalEntityMapper = $this->createMock(InternalEntityMapper::class);
+		$internalSongMapper = $this->createMock(InternalSongMapper::class);
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+
+		$internalEntityMapper->expects($this->once())
+			->method('mergeEntities')
+			->with(1, 'composer', 50, [5])
+			->willReturn(1);
+
+		$libraryMapper->expects($this->once())
+			->method('touch')
+			->with(1);
+
+		$internalSongMapper->expects($this->once())
+			->method('findLibraryData')
+			->with(1, $user)
+			->willReturn(['songs' => []]);
+
+		$service = new EntityService(
+			$libraryService,
+			$songMapper,
+			$logger,
+			null,
+			$internalEntityMapper,
+			$internalSongMapper,
+			$libraryMapper,
+		);
+
+		$result = $service->mergeEntities($user, 1, 'composers', 50, [5]);
+		self::assertNotNull($result);
+		self::assertSame(1, $result['mergedCount']);
+		self::assertSame(['songs' => []], $result['libraryData']);
 	}
 }
