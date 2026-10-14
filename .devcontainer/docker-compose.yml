@@ -2,7 +2,7 @@ services:
   nextcloud:
     image: ghcr.io/nextcloud/nextcloud-dev-php85:master
     ports:
-      - "8080:80"
+      - "3480:80"
     volumes:
       - ..:/var/www/html/apps-extra/mobilesheetsmanager
       
