@@ -550,4 +550,158 @@ class InternalEntityMapper {
 
 		return $removed;
 	}
+
+	/**
+	 * Find junction records linking to missing or deleted songs/entities, or across libraries.
+	 *
+	 * @return list<array{id: int, songId: int, entityId: int, reason: string}>
+	 */
+	public function findOrphanSongEntityAssignments(int $libraryId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('se.id', 'se.song_id', 'se.entity_id', 's.id as valid_song_id', 'e.id as valid_entity_id', 's.library_id as song_lib', 'e.library_id as ent_lib')
+			->from(self::JUNCTION_TABLE_NAME, 'se')
+			->leftJoin('se', 'sheetmusic_songs', 's', $qb->expr()->andX(
+				$qb->expr()->eq('se.song_id', 's.id'),
+				$qb->expr()->isNull('s.deleted_at')
+			))
+			->leftJoin('se', self::TABLE_NAME, 'e', $qb->expr()->andX(
+				$qb->expr()->eq('se.entity_id', 'e.id'),
+				$qb->expr()->isNull('e.deleted_at')
+			))
+			->where($qb->expr()->isNull('se.deleted_at'))
+			->andWhere($qb->expr()->orX(
+				$qb->expr()->eq('s.library_id', $qb->createNamedParameter($libraryId, IQueryBuilder::PARAM_INT)),
+				$qb->expr()->eq('e.library_id', $qb->createNamedParameter($libraryId, IQueryBuilder::PARAM_INT))
+			))
+			->andWhere($qb->expr()->orX(
+				$qb->expr()->isNull('s.id'),
+				$qb->expr()->isNull('e.id'),
+				$qb->expr()->neq('s.library_id', 'e.library_id')
+			));
+
+		$result = $qb->executeQuery();
+		$orphans = [];
+		while ($row = $result->fetchAssociative()) {
+			$reason = 'Unknown orphan reference';
+			if ($row['valid_song_id'] === null && $row['valid_entity_id'] === null) {
+				$reason = 'Song and entity both deleted or missing';
+			} elseif ($row['valid_song_id'] === null) {
+				$reason = 'Referenced song is deleted or missing';
+			} elseif ($row['valid_entity_id'] === null) {
+				$reason = 'Referenced entity is deleted or missing';
+			} elseif ((int)$row['song_lib'] !== (int)$row['ent_lib']) {
+				$reason = 'Song and entity belong to different libraries';
+			}
+
+			$orphans[] = [
+				'id' => (int)$row['id'],
+				'songId' => (int)$row['song_id'],
+				'entityId' => (int)$row['entity_id'],
+				'reason' => $reason,
+			];
+		}
+		$result->closeCursor();
+
+		return $orphans;
+	}
+
+	/**
+	 * Remove junction records that point to non-existent/deleted songs or entities.
+	 *
+	 * @return int number of removed rows
+	 */
+	public function removeOrphanSongEntityAssignments(int $libraryId): int {
+		$orphans = $this->findOrphanSongEntityAssignments($libraryId);
+		if ($orphans === []) {
+			return 0;
+		}
+
+		$ids = array_column($orphans, 'id');
+		$qbDel = $this->db->getQueryBuilder();
+		$qbDel->delete(self::JUNCTION_TABLE_NAME)
+			->where($qbDel->expr()->in('id', $qbDel->createNamedParameter($ids, IQueryBuilder::PARAM_INT_ARRAY)));
+
+		return $qbDel->executeStatement();
+	}
+
+	/**
+	 * Find entities of the same type sharing the same client_id in the library.
+	 *
+	 * @return list<array{type: string, clientId: int, entityIds: list<int>, names: list<string>}>
+	 */
+	public function findDuplicateClientIds(int $libraryId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('id', 'type', 'client_id', 'name')
+			->from(self::TABLE_NAME)
+			->where($qb->expr()->eq('library_id', $qb->createNamedParameter($libraryId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->isNull('deleted_at'))
+			->andWhere($qb->expr()->isNotNull('client_id'))
+			->andWhere($qb->expr()->gt('client_id', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->orderBy('id', 'ASC');
+
+		$result = $qb->executeQuery();
+		$grouped = [];
+		while ($row = $result->fetchAssociative()) {
+			$normType = self::normalizeType((string)$row['type']);
+			$cId = (int)$row['client_id'];
+			$grouped[$normType][$cId][] = [
+				'id' => (int)$row['id'],
+				'name' => (string)$row['name'],
+			];
+		}
+		$result->closeCursor();
+
+		$conflicts = [];
+		foreach ($grouped as $type => $byClient) {
+			foreach ($byClient as $cId => $entries) {
+				if (count($entries) > 1) {
+					$conflicts[] = [
+						'type' => $type,
+						'clientId' => $cId,
+						'entityIds' => array_column($entries, 'id'),
+						'names' => array_column($entries, 'name'),
+					];
+				}
+			}
+		}
+
+		return $conflicts;
+	}
+
+	/**
+	 * Re-assign unique client_ids to entities that have conflicting duplicates.
+	 *
+	 * @return int number of reassigned entities
+	 */
+	public function fixDuplicateClientIds(int $libraryId): int {
+		$conflicts = $this->findDuplicateClientIds($libraryId);
+		if ($conflicts === []) {
+			return 0;
+		}
+
+		$qbMax = $this->db->getQueryBuilder();
+		$qbMax->select($qbMax->createFunction('MAX(' . $qbMax->getColumnName('client_id') . ')'))
+			->from(self::TABLE_NAME)
+			->where($qbMax->expr()->eq('library_id', $qbMax->createNamedParameter($libraryId, IQueryBuilder::PARAM_INT)));
+		$maxId = (int)$qbMax->executeQuery()->fetchOne();
+		if ($maxId < 1) {
+			$maxId = 1;
+		}
+
+		$reassigned = 0;
+		foreach ($conflicts as $conflict) {
+			$duplicates = array_slice($conflict['entityIds'], 1);
+			foreach ($duplicates as $entId) {
+				$maxId++;
+				$qbUp = $this->db->getQueryBuilder();
+				$qbUp->update(self::TABLE_NAME)
+					->set('client_id', $qbUp->createNamedParameter($maxId, IQueryBuilder::PARAM_INT))
+					->set('updated_at', $qbUp->createNamedParameter(time(), IQueryBuilder::PARAM_INT))
+					->where($qbUp->expr()->eq('id', $qbUp->createNamedParameter($entId, IQueryBuilder::PARAM_INT)));
+				$reassigned += $qbUp->executeStatement();
+			}
+		}
+
+		return $reassigned;
+	}
 }
