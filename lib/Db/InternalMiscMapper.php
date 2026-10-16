@@ -220,6 +220,30 @@ class InternalMiscMapper {
 		return $qb->executeStatement() > 0;
 	}
 
+	public function deleteMiscDataForSong(int $libraryId, string $clientType, ?string $songUuid, bool $hardDelete = false): int {
+		if ($songUuid === null) {
+			return 0;
+		}
+
+		$qb = $this->db->getQueryBuilder();
+		if ($hardDelete) {
+			$qb->delete(self::DATA_TABLE_NAME)
+				->where($qb->expr()->eq('library_id', $qb->createNamedParameter($libraryId, IQueryBuilder::PARAM_INT)))
+				->andWhere($qb->expr()->eq('client_type', $qb->createNamedParameter($clientType, IQueryBuilder::PARAM_STR)))
+				->andWhere($qb->expr()->eq('song_uuid', $qb->createNamedParameter($songUuid, IQueryBuilder::PARAM_STR)));
+		} else {
+			$now = time();
+			$qb->update(self::DATA_TABLE_NAME)
+				->set('deleted_at', $qb->createNamedParameter($now, IQueryBuilder::PARAM_INT))
+				->set('updated_at', $qb->createNamedParameter($now, IQueryBuilder::PARAM_INT))
+				->where($qb->expr()->eq('library_id', $qb->createNamedParameter($libraryId, IQueryBuilder::PARAM_INT)))
+				->andWhere($qb->expr()->eq('client_type', $qb->createNamedParameter($clientType, IQueryBuilder::PARAM_STR)))
+				->andWhere($qb->expr()->eq('song_uuid', $qb->createNamedParameter($songUuid, IQueryBuilder::PARAM_STR)));
+		}
+
+		return $qb->executeStatement();
+	}
+
 	public function deleteAllMiscDataForLibrary(int $libraryId): void {
 		$qb1 = $this->db->getQueryBuilder();
 		$qb1->delete(self::SCHEMA_TABLE_NAME)

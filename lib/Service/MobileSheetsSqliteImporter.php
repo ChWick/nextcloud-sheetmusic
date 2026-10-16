@@ -742,6 +742,10 @@ class MobileSheetsSqliteImporter {
 						$stats['songsDeleted']++;
 					}
 					$this->miscMapper->deleteMiscData($libraryId, 'mobilesheets', 'Songs', (string)$clientId);
+					$songUuid = $song?->uuid ?? $meta['uuid'] ?? null;
+					if ($songUuid !== null) {
+						$this->miscMapper->deleteMiscDataForSong($libraryId, 'mobilesheets', $songUuid);
+					}
 				}
 			}
 		}

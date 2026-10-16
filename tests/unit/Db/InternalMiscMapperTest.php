@@ -109,4 +109,45 @@ final class InternalMiscMapperTest extends TestCase {
 		self::assertSame('Set 1', $data[0]['Name']);
 		self::assertSame('Set 2', $data[1]['Name']);
 	}
+
+	public function testDeleteMiscDataForSongUpdatesDeletedAt(): void {
+		$qb = $this->createMock(IQueryBuilder::class);
+		$expr = $this->createMock(IExpressionBuilder::class);
+		$expr->method('eq')->willReturn('eq');
+		$qb->method('expr')->willReturn($expr);
+		$qb->method('update')->willReturnSelf();
+		$qb->method('set')->willReturnSelf();
+		$qb->method('where')->willReturnSelf();
+		$qb->method('andWhere')->willReturnSelf();
+		$qb->method('createNamedParameter')->willReturn($this->createMock(IParameter::class));
+		$qb->expects(self::once())->method('executeStatement')->willReturn(3);
+
+		$db = $this->createMock(IDBConnection::class);
+		$db->method('getQueryBuilder')->willReturn($qb);
+
+		$mapper = new InternalMiscMapper($db);
+		$count = $mapper->deleteMiscDataForSong(1, 'mobilesheets', 'song-uuid-123', hardDelete: false);
+
+		self::assertSame(3, $count);
+	}
+
+	public function testDeleteMiscDataForSongHardDeleteDeletesRows(): void {
+		$qb = $this->createMock(IQueryBuilder::class);
+		$expr = $this->createMock(IExpressionBuilder::class);
+		$expr->method('eq')->willReturn('eq');
+		$qb->method('expr')->willReturn($expr);
+		$qb->method('delete')->willReturnSelf();
+		$qb->method('where')->willReturnSelf();
+		$qb->method('andWhere')->willReturnSelf();
+		$qb->method('createNamedParameter')->willReturn($this->createMock(IParameter::class));
+		$qb->expects(self::once())->method('executeStatement')->willReturn(2);
+
+		$db = $this->createMock(IDBConnection::class);
+		$db->method('getQueryBuilder')->willReturn($qb);
+
+		$mapper = new InternalMiscMapper($db);
+		$count = $mapper->deleteMiscDataForSong(1, 'mobilesheets', 'song-uuid-123', hardDelete: true);
+
+		self::assertSame(2, $count);
+	}
 }
