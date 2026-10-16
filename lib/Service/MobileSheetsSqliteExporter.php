@@ -17,6 +17,7 @@ use OCA\SheetMusic\Db\InternalSongFile;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
+use OCA\SheetMusic\Util\SongSortingUtil;
 use OCP\Files\File;
 use OCP\Files\IRootFolder;
 use OCP\IUser;
@@ -649,56 +650,14 @@ class MobileSheetsSqliteExporter {
 
 			// Sort entity links according to entity's sortBy and ascending mode
 			usort($entityLinks, function ($a, $b) use ($songById, $entity) {
-				$songA = $songById[$a['song_id']] ?? null;
-				$songB = $songById[$b['song_id']] ?? null;
-				if ($songA === null || $songB === null) {
-					return ($a['link_id'] ?? 0) <=> ($b['link_id'] ?? 0);
-				}
-
-				// If SortBy is 0 (Manual), preserve link sequence
-				if ($entity->sortBy === 0) {
-					$cmp = ($a['link_id'] ?? 0) <=> ($b['link_id'] ?? 0);
-					return $entity->ascending === 0 ? -$cmp : $cmp;
-				}
-
-				$cmp = 0;
-				switch ($entity->sortBy) {
-					case 1: // Title / Alphabetical
-						$titleA = $songA->sortTitle !== '' ? $songA->sortTitle : $songA->title;
-						$titleB = $songB->sortTitle !== '' ? $songB->sortTitle : $songB->title;
-						$cmp = strnatcasecmp($titleA, $titleB);
-						break;
-					case 2: // Date Created
-						$cmp = $songA->createdAt <=> $songB->createdAt;
-						break;
-					case 3: // Last Modified
-						$cmp = $songA->updatedAt <=> $songB->updatedAt;
-						break;
-					case 4: // Rating / Stars
-						$cmp = $songA->rating <=> $songB->rating;
-						break;
-					case 5: // Difficulty
-						$cmp = $songA->difficulty <=> $songB->difficulty;
-						break;
-					default:
-						$titleA = $songA->sortTitle !== '' ? $songA->sortTitle : $songA->title;
-						$titleB = $songB->sortTitle !== '' ? $songB->sortTitle : $songB->title;
-						$cmp = strnatcasecmp($titleA, $titleB);
-						break;
-				}
-
-				if ($cmp === 0) {
-					if ($entity->sortBy !== 1) {
-						$titleA = $songA->sortTitle !== '' ? $songA->sortTitle : $songA->title;
-						$titleB = $songB->sortTitle !== '' ? $songB->sortTitle : $songB->title;
-						$cmp = strnatcasecmp($titleA, $titleB);
-					}
-					if ($cmp === 0) {
-						$cmp = ($a['link_id'] ?? 0) <=> ($b['link_id'] ?? 0);
-					}
-				}
-
-				return $entity->ascending === 0 ? -$cmp : $cmp;
+				return SongSortingUtil::compare(
+					$songById[$a['song_id']] ?? null,
+					$songById[$b['song_id']] ?? null,
+					$entity->sortBy,
+					$entity->ascending,
+					$a['link_id'] ?? null,
+					$b['link_id'] ?? null,
+				);
 			});
 
 			$stmt = $db->prepare(sprintf(
