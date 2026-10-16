@@ -1135,6 +1135,57 @@ final class MobileSheetsSyncTest extends TestCase {
 		self::assertSame(1, (int)$finalDb->query('SELECT COUNT(*) FROM Composer')->fetchColumn());
 	}
 
+	public function testClientSongRenameReplacesOldSongWithoutDuplicatesWhenLibraryHasMiscSchemas(): void {
+		$lib = $this->createTestLibrary('ImportedLib_' . bin2hex(random_bytes(3)));
+
+		// 1. Set up library by importing an initial MobileSheets database so miscSchemas has 'Songs', 'Files', etc.
+		$initDbPath = $this->tempDbPath();
+		$initDb = $this->createEmptyMobileSheetsDb($initDbPath);
+		$initDb->exec("INSERT INTO Songs (Id, Title, SortTitle, Stars, Difficulty, Duration, SongId, DateCreated, LastModified) VALUES (440, 'Du hast, o Herr, dein Lebel', 'Du hast, o Herr, dein Lebel', 0, 0, 0, 440, 1000000, 1000000)");
+		$initDb->exec("INSERT INTO Files (Id, SongId, Path, PageOrder, FileSize, LastModified, Source, Type) VALUES (500, 440, '/test/Du hast, o Herr, dein Lebel.pdf', '1', 1000, 1000000, 1, 1)");
+
+		$importStats = $this->importer->importFromFile($lib, $initDbPath);
+		self::assertSame(1, $importStats['songsCreated']);
+
+		// Verify miscSchemas now has 'Songs'
+		$miscSchemas = $this->miscMapper->getMiscSchemas($lib->id, 'mobilesheets');
+		self::assertArrayHasKey('SONGS', array_change_key_case($miscSchemas, CASE_UPPER));
+
+		// 2. Client performs WebDAV GET (exportToFile)
+		$exportedDbPath = $this->tempDbPath();
+		$this->exporter->exportToFile($lib, $exportedDbPath);
+
+		// Verify _nc_sync_metadata table is present and contains the old song
+		$exportedDb = new PDO('sqlite:' . $exportedDbPath, options: [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
+		$metaSongs = $exportedDb->query("SELECT * FROM _nc_sync_metadata WHERE entity_type = 'song'")->fetchAll();
+		self::assertCount(1, $metaSongs);
+		self::assertSame(440, (int)$metaSongs[0]['client_id']);
+
+		// 3. Client renames song in MobileSheets (auto-rename file):
+		// Old song 440 is deleted, new song 441 is inserted with new title.
+		$exportedDb->exec("DELETE FROM Songs WHERE Id = 440");
+		$exportedDb->exec("DELETE FROM Files WHERE Id = 500");
+		$exportedDb->exec("INSERT INTO Songs (Id, Title, SortTitle, Stars, Difficulty, Duration, SongId, DateCreated, LastModified) VALUES (441, 'Du hast, o Herr, dein Leben', 'Du hast, o Herr, dein Leben', 0, 0, 0, 441, 1001000, 1001000)");
+		$exportedDb->exec("INSERT INTO Files (Id, SongId, Path, PageOrder, FileSize, LastModified, Source, Type) VALUES (501, 441, '/test/Du hast, o Herr, dein Leben.pdf', '1', 1000, 1001000, 1, 1)");
+
+		// 4. Client uploads modified DB back (WebDAV PUT / importFromFile)
+		$syncStats = $this->importer->importFromFile($lib, $exportedDbPath);
+		self::assertSame(1, $syncStats['songsCreated'], 'New renamed song should be created');
+		self::assertSame(1, $syncStats['songsDeleted'], 'Old song should be deleted');
+
+		// 5. Verify server state: old song is tombstoned, new song is active
+		$activeSongs = $this->songMapper->findByLibrary($lib->id, includeDeleted: false);
+		self::assertCount(1, $activeSongs);
+		self::assertSame('Du hast, o Herr, dein Leben', $activeSongs[0]->title);
+		self::assertSame(441, $activeSongs[0]->clientId);
+
+		$allSongs = $this->songMapper->findByLibrary($lib->id, includeDeleted: true);
+		self::assertCount(2, $allSongs);
+		$oldSong = array_values(array_filter($allSongs, fn ($s) => $s->clientId === 440))[0] ?? null;
+		self::assertNotNull($oldSong);
+		self::assertNotNull($oldSong->deletedAt, 'Old song must be tombstoned');
+	}
+
 	/**
 	 * @return array<string, array{string}>
 	 */

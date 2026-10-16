@@ -76,6 +76,11 @@ final class MobileSheetsRoundtripTest extends TestCase {
 		$origTableNames = array_column($origTables, 'name');
 		$expTableNames = array_column($expTables, 'name');
 
+		if (!in_array('_nc_sync_metadata', $origTableNames, true)) {
+			$expTables = array_values(array_filter($expTables, fn ($t) => $t['name'] !== '_nc_sync_metadata'));
+			$expTableNames = array_values(array_filter($expTableNames, fn ($name) => $name !== '_nc_sync_metadata'));
+		}
+
 		self::assertSame($origTableNames, $expTableNames, "Table list must match exactly for preset: $description");
 
 		$origUserVersion = (int)$origDb->query('PRAGMA user_version')->fetchColumn();

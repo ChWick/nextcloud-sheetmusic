@@ -247,14 +247,13 @@ class MobileSheetsSqliteExporter {
 
 		if (isset($miscSchemaKeysLower['songs'])) {
 			foreach ($miscSchemas as $tableName => $createSql) {
-				if (strtolower($tableName) === '_nc_sync_metadata' && !isset($miscSchemaKeysLower['_nc_sync_metadata'])) {
+				if (strtolower($tableName) === '_nc_sync_metadata') {
 					continue;
 				}
 				$db->exec($createSql);
 			}
-			if (isset($miscSchemaKeysLower['_nc_sync_metadata'])) {
-				$db->exec('CREATE INDEX IF NOT EXISTS idx_nc_sync_client ON _nc_sync_metadata (entity_type, client_id)');
-			}
+			$db->exec('CREATE TABLE IF NOT EXISTS _nc_sync_metadata (entity_type TEXT NOT NULL, uuid TEXT NOT NULL, client_id INTEGER, updated_at INTEGER, extra_json TEXT, PRIMARY KEY (entity_type, uuid))');
+			$db->exec('CREATE INDEX IF NOT EXISTS idx_nc_sync_client ON _nc_sync_metadata (entity_type, client_id)');
 			return;
 		}
 
