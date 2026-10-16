@@ -1024,6 +1024,12 @@ class MobileSheetsSqliteImporter {
 				$stats['miscTablesSynced']++;
 			}
 		}
+
+		// Preserve SQLite PRAGMA user_version so that exported databases match client schema version
+		$userVersion = (int)$db->query('PRAGMA user_version')->fetchColumn();
+		$this->miscMapper->saveMiscData($libraryId, 'mobilesheets', '__metadata', 'pragma_user_version', [
+			'user_version' => $userVersion,
+		]);
 	}
 
 	private function resolveFileIdFromPath(string $filePath, InternalLibrary $library, ?IUser $user): ?int {

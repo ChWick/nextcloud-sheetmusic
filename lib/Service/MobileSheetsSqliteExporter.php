@@ -154,6 +154,7 @@ class MobileSheetsSqliteExporter {
 			$db->exec('PRAGMA journal_mode = MEMORY');
 
 			$this->initializeSchema($db, $lib->id);
+			$this->applyUserVersion($db, $lib->id);
 
 			$db->beginTransaction();
 			try {
@@ -229,6 +230,21 @@ class MobileSheetsSqliteExporter {
 		}
 
 		return InternalLibrary::fromRow($library);
+	}
+
+	private function applyUserVersion(PDO $db, int $libraryId): void {
+		$metadataRows = $this->miscMapper->getMiscDataForTable($libraryId, 'mobilesheets', '__metadata');
+		$userVersion = null;
+		foreach ($metadataRows as $row) {
+			if (isset($row['user_version']) && is_numeric($row['user_version'])) {
+				$userVersion = (int)$row['user_version'];
+				break;
+			}
+		}
+
+		// Fallback to standard MobileSheets schema version 63 if not explicitly specified
+		$userVersion ??= 63;
+		$db->exec('PRAGMA user_version = ' . $userVersion);
 	}
 
 	private function initializeSchema(PDO $db, int $libraryId): void {

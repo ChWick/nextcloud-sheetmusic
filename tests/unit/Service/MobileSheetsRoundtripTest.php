@@ -78,6 +78,10 @@ final class MobileSheetsRoundtripTest extends TestCase {
 
 		self::assertSame($origTableNames, $expTableNames, "Table list must match exactly for preset: $description");
 
+		$origUserVersion = (int)$origDb->query('PRAGMA user_version')->fetchColumn();
+		$expUserVersion = (int)$expDb->query('PRAGMA user_version')->fetchColumn();
+		self::assertSame($origUserVersion, $expUserVersion, "SQLite user_version must match for preset: $description");
+
 		$origSql = array_column($origTables, 'sql', 'name');
 		$expSql = array_column($expTables, 'sql', 'name');
 
