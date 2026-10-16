@@ -900,6 +900,11 @@ class MobileSheetsSqliteImporter {
 						$song = $this->songMapper->findByClientId($libraryId, $clientId);
 					}
 					if ($song !== null && $song->deletedAt === null) {
+						$metaUpdatedAt = (int)($meta['updated_at'] ?? 0);
+						// LWW: If Nextcloud has newer edits since the baseline export, Nextcloud wins
+						if ($song->updatedAt > $metaUpdatedAt) {
+							continue;
+						}
 						$this->songMapper->delete($song->id, hardDelete: false);
 						$stats['songsDeleted']++;
 					}
@@ -931,6 +936,11 @@ class MobileSheetsSqliteImporter {
 						$entity = $this->entityMapper->findByClientId($libraryId, $type, $clientId);
 					}
 					if ($entity !== null && $entity->deletedAt === null) {
+						$metaUpdatedAt = (int)($meta['updated_at'] ?? 0);
+						// LWW: If Nextcloud has newer edits since the baseline export, Nextcloud wins
+						if ($entity->updatedAt > $metaUpdatedAt) {
+							continue;
+						}
 						$this->entityMapper->delete($entity->id, hardDelete: false);
 						$stats['entitiesDeleted']++;
 					}
@@ -949,6 +959,11 @@ class MobileSheetsSqliteImporter {
 					if (!isset($uploadedFileSet[$clientId])) {
 						$file = $this->songFileMapper->findByUuid($meta['uuid']);
 						if ($file !== null && $file->deletedAt === null) {
+							$metaUpdatedAt = (int)($meta['updated_at'] ?? 0);
+							// LWW: If Nextcloud has newer edits since the baseline export, Nextcloud wins
+							if ($file->updatedAt > $metaUpdatedAt) {
+								continue;
+							}
 							$this->songFileMapper->delete($file->id, hardDelete: false);
 							$stats['filesDeleted']++;
 						}

@@ -1292,4 +1292,198 @@ final class MobileSheetsSyncTest extends TestCase {
 		self::assertSame(20, (int)$finalLinks[0]['ComposerId']);
 		self::assertSame(2, (int)$finalLinks[0]['SongId']);
 	}
+
+	public function testSongDeletionConflictNextcloudWins(): void {
+		$lib = $this->createTestLibrary('LwwSongDeletion');
+
+		$song = new InternalSong(
+			uuid: 'lww-song-uuid-' . bin2hex(random_bytes(3)),
+			libraryId: $lib->id,
+			title: 'Song Original',
+			sortTitle: 'Song Original',
+			rating: 2,
+			difficulty: 1,
+			duration: 100,
+			clientId: 1,
+			createdAt: 1000,
+			updatedAt: 1000,
+		);
+		$this->songMapper->insert($song);
+
+		// 1. Export database (baseline metadata has updated_at = 1000)
+		$exportPath = $this->tempDbPath();
+		$this->exporter->exportToFile($lib, $exportPath);
+
+		// 2. MobileSheets deletes the song while offline
+		$msDb = new PDO('sqlite:' . $exportPath, options: [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
+		$msDb->exec('DELETE FROM Songs WHERE Id = 1');
+
+		// 3. Concurrently, Nextcloud modifies the song at timestamp 2000 > 1000
+		$song->title = 'Song Modified in Nextcloud';
+		$song->updatedAt = 2000;
+		$this->songMapper->update($song);
+
+		// 4. MobileSheets uploads the database back
+		$stats = $this->importer->importFromFile($lib, $exportPath);
+
+		// Deletion should be rejected because Nextcloud's updatedAt > metadata updated_at
+		self::assertSame(0, $stats['songsDeleted'], 'Song deletion should be rejected because Nextcloud was updated after export');
+
+		$reloaded = $this->songMapper->findById($song->id);
+		self::assertNotNull($reloaded);
+		self::assertNull($reloaded->deletedAt, 'Song should remain active');
+		self::assertSame('Song Modified in Nextcloud', $reloaded->title);
+		self::assertSame(2000, $reloaded->updatedAt);
+	}
+
+	public function testEntityDeletionConflictNextcloudWins(): void {
+		$lib = $this->createTestLibrary('LwwEntityDeletion');
+
+		$entity = new InternalEntity(
+			uuid: 'lww-ent-uuid-' . bin2hex(random_bytes(3)),
+			libraryId: $lib->id,
+			type: 'composer',
+			name: 'Original Composer',
+			sortBy: 1,
+			ascending: 1,
+			clientId: 10,
+			createdAt: 1000,
+			updatedAt: 1000,
+		);
+		$this->entityMapper->insert($entity);
+
+		// 1. Export database
+		$exportPath = $this->tempDbPath();
+		$this->exporter->exportToFile($lib, $exportPath);
+
+		// 2. MobileSheets deletes the entity
+		$msDb = new PDO('sqlite:' . $exportPath, options: [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
+		$msDb->exec('DELETE FROM Composer WHERE Id = 10');
+
+		// 3. Concurrently, Nextcloud updates the entity at timestamp 2000 > 1000
+		$entity->name = 'Updated Composer in Nextcloud';
+		$entity->updatedAt = 2000;
+		$this->entityMapper->update($entity);
+
+		// 4. MobileSheets uploads DB back
+		$stats = $this->importer->importFromFile($lib, $exportPath);
+
+		self::assertSame(0, $stats['entitiesDeleted'], 'Entity deletion should be rejected because Nextcloud was updated after export');
+
+		$reloaded = $this->entityMapper->findById($entity->id);
+		self::assertNotNull($reloaded);
+		self::assertNull($reloaded->deletedAt, 'Entity should remain active');
+		self::assertSame('Updated Composer in Nextcloud', $reloaded->name);
+		self::assertSame(2000, $reloaded->updatedAt);
+	}
+
+	public function testFileDeletionConflictNextcloudWins(): void {
+		$lib = $this->createTestLibrary('LwwFileDeletion');
+		$adminUser = $this->userManager->get('admin');
+		self::assertNotNull($adminUser);
+		$userFolder = $this->rootFolder->getUserFolder('admin');
+
+		$testFile = $userFolder->newFile('lww_test_' . bin2hex(random_bytes(3)) . '.pdf');
+		$testFile->putContent("%PDF-1.4 LWW Content\n");
+		$this->createdUserNodes[] = $testFile;
+
+		$song = new InternalSong(
+			uuid: 'lww-file-song-' . bin2hex(random_bytes(3)),
+			libraryId: $lib->id,
+			title: 'Song with File',
+			sortTitle: 'Song with File',
+			rating: 1,
+			difficulty: 1,
+			duration: 60,
+			clientId: 1,
+			createdAt: 1000,
+			updatedAt: 1000,
+		);
+		$this->songMapper->insert($song);
+
+		$songFile = new InternalSongFile(
+			uuid: 'lww-file-uuid-' . bin2hex(random_bytes(3)),
+			songId: $song->id,
+			fileId: (int)$testFile->getId(),
+			pageOrder: '1',
+			pageCount: 1,
+			fileSize: 100,
+			fileHash: 999,
+			type: 1,
+			clientId: 100,
+			createdAt: 1000,
+			updatedAt: 1000,
+		);
+		$this->songFileMapper->insert($songFile);
+
+		// 1. Export database
+		$exportPath = $this->tempDbPath();
+		$this->exporter->exportToFile($lib, $exportPath);
+
+		// 2. MobileSheets deletes file row
+		$msDb = new PDO('sqlite:' . $exportPath, options: [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
+		$msDb->exec('DELETE FROM Files WHERE Id = 100');
+
+		// 3. Concurrently, Nextcloud updates the file entry at timestamp 2000 > 1000
+		$songFile->pageOrder = '1-3';
+		$songFile->updatedAt = 2000;
+		$this->songFileMapper->update($songFile);
+
+		// 4. MobileSheets uploads back
+		$stats = $this->importer->importFromFile($lib, $exportPath, $adminUser);
+
+		self::assertSame(0, $stats['filesDeleted'], 'File deletion should be rejected because Nextcloud was updated after export');
+
+		$reloaded = $this->songFileMapper->findById($songFile->id);
+		self::assertNotNull($reloaded);
+		self::assertNull($reloaded->deletedAt, 'File should remain active');
+		self::assertSame('1-3', $reloaded->pageOrder);
+		self::assertSame(2000, $reloaded->updatedAt);
+	}
+
+	public function testSongPresentInNextcloudNeverInUploadedDbIsPreserved(): void {
+		$lib = $this->createTestLibrary('PreserveNcSong');
+
+		// 1. Song exists in Nextcloud
+		$ncSong = new InternalSong(
+			uuid: 'nc-only-song-' . bin2hex(random_bytes(3)),
+			libraryId: $lib->id,
+			title: 'Nextcloud Exclusive Song',
+			sortTitle: 'Nextcloud Exclusive Song',
+			rating: 5,
+			difficulty: 4,
+			duration: 300,
+			clientId: 1,
+			createdAt: 1500,
+			updatedAt: 1500,
+		);
+		$this->songMapper->insert($ncSong);
+
+		// 2. An uploaded MobileSheets DB from another device or backup only has its own song
+		$dbPath = $this->tempDbPath();
+		$msDb = $this->createEmptyMobileSheetsDb($dbPath);
+		$msDb->exec("INSERT INTO Songs (Id, Title, SortTitle, Stars, Difficulty, Duration, DateCreated, LastModified) VALUES (2, 'MS New Song', 'MS New Song', 3, 2, 180, 1000000, 1600000000000)");
+
+		// Note: The uploaded DB has NO _nc_sync_metadata referencing ncSong, or it's a completely different DB
+		$stats = $this->importer->importFromFile($lib, $dbPath);
+		self::assertSame(1, $stats['songsCreated'], 'MS New Song should be created');
+		self::assertSame(0, $stats['songsDeleted'], 'NC Exclusive Song must NOT be deleted');
+
+		// 3. Verify both songs exist in Nextcloud
+		$allSongs = $this->songMapper->findByLibrary($lib->id, includeDeleted: false);
+		self::assertCount(2, $allSongs);
+
+		$reloadedNcSong = $this->songMapper->findById($ncSong->id);
+		self::assertNotNull($reloadedNcSong);
+		self::assertNull($reloadedNcSong->deletedAt);
+		self::assertSame('Nextcloud Exclusive Song', $reloadedNcSong->title);
+
+		// 4. Exporting to a fresh DB includes both songs
+		$exportPath = $this->tempDbPath();
+		$this->exporter->exportToFile($lib, $exportPath);
+
+		$finalDb = new PDO('sqlite:' . $exportPath, options: [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
+		$titles = $finalDb->query('SELECT Title FROM Songs ORDER BY Title ASC')->fetchAll(PDO::FETCH_COLUMN);
+		self::assertSame(['MS New Song', 'Nextcloud Exclusive Song'], $titles);
+	}
 }
