@@ -916,7 +916,7 @@ class MobileSheetsSqliteImporter {
 				$this->miscMapper->saveMiscData($libraryId, 'mobilesheets', $tableName, $recordId, $dataRow, $songUuid);
 			}
 
-			if ($hasRows && !in_array(strtolower($tableName), self::CORE_MANAGED_TABLES, true)) {
+			if ($hasRows && !MobileSheetsEntityConfig::isCoreManaged($tableName)) {
 				$stats['miscTablesSynced']++;
 			}
 		}

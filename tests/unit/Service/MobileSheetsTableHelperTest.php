@@ -67,4 +67,25 @@ final class MobileSheetsTableHelperTest extends TestCase {
 		self::assertSame('Title', MobileSheetsTableHelper::resolveEntityNameColumn($cols, 'Name'));
 		self::assertNull(MobileSheetsTableHelper::resolveEntityNameColumn(['id' => 'Id'], 'Custom'));
 	}
+
+	public function testInsertRow(): void {
+		$this->db->exec('CREATE TABLE TestInsert (Id INTEGER PRIMARY KEY, Name TEXT, Value INTEGER)');
+
+		// Standard insert
+		MobileSheetsTableHelper::insertRow($this->db, 'TestInsert', ['Id' => 1, 'Name' => 'Alpha', 'Value' => 10]);
+		$row = $this->db->query('SELECT * FROM TestInsert WHERE Id = 1')->fetch();
+		self::assertSame('Alpha', $row['Name']);
+		self::assertSame(10, (int)$row['Value']);
+
+		// Insert or replace
+		MobileSheetsTableHelper::insertRow($this->db, 'TestInsert', ['Id' => 1, 'Name' => 'Alpha Updated', 'Value' => 20], orReplace: true);
+		$row = $this->db->query('SELECT * FROM TestInsert WHERE Id = 1')->fetch();
+		self::assertSame('Alpha Updated', $row['Name']);
+		self::assertSame(20, (int)$row['Value']);
+
+		// Empty row does nothing
+		MobileSheetsTableHelper::insertRow($this->db, 'TestInsert', []);
+		$cnt = (int)$this->db->query('SELECT count(*) FROM TestInsert')->fetchColumn();
+		self::assertSame(1, $cnt);
+	}
 }

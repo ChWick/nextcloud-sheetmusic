@@ -109,4 +109,35 @@ final class MobileSheetsTableHelper {
 
 		return null;
 	}
+
+	/**
+	 * Insert a single row into an SQLite table, with optional INSERT OR REPLACE.
+	 *
+	 * @param PDO $db
+	 * @param string $tableName
+	 * @param array<string, mixed> $row Column names and their corresponding values.
+	 * @param bool $orReplace Whether to execute INSERT OR REPLACE instead of INSERT.
+	 */
+	public static function insertRow(PDO $db, string $tableName, array $row, bool $orReplace = false): void {
+		if ($row === []) {
+			return;
+		}
+
+		$cols = array_keys($row);
+		$escapedTable = '"' . str_replace('"', '""', $tableName) . '"';
+		$escapedCols = array_map(static fn ($c) => '"' . str_replace('"', '""', (string)$c) . '"', $cols);
+		$placeholders = array_fill(0, count($cols), '?');
+
+		$verb = $orReplace ? 'INSERT OR REPLACE' : 'INSERT';
+		$sql = sprintf(
+			'%s INTO %s (%s) VALUES (%s)',
+			$verb,
+			$escapedTable,
+			implode(', ', $escapedCols),
+			implode(', ', $placeholders),
+		);
+
+		$stmt = $db->prepare($sql);
+		$stmt->execute(array_values($row));
+	}
 }

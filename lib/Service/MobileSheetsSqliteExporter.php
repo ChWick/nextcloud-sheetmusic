@@ -265,47 +265,29 @@ class MobileSheetsSqliteExporter {
 			if (!$rowExists) {
 				$existingCols = MobileSheetsTableHelper::getTableColumns($db, $tableName);
 
-				$nameCol = $config['nameCol'];
-				if (!isset($existingCols[strtolower($nameCol)])) {
-					if (isset($existingCols['name'])) {
-						$nameCol = $existingCols['name'];
-					} elseif (isset($existingCols['title'])) {
-						$nameCol = $existingCols['title'];
-					} elseif (isset($existingCols['type'])) {
-						$nameCol = $existingCols['type'];
-					} elseif (isset($existingCols['year'])) {
-						$nameCol = $existingCols['year'];
-					}
-				}
-
+				$nameCol = MobileSheetsTableHelper::resolveEntityNameColumn($existingCols, $config['nameCol']) ?? $config['nameCol'];
 				$val = (strtolower($nameCol) === 'year') ? (int)$entity->name : $entity->name;
 				$hasSortCols = isset($existingCols['sortby']) && isset($existingCols['ascending']);
-				$dateCreatedCol = isset($existingCols['datecreated']) ? $existingCols['datecreated'] : (isset($existingCols['creationdate']) ? $existingCols['creationdate'] : null);
-				$lastModCol = isset($existingCols['lastmodified']) ? $existingCols['lastmodified'] : null;
+				$dateCreatedCol = $existingCols['datecreated'] ?? ($existingCols['creationdate'] ?? null);
+				$lastModCol = $existingCols['lastmodified'] ?? null;
 
-				$cols = ['Id', $nameCol];
-				$vals = [$clientId, $val];
+				$insertRow = [
+					'Id' => $clientId,
+					$nameCol => $val,
+				];
 
 				if ($hasSortCols) {
-					$cols[] = $existingCols['sortby'];
-					$vals[] = $entity->sortBy;
-					$cols[] = $existingCols['ascending'];
-					$vals[] = $entity->ascending;
+					$insertRow[$existingCols['sortby']] = $entity->sortBy;
+					$insertRow[$existingCols['ascending']] = $entity->ascending;
 				}
 				if ($dateCreatedCol !== null) {
-					$cols[] = $dateCreatedCol;
-					$vals[] = $entity->createdAt * 1000;
+					$insertRow[$dateCreatedCol] = $entity->createdAt * 1000;
 				}
 				if ($lastModCol !== null) {
-					$cols[] = $lastModCol;
-					$vals[] = $entity->updatedAt * 1000;
+					$insertRow[$lastModCol] = $entity->updatedAt * 1000;
 				}
 
-				$escaped = array_map(fn ($c) => '"' . str_replace('"', '""', $c) . '"', $cols);
-				$placeholders = array_fill(0, count($cols), '?');
-				$sql = sprintf('INSERT INTO "%s" (%s) VALUES (%s)', str_replace('"', '""', $tableName), implode(', ', $escaped), implode(', ', $placeholders));
-				$stmt = $db->prepare($sql);
-				$stmt->execute($vals);
+				MobileSheetsTableHelper::insertRow($db, $tableName, $insertRow);
 			}
 
 			if ($metaStmt !== null) {
@@ -391,25 +373,14 @@ class MobileSheetsSqliteExporter {
 					'songnumber' => $song->songNumber ?? '',
 				];
 
-				$insertCols = [];
-				$insertVals = [];
+				$insertRow = [];
 				foreach ($candidateValues as $lowerKey => $val) {
 					if (isset($existingCols[$lowerKey])) {
-						$insertCols[] = '"' . $existingCols[$lowerKey] . '"';
-						$insertVals[] = $val;
+						$insertRow[$existingCols[$lowerKey]] = $val;
 					}
 				}
 
-				if ($insertCols !== []) {
-					$placeholders = array_fill(0, count($insertCols), '?');
-					$sql = sprintf(
-						'INSERT INTO Songs (%s) VALUES (%s)',
-						implode(', ', $insertCols),
-						implode(', ', $placeholders),
-					);
-					$stmt = $db->prepare($sql);
-					$stmt->execute($insertVals);
-				}
+				MobileSheetsTableHelper::insertRow($db, 'Songs', $insertRow);
 			}
 
 			if ($hasNotesTable && $song->notes !== '') {
@@ -431,23 +402,13 @@ class MobileSheetsSqliteExporter {
 						'creationdate' => $song->createdAt * 1000,
 						'lastmodified' => $song->updatedAt * 1000,
 					];
-					$insertCols = [];
-					$insertVals = [];
+					$noteRow = [];
 					foreach ($noteVals as $lowerKey => $val) {
 						if (isset($noteCols[$lowerKey])) {
-							$insertCols[] = '"' . $noteCols[$lowerKey] . '"';
-							$insertVals[] = $val;
+							$noteRow[$noteCols[$lowerKey]] = $val;
 						}
 					}
-					if ($insertCols !== []) {
-						$sql = sprintf(
-							'INSERT INTO SongNotes (%s) VALUES (%s)',
-							implode(', ', $insertCols),
-							implode(', ', array_fill(0, count($insertCols), '?')),
-						);
-						$noteStmt = $db->prepare($sql);
-						$noteStmt->execute($insertVals);
-					}
+					MobileSheetsTableHelper::insertRow($db, 'SongNotes', $noteRow);
 				}
 			}
 
@@ -628,21 +589,14 @@ class MobileSheetsSqliteExporter {
 					'height' => -1,
 				];
 
-				$insertCols = [];
-				$insertVals = [];
+				$insertRow = [];
 				foreach ($candidateValues as $lowerKey => $val) {
 					if (isset($existingCols[$lowerKey])) {
-						$insertCols[] = '"' . $existingCols[$lowerKey] . '"';
-						$insertVals[] = $val;
+						$insertRow[$existingCols[$lowerKey]] = $val;
 					}
 				}
 
-				if ($insertCols !== []) {
-					$placeholders = array_fill(0, count($insertCols), '?');
-					$sql = sprintf('INSERT INTO Files (%s) VALUES (%s)', implode(', ', $insertCols), implode(', ', $placeholders));
-					$stmt = $db->prepare($sql);
-					$stmt->execute($insertVals);
-				}
+				MobileSheetsTableHelper::insertRow($db, 'Files', $insertRow);
 			}
 
 			if ($metaStmt !== null) {
@@ -696,20 +650,8 @@ class MobileSheetsSqliteExporter {
 						continue;
 					}
 
-					$cols = array_keys($row);
-					$escapedCols = array_map(fn ($c) => '"' . str_replace('"', '""', (string)$c) . '"', $cols);
-					$placeholders = array_fill(0, count($cols), '?');
-
-					$sql = sprintf(
-						'INSERT OR REPLACE INTO "%s" (%s) VALUES (%s)',
-						$tableName,
-						implode(', ', $escapedCols),
-						implode(', ', $placeholders),
-					);
-
 					try {
-						$stmt = $db->prepare($sql);
-						$stmt->execute(array_values($row));
+						MobileSheetsTableHelper::insertRow($db, $tableName, $row, orReplace: true);
 					} catch (\Throwable $e) {
 						$this->logger->warning('Failed to insert misc row into table: ' . $tableName, ['exception' => $e]);
 					}
