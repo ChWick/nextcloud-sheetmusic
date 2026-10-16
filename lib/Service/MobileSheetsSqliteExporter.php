@@ -233,15 +233,7 @@ class MobileSheetsSqliteExporter {
 	}
 
 	private function applyUserVersion(PDO $db, int $libraryId): void {
-		$metadataRows = $this->miscMapper->getMiscDataForTable($libraryId, 'mobilesheets', '__metadata');
-		$userVersion = null;
-		foreach ($metadataRows as $row) {
-			if (isset($row['user_version']) && is_numeric($row['user_version'])) {
-				$userVersion = (int)$row['user_version'];
-				break;
-			}
-		}
-
+		$userVersion = $this->miscMapper->getPragmaUserVersion($libraryId, 'mobilesheets');
 		// Fallback to standard MobileSheets schema version 63 if not explicitly specified
 		$userVersion ??= 63;
 		$db->exec('PRAGMA user_version = ' . $userVersion);

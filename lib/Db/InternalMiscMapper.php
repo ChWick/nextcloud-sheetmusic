@@ -70,6 +70,22 @@ class InternalMiscMapper {
 		return $schemas;
 	}
 
+	public function savePragmaUserVersion(int $libraryId, string $clientType, int $version): void {
+		$this->saveMiscData($libraryId, $clientType, '__metadata', 'pragma_user_version', [
+			'user_version' => $version,
+		]);
+	}
+
+	public function getPragmaUserVersion(int $libraryId, string $clientType): ?int {
+		$rows = $this->getMiscDataForTable($libraryId, $clientType, '__metadata');
+		foreach ($rows as $row) {
+			if (isset($row['user_version']) && is_numeric($row['user_version'])) {
+				return (int)$row['user_version'];
+			}
+		}
+		return null;
+	}
+
 	/**
 	 * @param array<string, mixed> $data
 	 */
