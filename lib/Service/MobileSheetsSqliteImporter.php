@@ -20,6 +20,7 @@ use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
 use OCA\SheetMusic\Service\MobileSheetsEntityConfig;
+use OCA\SheetMusic\Service\MobileSheetsSyncMetadata;
 use OCA\SheetMusic\Service\MobileSheetsTableHelper;
 use OCA\SheetMusic\Util\MobileSheetsTimestampUtil;
 use OCP\Files\File;
@@ -103,7 +104,7 @@ class MobileSheetsSqliteImporter {
 		}
 		$user = $user ?? $this->userManager->get($lib->userId);
 
-		$syncMeta = $this->loadSyncMetadata($db);
+		$syncMeta = MobileSheetsSyncMetadata::fromDatabase($db);
 
 		$stats = [
 			'songsCreated' => 0,
@@ -133,7 +134,7 @@ class MobileSheetsSqliteImporter {
 		$this->mergeFiles($db, $lib, $user, $syncMeta, $stats);
 
 		// 5. Deletions (Tombstones) if sync metadata is present
-		if ($syncMeta['hasMetadata']) {
+		if ($syncMeta->hasMetadata) {
 			$this->processDeletions($db, $lib->id, $syncMeta, $stats);
 		}
 
@@ -163,67 +164,9 @@ class MobileSheetsSqliteImporter {
 	}
 
 	/**
-	 * @return array{
-	 *     byTypeAndId: array<string, array<int, array{uuid: string, updated_at: int, extra: array<string, mixed>}>>,
-	 *     byTypeAndUuid: array<string, array<string, array{client_id: int, updated_at: int, extra: array<string, mixed>}>>,
-	 *     hasMetadata: bool
-	 * }
-	 */
-	private function loadSyncMetadata(PDO $db): array {
-		$result = [
-			'byTypeAndId' => [],
-			'byTypeAndUuid' => [],
-			'hasMetadata' => false,
-		];
-
-		if (!MobileSheetsTableHelper::tableExists($db, '_nc_sync_metadata')) {
-			return $result;
-		}
-
-		$result['hasMetadata'] = true;
-
-		$stmt = $db->query('SELECT entity_type, uuid, client_id, updated_at, extra_json FROM _nc_sync_metadata');
-		if ($stmt === false) {
-			return $result;
-		}
-
-		while ($row = $stmt->fetch()) {
-			$type = (string)$row['entity_type'];
-			$uuid = (string)$row['uuid'];
-			$clientId = isset($row['client_id']) && $row['client_id'] !== null ? (int)$row['client_id'] : null;
-			$updatedAt = (int)($row['updated_at'] ?? 0);
-
-			$extra = [];
-			if (!empty($row['extra_json'])) {
-				try {
-					/** @var array<string, mixed> $extra */
-					$extra = json_decode((string)$row['extra_json'], true, 512, JSON_THROW_ON_ERROR);
-				} catch (\Throwable) {
-					$extra = [];
-				}
-			}
-
-			$entry = [
-				'uuid' => $uuid,
-				'client_id' => $clientId,
-				'updated_at' => $updatedAt,
-				'extra' => $extra,
-			];
-
-			if ($clientId !== null) {
-				$result['byTypeAndId'][$type][$clientId] = $entry;
-			}
-			$result['byTypeAndUuid'][$type][$uuid] = $entry;
-		}
-
-		return $result;
-	}
-
-	/**
-	 * @param array<string, mixed> $syncMeta
 	 * @param array<string, int> $stats
 	 */
-	private function mergeEntities(PDO $db, int $libraryId, array $syncMeta, array &$stats): void {
+	private function mergeEntities(PDO $db, int $libraryId, MobileSheetsSyncMetadata $syncMeta, array &$stats): void {
 		foreach (self::TABLE_TO_ENTITY_CONFIG as $tableName => $config) {
 			if (!MobileSheetsTableHelper::tableExists($db, $tableName)) {
 				continue;
@@ -257,13 +200,9 @@ class MobileSheetsSqliteImporter {
 				$uuid = null;
 
 				// Look up in syncMeta
-				$meta = $syncMeta['byTypeAndId']['entity:' . $type][$clientId]
-					?? $syncMeta['byTypeAndId'][$type][$clientId]
-					?? null;
+				$meta = $syncMeta->getEntityMeta($type, $clientId);
 				if ($meta === null && $tableName === 'CustomGroup') {
-					$meta = $syncMeta['byTypeAndId']['entity:instrument'][$clientId]
-						?? $syncMeta['byTypeAndId']['instrument'][$clientId]
-						?? null;
+					$meta = $syncMeta->getEntityMeta('instrument', $clientId);
 					if ($meta !== null) {
 						$type = 'instrument';
 					}
@@ -357,7 +296,7 @@ class MobileSheetsSqliteImporter {
 	private function mergeSongs(
 		PDO $db,
 		int $libraryId,
-		array $syncMeta,
+		MobileSheetsSyncMetadata $syncMeta,
 		array &$stats,
 		array &$updatedSongClientIds,
 	): void {
@@ -400,7 +339,7 @@ class MobileSheetsSqliteImporter {
 			$lastModifiedSec = MobileSheetsTimestampUtil::extractLastModifiedSec($row);
 			$dateCreatedSec = MobileSheetsTimestampUtil::extractDateCreatedSec($row);
 
-			$meta = $syncMeta['byTypeAndId']['song'][$clientId] ?? null;
+			$meta = $syncMeta->getSongMeta($clientId);
 			$uuid = $meta['uuid'] ?? null;
 			$extra = $meta['extra'] ?? [];
 
@@ -651,14 +590,13 @@ class MobileSheetsSqliteImporter {
 	}
 
 	/**
-	 * @param array<string, mixed> $syncMeta
 	 * @param array<string, int> $stats
 	 */
 	private function mergeFiles(
 		PDO $db,
 		InternalLibrary $library,
 		?IUser $user,
-		array $syncMeta,
+		MobileSheetsSyncMetadata $syncMeta,
 		array &$stats,
 	): void {
 		if (!MobileSheetsTableHelper::tableExists($db, 'Files')) {
@@ -694,7 +632,7 @@ class MobileSheetsSqliteImporter {
 				continue;
 			}
 
-			$meta = $syncMeta['byTypeAndId']['file'][$fileClientId] ?? null;
+			$meta = $syncMeta->getFileMeta($fileClientId);
 			$uuid = $meta['uuid'] ?? null;
 			$extra = $meta['extra'] ?? [];
 
@@ -779,15 +717,15 @@ class MobileSheetsSqliteImporter {
 	}
 
 	/**
-	 * @param array<string, mixed> $syncMeta
 	 * @param array<string, int> $stats
 	 */
-	private function processDeletions(PDO $db, int $libraryId, array $syncMeta, array &$stats): void {
+	private function processDeletions(PDO $db, int $libraryId, MobileSheetsSyncMetadata $syncMeta, array &$stats): void {
 		// 1. Deleted Songs
-		if (isset($syncMeta['byTypeAndId']['song'])) {
+		$songEntries = $syncMeta->getEntriesByType('song');
+		if (!empty($songEntries)) {
 			$uploadedSongSet = MobileSheetsTableHelper::getTableIdSet($db, 'Songs');
 
-			foreach ($syncMeta['byTypeAndId']['song'] as $clientId => $meta) {
+			foreach ($songEntries as $clientId => $meta) {
 				if (!isset($uploadedSongSet[$clientId])) {
 					// Deleted on client
 					$song = $this->songMapper->findByUuid($meta['uuid']);
@@ -809,7 +747,7 @@ class MobileSheetsSqliteImporter {
 		}
 
 		// 2. Deleted Entities
-		foreach ($syncMeta['byTypeAndId'] as $entityType => $entries) {
+		foreach ($syncMeta->byTypeAndId as $entityType => $entries) {
 			$type = str_starts_with($entityType, 'entity:') ? substr($entityType, strlen('entity:')) : $entityType;
 			$config = MobileSheetsEntityConfig::BY_TYPE[$type] ?? null;
 			if ($config === null) {
@@ -844,24 +782,25 @@ class MobileSheetsSqliteImporter {
 		}
 
 		// 3. Deleted Files
-		if (isset($syncMeta['byTypeAndId']['file']) && MobileSheetsTableHelper::tableExists($db, 'Files')) {
+		$fileEntries = $syncMeta->getEntriesByType('file');
+		if (!empty($fileEntries) && MobileSheetsTableHelper::tableExists($db, 'Files')) {
 			$uploadedFileSet = MobileSheetsTableHelper::getTableIdSet($db, 'Files');
 
-				foreach ($syncMeta['byTypeAndId']['file'] as $clientId => $meta) {
-					if (!isset($uploadedFileSet[$clientId])) {
-						$file = $this->songFileMapper->findByUuid($meta['uuid']);
-						if ($file !== null && $file->deletedAt === null) {
-							$metaUpdatedAt = (int)($meta['updated_at'] ?? 0);
-							// LWW: If Nextcloud has newer edits since the baseline export, Nextcloud wins
-							if ($file->updatedAt > $metaUpdatedAt) {
-								continue;
-							}
-							$this->songFileMapper->delete($file->id, hardDelete: false);
-							$stats['filesDeleted']++;
+			foreach ($fileEntries as $clientId => $meta) {
+				if (!isset($uploadedFileSet[$clientId])) {
+					$file = $this->songFileMapper->findByUuid($meta['uuid']);
+					if ($file !== null && $file->deletedAt === null) {
+						$metaUpdatedAt = (int)($meta['updated_at'] ?? 0);
+						// LWW: If Nextcloud has newer edits since the baseline export, Nextcloud wins
+						if ($file->updatedAt > $metaUpdatedAt) {
+							continue;
 						}
-						$this->miscMapper->deleteMiscData($libraryId, 'mobilesheets', 'Files', (string)$clientId);
+						$this->songFileMapper->delete($file->id, hardDelete: false);
+						$stats['filesDeleted']++;
 					}
+					$this->miscMapper->deleteMiscData($libraryId, 'mobilesheets', 'Files', (string)$clientId);
 				}
+			}
 		}
 	}
 
