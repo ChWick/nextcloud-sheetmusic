@@ -395,4 +395,57 @@ final class MobileSheetsSqliteExporterTest extends TestCase {
 		self::assertSame(4, (int)$rows[0]['Sig1']);
 		self::assertSame(4, (int)$rows[0]['Sig2']);
 	}
+
+	public function testGenerateHashcodesIncludesMiscFilesAndExcludesDeletedSongs(): void {
+		$songMapper = $this->createMock(InternalSongMapper::class);
+		$entityMapper = $this->createMock(InternalEntityMapper::class);
+		$songFileMapper = $this->createMock(InternalSongFileMapper::class);
+		$attributeMapper = $this->createMock(InternalSongAttributeMapper::class);
+		$miscMapper = $this->createMock(InternalMiscMapper::class);
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$pathResolver = $this->createMock(MobileSheetsPathResolver::class);
+		$rootFolder = $this->createMock(IRootFolder::class);
+		$userManager = $this->createMock(IUserManager::class);
+		$logger = $this->createMock(LoggerInterface::class);
+
+		$library = new InternalLibrary(id: 1, userId: 'admin', path: '/Noten');
+		$user = $this->createMock(IUser::class);
+		$userManager->method('get')->with('admin')->willReturn($user);
+
+		$songFileMapper->method('findAllForLibrary')->with(1, false)->willReturn([]);
+
+		$activeSong = new InternalSong(id: 1, uuid: 's-1', libraryId: 1, title: 'Active', clientId: 10);
+		$deletedSong = new InternalSong(id: 2, uuid: 's-2', libraryId: 1, title: 'Deleted', clientId: 20, deletedAt: 12345);
+		$songMapper->method('findByLibrary')->with(1, true)->willReturn([$activeSong, $deletedSong]);
+
+		$miscFiles = [
+			['Id' => 1, 'SongId' => 10, 'Path' => '/remote.php/dav/files/admin/Noten/active.pdf', 'FileHash' => 9999, 'LastModified' => 1000000, 'FileSize' => 45000],
+			['Id' => 2, 'SongId' => 20, 'Path' => '/remote.php/dav/files/admin/Noten/deleted.pdf', 'FileHash' => 8888, 'LastModified' => 1000000, 'FileSize' => 30000],
+		];
+		$miscMapper->method('getMiscDataForTable')->with(1, 'mobilesheets', 'Files', false)->willReturn($miscFiles);
+
+		$exporter = new MobileSheetsSqliteExporter(
+			$songMapper,
+			$entityMapper,
+			$songFileMapper,
+			$attributeMapper,
+			$miscMapper,
+			$libraryMapper,
+			$pathResolver,
+			$rootFolder,
+			$userManager,
+			$logger,
+		);
+
+		$hashcodes = $exporter->generateHashcodes($library);
+
+		$expected = implode("\n", [
+			'/remote.php/dav/files/admin/Noten/active.pdf',
+			'9999',
+			'1000000',
+			'45000',
+		]);
+
+		self::assertSame($expected, $hashcodes);
+	}
 }

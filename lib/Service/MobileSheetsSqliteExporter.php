@@ -124,11 +124,14 @@ class MobileSheetsSqliteExporter {
 		$files = $this->songFileMapper->findAllForLibrary($lib->id, includeDeleted: false);
 
 		$lines = [];
+		$handledPaths = [];
+
 		foreach ($files as $file) {
 			$webdavPath = $this->resolveWebdavPathForFile($file, $lib, $user);
-			if ($webdavPath === '') {
+			if ($webdavPath === '' || isset($handledPaths[$webdavPath])) {
 				continue;
 			}
+			$handledPaths[$webdavPath] = true;
 
 			$hash = $file->fileHash ?? 0;
 			$modifiedAtMs = MobileSheetsTimestampUtil::secondsToMs($file->updatedAt);
@@ -138,6 +141,43 @@ class MobileSheetsSqliteExporter {
 			$lines[] = (string)$hash;
 			$lines[] = (string)$modifiedAtMs;
 			$lines[] = (string)$size;
+		}
+
+		// Also supplement with files from misc_data if present and not tombstoned
+		$miscFiles = $this->miscMapper->getMiscDataForTable($lib->id, 'mobilesheets', 'Files', includeDeleted: false);
+		if ($miscFiles !== []) {
+			$songs = $this->songMapper->findByLibrary($lib->id, includeDeleted: true);
+			$deletedSongClientIds = [];
+			foreach ($songs as $s) {
+				if ($s->clientId !== null && $s->deletedAt !== null) {
+					$deletedSongClientIds[$s->clientId] = true;
+				}
+			}
+
+			foreach ($miscFiles as $mf) {
+				if (!is_array($mf) || empty($mf['Path'])) {
+					continue;
+				}
+				$songClientId = isset($mf['SongId']) && is_numeric($mf['SongId']) ? (int)$mf['SongId'] : null;
+				if ($songClientId !== null && isset($deletedSongClientIds[$songClientId])) {
+					continue;
+				}
+
+				$webdavPath = (string)$mf['Path'];
+				if (isset($handledPaths[$webdavPath])) {
+					continue;
+				}
+				$handledPaths[$webdavPath] = true;
+
+				$hash = isset($mf['FileHash']) && is_numeric($mf['FileHash']) ? (int)$mf['FileHash'] : 0;
+				$modifiedAtMs = isset($mf['LastModified']) && is_numeric($mf['LastModified']) ? (int)$mf['LastModified'] : 0;
+				$size = isset($mf['FileSize']) && is_numeric($mf['FileSize']) ? (int)$mf['FileSize'] : 0;
+
+				$lines[] = $webdavPath;
+				$lines[] = (string)$hash;
+				$lines[] = (string)$modifiedAtMs;
+				$lines[] = (string)$size;
+			}
 		}
 
 		return implode("\n", $lines);
@@ -637,22 +677,18 @@ class MobileSheetsSqliteExporter {
 						continue;
 					}
 
-					// Never export tombstoned / deleted core records via misc data
+					// Never export tombstoned / deleted records or references via misc data
 					if ($lowerTable === 'songs') {
 						if (isset($row['Id']) && isset($deletedSongClientIds[(int)$row['Id']])) {
 							continue;
 						}
-					} elseif ($lowerTable === 'files' || $lowerTable === 'songnotes') {
-						if (isset($row['SongId']) && isset($deletedSongClientIds[(int)$row['SongId']])) {
+					} elseif (isset($row['SongId']) && is_numeric($row['SongId'])) {
+						if (isset($deletedSongClientIds[(int)$row['SongId']])) {
 							continue;
 						}
-					}
-
-					foreach (self::ENTITY_TABLE_CONFIG as $entityCfg) {
-						if (strtolower($entityCfg['linkTable']) === $lowerTable) {
-							if (isset($row['SongId']) && isset($deletedSongClientIds[(int)$row['SongId']])) {
-								continue 2;
-							}
+					} elseif ($lowerTable === 'recent' && isset($row['Song']) && is_numeric($row['Song'])) {
+						if (isset($deletedSongClientIds[(int)$row['Song']])) {
+							continue;
 						}
 					}
 

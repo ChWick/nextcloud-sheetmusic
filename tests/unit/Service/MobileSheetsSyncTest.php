@@ -1200,7 +1200,11 @@ final class MobileSheetsSyncTest extends TestCase {
 		$initDbPath = $this->tempDbPath();
 		$initDb = $this->createEmptyMobileSheetsDb($initDbPath);
 		$initDb->exec("CREATE TABLE IF NOT EXISTS Setlists (Id INTEGER PRIMARY KEY, Name TEXT)");
+		$initDb->exec("CREATE TABLE IF NOT EXISTS SetlistSong (Id INTEGER PRIMARY KEY, SetlistId INTEGER, SongId INTEGER)");
+		$initDb->exec("CREATE TABLE IF NOT EXISTS Bookmarks (Id INTEGER PRIMARY KEY, SongId INTEGER, Name VARCHAR(255))");
+		$initDb->exec("CREATE TABLE IF NOT EXISTS Layers (Id INTEGER PRIMARY KEY, SongId INTEGER, Page INTEGER)");
 		$initDb->exec("INSERT INTO Songs (Id, Title, SortTitle, Stars, Difficulty, Duration, SongId, DateCreated, LastModified) VALUES (100, 'Song A', 'Song A', 0, 0, 0, 100, 1000000, 1000000)");
+		$initDb->exec("INSERT INTO Files (Id, SongId, Path, PageOrder, FileSize, LastModified, Source, Type) VALUES (50, 100, '/Noten/song_a.pdf', '1', 1000, 1000000, 1, 1)");
 		$initDb->exec("INSERT INTO Composer (Id, Name) VALUES (10, 'Composer Bach')");
 		$initDb->exec("INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (10, 100)");
 		$initDb->exec("INSERT INTO Collections (Id, Name) VALUES (20, 'Collection Hymns')");
@@ -1208,31 +1212,46 @@ final class MobileSheetsSyncTest extends TestCase {
 		$initDb->exec("INSERT INTO Books (Id, Title) VALUES (30, 'Book Chorales')");
 		$initDb->exec("INSERT INTO BookSongs (BookId, SongId) VALUES (30, 100)");
 		$initDb->exec("INSERT INTO Setlists (Id, Name) VALUES (1, 'Sunday Service')");
+		$initDb->exec("INSERT INTO SetlistSong (Id, SetlistId, SongId) VALUES (1, 1, 100)");
+		$initDb->exec("INSERT INTO Bookmarks (Id, SongId, Name) VALUES (1, 100, 'Chorus')");
+		$initDb->exec("INSERT INTO Layers (Id, SongId, Page) VALUES (1, 100, 1)");
 
 		$this->importer->importFromFile($lib, $initDbPath);
 
-		// Also populate legacy misc data rows for core-managed tables to simulate a database that had them stored
+		// Also populate legacy misc data rows for tables to simulate a database that had them stored
 		$this->miscMapper->saveMiscData($lib->id, 'mobilesheets', 'Songs', '100', ['Id' => 100, 'Title' => 'Song A']);
+		$this->miscMapper->saveMiscData($lib->id, 'mobilesheets', 'Files', '50', ['Id' => 50, 'SongId' => 100, 'Path' => '/Noten/song_a.pdf', 'FileSize' => 1000, 'FileHash' => 12345, 'LastModified' => 1000000000]);
 		$this->miscMapper->saveMiscData($lib->id, 'mobilesheets', 'Composer', '10', ['Id' => 10, 'Name' => 'Composer Bach']);
 		$this->miscMapper->saveMiscData($lib->id, 'mobilesheets', 'ComposerSongs', '10-100', ['ComposerId' => 10, 'SongId' => 100]);
 		$this->miscMapper->saveMiscData($lib->id, 'mobilesheets', 'Collections', '20', ['Id' => 20, 'Name' => 'Collection Hymns']);
 		$this->miscMapper->saveMiscData($lib->id, 'mobilesheets', 'CollectionSong', '20-100', ['CollectionId' => 20, 'SongId' => 100]);
 		$this->miscMapper->saveMiscData($lib->id, 'mobilesheets', 'Books', '30', ['Id' => 30, 'Title' => 'Book Chorales']);
 		$this->miscMapper->saveMiscData($lib->id, 'mobilesheets', 'BookSongs', '30-100', ['BookId' => 30, 'SongId' => 100]);
+		$this->miscMapper->saveMiscData($lib->id, 'mobilesheets', 'SetlistSong', '1-100', ['Id' => 1, 'SetlistId' => 1, 'SongId' => 100]);
+		$this->miscMapper->saveMiscData($lib->id, 'mobilesheets', 'Bookmarks', '1', ['Id' => 1, 'SongId' => 100, 'Name' => 'Chorus']);
+		$this->miscMapper->saveMiscData($lib->id, 'mobilesheets', 'Layers', '1', ['Id' => 1, 'SongId' => 100, 'Page' => 1]);
+
+		// Verify generateHashcodes includes the misc file while song is active
+		$initHashcodes = $this->exporter->generateHashcodes($lib);
+		self::assertStringContainsString('/Noten/song_a.pdf', $initHashcodes);
 
 		// 2. Export baseline database
 		$exportedDbPath = $this->tempDbPath();
 		$this->exporter->exportToFile($lib, $exportedDbPath);
 
-		// 3. Client deletes all core entities and song from the database, but keeps the Setlist
+		// 3. Client deletes all core entities, files and song from the database, but keeps the Setlist
 		$clientDb = new PDO('sqlite:' . $exportedDbPath, options: [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
 		$clientDb->exec("DELETE FROM Songs WHERE Id = 100");
+		$clientDb->exec("DELETE FROM Files WHERE Id = 50");
 		$clientDb->exec("DELETE FROM Composer WHERE Id = 10");
 		$clientDb->exec("DELETE FROM ComposerSongs WHERE ComposerId = 10");
 		$clientDb->exec("DELETE FROM Collections WHERE Id = 20");
 		$clientDb->exec("DELETE FROM CollectionSong WHERE CollectionId = 20");
 		$clientDb->exec("DELETE FROM Books WHERE Id = 30");
 		$clientDb->exec("DELETE FROM BookSongs WHERE BookId = 30");
+		$clientDb->exec("DELETE FROM SetlistSong WHERE SongId = 100");
+		$clientDb->exec("DELETE FROM Bookmarks WHERE SongId = 100");
+		$clientDb->exec("DELETE FROM Layers WHERE SongId = 100");
 
 		// 4. Client uploads modified DB back
 		$stats = $this->importer->importFromFile($lib, $exportedDbPath);
@@ -1247,6 +1266,7 @@ final class MobileSheetsSyncTest extends TestCase {
 
 		// Core managed tables MUST NOT contain deleted records (no resurrection via misc data)
 		self::assertSame(0, (int)$finalDb->query('SELECT COUNT(*) FROM Songs')->fetchColumn(), 'Songs table must have 0 rows');
+		self::assertSame(0, (int)$finalDb->query('SELECT COUNT(*) FROM Files')->fetchColumn(), 'Files table must have 0 rows');
 		self::assertSame(0, (int)$finalDb->query('SELECT COUNT(*) FROM Composer')->fetchColumn(), 'Composer table must have 0 rows');
 		self::assertSame(0, (int)$finalDb->query('SELECT COUNT(*) FROM ComposerSongs')->fetchColumn(), 'ComposerSongs table must have 0 rows');
 		self::assertSame(0, (int)$finalDb->query('SELECT COUNT(*) FROM Collections')->fetchColumn(), 'Collections table must have 0 rows');
@@ -1254,9 +1274,18 @@ final class MobileSheetsSyncTest extends TestCase {
 		self::assertSame(0, (int)$finalDb->query('SELECT COUNT(*) FROM Books')->fetchColumn(), 'Books table must have 0 rows');
 		self::assertSame(0, (int)$finalDb->query('SELECT COUNT(*) FROM BookSongs')->fetchColumn(), 'BookSongs table must have 0 rows');
 
+		// All dependent tables MUST NOT contain orphan references to deleted song 100
+		self::assertSame(0, (int)$finalDb->query('SELECT COUNT(*) FROM SetlistSong WHERE SongId = 100')->fetchColumn(), 'SetlistSong must not contain deleted song 100');
+		self::assertSame(0, (int)$finalDb->query('SELECT COUNT(*) FROM Bookmarks WHERE SongId = 100')->fetchColumn(), 'Bookmarks must not contain deleted song 100');
+		self::assertSame(0, (int)$finalDb->query('SELECT COUNT(*) FROM Layers WHERE SongId = 100')->fetchColumn(), 'Layers must not contain deleted song 100');
+
 		// Non-core misc tables MUST still be preserved and exported properly
 		self::assertSame(1, (int)$finalDb->query('SELECT COUNT(*) FROM Setlists')->fetchColumn(), 'Setlists table must retain its 1 row');
 		self::assertSame('Sunday Service', $finalDb->query('SELECT Name FROM Setlists WHERE Id = 1')->fetchColumn());
+
+		// mobilesheets_hashcodes.txt MUST NOT contain deleted song's file
+		$finalHashcodes = $this->exporter->generateHashcodes($lib);
+		self::assertStringNotContainsString('/Noten/song_a.pdf', $finalHashcodes, 'generateHashcodes must not include files of deleted songs');
 	}
 
 	/**
