@@ -120,4 +120,45 @@ class InternalSongAttributeMapper {
 
 		return $map;
 	}
+
+	/**
+	 * Find attribute records for songs that are deleted or do not exist in the library.
+	 *
+	 * @return list<int> list of attribute IDs
+	 */
+	public function findOrphanSongAttributes(int $libraryId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('a.id')
+			->from(self::TABLE_NAME, 'a')
+			->innerJoin('a', 'sheetmusic_songs', 's', $qb->expr()->eq('a.song_id', 's.id'))
+			->where($qb->expr()->eq('s.library_id', $qb->createNamedParameter($libraryId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->isNotNull('s.deleted_at'));
+
+		$result = $qb->executeQuery();
+		$ids = [];
+		while ($row = $result->fetchAssociative()) {
+			$ids[] = (int)$row['id'];
+		}
+		$result->closeCursor();
+
+		return $ids;
+	}
+
+	/**
+	 * Remove orphan attributes belonging to deleted songs.
+	 *
+	 * @return int number of removed rows
+	 */
+	public function removeOrphanSongAttributes(int $libraryId): int {
+		$ids = $this->findOrphanSongAttributes($libraryId);
+		if ($ids === []) {
+			return 0;
+		}
+
+		$qb = $this->db->getQueryBuilder();
+		$qb->delete(self::TABLE_NAME)
+			->where($qb->expr()->in('id', $qb->createNamedParameter($ids, IQueryBuilder::PARAM_INT_ARRAY)));
+
+		return $qb->executeStatement();
+	}
 }

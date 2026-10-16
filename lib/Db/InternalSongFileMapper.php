@@ -226,4 +226,56 @@ class InternalSongFileMapper {
 
 		return $files;
 	}
+
+	/**
+	 * Find active file records whose song is deleted or does not exist in this library.
+	 *
+	 * @return list<array{id: int, songId: int, fileId: int, uuid: string}>
+	 */
+	public function findOrphanSongFiles(int $libraryId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('f.id', 'f.song_id', 'f.file_id', 'f.uuid')
+			->from(self::TABLE_NAME, 'f')
+			->innerJoin('f', 'sheetmusic_songs', 's', $qb->expr()->eq('f.song_id', 's.id'))
+			->where($qb->expr()->eq('s.library_id', $qb->createNamedParameter($libraryId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->isNull('f.deleted_at'))
+			->andWhere($qb->expr()->isNotNull('s.deleted_at'))
+			->orderBy('f.id', 'ASC');
+
+		$result = $qb->executeQuery();
+		$orphans = [];
+		while ($row = $result->fetchAssociative()) {
+			$orphans[] = [
+				'id' => (int)$row['id'],
+				'songId' => (int)$row['song_id'],
+				'fileId' => (int)$row['file_id'],
+				'uuid' => (string)$row['uuid'],
+			];
+		}
+		$result->closeCursor();
+
+		return $orphans;
+	}
+
+	/**
+	 * Soft delete file records whose song was deleted.
+	 *
+	 * @return int number of soft-deleted file rows
+	 */
+	public function removeOrphanSongFiles(int $libraryId): int {
+		$orphans = $this->findOrphanSongFiles($libraryId);
+		if ($orphans === []) {
+			return 0;
+		}
+
+		$ids = array_column($orphans, 'id');
+		$now = time();
+		$qb = $this->db->getQueryBuilder();
+		$qb->update(self::TABLE_NAME)
+			->set('deleted_at', $qb->createNamedParameter($now, IQueryBuilder::PARAM_INT))
+			->set('updated_at', $qb->createNamedParameter($now, IQueryBuilder::PARAM_INT))
+			->where($qb->expr()->in('id', $qb->createNamedParameter($ids, IQueryBuilder::PARAM_INT_ARRAY)));
+
+		return $qb->executeStatement();
+	}
 }

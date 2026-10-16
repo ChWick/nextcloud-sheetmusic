@@ -271,6 +271,115 @@ class InternalSongMapper {
 	}
 
 	/**
+	 * Find active songs sharing the same client_id in the library.
+	 *
+	 * @return list<array{clientId: int, songIds: list<int>, titles: list<string>}>
+	 */
+	public function findDuplicateClientIds(int $libraryId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('id', 'client_id', 'title')
+			->from(self::TABLE_NAME)
+			->where($qb->expr()->eq('library_id', $qb->createNamedParameter($libraryId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->isNull('deleted_at'))
+			->andWhere($qb->expr()->isNotNull('client_id'))
+			->andWhere($qb->expr()->gt('client_id', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+			->orderBy('id', 'ASC');
+
+		$result = $qb->executeQuery();
+		$grouped = [];
+		while ($row = $result->fetchAssociative()) {
+			$cId = (int)$row['client_id'];
+			$grouped[$cId][] = [
+				'id' => (int)$row['id'],
+				'title' => (string)$row['title'],
+			];
+		}
+		$result->closeCursor();
+
+		$conflicts = [];
+		foreach ($grouped as $cId => $entries) {
+			if (count($entries) > 1) {
+				$conflicts[] = [
+					'clientId' => $cId,
+					'songIds' => array_column($entries, 'id'),
+					'titles' => array_column($entries, 'title'),
+				];
+			}
+		}
+
+		return $conflicts;
+	}
+
+	/**
+	 * Re-assign unique client_ids to songs that have conflicting duplicates.
+	 *
+	 * @return int number of reassigned songs
+	 */
+	public function fixDuplicateClientIds(int $libraryId): int {
+		$conflicts = $this->findDuplicateClientIds($libraryId);
+		if ($conflicts === []) {
+			return 0;
+		}
+
+		$qbMax = $this->db->getQueryBuilder();
+		$qbMax->select($qbMax->createFunction('MAX(' . $qbMax->getColumnName('client_id') . ')'))
+			->from(self::TABLE_NAME)
+			->where($qbMax->expr()->eq('library_id', $qbMax->createNamedParameter($libraryId, IQueryBuilder::PARAM_INT)));
+		$maxId = (int)$qbMax->executeQuery()->fetchOne();
+		if ($maxId < 1) {
+			$maxId = 1;
+		}
+
+		$reassigned = 0;
+		foreach ($conflicts as $conflict) {
+			$duplicates = array_slice($conflict['songIds'], 1);
+			foreach ($duplicates as $sId) {
+				$maxId++;
+				$qbUp = $this->db->getQueryBuilder();
+				$qbUp->update(self::TABLE_NAME)
+					->set('client_id', $qbUp->createNamedParameter($maxId, IQueryBuilder::PARAM_INT))
+					->set('updated_at', $qbUp->createNamedParameter(time(), IQueryBuilder::PARAM_INT))
+					->where($qbUp->expr()->eq('id', $qbUp->createNamedParameter($sId, IQueryBuilder::PARAM_INT)));
+				$reassigned += $qbUp->executeStatement();
+			}
+		}
+
+		return $reassigned;
+	}
+
+	/**
+	 * Find active songs that have no active files attached.
+	 *
+	 * @return list<array{id: int, title: string, uuid: string}>
+	 */
+	public function findSongsWithoutFiles(int $libraryId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('s.id', 's.title', 's.uuid')
+			->from(self::TABLE_NAME, 's')
+			->leftJoin('s', InternalSongFileMapper::TABLE_NAME, 'f', $qb->expr()->andX(
+				$qb->expr()->eq('s.id', 'f.song_id'),
+				$qb->expr()->isNull('f.deleted_at')
+			))
+			->where($qb->expr()->eq('s.library_id', $qb->createNamedParameter($libraryId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->isNull('s.deleted_at'))
+			->andWhere($qb->expr()->isNull('f.id'))
+			->orderBy('s.id', 'ASC');
+
+		$result = $qb->executeQuery();
+		$songs = [];
+		while ($row = $result->fetchAssociative()) {
+			$songs[] = [
+				'id' => (int)$row['id'],
+				'title' => (string)$row['title'],
+				'uuid' => (string)$row['uuid'],
+			];
+		}
+		$result->closeCursor();
+
+		return $songs;
+	}
+
+	/**
 	 * @return array{
 	 *     songs: list<MobileSheetsSong>,
 	 *     composers: list<MobileSheetsComposer>,

@@ -255,4 +255,49 @@ class InternalMiscMapper {
 			->where($qb2->expr()->eq('library_id', $qb2->createNamedParameter($libraryId, IQueryBuilder::PARAM_INT)));
 		$qb2->executeStatement();
 	}
+
+	/**
+	 * Find misc data rows referencing deleted song UUIDs.
+	 *
+	 * @return list<int> list of misc data record IDs
+	 */
+	public function findOrphanMiscData(int $libraryId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('m.id')
+			->from(self::DATA_TABLE_NAME, 'm')
+			->innerJoin('m', 'sheetmusic_songs', 's', $qb->expr()->eq('m.song_uuid', 's.uuid'))
+			->where($qb->expr()->eq('m.library_id', $qb->createNamedParameter($libraryId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->isNull('m.deleted_at'))
+			->andWhere($qb->expr()->isNotNull('s.deleted_at'));
+
+		$result = $qb->executeQuery();
+		$ids = [];
+		while ($row = $result->fetchAssociative()) {
+			$ids[] = (int)$row['id'];
+		}
+		$result->closeCursor();
+
+		return $ids;
+	}
+
+	/**
+	 * Soft delete misc data rows referencing deleted songs.
+	 *
+	 * @return int number of soft-deleted rows
+	 */
+	public function removeOrphanMiscData(int $libraryId): int {
+		$ids = $this->findOrphanMiscData($libraryId);
+		if ($ids === []) {
+			return 0;
+		}
+
+		$now = time();
+		$qb = $this->db->getQueryBuilder();
+		$qb->update(self::DATA_TABLE_NAME)
+			->set('deleted_at', $qb->createNamedParameter($now, IQueryBuilder::PARAM_INT))
+			->set('updated_at', $qb->createNamedParameter($now, IQueryBuilder::PARAM_INT))
+			->where($qb->expr()->in('id', $qb->createNamedParameter($ids, IQueryBuilder::PARAM_INT_ARRAY)));
+
+		return $qb->executeStatement();
+	}
 }

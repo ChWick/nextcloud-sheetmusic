@@ -128,4 +128,80 @@ final class InternalSongFileMapperTest extends TestCase {
 
 		self::assertSame(123, $saved->id);
 	}
+
+	public function testFindOrphanSongFiles(): void {
+		$result = $this->createMock(InternalQueryResult::class);
+		$result->method('fetchAssociative')->willReturnOnConsecutiveCalls(
+			['id' => 1, 'song_id' => 10, 'file_id' => 100, 'uuid' => 'f1'],
+			false,
+		);
+		$result->expects(self::once())->method('closeCursor')->willReturn(true);
+
+		$qb = $this->createMock(IQueryBuilder::class);
+		$expr = $this->createMock(IExpressionBuilder::class);
+		$expr->method('eq')->willReturn('eq');
+		$expr->method('isNull')->willReturn('isNull');
+		$expr->method('isNotNull')->willReturn('isNotNull');
+		$qb->method('expr')->willReturn($expr);
+		$qb->method('select')->willReturnSelf();
+		$qb->method('from')->willReturnSelf();
+		$qb->method('innerJoin')->willReturnSelf();
+		$qb->method('where')->willReturnSelf();
+		$qb->method('andWhere')->willReturnSelf();
+		$qb->method('orderBy')->willReturnSelf();
+		$qb->method('createNamedParameter')->willReturn($this->createMock(IParameter::class));
+		$qb->method('executeQuery')->willReturn($result);
+
+		$db = $this->createMock(IDBConnection::class);
+		$db->method('getQueryBuilder')->willReturn($qb);
+
+		$mapper = new InternalSongFileMapper($db);
+		$orphans = $mapper->findOrphanSongFiles(1);
+
+		self::assertCount(1, $orphans);
+		self::assertSame(1, $orphans[0]['id']);
+		self::assertSame(10, $orphans[0]['songId']);
+	}
+
+	public function testRemoveOrphanSongFiles(): void {
+		$selectResult = $this->createMock(InternalQueryResult::class);
+		$selectResult->method('fetchAssociative')->willReturnOnConsecutiveCalls(
+			['id' => 1, 'song_id' => 10, 'file_id' => 100, 'uuid' => 'f1'],
+			false,
+		);
+		$selectResult->expects(self::once())->method('closeCursor')->willReturn(true);
+
+		$expr = $this->createMock(IExpressionBuilder::class);
+		$expr->method('eq')->willReturn('eq');
+		$expr->method('isNull')->willReturn('isNull');
+		$expr->method('isNotNull')->willReturn('isNotNull');
+		$expr->method('in')->willReturn('in');
+
+		$selectQb = $this->createMock(IQueryBuilder::class);
+		$selectQb->method('expr')->willReturn($expr);
+		$selectQb->method('select')->willReturnSelf();
+		$selectQb->method('from')->willReturnSelf();
+		$selectQb->method('innerJoin')->willReturnSelf();
+		$selectQb->method('where')->willReturnSelf();
+		$selectQb->method('andWhere')->willReturnSelf();
+		$selectQb->method('orderBy')->willReturnSelf();
+		$selectQb->method('createNamedParameter')->willReturn($this->createMock(IParameter::class));
+		$selectQb->method('executeQuery')->willReturn($selectResult);
+
+		$updateQb = $this->createMock(IQueryBuilder::class);
+		$updateQb->method('expr')->willReturn($expr);
+		$updateQb->method('update')->willReturnSelf();
+		$updateQb->method('set')->willReturnSelf();
+		$updateQb->method('where')->willReturnSelf();
+		$updateQb->method('createNamedParameter')->willReturn($this->createMock(IParameter::class));
+		$updateQb->expects(self::once())->method('executeStatement')->willReturn(1);
+
+		$db = $this->createMock(IDBConnection::class);
+		$db->method('getQueryBuilder')->willReturnOnConsecutiveCalls($selectQb, $updateQb);
+
+		$mapper = new InternalSongFileMapper($db);
+		$removed = $mapper->removeOrphanSongFiles(1);
+
+		self::assertSame(1, $removed);
+	}
 }

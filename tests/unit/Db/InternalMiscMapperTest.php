@@ -150,4 +150,76 @@ final class InternalMiscMapperTest extends TestCase {
 
 		self::assertSame(2, $count);
 	}
+
+	public function testFindOrphanMiscData(): void {
+		$result = $this->createMock(InternalQueryResult::class);
+		$result->method('fetchAssociative')->willReturnOnConsecutiveCalls(
+			['id' => 77],
+			false,
+		);
+		$result->expects(self::once())->method('closeCursor')->willReturn(true);
+
+		$qb = $this->createMock(IQueryBuilder::class);
+		$expr = $this->createMock(IExpressionBuilder::class);
+		$expr->method('eq')->willReturn('eq');
+		$expr->method('isNull')->willReturn('isNull');
+		$expr->method('isNotNull')->willReturn('isNotNull');
+		$qb->method('expr')->willReturn($expr);
+		$qb->method('select')->willReturnSelf();
+		$qb->method('from')->willReturnSelf();
+		$qb->method('innerJoin')->willReturnSelf();
+		$qb->method('where')->willReturnSelf();
+		$qb->method('andWhere')->willReturnSelf();
+		$qb->method('createNamedParameter')->willReturn($this->createMock(IParameter::class));
+		$qb->method('executeQuery')->willReturn($result);
+
+		$db = $this->createMock(IDBConnection::class);
+		$db->method('getQueryBuilder')->willReturn($qb);
+
+		$mapper = new InternalMiscMapper($db);
+		$ids = $mapper->findOrphanMiscData(1);
+
+		self::assertSame([77], $ids);
+	}
+
+	public function testRemoveOrphanMiscData(): void {
+		$selectResult = $this->createMock(InternalQueryResult::class);
+		$selectResult->method('fetchAssociative')->willReturnOnConsecutiveCalls(
+			['id' => 77],
+			false,
+		);
+		$selectResult->expects(self::once())->method('closeCursor')->willReturn(true);
+
+		$expr = $this->createMock(IExpressionBuilder::class);
+		$expr->method('eq')->willReturn('eq');
+		$expr->method('isNull')->willReturn('isNull');
+		$expr->method('isNotNull')->willReturn('isNotNull');
+		$expr->method('in')->willReturn('in');
+
+		$selectQb = $this->createMock(IQueryBuilder::class);
+		$selectQb->method('expr')->willReturn($expr);
+		$selectQb->method('select')->willReturnSelf();
+		$selectQb->method('from')->willReturnSelf();
+		$selectQb->method('innerJoin')->willReturnSelf();
+		$selectQb->method('where')->willReturnSelf();
+		$selectQb->method('andWhere')->willReturnSelf();
+		$selectQb->method('createNamedParameter')->willReturn($this->createMock(IParameter::class));
+		$selectQb->method('executeQuery')->willReturn($selectResult);
+
+		$updateQb = $this->createMock(IQueryBuilder::class);
+		$updateQb->method('expr')->willReturn($expr);
+		$updateQb->method('update')->willReturnSelf();
+		$updateQb->method('set')->willReturnSelf();
+		$updateQb->method('where')->willReturnSelf();
+		$updateQb->method('createNamedParameter')->willReturn($this->createMock(IParameter::class));
+		$updateQb->expects(self::once())->method('executeStatement')->willReturn(1);
+
+		$db = $this->createMock(IDBConnection::class);
+		$db->method('getQueryBuilder')->willReturnOnConsecutiveCalls($selectQb, $updateQb);
+
+		$mapper = new InternalMiscMapper($db);
+		$removed = $mapper->removeOrphanMiscData(1);
+
+		self::assertSame(1, $removed);
+	}
 }

@@ -12,9 +12,11 @@ namespace Db;
 use OCA\SheetMusic\Db\InternalSong;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCP\DB\IResult;
+use OCP\DB\QueryBuilder\ICompositeExpression;
 use OCP\DB\QueryBuilder\IExpressionBuilder;
 use OCP\DB\QueryBuilder\IParameter;
 use OCP\DB\QueryBuilder\IQueryBuilder;
+use OCP\DB\QueryBuilder\IQueryFunction;
 use OCP\IDBConnection;
 use PHPUnit\Framework\TestCase;
 
@@ -183,5 +185,131 @@ final class InternalSongMapperTest extends TestCase {
 		$mapper = new InternalSongMapper($db);
 		self::assertTrue($mapper->delete(10));
 		self::assertTrue($mapper->restore(10));
+	}
+
+	public function testFindDuplicateClientIds(): void {
+		$result = $this->createMock(InternalQueryResult::class);
+		$result->method('fetchAssociative')->willReturnOnConsecutiveCalls(
+			['id' => 1, 'client_id' => 50, 'title' => 'Song A'],
+			['id' => 2, 'client_id' => 50, 'title' => 'Song B'],
+			['id' => 3, 'client_id' => 60, 'title' => 'Song C'],
+			false,
+		);
+		$result->expects(self::once())->method('closeCursor')->willReturn(true);
+
+		$qb = $this->createMock(IQueryBuilder::class);
+		$expr = $this->createMock(IExpressionBuilder::class);
+		$expr->method('eq')->willReturn('eq');
+		$expr->method('isNull')->willReturn('isNull');
+		$expr->method('isNotNull')->willReturn('isNotNull');
+		$expr->method('gt')->willReturn('gt');
+		$qb->method('expr')->willReturn($expr);
+		$qb->method('select')->willReturnSelf();
+		$qb->method('from')->willReturnSelf();
+		$qb->method('where')->willReturnSelf();
+		$qb->method('andWhere')->willReturnSelf();
+		$qb->method('orderBy')->willReturnSelf();
+		$qb->method('createNamedParameter')->willReturn($this->createMock(IParameter::class));
+		$qb->method('executeQuery')->willReturn($result);
+
+		$db = $this->createMock(IDBConnection::class);
+		$db->method('getQueryBuilder')->willReturn($qb);
+
+		$mapper = new InternalSongMapper($db);
+		$conflicts = $mapper->findDuplicateClientIds(1);
+
+		self::assertCount(1, $conflicts);
+		self::assertSame(50, $conflicts[0]['clientId']);
+		self::assertSame([1, 2], $conflicts[0]['songIds']);
+	}
+
+	public function testFixDuplicateClientIds(): void {
+		$selectResult = $this->createMock(InternalQueryResult::class);
+		$selectResult->method('fetchAssociative')->willReturnOnConsecutiveCalls(
+			['id' => 1, 'client_id' => 50, 'title' => 'Song A'],
+			['id' => 2, 'client_id' => 50, 'title' => 'Song B'],
+			false,
+		);
+		$selectResult->expects(self::once())->method('closeCursor')->willReturn(true);
+
+		$expr = $this->createMock(IExpressionBuilder::class);
+		$expr->method('eq')->willReturn('eq');
+		$expr->method('isNull')->willReturn('isNull');
+		$expr->method('isNotNull')->willReturn('isNotNull');
+		$expr->method('gt')->willReturn('gt');
+
+		$selectQb = $this->createMock(IQueryBuilder::class);
+		$selectQb->method('expr')->willReturn($expr);
+		$selectQb->method('select')->willReturnSelf();
+		$selectQb->method('from')->willReturnSelf();
+		$selectQb->method('where')->willReturnSelf();
+		$selectQb->method('andWhere')->willReturnSelf();
+		$selectQb->method('orderBy')->willReturnSelf();
+		$selectQb->method('createNamedParameter')->willReturn($this->createMock(IParameter::class));
+		$selectQb->method('executeQuery')->willReturn($selectResult);
+
+		$maxResult = $this->createMock(InternalQueryResult::class);
+		$maxResult->method('fetchOne')->willReturn(55);
+
+		$maxQb = $this->createMock(IQueryBuilder::class);
+		$maxQb->method('expr')->willReturn($expr);
+		$maxQb->method('createFunction')->willReturn($this->createMock(IQueryFunction::class));
+		$maxQb->method('getColumnName')->willReturn('`client_id`');
+		$maxQb->method('select')->willReturnSelf();
+		$maxQb->method('from')->willReturnSelf();
+		$maxQb->method('where')->willReturnSelf();
+		$maxQb->method('createNamedParameter')->willReturn($this->createMock(IParameter::class));
+		$maxQb->method('executeQuery')->willReturn($maxResult);
+
+		$updateQb = $this->createMock(IQueryBuilder::class);
+		$updateQb->method('expr')->willReturn($expr);
+		$updateQb->method('update')->willReturnSelf();
+		$updateQb->method('set')->willReturnSelf();
+		$updateQb->method('where')->willReturnSelf();
+		$updateQb->method('createNamedParameter')->willReturn($this->createMock(IParameter::class));
+		$updateQb->expects(self::once())->method('executeStatement')->willReturn(1);
+
+		$db = $this->createMock(IDBConnection::class);
+		$db->method('getQueryBuilder')->willReturnOnConsecutiveCalls($selectQb, $maxQb, $updateQb);
+
+		$mapper = new InternalSongMapper($db);
+		$fixed = $mapper->fixDuplicateClientIds(1);
+
+		self::assertSame(1, $fixed);
+	}
+
+	public function testFindSongsWithoutFiles(): void {
+		$result = $this->createMock(InternalQueryResult::class);
+		$result->method('fetchAssociative')->willReturnOnConsecutiveCalls(
+			['id' => 99, 'title' => 'Empty Song', 'uuid' => 'u99'],
+			false,
+		);
+		$result->expects(self::once())->method('closeCursor')->willReturn(true);
+
+		$composite = $this->createMock(ICompositeExpression::class);
+		$qb = $this->createMock(IQueryBuilder::class);
+		$expr = $this->createMock(IExpressionBuilder::class);
+		$expr->method('eq')->willReturn('eq');
+		$expr->method('isNull')->willReturn('isNull');
+		$expr->method('andX')->willReturn($composite);
+		$qb->method('expr')->willReturn($expr);
+		$qb->method('select')->willReturnSelf();
+		$qb->method('from')->willReturnSelf();
+		$qb->method('leftJoin')->willReturnSelf();
+		$qb->method('where')->willReturnSelf();
+		$qb->method('andWhere')->willReturnSelf();
+		$qb->method('orderBy')->willReturnSelf();
+		$qb->method('createNamedParameter')->willReturn($this->createMock(IParameter::class));
+		$qb->method('executeQuery')->willReturn($result);
+
+		$db = $this->createMock(IDBConnection::class);
+		$db->method('getQueryBuilder')->willReturn($qb);
+
+		$mapper = new InternalSongMapper($db);
+		$songs = $mapper->findSongsWithoutFiles(1);
+
+		self::assertCount(1, $songs);
+		self::assertSame(99, $songs[0]['id']);
+		self::assertSame('Empty Song', $songs[0]['title']);
 	}
 }
