@@ -18,6 +18,7 @@ use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
 use OCA\SheetMusic\Service\MobileSheetsTableHelper;
+use OCA\SheetMusic\Util\MobileSheetsTimestampUtil;
 use OCA\SheetMusic\Util\SongSortingUtil;
 use OCP\Files\File;
 use OCP\Files\IRootFolder;
@@ -130,7 +131,7 @@ class MobileSheetsSqliteExporter {
 			}
 
 			$hash = $file->fileHash ?? 0;
-			$modifiedAtMs = $file->updatedAt * 1000;
+			$modifiedAtMs = MobileSheetsTimestampUtil::secondsToMs($file->updatedAt);
 			$size = $file->fileSize ?? 0;
 
 			$lines[] = $webdavPath;
@@ -281,10 +282,10 @@ class MobileSheetsSqliteExporter {
 					$insertRow[$existingCols['ascending']] = $entity->ascending;
 				}
 				if ($dateCreatedCol !== null) {
-					$insertRow[$dateCreatedCol] = $entity->createdAt * 1000;
+					$insertRow[$dateCreatedCol] = MobileSheetsTimestampUtil::secondsToMs($entity->createdAt);
 				}
 				if ($lastModCol !== null) {
-					$insertRow[$lastModCol] = $entity->updatedAt * 1000;
+					$insertRow[$lastModCol] = MobileSheetsTimestampUtil::secondsToMs($entity->updatedAt);
 				}
 
 				MobileSheetsTableHelper::insertRow($db, $tableName, $insertRow);
@@ -365,9 +366,9 @@ class MobileSheetsSqliteExporter {
 					'custom' => $custom,
 					'custom2' => $custom2,
 					'songid' => $clientId,
-					'datecreated' => $song->createdAt * 1000,
-					'creationdate' => $song->createdAt * 1000,
-					'lastmodified' => $song->updatedAt * 1000,
+					'datecreated' => MobileSheetsTimestampUtil::secondsToMs($song->createdAt),
+					'creationdate' => MobileSheetsTimestampUtil::secondsToMs($song->createdAt),
+					'lastmodified' => MobileSheetsTimestampUtil::secondsToMs($song->updatedAt),
 					'opus' => $song->opus ?? '',
 					'catalognumber' => $song->catalogNumber ?? '',
 					'songnumber' => $song->songNumber ?? '',
@@ -398,9 +399,9 @@ class MobileSheetsSqliteExporter {
 						'notes' => $song->notes,
 						'note' => $song->notes,
 						'title' => '',
-						'datecreated' => $song->createdAt * 1000,
-						'creationdate' => $song->createdAt * 1000,
-						'lastmodified' => $song->updatedAt * 1000,
+						'datecreated' => MobileSheetsTimestampUtil::secondsToMs($song->createdAt),
+						'creationdate' => MobileSheetsTimestampUtil::secondsToMs($song->createdAt),
+						'lastmodified' => MobileSheetsTimestampUtil::secondsToMs($song->updatedAt),
 					];
 					$noteRow = [];
 					foreach ($noteVals as $lowerKey => $val) {
@@ -579,7 +580,7 @@ class MobileSheetsSqliteExporter {
 					'path' => $webdavPath,
 					'pageorder' => $file->pageOrder,
 					'filesize' => $size,
-					'lastmodified' => $file->updatedAt * 1000,
+					'lastmodified' => MobileSheetsTimestampUtil::secondsToMs($file->updatedAt),
 					'source' => 1,
 					'type' => $file->type,
 					'password' => '',

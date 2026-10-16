@@ -21,6 +21,7 @@ use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
 use OCA\SheetMusic\Service\MobileSheetsEntityConfig;
 use OCA\SheetMusic\Service\MobileSheetsTableHelper;
+use OCA\SheetMusic\Util\MobileSheetsTimestampUtil;
 use OCP\Files\File;
 use OCP\Files\IRootFolder;
 use OCP\IUser;
@@ -246,10 +247,8 @@ class MobileSheetsSqliteImporter {
 					continue;
 				}
 
-				$lastModifiedMs = (int)($row['LastModified'] ?? 0);
-				$lastModifiedSec = (int)round($lastModifiedMs / 1000);
-				$dateCreatedMs = (int)($row['DateCreated'] ?? $row['CreationDate'] ?? 0);
-				$dateCreatedSec = (int)round($dateCreatedMs / 1000);
+				$lastModifiedSec = MobileSheetsTimestampUtil::extractLastModifiedSec($row);
+				$dateCreatedSec = MobileSheetsTimestampUtil::extractDateCreatedSec($row);
 				$sortBy = isset($row['SortBy']) ? (int)$row['SortBy'] : 1;
 				$ascending = isset($row['Ascending']) ? (int)$row['Ascending'] : 1;
 
@@ -398,10 +397,8 @@ class MobileSheetsSqliteImporter {
 			$custom2 = (string)($row['Custom2'] ?? '');
 			$noteText = $notesBySongId[$clientId] ?? '';
 
-			$lastModifiedMs = (int)($row['LastModified'] ?? 0);
-			$lastModifiedSec = (int)round($lastModifiedMs / 1000);
-			$dateCreatedMs = (int)($row['DateCreated'] ?? $row['CreationDate'] ?? 0);
-			$dateCreatedSec = (int)round($dateCreatedMs / 1000);
+			$lastModifiedSec = MobileSheetsTimestampUtil::extractLastModifiedSec($row);
+			$dateCreatedSec = MobileSheetsTimestampUtil::extractDateCreatedSec($row);
 
 			$meta = $syncMeta['byTypeAndId']['song'][$clientId] ?? null;
 			$uuid = $meta['uuid'] ?? null;
@@ -690,8 +687,7 @@ class MobileSheetsSqliteImporter {
 			$fileHash = isset($row['FileHash']) ? (int)$row['FileHash'] : null;
 			$pageCount = (int)($row['SourceFilePageCount'] ?? 1);
 			$type = (int)($row['Type'] ?? 0);
-			$lastModifiedMs = (int)($row['LastModified'] ?? 0);
-			$lastModifiedSec = (int)round($lastModifiedMs / 1000);
+			$lastModifiedSec = MobileSheetsTimestampUtil::extractLastModifiedSec($row);
 
 			$song = $songByClientId[$songClientId] ?? null;
 			if ($song === null || $song->id === null) {
