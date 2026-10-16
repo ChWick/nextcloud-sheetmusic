@@ -660,6 +660,241 @@ final class MobileSheetsSyncTest extends TestCase {
 		self::assertNotNull($deleted->deletedAt, 'Song should be tombstoned');
 	}
 
+	public function testMultipleSongsDeletionByMobileSheets(): void {
+		$lib = $this->createTestLibrary();
+
+		$songs = [];
+		for ($i = 1; $i <= 3; $i++) {
+			$s = new InternalSong(
+				uuid: 'song-multi-' . $i . '-' . bin2hex(random_bytes(3)),
+				libraryId: $lib->id,
+				title: 'Multi Song ' . $i,
+				sortTitle: 'Multi Song ' . $i,
+				rating: $i,
+				difficulty: 1,
+				duration: 100,
+				clientId: 100 + $i,
+				createdAt: 1000,
+				updatedAt: 1000,
+			);
+			$this->songMapper->insert($s);
+			$songs[$i] = $s;
+		}
+
+		$dbPath = $this->tempDbPath();
+		$msDb = $this->createEmptyMobileSheetsDb($dbPath);
+
+		// MobileSheets has sync metadata for all 3 songs
+		foreach ($songs as $i => $s) {
+			$msDb->exec(sprintf(
+				"INSERT INTO _nc_sync_metadata (entity_type, uuid, client_id, updated_at, extra_json) VALUES ('song', '%s', %d, 1000, '{}')",
+				$s->uuid,
+				100 + $i,
+			));
+		}
+
+		// But Songs table only keeps Song 2 (Songs 1 and 3 were deleted in MobileSheets)
+		$msDb->exec(sprintf(
+			"INSERT INTO Songs (Id, Title, SortTitle, Stars, Difficulty, Duration, DateCreated, LastModified) VALUES (%d, '%s', '%s', 2, 1, 100, 1000000, 1000000)",
+			102,
+			$songs[2]->title,
+			$songs[2]->sortTitle,
+		));
+
+		$stats = $this->importer->importFromFile($lib, $dbPath);
+		self::assertSame(2, $stats['songsDeleted']);
+		self::assertSame(0, $stats['songsCreated']);
+
+		$reloaded1 = $this->songMapper->findById($songs[1]->id);
+		$reloaded2 = $this->songMapper->findById($songs[2]->id);
+		$reloaded3 = $this->songMapper->findById($songs[3]->id);
+
+		self::assertNotNull($reloaded1->deletedAt, 'Song 1 should be tombstoned');
+		self::assertNull($reloaded2->deletedAt, 'Song 2 should remain active');
+		self::assertNotNull($reloaded3->deletedAt, 'Song 3 should be tombstoned');
+
+		$activeSongs = $this->songMapper->findByLibrary($lib->id, includeDeleted: false);
+		self::assertCount(1, $activeSongs);
+		self::assertSame('Multi Song 2', $activeSongs[0]->title);
+	}
+
+	public function testAlreadyDeletedItemIgnoredWhenMobileSheetsUploadsWithoutIt(): void {
+		$lib = $this->createTestLibrary();
+
+		$uuid = 'already-deleted-' . bin2hex(random_bytes(3));
+		$song = new InternalSong(
+			uuid: $uuid,
+			libraryId: $lib->id,
+			title: 'Already Deleted Song',
+			sortTitle: 'Already Deleted Song',
+			rating: 1,
+			difficulty: 1,
+			duration: 100,
+			clientId: 110,
+			createdAt: 1000,
+			updatedAt: 1000,
+			deletedAt: 1500,
+		);
+		$this->songMapper->insert($song);
+
+		$dbPath = $this->tempDbPath();
+		$msDb = $this->createEmptyMobileSheetsDb($dbPath);
+
+		// MobileSheets has sync metadata with older timestamp
+		$msDb->exec(sprintf(
+			"INSERT INTO _nc_sync_metadata (entity_type, uuid, client_id, updated_at, extra_json) VALUES ('song', '%s', 110, 1000, '{}')",
+			$uuid,
+		));
+
+		$stats = $this->importer->importFromFile($lib, $dbPath);
+		self::assertSame(0, $stats['songsDeleted'], 'Already deleted song should not increment songsDeleted count');
+
+		$reloaded = $this->songMapper->findById($song->id);
+		self::assertNotNull($reloaded);
+		self::assertSame(1500, $reloaded->deletedAt, 'deletedAt timestamp should remain unchanged');
+	}
+
+	public function testNextcloudDeletedItemsExcludedFromExport(): void {
+		$lib = $this->createTestLibrary('NotenFolder');
+		$adminUser = $this->userManager->get('admin');
+		$userFolder = $this->rootFolder->getUserFolder('admin');
+
+		$testSubfolderName = 'TestDelMusic_' . bin2hex(random_bytes(3));
+		$testFolder = $userFolder->newFolder($testSubfolderName);
+		$this->createdUserNodes[] = $testFolder;
+
+		$fileA = $testFolder->newFile('fileA.pdf');
+		$fileA->putContent("%PDF-1.4 File A\n");
+		$this->createdUserNodes[] = $fileA;
+
+		$fileB = $testFolder->newFile('fileB.pdf');
+		$fileB->putContent("%PDF-1.4 File B\n");
+		$this->createdUserNodes[] = $fileB;
+
+		// 1. Two Songs: Song 1 (to be deleted), Song 2 (to keep)
+		$song1 = new InternalSong(
+			uuid: 'del-song-1',
+			libraryId: $lib->id,
+			title: 'Deleted Song 1',
+			sortTitle: 'Deleted Song 1',
+			rating: 1,
+			difficulty: 1,
+			duration: 100,
+			clientId: 10,
+			createdAt: 1000,
+			updatedAt: 1000,
+		);
+		$this->songMapper->insert($song1);
+
+		$song2 = new InternalSong(
+			uuid: 'active-song-2',
+			libraryId: $lib->id,
+			title: 'Active Song 2',
+			sortTitle: 'Active Song 2',
+			rating: 5,
+			difficulty: 3,
+			duration: 200,
+			clientId: 20,
+			createdAt: 1000,
+			updatedAt: 1000,
+		);
+		$this->songMapper->insert($song2);
+
+		// 2. Two Composers: Composer 1 (deleted), Composer 2 (active)
+		$comp1 = new InternalEntity(
+			uuid: 'comp-del-1',
+			libraryId: $lib->id,
+			type: 'composer',
+			name: 'Deleted Composer',
+			sortBy: 1,
+			ascending: 1,
+			clientId: 100,
+			createdAt: 1000,
+			updatedAt: 1000,
+		);
+		$this->entityMapper->insert($comp1);
+
+		$comp2 = new InternalEntity(
+			uuid: 'comp-act-2',
+			libraryId: $lib->id,
+			type: 'composer',
+			name: 'Active Composer',
+			sortBy: 1,
+			ascending: 1,
+			clientId: 200,
+			createdAt: 1000,
+			updatedAt: 1000,
+		);
+		$this->entityMapper->insert($comp2);
+
+		// 3. Two Files: File 1 (deleted), File 2 (active)
+		$songFile1 = new InternalSongFile(
+			uuid: 'file-del-1',
+			songId: $song2->id,
+			fileId: (int)$fileA->getId(),
+			pageOrder: '1',
+			pageCount: 1,
+			fileSize: 1024,
+			fileHash: 111,
+			type: 1,
+			clientId: 1000,
+			createdAt: 1000,
+			updatedAt: 1000,
+		);
+		$this->songFileMapper->insert($songFile1);
+
+		$songFile2 = new InternalSongFile(
+			uuid: 'file-act-2',
+			songId: $song2->id,
+			fileId: (int)$fileB->getId(),
+			pageOrder: '1-2',
+			pageCount: 2,
+			fileSize: 2048,
+			fileHash: 222,
+			type: 1,
+			clientId: 2000,
+			createdAt: 1000,
+			updatedAt: 1000,
+		);
+		$this->songFileMapper->insert($songFile2);
+
+		// Soft-delete in Nextcloud
+		$this->songMapper->delete($song1->id, hardDelete: false);
+		$this->entityMapper->delete($comp1->id, hardDelete: false);
+		$this->songFileMapper->delete($songFile1->id, hardDelete: false);
+
+		// Export
+		$exportPath = $this->tempDbPath();
+		$this->exporter->exportToFile($lib, $exportPath);
+
+		$db = new PDO('sqlite:' . $exportPath, options: [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
+
+		$songs = $db->query('SELECT Id, Title FROM Songs')->fetchAll();
+		self::assertCount(1, $songs);
+		self::assertSame(20, (int)$songs[0]['Id']);
+		self::assertSame('Active Song 2', $songs[0]['Title']);
+
+		$composers = $db->query('SELECT Id, Name FROM Composer')->fetchAll();
+		self::assertCount(1, $composers);
+		self::assertSame(200, (int)$composers[0]['Id']);
+		self::assertSame('Active Composer', $composers[0]['Name']);
+
+		$files = $db->query('SELECT Id, FileHash FROM Files')->fetchAll();
+		self::assertCount(1, $files);
+		self::assertSame(2000, (int)$files[0]['Id']);
+		self::assertSame(222, (int)$files[0]['FileHash']);
+
+		// Verify metadata only includes active items
+		$meta = $db->query('SELECT entity_type, uuid FROM _nc_sync_metadata')->fetchAll();
+		$metaUuids = array_column($meta, 'uuid');
+		self::assertContains('active-song-2', $metaUuids);
+		self::assertContains('comp-act-2', $metaUuids);
+		self::assertContains('file-act-2', $metaUuids);
+		self::assertNotContains('del-song-1', $metaUuids);
+		self::assertNotContains('comp-del-1', $metaUuids);
+		self::assertNotContains('file-del-1', $metaUuids);
+	}
+
 	/**
 	 * @return array<string, array{string, string, string, string, string}>
 	 */
@@ -780,6 +1015,95 @@ final class MobileSheetsSyncTest extends TestCase {
 		self::assertCount(0, $matchingLinks3, 'All links for this song and type should be removed');
 	}
 
+	/**
+	 * @dataProvider linkTableProvider
+	 */
+	public function testEntityDeletionWhenLinkedToSong(string $linkTable, string $linkCol, string $entityTable, string $entityType, string $nameCol): void {
+		$lib = $this->createTestLibrary();
+
+		$song = new InternalSong(
+			uuid: 'song-link-del-' . bin2hex(random_bytes(3)),
+			libraryId: $lib->id,
+			title: 'Song With Linked Entity',
+			sortTitle: 'Song With Linked Entity',
+			rating: 3,
+			difficulty: 2,
+			duration: 150,
+			clientId: 1,
+			createdAt: 1000,
+			updatedAt: 1000,
+		);
+		$this->songMapper->insert($song);
+
+		$entity = new InternalEntity(
+			uuid: 'ent-link-del-' . bin2hex(random_bytes(3)),
+			libraryId: $lib->id,
+			type: $entityType,
+			name: ($nameCol === 'Year' ? '2026' : 'Entity For Deletion'),
+			sortBy: 1,
+			ascending: 1,
+			clientId: 10,
+			createdAt: 1000,
+			updatedAt: 1000,
+		);
+		$this->entityMapper->insert($entity);
+		$this->entityMapper->setSongEntitiesForType($song->id, $entityType, [$entity->id]);
+
+		// 1. Export to SQLite
+		$exportPath1 = $this->tempDbPath();
+		$this->exporter->exportToFile($lib, $exportPath1);
+
+		// Verify exported SQLite DB has entity and link
+		$msDb = new PDO('sqlite:' . $exportPath1, options: [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
+		$actualEntityTable = $entityTable;
+		$check = $msDb->query("SELECT name FROM sqlite_master WHERE type='table' AND name='" . str_replace("'", "''", $actualEntityTable) . "'");
+		if ($check === false || $check->fetch() === false) {
+			if ($actualEntityTable === 'Key') {
+				$actualEntityTable = 'Keys';
+			} elseif ($actualEntityTable === 'SourceType') {
+				$actualEntityTable = 'SourceTypes';
+			}
+		}
+
+		$countEnt = (int)$msDb->query(sprintf('SELECT COUNT(*) FROM "%s" WHERE Id = 10', $actualEntityTable))->fetchColumn();
+		$countLink = (int)$msDb->query(sprintf('SELECT COUNT(*) FROM "%s" WHERE "%s" = 10 AND SongId = 1', $linkTable, $linkCol))->fetchColumn();
+		self::assertSame(1, $countEnt);
+		self::assertSame(1, $countLink);
+
+		// 2. MobileSheets deletes the entity and the link
+		$msDb->exec(sprintf('DELETE FROM "%s" WHERE Id = 10', $actualEntityTable));
+		$msDb->exec(sprintf('DELETE FROM "%s" WHERE "%s" = 10', $linkTable, $linkCol));
+
+		// 3. MobileSheets uploads DB back (triggering import)
+		$stats = $this->importer->importFromFile($lib, $exportPath1);
+		self::assertSame(1, $stats['entitiesDeleted']);
+
+		$reloadedEntity = $this->entityMapper->findById($entity->id);
+		self::assertNotNull($reloadedEntity);
+		self::assertNotNull($reloadedEntity->deletedAt, 'Entity should be tombstoned');
+
+		$reloadedSong = $this->songMapper->findById($song->id);
+		self::assertNotNull($reloadedSong);
+		self::assertNull($reloadedSong->deletedAt, 'Song should remain active');
+
+		$activeLinks = $this->entityMapper->findAllSongEntityLinksForLibrary($lib->id);
+		$matchingLinks = array_filter($activeLinks, fn($l) => $l['song_id'] === $song->id && $l['type'] === $entityType);
+		self::assertCount(0, $matchingLinks, 'Active links for this entity type should be 0');
+
+		// 4. Re-export and verify neither entity nor link appears in final DB
+		$exportPath2 = $this->tempDbPath();
+		$this->exporter->exportToFile($lib, $exportPath2);
+
+		$finalDb = new PDO('sqlite:' . $exportPath2, options: [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
+		$finalEntCount = (int)$finalDb->query(sprintf('SELECT COUNT(*) FROM "%s"', $actualEntityTable))->fetchColumn();
+		$finalLinkCount = (int)$finalDb->query(sprintf('SELECT COUNT(*) FROM "%s"', $linkTable))->fetchColumn();
+		$finalSongCount = (int)$finalDb->query('SELECT COUNT(*) FROM Songs')->fetchColumn();
+
+		self::assertSame(0, $finalEntCount);
+		self::assertSame(0, $finalLinkCount);
+		self::assertSame(1, $finalSongCount);
+	}
+
 	public function testFileAddConflictAndRemovalWithRealUserFile(): void {
 		$lib = $this->createTestLibrary('NotenFolder');
 
@@ -870,6 +1194,104 @@ final class MobileSheetsSyncTest extends TestCase {
 		$allFiles = $this->songFileMapper->findAllForLibrary($lib->id, includeDeleted: true);
 		self::assertCount(1, $allFiles);
 		self::assertNotNull($allFiles[0]->deletedAt, 'File should be tombstoned');
+	}
+
+	public function testSongDeletionWithLinkedEntitiesAndFilesExportCycle(): void {
+		$lib = $this->createTestLibrary('NotenFolder');
+		$adminUser = $this->userManager->get('admin');
+		$userFolder = $this->rootFolder->getUserFolder('admin');
+
+		$testSubfolderName = 'TestDelCycle_' . bin2hex(random_bytes(3));
+		$testFolder = $userFolder->newFolder($testSubfolderName);
+		$this->createdUserNodes[] = $testFolder;
+
+		$testFile = $testFolder->newFile('cycle.pdf');
+		$testFile->putContent("%PDF-1.4 Cycle content\n");
+		$this->createdUserNodes[] = $testFile;
+
+		// Song with clientId 1
+		$song = new InternalSong(
+			uuid: 'cycle-song-del',
+			libraryId: $lib->id,
+			title: 'Song To Delete In Cycle',
+			sortTitle: 'Song To Delete In Cycle',
+			rating: 4,
+			difficulty: 3,
+			duration: 240,
+			clientId: 1,
+			createdAt: 1000,
+			updatedAt: 1000,
+		);
+		$this->songMapper->insert($song);
+
+		// File with clientId 10
+		$songFile = new InternalSongFile(
+			uuid: 'cycle-file-del',
+			songId: $song->id,
+			fileId: (int)$testFile->getId(),
+			pageOrder: '1',
+			pageCount: 1,
+			fileSize: 1024,
+			fileHash: 333,
+			type: 1,
+			clientId: 10,
+			createdAt: 1000,
+			updatedAt: 1000,
+		);
+		$this->songFileMapper->insert($songFile);
+
+		// Composer with clientId 20
+		$composer = new InternalEntity(
+			uuid: 'cycle-comp-del',
+			libraryId: $lib->id,
+			type: 'composer',
+			name: 'Cycle Composer',
+			sortBy: 1,
+			ascending: 1,
+			clientId: 20,
+			createdAt: 1000,
+			updatedAt: 1000,
+		);
+		$this->entityMapper->insert($composer);
+		$this->entityMapper->setSongEntitiesForType($song->id, 'composer', [$composer->id]);
+
+		// 1. Export to SQLite
+		$exportPath1 = $this->tempDbPath();
+		$this->exporter->exportToFile($lib, $exportPath1);
+
+		// 2. MobileSheets deletes the song and file, but keeps the composer
+		$msDb = new PDO('sqlite:' . $exportPath1, options: [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
+		$msDb->exec('DELETE FROM Songs WHERE Id = 1');
+		$msDb->exec('DELETE FROM Files WHERE Id = 10');
+		$msDb->exec('DELETE FROM ComposerSongs WHERE SongId = 1');
+
+		// 3. MobileSheets uploads back
+		$stats = $this->importer->importFromFile($lib, $exportPath1, $adminUser);
+		self::assertSame(1, $stats['songsDeleted']);
+		self::assertSame(1, $stats['filesDeleted']);
+		self::assertSame(0, $stats['entitiesDeleted']);
+
+		$reloadedSong = $this->songMapper->findById($song->id);
+		self::assertNotNull($reloadedSong);
+		self::assertNotNull($reloadedSong->deletedAt, 'Song should be tombstoned');
+
+		$reloadedFile = $this->songFileMapper->findById($songFile->id);
+		self::assertNotNull($reloadedFile);
+		self::assertNotNull($reloadedFile->deletedAt, 'File should be tombstoned');
+
+		$reloadedComp = $this->entityMapper->findById($composer->id);
+		self::assertNotNull($reloadedComp);
+		self::assertNull($reloadedComp->deletedAt, 'Composer should remain active');
+
+		// 4. Nextcloud exports again
+		$exportPath2 = $this->tempDbPath();
+		$this->exporter->exportToFile($lib, $exportPath2);
+
+		$finalDb = new PDO('sqlite:' . $exportPath2, options: [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
+		self::assertSame(0, (int)$finalDb->query('SELECT COUNT(*) FROM Songs')->fetchColumn());
+		self::assertSame(0, (int)$finalDb->query('SELECT COUNT(*) FROM Files')->fetchColumn());
+		self::assertSame(0, (int)$finalDb->query('SELECT COUNT(*) FROM ComposerSongs')->fetchColumn());
+		self::assertSame(1, (int)$finalDb->query('SELECT COUNT(*) FROM Composer')->fetchColumn());
 	}
 
 	/**
