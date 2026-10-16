@@ -789,8 +789,7 @@ class MobileSheetsSqliteImporter {
 	private function processDeletions(PDO $db, int $libraryId, array $syncMeta, array &$stats): void {
 		// 1. Deleted Songs
 		if (isset($syncMeta['byTypeAndId']['song'])) {
-			$uploadedSongIds = $db->query('SELECT Id FROM Songs')->fetchAll(PDO::FETCH_COLUMN);
-			$uploadedSongSet = array_flip(array_map('intval', $uploadedSongIds));
+			$uploadedSongSet = MobileSheetsTableHelper::getTableIdSet($db, 'Songs');
 
 			foreach ($syncMeta['byTypeAndId']['song'] as $clientId => $meta) {
 				if (!isset($uploadedSongSet[$clientId])) {
@@ -826,8 +825,7 @@ class MobileSheetsSqliteImporter {
 				continue;
 			}
 
-			$uploadedEntityIds = $db->query('SELECT Id FROM "' . str_replace('"', '""', $tableName) . '"')->fetchAll(PDO::FETCH_COLUMN);
-			$uploadedEntitySet = array_flip(array_map('intval', $uploadedEntityIds));
+			$uploadedEntitySet = MobileSheetsTableHelper::getTableIdSet($db, $tableName);
 
 			foreach ($entries as $clientId => $meta) {
 				if (!isset($uploadedEntitySet[$clientId])) {
@@ -851,8 +849,7 @@ class MobileSheetsSqliteImporter {
 
 		// 3. Deleted Files
 		if (isset($syncMeta['byTypeAndId']['file']) && MobileSheetsTableHelper::tableExists($db, 'Files')) {
-				$uploadedFileIds = $db->query('SELECT Id FROM Files')->fetchAll(PDO::FETCH_COLUMN);
-				$uploadedFileSet = array_flip(array_map('intval', $uploadedFileIds));
+			$uploadedFileSet = MobileSheetsTableHelper::getTableIdSet($db, 'Files');
 
 				foreach ($syncMeta['byTypeAndId']['file'] as $clientId => $meta) {
 					if (!isset($uploadedFileSet[$clientId])) {

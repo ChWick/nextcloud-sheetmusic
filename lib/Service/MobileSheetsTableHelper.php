@@ -140,4 +140,19 @@ final class MobileSheetsTableHelper {
 		$stmt = $db->prepare($sql);
 		$stmt->execute(array_values($row));
 	}
+
+	/**
+	 * Query all IDs from an SQLite table and return as an integer set [id => int].
+	 *
+	 * @return array<int, int>
+	 */
+	public static function getTableIdSet(PDO $db, string $tableName): array {
+		if (!self::tableExists($db, $tableName)) {
+			return [];
+		}
+
+		$escapedTable = '"' . str_replace('"', '""', $tableName) . '"';
+		$ids = $db->query(sprintf('SELECT Id FROM %s', $escapedTable))->fetchAll(PDO::FETCH_COLUMN);
+		return array_flip(array_map('intval', $ids));
+	}
 }

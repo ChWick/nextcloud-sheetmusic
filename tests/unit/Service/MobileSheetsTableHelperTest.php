@@ -88,4 +88,18 @@ final class MobileSheetsTableHelperTest extends TestCase {
 		$cnt = (int)$this->db->query('SELECT count(*) FROM TestInsert')->fetchColumn();
 		self::assertSame(1, $cnt);
 	}
+
+	public function testGetTableIdSet(): void {
+		self::assertSame([], MobileSheetsTableHelper::getTableIdSet($this->db, 'NonExistent'));
+
+		$this->db->exec('CREATE TABLE TestIds (Id INTEGER PRIMARY KEY, Val TEXT)');
+		$this->db->exec('INSERT INTO TestIds (Id, Val) VALUES (10, "A"), (25, "B"), (99, "C")');
+
+		$idSet = MobileSheetsTableHelper::getTableIdSet($this->db, 'TestIds');
+		self::assertCount(3, $idSet);
+		self::assertTrue(isset($idSet[10]));
+		self::assertTrue(isset($idSet[25]));
+		self::assertTrue(isset($idSet[99]));
+		self::assertFalse(isset($idSet[11]));
+	}
 }
