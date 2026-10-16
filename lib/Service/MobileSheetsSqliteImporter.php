@@ -19,6 +19,7 @@ use OCA\SheetMusic\Db\InternalSongFile;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
+use OCA\SheetMusic\Service\MobileSheetsTableHelper;
 use OCP\Files\File;
 use OCP\Files\IRootFolder;
 use OCP\IUser;
@@ -273,8 +274,7 @@ class MobileSheetsSqliteImporter {
 			'hasMetadata' => false,
 		];
 
-		$check = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='_nc_sync_metadata'");
-		if ($check === false || $check->fetch() === false) {
+		if (!MobileSheetsTableHelper::tableExists($db, '_nc_sync_metadata')) {
 			return $result;
 		}
 
@@ -323,33 +323,14 @@ class MobileSheetsSqliteImporter {
 	 */
 	private function mergeEntities(PDO $db, int $libraryId, array $syncMeta, array &$stats): void {
 		foreach (self::TABLE_TO_ENTITY_CONFIG as $tableName => $config) {
-			$check = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='" . str_replace("'", "''", $tableName) . "'");
-			if ($check === false || $check->fetch() === false) {
+			if (!MobileSheetsTableHelper::tableExists($db, $tableName)) {
 				continue;
 			}
 
-			$stmt = $db->query('PRAGMA table_info("' . str_replace('"', '""', $tableName) . '")');
-			$cols = [];
-			if ($stmt !== false) {
-				foreach ($stmt->fetchAll() as $col) {
-					$cols[strtolower((string)$col['name'])] = (string)$col['name'];
-				}
-			}
-
-			$nameCol = $config['nameCol'];
-			if (!isset($cols[strtolower($nameCol)])) {
-				// Alternative fallback
-				if (isset($cols['name'])) {
-					$nameCol = $cols['name'];
-				} elseif (isset($cols['title'])) {
-					$nameCol = $cols['title'];
-				} elseif (isset($cols['type'])) {
-					$nameCol = $cols['type'];
-				} elseif (isset($cols['year'])) {
-					$nameCol = $cols['year'];
-				} else {
-					continue;
-				}
+			$cols = MobileSheetsTableHelper::getTableColumns($db, $tableName);
+			$nameCol = MobileSheetsTableHelper::resolveEntityNameColumn($cols, $config['nameCol']);
+			if ($nameCol === null) {
+				continue;
 			}
 
 			$rowsStmt = $db->query('SELECT * FROM "' . str_replace('"', '""', $tableName) . '"');
@@ -480,29 +461,13 @@ class MobileSheetsSqliteImporter {
 		array &$stats,
 		array &$updatedSongClientIds,
 	): void {
-		$check = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='Songs'");
-		if ($check === false || $check->fetch() === false) {
+		if (!MobileSheetsTableHelper::tableExists($db, 'Songs')) {
 			return;
 		}
 
 		$notesBySongId = [];
-		$noteCheck = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='SongNotes'");
-		if ($noteCheck !== false && $noteCheck->fetch() !== false) {
-			$colStmt = $db->query("PRAGMA table_info('SongNotes')");
-			$noteCol = 'Note';
-			if ($colStmt !== false) {
-				while ($col = $colStmt->fetch()) {
-					$cName = strtolower((string)$col['name']);
-					if ($cName === 'notes') {
-						$noteCol = 'Notes';
-						break;
-					} elseif ($cName === 'note') {
-						$noteCol = 'Note';
-					} elseif ($cName === 'text') {
-						$noteCol = 'Text';
-					}
-				}
-			}
+		$noteCol = MobileSheetsTableHelper::getSongNotesContentColumn($db);
+		if ($noteCol !== null) {
 			$notesStmt = $db->query('SELECT SongId, "' . $noteCol . '" AS Note FROM SongNotes ORDER BY Id ASC');
 			if ($notesStmt !== false) {
 				while ($nrow = $notesStmt->fetch()) {
@@ -703,8 +668,7 @@ class MobileSheetsSqliteImporter {
 			$linkCol = $config['linkCol'];
 			$type = $config['type'];
 
-			$check = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='" . str_replace("'", "''", $linkTable) . "'");
-			if ($check === false || $check->fetch() === false) {
+			if (!MobileSheetsTableHelper::tableExists($db, $linkTable)) {
 				continue;
 			}
 
@@ -799,8 +763,7 @@ class MobileSheetsSqliteImporter {
 		array $syncMeta,
 		array &$stats,
 	): void {
-		$check = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='Files'");
-		if ($check === false || $check->fetch() === false) {
+		if (!MobileSheetsTableHelper::tableExists($db, 'Files')) {
 			return;
 		}
 
@@ -956,40 +919,9 @@ class MobileSheetsSqliteImporter {
 				continue;
 			}
 
-			$tableName = $config['table'];
-			$check = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='" . str_replace("'", "''", $tableName) . "'");
-			if ($check === false || $check->fetch() === false) {
-				if ($tableName === 'Key') {
-					$alt = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='Keys'");
-					if ($alt !== false && $alt->fetch() !== false) {
-						$tableName = 'Keys';
-					} else {
-						continue;
-					}
-				} elseif ($tableName === 'Keys') {
-					$alt = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='Key'");
-					if ($alt !== false && $alt->fetch() !== false) {
-						$tableName = 'Key';
-					} else {
-						continue;
-					}
-				} elseif ($tableName === 'SourceType') {
-					$alt = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='SourceTypes'");
-					if ($alt !== false && $alt->fetch() !== false) {
-						$tableName = 'SourceTypes';
-					} else {
-						continue;
-					}
-				} elseif ($tableName === 'SourceTypes') {
-					$alt = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='SourceType'");
-					if ($alt !== false && $alt->fetch() !== false) {
-						$tableName = 'SourceType';
-					} else {
-						continue;
-					}
-				} else {
-					continue;
-				}
+			$tableName = MobileSheetsTableHelper::resolveTable($db, $config['table']);
+			if ($tableName === null) {
+				continue;
 			}
 
 			$uploadedEntityIds = $db->query('SELECT Id FROM "' . str_replace('"', '""', $tableName) . '"')->fetchAll(PDO::FETCH_COLUMN);
@@ -1015,9 +947,7 @@ class MobileSheetsSqliteImporter {
 		}
 
 		// 3. Deleted Files
-		if (isset($syncMeta['byTypeAndId']['file'])) {
-			$check = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='Files'");
-			if ($check !== false && $check->fetch() !== false) {
+		if (isset($syncMeta['byTypeAndId']['file']) && MobileSheetsTableHelper::tableExists($db, 'Files')) {
 				$uploadedFileIds = $db->query('SELECT Id FROM Files')->fetchAll(PDO::FETCH_COLUMN);
 				$uploadedFileSet = array_flip(array_map('intval', $uploadedFileIds));
 
@@ -1035,7 +965,6 @@ class MobileSheetsSqliteImporter {
 						}
 					}
 				}
-			}
 		}
 	}
 
