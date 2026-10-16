@@ -1494,4 +1494,154 @@ final class MobileSheetsSyncTest extends TestCase {
 		$titles = $finalDb->query('SELECT Title FROM Songs ORDER BY Title ASC')->fetchAll(PDO::FETCH_COLUMN);
 		self::assertSame(['MS New Song', 'Nextcloud Exclusive Song'], $titles);
 	}
+
+	public function testCollectionSongManualOrderingPreservedOnImportAndExport(): void {
+		$lib = $this->createTestLibrary('Ordering_Manual_' . bin2hex(random_bytes(3)));
+
+		// 1. MobileSheets has a Collection with Manual sort order (SortBy = 0)
+		//    Containing songs in non-alphabetical / custom sequence: Song 1, Song 3, Song 2
+		$dbPath1 = $this->tempDbPath();
+		$msDb1 = $this->createEmptyMobileSheetsDb($dbPath1);
+
+		$msDb1->exec("INSERT INTO Songs (Id, Title, SortTitle, DateCreated, LastModified) VALUES
+			(1, 'Song Alpha', 'Song Alpha', 1000000, 1000000),
+			(2, 'Song Beta', 'Song Beta', 1000000, 1000000),
+			(3, 'Song Gamma', 'Song Gamma', 1000000, 1000000)");
+
+		// SortBy = 0: Manual / custom order
+		$msDb1->exec("INSERT INTO Collections (Id, Name, SortBy, Ascending, DateCreated, LastModified) VALUES
+			(10, 'Live Set 2026', 0, 1, 1000000, 1000000)");
+
+		// Custom sequence: Song 1, then Song 3, then Song 2
+		$msDb1->exec("INSERT INTO CollectionSong (Id, CollectionId, SongId) VALUES
+			(1, 10, 1),
+			(2, 10, 3),
+			(3, 10, 2)");
+
+		// 2. Import into Nextcloud
+		$stats = $this->importer->importFromFile($lib, $dbPath1);
+		self::assertSame(3, $stats['songsCreated']);
+
+		// 3. Export back to a new MobileSheets SQLite database
+		$exportPath = $this->tempDbPath();
+		$this->exporter->exportToFile($lib, $exportPath);
+
+		$exportedDb = new PDO('sqlite:' . $exportPath, options: [
+			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+		]);
+
+		// Verify Collection retains SortBy = 0
+		$colRow = $exportedDb->query('SELECT SortBy, Ascending FROM Collections WHERE Id = 10')->fetch();
+		self::assertSame(0, (int)$colRow['SortBy']);
+		self::assertSame(1, (int)$colRow['Ascending']);
+
+		// Verify CollectionSong rows are in the EXACT sequence: 1, 3, 2
+		$exportedSongIds = $exportedDb->query('SELECT SongId FROM CollectionSong WHERE CollectionId = 10 ORDER BY Id ASC')->fetchAll(PDO::FETCH_COLUMN);
+		self::assertSame([1, 3, 2], array_map('intval', $exportedSongIds), 'Manual collection song ordering (1, 3, 2) must be preserved');
+	}
+
+	public function testCollectionSongOrderingAllModes(): void {
+		$lib = $this->createTestLibrary('Ordering_Modes_' . bin2hex(random_bytes(3)));
+
+		// Create 3 songs with diverse attributes
+		// Song A: Title 'Zebra', rating 5, difficulty 1, created 3000, updated 1000
+		// Song B: Title 'Apple', rating 1, difficulty 5, created 1000, updated 3000
+		// Song C: Title 'Mango', rating 3, difficulty 3, created 2000, updated 2000
+		$songA = new InternalSong(
+			uuid: 'song-zebra',
+			libraryId: $lib->id,
+			title: 'Zebra',
+			sortTitle: 'Zebra',
+			rating: 5,
+			difficulty: 1,
+			duration: 200,
+			clientId: 1,
+			createdAt: 3000,
+			updatedAt: 1000,
+		);
+		$songB = new InternalSong(
+			uuid: 'song-apple',
+			libraryId: $lib->id,
+			title: 'Apple',
+			sortTitle: 'Apple',
+			rating: 1,
+			difficulty: 5,
+			duration: 200,
+			clientId: 2,
+			createdAt: 1000,
+			updatedAt: 3000,
+		);
+		$songC = new InternalSong(
+			uuid: 'song-mango',
+			libraryId: $lib->id,
+			title: 'Mango',
+			sortTitle: 'Mango',
+			rating: 3,
+			difficulty: 3,
+			duration: 200,
+			clientId: 3,
+			createdAt: 2000,
+			updatedAt: 2000,
+		);
+		$this->songMapper->insert($songA);
+		$this->songMapper->insert($songB);
+		$this->songMapper->insert($songC);
+
+		$testModes = [
+			// Mode 1: Title (A-Z): Apple (2), Mango (3), Zebra (1)
+			['sortBy' => 1, 'ascending' => 1, 'expected' => [2, 3, 1]],
+			// Mode 1: Title (Z-A): Zebra (1), Mango (3), Apple (2)
+			['sortBy' => 1, 'ascending' => 0, 'expected' => [1, 3, 2]],
+			// Mode 2: Date Created (oldest first): Apple (2, 1000s), Mango (3, 2000s), Zebra (1, 3000s)
+			['sortBy' => 2, 'ascending' => 1, 'expected' => [2, 3, 1]],
+			// Mode 2: Date Created (newest first): Zebra (1, 3000s), Mango (3, 2000s), Apple (2, 1000s)
+			['sortBy' => 2, 'ascending' => 0, 'expected' => [1, 3, 2]],
+			// Mode 3: Last Modified (oldest first): Zebra (1, 1000s), Mango (3, 2000s), Apple (2, 3000s)
+			['sortBy' => 3, 'ascending' => 1, 'expected' => [1, 3, 2]],
+			// Mode 3: Last Modified (newest first): Apple (2, 3000s), Mango (3, 2000s), Zebra (1, 1000s)
+			['sortBy' => 3, 'ascending' => 0, 'expected' => [2, 3, 1]],
+			// Mode 4: Rating (lowest first): Apple (2, 1 star), Mango (3, 3 stars), Zebra (1, 5 stars)
+			['sortBy' => 4, 'ascending' => 1, 'expected' => [2, 3, 1]],
+			// Mode 4: Rating (highest first): Zebra (1, 5 stars), Mango (3, 3 stars), Apple (2, 1 star)
+			['sortBy' => 4, 'ascending' => 0, 'expected' => [1, 3, 2]],
+			// Mode 5: Difficulty (easiest first): Zebra (1, diff 1), Mango (3, diff 3), Apple (2, diff 5)
+			['sortBy' => 5, 'ascending' => 1, 'expected' => [1, 3, 2]],
+			// Mode 5: Difficulty (hardest first): Apple (2, diff 5), Mango (3, diff 3), Zebra (1, diff 1)
+			['sortBy' => 5, 'ascending' => 0, 'expected' => [2, 3, 1]],
+		];
+
+		$collection = new InternalEntity(
+			uuid: 'col-modes-test',
+			libraryId: $lib->id,
+			type: 'collection',
+			name: 'Test Collection',
+			sortBy: 1,
+			ascending: 1,
+			clientId: 10,
+		);
+		$this->entityMapper->insert($collection);
+		$this->entityMapper->setEntitySongs($collection->id, [$songA->id, $songB->id, $songC->id]);
+
+		foreach ($testModes as $idx => $spec) {
+			$collection->sortBy = $spec['sortBy'];
+			$collection->ascending = $spec['ascending'];
+			$this->entityMapper->update($collection);
+
+			$exportPath = $this->tempDbPath();
+			$this->exporter->exportToFile($lib, $exportPath);
+
+			$db = new PDO('sqlite:' . $exportPath, options: [
+				PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+				PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+			]);
+
+			$exportedSongIds = $db->query('SELECT SongId FROM CollectionSong WHERE CollectionId = 10 ORDER BY Id ASC')->fetchAll(PDO::FETCH_COLUMN);
+			self::assertSame(
+				$spec['expected'],
+				array_map('intval', $exportedSongIds),
+				sprintf('Failed ordering for sortBy=%d ascending=%d (case %d)', $spec['sortBy'], $spec['ascending'], $idx)
+			);
+		}
+	}
 }

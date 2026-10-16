@@ -607,7 +607,9 @@ class MobileSheetsSqliteExporter {
 
 		$songs = $this->songMapper->findByLibrary($libraryId, includeDeleted: false);
 		$songClientMap = [];
+		$songById = [];
 		foreach ($songs as $s) {
+			$songById[$s->id] = $s;
 			if ($s->clientId !== null) {
 				$songClientMap[$s->id] = $s->clientId;
 			}
@@ -615,24 +617,28 @@ class MobileSheetsSqliteExporter {
 
 		$entities = $this->entityMapper->findAllForLibrary($libraryId, includeDeleted: false);
 		$entityClientMap = [];
+		$entityById = [];
 		foreach ($entities as $e) {
+			$entityById[$e->id] = $e;
 			if ($e->clientId !== null) {
 				$entityClientMap[$e->id] = $e->clientId;
 			}
 		}
 
+		$linksByEntityId = [];
 		foreach ($links as $link) {
-			$songId = $link['song_id'];
 			$entityId = $link['entity_id'];
-			$type = $link['type'];
+			$linksByEntityId[$entityId][] = $link;
+		}
 
-			$songClientId = $songClientMap[$songId] ?? null;
+		foreach ($linksByEntityId as $entityId => $entityLinks) {
+			$entity = $entityById[$entityId] ?? null;
 			$entityClientId = $entityClientMap[$entityId] ?? null;
-
-			if ($songClientId === null || $entityClientId === null) {
+			if ($entity === null || $entityClientId === null) {
 				continue;
 			}
 
+			$type = $entity->type;
 			$config = self::ENTITY_TABLE_CONFIG[$type] ?? self::ENTITY_TABLE_CONFIG['customgroup'];
 			$linkTable = $config['linkTable'];
 			$linkCol = $config['linkCol'];
@@ -642,19 +648,83 @@ class MobileSheetsSqliteExporter {
 				continue;
 			}
 
-			$checkExisting = $db->prepare(sprintf('SELECT 1 FROM "%s" WHERE "%s" = ? AND SongId = ?', str_replace('"', '""', $linkTable), str_replace('"', '""', $linkCol)));
-			$checkExisting->execute([$entityClientId, $songClientId]);
-			if ($checkExisting->fetch() !== false) {
-				continue;
-			}
+			// Sort entity links according to entity's sortBy and ascending mode
+			usort($entityLinks, function ($a, $b) use ($songById, $entity) {
+				$songA = $songById[$a['song_id']] ?? null;
+				$songB = $songById[$b['song_id']] ?? null;
+				if ($songA === null || $songB === null) {
+					return ($a['link_id'] ?? 0) <=> ($b['link_id'] ?? 0);
+				}
 
-			$sql = sprintf(
+				// If SortBy is 0 (Manual), preserve link sequence
+				if ($entity->sortBy === 0) {
+					$cmp = ($a['link_id'] ?? 0) <=> ($b['link_id'] ?? 0);
+					return $entity->ascending === 0 ? -$cmp : $cmp;
+				}
+
+				$cmp = 0;
+				switch ($entity->sortBy) {
+					case 1: // Title / Alphabetical
+						$titleA = $songA->sortTitle !== '' ? $songA->sortTitle : $songA->title;
+						$titleB = $songB->sortTitle !== '' ? $songB->sortTitle : $songB->title;
+						$cmp = strnatcasecmp($titleA, $titleB);
+						break;
+					case 2: // Date Created
+						$cmp = $songA->createdAt <=> $songB->createdAt;
+						break;
+					case 3: // Last Modified
+						$cmp = $songA->updatedAt <=> $songB->updatedAt;
+						break;
+					case 4: // Rating / Stars
+						$cmp = $songA->rating <=> $songB->rating;
+						break;
+					case 5: // Difficulty
+						$cmp = $songA->difficulty <=> $songB->difficulty;
+						break;
+					default:
+						$titleA = $songA->sortTitle !== '' ? $songA->sortTitle : $songA->title;
+						$titleB = $songB->sortTitle !== '' ? $songB->sortTitle : $songB->title;
+						$cmp = strnatcasecmp($titleA, $titleB);
+						break;
+				}
+
+				if ($cmp === 0) {
+					if ($entity->sortBy !== 1) {
+						$titleA = $songA->sortTitle !== '' ? $songA->sortTitle : $songA->title;
+						$titleB = $songB->sortTitle !== '' ? $songB->sortTitle : $songB->title;
+						$cmp = strnatcasecmp($titleA, $titleB);
+					}
+					if ($cmp === 0) {
+						$cmp = ($a['link_id'] ?? 0) <=> ($b['link_id'] ?? 0);
+					}
+				}
+
+				return $entity->ascending === 0 ? -$cmp : $cmp;
+			});
+
+			$stmt = $db->prepare(sprintf(
 				'INSERT INTO "%s" ("%s", SongId) VALUES (?, ?)',
 				str_replace('"', '""', $linkTable),
 				str_replace('"', '""', $linkCol),
-			);
-			$stmt = $db->prepare($sql);
-			$stmt->execute([$entityClientId, $songClientId]);
+			));
+
+			$checkExisting = $db->prepare(sprintf('SELECT 1 FROM "%s" WHERE "%s" = ? AND SongId = ?', str_replace('"', '""', $linkTable), str_replace('"', '""', $linkCol)));
+			$insertedSongClientIds = [];
+			foreach ($entityLinks as $link) {
+				$songId = $link['song_id'];
+				$songClientId = $songClientMap[$songId] ?? null;
+				if ($songClientId === null || isset($insertedSongClientIds[$songClientId])) {
+					continue;
+				}
+				$insertedSongClientIds[$songClientId] = true;
+
+				$checkExisting->execute([$entityClientId, $songClientId]);
+				if ($checkExisting->fetch() !== false) {
+					continue;
+				}
+
+				$stmt->execute([$entityClientId, $songClientId]);
+			}
 		}
 	}
 

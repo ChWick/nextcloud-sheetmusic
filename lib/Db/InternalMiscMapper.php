@@ -153,6 +153,8 @@ class InternalMiscMapper {
 			$qb->andWhere($qb->expr()->isNull('deleted_at'));
 		}
 
+		$qb->orderBy('id', 'ASC');
+
 		$result = $qb->executeQuery();
 		$rows = [];
 		while ($row = $result->fetchAssociative()) {

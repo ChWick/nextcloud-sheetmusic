@@ -106,7 +106,7 @@ class MobileSheetsSqliteImporter {
 	];
 
 	/** Standard tables natively handled by Sheet Music core. */
-	private const CORE_MANAGED_TABLES = [
+	public const CORE_MANAGED_TABLES = [
 		'songs',
 		'files',
 		'composer',
@@ -688,11 +688,13 @@ class MobileSheetsSqliteImporter {
 			}
 		}
 
-		$entities = $this->entityMapper->findAllForLibrary($libraryId, includeDeleted: false);
+		$entities = $this->entityMapper->findAllForLibrary($libraryId, includeDeleted: true);
 		$entityIdByClientAndType = [];
+		$allEntityIdsByType = [];
 		foreach ($entities as $e) {
-			if ($e->clientId !== null) {
+			if ($e->clientId !== null && $e->id !== null) {
 				$entityIdByClientAndType[$e->type . ':' . $e->clientId] = $e->id;
+				$allEntityIdsByType[$e->type][$e->clientId] = $e->id;
 			}
 		}
 
@@ -706,16 +708,50 @@ class MobileSheetsSqliteImporter {
 				continue;
 			}
 
-			$stmt = $db->query('SELECT "' . str_replace('"', '""', $linkCol) . '" AS entity_client_id, SongId AS song_client_id FROM "' . str_replace('"', '""', $linkTable) . '"');
+			$stmt = $db->query('SELECT "' . str_replace('"', '""', $linkCol) . '" AS entity_client_id, SongId AS song_client_id FROM "' . str_replace('"', '""', $linkTable) . '" ORDER BY Id ASC');
 			if ($stmt === false) {
 				continue;
 			}
 
+			$songsByEntityClientId = [];
 			$linksBySongClientId = [];
 			while ($row = $stmt->fetch()) {
 				$sClientId = (int)$row['song_client_id'];
 				$eClientId = (int)$row['entity_client_id'];
+				$songsByEntityClientId[$eClientId][] = $sClientId;
 				$linksBySongClientId[$sClientId][] = $eClientId;
+			}
+
+			$knownClientIds = array_unique(array_merge(
+				array_keys($songsByEntityClientId),
+				array_keys($allEntityIdsByType[$type] ?? []),
+				($type === 'customgroup') ? array_keys($allEntityIdsByType['instrument'] ?? []) : []
+			));
+
+			foreach ($knownClientIds as $eClientId) {
+				$internalEntityId = null;
+				if ($type === 'customgroup') {
+					$internalEntityId = $entityIdByClientAndType['instrument:' . $eClientId]
+						?? $entityIdByClientAndType['customgroup:' . $eClientId]
+						?? null;
+				} else {
+					$internalEntityId = $entityIdByClientAndType[$type . ':' . $eClientId] ?? null;
+				}
+
+				if ($internalEntityId === null) {
+					continue;
+				}
+
+				$songClientIds = $songsByEntityClientId[$eClientId] ?? [];
+				$orderedInternalSongIds = [];
+				foreach ($songClientIds as $sClientId) {
+					$song = $songByClientId[$sClientId] ?? null;
+					if ($song !== null && $song->id !== null && $song->deletedAt === null) {
+						$orderedInternalSongIds[] = $song->id;
+					}
+				}
+
+				$this->entityMapper->setEntitySongs($internalEntityId, $orderedInternalSongIds);
 			}
 
 			$candidateSongClientIds = array_unique(array_merge(array_keys($updatedSongClientIds), array_keys($linksBySongClientId)));
@@ -1032,7 +1068,7 @@ class MobileSheetsSqliteImporter {
 			$this->miscMapper->saveMiscSchema($libraryId, 'mobilesheets', $tableName, $sql);
 
 			// Save rows
-			$rowsStmt = $db->query('SELECT * FROM "' . str_replace('"', '""', $tableName) . '"');
+			$rowsStmt = $db->query('SELECT * FROM "' . str_replace('"', '""', $tableName) . '" ORDER BY rowid ASC');
 			if ($rowsStmt === false) {
 				continue;
 			}

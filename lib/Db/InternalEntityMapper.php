@@ -244,7 +244,8 @@ class InternalEntityMapper {
 		$qb->select('song_id')
 			->from(self::JUNCTION_TABLE_NAME)
 			->where($qb->expr()->eq('entity_id', $qb->createNamedParameter($entityId, IQueryBuilder::PARAM_INT)))
-			->andWhere($qb->expr()->isNull('deleted_at'));
+			->andWhere($qb->expr()->isNull('deleted_at'))
+			->orderBy('id', 'ASC');
 
 		$result = $qb->executeQuery();
 		$songIds = [];
@@ -351,21 +352,55 @@ class InternalEntityMapper {
 	}
 
 	/**
-	 * @return list<array{song_id: int, entity_id: int, type: string}>
+	 * Set the songs linked to an entity in a specific sequence.
+	 *
+	 * @param list<int> $orderedSongIds
+	 */
+	public function setEntitySongs(int $entityId, array $orderedSongIds): void {
+		$currentSongIds = $this->findSongIdsForEntity($entityId);
+		if ($currentSongIds === $orderedSongIds) {
+			return;
+		}
+
+		// Hard delete existing junction rows for this entity
+		$qbDel = $this->db->getQueryBuilder();
+		$qbDel->delete(self::JUNCTION_TABLE_NAME)
+			->where($qbDel->expr()->eq('entity_id', $qbDel->createNamedParameter($entityId, IQueryBuilder::PARAM_INT)));
+		$qbDel->executeStatement();
+
+		$now = time();
+		foreach ($orderedSongIds as $songId) {
+			$qbIns = $this->db->getQueryBuilder();
+			$qbIns->insert(self::JUNCTION_TABLE_NAME)
+				->values([
+					'song_id' => $qbIns->createNamedParameter($songId, IQueryBuilder::PARAM_INT),
+					'entity_id' => $qbIns->createNamedParameter($entityId, IQueryBuilder::PARAM_INT),
+					'created_at' => $qbIns->createNamedParameter($now, IQueryBuilder::PARAM_INT),
+					'deleted_at' => $qbIns->createNamedParameter(null, IQueryBuilder::PARAM_NULL),
+				]);
+			$qbIns->executeStatement();
+		}
+	}
+
+	/**
+	 * @return list<array{link_id: int, song_id: int, entity_id: int, type: string}>
 	 */
 	public function findAllSongEntityLinksForLibrary(int $libraryId): array {
 		$qb = $this->db->getQueryBuilder();
-		$qb->select('se.song_id', 'se.entity_id', 'e.type')
+		$qb->select('se.id AS link_id', 'se.song_id', 'se.entity_id', 'e.type')
 			->from(self::JUNCTION_TABLE_NAME, 'se')
 			->innerJoin('se', self::TABLE_NAME, 'e', $qb->expr()->eq('se.entity_id', 'e.id'))
 			->where($qb->expr()->eq('e.library_id', $qb->createNamedParameter($libraryId, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->isNull('se.deleted_at'))
-			->andWhere($qb->expr()->isNull('e.deleted_at'));
+			->andWhere($qb->expr()->isNull('e.deleted_at'))
+			->orderBy('se.entity_id', 'ASC')
+			->addOrderBy('se.id', 'ASC');
 
 		$result = $qb->executeQuery();
 		$links = [];
 		while ($row = $result->fetchAssociative()) {
 			$links[] = [
+				'link_id' => (int)$row['link_id'],
 				'song_id' => (int)$row['song_id'],
 				'entity_id' => (int)$row['entity_id'],
 				'type' => (string)$row['type'],
