@@ -410,7 +410,7 @@ class MobileSheetsSqliteExporter {
 					$vals[] = $entity->updatedAt * 1000;
 				}
 
-				$escaped = array_map(fn($c) => '"' . str_replace('"', '""', $c) . '"', $cols);
+				$escaped = array_map(fn ($c) => '"' . str_replace('"', '""', $c) . '"', $cols);
 				$placeholders = array_fill(0, count($cols), '?');
 				$sql = sprintf('INSERT INTO "%s" (%s) VALUES (%s)', str_replace('"', '""', $tableName), implode(', ', $escaped), implode(', ', $placeholders));
 				$stmt = $db->prepare($sql);

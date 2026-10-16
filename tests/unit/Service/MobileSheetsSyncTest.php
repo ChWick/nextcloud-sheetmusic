@@ -10,183 +10,24 @@ declare(strict_types=1);
 namespace Service;
 
 use OCA\SheetMusic\Db\InternalEntity;
-use OCA\SheetMusic\Db\InternalEntityMapper;
-use OCA\SheetMusic\Db\InternalLibrary;
-use OCA\SheetMusic\Db\InternalMiscMapper;
 use OCA\SheetMusic\Db\InternalSong;
-use OCA\SheetMusic\Db\InternalSongAttributeMapper;
 use OCA\SheetMusic\Db\InternalSongFile;
-use OCA\SheetMusic\Db\InternalSongFileMapper;
-use OCA\SheetMusic\Db\InternalSongMapper;
-use OCA\SheetMusic\Db\LibraryMapper;
-use OCA\SheetMusic\Service\MobileSheetsPathResolver;
-use OCA\SheetMusic\Service\MobileSheetsSqliteExporter;
-use OCA\SheetMusic\Service\MobileSheetsSqliteImporter;
 use OCP\Files\File;
 use OCP\Files\Folder;
-use OCP\Files\IRootFolder;
-use OCP\IUserManager;
 use PDO;
 use PHPUnit\Framework\TestCase;
-use Psr\Log\NullLogger;
 
 final class MobileSheetsSyncTest extends TestCase {
-	private \OCP\IDBConnection $dbConn;
-	private InternalSongMapper $songMapper;
-	private InternalEntityMapper $entityMapper;
-	private InternalSongFileMapper $songFileMapper;
-	private InternalSongAttributeMapper $attributeMapper;
-	private InternalMiscMapper $miscMapper;
-	private LibraryMapper $libraryMapper;
-	private IRootFolder $rootFolder;
-	private IUserManager $userManager;
-	private MobileSheetsPathResolver $pathResolver;
-	private MobileSheetsSqliteImporter $importer;
-	private MobileSheetsSqliteExporter $exporter;
-
-	/** @var list<int> */
-	private array $createdLibraryIds = [];
-
-	/** @var list<string> */
-	private array $tempFiles = [];
-
-	/** @var list<Folder|File> */
-	private array $createdUserNodes = [];
+	use \TestSupport\RealMobileSheetsTestTrait;
 
 	protected function setUp(): void {
 		parent::setUp();
-
-		$this->dbConn = \OC::$server->get(\OCP\IDBConnection::class);
-		$this->songMapper = new InternalSongMapper($this->dbConn);
-		$this->entityMapper = new InternalEntityMapper($this->dbConn);
-		$this->songFileMapper = new InternalSongFileMapper($this->dbConn);
-		$this->attributeMapper = new InternalSongAttributeMapper($this->dbConn);
-		$this->miscMapper = new InternalMiscMapper($this->dbConn);
-		$this->libraryMapper = new LibraryMapper($this->dbConn);
-		$this->rootFolder = \OC::$server->get(IRootFolder::class);
-		$this->userManager = \OC::$server->get(IUserManager::class);
-		$logger = new NullLogger();
-		$this->pathResolver = new MobileSheetsPathResolver($this->rootFolder);
-
-		$this->importer = new MobileSheetsSqliteImporter(
-			$this->songMapper,
-			$this->entityMapper,
-			$this->songFileMapper,
-			$this->attributeMapper,
-			$this->miscMapper,
-			$this->libraryMapper,
-			$this->pathResolver,
-			$this->rootFolder,
-			$this->userManager,
-			$logger,
-		);
-
-		$this->exporter = new MobileSheetsSqliteExporter(
-			$this->songMapper,
-			$this->entityMapper,
-			$this->songFileMapper,
-			$this->attributeMapper,
-			$this->miscMapper,
-			$this->libraryMapper,
-			$this->pathResolver,
-			$this->rootFolder,
-			$this->userManager,
-			$logger,
-		);
+		$this->setUpRealMobileSheetsEnvironment();
 	}
 
 	protected function tearDown(): void {
-		foreach ($this->createdLibraryIds as $libId) {
-			$this->dbConn->executeStatement('DELETE FROM *PREFIX*sheetmusic_song_entities WHERE song_id IN (SELECT id FROM *PREFIX*sheetmusic_songs WHERE library_id = ?)', [$libId]);
-			$this->dbConn->executeStatement('DELETE FROM *PREFIX*sheetmusic_song_attributes WHERE song_id IN (SELECT id FROM *PREFIX*sheetmusic_songs WHERE library_id = ?)', [$libId]);
-			$this->dbConn->executeStatement('DELETE FROM *PREFIX*sheetmusic_song_files WHERE song_id IN (SELECT id FROM *PREFIX*sheetmusic_songs WHERE library_id = ?)', [$libId]);
-			$this->dbConn->executeStatement('DELETE FROM *PREFIX*sheetmusic_songs WHERE library_id = ?', [$libId]);
-			$this->dbConn->executeStatement('DELETE FROM *PREFIX*sheetmusic_entities WHERE library_id = ?', [$libId]);
-			$this->dbConn->executeStatement('DELETE FROM *PREFIX*sheetmusic_misc_data WHERE library_id = ?', [$libId]);
-			$this->dbConn->executeStatement('DELETE FROM *PREFIX*sheetmusic_misc_schema WHERE library_id = ?', [$libId]);
-			$this->dbConn->executeStatement('DELETE FROM *PREFIX*sheetmusic_libraries WHERE id = ?', [$libId]);
-		}
-
-		foreach ($this->createdUserNodes as $node) {
-			try {
-				if ($node instanceof File || $node instanceof Folder) {
-					$node->delete();
-				}
-			} catch (\Throwable) {
-				// Ignore cleanup errors
-			}
-		}
-
-		foreach ($this->tempFiles as $file) {
-			if (file_exists($file)) {
-				@unlink($file);
-			}
-		}
-
+		$this->tearDownRealMobileSheetsEnvironment();
 		parent::tearDown();
-	}
-
-	private function createTestLibrary(string $path = 'SheetMusic'): InternalLibrary {
-		$userId = 'sync_user_' . bin2hex(random_bytes(4));
-		$this->libraryMapper->addForUser($userId, $path);
-		$libs = $this->libraryMapper->findAllForUser($userId);
-		$lib = $this->libraryMapper->findModelById((int)$libs[0]['id']);
-		self::assertNotNull($lib);
-		$this->createdLibraryIds[] = (int)$lib->id;
-		return $lib;
-	}
-
-	private function tempDbPath(): string {
-		$path = tempnam(sys_get_temp_dir(), 'ms_sync_') . '.db';
-		$this->tempFiles[] = $path;
-		return $path;
-	}
-
-	private function createEmptyMobileSheetsDb(string $path): PDO {
-		if (file_exists($path)) {
-			@unlink($path);
-		}
-		$db = new PDO('sqlite:' . $path, options: [
-			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-		]);
-		$db->exec('CREATE TABLE Songs(Id INTEGER PRIMARY KEY, Title VARCHAR(255), SortTitle VARCHAR(255), Stars INTEGER DEFAULT 0, Difficulty INTEGER DEFAULT 0, Duration INTEGER DEFAULT 0, Keywords VARCHAR(255) DEFAULT \'\', Custom VARCHAR(255) DEFAULT \'\', Custom2 VARCHAR(255) DEFAULT \'\', SongId INTEGER, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
-		$db->exec('CREATE TABLE SongNotes(Id INTEGER PRIMARY KEY, SongId INTEGER, Note TEXT, Title VARCHAR(255) DEFAULT \'\', DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
-		$db->exec('CREATE TABLE Files(Id INTEGER PRIMARY KEY, SongId INTEGER, Path VARCHAR(255), PageOrder VARCHAR(255), FileSize INTEGER, LastModified INTEGER, Source INTEGER, Type INTEGER, Password VARCHAR(255) DEFAULT \'\', SourceFilePageCount INTEGER, FileHash INTEGER, Width INTEGER DEFAULT -1, Height INTEGER DEFAULT -1)');
-
-		// Entity tables
-		$db->exec('CREATE TABLE Composer(Id INTEGER PRIMARY KEY, Name VARCHAR(255), SortBy INTEGER DEFAULT 1, Ascending INTEGER DEFAULT 1, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
-		$db->exec('CREATE TABLE ComposerSongs(Id INTEGER PRIMARY KEY, ComposerId INTEGER, SongId INTEGER)');
-		$db->exec('CREATE TABLE Artists(Id INTEGER PRIMARY KEY, Name VARCHAR(255), SortBy INTEGER DEFAULT 1, Ascending INTEGER DEFAULT 1, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
-		$db->exec('CREATE TABLE ArtistsSongs(Id INTEGER PRIMARY KEY, ArtistId INTEGER, SongId INTEGER)');
-		$db->exec('CREATE TABLE Books(Id INTEGER PRIMARY KEY, Title VARCHAR(255), SortBy INTEGER DEFAULT 1, Ascending INTEGER DEFAULT 1, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
-		$db->exec('CREATE TABLE BookSongs(Id INTEGER PRIMARY KEY, BookId INTEGER, SongId INTEGER)');
-		$db->exec('CREATE TABLE Collections(Id INTEGER PRIMARY KEY, Name VARCHAR(255), SortBy INTEGER DEFAULT 1, Ascending INTEGER DEFAULT 1, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
-		$db->exec('CREATE TABLE CollectionSong(Id INTEGER PRIMARY KEY, CollectionId INTEGER, SongId INTEGER)');
-		$db->exec('CREATE TABLE Genres(Id INTEGER PRIMARY KEY, Type VARCHAR(255), SortBy INTEGER DEFAULT 1, Ascending INTEGER DEFAULT 1, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
-		$db->exec('CREATE TABLE GenresSongs(Id INTEGER PRIMARY KEY, GenreId INTEGER, SongId INTEGER)');
-		$db->exec('CREATE TABLE Key(Id INTEGER PRIMARY KEY, Name VARCHAR(255), SortBy INTEGER DEFAULT 1, Ascending INTEGER DEFAULT 1, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
-		$db->exec('CREATE TABLE Keys(Id INTEGER PRIMARY KEY, Name VARCHAR(255), SortBy INTEGER DEFAULT 1, Ascending INTEGER DEFAULT 1, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
-		$db->exec('CREATE TABLE KeySongs(Id INTEGER PRIMARY KEY, KeyId INTEGER, SongId INTEGER)');
-		$db->exec('CREATE TABLE CustomGroup(Id INTEGER PRIMARY KEY, Name VARCHAR(255), SortBy INTEGER DEFAULT 1, Ascending INTEGER DEFAULT 1, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
-		$db->exec('CREATE TABLE CustomGroupSongs(Id INTEGER PRIMARY KEY, GroupId INTEGER, SongId INTEGER)');
-		$db->exec('CREATE TABLE Years(Id INTEGER PRIMARY KEY, Name VARCHAR(255), SortBy INTEGER DEFAULT 1, Ascending INTEGER DEFAULT 1, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
-		$db->exec('CREATE TABLE YearsSongs(Id INTEGER PRIMARY KEY, YearId INTEGER, SongId INTEGER)');
-		$db->exec('CREATE TABLE Signature(Id INTEGER PRIMARY KEY, Name VARCHAR(255), SortBy INTEGER DEFAULT 1, Ascending INTEGER DEFAULT 1, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
-		$db->exec('CREATE TABLE SignatureSongs(Id INTEGER PRIMARY KEY, SignatureId INTEGER, SongId INTEGER)');
-		$db->exec('CREATE TABLE SourceType(Id INTEGER PRIMARY KEY, Type VARCHAR(255), SortBy INTEGER DEFAULT 1, Ascending INTEGER DEFAULT 1, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
-		$db->exec('CREATE TABLE SourceTypes(Id INTEGER PRIMARY KEY, Type VARCHAR(255), SortBy INTEGER DEFAULT 1, Ascending INTEGER DEFAULT 1, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
-		$db->exec('CREATE TABLE SourceTypeSongs(Id INTEGER PRIMARY KEY, SourceTypeId INTEGER, SongId INTEGER)');
-
-		// Misc tables
-		$db->exec('CREATE TABLE Bookmarks(Id INTEGER PRIMARY KEY, SongId INTEGER, Name VARCHAR(255), PageNum INTEGER, ShowInLibrary INTEGER DEFAULT 0, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
-		$db->exec('CREATE TABLE Setlists(Id INTEGER PRIMARY KEY, Name VARCHAR(255), DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
-		$db->exec('CREATE TABLE MetronomeSettings(Id INTEGER PRIMARY KEY, SongId INTEGER, Bpm INTEGER, Sig1 INTEGER DEFAULT 4, Sig2 INTEGER DEFAULT 4)');
-
-		// Metadata
-		$db->exec('CREATE TABLE _nc_sync_metadata (entity_type TEXT NOT NULL, uuid TEXT NOT NULL, client_id INTEGER, updated_at INTEGER, extra_json TEXT, PRIMARY KEY (entity_type, uuid))');
-
-		return $db;
 	}
 
 	/**
@@ -202,7 +43,7 @@ final class MobileSheetsSyncTest extends TestCase {
 			'Key (singular)' => ['Key', 'key', 'Name'],
 			'Keys (plural)' => ['Keys', 'key', 'Name'],
 			'CustomGroup' => ['CustomGroup', 'customgroup', 'Name'],
-			'Years' => ['Years', 'year', 'Name'],
+			'Years' => ['Years', 'year', 'Year'],
 			'Signature' => ['Signature', 'signature', 'Name'],
 			'SourceType (singular)' => ['SourceType', 'sourcetype', 'Type'],
 			'SourceTypes (plural)' => ['SourceTypes', 'sourcetype', 'Type'],
@@ -907,7 +748,7 @@ final class MobileSheetsSyncTest extends TestCase {
 			'Genres' => ['GenresSongs', 'GenreId', 'Genres', 'genre', 'Type'],
 			'Key' => ['KeySongs', 'KeyId', 'Key', 'key', 'Name'],
 			'CustomGroup' => ['CustomGroupSongs', 'GroupId', 'CustomGroup', 'customgroup', 'Name'],
-			'Years' => ['YearsSongs', 'YearId', 'Years', 'year', 'Name'],
+			'Years' => ['YearsSongs', 'YearId', 'Years', 'year', 'Year'],
 			'Signature' => ['SignatureSongs', 'SignatureId', 'Signature', 'signature', 'Name'],
 			'SourceType' => ['SourceTypeSongs', 'SourceTypeId', 'SourceType', 'sourcetype', 'Type'],
 		];
@@ -980,7 +821,7 @@ final class MobileSheetsSyncTest extends TestCase {
 		$this->importer->importFromFile($lib, $dbPath1);
 
 		$links1 = $this->entityMapper->findAllSongEntityLinksForLibrary($lib->id);
-		$matchingLinks1 = array_filter($links1, fn($l) => $l['song_id'] === $song->id && $l['type'] === $entityType);
+		$matchingLinks1 = array_filter($links1, fn ($l) => $l['song_id'] === $song->id && $l['type'] === $entityType);
 		self::assertCount(1, $matchingLinks1);
 		self::assertSame($entity1->id, (int)array_values($matchingLinks1)[0]['entity_id']);
 
@@ -996,7 +837,7 @@ final class MobileSheetsSyncTest extends TestCase {
 		$this->importer->importFromFile($lib, $dbPath2);
 
 		$links2 = $this->entityMapper->findAllSongEntityLinksForLibrary($lib->id);
-		$matchingLinks2 = array_filter($links2, fn($l) => $l['song_id'] === $song->id && $l['type'] === $entityType);
+		$matchingLinks2 = array_filter($links2, fn ($l) => $l['song_id'] === $song->id && $l['type'] === $entityType);
 		self::assertCount(1, $matchingLinks2);
 		self::assertSame($entity2->id, (int)array_values($matchingLinks2)[0]['entity_id'], 'Link should now point to entity2');
 
@@ -1011,7 +852,7 @@ final class MobileSheetsSyncTest extends TestCase {
 		$this->importer->importFromFile($lib, $dbPath3);
 
 		$links3 = $this->entityMapper->findAllSongEntityLinksForLibrary($lib->id);
-		$matchingLinks3 = array_filter($links3, fn($l) => $l['song_id'] === $song->id && $l['type'] === $entityType);
+		$matchingLinks3 = array_filter($links3, fn ($l) => $l['song_id'] === $song->id && $l['type'] === $entityType);
 		self::assertCount(0, $matchingLinks3, 'All links for this song and type should be removed');
 	}
 
@@ -1087,7 +928,7 @@ final class MobileSheetsSyncTest extends TestCase {
 		self::assertNull($reloadedSong->deletedAt, 'Song should remain active');
 
 		$activeLinks = $this->entityMapper->findAllSongEntityLinksForLibrary($lib->id);
-		$matchingLinks = array_filter($activeLinks, fn($l) => $l['song_id'] === $song->id && $l['type'] === $entityType);
+		$matchingLinks = array_filter($activeLinks, fn ($l) => $l['song_id'] === $song->id && $l['type'] === $entityType);
 		self::assertCount(0, $matchingLinks, 'Active links for this entity type should be 0');
 
 		// 4. Re-export and verify neither entity nor link appears in final DB
@@ -1318,7 +1159,7 @@ final class MobileSheetsSyncTest extends TestCase {
 		} elseif ($tableName === 'Setlists') {
 			$msDb->exec("INSERT INTO Setlists (Id, Name, DateCreated, LastModified) VALUES (1, 'Spring Concert 2026', 1000000, 1700000000000)");
 		} elseif ($tableName === 'MetronomeSettings') {
-			$msDb->exec("INSERT INTO MetronomeSettings (Id, SongId, Bpm, Sig1, Sig2) VALUES (1, 100, 132, 3, 4)");
+			$msDb->exec('INSERT INTO MetronomeSettings (Id, SongId, Bpm, Sig1, Sig2) VALUES (1, 100, 132, 3, 4)');
 		}
 
 		$stats = $this->importer->importFromFile($lib, $dbPath);
@@ -1395,10 +1236,10 @@ final class MobileSheetsSyncTest extends TestCase {
 		$msDb = new PDO('sqlite:' . $exportPath1, options: [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
 		$msDb->exec("UPDATE Songs SET Title = 'Song A (Updated by MS)', Stars = 5, LastModified = 2000000 WHERE Id = 1");
 		$msDb->exec("INSERT INTO Songs (Id, Title, SortTitle, Stars, Difficulty, Duration, DateCreated, LastModified) VALUES (2, 'Song B (Added in MS)', 'Song B (Added in MS)', 4, 3, 200, 2000000, 2000000)");
-		$msDb->exec("DELETE FROM Composer WHERE Id = 10");
-		$msDb->exec("DELETE FROM ComposerSongs WHERE ComposerId = 10");
+		$msDb->exec('DELETE FROM Composer WHERE Id = 10');
+		$msDb->exec('DELETE FROM ComposerSongs WHERE ComposerId = 10');
 		$msDb->exec("INSERT INTO Composer (Id, Name, SortBy, Ascending, DateCreated, LastModified) VALUES (20, 'Composer B', 1, 1, 2000000, 2000000)");
-		$msDb->exec("INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (20, 2)");
+		$msDb->exec('INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (20, 2)');
 
 		// 4. MobileSheets uploads DB back via WebDAV PUT (triggering importFromFile)
 		$stats = $this->importer->importFromFile($lib, $exportPath1);
@@ -1452,4 +1293,3 @@ final class MobileSheetsSyncTest extends TestCase {
 		self::assertSame(2, (int)$finalLinks[0]['SongId']);
 	}
 }
-

@@ -556,28 +556,28 @@ final class MobileSheetsSqliteImporterTest extends TestCase {
 		$origDb->exec("INSERT INTO Files (Id, SongId, Path, PageOrder, FileSize, LastModified, Source, Type, Password, SourceFilePageCount, FileHash, Width, Height) VALUES 
 		(10, 1, '/remote.php/webdav/tmp/SheetMusic/Bump City.pdf', '1-5', 1048576, 1700000000000, 1, 1, '', 5, 12345678, 1000, 1400)");
 		$origDb->exec("INSERT INTO Composer (Id, Name, SortBy, Ascending, DateCreated, LastModified) VALUES (20, 'Emilio Castillo', 1, 1, 1000000, 1700000000000)");
-		$origDb->exec("INSERT INTO ComposerSongs (Id, ComposerId, SongId) VALUES (1, 20, 1)");
+		$origDb->exec('INSERT INTO ComposerSongs (Id, ComposerId, SongId) VALUES (1, 20, 1)');
 		$origDb->exec("INSERT INTO Artists (Id, Name, DateCreated, LastModified) VALUES (30, 'Tower Of Power', 1000000, 1700000000000)");
-		$origDb->exec("INSERT INTO ArtistsSongs (Id, ArtistId, SongId) VALUES (1, 30, 1)");
+		$origDb->exec('INSERT INTO ArtistsSongs (Id, ArtistId, SongId) VALUES (1, 30, 1)');
 		$origDb->exec("INSERT INTO Books (Id, Title, SortBy, Ascending, DateCreated, LastModified) VALUES (40, 'Funk Collection', 1, 1, 1000000, 1700000000000)");
-		$origDb->exec("INSERT INTO BookSongs (Id, BookId, SongId) VALUES (1, 40, 1)");
+		$origDb->exec('INSERT INTO BookSongs (Id, BookId, SongId) VALUES (1, 40, 1)');
 		$origDb->exec("INSERT INTO Collections (Id, Name, SortBy, Ascending, DateCreated, LastModified) VALUES (50, 'Live Setlist', 1, 1, 1000000, 1700000000000)");
-		$origDb->exec("INSERT INTO CollectionSong (Id, CollectionId, SongId) VALUES (1, 50, 1)");
+		$origDb->exec('INSERT INTO CollectionSong (Id, CollectionId, SongId) VALUES (1, 50, 1)');
 		$origDb->exec("INSERT INTO Genres (Id, Type, DateCreated, LastModified) VALUES (60, 'Funk', 1000000, 1700000000000)");
-		$origDb->exec("INSERT INTO GenresSongs (Id, GenreId, SongId) VALUES (1, 60, 1)");
+		$origDb->exec('INSERT INTO GenresSongs (Id, GenreId, SongId) VALUES (1, 60, 1)');
 		$origDb->exec("INSERT INTO Keys (Id, Name, DateCreated, LastModified) VALUES (70, 'F# Minor', 1000000, 1700000000000)");
-		$origDb->exec("INSERT INTO KeySongs (Id, KeyId, SongId) VALUES (1, 70, 1)");
+		$origDb->exec('INSERT INTO KeySongs (Id, KeyId, SongId) VALUES (1, 70, 1)');
 		$origDb->exec("INSERT INTO CustomGroup (Id, Name, DateCreated, LastModified) VALUES (80, 'Horn Section', 1000000, 1700000000000)");
-		$origDb->exec("INSERT INTO CustomGroupSongs (Id, GroupId, SongId) VALUES (1, 80, 1)");
-		$origDb->exec("INSERT INTO Years (Id, Year, DateCreated, LastModified) VALUES (90, 1972, 1000000, 1700000000000)");
-		$origDb->exec("INSERT INTO YearsSongs (Id, YearId, SongId) VALUES (1, 90, 1)");
+		$origDb->exec('INSERT INTO CustomGroupSongs (Id, GroupId, SongId) VALUES (1, 80, 1)');
+		$origDb->exec('INSERT INTO Years (Id, Year, DateCreated, LastModified) VALUES (90, 1972, 1000000, 1700000000000)');
+		$origDb->exec('INSERT INTO YearsSongs (Id, YearId, SongId) VALUES (1, 90, 1)');
 		$origDb->exec("INSERT INTO Signature (Id, Name, DateCreated, LastModified) VALUES (100, '4/4', 1000000, 1700000000000)");
-		$origDb->exec("INSERT INTO SignatureSongs (Id, SignatureId, SongId) VALUES (1, 100, 1)");
+		$origDb->exec('INSERT INTO SignatureSongs (Id, SignatureId, SongId) VALUES (1, 100, 1)');
 		$origDb->exec("INSERT INTO SourceTypes (Id, Type, DateCreated, LastModified) VALUES (110, 'Manuscript', 1000000, 1700000000000)");
-		$origDb->exec("INSERT INTO SourceTypeSongs (Id, SourceTypeId, SongId) VALUES (1, 110, 1)");
+		$origDb->exec('INSERT INTO SourceTypeSongs (Id, SourceTypeId, SongId) VALUES (1, 110, 1)');
 		$origDb->exec("INSERT INTO Bookmarks (Id, SongId, Name, PageNum, ShowInLibrary, DateCreated, LastModified) VALUES (1, 1, 'Sax Solo', 3, 1, 1000000, 1700000000000)");
 		$origDb->exec("INSERT INTO AudioFiles (Id, SongId, Title, File, DateCreated, LastModified) VALUES (1, 1, 'Live Audio', 'bump_city.mp3', 1000000, 1700000000000)");
-		$origDb->exec("INSERT INTO MetronomeSettings (Id, SongId, Bpm, Sig1, Sig2) VALUES (1, 1, 115, 4, 4)");
+		$origDb->exec('INSERT INTO MetronomeSettings (Id, SongId, Bpm, Sig1, Sig2) VALUES (1, 1, 115, 4, 4)');
 		$origDb->exec("INSERT INTO Setlists (Id, Title, DateCreated, LastModified) VALUES (1, 'Saturday Night Gig', 1000000, 1700000000000)");
 
 		$storage = [
