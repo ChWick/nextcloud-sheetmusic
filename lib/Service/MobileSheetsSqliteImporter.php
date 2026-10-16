@@ -923,7 +923,37 @@ class MobileSheetsSqliteImporter {
 			$tableName = $config['table'];
 			$check = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='" . str_replace("'", "''", $tableName) . "'");
 			if ($check === false || $check->fetch() === false) {
-				continue;
+				if ($tableName === 'Key') {
+					$alt = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='Keys'");
+					if ($alt !== false && $alt->fetch() !== false) {
+						$tableName = 'Keys';
+					} else {
+						continue;
+					}
+				} elseif ($tableName === 'Keys') {
+					$alt = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='Key'");
+					if ($alt !== false && $alt->fetch() !== false) {
+						$tableName = 'Key';
+					} else {
+						continue;
+					}
+				} elseif ($tableName === 'SourceType') {
+					$alt = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='SourceTypes'");
+					if ($alt !== false && $alt->fetch() !== false) {
+						$tableName = 'SourceTypes';
+					} else {
+						continue;
+					}
+				} elseif ($tableName === 'SourceTypes') {
+					$alt = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='SourceType'");
+					if ($alt !== false && $alt->fetch() !== false) {
+						$tableName = 'SourceType';
+					} else {
+						continue;
+					}
+				} else {
+					continue;
+				}
 			}
 
 			$uploadedEntityIds = $db->query('SELECT Id FROM "' . str_replace('"', '""', $tableName) . '"')->fetchAll(PDO::FETCH_COLUMN);

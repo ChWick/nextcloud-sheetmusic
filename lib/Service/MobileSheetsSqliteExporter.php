@@ -67,7 +67,7 @@ class MobileSheetsSqliteExporter {
 			'hasSort' => false,
 		],
 		'key' => [
-			'table' => 'Keys',
+			'table' => 'Key',
 			'nameCol' => 'Name',
 			'linkTable' => 'KeySongs',
 			'linkCol' => 'KeyId',
@@ -95,7 +95,7 @@ class MobileSheetsSqliteExporter {
 			'hasSort' => false,
 		],
 		'sourcetype' => [
-			'table' => 'SourceTypes',
+			'table' => 'SourceType',
 			'nameCol' => 'Type',
 			'linkTable' => 'SourceTypeSongs',
 			'linkCol' => 'SourceTypeId',
@@ -150,6 +150,8 @@ class MobileSheetsSqliteExporter {
 				PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
 			]);
 
+			$db->exec('PRAGMA page_size = ' . MobileSheetsBaselineSchema::DEFAULT_PAGE_SIZE);
+			$db->exec('PRAGMA auto_vacuum = FULL');
 			$db->exec('PRAGMA synchronous = OFF');
 			$db->exec('PRAGMA journal_mode = MEMORY');
 
@@ -234,8 +236,8 @@ class MobileSheetsSqliteExporter {
 
 	private function applyUserVersion(PDO $db, int $libraryId): void {
 		$userVersion = $this->miscMapper->getPragmaUserVersion($libraryId, 'mobilesheets');
-		// Fallback to standard MobileSheets schema version 63 if not explicitly specified
-		$userVersion ??= 63;
+		// Fallback to standard MobileSheets baseline schema version if not explicitly specified
+		$userVersion ??= MobileSheetsBaselineSchema::DEFAULT_USER_VERSION;
 		$db->exec('PRAGMA user_version = ' . $userVersion);
 	}
 
@@ -256,35 +258,8 @@ class MobileSheetsSqliteExporter {
 			return;
 		}
 
-		$statements = [
-			'Songs' => 'CREATE TABLE Songs(Id INTEGER PRIMARY KEY, Title VARCHAR(255), SortTitle VARCHAR(255), Stars INTEGER DEFAULT 0, Difficulty INTEGER DEFAULT 0, Duration INTEGER DEFAULT 0, Keywords VARCHAR(255) DEFAULT \'\', Custom VARCHAR(255) DEFAULT \'\', Custom2 VARCHAR(255) DEFAULT \'\', SongId INTEGER, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0, Opus VARCHAR(255) DEFAULT \'\', CatalogNumber VARCHAR(255) DEFAULT \'\', SongNumber VARCHAR(255) DEFAULT \'\')',
-			'Files' => 'CREATE TABLE Files(Id INTEGER PRIMARY KEY, SongId INTEGER, Path VARCHAR(255), PageOrder VARCHAR(255), FileSize INTEGER, LastModified INTEGER, Source INTEGER, Type INTEGER, Password VARCHAR(255) DEFAULT \'\', SourceFilePageCount INTEGER, FileHash INTEGER, Width INTEGER DEFAULT -1, Height INTEGER DEFAULT -1)',
-			'Collections' => 'CREATE TABLE Collections(Id INTEGER PRIMARY KEY, Name VARCHAR(255), SortBy INTEGER DEFAULT 1, Ascending INTEGER DEFAULT 1, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)',
-			'CollectionSong' => 'CREATE TABLE CollectionSong(Id INTEGER PRIMARY KEY, CollectionId INTEGER, SongId INTEGER)',
-			'Composer' => 'CREATE TABLE Composer(Id INTEGER PRIMARY KEY, Name VARCHAR(255), SortBy INTEGER DEFAULT 1, Ascending INTEGER DEFAULT 1, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)',
-			'ComposerSongs' => 'CREATE TABLE ComposerSongs(Id INTEGER PRIMARY KEY, ComposerId INTEGER, SongId INTEGER)',
-			'Books' => 'CREATE TABLE Books(Id INTEGER PRIMARY KEY, Title VARCHAR(255), SortBy INTEGER DEFAULT 1, Ascending INTEGER DEFAULT 1, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)',
-			'BookSongs' => 'CREATE TABLE BookSongs(Id INTEGER PRIMARY KEY, BookId INTEGER, SongId INTEGER)',
-			'Artists' => 'CREATE TABLE Artists(Id INTEGER PRIMARY KEY, Name VARCHAR(255), DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)',
-			'ArtistsSongs' => 'CREATE TABLE ArtistsSongs(Id INTEGER PRIMARY KEY, ArtistId INTEGER, SongId INTEGER)',
-			'Genres' => 'CREATE TABLE Genres(Id INTEGER PRIMARY KEY, Type VARCHAR(255), DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)',
-			'GenresSongs' => 'CREATE TABLE GenresSongs(Id INTEGER PRIMARY KEY, GenreId INTEGER, SongId INTEGER)',
-			'Keys' => 'CREATE TABLE Keys(Id INTEGER PRIMARY KEY, Name VARCHAR(255), DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)',
-			'KeySongs' => 'CREATE TABLE KeySongs(Id INTEGER PRIMARY KEY, KeyId INTEGER, SongId INTEGER)',
-			'CustomGroup' => 'CREATE TABLE CustomGroup(Id INTEGER PRIMARY KEY, Name VARCHAR(255), DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)',
-			'CustomGroupSongs' => 'CREATE TABLE CustomGroupSongs(Id INTEGER PRIMARY KEY, GroupId INTEGER, SongId INTEGER)',
-			'Years' => 'CREATE TABLE Years(Id INTEGER PRIMARY KEY, Year INTEGER, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)',
-			'YearsSongs' => 'CREATE TABLE YearsSongs(Id INTEGER PRIMARY KEY, YearId INTEGER, SongId INTEGER)',
-			'Signature' => 'CREATE TABLE Signature(Id INTEGER PRIMARY KEY, Name VARCHAR(255), DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)',
-			'SignatureSongs' => 'CREATE TABLE SignatureSongs(Id INTEGER PRIMARY KEY, SignatureId INTEGER, SongId INTEGER)',
-			'SourceTypes' => 'CREATE TABLE SourceTypes(Id INTEGER PRIMARY KEY, Type VARCHAR(255), DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)',
-			'SourceTypeSongs' => 'CREATE TABLE SourceTypeSongs(Id INTEGER PRIMARY KEY, SourceTypeId INTEGER, SongId INTEGER)',
-			'Bookmarks' => 'CREATE TABLE Bookmarks(Id INTEGER PRIMARY KEY, SongId INTEGER, Name VARCHAR(255), PageNum INTEGER, ShowInLibrary INTEGER DEFAULT 0, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)',
-			'AudioFiles' => 'CREATE TABLE AudioFiles(Id INTEGER PRIMARY KEY, SongId INTEGER, Title VARCHAR(255), File VARCHAR(255), DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)',
-			'SongNotes' => 'CREATE TABLE SongNotes(Id INTEGER PRIMARY KEY, SongId INTEGER, Note TEXT, Title VARCHAR(255) DEFAULT \'\', DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)',
-			'MetronomeSettings' => 'CREATE TABLE MetronomeSettings(Id INTEGER PRIMARY KEY, SongId INTEGER, Bpm INTEGER)',
-			'_nc_sync_metadata' => 'CREATE TABLE _nc_sync_metadata (entity_type TEXT NOT NULL, uuid TEXT NOT NULL, client_id INTEGER, updated_at INTEGER, extra_json TEXT, PRIMARY KEY (entity_type, uuid))',
-		];
+		$statements = MobileSheetsBaselineSchema::TABLES;
+		$statements['_nc_sync_metadata'] = 'CREATE TABLE _nc_sync_metadata (entity_type TEXT NOT NULL, uuid TEXT NOT NULL, client_id INTEGER, updated_at INTEGER, extra_json TEXT, PRIMARY KEY (entity_type, uuid))';
 
 		foreach ($statements as $tableName => $sql) {
 			$lowerName = strtolower($tableName);
@@ -295,6 +270,15 @@ class MobileSheetsSqliteExporter {
 		}
 
 		$db->exec('CREATE INDEX IF NOT EXISTS idx_nc_sync_client ON _nc_sync_metadata (entity_type, client_id)');
+
+		// Recreate standard baseline MobileSheets indexes
+		foreach (MobileSheetsBaselineSchema::INDEXES as $idxSql) {
+			try {
+				$db->exec($idxSql);
+			} catch (\Throwable) {
+				// Ignore if underlying table/column does not exist in customized schemas
+			}
+		}
 
 		// Any remaining misc schemas not yet created
 		foreach ($miscSchemas as $tableName => $createSql) {
@@ -340,10 +324,20 @@ class MobileSheetsSqliteExporter {
 			$tableName = $config['table'];
 			$check = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='" . str_replace("'", "''", $tableName) . "'");
 			if ($check === false || $check->fetch() === false) {
-				if ($tableName === 'Keys') {
+				if ($tableName === 'Key') {
+					$alt = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='Keys'");
+					if ($alt !== false && $alt->fetch() !== false) {
+						$tableName = 'Keys';
+					}
+				} elseif ($tableName === 'Keys') {
 					$alt = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='Key'");
 					if ($alt !== false && $alt->fetch() !== false) {
 						$tableName = 'Key';
+					}
+				} elseif ($tableName === 'SourceType') {
+					$alt = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='SourceTypes'");
+					if ($alt !== false && $alt->fetch() !== false) {
+						$tableName = 'SourceTypes';
 					}
 				} elseif ($tableName === 'SourceTypes') {
 					$alt = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='SourceType'");
@@ -553,14 +547,40 @@ class MobileSheetsSqliteExporter {
 				}
 
 				if (!$noteExists) {
-					$noteStmt = $db->prepare('INSERT INTO SongNotes (SongId, Note, Title, DateCreated, LastModified) VALUES (?, ?, ?, ?, ?)');
-					$noteStmt->execute([
-						$clientId,
-						$song->notes,
-						'',
-						$song->createdAt * 1000,
-						$song->updatedAt * 1000,
-					]);
+					$noteColStmt = $db->query('PRAGMA table_info("SongNotes")');
+					$noteCols = [];
+					if ($noteColStmt !== false) {
+						while ($nc = $noteColStmt->fetch()) {
+							$noteCols[strtolower((string)$nc['name'])] = (string)$nc['name'];
+						}
+					}
+
+					$noteVals = [
+						'songid' => $clientId,
+						'notes' => $song->notes,
+						'note' => $song->notes,
+						'title' => '',
+						'datecreated' => $song->createdAt * 1000,
+						'creationdate' => $song->createdAt * 1000,
+						'lastmodified' => $song->updatedAt * 1000,
+					];
+					$insertCols = [];
+					$insertVals = [];
+					foreach ($noteVals as $lowerKey => $val) {
+						if (isset($noteCols[$lowerKey])) {
+							$insertCols[] = '"' . $noteCols[$lowerKey] . '"';
+							$insertVals[] = $val;
+						}
+					}
+					if ($insertCols !== []) {
+						$sql = sprintf(
+							'INSERT INTO SongNotes (%s) VALUES (%s)',
+							implode(', ', $insertCols),
+							implode(', ', array_fill(0, count($insertCols), '?')),
+						);
+						$noteStmt = $db->prepare($sql);
+						$noteStmt->execute($insertVals);
+					}
 				}
 			}
 
@@ -756,73 +776,87 @@ class MobileSheetsSqliteExporter {
 
 	private function exportMiscData(PDO $db, int $libraryId): void {
 		$miscSchemas = $this->miscMapper->getMiscSchemas($libraryId, 'mobilesheets');
-		if ($miscSchemas === []) {
-			return;
-		}
-
-		$songs = $this->songMapper->findByLibrary($libraryId, includeDeleted: true);
-		$songClientByUuid = [];
-		foreach ($songs as $s) {
-			if ($s->clientId !== null) {
-				$songClientByUuid[$s->uuid] = $s->clientId;
-			}
-		}
-
-		foreach (array_keys($miscSchemas) as $tableName) {
-			$check = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='" . str_replace("'", "''", $tableName) . "'");
-			if ($check === false || $check->fetch() === false) {
-				continue;
-			}
-
-			// Query table column info to ensure we only insert existing columns
-			$colStmt = $db->query(sprintf('PRAGMA table_info("%s")', str_replace('"', '""', $tableName)));
-			$existingColumns = [];
-			if ($colStmt !== false) {
-				while ($colInfo = $colStmt->fetch()) {
-					if (isset($colInfo['name'])) {
-						$existingColumns[strtolower((string)$colInfo['name'])] = (string)$colInfo['name'];
-					}
+		if ($miscSchemas !== []) {
+			$songs = $this->songMapper->findByLibrary($libraryId, includeDeleted: true);
+			$songClientByUuid = [];
+			foreach ($songs as $s) {
+				if ($s->clientId !== null) {
+					$songClientByUuid[$s->uuid] = $s->clientId;
 				}
 			}
 
-			$rows = $this->miscMapper->getMiscDataForTable($libraryId, 'mobilesheets', $tableName, includeDeleted: false);
-			foreach ($rows as $row) {
-				if (!is_array($row) || $row === []) {
+			foreach (array_keys($miscSchemas) as $tableName) {
+				$check = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='" . str_replace("'", "''", $tableName) . "'");
+				if ($check === false || $check->fetch() === false) {
 					continue;
 				}
 
-				if ($existingColumns !== []) {
-					$filteredRow = [];
-					foreach ($row as $colKey => $val) {
-						$lowerKey = strtolower((string)$colKey);
-						if (isset($existingColumns[$lowerKey])) {
-							$filteredRow[$existingColumns[$lowerKey]] = $val;
+				// Query table column info to ensure we only insert existing columns
+				$colStmt = $db->query(sprintf('PRAGMA table_info("%s")', str_replace('"', '""', $tableName)));
+				$existingColumns = [];
+				if ($colStmt !== false) {
+					while ($colInfo = $colStmt->fetch()) {
+						if (isset($colInfo['name'])) {
+							$existingColumns[strtolower((string)$colInfo['name'])] = (string)$colInfo['name'];
 						}
 					}
-					$row = $filteredRow;
 				}
 
-				if ($row === []) {
-					continue;
+				$rows = $this->miscMapper->getMiscDataForTable($libraryId, 'mobilesheets', $tableName, includeDeleted: false);
+				foreach ($rows as $row) {
+					if (!is_array($row) || $row === []) {
+						continue;
+					}
+
+					if ($existingColumns !== []) {
+						$filteredRow = [];
+						foreach ($row as $colKey => $val) {
+							$lowerKey = strtolower((string)$colKey);
+							if (isset($existingColumns[$lowerKey])) {
+								$filteredRow[$existingColumns[$lowerKey]] = $val;
+							}
+						}
+						$row = $filteredRow;
+					}
+
+					if ($row === []) {
+						continue;
+					}
+
+					$cols = array_keys($row);
+					$escapedCols = array_map(fn ($c) => '"' . str_replace('"', '""', (string)$c) . '"', $cols);
+					$placeholders = array_fill(0, count($cols), '?');
+
+					$sql = sprintf(
+						'INSERT OR REPLACE INTO "%s" (%s) VALUES (%s)',
+						$tableName,
+						implode(', ', $escapedCols),
+						implode(', ', $placeholders),
+					);
+
+					try {
+						$stmt = $db->prepare($sql);
+						$stmt->execute(array_values($row));
+					} catch (\Throwable $e) {
+						$this->logger->warning('Failed to insert misc row into table: ' . $tableName, ['exception' => $e]);
+					}
 				}
+			}
+		}
 
-				$cols = array_keys($row);
-				$escapedCols = array_map(fn ($c) => '"' . str_replace('"', '""', (string)$c) . '"', $cols);
-				$placeholders = array_fill(0, count($cols), '?');
+		$checkMeta = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='android_metadata'");
+		if ($checkMeta !== false && $checkMeta->fetch() !== false) {
+			$cnt = (int)$db->query('SELECT count(*) FROM android_metadata')->fetchColumn();
+			if ($cnt === 0) {
+				$db->exec("INSERT INTO android_metadata (locale) VALUES ('en_US')");
+			}
+		}
 
-				$sql = sprintf(
-					'INSERT OR REPLACE INTO "%s" (%s) VALUES (%s)',
-					$tableName,
-					implode(', ', $escapedCols),
-					implode(', ', $placeholders),
-				);
-
-				try {
-					$stmt = $db->prepare($sql);
-					$stmt->execute(array_values($row));
-				} catch (\Throwable $e) {
-					$this->logger->warning('Failed to insert misc row into table: ' . $tableName, ['exception' => $e]);
-				}
+		$checkDef = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='Defaults'");
+		if ($checkDef !== false && $checkDef->fetch() !== false) {
+			$cnt = (int)$db->query('SELECT count(*) FROM Defaults')->fetchColumn();
+			if ($cnt === 0) {
+				$db->exec('INSERT INTO Defaults (Id, Initialized) VALUES (1, 1)');
 			}
 		}
 	}

@@ -204,7 +204,7 @@ final class MobileSheetsSqliteExporterTest extends TestCase {
 		$noteRows = $db->query('SELECT * FROM SongNotes')->fetchAll(PDO::FETCH_ASSOC);
 		self::assertCount(1, $noteRows);
 		self::assertSame(101, (int)$noteRows[0]['SongId']);
-		self::assertSame('Play with expression', $noteRows[0]['Note']);
+		self::assertSame('Play with expression', $noteRows[0]['Notes'] ?? $noteRows[0]['Note']);
 
 		// Verify Composer
 		$composerRows = $db->query('SELECT * FROM Composer')->fetchAll(PDO::FETCH_ASSOC);

@@ -21,7 +21,7 @@ class SongNoteMapper extends AbstractDatabaseMapper {
 		}
 
 		$cols = $this->columnNames($database, 'SongNotes');
-		$textCol = $this->resolveColumn($database, 'SongNotes', ['Note', 'Text'], 'Note');
+		$textCol = $this->resolveColumn($database, 'SongNotes', ['Notes', 'Note', 'Text'], 'Notes');
 		$createdCol = isset($cols['datecreated']) ? 'DateCreated' : (isset($cols['creationdate']) ? 'CreationDate' : null);
 
 		$select = ['Id', 'SongId', $textCol . ' AS Note'];
@@ -63,7 +63,7 @@ class SongNoteMapper extends AbstractDatabaseMapper {
 		$stmt = $database->prepare('DELETE FROM SongNotes WHERE SongId = :songId');
 		$stmt->execute([':songId' => $songId]);
 
-		$textCol = $this->resolveColumn($database, 'SongNotes', ['Note', 'Text'], 'Note');
+		$textCol = $this->resolveColumn($database, 'SongNotes', ['Notes', 'Note', 'Text'], 'Notes');
 
 		foreach ($notes as $noteSpec) {
 			$text = trim((string)($noteSpec['note'] ?? $noteSpec['text'] ?? ''));

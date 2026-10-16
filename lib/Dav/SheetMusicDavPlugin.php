@@ -84,6 +84,14 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		$path = trim($request->getPath(), '/');
 		$method = strtoupper($request->getMethod());
 
+		$this->logger->info(sprintf(
+			'SheetMusicDavPlugin: beforeMethod %s path=%s user=%s ua=%s',
+			$method,
+			$path,
+			$this->userSession?->getUser()?->getUID() ?? 'anonymous',
+			$request->getHeader('User-Agent') ?? '',
+		));
+
 		try {
 			$match = $this->matchVirtualPath($path);
 			if ($match === null) {
@@ -164,6 +172,8 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		if ($library === null || $library->id === null) {
 			return;
 		}
+
+		$this->logger->info(sprintf('SheetMusicDavPlugin: afterPropfind injected into path=%s for library=%d', $path, $library->id));
 
 		$body = $response->getBody();
 		if (is_callable($body)) {
@@ -257,6 +267,7 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		$cachePath = $this->ensureDatabaseExport($library);
 
 		$size = (int)filesize($cachePath);
+		$this->logger->info(sprintf('SheetMusicDavPlugin: handleGetDatabase library=%d size=%d isHead=%d path=%s', $library->id, $size, $isHead ? 1 : 0, $cachePath));
 		$response->setStatus(200);
 		$response->setHeader('Content-Type', self::DB_CONTENT_TYPE);
 		$response->setHeader('Content-Length', (string)$size);

@@ -1235,7 +1235,15 @@ final class MobileSheetsSyncTest extends TestCase {
 		//    - Links Song B to Composer B
 		$msDb = new PDO('sqlite:' . $exportPath1, options: [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
 		$msDb->exec("UPDATE Songs SET Title = 'Song A (Updated by MS)', Stars = 5, LastModified = 2000000 WHERE Id = 1");
-		$msDb->exec("INSERT INTO Songs (Id, Title, SortTitle, Stars, Difficulty, Duration, DateCreated, LastModified) VALUES (2, 'Song B (Added in MS)', 'Song B (Added in MS)', 4, 3, 200, 2000000, 2000000)");
+		$songCols = $msDb->query('PRAGMA table_info("Songs")')->fetchAll();
+		$dateCol = 'CreationDate';
+		foreach ($songCols as $c) {
+			if (strcasecmp((string)$c['name'], 'DateCreated') === 0) {
+				$dateCol = 'DateCreated';
+				break;
+			}
+		}
+		$msDb->exec("INSERT INTO Songs (Id, Title, SortTitle, Stars, Difficulty, Duration, $dateCol, LastModified) VALUES (2, 'Song B (Added in MS)', 'Song B (Added in MS)', 4, 3, 200, 2000000, 2000000)");
 		$msDb->exec('DELETE FROM Composer WHERE Id = 10');
 		$msDb->exec('DELETE FROM ComposerSongs WHERE ComposerId = 10');
 		$msDb->exec("INSERT INTO Composer (Id, Name, SortBy, Ascending, DateCreated, LastModified) VALUES (20, 'Composer B', 1, 1, 2000000, 2000000)");
