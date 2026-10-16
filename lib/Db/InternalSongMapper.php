@@ -180,7 +180,9 @@ class InternalSongMapper {
 			throw new \InvalidArgumentException('Cannot update a song without an ID');
 		}
 
-		$song->updatedAt = time();
+		if ($song->updatedAt === null || $song->updatedAt <= 0) {
+			$song->updatedAt = time();
+		}
 
 		$qb = $this->db->getQueryBuilder();
 		$qb->update(self::TABLE_NAME)

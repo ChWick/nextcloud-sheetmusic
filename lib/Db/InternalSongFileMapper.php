@@ -151,7 +151,9 @@ class InternalSongFileMapper {
 			throw new \InvalidArgumentException('Cannot update a file without an ID');
 		}
 
-		$file->updatedAt = time();
+		if ($file->updatedAt === null || $file->updatedAt <= 0) {
+			$file->updatedAt = time();
+		}
 
 		$qb = $this->db->getQueryBuilder();
 		$qb->update(self::TABLE_NAME)

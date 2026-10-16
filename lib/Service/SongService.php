@@ -166,6 +166,7 @@ class SongService {
 				$song->opus = $opus !== '' ? $opus : null;
 				$song->catalogNumber = $catalogNumber !== '' ? $catalogNumber : null;
 				$song->songNumber = $songNumber !== '' ? $songNumber : null;
+				$song->updatedAt = time();
 				$this->internalSongMapper->update($song);
 
 				$this->internalEntityMapper->setSongEntitiesForType($songId, 'composer', array_map('intval', $composerIds));

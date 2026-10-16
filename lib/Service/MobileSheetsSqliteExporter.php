@@ -364,37 +364,57 @@ class MobileSheetsSqliteExporter {
 			}
 
 			if (!$rowExists) {
-				$val = ($config['nameCol'] === 'Year') ? (int)$entity->name : $entity->name;
-
-				if ($config['hasSort']) {
-					$sql = sprintf(
-						'INSERT INTO "%s" (Id, "%s", SortBy, Ascending, DateCreated, LastModified) VALUES (?, ?, ?, ?, ?, ?)',
-						$tableName,
-						$config['nameCol'],
-					);
-					$stmt = $db->prepare($sql);
-					$stmt->execute([
-						$clientId,
-						$val,
-						$entity->sortBy,
-						$entity->ascending,
-						$entity->createdAt * 1000,
-						$entity->updatedAt * 1000,
-					]);
-				} else {
-					$sql = sprintf(
-						'INSERT INTO "%s" (Id, "%s", DateCreated, LastModified) VALUES (?, ?, ?, ?)',
-						$tableName,
-						$config['nameCol'],
-					);
-					$stmt = $db->prepare($sql);
-					$stmt->execute([
-						$clientId,
-						$val,
-						$entity->createdAt * 1000,
-						$entity->updatedAt * 1000,
-					]);
+				$colStmt = $db->query(sprintf('PRAGMA table_info("%s")', str_replace('"', '""', $tableName)));
+				$existingCols = [];
+				if ($colStmt !== false) {
+					while ($colInfo = $colStmt->fetch()) {
+						if (isset($colInfo['name'])) {
+							$existingCols[strtolower((string)$colInfo['name'])] = (string)$colInfo['name'];
+						}
+					}
 				}
+
+				$nameCol = $config['nameCol'];
+				if (!isset($existingCols[strtolower($nameCol)])) {
+					if (isset($existingCols['name'])) {
+						$nameCol = $existingCols['name'];
+					} elseif (isset($existingCols['title'])) {
+						$nameCol = $existingCols['title'];
+					} elseif (isset($existingCols['type'])) {
+						$nameCol = $existingCols['type'];
+					} elseif (isset($existingCols['year'])) {
+						$nameCol = $existingCols['year'];
+					}
+				}
+
+				$val = (strtolower($nameCol) === 'year') ? (int)$entity->name : $entity->name;
+				$hasSortCols = isset($existingCols['sortby']) && isset($existingCols['ascending']);
+				$dateCreatedCol = isset($existingCols['datecreated']) ? $existingCols['datecreated'] : (isset($existingCols['creationdate']) ? $existingCols['creationdate'] : null);
+				$lastModCol = isset($existingCols['lastmodified']) ? $existingCols['lastmodified'] : null;
+
+				$cols = ['Id', $nameCol];
+				$vals = [$clientId, $val];
+
+				if ($hasSortCols) {
+					$cols[] = $existingCols['sortby'];
+					$vals[] = $entity->sortBy;
+					$cols[] = $existingCols['ascending'];
+					$vals[] = $entity->ascending;
+				}
+				if ($dateCreatedCol !== null) {
+					$cols[] = $dateCreatedCol;
+					$vals[] = $entity->createdAt * 1000;
+				}
+				if ($lastModCol !== null) {
+					$cols[] = $lastModCol;
+					$vals[] = $entity->updatedAt * 1000;
+				}
+
+				$escaped = array_map(fn($c) => '"' . str_replace('"', '""', $c) . '"', $cols);
+				$placeholders = array_fill(0, count($cols), '?');
+				$sql = sprintf('INSERT INTO "%s" (%s) VALUES (%s)', str_replace('"', '""', $tableName), implode(', ', $escaped), implode(', ', $placeholders));
+				$stmt = $db->prepare($sql);
+				$stmt->execute($vals);
 			}
 
 			if ($metaStmt !== null) {

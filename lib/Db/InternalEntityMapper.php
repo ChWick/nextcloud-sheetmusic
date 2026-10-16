@@ -150,7 +150,9 @@ class InternalEntityMapper {
 			throw new \InvalidArgumentException('Cannot update an entity without an ID');
 		}
 
-		$entity->updatedAt = time();
+		if ($entity->updatedAt === null || $entity->updatedAt <= 0) {
+			$entity->updatedAt = time();
+		}
 
 		$qb = $this->db->getQueryBuilder();
 		$qb->update(self::TABLE_NAME)
