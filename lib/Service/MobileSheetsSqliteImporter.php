@@ -19,6 +19,7 @@ use OCA\SheetMusic\Db\InternalSongFile;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
+use OCA\SheetMusic\Service\MobileSheetsEntityConfig;
 use OCA\SheetMusic\Service\MobileSheetsTableHelper;
 use OCP\Files\File;
 use OCP\Files\IRootFolder;
@@ -31,110 +32,10 @@ class MobileSheetsSqliteImporter {
 	/**
 	 * Mapping of table names to internal entity types and configuration.
 	 */
-	private const TABLE_TO_ENTITY_CONFIG = [
-		'Composer' => [
-			'type' => 'composer',
-			'nameCol' => 'Name',
-			'linkTable' => 'ComposerSongs',
-			'linkCol' => 'ComposerId',
-		],
-		'Artists' => [
-			'type' => 'artist',
-			'nameCol' => 'Name',
-			'linkTable' => 'ArtistsSongs',
-			'linkCol' => 'ArtistId',
-		],
-		'Books' => [
-			'type' => 'book',
-			'nameCol' => 'Title',
-			'linkTable' => 'BookSongs',
-			'linkCol' => 'BookId',
-		],
-		'Collections' => [
-			'type' => 'collection',
-			'nameCol' => 'Name',
-			'linkTable' => 'CollectionSong',
-			'linkCol' => 'CollectionId',
-		],
-		'Genres' => [
-			'type' => 'genre',
-			'nameCol' => 'Type',
-			'linkTable' => 'GenresSongs',
-			'linkCol' => 'GenreId',
-		],
-		'Keys' => [
-			'type' => 'key',
-			'nameCol' => 'Name',
-			'linkTable' => 'KeySongs',
-			'linkCol' => 'KeyId',
-		],
-		'Key' => [
-			'type' => 'key',
-			'nameCol' => 'Name',
-			'linkTable' => 'KeySongs',
-			'linkCol' => 'KeyId',
-		],
-		'CustomGroup' => [
-			'type' => 'customgroup',
-			'nameCol' => 'Name',
-			'linkTable' => 'CustomGroupSongs',
-			'linkCol' => 'GroupId',
-		],
-		'Years' => [
-			'type' => 'year',
-			'nameCol' => 'Year',
-			'linkTable' => 'YearsSongs',
-			'linkCol' => 'YearId',
-		],
-		'Signature' => [
-			'type' => 'signature',
-			'nameCol' => 'Name',
-			'linkTable' => 'SignatureSongs',
-			'linkCol' => 'SignatureId',
-		],
-		'SourceTypes' => [
-			'type' => 'sourcetype',
-			'nameCol' => 'Type',
-			'linkTable' => 'SourceTypeSongs',
-			'linkCol' => 'SourceTypeId',
-		],
-		'SourceType' => [
-			'type' => 'sourcetype',
-			'nameCol' => 'Type',
-			'linkTable' => 'SourceTypeSongs',
-			'linkCol' => 'SourceTypeId',
-		],
-	];
+	private const TABLE_TO_ENTITY_CONFIG = MobileSheetsEntityConfig::BY_TABLE;
 
 	/** Standard tables natively handled by Sheet Music core. */
-	public const CORE_MANAGED_TABLES = [
-		'songs',
-		'files',
-		'composer',
-		'composersongs',
-		'artists',
-		'artistssongs',
-		'books',
-		'booksongs',
-		'collections',
-		'collectionsong',
-		'genres',
-		'genressongs',
-		'keys',
-		'key',
-		'keysongs',
-		'customgroup',
-		'customgroupsongs',
-		'years',
-		'yearssongs',
-		'signature',
-		'signaturesongs',
-		'sourcetypes',
-		'sourcetype',
-		'sourcetypesongs',
-		'songnotes',
-		'_nc_sync_metadata',
-	];
+	public const CORE_MANAGED_TABLES = MobileSheetsEntityConfig::CORE_MANAGED_TABLES;
 
 	public function __construct(
 		private InternalSongMapper $songMapper,
@@ -914,7 +815,7 @@ class MobileSheetsSqliteImporter {
 		// 2. Deleted Entities
 		foreach ($syncMeta['byTypeAndId'] as $entityType => $entries) {
 			$type = str_starts_with($entityType, 'entity:') ? substr($entityType, strlen('entity:')) : $entityType;
-			$config = MobileSheetsSqliteExporter::ENTITY_TABLE_CONFIG[$type] ?? null;
+			$config = MobileSheetsEntityConfig::BY_TYPE[$type] ?? null;
 			if ($config === null) {
 				continue;
 			}
