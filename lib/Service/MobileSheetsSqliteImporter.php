@@ -808,6 +808,7 @@ class MobileSheetsSqliteImporter {
 						$this->songMapper->delete($song->id, hardDelete: false);
 						$stats['songsDeleted']++;
 					}
+					$this->miscMapper->deleteMiscData($libraryId, 'mobilesheets', 'Songs', (string)$clientId);
 				}
 			}
 		}
@@ -843,6 +844,7 @@ class MobileSheetsSqliteImporter {
 						$this->entityMapper->delete($entity->id, hardDelete: false);
 						$stats['entitiesDeleted']++;
 					}
+					$this->miscMapper->deleteMiscData($libraryId, 'mobilesheets', $tableName, (string)$clientId);
 				}
 			}
 		}
@@ -864,6 +866,7 @@ class MobileSheetsSqliteImporter {
 							$this->songFileMapper->delete($file->id, hardDelete: false);
 							$stats['filesDeleted']++;
 						}
+						$this->miscMapper->deleteMiscData($libraryId, 'mobilesheets', 'Files', (string)$clientId);
 					}
 				}
 		}
@@ -904,9 +907,11 @@ class MobileSheetsSqliteImporter {
 			}
 
 			$hasRows = false;
+			$uploadedRecordIds = [];
 			while ($dataRow = $rowsStmt->fetch()) {
 				$hasRows = true;
 				$recordId = isset($dataRow['Id']) ? (string)$dataRow['Id'] : md5(json_encode($dataRow, JSON_THROW_ON_ERROR));
+				$uploadedRecordIds[$recordId] = true;
 
 				$songUuid = null;
 				if (isset($dataRow['SongId']) && is_numeric($dataRow['SongId'])) {
@@ -914,6 +919,15 @@ class MobileSheetsSqliteImporter {
 				}
 
 				$this->miscMapper->saveMiscData($libraryId, 'mobilesheets', $tableName, $recordId, $dataRow, $songUuid);
+			}
+
+			// Reconcile deleted rows in misc data for this table
+			$existingMiscRows = $this->miscMapper->getMiscDataForTable($libraryId, 'mobilesheets', $tableName, includeDeleted: false);
+			foreach ($existingMiscRows as $existingRow) {
+				$existingRecordId = isset($existingRow['Id']) ? (string)$existingRow['Id'] : md5(json_encode($existingRow, JSON_THROW_ON_ERROR));
+				if (!isset($uploadedRecordIds[$existingRecordId])) {
+					$this->miscMapper->deleteMiscData($libraryId, 'mobilesheets', $tableName, $existingRecordId);
+				}
 			}
 
 			if ($hasRows && !MobileSheetsEntityConfig::isCoreManaged($tableName)) {

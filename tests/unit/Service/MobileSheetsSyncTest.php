@@ -1184,6 +1184,79 @@ final class MobileSheetsSyncTest extends TestCase {
 		$oldSong = array_values(array_filter($allSongs, fn ($s) => $s->clientId === 440))[0] ?? null;
 		self::assertNotNull($oldSong);
 		self::assertNotNull($oldSong->deletedAt, 'Old song must be tombstoned');
+
+		// 6. Nextcloud re-exports the library: old song 440 MUST NOT be present in exported Songs table
+		$reExportedDbPath = $this->tempDbPath();
+		$this->exporter->exportToFile($lib, $reExportedDbPath);
+		$reExportedDb = new PDO('sqlite:' . $reExportedDbPath, options: [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
+		$finalSongIds = array_map('intval', $reExportedDb->query('SELECT Id FROM Songs ORDER BY Id ASC')->fetchAll(PDO::FETCH_COLUMN));
+		self::assertSame([441], $finalSongIds, 'Exported database must contain only active song 441, not deleted song 440');
+	}
+
+	public function testCoreManagedTablesNeverResurrectDeletedRecordsViaMiscDataOnReExport(): void {
+		$lib = $this->createTestLibrary('CoreManagedDeletions_' . bin2hex(random_bytes(3)));
+
+		// 1. Initial MobileSheets DB containing core entities and a non-core misc table (Setlists)
+		$initDbPath = $this->tempDbPath();
+		$initDb = $this->createEmptyMobileSheetsDb($initDbPath);
+		$initDb->exec("CREATE TABLE IF NOT EXISTS Setlists (Id INTEGER PRIMARY KEY, Name TEXT)");
+		$initDb->exec("INSERT INTO Songs (Id, Title, SortTitle, Stars, Difficulty, Duration, SongId, DateCreated, LastModified) VALUES (100, 'Song A', 'Song A', 0, 0, 0, 100, 1000000, 1000000)");
+		$initDb->exec("INSERT INTO Composer (Id, Name) VALUES (10, 'Composer Bach')");
+		$initDb->exec("INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (10, 100)");
+		$initDb->exec("INSERT INTO Collections (Id, Name) VALUES (20, 'Collection Hymns')");
+		$initDb->exec("INSERT INTO CollectionSong (CollectionId, SongId) VALUES (20, 100)");
+		$initDb->exec("INSERT INTO Books (Id, Title) VALUES (30, 'Book Chorales')");
+		$initDb->exec("INSERT INTO BookSongs (BookId, SongId) VALUES (30, 100)");
+		$initDb->exec("INSERT INTO Setlists (Id, Name) VALUES (1, 'Sunday Service')");
+
+		$this->importer->importFromFile($lib, $initDbPath);
+
+		// Also populate legacy misc data rows for core-managed tables to simulate a database that had them stored
+		$this->miscMapper->saveMiscData($lib->id, 'mobilesheets', 'Songs', '100', ['Id' => 100, 'Title' => 'Song A']);
+		$this->miscMapper->saveMiscData($lib->id, 'mobilesheets', 'Composer', '10', ['Id' => 10, 'Name' => 'Composer Bach']);
+		$this->miscMapper->saveMiscData($lib->id, 'mobilesheets', 'ComposerSongs', '10-100', ['ComposerId' => 10, 'SongId' => 100]);
+		$this->miscMapper->saveMiscData($lib->id, 'mobilesheets', 'Collections', '20', ['Id' => 20, 'Name' => 'Collection Hymns']);
+		$this->miscMapper->saveMiscData($lib->id, 'mobilesheets', 'CollectionSong', '20-100', ['CollectionId' => 20, 'SongId' => 100]);
+		$this->miscMapper->saveMiscData($lib->id, 'mobilesheets', 'Books', '30', ['Id' => 30, 'Title' => 'Book Chorales']);
+		$this->miscMapper->saveMiscData($lib->id, 'mobilesheets', 'BookSongs', '30-100', ['BookId' => 30, 'SongId' => 100]);
+
+		// 2. Export baseline database
+		$exportedDbPath = $this->tempDbPath();
+		$this->exporter->exportToFile($lib, $exportedDbPath);
+
+		// 3. Client deletes all core entities and song from the database, but keeps the Setlist
+		$clientDb = new PDO('sqlite:' . $exportedDbPath, options: [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
+		$clientDb->exec("DELETE FROM Songs WHERE Id = 100");
+		$clientDb->exec("DELETE FROM Composer WHERE Id = 10");
+		$clientDb->exec("DELETE FROM ComposerSongs WHERE ComposerId = 10");
+		$clientDb->exec("DELETE FROM Collections WHERE Id = 20");
+		$clientDb->exec("DELETE FROM CollectionSong WHERE CollectionId = 20");
+		$clientDb->exec("DELETE FROM Books WHERE Id = 30");
+		$clientDb->exec("DELETE FROM BookSongs WHERE BookId = 30");
+
+		// 4. Client uploads modified DB back
+		$stats = $this->importer->importFromFile($lib, $exportedDbPath);
+		self::assertSame(1, $stats['songsDeleted']);
+		self::assertSame(3, $stats['entitiesDeleted'], 'Composer, Collection, and Book should be deleted');
+
+		// 5. Nextcloud re-exports the library to SQLite
+		$finalExportPath = $this->tempDbPath();
+		$this->exporter->exportToFile($lib, $finalExportPath);
+
+		$finalDb = new PDO('sqlite:' . $finalExportPath, options: [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
+
+		// Core managed tables MUST NOT contain deleted records (no resurrection via misc data)
+		self::assertSame(0, (int)$finalDb->query('SELECT COUNT(*) FROM Songs')->fetchColumn(), 'Songs table must have 0 rows');
+		self::assertSame(0, (int)$finalDb->query('SELECT COUNT(*) FROM Composer')->fetchColumn(), 'Composer table must have 0 rows');
+		self::assertSame(0, (int)$finalDb->query('SELECT COUNT(*) FROM ComposerSongs')->fetchColumn(), 'ComposerSongs table must have 0 rows');
+		self::assertSame(0, (int)$finalDb->query('SELECT COUNT(*) FROM Collections')->fetchColumn(), 'Collections table must have 0 rows');
+		self::assertSame(0, (int)$finalDb->query('SELECT COUNT(*) FROM CollectionSong')->fetchColumn(), 'CollectionSong table must have 0 rows');
+		self::assertSame(0, (int)$finalDb->query('SELECT COUNT(*) FROM Books')->fetchColumn(), 'Books table must have 0 rows');
+		self::assertSame(0, (int)$finalDb->query('SELECT COUNT(*) FROM BookSongs')->fetchColumn(), 'BookSongs table must have 0 rows');
+
+		// Non-core misc tables MUST still be preserved and exported properly
+		self::assertSame(1, (int)$finalDb->query('SELECT COUNT(*) FROM Setlists')->fetchColumn(), 'Setlists table must retain its 1 row');
+		self::assertSame('Sunday Service', $finalDb->query('SELECT Name FROM Setlists WHERE Id = 1')->fetchColumn());
 	}
 
 	/**

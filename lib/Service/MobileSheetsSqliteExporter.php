@@ -615,10 +615,10 @@ class MobileSheetsSqliteExporter {
 		$miscSchemas = $this->miscMapper->getMiscSchemas($libraryId, 'mobilesheets');
 		if ($miscSchemas !== []) {
 			$songs = $this->songMapper->findByLibrary($libraryId, includeDeleted: true);
-			$songClientByUuid = [];
+			$deletedSongClientIds = [];
 			foreach ($songs as $s) {
-				if ($s->clientId !== null) {
-					$songClientByUuid[$s->uuid] = $s->clientId;
+				if ($s->clientId !== null && $s->deletedAt !== null) {
+					$deletedSongClientIds[$s->clientId] = true;
 				}
 			}
 
@@ -627,12 +627,32 @@ class MobileSheetsSqliteExporter {
 					continue;
 				}
 
+				$lowerTable = strtolower($tableName);
 				$existingColumns = MobileSheetsTableHelper::getTableColumns($db, $tableName);
 
 				$rows = $this->miscMapper->getMiscDataForTable($libraryId, 'mobilesheets', $tableName, includeDeleted: false);
 				foreach ($rows as $row) {
 					if (!is_array($row) || $row === []) {
 						continue;
+					}
+
+					// Never export tombstoned / deleted core records via misc data
+					if ($lowerTable === 'songs') {
+						if (isset($row['Id']) && isset($deletedSongClientIds[(int)$row['Id']])) {
+							continue;
+						}
+					} elseif ($lowerTable === 'files' || $lowerTable === 'songnotes') {
+						if (isset($row['SongId']) && isset($deletedSongClientIds[(int)$row['SongId']])) {
+							continue;
+						}
+					}
+
+					foreach (self::ENTITY_TABLE_CONFIG as $entityCfg) {
+						if (strtolower($entityCfg['linkTable']) === $lowerTable) {
+							if (isset($row['SongId']) && isset($deletedSongClientIds[(int)$row['SongId']])) {
+								continue 2;
+							}
+						}
 					}
 
 					if ($existingColumns !== []) {
