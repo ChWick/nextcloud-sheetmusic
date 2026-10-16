@@ -18,10 +18,6 @@ use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\IDBConnection;
 use PHPUnit\Framework\TestCase;
 
-interface InternalQueryResult extends IResult {
-	public function fetchAssociative(): array|false;
-}
-
 final class InternalSongMapperTest extends TestCase {
 	public function testFindByIdReturnsSong(): void {
 		$result = $this->createMock(InternalQueryResult::class);

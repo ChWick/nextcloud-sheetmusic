@@ -516,8 +516,8 @@ class InternalEntityMapper {
 	 */
 	public function removeDuplicateSongEntityAssignments(int $libraryId, ?int $songId = null): int {
 		$qb = $this->db->getQueryBuilder();
-		$qb->select('se.song_id', 'se.entity_id', $qb->expr()->min('se.id', 'min_id'))
-			->addSelect($qb->expr()->count('se.id', 'cnt'))
+		$qb->select('se.song_id', 'se.entity_id')
+			->selectAlias($qb->createFunction('MIN(' . $qb->getColumnName('se.id') . ')'), 'min_id')
 			->from(self::JUNCTION_TABLE_NAME, 'se')
 			->innerJoin('se', self::TABLE_NAME, 'e', $qb->expr()->eq('se.entity_id', 'e.id'))
 			->where($qb->expr()->eq('e.library_id', $qb->createNamedParameter($libraryId, IQueryBuilder::PARAM_INT)))
@@ -529,7 +529,7 @@ class InternalEntityMapper {
 		}
 
 		$qb->groupBy('se.song_id', 'se.entity_id')
-			->having($qb->expr()->gt('cnt', $qb->createNamedParameter(1, IQueryBuilder::PARAM_INT)));
+			->having($qb->expr()->gt($qb->createFunction('COUNT(*)'), $qb->createNamedParameter(1, IQueryBuilder::PARAM_INT)));
 
 		$duplicates = $qb->executeQuery()->fetchAllAssociative();
 		$removed = 0;
