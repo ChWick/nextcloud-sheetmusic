@@ -665,7 +665,14 @@ class MobileSheetsSqliteExporter {
 
 		$nextId = $maxId + 1;
 
-		$fileStmt = $db->prepare('INSERT INTO Files (Id, SongId, Path, PageOrder, FileSize, LastModified, Source, Type, Password, SourceFilePageCount, FileHash, Width, Height) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+		$colStmt = $db->query('PRAGMA table_info("Files")');
+		$existingCols = [];
+		if ($colStmt !== false) {
+			while ($c = $colStmt->fetch()) {
+				$existingCols[strtolower((string)$c['name'])] = (string)$c['name'];
+			}
+		}
+
 		$metaStmt = $hasSyncMeta ? $db->prepare('INSERT INTO _nc_sync_metadata (entity_type, uuid, client_id, updated_at, extra_json) VALUES (:type, :uuid, :client_id, :updated_at, :extra_json)') : null;
 
 		foreach ($files as $file) {
@@ -694,21 +701,37 @@ class MobileSheetsSqliteExporter {
 				$size = $file->fileSize ?? 0;
 				$pageCount = $file->pageCount ?? 1;
 
-				$fileStmt->execute([
-					$clientId,
-					$songClientId,
-					$webdavPath,
-					$file->pageOrder,
-					$size,
-					$file->updatedAt * 1000,
-					1, // Source = 1 (local)
-					$file->type,
-					'',
-					$pageCount,
-					$hash,
-					-1,
-					-1,
-				]);
+				$candidateValues = [
+					'id' => $clientId,
+					'songid' => $songClientId,
+					'path' => $webdavPath,
+					'pageorder' => $file->pageOrder,
+					'filesize' => $size,
+					'lastmodified' => $file->updatedAt * 1000,
+					'source' => 1,
+					'type' => $file->type,
+					'password' => '',
+					'sourcefilepagecount' => $pageCount,
+					'filehash' => $hash,
+					'width' => -1,
+					'height' => -1,
+				];
+
+				$insertCols = [];
+				$insertVals = [];
+				foreach ($candidateValues as $lowerKey => $val) {
+					if (isset($existingCols[$lowerKey])) {
+						$insertCols[] = '"' . $existingCols[$lowerKey] . '"';
+						$insertVals[] = $val;
+					}
+				}
+
+				if ($insertCols !== []) {
+					$placeholders = array_fill(0, count($insertCols), '?');
+					$sql = sprintf('INSERT INTO Files (%s) VALUES (%s)', implode(', ', $insertCols), implode(', ', $placeholders));
+					$stmt = $db->prepare($sql);
+					$stmt->execute($insertVals);
+				}
 			}
 
 			if ($metaStmt !== null) {
