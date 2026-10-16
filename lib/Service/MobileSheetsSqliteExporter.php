@@ -17,6 +17,7 @@ use OCA\SheetMusic\Db\InternalSongFile;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
+use OCA\SheetMusic\Service\MobileSheetsTableHelper;
 use OCA\SheetMusic\Util\SongSortingUtil;
 use OCP\Files\File;
 use OCP\Files\IRootFolder;
@@ -310,41 +311,15 @@ class MobileSheetsSqliteExporter {
 
 		$nextId = $maxId + 1;
 
-		$hasSyncMeta = false;
-		$checkMeta = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='_nc_sync_metadata'");
-		if ($checkMeta !== false && $checkMeta->fetch() !== false) {
-			$hasSyncMeta = true;
-		}
-
+		$hasSyncMeta = MobileSheetsTableHelper::tableExists($db, '_nc_sync_metadata');
 		$metaStmt = $hasSyncMeta ? $db->prepare('INSERT INTO _nc_sync_metadata (entity_type, uuid, client_id, updated_at, extra_json) VALUES (:type, :uuid, :client_id, :updated_at, :extra_json)') : null;
 
 		foreach ($entities as $entity) {
 			$config = self::ENTITY_TABLE_CONFIG[$entity->type] ?? self::ENTITY_TABLE_CONFIG['customgroup'];
 
-			$tableName = $config['table'];
-			$check = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='" . str_replace("'", "''", $tableName) . "'");
-			if ($check === false || $check->fetch() === false) {
-				if ($tableName === 'Key') {
-					$alt = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='Keys'");
-					if ($alt !== false && $alt->fetch() !== false) {
-						$tableName = 'Keys';
-					}
-				} elseif ($tableName === 'Keys') {
-					$alt = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='Key'");
-					if ($alt !== false && $alt->fetch() !== false) {
-						$tableName = 'Key';
-					}
-				} elseif ($tableName === 'SourceType') {
-					$alt = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='SourceTypes'");
-					if ($alt !== false && $alt->fetch() !== false) {
-						$tableName = 'SourceTypes';
-					}
-				} elseif ($tableName === 'SourceTypes') {
-					$alt = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='SourceType'");
-					if ($alt !== false && $alt->fetch() !== false) {
-						$tableName = 'SourceType';
-					}
-				}
+			$tableName = MobileSheetsTableHelper::resolveTable($db, $config['table']);
+			if ($tableName === null) {
+				continue;
 			}
 
 			$clientId = $entity->clientId;
@@ -366,15 +341,7 @@ class MobileSheetsSqliteExporter {
 			}
 
 			if (!$rowExists) {
-				$colStmt = $db->query(sprintf('PRAGMA table_info("%s")', str_replace('"', '""', $tableName)));
-				$existingCols = [];
-				if ($colStmt !== false) {
-					while ($colInfo = $colStmt->fetch()) {
-						if (isset($colInfo['name'])) {
-							$existingCols[strtolower((string)$colInfo['name'])] = (string)$colInfo['name'];
-						}
-					}
-				}
+				$existingCols = MobileSheetsTableHelper::getTableColumns($db, $tableName);
 
 				$nameCol = $config['nameCol'];
 				if (!isset($existingCols[strtolower($nameCol)])) {
@@ -432,22 +399,12 @@ class MobileSheetsSqliteExporter {
 	}
 
 	private function exportSongs(PDO $db, int $libraryId): void {
-		$checkSongs = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='Songs'");
-		if ($checkSongs === false || $checkSongs->fetch() === false) {
+		if (!MobileSheetsTableHelper::tableExists($db, 'Songs')) {
 			return;
 		}
 
-		$hasNotesTable = false;
-		$checkNotes = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='SongNotes'");
-		if ($checkNotes !== false && $checkNotes->fetch() !== false) {
-			$hasNotesTable = true;
-		}
-
-		$hasSyncMeta = false;
-		$checkMeta = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='_nc_sync_metadata'");
-		if ($checkMeta !== false && $checkMeta->fetch() !== false) {
-			$hasSyncMeta = true;
-		}
+		$hasNotesTable = MobileSheetsTableHelper::tableExists($db, 'SongNotes');
+		$hasSyncMeta = MobileSheetsTableHelper::tableExists($db, '_nc_sync_metadata');
 
 		$songs = $this->songMapper->findByLibrary($libraryId, includeDeleted: false);
 		$attributesBySong = $this->attributeMapper->findAllForLibrary($libraryId);
@@ -467,13 +424,7 @@ class MobileSheetsSqliteExporter {
 
 		$metaStmt = $hasSyncMeta ? $db->prepare('INSERT INTO _nc_sync_metadata (entity_type, uuid, client_id, updated_at, extra_json) VALUES (:type, :uuid, :client_id, :updated_at, :extra_json)') : null;
 
-		$colStmt = $db->query('PRAGMA table_info("Songs")');
-		$existingCols = [];
-		if ($colStmt !== false) {
-			while ($c = $colStmt->fetch()) {
-				$existingCols[strtolower((string)$c['name'])] = (string)$c['name'];
-			}
-		}
+		$existingCols = MobileSheetsTableHelper::getTableColumns($db, 'Songs');
 
 		foreach ($songs as $song) {
 			$clientId = $song->clientId;
@@ -547,13 +498,7 @@ class MobileSheetsSqliteExporter {
 				}
 
 				if (!$noteExists) {
-					$noteColStmt = $db->query('PRAGMA table_info("SongNotes")');
-					$noteCols = [];
-					if ($noteColStmt !== false) {
-						while ($nc = $noteColStmt->fetch()) {
-							$noteCols[strtolower((string)$nc['name'])] = (string)$nc['name'];
-						}
-					}
+					$noteCols = MobileSheetsTableHelper::getTableColumns($db, 'SongNotes');
 
 					$noteVals = [
 						'songid' => $clientId,
@@ -643,8 +588,7 @@ class MobileSheetsSqliteExporter {
 			$linkTable = $config['linkTable'];
 			$linkCol = $config['linkCol'];
 
-			$checkLinkTable = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='" . str_replace("'", "''", $linkTable) . "'");
-			if ($checkLinkTable === false || $checkLinkTable->fetch() === false) {
+			if (!MobileSheetsTableHelper::tableExists($db, $linkTable)) {
 				continue;
 			}
 
@@ -687,16 +631,11 @@ class MobileSheetsSqliteExporter {
 	}
 
 	private function exportFiles(PDO $db, InternalLibrary $library, ?IUser $user): void {
-		$checkFiles = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='Files'");
-		if ($checkFiles === false || $checkFiles->fetch() === false) {
+		if (!MobileSheetsTableHelper::tableExists($db, 'Files')) {
 			return;
 		}
 
-		$hasSyncMeta = false;
-		$checkMeta = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='_nc_sync_metadata'");
-		if ($checkMeta !== false && $checkMeta->fetch() !== false) {
-			$hasSyncMeta = true;
-		}
+		$hasSyncMeta = MobileSheetsTableHelper::tableExists($db, '_nc_sync_metadata');
 
 		$files = $this->songFileMapper->findAllForLibrary($library->id, includeDeleted: false);
 
@@ -721,13 +660,7 @@ class MobileSheetsSqliteExporter {
 
 		$nextId = $maxId + 1;
 
-		$colStmt = $db->query('PRAGMA table_info("Files")');
-		$existingCols = [];
-		if ($colStmt !== false) {
-			while ($c = $colStmt->fetch()) {
-				$existingCols[strtolower((string)$c['name'])] = (string)$c['name'];
-			}
-		}
+		$existingCols = MobileSheetsTableHelper::getTableColumns($db, 'Files');
 
 		$metaStmt = $hasSyncMeta ? $db->prepare('INSERT INTO _nc_sync_metadata (entity_type, uuid, client_id, updated_at, extra_json) VALUES (:type, :uuid, :client_id, :updated_at, :extra_json)') : null;
 
@@ -814,21 +747,11 @@ class MobileSheetsSqliteExporter {
 			}
 
 			foreach (array_keys($miscSchemas) as $tableName) {
-				$check = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='" . str_replace("'", "''", $tableName) . "'");
-				if ($check === false || $check->fetch() === false) {
+				if (!MobileSheetsTableHelper::tableExists($db, $tableName)) {
 					continue;
 				}
 
-				// Query table column info to ensure we only insert existing columns
-				$colStmt = $db->query(sprintf('PRAGMA table_info("%s")', str_replace('"', '""', $tableName)));
-				$existingColumns = [];
-				if ($colStmt !== false) {
-					while ($colInfo = $colStmt->fetch()) {
-						if (isset($colInfo['name'])) {
-							$existingColumns[strtolower((string)$colInfo['name'])] = (string)$colInfo['name'];
-						}
-					}
-				}
+				$existingColumns = MobileSheetsTableHelper::getTableColumns($db, $tableName);
 
 				$rows = $this->miscMapper->getMiscDataForTable($libraryId, 'mobilesheets', $tableName, includeDeleted: false);
 				foreach ($rows as $row) {
@@ -872,16 +795,14 @@ class MobileSheetsSqliteExporter {
 			}
 		}
 
-		$checkMeta = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='android_metadata'");
-		if ($checkMeta !== false && $checkMeta->fetch() !== false) {
+		if (MobileSheetsTableHelper::tableExists($db, 'android_metadata')) {
 			$cnt = (int)$db->query('SELECT count(*) FROM android_metadata')->fetchColumn();
 			if ($cnt === 0) {
 				$db->exec("INSERT INTO android_metadata (locale) VALUES ('en_US')");
 			}
 		}
 
-		$checkDef = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='Defaults'");
-		if ($checkDef !== false && $checkDef->fetch() !== false) {
+		if (MobileSheetsTableHelper::tableExists($db, 'Defaults')) {
 			$cnt = (int)$db->query('SELECT count(*) FROM Defaults')->fetchColumn();
 			if ($cnt === 0) {
 				$db->exec('INSERT INTO Defaults (Id, Initialized) VALUES (1, 1)');
