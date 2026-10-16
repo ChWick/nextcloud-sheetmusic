@@ -128,49 +128,58 @@ class MobileSheetsSqliteExporter {
 	 * Export the entire library state to a MobileSheets-compatible SQLite database file.
 	 */
 	public function exportToFile(InternalLibrary|array|int $library, string $targetSqlitePath): void {
-		$lib = $this->resolveLibrary($library);
-		if ($lib->id === null) {
-			throw new \InvalidArgumentException('Library must have an ID to export');
-		}
+		$origPrecision = ini_get('precision');
+		ini_set('precision', '-1');
 
-		$directory = dirname($targetSqlitePath);
-		if (!is_dir($directory)) {
-			mkdir($directory, 0777, true);
-		}
-		if (file_exists($targetSqlitePath)) {
-			@unlink($targetSqlitePath);
-		}
-
-		$db = new PDO('sqlite:' . $targetSqlitePath, options: [
-			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-		]);
-
-		$db->exec('PRAGMA synchronous = OFF');
-		$db->exec('PRAGMA journal_mode = MEMORY');
-
-		$this->initializeSchema($db, $lib->id);
-
-		$db->beginTransaction();
 		try {
-			$user = $this->userManager->get($lib->userId);
-
-			$this->exportEntities($db, $lib->id);
-			$this->exportSongs($db, $lib->id);
-			$this->exportSongEntityLinks($db, $lib->id);
-			$this->exportFiles($db, $lib, $user);
-			$this->exportMiscData($db, $lib->id);
-
-			$db->commit();
-		} catch (\Throwable $e) {
-			if ($db->inTransaction()) {
-				$db->rollBack();
+			$lib = $this->resolveLibrary($library);
+			if ($lib->id === null) {
+				throw new \InvalidArgumentException('Library must have an ID to export');
 			}
-			$this->logger->error('Failed to export MobileSheets SQLite database: ' . $e->getMessage(), [
-				'exception' => $e,
-				'libraryId' => $lib->id,
+
+			$directory = dirname($targetSqlitePath);
+			if (!is_dir($directory)) {
+				mkdir($directory, 0777, true);
+			}
+			if (file_exists($targetSqlitePath)) {
+				@unlink($targetSqlitePath);
+			}
+
+			$db = new PDO('sqlite:' . $targetSqlitePath, options: [
+				PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+				PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
 			]);
-			throw $e;
+
+			$db->exec('PRAGMA synchronous = OFF');
+			$db->exec('PRAGMA journal_mode = MEMORY');
+
+			$this->initializeSchema($db, $lib->id);
+
+			$db->beginTransaction();
+			try {
+				$user = $this->userManager->get($lib->userId);
+
+				$this->exportMiscData($db, $lib->id);
+				$this->exportEntities($db, $lib->id);
+				$this->exportSongs($db, $lib->id);
+				$this->exportSongEntityLinks($db, $lib->id);
+				$this->exportFiles($db, $lib, $user);
+
+				$db->commit();
+			} catch (\Throwable $e) {
+				if ($db->inTransaction()) {
+					$db->rollBack();
+				}
+				$this->logger->error('Failed to export MobileSheets SQLite database: ' . $e->getMessage(), [
+					'exception' => $e,
+					'libraryId' => $lib->id,
+				]);
+				throw $e;
+			}
+		} finally {
+			if ($origPrecision !== false) {
+				ini_set('precision', $origPrecision);
+			}
 		}
 	}
 
@@ -225,6 +234,19 @@ class MobileSheetsSqliteExporter {
 	private function initializeSchema(PDO $db, int $libraryId): void {
 		$miscSchemas = $this->miscMapper->getMiscSchemas($libraryId, 'mobilesheets');
 		$miscSchemaKeysLower = array_change_key_case($miscSchemas, CASE_LOWER);
+
+		if (isset($miscSchemaKeysLower['songs'])) {
+			foreach ($miscSchemas as $tableName => $createSql) {
+				if (strtolower($tableName) === '_nc_sync_metadata' && !isset($miscSchemaKeysLower['_nc_sync_metadata'])) {
+					continue;
+				}
+				$db->exec($createSql);
+			}
+			if (isset($miscSchemaKeysLower['_nc_sync_metadata'])) {
+				$db->exec('CREATE INDEX IF NOT EXISTS idx_nc_sync_client ON _nc_sync_metadata (entity_type, client_id)');
+			}
+			return;
+		}
 
 		$statements = [
 			'Songs' => 'CREATE TABLE Songs(Id INTEGER PRIMARY KEY, Title VARCHAR(255), SortTitle VARCHAR(255), Stars INTEGER DEFAULT 0, Difficulty INTEGER DEFAULT 0, Duration INTEGER DEFAULT 0, Keywords VARCHAR(255) DEFAULT \'\', Custom VARCHAR(255) DEFAULT \'\', Custom2 VARCHAR(255) DEFAULT \'\', SongId INTEGER, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0, Opus VARCHAR(255) DEFAULT \'\', CatalogNumber VARCHAR(255) DEFAULT \'\', SongNumber VARCHAR(255) DEFAULT \'\')',
@@ -296,10 +318,32 @@ class MobileSheetsSqliteExporter {
 
 		$nextId = $maxId + 1;
 
-		$metaStmt = $db->prepare('INSERT INTO _nc_sync_metadata (entity_type, uuid, client_id, updated_at, extra_json) VALUES (:type, :uuid, :client_id, :updated_at, :extra_json)');
+		$hasSyncMeta = false;
+		$checkMeta = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='_nc_sync_metadata'");
+		if ($checkMeta !== false && $checkMeta->fetch() !== false) {
+			$hasSyncMeta = true;
+		}
+
+		$metaStmt = $hasSyncMeta ? $db->prepare('INSERT INTO _nc_sync_metadata (entity_type, uuid, client_id, updated_at, extra_json) VALUES (:type, :uuid, :client_id, :updated_at, :extra_json)') : null;
 
 		foreach ($entities as $entity) {
 			$config = self::ENTITY_TABLE_CONFIG[$entity->type] ?? self::ENTITY_TABLE_CONFIG['customgroup'];
+
+			$tableName = $config['table'];
+			$check = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='" . str_replace("'", "''", $tableName) . "'");
+			if ($check === false || $check->fetch() === false) {
+				if ($tableName === 'Keys') {
+					$alt = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='Key'");
+					if ($alt !== false && $alt->fetch() !== false) {
+						$tableName = 'Key';
+					}
+				} elseif ($tableName === 'SourceTypes') {
+					$alt = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='SourceType'");
+					if ($alt !== false && $alt->fetch() !== false) {
+						$tableName = 'SourceType';
+					}
+				}
+			}
 
 			$clientId = $entity->clientId;
 			if ($clientId === null || $clientId <= 0) {
@@ -313,49 +357,76 @@ class MobileSheetsSqliteExporter {
 				$this->entityMapper->update($entity);
 			}
 
-			$val = ($config['nameCol'] === 'Year') ? (int)$entity->name : $entity->name;
-
-			if ($config['hasSort']) {
-				$sql = sprintf(
-					'INSERT INTO "%s" (Id, "%s", SortBy, Ascending, DateCreated, LastModified) VALUES (?, ?, ?, ?, ?, ?)',
-					$config['table'],
-					$config['nameCol'],
-				);
-				$stmt = $db->prepare($sql);
-				$stmt->execute([
-					$clientId,
-					$val,
-					$entity->sortBy,
-					$entity->ascending,
-					$entity->createdAt * 1000,
-					$entity->updatedAt * 1000,
-				]);
-			} else {
-				$sql = sprintf(
-					'INSERT INTO "%s" (Id, "%s", DateCreated, LastModified) VALUES (?, ?, ?, ?)',
-					$config['table'],
-					$config['nameCol'],
-				);
-				$stmt = $db->prepare($sql);
-				$stmt->execute([
-					$clientId,
-					$val,
-					$entity->createdAt * 1000,
-					$entity->updatedAt * 1000,
-				]);
+			$rowExists = false;
+			$checkRow = $db->query(sprintf('SELECT 1 FROM "%s" WHERE Id = %d', str_replace('"', '""', $tableName), (int)$clientId));
+			if ($checkRow !== false && $checkRow->fetch() !== false) {
+				$rowExists = true;
 			}
 
-			$metaStmt->execute([
-				':type' => 'entity:' . $entity->type,
-				':uuid' => $entity->uuid,
-				':client_id' => $clientId,
-				':updated_at' => $entity->updatedAt,
-				':extra_json' => json_encode(['original_type' => $entity->type, 'name' => $entity->name], JSON_THROW_ON_ERROR),
-			]);
+			if (!$rowExists) {
+				$val = ($config['nameCol'] === 'Year') ? (int)$entity->name : $entity->name;
+
+				if ($config['hasSort']) {
+					$sql = sprintf(
+						'INSERT INTO "%s" (Id, "%s", SortBy, Ascending, DateCreated, LastModified) VALUES (?, ?, ?, ?, ?, ?)',
+						$tableName,
+						$config['nameCol'],
+					);
+					$stmt = $db->prepare($sql);
+					$stmt->execute([
+						$clientId,
+						$val,
+						$entity->sortBy,
+						$entity->ascending,
+						$entity->createdAt * 1000,
+						$entity->updatedAt * 1000,
+					]);
+				} else {
+					$sql = sprintf(
+						'INSERT INTO "%s" (Id, "%s", DateCreated, LastModified) VALUES (?, ?, ?, ?)',
+						$tableName,
+						$config['nameCol'],
+					);
+					$stmt = $db->prepare($sql);
+					$stmt->execute([
+						$clientId,
+						$val,
+						$entity->createdAt * 1000,
+						$entity->updatedAt * 1000,
+					]);
+				}
+			}
+
+			if ($metaStmt !== null) {
+				$metaStmt->execute([
+					':type' => 'entity:' . $entity->type,
+					':uuid' => $entity->uuid,
+					':client_id' => $clientId,
+					':updated_at' => $entity->updatedAt,
+					':extra_json' => json_encode(['original_type' => $entity->type, 'name' => $entity->name], JSON_THROW_ON_ERROR),
+				]);
+			}
 		}
 	}
 
 	private function exportSongs(PDO $db, int $libraryId): void {
+		$checkSongs = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='Songs'");
+		if ($checkSongs === false || $checkSongs->fetch() === false) {
+			return;
+		}
+
+		$hasNotesTable = false;
+		$checkNotes = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='SongNotes'");
+		if ($checkNotes !== false && $checkNotes->fetch() !== false) {
+			$hasNotesTable = true;
+		}
+
+		$hasSyncMeta = false;
+		$checkMeta = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='_nc_sync_metadata'");
+		if ($checkMeta !== false && $checkMeta->fetch() !== false) {
+			$hasSyncMeta = true;
+		}
+
 		$songs = $this->songMapper->findByLibrary($libraryId, includeDeleted: false);
 		$attributesBySong = $this->attributeMapper->findAllForLibrary($libraryId);
 
@@ -372,9 +443,15 @@ class MobileSheetsSqliteExporter {
 
 		$nextId = $maxId + 1;
 
-		$songStmt = $db->prepare('INSERT INTO Songs (Id, Title, SortTitle, Stars, Difficulty, Duration, Keywords, Custom, Custom2, SongId, DateCreated, LastModified, Opus, CatalogNumber, SongNumber) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-		$noteStmt = $db->prepare('INSERT INTO SongNotes (SongId, Note, Title, DateCreated, LastModified) VALUES (?, ?, ?, ?, ?)');
-		$metaStmt = $db->prepare('INSERT INTO _nc_sync_metadata (entity_type, uuid, client_id, updated_at, extra_json) VALUES (:type, :uuid, :client_id, :updated_at, :extra_json)');
+		$metaStmt = $hasSyncMeta ? $db->prepare('INSERT INTO _nc_sync_metadata (entity_type, uuid, client_id, updated_at, extra_json) VALUES (:type, :uuid, :client_id, :updated_at, :extra_json)') : null;
+
+		$colStmt = $db->query('PRAGMA table_info("Songs")');
+		$existingCols = [];
+		if ($colStmt !== false) {
+			while ($c = $colStmt->fetch()) {
+				$existingCols[strtolower((string)$c['name'])] = (string)$c['name'];
+			}
+		}
 
 		foreach ($songs as $song) {
 			$clientId = $song->clientId;
@@ -389,51 +466,91 @@ class MobileSheetsSqliteExporter {
 				$this->songMapper->update($song);
 			}
 
-			$attrs = $attributesBySong[$song->id] ?? [];
-			$custom = $attrs['custom'] ?? '';
-			$custom2 = $attrs['custom2'] ?? '';
-
-			$songStmt->execute([
-				$clientId,
-				$song->title,
-				$song->sortTitle,
-				$song->rating,
-				$song->difficulty,
-				$song->duration,
-				$song->keywords,
-				$custom,
-				$custom2,
-				$clientId,
-				$song->createdAt * 1000,
-				$song->updatedAt * 1000,
-				$song->opus ?? '',
-				$song->catalogNumber ?? '',
-				$song->songNumber ?? '',
-			]);
-
-			if ($song->notes !== '') {
-				$noteStmt->execute([
-					$clientId,
-					$song->notes,
-					'',
-					$song->createdAt * 1000,
-					$song->updatedAt * 1000,
-				]);
+			$rowExists = false;
+			$checkRow = $db->query(sprintf('SELECT 1 FROM Songs WHERE Id = %d', (int)$clientId));
+			if ($checkRow !== false && $checkRow->fetch() !== false) {
+				$rowExists = true;
 			}
 
-			$extra = [
-				'opus' => $song->opus,
-				'catalog_number' => $song->catalogNumber,
-				'song_number' => $song->songNumber,
-			];
+			if (!$rowExists) {
+				$attrs = $attributesBySong[$song->id] ?? [];
+				$custom = $attrs['custom'] ?? '';
+				$custom2 = $attrs['custom2'] ?? '';
 
-			$metaStmt->execute([
-				':type' => 'song',
-				':uuid' => $song->uuid,
-				':client_id' => $clientId,
-				':updated_at' => $song->updatedAt,
-				':extra_json' => json_encode($extra, JSON_THROW_ON_ERROR),
-			]);
+				$candidateValues = [
+					'id' => $clientId,
+					'title' => $song->title,
+					'sorttitle' => $song->sortTitle,
+					'stars' => $song->rating,
+					'difficulty' => $song->difficulty,
+					'duration' => $song->duration,
+					'keywords' => $song->keywords,
+					'custom' => $custom,
+					'custom2' => $custom2,
+					'songid' => $clientId,
+					'datecreated' => $song->createdAt * 1000,
+					'creationdate' => $song->createdAt * 1000,
+					'lastmodified' => $song->updatedAt * 1000,
+					'opus' => $song->opus ?? '',
+					'catalognumber' => $song->catalogNumber ?? '',
+					'songnumber' => $song->songNumber ?? '',
+				];
+
+				$insertCols = [];
+				$insertVals = [];
+				foreach ($candidateValues as $lowerKey => $val) {
+					if (isset($existingCols[$lowerKey])) {
+						$insertCols[] = '"' . $existingCols[$lowerKey] . '"';
+						$insertVals[] = $val;
+					}
+				}
+
+				if ($insertCols !== []) {
+					$placeholders = array_fill(0, count($insertCols), '?');
+					$sql = sprintf(
+						'INSERT INTO Songs (%s) VALUES (%s)',
+						implode(', ', $insertCols),
+						implode(', ', $placeholders),
+					);
+					$stmt = $db->prepare($sql);
+					$stmt->execute($insertVals);
+				}
+			}
+
+			if ($hasNotesTable && $song->notes !== '') {
+				$noteExists = false;
+				$checkNote = $db->query(sprintf('SELECT 1 FROM SongNotes WHERE SongId = %d', (int)$clientId));
+				if ($checkNote !== false && $checkNote->fetch() !== false) {
+					$noteExists = true;
+				}
+
+				if (!$noteExists) {
+					$noteStmt = $db->prepare('INSERT INTO SongNotes (SongId, Note, Title, DateCreated, LastModified) VALUES (?, ?, ?, ?, ?)');
+					$noteStmt->execute([
+						$clientId,
+						$song->notes,
+						'',
+						$song->createdAt * 1000,
+						$song->updatedAt * 1000,
+					]);
+				}
+			}
+
+			if ($metaStmt !== null) {
+				$extra = [
+					'opus' => $song->opus,
+					'catalog_number' => $song->catalogNumber,
+					'song_number' => $song->songNumber,
+				];
+
+				$metaStmt->execute([
+					':type' => 'song',
+					':uuid' => $song->uuid,
+					':client_id' => $clientId,
+					':updated_at' => $song->updatedAt,
+					':extra_json' => json_encode($extra, JSON_THROW_ON_ERROR),
+				]);
+			}
 		}
 	}
 
@@ -469,10 +586,24 @@ class MobileSheetsSqliteExporter {
 			}
 
 			$config = self::ENTITY_TABLE_CONFIG[$type] ?? self::ENTITY_TABLE_CONFIG['customgroup'];
+			$linkTable = $config['linkTable'];
+			$linkCol = $config['linkCol'];
+
+			$checkLinkTable = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='" . str_replace("'", "''", $linkTable) . "'");
+			if ($checkLinkTable === false || $checkLinkTable->fetch() === false) {
+				continue;
+			}
+
+			$checkExisting = $db->prepare(sprintf('SELECT 1 FROM "%s" WHERE "%s" = ? AND SongId = ?', str_replace('"', '""', $linkTable), str_replace('"', '""', $linkCol)));
+			$checkExisting->execute([$entityClientId, $songClientId]);
+			if ($checkExisting->fetch() !== false) {
+				continue;
+			}
+
 			$sql = sprintf(
 				'INSERT INTO "%s" ("%s", SongId) VALUES (?, ?)',
-				$config['linkTable'],
-				$config['linkCol'],
+				str_replace('"', '""', $linkTable),
+				str_replace('"', '""', $linkCol),
 			);
 			$stmt = $db->prepare($sql);
 			$stmt->execute([$entityClientId, $songClientId]);
@@ -480,6 +611,17 @@ class MobileSheetsSqliteExporter {
 	}
 
 	private function exportFiles(PDO $db, InternalLibrary $library, ?IUser $user): void {
+		$checkFiles = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='Files'");
+		if ($checkFiles === false || $checkFiles->fetch() === false) {
+			return;
+		}
+
+		$hasSyncMeta = false;
+		$checkMeta = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='_nc_sync_metadata'");
+		if ($checkMeta !== false && $checkMeta->fetch() !== false) {
+			$hasSyncMeta = true;
+		}
+
 		$files = $this->songFileMapper->findAllForLibrary($library->id, includeDeleted: false);
 
 		$songs = $this->songMapper->findByLibrary($library->id, includeDeleted: false);
@@ -504,7 +646,7 @@ class MobileSheetsSqliteExporter {
 		$nextId = $maxId + 1;
 
 		$fileStmt = $db->prepare('INSERT INTO Files (Id, SongId, Path, PageOrder, FileSize, LastModified, Source, Type, Password, SourceFilePageCount, FileHash, Width, Height) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-		$metaStmt = $db->prepare('INSERT INTO _nc_sync_metadata (entity_type, uuid, client_id, updated_at, extra_json) VALUES (:type, :uuid, :client_id, :updated_at, :extra_json)');
+		$metaStmt = $hasSyncMeta ? $db->prepare('INSERT INTO _nc_sync_metadata (entity_type, uuid, client_id, updated_at, extra_json) VALUES (:type, :uuid, :client_id, :updated_at, :extra_json)') : null;
 
 		foreach ($files as $file) {
 			$songClientId = $songClientMap[$file->songId] ?? null;
@@ -524,35 +666,40 @@ class MobileSheetsSqliteExporter {
 				$this->songFileMapper->update($file);
 			}
 
-			$webdavPath = $this->resolveWebdavPathForFile($file, $library, $user);
+			$checkRow = $db->query(sprintf('SELECT 1 FROM Files WHERE Id = %d', (int)$clientId));
+			if ($checkRow === false || $checkRow->fetch() === false) {
+				$webdavPath = $this->resolveWebdavPathForFile($file, $library, $user);
 
-			$hash = $file->fileHash ?? 0;
-			$size = $file->fileSize ?? 0;
-			$pageCount = $file->pageCount ?? 1;
+				$hash = $file->fileHash ?? 0;
+				$size = $file->fileSize ?? 0;
+				$pageCount = $file->pageCount ?? 1;
 
-			$fileStmt->execute([
-				$clientId,
-				$songClientId,
-				$webdavPath,
-				$file->pageOrder,
-				$size,
-				$file->updatedAt * 1000,
-				1, // Source = 1 (local)
-				$file->type,
-				'',
-				$pageCount,
-				$hash,
-				-1,
-				-1,
-			]);
+				$fileStmt->execute([
+					$clientId,
+					$songClientId,
+					$webdavPath,
+					$file->pageOrder,
+					$size,
+					$file->updatedAt * 1000,
+					1, // Source = 1 (local)
+					$file->type,
+					'',
+					$pageCount,
+					$hash,
+					-1,
+					-1,
+				]);
+			}
 
-			$metaStmt->execute([
-				':type' => 'file',
-				':uuid' => $file->uuid,
-				':client_id' => $clientId,
-				':updated_at' => $file->updatedAt,
-				':extra_json' => json_encode(['file_id' => $file->fileId], JSON_THROW_ON_ERROR),
-			]);
+			if ($metaStmt !== null) {
+				$metaStmt->execute([
+					':type' => 'file',
+					':uuid' => $file->uuid,
+					':client_id' => $clientId,
+					':updated_at' => $file->updatedAt,
+					':extra_json' => json_encode(['file_id' => $file->fileId], JSON_THROW_ON_ERROR),
+				]);
+			}
 		}
 	}
 

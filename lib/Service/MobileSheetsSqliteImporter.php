@@ -979,7 +979,7 @@ class MobileSheetsSqliteImporter {
 			$tableName = (string)$row['name'];
 			$sql = (string)$row['sql'];
 
-			if (in_array(strtolower($tableName), self::CORE_MANAGED_TABLES, true)) {
+			if (strtolower($tableName) === '_nc_sync_metadata') {
 				continue;
 			}
 
@@ -1005,7 +1005,7 @@ class MobileSheetsSqliteImporter {
 				$this->miscMapper->saveMiscData($libraryId, 'mobilesheets', $tableName, $recordId, $dataRow, $songUuid);
 			}
 
-			if ($hasRows) {
+			if ($hasRows && !in_array(strtolower($tableName), self::CORE_MANAGED_TABLES, true)) {
 				$stats['miscTablesSynced']++;
 			}
 		}
