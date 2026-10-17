@@ -124,6 +124,7 @@ class LibraryController extends OCSController {
 		?int $fileId = null,
 		?string $entityType = null,
 		?int $entityId = null,
+		?string $path = null,
 	): DataResponse {
 		$user = $this->userSession->getUser();
 		if ($user === null) {
@@ -135,7 +136,7 @@ class LibraryController extends OCSController {
 		}
 
 		try {
-			$result = $this->integrityService->fixIssue($id, $user->getUID(), $issueType, $songId, $fileId, $entityType, $entityId);
+			$result = $this->integrityService->fixIssue($id, $user->getUID(), $issueType, $songId, $fileId, $entityType, $entityId, $path);
 
 			return new DataResponse($result, Http::STATUS_OK);
 		} catch (\Throwable $e) {

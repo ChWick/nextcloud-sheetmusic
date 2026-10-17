@@ -1057,6 +1057,330 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		self::assertSame(3, $result['fixedCount']);
 	}
 
+	public function testOrphanFileAutofixUniqueTitle(): void {
+		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
+		$database = $fixture['connection'];
+		$database->exec("INSERT INTO Songs (Id, Title) VALUES (1, 'Moonlight Sonata')");
+
+		$targetFolder = $this->createMock(Folder::class);
+		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
+		$targetFolder->method('nodeExists')->willReturn(true);
+
+		$orphanNode = $this->createMock(\OCP\Files\Node::class);
+		$orphanNode->method('getName')->willReturn('Moonlight Sonata.pdf');
+		$orphanNode->method('getPath')->willReturn('/user1/files/Noten/Moonlight Sonata.pdf');
+		$orphanNode->method('getId')->willReturn(101);
+		$orphanNode->method('getSize')->willReturn(12345);
+		$targetFolder->method('getDirectoryListing')->willReturn([$orphanNode]);
+		$targetFolder->method('get')->with('Moonlight Sonata.pdf')->willReturn($orphanNode);
+
+		$songFileMapper = $this->createMock(InternalSongFileMapper::class);
+		$songFileMapper->method('findAllForSong')->willReturn([]);
+		$songFileMapper->expects(self::once())->method('insert');
+
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$libraryMapper->expects(self::atLeastOnce())->method('touch')->with(1);
+
+		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager($fixture['path'], $targetFolder);
+		$service = $this->createIntegrityService(
+			$this->createLibraryService(),
+			$fileManager,
+			$rootFolder,
+			$pathResolver,
+			internalSongFileMapper: $songFileMapper,
+			libraryMapper: $libraryMapper,
+			databasePath: $fixture['path'],
+		);
+
+		$issues = $service->checkIntegrity(1, 'user1');
+		$orphanIssues = array_values(array_filter($issues, fn ($i) => $i->type === IntegrityIssue::TYPE_ORPHAN_FILE));
+		self::assertCount(1, $orphanIssues);
+		self::assertTrue($orphanIssues[0]->fixable);
+		self::assertSame(1, $orphanIssues[0]->songId);
+		self::assertSame('Moonlight Sonata', $orphanIssues[0]->songTitle);
+		self::assertSame(1, $orphanIssues[0]->details['matchedSongId']);
+		self::assertSame('Moonlight Sonata', $orphanIssues[0]->details['matchedSongTitle']);
+
+		$result = $service->fixIssue(1, 'user1', IntegrityIssue::TYPE_ORPHAN_FILE, path: 'Moonlight Sonata.pdf');
+		self::assertTrue($result['success']);
+		self::assertSame(1, $result['fixedCount']);
+
+		$filesInDb = $database->query("SELECT * FROM Files WHERE SongId = 1")->fetchAll();
+		self::assertCount(1, $filesInDb);
+		self::assertSame('Moonlight Sonata.pdf', $filesInDb[0]['Path']);
+
+		unlink($fixture['path']);
+	}
+
+	public function testOrphanFileAutofixDeepenToComposer(): void {
+		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
+		$database = $fixture['connection'];
+		$database->exec("INSERT INTO Songs (Id, Title) VALUES (1, 'Sonata')");
+		$database->exec("INSERT INTO Songs (Id, Title) VALUES (2, 'Sonata')");
+		$database->exec("INSERT INTO Composer (Id, Name) VALUES (10, 'Beethoven')");
+		$database->exec("INSERT INTO Composer (Id, Name) VALUES (20, 'Mozart')");
+		$database->exec("INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (10, 1)");
+		$database->exec("INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (20, 2)");
+
+		$targetFolder = $this->createMock(Folder::class);
+		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
+		$targetFolder->method('nodeExists')->willReturn(true);
+
+		$orphanNode = $this->createMock(\OCP\Files\Node::class);
+		$orphanNode->method('getName')->willReturn('Sonata.pdf');
+		$orphanNode->method('getPath')->willReturn('/user1/files/Noten/Beethoven/Sonata.pdf');
+		$orphanNode->method('getId')->willReturn(101);
+		$targetFolder->method('getDirectoryListing')->willReturn([$orphanNode]);
+
+		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager($fixture['path'], $targetFolder);
+		$service = $this->createIntegrityService(
+			$this->createLibraryService(),
+			$fileManager,
+			$rootFolder,
+			$pathResolver,
+			databasePath: $fixture['path'],
+		);
+
+		$issues = $service->checkIntegrity(1, 'user1');
+		$orphanIssues = array_values(array_filter($issues, fn ($i) => $i->type === IntegrityIssue::TYPE_ORPHAN_FILE));
+		self::assertCount(1, $orphanIssues);
+		self::assertTrue($orphanIssues[0]->fixable);
+		self::assertSame(1, $orphanIssues[0]->songId);
+		self::assertSame('Sonata', $orphanIssues[0]->songTitle);
+
+		unlink($fixture['path']);
+	}
+
+	public function testOrphanFileAutofixDeepenToArtist(): void {
+		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
+		$database = $fixture['connection'];
+		$database->exec("INSERT INTO Songs (Id, Title) VALUES (1, 'Sonata')");
+		$database->exec("INSERT INTO Songs (Id, Title) VALUES (2, 'Sonata')");
+		$database->exec("INSERT INTO Composer (Id, Name) VALUES (10, 'Beethoven')");
+		$database->exec("INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (10, 1)");
+		$database->exec("INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (10, 2)");
+		$database->exec("INSERT INTO Artists (Id, Name) VALUES (100, 'Kempff')");
+		$database->exec("INSERT INTO Artists (Id, Name) VALUES (200, 'Barenboim')");
+		$database->exec("INSERT INTO ArtistsSongs (ArtistId, SongId) VALUES (100, 1)");
+		$database->exec("INSERT INTO ArtistsSongs (ArtistId, SongId) VALUES (200, 2)");
+
+		$targetFolder = $this->createMock(Folder::class);
+		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
+		$targetFolder->method('nodeExists')->willReturn(true);
+
+		$orphanNode = $this->createMock(\OCP\Files\Node::class);
+		$orphanNode->method('getName')->willReturn('Beethoven - Barenboim - Sonata.pdf');
+		$orphanNode->method('getPath')->willReturn('/user1/files/Noten/Beethoven - Barenboim - Sonata.pdf');
+		$orphanNode->method('getId')->willReturn(101);
+		$targetFolder->method('getDirectoryListing')->willReturn([$orphanNode]);
+
+		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager($fixture['path'], $targetFolder);
+		$service = $this->createIntegrityService(
+			$this->createLibraryService(),
+			$fileManager,
+			$rootFolder,
+			$pathResolver,
+			databasePath: $fixture['path'],
+		);
+
+		$issues = $service->checkIntegrity(1, 'user1');
+		$orphanIssues = array_values(array_filter($issues, fn ($i) => $i->type === IntegrityIssue::TYPE_ORPHAN_FILE));
+		self::assertCount(1, $orphanIssues);
+		self::assertTrue($orphanIssues[0]->fixable);
+		self::assertSame(2, $orphanIssues[0]->songId);
+
+		unlink($fixture['path']);
+	}
+
+	public function testOrphanFileAutofixDeepenToCollection(): void {
+		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
+		$database = $fixture['connection'];
+		$database->exec("INSERT INTO Songs (Id, Title) VALUES (1, 'Sonata')");
+		$database->exec("INSERT INTO Songs (Id, Title) VALUES (2, 'Sonata')");
+		$database->exec("INSERT INTO Collections (Id, Name) VALUES (10, 'Classics')");
+		$database->exec("INSERT INTO Collections (Id, Name) VALUES (20, 'Romantic')");
+		$database->exec("INSERT INTO CollectionSong (CollectionId, SongId) VALUES (10, 1)");
+		$database->exec("INSERT INTO CollectionSong (CollectionId, SongId) VALUES (20, 2)");
+
+		$targetFolder = $this->createMock(Folder::class);
+		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
+		$targetFolder->method('nodeExists')->willReturn(true);
+
+		$orphanNode = $this->createMock(\OCP\Files\Node::class);
+		$orphanNode->method('getName')->willReturn('Sonata.pdf');
+		$orphanNode->method('getPath')->willReturn('/user1/files/Noten/Classics/Sonata.pdf');
+		$orphanNode->method('getId')->willReturn(101);
+		$targetFolder->method('getDirectoryListing')->willReturn([$orphanNode]);
+
+		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager($fixture['path'], $targetFolder);
+		$service = $this->createIntegrityService(
+			$this->createLibraryService(),
+			$fileManager,
+			$rootFolder,
+			$pathResolver,
+			databasePath: $fixture['path'],
+		);
+
+		$issues = $service->checkIntegrity(1, 'user1');
+		$orphanIssues = array_values(array_filter($issues, fn ($i) => $i->type === IntegrityIssue::TYPE_ORPHAN_FILE));
+		self::assertCount(1, $orphanIssues);
+		self::assertTrue($orphanIssues[0]->fixable);
+		self::assertSame(1, $orphanIssues[0]->songId);
+
+		unlink($fixture['path']);
+	}
+
+	public function testOrphanFileAutofixDeepenToBook(): void {
+		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
+		$database = $fixture['connection'];
+		$database->exec("INSERT INTO Songs (Id, Title) VALUES (1, 'Sonata')");
+		$database->exec("INSERT INTO Songs (Id, Title) VALUES (2, 'Sonata')");
+		$database->exec("INSERT INTO Books (Id, Title) VALUES (10, 'Book A')");
+		$database->exec("INSERT INTO Books (Id, Title) VALUES (20, 'Book B')");
+		$database->exec("INSERT INTO BookSongs (BookId, SongId) VALUES (10, 1)");
+		$database->exec("INSERT INTO BookSongs (BookId, SongId) VALUES (20, 2)");
+
+		$targetFolder = $this->createMock(Folder::class);
+		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
+		$targetFolder->method('nodeExists')->willReturn(true);
+
+		$orphanNode = $this->createMock(\OCP\Files\Node::class);
+		$orphanNode->method('getName')->willReturn('Sonata.pdf');
+		$orphanNode->method('getPath')->willReturn('/user1/files/Noten/Book B/Sonata.pdf');
+		$orphanNode->method('getId')->willReturn(101);
+		$targetFolder->method('getDirectoryListing')->willReturn([$orphanNode]);
+
+		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager($fixture['path'], $targetFolder);
+		$service = $this->createIntegrityService(
+			$this->createLibraryService(),
+			$fileManager,
+			$rootFolder,
+			$pathResolver,
+			databasePath: $fixture['path'],
+		);
+
+		$issues = $service->checkIntegrity(1, 'user1');
+		$orphanIssues = array_values(array_filter($issues, fn ($i) => $i->type === IntegrityIssue::TYPE_ORPHAN_FILE));
+		self::assertCount(1, $orphanIssues);
+		self::assertTrue($orphanIssues[0]->fixable);
+		self::assertSame(2, $orphanIssues[0]->songId);
+
+		unlink($fixture['path']);
+	}
+
+	public function testOrphanFileCannotDisambiguateMultipleCandidates(): void {
+		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
+		$database = $fixture['connection'];
+		$database->exec("INSERT INTO Songs (Id, Title) VALUES (1, 'Sonata')");
+		$database->exec("INSERT INTO Songs (Id, Title) VALUES (2, 'Sonata')");
+		$database->exec("INSERT INTO Composer (Id, Name) VALUES (10, 'Beethoven')");
+		$database->exec("INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (1, 10)");
+		$database->exec("INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (2, 10)");
+
+		$targetFolder = $this->createMock(Folder::class);
+		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
+		$targetFolder->method('nodeExists')->willReturn(true);
+
+		$orphanNode = $this->createMock(\OCP\Files\Node::class);
+		$orphanNode->method('getName')->willReturn('Sonata.pdf');
+		$orphanNode->method('getPath')->willReturn('/user1/files/Noten/Beethoven/Sonata.pdf');
+		$orphanNode->method('getId')->willReturn(101);
+		$targetFolder->method('getDirectoryListing')->willReturn([$orphanNode]);
+
+		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager($fixture['path'], $targetFolder);
+		$service = $this->createIntegrityService(
+			$this->createLibraryService(),
+			$fileManager,
+			$rootFolder,
+			$pathResolver,
+			databasePath: $fixture['path'],
+		);
+
+		$issues = $service->checkIntegrity(1, 'user1');
+		$orphanIssues = array_values(array_filter($issues, fn ($i) => $i->type === IntegrityIssue::TYPE_ORPHAN_FILE));
+		self::assertCount(1, $orphanIssues);
+		self::assertFalse($orphanIssues[0]->fixable);
+		self::assertNull($orphanIssues[0]->songId);
+
+		unlink($fixture['path']);
+	}
+
+	public function testOrphanFileExcludedWhenSongAlreadyHasFiles(): void {
+		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
+		$database = $fixture['connection'];
+		$database->exec("INSERT INTO Songs (Id, Title) VALUES (1, 'Moonlight Sonata')");
+		$database->exec("INSERT INTO Files (Id, SongId, Path) VALUES (10, 1, '/remote.php/dav/files/user1/Noten/existing.pdf')");
+
+		$targetFolder = $this->createMock(Folder::class);
+		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
+		$targetFolder->method('nodeExists')->willReturn(true);
+
+		$orphanNode = $this->createMock(\OCP\Files\Node::class);
+		$orphanNode->method('getName')->willReturn('Moonlight Sonata.pdf');
+		$orphanNode->method('getPath')->willReturn('/user1/files/Noten/Moonlight Sonata.pdf');
+		$orphanNode->method('getId')->willReturn(101);
+		$targetFolder->method('getDirectoryListing')->willReturn([$orphanNode]);
+
+		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager($fixture['path'], $targetFolder);
+		$service = $this->createIntegrityService(
+			$this->createLibraryService(),
+			$fileManager,
+			$rootFolder,
+			$pathResolver,
+			databasePath: $fixture['path'],
+		);
+
+		$issues = $service->checkIntegrity(1, 'user1');
+		$orphanIssues = array_values(array_filter($issues, fn ($i) => $i->type === IntegrityIssue::TYPE_ORPHAN_FILE));
+		self::assertCount(1, $orphanIssues);
+		self::assertFalse($orphanIssues[0]->fixable);
+		self::assertNull($orphanIssues[0]->songId);
+
+		unlink($fixture['path']);
+	}
+
+	public function testFixAllIssuesResolvesOrphanFiles(): void {
+		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
+		$database = $fixture['connection'];
+		$database->exec("INSERT INTO Songs (Id, Title) VALUES (1, 'Moonlight Sonata')");
+
+		$targetFolder = $this->createMock(Folder::class);
+		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
+		$targetFolder->method('nodeExists')->willReturn(true);
+
+		$orphanNode = $this->createMock(\OCP\Files\Node::class);
+		$orphanNode->method('getName')->willReturn('Moonlight Sonata.pdf');
+		$orphanNode->method('getPath')->willReturn('/user1/files/Noten/Moonlight Sonata.pdf');
+		$orphanNode->method('getId')->willReturn(101);
+		$orphanNode->method('getSize')->willReturn(12345);
+		$targetFolder->method('getDirectoryListing')->willReturn([$orphanNode]);
+		$targetFolder->method('get')->with('Moonlight Sonata.pdf')->willReturn($orphanNode);
+
+		$songFileMapper = $this->createMock(InternalSongFileMapper::class);
+		$songFileMapper->method('findAllForSong')->willReturn([]);
+		$songFileMapper->expects(self::once())->method('insert');
+
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$libraryMapper->expects(self::atLeastOnce())->method('touch')->with(1);
+
+		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager($fixture['path'], $targetFolder);
+		$service = $this->createIntegrityService(
+			$this->createLibraryService(),
+			$fileManager,
+			$rootFolder,
+			$pathResolver,
+			internalSongFileMapper: $songFileMapper,
+			libraryMapper: $libraryMapper,
+			databasePath: $fixture['path'],
+		);
+
+		$result = $service->fixAllIssues(1, 'user1', IntegrityIssue::TYPE_ORPHAN_FILE);
+		self::assertTrue($result['success']);
+		self::assertSame(1, $result['fixedCount']);
+
+		unlink($fixture['path']);
+	}
+
 	private static function minimalPdf(): string {
 		return "%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n3 0 obj\n<< /Type /Page /Parent 2 0 R >>\nendobj\nxref\n0 4\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \ntrailer\n<< /Size 4 /Root 1 0 R >>\nstartxref\n164\n%%EOF";
 	}

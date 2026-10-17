@@ -128,6 +128,7 @@ describe('IntegrityView.vue', () => {
 			fileId: 100,
 			entityType: undefined,
 			entityId: undefined,
+			path: 'Noten/OldName.pdf',
 		})
 
 		// Verify success toast notification contains song title
@@ -328,6 +329,65 @@ describe('IntegrityView.vue', () => {
 		expect(wrapper.text()).not.toContain('Invalid Naming Rules')
 		expect(wrapper.text()).toContain('Prelude in C')
 		expect(wrapper.text()).toContain('does not exist in Nextcloud storage')
+	})
+
+	it('fixes a fixable orphan file issue and shows success toast with song title', async () => {
+		const mockOrphanIssue: IntegrityIssue = {
+			type: 'orphan_file',
+			severity: 'warning',
+			message: 'File "Moonlight Sonata.pdf" exists in library storage but is not linked to any song.',
+			songId: 42,
+			songTitle: 'Moonlight Sonata',
+			path: 'Moonlight Sonata.pdf',
+			fixable: true,
+		}
+
+		vi.mocked(apiGet).mockResolvedValueOnce({
+			data: {
+				ocs: {
+					data: {
+						issues: [mockOrphanIssue],
+					},
+				},
+			},
+		} as any)
+
+		vi.mocked(apiPost).mockResolvedValueOnce({
+			data: {
+				ocs: {
+					data: {
+						success: true,
+						fixedCount: 1,
+						message: 'Linked orphan file "Moonlight Sonata.pdf" to song "Moonlight Sonata".',
+					},
+				},
+			},
+		} as any)
+
+		const wrapper = mount(IntegrityView, {
+			props: { selectedLibrary: 1 },
+		})
+		await flushPromises()
+
+		expect(wrapper.text()).toContain('Orphan Files')
+		expect(wrapper.text()).toContain('Moonlight Sonata')
+
+		const autoFixBtn = wrapper.findAll('button').find(b => b.text().includes('Auto-Fix Issue'))
+		expect(autoFixBtn).toBeDefined()
+		await autoFixBtn!.trigger('click')
+		await flushPromises()
+
+		expect(apiPost).toHaveBeenCalledWith('/api/libraries/1/integrity/fix', {
+			issueType: 'orphan_file',
+			songId: 42,
+			fileId: undefined,
+			entityType: undefined,
+			entityId: undefined,
+			path: 'Moonlight Sonata.pdf',
+		})
+
+		expect(showSuccess).toHaveBeenCalledWith('Linked orphan file to "Moonlight Sonata".')
+		expect(wrapper.text()).not.toContain('Moonlight Sonata.pdf')
 	})
 })
 

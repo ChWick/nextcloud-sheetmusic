@@ -9,12 +9,17 @@ declare(strict_types=1);
 
 namespace OCA\SheetMusic\Service;
 
+use OCA\SheetMusic\Db\InternalEntity;
 use OCA\SheetMusic\Db\InternalEntityMapper;
 use OCA\SheetMusic\Db\InternalMiscMapper;
 use OCA\SheetMusic\Db\InternalSongAttributeMapper;
+use OCA\SheetMusic\Db\InternalSongFile;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
+use OCA\SheetMusic\Db\MobileSheetsSong;
+use OCA\SheetMusic\Db\SongFileMapper;
+use OCA\SheetMusic\Service\MobileSheetsFileFacts;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
@@ -211,7 +216,7 @@ class LibraryIntegrityService {
 
 		// Scan folder for orphan files (files in storage not in DB)
 		if ($autoPaths) {
-			$this->scanOrphans($targetFolder, $targetFolderPath, $referencedRelativePaths, $issues, $user);
+			$this->scanOrphans($targetFolder, $targetFolderPath, $referencedRelativePaths, $issues, $user, $songs);
 		}
 
 		// Check for songs with identical metadata (informational)
@@ -523,7 +528,20 @@ class LibraryIntegrityService {
 		?int $fileId = null,
 		?string $entityType = null,
 		?int $entityId = null,
+		?string $path = null,
 	): array {
+		if ($issueType === IntegrityIssue::TYPE_ORPHAN_FILE) {
+			if ($path === null || trim($path) === '') {
+				return [
+					'success' => false,
+					'fixedCount' => 0,
+					'message' => 'Orphan file path is required.',
+				];
+			}
+
+			return $this->fixOrphanFileIssue($libraryId, $userId, $path, $songId);
+		}
+
 		if ($issueType === IntegrityIssue::TYPE_DUPLICATE_ENTITY && $entityType !== null && $entityId !== null) {
 			$normType = InternalEntityMapper::normalizeType($entityType);
 			foreach ($this->internalEntityMapper->findDuplicateEntities($libraryId) as $duplicateEntity) {
@@ -817,6 +835,19 @@ class LibraryIntegrityService {
 					$this->logger->warning(sprintf('Cannot auto-fix duplicate/identical songs for song ID %d during batch fix: %s', $issue->songId, $e->getMessage()));
 					$errors[] = sprintf('Failed to merge identical songs: %s', $e->getMessage());
 				}
+			} elseif ($issue->type === IntegrityIssue::TYPE_ORPHAN_FILE && $issue->path !== null) {
+				try {
+					$result = $this->fixOrphanFileIssue($libraryId, $userId, $issue->path, $issue->songId);
+					if ($result['success']) {
+						$fixedCount++;
+					}
+				} catch (\Throwable $e) {
+					$this->logger->warning('Cannot auto-fix orphan file during batch fix', [
+						'exception' => $e,
+						'path' => $issue->path,
+					]);
+					$errors[] = sprintf('Failed to link orphan file "%s": %s', basename($issue->path), $e->getMessage());
+				}
 			}
 		}
 
@@ -975,12 +1006,20 @@ class LibraryIntegrityService {
 	 *
 	 * @param array<string, mixed> $referencedRelativePaths
 	 * @param list<IntegrityIssue> $issues
+	 * @param list<MobileSheetsSong> $songs
 	 */
-	private function scanOrphans(Folder $folder, string $targetFolderPath, array $referencedRelativePaths, array &$issues, \OCP\IUser $user): void {
+	private function scanOrphans(
+		Folder $folder,
+		string $targetFolderPath,
+		array $referencedRelativePaths,
+		array &$issues,
+		\OCP\IUser $user,
+		array $songs = [],
+	): void {
 		$nodes = $folder->getDirectoryListing();
 		foreach ($nodes as $node) {
 			if ($node instanceof Folder) {
-				$this->scanOrphans($node, $targetFolderPath, $referencedRelativePaths, $issues, $user);
+				$this->scanOrphans($node, $targetFolderPath, $referencedRelativePaths, $issues, $user, $songs);
 			} elseif ($node instanceof Node) {
 				$nodePath = $node->getPath();
 				$relativeToTarget = str_starts_with($nodePath, $targetFolderPath . '/')
@@ -1009,21 +1048,315 @@ class LibraryIntegrityService {
 						? substr($nodePath, strlen($userFolderPath) + 1)
 						: ltrim($relativeToTarget, '/');
 
+					$candidateSong = $this->findOrphanFileCandidateSong($relativeToTarget, $songs);
+					$isFixable = $candidateSong !== null;
+
+					$details = [
+						'webdavPath' => $storedPath?->webdav,
+						'userRelativePath' => $userRelativePath,
+						'filename' => $filename,
+					];
+					if ($candidateSong !== null) {
+						$details['matchedSongId'] = $candidateSong->id;
+						$details['matchedSongTitle'] = $candidateSong->title;
+					}
+
 					$issues[] = new IntegrityIssue(
 						type: IntegrityIssue::TYPE_ORPHAN_FILE,
 						severity: IntegrityIssue::SEVERITY_WARNING,
 						message: sprintf('File "%s" exists in library storage but is not linked to any song.', $filename),
+						songId: $candidateSong?->id,
+						songTitle: $candidateSong?->title,
 						path: $relativeToTarget,
-						fixable: false,
-						details: [
-							'webdavPath' => $storedPath?->webdav,
-							'userRelativePath' => $userRelativePath,
-							'filename' => $filename,
-						],
+						fixable: $isFixable,
+						details: $details,
 					);
 				}
 			}
 		}
+	}
+
+	/**
+	 * Find candidate song for an orphan file following the deepening rule:
+	 * a) has no attached files
+	 * b) the song's name is part of the file path
+	 * c) the composer
+	 * d) the artist
+	 * e) the collection
+	 * f) the book
+	 * g) the genre
+	 * h) the custom group
+	 *
+	 * Checks c, d, e, f... are only executed if the previous check returns more than one song.
+	 * Returns the single matched song, or null if 0 or >1 candidates remain.
+	 *
+	 * @param list<MobileSheetsSong> $songs
+	 */
+	public function findOrphanFileCandidateSong(string $filePath, array $songs): ?MobileSheetsSong {
+		// a) song has no attached files
+		$candidates = array_values(array_filter($songs, static fn (MobileSheetsSong $s): bool => empty($s->files)));
+		if (empty($candidates)) {
+			return null;
+		}
+
+		// b) the song's name is part of the file path
+		$matched = array_values(array_filter(
+			$candidates,
+			fn (MobileSheetsSong $s): bool => $this->stringMatchesPath($s->title, $filePath),
+		));
+
+		if (count($matched) === 1) {
+			return $matched[0];
+		}
+		if (count($matched) === 0) {
+			return null;
+		}
+
+		$candidates = $matched;
+
+		// c) the composer
+		$candidates = $this->deepenCandidateSearch($candidates, $filePath, static function (MobileSheetsSong $s): array {
+			return array_map(static fn ($c) => $c->name, $s->composers);
+		}, $singleMatch);
+		if ($singleMatch !== null) {
+			return $singleMatch;
+		}
+
+		// d) the artist
+		$candidates = $this->deepenCandidateSearch($candidates, $filePath, static function (MobileSheetsSong $s): array {
+			return array_map(static fn ($a) => $a->name, $s->artists);
+		}, $singleMatch);
+		if ($singleMatch !== null) {
+			return $singleMatch;
+		}
+
+		// e) the collection
+		$candidates = $this->deepenCandidateSearch($candidates, $filePath, static function (MobileSheetsSong $s): array {
+			return array_map(static fn ($col) => $col->name, $s->collections);
+		}, $singleMatch);
+		if ($singleMatch !== null) {
+			return $singleMatch;
+		}
+
+		// f) the book
+		$candidates = $this->deepenCandidateSearch($candidates, $filePath, static function (MobileSheetsSong $s): array {
+			return array_map(static fn ($b) => $b->title, $s->books);
+		}, $singleMatch);
+		if ($singleMatch !== null) {
+			return $singleMatch;
+		}
+
+		// g) the genre
+		$candidates = $this->deepenCandidateSearch($candidates, $filePath, static function (MobileSheetsSong $s): array {
+			return array_map(static fn ($g) => $g->name, $s->genres);
+		}, $singleMatch);
+		if ($singleMatch !== null) {
+			return $singleMatch;
+		}
+
+		// h) the custom group
+		$candidates = $this->deepenCandidateSearch($candidates, $filePath, static function (MobileSheetsSong $s): array {
+			return array_map(static fn ($cg) => $cg->name, $s->customGroups);
+		}, $singleMatch);
+		if ($singleMatch !== null) {
+			return $singleMatch;
+		}
+
+		return null;
+	}
+
+	/**
+	 * @param list<MobileSheetsSong> $candidates
+	 * @param callable(MobileSheetsSong): list<string> $extractNames
+	 * @param MobileSheetsSong|null &$singleMatch
+	 * @return list<MobileSheetsSong>
+	 */
+	private function deepenCandidateSearch(
+		array $candidates,
+		string $filePath,
+		callable $extractNames,
+		?MobileSheetsSong &$singleMatch,
+	): array {
+		$singleMatch = null;
+		$filtered = array_values(array_filter($candidates, function (MobileSheetsSong $s) use ($filePath, $extractNames): bool {
+			$names = $extractNames($s);
+			foreach ($names as $name) {
+				if ($this->stringMatchesPath($name, $filePath)) {
+					return true;
+				}
+			}
+			return false;
+		}));
+
+		if (count($filtered) === 1) {
+			$singleMatch = $filtered[0];
+			return $filtered;
+		}
+
+		if (count($filtered) > 1) {
+			return $filtered;
+		}
+
+		return $candidates;
+	}
+
+	private function stringMatchesPath(string $search, string $filePath): bool {
+		$search = trim($search);
+		if ($search === '') {
+			return false;
+		}
+
+		$normalizedPath = str_replace('\\', '/', $filePath);
+
+		if (mb_stripos($normalizedPath, $search) !== false) {
+			return true;
+		}
+
+		$normalizedSegment = normalizeGeneratedPathSegment($search);
+		if ($normalizedSegment !== '' && mb_stripos($normalizedPath, $normalizedSegment) !== false) {
+			return true;
+		}
+
+		if (str_contains($search, ' ')) {
+			$underscored = str_replace(' ', '_', $search);
+			if (mb_stripos($normalizedPath, $underscored) !== false) {
+				return true;
+			}
+		}
+		if (str_contains($search, '_')) {
+			$spaced = str_replace('_', ' ', $search);
+			if (mb_stripos($normalizedPath, $spaced) !== false) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Auto-fix an orphan file by attaching it to the single matched song.
+	 *
+	 * @return array{success: bool, fixedCount: int, message: string}
+	 */
+	public function fixOrphanFileIssue(int $libraryId, string $userId, string $path, ?int $songId = null): array {
+		$userFolder = $this->rootFolder->getUserFolder($userId);
+		$user = $userFolder->getOwner();
+		['databasePath' => $databasePath, 'targetFolder' => $targetFolder] = $this->fileManager->libraryContext($libraryId, $user);
+
+		$cleanPath = ltrim(str_replace('\\', '/', $path), '/');
+		try {
+			$orphanNode = $targetFolder->get($cleanPath);
+		} catch (\Throwable) {
+			return [
+				'success' => false,
+				'fixedCount' => 0,
+				'message' => sprintf('Orphan file "%s" was not found in library storage.', basename($path)),
+			];
+		}
+
+		if (!($orphanNode instanceof Node)) {
+			return [
+				'success' => false,
+				'fixedCount' => 0,
+				'message' => sprintf('Orphan file "%s" is not a valid file.', basename($path)),
+			];
+		}
+
+		$songs = $this->internalSongMapper->findLibraryData($libraryId, $user)['songs'];
+		$candidateSong = $this->findOrphanFileCandidateSong($cleanPath, $songs);
+
+		if ($candidateSong === null) {
+			return [
+				'success' => false,
+				'fixedCount' => 0,
+				'message' => sprintf('Could not uniquely identify a candidate song without files for "%s".', basename($path)),
+			];
+		}
+
+		if ($songId !== null && $candidateSong->id !== $songId) {
+			return [
+				'success' => false,
+				'fixedCount' => 0,
+				'message' => sprintf('Candidate song ID %d does not match requested song ID %d.', $candidateSong->id, $songId),
+			];
+		}
+
+		$fileId = (int)$orphanNode->getId();
+		$existingFiles = $this->internalSongFileMapper->findAllForSong($candidateSong->id);
+		$alreadyLinked = false;
+		foreach ($existingFiles as $ef) {
+			if ($ef->fileId === $fileId) {
+				$alreadyLinked = true;
+				break;
+			}
+		}
+
+		if (!$alreadyLinked) {
+			$fileSize = 0;
+			try {
+				$fileSize = $orphanNode->getSize();
+			} catch (\Throwable) {
+			}
+
+			$internalSongFile = new InternalSongFile(
+				id: null,
+				uuid: InternalEntity::generateUuid(),
+				songId: $candidateSong->id,
+				fileId: $fileId,
+				fileSize: $fileSize,
+				type: InternalSongFile::determineFileType($orphanNode->getName()),
+				createdAt: time(),
+				updatedAt: time(),
+			);
+			$this->internalSongFileMapper->insert($internalSongFile);
+			$this->libraryMapper->touch($libraryId);
+		}
+
+		// If SQLite database exists, also record file in SQLite Files table
+		if ($databasePath !== '' && file_exists($databasePath)) {
+			try {
+				$db = new \PDO('sqlite:' . $databasePath);
+				$db->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+				$tables = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='Files'")->fetchAll();
+				if (!empty($tables)) {
+					$existing = $db->prepare('SELECT Id FROM Files WHERE SongId = :songId AND Path = :path');
+					$existing->execute([':songId' => $candidateSong->id, ':path' => $cleanPath]);
+					if ($existing->fetch() === false) {
+						$facts = MobileSheetsFileFacts::fromNode($orphanNode);
+						$stmt = $db->prepare('INSERT INTO Files (SongId, Path, PageOrder, FileSize, LastModified, Source, Type, Password, SourceFilePageCount, FileHash, Width, Height) VALUES (:songId, :path, :pageOrder, :fileSize, :lastModified, 0, :type, \'\', :pageCount, :fileHash, 0, 0)');
+						$stmt->execute([
+							':songId' => $candidateSong->id,
+							':path' => $cleanPath,
+							':pageOrder' => $facts->pageOrder,
+							':fileSize' => $facts->fileSize,
+							':lastModified' => $facts->lastModified,
+							':type' => SongFileMapper::determineFileType($cleanPath),
+							':pageCount' => $facts->sourceFilePageCount,
+							':fileHash' => $facts->fileHash,
+						]);
+					}
+				}
+			} catch (\Throwable $e) {
+				$this->logger->warning('Could not record orphan file in SQLite database: ' . $e->getMessage());
+			}
+		}
+
+		$autoPaths = $this->libraryService->isAutoPathsEnabled($userId, $libraryId);
+		if ($autoPaths) {
+			$hashCodes = MobileSheetsHashCodesFile::forDatabase($databasePath, $this->logger);
+			try {
+				$this->fileManager->regenerateSongFilePaths($candidateSong->id, $user, $targetFolder, $databasePath, $hashCodes);
+				$hashCodes?->save();
+			} catch (\Throwable $e) {
+				$this->logger->debug('Naming rule not applied after linking orphan file: ' . $e->getMessage());
+			}
+		}
+
+		return [
+			'success' => true,
+			'fixedCount' => 1,
+			'message' => sprintf('Linked orphan file "%s" to song "%s".', $orphanNode->getName(), $candidateSong->title),
+		];
 	}
 
 	/**

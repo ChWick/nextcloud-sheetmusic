@@ -100,4 +100,48 @@ describe('FilesIntegrityIssueItem.vue', () => {
 		expect(wrapper.text()).toContain('Merge Songs')
 		expect(wrapper.text()).toContain('Keep as Two')
 	})
+
+	it('renders Auto-Fix Issue and Fix Orphan File when orphan file is fixable', async () => {
+		const issue: IntegrityIssue = {
+			type: 'orphan_file',
+			severity: 'warning',
+			message: 'File "Moonlight.pdf" exists in library storage but is not linked to any song.',
+			songId: 42,
+			songTitle: 'Moonlight Sonata',
+			path: 'Moonlight.pdf',
+			fixable: true,
+		}
+
+		const wrapper = mount(FilesIntegrityIssueItem, {
+			props: { issue },
+		})
+
+		expect(wrapper.text()).toContain('Auto-Fix Issue')
+		expect(wrapper.text()).toContain('Fix Orphan File')
+		expect(wrapper.text()).toContain('Moonlight Sonata')
+
+		const autoFixBtn = wrapper.findAll('button').find(b => b.text().includes('Auto-Fix Issue'))
+		expect(autoFixBtn).toBeDefined()
+		await autoFixBtn!.trigger('click')
+
+		expect(wrapper.emitted('fixIssue')).toHaveLength(1)
+		expect(wrapper.emitted('fixIssue')![0]).toEqual([issue])
+	})
+
+	it('does not render Auto-Fix Issue when orphan file is not fixable', () => {
+		const issue: IntegrityIssue = {
+			type: 'orphan_file',
+			severity: 'warning',
+			message: 'File "Unknown.pdf" exists in library storage but is not linked to any song.',
+			path: 'Unknown.pdf',
+			fixable: false,
+		}
+
+		const wrapper = mount(FilesIntegrityIssueItem, {
+			props: { issue },
+		})
+
+		expect(wrapper.text()).not.toContain('Auto-Fix Issue')
+		expect(wrapper.text()).toContain('Fix Orphan File')
+	})
 })

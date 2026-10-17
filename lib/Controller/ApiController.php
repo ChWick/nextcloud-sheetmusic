@@ -84,8 +84,9 @@ class ApiController extends OCSController {
 		?int $fileId = null,
 		?string $entityType = null,
 		?int $entityId = null,
+		?string $path = null,
 	): DataResponse {
-		return $this->libraryController->fixIntegrityIssue($id, $issueType, $songId, $fileId, $entityType, $entityId);
+		return $this->libraryController->fixIntegrityIssue($id, $issueType, $songId, $fileId, $entityType, $entityId, $path);
 	}
 
 	#[NoAdminRequired]

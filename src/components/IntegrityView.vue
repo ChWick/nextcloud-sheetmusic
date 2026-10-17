@@ -162,7 +162,7 @@ async function fixAllIssues(issueType?: string) {
 			const fixedCount = result?.fixedCount ?? 0
 			if (fixedCount > 0) {
 				if (issueType) {
-					integrityIssues.value = integrityIssues.value.filter(i => i.type !== issueType)
+					integrityIssues.value = integrityIssues.value.filter(i => i.type !== issueType || !i.fixable)
 				} else {
 					integrityIssues.value = integrityIssues.value.filter(i => !i.fixable)
 				}
@@ -196,6 +196,7 @@ async function fixIntegrityIssue(issue: IntegrityIssue) {
 			fileId: issue.fileId,
 			entityType: issue.details?.entityType,
 			entityId: issue.details?.keepId,
+			path: issue.path,
 		})
 		const result = response.data?.ocs?.data
 		if (result && !result.success) {
@@ -207,6 +208,8 @@ async function fixIntegrityIssue(issue: IntegrityIssue) {
 			const songTitle = issue.songTitle
 			if (issue.type === 'invalid_naming_rule' && songTitle) {
 				showSuccess(t('sheetmusic', 'Naming rule applied for "{title}".', { title: songTitle }))
+			} else if (issue.type === 'orphan_file' && songTitle) {
+				showSuccess(t('sheetmusic', 'Linked orphan file to "{title}".', { title: songTitle }))
 			} else if (songTitle) {
 				showSuccess(t('sheetmusic', 'Fixed integrity issue for "{title}".', { title: songTitle }))
 			} else {

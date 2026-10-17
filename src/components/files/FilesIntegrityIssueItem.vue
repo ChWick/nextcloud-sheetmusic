@@ -70,15 +70,27 @@ const isDuplicateBetweenSongs = computed(() =>
 				{{ t('sheetmusic', 'Edit Song') }}
 			</NcButton>
 
-			<NcButton
-				v-if="issue.type === 'orphan_file'"
-				variant="primary"
-				@click="emit('fixOrphanFile', issue)">
-				<template #icon>
-					<WrenchIcon :size="16" />
-				</template>
-				{{ t('sheetmusic', 'Fix Orphan File') }}
-			</NcButton>
+			<template v-if="issue.type === 'orphan_file'">
+				<NcButton
+					v-if="issue.fixable"
+					variant="primary"
+					:disabled="isFixing"
+					@click="emit('fixIssue', issue)">
+					<template #icon>
+						<WrenchIcon :size="16" />
+					</template>
+					{{ isFixing ? t('sheetmusic', 'Fixing…') : t('sheetmusic', 'Auto-Fix Issue') }}
+				</NcButton>
+
+				<NcButton
+					:variant="issue.fixable ? 'secondary' : 'primary'"
+					@click="emit('fixOrphanFile', issue)">
+					<template #icon>
+						<WrenchIcon :size="16" />
+					</template>
+					{{ t('sheetmusic', 'Fix Orphan File') }}
+				</NcButton>
+			</template>
 
 			<template v-else-if="isDuplicateBetweenSongs">
 				<NcButton
