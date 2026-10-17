@@ -134,6 +134,42 @@ function normalizeKeyNameForGeneratedPath(string $name): string {
 }
 
 /**
+ * Extract non-empty string properties (like 'name' or 'title') from an entity list.
+ *
+ * @param array<object> $entities
+ * @return list<string>
+ */
+function extractNonEmptyEntityNames(array $entities, string $property = 'name'): array {
+	$names = [];
+	foreach ($entities as $entity) {
+		$val = $entity->{$property} ?? '';
+		if ($val !== '') {
+			$names[] = $val;
+		}
+	}
+	return $names;
+}
+
+/**
+ * Sort strings by length descending, and alphabetically ascending as tie-breaker.
+ *
+ * @param array<string> $items
+ * @return list<string>
+ */
+function sortStringsByLengthDescending(array $items): array {
+	$result = array_values($items);
+	usort($result, static function (string $a, string $b): int {
+		$lenA = mb_strlen($a);
+		$lenB = mb_strlen($b);
+		if ($lenA !== $lenB) {
+			return $lenB <=> $lenA;
+		}
+		return strcmp($a, $b);
+	});
+	return $result;
+}
+
+/**
  * @return list<string> all valid target paths for a song given its composers, artists, books, and collections
  */
 function createTargetPaths(
@@ -146,18 +182,9 @@ function createTargetPaths(
 	$ext = $ext === '' ? '' : normalizeGeneratedPathSegment($ext);
 
 	// 1. Composers and Artists: sort alphabetically and join full list
-	$compArtistNames = [];
-	foreach ($song->composers as $c) {
-		if ($c->name !== '') {
-			$compArtistNames[] = $c->name;
-		}
-	}
+	$compArtistNames = extractNonEmptyEntityNames($song->composers);
 	if (empty($compArtistNames)) {
-		foreach ($song->artists as $a) {
-			if ($a->name !== '') {
-				$compArtistNames[] = $a->name;
-			}
-		}
+		$compArtistNames = extractNonEmptyEntityNames($song->artists);
 	}
 	sort($compArtistNames, SORT_STRING);
 	$compArtist = implode(', ', array_map(
@@ -166,28 +193,13 @@ function createTargetPaths(
 	));
 
 	// 2. Books and Collections: sort by length descending (longest string first), then alphabetically ascending
-	$sortByNameStability = static function (array $items): array {
-		usort($items, static function (string $a, string $b): int {
-			$lenA = mb_strlen($a);
-			$lenB = mb_strlen($b);
-			if ($lenA !== $lenB) {
-				return $lenB <=> $lenA;
-			}
-			return strcmp($a, $b);
-		});
-		return $items;
-	};
-
-	$bookTitles = array_values(array_filter(array_map(static fn ($b) => $b->title, $song->books), static fn ($t) => $t !== ''));
-	$bookTitles = $sortByNameStability($bookTitles);
-
-	$collectionNames = array_values(array_filter(array_map(static fn ($c) => $c->name, $song->collections), static fn ($n) => $n !== ''));
-	$collectionNames = $sortByNameStability($collectionNames);
+	$bookTitles = sortStringsByLengthDescending(extractNonEmptyEntityNames($song->books, 'title'));
+	$collectionNames = sortStringsByLengthDescending(extractNonEmptyEntityNames($song->collections));
 
 	$book = $bookTitles === [] ? '' : normalizeGeneratedPathSegment($bookTitles[0]);
 	$collection = $collectionNames === [] ? '' : normalizeGeneratedPathSegment($collectionNames[0]);
 
-	$keyNames = array_values(array_filter(array_map(static fn ($k) => $k->name, $song->keys), static fn ($n) => $n !== ''));
+	$keyNames = extractNonEmptyEntityNames($song->keys);
 	sort($keyNames, SORT_STRING);
 	$keyString = implode(', ', array_map(
 		static fn (string $name): string => normalizeGeneratedPathSegment(normalizeKeyNameForGeneratedPath($name)),
