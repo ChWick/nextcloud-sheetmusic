@@ -1114,52 +1114,21 @@ class LibraryIntegrityService {
 
 		$candidates = $matched;
 
-		// c) the composer
-		$candidates = $this->deepenCandidateSearch($candidates, $filePath, static function (MobileSheetsSong $s): array {
-			return array_map(static fn ($c) => $c->name, $s->composers);
-		}, $singleMatch);
-		if ($singleMatch !== null) {
-			return $singleMatch;
-		}
+		// Deepen search: c) composer, d) artist, e) collection, f) book, g) genre, h) custom group
+		$entityExtractors = [
+			static fn (MobileSheetsSong $s): array => array_map(static fn ($c) => $c->name, $s->composers),
+			static fn (MobileSheetsSong $s): array => array_map(static fn ($a) => $a->name, $s->artists),
+			static fn (MobileSheetsSong $s): array => array_map(static fn ($col) => $col->name, $s->collections),
+			static fn (MobileSheetsSong $s): array => array_map(static fn ($b) => $b->title, $s->books),
+			static fn (MobileSheetsSong $s): array => array_map(static fn ($g) => $g->name, $s->genres),
+			static fn (MobileSheetsSong $s): array => array_map(static fn ($cg) => $cg->name, $s->customGroups),
+		];
 
-		// d) the artist
-		$candidates = $this->deepenCandidateSearch($candidates, $filePath, static function (MobileSheetsSong $s): array {
-			return array_map(static fn ($a) => $a->name, $s->artists);
-		}, $singleMatch);
-		if ($singleMatch !== null) {
-			return $singleMatch;
-		}
-
-		// e) the collection
-		$candidates = $this->deepenCandidateSearch($candidates, $filePath, static function (MobileSheetsSong $s): array {
-			return array_map(static fn ($col) => $col->name, $s->collections);
-		}, $singleMatch);
-		if ($singleMatch !== null) {
-			return $singleMatch;
-		}
-
-		// f) the book
-		$candidates = $this->deepenCandidateSearch($candidates, $filePath, static function (MobileSheetsSong $s): array {
-			return array_map(static fn ($b) => $b->title, $s->books);
-		}, $singleMatch);
-		if ($singleMatch !== null) {
-			return $singleMatch;
-		}
-
-		// g) the genre
-		$candidates = $this->deepenCandidateSearch($candidates, $filePath, static function (MobileSheetsSong $s): array {
-			return array_map(static fn ($g) => $g->name, $s->genres);
-		}, $singleMatch);
-		if ($singleMatch !== null) {
-			return $singleMatch;
-		}
-
-		// h) the custom group
-		$candidates = $this->deepenCandidateSearch($candidates, $filePath, static function (MobileSheetsSong $s): array {
-			return array_map(static fn ($cg) => $cg->name, $s->customGroups);
-		}, $singleMatch);
-		if ($singleMatch !== null) {
-			return $singleMatch;
+		foreach ($entityExtractors as $extractor) {
+			$candidates = $this->deepenCandidateSearch($candidates, $filePath, $extractor, $singleMatch);
+			if ($singleMatch !== null) {
+				return $singleMatch;
+			}
 		}
 
 		return null;
