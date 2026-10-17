@@ -228,6 +228,28 @@ final class SheetMusicDavPluginTest extends TestCase {
 		self::assertStringContainsString('mobilesheets_hashcodes.txt', $body);
 	}
 
+	public function testAfterPropfindPreservesUtf8CharactersWithoutHtmlEntities(): void {
+		$this->attachServer();
+		$request = new Request('PROPFIND', '/remote.php/dav/files/admin/My%20Noten', ['Depth' => '1']);
+		$request->setBaseUrl('/remote.php/dav/');
+
+		$response = new Response();
+		$response->setStatus(207);
+		$response->setBody('<?xml version="1.0"?>'
+			. '<d:multistatus xmlns:d="DAV:">'
+			. '<d:response><d:href>/remote.php/dav/files/admin/My%20Noten/Louis%20James%20Alfred%20Lef%C3%A9bure-Wely/</d:href>'
+			. '<d:propstat><d:prop><d:displayname>Louis James Alfred Lefébure-Wely</d:displayname></d:prop></d:propstat>'
+			. '</d:response>'
+			. '</d:multistatus>');
+
+		$this->plugin->afterPropfind($request, $response);
+
+		$body = $response->getBodyAsString();
+		self::assertStringContainsString('Louis James Alfred Lefébure-Wely', $body);
+		self::assertStringNotContainsString('&#xE9;', $body);
+		self::assertStringNotContainsString('&#xe9;', $body);
+	}
+
 	public function testAfterPropfindInjectsIntoStreamedResponse(): void {
 		$this->attachServer('/remote.php/webdav/');
 		$request = new Request('PROPFIND', '/remote.php/webdav/My%20Noten', ['Depth' => '1']);

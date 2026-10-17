@@ -211,10 +211,11 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		}
 
 		try {
-			$document = new \DOMDocument();
+			$document = new \DOMDocument('1.0', 'UTF-8');
 			if (!@$document->loadXML($xml) || $document->documentElement === null) {
 				return $xml;
 			}
+			$document->encoding = 'UTF-8';
 
 			$existing = $this->listedFilenames($document);
 			$entries = [];
@@ -229,10 +230,11 @@ class SheetMusicDavPlugin extends ServerPlugin {
 				return $xml;
 			}
 
-			$virtual = new \DOMDocument();
+			$virtual = new \DOMDocument('1.0', 'UTF-8');
 			if (!$virtual->loadXML($this->generateMultiStatus($entries)) || $virtual->documentElement === null) {
 				return $xml;
 			}
+			$virtual->encoding = 'UTF-8';
 
 			foreach ($virtual->documentElement->childNodes as $node) {
 				if ($node instanceof \DOMElement && $node->localName === 'response') {
