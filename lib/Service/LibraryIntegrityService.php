@@ -927,25 +927,29 @@ class LibraryIntegrityService {
 	/**
 	 * Computes a canonical metadata string for a song to detect identical metadata duplicates.
 	 */
-	private function getCanonicalSongMetadataKey(\OCA\SheetMusic\Db\MobileSheetsSong $song): string {
-		$extractNames = static function (array $entities): array {
-			$names = array_map(static fn ($e) => $e->name ?? $e->title ?? (string)($e->id ?? ''), $entities);
-			sort($names, SORT_STRING);
-			return $names;
-		};
+	/**
+	 * @param list<object> $entities
+	 * @return list<string>
+	 */
+	private function extractSortedEntityNames(array $entities): array {
+		$names = array_map(static fn ($e) => $e->name ?? $e->title ?? (string)($e->id ?? ''), $entities);
+		sort($names, SORT_STRING);
+		return $names;
+	}
 
+	private function getCanonicalSongMetadataKey(\OCA\SheetMusic\Db\MobileSheetsSong $song): string {
 		$parts = [
 			'title:' => trim(strtolower($song->title)),
-			'composers:' => implode('|', $extractNames($song->composers)),
-			'artists:' => implode('|', $extractNames($song->artists)),
-			'books:' => implode('|', $extractNames($song->books)),
-			'collections:' => implode('|', $extractNames($song->collections)),
-			'genres:' => implode('|', $extractNames($song->genres)),
-			'keys:' => implode('|', $extractNames($song->keys)),
-			'customGroups:' => implode('|', $extractNames($song->customGroups)),
-			'years:' => implode('|', $extractNames($song->years)),
-			'signatures:' => implode('|', $extractNames($song->signatures)),
-			'sourceTypes:' => implode('|', $extractNames($song->sourceTypes)),
+			'composers:' => implode('|', $this->extractSortedEntityNames($song->composers)),
+			'artists:' => implode('|', $this->extractSortedEntityNames($song->artists)),
+			'books:' => implode('|', $this->extractSortedEntityNames($song->books)),
+			'collections:' => implode('|', $this->extractSortedEntityNames($song->collections)),
+			'genres:' => implode('|', $this->extractSortedEntityNames($song->genres)),
+			'keys:' => implode('|', $this->extractSortedEntityNames($song->keys)),
+			'customGroups:' => implode('|', $this->extractSortedEntityNames($song->customGroups)),
+			'years:' => implode('|', $this->extractSortedEntityNames($song->years)),
+			'signatures:' => implode('|', $this->extractSortedEntityNames($song->signatures)),
+			'sourceTypes:' => implode('|', $this->extractSortedEntityNames($song->sourceTypes)),
 		];
 
 		return json_encode($parts);
@@ -960,40 +964,30 @@ class LibraryIntegrityService {
 		}
 
 		$first = $songs[0];
-		$extractNames = static function (array $entities): array {
-			$names = array_map(static fn ($e) => $e->name ?? $e->title ?? (string)$e->id, $entities);
-			sort($names, SORT_STRING);
-			return $names;
-		};
-
-		$firstComposers = $extractNames($first->composers);
-		$firstArtists = $extractNames($first->artists);
-		$firstBooks = $extractNames($first->books);
-		$firstCollections = $extractNames($first->collections);
-		$firstGenres = $extractNames($first->genres);
-		$firstKeys = $extractNames($first->keys);
+		$firstTitle = trim(strtolower($first->title));
+		$firstAttributes = [
+			$this->extractSortedEntityNames($first->composers),
+			$this->extractSortedEntityNames($first->artists),
+			$this->extractSortedEntityNames($first->books),
+			$this->extractSortedEntityNames($first->collections),
+			$this->extractSortedEntityNames($first->genres),
+			$this->extractSortedEntityNames($first->keys),
+		];
 
 		for ($i = 1; $i < count($songs); $i++) {
 			$s = $songs[$i];
-			if (trim(strtolower($s->title)) !== trim(strtolower($first->title))) {
+			if (trim(strtolower($s->title)) !== $firstTitle) {
 				return false;
 			}
-			if ($extractNames($s->composers) !== $firstComposers) {
-				return false;
-			}
-			if ($extractNames($s->artists) !== $firstArtists) {
-				return false;
-			}
-			if ($extractNames($s->books) !== $firstBooks) {
-				return false;
-			}
-			if ($extractNames($s->collections) !== $firstCollections) {
-				return false;
-			}
-			if ($extractNames($s->genres) !== $firstGenres) {
-				return false;
-			}
-			if ($extractNames($s->keys) !== $firstKeys) {
+			$attributes = [
+				$this->extractSortedEntityNames($s->composers),
+				$this->extractSortedEntityNames($s->artists),
+				$this->extractSortedEntityNames($s->books),
+				$this->extractSortedEntityNames($s->collections),
+				$this->extractSortedEntityNames($s->genres),
+				$this->extractSortedEntityNames($s->keys),
+			];
+			if ($attributes !== $firstAttributes) {
 				return false;
 			}
 		}
