@@ -417,19 +417,20 @@ class InternalSongMapper {
 			$eid = (int)$e->id;
 			$entitiesById[$eid] = $e;
 			$type = InternalEntityMapper::normalizeType($e->type);
+			$msEntity = $e->toMobileSheetsEntity($type);
 
 			match ($type) {
-				'composer' => $composers[] = new MobileSheetsComposer($eid, $e->name),
-				'book' => $books[] = new MobileSheetsBook($eid, $e->name),
-				'collection' => $collections[] = new MobileSheetsCollection($eid, $e->name),
-				'artist' => $artists[] = new MobileSheetsArtist($eid, $e->name),
-				'genre' => $genres[] = new MobileSheetsGenre($eid, $e->name),
-				'key' => $keys[] = new MobileSheetsKey($eid, $e->name),
-				'customgroup' => $customGroups[] = new MobileSheetsCustomGroup($eid, $e->name),
-				'year' => $years[] = new MobileSheetsYear($eid, (int)$e->name),
-				'signature' => $signatures[] = new MobileSheetsSignature($eid, $e->name),
-				'sourcetype' => $sourceTypes[] = new MobileSheetsSourceType($eid, $e->name),
-				'instrument' => $instruments[] = new MobileSheetsCustomGroup($eid, $e->name),
+				'composer' => $composers[] = $msEntity,
+				'book' => $books[] = $msEntity,
+				'collection' => $collections[] = $msEntity,
+				'artist' => $artists[] = $msEntity,
+				'genre' => $genres[] = $msEntity,
+				'key' => $keys[] = $msEntity,
+				'customgroup' => $customGroups[] = $msEntity,
+				'year' => $years[] = $msEntity,
+				'signature' => $signatures[] = $msEntity,
+				'sourcetype' => $sourceTypes[] = $msEntity,
+				'instrument' => $instruments[] = $msEntity,
 				default => null,
 			};
 		}
@@ -490,21 +491,7 @@ class InternalSongMapper {
 				$res = [];
 				foreach ($ids as $id) {
 					if (isset($entitiesById[$id])) {
-						$e = $entitiesById[$id];
-						$res[] = match ($type) {
-							'composer' => new MobileSheetsComposer($e->id, $e->name),
-							'book' => new MobileSheetsBook($e->id, $e->name),
-							'collection' => new MobileSheetsCollection($e->id, $e->name),
-							'artist' => new MobileSheetsArtist($e->id, $e->name),
-							'genre' => new MobileSheetsGenre($e->id, $e->name),
-							'key' => new MobileSheetsKey($e->id, $e->name),
-							'customgroup' => new MobileSheetsCustomGroup($e->id, $e->name),
-							'year' => new MobileSheetsYear($e->id, (int)$e->name),
-							'signature' => new MobileSheetsSignature($e->id, $e->name),
-							'sourcetype' => new MobileSheetsSourceType($e->id, $e->name),
-							'instrument' => new MobileSheetsCustomGroup($e->id, $e->name),
-							default => new MobileSheetsCustomGroup($e->id, $e->name),
-						};
+						$res[] = $entitiesById[$id]->toMobileSheetsEntity($type);
 					}
 				}
 				return $res;

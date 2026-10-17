@@ -69,4 +69,23 @@ class InternalEntity {
 		$data[8] = chr(ord($data[8]) & 0x3f | 0x80);
 		return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($data), 4));
 	}
+
+	public function toMobileSheetsEntity(?string $type = null): object {
+		$normType = InternalEntityMapper::normalizeType($type ?? $this->type);
+		$id = (int)$this->id;
+		return match ($normType) {
+			'composer' => new MobileSheetsComposer($id, $this->name),
+			'book' => new MobileSheetsBook($id, $this->name),
+			'collection' => new MobileSheetsCollection($id, $this->name),
+			'artist' => new MobileSheetsArtist($id, $this->name),
+			'genre' => new MobileSheetsGenre($id, $this->name),
+			'key' => new MobileSheetsKey($id, $this->name),
+			'customgroup' => new MobileSheetsCustomGroup($id, $this->name),
+			'year' => new MobileSheetsYear($id, (int)$this->name),
+			'signature' => new MobileSheetsSignature($id, $this->name),
+			'sourcetype' => new MobileSheetsSourceType($id, $this->name),
+			'instrument' => new MobileSheetsCustomGroup($id, $this->name),
+			default => new MobileSheetsCustomGroup($id, $this->name),
+		};
+	}
 }
