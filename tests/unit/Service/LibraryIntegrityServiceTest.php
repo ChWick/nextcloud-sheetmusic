@@ -130,6 +130,12 @@ final class LibraryIntegrityServiceTest extends TestCase {
 			$types = array_map(static fn (IntegrityIssue $i): string => $i->type, $issues);
 			self::assertContains(IntegrityIssue::TYPE_MISSING_FILE, $types);
 			self::assertNotContains(IntegrityIssue::TYPE_INVALID_NAMING_RULE, $types);
+
+			$missingIssues = array_values(array_filter($issues, static fn (IntegrityIssue $i): bool => $i->type === IntegrityIssue::TYPE_MISSING_FILE));
+			self::assertCount(1, $missingIssues);
+			self::assertSame(IntegrityIssue::SEVERITY_ERROR, $missingIssues[0]->severity);
+			self::assertFalse($missingIssues[0]->fixable);
+			self::assertStringContainsString('OldNonStandardName.pdf', $missingIssues[0]->message);
 		} finally {
 			unlink($databasePath);
 		}

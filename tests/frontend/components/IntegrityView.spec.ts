@@ -296,5 +296,38 @@ describe('IntegrityView.vue', () => {
 
 		expect(showError).toHaveBeenCalledWith('Database corrupted or locked')
 	})
+
+	it('renders missing file issues under Missing Files group and not as naming rules', async () => {
+		const mockMissingIssue: IntegrityIssue = {
+			type: 'missing_file',
+			severity: 'error',
+			message: 'File "missing.pdf" referenced by song "Prelude in C" does not exist in Nextcloud storage.',
+			songId: 10,
+			songTitle: 'Prelude in C',
+			fileId: 100,
+			path: 'Noten/missing.pdf',
+			fixable: false,
+		}
+
+		vi.mocked(apiGet).mockResolvedValueOnce({
+			data: {
+				ocs: {
+					data: {
+						issues: [mockMissingIssue],
+					},
+				},
+			},
+		} as any)
+
+		const wrapper = mount(IntegrityView, {
+			props: { selectedLibrary: 1 },
+		})
+		await flushPromises()
+
+		expect(wrapper.text()).toContain('Missing Files')
+		expect(wrapper.text()).not.toContain('Invalid Naming Rules')
+		expect(wrapper.text()).toContain('Prelude in C')
+		expect(wrapper.text()).toContain('does not exist in Nextcloud storage')
+	})
 })
 
