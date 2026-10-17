@@ -10,208 +10,139 @@ declare(strict_types=1);
 namespace Db;
 
 use OCA\SheetMusic\Db\LibraryMapper;
-use OCP\DB\IResult;
-use OCP\DB\QueryBuilder\IExpressionBuilder;
-use OCP\DB\QueryBuilder\IParameter;
-use OCP\DB\QueryBuilder\IQueryBuilder;
-use OCP\IDBConnection;
 use PHPUnit\Framework\TestCase;
+use TestSupport\RealMobileSheetsTestTrait;
 
-/**
- * The result of the server versions this app runs on: the nextcloud/ocp stubs of
- * stable31 predate fetchAssociative(), which the server added to IResult later.
- * Declaring it again is compatible with both.
- */
-interface QueryResult extends IResult {
-	public function fetchAssociative(): array|false;
-}
-
-/**
- * Covers LibraryMapper against a mocked query builder.
- *
- * The database layer is mocked wholesale: what is asserted is which queries the
- * mapper runs, which values it binds and what it makes of the result rows -
- * including the string values real databases hand back for integer columns.
- */
 final class LibraryMapperTest extends TestCase {
-	/** @var list<array{value: mixed, type: mixed}> recorded createNamedParameter() calls */
-	private array $parameters = [];
+	use RealMobileSheetsTestTrait;
 
-	/** How many rows the next executeStatement() reports as affected. */
-	private int $affectedRows = 1;
-
-	/** How many write statements were run. */
-	private int $statements = 0;
+	private string $testUser = 'lib_test_user';
 
 	protected function setUp(): void {
-		$this->parameters = [];
-		$this->affectedRows = 1;
-		$this->statements = 0;
+		parent::setUp();
+		$this->setUpRealMobileSheetsEnvironment();
+		$this->cleanTestUsers();
+	}
+
+	protected function tearDown(): void {
+		$this->cleanTestUsers();
+		$this->tearDownRealMobileSheetsEnvironment();
+		parent::tearDown();
+	}
+
+	private function cleanTestUsers(): void {
+		$this->dbConn->executeStatement('DELETE FROM *PREFIX*sheetmusic_libraries WHERE user_id LIKE ?', ['lib_test_user%']);
+		$this->dbConn->executeStatement('DELETE FROM *PREFIX*sheetmusic_libraries WHERE user_id = ?', ['other_user']);
 	}
 
 	public function testFindAllForUserReturnsTheLibrariesOfTheUser(): void {
-		$result = $this->createMock(QueryResult::class);
-		$result->method('fetchAssociative')->willReturnOnConsecutiveCalls(
-			['id' => '3', 'path' => '/Noten/b.db'],
-			['id' => '7', 'path' => '/Noten/a.db'],
-			false,
-		);
-		$result->expects(self::once())->method('closeCursor')->willReturn(true);
+		$this->libraryMapper->addForUser($this->testUser, '/Noten/b.db');
+		$this->libraryMapper->addForUser($this->testUser, '/Noten/a.db');
+		$this->libraryMapper->addForUser('other_user', '/Noten/other.db');
 
-		$mapper = new LibraryMapper($this->connection($this->queryBuilder($result)));
+		$libraries = $this->libraryMapper->findAllForUser($this->testUser);
 
-		self::assertSame(
-			[
-				['id' => 3, 'path' => '/Noten/b.db', 'autoPaths' => true, 'autoPdfMetadata' => true],
-				['id' => 7, 'path' => '/Noten/a.db', 'autoPaths' => true, 'autoPdfMetadata' => true],
-			],
-			$mapper->findAllForUser('admin'),
-		);
-		self::assertContains(['value' => 'admin', 'type' => IQueryBuilder::PARAM_STR], $this->parameters);
+		self::assertCount(2, $libraries);
+		self::assertSame('/Noten/a.db', $libraries[0]['path']);
+		self::assertSame('/Noten/b.db', $libraries[1]['path']);
+		self::assertTrue($libraries[0]['autoPaths']);
+		self::assertTrue($libraries[0]['autoPdfMetadata']);
 	}
 
 	public function testFindAllForUserWithoutLibrariesReturnsAnEmptyList(): void {
-		$result = $this->createMock(QueryResult::class);
-		$result->method('fetchAssociative')->willReturn(false);
-
-		$mapper = new LibraryMapper($this->connection($this->queryBuilder($result)));
-
-		self::assertSame([], $mapper->findAllForUser('admin'));
+		self::assertSame([], $this->libraryMapper->findAllForUser('non_existent_user'));
 	}
 
-	public function testFindByIdReturnsTheRow(): void {
-		$result = $this->createMock(QueryResult::class);
-		$result->method('fetch')->willReturn(['id' => '3', 'user_id' => 'admin', 'path' => '/Noten/a.db']);
+	public function testFindByIdAndFindModelById(): void {
+		$this->libraryMapper->addForUser($this->testUser, '/Noten/find_by_id.db');
+		$libs = $this->libraryMapper->findAllForUser($this->testUser);
+		$id = $libs[0]['id'];
 
-		$mapper = new LibraryMapper($this->connection($this->queryBuilder($result)));
+		$row = $this->libraryMapper->findById($id);
+		self::assertNotNull($row);
+		self::assertSame($id, (int)$row['id']);
+		self::assertSame('/Noten/find_by_id.db', $row['path']);
+		self::assertSame($this->testUser, $row['user_id']);
 
-		self::assertSame(['id' => '3', 'user_id' => 'admin', 'path' => '/Noten/a.db'], $mapper->findById(3));
+		$model = $this->libraryMapper->findModelById($id);
+		self::assertNotNull($model);
+		self::assertSame($id, $model->id);
+		self::assertSame('/Noten/find_by_id.db', $model->path);
+
+		self::assertNull($this->libraryMapper->findById(999999));
+		self::assertNull($this->libraryMapper->findModelById(999999));
 	}
 
-	/**
-	 * fetch() hands back false when the row is missing, which must come out as
-	 * null - the false would otherwise violate the ?array return type.
-	 */
-	public function testFindByIdOfAnUnknownLibraryReturnsNull(): void {
-		$result = $this->createMock(QueryResult::class);
-		$result->method('fetch')->willReturn(false);
+	public function testTouchUpdatesTimestamp(): void {
+		$this->libraryMapper->addForUser($this->testUser, '/Noten/touch.db');
+		$libs = $this->libraryMapper->findAllForUser($this->testUser);
+		$id = $libs[0]['id'];
 
-		$mapper = new LibraryMapper($this->connection($this->queryBuilder($result)));
+		$this->libraryMapper->touch($id, 1234567890);
 
-		self::assertNull($mapper->findById(999));
+		$row = $this->libraryMapper->findById($id);
+		self::assertNotNull($row);
+		self::assertSame(1234567890, (int)$row['updated_at']);
 	}
 
-	public function testAddForUserInsertsTheLibrary(): void {
-		$result = $this->createMock(QueryResult::class);
-		$result->method('fetchOne')->willReturn(false);
+	public function testAddForUserIgnoresDuplicatePath(): void {
+		$this->libraryMapper->addForUser($this->testUser, '/Noten/duplicate.db');
+		$this->libraryMapper->addForUser($this->testUser, '/Noten/duplicate.db');
 
-		$mapper = new LibraryMapper($this->connection($this->queryBuilder($result)));
-		$mapper->addForUser('admin', '/Noten/a.db');
-
-		self::assertSame(1, $this->statements);
-		self::assertContains(['value' => 'admin', 'type' => IQueryBuilder::PARAM_STR], $this->parameters);
-		self::assertContains(['value' => '/Noten/a.db', 'type' => IQueryBuilder::PARAM_STR], $this->parameters);
-		self::assertContains(['value' => true, 'type' => IQueryBuilder::PARAM_BOOL], $this->parameters);
+		$libs = $this->libraryMapper->findAllForUser($this->testUser);
+		self::assertCount(1, $libs);
 	}
 
-	public function testAddForUserIgnoresAPathThatIsAlreadyThere(): void {
-		$result = $this->createMock(QueryResult::class);
-		$result->method('fetchOne')->willReturn('/Noten/a.db');
+	public function testDeleteForUser(): void {
+		$this->libraryMapper->addForUser($this->testUser, '/Noten/to_delete.db');
+		$libs = $this->libraryMapper->findAllForUser($this->testUser);
+		$id = $libs[0]['id'];
 
-		$mapper = new LibraryMapper($this->connection($this->queryBuilder($result)));
-		$mapper->addForUser('admin', '/Noten/a.db');
+		self::assertTrue($this->libraryMapper->deleteForUser($this->testUser, $id));
+		self::assertEmpty($this->libraryMapper->findAllForUser($this->testUser));
 
-		self::assertSame(0, $this->statements, 'a duplicate may not be inserted');
+		// Deleting again or deleting non-existent returns false
+		self::assertFalse($this->libraryMapper->deleteForUser($this->testUser, $id));
 	}
 
-	public function testDeleteForUserRemovesTheEntry(): void {
-		$this->affectedRows = 1;
+	public function testFindForUser(): void {
+		$this->libraryMapper->addForUser($this->testUser, '/Noten/find_user.db');
+		$libs = $this->libraryMapper->findAllForUser($this->testUser);
+		$id = $libs[0]['id'];
 
-		$mapper = new LibraryMapper($this->connection($this->queryBuilder($this->createMock(QueryResult::class))));
-		self::assertTrue($mapper->deleteForUser('admin', 7));
-		self::assertSame(1, $this->statements);
-		self::assertContains(['value' => 'admin', 'type' => IQueryBuilder::PARAM_STR], $this->parameters);
-		self::assertContains(['value' => 7, 'type' => IQueryBuilder::PARAM_INT], $this->parameters);
+		$found = $this->libraryMapper->findForUser($this->testUser, $id);
+		self::assertNotNull($found);
+		self::assertSame($id, $found['id']);
+		self::assertSame('/Noten/find_user.db', $found['path']);
+
+		// Different user cannot find it
+		self::assertNull($this->libraryMapper->findForUser('other_user', $id));
+		self::assertNull($this->libraryMapper->findForUser($this->testUser, 999999));
 	}
 
-	public function testDeleteForUserOfAnUnknownLibraryReportsNothingRemoved(): void {
-		$this->affectedRows = 0;
+	public function testSetAutoPathsForUser(): void {
+		$this->libraryMapper->addForUser($this->testUser, '/Noten/settings.db');
+		$libs = $this->libraryMapper->findAllForUser($this->testUser);
+		$id = $libs[0]['id'];
 
-		$mapper = new LibraryMapper($this->connection($this->queryBuilder($this->createMock(QueryResult::class))));
-		self::assertFalse($mapper->deleteForUser('admin', 7));
+		$this->libraryMapper->setAutoPathsForUser($this->testUser, $id, false);
+
+		$found = $this->libraryMapper->findForUser($this->testUser, $id);
+		self::assertNotNull($found);
+		self::assertFalse($found['autoPaths']);
 	}
 
-	public function testFindForUserReturnsTheRowWithTypedColumns(): void {
-		$result = $this->createMock(QueryResult::class);
-		$result->method('fetchAssociative')->willReturn(['id' => '7', 'path' => '/Noten/a.db', 'auto_paths' => '1']);
+	public function testSetSettingsForUser(): void {
+		$this->libraryMapper->addForUser($this->testUser, '/Noten/settings2.db');
+		$libs = $this->libraryMapper->findAllForUser($this->testUser);
+		$id = $libs[0]['id'];
 
-		$mapper = new LibraryMapper($this->connection($this->queryBuilder($result)));
+		$this->libraryMapper->setSettingsForUser($this->testUser, $id, autoPaths: false, autoPdfMetadata: false);
 
-		self::assertSame(['id' => 7, 'path' => '/Noten/a.db', 'autoPaths' => true, 'autoPdfMetadata' => true], $mapper->findForUser('admin', 7));
-		self::assertContains(['value' => 'admin', 'type' => IQueryBuilder::PARAM_STR], $this->parameters);
-		self::assertContains(['value' => 7, 'type' => IQueryBuilder::PARAM_INT], $this->parameters);
-	}
-
-	public function testFindForUserOfAnUnknownLibraryReturnsNull(): void {
-		$result = $this->createMock(QueryResult::class);
-		$result->method('fetchAssociative')->willReturn(false);
-
-		$mapper = new LibraryMapper($this->connection($this->queryBuilder($result)));
-
-		self::assertNull($mapper->findForUser('admin', 7));
-	}
-
-	public function testSetAutoPathsForUserUpdatesColumn(): void {
-		$qb = $this->createMock(IQueryBuilder::class);
-		$expr = $this->createMock(IExpressionBuilder::class);
-		$expr->method('eq')->willReturn('eq');
-
-		foreach (['update', 'set', 'where', 'andWhere'] as $method) {
-			$qb->method($method)->willReturnSelf();
-		}
-		$qb->method('expr')->willReturn($expr);
-		$qb->method('createNamedParameter')->willReturnCallback(function ($value, $type = null) {
-			$this->parameters[] = ['value' => $value, 'type' => $type];
-			return $this->createMock(IParameter::class);
-		});
-		$qb->expects(self::once())->method('executeStatement')->willReturn(1);
-
-		$db = $this->createMock(IDBConnection::class);
-		$db->method('getQueryBuilder')->willReturn($qb);
-
-		$mapper = new LibraryMapper($db);
-		$mapper->setAutoPathsForUser('admin', 7, false);
-
-		self::assertContains(['value' => false, 'type' => IQueryBuilder::PARAM_BOOL], $this->parameters);
-		self::assertContains(['value' => 'admin', 'type' => IQueryBuilder::PARAM_STR], $this->parameters);
-		self::assertContains(['value' => 7, 'type' => IQueryBuilder::PARAM_INT], $this->parameters);
-	}
-
-	public function testSetSettingsForUserUpdatesColumns(): void {
-		$qb = $this->createMock(IQueryBuilder::class);
-		$expr = $this->createMock(IExpressionBuilder::class);
-		$expr->method('eq')->willReturn('eq');
-
-		foreach (['update', 'set', 'where', 'andWhere'] as $method) {
-			$qb->method($method)->willReturnSelf();
-		}
-		$qb->method('expr')->willReturn($expr);
-		$qb->method('createNamedParameter')->willReturnCallback(function ($value, $type = null) {
-			$this->parameters[] = ['value' => $value, 'type' => $type];
-			return $this->createMock(IParameter::class);
-		});
-		$qb->expects(self::once())->method('executeStatement')->willReturn(1);
-
-		$db = $this->createMock(IDBConnection::class);
-		$db->method('getQueryBuilder')->willReturn($qb);
-
-		$mapper = new LibraryMapper($db);
-		$mapper->setSettingsForUser('admin', 7, false, true);
-
-		self::assertContains(['value' => false, 'type' => IQueryBuilder::PARAM_BOOL], $this->parameters);
-		self::assertContains(['value' => true, 'type' => IQueryBuilder::PARAM_BOOL], $this->parameters);
-		self::assertContains(['value' => 'admin', 'type' => IQueryBuilder::PARAM_STR], $this->parameters);
-		self::assertContains(['value' => 7, 'type' => IQueryBuilder::PARAM_INT], $this->parameters);
+		$found = $this->libraryMapper->findForUser($this->testUser, $id);
+		self::assertNotNull($found);
+		self::assertFalse($found['autoPaths']);
+		self::assertFalse($found['autoPdfMetadata']);
 	}
 
 	public function testAutoPathsOfHandlesDefaultAndNull(): void {
@@ -230,42 +161,5 @@ final class LibraryMapperTest extends TestCase {
 		self::assertFalse(LibraryMapper::autoPdfMetadataOf(['auto_pdf_metadata' => 0]));
 		self::assertTrue(LibraryMapper::autoPdfMetadataOf(['auto_pdf_metadata' => null]));
 		self::assertTrue(LibraryMapper::autoPdfMetadataOf([]));
-	}
-
-	/**
-	 * A query builder whose fluent API returns itself, which answers
-	 * executeQuery() with the given result and records bound parameters and
-	 * write statements.
-	 */
-	private function queryBuilder(IResult $result): IQueryBuilder {
-		$qb = $this->createMock(IQueryBuilder::class);
-		$expr = $this->createMock(IExpressionBuilder::class);
-		$expr->method('eq')->willReturn('eq');
-
-		foreach (['select', 'from', 'where', 'andWhere', 'orderBy', 'setMaxResults', 'insert', 'setValue', 'delete'] as $method) {
-			$qb->method($method)->willReturnSelf();
-		}
-
-		$qb->method('expr')->willReturn($expr);
-		$qb->method('createNamedParameter')->willReturnCallback(function ($value, $type = null) {
-			$this->parameters[] = ['value' => $value, 'type' => $type];
-
-			return $this->createMock(IParameter::class);
-		});
-		$qb->method('executeQuery')->willReturn($result);
-		$qb->method('executeStatement')->willReturnCallback(function (): int {
-			$this->statements++;
-
-			return $this->affectedRows;
-		});
-
-		return $qb;
-	}
-
-	private function connection(IQueryBuilder $qb): IDBConnection {
-		$db = $this->createMock(IDBConnection::class);
-		$db->method('getQueryBuilder')->willReturn($qb);
-
-		return $db;
 	}
 }
