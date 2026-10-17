@@ -104,6 +104,37 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		}
 	}
 
+	public function testCheckIntegrityDoesNotReportInvalidNamingRuleIfFileIsMissing(): void {
+		$libraryService = $this->createLibraryService();
+		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
+		$databasePath = $fixture['path'];
+		$database = $fixture['connection'];
+		$database->exec("INSERT INTO Songs (Id, Title) VALUES (1, 'Joshua')");
+		$database->exec("INSERT INTO Files (Id, SongId, Path) VALUES (10, 1, '/remote.php/dav/files/user1/Noten/OldNonStandardName.pdf')");
+		$database->exec("INSERT INTO Composer (Id, Name) VALUES (1, 'Georg Friedrich Händel')");
+		$database->exec('INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (1, 1)');
+
+		$targetFolder = $this->createMock(Folder::class);
+		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
+		// The source file does NOT exist on disk, even if target naming rule path exists
+		$targetFolder->method('nodeExists')->willReturnCallback(
+			static fn (string $path): bool => $path === 'Händel/Georg Friedrich Händel - Joshua.pdf'
+		);
+		$targetFolder->method('getDirectoryListing')->willReturn([]);
+		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager($databasePath, $targetFolder);
+
+		try {
+			$service = $this->createIntegrityService($libraryService, $fileManager, $rootFolder, $pathResolver, databasePath: $databasePath);
+			$issues = $service->checkIntegrity(1, 'user1');
+
+			$types = array_map(static fn (IntegrityIssue $i): string => $i->type, $issues);
+			self::assertContains(IntegrityIssue::TYPE_MISSING_FILE, $types);
+			self::assertNotContains(IntegrityIssue::TYPE_INVALID_NAMING_RULE, $types);
+		} finally {
+			unlink($databasePath);
+		}
+	}
+
 	public function testScanOrphansIgnoresHashcodeFiles(): void {
 		$libraryService = $this->createLibraryService();
 		$fixture = \TestSupport\MobileSheetsTestDatabase::create();

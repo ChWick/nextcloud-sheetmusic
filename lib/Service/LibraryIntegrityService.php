@@ -118,35 +118,6 @@ class LibraryIntegrityService {
 					}
 				}
 
-				// Check if the expected target file already exists on disk
-				$targetExists = false;
-				if (!empty($validTargetPaths)) {
-					foreach ($validTargetPaths as $validPath) {
-						$cleanValid = ltrim($validPath, '/');
-						if ($targetFolder->nodeExists($cleanValid)) {
-							$targetExists = true;
-							$existingPdfPath ??= $cleanValid;
-							if (!$sourceExists) {
-								// Mark target file as referenced by song so it is not flagged as an orphan
-								$cleanKey = strtolower(ltrim($cleanValid, '/'));
-								$referencedRelativePaths[$cleanKey][] = [
-									'songId' => $song->id,
-									'songTitle' => $song->title,
-									'fileId' => $file->id,
-								];
-							}
-							break;
-						}
-					}
-				}
-
-				if ($autoPdfMetadata && $existingPdfPath !== null && str_ends_with(strtolower($file->path), '.pdf')) {
-					$pdfIssue = $this->checkPdfMetadata($targetFolder, $existingPdfPath, $song, $file->id);
-					if ($pdfIssue !== null) {
-						$issues[] = $pdfIssue;
-					}
-				}
-
 				if ($sourceExists) {
 					$cleanRel = strtolower(ltrim($relativeToTarget, '/'));
 					$referencedRelativePaths[$cleanRel][] = [
@@ -154,6 +125,13 @@ class LibraryIntegrityService {
 						'songTitle' => $song->title,
 						'fileId' => $file->id,
 					];
+
+					if ($autoPdfMetadata && $existingPdfPath !== null && str_ends_with(strtolower($file->path), '.pdf')) {
+						$pdfIssue = $this->checkPdfMetadata($targetFolder, $existingPdfPath, $song, $file->id);
+						if ($pdfIssue !== null) {
+							$issues[] = $pdfIssue;
+						}
+					}
 
 					// Check naming rule compliance
 					$isCompliant = !$autoPaths || !$hasNamingRule;
@@ -182,32 +160,16 @@ class LibraryIntegrityService {
 					}
 				} else {
 					// Source file does not exist at stored path.
-					// If the target file ALREADY exists at the expected naming-rule path on disk:
-					if ($autoPaths && $targetExists) {
-						$issues[] = new IntegrityIssue(
-							type: IntegrityIssue::TYPE_INVALID_NAMING_RULE,
-							severity: IntegrityIssue::SEVERITY_WARNING,
-							message: sprintf('Database path "%s" is outdated; file already exists at the standard naming path.', basename($file->path)),
-							songId: $song->id,
-							songTitle: $song->title,
-							fileId: $file->id,
-							path: $relativeToTarget ?? $file->path,
-							suggestedPath: $validTargetPaths[0] ?? null,
-							fixable: true,
-						);
-					} else {
-						// Genuinely missing file (neither source nor target exist on disk)
-						$issues[] = new IntegrityIssue(
-							type: IntegrityIssue::TYPE_MISSING_FILE,
-							severity: IntegrityIssue::SEVERITY_ERROR,
-							message: sprintf('File "%s" referenced by song "%s" does not exist in Nextcloud storage.', basename($file->path), $song->title),
-							songId: $song->id,
-							songTitle: $song->title,
-							fileId: $file->id,
-							path: $relativeToTarget ?? $file->path,
-							fixable: false,
-						);
-					}
+					$issues[] = new IntegrityIssue(
+						type: IntegrityIssue::TYPE_MISSING_FILE,
+						severity: IntegrityIssue::SEVERITY_ERROR,
+						message: sprintf('File "%s" referenced by song "%s" does not exist in Nextcloud storage.', basename($file->path), $song->title),
+						songId: $song->id,
+						songTitle: $song->title,
+						fileId: $file->id,
+						path: $relativeToTarget ?? $file->path,
+						fixable: false,
+					);
 				}
 			}
 		}

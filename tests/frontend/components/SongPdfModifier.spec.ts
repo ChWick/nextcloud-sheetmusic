@@ -241,7 +241,7 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 
 		await splitSubmitBtn?.trigger('click')
 		await flushPromises()
-		await new Promise((r) => setTimeout(r, 50))
+		await vi.waitFor(() => expect(createdSongs).toHaveLength(3), { timeout: 5000 })
 		await flushPromises()
 
 		// Verify 3 new songs were created with inherited metadata
@@ -312,7 +312,7 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		const splitSubmitBtn = wrapper.findAll('button').find((b) => b.text().includes('Split & Create Songs'))
 		await splitSubmitBtn?.trigger('click')
 		await flushPromises()
-		await new Promise((r) => setTimeout(r, 50))
+		await vi.waitFor(() => expect(wrapper.emitted('saved')).toBeTruthy(), { timeout: 5000 })
 		await flushPromises()
 
 		// Original PDF file should be deleted, song should NOT be deleted
@@ -348,7 +348,7 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		const splitSubmitBtn = wrapper.findAll('button').find((b) => b.text().includes('Split & Create Songs'))
 		await splitSubmitBtn?.trigger('click')
 		await flushPromises()
-		await new Promise((r) => setTimeout(r, 50))
+		await vi.waitFor(() => expect(wrapper.emitted('saved')).toBeTruthy(), { timeout: 5000 })
 		await flushPromises()
 
 		// Original song should be deleted with deleteFiles: true
