@@ -41,7 +41,7 @@ class SongFileService {
 			try {
 				$userFolder = $this->rootFolder->getUserFolder($user->getUID());
 				$relativePath = ltrim((string)$path, '/');
-				$davPrefix = 'remote.php/dav/files/' . $user->getUID() . '/';
+				$davPrefix = ltrim(MobileSheetsPathResolver::WEBDAV_ROOT, '/') . '/' . $user->getUID() . '/';
 				if (str_starts_with($relativePath, $davPrefix)) {
 					$relativePath = substr($relativePath, strlen($davPrefix));
 				}

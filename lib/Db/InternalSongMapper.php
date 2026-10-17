@@ -464,7 +464,7 @@ class InternalSongMapper {
 						$p = substr($p, 6);
 					}
 					$uid = $user !== null ? $user->getUID() : '';
-					$fileNodePaths[(int)$r['fileid']] = '/remote.php/dav/files/' . $uid . '/' . ltrim($p, '/');
+					$fileNodePaths[(int)$r['fileid']] = MobileSheetsPathResolver::WEBDAV_ROOT . '/' . $uid . '/' . ltrim($p, '/');
 				}
 				$resCache->closeCursor();
 			} catch (\Throwable) {
@@ -474,7 +474,7 @@ class InternalSongMapper {
 
 		$songFiles = [];
 		foreach ($files as $file) {
-			$path = $fileNodePaths[$file->fileId] ?? ('/remote.php/dav/files/' . ($user !== null ? $user->getUID() : '') . '/file_' . $file->fileId . '.pdf');
+			$path = $fileNodePaths[$file->fileId] ?? (MobileSheetsPathResolver::WEBDAV_ROOT . '/' . ($user !== null ? $user->getUID() : '') . '/file_' . $file->fileId . '.pdf');
 			$songFiles[$file->songId][] = new MobileSheetsFile(
 				id: (int)$file->id,
 				path: $path,

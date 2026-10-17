@@ -763,6 +763,6 @@ class MobileSheetsSqliteExporter {
 
 		// Fallback
 		$base = rtrim($library->path, '/');
-		return sprintf('/remote.php/dav/files/%s/%s/file_%d.pdf', $library->userId, ltrim($base, '/'), $file->fileId);
+		return sprintf('%s/%s/%s/file_%d.pdf', MobileSheetsPathResolver::WEBDAV_ROOT, $library->userId, ltrim($base, '/'), $file->fileId);
 	}
 }
