@@ -31,10 +31,7 @@ class SongFileController extends OCSController {
 			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
 		}
 
-		$fileInfo = $this->request->getUploadedFile('file');
-		if ($fileInfo === null && isset($_FILES['file'])) {
-			$fileInfo = $_FILES['file'];
-		}
+		$fileInfo = $this->getUploadedFileInfo('file');
 
 		$path = (string)$this->request->getParam('path', '');
 
@@ -56,10 +53,7 @@ class SongFileController extends OCSController {
 			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
 		}
 
-		$fileInfo = $this->request->getUploadedFile('file');
-		if ($fileInfo === null && isset($_FILES['file'])) {
-			$fileInfo = $_FILES['file'];
-		}
+		$fileInfo = $this->getUploadedFileInfo('file');
 
 		if (isset($fileInfo['error']) && (int)$fileInfo['error'] !== UPLOAD_ERR_OK) {
 			[$message, $status] = $this->uploadError((int)$fileInfo['error']);
@@ -225,5 +219,16 @@ class SongFileController extends OCSController {
 		} catch (\Throwable $e) {
 			return new DataResponse([], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
+	}
+
+	/**
+	 * @return array<string, mixed>|null
+	 */
+	private function getUploadedFileInfo(string $key = 'file'): ?array {
+		$fileInfo = $this->request->getUploadedFile($key);
+		if ($fileInfo === null && isset($_FILES[$key])) {
+			$fileInfo = $_FILES[$key];
+		}
+		return $fileInfo;
 	}
 }
