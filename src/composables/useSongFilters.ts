@@ -176,48 +176,45 @@ export function useSongFilters(options: () => FilterOptions) {
 		return false
 	}
 
-	/** Whether the song carries every active filter selection. */
-	function songMatchesFilters(song: Song): boolean {
-		const titleQuery = normalizeSearchString(titleFilterOf())
-		if (titleQuery && !normalizeSearchString(song.title).includes(titleQuery)) {
-			return false
-		}
-
-		if (withoutFilesFilterOf()) {
-			if (song.files && song.files.length > 0) {
-				return false
-			}
-		}
-
-		const composerIds = new Set(idsOf('composers'))
-		const bookIds = new Set(idsOf('books'))
-		const collectionIds = new Set(idsOf('collections'))
-		const artistIds = new Set(idsOf('artists'))
-		const genreIds = new Set(idsOf('genres'))
-		const keyIds = new Set(idsOf('keys'))
-		const customGroupIds = new Set(idsOf('customgroups'))
-		const yearIds = new Set(idsOf('years'))
-		const signatureIds = new Set(idsOf('signatures'))
-		const sourceTypeIds = new Set(idsOf('sourcetypes'))
-		const instrumentIds = new Set(idsOf('instruments'))
-
-		if (!matchesCategory(song.composers, composerIds)) return false
-		if (!matchesCategory(song.books, bookIds)) return false
-		if (!matchesCategory(song.collections, collectionIds)) return false
-		if (!matchesCategory(song.artists, artistIds)) return false
-		if (!matchesCategory(song.genres, genreIds)) return false
-		if (!matchesCategory(song.keys, keyIds)) return false
-		if (!matchesCategory(song.customGroups, customGroupIds)) return false
-		if (!matchesCategory(song.years, yearIds)) return false
-		if (!matchesCategory(song.signatures, signatureIds)) return false
-		if (!matchesCategory(song.sourceTypes, sourceTypeIds)) return false
-		if (!matchesCategory(song.instruments, instrumentIds)) return false
-		return true
-	}
+	const ENTITY_SONG_PROPERTY_MAP: Array<[EntityType, keyof Song]> = [
+		['composers', 'composers'],
+		['books', 'books'],
+		['collections', 'collections'],
+		['artists', 'artists'],
+		['genres', 'genres'],
+		['keys', 'keys'],
+		['customgroups', 'customGroups'],
+		['years', 'years'],
+		['signatures', 'signatures'],
+		['sourcetypes', 'sourceTypes'],
+		['instruments', 'instruments'],
+	]
 
 	/** The songs that carry every active filter selection. */
 	function filterSongs(songs: Song[]): Song[] {
-		return songs.filter(songMatchesFilters)
+		const titleQuery = normalizeSearchString(titleFilterOf())
+		const requireNoFiles = withoutFilesFilterOf()
+		const activeFilters = ENTITY_SONG_PROPERTY_MAP
+			.map(([entityType, songKey]) => ({
+				songKey,
+				ids: new Set(idsOf(entityType)),
+			}))
+			.filter(f => f.ids.size > 0)
+
+		return songs.filter(song => {
+			if (titleQuery && !normalizeSearchString(song.title).includes(titleQuery)) {
+				return false
+			}
+			if (requireNoFiles && song.files && song.files.length > 0) {
+				return false
+			}
+			for (const { songKey, ids } of activeFilters) {
+				if (!matchesCategory(song[songKey] as { id: number }[] | undefined, ids)) {
+					return false
+				}
+			}
+			return true
+		})
 	}
 
 	/** Drop every selection in one history entry, leaving the unfiltered view. */
@@ -235,50 +232,24 @@ export function useSongFilters(options: () => FilterOptions) {
 		router.push({ query })
 	}
 
-	const selectedComposers = computed({
-		get: () => selectedOf('composers') as Composer[],
-		set: (value: Composer[]) => selectIds('composers', value.map(entry => entry.id)),
-	})
-	const selectedBooks = computed({
-		get: () => selectedOf('books') as Book[],
-		set: (value: Book[]) => selectIds('books', value.map(entry => entry.id)),
-	})
-	const selectedCollections = computed({
-		get: () => selectedOf('collections') as Collection[],
-		set: (value: Collection[]) => selectIds('collections', value.map(entry => entry.id)),
-	})
-	const selectedArtists = computed({
-		get: () => selectedOf('artists') as Artist[],
-		set: (value: Artist[]) => selectIds('artists', value.map(entry => entry.id)),
-	})
-	const selectedGenres = computed({
-		get: () => selectedOf('genres') as Genre[],
-		set: (value: Genre[]) => selectIds('genres', value.map(entry => entry.id)),
-	})
-	const selectedKeys = computed({
-		get: () => selectedOf('keys') as Key[],
-		set: (value: Key[]) => selectIds('keys', value.map(entry => entry.id)),
-	})
-	const selectedCustomGroups = computed({
-		get: () => selectedOf('customgroups') as CustomGroup[],
-		set: (value: CustomGroup[]) => selectIds('customgroups', value.map(entry => entry.id)),
-	})
-	const selectedYears = computed({
-		get: () => selectedOf('years') as Year[],
-		set: (value: Year[]) => selectIds('years', value.map(entry => entry.id)),
-	})
-	const selectedSignatures = computed({
-		get: () => selectedOf('signatures') as Signature[],
-		set: (value: Signature[]) => selectIds('signatures', value.map(entry => entry.id)),
-	})
-	const selectedSourceTypes = computed({
-		get: () => selectedOf('sourcetypes') as SourceType[],
-		set: (value: SourceType[]) => selectIds('sourcetypes', value.map(entry => entry.id)),
-	})
-	const selectedInstruments = computed({
-		get: () => selectedOf('instruments') as Instrument[],
-		set: (value: Instrument[]) => selectIds('instruments', value.map(entry => entry.id)),
-	})
+	function createSelectedComputed<T extends FilterEntity>(entityType: EntityType) {
+		return computed({
+			get: () => selectedOf(entityType) as T[],
+			set: (value: T[]) => selectIds(entityType, value.map(entry => entry.id)),
+		})
+	}
+
+	const selectedComposers = createSelectedComputed<Composer>('composers')
+	const selectedBooks = createSelectedComputed<Book>('books')
+	const selectedCollections = createSelectedComputed<Collection>('collections')
+	const selectedArtists = createSelectedComputed<Artist>('artists')
+	const selectedGenres = createSelectedComputed<Genre>('genres')
+	const selectedKeys = createSelectedComputed<Key>('keys')
+	const selectedCustomGroups = createSelectedComputed<CustomGroup>('customgroups')
+	const selectedYears = createSelectedComputed<Year>('years')
+	const selectedSignatures = createSelectedComputed<Signature>('signatures')
+	const selectedSourceTypes = createSelectedComputed<SourceType>('sourcetypes')
+	const selectedInstruments = createSelectedComputed<Instrument>('instruments')
 
 	return {
 		searchTitle,
