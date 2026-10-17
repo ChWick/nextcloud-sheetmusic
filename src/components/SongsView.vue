@@ -218,6 +218,16 @@
       </NcButton>
       <NcButton
         size="small"
+        variant="error"
+        :title="t('sheetmusic', 'Delete selected ({count})', { count: selectedCount })"
+        :aria-label="t('sheetmusic', 'Delete selected ({count})', { count: selectedCount })"
+        @click="isBatchDeleteDialogOpen = true">
+        <template #icon>
+          <DeleteIcon :size="18" />
+        </template>
+      </NcButton>
+      <NcButton
+        size="small"
         :title="t('sheetmusic', 'Clear selection')"
         :aria-label="t('sheetmusic', 'Clear selection')"
         @click="clearSelection">
@@ -335,6 +345,12 @@
     :instruments="instruments"
     @apply="handleApplyBatchUpdate" />
 
+  <BatchDeleteSongsDialog
+    v-model:open="isBatchDeleteDialogOpen"
+    :library-id="selectedLibrary"
+    :song-ids="selectedSongIds"
+    @deleted="handleBatchDeleted" />
+
   <SongMergeDialog
     v-if="isMergeDialogOpen && mergeIssue && currentLibraryData"
     v-model:open="isMergeDialogOpen"
@@ -369,6 +385,7 @@ import SongViewer from '../components/SongViewer.vue';
 import SongPdfModifier from '../components/song-pdf/SongPdfModifier.vue';
 import ViewHeader from '../components/ViewHeader.vue';
 import BatchSongEditorDialog, { type BatchUpdatePayload } from '../components/song-editor/BatchSongEditorDialog.vue';
+import BatchDeleteSongsDialog from '../components/BatchDeleteSongsDialog.vue';
 import SongMergeDialog, { type MergedSongData, type ResolveBothSongData } from '../components/song-editor/SongMergeDialog.vue';
 import type { Artist, Song, Composer, Book, Collection, CustomGroup, Genre, IntegrityIssue, Key, LibraryData, Signature, SongPrefill, SourceType, Year } from '../types/song';
 import { DEFAULT_VISIBLE_COLUMNS, type SongColumn } from '../types/song';
@@ -495,6 +512,7 @@ const { searchTitle, withoutFiles, selectedComposers, selectedBooks, selectedCol
 
 const { selectedSongIds, selectedCount, isSelected, toggleSelect, selectAll, isAllSelected, clearSelection } = useSongSelection();
 const isBatchEditorOpen = ref(false);
+const isBatchDeleteDialogOpen = ref(false);
 
 // Compare & Merge dialog state
 const isMergeDialogOpen = ref(false);
@@ -641,6 +659,17 @@ async function handleApplyBatchUpdate(payload: BatchUpdatePayload) {
     console.error('Failed to batch update songs:', error);
     showError(describeRequestFailure(error, t('sheetmusic', 'Failed to update selected songs.')));
   }
+}
+
+function handleBatchDeleted(data: LibraryData | undefined, count: number) {
+  isBatchDeleteDialogOpen.value = false;
+  clearSelection();
+  if (data) {
+    handleLibraryDataUpdate(data);
+  } else {
+    loadLibraryData(props.selectedLibrary);
+  }
+  showSuccess(t('sheetmusic', 'Successfully deleted {count} songs.', { count }));
 }
 
 /** The editor is open for a song that does not exist yet. */
