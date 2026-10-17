@@ -56,7 +56,6 @@ trait RealMobileSheetsTestTrait {
 
 	protected function setUpRealMobileSheetsEnvironment(): void {
 		$this->dbConn = \OC::$server->get(IDBConnection::class);
-		$this->songMapper = new InternalSongMapper($this->dbConn);
 		$this->entityMapper = new InternalEntityMapper($this->dbConn);
 		$this->songFileMapper = new InternalSongFileMapper($this->dbConn);
 		$this->attributeMapper = new InternalSongAttributeMapper($this->dbConn);
@@ -66,6 +65,14 @@ trait RealMobileSheetsTestTrait {
 		$this->userManager = \OC::$server->get(IUserManager::class);
 		$logger = new NullLogger();
 		$this->pathResolver = new MobileSheetsPathResolver($this->rootFolder);
+		$this->songMapper = new InternalSongMapper(
+			$this->dbConn,
+			$this->entityMapper,
+			$this->songFileMapper,
+			$this->miscMapper,
+			$this->rootFolder,
+			$this->pathResolver,
+		);
 
 		$this->importer = new MobileSheetsSqliteImporter(
 			$this->songMapper,

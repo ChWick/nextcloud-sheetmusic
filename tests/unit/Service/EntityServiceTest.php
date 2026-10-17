@@ -4,154 +4,151 @@ declare(strict_types=1);
 
 namespace Service;
 
-use OCA\SheetMusic\Db\InternalEntity;
-use OCA\SheetMusic\Db\InternalEntityMapper;
-use OCA\SheetMusic\Db\InternalSongMapper;
-use OCA\SheetMusic\Db\LibraryMapper;
+use OCA\SheetMusic\Db\InternalSong;
 use OCA\SheetMusic\Service\EntityService;
+use OCA\SheetMusic\Service\LibraryService;
 use OCP\IUser;
 use PHPUnit\Framework\TestCase;
-use Psr\Log\LoggerInterface;
-use TestSupport\TestUtils;
+use Psr\Log\NullLogger;
+use TestSupport\RealMobileSheetsTestTrait;
 
 final class EntityServiceTest extends TestCase {
-	use TestUtils;
+	use RealMobileSheetsTestTrait;
 
-	public function testCreateEntityValidatesEmptyValueAndUnknownLibrary(): void {
-		$user = $this->createMock(IUser::class);
-		$user->method('getUID')->willReturn('admin');
+	private int $libraryId;
+	private IUser $user;
+	private EntityService $service;
 
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->method('findForUser')->with('admin', 99)->willReturn(null);
-		$libraryService = $this->createLibraryServiceWithMapper($libraryMapper);
+	protected function setUp(): void {
+		parent::setUp();
+		$this->setUpRealMobileSheetsEnvironment();
+		$library = $this->createTestLibrary('EntityService Test Lib');
+		$this->libraryId = (int)$library->id;
 
-		$service = new EntityService(
-			$libraryService,
-			$this->createMock(LoggerInterface::class),
-			$this->createMock(InternalEntityMapper::class),
-			$this->createMock(InternalSongMapper::class),
-			$libraryMapper,
+		$this->user = $this->createMock(IUser::class);
+		$this->user->method('getUID')->willReturn($library->userId);
+
+		$libraryService = new LibraryService(
+			$this->libraryMapper,
+			$this->rootFolder,
+			new NullLogger(),
 		);
 
-		$this->assertNull($service->createEntity($user, 1, 'composer', '  '));
-		$this->assertNull($service->createEntity($user, 99, 'composer', 'Bach'));
+		$this->service = new EntityService(
+			$libraryService,
+			new NullLogger(),
+			$this->entityMapper,
+			$this->songMapper,
+			$this->libraryMapper,
+		);
+	}
+
+	protected function tearDown(): void {
+		$this->tearDownRealMobileSheetsEnvironment();
+		parent::tearDown();
+	}
+
+	public function testCreateEntityValidatesEmptyValueAndUnknownLibrary(): void {
+		self::assertNull($this->service->createEntity($this->user, $this->libraryId, 'composer', '  '));
+		self::assertNull($this->service->createEntity($this->user, 999999, 'composer', 'Bach'));
 	}
 
 	public function testCreateEntitySupportsAllTypes(): void {
-		$user = $this->createMock(IUser::class);
-		$user->method('getUID')->willReturn('admin');
+		$composer = $this->service->createEntity($this->user, $this->libraryId, 'composer', 'Bach');
+		$book = $this->service->createEntity($this->user, $this->libraryId, 'book', 'Real Book');
+		$collection = $this->service->createEntity($this->user, $this->libraryId, 'collection', 'Jazz');
+		$artist = $this->service->createEntity($this->user, $this->libraryId, 'artist', 'Miles');
+		$signature = $this->service->createEntity($this->user, $this->libraryId, 'signature', '3/4');
+		$sourceType = $this->service->createEntity($this->user, $this->libraryId, 'sourcetype', 'Lead Sheet');
+		$instrument = $this->service->createEntity($this->user, $this->libraryId, 'instrument', 'Organ');
+		$year = $this->service->createEntity($this->user, $this->libraryId, 'year', '1959');
 
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->method('findForUser')->with('admin', 1)->willReturn(['id' => 1, 'path' => '/Noten']);
-		$libraryService = $this->createLibraryServiceWithMapper($libraryMapper);
+		self::assertNotNull($composer);
+		self::assertSame('Bach', $composer['name']);
+		self::assertGreaterThan(0, $composer['id']);
 
-		$internalEntityMapper = $this->createMock(InternalEntityMapper::class);
-		$internalSongMapper = $this->createMock(InternalSongMapper::class);
+		self::assertNotNull($book);
+		self::assertSame('Real Book', $book['title']);
 
-		$createdId = 10;
-		$internalEntityMapper->method('insert')->willReturnCallback(function (InternalEntity $entity) use (&$createdId) {
-			$entity->id = ++$createdId;
-			return $entity;
-		});
+		self::assertNotNull($collection);
+		self::assertSame('Jazz', $collection['name']);
 
-		$service = new EntityService(
-			$libraryService,
-			$this->createMock(LoggerInterface::class),
-			$internalEntityMapper,
-			$internalSongMapper,
-			$libraryMapper,
-		);
+		self::assertNotNull($artist);
+		self::assertSame('Miles', $artist['name']);
 
-		$composer = $service->createEntity($user, 1, 'composer', 'Bach');
-		$book = $service->createEntity($user, 1, 'book', 'Real Book');
-		$collection = $service->createEntity($user, 1, 'collection', 'Jazz');
-		$artist = $service->createEntity($user, 1, 'artist', 'Miles');
-		$signature = $service->createEntity($user, 1, 'signature', '3/4');
-		$sourceType = $service->createEntity($user, 1, 'sourcetype', 'Lead Sheet');
-		$instrument = $service->createEntity($user, 1, 'instrument', 'Organ');
+		self::assertNotNull($signature);
+		self::assertSame('3/4', $signature['name']);
 
-		self::assertSame(['id' => 11, 'name' => 'Bach'], $composer);
-		self::assertSame(['id' => 12, 'title' => 'Real Book'], $book);
-		self::assertSame(['id' => 13, 'name' => 'Jazz'], $collection);
-		self::assertSame(['id' => 14, 'name' => 'Miles'], $artist);
-		self::assertSame(['id' => 15, 'name' => '3/4'], $signature);
-		self::assertSame(['id' => 16, 'name' => 'Lead Sheet', 'type' => 'Lead Sheet'], $sourceType);
-		self::assertSame(['id' => 17, 'name' => 'Organ'], $instrument);
+		self::assertNotNull($sourceType);
+		self::assertSame('Lead Sheet', $sourceType['type']);
+
+		self::assertNotNull($instrument);
+		self::assertSame('Organ', $instrument['name']);
+
+		self::assertNotNull($year);
+		self::assertSame(1959, $year['year']);
+
+		$composers = $this->entityMapper->findAllForLibrary($this->libraryId, 'composer');
+		self::assertCount(1, $composers);
+		$books = $this->entityMapper->findAllForLibrary($this->libraryId, 'book');
+		self::assertCount(1, $books);
+		$collections = $this->entityMapper->findAllForLibrary($this->libraryId, 'collection');
+		self::assertCount(1, $collections);
+		$artists = $this->entityMapper->findAllForLibrary($this->libraryId, 'artist');
+		self::assertCount(1, $artists);
 	}
 
-	public function testDeleteEntityPassesTypeToMapper(): void {
-		$user = $this->createMock(IUser::class);
-		$user->method('getUID')->willReturn('admin');
+	public function testDeleteEntityRemovesFromDbAndReturnsLibraryData(): void {
+		$composer = $this->service->createEntity($this->user, $this->libraryId, 'composer', 'Chopin');
+		self::assertNotNull($composer);
+		$composerId = $composer['id'];
 
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->method('findForUser')->with('admin', 1)->willReturn(['id' => 1, 'path' => '/Noten']);
-		$libraryService = $this->createLibraryServiceWithMapper($libraryMapper);
+		$result = $this->service->deleteEntity($this->user, $this->libraryId, 'composers', $composerId);
+		self::assertNotNull($result);
+		self::assertArrayHasKey('songs', $result);
 
-		$internalEntityMapper = $this->createMock(InternalEntityMapper::class);
-		$internalSongMapper = $this->createMock(InternalSongMapper::class);
+		// Entity should be soft-deleted in the database
+		$deleted = $this->entityMapper->findById($composerId);
+		self::assertNotNull($deleted);
+		self::assertNotNull($deleted->deletedAt);
+		self::assertEmpty($this->entityMapper->findAllForLibrary($this->libraryId, 'composer'));
 
-		$internalEntityMapper->expects($this->once())
-			->method('delete')
-			->with(10)
-			->willReturn(true);
-
-		$libraryMapper->expects($this->once())
-			->method('touch')
-			->with(1);
-
-		$internalSongMapper->expects($this->once())
-			->method('findLibraryData')
-			->with(1, $user)
-			->willReturn(['songs' => []]);
-
-		$service = new EntityService(
-			$libraryService,
-			$this->createMock(LoggerInterface::class),
-			$internalEntityMapper,
-			$internalSongMapper,
-			$libraryMapper,
-		);
-
-		$result = $service->deleteEntity($user, 1, 'composers', 10);
-		self::assertSame(['songs' => []], $result);
+		// Deleting non-existent returns null
+		self::assertNull($this->service->deleteEntity($this->user, $this->libraryId, 'composers', 999999));
 	}
 
 	public function testMergeEntitiesReassignsSongsAndDeletesDuplicates(): void {
-		$user = $this->createMock(IUser::class);
-		$user->method('getUID')->willReturn('admin');
+		$keep = $this->service->createEntity($this->user, $this->libraryId, 'composer', 'Johann Sebastian Bach');
+		$duplicate = $this->service->createEntity($this->user, $this->libraryId, 'composer', 'J.S. Bach');
+		self::assertNotNull($keep);
+		self::assertNotNull($duplicate);
 
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->method('findForUser')->with('admin', 1)->willReturn(['id' => 1, 'path' => '/Noten']);
-		$libraryService = $this->createLibraryServiceWithMapper($libraryMapper);
+		$song = $this->songMapper->insert(new InternalSong(
+			id: null,
+			uuid: 's-bach',
+			libraryId: $this->libraryId,
+			title: 'Toccata and Fugue',
+		));
 
-		$internalEntityMapper = $this->createMock(InternalEntityMapper::class);
-		$internalSongMapper = $this->createMock(InternalSongMapper::class);
+		$this->entityMapper->linkSongEntity((int)$song->id, (int)$duplicate['id']);
 
-		$internalEntityMapper->expects($this->once())
-			->method('mergeEntities')
-			->with(1, 'composer', 50, [5])
-			->willReturn(1);
+		// Verify initial link
+		$linkedBefore = $this->entityMapper->findEntityIdsForSong((int)$song->id, 'composer');
+		self::assertSame([$duplicate['id']], $linkedBefore);
 
-		$libraryMapper->expects($this->once())
-			->method('touch')
-			->with(1);
-
-		$internalSongMapper->expects($this->once())
-			->method('findLibraryData')
-			->with(1, $user)
-			->willReturn(['songs' => []]);
-
-		$service = new EntityService(
-			$libraryService,
-			$this->createMock(LoggerInterface::class),
-			$internalEntityMapper,
-			$internalSongMapper,
-			$libraryMapper,
-		);
-
-		$result = $service->mergeEntities($user, 1, 'composers', 50, [5]);
+		// Merge duplicate into keep
+		$result = $this->service->mergeEntities($this->user, $this->libraryId, 'composers', $keep['id'], [$duplicate['id']]);
 		self::assertNotNull($result);
 		self::assertSame(1, $result['mergedCount']);
-		self::assertSame(['songs' => []], $result['libraryData']);
+		self::assertArrayHasKey('songs', $result['libraryData']);
+
+		// Song is now linked to keep
+		$linkedAfter = $this->entityMapper->findEntityIdsForSong((int)$song->id, 'composer');
+		self::assertSame([$keep['id']], $linkedAfter);
+
+		// Duplicate entity was soft-deleted
+		$deletedDuplicate = $this->entityMapper->findById($duplicate['id']);
+		self::assertNotNull($deletedDuplicate);
+		self::assertNotNull($deletedDuplicate->deletedAt);
 	}
 }
