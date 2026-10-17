@@ -95,17 +95,19 @@ class SongService {
 			$createdSong = $this->internalSongMapper->insert($song);
 			$songId = (int)$createdSong->id;
 
-			$this->internalEntityMapper->setSongEntitiesForType($songId, 'composer', array_map('intval', $composerIds));
-			$this->internalEntityMapper->setSongEntitiesForType($songId, 'book', array_map('intval', $bookIds));
-			$this->internalEntityMapper->setSongEntitiesForType($songId, 'collection', array_map('intval', $collectionIds));
-			$this->internalEntityMapper->setSongEntitiesForType($songId, 'artist', array_map('intval', $artistIds));
-			$this->internalEntityMapper->setSongEntitiesForType($songId, 'genre', array_map('intval', $genreIds));
-			$this->internalEntityMapper->setSongEntitiesForType($songId, 'key', array_map('intval', $keyIds));
-			$this->internalEntityMapper->setSongEntitiesForType($songId, 'customgroup', array_map('intval', $customGroupIds));
-			$this->internalEntityMapper->setSongEntitiesForType($songId, 'year', array_map('intval', $yearIds));
-			$this->internalEntityMapper->setSongEntitiesForType($songId, 'signature', array_map('intval', $signatureIds));
-			$this->internalEntityMapper->setSongEntitiesForType($songId, 'sourcetype', array_map('intval', $sourceTypeIds));
-			$this->internalEntityMapper->setSongEntitiesForType($songId, 'instrument', array_map('intval', $instrumentIds));
+			$this->setSongEntities($songId, [
+				'composer' => $composerIds,
+				'book' => $bookIds,
+				'collection' => $collectionIds,
+				'artist' => $artistIds,
+				'genre' => $genreIds,
+				'key' => $keyIds,
+				'customgroup' => $customGroupIds,
+				'year' => $yearIds,
+				'signature' => $signatureIds,
+				'sourcetype' => $sourceTypeIds,
+				'instrument' => $instrumentIds,
+			]);
 
 			$this->libraryMapper->touch($libraryId);
 
@@ -169,17 +171,19 @@ class SongService {
 				$song->updatedAt = time();
 				$this->internalSongMapper->update($song);
 
-				$this->internalEntityMapper->setSongEntitiesForType($songId, 'composer', array_map('intval', $composerIds));
-				$this->internalEntityMapper->setSongEntitiesForType($songId, 'book', array_map('intval', $bookIds));
-				$this->internalEntityMapper->setSongEntitiesForType($songId, 'collection', array_map('intval', $collectionIds));
-				$this->internalEntityMapper->setSongEntitiesForType($songId, 'artist', array_map('intval', $artistIds));
-				$this->internalEntityMapper->setSongEntitiesForType($songId, 'genre', array_map('intval', $genreIds));
-				$this->internalEntityMapper->setSongEntitiesForType($songId, 'key', array_map('intval', $keyIds));
-				$this->internalEntityMapper->setSongEntitiesForType($songId, 'customgroup', array_map('intval', $customGroupIds));
-				$this->internalEntityMapper->setSongEntitiesForType($songId, 'year', array_map('intval', $yearIds));
-				$this->internalEntityMapper->setSongEntitiesForType($songId, 'signature', array_map('intval', $signatureIds));
-				$this->internalEntityMapper->setSongEntitiesForType($songId, 'sourcetype', array_map('intval', $sourceTypeIds));
-				$this->internalEntityMapper->setSongEntitiesForType($songId, 'instrument', array_map('intval', $instrumentIds));
+				$this->setSongEntities($songId, [
+					'composer' => $composerIds,
+					'book' => $bookIds,
+					'collection' => $collectionIds,
+					'artist' => $artistIds,
+					'genre' => $genreIds,
+					'key' => $keyIds,
+					'customgroup' => $customGroupIds,
+					'year' => $yearIds,
+					'signature' => $signatureIds,
+					'sourcetype' => $sourceTypeIds,
+					'instrument' => $instrumentIds,
+				]);
 
 				$this->libraryMapper->touch($libraryId);
 
@@ -222,39 +226,19 @@ class SongService {
 		try {
 			foreach ($songIds as $songId) {
 				$sid = (int)$songId;
-				if ($composers !== null) {
-					$this->internalEntityMapper->setSongEntitiesForType($sid, 'composer', array_map('intval', $composers));
-				}
-				if ($books !== null) {
-					$this->internalEntityMapper->setSongEntitiesForType($sid, 'book', array_map('intval', $books));
-				}
-				if ($collections !== null) {
-					$this->internalEntityMapper->setSongEntitiesForType($sid, 'collection', array_map('intval', $collections));
-				}
-				if ($artists !== null) {
-					$this->internalEntityMapper->setSongEntitiesForType($sid, 'artist', array_map('intval', $artists));
-				}
-				if ($genres !== null) {
-					$this->internalEntityMapper->setSongEntitiesForType($sid, 'genre', array_map('intval', $genres));
-				}
-				if ($keys !== null) {
-					$this->internalEntityMapper->setSongEntitiesForType($sid, 'key', array_map('intval', $keys));
-				}
-				if ($customGroups !== null) {
-					$this->internalEntityMapper->setSongEntitiesForType($sid, 'customgroup', array_map('intval', $customGroups));
-				}
-				if ($years !== null) {
-					$this->internalEntityMapper->setSongEntitiesForType($sid, 'year', array_map('intval', $years));
-				}
-				if ($signatures !== null) {
-					$this->internalEntityMapper->setSongEntitiesForType($sid, 'signature', array_map('intval', $signatures));
-				}
-				if ($sourceTypes !== null) {
-					$this->internalEntityMapper->setSongEntitiesForType($sid, 'sourcetype', array_map('intval', $sourceTypes));
-				}
-				if ($instruments !== null) {
-					$this->internalEntityMapper->setSongEntitiesForType($sid, 'instrument', array_map('intval', $instruments));
-				}
+				$this->setSongEntities($sid, [
+					'composer' => $composers,
+					'book' => $books,
+					'collection' => $collections,
+					'artist' => $artists,
+					'genre' => $genres,
+					'key' => $keys,
+					'customgroup' => $customGroups,
+					'year' => $years,
+					'signature' => $signatures,
+					'sourcetype' => $sourceTypes,
+					'instrument' => $instruments,
+				]);
 				$this->songFileService->syncSongFileMetadata($user, '', $sid, $libraryId);
 			}
 			$this->libraryMapper->touch($libraryId);
@@ -526,6 +510,19 @@ class SongService {
 			]);
 
 			throw $e;
+		}
+	}
+
+	/**
+	 * Associate a song with multiple entity types. Skips null entries.
+	 *
+	 * @param array<string, array<int|string>|null> $entitiesByType
+	 */
+	private function setSongEntities(int $songId, array $entitiesByType): void {
+		foreach ($entitiesByType as $type => $ids) {
+			if ($ids !== null) {
+				$this->internalEntityMapper->setSongEntitiesForType($songId, (string)$type, array_map('intval', (array)$ids));
+			}
 		}
 	}
 }
