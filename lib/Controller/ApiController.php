@@ -153,6 +153,16 @@ class ApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/songs-batch-delete')]
+	public function batchDeleteSongs(
+		?int $libraryId = null,
+		array $songIds = [],
+		bool $deleteFiles = true,
+	): DataResponse {
+		return $this->songController->batchDeleteSongs($libraryId, $songIds, $deleteFiles);
+	}
+
+	#[NoAdminRequired]
 	#[ApiRoute(verb: 'POST', url: '/api/songs/merge')]
 	public function mergeSong(
 		?int $libraryId = null,

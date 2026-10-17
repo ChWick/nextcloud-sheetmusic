@@ -301,6 +301,48 @@ class SongService {
 	}
 
 	/**
+	 * @param list<int> $songIds
+	 * @return array<string, mixed>|null
+	 */
+	public function batchDeleteSongs(IUser $user, int $libraryId, array $songIds, bool $deleteFiles = true): ?array {
+		if ($songIds === []) {
+			return $this->internalSongMapper->findLibraryData($libraryId, $user);
+		}
+
+		try {
+			$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+			foreach ($songIds as $songId) {
+				$songId = (int)$songId;
+				if ($deleteFiles) {
+					$files = $this->internalSongFileMapper->findAllForSong($songId);
+					foreach ($files as $file) {
+						try {
+							$nodes = $userFolder->getById($file->fileId);
+							if (!empty($nodes)) {
+								$nodes[0]->delete();
+							}
+						} catch (\Throwable) {
+						}
+					}
+				}
+				$this->internalSongFileMapper->deleteAllForSong($songId);
+				$this->internalSongMapper->delete($songId);
+			}
+			$this->libraryMapper->touch($libraryId);
+
+			return $this->internalSongMapper->findLibraryData($libraryId, $user);
+		} catch (\Throwable $e) {
+			$this->logger->error('Could not batch delete songs from SheetMusic library', [
+				'exception' => $e,
+				'libraryId' => $libraryId,
+				'songIds' => $songIds,
+			]);
+
+			throw $e;
+		}
+	}
+
+	/**
 	 * Merge song $droppedId into song $keepId.
 	 *
 	 * All entity relations, files, bookmarks, and audio files from $droppedId

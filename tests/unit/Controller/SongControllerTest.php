@@ -91,4 +91,30 @@ final class SongControllerTest extends TestCase {
 		$this->assertSame(Http::STATUS_OK, $res->getStatus());
 		$this->assertSame(['songs' => []], $res->getData());
 	}
+
+	public function testBatchDeleteSongs(): void {
+		$user = $this->createMock(IUser::class);
+		$userSession = $this->createMock(IUserSession::class);
+		$userSession->method('getUser')->willReturn($user);
+
+		$songService = $this->createMock(SongService::class);
+		$songService->expects($this->once())
+			->method('batchDeleteSongs')
+			->with($user, 1, [42, 43], true)
+			->willReturn(['songs' => []]);
+
+		$controller = new SongController(
+			'sheetmusic',
+			$this->createMock(IRequest::class),
+			$songService,
+			$userSession,
+		);
+
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $controller->batchDeleteSongs(null, [42, 43])->getStatus());
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $controller->batchDeleteSongs(1, [])->getStatus());
+
+		$res = $controller->batchDeleteSongs(1, [42, 43], true);
+		$this->assertSame(Http::STATUS_OK, $res->getStatus());
+		$this->assertSame(['songs' => []], $res->getData());
+	}
 }

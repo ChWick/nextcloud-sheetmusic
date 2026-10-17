@@ -287,6 +287,41 @@ class SongController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/songs-batch-delete')]
+	public function batchDeleteSongs(
+		?int $libraryId = null,
+		array $songIds = [],
+		bool $deleteFiles = true,
+	): DataResponse {
+		$libraryId = $libraryId ?? ((int)$this->request->getParam('libraryId', 0) ?: null);
+		$songIds = !empty($songIds) ? $songIds : (array)$this->request->getParam('songIds', []);
+		$deleteFilesParam = $this->request->getParam('deleteFiles');
+		if ($deleteFilesParam !== null) {
+			$deleteFiles = filter_var($deleteFilesParam, FILTER_VALIDATE_BOOLEAN);
+		}
+
+		if ($libraryId === null || empty($songIds)) {
+			return new DataResponse(['message' => 'libraryId and songIds are required'], Http::STATUS_BAD_REQUEST);
+		}
+
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		try {
+			$result = $this->songService->batchDeleteSongs($user, $libraryId, $songIds, $deleteFiles);
+			if ($result === null) {
+				return new DataResponse(['message' => 'Library not found'], Http::STATUS_NOT_FOUND);
+			}
+
+			return new DataResponse($result);
+		} catch (\Throwable $e) {
+			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	#[NoAdminRequired]
 	#[ApiRoute(verb: 'DELETE', url: '/api/songs/{id}')]
 	public function deleteSong(int $id, ?int $libraryId = null, bool $deleteFiles = true): DataResponse {
 		$libraryId = $libraryId ?? ((int)$this->request->getParam('libraryId', 0) ?: null);

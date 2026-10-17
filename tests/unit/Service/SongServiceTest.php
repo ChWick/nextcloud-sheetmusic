@@ -279,6 +279,46 @@ final class SongServiceTest extends TestCase {
 		self::assertSame(['songs' => []], $result);
 	}
 
+	public function testBatchDeleteSongsDeletesMultipleSongs(): void {
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('admin');
+
+		$internalSongMapper = $this->createMock(InternalSongMapper::class);
+		$internalSongMapper->expects(self::exactly(2))
+			->method('delete')
+			->willReturnCallback(function (int $id) {
+				self::assertContains($id, [42, 43]);
+				return true;
+			});
+
+		$internalSongFileMapper = $this->createMock(InternalSongFileMapper::class);
+		$internalSongFileMapper->expects(self::exactly(2))
+			->method('deleteAllForSong')
+			->willReturnCallback(function (int $id) {
+				self::assertContains($id, [42, 43]);
+				return 1;
+			});
+
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$libraryMapper->expects(self::once())
+			->method('touch')
+			->with(1);
+
+		$internalSongMapper->expects(self::once())
+			->method('findLibraryData')
+			->with(1, $user)
+			->willReturn(['songs' => []]);
+
+		$service = $this->createSongService(
+			internalSongMapper: $internalSongMapper,
+			internalSongFileMapper: $internalSongFileMapper,
+			libraryMapper: $libraryMapper,
+		);
+
+		$result = $service->batchDeleteSongs($user, 1, [42, 43], deleteFiles: false);
+		self::assertSame(['songs' => []], $result);
+	}
+
 	public function testMergeSongMergesRecords(): void {
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('admin');
