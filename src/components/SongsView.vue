@@ -661,8 +661,11 @@ async function handleApplyBatchUpdate(payload: BatchUpdatePayload) {
   }
 }
 
-function handleBatchDeleted(data: LibraryData | undefined, count: number) {
+function handleBatchDeleted(data: LibraryData | undefined, payload: number[] | number) {
   isBatchDeleteDialogOpen.value = false;
+  const deletedSongIds = Array.isArray(payload) ? payload : [];
+  const count = Array.isArray(payload) ? payload.length : payload;
+  const shouldGoBack = songIdInUrl.value !== null && deletedSongIds.includes(songIdInUrl.value);
   clearSelection();
   if (data) {
     handleLibraryDataUpdate(data);
@@ -670,6 +673,9 @@ function handleBatchDeleted(data: LibraryData | undefined, count: number) {
     loadLibraryData(props.selectedLibrary);
   }
   showSuccess(t('sheetmusic', 'Successfully deleted {count} songs.', { count }));
+  if (shouldGoBack) {
+    goBackToSongs();
+  }
 }
 
 /** The editor is open for a song that does not exist yet. */

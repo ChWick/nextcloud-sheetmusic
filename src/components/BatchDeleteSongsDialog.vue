@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcButton from '@nextcloud/vue/components/NcButton'
@@ -18,15 +18,25 @@ const props = defineProps<{
 
 const emit = defineEmits<{
 	(e: 'update:open', open: boolean): void
-	(e: 'deleted', data: LibraryData | undefined, count: number): void
+	(e: 'deleted', data: LibraryData | undefined, songIds: number[]): void
 }>()
 
 const deleteFiles = ref(true)
 const isDeleting = ref(false)
 const deleteError = ref('')
 
+watch(
+	() => props.open,
+	(isOpen) => {
+		if (isOpen) {
+			deleteFiles.value = true
+			deleteError.value = ''
+		}
+	},
+)
+
 async function confirmBatchDelete() {
-	if (props.songIds.length === 0 || props.libraryId < 0) return
+	if (props.songIds.length === 0 || props.libraryId < 0 || isDeleting.value) return
 	isDeleting.value = true
 	deleteError.value = ''
 
@@ -38,7 +48,7 @@ async function confirmBatchDelete() {
 		})
 		emit('update:open', false)
 		const data = response.data?.ocs?.data as LibraryData | undefined
-		emit('deleted', data, props.songIds.length)
+		emit('deleted', data, [...props.songIds])
 	} catch (error) {
 		deleteError.value = describeRequestFailure(error, t('sheetmusic', 'Failed to delete selected songs.'))
 		showError(deleteError.value)
@@ -61,7 +71,10 @@ function handleClose() {
 		@close="handleClose">
 		<p>{{ t('sheetmusic', 'Delete {count} selected songs from this library?', { count: songIds.length }) }}</p>
 		<p>{{ t('sheetmusic', 'The songs and everything pointing at them are removed from the MobileSheets database.') }}</p>
-		<NcCheckboxRadioSwitch v-model="deleteFiles" type="checkbox">
+		<NcCheckboxRadioSwitch
+			v-model="deleteFiles"
+			:disabled="isDeleting"
+			type="checkbox">
 			{{ t('sheetmusic', 'Delete all attached files') }}
 		</NcCheckboxRadioSwitch>
 		<p v-if="deleteFiles">
@@ -72,7 +85,7 @@ function handleClose() {
 		</p>
 		<p v-if="deleteError" :class="$style.error" role="alert">{{ deleteError }}</p>
 		<template #actions>
-			<NcButton @click="handleClose">
+			<NcButton :disabled="isDeleting" @click="handleClose">
 				{{ t('sheetmusic', 'Cancel') }}
 			</NcButton>
 			<NcButton
@@ -94,4 +107,3 @@ function handleClose() {
 	margin: 8px 0;
 }
 </style>
-
