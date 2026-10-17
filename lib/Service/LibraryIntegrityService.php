@@ -10,6 +10,8 @@ declare(strict_types=1);
 namespace OCA\SheetMusic\Service;
 
 use OCA\SheetMusic\Db\InternalEntityMapper;
+use OCA\SheetMusic\Db\InternalMiscMapper;
+use OCA\SheetMusic\Db\InternalSongAttributeMapper;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
@@ -30,6 +32,8 @@ class LibraryIntegrityService {
 		private InternalSongMapper $internalSongMapper,
 		private InternalSongFileMapper $internalSongFileMapper,
 		private LibraryMapper $libraryMapper,
+		private ?InternalSongAttributeMapper $internalSongAttributeMapper = null,
+		private ?InternalMiscMapper $internalMiscMapper = null,
 	) {
 	}
 
@@ -152,6 +156,136 @@ class LibraryIntegrityService {
 				fixable: true,
 				details: $duplicateEntity,
 			);
+		}
+
+		$orphanAssignments = $this->internalEntityMapper->findOrphanSongEntityAssignments($libraryId);
+		if (!empty($orphanAssignments)) {
+			$issues[] = new IntegrityIssue(
+				type: IntegrityIssue::TYPE_ORPHAN_ENTITY_ASSIGNMENT,
+				severity: IntegrityIssue::SEVERITY_WARNING,
+				message: sprintf(
+					'Found %d orphan song-entity assignment(s) referencing deleted or missing records.',
+					count($orphanAssignments),
+				),
+				fixable: true,
+				details: [
+					'count' => count($orphanAssignments),
+					'assignments' => $orphanAssignments,
+				],
+			);
+		}
+
+		$duplicateSongClientIds = $this->internalSongMapper->findDuplicateClientIds($libraryId);
+		foreach ($duplicateSongClientIds as $dup) {
+			$issues[] = new IntegrityIssue(
+				type: IntegrityIssue::TYPE_DUPLICATE_CLIENT_ID,
+				severity: IntegrityIssue::SEVERITY_WARNING,
+				message: sprintf(
+					'Duplicate song client_id %d shared by song IDs %s. Auto-fix will keep client_id on ID %d and reset duplicates.',
+					$dup['client_id'],
+					implode(', ', array_merge([$dup['keep_id']], $dup['duplicate_ids'])),
+					$dup['keep_id'],
+				),
+				songId: $dup['keep_id'],
+				fixable: true,
+				details: [
+					'target' => 'song',
+					'clientId' => $dup['client_id'],
+					'keepId' => $dup['keep_id'],
+					'duplicateIds' => $dup['duplicate_ids'],
+				],
+			);
+		}
+
+		$duplicateEntityClientIds = $this->internalEntityMapper->findDuplicateClientIds($libraryId);
+		foreach ($duplicateEntityClientIds as $dup) {
+			$label = $entityTypeLabels[$dup['entity_type']] ?? $dup['entity_type'];
+			$issues[] = new IntegrityIssue(
+				type: IntegrityIssue::TYPE_DUPLICATE_CLIENT_ID,
+				severity: IntegrityIssue::SEVERITY_WARNING,
+				message: sprintf(
+					'Duplicate %s client_id %d shared by entity IDs %s. Auto-fix will keep client_id on ID %d and reset duplicates.',
+					$label,
+					$dup['client_id'],
+					implode(', ', array_merge([$dup['keep_id']], $dup['duplicate_ids'])),
+					$dup['keep_id'],
+				),
+				fixable: true,
+				details: [
+					'target' => 'entity',
+					'entityType' => $dup['entity_type'],
+					'clientId' => $dup['client_id'],
+					'keepId' => $dup['keep_id'],
+					'duplicateIds' => $dup['duplicate_ids'],
+				],
+			);
+		}
+
+		$songsWithoutFiles = $this->internalSongMapper->findSongsWithoutFiles($libraryId);
+		foreach ($songsWithoutFiles as $row) {
+			$issues[] = new IntegrityIssue(
+				type: IntegrityIssue::TYPE_SONG_WITHOUT_FILES,
+				severity: IntegrityIssue::SEVERITY_WARNING,
+				message: sprintf('Song "%s" (ID %d) has no associated files.', $row['title'], $row['id']),
+				songId: (int)$row['id'],
+				songTitle: (string)$row['title'],
+				fixable: false,
+			);
+		}
+
+		$orphanSongFiles = $this->internalSongFileMapper->findOrphanSongFiles($libraryId);
+		if (!empty($orphanSongFiles)) {
+			$issues[] = new IntegrityIssue(
+				type: IntegrityIssue::TYPE_ORPHAN_SONG_FILE,
+				severity: IntegrityIssue::SEVERITY_WARNING,
+				message: sprintf(
+					'Found %d orphan song file record(s) referencing deleted songs.',
+					count($orphanSongFiles),
+				),
+				fixable: true,
+				details: [
+					'count' => count($orphanSongFiles),
+					'files' => $orphanSongFiles,
+				],
+			);
+		}
+
+		if ($this->internalSongAttributeMapper !== null) {
+			$orphanAttrs = $this->internalSongAttributeMapper->findOrphanSongAttributes($libraryId);
+			if (!empty($orphanAttrs)) {
+				$issues[] = new IntegrityIssue(
+					type: IntegrityIssue::TYPE_ORPHAN_SONG_ATTRIBUTE,
+					severity: IntegrityIssue::SEVERITY_WARNING,
+					message: sprintf(
+						'Found %d orphan song attribute record(s) referencing deleted songs.',
+						count($orphanAttrs),
+					),
+					fixable: true,
+					details: [
+						'count' => count($orphanAttrs),
+						'attributes' => $orphanAttrs,
+					],
+				);
+			}
+		}
+
+		if ($this->internalMiscMapper !== null) {
+			$orphanMisc = $this->internalMiscMapper->findOrphanMiscData($libraryId);
+			if (!empty($orphanMisc)) {
+				$issues[] = new IntegrityIssue(
+					type: IntegrityIssue::TYPE_ORPHAN_MISC_DATA,
+					severity: IntegrityIssue::SEVERITY_WARNING,
+					message: sprintf(
+						'Found %d orphan sync/misc data record(s) referencing deleted songs.',
+						count($orphanMisc),
+					),
+					fixable: true,
+					details: [
+						'count' => count($orphanMisc),
+						'misc' => $orphanMisc,
+					],
+				);
+			}
 		}
 
 		$autoPaths = $this->libraryService->isAutoPathsEnabled($userId, $libraryId);
@@ -501,6 +635,73 @@ class LibraryIntegrityService {
 			];
 		}
 
+		if ($issueType === IntegrityIssue::TYPE_ORPHAN_ENTITY_ASSIGNMENT) {
+			$removed = $this->internalEntityMapper->removeOrphanSongEntityAssignments($libraryId);
+			$this->libraryMapper->touch($libraryId);
+
+			return [
+				'success' => $removed > 0,
+				'fixedCount' => $removed > 0 ? 1 : 0,
+				'message' => $removed > 0
+					? sprintf('Removed %d orphan entity assignment(s).', $removed)
+					: 'No orphan entity assignments remained to fix.',
+			];
+		}
+
+		if ($issueType === IntegrityIssue::TYPE_ORPHAN_SONG_FILE) {
+			$removed = $this->internalSongFileMapper->removeOrphanSongFiles($libraryId);
+			$this->libraryMapper->touch($libraryId);
+
+			return [
+				'success' => $removed > 0,
+				'fixedCount' => $removed > 0 ? 1 : 0,
+				'message' => $removed > 0
+					? sprintf('Cleaned up %d orphan song file record(s).', $removed)
+					: 'No orphan song file records remained to fix.',
+			];
+		}
+
+		if ($issueType === IntegrityIssue::TYPE_ORPHAN_SONG_ATTRIBUTE && $this->internalSongAttributeMapper !== null) {
+			$removed = $this->internalSongAttributeMapper->removeOrphanSongAttributes($libraryId);
+			$this->libraryMapper->touch($libraryId);
+
+			return [
+				'success' => $removed > 0,
+				'fixedCount' => $removed > 0 ? 1 : 0,
+				'message' => $removed > 0
+					? sprintf('Cleaned up %d orphan song attribute record(s).', $removed)
+					: 'No orphan song attribute records remained to fix.',
+			];
+		}
+
+		if ($issueType === IntegrityIssue::TYPE_ORPHAN_MISC_DATA && $this->internalMiscMapper !== null) {
+			$removed = $this->internalMiscMapper->removeOrphanMiscData($libraryId);
+			$this->libraryMapper->touch($libraryId);
+
+			return [
+				'success' => $removed > 0,
+				'fixedCount' => $removed > 0 ? 1 : 0,
+				'message' => $removed > 0
+					? sprintf('Cleaned up %d orphan sync data record(s).', $removed)
+					: 'No orphan sync data records remained to fix.',
+			];
+		}
+
+		if ($issueType === IntegrityIssue::TYPE_DUPLICATE_CLIENT_ID) {
+			$fixedSongs = $this->internalSongMapper->fixDuplicateClientIds($libraryId);
+			$fixedEntities = $this->internalEntityMapper->fixDuplicateClientIds($libraryId);
+			$total = $fixedSongs + $fixedEntities;
+			$this->libraryMapper->touch($libraryId);
+
+			return [
+				'success' => $total > 0,
+				'fixedCount' => $total > 0 ? 1 : 0,
+				'message' => $total > 0
+					? sprintf('Reset %d duplicate client_id record(s).', $total)
+					: 'No duplicate client_id records remained to fix.',
+			];
+		}
+
 		if ($issueType === IntegrityIssue::TYPE_INVALID_NAMING_RULE && $songId !== null) {
 			$userFolder = $this->rootFolder->getUserFolder($userId);
 			$user = $userFolder->getOwner();
@@ -572,6 +773,7 @@ class LibraryIntegrityService {
 
 		$fixedCount = 0;
 		$processedSongs = [];
+		$duplicateClientIdsFixed = false;
 		$errors = [];
 
 		foreach ($issues as $issue) {
@@ -640,6 +842,65 @@ class LibraryIntegrityService {
 						'keepId' => $details['keepId'],
 					]);
 					$errors[] = sprintf('Failed to merge duplicate entity records: %s', $e->getMessage());
+				}
+			} elseif ($issue->type === IntegrityIssue::TYPE_ORPHAN_ENTITY_ASSIGNMENT) {
+				try {
+					$removed = $this->internalEntityMapper->removeOrphanSongEntityAssignments($libraryId);
+					$this->libraryMapper->touch($libraryId);
+					if ($removed > 0) {
+						$fixedCount++;
+					}
+				} catch (\Throwable $e) {
+					$this->logger->warning('Cannot auto-fix orphan entity assignments', ['exception' => $e]);
+					$errors[] = sprintf('Failed to remove orphan entity assignments: %s', $e->getMessage());
+				}
+			} elseif ($issue->type === IntegrityIssue::TYPE_ORPHAN_SONG_FILE) {
+				try {
+					$removed = $this->internalSongFileMapper->removeOrphanSongFiles($libraryId);
+					$this->libraryMapper->touch($libraryId);
+					if ($removed > 0) {
+						$fixedCount++;
+					}
+				} catch (\Throwable $e) {
+					$this->logger->warning('Cannot auto-fix orphan song files', ['exception' => $e]);
+					$errors[] = sprintf('Failed to remove orphan song files: %s', $e->getMessage());
+				}
+			} elseif ($issue->type === IntegrityIssue::TYPE_ORPHAN_SONG_ATTRIBUTE && $this->internalSongAttributeMapper !== null) {
+				try {
+					$removed = $this->internalSongAttributeMapper->removeOrphanSongAttributes($libraryId);
+					$this->libraryMapper->touch($libraryId);
+					if ($removed > 0) {
+						$fixedCount++;
+					}
+				} catch (\Throwable $e) {
+					$this->logger->warning('Cannot auto-fix orphan song attributes', ['exception' => $e]);
+					$errors[] = sprintf('Failed to remove orphan song attributes: %s', $e->getMessage());
+				}
+			} elseif ($issue->type === IntegrityIssue::TYPE_ORPHAN_MISC_DATA && $this->internalMiscMapper !== null) {
+				try {
+					$removed = $this->internalMiscMapper->removeOrphanMiscData($libraryId);
+					$this->libraryMapper->touch($libraryId);
+					if ($removed > 0) {
+						$fixedCount++;
+					}
+				} catch (\Throwable $e) {
+					$this->logger->warning('Cannot auto-fix orphan sync data', ['exception' => $e]);
+					$errors[] = sprintf('Failed to remove orphan sync data: %s', $e->getMessage());
+				}
+			} elseif ($issue->type === IntegrityIssue::TYPE_DUPLICATE_CLIENT_ID) {
+				if (!$duplicateClientIdsFixed) {
+					try {
+						$fixedSongs = $this->internalSongMapper->fixDuplicateClientIds($libraryId);
+						$fixedEntities = $this->internalEntityMapper->fixDuplicateClientIds($libraryId);
+						$this->libraryMapper->touch($libraryId);
+						if (($fixedSongs + $fixedEntities) > 0) {
+							$fixedCount++;
+						}
+						$duplicateClientIdsFixed = true;
+					} catch (\Throwable $e) {
+						$this->logger->warning('Cannot auto-fix duplicate client IDs', ['exception' => $e]);
+						$errors[] = sprintf('Failed to reset duplicate client IDs: %s', $e->getMessage());
+					}
 				}
 			} elseif ($issue->type === IntegrityIssue::TYPE_PDF_METADATA_MISMATCH) {
 				try {

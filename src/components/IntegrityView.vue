@@ -82,6 +82,12 @@ const groupedIssues = computed(() => {
 			else if (type === 'identical_song') title = t('sheetmusic', 'Identical Songs (Duplicates)')
 			else if (type === 'pdf_metadata_mismatch') title = t('sheetmusic', 'PDF Metadata Mismatches')
 			else if (type === 'pdf_metadata_unreadable') title = t('sheetmusic', 'PDF Metadata Could Not Be Verified')
+			else if (type === 'orphan_entity_assignment') title = t('sheetmusic', 'Orphan Entity Assignments')
+			else if (type === 'orphan_song_file') title = t('sheetmusic', 'Orphan Song Files')
+			else if (type === 'song_without_files') title = t('sheetmusic', 'Songs Without Files')
+			else if (type === 'duplicate_client_id') title = t('sheetmusic', 'Duplicate Client IDs')
+			else if (type === 'orphan_song_attribute') title = t('sheetmusic', 'Orphan Song Attributes')
+			else if (type === 'orphan_misc_data') title = t('sheetmusic', 'Orphan Sync Data')
 
 			groups[type] = {
 				type,
