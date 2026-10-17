@@ -74,25 +74,14 @@ class SongController extends OCSController {
 			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
 		}
 
-		$genreIds = !empty($genreIds) ? $genreIds : (array)$this->request->getParam('genreIds', []);
-		$keyIds = !empty($keyIds) ? $keyIds : (array)$this->request->getParam('keyIds', []);
-		$customGroupIds = !empty($customGroupIds) ? $customGroupIds : (array)$this->request->getParam('customGroupIds', []);
-		$yearIds = !empty($yearIds) ? $yearIds : (array)$this->request->getParam('yearIds', []);
-		$signatureIds = !empty($signatureIds) ? $signatureIds : (array)$this->request->getParam('signatureIds', []);
-		$sourceTypeIds = !empty($sourceTypeIds) ? $sourceTypeIds : (array)$this->request->getParam('sourceTypeIds', []);
-		$stars = (int)$this->request->getParam('stars', 0);
-		$difficulty = (int)$this->request->getParam('difficulty', 0);
-		$duration = (int)$this->request->getParam('duration', 0);
-		$keywords = (string)$this->request->getParam('keywords', '');
-		$custom = (string)$this->request->getParam('custom', '');
-		$custom2 = (string)$this->request->getParam('custom2', '');
-		$sortTitle = (string)$this->request->getParam('sortTitle', '');
-		$bookmarks = (array)$this->request->getParam('bookmarks', []);
-		$audioFiles = (array)$this->request->getParam('audioFiles', []);
-		$opus = (string)$this->request->getParam('opus', '');
-		$catalogNumber = (string)$this->request->getParam('catalogNumber', (string)$this->request->getParam('catalog_number', ''));
-		$songNumber = (string)$this->request->getParam('songNumber', (string)$this->request->getParam('song_number', ''));
-		$instrumentIds = (array)$this->request->getParam('instrumentIds', (array)$this->request->getParam('instrument_ids', []));
+		$payload = $this->extractSongPayload([
+			'genreIds' => $genreIds,
+			'keyIds' => $keyIds,
+			'customGroupIds' => $customGroupIds,
+			'yearIds' => $yearIds,
+			'signatureIds' => $signatureIds,
+			'sourceTypeIds' => $sourceTypeIds,
+		]);
 
 		try {
 			$result = $this->songService->createSong(
@@ -103,25 +92,25 @@ class SongController extends OCSController {
 				$bookIds,
 				$collectionIds,
 				$artistIds,
-				$genreIds,
-				$keyIds,
-				$customGroupIds,
-				$yearIds,
-				$signatureIds,
-				$sourceTypeIds,
-				$stars,
-				$difficulty,
-				$duration,
-				$keywords,
-				$custom,
-				$custom2,
-				$sortTitle,
-				$bookmarks,
-				$audioFiles,
-				$opus,
-				$catalogNumber,
-				$songNumber,
-				$instrumentIds,
+				$payload['genreIds'],
+				$payload['keyIds'],
+				$payload['customGroupIds'],
+				$payload['yearIds'],
+				$payload['signatureIds'],
+				$payload['sourceTypeIds'],
+				$payload['stars'],
+				$payload['difficulty'],
+				$payload['duration'],
+				$payload['keywords'],
+				$payload['custom'],
+				$payload['custom2'],
+				$payload['sortTitle'],
+				$payload['bookmarks'],
+				$payload['audioFiles'],
+				$payload['opus'],
+				$payload['catalogNumber'],
+				$payload['songNumber'],
+				$payload['instrumentIds'],
 			);
 
 			if ($result === null) {
@@ -161,25 +150,14 @@ class SongController extends OCSController {
 			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
 		}
 
-		$genreIds = !empty($genreIds) ? $genreIds : (array)$this->request->getParam('genreIds', []);
-		$keyIds = !empty($keyIds) ? $keyIds : (array)$this->request->getParam('keyIds', []);
-		$customGroupIds = !empty($customGroupIds) ? $customGroupIds : (array)$this->request->getParam('customGroupIds', []);
-		$yearIds = !empty($yearIds) ? $yearIds : (array)$this->request->getParam('yearIds', []);
-		$signatureIds = !empty($signatureIds) ? $signatureIds : (array)$this->request->getParam('signatureIds', []);
-		$sourceTypeIds = !empty($sourceTypeIds) ? $sourceTypeIds : (array)$this->request->getParam('sourceTypeIds', []);
-		$stars = (int)$this->request->getParam('stars', 0);
-		$difficulty = (int)$this->request->getParam('difficulty', 0);
-		$duration = (int)$this->request->getParam('duration', 0);
-		$keywords = (string)$this->request->getParam('keywords', '');
-		$custom = (string)$this->request->getParam('custom', '');
-		$custom2 = (string)$this->request->getParam('custom2', '');
-		$sortTitle = (string)$this->request->getParam('sortTitle', '');
-		$bookmarks = (array)$this->request->getParam('bookmarks', []);
-		$audioFiles = (array)$this->request->getParam('audioFiles', []);
-		$opus = (string)$this->request->getParam('opus', '');
-		$catalogNumber = (string)$this->request->getParam('catalogNumber', (string)$this->request->getParam('catalog_number', ''));
-		$songNumber = (string)$this->request->getParam('songNumber', (string)$this->request->getParam('song_number', ''));
-		$instrumentIds = (array)$this->request->getParam('instrumentIds', (array)$this->request->getParam('instrument_ids', []));
+		$payload = $this->extractSongPayload([
+			'genreIds' => $genreIds,
+			'keyIds' => $keyIds,
+			'customGroupIds' => $customGroupIds,
+			'yearIds' => $yearIds,
+			'signatureIds' => $signatureIds,
+			'sourceTypeIds' => $sourceTypeIds,
+		]);
 
 		try {
 			$result = $this->songService->updateSong(
@@ -191,25 +169,25 @@ class SongController extends OCSController {
 				$bookIds,
 				$collectionIds,
 				$artistIds,
-				$genreIds,
-				$keyIds,
-				$customGroupIds,
-				$yearIds,
-				$signatureIds,
-				$sourceTypeIds,
-				$stars,
-				$difficulty,
-				$duration,
-				$keywords,
-				$custom,
-				$custom2,
-				$sortTitle,
-				$bookmarks,
-				$audioFiles,
-				$opus,
-				$catalogNumber,
-				$songNumber,
-				$instrumentIds,
+				$payload['genreIds'],
+				$payload['keyIds'],
+				$payload['customGroupIds'],
+				$payload['yearIds'],
+				$payload['signatureIds'],
+				$payload['sourceTypeIds'],
+				$payload['stars'],
+				$payload['difficulty'],
+				$payload['duration'],
+				$payload['keywords'],
+				$payload['custom'],
+				$payload['custom2'],
+				$payload['sortTitle'],
+				$payload['bookmarks'],
+				$payload['audioFiles'],
+				$payload['opus'],
+				$payload['catalogNumber'],
+				$payload['songNumber'],
+				$payload['instrumentIds'],
 			);
 
 			if ($result === null) {
@@ -409,5 +387,35 @@ class SongController extends OCSController {
 		} catch (\Throwable $e) {
 			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
+	}
+
+	/**
+	 * Extracts song fields from the incoming request.
+	 *
+	 * @param array<string, mixed> $overrides Explicit method arguments overriding request params.
+	 * @return array<string, mixed>
+	 */
+	private function extractSongPayload(array $overrides = []): array {
+		return [
+			'genreIds' => !empty($overrides['genreIds']) ? (array)$overrides['genreIds'] : (array)$this->request->getParam('genreIds', []),
+			'keyIds' => !empty($overrides['keyIds']) ? (array)$overrides['keyIds'] : (array)$this->request->getParam('keyIds', []),
+			'customGroupIds' => !empty($overrides['customGroupIds']) ? (array)$overrides['customGroupIds'] : (array)$this->request->getParam('customGroupIds', []),
+			'yearIds' => !empty($overrides['yearIds']) ? (array)$overrides['yearIds'] : (array)$this->request->getParam('yearIds', []),
+			'signatureIds' => !empty($overrides['signatureIds']) ? (array)$overrides['signatureIds'] : (array)$this->request->getParam('signatureIds', []),
+			'sourceTypeIds' => !empty($overrides['sourceTypeIds']) ? (array)$overrides['sourceTypeIds'] : (array)$this->request->getParam('sourceTypeIds', []),
+			'stars' => (int)$this->request->getParam('stars', 0),
+			'difficulty' => (int)$this->request->getParam('difficulty', 0),
+			'duration' => (int)$this->request->getParam('duration', 0),
+			'keywords' => (string)$this->request->getParam('keywords', ''),
+			'custom' => (string)$this->request->getParam('custom', ''),
+			'custom2' => (string)$this->request->getParam('custom2', ''),
+			'sortTitle' => (string)$this->request->getParam('sortTitle', ''),
+			'bookmarks' => (array)$this->request->getParam('bookmarks', []),
+			'audioFiles' => (array)$this->request->getParam('audioFiles', []),
+			'opus' => (string)$this->request->getParam('opus', ''),
+			'catalogNumber' => (string)$this->request->getParam('catalogNumber', (string)$this->request->getParam('catalog_number', '')),
+			'songNumber' => (string)$this->request->getParam('songNumber', (string)$this->request->getParam('song_number', '')),
+			'instrumentIds' => (array)$this->request->getParam('instrumentIds', (array)$this->request->getParam('instrument_ids', [])),
+		];
 	}
 }
