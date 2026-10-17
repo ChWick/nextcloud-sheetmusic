@@ -430,6 +430,36 @@ class InternalEntityMapper {
 	}
 
 	/**
+	 * Returns a human-readable display label for an entity type.
+	 */
+	public static function getLabel(string $type, bool $plural = false): string {
+		$norm = self::normalizeType($type);
+		if ($plural) {
+			return match ($norm) {
+				'composer' => 'composers',
+				'book' => 'books',
+				'collection' => 'collections',
+				'artist' => 'artists',
+				'genre' => 'genres',
+				'key' => 'keys',
+				'customgroup' => 'custom groups',
+				'year' => 'years',
+				'signature' => 'time signatures',
+				'sourcetype' => 'source types',
+				'instrument' => 'instruments',
+				default => $norm . 's',
+			};
+		}
+
+		return match ($norm) {
+			'customgroup' => 'custom group',
+			'signature' => 'time signature',
+			'sourcetype' => 'source type',
+			default => $norm,
+		};
+	}
+
+	/**
 	 * Find active entity records with the same label (case-insensitive, trimmed) within the library.
 	 *
 	 * @return list<array{entityType: string, name: string, keepId: int, duplicateIds: list<int>}>

@@ -498,4 +498,15 @@ final class InternalEntityMapperTest extends TestCase {
 
 		self::assertSame(1, $fixed);
 	}
+
+	public function testGetLabel(): void {
+		self::assertSame('composer', InternalEntityMapper::getLabel('composers'));
+		self::assertSame('composers', InternalEntityMapper::getLabel('composer', true));
+		self::assertSame('custom group', InternalEntityMapper::getLabel('customgroups'));
+		self::assertSame('custom groups', InternalEntityMapper::getLabel('customgroups', true));
+		self::assertSame('time signature', InternalEntityMapper::getLabel('signatures'));
+		self::assertSame('time signatures', InternalEntityMapper::getLabel('signature', true));
+		self::assertSame('source type', InternalEntityMapper::getLabel('sourcetype'));
+		self::assertSame('source types', InternalEntityMapper::getLabel('sourcetypes', true));
+	}
 }
