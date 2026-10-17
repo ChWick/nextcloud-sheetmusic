@@ -9,40 +9,56 @@ declare(strict_types=1);
 
 namespace Db;
 
-use OCA\SheetMusic\Db\InternalSongAttributeMapper;
-use OCP\DB\QueryBuilder\IExpressionBuilder;
-use OCP\DB\QueryBuilder\IParameter;
-use OCP\DB\QueryBuilder\IQueryBuilder;
-use OCP\IDBConnection;
+use OCA\SheetMusic\Db\InternalSong;
 use PHPUnit\Framework\TestCase;
+use TestSupport\RealMobileSheetsTestTrait;
 
 final class InternalSongAttributeMapperTest extends TestCase {
-	public function testFindAllForSongReturnsMap(): void {
-		$result = $this->createMock(InternalQueryResult::class);
-		$result->method('fetchAssociative')->willReturnOnConsecutiveCalls(
-			['name' => 'custom', 'value' => 'Val1'],
-			['name' => 'custom2', 'value' => 'Val2'],
-			['name' => 'tuning', 'value' => 'Drop D'],
-			false,
-		);
-		$result->expects(self::once())->method('closeCursor')->willReturn(true);
+	use RealMobileSheetsTestTrait;
 
-		$qb = $this->createMock(IQueryBuilder::class);
-		$expr = $this->createMock(IExpressionBuilder::class);
-		$expr->method('eq')->willReturn('eq');
-		$qb->method('expr')->willReturn($expr);
-		$qb->method('select')->willReturnSelf();
-		$qb->method('from')->willReturnSelf();
-		$qb->method('where')->willReturnSelf();
-		$qb->method('createNamedParameter')->willReturn($this->createMock(IParameter::class));
-		$qb->method('executeQuery')->willReturn($result);
+	private int $libraryId;
+	private InternalSong $song;
 
-		$db = $this->createMock(IDBConnection::class);
-		$db->method('getQueryBuilder')->willReturn($qb);
+	protected function setUp(): void {
+		parent::setUp();
+		$this->setUpRealMobileSheetsEnvironment();
+		$library = $this->createTestLibrary('SongAttributeMapper Test Lib');
+		$this->libraryId = (int)$library->id;
+		$this->song = $this->songMapper->insert(new InternalSong(
+			id: null,
+			uuid: 'attr-test-song-uuid',
+			libraryId: $this->libraryId,
+			title: 'Song With Attributes',
+		));
+	}
 
-		$mapper = new InternalSongAttributeMapper($db);
-		$attrs = $mapper->findAllForSong(10);
+	protected function tearDown(): void {
+		$this->tearDownRealMobileSheetsEnvironment();
+		parent::tearDown();
+	}
 
+	public function testSetAttributeAndFind(): void {
+		$songId = (int)$this->song->id;
+
+		self::assertNull($this->attributeMapper->findForSong($songId, 'tuning'));
+
+		// Insert
+		$this->attributeMapper->setAttribute($songId, 'tuning', 'Standard');
+		self::assertSame('Standard', $this->attributeMapper->findForSong($songId, 'tuning'));
+
+		// Update existing
+		$this->attributeMapper->setAttribute($songId, 'tuning', 'Drop D');
+		self::assertSame('Drop D', $this->attributeMapper->findForSong($songId, 'tuning'));
+	}
+
+	public function testFindAllForSong(): void {
+		$songId = (int)$this->song->id;
+
+		$this->attributeMapper->setAttribute($songId, 'custom', 'Val1');
+		$this->attributeMapper->setAttribute($songId, 'custom2', 'Val2');
+		$this->attributeMapper->setAttribute($songId, 'tuning', 'Drop D');
+
+		$attrs = $this->attributeMapper->findAllForSong($songId);
 		self::assertSame([
 			'custom' => 'Val1',
 			'custom2' => 'Val2',
@@ -50,119 +66,68 @@ final class InternalSongAttributeMapperTest extends TestCase {
 		], $attrs);
 	}
 
-	public function testSetAttributeInsertsWhenNotExisting(): void {
-		$selectResult = $this->createMock(InternalQueryResult::class);
-		$selectResult->method('fetchAssociative')->willReturn(false);
+	public function testRemoveAttribute(): void {
+		$songId = (int)$this->song->id;
 
-		$qbSelect = $this->createMock(IQueryBuilder::class);
-		$expr = $this->createMock(IExpressionBuilder::class);
-		$expr->method('eq')->willReturn('eq');
-		$qbSelect->method('expr')->willReturn($expr);
-		$qbSelect->method('select')->willReturnSelf();
-		$qbSelect->method('from')->willReturnSelf();
-		$qbSelect->method('where')->willReturnSelf();
-		$qbSelect->method('andWhere')->willReturnSelf();
-		$qbSelect->method('setMaxResults')->willReturnSelf();
-		$qbSelect->method('createNamedParameter')->willReturn($this->createMock(IParameter::class));
-		$qbSelect->method('executeQuery')->willReturn($selectResult);
+		$this->attributeMapper->setAttribute($songId, 'tuning', 'Standard');
+		self::assertTrue($this->attributeMapper->removeAttribute($songId, 'tuning'));
+		self::assertNull($this->attributeMapper->findForSong($songId, 'tuning'));
 
-		$qbInsert = $this->createMock(IQueryBuilder::class);
-		$qbInsert->method('insert')->willReturnSelf();
-		$qbInsert->method('values')->willReturnSelf();
-		$qbInsert->method('createNamedParameter')->willReturn($this->createMock(IParameter::class));
-		$qbInsert->expects(self::once())->method('executeStatement')->willReturn(1);
-
-		$db = $this->createMock(IDBConnection::class);
-		$db->method('getQueryBuilder')->willReturnOnConsecutiveCalls($qbSelect, $qbInsert);
-
-		$mapper = new InternalSongAttributeMapper($db);
-		$mapper->setAttribute(10, 'tuning', 'Standard');
+		// Removing non-existent returns false
+		self::assertFalse($this->attributeMapper->removeAttribute($songId, 'tuning'));
 	}
 
-	public function testRemoveAttributeDeletesRow(): void {
-		$qb = $this->createMock(IQueryBuilder::class);
-		$expr = $this->createMock(IExpressionBuilder::class);
-		$expr->method('eq')->willReturn('eq');
-		$qb->method('expr')->willReturn($expr);
-		$qb->method('delete')->willReturnSelf();
-		$qb->method('where')->willReturnSelf();
-		$qb->method('andWhere')->willReturnSelf();
-		$qb->method('createNamedParameter')->willReturn($this->createMock(IParameter::class));
-		$qb->expects(self::once())->method('executeStatement')->willReturn(1);
+	public function testRemoveAllForSong(): void {
+		$songId = (int)$this->song->id;
 
-		$db = $this->createMock(IDBConnection::class);
-		$db->method('getQueryBuilder')->willReturn($qb);
+		$this->attributeMapper->setAttribute($songId, 'a1', 'v1');
+		$this->attributeMapper->setAttribute($songId, 'a2', 'v2');
 
-		$mapper = new InternalSongAttributeMapper($db);
-		self::assertTrue($mapper->removeAttribute(10, 'tuning'));
+		self::assertCount(2, $this->attributeMapper->findAllForSong($songId));
+
+		$this->attributeMapper->removeAllForSong($songId);
+		self::assertEmpty($this->attributeMapper->findAllForSong($songId));
 	}
 
-	public function testFindOrphanSongAttributes(): void {
-		$result = $this->createMock(InternalQueryResult::class);
-		$result->method('fetchAssociative')->willReturnOnConsecutiveCalls(
-			['id' => 101],
-			false,
-		);
-		$result->expects(self::once())->method('closeCursor')->willReturn(true);
+	public function testFindAllForLibrary(): void {
+		$song2 = $this->songMapper->insert(new InternalSong(
+			id: null,
+			uuid: 's2-uuid',
+			libraryId: $this->libraryId,
+			title: 'Second Song',
+		));
 
-		$qb = $this->createMock(IQueryBuilder::class);
-		$expr = $this->createMock(IExpressionBuilder::class);
-		$expr->method('eq')->willReturn('eq');
-		$expr->method('isNotNull')->willReturn('isNotNull');
-		$qb->method('expr')->willReturn($expr);
-		$qb->method('select')->willReturnSelf();
-		$qb->method('from')->willReturnSelf();
-		$qb->method('innerJoin')->willReturnSelf();
-		$qb->method('where')->willReturnSelf();
-		$qb->method('andWhere')->willReturnSelf();
-		$qb->method('createNamedParameter')->willReturn($this->createMock(IParameter::class));
-		$qb->method('executeQuery')->willReturn($result);
+		$s1Id = (int)$this->song->id;
+		$s2Id = (int)$song2->id;
 
-		$db = $this->createMock(IDBConnection::class);
-		$db->method('getQueryBuilder')->willReturn($qb);
+		$this->attributeMapper->setAttribute($s1Id, 'key', 'C major');
+		$this->attributeMapper->setAttribute($s2Id, 'key', 'G major');
+		$this->attributeMapper->setAttribute($s2Id, 'tempo', '120');
 
-		$mapper = new InternalSongAttributeMapper($db);
-		$ids = $mapper->findOrphanSongAttributes(1);
-
-		self::assertSame([101], $ids);
+		$libAttrs = $this->attributeMapper->findAllForLibrary($this->libraryId);
+		self::assertArrayHasKey($s1Id, $libAttrs);
+		self::assertArrayHasKey($s2Id, $libAttrs);
+		self::assertSame(['key' => 'C major'], $libAttrs[$s1Id]);
+		self::assertSame(['key' => 'G major', 'tempo' => '120'], $libAttrs[$s2Id]);
 	}
 
-	public function testRemoveOrphanSongAttributes(): void {
-		$selectResult = $this->createMock(InternalQueryResult::class);
-		$selectResult->method('fetchAssociative')->willReturnOnConsecutiveCalls(
-			['id' => 101],
-			false,
-		);
-		$selectResult->expects(self::once())->method('closeCursor')->willReturn(true);
+	public function testFindAndRemoveOrphanSongAttributes(): void {
+		$songId = (int)$this->song->id;
+		$this->attributeMapper->setAttribute($songId, 'custom_orphan', 'Val');
 
-		$expr = $this->createMock(IExpressionBuilder::class);
-		$expr->method('eq')->willReturn('eq');
-		$expr->method('isNotNull')->willReturn('isNotNull');
-		$expr->method('in')->willReturn('in');
+		// Active song -> not an orphan
+		self::assertEmpty($this->attributeMapper->findOrphanSongAttributes($this->libraryId));
 
-		$selectQb = $this->createMock(IQueryBuilder::class);
-		$selectQb->method('expr')->willReturn($expr);
-		$selectQb->method('select')->willReturnSelf();
-		$selectQb->method('from')->willReturnSelf();
-		$selectQb->method('innerJoin')->willReturnSelf();
-		$selectQb->method('where')->willReturnSelf();
-		$selectQb->method('andWhere')->willReturnSelf();
-		$selectQb->method('createNamedParameter')->willReturn($this->createMock(IParameter::class));
-		$selectQb->method('executeQuery')->willReturn($selectResult);
+		// Soft delete the song
+		$this->songMapper->delete($songId);
 
-		$delQb = $this->createMock(IQueryBuilder::class);
-		$delQb->method('expr')->willReturn($expr);
-		$delQb->method('delete')->willReturnSelf();
-		$delQb->method('where')->willReturnSelf();
-		$delQb->method('createNamedParameter')->willReturn($this->createMock(IParameter::class));
-		$delQb->expects(self::once())->method('executeStatement')->willReturn(1);
+		$orphanIds = $this->attributeMapper->findOrphanSongAttributes($this->libraryId);
+		self::assertCount(1, $orphanIds);
 
-		$db = $this->createMock(IDBConnection::class);
-		$db->method('getQueryBuilder')->willReturnOnConsecutiveCalls($selectQb, $delQb);
-
-		$mapper = new InternalSongAttributeMapper($db);
-		$removed = $mapper->removeOrphanSongAttributes(1);
-
+		$removed = $this->attributeMapper->removeOrphanSongAttributes($this->libraryId);
 		self::assertSame(1, $removed);
+
+		self::assertEmpty($this->attributeMapper->findOrphanSongAttributes($this->libraryId));
+		self::assertEmpty($this->attributeMapper->findAllForSong($songId));
 	}
 }
