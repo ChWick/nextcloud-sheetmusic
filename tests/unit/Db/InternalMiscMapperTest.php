@@ -9,217 +9,156 @@ declare(strict_types=1);
 
 namespace Db;
 
-use OCA\SheetMusic\Db\InternalMiscMapper;
-use OCP\DB\QueryBuilder\IExpressionBuilder;
-use OCP\DB\QueryBuilder\IParameter;
-use OCP\DB\QueryBuilder\IQueryBuilder;
-use OCP\IDBConnection;
+use OCA\SheetMusic\Db\InternalSong;
 use PHPUnit\Framework\TestCase;
+use TestSupport\RealMobileSheetsTestTrait;
 
 final class InternalMiscMapperTest extends TestCase {
-	public function testGetMiscSchemasReturnsMap(): void {
-		$result = $this->createMock(InternalQueryResult::class);
-		$result->method('fetchAssociative')->willReturnOnConsecutiveCalls(
-			['table_name' => 'Setlists', 'create_sql' => 'CREATE TABLE Setlists (Id INT);'],
-			['table_name' => 'Bookmarks', 'create_sql' => 'CREATE TABLE Bookmarks (Id INT);'],
-			false,
-		);
-		$result->expects(self::once())->method('closeCursor')->willReturn(true);
+	use RealMobileSheetsTestTrait;
 
-		$qb = $this->createMock(IQueryBuilder::class);
-		$expr = $this->createMock(IExpressionBuilder::class);
-		$expr->method('eq')->willReturn('eq');
-		$qb->method('expr')->willReturn($expr);
-		$qb->method('select')->willReturnSelf();
-		$qb->method('from')->willReturnSelf();
-		$qb->method('where')->willReturnSelf();
-		$qb->method('andWhere')->willReturnSelf();
-		$qb->method('createNamedParameter')->willReturn($this->createMock(IParameter::class));
-		$qb->method('executeQuery')->willReturn($result);
+	private int $libraryId;
 
-		$db = $this->createMock(IDBConnection::class);
-		$db->method('getQueryBuilder')->willReturn($qb);
+	protected function setUp(): void {
+		parent::setUp();
+		$this->setUpRealMobileSheetsEnvironment();
+		$library = $this->createTestLibrary('MiscMapper Test Lib');
+		$this->libraryId = (int)$library->id;
+	}
 
-		$mapper = new InternalMiscMapper($db);
-		$schemas = $mapper->getMiscSchemas(1, 'mobilesheets');
+	protected function tearDown(): void {
+		$this->tearDownRealMobileSheetsEnvironment();
+		parent::tearDown();
+	}
 
+	public function testSaveAndGetMiscSchemas(): void {
+		$this->miscMapper->saveMiscSchema($this->libraryId, 'mobilesheets', 'Setlists', 'CREATE TABLE Setlists (Id INT);');
+		$this->miscMapper->saveMiscSchema($this->libraryId, 'mobilesheets', 'Bookmarks', 'CREATE TABLE Bookmarks (Id INT);');
+
+		$schemas = $this->miscMapper->getMiscSchemas($this->libraryId, 'mobilesheets');
 		self::assertSame([
 			'Setlists' => 'CREATE TABLE Setlists (Id INT);',
 			'Bookmarks' => 'CREATE TABLE Bookmarks (Id INT);',
 		], $schemas);
+
+		// Update existing schema
+		$this->miscMapper->saveMiscSchema($this->libraryId, 'mobilesheets', 'Setlists', 'CREATE TABLE Setlists (Id INT, Title TEXT);');
+		$updatedSchemas = $this->miscMapper->getMiscSchemas($this->libraryId, 'mobilesheets');
+		self::assertSame('CREATE TABLE Setlists (Id INT, Title TEXT);', $updatedSchemas['Setlists']);
 	}
 
-	public function testSaveMiscDataInsertsRow(): void {
-		$selectResult = $this->createMock(InternalQueryResult::class);
-		$selectResult->method('fetchOne')->willReturn(false);
+	public function testPragmaUserVersion(): void {
+		self::assertNull($this->miscMapper->getPragmaUserVersion($this->libraryId, 'mobilesheets'));
 
-		$qbSelect = $this->createMock(IQueryBuilder::class);
-		$expr = $this->createMock(IExpressionBuilder::class);
-		$expr->method('eq')->willReturn('eq');
-		$qbSelect->method('expr')->willReturn($expr);
-		$qbSelect->method('select')->willReturnSelf();
-		$qbSelect->method('from')->willReturnSelf();
-		$qbSelect->method('where')->willReturnSelf();
-		$qbSelect->method('andWhere')->willReturnSelf();
-		$qbSelect->method('setMaxResults')->willReturnSelf();
-		$qbSelect->method('createNamedParameter')->willReturn($this->createMock(IParameter::class));
-		$qbSelect->method('executeQuery')->willReturn($selectResult);
-
-		$qbInsert = $this->createMock(IQueryBuilder::class);
-		$qbInsert->method('insert')->willReturnSelf();
-		$qbInsert->method('values')->willReturnSelf();
-		$qbInsert->method('createNamedParameter')->willReturn($this->createMock(IParameter::class));
-		$qbInsert->expects(self::once())->method('executeStatement')->willReturn(1);
-
-		$db = $this->createMock(IDBConnection::class);
-		$db->method('getQueryBuilder')->willReturnOnConsecutiveCalls($qbSelect, $qbInsert);
-
-		$mapper = new InternalMiscMapper($db);
-		$mapper->saveMiscData(1, 'mobilesheets', 'Setlists', '42', ['Id' => 42, 'Title' => 'Sunday Concert']);
+		$this->miscMapper->savePragmaUserVersion($this->libraryId, 'mobilesheets', 136);
+		self::assertSame(136, $this->miscMapper->getPragmaUserVersion($this->libraryId, 'mobilesheets'));
 	}
 
-	public function testGetMiscDataForTableDecodesJson(): void {
-		$result = $this->createMock(InternalQueryResult::class);
-		$result->method('fetchAssociative')->willReturnOnConsecutiveCalls(
-			['data_json' => json_encode(['Id' => 1, 'Name' => 'Set 1'])],
-			['data_json' => json_encode(['Id' => 2, 'Name' => 'Set 2'])],
-			false,
-		);
-		$result->expects(self::once())->method('closeCursor')->willReturn(true);
+	public function testSaveAndGetMiscData(): void {
+		$this->miscMapper->saveMiscData($this->libraryId, 'mobilesheets', 'Setlists', '1', [
+			'Id' => 1,
+			'Title' => 'Set 1',
+		]);
+		$this->miscMapper->saveMiscData($this->libraryId, 'mobilesheets', 'Setlists', '2', [
+			'Id' => 2,
+			'Title' => 'Set 2',
+		]);
 
-		$qb = $this->createMock(IQueryBuilder::class);
-		$expr = $this->createMock(IExpressionBuilder::class);
-		$expr->method('eq')->willReturn('eq');
-		$expr->method('isNull')->willReturn('isNull');
-		$qb->method('expr')->willReturn($expr);
-		$qb->method('select')->willReturnSelf();
-		$qb->method('from')->willReturnSelf();
-		$qb->method('where')->willReturnSelf();
-		$qb->method('andWhere')->willReturnSelf();
-		$qb->method('createNamedParameter')->willReturn($this->createMock(IParameter::class));
-		$qb->method('executeQuery')->willReturn($result);
-
-		$db = $this->createMock(IDBConnection::class);
-		$db->method('getQueryBuilder')->willReturn($qb);
-
-		$mapper = new InternalMiscMapper($db);
-		$data = $mapper->getMiscDataForTable(1, 'mobilesheets', 'Setlists');
-
+		$data = $this->miscMapper->getMiscDataForTable($this->libraryId, 'mobilesheets', 'Setlists');
 		self::assertCount(2, $data);
-		self::assertSame('Set 1', $data[0]['Name']);
-		self::assertSame('Set 2', $data[1]['Name']);
+		self::assertSame('Set 1', $data[0]['Title']);
+		self::assertSame('Set 2', $data[1]['Title']);
+
+		// Update record 1
+		$this->miscMapper->saveMiscData($this->libraryId, 'mobilesheets', 'Setlists', '1', [
+			'Id' => 1,
+			'Title' => 'Updated Set 1',
+		]);
+
+		$updatedData = $this->miscMapper->getMiscDataForTable($this->libraryId, 'mobilesheets', 'Setlists');
+		self::assertCount(2, $updatedData);
+		self::assertSame('Updated Set 1', $updatedData[0]['Title']);
 	}
 
-	public function testDeleteMiscDataForSongUpdatesDeletedAt(): void {
-		$qb = $this->createMock(IQueryBuilder::class);
-		$expr = $this->createMock(IExpressionBuilder::class);
-		$expr->method('eq')->willReturn('eq');
-		$qb->method('expr')->willReturn($expr);
-		$qb->method('update')->willReturnSelf();
-		$qb->method('set')->willReturnSelf();
-		$qb->method('where')->willReturnSelf();
-		$qb->method('andWhere')->willReturnSelf();
-		$qb->method('createNamedParameter')->willReturn($this->createMock(IParameter::class));
-		$qb->expects(self::once())->method('executeStatement')->willReturn(3);
+	public function testSaveAndRestoreBinaryData(): void {
+		$binaryString = "\x00\xFF\x81binary\x00\xFE";
+		$this->miscMapper->saveMiscData($this->libraryId, 'mobilesheets', 'CustomBinary', 'bin-1', [
+			'raw' => $binaryString,
+			'nested' => ['data' => $binaryString],
+		]);
 
-		$db = $this->createMock(IDBConnection::class);
-		$db->method('getQueryBuilder')->willReturn($qb);
-
-		$mapper = new InternalMiscMapper($db);
-		$count = $mapper->deleteMiscDataForSong(1, 'mobilesheets', 'song-uuid-123', hardDelete: false);
-
-		self::assertSame(3, $count);
+		$data = $this->miscMapper->getMiscDataForTable($this->libraryId, 'mobilesheets', 'CustomBinary');
+		self::assertCount(1, $data);
+		self::assertSame($binaryString, $data[0]['raw']);
+		self::assertSame($binaryString, $data[0]['nested']['data']);
 	}
 
-	public function testDeleteMiscDataForSongHardDeleteDeletesRows(): void {
-		$qb = $this->createMock(IQueryBuilder::class);
-		$expr = $this->createMock(IExpressionBuilder::class);
-		$expr->method('eq')->willReturn('eq');
-		$qb->method('expr')->willReturn($expr);
-		$qb->method('delete')->willReturnSelf();
-		$qb->method('where')->willReturnSelf();
-		$qb->method('andWhere')->willReturnSelf();
-		$qb->method('createNamedParameter')->willReturn($this->createMock(IParameter::class));
-		$qb->expects(self::once())->method('executeStatement')->willReturn(2);
+	public function testDeleteMiscData(): void {
+		$this->miscMapper->saveMiscData($this->libraryId, 'mobilesheets', 'Setlists', 'rec-1', ['Name' => 'Concert']);
 
-		$db = $this->createMock(IDBConnection::class);
-		$db->method('getQueryBuilder')->willReturn($qb);
+		// Soft delete
+		self::assertTrue($this->miscMapper->deleteMiscData($this->libraryId, 'mobilesheets', 'Setlists', 'rec-1', hardDelete: false));
+		self::assertEmpty($this->miscMapper->getMiscDataForTable($this->libraryId, 'mobilesheets', 'Setlists', includeDeleted: false));
+		self::assertCount(1, $this->miscMapper->getMiscDataForTable($this->libraryId, 'mobilesheets', 'Setlists', includeDeleted: true));
 
-		$mapper = new InternalMiscMapper($db);
-		$count = $mapper->deleteMiscDataForSong(1, 'mobilesheets', 'song-uuid-123', hardDelete: true);
+		// Hard delete
+		self::assertTrue($this->miscMapper->deleteMiscData($this->libraryId, 'mobilesheets', 'Setlists', 'rec-1', hardDelete: true));
+		self::assertEmpty($this->miscMapper->getMiscDataForTable($this->libraryId, 'mobilesheets', 'Setlists', includeDeleted: true));
+	}
 
+	public function testDeleteMiscDataForSong(): void {
+		$songUuid = 'song-uuid-xyz';
+		$this->miscMapper->saveMiscData($this->libraryId, 'mobilesheets', 'Annotations', 'a1', ['val' => 1], songUuid: $songUuid);
+		$this->miscMapper->saveMiscData($this->libraryId, 'mobilesheets', 'Annotations', 'a2', ['val' => 2], songUuid: $songUuid);
+
+		// Soft delete
+		$count = $this->miscMapper->deleteMiscDataForSong($this->libraryId, 'mobilesheets', $songUuid, hardDelete: false);
 		self::assertSame(2, $count);
+		self::assertEmpty($this->miscMapper->getMiscDataForTable($this->libraryId, 'mobilesheets', 'Annotations', includeDeleted: false));
+
+		// Hard delete
+		$hardCount = $this->miscMapper->deleteMiscDataForSong($this->libraryId, 'mobilesheets', $songUuid, hardDelete: true);
+		self::assertSame(2, $hardCount);
+		self::assertEmpty($this->miscMapper->getMiscDataForTable($this->libraryId, 'mobilesheets', 'Annotations', includeDeleted: true));
+
+		// Null songUuid returns 0
+		self::assertSame(0, $this->miscMapper->deleteMiscDataForSong($this->libraryId, 'mobilesheets', null));
 	}
 
-	public function testFindOrphanMiscData(): void {
-		$result = $this->createMock(InternalQueryResult::class);
-		$result->method('fetchAssociative')->willReturnOnConsecutiveCalls(
-			['id' => 77],
-			false,
-		);
-		$result->expects(self::once())->method('closeCursor')->willReturn(true);
+	public function testDeleteAllMiscDataForLibrary(): void {
+		$this->miscMapper->saveMiscSchema($this->libraryId, 'mobilesheets', 'Setlists', 'CREATE TABLE Setlists (Id INT);');
+		$this->miscMapper->saveMiscData($this->libraryId, 'mobilesheets', 'Setlists', '1', ['Id' => 1]);
 
-		$qb = $this->createMock(IQueryBuilder::class);
-		$expr = $this->createMock(IExpressionBuilder::class);
-		$expr->method('eq')->willReturn('eq');
-		$expr->method('isNull')->willReturn('isNull');
-		$expr->method('isNotNull')->willReturn('isNotNull');
-		$qb->method('expr')->willReturn($expr);
-		$qb->method('select')->willReturnSelf();
-		$qb->method('from')->willReturnSelf();
-		$qb->method('innerJoin')->willReturnSelf();
-		$qb->method('where')->willReturnSelf();
-		$qb->method('andWhere')->willReturnSelf();
-		$qb->method('createNamedParameter')->willReturn($this->createMock(IParameter::class));
-		$qb->method('executeQuery')->willReturn($result);
+		$this->miscMapper->deleteAllMiscDataForLibrary($this->libraryId);
 
-		$db = $this->createMock(IDBConnection::class);
-		$db->method('getQueryBuilder')->willReturn($qb);
-
-		$mapper = new InternalMiscMapper($db);
-		$ids = $mapper->findOrphanMiscData(1);
-
-		self::assertSame([77], $ids);
+		self::assertEmpty($this->miscMapper->getMiscSchemas($this->libraryId, 'mobilesheets'));
+		self::assertEmpty($this->miscMapper->getMiscDataForTable($this->libraryId, 'mobilesheets', 'Setlists', includeDeleted: true));
 	}
 
-	public function testRemoveOrphanMiscData(): void {
-		$selectResult = $this->createMock(InternalQueryResult::class);
-		$selectResult->method('fetchAssociative')->willReturnOnConsecutiveCalls(
-			['id' => 77],
-			false,
-		);
-		$selectResult->expects(self::once())->method('closeCursor')->willReturn(true);
+	public function testFindAndRemoveOrphanMiscData(): void {
+		$song = $this->songMapper->insert(new InternalSong(
+			id: null,
+			uuid: 'orphan-song-uuid',
+			libraryId: $this->libraryId,
+			title: 'Orphan Song Candidate',
+		));
 
-		$expr = $this->createMock(IExpressionBuilder::class);
-		$expr->method('eq')->willReturn('eq');
-		$expr->method('isNull')->willReturn('isNull');
-		$expr->method('isNotNull')->willReturn('isNotNull');
-		$expr->method('in')->willReturn('in');
+		$this->miscMapper->saveMiscData($this->libraryId, 'mobilesheets', 'Bookmarks', 'b1', [
+			'Name' => 'Page 1',
+		], songUuid: 'orphan-song-uuid');
 
-		$selectQb = $this->createMock(IQueryBuilder::class);
-		$selectQb->method('expr')->willReturn($expr);
-		$selectQb->method('select')->willReturnSelf();
-		$selectQb->method('from')->willReturnSelf();
-		$selectQb->method('innerJoin')->willReturnSelf();
-		$selectQb->method('where')->willReturnSelf();
-		$selectQb->method('andWhere')->willReturnSelf();
-		$selectQb->method('createNamedParameter')->willReturn($this->createMock(IParameter::class));
-		$selectQb->method('executeQuery')->willReturn($selectResult);
+		// Active song -> not an orphan
+		self::assertEmpty($this->miscMapper->findOrphanMiscData($this->libraryId));
 
-		$updateQb = $this->createMock(IQueryBuilder::class);
-		$updateQb->method('expr')->willReturn($expr);
-		$updateQb->method('update')->willReturnSelf();
-		$updateQb->method('set')->willReturnSelf();
-		$updateQb->method('where')->willReturnSelf();
-		$updateQb->method('createNamedParameter')->willReturn($this->createMock(IParameter::class));
-		$updateQb->expects(self::once())->method('executeStatement')->willReturn(1);
+		// Soft delete the song
+		$this->songMapper->delete((int)$song->id);
 
-		$db = $this->createMock(IDBConnection::class);
-		$db->method('getQueryBuilder')->willReturnOnConsecutiveCalls($selectQb, $updateQb);
+		$orphanIds = $this->miscMapper->findOrphanMiscData($this->libraryId);
+		self::assertCount(1, $orphanIds);
 
-		$mapper = new InternalMiscMapper($db);
-		$removed = $mapper->removeOrphanMiscData(1);
-
+		$removed = $this->miscMapper->removeOrphanMiscData($this->libraryId);
 		self::assertSame(1, $removed);
+
+		self::assertEmpty($this->miscMapper->findOrphanMiscData($this->libraryId));
+		self::assertEmpty($this->miscMapper->getMiscDataForTable($this->libraryId, 'mobilesheets', 'Bookmarks', includeDeleted: false));
 	}
 }
