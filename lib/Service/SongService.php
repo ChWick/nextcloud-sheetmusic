@@ -294,10 +294,10 @@ class SongService {
 		}
 
 		try {
-			$userFolder = $this->rootFolder->getUserFolder($user->getUID());
-			foreach ($songIds as $songId) {
-				$songId = (int)$songId;
-				if ($deleteFiles) {
+			if ($deleteFiles) {
+				$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+				foreach ($songIds as $songId) {
+					$songId = (int)$songId;
 					$files = $this->internalSongFileMapper->findAllForSong($songId);
 					foreach ($files as $file) {
 						try {
@@ -309,6 +309,9 @@ class SongService {
 						}
 					}
 				}
+			}
+			foreach ($songIds as $songId) {
+				$songId = (int)$songId;
 				$this->internalSongFileMapper->deleteAllForSong($songId);
 				$this->internalSongMapper->delete($songId);
 			}
@@ -515,13 +518,32 @@ class SongService {
 
 	/**
 	 * Associate a song with multiple entity types. Skips null entries.
+	 * Supports both a plain list of IDs or an update spec with action ('add', 'remove', 'replace') and ids.
 	 *
-	 * @param array<string, array<int|string>|null> $entitiesByType
+	 * @param array<string, array<int|string>|array{action: string, ids: array<int|string>}|null> $entitiesByType
 	 */
 	private function setSongEntities(int $songId, array $entitiesByType): void {
-		foreach ($entitiesByType as $type => $ids) {
-			if ($ids !== null) {
-				$this->internalEntityMapper->setSongEntitiesForType($songId, (string)$type, array_map('intval', (array)$ids));
+		foreach ($entitiesByType as $type => $spec) {
+			if ($spec === null) {
+				continue;
+			}
+			$typeStr = (string)$type;
+			if (is_array($spec) && isset($spec['action']) && isset($spec['ids']) && is_array($spec['ids'])) {
+				$action = (string)$spec['action'];
+				$targetIds = array_map('intval', $spec['ids']);
+				if ($action === 'replace') {
+					$this->internalEntityMapper->setSongEntitiesForType($songId, $typeStr, $targetIds);
+				} elseif ($action === 'add') {
+					$currentIds = $this->internalEntityMapper->findEntityIdsForSong($songId, $typeStr);
+					$newIds = array_values(array_unique(array_merge($currentIds, $targetIds)));
+					$this->internalEntityMapper->setSongEntitiesForType($songId, $typeStr, $newIds);
+				} elseif ($action === 'remove') {
+					$currentIds = $this->internalEntityMapper->findEntityIdsForSong($songId, $typeStr);
+					$newIds = array_values(array_diff($currentIds, $targetIds));
+					$this->internalEntityMapper->setSongEntitiesForType($songId, $typeStr, $newIds);
+				}
+			} else {
+				$this->internalEntityMapper->setSongEntitiesForType($songId, $typeStr, array_map('intval', (array)$spec));
 			}
 		}
 	}

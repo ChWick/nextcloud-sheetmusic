@@ -137,12 +137,14 @@ trait RealMobileSheetsTestTrait {
 		$this->dbConn->executeStatement('DELETE FROM *PREFIX*sheetmusic_libraries WHERE id = ?', [$libraryId]);
 	}
 
-	protected function createTestLibrary(?string $path = null): InternalLibrary {
+	protected function createTestLibrary(?string $path = null, ?string $userId = null): InternalLibrary {
 		$path ??= 'TestSync_' . bin2hex(random_bytes(4));
-		$userId = 'sync_user_' . bin2hex(random_bytes(4));
+		$userId ??= 'admin';
 		$this->libraryMapper->addForUser($userId, $path);
 		$libs = $this->libraryMapper->findAllForUser($userId);
-		$lib = $this->libraryMapper->findModelById((int)$libs[0]['id']);
+		$matching = array_filter($libs, fn($l) => $l['path'] === $path);
+		$libId = (int)(reset($matching)['id'] ?? $libs[0]['id']);
+		$lib = $this->libraryMapper->findModelById($libId);
 		self::assertNotNull($lib);
 		$this->createdLibraryIds[] = (int)$lib->id;
 		return $lib;
