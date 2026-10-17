@@ -63,230 +63,11 @@ class LibraryIntegrityService {
 			$songsById[$song->id] = $song;
 		}
 
-		$descriptionByType = [
-			'composers' => 'composers',
-			'composer' => 'composers',
-			'books' => 'books',
-			'book' => 'books',
-			'collections' => 'collections',
-			'collection' => 'collections',
-			'artists' => 'artists',
-			'artist' => 'artists',
-			'genres' => 'genres',
-			'genre' => 'genres',
-			'keys' => 'keys',
-			'key' => 'keys',
-			'customgroups' => 'custom groups',
-			'customgroup' => 'custom groups',
-			'years' => 'years',
-			'year' => 'years',
-			'signatures' => 'time signatures',
-			'signature' => 'time signatures',
-			'sourcetypes' => 'source types',
-			'sourcetype' => 'source types',
-			'instruments' => 'instruments',
-			'instrument' => 'instruments',
+		$issues = [
+			...$this->checkDuplicateEntityAssignments($libraryId, $songsById),
+			...$this->checkDuplicateEntities($libraryId),
+			...$this->checkRelationalIntegrity($libraryId),
 		];
-		$duplicateAssignmentsBySong = [];
-		$assignmentsList = $this->internalEntityMapper->findDuplicateSongEntityAssignments($libraryId);
-		foreach ($assignmentsList as $assignment) {
-			$duplicateAssignmentsBySong[$assignment['songId']][] = $assignment;
-		}
-		foreach ($duplicateAssignmentsBySong as $songId => $assignments) {
-			$song = $songsById[$songId] ?? null;
-			$assignmentDescriptions = array_map(
-				static fn (array $assignment): string => sprintf(
-					'%d duplicate %s assignment(s)',
-					$assignment['count'] - 1,
-					$descriptionByType[$assignment['entityType']] ?? $assignment['entityType'],
-				),
-				$assignments,
-			);
-			$issues[] = new IntegrityIssue(
-				type: IntegrityIssue::TYPE_DUPLICATE_ENTITY_ASSIGNMENT,
-				severity: IntegrityIssue::SEVERITY_WARNING,
-				message: sprintf(
-					'Song "%s" has repeated entity assignments: %s.',
-					$song?->title ?? sprintf('ID %d', $songId),
-					implode(', ', $assignmentDescriptions),
-				),
-				songId: (int)$songId,
-				songTitle: $song?->title,
-				fixable: true,
-				details: ['duplicates' => $assignments],
-			);
-		}
-		$entityTypeLabels = [
-			'composers' => 'composer',
-			'composer' => 'composer',
-			'books' => 'book',
-			'book' => 'book',
-			'collections' => 'collection',
-			'collection' => 'collection',
-			'artists' => 'artist',
-			'artist' => 'artist',
-			'genres' => 'genre',
-			'genre' => 'genre',
-			'keys' => 'key',
-			'key' => 'key',
-			'customgroups' => 'custom group',
-			'customgroup' => 'custom group',
-			'years' => 'year',
-			'year' => 'year',
-			'signatures' => 'time signature',
-			'signature' => 'time signature',
-			'sourcetypes' => 'source type',
-			'sourcetype' => 'source type',
-			'instruments' => 'instrument',
-			'instrument' => 'instrument',
-		];
-		$duplicatesList = $this->internalEntityMapper->findDuplicateEntities($libraryId);
-		foreach ($duplicatesList as $duplicateEntity) {
-			$label = $entityTypeLabels[$duplicateEntity['entityType']] ?? $duplicateEntity['entityType'];
-			$issues[] = new IntegrityIssue(
-				type: IntegrityIssue::TYPE_DUPLICATE_ENTITY,
-				severity: IntegrityIssue::SEVERITY_WARNING,
-				message: sprintf(
-					'Duplicate %s "%s" entries found (IDs %s). Auto-fix will keep ID %d and reassign songs.',
-					$label,
-					$duplicateEntity['name'],
-					implode(', ', array_merge([$duplicateEntity['keepId']], $duplicateEntity['duplicateIds'])),
-					$duplicateEntity['keepId'],
-				),
-				fixable: true,
-				details: $duplicateEntity,
-			);
-		}
-
-		$orphanAssignments = $this->internalEntityMapper->findOrphanSongEntityAssignments($libraryId);
-		if (!empty($orphanAssignments)) {
-			$issues[] = new IntegrityIssue(
-				type: IntegrityIssue::TYPE_ORPHAN_ENTITY_ASSIGNMENT,
-				severity: IntegrityIssue::SEVERITY_WARNING,
-				message: sprintf(
-					'Found %d orphan song-entity assignment(s) referencing deleted or missing records.',
-					count($orphanAssignments),
-				),
-				fixable: true,
-				details: [
-					'count' => count($orphanAssignments),
-					'assignments' => $orphanAssignments,
-				],
-			);
-		}
-
-		$duplicateSongClientIds = $this->internalSongMapper->findDuplicateClientIds($libraryId);
-		foreach ($duplicateSongClientIds as $dup) {
-			$issues[] = new IntegrityIssue(
-				type: IntegrityIssue::TYPE_DUPLICATE_CLIENT_ID,
-				severity: IntegrityIssue::SEVERITY_WARNING,
-				message: sprintf(
-					'Duplicate song client_id %d shared by song IDs %s. Auto-fix will keep client_id on ID %d and reset duplicates.',
-					$dup['client_id'],
-					implode(', ', array_merge([$dup['keep_id']], $dup['duplicate_ids'])),
-					$dup['keep_id'],
-				),
-				songId: $dup['keep_id'],
-				fixable: true,
-				details: [
-					'target' => 'song',
-					'clientId' => $dup['client_id'],
-					'keepId' => $dup['keep_id'],
-					'duplicateIds' => $dup['duplicate_ids'],
-				],
-			);
-		}
-
-		$duplicateEntityClientIds = $this->internalEntityMapper->findDuplicateClientIds($libraryId);
-		foreach ($duplicateEntityClientIds as $dup) {
-			$label = $entityTypeLabels[$dup['entity_type']] ?? $dup['entity_type'];
-			$issues[] = new IntegrityIssue(
-				type: IntegrityIssue::TYPE_DUPLICATE_CLIENT_ID,
-				severity: IntegrityIssue::SEVERITY_WARNING,
-				message: sprintf(
-					'Duplicate %s client_id %d shared by entity IDs %s. Auto-fix will keep client_id on ID %d and reset duplicates.',
-					$label,
-					$dup['client_id'],
-					implode(', ', array_merge([$dup['keep_id']], $dup['duplicate_ids'])),
-					$dup['keep_id'],
-				),
-				fixable: true,
-				details: [
-					'target' => 'entity',
-					'entityType' => $dup['entity_type'],
-					'clientId' => $dup['client_id'],
-					'keepId' => $dup['keep_id'],
-					'duplicateIds' => $dup['duplicate_ids'],
-				],
-			);
-		}
-
-		$songsWithoutFiles = $this->internalSongMapper->findSongsWithoutFiles($libraryId);
-		foreach ($songsWithoutFiles as $row) {
-			$issues[] = new IntegrityIssue(
-				type: IntegrityIssue::TYPE_SONG_WITHOUT_FILES,
-				severity: IntegrityIssue::SEVERITY_WARNING,
-				message: sprintf('Song "%s" (ID %d) has no associated files.', $row['title'], $row['id']),
-				songId: (int)$row['id'],
-				songTitle: (string)$row['title'],
-				fixable: false,
-			);
-		}
-
-		$orphanSongFiles = $this->internalSongFileMapper->findOrphanSongFiles($libraryId);
-		if (!empty($orphanSongFiles)) {
-			$issues[] = new IntegrityIssue(
-				type: IntegrityIssue::TYPE_ORPHAN_SONG_FILE,
-				severity: IntegrityIssue::SEVERITY_WARNING,
-				message: sprintf(
-					'Found %d orphan song file record(s) referencing deleted songs.',
-					count($orphanSongFiles),
-				),
-				fixable: true,
-				details: [
-					'count' => count($orphanSongFiles),
-					'files' => $orphanSongFiles,
-				],
-			);
-		}
-
-		if ($this->internalSongAttributeMapper !== null) {
-			$orphanAttrs = $this->internalSongAttributeMapper->findOrphanSongAttributes($libraryId);
-			if (!empty($orphanAttrs)) {
-				$issues[] = new IntegrityIssue(
-					type: IntegrityIssue::TYPE_ORPHAN_SONG_ATTRIBUTE,
-					severity: IntegrityIssue::SEVERITY_WARNING,
-					message: sprintf(
-						'Found %d orphan song attribute record(s) referencing deleted songs.',
-						count($orphanAttrs),
-					),
-					fixable: true,
-					details: [
-						'count' => count($orphanAttrs),
-						'attributes' => $orphanAttrs,
-					],
-				);
-			}
-		}
-
-		if ($this->internalMiscMapper !== null) {
-			$orphanMisc = $this->internalMiscMapper->findOrphanMiscData($libraryId);
-			if (!empty($orphanMisc)) {
-				$issues[] = new IntegrityIssue(
-					type: IntegrityIssue::TYPE_ORPHAN_MISC_DATA,
-					severity: IntegrityIssue::SEVERITY_WARNING,
-					message: sprintf(
-						'Found %d orphan sync/misc data record(s) referencing deleted songs.',
-						count($orphanMisc),
-					),
-					fixable: true,
-					details: [
-						'count' => count($orphanMisc),
-						'misc' => $orphanMisc,
-					],
-				);
-			}
-		}
 
 		$autoPaths = $this->libraryService->isAutoPathsEnabled($userId, $libraryId);
 		$autoPdfMetadata = $this->libraryService->isAutoPdfMetadataEnabled($userId, $libraryId);
@@ -497,6 +278,211 @@ class LibraryIntegrityService {
 					details: [
 						'songIds' => $identicalIds,
 						'exactDuplicate' => true,
+					],
+				);
+			}
+		}
+
+		return $issues;
+	}
+
+	/**
+	 * @param array<int, \OCA\SheetMusic\Db\MobileSheetsSong> $songsById
+	 * @return list<IntegrityIssue>
+	 */
+	private function checkDuplicateEntityAssignments(int $libraryId, array $songsById): array {
+		$issues = [];
+		$duplicateAssignmentsBySong = [];
+		$assignmentsList = $this->internalEntityMapper->findDuplicateSongEntityAssignments($libraryId);
+		foreach ($assignmentsList as $assignment) {
+			$duplicateAssignmentsBySong[$assignment['songId']][] = $assignment;
+		}
+
+		foreach ($duplicateAssignmentsBySong as $songId => $assignments) {
+			$song = $songsById[$songId] ?? null;
+			$assignmentDescriptions = array_map(
+				static fn (array $assignment): string => sprintf(
+					'%d duplicate %s assignment(s)',
+					$assignment['count'] - 1,
+					InternalEntityMapper::getLabel($assignment['entityType'], true),
+				),
+				$assignments,
+			);
+			$issues[] = new IntegrityIssue(
+				type: IntegrityIssue::TYPE_DUPLICATE_ENTITY_ASSIGNMENT,
+				severity: IntegrityIssue::SEVERITY_WARNING,
+				message: sprintf(
+					'Song "%s" has repeated entity assignments: %s.',
+					$song?->title ?? sprintf('ID %d', $songId),
+					implode(', ', $assignmentDescriptions),
+				),
+				songId: (int)$songId,
+				songTitle: $song?->title,
+				fixable: true,
+				details: ['duplicates' => $assignments],
+			);
+		}
+
+		return $issues;
+	}
+
+	/**
+	 * @return list<IntegrityIssue>
+	 */
+	private function checkDuplicateEntities(int $libraryId): array {
+		$issues = [];
+		$duplicatesList = $this->internalEntityMapper->findDuplicateEntities($libraryId);
+		foreach ($duplicatesList as $duplicateEntity) {
+			$label = InternalEntityMapper::getLabel($duplicateEntity['entityType']);
+			$issues[] = new IntegrityIssue(
+				type: IntegrityIssue::TYPE_DUPLICATE_ENTITY,
+				severity: IntegrityIssue::SEVERITY_WARNING,
+				message: sprintf(
+					'Duplicate %s "%s" entries found (IDs %s). Auto-fix will keep ID %d and reassign songs.',
+					$label,
+					$duplicateEntity['name'],
+					implode(', ', array_merge([$duplicateEntity['keepId']], $duplicateEntity['duplicateIds'])),
+					$duplicateEntity['keepId'],
+				),
+				fixable: true,
+				details: $duplicateEntity,
+			);
+		}
+
+		return $issues;
+	}
+
+	/**
+	 * @return list<IntegrityIssue>
+	 */
+	private function checkRelationalIntegrity(int $libraryId): array {
+		$issues = [];
+
+		$orphanAssignments = $this->internalEntityMapper->findOrphanSongEntityAssignments($libraryId);
+		if (!empty($orphanAssignments)) {
+			$issues[] = new IntegrityIssue(
+				type: IntegrityIssue::TYPE_ORPHAN_ENTITY_ASSIGNMENT,
+				severity: IntegrityIssue::SEVERITY_WARNING,
+				message: sprintf(
+					'Found %d orphan song-entity assignment(s) referencing deleted or missing records.',
+					count($orphanAssignments),
+				),
+				fixable: true,
+				details: [
+					'count' => count($orphanAssignments),
+					'assignments' => $orphanAssignments,
+				],
+			);
+		}
+
+		$duplicateSongClientIds = $this->internalSongMapper->findDuplicateClientIds($libraryId);
+		foreach ($duplicateSongClientIds as $dup) {
+			$issues[] = new IntegrityIssue(
+				type: IntegrityIssue::TYPE_DUPLICATE_CLIENT_ID,
+				severity: IntegrityIssue::SEVERITY_WARNING,
+				message: sprintf(
+					'Duplicate song client_id %d shared by song IDs %s. Auto-fix will keep client_id on ID %d and reset duplicates.',
+					$dup['client_id'],
+					implode(', ', array_merge([$dup['keep_id']], $dup['duplicate_ids'])),
+					$dup['keep_id'],
+				),
+				songId: $dup['keep_id'],
+				fixable: true,
+				details: [
+					'target' => 'song',
+					'clientId' => $dup['client_id'],
+					'keepId' => $dup['keep_id'],
+					'duplicateIds' => $dup['duplicate_ids'],
+				],
+			);
+		}
+
+		$duplicateEntityClientIds = $this->internalEntityMapper->findDuplicateClientIds($libraryId);
+		foreach ($duplicateEntityClientIds as $dup) {
+			$label = InternalEntityMapper::getLabel($dup['entity_type']);
+			$issues[] = new IntegrityIssue(
+				type: IntegrityIssue::TYPE_DUPLICATE_CLIENT_ID,
+				severity: IntegrityIssue::SEVERITY_WARNING,
+				message: sprintf(
+					'Duplicate %s client_id %d shared by entity IDs %s. Auto-fix will keep client_id on ID %d and reset duplicates.',
+					$label,
+					$dup['client_id'],
+					implode(', ', array_merge([$dup['keep_id']], $dup['duplicate_ids'])),
+					$dup['keep_id'],
+				),
+				fixable: true,
+				details: [
+					'target' => 'entity',
+					'entityType' => $dup['entity_type'],
+					'clientId' => $dup['client_id'],
+					'keepId' => $dup['keep_id'],
+					'duplicateIds' => $dup['duplicate_ids'],
+				],
+			);
+		}
+
+		$songsWithoutFiles = $this->internalSongMapper->findSongsWithoutFiles($libraryId);
+		foreach ($songsWithoutFiles as $row) {
+			$issues[] = new IntegrityIssue(
+				type: IntegrityIssue::TYPE_SONG_WITHOUT_FILES,
+				severity: IntegrityIssue::SEVERITY_WARNING,
+				message: sprintf('Song "%s" (ID %d) has no associated files.', $row['title'], $row['id']),
+				songId: (int)$row['id'],
+				songTitle: (string)$row['title'],
+				fixable: false,
+			);
+		}
+
+		$orphanSongFiles = $this->internalSongFileMapper->findOrphanSongFiles($libraryId);
+		if (!empty($orphanSongFiles)) {
+			$issues[] = new IntegrityIssue(
+				type: IntegrityIssue::TYPE_ORPHAN_SONG_FILE,
+				severity: IntegrityIssue::SEVERITY_WARNING,
+				message: sprintf(
+					'Found %d orphan song file record(s) referencing deleted songs.',
+					count($orphanSongFiles),
+				),
+				fixable: true,
+				details: [
+					'count' => count($orphanSongFiles),
+					'files' => $orphanSongFiles,
+				],
+			);
+		}
+
+		if ($this->internalSongAttributeMapper !== null) {
+			$orphanAttrs = $this->internalSongAttributeMapper->findOrphanSongAttributes($libraryId);
+			if (!empty($orphanAttrs)) {
+				$issues[] = new IntegrityIssue(
+					type: IntegrityIssue::TYPE_ORPHAN_SONG_ATTRIBUTE,
+					severity: IntegrityIssue::SEVERITY_WARNING,
+					message: sprintf(
+						'Found %d orphan song attribute record(s) referencing deleted songs.',
+						count($orphanAttrs),
+					),
+					fixable: true,
+					details: [
+						'count' => count($orphanAttrs),
+						'attributes' => $orphanAttrs,
+					],
+				);
+			}
+		}
+
+		if ($this->internalMiscMapper !== null) {
+			$orphanMisc = $this->internalMiscMapper->findOrphanMiscData($libraryId);
+			if (!empty($orphanMisc)) {
+				$issues[] = new IntegrityIssue(
+					type: IntegrityIssue::TYPE_ORPHAN_MISC_DATA,
+					severity: IntegrityIssue::SEVERITY_WARNING,
+					message: sprintf(
+						'Found %d orphan sync/misc data record(s) referencing deleted songs.',
+						count($orphanMisc),
+					),
+					fixable: true,
+					details: [
+						'count' => count($orphanMisc),
+						'misc' => $orphanMisc,
 					],
 				);
 			}
