@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OCA\SheetMusic\Db;
 
+use OCA\SheetMusic\Service\MobileSheetsPathResolver;
 use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\IDBConnection;
 use OCP\IUser;
