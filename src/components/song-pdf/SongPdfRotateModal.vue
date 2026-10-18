@@ -9,9 +9,7 @@ import ArrowLeft from 'vue-material-design-icons/ArrowLeft.vue'
 import ArrowRight from 'vue-material-design-icons/ArrowRight.vue'
 import RestoreIcon from 'vue-material-design-icons/Restore.vue'
 import Grid from 'vue-material-design-icons/Grid.vue'
-import RotateLeft from 'vue-material-design-icons/RotateLeft.vue'
-import RotateRight from 'vue-material-design-icons/RotateRight.vue'
-import Rotate360 from 'vue-material-design-icons/Rotate360.vue'
+import SongPdfRotateControls from './SongPdfRotateControls.vue'
 import type { PageCrop } from './crop-types'
 
 const props = defineProps<{
@@ -42,7 +40,6 @@ const currentAngle = ref(0)
 const cropToOriginalSize = ref(false)
 const applyScope = ref<'current' | 'all'>('current')
 const showGrid = ref(true)
-const sliderExpanded = ref(false)
 
 // Sync initial angle on open or page change
 watch(
@@ -59,9 +56,6 @@ watch(
 	},
 	{ immediate: true },
 )
-
-const sliderMin = computed(() => (sliderExpanded.value ? -180 : -45))
-const sliderMax = computed(() => (sliderExpanded.value ? 180 : 45))
 
 function adjustAngle(delta: number) {
 	const raw = currentAngle.value + delta
@@ -247,101 +241,11 @@ onMounted(() => {
 			</div>
 
 			<!-- Angle Adjustments Control Panel -->
-			<div :class="$style.controlsCard">
-				<div :class="$style.angleDisplayRow">
-					<span :class="$style.angleLabel">
-						<Rotate360 :size="20" />
-						<strong>{{ t('sheetmusic', 'Rotation Angle:') }}</strong>
-					</span>
-					<div :class="$style.angleInputWrapper">
-						<input
-							v-model.number="currentAngle"
-							type="number"
-							step="0.1"
-							min="-360"
-							max="360"
-							:class="$style.numberInput"
-							:aria-label="t('sheetmusic', 'Rotation angle in degrees')">
-						<span :class="$style.degreeSign">°</span>
-					</div>
-					<span :class="$style.directionHint">
-						{{ currentAngle > 0 ? t('sheetmusic', '(Clockwise)') : currentAngle < 0 ? t('sheetmusic', '(Counter-Clockwise)') : '' }}
-					</span>
-				</div>
-
-				<!-- Range Slider -->
-				<div :class="$style.sliderRow">
-					<span :class="$style.sliderEdgeLabel">{{ sliderMin }}°</span>
-					<input
-						v-model.number="currentAngle"
-						type="range"
-						:min="sliderMin"
-						:max="sliderMax"
-						step="0.1"
-						:class="$style.angleSlider"
-						:aria-label="t('sheetmusic', 'Angle slider')">
-					<span :class="$style.sliderEdgeLabel">+{{ sliderMax }}°</span>
-					<button
-						type="button"
-						:class="$style.expandRangeBtn"
-						:title="sliderExpanded ? t('sheetmusic', 'Switch to fine slider range (±45°)') : t('sheetmusic', 'Expand slider range to full ±180°')"
-						@click="sliderExpanded = !sliderExpanded">
-						{{ sliderExpanded ? '±45°' : '±180°' }}
-					</button>
-				</div>
-
-				<!-- Quick Step Fine-Tuning Buttons -->
-				<div :class="$style.quickButtonsGroup">
-					<div :class="$style.fineTuneSubgroup">
-						<span :class="$style.subgroupTitle">{{ t('sheetmusic', 'Fine deskew:') }}</span>
-						<NcButton size="small" variant="secondary" @click="adjustAngle(-5)">-5°</NcButton>
-						<NcButton size="small" variant="secondary" @click="adjustAngle(-1)">-1°</NcButton>
-						<NcButton size="small" variant="secondary" @click="adjustAngle(-0.5)">-0.5°</NcButton>
-						<NcButton size="small" variant="secondary" @click="adjustAngle(-0.1)">-0.1°</NcButton>
-						<NcButton size="small" variant="tertiary" :disabled="currentAngle === 0" @click="resetAngle">0°</NcButton>
-						<NcButton size="small" variant="secondary" @click="adjustAngle(0.1)">+0.1°</NcButton>
-						<NcButton size="small" variant="secondary" @click="adjustAngle(0.5)">+0.5°</NcButton>
-						<NcButton size="small" variant="secondary" @click="adjustAngle(1)">+1°</NcButton>
-						<NcButton size="small" variant="secondary" @click="adjustAngle(5)">+5°</NcButton>
-					</div>
-
-					<div :class="$style.standardTurnsSubgroup">
-						<span :class="$style.subgroupTitle">{{ t('sheetmusic', '90° turns:') }}</span>
-						<NcButton size="small" variant="secondary" @click="adjustAngle(-90)">
-							<template #icon>
-								<RotateLeft :size="16" />
-							</template>
-							-90°
-						</NcButton>
-						<NcButton size="small" variant="secondary" @click="adjustAngle(90)">
-							<template #icon>
-								<RotateRight :size="16" />
-							</template>
-							+90°
-						</NcButton>
-						<NcButton size="small" variant="secondary" @click="adjustAngle(180)">
-							180°
-						</NcButton>
-					</div>
-				</div>
-
-				<!-- Crop to original page size option -->
-				<div :class="$style.optionRow">
-					<label :class="$style.checkboxLabel">
-						<input
-							v-model="cropToOriginalSize"
-							type="checkbox"
-							:class="$style.checkbox"
-							data-test="crop-to-original-checkbox">
-						<span>{{ t('sheetmusic', 'Crop page when rotating (keep original size)') }}</span>
-					</label>
-					<span :class="$style.optionHint">
-						{{ cropToOriginalSize
-							? t('sheetmusic', 'Keeps original page dimensions. Rotated corners outside the page bounds will be cropped.')
-							: t('sheetmusic', 'Expands page boundaries so no content is clipped.') }}
-					</span>
-				</div>
-			</div>
+			<SongPdfRotateControls
+				v-model:angle="currentAngle"
+				v-model:crop-to-original-size="cropToOriginalSize"
+				@adjust-angle="adjustAngle"
+				@reset-angle="resetAngle" />
 
 			<!-- Footer Settings & Actions -->
 			<div :class="$style.footer">
@@ -510,148 +414,6 @@ onMounted(() => {
 	bottom: 0;
 	width: 1px;
 	background-color: rgba(59, 130, 246, 0.25);
-}
-
-.controlsCard {
-	display: flex;
-	flex-direction: column;
-	gap: 10px;
-	background-color: var(--color-background-hover);
-	border-radius: var(--border-radius, 6px);
-	padding: 12px 16px;
-}
-
-.angleDisplayRow {
-	display: flex;
-	align-items: center;
-	gap: 12px;
-}
-
-.angleLabel {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	font-size: 14px;
-}
-
-.angleInputWrapper {
-	display: flex;
-	align-items: center;
-	background-color: var(--color-main-background);
-	border: 1px solid var(--color-border);
-	border-radius: var(--border-radius, 4px);
-	padding: 2px 8px;
-}
-
-.numberInput {
-	width: 70px;
-	border: none;
-	background: transparent;
-	font-size: 15px;
-	font-weight: 600;
-	text-align: right;
-	color: var(--color-main-text);
-	outline: none;
-}
-
-.degreeSign {
-	font-size: 15px;
-	font-weight: 600;
-	margin-left: 2px;
-	color: var(--color-text-maxcontrast);
-}
-
-.directionHint {
-	font-size: 12px;
-	color: var(--color-text-maxcontrast);
-}
-
-.sliderRow {
-	display: flex;
-	align-items: center;
-	gap: 10px;
-	width: 100%;
-}
-
-.sliderEdgeLabel {
-	font-size: 11px;
-	color: var(--color-text-maxcontrast);
-	min-width: 32px;
-	text-align: center;
-}
-
-.angleSlider {
-	flex: 1;
-	cursor: pointer;
-	height: 6px;
-	accent-color: var(--color-primary-element, #0082c9);
-}
-
-.expandRangeBtn {
-	font-size: 11px;
-	padding: 2px 6px;
-	background: var(--color-main-background);
-	border: 1px solid var(--color-border);
-	border-radius: 3px;
-	cursor: pointer;
-	color: var(--color-main-text);
-}
-
-.quickButtonsGroup {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	justify-content: space-between;
-	gap: 10px;
-	padding-top: 4px;
-	border-top: 1px solid var(--color-border);
-}
-
-.fineTuneSubgroup {
-	display: flex;
-	align-items: center;
-	gap: 4px;
-	flex-wrap: wrap;
-}
-
-.standardTurnsSubgroup {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-}
-
-.subgroupTitle {
-	font-size: 11px;
-	font-weight: 600;
-	color: var(--color-text-maxcontrast);
-	margin-right: 2px;
-}
-
-.optionRow {
-	display: flex;
-	flex-direction: column;
-	gap: 4px;
-	padding-top: 8px;
-	border-top: 1px solid var(--color-border);
-}
-
-.checkboxLabel {
-	display: inline-flex;
-	align-items: center;
-	gap: 8px;
-	font-size: 13px;
-	font-weight: 500;
-	cursor: pointer;
-}
-
-.checkbox {
-	cursor: pointer;
-}
-
-.optionHint {
-	font-size: 11px;
-	color: var(--color-text-maxcontrast);
-	margin-left: 24px;
 }
 
 .footer {
