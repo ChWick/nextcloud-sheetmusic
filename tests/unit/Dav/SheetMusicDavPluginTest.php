@@ -14,45 +14,40 @@ use OCA\SheetMusic\Db\InternalLibrary;
 use OCA\SheetMusic\Db\LibraryMapper;
 use OCA\SheetMusic\Service\MobileSheetsSqliteExporter;
 use OCA\SheetMusic\Service\MobileSheetsSqliteImporter;
-use OCP\IUser;
-use OCP\IUserSession;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Sabre\DAV\Server;
 use Sabre\HTTP\Request;
 use Sabre\HTTP\Response;
+use TestSupport\FakeUserSession;
+use TestSupport\RealMobileSheetsTestTrait;
 
 final class SheetMusicDavPluginTest extends TestCase {
-	private LibraryMapper $libraryMapper;
-	private MobileSheetsSqliteExporter $exporter;
-	private MobileSheetsSqliteImporter $importer;
+	use RealMobileSheetsTestTrait;
+
 	private LoggerInterface $logger;
-	private IUserSession $userSession;
+	private FakeUserSession $userSession;
 	private SheetMusicDavPlugin $plugin;
 	private InternalLibrary $library;
 
 	protected function setUp(): void {
 		parent::setUp();
-		$this->libraryMapper = $this->createMock(LibraryMapper::class);
+		$this->setUpRealMobileSheetsEnvironment();
+		$user = $this->userManager->get('admin');
+		self::assertNotNull($user);
+		$this->userSession = new FakeUserSession($user);
+
+		$this->library = $this->createTestLibrary('/My Noten', 'admin');
+		$this->dbConn->executeStatement('UPDATE *PREFIX*sheetmusic_libraries SET updated_at = 2000 WHERE id = ?', [$this->library->id]);
+		$lib = $this->libraryMapper->findModelById((int)$this->library->id);
+		self::assertNotNull($lib);
+		$this->library = $lib;
+
 		$this->exporter = $this->createMock(MobileSheetsSqliteExporter::class);
 		$this->importer = $this->createMock(MobileSheetsSqliteImporter::class);
 		$this->logger = new NullLogger();
-		$this->userSession = $this->createMock(IUserSession::class);
 
-		$user = $this->createMock(IUser::class);
-		$user->method('getUID')->willReturn('admin');
-		$this->userSession->method('getUser')->willReturn($user);
-
-		// Library ids are unique per test run so cached exports never collide.
-		$id = random_int(100000, 999999);
-		$this->library = new InternalLibrary(id: $id, userId: 'admin', path: '/My Noten', updatedAt: 2000);
-		$this->libraryMapper->method('findAllForUser')->willReturnCallback(
-			fn (string $user) => $user === 'admin' ? [['id' => $id, 'path' => '/My Noten', 'autoPaths' => true, 'autoPdfMetadata' => true]] : [],
-		);
-		$this->libraryMapper->method('findModelById')->willReturnCallback(
-			fn (int $libId) => $libId === $id ? $this->library : null,
-		);
 		$this->exporter->method('exportToFile')->willReturnCallback(
 			function ($library, string $target): void {
 				file_put_contents($target, 'SQLite format 3' . "\0" . str_repeat('x', 84));
@@ -67,6 +62,11 @@ final class SheetMusicDavPluginTest extends TestCase {
 			$this->logger,
 			$this->userSession,
 		);
+	}
+
+	protected function tearDown(): void {
+		$this->tearDownRealMobileSheetsEnvironment();
+		parent::tearDown();
 	}
 
 	private function attachServer(string $baseUri = '/remote.php/dav/'): Server {
@@ -274,17 +274,11 @@ final class SheetMusicDavPluginTest extends TestCase {
 	}
 
 	public function testLibraryPathWithDbFilenameMatchesParentFolder(): void {
-		$dbLibId = 987654;
-		$dbLib = new InternalLibrary(id: $dbLibId, userId: 'admin', path: '/tmp/SheetMusic/mobilesheets.db', updatedAt: 3000);
-
-		$mapper = $this->createMock(LibraryMapper::class);
-		$mapper->method('findAllForUser')->with('admin')->willReturn([
-			['id' => $dbLibId, 'path' => '/tmp/SheetMusic/mobilesheets.db', 'autoPaths' => true, 'autoPdfMetadata' => true],
-		]);
-		$mapper->method('findModelById')->with($dbLibId)->willReturn($dbLib);
+		$dbLib = $this->createTestLibrary('/tmp/SheetMusic/mobilesheets.db', 'admin');
+		$dbLibId = (int)$dbLib->id;
 
 		$plugin = new SheetMusicDavPlugin(
-			$mapper,
+			$this->libraryMapper,
 			$this->exporter,
 			$this->importer,
 			$this->logger,
