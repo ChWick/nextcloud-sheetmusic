@@ -9,12 +9,17 @@ declare(strict_types=1);
 
 namespace Service;
 
+use OCA\SheetMusic\Db\InternalEntity;
 use OCA\SheetMusic\Db\InternalEntityMapper;
+use OCA\SheetMusic\Db\InternalMiscData;
 use OCA\SheetMusic\Db\InternalMiscMapper;
+use OCA\SheetMusic\Db\InternalSong;
 use OCA\SheetMusic\Db\InternalSongAttributeMapper;
+use OCA\SheetMusic\Db\InternalSongFile;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
+use OCA\SheetMusic\Db\SongFileMapper;
 use OCA\SheetMusic\Service\FileManager;
 use OCA\SheetMusic\Service\IntegrityIssue;
 use OCA\SheetMusic\Service\LibraryIntegrityService;
@@ -31,10 +36,24 @@ use OCP\Files\Storage\IStorage;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
+use TestSupport\RealMobileSheetsTestTrait;
 use TestSupport\TestUtils;
 
 final class LibraryIntegrityServiceTest extends TestCase {
+	use RealMobileSheetsTestTrait;
 	use TestUtils;
+
+	protected function setUp(): void {
+		parent::setUp();
+		$this->setUpRealMobileSheetsEnvironment();
+		$this->cleanupLibraryData(1);
+	}
+
+	protected function tearDown(): void {
+		$this->cleanupLibraryData(1);
+		$this->tearDownRealMobileSheetsEnvironment();
+		parent::tearDown();
+	}
 
 	private function createIntegrityService(
 		LibraryService $libraryService,
@@ -51,8 +70,8 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		?string $databasePath = null,
 	): LibraryIntegrityService {
 		if ($internalSongMapper === null) {
-			$internalSongMapper = $this->createMock(InternalSongMapper::class);
 			if ($databasePath !== null) {
+				$internalSongMapper = $this->createMock(InternalSongMapper::class);
 				$songMapper = $this->createSongMapper();
 				$internalSongMapper->method('findLibraryData')->willReturnCallback(function () use ($songMapper, $databasePath) {
 					return ['songs' => $songMapper->findSongs($databasePath)];
@@ -61,7 +80,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 					return $songMapper->findSong($databasePath, $songId);
 				});
 			} else {
-				$internalSongMapper->method('findLibraryData')->willReturn(['songs' => []]);
+				$internalSongMapper = $this->songMapper;
 			}
 		}
 
@@ -71,12 +90,12 @@ final class LibraryIntegrityServiceTest extends TestCase {
 			$rootFolder,
 			$pathResolver,
 			$logger ?? new NullLogger(),
-			$internalEntityMapper ?? $this->createMock(InternalEntityMapper::class),
+			$internalEntityMapper ?? $this->entityMapper,
 			$internalSongMapper,
-			$internalSongFileMapper ?? $this->createMock(InternalSongFileMapper::class),
-			$libraryMapper ?? $this->createMock(LibraryMapper::class),
-			$internalSongAttributeMapper ?? $this->createMock(InternalSongAttributeMapper::class),
-			$internalMiscMapper ?? $this->createMock(InternalMiscMapper::class),
+			$internalSongFileMapper ?? $this->songFileMapper,
+			$libraryMapper ?? $this->libraryMapper,
+			$internalSongAttributeMapper ?? $this->attributeMapper,
+			$internalMiscMapper ?? $this->miscMapper,
 		);
 	}
 
@@ -702,9 +721,12 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$userFolder->method('getOwner')->willReturn($user);
 		$userFolder->method('getPath')->willReturn('/user1/files');
 		$userFolder->method('get')->willReturnCallback(
-			static function (string $path) use ($databaseNode, $files): Node {
-				if ($path === 'Noten/library.db') {
+			static function (string $path) use ($databaseNode, $targetFolder, $files): Node {
+				if ($path === 'Noten/library.db' || str_ends_with($path, '.db')) {
 					return $databaseNode;
+				}
+				if ($path === 'Noten' || !str_contains($path, '.')) {
+					return $targetFolder;
 				}
 				if (isset($files[$path])) {
 					return $files[$path];
@@ -714,13 +736,22 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		);
 
 		$rootFolder = $this->createMock(IRootFolder::class);
-		$rootFolder->method('getUserFolder')->with('user1')->willReturn($userFolder);
+		$rootFolder->method('getUserFolder')->willReturn($userFolder);
 
 		$libraryMapper = $this->createMock(\OCA\SheetMusic\Db\LibraryMapper::class);
-		$libraryMapper->method('findById')->with(1)->willReturn([
-			'id' => 1,
-			'path' => '/Noten/library.db',
-		]);
+		$libraryMapper->method('findById')->willReturnCallback(function (int $id) {
+			$found = $this->libraryMapper->findById($id);
+			if ($found !== null) {
+				return $found;
+			}
+			return [
+				'id' => $id,
+				'path' => '/Noten/library.db',
+			];
+		});
+		$libraryMapper->method('touch')->willReturnCallback(function (int $id) {
+			$this->libraryMapper->touch($id);
+		});
 
 		if ($internalSongMapper === null) {
 			$songMapper = $this->createSongMapper();
@@ -788,20 +819,26 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$targetFolder = $this->createMock(Folder::class);
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
 		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager('dummy.db', $targetFolder);
-		$entityMapper = $this->createMock(InternalEntityMapper::class);
-		$entityMapper->method('findOrphanSongEntityAssignments')->with(1)->willReturn([
-			['id' => 1, 'song_id' => 999, 'entity_id' => 10, 'entity_type' => 'composers'],
-		]);
+
+		$libId = 1;
+		$this->cleanupLibraryData($libId);
+
+		$entity = $this->entityMapper->insert(new InternalEntity(
+			uuid: 'ent-orph-assign',
+			libraryId: $libId,
+			type: 'composer',
+			name: 'Test Composer',
+		));
+		$this->entityMapper->linkSongEntity(999999, (int)$entity->id);
 
 		$service = $this->createIntegrityService(
 			$this->createLibraryService(),
 			$fileManager,
 			$rootFolder,
 			$pathResolver,
-			internalEntityMapper: $entityMapper,
 		);
 
-		$issues = $service->checkIntegrity(1, 'user1');
+		$issues = $service->checkIntegrity($libId, 'user1');
 		$orphanIssues = array_values(array_filter($issues, static fn ($i) => $i->type === IntegrityIssue::TYPE_ORPHAN_ENTITY_ASSIGNMENT));
 		self::assertCount(1, $orphanIssues);
 		self::assertTrue($orphanIssues[0]->fixable);
@@ -811,24 +848,33 @@ final class LibraryIntegrityServiceTest extends TestCase {
 	public function testFixIssueRemovesOrphanEntityAssignments(): void {
 		$targetFolder = $this->createMock(Folder::class);
 		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager('dummy.db', $targetFolder);
-		$entityMapper = $this->createMock(InternalEntityMapper::class);
-		$entityMapper->expects(self::once())->method('removeOrphanSongEntityAssignments')->with(1)->willReturn(2);
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->expects(self::once())->method('touch')->with(1);
+
+		$libId = 1;
+		$this->cleanupLibraryData($libId);
+
+		$entity = $this->entityMapper->insert(new InternalEntity(
+			uuid: 'ent-fix-assign',
+			libraryId: $libId,
+			type: 'composer',
+			name: 'Fix Composer',
+		));
+		$this->entityMapper->linkSongEntity(999999, (int)$entity->id);
+		$this->entityMapper->linkSongEntity(888888, (int)$entity->id);
 
 		$service = $this->createIntegrityService(
 			$this->createLibraryService(),
 			$fileManager,
 			$rootFolder,
 			$pathResolver,
-			internalEntityMapper: $entityMapper,
-			libraryMapper: $libraryMapper,
 		);
 
-		$result = $service->fixIssue(1, 'user1', IntegrityIssue::TYPE_ORPHAN_ENTITY_ASSIGNMENT);
+		$result = $service->fixIssue($libId, 'user1', IntegrityIssue::TYPE_ORPHAN_ENTITY_ASSIGNMENT);
 		self::assertTrue($result['success']);
 		self::assertSame(1, $result['fixedCount']);
 		self::assertStringContainsString('Removed 2 orphan entity assignment(s)', $result['message']);
+
+		$remaining = $this->entityMapper->findOrphanSongEntityAssignments($libId);
+		self::assertEmpty($remaining);
 	}
 
 	public function testCheckIntegrityDetectsDuplicateClientIds(): void {
@@ -836,27 +882,23 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
 		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager('dummy.db', $targetFolder);
 
-		$songMapper = $this->createMock(InternalSongMapper::class);
-		$songMapper->method('findLibraryData')->willReturn(['songs' => []]);
-		$songMapper->method('findDuplicateClientIds')->with(1)->willReturn([
-			['client_id' => 123, 'keep_id' => 1, 'duplicate_ids' => [2], 'count' => 2],
-		]);
+		$libId = 1;
+		$this->cleanupLibraryData($libId);
 
-		$entityMapper = $this->createMock(InternalEntityMapper::class);
-		$entityMapper->method('findDuplicateClientIds')->with(1)->willReturn([
-			['client_id' => 456, 'entity_type' => 'composers', 'keep_id' => 10, 'duplicate_ids' => [11], 'count' => 2],
-		]);
+		$this->songMapper->insert(new InternalSong(uuid: 'dup-s1', libraryId: $libId, title: 'S1', clientId: 123));
+		$this->songMapper->insert(new InternalSong(uuid: 'dup-s2', libraryId: $libId, title: 'S2', clientId: 123));
+
+		$this->entityMapper->insert(new InternalEntity(uuid: 'dup-e1', libraryId: $libId, type: 'composer', name: 'C1', clientId: 456));
+		$this->entityMapper->insert(new InternalEntity(uuid: 'dup-e2', libraryId: $libId, type: 'composer', name: 'C2', clientId: 456));
 
 		$service = $this->createIntegrityService(
 			$this->createLibraryService(),
 			$fileManager,
 			$rootFolder,
 			$pathResolver,
-			internalEntityMapper: $entityMapper,
-			internalSongMapper: $songMapper,
 		);
 
-		$issues = $service->checkIntegrity(1, 'user1');
+		$issues = $service->checkIntegrity($libId, 'user1');
 		$dupIssues = array_values(array_filter($issues, static fn ($i) => $i->type === IntegrityIssue::TYPE_DUPLICATE_CLIENT_ID));
 		self::assertCount(2, $dupIssues);
 		self::assertTrue($dupIssues[0]->fixable);
@@ -867,27 +909,30 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$targetFolder = $this->createMock(Folder::class);
 		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager('dummy.db', $targetFolder);
 
-		$songMapper = $this->createMock(InternalSongMapper::class);
-		$songMapper->expects(self::once())->method('fixDuplicateClientIds')->with(1)->willReturn(1);
-		$entityMapper = $this->createMock(InternalEntityMapper::class);
-		$entityMapper->expects(self::once())->method('fixDuplicateClientIds')->with(1)->willReturn(2);
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->expects(self::once())->method('touch')->with(1);
+		$libId = 1;
+		$this->cleanupLibraryData($libId);
+
+		$this->songMapper->insert(new InternalSong(uuid: 'fix-dup-s1', libraryId: $libId, title: 'S1', clientId: 123));
+		$this->songMapper->insert(new InternalSong(uuid: 'fix-dup-s2', libraryId: $libId, title: 'S2', clientId: 123));
+
+		$this->entityMapper->insert(new InternalEntity(uuid: 'fix-dup-e1', libraryId: $libId, type: 'composer', name: 'C1', clientId: 456));
+		$this->entityMapper->insert(new InternalEntity(uuid: 'fix-dup-e2', libraryId: $libId, type: 'composer', name: 'C2', clientId: 456));
+		$this->entityMapper->insert(new InternalEntity(uuid: 'fix-dup-e3', libraryId: $libId, type: 'composer', name: 'C3', clientId: 456));
 
 		$service = $this->createIntegrityService(
 			$this->createLibraryService(),
 			$fileManager,
 			$rootFolder,
 			$pathResolver,
-			internalEntityMapper: $entityMapper,
-			internalSongMapper: $songMapper,
-			libraryMapper: $libraryMapper,
 		);
 
-		$result = $service->fixIssue(1, 'user1', IntegrityIssue::TYPE_DUPLICATE_CLIENT_ID);
+		$result = $service->fixIssue($libId, 'user1', IntegrityIssue::TYPE_DUPLICATE_CLIENT_ID);
 		self::assertTrue($result['success']);
 		self::assertSame(1, $result['fixedCount']);
 		self::assertStringContainsString('Reset 3 duplicate client_id record(s)', $result['message']);
+
+		self::assertEmpty($this->songMapper->findDuplicateClientIds($libId));
+		self::assertEmpty($this->entityMapper->findDuplicateClientIds($libId));
 	}
 
 	public function testCheckIntegrityDetectsSongsWithoutFiles(): void {
@@ -895,24 +940,26 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
 		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager('dummy.db', $targetFolder);
 
-		$songMapper = $this->createMock(InternalSongMapper::class);
-		$songMapper->method('findLibraryData')->willReturn(['songs' => []]);
-		$songMapper->method('findSongsWithoutFiles')->with(1)->willReturn([
-			['id' => 42, 'title' => 'Empty Song', 'client_id' => null],
-		]);
+		$libId = 1;
+		$this->cleanupLibraryData($libId);
+
+		$song = $this->songMapper->insert(new InternalSong(
+			uuid: 'empty-song-uuid',
+			libraryId: $libId,
+			title: 'Empty Song',
+		));
 
 		$service = $this->createIntegrityService(
 			$this->createLibraryService(),
 			$fileManager,
 			$rootFolder,
 			$pathResolver,
-			internalSongMapper: $songMapper,
 		);
 
-		$issues = $service->checkIntegrity(1, 'user1');
+		$issues = $service->checkIntegrity($libId, 'user1');
 		$emptyIssues = array_values(array_filter($issues, static fn ($i) => $i->type === IntegrityIssue::TYPE_SONG_WITHOUT_FILES));
 		self::assertCount(1, $emptyIssues);
-		self::assertSame(42, $emptyIssues[0]->songId);
+		self::assertSame($song->id, $emptyIssues[0]->songId);
 		self::assertSame('Empty Song', $emptyIssues[0]->songTitle);
 		self::assertFalse($emptyIssues[0]->fixable);
 	}
@@ -922,31 +969,41 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
 		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager('dummy.db', $targetFolder);
 
-		$songFileMapper = $this->createMock(InternalSongFileMapper::class);
-		$songFileMapper->method('findOrphanSongFiles')->with(1)->willReturn([
-			['id' => 10, 'songId' => 999, 'fileId' => 123, 'uuid' => 'abc'],
-		]);
-		$songFileMapper->expects(self::once())->method('removeOrphanSongFiles')->with(1)->willReturn(1);
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->expects(self::once())->method('touch')->with(1);
+		$libId = 1;
+		$this->cleanupLibraryData($libId);
+
+		$song = $this->songMapper->insert(new InternalSong(
+			uuid: 'orphan-file-song-uuid',
+			libraryId: $libId,
+			title: 'Orphan File Song',
+		));
+
+		$this->songFileMapper->insert(new InternalSongFile(
+			uuid: 'orph-file-uuid-' . bin2hex(random_bytes(4)),
+			songId: (int)$song->id,
+			fileId: 123,
+			type: SongFileMapper::FILE_TYPE_PDF,
+		));
+
+		$this->songMapper->delete((int)$song->id);
 
 		$service = $this->createIntegrityService(
 			$this->createLibraryService(),
 			$fileManager,
 			$rootFolder,
 			$pathResolver,
-			internalSongFileMapper: $songFileMapper,
-			libraryMapper: $libraryMapper,
 		);
 
-		$issues = $service->checkIntegrity(1, 'user1');
+		$issues = $service->checkIntegrity($libId, 'user1');
 		$orphanFiles = array_values(array_filter($issues, static fn ($i) => $i->type === IntegrityIssue::TYPE_ORPHAN_SONG_FILE));
 		self::assertCount(1, $orphanFiles);
 		self::assertTrue($orphanFiles[0]->fixable);
 
-		$result = $service->fixIssue(1, 'user1', IntegrityIssue::TYPE_ORPHAN_SONG_FILE);
+		$result = $service->fixIssue($libId, 'user1', IntegrityIssue::TYPE_ORPHAN_SONG_FILE);
 		self::assertTrue($result['success']);
 		self::assertSame(1, $result['fixedCount']);
+
+		self::assertEmpty($this->songFileMapper->findOrphanSongFiles($libId));
 	}
 
 	public function testCheckIntegrityAndFixOrphanSongAttributes(): void {
@@ -954,31 +1011,35 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
 		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager('dummy.db', $targetFolder);
 
-		$songAttrMapper = $this->createMock(InternalSongAttributeMapper::class);
-		$songAttrMapper->method('findOrphanSongAttributes')->with(1)->willReturn([
-			['id' => 5, 'song_id' => 999, 'key' => 'custom'],
-		]);
-		$songAttrMapper->expects(self::once())->method('removeOrphanSongAttributes')->with(1)->willReturn(1);
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->expects(self::once())->method('touch')->with(1);
+		$libId = 1;
+		$this->cleanupLibraryData($libId);
+
+		$song = $this->songMapper->insert(new InternalSong(
+			uuid: 'orphan-attr-song-uuid',
+			libraryId: $libId,
+			title: 'Orphan Attr Song',
+		));
+
+		$this->attributeMapper->setAttribute((int)$song->id, 'custom', 'Some Val');
+		$this->songMapper->delete((int)$song->id);
 
 		$service = $this->createIntegrityService(
 			$this->createLibraryService(),
 			$fileManager,
 			$rootFolder,
 			$pathResolver,
-			libraryMapper: $libraryMapper,
-			internalSongAttributeMapper: $songAttrMapper,
 		);
 
-		$issues = $service->checkIntegrity(1, 'user1');
+		$issues = $service->checkIntegrity($libId, 'user1');
 		$orphanAttrs = array_values(array_filter($issues, static fn ($i) => $i->type === IntegrityIssue::TYPE_ORPHAN_SONG_ATTRIBUTE));
 		self::assertCount(1, $orphanAttrs);
 		self::assertTrue($orphanAttrs[0]->fixable);
 
-		$result = $service->fixIssue(1, 'user1', IntegrityIssue::TYPE_ORPHAN_SONG_ATTRIBUTE);
+		$result = $service->fixIssue($libId, 'user1', IntegrityIssue::TYPE_ORPHAN_SONG_ATTRIBUTE);
 		self::assertTrue($result['success']);
 		self::assertSame(1, $result['fixedCount']);
+
+		self::assertEmpty($this->attributeMapper->findOrphanSongAttributes($libId));
 	}
 
 	public function testCheckIntegrityAndFixOrphanMiscData(): void {
@@ -986,31 +1047,38 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
 		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager('dummy.db', $targetFolder);
 
-		$miscMapper = $this->createMock(InternalMiscMapper::class);
-		$miscMapper->method('findOrphanMiscData')->with(1)->willReturn([
-			['id' => 7, 'song_id' => 999],
-		]);
-		$miscMapper->expects(self::once())->method('removeOrphanMiscData')->with(1)->willReturn(1);
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->expects(self::once())->method('touch')->with(1);
+		$libId = 1;
+		$this->cleanupLibraryData($libId);
+
+		$song = $this->songMapper->insert(new InternalSong(
+			uuid: 'orphan-misc-song-uuid',
+			libraryId: $libId,
+			title: 'Orphan Misc Song',
+		));
+
+		$this->miscMapper->saveMiscData($libId, 'mobilesheets', 'Bookmarks', 'b1', [
+			'Name' => 'Page 1',
+		], songUuid: 'orphan-misc-song-uuid');
+
+		$this->songMapper->delete((int)$song->id);
 
 		$service = $this->createIntegrityService(
 			$this->createLibraryService(),
 			$fileManager,
 			$rootFolder,
 			$pathResolver,
-			libraryMapper: $libraryMapper,
-			internalMiscMapper: $miscMapper,
 		);
 
-		$issues = $service->checkIntegrity(1, 'user1');
+		$issues = $service->checkIntegrity($libId, 'user1');
 		$orphanMisc = array_values(array_filter($issues, static fn ($i) => $i->type === IntegrityIssue::TYPE_ORPHAN_MISC_DATA));
 		self::assertCount(1, $orphanMisc);
 		self::assertTrue($orphanMisc[0]->fixable);
 
-		$result = $service->fixIssue(1, 'user1', IntegrityIssue::TYPE_ORPHAN_MISC_DATA);
+		$result = $service->fixIssue($libId, 'user1', IntegrityIssue::TYPE_ORPHAN_MISC_DATA);
 		self::assertTrue($result['success']);
 		self::assertSame(1, $result['fixedCount']);
+
+		self::assertEmpty($this->miscMapper->findOrphanMiscData($libId));
 	}
 
 	public function testFixAllIssuesHandlesRelationalIntegrityIssues(): void {
@@ -1018,44 +1086,50 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
 		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager('dummy.db', $targetFolder);
 
-		$entityMapper = $this->createMock(InternalEntityMapper::class);
-		$entityMapper->method('findOrphanSongEntityAssignments')->with(1)->willReturn([
-			['id' => 1, 'song_id' => 999, 'entity_id' => 10, 'entity_type' => 'composers'],
-		]);
-		$entityMapper->expects(self::once())->method('removeOrphanSongEntityAssignments')->with(1)->willReturn(1);
-		$entityMapper->method('findDuplicateClientIds')->with(1)->willReturn([
-			['client_id' => 456, 'entity_type' => 'composers', 'keep_id' => 10, 'duplicate_ids' => [11], 'count' => 2],
-		]);
-		$entityMapper->expects(self::once())->method('fixDuplicateClientIds')->with(1)->willReturn(1);
+		$libId = 1;
+		$this->cleanupLibraryData($libId);
 
-		$songMapper = $this->createMock(InternalSongMapper::class);
-		$songMapper->method('findLibraryData')->willReturn(['songs' => []]);
-		$songMapper->method('findDuplicateClientIds')->with(1)->willReturn([]);
-		$songMapper->method('fixDuplicateClientIds')->with(1)->willReturn(0);
+		// 1. Orphan entity assignment
+		$entity = $this->entityMapper->insert(new InternalEntity(
+			uuid: 'rel-ent-orph',
+			libraryId: $libId,
+			type: 'composer',
+			name: 'Rel Composer',
+		));
+		$this->entityMapper->linkSongEntity(999999, (int)$entity->id);
 
-		$songFileMapper = $this->createMock(InternalSongFileMapper::class);
-		$songFileMapper->method('findOrphanSongFiles')->with(1)->willReturn([
-			['id' => 10, 'songId' => 999, 'fileId' => 123, 'uuid' => 'abc'],
-		]);
-		$songFileMapper->expects(self::once())->method('removeOrphanSongFiles')->with(1)->willReturn(1);
+		// 2. Duplicate client id in entity
+		$this->entityMapper->insert(new InternalEntity(uuid: 'rel-dup-e1', libraryId: $libId, type: 'composer', name: 'RC1', clientId: 789));
+		$this->entityMapper->insert(new InternalEntity(uuid: 'rel-dup-e2', libraryId: $libId, type: 'composer', name: 'RC2', clientId: 789));
 
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->expects(self::atLeastOnce())->method('touch')->with(1);
+		// 3. Orphan song file
+		$song = $this->songMapper->insert(new InternalSong(
+			uuid: 'rel-song-for-orph-file',
+			libraryId: $libId,
+			title: 'Rel Song File',
+		));
+		$this->songFileMapper->insert(new InternalSongFile(
+			uuid: 'rel-file-orph-' . bin2hex(random_bytes(4)),
+			songId: (int)$song->id,
+			fileId: 456,
+			type: SongFileMapper::FILE_TYPE_PDF,
+		));
+		$this->songMapper->delete((int)$song->id);
 
 		$service = $this->createIntegrityService(
 			$this->createLibraryService(),
 			$fileManager,
 			$rootFolder,
 			$pathResolver,
-			internalEntityMapper: $entityMapper,
-			internalSongMapper: $songMapper,
-			internalSongFileMapper: $songFileMapper,
-			libraryMapper: $libraryMapper,
 		);
 
-		$result = $service->fixAllIssues(1, 'user1');
+		$result = $service->fixAllIssues($libId, 'user1');
 		self::assertTrue($result['success']);
 		self::assertSame(3, $result['fixedCount']);
+
+		self::assertEmpty($this->entityMapper->findOrphanSongEntityAssignments($libId));
+		self::assertEmpty($this->entityMapper->findDuplicateClientIds($libId));
+		self::assertEmpty($this->songFileMapper->findOrphanSongFiles($libId));
 	}
 
 	public function testOrphanFileAutofixUniqueTitle(): void {
