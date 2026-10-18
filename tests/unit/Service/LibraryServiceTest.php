@@ -4,245 +4,160 @@ declare(strict_types=1);
 
 namespace Service;
 
-use OCA\SheetMusic\Db\LibraryMapper;
 use OCA\SheetMusic\Service\LibraryService;
-use OCP\Files\IRootFolder;
-use OCP\Files\IUserFolder;
-use OCP\Files\Node;
-use OCP\Files\Storage\IStorage;
 use PHPUnit\Framework\TestCase;
-use Psr\Log\LoggerInterface;
-use TestSupport\TestUtils;
+use Psr\Log\NullLogger;
+use TestSupport\RealMobileSheetsTestTrait;
 
 final class LibraryServiceTest extends TestCase {
-	use TestUtils;
+	use RealMobileSheetsTestTrait;
+
+	private LibraryService $service;
+
+	protected function setUp(): void {
+		parent::setUp();
+		$this->setUpRealMobileSheetsEnvironment();
+		$this->service = new LibraryService(
+			$this->libraryMapper,
+			$this->rootFolder,
+			new NullLogger(),
+			exporter: $this->exporter,
+		);
+	}
+
+	protected function tearDown(): void {
+		$this->tearDownRealMobileSheetsEnvironment();
+		parent::tearDown();
+	}
 
 	public function testResolveLibraryPathReturnsPathWhenFound(): void {
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->expects($this->once())
-			->method('findForUser')
-			->with('admin', 1)
-			->willReturn(['id' => 1, 'path' => '/Noten/mobilesheets.db']);
+		$lib = $this->createTestLibrary('/Noten/resolve_test.db', 'admin');
 
-		$service = new LibraryService(
-			$libraryMapper,
-			$this->createMock(IRootFolder::class),
-			$this->createMock(LoggerInterface::class),
-		);
-
-		$this->assertSame('/Noten/mobilesheets.db', $service->resolveLibraryPath('admin', 1));
+		self::assertSame('/Noten/resolve_test.db', $this->service->resolveLibraryPath('admin', (int)$lib->id));
 	}
 
 	public function testResolveLibraryPathReturnsNullWhenMissing(): void {
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->method('findForUser')->willReturn(null);
-
-		$service = new LibraryService(
-			$libraryMapper,
-			$this->createMock(IRootFolder::class),
-			$this->createMock(LoggerInterface::class),
-		);
-
-		$this->assertNull($service->resolveLibraryPath('admin', 99));
+		self::assertNull($this->service->resolveLibraryPath('admin', 999999));
 	}
 
 	public function testGetDatabasePathResolvesFileLocation(): void {
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->method('findForUser')->willReturn(['id' => 1, 'path' => '/Noten/mobilesheets.db']);
+		$userFolder = $this->rootFolder->getUserFolder('admin');
+		if (!$userFolder->nodeExists('Noten')) {
+			$this->createdUserNodes[] = $userFolder->newFolder('Noten');
+		}
+		$notenFolder = $userFolder->get('Noten');
+		if (!$notenFolder->nodeExists('mobilesheets.db')) {
+			$file = $notenFolder->newFile('mobilesheets.db');
+			$file->putContent('fake-sqlite-content');
+			$this->createdUserNodes[] = $file;
+		}
 
-		$storage = $this->createMock(IStorage::class);
-		$storage->method('getLocalFile')->with('files/Noten/mobilesheets.db')->willReturn('/tmp/mobilesheets.db');
+		$lib = $this->createTestLibrary('/Noten/mobilesheets.db', 'admin');
+		$path = $this->service->getDatabasePath('admin', (int)$lib->id);
 
-		$node = $this->createMock(Node::class);
-		$node->method('getStorage')->willReturn($storage);
-		$node->method('getInternalPath')->willReturn('files/Noten/mobilesheets.db');
-
-		$userFolder = $this->createMock(IUserFolder::class);
-		$userFolder->method('get')->with('Noten/mobilesheets.db')->willReturn($node);
-
-		$rootFolder = $this->createMock(IRootFolder::class);
-		$rootFolder->method('getUserFolder')->with('admin')->willReturn($userFolder);
-
-		$service = new LibraryService(
-			$libraryMapper,
-			$rootFolder,
-			$this->createMock(LoggerInterface::class),
-		);
-
-		$this->assertSame('/tmp/mobilesheets.db', $service->getDatabasePath('admin', 1));
+		self::assertNotNull($path);
+		self::assertFileExists($path);
 	}
 
 	public function testGetLibrariesReturnsUserLibraries(): void {
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->expects($this->once())
-			->method('findAllForUser')
-			->with('admin')
-			->willReturn([['id' => 1, 'path' => '/Noten/mobilesheets.db']]);
+		$lib1 = $this->createTestLibrary('/Noten/lib1.db', 'admin');
+		$lib2 = $this->createTestLibrary('/Noten/lib2.db', 'admin');
 
-		$service = new LibraryService(
-			$libraryMapper,
-			$this->createMock(IRootFolder::class),
-			$this->createMock(LoggerInterface::class),
-		);
+		$libs = $this->service->getLibraries('admin');
+		$paths = array_column($libs, 'path');
 
-		$this->assertSame([['id' => 1, 'path' => '/Noten/mobilesheets.db']], $service->getLibraries('admin'));
+		self::assertContains('/Noten/lib1.db', $paths);
+		self::assertContains('/Noten/lib2.db', $paths);
 	}
 
 	public function testAddLibraryValidatesPath(): void {
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->expects($this->exactly(2))
-			->method('addForUser');
+		self::assertNull($this->service->addLibrary('admin', 'relative/path.db'));
+		self::assertNull($this->service->addLibrary('admin', '/Noten/invalid.txt'));
 
-		$service = new LibraryService(
-			$libraryMapper,
-			$this->createMock(IRootFolder::class),
-			$this->createMock(LoggerInterface::class),
-		);
+		$result1 = $this->service->addLibrary('admin', '/Noten/add_test.db');
+		self::assertSame(['path' => '/Noten/add_test.db'], $result1);
 
-		$this->assertNull($service->addLibrary('admin', 'relative/path.db'));
-		$this->assertNull($service->addLibrary('admin', '/Noten/invalid.txt'));
-		$this->assertSame(['path' => '/Noten/mobilesheets.db'], $service->addLibrary('admin', '/Noten/mobilesheets.db'));
-		$this->assertSame(['path' => '/Noten'], $service->addLibrary('admin', '/Noten'));
+		$allLibs = $this->libraryMapper->findAllForUser('admin');
+		$added = array_filter($allLibs, fn($l) => $l['path'] === '/Noten/add_test.db');
+		if (!empty($added)) {
+			$this->createdLibraryIds[] = (int)reset($added)['id'];
+		}
 	}
 
 	public function testAddLibraryThrowsWhenDirectoryIsNotEmpty(): void {
-		$folderNode = $this->createMock(\OCP\Files\Folder::class);
-		$folderNode->method('getDirectoryListing')->willReturn([$this->createMock(\OCP\Files\File::class)]);
+		$userFolder = $this->rootFolder->getUserFolder('admin');
+		$folderName = 'NotEmptyDir_' . bin2hex(random_bytes(4));
+		$folder = $userFolder->newFolder($folderName);
+		$this->createdUserNodes[] = $folder;
 
-		$userFolder = $this->createMock(IUserFolder::class);
-		$userFolder->method('nodeExists')->with('Noten')->willReturn(true);
-		$userFolder->method('get')->with('Noten')->willReturn($folderNode);
-
-		$rootFolder = $this->createMock(IRootFolder::class);
-		$rootFolder->method('getUserFolder')->with('admin')->willReturn($userFolder);
-
-		$service = new LibraryService(
-			$this->createMock(LibraryMapper::class),
-			$rootFolder,
-			$this->createMock(LoggerInterface::class),
-		);
+		$file = $folder->newFile('file.txt');
+		$file->putContent('some content');
+		$this->createdUserNodes[] = $file;
 
 		$this->expectException(\InvalidArgumentException::class);
 		$this->expectExceptionMessage('The directory must be empty');
-		$service->addLibrary('admin', '/Noten');
+		$this->service->addLibrary('admin', '/' . $folderName);
 	}
 
 	public function testAddLibrarySucceedsWhenDirectoryIsEmpty(): void {
-		$folderNode = $this->createMock(\OCP\Files\Folder::class);
-		$folderNode->method('getDirectoryListing')->willReturn([]);
+		$userFolder = $this->rootFolder->getUserFolder('admin');
+		$folderName = 'EmptyDir_' . bin2hex(random_bytes(4));
+		$folder = $userFolder->newFolder($folderName);
+		$this->createdUserNodes[] = $folder;
 
-		$userFolder = $this->createMock(IUserFolder::class);
-		$userFolder->method('nodeExists')->with('Noten')->willReturn(true);
-		$userFolder->method('get')->with('Noten')->willReturn($folderNode);
+		$result = $this->service->addLibrary('admin', '/' . $folderName);
+		self::assertSame(['path' => '/' . $folderName], $result);
 
-		$rootFolder = $this->createMock(IRootFolder::class);
-		$rootFolder->method('getUserFolder')->with('admin')->willReturn($userFolder);
-
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->expects($this->once())->method('addForUser')->with('admin', '/Noten');
-		$libraryMapper->method('findAllForUser')->with('admin')->willReturn([['id' => 10, 'path' => '/Noten']]);
-
-		$service = new LibraryService(
-			$libraryMapper,
-			$rootFolder,
-			$this->createMock(LoggerInterface::class),
-		);
-
-		$result = $service->addLibrary('admin', '/Noten');
-		$this->assertSame(['path' => '/Noten'], $result);
+		$allLibs = $this->libraryMapper->findAllForUser('admin');
+		$added = array_filter($allLibs, fn($l) => $l['path'] === '/' . $folderName);
+		if (!empty($added)) {
+			$this->createdLibraryIds[] = (int)reset($added)['id'];
+		}
 	}
 
 	public function testDeleteLibraryRemovesLibraryEntry(): void {
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->method('findForUser')->with('admin', 1)->willReturn(['id' => 1, 'path' => '/Noten/mobilesheets.db']);
-		$libraryMapper->expects($this->once())->method('deleteForUser')->with('admin', 1);
+		$lib = $this->createTestLibrary('/Noten/to_delete.db', 'admin');
 
-		$service = new LibraryService(
-			$libraryMapper,
-			$this->createMock(IRootFolder::class),
-			$this->createMock(LoggerInterface::class),
-		);
+		$result = $this->service->deleteLibrary('admin', (int)$lib->id);
+		self::assertNotNull($result);
+		self::assertSame((int)$lib->id, $result['id']);
+		self::assertSame('/Noten/to_delete.db', $result['path']);
 
-		$this->assertSame(['id' => 1, 'path' => '/Noten/mobilesheets.db'], $service->deleteLibrary('admin', 1));
+		self::assertNull($this->libraryMapper->findForUser('admin', (int)$lib->id));
 	}
 
 	public function testIsAutoPathsEnabledReturnsMapperValue(): void {
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->expects($this->exactly(2))
-			->method('findForUser')
-			->willReturnMap([
-				['admin', 1, ['id' => 1, 'path' => '/Noten/mobilesheets.db', 'auto_paths' => 1]],
-				['admin', 2, ['id' => 2, 'path' => '/Noten/mobilesheets.db', 'auto_paths' => 0]],
-			]);
+		$lib1 = $this->createTestLibrary('/Noten/autopaths1.db', 'admin');
+		$lib2 = $this->createTestLibrary('/Noten/autopaths2.db', 'admin');
 
-		$service = new LibraryService(
-			$libraryMapper,
-			$this->createMock(IRootFolder::class),
-			$this->createMock(LoggerInterface::class),
-		);
+		$this->libraryMapper->setAutoPathsForUser('admin', (int)$lib1->id, true);
+		$this->libraryMapper->setAutoPathsForUser('admin', (int)$lib2->id, false);
 
-		$this->assertTrue($service->isAutoPathsEnabled('admin', 1));
-		$this->assertFalse($service->isAutoPathsEnabled('admin', 2));
+		self::assertTrue($this->service->isAutoPathsEnabled('admin', (int)$lib1->id));
+		self::assertFalse($this->service->isAutoPathsEnabled('admin', (int)$lib2->id));
 	}
 
 	public function testIsAutoPdfMetadataEnabledReturnsMapperValue(): void {
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->expects($this->exactly(2))
-			->method('findForUser')
-			->willReturnMap([
-				['admin', 1, ['id' => 1, 'path' => '/Noten/mobilesheets.db', 'auto_pdf_metadata' => 1]],
-				['admin', 2, ['id' => 2, 'path' => '/Noten/mobilesheets.db', 'auto_pdf_metadata' => 0]],
-			]);
+		$lib1 = $this->createTestLibrary('/Noten/autopdf1.db', 'admin');
+		$lib2 = $this->createTestLibrary('/Noten/autopdf2.db', 'admin');
 
-		$service = new LibraryService(
-			$libraryMapper,
-			$this->createMock(IRootFolder::class),
-			$this->createMock(LoggerInterface::class),
-		);
+		$this->libraryMapper->setSettingsForUser('admin', (int)$lib1->id, autoPdfMetadata: true);
+		$this->libraryMapper->setSettingsForUser('admin', (int)$lib2->id, autoPdfMetadata: false);
 
-		$this->assertTrue($service->isAutoPdfMetadataEnabled('admin', 1));
-		$this->assertFalse($service->isAutoPdfMetadataEnabled('admin', 2));
+		self::assertTrue($this->service->isAutoPdfMetadataEnabled('admin', (int)$lib1->id));
+		self::assertFalse($this->service->isAutoPdfMetadataEnabled('admin', (int)$lib2->id));
 	}
 
 	public function testUpdateSettingsUpdatesAndReturnsLibrary(): void {
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->expects($this->once())
-			->method('setSettingsForUser')
-			->with('admin', 1, false, true);
-		$libraryMapper->expects($this->once())
-			->method('findForUser')
-			->with('admin', 1)
-			->willReturn(['id' => 1, 'path' => '/Noten/mobilesheets.db', 'autoPaths' => false, 'autoPdfMetadata' => true]);
+		$lib = $this->createTestLibrary('/Noten/update_settings.db', 'admin');
 
-		$service = new LibraryService(
-			$libraryMapper,
-			$this->createMock(IRootFolder::class),
-			$this->createMock(LoggerInterface::class),
-		);
-
-		$result = $service->updateSettings('admin', 1, false, true);
-		$this->assertNotNull($result);
-		$this->assertFalse($result['autoPaths']);
-		$this->assertTrue($result['autoPdfMetadata']);
+		$result = $this->service->updateSettings('admin', (int)$lib->id, false, true);
+		self::assertNotNull($result);
+		self::assertFalse($result['autoPaths']);
+		self::assertTrue($result['autoPdfMetadata']);
 	}
 
 	public function testUpdateSettingsReturnsNullWhenLibraryNotFound(): void {
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->expects($this->once())
-			->method('setSettingsForUser')
-			->with('admin', 99, true, null);
-		$libraryMapper->expects($this->once())
-			->method('findForUser')
-			->with('admin', 99)
-			->willReturn(null);
-
-		$service = new LibraryService(
-			$libraryMapper,
-			$this->createMock(IRootFolder::class),
-			$this->createMock(LoggerInterface::class),
-		);
-
-		$this->assertNull($service->updateSettings('admin', 99, true));
+		self::assertNull($this->service->updateSettings('admin', 999999, true));
 	}
-
 }
