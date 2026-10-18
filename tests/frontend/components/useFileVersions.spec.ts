@@ -105,6 +105,32 @@ describe('useFileVersions.ts', () => {
 		])
 	})
 
+	it('fetches versions when response is unwrapped directly as an array or nested under data', async () => {
+		const rawVersions = [{ version: '500', timestamp: 500, size: 1024 }]
+
+		// Direct data array
+		vi.mocked(client.apiGet).mockResolvedValueOnce({
+			data: rawVersions,
+		} as any)
+
+		const { fileVersions, openVersionsModal } = useFileVersions({
+			libraryId: 1,
+			songId: 10,
+			fileId: 101,
+		})
+
+		await openVersionsModal()
+		expect(fileVersions.value).toEqual([{ revision: 500, timestamp: 500, size: 1024 }])
+
+		// Nested data.data
+		vi.mocked(client.apiGet).mockResolvedValueOnce({
+			data: { data: rawVersions },
+		} as any)
+
+		await openVersionsModal()
+		expect(fileVersions.value).toEqual([{ revision: 500, timestamp: 500, size: 1024 }])
+	})
+
 	it('handles fetch error gracefully and shows error message', async () => {
 		vi.mocked(client.apiGet).mockRejectedValueOnce(new Error('Network error'))
 

@@ -42,10 +42,10 @@ export function useFileVersions(options: UseFileVersionsOptions) {
 					},
 				},
 			)
-			const rawData = res.data?.ocs?.data
+			const rawData = (res.data as any)?.ocs?.data ?? (res.data as any)?.data ?? res.data
 			const rawList = Array.isArray(rawData)
 				? rawData
-				: (Array.isArray(rawData?.versions) ? rawData.versions : [])
+				: (Array.isArray(rawData?.versions) ? rawData.versions : (Array.isArray(rawData?.data) ? rawData.data : []))
 			const versions: FileVersionInfo[] = rawList.map((v: any) => ({
 				revision: Number(v.revision ?? v.version ?? v.timestamp ?? 0),
 				timestamp: Number(v.timestamp ?? v.revision ?? v.version ?? 0),
