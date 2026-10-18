@@ -1163,6 +1163,7 @@ watch(() => targetFile.value?.path, () => {
 			:is-loading="isLoading"
 			:split-segments-count="splitSegments.length"
 			@update:active-mode="activeMode = $event"
+			@update:activeMode="activeMode = $event"
 			@cancel="emit('cancel')"
 			@save="handleHeaderSave" />
 
@@ -1204,195 +1205,29 @@ watch(() => targetFile.value?.path, () => {
 
 				<!-- Thumbnail Grid -->
 				<div :class="$style.grid">
-					<div
+					<SongPdfPageCard
 						v-for="pageNum in totalPages"
 						:key="pageNum"
-						:class="[
-							$style.pageCard,
-							selectedPages.includes(pageNum) && $style.pageCardSelected,
-							activeMode === 'crop' && isPageCropped(pageNum) && $style.pageCardCropped,
-							activeMode === 'enhance' && isPageEnhanced(pageNum) && $style.pageCardEnhanced,
-							isPageDeleted(pageNum) && $style.pageCardDeleted,
-						]"
-						@click="activeMode === 'split' ? togglePageSelection(pageNum) : activeMode === 'crop' && !isPageDeleted(pageNum) ? openCropModal(pageNum) : activeMode === 'enhance' && !isPageDeleted(pageNum) ? openEnhanceModal(pageNum) : undefined">
-						<!-- Segment color indicators bar -->
-						<div v-if="activeMode === 'split'" :class="$style.segmentPills">
-							<span
-								v-for="(seg, sIdx) in getSegmentsForPage(pageNum)"
-								:key="seg.id"
-								:class="$style.segmentPill"
-								:style="{ backgroundColor: getSegmentColor(splitSegments.indexOf(seg)) }"
-								:title="seg.title">
-								{{ splitSegments.indexOf(seg) + 1 }}
-							</span>
-						</div>
-
-						<div :class="$style.canvasWrapper">
-							<div
-								:ref="(el) => setContainerRef(pageNum, el)"
-								:class="$style.thumbnailSlot"
-								:style="{
-									transform: `rotate(${pageRotations[pageNum - 1] || 0}deg)`,
-									transition: 'transform 0.15s ease-out'
-								}"></div>
-							<div v-if="isPageDeleted(pageNum)" :class="$style.deletedOverlay">
-								<DeleteOutline :size="28" />
-								<span>{{ t('sheetmusic', 'Deleted') }}</span>
-							</div>
-						</div>
-
-						<div :class="$style.cardFooter">
-							<span :class="[$style.pageNumLabel, isPageDeleted(pageNum) && $style.pageNumLabelDeleted]">
-								{{ t('sheetmusic', 'p. {page}', { page: pageNum }) }}
-								<span v-if="Math.abs(pageRotations[pageNum - 1] || 0) > 0.001" :class="$style.rotationBadge">
-									{{ Math.round((pageRotations[pageNum - 1] || 0) * 10) / 10 }}°
-								</span>
-								<span v-if="activeMode === 'crop' && isPageCropped(pageNum)" :class="$style.cropBadge" :title="getCropIndicatorText(pageNum)">
-									{{ t('sheetmusic', 'Cropped') }}
-								</span>
-								<span v-if="activeMode === 'enhance' && isPageEnhanced(pageNum)" :class="$style.enhanceBadge" :title="getEnhanceIndicatorText(pageNum)">
-									{{ t('sheetmusic', 'Enhanced') }}
-								</span>
-								<span v-if="isPageDeleted(pageNum)" :class="$style.deletedBadge">
-									{{ t('sheetmusic', 'Deleted') }}
-								</span>
-							</span>
-
-							<!-- Individual Page Rotate & Delete Buttons -->
-							<div v-if="activeMode === 'rotate'" :class="$style.cardActions">
-								<NcButton
-									size="small"
-									variant="tertiary"
-									:disabled="isPageDeleted(pageNum)"
-									:title="t('sheetmusic', 'Rotate page 90° CCW')"
-									:aria-label="t('sheetmusic', 'Rotate page 90° CCW')"
-									@click.stop="rotatePage(pageNum - 1, -90)">
-									<template #icon>
-										<RotateLeft :size="16" />
-									</template>
-								</NcButton>
-								<NcButton
-									size="small"
-									variant="tertiary"
-									:disabled="isPageDeleted(pageNum)"
-									:title="t('sheetmusic', 'Rotate page 90° CW')"
-									:aria-label="t('sheetmusic', 'Rotate page 90° CW')"
-									@click.stop="rotatePage(pageNum - 1, 90)">
-									<template #icon>
-										<RotateRight :size="16" />
-									</template>
-								</NcButton>
-								<NcButton
-									size="small"
-									variant="tertiary"
-									:disabled="isPageDeleted(pageNum)"
-									:title="t('sheetmusic', 'Rotate page {page} by custom angle', { page: pageNum })"
-									:aria-label="t('sheetmusic', 'Rotate page {page} by custom angle', { page: pageNum })"
-									@click.stop="openRotateModal(pageNum)">
-									<template #icon>
-										<Rotate360 :size="16" />
-									</template>
-								</NcButton>
-								<NcButton
-									v-if="pageNum < totalPages && !isPageDeleted(pageNum)"
-									size="small"
-									variant="tertiary"
-									:title="t('sheetmusic', 'Join with page {p}', { p: pageNum + 1 })"
-									:aria-label="t('sheetmusic', 'Join with page {p}', { p: pageNum + 1 })"
-									@click.stop="openJoinModal(pageNum, pageNum + 1)">
-									<template #icon>
-										<TableMergeCells :size="16" />
-									</template>
-								</NcButton>
-								<NcButton
-									size="small"
-									:variant="isPageDeleted(pageNum) ? 'primary' : 'tertiary'"
-									:title="isPageDeleted(pageNum) ? t('sheetmusic', 'Restore page {page}', { page: pageNum }) : t('sheetmusic', 'Delete page {page}', { page: pageNum })"
-									:aria-label="isPageDeleted(pageNum) ? t('sheetmusic', 'Restore page {page}', { page: pageNum }) : t('sheetmusic', 'Delete page {page}', { page: pageNum })"
-									:disabled="!isPageDeleted(pageNum) && remainingPagesCount <= 1"
-									@click.stop="toggleDeletePage(pageNum)">
-									<template #icon>
-										<DeleteRestore v-if="isPageDeleted(pageNum)" :size="16" />
-										<DeleteOutline v-else :size="16" />
-									</template>
-								</NcButton>
-							</div>
-
-							<!-- Crop and Delete buttons in Crop mode -->
-							<div v-else-if="activeMode === 'crop'" :class="$style.cardActions">
-								<NcButton
-									v-if="!isPageDeleted(pageNum)"
-									size="small"
-									:variant="isPageCropped(pageNum) ? 'primary' : 'tertiary'"
-									:title="t('sheetmusic', 'Crop page {page}', { page: pageNum })"
-									@click.stop="openCropModal(pageNum)">
-									<template #icon>
-										<CropIcon :size="16" />
-									</template>
-									{{ t('sheetmusic', 'Crop') }}
-								</NcButton>
-								<NcButton
-									v-if="pageNum < totalPages && !isPageDeleted(pageNum)"
-									size="small"
-									variant="tertiary"
-									:title="t('sheetmusic', 'Join with page {p}', { p: pageNum + 1 })"
-									:aria-label="t('sheetmusic', 'Join with page {p}', { p: pageNum + 1 })"
-									@click.stop="openJoinModal(pageNum, pageNum + 1)">
-									<template #icon>
-										<TableMergeCells :size="16" />
-									</template>
-								</NcButton>
-								<NcButton
-									size="small"
-									:variant="isPageDeleted(pageNum) ? 'primary' : 'tertiary'"
-									:title="isPageDeleted(pageNum) ? t('sheetmusic', 'Restore page {page}', { page: pageNum }) : t('sheetmusic', 'Delete page {page}', { page: pageNum })"
-									:aria-label="isPageDeleted(pageNum) ? t('sheetmusic', 'Restore page {page}', { page: pageNum }) : t('sheetmusic', 'Delete page {page}', { page: pageNum })"
-									:disabled="!isPageDeleted(pageNum) && remainingPagesCount <= 1"
-									@click.stop="toggleDeletePage(pageNum)">
-									<template #icon>
-										<DeleteRestore v-if="isPageDeleted(pageNum)" :size="16" />
-										<DeleteOutline v-else :size="16" />
-									</template>
-								</NcButton>
-							</div>
-
-							<!-- Enhance and Delete buttons in Enhance mode -->
-							<div v-else-if="activeMode === 'enhance'" :class="$style.cardActions">
-								<NcButton
-									v-if="!isPageDeleted(pageNum)"
-									size="small"
-									:variant="isPageEnhanced(pageNum) ? 'primary' : 'tertiary'"
-									:title="t('sheetmusic', 'Enhance page {page}', { page: pageNum })"
-									@click.stop="openEnhanceModal(pageNum)">
-									<template #icon>
-										<Tune :size="16" />
-									</template>
-									{{ t('sheetmusic', 'Enhance') }}
-								</NcButton>
-								<NcButton
-									size="small"
-									:variant="isPageDeleted(pageNum) ? 'primary' : 'tertiary'"
-									:title="isPageDeleted(pageNum) ? t('sheetmusic', 'Restore page {page}', { page: pageNum }) : t('sheetmusic', 'Delete page {page}', { page: pageNum })"
-									:aria-label="isPageDeleted(pageNum) ? t('sheetmusic', 'Restore page {page}', { page: pageNum }) : t('sheetmusic', 'Delete page {page}', { page: pageNum })"
-									:disabled="!isPageDeleted(pageNum) && remainingPagesCount <= 1"
-									@click.stop="toggleDeletePage(pageNum)">
-									<template #icon>
-										<DeleteRestore v-if="isPageDeleted(pageNum)" :size="16" />
-										<DeleteOutline v-else :size="16" />
-									</template>
-								</NcButton>
-							</div>
-
-							<!-- Selection indicator in split mode -->
-							<div v-else-if="activeMode === 'split'" :class="$style.selectCheckbox">
-								<CheckboxMarkedCircleOutline
-									v-if="selectedPages.includes(pageNum)"
-									:size="18"
-									:class="$style.checkedIcon" />
-								<span v-else :class="$style.uncheckedDot"></span>
-							</div>
-						</div>
-					</div>
+						:page-num="pageNum"
+						:active-mode="activeMode"
+						:is-selected="selectedPages.includes(pageNum)"
+						:is-cropped="isPageCropped(pageNum)"
+						:is-enhanced="isPageEnhanced(pageNum)"
+						:is-deleted="isPageDeleted(pageNum)"
+						:rotation-deg="pageRotations[pageNum - 1] || 0"
+						:crop-indicator-text="getCropIndicatorText(pageNum)"
+						:enhance-indicator-text="getEnhanceIndicatorText(pageNum)"
+						:page-segments="getPageSegmentsSummary(pageNum)"
+						:total-pages="totalPages"
+						:can-delete="remainingPagesCount > 1"
+						@card-click="activeMode === 'split' ? togglePageSelection(pageNum) : undefined"
+						@open-crop-modal="openCropModal(pageNum)"
+						@open-enhance-modal="openEnhanceModal(pageNum)"
+						@rotate-page="rotatePage(pageNum - 1, $event)"
+						@open-rotate-modal="openRotateModal(pageNum)"
+						@open-join-modal="openJoinModal(pageNum, $event)"
+						@toggle-delete-page="toggleDeletePage(pageNum)"
+						@set-container-ref="setContainerRef" />
 				</div>
 			</div>
 
