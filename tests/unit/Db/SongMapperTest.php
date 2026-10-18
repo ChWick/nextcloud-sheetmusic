@@ -176,23 +176,23 @@ final class SongMapperTest extends TestCase {
 	public function testFindLibraryDataReturnsAllEntities(): void {
 		$data = $this->mapper()->findLibraryData($this->databasePath);
 
-		$this->assertCount(2, $data['songs']);
-		$this->assertContainsOnlyInstancesOf(MobileSheetsSong::class, $data['songs']);
-		$this->assertContainsOnlyInstancesOf(MobileSheetsComposer::class, $data['composers']);
-		$this->assertContainsOnlyInstancesOf(MobileSheetsBook::class, $data['books']);
-		$this->assertContainsOnlyInstancesOf(MobileSheetsCollection::class, $data['collections']);
-		$this->assertContainsOnlyInstancesOf(MobileSheetsArtist::class, $data['artists']);
-		$this->assertContainsOnlyInstancesOf(MobileSheetsGenre::class, $data['genres']);
-		$this->assertContainsOnlyInstancesOf(MobileSheetsKey::class, $data['keys']);
-		$this->assertSame(['Bach', 'Beethoven'], $this->names($data['composers']));
-		$this->assertSame(['Real Book 1'], $this->titles($data['books']));
-		$this->assertSame(['Jazz Standards'], $this->names($data['collections']));
-		$this->assertSame(['Coltrane'], $this->names($data['artists']));
-		$this->assertSame(['Jazz'], $this->names($data['genres']));
-		$this->assertSame(['C Major'], $this->names($data['keys']));
+		$this->assertCount(2, $data->songs);
+		$this->assertContainsOnlyInstancesOf(MobileSheetsSong::class, $data->songs);
+		$this->assertContainsOnlyInstancesOf(MobileSheetsComposer::class, $data->composers);
+		$this->assertContainsOnlyInstancesOf(MobileSheetsBook::class, $data->books);
+		$this->assertContainsOnlyInstancesOf(MobileSheetsCollection::class, $data->collections);
+		$this->assertContainsOnlyInstancesOf(MobileSheetsArtist::class, $data->artists);
+		$this->assertContainsOnlyInstancesOf(MobileSheetsGenre::class, $data->genres);
+		$this->assertContainsOnlyInstancesOf(MobileSheetsKey::class, $data->keys);
+		$this->assertSame(['Bach', 'Beethoven'], $this->names($data->composers));
+		$this->assertSame(['Real Book 1'], $this->titles($data->books));
+		$this->assertSame(['Jazz Standards'], $this->names($data->collections));
+		$this->assertSame(['Coltrane'], $this->names($data->artists));
+		$this->assertSame(['Jazz'], $this->names($data->genres));
+		$this->assertSame(['C Major'], $this->names($data->keys));
 
 		// Songs are ordered by title (Alpha, Zebra) and carry nested entities.
-		$alpha = $data['songs'][0];
+		$alpha = $data->songs[0];
 		$this->assertSame('Alpha', $alpha->title);
 		$this->assertSame(20, $alpha->composers[0]->id);
 		$this->assertSame('Bach', $alpha->composers[0]->name);
@@ -205,7 +205,7 @@ final class SongMapperTest extends TestCase {
 		$mapper->updateSong($this->databasePath, 2, 'Alpha (Updated)', [10], [100], [1000], []);
 
 		$data = $mapper->findLibraryData($this->databasePath);
-		$updatedSong = array_values(array_filter($data['songs'], fn (MobileSheetsSong $s) => $s->id === 2))[0];
+		$updatedSong = array_values(array_filter($data->songs, fn (MobileSheetsSong $s) => $s->id === 2))[0];
 
 		$this->assertSame('Alpha (Updated)', $updatedSong->title);
 		$this->assertSame(['Beethoven'], $this->names($updatedSong->composers));
@@ -221,7 +221,7 @@ final class SongMapperTest extends TestCase {
 		$this->assertGreaterThan(0, $songId);
 
 		$data = $mapper->findLibraryData($this->databasePath);
-		$created = array_values(array_filter($data['songs'], fn (MobileSheetsSong $s) => $s->id === $songId))[0];
+		$created = array_values(array_filter($data->songs, fn (MobileSheetsSong $s) => $s->id === $songId))[0];
 
 		$this->assertSame('New Song', $created->title);
 		$this->assertSame([], $created->files);
@@ -236,7 +236,7 @@ final class SongMapperTest extends TestCase {
 		$songId = $mapper->createSong($this->databasePath, 'Bare Song', [], [], [], []);
 
 		$data = $mapper->findLibraryData($this->databasePath);
-		$created = array_values(array_filter($data['songs'], fn (MobileSheetsSong $s) => $s->id === $songId))[0];
+		$created = array_values(array_filter($data->songs, fn (MobileSheetsSong $s) => $s->id === $songId))[0];
 
 		$this->assertSame('Bare Song', $created->title);
 		$this->assertSame([], $created->composers);
@@ -391,7 +391,7 @@ final class SongMapperTest extends TestCase {
 		}
 		$this->assertSame(0, (int)$database->query('SELECT COUNT(*) FROM Songs WHERE Id = 2')->fetchColumn());
 
-		$songs = $mapper->findLibraryData($this->databasePath)['songs'];
+		$songs = $mapper->findLibraryData($this->databasePath)->songs;
 		$this->assertCount(1, $songs);
 		$this->assertSame(1, $songs[0]->id);
 		$this->assertSame('Zebra', $songs[0]->title);
@@ -425,7 +425,7 @@ final class SongMapperTest extends TestCase {
 		);
 
 		$data = $mapper->findLibraryData($this->databasePath);
-		$updatedSong = array_values(array_filter($data['songs'], fn (MobileSheetsSong $s) => $s->id === 2))[0];
+		$updatedSong = array_values(array_filter($data->songs, fn (MobileSheetsSong $s) => $s->id === 2))[0];
 
 		$this->assertCount(2, $updatedSong->files);
 		$this->assertContainsOnlyInstancesOf(MobileSheetsFile::class, $updatedSong->files);
@@ -454,7 +454,7 @@ final class SongMapperTest extends TestCase {
 		$this->assertSame('/remote.php/dav/files/admin/Noten/Alpha.pdf', $deletedPath);
 
 		$data = $mapper->findLibraryData($this->databasePath);
-		$updatedSong = array_values(array_filter($data['songs'], fn (MobileSheetsSong $s) => $s->id === 2))[0];
+		$updatedSong = array_values(array_filter($data->songs, fn (MobileSheetsSong $s) => $s->id === 2))[0];
 
 		$this->assertCount(0, $updatedSong->files);
 	}
@@ -472,10 +472,10 @@ final class SongMapperTest extends TestCase {
 		$this->assertGreaterThan(0, $genreId);
 
 		$data = $mapper->findLibraryData($this->databasePath);
-		$this->assertCount(3, $data['composers']);
-		$this->assertCount(2, $data['books']);
-		$this->assertCount(2, $data['collections']);
-		$this->assertCount(2, $data['genres']);
+		$this->assertCount(3, $data->composers);
+		$this->assertCount(2, $data->books);
+		$this->assertCount(2, $data->collections);
+		$this->assertCount(2, $data->genres);
 	}
 
 	/**
@@ -498,8 +498,8 @@ final class SongMapperTest extends TestCase {
 		$this->assertSame(1, (int)$database->query('SELECT COUNT(*) FROM Files WHERE SongId = 1')->fetchColumn());
 
 		$data = $mapper->findLibraryData($this->databasePath);
-		$this->assertSame(['Bach'], $this->names($data['composers']));
-		$zebra = $data['songs'][1];
+		$this->assertSame(['Bach'], $this->names($data->composers));
+		$zebra = $data->songs[1];
 		$this->assertSame(1, $zebra->id);
 		$this->assertSame([], $zebra->composers);
 		$this->assertSame(['Jazz Standards'], $this->names($zebra->collections));
@@ -518,7 +518,7 @@ final class SongMapperTest extends TestCase {
 		$this->assertSame(2, (int)$database->query('SELECT COUNT(*) FROM Songs')->fetchColumn());
 
 		$data = $mapper->findLibraryData($this->databasePath);
-		$alpha = $data['songs'][0];
+		$alpha = $data->songs[0];
 		$this->assertSame(2, $alpha->id);
 		$this->assertSame([], $alpha->books);
 		$this->assertSame(['Bach'], $this->names($alpha->composers));
@@ -537,8 +537,8 @@ final class SongMapperTest extends TestCase {
 		$this->assertSame(2, (int)$database->query('SELECT COUNT(*) FROM Songs')->fetchColumn());
 
 		$data = $mapper->findLibraryData($this->databasePath);
-		$this->assertSame([], $data['collections']);
-		foreach ($data['songs'] as $song) {
+		$this->assertSame([], $data->collections);
+		foreach ($data->songs as $song) {
 			$this->assertSame([], $song->collections);
 			$this->assertNotEmpty($song->composers);
 		}
@@ -555,7 +555,7 @@ final class SongMapperTest extends TestCase {
 		$this->assertSame(2, (int)$database->query('SELECT COUNT(*) FROM Songs')->fetchColumn());
 
 		$data = $mapper->findLibraryData($this->databasePath);
-		$zebra = $data['songs'][1];
+		$zebra = $data->songs[1];
 		$this->assertSame(1, $zebra->id);
 		$this->assertSame([], $zebra->artists);
 		$this->assertSame(['Beethoven'], $this->names($zebra->composers));
@@ -572,7 +572,7 @@ final class SongMapperTest extends TestCase {
 		$this->assertSame(2, (int)$database->query('SELECT COUNT(*) FROM Songs')->fetchColumn());
 
 		$data = $mapper->findLibraryData($this->databasePath);
-		$zebra = $data['songs'][1];
+		$zebra = $data->songs[1];
 		$this->assertSame(1, $zebra->id);
 		$this->assertSame([], $zebra->genres);
 		$this->assertSame(['Beethoven'], $this->names($zebra->composers));
@@ -695,15 +695,15 @@ final class SongMapperTest extends TestCase {
 		try {
 			$data = $this->mapper()->findLibraryData($barePath);
 
-			self::assertCount(1, $data['songs']);
-			self::assertSame('Solo', $data['songs'][0]->title);
-			self::assertSame([], $data['songs'][0]->files);
-			self::assertSame([], $data['songs'][0]->composers);
-			self::assertSame([], $data['composers']);
-			self::assertSame([], $data['books']);
-			self::assertSame([], $data['collections']);
-			self::assertSame([], $data['artists']);
-			self::assertSame([], $data['genres']);
+			self::assertCount(1, $data->songs);
+			self::assertSame('Solo', $data->songs[0]->title);
+			self::assertSame([], $data->songs[0]->files);
+			self::assertSame([], $data->songs[0]->composers);
+			self::assertSame([], $data->composers);
+			self::assertSame([], $data->books);
+			self::assertSame([], $data->collections);
+			self::assertSame([], $data->artists);
+			self::assertSame([], $data->genres);
 		} finally {
 			unlink($barePath);
 		}
@@ -1054,10 +1054,10 @@ final class SongMapperTest extends TestCase {
 
 		$mapper = $this->mapper();
 		$data = $mapper->findLibraryData($dbPath);
-		self::assertCount(1, $data['songs']);
-		self::assertSame('C Major', $data['keys'][0]->name);
-		self::assertSame(1999, $data['years'][0]->year);
-		self::assertSame('Score', $data['sourceTypes'][0]->type);
+		self::assertCount(1, $data->songs);
+		self::assertSame('C Major', $data->keys[0]->name);
+		self::assertSame(1999, $data->years[0]->year);
+		self::assertSame('Score', $data->sourceTypes[0]->type);
 
 		$songs = $mapper->findSongs($dbPath);
 		self::assertCount(1, $songs);
@@ -1087,18 +1087,18 @@ final class SongMapperTest extends TestCase {
 
 		$data = $mapper->findLibraryData($this->databasePath);
 
-		$instrumentNames = $this->names($data['instruments']);
+		$instrumentNames = $this->names($data->instruments);
 		self::assertContains('Pipe Organ', $instrumentNames);
 		self::assertContains('Harpsichord', $instrumentNames);
 		self::assertNotContains('Jazz Ensemble', $instrumentNames);
 
-		$customGroupNames = $this->names($data['customGroups']);
+		$customGroupNames = $this->names($data->customGroups);
 		self::assertContains('Jazz Ensemble', $customGroupNames);
 		self::assertNotContains('Pipe Organ', $customGroupNames);
 		self::assertNotContains('Harpsichord', $customGroupNames);
 
 		// Check song 1's resolved entities
-		$song = array_values(array_filter($data['songs'], static fn ($s) => $s->id === 1))[0];
+		$song = array_values(array_filter($data->songs, static fn ($s) => $s->id === 1))[0];
 		$songInstrumentNames = $this->names($song->instruments);
 		self::assertContains('Pipe Organ', $songInstrumentNames);
 		self::assertContains('Harpsichord', $songInstrumentNames);

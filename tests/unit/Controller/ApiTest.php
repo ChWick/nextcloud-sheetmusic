@@ -210,9 +210,11 @@ final class ApiTest extends TestCase {
 		$response = $controller->createSong(7, 'New Song', [10], [100], [1000], [200]);
 
 		$this->assertEquals(Http::STATUS_CREATED, $response->getStatus());
-		self::assertSame(42, $response->getData()['createdSongId']);
+		$data = $response->getData();
+		self::assertInstanceOf(LibraryData::class, $data);
+		self::assertSame(42, $data->createdSongId);
 		$createdSong = array_values(array_filter(
-			$response->getData()['songs'],
+			$data->songs,
 			static fn (MobileSheetsSong $song): bool => $song->id === 42,
 		))[0];
 		self::assertSame('New Song', $createdSong->title);
@@ -363,8 +365,10 @@ final class ApiTest extends TestCase {
 		$response = $controller->getSongs('7');
 
 		self::assertEquals(Http::STATUS_OK, $response->getStatus());
-		self::assertSame([], $response->getData()['songs']);
-		self::assertArrayHasKey('sourceTypes', $response->getData());
+		$data = $response->getData();
+		self::assertInstanceOf(LibraryData::class, $data);
+		self::assertSame([], $data->songs);
+		self::assertSame([], $data->sourceTypes);
 	}
 
 	public function testAddLibraryRejectsInvalidPaths(): void {

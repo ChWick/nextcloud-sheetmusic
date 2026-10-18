@@ -62,7 +62,7 @@ class LibraryIntegrityService {
 		$user = $userFolder->getOwner();
 		['databasePath' => $databasePath, 'targetFolder' => $targetFolder] = $this->fileManager->libraryContext($libraryId, $user);
 
-		$songs = $this->internalSongMapper->findLibraryData($libraryId, $user)['songs'];
+		$songs = $this->internalSongMapper->findLibraryData($libraryId, $user)->songs;
 		$targetFolderPath = (string)$targetFolder->getPath();
 
 		$issues = [];
@@ -904,7 +904,7 @@ class LibraryIntegrityService {
 
 		$song = null;
 		$data = $this->internalSongMapper->findLibraryData($libraryId, $user);
-		foreach ($data['songs'] as $s) {
+		foreach ($data->songs as $s) {
 			if ($s->id === $issue->songId) {
 				$song = $s;
 				break;
@@ -1235,7 +1235,7 @@ class LibraryIntegrityService {
 			];
 		}
 
-		$songs = $this->internalSongMapper->findLibraryData($libraryId, $user)['songs'];
+		$songs = $this->internalSongMapper->findLibraryData($libraryId, $user)->songs;
 		$candidateSong = $this->findOrphanFileCandidateSong($cleanPath, $songs);
 
 		if ($candidateSong === null) {

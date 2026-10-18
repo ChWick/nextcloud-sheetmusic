@@ -46,7 +46,7 @@ class InternalSongMapper {
 		}
 
 		$data = $this->findLibraryData($internalSong->libraryId, $user);
-		foreach ($data['songs'] as $song) {
+		foreach ($data->songs as $song) {
 			if ($song->id === $songId) {
 				return $song;
 			}

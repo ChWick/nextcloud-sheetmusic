@@ -376,7 +376,7 @@ class SongController extends OCSController {
 
 		try {
 			$result = $this->songService->resolveBothSongs($user, $libraryId, $songA, $songB);
-			if (isset($result['error'])) {
+			if (is_array($result) && isset($result['error'])) {
 				return new DataResponse(['message' => $result['error']], Http::STATUS_CONFLICT);
 			}
 			if ($result === null) {

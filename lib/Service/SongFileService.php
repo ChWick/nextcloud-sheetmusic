@@ -211,7 +211,7 @@ class SongFileService {
 
 		$song = null;
 		$data = $this->internalSongMapper->findLibraryData($libraryId, $user);
-		foreach ($data['songs'] as $s) {
+		foreach ($data->songs as $s) {
 			if ($s->id === $songId) {
 				$song = $s;
 				break;

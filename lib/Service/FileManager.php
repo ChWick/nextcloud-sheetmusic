@@ -376,7 +376,7 @@ class FileManager {
 		['databasePath' => $databasePath, 'targetFolder' => $targetFolder] = $this->libraryContext($libraryId, $user);
 
 		$songs = $this->internalSongMapper !== null
-			? $this->internalSongMapper->findLibraryData($libraryId, $user)['songs']
+			? $this->internalSongMapper->findLibraryData($libraryId, $user)->songs
 			: ($this->songMapper !== null ? $this->songMapper->findSongs($databasePath) : []);
 
 		// MobileSheets stores absolute WebDAV paths that sit next to the library

@@ -6,6 +6,7 @@ namespace Controller;
 
 use OCA\SheetMusic\Controller\SongController;
 use OCA\SheetMusic\Db\InternalSong;
+use OCA\SheetMusic\Db\LibraryData;
 use OCA\SheetMusic\Service\FileManager;
 use OCA\SheetMusic\Service\LibraryIntegrityService;
 use OCA\SheetMusic\Service\LibraryService;
@@ -103,9 +104,9 @@ final class SongControllerTest extends TestCase {
 		$res = $this->controller->getSongs((string)$this->libraryId);
 		$this->assertSame(Http::STATUS_OK, $res->getStatus());
 		$data = $res->getData();
-		$this->assertArrayHasKey('songs', $data);
-		$this->assertCount(1, $data['songs']);
-		$this->assertSame('Autumn Leaves', $data['songs'][0]->title);
+		$this->assertInstanceOf(LibraryData::class, $data);
+		$this->assertCount(1, $data->songs);
+		$this->assertSame('Autumn Leaves', $data->songs[0]->title);
 	}
 
 	public function testCreateSongValidatesParametersAndCreatesSong(): void {
@@ -119,9 +120,9 @@ final class SongControllerTest extends TestCase {
 		$res = $this->controller->createSong($this->libraryId, 'Blue in Green');
 		$this->assertSame(Http::STATUS_CREATED, $res->getStatus());
 		$data = $res->getData();
-		$this->assertArrayHasKey('createdSongId', $data);
-		$this->assertArrayHasKey('songs', $data);
-		$this->assertSame('Blue in Green', $data['songs'][0]->title);
+		$this->assertInstanceOf(LibraryData::class, $data);
+		$this->assertNotNull($data->createdSongId);
+		$this->assertSame('Blue in Green', $data->songs[0]->title);
 	}
 
 	public function testDeleteSongValidatesParametersAndDeletesSong(): void {

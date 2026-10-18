@@ -7,6 +7,7 @@ namespace Service;
 use OCA\SheetMusic\Db\InternalEntity;
 use OCA\SheetMusic\Db\InternalSong;
 use OCA\SheetMusic\Db\InternalSongFile;
+use OCA\SheetMusic\Db\LibraryData;
 use OCA\SheetMusic\Service\FileManager;
 use OCA\SheetMusic\Service\LibraryIntegrityService;
 use OCA\SheetMusic\Service\LibraryService;
@@ -88,8 +89,9 @@ final class SongServiceTest extends TestCase {
 		));
 
 		$data = $this->service->getSongs($this->user, $this->libraryId);
-		self::assertCount(1, $data['songs']);
-		self::assertSame('Song One', $data['songs'][0]->title);
+		self::assertNotNull($data);
+		self::assertCount(1, $data->songs);
+		self::assertSame('Song One', $data->songs[0]->title);
 	}
 
 	public function testCreateSongReturnsCreatedIdAndData(): void {
@@ -102,8 +104,9 @@ final class SongServiceTest extends TestCase {
 			songNumber: '88',
 		);
 
-		self::assertArrayHasKey('createdSongId', $res);
-		$createdId = $res['createdSongId'];
+		self::assertNotNull($res);
+		$createdId = $res->createdSongId;
+		self::assertNotNull($createdId);
 		self::assertGreaterThan(0, $createdId);
 
 		$savedSong = $this->songMapper->findById($createdId);
@@ -131,7 +134,8 @@ final class SongServiceTest extends TestCase {
 			difficulty: 2,
 		);
 
-		self::assertArrayHasKey('songs', $res);
+		self::assertNotNull($res);
+		self::assertNotEmpty($res->songs);
 		$reloaded = $this->songMapper->findById((int)$song->id);
 		self::assertNotNull($reloaded);
 		self::assertSame('Updated Title', $reloaded->title);
@@ -168,7 +172,8 @@ final class SongServiceTest extends TestCase {
 			composers: ['action' => 'add', 'ids' => [(int)$composer->id]],
 		);
 
-		self::assertCount(2, $result['songs']);
+		self::assertNotNull($result);
+		self::assertCount(2, $result->songs);
 
 		$s1Composers = $this->entityMapper->findEntityIdsForSong((int)$s1->id, 'composer');
 		$s2Composers = $this->entityMapper->findEntityIdsForSong((int)$s2->id, 'composer');
@@ -204,7 +209,8 @@ final class SongServiceTest extends TestCase {
 			['id' => (int)$songB->id, 'title' => 'Song B Renamed', 'detachFileIds' => []],
 		);
 
-		self::assertCount(2, $res['songs']);
+		self::assertInstanceOf(LibraryData::class, $res);
+		self::assertCount(2, $res->songs);
 
 		$reloadedA = $this->songMapper->findById((int)$songA->id);
 		$reloadedB = $this->songMapper->findById((int)$songB->id);
@@ -226,7 +232,8 @@ final class SongServiceTest extends TestCase {
 		));
 
 		$result = $this->service->deleteSong($this->user, (int)$song->id, $this->libraryId);
-		self::assertEmpty($result['songs']);
+		self::assertNotNull($result);
+		self::assertEmpty($result->songs);
 
 		$reloaded = $this->songMapper->findById((int)$song->id);
 		self::assertNotNull($reloaded);
@@ -254,7 +261,8 @@ final class SongServiceTest extends TestCase {
 			deleteFiles: false,
 		);
 
-		self::assertEmpty($result['songs']);
+		self::assertNotNull($result);
+		self::assertEmpty($result->songs);
 
 		$reloaded1 = $this->songMapper->findById((int)$s1->id);
 		$reloaded2 = $this->songMapper->findById((int)$s2->id);
