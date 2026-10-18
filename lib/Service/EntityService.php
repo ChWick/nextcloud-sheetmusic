@@ -18,7 +18,6 @@ class EntityService {
 		private InternalEntityMapper $internalEntityMapper,
 		private InternalSongMapper $internalSongMapper,
 		private LibraryMapper $libraryMapper,
-		private ?FileManager $fileManager = null,
 	) {
 	}
 

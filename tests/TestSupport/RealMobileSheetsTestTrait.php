@@ -69,9 +69,6 @@ trait RealMobileSheetsTestTrait {
 			$this->dbConn,
 			$this->entityMapper,
 			$this->songFileMapper,
-			$this->miscMapper,
-			$this->rootFolder,
-			$this->pathResolver,
 		);
 
 		$this->importer = new MobileSheetsSqliteImporter(

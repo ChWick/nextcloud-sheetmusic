@@ -20,7 +20,6 @@ use OCA\SheetMusic\Db\LibraryMapper;
 use OCA\SheetMusic\Service\MobileSheetsTableHelper;
 use OCA\SheetMusic\Util\MobileSheetsTimestampUtil;
 use OCA\SheetMusic\Util\SongSortingUtil;
-use OCP\Files\File;
 use OCP\Files\IRootFolder;
 use OCP\IUser;
 use OCP\IUserManager;

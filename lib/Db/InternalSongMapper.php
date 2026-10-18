@@ -9,9 +9,7 @@ declare(strict_types=1);
 
 namespace OCA\SheetMusic\Db;
 
-use OCA\SheetMusic\Service\MobileSheetsPathResolver;
 use OCP\DB\QueryBuilder\IQueryBuilder;
-use OCP\Files\IRootFolder;
 use OCP\IDBConnection;
 use OCP\IUser;
 
@@ -22,9 +20,6 @@ class InternalSongMapper {
 		private IDBConnection $db,
 		private ?InternalEntityMapper $entityMapper = null,
 		private ?InternalSongFileMapper $songFileMapper = null,
-		private ?InternalMiscMapper $miscMapper = null,
-		private ?IRootFolder $rootFolder = null,
-		private ?MobileSheetsPathResolver $pathResolver = null,
 	) {
 	}
 

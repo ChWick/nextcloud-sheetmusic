@@ -12,8 +12,6 @@ namespace Service;
 use OCA\SheetMusic\Db\InternalEntity;
 use OCA\SheetMusic\Db\InternalSong;
 use OCA\SheetMusic\Db\InternalSongFile;
-use OCP\Files\File;
-use OCP\Files\Folder;
 use PDO;
 use PHPUnit\Framework\TestCase;
 

@@ -23,7 +23,6 @@ use OCA\SheetMusic\Service\MobileSheetsEntityConfig;
 use OCA\SheetMusic\Service\MobileSheetsSyncMetadata;
 use OCA\SheetMusic\Service\MobileSheetsTableHelper;
 use OCA\SheetMusic\Util\MobileSheetsTimestampUtil;
-use OCP\Files\File;
 use OCP\Files\IRootFolder;
 use OCP\IUser;
 use OCP\IUserManager;

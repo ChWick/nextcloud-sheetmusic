@@ -111,7 +111,7 @@ class SheetMusicDavPlugin extends ServerPlugin {
 					: $this->handleGetHashcodes($request, $response, $library, $method === 'HEAD'),
 				'PUT' => $isDb
 					? $this->handlePutDatabase($request, $response, $library)
-					: $this->handlePutHashcodes($request, $response, $library),
+					: $this->handlePutHashcodes($response, $library),
 				'PROPFIND' => $this->handlePropfindFile($request, $response, $library, $path, $filename),
 				// The files cannot be removed; acknowledge so clients that delete
 				// before re-uploading keep going.
@@ -346,7 +346,6 @@ class SheetMusicDavPlugin extends ServerPlugin {
 	}
 
 	private function handlePutHashcodes(
-		RequestInterface $request,
 		ResponseInterface $response,
 		InternalLibrary $library,
 	): bool {

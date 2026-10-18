@@ -152,7 +152,7 @@ class SongFileService {
 
 	public function deleteSongFile(IUser $user, int $libraryId, int $songId, int $fileId): ?array {
 		$fileRecord = $this->internalSongFileMapper->findById($fileId);
-		if ($fileRecord !== null) {
+		if ($fileRecord !== null && ($songId <= 0 || $fileRecord->songId === $songId)) {
 			$targetFileId = $fileRecord->fileId;
 			$this->internalSongFileMapper->delete($fileId);
 			$this->libraryMapper->touch($libraryId);
