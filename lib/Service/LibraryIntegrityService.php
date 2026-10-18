@@ -11,6 +11,7 @@ namespace OCA\SheetMusic\Service;
 
 use OCA\SheetMusic\Db\DuplicateSongEntityAssignment;
 use OCA\SheetMusic\Db\InternalEntity;
+use OCA\SheetMusic\Db\OrphanSongEntityAssignment;
 use OCA\SheetMusic\Db\InternalEntityMapper;
 use OCA\SheetMusic\Db\InternalMiscMapper;
 use OCA\SheetMusic\Db\InternalSongAttributeMapper;
@@ -338,7 +339,7 @@ class LibraryIntegrityService {
 				fixable: true,
 				details: [
 					'count' => count($orphanAssignments),
-					'assignments' => $orphanAssignments,
+					'assignments' => array_map(static fn (OrphanSongEntityAssignment $a): array => $a->toArray(), $orphanAssignments),
 				],
 			);
 		}

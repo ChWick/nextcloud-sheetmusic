@@ -579,7 +579,7 @@ class InternalEntityMapper {
 	/**
 	 * Find junction records linking to missing or deleted songs/entities, or across libraries.
 	 *
-	 * @return list<array{id: int, songId: int, entityId: int, reason: string}>
+	 * @return list<OrphanSongEntityAssignment>
 	 */
 	public function findOrphanSongEntityAssignments(int $libraryId): array {
 		$qb = $this->db->getQueryBuilder();
@@ -618,12 +618,12 @@ class InternalEntityMapper {
 				$reason = 'Song and entity belong to different libraries';
 			}
 
-			$orphans[] = [
-				'id' => (int)$row['id'],
-				'songId' => (int)$row['song_id'],
-				'entityId' => (int)$row['entity_id'],
-				'reason' => $reason,
-			];
+			$orphans[] = new OrphanSongEntityAssignment(
+				id: (int)$row['id'],
+				songId: (int)$row['song_id'],
+				entityId: (int)$row['entity_id'],
+				reason: $reason,
+			);
 		}
 		$result->closeCursor();
 
