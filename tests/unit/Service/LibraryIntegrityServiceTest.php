@@ -164,6 +164,109 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		}
 	}
 
+	public function testCheckIntegrityDoesNotReportInvalidNamingRuleIfSongHasAnyMissingFile(): void {
+		$libraryService = $this->createLibraryService();
+		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
+		$databasePath = $fixture['path'];
+		$database = $fixture['connection'];
+		$database->exec("INSERT INTO Songs (Id, Title) VALUES (1, 'Largetto')");
+		// File 1 exists but does not follow naming rules
+		$database->exec("INSERT INTO Files (Id, SongId, Path) VALUES (13, 1, '/remote.php/dav/files/user1/Noten/Largetto.pdf')");
+		// File 2 is missing
+		$database->exec("INSERT INTO Files (Id, SongId, Path) VALUES (14, 1, '/remote.php/dav/files/user1/Noten/file_3438368.pdf')");
+		$database->exec("INSERT INTO Composer (Id, Name) VALUES (1, 'Georg Friedrich Händel')");
+		$database->exec('INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (1, 1)');
+
+		$targetFolder = $this->createMock(Folder::class);
+		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
+		// Only Largetto.pdf exists; file_3438368.pdf does NOT exist
+		$targetFolder->method('nodeExists')->willReturnCallback(
+			static fn (string $path): bool => $path === 'Largetto.pdf'
+		);
+		$targetFolder->method('getDirectoryListing')->willReturn([]);
+		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager($databasePath, $targetFolder);
+
+		try {
+			$service = $this->createIntegrityService($libraryService, $fileManager, $rootFolder, $pathResolver, databasePath: $databasePath);
+			$issues = $service->checkIntegrity(1, 'user1');
+
+			$types = array_map(static fn (IntegrityIssue $i): string => $i->type, $issues);
+			self::assertContains(IntegrityIssue::TYPE_MISSING_FILE, $types);
+			self::assertNotContains(IntegrityIssue::TYPE_INVALID_NAMING_RULE, $types);
+
+			$missingIssues = array_values(array_filter($issues, static fn (IntegrityIssue $i): bool => $i->type === IntegrityIssue::TYPE_MISSING_FILE));
+			self::assertCount(1, $missingIssues);
+			self::assertSame(14, $missingIssues[0]->fileId);
+			self::assertSame('Largetto', $missingIssues[0]->songTitle);
+		} finally {
+			unlink($databasePath);
+		}
+	}
+
+	public function testCheckIntegrityDoesNotReportInvalidNamingRuleIfFileIsFolder(): void {
+		$libraryService = $this->createLibraryService();
+		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
+		$databasePath = $fixture['path'];
+		$database = $fixture['connection'];
+		$database->exec("INSERT INTO Songs (Id, Title) VALUES (1, 'Joshua')");
+		$database->exec("INSERT INTO Files (Id, SongId, Path) VALUES (10, 1, '/remote.php/dav/files/user1/Noten/SomeFolder.pdf')");
+		$database->exec("INSERT INTO Composer (Id, Name) VALUES (1, 'Georg Friedrich Händel')");
+		$database->exec('INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (1, 1)');
+
+		$subFolderNode = $this->createMock(Folder::class);
+		$targetFolder = $this->createMock(Folder::class);
+		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
+		$targetFolder->method('nodeExists')->willReturnCallback(
+			static fn (string $path): bool => $path === 'SomeFolder.pdf'
+		);
+		$targetFolder->method('get')->willReturnCallback(
+			static function (string $path) use ($subFolderNode) {
+				if ($path === 'SomeFolder.pdf') {
+					return $subFolderNode;
+				}
+				throw new \OCP\Files\NotFoundException($path);
+			}
+		);
+		$targetFolder->method('getDirectoryListing')->willReturn([]);
+		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager($databasePath, $targetFolder);
+
+		try {
+			$service = $this->createIntegrityService($libraryService, $fileManager, $rootFolder, $pathResolver, databasePath: $databasePath);
+			$issues = $service->checkIntegrity(1, 'user1');
+
+			$types = array_map(static fn (IntegrityIssue $i): string => $i->type, $issues);
+			self::assertContains(IntegrityIssue::TYPE_MISSING_FILE, $types);
+			self::assertNotContains(IntegrityIssue::TYPE_INVALID_NAMING_RULE, $types);
+		} finally {
+			unlink($databasePath);
+		}
+	}
+
+	public function testFixIssueFailsGracefullyWhenSongFileIsMissing(): void {
+		$libraryService = $this->createLibraryService();
+		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
+		$databasePath = $fixture['path'];
+		$database = $fixture['connection'];
+		$database->exec("INSERT INTO Songs (Id, Title) VALUES (1, 'Largetto')");
+		$database->exec("INSERT INTO Files (Id, SongId, Path) VALUES (14, 1, '/remote.php/dav/files/user1/Noten/file_3438368.pdf')");
+
+		$targetFolder = $this->createMock(Folder::class);
+		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
+		$targetFolder->method('nodeExists')->willReturn(false);
+		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager($databasePath, $targetFolder);
+
+		try {
+			$service = $this->createIntegrityService($libraryService, $fileManager, $rootFolder, $pathResolver, databasePath: $databasePath);
+			$result = $service->fixIssue(1, 'user1', IntegrityIssue::TYPE_INVALID_NAMING_RULE, songId: 1, fileId: 14);
+
+			self::assertFalse($result['success']);
+			self::assertSame(0, $result['fixedCount']);
+			self::assertStringContainsString('file_3438368.pdf', $result['message']);
+		} finally {
+			unlink($databasePath);
+		}
+	}
+
 	public function testScanOrphansIgnoresHashcodeFiles(): void {
 		$libraryService = $this->createLibraryService();
 		$fixture = \TestSupport\MobileSheetsTestDatabase::create();

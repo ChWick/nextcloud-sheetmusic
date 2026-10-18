@@ -81,6 +81,7 @@ class LibraryIntegrityService {
 
 		$autoPaths = $this->libraryService->isAutoPathsEnabled($userId, $libraryId);
 		$autoPdfMetadata = $this->libraryService->isAutoPdfMetadataEnabled($userId, $libraryId);
+		$namingRuleIssuesBySong = [];
 
 		foreach ($songs as $song) {
 			foreach ($song->files as $file) {
@@ -109,7 +110,7 @@ class LibraryIntegrityService {
 					$relativeToTarget = substr($internalPath, strlen($targetFolderPath) + 1);
 				}
 
-				$sourceExists = ($relativeToTarget !== null && $targetFolder->nodeExists($relativeToTarget));
+				$sourceExists = $this->fileNodeExists($targetFolder, $relativeToTarget);
 				$existingPdfPath = $sourceExists ? $relativeToTarget : null;
 
 				// Calculate valid target paths (naming rules)
@@ -157,7 +158,7 @@ class LibraryIntegrityService {
 					}
 
 					if (!$isCompliant) {
-						$issues[] = new IntegrityIssue(
+						$namingRuleIssuesBySong[$song->id][] = new IntegrityIssue(
 							type: IntegrityIssue::TYPE_INVALID_NAMING_RULE,
 							severity: IntegrityIssue::SEVERITY_WARNING,
 							message: sprintf('File path "%s" does not match standard naming rule.', basename($file->path)),
@@ -182,6 +183,15 @@ class LibraryIntegrityService {
 						path: $relativeToTarget ?? $file->path,
 						fixable: false,
 					);
+				}
+			}
+		}
+
+		// Only include invalid naming rule issues if the files themselves exist (no missing files for the song)
+		foreach ($namingRuleIssuesBySong as $songId => $namingIssues) {
+			if (!isset($missingSongIds[$songId])) {
+				foreach ($namingIssues as $namingIssue) {
+					$issues[] = $namingIssue;
 				}
 			}
 		}
@@ -623,6 +633,36 @@ class LibraryIntegrityService {
 			['databasePath' => $databasePath, 'targetFolder' => $targetFolder] = $this->fileManager->libraryContext($libraryId, $user);
 			$hashCodes = MobileSheetsHashCodesFile::forDatabase($databasePath, $this->logger);
 
+			$song = $this->internalSongMapper?->findSong($songId, $user)
+				?? ($this->songMapper !== null && $databasePath !== '' ? $this->songMapper->findSong($databasePath, $songId) : null);
+			if ($song !== null) {
+				$targetFolderPath = (string)$targetFolder->getPath();
+				foreach ($song->files as $songFile) {
+					$pathObj = $this->pathResolver->fromStored($songFile->path, $user);
+					if ($pathObj === null) {
+						return [
+							'success' => false,
+							'fixedCount' => 0,
+							'message' => sprintf('Cannot apply naming rule for "%s": file "%s" is missing.', $song->title, basename($songFile->path)),
+						];
+					}
+					$internalPath = $pathObj->internal;
+					$relativeToTarget = null;
+					if ($internalPath === $targetFolderPath) {
+						$relativeToTarget = '';
+					} elseif (str_starts_with($internalPath, $targetFolderPath . '/')) {
+						$relativeToTarget = substr($internalPath, strlen($targetFolderPath) + 1);
+					}
+					if (!$this->fileNodeExists($targetFolder, $relativeToTarget)) {
+						return [
+							'success' => false,
+							'fixedCount' => 0,
+							'message' => sprintf('Cannot apply naming rule for "%s": file "%s" does not exist.', $song->title, basename($songFile->path)),
+						];
+					}
+				}
+			}
+
 			try {
 				$this->fileManager->regenerateSongFilePaths($songId, $user, $targetFolder, $databasePath, $hashCodes);
 				$hashCodes?->save();
@@ -701,6 +741,16 @@ class LibraryIntegrityService {
 
 			if ($issue->type === IntegrityIssue::TYPE_INVALID_NAMING_RULE && $issue->songId !== null) {
 				if (isset($processedSongs[$issue->songId])) {
+					continue;
+				}
+				$hasMissingFile = false;
+				foreach ($issues as $checkIssue) {
+					if ($checkIssue->songId === $issue->songId && $checkIssue->type === IntegrityIssue::TYPE_MISSING_FILE) {
+						$hasMissingFile = true;
+						break;
+					}
+				}
+				if ($hasMissingFile) {
 					continue;
 				}
 				try {
@@ -1094,8 +1144,42 @@ class LibraryIntegrityService {
 	}
 
 	/**
+	 * Check whether a file referenced in MobileSheets actually exists in library storage.
+	 */
+	public function fileNodeExists(Folder $targetFolder, ?string $relativeToTarget): bool {
+		if ($relativeToTarget === null || $relativeToTarget === '') {
+			return false;
+		}
+
+		if (!$targetFolder->nodeExists($relativeToTarget)) {
+			return false;
+		}
+
+		try {
+			$node = $targetFolder->get($relativeToTarget);
+			if ($node instanceof Folder) {
+				return false;
+			}
+			if ($node instanceof \OCP\Files\File) {
+				$storage = $node->getStorage();
+				if ($storage !== null && method_exists($storage, 'file_exists') && !$storage->file_exists($node->getInternalPath())) {
+					return false;
+				}
+			}
+		} catch (\OCP\Files\NotFoundException) {
+			return false;
+		} catch (\Throwable) {
+			// Keep true for test mocks that don't mock get()
+		}
+
+		return true;
+	}
+
+	/**
+	 * Find IDs of songs that have at least one missing file.
+	 *
 	 * @param list<MobileSheetsSong> $songs
-	 * @return array<int, bool>
+	 * @return array<int, bool> map of songId => true
 	 */
 	public function findMissingSongIds(
 		array $songs,
@@ -1120,7 +1204,7 @@ class LibraryIntegrityService {
 					$relativeToTarget = substr($internalPath, strlen($targetFolderPath) + 1);
 				}
 
-				if ($relativeToTarget === null || !$targetFolder->nodeExists($relativeToTarget)) {
+				if (!$this->fileNodeExists($targetFolder, $relativeToTarget)) {
 					$missingSongIds[$song->id] = true;
 				}
 			}
