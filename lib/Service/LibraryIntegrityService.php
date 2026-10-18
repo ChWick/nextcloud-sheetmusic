@@ -19,6 +19,7 @@ use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
 use OCA\SheetMusic\Db\MobileSheetsSong;
 use OCA\SheetMusic\Db\SongFileMapper;
+use OCA\SheetMusic\Service\MobileSheetsFileFacts;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
@@ -1331,53 +1332,6 @@ class LibraryIntegrityService {
 		];
 	}
 
-	/**
-	 * Permanently delete an orphan file from library storage.
-	 *
-	 * @return array{success: bool, message: string}
-	 */
-	public function deleteOrphanFile(int $libraryId, string $userId, string $orphanPath): array {
-		if (trim($orphanPath) === '') {
-			return ['success' => false, 'message' => 'Orphan file path cannot be empty.'];
-		}
-
-		$userFolder = $this->rootFolder->getUserFolder($userId);
-		$user = $userFolder->getOwner();
-		['targetFolder' => $targetFolder] = $this->fileManager->libraryContext($libraryId, $user);
-
-		$cleanPath = ltrim($orphanPath, '/');
-		$node = null;
-
-		try {
-			if ($userFolder->nodeExists($cleanPath)) {
-				$node = $userFolder->get($cleanPath);
-			}
-		} catch (\Throwable) {
-			// ignore
-		}
-
-		if ($node === null) {
-			try {
-				if ($targetFolder->nodeExists($cleanPath)) {
-					$node = $targetFolder->get($cleanPath);
-				}
-			} catch (\Throwable) {
-				// ignore
-			}
-		}
-
-		if ($node === null) {
-			return ['success' => false, 'message' => sprintf('Orphan file "%s" was not found.', basename($orphanPath))];
-		}
-
-		$filename = $node->getName();
-		$node->delete();
-
-		return [
-			'success' => true,
-			'message' => sprintf('Deleted orphan file "%s".', $filename),
-		];
-	}
 
 	private function isRelationalIssueType(string $type): bool {
 		return in_array($type, [
