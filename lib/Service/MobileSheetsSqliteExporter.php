@@ -494,8 +494,7 @@ class MobileSheetsSqliteExporter {
 		}
 
 		$linksByEntityId = [];
-		foreach ($links as $rawLink) {
-			$link = $rawLink instanceof SongEntityLink ? $rawLink : SongEntityLink::fromRow($rawLink);
+		foreach ($links as $link) {
 			$linksByEntityId[$link->entityId][] = $link;
 		}
 

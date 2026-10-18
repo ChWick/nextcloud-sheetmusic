@@ -19,6 +19,7 @@ use OCA\SheetMusic\Db\InternalSongFile;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
+use OCA\SheetMusic\Db\SongEntityLink;
 use OCA\SheetMusic\Service\MobileSheetsPath;
 use OCA\SheetMusic\Service\MobileSheetsPathResolver;
 use OCA\SheetMusic\Service\MobileSheetsSqliteExporter;
@@ -653,9 +654,9 @@ final class MobileSheetsSqliteImporterTest extends TestCase {
 			return $e;
 		});
 		$entityMapper->method('setSongEntitiesForType')->willReturnCallback(function (int $sId, string $type, array $ids) use (&$storage) {
-			$storage['songEntityLinks'] = array_filter($storage['songEntityLinks'], fn ($l) => !($l['song_id'] === $sId && $l['type'] === $type));
+			$storage['songEntityLinks'] = array_filter($storage['songEntityLinks'], fn (SongEntityLink $l) => !($l->songId === $sId && $l->type === $type));
 			foreach ($ids as $entId) {
-				$storage['songEntityLinks'][] = ['song_id' => $sId, 'entity_id' => $entId, 'type' => $type];
+				$storage['songEntityLinks'][] = new SongEntityLink(linkId: count($storage['songEntityLinks']) + 1, songId: $sId, entityId: $entId, type: $type);
 			}
 		});
 		$entityMapper->method('findAllSongEntityLinksForLibrary')->willReturnCallback(function () use (&$storage) {

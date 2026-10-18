@@ -9,7 +9,7 @@ declare(strict_types=1);
 
 namespace OCA\SheetMusic\Db;
 
-class SongEntityLink implements \ArrayAccess {
+class SongEntityLink {
 	public function __construct(
 		public int $linkId,
 		public int $songId,
@@ -40,32 +40,5 @@ class SongEntityLink implements \ArrayAccess {
 			'entity_id' => $this->entityId,
 			'type' => $this->type,
 		];
-	}
-
-	public function offsetExists(mixed $offset): bool {
-		return in_array($offset, ['link_id', 'linkId', 'song_id', 'songId', 'entity_id', 'entityId', 'type'], true);
-	}
-
-	public function offsetGet(mixed $offset): mixed {
-		return match ($offset) {
-			'link_id', 'linkId' => $this->linkId,
-			'song_id', 'songId' => $this->songId,
-			'entity_id', 'entityId' => $this->entityId,
-			'type' => $this->type,
-			default => null,
-		};
-	}
-
-	public function offsetSet(mixed $offset, mixed $value): void {
-		match ($offset) {
-			'link_id', 'linkId' => $this->linkId = (int)$value,
-			'song_id', 'songId' => $this->songId = (int)$value,
-			'entity_id', 'entityId' => $this->entityId = (int)$value,
-			'type' => $this->type = (string)$value,
-			default => null,
-		};
-	}
-
-	public function offsetUnset(mixed $offset): void {
 	}
 }

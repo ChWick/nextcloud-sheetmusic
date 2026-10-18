@@ -819,9 +819,9 @@ final class MobileSheetsSyncTest extends TestCase {
 		$this->importer->importFromFile($lib, $dbPath1);
 
 		$links1 = $this->entityMapper->findAllSongEntityLinksForLibrary($lib->id);
-		$matchingLinks1 = array_filter($links1, fn ($l) => $l['song_id'] === $song->id && $l['type'] === $entityType);
+		$matchingLinks1 = array_filter($links1, fn ($l) => $l->songId === $song->id && $l->type === $entityType);
 		self::assertCount(1, $matchingLinks1);
-		self::assertSame($entity1->id, (int)array_values($matchingLinks1)[0]['entity_id']);
+		self::assertSame($entity1->id, (int)array_values($matchingLinks1)[0]->entityId);
 
 		// STEP B: MobileSheets CHANGES the link from Entity 1 to Entity 2
 		$dbPath2 = $this->tempDbPath();
@@ -835,9 +835,9 @@ final class MobileSheetsSyncTest extends TestCase {
 		$this->importer->importFromFile($lib, $dbPath2);
 
 		$links2 = $this->entityMapper->findAllSongEntityLinksForLibrary($lib->id);
-		$matchingLinks2 = array_filter($links2, fn ($l) => $l['song_id'] === $song->id && $l['type'] === $entityType);
+		$matchingLinks2 = array_filter($links2, fn ($l) => $l->songId === $song->id && $l->type === $entityType);
 		self::assertCount(1, $matchingLinks2);
-		self::assertSame($entity2->id, (int)array_values($matchingLinks2)[0]['entity_id'], 'Link should now point to entity2');
+		self::assertSame($entity2->id, (int)array_values($matchingLinks2)[0]->entityId, 'Link should now point to entity2');
 
 		// STEP C: MobileSheets REMOVES all links for this song
 		$dbPath3 = $this->tempDbPath();
@@ -850,7 +850,7 @@ final class MobileSheetsSyncTest extends TestCase {
 		$this->importer->importFromFile($lib, $dbPath3);
 
 		$links3 = $this->entityMapper->findAllSongEntityLinksForLibrary($lib->id);
-		$matchingLinks3 = array_filter($links3, fn ($l) => $l['song_id'] === $song->id && $l['type'] === $entityType);
+		$matchingLinks3 = array_filter($links3, fn ($l) => $l->songId === $song->id && $l->type === $entityType);
 		self::assertCount(0, $matchingLinks3, 'All links for this song and type should be removed');
 	}
 
@@ -926,7 +926,7 @@ final class MobileSheetsSyncTest extends TestCase {
 		self::assertNull($reloadedSong->deletedAt, 'Song should remain active');
 
 		$activeLinks = $this->entityMapper->findAllSongEntityLinksForLibrary($lib->id);
-		$matchingLinks = array_filter($activeLinks, fn ($l) => $l['song_id'] === $song->id && $l['type'] === $entityType);
+		$matchingLinks = array_filter($activeLinks, fn ($l) => $l->songId === $song->id && $l->type === $entityType);
 		self::assertCount(0, $matchingLinks, 'Active links for this entity type should be 0');
 
 		// 4. Re-export and verify neither entity nor link appears in final DB
