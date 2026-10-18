@@ -252,7 +252,7 @@ class InternalSongMapper {
 	/**
 	 * Find active songs sharing the same client_id in the library.
 	 *
-	 * @return list<array{clientId: int, songIds: list<int>, titles: list<string>}>
+	 * @return list<DuplicateSongClientIdConflict>
 	 */
 	public function findDuplicateClientIds(int $libraryId): array {
 		$qb = $this->db->getQueryBuilder();
@@ -278,11 +278,11 @@ class InternalSongMapper {
 		$conflicts = [];
 		foreach ($grouped as $cId => $entries) {
 			if (count($entries) > 1) {
-				$conflicts[] = [
-					'clientId' => $cId,
-					'songIds' => array_column($entries, 'id'),
-					'titles' => array_column($entries, 'title'),
-				];
+				$conflicts[] = new DuplicateSongClientIdConflict(
+					clientId: $cId,
+					songIds: array_column($entries, 'id'),
+					titles: array_column($entries, 'title'),
+				);
 			}
 		}
 
@@ -311,7 +311,7 @@ class InternalSongMapper {
 
 		$reassigned = 0;
 		foreach ($conflicts as $conflict) {
-			$duplicates = array_slice($conflict['songIds'], 1);
+			$duplicates = array_slice($conflict->songIds, 1);
 			foreach ($duplicates as $sId) {
 				$maxId++;
 				$qbUp = $this->db->getQueryBuilder();

@@ -652,7 +652,7 @@ class InternalEntityMapper {
 	/**
 	 * Find entities of the same type sharing the same client_id in the library.
 	 *
-	 * @return list<array{type: string, clientId: int, entityIds: list<int>, names: list<string>}>
+	 * @return list<DuplicateEntityClientIdConflict>
 	 */
 	public function findDuplicateClientIds(int $libraryId): array {
 		$qb = $this->db->getQueryBuilder();
@@ -680,12 +680,12 @@ class InternalEntityMapper {
 		foreach ($grouped as $type => $byClient) {
 			foreach ($byClient as $cId => $entries) {
 				if (count($entries) > 1) {
-					$conflicts[] = [
-						'type' => $type,
-						'clientId' => $cId,
-						'entityIds' => array_column($entries, 'id'),
-						'names' => array_column($entries, 'name'),
-					];
+					$conflicts[] = new DuplicateEntityClientIdConflict(
+						type: $type,
+						clientId: $cId,
+						entityIds: array_column($entries, 'id'),
+						names: array_column($entries, 'name'),
+					);
 				}
 			}
 		}
@@ -715,7 +715,7 @@ class InternalEntityMapper {
 
 		$reassigned = 0;
 		foreach ($conflicts as $conflict) {
-			$duplicates = array_slice($conflict['entityIds'], 1);
+			$duplicates = array_slice($conflict->entityIds, 1);
 			foreach ($duplicates as $entId) {
 				$maxId++;
 				$qbUp = $this->db->getQueryBuilder();

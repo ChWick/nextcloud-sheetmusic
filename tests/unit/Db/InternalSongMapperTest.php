@@ -149,8 +149,8 @@ final class InternalSongMapperTest extends TestCase {
 
 		$conflicts = $this->mapper->findDuplicateClientIds($this->libraryId);
 		self::assertCount(1, $conflicts);
-		self::assertSame(50, $conflicts[0]['clientId']);
-		self::assertSame([(int)$s1->id, (int)$s2->id], $conflicts[0]['songIds']);
+		self::assertSame(50, $conflicts[0]->clientId);
+		self::assertSame([(int)$s1->id, (int)$s2->id], $conflicts[0]->songIds);
 	}
 
 	public function testFixDuplicateClientIds(): void {

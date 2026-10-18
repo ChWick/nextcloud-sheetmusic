@@ -244,9 +244,9 @@ final class InternalEntityMapperTest extends TestCase {
 
 		$conflicts = $this->mapper->findDuplicateClientIds($this->libraryId);
 		self::assertCount(1, $conflicts);
-		self::assertSame('composer', $conflicts[0]['type']);
-		self::assertSame(10, $conflicts[0]['clientId']);
-		self::assertSame([(int)$e1->id, (int)$e2->id], $conflicts[0]['entityIds']);
+		self::assertSame('composer', $conflicts[0]->type);
+		self::assertSame(10, $conflicts[0]->clientId);
+		self::assertSame([(int)$e1->id, (int)$e2->id], $conflicts[0]->entityIds);
 	}
 
 	public function testFixDuplicateClientIds(): void {
