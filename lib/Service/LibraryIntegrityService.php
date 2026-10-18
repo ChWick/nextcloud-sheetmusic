@@ -344,46 +344,50 @@ class LibraryIntegrityService {
 
 		$duplicateSongClientIds = $this->internalSongMapper->findDuplicateClientIds($libraryId);
 		foreach ($duplicateSongClientIds as $dup) {
+			$keepId = $dup['songIds'][0];
+			$duplicateIds = array_slice($dup['songIds'], 1);
 			$issues[] = new IntegrityIssue(
 				type: IntegrityIssue::TYPE_DUPLICATE_CLIENT_ID,
 				severity: IntegrityIssue::SEVERITY_WARNING,
 				message: sprintf(
 					'Duplicate song client_id %d shared by song IDs %s. Auto-fix will keep client_id on ID %d and reset duplicates.',
-					$dup['client_id'],
-					implode(', ', array_merge([$dup['keep_id']], $dup['duplicate_ids'])),
-					$dup['keep_id'],
+					$dup['clientId'],
+					implode(', ', $dup['songIds']),
+					$keepId,
 				),
-				songId: $dup['keep_id'],
+				songId: $keepId,
 				fixable: true,
 				details: [
 					'target' => 'song',
-					'clientId' => $dup['client_id'],
-					'keepId' => $dup['keep_id'],
-					'duplicateIds' => $dup['duplicate_ids'],
+					'clientId' => $dup['clientId'],
+					'keepId' => $keepId,
+					'duplicateIds' => $duplicateIds,
 				],
 			);
 		}
 
 		$duplicateEntityClientIds = $this->internalEntityMapper->findDuplicateClientIds($libraryId);
 		foreach ($duplicateEntityClientIds as $dup) {
-			$label = InternalEntityMapper::getLabel($dup['entity_type']);
+			$label = InternalEntityMapper::getLabel($dup['type']);
+			$keepId = $dup['entityIds'][0];
+			$duplicateIds = array_slice($dup['entityIds'], 1);
 			$issues[] = new IntegrityIssue(
 				type: IntegrityIssue::TYPE_DUPLICATE_CLIENT_ID,
 				severity: IntegrityIssue::SEVERITY_WARNING,
 				message: sprintf(
 					'Duplicate %s client_id %d shared by entity IDs %s. Auto-fix will keep client_id on ID %d and reset duplicates.',
 					$label,
-					$dup['client_id'],
-					implode(', ', array_merge([$dup['keep_id']], $dup['duplicate_ids'])),
-					$dup['keep_id'],
+					$dup['clientId'],
+					implode(', ', $dup['entityIds']),
+					$keepId,
 				),
 				fixable: true,
 				details: [
 					'target' => 'entity',
-					'entityType' => $dup['entity_type'],
-					'clientId' => $dup['client_id'],
-					'keepId' => $dup['keep_id'],
-					'duplicateIds' => $dup['duplicate_ids'],
+					'entityType' => $dup['type'],
+					'clientId' => $dup['clientId'],
+					'keepId' => $keepId,
+					'duplicateIds' => $duplicateIds,
 				],
 			);
 		}
