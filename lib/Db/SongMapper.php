@@ -753,37 +753,7 @@ class SongMapper extends AbstractDatabaseMapper {
 		return $songs[0] ?? null;
 	}
 
-	/**
-	 * @return list<array{songId: int, entityType: string, entityId: int, count: int}>
-	 */
-	public function findDuplicateEntityAssignments(string $databasePath): array {
-		return $this->entityMapper->findDuplicateSongEntityAssignments($databasePath);
-	}
 
-	/** Remove repeated song-to-entity relation rows, preserving one assignment each. */
-	public function removeDuplicateEntityAssignments(string $databasePath, int $songId): int {
-		return $this->entityMapper->removeDuplicateSongEntityAssignments($databasePath, $songId);
-	}
-
-	/**
-	 * @return list<array{entityType: string, name: string, keepId: int, duplicateIds: list<int>}>
-	 */
-	public function findDuplicateEntities(string $databasePath): array {
-		return $this->entityMapper->findDuplicateEntities($databasePath);
-	}
-
-	/**
-	 * @param int|list<int> $entityIds
-	 * @return list<int>
-	 */
-	public function getSongIdsForEntity(string $databasePath, string $entityType, int|array $entityIds): array {
-		return $this->entityMapper->getSongIdsForEntity($databasePath, $entityType, $entityIds);
-	}
-
-	/** @param list<int> $duplicateIds */
-	public function mergeDuplicateEntities(string $databasePath, string $entityType, int $keepId, array $duplicateIds): int {
-		return $this->entityMapper->mergeDuplicateEntities($databasePath, $entityType, $keepId, $duplicateIds);
-	}
 
 	/**
 	 * @template T of object
