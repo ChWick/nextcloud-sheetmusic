@@ -245,36 +245,6 @@ class SongFileService {
 		}
 	}
 
-	public function deleteFileNode(string $internalPath): void {
-		try {
-			$node = $this->rootFolder->get($internalPath);
-		} catch (NotFoundException) {
-			return;
-		}
-
-		if ($node->getType() !== 'file') {
-			$this->logger->warning('Refusing to delete a stored MobileSheets path that is not a file', [
-				'internalPath' => $internalPath,
-			]);
-
-			return;
-		}
-
-		$node->delete();
-	}
-
-	public function hashCodesFor(string $databasePath): ?MobileSheetsHashCodesFile {
-		try {
-			return MobileSheetsHashCodesFile::forDatabase($databasePath, $this->logger);
-		} catch (\Throwable $exception) {
-			$this->logger->warning('Could not read the MobileSheets hash codes file', [
-				'exception' => $exception,
-				'databasePath' => $databasePath,
-			]);
-
-			return null;
-		}
-	}
 
 	private function libraryFolderPath(string $libraryPath): string {
 		$directory = dirname(ltrim($libraryPath, '/'));
