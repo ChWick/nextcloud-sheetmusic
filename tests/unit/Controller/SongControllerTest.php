@@ -5,116 +5,172 @@ declare(strict_types=1);
 namespace Controller;
 
 use OCA\SheetMusic\Controller\SongController;
+use OCA\SheetMusic\Db\InternalSong;
+use OCA\SheetMusic\Service\FileManager;
+use OCA\SheetMusic\Service\LibraryIntegrityService;
+use OCA\SheetMusic\Service\LibraryService;
+use OCA\SheetMusic\Service\SongFileService;
 use OCA\SheetMusic\Service\SongService;
 use OCP\AppFramework\Http;
 use OCP\IRequest;
 use OCP\IUser;
-use OCP\IUserSession;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
+use TestSupport\FakeUserSession;
+use TestSupport\RealMobileSheetsTestTrait;
 
 final class SongControllerTest extends TestCase {
-	public function testGetSongsValidatesIdAndAuth(): void {
-		$userSession = $this->createMock(IUserSession::class);
-		$userSession->method('getUser')->willReturn(null);
+	use RealMobileSheetsTestTrait;
 
-		$controller = new SongController(
-			'sheetmusic',
-			$this->createMock(IRequest::class),
-			$this->createMock(SongService::class),
-			$userSession,
+	private int $libraryId;
+	private IUser $user;
+	private FakeUserSession $userSession;
+	private SongService $songService;
+	private SongController $controller;
+
+	protected function setUp(): void {
+		parent::setUp();
+		$this->setUpRealMobileSheetsEnvironment();
+		$library = $this->createTestLibrary('SongController Test Lib');
+		$this->libraryId = (int)$library->id;
+		$this->user = $this->userManager->get($library->userId);
+
+		$logger = new NullLogger();
+		$libraryService = new LibraryService($this->libraryMapper, $this->rootFolder, $logger, exporter: $this->exporter);
+		$fileManager = new FileManager(
+			$this->libraryMapper,
+			$this->rootFolder,
+			$this->pathResolver,
+			$logger,
+			$libraryService,
+			$this->songFileMapper,
+			$this->songMapper,
+		);
+		$songFileService = new SongFileService(
+			$libraryService,
+			$fileManager,
+			$this->rootFolder,
+			$logger,
+			$this->songFileMapper,
+			$this->songMapper,
+			$this->libraryMapper,
+		);
+		$integrityService = new LibraryIntegrityService(
+			$libraryService,
+			$fileManager,
+			$this->rootFolder,
+			$this->pathResolver,
+			$logger,
+			$this->entityMapper,
+			$this->songMapper,
+			$this->songFileMapper,
+			$this->libraryMapper,
+			$this->attributeMapper,
+			$this->miscMapper,
+		);
+		$this->songService = new SongService(
+			$libraryService,
+			$songFileService,
+			$fileManager,
+			$logger,
+			$this->songMapper,
+			$this->entityMapper,
+			$this->songFileMapper,
+			$this->libraryMapper,
+			$this->rootFolder,
+			$integrityService,
 		);
 
-		$this->assertSame(Http::STATUS_BAD_REQUEST, $controller->getSongs(null)->getStatus());
-		$this->assertSame(Http::STATUS_BAD_REQUEST, $controller->getSongs('-1')->getStatus());
-		$this->assertSame(Http::STATUS_UNAUTHORIZED, $controller->getSongs('1')->getStatus());
+		$this->userSession = new FakeUserSession($this->user);
+		$request = \OC::$server->get(IRequest::class);
+
+		$this->controller = new SongController(
+			'sheetmusic',
+			$request,
+			$this->songService,
+			$this->userSession,
+		);
+	}
+
+	protected function tearDown(): void {
+		$this->tearDownRealMobileSheetsEnvironment();
+		parent::tearDown();
+	}
+
+	public function testGetSongsValidatesIdAndAuth(): void {
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $this->controller->getSongs(null)->getStatus());
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $this->controller->getSongs('-1')->getStatus());
+
+		$this->userSession->setUser(null);
+		$this->assertSame(Http::STATUS_UNAUTHORIZED, $this->controller->getSongs((string)$this->libraryId)->getStatus());
 	}
 
 	public function testGetSongsReturnsData(): void {
-		$user = $this->createMock(IUser::class);
-		$userSession = $this->createMock(IUserSession::class);
-		$userSession->method('getUser')->willReturn($user);
+		$this->songMapper->insert(new InternalSong(
+			uuid: 'uuid-autumn',
+			libraryId: $this->libraryId,
+			title: 'Autumn Leaves',
+		));
 
-		$songService = $this->createMock(SongService::class);
-		$songService->expects($this->once())
-			->method('getSongs')
-			->with($user, 1)
-			->willReturn(['songs' => []]);
-
-		$controller = new SongController(
-			'sheetmusic',
-			$this->createMock(IRequest::class),
-			$songService,
-			$userSession,
-		);
-
-		$res = $controller->getSongs('1');
+		$res = $this->controller->getSongs((string)$this->libraryId);
 		$this->assertSame(Http::STATUS_OK, $res->getStatus());
-		$this->assertSame(['songs' => []], $res->getData());
+		$data = $res->getData();
+		$this->assertArrayHasKey('songs', $data);
+		$this->assertCount(1, $data['songs']);
+		$this->assertSame('Autumn Leaves', $data['songs'][0]->title);
 	}
 
-	public function testCreateSongValidatesParameters(): void {
-		$userSession = $this->createMock(IUserSession::class);
-		$userSession->method('getUser')->willReturn($this->createMock(IUser::class));
+	public function testCreateSongValidatesParametersAndCreatesSong(): void {
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $this->controller->createSong(null, 'Title')->getStatus());
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $this->controller->createSong($this->libraryId, '  ')->getStatus());
 
-		$controller = new SongController(
-			'sheetmusic',
-			$this->createMock(IRequest::class),
-			$this->createMock(SongService::class),
-			$userSession,
-		);
+		$this->userSession->setUser(null);
+		$this->assertSame(Http::STATUS_UNAUTHORIZED, $this->controller->createSong($this->libraryId, 'Title')->getStatus());
+		$this->userSession->setUser($this->user);
 
-		$this->assertSame(Http::STATUS_BAD_REQUEST, $controller->createSong(null, 'Title')->getStatus());
-		$this->assertSame(Http::STATUS_BAD_REQUEST, $controller->createSong(1, '  ')->getStatus());
+		$res = $this->controller->createSong($this->libraryId, 'Blue in Green');
+		$this->assertSame(Http::STATUS_CREATED, $res->getStatus());
+		$data = $res->getData();
+		$this->assertArrayHasKey('createdSongId', $data);
+		$this->assertArrayHasKey('songs', $data);
+		$this->assertSame('Blue in Green', $data['songs'][0]->title);
 	}
 
-	public function testDeleteSongValidatesParametersAndReturnsData(): void {
-		$user = $this->createMock(IUser::class);
-		$userSession = $this->createMock(IUserSession::class);
-		$userSession->method('getUser')->willReturn($user);
+	public function testDeleteSongValidatesParametersAndDeletesSong(): void {
+		$song = $this->songMapper->insert(new InternalSong(
+			uuid: 'uuid-to-delete',
+			libraryId: $this->libraryId,
+			title: 'Song to Delete',
+		));
 
-		$songService = $this->createMock(SongService::class);
-		$songService->expects($this->once())
-			->method('deleteSong')
-			->with($user, 42, 1, true)
-			->willReturn(['songs' => []]);
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $this->controller->deleteSong($song->id, null)->getStatus());
 
-		$controller = new SongController(
-			'sheetmusic',
-			$this->createMock(IRequest::class),
-			$songService,
-			$userSession,
-		);
-
-		$this->assertSame(Http::STATUS_BAD_REQUEST, $controller->deleteSong(42, null)->getStatus());
-
-		$res = $controller->deleteSong(42, 1);
+		$res = $this->controller->deleteSong($song->id, $this->libraryId);
 		$this->assertSame(Http::STATUS_OK, $res->getStatus());
-		$this->assertSame(['songs' => []], $res->getData());
+
+		$remaining = $this->songMapper->findAllForLibrary($this->libraryId);
+		$this->assertEmpty($remaining);
 	}
 
 	public function testBatchDeleteSongs(): void {
-		$user = $this->createMock(IUser::class);
-		$userSession = $this->createMock(IUserSession::class);
-		$userSession->method('getUser')->willReturn($user);
+		$song1 = $this->songMapper->insert(new InternalSong(
+			uuid: 'uuid-batch-1',
+			libraryId: $this->libraryId,
+			title: 'Batch 1',
+		));
+		$song2 = $this->songMapper->insert(new InternalSong(
+			uuid: 'uuid-batch-2',
+			libraryId: $this->libraryId,
+			title: 'Batch 2',
+		));
 
-		$songService = $this->createMock(SongService::class);
-		$songService->expects($this->once())
-			->method('batchDeleteSongs')
-			->with($user, 1, [42, 43], true)
-			->willReturn(['songs' => []]);
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $this->controller->batchDeleteSongs(null, [$song1->id, $song2->id])->getStatus());
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $this->controller->batchDeleteSongs($this->libraryId, [])->getStatus());
 
-		$controller = new SongController(
-			'sheetmusic',
-			$this->createMock(IRequest::class),
-			$songService,
-			$userSession,
-		);
-
-		$this->assertSame(Http::STATUS_BAD_REQUEST, $controller->batchDeleteSongs(null, [42, 43])->getStatus());
-		$this->assertSame(Http::STATUS_BAD_REQUEST, $controller->batchDeleteSongs(1, [])->getStatus());
-
-		$res = $controller->batchDeleteSongs(1, [42, 43], true);
+		$res = $this->controller->batchDeleteSongs($this->libraryId, [$song1->id, $song2->id]);
 		$this->assertSame(Http::STATUS_OK, $res->getStatus());
-		$this->assertSame(['songs' => []], $res->getData());
+
+		$remaining = $this->songMapper->findAllForLibrary($this->libraryId);
+		$this->assertEmpty($remaining);
 	}
 }
