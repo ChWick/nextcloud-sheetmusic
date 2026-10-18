@@ -35,6 +35,21 @@ return [
 			'verb' => 'POST',
 		],
 		[
+			'name' => 'Api#updateSongFile',
+			'url' => '/api/libraries/{libraryId}/songs/{id}/file/{fileId}/update',
+			'verb' => 'POST',
+		],
+		[
+			'name' => 'Api#getSongFileVersions',
+			'url' => '/api/libraries/{libraryId}/songs/{id}/file/{fileId}/versions',
+			'verb' => 'GET',
+		],
+		[
+			'name' => 'Api#revertSongFileVersion',
+			'url' => '/api/libraries/{libraryId}/songs/{id}/file/{fileId}/versions/{revision}/revert',
+			'verb' => 'POST',
+		],
+		[
 			'name' => 'Api#attachNextcloudFile',
 			'url' => '/api/songs/{id}/file/attach',
 			'verb' => 'POST',

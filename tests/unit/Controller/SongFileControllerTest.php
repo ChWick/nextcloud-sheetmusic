@@ -205,4 +205,47 @@ final class SongFileControllerTest extends TestCase {
 		$files = $this->songFileMapper->findAllForSong($song->id);
 		$this->assertEmpty($files);
 	}
+
+	public function testUpdateSongFile(): void {
+		$song = $this->songMapper->insert(new InternalSong(
+			uuid: 'update-file-song-uuid',
+			libraryId: $this->libraryId,
+			title: 'Song to Update File',
+		));
+
+		$fileNode = $this->libFolder->newFile('update-me.pdf');
+		$fileNode->putContent('%PDF-1.4 initial content');
+		$this->createdUserNodes[] = $fileNode;
+
+		$songFile = $this->songFileMapper->insert(new InternalSongFile(
+			songId: (int)$song->id,
+			fileId: $fileNode->getId(),
+			type: SongFileMapper::FILE_TYPE_PDF,
+		));
+
+		$tmp = tempnam(sys_get_temp_dir(), 'test_update_');
+		file_put_contents($tmp, '%PDF-1.4 updated content');
+
+		$this->request->setUploadedFile('file', [
+			'tmp_name' => $tmp,
+			'name' => 'update-me.pdf',
+			'error' => UPLOAD_ERR_OK,
+		]);
+
+		try {
+			$res = $this->controller->updateSongFile($song->id, $songFile->id, $this->libraryId);
+			$this->assertSame(Http::STATUS_OK, $res->getStatus());
+		} finally {
+			unlink($tmp);
+		}
+
+		$reloaded = $this->libFolder->get('update-me.pdf');
+		$this->assertSame('%PDF-1.4 updated content', $reloaded->getContent());
+	}
+
+	public function testGetSongFileVersions(): void {
+		$res = $this->controller->getSongFileVersions(1, 99999, $this->libraryId);
+		$this->assertSame(Http::STATUS_OK, $res->getStatus());
+		$this->assertSame([], $res->getData());
+	}
 }

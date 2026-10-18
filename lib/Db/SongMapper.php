@@ -753,8 +753,6 @@ class SongMapper extends AbstractDatabaseMapper {
 		return $songs[0] ?? null;
 	}
 
-
-
 	/**
 	 * @template T of object
 	 * @param list<int> $ids

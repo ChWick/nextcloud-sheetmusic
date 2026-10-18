@@ -209,6 +209,24 @@ class ApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/libraries/{libraryId}/songs/{id}/file/{fileId}/update')]
+	public function updateSongFile(int $id, int $fileId, int $libraryId): DataResponse {
+		return $this->songFileController->updateSongFile($id, $fileId, $libraryId);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'GET', url: '/api/libraries/{libraryId}/songs/{id}/file/{fileId}/versions')]
+	public function getSongFileVersions(int $id, int $fileId, int $libraryId): DataResponse {
+		return $this->songFileController->getSongFileVersions($id, $fileId, $libraryId);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/libraries/{libraryId}/songs/{id}/file/{fileId}/versions/{revision}/revert')]
+	public function revertSongFileVersion(int $id, int $fileId, int $libraryId, string $revision): DataResponse {
+		return $this->songFileController->revertSongFileVersion($id, $fileId, $libraryId, $revision);
+	}
+
+	#[NoAdminRequired]
 	#[ApiRoute(verb: 'POST', url: '/api/songs/{id}/file/attach')]
 	public function attachNextcloudFile(
 		int $id,

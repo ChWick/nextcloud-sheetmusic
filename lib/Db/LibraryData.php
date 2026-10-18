@@ -93,4 +93,3 @@ class LibraryData implements \JsonSerializable {
 		return $this->toArray();
 	}
 }
-

@@ -126,7 +126,6 @@ class LibraryMapper {
 		return InternalLibrary::fromRow($row);
 	}
 
-
 	public function setSettingsForUser(string $userId, int $id, ?bool $autoPaths = null, ?bool $autoPdfMetadata = null): void {
 		$qb = $this->db->getQueryBuilder();
 		$qb->update(self::TABLE_NAME)

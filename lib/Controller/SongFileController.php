@@ -92,6 +92,103 @@ class SongFileController extends OCSController {
 		}
 	}
 
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/libraries/{libraryId}/songs/{id}/file/{fileId}/update')]
+	public function updateSongFile(int $id, int $fileId, int $libraryId): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		$fileInfo = $this->getUploadedFileInfo('file');
+
+		if (isset($fileInfo['error']) && (int)$fileInfo['error'] !== UPLOAD_ERR_OK) {
+			[$message, $status] = $this->uploadError((int)$fileInfo['error']);
+			return new DataResponse(['message' => $message], $status);
+		}
+		if ($fileInfo === null && $this->requestExceedsPostMaxSize()) {
+			return new DataResponse([
+				'message' => sprintf(
+					'The request exceeds PHP post_max_size (%s). Increase post_max_size on the server.',
+					(string)ini_get('post_max_size'),
+				),
+			], Http::STATUS_REQUEST_ENTITY_TOO_LARGE);
+		}
+		if ($fileInfo === null) {
+			return new DataResponse(['message' => 'No file uploaded'], Http::STATUS_BAD_REQUEST);
+		}
+
+		try {
+			$result = $this->songFileService->updateSongFile($user, $libraryId, $id, $fileId, $fileInfo);
+			if ($result === null) {
+				return new DataResponse([], Http::STATUS_NOT_FOUND);
+			}
+
+			return new DataResponse($result);
+		} catch (\InvalidArgumentException $e) {
+			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_BAD_REQUEST);
+		} catch (\Throwable $e) {
+			$this->songFileService->getLogger()->error('Failed to update song file', [
+				'exception' => $e,
+				'songId' => $id,
+				'fileId' => $fileId,
+				'libraryId' => $libraryId,
+			]);
+			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'GET', url: '/api/libraries/{libraryId}/songs/{id}/file/{fileId}/versions')]
+	public function getSongFileVersions(int $id, int $fileId, int $libraryId): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		try {
+			$versions = $this->songFileService->getSongFileVersions($user, $fileId);
+			return new DataResponse($versions);
+		} catch (\Throwable $e) {
+			$this->songFileService->getLogger()->error('Failed to get song file versions', [
+				'exception' => $e,
+				'songId' => $id,
+				'fileId' => $fileId,
+				'libraryId' => $libraryId,
+			]);
+			return new DataResponse([], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/libraries/{libraryId}/songs/{id}/file/{fileId}/versions/{revision}/revert')]
+	public function revertSongFileVersion(int $id, int $fileId, int $libraryId, string $revision): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		try {
+			$result = $this->songFileService->revertSongFileVersion($user, $libraryId, $id, $fileId, $revision);
+			if ($result === null) {
+				return new DataResponse([], Http::STATUS_NOT_FOUND);
+			}
+
+			return new DataResponse($result);
+		} catch (\InvalidArgumentException $e) {
+			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_BAD_REQUEST);
+		} catch (\Throwable $e) {
+			$this->songFileService->getLogger()->error('Failed to revert song file version', [
+				'exception' => $e,
+				'songId' => $id,
+				'fileId' => $fileId,
+				'revision' => $revision,
+				'libraryId' => $libraryId,
+			]);
+			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
 	/**
 	 * @return array{string, int}
 	 */

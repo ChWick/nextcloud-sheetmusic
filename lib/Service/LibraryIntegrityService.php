@@ -11,9 +11,6 @@ namespace OCA\SheetMusic\Service;
 
 use OCA\SheetMusic\Db\DuplicateSongEntityAssignment;
 use OCA\SheetMusic\Db\InternalEntity;
-use OCA\SheetMusic\Db\OrphanSongEntityAssignment;
-use OCA\SheetMusic\Db\OrphanSongFile;
-use OCA\SheetMusic\Db\SongWithoutFiles;
 use OCA\SheetMusic\Db\InternalEntityMapper;
 use OCA\SheetMusic\Db\InternalMiscMapper;
 use OCA\SheetMusic\Db\InternalSongAttributeMapper;
@@ -22,8 +19,9 @@ use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
 use OCA\SheetMusic\Db\MobileSheetsSong;
+use OCA\SheetMusic\Db\OrphanSongEntityAssignment;
+use OCA\SheetMusic\Db\OrphanSongFile;
 use OCA\SheetMusic\Db\SongFileMapper;
-use OCA\SheetMusic\Service\MobileSheetsFileFacts;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
@@ -1586,7 +1584,6 @@ class LibraryIntegrityService {
 			'message' => sprintf('Linked orphan file "%s" to song "%s".', $orphanNode->getName(), $candidateSong->title),
 		];
 	}
-
 
 	private function isRelationalIssueType(string $type): bool {
 		return in_array($type, [

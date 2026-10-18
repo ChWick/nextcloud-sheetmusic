@@ -95,7 +95,6 @@ class LibraryService {
 		return $cacheFile;
 	}
 
-
 	public function getDatabasePath(string $userId, int $libraryId): ?string {
 		$pair = $this->getLibraryAndDatabasePath($userId, $libraryId);
 		return $pair === null ? null : $pair[1];

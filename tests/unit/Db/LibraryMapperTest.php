@@ -9,7 +9,6 @@ declare(strict_types=1);
 
 namespace Db;
 
-use OCA\SheetMusic\Db\LibraryMapper;
 use PHPUnit\Framework\TestCase;
 use TestSupport\RealMobileSheetsTestTrait;
 

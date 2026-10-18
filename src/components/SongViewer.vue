@@ -209,8 +209,8 @@ defineExpose({
 					<NcButton
 						v-if="song && isSelectedFilePdf"
 						variant="secondary"
-						:title="t('sheetmusic', 'Modify PDF (rotate, crop, split)')"
-						:aria-label="t('sheetmusic', 'Modify PDF (rotate, crop, split)')"
+						:title="t('sheetmusic', 'Modify PDF (rotate, crop, enhance, split)')"
+						:aria-label="t('sheetmusic', 'Modify PDF (rotate, crop, enhance, split)')"
 						@click="emit('modify-pdf', song, selectedFile?.id)">
 						<template #icon>
 							<FileDocumentEditOutline :size="20" />

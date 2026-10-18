@@ -13,7 +13,6 @@ use OCA\SheetMusic\Db\LibraryMapper;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\Files\Node;
-use OCP\Files\NotFoundException;
 use OCP\IUser;
 use Psr\Log\LoggerInterface;
 
@@ -101,6 +100,117 @@ class SongFileService {
 		$targetFile->putContent($content);
 
 		$this->recordSongFile($songId, $user, $targetFile, $libraryId);
+
+		return $this->internalSongMapper->findLibraryData($libraryId, $user);
+	}
+
+	public function updateSongFile(IUser $user, int $libraryId, int $songId, int $fileId, ?array $fileInfo): ?LibraryData {
+		if ($fileInfo === null || !isset($fileInfo['tmp_name'])) {
+			throw new \InvalidArgumentException('No file uploaded');
+		}
+		if (is_uploaded_file($fileInfo['tmp_name']) === false && file_exists($fileInfo['tmp_name']) === false) {
+			throw new \InvalidArgumentException('No file uploaded');
+		}
+
+		$content = file_get_contents($fileInfo['tmp_name']);
+		if ($content === false) {
+			throw new \InvalidArgumentException('Could not read the uploaded file');
+		}
+
+		$fileRecord = $this->internalSongFileMapper->findById($fileId);
+		if ($fileRecord === null || ($songId > 0 && $fileRecord->songId !== $songId)) {
+			throw new \InvalidArgumentException('Song file record not found');
+		}
+
+		$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+		$nodes = $userFolder->getById($fileRecord->fileId);
+		if (empty($nodes) || !($nodes[0] instanceof Node)) {
+			throw new \RuntimeException('Nextcloud file node not found');
+		}
+
+		$targetNode = $nodes[0];
+		if (!($targetNode instanceof \OCP\Files\File)) {
+			throw new \RuntimeException('Target node is not a file');
+		}
+
+		// Overwrite content in place on existing File node:
+		// Preserves fileId, path, and triggers Nextcloud files_versions app to capture history
+		$targetNode->putContent($content);
+
+		$this->libraryMapper->touch($libraryId);
+		$this->syncSongFileMetadata($user, '', $songId, $libraryId);
+
+		return $this->internalSongMapper->findLibraryData($libraryId, $user);
+	}
+
+	/**
+	 * @return list<array{version: string, timestamp: int, humanReadableTimestamp: string, size: int, name: string}>
+	 */
+	public function getSongFileVersions(IUser $user, int $fileId): array {
+		$fileRecord = $this->internalSongFileMapper->findById($fileId);
+		if ($fileRecord === null) {
+			return [];
+		}
+
+		$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+		$nodes = $userFolder->getById($fileRecord->fileId);
+		if (empty($nodes) || !($nodes[0] instanceof Node)) {
+			return [];
+		}
+
+		$targetNode = $nodes[0];
+		$relativePath = $userFolder->getRelativePath($targetNode->getPath());
+		if ($relativePath === null || $relativePath === false) {
+			return [];
+		}
+
+		if (class_exists(\OCA\Files_Versions\Storage::class)) {
+			$rawVersions = \OCA\Files_Versions\Storage::getVersions($user->getUID(), '/' . ltrim($relativePath, '/'));
+			$result = [];
+			foreach ($rawVersions as $key => $v) {
+				$result[] = [
+					'version' => (string)($v['version'] ?? $key),
+					'timestamp' => (int)($v['version'] ?? 0),
+					'humanReadableTimestamp' => (string)($v['humanReadableTimestamp'] ?? ''),
+					'size' => (int)($v['size'] ?? 0),
+					'name' => (string)($v['name'] ?? $targetNode->getName()),
+				];
+			}
+			return $result;
+		}
+
+		return [];
+	}
+
+	public function revertSongFileVersion(IUser $user, int $libraryId, int $songId, int $fileId, string|int $revision): ?LibraryData {
+		$fileRecord = $this->internalSongFileMapper->findById($fileId);
+		if ($fileRecord === null || ($songId > 0 && $fileRecord->songId !== $songId)) {
+			throw new \InvalidArgumentException('Song file record not found');
+		}
+
+		$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+		$nodes = $userFolder->getById($fileRecord->fileId);
+		if (empty($nodes) || !($nodes[0] instanceof Node)) {
+			throw new \RuntimeException('Nextcloud file node not found');
+		}
+
+		$targetNode = $nodes[0];
+		$relativePath = $userFolder->getRelativePath($targetNode->getPath());
+		if ($relativePath === null || $relativePath === false) {
+			throw new \RuntimeException('Cannot determine relative path for file');
+		}
+
+		if (class_exists(\OCA\Files_Versions\Storage::class)) {
+			$success = \OCA\Files_Versions\Storage::rollback('/' . ltrim($relativePath, '/'), (int)$revision, $user);
+			if (!$success) {
+				throw new \RuntimeException('Failed to rollback file revision');
+			}
+		} else {
+			throw new \RuntimeException('Nextcloud files_versions app is not available');
+		}
+
+		$this->libraryMapper->touch($libraryId);
+		$this->syncSongFileMetadata($user, '', $songId, $libraryId);
 
 		return $this->internalSongMapper->findLibraryData($libraryId, $user);
 	}
@@ -245,7 +355,6 @@ class SongFileService {
 			}
 		}
 	}
-
 
 	private function libraryFolderPath(string $libraryPath): string {
 		$directory = dirname(ltrim($libraryPath, '/'));

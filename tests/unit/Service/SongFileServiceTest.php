@@ -285,4 +285,68 @@ final class SongFileServiceTest extends TestCase {
 
 		self::assertFalse($this->libraryService->isAutoPdfMetadataEnabled('admin', $this->libraryId));
 	}
+
+	public function testUpdateSongFileOverwritesInPlaceAndPreservesFileId(): void {
+		$song = $this->songMapper->insert(new InternalSong(
+			id: null,
+			uuid: 's-update-1',
+			libraryId: $this->libraryId,
+			title: 'Song Update In Place',
+		));
+
+		$fileNode = $this->libraryFolder->newFile('original_score.pdf');
+		$fileNode->putContent('%PDF-1.4 ORIGINAL_CONTENT');
+		$this->createdUserNodes[] = $fileNode;
+		$origFileId = (int)$fileNode->getId();
+
+		$fileRecord = $this->songFileMapper->insert(new InternalSongFile(
+			id: null,
+			uuid: 'sf-update-1',
+			songId: (int)$song->id,
+			fileId: $origFileId,
+			type: InternalSongFile::FILE_TYPE_PDF,
+		));
+
+		$tmpFile = tempnam(sys_get_temp_dir(), 'test_update_');
+		file_put_contents($tmpFile, '%PDF-1.4 UPDATED_ENHANCED_CONTENT');
+
+		try {
+			$result = $this->service->updateSongFile(
+				$this->user,
+				$this->libraryId,
+				(int)$song->id,
+				(int)$fileRecord->id,
+				[
+					'tmp_name' => $tmpFile,
+					'name' => 'original_score.pdf',
+				],
+			);
+			self::assertNotNull($result);
+		} finally {
+			unlink($tmpFile);
+		}
+
+		// Verify file node ID is identical (not deleted and recreated)
+		self::assertTrue($this->libraryFolder->nodeExists('original_score.pdf'));
+		$reloadedFile = $this->libraryFolder->get('original_score.pdf');
+		self::assertSame($origFileId, (int)$reloadedFile->getId(), 'File ID must be preserved for Nextcloud version history');
+		self::assertSame('%PDF-1.4 UPDATED_ENHANCED_CONTENT', $reloadedFile->getContent());
+	}
+
+	public function testUpdateSongFileThrowsOnInvalidFile(): void {
+		$song = $this->songMapper->insert(new InternalSong(
+			id: null,
+			uuid: 's-update-fail',
+			libraryId: $this->libraryId,
+			title: 'Song Update Fail',
+		));
+
+		$this->expectException(\InvalidArgumentException::class);
+		$this->service->updateSongFile($this->user, $this->libraryId, (int)$song->id, 9999, null);
+	}
+
+	public function testGetSongFileVersionsForNonexistentFileReturnsEmpty(): void {
+		$versions = $this->service->getSongFileVersions($this->user, 99999);
+		self::assertSame([], $versions);
+	}
 }

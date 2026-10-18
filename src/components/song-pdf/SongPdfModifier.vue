@@ -6,12 +6,13 @@ import { translate as t } from '@nextcloud/l10n'
 import { generateFilePath } from '@nextcloud/router'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
+import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist'
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { PDFDocument, degrees } from 'pdf-lib'
-import { apiDelete, apiPost } from '../../api/client'
+import { apiDelete, apiGet, apiPost } from '../../api/client'
 import { showError, showInfo, showSuccess } from '@nextcloud/dialogs'
 import { getCacheBustedFileUrl, getFileName } from '../../utils/file'
 import { describeRequestFailure } from '../../utils/api'
@@ -32,12 +33,18 @@ import CropIcon from 'vue-material-design-icons/Crop.vue'
 import ArrowRight from 'vue-material-design-icons/ArrowRight.vue'
 import TableMergeCells from 'vue-material-design-icons/TableMergeCells.vue'
 import Rotate360 from 'vue-material-design-icons/Rotate360.vue'
+import Tune from 'vue-material-design-icons/Tune.vue'
+import History from 'vue-material-design-icons/History.vue'
 import SongPdfCropModal from './SongPdfCropModal.vue'
 import SongPdfJoinModal from './SongPdfJoinModal.vue'
 import SongPdfRotateModal from './SongPdfRotateModal.vue'
+import SongPdfEnhanceModal from './SongPdfEnhanceModal.vue'
 import { computeCropBoxForRotation, type PageCrop } from './crop-types'
 import { executeJoinTwoPages, type JoinLayout } from './pdf-join-engine'
 import { executeRotatePage } from './pdf-rotate-engine'
+import type { ScanOperation } from './scan-types'
+import { applyPipeline, createImageBuffer, imageDataToImageBuffer, imageBufferToImageData } from './scan-enhance-engine'
+import { executeEnhancePage } from './pdf-enhance-engine'
 
 GlobalWorkerOptions.workerSrc = pdfWorker
 
@@ -96,7 +103,7 @@ const targetFile = computed<SongFile | undefined>(() => {
 })
 
 // State
-type Mode = 'rotate' | 'split' | 'crop'
+type Mode = 'rotate' | 'split' | 'crop' | 'enhance'
 const activeMode = ref<Mode>('rotate')
 
 const isLoading = ref(false)
@@ -113,8 +120,26 @@ const pageRotations = ref<number[]>([])
 // Page-specific crop state: Record<pageNum, PageCrop>
 const pageCrops = ref<Record<number, PageCrop>>({})
 
+// Page-specific scan enhancement state: Record<pageNum, ScanOperation[]>
+const pageEnhancements = ref<Record<number, ScanOperation[]>>({})
+
 // Deleted pages (1-indexed page numbers)
 const deletedPages = ref<Set<number>>(new Set())
+
+// Enhance modal state
+const isEnhanceModalOpen = ref(false)
+const enhanceModalPage = ref(1)
+
+// Version history modal state
+interface FileVersionInfo {
+	revision: number
+	timestamp: number
+	size: number
+}
+const isVersionsModalOpen = ref(false)
+const fileVersions = ref<FileVersionInfo[]>([])
+const isLoadingVersions = ref(false)
+const isRevertingVersion = ref(false)
 
 // Crop modal state
 const isCropModalOpen = ref(false)
@@ -159,6 +184,7 @@ async function loadPdf() {
 	pageRotations.value = []
 	pageRotateCropToOriginal.value = {}
 	pageCrops.value = {}
+	pageEnhancements.value = {}
 	deletedPages.value = new Set()
 	hasAnyJoin.value = false
 	thumbnailCanvases.value = {}
@@ -225,6 +251,11 @@ function cleanupThumbnailObserver() {
 	renderedThumbnails.clear()
 }
 
+function isPageEnhanced(pageNum: number): boolean {
+	const ops = pageEnhancements.value[pageNum]
+	return Array.isArray(ops) && ops.some((op) => op.enabled)
+}
+
 async function renderSingleThumbnail(pdf: any, pageNum: number) {
 	if (renderedThumbnails.has(pageNum)) return
 	renderedThumbnails.add(pageNum)
@@ -250,6 +281,14 @@ async function renderSingleThumbnail(pdf: any, pageNum: number) {
 				viewport,
 				background: 'rgb(255, 255, 255)',
 			}).promise
+
+			if (isPageEnhanced(pageNum)) {
+				const imgData = canvasContext.getImageData(0, 0, canvas.width, canvas.height)
+				const buffer = imageDataToImageBuffer(imgData)
+				const enhanced = applyPipeline(buffer, pageEnhancements.value[pageNum])
+				const newImgData = imageBufferToImageData(enhanced)
+				canvasContext.putImageData(newImgData, 0, 0)
+			}
 		}
 		thumbnailCanvases.value[pageNum] = canvas
 
@@ -259,6 +298,49 @@ async function renderSingleThumbnail(pdf: any, pageNum: number) {
 		}
 	} catch (e) {
 		console.warn(`Could not render thumbnail for page ${pageNum}`, e)
+	}
+}
+
+async function updateThumbnailForPage(pageNum: number) {
+	if (!activePdfDoc.value) return
+	try {
+		const page = await activePdfDoc.value.getPage(pageNum)
+		const unscaledViewport = page.getViewport({ scale: 1.0 })
+		const targetWidth = 140
+		const scale = targetWidth / unscaledViewport.width
+		const viewport = page.getViewport({ scale })
+
+		const canvas = document.createElement('canvas')
+		canvas.width = Math.floor(viewport.width)
+		canvas.height = Math.floor(viewport.height)
+		canvas.className = 'sheetmusic-pdf-thumbnail-canvas'
+
+		const canvasContext = canvas.getContext('2d')
+		if (canvasContext) {
+			canvasContext.fillStyle = '#ffffff'
+			canvasContext.fillRect(0, 0, canvas.width, canvas.height)
+			await page.render({
+				canvasContext,
+				viewport,
+				background: 'rgb(255, 255, 255)',
+			}).promise
+
+			if (isPageEnhanced(pageNum)) {
+				const imgData = canvasContext.getImageData(0, 0, canvas.width, canvas.height)
+				const buffer = imageDataToImageBuffer(imgData)
+				const enhanced = applyPipeline(buffer, pageEnhancements.value[pageNum])
+				const newImgData = imageBufferToImageData(enhanced)
+				canvasContext.putImageData(newImgData, 0, 0)
+			}
+		}
+		thumbnailCanvases.value[pageNum] = canvas
+
+		const container = thumbnailContainers.value[pageNum]
+		if (container) {
+			container.replaceChildren(canvas)
+		}
+	} catch (e) {
+		console.warn(`Could not update thumbnail for page ${pageNum}`, e)
 	}
 }
 
@@ -510,8 +592,125 @@ const remainingPagesCount = computed(() => {
 })
 
 const hasAnyChange = computed(() => {
-	return hasAnyRotation.value || hasAnyCrop.value || hasAnyDeletion.value || hasAnyJoin.value
+	return hasAnyRotation.value || hasAnyCrop.value || hasAnyDeletion.value || hasAnyJoin.value || hasAnyEnhance.value
 })
+
+// Enhance helpers
+function openEnhanceModal(pageNum: number) {
+	enhanceModalPage.value = pageNum
+	isEnhanceModalOpen.value = true
+}
+
+function handleApplyEnhancements(operations: ScanOperation[], scope: 'current' | 'all') {
+	if (scope === 'all') {
+		const updated: Record<number, ScanOperation[]> = {}
+		for (let p = 1; p <= totalPages.value; p++) {
+			updated[p] = operations.map((op) => ({ ...op }))
+		}
+		pageEnhancements.value = updated
+		for (let p = 1; p <= totalPages.value; p++) {
+			updateThumbnailForPage(p)
+		}
+	} else {
+		pageEnhancements.value = {
+			...pageEnhancements.value,
+			[enhanceModalPage.value]: operations.map((op) => ({ ...op })),
+		}
+		updateThumbnailForPage(enhanceModalPage.value)
+	}
+}
+
+function resetAllEnhancements() {
+	pageEnhancements.value = {}
+	for (let p = 1; p <= totalPages.value; p++) {
+		updateThumbnailForPage(p)
+	}
+	showInfo(t('sheetmusic', 'Reset all scan enhancements for "{title}".', { title: props.song.title }))
+}
+
+const hasAnyEnhance = computed(() => {
+	return Object.values(pageEnhancements.value).some((ops) =>
+		Array.isArray(ops) && ops.some((op) => op.enabled),
+	)
+})
+
+function getEnhanceIndicatorText(pageNum: number): string {
+	const ops = pageEnhancements.value[pageNum]
+	if (!ops || ops.length === 0) return ''
+	const active = ops.filter((op) => op.enabled)
+	if (active.length === 0) return ''
+	return `${active.length} ${active.length === 1 ? 'filter' : 'filters'}`
+}
+
+// Version History helpers
+async function openVersionsModal() {
+	if (!targetFile.value) return
+	isVersionsModalOpen.value = true
+	isLoadingVersions.value = true
+	fileVersions.value = []
+	try {
+		const res = await (apiGet as any)(
+			'/api/libraries/{libraryId}/songs/{id}/file/{fileId}/versions',
+			{
+				pathParams: {
+					libraryId: props.libraryId,
+					id: props.song.id,
+					fileId: targetFile.value.id,
+				},
+			},
+		)
+		const versions = (res.data?.ocs?.data?.versions ?? []) as FileVersionInfo[]
+		versions.sort((a, b) => b.timestamp - a.timestamp)
+		fileVersions.value = versions
+	} catch (err: any) {
+		console.error('Failed to load file versions:', err)
+		showError(t('sheetmusic', 'Failed to load file versions.'))
+	} finally {
+		isLoadingVersions.value = false
+	}
+}
+
+async function revertToVersion(revision: number) {
+	if (!targetFile.value) return
+	isRevertingVersion.value = true
+	try {
+		const res = await (apiPost as any)(
+			'/api/libraries/{libraryId}/songs/{id}/file/{fileId}/versions/{revision}/revert',
+			{},
+			{
+				pathParams: {
+					libraryId: props.libraryId,
+					id: props.song.id,
+					fileId: targetFile.value.id,
+					revision,
+				},
+			},
+		)
+		showSuccess(t('sheetmusic', 'Reverted PDF to earlier version successfully.'))
+		isVersionsModalOpen.value = false
+		const data = res.data?.ocs?.data as LibraryData
+		emit('saved', data, props.song.id)
+	} catch (err: any) {
+		console.error('Failed to revert file version:', err)
+		showError(t('sheetmusic', 'Failed to revert version: {error}', {
+			error: err?.message ?? String(err),
+		}))
+	} finally {
+		isRevertingVersion.value = false
+	}
+}
+
+function formatFileSize(bytes: number): string {
+	if (bytes < 1024) return `${bytes} B`
+	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+	return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function formatTimestamp(timestamp: number): string {
+	if (!timestamp) return ''
+	const d = new Date(timestamp * 1000)
+	return d.toLocaleString()
+}
 
 function openJoinModal(pageA: number, pageB?: number) {
 	joinModalPageA.value = pageA
@@ -632,7 +831,7 @@ async function handleExecuteJoin(options: {
 	}
 }
 
-// Saving Rotated, Cropped, or Modified PDF
+// Saving Rotated, Cropped, Enhanced, or Modified PDF
 async function saveRotationsAndCrops() {
 	if (!originalPdfBytes.value || !targetFile.value) return
 	isSaving.value = true
@@ -644,14 +843,58 @@ async function saveRotationsAndCrops() {
 
 		let modifiedRotations = false
 		let modifiedCrops = false
+		let modifiedEnhancements = false
 		for (let i = 0; i < pages.length; i++) {
 			const pageNum = i + 1
-			// Skip deleted pages from rotation/crop modifications
+			// Skip deleted pages from modifications
 			if (deletedPages.value.has(pageNum)) {
 				continue
 			}
 
-			// 1. Calculate net rotation
+			// 1. Scan Enhancement (if configured for page)
+			if (isPageEnhanced(pageNum) && activePdfDoc.value) {
+				try {
+					const pageToRender = await activePdfDoc.value.getPage(pageNum)
+					const unscaled = pageToRender.getViewport({ scale: 1.0 })
+					const scale = Math.min(3.0, Math.max(1.5, 1600 / Math.max(1, unscaled.width)))
+					const vp = pageToRender.getViewport({ scale })
+					const canvas = document.createElement('canvas')
+					canvas.width = Math.floor(vp.width)
+					canvas.height = Math.floor(vp.height)
+					const ctx = canvas.getContext('2d')
+					let rawBuffer: any = null
+					if (ctx) {
+						ctx.fillStyle = '#ffffff'
+						ctx.fillRect(0, 0, canvas.width, canvas.height)
+						await pageToRender.render({
+							canvasContext: ctx,
+							viewport: vp,
+							background: 'rgb(255, 255, 255)',
+						}).promise
+						const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+						rawBuffer = imageDataToImageBuffer(imgData)
+					} else {
+						// Headless / test environment fallback when 2D canvas context is unavailable
+						const w = Math.max(1, Math.floor(vp.width))
+						const h = Math.max(1, Math.floor(vp.height))
+						rawBuffer = createImageBuffer(w, h, 4)
+						rawBuffer.data.fill(255)
+					}
+
+					if (rawBuffer) {
+						const enhancedBuffer = applyPipeline(rawBuffer, pageEnhancements.value[pageNum])
+						await executeEnhancePage(pdfDoc, {
+							pageIndex: i,
+							enhancedImageBuffer: enhancedBuffer,
+						})
+						modifiedEnhancements = true
+					}
+				} catch (enhErr) {
+					console.warn(`Could not enhance page ${pageNum}`, enhErr)
+				}
+			}
+
+			// 2. Calculate net rotation
 			const rotDelta = pageRotations.value[i] ?? 0
 			const crop = pageCrops.value[pageNum]
 			const hasCrop = crop && (crop.left > 0.005 || crop.top > 0.005 || crop.width < 0.995 || crop.height < 0.995)
@@ -681,7 +924,7 @@ async function saveRotationsAndCrops() {
 					modifiedRotations = true
 				}
 
-				// 2. Apply Crop if any, taking the net rotation into account
+				// 3. Apply Crop if any, taking the net rotation into account
 				if (hasCrop) {
 					const { x: origX, y: origY, width: origW, height: origH } = page.getCropBox() ?? page.getMediaBox()
 					const box = computeCropBoxForRotation(origX, origY, origW, origH, crop, netAngle)
@@ -691,7 +934,7 @@ async function saveRotationsAndCrops() {
 			}
 		}
 
-		// 3. Remove deleted pages in descending order to avoid index shifts
+		// 4. Remove deleted pages in descending order to avoid index shifts
 		let modifiedDeletions = false
 		if (deletedPages.value.size > 0) {
 			const indicesToDelete = Array.from(deletedPages.value)
@@ -710,7 +953,7 @@ async function saveRotationsAndCrops() {
 			throw new Error(t('sheetmusic', 'Cannot save a PDF with no pages.'))
 		}
 
-		if (!modifiedRotations && !modifiedCrops && !modifiedDeletions && !hasAnyJoin.value) {
+		if (!modifiedRotations && !modifiedCrops && !modifiedDeletions && !modifiedEnhancements && !hasAnyJoin.value) {
 			showSuccess(t('sheetmusic', 'No changes to save.'))
 			isSaving.value = false
 			return
@@ -720,31 +963,25 @@ async function saveRotationsAndCrops() {
 		const fileName = getFileName(targetFile.value.path) || 'modified.pdf'
 		const modifiedFile = new File([modifiedBytes as Uint8Array<ArrayBuffer>], fileName, { type: 'application/pdf' })
 
-		// Upload the modified file to replace / update
-		// 1. Delete original file
-		await apiPost('/api/songs/{id}/file/{fileId}/delete', {
-			libraryId: props.libraryId,
-		}, {
-			pathParams: { id: props.song.id, fileId: targetFile.value.id },
-		})
-
-		// 2. Upload replacement file
+		// Update existing file in-place, preserving file ID and triggering Nextcloud file versioning
 		const formData = new FormData()
 		formData.append('file', modifiedFile)
-		const uploadRes = await apiPost('/api/libraries/{libraryId}/songs/{id}/file/upload', formData as any, {
-			pathParams: { libraryId: props.libraryId, id: props.song.id },
+		const uploadRes = await (apiPost as any)('/api/libraries/{libraryId}/songs/{id}/file/{fileId}/update', formData, {
+			pathParams: { libraryId: props.libraryId, id: props.song.id, fileId: targetFile.value.id },
 		})
 
 		const data = uploadRes.data.ocs.data as LibraryData
 		const songTitle = props.song.title || t('sheetmusic', 'Song')
-		const hasMultipleTypes = [modifiedRotations, modifiedCrops, modifiedDeletions, hasAnyJoin.value].filter(Boolean).length > 1
+		const hasMultipleTypes = [modifiedRotations, modifiedCrops, modifiedDeletions, modifiedEnhancements, hasAnyJoin.value].filter(Boolean).length > 1
 		const successMsg = hasMultipleTypes || hasAnyJoin.value
 			? t('sheetmusic', 'PDF changes saved successfully for "{title}".', { title: songTitle })
-			: modifiedDeletions
-				? t('sheetmusic', 'Pages deleted and PDF saved successfully for "{title}".', { title: songTitle })
-				: modifiedRotations
-					? t('sheetmusic', 'Rotated PDF saved successfully for "{title}".', { title: songTitle })
-					: t('sheetmusic', 'Cropped PDF saved successfully for "{title}".', { title: songTitle })
+			: modifiedEnhancements
+				? t('sheetmusic', 'Enhanced scan PDF saved successfully for "{title}".', { title: songTitle })
+				: modifiedDeletions
+					? t('sheetmusic', 'Pages deleted and PDF saved successfully for "{title}".', { title: songTitle })
+					: modifiedRotations
+						? t('sheetmusic', 'Rotated PDF saved successfully for "{title}".', { title: songTitle })
+						: t('sheetmusic', 'Cropped PDF saved successfully for "{title}".', { title: songTitle })
 		showSuccess(successMsg)
 		emit('saved', data, props.song.id)
 	} catch (err: any) {
@@ -761,6 +998,7 @@ async function saveRotationsAndCrops() {
 
 const saveRotations = saveRotationsAndCrops
 const saveCrops = saveRotationsAndCrops
+const saveEnhancements = saveRotationsAndCrops
 
 // Saving Split PDF Segments
 async function saveSplits() {
@@ -974,6 +1212,13 @@ watch(() => targetFile.value?.path, () => {
 				</button>
 				<button
 					type="button"
+					:class="[$style.tabButton, activeMode === 'enhance' && $style.tabButtonActive]"
+					@click="activeMode = 'enhance'">
+					<Tune :size="18" />
+					<span>{{ t('sheetmusic', 'Enhance Scans') }}</span>
+				</button>
+				<button
+					type="button"
 					:class="[$style.tabButton, activeMode === 'split' && $style.tabButtonActive]"
 					@click="activeMode = 'split'">
 					<CallSplit :size="18" />
@@ -986,24 +1231,36 @@ watch(() => targetFile.value?.path, () => {
 					v-if="activeMode === 'rotate'"
 					variant="primary"
 					:disabled="isSaving || isLoading || !hasAnyChange || remainingPagesCount === 0"
-					:title="(hasAnyDeletion || hasAnyCrop || hasAnyJoin) ? t('sheetmusic', 'Save changes') : t('sheetmusic', 'Save rotated PDF')"
+					:title="(hasAnyDeletion || hasAnyCrop || hasAnyEnhance || hasAnyJoin) ? t('sheetmusic', 'Save changes') : t('sheetmusic', 'Save rotated PDF')"
 					@click="saveRotations">
 					<template #icon>
 						<ContentSaveOutlineIcon :size="20" />
 					</template>
-					{{ isSaving ? t('sheetmusic', 'Saving…') : ((hasAnyDeletion || hasAnyCrop || hasAnyJoin) ? t('sheetmusic', 'Save Changes') : t('sheetmusic', 'Save Rotations')) }}
+					{{ isSaving ? t('sheetmusic', 'Saving…') : ((hasAnyDeletion || hasAnyCrop || hasAnyEnhance || hasAnyJoin) ? t('sheetmusic', 'Save Changes') : t('sheetmusic', 'Save Rotations')) }}
 				</NcButton>
 
 				<NcButton
 					v-else-if="activeMode === 'crop'"
 					variant="primary"
 					:disabled="isSaving || isLoading || !hasAnyChange || remainingPagesCount === 0"
-					:title="(hasAnyDeletion || hasAnyRotation || hasAnyJoin) ? t('sheetmusic', 'Save changes') : t('sheetmusic', 'Save cropped PDF')"
+					:title="(hasAnyDeletion || hasAnyRotation || hasAnyEnhance || hasAnyJoin) ? t('sheetmusic', 'Save changes') : t('sheetmusic', 'Save cropped PDF')"
 					@click="saveCrops">
 					<template #icon>
 						<ContentSaveOutlineIcon :size="20" />
 					</template>
-					{{ isSaving ? t('sheetmusic', 'Saving…') : ((hasAnyDeletion || hasAnyRotation || hasAnyJoin) ? t('sheetmusic', 'Save Changes') : t('sheetmusic', 'Save Crops')) }}
+					{{ isSaving ? t('sheetmusic', 'Saving…') : ((hasAnyDeletion || hasAnyRotation || hasAnyEnhance || hasAnyJoin) ? t('sheetmusic', 'Save Changes') : t('sheetmusic', 'Save Crops')) }}
+				</NcButton>
+
+				<NcButton
+					v-else-if="activeMode === 'enhance'"
+					variant="primary"
+					:disabled="isSaving || isLoading || !hasAnyChange || remainingPagesCount === 0"
+					:title="t('sheetmusic', 'Save enhanced PDF')"
+					@click="saveEnhancements">
+					<template #icon>
+						<ContentSaveOutlineIcon :size="20" />
+					</template>
+					{{ isSaving ? t('sheetmusic', 'Saving…') : t('sheetmusic', 'Save Enhanced PDF') }}
 				</NcButton>
 
 				<NcButton
@@ -1075,6 +1332,16 @@ watch(() => targetFile.value?.path, () => {
 							{{ t('sheetmusic', 'Join Pages…') }}
 						</NcButton>
 						<NcButton
+							size="small"
+							variant="secondary"
+							:title="t('sheetmusic', 'View file version history and revert changes')"
+							@click="openVersionsModal">
+							<template #icon>
+								<History :size="16" />
+							</template>
+							{{ t('sheetmusic', 'Version History…') }}
+						</NcButton>
+						<NcButton
 							v-if="hasAnyDeletion"
 							size="small"
 							variant="tertiary"
@@ -1121,6 +1388,61 @@ watch(() => targetFile.value?.path, () => {
 							{{ t('sheetmusic', 'Join Pages…') }}
 						</NcButton>
 						<NcButton
+							size="small"
+							variant="secondary"
+							:title="t('sheetmusic', 'View file version history and revert changes')"
+							@click="openVersionsModal">
+							<template #icon>
+								<History :size="16" />
+							</template>
+							{{ t('sheetmusic', 'Version History…') }}
+						</NcButton>
+						<NcButton
+							v-if="hasAnyDeletion"
+							size="small"
+							variant="tertiary"
+							:title="t('sheetmusic', 'Restore all deleted pages')"
+							@click="restoreAllPages">
+							<template #icon>
+								<DeleteRestore :size="16" />
+							</template>
+							{{ t('sheetmusic', 'Restore Deleted ({count})', { count: deletedPages.size }) }}
+						</NcButton>
+					</template>
+
+					<template v-else-if="activeMode === 'enhance'">
+						<span :class="$style.toolbarTitle">
+							{{ t('sheetmusic', 'Enhance scan quality (Gaussian filter, thresholding, gray level mapping):') }}
+						</span>
+						<NcButton
+							size="small"
+							variant="secondary"
+							:title="t('sheetmusic', 'Configure scan enhancement and apply to all pages')"
+							@click="openEnhanceModal(1)">
+							<template #icon>
+								<Tune :size="16" />
+							</template>
+							{{ t('sheetmusic', 'Enhance All Pages…') }}
+						</NcButton>
+						<NcButton
+							size="small"
+							variant="tertiary"
+							:disabled="!hasAnyEnhance"
+							:title="t('sheetmusic', 'Reset all page enhancements')"
+							@click="resetAllEnhancements">
+							{{ t('sheetmusic', 'Reset All Enhancements') }}
+						</NcButton>
+						<NcButton
+							size="small"
+							variant="secondary"
+							:title="t('sheetmusic', 'View file version history and revert changes')"
+							@click="openVersionsModal">
+							<template #icon>
+								<History :size="16" />
+							</template>
+							{{ t('sheetmusic', 'Version History…') }}
+						</NcButton>
+						<NcButton
 							v-if="hasAnyDeletion"
 							size="small"
 							variant="tertiary"
@@ -1159,9 +1481,10 @@ watch(() => targetFile.value?.path, () => {
 							$style.pageCard,
 							selectedPages.includes(pageNum) && $style.pageCardSelected,
 							activeMode === 'crop' && isPageCropped(pageNum) && $style.pageCardCropped,
+							activeMode === 'enhance' && isPageEnhanced(pageNum) && $style.pageCardEnhanced,
 							isPageDeleted(pageNum) && $style.pageCardDeleted,
 						]"
-						@click="activeMode === 'split' ? togglePageSelection(pageNum) : activeMode === 'crop' && !isPageDeleted(pageNum) ? openCropModal(pageNum) : undefined">
+						@click="activeMode === 'split' ? togglePageSelection(pageNum) : activeMode === 'crop' && !isPageDeleted(pageNum) ? openCropModal(pageNum) : activeMode === 'enhance' && !isPageDeleted(pageNum) ? openEnhanceModal(pageNum) : undefined">
 						<!-- Segment color indicators bar -->
 						<div v-if="activeMode === 'split'" :class="$style.segmentPills">
 							<span
@@ -1196,6 +1519,9 @@ watch(() => targetFile.value?.path, () => {
 								</span>
 								<span v-if="activeMode === 'crop' && isPageCropped(pageNum)" :class="$style.cropBadge" :title="getCropIndicatorText(pageNum)">
 									{{ t('sheetmusic', 'Cropped') }}
+								</span>
+								<span v-if="activeMode === 'enhance' && isPageEnhanced(pageNum)" :class="$style.enhanceBadge" :title="getEnhanceIndicatorText(pageNum)">
+									{{ t('sheetmusic', 'Enhanced') }}
 								</span>
 								<span v-if="isPageDeleted(pageNum)" :class="$style.deletedBadge">
 									{{ t('sheetmusic', 'Deleted') }}
@@ -1285,6 +1611,33 @@ watch(() => targetFile.value?.path, () => {
 									<template #icon>
 										<TableMergeCells :size="16" />
 									</template>
+								</NcButton>
+								<NcButton
+									size="small"
+									:variant="isPageDeleted(pageNum) ? 'primary' : 'tertiary'"
+									:title="isPageDeleted(pageNum) ? t('sheetmusic', 'Restore page {page}', { page: pageNum }) : t('sheetmusic', 'Delete page {page}', { page: pageNum })"
+									:aria-label="isPageDeleted(pageNum) ? t('sheetmusic', 'Restore page {page}', { page: pageNum }) : t('sheetmusic', 'Delete page {page}', { page: pageNum })"
+									:disabled="!isPageDeleted(pageNum) && remainingPagesCount <= 1"
+									@click.stop="toggleDeletePage(pageNum)">
+									<template #icon>
+										<DeleteRestore v-if="isPageDeleted(pageNum)" :size="16" />
+										<DeleteOutline v-else :size="16" />
+									</template>
+								</NcButton>
+							</div>
+
+							<!-- Enhance and Delete buttons in Enhance mode -->
+							<div v-else-if="activeMode === 'enhance'" :class="$style.cardActions">
+								<NcButton
+									v-if="!isPageDeleted(pageNum)"
+									size="small"
+									:variant="isPageEnhanced(pageNum) ? 'primary' : 'tertiary'"
+									:title="t('sheetmusic', 'Enhance page {page}', { page: pageNum })"
+									@click.stop="openEnhanceModal(pageNum)">
+									<template #icon>
+										<Tune :size="16" />
+									</template>
+									{{ t('sheetmusic', 'Enhance') }}
 								</NcButton>
 								<NcButton
 									size="small"
@@ -1437,6 +1790,59 @@ watch(() => targetFile.value?.path, () => {
 			:crop="pageCrops[rotateModalPage]"
 			@apply="handleApplyCustomRotation"
 			@change-page="rotateModalPage = $event" />
+
+		<!-- Page Enhance Modal -->
+		<SongPdfEnhanceModal
+			v-model:open="isEnhanceModalOpen"
+			:page-num="enhanceModalPage"
+			:total-pages="totalPages"
+			:pdf="activePdfDoc"
+			:initial-operations="pageEnhancements[enhanceModalPage]"
+			:rotation="pageRotations[enhanceModalPage - 1]"
+			@apply="handleApplyEnhancements"
+			@change-page="enhanceModalPage = $event" />
+
+		<!-- File Version History Dialog -->
+		<NcDialog
+			v-if="isVersionsModalOpen"
+			:open="isVersionsModalOpen"
+			:name="t('sheetmusic', 'PDF Version History')"
+			size="normal"
+			@update:open="isVersionsModalOpen = $event">
+			<template #actions>
+				<NcButton @click="isVersionsModalOpen = false">
+					{{ t('sheetmusic', 'Close') }}
+				</NcButton>
+			</template>
+
+			<div v-if="isLoadingVersions" :class="$style.versionsLoading">
+				<NcLoadingIcon :size="32" />
+				<span>{{ t('sheetmusic', 'Loading version history…') }}</span>
+			</div>
+			<div v-else-if="fileVersions.length === 0" :class="$style.noVersions">
+				<History :size="40" />
+				<p>{{ t('sheetmusic', 'No previous versions found for this file.') }}</p>
+				<small>{{ t('sheetmusic', 'Previous versions are automatically created in Nextcloud each time you save changes to the PDF.') }}</small>
+			</div>
+			<div v-else :class="$style.versionsList">
+				<div
+					v-for="ver in fileVersions"
+					:key="ver.revision"
+					:class="$style.versionRow">
+					<div :class="$style.versionInfo">
+						<span :class="$style.versionDate">{{ formatTimestamp(ver.timestamp) }}</span>
+						<span :class="$style.versionMeta">{{ formatFileSize(ver.size) }}</span>
+					</div>
+					<NcButton
+						size="small"
+						variant="secondary"
+						:disabled="isRevertingVersion"
+						@click="revertToVersion(ver.revision)">
+						{{ isRevertingVersion ? t('sheetmusic', 'Reverting…') : t('sheetmusic', 'Revert to this version') }}
+					</NcButton>
+				</div>
+			</div>
+		</NcDialog>
 	</div>
 </template>
 
@@ -1860,6 +2266,90 @@ watch(() => targetFile.value?.path, () => {
 
 .assignBtn {
 	align-self: flex-start;
+}
+
+.pageCardEnhanced {
+	outline: 2px solid var(--color-primary-element);
+	outline-offset: 1px;
+}
+
+.enhanceBadge {
+	display: inline-flex;
+	align-items: center;
+	background-color: var(--color-primary-element-light, rgba(0, 130, 201, 0.15));
+	color: var(--color-primary-element);
+	padding: 1px 6px;
+	border-radius: 10px;
+	font-size: 11px;
+	font-weight: 600;
+}
+
+.versionsLoading {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	padding: 32px;
+	gap: 12px;
+	color: var(--color-text-maxcontrast);
+}
+
+.noVersions {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	padding: 32px 16px;
+	text-align: center;
+	color: var(--color-text-maxcontrast);
+	gap: 8px;
+}
+
+.noVersions p {
+	margin: 0;
+	font-weight: bold;
+	font-size: 15px;
+}
+
+.noVersions small {
+	font-size: 12px;
+	max-width: 320px;
+}
+
+.versionsList {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	max-height: 400px;
+	overflow-y: auto;
+	padding: 4px;
+}
+
+.versionRow {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 10px 14px;
+	border: 1px solid var(--color-border);
+	border-radius: 8px;
+	background-color: var(--color-main-background);
+}
+
+.versionInfo {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.versionDate {
+	font-weight: 600;
+	font-size: 13px;
+	color: var(--color-main-text);
+}
+
+.versionMeta {
+	font-size: 12px;
+	color: var(--color-text-maxcontrast);
 }
 </style>
 
