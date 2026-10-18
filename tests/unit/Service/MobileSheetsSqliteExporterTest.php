@@ -449,4 +449,60 @@ final class MobileSheetsSqliteExporterTest extends TestCase {
 
 		self::assertSame($expected, $hashcodes);
 	}
+
+	public function testExportToFilePurgesFilesWithNoConnectedSong(): void {
+		$songMapper = $this->createMock(InternalSongMapper::class);
+		$entityMapper = $this->createMock(InternalEntityMapper::class);
+		$songFileMapper = $this->createMock(InternalSongFileMapper::class);
+		$attributeMapper = $this->createMock(InternalSongAttributeMapper::class);
+		$miscMapper = $this->createMock(InternalMiscMapper::class);
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$pathResolver = $this->createMock(MobileSheetsPathResolver::class);
+		$rootFolder = $this->createMock(IRootFolder::class);
+		$userManager = $this->createMock(IUserManager::class);
+		$logger = new NullLogger();
+
+		$library = new InternalLibrary(id: 1, userId: 'admin', path: '/Noten');
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('admin');
+		$userManager->method('get')->with('admin')->willReturn($user);
+
+		$activeSong = new InternalSong(id: 1, uuid: 's-1', libraryId: 1, title: 'Active', clientId: 10);
+		$songMapper->method('findAllForLibrary')->willReturn([$activeSong]);
+		$songFileMapper->method('findAllForLibrary')->with(1, false)->willReturn([]);
+
+		$miscMapper->method('getMiscSchemas')->with(1, 'mobilesheets')->willReturn([
+			'Files' => 'CREATE TABLE Files (Id INTEGER PRIMARY KEY, SongId INTEGER, Path VARCHAR(255), PageOrder VARCHAR(255), FileSize INTEGER, LastModified INTEGER, Source INTEGER, Type INTEGER, Password VARCHAR(255), SourceFilePageCount INTEGER, FileHash INTEGER, Width INTEGER, Height INTEGER);',
+		]);
+
+		$miscFiles = [
+			['Id' => 1, 'SongId' => 10, 'Path' => 'active.pdf'],
+			['Id' => 2, 'SongId' => 999, 'Path' => 'orphan.pdf'],
+		];
+		$miscMapper->method('getMiscDataForTable')->with(1, 'mobilesheets', 'Files', false)->willReturn($miscFiles);
+
+		$exporter = new MobileSheetsSqliteExporter(
+			$songMapper,
+			$entityMapper,
+			$songFileMapper,
+			$attributeMapper,
+			$miscMapper,
+			$libraryMapper,
+			$pathResolver,
+			$rootFolder,
+			$userManager,
+			$logger,
+		);
+
+		$exporter->exportToFile($library, $this->tempDbPath);
+
+		self::assertFileExists($this->tempDbPath);
+		$db = new PDO('sqlite:' . $this->tempDbPath);
+		$fileRows = $db->query('SELECT Id, SongId, Path FROM Files')->fetchAll(PDO::FETCH_ASSOC);
+
+		// File 1 with SongId 10 exists, File 2 with orphan SongId 999 must have been purged
+		self::assertCount(1, $fileRows);
+		self::assertSame(1, (int)$fileRows[0]['Id']);
+		self::assertSame(10, (int)$fileRows[0]['SongId']);
+	}
 }

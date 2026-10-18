@@ -85,7 +85,7 @@ class MobileSheetsSqliteExporter {
 			try {
 				$user = $this->userManager->get($lib->userId);
 
-				$this->exportMiscData($db, $lib->id);
+				$this->exportMiscData($db, $lib->id, $user);
 				$this->exportEntities($db, $lib->id);
 				$this->exportSongs($db, $lib->id);
 				$this->exportSongEntityLinks($db, $lib->id);
@@ -603,39 +603,36 @@ class MobileSheetsSqliteExporter {
 				$this->songFileMapper->update($file);
 			}
 
-			$checkRow = $db->query(sprintf('SELECT 1 FROM Files WHERE Id = %d', (int)$clientId));
-			if ($checkRow === false || $checkRow->fetch() === false) {
-				$webdavPath = $this->resolveWebdavPathForFile($file, $library, $user);
+			$webdavPath = $this->resolveWebdavPathForFile($file, $library, $user);
 
-				$hash = $file->fileHash ?? 0;
-				$size = $file->fileSize ?? 0;
-				$pageCount = $file->pageCount ?? 1;
+			$hash = $file->fileHash ?? 0;
+			$size = $file->fileSize ?? 0;
+			$pageCount = $file->pageCount ?? 1;
 
-				$candidateValues = [
-					'id' => $clientId,
-					'songid' => $songClientId,
-					'path' => $webdavPath,
-					'pageorder' => $file->pageOrder,
-					'filesize' => $size,
-					'lastmodified' => MobileSheetsTimestampUtil::secondsToMs($file->updatedAt),
-					'source' => 1,
-					'type' => $file->type,
-					'password' => '',
-					'sourcefilepagecount' => $pageCount,
-					'filehash' => $hash,
-					'width' => -1,
-					'height' => -1,
-				];
+			$candidateValues = [
+				'id' => $clientId,
+				'songid' => $songClientId,
+				'path' => $webdavPath,
+				'pageorder' => $file->pageOrder,
+				'filesize' => $size,
+				'lastmodified' => MobileSheetsTimestampUtil::secondsToMs($file->updatedAt),
+				'source' => 1,
+				'type' => $file->type,
+				'password' => '',
+				'sourcefilepagecount' => $pageCount,
+				'filehash' => $hash,
+				'width' => -1,
+				'height' => -1,
+			];
 
-				$insertRow = [];
-				foreach ($candidateValues as $lowerKey => $val) {
-					if (isset($existingCols[$lowerKey])) {
-						$insertRow[$existingCols[$lowerKey]] = $val;
-					}
+			$insertRow = [];
+			foreach ($candidateValues as $lowerKey => $val) {
+				if (isset($existingCols[$lowerKey])) {
+					$insertRow[$existingCols[$lowerKey]] = $val;
 				}
-
-				MobileSheetsTableHelper::insertRow($db, 'Files', $insertRow);
 			}
+
+			MobileSheetsTableHelper::insertRow($db, 'Files', $insertRow, orReplace: true);
 
 			if ($metaStmt !== null) {
 				$metaStmt->execute([
@@ -647,9 +644,13 @@ class MobileSheetsSqliteExporter {
 				]);
 			}
 		}
+
+		if (MobileSheetsTableHelper::tableExists($db, 'Files') && MobileSheetsTableHelper::tableExists($db, 'Songs')) {
+			$db->exec('DELETE FROM Files WHERE SongId IS NULL OR SongId NOT IN (SELECT Id FROM Songs)');
+		}
 	}
 
-	private function exportMiscData(PDO $db, int $libraryId): void {
+	private function exportMiscData(PDO $db, int $libraryId, ?IUser $user = null): void {
 		$miscSchemas = $this->miscMapper->getMiscSchemas($libraryId, 'mobilesheets');
 		if ($miscSchemas !== []) {
 			$songs = $this->songMapper->findAllForLibrary($libraryId, includeDeleted: true);
