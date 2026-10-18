@@ -35,6 +35,7 @@ import type { ScanOperation } from './scan-types'
 import { applyPipeline, createImageBuffer, imageDataToImageBuffer, imageBufferToImageData } from './scan-enhance-engine'
 import { executeEnhancePage } from './pdf-enhance-engine'
 import { usePdfThumbnails } from './usePdfThumbnails'
+import { usePdfSplit } from './usePdfSplit'
 
 GlobalWorkerOptions.workerSrc = pdfWorker
 
@@ -146,15 +147,38 @@ const {
 	isPageEnhanced,
 } = usePdfThumbnails(activePdfDoc, pageEnhancements)
 
-// Split state
-const originalSongAction = ref<OriginalSongAction>('keep')
-const attachedFilesCount = computed(() => props.song.files?.length ?? 0)
-const hasExactlyOneFile = computed(() => attachedFilesCount.value === 1)
-const splitSegments = ref<SplitSegment[]>([])
-let segmentCounter = 0
+// Split state & operations
+const {
+	originalSongAction,
+	attachedFilesCount,
+	hasExactlyOneFile,
+	splitSegments,
+	selectedPages,
+	initSplitSegments,
+	addSegment,
+	removeSegment,
+	assignSelectedPagesToSegment,
+	togglePageSelection,
+	getSegmentsForPage,
+	getPageSegmentsSummary,
+	saveSplits: executeSaveSplits,
+} = usePdfSplit({
+	song: computed(() => props.song),
+	libraryId: computed(() => props.libraryId),
+	totalPages,
+	pageRotations,
+	originalPdfBytes,
+	targetFile,
+	onSaved: (data, targetSongId) => emit('saved', data, targetSongId),
+	onCancel: () => emit('cancel'),
+})
 
-// Selection state for quick range assignment
-const selectedPages = ref<number[]>([])
+async function saveSplits() {
+	await executeSaveSplits(
+		(v) => { isSaving.value = v },
+		(msg) => { errorMessage.value = msg },
+	)
+}
 
 // Load PDF bytes and initialize
 async function loadPdf() {
@@ -202,15 +226,7 @@ async function loadPdf() {
 		pageCrops.value = {}
 
 		// Initialize split segments: default with 1 segment covering all pages
-		segmentCounter = 1
-		splitSegments.value = [
-			{
-				id: `seg-${segmentCounter}`,
-				title: `${props.song.title} - Part 1`,
-				startPage: 1,
-				endPage: pdf.numPages,
-			},
-		]
+		initSplitSegments(pdf.numPages, props.song.title)
 
 		await nextTick()
 		initThumbnailObserver(pdf)
@@ -271,62 +287,6 @@ function handleApplyCustomRotation(angle: number, scope: 'current' | 'all', crop
 const hasAnyRotation = computed(() => {
 	return pageRotations.value.some((rot) => Math.abs(rot) > 0.001)
 })
-
-// Split management
-function addSegment() {
-	segmentCounter++
-	const lastSeg = splitSegments.value[splitSegments.value.length - 1]
-	let nextStart = 1
-	if (lastSeg && lastSeg.endPage < totalPages.value) {
-		nextStart = lastSeg.endPage + 1
-	} else if (lastSeg) {
-		nextStart = Math.min(lastSeg.endPage, totalPages.value)
-	}
-	splitSegments.value.push({
-		id: `seg-${segmentCounter}`,
-		title: `${props.song.title} - Part ${splitSegments.value.length + 1}`,
-		startPage: nextStart,
-		endPage: Math.min(nextStart, totalPages.value),
-	})
-}
-
-function removeSegment(index: number) {
-	if (splitSegments.value.length <= 1) return
-	splitSegments.value.splice(index, 1)
-}
-
-function assignSelectedPagesToSegment(segment: SplitSegment) {
-	if (selectedPages.value.length === 0) return
-	const sorted = [...selectedPages.value].sort((a, b) => a - b)
-	segment.startPage = sorted[0]
-	segment.endPage = sorted[sorted.length - 1]
-	selectedPages.value = []
-}
-
-function togglePageSelection(pageNum: number) {
-	const idx = selectedPages.value.indexOf(pageNum)
-	if (idx >= 0) {
-		selectedPages.value.splice(idx, 1)
-	} else {
-		selectedPages.value.push(pageNum)
-	}
-}
-
-function getSegmentsForPage(pageNum: number): SplitSegment[] {
-	return splitSegments.value.filter((s) => pageNum >= s.startPage && pageNum <= s.endPage)
-}
-
-function getPageSegmentsSummary(pageNum: number): SplitSegmentSummary[] {
-	return splitSegments.value
-		.map((seg, index) => ({ seg, index }))
-		.filter(({ seg }) => pageNum >= seg.startPage && pageNum <= seg.endPage)
-		.map(({ seg, index }) => ({
-			id: seg.id,
-			title: seg.title,
-			index: index + 1,
-			color: getSegmentColor(index),
-		}))
-}
 
 // Crop helpers
 function openCropModal(pageNum: number) {
@@ -823,168 +783,6 @@ async function saveRotationsAndCrops() {
 const saveRotations = saveRotationsAndCrops
 const saveCrops = saveRotationsAndCrops
 const saveEnhancements = saveRotationsAndCrops
-
-// Saving Split PDF Segments
-async function saveSplits() {
-	if (!originalPdfBytes.value || !targetFile.value) return
-	if (splitSegments.value.length === 0) {
-		errorMessage.value = t('sheetmusic', 'Please configure at least one segment to split.')
-		showError(errorMessage.value)
-		return
-	}
-
-	// Validate segments
-	for (const seg of splitSegments.value) {
-		if (!seg.title.trim()) {
-			errorMessage.value = t('sheetmusic', 'All segments must have a title.')
-			showError(errorMessage.value)
-			return
-		}
-		if (seg.startPage < 1 || seg.endPage > totalPages.value || seg.startPage > seg.endPage) {
-			errorMessage.value = t('sheetmusic', 'Invalid page range ({start}–{end}) for "{title}".', {
-				start: seg.startPage,
-				end: seg.endPage,
-				title: seg.title,
-			})
-			showError(errorMessage.value)
-			return
-		}
-	}
-
-	isSaving.value = true
-	errorMessage.value = ''
-
-	try {
-		const srcPdfDoc = await PDFDocument.load(originalPdfBytes.value)
-
-		// Base metadata to inherit from props.song
-		const composerIds = (props.song.composers ?? []).map((c) => c.id)
-		const bookIds = (props.song.books ?? []).map((b) => b.id)
-		const collectionIds = (props.song.collections ?? []).map((c) => c.id)
-		const artistIds = (props.song.artists ?? []).map((a) => a.id)
-		const genreIds = (props.song.genres ?? []).map((g) => g.id)
-		const keyIds = (props.song.keys ?? []).map((k) => k.id)
-		const customGroupIds = (props.song.customGroups ?? []).map((cg) => cg.id)
-		const yearIds = (props.song.years ?? []).map((y) => y.id)
-		const signatureIds = (props.song.signatures ?? []).map((s) => s.id)
-		const sourceTypeIds = (props.song.sourceTypes ?? []).map((st) => st.id)
-		const instrumentIds = (props.song.instruments ?? []).map((i) => i.id)
-
-		let lastLibraryData: LibraryData | null = null
-		let firstCreatedSongId: number | undefined = undefined
-
-		for (const seg of splitSegments.value) {
-			// Create sub-document
-			const newPdfDoc = await PDFDocument.create()
-			const pageIndices: number[] = []
-			for (let p = seg.startPage; p <= seg.endPage; p++) {
-				pageIndices.push(p - 1)
-			}
-
-			const copiedPages = await newPdfDoc.copyPages(srcPdfDoc, pageIndices)
-			for (let i = 0; i < copiedPages.length; i++) {
-				const srcPageNum = seg.startPage + i
-				const rot = pageRotations.value[srcPageNum - 1] ?? 0
-				if (rot !== 0) {
-					copiedPages[i].setRotation(degrees((copiedPages[i].getRotation().angle + rot) % 360))
-				}
-				newPdfDoc.addPage(copiedPages[i])
-			}
-
-			const splitBytes = await newPdfDoc.save()
-			const sanitizedTitle = seg.title.trim().replace(/[/\\?%*:|"<>]/g, '-')
-			const splitFileName = `${sanitizedTitle}.pdf`
-			const splitFile = new File([splitBytes as Uint8Array<ArrayBuffer>], splitFileName, { type: 'application/pdf' })
-
-			// Create new song in MobileSheets
-			const createSongRes = await apiPost('/api/songs', {
-				libraryId: props.libraryId,
-				title: seg.title.trim(),
-				composerIds,
-				bookIds,
-				collectionIds,
-				artistIds,
-				genreIds,
-				keyIds,
-				customGroupIds,
-				yearIds,
-				signatureIds,
-				sourceTypeIds,
-				instrumentIds,
-				opus: props.song.opus ?? '',
-				catalogNumber: props.song.catalogNumber ?? '',
-				songNumber: props.song.songNumber ?? '',
-				stars: props.song.stars ?? 0,
-				difficulty: props.song.difficulty ?? 0,
-				keywords: props.song.keywords ?? '',
-				custom: props.song.custom ?? '',
-				custom2: props.song.custom2 ?? '',
-			} as any)
-
-			const createdData = createSongRes.data.ocs.data as any
-			const newSongId = createdData.createdSongId ?? createdData.id
-
-			if (!newSongId) {
-				throw new Error(t('sheetmusic', 'Failed to retrieve ID for created split song: {title}', { title: seg.title }))
-			}
-
-			if (firstCreatedSongId === undefined) {
-				firstCreatedSongId = Number(newSongId)
-			}
-
-			// Upload split PDF file
-			const formData = new FormData()
-			formData.append('file', splitFile)
-			const uploadRes = await apiPost('/api/libraries/{libraryId}/songs/{id}/file/upload', formData as any, {
-				pathParams: { libraryId: props.libraryId, id: newSongId },
-			})
-
-			lastLibraryData = uploadRes.data.ocs.data as LibraryData
-		}
-
-		// Target song to open after splitting: the first newly created split song
-		const targetOpenSongId = firstCreatedSongId
-
-		// Handle chosen action for original song / file
-		if (originalSongAction.value === 'delete-song' && hasExactlyOneFile.value) {
-			const delSongRes = await apiDelete('/api/songs/{id}', {
-				pathParams: { id: props.song.id },
-				queryParams: { libraryId: props.libraryId, deleteFiles: true },
-			})
-			lastLibraryData = (delSongRes.data?.ocs?.data as LibraryData) ?? lastLibraryData
-			showSuccess(t('sheetmusic', 'Successfully split "{title}" into {count} songs and deleted original song.', { title: props.song.title, count: splitSegments.value.length }))
-			if (lastLibraryData) {
-				emit('saved', lastLibraryData, targetOpenSongId)
-			} else {
-				emit('cancel')
-			}
-			return
-		} else if (originalSongAction.value === 'delete-file' && targetFile.value) {
-			const delRes = await apiPost('/api/songs/{id}/file/{fileId}/delete', {
-				libraryId: props.libraryId,
-			}, {
-				pathParams: { id: props.song.id, fileId: targetFile.value.id },
-			})
-			lastLibraryData = (delRes.data?.ocs?.data as LibraryData) ?? lastLibraryData
-		}
-
-		showSuccess(t('sheetmusic', 'Successfully split "{title}" into {count} songs.', { title: props.song.title, count: splitSegments.value.length }))
-		if (lastLibraryData) {
-			emit('saved', lastLibraryData, targetOpenSongId)
-		} else {
-			emit('cancel')
-		}
-	} catch (err: any) {
-		console.error('Failed to split PDF:', err)
-		const detail = describeRequestFailure(err, err?.message ?? String(err))
-		errorMessage.value = t('sheetmusic', 'Failed to split PDF: {error}', {
-			error: detail,
-		})
-		showError(errorMessage.value)
-	} finally {
-		isSaving.value = false
-	}
-}
 
 onMounted(() => {
 	loadPdf()
