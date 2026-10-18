@@ -22,6 +22,7 @@ use OCA\SheetMusic\Db\OrphanSongFile;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
+use OCP\IUser;
 use Psr\Log\LoggerInterface;
 
 class LibraryIntegrityService {
@@ -96,7 +97,7 @@ class LibraryIntegrityService {
 		$issues = [
 			...$this->checkDuplicateEntityAssignments($libraryId, $songsById),
 			...$this->checkDuplicateEntities($libraryId),
-			...$this->checkRelationalIntegrity($libraryId),
+			...$this->checkRelationalIntegrity($libraryId, $user, $targetFolder, $databasePath),
 		];
 
 		$autoPaths = $this->libraryService->isAutoPathsEnabled($userId, $libraryId);
@@ -359,7 +360,12 @@ class LibraryIntegrityService {
 	/**
 	 * @return list<IntegrityIssue>
 	 */
-	private function checkRelationalIntegrity(int $libraryId): array {
+	private function checkRelationalIntegrity(
+		int $libraryId,
+		?IUser $user = null,
+		?Folder $targetFolder = null,
+		?string $databasePath = null,
+	): array {
 		$issues = [];
 
 		$orphanAssignments = $this->internalEntityMapper->findOrphanSongEntityAssignments($libraryId);
@@ -447,7 +453,7 @@ class LibraryIntegrityService {
 				type: IntegrityIssue::TYPE_ORPHAN_SONG_FILE,
 				severity: IntegrityIssue::SEVERITY_WARNING,
 				message: sprintf(
-					'Found %d orphan song file record(s) referencing deleted songs.',
+					'Found %d orphan song file record(s) referencing deleted or missing songs.',
 					count($orphanSongFiles),
 				),
 				fixable: true,
@@ -456,6 +462,34 @@ class LibraryIntegrityService {
 					'files' => array_map(static fn (OrphanSongFile $f): array => $f->toArray(), $orphanSongFiles),
 				],
 			);
+
+			// Also check if any orphan song file does not exist in Nextcloud storage
+			if ($user !== null) {
+				try {
+					$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+					foreach ($orphanSongFiles as $orphan) {
+						$nodes = [];
+						try {
+							$nodes = $userFolder->getById($orphan->fileId);
+						} catch (\Throwable) {
+						}
+						if ($nodes === []) {
+							$issues[] = new IntegrityIssue(
+								type: IntegrityIssue::TYPE_MISSING_FILE,
+								severity: IntegrityIssue::SEVERITY_ERROR,
+								message: sprintf('Song file (ID %d) has no connected song and referenced file does not exist in Nextcloud storage.', $orphan->id),
+								fileId: $orphan->id,
+								fixable: true,
+								details: [
+									'orphanSongFileId' => $orphan->id,
+									'fileId' => $orphan->fileId,
+								],
+							);
+						}
+					}
+				} catch (\Throwable) {
+				}
+			}
 		}
 
 		$orphanAttrs = $this->internalSongAttributeMapper->findOrphanSongAttributes($libraryId);
@@ -481,7 +515,7 @@ class LibraryIntegrityService {
 				type: IntegrityIssue::TYPE_ORPHAN_MISC_DATA,
 				severity: IntegrityIssue::SEVERITY_WARNING,
 				message: sprintf(
-					'Found %d orphan sync/misc data record(s) referencing deleted songs.',
+					'Found %d orphan sync/misc data record(s) referencing deleted or missing songs.',
 					count($orphanMisc),
 				),
 				fixable: true,
@@ -490,6 +524,66 @@ class LibraryIntegrityService {
 					'misc' => $orphanMisc,
 				],
 			);
+		}
+
+		if ($databasePath !== null && $databasePath !== '' && file_exists($databasePath)) {
+			$targetFolderPath = $targetFolder !== null ? (string)$targetFolder->getPath() : '';
+			try {
+				$db = new \PDO('sqlite:' . $databasePath);
+				$db->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+				if (MobileSheetsTableHelper::tableExists($db, 'Files')) {
+					$hasSongs = MobileSheetsTableHelper::tableExists($db, 'Songs');
+					$sql = $hasSongs
+						? 'SELECT f.Id, f.SongId, f.Path, s.Id as SongExists FROM Files f LEFT JOIN Songs s ON f.SongId = s.Id'
+						: 'SELECT f.Id, f.SongId, f.Path, NULL as SongExists FROM Files f';
+					$stmt = $db->query($sql);
+					if ($stmt !== false) {
+						while ($fRow = $stmt->fetch(\PDO::FETCH_ASSOC)) {
+							if ($fRow['SongExists'] !== null) {
+								continue;
+							}
+							$path = (string)($fRow['Path'] ?? '');
+							if ($path === '') {
+								continue;
+							}
+
+							$sourceExists = false;
+							if ($user !== null && $targetFolder !== null) {
+								$pathObj = $this->pathResolver->fromStored($path, $user);
+								if ($pathObj !== null) {
+									$internalPath = $pathObj->internal;
+									$rel = null;
+									if ($internalPath === $targetFolderPath) {
+										$rel = '';
+									} elseif (str_starts_with($internalPath, $targetFolderPath . '/')) {
+										$rel = substr($internalPath, strlen($targetFolderPath) + 1);
+									}
+									$sourceExists = $this->fileNodeExists($targetFolder, $rel);
+								}
+							}
+
+							if (!$sourceExists) {
+								$issues[] = new IntegrityIssue(
+									type: IntegrityIssue::TYPE_MISSING_FILE,
+									severity: IntegrityIssue::SEVERITY_ERROR,
+									message: sprintf('File "%s" in database has no connected song and does not exist on the filesystem.', basename($path)),
+									fileId: (int)$fRow['Id'],
+									path: $path,
+									fixable: true,
+									details: [
+										'source' => 'sqlite',
+										'fileId' => (int)$fRow['Id'],
+										'songId' => (int)$fRow['SongId'],
+										'path' => $path,
+									],
+								);
+							}
+						}
+					}
+				}
+			} catch (\Throwable $e) {
+				$this->logger->warning('Failed to inspect database files for integrity: ' . $e->getMessage());
+			}
 		}
 
 		return $issues;

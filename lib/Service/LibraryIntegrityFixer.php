@@ -72,16 +72,48 @@ class LibraryIntegrityFixer {
 		?int $entityId = null,
 		?string $path = null,
 	): array {
-		if ($issueType === IntegrityIssue::TYPE_MISSING_FILE && $fileId !== null) {
-			$fileRecord = $this->internalSongFileMapper->findById($fileId);
-			if ($fileRecord !== null) {
-				$this->internalSongFileMapper->delete($fileId, hardDelete: false);
+		if ($issueType === IntegrityIssue::TYPE_MISSING_FILE && ($fileId !== null || ($path !== null && trim($path) !== ''))) {
+			$fixed = 0;
+			if ($fileId !== null) {
+				$fileRecord = $this->internalSongFileMapper->findById($fileId);
+				if ($fileRecord !== null) {
+					$this->internalSongFileMapper->delete($fileId, hardDelete: false);
+					$fixed++;
+				}
+				if ($this->internalMiscMapper->deleteMiscData($libraryId, 'mobilesheets', 'Files', (string)$fileId)) {
+					$fixed++;
+				}
+			}
+
+			try {
+				$userFolder = $this->rootFolder->getUserFolder($userId);
+				$user = $userFolder->getOwner();
+				['databasePath' => $databasePath] = $this->fileManager->libraryContext($libraryId, $user);
+				if ($databasePath !== '' && file_exists($databasePath)) {
+					$db = new \PDO('sqlite:' . $databasePath);
+					$db->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+					if (MobileSheetsTableHelper::tableExists($db, 'Files')) {
+						$stmt = $db->prepare('DELETE FROM Files WHERE Id = :id OR (Path = :path AND :path != \'\')');
+						$stmt->execute([
+							':id' => $fileId ?? -1,
+							':path' => $path ?? '',
+						]);
+						if ($stmt->rowCount() > 0) {
+							$fixed += $stmt->rowCount();
+						}
+					}
+				}
+			} catch (\Throwable $e) {
+				$this->logger->warning('Could not remove file from SQLite database: ' . $e->getMessage());
+			}
+
+			if ($fixed > 0) {
 				$this->libraryMapper->touch($libraryId);
 
 				return [
 					'success' => true,
-					'fixedCount' => 1,
-					'message' => 'Missing file record removed from song.',
+					'fixedCount' => $fixed,
+					'message' => 'Missing file record removed.',
 				];
 			}
 
@@ -581,30 +613,62 @@ class LibraryIntegrityFixer {
 				$db->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
 				$tables = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='Files'")->fetchAll();
 				if (!empty($tables)) {
-					$facts = MobileSheetsFileFacts::fromNode($orphanNode);
-					$fileType = SongFileMapper::determineFileType($cleanPath);
-					$updatedExisting = false;
+					$internalSong = $this->internalSongMapper->findById($candidateSong->id);
+					$sqliteSongId = $internalSong?->clientId;
+					if ($sqliteSongId === null && MobileSheetsTableHelper::tableExists($db, 'Songs')) {
+						$check = $db->prepare('SELECT Id FROM Songs WHERE Id = :id');
+						$check->execute([':id' => $candidateSong->id]);
+						if ($check->fetch() !== false) {
+							$sqliteSongId = $candidateSong->id;
+						}
+					}
 
-					if (!empty($missingFiles)) {
-						foreach ($missingFiles as $mf) {
-							$mfPathObj = $this->pathResolver->fromStored($mf->path, $user);
-							$mfInternal = $mfPathObj?->internal ?? '';
-							$mfRel = str_starts_with($mfInternal, $targetFolderPath . '/')
-								? substr($mfInternal, strlen($targetFolderPath) + 1)
-								: basename($mf->path);
+					if ($sqliteSongId !== null) {
+						$facts = MobileSheetsFileFacts::fromNode($orphanNode);
+						$fileType = SongFileMapper::determineFileType($cleanPath);
+						$updatedExisting = false;
 
-							$stmtFind = $db->prepare('SELECT Id FROM Files WHERE SongId = :songId AND (Path = :p1 OR Path = :p2 OR Id = :fid)');
-							$stmtFind->execute([
-								':songId' => $candidateSong->id,
-								':p1' => $mfRel,
-								':p2' => $mf->path,
-								':fid' => $mf->id,
-							]);
-							$row = $stmtFind->fetch();
-							if ($row !== false) {
-								$stmtUpdate = $db->prepare('UPDATE Files SET Path = :path, PageOrder = :pageOrder, FileSize = :fileSize, LastModified = :lastModified, Type = :type, SourceFilePageCount = :pageCount, FileHash = :fileHash WHERE Id = :id');
-								$stmtUpdate->execute([
-									':id' => $row['Id'],
+						if (!empty($missingFiles)) {
+							foreach ($missingFiles as $mf) {
+								$mfPathObj = $this->pathResolver->fromStored($mf->path, $user);
+								$mfInternal = $mfPathObj?->internal ?? '';
+								$mfRel = str_starts_with($mfInternal, $targetFolderPath . '/')
+									? substr($mfInternal, strlen($targetFolderPath) + 1)
+									: basename($mf->path);
+
+								$stmtFind = $db->prepare('SELECT Id FROM Files WHERE SongId = :songId AND (Path = :p1 OR Path = :p2 OR Id = :fid)');
+								$stmtFind->execute([
+									':songId' => $sqliteSongId,
+									':p1' => $mfRel,
+									':p2' => $mf->path,
+									':fid' => $mf->id,
+								]);
+								$row = $stmtFind->fetch();
+								if ($row !== false) {
+									$stmtUpdate = $db->prepare('UPDATE Files SET Path = :path, PageOrder = :pageOrder, FileSize = :fileSize, LastModified = :lastModified, Type = :type, SourceFilePageCount = :pageCount, FileHash = :fileHash WHERE Id = :id');
+									$stmtUpdate->execute([
+										':id' => $row['Id'],
+										':path' => $cleanPath,
+										':pageOrder' => $facts->pageOrder,
+										':fileSize' => $facts->fileSize,
+										':lastModified' => $facts->lastModified,
+										':type' => $fileType,
+										':pageCount' => $facts->sourceFilePageCount,
+										':fileHash' => $facts->fileHash,
+									]);
+									$updatedExisting = true;
+									break;
+								}
+							}
+						}
+
+						if (!$updatedExisting) {
+							$existing = $db->prepare('SELECT Id FROM Files WHERE SongId = :songId AND Path = :path');
+							$existing->execute([':songId' => $sqliteSongId, ':path' => $cleanPath]);
+							if ($existing->fetch() === false) {
+								$stmt = $db->prepare('INSERT INTO Files (SongId, Path, PageOrder, FileSize, LastModified, Source, Type, Password, SourceFilePageCount, FileHash, Width, Height) VALUES (:songId, :path, :pageOrder, :fileSize, :lastModified, 0, :type, \'\', :pageCount, :fileHash, 0, 0)');
+								$stmt->execute([
+									':songId' => $sqliteSongId,
 									':path' => $cleanPath,
 									':pageOrder' => $facts->pageOrder,
 									':fileSize' => $facts->fileSize,
@@ -613,27 +677,7 @@ class LibraryIntegrityFixer {
 									':pageCount' => $facts->sourceFilePageCount,
 									':fileHash' => $facts->fileHash,
 								]);
-								$updatedExisting = true;
-								break;
 							}
-						}
-					}
-
-					if (!$updatedExisting) {
-						$existing = $db->prepare('SELECT Id FROM Files WHERE SongId = :songId AND Path = :path');
-						$existing->execute([':songId' => $candidateSong->id, ':path' => $cleanPath]);
-						if ($existing->fetch() === false) {
-							$stmt = $db->prepare('INSERT INTO Files (SongId, Path, PageOrder, FileSize, LastModified, Source, Type, Password, SourceFilePageCount, FileHash, Width, Height) VALUES (:songId, :path, :pageOrder, :fileSize, :lastModified, 0, :type, \'\', :pageCount, :fileHash, 0, 0)');
-							$stmt->execute([
-								':songId' => $candidateSong->id,
-								':path' => $cleanPath,
-								':pageOrder' => $facts->pageOrder,
-								':fileSize' => $facts->fileSize,
-								':lastModified' => $facts->lastModified,
-								':type' => $fileType,
-								':pageCount' => $facts->sourceFilePageCount,
-								':fileHash' => $facts->fileHash,
-							]);
 						}
 					}
 				}

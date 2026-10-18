@@ -9,6 +9,8 @@ declare(strict_types=1);
 
 namespace OCA\SheetMusic\Tests\Unit\Service;
 
+use OCA\SheetMusic\Db\InternalSong;
+use OCA\SheetMusic\Db\InternalSongFile;
 use OCA\SheetMusic\Service\FileManager;
 use OCA\SheetMusic\Service\IntegrityIssue;
 use OCA\SheetMusic\Service\LibraryIntegrityFixer;
@@ -91,5 +93,56 @@ final class LibraryIntegrityFixerTest extends TestCase {
 	public function testFixRelationalIssueWhenNoRecordsExistReturnsZero(): void {
 		$res = $this->fixer->fixRelationalIssue(999, IntegrityIssue::TYPE_ORPHAN_SONG_FILE);
 		self::assertSame(0, $res);
+	}
+
+	public function testFixMissingFileRemovesFromInternalFilesAndMiscData(): void {
+		$lib = $this->createTestLibrary();
+		$this->miscMapper->saveMiscData($lib->id, 'mobilesheets', 'Files', '99', [
+			'Id' => 99,
+			'SongId' => 888,
+			'Path' => '/some/missing/file.pdf',
+		]);
+
+		$song = $this->songMapper->insert(new InternalSong(
+			id: null,
+			uuid: 'test-song-uuid',
+			libraryId: $lib->id,
+			title: 'Song with missing file',
+		));
+
+		$file = $this->songFileMapper->insert(new InternalSongFile(
+			id: null,
+			uuid: 'test-file-uuid',
+			songId: $song->id,
+			fileId: 12345,
+			fileSize: 100,
+			type: 1,
+			createdAt: time(),
+			updatedAt: time(),
+		));
+
+		$res = $this->fixer->fixIssue(
+			$lib->id,
+			'admin',
+			IntegrityIssue::TYPE_MISSING_FILE,
+			fileId: $file->id,
+		);
+
+		self::assertTrue($res['success']);
+		self::assertNotNull($this->songFileMapper->findById($file->id)->deletedAt);
+		self::assertEmpty($this->songFileMapper->findAllForSong($song->id));
+
+		// Now test fixing the misc data file
+		$resMisc = $this->fixer->fixIssue(
+			$lib->id,
+			'admin',
+			IntegrityIssue::TYPE_MISSING_FILE,
+			fileId: 99,
+		);
+		self::assertTrue($resMisc['success']);
+
+		// Misc data for 99 was deleted
+		$miscRows = $this->miscMapper->getMiscDataForTable($lib->id, 'mobilesheets', 'Files', includeDeleted: false);
+		self::assertEmpty($miscRows);
 	}
 }

@@ -1890,6 +1890,41 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		unlink($fixture['path']);
 	}
 
+	public function testOrphanFileInSqliteWithoutConnectedSongAndMissingOnFilesystemDetected(): void {
+		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
+		$database = $fixture['connection'];
+		$database->exec("INSERT INTO Songs (Id, Title) VALUES (1, 'Song 1')");
+		// File 1 has a song, File 2 has SongId 999 which does NOT exist in Songs
+		$database->exec("INSERT INTO Files (Id, SongId, Path) VALUES (1, 1, '/user1/files/Noten/existing.pdf')");
+		$database->exec("INSERT INTO Files (Id, SongId, Path) VALUES (2, 999, '/remote.php/dav/files/user1/Noten/nonexistent.pdf')");
+
+		$targetFolder = $this->createMock(Folder::class);
+		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
+		$targetFolder->method('nodeExists')->willReturn(false);
+
+		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager($fixture['path'], $targetFolder);
+		$service = $this->createIntegrityService(
+			$this->createLibraryService(),
+			$fileManager,
+			$rootFolder,
+			$pathResolver,
+			databasePath: $fixture['path'],
+		);
+
+		$issues = $service->checkIntegrity(1, 'user1');
+		$missingFileIssues = array_values(array_filter(
+			$issues,
+			fn ($i) => $i->type === IntegrityIssue::TYPE_MISSING_FILE && ($i->details['source'] ?? '') === 'sqlite',
+		));
+
+		self::assertCount(1, $missingFileIssues);
+		self::assertSame(2, $missingFileIssues[0]->fileId);
+		self::assertSame(IntegrityIssue::SEVERITY_ERROR, $missingFileIssues[0]->severity);
+		self::assertTrue($missingFileIssues[0]->fixable);
+
+		unlink($fixture['path']);
+	}
+
 	private static function minimalPdf(): string {
 		return "%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n3 0 obj\n<< /Type /Page /Parent 2 0 R >>\nendobj\nxref\n0 4\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \ntrailer\n<< /Size 4 /Root 1 0 R >>\nstartxref\n164\n%%EOF";
 	}
