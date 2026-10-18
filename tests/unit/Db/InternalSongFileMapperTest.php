@@ -11,8 +11,8 @@ namespace Db;
 
 use OCA\SheetMusic\Db\InternalSong;
 use OCA\SheetMusic\Db\InternalSongFile;
-use TestSupport\RealMobileSheetsTestTrait;
 use PHPUnit\Framework\TestCase;
+use TestSupport\RealMobileSheetsTestTrait;
 
 final class InternalSongFileMapperTest extends TestCase {
 	use RealMobileSheetsTestTrait;
@@ -110,7 +110,7 @@ final class InternalSongFileMapperTest extends TestCase {
 
 		$files = $this->songFileMapper->findAllForSong((int)$this->song->id);
 		self::assertCount(2, $files);
-		self::assertSame([$f1->id, $f2->id], array_map(fn($f) => $f->id, $files));
+		self::assertSame([$f1->id, $f2->id], array_map(fn ($f) => $f->id, $files));
 
 		// Soft delete f1
 		$this->songFileMapper->delete((int)$f1->id);

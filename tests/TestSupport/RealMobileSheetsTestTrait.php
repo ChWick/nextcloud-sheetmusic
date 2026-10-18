@@ -139,7 +139,7 @@ trait RealMobileSheetsTestTrait {
 		$userId ??= 'admin';
 		$this->libraryMapper->addForUser($userId, $path);
 		$libs = $this->libraryMapper->findAllForUser($userId);
-		$matching = array_filter($libs, fn($l) => $l['path'] === $path);
+		$matching = array_filter($libs, fn ($l) => $l['path'] === $path);
 		$libId = (int)(reset($matching)['id'] ?? $libs[0]['id']);
 		$lib = $this->libraryMapper->findModelById($libId);
 		self::assertNotNull($lib);

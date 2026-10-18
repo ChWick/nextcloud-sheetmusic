@@ -17,4 +17,3 @@ if (!interface_exists(InternalQueryResult::class)) {
 		public function fetchAllAssociative(): array;
 	}
 }
-

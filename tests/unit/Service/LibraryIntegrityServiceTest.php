@@ -11,7 +11,6 @@ namespace Service;
 
 use OCA\SheetMusic\Db\InternalEntity;
 use OCA\SheetMusic\Db\InternalEntityMapper;
-use OCA\SheetMusic\Db\InternalMiscData;
 use OCA\SheetMusic\Db\InternalMiscMapper;
 use OCA\SheetMusic\Db\InternalSong;
 use OCA\SheetMusic\Db\InternalSongAttributeMapper;
@@ -1180,7 +1179,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		self::assertTrue($result['success']);
 		self::assertSame(1, $result['fixedCount']);
 
-		$filesInDb = $database->query("SELECT * FROM Files WHERE SongId = 1")->fetchAll();
+		$filesInDb = $database->query('SELECT * FROM Files WHERE SongId = 1')->fetchAll();
 		self::assertCount(1, $filesInDb);
 		self::assertSame('Moonlight Sonata.pdf', $filesInDb[0]['Path']);
 
@@ -1194,8 +1193,8 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$database->exec("INSERT INTO Songs (Id, Title) VALUES (2, 'Sonata')");
 		$database->exec("INSERT INTO Composer (Id, Name) VALUES (10, 'Beethoven')");
 		$database->exec("INSERT INTO Composer (Id, Name) VALUES (20, 'Mozart')");
-		$database->exec("INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (10, 1)");
-		$database->exec("INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (20, 2)");
+		$database->exec('INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (10, 1)');
+		$database->exec('INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (20, 2)');
 
 		$targetFolder = $this->createMock(Folder::class);
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
@@ -1232,12 +1231,12 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$database->exec("INSERT INTO Songs (Id, Title) VALUES (1, 'Sonata')");
 		$database->exec("INSERT INTO Songs (Id, Title) VALUES (2, 'Sonata')");
 		$database->exec("INSERT INTO Composer (Id, Name) VALUES (10, 'Beethoven')");
-		$database->exec("INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (10, 1)");
-		$database->exec("INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (10, 2)");
+		$database->exec('INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (10, 1)');
+		$database->exec('INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (10, 2)');
 		$database->exec("INSERT INTO Artists (Id, Name) VALUES (100, 'Kempff')");
 		$database->exec("INSERT INTO Artists (Id, Name) VALUES (200, 'Barenboim')");
-		$database->exec("INSERT INTO ArtistsSongs (ArtistId, SongId) VALUES (100, 1)");
-		$database->exec("INSERT INTO ArtistsSongs (ArtistId, SongId) VALUES (200, 2)");
+		$database->exec('INSERT INTO ArtistsSongs (ArtistId, SongId) VALUES (100, 1)');
+		$database->exec('INSERT INTO ArtistsSongs (ArtistId, SongId) VALUES (200, 2)');
 
 		$targetFolder = $this->createMock(Folder::class);
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
@@ -1274,8 +1273,8 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$database->exec("INSERT INTO Songs (Id, Title) VALUES (2, 'Sonata')");
 		$database->exec("INSERT INTO Collections (Id, Name) VALUES (10, 'Classics')");
 		$database->exec("INSERT INTO Collections (Id, Name) VALUES (20, 'Romantic')");
-		$database->exec("INSERT INTO CollectionSong (CollectionId, SongId) VALUES (10, 1)");
-		$database->exec("INSERT INTO CollectionSong (CollectionId, SongId) VALUES (20, 2)");
+		$database->exec('INSERT INTO CollectionSong (CollectionId, SongId) VALUES (10, 1)');
+		$database->exec('INSERT INTO CollectionSong (CollectionId, SongId) VALUES (20, 2)');
 
 		$targetFolder = $this->createMock(Folder::class);
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
@@ -1312,8 +1311,8 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$database->exec("INSERT INTO Songs (Id, Title) VALUES (2, 'Sonata')");
 		$database->exec("INSERT INTO Books (Id, Title) VALUES (10, 'Book A')");
 		$database->exec("INSERT INTO Books (Id, Title) VALUES (20, 'Book B')");
-		$database->exec("INSERT INTO BookSongs (BookId, SongId) VALUES (10, 1)");
-		$database->exec("INSERT INTO BookSongs (BookId, SongId) VALUES (20, 2)");
+		$database->exec('INSERT INTO BookSongs (BookId, SongId) VALUES (10, 1)');
+		$database->exec('INSERT INTO BookSongs (BookId, SongId) VALUES (20, 2)');
 
 		$targetFolder = $this->createMock(Folder::class);
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
@@ -1349,8 +1348,8 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$database->exec("INSERT INTO Songs (Id, Title) VALUES (1, 'Sonata')");
 		$database->exec("INSERT INTO Songs (Id, Title) VALUES (2, 'Sonata')");
 		$database->exec("INSERT INTO Composer (Id, Name) VALUES (10, 'Beethoven')");
-		$database->exec("INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (1, 10)");
-		$database->exec("INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (2, 10)");
+		$database->exec('INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (1, 10)');
+		$database->exec('INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (2, 10)');
 
 		$targetFolder = $this->createMock(Folder::class);
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');

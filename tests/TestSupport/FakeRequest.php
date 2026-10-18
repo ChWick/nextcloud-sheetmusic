@@ -114,4 +114,3 @@ final class FakeRequest implements IRequest {
 		return 'json';
 	}
 }
-

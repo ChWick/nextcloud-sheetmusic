@@ -45,4 +45,3 @@ final class MobileSheetsEntityConfigTest extends TestCase {
 		self::assertFalse(MobileSheetsEntityConfig::isCoreManaged('bookmarks'));
 	}
 }
-

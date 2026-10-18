@@ -106,7 +106,9 @@ final class LibraryControllerTest extends TestCase {
 		);
 
 		$fakeIntegrity = new class([$issue]) extends LibraryIntegrityService {
-			public function __construct(private array $issues) {
+			public function __construct(
+				private array $issues,
+			) {
 			}
 			public function checkIntegrity(int $libraryId, ?string $userId = null): array {
 				return $this->issues;

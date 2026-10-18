@@ -1161,8 +1161,8 @@ final class MobileSheetsSyncTest extends TestCase {
 
 		// 3. Client renames song in MobileSheets (auto-rename file):
 		// Old song 440 is deleted, new song 441 is inserted with new title.
-		$exportedDb->exec("DELETE FROM Songs WHERE Id = 440");
-		$exportedDb->exec("DELETE FROM Files WHERE Id = 500");
+		$exportedDb->exec('DELETE FROM Songs WHERE Id = 440');
+		$exportedDb->exec('DELETE FROM Files WHERE Id = 500');
 		$exportedDb->exec("INSERT INTO Songs (Id, Title, SortTitle, Stars, Difficulty, Duration, SongId, DateCreated, LastModified) VALUES (441, 'Du hast, o Herr, dein Leben', 'Du hast, o Herr, dein Leben', 0, 0, 0, 441, 1001000, 1001000)");
 		$exportedDb->exec("INSERT INTO Files (Id, SongId, Path, PageOrder, FileSize, LastModified, Source, Type) VALUES (501, 441, '/test/Du hast, o Herr, dein Leben.pdf', '1', 1000, 1001000, 1, 1)");
 
@@ -1197,22 +1197,22 @@ final class MobileSheetsSyncTest extends TestCase {
 		// 1. Initial MobileSheets DB containing core entities and a non-core misc table (Setlists)
 		$initDbPath = $this->tempDbPath();
 		$initDb = $this->createEmptyMobileSheetsDb($initDbPath);
-		$initDb->exec("CREATE TABLE IF NOT EXISTS Setlists (Id INTEGER PRIMARY KEY, Name TEXT)");
-		$initDb->exec("CREATE TABLE IF NOT EXISTS SetlistSong (Id INTEGER PRIMARY KEY, SetlistId INTEGER, SongId INTEGER)");
-		$initDb->exec("CREATE TABLE IF NOT EXISTS Bookmarks (Id INTEGER PRIMARY KEY, SongId INTEGER, Name VARCHAR(255))");
-		$initDb->exec("CREATE TABLE IF NOT EXISTS Layers (Id INTEGER PRIMARY KEY, SongId INTEGER, Page INTEGER)");
+		$initDb->exec('CREATE TABLE IF NOT EXISTS Setlists (Id INTEGER PRIMARY KEY, Name TEXT)');
+		$initDb->exec('CREATE TABLE IF NOT EXISTS SetlistSong (Id INTEGER PRIMARY KEY, SetlistId INTEGER, SongId INTEGER)');
+		$initDb->exec('CREATE TABLE IF NOT EXISTS Bookmarks (Id INTEGER PRIMARY KEY, SongId INTEGER, Name VARCHAR(255))');
+		$initDb->exec('CREATE TABLE IF NOT EXISTS Layers (Id INTEGER PRIMARY KEY, SongId INTEGER, Page INTEGER)');
 		$initDb->exec("INSERT INTO Songs (Id, Title, SortTitle, Stars, Difficulty, Duration, SongId, DateCreated, LastModified) VALUES (100, 'Song A', 'Song A', 0, 0, 0, 100, 1000000, 1000000)");
 		$initDb->exec("INSERT INTO Files (Id, SongId, Path, PageOrder, FileSize, LastModified, Source, Type) VALUES (50, 100, '/Noten/song_a.pdf', '1', 1000, 1000000, 1, 1)");
 		$initDb->exec("INSERT INTO Composer (Id, Name) VALUES (10, 'Composer Bach')");
-		$initDb->exec("INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (10, 100)");
+		$initDb->exec('INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (10, 100)');
 		$initDb->exec("INSERT INTO Collections (Id, Name) VALUES (20, 'Collection Hymns')");
-		$initDb->exec("INSERT INTO CollectionSong (CollectionId, SongId) VALUES (20, 100)");
+		$initDb->exec('INSERT INTO CollectionSong (CollectionId, SongId) VALUES (20, 100)');
 		$initDb->exec("INSERT INTO Books (Id, Title) VALUES (30, 'Book Chorales')");
-		$initDb->exec("INSERT INTO BookSongs (BookId, SongId) VALUES (30, 100)");
+		$initDb->exec('INSERT INTO BookSongs (BookId, SongId) VALUES (30, 100)');
 		$initDb->exec("INSERT INTO Setlists (Id, Name) VALUES (1, 'Sunday Service')");
-		$initDb->exec("INSERT INTO SetlistSong (Id, SetlistId, SongId) VALUES (1, 1, 100)");
+		$initDb->exec('INSERT INTO SetlistSong (Id, SetlistId, SongId) VALUES (1, 1, 100)');
 		$initDb->exec("INSERT INTO Bookmarks (Id, SongId, Name) VALUES (1, 100, 'Chorus')");
-		$initDb->exec("INSERT INTO Layers (Id, SongId, Page) VALUES (1, 100, 1)");
+		$initDb->exec('INSERT INTO Layers (Id, SongId, Page) VALUES (1, 100, 1)');
 
 		$this->importer->importFromFile($lib, $initDbPath);
 
@@ -1239,17 +1239,17 @@ final class MobileSheetsSyncTest extends TestCase {
 
 		// 3. Client deletes all core entities, files and song from the database, but keeps the Setlist
 		$clientDb = new PDO('sqlite:' . $exportedDbPath, options: [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
-		$clientDb->exec("DELETE FROM Songs WHERE Id = 100");
-		$clientDb->exec("DELETE FROM Files WHERE Id = 50");
-		$clientDb->exec("DELETE FROM Composer WHERE Id = 10");
-		$clientDb->exec("DELETE FROM ComposerSongs WHERE ComposerId = 10");
-		$clientDb->exec("DELETE FROM Collections WHERE Id = 20");
-		$clientDb->exec("DELETE FROM CollectionSong WHERE CollectionId = 20");
-		$clientDb->exec("DELETE FROM Books WHERE Id = 30");
-		$clientDb->exec("DELETE FROM BookSongs WHERE BookId = 30");
-		$clientDb->exec("DELETE FROM SetlistSong WHERE SongId = 100");
-		$clientDb->exec("DELETE FROM Bookmarks WHERE SongId = 100");
-		$clientDb->exec("DELETE FROM Layers WHERE SongId = 100");
+		$clientDb->exec('DELETE FROM Songs WHERE Id = 100');
+		$clientDb->exec('DELETE FROM Files WHERE Id = 50');
+		$clientDb->exec('DELETE FROM Composer WHERE Id = 10');
+		$clientDb->exec('DELETE FROM ComposerSongs WHERE ComposerId = 10');
+		$clientDb->exec('DELETE FROM Collections WHERE Id = 20');
+		$clientDb->exec('DELETE FROM CollectionSong WHERE CollectionId = 20');
+		$clientDb->exec('DELETE FROM Books WHERE Id = 30');
+		$clientDb->exec('DELETE FROM BookSongs WHERE BookId = 30');
+		$clientDb->exec('DELETE FROM SetlistSong WHERE SongId = 100');
+		$clientDb->exec('DELETE FROM Bookmarks WHERE SongId = 100');
+		$clientDb->exec('DELETE FROM Layers WHERE SongId = 100');
 
 		// 4. Client uploads modified DB back
 		$stats = $this->importer->importFromFile($lib, $exportedDbPath);
@@ -1664,10 +1664,10 @@ final class MobileSheetsSyncTest extends TestCase {
 			(10, 'Live Set 2026', 0, 1, 1000000, 1000000)");
 
 		// Custom sequence: Song 1, then Song 3, then Song 2
-		$msDb1->exec("INSERT INTO CollectionSong (Id, CollectionId, SongId) VALUES
+		$msDb1->exec('INSERT INTO CollectionSong (Id, CollectionId, SongId) VALUES
 			(1, 10, 1),
 			(2, 10, 3),
-			(3, 10, 2)");
+			(3, 10, 2)');
 
 		// 2. Import into Nextcloud
 		$stats = $this->importer->importFromFile($lib, $dbPath1);

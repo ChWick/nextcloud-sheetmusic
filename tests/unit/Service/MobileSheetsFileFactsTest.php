@@ -10,10 +10,8 @@ declare(strict_types=1);
 namespace Service;
 
 use OCA\SheetMusic\Service\MobileSheetsFileFacts;
-use OCP\Files\File;
 use OCP\Files\Node;
 use PHPUnit\Framework\TestCase;
-
 use TestSupport\RealMobileSheetsTestTrait;
 
 final class MobileSheetsFileFactsTest extends TestCase {

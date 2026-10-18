@@ -80,4 +80,3 @@ final class MobileSheetsSyncMetadataTest extends TestCase {
 		self::assertArrayHasKey('song', $arr['byTypeAndId']);
 	}
 }
-

@@ -30,7 +30,6 @@ use OCP\IUser;
 use OCP\IUserManager;
 use PDO;
 use PHPUnit\Framework\TestCase;
-use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
 final class MobileSheetsSqliteImporterTest extends TestCase {
