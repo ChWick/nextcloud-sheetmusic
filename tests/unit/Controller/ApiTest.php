@@ -14,9 +14,10 @@ use OCA\SheetMusic\Service\SongFileService;
 use OCA\SheetMusic\Service\SongService;
 use OCP\AppFramework\Http;
 use OCP\IRequest;
-use OCP\IUser;
-use OCP\IUserSession;
+use OCP\IUserManager;
 use PHPUnit\Framework\TestCase;
+use TestSupport\FakeRequest;
+use TestSupport\FakeUserSession;
 
 final class ApiTest extends TestCase {
 	private function createController(
@@ -28,15 +29,12 @@ final class ApiTest extends TestCase {
 		?IRequest $request = null,
 		bool $loggedIn = true,
 	): ApiController {
-		$user = $this->createMock(IUser::class);
-		$user->method('getUID')->willReturn('admin');
-
-		$userSession = $this->createMock(IUserSession::class);
-		$userSession->method('getUser')->willReturn($loggedIn ? $user : null);
+		$user = \OC::$server->get(IUserManager::class)->get('admin');
+		$userSession = new FakeUserSession($loggedIn ? $user : null);
 
 		return new ApiController(
 			Application::APP_ID,
-			$request ?? $this->createMock(IRequest::class),
+			$request ?? new FakeRequest(),
 			$libraryService ?? $this->createMock(LibraryService::class),
 			$songService ?? $this->createMock(SongService::class),
 			$songFileService ?? $this->createMock(SongFileService::class),
