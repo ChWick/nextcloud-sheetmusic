@@ -1,10 +1,13 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import type { Song } from '../../../src/types/song'
-import { flushPromises, mount } from '@vue/test-utils'
+import { config, flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { PDFDocument } from 'pdf-lib'
 import SongPdfModifier from '../../../src/components/song-pdf/SongPdfModifier.vue'
+
+// Avoid teleporting child modals (NcDialog) to body so wrapper.find queries work without mocks
+config.global.stubs = { teleport: true }
 
 // Real PDF bytes from fixture
 const realPdfPath = path.resolve(__dirname, '../../fixtures/sample.pdf')
@@ -37,55 +40,20 @@ vi.mock('@nextcloud/router', () => ({
 	generateOcsUrl: vi.fn((path: string) => `/ocs/v2.php${path}`),
 }))
 
-vi.mock('@nextcloud/l10n', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('@nextcloud/l10n')>()
-	return {
-		...actual,
-		translate: vi.fn((_app: string, text: string, vars?: Record<string, any>) => {
-			if (!vars) return text
-			let res = text
-			for (const [k, v] of Object.entries(vars)) {
-				res = res.replace(`{${k}}`, String(v))
-			}
-			return res
-		}),
-		getLanguage: vi.fn(() => 'en'),
-		isRTL: vi.fn(() => false),
-	}
-})
+vi.mock('focus-trap', () => ({
+	createFocusTrap: () => ({
+		activate: vi.fn(),
+		deactivate: vi.fn(),
+		pause: vi.fn(),
+		unpause: vi.fn(),
+	}),
+}))
 
 vi.mock('@nextcloud/dialogs', () => ({
 	showSuccess: vi.fn(),
 	showError: vi.fn(),
 	showInfo: vi.fn(),
 	showWarning: vi.fn(),
-}))
-
-vi.mock('@nextcloud/vue/components/NcCheckboxRadioSwitch', () => ({
-	default: {
-		name: 'NcCheckboxRadioSwitch',
-		props: ['modelValue', 'checked', 'type', 'disabled', 'name', 'value'],
-		emits: ['update:modelValue', 'update:checked'],
-		template: `
-			<label>
-				<input :type="type || 'checkbox'"
-					:name="name"
-					:value="value"
-					:checked="checked !== undefined ? checked : modelValue"
-					:disabled="disabled"
-					@change="$emit('update:checked', type === 'radio' ? true : $event.target.checked); $emit('update:modelValue', type === 'radio' ? value : $event.target.checked)" />
-				<slot />
-			</label>
-		`,
-	},
-}))
-
-vi.mock('@nextcloud/vue/components/NcDialog', () => ({
-	default: {
-		name: 'NcDialog',
-		props: ['open', 'name'],
-		template: '<div v-if="open" role="dialog" class="nc-dialog"><h2>{{ name }}</h2><slot /><slot name="actions" /></div>',
-	},
 }))
 
 const { mockGetDocument, mockPdf } = vi.hoisted(() => {
