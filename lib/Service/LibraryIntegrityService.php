@@ -19,7 +19,6 @@ use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
 use OCA\SheetMusic\Db\MobileSheetsSong;
 use OCA\SheetMusic\Db\SongFileMapper;
-use OCA\SheetMusic\Service\MobileSheetsFileFacts;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;

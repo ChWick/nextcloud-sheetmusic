@@ -17,7 +17,6 @@ use OCA\SheetMusic\Db\InternalSongFile;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
-use OCA\SheetMusic\Service\MobileSheetsTableHelper;
 use OCA\SheetMusic\Util\MobileSheetsTimestampUtil;
 use OCA\SheetMusic\Util\SongSortingUtil;
 use OCP\Files\IRootFolder;

@@ -220,4 +220,3 @@ final class MobileSheetsEntityConfig {
 		return in_array(strtolower($tableName), self::CORE_MANAGED_TABLES, true);
 	}
 }
-
