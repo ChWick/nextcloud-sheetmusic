@@ -13,7 +13,7 @@ import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist'
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { PDFDocument, degrees } from 'pdf-lib'
-import { apiDelete, apiGet, apiPost } from '../../api/client'
+import { apiDelete, apiPost } from '../../api/client'
 import { showError, showInfo, showSuccess } from '@nextcloud/dialogs'
 import { getCacheBustedFileUrl, getFileName } from '../../utils/file'
 import { describeRequestFailure } from '../../utils/api'
@@ -23,7 +23,8 @@ import SongPdfHeader from './SongPdfHeader.vue'
 import SongPdfToolbar from './SongPdfToolbar.vue'
 import SongPdfPageCard, { type SplitSegmentSummary } from './SongPdfPageCard.vue'
 import SongPdfSplitSidebar, { getSegmentColor, type SplitSegment } from './SongPdfSplitSidebar.vue'
-import SongPdfVersionsModal, { type FileVersionInfo } from './SongPdfVersionsModal.vue'
+import SongPdfVersionsModal from './SongPdfVersionsModal.vue'
+import { useFileVersions } from './useFileVersions'
 import SongPdfCropModal from './SongPdfCropModal.vue'
 import SongPdfJoinModal from './SongPdfJoinModal.vue'
 import SongPdfRotateModal from './SongPdfRotateModal.vue'
@@ -115,11 +116,6 @@ const deletedPages = ref<Set<number>>(new Set())
 const isEnhanceModalOpen = ref(false)
 const enhanceModalPage = ref(1)
 
-// Version history modal state
-const isVersionsModalOpen = ref(false)
-const fileVersions = ref<FileVersionInfo[]>([])
-const isLoadingVersions = ref(false)
-const isRevertingVersion = ref(false)
 
 // Crop modal state
 const isCropModalOpen = ref(false)
@@ -426,63 +422,20 @@ function getEnhanceIndicatorText(pageNum: number): string {
 	return `${active.length} ${active.length === 1 ? 'filter' : 'filters'}`
 }
 
-// Version History helpers
-async function openVersionsModal() {
-	if (!targetFile.value) return
-	isVersionsModalOpen.value = true
-	isLoadingVersions.value = true
-	fileVersions.value = []
-	try {
-		const res = await (apiGet as any)(
-			'/api/libraries/{libraryId}/songs/{id}/file/{fileId}/versions',
-			{
-				pathParams: {
-					libraryId: props.libraryId,
-					id: props.song.id,
-					fileId: targetFile.value.id,
-				},
-			},
-		)
-		const versions = (res.data?.ocs?.data?.versions ?? []) as FileVersionInfo[]
-		versions.sort((a, b) => b.timestamp - a.timestamp)
-		fileVersions.value = versions
-	} catch (err: any) {
-		console.error('Failed to load file versions:', err)
-		showError(t('sheetmusic', 'Failed to load file versions.'))
-	} finally {
-		isLoadingVersions.value = false
-	}
-}
-
-async function revertToVersion(revision: number) {
-	if (!targetFile.value) return
-	isRevertingVersion.value = true
-	try {
-		const res = await (apiPost as any)(
-			'/api/libraries/{libraryId}/songs/{id}/file/{fileId}/versions/{revision}/revert',
-			{},
-			{
-				pathParams: {
-					libraryId: props.libraryId,
-					id: props.song.id,
-					fileId: targetFile.value.id,
-					revision,
-				},
-			},
-		)
-		showSuccess(t('sheetmusic', 'Reverted PDF to earlier version successfully.'))
-		isVersionsModalOpen.value = false
-		const data = res.data?.ocs?.data as LibraryData
-		emit('saved', data, props.song.id)
-	} catch (err: any) {
-		console.error('Failed to revert file version:', err)
-		showError(t('sheetmusic', 'Failed to revert version: {error}', {
-			error: err?.message ?? String(err),
-		}))
-	} finally {
-		isRevertingVersion.value = false
-	}
-}
+// Version History state & operations
+const {
+	isVersionsModalOpen,
+	fileVersions,
+	isLoadingVersions,
+	isRevertingVersion,
+	openVersionsModal,
+	revertToVersion,
+} = useFileVersions({
+	libraryId: () => props.libraryId,
+	songId: () => props.song.id,
+	fileId: () => targetFile.value?.id,
+	onReverted: (data) => emit('saved', data, props.song.id),
+})
 
 function handleHeaderSave() {
 	if (activeMode.value === 'rotate') {
