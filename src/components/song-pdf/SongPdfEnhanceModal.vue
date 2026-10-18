@@ -6,10 +6,7 @@ import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import ArrowLeft from 'vue-material-design-icons/ArrowLeft.vue'
 import ArrowRight from 'vue-material-design-icons/ArrowRight.vue'
-import ArrowUp from 'vue-material-design-icons/ArrowUp.vue'
-import ArrowDown from 'vue-material-design-icons/ArrowDown.vue'
 import Plus from 'vue-material-design-icons/Plus.vue'
-import DeleteOutline from 'vue-material-design-icons/DeleteOutline.vue'
 import Undo from 'vue-material-design-icons/Undo.vue'
 import Redo from 'vue-material-design-icons/Redo.vue'
 import EyeOutline from 'vue-material-design-icons/EyeOutline.vue'
@@ -17,7 +14,8 @@ import EyeOffOutline from 'vue-material-design-icons/EyeOffOutline.vue'
 import RestoreIcon from 'vue-material-design-icons/Restore.vue'
 import Tune from 'vue-material-design-icons/Tune.vue'
 
-import type { AdaptiveThresholdOp, GaussianOp, GrayLevelMappingOp, ImageBuffer, ScanOperation } from './scan-types'
+import SongPdfEnhanceOperationItem from './SongPdfEnhanceOperationItem.vue'
+import type { ImageBuffer, ScanOperation } from './scan-types'
 import {
 	applyPipeline,
 	createImageBuffer,
@@ -423,192 +421,17 @@ watch(
 
 					<!-- Operation Cards List -->
 					<div :class="$style.operationsList">
-						<div
+						<SongPdfEnhanceOperationItem
 							v-for="(op, idx) in operations"
 							:key="op.id"
-							:class="[$style.opCard, !op.enabled && $style.opCardDisabled]">
-							<!-- Op Card Header -->
-							<div :class="$style.opHeader">
-								<div :class="$style.opTitleRow">
-									<input
-										type="checkbox"
-										:checked="op.enabled"
-										:title="t('sheetmusic', 'Toggle operation')"
-										@change="toggleOperation(idx)" />
-									<strong :class="$style.opName">
-										{{ idx + 1 }}.
-										{{
-											op.type === 'gaussian'
-												? t('sheetmusic', 'Gaussian Filter')
-												: op.type === 'grayLevelMapping'
-													? t('sheetmusic', 'Gray Level Mapping (Curves)')
-													: t('sheetmusic', 'Adaptive Thresholding')
-										}}
-									</strong>
-								</div>
-
-								<div :class="$style.opControls">
-									<button
-										type="button"
-										:class="$style.iconBtn"
-										:disabled="idx === 0"
-										:title="t('sheetmusic', 'Move up')"
-										@click="moveOperation(idx, 'up')">
-										<ArrowUp :size="16" />
-									</button>
-									<button
-										type="button"
-										:class="$style.iconBtn"
-										:disabled="idx === operations.length - 1"
-										:title="t('sheetmusic', 'Move down')"
-										@click="moveOperation(idx, 'down')">
-										<ArrowDown :size="16" />
-									</button>
-									<button
-										type="button"
-										:class="[$style.iconBtn, $style.deleteBtn]"
-										:title="t('sheetmusic', 'Remove operation')"
-										@click="removeOperation(idx)">
-										<DeleteOutline :size="16" />
-									</button>
-								</div>
-							</div>
-
-							<!-- Op Parameters -->
-							<div :class="$style.opParams">
-								<!-- Gaussian Filter Parameters -->
-								<template v-if="op.type === 'gaussian'">
-									<div :class="$style.paramRow">
-										<label :class="$style.paramLabel">
-											{{ t('sheetmusic', 'Filter Kernel Size (px):') }}
-											<strong>{{ (op as GaussianOp).size }}</strong>
-										</label>
-										<input
-											v-model.number="(op as GaussianOp).size"
-											type="range"
-											min="1"
-											max="15"
-											step="2"
-											:class="$style.slider"
-											@input="renderEnhancedPreview"
-											@change="recordHistory" />
-									</div>
-								</template>
-
-								<!-- Gray Level Mapping Parameters -->
-								<template v-else-if="op.type === 'grayLevelMapping'">
-									<div :class="$style.paramRow">
-										<label :class="$style.paramLabel">
-											{{ t('sheetmusic', 'Black Cutoff (Lower):') }}
-											<strong>{{ (op as GrayLevelMappingOp).lowerCutoff }}</strong>
-										</label>
-										<input
-											v-model.number="(op as GrayLevelMappingOp).lowerCutoff"
-											type="range"
-											min="0"
-											max="255"
-											:class="$style.slider"
-											@input="renderEnhancedPreview"
-											@change="recordHistory" />
-									</div>
-									<div :class="$style.paramRow">
-										<label :class="$style.paramLabel">
-											{{ t('sheetmusic', 'White Cutoff (Upper):') }}
-											<strong>{{ (op as GrayLevelMappingOp).upperCutoff }}</strong>
-										</label>
-										<input
-											v-model.number="(op as GrayLevelMappingOp).upperCutoff"
-											type="range"
-											min="0"
-											max="255"
-											:class="$style.slider"
-											@input="renderEnhancedPreview"
-											@change="recordHistory" />
-									</div>
-									<div :class="$style.paramRow">
-										<label :class="$style.paramLabel">{{ t('sheetmusic', 'Color Mode:') }}</label>
-										<select
-											v-model="(op as GrayLevelMappingOp).colorMode"
-											:class="$style.select"
-											@change="renderEnhancedPreview(); recordHistory()">
-											<option value="color">{{ t('sheetmusic', 'Preserve Color Tones') }}</option>
-											<option value="grayscale">{{ t('sheetmusic', 'Convert to Grayscale') }}</option>
-										</select>
-									</div>
-								</template>
-
-								<!-- Adaptive Thresholding Parameters -->
-								<template v-else-if="op.type === 'adaptiveThreshold'">
-									<div :class="$style.paramRow">
-										<label :class="$style.paramLabel">
-											{{ t('sheetmusic', 'Neighborhood Window Size:') }}
-											<strong>{{ (op as AdaptiveThresholdOp).windowSize }}</strong>
-										</label>
-										<input
-											v-model.number="(op as AdaptiveThresholdOp).windowSize"
-											type="range"
-											min="3"
-											max="61"
-											step="2"
-											:class="$style.slider"
-											@input="renderEnhancedPreview"
-											@change="recordHistory" />
-									</div>
-									<div :class="$style.paramRow">
-										<label :class="$style.paramLabel">
-											{{ t('sheetmusic', 'Mean Offset Delta:') }}
-											<strong>{{ (op as AdaptiveThresholdOp).delta }}</strong>
-										</label>
-										<input
-											v-model.number="(op as AdaptiveThresholdOp).delta"
-											type="range"
-											min="-20"
-											max="40"
-											:class="$style.slider"
-											@input="renderEnhancedPreview"
-											@change="recordHistory" />
-									</div>
-									<div :class="$style.paramRow">
-										<label :class="$style.paramLabel">
-											{{ t('sheetmusic', 'Custom Black Limit (Ink):') }}
-											<strong>{{ (op as AdaptiveThresholdOp).blackValue }}</strong>
-										</label>
-										<input
-											v-model.number="(op as AdaptiveThresholdOp).blackValue"
-											type="range"
-											min="0"
-											max="100"
-											:class="$style.slider"
-											@input="renderEnhancedPreview"
-											@change="recordHistory" />
-									</div>
-									<div :class="$style.paramRow">
-										<label :class="$style.paramLabel">
-											{{ t('sheetmusic', 'Custom White Limit (Paper):') }}
-											<strong>{{ (op as AdaptiveThresholdOp).whiteValue }}</strong>
-										</label>
-										<input
-											v-model.number="(op as AdaptiveThresholdOp).whiteValue"
-											type="range"
-											min="150"
-											max="255"
-											:class="$style.slider"
-											@input="renderEnhancedPreview"
-											@change="recordHistory" />
-									</div>
-									<div :class="$style.paramRow">
-										<label :class="$style.paramLabel">{{ t('sheetmusic', 'Output Mode:') }}</label>
-										<select
-											v-model="(op as AdaptiveThresholdOp).colorMode"
-											:class="$style.select"
-											@change="renderEnhancedPreview(); recordHistory()">
-											<option value="binarize">{{ t('sheetmusic', 'Binarize (Black & White)') }}</option>
-											<option value="preserveColor">{{ t('sheetmusic', 'Whiten Paper, Keep Colored Notes') }}</option>
-										</select>
-									</div>
-								</template>
-							</div>
-						</div>
+							:operation="op"
+							:index="idx"
+							:total="operations.length"
+							@toggle="toggleOperation(idx)"
+							@move="moveOperation(idx, $event)"
+							@remove="removeOperation(idx)"
+							@input="renderEnhancedPreview"
+							@change="recordHistory" />
 
 						<div v-if="operations.length === 0" :class="$style.emptyStack">
 							<span>{{ t('sheetmusic', 'No operations stacked. Click "+ Add Operation" below or select a preset.') }}</span>
@@ -807,104 +630,6 @@ watch(
 	flex-direction: column;
 	gap: 8px;
 	padding-right: 4px;
-}
-
-.opCard {
-	border: 1px solid var(--color-border);
-	border-radius: var(--border-radius);
-	background: var(--color-background-hover);
-	padding: 8px;
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-}
-
-.opCardDisabled {
-	opacity: 0.55;
-}
-
-.opHeader {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-}
-
-.opTitleRow {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-}
-
-.opName {
-	font-size: 13px;
-	color: var(--color-main-text);
-}
-
-.opControls {
-	display: flex;
-	align-items: center;
-	gap: 2px;
-}
-
-.iconBtn {
-	background: transparent;
-	border: none;
-	cursor: pointer;
-	padding: 2px 4px;
-	border-radius: 4px;
-	color: var(--color-text-maxcontrast);
-	display: flex;
-	align-items: center;
-}
-
-.iconBtn:hover:not(:disabled) {
-	background: var(--color-border);
-	color: var(--color-main-text);
-}
-
-.iconBtn:disabled {
-	opacity: 0.3;
-	cursor: not-allowed;
-}
-
-.deleteBtn:hover {
-	color: var(--color-error);
-}
-
-.opParams {
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-	padding-top: 4px;
-	border-top: 1px solid var(--color-border-maxcontrast);
-}
-
-.paramRow {
-	display: flex;
-	flex-direction: column;
-	gap: 2px;
-}
-
-.paramLabel {
-	font-size: 11px;
-	color: var(--color-text-maxcontrast);
-	display: flex;
-	justify-content: space-between;
-}
-
-.slider {
-	width: 100%;
-	height: 4px;
-	cursor: pointer;
-}
-
-.select {
-	padding: 4px;
-	border-radius: 4px;
-	border: 1px solid var(--color-border);
-	font-size: 12px;
-	background: var(--color-main-background);
-	color: var(--color-main-text);
 }
 
 .emptyStack {
