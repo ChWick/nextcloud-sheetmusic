@@ -265,10 +265,24 @@ class InternalMiscMapper {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('m.id')
 			->from(self::DATA_TABLE_NAME, 'm')
-			->innerJoin('m', 'sheetmusic_songs', 's', $qb->expr()->eq('m.song_uuid', 's.uuid'))
+			->leftJoin('m', 'sheetmusic_songs', 's', $qb->expr()->eq('m.song_uuid', 's.uuid'))
 			->where($qb->expr()->eq('m.library_id', $qb->createNamedParameter($libraryId, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->isNull('m.deleted_at'))
-			->andWhere($qb->expr()->isNotNull('s.deleted_at'));
+			->andWhere(
+				$qb->expr()->orX(
+					$qb->expr()->andX(
+						$qb->expr()->isNotNull('m.song_uuid'),
+						$qb->expr()->orX(
+							$qb->expr()->isNull('s.id'),
+							$qb->expr()->isNotNull('s.deleted_at')
+						)
+					),
+					$qb->expr()->andX(
+						$qb->expr()->in('m.table_name', $qb->createNamedParameter(['Files', 'files'], IQueryBuilder::PARAM_STR_ARRAY)),
+						$qb->expr()->isNull('m.song_uuid')
+					)
+				)
+			);
 
 		$result = $qb->executeQuery();
 		$ids = [];

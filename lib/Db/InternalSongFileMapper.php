@@ -236,10 +236,17 @@ class InternalSongFileMapper {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('f.id', 'f.song_id', 'f.file_id', 'f.uuid')
 			->from(self::TABLE_NAME, 'f')
-			->innerJoin('f', 'sheetmusic_songs', 's', $qb->expr()->eq('f.song_id', 's.id'))
-			->where($qb->expr()->eq('s.library_id', $qb->createNamedParameter($libraryId, IQueryBuilder::PARAM_INT)))
-			->andWhere($qb->expr()->isNull('f.deleted_at'))
-			->andWhere($qb->expr()->isNotNull('s.deleted_at'))
+			->leftJoin('f', 'sheetmusic_songs', 's', $qb->expr()->eq('f.song_id', 's.id'))
+			->where($qb->expr()->isNull('f.deleted_at'))
+			->andWhere(
+				$qb->expr()->orX(
+					$qb->expr()->andX(
+						$qb->expr()->eq('s.library_id', $qb->createNamedParameter($libraryId, IQueryBuilder::PARAM_INT)),
+						$qb->expr()->isNotNull('s.deleted_at')
+					),
+					$qb->expr()->isNull('s.id')
+				)
+			)
 			->orderBy('f.id', 'ASC');
 
 		$result = $qb->executeQuery();
