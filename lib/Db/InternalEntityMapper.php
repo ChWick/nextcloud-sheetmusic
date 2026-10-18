@@ -383,7 +383,7 @@ class InternalEntityMapper {
 	}
 
 	/**
-	 * @return list<array{link_id: int, song_id: int, entity_id: int, type: string}>
+	 * @return list<SongEntityLink>
 	 */
 	public function findAllSongEntityLinksForLibrary(int $libraryId): array {
 		$qb = $this->db->getQueryBuilder();
@@ -399,12 +399,7 @@ class InternalEntityMapper {
 		$result = $qb->executeQuery();
 		$links = [];
 		while ($row = $result->fetchAssociative()) {
-			$links[] = [
-				'link_id' => (int)$row['link_id'],
-				'song_id' => (int)$row['song_id'],
-				'entity_id' => (int)$row['entity_id'],
-				'type' => (string)$row['type'],
-			];
+			$links[] = SongEntityLink::fromRow($row);
 		}
 		$result->closeCursor();
 

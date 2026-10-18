@@ -420,8 +420,8 @@ class InternalSongMapper {
 		if ($this->entityMapper !== null) {
 			$links = $this->entityMapper->findAllSongEntityLinksForLibrary($libraryId);
 			foreach ($links as $link) {
-				$normType = InternalEntityMapper::normalizeType($link['type']);
-				$songEntities[$link['song_id']][$normType][] = $link['entity_id'];
+				$normType = InternalEntityMapper::normalizeType($link->type);
+				$songEntities[$link->songId][$normType][] = $link->entityId;
 			}
 		}
 

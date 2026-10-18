@@ -19,6 +19,7 @@ use OCA\SheetMusic\Db\InternalSongFile;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
+use OCA\SheetMusic\Db\SongEntityLink;
 use OCA\SheetMusic\Service\MobileSheetsPath;
 use OCA\SheetMusic\Service\MobileSheetsPathResolver;
 use OCA\SheetMusic\Service\MobileSheetsSqliteExporter;
@@ -126,8 +127,8 @@ final class MobileSheetsSqliteExporterTest extends TestCase {
 
 		// Links
 		$entityMapper->method('findAllSongEntityLinksForLibrary')->with(1)->willReturn([
-			['song_id' => 10, 'entity_id' => 20, 'type' => 'composer'],
-			['song_id' => 10, 'entity_id' => 21, 'type' => 'instrument'],
+			new SongEntityLink(linkId: 1, songId: 10, entityId: 20, type: 'composer'),
+			new SongEntityLink(linkId: 2, songId: 10, entityId: 21, type: 'instrument'),
 		]);
 
 		// Files

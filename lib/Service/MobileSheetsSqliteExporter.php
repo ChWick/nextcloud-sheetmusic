@@ -17,6 +17,7 @@ use OCA\SheetMusic\Db\InternalSongFile;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
+use OCA\SheetMusic\Db\SongEntityLink;
 use OCA\SheetMusic\Util\MobileSheetsTimestampUtil;
 use OCA\SheetMusic\Util\SongSortingUtil;
 use OCP\Files\IRootFolder;
@@ -493,9 +494,9 @@ class MobileSheetsSqliteExporter {
 		}
 
 		$linksByEntityId = [];
-		foreach ($links as $link) {
-			$entityId = $link['entity_id'];
-			$linksByEntityId[$entityId][] = $link;
+		foreach ($links as $rawLink) {
+			$link = $rawLink instanceof SongEntityLink ? $rawLink : SongEntityLink::fromRow($rawLink);
+			$linksByEntityId[$link->entityId][] = $link;
 		}
 
 		foreach ($linksByEntityId as $entityId => $entityLinks) {
@@ -517,12 +518,12 @@ class MobileSheetsSqliteExporter {
 			// Sort entity links according to entity's sortBy and ascending mode
 			usort($entityLinks, function ($a, $b) use ($songById, $entity) {
 				return SongSortingUtil::compare(
-					$songById[$a['song_id']] ?? null,
-					$songById[$b['song_id']] ?? null,
+					$songById[$a->songId] ?? null,
+					$songById[$b->songId] ?? null,
 					$entity->sortBy,
 					$entity->ascending,
-					$a['link_id'] ?? null,
-					$b['link_id'] ?? null,
+					$a->linkId,
+					$b->linkId,
 				);
 			});
 
@@ -535,7 +536,7 @@ class MobileSheetsSqliteExporter {
 			$checkExisting = $db->prepare(sprintf('SELECT 1 FROM "%s" WHERE "%s" = ? AND SongId = ?', str_replace('"', '""', $linkTable), str_replace('"', '""', $linkCol)));
 			$insertedSongClientIds = [];
 			foreach ($entityLinks as $link) {
-				$songId = $link['song_id'];
+				$songId = $link->songId;
 				$songClientId = $songClientMap[$songId] ?? null;
 				if ($songClientId === null || isset($insertedSongClientIds[$songClientId])) {
 					continue;
