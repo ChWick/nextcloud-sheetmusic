@@ -93,14 +93,16 @@ class LibraryController extends OCSController {
 
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'GET', url: '/api/libraries/{id}/integrity')]
-	public function getIntegrity(int $id): DataResponse {
+	public function getIntegrity(int $id, bool|string $autoMatchOrphans = true): DataResponse {
 		$user = $this->userSession->getUser();
 		if ($user === null) {
 			return new DataResponse(['message' => 'User not logged in'], Http::STATUS_UNAUTHORIZED);
 		}
 
+		$matchOrphans = filter_var($autoMatchOrphans, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? true;
+
 		try {
-			$issues = $this->integrityService->checkIntegrity($id, $user->getUID());
+			$issues = $this->integrityService->checkIntegrity($id, $user->getUID(), $matchOrphans);
 
 			return new DataResponse(['issues' => array_map(static fn ($issue) => $issue->jsonSerialize(), $issues)], Http::STATUS_OK);
 		} catch (\Throwable $e) {

@@ -51,6 +51,10 @@ const isDuplicateBetweenSongs = computed(() =>
 				<span :class="$style.pathLabel">{{ t('sheetmusic', 'Current Path:') }}</span>
 				<code>{{ issue.path }}</code>
 			</div>
+			<div v-if="issue.type === 'orphan_file' && issue.songTitle" :class="$style.pathLine">
+				<span :class="$style.pathLabel">{{ t('sheetmusic', 'Matched Song:') }}</span>
+				<span>{{ issue.songTitle }}</span>
+			</div>
 			<div v-if="issue.suggestedPath" :class="$style.pathLine">
 				<span :class="$style.pathLabel">{{ t('sheetmusic', 'Expected Path:') }}</span>
 				<code>{{ issue.suggestedPath }}</code>

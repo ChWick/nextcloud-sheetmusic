@@ -389,5 +389,36 @@ describe('IntegrityView.vue', () => {
 		expect(showSuccess).toHaveBeenCalledWith('Linked orphan file to "Moonlight Sonata".')
 		expect(wrapper.text()).not.toContain('Moonlight Sonata.pdf')
 	})
+
+	it('passes autoMatchOrphans=0 query param when autoMatchOrphans toggle is disabled', async () => {
+		vi.mocked(apiGet).mockResolvedValue({
+			data: {
+				ocs: {
+					data: {
+						issues: [],
+					},
+				},
+			},
+		} as any)
+
+		const wrapper = mount(IntegrityView, {
+			props: { selectedLibrary: 1 },
+		})
+		await flushPromises()
+
+		expect(apiGet).toHaveBeenCalledWith('/api/libraries/1/integrity')
+
+		// Find the switch component or input and toggle it off
+		const toggle = wrapper.findComponent({ name: 'NcCheckboxRadioSwitch' })
+		expect(toggle.exists()).toBe(true)
+		await toggle.vm.$emit('update:modelValue', false)
+		await flushPromises()
+
+		expect(apiGet).toHaveBeenCalledWith('/api/libraries/1/integrity', {
+			queryParams: {
+				autoMatchOrphans: '0',
+			},
+		})
+	})
 })
 

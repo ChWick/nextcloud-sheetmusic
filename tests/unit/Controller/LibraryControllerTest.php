@@ -112,7 +112,7 @@ final class LibraryControllerTest extends TestCase {
 				private array $issues,
 			) {
 			}
-			public function checkIntegrity(int $libraryId, ?string $userId = null): array {
+			public function checkIntegrity(int $libraryId, ?string $userId = null, bool $autoMatchOrphans = true): array {
 				return $this->issues;
 			}
 		};
@@ -134,6 +134,35 @@ final class LibraryControllerTest extends TestCase {
 			'songIds' => [60, 61],
 			'exactDuplicate' => false,
 		], $data['issues'][0]['details']);
+	}
+
+	public function testGetIntegrityPassesAutoMatchOrphansOption(): void {
+		$capturedOption = null;
+		$fakeIntegrity = new class($capturedOption) extends LibraryIntegrityService {
+			public ?bool $captured = null;
+			public function __construct(
+				?bool &$capturedOption,
+			) {
+			}
+			public function checkIntegrity(int $libraryId, ?string $userId = null, bool $autoMatchOrphans = true): array {
+				$this->captured = $autoMatchOrphans;
+				return [];
+			}
+		};
+
+		$controller = new LibraryController(
+			'sheetmusic',
+			$this->request,
+			$this->libraryService,
+			$this->userSession,
+			$fakeIntegrity,
+		);
+
+		$controller->getIntegrity(1, autoMatchOrphans: '0');
+		$this->assertFalse($fakeIntegrity->captured);
+
+		$controller->getIntegrity(1, autoMatchOrphans: '1');
+		$this->assertTrue($fakeIntegrity->captured);
 	}
 
 	public function testUpdateSettingsRejectsUnauthenticated(): void {

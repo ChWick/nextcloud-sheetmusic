@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import { showError, showSuccess, showWarning } from '@nextcloud/dialogs'
@@ -34,6 +35,7 @@ const integrityError = ref('')
 const integrityIssues = ref<IntegrityIssue[]>([])
 const collapsedGroups = ref<Record<string, boolean>>({})
 const activeOrphanIssue = ref<IntegrityIssue | null>(null)
+const autoMatchOrphans = ref(true)
 
 // Song conflict resolution state
 const isMergeDialogOpen = ref(false)
@@ -117,7 +119,14 @@ async function auditIntegrity(keepCurrentIssues = false) {
 	}
 
 	try {
-		const response = await apiGet(`/api/libraries/${props.selectedLibrary}/integrity`)
+		const queryParams: Record<string, string> = {}
+		if (!autoMatchOrphans.value) {
+			queryParams.autoMatchOrphans = '0'
+		}
+		const options = Object.keys(queryParams).length > 0 ? { queryParams } : undefined
+		const response = options !== undefined
+			? await apiGet(`/api/libraries/${props.selectedLibrary}/integrity` as any, options)
+			: await apiGet(`/api/libraries/${props.selectedLibrary}/integrity` as any)
 		integrityIssues.value = response.data?.ocs?.data?.issues ?? []
 	} catch (error) {
 		console.error('Failed to audit library integrity:', error)
@@ -128,6 +137,10 @@ async function auditIntegrity(keepCurrentIssues = false) {
 		isCheckingIntegrity.value = false
 	}
 }
+
+watch(autoMatchOrphans, () => {
+	auditIntegrity(true)
+})
 
 watch(() => props.selectedLibrary, (newLib) => {
 	if (newLib >= 0) {
@@ -340,17 +353,21 @@ function openSong(songId: number) {
 
 		<template v-else>
 			<ViewHeader :title="t('sheetmusic', 'Integrity Audit')">
-				<template #actions>
-					<NcButton
-						variant="secondary"
-						:disabled="isCheckingIntegrity"
-						@click="auditIntegrity(true)">
-						<template #icon>
-							<RefreshIcon :size="20" />
-						</template>
-						{{ t('sheetmusic', 'Re-audit Library') }}
-					</NcButton>
-				</template>
+				<NcCheckboxRadioSwitch
+					v-model="autoMatchOrphans"
+					type="switch"
+					:disabled="isCheckingIntegrity">
+					{{ t('sheetmusic', 'Automatically match orphan files') }}
+				</NcCheckboxRadioSwitch>
+				<NcButton
+					variant="secondary"
+					:disabled="isCheckingIntegrity"
+					@click="auditIntegrity(true)">
+					<template #icon>
+						<RefreshIcon :size="20" />
+					</template>
+					{{ t('sheetmusic', 'Re-audit Library') }}
+				</NcButton>
 			</ViewHeader>
 
 			<div :class="$style.content">

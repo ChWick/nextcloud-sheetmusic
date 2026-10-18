@@ -57,7 +57,7 @@ class LibraryIntegrityService {
 	 *
 	 * @return list<IntegrityIssue>
 	 */
-	public function checkIntegrity(int $libraryId, string $userId): array {
+	public function checkIntegrity(int $libraryId, string $userId, bool $autoMatchOrphans = true): array {
 		$userFolder = $this->rootFolder->getUserFolder($userId);
 		$user = $userFolder->getOwner();
 		['databasePath' => $databasePath, 'targetFolder' => $targetFolder] = $this->fileManager->libraryContext($libraryId, $user);
@@ -68,6 +68,7 @@ class LibraryIntegrityService {
 		$issues = [];
 		$referencedRelativePaths = []; // relativeToTarget => list<array{songId: int, songTitle: string, fileId: int}>
 		$songsById = [];
+		$missingSongIds = [];
 		foreach ($songs as $song) {
 			$songsById[$song->id] = $song;
 		}
@@ -85,6 +86,7 @@ class LibraryIntegrityService {
 			foreach ($song->files as $file) {
 				$pathObj = $this->pathResolver->fromStored($file->path, $user);
 				if ($pathObj === null) {
+					$missingSongIds[$song->id] = true;
 					$issues[] = new IntegrityIssue(
 						type: IntegrityIssue::TYPE_MISSING_FILE,
 						severity: IntegrityIssue::SEVERITY_ERROR,
@@ -168,6 +170,7 @@ class LibraryIntegrityService {
 						);
 					}
 				} else {
+					$missingSongIds[$song->id] = true;
 					// Source file does not exist at stored path.
 					$issues[] = new IntegrityIssue(
 						type: IntegrityIssue::TYPE_MISSING_FILE,
@@ -220,7 +223,7 @@ class LibraryIntegrityService {
 
 		// Scan folder for orphan files (files in storage not in DB)
 		if ($autoPaths) {
-			$this->scanOrphans($targetFolder, $targetFolderPath, $referencedRelativePaths, $issues, $user, $songs);
+			$this->scanOrphans($targetFolder, $targetFolderPath, $referencedRelativePaths, $issues, $user, $songs, $missingSongIds, $autoMatchOrphans);
 		}
 
 		// Check for songs with identical metadata (informational)
@@ -1012,6 +1015,12 @@ class LibraryIntegrityService {
 	 * @param list<IntegrityIssue> $issues
 	 * @param list<MobileSheetsSong> $songs
 	 */
+	/**
+	 * @param array<string, mixed> $referencedRelativePaths
+	 * @param list<IntegrityIssue> $issues
+	 * @param list<MobileSheetsSong> $songs
+	 * @param array<int, bool> $missingSongIds
+	 */
 	private function scanOrphans(
 		Folder $folder,
 		string $targetFolderPath,
@@ -1019,11 +1028,13 @@ class LibraryIntegrityService {
 		array &$issues,
 		\OCP\IUser $user,
 		array $songs = [],
+		array $missingSongIds = [],
+		bool $autoMatchOrphans = true,
 	): void {
 		$nodes = $folder->getDirectoryListing();
 		foreach ($nodes as $node) {
 			if ($node instanceof Folder) {
-				$this->scanOrphans($node, $targetFolderPath, $referencedRelativePaths, $issues, $user, $songs);
+				$this->scanOrphans($node, $targetFolderPath, $referencedRelativePaths, $issues, $user, $songs, $missingSongIds, $autoMatchOrphans);
 			} elseif ($node instanceof Node) {
 				$nodePath = $node->getPath();
 				$relativeToTarget = str_starts_with($nodePath, $targetFolderPath . '/')
@@ -1052,7 +1063,9 @@ class LibraryIntegrityService {
 						? substr($nodePath, strlen($userFolderPath) + 1)
 						: ltrim($relativeToTarget, '/');
 
-					$candidateSong = $this->findOrphanFileCandidateSong($relativeToTarget, $songs);
+					$candidateSong = $autoMatchOrphans
+						? $this->findOrphanFileCandidateSong($relativeToTarget, $songs, $missingSongIds)
+						: null;
 					$isFixable = $candidateSong !== null;
 
 					$details = [
@@ -1081,61 +1094,131 @@ class LibraryIntegrityService {
 	}
 
 	/**
-	 * Find candidate song for an orphan file following the deepening rule:
-	 * a) has no attached files
-	 * b) the song's name is part of the file path
-	 * c) the composer
-	 * d) the artist
-	 * e) the collection
-	 * f) the book
-	 * g) the genre
-	 * h) the custom group
+	 * @param list<MobileSheetsSong> $songs
+	 * @return array<int, bool>
+	 */
+	public function findMissingSongIds(
+		array $songs,
+		Folder $targetFolder,
+		string $targetFolderPath,
+		\OCP\IUser $user,
+	): array {
+		$missingSongIds = [];
+		foreach ($songs as $song) {
+			foreach ($song->files as $file) {
+				$pathObj = $this->pathResolver->fromStored($file->path, $user);
+				if ($pathObj === null) {
+					$missingSongIds[$song->id] = true;
+					continue;
+				}
+
+				$internalPath = $pathObj->internal;
+				$relativeToTarget = null;
+				if ($internalPath === $targetFolderPath) {
+					$relativeToTarget = '';
+				} elseif (str_starts_with($internalPath, $targetFolderPath . '/')) {
+					$relativeToTarget = substr($internalPath, strlen($targetFolderPath) + 1);
+				}
+
+				if ($relativeToTarget === null || !$targetFolder->nodeExists($relativeToTarget)) {
+					$missingSongIds[$song->id] = true;
+				}
+			}
+		}
+
+		return $missingSongIds;
+	}
+
+	/**
+	 * Find candidate song for an orphan file following the rules:
+	 * 1. First try songs with an attached but missing file.
+	 * 2. If no match is found, try songs without any files.
 	 *
-	 * Checks c, d, e, f... are only executed if the previous check returns more than one song.
+	 * Within each tier:
+	 * a) Match by song name (in the file name).
+	 * b) If multiple candidates remain, attempt to eliminate by adding filters:
+	 *    composer, collection, artist, book, genre, custom group.
+	 *
 	 * Returns the single matched song, or null if 0 or >1 candidates remain.
 	 *
 	 * @param list<MobileSheetsSong> $songs
+	 * @param array<int, bool>|list<int> $missingSongIds
 	 */
-	public function findOrphanFileCandidateSong(string $filePath, array $songs): ?MobileSheetsSong {
-		// a) song has no attached files
-		$candidates = array_values(array_filter($songs, static fn (MobileSheetsSong $s): bool => empty($s->files)));
-		if (empty($candidates)) {
-			return null;
-		}
+	public function findOrphanFileCandidateSong(string $filePath, array $songs, array $missingSongIds = []): ?MobileSheetsSong {
+		$isMissing = static function (int $id) use ($missingSongIds): bool {
+			return isset($missingSongIds[$id]) || in_array($id, $missingSongIds, true);
+		};
 
-		// b) the song's name is part of the file path
-		$matched = array_values(array_filter(
-			$candidates,
-			fn (MobileSheetsSong $s): bool => $this->stringMatchesPath($s->title, $filePath),
+		// Tier 1: songs with an attached but missing file
+		$tier1Candidates = array_values(array_filter(
+			$songs,
+			static fn (MobileSheetsSong $s): bool => !empty($s->files) && $isMissing($s->id),
 		));
 
-		if (count($matched) === 1) {
-			return $matched[0];
+		$tier1Result = $this->matchCandidateSongInPool($filePath, $tier1Candidates);
+		if ($tier1Result['matched'] !== null) {
+			return $tier1Result['matched'];
 		}
-		if (count($matched) === 0) {
+		if ($tier1Result['hasCandidates']) {
+			// Candidates in Tier 1 matched the song name, but could not be disambiguated to a single match.
 			return null;
 		}
 
-		$candidates = $matched;
+		// Tier 2: songs without any files
+		$tier2Candidates = array_values(array_filter(
+			$songs,
+			static fn (MobileSheetsSong $s): bool => empty($s->files),
+		));
 
-		// Deepen search: c) composer, d) artist, e) collection, f) book, g) genre, h) custom group
+		$tier2Result = $this->matchCandidateSongInPool($filePath, $tier2Candidates);
+		return $tier2Result['matched'];
+	}
+
+	/**
+	 * @param list<MobileSheetsSong> $pool
+	 * @return array{matched: ?MobileSheetsSong, hasCandidates: bool}
+	 */
+	private function matchCandidateSongInPool(string $filePath, array $pool): array {
+		if (empty($pool)) {
+			return ['matched' => null, 'hasCandidates' => false];
+		}
+
+		$normalizedPath = str_replace('\\', '/', $filePath);
+		$fileName = basename($normalizedPath);
+
+		// Match by song name (in the file name)
+		$matched = array_values(array_filter(
+			$pool,
+			fn (MobileSheetsSong $s): bool => $this->stringMatchesPath($s->title, $fileName),
+		));
+
+		if (empty($matched)) {
+			return ['matched' => null, 'hasCandidates' => false];
+		}
+
+		if (count($matched) === 1) {
+			return ['matched' => $matched[0], 'hasCandidates' => true];
+		}
+
+		// Multiple candidates: attempt to eliminate by adding more filters
+		$candidates = $matched;
 		$entityExtractors = [
 			static fn (MobileSheetsSong $s): array => array_map(static fn ($c) => $c->name, $s->composers),
-			static fn (MobileSheetsSong $s): array => array_map(static fn ($a) => $a->name, $s->artists),
 			static fn (MobileSheetsSong $s): array => array_map(static fn ($col) => $col->name, $s->collections),
+			static fn (MobileSheetsSong $s): array => array_map(static fn ($a) => $a->name, $s->artists),
 			static fn (MobileSheetsSong $s): array => array_map(static fn ($b) => $b->title, $s->books),
 			static fn (MobileSheetsSong $s): array => array_map(static fn ($g) => $g->name, $s->genres),
 			static fn (MobileSheetsSong $s): array => array_map(static fn ($cg) => $cg->name, $s->customGroups),
 		];
 
 		foreach ($entityExtractors as $extractor) {
-			$candidates = $this->deepenCandidateSearch($candidates, $filePath, $extractor, $singleMatch);
+			$candidates = $this->deepenCandidateSearch($candidates, $normalizedPath, $extractor, $singleMatch);
 			if ($singleMatch !== null) {
-				return $singleMatch;
+				return ['matched' => $singleMatch, 'hasCandidates' => true];
 			}
 		}
 
-		return null;
+		return ['matched' => null, 'hasCandidates' => true];
 	}
 
 	/**
@@ -1235,8 +1318,10 @@ class LibraryIntegrityService {
 			];
 		}
 
+		$targetFolderPath = (string)$targetFolder->getPath();
 		$songs = $this->internalSongMapper->findLibraryData($libraryId, $user)->songs;
-		$candidateSong = $this->findOrphanFileCandidateSong($cleanPath, $songs);
+		$missingSongIds = $this->findMissingSongIds($songs, $targetFolder, $targetFolderPath, $user);
+		$candidateSong = $this->findOrphanFileCandidateSong($cleanPath, $songs, $missingSongIds);
 
 		if ($candidateSong === null) {
 			return [
@@ -1254,6 +1339,24 @@ class LibraryIntegrityService {
 			];
 		}
 
+		$missingFiles = [];
+		foreach ($candidateSong->files as $f) {
+			$pathObj = $this->pathResolver->fromStored($f->path, $user);
+			if ($pathObj === null) {
+				$missingFiles[] = $f;
+				continue;
+			}
+			$rel = null;
+			if ($pathObj->internal === $targetFolderPath) {
+				$rel = '';
+			} elseif (str_starts_with($pathObj->internal, $targetFolderPath . '/')) {
+				$rel = substr($pathObj->internal, strlen($targetFolderPath) + 1);
+			}
+			if ($rel === null || !$targetFolder->nodeExists($rel)) {
+				$missingFiles[] = $f;
+			}
+		}
+
 		$fileId = (int)$orphanNode->getId();
 		$existingFiles = $this->internalSongFileMapper->findAllForSong($candidateSong->id);
 		$alreadyLinked = false;
@@ -1265,6 +1368,15 @@ class LibraryIntegrityService {
 		}
 
 		if (!$alreadyLinked) {
+			if (!empty($missingFiles)) {
+				foreach ($missingFiles as $mf) {
+					$rec = $this->internalSongFileMapper->findById($mf->id);
+					if ($rec !== null && $rec->songId === $candidateSong->id) {
+						$this->internalSongFileMapper->delete($rec->id);
+					}
+				}
+			}
+
 			$fileSize = 0;
 			try {
 				$fileSize = $orphanNode->getSize();
@@ -1285,28 +1397,67 @@ class LibraryIntegrityService {
 			$this->libraryMapper->touch($libraryId);
 		}
 
-		// If SQLite database exists, also record file in SQLite Files table
+		// If SQLite database exists, also record or update file in SQLite Files table
 		if ($databasePath !== '' && file_exists($databasePath)) {
 			try {
 				$db = new \PDO('sqlite:' . $databasePath);
 				$db->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
 				$tables = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='Files'")->fetchAll();
 				if (!empty($tables)) {
-					$existing = $db->prepare('SELECT Id FROM Files WHERE SongId = :songId AND Path = :path');
-					$existing->execute([':songId' => $candidateSong->id, ':path' => $cleanPath]);
-					if ($existing->fetch() === false) {
-						$facts = MobileSheetsFileFacts::fromNode($orphanNode);
-						$stmt = $db->prepare('INSERT INTO Files (SongId, Path, PageOrder, FileSize, LastModified, Source, Type, Password, SourceFilePageCount, FileHash, Width, Height) VALUES (:songId, :path, :pageOrder, :fileSize, :lastModified, 0, :type, \'\', :pageCount, :fileHash, 0, 0)');
-						$stmt->execute([
-							':songId' => $candidateSong->id,
-							':path' => $cleanPath,
-							':pageOrder' => $facts->pageOrder,
-							':fileSize' => $facts->fileSize,
-							':lastModified' => $facts->lastModified,
-							':type' => SongFileMapper::determineFileType($cleanPath),
-							':pageCount' => $facts->sourceFilePageCount,
-							':fileHash' => $facts->fileHash,
-						]);
+					$facts = MobileSheetsFileFacts::fromNode($orphanNode);
+					$fileType = SongFileMapper::determineFileType($cleanPath);
+					$updatedExisting = false;
+
+					if (!empty($missingFiles)) {
+						foreach ($missingFiles as $mf) {
+							$mfPathObj = $this->pathResolver->fromStored($mf->path, $user);
+							$mfInternal = $mfPathObj?->internal ?? '';
+							$mfRel = str_starts_with($mfInternal, $targetFolderPath . '/')
+								? substr($mfInternal, strlen($targetFolderPath) + 1)
+								: basename($mf->path);
+
+							$stmtFind = $db->prepare('SELECT Id FROM Files WHERE SongId = :songId AND (Path = :p1 OR Path = :p2 OR Id = :fid)');
+							$stmtFind->execute([
+								':songId' => $candidateSong->id,
+								':p1' => $mfRel,
+								':p2' => $mf->path,
+								':fid' => $mf->id,
+							]);
+							$row = $stmtFind->fetch();
+							if ($row !== false) {
+								$stmtUpdate = $db->prepare('UPDATE Files SET Path = :path, PageOrder = :pageOrder, FileSize = :fileSize, LastModified = :lastModified, Type = :type, SourceFilePageCount = :pageCount, FileHash = :fileHash WHERE Id = :id');
+								$stmtUpdate->execute([
+									':id' => $row['Id'],
+									':path' => $cleanPath,
+									':pageOrder' => $facts->pageOrder,
+									':fileSize' => $facts->fileSize,
+									':lastModified' => $facts->lastModified,
+									':type' => $fileType,
+									':pageCount' => $facts->sourceFilePageCount,
+									':fileHash' => $facts->fileHash,
+								]);
+								$updatedExisting = true;
+								break;
+							}
+						}
+					}
+
+					if (!$updatedExisting) {
+						$existing = $db->prepare('SELECT Id FROM Files WHERE SongId = :songId AND Path = :path');
+						$existing->execute([':songId' => $candidateSong->id, ':path' => $cleanPath]);
+						if ($existing->fetch() === false) {
+							$stmt = $db->prepare('INSERT INTO Files (SongId, Path, PageOrder, FileSize, LastModified, Source, Type, Password, SourceFilePageCount, FileHash, Width, Height) VALUES (:songId, :path, :pageOrder, :fileSize, :lastModified, 0, :type, \'\', :pageCount, :fileHash, 0, 0)');
+							$stmt->execute([
+								':songId' => $candidateSong->id,
+								':path' => $cleanPath,
+								':pageOrder' => $facts->pageOrder,
+								':fileSize' => $facts->fileSize,
+								':lastModified' => $facts->lastModified,
+								':type' => $fileType,
+								':pageCount' => $facts->sourceFilePageCount,
+								':fileHash' => $facts->fileHash,
+							]);
+						}
 					}
 				}
 			} catch (\Throwable $e) {
