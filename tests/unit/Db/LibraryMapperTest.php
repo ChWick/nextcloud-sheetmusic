@@ -120,12 +120,12 @@ final class LibraryMapperTest extends TestCase {
 		self::assertNull($this->libraryMapper->findForUser($this->testUser, 999999));
 	}
 
-	public function testSetAutoPathsForUser(): void {
+	public function testSetSettingsForUserAutoPathsOnly(): void {
 		$this->libraryMapper->addForUser($this->testUser, '/Noten/settings.db');
 		$libs = $this->libraryMapper->findAllForUser($this->testUser);
 		$id = $libs[0]['id'];
 
-		$this->libraryMapper->setAutoPathsForUser($this->testUser, $id, false);
+		$this->libraryMapper->setSettingsForUser($this->testUser, $id, autoPaths: false);
 
 		$found = $this->libraryMapper->findForUser($this->testUser, $id);
 		self::assertNotNull($found);

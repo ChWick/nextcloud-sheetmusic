@@ -130,8 +130,8 @@ final class LibraryServiceTest extends TestCase {
 		$lib1 = $this->createTestLibrary('/Noten/autopaths1.db', 'admin');
 		$lib2 = $this->createTestLibrary('/Noten/autopaths2.db', 'admin');
 
-		$this->libraryMapper->setAutoPathsForUser('admin', (int)$lib1->id, true);
-		$this->libraryMapper->setAutoPathsForUser('admin', (int)$lib2->id, false);
+		$this->libraryMapper->setSettingsForUser('admin', (int)$lib1->id, autoPaths: true);
+		$this->libraryMapper->setSettingsForUser('admin', (int)$lib2->id, autoPaths: false);
 
 		self::assertTrue($this->service->isAutoPathsEnabled('admin', (int)$lib1->id));
 		self::assertFalse($this->service->isAutoPathsEnabled('admin', (int)$lib2->id));

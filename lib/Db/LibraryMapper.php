@@ -137,15 +137,6 @@ class LibraryMapper {
 		];
 	}
 
-	public function setAutoPathsForUser(string $userId, int $id, bool $autoPaths): void {
-		$qb = $this->db->getQueryBuilder();
-		$qb->update(self::TABLE_NAME)
-			->set('auto_paths', $qb->createNamedParameter($autoPaths, IQueryBuilder::PARAM_BOOL))
-			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId, IQueryBuilder::PARAM_STR)))
-			->andWhere($qb->expr()->eq('id', $qb->createNamedParameter($id, IQueryBuilder::PARAM_INT)));
-
-		$qb->executeStatement();
-	}
 
 	public function setSettingsForUser(string $userId, int $id, ?bool $autoPaths = null, ?bool $autoPdfMetadata = null): void {
 		$qb = $this->db->getQueryBuilder();

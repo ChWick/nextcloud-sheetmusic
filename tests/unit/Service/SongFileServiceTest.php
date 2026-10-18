@@ -224,7 +224,7 @@ final class SongFileServiceTest extends TestCase {
 			title: 'Song Fail',
 		));
 
-		$this->libraryMapper->setAutoPathsForUser('admin', $this->libraryId, false);
+		$this->libraryMapper->setSettingsForUser('admin', $this->libraryId, autoPaths: false);
 
 		$existingFile = $this->libraryFolder->newFile('existing.pdf');
 		$existingFile->putContent('%PDF-1.4 existing');
@@ -252,7 +252,7 @@ final class SongFileServiceTest extends TestCase {
 			title: 'Song No Reloc',
 		));
 
-		$this->libraryMapper->setAutoPathsForUser('admin', $this->libraryId, false);
+		$this->libraryMapper->setSettingsForUser('admin', $this->libraryId, autoPaths: false);
 
 		$tmpFile = tempnam(sys_get_temp_dir(), 'test_upload_');
 		file_put_contents($tmpFile, '%PDF-1.4 content');
