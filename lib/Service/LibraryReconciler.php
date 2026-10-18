@@ -60,11 +60,22 @@ class LibraryReconciler {
 
 		$userFolder = $this->rootFolder->getUserFolder($user->getUID());
 		$cleanLibPath = ltrim($lib->path, '/');
-		if (!$userFolder->nodeExists($cleanLibPath)) {
-			return ['indexed' => 0, 'pruned' => 0];
+		if (str_ends_with(strtolower($cleanLibPath), '.db')) {
+			$cleanLibPath = dirname($cleanLibPath);
+			if ($cleanLibPath === '.') {
+				$cleanLibPath = '';
+			}
 		}
 
-		$libFolderNode = $userFolder->get($cleanLibPath);
+		if ($cleanLibPath === '') {
+			$libFolderNode = $userFolder;
+		} else {
+			if (!$userFolder->nodeExists($cleanLibPath)) {
+				return ['indexed' => 0, 'pruned' => 0];
+			}
+			$libFolderNode = $userFolder->get($cleanLibPath);
+		}
+
 		if (!($libFolderNode instanceof Folder)) {
 			return ['indexed' => 0, 'pruned' => 0];
 		}
