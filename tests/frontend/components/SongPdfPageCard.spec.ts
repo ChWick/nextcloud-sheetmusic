@@ -135,3 +135,4 @@ describe('SongPdfPageCard.vue', () => {
 		expect(wrapper.text()).toContain('Deleted')
 	})
 })
+

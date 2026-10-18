@@ -1,14 +1,15 @@
+<script lang="ts">
+export type { SplitSegment } from './SongPdfSplitSidebar.vue'
+export type { OriginalSongAction } from './OriginalSongActionSelector.vue'
+</script>
+
 <script setup lang="ts">
 import type { Song, SongFile, Book, Composer, Collection, Artist, Genre, Instrument, Key, CustomGroup, Year, Signature, SourceType, LibraryData } from '../../types/song'
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
 import { generateFilePath } from '@nextcloud/router'
-import NcButton from '@nextcloud/vue/components/NcButton'
-import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
-import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
-import NcTextField from '@nextcloud/vue/components/NcTextField'
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist'
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { PDFDocument, degrees } from 'pdf-lib'
@@ -16,25 +17,13 @@ import { apiDelete, apiGet, apiPost } from '../../api/client'
 import { showError, showInfo, showSuccess } from '@nextcloud/dialogs'
 import { getCacheBustedFileUrl, getFileName } from '../../utils/file'
 import { describeRequestFailure } from '../../utils/api'
-import OriginalSongActionSelector, { type OriginalSongAction } from './OriginalSongActionSelector.vue'
+import type { OriginalSongAction } from './OriginalSongActionSelector.vue'
 
-// Icons
-import RotateRight from 'vue-material-design-icons/RotateRight.vue'
-import RotateLeft from 'vue-material-design-icons/RotateLeft.vue'
-import ContentSaveOutlineIcon from 'vue-material-design-icons/ContentSaveOutline.vue'
-import CloseIcon from 'vue-material-design-icons/Close.vue'
-import CallSplit from 'vue-material-design-icons/CallSplit.vue'
-import PlusIcon from 'vue-material-design-icons/Plus.vue'
-import DeleteIcon from 'vue-material-design-icons/Delete.vue'
-import DeleteOutline from 'vue-material-design-icons/DeleteOutline.vue'
-import DeleteRestore from 'vue-material-design-icons/DeleteRestore.vue'
-import CheckboxMarkedCircleOutline from 'vue-material-design-icons/CheckboxMarkedCircleOutline.vue'
-import CropIcon from 'vue-material-design-icons/Crop.vue'
-import ArrowRight from 'vue-material-design-icons/ArrowRight.vue'
-import TableMergeCells from 'vue-material-design-icons/TableMergeCells.vue'
-import Rotate360 from 'vue-material-design-icons/Rotate360.vue'
-import Tune from 'vue-material-design-icons/Tune.vue'
-import History from 'vue-material-design-icons/History.vue'
+import SongPdfHeader from './SongPdfHeader.vue'
+import SongPdfToolbar from './SongPdfToolbar.vue'
+import SongPdfPageCard, { type SplitSegmentSummary } from './SongPdfPageCard.vue'
+import SongPdfSplitSidebar, { getSegmentColor, type SplitSegment } from './SongPdfSplitSidebar.vue'
+import SongPdfVersionsModal, { type FileVersionInfo } from './SongPdfVersionsModal.vue'
 import SongPdfCropModal from './SongPdfCropModal.vue'
 import SongPdfJoinModal from './SongPdfJoinModal.vue'
 import SongPdfRotateModal from './SongPdfRotateModal.vue'
@@ -48,12 +37,6 @@ import { executeEnhancePage } from './pdf-enhance-engine'
 
 GlobalWorkerOptions.workerSrc = pdfWorker
 
-export interface SplitSegment {
-	id: string
-	title: string
-	startPage: number
-	endPage: number
-}
 
 const props = withDefaults(
 	defineProps<{
@@ -131,11 +114,6 @@ const isEnhanceModalOpen = ref(false)
 const enhanceModalPage = ref(1)
 
 // Version history modal state
-interface FileVersionInfo {
-	revision: number
-	timestamp: number
-	size: number
-}
 const isVersionsModalOpen = ref(false)
 const fileVersions = ref<FileVersionInfo[]>([])
 const isLoadingVersions = ref(false)
@@ -161,7 +139,6 @@ const thumbnailCanvases = ref<Record<number, HTMLCanvasElement>>({})
 const thumbnailContainers = ref<Record<number, HTMLElement | null>>({})
 
 // Split state
-export type { OriginalSongAction } from './OriginalSongActionSelector.vue'
 const originalSongAction = ref<OriginalSongAction>('keep')
 const attachedFilesCount = computed(() => props.song.files?.length ?? 0)
 const hasExactlyOneFile = computed(() => attachedFilesCount.value === 1)
@@ -488,20 +465,16 @@ function getSegmentsForPage(pageNum: number): SplitSegment[] {
 	return splitSegments.value.filter((s) => pageNum >= s.startPage && pageNum <= s.endPage)
 }
 
-// Color palette for segments
-const segmentColors = [
-	'#3b82f6', // blue
-	'#10b981', // emerald
-	'#f59e0b', // amber
-	'#8b5cf6', // purple
-	'#ec4899', // pink
-	'#06b6d4', // cyan
-	'#84cc16', // lime
-	'#f97316', // orange
-]
-
-function getSegmentColor(segIndex: number): string {
-	return segmentColors[segIndex % segmentColors.length]
+function getPageSegmentsSummary(pageNum: number): SplitSegmentSummary[] {
+	return splitSegments.value
+		.map((seg, index) => ({ seg, index }))
+		.filter(({ seg }) => pageNum >= seg.startPage && pageNum <= seg.endPage)
+		.map(({ seg, index }) => ({
+			id: seg.id,
+			title: seg.title,
+			index: index + 1,
+			color: getSegmentColor(index),
+		}))
 }
 
 // Crop helpers
@@ -700,16 +673,16 @@ async function revertToVersion(revision: number) {
 	}
 }
 
-function formatFileSize(bytes: number): string {
-	if (bytes < 1024) return `${bytes} B`
-	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-	return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
-function formatTimestamp(timestamp: number): string {
-	if (!timestamp) return ''
-	const d = new Date(timestamp * 1000)
-	return d.toLocaleString()
+function handleHeaderSave() {
+	if (activeMode.value === 'rotate') {
+		saveRotations()
+	} else if (activeMode.value === 'crop') {
+		saveCrops()
+	} else if (activeMode.value === 'enhance') {
+		saveEnhancements()
+	} else if (activeMode.value === 'split') {
+		saveSplits()
+	}
 }
 
 function openJoinModal(pageA: number, pageB?: number) {
@@ -1174,108 +1147,24 @@ watch(() => targetFile.value?.path, () => {
 <template>
 	<div :class="$style.container">
 		<!-- Top Bar / Sub-header -->
-		<header :class="$style.header">
-			<div :class="$style.headerLeft">
-				<NcButton
-					variant="secondary"
-					:title="t('sheetmusic', 'Back to song')"
-					:aria-label="t('sheetmusic', 'Back to song')"
-					@click="emit('cancel')">
-					<template #icon>
-						<CloseIcon :size="20" />
-					</template>
-					{{ t('sheetmusic', 'Cancel') }}
-				</NcButton>
-				<div :class="$style.fileMeta">
-					<span :class="$style.songTitle">{{ song.title }}</span>
-					<span v-if="targetFile" :class="$style.fileName">
-						({{ getFileName(targetFile.path) }} — {{ hasAnyDeletion ? `${remainingPagesCount} / ${totalPages}` : totalPages }} {{ totalPages === 1 ? t('sheetmusic', 'page') : t('sheetmusic', 'pages') }})
-					</span>
-				</div>
-			</div>
-
-			<!-- Mode Switcher Tabs -->
-			<div :class="$style.modeTabs">
-				<button
-					type="button"
-					:class="[$style.tabButton, activeMode === 'rotate' && $style.tabButtonActive]"
-					@click="activeMode = 'rotate'">
-					<RotateRight :size="18" />
-					<span>{{ t('sheetmusic', 'Rotate Pages') }}</span>
-				</button>
-				<button
-					type="button"
-					:class="[$style.tabButton, activeMode === 'crop' && $style.tabButtonActive]"
-					@click="activeMode = 'crop'">
-					<CropIcon :size="18" />
-					<span>{{ t('sheetmusic', 'Crop Pages') }}</span>
-				</button>
-				<button
-					type="button"
-					:class="[$style.tabButton, activeMode === 'enhance' && $style.tabButtonActive]"
-					@click="activeMode = 'enhance'">
-					<Tune :size="18" />
-					<span>{{ t('sheetmusic', 'Enhance Scans') }}</span>
-				</button>
-				<button
-					type="button"
-					:class="[$style.tabButton, activeMode === 'split' && $style.tabButtonActive]"
-					@click="activeMode = 'split'">
-					<CallSplit :size="18" />
-					<span>{{ t('sheetmusic', 'Split PDF') }}</span>
-				</button>
-			</div>
-
-			<div :class="$style.headerRight">
-				<NcButton
-					v-if="activeMode === 'rotate'"
-					variant="primary"
-					:disabled="isSaving || isLoading || !hasAnyChange || remainingPagesCount === 0"
-					:title="(hasAnyDeletion || hasAnyCrop || hasAnyEnhance || hasAnyJoin) ? t('sheetmusic', 'Save changes') : t('sheetmusic', 'Save rotated PDF')"
-					@click="saveRotations">
-					<template #icon>
-						<ContentSaveOutlineIcon :size="20" />
-					</template>
-					{{ isSaving ? t('sheetmusic', 'Saving…') : ((hasAnyDeletion || hasAnyCrop || hasAnyEnhance || hasAnyJoin) ? t('sheetmusic', 'Save Changes') : t('sheetmusic', 'Save Rotations')) }}
-				</NcButton>
-
-				<NcButton
-					v-else-if="activeMode === 'crop'"
-					variant="primary"
-					:disabled="isSaving || isLoading || !hasAnyChange || remainingPagesCount === 0"
-					:title="(hasAnyDeletion || hasAnyRotation || hasAnyEnhance || hasAnyJoin) ? t('sheetmusic', 'Save changes') : t('sheetmusic', 'Save cropped PDF')"
-					@click="saveCrops">
-					<template #icon>
-						<ContentSaveOutlineIcon :size="20" />
-					</template>
-					{{ isSaving ? t('sheetmusic', 'Saving…') : ((hasAnyDeletion || hasAnyRotation || hasAnyEnhance || hasAnyJoin) ? t('sheetmusic', 'Save Changes') : t('sheetmusic', 'Save Crops')) }}
-				</NcButton>
-
-				<NcButton
-					v-else-if="activeMode === 'enhance'"
-					variant="primary"
-					:disabled="isSaving || isLoading || !hasAnyChange || remainingPagesCount === 0"
-					:title="t('sheetmusic', 'Save enhanced PDF')"
-					@click="saveEnhancements">
-					<template #icon>
-						<ContentSaveOutlineIcon :size="20" />
-					</template>
-					{{ isSaving ? t('sheetmusic', 'Saving…') : t('sheetmusic', 'Save Enhanced PDF') }}
-				</NcButton>
-
-				<NcButton
-					v-else-if="activeMode === 'split'"
-					variant="primary"
-					:disabled="isSaving || isLoading || splitSegments.length === 0"
-					:title="t('sheetmusic', 'Split and create songs')"
-					@click="saveSplits">
-					<template #icon>
-						<CallSplit :size="20" />
-					</template>
-					{{ isSaving ? t('sheetmusic', 'Processing…') : t('sheetmusic', 'Split & Create Songs') }}
-				</NcButton>
-			</div>
-		</header>
+		<SongPdfHeader
+			:song="song"
+			:target-file="targetFile"
+			:total-pages="totalPages"
+			:remaining-pages-count="remainingPagesCount"
+			:has-any-deletion="hasAnyDeletion"
+			:has-any-change="hasAnyChange"
+			:has-any-rotation="hasAnyRotation"
+			:has-any-crop="hasAnyCrop"
+			:has-any-enhance="hasAnyEnhance"
+			:has-any-join="hasAnyJoin"
+			:active-mode="activeMode"
+			:is-saving="isSaving"
+			:is-loading="isLoading"
+			:split-segments-count="splitSegments.length"
+			@update:active-mode="activeMode = $event"
+			@cancel="emit('cancel')"
+			@save="handleHeaderSave" />
 
 		<!-- Error Banner -->
 		<div v-if="errorMessage" :class="$style.errorBanner">
@@ -1292,185 +1181,26 @@ watch(() => targetFile.value?.path, () => {
 			<!-- Left / Main Panel: Page Preview Grid -->
 			<div :class="$style.previewSection">
 				<!-- Global Toolbar for Active Mode -->
-				<div :class="$style.toolbar">
-					<template v-if="activeMode === 'rotate'">
-						<span :class="$style.toolbarTitle">{{ t('sheetmusic', 'Quick Actions:') }}</span>
-						<NcButton size="small" variant="secondary" @click="rotateAll(90)">
-							<template #icon>
-								<RotateRight :size="16" />
-							</template>
-							{{ t('sheetmusic', 'Rotate All 90° CW') }}
-						</NcButton>
-						<NcButton size="small" variant="secondary" @click="rotateAll(-90)">
-							<template #icon>
-								<RotateLeft :size="16" />
-							</template>
-							{{ t('sheetmusic', 'Rotate All 90° CCW') }}
-						</NcButton>
-						<NcButton
-							size="small"
-							variant="secondary"
-							:title="t('sheetmusic', 'Rotate by custom angle / fine deskew')"
-							@click="openRotateModal(1)">
-							<template #icon>
-								<Rotate360 :size="16" />
-							</template>
-							{{ t('sheetmusic', 'Rotate by Angle…') }}
-						</NcButton>
-						<NcButton size="small" variant="tertiary" :disabled="!hasAnyRotation" @click="resetRotations">
-							{{ t('sheetmusic', 'Reset All') }}
-						</NcButton>
-						<NcButton
-							v-if="totalPages >= 2"
-							size="small"
-							variant="secondary"
-							:title="t('sheetmusic', 'Join two pages into a single page')"
-							@click="openJoinModal(1, 2)">
-							<template #icon>
-								<TableMergeCells :size="16" />
-							</template>
-							{{ t('sheetmusic', 'Join Pages…') }}
-						</NcButton>
-						<NcButton
-							size="small"
-							variant="secondary"
-							:title="t('sheetmusic', 'View file version history and revert changes')"
-							@click="openVersionsModal">
-							<template #icon>
-								<History :size="16" />
-							</template>
-							{{ t('sheetmusic', 'Version History…') }}
-						</NcButton>
-						<NcButton
-							v-if="hasAnyDeletion"
-							size="small"
-							variant="tertiary"
-							:title="t('sheetmusic', 'Restore all deleted pages')"
-							@click="restoreAllPages">
-							<template #icon>
-								<DeleteRestore :size="16" />
-							</template>
-							{{ t('sheetmusic', 'Restore Deleted ({count})', { count: deletedPages.size }) }}
-						</NcButton>
-					</template>
-
-					<template v-else-if="activeMode === 'crop'">
-						<span :class="$style.toolbarTitle">
-							{{ t('sheetmusic', 'Click on any page or "Crop" button to adjust crop margins:') }}
-						</span>
-						<NcButton
-							size="small"
-							variant="secondary"
-							:title="t('sheetmusic', 'Crop first page and apply to all')"
-							@click="openCropModal(1)">
-							<template #icon>
-								<CropIcon :size="16" />
-							</template>
-							{{ t('sheetmusic', 'Crop All Pages…') }}
-						</NcButton>
-						<NcButton
-							size="small"
-							variant="tertiary"
-							:disabled="!hasAnyCrop"
-							:title="t('sheetmusic', 'Reset all page crops to full page')"
-							@click="resetAllCrops">
-							{{ t('sheetmusic', 'Reset All Crops') }}
-						</NcButton>
-						<NcButton
-							v-if="totalPages >= 2"
-							size="small"
-							variant="secondary"
-							:title="t('sheetmusic', 'Join two pages into a single page')"
-							@click="openJoinModal(1, 2)">
-							<template #icon>
-								<TableMergeCells :size="16" />
-							</template>
-							{{ t('sheetmusic', 'Join Pages…') }}
-						</NcButton>
-						<NcButton
-							size="small"
-							variant="secondary"
-							:title="t('sheetmusic', 'View file version history and revert changes')"
-							@click="openVersionsModal">
-							<template #icon>
-								<History :size="16" />
-							</template>
-							{{ t('sheetmusic', 'Version History…') }}
-						</NcButton>
-						<NcButton
-							v-if="hasAnyDeletion"
-							size="small"
-							variant="tertiary"
-							:title="t('sheetmusic', 'Restore all deleted pages')"
-							@click="restoreAllPages">
-							<template #icon>
-								<DeleteRestore :size="16" />
-							</template>
-							{{ t('sheetmusic', 'Restore Deleted ({count})', { count: deletedPages.size }) }}
-						</NcButton>
-					</template>
-
-					<template v-else-if="activeMode === 'enhance'">
-						<span :class="$style.toolbarTitle">
-							{{ t('sheetmusic', 'Enhance scan quality (Gaussian filter, thresholding, gray level mapping):') }}
-						</span>
-						<NcButton
-							size="small"
-							variant="secondary"
-							:title="t('sheetmusic', 'Configure scan enhancement and apply to all pages')"
-							@click="openEnhanceModal(1)">
-							<template #icon>
-								<Tune :size="16" />
-							</template>
-							{{ t('sheetmusic', 'Enhance All Pages…') }}
-						</NcButton>
-						<NcButton
-							size="small"
-							variant="tertiary"
-							:disabled="!hasAnyEnhance"
-							:title="t('sheetmusic', 'Reset all page enhancements')"
-							@click="resetAllEnhancements">
-							{{ t('sheetmusic', 'Reset All Enhancements') }}
-						</NcButton>
-						<NcButton
-							size="small"
-							variant="secondary"
-							:title="t('sheetmusic', 'View file version history and revert changes')"
-							@click="openVersionsModal">
-							<template #icon>
-								<History :size="16" />
-							</template>
-							{{ t('sheetmusic', 'Version History…') }}
-						</NcButton>
-						<NcButton
-							v-if="hasAnyDeletion"
-							size="small"
-							variant="tertiary"
-							:title="t('sheetmusic', 'Restore all deleted pages')"
-							@click="restoreAllPages">
-							<template #icon>
-								<DeleteRestore :size="16" />
-							</template>
-							{{ t('sheetmusic', 'Restore Deleted ({count})', { count: deletedPages.size }) }}
-						</NcButton>
-					</template>
-
-					<template v-else-if="activeMode === 'split'">
-						<span :class="$style.toolbarTitle">
-							{{ t('sheetmusic', 'Select pages in grid to assign to segments:') }}
-						</span>
-						<span v-if="selectedPages.length > 0" :class="$style.selectionBadge">
-							{{ t('sheetmusic', '{count} pages selected', { count: selectedPages.length }) }}
-						</span>
-						<NcButton
-							v-if="selectedPages.length > 0"
-							size="small"
-							variant="tertiary"
-							@click="selectedPages = []">
-							{{ t('sheetmusic', 'Clear Selection') }}
-						</NcButton>
-					</template>
-				</div>
+				<SongPdfToolbar
+					:active-mode="activeMode"
+					:total-pages="totalPages"
+					:has-any-rotation="hasAnyRotation"
+					:has-any-crop="hasAnyCrop"
+					:has-any-enhance="hasAnyEnhance"
+					:has-any-deletion="hasAnyDeletion"
+					:deleted-pages-count="deletedPages.size"
+					:selected-pages-count="selectedPages.length"
+					@rotate-all="rotateAll($event)"
+					@open-rotate-modal="openRotateModal(1)"
+					@reset-rotations="resetRotations"
+					@open-join-modal="openJoinModal(1, 2)"
+					@restore-all-pages="restoreAllPages"
+					@open-crop-modal="openCropModal(1)"
+					@reset-all-crops="resetAllCrops"
+					@open-enhance-modal="openEnhanceModal(1)"
+					@reset-all-enhancements="resetAllEnhancements"
+					@open-versions-modal="openVersionsModal"
+					@clear-selection="selectedPages = []" />
 
 				<!-- Thumbnail Grid -->
 				<div :class="$style.grid">
@@ -1666,93 +1396,16 @@ watch(() => targetFile.value?.path, () => {
 				</div>
 			</div>
 
-			<!-- Right Sidebar: Split Segments Configuration -->
-			<aside v-if="activeMode === 'split'" :class="$style.splitSidebar">
-				<div :class="$style.sidebarHeader">
-					<h4>{{ t('sheetmusic', 'Split Segments') }}</h4>
-					<NcButton size="small" variant="secondary" @click="addSegment">
-						<template #icon>
-							<PlusIcon :size="16" />
-						</template>
-						{{ t('sheetmusic', 'Add Part') }}
-					</NcButton>
-				</div>
-
-				<p :class="$style.sidebarHelp">
-					{{ t('sheetmusic', 'Each segment creates a new song in the same book, copying metadata from the original song.') }}
-				</p>
-
-				<!-- Segments list -->
-				<div :class="$style.segmentList">
-					<div
-						v-for="(seg, idx) in splitSegments"
-						:key="seg.id"
-						:class="$style.segmentCard"
-						:style="{ borderLeftColor: getSegmentColor(idx) }">
-						<div :class="$style.segmentCardHeader">
-							<span
-								:class="$style.segmentNumberBadge"
-								:style="{ backgroundColor: getSegmentColor(idx) }">
-								{{ idx + 1 }}
-							</span>
-							<NcTextField
-								v-model="seg.title"
-								:label="t('sheetmusic', 'Song Title')"
-								hide-label
-								:class="$style.segmentTitleInput"
-								:placeholder="t('sheetmusic', 'Song title…')" />
-							<NcButton
-								v-if="splitSegments.length > 1"
-								size="small"
-								variant="tertiary"
-								:title="t('sheetmusic', 'Remove part')"
-								@click="removeSegment(idx)">
-								<template #icon>
-									<DeleteIcon :size="16" />
-								</template>
-							</NcButton>
-						</div>
-
-						<div :class="$style.segmentCardBody">
-							<div :class="$style.rangeGroup">
-								<label :class="$style.rangeLabel">{{ t('sheetmusic', 'Pages:') }}</label>
-								<input
-									v-model.number="seg.startPage"
-									type="number"
-									min="1"
-									:max="totalPages"
-									:class="$style.pageInput" />
-								<span>{{ t('sheetmusic', 'to') }}</span>
-								<input
-									v-model.number="seg.endPage"
-									type="number"
-									:min="seg.startPage"
-									:max="totalPages"
-									:class="$style.pageInput" />
-							</div>
-
-							<NcButton
-								v-if="selectedPages.length > 0"
-								size="small"
-								variant="secondary"
-								:class="$style.assignBtn"
-								@click="assignSelectedPagesToSegment(seg)">
-								<template #icon>
-									<ArrowRight :size="14" />
-								</template>
-								{{ t('sheetmusic', 'Assign selected ({range})', {
-									range: `${Math.min(...selectedPages)}–${Math.max(...selectedPages)}`
-								}) }}
-							</NcButton>
-						</div>
-					</div>
-				</div>
-
-				<!-- Options for Original Song -->
-				<OriginalSongActionSelector
-					v-model="originalSongAction"
-					:attached-files-count="attachedFilesCount" />
-			</aside>
+			<SongPdfSplitSidebar
+				v-if="activeMode === 'split'"
+				v-model:original-song-action="originalSongAction"
+				:segments="splitSegments"
+				:attached-files-count="attachedFilesCount"
+				:total-pages="totalPages"
+				:selected-pages="selectedPages"
+				@add-segment="addSegment"
+				@remove-segment="removeSegment"
+				@assign-selected="assignSelectedPagesToSegment" />
 		</div>
 
 		<!-- Page Crop Modal -->
@@ -1803,46 +1456,12 @@ watch(() => targetFile.value?.path, () => {
 			@change-page="enhanceModalPage = $event" />
 
 		<!-- File Version History Dialog -->
-		<NcDialog
-			v-if="isVersionsModalOpen"
-			:open="isVersionsModalOpen"
-			:name="t('sheetmusic', 'PDF Version History')"
-			size="normal"
-			@update:open="isVersionsModalOpen = $event">
-			<template #actions>
-				<NcButton @click="isVersionsModalOpen = false">
-					{{ t('sheetmusic', 'Close') }}
-				</NcButton>
-			</template>
-
-			<div v-if="isLoadingVersions" :class="$style.versionsLoading">
-				<NcLoadingIcon :size="32" />
-				<span>{{ t('sheetmusic', 'Loading version history…') }}</span>
-			</div>
-			<div v-else-if="fileVersions.length === 0" :class="$style.noVersions">
-				<History :size="40" />
-				<p>{{ t('sheetmusic', 'No previous versions found for this file.') }}</p>
-				<small>{{ t('sheetmusic', 'Previous versions are automatically created in Nextcloud each time you save changes to the PDF.') }}</small>
-			</div>
-			<div v-else :class="$style.versionsList">
-				<div
-					v-for="ver in fileVersions"
-					:key="ver.revision"
-					:class="$style.versionRow">
-					<div :class="$style.versionInfo">
-						<span :class="$style.versionDate">{{ formatTimestamp(ver.timestamp) }}</span>
-						<span :class="$style.versionMeta">{{ formatFileSize(ver.size) }}</span>
-					</div>
-					<NcButton
-						size="small"
-						variant="secondary"
-						:disabled="isRevertingVersion"
-						@click="revertToVersion(ver.revision)">
-						{{ isRevertingVersion ? t('sheetmusic', 'Reverting…') : t('sheetmusic', 'Revert to this version') }}
-					</NcButton>
-				</div>
-			</div>
-		</NcDialog>
+		<SongPdfVersionsModal
+			v-model:open="isVersionsModalOpen"
+			:versions="fileVersions"
+			:is-loading="isLoadingVersions"
+			:is-reverting="isRevertingVersion"
+			@revert="revertToVersion" />
 	</div>
 </template>
 

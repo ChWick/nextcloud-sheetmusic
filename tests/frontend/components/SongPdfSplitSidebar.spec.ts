@@ -77,3 +77,4 @@ describe('SongPdfSplitSidebar.vue', () => {
 		expect(wrapper.emitted('update:originalSongAction')?.[0]).toEqual(['delete-file'])
 	})
 })
+

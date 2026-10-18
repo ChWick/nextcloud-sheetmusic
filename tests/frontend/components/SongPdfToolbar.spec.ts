@@ -138,3 +138,4 @@ describe('SongPdfToolbar.vue', () => {
 		expect(wrapper.emitted('clear-selection')).toBeTruthy()
 	})
 })
+

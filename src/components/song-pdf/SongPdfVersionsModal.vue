@@ -157,3 +157,4 @@ const emit = defineEmits<{
 	color: var(--color-text-maxcontrast);
 }
 </style>
+

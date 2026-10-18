@@ -100,6 +100,7 @@ const formattedRotation = computed(() => `${Math.round(props.rotationDeg * 10) /
 			<div
 				:ref="(el) => emit('set-container-ref', pageNum, el as HTMLElement | null)"
 				:class="$style.thumbnailSlot"
+				:data-page-num="pageNum"
 				:style="{
 					transform: `rotate(${rotationDeg || 0}deg)`,
 					transition: 'transform 0.15s ease-out'
@@ -339,6 +340,14 @@ const formattedRotation = computed(() => `${Math.round(props.rotationDeg * 10) /
 	align-items: center;
 	justify-content: center;
 	box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+
+.thumbnailSlot :global(canvas) {
+	max-width: 140px;
+	max-height: 190px;
+	object-fit: contain;
+	display: block;
+	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
 }
 
 .deletedOverlay {
