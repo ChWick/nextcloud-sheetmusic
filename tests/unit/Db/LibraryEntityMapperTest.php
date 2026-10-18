@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace Db;
 
 use OCA\SheetMusic\Db\DuplicateEntityConflict;
+use OCA\SheetMusic\Db\DuplicateSongEntityAssignment;
 use OCA\SheetMusic\Db\LibraryEntityMapper;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
@@ -120,7 +121,7 @@ final class LibraryEntityMapperTest extends TestCase {
 		self::assertCount(count($relations) * 2, $duplicates);
 		$songTenDuplicates = array_values(array_filter(
 			$duplicates,
-			static fn (array $duplicate): bool => $duplicate['songId'] === 10,
+			static fn (DuplicateSongEntityAssignment $duplicate): bool => $duplicate->songId === 10,
 		));
 		self::assertCount(count($relations), $songTenDuplicates);
 		self::assertSame(2, $songTenDuplicates[0]['count']);

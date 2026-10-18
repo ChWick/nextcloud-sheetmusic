@@ -505,7 +505,7 @@ class InternalEntityMapper {
 	/**
 	 * Find repeated links from songs to the same entity.
 	 *
-	 * @return list<array{songId: int, entityType: string, entityId: int, count: int}>
+	 * @return list<DuplicateSongEntityAssignment>
 	 */
 	public function findDuplicateSongEntityAssignments(int $libraryId): array {
 		$qb = $this->db->getQueryBuilder();
@@ -522,12 +522,12 @@ class InternalEntityMapper {
 		$result = $qb->executeQuery();
 		$duplicates = [];
 		while ($row = $result->fetchAssociative()) {
-			$duplicates[] = [
-				'songId' => (int)$row['song_id'],
-				'entityType' => self::normalizeType((string)$row['type']),
-				'entityId' => (int)$row['entity_id'],
-				'count' => (int)$row['cnt'],
-			];
+			$duplicates[] = new DuplicateSongEntityAssignment(
+				songId: (int)$row['song_id'],
+				entityType: self::normalizeType((string)$row['type']),
+				entityId: (int)$row['entity_id'],
+				count: (int)$row['cnt'],
+			);
 		}
 		$result->closeCursor();
 

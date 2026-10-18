@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace Service;
 
 use OCA\SheetMusic\Db\DuplicateEntityConflict;
+use OCA\SheetMusic\Db\DuplicateSongEntityAssignment;
 use OCA\SheetMusic\Db\InternalEntity;
 use OCA\SheetMusic\Db\InternalEntityMapper;
 use OCA\SheetMusic\Db\InternalLibrary;
@@ -354,16 +355,16 @@ final class LibraryIntegrityServiceTest extends TestCase {
 
 			$internalEntityMapper = $this->createMock(InternalEntityMapper::class);
 			$assignments = [
-				['songId' => 7, 'entityType' => 'collections', 'count' => 3],
-				['songId' => 7, 'entityType' => 'keys', 'count' => 2],
-				['songId' => 8, 'entityType' => 'keys', 'count' => 2],
+				new DuplicateSongEntityAssignment(songId: 7, entityType: 'collections', entityId: 1, count: 3),
+				new DuplicateSongEntityAssignment(songId: 7, entityType: 'keys', entityId: 2, count: 2),
+				new DuplicateSongEntityAssignment(songId: 8, entityType: 'keys', entityId: 3, count: 2),
 			];
 			$internalEntityMapper->method('findDuplicateSongEntityAssignments')->willReturnCallback(function () use (&$assignments) {
 				return $assignments;
 			});
 			$internalEntityMapper->method('removeDuplicateSongEntityAssignments')->willReturnCallback(function ($libId, $songId) use (&$assignments) {
 				$initial = count($assignments);
-				$assignments = array_values(array_filter($assignments, fn ($a) => $a['songId'] !== $songId));
+				$assignments = array_values(array_filter($assignments, fn (DuplicateSongEntityAssignment $a) => $a->songId !== $songId));
 				return $initial - count($assignments);
 			});
 

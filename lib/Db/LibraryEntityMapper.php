@@ -200,7 +200,7 @@ class LibraryEntityMapper extends AbstractDatabaseMapper {
 	/**
 	 * Find repeated links from songs to the same entity.
 	 *
-	 * @return list<array{songId: int, entityType: string, entityId: int, count: int}>
+	 * @return list<DuplicateSongEntityAssignment>
 	 */
 	public function findDuplicateSongEntityAssignments(string $databasePath): array {
 		$database = $this->openConnection($databasePath);
@@ -230,12 +230,12 @@ class LibraryEntityMapper extends AbstractDatabaseMapper {
 			}
 
 			while ($row = $statement->fetch()) {
-				$duplicates[] = [
-					'songId' => (int)$row['SongId'],
-					'entityType' => $entityType,
-					'entityId' => (int)$row['EntityId'],
-					'count' => (int)$row['AssignmentCount'],
-				];
+				$duplicates[] = new DuplicateSongEntityAssignment(
+					songId: (int)$row['SongId'],
+					entityType: $entityType,
+					entityId: (int)$row['EntityId'],
+					count: (int)$row['AssignmentCount'],
+				);
 			}
 		}
 

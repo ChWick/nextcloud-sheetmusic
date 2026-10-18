@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OCA\SheetMusic\Service;
 
+use OCA\SheetMusic\Db\DuplicateSongEntityAssignment;
 use OCA\SheetMusic\Db\InternalEntity;
 use OCA\SheetMusic\Db\InternalEntityMapper;
 use OCA\SheetMusic\Db\InternalMiscMapper;
@@ -262,16 +263,16 @@ class LibraryIntegrityService {
 		$duplicateAssignmentsBySong = [];
 		$assignmentsList = $this->internalEntityMapper->findDuplicateSongEntityAssignments($libraryId);
 		foreach ($assignmentsList as $assignment) {
-			$duplicateAssignmentsBySong[$assignment['songId']][] = $assignment;
+			$duplicateAssignmentsBySong[$assignment->songId][] = $assignment;
 		}
 
 		foreach ($duplicateAssignmentsBySong as $songId => $assignments) {
 			$song = $songsById[$songId] ?? null;
 			$assignmentDescriptions = array_map(
-				static fn (array $assignment): string => sprintf(
+				static fn (DuplicateSongEntityAssignment $assignment): string => sprintf(
 					'%d duplicate %s assignment(s)',
-					$assignment['count'] - 1,
-					InternalEntityMapper::getLabel($assignment['entityType'], true),
+					$assignment->count - 1,
+					InternalEntityMapper::getLabel($assignment->entityType, true),
 				),
 				$assignments,
 			);
@@ -286,7 +287,7 @@ class LibraryIntegrityService {
 				songId: (int)$songId,
 				songTitle: $song?->title,
 				fixable: true,
-				details: ['duplicates' => $assignments],
+				details: ['duplicates' => array_map(static fn (DuplicateSongEntityAssignment $a) => $a->toArray(), $assignments)],
 			);
 		}
 
