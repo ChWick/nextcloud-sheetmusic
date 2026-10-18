@@ -22,220 +22,48 @@ use OCP\IUser;
 use Psr\Log\LoggerInterface;
 
 function getFileExtension(string $filename): string {
-	$extension = pathinfo($filename, PATHINFO_EXTENSION);
-
-	return $extension !== '' ? '.' . $extension : '';
+	return SongPathNamingRule::getFileExtension($filename);
 }
 
-/**
- * Zero-padded index prefix used to tell the files of a multi-file song apart,
- * e.g. "001 " producing "001 Miles - Real Book - Blue.pdf".
- *
- * Files with different extensions (e.g. .pdf and .mid) do not compete for the
- * same file name and keep their plain, unprefixed name.
- *
- * A song with a single file (or only one file for given extension) keeps its plain, unprefixed name.
- */
 function fileIndexPrefix(?int $fileIndex, int $fileCount): string {
-	if ($fileIndex === null || $fileCount < 2) {
-		return '';
-	}
-
-	return sprintf('%03d ', $fileIndex);
+	return SongPathNamingRule::fileIndexPrefix($fileIndex, $fileCount);
 }
 
-/**
- * 1-based position of $file within $song among files sharing the same extension,
- * or null when it is not listed there.
- */
 function fileIndexOf(MobileSheetsSong $song, MobileSheetsFile $file): ?int {
-	$ext = strtolower(getFileExtension($file->path));
-	$position = 0;
-	foreach ($song->files as $candidate) {
-		if (strtolower(getFileExtension($candidate->path)) === $ext) {
-			$position++;
-			if ($candidate->id === $file->id) {
-				return $position;
-			}
-		}
-	}
-
-	return null;
+	return SongPathNamingRule::fileIndexOf($song, $file);
 }
 
-/** Number of files in $song sharing the same extension as $file. */
 function fileCountForExtension(MobileSheetsSong $song, MobileSheetsFile $file): int {
-	$ext = strtolower(getFileExtension($file->path));
-	$count = 0;
-	foreach ($song->files as $candidate) {
-		if (strtolower(getFileExtension($candidate->path)) === $ext) {
-			$count++;
-		}
-	}
-
-	return $count;
+	return SongPathNamingRule::fileCountForExtension($song, $file);
 }
 
-/**
- * Normalize a generated path for Windows, Linux, and Nextcloud's 250-byte
- * filename limit before it is used for a folder or file operation.
- */
 function normalizeGeneratedPath(string $path): string {
-	$path = str_replace('\\', '/', $path);
-	$segments = array_map(
-		static fn (string $segment): string => normalizeGeneratedPathSegment($segment),
-		explode('/', trim($path, '/')),
-	);
-
-	return implode('/', $segments);
+	return SongPathNamingRule::normalizeGeneratedPath($path);
 }
 
 function normalizeGeneratedPathSegment(string $segment): string {
-	$segment = mb_scrub($segment, 'UTF-8');
-	$segment = str_replace(['<', '>', ':', '"', '/', '\\', '|', '?', '*'], '-', $segment);
-	$segment = preg_replace('/[\x00-\x1F\x7F]/', '-', $segment) ?? '';
-	$segment = rtrim($segment, ' .');
-
-	if ($segment === '' || $segment === '.' || $segment === '..') {
-		$segment = 'untitled';
-	}
-
-	// Windows treats these device names as reserved, even when an extension follows.
-	$windowsBasename = rtrim(explode('.', $segment, 2)[0], ' .');
-	if (preg_match('/^(CON|PRN|AUX|NUL|CONIN\$|CONOUT\$|COM[1-9¹²³]|LPT[1-9¹²³])$/iu', $windowsBasename) === 1
-		|| strcasecmp($segment, '.htaccess') === 0) {
-		$segment = '_' . $segment;
-	}
-
-	// Nextcloud reserves these suffixes for incomplete uploads.
-	foreach (['.filepart', '.part'] as $forbiddenExtension) {
-		if (str_ends_with(strtolower($segment), $forbiddenExtension)) {
-			$segment = substr($segment, 0, -strlen($forbiddenExtension)) . '-' . substr($forbiddenExtension, 1);
-			break;
-		}
-	}
-
-	// Nextcloud's file cache permits at most 250 bytes per filename; keep a file
-	// extension intact when shortening long generated file names.
-	$extension = getFileExtension($segment);
-	$name = $extension === '' ? $segment : substr($segment, 0, -strlen($extension));
-	$extensionBytes = min(strlen($extension), 250);
-	$extension = mb_strcut($extension, 0, $extensionBytes, 'UTF-8');
-	$name = mb_strcut($name, 0, 250 - strlen($extension), 'UTF-8');
-
-	return rtrim($name . $extension, ' .') ?: 'untitled';
+	return SongPathNamingRule::normalizeGeneratedPathSegment($segment);
 }
 
 function normalizeKeyNameForGeneratedPath(string $name): string {
-	$name = mb_scrub($name, 'UTF-8');
-	$name = preg_replace('/([A-Ga-g])#(?=(?:m|M)?(?:\s|$|[,0-9]))/u', '$1♯', $name) ?? $name;
-
-	return preg_replace('/([A-Ga-g])b(?=(?:m|M)?(?:\s|$|[,0-9]))/u', '$1♭', $name) ?? $name;
+	return SongPathNamingRule::normalizeKeyNameForGeneratedPath($name);
 }
 
-/**
- * Extract non-empty string properties (like 'name' or 'title') from an entity list.
- *
- * @param array<object> $entities
- * @return list<string>
- */
 function extractNonEmptyEntityNames(array $entities, string $property = 'name'): array {
-	$names = [];
-	foreach ($entities as $entity) {
-		$val = $entity->{$property} ?? '';
-		if ($val !== '') {
-			$names[] = $val;
-		}
-	}
-	return $names;
+	return SongPathNamingRule::extractNonEmptyEntityNames($entities, $property);
 }
 
-/**
- * Sort strings by length descending, and alphabetically ascending as tie-breaker.
- *
- * @param array<string> $items
- * @return list<string>
- */
 function sortStringsByLengthDescending(array $items): array {
-	$result = array_values($items);
-	usort($result, static function (string $a, string $b): int {
-		$lenA = mb_strlen($a);
-		$lenB = mb_strlen($b);
-		if ($lenA !== $lenB) {
-			return $lenB <=> $lenA;
-		}
-		return strcmp($a, $b);
-	});
-	return $result;
+	return SongPathNamingRule::sortStringsByLengthDescending($items);
 }
 
-/**
- * @return list<string> all valid target paths for a song given its composers, artists, books, and collections
- */
 function createTargetPaths(
 	MobileSheetsSong $song,
 	string $ext,
 	?int $fileIndex = null,
 	int $fileCount = 1,
 ): array {
-	$filePrefix = fileIndexPrefix($fileIndex, $fileCount);
-	$ext = $ext === '' ? '' : normalizeGeneratedPathSegment($ext);
-
-	// 1. Composers and Artists: sort alphabetically and join full list
-	$compArtistNames = extractNonEmptyEntityNames($song->composers);
-	if (empty($compArtistNames)) {
-		$compArtistNames = extractNonEmptyEntityNames($song->artists);
-	}
-	sort($compArtistNames, SORT_STRING);
-	$compArtist = implode(', ', array_map(
-		static fn (string $name): string => normalizeGeneratedPathSegment($name),
-		$compArtistNames,
-	));
-
-	// 2. Books and Collections: sort by length descending (longest string first), then alphabetically ascending
-	$bookTitles = sortStringsByLengthDescending(extractNonEmptyEntityNames($song->books, 'title'));
-	$collectionNames = sortStringsByLengthDescending(extractNonEmptyEntityNames($song->collections));
-
-	$book = $bookTitles === [] ? '' : normalizeGeneratedPathSegment($bookTitles[0]);
-	$collection = $collectionNames === [] ? '' : normalizeGeneratedPathSegment($collectionNames[0]);
-
-	$keyNames = extractNonEmptyEntityNames($song->keys);
-	sort($keyNames, SORT_STRING);
-	$keyString = implode(', ', array_map(
-		static fn (string $name): string => normalizeGeneratedPathSegment(normalizeKeyNameForGeneratedPath($name)),
-		$keyNames,
-	));
-
-	$songTitle = normalizeGeneratedPathSegment($song->title);
-	$songTitlePart = $keyString !== '' ? "{$songTitle} in {$keyString}" : $songTitle;
-
-	if ($compArtist !== '') {
-		if ($book !== '') {
-			$folder = $compArtist . DIRECTORY_SEPARATOR . "{$compArtist} - {$book}";
-			$fileName = "{$compArtist} - {$book} - {$songTitlePart}";
-			return [normalizeGeneratedPath($folder . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext)];
-		}
-		if ($collection !== '') {
-			$folder = $compArtist . DIRECTORY_SEPARATOR . "{$compArtist} - {$collection}";
-			$fileName = "{$compArtist} - {$collection} - {$songTitlePart}";
-			return [normalizeGeneratedPath($folder . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext)];
-		}
-		$folder = $compArtist;
-		$fileName = "{$compArtist} - {$songTitlePart}";
-		return [
-			normalizeGeneratedPath($folder . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext),
-			normalizeGeneratedPath($filePrefix . $fileName . $ext),
-		];
-	}
-	if ($collection !== '') {
-		$folder = $collection;
-		$fileName = "{$collection} - {$songTitlePart}";
-		return [
-			normalizeGeneratedPath($folder . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext),
-			normalizeGeneratedPath($filePrefix . $fileName . $ext),
-		];
-	}
-	throw new NoNamingRuleException('No composer, artist, or collection');
+	return SongPathNamingRule::createTargetPaths($song, $ext, $fileIndex, $fileCount);
 }
 
 function createTargetPath(
@@ -244,9 +72,7 @@ function createTargetPath(
 	?int $fileIndex = null,
 	int $fileCount = 1,
 ): string {
-	$paths = createTargetPaths($song, $ext, $fileIndex, $fileCount);
-
-	return $paths[0];
+	return SongPathNamingRule::createTargetPath($song, $ext, $fileIndex, $fileCount);
 }
 
 class FileManager {
@@ -956,111 +782,15 @@ class FileManager {
 		string $databasePath,
 		?MobileSheetsHashCodesFile $hashCodes = null,
 	): string {
-		if (!str_ends_with(strtolower($file->path), '.pdf')) {
-			return MobileSheetsFileLogEntry::CODE_NOT_PDF;
-		}
+		$syncer = new FileMetadataSyncer(
+			$this->rootFolder,
+			$this->pathResolver,
+			$this->logger,
+			$this->internalSongFileMapper,
+			$this->songMapper,
+		);
 
-		$path = $this->pathOfStoredFile($file->path, $user);
-		if ($path === null) {
-			throw new SyncException(MobileSheetsFileLogEntry::CODE_SOURCE_OUTSIDE_LIBRARY, sprintf(
-				'Cannot sync the metadata of file %d: stored path "%s" is not below "%s"',
-				$file->id,
-				$file->path,
-				$this->pathResolver->webdavRoot($user),
-			));
-		}
-
-		$relative = $this->pathResolver->relativeToUserFolder($path->internal, $user) ?? '';
-		$userFolder = $this->rootFolder->getUserFolder($user->getUID());
-
-		try {
-			$node = $userFolder->get($relative);
-		} catch (\Throwable) {
-			throw new SyncException(
-				MobileSheetsFileLogEntry::CODE_METADATA_FILE_MISSING,
-				sprintf('Cannot sync the metadata of file %d: "%s" does not exist', $file->id, $file->path),
-			);
-		}
-
-		if (!($node instanceof File)) {
-			throw new SyncException(
-				MobileSheetsFileLogEntry::CODE_METADATA_NOT_A_FILE,
-				sprintf('Cannot sync the metadata of file %d: "%s" is not a file', $file->id, $file->path),
-			);
-		}
-
-		try {
-			$content = $node->getContent();
-		} catch (\Throwable $exception) {
-			throw new SyncException(
-				MobileSheetsFileLogEntry::CODE_METADATA_UNREADABLE,
-				sprintf('Cannot sync the metadata of file %d: "%s" could not be read', $file->id, $file->path),
-				$exception,
-			);
-		}
-		if (!is_string($content) || $content === '') {
-			throw new SyncException(
-				MobileSheetsFileLogEntry::CODE_METADATA_UNREADABLE,
-				sprintf('Cannot sync the metadata of file %d: "%s" is empty', $file->id, $file->path),
-			);
-		}
-
-		try {
-			$upToDate = MobileSheetsPdfMetadata::matchesSong($content, $song);
-		} catch (\Throwable) {
-			// Properties that cannot be read are worth rewriting: writing may
-			// repair what reading could not make sense of.
-			$upToDate = false;
-		}
-		if ($upToDate) {
-			return MobileSheetsFileLogEntry::CODE_METADATA_CURRENT;
-		}
-
-		try {
-			$node->putContent(
-				MobileSheetsPdfMetadata::withInfo($content, MobileSheetsPdfMetadata::fieldsFor($song)),
-			);
-		} catch (\Throwable $exception) {
-			throw new SyncException(
-				MobileSheetsFileLogEntry::CODE_METADATA_WRITE_FAILED,
-				sprintf('Cannot sync the metadata of file %d: "%s" could not be written', $file->id, $file->path),
-				$exception,
-			);
-		}
-
-		try {
-			// The bytes changed, so the hash, size and timestamp stored for
-			// the file have to follow them - everywhere they are kept.
-			$facts = MobileSheetsFileFacts::fromNode($node);
-			if ($this->internalSongFileMapper !== null) {
-				$internalSongFile = $this->internalSongFileMapper->findById($file->id);
-				if ($internalSongFile !== null) {
-					$internalSongFile->fileSize = $facts->fileSize;
-					$internalSongFile->fileHash = $facts->fileHash;
-					$this->internalSongFileMapper->update($internalSongFile);
-				}
-			}
-			if ($this->songMapper !== null && $databasePath !== '' && file_exists($databasePath) && is_writable($databasePath)) {
-				$this->songMapper->updateFile($databasePath, $file->id, $file->path, $facts);
-			}
-			$hashCodes?->updateFacts(
-				$file->path,
-				(string)$facts->fileHash,
-				(string)$facts->lastModified,
-				(string)$facts->fileSize,
-			);
-		} catch (\Throwable $exception) {
-			throw new SyncException(
-				MobileSheetsFileLogEntry::CODE_METADATA_FACTS_FAILED,
-				sprintf(
-					'The metadata of file %d was written, but the database was not refreshed',
-					$file->id,
-				),
-				$exception,
-			);
-		}
-
-		return MobileSheetsFileLogEntry::CODE_METADATA_UPDATED;
+		return $syncer->syncMetadataIntoFile($song, $file, $user, $databasePath, $hashCodes);
 	}
 
 	/**
