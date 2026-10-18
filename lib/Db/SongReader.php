@@ -741,4 +741,3 @@ class SongReader extends AbstractDatabaseMapper {
 		return $entities;
 	}
 }
-
