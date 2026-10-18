@@ -9,39 +9,42 @@ declare(strict_types=1);
 
 namespace Migration;
 
+use Doctrine\DBAL\Schema\Schema;
+use OC\DB\SchemaWrapper;
+use OC\Migration\NullOutput;
 use OCA\SheetMusic\Migration\Version1002Date20261009120000;
-use OCP\DB\ISchemaWrapper;
-use OCP\Migration\IOutput;
 use PHPUnit\Framework\TestCase;
+use TestSupport\RealMobileSheetsTestTrait;
 
 final class Version1002Test extends TestCase {
-	public function testChangeSchemaCreatesAllInternalTables(): void {
-		$output = $this->createMock(IOutput::class);
-		$schema = $this->createMock(ISchemaWrapper::class);
+	use RealMobileSheetsTestTrait;
 
-		$createdTables = [];
-		$schema->method('hasTable')->willReturn(false);
-		$schema->method('createTable')->willReturnCallback(function (string $name) use (&$createdTables) {
-			$createdTables[] = $name;
-			$table = $this->createMock(\OCP\DB\Schema\ITable::class);
-			$table->method('addColumn')->willReturn($this->createMock(\OCP\DB\Schema\IColumn::class));
-			$table->method('setPrimaryKey')->willReturnSelf();
-			$table->method('addIndex')->willReturnSelf();
-			$table->method('addUniqueIndex')->willReturnSelf();
-			return $table;
-		});
+	protected function setUp(): void {
+		parent::setUp();
+		$this->setUpRealMobileSheetsEnvironment();
+	}
+
+	protected function tearDown(): void {
+		$this->tearDownRealMobileSheetsEnvironment();
+		parent::tearDown();
+	}
+
+	public function testChangeSchemaCreatesAllInternalTables(): void {
+		$output = new NullOutput();
+		$connection = \OC::$server->get(\OC\DB\Connection::class);
+		$schema = new SchemaWrapper($connection, new Schema());
 
 		$migration = new Version1002Date20261009120000();
 		$res = $migration->changeSchema($output, fn () => $schema, []);
 
 		self::assertSame($schema, $res);
-		self::assertContains('sheetmusic_libraries', $createdTables);
-		self::assertContains('sheetmusic_songs', $createdTables);
-		self::assertContains('sheetmusic_song_attributes', $createdTables);
-		self::assertContains('sheetmusic_entities', $createdTables);
-		self::assertContains('sheetmusic_song_entities', $createdTables);
-		self::assertContains('sheetmusic_song_files', $createdTables);
-		self::assertContains('sheetmusic_misc_schema', $createdTables);
-		self::assertContains('sheetmusic_misc_data', $createdTables);
+		self::assertTrue($schema->hasTable('sheetmusic_libraries'));
+		self::assertTrue($schema->hasTable('sheetmusic_songs'));
+		self::assertTrue($schema->hasTable('sheetmusic_song_attributes'));
+		self::assertTrue($schema->hasTable('sheetmusic_entities'));
+		self::assertTrue($schema->hasTable('sheetmusic_song_entities'));
+		self::assertTrue($schema->hasTable('sheetmusic_song_files'));
+		self::assertTrue($schema->hasTable('sheetmusic_misc_schema'));
+		self::assertTrue($schema->hasTable('sheetmusic_misc_data'));
 	}
 }
