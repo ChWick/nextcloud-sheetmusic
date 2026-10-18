@@ -91,6 +91,16 @@
         </template>
       </NcButton>
       <NcButton
+        v-if="openSong && songViewerRef?.selectedFile?.path?.toLowerCase().endsWith('.pdf')"
+        variant="secondary"
+        :title="t('sheetmusic', 'PDF version history')"
+        :aria-label="t('sheetmusic', 'PDF version history')"
+        @click="songViewerRef?.openVersionsModal">
+        <template #icon>
+          <History :size="20" />
+        </template>
+      </NcButton>
+      <NcButton
         v-if="openSong"
         variant="secondary"
         :title="t('sheetmusic', 'Duplicate song')"
@@ -374,6 +384,7 @@ import CheckIcon from 'vue-material-design-icons/Check.vue';
 import CloseIcon from 'vue-material-design-icons/Close.vue';
 import ContentSaveOutlineIcon from 'vue-material-design-icons/ContentSaveOutline.vue';
 import FileDocumentEditOutline from 'vue-material-design-icons/FileDocumentEditOutline.vue';
+import History from 'vue-material-design-icons/History.vue';
 import ContentCopyIcon from 'vue-material-design-icons/ContentCopy.vue';
 import DeleteIcon from 'vue-material-design-icons/Delete.vue';
 import MergeIcon from 'vue-material-design-icons/Merge.vue';

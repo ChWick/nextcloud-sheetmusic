@@ -419,4 +419,68 @@ describe('SongViewer.vue', () => {
 		expect(updatedUrl).toContain('1700000000')
 		expect(updatedUrl).not.toBe(initialUrl)
 	})
+
+	it('renders PDF version history button in header actions for PDF files', async () => {
+		const wrapper = mount(SongViewer, {
+			props: { song: mockSong, libraryId: 1, hideHeader: false },
+			...globalStubs,
+		})
+
+		await settle()
+
+		const versionBtn = wrapper.findAll('button').find((b) => b.attributes('title') === 'PDF version history')
+		expect(versionBtn).toBeDefined()
+	})
+
+	it('does not render PDF version history button for non-PDF files', async () => {
+		const imageSong: Song = {
+			...mockSong,
+			files: [{ id: 200, path: '/dav/files/admin/Noten/photo.png' }],
+		}
+		const wrapper = mount(SongViewer, {
+			props: { song: imageSong, libraryId: 1, hideHeader: false },
+			...globalStubs,
+		})
+
+		await settle()
+
+		const versionBtn = wrapper.findAll('button').find((b) => b.attributes('title') === 'PDF version history')
+		expect(versionBtn).toBeUndefined()
+	})
+
+	it('opens version history dialog when openVersionsModal is invoked', async () => {
+		vi.mocked(axios.get).mockImplementation((url: string) => {
+			if (url.includes('/versions')) {
+				return Promise.resolve({
+					data: {
+						ocs: {
+							data: {
+								versions: [
+									{ revision: 101, timestamp: 1700000000, size: 2048 },
+								],
+							},
+						},
+					},
+				}) as any
+			}
+			return Promise.resolve({ data: new ArrayBuffer(8) }) as any
+		})
+
+		const wrapper = mount(SongViewer, {
+			props: { song: mockSong, libraryId: 1, hideHeader: true },
+			...globalStubs,
+		})
+
+		await settle()
+
+		// Invoke openVersionsModal exposed method (as called by SongsView.vue)
+		await (wrapper.vm as any).openVersionsModal()
+		await settle()
+
+		expect(axios.get).toHaveBeenCalledWith(
+			expect.stringContaining('/api/libraries/1/songs/42/file/100/versions'),
+		)
+		expect(wrapper.text()).toContain('2.0 KB')
+		expect(wrapper.text()).toContain('Revert to this version')
+	})
 })

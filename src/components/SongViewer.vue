@@ -26,6 +26,7 @@ import MagnifyPlus from 'vue-material-design-icons/MagnifyPlus.vue'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import FileDocumentEditOutline from 'vue-material-design-icons/FileDocumentEditOutline.vue'
+import History from 'vue-material-design-icons/History.vue'
 import RotateRight from 'vue-material-design-icons/RotateRight.vue'
 import ViewColumn from 'vue-material-design-icons/ViewColumn.vue'
 import ViewDay from 'vue-material-design-icons/ViewDay.vue'
@@ -34,6 +35,8 @@ import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } fr
 import SongEditor from './SongEditor.vue'
 import DeleteSongDialog from './DeleteSongDialog.vue'
 import FilePreviewer from './FilePreviewer.vue'
+import SongPdfVersionsModal from './song-pdf/SongPdfVersionsModal.vue'
+import { useFileVersions } from './song-pdf/useFileVersions'
 
 const props = withDefaults(
 	defineProps<{
@@ -174,8 +177,25 @@ watch(
 	{ immediate: true },
 )
 
+const {
+	isVersionsModalOpen,
+	fileVersions,
+	isLoadingVersions,
+	isRevertingVersion,
+	openVersionsModal,
+	revertToVersion,
+} = useFileVersions({
+	libraryId: () => props.libraryId,
+	songId: () => props.song?.id,
+	fileId: () => selectedFile.value?.id,
+	onReverted: (data) => {
+		handleUpdated(data)
+	},
+})
+
 defineExpose({
 	openInExternalViewer,
+	openVersionsModal,
 	promptDelete: () => { isDeleteDialogOpen.value = true },
 	startEditing: () => { isEditing.value = true },
 	selectedFile,
@@ -214,6 +234,16 @@ defineExpose({
 						@click="emit('modify-pdf', song, selectedFile?.id)">
 						<template #icon>
 							<FileDocumentEditOutline :size="20" />
+						</template>
+					</NcButton>
+					<NcButton
+						v-if="song && isSelectedFilePdf"
+						variant="secondary"
+						:title="t('sheetmusic', 'PDF version history')"
+						:aria-label="t('sheetmusic', 'PDF version history')"
+						@click="openVersionsModal">
+						<template #icon>
+							<History :size="20" />
 						</template>
 					</NcButton>
 					<NcButton
@@ -450,6 +480,13 @@ defineExpose({
 			:library-id="libraryId ?? -1"
 			:file-count="songFiles.length"
 			@deleted="handleSongDeleted" />
+
+		<SongPdfVersionsModal
+			v-model:open="isVersionsModalOpen"
+			:versions="fileVersions"
+			:is-loading="isLoadingVersions"
+			:is-reverting="isRevertingVersion"
+			@revert="revertToVersion" />
 	</div>
 </template>
 
