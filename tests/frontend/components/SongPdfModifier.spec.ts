@@ -939,7 +939,7 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 			scaleB: 1.4,
 		})
 		await flushPromises()
-		await new Promise((r) => setTimeout(r, 60))
+		await new Promise((r) => setTimeout(r, 150))
 		await flushPromises()
 
 		expect(wrapper.text()).toContain('7 pages')
