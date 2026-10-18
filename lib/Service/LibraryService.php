@@ -94,24 +94,6 @@ class LibraryService {
 		return $cacheFile;
 	}
 
-	public function syncFromDatabase(string $userId, int $libraryId): void {
-		if ($this->importer === null) {
-			return;
-		}
-
-		$databasePath = $this->getDatabasePath($userId, $libraryId);
-		if ($databasePath !== null && file_exists($databasePath)) {
-			try {
-				$this->importer->importFromFile($libraryId, $databasePath, $userId);
-			} catch (\Throwable $e) {
-				$this->logger->error('Failed to sync changes from SQLite database', [
-					'exception' => $e,
-					'libraryId' => $libraryId,
-					'userId' => $userId,
-				]);
-			}
-		}
-	}
 
 	public function getDatabasePath(string $userId, int $libraryId): ?string {
 		$pair = $this->getLibraryAndDatabasePath($userId, $libraryId);
