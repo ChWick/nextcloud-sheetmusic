@@ -9,7 +9,7 @@ declare(strict_types=1);
 
 namespace OCA\SheetMusic\Db;
 
-class InternalLibrary implements \JsonSerializable, \ArrayAccess {
+class InternalLibrary implements \JsonSerializable {
 	public function __construct(
 		public ?int $id = null,
 		public string $userId = '',
@@ -29,8 +29,8 @@ class InternalLibrary implements \JsonSerializable, \ArrayAccess {
 			id: isset($row['id']) ? (int)$row['id'] : null,
 			userId: (string)($row['user_id'] ?? $row['userId'] ?? ''),
 			path: (string)($row['path'] ?? ''),
-			autoPaths: LibraryMapper::autoPathsOf($row),
-			autoPdfMetadata: LibraryMapper::autoPdfMetadataOf($row),
+			autoPaths: isset($row['auto_paths']) ? (bool)$row['auto_paths'] : (isset($row['autoPaths']) ? (bool)$row['autoPaths'] : true),
+			autoPdfMetadata: isset($row['auto_pdf_metadata']) ? (bool)$row['auto_pdf_metadata'] : (isset($row['autoPdfMetadata']) ? (bool)$row['autoPdfMetadata'] : true),
 			createdAt: (int)($row['created_at'] ?? $row['createdAt'] ?? 0),
 			updatedAt: (int)($row['updated_at'] ?? $row['updatedAt'] ?? 0),
 		);
@@ -61,42 +61,5 @@ class InternalLibrary implements \JsonSerializable, \ArrayAccess {
 			'autoPaths' => $this->autoPaths,
 			'autoPdfMetadata' => $this->autoPdfMetadata,
 		];
-	}
-
-	public function offsetExists(mixed $offset): bool {
-		return in_array($offset, [
-			'id', 'userId', 'user_id', 'path', 'autoPaths', 'auto_paths',
-			'autoPdfMetadata', 'auto_pdf_metadata', 'createdAt', 'created_at',
-			'updatedAt', 'updated_at',
-		], true);
-	}
-
-	public function offsetGet(mixed $offset): mixed {
-		return match ($offset) {
-			'id' => $this->id,
-			'userId', 'user_id' => $this->userId,
-			'path' => $this->path,
-			'autoPaths', 'auto_paths' => $this->autoPaths,
-			'autoPdfMetadata', 'auto_pdf_metadata' => $this->autoPdfMetadata,
-			'createdAt', 'created_at' => $this->createdAt,
-			'updatedAt', 'updated_at' => $this->updatedAt,
-			default => null,
-		};
-	}
-
-	public function offsetSet(mixed $offset, mixed $value): void {
-		match ($offset) {
-			'id' => $this->id = $value !== null ? (int)$value : null,
-			'userId', 'user_id' => $this->userId = (string)$value,
-			'path' => $this->path = (string)$value,
-			'autoPaths', 'auto_paths' => $this->autoPaths = (bool)$value,
-			'autoPdfMetadata', 'auto_pdf_metadata' => $this->autoPdfMetadata = (bool)$value,
-			'createdAt', 'created_at' => $this->createdAt = (int)$value,
-			'updatedAt', 'updated_at' => $this->updatedAt = (int)$value,
-			default => null,
-		};
-	}
-
-	public function offsetUnset(mixed $offset): void {
 	}
 }

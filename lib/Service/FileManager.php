@@ -369,7 +369,7 @@ class FileManager {
 	 */
 	public function regenerateFilePaths(int $libraryId, IUser $user): array {
 		$library = $this->libraryMapper->findById($libraryId);
-		if ($library !== null && !LibraryMapper::autoPathsOf($library)) {
+		if ($library !== null && !$library->autoPaths) {
 			return [];
 		}
 
@@ -419,7 +419,7 @@ class FileManager {
 		}
 
 		$userFolder = $this->rootFolder->getUserFolder($user->getUID());
-		$path = (string)($library['path'] ?? '');
+		$path = $library->path;
 
 		// Try to resolve as physical file node first (for backward compatibility and test mocks)
 		try {

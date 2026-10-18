@@ -78,9 +78,9 @@ final class LibraryServiceTest extends TestCase {
 		self::assertSame(['path' => '/Noten/add_test.db'], $result1);
 
 		$allLibs = $this->libraryMapper->findAllForUser('admin');
-		$added = array_filter($allLibs, fn ($l) => $l['path'] === '/Noten/add_test.db');
+		$added = array_filter($allLibs, fn ($l) => $l->path === '/Noten/add_test.db');
 		if (!empty($added)) {
-			$this->createdLibraryIds[] = (int)reset($added)['id'];
+			$this->createdLibraryIds[] = (int)reset($added)->id;
 		}
 	}
 
@@ -109,9 +109,9 @@ final class LibraryServiceTest extends TestCase {
 		self::assertSame(['path' => '/' . $folderName], $result);
 
 		$allLibs = $this->libraryMapper->findAllForUser('admin');
-		$added = array_filter($allLibs, fn ($l) => $l['path'] === '/' . $folderName);
+		$added = array_filter($allLibs, fn ($l) => $l->path === '/' . $folderName);
 		if (!empty($added)) {
-			$this->createdLibraryIds[] = (int)reset($added)['id'];
+			$this->createdLibraryIds[] = (int)reset($added)->id;
 		}
 	}
 
@@ -153,8 +153,8 @@ final class LibraryServiceTest extends TestCase {
 
 		$result = $this->service->updateSettings('admin', (int)$lib->id, false, true);
 		self::assertNotNull($result);
-		self::assertFalse($result['autoPaths']);
-		self::assertTrue($result['autoPdfMetadata']);
+		self::assertFalse($result->autoPaths);
+		self::assertTrue($result->autoPdfMetadata);
 	}
 
 	public function testUpdateSettingsReturnsNullWhenLibraryNotFound(): void {

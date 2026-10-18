@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Controller;
 
 use OCA\SheetMusic\Controller\LibraryController;
+use OCA\SheetMusic\Db\InternalLibrary;
 use OCA\SheetMusic\Service\IntegrityIssue;
 use OCA\SheetMusic\Service\LibraryIntegrityService;
 use OCA\SheetMusic\Service\LibraryService;
@@ -151,11 +152,13 @@ final class LibraryControllerTest extends TestCase {
 		$this->assertSame(Http::STATUS_OK, $response->getStatus());
 		$data = $response->getData();
 		$this->assertArrayHasKey('library', $data);
-		$this->assertFalse($data['library']['autoPaths']);
-		$this->assertTrue($data['library']['autoPdfMetadata']);
+		$this->assertInstanceOf(InternalLibrary::class, $data['library']);
+		$this->assertFalse($data['library']->autoPaths);
+		$this->assertTrue($data['library']->autoPdfMetadata);
 
 		$updated = $this->libraryMapper->findForUser('admin', (int)$library->id);
-		$this->assertFalse($updated['autoPaths']);
-		$this->assertTrue($updated['autoPdfMetadata']);
+		$this->assertNotNull($updated);
+		$this->assertFalse($updated->autoPaths);
+		$this->assertTrue($updated->autoPdfMetadata);
 	}
 }

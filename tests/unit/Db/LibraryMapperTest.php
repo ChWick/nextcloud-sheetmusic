@@ -43,10 +43,10 @@ final class LibraryMapperTest extends TestCase {
 		$libraries = $this->libraryMapper->findAllForUser($this->testUser);
 
 		self::assertCount(2, $libraries);
-		self::assertSame('/Noten/a.db', $libraries[0]['path']);
-		self::assertSame('/Noten/b.db', $libraries[1]['path']);
-		self::assertTrue($libraries[0]['autoPaths']);
-		self::assertTrue($libraries[0]['autoPdfMetadata']);
+		self::assertSame('/Noten/a.db', $libraries[0]->path);
+		self::assertSame('/Noten/b.db', $libraries[1]->path);
+		self::assertTrue($libraries[0]->autoPaths);
+		self::assertTrue($libraries[0]->autoPdfMetadata);
 	}
 
 	public function testFindAllForUserWithoutLibrariesReturnsAnEmptyList(): void {
@@ -56,13 +56,13 @@ final class LibraryMapperTest extends TestCase {
 	public function testFindByIdAndFindModelById(): void {
 		$this->libraryMapper->addForUser($this->testUser, '/Noten/find_by_id.db');
 		$libs = $this->libraryMapper->findAllForUser($this->testUser);
-		$id = $libs[0]['id'];
+		$id = $libs[0]->id;
 
 		$row = $this->libraryMapper->findById($id);
 		self::assertNotNull($row);
-		self::assertSame($id, (int)$row['id']);
-		self::assertSame('/Noten/find_by_id.db', $row['path']);
-		self::assertSame($this->testUser, $row['user_id']);
+		self::assertSame($id, $row->id);
+		self::assertSame('/Noten/find_by_id.db', $row->path);
+		self::assertSame($this->testUser, $row->userId);
 
 		$model = $this->libraryMapper->findModelById($id);
 		self::assertNotNull($model);
@@ -76,13 +76,13 @@ final class LibraryMapperTest extends TestCase {
 	public function testTouchUpdatesTimestamp(): void {
 		$this->libraryMapper->addForUser($this->testUser, '/Noten/touch.db');
 		$libs = $this->libraryMapper->findAllForUser($this->testUser);
-		$id = $libs[0]['id'];
+		$id = $libs[0]->id;
 
 		$this->libraryMapper->touch($id, 1234567890);
 
 		$row = $this->libraryMapper->findById($id);
 		self::assertNotNull($row);
-		self::assertSame(1234567890, (int)$row['updated_at']);
+		self::assertSame(1234567890, $row->updatedAt);
 	}
 
 	public function testAddForUserIgnoresDuplicatePath(): void {
@@ -96,7 +96,7 @@ final class LibraryMapperTest extends TestCase {
 	public function testDeleteForUser(): void {
 		$this->libraryMapper->addForUser($this->testUser, '/Noten/to_delete.db');
 		$libs = $this->libraryMapper->findAllForUser($this->testUser);
-		$id = $libs[0]['id'];
+		$id = $libs[0]->id;
 
 		self::assertTrue($this->libraryMapper->deleteForUser($this->testUser, $id));
 		self::assertEmpty($this->libraryMapper->findAllForUser($this->testUser));
@@ -108,12 +108,12 @@ final class LibraryMapperTest extends TestCase {
 	public function testFindForUser(): void {
 		$this->libraryMapper->addForUser($this->testUser, '/Noten/find_user.db');
 		$libs = $this->libraryMapper->findAllForUser($this->testUser);
-		$id = $libs[0]['id'];
+		$id = $libs[0]->id;
 
 		$found = $this->libraryMapper->findForUser($this->testUser, $id);
 		self::assertNotNull($found);
-		self::assertSame($id, $found['id']);
-		self::assertSame('/Noten/find_user.db', $found['path']);
+		self::assertSame($id, $found->id);
+		self::assertSame('/Noten/find_user.db', $found->path);
 
 		// Different user cannot find it
 		self::assertNull($this->libraryMapper->findForUser('other_user', $id));
@@ -123,43 +123,25 @@ final class LibraryMapperTest extends TestCase {
 	public function testSetSettingsForUserAutoPathsOnly(): void {
 		$this->libraryMapper->addForUser($this->testUser, '/Noten/settings.db');
 		$libs = $this->libraryMapper->findAllForUser($this->testUser);
-		$id = $libs[0]['id'];
+		$id = $libs[0]->id;
 
 		$this->libraryMapper->setSettingsForUser($this->testUser, $id, autoPaths: false);
 
 		$found = $this->libraryMapper->findForUser($this->testUser, $id);
 		self::assertNotNull($found);
-		self::assertFalse($found['autoPaths']);
+		self::assertFalse($found->autoPaths);
 	}
 
 	public function testSetSettingsForUser(): void {
 		$this->libraryMapper->addForUser($this->testUser, '/Noten/settings2.db');
 		$libs = $this->libraryMapper->findAllForUser($this->testUser);
-		$id = $libs[0]['id'];
+		$id = $libs[0]->id;
 
 		$this->libraryMapper->setSettingsForUser($this->testUser, $id, autoPaths: false, autoPdfMetadata: false);
 
 		$found = $this->libraryMapper->findForUser($this->testUser, $id);
 		self::assertNotNull($found);
-		self::assertFalse($found['autoPaths']);
-		self::assertFalse($found['autoPdfMetadata']);
-	}
-
-	public function testAutoPathsOfHandlesDefaultAndNull(): void {
-		self::assertTrue(LibraryMapper::autoPathsOf(['autoPaths' => true]));
-		self::assertFalse(LibraryMapper::autoPathsOf(['autoPaths' => false]));
-		self::assertTrue(LibraryMapper::autoPathsOf(['auto_paths' => 1]));
-		self::assertFalse(LibraryMapper::autoPathsOf(['auto_paths' => 0]));
-		self::assertTrue(LibraryMapper::autoPathsOf(['auto_paths' => null]));
-		self::assertTrue(LibraryMapper::autoPathsOf([]));
-	}
-
-	public function testAutoPdfMetadataOfHandlesDefaultAndNull(): void {
-		self::assertTrue(LibraryMapper::autoPdfMetadataOf(['autoPdfMetadata' => true]));
-		self::assertFalse(LibraryMapper::autoPdfMetadataOf(['autoPdfMetadata' => false]));
-		self::assertTrue(LibraryMapper::autoPdfMetadataOf(['auto_pdf_metadata' => 1]));
-		self::assertFalse(LibraryMapper::autoPdfMetadataOf(['auto_pdf_metadata' => 0]));
-		self::assertTrue(LibraryMapper::autoPdfMetadataOf(['auto_pdf_metadata' => null]));
-		self::assertTrue(LibraryMapper::autoPdfMetadataOf([]));
+		self::assertFalse($found->autoPaths);
+		self::assertFalse($found->autoPdfMetadata);
 	}
 }

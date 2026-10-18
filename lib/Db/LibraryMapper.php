@@ -147,36 +147,4 @@ class LibraryMapper {
 			$qb->executeStatement();
 		}
 	}
-
-	/**
-	 * @param InternalLibrary|array<string, mixed> $library
-	 */
-	public static function autoPathsOf(InternalLibrary|array $library): bool {
-		if ($library instanceof InternalLibrary) {
-			return $library->autoPaths;
-		}
-		if (array_key_exists('autoPaths', $library)) {
-			return (bool)$library['autoPaths'];
-		}
-		if (array_key_exists('auto_paths', $library) && $library['auto_paths'] !== null) {
-			return (bool)$library['auto_paths'];
-		}
-		return true;
-	}
-
-	/**
-	 * @param InternalLibrary|array<string, mixed> $library
-	 */
-	public static function autoPdfMetadataOf(InternalLibrary|array $library): bool {
-		if ($library instanceof InternalLibrary) {
-			return $library->autoPdfMetadata;
-		}
-		if (array_key_exists('autoPdfMetadata', $library)) {
-			return (bool)$library['autoPdfMetadata'];
-		}
-		if (array_key_exists('auto_pdf_metadata', $library) && $library['auto_pdf_metadata'] !== null) {
-			return (bool)$library['auto_pdf_metadata'];
-		}
-		return true;
-	}
 }

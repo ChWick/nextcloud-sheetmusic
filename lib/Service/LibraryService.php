@@ -147,14 +147,14 @@ class LibraryService {
 		$libraries = $this->libraryMapper->findAllForUser($userId);
 		$added = null;
 		foreach ($libraries as $lib) {
-			if ($lib['path'] === $path) {
+			if ($lib->path === $path) {
 				$added = $lib;
 				break;
 			}
 		}
 
 		if ($added !== null) {
-			$libraryId = (int)$added['id'];
+			$libraryId = (int)$added->id;
 
 			// Check for existing physical db file to import if requested
 			if ($importExistingDb && $this->importer !== null) {
