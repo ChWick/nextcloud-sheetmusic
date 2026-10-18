@@ -16,7 +16,7 @@ export async function getOpenCV(): Promise<any> {
 			}
 			// Attempt dynamic import if available
 			// @ts-expect-error dynamic optional import
-			const cvModule = await import('@techstark/opencv-js')
+			const cvModule = await import(/* @vite-ignore */ '@techstark/opencv-js')
 			const cv = cvModule.default || cvModule
 			if (cv?.getBuildInformation) {
 				return cv

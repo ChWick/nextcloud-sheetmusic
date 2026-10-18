@@ -7,10 +7,30 @@ export default createAppConfig(
 		main: resolve(join('src', 'main.js')),
 	},
 	{
+		minify: false,
 		createEmptyCSSEntryPoints: true,
-		extractLicenseInformation: true,
+		extractLicenseInformation: false,
 		thirdPartyLicense: false,
 		config: {
+			build: {
+				reportCompressedSize: false,
+				sourcemap: false,
+				rollupOptions: {
+					output: {
+						manualChunks(id) {
+							if (id.includes('node_modules/pdfjs-dist')) {
+								return 'pdfjs'
+							}
+							if (id.includes('node_modules/pdf-lib') || id.includes('node_modules/@pdf-lib')) {
+								return 'pdflib'
+							}
+							if (id.includes('node_modules/date-fns')) {
+								return 'date-fns'
+							}
+						},
+					},
+				},
+			},
 			plugins: [
 				{
 					name: 'copy-pdfjs-assets',
