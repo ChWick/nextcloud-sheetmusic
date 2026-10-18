@@ -30,7 +30,9 @@ final class SongServiceTest extends TestCase {
 		$library = $this->createTestLibrary('SongService Test Lib');
 		$this->libraryId = (int)$library->id;
 
-		$this->user = $this->userManager->get($library->userId) ?? $this->createMock(IUser::class);
+		$user = $this->userManager->get($library->userId);
+		self::assertNotNull($user);
+		$this->user = $user;
 		$userFolder = $this->rootFolder->getUserFolder($library->userId);
 		if (!$userFolder->nodeExists('SongService Test Lib')) {
 			$this->createdUserNodes[] = $userFolder->newFolder('SongService Test Lib');

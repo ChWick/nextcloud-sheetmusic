@@ -25,8 +25,7 @@ final class EntityServiceTest extends TestCase {
 		$library = $this->createTestLibrary('EntityService Test Lib');
 		$this->libraryId = (int)$library->id;
 
-		$this->user = $this->createMock(IUser::class);
-		$this->user->method('getUID')->willReturn($library->userId);
+		$this->user = $this->userManager->get($library->userId);
 
 		$libraryService = new LibraryService(
 			$this->libraryMapper,
