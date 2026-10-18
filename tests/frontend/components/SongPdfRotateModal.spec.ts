@@ -1,41 +1,9 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { config, flushPromises, mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import SongPdfRotateModal from '../../../src/components/song-pdf/SongPdfRotateModal.vue'
 
-vi.mock('@nextcloud/l10n', () => ({
-	translate: (_app: string, text: string, vars?: any) => {
-		if (!vars) return text
-		let result = text
-		for (const [k, v] of Object.entries(vars)) {
-			result = result.replace(`{${k}}`, String(v))
-		}
-		return result
-	},
-}))
-
-vi.mock('@nextcloud/vue/components/NcDialog', () => ({
-	default: {
-		name: 'NcDialog',
-		props: ['open', 'name', 'size', 'canClose'],
-		template: '<div v-if="open" class="mock-dialog"><slot /></div>',
-	},
-}))
-
-vi.mock('@nextcloud/vue/components/NcButton', () => ({
-	default: {
-		name: 'NcButton',
-		props: ['variant', 'size', 'disabled', 'title'],
-		emits: ['click'],
-		template: '<button :disabled="disabled" :title="title" @click="$emit(\'click\', $event)"><slot name="icon" /><slot /></button>',
-	},
-}))
-
-vi.mock('@nextcloud/vue/components/NcLoadingIcon', () => ({
-	default: {
-		name: 'NcLoadingIcon',
-		template: '<div class="mock-loading" />',
-	},
-}))
+// Avoid teleporting NcDialog to body so wrapper.find queries work without mocks
+config.global.stubs = { teleport: true }
 
 describe('SongPdfRotateModal.vue', () => {
 	const mockPage = {
