@@ -11,35 +11,43 @@ namespace Service;
 
 use OCA\SheetMusic\Service\MobileSheetsPath;
 use OCA\SheetMusic\Service\MobileSheetsPathResolver;
-use OCP\Files\IRootFolder;
-use OCP\Files\IUserFolder;
 use OCP\IUser;
 use PHPUnit\Framework\TestCase;
+use TestSupport\RealMobileSheetsTestTrait;
 
 /**
  * Covers MobileSheetsPathResolver, the conversion between the WebDAV paths that
  * the MobileSheets database stores and the internal paths Nextcloud works with.
  */
 final class MobileSheetsPathResolverTest extends TestCase {
+	use RealMobileSheetsTestTrait;
+
 	private const USER_ROOT = '/admin/files';
 	private const WEBDAV_ROOT = '/remote.php/dav/files/admin';
 
-	/** Resolver whose user folder is "/admin/files" (with a trailing slash to test trimming). */
-	private function resolver(string $userRoot = self::USER_ROOT . '/'): MobileSheetsPathResolver {
-		$userFolder = $this->createMock(IUserFolder::class);
-		$userFolder->method('getPath')->willReturn($userRoot);
+	private IUser $user;
+	private MobileSheetsPathResolver $resolver;
 
-		$rootFolder = $this->createMock(IRootFolder::class);
-		$rootFolder->method('getUserFolder')->with('admin')->willReturn($userFolder);
+	protected function setUp(): void {
+		parent::setUp();
+		$this->setUpRealMobileSheetsEnvironment();
+		$user = $this->userManager->get('admin');
+		self::assertNotNull($user);
+		$this->user = $user;
+		$this->resolver = new MobileSheetsPathResolver($this->rootFolder);
+	}
 
-		return new MobileSheetsPathResolver($rootFolder);
+	protected function tearDown(): void {
+		$this->tearDownRealMobileSheetsEnvironment();
+		parent::tearDown();
+	}
+
+	private function resolver(): MobileSheetsPathResolver {
+		return $this->resolver;
 	}
 
 	private function user(): IUser {
-		$user = $this->createMock(IUser::class);
-		$user->method('getUID')->willReturn('admin');
-
-		return $user;
+		return $this->user;
 	}
 
 	public function testInternalRootTrimsTheTrailingSlash(): void {
