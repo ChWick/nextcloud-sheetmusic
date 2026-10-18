@@ -5,6 +5,7 @@ import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import AlertCircleIcon from 'vue-material-design-icons/AlertCircle.vue'
 import AlertIcon from 'vue-material-design-icons/Alert.vue'
+import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import FileMultipleIcon from 'vue-material-design-icons/FileMultiple.vue'
 import InformationIcon from 'vue-material-design-icons/Information.vue'
 import MergeIcon from 'vue-material-design-icons/Merge.vue'
@@ -20,6 +21,7 @@ const emit = defineEmits<{
 	fixIssue: [issue: IntegrityIssue]
 	mergeSongs: [issue: IntegrityIssue, mode?: 'merge' | 'keepBoth']
 	fixOrphanFile: [issue: IntegrityIssue]
+	deleteMissingFile: [issue: IntegrityIssue]
 }>()
 
 /** True when this is a duplicate or identical song issue between distinct songs (needs merge dialog, not auto-fix) */
@@ -115,6 +117,18 @@ const isDuplicateBetweenSongs = computed(() =>
 						<MergeIcon :size="16" />
 					</template>
 					{{ isFixing ? t('sheetmusic', 'Merging…') : t('sheetmusic', 'Merge Songs') }}
+				</NcButton>
+			</template>
+
+			<template v-else-if="issue.type === 'missing_file'">
+				<NcButton
+					variant="error"
+					:disabled="isFixing"
+					@click="emit('deleteMissingFile', issue)">
+					<template #icon>
+						<DeleteIcon :size="16" />
+					</template>
+					{{ isFixing ? t('sheetmusic', 'Deleting…') : t('sheetmusic', 'Delete File') }}
 				</NcButton>
 			</template>
 

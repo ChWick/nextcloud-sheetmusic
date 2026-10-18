@@ -93,7 +93,7 @@ final class SheetMusicFileEventListenerTest extends TestCase {
 		self::assertEmpty($songFiles);
 	}
 
-	public function testOnNodeDeletedPrunesFile(): void {
+	public function testOnNodeDeletedDoesNotDeleteSongFile(): void {
 		$userFolder = $this->rootFolder->getUserFolder('admin');
 		if (!$userFolder->nodeExists('Noten')) {
 			$this->createdUserNodes[] = $userFolder->newFolder('Noten');
@@ -110,11 +110,11 @@ final class SheetMusicFileEventListenerTest extends TestCase {
 		$event = new NodeDeletedEvent($file);
 		$this->listener->handle($event);
 
-		self::assertEmpty($this->songFileMapper->findByFileId($file->getId(), false));
-		self::assertCount(1, $this->songFileMapper->findByFileId($file->getId(), true));
+		// Song file attachment is preserved so it shows as a missing file instead of a song without files
+		self::assertCount(1, $this->songFileMapper->findByFileId($file->getId(), false));
 	}
 
-	public function testOnNodeRenamedOutsideLibraryDeletesFile(): void {
+	public function testOnNodeRenamedOutsideLibraryDoesNotDeleteSongFile(): void {
 		$userFolder = $this->rootFolder->getUserFolder('admin');
 		if (!$userFolder->nodeExists('Noten')) {
 			$this->createdUserNodes[] = $userFolder->newFolder('Noten');
@@ -143,7 +143,7 @@ final class SheetMusicFileEventListenerTest extends TestCase {
 		$event = new NodeRenamedEvent($source, $target);
 		$this->listener->handle($event);
 
-		self::assertEmpty($this->songFileMapper->findByFileId($target->getId(), false));
-		self::assertCount(1, $this->songFileMapper->findByFileId($target->getId(), true));
+		// Song file attachment is preserved
+		self::assertCount(1, $this->songFileMapper->findByFileId($target->getId(), false));
 	}
 }

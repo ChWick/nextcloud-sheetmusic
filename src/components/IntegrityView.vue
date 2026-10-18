@@ -223,6 +223,8 @@ async function fixIntegrityIssue(issue: IntegrityIssue) {
 				showSuccess(t('sheetmusic', 'Naming rule applied for "{title}".', { title: songTitle }))
 			} else if (issue.type === 'orphan_file' && songTitle) {
 				showSuccess(t('sheetmusic', 'Linked orphan file to "{title}".', { title: songTitle }))
+			} else if (issue.type === 'missing_file' && songTitle) {
+				showSuccess(t('sheetmusic', 'Deleted missing file from "{title}".', { title: songTitle }))
 			} else if (songTitle) {
 				showSuccess(t('sheetmusic', 'Fixed integrity issue for "{title}".', { title: songTitle }))
 			} else {
@@ -441,7 +443,8 @@ function openSong(songId: number) {
 									@open-song="openSong"
 									@fix-issue="fixIntegrityIssue"
 									@merge-songs="openMergeDialog"
-									@fix-orphan-file="openOrphanFixer" />
+									@fix-orphan-file="openOrphanFixer"
+									@delete-missing-file="fixIntegrityIssue" />
 							</ul>
 						</div>
 					</div>

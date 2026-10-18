@@ -440,7 +440,7 @@ defineExpose({
 				:file-path="previewFilePath"
 				:show-external-button="false" />
 			<div v-else :class="$style.error">
-				{{ t('sheetmusic', 'No file available for this song.') }}
+				{{ songFiles.length === 0 ? t('sheetmusic', 'No files attached to this song.') : t('sheetmusic', 'Missing file: The file does not exist on the file system.') }}
 			</div>
 		</template>
 

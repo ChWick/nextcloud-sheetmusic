@@ -155,4 +155,46 @@ describe('FilePreviewer.vue', () => {
 			rotation: 90,
 		}))
 	})
+
+	it('shows missing file message when PDF request returns 404', async () => {
+		const axios = (await import('@nextcloud/axios')).default
+		vi.mocked(axios.get).mockRejectedValueOnce({
+			response: { status: 404 },
+		})
+
+		const wrapper = mount(FilePreviewer, {
+			props: {
+				filePath: '/files/scores/NonExistent.pdf',
+			},
+		})
+		await flushPromises()
+
+		expect(wrapper.text()).toContain('Missing file: The file does not exist on the file system.')
+	})
+
+	it('shows missing file message when filePath is empty', async () => {
+		const wrapper = mount(FilePreviewer, {
+			props: {
+				filePath: '',
+			},
+		})
+		await flushPromises()
+
+		expect(wrapper.text()).toContain('Missing file: The file does not exist on the file system.')
+	})
+
+	it('shows missing file message when image fails to load', async () => {
+		const wrapper = mount(FilePreviewer, {
+			props: {
+				filePath: '/files/scores/MissingImage.png',
+			},
+		})
+		await flushPromises()
+
+		const img = wrapper.find('img')
+		expect(img.exists()).toBe(true)
+
+		await img.trigger('error')
+		expect(wrapper.text()).toContain('Missing file: The file does not exist on the file system.')
+	})
 })

@@ -547,6 +547,26 @@ class LibraryIntegrityService {
 		?int $entityId = null,
 		?string $path = null,
 	): array {
+		if ($issueType === IntegrityIssue::TYPE_MISSING_FILE && $fileId !== null) {
+			$fileRecord = $this->internalSongFileMapper->findById($fileId);
+			if ($fileRecord !== null) {
+				$this->internalSongFileMapper->delete($fileId, hardDelete: false);
+				$this->libraryMapper->touch($libraryId);
+
+				return [
+					'success' => true,
+					'fixedCount' => 1,
+					'message' => 'Missing file record removed from song.',
+				];
+			}
+
+			return [
+				'success' => false,
+				'fixedCount' => 0,
+				'message' => 'Missing file record could not be found.',
+			];
+		}
+
 		if ($issueType === IntegrityIssue::TYPE_ORPHAN_FILE) {
 			if ($path === null || trim($path) === '') {
 				return [

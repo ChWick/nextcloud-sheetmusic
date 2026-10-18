@@ -1072,6 +1072,119 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		self::assertFalse($emptyIssues[0]->fixable);
 	}
 
+	public function testSongWithMissingPhysicalFileShowsAsMissingFileAndNotSongWithoutFilesUntilManuallyRemoved(): void {
+		$targetFolder = $this->createMock(Folder::class);
+		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
+		$targetFolder->method('nodeExists')->willReturn(false);
+		$targetFolder->method('getDirectoryListing')->willReturn([]);
+
+		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager('dummy.db', $targetFolder);
+
+		$libId = 1;
+		$this->cleanupLibraryData($libId);
+
+		$song = $this->songMapper->insert(new InternalSong(
+			uuid: 'missing-file-song-uuid',
+			libraryId: $libId,
+			title: 'Song With Missing File',
+		));
+
+		$songFile = $this->songFileMapper->insert(new \OCA\SheetMusic\Db\InternalSongFile(
+			uuid: 'song-file-uuid',
+			songId: (int)$song->id,
+			fileId: 123456,
+		));
+
+		$service = $this->createIntegrityService(
+			$this->createLibraryService(),
+			$fileManager,
+			$rootFolder,
+			$pathResolver,
+		);
+
+		// 1. With attached file (even though physical file is missing), song must show as missing_file, NOT song_without_files
+		$issues = $service->checkIntegrity($libId, 'user1');
+		$missingFileIssues = array_values(array_filter($issues, static fn ($i) => $i->type === IntegrityIssue::TYPE_MISSING_FILE));
+		$songWithoutFilesIssues = array_values(array_filter($issues, static fn ($i) => $i->type === IntegrityIssue::TYPE_SONG_WITHOUT_FILES));
+
+		self::assertCount(1, $missingFileIssues);
+		self::assertSame($song->id, $missingFileIssues[0]->songId);
+		self::assertCount(0, $songWithoutFilesIssues);
+
+		// 2. Only once the file attachment is manually removed does the song show as song_without_files
+		$this->songFileMapper->delete((int)$songFile->id, hardDelete: false);
+
+		$issuesAfterRemoval = $service->checkIntegrity($libId, 'user1');
+		$missingAfter = array_values(array_filter($issuesAfterRemoval, static fn ($i) => $i->type === IntegrityIssue::TYPE_MISSING_FILE));
+		$songWithoutFilesAfter = array_values(array_filter($issuesAfterRemoval, static fn ($i) => $i->type === IntegrityIssue::TYPE_SONG_WITHOUT_FILES));
+
+		self::assertCount(0, $missingAfter);
+		self::assertCount(1, $songWithoutFilesAfter);
+		self::assertSame($song->id, $songWithoutFilesAfter[0]->songId);
+	}
+
+	public function testFixIssueDeletesMissingFileRecord(): void {
+		$targetFolder = $this->createMock(Folder::class);
+		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
+		$targetFolder->method('nodeExists')->willReturn(false);
+		$targetFolder->method('getDirectoryListing')->willReturn([]);
+
+		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager('dummy.db', $targetFolder);
+
+		$libId = 1;
+		$this->cleanupLibraryData($libId);
+
+		$song = $this->songMapper->insert(new InternalSong(
+			uuid: 'missing-file-fix-uuid',
+			libraryId: $libId,
+			title: 'Fix Missing File Song',
+		));
+
+		$songFile = $this->songFileMapper->insert(new \OCA\SheetMusic\Db\InternalSongFile(
+			uuid: 'song-file-fix-uuid',
+			songId: (int)$song->id,
+			fileId: 777888,
+		));
+
+		$service = $this->createIntegrityService(
+			$this->createLibraryService(),
+			$fileManager,
+			$rootFolder,
+			$pathResolver,
+		);
+
+		// Before fix: missing_file is reported
+		$issues = $service->checkIntegrity($libId, 'user1');
+		$missingFileIssues = array_values(array_filter($issues, static fn ($i) => $i->type === IntegrityIssue::TYPE_MISSING_FILE));
+		self::assertCount(1, $missingFileIssues);
+
+		// Execute fixIssue for TYPE_MISSING_FILE
+		$result = $service->fixIssue(
+			libraryId: $libId,
+			userId: 'user1',
+			issueType: IntegrityIssue::TYPE_MISSING_FILE,
+			songId: (int)$song->id,
+			fileId: (int)$songFile->id,
+		);
+
+		self::assertTrue($result['success']);
+		self::assertSame(1, $result['fixedCount']);
+
+		// The file record is now soft-deleted
+		$reloaded = $this->songFileMapper->findById((int)$songFile->id);
+		self::assertNotNull($reloaded);
+		self::assertNotNull($reloaded->deletedAt);
+
+		// After fix: 0 missing_file issues, and song now reports as song_without_files
+		$issuesAfter = $service->checkIntegrity($libId, 'user1');
+		$missingAfter = array_values(array_filter($issuesAfter, static fn ($i) => $i->type === IntegrityIssue::TYPE_MISSING_FILE));
+		$emptyAfter = array_values(array_filter($issuesAfter, static fn ($i) => $i->type === IntegrityIssue::TYPE_SONG_WITHOUT_FILES));
+
+		self::assertCount(0, $missingAfter);
+		self::assertCount(1, $emptyAfter);
+		self::assertSame($song->id, $emptyAfter[0]->songId);
+	}
+
 	public function testCheckIntegrityAndFixOrphanSongFiles(): void {
 		$targetFolder = $this->createMock(Folder::class);
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');

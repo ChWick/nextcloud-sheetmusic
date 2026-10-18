@@ -98,11 +98,7 @@ class SheetMusicFileEventListener implements IEventListener {
 		}
 
 		if ($sourceLib !== null && $targetLib === null) {
-			// File moved OUT of library
-			$files = $this->songFileMapper->findByFileId($target->getId(), includeDeleted: false);
-			foreach ($files as $file) {
-				$this->songFileMapper->delete($file->id, hardDelete: false);
-			}
+			// File moved OUT of library: keep song file attachment so it shows up as missing/outside library
 			if ($sourceLib->id !== null) {
 				$this->libraryMapper->touch($sourceLib->id);
 			}
@@ -131,10 +127,9 @@ class SheetMusicFileEventListener implements IEventListener {
 			return;
 		}
 
-		foreach ($files as $file) {
-			$this->songFileMapper->delete($file->id, hardDelete: false);
-		}
-
+		// Do not automatically delete song file records when physical files are deleted.
+		// Songs preserve their file attachment so they show up as "missing file"
+		// rather than "song without files". Only manual removal detaches the file.
 		$library = $this->findLibraryForNode($node);
 		if ($library !== null && $library->id !== null) {
 			$this->libraryMapper->touch($library->id);

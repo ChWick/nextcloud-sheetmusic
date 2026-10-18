@@ -362,7 +362,7 @@ async function loadAndRenderFile() {
 
 	if (!props.filePath) {
 		isLoading.value = false
-		errorMessage.value = t('sheetmusic', 'No file available.')
+		errorMessage.value = t('sheetmusic', 'Missing file: The file does not exist on the file system.')
 		return
 	}
 
@@ -405,16 +405,25 @@ async function loadAndRenderFile() {
 		}
 
 		await renderCurrentView()
-	} catch (error) {
+	} catch (error: any) {
 		console.error('Failed to load or render PDF:', error)
 		if (loadId === currentLoadId) {
-			errorMessage.value = t('sheetmusic', 'Could not load the selected file.')
+			const status = error?.response?.status ?? error?.status
+			if (status === 404) {
+				errorMessage.value = t('sheetmusic', 'Missing file: The file does not exist on the file system.')
+			} else {
+				errorMessage.value = t('sheetmusic', 'Could not load the selected file.')
+			}
 		}
 	} finally {
 		if (loadId === currentLoadId) {
 			isLoading.value = false
 		}
 	}
+}
+
+function handleImageError() {
+	errorMessage.value = t('sheetmusic', 'Missing file: The file does not exist on the file system.')
 }
 
 function handleResize() {
@@ -476,7 +485,8 @@ defineExpose({
 				:src="filePath"
 				:alt="filePath"
 				:style="imageStyle"
-				:class="$style.previewImage">
+				:class="$style.previewImage"
+				@error="handleImageError">
 		</div>
 
 		<div

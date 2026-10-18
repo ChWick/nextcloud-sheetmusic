@@ -39,7 +39,7 @@ final class LibraryReconcilerTest extends TestCase {
 		parent::tearDown();
 	}
 
-	public function testReconcileIndexesNewFilesAndPrunesMissing(): void {
+	public function testReconcileIndexesNewFilesAndPreservesMissingTrackedFiles(): void {
 		$userFolder = $this->rootFolder->getUserFolder('admin');
 		$folderName = 'Reconcile_' . bin2hex(random_bytes(4));
 		$libFolder = $userFolder->newFolder($folderName);
@@ -70,7 +70,7 @@ final class LibraryReconcilerTest extends TestCase {
 		$result = $this->reconciler->reconcile($library);
 
 		self::assertSame(1, $result['indexed']);
-		self::assertSame(1, $result['pruned']);
+		self::assertSame(0, $result['pruned']);
 
 		// The new score should now be indexed as a song and file in database
 		$indexedSong = $this->songMapper->findByTitle((int)$library->id, 'New Score');
@@ -81,10 +81,10 @@ final class LibraryReconcilerTest extends TestCase {
 		self::assertCount(1, $indexedFiles);
 		self::assertSame((int)$physicalFile->getId(), $indexedFiles[0]->fileId);
 
-		// The stale file should now be pruned (soft-deleted)
+		// The stale file should NOT be pruned (its attachment is preserved for missing file detection)
 		$reloadedStale = $this->songFileMapper->findById((int)$staleFile->id);
 		self::assertNotNull($reloadedStale);
-		self::assertNotNull($reloadedStale->deletedAt);
+		self::assertNull($reloadedStale->deletedAt);
 	}
 
 	public function testExtractTitleFromFilenameRemovesNumericPrefixes(): void {

@@ -144,4 +144,31 @@ describe('FilesIntegrityIssueItem.vue', () => {
 		expect(wrapper.text()).not.toContain('Auto-Fix Issue')
 		expect(wrapper.text()).toContain('Fix Orphan File')
 	})
+
+	it('renders Delete File button for missing_file issue and emits deleteMissingFile when clicked', async () => {
+		const issue: IntegrityIssue = {
+			type: 'missing_file',
+			severity: 'error',
+			message: 'File "Missing.pdf" referenced by song "Prelude" does not exist in Nextcloud storage.',
+			songId: 10,
+			songTitle: 'Prelude',
+			fileId: 99,
+			path: 'Noten/Missing.pdf',
+			fixable: false,
+		}
+
+		const wrapper = mount(FilesIntegrityIssueItem, {
+			props: { issue },
+		})
+
+		expect(wrapper.text()).toContain('Delete File')
+		expect(wrapper.text()).toContain('Edit Song')
+
+		const deleteBtn = wrapper.findAll('button').find(b => b.text().includes('Delete File'))
+		expect(deleteBtn).toBeDefined()
+		await deleteBtn!.trigger('click')
+
+		expect(wrapper.emitted('deleteMissingFile')).toHaveLength(1)
+		expect(wrapper.emitted('deleteMissingFile')![0]).toEqual([issue])
+	})
 })

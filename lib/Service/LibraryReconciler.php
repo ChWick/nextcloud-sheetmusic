@@ -104,15 +104,11 @@ class LibraryReconciler {
 			$indexedCount++;
 		}
 
-		// 4. Prune tracked files whose physical file is no longer present
-		foreach ($trackedFiles as $tf) {
-			if (!isset($physicalFiles[$tf->fileId])) {
-				$this->songFileMapper->delete($tf->id, hardDelete: false);
-				$prunedCount++;
-			}
-		}
+		// 4. Do not prune tracked files whose physical file is no longer present.
+		// Missing physical files must remain attached as tracked files so the integrity check
+		// can report them as missing files. Only manual user action should detach or delete them.
 
-		if ($indexedCount > 0 || $prunedCount > 0) {
+		if ($indexedCount > 0) {
 			$this->libraryMapper->touch($lib->id);
 		}
 

@@ -231,7 +231,23 @@ describe('SongViewer.vue', () => {
 
 		await settle()
 
-		expect(wrapper.text()).toContain('No file available for this song.')
+		expect(wrapper.text()).toContain('No files attached to this song.')
+		expect(pdfCanvasCount(wrapper)).toBe(0)
+	})
+
+	it('shows missing file message when song has file but path is missing', async () => {
+		const songMissingFile: Song = {
+			...mockSong,
+			files: [{ id: 99, path: '' }],
+		}
+		const wrapper = mount(SongViewer, {
+			props: { song: songMissingFile, libraryId: 1 },
+			...globalStubs,
+		})
+
+		await settle()
+
+		expect(wrapper.text()).toContain('Missing file: The file does not exist on the file system.')
 		expect(pdfCanvasCount(wrapper)).toBe(0)
 	})
 

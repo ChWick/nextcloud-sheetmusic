@@ -87,7 +87,8 @@ defineExpose({ clearMergingState })
 						@open-song="emit('openSong', $event)"
 						@fix-issue="handleFix"
 						@merge-songs="handleMerge"
-						@fix-orphan-file="emit('fixOrphanFile', $event)" />
+						@fix-orphan-file="emit('fixOrphanFile', $event)"
+						@delete-missing-file="handleFix" />
 				</ul>
 			</template>
 		</template>
