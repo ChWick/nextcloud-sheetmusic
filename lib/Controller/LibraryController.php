@@ -20,7 +20,7 @@ class LibraryController extends OCSController {
 		IRequest $request,
 		private LibraryService $libraryService,
 		private IUserSession $userSession,
-		private ?LibraryIntegrityService $integrityService = null,
+		private LibraryIntegrityService $integrityService,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -99,10 +99,6 @@ class LibraryController extends OCSController {
 			return new DataResponse(['message' => 'User not logged in'], Http::STATUS_UNAUTHORIZED);
 		}
 
-		if ($this->integrityService === null) {
-			return new DataResponse(['issues' => []], Http::STATUS_OK);
-		}
-
 		try {
 			$issues = $this->integrityService->checkIntegrity($id, $user->getUID());
 
@@ -131,10 +127,6 @@ class LibraryController extends OCSController {
 			return new DataResponse(['message' => 'User not logged in'], Http::STATUS_UNAUTHORIZED);
 		}
 
-		if ($this->integrityService === null) {
-			return new DataResponse(['success' => false, 'message' => 'Integrity service not available.'], Http::STATUS_OK);
-		}
-
 		try {
 			$result = $this->integrityService->fixIssue($id, $user->getUID(), $issueType, $songId, $fileId, $entityType, $entityId, $path);
 
@@ -153,10 +145,6 @@ class LibraryController extends OCSController {
 		$user = $this->userSession->getUser();
 		if ($user === null) {
 			return new DataResponse(['message' => 'User not logged in'], Http::STATUS_UNAUTHORIZED);
-		}
-
-		if ($this->integrityService === null) {
-			return new DataResponse(['success' => false, 'message' => 'Integrity service not available.'], Http::STATUS_OK);
 		}
 
 		try {

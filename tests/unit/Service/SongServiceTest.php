@@ -58,19 +58,7 @@ final class SongServiceTest extends TestCase {
 			$this->songMapper,
 			$this->libraryMapper,
 		);
-		$integrityService = new LibraryIntegrityService(
-			$libraryService,
-			$fileManager,
-			$this->rootFolder,
-			$this->pathResolver,
-			$logger,
-			$this->entityMapper,
-			$this->songMapper,
-			$this->songFileMapper,
-			$this->libraryMapper,
-			$this->attributeMapper,
-			$this->miscMapper,
-		);
+		$integrityService = $this->createLibraryIntegrityService($libraryService);
 
 		$this->service = new SongService(
 			$libraryService,

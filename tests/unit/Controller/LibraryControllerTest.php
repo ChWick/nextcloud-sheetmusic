@@ -40,6 +40,7 @@ final class LibraryControllerTest extends TestCase {
 			$this->request,
 			$this->libraryService,
 			$this->userSession,
+			$this->createLibraryIntegrityService($this->libraryService),
 		);
 	}
 

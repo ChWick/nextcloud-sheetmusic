@@ -16,6 +16,9 @@ use OCA\SheetMusic\Db\InternalSongAttributeMapper;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
+use OCA\SheetMusic\Service\FileManager;
+use OCA\SheetMusic\Service\LibraryIntegrityService;
+use OCA\SheetMusic\Service\LibraryService;
 use OCA\SheetMusic\Service\MobileSheetsPathResolver;
 use OCA\SheetMusic\Service\MobileSheetsSqliteExporter;
 use OCA\SheetMusic\Service\MobileSheetsSqliteImporter;
@@ -159,5 +162,33 @@ trait RealMobileSheetsTestTrait {
 		$db->exec('CREATE TABLE IF NOT EXISTS "Key"(Id INTEGER PRIMARY KEY, Name VARCHAR(255), SortBy INTEGER DEFAULT 1, Ascending INTEGER DEFAULT 1, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
 		$db->exec('CREATE TABLE IF NOT EXISTS SourceType(Id INTEGER PRIMARY KEY, Type VARCHAR(255), SortBy INTEGER DEFAULT 1, Ascending INTEGER DEFAULT 1, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
 		return $db;
+	}
+
+	protected function createLibraryIntegrityService(?LibraryService $libraryService = null): LibraryIntegrityService {
+		$logger = new NullLogger();
+		$libraryService ??= new LibraryService($this->libraryMapper, $this->rootFolder, $logger, exporter: $this->exporter);
+		$fileManager = new FileManager(
+			$this->libraryMapper,
+			$this->rootFolder,
+			$this->pathResolver,
+			$logger,
+			$libraryService,
+			$this->songFileMapper,
+			$this->songMapper,
+		);
+
+		return new LibraryIntegrityService(
+			$libraryService,
+			$fileManager,
+			$this->rootFolder,
+			$this->pathResolver,
+			$logger,
+			$this->entityMapper,
+			$this->songMapper,
+			$this->songFileMapper,
+			$this->libraryMapper,
+			$this->attributeMapper,
+			$this->miscMapper,
+		);
 	}
 }
