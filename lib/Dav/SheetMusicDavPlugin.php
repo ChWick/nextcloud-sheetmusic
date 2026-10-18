@@ -61,7 +61,7 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		private MobileSheetsSqliteExporter $exporter,
 		private MobileSheetsSqliteImporter $importer,
 		private LoggerInterface $logger,
-		private ?IUserSession $userSession = null,
+		private IUserSession $userSession,
 	) {
 	}
 
@@ -88,7 +88,7 @@ class SheetMusicDavPlugin extends ServerPlugin {
 			'SheetMusicDavPlugin: beforeMethod %s path=%s user=%s ua=%s',
 			$method,
 			$path,
-			$this->userSession?->getUser()?->getUID() ?? 'anonymous',
+			$this->userSession->getUser()?->getUID() ?? 'anonymous',
 			$request->getHeader('User-Agent') ?? '',
 		));
 
@@ -575,7 +575,7 @@ class SheetMusicDavPlugin extends ServerPlugin {
 	 */
 	private function resolveUserFolder(string $path): ?array {
 		$path = trim($path, '/');
-		$sessionUser = $this->userSession?->getUser()?->getUID();
+		$sessionUser = $this->userSession->getUser()?->getUID();
 
 		// Legacy endpoint (remote.php/webdav): paths are relative to the files
 		// root of the authenticated user.
@@ -590,7 +590,7 @@ class SheetMusicDavPlugin extends ServerPlugin {
 
 		$userId = $parts[1];
 		// Never expose a library to anybody but its owner.
-		if ($this->userSession !== null && $sessionUser !== $userId) {
+		if ($sessionUser !== $userId) {
 			return null;
 		}
 
