@@ -1,14 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { config, mount } from '@vue/test-utils'
 import SongPdfEnhanceModal from '../../../src/components/song-pdf/SongPdfEnhanceModal.vue'
 
-vi.mock('@nextcloud/vue/components/NcDialog', () => ({
-	default: {
-		name: 'NcDialog',
-		props: ['open', 'name'],
-		template: '<div v-if="open" role="dialog" class="nc-dialog"><slot /></div>',
-	},
-}))
+// Avoid teleporting NcDialog to body so wrapper.find queries work without mocks
+config.global.stubs = { teleport: true }
 
 describe('SongPdfEnhanceModal.vue', () => {
 	const createMockPdf = () => ({
