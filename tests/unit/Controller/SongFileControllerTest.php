@@ -5,99 +5,136 @@ declare(strict_types=1);
 namespace Controller;
 
 use OCA\SheetMusic\Controller\SongFileController;
+use OCA\SheetMusic\Db\InternalSong;
+use OCA\SheetMusic\Db\InternalSongFile;
+use OCA\SheetMusic\Db\SongFileMapper;
+use OCA\SheetMusic\Service\FileManager;
+use OCA\SheetMusic\Service\LibraryService;
 use OCA\SheetMusic\Service\SongFileService;
 use OCP\AppFramework\Http;
-use OCP\IRequest;
+use OCP\Files\Folder;
 use OCP\IUser;
-use OCP\IUserSession;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
+use TestSupport\FakeRequest;
+use TestSupport\FakeUserSession;
+use TestSupport\RealMobileSheetsTestTrait;
 
 final class SongFileControllerTest extends TestCase {
-	public function testImportSongMetadataHandlesUnauthenticatedAndInvalidFile(): void {
-		$userSession = $this->createMock(IUserSession::class);
-		$userSession->method('getUser')->willReturn(null);
+	use RealMobileSheetsTestTrait;
 
-		$controller = new SongFileController(
-			'sheetmusic',
-			$this->createMock(IRequest::class),
-			$this->createMock(SongFileService::class),
-			$userSession,
+	private int $libraryId;
+	private IUser $user;
+	private FakeUserSession $userSession;
+	private FakeRequest $request;
+	private SongFileService $songFileService;
+	private SongFileController $controller;
+	private Folder $libFolder;
+
+	protected function setUp(): void {
+		parent::setUp();
+		$this->setUpRealMobileSheetsEnvironment();
+		$library = $this->createTestLibrary('SongFileController Test Lib');
+		$this->libraryId = (int)$library->id;
+		$this->user = $this->userManager->get($library->userId);
+
+		$userFolder = $this->rootFolder->getUserFolder($this->user->getUID());
+		if (!$userFolder->nodeExists('SongFileController Test Lib')) {
+			$this->libFolder = $userFolder->newFolder('SongFileController Test Lib');
+			$this->createdUserNodes[] = $this->libFolder;
+		} else {
+			$this->libFolder = $userFolder->get('SongFileController Test Lib');
+		}
+
+		$logger = new NullLogger();
+		$libraryService = new LibraryService($this->libraryMapper, $this->rootFolder, $logger, exporter: $this->exporter);
+		$fileManager = new FileManager(
+			$this->libraryMapper,
+			$this->rootFolder,
+			$this->pathResolver,
+			$logger,
+			$libraryService,
+			$this->songFileMapper,
+			$this->songMapper,
+		);
+		$this->songFileService = new SongFileService(
+			$libraryService,
+			$fileManager,
+			$this->rootFolder,
+			$logger,
+			$this->songFileMapper,
+			$this->songMapper,
+			$this->libraryMapper,
 		);
 
-		$this->assertSame(Http::STATUS_UNAUTHORIZED, $controller->importSongMetadata()->getStatus());
+		$this->userSession = new FakeUserSession($this->user);
+		$this->request = new FakeRequest();
+
+		$this->controller = new SongFileController(
+			'sheetmusic',
+			$this->request,
+			$this->songFileService,
+			$this->userSession,
+		);
+	}
+
+	protected function tearDown(): void {
+		$this->tearDownRealMobileSheetsEnvironment();
+		parent::tearDown();
+	}
+
+	public function testImportSongMetadataHandlesUnauthenticated(): void {
+		$this->userSession->setUser(null);
+		$this->assertSame(Http::STATUS_UNAUTHORIZED, $this->controller->importSongMetadata()->getStatus());
 	}
 
 	public function testUploadSongFileUsesLibraryIdFromLibraryScopedRoute(): void {
-		$user = $this->createMock(IUser::class);
-		$userSession = $this->createMock(IUserSession::class);
-		$userSession->method('getUser')->willReturn($user);
+		$song = $this->songMapper->insert(new InternalSong(
+			uuid: 'upload-route-uuid',
+			libraryId: $this->libraryId,
+			title: 'Upload Test Song',
+		));
 
 		$tmpFile = tempnam(sys_get_temp_dir(), 'song-upload-controller-test-');
 		self::assertNotFalse($tmpFile);
+		file_put_contents($tmpFile, '%PDF-1.4 minimal test pdf content');
 		$fileInfo = ['tmp_name' => $tmpFile, 'name' => 'score.pdf'];
-		$request = $this->createMock(IRequest::class);
-		$request->method('getUploadedFile')->with('file')->willReturn($fileInfo);
-
-		$songFileService = $this->createMock(SongFileService::class);
-		$songFileService->expects(self::once())
-			->method('uploadSongFile')
-			->with($user, 7, 42, $fileInfo)
-			->willReturn(['songs' => []]);
+		$this->request->setUploadedFile('file', $fileInfo);
 
 		try {
-			$controller = new SongFileController('sheetmusic', $request, $songFileService, $userSession);
-			$response = $controller->uploadSongFile(42, 7);
+			$response = $this->controller->uploadSongFile($song->id, $this->libraryId);
 
 			self::assertSame(Http::STATUS_OK, $response->getStatus());
-			self::assertSame(['songs' => []], $response->getData());
+			$data = $response->getData();
+			self::assertArrayHasKey('songs', $data);
 		} finally {
-			unlink($tmpFile);
+			if (is_file($tmpFile)) {
+				unlink($tmpFile);
+			}
 		}
 	}
 
 	public function testUploadSongFileReportsPhpUploadSizeLimit(): void {
-		$userSession = $this->createMock(IUserSession::class);
-		$userSession->method('getUser')->willReturn($this->createMock(IUser::class));
-		$request = $this->createMock(IRequest::class);
-		$request->method('getParam')->willReturnCallback(
-			static fn (string $key, mixed $default = null): mixed => $key === 'libraryId' ? '7' : $default,
-		);
-		$request->method('getUploadedFile')->with('file')->willReturn([
+		$this->request->setParam('libraryId', (string)$this->libraryId);
+		$this->request->setUploadedFile('file', [
 			'tmp_name' => '',
 			'error' => UPLOAD_ERR_INI_SIZE,
 		]);
 
-		$controller = new SongFileController(
-			'sheetmusic',
-			$request,
-			$this->createMock(SongFileService::class),
-			$userSession,
-		);
-		$response = $controller->uploadSongFile(42, 7);
+		$response = $this->controller->uploadSongFile(42, $this->libraryId);
 
 		self::assertSame(Http::STATUS_REQUEST_ENTITY_TOO_LARGE, $response->getStatus());
 		self::assertStringContainsString('upload_max_filesize', $response->getData()['message']);
 	}
 
 	public function testUploadSongFileDetectsPhpPostMaxSizeWhenFilesAreMissing(): void {
-		$userSession = $this->createMock(IUserSession::class);
-		$userSession->method('getUser')->willReturn($this->createMock(IUser::class));
-		$request = $this->createMock(IRequest::class);
-		$request->method('getParam')->willReturnCallback(
-			static fn (string $key, mixed $default = null): mixed => $key === 'libraryId' ? '7' : $default,
-		);
-		$request->method('getUploadedFile')->with('file')->willReturn(null);
+		$this->request->setParam('libraryId', (string)$this->libraryId);
+		$this->request->setUploadedFile('file', null);
 
 		$previousContentLength = $_SERVER['CONTENT_LENGTH'] ?? null;
 		$_SERVER['CONTENT_LENGTH'] = '999999999999';
 		try {
-			$controller = new SongFileController(
-				'sheetmusic',
-				$request,
-				$this->createMock(SongFileService::class),
-				$userSession,
-			);
-			$response = $controller->uploadSongFile(42, 7);
+			$response = $this->controller->uploadSongFile(42, $this->libraryId);
 
 			self::assertSame(Http::STATUS_REQUEST_ENTITY_TOO_LARGE, $response->getStatus());
 			self::assertStringContainsString('post_max_size', $response->getData()['message']);
@@ -111,71 +148,59 @@ final class SongFileControllerTest extends TestCase {
 	}
 
 	public function testAttachNextcloudFileValidatesParameters(): void {
-		$user = $this->createMock(IUser::class);
-		$userSession = $this->createMock(IUserSession::class);
-		$userSession->method('getUser')->willReturn($user);
-
-		$request = $this->createMock(IRequest::class);
-		$request->method('getParam')->willReturnCallback(fn ($key, $default) => $default ?? '');
-
-		$controller = new SongFileController(
-			'sheetmusic',
-			$request,
-			$this->createMock(SongFileService::class),
-			$userSession,
-		);
-
-		$this->assertSame(Http::STATUS_BAD_REQUEST, $controller->attachNextcloudFile(42, null, '/a.pdf')->getStatus());
-		$this->assertSame(Http::STATUS_BAD_REQUEST, $controller->attachNextcloudFile(42, 1, '')->getStatus());
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $this->controller->attachNextcloudFile(42, null, '/a.pdf')->getStatus());
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $this->controller->attachNextcloudFile(42, $this->libraryId, '')->getStatus());
 	}
 
-	public function testDeleteSongFileDelegatesToService(): void {
-		$user = $this->createMock(IUser::class);
-		$userSession = $this->createMock(IUserSession::class);
-		$userSession->method('getUser')->willReturn($user);
+	public function testDeleteSongFile(): void {
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $this->controller->deleteSongFile(42, 2, null)->getStatus());
 
-		$songFileService = $this->createMock(SongFileService::class);
-		$songFileService->expects($this->once())
-			->method('deleteSongFile')
-			->with($user, 1, 42, 2)
-			->willReturn(['songs' => []]);
+		$song = $this->songMapper->insert(new InternalSong(
+			uuid: 'del-file-song-uuid',
+			libraryId: $this->libraryId,
+			title: 'Song with File',
+		));
 
-		$controller = new SongFileController(
-			'sheetmusic',
-			$this->createMock(IRequest::class),
-			$songFileService,
-			$userSession,
-		);
+		$fileNode = $this->libFolder->newFile('delete-me.pdf');
+		$fileNode->putContent('%PDF-1.4 delete test');
+		$this->createdUserNodes[] = $fileNode;
 
-		$this->assertSame(Http::STATUS_BAD_REQUEST, $controller->deleteSongFile(42, 2, null)->getStatus());
+		$songFile = $this->songFileMapper->insert(new InternalSongFile(
+			songId: (int)$song->id,
+			fileId: $fileNode->getId(),
+			type: SongFileMapper::FILE_TYPE_PDF,
+		));
 
-		$res = $controller->deleteSongFile(42, 2, 1);
+		$res = $this->controller->deleteSongFile($song->id, $songFile->id, $this->libraryId);
 		$this->assertSame(Http::STATUS_OK, $res->getStatus());
-		$this->assertSame(['songs' => []], $res->getData());
+
+		$files = $this->songFileMapper->findAllForSong($song->id);
+		$this->assertEmpty($files);
 	}
 
-	public function testDetachSongFileDelegatesToService(): void {
-		$user = $this->createMock(IUser::class);
-		$userSession = $this->createMock(IUserSession::class);
-		$userSession->method('getUser')->willReturn($user);
+	public function testDetachSongFile(): void {
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $this->controller->detachSongFile(42, 2, null)->getStatus());
 
-		$songFileService = $this->createMock(SongFileService::class);
-		$songFileService->expects($this->once())
-			->method('detachSongFile')
-			->with($user, 1, 42, 2)
-			->willReturn(['songs' => []]);
+		$song = $this->songMapper->insert(new InternalSong(
+			uuid: 'detach-file-song-uuid',
+			libraryId: $this->libraryId,
+			title: 'Song to Detach',
+		));
 
-		$controller = new SongFileController(
-			'sheetmusic',
-			$this->createMock(IRequest::class),
-			$songFileService,
-			$userSession,
-		);
+		$fileNode = $this->libFolder->newFile('detach-me.pdf');
+		$fileNode->putContent('%PDF-1.4 detach test');
+		$this->createdUserNodes[] = $fileNode;
 
-		$this->assertSame(Http::STATUS_BAD_REQUEST, $controller->detachSongFile(42, 2, null)->getStatus());
+		$songFile = $this->songFileMapper->insert(new InternalSongFile(
+			songId: (int)$song->id,
+			fileId: $fileNode->getId(),
+			type: SongFileMapper::FILE_TYPE_PDF,
+		));
 
-		$response = $controller->detachSongFile(42, 2, 1);
-		$this->assertSame(Http::STATUS_OK, $response->getStatus());
-		$this->assertSame(['songs' => []], $response->getData());
+		$res = $this->controller->detachSongFile($song->id, $songFile->id, $this->libraryId);
+		$this->assertSame(Http::STATUS_OK, $res->getStatus());
+
+		$files = $this->songFileMapper->findAllForSong($song->id);
+		$this->assertEmpty($files);
 	}
 }
