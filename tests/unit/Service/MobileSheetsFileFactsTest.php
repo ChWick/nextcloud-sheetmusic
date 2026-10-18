@@ -14,11 +14,27 @@ use OCP\Files\File;
 use OCP\Files\Node;
 use PHPUnit\Framework\TestCase;
 
+use TestSupport\RealMobileSheetsTestTrait;
+
 final class MobileSheetsFileFactsTest extends TestCase {
+	use RealMobileSheetsTestTrait;
+
+	protected function setUp(): void {
+		parent::setUp();
+		$this->setUpRealMobileSheetsEnvironment();
+	}
+
+	protected function tearDown(): void {
+		$this->tearDownRealMobileSheetsEnvironment();
+		parent::tearDown();
+	}
+
 	public function testFromNodeDerivesTheFactsFromTheFile(): void {
-		$file = $this->createMock(File::class);
-		$file->method('getContent')->willReturn('123456789');
-		$file->method('getMTime')->willReturn(1789222407);
+		$userFolder = $this->rootFolder->getUserFolder('admin');
+		$file = $userFolder->newFile('facts_test.txt');
+		$file->putContent('123456789');
+		$file->touch(1789222407);
+		$this->createdUserNodes[] = $file;
 
 		$facts = MobileSheetsFileFacts::fromNode($file);
 
@@ -35,9 +51,11 @@ final class MobileSheetsFileFactsTest extends TestCase {
 			. "1 0 obj << /Type /Page >> endobj\n"
 			. "2 0 obj << /Type /Page >> endobj\n"
 			. "3 0 obj << /Type /Page >> endobj\n";
-		$file = $this->createMock(File::class);
-		$file->method('getContent')->willReturn($pdf);
-		$file->method('getMTime')->willReturn(1789222408);
+		$userFolder = $this->rootFolder->getUserFolder('admin');
+		$file = $userFolder->newFile('facts_test.pdf');
+		$file->putContent($pdf);
+		$file->touch(1789222408);
+		$this->createdUserNodes[] = $file;
 
 		$facts = MobileSheetsFileFacts::fromNode($file);
 
@@ -49,10 +67,12 @@ final class MobileSheetsFileFactsTest extends TestCase {
 
 	/** A plain Node has no readable content: the derived fields fall back safely. */
 	public function testFromNodeToleratesANodeWithoutContent(): void {
-		$node = $this->createMock(Node::class);
-		$node->method('getMTime')->willReturn(1789222409);
+		$userFolder = $this->rootFolder->getUserFolder('admin');
+		$folder = $userFolder->newFolder('facts_test_dir');
+		$folder->touch(1789222409);
+		$this->createdUserNodes[] = $folder;
 
-		$facts = MobileSheetsFileFacts::fromNode($node);
+		$facts = MobileSheetsFileFacts::fromNode($folder);
 
 		self::assertSame(0, $facts->fileHash);
 		self::assertSame(0, $facts->fileSize);
