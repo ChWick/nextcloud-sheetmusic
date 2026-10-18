@@ -7,6 +7,7 @@ namespace OCA\SheetMusic\Service;
 use OCA\SheetMusic\Db\InternalEntity;
 use OCA\SheetMusic\Db\InternalEntityMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
+use OCA\SheetMusic\Db\LibraryData;
 use OCA\SheetMusic\Db\LibraryMapper;
 use OCP\IUser;
 use Psr\Log\LoggerInterface;
@@ -67,7 +68,7 @@ class EntityService {
 	/**
 	 * @param 'composers'|'books'|'collections'|'artists'|'genres'|'keys'|'customgroups'|'years'|'signatures'|'sourcetypes'|'instruments' $entityType
 	 */
-	public function deleteEntity(IUser $user, int $libraryId, string $entityType, int $id): ?array {
+	public function deleteEntity(IUser $user, int $libraryId, string $entityType, int $id): ?LibraryData {
 		$library = $this->libraryMapper->findForUser($user->getUID(), $libraryId);
 		if ($library === null) {
 			return null;
@@ -96,7 +97,7 @@ class EntityService {
 	 * Merge duplicate entity records into a canonical record and re-link attached songs.
 	 *
 	 * @param list<int> $duplicateIds
-	 * @return array{mergedCount: int, libraryData: array}|null
+	 * @return array{mergedCount: int, libraryData: LibraryData}|null
 	 */
 	public function mergeEntities(IUser $user, int $libraryId, string $entityType, int $keepId, array $duplicateIds): ?array {
 		if ($keepId <= 0 || $duplicateIds === []) {

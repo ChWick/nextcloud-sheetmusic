@@ -61,7 +61,7 @@ class SongMapper extends AbstractDatabaseMapper {
 	 *     signatures: list<MobileSheetsSignature>
 	 * }
 	 */
-	public function findLibraryData(string $databasePath): array {
+	public function findLibraryData(string $databasePath): LibraryData {
 		$database = $this->openConnection($databasePath);
 
 		$composers = [];
@@ -466,20 +466,20 @@ class SongMapper extends AbstractDatabaseMapper {
 			}
 		}
 
-		return [
-			'songs' => $songs,
-			'composers' => $composers,
-			'books' => $books,
-			'collections' => $collections,
-			'artists' => $artists,
-			'genres' => $genres,
-			'keys' => $keys,
-			'customGroups' => $customGroups,
-			'years' => $years,
-			'signatures' => $signatures,
-			'sourceTypes' => $sourceTypes,
-			'instruments' => $instruments,
-		];
+		return new LibraryData(
+			songs: $songs,
+			composers: $composers,
+			books: $books,
+			collections: $collections,
+			artists: $artists,
+			genres: $genres,
+			keys: $keys,
+			customGroups: $customGroups,
+			years: $years,
+			signatures: $signatures,
+			sourceTypes: $sourceTypes,
+			instruments: $instruments,
+		);
 	}
 
 	/**

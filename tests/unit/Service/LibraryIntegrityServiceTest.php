@@ -11,12 +11,14 @@ namespace Service;
 
 use OCA\SheetMusic\Db\InternalEntity;
 use OCA\SheetMusic\Db\InternalEntityMapper;
+use OCA\SheetMusic\Db\InternalLibrary;
 use OCA\SheetMusic\Db\InternalMiscMapper;
 use OCA\SheetMusic\Db\InternalSong;
 use OCA\SheetMusic\Db\InternalSongAttributeMapper;
 use OCA\SheetMusic\Db\InternalSongFile;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
+use OCA\SheetMusic\Db\LibraryData;
 use OCA\SheetMusic\Db\LibraryMapper;
 use OCA\SheetMusic\Db\SongFileMapper;
 use OCA\SheetMusic\Service\FileManager;
@@ -73,7 +75,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 				$internalSongMapper = $this->createMock(InternalSongMapper::class);
 				$songMapper = $this->createSongMapper();
 				$internalSongMapper->method('findLibraryData')->willReturnCallback(function () use ($songMapper, $databasePath) {
-					return ['songs' => $songMapper->findSongs($databasePath)];
+					return new LibraryData(songs: $songMapper->findSongs($databasePath));
 				});
 				$internalSongMapper->method('findSong')->willReturnCallback(function (int $songId) use ($songMapper, $databasePath) {
 					return $songMapper->findSong($databasePath, $songId);
@@ -644,11 +646,12 @@ final class LibraryIntegrityServiceTest extends TestCase {
 
 	public function testCheckIntegrityWhenAutoPathsDisabledReportsNoNamingOrOrphanIssues(): void {
 		$libraryMapper = $this->createMock(\OCA\SheetMusic\Db\LibraryMapper::class);
-		$libraryMapper->method('findForUser')->with('user1', 1)->willReturn([
-			'id' => 1,
-			'path' => '/Noten/library.db',
-			'autoPaths' => false,
-		]);
+		$libraryMapper->method('findForUser')->with('user1', 1)->willReturn(new InternalLibrary(
+			id: 1,
+			userId: 'user1',
+			path: '/Noten/library.db',
+			autoPaths: false,
+		));
 		$libraryService = new LibraryService(
 			$libraryMapper,
 			$this->createMock(IRootFolder::class),
@@ -743,10 +746,11 @@ final class LibraryIntegrityServiceTest extends TestCase {
 			if ($found !== null) {
 				return $found;
 			}
-			return [
-				'id' => $id,
-				'path' => '/Noten/library.db',
-			];
+			return new InternalLibrary(
+				id: $id,
+				userId: 'user1',
+				path: '/Noten/library.db',
+			);
 		});
 		$libraryMapper->method('touch')->willReturnCallback(function (int $id) {
 			$this->libraryMapper->touch($id);
@@ -756,7 +760,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 			$songMapper = $this->createSongMapper();
 			$internalSongMapper = $this->createMock(InternalSongMapper::class);
 			$internalSongMapper->method('findLibraryData')->willReturnCallback(function () use ($songMapper, $databasePath) {
-				return ['songs' => $songMapper->findSongs($databasePath)];
+				return new LibraryData(songs: $songMapper->findSongs($databasePath));
 			});
 			$internalSongMapper->method('findSong')->willReturnCallback(function (int $songId) use ($songMapper, $databasePath) {
 				return $songMapper->findSong($databasePath, $songId);

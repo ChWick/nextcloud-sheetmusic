@@ -149,9 +149,12 @@ class LibraryMapper {
 	}
 
 	/**
-	 * @param array<string, mixed> $library
+	 * @param InternalLibrary|array<string, mixed> $library
 	 */
-	public static function autoPathsOf(array $library): bool {
+	public static function autoPathsOf(InternalLibrary|array $library): bool {
+		if ($library instanceof InternalLibrary) {
+			return $library->autoPaths;
+		}
 		if (array_key_exists('autoPaths', $library)) {
 			return (bool)$library['autoPaths'];
 		}
@@ -162,9 +165,12 @@ class LibraryMapper {
 	}
 
 	/**
-	 * @param array<string, mixed> $library
+	 * @param InternalLibrary|array<string, mixed> $library
 	 */
-	public static function autoPdfMetadataOf(array $library): bool {
+	public static function autoPdfMetadataOf(InternalLibrary|array $library): bool {
+		if ($library instanceof InternalLibrary) {
+			return $library->autoPdfMetadata;
+		}
 		if (array_key_exists('autoPdfMetadata', $library)) {
 			return (bool)$library['autoPdfMetadata'];
 		}

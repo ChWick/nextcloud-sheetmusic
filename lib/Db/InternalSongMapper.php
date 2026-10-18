@@ -374,7 +374,7 @@ class InternalSongMapper {
 	 *     instruments: list<MobileSheetsCustomGroup>
 	 * }
 	 */
-	public function findLibraryData(int $libraryId, ?IUser $user = null): array {
+	public function findLibraryData(int $libraryId, ?IUser $user = null): LibraryData {
 		$entities = $this->entityMapper !== null
 			? $this->entityMapper->findAllForLibrary($libraryId)
 			: [];
@@ -508,19 +508,19 @@ class InternalSongMapper {
 			);
 		}
 
-		return [
-			'songs' => $resultSongs,
-			'composers' => $composers,
-			'books' => $books,
-			'collections' => $collections,
-			'artists' => $artists,
-			'genres' => $genres,
-			'keys' => $keys,
-			'customGroups' => $customGroups,
-			'years' => $years,
-			'signatures' => $signatures,
-			'sourceTypes' => $sourceTypes,
-			'instruments' => $instruments,
-		];
+		return new LibraryData(
+			songs: $resultSongs,
+			composers: $composers,
+			books: $books,
+			collections: $collections,
+			artists: $artists,
+			genres: $genres,
+			keys: $keys,
+			customGroups: $customGroups,
+			years: $years,
+			signatures: $signatures,
+			sourceTypes: $sourceTypes,
+			instruments: $instruments,
+		);
 	}
 }

@@ -6,6 +6,7 @@ namespace Controller;
 
 use OCA\SheetMusic\AppInfo\Application;
 use OCA\SheetMusic\Controller\ApiController;
+use OCA\SheetMusic\Db\LibraryData;
 use OCA\SheetMusic\Db\MobileSheetsSong;
 use OCA\SheetMusic\Service\EntityService;
 use OCA\SheetMusic\Service\LibraryIntegrityService;
@@ -86,14 +87,14 @@ final class ApiTest extends TestCase {
 		$songFileService = $this->createMock(SongFileService::class);
 		$songFileService->expects($this->once())
 			->method('attachNextcloudFile')
-			->willReturn(['songs' => []]);
+			->willReturn(new LibraryData(songs: []));
 
 		$controller = $this->createController(songFileService: $songFileService);
 
 		$response = $controller->attachNextcloudFile(42, 7, '/Music/T-Pen 2_QG.pdf', 'copy');
 
 		$this->assertEquals(Http::STATUS_OK, $response->getStatus());
-		$this->assertEquals(['songs' => []], $response->getData());
+		$this->assertEquals(new LibraryData(songs: []), $response->getData());
 	}
 
 	public function testAttachNextcloudFileReturnsNotFoundWhenServiceFails(): void {
@@ -117,7 +118,7 @@ final class ApiTest extends TestCase {
 		$songFileService = $this->createMock(SongFileService::class);
 		$songFileService->expects($this->once())
 			->method('deleteSongFile')
-			->willReturn(['songs' => []]);
+			->willReturn(new LibraryData(songs: []));
 
 		$controller = $this->createController(songFileService: $songFileService);
 
@@ -143,7 +144,7 @@ final class ApiTest extends TestCase {
 		$songFileService = $this->createMock(SongFileService::class);
 		$songFileService->expects($this->once())
 			->method('detachSongFile')
-			->willReturn(['songs' => []]);
+			->willReturn(new LibraryData(songs: []));
 
 		$controller = $this->createController(songFileService: $songFileService);
 
@@ -202,7 +203,7 @@ final class ApiTest extends TestCase {
 		$songService = $this->createMock(SongService::class);
 		$songService->expects(self::once())
 			->method('createSong')
-			->willReturn(['createdSongId' => 42, 'songs' => [new MobileSheetsSong(42, 'New Song')]]);
+			->willReturn(new LibraryData(songs: [new MobileSheetsSong(42, 'New Song')], createdSongId: 42));
 
 		$controller = $this->createController(songService: $songService);
 
@@ -254,7 +255,7 @@ final class ApiTest extends TestCase {
 		$songService = $this->createMock(SongService::class);
 		$songService->expects($this->once())
 			->method('deleteSong')
-			->willReturn(['songs' => []]);
+			->willReturn(new LibraryData(songs: []));
 
 		$controller = $this->createController(songService: $songService);
 
@@ -268,7 +269,7 @@ final class ApiTest extends TestCase {
 		$songService = $this->createMock(SongService::class);
 		$songService->expects($this->once())
 			->method('deleteSong')
-			->willReturn(['songs' => []]);
+			->willReturn(new LibraryData(songs: []));
 
 		$controller = $this->createController(songService: $songService);
 
@@ -303,14 +304,14 @@ final class ApiTest extends TestCase {
 		$entityService = $this->createMock(EntityService::class);
 		$entityService->expects($this->once())
 			->method('deleteEntity')
-			->willReturn(['composers' => []]);
+			->willReturn(new LibraryData(composers: []));
 
 		$controller = $this->createController(entityService: $entityService);
 
 		$response = $controller->deleteComposer(10, 7);
 
 		$this->assertEquals(Http::STATUS_OK, $response->getStatus());
-		$this->assertEquals(['composers' => []], $response->getData());
+		$this->assertEquals(new LibraryData(composers: []), $response->getData());
 	}
 
 	public function testDeleteEntityOfAnUnknownEntityIsNotFound(): void {
@@ -352,10 +353,10 @@ final class ApiTest extends TestCase {
 
 	public function testGetSongsReturnsTheLibraryData(): void {
 		$songService = $this->createMock(SongService::class);
-		$songService->method('getSongs')->willReturn([
-			'songs' => [],
-			'sourceTypes' => [],
-		]);
+		$songService->method('getSongs')->willReturn(new LibraryData(
+			songs: [],
+			sourceTypes: [],
+		));
 
 		$controller = $this->createController(songService: $songService);
 
@@ -395,7 +396,7 @@ final class ApiTest extends TestCase {
 		$songService = $this->createMock(SongService::class);
 		$songService->expects(self::once())
 			->method('updateSong')
-			->willReturn(['songs' => []]);
+			->willReturn(new LibraryData(songs: []));
 
 		$controller = $this->createController(songService: $songService);
 
@@ -429,14 +430,14 @@ final class ApiTest extends TestCase {
 		$songService = $this->createMock(SongService::class);
 		$songService->expects(self::once())
 			->method('updateSong')
-			->willReturn(['songs' => []]);
+			->willReturn(new LibraryData(songs: []));
 
 		$controller = $this->createController(songService: $songService);
 
 		$response = $controller->updateSong(1, 7, 'After', [10], [100], [1000], [200]);
 
 		$this->assertEquals(Http::STATUS_OK, $response->getStatus());
-		$this->assertEquals(['songs' => []], $response->getData());
+		$this->assertEquals(new LibraryData(songs: []), $response->getData());
 	}
 
 	public function testCreateEntityEndpointsRejectMissingValues(): void {
@@ -474,7 +475,7 @@ final class ApiTest extends TestCase {
 		$entityService->expects(self::once())
 			->method('deleteEntity')
 			->with($this->anything(), 7, 'composers', 10)
-			->willReturn(['composers' => []]);
+			->willReturn(new LibraryData(composers: []));
 
 		$controller = $this->createController(entityService: $entityService);
 

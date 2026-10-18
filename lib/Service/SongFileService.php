@@ -8,6 +8,7 @@ use OCA\SheetMusic\Db\InternalEntity;
 use OCA\SheetMusic\Db\InternalSongFile;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
+use OCA\SheetMusic\Db\LibraryData;
 use OCA\SheetMusic\Db\LibraryMapper;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
@@ -72,7 +73,7 @@ class SongFileService {
 		}
 	}
 
-	public function uploadSongFile(IUser $user, int $libraryId, int $songId, ?array $fileInfo): ?array {
+	public function uploadSongFile(IUser $user, int $libraryId, int $songId, ?array $fileInfo): ?LibraryData {
 		if ($fileInfo === null || !isset($fileInfo['tmp_name'])) {
 			throw new \InvalidArgumentException('No file uploaded');
 		}
@@ -110,7 +111,7 @@ class SongFileService {
 		int $songId,
 		string $sourcePath,
 		string $action = 'copy',
-	): ?array {
+	): ?LibraryData {
 		if ($sourcePath === '') {
 			throw new \InvalidArgumentException('Source path cannot be empty');
 		}
@@ -150,7 +151,7 @@ class SongFileService {
 		return $this->internalSongMapper->findLibraryData($libraryId, $user);
 	}
 
-	public function deleteSongFile(IUser $user, int $libraryId, int $songId, int $fileId): ?array {
+	public function deleteSongFile(IUser $user, int $libraryId, int $songId, int $fileId): ?LibraryData {
 		$fileRecord = $this->internalSongFileMapper->findById($fileId);
 		if ($fileRecord !== null && ($songId <= 0 || $fileRecord->songId === $songId)) {
 			$targetFileId = $fileRecord->fileId;
@@ -181,7 +182,7 @@ class SongFileService {
 		return null;
 	}
 
-	public function detachSongFile(IUser $user, int $libraryId, int $songId, int $fileId): ?array {
+	public function detachSongFile(IUser $user, int $libraryId, int $songId, int $fileId): ?LibraryData {
 		try {
 			$this->internalSongFileMapper->delete($fileId);
 			$this->libraryMapper->touch($libraryId);

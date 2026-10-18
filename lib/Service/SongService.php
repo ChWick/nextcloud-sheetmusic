@@ -9,6 +9,7 @@ use OCA\SheetMusic\Db\InternalEntityMapper;
 use OCA\SheetMusic\Db\InternalSong;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
+use OCA\SheetMusic\Db\LibraryData;
 use OCA\SheetMusic\Db\LibraryMapper;
 use OCP\Files\IRootFolder;
 use OCP\IUser;
@@ -29,7 +30,7 @@ class SongService {
 	) {
 	}
 
-	public function getSongs(IUser $user, int $libraryId): ?array {
+	public function getSongs(IUser $user, int $libraryId): ?LibraryData {
 		try {
 			return $this->internalSongMapper->findLibraryData($libraryId, $user);
 		} catch (\Throwable $e) {
@@ -70,7 +71,7 @@ class SongService {
 		string $catalogNumber = '',
 		string $songNumber = '',
 		array $instrumentIds = [],
-	): ?array {
+	): ?LibraryData {
 		$title = trim($title);
 		if ($title === '') {
 			return null;
@@ -111,7 +112,10 @@ class SongService {
 
 			$this->libraryMapper->touch($libraryId);
 
-			return ['createdSongId' => $songId] + $this->internalSongMapper->findLibraryData($libraryId, $user);
+			$data = $this->internalSongMapper->findLibraryData($libraryId, $user);
+			$data->createdSongId = $songId;
+
+			return $data;
 		} catch (\Throwable $e) {
 			$this->logger->error('Could not create song in SheetMusic library', [
 				'exception' => $e,
@@ -150,7 +154,7 @@ class SongService {
 		string $catalogNumber = '',
 		string $songNumber = '',
 		array $instrumentIds = [],
-	): ?array {
+	): ?LibraryData {
 		if ($title === '') {
 			return null;
 		}
@@ -218,7 +222,7 @@ class SongService {
 		?array $signatures = null,
 		?array $sourceTypes = null,
 		?array $instruments = null,
-	): ?array {
+	): ?LibraryData {
 		if (empty($songIds)) {
 			return null;
 		}
@@ -254,7 +258,7 @@ class SongService {
 		}
 	}
 
-	public function deleteSong(IUser $user, int $songId, int $libraryId, bool $deleteFiles = true): ?array {
+	public function deleteSong(IUser $user, int $songId, int $libraryId, bool $deleteFiles = true): ?LibraryData {
 		try {
 			$files = $this->internalSongFileMapper->findAllForSong($songId);
 			if ($deleteFiles) {
@@ -288,7 +292,7 @@ class SongService {
 	 * @param list<int> $songIds
 	 * @return array<string, mixed>|null
 	 */
-	public function batchDeleteSongs(IUser $user, int $libraryId, array $songIds, bool $deleteFiles = true): ?array {
+	public function batchDeleteSongs(IUser $user, int $libraryId, array $songIds, bool $deleteFiles = true): ?LibraryData {
 		if ($songIds === []) {
 			return $this->internalSongMapper->findLibraryData($libraryId, $user);
 		}
@@ -358,7 +362,7 @@ class SongService {
 	 *     sortTitle?: string,
 	 * } $merged
 	 */
-	public function mergeSong(IUser $user, int $libraryId, int $keepId, int $droppedId, array $merged): ?array {
+	public function mergeSong(IUser $user, int $libraryId, int $keepId, int $droppedId, array $merged): ?LibraryData {
 		try {
 			if (!empty($merged['title'])) {
 				$this->updateSong(
@@ -406,7 +410,7 @@ class SongService {
 	 * Detaches requested files, updates metadata for both songs, and verifies via LibraryIntegrityService
 	 * that no duplicate physical paths or naming rule conflicts remain between them.
 	 */
-	public function resolveBothSongs(IUser $user, int $libraryId, array $songAData, array $songBData): ?array {
+	public function resolveBothSongs(IUser $user, int $libraryId, array $songAData, array $songBData): LibraryData|array|null {
 		$songAId = (int)($songAData['id'] ?? 0);
 		$songBId = (int)($songBData['id'] ?? 0);
 		if ($songAId <= 0 || $songBId <= 0) {

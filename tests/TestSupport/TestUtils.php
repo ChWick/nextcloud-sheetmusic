@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace TestSupport;
 
+use OCA\SheetMusic\Db\InternalLibrary;
 use OCA\SheetMusic\Db\LibraryMapper;
 use OCA\SheetMusic\Db\SongMapper;
 use OCA\SheetMusic\Service\LibraryService;
@@ -44,7 +45,11 @@ trait TestUtils {
 		$libraryMapper = $this->createMock(LibraryMapper::class);
 		$libraryMapper->method('findForUser')
 			->with($userId, $libraryId)
-			->willReturn(['id' => $libraryId, 'path' => $libraryPath]);
+			->willReturn(new InternalLibrary(
+				id: $libraryId,
+				userId: $userId,
+				path: $libraryPath,
+			));
 
 		$storage = $this->createMock(IStorage::class);
 		$storage->method('getLocalFile')->willReturn($databasePath);

@@ -9,8 +9,10 @@ declare(strict_types=1);
 
 namespace Service;
 
+use OCA\SheetMusic\Db\InternalLibrary;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
+use OCA\SheetMusic\Db\LibraryData;
 use OCA\SheetMusic\Db\LibraryMapper;
 use OCA\SheetMusic\Db\MobileSheetsArtist;
 use OCA\SheetMusic\Db\MobileSheetsBook;
@@ -151,14 +153,16 @@ final class FileManagerTest extends TestCase {
 		});
 
 		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->method('findById')->with(1)->willReturn([
-			'id' => 1,
-			'path' => '/Noten/mobilesheets.db',
-		]);
-		$libraryMapper->method('findForUser')->willReturn([
-			'id' => 1,
-			'path' => '/Noten/mobilesheets.db',
-		]);
+		$libraryMapper->method('findById')->with(1)->willReturn(new InternalLibrary(
+			id: 1,
+			userId: self::UID,
+			path: '/Noten/mobilesheets.db',
+		));
+		$libraryMapper->method('findForUser')->willReturn(new InternalLibrary(
+			id: 1,
+			userId: self::UID,
+			path: '/Noten/mobilesheets.db',
+		));
 
 		return new FileManager(
 			$libraryMapper,
@@ -1255,7 +1259,11 @@ final class FileManagerTest extends TestCase {
 		$rootFolder->method('getUserFolder')->with(self::UID)->willReturn($userFolder);
 
 		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->method('findById')->with(1)->willReturn(['id' => 1, 'path' => '/Noten/mobilesheets.db']);
+		$libraryMapper->method('findById')->with(1)->willReturn(new InternalLibrary(
+			id: 1,
+			userId: self::UID,
+			path: '/Noten/mobilesheets.db',
+		));
 
 		foreach ($songs as $song) {
 			$this->storeSong($song);
@@ -1266,7 +1274,7 @@ final class FileManagerTest extends TestCase {
 			return $this->songMapper->findSong($this->databaseFixture['path'], $songId);
 		});
 		$internalSongMapper->method('findLibraryData')->willReturnCallback(function (int $libraryId, IUser $user) {
-			return ['songs' => $this->songMapper->findSongs($this->databaseFixture['path'])];
+			return new LibraryData(songs: $this->songMapper->findSongs($this->databaseFixture['path']));
 		});
 
 		$internalSongFileMapper = $this->createMock(InternalSongFileMapper::class);
