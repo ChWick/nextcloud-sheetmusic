@@ -21,11 +21,11 @@ class LibraryMapper {
 	}
 
 	/**
-	 * @return list<array{id: int, path: string, autoPaths: bool, autoPdfMetadata: bool}>
+	 * @return list<InternalLibrary>
 	 */
 	public function findAllForUser(string $userId): array {
 		$qb = $this->db->getQueryBuilder();
-		$qb->select('id', 'path', 'auto_paths', 'auto_pdf_metadata')
+		$qb->select('*')
 			->from(self::TABLE_NAME)
 			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId, IQueryBuilder::PARAM_STR)))
 			->orderBy('path', 'ASC');
@@ -33,19 +33,14 @@ class LibraryMapper {
 		$result = $qb->executeQuery();
 		$results = [];
 		while ($row = $result->fetchAssociative()) {
-			$results[] = [
-				'id' => (int)$row['id'],
-				'path' => (string)$row['path'],
-				'autoPaths' => self::autoPathsOf($row),
-				'autoPdfMetadata' => self::autoPdfMetadataOf($row),
-			];
+			$results[] = InternalLibrary::fromRow($row);
 		}
 		$result->closeCursor();
 
 		return $results;
 	}
 
-	public function findById(int $libraryId): ?array {
+	public function findById(int $libraryId): ?InternalLibrary {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')
 			->from(self::TABLE_NAME)
@@ -53,12 +48,11 @@ class LibraryMapper {
 
 		$row = $qb->executeQuery()->fetch();
 
-		return $row === false ? null : $row;
+		return $row === false ? null : InternalLibrary::fromRow($row);
 	}
 
 	public function findModelById(int $libraryId): ?InternalLibrary {
-		$row = $this->findById($libraryId);
-		return $row === null ? null : InternalLibrary::fromRow($row);
+		return $this->findById($libraryId);
 	}
 
 	public function touch(int $libraryId, ?int $timestamp = null): void {
@@ -113,11 +107,11 @@ class LibraryMapper {
 	}
 
 	/**
-	 * @return array{id: int, path: string, autoPaths: bool, autoPdfMetadata: bool}|null
+	 * @return InternalLibrary|null
 	 */
-	public function findForUser(string $userId, int $id): ?array {
+	public function findForUser(string $userId, int $id): ?InternalLibrary {
 		$qb = $this->db->getQueryBuilder();
-		$qb->select('id', 'path', 'auto_paths', 'auto_pdf_metadata')
+		$qb->select('*')
 			->from(self::TABLE_NAME)
 			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId, IQueryBuilder::PARAM_STR)))
 			->andWhere($qb->expr()->eq('id', $qb->createNamedParameter($id, IQueryBuilder::PARAM_INT)))
@@ -129,12 +123,7 @@ class LibraryMapper {
 			return null;
 		}
 
-		return [
-			'id' => (int)$row['id'],
-			'path' => (string)$row['path'],
-			'autoPaths' => self::autoPathsOf($row),
-			'autoPdfMetadata' => self::autoPdfMetadataOf($row),
-		];
+		return InternalLibrary::fromRow($row);
 	}
 
 

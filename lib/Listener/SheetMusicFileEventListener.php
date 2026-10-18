@@ -153,10 +153,10 @@ class SheetMusicFileEventListener implements IEventListener {
 		$relToUser = implode('/', array_slice($parts, 2));
 
 		$libraries = $this->libraryMapper->findAllForUser($userId);
-		foreach ($libraries as $libData) {
-			$cleanLibPath = trim($libData['path'], '/');
+		foreach ($libraries as $lib) {
+			$cleanLibPath = trim($lib->path, '/');
 			if ($cleanLibPath === '' || str_starts_with($relToUser, $cleanLibPath . '/') || $relToUser === $cleanLibPath) {
-				return $this->libraryMapper->findModelById($libData['id']);
+				return $lib;
 			}
 		}
 

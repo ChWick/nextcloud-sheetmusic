@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OCA\SheetMusic\Service;
 
+use OCA\SheetMusic\Db\InternalLibrary;
 use OCA\SheetMusic\Db\LibraryMapper;
 use OCP\Files\IRootFolder;
 use Psr\Log\LoggerInterface;
@@ -25,7 +26,7 @@ class LibraryService {
 			return null;
 		}
 
-		return (string)($library['path'] ?? '');
+		return $library->path;
 	}
 
 	/**
@@ -77,7 +78,7 @@ class LibraryService {
 			return null;
 		}
 
-		$updatedAt = (int)($library['updated_at'] ?? 0);
+		$updatedAt = $library->updatedAt;
 		if (!file_exists($cacheFile) || filemtime($cacheFile) < $updatedAt) {
 			try {
 				$this->exporter->exportToFile($libraryId, $cacheFile, $userId);
@@ -217,31 +218,20 @@ class LibraryService {
 
 	public function isAutoPathsEnabled(string $userId, int $libraryId): bool {
 		$library = $this->libraryMapper->findForUser($userId, $libraryId);
-		if ($library === null) {
-			return true;
-		}
-
-		return LibraryMapper::autoPathsOf($library);
+		return $library?->autoPaths ?? true;
 	}
 
 	public function isAutoPdfMetadataEnabled(string $userId, int $libraryId): bool {
 		$library = $this->libraryMapper->findForUser($userId, $libraryId);
-		if ($library === null) {
-			return true;
-		}
-
-		return LibraryMapper::autoPdfMetadataOf($library);
+		return $library?->autoPdfMetadata ?? true;
 	}
 
-	/**
-	 * @return array{id: int, path: string, autoPaths: bool, autoPdfMetadata: bool}|null
-	 */
 	public function updateSettings(
 		string $userId,
 		int $libraryId,
 		?bool $autoPaths = null,
 		?bool $autoPdfMetadata = null,
-	): ?array {
+	): ?InternalLibrary {
 		$this->libraryMapper->setSettingsForUser($userId, $libraryId, $autoPaths, $autoPdfMetadata);
 		return $this->libraryMapper->findForUser($userId, $libraryId);
 	}
