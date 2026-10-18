@@ -445,7 +445,7 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		const saveBtn = wrapper.findAll('button').find((b) => b.text().includes('Save Rotations'))
 		await saveBtn?.trigger('click')
 		await flushPromises()
-		await new Promise((r) => setTimeout(r, 50))
+		await new Promise((r) => setTimeout(r, 150))
 		await flushPromises()
 
 		// Original file updated in place, preserving version history and file ID
@@ -538,7 +538,7 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		await splitSubmitBtn?.trigger('click')
 
 		await flushPromises()
-		await new Promise((r) => setTimeout(r, 50))
+		await new Promise((r) => setTimeout(r, 150))
 		await flushPromises()
 
 		expect(dialogs.showError).toHaveBeenCalledWith(expect.stringContaining('Failed to create target folder in Nextcloud storage'))
@@ -585,7 +585,7 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 
 		await saveCropsBtn?.trigger('click')
 		await flushPromises()
-		await new Promise((r) => setTimeout(r, 50))
+		await new Promise((r) => setTimeout(r, 150))
 		await flushPromises()
 
 		// Verify replacement cropped PDF was uploaded
@@ -635,7 +635,7 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		const saveCropsBtn = wrapper.findAll('button').find((b) => b.text().includes('Save Crops'))
 		await saveCropsBtn?.trigger('click')
 		await flushPromises()
-		await new Promise((r) => setTimeout(r, 50))
+		await new Promise((r) => setTimeout(r, 150))
 		await flushPromises()
 
 		expect(uploadedFiles).toHaveLength(1)
@@ -695,7 +695,7 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 
 		await saveBtn?.trigger('click')
 		await flushPromises()
-		await new Promise((r) => setTimeout(r, 50))
+		await new Promise((r) => setTimeout(r, 150))
 		await flushPromises()
 
 		// 5. Verify single upload containing BOTH rotation and crop applied
@@ -750,7 +750,7 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 
 		await saveBtn?.trigger('click')
 		await flushPromises()
-		await new Promise((r) => setTimeout(r, 50))
+		await new Promise((r) => setTimeout(r, 150))
 		await flushPromises()
 
 		// Verify uploaded PDF has 7 pages
@@ -831,7 +831,7 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		expect(saveBtn?.attributes('disabled')).toBeUndefined()
 		await saveBtn?.trigger('click')
 		await flushPromises()
-		await new Promise((r) => setTimeout(r, 50))
+		await new Promise((r) => setTimeout(r, 150))
 		await flushPromises()
 
 		// 5. Verify single upload containing deletions, rotations, and crops
@@ -886,7 +886,7 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 			gap: 12,
 		})
 		await flushPromises()
-		await new Promise((r) => setTimeout(r, 60))
+		await new Promise((r) => setTimeout(r, 150))
 		await flushPromises()
 
 		// 3. Document should now have 7 pages (pages 1 and 2 joined into page 1)
@@ -899,7 +899,7 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 
 		await saveBtn?.trigger('click')
 		await flushPromises()
-		await new Promise((r) => setTimeout(r, 60))
+		await new Promise((r) => setTimeout(r, 150))
 		await flushPromises()
 
 		// 5. Verify single uploaded PDF with 7 pages
@@ -948,7 +948,7 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		expect(saveBtn).toBeDefined()
 		await saveBtn?.trigger('click')
 		await flushPromises()
-		await new Promise((r) => setTimeout(r, 60))
+		await new Promise((r) => setTimeout(r, 150))
 		await flushPromises()
 
 		expect(uploadedFiles).toHaveLength(1)
@@ -1004,7 +1004,7 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		expect(saveBtn).toBeDefined()
 		await saveBtn?.trigger('click')
 		await flushPromises()
-		await new Promise((r) => setTimeout(r, 60))
+		await new Promise((r) => setTimeout(r, 150))
 		await flushPromises()
 
 		// Verify uploaded PDF
@@ -1062,7 +1062,7 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		const saveBtn = wrapper.findAll('button').find((b) => b.text().includes('Save Changes') || b.text().includes('Save Rotations'))
 		await saveBtn?.trigger('click')
 		await flushPromises()
-		await new Promise((r) => setTimeout(r, 60))
+		await new Promise((r) => setTimeout(r, 150))
 		await flushPromises()
 
 		expect(uploadedFiles).toHaveLength(1)
@@ -1095,7 +1095,7 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		const saveBtn = wrapper.findAll('button').find((b) => b.text().includes('Save Changes') || b.text().includes('Save Rotations'))
 		await saveBtn?.trigger('click')
 		await flushPromises()
-		await new Promise((r) => setTimeout(r, 60))
+		await new Promise((r) => setTimeout(r, 150))
 		await flushPromises()
 
 		expect(uploadedFiles).toHaveLength(1)
@@ -1167,7 +1167,7 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		await saveBtn?.trigger('click')
 		await flushPromises()
 		for (let attempt = 0; attempt < 50 && wrapper.text().includes('Saving…'); attempt++) {
-			await new Promise((r) => setTimeout(r, 50))
+			await new Promise((r) => setTimeout(r, 150))
 			await flushPromises()
 		}
 
