@@ -199,7 +199,7 @@ final class InternalSongMapperTest extends TestCase {
 
 		$songs = $this->mapper->findSongsWithoutFiles($this->libraryId);
 		self::assertCount(1, $songs);
-		self::assertSame((int)$emptySong->id, $songs[0]['id']);
-		self::assertSame('Empty Song', $songs[0]['title']);
+		self::assertSame((int)$emptySong->id, $songs[0]->id);
+		self::assertSame('Empty Song', $songs[0]->title);
 	}
 }

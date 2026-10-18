@@ -253,9 +253,9 @@ final class InternalSongFileMapperTest extends TestCase {
 		// Now file is an orphan
 		$orphans = $this->songFileMapper->findOrphanSongFiles($this->libraryId);
 		self::assertCount(1, $orphans);
-		self::assertSame((int)$file->id, $orphans[0]['id']);
-		self::assertSame((int)$this->song->id, $orphans[0]['songId']);
-		self::assertSame(999, $orphans[0]['fileId']);
+		self::assertSame((int)$file->id, $orphans[0]->id);
+		self::assertSame((int)$this->song->id, $orphans[0]->songId);
+		self::assertSame(999, $orphans[0]->fileId);
 
 		// Remove orphan song files (soft deletes the file records)
 		$removed = $this->songFileMapper->removeOrphanSongFiles($this->libraryId);

@@ -12,6 +12,8 @@ namespace OCA\SheetMusic\Service;
 use OCA\SheetMusic\Db\DuplicateSongEntityAssignment;
 use OCA\SheetMusic\Db\InternalEntity;
 use OCA\SheetMusic\Db\OrphanSongEntityAssignment;
+use OCA\SheetMusic\Db\OrphanSongFile;
+use OCA\SheetMusic\Db\SongWithoutFiles;
 use OCA\SheetMusic\Db\InternalEntityMapper;
 use OCA\SheetMusic\Db\InternalMiscMapper;
 use OCA\SheetMusic\Db\InternalSongAttributeMapper;
@@ -399,9 +401,9 @@ class LibraryIntegrityService {
 			$issues[] = new IntegrityIssue(
 				type: IntegrityIssue::TYPE_SONG_WITHOUT_FILES,
 				severity: IntegrityIssue::SEVERITY_WARNING,
-				message: sprintf('Song "%s" (ID %d) has no associated files.', $row['title'], $row['id']),
-				songId: (int)$row['id'],
-				songTitle: (string)$row['title'],
+				message: sprintf('Song "%s" (ID %d) has no associated files.', $row->title, $row->id),
+				songId: $row->id,
+				songTitle: $row->title,
 				fixable: false,
 			);
 		}
@@ -418,7 +420,7 @@ class LibraryIntegrityService {
 				fixable: true,
 				details: [
 					'count' => count($orphanSongFiles),
-					'files' => $orphanSongFiles,
+					'files' => array_map(static fn (OrphanSongFile $f): array => $f->toArray(), $orphanSongFiles),
 				],
 			);
 		}

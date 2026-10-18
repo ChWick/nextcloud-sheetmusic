@@ -329,7 +329,7 @@ class InternalSongMapper {
 	/**
 	 * Find active songs that have no active files attached.
 	 *
-	 * @return list<array{id: int, title: string, uuid: string}>
+	 * @return list<SongWithoutFiles>
 	 */
 	public function findSongsWithoutFiles(int $libraryId): array {
 		$qb = $this->db->getQueryBuilder();
@@ -347,11 +347,11 @@ class InternalSongMapper {
 		$result = $qb->executeQuery();
 		$songs = [];
 		while ($row = $result->fetchAssociative()) {
-			$songs[] = [
-				'id' => (int)$row['id'],
-				'title' => (string)$row['title'],
-				'uuid' => (string)$row['uuid'],
-			];
+			$songs[] = new SongWithoutFiles(
+				id: (int)$row['id'],
+				title: (string)$row['title'],
+				uuid: (string)$row['uuid'],
+			);
 		}
 		$result->closeCursor();
 

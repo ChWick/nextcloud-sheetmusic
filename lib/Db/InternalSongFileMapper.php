@@ -230,7 +230,7 @@ class InternalSongFileMapper {
 	/**
 	 * Find active file records whose song is deleted or does not exist in this library.
 	 *
-	 * @return list<array{id: int, songId: int, fileId: int, uuid: string}>
+	 * @return list<OrphanSongFile>
 	 */
 	public function findOrphanSongFiles(int $libraryId): array {
 		$qb = $this->db->getQueryBuilder();
@@ -245,12 +245,12 @@ class InternalSongFileMapper {
 		$result = $qb->executeQuery();
 		$orphans = [];
 		while ($row = $result->fetchAssociative()) {
-			$orphans[] = [
-				'id' => (int)$row['id'],
-				'songId' => (int)$row['song_id'],
-				'fileId' => (int)$row['file_id'],
-				'uuid' => (string)$row['uuid'],
-			];
+			$orphans[] = new OrphanSongFile(
+				id: (int)$row['id'],
+				songId: (int)$row['song_id'],
+				fileId: (int)$row['file_id'],
+				uuid: (string)$row['uuid'],
+			);
 		}
 		$result->closeCursor();
 
