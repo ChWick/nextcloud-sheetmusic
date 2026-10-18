@@ -136,7 +136,8 @@ class SongFileService {
 		// Explicitly capture previous version in Nextcloud files_versions before overwriting
 		if ($targetNode->getSize() > 0) {
 			$versionCaptured = false;
-			if (class_exists(\OCA\Files_Versions\Versions\IVersionManager::class) && \OC::$server->has(\OCA\Files_Versions\Versions\IVersionManager::class)) {
+			if ((interface_exists(\OCA\Files_Versions\Versions\IVersionManager::class) || class_exists(\OCA\Files_Versions\Versions\IVersionManager::class))
+				&& \OC::$server->has(\OCA\Files_Versions\Versions\IVersionManager::class)) {
 				try {
 					/** @var \OCA\Files_Versions\Versions\IVersionManager $versionManager */
 					$versionManager = \OC::$server->get(\OCA\Files_Versions\Versions\IVersionManager::class);
@@ -200,13 +201,23 @@ class SongFileService {
 			return [];
 		}
 
-		if (class_exists(\OCA\Files_Versions\Versions\IVersionManager::class) && \OC::$server->has(\OCA\Files_Versions\Versions\IVersionManager::class)) {
+		if ((interface_exists(\OCA\Files_Versions\Versions\IVersionManager::class) || class_exists(\OCA\Files_Versions\Versions\IVersionManager::class))
+			&& \OC::$server->has(\OCA\Files_Versions\Versions\IVersionManager::class)) {
 			try {
 				/** @var \OCA\Files_Versions\Versions\IVersionManager $versionManager */
 				$versionManager = \OC::$server->get(\OCA\Files_Versions\Versions\IVersionManager::class);
 				$versions = $versionManager->getVersionsForFile($user, $targetNode);
 				$result = [];
 				foreach ($versions as $v) {
+					try {
+						$stream = $versionManager->read($v);
+						if (is_resource($stream)) {
+							fclose($stream);
+						}
+					} catch (\Throwable) {
+						// Skip synthesized current file or unreadable version records
+						continue;
+					}
 					$revision = (int)$v->getRevisionId();
 					$result[] = [
 						'version' => (string)$revision,
@@ -217,6 +228,7 @@ class SongFileService {
 						'name' => (string)$v->getSourceFileName(),
 					];
 				}
+				usort($result, static fn ($a, $b) => $b['timestamp'] <=> $a['timestamp']);
 				return $result;
 			} catch (\Throwable $e) {
 				$this->logger->warning('Could not get versions via IVersionManager: ' . $e->getMessage(), [
@@ -231,6 +243,9 @@ class SongFileService {
 			$result = [];
 			foreach ($rawVersions as $key => $v) {
 				$revision = (int)($v['version'] ?? $key);
+				if ($revision === (int)$targetNode->getMtime()) {
+					continue;
+				}
 				$result[] = [
 					'version' => (string)$revision,
 					'revision' => $revision,
@@ -240,6 +255,7 @@ class SongFileService {
 					'name' => (string)($v['name'] ?? $targetNode->getName()),
 				];
 			}
+			usort($result, static fn ($a, $b) => $b['timestamp'] <=> $a['timestamp']);
 			return $result;
 		}
 
@@ -264,15 +280,41 @@ class SongFileService {
 			throw new \RuntimeException('Cannot determine relative path for file');
 		}
 
-		if (class_exists(\OCA\Files_Versions\Storage::class)) {
+		$rolledBack = false;
+		if ((interface_exists(\OCA\Files_Versions\Versions\IVersionManager::class) || class_exists(\OCA\Files_Versions\Versions\IVersionManager::class))
+			&& \OC::$server->has(\OCA\Files_Versions\Versions\IVersionManager::class)) {
+			try {
+				/** @var \OCA\Files_Versions\Versions\IVersionManager $versionManager */
+				$versionManager = \OC::$server->get(\OCA\Files_Versions\Versions\IVersionManager::class);
+				$versions = $versionManager->getVersionsForFile($user, $targetNode);
+				foreach ($versions as $v) {
+					if ((int)$v->getRevisionId() === (int)$revision) {
+						$versionManager->rollback($v);
+						$rolledBack = true;
+						break;
+					}
+				}
+			} catch (\Throwable $e) {
+				$this->logger->warning('Could not rollback version via IVersionManager: ' . $e->getMessage(), [
+					'exception' => $e,
+					'fileId' => $fileId,
+					'revision' => $revision,
+				]);
+			}
+		}
+
+		if (!$rolledBack && class_exists(\OCA\Files_Versions\Storage::class)) {
 			$userView = new \OC\Files\View('/' . $user->getUID());
 			\OCA\Files_Versions\Storage::createMissingDirectories($relativePath, $userView);
 			$success = \OCA\Files_Versions\Storage::rollback('/' . ltrim($relativePath, '/'), (int)$revision, $user);
 			if (!$success) {
 				throw new \RuntimeException('Failed to rollback file revision');
 			}
-		} else {
-			throw new \RuntimeException('Nextcloud files_versions app is not available');
+			$rolledBack = true;
+		}
+
+		if (!$rolledBack) {
+			throw new \RuntimeException('Failed to rollback file revision');
 		}
 
 		$this->libraryMapper->touch($libraryId);
