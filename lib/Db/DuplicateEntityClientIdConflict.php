@@ -9,7 +9,7 @@ declare(strict_types=1);
 
 namespace OCA\SheetMusic\Db;
 
-class DuplicateEntityClientIdConflict implements \JsonSerializable, \ArrayAccess {
+class DuplicateEntityClientIdConflict implements \JsonSerializable {
 	/**
 	 * @param list<int> $entityIds
 	 * @param list<string> $names
@@ -48,23 +48,5 @@ class DuplicateEntityClientIdConflict implements \JsonSerializable, \ArrayAccess
 
 	public function jsonSerialize(): array {
 		return $this->toArray();
-	}
-
-	public function offsetExists(mixed $offset): bool {
-		return property_exists($this, (string)$offset) && isset($this->{(string)$offset});
-	}
-
-	public function offsetGet(mixed $offset): mixed {
-		return $this->{(string)$offset} ?? null;
-	}
-
-	public function offsetSet(mixed $offset, mixed $value): void {
-		$key = (string)$offset;
-		if (property_exists($this, $key)) {
-			$this->{$key} = $value;
-		}
-	}
-
-	public function offsetUnset(mixed $offset): void {
 	}
 }

@@ -7,6 +7,7 @@ namespace Controller;
 use OCA\SheetMusic\Controller\SongFileController;
 use OCA\SheetMusic\Db\InternalSong;
 use OCA\SheetMusic\Db\InternalSongFile;
+use OCA\SheetMusic\Db\LibraryData;
 use OCA\SheetMusic\Db\SongFileMapper;
 use OCA\SheetMusic\Service\FileManager;
 use OCA\SheetMusic\Service\LibraryService;
@@ -106,7 +107,8 @@ final class SongFileControllerTest extends TestCase {
 
 			self::assertSame(Http::STATUS_OK, $response->getStatus());
 			$data = $response->getData();
-			self::assertArrayHasKey('songs', $data);
+			self::assertInstanceOf(LibraryData::class, $data);
+			self::assertNotEmpty($data->songs);
 		} finally {
 			if (is_file($tmpFile)) {
 				unlink($tmpFile);

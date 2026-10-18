@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Service;
 
 use OCA\SheetMusic\Db\InternalSong;
+use OCA\SheetMusic\Db\LibraryData;
 use OCA\SheetMusic\Service\EntityService;
 use OCA\SheetMusic\Service\LibraryService;
 use OCP\IUser;
@@ -103,8 +104,8 @@ final class EntityServiceTest extends TestCase {
 		$composerId = $composer['id'];
 
 		$result = $this->service->deleteEntity($this->user, $this->libraryId, 'composers', $composerId);
-		self::assertNotNull($result);
-		self::assertArrayHasKey('songs', $result);
+		self::assertInstanceOf(LibraryData::class, $result);
+		self::assertIsArray($result->songs);
 
 		// Entity should be soft-deleted in the database
 		$deleted = $this->entityMapper->findById($composerId);
@@ -139,7 +140,8 @@ final class EntityServiceTest extends TestCase {
 		$result = $this->service->mergeEntities($this->user, $this->libraryId, 'composers', $keep['id'], [$duplicate['id']]);
 		self::assertNotNull($result);
 		self::assertSame(1, $result['mergedCount']);
-		self::assertArrayHasKey('songs', $result['libraryData']);
+		self::assertInstanceOf(LibraryData::class, $result['libraryData']);
+		self::assertIsArray($result['libraryData']->songs);
 
 		// Song is now linked to keep
 		$linkedAfter = $this->entityMapper->findEntityIdsForSong((int)$song->id, 'composer');

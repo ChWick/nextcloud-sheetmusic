@@ -124,7 +124,7 @@ final class LibraryEntityMapperTest extends TestCase {
 			static fn (DuplicateSongEntityAssignment $duplicate): bool => $duplicate->songId === 10,
 		));
 		self::assertCount(count($relations), $songTenDuplicates);
-		self::assertSame(2, $songTenDuplicates[0]['count']);
+		self::assertSame(2, $songTenDuplicates[0]->count);
 
 		self::assertSame(count($relations), $this->entityMapper->removeDuplicateSongEntityAssignments($this->databasePath, 10));
 
@@ -191,8 +191,8 @@ final class LibraryEntityMapperTest extends TestCase {
 		$duplicates = $this->entityMapper->findDuplicateEntities($this->databasePath);
 		self::assertCount(count($entities), $duplicates);
 		foreach ($duplicates as $duplicate) {
-			self::assertSame(2, $duplicate['keepId']);
-			self::assertSame([9], $duplicate['duplicateIds']);
+			self::assertSame(2, $duplicate->keepId);
+			self::assertSame([9], $duplicate->duplicateIds);
 		}
 
 		foreach ($duplicates as $duplicate) {
@@ -200,11 +200,11 @@ final class LibraryEntityMapperTest extends TestCase {
 				1,
 				$this->entityMapper->mergeDuplicateEntities(
 					$this->databasePath,
-					$duplicate['entityType'],
-					$duplicate['keepId'],
-					$duplicate['duplicateIds'],
+					$duplicate->entityType,
+					$duplicate->keepId,
+					$duplicate->duplicateIds,
 				),
-				sprintf('Expected one duplicate entity to be removed for %s', $duplicate['entityType']),
+				sprintf('Expected one duplicate entity to be removed for %s', $duplicate->entityType),
 			);
 		}
 

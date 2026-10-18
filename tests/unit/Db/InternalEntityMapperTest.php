@@ -138,10 +138,10 @@ final class InternalEntityMapperTest extends TestCase {
 
 		$duplicates = $this->mapper->findDuplicateSongEntityAssignments($this->libraryId);
 		self::assertCount(1, $duplicates);
-		self::assertSame((int)$song->id, $duplicates[0]['songId']);
-		self::assertSame((int)$entity->id, $duplicates[0]['entityId']);
-		self::assertSame('composer', $duplicates[0]['entityType']);
-		self::assertSame(2, $duplicates[0]['count']);
+		self::assertSame((int)$song->id, $duplicates[0]->songId);
+		self::assertSame((int)$entity->id, $duplicates[0]->entityId);
+		self::assertSame('composer', $duplicates[0]->entityType);
+		self::assertSame(2, $duplicates[0]->count);
 	}
 
 	public function testRemoveDuplicateSongEntityAssignments(): void {
