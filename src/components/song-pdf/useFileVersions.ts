@@ -42,7 +42,15 @@ export function useFileVersions(options: UseFileVersionsOptions) {
 					},
 				},
 			)
-			const versions = (res.data?.ocs?.data?.versions ?? []) as FileVersionInfo[]
+			const rawData = res.data?.ocs?.data
+			const rawList = Array.isArray(rawData)
+				? rawData
+				: (Array.isArray(rawData?.versions) ? rawData.versions : [])
+			const versions: FileVersionInfo[] = rawList.map((v: any) => ({
+				revision: Number(v.revision ?? v.version ?? v.timestamp ?? 0),
+				timestamp: Number(v.timestamp ?? v.revision ?? v.version ?? 0),
+				size: Number(v.size ?? 0),
+			}))
 			versions.sort((a, b) => b.timestamp - a.timestamp)
 			fileVersions.value = versions
 		} catch (err: any) {

@@ -81,6 +81,30 @@ describe('useFileVersions.ts', () => {
 		expect(fileVersions.value.map((v) => v.revision)).toEqual([2, 3, 1])
 	})
 
+	it('fetches versions from a flat array response (controller data response) and normalizes fields', async () => {
+		const rawBackendVersions = [
+			{ version: '1000', timestamp: 1000, size: 2048, name: 'score.pdf' },
+			{ version: '3000', revision: 3000, timestamp: 3000, size: 4096, name: 'score.pdf' },
+		]
+
+		vi.mocked(client.apiGet).mockResolvedValueOnce({
+			data: { ocs: { data: rawBackendVersions } },
+		} as any)
+
+		const { fileVersions, openVersionsModal } = useFileVersions({
+			libraryId: 1,
+			songId: 10,
+			fileId: 101,
+		})
+
+		await openVersionsModal()
+
+		expect(fileVersions.value).toEqual([
+			{ revision: 3000, timestamp: 3000, size: 4096 },
+			{ revision: 1000, timestamp: 1000, size: 2048 },
+		])
+	})
+
 	it('handles fetch error gracefully and shows error message', async () => {
 		vi.mocked(client.apiGet).mockRejectedValueOnce(new Error('Network error'))
 
