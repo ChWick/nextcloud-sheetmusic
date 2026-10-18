@@ -33,6 +33,7 @@ final class SongFileServiceTest extends TestCase {
 		$this->setUpRealMobileSheetsEnvironment();
 
 		$this->user = $this->userManager->get('admin');
+		\OC::$server->get(\OCP\IUserSession::class)->setUser($this->user);
 		$this->userFolder = $this->rootFolder->getUserFolder('admin');
 
 		$libraryDirName = 'Noten_' . bin2hex(random_bytes(4));
@@ -66,6 +67,7 @@ final class SongFileServiceTest extends TestCase {
 
 	protected function tearDown(): void {
 		$this->tearDownRealMobileSheetsEnvironment();
+		\OC::$server->get(\OCP\IUserSession::class)->setUser(null);
 		parent::tearDown();
 	}
 
@@ -348,5 +350,82 @@ final class SongFileServiceTest extends TestCase {
 	public function testGetSongFileVersionsForNonexistentFileReturnsEmpty(): void {
 		$versions = $this->service->getSongFileVersions($this->user, 99999);
 		self::assertSame([], $versions);
+	}
+
+	public function testUpdateSongFileCapturesVersionInFilesVersionsHistory(): void {
+		$song = $this->songMapper->insert(new InternalSong(
+			id: null,
+			uuid: 's-version-test-1',
+			libraryId: $this->libraryId,
+			title: 'Song Version Capture',
+		));
+
+		$initialContent = '%PDF-1.4 INITIAL_SCORE_CONTENT_FOR_VERSIONING';
+		$fileNode = $this->libraryFolder->newFile('score_versioned.pdf');
+		$fileNode->putContent($initialContent);
+		$this->createdUserNodes[] = $fileNode;
+		$origFileId = (int)$fileNode->getId();
+
+		$fileRecord = $this->songFileMapper->insert(new InternalSongFile(
+			id: null,
+			uuid: 'sf-version-test-1',
+			songId: (int)$song->id,
+			fileId: $origFileId,
+			type: InternalSongFile::FILE_TYPE_PDF,
+		));
+
+		// Before update, no versions exist yet
+		$versionsBefore = $this->service->getSongFileVersions($this->user, (int)$fileRecord->id);
+		self::assertEmpty($versionsBefore);
+
+		$tmpFile = tempnam(sys_get_temp_dir(), 'test_update_version_');
+		$updatedContent = '%PDF-1.4 UPDATED_ENHANCED_SCORE_CONTENT';
+		file_put_contents($tmpFile, $updatedContent);
+
+		try {
+			$this->service->updateSongFile(
+				$this->user,
+				$this->libraryId,
+				(int)$song->id,
+				(int)$fileRecord->id,
+				[
+					'tmp_name' => $tmpFile,
+					'name' => 'score_versioned.pdf',
+				],
+			);
+		} finally {
+			unlink($tmpFile);
+		}
+
+		// Content was updated in place
+		$reloadedFile = $this->libraryFolder->get('score_versioned.pdf');
+		self::assertSame($updatedContent, $reloadedFile->getContent());
+
+		// Nextcloud files_versions captured the previous version
+		$versionsAfter = $this->service->getSongFileVersions($this->user, (int)$fileRecord->id);
+		self::assertNotEmpty($versionsAfter, 'Expected a version to be captured in files_versions');
+
+		$firstVersion = $versionsAfter[0];
+		self::assertArrayHasKey('revision', $firstVersion);
+		self::assertArrayHasKey('version', $firstVersion);
+		self::assertArrayHasKey('timestamp', $firstVersion);
+		self::assertArrayHasKey('size', $firstVersion);
+		self::assertArrayHasKey('name', $firstVersion);
+		self::assertGreaterThan(0, $firstVersion['revision']);
+		self::assertSame((string)$firstVersion['revision'], $firstVersion['version']);
+		self::assertSame(strlen($initialContent), $firstVersion['size']);
+		self::assertSame('score_versioned.pdf', $firstVersion['name']);
+
+		// Reverting to the earlier version rolls back file content on disk
+		$this->service->revertSongFileVersion(
+			$this->user,
+			$this->libraryId,
+			(int)$song->id,
+			(int)$fileRecord->id,
+			$firstVersion['revision'],
+		);
+
+		$restoredFile = $this->libraryFolder->get('score_versioned.pdf');
+		self::assertSame($initialContent, $restoredFile->getContent(), 'File content should be restored to initial version');
 	}
 }

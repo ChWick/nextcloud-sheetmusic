@@ -133,6 +133,38 @@ class SongFileService {
 			throw new \RuntimeException('Target node is not a file');
 		}
 
+		// Explicitly capture previous version in Nextcloud files_versions before overwriting
+		if ($targetNode->getSize() > 0) {
+			$versionCaptured = false;
+			if (class_exists(\OCA\Files_Versions\Versions\IVersionManager::class) && \OC::$server->has(\OCA\Files_Versions\Versions\IVersionManager::class)) {
+				try {
+					/** @var \OCA\Files_Versions\Versions\IVersionManager $versionManager */
+					$versionManager = \OC::$server->get(\OCA\Files_Versions\Versions\IVersionManager::class);
+					$versionManager->createVersion($user, $targetNode);
+					$versionCaptured = true;
+				} catch (\Throwable $e) {
+					$this->logger->warning('Could not capture file version via IVersionManager before update: ' . $e->getMessage(), [
+						'exception' => $e,
+						'fileId' => $fileId,
+					]);
+				}
+			}
+
+			if (!$versionCaptured && class_exists(\OCA\Files_Versions\Storage::class)) {
+				$relativePath = $userFolder->getRelativePath($targetNode->getPath());
+				if ($relativePath !== null) {
+					try {
+						\OCA\Files_Versions\Storage::store('/' . ltrim($relativePath, '/'));
+					} catch (\Throwable $e) {
+						$this->logger->warning('Could not capture file version before update: ' . $e->getMessage(), [
+							'exception' => $e,
+							'fileId' => $fileId,
+						]);
+					}
+				}
+			}
+		}
+
 		// Overwrite content in place on existing File node:
 		// Preserves fileId, path, and triggers Nextcloud files_versions app to capture history
 		$targetNode->putContent($content);
@@ -144,7 +176,7 @@ class SongFileService {
 	}
 
 	/**
-	 * @return list<array{version: string, timestamp: int, humanReadableTimestamp: string, size: int, name: string}>
+	 * @return list<array{version: string, revision: int, timestamp: int, humanReadableTimestamp: string, size: int, name: string}>
 	 */
 	public function getSongFileVersions(IUser $user, int $fileId): array {
 		$fileRecord = $this->internalSongFileMapper->findById($fileId);
@@ -159,18 +191,50 @@ class SongFileService {
 		}
 
 		$targetNode = $nodes[0];
+		if (!($targetNode instanceof \OCP\Files\File)) {
+			return [];
+		}
+
 		$relativePath = $userFolder->getRelativePath($targetNode->getPath());
 		if ($relativePath === null || $relativePath === false) {
 			return [];
+		}
+
+		if (class_exists(\OCA\Files_Versions\Versions\IVersionManager::class) && \OC::$server->has(\OCA\Files_Versions\Versions\IVersionManager::class)) {
+			try {
+				/** @var \OCA\Files_Versions\Versions\IVersionManager $versionManager */
+				$versionManager = \OC::$server->get(\OCA\Files_Versions\Versions\IVersionManager::class);
+				$versions = $versionManager->getVersionsForFile($user, $targetNode);
+				$result = [];
+				foreach ($versions as $v) {
+					$revision = (int)$v->getRevisionId();
+					$result[] = [
+						'version' => (string)$revision,
+						'revision' => $revision,
+						'timestamp' => $v->getTimestamp(),
+						'humanReadableTimestamp' => date('Y-m-d H:i:s', $v->getTimestamp()),
+						'size' => (int)$v->getSize(),
+						'name' => (string)$v->getSourceFileName(),
+					];
+				}
+				return $result;
+			} catch (\Throwable $e) {
+				$this->logger->warning('Could not get versions via IVersionManager: ' . $e->getMessage(), [
+					'exception' => $e,
+					'fileId' => $fileId,
+				]);
+			}
 		}
 
 		if (class_exists(\OCA\Files_Versions\Storage::class)) {
 			$rawVersions = \OCA\Files_Versions\Storage::getVersions($user->getUID(), '/' . ltrim($relativePath, '/'));
 			$result = [];
 			foreach ($rawVersions as $key => $v) {
+				$revision = (int)($v['version'] ?? $key);
 				$result[] = [
-					'version' => (string)($v['version'] ?? $key),
-					'timestamp' => (int)($v['version'] ?? 0),
+					'version' => (string)$revision,
+					'revision' => $revision,
+					'timestamp' => $revision,
 					'humanReadableTimestamp' => (string)($v['humanReadableTimestamp'] ?? ''),
 					'size' => (int)($v['size'] ?? 0),
 					'name' => (string)($v['name'] ?? $targetNode->getName()),
@@ -201,6 +265,8 @@ class SongFileService {
 		}
 
 		if (class_exists(\OCA\Files_Versions\Storage::class)) {
+			$userView = new \OC\Files\View('/' . $user->getUID());
+			\OCA\Files_Versions\Storage::createMissingDirectories($relativePath, $userView);
 			$success = \OCA\Files_Versions\Storage::rollback('/' . ltrim($relativePath, '/'), (int)$revision, $user);
 			if (!$success) {
 				throw new \RuntimeException('Failed to rollback file revision');
