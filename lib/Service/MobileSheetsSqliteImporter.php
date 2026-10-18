@@ -478,7 +478,7 @@ class MobileSheetsSqliteImporter {
 	 * @param array<int, bool> $updatedSongClientIds
 	 */
 	private function mergeSongEntityLinks(PDO $db, int $libraryId, array $updatedSongClientIds): void {
-		$songs = $this->songMapper->findByLibrary($libraryId, includeDeleted: false);
+		$songs = $this->songMapper->findAllForLibrary($libraryId, includeDeleted: false);
 		$songByClientId = [];
 		foreach ($songs as $s) {
 			if ($s->clientId !== null) {
@@ -599,7 +599,7 @@ class MobileSheetsSqliteImporter {
 			return;
 		}
 
-		$songs = $this->songMapper->findByLibrary($library->id, includeDeleted: false);
+		$songs = $this->songMapper->findAllForLibrary($library->id, includeDeleted: false);
 		$songByClientId = [];
 		foreach ($songs as $s) {
 			if ($s->clientId !== null) {
@@ -813,7 +813,7 @@ class MobileSheetsSqliteImporter {
 			return;
 		}
 
-		$songs = $this->songMapper->findByLibrary($libraryId, includeDeleted: true);
+		$songs = $this->songMapper->findAllForLibrary($libraryId, includeDeleted: true);
 		$songUuidByClientId = [];
 		foreach ($songs as $s) {
 			if ($s->clientId !== null) {

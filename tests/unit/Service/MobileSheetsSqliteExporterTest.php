@@ -87,7 +87,7 @@ final class MobileSheetsSqliteExporterTest extends TestCase {
 			createdAt: 1000,
 			updatedAt: 2000,
 		);
-		$songMapper->method('findByLibrary')->willReturn([$song]);
+		$songMapper->method('findAllForLibrary')->willReturn([$song]);
 
 		// Dynamic attributes
 		$attributeMapper->method('findAllForLibrary')->with(1)->willReturn([
@@ -355,7 +355,7 @@ final class MobileSheetsSqliteExporterTest extends TestCase {
 
 		$library = new InternalLibrary(id: 1, userId: 'admin', path: 'Noten');
 
-		$songMapper->method('findByLibrary')->willReturn([]);
+		$songMapper->method('findAllForLibrary')->willReturn([]);
 		$entityMapper->method('findAllForLibrary')->willReturn([]);
 		$entityMapper->method('findAllSongEntityLinksForLibrary')->willReturn([]);
 		$songFileMapper->method('findAllForLibrary')->willReturn([]);
@@ -416,7 +416,7 @@ final class MobileSheetsSqliteExporterTest extends TestCase {
 
 		$activeSong = new InternalSong(id: 1, uuid: 's-1', libraryId: 1, title: 'Active', clientId: 10);
 		$deletedSong = new InternalSong(id: 2, uuid: 's-2', libraryId: 1, title: 'Deleted', clientId: 20, deletedAt: 12345);
-		$songMapper->method('findByLibrary')->with(1, true)->willReturn([$activeSong, $deletedSong]);
+		$songMapper->method('findAllForLibrary')->with(1, true)->willReturn([$activeSong, $deletedSong]);
 
 		$miscFiles = [
 			['Id' => 1, 'SongId' => 10, 'Path' => '/remote.php/dav/files/admin/Noten/active.pdf', 'FileHash' => 9999, 'LastModified' => 1000000, 'FileSize' => 45000],

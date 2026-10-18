@@ -119,7 +119,7 @@ final class MobileSheetsSqliteImporterTest extends TestCase {
 		});
 
 		// Links
-		$songMapper->method('findByLibrary')->willReturnCallback(function () use (&$createdSong) {
+		$songMapper->method('findAllForLibrary')->willReturnCallback(function () use (&$createdSong) {
 			return $createdSong !== null ? [$createdSong] : [];
 		});
 		$entityMapper->method('findAllForLibrary')->willReturnCallback(function () use (&$createdEntity) {
@@ -481,7 +481,7 @@ final class MobileSheetsSqliteImporterTest extends TestCase {
 		});
 
 		$song = new InternalSong(id: 1, uuid: 'song-uuid', libraryId: 1, title: 'Toccata', clientId: 1);
-		$songMapper->method('findByLibrary')->willReturn([$song]);
+		$songMapper->method('findAllForLibrary')->willReturn([$song]);
 
 		$setLinks = [];
 		$entityMapper->method('setSongEntitiesForType')->willReturnCallback(function ($songId, $type, $ids) use (&$setLinks) {
@@ -594,7 +594,7 @@ final class MobileSheetsSqliteImporterTest extends TestCase {
 		];
 
 		$songMapper = $this->createMock(InternalSongMapper::class);
-		$songMapper->method('findByLibrary')->willReturnCallback(function (int $libId, bool $incDel = false) use (&$storage) {
+		$songMapper->method('findAllForLibrary')->willReturnCallback(function (int $libId, bool $incDel = false) use (&$storage) {
 			return array_values(array_filter($storage['songs'], fn ($x) => $x->libraryId === $libId && ($incDel || $x->deletedAt === null)));
 		});
 		$songMapper->method('findByClientId')->willReturnCallback(function (int $libId, int $cId) use (&$storage) {

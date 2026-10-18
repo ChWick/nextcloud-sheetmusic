@@ -144,7 +144,7 @@ class MobileSheetsSqliteExporter {
 		// Also supplement with files from misc_data if present and not tombstoned
 		$miscFiles = $this->miscMapper->getMiscDataForTable($lib->id, 'mobilesheets', 'Files', includeDeleted: false);
 		if ($miscFiles !== []) {
-			$songs = $this->songMapper->findByLibrary($lib->id, includeDeleted: true);
+			$songs = $this->songMapper->findAllForLibrary($lib->id, includeDeleted: true);
 			$deletedSongClientIds = [];
 			foreach ($songs as $s) {
 				if ($s->clientId !== null && $s->deletedAt !== null) {
@@ -349,7 +349,7 @@ class MobileSheetsSqliteExporter {
 		$hasNotesTable = MobileSheetsTableHelper::tableExists($db, 'SongNotes');
 		$hasSyncMeta = MobileSheetsTableHelper::tableExists($db, '_nc_sync_metadata');
 
-		$songs = $this->songMapper->findByLibrary($libraryId, includeDeleted: false);
+		$songs = $this->songMapper->findAllForLibrary($libraryId, includeDeleted: false);
 		$attributesBySong = $this->attributeMapper->findAllForLibrary($libraryId);
 
 		$usedIds = [];
@@ -472,7 +472,7 @@ class MobileSheetsSqliteExporter {
 	private function exportSongEntityLinks(PDO $db, int $libraryId): void {
 		$links = $this->entityMapper->findAllSongEntityLinksForLibrary($libraryId);
 
-		$songs = $this->songMapper->findByLibrary($libraryId, includeDeleted: false);
+		$songs = $this->songMapper->findAllForLibrary($libraryId, includeDeleted: false);
 		$songClientMap = [];
 		$songById = [];
 		foreach ($songs as $s) {
@@ -561,7 +561,7 @@ class MobileSheetsSqliteExporter {
 
 		$files = $this->songFileMapper->findAllForLibrary($library->id, includeDeleted: false);
 
-		$songs = $this->songMapper->findByLibrary($library->id, includeDeleted: false);
+		$songs = $this->songMapper->findAllForLibrary($library->id, includeDeleted: false);
 		$songClientMap = [];
 		foreach ($songs as $s) {
 			if ($s->clientId !== null) {
@@ -653,7 +653,7 @@ class MobileSheetsSqliteExporter {
 	private function exportMiscData(PDO $db, int $libraryId): void {
 		$miscSchemas = $this->miscMapper->getMiscSchemas($libraryId, 'mobilesheets');
 		if ($miscSchemas !== []) {
-			$songs = $this->songMapper->findByLibrary($libraryId, includeDeleted: true);
+			$songs = $this->songMapper->findAllForLibrary($libraryId, includeDeleted: true);
 			$deletedSongClientIds = [];
 			foreach ($songs as $s) {
 				if ($s->clientId !== null && $s->deletedAt !== null) {

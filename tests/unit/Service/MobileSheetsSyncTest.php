@@ -293,7 +293,7 @@ final class MobileSheetsSyncTest extends TestCase {
 		self::assertSame(0, $stats['songsUpdated']);
 		self::assertSame(0, $stats['songsDeleted']);
 
-		$songs = $this->songMapper->findByLibrary($lib->id);
+		$songs = $this->songMapper->findAllForLibrary($lib->id);
 		self::assertCount(1, $songs);
 		$song = $songs[0];
 		self::assertSame('Moonlight Sonata', $song->title);
@@ -552,7 +552,7 @@ final class MobileSheetsSyncTest extends TestCase {
 		self::assertNull($reloaded2->deletedAt, 'Song 2 should remain active');
 		self::assertNotNull($reloaded3->deletedAt, 'Song 3 should be tombstoned');
 
-		$activeSongs = $this->songMapper->findByLibrary($lib->id, includeDeleted: false);
+		$activeSongs = $this->songMapper->findAllForLibrary($lib->id, includeDeleted: false);
 		self::assertCount(1, $activeSongs);
 		self::assertSame('Multi Song 2', $activeSongs[0]->title);
 	}
@@ -1172,12 +1172,12 @@ final class MobileSheetsSyncTest extends TestCase {
 		self::assertSame(1, $syncStats['songsDeleted'], 'Old song should be deleted');
 
 		// 5. Verify server state: old song is tombstoned, new song is active
-		$activeSongs = $this->songMapper->findByLibrary($lib->id, includeDeleted: false);
+		$activeSongs = $this->songMapper->findAllForLibrary($lib->id, includeDeleted: false);
 		self::assertCount(1, $activeSongs);
 		self::assertSame('Du hast, o Herr, dein Leben', $activeSongs[0]->title);
 		self::assertSame(441, $activeSongs[0]->clientId);
 
-		$allSongs = $this->songMapper->findByLibrary($lib->id, includeDeleted: true);
+		$allSongs = $this->songMapper->findAllForLibrary($lib->id, includeDeleted: true);
 		self::assertCount(2, $allSongs);
 		$oldSong = array_values(array_filter($allSongs, fn ($s) => $s->clientId === 440))[0] ?? null;
 		self::assertNotNull($oldSong);
@@ -1416,7 +1416,7 @@ final class MobileSheetsSyncTest extends TestCase {
 		self::assertSame(5, $reloadedA->rating);
 		self::assertSame(2000, $reloadedA->updatedAt);
 
-		$songs = $this->songMapper->findByLibrary($lib->id);
+		$songs = $this->songMapper->findAllForLibrary($lib->id);
 		self::assertCount(2, $songs, 'Both Song A and Song B should exist');
 
 		$deletedCompA = $this->entityMapper->findById($composerA->id);
@@ -1629,7 +1629,7 @@ final class MobileSheetsSyncTest extends TestCase {
 		self::assertSame(0, $stats['songsDeleted'], 'NC Exclusive Song must NOT be deleted');
 
 		// 3. Verify both songs exist in Nextcloud
-		$allSongs = $this->songMapper->findByLibrary($lib->id, includeDeleted: false);
+		$allSongs = $this->songMapper->findAllForLibrary($lib->id, includeDeleted: false);
 		self::assertCount(2, $allSongs);
 
 		$reloadedNcSong = $this->songMapper->findById($ncSong->id);

@@ -112,13 +112,6 @@ class InternalSongMapper {
 		return $songs;
 	}
 
-	/**
-	 * @return list<InternalSong>
-	 */
-	public function findByLibrary(int $libraryId, bool $includeDeleted = false): array {
-		return $this->findAllForLibrary($libraryId, $includeDeleted);
-	}
-
 	public function findByClientId(int $libraryId, int $clientId): ?InternalSong {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')
