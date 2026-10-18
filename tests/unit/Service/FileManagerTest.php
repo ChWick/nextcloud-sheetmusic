@@ -35,6 +35,7 @@ use OCP\IUser;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 use TestSupport\TestUtils;
 use function OCA\SheetMusic\Service\fileIndexOf;
 use function OCA\SheetMusic\Service\fileIndexPrefix;
@@ -163,7 +164,7 @@ final class FileManagerTest extends TestCase {
 			$libraryMapper,
 			$this->rootFolder,
 			new MobileSheetsPathResolver($this->rootFolder),
-			$this->createMock(LoggerInterface::class),
+			new NullLogger(),
 			null,
 			$internalSongFileMapper,
 			$internalSongMapper,
@@ -1093,7 +1094,7 @@ final class FileManagerTest extends TestCase {
 			[$this->sourceWebdav('Noten/other.pdf'), '-205429089', '1789249491000', '809049'],
 		]);
 
-		$hashCodes = MobileSheetsHashCodesFile::parse($hashFile, $this->createMock(LoggerInterface::class));
+		$hashCodes = MobileSheetsHashCodesFile::parse($hashFile, new NullLogger());
 		$this->regenerate($this->collectionSong(), 'Noten/source/SomeFile.pdf', hashCodes: $hashCodes);
 
 		// FileManager does not save; the caller does. Verify the in-memory edit.
@@ -1126,7 +1127,7 @@ final class FileManagerTest extends TestCase {
 		];
 		$this->folders = ['Noten' => true, 'Noten/A' => true, 'Noten/A/B' => true, 'Noten/Jazz' => true];
 
-		$hashCodes = MobileSheetsHashCodesFile::parse($hashFile, $this->createMock(LoggerInterface::class));
+		$hashCodes = MobileSheetsHashCodesFile::parse($hashFile, new NullLogger());
 
 		$this->regenerate($this->collectionSong(), 'Noten/A/B/SomeFile.pdf', hashCodes: $hashCodes);
 
@@ -1147,7 +1148,7 @@ final class FileManagerTest extends TestCase {
 		$this->files = ['Noten/Jazz/Jazz - Take Five.pdf' => 'PAYLOAD'];
 		$this->folders = ['Noten' => true, 'Noten/Jazz' => true];
 
-		$hashCodes = MobileSheetsHashCodesFile::parse($hashFile, $this->createMock(LoggerInterface::class));
+		$hashCodes = MobileSheetsHashCodesFile::parse($hashFile, new NullLogger());
 		$this->regenerate($this->collectionSong(), 'Noten/Jazz/Jazz - Take Five.pdf', hashCodes: $hashCodes);
 
 		self::assertFalse($hashCodes->isDirty(), 'a no-op must not touch the hash codes file');
@@ -1158,7 +1159,7 @@ final class FileManagerTest extends TestCase {
 			[$this->sourceWebdav('Noten/unrelated.pdf'), '1', '2', '3'],
 		]);
 
-		$hashCodes = MobileSheetsHashCodesFile::parse($hashFile, $this->createMock(LoggerInterface::class));
+		$hashCodes = MobileSheetsHashCodesFile::parse($hashFile, new NullLogger());
 		$this->regenerate($this->collectionSong(), 'Noten/source/SomeFile.pdf', hashCodes: $hashCodes);
 
 		// The move still happens; there is simply no entry to rename.
@@ -1277,7 +1278,7 @@ final class FileManagerTest extends TestCase {
 			$libraryMapper,
 			$rootFolder,
 			new MobileSheetsPathResolver($rootFolder),
-			$logger ?? $this->createMock(LoggerInterface::class),
+			$logger ?? new NullLogger(),
 			null,
 			$internalSongFileMapper,
 			$internalSongMapper,
@@ -1575,7 +1576,7 @@ final class FileManagerTest extends TestCase {
 			$libraryMapper,
 			$this->rootFolder,
 			new MobileSheetsPathResolver($this->rootFolder),
-			$this->createMock(LoggerInterface::class),
+			new NullLogger(),
 		);
 
 		$this->expectException(\Exception::class);
@@ -1691,7 +1692,7 @@ final class FileManagerTest extends TestCase {
 	public function testRegenerateSongFilePathsUpdatesTheHashCodesFile(): void {
 		$source = $this->sourceWebdav('Noten/old/SomeFile.pdf');
 		$hashFile = $this->writeHashCodesFile([[$source, '1', '2', '3']]);
-		$hashCodes = MobileSheetsHashCodesFile::parse($hashFile, $this->createMock(LoggerInterface::class));
+		$hashCodes = MobileSheetsHashCodesFile::parse($hashFile, new NullLogger());
 
 		$song = new MobileSheetsSong(
 			1,

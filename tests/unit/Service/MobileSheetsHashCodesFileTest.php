@@ -12,6 +12,7 @@ namespace Service;
 use OCA\SheetMusic\Service\MobileSheetsHashCodesFile;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 
 /**
  * Covers the MobileSheets hash codes file reader/writer.
@@ -26,7 +27,7 @@ final class MobileSheetsHashCodesFileTest extends TestCase {
 	private LoggerInterface $logger;
 
 	protected function setUp(): void {
-		$this->logger = $this->createMock(LoggerInterface::class);
+		$this->logger = new NullLogger();
 	}
 
 	protected function tearDown(): void {

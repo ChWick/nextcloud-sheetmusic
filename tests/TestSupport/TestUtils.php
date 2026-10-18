@@ -11,10 +11,11 @@ use OCP\Files\IRootFolder;
 use OCP\Files\Node;
 use OCP\Files\Storage\IStorage;
 use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 
 trait TestUtils {
 	protected function createSongMapper(?LoggerInterface $logger = null): SongMapper {
-		return new SongMapper($logger ?? $this->createMock(LoggerInterface::class));
+		return new SongMapper($logger ?? new NullLogger());
 	}
 
 	protected function createLibraryService(): LibraryService {
@@ -30,7 +31,7 @@ trait TestUtils {
 		return new LibraryService(
 			$libraryMapper,
 			$rootFolder ?? $this->createMock(IRootFolder::class),
-			$this->createMock(LoggerInterface::class),
+			new NullLogger(),
 		);
 	}
 

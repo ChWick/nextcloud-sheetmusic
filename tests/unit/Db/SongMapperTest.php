@@ -25,6 +25,7 @@ use OCA\SheetMusic\Db\SongMapper;
 use OCA\SheetMusic\Service\MobileSheetsFileFacts;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 
 final class SongMapperTest extends TestCase {
 	private string $databasePath;
@@ -81,7 +82,7 @@ final class SongMapperTest extends TestCase {
 	}
 
 	private function mapper(): SongMapper {
-		return new SongMapper($this->createMock(LoggerInterface::class));
+		return new SongMapper(new NullLogger());
 	}
 
 	public function testFindSongsReturnsSongsWithNestedEntities(): void {
@@ -993,7 +994,7 @@ final class SongMapperTest extends TestCase {
 	}
 
 	public function testBookmarksOfSongAndUpdateBookmarks(): void {
-		$mapper = new SongMapper(self::createMock(LoggerInterface::class));
+		$mapper = $this->mapper();
 
 		$bookmarks = $mapper->bookmarksOfSong($this->databasePath, 1);
 		self::assertCount(1, $bookmarks);
@@ -1014,7 +1015,7 @@ final class SongMapperTest extends TestCase {
 	}
 
 	public function testAudioFilesOfSongAndUpdateAudioFiles(): void {
-		$mapper = new SongMapper(self::createMock(LoggerInterface::class));
+		$mapper = $this->mapper();
 
 		$audioFiles = $mapper->audioFilesOfSong($this->databasePath, 1);
 		self::assertCount(1, $audioFiles);
@@ -1051,7 +1052,7 @@ final class SongMapperTest extends TestCase {
 		$db->exec("INSERT INTO SourceType (Id, Type) VALUES (1, 'Score')");
 		$db->exec('INSERT INTO SourceTypeSongs (SourceTypeId, SongId) VALUES (1, 1)');
 
-		$mapper = new SongMapper(self::createMock(LoggerInterface::class));
+		$mapper = $this->mapper();
 		$data = $mapper->findLibraryData($dbPath);
 		self::assertCount(1, $data['songs']);
 		self::assertSame('C Major', $data['keys'][0]->name);

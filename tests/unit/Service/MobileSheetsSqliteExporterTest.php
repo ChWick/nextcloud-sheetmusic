@@ -30,6 +30,7 @@ use OCP\IUserManager;
 use PDO;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 
 final class MobileSheetsSqliteExporterTest extends TestCase {
 	private string $tempDbPath;
@@ -56,7 +57,7 @@ final class MobileSheetsSqliteExporterTest extends TestCase {
 		$pathResolver = $this->createMock(MobileSheetsPathResolver::class);
 		$rootFolder = $this->createMock(IRootFolder::class);
 		$userManager = $this->createMock(IUserManager::class);
-		$logger = $this->createMock(LoggerInterface::class);
+		$logger = new NullLogger();
 
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('admin');
@@ -267,7 +268,7 @@ final class MobileSheetsSqliteExporterTest extends TestCase {
 		$pathResolver = $this->createMock(MobileSheetsPathResolver::class);
 		$rootFolder = $this->createMock(IRootFolder::class);
 		$userManager = $this->createMock(IUserManager::class);
-		$logger = $this->createMock(LoggerInterface::class);
+		$logger = new NullLogger();
 
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('admin');
@@ -351,7 +352,7 @@ final class MobileSheetsSqliteExporterTest extends TestCase {
 		$pathResolver = $this->createMock(MobileSheetsPathResolver::class);
 		$rootFolder = $this->createMock(IRootFolder::class);
 		$userManager = $this->createMock(IUserManager::class);
-		$logger = $this->createMock(LoggerInterface::class);
+		$logger = new NullLogger();
 
 		$library = new InternalLibrary(id: 1, userId: 'admin', path: 'Noten');
 
@@ -406,7 +407,7 @@ final class MobileSheetsSqliteExporterTest extends TestCase {
 		$pathResolver = $this->createMock(MobileSheetsPathResolver::class);
 		$rootFolder = $this->createMock(IRootFolder::class);
 		$userManager = $this->createMock(IUserManager::class);
-		$logger = $this->createMock(LoggerInterface::class);
+		$logger = new NullLogger();
 
 		$library = new InternalLibrary(id: 1, userId: 'admin', path: '/Noten');
 		$user = $this->createMock(IUser::class);

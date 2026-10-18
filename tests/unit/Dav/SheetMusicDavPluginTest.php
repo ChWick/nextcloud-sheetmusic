@@ -18,6 +18,7 @@ use OCP\IUser;
 use OCP\IUserSession;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 use Sabre\DAV\Server;
 use Sabre\HTTP\Request;
 use Sabre\HTTP\Response;
@@ -36,7 +37,7 @@ final class SheetMusicDavPluginTest extends TestCase {
 		$this->libraryMapper = $this->createMock(LibraryMapper::class);
 		$this->exporter = $this->createMock(MobileSheetsSqliteExporter::class);
 		$this->importer = $this->createMock(MobileSheetsSqliteImporter::class);
-		$this->logger = $this->createMock(LoggerInterface::class);
+		$this->logger = new NullLogger();
 		$this->userSession = $this->createMock(IUserSession::class);
 
 		$user = $this->createMock(IUser::class);

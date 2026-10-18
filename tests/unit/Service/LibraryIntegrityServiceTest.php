@@ -30,6 +30,7 @@ use OCP\Files\NotFoundException;
 use OCP\Files\Storage\IStorage;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 use TestSupport\TestUtils;
 
 final class LibraryIntegrityServiceTest extends TestCase {
@@ -69,7 +70,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 			$fileManager,
 			$rootFolder,
 			$pathResolver,
-			$logger ?? $this->createMock(LoggerInterface::class),
+			$logger ?? new NullLogger(),
 			$internalEntityMapper ?? $this->createMock(InternalEntityMapper::class),
 			$internalSongMapper,
 			$internalSongFileMapper ?? $this->createMock(InternalSongFileMapper::class),
@@ -633,7 +634,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$libraryService = new LibraryService(
 			$libraryMapper,
 			$this->createMock(IRootFolder::class),
-			$this->createMock(LoggerInterface::class),
+			new NullLogger(),
 		);
 
 		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
@@ -737,7 +738,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 			$libraryMapper,
 			$rootFolder,
 			$pathResolver,
-			$this->createMock(LoggerInterface::class),
+			new NullLogger(),
 			null,
 			null,
 			$internalSongMapper,

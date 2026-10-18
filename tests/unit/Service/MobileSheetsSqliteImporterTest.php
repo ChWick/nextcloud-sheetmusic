@@ -31,6 +31,7 @@ use OCP\IUserManager;
 use PDO;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 
 final class MobileSheetsSqliteImporterTest extends TestCase {
 	private string $tempDbPath;
@@ -88,7 +89,7 @@ final class MobileSheetsSqliteImporterTest extends TestCase {
 		$pathResolver = $this->createMock(MobileSheetsPathResolver::class);
 		$rootFolder = $this->createMock(IRootFolder::class);
 		$userManager = $this->createMock(IUserManager::class);
-		$logger = $this->createMock(LoggerInterface::class);
+		$logger = new NullLogger();
 
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('admin');
@@ -216,7 +217,7 @@ final class MobileSheetsSqliteImporterTest extends TestCase {
 		$pathResolver = $this->createMock(MobileSheetsPathResolver::class);
 		$rootFolder = $this->createMock(IRootFolder::class);
 		$userManager = $this->createMock(IUserManager::class);
-		$logger = $this->createMock(LoggerInterface::class);
+		$logger = new NullLogger();
 
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('admin');
@@ -278,7 +279,7 @@ final class MobileSheetsSqliteImporterTest extends TestCase {
 		$pathResolver = $this->createMock(MobileSheetsPathResolver::class);
 		$rootFolder = $this->createMock(IRootFolder::class);
 		$userManager = $this->createMock(IUserManager::class);
-		$logger = $this->createMock(LoggerInterface::class);
+		$logger = new NullLogger();
 
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('admin');
@@ -334,7 +335,7 @@ final class MobileSheetsSqliteImporterTest extends TestCase {
 		$pathResolver = $this->createMock(MobileSheetsPathResolver::class);
 		$rootFolder = $this->createMock(IRootFolder::class);
 		$userManager = $this->createMock(IUserManager::class);
-		$logger = $this->createMock(LoggerInterface::class);
+		$logger = new NullLogger();
 
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('admin');
@@ -391,7 +392,7 @@ final class MobileSheetsSqliteImporterTest extends TestCase {
 		$pathResolver = $this->createMock(MobileSheetsPathResolver::class);
 		$rootFolder = $this->createMock(IRootFolder::class);
 		$userManager = $this->createMock(IUserManager::class);
-		$logger = $this->createMock(LoggerInterface::class);
+		$logger = new NullLogger();
 
 		$user = $this->createMock(IUser::class);
 		$user->method('getUID')->willReturn('admin');
@@ -465,7 +466,7 @@ final class MobileSheetsSqliteImporterTest extends TestCase {
 		$pathResolver = $this->createMock(MobileSheetsPathResolver::class);
 		$rootFolder = $this->createMock(IRootFolder::class);
 		$userManager = $this->createMock(IUserManager::class);
-		$logger = $this->createMock(LoggerInterface::class);
+		$logger = new NullLogger();
 
 		$library = new InternalLibrary(id: 1, userId: 'admin', path: 'Noten');
 
@@ -740,7 +741,7 @@ final class MobileSheetsSqliteImporterTest extends TestCase {
 		$userManager = $this->createMock(IUserManager::class);
 		$userManager->method('get')->willReturn($user);
 
-		$logger = $this->createMock(LoggerInterface::class);
+		$logger = new NullLogger();
 		$pathResolver = new MobileSheetsPathResolver($rootFolder);
 
 		// 1. Import from MobileSheets DB

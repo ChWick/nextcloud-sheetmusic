@@ -11,7 +11,7 @@ namespace Db;
 
 use OCA\SheetMusic\Db\SongAudioMapper;
 use PHPUnit\Framework\TestCase;
-use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 
 final class SongAudioMapperTest extends TestCase {
 	private string $databasePath;
@@ -26,8 +26,7 @@ final class SongAudioMapperTest extends TestCase {
 		$database->exec('CREATE TABLE AudioFiles(Id INTEGER PRIMARY KEY, SongId INTEGER, Title VARCHAR(255), File VARCHAR(255), DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
 		$database->exec("INSERT INTO AudioFiles (Id, SongId, Title, File) VALUES (1, 10, 'Backing Track', 'track1.mp3')");
 
-		$logger = $this->createMock(LoggerInterface::class);
-		$this->audioMapper = new SongAudioMapper($logger);
+		$this->audioMapper = new SongAudioMapper(new NullLogger());
 	}
 
 	protected function tearDown(): void {

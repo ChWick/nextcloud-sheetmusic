@@ -11,7 +11,7 @@ namespace Db;
 
 use OCA\SheetMusic\Db\LibraryEntityMapper;
 use PHPUnit\Framework\TestCase;
-use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 
 final class LibraryEntityMapperTest extends TestCase {
 	private string $databasePath;
@@ -44,8 +44,7 @@ final class LibraryEntityMapperTest extends TestCase {
 		$database->exec('CREATE TABLE SourceTypes(Id INTEGER PRIMARY KEY, Type VARCHAR(255), DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
 		$database->exec('CREATE TABLE SourceTypeSongs(Id INTEGER PRIMARY KEY, SourceTypeId INTEGER, SongId INTEGER)');
 
-		$logger = $this->createMock(LoggerInterface::class);
-		$this->entityMapper = new LibraryEntityMapper($logger);
+		$this->entityMapper = new LibraryEntityMapper(new NullLogger());
 	}
 
 	protected function tearDown(): void {

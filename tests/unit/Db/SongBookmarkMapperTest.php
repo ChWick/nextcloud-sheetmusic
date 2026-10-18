@@ -11,7 +11,7 @@ namespace Db;
 
 use OCA\SheetMusic\Db\SongBookmarkMapper;
 use PHPUnit\Framework\TestCase;
-use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 
 final class SongBookmarkMapperTest extends TestCase {
 	private string $databasePath;
@@ -26,8 +26,7 @@ final class SongBookmarkMapperTest extends TestCase {
 		$database->exec('CREATE TABLE Bookmarks(Id INTEGER PRIMARY KEY, SongId INTEGER, Name VARCHAR(255), PageNum INTEGER, ShowInLibrary INTEGER DEFAULT 0, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
 		$database->exec("INSERT INTO Bookmarks (Id, SongId, Name, PageNum, ShowInLibrary) VALUES (1, 10, 'Intro', 1, 1)");
 
-		$logger = $this->createMock(LoggerInterface::class);
-		$this->bookmarkMapper = new SongBookmarkMapper($logger);
+		$this->bookmarkMapper = new SongBookmarkMapper(new NullLogger());
 	}
 
 	protected function tearDown(): void {

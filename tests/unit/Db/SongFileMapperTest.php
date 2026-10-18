@@ -12,7 +12,7 @@ namespace Db;
 use OCA\SheetMusic\Db\SongFileMapper;
 use OCA\SheetMusic\Service\MobileSheetsFileFacts;
 use PHPUnit\Framework\TestCase;
-use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 
 final class SongFileMapperTest extends TestCase {
 	private string $databasePath;
@@ -27,8 +27,7 @@ final class SongFileMapperTest extends TestCase {
 		$database->exec('CREATE TABLE Files(Id INTEGER PRIMARY KEY, SongId INTEGER, Path VARCHAR(255), PageOrder VARCHAR(255), FileSize INTEGER, LastModified INTEGER, Source INTEGER, Type INTEGER, Password VARCHAR(255) DEFAULT \'\', SourceFilePageCount INTEGER, FileHash INTEGER, Width INTEGER, Height INTEGER)');
 		$database->exec("INSERT INTO Files (Id, SongId, Path, LastModified) VALUES (1, 10, '/path/to/song.pdf', 1000)");
 
-		$logger = $this->createMock(LoggerInterface::class);
-		$this->fileMapper = new SongFileMapper($logger);
+		$this->fileMapper = new SongFileMapper(new NullLogger());
 	}
 
 	protected function tearDown(): void {

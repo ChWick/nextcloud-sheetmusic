@@ -23,6 +23,7 @@ use OCP\Files\File;
 use OCP\Files\IRootFolder;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 
 final class SheetMusicFileEventListenerTest extends TestCase {
 	private LibraryMapper $libraryMapper;
@@ -40,7 +41,7 @@ final class SheetMusicFileEventListenerTest extends TestCase {
 		$this->songFileMapper = $this->createMock(InternalSongFileMapper::class);
 		$this->reconciler = $this->createMock(LibraryReconciler::class);
 		$this->rootFolder = $this->createMock(IRootFolder::class);
-		$this->logger = $this->createMock(LoggerInterface::class);
+		$this->logger = new NullLogger();
 
 		$this->listener = new SheetMusicFileEventListener(
 			$this->libraryMapper,

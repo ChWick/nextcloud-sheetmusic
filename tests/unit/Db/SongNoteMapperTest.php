@@ -11,7 +11,7 @@ namespace Db;
 
 use OCA\SheetMusic\Db\SongNoteMapper;
 use PHPUnit\Framework\TestCase;
-use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 
 final class SongNoteMapperTest extends TestCase {
 	private string $databasePath;
@@ -26,8 +26,7 @@ final class SongNoteMapperTest extends TestCase {
 		$database->exec('CREATE TABLE SongNotes(Id INTEGER PRIMARY KEY, SongId INTEGER, Note VARCHAR(255), DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
 		$database->exec("INSERT INTO SongNotes (Id, SongId, Note) VALUES (1, 10, 'Remember to repeat chorus')");
 
-		$logger = $this->createMock(LoggerInterface::class);
-		$this->noteMapper = new SongNoteMapper($logger);
+		$this->noteMapper = new SongNoteMapper(new NullLogger());
 	}
 
 	protected function tearDown(): void {
