@@ -9,39 +9,33 @@ declare(strict_types=1);
 
 namespace Listener;
 
-use OCA\SheetMusic\Db\InternalLibrary;
-use OCA\SheetMusic\Db\InternalSongFile;
-use OCA\SheetMusic\Db\InternalSongFileMapper;
-use OCA\SheetMusic\Db\InternalSongMapper;
-use OCA\SheetMusic\Db\LibraryMapper;
 use OCA\SheetMusic\Listener\SheetMusicFileEventListener;
 use OCA\SheetMusic\Service\LibraryReconciler;
 use OCP\Files\Events\Node\NodeCreatedEvent;
 use OCP\Files\Events\Node\NodeDeletedEvent;
 use OCP\Files\Events\Node\NodeRenamedEvent;
-use OCP\Files\File;
-use OCP\Files\IRootFolder;
 use PHPUnit\Framework\TestCase;
-use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
+use TestSupport\RealMobileSheetsTestTrait;
 
 final class SheetMusicFileEventListenerTest extends TestCase {
-	private LibraryMapper $libraryMapper;
-	private InternalSongMapper $songMapper;
-	private InternalSongFileMapper $songFileMapper;
+	use RealMobileSheetsTestTrait;
+
 	private LibraryReconciler $reconciler;
-	private IRootFolder $rootFolder;
-	private LoggerInterface $logger;
 	private SheetMusicFileEventListener $listener;
 
 	protected function setUp(): void {
 		parent::setUp();
-		$this->libraryMapper = $this->createMock(LibraryMapper::class);
-		$this->songMapper = $this->createMock(InternalSongMapper::class);
-		$this->songFileMapper = $this->createMock(InternalSongFileMapper::class);
-		$this->reconciler = $this->createMock(LibraryReconciler::class);
-		$this->rootFolder = $this->createMock(IRootFolder::class);
-		$this->logger = new NullLogger();
+		$this->setUpRealMobileSheetsEnvironment();
+
+		$this->reconciler = new LibraryReconciler(
+			$this->songMapper,
+			$this->songFileMapper,
+			$this->libraryMapper,
+			$this->rootFolder,
+			$this->userManager,
+			new NullLogger(),
+		);
 
 		$this->listener = new SheetMusicFileEventListener(
 			$this->libraryMapper,
@@ -49,105 +43,107 @@ final class SheetMusicFileEventListenerTest extends TestCase {
 			$this->songFileMapper,
 			$this->reconciler,
 			$this->rootFolder,
-			$this->logger,
+			new NullLogger(),
 		);
 	}
 
+	protected function tearDown(): void {
+		$this->tearDownRealMobileSheetsEnvironment();
+		parent::tearDown();
+	}
+
 	public function testOnNodeCreatedIndexesNewFileInLibrary(): void {
-		$library = new InternalLibrary(id: 1, userId: 'admin', path: 'Noten');
+		$userFolder = $this->rootFolder->getUserFolder('admin');
+		if (!$userFolder->nodeExists('Noten')) {
+			$this->createdUserNodes[] = $userFolder->newFolder('Noten');
+		}
+		$library = $this->createTestLibrary('Noten', 'admin');
 
-		$this->libraryMapper->method('findAllForUser')->with('admin')->willReturn([
-			['id' => 1, 'path' => 'Noten'],
-		]);
-		$this->libraryMapper->method('findModelById')->with(1)->willReturn($library);
-
-		$file = $this->createMock(File::class);
-		$file->method('getId')->willReturn(100);
-		$file->method('getName')->willReturn('Chopin - Nocturne.pdf');
-		$file->method('getPath')->willReturn('/admin/files/Noten/Chopin - Nocturne.pdf');
-
-		$this->reconciler->method('isIgnoredFilename')->with('Chopin - Nocturne.pdf')->willReturn(false);
-		$this->songFileMapper->method('findByFileId')->with(100, false)->willReturn([]);
-
-		$this->reconciler->expects(self::once())
-			->method('indexFile')
-			->with($library, $file);
-
-		$this->libraryMapper->expects(self::once())
-			->method('touch')
-			->with(1);
+		$file = $userFolder->newFile('Noten/Chopin - Nocturne.pdf');
+		$file->putContent("%PDF-1.4\n1 0 obj << /Type /Catalog >> endobj\n");
+		$this->createdUserNodes[] = $file;
 
 		$event = new NodeCreatedEvent($file);
 		$this->listener->handle($event);
+
+		$song = $this->songMapper->findByTitle((int)$library->id, 'Chopin - Nocturne');
+		self::assertNotNull($song);
+		self::assertSame('Chopin - Nocturne', $song->title);
+
+		$songFiles = $this->songFileMapper->findByFileId($file->getId(), false);
+		self::assertCount(1, $songFiles);
+		self::assertSame($song->id, $songFiles[0]->songId);
 	}
 
 	public function testOnNodeCreatedIgnoresDbFiles(): void {
-		$file = $this->createMock(File::class);
-		$file->method('getName')->willReturn('mobilesheets.db');
+		$userFolder = $this->rootFolder->getUserFolder('admin');
+		if (!$userFolder->nodeExists('Noten')) {
+			$this->createdUserNodes[] = $userFolder->newFolder('Noten');
+		}
+		$this->createTestLibrary('Noten', 'admin');
 
-		$this->reconciler->method('isIgnoredFilename')->with('mobilesheets.db')->willReturn(true);
-
-		$this->reconciler->expects(self::never())->method('indexFile');
+		$file = $userFolder->newFile('Noten/mobilesheets.db');
+		$file->putContent('sqlite');
+		$this->createdUserNodes[] = $file;
 
 		$event = new NodeCreatedEvent($file);
 		$this->listener->handle($event);
+
+		$songFiles = $this->songFileMapper->findByFileId($file->getId(), false);
+		self::assertEmpty($songFiles);
 	}
 
 	public function testOnNodeDeletedPrunesFile(): void {
-		$library = new InternalLibrary(id: 1, userId: 'admin', path: 'Noten');
+		$userFolder = $this->rootFolder->getUserFolder('admin');
+		if (!$userFolder->nodeExists('Noten')) {
+			$this->createdUserNodes[] = $userFolder->newFolder('Noten');
+		}
+		$library = $this->createTestLibrary('Noten', 'admin');
 
-		$this->libraryMapper->method('findAllForUser')->with('admin')->willReturn([
-			['id' => 1, 'path' => 'Noten'],
-		]);
-		$this->libraryMapper->method('findModelById')->with(1)->willReturn($library);
+		$file = $userFolder->newFile('Noten/Chopin - Nocturne.pdf');
+		$file->putContent("%PDF-1.4\n1 0 obj << /Type /Catalog >> endobj\n");
+		$this->createdUserNodes[] = $file;
 
-		$file = $this->createMock(File::class);
-		$file->method('getId')->willReturn(100);
-		$file->method('getPath')->willReturn('/admin/files/Noten/Chopin - Nocturne.pdf');
-
-		$songFile = new InternalSongFile(id: 5, uuid: 'sf-uuid', songId: 10, fileId: 100);
-		$this->songFileMapper->method('findByFileId')->with(100, false)->willReturn([$songFile]);
-
-		$this->songFileMapper->expects(self::once())
-			->method('delete')
-			->with(5, false);
-
-		$this->libraryMapper->expects(self::once())
-			->method('touch')
-			->with(1);
+		$this->reconciler->indexFile($library, $file);
+		self::assertCount(1, $this->songFileMapper->findByFileId($file->getId(), false));
 
 		$event = new NodeDeletedEvent($file);
 		$this->listener->handle($event);
+
+		self::assertEmpty($this->songFileMapper->findByFileId($file->getId(), false));
+		self::assertCount(1, $this->songFileMapper->findByFileId($file->getId(), true));
 	}
 
 	public function testOnNodeRenamedOutsideLibraryDeletesFile(): void {
-		$library = new InternalLibrary(id: 1, userId: 'admin', path: 'Noten');
+		$userFolder = $this->rootFolder->getUserFolder('admin');
+		if (!$userFolder->nodeExists('Noten')) {
+			$this->createdUserNodes[] = $userFolder->newFolder('Noten');
+		}
+		if (!$userFolder->nodeExists('Documents')) {
+			$this->createdUserNodes[] = $userFolder->newFolder('Documents');
+		}
+		$library = $this->createTestLibrary('Noten', 'admin');
 
-		// Source in Noten, target in Documents
-		$source = $this->createMock(File::class);
-		$source->method('getPath')->willReturn('/admin/files/Noten/Chopin.pdf');
+		$source = $userFolder->newFile('Noten/Chopin.pdf');
+		$source->putContent("%PDF-1.4\n1 0 obj << /Type /Catalog >> endobj\n");
+		$this->createdUserNodes[] = $source;
 
-		$target = $this->createMock(File::class);
-		$target->method('getId')->willReturn(100);
-		$target->method('getPath')->willReturn('/admin/files/Documents/Chopin.pdf');
+		$this->reconciler->indexFile($library, $source);
+		self::assertCount(1, $this->songFileMapper->findByFileId($source->getId(), false));
 
-		$this->libraryMapper->method('findAllForUser')->with('admin')->willReturn([
-			['id' => 1, 'path' => 'Noten'],
-		]);
-		$this->libraryMapper->method('findModelById')->with(1)->willReturn($library);
+		$target = $userFolder->newFile('Documents/Chopin.pdf');
+		$target->putContent("%PDF-1.4\n1 0 obj << /Type /Catalog >> endobj\n");
+		$this->createdUserNodes[] = $target;
 
-		$songFile = new InternalSongFile(id: 5, uuid: 'sf-uuid', songId: 10, fileId: 100);
-		$this->songFileMapper->method('findByFileId')->with(100, false)->willReturn([$songFile]);
-
-		$this->songFileMapper->expects(self::once())
-			->method('delete')
-			->with(5, false);
-
-		$this->libraryMapper->expects(self::once())
-			->method('touch')
-			->with(1);
+		$this->dbConn->executeStatement(
+			'UPDATE *PREFIX*sheetmusic_song_files SET file_id = ? WHERE file_id = ?',
+			[$target->getId(), $source->getId()]
+		);
 
 		$event = new NodeRenamedEvent($source, $target);
 		$this->listener->handle($event);
+
+		self::assertEmpty($this->songFileMapper->findByFileId($target->getId(), false));
+		self::assertCount(1, $this->songFileMapper->findByFileId($target->getId(), true));
 	}
 }
