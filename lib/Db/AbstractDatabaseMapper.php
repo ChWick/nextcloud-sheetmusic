@@ -20,16 +20,17 @@ abstract class AbstractDatabaseMapper {
 	 *     'columns' => array<string, array<string, string>> // lowercase_table_name => array<lowercase_column_name, exact_column_name>
 	 * ]
 	 *
-	 * @var array<string, array{
+	 * @var \WeakMap<PDO, array{
 	 *     tables: array<string, string>,
 	 *     columns: array<string, array<string, string>>
-	 * }>
+	 * }>|null
 	 */
-	protected array $schemaMapCache = [];
+	protected ?\WeakMap $schemaMapCache = null;
 
 	public function __construct(
 		protected LoggerInterface $logger,
 	) {
+		$this->schemaMapCache = new \WeakMap();
 	}
 
 	protected function openConnection(string $databasePath): PDO {
@@ -46,9 +47,11 @@ abstract class AbstractDatabaseMapper {
 	 * }
 	 */
 	protected function getSchemaMap(PDO $database): array {
-		$hash = spl_object_hash($database);
-		if (isset($this->schemaMapCache[$hash])) {
-			return $this->schemaMapCache[$hash];
+		if ($this->schemaMapCache === null) {
+			$this->schemaMapCache = new \WeakMap();
+		}
+		if (isset($this->schemaMapCache[$database])) {
+			return $this->schemaMapCache[$database];
 		}
 
 		$tables = [];
@@ -61,12 +64,12 @@ abstract class AbstractDatabaseMapper {
 			}
 		}
 
-		$this->schemaMapCache[$hash] = [
+		$this->schemaMapCache[$database] = [
 			'tables' => $tables,
 			'columns' => [],
 		];
 
-		return $this->schemaMapCache[$hash];
+		return $this->schemaMapCache[$database];
 	}
 
 	protected function hasTable(PDO $database, string $table): bool {
@@ -113,7 +116,6 @@ abstract class AbstractDatabaseMapper {
 	 * @return array<string, string>
 	 */
 	protected function columnNames(PDO $database, string $table): array {
-		$hash = spl_object_hash($database);
 		$schema = $this->getSchemaMap($database);
 		$tableLower = strtolower($table);
 
@@ -133,7 +135,8 @@ abstract class AbstractDatabaseMapper {
 			}
 		}
 
-		$this->schemaMapCache[$hash]['columns'][$tableLower] = $names;
+		$schema['columns'][$tableLower] = $names;
+		$this->schemaMapCache[$database] = $schema;
 		return $names;
 	}
 

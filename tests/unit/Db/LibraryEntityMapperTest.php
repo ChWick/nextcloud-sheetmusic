@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace Db;
 
+use OCA\SheetMusic\Db\DuplicateEntityConflict;
 use OCA\SheetMusic\Db\LibraryEntityMapper;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
@@ -250,19 +251,19 @@ final class LibraryEntityMapperTest extends TestCase {
 		$database->exec('CREATE TABLE "Key"(Id INTEGER PRIMARY KEY, Name VARCHAR(255), DateCreated INTEGER, LastModified INTEGER)');
 		$database->exec("INSERT INTO \"Key\" (Id, Name) VALUES (35, 'C'), (36, 'F'), (37, 'C'), (38, 'F')");
 
-		self::assertSame([
-			[
-				'entityType' => 'keys',
-				'name' => 'C',
-				'keepId' => 35,
-				'duplicateIds' => [37],
-			],
-			[
-				'entityType' => 'keys',
-				'name' => 'F',
-				'keepId' => 36,
-				'duplicateIds' => [38],
-			],
+		self::assertEquals([
+			new DuplicateEntityConflict(
+				entityType: 'keys',
+				name: 'C',
+				keepId: 35,
+				duplicateIds: [37],
+			),
+			new DuplicateEntityConflict(
+				entityType: 'keys',
+				name: 'F',
+				keepId: 36,
+				duplicateIds: [38],
+			),
 		], $this->entityMapper->findDuplicateEntities($this->databasePath));
 	}
 
@@ -304,13 +305,13 @@ final class LibraryEntityMapperTest extends TestCase {
 			$otherDatabase->exec("INSERT INTO \"Key\" (Id, Name) VALUES (35, 'C'), (37, 'C')");
 
 			self::assertSame([], $this->entityMapper->findDuplicateEntities($this->databasePath));
-			self::assertSame([
-				[
-					'entityType' => 'keys',
-					'name' => 'C',
-					'keepId' => 35,
-					'duplicateIds' => [37],
-				],
+			self::assertEquals([
+				new DuplicateEntityConflict(
+					entityType: 'keys',
+					name: 'C',
+					keepId: 35,
+					duplicateIds: [37],
+				),
 			], $this->entityMapper->findDuplicateEntities($otherDatabasePath));
 		} finally {
 			unlink($otherDatabasePath);

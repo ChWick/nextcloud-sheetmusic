@@ -457,7 +457,7 @@ class InternalEntityMapper {
 	/**
 	 * Find active entity records with the same label (case-insensitive, trimmed) within the library.
 	 *
-	 * @return list<array{entityType: string, name: string, keepId: int, duplicateIds: list<int>}>
+	 * @return list<DuplicateEntityConflict>
 	 */
 	public function findDuplicateEntities(int $libraryId): array {
 		$qb = $this->db->getQueryBuilder();
@@ -489,12 +489,12 @@ class InternalEntityMapper {
 				if (count($entries) > 1) {
 					$keepId = $entries[0]['id'];
 					$duplicateIds = array_map(fn ($e) => $e['id'], array_slice($entries, 1));
-					$duplicates[] = [
-						'entityType' => $type,
-						'name' => $entries[0]['name'],
-						'keepId' => $keepId,
-						'duplicateIds' => $duplicateIds,
-					];
+					$duplicates[] = new DuplicateEntityConflict(
+						entityType: $type,
+						name: $entries[0]['name'],
+						keepId: $keepId,
+						duplicateIds: $duplicateIds,
+					);
 				}
 			}
 		}

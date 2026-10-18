@@ -300,19 +300,19 @@ class LibraryIntegrityService {
 		$issues = [];
 		$duplicatesList = $this->internalEntityMapper->findDuplicateEntities($libraryId);
 		foreach ($duplicatesList as $duplicateEntity) {
-			$label = InternalEntityMapper::getLabel($duplicateEntity['entityType']);
+			$label = InternalEntityMapper::getLabel($duplicateEntity->entityType);
 			$issues[] = new IntegrityIssue(
 				type: IntegrityIssue::TYPE_DUPLICATE_ENTITY,
 				severity: IntegrityIssue::SEVERITY_WARNING,
 				message: sprintf(
 					'Duplicate %s "%s" entries found (IDs %s). Auto-fix will keep ID %d and reassign songs.',
 					$label,
-					$duplicateEntity['name'],
-					implode(', ', array_merge([$duplicateEntity['keepId']], $duplicateEntity['duplicateIds'])),
-					$duplicateEntity['keepId'],
+					$duplicateEntity->name,
+					implode(', ', array_merge([$duplicateEntity->keepId], $duplicateEntity->duplicateIds)),
+					$duplicateEntity->keepId,
 				),
 				fixable: true,
-				details: $duplicateEntity,
+				details: $duplicateEntity->toArray(),
 			);
 		}
 
@@ -545,7 +545,7 @@ class LibraryIntegrityService {
 		if ($issueType === IntegrityIssue::TYPE_DUPLICATE_ENTITY && $entityType !== null && $entityId !== null) {
 			$normType = InternalEntityMapper::normalizeType($entityType);
 			foreach ($this->internalEntityMapper->findDuplicateEntities($libraryId) as $duplicateEntity) {
-				if ($duplicateEntity['entityType'] !== $normType || $duplicateEntity['keepId'] !== $entityId) {
+				if ($duplicateEntity->entityType !== $normType || $duplicateEntity->keepId !== $entityId) {
 					continue;
 				}
 
@@ -553,7 +553,7 @@ class LibraryIntegrityService {
 					$libraryId,
 					$normType,
 					$entityId,
-					$duplicateEntity['duplicateIds'],
+					$duplicateEntity->duplicateIds,
 				);
 				$this->libraryMapper->touch($libraryId);
 

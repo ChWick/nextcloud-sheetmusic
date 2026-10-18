@@ -289,7 +289,7 @@ class LibraryEntityMapper extends AbstractDatabaseMapper {
 	 * Find entity records with the same non-empty label, ignoring case and
 	 * surrounding whitespace. The lowest ID is the canonical record.
 	 *
-	 * @return list<array{entityType: string, name: string, keepId: int, duplicateIds: list<int>}>
+	 * @return list<DuplicateEntityConflict>
 	 */
 	public function findDuplicateEntities(string $databasePath): array {
 		$database = $this->openConnection($databasePath);
@@ -340,12 +340,12 @@ class LibraryEntityMapper extends AbstractDatabaseMapper {
 				}
 				sort($ids, SORT_NUMERIC);
 
-				$duplicates[] = [
-					'entityType' => $entityType,
-					'name' => $group[$ids[0]],
-					'keepId' => $ids[0],
-					'duplicateIds' => array_slice($ids, 1),
-				];
+				$duplicates[] = new DuplicateEntityConflict(
+					entityType: $entityType,
+					name: $group[$ids[0]],
+					keepId: $ids[0],
+					duplicateIds: array_slice($ids, 1),
+				);
 			}
 		}
 

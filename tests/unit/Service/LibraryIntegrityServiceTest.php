@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace Service;
 
+use OCA\SheetMusic\Db\DuplicateEntityConflict;
 use OCA\SheetMusic\Db\InternalEntity;
 use OCA\SheetMusic\Db\InternalEntityMapper;
 use OCA\SheetMusic\Db\InternalLibrary;
@@ -409,24 +410,24 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		try {
 			$internalEntityMapper = $this->createMock(InternalEntityMapper::class);
 			$duplicates = [
-				[
-					'entityType' => 'composer',
-					'name' => 'Bach',
-					'keepId' => 4,
-					'duplicateIds' => [8],
-				],
-				[
-					'entityType' => 'key',
-					'name' => 'C',
-					'keepId' => 2,
-					'duplicateIds' => [9],
-				],
+				new DuplicateEntityConflict(
+					entityType: 'composer',
+					name: 'Bach',
+					keepId: 4,
+					duplicateIds: [8],
+				),
+				new DuplicateEntityConflict(
+					entityType: 'key',
+					name: 'C',
+					keepId: 2,
+					duplicateIds: [9],
+				),
 			];
 			$internalEntityMapper->method('findDuplicateEntities')->willReturnCallback(function () use (&$duplicates) {
 				return $duplicates;
 			});
 			$internalEntityMapper->method('mergeEntities')->willReturnCallback(function ($libId, $normType, $keepId, $dupIds) use (&$duplicates) {
-				$duplicates = array_values(array_filter($duplicates, fn ($d) => !($d['entityType'] === $normType && $d['keepId'] === $keepId)));
+				$duplicates = array_values(array_filter($duplicates, fn ($d) => !($d->entityType === $normType && $d->keepId === $keepId)));
 				return count($dupIds);
 			});
 
@@ -477,18 +478,18 @@ final class LibraryIntegrityServiceTest extends TestCase {
 
 			$internalEntityMapper = $this->createMock(InternalEntityMapper::class);
 			$internalEntityMapper->method('findDuplicateEntities')->willReturn([
-				[
-					'entityType' => 'key',
-					'name' => 'C',
-					'keepId' => 35,
-					'duplicateIds' => [37],
-				],
-				[
-					'entityType' => 'key',
-					'name' => 'F',
-					'keepId' => 36,
-					'duplicateIds' => [38],
-				],
+				new DuplicateEntityConflict(
+					entityType: 'key',
+					name: 'C',
+					keepId: 35,
+					duplicateIds: [37],
+				),
+				new DuplicateEntityConflict(
+					entityType: 'key',
+					name: 'F',
+					keepId: 36,
+					duplicateIds: [38],
+				),
 			]);
 
 			$service = $this->createIntegrityService(
