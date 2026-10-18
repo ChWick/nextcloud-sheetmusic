@@ -37,8 +37,8 @@ class LibraryIntegrityService {
 		private InternalSongMapper $internalSongMapper,
 		private InternalSongFileMapper $internalSongFileMapper,
 		private LibraryMapper $libraryMapper,
-		private ?InternalSongAttributeMapper $internalSongAttributeMapper = null,
-		private ?InternalMiscMapper $internalMiscMapper = null,
+		private InternalSongAttributeMapper $internalSongAttributeMapper,
+		private InternalMiscMapper $internalMiscMapper,
 	) {
 	}
 
@@ -421,42 +421,38 @@ class LibraryIntegrityService {
 			);
 		}
 
-		if ($this->internalSongAttributeMapper !== null) {
-			$orphanAttrs = $this->internalSongAttributeMapper->findOrphanSongAttributes($libraryId);
-			if (!empty($orphanAttrs)) {
-				$issues[] = new IntegrityIssue(
-					type: IntegrityIssue::TYPE_ORPHAN_SONG_ATTRIBUTE,
-					severity: IntegrityIssue::SEVERITY_WARNING,
-					message: sprintf(
-						'Found %d orphan song attribute record(s) referencing deleted songs.',
-						count($orphanAttrs),
-					),
-					fixable: true,
-					details: [
-						'count' => count($orphanAttrs),
-						'attributes' => $orphanAttrs,
-					],
-				);
-			}
+		$orphanAttrs = $this->internalSongAttributeMapper->findOrphanSongAttributes($libraryId);
+		if (!empty($orphanAttrs)) {
+			$issues[] = new IntegrityIssue(
+				type: IntegrityIssue::TYPE_ORPHAN_SONG_ATTRIBUTE,
+				severity: IntegrityIssue::SEVERITY_WARNING,
+				message: sprintf(
+					'Found %d orphan song attribute record(s) referencing deleted songs.',
+					count($orphanAttrs),
+				),
+				fixable: true,
+				details: [
+					'count' => count($orphanAttrs),
+					'attributes' => $orphanAttrs,
+				],
+			);
 		}
 
-		if ($this->internalMiscMapper !== null) {
-			$orphanMisc = $this->internalMiscMapper->findOrphanMiscData($libraryId);
-			if (!empty($orphanMisc)) {
-				$issues[] = new IntegrityIssue(
-					type: IntegrityIssue::TYPE_ORPHAN_MISC_DATA,
-					severity: IntegrityIssue::SEVERITY_WARNING,
-					message: sprintf(
-						'Found %d orphan sync/misc data record(s) referencing deleted songs.',
-						count($orphanMisc),
-					),
-					fixable: true,
-					details: [
-						'count' => count($orphanMisc),
-						'misc' => $orphanMisc,
-					],
-				);
-			}
+		$orphanMisc = $this->internalMiscMapper->findOrphanMiscData($libraryId);
+		if (!empty($orphanMisc)) {
+			$issues[] = new IntegrityIssue(
+				type: IntegrityIssue::TYPE_ORPHAN_MISC_DATA,
+				severity: IntegrityIssue::SEVERITY_WARNING,
+				message: sprintf(
+					'Found %d orphan sync/misc data record(s) referencing deleted songs.',
+					count($orphanMisc),
+				),
+				fixable: true,
+				details: [
+					'count' => count($orphanMisc),
+					'misc' => $orphanMisc,
+				],
+			);
 		}
 
 		return $issues;
@@ -1352,8 +1348,8 @@ class LibraryIntegrityService {
 		$fixed = match ($issueType) {
 			IntegrityIssue::TYPE_ORPHAN_ENTITY_ASSIGNMENT => $this->internalEntityMapper->removeOrphanSongEntityAssignments($libraryId),
 			IntegrityIssue::TYPE_ORPHAN_SONG_FILE => $this->internalSongFileMapper->removeOrphanSongFiles($libraryId),
-			IntegrityIssue::TYPE_ORPHAN_SONG_ATTRIBUTE => $this->internalSongAttributeMapper?->removeOrphanSongAttributes($libraryId) ?? 0,
-			IntegrityIssue::TYPE_ORPHAN_MISC_DATA => $this->internalMiscMapper?->removeOrphanMiscData($libraryId) ?? 0,
+			IntegrityIssue::TYPE_ORPHAN_SONG_ATTRIBUTE => $this->internalSongAttributeMapper->removeOrphanSongAttributes($libraryId),
+			IntegrityIssue::TYPE_ORPHAN_MISC_DATA => $this->internalMiscMapper->removeOrphanMiscData($libraryId),
 			IntegrityIssue::TYPE_DUPLICATE_CLIENT_ID => $this->internalSongMapper->fixDuplicateClientIds($libraryId) + $this->internalEntityMapper->fixDuplicateClientIds($libraryId),
 			default => null,
 		};
