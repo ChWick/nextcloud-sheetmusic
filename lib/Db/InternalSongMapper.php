@@ -218,16 +218,6 @@ class InternalSongMapper {
 		return $qb->executeStatement() > 0;
 	}
 
-	public function restore(int $id): bool {
-		$qb = $this->db->getQueryBuilder();
-		$qb->update(self::TABLE_NAME)
-			->set('deleted_at', $qb->createNamedParameter(null, IQueryBuilder::PARAM_NULL))
-			->set('updated_at', $qb->createNamedParameter(time(), IQueryBuilder::PARAM_INT))
-			->where($qb->expr()->eq('id', $qb->createNamedParameter($id, IQueryBuilder::PARAM_INT)));
-
-		return $qb->executeStatement() > 0;
-	}
-
 	public function mergeSongs(int $libraryId, int $keepId, int $droppedId): void {
 		if ($keepId === $droppedId) {
 			return;

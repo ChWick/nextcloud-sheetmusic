@@ -120,12 +120,6 @@ final class InternalSongMapperTest extends TestCase {
 		self::assertNotNull($deleted->deletedAt);
 		self::assertEmpty($this->mapper->findAllForLibrary($this->libraryId));
 
-		self::assertTrue($this->mapper->restore((int)$song->id));
-		$restored = $this->mapper->findById((int)$song->id);
-		self::assertNotNull($restored);
-		self::assertNull($restored->deletedAt);
-		self::assertCount(1, $this->mapper->findAllForLibrary($this->libraryId));
-
 		self::assertTrue($this->mapper->delete((int)$song->id, true));
 		self::assertNull($this->mapper->findById((int)$song->id));
 	}
