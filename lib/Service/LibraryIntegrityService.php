@@ -81,7 +81,7 @@ class LibraryIntegrityService {
 	public function checkIntegrity(int $libraryId, string $userId, bool $autoMatchOrphans = true): array {
 		$userFolder = $this->rootFolder->getUserFolder($userId);
 		$user = $userFolder->getOwner();
-		['databasePath' => $databasePath, 'targetFolder' => $targetFolder] = $this->fileManager->libraryContext($libraryId, $user);
+		['targetFolder' => $targetFolder] = $this->fileManager->libraryContext($libraryId, $user);
 
 		$songs = $this->internalSongMapper->findLibraryData($libraryId, $user)->songs;
 		$targetFolderPath = (string)$targetFolder->getPath();
@@ -301,7 +301,7 @@ class LibraryIntegrityService {
 
 		$issues = [
 			...$issues,
-			...$this->checkRelationalIntegrity($libraryId, $user, $targetFolder, $databasePath, $reportedMissingPaths),
+			...$this->checkRelationalIntegrity($libraryId, $user, $targetFolder, $reportedMissingPaths),
 		];
 
 		return $issues;
@@ -380,7 +380,6 @@ class LibraryIntegrityService {
 		int $libraryId,
 		?IUser $user = null,
 		?Folder $targetFolder = null,
-		?string $databasePath = null,
 		array &$reportedMissingPaths = [],
 	): array {
 		$issues = [];
@@ -498,6 +497,7 @@ class LibraryIntegrityService {
 								fileId: $orphan->id,
 								fixable: true,
 								details: [
+									'source' => 'orphan_song_file',
 									'orphanSongFileId' => $orphan->id,
 									'fileId' => $orphan->fileId,
 								],
@@ -586,69 +586,6 @@ class LibraryIntegrityService {
 						'path' => $mPath,
 					],
 				);
-			}
-		}
-
-		if ($databasePath !== null && $databasePath !== '' && file_exists($databasePath)) {
-			$targetFolderPath = $targetFolder !== null ? (string)$targetFolder->getPath() : '';
-			try {
-				$db = new \PDO('sqlite:' . $databasePath);
-				$db->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
-				if (MobileSheetsTableHelper::tableExists($db, 'Files')) {
-					$hasSongs = MobileSheetsTableHelper::tableExists($db, 'Songs');
-					$sql = $hasSongs
-						? 'SELECT f.Id, f.SongId, f.Path, s.Id as SongExists, s.Title as SongTitle FROM Files f LEFT JOIN Songs s ON f.SongId = s.Id'
-						: 'SELECT f.Id, f.SongId, f.Path, NULL as SongExists, NULL as SongTitle FROM Files f';
-					$stmt = $db->query($sql);
-					if ($stmt !== false) {
-						while ($fRow = $stmt->fetch(\PDO::FETCH_ASSOC)) {
-							$path = (string)($fRow['Path'] ?? '');
-							if ($path === '' || isset($reportedMissingPaths[$path])) {
-								continue;
-							}
-
-							$sourceExists = false;
-							if ($user !== null && $targetFolder !== null) {
-								$pathObj = $this->pathResolver->fromStored($path, $user);
-								if ($pathObj !== null) {
-									$internalPath = $pathObj->internal;
-									$rel = null;
-									if ($internalPath === $targetFolderPath) {
-										$rel = '';
-									} elseif (str_starts_with($internalPath, $targetFolderPath . '/')) {
-										$rel = substr($internalPath, strlen($targetFolderPath) + 1);
-									}
-									$sourceExists = $this->fileNodeExists($targetFolder, $rel);
-								}
-							}
-
-							if (!$sourceExists) {
-								$reportedMissingPaths[$path] = true;
-								$hasConnectedSong = $fRow['SongExists'] !== null;
-								$message = $hasConnectedSong
-									? sprintf('File "%s" referenced by song "%s" in database does not exist on the filesystem.', basename($path), (string)($fRow['SongTitle'] ?? $fRow['SongId']))
-									: sprintf('File "%s" in database has no connected song and does not exist on the filesystem.', basename($path));
-
-								$issues[] = new IntegrityIssue(
-									type: IntegrityIssue::TYPE_MISSING_FILE,
-									severity: IntegrityIssue::SEVERITY_ERROR,
-									message: $message,
-									fileId: (int)$fRow['Id'],
-									path: $path,
-									fixable: true,
-									details: [
-										'source' => 'sqlite',
-										'fileId' => (int)$fRow['Id'],
-										'songId' => $fRow['SongId'] !== null ? (int)$fRow['SongId'] : null,
-										'path' => $path,
-									],
-								);
-							}
-						}
-					}
-				}
-			} catch (\Throwable $e) {
-				$this->logger->warning('Failed to inspect database files for integrity: ' . $e->getMessage());
 			}
 		}
 

@@ -17,8 +17,6 @@ use OCA\SheetMusic\Db\InternalSongFile;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
-use OCA\SheetMusic\Db\SongFileMapper;
-use OCA\SheetMusic\Db\SongMapper;
 use OCP\Files\IRootFolder;
 use OCP\Files\Node;
 use Psr\Log\LoggerInterface;
@@ -38,7 +36,6 @@ class LibraryIntegrityFixer {
 		private InternalMiscMapper $internalMiscMapper,
 		private LibraryOrphanScanner $orphanScanner,
 		private ?LibraryIntegrityService $integrityService = null,
-		private ?SongMapper $songMapper = null,
 	) {
 	}
 
@@ -221,8 +218,7 @@ class LibraryIntegrityFixer {
 			['databasePath' => $databasePath, 'targetFolder' => $targetFolder] = $this->fileManager->libraryContext($libraryId, $user);
 			$hashCodes = MobileSheetsHashCodesFile::forDatabase($databasePath, $this->logger);
 
-			$song = $this->internalSongMapper?->findSong($songId, $user)
-				?? ($this->songMapper !== null && $databasePath !== '' ? $this->songMapper->findSong($databasePath, $songId) : null);
+			$song = $this->internalSongMapper->findSong($songId, $user);
 			if ($song !== null) {
 				$targetFolderPath = (string)$targetFolder->getPath();
 				foreach ($song->files as $songFile) {
@@ -633,7 +629,7 @@ class LibraryIntegrityFixer {
 			$this->libraryMapper->touch($libraryId);
 		}
 
-		// If SQLite database exists, also record or update file in SQLite Files table
+		// If physical/cached SQLite database exists, keep it consistent with the linked file
 		if ($databasePath !== '' && file_exists($databasePath)) {
 			try {
 				$db = new \PDO('sqlite:' . $databasePath);
@@ -652,7 +648,7 @@ class LibraryIntegrityFixer {
 
 					if ($sqliteSongId !== null) {
 						$facts = MobileSheetsFileFacts::fromNode($orphanNode);
-						$fileType = SongFileMapper::determineFileType($cleanPath);
+						$fileType = InternalSongFile::determineFileType($cleanPath);
 						$updatedExisting = false;
 
 						if (!empty($missingFiles)) {

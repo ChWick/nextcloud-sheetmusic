@@ -1890,31 +1890,39 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		unlink($fixture['path']);
 	}
 
-	public function testOrphanFileInSqliteWithoutConnectedSongAndMissingOnFilesystemDetected(): void {
+	public function testOrphanSongFileWithoutConnectedSongAndMissingOnFilesystemDetected(): void {
 		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
-		$database = $fixture['connection'];
-		$database->exec("INSERT INTO Songs (Id, Title) VALUES (1, 'Song 1')");
-		// File 1 has a song, File 2 has SongId 999 which does NOT exist in Songs
-		$database->exec("INSERT INTO Files (Id, SongId, Path) VALUES (1, 1, '/user1/files/Noten/existing.pdf')");
-		$database->exec("INSERT INTO Files (Id, SongId, Path) VALUES (2, 999, '/remote.php/dav/files/user1/Noten/nonexistent.pdf')");
-
 		$targetFolder = $this->createMock(Folder::class);
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
 		$targetFolder->method('nodeExists')->willReturn(false);
 
+		$orphanSongFile = new \OCA\SheetMusic\Db\OrphanSongFile(
+			id: 2,
+			songId: 999,
+			fileId: 999,
+			uuid: 'orphan-1',
+		);
+
+		$internalSongFileMapper = $this->createMock(InternalSongFileMapper::class);
+		$internalSongFileMapper->method('findOrphanSongFiles')->with(1)->willReturn([$orphanSongFile]);
+
 		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager($fixture['path'], $targetFolder);
+		$userFolder = $rootFolder->getUserFolder('user1');
+		$userFolder->method('getById')->with(999)->willReturn([]);
+
 		$service = $this->createIntegrityService(
 			$this->createLibraryService(),
 			$fileManager,
 			$rootFolder,
 			$pathResolver,
+			internalSongFileMapper: $internalSongFileMapper,
 			databasePath: $fixture['path'],
 		);
 
 		$issues = $service->checkIntegrity(1, 'user1');
 		$missingFileIssues = array_values(array_filter(
 			$issues,
-			fn ($i) => $i->type === IntegrityIssue::TYPE_MISSING_FILE && ($i->details['source'] ?? '') === 'sqlite',
+			fn ($i) => $i->type === IntegrityIssue::TYPE_MISSING_FILE && ($i->details['source'] ?? '') === 'orphan_song_file',
 		));
 
 		self::assertCount(1, $missingFileIssues);
@@ -1931,8 +1939,6 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$database->exec("INSERT INTO Songs (Id, Title) VALUES (1, 'Song 1')");
 		// File 1 has a song, but file does not exist on disk
 		$database->exec("INSERT INTO Files (Id, SongId, Path) VALUES (1, 1, '/remote.php/dav/files/user1/Noten/missing_connected.pdf')");
-		// File 2 has no connected song (SongId 999 not in Songs), and does not exist on disk
-		$database->exec("INSERT INTO Files (Id, SongId, Path) VALUES (2, 999, '/remote.php/dav/files/user1/Noten/missing_orphan.pdf')");
 
 		$physicalOrphanFile = $this->createMock(\OCP\Files\File::class);
 		$physicalOrphanFile->method('getName')->willReturn('physical_orphan.pdf');
@@ -1945,6 +1951,16 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$targetFolder->method('nodeExists')->willReturn(false);
 		$targetFolder->method('getDirectoryListing')->willReturn([$physicalOrphanFile]);
 
+		$orphanSongFile = new \OCA\SheetMusic\Db\OrphanSongFile(
+			id: 2,
+			songId: 999,
+			fileId: 999,
+			uuid: 'orphan-1',
+		);
+
+		$internalSongFileMapper = $this->createMock(InternalSongFileMapper::class);
+		$internalSongFileMapper->method('findOrphanSongFiles')->with(1)->willReturn([$orphanSongFile]);
+
 		$miscMapper = $this->createMock(InternalMiscMapper::class);
 		$miscMapper->method('findOrphanMiscData')->willReturn([]);
 		$miscMapper->method('getMiscDataForTable')->with(1, 'mobilesheets', 'Files', false)->willReturn([
@@ -1952,11 +1968,15 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		]);
 
 		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager($fixture['path'], $targetFolder);
+		$userFolder = $rootFolder->getUserFolder('user1');
+		$userFolder->method('getById')->with(999)->willReturn([]);
+
 		$service = $this->createIntegrityService(
 			$this->createLibraryService(),
 			$fileManager,
 			$rootFolder,
 			$pathResolver,
+			internalSongFileMapper: $internalSongFileMapper,
 			internalMiscMapper: $miscMapper,
 			databasePath: $fixture['path'],
 		);
@@ -1984,14 +2004,14 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		}
 
 		$messages = array_map(fn ($i) => $i->message, $virtualOrphans);
-		// Check that connected song, unconnected in SQLite, and misc data all have appropriate messages
+		// Check that connected song, orphan song file, and misc data all have appropriate error messages
 		self::assertTrue(
 			array_any($messages, fn ($m) => str_contains($m, 'referenced by song "Song 1"') || str_contains($m, 'referenced by song')),
 			'Expected message for file linked to a song',
 		);
 		self::assertTrue(
-			array_any($messages, fn ($m) => str_contains($m, 'in database has no connected song and does not exist')),
-			'Expected message for database file with no connected song',
+			array_any($messages, fn ($m) => str_contains($m, 'has no connected song and referenced file does not exist')),
+			'Expected message for song file record with no connected song',
 		);
 		self::assertTrue(
 			array_any($messages, fn ($m) => str_contains($m, 'in sync data has no connected song and does not exist')),
