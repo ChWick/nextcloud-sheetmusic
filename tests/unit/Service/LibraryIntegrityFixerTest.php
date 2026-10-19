@@ -145,4 +145,24 @@ final class LibraryIntegrityFixerTest extends TestCase {
 		$miscRows = $this->miscMapper->getMiscDataForTable($lib->id, 'mobilesheets', 'Files', includeDeleted: false);
 		self::assertEmpty($miscRows);
 	}
+
+	public function testFixIssueRemovesMissingFileByPathFromMiscData(): void {
+		$lib = $this->createTestLibrary();
+		$this->miscMapper->saveMiscData($lib->id, 'mobilesheets', 'Files', '101', [
+			'Id' => 101,
+			'SongId' => 888,
+			'Path' => '/remote.php/dav/files/admin/Noten/phantom.pdf',
+		]);
+
+		$res = $this->fixer->fixIssue(
+			$lib->id,
+			'admin',
+			IntegrityIssue::TYPE_MISSING_FILE,
+			path: '/remote.php/dav/files/admin/Noten/phantom.pdf',
+		);
+		self::assertTrue($res['success']);
+
+		$miscRows = $this->miscMapper->getMiscDataForTable($lib->id, 'mobilesheets', 'Files', includeDeleted: false);
+		self::assertEmpty($miscRows);
+	}
 }

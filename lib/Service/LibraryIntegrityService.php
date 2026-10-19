@@ -97,18 +97,19 @@ class LibraryIntegrityService {
 		$issues = [
 			...$this->checkDuplicateEntityAssignments($libraryId, $songsById),
 			...$this->checkDuplicateEntities($libraryId),
-			...$this->checkRelationalIntegrity($libraryId, $user, $targetFolder, $databasePath),
 		];
 
 		$autoPaths = $this->libraryService->isAutoPathsEnabled($userId, $libraryId);
 		$autoPdfMetadata = $this->libraryService->isAutoPdfMetadataEnabled($userId, $libraryId);
 		$namingRuleIssuesBySong = [];
+		$reportedMissingPaths = [];
 
 		foreach ($songs as $song) {
 			foreach ($song->files as $file) {
 				$pathObj = $this->pathResolver->fromStored($file->path, $user);
 				if ($pathObj === null) {
 					$missingSongIds[$song->id] = true;
+					$reportedMissingPaths[$file->path] = true;
 					$issues[] = new IntegrityIssue(
 						type: IntegrityIssue::TYPE_MISSING_FILE,
 						severity: IntegrityIssue::SEVERITY_ERROR,
@@ -193,6 +194,10 @@ class LibraryIntegrityService {
 					}
 				} else {
 					$missingSongIds[$song->id] = true;
+					$reportedMissingPaths[$file->path] = true;
+					if ($relativeToTarget !== null) {
+						$reportedMissingPaths[$relativeToTarget] = true;
+					}
 					// Source file does not exist at stored path.
 					$issues[] = new IntegrityIssue(
 						type: IntegrityIssue::TYPE_MISSING_FILE,
@@ -203,6 +208,12 @@ class LibraryIntegrityService {
 						fileId: $file->id,
 						path: $relativeToTarget ?? $file->path,
 						fixable: false,
+						details: [
+							'source' => 'song_files',
+							'fileId' => $file->id,
+							'songId' => $song->id,
+							'path' => $file->path,
+						],
 					);
 				}
 			}
@@ -288,6 +299,11 @@ class LibraryIntegrityService {
 			}
 		}
 
+		$issues = [
+			...$issues,
+			...$this->checkRelationalIntegrity($libraryId, $user, $targetFolder, $databasePath, $reportedMissingPaths),
+		];
+
 		return $issues;
 	}
 
@@ -365,6 +381,7 @@ class LibraryIntegrityService {
 		?IUser $user = null,
 		?Folder $targetFolder = null,
 		?string $databasePath = null,
+		array &$reportedMissingPaths = [],
 	): array {
 		$issues = [];
 
@@ -526,6 +543,52 @@ class LibraryIntegrityService {
 			);
 		}
 
+		$miscFiles = $this->internalMiscMapper->getMiscDataForTable($libraryId, 'mobilesheets', 'Files', includeDeleted: false);
+		foreach ($miscFiles as $mRow) {
+			$mPath = (string)($mRow['Path'] ?? '');
+			if ($mPath === '' || isset($reportedMissingPaths[$mPath])) {
+				continue;
+			}
+			$sourceExists = false;
+			if ($user !== null && $targetFolder !== null) {
+				$pathObj = $this->pathResolver->fromStored($mPath, $user);
+				if ($pathObj !== null) {
+					$internalPath = $pathObj->internal;
+					$rel = null;
+					$tPath = (string)$targetFolder->getPath();
+					if ($internalPath === $tPath) {
+						$rel = '';
+					} elseif (str_starts_with($internalPath, $tPath . '/')) {
+						$rel = substr($internalPath, strlen($tPath) + 1);
+					}
+					$sourceExists = $this->fileNodeExists($targetFolder, $rel);
+				}
+			}
+			if (!$sourceExists) {
+				$reportedMissingPaths[$mPath] = true;
+				$mFileId = isset($mRow['Id']) ? (int)$mRow['Id'] : null;
+				$mSongId = isset($mRow['SongId']) && is_numeric($mRow['SongId']) ? (int)$mRow['SongId'] : null;
+				$message = $mSongId !== null
+					? sprintf('File "%s" referenced in sync data does not exist on the filesystem.', basename($mPath))
+					: sprintf('File "%s" in sync data has no connected song and does not exist on the filesystem.', basename($mPath));
+
+				$issues[] = new IntegrityIssue(
+					type: IntegrityIssue::TYPE_MISSING_FILE,
+					severity: IntegrityIssue::SEVERITY_ERROR,
+					message: $message,
+					fileId: $mFileId,
+					path: $mPath,
+					fixable: true,
+					details: [
+						'source' => 'misc_data',
+						'fileId' => $mFileId,
+						'songId' => $mSongId,
+						'path' => $mPath,
+					],
+				);
+			}
+		}
+
 		if ($databasePath !== null && $databasePath !== '' && file_exists($databasePath)) {
 			$targetFolderPath = $targetFolder !== null ? (string)$targetFolder->getPath() : '';
 			try {
@@ -534,16 +597,13 @@ class LibraryIntegrityService {
 				if (MobileSheetsTableHelper::tableExists($db, 'Files')) {
 					$hasSongs = MobileSheetsTableHelper::tableExists($db, 'Songs');
 					$sql = $hasSongs
-						? 'SELECT f.Id, f.SongId, f.Path, s.Id as SongExists FROM Files f LEFT JOIN Songs s ON f.SongId = s.Id'
-						: 'SELECT f.Id, f.SongId, f.Path, NULL as SongExists FROM Files f';
+						? 'SELECT f.Id, f.SongId, f.Path, s.Id as SongExists, s.Title as SongTitle FROM Files f LEFT JOIN Songs s ON f.SongId = s.Id'
+						: 'SELECT f.Id, f.SongId, f.Path, NULL as SongExists, NULL as SongTitle FROM Files f';
 					$stmt = $db->query($sql);
 					if ($stmt !== false) {
 						while ($fRow = $stmt->fetch(\PDO::FETCH_ASSOC)) {
-							if ($fRow['SongExists'] !== null) {
-								continue;
-							}
 							$path = (string)($fRow['Path'] ?? '');
-							if ($path === '') {
+							if ($path === '' || isset($reportedMissingPaths[$path])) {
 								continue;
 							}
 
@@ -563,17 +623,23 @@ class LibraryIntegrityService {
 							}
 
 							if (!$sourceExists) {
+								$reportedMissingPaths[$path] = true;
+								$hasConnectedSong = $fRow['SongExists'] !== null;
+								$message = $hasConnectedSong
+									? sprintf('File "%s" referenced by song "%s" in database does not exist on the filesystem.', basename($path), (string)($fRow['SongTitle'] ?? $fRow['SongId']))
+									: sprintf('File "%s" in database has no connected song and does not exist on the filesystem.', basename($path));
+
 								$issues[] = new IntegrityIssue(
 									type: IntegrityIssue::TYPE_MISSING_FILE,
 									severity: IntegrityIssue::SEVERITY_ERROR,
-									message: sprintf('File "%s" in database has no connected song and does not exist on the filesystem.', basename($path)),
+									message: $message,
 									fileId: (int)$fRow['Id'],
 									path: $path,
 									fixable: true,
 									details: [
 										'source' => 'sqlite',
 										'fileId' => (int)$fRow['Id'],
-										'songId' => (int)$fRow['SongId'],
+										'songId' => $fRow['SongId'] !== null ? (int)$fRow['SongId'] : null,
 										'path' => $path,
 									],
 								);

@@ -126,7 +126,7 @@ class MobileSheetsSqliteExporter {
 
 		foreach ($files as $file) {
 			$webdavPath = $this->resolveWebdavPathForFile($file, $lib, $user);
-			if ($webdavPath === '' || isset($handledPaths[$webdavPath])) {
+			if ($webdavPath === null || $webdavPath === '' || isset($handledPaths[$webdavPath])) {
 				continue;
 			}
 			$handledPaths[$webdavPath] = true;
@@ -604,6 +604,9 @@ class MobileSheetsSqliteExporter {
 			}
 
 			$webdavPath = $this->resolveWebdavPathForFile($file, $library, $user);
+			if ($webdavPath === null || $webdavPath === '') {
+				continue;
+			}
 
 			$hash = $file->fileHash ?? 0;
 			$size = $file->fileSize ?? 0;
@@ -680,6 +683,10 @@ class MobileSheetsSqliteExporter {
 						if (isset($row['Id']) && isset($deletedSongClientIds[(int)$row['Id']])) {
 							continue;
 						}
+					} elseif ($lowerTable === 'files') {
+						if (!isset($row['SongId']) || !is_numeric($row['SongId']) || isset($deletedSongClientIds[(int)$row['SongId']])) {
+							continue;
+						}
 					} elseif (isset($row['SongId']) && is_numeric($row['SongId'])) {
 						if (isset($deletedSongClientIds[(int)$row['SongId']])) {
 							continue;
@@ -729,7 +736,7 @@ class MobileSheetsSqliteExporter {
 		}
 	}
 
-	private function resolveWebdavPathForFile(InternalSongFile $file, InternalLibrary $library, ?IUser $user): string {
+	private function resolveWebdavPathForFile(InternalSongFile $file, InternalLibrary $library, ?IUser $user): ?string {
 		if ($user !== null) {
 			try {
 				$userFolder = $this->rootFolder->getUserFolder($user->getUID());
@@ -757,9 +764,11 @@ class MobileSheetsSqliteExporter {
 			} catch (\Throwable) {
 				// Fall through
 			}
+
+			return null;
 		}
 
-		// Fallback
+		// Fallback for tests/synthetic libraries where $user is null
 		$base = rtrim($library->path, '/');
 		return sprintf('%s/%s/%s/file_%d.pdf', MobileSheetsPathResolver::WEBDAV_ROOT, $library->userId, ltrim($base, '/'), $file->fileId);
 	}

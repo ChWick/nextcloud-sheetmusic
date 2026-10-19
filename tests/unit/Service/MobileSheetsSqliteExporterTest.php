@@ -505,4 +505,65 @@ final class MobileSheetsSqliteExporterTest extends TestCase {
 		self::assertSame(1, (int)$fileRows[0]['Id']);
 		self::assertSame(10, (int)$fileRows[0]['SongId']);
 	}
+
+	public function testExportToFileDoesNotAddSongFilesMissingOnDisk(): void {
+		$songMapper = $this->createMock(InternalSongMapper::class);
+		$entityMapper = $this->createMock(InternalEntityMapper::class);
+		$songFileMapper = $this->createMock(InternalSongFileMapper::class);
+		$attributeMapper = $this->createMock(InternalSongAttributeMapper::class);
+		$miscMapper = $this->createMock(InternalMiscMapper::class);
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$pathResolver = $this->createMock(MobileSheetsPathResolver::class);
+		$rootFolder = $this->createMock(IRootFolder::class);
+		$userManager = $this->createMock(IUserManager::class);
+		$logger = new NullLogger();
+
+		$library = new InternalLibrary(id: 1, userId: 'admin', path: '/Noten');
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('admin');
+		$userManager->method('get')->with('admin')->willReturn($user);
+
+		$userFolder = $this->createMock(\OCP\Files\IUserFolder::class);
+		$rootFolder->method('getUserFolder')->with('admin')->willReturn($userFolder);
+		// fileId 404 does not exist on disk
+		$userFolder->method('getById')->with(404)->willReturn([]);
+		$rootFolder->method('getById')->with(404)->willReturn([]);
+
+		$activeSong = new InternalSong(id: 1, uuid: 's-1', libraryId: 1, title: 'Active', clientId: 10);
+		$songMapper->method('findAllForLibrary')->willReturn([$activeSong]);
+
+		$missingFile = new InternalSongFile(
+			id: 1,
+			uuid: 'f-1',
+			songId: 1,
+			fileId: 404,
+			clientId: 1,
+			pageOrder: '1',
+			type: 1,
+		);
+		$songFileMapper->method('findAllForLibrary')->with(1, false)->willReturn([$missingFile]);
+		$miscMapper->method('getMiscSchemas')->with(1, 'mobilesheets')->willReturn([]);
+
+		$exporter = new MobileSheetsSqliteExporter(
+			$songMapper,
+			$entityMapper,
+			$songFileMapper,
+			$attributeMapper,
+			$miscMapper,
+			$libraryMapper,
+			$pathResolver,
+			$rootFolder,
+			$userManager,
+			$logger,
+		);
+
+		$exporter->exportToFile($library, $this->tempDbPath);
+
+		self::assertFileExists($this->tempDbPath);
+		$db = new PDO('sqlite:' . $this->tempDbPath);
+		$fileRows = $db->query('SELECT Id, SongId, Path FROM Files')->fetchAll(PDO::FETCH_ASSOC);
+
+		// The missing file must NOT have been added to the Files table
+		self::assertCount(0, $fileRows);
+	}
 }

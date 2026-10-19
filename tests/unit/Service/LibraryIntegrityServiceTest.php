@@ -1925,6 +1925,82 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		unlink($fixture['path']);
 	}
 
+	public function testDistinguishesPhysicalOrphansAndVirtualLayerOrphans(): void {
+		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
+		$database = $fixture['connection'];
+		$database->exec("INSERT INTO Songs (Id, Title) VALUES (1, 'Song 1')");
+		// File 1 has a song, but file does not exist on disk
+		$database->exec("INSERT INTO Files (Id, SongId, Path) VALUES (1, 1, '/remote.php/dav/files/user1/Noten/missing_connected.pdf')");
+		// File 2 has no connected song (SongId 999 not in Songs), and does not exist on disk
+		$database->exec("INSERT INTO Files (Id, SongId, Path) VALUES (2, 999, '/remote.php/dav/files/user1/Noten/missing_orphan.pdf')");
+
+		$physicalOrphanFile = $this->createMock(\OCP\Files\File::class);
+		$physicalOrphanFile->method('getName')->willReturn('physical_orphan.pdf');
+		$physicalOrphanFile->method('getPath')->willReturn('/user1/files/Noten/physical_orphan.pdf');
+		$physicalOrphanFile->method('getMimeType')->willReturn('application/pdf');
+		$physicalOrphanFile->method('getId')->willReturn(500);
+
+		$targetFolder = $this->createMock(Folder::class);
+		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
+		$targetFolder->method('nodeExists')->willReturn(false);
+		$targetFolder->method('getDirectoryListing')->willReturn([$physicalOrphanFile]);
+
+		$miscMapper = $this->createMock(InternalMiscMapper::class);
+		$miscMapper->method('findOrphanMiscData')->willReturn([]);
+		$miscMapper->method('getMiscDataForTable')->with(1, 'mobilesheets', 'Files', false)->willReturn([
+			['Id' => 3, 'SongId' => null, 'Path' => '/remote.php/dav/files/user1/Noten/missing_misc.pdf'],
+		]);
+
+		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager($fixture['path'], $targetFolder);
+		$service = $this->createIntegrityService(
+			$this->createLibraryService(),
+			$fileManager,
+			$rootFolder,
+			$pathResolver,
+			internalMiscMapper: $miscMapper,
+			databasePath: $fixture['path'],
+		);
+
+		$issues = $service->checkIntegrity(1, 'user1', autoMatchOrphans: false);
+
+		// Type a) Physical orphan file: warning severity
+		$physicalOrphans = array_values(array_filter(
+			$issues,
+			fn ($i) => $i->type === IntegrityIssue::TYPE_ORPHAN_FILE,
+		));
+		self::assertCount(1, $physicalOrphans);
+		self::assertSame(IntegrityIssue::SEVERITY_WARNING, $physicalOrphans[0]->severity);
+		self::assertStringContainsString('exists in library storage but is not linked to any song', $physicalOrphans[0]->message);
+
+		// Type b) Virtual / layer orphans (missing from filesystem): error severity
+		$virtualOrphans = array_values(array_filter(
+			$issues,
+			fn ($i) => $i->type === IntegrityIssue::TYPE_MISSING_FILE,
+		));
+		self::assertCount(3, $virtualOrphans);
+
+		foreach ($virtualOrphans as $vOrphan) {
+			self::assertSame(IntegrityIssue::SEVERITY_ERROR, $vOrphan->severity);
+		}
+
+		$messages = array_map(fn ($i) => $i->message, $virtualOrphans);
+		// Check that connected song, unconnected in SQLite, and misc data all have appropriate messages
+		self::assertTrue(
+			array_any($messages, fn ($m) => str_contains($m, 'referenced by song "Song 1"') || str_contains($m, 'referenced by song')),
+			'Expected message for file linked to a song',
+		);
+		self::assertTrue(
+			array_any($messages, fn ($m) => str_contains($m, 'in database has no connected song and does not exist')),
+			'Expected message for database file with no connected song',
+		);
+		self::assertTrue(
+			array_any($messages, fn ($m) => str_contains($m, 'in sync data has no connected song and does not exist')),
+			'Expected message for sync data file with no connected song',
+		);
+
+		unlink($fixture['path']);
+	}
+
 	private static function minimalPdf(): string {
 		return "%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n3 0 obj\n<< /Type /Page /Parent 2 0 R >>\nendobj\nxref\n0 4\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \ntrailer\n<< /Size 4 /Root 1 0 R >>\nstartxref\n164\n%%EOF";
 	}

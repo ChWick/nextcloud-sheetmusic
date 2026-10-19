@@ -85,6 +85,17 @@ class LibraryIntegrityFixer {
 				}
 			}
 
+			if ($path !== null && trim($path) !== '') {
+				$miscFiles = $this->internalMiscMapper->getMiscDataForTable($libraryId, 'mobilesheets', 'Files');
+				foreach ($miscFiles as $m) {
+					if (($m['Path'] ?? '') === $path && isset($m['Id'])) {
+						if ($this->internalMiscMapper->deleteMiscData($libraryId, 'mobilesheets', 'Files', (string)$m['Id'])) {
+							$fixed++;
+						}
+					}
+				}
+			}
+
 			try {
 				$userFolder = $this->rootFolder->getUserFolder($userId);
 				$user = $userFolder->getOwner();
@@ -425,6 +436,22 @@ class LibraryIntegrityFixer {
 						$issue->songTitle ?? ('song ID ' . $issue->songId),
 						$e->getMessage(),
 					);
+				}
+			} elseif ($issue->type === IntegrityIssue::TYPE_MISSING_FILE && $issue->fixable) {
+				try {
+					$res = $this->fixIssue(
+						$libraryId,
+						$userId,
+						$issue->songId,
+						issueType: IntegrityIssue::TYPE_MISSING_FILE,
+						fileId: $issue->fileId,
+						path: $issue->path,
+					);
+					if ($res['success']) {
+						$fixedCount++;
+					}
+				} catch (\Throwable $e) {
+					$this->logger->warning('Cannot auto-fix missing file: ' . $e->getMessage());
 				}
 			}
 		}
