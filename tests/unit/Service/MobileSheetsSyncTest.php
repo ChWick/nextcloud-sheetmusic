@@ -1795,4 +1795,59 @@ final class MobileSheetsSyncTest extends TestCase {
 			);
 		}
 	}
+
+	public function testMergedSongFileMissingOnServerDoesNotResurrectConflict(): void {
+		$lib = $this->createTestLibrary('MergeMissingFileLib');
+		$adminUser = $this->userManager->get('admin');
+		$userFolder = $this->rootFolder->getUserFolder('admin');
+
+		// 1. Setup on Nextcloud: Song 1 (active) and Song 2 (to be merged)
+		$song1 = new InternalSong(uuid: 'song-merge-1', libraryId: $lib->id, title: 'Song 1', clientId: 1, updatedAt: 1000);
+		$this->songMapper->insert($song1);
+		$file1 = $userFolder->newFile('Song 1.pdf');
+		$file1->putContent("%PDF-1.4 test\n");
+		$this->createdUserNodes[] = $file1;
+		$sf1 = new InternalSongFile(uuid: 'sf-merge-1', songId: $song1->id, fileId: $file1->getId(), clientId: 10, updatedAt: 1000);
+		$this->songFileMapper->insert($sf1);
+
+		$song2 = new InternalSong(uuid: 'song-merge-2', libraryId: $lib->id, title: 'Song 2', clientId: 2, updatedAt: 1000);
+		$this->songMapper->insert($song2);
+
+		// Initial export
+		$exportPath = $this->tempDbPath();
+		$this->exporter->exportToFile($lib, $exportPath);
+
+		// 2. Client merges Song 2 into Song 1:
+		// Song 2 is deleted on client. Song 1 now has file 10 and client attaches phantom file 20 (not on server).
+		$msDb = new PDO('sqlite:' . $exportPath, options: [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
+		$msDb->exec('DELETE FROM Songs WHERE Id = 2');
+		// In client, user chose delete on conflict or file 20 is in client Files without server file
+		$msDb->exec("INSERT INTO Files (Id, SongId, Path, PageOrder, FileSize, LastModified, Source, Type, Password, SourceFilePageCount, FileHash, Width, Height)
+			VALUES (20, 1, '/remote.php/dav/files/admin/MergeMissingFileLib/phantom.pdf', '1', 1234, 1000000, 1, 1, '', 1, 99999, -1, -1)");
+
+		// 3. Client uploads back
+		$stats = $this->importer->importFromFile($lib, $exportPath, $adminUser);
+		self::assertSame(1, $stats['songsDeleted']);
+		self::assertSame(0, $stats['filesCreated']);
+
+		// 4. Verify Song 2 is tombstoned on Nextcloud
+		$reloaded2 = $this->songMapper->findById($song2->id);
+		self::assertNotNull($reloaded2);
+		self::assertNotNull($reloaded2->deletedAt);
+
+		// 5. Verify Nextcloud exports clean state:
+		// Neither mobilesheets.db nor hashcodes contains phantom.pdf or Song 2
+		$resyncDbPath = $this->tempDbPath();
+		$this->exporter->exportToFile($lib, $resyncDbPath);
+		$resyncDb = new PDO('sqlite:' . $resyncDbPath, options: [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
+		$resyncSongs = $resyncDb->query('SELECT Id FROM Songs')->fetchAll(PDO::FETCH_COLUMN);
+		self::assertSame([1], array_map('intval', $resyncSongs));
+
+		$resyncFiles = $resyncDb->query('SELECT Path FROM Files')->fetchAll(PDO::FETCH_COLUMN);
+		self::assertNotContains('/remote.php/dav/files/admin/MergeMissingFileLib/phantom.pdf', $resyncFiles);
+
+		$hashcodes = $this->exporter->generateHashcodes($lib);
+		self::assertStringNotContainsString('phantom.pdf', $hashcodes);
+		self::assertStringContainsString('Song 1.pdf', $hashcodes);
+	}
 }

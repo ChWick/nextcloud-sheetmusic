@@ -141,40 +141,58 @@ class MobileSheetsSqliteExporter {
 			$lines[] = (string)$size;
 		}
 
-		// Also supplement with files from misc_data if present and not tombstoned
-		$miscFiles = $this->miscMapper->getMiscDataForTable($lib->id, 'mobilesheets', 'Files', includeDeleted: false);
-		if ($miscFiles !== []) {
-			$songs = $this->songMapper->findAllForLibrary($lib->id, includeDeleted: true);
-			$deletedSongClientIds = [];
-			foreach ($songs as $s) {
-				if ($s->clientId !== null && $s->deletedAt !== null) {
-					$deletedSongClientIds[$s->clientId] = true;
-				}
-			}
-
-			foreach ($miscFiles as $mf) {
-				if (!is_array($mf) || empty($mf['Path'])) {
-					continue;
-				}
-				$songClientId = isset($mf['SongId']) && is_numeric($mf['SongId']) ? (int)$mf['SongId'] : null;
-				if ($songClientId !== null && isset($deletedSongClientIds[$songClientId])) {
-					continue;
+		// Also supplement with files from misc_data if present and library has no managed files
+		if (empty($files)) {
+			$miscFiles = $this->miscMapper->getMiscDataForTable($lib->id, 'mobilesheets', 'Files', includeDeleted: false);
+			if ($miscFiles !== []) {
+				$songs = $this->songMapper->findAllForLibrary($lib->id, includeDeleted: true);
+				$deletedSongClientIds = [];
+				foreach ($songs as $s) {
+					if ($s->clientId !== null && $s->deletedAt !== null) {
+						$deletedSongClientIds[$s->clientId] = true;
+					}
 				}
 
-				$webdavPath = (string)$mf['Path'];
-				if (isset($handledPaths[$webdavPath])) {
-					continue;
+				foreach ($miscFiles as $mf) {
+					if (!is_array($mf) || empty($mf['Path'])) {
+						continue;
+					}
+					$songClientId = isset($mf['SongId']) && is_numeric($mf['SongId']) ? (int)$mf['SongId'] : null;
+					if ($songClientId !== null && isset($deletedSongClientIds[$songClientId])) {
+						continue;
+					}
+
+					$webdavPath = (string)$mf['Path'];
+					if (isset($handledPaths[$webdavPath])) {
+						continue;
+					}
+
+					if ($user !== null) {
+						try {
+							$pathObj = $this->pathResolver->fromStored($webdavPath, $user);
+							if ($pathObj !== null) {
+								$rel = $this->pathResolver->relativeToUserFolder($pathObj->internal, $user);
+								$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+								if ($rel !== null && !$userFolder->nodeExists($rel)) {
+									continue;
+								}
+							}
+						} catch (\Throwable) {
+							// Pass through in synthetic environments where userFolder cannot resolve
+						}
+					}
+
+					$handledPaths[$webdavPath] = true;
+
+					$hash = isset($mf['FileHash']) && is_numeric($mf['FileHash']) ? (int)$mf['FileHash'] : 0;
+					$modifiedAtMs = isset($mf['LastModified']) && is_numeric($mf['LastModified']) ? (int)$mf['LastModified'] : 0;
+					$size = isset($mf['FileSize']) && is_numeric($mf['FileSize']) ? (int)$mf['FileSize'] : 0;
+
+					$lines[] = $webdavPath;
+					$lines[] = (string)$hash;
+					$lines[] = (string)$modifiedAtMs;
+					$lines[] = (string)$size;
 				}
-				$handledPaths[$webdavPath] = true;
-
-				$hash = isset($mf['FileHash']) && is_numeric($mf['FileHash']) ? (int)$mf['FileHash'] : 0;
-				$modifiedAtMs = isset($mf['LastModified']) && is_numeric($mf['LastModified']) ? (int)$mf['LastModified'] : 0;
-				$size = isset($mf['FileSize']) && is_numeric($mf['FileSize']) ? (int)$mf['FileSize'] : 0;
-
-				$lines[] = $webdavPath;
-				$lines[] = (string)$hash;
-				$lines[] = (string)$modifiedAtMs;
-				$lines[] = (string)$size;
 			}
 		}
 
@@ -645,6 +663,19 @@ class MobileSheetsSqliteExporter {
 					':updated_at' => $file->updatedAt,
 					':extra_json' => json_encode(['file_id' => $file->fileId], JSON_THROW_ON_ERROR),
 				]);
+			}
+		}
+
+		if (!empty($files) && MobileSheetsTableHelper::tableExists($db, 'Files')) {
+			$validClientIds = [];
+			foreach ($files as $f) {
+				if ($f->clientId !== null && $f->clientId > 0) {
+					$validClientIds[] = (int)$f->clientId;
+				}
+			}
+			if (!empty($validClientIds)) {
+				$inList = implode(',', $validClientIds);
+				$db->exec("DELETE FROM Files WHERE Id NOT IN ($inList)");
 			}
 		}
 
