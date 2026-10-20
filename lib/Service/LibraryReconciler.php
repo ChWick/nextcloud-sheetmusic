@@ -15,7 +15,6 @@ use OCA\SheetMusic\Db\InternalSongFile;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
-use OCA\SheetMusic\Db\SongFileMapper;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
@@ -164,7 +163,7 @@ class LibraryReconciler {
 			pageCount: $pageCount,
 			fileSize: $fileSize,
 			fileHash: $hash,
-			type: SongFileMapper::determineFileType($filename),
+			type: InternalSongFile::determineFileType($filename),
 			createdAt: time(),
 			updatedAt: time(),
 		);
