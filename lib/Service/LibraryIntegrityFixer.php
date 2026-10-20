@@ -230,13 +230,7 @@ class LibraryIntegrityFixer {
 							'message' => sprintf('Cannot apply naming rule for "%s": file "%s" is missing.', $song->title, basename($songFile->path)),
 						];
 					}
-					$internalPath = $pathObj->internal;
-					$relativeToTarget = null;
-					if ($internalPath === $targetFolderPath) {
-						$relativeToTarget = '';
-					} elseif (str_starts_with($internalPath, $targetFolderPath . '/')) {
-						$relativeToTarget = substr($internalPath, strlen($targetFolderPath) + 1);
-					}
+					$relativeToTarget = $this->pathResolver->relativeToFolder($pathObj->internal, $targetFolderPath);
 					if (!$this->orphanScanner->fileNodeExists($targetFolder, $relativeToTarget)) {
 						return [
 							'success' => false,
@@ -578,12 +572,7 @@ class LibraryIntegrityFixer {
 				$missingFiles[] = $f;
 				continue;
 			}
-			$rel = null;
-			if ($pathObj->internal === $targetFolderPath) {
-				$rel = '';
-			} elseif (str_starts_with($pathObj->internal, $targetFolderPath . '/')) {
-				$rel = substr($pathObj->internal, strlen($targetFolderPath) + 1);
-			}
+			$rel = $this->pathResolver->relativeToFolder($pathObj->internal, $targetFolderPath);
 			if ($rel === null || !$targetFolder->nodeExists($rel)) {
 				$missingFiles[] = $f;
 			}
@@ -655,9 +644,8 @@ class LibraryIntegrityFixer {
 							foreach ($missingFiles as $mf) {
 								$mfPathObj = $this->pathResolver->fromStored($mf->path, $user);
 								$mfInternal = $mfPathObj?->internal ?? '';
-								$mfRel = str_starts_with($mfInternal, $targetFolderPath . '/')
-									? substr($mfInternal, strlen($targetFolderPath) + 1)
-									: basename($mf->path);
+								$mfRel = ($mfPathObj !== null ? $this->pathResolver->relativeToFolder($mfPathObj->internal, $targetFolderPath) : null)
+									?? basename($mf->path);
 
 								$stmtFind = $db->prepare('SELECT Id FROM Files WHERE SongId = :songId AND (Path = :p1 OR Path = :p2 OR Id = :fid)');
 								$stmtFind->execute([

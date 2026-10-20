@@ -43,10 +43,8 @@ class LibraryOrphanScanner {
 			if ($node instanceof Folder) {
 				$this->scanOrphans($node, $targetFolderPath, $referencedRelativePaths, $issues, $user, $songs, $missingSongIds, $autoMatchOrphans);
 			} elseif ($node instanceof Node) {
-				$nodePath = $node->getPath();
-				$relativeToTarget = str_starts_with($nodePath, $targetFolderPath . '/')
-					? substr($nodePath, strlen($targetFolderPath) + 1)
-					: $node->getName();
+				$relativeToTarget = $this->pathResolver->relativeToFolder($node->getPath(), $targetFolderPath)
+					?? $node->getName();
 				$filename = $node->getName();
 
 				// Ignore database file and hash codes file
@@ -153,13 +151,7 @@ class LibraryOrphanScanner {
 					continue;
 				}
 
-				$internalPath = $pathObj->internal;
-				$relativeToTarget = null;
-				if ($internalPath === $targetFolderPath) {
-					$relativeToTarget = '';
-				} elseif (str_starts_with($internalPath, $targetFolderPath . '/')) {
-					$relativeToTarget = substr($internalPath, strlen($targetFolderPath) + 1);
-				}
+				$relativeToTarget = $this->pathResolver->relativeToFolder($pathObj->internal, $targetFolderPath);
 
 				if (!$this->fileNodeExists($targetFolder, $relativeToTarget)) {
 					$missingSongIds[$song->id] = true;

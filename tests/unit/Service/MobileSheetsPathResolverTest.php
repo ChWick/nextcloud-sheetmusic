@@ -172,4 +172,11 @@ final class MobileSheetsPathResolverTest extends TestCase {
 	public function testRelativeToUserFolderCollapsesTraversalSegments(): void {
 		self::assertSame('file.pdf', $this->resolver()->relativeToUserFolder('/admin/files/./sub/../file.pdf', $this->user()));
 	}
+
+	public function testRelativeToFolder(): void {
+		self::assertSame('sub/file.pdf', $this->resolver()->relativeToFolder('/admin/files/Noten/sub/file.pdf', '/admin/files/Noten'));
+		self::assertSame('', $this->resolver()->relativeToFolder('/admin/files/Noten', '/admin/files/Noten'));
+		self::assertSame('file.pdf', $this->resolver()->relativeToFolder('/admin/files/Noten/dir/../file.pdf', '/admin/files/Noten/'));
+		self::assertNull($this->resolver()->relativeToFolder('/admin/files/Other/file.pdf', '/admin/files/Noten'));
+	}
 }

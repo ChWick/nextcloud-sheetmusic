@@ -496,54 +496,21 @@ class FileManager {
 				if ($userFolder->nodeExists($candRel)) {
 					$candTarget = $this->pathResolver->forTarget($candRel, $user, $userFolder->getPath());
 
-					$isReferencedByOtherSong = false;
 					$existingNode = $userFolder->get($candRel);
-					if ($this->internalSongFileMapper !== null && $existingNode instanceof \OCP\Files\File) {
-						$others = $this->internalSongFileMapper->findByFileId((int)$existingNode->getId());
-						foreach ($others as $other) {
-							if ($other->songId !== $song->id && $other->deletedAt === null) {
-								$isReferencedByOtherSong = true;
-								break;
-							}
-						}
-					}
+					$isReferencedByOtherSong = $this->isNodeReferencedByOtherSong($existingNode, $song->id, $candTarget->webdav, $databasePath);
 
-					if (!$isReferencedByOtherSong && $this->songMapper !== null && $databasePath !== '' && file_exists($databasePath)) {
-						if ($this->songMapper->isPathReferencedByOtherSong($databasePath, $candTarget->webdav, $song->id)) {
-							$isReferencedByOtherSong = true;
-						}
-					}
-
-					// If candidate target file is ALREADY referenced by another song in DB,
-					// duplicate the file so this song gets its own distinct file copy.
 					if ($isReferencedByOtherSong) {
 						if ($existingNode instanceof \OCP\Files\File) {
-							$targetRelative = $this->uniqueRelativePath($userFolder, $candRel, '');
-							$this->ensureParentFolder($userFolder, $targetRelative);
-							$copiedNode = $existingNode->copy($targetRelative);
-							$copiedTarget = $this->pathResolver->forTarget($targetRelative, $user, $userFolder->getPath());
-							$facts = MobileSheetsFileFacts::fromNode($copiedNode);
-							if ($this->internalSongFileMapper !== null) {
-								$internalSongFile = $this->internalSongFileMapper->findById($file->id);
-								if ($internalSongFile !== null) {
-									$internalSongFile->fileId = (int)$copiedNode->getId();
-									$internalSongFile->fileSize = $facts->fileSize;
-									$internalSongFile->fileHash = $facts->fileHash;
-									$this->internalSongFileMapper->update($internalSongFile);
-								}
-							}
-							if ($this->songMapper !== null && $databasePath !== '' && file_exists($databasePath) && is_writable($databasePath)) {
-								$this->songMapper->updateFile($databasePath, $file->id, $copiedTarget->webdav, $facts);
-							}
-							$hashCodes?->updatePath($source->webdav, $copiedTarget->webdav);
-
-							return $this->logEntry(
+							return $this->copyFileForSeparateSong(
+								$existingNode,
+								$candRel,
+								$userFolder,
+								$user,
 								$song,
 								$file,
-								sprintf('Copied file for separate song to "%s"', $targetRelative),
-								MobileSheetsFileLogEntry::LEVEL_INFO,
-								MobileSheetsFileLogEntry::CODE_PATH_MOVED,
-								$this->nodeIdOfStoredFile($copiedTarget->webdav, $user),
+								$source->webdav,
+								$databasePath,
+								$hashCodes,
 							);
 						}
 						continue;
@@ -551,18 +518,13 @@ class FileManager {
 
 					$targetNode = $userFolder->get($candRel);
 					$facts = MobileSheetsFileFacts::fromNode($targetNode);
-					if ($this->internalSongFileMapper !== null) {
-						$internalSongFile = $this->internalSongFileMapper->findById($file->id);
-						if ($internalSongFile !== null) {
-							$internalSongFile->fileId = (int)$targetNode->getId();
-							$internalSongFile->fileSize = $facts->fileSize;
-							$internalSongFile->fileHash = $facts->fileHash;
-							$this->internalSongFileMapper->update($internalSongFile);
-						}
-					}
-					if ($this->songMapper !== null && $databasePath !== '' && file_exists($databasePath) && is_writable($databasePath)) {
-						$this->songMapper->updateFile($databasePath, $file->id, $candTarget->webdav, $facts);
-					}
+					$this->updateFileRecord(
+						$file->id,
+						$facts,
+						newNodeId: (int)$targetNode->getId(),
+						databasePath: $databasePath,
+						webdavPath: $candTarget->webdav,
+					);
 					$hashCodes?->updatePath($source->webdav, $candTarget->webdav);
 
 					return $this->logEntry(
@@ -614,55 +576,21 @@ class FileManager {
 		}
 
 		if ($isAlreadyInPlace) {
-			$isReferencedByOtherSong = false;
 			$existingNode = $userFolder->get($sourceRelative);
-			if ($this->internalSongFileMapper !== null && $existingNode instanceof \OCP\Files\File) {
-				$others = $this->internalSongFileMapper->findByFileId((int)$existingNode->getId());
-				foreach ($others as $other) {
-					if ($other->songId !== $song->id && $other->deletedAt === null) {
-						$isReferencedByOtherSong = true;
-						break;
-					}
-				}
-			}
+			$isReferencedByOtherSong = $this->isNodeReferencedByOtherSong($existingNode, $song->id, $source->webdav, $databasePath);
 
-			if (!$isReferencedByOtherSong && $this->songMapper !== null && $databasePath !== '' && file_exists($databasePath)) {
-				if ($this->songMapper->isPathReferencedByOtherSong($databasePath, $source->webdav, $song->id)) {
-					$isReferencedByOtherSong = true;
-				}
-			}
-
-			// Check if this path is shared/referenced by another song in DB
-			if ($isReferencedByOtherSong) {
-				if ($existingNode instanceof \OCP\Files\File) {
-					$targetRelative = $this->uniqueRelativePath($userFolder, $sourceRelative, '');
-					$this->ensureParentFolder($userFolder, $targetRelative);
-					$copiedNode = $existingNode->copy($targetRelative);
-					$copiedTarget = $this->pathResolver->forTarget($targetRelative, $user, $userFolder->getPath());
-					$facts = MobileSheetsFileFacts::fromNode($copiedNode);
-					if ($this->internalSongFileMapper !== null) {
-						$internalSongFile = $this->internalSongFileMapper->findById($file->id);
-						if ($internalSongFile !== null) {
-							$internalSongFile->fileId = (int)$copiedNode->getId();
-							$internalSongFile->fileSize = $facts->fileSize;
-							$internalSongFile->fileHash = $facts->fileHash;
-							$this->internalSongFileMapper->update($internalSongFile);
-						}
-					}
-					if ($this->songMapper !== null && $databasePath !== '' && file_exists($databasePath) && is_writable($databasePath)) {
-						$this->songMapper->updateFile($databasePath, $file->id, $copiedTarget->webdav, $facts);
-					}
-					$hashCodes?->updatePath($source->webdav, $copiedTarget->webdav);
-
-					return $this->logEntry(
-						$song,
-						$file,
-						sprintf('Copied file for separate song to "%s"', $targetRelative),
-						MobileSheetsFileLogEntry::LEVEL_INFO,
-						MobileSheetsFileLogEntry::CODE_PATH_MOVED,
-						$this->nodeIdOfStoredFile($copiedTarget->webdav, $user),
-					);
-				}
+			if ($isReferencedByOtherSong && $existingNode instanceof \OCP\Files\File) {
+				return $this->copyFileForSeparateSong(
+					$existingNode,
+					$sourceRelative,
+					$userFolder,
+					$user,
+					$song,
+					$file,
+					$source->webdav,
+					$databasePath,
+					$hashCodes,
+				);
 			}
 
 			// Already in place. This also covers a file that already carries the counter
@@ -694,17 +622,12 @@ class FileManager {
 		$sourceNode->move($target->internal);
 
 		try {
-			if ($this->internalSongFileMapper !== null) {
-				$internalSongFile = $this->internalSongFileMapper->findById($file->id);
-				if ($internalSongFile !== null) {
-					$internalSongFile->fileSize = $facts->fileSize;
-					$internalSongFile->fileHash = $facts->fileHash;
-					$this->internalSongFileMapper->update($internalSongFile);
-				}
-			}
-			if ($this->songMapper !== null && $databasePath !== '' && file_exists($databasePath) && is_writable($databasePath)) {
-				$this->songMapper->updateFile($databasePath, $file->id, $target->webdav, $facts);
-			}
+			$this->updateFileRecord(
+				$file->id,
+				$facts,
+				databasePath: $databasePath,
+				webdavPath: $target->webdav,
+			);
 		} catch (\Throwable $exception) {
 			$this->revertMove(
 				$userFolder,
@@ -946,5 +869,89 @@ class FileManager {
 			'removedFolders' => $createdFolders,
 			'exception' => $cause,
 		]);
+	}
+
+	private function isNodeReferencedByOtherSong(
+		\OCP\Files\Node $node,
+		int $currentSongId,
+		string $webdavPath,
+		string $databasePath,
+	): bool {
+		if ($this->internalSongFileMapper !== null && $node instanceof \OCP\Files\File) {
+			$others = $this->internalSongFileMapper->findByFileId((int)$node->getId());
+			foreach ($others as $other) {
+				if ($other->songId !== $currentSongId && $other->deletedAt === null) {
+					return true;
+				}
+			}
+		}
+
+		if ($this->songMapper !== null && $databasePath !== '' && file_exists($databasePath)) {
+			if ($this->songMapper->isPathReferencedByOtherSong($databasePath, $webdavPath, $currentSongId)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private function updateFileRecord(
+		int $fileId,
+		MobileSheetsFileFacts $facts,
+		?int $newNodeId = null,
+		string $databasePath = '',
+		?string $webdavPath = null,
+	): void {
+		if ($this->internalSongFileMapper !== null) {
+			$internalSongFile = $this->internalSongFileMapper->findById($fileId);
+			if ($internalSongFile !== null) {
+				if ($newNodeId !== null) {
+					$internalSongFile->fileId = $newNodeId;
+				}
+				$internalSongFile->fileSize = $facts->fileSize;
+				$internalSongFile->fileHash = $facts->fileHash;
+				$this->internalSongFileMapper->update($internalSongFile);
+			}
+		}
+
+		if ($this->songMapper !== null && $databasePath !== '' && $webdavPath !== null && file_exists($databasePath) && is_writable($databasePath)) {
+			$this->songMapper->updateFile($databasePath, $fileId, $webdavPath, $facts);
+		}
+	}
+
+	private function copyFileForSeparateSong(
+		\OCP\Files\File $existingNode,
+		string $baseRelative,
+		Folder $userFolder,
+		IUser $user,
+		MobileSheetsSong $song,
+		MobileSheetsFile $file,
+		string $sourceWebdav,
+		string $databasePath,
+		?MobileSheetsHashCodesFile $hashCodes,
+	): MobileSheetsFileLogEntry {
+		$targetRelative = $this->uniqueRelativePath($userFolder, $baseRelative, '');
+		$this->ensureParentFolder($userFolder, $targetRelative);
+		$copiedNode = $existingNode->copy($targetRelative);
+		$copiedTarget = $this->pathResolver->forTarget($targetRelative, $user, $userFolder->getPath());
+		$facts = MobileSheetsFileFacts::fromNode($copiedNode);
+
+		$this->updateFileRecord(
+			$file->id,
+			$facts,
+			newNodeId: (int)$copiedNode->getId(),
+			databasePath: $databasePath,
+			webdavPath: $copiedTarget->webdav,
+		);
+		$hashCodes?->updatePath($sourceWebdav, $copiedTarget->webdav);
+
+		return $this->logEntry(
+			$song,
+			$file,
+			sprintf('Copied file for separate song to "%s"', $targetRelative),
+			MobileSheetsFileLogEntry::LEVEL_INFO,
+			MobileSheetsFileLogEntry::CODE_PATH_MOVED,
+			$this->nodeIdOfStoredFile($copiedTarget->webdav, $user),
+		);
 	}
 }

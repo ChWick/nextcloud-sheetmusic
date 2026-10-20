@@ -106,18 +106,23 @@ class MobileSheetsPathResolver {
 		return new MobileSheetsPath($internal, $this->webdavRoot($user) . '/' . $relativeToRoot);
 	}
 
-	/** Path of $internal relative to the user folder, e.g. "Noten/sub/file.pdf". */
-	public function relativeToUserFolder(string $internalPath, IUser $user): ?string {
+	/** Path of $internal relative to a folder, e.g. "sub/file.pdf" relative to "/admin/files/Noten". */
+	public function relativeToFolder(string $internalPath, string $folderPath): ?string {
 		$internalPath = $this->normalize($internalPath);
-		$internalRoot = $this->normalize($this->internalRoot($user));
-		if ($internalPath === $internalRoot) {
+		$folderPath = $this->normalize($folderPath);
+		if ($internalPath === $folderPath) {
 			return '';
 		}
-		if (!str_starts_with($internalPath, $internalRoot . '/')) {
+		if (!str_starts_with($internalPath, $folderPath . '/')) {
 			return null;
 		}
 
-		return substr($internalPath, strlen($internalRoot) + 1);
+		return substr($internalPath, strlen($folderPath) + 1);
+	}
+
+	/** Path of $internal relative to the user folder, e.g. "Noten/sub/file.pdf". */
+	public function relativeToUserFolder(string $internalPath, IUser $user): ?string {
+		return $this->relativeToFolder($internalPath, $this->internalRoot($user));
 	}
 
 	/**

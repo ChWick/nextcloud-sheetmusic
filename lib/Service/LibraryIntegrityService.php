@@ -124,13 +124,7 @@ class LibraryIntegrityService {
 				}
 
 				// Compute path relative to the library target folder
-				$internalPath = $pathObj->internal;
-				$relativeToTarget = null;
-				if ($internalPath === $targetFolderPath) {
-					$relativeToTarget = '';
-				} elseif (str_starts_with($internalPath, $targetFolderPath . '/')) {
-					$relativeToTarget = substr($internalPath, strlen($targetFolderPath) + 1);
-				}
+				$relativeToTarget = $this->pathResolver->relativeToFolder($pathObj->internal, $targetFolderPath);
 
 				$sourceExists = $this->fileNodeExists($targetFolder, $relativeToTarget);
 				$existingPdfPath = $sourceExists ? $relativeToTarget : null;
@@ -684,41 +678,9 @@ class LibraryIntegrityService {
 			return true;
 		}
 
-		$first = $songs[0];
-		$extractNames = static function (array $entities): array {
-			$names = array_map(static fn ($e) => $e->name ?? $e->title ?? (string)$e->id, $entities);
-			sort($names, SORT_STRING);
-			return $names;
-		};
-
-		$firstComposers = $extractNames($first->composers);
-		$firstArtists = $extractNames($first->artists);
-		$firstBooks = $extractNames($first->books);
-		$firstCollections = $extractNames($first->collections);
-		$firstGenres = $extractNames($first->genres);
-		$firstKeys = $extractNames($first->keys);
-
+		$firstKey = $this->getCanonicalSongMetadataKey($songs[0]);
 		for ($i = 1; $i < count($songs); $i++) {
-			$s = $songs[$i];
-			if (trim(strtolower($s->title)) !== trim(strtolower($first->title))) {
-				return false;
-			}
-			if ($extractNames($s->composers) !== $firstComposers) {
-				return false;
-			}
-			if ($extractNames($s->artists) !== $firstArtists) {
-				return false;
-			}
-			if ($extractNames($s->books) !== $firstBooks) {
-				return false;
-			}
-			if ($extractNames($s->collections) !== $firstCollections) {
-				return false;
-			}
-			if ($extractNames($s->genres) !== $firstGenres) {
-				return false;
-			}
-			if ($extractNames($s->keys) !== $firstKeys) {
+			if ($this->getCanonicalSongMetadataKey($songs[$i]) !== $firstKey) {
 				return false;
 			}
 		}

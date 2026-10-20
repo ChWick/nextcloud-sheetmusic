@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OCA\SheetMusic\Service;
 
+use OCA\SheetMusic\Db\InternalEntity;
 use OCA\SheetMusic\Db\InternalLibrary;
 use OCA\SheetMusic\Db\InternalSong;
 use OCA\SheetMusic\Db\InternalSongFile;
@@ -125,7 +126,7 @@ class LibraryReconciler {
 		$song = $this->songMapper->findByTitle($library->id, $title);
 		if ($song === null) {
 			$song = new InternalSong(
-				uuid: MobileSheetsSqliteImporter::generateUuid(),
+				uuid: InternalEntity::generateUuid(),
 				libraryId: $library->id,
 				title: $title,
 				sortTitle: $title,
@@ -156,7 +157,7 @@ class LibraryReconciler {
 		}
 
 		$songFile = new InternalSongFile(
-			uuid: MobileSheetsSqliteImporter::generateUuid(),
+			uuid: InternalEntity::generateUuid(),
 			songId: $song->id,
 			fileId: $fileNode->getId(),
 			pageOrder: $pageOrder,
