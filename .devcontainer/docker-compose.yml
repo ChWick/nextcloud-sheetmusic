@@ -1,6 +1,8 @@
 services:
   nextcloud:
-    image: ghcr.io/nextcloud/nextcloud-dev-php85:master
+    build:
+      context: .
+      dockerfile: Dockerfile
     ports:
       - "8080:80"
     volumes:
