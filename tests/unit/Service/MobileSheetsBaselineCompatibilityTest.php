@@ -157,7 +157,8 @@ final class MobileSheetsBaselineCompatibilityTest extends TestCase {
 			createdAt: 1000,
 			updatedAt: 1000,
 		);
-		$this->songMapper->insert($song);
+		$song = $this->songMapper->insert($song);
+		$this->attachTestFileToSong($song, 'canon.pdf', clientId: 1);
 
 		// Create entities of all supported types
 		$entitySpecs = [
@@ -274,7 +275,8 @@ final class MobileSheetsBaselineCompatibilityTest extends TestCase {
 			createdAt: 2000,
 			updatedAt: 2000,
 		);
-		$this->songMapper->insert($song);
+		$song = $this->songMapper->insert($song);
+		$this->attachTestFileToSong($song, 'canon.pdf', clientId: 1);
 
 		$exportPath = $this->tempDbPath();
 		$this->exporter->exportToFile($lib, $exportPath);

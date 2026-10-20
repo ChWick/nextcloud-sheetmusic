@@ -872,7 +872,8 @@ final class MobileSheetsSyncTest extends TestCase {
 			createdAt: 1000,
 			updatedAt: 1000,
 		);
-		$this->songMapper->insert($song);
+		$song = $this->songMapper->insert($song);
+		$this->attachTestFileToSong($song, 'link_del.pdf', clientId: 100);
 
 		$entity = new InternalEntity(
 			uuid: 'ent-link-del-' . bin2hex(random_bytes(3)),
@@ -1357,7 +1358,8 @@ final class MobileSheetsSyncTest extends TestCase {
 			createdAt: 1000,
 			updatedAt: 1000,
 		);
-		$this->songMapper->insert($songA);
+		$songA = $this->songMapper->insert($songA);
+		$this->attachTestFileToSong($songA, 'songA.pdf', clientId: 100);
 
 		$composerA = new InternalEntity(
 			uuid: 'comp-a-uuid',
@@ -1394,7 +1396,13 @@ final class MobileSheetsSyncTest extends TestCase {
 				break;
 			}
 		}
+		$userFolder = $this->rootFolder->getUserFolder('admin');
+		$fileB = $userFolder->newFile($lib->path . '/songB.pdf');
+		$fileB->putContent("%PDF-1.4 Song B\n");
+		$this->createdUserNodes[] = $fileB;
+
 		$msDb->exec("INSERT INTO Songs (Id, Title, SortTitle, Stars, Difficulty, Duration, $dateCol, LastModified) VALUES (2, 'Song B (Added in MS)', 'Song B (Added in MS)', 4, 3, 200, 2000000, 2000000)");
+		$msDb->exec("INSERT INTO Files (Id, SongId, Path, PageOrder, FileSize, LastModified, Source, Type, Password, SourceFilePageCount, FileHash, Width, Height) VALUES (200, 2, 'songB.pdf', '1', 100, 2000000, 1, 1, '', 1, 222, -1, -1)");
 		$msDb->exec('DELETE FROM Composer WHERE Id = 10');
 		$msDb->exec('DELETE FROM ComposerSongs WHERE ComposerId = 10');
 		$msDb->exec("INSERT INTO Composer (Id, Name, SortBy, Ascending, DateCreated, LastModified) VALUES (20, 'Composer B', 1, 1, 2000000, 2000000)");
@@ -1616,12 +1624,19 @@ final class MobileSheetsSyncTest extends TestCase {
 			createdAt: 1500,
 			updatedAt: 1500,
 		);
-		$this->songMapper->insert($ncSong);
+		$ncSong = $this->songMapper->insert($ncSong);
+		$this->attachTestFileToSong($ncSong, 'nc_song.pdf', clientId: 10);
 
 		// 2. An uploaded MobileSheets DB from another device or backup only has its own song
 		$dbPath = $this->tempDbPath();
 		$msDb = $this->createEmptyMobileSheetsDb($dbPath);
 		$msDb->exec("INSERT INTO Songs (Id, Title, SortTitle, Stars, Difficulty, Duration, DateCreated, LastModified) VALUES (2, 'MS New Song', 'MS New Song', 3, 2, 180, 1000000, 1600000000000)");
+		$msDb->exec("INSERT INTO Files (Id, SongId, Path, PageOrder, FileSize, LastModified, Source, Type, Password, SourceFilePageCount, FileHash, Width, Height) VALUES (20, 2, 'ms_song.pdf', '1', 100, 1600000000000, 1, 1, '', 1, 222, -1, -1)");
+
+		$userFolder = $this->rootFolder->getUserFolder('admin');
+		$msFile = $userFolder->newFile($lib->path . '/ms_song.pdf');
+		$msFile->putContent("%PDF-1.4 MS Song\n");
+		$this->createdUserNodes[] = $msFile;
 
 		// Note: The uploaded DB has NO _nc_sync_metadata referencing ncSong, or it's a completely different DB
 		$stats = $this->importer->importFromFile($lib, $dbPath);
@@ -1658,6 +1673,11 @@ final class MobileSheetsSyncTest extends TestCase {
 			(1, 'Song Alpha', 'Song Alpha', 1000000, 1000000),
 			(2, 'Song Beta', 'Song Beta', 1000000, 1000000),
 			(3, 'Song Gamma', 'Song Gamma', 1000000, 1000000)");
+
+		$msDb1->exec("INSERT INTO Files (Id, SongId, Path, PageOrder, FileSize, LastModified, Source, Type, Password, SourceFilePageCount, FileHash, Width, Height) VALUES
+			(1, 1, 'alpha.pdf', '1', 100, 1000000, 1, 1, '', 1, 111, -1, -1),
+			(2, 2, 'beta.pdf', '1', 100, 1000000, 1, 1, '', 1, 222, -1, -1),
+			(3, 3, 'gamma.pdf', '1', 100, 1000000, 1, 1, '', 1, 333, -1, -1)");
 
 		// SortBy = 0: Manual / custom order
 		$msDb1->exec("INSERT INTO Collections (Id, Name, SortBy, Ascending, DateCreated, LastModified) VALUES
@@ -1735,9 +1755,12 @@ final class MobileSheetsSyncTest extends TestCase {
 			createdAt: 2000,
 			updatedAt: 2000,
 		);
-		$this->songMapper->insert($songA);
-		$this->songMapper->insert($songB);
-		$this->songMapper->insert($songC);
+		$songA = $this->songMapper->insert($songA);
+		$this->attachTestFileToSong($songA, 'zebra.pdf', clientId: 1);
+		$songB = $this->songMapper->insert($songB);
+		$this->attachTestFileToSong($songB, 'apple.pdf', clientId: 2);
+		$songC = $this->songMapper->insert($songC);
+		$this->attachTestFileToSong($songC, 'mango.pdf', clientId: 3);
 
 		$testModes = [
 			// Mode 1: Title (A-Z): Apple (2), Mango (3), Zebra (1)
@@ -1812,6 +1835,11 @@ final class MobileSheetsSyncTest extends TestCase {
 
 		$song2 = new InternalSong(uuid: 'song-merge-2', libraryId: $lib->id, title: 'Song 2', clientId: 2, updatedAt: 1000);
 		$this->songMapper->insert($song2);
+		$file2 = $userFolder->newFile('Song 2.pdf');
+		$file2->putContent("%PDF-1.4 test 2\n");
+		$this->createdUserNodes[] = $file2;
+		$sf2 = new InternalSongFile(uuid: 'sf-merge-2', songId: $song2->id, fileId: $file2->getId(), clientId: 2, updatedAt: 1000);
+		$this->songFileMapper->insert($sf2);
 
 		// Initial export
 		$exportPath = $this->tempDbPath();

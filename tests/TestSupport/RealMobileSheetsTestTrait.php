@@ -12,7 +12,9 @@ namespace TestSupport;
 use OCA\SheetMusic\Db\InternalEntityMapper;
 use OCA\SheetMusic\Db\InternalLibrary;
 use OCA\SheetMusic\Db\InternalMiscMapper;
+use OCA\SheetMusic\Db\InternalSong;
 use OCA\SheetMusic\Db\InternalSongAttributeMapper;
+use OCA\SheetMusic\Db\InternalSongFile;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
@@ -148,6 +150,33 @@ trait RealMobileSheetsTestTrait {
 		$lib = $firstMatch instanceof InternalLibrary ? $firstMatch : $libs[0];
 		$this->createdLibraryIds[] = (int)$lib->id;
 		return $lib;
+	}
+
+	protected function attachTestFileToSong(InternalSong $song, string $fileName = 'score.pdf', ?int $clientId = null): InternalSongFile {
+		$lib = $this->libraryMapper->findById($song->libraryId);
+		$userId = $lib ? $lib->userId : 'admin';
+		$userFolder = $this->rootFolder->getUserFolder($userId);
+		$libPath = $lib ? trim($lib->path, '/') : 'Test';
+		$folder = $userFolder->nodeExists($libPath) ? $userFolder->get($libPath) : $userFolder->newFolder($libPath);
+		$uniqueName = bin2hex(random_bytes(3)) . '_' . $fileName;
+		$fileNode = $folder->newFile($uniqueName);
+		$fileNode->putContent("%PDF-1.4 Test Score\n");
+		$this->createdUserNodes[] = $fileNode;
+
+		$songFile = new InternalSongFile(
+			uuid: 'sf_' . bin2hex(random_bytes(4)),
+			songId: $song->id,
+			fileId: (int)$fileNode->getId(),
+			pageOrder: '1',
+			pageCount: 1,
+			fileSize: 1024,
+			fileHash: 123456,
+			type: 1,
+			clientId: $clientId,
+			createdAt: $song->createdAt,
+			updatedAt: $song->updatedAt,
+		);
+		return $this->songFileMapper->insert($songFile);
 	}
 
 	protected function tempDbPath(): string {

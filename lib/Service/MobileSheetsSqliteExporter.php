@@ -86,9 +86,10 @@ class MobileSheetsSqliteExporter {
 				$user = $this->userManager->get($lib->userId);
 
 				$this->exportMiscData($db, $lib->id, $user);
+				$validSongIds = $this->getSongIdsWithValidFiles($db, $lib, $user);
 				$this->exportEntities($db, $lib->id);
-				$this->exportSongs($db, $lib->id);
-				$this->exportSongEntityLinks($db, $lib->id);
+				$this->exportSongs($db, $lib->id, $validSongIds);
+				$this->exportSongEntityLinks($db, $lib->id, $validSongIds);
 				$this->exportFiles($db, $lib, $user);
 
 				$db->commit();
@@ -359,7 +360,37 @@ class MobileSheetsSqliteExporter {
 		}
 	}
 
-	private function exportSongs(PDO $db, int $libraryId): void {
+	/**
+	 * @return array<int, bool> Set of internal song IDs (and/or client IDs) that have at least one valid file.
+	 */
+	private function getSongIdsWithValidFiles(PDO $db, InternalLibrary $library, ?IUser $user): array {
+		$validSongIds = [];
+		$files = $this->songFileMapper->findAllForLibrary($library->id, includeDeleted: false);
+
+		foreach ($files as $file) {
+			$webdavPath = $this->resolveWebdavPathForFile($file, $library, $user);
+			if ($webdavPath !== null && $webdavPath !== '') {
+				$validSongIds[$file->songId] = true;
+			}
+		}
+
+		// Also check if any files were exported from misc_data (e.g. synthetic roundtrip tests)
+		if (MobileSheetsTableHelper::tableExists($db, 'Files')) {
+			$stmt = $db->query('SELECT DISTINCT SongId FROM Files WHERE SongId IS NOT NULL');
+			if ($stmt !== false) {
+				while ($row = $stmt->fetch()) {
+					$validSongIds[(int)$row['SongId']] = true;
+				}
+			}
+		}
+
+		return $validSongIds;
+	}
+
+	/**
+	 * @param array<int, bool> $validSongIds
+	 */
+	private function exportSongs(PDO $db, int $libraryId, array $validSongIds): void {
 		if (!MobileSheetsTableHelper::tableExists($db, 'Songs')) {
 			return;
 		}
@@ -388,6 +419,12 @@ class MobileSheetsSqliteExporter {
 		$existingCols = MobileSheetsTableHelper::getTableColumns($db, 'Songs');
 
 		foreach ($songs as $song) {
+			$hasValidFile = isset($validSongIds[$song->id])
+				|| ($song->clientId !== null && isset($validSongIds[$song->clientId]));
+			if (!$hasValidFile) {
+				continue;
+			}
+
 			$clientId = $song->clientId;
 			if ($clientId === null || $clientId <= 0) {
 				while (isset($usedIds[$nextId])) {
@@ -487,13 +524,21 @@ class MobileSheetsSqliteExporter {
 		}
 	}
 
-	private function exportSongEntityLinks(PDO $db, int $libraryId): void {
+	/**
+	 * @param array<int, bool> $validSongIds
+	 */
+	private function exportSongEntityLinks(PDO $db, int $libraryId, array $validSongIds): void {
 		$links = $this->entityMapper->findAllSongEntityLinksForLibrary($libraryId);
 
 		$songs = $this->songMapper->findAllForLibrary($libraryId, includeDeleted: false);
 		$songClientMap = [];
 		$songById = [];
 		foreach ($songs as $s) {
+			$hasValidFile = isset($validSongIds[$s->id])
+				|| ($s->clientId !== null && isset($validSongIds[$s->clientId]));
+			if (!$hasValidFile) {
+				continue;
+			}
 			$songById[$s->id] = $s;
 			if ($s->clientId !== null) {
 				$songClientMap[$s->id] = $s->clientId;
@@ -681,6 +726,26 @@ class MobileSheetsSqliteExporter {
 
 		if (MobileSheetsTableHelper::tableExists($db, 'Files') && MobileSheetsTableHelper::tableExists($db, 'Songs')) {
 			$db->exec('DELETE FROM Files WHERE SongId IS NULL OR SongId NOT IN (SELECT Id FROM Songs)');
+			$db->exec('DELETE FROM Songs WHERE Id NOT IN (SELECT DISTINCT SongId FROM Files WHERE SongId IS NOT NULL)');
+			$this->cleanOrphanSongReferences($db);
+		}
+	}
+
+	private function cleanOrphanSongReferences(PDO $db): void {
+		if (MobileSheetsTableHelper::tableExists($db, 'SongNotes')) {
+			$db->exec('DELETE FROM SongNotes WHERE SongId NOT IN (SELECT Id FROM Songs)');
+		}
+		if (MobileSheetsTableHelper::tableExists($db, '_nc_sync_metadata')) {
+			$db->exec("DELETE FROM _nc_sync_metadata WHERE entity_type = 'song' AND client_id NOT IN (SELECT Id FROM Songs)");
+		}
+		foreach (MobileSheetsEntityConfig::BY_TABLE as $config) {
+			$linkTable = $config['linkTable'];
+			if (MobileSheetsTableHelper::tableExists($db, $linkTable)) {
+				$db->exec(sprintf('DELETE FROM "%s" WHERE SongId NOT IN (SELECT Id FROM Songs)', str_replace('"', '""', $linkTable)));
+			}
+		}
+		if (MobileSheetsTableHelper::tableExists($db, 'SetlistSongs')) {
+			$db->exec('DELETE FROM SetlistSongs WHERE SongId NOT IN (SELECT Id FROM Songs)');
 		}
 	}
 

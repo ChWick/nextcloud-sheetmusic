@@ -565,5 +565,78 @@ final class MobileSheetsSqliteExporterTest extends TestCase {
 
 		// The missing file must NOT have been added to the Files table
 		self::assertCount(0, $fileRows);
+
+		// The song whose only file was missing on disk must ALSO be excluded from Songs
+		$songRows = $db->query('SELECT * FROM Songs')->fetchAll(PDO::FETCH_ASSOC);
+		self::assertCount(0, $songRows);
+	}
+
+	public function testExportToFileExcludesSongsWithoutFiles(): void {
+		$songMapper = $this->createMock(InternalSongMapper::class);
+		$entityMapper = $this->createMock(InternalEntityMapper::class);
+		$songFileMapper = $this->createMock(InternalSongFileMapper::class);
+		$attributeMapper = $this->createMock(InternalSongAttributeMapper::class);
+		$miscMapper = $this->createMock(InternalMiscMapper::class);
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$pathResolver = $this->createMock(MobileSheetsPathResolver::class);
+		$rootFolder = $this->createMock(IRootFolder::class);
+		$userManager = $this->createMock(IUserManager::class);
+		$logger = new NullLogger();
+
+		$library = new InternalLibrary(id: 1, userId: 'admin', path: '/Noten');
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('admin');
+		$userManager->method('get')->with('admin')->willReturn($user);
+
+		$node1 = $this->createMock(File::class);
+		$node1->method('getPath')->willReturn('/admin/files/Noten/song1.pdf');
+
+		$userFolder = $this->createMock(IUserFolder::class);
+		$userFolder->method('getById')->with(101)->willReturn([$node1]);
+		$rootFolder->method('getUserFolder')->with('admin')->willReturn($userFolder);
+
+		$pathResolver->method('fromInternal')->with('/admin/files/Noten/song1.pdf', $user)->willReturn(
+			new MobileSheetsPath('/admin/files/Noten/song1.pdf', '/remote.php/dav/files/admin/Noten/song1.pdf')
+		);
+
+		$songWithFile = new InternalSong(id: 1, uuid: 's-1', libraryId: 1, title: 'Has File', clientId: 10);
+		$songWithoutFile = new InternalSong(id: 2, uuid: 's-2', libraryId: 1, title: 'No File', clientId: 20);
+		$songMapper->method('findAllForLibrary')->willReturn([$songWithFile, $songWithoutFile]);
+
+		$file = new InternalSongFile(
+			id: 1,
+			uuid: 'f-1',
+			songId: 1,
+			fileId: 101,
+			clientId: 100,
+			pageOrder: '1',
+			type: 1,
+		);
+		$songFileMapper->method('findAllForLibrary')->with(1, false)->willReturn([$file]);
+		$miscMapper->method('getMiscSchemas')->with(1, 'mobilesheets')->willReturn([]);
+
+		$exporter = new MobileSheetsSqliteExporter(
+			$songMapper,
+			$entityMapper,
+			$songFileMapper,
+			$attributeMapper,
+			$miscMapper,
+			$libraryMapper,
+			$pathResolver,
+			$rootFolder,
+			$userManager,
+			$logger,
+		);
+
+		$exporter->exportToFile($library, $this->tempDbPath);
+
+		self::assertFileExists($this->tempDbPath);
+		$db = new PDO('sqlite:' . $this->tempDbPath);
+		$songRows = $db->query('SELECT Id, Title FROM Songs')->fetchAll(PDO::FETCH_ASSOC);
+
+		// Only the song with a valid file should be exported
+		self::assertCount(1, $songRows);
+		self::assertSame(10, (int)$songRows[0]['Id']);
+		self::assertSame('Has File', $songRows[0]['Title']);
 	}
 }
