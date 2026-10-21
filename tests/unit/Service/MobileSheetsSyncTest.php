@@ -1034,6 +1034,7 @@ final class MobileSheetsSyncTest extends TestCase {
 		$allFiles = $this->songFileMapper->findAllForLibrary($lib->id, includeDeleted: true);
 		self::assertCount(1, $allFiles);
 		self::assertNotNull($allFiles[0]->deletedAt, 'File should be tombstoned');
+		self::assertFalse($testFolder->nodeExists('sonata.pdf'), 'Physical file should be deleted when removed in MobileSheets');
 	}
 
 	public function testSongDeletionWithLinkedEntitiesAndFilesExportCycle(): void {
@@ -1118,6 +1119,7 @@ final class MobileSheetsSyncTest extends TestCase {
 		$reloadedFile = $this->songFileMapper->findById($songFile->id);
 		self::assertNotNull($reloadedFile);
 		self::assertNotNull($reloadedFile->deletedAt, 'File should be tombstoned');
+		self::assertFalse($testFolder->nodeExists('cycle.pdf'), 'Physical file should be deleted when song is deleted in MobileSheets');
 
 		$reloadedComp = $this->entityMapper->findById($composer->id);
 		self::assertNotNull($reloadedComp);
@@ -1132,6 +1134,74 @@ final class MobileSheetsSyncTest extends TestCase {
 		self::assertSame(0, (int)$finalDb->query('SELECT COUNT(*) FROM Files')->fetchColumn());
 		self::assertSame(0, (int)$finalDb->query('SELECT COUNT(*) FROM ComposerSongs')->fetchColumn());
 		self::assertSame(1, (int)$finalDb->query('SELECT COUNT(*) FROM Composer')->fetchColumn());
+	}
+
+	public function testCreateSongWithFileSyncThenDeleteSongSyncDeletesPhysicalFile(): void {
+		$libName = 'TestSyncCreateDel_' . bin2hex(random_bytes(3));
+		$lib = $this->createTestLibrary($libName, 'admin');
+		$adminUser = $this->userManager->get('admin');
+		self::assertNotNull($adminUser);
+		$userFolder = $this->rootFolder->getUserFolder('admin');
+		$libFolder = $userFolder->newFolder($libName);
+		$this->createdUserNodes[] = $libFolder;
+
+		// 1. MobileSheets uploads a file via WebDAV PUT (triggers NodeCreatedEvent / reconciler)
+		//    and then uploads mobilesheets.db containing the song and file.
+		$scoreFile = $libFolder->newFile('TestScore.pdf');
+		$scoreFile->putContent("%PDF-1.4\n1 0 obj << /Type /Catalog >> endobj\n");
+		$this->createdUserNodes[] = $scoreFile;
+
+		$reconciler = new \OCA\SheetMusic\Service\LibraryReconciler(
+			$this->songMapper,
+			$this->songFileMapper,
+			$this->libraryMapper,
+			$this->rootFolder,
+			$this->userManager,
+			new \Psr\Log\NullLogger(),
+		);
+		// Simulate SheetMusicFileEventListener auto-indexing the newly uploaded file
+		$reconciler->indexFile($lib, $scoreFile);
+
+		// MobileSheets uploads its SQLite DB on first sync (which has no _nc_sync_metadata yet, or has empty metadata from initial GET)
+		$dbPath1 = $this->tempDbPath();
+		$this->exporter->exportToFile($lib, $dbPath1);
+		// Or simulate MobileSheets having created Song 1 + File 1 locally and uploading over empty baseline:
+		$msDb1 = $this->createEmptyMobileSheetsDb($dbPath1);
+		$webdavPath = sprintf('/remote.php/dav/files/admin/%s/TestScore.pdf', $libName);
+		$msDb1->exec("INSERT INTO Songs (Id, Title, SortTitle, Stars, Difficulty, Duration, DateCreated, LastModified) VALUES (1, 'TestScore', 'TestScore', 0, 0, 0, 1000000, 2000000000000)");
+		$msDb1->exec(sprintf(
+			"INSERT INTO Files (Id, SongId, Path, PageOrder, FileSize, LastModified, Source, Type, SourceFilePageCount, FileHash) VALUES (10, 1, '%s', '1', 44, 2000000000000, 1, 1, 1, 12345)",
+			$webdavPath,
+		));
+
+		// 2. First sync (import)
+		$this->importer->importFromFile($lib, $dbPath1, $adminUser);
+
+		$activeSongsAfterCreate = $this->songMapper->findAllForLibrary($lib->id, includeDeleted: false);
+		self::assertCount(1, $activeSongsAfterCreate);
+		$activeFilesAfterCreate = $this->songFileMapper->findAllForLibrary($lib->id, includeDeleted: false);
+		self::assertCount(1, $activeFilesAfterCreate);
+		self::assertTrue($libFolder->nodeExists('TestScore.pdf'));
+
+		// 3. Delete the song on MobileSheets client (after fetching baseline or using local DB, then syncing):
+		//    Client fetches or has baseline with _nc_sync_metadata (or deletes from its DB after sync):
+		$dbPath2 = $this->tempDbPath();
+		$this->exporter->exportToFile($lib, $dbPath2);
+
+		$msDb2 = new PDO('sqlite:' . $dbPath2, options: [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
+		$msDb2->exec('DELETE FROM Songs WHERE Id = 1');
+		$msDb2->exec('DELETE FROM Files WHERE Id = 10');
+
+		// 4. Second sync (import)
+		$stats2 = $this->importer->importFromFile($lib, $dbPath2, $adminUser);
+		self::assertSame(1, $stats2['songsDeleted']);
+		self::assertSame(1, $stats2['filesDeleted']);
+
+		// Verify song is deleted, song_file record is deleted, AND physical file is deleted (not orphan)
+		self::assertEmpty($this->songMapper->findAllForLibrary($lib->id, includeDeleted: false));
+		self::assertEmpty($this->songFileMapper->findAllForLibrary($lib->id, includeDeleted: false));
+		self::assertEmpty($this->songFileMapper->findOrphanSongFiles($lib->id));
+		self::assertFalse($libFolder->nodeExists('TestScore.pdf'), 'Physical file must be deleted and not left as an orphan');
 	}
 
 	public function testClientSongRenameReplacesOldSongWithoutDuplicatesWhenLibraryHasMiscSchemas(): void {

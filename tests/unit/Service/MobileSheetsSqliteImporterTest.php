@@ -410,6 +410,24 @@ final class MobileSheetsSqliteImporterTest extends TestCase {
 		);
 		$songMapper->method('findByUuid')->with('deleted-uuid')->willReturn($songToDelete);
 
+		$attachedFile = new InternalSongFile(
+			id: 50,
+			uuid: 'attached-file-uuid',
+			songId: 1,
+			fileId: 777,
+			clientId: 20,
+			deletedAt: null,
+		);
+		$songFileMapper->method('findAllForSong')->with(1, false)->willReturn([$attachedFile]);
+		$songFileMapper->method('findByFileId')->with(777, false)->willReturn([]);
+		$songFileMapper->expects(self::once())->method('delete')->with(50, false);
+
+		$physicalNode = $this->createMock(File::class);
+		$physicalNode->expects(self::once())->method('delete');
+		$userFolder = $this->createMock(IUserFolder::class);
+		$userFolder->method('getById')->with(777)->willReturn([$physicalNode]);
+		$rootFolder->method('getUserFolder')->with('admin')->willReturn($userFolder);
+
 		$deletedId = null;
 		$songMapper->method('delete')->willReturnCallback(function ($id, $hardDelete) use (&$deletedId) {
 			$deletedId = $id;
@@ -433,6 +451,7 @@ final class MobileSheetsSqliteImporterTest extends TestCase {
 		$stats = $importer->importFromFile($library, $this->tempDbPath);
 
 		self::assertSame(1, $stats['songsDeleted']);
+		self::assertSame(1, $stats['filesDeleted']);
 		self::assertSame(1, $deletedId);
 	}
 

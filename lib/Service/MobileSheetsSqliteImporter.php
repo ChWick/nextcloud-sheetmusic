@@ -130,7 +130,7 @@ class MobileSheetsSqliteImporter {
 
 		// 5. Deletions (Tombstones) if sync metadata is present
 		if ($syncMeta->hasMetadata) {
-			$this->processDeletions($db, $lib->id, $syncMeta, $stats);
+			$this->processDeletions($db, $lib->id, $user, $syncMeta, $stats);
 		}
 
 		// 6. Misc Tables (Setlists, Bookmarks, Annotations, AudioFiles, etc.)
@@ -478,7 +478,13 @@ class MobileSheetsSqliteImporter {
 	/**
 	 * @param array<string, int> $stats
 	 */
-	private function processDeletions(PDO $db, int $libraryId, MobileSheetsSyncMetadata $syncMeta, array &$stats): void {
+	private function processDeletions(
+		PDO $db,
+		int $libraryId,
+		?IUser $user,
+		MobileSheetsSyncMetadata $syncMeta,
+		array &$stats,
+	): void {
 		// 1. Deleted Songs
 		$songEntries = $syncMeta->getEntriesByType('song');
 		if (!empty($songEntries)) {
@@ -496,6 +502,14 @@ class MobileSheetsSqliteImporter {
 						// LWW: If Nextcloud has newer edits since the baseline export, Nextcloud wins
 						if ($song->updatedAt > $metaUpdatedAt) {
 							continue;
+						}
+						$filesOfSong = $this->songFileMapper->findAllForSong($song->id, includeDeleted: false);
+						foreach ($filesOfSong as $songFile) {
+							$this->deleteSongFileAndPhysicalNode($songFile, $user);
+							$stats['filesDeleted']++;
+							if ($songFile->clientId !== null) {
+								$this->miscMapper->deleteMiscData($libraryId, 'mobilesheets', 'Files', (string)$songFile->clientId);
+							}
 						}
 						$this->songMapper->delete($song->id, hardDelete: false);
 						$stats['songsDeleted']++;
@@ -526,11 +540,38 @@ class MobileSheetsSqliteImporter {
 						if ($file->updatedAt > $metaUpdatedAt) {
 							continue;
 						}
-						$this->songFileMapper->delete($file->id, hardDelete: false);
+						$this->deleteSongFileAndPhysicalNode($file, $user);
 						$stats['filesDeleted']++;
 					}
 					$this->miscMapper->deleteMiscData($libraryId, 'mobilesheets', 'Files', (string)$clientId);
 				}
+			}
+		}
+	}
+
+	private function deleteSongFileAndPhysicalNode(InternalSongFile $songFile, ?IUser $user): void {
+		$targetFileId = $songFile->fileId;
+		$this->songFileMapper->delete($songFile->id, hardDelete: false);
+
+		if ($user === null || $targetFileId <= 0) {
+			return;
+		}
+
+		$others = $this->songFileMapper->findByFileId($targetFileId, includeDeleted: false);
+		$activeOthers = array_filter($others, static fn (InternalSongFile $f): bool => $f->id !== $songFile->id && $f->deletedAt === null);
+
+		if ($activeOthers === []) {
+			try {
+				$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+				$nodes = $userFolder->getById($targetFileId);
+				if ($nodes !== []) {
+					$nodes[0]->delete();
+				}
+			} catch (\Throwable $e) {
+				$this->logger->warning('Could not delete physical file node during sync deletion', [
+					'fileId' => $targetFileId,
+					'exception' => $e,
+				]);
 			}
 		}
 	}
