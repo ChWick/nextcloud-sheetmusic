@@ -171,6 +171,23 @@ class SongFileService {
 		// Preserves fileId, path, and triggers Nextcloud files_versions app to capture history
 		$targetNode->putContent($content);
 
+		$fileRecord->fileSize = strlen($content);
+		$ext = strtolower(pathinfo($targetNode->getName(), PATHINFO_EXTENSION));
+		if ($ext === 'pdf') {
+			try {
+				$fileRecord->fileHash = MobileSheetsPdf::contentHash($content);
+				$pageCount = MobileSheetsPdf::pageCount($content);
+				$fileRecord->pageCount = $pageCount;
+				$fileRecord->pageOrder = $pageCount > 1 ? '1-' . $pageCount : '1';
+			} catch (\Throwable $e) {
+				$this->logger->warning('Failed to compute PDF metadata for updated song file: ' . $targetNode->getName(), [
+					'exception' => $e,
+				]);
+			}
+		}
+		$fileRecord->updatedAt = time();
+		$this->internalSongFileMapper->update($fileRecord);
+
 		$this->libraryMapper->touch($libraryId);
 		$this->syncSongFileMetadata($user, '', $songId, $libraryId);
 

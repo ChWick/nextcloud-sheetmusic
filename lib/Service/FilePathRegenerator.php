@@ -518,6 +518,7 @@ class FilePathRegenerator {
 				}
 				$internalSongFile->fileSize = $facts->fileSize;
 				$internalSongFile->fileHash = $facts->fileHash;
+				$internalSongFile->updatedAt = time();
 				$this->internalSongFileMapper->update($internalSongFile);
 			}
 		}

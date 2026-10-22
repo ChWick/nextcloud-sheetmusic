@@ -263,8 +263,52 @@ class InternalSongMapper {
 			}
 		}
 
-		// 3. Delete dropped song
+		// 3. Remove attributes and misc_data of dropped song, bump keepId updated_at, and delete dropped song
+		$droppedSong = $this->findById($droppedId);
+		if ($droppedSong !== null) {
+			$miscQb = $this->db->getQueryBuilder();
+			$miscQb->update(InternalMiscMapper::DATA_TABLE_NAME)
+				->set('deleted_at', $miscQb->createNamedParameter(time(), IQueryBuilder::PARAM_INT))
+				->set('updated_at', $miscQb->createNamedParameter(time(), IQueryBuilder::PARAM_INT))
+				->where($miscQb->expr()->eq('library_id', $miscQb->createNamedParameter($libraryId, IQueryBuilder::PARAM_INT)))
+				->andWhere($miscQb->expr()->eq('song_uuid', $miscQb->createNamedParameter($droppedSong->uuid, IQueryBuilder::PARAM_STR)));
+			$miscQb->executeStatement();
+		}
+
+		$attrQb = $this->db->getQueryBuilder();
+		$attrQb->delete(InternalSongAttributeMapper::TABLE_NAME)
+			->where($attrQb->expr()->eq('song_id', $attrQb->createNamedParameter($droppedId, IQueryBuilder::PARAM_INT)));
+		$attrQb->executeStatement();
+
+		$qbKeep = $this->db->getQueryBuilder();
+		$qbKeep->update(self::TABLE_NAME)
+			->set('updated_at', $qbKeep->createNamedParameter(time(), IQueryBuilder::PARAM_INT))
+			->where($qbKeep->expr()->eq('id', $qbKeep->createNamedParameter($keepId, IQueryBuilder::PARAM_INT)));
+		$qbKeep->executeStatement();
+
 		$this->delete($droppedId);
+	}
+
+	/**
+	 * Clean up auxiliary attributes and misc_data records associated with a deleted song.
+	 */
+	public function cleanupDeletedSongData(int $libraryId, int $songId): void {
+		$song = $this->findById($songId);
+		$attrQb = $this->db->getQueryBuilder();
+		$attrQb->delete(InternalSongAttributeMapper::TABLE_NAME)
+			->where($attrQb->expr()->eq('song_id', $attrQb->createNamedParameter($songId, IQueryBuilder::PARAM_INT)));
+		$attrQb->executeStatement();
+
+		if ($song !== null) {
+			$now = time();
+			$miscQb = $this->db->getQueryBuilder();
+			$miscQb->update(InternalMiscMapper::DATA_TABLE_NAME)
+				->set('deleted_at', $miscQb->createNamedParameter($now, IQueryBuilder::PARAM_INT))
+				->set('updated_at', $miscQb->createNamedParameter($now, IQueryBuilder::PARAM_INT))
+				->where($miscQb->expr()->eq('library_id', $miscQb->createNamedParameter($libraryId, IQueryBuilder::PARAM_INT)))
+				->andWhere($miscQb->expr()->eq('song_uuid', $miscQb->createNamedParameter($song->uuid, IQueryBuilder::PARAM_STR)));
+			$miscQb->executeStatement();
+		}
 	}
 
 	/**

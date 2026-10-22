@@ -278,6 +278,7 @@ class SongService {
 				}
 			}
 			$this->internalSongFileMapper->deleteAllForSong($songId);
+			$this->internalSongMapper->cleanupDeletedSongData($libraryId, $songId);
 			$this->internalSongMapper->delete($songId);
 			$this->libraryMapper->touch($libraryId);
 
@@ -322,6 +323,7 @@ class SongService {
 			foreach ($songIds as $songId) {
 				$songId = (int)$songId;
 				$this->internalSongFileMapper->deleteAllForSong($songId);
+				$this->internalSongMapper->cleanupDeletedSongData($libraryId, $songId);
 				$this->internalSongMapper->delete($songId);
 			}
 			$this->libraryMapper->touch($libraryId);

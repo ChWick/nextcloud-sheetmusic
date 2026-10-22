@@ -356,6 +356,8 @@ class InternalEntityMapper {
 	 */
 	public function mergeEntities(int $libraryId, string $type, int $keepId, array $duplicateIds): int {
 		$mergedCount = 0;
+		$now = time();
+		$affectedSongIds = [];
 		foreach ($duplicateIds as $dupId) {
 			if ($dupId === $keepId) {
 				continue;
@@ -366,11 +368,28 @@ class InternalEntityMapper {
 			foreach ($songIds as $songId) {
 				$this->linkSongEntity($songId, $keepId);
 				$this->unlinkSongEntity($songId, $dupId);
+				$affectedSongIds[$songId] = true;
 			}
 
 			// Delete duplicate entity
 			$this->delete($dupId);
 			$mergedCount++;
+		}
+
+		if ($mergedCount > 0) {
+			$qbKeep = $this->db->getQueryBuilder();
+			$qbKeep->update(self::TABLE_NAME)
+				->set('updated_at', $qbKeep->createNamedParameter($now, IQueryBuilder::PARAM_INT))
+				->where($qbKeep->expr()->eq('id', $qbKeep->createNamedParameter($keepId, IQueryBuilder::PARAM_INT)));
+			$qbKeep->executeStatement();
+
+			if ($affectedSongIds !== []) {
+				$qbSongs = $this->db->getQueryBuilder();
+				$qbSongs->update('sheetmusic_songs')
+					->set('updated_at', $qbSongs->createNamedParameter($now, IQueryBuilder::PARAM_INT))
+					->where($qbSongs->expr()->in('id', $qbSongs->createNamedParameter(array_keys($affectedSongIds), IQueryBuilder::PARAM_INT_ARRAY)));
+				$qbSongs->executeStatement();
+			}
 		}
 
 		return $mergedCount;

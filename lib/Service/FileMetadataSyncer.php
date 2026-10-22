@@ -123,6 +123,7 @@ class FileMetadataSyncer {
 				if ($internalSongFile !== null) {
 					$internalSongFile->fileSize = $facts->fileSize;
 					$internalSongFile->fileHash = $facts->fileHash;
+					$internalSongFile->updatedAt = time();
 					$this->internalSongFileMapper->update($internalSongFile);
 				}
 			}
