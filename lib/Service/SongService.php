@@ -243,6 +243,11 @@ class SongService {
 					'sourcetype' => $sourceTypes,
 					'instrument' => $instruments,
 				]);
+				$song = $this->internalSongMapper->findById($sid);
+				if ($song !== null) {
+					$song->updatedAt = time();
+					$this->internalSongMapper->update($song);
+				}
 				$this->songFileService->syncSongFileMetadata($user, '', $sid, $libraryId);
 			}
 			$this->libraryMapper->touch($libraryId);

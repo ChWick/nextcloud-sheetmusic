@@ -99,6 +99,7 @@ class SongFileService {
 		$targetFile = $userFolder->newFile($targetRelative);
 		$targetFile->putContent($content);
 
+		$this->cleanupAutoIndexedStubForNewUpload($songId, (int)$targetFile->getId());
 		$this->recordSongFile($songId, $user, $targetFile, $libraryId);
 
 		return $this->internalSongMapper->findLibraryData($libraryId, $user);
@@ -465,9 +466,16 @@ class SongFileService {
 	}
 
 	private function libraryFolderPath(string $libraryPath): string {
-		$directory = dirname(ltrim($libraryPath, '/'));
+		$clean = trim($libraryPath, '/');
+		if ($clean === '' || $clean === '.') {
+			return '';
+		}
+		if (str_ends_with(strtolower($clean), '.db')) {
+			$directory = dirname($clean);
+			return ($directory === '' || $directory === '.') ? '' : $directory;
+		}
 
-		return ($directory === '' || $directory === '.') ? '' : $directory;
+		return $clean;
 	}
 
 	/**
@@ -528,19 +536,62 @@ class SongFileService {
 		}
 	}
 
+	private function cleanupAutoIndexedStubForNewUpload(int $targetSongId, int $physicalFileId): void {
+		$existingForFile = $this->internalSongFileMapper->findByFileId($physicalFileId, includeDeleted: false);
+		foreach ($existingForFile as $sf) {
+			if ($sf->songId === $targetSongId || $sf->id === null || $sf->clientId !== null) {
+				continue;
+			}
+			$otherSong = $this->internalSongMapper->findById($sf->songId);
+			$this->internalSongFileMapper->delete($sf->id, hardDelete: true);
+			if ($otherSong !== null && $otherSong->id !== null && $otherSong->clientId === null) {
+				$remaining = $this->internalSongFileMapper->findAllForSong($otherSong->id, includeDeleted: false);
+				if ($remaining === []) {
+					$this->internalSongMapper->delete($otherSong->id, hardDelete: true);
+				}
+			}
+		}
+	}
+
 	private function recordSongFile(
 		int $songId,
 		IUser $user,
 		Node $file,
 		int $libraryId,
 	): void {
+		$fileSize = (int)$file->getSize();
+		$fileHash = null;
+		$pageCount = 1;
+		$pageOrder = '1';
+		$fileName = $file->getName();
+		$ext = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+		if ($ext === 'pdf' && $file instanceof \OCP\Files\File) {
+			try {
+				$content = $file->getContent();
+				if (is_string($content) && $content !== '') {
+					$fileHash = MobileSheetsPdf::contentHash($content);
+					$pageCount = MobileSheetsPdf::pageCount($content);
+					$pageOrder = $pageCount > 1 ? '1-' . $pageCount : '1';
+				}
+			} catch (\Throwable $e) {
+				$this->logger->warning('Failed to compute PDF metadata for recorded song file: ' . $fileName, [
+					'exception' => $e,
+				]);
+			}
+		}
+
 		$existingFiles = $this->internalSongFileMapper->findAllForSong($songId);
 		foreach ($existingFiles as $existing) {
 			if ($existing->fileId === (int)$file->getId()) {
-				$this->logger->debug('Song already lists this file, nothing to add', [
-					'songId' => $songId,
-					'fileId' => $file->getId(),
-				]);
+				$existing->fileSize = $fileSize;
+				$existing->fileHash = $fileHash;
+				$existing->pageCount = $pageCount;
+				if ($existing->pageOrder === '' || $existing->pageOrder === '1') {
+					$existing->pageOrder = $pageOrder;
+				}
+				$existing->updatedAt = time();
+				$this->internalSongFileMapper->update($existing);
+				$this->libraryMapper->touch($libraryId);
 				$this->syncSongFileMetadata($user, '', $songId, $libraryId);
 				return;
 			}
@@ -551,7 +602,11 @@ class SongFileService {
 			uuid: InternalEntity::generateUuid(),
 			songId: $songId,
 			fileId: (int)$file->getId(),
-			type: InternalSongFile::determineFileType($file->getName()),
+			pageOrder: $pageOrder,
+			pageCount: $pageCount,
+			fileSize: $fileSize,
+			fileHash: $fileHash,
+			type: InternalSongFile::determineFileType($fileName),
 		);
 		$this->internalSongFileMapper->insert($internalSongFile);
 		$this->libraryMapper->touch($libraryId);

@@ -556,6 +556,8 @@ class LibraryIntegrityService {
 						$rel = substr($internalPath, strlen($tPath) + 1);
 					}
 					$sourceExists = $this->fileNodeExists($targetFolder, $rel);
+				} else {
+					$sourceExists = $this->fileNodeExists($targetFolder, ltrim(rawurldecode($mPath), '/'));
 				}
 			}
 			if (!$sourceExists) {
