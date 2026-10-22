@@ -105,8 +105,9 @@ class MobileSheetsEntityMerger {
 
 				if ($existing !== null) {
 					if ($existing->deletedAt !== null) {
-						// Tombstoned: check if MobileSheets modified after tombstone
-						if ($lastModifiedSec > $existing->deletedAt) {
+						// Tombstoned: check if MobileSheets modified after tombstone and baseline export
+						$metaUpdatedAt = (int)($meta['updated_at'] ?? 0);
+						if ($lastModifiedSec > $existing->deletedAt && ($meta === null || $lastModifiedSec > $metaUpdatedAt)) {
 							$existing->deletedAt = null;
 							$existing->name = $name;
 							$existing->sortBy = $sortBy;
@@ -162,7 +163,12 @@ class MobileSheetsEntityMerger {
 	 *
 	 * @param array<int, bool> $updatedSongClientIds
 	 */
-	public function mergeSongEntityLinks(PDO $db, int $libraryId, array $updatedSongClientIds): void {
+	public function mergeSongEntityLinks(
+		PDO $db,
+		int $libraryId,
+		array $updatedSongClientIds,
+		?MobileSheetsSyncMetadata $syncMeta = null,
+	): void {
 		$songs = $this->songMapper->findAllForLibrary($libraryId, includeDeleted: false);
 		$songByClientId = [];
 		foreach ($songs as $s) {
@@ -171,11 +177,47 @@ class MobileSheetsEntityMerger {
 			}
 		}
 
-		$entities = $this->entityMapper->findAllForLibrary($libraryId, includeDeleted: true);
+		$hasSongsTable = MobileSheetsTableHelper::tableExists($db, 'Songs');
+		$uploadedSongSet = $hasSongsTable
+			? MobileSheetsTableHelper::getTableIdSet($db, 'Songs')
+			: [];
+
+		// Identify songs whose entity links are authoritative in Nextcloud (created in Nextcloud
+		// and not yet in the client DB, or modified in Nextcloud since the client's baseline
+		// and Nextcloud won LWW).
+		$ncAuthoritativeSongIds = [];
+		$ncSongEntitySet = [];
+		foreach ($songs as $s) {
+			if ($s->id === null || $s->deletedAt !== null) {
+				continue;
+			}
+			$isAuthInNc = false;
+			if ($s->clientId === null) {
+				$isAuthInNc = true;
+			} elseif (!isset($updatedSongClientIds[$s->clientId])) {
+				if ($hasSongsTable && !isset($uploadedSongSet[$s->clientId])) {
+					$isAuthInNc = true;
+				} elseif ($syncMeta !== null && $syncMeta->hasMetadata) {
+					$songMeta = $syncMeta->getSongMeta($s->clientId);
+					if ($songMeta !== null && $s->updatedAt > (int)($songMeta['updated_at'] ?? 0)) {
+						$isAuthInNc = true;
+					}
+				}
+			}
+			if ($isAuthInNc) {
+				$ncAuthoritativeSongIds[$s->id] = true;
+				$ncSongEntitySet[$s->id] = array_fill_keys(
+					$this->entityMapper->findEntityIdsForSong($s->id),
+					true
+				);
+			}
+		}
+
+		$entities = $this->entityMapper->findAllForLibrary($libraryId, includeDeleted: false);
 		$entityIdByClientAndType = [];
 		$allEntityIdsByType = [];
 		foreach ($entities as $e) {
-			if ($e->clientId !== null && $e->id !== null) {
+			if ($e->clientId !== null && $e->id !== null && $e->deletedAt === null) {
 				$entityIdByClientAndType[$e->type . ':' . $e->clientId] = $e->id;
 				$allEntityIdsByType[$e->type][$e->clientId] = $e->id;
 			}
@@ -229,7 +271,19 @@ class MobileSheetsEntityMerger {
 				foreach ($songClientIds as $sClientId) {
 					$song = $songByClientId[$sClientId] ?? null;
 					if ($song !== null && $song->id !== null && $song->deletedAt === null) {
-						$orderedInternalSongIds[] = $song->id;
+						if (isset($ncAuthoritativeSongIds[$song->id])) {
+							if (isset($ncSongEntitySet[$song->id][$internalEntityId])) {
+								$orderedInternalSongIds[] = $song->id;
+							}
+						} else {
+							$orderedInternalSongIds[] = $song->id;
+						}
+					}
+				}
+				foreach ($ncAuthoritativeSongIds as $ncSongId => $_) {
+					if (isset($ncSongEntitySet[$ncSongId][$internalEntityId])
+						&& !in_array($ncSongId, $orderedInternalSongIds, true)) {
+						$orderedInternalSongIds[] = $ncSongId;
 					}
 				}
 
@@ -239,7 +293,7 @@ class MobileSheetsEntityMerger {
 			$candidateSongClientIds = array_unique(array_merge(array_keys($updatedSongClientIds), array_keys($linksBySongClientId)));
 			foreach ($candidateSongClientIds as $songClientId) {
 				$song = $songByClientId[$songClientId] ?? null;
-				if ($song === null || $song->id === null) {
+				if ($song === null || $song->id === null || isset($ncAuthoritativeSongIds[$song->id])) {
 					continue;
 				}
 

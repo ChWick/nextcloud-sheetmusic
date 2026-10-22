@@ -357,25 +357,28 @@ class MobileSheetsSqliteExporter {
 				$this->songMapper->update($song);
 			}
 
-			$rowExists = false;
-			$checkRow = $db->query(sprintf('SELECT 1 FROM Songs WHERE Id = %d', (int)$clientId));
-			if ($checkRow !== false && $checkRow->fetch() !== false) {
-				$rowExists = true;
+			$existingSongRow = null;
+			$checkRow = $db->query(sprintf('SELECT * FROM Songs WHERE Id = %d', (int)$clientId));
+			if ($checkRow !== false) {
+				$fetched = $checkRow->fetch();
+				if (is_array($fetched)) {
+					$existingSongRow = $fetched;
+				}
 			}
 
-			if (!$rowExists) {
-				$attrs = $attributesBySong[$song->id] ?? [];
-				$custom = $attrs['custom'] ?? '';
-				$custom2 = $attrs['custom2'] ?? '';
+			$attrs = $attributesBySong[$song->id] ?? [];
+			$custom = $attrs['custom'] ?? '';
+			$custom2 = $attrs['custom2'] ?? '';
 
+			if ($existingSongRow === null) {
 				$candidateValues = [
 					'id' => $clientId,
 					'title' => $song->title,
-					'sorttitle' => $song->sortTitle,
+					'sorttitle' => $song->sortTitle ?? '',
 					'stars' => $song->rating,
 					'difficulty' => $song->difficulty,
 					'duration' => $song->duration,
-					'keywords' => $song->keywords,
+					'keywords' => $song->keywords ?? '',
 					'custom' => $custom,
 					'custom2' => $custom2,
 					'songid' => $clientId,
@@ -395,34 +398,86 @@ class MobileSheetsSqliteExporter {
 				}
 
 				MobileSheetsTableHelper::insertRow($db, 'Songs', $insertRow);
+			} else {
+				$existingModSec = MobileSheetsTimestampUtil::extractLastModifiedSec($existingSongRow);
+				if (($existingModSec > 0 && $song->updatedAt > $existingModSec) || trim((string)($existingSongRow['Title'] ?? '')) !== $song->title) {
+					$updateCandidates = [
+						'title' => $song->title,
+						'sorttitle' => $song->sortTitle ?? '',
+						'stars' => $song->rating,
+						'difficulty' => $song->difficulty,
+						'duration' => $song->duration,
+						'keywords' => $song->keywords ?? '',
+						'lastmodified' => MobileSheetsTimestampUtil::secondsToMs($song->updatedAt),
+					];
+					if (isset($attrs['custom'])) {
+						$updateCandidates['custom'] = $custom;
+					}
+					if (isset($attrs['custom2'])) {
+						$updateCandidates['custom2'] = $custom2;
+					}
+					if ($song->opus !== null) {
+						$updateCandidates['opus'] = $song->opus;
+					}
+					if ($song->catalogNumber !== null) {
+						$updateCandidates['catalognumber'] = $song->catalogNumber;
+					}
+					if ($song->songNumber !== null) {
+						$updateCandidates['songnumber'] = $song->songNumber;
+					}
+					$sets = [];
+					$params = [':id' => $clientId];
+					foreach ($updateCandidates as $lowerKey => $val) {
+						if (isset($existingCols[$lowerKey])) {
+							$colName = $existingCols[$lowerKey];
+							$pName = ':u_' . $lowerKey;
+							$sets[] = '"' . str_replace('"', '""', $colName) . '" = ' . $pName;
+							$params[$pName] = $val;
+						}
+					}
+					if ($sets !== []) {
+						$updStmt = $db->prepare('UPDATE Songs SET ' . implode(', ', $sets) . ' WHERE Id = :id');
+						$updStmt->execute($params);
+					}
+				}
 			}
 
-			if ($hasNotesTable && $song->notes !== '') {
+			if ($hasNotesTable) {
 				$noteExists = false;
 				$checkNote = $db->query(sprintf('SELECT 1 FROM SongNotes WHERE SongId = %d', (int)$clientId));
 				if ($checkNote !== false && $checkNote->fetch() !== false) {
 					$noteExists = true;
 				}
 
-				if (!$noteExists) {
+				$noteText = (string)($song->notes ?? '');
+				if ($noteText !== '') {
 					$noteCols = MobileSheetsTableHelper::getTableColumns($db, 'SongNotes');
-
-					$noteVals = [
-						'songid' => $clientId,
-						'notes' => $song->notes,
-						'note' => $song->notes,
-						'title' => '',
-						'datecreated' => MobileSheetsTimestampUtil::secondsToMs($song->createdAt),
-						'creationdate' => MobileSheetsTimestampUtil::secondsToMs($song->createdAt),
-						'lastmodified' => MobileSheetsTimestampUtil::secondsToMs($song->updatedAt),
-					];
-					$noteRow = [];
-					foreach ($noteVals as $lowerKey => $val) {
-						if (isset($noteCols[$lowerKey])) {
-							$noteRow[$noteCols[$lowerKey]] = $val;
+					if (!$noteExists) {
+						$noteVals = [
+							'songid' => $clientId,
+							'notes' => $noteText,
+							'note' => $noteText,
+							'title' => '',
+							'datecreated' => MobileSheetsTimestampUtil::secondsToMs($song->createdAt),
+							'creationdate' => MobileSheetsTimestampUtil::secondsToMs($song->createdAt),
+							'lastmodified' => MobileSheetsTimestampUtil::secondsToMs($song->updatedAt),
+						];
+						$noteRow = [];
+						foreach ($noteVals as $lowerKey => $val) {
+							if (isset($noteCols[$lowerKey])) {
+								$noteRow[$noteCols[$lowerKey]] = $val;
+							}
+						}
+						MobileSheetsTableHelper::insertRow($db, 'SongNotes', $noteRow);
+					} else {
+						$noteColName = $noteCols['notes'] ?? ($noteCols['note'] ?? null);
+						if ($noteColName !== null) {
+							$updNote = $db->prepare('UPDATE SongNotes SET "' . str_replace('"', '""', $noteColName) . '" = :notes WHERE SongId = :songId');
+							$updNote->execute([':notes' => $noteText, ':songId' => $clientId]);
 						}
 					}
-					MobileSheetsTableHelper::insertRow($db, 'SongNotes', $noteRow);
+				} elseif ($noteExists && $existingSongRow !== null && $song->updatedAt > MobileSheetsTimestampUtil::extractLastModifiedSec($existingSongRow)) {
+					$db->exec(sprintf('DELETE FROM SongNotes WHERE SongId = %d', (int)$clientId));
 				}
 			}
 

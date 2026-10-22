@@ -76,21 +76,23 @@ class MobileSheetsEntityExporter {
 				$this->entityMapper->update($entity);
 			}
 
-			$rowExists = false;
-			$checkRow = $db->query(sprintf('SELECT 1 FROM "%s" WHERE Id = %d', str_replace('"', '""', $tableName), (int)$clientId));
-			if ($checkRow !== false && $checkRow->fetch() !== false) {
-				$rowExists = true;
+			$existingEntityRow = null;
+			$checkRow = $db->query(sprintf('SELECT * FROM "%s" WHERE Id = %d', str_replace('"', '""', $tableName), (int)$clientId));
+			if ($checkRow !== false) {
+				$fetched = $checkRow->fetch();
+				if (is_array($fetched)) {
+					$existingEntityRow = $fetched;
+				}
 			}
 
-			if (!$rowExists) {
-				$existingCols = MobileSheetsTableHelper::getTableColumns($db, $tableName);
+			$existingCols = MobileSheetsTableHelper::getTableColumns($db, $tableName);
+			$nameCol = MobileSheetsTableHelper::resolveEntityNameColumn($existingCols, $config['nameCol']) ?? $config['nameCol'];
+			$val = (strtolower($nameCol) === 'year') ? (int)$entity->name : $entity->name;
+			$hasSortCols = isset($existingCols['sortby']) && isset($existingCols['ascending']);
+			$dateCreatedCol = $existingCols['datecreated'] ?? ($existingCols['creationdate'] ?? null);
+			$lastModCol = $existingCols['lastmodified'] ?? null;
 
-				$nameCol = MobileSheetsTableHelper::resolveEntityNameColumn($existingCols, $config['nameCol']) ?? $config['nameCol'];
-				$val = (strtolower($nameCol) === 'year') ? (int)$entity->name : $entity->name;
-				$hasSortCols = isset($existingCols['sortby']) && isset($existingCols['ascending']);
-				$dateCreatedCol = $existingCols['datecreated'] ?? ($existingCols['creationdate'] ?? null);
-				$lastModCol = $existingCols['lastmodified'] ?? null;
-
+			if ($existingEntityRow === null) {
 				$insertRow = [
 					'Id' => $clientId,
 					$nameCol => $val,
@@ -108,6 +110,24 @@ class MobileSheetsEntityExporter {
 				}
 
 				MobileSheetsTableHelper::insertRow($db, $tableName, $insertRow);
+			} else {
+				$existingModSec = MobileSheetsTimestampUtil::extractLastModifiedSec($existingEntityRow);
+				if (($existingModSec > 0 && $entity->updatedAt > $existingModSec) || trim((string)($existingEntityRow[$nameCol] ?? '')) !== (string)$val) {
+					$sets = ['"' . str_replace('"', '""', $nameCol) . '" = :nameVal'];
+					$params = [':nameVal' => $val, ':id' => $clientId];
+					if ($hasSortCols) {
+						$sets[] = '"' . str_replace('"', '""', $existingCols['sortby']) . '" = :sortBy';
+						$sets[] = '"' . str_replace('"', '""', $existingCols['ascending']) . '" = :ascending';
+						$params[':sortBy'] = $entity->sortBy;
+						$params[':ascending'] = $entity->ascending;
+					}
+					if ($lastModCol !== null) {
+						$sets[] = '"' . str_replace('"', '""', $lastModCol) . '" = :lastMod';
+						$params[':lastMod'] = MobileSheetsTimestampUtil::secondsToMs($entity->updatedAt);
+					}
+					$updStmt = $db->prepare('UPDATE "' . str_replace('"', '""', $tableName) . '" SET ' . implode(', ', $sets) . ' WHERE Id = :id');
+					$updStmt->execute($params);
+				}
 			}
 
 			if ($metaStmt !== null) {
@@ -160,6 +180,8 @@ class MobileSheetsEntityExporter {
 			$linksByEntityId[$link->entityId][] = $link;
 		}
 
+		$activePairsByLinkTable = [];
+
 		foreach ($linksByEntityId as $entityId => $entityLinks) {
 			$entity = $entityById[$entityId] ?? null;
 			$entityClientId = $entityClientMap[$entityId] ?? null;
@@ -203,6 +225,7 @@ class MobileSheetsEntityExporter {
 					continue;
 				}
 				$insertedSongClientIds[$songClientId] = true;
+				$activePairsByLinkTable[$linkTable][(int)$entityClientId . ':' . (int)$songClientId] = true;
 
 				$checkExisting->execute([$entityClientId, $songClientId]);
 				if ($checkExisting->fetch() !== false) {
@@ -210,6 +233,31 @@ class MobileSheetsEntityExporter {
 				}
 
 				$stmt->execute([$entityClientId, $songClientId]);
+			}
+		}
+
+		// Prune stale link rows that were pre-populated from misc_data but are no longer active in Nextcloud
+		foreach (MobileSheetsEntityConfig::BY_TABLE as $cfg) {
+			$linkTable = $cfg['linkTable'];
+			$linkCol = $cfg['linkCol'];
+			if (!MobileSheetsTableHelper::tableExists($db, $linkTable)) {
+				continue;
+			}
+			$quotedTable = '"' . str_replace('"', '""', $linkTable) . '"';
+			$quotedCol = '"' . str_replace('"', '""', $linkCol) . '"';
+			$existingStmt = $db->query("SELECT Id, {$quotedCol} AS entity_client_id, SongId AS song_client_id FROM {$quotedTable}");
+			if ($existingStmt === false) {
+				continue;
+			}
+			$idsToDelete = [];
+			while ($row = $existingStmt->fetch()) {
+				$pairKey = (int)$row['entity_client_id'] . ':' . (int)$row['song_client_id'];
+				if (!isset($activePairsByLinkTable[$linkTable][$pairKey])) {
+					$idsToDelete[] = (int)$row['Id'];
+				}
+			}
+			if ($idsToDelete !== []) {
+				$db->exec("DELETE FROM {$quotedTable} WHERE Id IN (" . implode(',', $idsToDelete) . ')');
 			}
 		}
 	}

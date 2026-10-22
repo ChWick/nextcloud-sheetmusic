@@ -123,7 +123,7 @@ class MobileSheetsSqliteImporter {
 		$this->mergeSongs($db, $lib->id, $syncMeta, $stats, $updatedSongClientIds);
 
 		// 3. Song-Entity Links
-		$this->entityMerger->mergeSongEntityLinks($db, $lib->id, $updatedSongClientIds);
+		$this->entityMerger->mergeSongEntityLinks($db, $lib->id, $updatedSongClientIds, $syncMeta);
 
 		// 4. Files
 		$this->mergeFiles($db, $lib, $user, $syncMeta, $stats);
@@ -234,8 +234,9 @@ class MobileSheetsSqliteImporter {
 
 			if ($existing !== null) {
 				if ($existing->deletedAt !== null) {
-					// Tombstone check
-					if ($lastModifiedSec > $existing->deletedAt) {
+					// Tombstone check: only revive if modified on client after both deletion and baseline export
+					$metaUpdatedAt = (int)($meta['updated_at'] ?? 0);
+					if ($lastModifiedSec > $existing->deletedAt && ($meta === null || $lastModifiedSec > $metaUpdatedAt)) {
 						// Revive song!
 						$existing->deletedAt = null;
 						$existing->title = $title;
@@ -262,8 +263,8 @@ class MobileSheetsSqliteImporter {
 						$updatedSongClientIds[$clientId] = true;
 					}
 				} else {
-					// Active song: LWW
-					if ($lastModifiedSec > $existing->updatedAt) {
+					// Active song: LWW (or unsynced auto-indexed stub song)
+					if ($lastModifiedSec > $existing->updatedAt || ($existing->clientId === null && $uuid === null)) {
 						$existing->title = $title;
 						$existing->sortTitle = $sortTitle;
 						$existing->rating = $stars;
@@ -274,7 +275,7 @@ class MobileSheetsSqliteImporter {
 							$existing->notes = $noteText;
 						}
 						$existing->clientId = $clientId;
-						$existing->updatedAt = $lastModifiedSec;
+						$existing->updatedAt = $lastModifiedSec ?: $existing->updatedAt;
 
 						if (!empty($row['Opus'])) {
 							$existing->opus = (string)$row['Opus'];
@@ -425,7 +426,8 @@ class MobileSheetsSqliteImporter {
 
 			if ($existing !== null) {
 				if ($existing->deletedAt !== null) {
-					if ($lastModifiedSec > $existing->deletedAt) {
+					$metaUpdatedAt = (int)($meta['updated_at'] ?? 0);
+					if ($lastModifiedSec > $existing->deletedAt && ($meta === null || $lastModifiedSec > $metaUpdatedAt)) {
 						$existing->deletedAt = null;
 						$existing->pageOrder = $pageOrder;
 						$existing->pageCount = $pageCount;
@@ -438,14 +440,14 @@ class MobileSheetsSqliteImporter {
 						$stats['filesUpdated']++;
 					}
 				} else {
-					if ($lastModifiedSec > $existing->updatedAt) {
+					if ($lastModifiedSec > $existing->updatedAt || ($existing->clientId === null && $uuid === null)) {
 						$existing->pageOrder = $pageOrder;
 						$existing->pageCount = $pageCount;
 						$existing->fileSize = $fileSize;
 						$existing->fileHash = $fileHash;
 						$existing->type = $type;
 						$existing->clientId = $fileClientId;
-						$existing->updatedAt = $lastModifiedSec;
+						$existing->updatedAt = $lastModifiedSec ?: $existing->updatedAt;
 						$this->songFileMapper->update($existing);
 						$stats['filesUpdated']++;
 					} else {
@@ -471,6 +473,23 @@ class MobileSheetsSqliteImporter {
 				);
 				$this->songFileMapper->insert($newFile);
 				$stats['filesCreated']++;
+			}
+
+			// Clean up any unsynced auto-indexed stub song/file that was created when the physical file was uploaded
+			$otherFiles = $this->songFileMapper->findByFileId($fileId, includeDeleted: false);
+			foreach ($otherFiles as $otherFile) {
+				if ($otherFile->songId === $song->id || $otherFile->id === null || $otherFile->clientId !== null) {
+					continue;
+				}
+				$otherSong = $this->songMapper->findById($otherFile->songId);
+				if ($otherSong !== null && $otherSong->id !== null && $otherSong->clientId === null) {
+					$this->songFileMapper->delete($otherFile->id, hardDelete: true);
+					$remaining = $this->songFileMapper->findAllForSong($otherSong->id, includeDeleted: false);
+					if ($remaining === []) {
+						$this->songMapper->delete($otherSong->id, hardDelete: true);
+						unset($songByClientId[$otherSong->clientId ?? -1]);
+					}
+				}
 			}
 		}
 	}
