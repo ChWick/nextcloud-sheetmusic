@@ -9,11 +9,14 @@ declare(strict_types=1);
 putenv('TEST_DONT_LOAD_APPS=1');
 
 require_once __DIR__ . '/../../../tests/bootstrap.php';
-require_once __DIR__ . '/../vendor/autoload.php';
+if (file_exists(__DIR__ . '/../vendor/autoload.php')) {
+	require_once __DIR__ . '/../vendor/autoload.php';
+}
 require_once __DIR__ . '/TestSupport/MobileSheetsTestDatabase.php';
 require_once __DIR__ . '/TestSupport/TestUtils.php';
 require_once __DIR__ . '/TestSupport/RealMobileSheetsTestTrait.php';
 require_once __DIR__ . '/TestSupport/MobileSheetsDatabasePresets.php';
+require_once __DIR__ . '/TestSupport/MobileSheetsEndToEndSyncHarness.php';
 require_once __DIR__ . '/TestSupport/InternalQueryResult.php';
 require_once __DIR__ . '/TestSupport/FakeUserSession.php';
 require_once __DIR__ . '/TestSupport/FakeRequest.php';
