@@ -170,6 +170,7 @@ class InternalEntityMapper {
 	}
 
 	public function delete(int $id, bool $hardDelete = false): bool {
+		$entity = $this->findById($id);
 		$qb = $this->db->getQueryBuilder();
 
 		if ($hardDelete) {
@@ -178,6 +179,17 @@ class InternalEntityMapper {
 			$unlinkQb->delete(self::JUNCTION_TABLE_NAME)
 				->where($unlinkQb->expr()->eq('entity_id', $unlinkQb->createNamedParameter($id, IQueryBuilder::PARAM_INT)));
 			$unlinkQb->executeStatement();
+
+			if ($entity !== null && $entity->clientId !== null) {
+				$cfg = \OCA\SheetMusic\Service\MobileSheetsEntityConfig::BY_TYPE[$entity->type]
+					?? \OCA\SheetMusic\Service\MobileSheetsEntityConfig::BY_TYPE['customgroup'];
+				$miscQb = $this->db->getQueryBuilder();
+				$miscQb->delete(InternalMiscMapper::DATA_TABLE_NAME)
+					->where($miscQb->expr()->eq('library_id', $miscQb->createNamedParameter($entity->libraryId, IQueryBuilder::PARAM_INT)))
+					->andWhere($miscQb->expr()->eq('table_name', $miscQb->createNamedParameter($cfg['table'], IQueryBuilder::PARAM_STR)))
+					->andWhere($miscQb->expr()->eq('record_id', $miscQb->createNamedParameter((string)$entity->clientId, IQueryBuilder::PARAM_STR)));
+				$miscQb->executeStatement();
+			}
 
 			$qb->delete(self::TABLE_NAME)
 				->where($qb->expr()->eq('id', $qb->createNamedParameter($id, IQueryBuilder::PARAM_INT)));
@@ -195,6 +207,19 @@ class InternalEntityMapper {
 				->where($unlinkQb->expr()->eq('entity_id', $unlinkQb->createNamedParameter($id, IQueryBuilder::PARAM_INT)))
 				->andWhere($unlinkQb->expr()->isNull('deleted_at'));
 			$unlinkQb->executeStatement();
+
+			if ($entity !== null && $entity->clientId !== null) {
+				$cfg = \OCA\SheetMusic\Service\MobileSheetsEntityConfig::BY_TYPE[$entity->type]
+					?? \OCA\SheetMusic\Service\MobileSheetsEntityConfig::BY_TYPE['customgroup'];
+				$miscQb = $this->db->getQueryBuilder();
+				$miscQb->update(InternalMiscMapper::DATA_TABLE_NAME)
+					->set('deleted_at', $miscQb->createNamedParameter($now, IQueryBuilder::PARAM_INT))
+					->set('updated_at', $miscQb->createNamedParameter($now, IQueryBuilder::PARAM_INT))
+					->where($miscQb->expr()->eq('library_id', $miscQb->createNamedParameter($entity->libraryId, IQueryBuilder::PARAM_INT)))
+					->andWhere($miscQb->expr()->eq('table_name', $miscQb->createNamedParameter($cfg['table'], IQueryBuilder::PARAM_STR)))
+					->andWhere($miscQb->expr()->eq('record_id', $miscQb->createNamedParameter((string)$entity->clientId, IQueryBuilder::PARAM_STR)));
+				$miscQb->executeStatement();
+			}
 		}
 
 		return $qb->executeStatement() > 0;

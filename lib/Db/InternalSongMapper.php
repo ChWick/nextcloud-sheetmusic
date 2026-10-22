@@ -199,13 +199,31 @@ class InternalSongMapper {
 		$qb = $this->db->getQueryBuilder();
 
 		if ($hardDelete) {
+			$unlinkQb = $this->db->getQueryBuilder();
+			$unlinkQb->delete(InternalEntityMapper::JUNCTION_TABLE_NAME)
+				->where($unlinkQb->expr()->eq('song_id', $unlinkQb->createNamedParameter($id, IQueryBuilder::PARAM_INT)));
+			$unlinkQb->executeStatement();
+
+			$attrQb = $this->db->getQueryBuilder();
+			$attrQb->delete(InternalSongAttributeMapper::TABLE_NAME)
+				->where($attrQb->expr()->eq('song_id', $attrQb->createNamedParameter($id, IQueryBuilder::PARAM_INT)));
+			$attrQb->executeStatement();
+
 			$qb->delete(self::TABLE_NAME)
 				->where($qb->expr()->eq('id', $qb->createNamedParameter($id, IQueryBuilder::PARAM_INT)));
 		} else {
+			$now = time();
 			$qb->update(self::TABLE_NAME)
-				->set('deleted_at', $qb->createNamedParameter(time(), IQueryBuilder::PARAM_INT))
-				->set('updated_at', $qb->createNamedParameter(time(), IQueryBuilder::PARAM_INT))
+				->set('deleted_at', $qb->createNamedParameter($now, IQueryBuilder::PARAM_INT))
+				->set('updated_at', $qb->createNamedParameter($now, IQueryBuilder::PARAM_INT))
 				->where($qb->expr()->eq('id', $qb->createNamedParameter($id, IQueryBuilder::PARAM_INT)));
+
+			$unlinkQb = $this->db->getQueryBuilder();
+			$unlinkQb->update(InternalEntityMapper::JUNCTION_TABLE_NAME)
+				->set('deleted_at', $unlinkQb->createNamedParameter($now, IQueryBuilder::PARAM_INT))
+				->where($unlinkQb->expr()->eq('song_id', $unlinkQb->createNamedParameter($id, IQueryBuilder::PARAM_INT)))
+				->andWhere($unlinkQb->expr()->isNull('deleted_at'));
+			$unlinkQb->executeStatement();
 		}
 
 		return $qb->executeStatement() > 0;

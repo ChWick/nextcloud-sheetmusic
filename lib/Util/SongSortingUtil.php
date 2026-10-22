@@ -79,8 +79,8 @@ final class SongSortingUtil {
 	}
 
 	private static function compareTitles(InternalSong $songA, InternalSong $songB): int {
-		$titleA = $songA->sortTitle !== '' ? $songA->sortTitle : $songA->title;
-		$titleB = $songB->sortTitle !== '' ? $songB->sortTitle : $songB->title;
+		$titleA = ($songA->sortTitle !== null && $songA->sortTitle !== '') ? $songA->sortTitle : $songA->title;
+		$titleB = ($songB->sortTitle !== null && $songB->sortTitle !== '') ? $songB->sortTitle : $songB->title;
 		return strnatcasecmp($titleA, $titleB);
 	}
 }
