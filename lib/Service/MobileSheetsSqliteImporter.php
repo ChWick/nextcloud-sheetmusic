@@ -555,8 +555,15 @@ class MobileSheetsSqliteImporter {
 					$file = $this->songFileMapper->findByUuid($meta['uuid']);
 					if ($file !== null && $file->deletedAt === null) {
 						$metaUpdatedAt = (int)($meta['updated_at'] ?? 0);
-						// LWW: If Nextcloud has newer edits since the baseline export, Nextcloud wins
-						if ($file->updatedAt > $metaUpdatedAt) {
+						$parentSong = $this->songMapper->findById($file->songId);
+						$parentSongMeta = ($parentSong !== null && $parentSong->clientId !== null)
+							? $syncMeta->getSongMeta($parentSong->clientId)
+							: null;
+						$parentSongWonLww = $parentSong !== null
+							&& $parentSongMeta !== null
+							&& $parentSong->updatedAt > (int)($parentSongMeta['updated_at'] ?? 0);
+						// LWW: If Nextcloud has newer edits to this file or its parent song since baseline export, Nextcloud wins
+						if ($file->updatedAt > $metaUpdatedAt || $parentSongWonLww) {
 							continue;
 						}
 						$this->deleteSongFileAndPhysicalNode($file, $user);
@@ -606,17 +613,39 @@ class MobileSheetsSqliteImporter {
 
 		$songs = $this->songMapper->findAllForLibrary($libraryId, includeDeleted: true);
 		$songUuidByClientId = [];
+		$deletedSongClientIds = [];
 		foreach ($songs as $s) {
 			if ($s->clientId !== null) {
 				$songUuidByClientId[$s->clientId] = $s->uuid;
+				if ($s->deletedAt !== null) {
+					$deletedSongClientIds[$s->clientId] = true;
+				}
+			}
+		}
+
+		$files = $this->songFileMapper->findAllForLibrary($libraryId, includeDeleted: true);
+		$deletedFileClientIds = [];
+		foreach ($files as $f) {
+			if ($f->clientId !== null && $f->deletedAt !== null) {
+				$deletedFileClientIds[$f->clientId] = true;
+			}
+		}
+
+		$entities = $this->entityMapper->findAllForLibrary($libraryId, includeDeleted: true);
+		$deletedEntityClientIdsByTable = [];
+		foreach ($entities as $e) {
+			if ($e->clientId !== null && $e->deletedAt !== null) {
+				$cfg = MobileSheetsEntityConfig::BY_TYPE[$e->type] ?? MobileSheetsEntityConfig::BY_TYPE['customgroup'];
+				$deletedEntityClientIdsByTable[strtolower($cfg['table'])][$e->clientId] = true;
 			}
 		}
 
 		while ($row = $stmt->fetch()) {
 			$tableName = (string)$row['name'];
+			$lowerTable = strtolower($tableName);
 			$sql = (string)$row['sql'];
 
-			if (strtolower($tableName) === '_nc_sync_metadata') {
+			if ($lowerTable === '_nc_sync_metadata') {
 				continue;
 			}
 
@@ -634,11 +663,36 @@ class MobileSheetsSqliteImporter {
 			while ($dataRow = $rowsStmt->fetch()) {
 				$hasRows = true;
 				$recordId = isset($dataRow['Id']) ? (string)$dataRow['Id'] : md5(json_encode($dataRow, JSON_THROW_ON_ERROR));
+
+				// Skip rows that correspond to records tombstoned in Nextcloud
+				if ($lowerTable === 'songs' && isset($dataRow['Id']) && isset($deletedSongClientIds[(int)$dataRow['Id']])) {
+					$this->miscMapper->deleteMiscData($libraryId, 'mobilesheets', $tableName, $recordId);
+					continue;
+				}
+				if ($lowerTable === 'files') {
+					$fId = isset($dataRow['Id']) ? (int)$dataRow['Id'] : 0;
+					$sId = isset($dataRow['SongId']) ? (int)$dataRow['SongId'] : 0;
+					if (isset($deletedFileClientIds[$fId]) || isset($deletedSongClientIds[$sId])) {
+						$this->miscMapper->deleteMiscData($libraryId, 'mobilesheets', $tableName, $recordId);
+						continue;
+					}
+				}
+				if (isset($dataRow['SongId']) && is_numeric($dataRow['SongId']) && isset($deletedSongClientIds[(int)$dataRow['SongId']])) {
+					$this->miscMapper->deleteMiscData($libraryId, 'mobilesheets', $tableName, $recordId);
+					continue;
+				}
+				if (isset($deletedEntityClientIdsByTable[$lowerTable]) && isset($dataRow['Id']) && isset($deletedEntityClientIdsByTable[$lowerTable][(int)$dataRow['Id']])) {
+					$this->miscMapper->deleteMiscData($libraryId, 'mobilesheets', $tableName, $recordId);
+					continue;
+				}
+
 				$uploadedRecordIds[$recordId] = true;
 
 				$songUuid = null;
 				if (isset($dataRow['SongId']) && is_numeric($dataRow['SongId'])) {
 					$songUuid = $songUuidByClientId[(int)$dataRow['SongId']] ?? null;
+				} elseif ($lowerTable === 'songs' && isset($dataRow['Id']) && is_numeric($dataRow['Id'])) {
+					$songUuid = $songUuidByClientId[(int)$dataRow['Id']] ?? null;
 				}
 
 				$this->miscMapper->saveMiscData($libraryId, 'mobilesheets', $tableName, $recordId, $dataRow, $songUuid);

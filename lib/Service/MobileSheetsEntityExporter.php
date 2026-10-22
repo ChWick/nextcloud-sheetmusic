@@ -112,7 +112,11 @@ class MobileSheetsEntityExporter {
 				MobileSheetsTableHelper::insertRow($db, $tableName, $insertRow);
 			} else {
 				$existingModSec = MobileSheetsTimestampUtil::extractLastModifiedSec($existingEntityRow);
-				if (($existingModSec > 0 && $entity->updatedAt > $existingModSec) || trim((string)($existingEntityRow[$nameCol] ?? '')) !== (string)$val) {
+				$sortChanged = $hasSortCols && (
+					(int)($existingEntityRow[$existingCols['sortby']] ?? 1) !== $entity->sortBy
+					|| (int)($existingEntityRow[$existingCols['ascending']] ?? 1) !== $entity->ascending
+				);
+				if (($existingModSec > 0 && $entity->updatedAt > $existingModSec) || trim((string)($existingEntityRow[$nameCol] ?? '')) !== (string)$val || $sortChanged) {
 					$sets = ['"' . str_replace('"', '""', $nameCol) . '" = :nameVal'];
 					$params = [':nameVal' => $val, ':id' => $clientId];
 					if ($hasSortCols) {
@@ -210,13 +214,7 @@ class MobileSheetsEntityExporter {
 				);
 			});
 
-			$stmt = $db->prepare(sprintf(
-				'INSERT INTO "%s" ("%s", SongId) VALUES (?, ?)',
-				str_replace('"', '""', $linkTable),
-				str_replace('"', '""', $linkCol),
-			));
-
-			$checkExisting = $db->prepare(sprintf('SELECT 1 FROM "%s" WHERE "%s" = ? AND SongId = ?', str_replace('"', '""', $linkTable), str_replace('"', '""', $linkCol)));
+			$orderedSongClientIds = [];
 			$insertedSongClientIds = [];
 			foreach ($entityLinks as $link) {
 				$songId = $link->songId;
@@ -225,14 +223,36 @@ class MobileSheetsEntityExporter {
 					continue;
 				}
 				$insertedSongClientIds[$songClientId] = true;
+				$orderedSongClientIds[] = (int)$songClientId;
 				$activePairsByLinkTable[$linkTable][(int)$entityClientId . ':' . (int)$songClientId] = true;
+			}
 
-				$checkExisting->execute([$entityClientId, $songClientId]);
-				if ($checkExisting->fetch() !== false) {
+			$quotedTable = '"' . str_replace('"', '""', $linkTable) . '"';
+			$quotedCol = '"' . str_replace('"', '""', $linkCol) . '"';
+			$existingOrderStmt = $db->prepare("SELECT SongId FROM {$quotedTable} WHERE {$quotedCol} = ? ORDER BY Id ASC");
+			$existingOrderStmt->execute([$entityClientId]);
+			$existingOrder = array_map('intval', $existingOrderStmt->fetchAll(PDO::FETCH_COLUMN));
+
+			if ($entity->sortBy === SongSortingUtil::MODE_MANUAL) {
+				if ($existingOrder === $orderedSongClientIds) {
 					continue;
 				}
+				// In manual sort mode, if order or membership changed, replace rows in the exact manual sequence
+				$delExisting = $db->prepare("DELETE FROM {$quotedTable} WHERE {$quotedCol} = ?");
+				$delExisting->execute([$entityClientId]);
 
-				$stmt->execute([$entityClientId, $songClientId]);
+				$stmt = $db->prepare("INSERT INTO {$quotedTable} ({$quotedCol}, SongId) VALUES (?, ?)");
+				foreach ($orderedSongClientIds as $songClientId) {
+					$stmt->execute([$entityClientId, $songClientId]);
+				}
+			} else {
+				$existingSet = array_fill_keys($existingOrder, true);
+				$stmt = $db->prepare("INSERT INTO {$quotedTable} ({$quotedCol}, SongId) VALUES (?, ?)");
+				foreach ($orderedSongClientIds as $songClientId) {
+					if (!isset($existingSet[$songClientId])) {
+						$stmt->execute([$entityClientId, $songClientId]);
+					}
+				}
 			}
 		}
 

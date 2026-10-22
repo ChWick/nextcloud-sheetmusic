@@ -216,10 +216,17 @@ class MobileSheetsEntityMerger {
 		$entities = $this->entityMapper->findAllForLibrary($libraryId, includeDeleted: false);
 		$entityIdByClientAndType = [];
 		$allEntityIdsByType = [];
+		$ncAuthoritativeEntityIds = [];
 		foreach ($entities as $e) {
 			if ($e->clientId !== null && $e->id !== null && $e->deletedAt === null) {
 				$entityIdByClientAndType[$e->type . ':' . $e->clientId] = $e->id;
 				$allEntityIdsByType[$e->type][$e->clientId] = $e->id;
+				if ($syncMeta !== null && $syncMeta->hasMetadata) {
+					$entMeta = $syncMeta->getEntityMeta($e->type, $e->clientId);
+					if ($entMeta !== null && $e->updatedAt > (int)($entMeta['updated_at'] ?? 0)) {
+						$ncAuthoritativeEntityIds[$e->id] = true;
+					}
+				}
 			}
 		}
 
@@ -262,7 +269,7 @@ class MobileSheetsEntityMerger {
 					$internalEntityId = $entityIdByClientAndType[$type . ':' . $eClientId] ?? null;
 				}
 
-				if ($internalEntityId === null) {
+				if ($internalEntityId === null || isset($ncAuthoritativeEntityIds[$internalEntityId])) {
 					continue;
 				}
 
