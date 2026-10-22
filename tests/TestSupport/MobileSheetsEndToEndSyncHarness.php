@@ -1027,6 +1027,363 @@ class MobileSheetsEndToEndSyncHarness {
 		return $data;
 	}
 
+	/**
+	 * Merge duplicate entities in Nextcloud via EntityService::mergeEntities.
+	 *
+	 * @param list<int> $duplicateIds
+	 */
+	public function ncMergeEntities(string $entityType, int $keepId, array $duplicateIds): LibraryData {
+		$res = $this->entityService->mergeEntities($this->user, $this->libraryId, $entityType, $keepId, $duplicateIds);
+		Assert::assertNotNull($res);
+		$ts = $this->nextTimestamp();
+		$keep = $this->entityMapper->findById($keepId);
+		if ($keep !== null) {
+			$keep->updatedAt = $ts;
+			$this->entityMapper->update($keep);
+		}
+		foreach ($this->entityMapper->findSongIdsForEntity($keepId) as $sid) {
+			$song = $this->songMapper->findById($sid);
+			if ($song !== null) {
+				$song->updatedAt = $ts;
+				$this->songMapper->update($song);
+			}
+		}
+		return $res['libraryData'];
+	}
+
+	/**
+	 * Merge song $droppedId into song $keepId in Nextcloud via SongService::mergeSong.
+	 *
+	 * @param array<string, mixed> $merged
+	 */
+	public function ncMergeSong(int $keepId, int $droppedId, array $merged): LibraryData {
+		$data = $this->songService->mergeSong($this->user, $this->libraryId, $keepId, $droppedId, $merged);
+		Assert::assertNotNull($data);
+		$song = $this->songMapper->findById($keepId);
+		if ($song !== null) {
+			$song->updatedAt = $this->nextTimestamp();
+			$this->songMapper->update($song);
+		}
+		return $data;
+	}
+
+	/**
+	 * Update an existing song file's PDF content in Nextcloud via SongFileService::updateSongFile.
+	 */
+	public function ncUpdateSongFile(int $songId, int $songFileId, string $newPdfContent): LibraryData {
+		$tmpFile = $this->tempDir . '/update_file_' . bin2hex(random_bytes(4)) . '.pdf';
+		file_put_contents($tmpFile, $newPdfContent);
+
+		try {
+			$data = $this->songFileService->updateSongFile(
+				$this->user,
+				$this->libraryId,
+				$songId,
+				$songFileId,
+				[
+					'tmp_name' => $tmpFile,
+					'name' => 'updated.pdf',
+					'size' => strlen($newPdfContent),
+					'error' => UPLOAD_ERR_OK,
+				],
+			);
+		} finally {
+			@unlink($tmpFile);
+		}
+
+		Assert::assertNotNull($data);
+		$fileRec = $this->songFileMapper->findById($songFileId);
+		if ($fileRec !== null) {
+			$fileRec->updatedAt = $this->nextTimestamp();
+			$this->songFileMapper->update($fileRec);
+		}
+		$song = $this->songMapper->findById($songId);
+		if ($song !== null) {
+			$song->updatedAt = $this->nextTimestamp();
+			$this->songMapper->update($song);
+		}
+
+		return $data;
+	}
+
+	/**
+	 * Detach a song file in Nextcloud without deleting the physical file via SongFileService::detachSongFile.
+	 */
+	public function ncDetachSongFile(int $songId, int $songFileId): LibraryData {
+		$data = $this->songFileService->detachSongFile($this->user, $this->libraryId, $songId, $songFileId);
+		Assert::assertNotNull($data);
+		return $data;
+	}
+
+	/**
+	 * Attach an existing file in Nextcloud user storage to a song via SongFileService::attachNextcloudFile.
+	 */
+	public function ncAttachNextcloudFile(int $songId, string $sourcePath, string $action = 'copy'): LibraryData {
+		$data = $this->songFileService->attachNextcloudFile($this->user, $this->libraryId, $songId, $sourcePath, $action);
+		Assert::assertNotNull($data);
+		$song = $this->songMapper->findById($songId);
+		if ($song !== null) {
+			$song->updatedAt = $this->nextTimestamp();
+			$this->songMapper->update($song);
+		}
+		return $data;
+	}
+
+	/**
+	 * Drop a new physical file directly into the Nextcloud library folder, triggering
+	 * SheetMusicFileEventListener::onNodeCreated auto-indexing.
+	 */
+	public function ncDropFileIntoLibraryFolder(string $relativePath, ?string $pdfContent = null, int $pages = 1): File {
+		$libraryFolder = $this->getLibraryFolder();
+		$relPath = ltrim($relativePath, '/');
+		$this->ensureNextcloudSubfolders($libraryFolder, $relPath);
+		$content = $pdfContent ?? self::generateValidPdf(basename($relPath), $pages);
+		$ncFile = $libraryFolder->newFile($relPath, $content);
+		$this->fileEventListener->onNodeCreated($ncFile);
+		return $ncFile;
+	}
+
+	/**
+	 * Replace a file's PDF content on the MobileSheets client and update its `Files` table facts.
+	 */
+	public function clientUpdateFileContent(int $clientFileId, string $newPdfContent, ?string $newPageOrder = null): void {
+		$pdo = $this->openSqlite($this->clientDbPath);
+		$stmt = $pdo->prepare('SELECT * FROM Files WHERE Id = :id');
+		$stmt->execute([':id' => $clientFileId]);
+		$row = $stmt->fetch();
+		Assert::assertIsArray($row, "Client file row {$clientFileId} must exist");
+
+		$relPath = $this->extractLibraryRelativePath((string)$row['Path']);
+		$localPath = $this->clientFilesDir . '/' . $relPath;
+		$localDir = dirname($localPath);
+		if (!is_dir($localDir)) {
+			mkdir($localDir, 0777, true);
+		}
+		file_put_contents($localPath, $newPdfContent);
+
+		$ts = $this->nextTimestamp();
+		$tsMs = $ts * 1000;
+		$fileSize = strlen($newPdfContent);
+		$fileHash = MobileSheetsPdf::contentHash($newPdfContent);
+		$pageCount = MobileSheetsPdf::pageCount($newPdfContent);
+		$pageOrder = $newPageOrder ?? ($pageCount > 1 ? '1-' . $pageCount : '1');
+
+		$upd = $pdo->prepare(
+			'UPDATE Files SET FileSize = :size, FileHash = :hash, SourceFilePageCount = :pages, PageOrder = :order, LastModified = :lastMod WHERE Id = :id'
+		);
+		$upd->execute([
+			':size' => $fileSize,
+			':hash' => $fileHash,
+			':pages' => $pageCount,
+			':order' => $pageOrder,
+			':lastMod' => $tsMs,
+			':id' => $clientFileId,
+		]);
+		$this->clientDbDirty = true;
+	}
+
+	/**
+	 * Create a rich, pre-populated MobileSheets client library (with songs, multi-page PDFs,
+	 * collections, composers, books, artists, genres, keys, years, signatures, custom groups,
+	 * song notes, custom attributes, setlists, bookmarks, annotations, audio files, tempos,
+	 * and display settings) before syncing with Nextcloud.
+	 */
+	public function populateRichMobileSheetsClientLibrary(): void {
+		// 1. Create entities across all MobileSheets entity tables
+		$compBach = $this->clientCreateEntity('Composer', 'Johann Sebastian Bach');
+		$compChopin = $this->clientCreateEntity('Composer', 'Frédéric Chopin');
+		$compMiles = $this->clientCreateEntity('Composer', 'Miles Davis');
+
+		$colBaroque = $this->clientCreateEntity('Collections', 'Baroque Masterworks', sortBy: 1, ascending: 1);
+		$colRomantic = $this->clientCreateEntity('Collections', 'Romantic Nocturnes', sortBy: 1, ascending: 1);
+		$colConcertOrder = $this->clientCreateEntity('Collections', 'Recital Program (Manual Order)', sortBy: 0, ascending: 1);
+
+		$bookWtc = $this->clientCreateEntity('Books', 'Well-Tempered Clavier Book I');
+		$bookReal = $this->clientCreateEntity('Books', 'The Real Book Vol. 1');
+
+		$artistGould = $this->clientCreateEntity('Artists', 'Glenn Gould');
+		$artistRubinstein = $this->clientCreateEntity('Artists', 'Arthur Rubinstein');
+
+		$genreClassical = $this->clientCreateEntity('Genres', 'Classical');
+		$genreJazz = $this->clientCreateEntity('Genres', 'Modal Jazz');
+
+		$keyCMaj = $this->clientCreateEntity('Key', 'C Major');
+		$keyEbMaj = $this->clientCreateEntity('Key', 'E-Flat Major');
+		$keyDMin = $this->clientCreateEntity('Key', 'D Dorian');
+
+		$year1722 = $this->clientCreateEntity('Years', '1722');
+		$year1832 = $this->clientCreateEntity('Years', '1832');
+		$year1959 = $this->clientCreateEntity('Years', '1959');
+
+		$sig44 = $this->clientCreateEntity('Signature', '4/4');
+		$sig128 = $this->clientCreateEntity('Signature', '12/8');
+
+		$srcUrtext = $this->clientCreateEntity('SourceType', 'Henle Urtext');
+		$srcLeadSheet = $this->clientCreateEntity('SourceType', 'Lead Sheet');
+
+		$grpPiano = $this->clientCreateEntity('CustomGroup', 'Solo Piano');
+		$grpQuintet = $this->clientCreateEntity('CustomGroup', 'Jazz Quintet');
+
+		// 2. Create 3 rich songs with PDFs and multi-entity links
+		$s1 = $this->clientCreateSong(
+			title: 'Prelude & Fugue No. 1 in C Major',
+			fileName: 'wtc1_prelude_fugue_1.pdf',
+			options: [
+				'sortTitle' => 'Prelude & Fugue 01 in C Major, BWV 846',
+				'stars' => 5,
+				'difficulty' => 3,
+				'duration' => 255,
+				'keywords' => 'baroque, counterpoint, fugue',
+				'custom' => 'BWV 846',
+				'custom2' => 'Henle Ed.',
+				'notes' => 'Keep fugue subject crisp and detached',
+				'pages' => 4,
+				'entities' => [
+					'Composer' => [$compBach],
+					'Collections' => [$colBaroque, $colConcertOrder],
+					'Books' => [$bookWtc],
+					'Artists' => [$artistGould],
+					'Genres' => [$genreClassical],
+					'Key' => [$keyCMaj],
+					'Years' => [$year1722],
+					'Signature' => [$sig44],
+					'SourceType' => [$srcUrtext],
+					'CustomGroup' => [$grpPiano],
+				],
+			],
+		);
+
+		$s2 = $this->clientCreateSong(
+			title: 'Nocturne in E-Flat Major, Op. 9 No. 2',
+			fileName: 'chopin_nocturne_op9_2.pdf',
+			options: [
+				'sortTitle' => 'Nocturne Op. 09 No. 2',
+				'stars' => 5,
+				'difficulty' => 4,
+				'duration' => 270,
+				'keywords' => 'romantic, rubato, cantabile',
+				'custom' => 'Op. 9 No. 2',
+				'custom2' => 'Paderewski Ed.',
+				'notes' => 'Espressivo dolce with flexible left hand',
+				'pages' => 3,
+				'entities' => [
+					'Composer' => [$compChopin],
+					'Collections' => [$colRomantic, $colConcertOrder],
+					'Artists' => [$artistRubinstein],
+					'Genres' => [$genreClassical],
+					'Key' => [$keyEbMaj],
+					'Years' => [$year1832],
+					'Signature' => [$sig128],
+					'SourceType' => [$srcUrtext],
+					'CustomGroup' => [$grpPiano],
+				],
+			],
+		);
+
+		$s3 = $this->clientCreateSong(
+			title: 'So What',
+			fileName: 'so_what_lead.pdf',
+			options: [
+				'sortTitle' => 'So What',
+				'stars' => 4,
+				'difficulty' => 2,
+				'duration' => 560,
+				'keywords' => 'modal, jazz, kind of blue',
+				'custom' => 'D Dorian / Eb Dorian',
+				'custom2' => 'Concert Pitch',
+				'notes' => 'Bass intro, horn answers on 2-note voicings',
+				'pages' => 2,
+				'entities' => [
+					'Composer' => [$compMiles],
+					'Collections' => [$colConcertOrder],
+					'Books' => [$bookReal],
+					'Genres' => [$genreJazz],
+					'Key' => [$keyDMin],
+					'Years' => [$year1959],
+					'Signature' => [$sig44],
+					'SourceType' => [$srcLeadSheet],
+					'CustomGroup' => [$grpQuintet],
+				],
+			],
+		);
+
+		// 3. Populate auxiliary MobileSheets tables (Setlists, SetlistSong, Bookmarks, AnnotationsBase, DrawAnnotations, AudioFiles, Tempos, SongDisplaySettings)
+		$pdo = $this->openSqlite($this->clientDbPath);
+		$tsMs = $this->nextTimestamp() * 1000;
+
+		$pdo->exec("INSERT INTO Setlists (Id, Name, LastPage, LastIndex, SortBy, Ascending, DateCreated, LastModified) VALUES
+			(1, 'Autumn Recital 2026', 0, 0, 0, 1, {$tsMs}, {$tsMs})");
+		$pdo->exec("INSERT INTO SetlistSong (Id, SetlistId, SongId) VALUES
+			(1, 1, {$s2}),
+			(2, 1, {$s1}),
+			(3, 1, {$s3})");
+		$pdo->exec("INSERT INTO Bookmarks (Id, SongId, Name, PageNum, ShowInLibrary, DateCreated, LastModified) VALUES
+			(1, {$s1}, 'Fugue Subject Entry', 3, 1, {$tsMs}, {$tsMs}),
+			(2, {$s2}, 'Coda Cadence', 3, 1, {$tsMs}, {$tsMs})");
+		$pdo->exec("INSERT INTO AnnotationsBase (Id, SongId, Page, Type, Opacity, Zoom, ZoomY, Version, SourcePageWidth, SourcePageHeight, Layer) VALUES
+			(1, {$s1}, 1, 1, 255, 1.0, 1.0, 1, 612.0, 792.0, 0)");
+		$pdo->exec("INSERT INTO DrawAnnotations (Id, BaseId, LineColor, FillColor, LineWidth, DrawMode, PenMode, SmoothMode) VALUES
+			(1, 1, -65536, 0, 2.5, 0, 1, 1)");
+		$pdo->exec("INSERT INTO Tempos (Id, SongId, Tempo, TempoIndex) VALUES
+			(1, {$s1}, 84, 0),
+			(2, {$s2}, 66, 0),
+			(3, {$s3}, 136, 0)");
+		$pdo->exec("INSERT INTO SongDisplaySettings (Id, SongId, UseDefaultAdapter, PortraitAdapterType, LandscapeAdapterType, UseDefaultScaleMode, PortraitScaleMode, LandscapeScaleMode) VALUES
+			(1, {$s1}, 0, 1, 2, 0, 1, 1)");
+
+		$this->clientDbDirty = true;
+	}
+
+	/**
+	 * Set up a pre-existing MobileSheets library directly inside a Nextcloud folder
+	 * (with `mobilesheets.db`, `mobilesheets_hashcodes.txt`, and PDF files already sitting in Nextcloud)
+	 * and import it via `LibraryService::addLibrary(..., importExistingDb: true)`.
+	 */
+	public function setupAndImportPreExistingMobileSheetsLibraryInNextcloud(
+		string $folderName = 'ImportedMobileSheetsLib',
+	): int {
+		$this->libraryFolderName = trim($folderName, '/');
+		$userFolder = $this->rootFolder->getUserFolder($this->userId);
+		if ($userFolder->nodeExists($this->libraryFolderName)) {
+			$userFolder->get($this->libraryFolderName)->delete();
+		}
+		$libFolder = $userFolder->newFolder($this->libraryFolderName);
+
+		$this->initEmptyMobileSheetsClient();
+		$this->populateRichMobileSheetsClientLibrary();
+
+		// Copy client physical PDF files and mobilesheets.db into the Nextcloud folder BEFORE calling addLibrary
+		$clientPdo = $this->openSqlite($this->clientDbPath);
+		$stmt = $clientPdo->query('SELECT Path FROM Files');
+		if ($stmt !== false) {
+			while ($row = $stmt->fetch()) {
+				$relPath = $this->extractLibraryRelativePath((string)$row['Path']);
+				$localFile = $this->clientFilesDir . '/' . $relPath;
+				if ($relPath !== '' && is_file($localFile)) {
+					$this->ensureNextcloudSubfolders($libFolder, $relPath);
+					$libFolder->newFile($relPath, (string)file_get_contents($localFile));
+				}
+			}
+		}
+
+		$libFolder->newFile('mobilesheets.db', (string)file_get_contents($this->clientDbPath));
+
+		// Register library via LibraryService::addLibrary pointing to /Folder/mobilesheets.db with importExistingDb = true
+		$added = $this->libraryService->addLibrary(
+			$this->userId,
+			'/' . $this->libraryFolderName . '/mobilesheets.db',
+			importExistingDb: true,
+		);
+		Assert::assertNotNull($added, 'LibraryService::addLibrary with importExistingDb must succeed');
+
+		$libraries = $this->libraryService->getLibraries($this->userId);
+		Assert::assertNotEmpty($libraries);
+		$this->libraryId = (int)$libraries[0]->id;
+		$this->libraryService->updateSettings($this->userId, $this->libraryId, autoPaths: false, autoPdfMetadata: false);
+
+		return $this->libraryId;
+	}
+
 	// =========================================================================
 	// Bidirectional Sync & Assertions
 	// =========================================================================
@@ -1046,21 +1403,22 @@ class MobileSheetsEndToEndSyncHarness {
 		// 1. Upload any new or modified client physical files referenced in the client DB to Nextcloud
 		if (is_file($this->clientDbPath)) {
 			$clientPdo = $this->openSqlite($this->clientDbPath);
-			$previouslySyncedFileClientIds = [];
+			$previouslySyncedFileMeta = [];
 			if (MobileSheetsTableHelper::tableExists($clientPdo, '_nc_sync_metadata')) {
-				$metaStmt = $clientPdo->query("SELECT client_id FROM _nc_sync_metadata WHERE entity_type = 'file'");
+				$metaStmt = $clientPdo->query("SELECT client_id, updated_at FROM _nc_sync_metadata WHERE entity_type = 'file'");
 				if ($metaStmt !== false) {
 					while ($mRow = $metaStmt->fetch()) {
-						$previouslySyncedFileClientIds[(int)$mRow['client_id']] = true;
+						$previouslySyncedFileMeta[(int)$mRow['client_id']] = (int)($mRow['updated_at'] ?? 0);
 					}
 				}
 			}
 
 			if (MobileSheetsTableHelper::tableExists($clientPdo, 'Files')) {
-				$stmt = $clientPdo->query('SELECT Id, Path FROM Files');
+				$stmt = $clientPdo->query('SELECT Id, Path, LastModified FROM Files');
 				if ($stmt !== false) {
 					while ($row = $stmt->fetch()) {
 						$fileClientId = (int)($row['Id'] ?? 0);
+						$fileLastModSec = (int)floor(((int)($row['LastModified'] ?? 0)) / 1000);
 						$relPath = $this->extractLibraryRelativePath((string)($row['Path'] ?? ''));
 						if ($relPath === '') {
 							continue;
@@ -1072,12 +1430,13 @@ class MobileSheetsEndToEndSyncHarness {
 						$content = (string)file_get_contents($localFile);
 						if (!$libraryFolder->nodeExists($relPath)) {
 							// Only upload if this file was newly created on the client (not previously synced and deleted in Nextcloud)
-							if (!isset($previouslySyncedFileClientIds[$fileClientId])) {
+							if (!isset($previouslySyncedFileMeta[$fileClientId])) {
 								$this->ensureNextcloudSubfolders($libraryFolder, $relPath);
 								$ncFile = $libraryFolder->newFile($relPath, $content);
 								$this->fileEventListener->onNodeCreated($ncFile);
 							}
-						} else {
+						} elseif (!isset($previouslySyncedFileMeta[$fileClientId]) || $fileLastModSec > $previouslySyncedFileMeta[$fileClientId]) {
+							// Only overwrite Nextcloud physical file if the file was modified on the client since baseline
 							$ncNode = $libraryFolder->get($relPath);
 							if ($ncNode instanceof File && $ncNode->getContent() !== $content) {
 								$ncNode->putContent($content);

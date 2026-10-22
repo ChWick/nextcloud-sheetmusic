@@ -629,4 +629,550 @@ class MobileSheetsEndToEndSyncTest extends TestCase {
 		self::assertCount(2, $this->harness->getClientTableRows('CollectionSong'));
 		self::assertCount(2, $this->harness->getClientTableRows('ComposerSongs'));
 	}
+
+	/**
+	 * Test Case 6a:
+	 * Import a pre-populated MobileSheets client library (with songs, multi-page PDFs, all entity types,
+	 * setlists, bookmarks, annotations, tempos, display settings, custom attributes) into an empty Nextcloud
+	 * library via sync, then modify songs, entities, and files on both Nextcloud and the MobileSheets client.
+	 */
+	public function testImportPopulatedMobileSheetsClientLibraryAndModifyFromBothSides(): void {
+		$this->harness->setupEmptyLibraries();
+
+		// Populate rich MobileSheets client library BEFORE initial sync
+		$this->harness->populateRichMobileSheetsClientLibrary();
+
+		// Initial sync imports the populated MobileSheets client library into Nextcloud
+		$importStats = $this->harness->sync();
+		self::assertNotNull($importStats);
+		self::assertSame(3, $importStats['songsCreated']);
+		self::assertSame(3, $importStats['filesCreated']);
+
+		// Verify all songs, entities, and auxiliary tables were preserved
+		$ncData = $this->harness->getNextcloudLibraryData();
+		self::assertCount(3, $ncData->songs);
+		self::assertCount(3, $ncData->composers);
+		self::assertCount(3, $ncData->collections);
+		self::assertCount(2, $ncData->books);
+		self::assertCount(2, $ncData->artists);
+		self::assertCount(2, $ncData->genres);
+		self::assertCount(3, $ncData->keys);
+		self::assertCount(3, $ncData->years);
+		self::assertCount(2, $ncData->signatures);
+		self::assertCount(2, $ncData->sourceTypes);
+		self::assertCount(2, $ncData->customGroups);
+
+		self::assertCount(1, $this->harness->getClientTableRows('Setlists'));
+		self::assertCount(3, $this->harness->getClientTableRows('SetlistSong'));
+		self::assertCount(2, $this->harness->getClientTableRows('Bookmarks'));
+		self::assertCount(1, $this->harness->getClientTableRows('AnnotationsBase'));
+		self::assertCount(1, $this->harness->getClientTableRows('DrawAnnotations'));
+		self::assertCount(3, $this->harness->getClientTableRows('Tempos'));
+		self::assertCount(1, $this->harness->getClientTableRows('SongDisplaySettings'));
+
+		// Step 1: Modify an imported song in Nextcloud (update title, rating, notes, collections)
+		$soWhatNc = array_values(array_filter($ncData->songs, static fn ($s): bool => $s->title === 'So What'))[0];
+		$baroqueColNc = array_values(array_filter($ncData->collections, static fn ($c): bool => $c->name === 'Baroque Masterworks'))[0];
+		$romanticColNc = array_values(array_filter($ncData->collections, static fn ($c): bool => $c->name === 'Romantic Nocturnes'))[0];
+
+		$this->harness->ncUpdateSong($soWhatNc->id, 'So What (Kind of Blue)', [
+			'stars' => 5,
+			'difficulty' => 3,
+			'duration' => 565,
+			'keywords' => 'modal, jazz, miles, 1959',
+			'custom' => 'Updated notes from Nextcloud for So What',
+			'collectionIds' => [$romanticColNc->id],
+		]);
+		$this->harness->sync();
+
+		$clientSongsByTitle = array_column($this->harness->getClientTableRows('Songs'), null, 'Title');
+		self::assertArrayHasKey('So What (Kind of Blue)', $clientSongsByTitle);
+		self::assertSame(5, (int)$clientSongsByTitle['So What (Kind of Blue)']['Stars']);
+		self::assertSame(3, (int)$clientSongsByTitle['So What (Kind of Blue)']['Difficulty']);
+		self::assertSame('modal, jazz, miles, 1959', $clientSongsByTitle['So What (Kind of Blue)']['Keywords']);
+
+		// Step 2: Modify an imported song on the MobileSheets client (update Nocturne and add a new song)
+		$nocturneClientId = (int)$clientSongsByTitle['Nocturne in E-Flat Major, Op. 9 No. 2']['Id'];
+		$this->harness->clientUpdateSong($nocturneClientId, [
+			'Title' => 'Nocturne Op. 9 No. 2 (Chopin)',
+			'Difficulty' => 5,
+			'Notes' => 'Updated performance notes on MobileSheets tablet',
+		]);
+		$this->harness->clientCreateSong(
+			title: 'Goldberg Variations: Aria',
+			fileName: 'goldberg_aria.pdf',
+			options: [
+				'stars' => 5,
+				'difficulty' => 3,
+				'pages' => 2,
+			],
+		);
+		$this->harness->sync();
+
+		$ncData = $this->harness->getNextcloudLibraryData();
+		self::assertCount(4, $ncData->songs);
+		$nocturneNc = array_values(array_filter($ncData->songs, static fn ($s): bool => $s->title === 'Nocturne Op. 9 No. 2 (Chopin)'))[0];
+		self::assertSame(5, $nocturneNc->difficulty);
+		self::assertSame('Updated performance notes on MobileSheets tablet', $nocturneNc->custom);
+
+		// Step 3: Delete one of the originally imported songs ('Prelude & Fugue No. 1 in C Major') in Nextcloud
+		//         and verify its auxiliary rows (Bookmarks, Annotations, Tempos, SetlistSong, SongDisplaySettings)
+		//         are cleanly removed without leaving orphan misc_data or broken references
+		$preludeNc = array_values(array_filter($ncData->songs, static fn ($s): bool => $s->title === 'Prelude & Fugue No. 1 in C Major'))[0];
+		$this->harness->ncDeleteSong($preludeNc->id, deleteFiles: true);
+		$this->harness->sync();
+
+		self::assertCount(3, $this->harness->getClientTableRows('Songs'));
+		self::assertCount(1, $this->harness->getClientTableRows('Bookmarks'), 'Bookmark for deleted song must be removed');
+		self::assertSame([], $this->harness->getClientTableRows('AnnotationsBase'), 'Annotation for deleted song must be removed');
+		self::assertCount(2, $this->harness->getClientTableRows('Tempos'), 'Tempo for deleted song must be removed');
+		self::assertCount(2, $this->harness->getClientTableRows('SetlistSong'), 'SetlistSong entry for deleted song must be removed');
+		self::assertSame([], $this->harness->getClientTableRows('SongDisplaySettings'), 'Display settings for deleted song must be removed');
+		self::assertFalse($this->harness->getLibraryFolder()->nodeExists('wtc1_prelude_fugue_1.pdf'));
+	}
+
+	/**
+	 * Test Case 6b:
+	 * Import an existing MobileSheets library that already sits inside a Nextcloud folder
+	 * via `LibraryService::addLibrary(..., importExistingDb: true)`, then sync with the MobileSheets client
+	 * and perform modifications on both sides.
+	 */
+	public function testAddLibraryWithImportExistingDbInNextcloudAndModify(): void {
+		$this->harness->setupAndImportPreExistingMobileSheetsLibraryInNextcloud('ExistingMsFolder');
+
+		// Immediately after addLibrary(importExistingDb: true), all 3 songs and entities are in Nextcloud
+		$ncData = $this->harness->getNextcloudLibraryData();
+		self::assertCount(3, $ncData->songs);
+		self::assertCount(3, $ncData->composers);
+		self::assertCount(3, $ncData->collections);
+
+		// Initial sync exports `_nc_sync_metadata` and `mobilesheets_hashcodes.txt` with zero diff
+		$this->harness->sync(forceClientUpload: false);
+
+		// Modify in Nextcloud: add a new song, rename an existing song, and delete an entity
+		$ncNewSongId = $this->harness->ncCreateSong('Invention No. 1 in C Major', 'invention_1.pdf', options: [
+			'stars' => 4,
+			'difficulty' => 2,
+			'pages' => 2,
+		]);
+		self::assertGreaterThan(0, $ncNewSongId);
+
+		$milesComp = array_values(array_filter($ncData->composers, static fn ($c): bool => $c->name === 'Miles Davis'))[0];
+		$this->harness->ncDeleteEntity('composers', $milesComp->id);
+
+		$this->harness->sync();
+
+		self::assertCount(4, $this->harness->getClientTableRows('Songs'));
+		self::assertCount(2, $this->harness->getClientTableRows('Composer'));
+		self::assertFileExists($this->harness->clientFilesDir . '/invention_1.pdf');
+
+		// Modify on MobileSheets client: rename 'Invention No. 1 in C Major' and add it to 'Baroque Masterworks'
+		$invClientRow = array_values(array_filter(
+			$this->harness->getClientTableRows('Songs'),
+			static fn (array $r): bool => $r['Title'] === 'Invention No. 1 in C Major'
+		))[0];
+		$baroqueClientRow = array_values(array_filter(
+			$this->harness->getClientTableRows('Collections'),
+			static fn (array $r): bool => $r['Name'] === 'Baroque Masterworks'
+		))[0];
+
+		$this->harness->clientUpdateSong((int)$invClientRow['Id'], [
+			'Title' => 'Invention No. 1 in C Major, BWV 772',
+			'Stars' => 5,
+		]);
+		$this->harness->clientAddSongToEntity('Collections', (int)$baroqueClientRow['Id'], (int)$invClientRow['Id']);
+		$this->harness->sync();
+
+		$ncData = $this->harness->getNextcloudLibraryData();
+		$invNc = array_values(array_filter($ncData->songs, static fn ($s): bool => $s->title === 'Invention No. 1 in C Major, BWV 772'))[0];
+		self::assertSame(5, $invNc->stars);
+		self::assertCount(1, $invNc->collections);
+		self::assertSame('Baroque Masterworks', $invNc->collections[0]->name);
+	}
+
+	/**
+	 * Test Case 7:
+	 * File operations E2E:
+	 * - Update/replace PDF file content in Nextcloud (`SongFileService::updateSongFile`) -> page count, size, and hash update in `Files` and `mobilesheets_hashcodes.txt`
+	 * - Update/replace PDF file content on MobileSheets client -> updated PDF content, page count, size, and hash sync to Nextcloud
+	 * - Attach an existing Nextcloud file to a song (`SongFileService::attachNextcloudFile`)
+	 * - Detach a file from a song in Nextcloud (`SongFileService::detachSongFile`) -> when last file is detached, song becomes fileless in Nextcloud and is removed from client `mobilesheets.db` while the physical file remains in Nextcloud
+	 * - Drop a new PDF file directly into the Nextcloud library folder -> `SheetMusicFileEventListener` auto-indexes it and sync exports it to MobileSheets
+	 */
+	public function testFileUpdateAttachDetachAndAutoIndexOperationsSyncCleanly(): void {
+		$this->harness->setupEmptyLibraries();
+		$this->harness->sync();
+
+		// 1. Create song with 1-page PDF in Nextcloud and sync
+		$ncSongId = $this->harness->ncCreateSong('Etude Op. 10 No. 1', 'etude_op10_1.pdf', options: ['pages' => 1]);
+		$this->harness->sync();
+
+		$clientFiles = $this->harness->getClientTableRows('Files');
+		self::assertCount(1, $clientFiles);
+		$origHash = (int)$clientFiles[0]['FileHash'];
+		$origSize = (int)$clientFiles[0]['FileSize'];
+		self::assertSame(1, (int)$clientFiles[0]['SourceFilePageCount']);
+		self::assertSame('1', $clientFiles[0]['PageOrder']);
+
+		// 2. Replace PDF content in Nextcloud with a 4-page PDF via SongFileService::updateSongFile
+		$ncFileId = $this->harness->getNextcloudLibraryData()->songs[0]->files[0]->id;
+		$fourPagePdf = MobileSheetsEndToEndSyncHarness::generateValidPdf('Etude Op. 10 No. 1 - Revised 4 Pages', 4);
+		$this->harness->ncUpdateSongFile($ncSongId, $ncFileId, $fourPagePdf);
+		$this->harness->sync();
+
+		$clientFiles = $this->harness->getClientTableRows('Files');
+		self::assertCount(1, $clientFiles);
+		self::assertSame(4, (int)$clientFiles[0]['SourceFilePageCount']);
+		self::assertSame('1-4', $clientFiles[0]['PageOrder']);
+		self::assertNotSame($origHash, (int)$clientFiles[0]['FileHash']);
+		self::assertNotSame($origSize, (int)$clientFiles[0]['FileSize']);
+		self::assertSame($fourPagePdf, (string)file_get_contents($this->harness->clientFilesDir . '/etude_op10_1.pdf'));
+
+		// 3. Replace PDF content on MobileSheets client with a 6-page PDF and custom PageOrder
+		$sixPagePdf = MobileSheetsEndToEndSyncHarness::generateValidPdf('Etude Op. 10 No. 1 - Client Annotated 6 Pages', 6);
+		$this->harness->clientUpdateFileContent((int)$clientFiles[0]['Id'], $sixPagePdf, '1-6');
+		$this->harness->sync();
+
+		$ncFileModel = $this->harness->songFileMapper->findById($ncFileId);
+		self::assertNotNull($ncFileModel);
+		self::assertSame(6, $ncFileModel->pageCount);
+		self::assertSame('1-6', $ncFileModel->pageOrder);
+		self::assertSame(strlen($sixPagePdf), $ncFileModel->fileSize);
+
+		// 4. Attach an existing Nextcloud file from outside the library folder via SongFileService::attachNextcloudFile
+		$userFolder = $this->harness->rootFolder->getUserFolder($this->harness->userId);
+		$externalPdf = MobileSheetsEndToEndSyncHarness::generateValidPdf('Coda Insert Page', 2);
+		if ($userFolder->nodeExists('external_coda.pdf')) {
+			$userFolder->get('external_coda.pdf')->delete();
+		}
+		$userFolder->newFile('external_coda.pdf', $externalPdf);
+		$this->harness->ncAttachNextcloudFile($ncSongId, '/external_coda.pdf', 'move');
+		$this->harness->sync();
+
+		self::assertCount(2, $this->harness->getClientTableRows('Files'));
+		self::assertFileExists($this->harness->clientFilesDir . '/external_coda.pdf');
+
+		// 5. Detach both files in Nextcloud via SongFileService::detachSongFile
+		//    -> Song remains in Nextcloud (now fileless) and is removed from client mobilesheets.db
+		foreach ($this->harness->getNextcloudLibraryData()->songs[0]->files as $f) {
+			$this->harness->ncDetachSongFile($ncSongId, $f->id);
+		}
+		// Delete the unreferenced physical files from the library folder so reconciler doesn't re-index them
+		$this->harness->getLibraryFolder()->get('etude_op10_1.pdf')->delete();
+		$this->harness->getLibraryFolder()->get('external_coda.pdf')->delete();
+
+		$this->harness->sync(allowSongsWithoutFilesInNc: true);
+
+		self::assertCount(1, $this->harness->getNextcloudLibraryData()->songs, 'Detached song must remain in Nextcloud');
+		self::assertSame([], $this->harness->getNextcloudLibraryData()->songs[0]->files);
+		self::assertSame([], $this->harness->getClientTableRows('Songs'), 'Fileless song must be removed from client mobilesheets.db');
+		self::assertSame([], $this->harness->getClientTableRows('Files'));
+		self::assertSame('', $this->harness->getClientHashCodesContent());
+
+		// 6. Drop a new PDF file directly into the Nextcloud library folder -> auto-indexed into a new song and synced to MobileSheets
+		$this->harness->ncDropFileIntoLibraryFolder('001_Arabesque_No_1.pdf', pages: 3);
+		$this->harness->sync(allowSongsWithoutFilesInNc: true);
+
+		$clientSongs = $this->harness->getClientTableRows('Songs');
+		self::assertCount(1, $clientSongs);
+		self::assertSame('001 Arabesque No 1', $clientSongs[0]['Title']);
+		$clientFiles = $this->harness->getClientTableRows('Files');
+		self::assertCount(1, $clientFiles);
+		self::assertSame(3, (int)$clientFiles[0]['SourceFilePageCount']);
+	}
+
+	/**
+	 * Test Case 8:
+	 * Last-Write-Wins (LWW) conflict resolution E2E:
+	 * - Concurrent edits to the same song on both MobileSheets client and Nextcloud:
+	 *   - Scenario A: Nextcloud edit is newer than client edit -> Nextcloud metadata & entity links win
+	 *   - Scenario B: Client edit is newer than Nextcloud edit -> Client metadata & entity links win
+	 * - Edit vs Delete conflict:
+	 *   - Scenario C: Song deleted on MobileSheets client, but modified in Nextcloud after baseline -> Nextcloud edit wins and preserves song
+	 *   - Scenario D: Song deleted in Nextcloud, but modified on MobileSheets client after deletion -> Client edit revives song
+	 */
+	public function testLastWriteWinsConflictResolutionBetweenClientAndNextcloud(): void {
+		$this->harness->setupEmptyLibraries();
+		$this->harness->sync();
+
+		$colA = $this->harness->ncCreateEntity('collection', 'Collection A');
+		$colB = $this->harness->ncCreateEntity('collection', 'Collection B');
+		$ncSongId = $this->harness->ncCreateSong('Conflict Piece', 'conflict_piece.pdf', options: [
+			'stars' => 3,
+			'difficulty' => 2,
+			'collectionIds' => [$colA],
+		]);
+		$this->harness->sync();
+
+		$clientSongId = (int)$this->harness->getClientTableRows('Songs')[0]['Id'];
+		$colBClientRow = array_values(array_filter(
+			$this->harness->getClientTableRows('Collections'),
+			static fn (array $r): bool => $r['Name'] === 'Collection B'
+		))[0];
+		$colAClientRow = array_values(array_filter(
+			$this->harness->getClientTableRows('Collections'),
+			static fn (array $r): bool => $r['Name'] === 'Collection A'
+		))[0];
+
+		// Scenario A: Client edits first (older timestamp), then Nextcloud edits second (newer timestamp)
+		$this->harness->clientUpdateSong($clientSongId, [
+			'Title' => 'Conflict Piece (Client Older Edit)',
+			'Stars' => 1,
+		]);
+		// Nextcloud edits afterwards (higher timestamp from logical clock)
+		$this->harness->ncUpdateSong($ncSongId, 'Conflict Piece (Nextcloud Newer Edit)', [
+			'stars' => 5,
+			'collectionIds' => [$colB],
+		]);
+		$this->harness->sync();
+
+		// Nextcloud's newer edit must win on both sides
+		$ncSong = $this->harness->getNextcloudLibraryData()->songs[0];
+		self::assertSame('Conflict Piece (Nextcloud Newer Edit)', $ncSong->title);
+		self::assertSame(5, $ncSong->stars);
+		self::assertSame([$colB], array_map(static fn ($c): int => $c->id, $ncSong->collections));
+
+		$clientSong = $this->harness->getClientTableRows('Songs')[0];
+		self::assertSame('Conflict Piece (Nextcloud Newer Edit)', $clientSong['Title']);
+		self::assertSame(5, (int)$clientSong['Stars']);
+
+		// Scenario B: Nextcloud edits first (older timestamp), then Client edits second (newer timestamp)
+		$this->harness->ncUpdateSong($ncSongId, 'Conflict Piece (Nextcloud Older Edit)', [
+			'stars' => 2,
+			'collectionIds' => [$colB],
+		]);
+		$this->harness->clientUpdateSong($clientSongId, [
+			'Title' => 'Conflict Piece (Client Newer Edit)',
+			'Stars' => 4,
+		]);
+		$this->harness->clientRemoveSongFromEntity('Collections', (int)$colBClientRow['Id'], $clientSongId);
+		$this->harness->clientAddSongToEntity('Collections', (int)$colAClientRow['Id'], $clientSongId);
+		$this->harness->sync();
+
+		// Client's newer edit must win on both sides
+		$ncSong = $this->harness->getNextcloudLibraryData()->songs[0];
+		self::assertSame('Conflict Piece (Client Newer Edit)', $ncSong->title);
+		self::assertSame(4, $ncSong->stars);
+		self::assertSame([$colA], array_map(static fn ($c): int => $c->id, $ncSong->collections));
+
+		// Scenario C: Client deletes song (without removing physical file yet), while Nextcloud has newer edits since baseline
+		$this->harness->clientDeleteSong($clientSongId, deleteLocalFile: false);
+		$this->harness->ncUpdateSong($ncSongId, 'Conflict Piece (Saved By Nextcloud Edit)', [
+			'stars' => 5,
+		]);
+		$this->harness->sync();
+
+		self::assertCount(1, $this->harness->getNextcloudLibraryData()->songs, 'Song edited in Nextcloud after baseline must survive client deletion');
+		self::assertCount(1, $this->harness->getClientTableRows('Songs'), 'Survived song must be re-exported to client');
+		self::assertSame('Conflict Piece (Saved By Nextcloud Edit)', $this->harness->getClientTableRows('Songs')[0]['Title']);
+
+		// Scenario D: Nextcloud deletes song (keeping physical file), then Client modifies song with a newer timestamp -> revived!
+		$this->harness->ncDeleteSong($ncSongId, deleteFiles: false);
+		$this->harness->clientUpdateSong($clientSongId, [
+			'Title' => 'Conflict Piece (Revived By Client Edit)',
+			'Stars' => 5,
+		]);
+		// Also bump client file timestamp so the file record is revived along with the song
+		$clientFileId = (int)$this->harness->getClientTableRows('Files')[0]['Id'];
+		$this->harness->clientUpdateFileContent(
+			$clientFileId,
+			MobileSheetsEndToEndSyncHarness::generateValidPdf('Revived PDF', 2),
+		);
+		$this->harness->sync();
+
+		self::assertCount(1, $this->harness->getNextcloudLibraryData()->songs, 'Song modified on client after Nextcloud deletion must be revived');
+		self::assertSame('Conflict Piece (Revived By Client Edit)', $this->harness->getNextcloudLibraryData()->songs[0]->title);
+		self::assertCount(1, $this->harness->getClientTableRows('Songs'));
+	}
+
+	/**
+	 * Test Case 9:
+	 * Song merging (`SongService::mergeSong`) and Entity merging (`EntityService::mergeEntities`)
+	 * in Nextcloud after importing a MobileSheets library with duplicate entries.
+	 */
+	public function testMergeDuplicateSongsAndEntitiesInNextcloudAndSync(): void {
+		$this->harness->setupEmptyLibraries();
+
+		// Create duplicate composers ("J.S. Bach" and "Johann Sebastian Bach") and 2 songs on MobileSheets client
+		$compBach1 = $this->harness->clientCreateEntity('Composer', 'J.S. Bach');
+		$compBach2 = $this->harness->clientCreateEntity('Composer', 'Johann Sebastian Bach');
+		$colA = $this->harness->clientCreateEntity('Collections', 'Partitas');
+		$colB = $this->harness->clientCreateEntity('Collections', 'Keyboard Suites');
+
+		$this->harness->clientCreateSong(
+			title: 'Partita No. 1 (Page 1)',
+			fileName: 'partita1_p1.pdf',
+			options: [
+				'stars' => 4,
+				'entities' => [
+					'Composer' => [$compBach1],
+					'Collections' => [$colA],
+				],
+			],
+		);
+		$this->harness->clientCreateSong(
+			title: 'Partita No. 1 (Page 2)',
+			fileName: 'partita1_p2.pdf',
+			options: [
+				'stars' => 5,
+				'entities' => [
+					'Composer' => [$compBach2],
+					'Collections' => [$colB],
+				],
+			],
+		);
+
+		$this->harness->sync();
+
+		$ncData = $this->harness->getNextcloudLibraryData();
+		self::assertCount(2, $ncData->songs);
+		self::assertCount(2, $ncData->composers);
+
+		// 1. Merge duplicate composers in Nextcloud: merge "J.S. Bach" into "Johann Sebastian Bach"
+		$keepComposer = array_values(array_filter($ncData->composers, static fn ($c): bool => $c->name === 'Johann Sebastian Bach'))[0];
+		$dupComposer = array_values(array_filter($ncData->composers, static fn ($c): bool => $c->name === 'J.S. Bach'))[0];
+
+		$this->harness->ncMergeEntities('composers', $keepComposer->id, [$dupComposer->id]);
+		$this->harness->sync();
+
+		self::assertCount(1, $this->harness->getNextcloudLibraryData()->composers);
+		self::assertCount(1, $this->harness->getClientTableRows('Composer'));
+		self::assertSame('Johann Sebastian Bach', $this->harness->getClientTableRows('Composer')[0]['Name']);
+		self::assertCount(2, $this->harness->getClientTableRows('ComposerSongs'));
+
+		// 2. Merge the 2 songs in Nextcloud into a single 2-file song ('Partita No. 1 in B-Flat Major, BWV 825')
+		$ncData = $this->harness->getNextcloudLibraryData();
+		$songKeep = array_values(array_filter($ncData->songs, static fn ($s): bool => $s->title === 'Partita No. 1 (Page 1)'))[0];
+		$songDrop = array_values(array_filter($ncData->songs, static fn ($s): bool => $s->title === 'Partita No. 1 (Page 2)'))[0];
+		$colIds = array_map(static fn ($c): int => $c->id, $ncData->collections);
+
+		$this->harness->ncMergeSong($songKeep->id, $songDrop->id, [
+			'title' => 'Partita No. 1 in B-Flat Major, BWV 825',
+			'composerIds' => [$keepComposer->id],
+			'collectionIds' => $colIds,
+			'stars' => 5,
+			'difficulty' => 4,
+		]);
+		$this->harness->sync();
+
+		$ncData = $this->harness->getNextcloudLibraryData();
+		self::assertCount(1, $ncData->songs);
+		self::assertSame('Partita No. 1 in B-Flat Major, BWV 825', $ncData->songs[0]->title);
+		self::assertCount(2, $ncData->songs[0]->files, 'Merged song must have both files attached');
+		self::assertCount(2, $ncData->songs[0]->collections, 'Merged song must be linked to both collections');
+
+		self::assertCount(1, $this->harness->getClientTableRows('Songs'));
+		self::assertCount(2, $this->harness->getClientTableRows('Files'));
+		self::assertCount(2, $this->harness->getClientTableRows('CollectionSong'));
+		self::assertCount(1, $this->harness->getClientTableRows('ComposerSongs'));
+	}
+
+	/**
+	 * Test Case 10:
+	 * Collection manual song ordering (`SortBy = 0` / `SongSortingUtil::MODE_MANUAL`) vs alphabetical
+	 * and rating sort modes across bidirectional syncs.
+	 */
+	public function testCollectionManualAndAutomaticSongOrderingAcrossSyncs(): void {
+		$this->harness->setupEmptyLibraries();
+
+		// Create a collection with SortBy = 0 (Manual order) on the MobileSheets client
+		$colManualClient = $this->harness->clientCreateEntity('Collections', 'Live Setlist Order', sortBy: 0, ascending: 1);
+		$sZebra = $this->harness->clientCreateSong('Zebra Waltz', 'zebra.pdf', options: ['stars' => 3]);
+		$sAlpha = $this->harness->clientCreateSong('Alpha March', 'alpha.pdf', options: ['stars' => 5]);
+		$sMiddle = $this->harness->clientCreateSong('Middle Nocturne', 'middle.pdf', options: ['stars' => 4]);
+
+		// Add songs in specific non-alphabetical manual order: Zebra -> Middle -> Alpha
+		$this->harness->clientAddSongToEntity('Collections', $colManualClient, $sZebra);
+		$this->harness->clientAddSongToEntity('Collections', $colManualClient, $sMiddle);
+		$this->harness->clientAddSongToEntity('Collections', $colManualClient, $sAlpha);
+
+		$this->harness->sync();
+
+		// Verify manual order is preserved in client CollectionSong table after sync
+		$colSongRows = $this->harness->getClientTableRows('CollectionSong', 'Id ASC');
+		self::assertSame(
+			[$sZebra, $sMiddle, $sAlpha],
+			array_map(static fn (array $r): int => (int)$r['SongId'], $colSongRows),
+			'Manual song order (SortBy=0) must be preserved in CollectionSong'
+		);
+
+		// Reorder songs in Nextcloud via InternalEntityMapper::setEntitySongs: Alpha -> Zebra -> Middle
+		$ncCol = $this->harness->getNextcloudLibraryData()->collections[0];
+		$ncSongsByTitle = [];
+		foreach ($this->harness->getNextcloudLibraryData()->songs as $s) {
+			$ncSongsByTitle[$s->title] = $s->id;
+		}
+		$this->harness->entityMapper->setEntitySongs($ncCol->id, [
+			$ncSongsByTitle['Alpha March'],
+			$ncSongsByTitle['Zebra Waltz'],
+			$ncSongsByTitle['Middle Nocturne'],
+		]);
+		$ncColModel = $this->harness->entityMapper->findById($ncCol->id);
+		if ($ncColModel !== null) {
+			$ncColModel->updatedAt = $this->harness->nextTimestamp();
+			$this->harness->entityMapper->update($ncColModel);
+		}
+		foreach ($ncSongsByTitle as $sid) {
+			$songModel = $this->harness->songMapper->findById($sid);
+			if ($songModel !== null) {
+				$songModel->updatedAt = $this->harness->nextTimestamp();
+				$this->harness->songMapper->update($songModel);
+			}
+		}
+
+		$this->harness->sync();
+
+		$colSongRows = $this->harness->getClientTableRows('CollectionSong', 'Id ASC');
+		self::assertSame(
+			[$sAlpha, $sZebra, $sMiddle],
+			array_map(static fn (array $r): int => (int)$r['SongId'], $colSongRows),
+			'Reordered manual song sequence from Nextcloud must be exported to CollectionSong'
+		);
+	}
+
+	/**
+	 * Test Case 11:
+	 * Library with `autoPaths = true` and `autoPdfMetadata = true`:
+	 * Create songs with composer/collection in Nextcloud, regenerate file paths into organized subfolders
+	 * (`FileManager::regenerateFilePaths`), and sync with MobileSheets -> `Files.Path`, `mobilesheets_hashcodes.txt`,
+	 * and client local files reflect the reorganized subfolder structure and embedded PDF metadata with zero diff.
+	 */
+	public function testAutoPathsAndAutoPdfMetadataSyncWithSubfolderOrganization(): void {
+		$this->harness->setupEmptyLibraries(
+			folderName: 'AutoPathsLib',
+			autoPaths: true,
+			autoPdfMetadata: true,
+		);
+		$this->harness->sync();
+
+		$compBachId = $this->harness->ncCreateEntity('composer', 'Bach');
+		$colPreludesId = $this->harness->ncCreateEntity('collection', 'Preludes');
+
+		$this->harness->ncCreateSong(
+			title: 'Little Prelude in C',
+			fileName: 'raw_upload.pdf',
+			options: [
+				'composerIds' => [$compBachId],
+				'collectionIds' => [$colPreludesId],
+				'stars' => 5,
+				'pages' => 2,
+			],
+		);
+
+		// Regenerate file paths according to naming rules
+		$log = $this->harness->fileManager->regenerateFilePaths($this->harness->libraryId, $this->harness->user);
+		self::assertNotEmpty($log);
+
+		// Sync with MobileSheets client
+		$this->harness->sync();
+
+		$clientFiles = $this->harness->getClientTableRows('Files');
+		self::assertCount(1, $clientFiles);
+		$exportedWebdavPath = (string)$clientFiles[0]['Path'];
+		$relPath = $this->harness->extractLibraryRelativePath($exportedWebdavPath);
+		self::assertNotSame('raw_upload.pdf', $relPath, 'File path must be reorganized by FileManager::regenerateFilePaths');
+		self::assertStringContainsString('Little Prelude in C', $relPath);
+		self::assertFileExists($this->harness->clientFilesDir . '/' . $relPath);
+		self::assertStringContainsString($relPath, $this->harness->getClientHashCodesContent());
+	}
 }
