@@ -396,6 +396,7 @@ class MobileSheetsEndToEndSyncHarness {
 		?string $fileName = 'song.pdf',
 		?string $pdfContent = null,
 		array $options = [],
+		?array $files = null,
 	): int {
 		$pdo = $this->openSqlite($this->clientDbPath);
 		$ts = $this->nextTimestamp();
@@ -441,10 +442,18 @@ class MobileSheetsEndToEndSyncHarness {
 			]);
 		}
 
-		if ($fileName !== null && $fileName !== '') {
+		$filesToCreate = [];
+		if ($files !== null) {
+			foreach ($files as $fName => $fContent) {
+				$filesToCreate[(string)$fName] = (string)$fContent;
+			}
+		} elseif ($fileName !== null && $fileName !== '') {
 			$pages = $options['pages'] ?? 1;
-			$content = $pdfContent ?? self::generateValidPdf($title, $pages);
-			$relFile = ltrim($fileName, '/');
+			$filesToCreate[$fileName] = $pdfContent ?? self::generateValidPdf($title, $pages);
+		}
+
+		foreach ($filesToCreate as $fName => $content) {
+			$relFile = ltrim($fName, '/');
 			$localPath = $this->clientFilesDir . '/' . $relFile;
 			$localDir = dirname($localPath);
 			if (!is_dir($localDir)) {
@@ -582,6 +591,74 @@ class MobileSheetsEndToEndSyncHarness {
 		}
 		$pdo->exec('DELETE FROM Files WHERE Id = ' . $clientFileId);
 		$this->clientDbDirty = true;
+	}
+
+	/**
+	 * Add a physical PDF file and `Files` row to an existing song on the MobileSheets client.
+	 *
+	 * @return int The client `Files.Id` assigned to the newly added file
+	 */
+	public function clientAddFileToSong(
+		int $clientSongId,
+		string $fileName,
+		?string $pdfContent = null,
+		int $pages = 1,
+		?string $pageOrder = null,
+		bool $reuseDeletedId = false,
+	): int {
+		$pdo = $this->openSqlite($this->clientDbPath);
+		$ts = $this->nextTimestamp();
+		$tsMs = $ts * 1000;
+
+		$relFile = ltrim($fileName, '/');
+		$content = $pdfContent ?? self::generateValidPdf('Song:' . $clientSongId . ':' . $relFile, $pages);
+
+		$localPath = $this->clientFilesDir . '/' . $relFile;
+		$localDir = dirname($localPath);
+		if (!is_dir($localDir)) {
+			mkdir($localDir, 0777, true);
+		}
+		file_put_contents($localPath, $content);
+
+		$fileSize = strlen($content);
+		$fileHash = MobileSheetsPdf::contentHash($content);
+		$pageCount = MobileSheetsPdf::pageCount($content);
+		$effectivePageOrder = $pageOrder ?? ($pageCount > 1 ? '1-' . $pageCount : '1');
+		$webdavPath = MobileSheetsPathResolver::WEBDAV_ROOT
+			. '/' . $this->userId
+			. ($this->libraryFolderName !== '' ? '/' . $this->libraryFolderName : '')
+			. '/' . $relFile;
+
+		$maxInFiles = (int)$pdo->query('SELECT COALESCE(MAX(Id), 0) FROM Files')->fetchColumn();
+		$maxInSyncMeta = 0;
+		if (!$reuseDeletedId && MobileSheetsTableHelper::tableExists($pdo, '_nc_sync_metadata')) {
+			$maxInSyncMeta = (int)$pdo->query("SELECT COALESCE(MAX(client_id), 0) FROM _nc_sync_metadata WHERE entity_type = 'file'")->fetchColumn();
+		}
+		$nextFileId = max($maxInFiles, $maxInSyncMeta) + 1;
+
+		$fileStmt = $pdo->prepare(
+			'INSERT INTO Files (Id, SongId, Path, PageOrder, FileSize, LastModified, Type, SourceFilePageCount, FileHash)
+			 VALUES (:id, :songId, :path, :pageOrder, :fileSize, :lastModified, 0, :pageCount, :fileHash)'
+		);
+		$fileStmt->execute([
+			':id' => $nextFileId,
+			':songId' => $clientSongId,
+			':path' => $webdavPath,
+			':pageOrder' => $effectivePageOrder,
+			':fileSize' => $fileSize,
+			':lastModified' => $tsMs,
+			':pageCount' => $pageCount,
+			':fileHash' => $fileHash,
+		]);
+
+		$songStmt = $pdo->prepare('UPDATE Songs SET LastModified = :lastModified WHERE Id = :id');
+		$songStmt->execute([
+			':lastModified' => $tsMs,
+			':id' => $clientSongId,
+		]);
+
+		$this->clientDbDirty = true;
+		return $nextFileId;
 	}
 
 	/**
@@ -838,9 +915,17 @@ class MobileSheetsEndToEndSyncHarness {
 
 		Assert::assertNotNull($data, 'SongFileService::uploadSongFile should return LibraryData');
 
+		$ts = $this->nextTimestamp();
+		foreach ($this->songFileMapper->findAllForSong($songId) as $sf) {
+			if ($sf->clientId === null) {
+				$sf->updatedAt = $ts;
+				$this->songFileMapper->update($sf);
+			}
+		}
+
 		$song = $this->songMapper->findById($songId);
 		if ($song !== null) {
-			$song->updatedAt = $this->nextTimestamp();
+			$song->updatedAt = $ts;
 			$this->songMapper->update($song);
 		}
 
@@ -998,6 +1083,18 @@ class MobileSheetsEndToEndSyncHarness {
 	public function ncDeleteSongFile(int $songId, int $songFileId): LibraryData {
 		$data = $this->songFileService->deleteSongFile($this->user, $this->libraryId, $songId, $songFileId);
 		Assert::assertNotNull($data);
+		$ts = $this->nextTimestamp();
+		$fileRec = $this->songFileMapper->findById($songFileId);
+		if ($fileRec !== null && $fileRec->deletedAt !== null) {
+			$fileRec->deletedAt = $ts;
+			$fileRec->updatedAt = $ts;
+			$this->songFileMapper->update($fileRec);
+		}
+		$song = $this->songMapper->findById($songId);
+		if ($song !== null) {
+			$song->updatedAt = $ts;
+			$this->songMapper->update($song);
+		}
 		return $data;
 	}
 
@@ -1429,8 +1526,8 @@ class MobileSheetsEndToEndSyncHarness {
 						}
 						$content = (string)file_get_contents($localFile);
 						if (!$libraryFolder->nodeExists($relPath)) {
-							// Only upload if this file was newly created on the client (not previously synced and deleted in Nextcloud)
-							if (!isset($previouslySyncedFileMeta[$fileClientId])) {
+							// Only upload if this file was newly created or updated on the client (not previously synced and deleted in Nextcloud)
+							if (!isset($previouslySyncedFileMeta[$fileClientId]) || $fileLastModSec > $previouslySyncedFileMeta[$fileClientId]) {
 								$this->ensureNextcloudSubfolders($libraryFolder, $relPath);
 								$ncFile = $libraryFolder->newFile($relPath, $content);
 								$this->fileEventListener->onNodeCreated($ncFile);
@@ -1734,7 +1831,7 @@ class MobileSheetsEndToEndSyncHarness {
 			'sheetmusic_song_files',
 			'sheetmusic_song_attributes',
 			'sheetmusic_misc_data',
-			'sheetmusic_misc_schemas',
+			'sheetmusic_misc_schema',
 			'sheetmusic_songs',
 			'sheetmusic_entities',
 			'sheetmusic_libraries',

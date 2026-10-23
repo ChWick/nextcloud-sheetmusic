@@ -23,6 +23,8 @@ class MobileSheetsEndToEndSyncTest extends TestCase {
 
 	protected function tearDown(): void {
 		$this->harness->cleanup();
+		unset($this->harness);
+		gc_collect_cycles();
 		parent::tearDown();
 	}
 
@@ -1174,5 +1176,429 @@ class MobileSheetsEndToEndSyncTest extends TestCase {
 		self::assertStringContainsString('Little Prelude in C', $relPath);
 		self::assertFileExists($this->harness->clientFilesDir . '/' . $relPath);
 		self::assertStringContainsString($relPath, $this->harness->getClientHashCodesContent());
+	}
+
+	/**
+	 * Test Case 12a (Client -> Server):
+	 * Client adds a new physical PDF file to an existing synced song.
+	 * On sync, the file must be uploaded to the Nextcloud server, attached to the existing song
+	 * (without leaving an auto-indexed stub song), and reflected in `mobilesheets.db` and `mobilesheets_hashcodes.txt`.
+	 */
+	public function testClientAddsFileToExistingSongAndUploadsToServerOnSync(): void {
+		$this->harness->setupEmptyLibraries();
+
+		// Create song with 1 initial file in Nextcloud and sync to client
+		$ncSongId = $this->harness->ncCreateSong(
+			title: 'String Quartet in D',
+			fileName: 'quartet_part1_violin1.pdf',
+			options: ['pages' => 2],
+		);
+		$this->harness->sync();
+
+		$clientSongs = $this->harness->getClientTableRows('Songs');
+		self::assertCount(1, $clientSongs);
+		$clientSongId = (int)$clientSongs[0]['Id'];
+		self::assertCount(1, $this->harness->getClientTableRows('Files'));
+
+		// Client adds a 2nd file to the existing song
+		$newFileContent = MobileSheetsEndToEndSyncHarness::generateValidPdf('Quartet Part 2 - Violin II', 3);
+		$newClientFileId = $this->harness->clientAddFileToSong(
+			clientSongId: $clientSongId,
+			fileName: 'quartet_part2_violin2.pdf',
+			pdfContent: $newFileContent,
+			pages: 3,
+		);
+		self::assertGreaterThan(0, $newClientFileId);
+
+		$importStats = $this->harness->sync();
+		self::assertNotNull($importStats);
+		self::assertSame(1, $importStats['filesCreated']);
+
+		// Verify physical file was uploaded to Nextcloud library folder with exact content
+		$libFolder = $this->harness->getLibraryFolder();
+		self::assertTrue($libFolder->nodeExists('quartet_part1_violin1.pdf'));
+		self::assertTrue($libFolder->nodeExists('quartet_part2_violin2.pdf'));
+		$uploadedNode = $libFolder->get('quartet_part2_violin2.pdf');
+		self::assertInstanceOf(\OCP\Files\File::class, $uploadedNode);
+		self::assertSame($newFileContent, $uploadedNode->getContent());
+
+		// Verify Nextcloud song has both files and no extra auto-indexed stub song was left behind
+		$ncData = $this->harness->getNextcloudLibraryData();
+		self::assertCount(1, $ncData->songs);
+		self::assertSame($ncSongId, $ncData->songs[0]->id);
+		self::assertCount(2, $ncData->songs[0]->files);
+
+		$ncFileNames = array_map(static fn ($f): string => basename($f->path), $ncData->songs[0]->files);
+		sort($ncFileNames);
+		self::assertSame(['quartet_part1_violin1.pdf', 'quartet_part2_violin2.pdf'], $ncFileNames);
+
+		// Verify client DB and hashcodes contain both files
+		self::assertCount(2, $this->harness->getClientTableRows('Files'));
+		$hashCodes = $this->harness->getClientHashCodesContent();
+		self::assertStringContainsString('quartet_part1_violin1.pdf', $hashCodes);
+		self::assertStringContainsString('quartet_part2_violin2.pdf', $hashCodes);
+	}
+
+	/**
+	 * Test Case 12b (Client -> Server):
+	 * Client deletes a file from an existing multi-file song.
+	 * On sync, the deleted file is removed from the song on the Nextcloud server (including its physical file node),
+	 * while the remaining file stays intact.
+	 */
+	public function testClientDeletesFileFromSongAndSyncsToServer(): void {
+		$this->harness->setupEmptyLibraries();
+
+		// Create song with 2 files on the client and sync to Nextcloud
+		$clientSongId = $this->harness->clientCreateSong(
+			title: 'Concerto for Two Violins',
+			files: [
+				'concerto_full_score.pdf' => MobileSheetsEndToEndSyncHarness::generateValidPdf('Concerto Full Score', 4),
+				'concerto_solo_violin.pdf' => MobileSheetsEndToEndSyncHarness::generateValidPdf('Concerto Solo Violin', 2),
+			],
+		);
+		$this->harness->sync();
+
+		$libFolder = $this->harness->getLibraryFolder();
+		self::assertTrue($libFolder->nodeExists('concerto_full_score.pdf'));
+		self::assertTrue($libFolder->nodeExists('concerto_solo_violin.pdf'));
+		self::assertCount(2, $this->harness->getNextcloudLibraryData()->songs[0]->files);
+
+		// Find `concerto_solo_violin.pdf` row on the client and delete it
+		$clientFiles = $this->harness->getClientTableRows('Files');
+		self::assertCount(2, $clientFiles);
+		$soloViolinRow = array_values(array_filter(
+			$clientFiles,
+			static fn (array $r): bool => str_ends_with((string)$r['Path'], '/concerto_solo_violin.pdf')
+		))[0];
+
+		$this->harness->clientDeleteFile((int)$soloViolinRow['Id'], deleteLocalFile: true);
+		$this->harness->clientUpdateSong($clientSongId, []);
+
+		$importStats = $this->harness->sync();
+		self::assertNotNull($importStats);
+		self::assertSame(1, $importStats['filesDeleted']);
+
+		// Verify deleted file was removed from Nextcloud storage and DB, while full score remains
+		self::assertTrue($libFolder->nodeExists('concerto_full_score.pdf'));
+		self::assertFalse($libFolder->nodeExists('concerto_solo_violin.pdf'));
+
+		$ncData = $this->harness->getNextcloudLibraryData();
+		self::assertCount(1, $ncData->songs);
+		self::assertCount(1, $ncData->songs[0]->files);
+		self::assertSame('concerto_full_score.pdf', basename($ncData->songs[0]->files[0]->path));
+
+		self::assertCount(1, $this->harness->getClientTableRows('Files'));
+		$hashCodes = $this->harness->getClientHashCodesContent();
+		self::assertStringContainsString('concerto_full_score.pdf', $hashCodes);
+		self::assertStringNotContainsString('concerto_solo_violin.pdf', $hashCodes);
+	}
+
+	/**
+	 * Test Case 12c (Client -> Server):
+	 * Client replaces a song's file by deleting the existing file and adding a new file before syncing.
+	 * On sync, the old file is deleted from the Nextcloud server and the new file is uploaded and attached to the song.
+	 */
+	public function testClientReplacesFileOfSongByDeleteAndAddAndSyncsToServer(): void {
+		$this->harness->setupEmptyLibraries();
+
+		$clientSongId = $this->harness->clientCreateSong(
+			title: 'Caprice No. 24',
+			files: [
+				'caprice24_draft.pdf' => MobileSheetsEndToEndSyncHarness::generateValidPdf('Caprice 24 Draft', 1),
+			],
+		);
+		$this->harness->sync();
+
+		$libFolder = $this->harness->getLibraryFolder();
+		self::assertTrue($libFolder->nodeExists('caprice24_draft.pdf'));
+
+		$initialFiles = $this->harness->getClientTableRows('Files');
+		self::assertCount(1, $initialFiles);
+		$oldClientFileId = (int)$initialFiles[0]['Id'];
+
+		// Client deletes old file and adds new replacement file in the same sync cycle
+		$this->harness->clientDeleteFile($oldClientFileId, deleteLocalFile: true);
+		$replacementPdf = MobileSheetsEndToEndSyncHarness::generateValidPdf('Caprice 24 Urtext Edition', 4);
+		$this->harness->clientAddFileToSong(
+			clientSongId: $clientSongId,
+			fileName: 'caprice24_urtext.pdf',
+			pdfContent: $replacementPdf,
+			pages: 4,
+		);
+
+		$importStats = $this->harness->sync();
+		self::assertNotNull($importStats);
+		self::assertSame(1, $importStats['filesDeleted']);
+		self::assertSame(1, $importStats['filesCreated']);
+
+		// Verify old file is removed from Nextcloud and new file is uploaded and linked to the song
+		self::assertFalse($libFolder->nodeExists('caprice24_draft.pdf'));
+		self::assertTrue($libFolder->nodeExists('caprice24_urtext.pdf'));
+		$ncNode = $libFolder->get('caprice24_urtext.pdf');
+		self::assertInstanceOf(\OCP\Files\File::class, $ncNode);
+		self::assertSame($replacementPdf, $ncNode->getContent());
+
+		$ncData = $this->harness->getNextcloudLibraryData();
+		self::assertCount(1, $ncData->songs);
+		self::assertCount(1, $ncData->songs[0]->files);
+		self::assertSame('caprice24_urtext.pdf', basename($ncData->songs[0]->files[0]->path));
+		$ncFileModel = $this->harness->songFileMapper->findById($ncData->songs[0]->files[0]->id);
+		self::assertNotNull($ncFileModel);
+		self::assertSame(4, $ncFileModel->pageCount);
+		self::assertSame('1-4', $ncFileModel->pageOrder);
+
+		$clientFiles = $this->harness->getClientTableRows('Files');
+		self::assertCount(1, $clientFiles);
+		self::assertStringEndsWith('/caprice24_urtext.pdf', (string)$clientFiles[0]['Path']);
+		self::assertSame(4, (int)$clientFiles[0]['SourceFilePageCount']);
+
+		$hashCodes = $this->harness->getClientHashCodesContent();
+		self::assertStringNotContainsString('caprice24_draft.pdf', $hashCodes);
+		self::assertStringContainsString('caprice24_urtext.pdf', $hashCodes);
+
+		// Step 2: Client deletes the current file and adds a new file reusing the deleted SQLite Files.Id
+		$currentFiles = $this->harness->getClientTableRows('Files');
+		self::assertCount(1, $currentFiles);
+		$urtextClientFileId = (int)$currentFiles[0]['Id'];
+
+		$this->harness->clientDeleteFile($urtextClientFileId, deleteLocalFile: true);
+		$annotatedPdf = MobileSheetsEndToEndSyncHarness::generateValidPdf('Caprice 24 Annotated Edition', 6);
+		$reusedFileId = $this->harness->clientAddFileToSong(
+			clientSongId: $clientSongId,
+			fileName: 'caprice24_annotated.pdf',
+			pdfContent: $annotatedPdf,
+			pages: 6,
+			reuseDeletedId: true,
+		);
+		self::assertSame(1, $reusedFileId);
+
+		$importStats2 = $this->harness->sync();
+		self::assertNotNull($importStats2);
+		self::assertSame(1, $importStats2['filesDeleted']);
+		self::assertSame(1, $importStats2['filesCreated']);
+
+		self::assertFalse($libFolder->nodeExists('caprice24_urtext.pdf'));
+		self::assertTrue($libFolder->nodeExists('caprice24_annotated.pdf'));
+
+		$ncData2 = $this->harness->getNextcloudLibraryData();
+		self::assertCount(1, $ncData2->songs);
+		self::assertCount(1, $ncData2->songs[0]->files);
+		self::assertSame('caprice24_annotated.pdf', basename($ncData2->songs[0]->files[0]->path));
+
+		$hashCodes2 = $this->harness->getClientHashCodesContent();
+		self::assertStringNotContainsString('caprice24_urtext.pdf', $hashCodes2);
+		self::assertStringContainsString('caprice24_annotated.pdf', $hashCodes2);
+
+		// Step 3: On a multi-file song (annotated + accompaniment), client removes annotated and adds final in one step
+		$accompPdf = MobileSheetsEndToEndSyncHarness::generateValidPdf('Caprice 24 Piano Accompaniment', 3);
+		$this->harness->clientAddFileToSong(
+			clientSongId: $clientSongId,
+			fileName: 'caprice24_accompaniment.pdf',
+			pdfContent: $accompPdf,
+			pages: 3,
+		);
+		$this->harness->sync();
+		self::assertCount(2, $this->harness->getNextcloudLibraryData()->songs[0]->files);
+
+		$annotatedRow = array_values(array_filter(
+			$this->harness->getClientTableRows('Files'),
+			static fn (array $r): bool => str_ends_with((string)$r['Path'], '/caprice24_annotated.pdf')
+		))[0];
+		$this->harness->clientDeleteFile((int)$annotatedRow['Id'], deleteLocalFile: true);
+		$finalPdf = MobileSheetsEndToEndSyncHarness::generateValidPdf('Caprice 24 Final Solo Part', 5);
+		$this->harness->clientAddFileToSong(
+			clientSongId: $clientSongId,
+			fileName: 'caprice24_final_solo.pdf',
+			pdfContent: $finalPdf,
+			pages: 5,
+		);
+
+		$importStats3 = $this->harness->sync();
+		self::assertNotNull($importStats3);
+		self::assertSame(1, $importStats3['filesDeleted']);
+		self::assertSame(1, $importStats3['filesCreated']);
+
+		self::assertFalse($libFolder->nodeExists('caprice24_annotated.pdf'));
+		self::assertTrue($libFolder->nodeExists('caprice24_accompaniment.pdf'));
+		self::assertTrue($libFolder->nodeExists('caprice24_final_solo.pdf'));
+
+		$ncFileNames3 = array_map(
+			static fn ($f): string => basename($f->path),
+			$this->harness->getNextcloudLibraryData()->songs[0]->files
+		);
+		sort($ncFileNames3);
+		self::assertSame(['caprice24_accompaniment.pdf', 'caprice24_final_solo.pdf'], $ncFileNames3);
+	}
+
+	/**
+	 * Test Case 12d (Server -> Client):
+	 * User adds a file to an existing song in the Nextcloud app (`ncUploadFileToSong`) and syncs to the client.
+	 * On sync, the new file is downloaded to the client's local storage and added to `Files` and `mobilesheets_hashcodes.txt`.
+	 */
+	public function testNextcloudAddsFileToExistingSongAndSyncsToClient(): void {
+		$this->harness->setupEmptyLibraries();
+
+		// Create song on client with 1 file and sync to Nextcloud
+		$this->harness->clientCreateSong(
+			title: 'Trio in E-flat',
+			files: [
+				'trio_piano.pdf' => MobileSheetsEndToEndSyncHarness::generateValidPdf('Trio Piano Score', 3),
+			],
+		);
+		$this->harness->sync();
+
+		$ncSong = $this->harness->getNextcloudLibraryData()->songs[0];
+		self::assertCount(1, $ncSong->files);
+
+		// In Nextcloud app, user adds a 2nd file to the existing song
+		$hornPdf = MobileSheetsEndToEndSyncHarness::generateValidPdf('Trio Horn Part', 2);
+		$this->harness->ncUploadFileToSong($ncSong->id, 'trio_horn.pdf', $hornPdf);
+
+		$this->harness->sync();
+
+		// Verify client received the new file on disk, in `Files`, and in `mobilesheets_hashcodes.txt`
+		self::assertFileExists($this->harness->clientFilesDir . '/trio_piano.pdf');
+		self::assertFileExists($this->harness->clientFilesDir . '/trio_horn.pdf');
+		self::assertSame($hornPdf, file_get_contents($this->harness->clientFilesDir . '/trio_horn.pdf'));
+
+		$clientFiles = $this->harness->getClientTableRows('Files');
+		self::assertCount(2, $clientFiles);
+		$clientRelPaths = array_map(
+			fn (array $r): string => $this->harness->extractLibraryRelativePath((string)$r['Path']),
+			$clientFiles
+		);
+		sort($clientRelPaths);
+		self::assertSame(['trio_horn.pdf', 'trio_piano.pdf'], $clientRelPaths);
+
+		$hashCodes = $this->harness->getClientHashCodesContent();
+		self::assertStringContainsString('trio_piano.pdf', $hashCodes);
+		self::assertStringContainsString('trio_horn.pdf', $hashCodes);
+	}
+
+	/**
+	 * Test Case 12e (Server -> Client):
+	 * User deletes a file from a multi-file song in the Nextcloud app (`ncDeleteSongFile`) and syncs to the client.
+	 * On sync, the deleted file is removed from the client's local storage, `Files` table, and `mobilesheets_hashcodes.txt`.
+	 */
+	public function testNextcloudDeletesFileFromSongAndSyncsToClient(): void {
+		$this->harness->setupEmptyLibraries();
+
+		$ncSongId = $this->harness->ncCreateSong(
+			title: 'Sonata for Cello and Piano',
+			fileName: 'cello_sonata_piano.pdf',
+			options: ['pages' => 4],
+		);
+		$this->harness->ncUploadFileToSong(
+			$ncSongId,
+			'cello_sonata_cello.pdf',
+			MobileSheetsEndToEndSyncHarness::generateValidPdf('Cello Part', 2),
+		);
+		$this->harness->sync();
+
+		self::assertFileExists($this->harness->clientFilesDir . '/cello_sonata_piano.pdf');
+		self::assertFileExists($this->harness->clientFilesDir . '/cello_sonata_cello.pdf');
+		self::assertCount(2, $this->harness->getClientTableRows('Files'));
+
+		// In Nextcloud app, user deletes `cello_sonata_cello.pdf` from the song
+		$ncSong = $this->harness->getNextcloudLibraryData()->songs[0];
+		$celloFileDto = array_values(array_filter(
+			$ncSong->files,
+			static fn ($f): bool => basename($f->path) === 'cello_sonata_cello.pdf'
+		))[0];
+		$this->harness->ncDeleteSongFile($ncSongId, $celloFileDto->id);
+
+		$this->harness->sync();
+
+		// Verify `cello_sonata_cello.pdf` was deleted on the client while `cello_sonata_piano.pdf` remains
+		self::assertFileExists($this->harness->clientFilesDir . '/cello_sonata_piano.pdf');
+		self::assertFileDoesNotExist($this->harness->clientFilesDir . '/cello_sonata_cello.pdf');
+
+		$clientFiles = $this->harness->getClientTableRows('Files');
+		self::assertCount(1, $clientFiles);
+		self::assertStringEndsWith('/cello_sonata_piano.pdf', (string)$clientFiles[0]['Path']);
+
+		$hashCodes = $this->harness->getClientHashCodesContent();
+		self::assertStringContainsString('cello_sonata_piano.pdf', $hashCodes);
+		self::assertStringNotContainsString('cello_sonata_cello.pdf', $hashCodes);
+	}
+
+	/**
+	 * Test Case 12f (Server -> Client):
+	 * User replaces a file of a song in the Nextcloud app by deleting the old file (`ncDeleteSongFile`)
+	 * and uploading a new file (`ncUploadFileToSong`), then syncing to the client.
+	 * On sync, the old file is removed from the client and the new file is downloaded to the client,
+	 * recorded in `Files` and `mobilesheets_hashcodes.txt`, with zero diff.
+	 */
+	public function testNextcloudReplacesFileOfSongByDeleteAndAddAndSyncsToClient(): void {
+		$this->harness->setupEmptyLibraries();
+
+		$ncSongId = $this->harness->ncCreateSong(
+			title: 'Ballade No. 1 in G Minor',
+			fileName: 'ballade1_scan_old.pdf',
+			options: ['pages' => 1],
+		);
+		$this->harness->sync();
+
+		self::assertFileExists($this->harness->clientFilesDir . '/ballade1_scan_old.pdf');
+		self::assertCount(1, $this->harness->getClientTableRows('Files'));
+
+		// In Nextcloud app, user deletes the old scan and uploads the clean engraved PDF
+		$ncSong = $this->harness->getNextcloudLibraryData()->songs[0];
+		$oldFileDto = $ncSong->files[0];
+		$this->harness->ncDeleteSongFile($ncSongId, $oldFileDto->id);
+
+		$newEngravedPdf = MobileSheetsEndToEndSyncHarness::generateValidPdf('Ballade No. 1 Engraved Edition', 5);
+		$this->harness->ncUploadFileToSong($ncSongId, 'ballade1_engraved_new.pdf', $newEngravedPdf);
+
+		$this->harness->sync();
+
+		// Verify client local files, `Files` table, and `mobilesheets_hashcodes.txt` have only the new file
+		self::assertFileDoesNotExist($this->harness->clientFilesDir . '/ballade1_scan_old.pdf');
+		self::assertFileExists($this->harness->clientFilesDir . '/ballade1_engraved_new.pdf');
+		self::assertSame($newEngravedPdf, file_get_contents($this->harness->clientFilesDir . '/ballade1_engraved_new.pdf'));
+
+		$clientFiles = $this->harness->getClientTableRows('Files');
+		self::assertCount(1, $clientFiles);
+		self::assertStringEndsWith('/ballade1_engraved_new.pdf', (string)$clientFiles[0]['Path']);
+		self::assertSame(5, (int)$clientFiles[0]['SourceFilePageCount']);
+		self::assertSame('1-5', (string)$clientFiles[0]['PageOrder']);
+
+		$hashCodes = $this->harness->getClientHashCodesContent();
+		self::assertStringNotContainsString('ballade1_scan_old.pdf', $hashCodes);
+		self::assertStringContainsString('ballade1_engraved_new.pdf', $hashCodes);
+
+		// Step 2: On a multi-file song in Nextcloud, remove one file and upload a new file in one step, then sync
+		$codaNotesPdf = MobileSheetsEndToEndSyncHarness::generateValidPdf('Ballade No. 1 Coda Notes', 2);
+		$this->harness->ncUploadFileToSong($ncSongId, 'ballade1_coda_notes.pdf', $codaNotesPdf);
+		$this->harness->sync();
+		self::assertCount(2, $this->harness->getClientTableRows('Files'));
+
+		$ncSongNow = $this->harness->getNextcloudLibraryData()->songs[0];
+		$engravedDto = array_values(array_filter(
+			$ncSongNow->files,
+			static fn ($f): bool => basename($f->path) === 'ballade1_engraved_new.pdf'
+		))[0];
+		$this->harness->ncDeleteSongFile($ncSongId, $engravedDto->id);
+		$henlePdf = MobileSheetsEndToEndSyncHarness::generateValidPdf('Ballade No. 1 Henle Urtext', 6);
+		$this->harness->ncUploadFileToSong($ncSongId, 'ballade1_henle_urtext.pdf', $henlePdf);
+
+		$this->harness->sync();
+
+		self::assertFileDoesNotExist($this->harness->clientFilesDir . '/ballade1_engraved_new.pdf');
+		self::assertFileExists($this->harness->clientFilesDir . '/ballade1_coda_notes.pdf');
+		self::assertFileExists($this->harness->clientFilesDir . '/ballade1_henle_urtext.pdf');
+		self::assertSame($henlePdf, file_get_contents($this->harness->clientFilesDir . '/ballade1_henle_urtext.pdf'));
+
+		$clientRelPaths2 = array_map(
+			fn (array $r): string => $this->harness->extractLibraryRelativePath((string)$r['Path']),
+			$this->harness->getClientTableRows('Files')
+		);
+		sort($clientRelPaths2);
+		self::assertSame(['ballade1_coda_notes.pdf', 'ballade1_henle_urtext.pdf'], $clientRelPaths2);
+
+		$hashCodes2 = $this->harness->getClientHashCodesContent();
+		self::assertStringNotContainsString('ballade1_engraved_new.pdf', $hashCodes2);
+		self::assertStringContainsString('ballade1_coda_notes.pdf', $hashCodes2);
+		self::assertStringContainsString('ballade1_henle_urtext.pdf', $hashCodes2);
 	}
 }

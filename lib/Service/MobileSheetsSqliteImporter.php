@@ -130,7 +130,7 @@ class MobileSheetsSqliteImporter {
 
 		// 5. Deletions (Tombstones) if sync metadata is present
 		if ($syncMeta->hasMetadata) {
-			$this->processDeletions($db, $lib->id, $user, $syncMeta, $stats);
+			$this->processDeletions($db, $lib->id, $user, $syncMeta, $stats, $updatedSongClientIds);
 		}
 
 		// 6. Misc Tables (Setlists, Bookmarks, Annotations, AudioFiles, etc.)
@@ -396,9 +396,28 @@ class MobileSheetsSqliteImporter {
 			$uuid = $meta['uuid'] ?? null;
 			$extra = $meta['extra'] ?? [];
 
-			$fileId = isset($extra['file_id']) ? (int)$extra['file_id'] : null;
-			if ($fileId === null) {
-				$fileId = $this->resolveFileIdFromPath($filePath, $library, $user);
+			$metaFileId = isset($extra['file_id']) ? (int)$extra['file_id'] : null;
+			$resolvedFileId = $this->resolveFileIdFromPath($filePath, $library, $user);
+
+			if ($resolvedFileId !== null && $metaFileId !== null && $resolvedFileId !== $metaFileId) {
+				$metaUpdatedAt = (int)($meta['updated_at'] ?? 0);
+				if ($lastModifiedSec > $metaUpdatedAt) {
+					$replacedFile = $uuid !== null
+						? $this->songFileMapper->findByUuid($uuid)
+						: $this->songFileMapper->findByClientId($song->id, $fileClientId);
+					if ($replacedFile !== null && $replacedFile->deletedAt === null) {
+						$replacedFile->clientId = null;
+						$this->songFileMapper->update($replacedFile);
+						$this->deleteSongFileAndPhysicalNode($replacedFile, $user);
+						$stats['filesDeleted']++;
+					}
+					$uuid = null;
+					$fileId = $resolvedFileId;
+				} else {
+					$fileId = $metaFileId;
+				}
+			} else {
+				$fileId = $metaFileId ?? $resolvedFileId;
 			}
 
 			if ($fileId === null) {
@@ -412,7 +431,15 @@ class MobileSheetsSqliteImporter {
 				$existing = $this->songFileMapper->findByUuid($uuid);
 			}
 			if ($existing === null) {
-				$existing = $this->songFileMapper->findByClientId($song->id, $fileClientId);
+				$byClientId = $this->songFileMapper->findByClientId($song->id, $fileClientId);
+				if ($byClientId !== null) {
+					if ($byClientId->fileId === $fileId) {
+						$existing = $byClientId;
+					} elseif ($byClientId->deletedAt !== null) {
+						$byClientId->clientId = null;
+						$this->songFileMapper->update($byClientId);
+					}
+				}
 			}
 			if ($existing === null) {
 				$filesOfSong = $this->songFileMapper->findAllForSong($song->id, includeDeleted: true);
@@ -496,6 +523,7 @@ class MobileSheetsSqliteImporter {
 
 	/**
 	 * @param array<string, int> $stats
+	 * @param array<int, bool> $updatedSongClientIds
 	 */
 	private function processDeletions(
 		PDO $db,
@@ -503,6 +531,7 @@ class MobileSheetsSqliteImporter {
 		?IUser $user,
 		MobileSheetsSyncMetadata $syncMeta,
 		array &$stats,
+		array $updatedSongClientIds = [],
 	): void {
 		// 1. Deleted Songs
 		$songEntries = $syncMeta->getEntriesByType('song');
@@ -560,6 +589,8 @@ class MobileSheetsSqliteImporter {
 							? $syncMeta->getSongMeta($parentSong->clientId)
 							: null;
 						$parentSongWonLww = $parentSong !== null
+							&& $parentSong->clientId !== null
+							&& !isset($updatedSongClientIds[$parentSong->clientId])
 							&& $parentSongMeta !== null
 							&& $parentSong->updatedAt > (int)($parentSongMeta['updated_at'] ?? 0);
 						// LWW: If Nextcloud has newer edits to this file or its parent song since baseline export, Nextcloud wins
@@ -625,10 +656,18 @@ class MobileSheetsSqliteImporter {
 
 		$files = $this->songFileMapper->findAllForLibrary($libraryId, includeDeleted: true);
 		$deletedFileClientIds = [];
+		$activeFileClientIds = [];
 		foreach ($files as $f) {
-			if ($f->clientId !== null && $f->deletedAt !== null) {
-				$deletedFileClientIds[$f->clientId] = true;
+			if ($f->clientId !== null) {
+				if ($f->deletedAt !== null) {
+					$deletedFileClientIds[$f->clientId] = true;
+				} else {
+					$activeFileClientIds[$f->clientId] = true;
+				}
 			}
+		}
+		foreach ($activeFileClientIds as $activeClientId => $_) {
+			unset($deletedFileClientIds[$activeClientId]);
 		}
 
 		$entities = $this->entityMapper->findAllForLibrary($libraryId, includeDeleted: true);

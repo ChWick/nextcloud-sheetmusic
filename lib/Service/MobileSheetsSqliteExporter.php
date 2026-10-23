@@ -149,7 +149,7 @@ class MobileSheetsSqliteExporter {
 		}
 
 		// Also supplement with files from misc_data if present and library has no managed files
-		if (empty($files) && $this->songFileMapper->findAllForLibrary($lib->id, includeDeleted: true) === []) {
+		if (empty($files)) {
 			$miscFiles = $this->miscMapper->getMiscDataForTable($lib->id, 'mobilesheets', 'Files', includeDeleted: false);
 			if ($miscFiles !== []) {
 				$songs = $this->songMapper->findAllForLibrary($lib->id, includeDeleted: true);
@@ -296,8 +296,7 @@ class MobileSheetsSqliteExporter {
 
 		// Also check if any files were exported from misc_data when the library has no managed song_files records
 		// (e.g. synthetic roundtrip tests that populate misc_data without Nextcloud storage nodes)
-		$allSongFiles = $this->songFileMapper->findAllForLibrary($library->id, includeDeleted: true);
-		if ($allSongFiles === [] && MobileSheetsTableHelper::tableExists($db, 'Files')) {
+		if ($files === [] && MobileSheetsTableHelper::tableExists($db, 'Files')) {
 			$stmt = $db->query('SELECT DISTINCT SongId FROM Files WHERE SongId IS NOT NULL');
 			if ($stmt !== false) {
 				while ($row = $stmt->fetch()) {
@@ -598,7 +597,7 @@ class MobileSheetsSqliteExporter {
 			}
 		}
 
-		if (MobileSheetsTableHelper::tableExists($db, 'Files')) {
+		if (!empty($files) && MobileSheetsTableHelper::tableExists($db, 'Files')) {
 			$validClientIds = [];
 			foreach ($files as $f) {
 				if ($f->clientId !== null && $f->clientId > 0) {
@@ -608,8 +607,6 @@ class MobileSheetsSqliteExporter {
 			if (!empty($validClientIds)) {
 				$inList = implode(',', $validClientIds);
 				$db->exec("DELETE FROM Files WHERE Id NOT IN ($inList)");
-			} elseif ($this->songFileMapper->findAllForLibrary($library->id, includeDeleted: true) !== []) {
-				$db->exec('DELETE FROM Files');
 			}
 		}
 
