@@ -143,4 +143,35 @@ final class LibraryMapperTest extends TestCase {
 		self::assertFalse($found->autoPaths);
 		self::assertFalse($found->autoPdfMetadata);
 	}
+
+	public function testResolveLibrary(): void {
+		$this->libraryMapper->addForUser($this->testUser, '/Noten/resolve.db');
+		$libs = $this->libraryMapper->findAllForUser($this->testUser);
+		$lib = $libs[0];
+
+		// Resolving model instance returns itself
+		self::assertSame($lib, $this->libraryMapper->resolveLibrary($lib));
+
+		// Resolving by int ID
+		$resolvedById = $this->libraryMapper->resolveLibrary((int)$lib->id);
+		self::assertSame((int)$lib->id, (int)$resolvedById->id);
+		self::assertSame($lib->path, $resolvedById->path);
+
+		// Resolving by row array
+		$resolvedByRow = $this->libraryMapper->resolveLibrary([
+			'id' => 999,
+			'user_id' => 'custom_user',
+			'path' => '/custom/path.db',
+			'auto_paths' => 1,
+			'auto_pdf_metadata' => 1,
+			'created_at' => 1000,
+			'updated_at' => 2000,
+		]);
+		self::assertSame(999, (int)$resolvedByRow->id);
+		self::assertSame('custom_user', $resolvedByRow->userId);
+
+		// Unknown ID throws
+		$this->expectException(\InvalidArgumentException::class);
+		$this->libraryMapper->resolveLibrary(999999);
+	}
 }

@@ -79,7 +79,7 @@ class MobileSheetsSqliteImporter {
 		string $sqlitePath,
 		IUser|string|null $user = null,
 	): array {
-		$lib = $this->resolveLibrary($library);
+		$lib = $this->libraryMapper->resolveLibrary($library);
 		if ($lib->id === null) {
 			throw new \InvalidArgumentException('Library must have an ID to import');
 		}
@@ -141,22 +141,6 @@ class MobileSheetsSqliteImporter {
 		$this->libraryMapper->touch($lib->id);
 
 		return $stats;
-	}
-
-	private function resolveLibrary(InternalLibrary|array|int $library): InternalLibrary {
-		if ($library instanceof InternalLibrary) {
-			return $library;
-		}
-
-		if (is_int($library)) {
-			$model = $this->libraryMapper->findModelById($library);
-			if ($model === null) {
-				throw new \InvalidArgumentException('Library not found: ' . $library);
-			}
-			return $model;
-		}
-
-		return InternalLibrary::fromRow($library);
 	}
 
 	/**

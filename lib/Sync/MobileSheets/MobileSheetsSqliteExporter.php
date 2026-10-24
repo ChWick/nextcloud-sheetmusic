@@ -60,7 +60,7 @@ class MobileSheetsSqliteExporter {
 		ini_set('precision', '-1');
 
 		try {
-			$lib = $this->resolveLibrary($library);
+			$lib = $this->libraryMapper->resolveLibrary($library);
 			if ($lib->id === null) {
 				throw new \InvalidArgumentException('Library must have an ID to export');
 			}
@@ -119,7 +119,7 @@ class MobileSheetsSqliteExporter {
 	 * Generate the dynamic content for mobilesheets_hashcodes.txt.
 	 */
 	public function generateHashcodes(InternalLibrary|array|int $library): string {
-		$lib = $this->resolveLibrary($library);
+		$lib = $this->libraryMapper->resolveLibrary($library);
 		if ($lib->id === null) {
 			return '';
 		}
@@ -203,22 +203,6 @@ class MobileSheetsSqliteExporter {
 		}
 
 		return implode("\n", $lines);
-	}
-
-	private function resolveLibrary(InternalLibrary|array|int $library): InternalLibrary {
-		if ($library instanceof InternalLibrary) {
-			return $library;
-		}
-
-		if (is_int($library)) {
-			$model = $this->libraryMapper->findModelById($library);
-			if ($model === null) {
-				throw new \InvalidArgumentException('Library not found: ' . $library);
-			}
-			return $model;
-		}
-
-		return InternalLibrary::fromRow($library);
 	}
 
 	private function applyUserVersion(PDO $db, int $libraryId): void {

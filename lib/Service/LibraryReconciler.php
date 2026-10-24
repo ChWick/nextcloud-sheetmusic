@@ -50,7 +50,7 @@ class LibraryReconciler {
 	 * @return array{indexed: int, pruned: int}
 	 */
 	public function reconcile(InternalLibrary|array|int $library): array {
-		$lib = $this->resolveLibrary($library);
+		$lib = $this->libraryMapper->resolveLibrary($library);
 		if ($lib->id === null) {
 			return ['indexed' => 0, 'pruned' => 0];
 		}
@@ -223,21 +223,5 @@ class LibraryReconciler {
 			'mp3', 'm4a', 'ogg', 'flac', 'wav' => true,
 			default => false,
 		};
-	}
-
-	private function resolveLibrary(InternalLibrary|array|int $library): InternalLibrary {
-		if ($library instanceof InternalLibrary) {
-			return $library;
-		}
-
-		if (is_int($library)) {
-			$model = $this->libraryMapper->findModelById($library);
-			if ($model === null) {
-				throw new \InvalidArgumentException('Library not found: ' . $library);
-			}
-			return $model;
-		}
-
-		return InternalLibrary::fromRow($library);
 	}
 }

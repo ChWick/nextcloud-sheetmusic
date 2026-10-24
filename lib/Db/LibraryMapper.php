@@ -55,6 +55,22 @@ class LibraryMapper {
 		return $this->findById($libraryId);
 	}
 
+	public function resolveLibrary(InternalLibrary|array|int $library): InternalLibrary {
+		if ($library instanceof InternalLibrary) {
+			return $library;
+		}
+
+		if (is_int($library)) {
+			$model = $this->findModelById($library);
+			if ($model === null) {
+				throw new \InvalidArgumentException('Library not found: ' . $library);
+			}
+			return $model;
+		}
+
+		return InternalLibrary::fromRow($library);
+	}
+
 	public function touch(int $libraryId, ?int $timestamp = null): void {
 		$now = $timestamp ?? time();
 		$qb = $this->db->getQueryBuilder();
