@@ -1601,4 +1601,139 @@ class MobileSheetsEndToEndSyncTest extends TestCase {
 		self::assertStringContainsString('ballade1_coda_notes.pdf', $hashCodes2);
 		self::assertStringContainsString('ballade1_henle_urtext.pdf', $hashCodes2);
 	}
+
+	/**
+	 * Test Case 12g:
+	 * Song with two files: remove one file, sync.
+	 * Only the removed file is deleted (from storage, database, and hashcodes),
+	 * while the song itself and the remaining file are kept intact on both client and server.
+	 *
+	 * Verified for:
+	 * 1. MobileSheets client deletes the FIRST file (Id = 1) and renumbers the remaining file (Id = 2 -> 1),
+	 *    replicating the real MobileSheets app SQLite renumbering behavior -> sync.
+	 * 2. MobileSheets client deletes the SECOND file (Id = 2) -> sync.
+	 * 3. Nextcloud removes a file from a 2-file song -> sync to client.
+	 */
+	public function testSongWithTwoFilesRemoveOneFileAndSyncKeepsSong(): void {
+		$this->harness->setupEmptyLibraries();
+
+		// --- 1. Client deletes the FIRST file (Id = 1) and renumbers remaining file to Id = 1 (real MobileSheets app behavior) ---
+		$clientSongId = $this->harness->clientCreateSong(
+			title: 'Sinfonia Concertante',
+			files: [
+				'sinfonia_score.pdf' => MobileSheetsEndToEndSyncHarness::generateValidPdf('Sinfonia Score', 6),
+				'sinfonia_violin.pdf' => MobileSheetsEndToEndSyncHarness::generateValidPdf('Sinfonia Violin Part', 3),
+			],
+			options: ['stars' => 4, 'difficulty' => 3],
+		);
+		$this->harness->sync();
+
+		$libFolder = $this->harness->getLibraryFolder();
+		self::assertTrue($libFolder->nodeExists('sinfonia_score.pdf'));
+		self::assertTrue($libFolder->nodeExists('sinfonia_violin.pdf'));
+		self::assertCount(1, $this->harness->getNextcloudLibraryData()->songs);
+		self::assertCount(2, $this->harness->getNextcloudLibraryData()->songs[0]->files);
+
+		// In real MobileSheets app, when the first file is deleted, MobileSheets deletes Id=1
+		// and renumbers the remaining file(s) so Id=2 becomes Id=1.
+		$clientPdo = $this->harness->openSqlite($this->harness->clientDbPath);
+		$firstFileRow = $clientPdo->query("SELECT Id, Path FROM Files WHERE Path LIKE '%/sinfonia_score.pdf'")->fetch();
+		$secondFileRow = $clientPdo->query("SELECT Id, Path FROM Files WHERE Path LIKE '%/sinfonia_violin.pdf'")->fetch();
+		self::assertNotFalse($firstFileRow);
+		self::assertNotFalse($secondFileRow);
+		$firstFileId = (int)$firstFileRow['Id'];
+		$secondFileId = (int)$secondFileRow['Id'];
+
+		$clientPdo->exec("DELETE FROM Files WHERE Id = {$firstFileId}");
+		$clientPdo->exec("UPDATE Files SET Id = {$firstFileId} WHERE Id = {$secondFileId}");
+		@unlink($this->harness->clientFilesDir . '/sinfonia_score.pdf');
+		$this->harness->clientUpdateSong($clientSongId, []);
+
+		$syncStats = $this->harness->sync();
+		self::assertNotNull($syncStats);
+		self::assertSame(1, $syncStats['filesDeleted'], 'Exactly 1 file should be deleted');
+		self::assertSame(0, $syncStats['songsDeleted'], 'The song must not be deleted');
+
+		// Server side: score deleted, violin kept, song kept
+		self::assertFalse($libFolder->nodeExists('sinfonia_score.pdf'), 'First file must be deleted on server');
+		self::assertTrue($libFolder->nodeExists('sinfonia_violin.pdf'), 'Remaining second file must be kept on server');
+
+		$ncData = $this->harness->getNextcloudLibraryData();
+		self::assertCount(1, $ncData->songs, 'Song must be kept on server');
+		$ncSong = $ncData->songs[0];
+		self::assertSame('Sinfonia Concertante', $ncSong->title);
+		self::assertCount(1, $ncSong->files, 'Song must have exactly 1 file on server');
+		self::assertSame('sinfonia_violin.pdf', basename($ncSong->files[0]->path));
+
+		// Client side: score deleted, violin kept, song kept
+		self::assertFileDoesNotExist($this->harness->clientFilesDir . '/sinfonia_score.pdf');
+		self::assertFileExists($this->harness->clientFilesDir . '/sinfonia_violin.pdf');
+
+		$clientSongs = $this->harness->getClientTableRows('Songs');
+		self::assertCount(1, $clientSongs, 'Song must be kept on client');
+		self::assertSame('Sinfonia Concertante', (string)$clientSongs[0]['Title']);
+
+		$clientFilesAfter = $this->harness->getClientTableRows('Files');
+		self::assertCount(1, $clientFilesAfter, 'Client must have exactly 1 file');
+		self::assertStringEndsWith('/sinfonia_violin.pdf', (string)$clientFilesAfter[0]['Path']);
+		self::assertSame((int)$clientSongs[0]['Id'], (int)$clientFilesAfter[0]['SongId']);
+
+		$hashCodes = $this->harness->getClientHashCodesContent();
+		self::assertStringNotContainsString('sinfonia_score.pdf', $hashCodes);
+		self::assertStringContainsString('sinfonia_violin.pdf', $hashCodes);
+
+		// Subsequent sync is clean
+		$cleanStats = $this->harness->sync();
+		self::assertNotNull($cleanStats);
+		self::assertSame(0, $cleanStats['filesDeleted']);
+		self::assertSame(0, $cleanStats['songsDeleted']);
+		self::assertSame(0, $cleanStats['filesCreated']);
+		self::assertSame(0, $cleanStats['songsCreated']);
+
+		// --- 2. Nextcloud removes one file from a 2-file song ---
+		// Re-add a second file on Nextcloud to create a 2-file song again
+		$violaPdf = MobileSheetsEndToEndSyncHarness::generateValidPdf('Sinfonia Viola Part', 3);
+		$this->harness->ncUploadFileToSong($ncSong->id, 'sinfonia_viola.pdf', $violaPdf);
+		$this->harness->sync();
+
+		self::assertFileExists($this->harness->clientFilesDir . '/sinfonia_viola.pdf');
+		self::assertCount(2, $this->harness->getClientTableRows('Files'));
+		self::assertCount(2, $this->harness->getNextcloudLibraryData()->songs[0]->files);
+
+		// Remove 'sinfonia_violin.pdf' in Nextcloud
+		$ncSongNow = $this->harness->getNextcloudLibraryData()->songs[0];
+		$violinDto = array_values(array_filter(
+			$ncSongNow->files,
+			static fn ($f): bool => basename($f->path) === 'sinfonia_violin.pdf'
+		))[0];
+		$this->harness->ncDeleteSongFile($ncSong->id, $violinDto->id);
+
+		$this->harness->sync();
+
+		// Server side: violin deleted, viola kept, song kept
+		self::assertFalse($libFolder->nodeExists('sinfonia_violin.pdf'), 'Violin part must be deleted from server');
+		self::assertTrue($libFolder->nodeExists('sinfonia_viola.pdf'), 'Viola part must be kept on server');
+
+		$ncDataFinal = $this->harness->getNextcloudLibraryData();
+		self::assertCount(1, $ncDataFinal->songs, 'Song must be kept on server');
+		self::assertCount(1, $ncDataFinal->songs[0]->files, 'Song must have 1 file on server');
+		self::assertSame('sinfonia_viola.pdf', basename($ncDataFinal->songs[0]->files[0]->path));
+
+		// Client side: violin deleted, viola kept, song kept
+		self::assertFileDoesNotExist($this->harness->clientFilesDir . '/sinfonia_violin.pdf');
+		self::assertFileExists($this->harness->clientFilesDir . '/sinfonia_viola.pdf');
+
+		$clientSongsFinal = $this->harness->getClientTableRows('Songs');
+		self::assertCount(1, $clientSongsFinal, 'Song must be kept on client');
+		self::assertSame('Sinfonia Concertante', (string)$clientSongsFinal[0]['Title']);
+
+		$clientFilesFinal = $this->harness->getClientTableRows('Files');
+		self::assertCount(1, $clientFilesFinal, 'Client must have exactly 1 file');
+		self::assertStringEndsWith('/sinfonia_viola.pdf', (string)$clientFilesFinal[0]['Path']);
+		self::assertSame((int)$clientSongsFinal[0]['Id'], (int)$clientFilesFinal[0]['SongId']);
+
+		$hashCodesFinal = $this->harness->getClientHashCodesContent();
+		self::assertStringNotContainsString('sinfonia_violin.pdf', $hashCodesFinal);
+		self::assertStringContainsString('sinfonia_viola.pdf', $hashCodesFinal);
+	}
 }

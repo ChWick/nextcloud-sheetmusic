@@ -126,11 +126,13 @@ class MobileSheetsSqliteImporter {
 		$this->entityMerger->mergeSongEntityLinks($db, $lib->id, $updatedSongClientIds, $syncMeta);
 
 		// 4. Files
-		$this->mergeFiles($db, $lib, $user, $syncMeta, $stats);
+		$uploadedFileNodeIds = [];
+		$uploadedSongFileIds = [];
+		$this->mergeFiles($db, $lib, $user, $syncMeta, $stats, $uploadedFileNodeIds, $uploadedSongFileIds);
 
 		// 5. Deletions (Tombstones) if sync metadata is present
 		if ($syncMeta->hasMetadata) {
-			$this->processDeletions($db, $lib->id, $user, $syncMeta, $stats, $updatedSongClientIds);
+			$this->processDeletions($db, $lib->id, $user, $syncMeta, $stats, $updatedSongClientIds, $uploadedFileNodeIds, $uploadedSongFileIds);
 		}
 
 		// 6. Misc Tables (Setlists, Bookmarks, Annotations, AudioFiles, etc.)
@@ -351,6 +353,8 @@ class MobileSheetsSqliteImporter {
 
 	/**
 	 * @param array<string, int> $stats
+	 * @param array<int, bool> $uploadedFileNodeIds
+	 * @param array<int, bool> $uploadedSongFileIds
 	 */
 	private function mergeFiles(
 		PDO $db,
@@ -358,6 +362,8 @@ class MobileSheetsSqliteImporter {
 		?IUser $user,
 		MobileSheetsSyncMetadata $syncMeta,
 		array &$stats,
+		array &$uploadedFileNodeIds = [],
+		array &$uploadedSongFileIds = [],
 	): void {
 		if (!MobileSheetsTableHelper::tableExists($db, 'Files')) {
 			return;
@@ -399,25 +405,13 @@ class MobileSheetsSqliteImporter {
 			$metaFileId = isset($extra['file_id']) ? (int)$extra['file_id'] : null;
 			$resolvedFileId = $this->resolveFileIdFromPath($filePath, $library, $user);
 
-			if ($resolvedFileId !== null && $metaFileId !== null && $resolvedFileId !== $metaFileId) {
-				$metaUpdatedAt = (int)($meta['updated_at'] ?? 0);
-				if ($lastModifiedSec > $metaUpdatedAt) {
-					$replacedFile = $uuid !== null
-						? $this->songFileMapper->findByUuid($uuid)
-						: $this->songFileMapper->findByClientId($song->id, $fileClientId);
-					if ($replacedFile !== null && $replacedFile->deletedAt === null) {
-						$replacedFile->clientId = null;
-						$this->songFileMapper->update($replacedFile);
-						$this->deleteSongFileAndPhysicalNode($replacedFile, $user);
-						$stats['filesDeleted']++;
-					}
+			if ($resolvedFileId !== null) {
+				$fileId = $resolvedFileId;
+				if ($metaFileId !== null && $metaFileId !== $resolvedFileId) {
 					$uuid = null;
-					$fileId = $resolvedFileId;
-				} else {
-					$fileId = $metaFileId;
 				}
 			} else {
-				$fileId = $metaFileId ?? $resolvedFileId;
+				$fileId = $metaFileId;
 			}
 
 			if ($fileId === null) {
@@ -431,6 +425,15 @@ class MobileSheetsSqliteImporter {
 				$existing = $this->songFileMapper->findByUuid($uuid);
 			}
 			if ($existing === null) {
+				$filesOfSong = $this->songFileMapper->findAllForSong($song->id, includeDeleted: true);
+				foreach ($filesOfSong as $f) {
+					if ($f->fileId === $fileId) {
+						$existing = $f;
+						break;
+					}
+				}
+			}
+			if ($existing === null) {
 				$byClientId = $this->songFileMapper->findByClientId($song->id, $fileClientId);
 				if ($byClientId !== null) {
 					if ($byClientId->fileId === $fileId) {
@@ -438,15 +441,6 @@ class MobileSheetsSqliteImporter {
 					} elseif ($byClientId->deletedAt !== null) {
 						$byClientId->clientId = null;
 						$this->songFileMapper->update($byClientId);
-					}
-				}
-			}
-			if ($existing === null) {
-				$filesOfSong = $this->songFileMapper->findAllForSong($song->id, includeDeleted: true);
-				foreach ($filesOfSong as $f) {
-					if ($f->fileId === $fileId) {
-						$existing = $f;
-						break;
 					}
 				}
 			}
@@ -502,6 +496,12 @@ class MobileSheetsSqliteImporter {
 				$stats['filesCreated']++;
 			}
 
+			$activeRecordId = $existing !== null ? $existing->id : ($newFile->id ?? null);
+			if ($activeRecordId !== null) {
+				$uploadedSongFileIds[$activeRecordId] = true;
+			}
+			$uploadedFileNodeIds[$fileId] = true;
+
 			// Clean up any unsynced auto-indexed stub song/file that was created when the physical file was uploaded
 			$otherFiles = $this->songFileMapper->findByFileId($fileId, includeDeleted: false);
 			foreach ($otherFiles as $otherFile) {
@@ -524,6 +524,8 @@ class MobileSheetsSqliteImporter {
 	/**
 	 * @param array<string, int> $stats
 	 * @param array<int, bool> $updatedSongClientIds
+	 * @param array<int, bool> $uploadedFileNodeIds
+	 * @param array<int, bool> $uploadedSongFileIds
 	 */
 	private function processDeletions(
 		PDO $db,
@@ -532,6 +534,8 @@ class MobileSheetsSqliteImporter {
 		MobileSheetsSyncMetadata $syncMeta,
 		array &$stats,
 		array $updatedSongClientIds = [],
+		array $uploadedFileNodeIds = [],
+		array $uploadedSongFileIds = [],
 	): void {
 		// 1. Deleted Songs
 		$songEntries = $syncMeta->getEntriesByType('song');
@@ -580,28 +584,38 @@ class MobileSheetsSqliteImporter {
 			$uploadedFileSet = MobileSheetsTableHelper::getTableIdSet($db, 'Files');
 
 			foreach ($fileEntries as $clientId => $meta) {
-				if (!isset($uploadedFileSet[$clientId])) {
-					$file = $this->songFileMapper->findByUuid($meta['uuid']);
-					if ($file !== null && $file->deletedAt === null) {
-						$metaUpdatedAt = (int)($meta['updated_at'] ?? 0);
-						$parentSong = $this->songMapper->findById($file->songId);
-						$parentSongMeta = ($parentSong !== null && $parentSong->clientId !== null)
-							? $syncMeta->getSongMeta($parentSong->clientId)
-							: null;
-						$parentSongWonLww = $parentSong !== null
-							&& $parentSong->clientId !== null
-							&& !isset($updatedSongClientIds[$parentSong->clientId])
-							&& $parentSongMeta !== null
-							&& $parentSong->updatedAt > (int)($parentSongMeta['updated_at'] ?? 0);
-						// LWW: If Nextcloud has newer edits to this file or its parent song since baseline export, Nextcloud wins
-						if ($file->updatedAt > $metaUpdatedAt || $parentSongWonLww) {
-							continue;
-						}
-						$this->deleteSongFileAndPhysicalNode($file, $user);
-						$stats['filesDeleted']++;
-					}
-					$this->miscMapper->deleteMiscData($libraryId, 'mobilesheets', 'Files', (string)$clientId);
+				$file = $this->songFileMapper->findByUuid($meta['uuid']);
+				if ($file === null) {
+					continue;
 				}
+
+				// If this physical file node or song file record is present anywhere in the uploaded files, it was not deleted
+				if (isset($uploadedSongFileIds[$file->id]) || isset($uploadedFileNodeIds[$file->fileId])) {
+					if (!isset($uploadedFileSet[$clientId])) {
+						$this->miscMapper->deleteMiscData($libraryId, 'mobilesheets', 'Files', (string)$clientId);
+					}
+					continue;
+				}
+
+				if ($file->deletedAt === null) {
+					$metaUpdatedAt = (int)($meta['updated_at'] ?? 0);
+					$parentSong = $this->songMapper->findById($file->songId);
+					$parentSongMeta = ($parentSong !== null && $parentSong->clientId !== null)
+						? $syncMeta->getSongMeta($parentSong->clientId)
+						: null;
+					$parentSongWonLww = $parentSong !== null
+						&& $parentSong->clientId !== null
+						&& !isset($updatedSongClientIds[$parentSong->clientId])
+						&& $parentSongMeta !== null
+						&& $parentSong->updatedAt > (int)($parentSongMeta['updated_at'] ?? 0);
+					// LWW: If Nextcloud has newer edits to this file or its parent song since baseline export, Nextcloud wins
+					if ($file->updatedAt > $metaUpdatedAt || $parentSongWonLww) {
+						continue;
+					}
+					$this->deleteSongFileAndPhysicalNode($file, $user);
+					$stats['filesDeleted']++;
+				}
+				$this->miscMapper->deleteMiscData($libraryId, 'mobilesheets', 'Files', (string)$clientId);
 			}
 		}
 	}

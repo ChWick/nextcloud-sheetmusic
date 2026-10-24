@@ -1847,7 +1847,7 @@ class MobileSheetsEndToEndSyncHarness {
 		$this->removeDirectoryRecursive($this->tempDir);
 	}
 
-	private function openSqlite(string $path): PDO {
+	public function openSqlite(string $path): PDO {
 		return new PDO('sqlite:' . $path, options: [
 			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
 			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
