@@ -14,6 +14,7 @@ use OCA\SheetMusic\Db\LibraryMapper;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSqliteExporter;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSqliteImporter;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSyncBackend;
+use OCA\SheetMusic\Sync\SyncClientInterface;
 use OCA\SheetMusic\Sync\SyncClientRegistry;
 use OCP\IUserSession;
 use Psr\Log\LoggerInterface;
@@ -43,8 +44,6 @@ class SheetMusicDavPlugin extends ServerPlugin {
 	public const VIRTUAL_DB_NAME = 'mobilesheets.db';
 	public const VIRTUAL_HASH_NAME = 'mobilesheets_hashcodes.txt';
 
-	private const DB_CONTENT_TYPE = 'application/x-sqlite3';
-	private const HASH_CONTENT_TYPE = 'text/plain; charset=utf-8';
 	private const OC_NS = 'http://owncloud.org/ns';
 
 	/**
@@ -114,18 +113,14 @@ class SheetMusicDavPlugin extends ServerPlugin {
 				return true;
 			}
 
+			$client = $match['client'];
 			$library = $match['library'];
 			$filename = $match['filename'];
-			$isDb = $filename === self::VIRTUAL_DB_NAME;
 
 			$handled = !match ($method) {
-				'GET', 'HEAD' => $isDb
-					? $this->handleGetDatabase($request, $response, $library, $method === 'HEAD')
-					: $this->handleGetHashcodes($request, $response, $library, $method === 'HEAD'),
-				'PUT' => $isDb
-					? $this->handlePutDatabase($request, $response, $library)
-					: $this->handlePutHashcodes($response, $library),
-				'PROPFIND' => $this->handlePropfindFile($request, $response, $library, $path, $filename),
+				'GET', 'HEAD' => $client->handleGet($request, $response, $library, $filename, $method === 'HEAD'),
+				'PUT' => $client->handlePut($request, $response, $library, $filename),
+				'PROPFIND' => $this->handlePropfindFile($request, $response, $library, $path, $filename, $client),
 				// The files cannot be removed; acknowledge so clients that delete
 				// before re-uploading keep going.
 				'DELETE' => $this->acknowledge($response),
@@ -237,7 +232,8 @@ class SheetMusicDavPlugin extends ServerPlugin {
 				if (in_array($filename, $existing, true)) {
 					continue;
 				}
-				$entries[] = $this->buildPropfindEntry($library, $path . '/' . $filename, $filename, $requestBody);
+				$client = $this->registry->getClientForVirtualFile($filename);
+				$entries[] = $this->buildPropfindEntry($library, $path . '/' . $filename, $filename, $requestBody, $client);
 			}
 			if ($entries === []) {
 				return $xml;
@@ -265,118 +261,15 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		}
 	}
 
-	private function handleGetDatabase(
-		RequestInterface $request,
-		ResponseInterface $response,
-		InternalLibrary $library,
-		bool $isHead,
-	): bool {
-		$etag = $this->etagFor($library, self::VIRTUAL_DB_NAME);
-
-		if ($request->getHeader('If-None-Match') === $etag) {
-			$response->setStatus(304);
-			$response->setHeader('ETag', $etag);
-			return false;
-		}
-
-		$cachePath = $this->ensureDatabaseExport($library);
-
-		$size = (int)filesize($cachePath);
-		$this->logger->info(sprintf('SheetMusicDavPlugin: handleGetDatabase library=%d size=%d isHead=%d path=%s', $library->id, $size, $isHead ? 1 : 0, $cachePath));
-		$response->setStatus(200);
-		$response->setHeader('Content-Type', self::DB_CONTENT_TYPE);
-		$response->setHeader('Content-Length', (string)$size);
-		$response->setHeader('ETag', $etag);
-		$response->setHeader('Last-Modified', $this->httpDate($library));
-
-		if (!$isHead) {
-			$response->setBody(fopen($cachePath, 'rb'));
-		}
-
-		return false;
-	}
-
-	private function handlePutDatabase(
-		RequestInterface $request,
-		ResponseInterface $response,
-		InternalLibrary $library,
-	): bool {
-		$body = $request->getBody();
-		$tempUpload = tempnam(sys_get_temp_dir(), 'sm_upload_') . '.db';
-
-		if (is_resource($body)) {
-			$dest = fopen($tempUpload, 'wb');
-			stream_copy_to_stream($body, $dest);
-			fclose($dest);
-		} else {
-			file_put_contents($tempUpload, (string)$body);
-		}
-
-		try {
-			$this->importer->importFromFile($library, $tempUpload);
-		} finally {
-			if (file_exists($tempUpload)) {
-				@unlink($tempUpload);
-			}
-		}
-
-		// The import changes the library; report the state clients will see next.
-		$updated = $library->id !== null ? $this->libraryMapper->findModelById($library->id) : null;
-		$updated ??= $library;
-
-		$response->setStatus(204);
-		$response->setHeader('ETag', $this->etagFor($updated, self::VIRTUAL_DB_NAME));
-		return false;
-	}
-
-	private function handleGetHashcodes(
-		RequestInterface $request,
-		ResponseInterface $response,
-		InternalLibrary $library,
-		bool $isHead,
-	): bool {
-		$etag = $this->etagFor($library, self::VIRTUAL_HASH_NAME);
-
-		if ($request->getHeader('If-None-Match') === $etag) {
-			$response->setStatus(304);
-			$response->setHeader('ETag', $etag);
-			return false;
-		}
-
-		$hashcodes = $this->exporter->generateHashcodes($library);
-
-		$response->setStatus(200);
-		$response->setHeader('Content-Type', self::HASH_CONTENT_TYPE);
-		$response->setHeader('Content-Length', (string)strlen($hashcodes));
-		$response->setHeader('ETag', $etag);
-		$response->setHeader('Last-Modified', $this->httpDate($library));
-
-		if (!$isHead) {
-			$response->setBody($hashcodes);
-		}
-
-		return false;
-	}
-
-	private function handlePutHashcodes(
-		ResponseInterface $response,
-		InternalLibrary $library,
-	): bool {
-		// The hash codes are generated from the library; uploads are acknowledged
-		// but not stored.
-		$response->setStatus(204);
-		$response->setHeader('ETag', $this->etagFor($library, self::VIRTUAL_HASH_NAME));
-		return false;
-	}
-
 	private function handlePropfindFile(
 		RequestInterface $request,
 		ResponseInterface $response,
 		InternalLibrary $library,
 		string $path,
 		string $filename,
+		?SyncClientInterface $client = null,
 	): bool {
-		$entry = $this->buildPropfindEntry($library, $path, $filename, $request->getBodyAsString());
+		$entry = $this->buildPropfindEntry($library, $path, $filename, $request->getBodyAsString(), $client);
 
 		$xml = $this->generateMultiStatus([$entry]);
 		$response->setStatus(207);
@@ -398,8 +291,15 @@ class SheetMusicDavPlugin extends ServerPlugin {
 	 *
 	 * @return array<int|string, mixed>
 	 */
-	private function buildPropfindEntry(InternalLibrary $library, string $path, string $filename, ?string $requestBody): array {
-		$isDb = $filename === self::VIRTUAL_DB_NAME;
+	private function buildPropfindEntry(
+		InternalLibrary $library,
+		string $path,
+		string $filename,
+		?string $requestBody,
+		?SyncClientInterface $client = null,
+	): array {
+		$client ??= $this->registry->getClientForVirtualFile($filename);
+		$props = $client?->getVirtualFileProperties($library, $filename, $library->userId ?? '');
 
 		$requestType = PropFind::ALLPROPS;
 		$requested = [];
@@ -411,14 +311,16 @@ class SheetMusicDavPlugin extends ServerPlugin {
 			}
 		}
 
-		$size = $isDb ? $this->databaseSize($library) : strlen($this->exporter->generateHashcodes($library));
-		$etag = $this->etagFor($library, $filename);
+		$size = $props['size'] ?? 0;
+		$contentType = $props['contentType'] ?? 'application/octet-stream';
+		$lastModified = $props['lastModified'] ?? ($library->updatedAt ?: time());
+		$etag = $props['etag'] ?? sprintf('"sm-%d-%d"', $library->id, $library->updatedAt);
 
 		$propFind = new PropFind($path, $requested, 0, $requestType);
 		$propFind->set('{DAV:}displayname', $filename);
-		$propFind->set('{DAV:}getlastmodified', new GetLastModified($library->updatedAt ?: time()));
+		$propFind->set('{DAV:}getlastmodified', new GetLastModified($lastModified));
 		$propFind->set('{DAV:}getcontentlength', $size);
-		$propFind->set('{DAV:}getcontenttype', $isDb ? self::DB_CONTENT_TYPE : self::HASH_CONTENT_TYPE);
+		$propFind->set('{DAV:}getcontenttype', $contentType);
 		$propFind->set('{DAV:}getetag', $etag);
 		$propFind->set('{DAV:}resourcetype', new ResourceType());
 		$propFind->set('{' . self::OC_NS . '}size', $size);
@@ -478,69 +380,13 @@ class SheetMusicDavPlugin extends ServerPlugin {
 	}
 
 	/**
-	 * Export the library to a cached SQLite file and return its path.
-	 */
-	private function ensureDatabaseExport(InternalLibrary $library): string {
-		// One directory per system user: a directory created by another user
-		// (e.g. occ running as root) would not be writable for the web server.
-		$owner = function_exists('posix_geteuid') ? (string)posix_geteuid() : get_current_user();
-		$tempDir = sys_get_temp_dir() . '/sheetmusic_dav_cache_' . $owner;
-		if (!is_dir($tempDir)) {
-			@mkdir($tempDir, 0700, true);
-		}
-		$prefix = $tempDir . '/sm_' . (int)$library->id . '_';
-		$cachePath = $prefix . $library->updatedAt . '.db';
-
-		if (!file_exists($cachePath)) {
-			$partPath = $cachePath . '.' . bin2hex(random_bytes(4)) . '.part';
-			try {
-				$this->exporter->exportToFile($library, $partPath);
-				rename($partPath, $cachePath);
-			} finally {
-				if (file_exists($partPath)) {
-					@unlink($partPath);
-				}
-			}
-
-			// Drop exports of older states of this library.
-			foreach (glob($prefix . '*.db') ?: [] as $stale) {
-				if ($stale !== $cachePath) {
-					@unlink($stale);
-				}
-			}
-		}
-
-		return $cachePath;
-	}
-
-	private function databaseSize(InternalLibrary $library): int {
-		try {
-			return (int)filesize($this->ensureDatabaseExport($library));
-		} catch (\Throwable $e) {
-			$this->logger->warning('Could not determine size of virtual MobileSheets database', [
-				'exception' => $e,
-				'libraryId' => $library->id,
-			]);
-			return 0;
-		}
-	}
-
-	private function etagFor(InternalLibrary $library, string $filename): string {
-		$kind = $filename === self::VIRTUAL_DB_NAME ? 'db' : 'hash';
-		return '"sm-' . $kind . '-' . (int)$library->id . '-' . $library->updatedAt . '"';
-	}
-
-	private function httpDate(InternalLibrary $library): string {
-		return gmdate('D, d M Y H:i:s \G\M\T', $library->updatedAt ?: time());
-	}
-
-	/**
-	 * @return array{library: InternalLibrary, filename: string}|null
+	 * @return array{client: SyncClientInterface, library: InternalLibrary, filename: string}|null
 	 */
 	public function matchVirtualPath(string $path): ?array {
 		$path = trim($path, '/');
 		$filename = basename($path);
-		if ($this->registry->getClientForVirtualFile($filename) === null) {
+		$client = $this->registry->getClientForVirtualFile($filename);
+		if ($client === null) {
 			return null;
 		}
 
@@ -550,7 +396,7 @@ class SheetMusicDavPlugin extends ServerPlugin {
 			return null;
 		}
 
-		return ['library' => $library, 'filename' => $filename];
+		return ['client' => $client, 'library' => $library, 'filename' => $filename];
 	}
 
 	public function findLibraryByFolderPath(string $path): ?InternalLibrary {
