@@ -38,7 +38,6 @@ final class LibraryIntegrityFixerTest extends TestCase {
 			$libraryService,
 			$this->songFileMapper,
 			$this->songMapper,
-			internalMiscMapper: $this->miscMapper,
 		);
 		$orphanScanner = new LibraryOrphanScanner(
 			$fileManager,
@@ -132,38 +131,5 @@ final class LibraryIntegrityFixerTest extends TestCase {
 		self::assertTrue($res['success']);
 		self::assertNotNull($this->songFileMapper->findById($file->id)->deletedAt);
 		self::assertEmpty($this->songFileMapper->findAllForSong($song->id));
-
-		// Now test fixing the misc data file
-		$resMisc = $this->fixer->fixIssue(
-			$lib->id,
-			'admin',
-			IntegrityIssue::TYPE_MISSING_FILE,
-			fileId: 99,
-		);
-		self::assertTrue($resMisc['success']);
-
-		// Misc data for 99 was deleted
-		$miscRows = $this->miscMapper->getMiscDataForTable($lib->id, 'mobilesheets', 'Files', includeDeleted: false);
-		self::assertEmpty($miscRows);
-	}
-
-	public function testFixIssueRemovesMissingFileByPathFromMiscData(): void {
-		$lib = $this->createTestLibrary();
-		$this->miscMapper->saveMiscData($lib->id, 'mobilesheets', 'Files', '101', [
-			'Id' => 101,
-			'SongId' => 888,
-			'Path' => '/remote.php/dav/files/admin/Noten/phantom.pdf',
-		]);
-
-		$res = $this->fixer->fixIssue(
-			$lib->id,
-			'admin',
-			IntegrityIssue::TYPE_MISSING_FILE,
-			path: '/remote.php/dav/files/admin/Noten/phantom.pdf',
-		);
-		self::assertTrue($res['success']);
-
-		$miscRows = $this->miscMapper->getMiscDataForTable($lib->id, 'mobilesheets', 'Files', includeDeleted: false);
-		self::assertEmpty($miscRows);
 	}
 }

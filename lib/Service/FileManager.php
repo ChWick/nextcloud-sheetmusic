@@ -9,7 +9,6 @@ declare(strict_types=1);
 
 namespace OCA\SheetMusic\Service;
 
-use OCA\SheetMusic\Db\InternalMiscMapper;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
@@ -98,7 +97,6 @@ class FileManager {
 		private ?InternalSongMapper $internalSongMapper = null,
 		private ?SongMapper $songMapper = null,
 		?FilePathRegenerator $pathRegenerator = null,
-		private ?InternalMiscMapper $internalMiscMapper = null,
 	) {
 		$this->pathRegenerator = $pathRegenerator ?? new FilePathRegenerator(
 			$this->rootFolder,
@@ -106,7 +104,6 @@ class FileManager {
 			$this->logger,
 			$this->internalSongFileMapper,
 			$this->songMapper,
-			$this->internalMiscMapper,
 			$this->internalSongMapper,
 		);
 	}
@@ -458,7 +455,6 @@ class FileManager {
 			$this->logger,
 			$this->internalSongFileMapper,
 			$this->songMapper,
-			$this->internalMiscMapper,
 			$this->internalSongMapper,
 		);
 

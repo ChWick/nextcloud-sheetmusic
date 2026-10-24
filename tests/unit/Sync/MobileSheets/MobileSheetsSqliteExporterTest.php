@@ -397,7 +397,7 @@ final class MobileSheetsSqliteExporterTest extends TestCase {
 		self::assertSame(4, (int)$rows[0]['Sig2']);
 	}
 
-	public function testGenerateHashcodesIncludesMiscFilesAndExcludesDeletedSongs(): void {
+	public function testGenerateHashcodesFromSongFilesAndExcludesDeletedSongs(): void {
 		$songMapper = $this->createMock(InternalSongMapper::class);
 		$entityMapper = $this->createMock(InternalEntityMapper::class);
 		$songFileMapper = $this->createMock(InternalSongFileMapper::class);
@@ -411,19 +411,47 @@ final class MobileSheetsSqliteExporterTest extends TestCase {
 
 		$library = new InternalLibrary(id: 1, userId: 'admin', path: '/Noten');
 		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('admin');
 		$userManager->method('get')->with('admin')->willReturn($user);
-
-		$songFileMapper->method('findAllForLibrary')->with(1, false)->willReturn([]);
 
 		$activeSong = new InternalSong(id: 1, uuid: 's-1', libraryId: 1, title: 'Active', clientId: 10);
 		$deletedSong = new InternalSong(id: 2, uuid: 's-2', libraryId: 1, title: 'Deleted', clientId: 20, deletedAt: 12345);
 		$songMapper->method('findAllForLibrary')->with(1, true)->willReturn([$activeSong, $deletedSong]);
 
-		$miscFiles = [
-			['Id' => 1, 'SongId' => 10, 'Path' => '/remote.php/dav/files/admin/Noten/active.pdf', 'FileHash' => 9999, 'LastModified' => 1000000, 'FileSize' => 45000],
-			['Id' => 2, 'SongId' => 20, 'Path' => '/remote.php/dav/files/admin/Noten/deleted.pdf', 'FileHash' => 8888, 'LastModified' => 1000000, 'FileSize' => 30000],
-		];
-		$miscMapper->method('getMiscDataForTable')->with(1, 'mobilesheets', 'Files', false)->willReturn($miscFiles);
+		$activeFile = new InternalSongFile(
+			id: 1,
+			uuid: 'f-1',
+			songId: 1,
+			fileId: 101,
+			fileSize: 45000,
+			fileHash: 9999,
+			updatedAt: 1000,
+		);
+		$deletedSongFile = new InternalSongFile(
+			id: 2,
+			uuid: 'f-2',
+			songId: 2,
+			fileId: 102,
+			fileSize: 30000,
+			fileHash: 8888,
+			updatedAt: 1000,
+		);
+		$songFileMapper->method('findAllForLibrary')->with(1, false)->willReturn([$activeFile, $deletedSongFile]);
+
+		$node1 = $this->createMock(File::class);
+		$node1->method('getPath')->willReturn('/admin/files/Noten/active.pdf');
+		$userFolder = $this->createMock(IUserFolder::class);
+		$userFolder->method('getById')->willReturnCallback(function ($id) use ($node1) {
+			if ($id === 101) {
+				return [$node1];
+			}
+			return [];
+		});
+		$rootFolder->method('getUserFolder')->with('admin')->willReturn($userFolder);
+
+		$pathResolver->method('fromInternal')->with('/admin/files/Noten/active.pdf', $user)->willReturn(
+			new MobileSheetsPath('/admin/files/Noten/active.pdf', '/remote.php/dav/files/admin/Noten/active.pdf')
+		);
 
 		$exporter = new MobileSheetsSqliteExporter(
 			$songMapper,
@@ -469,17 +497,49 @@ final class MobileSheetsSqliteExporterTest extends TestCase {
 
 		$activeSong = new InternalSong(id: 1, uuid: 's-1', libraryId: 1, title: 'Active', clientId: 10);
 		$songMapper->method('findAllForLibrary')->willReturn([$activeSong]);
-		$songFileMapper->method('findAllForLibrary')->with(1, false)->willReturn([]);
+
+		$activeFile = new InternalSongFile(
+			id: 1,
+			uuid: 'f-1',
+			songId: 1,
+			fileId: 101,
+			clientId: 1,
+			pageOrder: '1',
+			fileSize: 45000,
+			fileHash: 9999,
+			updatedAt: 1000,
+		);
+		$orphanFile = new InternalSongFile(
+			id: 2,
+			uuid: 'f-2',
+			songId: 999, // orphan songId
+			fileId: 102,
+			clientId: 2,
+			pageOrder: '1',
+			fileSize: 30000,
+			fileHash: 8888,
+			updatedAt: 1000,
+		);
+		$songFileMapper->method('findAllForLibrary')->with(1, false)->willReturn([$activeFile, $orphanFile]);
+
+		$node1 = $this->createMock(File::class);
+		$node1->method('getPath')->willReturn('/admin/files/Noten/active.pdf');
+		$userFolder = $this->createMock(IUserFolder::class);
+		$userFolder->method('getById')->willReturnCallback(function ($id) use ($node1) {
+			if ($id === 101) {
+				return [$node1];
+			}
+			return [];
+		});
+		$rootFolder->method('getUserFolder')->with('admin')->willReturn($userFolder);
+
+		$pathResolver->method('fromInternal')->with('/admin/files/Noten/active.pdf', $user)->willReturn(
+			new MobileSheetsPath('/admin/files/Noten/active.pdf', '/remote.php/dav/files/admin/Noten/active.pdf')
+		);
 
 		$miscMapper->method('getMiscSchemas')->with(1, 'mobilesheets')->willReturn([
 			'Files' => 'CREATE TABLE Files (Id INTEGER PRIMARY KEY, SongId INTEGER, Path VARCHAR(255), PageOrder VARCHAR(255), FileSize INTEGER, LastModified INTEGER, Source INTEGER, Type INTEGER, Password VARCHAR(255), SourceFilePageCount INTEGER, FileHash INTEGER, Width INTEGER, Height INTEGER);',
 		]);
-
-		$miscFiles = [
-			['Id' => 1, 'SongId' => 10, 'Path' => 'active.pdf'],
-			['Id' => 2, 'SongId' => 999, 'Path' => 'orphan.pdf'],
-		];
-		$miscMapper->method('getMiscDataForTable')->with(1, 'mobilesheets', 'Files', false)->willReturn($miscFiles);
 
 		$exporter = new MobileSheetsSqliteExporter(
 			$songMapper,
@@ -500,7 +560,7 @@ final class MobileSheetsSqliteExporterTest extends TestCase {
 		$db = new PDO('sqlite:' . $this->tempDbPath);
 		$fileRows = $db->query('SELECT Id, SongId, Path FROM Files')->fetchAll(PDO::FETCH_ASSOC);
 
-		// File 1 with SongId 10 exists, File 2 with orphan SongId 999 must have been purged
+		// File 1 with SongId 10 exists, File 2 with orphan SongId 999 must have been skipped
 		self::assertCount(1, $fileRows);
 		self::assertSame(1, (int)$fileRows[0]['Id']);
 		self::assertSame(10, (int)$fileRows[0]['SongId']);

@@ -9,7 +9,6 @@ declare(strict_types=1);
 
 namespace OCA\SheetMusic\Service;
 
-use OCA\SheetMusic\Db\InternalMiscMapper;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsFile;
@@ -41,7 +40,6 @@ class FilePathRegenerator {
 		private LoggerInterface $logger,
 		private ?InternalSongFileMapper $internalSongFileMapper = null,
 		private ?SongMapper $songMapper = null,
-		private ?InternalMiscMapper $internalMiscMapper = null,
 		private ?InternalSongMapper $internalSongMapper = null,
 	) {
 	}
@@ -551,21 +549,6 @@ class FilePathRegenerator {
 
 		if ($this->songMapper !== null && $databasePath !== '' && $webdavPath !== null && file_exists($databasePath) && is_writable($databasePath)) {
 			$this->songMapper->updateFile($databasePath, $sqliteFileId, $webdavPath, $facts, $oldWebdavPath);
-		}
-
-		if ($this->internalMiscMapper !== null && $webdavPath !== null && $internalSongFile !== null) {
-			$song = $this->internalSongMapper?->findById($internalSongFile->songId);
-			if ($song !== null) {
-				$this->internalMiscMapper->updateFilePath(
-					libraryId: (int)$song->libraryId,
-					clientType: 'mobilesheets',
-					oldPath: $oldWebdavPath ?? '',
-					newPath: $webdavPath,
-					fileClientId: $internalSongFile->clientId,
-					fileSize: $facts->fileSize,
-					fileHash: $facts->fileHash,
-				);
-			}
 		}
 	}
 

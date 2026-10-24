@@ -540,54 +540,6 @@ class LibraryIntegrityService {
 			);
 		}
 
-		$miscFiles = $this->internalMiscMapper->getMiscDataForTable($libraryId, 'mobilesheets', 'Files', includeDeleted: false);
-		foreach ($miscFiles as $mRow) {
-			$mPath = (string)($mRow['Path'] ?? '');
-			if ($mPath === '' || isset($reportedMissingPaths[$mPath])) {
-				continue;
-			}
-			$sourceExists = false;
-			if ($user !== null && $targetFolder !== null) {
-				$pathObj = $this->pathResolver->fromStored($mPath, $user);
-				if ($pathObj !== null) {
-					$internalPath = $pathObj->internal;
-					$rel = null;
-					$tPath = (string)$targetFolder->getPath();
-					if ($internalPath === $tPath) {
-						$rel = '';
-					} elseif (str_starts_with($internalPath, $tPath . '/')) {
-						$rel = substr($internalPath, strlen($tPath) + 1);
-					}
-					$sourceExists = $this->fileNodeExists($targetFolder, $rel);
-				} else {
-					$sourceExists = $this->fileNodeExists($targetFolder, ltrim(rawurldecode($mPath), '/'));
-				}
-			}
-			if (!$sourceExists) {
-				$reportedMissingPaths[$mPath] = true;
-				$mFileId = isset($mRow['Id']) ? (int)$mRow['Id'] : null;
-				$mSongId = isset($mRow['SongId']) && is_numeric($mRow['SongId']) ? (int)$mRow['SongId'] : null;
-				$message = $mSongId !== null
-					? sprintf('File "%s" referenced in sync data does not exist on the filesystem.', basename($mPath))
-					: sprintf('File "%s" in sync data has no connected song and does not exist on the filesystem.', basename($mPath));
-
-				$issues[] = new IntegrityIssue(
-					type: IntegrityIssue::TYPE_MISSING_FILE,
-					severity: IntegrityIssue::SEVERITY_ERROR,
-					message: $message,
-					fileId: $mFileId,
-					path: $mPath,
-					fixable: true,
-					details: [
-						'source' => 'misc_data',
-						'fileId' => $mFileId,
-						'songId' => $mSongId,
-						'path' => $mPath,
-					],
-				);
-			}
-		}
-
 		return $issues;
 	}
 

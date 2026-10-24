@@ -1193,10 +1193,17 @@ final class MobileSheetsSyncTest extends TestCase {
 		$lib = $this->createTestLibrary('ImportedLib_' . bin2hex(random_bytes(3)));
 
 		// 1. Set up library by importing an initial MobileSheets database so miscSchemas has 'Songs', 'Files', etc.
+		$userFolder = $this->rootFolder->getUserFolder($lib->userId);
+		$libFolder = $userFolder->nodeExists($lib->path) ? $userFolder->get($lib->path) : $userFolder->newFolder($lib->path);
+		$this->createdUserNodes[] = $libFolder;
+		$f1 = $libFolder->newFile('song_lebel.pdf');
+		$f1->putContent("%PDF-1.4\n");
+		$this->createdUserNodes[] = $f1;
+
 		$initDbPath = $this->tempDbPath();
 		$initDb = $this->createEmptyMobileSheetsDb($initDbPath);
 		$initDb->exec("INSERT INTO Songs (Id, Title, SortTitle, Stars, Difficulty, Duration, SongId, DateCreated, LastModified) VALUES (440, 'Du hast, o Herr, dein Lebel', 'Du hast, o Herr, dein Lebel', 0, 0, 0, 440, 1000000, 1000000)");
-		$initDb->exec("INSERT INTO Files (Id, SongId, Path, PageOrder, FileSize, LastModified, Source, Type) VALUES (500, 440, '/test/Du hast, o Herr, dein Lebel.pdf', '1', 1000, 1000000, 1, 1)");
+		$initDb->exec("INSERT INTO Files (Id, SongId, Path, PageOrder, FileSize, LastModified, Source, Type) VALUES (500, 440, 'song_lebel.pdf', '1', 1000, 1000000, 1, 1)");
 
 		$importStats = $this->importer->importFromFile($lib, $initDbPath);
 		self::assertSame(1, $importStats['songsCreated']);
@@ -1217,10 +1224,14 @@ final class MobileSheetsSyncTest extends TestCase {
 
 		// 3. Client renames song in MobileSheets (auto-rename file):
 		// Old song 440 is deleted, new song 441 is inserted with new title.
+		$f2 = $libFolder->newFile('song_leben.pdf');
+		$f2->putContent("%PDF-1.4\n");
+		$this->createdUserNodes[] = $f2;
+
 		$exportedDb->exec('DELETE FROM Songs WHERE Id = 440');
 		$exportedDb->exec('DELETE FROM Files WHERE Id = 500');
 		$exportedDb->exec("INSERT INTO Songs (Id, Title, SortTitle, Stars, Difficulty, Duration, SongId, DateCreated, LastModified) VALUES (441, 'Du hast, o Herr, dein Leben', 'Du hast, o Herr, dein Leben', 0, 0, 0, 441, 1001000, 1001000)");
-		$exportedDb->exec("INSERT INTO Files (Id, SongId, Path, PageOrder, FileSize, LastModified, Source, Type) VALUES (501, 441, '/test/Du hast, o Herr, dein Leben.pdf', '1', 1000, 1001000, 1, 1)");
+		$exportedDb->exec("INSERT INTO Files (Id, SongId, Path, PageOrder, FileSize, LastModified, Source, Type) VALUES (501, 441, 'song_leben.pdf', '1', 1000, 1001000, 1, 1)");
 
 		// 4. Client uploads modified DB back (WebDAV PUT / importFromFile)
 		$syncStats = $this->importer->importFromFile($lib, $exportedDbPath);
@@ -1249,6 +1260,12 @@ final class MobileSheetsSyncTest extends TestCase {
 
 	public function testCoreManagedTablesNeverResurrectDeletedRecordsViaMiscDataOnReExport(): void {
 		$lib = $this->createTestLibrary('CoreManagedDeletions_' . bin2hex(random_bytes(3)));
+		$userFolder = $this->rootFolder->getUserFolder($lib->userId);
+		$libFolder = $userFolder->nodeExists($lib->path) ? $userFolder->get($lib->path) : $userFolder->newFolder($lib->path);
+		$this->createdUserNodes[] = $libFolder;
+		$f1 = $libFolder->newFile('song_a.pdf');
+		$f1->putContent("%PDF-1.4\n");
+		$this->createdUserNodes[] = $f1;
 
 		// 1. Initial MobileSheets DB containing core entities and a non-core misc table (Setlists)
 		$initDbPath = $this->tempDbPath();
@@ -1258,7 +1275,7 @@ final class MobileSheetsSyncTest extends TestCase {
 		$initDb->exec('CREATE TABLE IF NOT EXISTS Bookmarks (Id INTEGER PRIMARY KEY, SongId INTEGER, Name VARCHAR(255))');
 		$initDb->exec('CREATE TABLE IF NOT EXISTS Layers (Id INTEGER PRIMARY KEY, SongId INTEGER, Page INTEGER)');
 		$initDb->exec("INSERT INTO Songs (Id, Title, SortTitle, Stars, Difficulty, Duration, SongId, DateCreated, LastModified) VALUES (100, 'Song A', 'Song A', 0, 0, 0, 100, 1000000, 1000000)");
-		$initDb->exec("INSERT INTO Files (Id, SongId, Path, PageOrder, FileSize, LastModified, Source, Type) VALUES (50, 100, '/Noten/song_a.pdf', '1', 1000, 1000000, 1, 1)");
+		$initDb->exec("INSERT INTO Files (Id, SongId, Path, PageOrder, FileSize, LastModified, Source, Type) VALUES (50, 100, 'song_a.pdf', '1', 1000, 1000000, 1, 1)");
 		$initDb->exec("INSERT INTO Composer (Id, Name) VALUES (10, 'Composer Bach')");
 		$initDb->exec('INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (10, 100)');
 		$initDb->exec("INSERT INTO Collections (Id, Name) VALUES (20, 'Collection Hymns')");
@@ -1284,10 +1301,6 @@ final class MobileSheetsSyncTest extends TestCase {
 		$this->miscMapper->saveMiscData($lib->id, 'mobilesheets', 'SetlistSong', '1-100', ['Id' => 1, 'SetlistId' => 1, 'SongId' => 100]);
 		$this->miscMapper->saveMiscData($lib->id, 'mobilesheets', 'Bookmarks', '1', ['Id' => 1, 'SongId' => 100, 'Name' => 'Chorus']);
 		$this->miscMapper->saveMiscData($lib->id, 'mobilesheets', 'Layers', '1', ['Id' => 1, 'SongId' => 100, 'Page' => 1]);
-
-		// Verify generateHashcodes includes the misc file while song is active
-		$initHashcodes = $this->exporter->generateHashcodes($lib);
-		self::assertStringContainsString('/Noten/song_a.pdf', $initHashcodes);
 
 		// 2. Export baseline database
 		$exportedDbPath = $this->tempDbPath();
@@ -1716,6 +1729,14 @@ final class MobileSheetsSyncTest extends TestCase {
 
 	public function testCollectionSongManualOrderingPreservedOnImportAndExport(): void {
 		$lib = $this->createTestLibrary('Ordering_Manual_' . bin2hex(random_bytes(3)));
+		$userFolder = $this->rootFolder->getUserFolder($lib->userId);
+		$libFolder = $userFolder->nodeExists($lib->path) ? $userFolder->get($lib->path) : $userFolder->newFolder($lib->path);
+		$this->createdUserNodes[] = $libFolder;
+		foreach (['alpha.pdf', 'beta.pdf', 'gamma.pdf'] as $fn) {
+			$fNode = $libFolder->newFile($fn);
+			$fNode->putContent("%PDF-1.4\n");
+			$this->createdUserNodes[] = $fNode;
+		}
 
 		// 1. MobileSheets has a Collection with Manual sort order (SortBy = 0)
 		//    Containing songs in non-alphabetical / custom sequence: Song 1, Song 3, Song 2

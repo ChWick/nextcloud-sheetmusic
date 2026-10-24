@@ -1776,8 +1776,10 @@ class MobileSheetsEndToEndSyncTest extends TestCase {
 		self::assertFileExists($this->harness->clientFilesDir . '/raw_scan_001.pdf');
 
 		$miscFilesBefore = $this->harness->miscMapper->getMiscDataForTable($this->harness->libraryId, 'mobilesheets', 'Files');
-		self::assertCount(1, $miscFilesBefore);
-		self::assertStringContainsString('raw_scan_001.pdf', (string)$miscFilesBefore[0]['Path']);
+		self::assertEmpty($miscFilesBefore, 'Files table must not be stored in misc_data');
+
+		$ncFilesBefore = $this->harness->songFileMapper->findAllForLibrary($this->harness->libraryId);
+		self::assertCount(1, $ncFilesBefore);
 
 		// 3. Enable autoPaths so the naming rule is expected
 		$this->harness->libraryService->updateSettings($this->harness->userId, $this->harness->libraryId, autoPaths: true);
@@ -1804,12 +1806,12 @@ class MobileSheetsEndToEndSyncTest extends TestCase {
 		self::assertFalse($libFolder->nodeExists('raw_scan_001.pdf'), 'Old file must be moved away');
 		self::assertTrue($libFolder->nodeExists('Erik Satie/Erik Satie - Gymnopedie No 1.pdf'), 'Renamed file must exist in composer subfolder on filesystem');
 
-		// 7. Verify sync data (misc_data Files): the file must NOT be marked non-existing or deleted.
-		// It must be moved to the new file location!
+		// 7. Verify sync data: Files table is not stored in misc_data, but managed cleanly in Nextcloud
 		$miscFilesAfter = $this->harness->miscMapper->getMiscDataForTable($this->harness->libraryId, 'mobilesheets', 'Files');
-		self::assertCount(1, $miscFilesAfter, 'Sync data must still contain exactly 1 file');
-		self::assertStringNotContainsString('raw_scan_001.pdf', (string)$miscFilesAfter[0]['Path'], 'Old file path must no longer be in sync data');
-		self::assertStringContainsString('Erik Satie/Erik Satie - Gymnopedie No 1.pdf', (string)$miscFilesAfter[0]['Path'], 'New file path must be recorded in sync data');
+		self::assertEmpty($miscFilesAfter, 'Files table must remain excluded from misc_data');
+
+		$ncFilesAfter = $this->harness->songFileMapper->findAllForLibrary($this->harness->libraryId);
+		self::assertCount(1, $ncFilesAfter, 'Song file record must still exist');
 
 		// 8. Re-run integrity audit: MUST NOT report TYPE_MISSING_FILE for the old file in sync data!
 		$issuesAfterFix = $this->harness->integrityService->checkIntegrity($this->harness->libraryId, $this->harness->userId);
@@ -1891,7 +1893,9 @@ class MobileSheetsEndToEndSyncTest extends TestCase {
 			self::assertSame($expectedHash, (int)($dbRow['FileHash'] ?? 0), 'Physical mobilesheets.db in folder must have updated FileHash');
 		}
 
-		self::assertSame($expectedHash, $miscFiles[0]['FileHash'] ?? null, 'Misc sync data must record new file hash');
+		self::assertEmpty($miscFiles, 'Files table must not be stored in misc_data');
+		$ncFiles = $this->harness->songFileMapper->findAllForLibrary($this->harness->libraryId);
+		self::assertSame($expectedHash, $ncFiles[0]->fileHash, 'Internal song file must record new file hash');
 
 		// 5. Subsequent checkIntegrity must report zero issues
 		$issuesAfter = $this->harness->integrityService->checkIntegrity($this->harness->libraryId, $this->harness->userId);

@@ -1963,9 +1963,6 @@ final class LibraryIntegrityServiceTest extends TestCase {
 
 		$miscMapper = $this->createMock(InternalMiscMapper::class);
 		$miscMapper->method('findOrphanMiscData')->willReturn([]);
-		$miscMapper->method('getMiscDataForTable')->with(1, 'mobilesheets', 'Files', false)->willReturn([
-			['Id' => 3, 'SongId' => null, 'Path' => '/remote.php/dav/files/user1/Noten/missing_misc.pdf'],
-		]);
 
 		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager($fixture['path'], $targetFolder);
 		$userFolder = $rootFolder->getUserFolder('user1');
@@ -1997,14 +1994,14 @@ final class LibraryIntegrityServiceTest extends TestCase {
 			$issues,
 			fn ($i) => $i->type === IntegrityIssue::TYPE_MISSING_FILE,
 		));
-		self::assertCount(3, $virtualOrphans);
+		self::assertCount(2, $virtualOrphans);
 
 		foreach ($virtualOrphans as $vOrphan) {
 			self::assertSame(IntegrityIssue::SEVERITY_ERROR, $vOrphan->severity);
 		}
 
 		$messages = array_map(fn ($i) => $i->message, $virtualOrphans);
-		// Check that connected song, orphan song file, and misc data all have appropriate error messages
+		// Check that connected song and orphan song file have appropriate error messages
 		self::assertTrue(
 			array_any($messages, fn ($m) => str_contains($m, 'referenced by song "Song 1"') || str_contains($m, 'referenced by song')),
 			'Expected message for file linked to a song',
@@ -2012,10 +2009,6 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		self::assertTrue(
 			array_any($messages, fn ($m) => str_contains($m, 'has no connected song and referenced file does not exist')),
 			'Expected message for song file record with no connected song',
-		);
-		self::assertTrue(
-			array_any($messages, fn ($m) => str_contains($m, 'in sync data has no connected song and does not exist')),
-			'Expected message for sync data file with no connected song',
 		);
 
 		unlink($fixture['path']);

@@ -17,6 +17,28 @@ final class MobileSheetsBaselineSchema {
 	public const DEFAULT_PAGE_SIZE = 1024;
 
 	/**
+	 * Recognized baseline columns in MobileSheets Files table.
+	 * Any columns outside this set sent by clients will trigger an unknown column warning.
+	 *
+	 * @var list<string>
+	 */
+	public const KNOWN_FILE_COLUMNS = [
+		'id',
+		'songid',
+		'path',
+		'pageorder',
+		'filesize',
+		'lastmodified',
+		'source',
+		'type',
+		'password',
+		'sourcefilepagecount',
+		'filehash',
+		'width',
+		'height',
+	];
+
+	/**
 	 * Core MobileSheets table creation statements.
 	 * @var array<string, string>
 	 */

@@ -352,6 +352,15 @@ class MobileSheetsSqliteImporter {
 			return;
 		}
 
+		$existingCols = MobileSheetsTableHelper::getTableColumns($db, 'Files');
+		$unknownCols = array_diff(array_keys($existingCols), MobileSheetsBaselineSchema::KNOWN_FILE_COLUMNS);
+		if ($unknownCols !== []) {
+			$this->logger->warning('MobileSheets database contains unknown column(s) in Files table: ' . implode(', ', $unknownCols), [
+				'columns' => array_values($unknownCols),
+				'libraryId' => $library->id,
+			]);
+		}
+
 		$songs = $this->songMapper->findAllForLibrary($library->id, includeDeleted: false);
 		$songByClientId = [];
 		foreach ($songs as $s) {
@@ -598,7 +607,6 @@ class MobileSheetsSqliteImporter {
 					$this->deleteSongFileAndPhysicalNode($file, $user);
 					$stats['filesDeleted']++;
 				}
-				$this->miscMapper->deleteMiscData($libraryId, 'mobilesheets', 'Files', (string)$clientId);
 			}
 		}
 	}
@@ -654,22 +662,6 @@ class MobileSheetsSqliteImporter {
 			}
 		}
 
-		$files = $this->songFileMapper->findAllForLibrary($libraryId, includeDeleted: true);
-		$deletedFileClientIds = [];
-		$activeFileClientIds = [];
-		foreach ($files as $f) {
-			if ($f->clientId !== null) {
-				if ($f->deletedAt !== null) {
-					$deletedFileClientIds[$f->clientId] = true;
-				} else {
-					$activeFileClientIds[$f->clientId] = true;
-				}
-			}
-		}
-		foreach ($activeFileClientIds as $activeClientId => $_) {
-			unset($deletedFileClientIds[$activeClientId]);
-		}
-
 		$entities = $this->entityMapper->findAllForLibrary($libraryId, includeDeleted: true);
 		$deletedEntityClientIdsByTable = [];
 		foreach ($entities as $e) {
@@ -691,6 +683,11 @@ class MobileSheetsSqliteImporter {
 			// Save DDL schema
 			$this->miscMapper->saveMiscSchema($libraryId, 'mobilesheets', $tableName, $sql);
 
+			// Files table rows are exclusively managed via sheetmusic_song_files and filesystem
+			if ($lowerTable === 'files') {
+				continue;
+			}
+
 			// Save rows
 			$rowsStmt = $db->query('SELECT * FROM "' . str_replace('"', '""', $tableName) . '" ORDER BY rowid ASC');
 			if ($rowsStmt === false) {
@@ -707,35 +704,6 @@ class MobileSheetsSqliteImporter {
 				if ($lowerTable === 'songs' && isset($dataRow['Id']) && isset($deletedSongClientIds[(int)$dataRow['Id']])) {
 					$this->miscMapper->deleteMiscData($libraryId, 'mobilesheets', $tableName, $recordId);
 					continue;
-				}
-				if ($lowerTable === 'files') {
-					$fId = isset($dataRow['Id']) ? (int)$dataRow['Id'] : 0;
-					$sId = isset($dataRow['SongId']) ? (int)$dataRow['SongId'] : 0;
-					if (isset($deletedFileClientIds[$fId]) || isset($deletedSongClientIds[$sId])) {
-						$this->miscMapper->deleteMiscData($libraryId, 'mobilesheets', $tableName, $recordId);
-						continue;
-					}
-
-					if ($sId > 0 && isset($songByClientId[$sId])) {
-						$ncSong = $songByClientId[$sId];
-						$existingFiles = $this->songFileMapper->findAllForSong($ncSong->id, includeDeleted: false);
-						foreach ($existingFiles as $ef) {
-							if ($ef->clientId === $fId) {
-								$lastModifiedSec = MobileSheetsTimestampUtil::extractLastModifiedSec($dataRow);
-								if ($ef->updatedAt >= $lastModifiedSec) {
-									// Nextcloud has newer or equal edits for this file (e.g. renamed via integrity audit on server)
-									$ncPath = $this->resolveWebdavPathForFile($ef, $lib, $user);
-									if ($ncPath !== null && $ncPath !== '') {
-										$dataRow['Path'] = $ncPath;
-										$dataRow['FileSize'] = $ef->fileSize;
-										$dataRow['FileHash'] = $ef->fileHash;
-										$dataRow['LastModified'] = MobileSheetsTimestampUtil::secondsToMs($ef->updatedAt);
-									}
-								}
-								break;
-							}
-						}
-					}
 				}
 				if (isset($dataRow['SongId']) && is_numeric($dataRow['SongId']) && isset($deletedSongClientIds[(int)$dataRow['SongId']])) {
 					$this->miscMapper->deleteMiscData($libraryId, 'mobilesheets', $tableName, $recordId);

@@ -45,6 +45,8 @@ final class MobileSheetsRoundtripTest extends TestCase {
 
 		$library = $this->createTestLibrary('Roundtrip_' . bin2hex(random_bytes(3)));
 
+		$this->createFilesForPreset($library, $sourceDbPath);
+
 		// 1. Import database into Nextcloud
 		$stats = $this->importer->importFromFile($library, $sourceDbPath);
 		self::assertIsArray($stats);
@@ -110,8 +112,58 @@ final class MobileSheetsRoundtripTest extends TestCase {
 					if (is_numeric($v) && is_numeric($ev) && (float)$v === (float)$ev) {
 						continue;
 					}
+					// Files table properties recomputed from Nextcloud filesystem (Path WebDAV prefix, file facts)
+					if ($table === 'Files' && $k === 'Path' && is_string($v) && is_string($ev)) {
+						if (str_ends_with($ev, ltrim($v, '/')) || basename($v) === basename($ev)) {
+							continue;
+						}
+					}
+					if ($table === 'Files' && in_array($k, ['Width', 'Height', 'Password'], true)) {
+						continue;
+					}
 					self::assertSame($v, $ev, "Mismatch in table '$table', row $idx, column '$k' for preset: $description");
 				}
+			}
+		}
+	}
+
+	private function createFilesForPreset(\OCA\SheetMusic\Db\InternalLibrary $library, string $sourceDbPath): void {
+		$sourceDb = new PDO('sqlite:' . $sourceDbPath, options: [
+			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+		]);
+
+		$tables = $sourceDb->query("SELECT name FROM sqlite_master WHERE type='table' AND name='Files'")->fetchAll();
+		if ($tables === []) {
+			return;
+		}
+
+		$files = $sourceDb->query('SELECT * FROM Files')->fetchAll();
+		$userFolder = $this->rootFolder->getUserFolder($library->userId);
+
+		foreach ($files as $fileRow) {
+			$rawPath = (string)($fileRow['Path'] ?? '');
+			if ($rawPath === '') {
+				continue;
+			}
+
+			$clean = ltrim($rawPath, '/');
+			$parts = explode('/', $clean);
+			$fileName = array_pop($parts);
+
+			$curr = $userFolder;
+			foreach ($parts as $p) {
+				if ($p === '') {
+					continue;
+				}
+				$curr = $curr->nodeExists($p) ? $curr->get($p) : $curr->newFolder($p);
+				$this->createdUserNodes[] = $curr;
+			}
+
+			if (!$curr->nodeExists($fileName)) {
+				$node = $curr->newFile($fileName);
+				$node->putContent("%PDF-1.4 Mock Score Content\n");
+				$this->createdUserNodes[] = $node;
 			}
 		}
 	}

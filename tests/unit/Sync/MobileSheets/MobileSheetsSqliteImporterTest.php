@@ -844,4 +844,52 @@ final class MobileSheetsSqliteImporterTest extends TestCase {
 			}
 		}
 	}
+
+	public function testImportDatabaseLogsWarningWhenClientFilesTableContainsUnknownColumns(): void {
+		$db = $this->createTestDatabase();
+		// Add unknown columns to Files table (e.g. from a future MobileSheets release)
+		$db->exec('ALTER TABLE Files ADD COLUMN CropMargins TEXT');
+		$db->exec('ALTER TABLE Files ADD COLUMN Rotation INTEGER');
+
+		$library = new InternalLibrary(id: 1, userId: 'admin', path: '/Noten');
+		$songMapper = $this->createMock(InternalSongMapper::class);
+		$songMapper->method('findAllForLibrary')->willReturn([]);
+		$entityMapper = $this->createMock(InternalEntityMapper::class);
+		$entityMapper->method('findAllForLibrary')->willReturn([]);
+		$songFileMapper = $this->createMock(InternalSongFileMapper::class);
+		$songFileMapper->method('findAllForLibrary')->willReturn([]);
+		$attributeMapper = $this->createMock(InternalSongAttributeMapper::class);
+		$miscMapper = $this->createMock(InternalMiscMapper::class);
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$pathResolver = $this->createMock(MobileSheetsPathResolver::class);
+		$rootFolder = $this->createMock(IRootFolder::class);
+		$userManager = $this->createMock(IUserManager::class);
+
+		$logger = $this->createMock(\Psr\Log\LoggerInterface::class);
+		$warningLogged = false;
+		$logger->expects(self::atLeastOnce())
+			->method('warning')
+			->willReturnCallback(function (string $message, array $context = []) use (&$warningLogged) {
+				if (str_contains($message, 'unknown column(s) in Files table') && str_contains($message, 'cropmargins') && str_contains($message, 'rotation')) {
+					$warningLogged = true;
+				}
+			});
+
+		$importer = new MobileSheetsSqliteImporter(
+			$songMapper,
+			$entityMapper,
+			$songFileMapper,
+			$attributeMapper,
+			$miscMapper,
+			$libraryMapper,
+			$pathResolver,
+			$rootFolder,
+			$userManager,
+			$logger,
+		);
+
+		$importer->importFromFile($library, $this->tempDbPath);
+
+		self::assertTrue($warningLogged, 'Importer must log a warning with unknown column names');
+	}
 }

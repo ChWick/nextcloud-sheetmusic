@@ -147,61 +147,6 @@ class MobileSheetsSqliteExporter {
 			$lines[] = (string)$size;
 		}
 
-		// Also supplement with files from misc_data if present and library has no managed files
-		if (empty($files)) {
-			$miscFiles = $this->miscMapper->getMiscDataForTable($lib->id, 'mobilesheets', 'Files', includeDeleted: false);
-			if ($miscFiles !== []) {
-				$songs = $this->songMapper->findAllForLibrary($lib->id, includeDeleted: true);
-				$deletedSongClientIds = [];
-				foreach ($songs as $s) {
-					if ($s->clientId !== null && $s->deletedAt !== null) {
-						$deletedSongClientIds[$s->clientId] = true;
-					}
-				}
-
-				foreach ($miscFiles as $mf) {
-					if (!is_array($mf) || empty($mf['Path'])) {
-						continue;
-					}
-					$songClientId = isset($mf['SongId']) && is_numeric($mf['SongId']) ? (int)$mf['SongId'] : null;
-					if ($songClientId !== null && isset($deletedSongClientIds[$songClientId])) {
-						continue;
-					}
-
-					$webdavPath = (string)$mf['Path'];
-					if (isset($handledPaths[$webdavPath])) {
-						continue;
-					}
-
-					if ($user !== null) {
-						try {
-							$pathObj = $this->pathResolver->fromStored($webdavPath, $user);
-							if ($pathObj !== null) {
-								$rel = $this->pathResolver->relativeToUserFolder($pathObj->internal, $user);
-								$userFolder = $this->rootFolder->getUserFolder($user->getUID());
-								if ($rel !== null && !$userFolder->nodeExists($rel)) {
-									continue;
-								}
-							}
-						} catch (\Throwable) {
-							// Pass through in synthetic environments where userFolder cannot resolve
-						}
-					}
-
-					$handledPaths[$webdavPath] = true;
-
-					$hash = isset($mf['FileHash']) && is_numeric($mf['FileHash']) ? (int)$mf['FileHash'] : 0;
-					$modifiedAtMs = isset($mf['LastModified']) && is_numeric($mf['LastModified']) ? (int)$mf['LastModified'] : 0;
-					$size = isset($mf['FileSize']) && is_numeric($mf['FileSize']) ? (int)$mf['FileSize'] : 0;
-
-					$lines[] = $webdavPath;
-					$lines[] = (string)$hash;
-					$lines[] = (string)$modifiedAtMs;
-					$lines[] = (string)$size;
-				}
-			}
-		}
-
 		return implode("\n", $lines);
 	}
 
@@ -274,17 +219,6 @@ class MobileSheetsSqliteExporter {
 			$webdavPath = $this->resolveWebdavPathForFile($file, $library, $user);
 			if ($webdavPath !== null && $webdavPath !== '') {
 				$validSongIds[$file->songId] = true;
-			}
-		}
-
-		// Also check if any files were exported from misc_data when the library has no managed song_files records
-		// (e.g. synthetic roundtrip tests that populate misc_data without Nextcloud storage nodes)
-		if ($files === [] && MobileSheetsTableHelper::tableExists($db, 'Files')) {
-			$stmt = $db->query('SELECT DISTINCT SongId FROM Files WHERE SongId IS NOT NULL');
-			if ($stmt !== false) {
-				while ($row = $stmt->fetch()) {
-					$validSongIds[(int)$row['SongId']] = true;
-				}
 			}
 		}
 
@@ -637,6 +571,10 @@ class MobileSheetsSqliteExporter {
 				}
 
 				$lowerTable = strtolower($tableName);
+				if ($lowerTable === 'files') {
+					continue;
+				}
+
 				$existingColumns = MobileSheetsTableHelper::getTableColumns($db, $tableName);
 
 				$rows = $this->miscMapper->getMiscDataForTable($libraryId, 'mobilesheets', $tableName, includeDeleted: false);
@@ -648,10 +586,6 @@ class MobileSheetsSqliteExporter {
 					// Never export tombstoned / deleted records or references via misc data
 					if ($lowerTable === 'songs') {
 						if (isset($row['Id']) && isset($deletedSongClientIds[(int)$row['Id']])) {
-							continue;
-						}
-					} elseif ($lowerTable === 'files') {
-						if (!isset($row['SongId']) || !is_numeric($row['SongId']) || isset($deletedSongClientIds[(int)$row['SongId']])) {
 							continue;
 						}
 					} elseif (isset($row['SongId']) && is_numeric($row['SongId'])) {
@@ -721,7 +655,7 @@ class MobileSheetsSqliteExporter {
 
 			try {
 				$rootNodes = $this->rootFolder->getById($file->fileId);
-				if ($rootNodes !== []) {
+				if (is_array($rootNodes) && !empty($rootNodes) && isset($rootNodes[0])) {
 					$nodePath = $rootNodes[0]->getPath();
 					$msPath = $this->pathResolver->fromInternal($nodePath, $user);
 					if ($msPath !== null) {

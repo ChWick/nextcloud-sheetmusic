@@ -84,20 +84,6 @@ class LibraryIntegrityFixer {
 					$this->internalSongFileMapper->delete($fileId, hardDelete: false);
 					$fixed++;
 				}
-				if ($this->internalMiscMapper->deleteMiscData($libraryId, 'mobilesheets', 'Files', (string)$fileId)) {
-					$fixed++;
-				}
-			}
-
-			if ($path !== null && trim($path) !== '') {
-				$miscFiles = $this->internalMiscMapper->getMiscDataForTable($libraryId, 'mobilesheets', 'Files');
-				foreach ($miscFiles as $m) {
-					if (($m['Path'] ?? '') === $path && isset($m['Id'])) {
-						if ($this->internalMiscMapper->deleteMiscData($libraryId, 'mobilesheets', 'Files', (string)$m['Id'])) {
-							$fixed++;
-						}
-					}
-				}
 			}
 
 			try {
