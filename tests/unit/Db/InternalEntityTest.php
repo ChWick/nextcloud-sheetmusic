@@ -10,16 +10,16 @@ declare(strict_types=1);
 namespace Db;
 
 use OCA\SheetMusic\Db\InternalEntity;
-use OCA\SheetMusic\Db\MobileSheetsArtist;
-use OCA\SheetMusic\Db\MobileSheetsBook;
-use OCA\SheetMusic\Db\MobileSheetsCollection;
-use OCA\SheetMusic\Db\MobileSheetsComposer;
-use OCA\SheetMusic\Db\MobileSheetsCustomGroup;
-use OCA\SheetMusic\Db\MobileSheetsGenre;
-use OCA\SheetMusic\Db\MobileSheetsKey;
-use OCA\SheetMusic\Db\MobileSheetsSignature;
-use OCA\SheetMusic\Db\MobileSheetsSourceType;
-use OCA\SheetMusic\Db\MobileSheetsYear;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsArtist;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsBook;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsCollection;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsComposer;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsCustomGroup;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsGenre;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsKey;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSignature;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSourceType;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsYear;
 use PHPUnit\Framework\TestCase;
 
 final class InternalEntityTest extends TestCase {

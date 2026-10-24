@@ -8,6 +8,9 @@ use OCA\SheetMusic\Db\InternalLibrary;
 use OCA\SheetMusic\Db\LibraryMapper;
 use OCP\Files\IRootFolder;
 use Psr\Log\LoggerInterface;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSqliteExporter;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSqliteImporter;
+
 
 class LibraryService {
 	public function __construct(

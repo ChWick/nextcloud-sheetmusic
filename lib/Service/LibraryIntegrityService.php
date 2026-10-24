@@ -16,7 +16,7 @@ use OCA\SheetMusic\Db\InternalSongAttributeMapper;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
-use OCA\SheetMusic\Db\MobileSheetsSong;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSong;
 use OCA\SheetMusic\Db\OrphanSongEntityAssignment;
 use OCA\SheetMusic\Db\OrphanSongFile;
 use OCP\Files\File;
@@ -24,6 +24,9 @@ use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\IUser;
 use Psr\Log\LoggerInterface;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPathResolver;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdfMetadata;
+
 
 class LibraryIntegrityService {
 	private LibraryOrphanScanner $orphanScanner;
@@ -302,7 +305,7 @@ class LibraryIntegrityService {
 	}
 
 	/**
-	 * @param array<int, \OCA\SheetMusic\Db\MobileSheetsSong> $songsById
+	 * @param array<int, MobileSheetsSong> $songsById
 	 * @return list<IntegrityIssue>
 	 */
 	private function checkDuplicateEntityAssignments(int $libraryId, array $songsById): array {
@@ -591,7 +594,7 @@ class LibraryIntegrityService {
 	private function checkPdfMetadata(
 		Folder $targetFolder,
 		string $relativePath,
-		\OCA\SheetMusic\Db\MobileSheetsSong $song,
+		MobileSheetsSong $song,
 		int $fileId,
 	): ?IntegrityIssue {
 		try {
@@ -648,7 +651,7 @@ class LibraryIntegrityService {
 	/**
 	 * Computes a canonical metadata string for a song to detect identical metadata duplicates.
 	 */
-	private function getCanonicalSongMetadataKey(\OCA\SheetMusic\Db\MobileSheetsSong $song): string {
+	private function getCanonicalSongMetadataKey(MobileSheetsSong $song): string {
 		$extractNames = static function (array $entities): array {
 			$names = array_map(static fn ($e) => $e->name ?? $e->title ?? (string)($e->id ?? ''), $entities);
 			sort($names, SORT_STRING);
@@ -673,7 +676,7 @@ class LibraryIntegrityService {
 	}
 
 	/**
-	 * @param list<\OCA\SheetMusic\Db\MobileSheetsSong> $songs
+	 * @param list<MobileSheetsSong> $songs
 	 */
 	private function areSongsExactDuplicates(array $songs): bool {
 		if (count($songs) <= 1) {

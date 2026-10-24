@@ -181,8 +181,8 @@ class InternalEntityMapper {
 			$unlinkQb->executeStatement();
 
 			if ($entity !== null && $entity->clientId !== null) {
-				$cfg = \OCA\SheetMusic\Service\MobileSheetsEntityConfig::BY_TYPE[$entity->type]
-					?? \OCA\SheetMusic\Service\MobileSheetsEntityConfig::BY_TYPE['customgroup'];
+				$cfg = \OCA\SheetMusic\Sync\MobileSheets\MobileSheetsEntityConfig::BY_TYPE[$entity->type]
+					?? \OCA\SheetMusic\Sync\MobileSheets\MobileSheetsEntityConfig::BY_TYPE['customgroup'];
 				$miscQb = $this->db->getQueryBuilder();
 				$miscQb->delete(InternalMiscMapper::DATA_TABLE_NAME)
 					->where($miscQb->expr()->eq('library_id', $miscQb->createNamedParameter($entity->libraryId, IQueryBuilder::PARAM_INT)))
@@ -209,8 +209,8 @@ class InternalEntityMapper {
 			$unlinkQb->executeStatement();
 
 			if ($entity !== null && $entity->clientId !== null) {
-				$cfg = \OCA\SheetMusic\Service\MobileSheetsEntityConfig::BY_TYPE[$entity->type]
-					?? \OCA\SheetMusic\Service\MobileSheetsEntityConfig::BY_TYPE['customgroup'];
+				$cfg = \OCA\SheetMusic\Sync\MobileSheets\MobileSheetsEntityConfig::BY_TYPE[$entity->type]
+					?? \OCA\SheetMusic\Sync\MobileSheets\MobileSheetsEntityConfig::BY_TYPE['customgroup'];
 				$miscQb = $this->db->getQueryBuilder();
 				$miscQb->update(InternalMiscMapper::DATA_TABLE_NAME)
 					->set('deleted_at', $miscQb->createNamedParameter($now, IQueryBuilder::PARAM_INT))

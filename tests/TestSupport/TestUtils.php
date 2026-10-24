@@ -6,7 +6,7 @@ namespace TestSupport;
 
 use OCA\SheetMusic\Db\InternalLibrary;
 use OCA\SheetMusic\Db\LibraryMapper;
-use OCA\SheetMusic\Db\SongMapper;
+use OCA\SheetMusic\Sync\MobileSheets\SongMapper;
 use OCA\SheetMusic\Service\LibraryService;
 use OCP\Files\IRootFolder;
 use OCP\Files\Node;

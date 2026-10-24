@@ -14,18 +14,19 @@ use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryData;
 use OCA\SheetMusic\Db\LibraryMapper;
-use OCA\SheetMusic\Db\MobileSheetsArtist;
-use OCA\SheetMusic\Db\MobileSheetsBook;
-use OCA\SheetMusic\Db\MobileSheetsCollection;
-use OCA\SheetMusic\Db\MobileSheetsComposer;
-use OCA\SheetMusic\Db\MobileSheetsFile;
-use OCA\SheetMusic\Db\MobileSheetsSong;
-use OCA\SheetMusic\Db\SongMapper;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsArtist;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsBook;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsCollection;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsComposer;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsFile;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsKey;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSong;
+use OCA\SheetMusic\Sync\MobileSheets\SongMapper;
 use OCA\SheetMusic\Service\FileManager;
-use OCA\SheetMusic\Service\MobileSheetsFileLogEntry;
-use OCA\SheetMusic\Service\MobileSheetsHashCodesFile;
-use OCA\SheetMusic\Service\MobileSheetsPathResolver;
-use OCA\SheetMusic\Service\MobileSheetsPdfMetadata;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsFileLogEntry;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsHashCodesFile;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPathResolver;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdfMetadata;
 use OCA\SheetMusic\Service\SyncException;
 use OCP\Files\File;
 use OCP\Files\Folder;
@@ -254,7 +255,7 @@ final class FileManagerTest extends TestCase {
 			[],
 			[],
 			[],
-			[new \OCA\SheetMusic\Db\MobileSheetsKey(1, 'Ebm')],
+			[new MobileSheetsKey(1, 'Ebm')],
 		);
 
 		$paths = \OCA\SheetMusic\Service\createTargetPaths($song, '.pdf');
@@ -278,7 +279,7 @@ final class FileManagerTest extends TestCase {
 				[],
 				[],
 				[],
-				[new \OCA\SheetMusic\Db\MobileSheetsKey(1, $keyName)],
+				[new MobileSheetsKey(1, $keyName)],
 			);
 
 			$path = \OCA\SheetMusic\Service\createTargetPath($song, '.pdf');
@@ -300,7 +301,7 @@ final class FileManagerTest extends TestCase {
 			[],
 			[],
 			[],
-			[new \OCA\SheetMusic\Db\MobileSheetsKey(1, 'Blues')],
+			[new MobileSheetsKey(1, 'Blues')],
 		);
 
 		self::assertSame(
@@ -416,7 +417,7 @@ final class FileManagerTest extends TestCase {
 			'artist fallback' => new MobileSheetsSong(1, 'Take Five', [], [], [], [], [new MobileSheetsArtist(1, $name)]),
 			'book' => new MobileSheetsSong(1, 'Take Five', [], [new MobileSheetsComposer(1, 'Bach')], [new MobileSheetsBook(1, $name)]),
 			'collection' => new MobileSheetsSong(1, 'Take Five', [], [], [], [new MobileSheetsCollection(1, $name)]),
-			'key' => new MobileSheetsSong(1, 'Take Five', [], [new MobileSheetsComposer(1, 'Bach')], [], [], [], [], [new \OCA\SheetMusic\Db\MobileSheetsKey(1, $name)]),
+			'key' => new MobileSheetsSong(1, 'Take Five', [], [new MobileSheetsComposer(1, 'Bach')], [], [], [], [], [new MobileSheetsKey(1, $name)]),
 		];
 
 		foreach ($cases as $component => $song) {
@@ -455,7 +456,7 @@ final class FileManagerTest extends TestCase {
 			[new MobileSheetsCollection(1, '...'), new MobileSheetsCollection(2, "\xFF")],
 			[new MobileSheetsArtist(1, 'Artist/Name')],
 			[],
-			[new \OCA\SheetMusic\Db\MobileSheetsKey(1, "Key\tName")],
+			[new MobileSheetsKey(1, "Key\tName")],
 		);
 
 		$paths = \OCA\SheetMusic\Service\createTargetPaths($song, '.pdf');
@@ -486,7 +487,7 @@ final class FileManagerTest extends TestCase {
 				new MobileSheetsSong(1, 'Title', [], [], [], [], [new MobileSheetsArtist(1, $name)]),
 				new MobileSheetsSong(1, 'Title', [], [new MobileSheetsComposer(1, 'Composer')], [new MobileSheetsBook(1, $name)]),
 				new MobileSheetsSong(1, 'Title', [], [], [], [new MobileSheetsCollection(1, $name)]),
-				new MobileSheetsSong(1, 'Title', [], [new MobileSheetsComposer(1, 'Composer')], [], [], [], [], [new \OCA\SheetMusic\Db\MobileSheetsKey(1, $name)]),
+				new MobileSheetsSong(1, 'Title', [], [new MobileSheetsComposer(1, 'Composer')], [], [], [], [], [new MobileSheetsKey(1, $name)]),
 			];
 
 			foreach ($cases as $song) {

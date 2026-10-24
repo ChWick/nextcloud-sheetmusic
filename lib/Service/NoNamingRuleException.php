@@ -9,6 +9,9 @@ declare(strict_types=1);
 
 namespace OCA\SheetMusic\Service;
 
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsFileLogEntry;
+
+
 /**
  * A song has no composer, artist or collection to build a file name from.
  *

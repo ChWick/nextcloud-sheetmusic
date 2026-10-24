@@ -9,6 +9,9 @@ declare(strict_types=1);
 
 namespace OCA\SheetMusic\Service;
 
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsFileLogEntry;
+
+
 /**
  * A problem the sync tool knows by name, reported with a stable code.
  *

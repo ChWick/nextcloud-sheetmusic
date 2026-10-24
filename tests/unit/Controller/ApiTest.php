@@ -7,7 +7,7 @@ namespace Controller;
 use OCA\SheetMusic\AppInfo\Application;
 use OCA\SheetMusic\Controller\ApiController;
 use OCA\SheetMusic\Db\LibraryData;
-use OCA\SheetMusic\Db\MobileSheetsSong;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSong;
 use OCA\SheetMusic\Service\EntityService;
 use OCA\SheetMusic\Service\LibraryIntegrityService;
 use OCA\SheetMusic\Service\LibraryService;

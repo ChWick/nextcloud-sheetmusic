@@ -13,6 +13,8 @@ use OCA\SheetMusic\Db\InternalSong;
 use OCA\SheetMusic\Db\InternalSongFile;
 use PHPUnit\Framework\TestCase;
 use TestSupport\RealMobileSheetsTestTrait;
+use OCA\SheetMusic\Sync\MobileSheets\SongFileMapper;
+
 
 final class InternalSongFileMapperTest extends TestCase {
 	use RealMobileSheetsTestTrait;

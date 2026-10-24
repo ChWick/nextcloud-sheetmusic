@@ -9,11 +9,11 @@ declare(strict_types=1);
 
 namespace OCA\SheetMusic\Tests\Unit\Service;
 
-use OCA\SheetMusic\Db\MobileSheetsFile;
-use OCA\SheetMusic\Db\MobileSheetsSong;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsFile;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSong;
 use OCA\SheetMusic\Service\FilePathRegenerator;
-use OCA\SheetMusic\Service\MobileSheetsPath;
-use OCA\SheetMusic\Service\MobileSheetsPathResolver;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPath;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPathResolver;
 use OCA\SheetMusic\Service\SyncException;
 use OCP\Files\File;
 use OCP\Files\Folder;

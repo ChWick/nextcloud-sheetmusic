@@ -10,13 +10,19 @@ declare(strict_types=1);
 namespace OCA\SheetMusic\Service;
 
 use OCA\SheetMusic\Db\InternalSongFileMapper;
-use OCA\SheetMusic\Db\MobileSheetsFile;
-use OCA\SheetMusic\Db\MobileSheetsSong;
-use OCA\SheetMusic\Db\SongMapper;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsFile;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSong;
+use OCA\SheetMusic\Sync\MobileSheets\SongMapper;
 use OCP\Files\File;
 use OCP\Files\IRootFolder;
 use OCP\IUser;
 use Psr\Log\LoggerInterface;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsFileFacts;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsFileLogEntry;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsHashCodesFile;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPathResolver;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdfMetadata;
+
 
 class FileMetadataSyncer {
 	public function __construct(

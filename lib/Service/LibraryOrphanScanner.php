@@ -9,10 +9,12 @@ declare(strict_types=1);
 
 namespace OCA\SheetMusic\Service;
 
-use OCA\SheetMusic\Db\MobileSheetsSong;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSong;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\Files\Node;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPathResolver;
+
 
 class LibraryOrphanScanner {
 	public function __construct(

@@ -20,6 +20,11 @@ use OCA\SheetMusic\Db\LibraryMapper;
 use OCP\Files\IRootFolder;
 use OCP\Files\Node;
 use Psr\Log\LoggerInterface;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsFileFacts;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsHashCodesFile;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPathResolver;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsTableHelper;
+
 
 class LibraryIntegrityFixer {
 	public function __construct(

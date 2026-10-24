@@ -8,7 +8,7 @@ use OCA\SheetMusic\Controller\SongFileController;
 use OCA\SheetMusic\Db\InternalSong;
 use OCA\SheetMusic\Db\InternalSongFile;
 use OCA\SheetMusic\Db\LibraryData;
-use OCA\SheetMusic\Db\SongFileMapper;
+use OCA\SheetMusic\Sync\MobileSheets\SongFileMapper;
 use OCA\SheetMusic\Service\FileManager;
 use OCA\SheetMusic\Service\LibraryService;
 use OCA\SheetMusic\Service\SongFileService;

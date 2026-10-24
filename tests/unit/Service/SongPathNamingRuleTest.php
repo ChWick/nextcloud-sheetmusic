@@ -9,11 +9,11 @@ declare(strict_types=1);
 
 namespace Service;
 
-use OCA\SheetMusic\Db\MobileSheetsBook;
-use OCA\SheetMusic\Db\MobileSheetsComposer;
-use OCA\SheetMusic\Db\MobileSheetsFile;
-use OCA\SheetMusic\Db\MobileSheetsKey;
-use OCA\SheetMusic\Db\MobileSheetsSong;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsBook;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsComposer;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsFile;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsKey;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSong;
 use OCA\SheetMusic\Service\NoNamingRuleException;
 use OCA\SheetMusic\Service\SongPathNamingRule;
 use PHPUnit\Framework\TestCase;

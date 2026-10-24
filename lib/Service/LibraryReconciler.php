@@ -21,6 +21,8 @@ use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\IUserManager;
 use Psr\Log\LoggerInterface;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdf;
+
 
 class LibraryReconciler {
 	/** Ignored filenames and extensions for sheet music */

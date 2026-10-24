@@ -11,8 +11,10 @@ namespace OCA\SheetMusic\Dav;
 
 use OCA\SheetMusic\Db\InternalLibrary;
 use OCA\SheetMusic\Db\LibraryMapper;
-use OCA\SheetMusic\Service\MobileSheetsSqliteExporter;
-use OCA\SheetMusic\Service\MobileSheetsSqliteImporter;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSqliteExporter;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSqliteImporter;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSyncBackend;
+use OCA\SheetMusic\Sync\SyncClientRegistry;
 use OCP\IUserSession;
 use Psr\Log\LoggerInterface;
 use Sabre\DAV\PropFind;
@@ -52,6 +54,7 @@ class SheetMusicDavPlugin extends ServerPlugin {
 	private const BEFORE_METHOD_PRIORITY = 20;
 
 	private ?Server $server = null;
+	private SyncClientRegistry $registry;
 
 	/** Raw body of a PROPFIND request on a library folder, kept for afterPropfind. */
 	private ?string $propfindBody = null;
@@ -62,7 +65,16 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		private MobileSheetsSqliteImporter $importer,
 		private LoggerInterface $logger,
 		private IUserSession $userSession,
+		?SyncClientRegistry $registry = null,
 	) {
+		$this->registry = $registry ?? new SyncClientRegistry([
+			new MobileSheetsSyncBackend(
+				$this->exporter,
+				$this->importer,
+				$this->libraryMapper,
+				$this->logger,
+			),
+		]);
 	}
 
 	#[\Override]
@@ -219,7 +231,7 @@ class SheetMusicDavPlugin extends ServerPlugin {
 
 			$existing = $this->listedFilenames($document);
 			$entries = [];
-			foreach ([self::VIRTUAL_DB_NAME, self::VIRTUAL_HASH_NAME] as $filename) {
+			foreach ($this->registry->getAllVirtualFileNames() as $filename) {
 				// A real file of that name takes precedence over the virtual one.
 				if (in_array($filename, $existing, true)) {
 					continue;
@@ -527,7 +539,7 @@ class SheetMusicDavPlugin extends ServerPlugin {
 	public function matchVirtualPath(string $path): ?array {
 		$path = trim($path, '/');
 		$filename = basename($path);
-		if ($filename !== self::VIRTUAL_DB_NAME && $filename !== self::VIRTUAL_HASH_NAME) {
+		if ($this->registry->getClientForVirtualFile($filename) === null) {
 			return null;
 		}
 

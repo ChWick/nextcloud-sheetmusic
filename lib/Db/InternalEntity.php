@@ -9,6 +9,18 @@ declare(strict_types=1);
 
 namespace OCA\SheetMusic\Db;
 
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsArtist;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsBook;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsCollection;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsComposer;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsCustomGroup;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsGenre;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsKey;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSignature;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSourceType;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsYear;
+
+
 class InternalEntity {
 	public function __construct(
 		public ?int $id = null,

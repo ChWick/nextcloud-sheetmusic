@@ -11,8 +11,8 @@ namespace Dav;
 
 use OCA\SheetMusic\Dav\SheetMusicDavPlugin;
 use OCA\SheetMusic\Db\InternalLibrary;
-use OCA\SheetMusic\Service\MobileSheetsSqliteExporter;
-use OCA\SheetMusic\Service\MobileSheetsSqliteImporter;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSqliteExporter;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSqliteImporter;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
