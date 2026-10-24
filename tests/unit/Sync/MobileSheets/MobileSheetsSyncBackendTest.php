@@ -90,8 +90,76 @@ final class MobileSheetsSyncBackendTest extends TestCase {
 		self::assertSame('text/plain; charset=utf-8', $hashProps['contentType']);
 		self::assertSame(1234567890, $hashProps['lastModified']);
 		self::assertSame(strlen("file.pdf\n123\n1000\n500"), $hashProps['size']);
+		self::assertSame('"sm-hash-42-1234567890"', $hashProps['etag']);
+
+		$this->exporter->method('exportToFile')->willReturnCallback(
+			function ($lib, string $target): void {
+				file_put_contents($target, 'SQLite format 3' . "\0" . str_repeat('x', 84));
+			},
+		);
+
+		$dbProps = $this->backend->getVirtualFileProperties($library, 'mobilesheets.db', 'admin');
+		self::assertNotNull($dbProps);
+		self::assertSame('application/x-sqlite3', $dbProps['contentType']);
+		self::assertSame(1234567890, $dbProps['lastModified']);
+		self::assertSame(100, $dbProps['size']);
+		self::assertSame('"sm-db-42-1234567890"', $dbProps['etag']);
 
 		self::assertNull($this->backend->getVirtualFileProperties($library, 'unknown.txt', 'admin'));
+	}
+
+	public function testHandleGetDatabase(): void {
+		$library = new InternalLibrary(id: 42, userId: 'admin', path: '/Noten', updatedAt: 1234567890);
+		$this->exporter->method('exportToFile')->willReturnCallback(
+			function ($lib, string $target): void {
+				file_put_contents($target, 'SQLite format 3' . "\0" . str_repeat('x', 84));
+			},
+		);
+
+		$request = new Request('GET', '/remote.php/dav/files/admin/Noten/mobilesheets.db');
+		$response = new Response();
+
+		$handled = $this->backend->handleGet($request, $response, $library, 'mobilesheets.db', false);
+		self::assertFalse($handled);
+		self::assertSame(200, $response->getStatus());
+		self::assertSame('application/x-sqlite3', $response->getHeader('Content-Type'));
+		self::assertSame('"sm-db-42-1234567890"', $response->getHeader('ETag'));
+		self::assertSame(100, (int)$response->getHeader('Content-Length'));
+
+		// Test 304 Not Modified when ETag matches
+		$ifNoneMatchRequest = new Request('GET', '/remote.php/dav/files/admin/Noten/mobilesheets.db', [
+			'If-None-Match' => '"sm-db-42-1234567890"',
+		]);
+		$notModifiedResponse = new Response();
+		$handled304 = $this->backend->handleGet($ifNoneMatchRequest, $notModifiedResponse, $library, 'mobilesheets.db', false);
+		self::assertFalse($handled304);
+		self::assertSame(304, $notModifiedResponse->getStatus());
+	}
+
+	public function testHandlePutDatabase(): void {
+		$library = new InternalLibrary(id: 42, userId: 'admin', path: '/Noten', updatedAt: 1234567890);
+		$updatedLibrary = new InternalLibrary(id: 42, userId: 'admin', path: '/Noten', updatedAt: 1234567999);
+
+		$this->importer->expects(self::once())
+			->method('importFromFile')
+			->with($library, self::isType('string'));
+
+		$this->libraryMapper->expects(self::once())
+			->method('touch')
+			->with(42);
+
+		$this->libraryMapper->expects(self::once())
+			->method('findModelById')
+			->with(42)
+			->willReturn($updatedLibrary);
+
+		$request = new Request('PUT', '/remote.php/dav/files/admin/Noten/mobilesheets.db', [], 'dummy db content');
+		$response = new Response();
+
+		$handled = $this->backend->handlePut($request, $response, $library, 'mobilesheets.db');
+		self::assertFalse($handled);
+		self::assertSame(204, $response->getStatus());
+		self::assertSame('"sm-db-42-1234567999"', $response->getHeader('ETag'));
 	}
 
 	public function testHandleGetHashcodes(): void {
