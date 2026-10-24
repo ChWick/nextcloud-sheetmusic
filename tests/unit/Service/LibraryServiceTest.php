@@ -75,13 +75,26 @@ final class LibraryServiceTest extends TestCase {
 		self::assertNull($this->service->addLibrary('admin', '/Noten/invalid.txt'));
 
 		$result1 = $this->service->addLibrary('admin', '/Noten/add_test.db');
-		self::assertSame(['path' => '/Noten/add_test.db'], $result1);
+		self::assertSame(['path' => '/Noten'], $result1);
 
 		$allLibs = $this->libraryMapper->findAllForUser('admin');
-		$added = array_filter($allLibs, fn ($l) => $l->path === '/Noten/add_test.db');
+		$added = array_filter($allLibs, fn ($l) => $l->path === '/Noten');
 		if (!empty($added)) {
 			$this->createdLibraryIds[] = (int)reset($added)->id;
 		}
+	}
+
+	public function testAddLibraryExcludesMobileSheetsDbFromLibraryPath(): void {
+		$resultSub = $this->service->addLibrary('admin', '/SheetMusic/Orchestra/mobilesheets.db');
+		self::assertSame(['path' => '/SheetMusic/Orchestra'], $resultSub);
+
+		$resultRoot = $this->service->addLibrary('admin', '/mobilesheets.db');
+		self::assertSame(['path' => '/'], $resultRoot);
+
+		$allLibs = $this->libraryMapper->findAllForUser('admin');
+		$paths = array_column($allLibs, 'path');
+		self::assertContains('/SheetMusic/Orchestra', $paths);
+		self::assertContains('/', $paths);
 	}
 
 	public function testAddLibraryThrowsWhenDirectoryIsNotEmpty(): void {

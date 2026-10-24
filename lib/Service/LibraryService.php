@@ -43,13 +43,26 @@ class LibraryService {
 
 		$userFolder = $this->rootFolder->getUserFolder($userId);
 
-		// 1. If physical .db file exists at $libraryPath, use it
+		// 1. If physical .db file exists at $libraryPath or within it as mobilesheets.db, use it
 		if (str_ends_with(strtolower($libraryPath), '.db')) {
 			try {
 				$node = $userFolder->get(ltrim($libraryPath, '/'));
 				$localFile = $node->getStorage()->getLocalFile($node->getInternalPath());
 				if ($localFile !== false) {
 					return [$libraryPath, $localFile];
+				}
+			} catch (\Throwable $e) {
+				// Fall through to virtual export
+			}
+		} else {
+			try {
+				$dbRel = ltrim(rtrim($libraryPath, '/') . '/mobilesheets.db', '/');
+				if ($userFolder->nodeExists($dbRel)) {
+					$node = $userFolder->get($dbRel);
+					$localFile = $node->getStorage()->getLocalFile($node->getInternalPath());
+					if ($localFile !== false) {
+						return [$libraryPath, $localFile];
+					}
 				}
 			} catch (\Throwable $e) {
 				// Fall through to virtual export
@@ -145,11 +158,23 @@ class LibraryService {
 			}
 		}
 
-		$this->libraryMapper->addForUser($userId, $path);
+		$targetDbRel = null;
+		if ($extension === 'db') {
+			$targetDbRel = ltrim($path, '/');
+			$baseDir = dirname($path);
+			$libraryPath = ($baseDir === '.' || $baseDir === '') ? '/' : $baseDir;
+		} else {
+			$libraryPath = $path;
+		}
+		if ($libraryPath !== '/' && str_ends_with($libraryPath, '/')) {
+			$libraryPath = rtrim($libraryPath, '/');
+		}
+
+		$this->libraryMapper->addForUser($userId, $libraryPath);
 		$libraries = $this->libraryMapper->findAllForUser($userId);
 		$added = null;
 		foreach ($libraries as $lib) {
-			if ($lib->path === $path) {
+			if ($lib->path === $libraryPath) {
 				$added = $lib;
 				break;
 			}
@@ -162,12 +187,10 @@ class LibraryService {
 			if ($importExistingDb && $this->importer !== null) {
 				try {
 					$userFolder = $this->rootFolder->getUserFolder($userId);
-					$targetDbRel = str_ends_with(strtolower($path), '.db')
-						? ltrim($path, '/')
-						: ltrim(rtrim($path, '/') . '/mobilesheets.db', '/');
+					$dbRel = $targetDbRel ?? ltrim(rtrim($libraryPath, '/') . '/mobilesheets.db', '/');
 
-					if ($userFolder->nodeExists($targetDbRel)) {
-						$node = $userFolder->get($targetDbRel);
+					if ($userFolder->nodeExists($dbRel)) {
+						$node = $userFolder->get($dbRel);
 						$localFile = $node->getStorage()->getLocalFile($node->getInternalPath());
 						if ($localFile !== false && file_exists($localFile)) {
 							$this->importer->importFromFile($libraryId, $localFile, $userId);
@@ -196,7 +219,7 @@ class LibraryService {
 			}
 		}
 
-		return ['path' => $path];
+		return ['path' => $libraryPath];
 	}
 
 	public function deleteLibrary(string $userId, int $id): ?array {

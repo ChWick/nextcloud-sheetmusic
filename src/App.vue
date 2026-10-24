@@ -214,7 +214,7 @@ async function importLibrary() {
   isImportingLibrary.value = true
   importError.value = ''
   try {
-    await apiPost('/api/libraries', {
+    const response = await apiPost('/api/libraries', {
       path: addedPath,
       import_mobilesheets: true,
     })
@@ -223,7 +223,8 @@ async function importLibrary() {
 
     await loadLibraries()
 
-    const addedLibrary = libraries.value.find(library => library.path === addedPath)
+    const targetPath = (response as any)?.data?.ocs?.data?.path ?? (addedPath.includes('/') ? addedPath.substring(0, addedPath.lastIndexOf('/')) || '/' : addedPath)
+    const addedLibrary = libraries.value.find(library => library.path === targetPath)
     if (addedLibrary && selectedLibrary.value < 0) {
       navigateToLibrary(addedLibrary.id)
     }

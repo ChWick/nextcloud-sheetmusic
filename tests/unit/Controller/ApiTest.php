@@ -386,14 +386,14 @@ final class ApiTest extends TestCase {
 		$libraryService->expects(self::once())
 			->method('addLibrary')
 			->with('admin', '/Noten/mobilesheets.db')
-			->willReturn(['path' => '/Noten/mobilesheets.db']);
+			->willReturn(['path' => '/Noten']);
 
 		$controller = $this->createController(libraryService: $libraryService);
 
 		$response = $controller->addLibrary('/Noten/mobilesheets.db');
 
 		self::assertEquals(Http::STATUS_CREATED, $response->getStatus());
-		self::assertSame(['path' => '/Noten/mobilesheets.db'], $response->getData());
+		self::assertSame(['path' => '/Noten'], $response->getData());
 	}
 
 	public function testUpdateSongWritesTheMetadataIntoTheAttachedPdf(): void {

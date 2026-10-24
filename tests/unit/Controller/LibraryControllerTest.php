@@ -76,7 +76,7 @@ final class LibraryControllerTest extends TestCase {
 
 		$okRes = $this->controller->addLibrary('/NewFolder/mobilesheets.db');
 		$this->assertSame(Http::STATUS_CREATED, $okRes->getStatus());
-		$this->assertSame(['path' => '/NewFolder/mobilesheets.db'], $okRes->getData());
+		$this->assertSame(['path' => '/NewFolder'], $okRes->getData());
 	}
 
 	public function testDeleteLibraryHandlesNotFoundAndSuccess(): void {
