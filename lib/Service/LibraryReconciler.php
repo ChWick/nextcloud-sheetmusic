@@ -50,7 +50,7 @@ class LibraryReconciler {
 	 * @return array{indexed: int, pruned: int}
 	 */
 	public function reconcile(InternalLibrary|array|int $library): array {
-		$lib = $this->libraryMapper->resolveLibrary($library);
+		$lib = $library instanceof InternalLibrary ? $library : $this->libraryMapper->resolveLibrary($library);
 		if ($lib->id === null) {
 			return ['indexed' => 0, 'pruned' => 0];
 		}

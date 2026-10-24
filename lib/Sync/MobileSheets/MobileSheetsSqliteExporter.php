@@ -60,7 +60,7 @@ class MobileSheetsSqliteExporter {
 		ini_set('precision', '-1');
 
 		try {
-			$lib = $this->libraryMapper->resolveLibrary($library);
+			$lib = $library instanceof InternalLibrary ? $library : $this->libraryMapper->resolveLibrary($library);
 			if ($lib->id === null) {
 				throw new \InvalidArgumentException('Library must have an ID to export');
 			}
@@ -119,7 +119,7 @@ class MobileSheetsSqliteExporter {
 	 * Generate the dynamic content for mobilesheets_hashcodes.txt.
 	 */
 	public function generateHashcodes(InternalLibrary|array|int $library): string {
-		$lib = $this->libraryMapper->resolveLibrary($library);
+		$lib = $library instanceof InternalLibrary ? $library : $this->libraryMapper->resolveLibrary($library);
 		if ($lib->id === null) {
 			return '';
 		}

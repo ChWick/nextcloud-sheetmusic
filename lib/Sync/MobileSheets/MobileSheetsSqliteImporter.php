@@ -79,7 +79,7 @@ class MobileSheetsSqliteImporter {
 		string $sqlitePath,
 		IUser|string|null $user = null,
 	): array {
-		$lib = $this->libraryMapper->resolveLibrary($library);
+		$lib = $library instanceof InternalLibrary ? $library : $this->libraryMapper->resolveLibrary($library);
 		if ($lib->id === null) {
 			throw new \InvalidArgumentException('Library must have an ID to import');
 		}
