@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace Sync\MobileSheets;
 
 use PDO;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use TestSupport\MobileSheetsDatabasePresets;
 use TestSupport\RealMobileSheetsTestTrait;
@@ -34,9 +35,7 @@ final class MobileSheetsRoundtripTest extends TestCase {
 		return MobileSheetsDatabasePresets::allPresets();
 	}
 
-	/**
-	 * @dataProvider databasePresetProvider
-	 */
+	#[DataProvider('databasePresetProvider')]
 	public function testRoundtripWithVariousDatabasesAndSettings(string $description, callable $dbGenerator): void {
 		$sourceDbPath = $dbGenerator();
 		self::assertFileExists($sourceDbPath, "Source database file must exist: $description");

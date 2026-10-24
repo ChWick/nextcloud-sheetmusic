@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace OCA\SheetMusic\Tests\Unit\Service;
+namespace Sync\MobileSheets;
 
-use OCA\SheetMusic\Tests\TestSupport\MobileSheetsEndToEndSyncHarness;
-use PHPUnit\Framework\TestCase;
 use OCA\SheetMusic\Db\InternalEntityMapper;
 use OCA\SheetMusic\Service\EntityService;
 use OCA\SheetMusic\Service\FileManager;
 use OCA\SheetMusic\Service\LibraryService;
 use OCA\SheetMusic\Service\SongFileService;
 use OCA\SheetMusic\Service\SongService;
+use OCA\SheetMusic\Tests\TestSupport\MobileSheetsEndToEndSyncHarness;
+use PHPUnit\Framework\TestCase;
 
 
 /**

@@ -13,6 +13,7 @@ use OCA\SheetMusic\Db\InternalEntity;
 use OCA\SheetMusic\Db\InternalSong;
 use OCA\SheetMusic\Db\InternalSongFile;
 use PDO;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 final class MobileSheetsSyncTest extends TestCase {
@@ -48,9 +49,7 @@ final class MobileSheetsSyncTest extends TestCase {
 		];
 	}
 
-	/**
-	 * @dataProvider entityTableProvider
-	 */
+	#[DataProvider('entityTableProvider')]
 	public function testEntitySingleAdd(string $tableName, string $type, string $nameCol): void {
 		$lib = $this->createTestLibrary();
 		$dbPath = $this->tempDbPath();
@@ -77,9 +76,7 @@ final class MobileSheetsSyncTest extends TestCase {
 		self::assertSame(1700000000, $entities[0]->updatedAt);
 	}
 
-	/**
-	 * @dataProvider entityTableProvider
-	 */
+	#[DataProvider('entityTableProvider')]
 	public function testEntityConflictResolutionMobileSheetsWins(string $tableName, string $type, string $nameCol): void {
 		$lib = $this->createTestLibrary();
 
@@ -119,9 +116,7 @@ final class MobileSheetsSyncTest extends TestCase {
 		self::assertSame(2000, $updated->updatedAt);
 	}
 
-	/**
-	 * @dataProvider entityTableProvider
-	 */
+	#[DataProvider('entityTableProvider')]
 	public function testEntityConflictResolutionNextcloudWins(string $tableName, string $type, string $nameCol): void {
 		$lib = $this->createTestLibrary();
 
@@ -160,9 +155,7 @@ final class MobileSheetsSyncTest extends TestCase {
 		self::assertSame(3000, $reloaded->updatedAt);
 	}
 
-	/**
-	 * @dataProvider entityTableProvider
-	 */
+	#[DataProvider('entityTableProvider')]
 	public function testEntityTombstoneRevival(string $tableName, string $type, string $nameCol): void {
 		$lib = $this->createTestLibrary();
 
@@ -202,9 +195,7 @@ final class MobileSheetsSyncTest extends TestCase {
 		self::assertSame(2500, $revived->updatedAt);
 	}
 
-	/**
-	 * @dataProvider entityTableProvider
-	 */
+	#[DataProvider('entityTableProvider')]
 	public function testEntityTombstoneRemainsDeletedWhenMobileSheetsIsOlder(string $tableName, string $type, string $nameCol): void {
 		$lib = $this->createTestLibrary();
 
@@ -242,9 +233,7 @@ final class MobileSheetsSyncTest extends TestCase {
 		self::assertSame(2000, $reloaded->deletedAt, 'Entity should remain deleted');
 	}
 
-	/**
-	 * @dataProvider entityTableProvider
-	 */
+	#[DataProvider('entityTableProvider')]
 	public function testEntityRemovalByMobileSheets(string $tableName, string $type, string $nameCol): void {
 		$lib = $this->createTestLibrary();
 
@@ -752,9 +741,7 @@ final class MobileSheetsSyncTest extends TestCase {
 		];
 	}
 
-	/**
-	 * @dataProvider linkTableProvider
-	 */
+	#[DataProvider('linkTableProvider')]
 	public function testSongEntityLinkAddRemoveAndChange(
 		string $linkTable,
 		string $linkCol,
@@ -854,9 +841,7 @@ final class MobileSheetsSyncTest extends TestCase {
 		self::assertCount(0, $matchingLinks3, 'All links for this song and type should be removed');
 	}
 
-	/**
-	 * @dataProvider linkTableProvider
-	 */
+	#[DataProvider('linkTableProvider')]
 	public function testEntityDeletionWhenLinkedToSong(string $linkTable, string $linkCol, string $entityTable, string $entityType, string $nameCol): void {
 		$lib = $this->createTestLibrary();
 
@@ -1368,9 +1353,7 @@ final class MobileSheetsSyncTest extends TestCase {
 		];
 	}
 
-	/**
-	 * @dataProvider miscTableProvider
-	 */
+	#[DataProvider('miscTableProvider')]
 	public function testMiscTableAddAndExport(string $tableName): void {
 		$lib = $this->createTestLibrary();
 		$dbPath = $this->tempDbPath();

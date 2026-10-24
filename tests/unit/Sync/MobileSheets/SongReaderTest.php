@@ -7,12 +7,13 @@ declare(strict_types=1);
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-namespace OCA\SheetMusic\Tests\Unit\Db;
+namespace Sync\MobileSheets;
 
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSong;
 use OCA\SheetMusic\Sync\MobileSheets\SongReader;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
+use TestSupport\MobileSheetsTestDatabase;
 
 final class SongReaderTest extends TestCase {
 	private string $databasePath;
@@ -20,7 +21,7 @@ final class SongReaderTest extends TestCase {
 
 	protected function setUp(): void {
 		parent::setUp();
-		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
+		$fixture = MobileSheetsTestDatabase::create();
 		$this->databasePath = $fixture['path'];
 		$database = $fixture['connection'];
 
