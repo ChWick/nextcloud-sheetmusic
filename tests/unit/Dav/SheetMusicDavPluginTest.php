@@ -13,6 +13,7 @@ use OCA\SheetMusic\Dav\SheetMusicDavPlugin;
 use OCA\SheetMusic\Db\InternalLibrary;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSqliteExporter;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSqliteImporter;
+use OCA\SheetMusic\Sync\SyncClientRegistry;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
@@ -292,6 +293,41 @@ final class SheetMusicDavPluginTest extends TestCase {
 		$folderLib = $plugin->findLibraryByFolderPath('files/admin/tmp/SheetMusic');
 		self::assertNotNull($folderLib);
 		self::assertSame($dbLibId, $folderLib->id);
+	}
+
+	public function testPluginWithEmptyRegistryStillRegistersMobileSheetsSyncBackend(): void {
+		$emptyRegistry = new SyncClientRegistry([]);
+		self::assertEmpty($emptyRegistry->getClients());
+
+		$plugin = new SheetMusicDavPlugin(
+			$this->libraryMapper,
+			$this->exporter,
+			$this->importer,
+			$this->logger,
+			$this->userSession,
+			$emptyRegistry,
+		);
+
+		$match = $plugin->matchVirtualPath('files/admin/My Noten/mobilesheets.db');
+		self::assertNotNull($match);
+		self::assertSame((int)$this->library->id, $match['library']->id);
+		self::assertSame('mobilesheets.db', $match['filename']);
+
+		$hashMatch = $plugin->matchVirtualPath('files/admin/My Noten/mobilesheets_hashcodes.txt');
+		self::assertNotNull($hashMatch);
+		self::assertSame('mobilesheets_hashcodes.txt', $hashMatch['filename']);
+	}
+
+	public function testServerContainerResolvesPluginWithRegisteredSyncClients(): void {
+		$plugin = \OC::$server->get(SheetMusicDavPlugin::class);
+		self::assertInstanceOf(SheetMusicDavPlugin::class, $plugin);
+
+		$userSession = \OC::$server->get(\OCP\IUserSession::class);
+		$userSession->setUser($this->userManager->get('admin'));
+
+		$match = $plugin->matchVirtualPath('files/admin/My Noten/mobilesheets.db');
+		self::assertNotNull($match);
+		self::assertSame((int)$this->library->id, $match['library']->id);
 	}
 }
 

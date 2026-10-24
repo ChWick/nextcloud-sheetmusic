@@ -67,14 +67,15 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		private IUserSession $userSession,
 		?SyncClientRegistry $registry = null,
 	) {
-		$this->registry = $registry ?? new SyncClientRegistry([
-			new MobileSheetsSyncBackend(
+		$this->registry = $registry ?? new SyncClientRegistry();
+		if ($this->registry->getClients() === []) {
+			$this->registry->registerClient(new MobileSheetsSyncBackend(
 				$this->exporter,
 				$this->importer,
 				$this->libraryMapper,
 				$this->logger,
-			),
-		]);
+			));
+		}
 	}
 
 	#[\Override]
