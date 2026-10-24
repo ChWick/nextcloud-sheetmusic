@@ -295,7 +295,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$songMapper = $this->createSongMapper();
 		$targetFolder = $this->createMock(Folder::class);
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
-		$targetFolder->method('nodeExists')->willReturn(true);
+		$targetFolder->method('nodeExists')->willReturnCallback(static fn (string $path): bool => !in_array($path, ['mobilesheets_hashcodes.txt', 'mobilesheets.db'], true));
 		$targetFolder->method('getDirectoryListing')->willReturn([]);
 
 		$song = $songMapper->findSongs($fixture['path'])[0];
@@ -323,7 +323,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$songMapper = $this->createSongMapper();
 		$targetFolder = $this->createMock(Folder::class);
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
-		$targetFolder->method('nodeExists')->willReturn(true);
+		$targetFolder->method('nodeExists')->willReturnCallback(static fn (string $path): bool => !in_array($path, ['mobilesheets_hashcodes.txt', 'mobilesheets.db'], true));
 		$targetFolder->method('getDirectoryListing')->willReturn([]);
 
 		$song = $songMapper->findSongs($fixture['path'])[0];
@@ -378,7 +378,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$fixture['connection']->exec('INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (1, 1)');
 		$targetFolder = $this->createMock(Folder::class);
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
-		$targetFolder->method('nodeExists')->willReturn(true);
+		$targetFolder->method('nodeExists')->willReturnCallback(static fn (string $path): bool => !in_array($path, ['mobilesheets_hashcodes.txt', 'mobilesheets.db'], true));
 		$targetFolder->method('getDirectoryListing')->willReturn([]);
 
 		$pdf = $this->createMock(\OCP\Files\File::class);
@@ -426,7 +426,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$database->exec('INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (1, 1), (1, 2)');
 		$targetFolder = $this->createMock(Folder::class);
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
-		$targetFolder->method('nodeExists')->willReturn(true);
+		$targetFolder->method('nodeExists')->willReturnCallback(static fn (string $path): bool => !in_array($path, ['mobilesheets_hashcodes.txt', 'mobilesheets.db'], true));
 		$targetFolder->method('getDirectoryListing')->willReturn([]);
 		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager($databasePath, $targetFolder);
 
@@ -726,7 +726,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
 		$targetFolder = $this->createMock(Folder::class);
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
-		$targetFolder->method('nodeExists')->willReturn(true);
+		$targetFolder->method('nodeExists')->willReturnCallback(static fn (string $path): bool => !in_array($path, ['mobilesheets_hashcodes.txt', 'mobilesheets.db'], true));
 
 		$orphanNode = $this->createMock(\OCP\Files\Node::class);
 		$orphanNode->method('getName')->willReturn('OrphanScore.pdf');
@@ -771,7 +771,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$songMapper = $this->createSongMapper();
 		$targetFolder = $this->createMock(Folder::class);
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
-		$targetFolder->method('nodeExists')->willReturn(true);
+		$targetFolder->method('nodeExists')->willReturnCallback(static fn (string $path): bool => !in_array($path, ['mobilesheets_hashcodes.txt', 'mobilesheets.db'], true));
 
 		// An unreferenced file in target folder (would normally be orphan)
 		$orphanNode = $this->createMock(\OCP\Files\Node::class);
@@ -1360,7 +1360,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 
 		$targetFolder = $this->createMock(Folder::class);
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
-		$targetFolder->method('nodeExists')->willReturn(true);
+		$targetFolder->method('nodeExists')->willReturnCallback(static fn (string $path): bool => !in_array($path, ['mobilesheets_hashcodes.txt', 'mobilesheets.db'], true));
 
 		$orphanNode = $this->createMock(\OCP\Files\Node::class);
 		$orphanNode->method('getName')->willReturn('Moonlight Sonata.pdf');
@@ -1420,7 +1420,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 
 		$targetFolder = $this->createMock(Folder::class);
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
-		$targetFolder->method('nodeExists')->willReturn(true);
+		$targetFolder->method('nodeExists')->willReturnCallback(static fn (string $path): bool => !in_array($path, ['mobilesheets_hashcodes.txt', 'mobilesheets.db'], true));
 
 		$orphanNode = $this->createMock(\OCP\Files\Node::class);
 		$orphanNode->method('getName')->willReturn('Sonata.pdf');
@@ -1462,7 +1462,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 
 		$targetFolder = $this->createMock(Folder::class);
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
-		$targetFolder->method('nodeExists')->willReturn(true);
+		$targetFolder->method('nodeExists')->willReturnCallback(static fn (string $path): bool => !in_array($path, ['mobilesheets_hashcodes.txt', 'mobilesheets.db'], true));
 
 		$orphanNode = $this->createMock(\OCP\Files\Node::class);
 		$orphanNode->method('getName')->willReturn('Beethoven - Barenboim - Sonata.pdf');
@@ -1500,7 +1500,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 
 		$targetFolder = $this->createMock(Folder::class);
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
-		$targetFolder->method('nodeExists')->willReturn(true);
+		$targetFolder->method('nodeExists')->willReturnCallback(static fn (string $path): bool => !in_array($path, ['mobilesheets_hashcodes.txt', 'mobilesheets.db'], true));
 
 		$orphanNode = $this->createMock(\OCP\Files\Node::class);
 		$orphanNode->method('getName')->willReturn('Sonata.pdf');
@@ -1538,7 +1538,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 
 		$targetFolder = $this->createMock(Folder::class);
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
-		$targetFolder->method('nodeExists')->willReturn(true);
+		$targetFolder->method('nodeExists')->willReturnCallback(static fn (string $path): bool => !in_array($path, ['mobilesheets_hashcodes.txt', 'mobilesheets.db'], true));
 
 		$orphanNode = $this->createMock(\OCP\Files\Node::class);
 		$orphanNode->method('getName')->willReturn('Sonata.pdf');
@@ -1575,7 +1575,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 
 		$targetFolder = $this->createMock(Folder::class);
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
-		$targetFolder->method('nodeExists')->willReturn(true);
+		$targetFolder->method('nodeExists')->willReturnCallback(static fn (string $path): bool => !in_array($path, ['mobilesheets_hashcodes.txt', 'mobilesheets.db'], true));
 
 		$orphanNode = $this->createMock(\OCP\Files\Node::class);
 		$orphanNode->method('getName')->willReturn('Sonata.pdf');
@@ -1609,7 +1609,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 
 		$targetFolder = $this->createMock(Folder::class);
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
-		$targetFolder->method('nodeExists')->willReturn(true);
+		$targetFolder->method('nodeExists')->willReturnCallback(static fn (string $path): bool => !in_array($path, ['mobilesheets_hashcodes.txt', 'mobilesheets.db'], true));
 
 		$orphanNode = $this->createMock(\OCP\Files\Node::class);
 		$orphanNode->method('getName')->willReturn('Moonlight Sonata.pdf');
@@ -1642,7 +1642,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 
 		$targetFolder = $this->createMock(Folder::class);
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
-		$targetFolder->method('nodeExists')->willReturn(true);
+		$targetFolder->method('nodeExists')->willReturnCallback(static fn (string $path): bool => !in_array($path, ['mobilesheets_hashcodes.txt', 'mobilesheets.db'], true));
 
 		$orphanNode = $this->createMock(\OCP\Files\Node::class);
 		$orphanNode->method('getName')->willReturn('Moonlight Sonata.pdf');
@@ -1780,7 +1780,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 
 		$targetFolder = $this->createMock(Folder::class);
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
-		$targetFolder->method('nodeExists')->willReturn(true);
+		$targetFolder->method('nodeExists')->willReturnCallback(static fn (string $path): bool => !in_array($path, ['mobilesheets_hashcodes.txt', 'mobilesheets.db'], true));
 
 		$orphanNode = $this->createMock(\OCP\Files\Node::class);
 		$orphanNode->method('getName')->willReturn('Sonata.pdf');
@@ -1828,7 +1828,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 
 		$targetFolder = $this->createMock(Folder::class);
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
-		$targetFolder->method('nodeExists')->willReturn(true);
+		$targetFolder->method('nodeExists')->willReturnCallback(static fn (string $path): bool => !in_array($path, ['mobilesheets_hashcodes.txt', 'mobilesheets.db'], true));
 
 		$orphanNode = $this->createMock(\OCP\Files\Node::class);
 		$orphanNode->method('getName')->willReturn('Sonata.pdf');
@@ -1862,7 +1862,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 
 		$targetFolder = $this->createMock(Folder::class);
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
-		$targetFolder->method('nodeExists')->willReturn(true);
+		$targetFolder->method('nodeExists')->willReturnCallback(static fn (string $path): bool => !in_array($path, ['mobilesheets_hashcodes.txt', 'mobilesheets.db'], true));
 
 		$orphanNode = $this->createMock(\OCP\Files\Node::class);
 		$orphanNode->method('getName')->willReturn('Moonlight Sonata.pdf');

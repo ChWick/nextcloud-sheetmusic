@@ -225,9 +225,19 @@ class MobileSheetsHashCodesFile {
 		$kept = [];
 		$updated = false;
 
+		$cleanPath = trim($path, '/');
+		$decodedPath = rawurldecode($path);
+
 		foreach ($this->entries as $entry) {
-			if (!$updated && $entry->path === $path) {
-				$kept[] = new MobileSheetsHashCode($path, $hashCode, $modifiedAt, $size);
+			$entryClean = trim($entry->path, '/');
+			$entryDecoded = rawurldecode($entry->path);
+
+			$matches = ($entry->path === $path
+				|| $entryClean === $cleanPath
+				|| $entryDecoded === $decodedPath);
+
+			if (!$updated && $matches) {
+				$kept[] = new MobileSheetsHashCode($entry->path, $hashCode, $modifiedAt, $size);
 				$updated = true;
 				continue;
 			}

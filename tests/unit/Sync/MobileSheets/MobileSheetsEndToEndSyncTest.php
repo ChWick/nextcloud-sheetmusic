@@ -1835,4 +1835,82 @@ class MobileSheetsEndToEndSyncTest extends TestCase {
 		self::assertStringNotContainsString('raw_scan_001.pdf', $clientHashCodes);
 		self::assertStringContainsString('Erik Satie/Erik Satie - Gymnopedie No 1.pdf', $clientHashCodes);
 	}
+
+	public function testIntegrityAuditPdfMetadataUpdateSyncsWithoutConflict(): void {
+		$this->harness->setupEmptyLibraries(folderName: 'PdfMetaSyncLib', autoPaths: false);
+
+		// 1. Create a song with a PDF on client whose metadata differs from song title
+		$clientSongId = $this->harness->clientCreateSong(
+			title: 'Canon in D',
+			files: [
+				'Canon in D.pdf' => MobileSheetsEndToEndSyncHarness::generateValidPdf('Old Canon Title', 2),
+			],
+		);
+
+		// 2. Initial sync
+		$this->harness->sync();
+
+		// 3. Enable autoPdfMetadata and run integrity audit
+		$this->harness->libraryService->updateSettings($this->harness->userId, $this->harness->libraryId, autoPdfMetadata: true);
+		$issues = $this->harness->integrityService->checkIntegrity($this->harness->libraryId, $this->harness->userId);
+		$metaIssues = array_values(array_filter(
+			$issues,
+			static fn (IntegrityIssue $i): bool => $i->type === IntegrityIssue::TYPE_PDF_METADATA_MISMATCH
+		));
+		self::assertCount(1, $metaIssues, 'Integrity audit must detect PDF metadata mismatch');
+
+		// 4. Fix issue via integrity service
+		$fixResult = $this->harness->integrityService->fixIssue(
+			$this->harness->libraryId,
+			$this->harness->userId,
+			IntegrityIssue::TYPE_PDF_METADATA_MISMATCH,
+			songId: (int)$metaIssues[0]->songId,
+			fileId: (int)$metaIssues[0]->fileId,
+		);
+		self::assertTrue($fixResult['success'], 'Fixing PDF metadata mismatch must succeed');
+
+		// Check what the physical/virtual hashcodes and database have immediately after fix:
+		$libFolder = $this->harness->getLibraryFolder();
+		$hcContent = $libFolder->nodeExists('mobilesheets_hashcodes.txt')
+			? (string)$libFolder->get('mobilesheets_hashcodes.txt')->getContent()
+			: $this->harness->exporter->generateHashcodes($this->harness->libraryId);
+
+		$pdfNode = $libFolder->get('Canon in D.pdf');
+		$expectedHash = \OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdf::contentHash((string)$pdfNode->getContent());
+		self::assertStringContainsString((string)$expectedHash, $hcContent, 'Hashcodes file must contain updated PDF hash');
+
+		$miscFiles = $this->harness->miscMapper->getMiscDataForTable($this->harness->libraryId, 'mobilesheets', 'Files');
+
+		if ($libFolder->nodeExists('mobilesheets.db')) {
+			$dbNode = $libFolder->get('mobilesheets.db');
+			$tmpDb = tempnam(sys_get_temp_dir(), 'db_check');
+			file_put_contents($tmpDb, $dbNode->getContent());
+			$checkPdo = new \PDO('sqlite:' . $tmpDb);
+			$dbRow = $checkPdo->query('SELECT FileHash, FileSize FROM Files WHERE Id = 1')->fetch(\PDO::FETCH_ASSOC);
+			@unlink($tmpDb);
+			self::assertSame($expectedHash, (int)($dbRow['FileHash'] ?? 0), 'Physical mobilesheets.db in folder must have updated FileHash');
+		}
+
+		self::assertSame($expectedHash, $miscFiles[0]['FileHash'] ?? null, 'Misc sync data must record new file hash');
+
+		// 5. Subsequent checkIntegrity must report zero issues
+		$issuesAfter = $this->harness->integrityService->checkIntegrity($this->harness->libraryId, $this->harness->userId);
+		self::assertEmpty($issuesAfter, 'No issues must remain after fixing PDF metadata');
+
+		// 6. Sync with MobileSheets client: must be completely conflict-free with zero diff
+		$this->harness->sync();
+
+		$clientFiles = $this->harness->getClientTableRows('Files');
+		self::assertCount(1, $clientFiles);
+		self::assertSame($expectedHash, (int)$clientFiles[0]['FileHash'], 'Client mobilesheets.db must be updated with new FileHash');
+
+		$clientHashCodes = $this->harness->getClientHashCodesContent();
+		self::assertStringContainsString((string)$expectedHash, $clientHashCodes, 'Client hashcodes must contain updated FileHash');
+
+		$clientPdfContent = (string)file_get_contents($this->harness->clientFilesDir . '/Canon in D.pdf');
+		self::assertSame($expectedHash, \OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdf::contentHash($clientPdfContent), 'Client local PDF file must match new content hash');
+
+		// 7. Second sync cycle: must remain completely clean and conflict-free
+		$this->harness->sync();
+	}
 }

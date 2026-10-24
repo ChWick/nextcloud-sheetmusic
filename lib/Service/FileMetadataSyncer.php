@@ -9,7 +9,9 @@ declare(strict_types=1);
 
 namespace OCA\SheetMusic\Service;
 
+use OCA\SheetMusic\Db\InternalMiscMapper;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
+use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsFile;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSong;
 use OCA\SheetMusic\Sync\MobileSheets\SongMapper;
@@ -31,6 +33,8 @@ class FileMetadataSyncer {
 		private LoggerInterface $logger,
 		private ?InternalSongFileMapper $internalSongFileMapper = null,
 		private ?SongMapper $songMapper = null,
+		private ?InternalMiscMapper $internalMiscMapper = null,
+		private ?InternalSongMapper $internalSongMapper = null,
 	) {
 	}
 
@@ -124,17 +128,37 @@ class FileMetadataSyncer {
 			// The bytes changed, so the hash, size and timestamp stored for
 			// the file have to follow them - everywhere they are kept.
 			$facts = MobileSheetsFileFacts::fromNode($node);
+			$sqliteFileId = $file->id;
+			$internalSongFile = null;
 			if ($this->internalSongFileMapper !== null) {
 				$internalSongFile = $this->internalSongFileMapper->findById($file->id);
 				if ($internalSongFile !== null) {
 					$internalSongFile->fileSize = $facts->fileSize;
 					$internalSongFile->fileHash = $facts->fileHash;
-					$internalSongFile->updatedAt = time();
+					$internalSongFile->updatedAt = (int)floor($facts->lastModified / 1000);
 					$this->internalSongFileMapper->update($internalSongFile);
+
+					if ($internalSongFile->clientId !== null && $internalSongFile->clientId > 0) {
+						$sqliteFileId = $internalSongFile->clientId;
+					}
 				}
 			}
 			if ($this->songMapper !== null && $databasePath !== '' && file_exists($databasePath) && is_writable($databasePath)) {
-				$this->songMapper->updateFile($databasePath, $file->id, $file->path, $facts);
+				$this->songMapper->updateFile($databasePath, $sqliteFileId, $file->path, $facts);
+			}
+			if ($this->internalMiscMapper !== null && $internalSongFile !== null) {
+				$targetSong = $this->internalSongMapper?->findById($internalSongFile->songId);
+				if ($targetSong !== null) {
+					$this->internalMiscMapper->updateFilePath(
+						libraryId: (int)$targetSong->libraryId,
+						clientType: 'mobilesheets',
+						oldPath: $file->path,
+						newPath: $file->path,
+						fileClientId: $internalSongFile->clientId,
+						fileSize: $facts->fileSize,
+						fileHash: $facts->fileHash,
+					);
+				}
 			}
 			$hashCodes?->updateFacts(
 				$file->path,

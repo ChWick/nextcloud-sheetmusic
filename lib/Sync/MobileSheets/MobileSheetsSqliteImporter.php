@@ -729,6 +729,7 @@ class MobileSheetsSqliteImporter {
 										$dataRow['Path'] = $ncPath;
 										$dataRow['FileSize'] = $ef->fileSize;
 										$dataRow['FileHash'] = $ef->fileHash;
+										$dataRow['LastModified'] = MobileSheetsTimestampUtil::secondsToMs($ef->updatedAt);
 									}
 								}
 								break;

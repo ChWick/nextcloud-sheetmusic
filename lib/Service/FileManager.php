@@ -458,6 +458,8 @@ class FileManager {
 			$this->logger,
 			$this->internalSongFileMapper,
 			$this->songMapper,
+			$this->internalMiscMapper,
+			$this->internalSongMapper,
 		);
 
 		return $syncer->syncMetadataIntoFile($song, $file, $user, $databasePath, $hashCodes);

@@ -7,6 +7,7 @@ namespace OCA\SheetMusic\Service;
 use OCA\SheetMusic\Db\InternalLibrary;
 use OCA\SheetMusic\Db\LibraryMapper;
 use OCP\Files\IRootFolder;
+use OCP\IUser;
 use Psr\Log\LoggerInterface;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSqliteExporter;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSqliteImporter;
@@ -76,6 +77,14 @@ class LibraryService {
 		}
 
 		return [$libraryPath, $databasePath];
+	}
+
+	public function exportDatabaseToFile(int $libraryId, string $targetPath, IUser|string|null $user = null): void {
+		$this->exporter?->exportToFile($libraryId, $targetPath, $user);
+	}
+
+	public function generateHashcodes(int $libraryId): string {
+		return $this->exporter?->generateHashcodes($libraryId) ?? '';
 	}
 
 	public function getVirtualDatabasePath(string $userId, int $libraryId): ?string {

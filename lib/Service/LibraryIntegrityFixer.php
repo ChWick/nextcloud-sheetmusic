@@ -17,6 +17,8 @@ use OCA\SheetMusic\Db\InternalSongFile;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
+use OCP\Files\File;
+use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\Files\Node;
 use Psr\Log\LoggerInterface;
@@ -250,6 +252,7 @@ class LibraryIntegrityFixer {
 				$this->fileManager->regenerateSongFilePaths($songId, $user, $targetFolder, $databasePath, $hashCodes);
 				$hashCodes?->save();
 				$this->libraryMapper->touch($libraryId);
+				$this->refreshFolderDatabaseAndHashcodes($targetFolder, $libraryId, $user);
 
 				return [
 					'success' => true,
@@ -276,7 +279,7 @@ class LibraryIntegrityFixer {
 
 		$userFolder = $this->rootFolder->getUserFolder($userId);
 		$user = $userFolder->getOwner();
-		['databasePath' => $databasePath] = $this->fileManager->libraryContext($libraryId, $user);
+		['databasePath' => $databasePath, 'targetFolder' => $targetFolder] = $this->fileManager->libraryContext($libraryId, $user);
 		$issue = $this->findPdfMetadataMismatch($libraryId, $userId, $songId, $fileId);
 		if ($issue === null) {
 			return [
@@ -289,6 +292,8 @@ class LibraryIntegrityFixer {
 		$hashCodes = MobileSheetsHashCodesFile::forDatabase($databasePath, $this->logger);
 		$this->fixPdfMetadataMismatch($issue, $libraryId, $databasePath, $user, $hashCodes);
 		$hashCodes?->save();
+		$this->libraryMapper->touch($libraryId);
+		$this->refreshFolderDatabaseAndHashcodes($targetFolder, $libraryId, $user);
 
 		return [
 			'success' => true,
@@ -454,6 +459,10 @@ class LibraryIntegrityFixer {
 		}
 
 		$hashCodes?->save();
+		if ($fixedCount > 0) {
+			$this->libraryMapper->touch($libraryId);
+			$this->refreshFolderDatabaseAndHashcodes($targetFolder, $libraryId, $user);
+		}
 
 		$success = $fixedCount > 0 || empty($errors);
 		if ($fixedCount > 0 && empty($errors)) {
@@ -774,5 +783,38 @@ class LibraryIntegrityFixer {
 			IntegrityIssue::TYPE_DUPLICATE_CLIENT_ID => sprintf('Reset %d duplicate client_id record(s).', $fixed),
 			default => sprintf('Fixed %d record(s).', $fixed),
 		};
+	}
+
+	private function refreshFolderDatabaseAndHashcodes(Folder $targetFolder, int $libraryId, \OCP\IUser $user): void {
+		try {
+			if ($targetFolder->nodeExists('mobilesheets_hashcodes.txt')) {
+				$hashcodesContent = $this->libraryService->generateHashcodes($libraryId);
+				$hcNode = $targetFolder->get('mobilesheets_hashcodes.txt');
+				if ($hcNode instanceof File) {
+					$hcNode->putContent($hashcodesContent);
+				}
+			}
+		} catch (\Throwable $e) {
+			$this->logger->debug('Could not refresh mobilesheets_hashcodes.txt in library folder', ['exception' => $e]);
+		}
+
+		try {
+			if ($targetFolder->nodeExists('mobilesheets.db')) {
+				$tmpDb = tempnam(sys_get_temp_dir(), 'ms_db_refresh');
+				if ($tmpDb !== false) {
+					try {
+						$this->libraryService->exportDatabaseToFile($libraryId, $tmpDb, $user);
+						$dbNode = $targetFolder->get('mobilesheets.db');
+						if ($dbNode instanceof File) {
+							$dbNode->putContent((string)file_get_contents($tmpDb));
+						}
+					} finally {
+						@unlink($tmpDb);
+					}
+				}
+			}
+		} catch (\Throwable $e) {
+			$this->logger->debug('Could not refresh mobilesheets.db in library folder', ['exception' => $e]);
+		}
 	}
 }
