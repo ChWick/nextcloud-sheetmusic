@@ -38,6 +38,7 @@ final class LibraryIntegrityFixerTest extends TestCase {
 			$libraryService,
 			$this->songFileMapper,
 			$this->songMapper,
+			internalMiscMapper: $this->miscMapper,
 		);
 		$orphanScanner = new LibraryOrphanScanner(
 			$fileManager,

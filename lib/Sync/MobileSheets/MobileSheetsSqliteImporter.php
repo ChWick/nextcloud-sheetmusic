@@ -135,7 +135,7 @@ class MobileSheetsSqliteImporter {
 		}
 
 		// 6. Misc Tables (Setlists, Bookmarks, Annotations, AudioFiles, etc.)
-		$this->mergeMiscTables($db, $lib->id, $stats);
+		$this->mergeMiscTables($db, $lib, $user, $stats);
 
 		// 7. Update library modified timestamp
 		$this->libraryMapper->touch($lib->id);
@@ -633,17 +633,20 @@ class MobileSheetsSqliteImporter {
 	/**
 	 * @param array<string, int> $stats
 	 */
-	private function mergeMiscTables(PDO $db, int $libraryId, array &$stats): void {
+	private function mergeMiscTables(PDO $db, InternalLibrary $lib, ?IUser $user, array &$stats): void {
+		$libraryId = $lib->id;
 		$stmt = $db->query("SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'");
 		if ($stmt === false) {
 			return;
 		}
 
 		$songs = $this->songMapper->findAllForLibrary($libraryId, includeDeleted: true);
+		$songByClientId = [];
 		$songUuidByClientId = [];
 		$deletedSongClientIds = [];
 		foreach ($songs as $s) {
 			if ($s->clientId !== null) {
+				$songByClientId[$s->clientId] = $s;
 				$songUuidByClientId[$s->clientId] = $s->uuid;
 				if ($s->deletedAt !== null) {
 					$deletedSongClientIds[$s->clientId] = true;
@@ -711,6 +714,26 @@ class MobileSheetsSqliteImporter {
 					if (isset($deletedFileClientIds[$fId]) || isset($deletedSongClientIds[$sId])) {
 						$this->miscMapper->deleteMiscData($libraryId, 'mobilesheets', $tableName, $recordId);
 						continue;
+					}
+
+					if ($sId > 0 && isset($songByClientId[$sId])) {
+						$ncSong = $songByClientId[$sId];
+						$existingFiles = $this->songFileMapper->findAllForSong($ncSong->id, includeDeleted: false);
+						foreach ($existingFiles as $ef) {
+							if ($ef->clientId === $fId) {
+								$lastModifiedSec = MobileSheetsTimestampUtil::extractLastModifiedSec($dataRow);
+								if ($ef->updatedAt >= $lastModifiedSec) {
+									// Nextcloud has newer or equal edits for this file (e.g. renamed via integrity audit on server)
+									$ncPath = $this->resolveWebdavPathForFile($ef, $lib, $user);
+									if ($ncPath !== null && $ncPath !== '') {
+										$dataRow['Path'] = $ncPath;
+										$dataRow['FileSize'] = $ef->fileSize;
+										$dataRow['FileHash'] = $ef->fileHash;
+									}
+								}
+								break;
+							}
+						}
 					}
 				}
 				if (isset($dataRow['SongId']) && is_numeric($dataRow['SongId']) && isset($deletedSongClientIds[(int)$dataRow['SongId']])) {
@@ -796,5 +819,42 @@ class MobileSheetsSqliteImporter {
 		}
 
 		return null;
+	}
+
+	private function resolveWebdavPathForFile(InternalSongFile $file, InternalLibrary $library, ?IUser $user): ?string {
+		if ($user !== null) {
+			try {
+				$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+				$nodes = $userFolder->getById($file->fileId);
+				if ($nodes !== []) {
+					$nodePath = $nodes[0]->getPath();
+					$msPath = $this->pathResolver->fromInternal($nodePath, $user);
+					if ($msPath !== null) {
+						return $msPath->webdav;
+					}
+				}
+			} catch (\Throwable) {
+				// Fall through
+			}
+
+			try {
+				$rootNodes = $this->rootFolder->getById($file->fileId);
+				if ($rootNodes !== []) {
+					$nodePath = $rootNodes[0]->getPath();
+					$msPath = $this->pathResolver->fromInternal($nodePath, $user);
+					if ($msPath !== null) {
+						return $msPath->webdav;
+					}
+				}
+			} catch (\Throwable) {
+				// Fall through
+			}
+
+			return null;
+		}
+
+		// Fallback for tests/synthetic libraries where $user is null
+		$base = rtrim($library->path, '/');
+		return sprintf('%s/%s/%s/file_%d.pdf', MobileSheetsPathResolver::WEBDAV_ROOT, $library->userId, ltrim($base, '/'), $file->fileId);
 	}
 }

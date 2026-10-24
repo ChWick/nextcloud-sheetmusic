@@ -249,6 +249,7 @@ class LibraryIntegrityFixer {
 			try {
 				$this->fileManager->regenerateSongFilePaths($songId, $user, $targetFolder, $databasePath, $hashCodes);
 				$hashCodes?->save();
+				$this->libraryMapper->touch($libraryId);
 
 				return [
 					'success' => true,
@@ -340,6 +341,7 @@ class LibraryIntegrityFixer {
 					$this->fileManager->regenerateSongFilePaths($issue->songId, $user, $targetFolder, $databasePath, $hashCodes);
 					$processedSongs[$issue->songId] = true;
 					$fixedCount++;
+					$this->libraryMapper->touch($libraryId);
 				} catch (\Throwable $e) {
 					$this->logger->warning(sprintf('Cannot auto-fix naming rule for song ID %d during batch fix: %s', $issue->songId, $e->getMessage()));
 					$songName = $issue->songTitle ?? ('song ID ' . $issue->songId);

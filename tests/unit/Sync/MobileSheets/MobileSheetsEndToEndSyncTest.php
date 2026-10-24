@@ -7,6 +7,7 @@ namespace Sync\MobileSheets;
 use OCA\SheetMusic\Db\InternalEntityMapper;
 use OCA\SheetMusic\Service\EntityService;
 use OCA\SheetMusic\Service\FileManager;
+use OCA\SheetMusic\Service\IntegrityIssue;
 use OCA\SheetMusic\Service\LibraryService;
 use OCA\SheetMusic\Service\SongFileService;
 use OCA\SheetMusic\Service\SongService;
@@ -1742,5 +1743,96 @@ class MobileSheetsEndToEndSyncTest extends TestCase {
 		$hashCodesFinal = $this->harness->getClientHashCodesContent();
 		self::assertStringNotContainsString('sinfonia_violin.pdf', $hashCodesFinal);
 		self::assertStringContainsString('sinfonia_viola.pdf', $hashCodesFinal);
+	}
+
+	/**
+	 * Test Case 25:
+	 * When running the integrity audit to automatically rename a file to match naming rules,
+	 * the file in "sync data" (misc data / Files) must be moved to the new location instead
+	 * of leaving the old file marked as non-existing / missing.
+	 * Subsequent sync with MobileSheets client must cleanly reflect the moved file.
+	 */
+	public function testIntegrityAuditRenameFileMovesFileInSyncDataWithoutMissingFileIssues(): void {
+		$this->harness->setupEmptyLibraries(folderName: 'RenameSyncLib', autoPaths: false);
+
+		// 1. Create a song with a composer whose file name violates naming rules
+		$satieId = $this->harness->clientCreateEntity('Composer', 'Erik Satie');
+		$clientSongId = $this->harness->clientCreateSong(
+			title: 'Gymnopedie No 1',
+			files: [
+				'raw_scan_001.pdf' => MobileSheetsEndToEndSyncHarness::generateValidPdf('Gymnopedie No 1 Part', 4),
+			],
+			options: [
+				'entities' => ['Composer' => [$satieId]],
+				'stars' => 5,
+			],
+		);
+
+		// 2. Initial sync: file raw_scan_001.pdf exists on both sides and is recorded in sync data (misc_data Files)
+		$this->harness->sync();
+
+		$libFolder = $this->harness->getLibraryFolder();
+		self::assertTrue($libFolder->nodeExists('raw_scan_001.pdf'));
+		self::assertFileExists($this->harness->clientFilesDir . '/raw_scan_001.pdf');
+
+		$miscFilesBefore = $this->harness->miscMapper->getMiscDataForTable($this->harness->libraryId, 'mobilesheets', 'Files');
+		self::assertCount(1, $miscFilesBefore);
+		self::assertStringContainsString('raw_scan_001.pdf', (string)$miscFilesBefore[0]['Path']);
+
+		// 3. Enable autoPaths so the naming rule is expected
+		$this->harness->libraryService->updateSettings($this->harness->userId, $this->harness->libraryId, autoPaths: true);
+
+		// 4. Run integrity audit: checkIntegrity reports TYPE_INVALID_NAMING_RULE
+		$issues = $this->harness->integrityService->checkIntegrity($this->harness->libraryId, $this->harness->userId);
+		$namingIssues = array_values(array_filter(
+			$issues,
+			static fn (IntegrityIssue $i): bool => $i->type === IntegrityIssue::TYPE_INVALID_NAMING_RULE
+		));
+		self::assertCount(1, $namingIssues, 'Audit must report invalid naming rule for raw_scan_001.pdf');
+		$ncSongId = (int)$namingIssues[0]->songId;
+
+		// 5. Automatically fix the naming rule issue via integrity service
+		$fixResult = $this->harness->integrityService->fixIssue(
+			$this->harness->libraryId,
+			$this->harness->userId,
+			IntegrityIssue::TYPE_INVALID_NAMING_RULE,
+			songId: $ncSongId,
+		);
+		self::assertTrue($fixResult['success'], 'Fixing invalid naming rule must succeed');
+
+		// 6. Verify filesystem rename: raw_scan_001.pdf is gone, Erik Satie/Erik Satie - Gymnopedie No 1.pdf exists
+		self::assertFalse($libFolder->nodeExists('raw_scan_001.pdf'), 'Old file must be moved away');
+		self::assertTrue($libFolder->nodeExists('Erik Satie/Erik Satie - Gymnopedie No 1.pdf'), 'Renamed file must exist in composer subfolder on filesystem');
+
+		// 7. Verify sync data (misc_data Files): the file must NOT be marked non-existing or deleted.
+		// It must be moved to the new file location!
+		$miscFilesAfter = $this->harness->miscMapper->getMiscDataForTable($this->harness->libraryId, 'mobilesheets', 'Files');
+		self::assertCount(1, $miscFilesAfter, 'Sync data must still contain exactly 1 file');
+		self::assertStringNotContainsString('raw_scan_001.pdf', (string)$miscFilesAfter[0]['Path'], 'Old file path must no longer be in sync data');
+		self::assertStringContainsString('Erik Satie/Erik Satie - Gymnopedie No 1.pdf', (string)$miscFilesAfter[0]['Path'], 'New file path must be recorded in sync data');
+
+		// 8. Re-run integrity audit: MUST NOT report TYPE_MISSING_FILE for the old file in sync data!
+		$issuesAfterFix = $this->harness->integrityService->checkIntegrity($this->harness->libraryId, $this->harness->userId);
+		$missingFileIssues = array_filter(
+			$issuesAfterFix,
+			static fn (IntegrityIssue $i): bool => $i->type === IntegrityIssue::TYPE_MISSING_FILE
+		);
+		self::assertEmpty($missingFileIssues, 'Old file must not be marked as missing/non-existing in sync data');
+		self::assertEmpty($issuesAfterFix, 'Library must have zero integrity issues after naming rule fix');
+
+		// 9. Sync with MobileSheets client:
+		// Client must receive moved file at new path, prune old file, and maintain zero diff
+		$this->harness->sync();
+
+		self::assertFileDoesNotExist($this->harness->clientFilesDir . '/raw_scan_001.pdf');
+		self::assertFileExists($this->harness->clientFilesDir . '/Erik Satie/Erik Satie - Gymnopedie No 1.pdf');
+
+		$clientFiles = $this->harness->getClientTableRows('Files');
+		self::assertCount(1, $clientFiles);
+		self::assertStringContainsString('Erik Satie/Erik Satie - Gymnopedie No 1.pdf', (string)$clientFiles[0]['Path']);
+
+		$clientHashCodes = $this->harness->getClientHashCodesContent();
+		self::assertStringNotContainsString('raw_scan_001.pdf', $clientHashCodes);
+		self::assertStringContainsString('Erik Satie/Erik Satie - Gymnopedie No 1.pdf', $clientHashCodes);
 	}
 }

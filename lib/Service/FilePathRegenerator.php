@@ -9,7 +9,9 @@ declare(strict_types=1);
 
 namespace OCA\SheetMusic\Service;
 
+use OCA\SheetMusic\Db\InternalMiscMapper;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
+use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsFile;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSong;
 use OCA\SheetMusic\Sync\MobileSheets\SongMapper;
@@ -39,6 +41,8 @@ class FilePathRegenerator {
 		private LoggerInterface $logger,
 		private ?InternalSongFileMapper $internalSongFileMapper = null,
 		private ?SongMapper $songMapper = null,
+		private ?InternalMiscMapper $internalMiscMapper = null,
+		private ?InternalSongMapper $internalSongMapper = null,
 	) {
 	}
 
@@ -228,6 +232,7 @@ class FilePathRegenerator {
 						newNodeId: (int)$targetNode->getId(),
 						databasePath: $databasePath,
 						webdavPath: $candTarget->webdav,
+						oldWebdavPath: $source->webdav,
 					);
 					$hashCodes?->updatePath($source->webdav, $candTarget->webdav);
 
@@ -318,12 +323,20 @@ class FilePathRegenerator {
 		$facts = MobileSheetsFileFacts::fromNode($sourceNode);
 		$sourceNode->move($target->internal);
 
+		$newNodeId = null;
+		if ($userFolder->nodeExists($targetRelative)) {
+			$targetNode = $userFolder->get($targetRelative);
+			$newNodeId = (int)$targetNode->getId();
+		}
+
 		try {
 			$this->updateFileRecord(
 				$file->id,
 				$facts,
+				newNodeId: $newNodeId,
 				databasePath: $databasePath,
 				webdavPath: $target->webdav,
+				oldWebdavPath: $source->webdav,
 			);
 		} catch (\Throwable $exception) {
 			$this->revertMove(
@@ -515,7 +528,10 @@ class FilePathRegenerator {
 		?int $newNodeId = null,
 		string $databasePath = '',
 		?string $webdavPath = null,
+		?string $oldWebdavPath = null,
 	): void {
+		$internalSongFile = null;
+		$sqliteFileId = $fileId;
 		if ($this->internalSongFileMapper !== null) {
 			$internalSongFile = $this->internalSongFileMapper->findById($fileId);
 			if ($internalSongFile !== null) {
@@ -526,11 +542,30 @@ class FilePathRegenerator {
 				$internalSongFile->fileHash = $facts->fileHash;
 				$internalSongFile->updatedAt = time();
 				$this->internalSongFileMapper->update($internalSongFile);
+
+				if ($internalSongFile->clientId !== null && $internalSongFile->clientId > 0) {
+					$sqliteFileId = $internalSongFile->clientId;
+				}
 			}
 		}
 
 		if ($this->songMapper !== null && $databasePath !== '' && $webdavPath !== null && file_exists($databasePath) && is_writable($databasePath)) {
-			$this->songMapper->updateFile($databasePath, $fileId, $webdavPath, $facts);
+			$this->songMapper->updateFile($databasePath, $sqliteFileId, $webdavPath, $facts, $oldWebdavPath);
+		}
+
+		if ($this->internalMiscMapper !== null && $webdavPath !== null && $internalSongFile !== null) {
+			$song = $this->internalSongMapper?->findById($internalSongFile->songId);
+			if ($song !== null) {
+				$this->internalMiscMapper->updateFilePath(
+					libraryId: (int)$song->libraryId,
+					clientType: 'mobilesheets',
+					oldPath: $oldWebdavPath ?? '',
+					newPath: $webdavPath,
+					fileClientId: $internalSongFile->clientId,
+					fileSize: $facts->fileSize,
+					fileHash: $facts->fileHash,
+				);
+			}
 		}
 	}
 
@@ -557,6 +592,7 @@ class FilePathRegenerator {
 			newNodeId: (int)$copiedNode->getId(),
 			databasePath: $databasePath,
 			webdavPath: $copiedTarget->webdav,
+			oldWebdavPath: $sourceWebdav,
 		);
 		$hashCodes?->updatePath($sourceWebdav, $copiedTarget->webdav);
 

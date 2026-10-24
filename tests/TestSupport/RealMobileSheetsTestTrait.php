@@ -204,6 +204,7 @@ trait RealMobileSheetsTestTrait {
 			$libraryService,
 			$this->songFileMapper,
 			$this->songMapper,
+			internalMiscMapper: $this->miscMapper,
 		);
 
 		return new LibraryIntegrityService(

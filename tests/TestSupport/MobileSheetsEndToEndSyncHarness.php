@@ -154,6 +154,7 @@ class MobileSheetsEndToEndSyncHarness {
 			$this->libraryService,
 			$this->songFileMapper,
 			$this->songMapper,
+			internalMiscMapper: $this->miscMapper,
 		);
 		$this->songFileService = new SongFileService(
 			$this->libraryService,
