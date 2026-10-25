@@ -241,19 +241,7 @@ class MobileSheetsSqliteExporter {
 
 		$songs = $this->songMapper->findAllForLibrary($libraryId, includeDeleted: false);
 		$attributesBySong = $this->attributeMapper->findAllForLibrary($libraryId);
-
-		$usedIds = [];
-		$maxId = 0;
-		foreach ($songs as $s) {
-			if ($s->clientId !== null && $s->clientId > 0) {
-				$usedIds[$s->clientId] = true;
-				if ($s->clientId > $maxId) {
-					$maxId = $s->clientId;
-				}
-			}
-		}
-
-		$nextId = $maxId + 1;
+		[$usedIds, $nextId] = MobileSheetsTableHelper::initClientIdTracking($songs);
 
 		$metaStmt = $hasSyncMeta ? $db->prepare('INSERT INTO _nc_sync_metadata (entity_type, uuid, client_id, updated_at, extra_json) VALUES (:type, :uuid, :client_id, :updated_at, :extra_json)') : null;
 
@@ -266,14 +254,8 @@ class MobileSheetsSqliteExporter {
 				continue;
 			}
 
-			$clientId = $song->clientId;
-			if ($clientId === null || $clientId <= 0) {
-				while (isset($usedIds[$nextId])) {
-					$nextId++;
-				}
-				$clientId = $nextId++;
-				$usedIds[$clientId] = true;
-
+			$clientId = MobileSheetsTableHelper::nextClientId($usedIds, $nextId, $song->clientId);
+			if ($song->clientId !== $clientId) {
 				$song->clientId = $clientId;
 				$this->songMapper->update($song);
 			}
@@ -369,10 +351,9 @@ class MobileSheetsSqliteExporter {
 						$noteRow = MobileSheetsTableHelper::filterToExistingColumns($noteCols, $noteVals);
 						MobileSheetsTableHelper::insertRow($db, 'SongNotes', $noteRow);
 					} else {
-						$noteColName = $noteCols['notes'] ?? ($noteCols['note'] ?? null);
+						$noteColName = MobileSheetsTableHelper::getSongNotesContentColumn($db);
 						if ($noteColName !== null) {
-							$updNote = $db->prepare('UPDATE SongNotes SET "' . str_replace('"', '""', $noteColName) . '" = :notes WHERE SongId = :songId');
-							$updNote->execute([':notes' => $noteText, ':songId' => $clientId]);
+							MobileSheetsTableHelper::updateRow($db, 'SongNotes', [$noteColName => $noteText], 'SongId', $clientId);
 						}
 					}
 				} elseif ($noteExists && $existingSongRow !== null && $song->updatedAt > MobileSheetsTimestampUtil::extractLastModifiedSec($existingSongRow)) {
@@ -406,6 +387,7 @@ class MobileSheetsSqliteExporter {
 		$hasSyncMeta = MobileSheetsTableHelper::tableExists($db, '_nc_sync_metadata');
 
 		$files = $this->songFileMapper->findAllForLibrary($library->id, includeDeleted: false);
+		[$usedIds, $nextId] = MobileSheetsTableHelper::initClientIdTracking($files);
 
 		$songs = $this->songMapper->findAllForLibrary($library->id, includeDeleted: false);
 		$songClientMap = [];
@@ -414,19 +396,6 @@ class MobileSheetsSqliteExporter {
 				$songClientMap[$s->id] = $s->clientId;
 			}
 		}
-
-		$usedIds = [];
-		$maxId = 0;
-		foreach ($files as $f) {
-			if ($f->clientId !== null && $f->clientId > 0) {
-				$usedIds[$f->clientId] = true;
-				if ($f->clientId > $maxId) {
-					$maxId = $f->clientId;
-				}
-			}
-		}
-
-		$nextId = $maxId + 1;
 
 		$existingCols = MobileSheetsTableHelper::getTableColumns($db, 'Files');
 
@@ -439,14 +408,8 @@ class MobileSheetsSqliteExporter {
 				continue;
 			}
 
-			$clientId = $file->clientId;
-			if ($clientId === null || $clientId <= 0) {
-				while (isset($usedIds[$nextId])) {
-					$nextId++;
-				}
-				$clientId = $nextId++;
-				$usedIds[$clientId] = true;
-
+			$clientId = MobileSheetsTableHelper::nextClientId($usedIds, $nextId, $file->clientId);
+			if ($file->clientId !== $clientId) {
 				$file->clientId = $clientId;
 				$this->songFileMapper->update($file);
 			}

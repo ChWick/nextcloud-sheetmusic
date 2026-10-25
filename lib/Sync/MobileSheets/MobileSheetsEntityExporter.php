@@ -37,20 +37,7 @@ class MobileSheetsEntityExporter {
 	 */
 	public function exportEntities(PDO $db, int $libraryId): void {
 		$entities = $this->entityMapper->findAllForLibrary($libraryId, includeDeleted: false);
-
-		// Determine highest clientId per table to assign new client IDs safely
-		$usedIds = [];
-		$maxId = 0;
-		foreach ($entities as $e) {
-			if ($e->clientId !== null && $e->clientId > 0) {
-				$usedIds[$e->clientId] = true;
-				if ($e->clientId > $maxId) {
-					$maxId = $e->clientId;
-				}
-			}
-		}
-
-		$nextId = $maxId + 1;
+		[$usedIds, $nextId] = MobileSheetsTableHelper::initClientIdTracking($entities);
 
 		$hasSyncMeta = MobileSheetsTableHelper::tableExists($db, '_nc_sync_metadata');
 		$metaStmt = $hasSyncMeta ? $db->prepare('INSERT INTO _nc_sync_metadata (entity_type, uuid, client_id, updated_at, extra_json) VALUES (:type, :uuid, :client_id, :updated_at, :extra_json)') : null;
@@ -63,14 +50,8 @@ class MobileSheetsEntityExporter {
 				continue;
 			}
 
-			$clientId = $entity->clientId;
-			if ($clientId === null || $clientId <= 0) {
-				while (isset($usedIds[$nextId])) {
-					$nextId++;
-				}
-				$clientId = $nextId++;
-				$usedIds[$clientId] = true;
-
+			$clientId = MobileSheetsTableHelper::nextClientId($usedIds, $nextId, $entity->clientId);
+			if ($entity->clientId !== $clientId) {
 				$entity->clientId = $clientId;
 				$this->entityMapper->update($entity);
 			}
