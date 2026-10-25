@@ -9,17 +9,18 @@ declare(strict_types=1);
 
 namespace OCA\SheetMusic\Sync\MobileSheets;
 
+use OCA\SheetMusic\Db\InternalSongFile;
 
 class SongFileMapper extends AbstractDatabaseMapper {
 	/** Source of a file that lives in the library folder. */
 	private const FILE_SOURCE_LOCAL = 1;
 
 	/** Type constants for MobileSheets Files.Type column */
-	public const FILE_TYPE_OTHER = 0;
-	public const FILE_TYPE_PDF = 1;
-	public const FILE_TYPE_IMAGE = 2;
-	public const FILE_TYPE_TEXT = 3;
-	public const FILE_TYPE_ABC = 4;
+	public const FILE_TYPE_OTHER = InternalSongFile::FILE_TYPE_OTHER;
+	public const FILE_TYPE_PDF = InternalSongFile::FILE_TYPE_PDF;
+	public const FILE_TYPE_IMAGE = InternalSongFile::FILE_TYPE_IMAGE;
+	public const FILE_TYPE_TEXT = InternalSongFile::FILE_TYPE_TEXT;
+	public const FILE_TYPE_ABC = InternalSongFile::FILE_TYPE_ABC;
 
 	/** Width/Height of a file whose dimensions were not measured. */
 	private const FILE_DIMENSION_UNKNOWN = -1;
@@ -28,14 +29,7 @@ class SongFileMapper extends AbstractDatabaseMapper {
 	 * Map a file path's extension to MobileSheets Files.Type.
 	 */
 	public static function determineFileType(string $path): int {
-		$extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
-		return match ($extension) {
-			'pdf' => self::FILE_TYPE_PDF,
-			'png', 'jpg', 'jpeg', 'bmp', 'gif', 'webp', 'svg' => self::FILE_TYPE_IMAGE,
-			'txt', 'cho', 'chopro', 'crd', 'chordpro' => self::FILE_TYPE_TEXT,
-			'abc' => self::FILE_TYPE_ABC,
-			default => self::FILE_TYPE_OTHER,
-		};
+		return InternalSongFile::determineFileType($path);
 	}
 
 	/**

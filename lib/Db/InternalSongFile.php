@@ -20,8 +20,8 @@ class InternalSongFile {
 		$extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
 		return match ($extension) {
 			'pdf' => self::FILE_TYPE_PDF,
-			'jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp' => self::FILE_TYPE_IMAGE,
-			'txt', 'text', 'chopro', 'chordpro', 'crd', 'pro' => self::FILE_TYPE_TEXT,
+			'jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg' => self::FILE_TYPE_IMAGE,
+			'txt', 'text', 'cho', 'chopro', 'chordpro', 'crd', 'pro' => self::FILE_TYPE_TEXT,
 			'abc' => self::FILE_TYPE_ABC,
 			default => self::FILE_TYPE_OTHER,
 		};
