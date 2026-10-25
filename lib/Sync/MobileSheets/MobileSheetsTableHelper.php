@@ -290,4 +290,20 @@ final class MobileSheetsTableHelper {
 		}
 		return false;
 	}
+
+	/**
+	 * Find a row by integer primary key Id.
+	 *
+	 * @return array<string, mixed>|null
+	 */
+	public static function findRowById(PDO $db, string $tableName, int $id): ?array {
+		$stmt = $db->query(sprintf('SELECT * FROM "%s" WHERE Id = %d', str_replace('"', '""', $tableName), $id));
+		if ($stmt !== false) {
+			$row = $stmt->fetch(PDO::FETCH_ASSOC);
+			if (is_array($row)) {
+				return $row;
+			}
+		}
+		return null;
+	}
 }

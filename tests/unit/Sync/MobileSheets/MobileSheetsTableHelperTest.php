@@ -192,4 +192,16 @@ final class MobileSheetsTableHelperTest extends TestCase {
 		self::assertFalse(MobileSheetsTableHelper::shouldClientWinLww($untracked, 400, null, allowUntrackedClientLww: false));
 		self::assertTrue(MobileSheetsTableHelper::shouldClientWinLww($untracked, 400, null, allowUntrackedClientLww: true));
 	}
+
+	public function testFindRowById(): void {
+		$this->db->exec('CREATE TABLE TestFind (Id INTEGER PRIMARY KEY, Title TEXT)');
+		$this->db->exec('INSERT INTO TestFind (Id, Title) VALUES (42, "Found It")');
+
+		$found = MobileSheetsTableHelper::findRowById($this->db, 'TestFind', 42);
+		self::assertNotNull($found);
+		self::assertSame('Found It', $found['Title']);
+
+		$notFound = MobileSheetsTableHelper::findRowById($this->db, 'TestFind', 999);
+		self::assertNull($notFound);
+	}
 }
