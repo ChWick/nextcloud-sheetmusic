@@ -96,8 +96,7 @@ class LibraryEntityMapper extends AbstractDatabaseMapper {
 		] + $this->dateColumns($database, 'CustomGroup'));
 
 		if (!$this->hasTable($database, '_nc_sync_metadata')) {
-			$database->exec('CREATE TABLE IF NOT EXISTS _nc_sync_metadata (entity_type TEXT NOT NULL, uuid TEXT NOT NULL, client_id INTEGER, updated_at INTEGER, extra_json TEXT, PRIMARY KEY (entity_type, uuid))');
-			$database->exec('CREATE INDEX IF NOT EXISTS idx_nc_sync_client ON _nc_sync_metadata (entity_type, client_id)');
+			MobileSheetsTableHelper::ensureSyncMetadataTable($database);
 		}
 
 		$uuid = self::generateUuid();

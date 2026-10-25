@@ -171,13 +171,11 @@ class MobileSheetsSqliteExporter {
 				}
 				$db->exec($createSql);
 			}
-			$db->exec('CREATE TABLE IF NOT EXISTS _nc_sync_metadata (entity_type TEXT NOT NULL, uuid TEXT NOT NULL, client_id INTEGER, updated_at INTEGER, extra_json TEXT, PRIMARY KEY (entity_type, uuid))');
-			$db->exec('CREATE INDEX IF NOT EXISTS idx_nc_sync_client ON _nc_sync_metadata (entity_type, client_id)');
+			MobileSheetsTableHelper::ensureSyncMetadataTable($db);
 			return;
 		}
 
 		$statements = MobileSheetsBaselineSchema::TABLES;
-		$statements['_nc_sync_metadata'] = 'CREATE TABLE _nc_sync_metadata (entity_type TEXT NOT NULL, uuid TEXT NOT NULL, client_id INTEGER, updated_at INTEGER, extra_json TEXT, PRIMARY KEY (entity_type, uuid))';
 
 		foreach ($statements as $tableName => $sql) {
 			$lowerName = strtolower($tableName);
@@ -187,7 +185,7 @@ class MobileSheetsSqliteExporter {
 			$db->exec($sql);
 		}
 
-		$db->exec('CREATE INDEX IF NOT EXISTS idx_nc_sync_client ON _nc_sync_metadata (entity_type, client_id)');
+		MobileSheetsTableHelper::ensureSyncMetadataTable($db);
 
 		// Recreate standard baseline MobileSheets indexes
 		foreach (MobileSheetsBaselineSchema::INDEXES as $idxSql) {
