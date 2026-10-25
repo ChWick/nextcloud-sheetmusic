@@ -676,8 +676,8 @@ class LibraryIntegrityService {
 	 *
 	 * @return array{success: bool, fixedCount: int, message: string}
 	 */
-	public function fixAllIssues(int $libraryId, string $userId, ?string $issueType = null): array {
-		return $this->integrityFixer->fixAllIssues($libraryId, $userId, $issueType);
+	public function fixAllIssues(int $libraryId, string $userId, ?string $issueType = null, ?callable $onProgress = null): array {
+		return $this->integrityFixer->fixAllIssues($libraryId, $userId, $issueType, $onProgress);
 	}
 
 	/**

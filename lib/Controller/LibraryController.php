@@ -165,17 +165,39 @@ class LibraryController extends OCSController {
 
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'POST', url: '/api/libraries/{id}/integrity/fix-all')]
-	public function fixAllIntegrityIssues(int $id, ?string $issueType = null): DataResponse {
+	public function fixAllIntegrityIssues(int $id, ?string $issueType = null, ?string $progressId = null): DataResponse {
 		$user = $this->userSession->getUser();
 		if ($user === null) {
 			return new DataResponse(['message' => 'User not logged in'], Http::STATUS_UNAUTHORIZED);
 		}
 
+		$progId = $progressId ?? $this->request->getParam('progressId');
+		if ($progId !== null && session_status() === PHP_SESSION_ACTIVE) {
+			session_write_close();
+		}
+
+		if ($progId !== null) {
+			$this->libraryService->startProgress($progId, 'Starting integrity fixes...');
+		}
+
+		$onProgress = null;
+		if ($progId !== null) {
+			$onProgress = function (string $stage, int $current, int $total, ?string $detail = null) use ($progId): void {
+				$this->libraryService->updateProgress($progId, $stage, $current, $total, $detail ?? '');
+			};
+		}
+
 		try {
-			$result = $this->integrityService->fixAllIssues($id, $user->getUID(), $issueType);
+			$result = $this->integrityService->fixAllIssues($id, $user->getUID(), $issueType, $onProgress);
+			if ($progId !== null) {
+				$this->libraryService->completeProgress($progId, $result['message'] ?? 'Fix complete');
+			}
 
 			return new DataResponse($result, Http::STATUS_OK);
 		} catch (\Throwable $e) {
+			if ($progId !== null) {
+				$this->libraryService->failProgress($progId, $e->getMessage());
+			}
 			return new DataResponse(
 				['success' => false, 'message' => 'Error batch-fixing integrity issues: ' . $e->getMessage()],
 				Http::STATUS_OK

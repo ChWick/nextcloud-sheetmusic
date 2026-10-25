@@ -292,7 +292,7 @@ class LibraryIntegrityFixer {
 	 *
 	 * @return array{success: bool, fixedCount: int, message: string}
 	 */
-	public function fixAllIssues(int $libraryId, string $userId, ?string $issueType = null): array {
+	public function fixAllIssues(int $libraryId, string $userId, ?string $issueType = null, ?callable $onProgress = null): array {
 		$userFolder = $this->rootFolder->getUserFolder($userId);
 		$user = $userFolder->getOwner();
 		['databasePath' => $databasePath, 'targetFolder' => $targetFolder] = $this->fileManager->libraryContext($libraryId, $user);
@@ -305,12 +305,23 @@ class LibraryIntegrityFixer {
 		$duplicateClientIdsFixed = false;
 		$errors = [];
 
-		foreach ($issues as $issue) {
+		$fixableIssues = array_values(array_filter($issues, function ($issue) use ($issueType) {
 			if (!$issue->fixable) {
-				continue;
+				return false;
 			}
 			if ($issueType !== null && $issueType !== '' && $issue->type !== $issueType) {
-				continue;
+				return false;
+			}
+			return true;
+		}));
+		$totalFixable = count($fixableIssues);
+		$currentIndex = 0;
+
+		foreach ($fixableIssues as $issue) {
+			$currentIndex++;
+			if ($onProgress !== null) {
+				$detail = $issue->songTitle ?? $issue->description ?? $issue->type;
+				$onProgress('fixing', $currentIndex, $totalFixable, $detail);
 			}
 
 			if ($issue->type === IntegrityIssue::TYPE_INVALID_NAMING_RULE && $issue->songId !== null) {
@@ -441,6 +452,10 @@ class LibraryIntegrityFixer {
 					$this->logger->warning('Cannot auto-fix missing file: ' . $e->getMessage());
 				}
 			}
+		}
+
+		if ($onProgress !== null && $totalFixable > 0) {
+			$onProgress('finalizing', $totalFixable, $totalFixable, 'Finalizing changes...');
 		}
 
 		$hashCodes?->save();

@@ -165,6 +165,16 @@ return [
 			'verb' => 'GET',
 		],
 		[
+			'name' => 'Api#fixIntegrityIssue',
+			'url' => '/api/libraries/{id}/integrity/fix',
+			'verb' => 'POST',
+		],
+		[
+			'name' => 'Api#fixAllIntegrityIssues',
+			'url' => '/api/libraries/{id}/integrity/fix-all',
+			'verb' => 'POST',
+		],
+		[
 			'name' => 'Api#createSignature',
 			'url' => '/api/signatures',
 			'verb' => 'POST',

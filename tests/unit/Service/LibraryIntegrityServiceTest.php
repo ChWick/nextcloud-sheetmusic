@@ -1677,6 +1677,55 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		unlink($fixture['path']);
 	}
 
+	public function testFixAllIssuesReportsProgressThroughCallback(): void {
+		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
+		$database = $fixture['connection'];
+		$database->exec("INSERT INTO Songs (Id, Title) VALUES (1, 'Moonlight Sonata')");
+
+		$targetFolder = $this->createMock(Folder::class);
+		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
+		$targetFolder->method('nodeExists')->willReturnCallback(static fn (string $path): bool => !in_array($path, ['mobilesheets_hashcodes.txt', 'mobilesheets.db'], true));
+
+		$orphanNode = $this->createMock(\OCP\Files\Node::class);
+		$orphanNode->method('getName')->willReturn('Moonlight Sonata.pdf');
+		$orphanNode->method('getPath')->willReturn('/user1/files/Noten/Moonlight Sonata.pdf');
+		$orphanNode->method('getId')->willReturn(101);
+		$orphanNode->method('getSize')->willReturn(12345);
+		$targetFolder->method('getDirectoryListing')->willReturn([$orphanNode]);
+		$targetFolder->method('get')->with('Moonlight Sonata.pdf')->willReturn($orphanNode);
+
+		$songFileMapper = $this->createMock(InternalSongFileMapper::class);
+		$songFileMapper->method('findAllForSong')->willReturn([]);
+
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+
+		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager($fixture['path'], $targetFolder);
+		$service = $this->createIntegrityService(
+			$this->createLibraryService(),
+			$fileManager,
+			$rootFolder,
+			$pathResolver,
+			internalSongFileMapper: $songFileMapper,
+			libraryMapper: $libraryMapper,
+			databasePath: $fixture['path'],
+		);
+
+		$progressCalls = [];
+		$callback = function (string $stage, int $current, int $total, ?string $detail = null) use (&$progressCalls): void {
+			$progressCalls[] = [$stage, $current, $total, $detail];
+		};
+
+		$result = $service->fixAllIssues(1, 'user1', IntegrityIssue::TYPE_ORPHAN_FILE, $callback);
+		self::assertTrue($result['success']);
+		self::assertSame(1, $result['fixedCount']);
+		self::assertNotEmpty($progressCalls);
+		self::assertSame('fixing', $progressCalls[0][0]);
+		self::assertSame(1, $progressCalls[0][1]);
+		self::assertSame(1, $progressCalls[0][2]);
+
+		unlink($fixture['path']);
+	}
+
 	public function testOrphanFileMatchesSongWithMissingFile(): void {
 		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
 		$database = $fixture['connection'];

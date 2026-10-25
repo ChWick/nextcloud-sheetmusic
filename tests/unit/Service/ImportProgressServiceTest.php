@@ -63,5 +63,17 @@ final class ImportProgressServiceTest extends TestCase {
 		$this->service->update($id, 'files', 10, 20, 'Ode.pdf', isMobileSheets: true);
 		$data = $this->service->get($id);
 		self::assertSame(68, $data['percent']); // 45 + 10/20 * 45 = 67.5 -> 68
+
+		// Fixing integrity issues stage (0-90%)
+		$this->service->update($id, 'fixing', 5, 10, 'Fixing duplicate entity', isMobileSheets: false);
+		$data = $this->service->get($id);
+		self::assertSame(45, $data['percent']); // 5/10 * 90 = 45
+		self::assertStringContainsString('Fixing duplicate entity', $data['message']);
+
+		// Finalizing stage (95%)
+		$this->service->update($id, 'finalizing', 10, 10, 'Saving hashcodes', isMobileSheets: false);
+		$data = $this->service->get($id);
+		self::assertSame(95, $data['percent']);
+		self::assertSame('Saving hashcodes', $data['message']);
 	}
 }

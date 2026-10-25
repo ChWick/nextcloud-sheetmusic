@@ -254,6 +254,22 @@ class LibraryService {
 		return $this->progressService?->get($progressId);
 	}
 
+	public function startProgress(string $progressId, string $message = ''): void {
+		$this->progressService?->start($progressId, $message);
+	}
+
+	public function updateProgress(string $progressId, string $stage, int $current, int $total, string $detail = '', bool $isMobileSheets = false): void {
+		$this->progressService?->update($progressId, $stage, $current, $total, $detail, $isMobileSheets);
+	}
+
+	public function completeProgress(string $progressId, string $message = 'Completed'): void {
+		$this->progressService?->complete($progressId, $message);
+	}
+
+	public function failProgress(string $progressId, string $errorMessage): void {
+		$this->progressService?->fail($progressId, $errorMessage);
+	}
+
 	public function deleteLibrary(string $userId, int $id): ?array {
 		$libraryPath = $this->resolveLibraryPath($userId, $id);
 		if ($libraryPath === null) {

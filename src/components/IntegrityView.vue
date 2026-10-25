@@ -2,11 +2,13 @@
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from '@nextcloud/axios'
+import { generateOcsUrl } from '@nextcloud/router'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
+import NcProgressBar from '@nextcloud/vue/components/NcProgressBar'
 import { showError, showSuccess, showWarning } from '@nextcloud/dialogs'
 import RefreshIcon from 'vue-material-design-icons/Refresh.vue'
 import ChevronDownIcon from 'vue-material-design-icons/ChevronDown.vue'
@@ -27,9 +29,62 @@ const props = defineProps<{
 
 const router = useRouter()
 
+interface FixProgress {
+	status: 'running' | 'completed' | 'error'
+	stage: string
+	current: number
+	total: number
+	percent: number
+	message: string
+}
+
 // Integrity Audit state
 const isCheckingIntegrity = ref(false)
 const isBatchFixing = ref(false)
+const fixProgress = ref<FixProgress | null>(null)
+let progressPollingTimer: ReturnType<typeof setInterval> | null = null
+
+function startProgressPolling(progressId: string) {
+	stopProgressPolling()
+	fixProgress.value = {
+		status: 'running',
+		stage: 'starting',
+		current: 0,
+		total: 0,
+		percent: 0,
+		message: t('sheetmusic', 'Starting integrity fixes…'),
+	}
+	progressPollingTimer = setInterval(async () => {
+		try {
+			const url = generateOcsUrl('/apps/sheetmusic/api/libraries/progress/' + encodeURIComponent(progressId))
+			const res = await axios.get(url)
+			const data = res?.data?.ocs?.data
+			if (data && typeof data === 'object') {
+				fixProgress.value = {
+					status: data.status,
+					stage: data.stage,
+					current: Number(data.current ?? 0),
+					total: Number(data.total ?? 0),
+					percent: Number(data.percent ?? 0),
+					message: String(data.message ?? ''),
+				}
+				if (data.status === 'completed' || data.status === 'error') {
+					stopProgressPolling()
+				}
+			}
+		} catch {
+			// Ignore transient polling errors
+		}
+	}, 300)
+}
+
+function stopProgressPolling() {
+	if (progressPollingTimer !== null) {
+		clearInterval(progressPollingTimer)
+		progressPollingTimer = null
+	}
+}
+
 const fixingKey = ref<string | null>(null)
 const integrityError = ref('')
 const integrityIssues = ref<IntegrityIssue[]>([])
@@ -161,11 +216,15 @@ async function fixAllIssues(issueType?: string) {
 
 	isBatchFixing.value = true
 	integrityError.value = ''
+	const progressId = 'fix-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9)
+	startProgressPolling(progressId)
 
 	try {
-		const response = await apiPost(`/api/libraries/${props.selectedLibrary}/integrity/fix-all`, {
+		const response = await apiPost(`/api/libraries/${props.selectedLibrary}/integrity/fix-all` as any, {
 			issueType,
-		})
+			progressId,
+		} as any)
+		stopProgressPolling()
 		const result = response.data?.ocs?.data
 		if (result && !result.success) {
 			const errorMsg = result.message ?? t('sheetmusic', 'Failed to fix integrity issues.')
@@ -187,12 +246,15 @@ async function fixAllIssues(issueType?: string) {
 			}
 		}
 	} catch (error) {
+		stopProgressPolling()
 		console.error('Failed to batch fix integrity issues:', error)
 		const serverMessage = describeRequestFailure(error, t('sheetmusic', 'Failed to batch fix integrity issues. Please try again.'))
 		integrityError.value = serverMessage
 		showError(serverMessage)
 	} finally {
 		isBatchFixing.value = false
+		stopProgressPolling()
+		fixProgress.value = null
 	}
 }
 
@@ -466,16 +528,38 @@ function openSong(songId: number) {
 		<NcDialog
 			v-if="isBatchFixing"
 			:name="t('sheetmusic', 'Fixing issues…')"
-			size="small">
-			<div :class="$style.dialogLoading">
-				<NcLoadingIcon :size="36" />
-				<span>{{ t('sheetmusic', 'Fixing integrity issues in library…') }}</span>
+			size="normal">
+			<div :class="$style.progressContainer">
+				<NcProgressBar
+					:value="fixProgress ? fixProgress.percent : 0"
+					size="medium"
+					:show-value="true"
+					:error="fixProgress?.status === 'error'" />
+				<p :class="$style.progressMessage">
+					{{ fixProgress?.message || t('sheetmusic', 'Fixing integrity issues in library…') }}
+				</p>
 			</div>
 		</NcDialog>
 	</div>
 </template>
 
 <style module>
+.progressContainer {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	padding: 16px 8px;
+	width: 100%;
+	box-sizing: border-box;
+}
+
+.progressMessage {
+	margin: 0;
+	font-size: 0.9em;
+	color: var(--color-text-maxcontrast);
+	text-align: center;
+}
+
 .dialogLoading {
 	display: flex;
 	flex-direction: column;

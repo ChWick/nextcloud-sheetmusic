@@ -63,6 +63,10 @@ class ImportProgressService {
 				} else {
 					$percent = 90 + (int)round(($current / $total) * 9);
 				}
+			} elseif ($stage === 'fixing' || $stage === 'fix') {
+				$percent = (int)round(($current / $total) * 90);
+			} elseif ($stage === 'finalizing') {
+				$percent = 95;
 			} else {
 				$percent = (int)round(($current / $total) * 99);
 			}
@@ -73,7 +77,9 @@ class ImportProgressService {
 			'songs' => $total > 0 ? "Importing song $current of $total" . ($detail !== '' ? ": $detail" : '') : 'Importing songs...',
 			'files' => $total > 0 ? "Importing file $current of $total" . ($detail !== '' ? ": $detail" : '') : 'Importing files...',
 			'reconcile' => $total > 0 ? "Importing file $current of $total" . ($detail !== '' ? ": $detail" : '') : 'Importing files...',
-			default => $detail ?: 'Importing...',
+			'fixing', 'fix' => $total > 0 ? "Fixing issue $current of $total" . ($detail !== '' ? ": $detail" : '') : 'Fixing issues...',
+			'finalizing' => $detail ?: 'Finalizing...',
+			default => $detail ?: 'Processing...',
 		};
 
 		$data = [

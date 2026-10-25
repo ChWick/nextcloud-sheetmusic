@@ -96,6 +96,12 @@ class ApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/libraries/{id}/integrity/fix-all')]
+	public function fixAllIntegrityIssues(int $id, ?string $issueType = null, ?string $progressId = null): DataResponse {
+		return $this->libraryController->fixAllIntegrityIssues($id, $issueType, $progressId);
+	}
+
+	#[NoAdminRequired]
 	#[ApiRoute(verb: 'GET', url: '/api/songs')]
 	public function getSongs(?string $id = null): DataResponse {
 		return $this->songController->getSongs($id);
