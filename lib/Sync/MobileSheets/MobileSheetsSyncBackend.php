@@ -118,9 +118,7 @@ class MobileSheetsSyncBackend implements SyncClientInterface {
 	): bool {
 		$etag = $this->etagFor($library, self::VIRTUAL_DB_NAME);
 
-		if ($request->getHeader('If-None-Match') === $etag) {
-			$response->setStatus(304);
-			$response->setHeader('ETag', $etag);
+		if ($this->checkNotModified($request, $response, $etag)) {
 			return false;
 		}
 
@@ -137,11 +135,7 @@ class MobileSheetsSyncBackend implements SyncClientInterface {
 
 		$size = (int)filesize($cachePath);
 		$this->logger->info(sprintf('MobileSheetsSyncBackend: handleGetDatabase library=%d size=%d isHead=%d path=%s', $library->id, $size, $isHead ? 1 : 0, $cachePath));
-		$response->setStatus(200);
-		$response->setHeader('Content-Type', self::DB_CONTENT_TYPE);
-		$response->setHeader('Content-Length', (string)$size);
-		$response->setHeader('ETag', $etag);
-		$response->setHeader('Last-Modified', $this->httpDate($library));
+		$this->setSuccessHeaders($response, self::DB_CONTENT_TYPE, $size, $etag, $library);
 
 		if (!$isHead) {
 			$response->setBody(fopen($cachePath, 'rb'));
@@ -193,25 +187,41 @@ class MobileSheetsSyncBackend implements SyncClientInterface {
 	): bool {
 		$etag = $this->etagFor($library, self::VIRTUAL_HASH_NAME);
 
-		if ($request->getHeader('If-None-Match') === $etag) {
-			$response->setStatus(304);
-			$response->setHeader('ETag', $etag);
+		if ($this->checkNotModified($request, $response, $etag)) {
 			return false;
 		}
 
 		$hashcodes = $this->exporter->generateHashcodes($library);
-
-		$response->setStatus(200);
-		$response->setHeader('Content-Type', self::HASH_CONTENT_TYPE);
-		$response->setHeader('Content-Length', (string)strlen($hashcodes));
-		$response->setHeader('ETag', $etag);
-		$response->setHeader('Last-Modified', $this->httpDate($library));
+		$this->setSuccessHeaders($response, self::HASH_CONTENT_TYPE, strlen($hashcodes), $etag, $library);
 
 		if (!$isHead) {
 			$response->setBody($hashcodes);
 		}
 
 		return false;
+	}
+
+	private function checkNotModified(RequestInterface $request, ResponseInterface $response, string $etag): bool {
+		if ($request->getHeader('If-None-Match') === $etag) {
+			$response->setStatus(304);
+			$response->setHeader('ETag', $etag);
+			return true;
+		}
+		return false;
+	}
+
+	private function setSuccessHeaders(
+		ResponseInterface $response,
+		string $contentType,
+		int $contentLength,
+		string $etag,
+		InternalLibrary $library,
+	): void {
+		$response->setStatus(200);
+		$response->setHeader('Content-Type', $contentType);
+		$response->setHeader('Content-Length', (string)$contentLength);
+		$response->setHeader('ETag', $etag);
+		$response->setHeader('Last-Modified', $this->httpDate($library));
 	}
 
 	private function handlePutHashcodes(
