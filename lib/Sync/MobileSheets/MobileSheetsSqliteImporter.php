@@ -717,10 +717,12 @@ class MobileSheetsSqliteImporter {
 				$uploadedRecordIds[$recordId] = true;
 
 				$songUuid = null;
-				if (isset($dataRow['SongId']) && is_numeric($dataRow['SongId'])) {
+				if ($lowerTable === 'songs') {
+					if (isset($dataRow['Id']) && is_numeric($dataRow['Id'])) {
+						$songUuid = $songUuidByClientId[(int)$dataRow['Id']] ?? null;
+					}
+				} elseif (isset($dataRow['SongId']) && is_numeric($dataRow['SongId'])) {
 					$songUuid = $songUuidByClientId[(int)$dataRow['SongId']] ?? null;
-				} elseif ($lowerTable === 'songs' && isset($dataRow['Id']) && is_numeric($dataRow['Id'])) {
-					$songUuid = $songUuidByClientId[(int)$dataRow['Id']] ?? null;
 				}
 
 				$this->miscMapper->saveMiscData($libraryId, 'mobilesheets', $tableName, $recordId, $dataRow, $songUuid);
