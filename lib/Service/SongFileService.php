@@ -10,15 +10,14 @@ use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryData;
 use OCA\SheetMusic\Db\LibraryMapper;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPathResolver;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdf;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdfMetadata;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\Files\Node;
 use OCP\IUser;
 use Psr\Log\LoggerInterface;
-use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPathResolver;
-use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdf;
-use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdfMetadata;
-
 
 class SongFileService {
 	public function __construct(

@@ -76,4 +76,3 @@ interface SyncClientInterface {
 	 */
 	public function getVirtualFileProperties(InternalLibrary $library, string $filename, string $userId): ?array;
 }
-

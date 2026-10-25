@@ -9,11 +9,11 @@ declare(strict_types=1);
 
 namespace OCA\SheetMusic\Tests\Unit\Service;
 
+use OCA\SheetMusic\Service\FileManager;
+use OCA\SheetMusic\Service\LibraryOrphanScanner;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsComposer;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsFile;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSong;
-use OCA\SheetMusic\Service\FileManager;
-use OCA\SheetMusic\Service\LibraryOrphanScanner;
 use PHPUnit\Framework\TestCase;
 use TestSupport\RealMobileSheetsTestTrait;
 

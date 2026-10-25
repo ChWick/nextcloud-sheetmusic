@@ -19,6 +19,8 @@ use OCA\SheetMusic\Service\IntegrityIssue;
 use OCA\SheetMusic\Service\LibraryIntegrityService;
 use OCA\SheetMusic\Service\LibraryReconciler;
 use OCA\SheetMusic\Service\LibraryService;
+use OCA\SheetMusic\Service\SongFileService;
+use OCA\SheetMusic\Service\SongService;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsBaselineSchema;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsEntityConfig;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsHashCodesFile;
@@ -27,8 +29,6 @@ use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdf;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSqliteExporter;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSqliteImporter;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsTableHelper;
-use OCA\SheetMusic\Service\SongFileService;
-use OCA\SheetMusic\Service\SongService;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
@@ -321,7 +321,7 @@ class MobileSheetsEndToEndSyncHarness {
 	public static function generateValidPdf(string $label = 'Test Sheet Music', int $pages = 1): string {
 		$pageCount = max(1, $pages);
 		$objects = [];
-		$objects[1] = "<< /Type /Catalog /Pages 2 0 R >>";
+		$objects[1] = '<< /Type /Catalog /Pages 2 0 R >>';
 
 		$kids = [];
 		$nextObjId = 3;
@@ -1419,8 +1419,8 @@ class MobileSheetsEndToEndSyncHarness {
 			(2, {$s2}, 'Coda Cadence', 3, 1, {$tsMs}, {$tsMs})");
 		$pdo->exec("INSERT INTO AnnotationsBase (Id, SongId, Page, Type, Opacity, Zoom, ZoomY, Version, SourcePageWidth, SourcePageHeight, Layer) VALUES
 			(1, {$s1}, 1, 1, 255, 1.0, 1.0, 1, 612.0, 792.0, 0)");
-		$pdo->exec("INSERT INTO DrawAnnotations (Id, BaseId, LineColor, FillColor, LineWidth, DrawMode, PenMode, SmoothMode) VALUES
-			(1, 1, -65536, 0, 2.5, 0, 1, 1)");
+		$pdo->exec('INSERT INTO DrawAnnotations (Id, BaseId, LineColor, FillColor, LineWidth, DrawMode, PenMode, SmoothMode) VALUES
+			(1, 1, -65536, 0, 2.5, 0, 1, 1)');
 		$pdo->exec("INSERT INTO Tempos (Id, SongId, Tempo, TempoIndex) VALUES
 			(1, {$s1}, 84, 0),
 			(2, {$s2}, 66, 0),

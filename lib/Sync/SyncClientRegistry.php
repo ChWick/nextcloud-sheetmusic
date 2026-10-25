@@ -57,4 +57,3 @@ class SyncClientRegistry {
 		return array_values($this->clients);
 	}
 }
-

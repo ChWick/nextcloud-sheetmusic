@@ -9,7 +9,6 @@ declare(strict_types=1);
 
 namespace OCA\SheetMusic\Sync\MobileSheets;
 
-
 /**
  * Writes the metadata MobileSheets reads on import into a PDF.
  *

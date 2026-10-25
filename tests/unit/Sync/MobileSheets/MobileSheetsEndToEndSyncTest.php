@@ -14,7 +14,6 @@ use OCA\SheetMusic\Service\SongService;
 use OCA\SheetMusic\Tests\TestSupport\MobileSheetsEndToEndSyncHarness;
 use PHPUnit\Framework\TestCase;
 
-
 /**
  * End-to-End tests for MobileSheets import/export and bidirectional synchronization.
  *

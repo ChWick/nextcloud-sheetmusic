@@ -13,9 +13,9 @@ use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsArtist;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsBook;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsCollection;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsComposer;
-use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSong;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdf;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdfMetadata;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSong;
 use PHPUnit\Framework\TestCase;
 
 final class MobileSheetsPdfMetadataTest extends TestCase {

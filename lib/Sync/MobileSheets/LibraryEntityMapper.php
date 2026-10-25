@@ -13,7 +13,6 @@ use OCA\SheetMusic\Db\DuplicateEntityConflict;
 use OCA\SheetMusic\Db\DuplicateSongEntityAssignment;
 use OCA\SheetMusic\Db\InternalEntity;
 
-
 class LibraryEntityMapper extends AbstractDatabaseMapper {
 	/**
 	 * Tables of the entity kinds a song can carry, and how each of them links

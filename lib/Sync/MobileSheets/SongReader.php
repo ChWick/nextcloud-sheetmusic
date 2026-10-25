@@ -9,10 +9,9 @@ declare(strict_types=1);
 
 namespace OCA\SheetMusic\Sync\MobileSheets;
 
+use OCA\SheetMusic\Db\LibraryData;
 use PDO;
 use Psr\Log\LoggerInterface;
-use OCA\SheetMusic\Db\LibraryData;
-
 
 class SongReader extends AbstractDatabaseMapper {
 	public function __construct(
@@ -30,12 +29,12 @@ class SongReader extends AbstractDatabaseMapper {
 	public function findLibraryData(string $databasePath): LibraryData {
 		$database = $this->openConnection($databasePath);
 
-		[$composers, $composersById] = $this->loadEntities($database, 'Composer', 'Name', fn(int $id, string $val) => new MobileSheetsComposer($id, $val));
-		[$books, $booksById] = $this->loadEntities($database, 'Books', 'Title', fn(int $id, string $val) => new MobileSheetsBook($id, $val));
-		[$collections, $collectionsById] = $this->loadEntities($database, 'Collections', 'Name', fn(int $id, string $val) => new MobileSheetsCollection($id, $val));
-		[$artists, $artistsById] = $this->loadEntities($database, 'Artists', 'Name', fn(int $id, string $val) => new MobileSheetsArtist($id, $val));
-		[$genres, $genresById] = $this->loadEntities($database, 'Genres', ['Type', 'Name'], fn(int $id, string $val) => new MobileSheetsGenre($id, $val));
-		[$keys, $keysById] = $this->loadEntities($database, ['Key', 'Keys'], ['Name', 'Key'], fn(int $id, string $val) => new MobileSheetsKey($id, $val));
+		[$composers, $composersById] = $this->loadEntities($database, 'Composer', 'Name', fn (int $id, string $val) => new MobileSheetsComposer($id, $val));
+		[$books, $booksById] = $this->loadEntities($database, 'Books', 'Title', fn (int $id, string $val) => new MobileSheetsBook($id, $val));
+		[$collections, $collectionsById] = $this->loadEntities($database, 'Collections', 'Name', fn (int $id, string $val) => new MobileSheetsCollection($id, $val));
+		[$artists, $artistsById] = $this->loadEntities($database, 'Artists', 'Name', fn (int $id, string $val) => new MobileSheetsArtist($id, $val));
+		[$genres, $genresById] = $this->loadEntities($database, 'Genres', ['Type', 'Name'], fn (int $id, string $val) => new MobileSheetsGenre($id, $val));
+		[$keys, $keysById] = $this->loadEntities($database, ['Key', 'Keys'], ['Name', 'Key'], fn (int $id, string $val) => new MobileSheetsKey($id, $val));
 
 		$customGroups = [];
 		$customGroupsById = [];
@@ -69,9 +68,9 @@ class SongReader extends AbstractDatabaseMapper {
 			}
 		}
 
-		[$years, $yearsById] = $this->loadEntities($database, 'Years', ['Year', 'Name'], fn(int $id, string $val) => new MobileSheetsYear($id, (int)$val));
-		[$signatures, $signaturesById] = $this->loadEntities($database, 'Signature', 'Name', fn(int $id, string $val) => new MobileSheetsSignature($id, $val));
-		[$sourceTypes, $sourceTypesById] = $this->loadEntities($database, ['SourceType', 'SourceTypes'], ['Type', 'Name'], fn(int $id, string $val) => new MobileSheetsSourceType($id, $val));
+		[$years, $yearsById] = $this->loadEntities($database, 'Years', ['Year', 'Name'], fn (int $id, string $val) => new MobileSheetsYear($id, (int)$val));
+		[$signatures, $signaturesById] = $this->loadEntities($database, 'Signature', 'Name', fn (int $id, string $val) => new MobileSheetsSignature($id, $val));
+		[$sourceTypes, $sourceTypesById] = $this->loadEntities($database, ['SourceType', 'SourceTypes'], ['Type', 'Name'], fn (int $id, string $val) => new MobileSheetsSourceType($id, $val));
 
 		$songComposers = $this->loadSongLinks($database, 'ComposerSongs', 'ComposerId');
 		$songBooks = $this->loadSongLinks($database, 'BookSongs', 'BookId');

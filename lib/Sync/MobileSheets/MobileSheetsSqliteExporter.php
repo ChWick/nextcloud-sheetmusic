@@ -565,7 +565,6 @@ class MobileSheetsSqliteExporter {
 		MobileSheetsTableHelper::insertIfEmpty($db, 'Defaults', ['Id' => 1, 'Initialized' => 1]);
 	}
 
-
 	private function resolveWebdavPathForFile(InternalSongFile $file, InternalLibrary $library, ?IUser $user): ?string {
 		if ($user !== null) {
 			try {

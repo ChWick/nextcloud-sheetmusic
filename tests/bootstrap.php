@@ -89,4 +89,3 @@ foreach ($legacyAliases as $newClass => $oldClass) {
 		class_alias($newClass, $oldClass);
 	}
 }
-

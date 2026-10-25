@@ -285,4 +285,3 @@ class MobileSheetsSyncBackend implements SyncClientInterface {
 		return gmdate('D, d M Y H:i:s', $library->updatedAt) . ' GMT';
 	}
 }
-

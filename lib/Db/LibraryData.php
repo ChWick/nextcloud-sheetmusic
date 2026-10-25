@@ -21,7 +21,6 @@ use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSong;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSourceType;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsYear;
 
-
 class LibraryData implements \JsonSerializable {
 	/**
 	 * @param list<MobileSheetsSong> $songs

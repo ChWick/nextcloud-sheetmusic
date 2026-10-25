@@ -9,12 +9,12 @@ declare(strict_types=1);
 
 namespace OCA\SheetMusic\Tests\Unit\Service;
 
-use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsFile;
-use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSong;
 use OCA\SheetMusic\Service\FilePathRegenerator;
+use OCA\SheetMusic\Service\SyncException;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsFile;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPath;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPathResolver;
-use OCA\SheetMusic\Service\SyncException;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSong;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;

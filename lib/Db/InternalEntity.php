@@ -20,7 +20,6 @@ use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSignature;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSourceType;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsYear;
 
-
 class InternalEntity {
 	public function __construct(
 		public ?int $id = null,

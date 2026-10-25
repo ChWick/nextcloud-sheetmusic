@@ -9,10 +9,9 @@ declare(strict_types=1);
 
 namespace OCA\SheetMusic\Sync\MobileSheets;
 
+use OCA\SheetMusic\Db\LibraryData;
 use PDO;
 use Psr\Log\LoggerInterface;
-use OCA\SheetMusic\Db\LibraryData;
-
 
 class SongMapper extends AbstractDatabaseMapper {
 	/** Type constants for MobileSheets Files.Type column */

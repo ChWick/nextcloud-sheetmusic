@@ -12,6 +12,11 @@ namespace OCA\SheetMusic\Service;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsFile;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsFileFacts;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsFileLogEntry;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsHashCodesFile;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPath;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPathResolver;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSong;
 use OCA\SheetMusic\Sync\MobileSheets\SongMapper;
 use OCP\Files\File;
@@ -20,12 +25,6 @@ use OCP\Files\IRootFolder;
 use OCP\Files\Node;
 use OCP\IUser;
 use Psr\Log\LoggerInterface;
-use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsFileFacts;
-use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsFileLogEntry;
-use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsHashCodesFile;
-use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPath;
-use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPathResolver;
-
 
 /**
  * Handles regenerating individual file paths according to library naming rules,

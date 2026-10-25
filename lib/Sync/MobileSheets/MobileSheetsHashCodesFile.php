@@ -198,7 +198,7 @@ class MobileSheetsHashCodesFile {
 		$origCount = count($this->entries);
 		$this->entries = array_values(array_filter(
 			$this->entries,
-			static fn(MobileSheetsHashCode $entry): bool => $entry->path !== $path,
+			static fn (MobileSheetsHashCode $entry): bool => $entry->path !== $path,
 		));
 
 		if (count($this->entries) !== $origCount) {

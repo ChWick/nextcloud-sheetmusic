@@ -17,16 +17,15 @@ use OCA\SheetMusic\Db\InternalSongFile;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsFileFacts;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsHashCodesFile;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPathResolver;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsTableHelper;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\Files\Node;
 use Psr\Log\LoggerInterface;
-use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsFileFacts;
-use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsHashCodesFile;
-use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPathResolver;
-use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsTableHelper;
-
 
 class LibraryIntegrityFixer {
 	public function __construct(

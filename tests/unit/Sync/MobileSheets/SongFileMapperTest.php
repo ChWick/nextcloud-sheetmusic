@@ -9,8 +9,8 @@ declare(strict_types=1);
 
 namespace Sync\MobileSheets;
 
-use OCA\SheetMusic\Sync\MobileSheets\SongFileMapper;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsFileFacts;
+use OCA\SheetMusic\Sync\MobileSheets\SongFileMapper;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 
