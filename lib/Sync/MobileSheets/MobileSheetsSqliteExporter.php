@@ -561,19 +561,8 @@ class MobileSheetsSqliteExporter {
 			}
 		}
 
-		if (MobileSheetsTableHelper::tableExists($db, 'android_metadata')) {
-			$cnt = (int)$db->query('SELECT count(*) FROM android_metadata')->fetchColumn();
-			if ($cnt === 0) {
-				$db->exec("INSERT INTO android_metadata (locale) VALUES ('en_US')");
-			}
-		}
-
-		if (MobileSheetsTableHelper::tableExists($db, 'Defaults')) {
-			$cnt = (int)$db->query('SELECT count(*) FROM Defaults')->fetchColumn();
-			if ($cnt === 0) {
-				$db->exec('INSERT INTO Defaults (Id, Initialized) VALUES (1, 1)');
-			}
-		}
+		MobileSheetsTableHelper::insertIfEmpty($db, 'android_metadata', ['locale' => 'en_US']);
+		MobileSheetsTableHelper::insertIfEmpty($db, 'Defaults', ['Id' => 1, 'Initialized' => 1]);
 	}
 
 
