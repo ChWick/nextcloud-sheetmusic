@@ -24,6 +24,20 @@ require_once __DIR__ . '/TestSupport/FakeRequest.php';
 \OC_App::loadApp(OCA\SheetMusic\AppInfo\Application::APP_ID);
 OC_Hook::clear();
 
+// Disable Nextcloud profiler DB query backtrace accumulation during test runs to prevent multi-GB memory leaks
+try {
+	if (\OC::$server->has(\OCP\IDBConnection::class)) {
+		$adapter = \OC::$server->get(\OCP\IDBConnection::class);
+		$ref = new ReflectionProperty($adapter, 'inner');
+		$inner = $ref->getValue($adapter);
+		$refConfig = new ReflectionProperty($inner, '_config');
+		$config = $refConfig->getValue($inner);
+		$config->setSQLLogger(null);
+	}
+} catch (\Throwable) {
+	// Fall through
+}
+
 // Register class aliases for backwards compatibility with legacy namespaces
 $legacyAliases = [
 	'OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSong' => 'OCA\SheetMusic\Db\MobileSheetsSong',

@@ -753,7 +753,7 @@ final class MobileSheetsSyncTest extends TestCase {
 
 		// 1. Create a song in Nextcloud
 		$song = new InternalSong(
-			uuid: 'song-link-uuid',
+			uuid: 'song-link-uuid-' . $entityType,
 			libraryId: $lib->id,
 			title: 'Link Test Song',
 			sortTitle: 'Link Test Song',
@@ -770,7 +770,7 @@ final class MobileSheetsSyncTest extends TestCase {
 
 		// 2. Create two entities in Nextcloud
 		$entity1 = new InternalEntity(
-			uuid: 'ent-1-uuid',
+			uuid: 'ent-1-uuid-' . $entityType,
 			libraryId: $lib->id,
 			type: $entityType,
 			name: 'Entity One',
@@ -783,7 +783,7 @@ final class MobileSheetsSyncTest extends TestCase {
 		$this->entityMapper->insert($entity1);
 
 		$entity2 = new InternalEntity(
-			uuid: 'ent-2-uuid',
+			uuid: 'ent-2-uuid-' . $entityType,
 			libraryId: $lib->id,
 			type: $entityType,
 			name: 'Entity Two',
