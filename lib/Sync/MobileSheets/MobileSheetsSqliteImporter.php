@@ -792,40 +792,4 @@ class MobileSheetsSqliteImporter {
 		return null;
 	}
 
-	private function resolveWebdavPathForFile(InternalSongFile $file, InternalLibrary $library, ?IUser $user): ?string {
-		if ($user !== null) {
-			try {
-				$userFolder = $this->rootFolder->getUserFolder($user->getUID());
-				$nodes = $userFolder->getById($file->fileId);
-				if ($nodes !== []) {
-					$nodePath = $nodes[0]->getPath();
-					$msPath = $this->pathResolver->fromInternal($nodePath, $user);
-					if ($msPath !== null) {
-						return $msPath->webdav;
-					}
-				}
-			} catch (\Throwable) {
-				// Fall through
-			}
-
-			try {
-				$rootNodes = $this->rootFolder->getById($file->fileId);
-				if ($rootNodes !== []) {
-					$nodePath = $rootNodes[0]->getPath();
-					$msPath = $this->pathResolver->fromInternal($nodePath, $user);
-					if ($msPath !== null) {
-						return $msPath->webdav;
-					}
-				}
-			} catch (\Throwable) {
-				// Fall through
-			}
-
-			return null;
-		}
-
-		// Fallback for tests/synthetic libraries where $user is null
-		$base = rtrim($library->path, '/');
-		return sprintf('%s/%s/%s/file_%d.pdf', MobileSheetsPathResolver::WEBDAV_ROOT, $library->userId, ltrim($base, '/'), $file->fileId);
-	}
 }

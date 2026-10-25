@@ -283,146 +283,16 @@ class SongMapper extends AbstractDatabaseMapper {
 
 		$this->updateRowById($database, 'Songs', $updateData + $this->dateColumns($database, 'Songs', withCreation: false), $songId);
 
-		// Update Composers
-		if ($this->hasTable($database, 'ComposerSongs')) {
-			$delStmt = $database->prepare('DELETE FROM ComposerSongs WHERE SongId = :songId');
-			$delStmt->execute([':songId' => $songId]);
-
-			$insStmt = $database->prepare('INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (:composerId, :songId)');
-			foreach ($composerIds as $composerId) {
-				$insStmt->execute([
-					':composerId' => $composerId,
-					':songId' => $songId,
-				]);
-			}
-		}
-
-		// Update Books
-		if ($this->hasTable($database, 'BookSongs')) {
-			$delStmt = $database->prepare('DELETE FROM BookSongs WHERE SongId = :songId');
-			$delStmt->execute([':songId' => $songId]);
-
-			$insStmt = $database->prepare('INSERT INTO BookSongs (BookId, SongId) VALUES (:bookId, :songId)');
-			foreach ($bookIds as $bookId) {
-				$insStmt->execute([
-					':bookId' => $bookId,
-					':songId' => $songId,
-				]);
-			}
-		}
-
-		// Update Collections
-		if ($this->hasTable($database, 'CollectionSong')) {
-			$delStmt = $database->prepare('DELETE FROM CollectionSong WHERE SongId = :songId');
-			$delStmt->execute([':songId' => $songId]);
-
-			$insStmt = $database->prepare('INSERT INTO CollectionSong (CollectionId, SongId) VALUES (:collectionId, :songId)');
-			foreach ($collectionIds as $collectionId) {
-				$insStmt->execute([
-					':collectionId' => $collectionId,
-					':songId' => $songId,
-				]);
-			}
-		}
-
-		// Update Artists
-		if ($this->hasTable($database, 'ArtistsSongs')) {
-			$delStmt = $database->prepare('DELETE FROM ArtistsSongs WHERE SongId = :songId');
-			$delStmt->execute([':songId' => $songId]);
-
-			$insStmt = $database->prepare('INSERT INTO ArtistsSongs (ArtistId, SongId) VALUES (:artistId, :songId)');
-			foreach ($artistIds as $artistId) {
-				$insStmt->execute([
-					':artistId' => $artistId,
-					':songId' => $songId,
-				]);
-			}
-		}
-
-		// Update Genres
-		if ($this->hasTable($database, 'GenresSongs')) {
-			$delStmt = $database->prepare('DELETE FROM GenresSongs WHERE SongId = :songId');
-			$delStmt->execute([':songId' => $songId]);
-
-			$insStmt = $database->prepare('INSERT INTO GenresSongs (GenreId, SongId) VALUES (:genreId, :songId)');
-			foreach ($genreIds as $genreId) {
-				$insStmt->execute([
-					':genreId' => $genreId,
-					':songId' => $songId,
-				]);
-			}
-		}
-
-		// Update Keys
-		if ($this->hasTable($database, 'KeySongs')) {
-			$delStmt = $database->prepare('DELETE FROM KeySongs WHERE SongId = :songId');
-			$delStmt->execute([':songId' => $songId]);
-
-			$insStmt = $database->prepare('INSERT INTO KeySongs (KeyId, SongId) VALUES (:keyId, :songId)');
-			foreach ($keyIds as $keyId) {
-				$insStmt->execute([
-					':keyId' => $keyId,
-					':songId' => $songId,
-				]);
-			}
-		}
-
-		// Update Custom Groups & Instruments
-		if ($this->hasTable($database, 'CustomGroupSongs')) {
-			$delStmt = $database->prepare('DELETE FROM CustomGroupSongs WHERE SongId = :songId');
-			$delStmt->execute([':songId' => $songId]);
-
-			$allGroupIds = array_unique(array_merge($customGroupIds, $instrumentIds));
-			$insStmt = $database->prepare('INSERT INTO CustomGroupSongs (GroupId, SongId) VALUES (:groupId, :songId)');
-			foreach ($allGroupIds as $groupId) {
-				$insStmt->execute([
-					':groupId' => $groupId,
-					':songId' => $songId,
-				]);
-			}
-		}
-
-		// Update Years
-		if ($this->hasTable($database, 'YearsSongs')) {
-			$delStmt = $database->prepare('DELETE FROM YearsSongs WHERE SongId = :songId');
-			$delStmt->execute([':songId' => $songId]);
-
-			$insStmt = $database->prepare('INSERT INTO YearsSongs (YearId, SongId) VALUES (:yearId, :songId)');
-			foreach ($yearIds as $yearId) {
-				$insStmt->execute([
-					':yearId' => $yearId,
-					':songId' => $songId,
-				]);
-			}
-		}
-
-		// Update Signatures
-		if ($this->hasTable($database, 'SignatureSongs')) {
-			$delStmt = $database->prepare('DELETE FROM SignatureSongs WHERE SongId = :songId');
-			$delStmt->execute([':songId' => $songId]);
-
-			$insStmt = $database->prepare('INSERT INTO SignatureSongs (SignatureId, SongId) VALUES (:signatureId, :songId)');
-			foreach ($signatureIds as $signatureId) {
-				$insStmt->execute([
-					':signatureId' => $signatureId,
-					':songId' => $songId,
-				]);
-			}
-		}
-
-		// Update SourceTypes
-		if ($this->hasTable($database, 'SourceTypeSongs')) {
-			$delStmt = $database->prepare('DELETE FROM SourceTypeSongs WHERE SongId = :songId');
-			$delStmt->execute([':songId' => $songId]);
-
-			$insStmt = $database->prepare('INSERT INTO SourceTypeSongs (SourceTypeId, SongId) VALUES (:sourceTypeId, :songId)');
-			foreach ($sourceTypeIds as $sourceTypeId) {
-				$insStmt->execute([
-					':sourceTypeId' => $sourceTypeId,
-					':songId' => $songId,
-				]);
-			}
-		}
+		$this->replaceSongRelations($database, 'ComposerSongs', 'ComposerId', $songId, $composerIds);
+		$this->replaceSongRelations($database, 'BookSongs', 'BookId', $songId, $bookIds);
+		$this->replaceSongRelations($database, 'CollectionSong', 'CollectionId', $songId, $collectionIds);
+		$this->replaceSongRelations($database, 'ArtistsSongs', 'ArtistId', $songId, $artistIds);
+		$this->replaceSongRelations($database, 'GenresSongs', 'GenreId', $songId, $genreIds);
+		$this->replaceSongRelations($database, 'KeySongs', 'KeyId', $songId, $keyIds);
+		$this->replaceSongRelations($database, 'CustomGroupSongs', 'GroupId', $songId, array_values(array_unique(array_merge($customGroupIds, $instrumentIds))));
+		$this->replaceSongRelations($database, 'YearsSongs', 'YearId', $songId, $yearIds);
+		$this->replaceSongRelations($database, 'SignatureSongs', 'SignatureId', $songId, $signatureIds);
+		$this->replaceSongRelations($database, 'SourceTypeSongs', 'SourceTypeId', $songId, $sourceTypeIds);
 	}
 
 	/**
@@ -546,6 +416,32 @@ class SongMapper extends AbstractDatabaseMapper {
 				$delStmt = $database->prepare('DELETE FROM "' . $tableName . '" WHERE SongId = ? AND ' . $entityIdCol . ' IN (' . $inClause . ')');
 				$delStmt->execute(array_merge([$songId], $targetIds));
 			}
+		}
+	}
+
+	/**
+	 * Replace song-entity relations in a link table.
+	 *
+	 * @param list<int> $entityIds
+	 */
+	private function replaceSongRelations(PDO $database, string $tableName, string $entityIdCol, int $songId, array $entityIds): void {
+		if (!$this->hasTable($database, $tableName)) {
+			return;
+		}
+
+		$delStmt = $database->prepare('DELETE FROM "' . $tableName . '" WHERE SongId = :songId');
+		$delStmt->execute([':songId' => $songId]);
+
+		if ($entityIds === []) {
+			return;
+		}
+
+		$insStmt = $database->prepare('INSERT INTO "' . $tableName . '" (' . $entityIdCol . ', SongId) VALUES (:entityId, :songId)');
+		foreach ($entityIds as $entityId) {
+			$insStmt->execute([
+				':entityId' => $entityId,
+				':songId' => $songId,
+			]);
 		}
 	}
 

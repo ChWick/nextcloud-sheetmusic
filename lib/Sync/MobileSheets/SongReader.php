@@ -192,35 +192,9 @@ class SongReader extends AbstractDatabaseMapper {
 			}
 		}
 
-		$songComposers = [];
-		if ($this->hasTable($database, 'ComposerSongs')) {
-			$stmt = $database->query('SELECT ComposerId, SongId FROM ComposerSongs');
-			if ($stmt !== false) {
-				while ($row = $stmt->fetch()) {
-					$songComposers[(int)$row['SongId']][] = (int)$row['ComposerId'];
-				}
-			}
-		}
-
-		$songBooks = [];
-		if ($this->hasTable($database, 'BookSongs')) {
-			$stmt = $database->query('SELECT BookId, SongId FROM BookSongs');
-			if ($stmt !== false) {
-				while ($row = $stmt->fetch()) {
-					$songBooks[(int)$row['SongId']][] = (int)$row['BookId'];
-				}
-			}
-		}
-
-		$songCollections = [];
-		if ($this->hasTable($database, 'CollectionSong')) {
-			$stmt = $database->query('SELECT CollectionId, SongId FROM CollectionSong');
-			if ($stmt !== false) {
-				while ($row = $stmt->fetch()) {
-					$songCollections[(int)$row['SongId']][] = (int)$row['CollectionId'];
-				}
-			}
-		}
+		$songComposers = $this->loadSongLinks($database, 'ComposerSongs', 'ComposerId');
+		$songBooks = $this->loadSongLinks($database, 'BookSongs', 'BookId');
+		$songCollections = $this->loadSongLinks($database, 'CollectionSong', 'CollectionId');
 
 		$songFiles = [];
 		if ($this->hasTable($database, 'Files')) {
@@ -235,35 +209,9 @@ class SongReader extends AbstractDatabaseMapper {
 			}
 		}
 
-		$songArtists = [];
-		if ($this->hasTable($database, 'ArtistsSongs')) {
-			$stmt = $database->query('SELECT ArtistId, SongId FROM ArtistsSongs');
-			if ($stmt !== false) {
-				while ($row = $stmt->fetch()) {
-					$songArtists[(int)$row['SongId']][] = (int)$row['ArtistId'];
-				}
-			}
-		}
-
-		$songGenres = [];
-		if ($this->hasTable($database, 'GenresSongs')) {
-			$stmt = $database->query('SELECT GenreId, SongId FROM GenresSongs');
-			if ($stmt !== false) {
-				while ($row = $stmt->fetch()) {
-					$songGenres[(int)$row['SongId']][] = (int)$row['GenreId'];
-				}
-			}
-		}
-
-		$songKeys = [];
-		if ($this->hasTable($database, 'KeySongs')) {
-			$stmt = $database->query('SELECT KeyId, SongId FROM KeySongs');
-			if ($stmt !== false) {
-				while ($row = $stmt->fetch()) {
-					$songKeys[(int)$row['SongId']][] = (int)$row['KeyId'];
-				}
-			}
-		}
+		$songArtists = $this->loadSongLinks($database, 'ArtistsSongs', 'ArtistId');
+		$songGenres = $this->loadSongLinks($database, 'GenresSongs', 'GenreId');
+		$songKeys = $this->loadSongLinks($database, 'KeySongs', 'KeyId');
 
 		$songCustomGroups = [];
 		$songInstruments = [];
@@ -282,35 +230,9 @@ class SongReader extends AbstractDatabaseMapper {
 			}
 		}
 
-		$songYears = [];
-		if ($this->hasTable($database, 'YearsSongs')) {
-			$stmt = $database->query('SELECT YearId, SongId FROM YearsSongs');
-			if ($stmt !== false) {
-				while ($row = $stmt->fetch()) {
-					$songYears[(int)$row['SongId']][] = (int)$row['YearId'];
-				}
-			}
-		}
-
-		$songSignatures = [];
-		if ($this->hasTable($database, 'SignatureSongs')) {
-			$stmt = $database->query('SELECT SignatureId, SongId FROM SignatureSongs');
-			if ($stmt !== false) {
-				while ($row = $stmt->fetch()) {
-					$songSignatures[(int)$row['SongId']][] = (int)$row['SignatureId'];
-				}
-			}
-		}
-
-		$songSourceTypes = [];
-		if ($this->hasTable($database, 'SourceTypeSongs')) {
-			$stmt = $database->query('SELECT SourceTypeId, SongId FROM SourceTypeSongs');
-			if ($stmt !== false) {
-				while ($row = $stmt->fetch()) {
-					$songSourceTypes[(int)$row['SongId']][] = (int)$row['SourceTypeId'];
-				}
-			}
-		}
+		$songYears = $this->loadSongLinks($database, 'YearsSongs', 'YearId');
+		$songSignatures = $this->loadSongLinks($database, 'SignatureSongs', 'SignatureId');
+		$songSourceTypes = $this->loadSongLinks($database, 'SourceTypeSongs', 'SourceTypeId');
 
 		$songBookmarks = [];
 		if ($this->hasTable($database, 'Bookmarks')) {
@@ -741,5 +663,26 @@ class SongReader extends AbstractDatabaseMapper {
 		}
 
 		return $entities;
+	}
+
+	/**
+	 * @return array<int, list<int>> [songId => [entityId, ...]]
+	 */
+	private function loadSongLinks(PDO $database, string $tableName, string $entityIdCol): array {
+		if (!$this->hasTable($database, $tableName)) {
+			return [];
+		}
+
+		$stmt = $database->query('SELECT ' . $entityIdCol . ', SongId FROM "' . $tableName . '"');
+		if ($stmt === false) {
+			return [];
+		}
+
+		$links = [];
+		while ($row = $stmt->fetch()) {
+			$links[(int)$row['SongId']][] = (int)$row[$entityIdCol];
+		}
+
+		return $links;
 	}
 }

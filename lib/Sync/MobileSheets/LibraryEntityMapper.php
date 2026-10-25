@@ -50,55 +50,43 @@ class LibraryEntityMapper extends AbstractDatabaseMapper {
 		'sourcetypes' => ['tables' => ['SourceType', 'SourceTypes'], 'columns' => ['Type', 'Name']],
 	];
 
-	public function createComposer(string $databasePath, string $name): int {
+	/**
+	 * @param list<string> $tableCandidates
+	 * @param list<string> $colCandidates
+	 */
+	private function createGenericEntity(string $databasePath, array $tableCandidates, array $colCandidates, string $value): int {
 		$database = $this->openConnection($databasePath);
-		return $this->insertRow($database, 'Composer', [
-			'Name' => $name,
-		] + $this->dateColumns($database, 'Composer'));
+		$table = $this->resolveTable($database, $tableCandidates) ?? $tableCandidates[0];
+		$col = $this->resolveColumn($database, $table, $colCandidates, $colCandidates[0]);
+		return $this->insertRow($database, $table, [$col => $value] + $this->dateColumns($database, $table));
+	}
+
+	public function createComposer(string $databasePath, string $name): int {
+		return $this->createGenericEntity($databasePath, ['Composer'], ['Name'], $name);
 	}
 
 	public function createBook(string $databasePath, string $title): int {
-		$database = $this->openConnection($databasePath);
-		return $this->insertRow($database, 'Books', [
-			'Title' => $title,
-		] + $this->dateColumns($database, 'Books'));
+		return $this->createGenericEntity($databasePath, ['Books'], ['Title'], $title);
 	}
 
 	public function createCollection(string $databasePath, string $name): int {
-		$database = $this->openConnection($databasePath);
-		return $this->insertRow($database, 'Collections', [
-			'Name' => $name,
-		] + $this->dateColumns($database, 'Collections'));
+		return $this->createGenericEntity($databasePath, ['Collections'], ['Name'], $name);
 	}
 
 	public function createArtist(string $databasePath, string $name): int {
-		$database = $this->openConnection($databasePath);
-		return $this->insertRow($database, 'Artists', [
-			'Name' => $name,
-		] + $this->dateColumns($database, 'Artists'));
+		return $this->createGenericEntity($databasePath, ['Artists'], ['Name'], $name);
 	}
 
 	public function createGenre(string $databasePath, string $name): int {
-		$database = $this->openConnection($databasePath);
-		return $this->insertRow($database, 'Genres', [
-			'Type' => $name,
-		] + $this->dateColumns($database, 'Genres'));
+		return $this->createGenericEntity($databasePath, ['Genres'], ['Type', 'Name'], $name);
 	}
 
 	public function createKey(string $databasePath, string $name): int {
-		$database = $this->openConnection($databasePath);
-		$table = $this->resolveTable($database, ['Key', 'Keys']) ?? 'Keys';
-		$col = $this->resolveColumn($database, $table, ['Name', 'Key'], 'Name');
-		return $this->insertRow($database, $table, [
-			$col => $name,
-		] + $this->dateColumns($database, $table));
+		return $this->createGenericEntity($databasePath, ['Key', 'Keys'], ['Name', 'Key'], $name);
 	}
 
 	public function createCustomGroup(string $databasePath, string $name): int {
-		$database = $this->openConnection($databasePath);
-		return $this->insertRow($database, 'CustomGroup', [
-			'Name' => $name,
-		] + $this->dateColumns($database, 'CustomGroup'));
+		return $this->createGenericEntity($databasePath, ['CustomGroup'], ['Name'], $name);
 	}
 
 	public function createInstrument(string $databasePath, string $name): int {
@@ -145,19 +133,11 @@ class LibraryEntityMapper extends AbstractDatabaseMapper {
 	}
 
 	public function createSignature(string $databasePath, string $name): int {
-		$database = $this->openConnection($databasePath);
-		return $this->insertRow($database, 'Signature', [
-			'Name' => $name,
-		] + $this->dateColumns($database, 'Signature'));
+		return $this->createGenericEntity($databasePath, ['Signature'], ['Name'], $name);
 	}
 
 	public function createSourceType(string $databasePath, string $name): int {
-		$database = $this->openConnection($databasePath);
-		$table = $this->resolveTable($database, ['SourceType', 'SourceTypes']) ?? 'SourceTypes';
-		$col = $this->resolveColumn($database, $table, ['Type', 'Name'], 'Type');
-		return $this->insertRow($database, $table, [
-			$col => $name,
-		] + $this->dateColumns($database, $table));
+		return $this->createGenericEntity($databasePath, ['SourceType', 'SourceTypes'], ['Type', 'Name'], $name);
 	}
 
 	/**
