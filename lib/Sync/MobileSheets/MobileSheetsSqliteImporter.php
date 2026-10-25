@@ -669,12 +669,15 @@ class MobileSheetsSqliteImporter {
 				$hasRows = true;
 				$recordId = self::extractRecordId($dataRow);
 
+				$refSongClientId = match (true) {
+					$lowerTable === 'songs' => isset($dataRow['Id']) && is_numeric($dataRow['Id']) ? (int)$dataRow['Id'] : null,
+					$lowerTable === 'recent' && isset($dataRow['Song']) && is_numeric($dataRow['Song']) => (int)$dataRow['Song'],
+					isset($dataRow['SongId']) && is_numeric($dataRow['SongId']) => (int)$dataRow['SongId'],
+					default => null,
+				};
+
 				// Skip rows that correspond to records tombstoned in Nextcloud
-				if ($lowerTable === 'songs' && isset($dataRow['Id']) && isset($deletedSongClientIds[(int)$dataRow['Id']])) {
-					$this->miscMapper->deleteMiscData($libraryId, 'mobilesheets', $tableName, $recordId);
-					continue;
-				}
-				if (isset($dataRow['SongId']) && is_numeric($dataRow['SongId']) && isset($deletedSongClientIds[(int)$dataRow['SongId']])) {
+				if ($refSongClientId !== null && isset($deletedSongClientIds[$refSongClientId])) {
 					$this->miscMapper->deleteMiscData($libraryId, 'mobilesheets', $tableName, $recordId);
 					continue;
 				}
@@ -684,15 +687,7 @@ class MobileSheetsSqliteImporter {
 				}
 
 				$uploadedRecordIds[$recordId] = true;
-
-				$songUuid = null;
-				if ($lowerTable === 'songs') {
-					if (isset($dataRow['Id']) && is_numeric($dataRow['Id'])) {
-						$songUuid = $songUuidByClientId[(int)$dataRow['Id']] ?? null;
-					}
-				} elseif (isset($dataRow['SongId']) && is_numeric($dataRow['SongId'])) {
-					$songUuid = $songUuidByClientId[(int)$dataRow['SongId']] ?? null;
-				}
+				$songUuid = $refSongClientId !== null ? ($songUuidByClientId[$refSongClientId] ?? null) : null;
 
 				$this->miscMapper->saveMiscData($libraryId, 'mobilesheets', $tableName, $recordId, $dataRow, $songUuid);
 			}

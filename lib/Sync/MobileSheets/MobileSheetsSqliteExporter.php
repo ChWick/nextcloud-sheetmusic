@@ -580,18 +580,14 @@ class MobileSheetsSqliteExporter {
 					}
 
 					// Never export tombstoned / deleted records or references via misc data
-					if ($lowerTable === 'songs') {
-						if (isset($row['Id']) && isset($deletedSongClientIds[(int)$row['Id']])) {
-							continue;
-						}
-					} elseif (isset($row['SongId']) && is_numeric($row['SongId'])) {
-						if (isset($deletedSongClientIds[(int)$row['SongId']])) {
-							continue;
-						}
-					} elseif ($lowerTable === 'recent' && isset($row['Song']) && is_numeric($row['Song'])) {
-						if (isset($deletedSongClientIds[(int)$row['Song']])) {
-							continue;
-						}
+					$refSongClientId = match (true) {
+						$lowerTable === 'songs' => isset($row['Id']) && is_numeric($row['Id']) ? (int)$row['Id'] : null,
+						$lowerTable === 'recent' && isset($row['Song']) && is_numeric($row['Song']) => (int)$row['Song'],
+						isset($row['SongId']) && is_numeric($row['SongId']) => (int)$row['SongId'],
+						default => null,
+					};
+					if ($refSongClientId !== null && isset($deletedSongClientIds[$refSongClientId])) {
+						continue;
 					}
 
 					if ($existingColumns !== []) {
