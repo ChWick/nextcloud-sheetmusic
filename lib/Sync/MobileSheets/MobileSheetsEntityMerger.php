@@ -103,25 +103,7 @@ class MobileSheetsEntityMerger {
 				}
 
 				if ($existing !== null) {
-					$shouldUpdate = false;
-					if ($existing->deletedAt !== null) {
-						// Tombstoned: check if MobileSheets modified after tombstone and baseline export
-						$metaUpdatedAt = (int)($meta['updated_at'] ?? 0);
-						if ($lastModifiedSec > $existing->deletedAt && ($meta === null || $lastModifiedSec > $metaUpdatedAt)) {
-							$existing->deletedAt = null;
-							$shouldUpdate = true;
-						}
-					} elseif ($lastModifiedSec > $existing->updatedAt) {
-						$shouldUpdate = true;
-					} else {
-						// Nextcloud wins or equals; just ensure clientId is recorded
-						if ($existing->clientId === null || $existing->clientId !== $clientId) {
-							$existing->clientId = $clientId;
-							$this->entityMapper->update($existing);
-						}
-					}
-
-					if ($shouldUpdate) {
+					if (MobileSheetsTableHelper::shouldClientWinLww($existing, $lastModifiedSec, $meta)) {
 						$existing->name = $name;
 						$existing->sortBy = $sortBy;
 						$existing->ascending = $ascending;
@@ -129,6 +111,8 @@ class MobileSheetsEntityMerger {
 						$existing->updatedAt = $lastModifiedSec;
 						$this->entityMapper->update($existing);
 						$stats['entitiesUpdated']++;
+					} elseif (MobileSheetsTableHelper::ensureClientId($existing, $clientId)) {
+						$this->entityMapper->update($existing);
 					}
 				} else {
 					// New entity created in MobileSheets

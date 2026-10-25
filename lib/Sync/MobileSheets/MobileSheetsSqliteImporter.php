@@ -222,25 +222,7 @@ class MobileSheetsSqliteImporter {
 
 			$savedSongId = null;
 			if ($existing !== null) {
-				$shouldUpdate = false;
-				if ($existing->deletedAt !== null) {
-					// Tombstone check: only revive if modified on client after both deletion and baseline export
-					$metaUpdatedAt = (int)($meta['updated_at'] ?? 0);
-					if ($lastModifiedSec > $existing->deletedAt && ($meta === null || $lastModifiedSec > $metaUpdatedAt)) {
-						$existing->deletedAt = null;
-						$shouldUpdate = true;
-					}
-				} elseif ($lastModifiedSec > $existing->updatedAt || ($existing->clientId === null && $uuid === null)) {
-					$shouldUpdate = true;
-				} else {
-					// Nextcloud is newer or equal
-					if ($existing->clientId === null || $existing->clientId !== $clientId) {
-						$existing->clientId = $clientId;
-						$this->songMapper->update($existing);
-					}
-				}
-
-				if ($shouldUpdate) {
+				if (MobileSheetsTableHelper::shouldClientWinLww($existing, $lastModifiedSec, $meta, allowUntrackedClientLww: true)) {
 					$existing->title = $title;
 					$existing->sortTitle = $sortTitle;
 					$existing->rating = $stars;
@@ -261,6 +243,8 @@ class MobileSheetsSqliteImporter {
 					$stats['songsUpdated']++;
 					$updatedSongClientIds[$clientId] = true;
 					$savedSongId = $existing->id;
+				} elseif (MobileSheetsTableHelper::ensureClientId($existing, $clientId)) {
+					$this->songMapper->update($existing);
 				}
 			} else {
 				// New song created in MobileSheets
@@ -406,23 +390,7 @@ class MobileSheetsSqliteImporter {
 			}
 
 			if ($existing !== null) {
-				$shouldUpdate = false;
-				if ($existing->deletedAt !== null) {
-					$metaUpdatedAt = (int)($meta['updated_at'] ?? 0);
-					if ($lastModifiedSec > $existing->deletedAt && ($meta === null || $lastModifiedSec > $metaUpdatedAt)) {
-						$existing->deletedAt = null;
-						$shouldUpdate = true;
-					}
-				} elseif ($lastModifiedSec > $existing->updatedAt || ($existing->clientId === null && $uuid === null)) {
-					$shouldUpdate = true;
-				} else {
-					if ($existing->clientId === null || $existing->clientId !== $fileClientId) {
-						$existing->clientId = $fileClientId;
-						$this->songFileMapper->update($existing);
-					}
-				}
-
-				if ($shouldUpdate) {
+				if (MobileSheetsTableHelper::shouldClientWinLww($existing, $lastModifiedSec, $meta, allowUntrackedClientLww: true)) {
 					$existing->pageOrder = $pageOrder;
 					$existing->pageCount = $pageCount;
 					$existing->fileSize = $fileSize;
@@ -432,6 +400,8 @@ class MobileSheetsSqliteImporter {
 					$existing->updatedAt = $lastModifiedSec ?: $existing->updatedAt;
 					$this->songFileMapper->update($existing);
 					$stats['filesUpdated']++;
+				} elseif (MobileSheetsTableHelper::ensureClientId($existing, $fileClientId)) {
+					$this->songFileMapper->update($existing);
 				}
 			} else {
 				$newFile = new InternalSongFile(
