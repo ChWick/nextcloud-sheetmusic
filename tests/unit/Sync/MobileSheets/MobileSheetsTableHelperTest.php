@@ -209,4 +209,20 @@ final class MobileSheetsTableHelperTest extends TestCase {
 		MobileSheetsTableHelper::ensureSyncMetadataTable($this->db);
 		self::assertTrue(MobileSheetsTableHelper::tableExists($this->db, '_nc_sync_metadata'));
 	}
+
+	public function testInsertIfEmpty(): void {
+		$this->db->exec('CREATE TABLE TestEmpty (Id INTEGER, Val TEXT)');
+
+		MobileSheetsTableHelper::insertIfEmpty($this->db, 'TestEmpty', ['Id' => 1, 'Val' => 'Default']);
+		$cnt = (int)$this->db->query('SELECT count(*) FROM TestEmpty')->fetchColumn();
+		self::assertSame(1, $cnt);
+
+		// Second call should not insert another row
+		MobileSheetsTableHelper::insertIfEmpty($this->db, 'TestEmpty', ['Id' => 2, 'Val' => 'Second']);
+		$cnt = (int)$this->db->query('SELECT count(*) FROM TestEmpty')->fetchColumn();
+		self::assertSame(1, $cnt);
+
+		// Non-existent table does nothing
+		MobileSheetsTableHelper::insertIfEmpty($this->db, 'NonExistentTable', ['Id' => 1]);
+	}
 }

@@ -317,4 +317,18 @@ final class MobileSheetsTableHelper {
 		$db->exec(self::SYNC_METADATA_TABLE_DDL);
 		$db->exec(self::SYNC_METADATA_INDEX_DDL);
 	}
+
+	/**
+	 * Insert a default row into a table if the table exists and is currently empty.
+	 *
+	 * @param array<string, mixed> $defaultRow
+	 */
+	public static function insertIfEmpty(PDO $db, string $tableName, array $defaultRow): void {
+		if (self::tableExists($db, $tableName)) {
+			$cnt = (int)$db->query(sprintf('SELECT count(*) FROM "%s"', str_replace('"', '""', $tableName)))->fetchColumn();
+			if ($cnt === 0) {
+				self::insertRow($db, $tableName, $defaultRow);
+			}
+		}
+	}
 }
