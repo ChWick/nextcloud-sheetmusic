@@ -204,4 +204,9 @@ final class MobileSheetsTableHelperTest extends TestCase {
 		$notFound = MobileSheetsTableHelper::findRowById($this->db, 'TestFind', 999);
 		self::assertNull($notFound);
 	}
+
+	public function testEnsureSyncMetadataTable(): void {
+		MobileSheetsTableHelper::ensureSyncMetadataTable($this->db);
+		self::assertTrue(MobileSheetsTableHelper::tableExists($this->db, '_nc_sync_metadata'));
+	}
 }

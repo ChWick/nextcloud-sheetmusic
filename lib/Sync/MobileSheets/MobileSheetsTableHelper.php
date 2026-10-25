@@ -306,4 +306,15 @@ final class MobileSheetsTableHelper {
 		}
 		return null;
 	}
+
+	public const SYNC_METADATA_TABLE_DDL = 'CREATE TABLE IF NOT EXISTS _nc_sync_metadata (entity_type TEXT NOT NULL, uuid TEXT NOT NULL, client_id INTEGER, updated_at INTEGER, extra_json TEXT, PRIMARY KEY (entity_type, uuid))';
+	public const SYNC_METADATA_INDEX_DDL = 'CREATE INDEX IF NOT EXISTS idx_nc_sync_client ON _nc_sync_metadata (entity_type, client_id)';
+
+	/**
+	 * Ensure the _nc_sync_metadata table and its client ID index exist.
+	 */
+	public static function ensureSyncMetadataTable(PDO $db): void {
+		$db->exec(self::SYNC_METADATA_TABLE_DDL);
+		$db->exec(self::SYNC_METADATA_INDEX_DDL);
+	}
 }
