@@ -56,14 +56,7 @@ class MobileSheetsEntityExporter {
 				$this->entityMapper->update($entity);
 			}
 
-			$existingEntityRow = null;
-			$checkRow = $db->query(sprintf('SELECT * FROM "%s" WHERE Id = %d', str_replace('"', '""', $tableName), (int)$clientId));
-			if ($checkRow !== false) {
-				$fetched = $checkRow->fetch();
-				if (is_array($fetched)) {
-					$existingEntityRow = $fetched;
-				}
-			}
+			$existingEntityRow = MobileSheetsTableHelper::findRowById($db, $tableName, $clientId);
 
 			$existingCols = MobileSheetsTableHelper::getTableColumns($db, $tableName);
 			$nameCol = MobileSheetsTableHelper::resolveEntityNameColumn($existingCols, $config['nameCol']) ?? $config['nameCol'];

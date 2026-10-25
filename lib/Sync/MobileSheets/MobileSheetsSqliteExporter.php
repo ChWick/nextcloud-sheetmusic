@@ -260,14 +260,7 @@ class MobileSheetsSqliteExporter {
 				$this->songMapper->update($song);
 			}
 
-			$existingSongRow = null;
-			$checkRow = $db->query(sprintf('SELECT * FROM Songs WHERE Id = %d', (int)$clientId));
-			if ($checkRow !== false) {
-				$fetched = $checkRow->fetch();
-				if (is_array($fetched)) {
-					$existingSongRow = $fetched;
-				}
-			}
+			$existingSongRow = MobileSheetsTableHelper::findRowById($db, 'Songs', $clientId);
 
 			$attrs = $attributesBySong[$song->id] ?? [];
 			$custom = $attrs['custom'] ?? '';
