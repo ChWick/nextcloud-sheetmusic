@@ -3,9 +3,20 @@
 	<php>
 		<ini name="memory_limit" value="512M"/>
 	</php>
-	<testsuite name="Sheet Music Tests">
-		<directory suffix="Test.php">unit</directory>
-	</testsuite>
+	<testsuites>
+		<testsuite name="core">
+			<directory suffix="Test.php">unit/Controller</directory>
+			<directory suffix="Test.php">unit/Dav</directory>
+			<directory suffix="Test.php">unit/Db</directory>
+			<directory suffix="Test.php">unit/Listener</directory>
+			<directory suffix="Test.php">unit/Migration</directory>
+			<directory suffix="Test.php">unit/Service</directory>
+			<directory suffix="Test.php">unit/Util</directory>
+		</testsuite>
+		<testsuite name="mobilesheets">
+			<directory suffix="Test.php">unit/Sync/MobileSheets</directory>
+		</testsuite>
+	</testsuites>
 	<source>
 		<include>
 			<directory suffix=".php">../appinfo</directory>
