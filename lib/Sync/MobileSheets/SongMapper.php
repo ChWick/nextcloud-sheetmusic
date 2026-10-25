@@ -331,43 +331,31 @@ class SongMapper extends AbstractDatabaseMapper {
 
 		$database = $this->openConnection($databasePath);
 
+		$allUpdates = [
+			['ComposerSongs', 'ComposerId', $composerUpdate],
+			['BookSongs', 'BookId', $bookUpdate],
+			['CollectionSong', 'CollectionId', $collectionUpdate],
+			['ArtistsSongs', 'ArtistId', $artistUpdate],
+			['GenresSongs', 'GenreId', $genreUpdate],
+			['KeySongs', 'KeyId', $keyUpdate],
+			['CustomGroupSongs', 'GroupId', $customGroupUpdate],
+			['YearsSongs', 'YearId', $yearUpdate],
+			['SignatureSongs', 'SignatureId', $signatureUpdate],
+			['SourceTypeSongs', 'SourceTypeId', $sourceTypeUpdate],
+			['CustomGroupSongs', 'GroupId', $instrumentUpdate],
+		];
+		$activeUpdates = array_values(array_filter(
+			$allUpdates,
+			fn (array $u): bool => $u[2] !== null && $this->hasTable($database, $u[0]),
+		));
+
 		$database->beginTransaction();
 		try {
 			foreach ($songIds as $songId) {
 				$this->updateRowById($database, 'Songs', $this->dateColumns($database, 'Songs', withCreation: false), $songId);
 
-				if ($composerUpdate !== null && $this->hasTable($database, 'ComposerSongs')) {
-					$this->updateCategoryRelations($database, 'ComposerSongs', 'ComposerId', $songId, $composerUpdate);
-				}
-				if ($bookUpdate !== null && $this->hasTable($database, 'BookSongs')) {
-					$this->updateCategoryRelations($database, 'BookSongs', 'BookId', $songId, $bookUpdate);
-				}
-				if ($collectionUpdate !== null && $this->hasTable($database, 'CollectionSong')) {
-					$this->updateCategoryRelations($database, 'CollectionSong', 'CollectionId', $songId, $collectionUpdate);
-				}
-				if ($artistUpdate !== null && $this->hasTable($database, 'ArtistsSongs')) {
-					$this->updateCategoryRelations($database, 'ArtistsSongs', 'ArtistId', $songId, $artistUpdate);
-				}
-				if ($genreUpdate !== null && $this->hasTable($database, 'GenresSongs')) {
-					$this->updateCategoryRelations($database, 'GenresSongs', 'GenreId', $songId, $genreUpdate);
-				}
-				if ($keyUpdate !== null && $this->hasTable($database, 'KeySongs')) {
-					$this->updateCategoryRelations($database, 'KeySongs', 'KeyId', $songId, $keyUpdate);
-				}
-				if ($customGroupUpdate !== null && $this->hasTable($database, 'CustomGroupSongs')) {
-					$this->updateCategoryRelations($database, 'CustomGroupSongs', 'GroupId', $songId, $customGroupUpdate);
-				}
-				if ($yearUpdate !== null && $this->hasTable($database, 'YearsSongs')) {
-					$this->updateCategoryRelations($database, 'YearsSongs', 'YearId', $songId, $yearUpdate);
-				}
-				if ($signatureUpdate !== null && $this->hasTable($database, 'SignatureSongs')) {
-					$this->updateCategoryRelations($database, 'SignatureSongs', 'SignatureId', $songId, $signatureUpdate);
-				}
-				if ($sourceTypeUpdate !== null && $this->hasTable($database, 'SourceTypeSongs')) {
-					$this->updateCategoryRelations($database, 'SourceTypeSongs', 'SourceTypeId', $songId, $sourceTypeUpdate);
-				}
-				if ($instrumentUpdate !== null && $this->hasTable($database, 'CustomGroupSongs')) {
-					$this->updateCategoryRelations($database, 'CustomGroupSongs', 'GroupId', $songId, $instrumentUpdate);
+				foreach ($activeUpdates as [$table, $col, $spec]) {
+					$this->updateCategoryRelations($database, $table, $col, $songId, $spec);
 				}
 			}
 			$database->commit();
