@@ -152,4 +152,44 @@ final class MobileSheetsTableHelperTest extends TestCase {
 		self::assertSame(5, $alloc2);
 		self::assertTrue($usedIds[5]);
 	}
+
+	public function testShouldClientWinLwwAndEnsureClientId(): void {
+		$record = (object)[
+			'clientId' => null,
+			'updatedAt' => 100,
+			'deletedAt' => null,
+		];
+
+		// Client has older timestamp
+		self::assertFalse(MobileSheetsTableHelper::shouldClientWinLww($record, 50));
+		// When client loses, ensureClientId records the clientId
+		self::assertTrue(MobileSheetsTableHelper::ensureClientId($record, 42));
+		self::assertSame(42, $record->clientId);
+		self::assertFalse(MobileSheetsTableHelper::ensureClientId($record, 42)); // No change if already set
+
+		// Client has newer timestamp
+		self::assertTrue(MobileSheetsTableHelper::shouldClientWinLww($record, 150));
+
+		// Tombstone: client older than deletion does not revive
+		$tombstoned = (object)[
+			'clientId' => 10,
+			'updatedAt' => 100,
+			'deletedAt' => 200,
+		];
+		self::assertFalse(MobileSheetsTableHelper::shouldClientWinLww($tombstoned, 150));
+		self::assertSame(200, $tombstoned->deletedAt);
+
+		// Tombstone: client newer than deletion and newer than baseline export revives
+		self::assertTrue(MobileSheetsTableHelper::shouldClientWinLww($tombstoned, 300, ['updated_at' => 250]));
+		self::assertNull($tombstoned->deletedAt);
+
+		// Untracked client LWW
+		$untracked = (object)[
+			'clientId' => null,
+			'updatedAt' => 500,
+			'deletedAt' => null,
+		];
+		self::assertFalse(MobileSheetsTableHelper::shouldClientWinLww($untracked, 400, null, allowUntrackedClientLww: false));
+		self::assertTrue(MobileSheetsTableHelper::shouldClientWinLww($untracked, 400, null, allowUntrackedClientLww: true));
+	}
 }

@@ -240,4 +240,54 @@ final class MobileSheetsTableHelper {
 		$usedIds[$allocated] = true;
 		return $allocated;
 	}
+
+	/**
+	 * Decide whether an uploaded client record wins Last-Write-Wins against an existing internal record,
+	 * reviving tombstones if modified on the client after deletion and baseline sync.
+	 *
+	 * @param object $existing Internal record with properties (deletedAt, updatedAt)
+	 * @param int $lastModifiedSec Client modification time in UNIX seconds
+	 * @param array<string, mixed>|null $syncMetaEntry Metadata entry from _nc_sync_metadata if present
+	 * @param bool $allowUntrackedClientLww When true, untracked client records with null clientId/uuid win LWW
+	 * @return bool True if client wins and existing record should be updated (deletedAt cleared if revived)
+	 */
+	public static function shouldClientWinLww(
+		object $existing,
+		int $lastModifiedSec,
+		?array $syncMetaEntry = null,
+		bool $allowUntrackedClientLww = false,
+	): bool {
+		if ($existing->deletedAt !== null) {
+			$metaUpdatedAt = (int)($syncMetaEntry['updated_at'] ?? 0);
+			if ($lastModifiedSec > $existing->deletedAt && ($syncMetaEntry === null || $lastModifiedSec > $metaUpdatedAt)) {
+				$existing->deletedAt = null;
+				return true;
+			}
+			return false;
+		}
+
+		if ($lastModifiedSec > $existing->updatedAt) {
+			return true;
+		}
+
+		if ($allowUntrackedClientLww && $existing->clientId === null && empty($syncMetaEntry['uuid'])) {
+			return true;
+		}
+
+		return false;
+	}
+
+	/**
+	 * Ensure the existing record has its clientId recorded when Nextcloud won or equaled LWW.
+	 * Returns true if clientId changed and the record needs to be updated.
+	 *
+	 * @param object $existing Internal record with property (clientId)
+	 */
+	public static function ensureClientId(object $existing, int $clientId): bool {
+		if ($existing->clientId === null || $existing->clientId !== $clientId) {
+			$existing->clientId = $clientId;
+			return true;
+		}
+		return false;
+	}
 }
