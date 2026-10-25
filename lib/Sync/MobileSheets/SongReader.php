@@ -37,86 +37,12 @@ class SongReader extends AbstractDatabaseMapper {
 	public function findLibraryData(string $databasePath): LibraryData {
 		$database = $this->openConnection($databasePath);
 
-		$composers = [];
-		$composersById = [];
-		if ($this->hasTable($database, 'Composer')) {
-			$stmt = $database->query('SELECT Id, Name FROM Composer ORDER BY Name');
-			if ($stmt !== false) {
-				while ($row = $stmt->fetch()) {
-					$composer = new MobileSheetsComposer((int)$row['Id'], (string)$row['Name']);
-					$composers[] = $composer;
-					$composersById[$composer->id] = $composer;
-				}
-			}
-		}
-
-		$books = [];
-		$booksById = [];
-		if ($this->hasTable($database, 'Books')) {
-			$stmt = $database->query('SELECT Id, Title FROM Books ORDER BY Title');
-			if ($stmt !== false) {
-				while ($row = $stmt->fetch()) {
-					$book = new MobileSheetsBook((int)$row['Id'], (string)$row['Title']);
-					$books[] = $book;
-					$booksById[$book->id] = $book;
-				}
-			}
-		}
-
-		$collections = [];
-		$collectionsById = [];
-		if ($this->hasTable($database, 'Collections')) {
-			$stmt = $database->query('SELECT Id, Name FROM Collections ORDER BY Name');
-			if ($stmt !== false) {
-				while ($row = $stmt->fetch()) {
-					$collection = new MobileSheetsCollection((int)$row['Id'], (string)$row['Name']);
-					$collections[] = $collection;
-					$collectionsById[$collection->id] = $collection;
-				}
-			}
-		}
-
-		$artists = [];
-		$artistsById = [];
-		if ($this->hasTable($database, 'Artists')) {
-			$stmt = $database->query('SELECT Id, Name FROM Artists ORDER BY Name');
-			if ($stmt !== false) {
-				while ($row = $stmt->fetch()) {
-					$artist = new MobileSheetsArtist((int)$row['Id'], (string)$row['Name']);
-					$artists[] = $artist;
-					$artistsById[$artist->id] = $artist;
-				}
-			}
-		}
-
-		$genres = [];
-		$genresById = [];
-		if ($this->hasTable($database, 'Genres')) {
-			$genreCol = $this->resolveColumn($database, 'Genres', ['Type', 'Name'], 'Type');
-			$stmt = $database->query('SELECT Id, ' . $genreCol . ' AS Type FROM Genres ORDER BY ' . $genreCol);
-			if ($stmt !== false) {
-				while ($row = $stmt->fetch()) {
-					$genre = new MobileSheetsGenre((int)$row['Id'], (string)$row['Type']);
-					$genres[] = $genre;
-					$genresById[$genre->id] = $genre;
-				}
-			}
-		}
-
-		$keys = [];
-		$keysById = [];
-		$keyTable = $this->resolveTable($database, ['Key', 'Keys']);
-		if ($keyTable !== null) {
-			$keyCol = $this->resolveColumn($database, $keyTable, ['Name', 'Key'], 'Name');
-			$stmt = $database->query('SELECT Id, ' . $keyCol . ' AS Name FROM "' . $keyTable . '" ORDER BY ' . $keyCol);
-			if ($stmt !== false) {
-				while ($row = $stmt->fetch()) {
-					$key = new MobileSheetsKey((int)$row['Id'], (string)$row['Name']);
-					$keys[] = $key;
-					$keysById[$key->id] = $key;
-				}
-			}
-		}
+		[$composers, $composersById] = $this->loadEntities($database, 'Composer', 'Name', fn(int $id, string $val) => new MobileSheetsComposer($id, $val));
+		[$books, $booksById] = $this->loadEntities($database, 'Books', 'Title', fn(int $id, string $val) => new MobileSheetsBook($id, $val));
+		[$collections, $collectionsById] = $this->loadEntities($database, 'Collections', 'Name', fn(int $id, string $val) => new MobileSheetsCollection($id, $val));
+		[$artists, $artistsById] = $this->loadEntities($database, 'Artists', 'Name', fn(int $id, string $val) => new MobileSheetsArtist($id, $val));
+		[$genres, $genresById] = $this->loadEntities($database, 'Genres', ['Type', 'Name'], fn(int $id, string $val) => new MobileSheetsGenre($id, $val));
+		[$keys, $keysById] = $this->loadEntities($database, ['Key', 'Keys'], ['Name', 'Key'], fn(int $id, string $val) => new MobileSheetsKey($id, $val));
 
 		$customGroups = [];
 		$customGroupsById = [];
@@ -150,47 +76,9 @@ class SongReader extends AbstractDatabaseMapper {
 			}
 		}
 
-		$years = [];
-		$yearsById = [];
-		if ($this->hasTable($database, 'Years')) {
-			$yearCol = $this->resolveColumn($database, 'Years', ['Year', 'Name'], 'Year');
-			$stmt = $database->query('SELECT Id, ' . $yearCol . ' AS Year FROM Years ORDER BY ' . $yearCol . ' ASC');
-			if ($stmt !== false) {
-				while ($row = $stmt->fetch()) {
-					$year = new MobileSheetsYear((int)$row['Id'], (int)$row['Year']);
-					$years[] = $year;
-					$yearsById[$year->id] = $year;
-				}
-			}
-		}
-
-		$signatures = [];
-		$signaturesById = [];
-		if ($this->hasTable($database, 'Signature')) {
-			$stmt = $database->query('SELECT Id, Name FROM Signature ORDER BY Name');
-			if ($stmt !== false) {
-				while ($row = $stmt->fetch()) {
-					$signature = new MobileSheetsSignature((int)$row['Id'], (string)$row['Name']);
-					$signatures[] = $signature;
-					$signaturesById[$signature->id] = $signature;
-				}
-			}
-		}
-
-		$sourceTypes = [];
-		$sourceTypesById = [];
-		$sourceTypeTable = $this->resolveTable($database, ['SourceType', 'SourceTypes']);
-		if ($sourceTypeTable !== null) {
-			$sourceTypeCol = $this->resolveColumn($database, $sourceTypeTable, ['Type', 'Name'], 'Type');
-			$stmt = $database->query('SELECT Id, ' . $sourceTypeCol . ' AS Type FROM "' . $sourceTypeTable . '" ORDER BY ' . $sourceTypeCol);
-			if ($stmt !== false) {
-				while ($row = $stmt->fetch()) {
-					$sourceType = new MobileSheetsSourceType((int)$row['Id'], (string)$row['Type']);
-					$sourceTypes[] = $sourceType;
-					$sourceTypesById[$sourceType->id] = $sourceType;
-				}
-			}
-		}
+		[$years, $yearsById] = $this->loadEntities($database, 'Years', ['Year', 'Name'], fn(int $id, string $val) => new MobileSheetsYear($id, (int)$val));
+		[$signatures, $signaturesById] = $this->loadEntities($database, 'Signature', 'Name', fn(int $id, string $val) => new MobileSheetsSignature($id, $val));
+		[$sourceTypes, $sourceTypesById] = $this->loadEntities($database, ['SourceType', 'SourceTypes'], ['Type', 'Name'], fn(int $id, string $val) => new MobileSheetsSourceType($id, $val));
 
 		$songComposers = $this->loadSongLinks($database, 'ComposerSongs', 'ComposerId');
 		$songBooks = $this->loadSongLinks($database, 'BookSongs', 'BookId');
@@ -684,5 +572,38 @@ class SongReader extends AbstractDatabaseMapper {
 		}
 
 		return $links;
+	}
+
+	/**
+	 * @template T of object
+	 * @param list<string>|string $table
+	 * @param list<string>|string $column
+	 * @param callable(int, string): T $factory
+	 * @return array{0: list<T>, 1: array<int, T>}
+	 */
+	private function loadEntities(PDO $database, array|string $table, array|string $column, callable $factory): array {
+		$tableName = is_array($table) ? $this->resolveTable($database, $table) : ($this->hasTable($database, $table) ? $table : null);
+		if ($tableName === null) {
+			return [[], []];
+		}
+
+		$colName = is_array($column)
+			? $this->resolveColumn($database, $tableName, $column, $column[0])
+			: $column;
+
+		$stmt = $database->query('SELECT Id, ' . $colName . ' AS val FROM "' . $tableName . '" ORDER BY ' . $colName);
+		if ($stmt === false) {
+			return [[], []];
+		}
+
+		$list = [];
+		$byId = [];
+		while ($row = $stmt->fetch()) {
+			$entity = $factory((int)$row['Id'], (string)$row['val']);
+			$list[] = $entity;
+			$byId[(int)$row['Id']] = $entity;
+		}
+
+		return [$list, $byId];
 	}
 }
