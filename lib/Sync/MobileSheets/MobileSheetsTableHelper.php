@@ -202,4 +202,42 @@ final class MobileSheetsTableHelper {
 		$ids = $db->query(sprintf('SELECT Id FROM %s', $escapedTable))->fetchAll(PDO::FETCH_COLUMN);
 		return array_flip(array_map('intval', $ids));
 	}
+
+	/**
+	 * Collect used client IDs and the starting next ID from a list of records.
+	 *
+	 * @param iterable<object> $records
+	 * @return array{array<int, bool>, int} [$usedIds, $nextId]
+	 */
+	public static function initClientIdTracking(iterable $records): array {
+		$usedIds = [];
+		$maxId = 0;
+		foreach ($records as $r) {
+			$cid = $r->clientId ?? null;
+			if ($cid !== null && $cid > 0) {
+				$usedIds[$cid] = true;
+				if ($cid > $maxId) {
+					$maxId = $cid;
+				}
+			}
+		}
+		return [$usedIds, $maxId + 1];
+	}
+
+	/**
+	 * Allocate an available client ID, initializing from existing client IDs if not already tracked.
+	 *
+	 * @param array<int, bool> $usedIds
+	 */
+	public static function nextClientId(array &$usedIds, int &$nextId, ?int $currentId = null): int {
+		if ($currentId !== null && $currentId > 0) {
+			return $currentId;
+		}
+		while (isset($usedIds[$nextId])) {
+			$nextId++;
+		}
+		$allocated = $nextId++;
+		$usedIds[$allocated] = true;
+		return $allocated;
+	}
 }

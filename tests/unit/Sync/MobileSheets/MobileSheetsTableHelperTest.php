@@ -125,4 +125,31 @@ final class MobileSheetsTableHelperTest extends TestCase {
 		MobileSheetsTableHelper::updateRow($this->db, 'TestUpdate', [], 'Id', 1);
 		self::assertSame('Modified', $row['Title']);
 	}
+
+	public function testClientIdTracking(): void {
+		$records = [
+			(object)['clientId' => 1],
+			(object)['clientId' => 3],
+			(object)['clientId' => null],
+		];
+
+		[$usedIds, $nextId] = MobileSheetsTableHelper::initClientIdTracking($records);
+		self::assertTrue($usedIds[1]);
+		self::assertTrue($usedIds[3]);
+		self::assertFalse(isset($usedIds[2]));
+		self::assertSame(4, $nextId);
+
+		// Allocating for existing valid ID returns it
+		self::assertSame(1, MobileSheetsTableHelper::nextClientId($usedIds, $nextId, 1));
+		self::assertSame(3, MobileSheetsTableHelper::nextClientId($usedIds, $nextId, 3));
+
+		// Allocating for null allocates nextId
+		$alloc1 = MobileSheetsTableHelper::nextClientId($usedIds, $nextId, null);
+		self::assertSame(4, $alloc1);
+		self::assertTrue($usedIds[4]);
+
+		$alloc2 = MobileSheetsTableHelper::nextClientId($usedIds, $nextId, null);
+		self::assertSame(5, $alloc2);
+		self::assertTrue($usedIds[5]);
+	}
 }
