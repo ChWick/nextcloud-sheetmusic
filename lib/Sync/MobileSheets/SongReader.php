@@ -15,10 +15,6 @@ use OCA\SheetMusic\Db\LibraryData;
 
 
 class SongReader extends AbstractDatabaseMapper {
-	private SongFileMapper $fileMapper;
-	private SongBookmarkMapper $bookmarkMapper;
-	private SongAudioMapper $audioMapper;
-
 	public function __construct(
 		LoggerInterface $logger,
 		?SongFileMapper $fileMapper = null,
@@ -26,9 +22,6 @@ class SongReader extends AbstractDatabaseMapper {
 		?SongAudioMapper $audioMapper = null,
 	) {
 		parent::__construct($logger);
-		$this->fileMapper = $fileMapper ?? new SongFileMapper($logger);
-		$this->bookmarkMapper = $bookmarkMapper ?? new SongBookmarkMapper($logger);
-		$this->audioMapper = $audioMapper ?? new SongAudioMapper($logger);
 	}
 
 	/**
