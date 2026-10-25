@@ -520,64 +520,32 @@ class MobileSheetsSqliteExporter {
 			return;
 		}
 
-		if (MobileSheetsTableHelper::tableExists($db, '_nc_sync_metadata')) {
-			$db->exec("DELETE FROM _nc_sync_metadata WHERE entity_type = 'song' AND client_id NOT IN (SELECT Id FROM Songs)");
-			if (MobileSheetsTableHelper::tableExists($db, 'Files')) {
-				$db->exec("DELETE FROM _nc_sync_metadata WHERE entity_type = 'file' AND client_id NOT IN (SELECT Id FROM Files)");
-			}
-		}
+		$tablesStmt = $db->query("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name != 'Songs'");
+		$tables = $tablesStmt !== false ? $tablesStmt->fetchAll(PDO::FETCH_COLUMN) : [];
 
-		foreach (MobileSheetsEntityConfig::BY_TABLE as $config) {
-			$linkTable = $config['linkTable'];
-			if (MobileSheetsTableHelper::tableExists($db, $linkTable)) {
-				$db->exec(sprintf('DELETE FROM "%s" WHERE SongId IS NULL OR SongId NOT IN (SELECT Id FROM Songs)', str_replace('"', '""', $linkTable)));
-			}
-		}
-
-		$tablesWithSongId = [
-			'Layers',
-			'SetlistSong',
-			'SetlistSongNotes',
-			'SongNotes',
-			'Bookmarks',
-			'AudioFiles',
-			'ZoomPerPage',
-			'Crop',
-			'AutoScroll',
-			'MetronomeSettings',
-			'MetronomeBeatsPerPage',
-			'SongDisplaySettings',
-			'TextDisplaySettings',
-			'Tempos',
-			'AnnotationsBase',
-			'BatchMIDI',
-			'BatchMidiSysex',
-			'MIDI',
-			'MidiSysex',
-			'SmartButtons',
-			'SmartButtonMIDI',
-			'SmartMidiSysex',
-			'Links',
-			'HalfPagePos',
-			'AbcSettings',
-		];
-		foreach ($tablesWithSongId as $songRefTable) {
-			if (MobileSheetsTableHelper::tableExists($db, $songRefTable)) {
-				$cols = MobileSheetsTableHelper::getTableColumns($db, $songRefTable);
-				if (isset($cols['songid'])) {
-					$db->exec(sprintf('DELETE FROM "%s" WHERE SongId IS NULL OR SongId NOT IN (SELECT Id FROM Songs)', str_replace('"', '""', $songRefTable)));
-				}
+		foreach ($tables as $tableName) {
+			$cols = MobileSheetsTableHelper::getTableColumns($db, $tableName);
+			if (isset($cols['songid'])) {
+				$db->exec(sprintf('DELETE FROM "%s" WHERE SongId IS NULL OR SongId NOT IN (SELECT Id FROM Songs)', str_replace('"', '""', $tableName)));
 			}
 		}
 
 		if (MobileSheetsTableHelper::tableExists($db, 'AnnotationsBase')) {
-			foreach (['DrawAnnotations', 'TextboxAnnotations', 'StampAnnotations', 'AnnotationPoints'] as $annTable) {
-				if (MobileSheetsTableHelper::tableExists($db, $annTable)) {
-					$cols = MobileSheetsTableHelper::getTableColumns($db, $annTable);
-					if (isset($cols['baseid'])) {
-						$db->exec(sprintf('DELETE FROM "%s" WHERE BaseId IS NULL OR BaseId NOT IN (SELECT Id FROM AnnotationsBase)', str_replace('"', '""', $annTable)));
-					}
+			foreach ($tables as $tableName) {
+				if ($tableName === 'AnnotationsBase') {
+					continue;
 				}
+				$cols = MobileSheetsTableHelper::getTableColumns($db, $tableName);
+				if (isset($cols['baseid'])) {
+					$db->exec(sprintf('DELETE FROM "%s" WHERE BaseId IS NULL OR BaseId NOT IN (SELECT Id FROM AnnotationsBase)', str_replace('"', '""', $tableName)));
+				}
+			}
+		}
+
+		if (MobileSheetsTableHelper::tableExists($db, '_nc_sync_metadata')) {
+			$db->exec("DELETE FROM _nc_sync_metadata WHERE entity_type = 'song' AND client_id NOT IN (SELECT Id FROM Songs)");
+			if (MobileSheetsTableHelper::tableExists($db, 'Files')) {
+				$db->exec("DELETE FROM _nc_sync_metadata WHERE entity_type = 'file' AND client_id NOT IN (SELECT Id FROM Files)");
 			}
 		}
 	}
