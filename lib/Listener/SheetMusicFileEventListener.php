@@ -19,6 +19,7 @@ use OCP\EventDispatcher\IEventListener;
 use OCP\Files\Events\Node\NodeCreatedEvent;
 use OCP\Files\Events\Node\NodeDeletedEvent;
 use OCP\Files\Events\Node\NodeRenamedEvent;
+use OCP\Files\Events\Node\NodeWrittenEvent;
 use OCP\Files\File;
 use OCP\Files\IRootFolder;
 use OCP\Files\Node;
@@ -28,7 +29,7 @@ use Psr\Log\LoggerInterface;
  * Real-time listener for file system events to automatically index, move,
  * and prune music files.
  *
- * @template-implements IEventListener<NodeCreatedEvent|NodeRenamedEvent|NodeDeletedEvent>
+ * @template-implements IEventListener<NodeCreatedEvent|NodeRenamedEvent|NodeDeletedEvent|NodeWrittenEvent>
  */
 class SheetMusicFileEventListener implements IEventListener {
 	public function __construct(
@@ -48,6 +49,8 @@ class SheetMusicFileEventListener implements IEventListener {
 			$this->onNodeRenamed($event->getSource(), $event->getTarget());
 		} elseif ($event instanceof NodeDeletedEvent) {
 			$this->onNodeDeleted($event->getNode());
+		} elseif ($event instanceof NodeWrittenEvent) {
+			$this->onNodeWritten($event->getNode());
 		}
 	}
 
@@ -133,6 +136,42 @@ class SheetMusicFileEventListener implements IEventListener {
 		$library = $this->findLibraryForNode($node);
 		if ($library !== null && $library->id !== null) {
 			$this->libraryMapper->touch($library->id);
+		}
+	}
+
+	public function onNodeWritten(Node $node): void {
+		if (!($node instanceof File)) {
+			return;
+		}
+
+		if ($this->reconciler->isIgnoredFilename($node->getName())) {
+			return;
+		}
+
+		$library = $this->findLibraryForNode($node);
+		if ($library === null || $library->id === null) {
+			return;
+		}
+
+		$existing = $this->songFileMapper->findByFileId($node->getId(), includeDeleted: false);
+		if ($existing === []) {
+			$this->onNodeCreated($node);
+			return;
+		}
+
+		$changed = false;
+		foreach ($existing as $songFile) {
+			if ($this->reconciler->updateFileFactsIfChanged($library, $songFile, $node)) {
+				$changed = true;
+			}
+		}
+
+		if ($changed) {
+			$this->libraryMapper->touch($library->id);
+			$this->logger->info('Updated sheet music file facts on node written', [
+				'file' => $node->getName(),
+				'libraryId' => $library->id,
+			]);
 		}
 	}
 

@@ -95,10 +95,14 @@ class LibraryReconciler {
 
 		$indexedCount = 0;
 		$prunedCount = 0;
+		$updatedFactsCount = 0;
 
-		// 3. Index unindexed physical files
+		// 3. Index unindexed physical files and update changed facts
 		foreach ($physicalFiles as $fileId => $fileNode) {
 			if (isset($trackedByFileId[$fileId])) {
+				if ($this->updateFileFactsIfChanged($lib, $trackedByFileId[$fileId], $fileNode)) {
+					$updatedFactsCount++;
+				}
 				continue;
 			}
 
@@ -110,7 +114,7 @@ class LibraryReconciler {
 		// Missing physical files must remain attached as tracked files so the integrity check
 		// can report them as missing files. Only manual user action should detach or delete them.
 
-		if ($indexedCount > 0) {
+		if ($indexedCount > 0 || $updatedFactsCount > 0) {
 			$this->libraryMapper->touch($lib->id);
 		}
 
@@ -118,6 +122,58 @@ class LibraryReconciler {
 			'indexed' => $indexedCount,
 			'pruned' => $prunedCount,
 		];
+	}
+
+	public function updateFileFactsIfChanged(InternalLibrary $library, InternalSongFile $songFile, File $fileNode): bool {
+		$fileSize = $fileNode->getSize();
+		$nodeMtime = $fileNode->getMTime();
+		$filename = $fileNode->getName();
+
+		$needsUpdate = false;
+		if ($songFile->fileSize !== $fileSize) {
+			$needsUpdate = true;
+		}
+
+		$ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+		$hash = $songFile->fileHash;
+		$pageCount = $songFile->pageCount ?? 1;
+		$pageOrder = $songFile->pageOrder;
+
+		if ($needsUpdate || $hash === null) {
+			if ($ext === 'pdf') {
+				try {
+					$content = $fileNode->getContent();
+					if ($content !== false && $content !== '') {
+						$newHash = MobileSheetsPdf::contentHash($content);
+						$newPageCount = MobileSheetsPdf::pageCount($content);
+						if ($hash !== $newHash || $pageCount !== $newPageCount) {
+							$hash = $newHash;
+							$pageCount = $newPageCount;
+							if (empty($pageOrder)) {
+								$pageOrder = $newPageCount > 1 ? '1-' . $newPageCount : '1';
+							}
+							$needsUpdate = true;
+						}
+					}
+				} catch (\Throwable $e) {
+					$this->logger->warning('Failed to compute PDF metadata for updated file: ' . $filename, ['exception' => $e]);
+				}
+			}
+		}
+
+		if ($needsUpdate) {
+			$songFile->fileSize = $fileSize;
+			$songFile->fileHash = $hash;
+			$songFile->pageCount = $pageCount;
+			if (!empty($pageOrder)) {
+				$songFile->pageOrder = $pageOrder;
+			}
+			$songFile->updatedAt = $nodeMtime ?: time();
+			$this->songFileMapper->update($songFile);
+			return true;
+		}
+
+		return false;
 	}
 
 	public function indexFile(InternalLibrary $library, File $fileNode): void {

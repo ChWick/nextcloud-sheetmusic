@@ -129,8 +129,14 @@ class FileMetadataSyncer {
 			$sqliteFileId = $file->id;
 			$internalSongFile = null;
 			if ($this->internalSongFileMapper !== null) {
-				$internalSongFile = $this->internalSongFileMapper->findById($file->id);
-				if ($internalSongFile !== null) {
+				$matchedFiles = $this->internalSongFileMapper->findByFileId($node->getId(), includeDeleted: false);
+				if ($matchedFiles === []) {
+					$byId = $this->internalSongFileMapper->findById($file->id);
+					if ($byId !== null) {
+						$matchedFiles = [$byId];
+					}
+				}
+				foreach ($matchedFiles as $internalSongFile) {
 					$internalSongFile->fileSize = $facts->fileSize;
 					$internalSongFile->fileHash = $facts->fileHash;
 					$internalSongFile->updatedAt = (int)floor($facts->lastModified / 1000);

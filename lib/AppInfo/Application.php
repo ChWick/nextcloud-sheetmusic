@@ -16,6 +16,7 @@ use OCP\AppFramework\Bootstrap\IRegistrationContext;
 use OCP\Files\Events\Node\NodeCreatedEvent;
 use OCP\Files\Events\Node\NodeDeletedEvent;
 use OCP\Files\Events\Node\NodeRenamedEvent;
+use OCP\Files\Events\Node\NodeWrittenEvent;
 use Psr\Container\ContainerInterface;
 
 class Application extends App implements IBootstrap {
@@ -32,6 +33,7 @@ class Application extends App implements IBootstrap {
 		$context->registerEventListener(NodeCreatedEvent::class, SheetMusicFileEventListener::class);
 		$context->registerEventListener(NodeRenamedEvent::class, SheetMusicFileEventListener::class);
 		$context->registerEventListener(NodeDeletedEvent::class, SheetMusicFileEventListener::class);
+		$context->registerEventListener(NodeWrittenEvent::class, SheetMusicFileEventListener::class);
 
 		$context->registerService(SyncClientRegistry::class, function (ContainerInterface $c): SyncClientRegistry {
 			return new SyncClientRegistry([

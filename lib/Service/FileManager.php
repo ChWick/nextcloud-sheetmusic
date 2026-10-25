@@ -450,12 +450,12 @@ class FileManager {
 		?MobileSheetsHashCodesFile $hashCodes = null,
 	): string {
 		$syncer = new FileMetadataSyncer(
-			$this->rootFolder,
-			$this->pathResolver,
-			$this->logger,
-			$this->internalSongFileMapper,
-			$this->songMapper,
-			$this->internalSongMapper,
+			rootFolder: $this->rootFolder,
+			pathResolver: $this->pathResolver,
+			logger: $this->logger,
+			internalSongFileMapper: $this->internalSongFileMapper,
+			songMapper: $this->songMapper,
+			internalSongMapper: $this->internalSongMapper,
 		);
 
 		return $syncer->syncMetadataIntoFile($song, $file, $user, $databasePath, $hashCodes);

@@ -17,6 +17,7 @@ use OCA\SheetMusic\Db\InternalSongFile;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
+use OCP\Files\File;
 use OCP\Files\IRootFolder;
 use OCP\IUser;
 use OCP\IUserManager;
@@ -131,6 +132,7 @@ class MobileSheetsSqliteExporter {
 		$handledPaths = [];
 
 		foreach ($files as $file) {
+			$this->ensureAccurateFileFacts($file, $user);
 			$webdavPath = $this->resolveWebdavPathForFile($file, $lib, $user);
 			if ($webdavPath === null || $webdavPath === '' || isset($handledPaths[$webdavPath])) {
 				continue;
@@ -452,6 +454,7 @@ class MobileSheetsSqliteExporter {
 		$metaStmt = $hasSyncMeta ? $db->prepare('INSERT INTO _nc_sync_metadata (entity_type, uuid, client_id, updated_at, extra_json) VALUES (:type, :uuid, :client_id, :updated_at, :extra_json)') : null;
 
 		foreach ($files as $file) {
+			$this->ensureAccurateFileFacts($file, $user);
 			$songClientId = $songClientMap[$file->songId] ?? null;
 			if ($songClientId === null) {
 				continue;
@@ -672,5 +675,42 @@ class MobileSheetsSqliteExporter {
 		// Fallback for tests/synthetic libraries where $user is null
 		$base = rtrim($library->path, '/');
 		return sprintf('%s/%s/%s/file_%d.pdf', MobileSheetsPathResolver::WEBDAV_ROOT, $library->userId, ltrim($base, '/'), $file->fileId);
+	}
+
+	private function ensureAccurateFileFacts(InternalSongFile $file, ?IUser $user): void {
+		if ($user === null) {
+			return;
+		}
+
+		if ($file->fileSize !== null && $file->fileSize > 0 && $file->fileHash !== null) {
+			return;
+		}
+
+		try {
+			$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+			$nodes = $userFolder->getById($file->fileId);
+			if (empty($nodes) || !($nodes[0] instanceof File)) {
+				return;
+			}
+			$node = $nodes[0];
+			$realSize = $node->getSize();
+			if ($file->fileSize === null || $file->fileSize <= 0) {
+				$file->fileSize = $realSize;
+			}
+			if ($file->fileHash === null) {
+				$content = $node->getContent();
+				if ($content !== false && $content !== '') {
+					$file->fileHash = MobileSheetsPdf::contentHash($content);
+					$pageCount = MobileSheetsPdf::pageCount($content);
+					$file->pageCount = $pageCount;
+					if (empty($file->pageOrder)) {
+						$file->pageOrder = $pageCount > 1 ? '1-' . $pageCount : '1';
+					}
+				}
+			}
+			$this->songFileMapper->update($file);
+		} catch (\Throwable) {
+			// Best effort fallback
+		}
 	}
 }
