@@ -157,64 +157,13 @@ class SongReader extends AbstractDatabaseMapper {
 			}
 		}
 
-		$songCols = $this->columnNames($database, 'Songs');
-		$hasLastModified = isset($songCols['lastmodified']);
-		$createdCol = isset($songCols['datecreated']) ? 'DateCreated' : (isset($songCols['creationdate']) ? 'CreationDate' : null);
-		$hasStars = isset($songCols['stars']);
-		$hasDifficulty = isset($songCols['difficulty']);
-		$hasDuration = isset($songCols['duration']);
-		$hasKeywords = isset($songCols['keywords']);
-		$hasCustom = isset($songCols['custom']);
-		$hasCustom2 = isset($songCols['custom2']);
-		$hasSortTitle = isset($songCols['sorttitle']);
-
-		$selectFields = ['Songs.Id', 'Songs.Title'];
-		if ($hasLastModified) {
-			$selectFields[] = 'Songs.LastModified';
-		}
-		if ($createdCol !== null) {
-			$selectFields[] = 'Songs.' . $createdCol . ' AS DateCreated';
-		}
-		if ($hasStars) {
-			$selectFields[] = 'Songs.Stars';
-		}
-		if ($hasDifficulty) {
-			$selectFields[] = 'Songs.Difficulty';
-		}
-		if ($hasDuration) {
-			$selectFields[] = 'Songs.Duration';
-		}
-		if ($hasKeywords) {
-			$selectFields[] = 'Songs.Keywords';
-		}
-		if ($hasCustom) {
-			$selectFields[] = 'Songs.Custom';
-		}
-		if ($hasCustom2) {
-			$selectFields[] = 'Songs.Custom2';
-		}
-		if ($hasSortTitle) {
-			$selectFields[] = 'Songs.SortTitle';
-		}
-		$hasOpus = isset($songCols['opus']);
-		$hasCatalogNumber = isset($songCols['catalognumber']);
-		$hasSongNumber = isset($songCols['songnumber']);
-		if ($hasOpus) {
-			$selectFields[] = 'Songs.Opus';
-		}
-		if ($hasCatalogNumber) {
-			$selectFields[] = 'Songs.CatalogNumber';
-		}
-		if ($hasSongNumber) {
-			$selectFields[] = 'Songs.SongNumber';
-		}
-
-		$statement = $database->query('SELECT ' . implode(', ', $selectFields) . ' FROM Songs ORDER BY Songs.Title COLLATE NOCASE ASC');
+		$statement = $database->query('SELECT * FROM Songs ORDER BY Title COLLATE NOCASE ASC');
 
 		$songs = [];
 		if ($statement !== false) {
 			while ($row = $statement->fetch()) {
 				$songId = (int)$row['Id'];
+				$created = $row['DateCreated'] ?? $row['CreationDate'] ?? null;
 
 				$songs[] = new MobileSheetsSong(
 					$songId,
@@ -233,7 +182,7 @@ class SongReader extends AbstractDatabaseMapper {
 					$songBookmarks[$songId] ?? [],
 					$songAudioFiles[$songId] ?? [],
 					isset($row['LastModified']) && $row['LastModified'] !== null ? (int)$row['LastModified'] : null,
-					isset($row['DateCreated']) && $row['DateCreated'] !== null ? (int)$row['DateCreated'] : null,
+					$created !== null ? (int)$created : null,
 					isset($row['Stars']) ? (int)$row['Stars'] : 0,
 					isset($row['Difficulty']) ? (int)$row['Difficulty'] : 0,
 					isset($row['Duration']) ? (int)$row['Duration'] : 0,
