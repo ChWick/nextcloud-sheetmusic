@@ -116,20 +116,15 @@ class MobileSheetsEntityExporter {
 					|| (int)($existingEntityRow[$existingCols['ascending']] ?? 1) !== $entity->ascending
 				);
 				if (($existingModSec > 0 && $entity->updatedAt > $existingModSec) || trim((string)($existingEntityRow[$nameCol] ?? '')) !== (string)$val || $sortChanged) {
-					$sets = ['"' . str_replace('"', '""', $nameCol) . '" = :nameVal'];
-					$params = [':nameVal' => $val, ':id' => $clientId];
+					$updateValues = [$nameCol => $val];
 					if ($hasSortCols) {
-						$sets[] = '"' . str_replace('"', '""', $existingCols['sortby']) . '" = :sortBy';
-						$sets[] = '"' . str_replace('"', '""', $existingCols['ascending']) . '" = :ascending';
-						$params[':sortBy'] = $entity->sortBy;
-						$params[':ascending'] = $entity->ascending;
+						$updateValues[$existingCols['sortby']] = $entity->sortBy;
+						$updateValues[$existingCols['ascending']] = $entity->ascending;
 					}
 					if ($lastModCol !== null) {
-						$sets[] = '"' . str_replace('"', '""', $lastModCol) . '" = :lastMod';
-						$params[':lastMod'] = MobileSheetsTimestampUtil::secondsToMs($entity->updatedAt);
+						$updateValues[$lastModCol] = MobileSheetsTimestampUtil::secondsToMs($entity->updatedAt);
 					}
-					$updStmt = $db->prepare('UPDATE "' . str_replace('"', '""', $tableName) . '" SET ' . implode(', ', $sets) . ' WHERE Id = :id');
-					$updStmt->execute($params);
+					MobileSheetsTableHelper::updateRow($db, $tableName, $updateValues, 'Id', $clientId);
 				}
 			}
 
@@ -232,25 +227,23 @@ class MobileSheetsEntityExporter {
 			$existingOrderStmt->execute([$entityClientId]);
 			$existingOrder = array_map('intval', $existingOrderStmt->fetchAll(PDO::FETCH_COLUMN));
 
-			if ($entity->sortBy === SongSortingUtil::MODE_MANUAL) {
+			$isManual = ($entity->sortBy === SongSortingUtil::MODE_MANUAL);
+			if ($isManual) {
 				if ($existingOrder === $orderedSongClientIds) {
 					continue;
 				}
 				// In manual sort mode, if order or membership changed, replace rows in the exact manual sequence
 				$delExisting = $db->prepare("DELETE FROM {$quotedTable} WHERE {$quotedCol} = ?");
 				$delExisting->execute([$entityClientId]);
-
-				$stmt = $db->prepare("INSERT INTO {$quotedTable} ({$quotedCol}, SongId) VALUES (?, ?)");
-				foreach ($orderedSongClientIds as $songClientId) {
-					$stmt->execute([$entityClientId, $songClientId]);
-				}
+				$existingSet = [];
 			} else {
 				$existingSet = array_fill_keys($existingOrder, true);
-				$stmt = $db->prepare("INSERT INTO {$quotedTable} ({$quotedCol}, SongId) VALUES (?, ?)");
-				foreach ($orderedSongClientIds as $songClientId) {
-					if (!isset($existingSet[$songClientId])) {
-						$stmt->execute([$entityClientId, $songClientId]);
-					}
+			}
+
+			$stmt = $db->prepare("INSERT INTO {$quotedTable} ({$quotedCol}, SongId) VALUES (?, ?)");
+			foreach ($orderedSongClientIds as $songClientId) {
+				if (!isset($existingSet[$songClientId])) {
+					$stmt->execute([$entityClientId, $songClientId]);
 				}
 			}
 		}
