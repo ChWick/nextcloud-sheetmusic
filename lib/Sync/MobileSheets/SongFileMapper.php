@@ -91,16 +91,7 @@ class SongFileMapper extends AbstractDatabaseMapper {
 			'Height' => self::FILE_DIMENSION_UNKNOWN,
 		];
 
-		$columns = [];
-		$params = [];
-		foreach ($this->existingColumns($database, 'Files', $values) as $name => $value) {
-			$columns[] = $name;
-			$params[':' . $name] = $value;
-		}
-
-		$sql = 'INSERT INTO Files (' . implode(', ', $columns) . ') VALUES (' . implode(', ', array_keys($params)) . ')';
-		$insertStmt = $database->prepare($sql);
-		$insertStmt->execute($params);
+		$this->insertRow($database, 'Files', $values);
 	}
 
 	public function removeSongFile(string $databasePath, int $songId, int $fileId): ?string {
@@ -142,16 +133,7 @@ class SongFileMapper extends AbstractDatabaseMapper {
 			'FileHash' => $facts->fileHash,
 		];
 
-		$assignments = [];
-		$params = [':id' => $fileId];
-		foreach ($this->existingColumns($database, 'Files', $values) as $name => $value) {
-			$assignments[] = $name . ' = :' . $name;
-			$params[':' . $name] = $value;
-		}
-
-		$sql = 'UPDATE Files SET ' . implode(', ', $assignments) . ' WHERE Id = :id';
-		$updateStmt = $database->prepare($sql);
-		$updateStmt->execute($params);
+		$this->updateRowById($database, 'Files', $values, $fileId);
 	}
 
 	public function isPathReferencedByOtherSong(string $databasePath, string $filePath, int $songId): bool {
