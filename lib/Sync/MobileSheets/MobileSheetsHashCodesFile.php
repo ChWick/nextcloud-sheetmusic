@@ -195,23 +195,18 @@ class MobileSheetsHashCodesFile {
 	 * @return bool whether an entry was removed
 	 */
 	public function removePath(string $path): bool {
-		$kept = [];
-		$removed = false;
+		$origCount = count($this->entries);
+		$this->entries = array_values(array_filter(
+			$this->entries,
+			static fn(MobileSheetsHashCode $entry): bool => $entry->path !== $path,
+		));
 
-		foreach ($this->entries as $entry) {
-			if ($entry->path === $path) {
-				$removed = true;
-				continue;
-			}
-			$kept[] = $entry;
-		}
-
-		if ($removed) {
-			$this->entries = $kept;
+		if (count($this->entries) !== $origCount) {
 			$this->dirty = true;
+			return true;
 		}
 
-		return $removed;
+		return false;
 	}
 
 	/**
