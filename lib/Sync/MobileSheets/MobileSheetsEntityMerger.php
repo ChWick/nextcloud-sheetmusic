@@ -103,36 +103,32 @@ class MobileSheetsEntityMerger {
 				}
 
 				if ($existing !== null) {
+					$shouldUpdate = false;
 					if ($existing->deletedAt !== null) {
 						// Tombstoned: check if MobileSheets modified after tombstone and baseline export
 						$metaUpdatedAt = (int)($meta['updated_at'] ?? 0);
 						if ($lastModifiedSec > $existing->deletedAt && ($meta === null || $lastModifiedSec > $metaUpdatedAt)) {
 							$existing->deletedAt = null;
-							$existing->name = $name;
-							$existing->sortBy = $sortBy;
-							$existing->ascending = $ascending;
-							$existing->clientId = $clientId;
-							$existing->updatedAt = $lastModifiedSec;
-							$this->entityMapper->update($existing);
-							$stats['entitiesUpdated']++;
+							$shouldUpdate = true;
 						}
+					} elseif ($lastModifiedSec > $existing->updatedAt) {
+						$shouldUpdate = true;
 					} else {
-						// Active: LWW comparison
-						if ($lastModifiedSec > $existing->updatedAt) {
-							$existing->name = $name;
-							$existing->sortBy = $sortBy;
-							$existing->ascending = $ascending;
+						// Nextcloud wins or equals; just ensure clientId is recorded
+						if ($existing->clientId === null || $existing->clientId !== $clientId) {
 							$existing->clientId = $clientId;
-							$existing->updatedAt = $lastModifiedSec;
 							$this->entityMapper->update($existing);
-							$stats['entitiesUpdated']++;
-						} else {
-							// Nextcloud wins or equals; just ensure clientId is recorded
-							if ($existing->clientId === null || $existing->clientId !== $clientId) {
-								$existing->clientId = $clientId;
-								$this->entityMapper->update($existing);
-							}
 						}
+					}
+
+					if ($shouldUpdate) {
+						$existing->name = $name;
+						$existing->sortBy = $sortBy;
+						$existing->ascending = $ascending;
+						$existing->clientId = $clientId;
+						$existing->updatedAt = $lastModifiedSec;
+						$this->entityMapper->update($existing);
+						$stats['entitiesUpdated']++;
 					}
 				} else {
 					// New entity created in MobileSheets

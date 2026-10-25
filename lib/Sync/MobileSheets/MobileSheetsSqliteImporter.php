@@ -218,84 +218,64 @@ class MobileSheetsSqliteImporter {
 			}
 
 			if ($existing !== null) {
+				$shouldUpdate = false;
 				if ($existing->deletedAt !== null) {
 					// Tombstone check: only revive if modified on client after both deletion and baseline export
 					$metaUpdatedAt = (int)($meta['updated_at'] ?? 0);
 					if ($lastModifiedSec > $existing->deletedAt && ($meta === null || $lastModifiedSec > $metaUpdatedAt)) {
-						// Revive song!
 						$existing->deletedAt = null;
-						$existing->title = $title;
-						$existing->sortTitle = $sortTitle;
-						$existing->rating = $stars;
-						$existing->difficulty = $difficulty;
-						$existing->duration = $duration;
-						$existing->keywords = $keywords;
-						if ($noteText !== '') {
-							$existing->notes = $noteText;
-						}
-						$existing->clientId = $clientId;
-						$existing->updatedAt = $lastModifiedSec;
-						$this->songMapper->update($existing);
-
-						if ($custom !== '') {
-							$this->attributeMapper->setAttribute($existing->id, 'custom', $custom);
-						}
-						if ($custom2 !== '') {
-							$this->attributeMapper->setAttribute($existing->id, 'custom2', $custom2);
-						}
-
-						$stats['songsUpdated']++;
-						$updatedSongClientIds[$clientId] = true;
+						$shouldUpdate = true;
 					}
+				} elseif ($lastModifiedSec > $existing->updatedAt || ($existing->clientId === null && $uuid === null)) {
+					$shouldUpdate = true;
 				} else {
-					// Active song: LWW (or unsynced auto-indexed stub song)
-					if ($lastModifiedSec > $existing->updatedAt || ($existing->clientId === null && $uuid === null)) {
-						$existing->title = $title;
-						$existing->sortTitle = $sortTitle;
-						$existing->rating = $stars;
-						$existing->difficulty = $difficulty;
-						$existing->duration = $duration;
-						$existing->keywords = $keywords;
-						if ($noteText !== '') {
-							$existing->notes = $noteText;
-						}
+					// Nextcloud is newer or equal
+					if ($existing->clientId === null || $existing->clientId !== $clientId) {
 						$existing->clientId = $clientId;
-						$existing->updatedAt = $lastModifiedSec ?: $existing->updatedAt;
-
-						if (!empty($row['Opus'])) {
-							$existing->opus = (string)$row['Opus'];
-						} elseif ($existing->opus === null && !empty($extra['opus'])) {
-							$existing->opus = (string)$extra['opus'];
-						}
-						if (!empty($row['CatalogNumber'])) {
-							$existing->catalogNumber = (string)$row['CatalogNumber'];
-						} elseif ($existing->catalogNumber === null && !empty($extra['catalog_number'])) {
-							$existing->catalogNumber = (string)$extra['catalog_number'];
-						}
-						if (!empty($row['SongNumber'])) {
-							$existing->songNumber = (string)$row['SongNumber'];
-						} elseif ($existing->songNumber === null && !empty($extra['song_number'])) {
-							$existing->songNumber = (string)$extra['song_number'];
-						}
-
 						$this->songMapper->update($existing);
-
-						if ($custom !== '') {
-							$this->attributeMapper->setAttribute($existing->id, 'custom', $custom);
-						}
-						if ($custom2 !== '') {
-							$this->attributeMapper->setAttribute($existing->id, 'custom2', $custom2);
-						}
-
-						$stats['songsUpdated']++;
-						$updatedSongClientIds[$clientId] = true;
-					} else {
-						// Nextcloud is newer or equal
-						if ($existing->clientId === null || $existing->clientId !== $clientId) {
-							$existing->clientId = $clientId;
-							$this->songMapper->update($existing);
-						}
 					}
+				}
+
+				if ($shouldUpdate) {
+					$existing->title = $title;
+					$existing->sortTitle = $sortTitle;
+					$existing->rating = $stars;
+					$existing->difficulty = $difficulty;
+					$existing->duration = $duration;
+					$existing->keywords = $keywords;
+					if ($noteText !== '') {
+						$existing->notes = $noteText;
+					}
+					$existing->clientId = $clientId;
+					$existing->updatedAt = $lastModifiedSec ?: $existing->updatedAt;
+
+					if (!empty($row['Opus'])) {
+						$existing->opus = (string)$row['Opus'];
+					} elseif ($existing->opus === null && !empty($extra['opus'])) {
+						$existing->opus = (string)$extra['opus'];
+					}
+					if (!empty($row['CatalogNumber'])) {
+						$existing->catalogNumber = (string)$row['CatalogNumber'];
+					} elseif ($existing->catalogNumber === null && !empty($extra['catalog_number'])) {
+						$existing->catalogNumber = (string)$extra['catalog_number'];
+					}
+					if (!empty($row['SongNumber'])) {
+						$existing->songNumber = (string)$row['SongNumber'];
+					} elseif ($existing->songNumber === null && !empty($extra['song_number'])) {
+						$existing->songNumber = (string)$extra['song_number'];
+					}
+
+					$this->songMapper->update($existing);
+
+					if ($custom !== '') {
+						$this->attributeMapper->setAttribute($existing->id, 'custom', $custom);
+					}
+					if ($custom2 !== '') {
+						$this->attributeMapper->setAttribute($existing->id, 'custom2', $custom2);
+					}
+
+					$stats['songsUpdated']++;
+					$updatedSongClientIds[$clientId] = true;
 				}
 			} else {
 				// New song created in MobileSheets
@@ -438,37 +418,32 @@ class MobileSheetsSqliteImporter {
 			}
 
 			if ($existing !== null) {
+				$shouldUpdate = false;
 				if ($existing->deletedAt !== null) {
 					$metaUpdatedAt = (int)($meta['updated_at'] ?? 0);
 					if ($lastModifiedSec > $existing->deletedAt && ($meta === null || $lastModifiedSec > $metaUpdatedAt)) {
 						$existing->deletedAt = null;
-						$existing->pageOrder = $pageOrder;
-						$existing->pageCount = $pageCount;
-						$existing->fileSize = $fileSize;
-						$existing->fileHash = $fileHash;
-						$existing->type = $type;
-						$existing->clientId = $fileClientId;
-						$existing->updatedAt = $lastModifiedSec;
-						$this->songFileMapper->update($existing);
-						$stats['filesUpdated']++;
+						$shouldUpdate = true;
 					}
+				} elseif ($lastModifiedSec > $existing->updatedAt || ($existing->clientId === null && $uuid === null)) {
+					$shouldUpdate = true;
 				} else {
-					if ($lastModifiedSec > $existing->updatedAt || ($existing->clientId === null && $uuid === null)) {
-						$existing->pageOrder = $pageOrder;
-						$existing->pageCount = $pageCount;
-						$existing->fileSize = $fileSize;
-						$existing->fileHash = $fileHash;
-						$existing->type = $type;
+					if ($existing->clientId === null || $existing->clientId !== $fileClientId) {
 						$existing->clientId = $fileClientId;
-						$existing->updatedAt = $lastModifiedSec ?: $existing->updatedAt;
 						$this->songFileMapper->update($existing);
-						$stats['filesUpdated']++;
-					} else {
-						if ($existing->clientId === null || $existing->clientId !== $fileClientId) {
-							$existing->clientId = $fileClientId;
-							$this->songFileMapper->update($existing);
-						}
 					}
+				}
+
+				if ($shouldUpdate) {
+					$existing->pageOrder = $pageOrder;
+					$existing->pageCount = $pageCount;
+					$existing->fileSize = $fileSize;
+					$existing->fileHash = $fileHash;
+					$existing->type = $type;
+					$existing->clientId = $fileClientId;
+					$existing->updatedAt = $lastModifiedSec ?: $existing->updatedAt;
+					$this->songFileMapper->update($existing);
+					$stats['filesUpdated']++;
 				}
 			} else {
 				$newFile = new InternalSongFile(
