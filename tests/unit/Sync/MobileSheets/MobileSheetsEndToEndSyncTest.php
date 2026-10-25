@@ -1917,4 +1917,115 @@ class MobileSheetsEndToEndSyncTest extends TestCase {
 		// 7. Second sync cycle: must remain completely clean and conflict-free
 		$this->harness->sync();
 	}
+
+	public function testResolvePdfConflictKeepLocalClientWins(): void {
+		$this->harness->setupEmptyLibraries(folderName: 'ConflictKeepLocalLib', autoPaths: false);
+
+		// 1. Initial song with PDF on client
+		$initialPdf = MobileSheetsEndToEndSyncHarness::generateValidPdf('Initial Song', 1);
+		$clientSongId = $this->harness->clientCreateSong(
+			title: 'Conflict Test Song',
+			files: [
+				'conflict_song.pdf' => $initialPdf,
+			],
+		);
+
+		// Initial sync
+		$this->harness->sync();
+
+		$clientFiles = $this->harness->getClientTableRows('Files');
+		self::assertCount(1, $clientFiles);
+		$clientFileId = (int)$clientFiles[0]['Id'];
+
+		// 2. Both sides modify the PDF:
+		// Nextcloud server updates the PDF
+		$serverPdf = MobileSheetsEndToEndSyncHarness::generateValidPdf('Server Version Title', 2);
+		$libFolder = $this->harness->getLibraryFolder();
+		$ncNode = $libFolder->get('conflict_song.pdf');
+		self::assertInstanceOf(\OCP\Files\File::class, $ncNode);
+		$ncNode->putContent($serverPdf);
+		$this->harness->fileEventListener->onNodeWritten($ncNode);
+
+		// MobileSheets client also updates the PDF locally
+		$clientPdf = MobileSheetsEndToEndSyncHarness::generateValidPdf('Client Kept Version Title', 3);
+		$clientExpectedHash = \OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdf::contentHash($clientPdf);
+		$this->harness->clientUpdateFileContent($clientFileId, $clientPdf);
+
+		// 3. User chooses "Keep local" -> Client uploads its local file and DB to server
+		$this->harness->sync();
+
+		// 4. Verify Nextcloud physical file and DB now match the client's kept version
+		$ncPdfContent = (string)$ncNode->getContent();
+		self::assertSame($clientExpectedHash, \OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdf::contentHash($ncPdfContent), 'Server physical file must match client kept version');
+
+		$ncFiles = $this->harness->songFileMapper->findAllForLibrary($this->harness->libraryId);
+		self::assertSame($clientExpectedHash, $ncFiles[0]->fileHash, 'Internal song file hash must match client kept version');
+		self::assertSame(strlen($clientPdf), $ncFiles[0]->fileSize, 'Internal song file size must match client kept version');
+
+		$serverHashCodes = $this->harness->exporter->generateHashcodes($this->harness->libraryId);
+		self::assertStringContainsString((string)$clientExpectedHash, $serverHashCodes, 'Server hashcodes must contain client file hash');
+		self::assertStringContainsString((string)strlen($clientPdf), $serverHashCodes, 'Server hashcodes must contain client file size');
+
+		// 5. Subsequent sync cycles must be 100% clean and conflict-free
+		$this->harness->sync();
+		$this->harness->sync();
+	}
+
+	public function testResolvePdfConflictKeepRemoteServerWins(): void {
+		$this->harness->setupEmptyLibraries(folderName: 'ConflictKeepRemoteLib', autoPaths: false);
+
+		// 1. Initial song with PDF on client
+		$initialPdf = MobileSheetsEndToEndSyncHarness::generateValidPdf('Initial Song', 1);
+		$clientSongId = $this->harness->clientCreateSong(
+			title: 'Remote Conflict Song',
+			files: [
+				'remote_conflict.pdf' => $initialPdf,
+			],
+		);
+
+		// Initial sync
+		$this->harness->sync();
+
+		$clientFiles = $this->harness->getClientTableRows('Files');
+		self::assertCount(1, $clientFiles);
+		$clientFileId = (int)$clientFiles[0]['Id'];
+
+		// 2. Both sides modify the PDF:
+		// Nextcloud server updates the PDF
+		$serverPdf = MobileSheetsEndToEndSyncHarness::generateValidPdf('Server Winner Title', 4);
+		$serverExpectedHash = \OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdf::contentHash($serverPdf);
+		$libFolder = $this->harness->getLibraryFolder();
+		$ncNode = $libFolder->get('remote_conflict.pdf');
+		self::assertInstanceOf(\OCP\Files\File::class, $ncNode);
+		$ncNode->putContent($serverPdf);
+		$this->harness->fileEventListener->onNodeWritten($ncNode);
+
+		// Client also modified locally
+		$clientPdf = MobileSheetsEndToEndSyncHarness::generateValidPdf('Client Discarded Title', 2);
+		$this->harness->clientUpdateFileContent($clientFileId, $clientPdf);
+
+		// Verify that server's exported hashcodes immediately reflect the server's file on disk
+		$serverHashCodes = $this->harness->exporter->generateHashcodes($this->harness->libraryId);
+		self::assertStringContainsString((string)$serverExpectedHash, $serverHashCodes, 'Server hashcodes must contain server file hash');
+		self::assertStringContainsString((string)strlen($serverPdf), $serverHashCodes, 'Server hashcodes must contain server file size');
+
+		// 3. User chooses "Keep remote" -> Client downloads server file via WebDAV GET
+		$downloadedContent = (string)$ncNode->getContent();
+		$this->harness->clientUpdateFileContent($clientFileId, $downloadedContent);
+
+		// Sync client acknowledging server version
+		$this->harness->sync();
+
+		// 4. Verify client and server agree on server version
+		$clientFilesAfter = $this->harness->getClientTableRows('Files');
+		self::assertSame($serverExpectedHash, (int)$clientFilesAfter[0]['FileHash'], 'Client DB must record server file hash');
+		self::assertSame(strlen($serverPdf), (int)$clientFilesAfter[0]['FileSize'], 'Client DB must record server file size');
+
+		$clientPdfContent = (string)file_get_contents($this->harness->clientFilesDir . '/remote_conflict.pdf');
+		self::assertSame($serverExpectedHash, \OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdf::contentHash($clientPdfContent), 'Client local file must match server version');
+
+		// 5. Subsequent sync cycles must be 100% clean and conflict-free
+		$this->harness->sync();
+		$this->harness->sync();
+	}
 }

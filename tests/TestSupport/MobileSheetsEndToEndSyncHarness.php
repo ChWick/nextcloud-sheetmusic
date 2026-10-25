@@ -1537,6 +1537,7 @@ class MobileSheetsEndToEndSyncHarness {
 							$ncNode = $libraryFolder->get($relPath);
 							if ($ncNode instanceof File && $ncNode->getContent() !== $content) {
 								$ncNode->putContent($content);
+								$this->fileEventListener->onNodeWritten($ncNode);
 							}
 						}
 					}
