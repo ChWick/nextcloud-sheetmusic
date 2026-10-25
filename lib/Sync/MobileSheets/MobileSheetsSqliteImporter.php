@@ -217,6 +217,10 @@ class MobileSheetsSqliteImporter {
 				}
 			}
 
+			$resolveField = static fn (string $col, string $extraKey, ?string $fallback = null): ?string =>
+				!empty($row[$col]) ? (string)$row[$col] : ($fallback ?? (isset($extra[$extraKey]) ? (string)$extra[$extraKey] : null));
+
+			$savedSongId = null;
 			if ($existing !== null) {
 				$shouldUpdate = false;
 				if ($existing->deletedAt !== null) {
@@ -249,33 +253,14 @@ class MobileSheetsSqliteImporter {
 					$existing->clientId = $clientId;
 					$existing->updatedAt = $lastModifiedSec ?: $existing->updatedAt;
 
-					if (!empty($row['Opus'])) {
-						$existing->opus = (string)$row['Opus'];
-					} elseif ($existing->opus === null && !empty($extra['opus'])) {
-						$existing->opus = (string)$extra['opus'];
-					}
-					if (!empty($row['CatalogNumber'])) {
-						$existing->catalogNumber = (string)$row['CatalogNumber'];
-					} elseif ($existing->catalogNumber === null && !empty($extra['catalog_number'])) {
-						$existing->catalogNumber = (string)$extra['catalog_number'];
-					}
-					if (!empty($row['SongNumber'])) {
-						$existing->songNumber = (string)$row['SongNumber'];
-					} elseif ($existing->songNumber === null && !empty($extra['song_number'])) {
-						$existing->songNumber = (string)$extra['song_number'];
-					}
+					$existing->opus = $resolveField('Opus', 'opus', $existing->opus);
+					$existing->catalogNumber = $resolveField('CatalogNumber', 'catalog_number', $existing->catalogNumber);
+					$existing->songNumber = $resolveField('SongNumber', 'song_number', $existing->songNumber);
 
 					$this->songMapper->update($existing);
-
-					if ($custom !== '') {
-						$this->attributeMapper->setAttribute($existing->id, 'custom', $custom);
-					}
-					if ($custom2 !== '') {
-						$this->attributeMapper->setAttribute($existing->id, 'custom2', $custom2);
-					}
-
 					$stats['songsUpdated']++;
 					$updatedSongClientIds[$clientId] = true;
+					$savedSongId = $existing->id;
 				}
 			} else {
 				// New song created in MobileSheets
@@ -292,24 +277,27 @@ class MobileSheetsSqliteImporter {
 					duration: $duration,
 					keywords: $keywords,
 					notes: $noteText,
-					opus: !empty($row['Opus']) ? (string)$row['Opus'] : (isset($extra['opus']) ? (string)$extra['opus'] : null),
-					catalogNumber: !empty($row['CatalogNumber']) ? (string)$row['CatalogNumber'] : (isset($extra['catalog_number']) ? (string)$extra['catalog_number'] : null),
-					songNumber: !empty($row['SongNumber']) ? (string)$row['SongNumber'] : (isset($extra['song_number']) ? (string)$extra['song_number'] : null),
+					opus: $resolveField('Opus', 'opus'),
+					catalogNumber: $resolveField('CatalogNumber', 'catalog_number'),
+					songNumber: $resolveField('SongNumber', 'song_number'),
 					clientId: $clientId,
 					createdAt: $dateCreatedSec ?: time(),
 					updatedAt: $lastModifiedSec ?: time(),
 				);
 				$this->songMapper->insert($newSong);
 
-				if ($custom !== '') {
-					$this->attributeMapper->setAttribute($newSong->id, 'custom', $custom);
-				}
-				if ($custom2 !== '') {
-					$this->attributeMapper->setAttribute($newSong->id, 'custom2', $custom2);
-				}
-
 				$stats['songsCreated']++;
 				$updatedSongClientIds[$clientId] = true;
+				$savedSongId = $newSong->id;
+			}
+
+			if ($savedSongId !== null) {
+				if ($custom !== '') {
+					$this->attributeMapper->setAttribute($savedSongId, 'custom', $custom);
+				}
+				if ($custom2 !== '') {
+					$this->attributeMapper->setAttribute($savedSongId, 'custom2', $custom2);
+				}
 			}
 		}
 	}
