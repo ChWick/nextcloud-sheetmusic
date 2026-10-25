@@ -59,8 +59,14 @@ class ApiController extends OCSController {
 
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'POST', url: '/api/libraries')]
-	public function addLibrary(string $path, bool $importExistingDb = true): DataResponse {
-		return $this->libraryController->addLibrary($path, $importExistingDb);
+	public function addLibrary(string $path, bool $importExistingDb = true, ?string $progressId = null): DataResponse {
+		return $this->libraryController->addLibrary($path, $importExistingDb, $progressId);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'GET', url: '/api/libraries/progress/{progressId}')]
+	public function getProgress(string $progressId): DataResponse {
+		return $this->libraryController->getProgress($progressId);
 	}
 
 	#[NoAdminRequired]

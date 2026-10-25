@@ -16,13 +16,12 @@ use OCA\SheetMusic\Db\InternalSongFile;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdf;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\IUserManager;
 use Psr\Log\LoggerInterface;
-use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdf;
-
 
 class LibraryReconciler {
 	/** Ignored filenames and extensions for sheet music */
@@ -49,7 +48,7 @@ class LibraryReconciler {
 	 *
 	 * @return array{indexed: int, pruned: int}
 	 */
-	public function reconcile(InternalLibrary|array|int $library): array {
+	public function reconcile(InternalLibrary|array|int $library, ?callable $onProgress = null): array {
 		$lib = $library instanceof InternalLibrary ? $library : $this->libraryMapper->resolveLibrary($library);
 		if ($lib->id === null) {
 			return ['indexed' => 0, 'pruned' => 0];
@@ -96,9 +95,16 @@ class LibraryReconciler {
 		$indexedCount = 0;
 		$prunedCount = 0;
 		$updatedFactsCount = 0;
+		$totalPhysical = count($physicalFiles);
+		$currentIndex = 0;
 
 		// 3. Index unindexed physical files and update changed facts
 		foreach ($physicalFiles as $fileId => $fileNode) {
+			$currentIndex++;
+			if ($onProgress !== null) {
+				$onProgress('reconcile', $currentIndex, $totalPhysical, $fileNode->getName());
+			}
+
 			if (isset($trackedByFileId[$fileId])) {
 				if ($this->updateFileFactsIfChanged($lib, $trackedByFileId[$fileId], $fileNode)) {
 					$updatedFactsCount++;

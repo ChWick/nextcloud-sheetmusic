@@ -6,12 +6,11 @@ namespace OCA\SheetMusic\Service;
 
 use OCA\SheetMusic\Db\InternalLibrary;
 use OCA\SheetMusic\Db\LibraryMapper;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSqliteExporter;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSqliteImporter;
 use OCP\Files\IRootFolder;
 use OCP\IUser;
 use Psr\Log\LoggerInterface;
-use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSqliteExporter;
-use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSqliteImporter;
-
 
 class LibraryService {
 	public function __construct(
@@ -21,6 +20,7 @@ class LibraryService {
 		private ?MobileSheetsSqliteExporter $exporter = null,
 		private ?MobileSheetsSqliteImporter $importer = null,
 		private ?LibraryReconciler $reconciler = null,
+		private ?ImportProgressService $progressService = null,
 	) {
 	}
 
@@ -129,7 +129,7 @@ class LibraryService {
 		return $this->libraryMapper->findAllForUser($userId);
 	}
 
-	public function addLibrary(string $userId, string $path, bool $importExistingDb = true): ?array {
+	public function addLibrary(string $userId, string $path, bool $importExistingDb = true, ?string $progressId = null): ?array {
 		if (!str_starts_with($path, '/')) {
 			return null;
 		}
@@ -152,9 +152,6 @@ class LibraryService {
 					$node = $userFolder->get($relPath);
 					if (!($node instanceof \OCP\Files\Folder)) {
 						throw new \InvalidArgumentException('Selected path is not a directory');
-					}
-					if (count($node->getDirectoryListing()) > 0) {
-						throw new \InvalidArgumentException('The directory must be empty');
 					}
 				}
 			} else {
@@ -179,56 +176,82 @@ class LibraryService {
 			$libraryPath = rtrim($libraryPath, '/');
 		}
 
-		$this->libraryMapper->addForUser($userId, $libraryPath);
-		$libraries = $this->libraryMapper->findAllForUser($userId);
-		$added = null;
-		foreach ($libraries as $lib) {
-			if ($lib->path === $libraryPath) {
-				$added = $lib;
-				break;
-			}
+		if ($progressId !== null && $this->progressService !== null) {
+			$this->progressService->start($progressId, 'Initializing library...');
 		}
 
-		if ($added !== null) {
-			$libraryId = (int)$added->id;
+		$isMobileSheets = ($extension === 'db');
+		$progressCallback = function (string $stage, int $current, int $total, ?string $message = null) use ($progressId, $isMobileSheets): void {
+			if ($progressId !== null && $this->progressService !== null) {
+				$this->progressService->update($progressId, $stage, $current, $total, $message ?? '', $isMobileSheets);
+			}
+		};
 
-			// Check for existing physical db file to import if requested
-			if ($importExistingDb && $this->importer !== null) {
-				try {
-					$userFolder = $this->rootFolder->getUserFolder($userId);
-					$dbRel = $targetDbRel ?? ltrim(rtrim($libraryPath, '/') . '/mobilesheets.db', '/');
+		try {
+			$this->libraryMapper->addForUser($userId, $libraryPath);
+			$libraries = $this->libraryMapper->findAllForUser($userId);
+			$added = null;
+			foreach ($libraries as $lib) {
+				if ($lib->path === $libraryPath) {
+					$added = $lib;
+					break;
+				}
+			}
 
-					if ($userFolder->nodeExists($dbRel)) {
-						$node = $userFolder->get($dbRel);
-						$localFile = $node->getStorage()->getLocalFile($node->getInternalPath());
-						if ($localFile !== false && file_exists($localFile)) {
-							$this->importer->importFromFile($libraryId, $localFile, $userId);
+			if ($added !== null) {
+				$libraryId = (int)$added->id;
+
+				// Check for existing physical db file to import if requested
+				if ($importExistingDb && $this->importer !== null) {
+					try {
+						$userFolder = $this->rootFolder->getUserFolder($userId);
+						$dbRel = $targetDbRel ?? ltrim(rtrim($libraryPath, '/') . '/mobilesheets.db', '/');
+
+						if ($userFolder->nodeExists($dbRel)) {
+							$node = $userFolder->get($dbRel);
+							$localFile = $node->getStorage()->getLocalFile($node->getInternalPath());
+							if ($localFile !== false && file_exists($localFile)) {
+								$this->importer->importFromFile($libraryId, $localFile, $userId, $progressCallback);
+							}
 						}
+					} catch (\Throwable $e) {
+						$this->logger->warning('Failed to import existing physical MobileSheets db', [
+							'exception' => $e,
+							'path' => $path,
+							'userId' => $userId,
+						]);
 					}
-				} catch (\Throwable $e) {
-					$this->logger->warning('Failed to import existing physical MobileSheets db', [
-						'exception' => $e,
-						'path' => $path,
-						'userId' => $userId,
-					]);
+				}
+
+				// Run initial folder reconciliation to register music files
+				if ($this->reconciler !== null) {
+					try {
+						$this->reconciler->reconcile($libraryId, $progressCallback);
+					} catch (\Throwable $e) {
+						$this->logger->warning('Initial library reconciliation failed', [
+							'exception' => $e,
+							'libraryId' => $libraryId,
+							'userId' => $userId,
+						]);
+					}
 				}
 			}
 
-			// Run initial folder reconciliation to register music files
-			if ($this->reconciler !== null) {
-				try {
-					$this->reconciler->reconcile($libraryId);
-				} catch (\Throwable $e) {
-					$this->logger->warning('Initial library reconciliation failed', [
-						'exception' => $e,
-						'libraryId' => $libraryId,
-						'userId' => $userId,
-					]);
-				}
+			if ($progressId !== null && $this->progressService !== null) {
+				$this->progressService->complete($progressId, 'Import complete');
 			}
+
+			return ['path' => $libraryPath];
+		} catch (\Throwable $e) {
+			if ($progressId !== null && $this->progressService !== null) {
+				$this->progressService->fail($progressId, $e->getMessage());
+			}
+			throw $e;
 		}
+	}
 
-		return ['path' => $libraryPath];
+	public function getProgress(string $progressId): ?array {
+		return $this->progressService?->get($progressId);
 	}
 
 	public function deleteLibrary(string $userId, int $id): ?array {

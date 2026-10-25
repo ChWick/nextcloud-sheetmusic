@@ -38,15 +38,21 @@ class LibraryController extends OCSController {
 
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'POST', url: '/api/libraries')]
-	public function addLibrary(string $path, bool $importExistingDb = true): DataResponse {
+	public function addLibrary(string $path, bool $importExistingDb = true, ?string $progressId = null): DataResponse {
 		$user = $this->userSession->getUser();
 		if ($user === null) {
 			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
 		}
 
 		$import = (bool)$this->request->getParam('importExistingDb', $this->request->getParam('import_mobilesheets', $importExistingDb));
+		$progId = $progressId ?? $this->request->getParam('progressId');
+
+		if ($progId !== null && session_status() === PHP_SESSION_ACTIVE) {
+			session_write_close();
+		}
+
 		try {
-			$result = $this->libraryService->addLibrary($user->getUID(), $path, $import);
+			$result = $this->libraryService->addLibrary($user->getUID(), $path, $import, $progId);
 			if ($result === null) {
 				return new DataResponse(['message' => 'Invalid library path'], Http::STATUS_BAD_REQUEST);
 			}
@@ -57,6 +63,22 @@ class LibraryController extends OCSController {
 		} catch (\Throwable $e) {
 			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'GET', url: '/api/libraries/progress/{progressId}')]
+	public function getProgress(string $progressId): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		$progress = $this->libraryService->getProgress($progressId);
+		if ($progress === null) {
+			return new DataResponse(['message' => 'Progress not found'], Http::STATUS_NOT_FOUND);
+		}
+
+		return new DataResponse($progress);
 	}
 
 	#[NoAdminRequired]

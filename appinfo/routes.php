@@ -160,6 +160,11 @@ return [
 			'verb' => 'DELETE',
 		],
 		[
+			'name' => 'Api#getProgress',
+			'url' => '/api/libraries/progress/{progressId}',
+			'verb' => 'GET',
+		],
+		[
 			'name' => 'Api#createSignature',
 			'url' => '/api/signatures',
 			'verb' => 'POST',

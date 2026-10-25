@@ -97,7 +97,7 @@ final class LibraryServiceTest extends TestCase {
 		self::assertContains('/', $paths);
 	}
 
-	public function testAddLibraryThrowsWhenDirectoryIsNotEmpty(): void {
+	public function testAddLibrarySucceedsWhenDirectoryIsNotEmpty(): void {
 		$userFolder = $this->rootFolder->getUserFolder('admin');
 		$folderName = 'NotEmptyDir_' . bin2hex(random_bytes(4));
 		$folder = $userFolder->newFolder($folderName);
@@ -107,9 +107,14 @@ final class LibraryServiceTest extends TestCase {
 		$file->putContent('some content');
 		$this->createdUserNodes[] = $file;
 
-		$this->expectException(\InvalidArgumentException::class);
-		$this->expectExceptionMessage('The directory must be empty');
-		$this->service->addLibrary('admin', '/' . $folderName);
+		$result = $this->service->addLibrary('admin', '/' . $folderName);
+		self::assertSame(['path' => '/' . $folderName], $result);
+
+		$allLibs = $this->libraryMapper->findAllForUser('admin');
+		$added = array_filter($allLibs, fn ($l) => $l->path === '/' . $folderName);
+		if (!empty($added)) {
+			$this->createdLibraryIds[] = (int)reset($added)->id;
+		}
 	}
 
 	public function testAddLibrarySucceedsWhenDirectoryIsEmpty(): void {
@@ -120,6 +125,51 @@ final class LibraryServiceTest extends TestCase {
 
 		$result = $this->service->addLibrary('admin', '/' . $folderName);
 		self::assertSame(['path' => '/' . $folderName], $result);
+
+		$allLibs = $this->libraryMapper->findAllForUser('admin');
+		$added = array_filter($allLibs, fn ($l) => $l->path === '/' . $folderName);
+		if (!empty($added)) {
+			$this->createdLibraryIds[] = (int)reset($added)->id;
+		}
+	}
+
+	public function testAddLibraryWithProgressTracking(): void {
+		$progressService = new \OCA\SheetMusic\Service\ImportProgressService();
+		$reconciler = new \OCA\SheetMusic\Service\LibraryReconciler(
+			$this->songMapper,
+			$this->songFileMapper,
+			$this->libraryMapper,
+			$this->rootFolder,
+			$this->userManager,
+			new NullLogger(),
+		);
+		$serviceWithProgress = new LibraryService(
+			$this->libraryMapper,
+			$this->rootFolder,
+			new NullLogger(),
+			exporter: $this->exporter,
+			importer: $this->importer,
+			reconciler: $reconciler,
+			progressService: $progressService,
+		);
+
+		$userFolder = $this->rootFolder->getUserFolder('admin');
+		$folderName = 'ProgressDir_' . bin2hex(random_bytes(4));
+		$folder = $userFolder->newFolder($folderName);
+		$this->createdUserNodes[] = $folder;
+
+		$file = $folder->newFile('Sonata.pdf');
+		$file->putContent('%PDF-1.4 test');
+		$this->createdUserNodes[] = $file;
+
+		$progressId = 'test-prog-' . bin2hex(random_bytes(4));
+		$result = $serviceWithProgress->addLibrary('admin', '/' . $folderName, false, $progressId);
+		self::assertSame(['path' => '/' . $folderName], $result);
+
+		$prog = $serviceWithProgress->getProgress($progressId);
+		self::assertNotNull($prog);
+		self::assertSame('completed', $prog['status']);
+		self::assertSame(100, $prog['percent']);
 
 		$allLibs = $this->libraryMapper->findAllForUser('admin');
 		$added = array_filter($allLibs, fn ($l) => $l->path === '/' . $folderName);

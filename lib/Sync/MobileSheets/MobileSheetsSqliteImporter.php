@@ -78,6 +78,7 @@ class MobileSheetsSqliteImporter {
 		InternalLibrary|array|int $library,
 		string $sqlitePath,
 		IUser|string|null $user = null,
+		?callable $onProgress = null,
 	): array {
 		$lib = $library instanceof InternalLibrary ? $library : $this->libraryMapper->resolveLibrary($library);
 		if ($lib->id === null) {
@@ -119,7 +120,7 @@ class MobileSheetsSqliteImporter {
 		$this->entityMerger->mergeEntities($db, $lib->id, $syncMeta, $stats);
 
 		// 2. Songs
-		$this->mergeSongs($db, $lib->id, $syncMeta, $stats, $updatedSongClientIds);
+		$this->mergeSongs($db, $lib->id, $syncMeta, $stats, $updatedSongClientIds, $onProgress);
 
 		// 3. Song-Entity Links
 		$this->entityMerger->mergeSongEntityLinks($db, $lib->id, $updatedSongClientIds, $syncMeta);
@@ -127,7 +128,7 @@ class MobileSheetsSqliteImporter {
 		// 4. Files
 		$uploadedFileNodeIds = [];
 		$uploadedSongFileIds = [];
-		$this->mergeFiles($db, $lib, $user, $syncMeta, $stats, $uploadedFileNodeIds, $uploadedSongFileIds);
+		$this->mergeFiles($db, $lib, $user, $syncMeta, $stats, $uploadedFileNodeIds, $uploadedSongFileIds, $onProgress);
 
 		// 5. Deletions (Tombstones) if sync metadata is present
 		if ($syncMeta->hasMetadata) {
@@ -154,9 +155,16 @@ class MobileSheetsSqliteImporter {
 		MobileSheetsSyncMetadata $syncMeta,
 		array &$stats,
 		array &$updatedSongClientIds,
+		?callable $onProgress = null,
 	): void {
 		if (!MobileSheetsTableHelper::tableExists($db, 'Songs')) {
 			return;
+		}
+
+		$totalSongs = 0;
+		$countStmt = $db->query('SELECT COUNT(*) FROM Songs');
+		if ($countStmt !== false) {
+			$totalSongs = (int)$countStmt->fetchColumn();
 		}
 
 		$notesBySongId = [];
@@ -175,9 +183,14 @@ class MobileSheetsSqliteImporter {
 			return;
 		}
 
+		$songIndex = 0;
 		while ($row = $songsStmt->fetch()) {
+			$songIndex++;
 			$clientId = (int)$row['Id'];
 			$title = trim((string)($row['Title'] ?? ''));
+			if ($onProgress !== null) {
+				$onProgress('songs', $songIndex, $totalSongs, $title);
+			}
 			if ($title === '') {
 				continue;
 			}
@@ -217,8 +230,8 @@ class MobileSheetsSqliteImporter {
 				}
 			}
 
-			$resolveField = static fn (string $col, string $extraKey, ?string $fallback = null): ?string =>
-				!empty($row[$col]) ? (string)$row[$col] : ($fallback ?? (isset($extra[$extraKey]) ? (string)$extra[$extraKey] : null));
+			$resolveField = static fn (string $col, string $extraKey, ?string $fallback = null): ?string
+				=> !empty($row[$col]) ? (string)$row[$col] : ($fallback ?? (isset($extra[$extraKey]) ? (string)$extra[$extraKey] : null));
 
 			$savedSongId = null;
 			if ($existing !== null) {
@@ -299,9 +312,16 @@ class MobileSheetsSqliteImporter {
 		array &$stats,
 		array &$uploadedFileNodeIds = [],
 		array &$uploadedSongFileIds = [],
+		?callable $onProgress = null,
 	): void {
 		if (!MobileSheetsTableHelper::tableExists($db, 'Files')) {
 			return;
+		}
+
+		$totalFiles = 0;
+		$countStmt = $db->query('SELECT COUNT(*) FROM Files');
+		if ($countStmt !== false) {
+			$totalFiles = (int)$countStmt->fetchColumn();
 		}
 
 		$existingCols = MobileSheetsTableHelper::getTableColumns($db, 'Files');
@@ -326,10 +346,15 @@ class MobileSheetsSqliteImporter {
 			return;
 		}
 
+		$fileIndex = 0;
 		while ($row = $stmt->fetch()) {
+			$fileIndex++;
 			$fileClientId = (int)$row['Id'];
 			$songClientId = (int)$row['SongId'];
 			$filePath = (string)($row['Path'] ?? '');
+			if ($onProgress !== null) {
+				$onProgress('files', $fileIndex, $totalFiles, basename($filePath));
+			}
 			$pageOrder = (string)($row['PageOrder'] ?? '');
 			$fileSize = (int)($row['FileSize'] ?? 0);
 			$fileHash = isset($row['FileHash']) ? (int)$row['FileHash'] : null;

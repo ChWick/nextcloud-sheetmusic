@@ -18,6 +18,7 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
+import NcProgressBar from '@nextcloud/vue/components/NcProgressBar'
 import CogIcon from 'vue-material-design-icons/Cog.vue'
 import Plus from 'vue-material-design-icons/Plus.vue'
 import FolderPlusOutline from 'vue-material-design-icons/FolderPlusOutline.vue'
@@ -31,6 +32,15 @@ import LibrarySettingsDialog from './components/LibrarySettingsDialog.vue'
 type ViewName = 'songs' | 'new-song' | 'integrity' | EntityType
 const VIEW_NAMES: ViewName[] = ['songs', 'new-song', 'composers', 'artists', 'books', 'collections', 'genres', 'keys', 'customgroups', 'years', 'signatures', 'sourcetypes', 'instruments', 'integrity']
 
+interface ImportProgress {
+  status: 'running' | 'completed' | 'error'
+  stage: string
+  current: number
+  total: number
+  percent: number
+  message: string
+}
+
 /*** State ***/
 const isAddDialogOpen = ref(false)
 const isImportDialogOpen = ref(false)
@@ -41,6 +51,49 @@ const addError = ref('')
 const importError = ref('')
 const isAddingLibrary = ref(false)
 const isImportingLibrary = ref(false)
+const importProgress = ref<ImportProgress | null>(null)
+let progressPollingTimer: ReturnType<typeof setInterval> | null = null
+
+function startProgressPolling(progressId: string) {
+  stopProgressPolling()
+  importProgress.value = {
+    status: 'running',
+    stage: 'starting',
+    current: 0,
+    total: 0,
+    percent: 0,
+    message: t('sheetmusic', 'Starting import...'),
+  }
+  progressPollingTimer = setInterval(async () => {
+    try {
+      const url = generateOcsUrl('/apps/sheetmusic/api/libraries/progress/' + encodeURIComponent(progressId))
+      const res = await axios.get(url)
+      const data = res?.data?.ocs?.data
+      if (data && typeof data === 'object') {
+        importProgress.value = {
+          status: data.status,
+          stage: data.stage,
+          current: Number(data.current ?? 0),
+          total: Number(data.total ?? 0),
+          percent: Number(data.percent ?? 0),
+          message: String(data.message ?? ''),
+        }
+        if (data.status === 'completed' || data.status === 'error') {
+          stopProgressPolling()
+        }
+      }
+    } catch {
+      // Ignore transient polling errors
+    }
+  }, 400)
+}
+
+function stopProgressPolling() {
+  if (progressPollingTimer !== null) {
+    clearInterval(progressPollingTimer)
+    progressPollingTimer = null
+  }
+}
 const libraries = ref<Library[]>([])
 const selectedLibrary = ref<number>(-1)
 const selectedView = ref<ViewName>('songs')
@@ -115,6 +168,8 @@ function openAddDialog(event?: Event) {
   event?.preventDefault()
   selectedFolder.value = undefined
   addError.value = ''
+  importProgress.value = null
+  stopProgressPolling()
   isAddDialogOpen.value = true
 }
 
@@ -122,12 +177,14 @@ function openImportDialog(event?: Event) {
   event?.preventDefault()
   selectedDbFile.value = undefined
   importError.value = ''
+  importProgress.value = null
+  stopProgressPolling()
   isImportDialogOpen.value = true
 }
 
 async function openFolderPicker() {
   addError.value = ''
-  const picker = getFilePickerBuilder(t('sheetmusic', 'Select an empty folder for your sheet music library'))
+  const picker = getFilePickerBuilder(t('sheetmusic', 'Select a folder for your sheet music library'))
     .setMultiSelect(false)
     .allowDirectories(true)
     .setFilter(node => node.type === 'folder')
@@ -174,20 +231,25 @@ async function openDbPicker() {
 
 async function addLibrary() {
   if (!selectedFolder.value) {
-    addError.value = t('sheetmusic', 'Please select an empty folder first.')
+    addError.value = t('sheetmusic', 'Please select a folder first.')
     showError(addError.value)
     return
   }
   const addedPath = selectedFolder.value.path
   isAddingLibrary.value = true
   addError.value = ''
+  const progressId = 'import-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9)
+  startProgressPolling(progressId)
   try {
-    await apiPost('/api/libraries', {
+    await apiPost('/api/libraries' as any, {
       path: addedPath,
       import_mobilesheets: false,
-    })
+      progressId,
+    } as any)
+    stopProgressPolling()
     selectedFolder.value = undefined
     isAddDialogOpen.value = false
+    importProgress.value = null
 
     await loadLibraries()
 
@@ -197,10 +259,12 @@ async function addLibrary() {
     }
     showSuccess(t('sheetmusic', 'Library added successfully.'))
   } catch (error) {
+    stopProgressPolling()
     addError.value = describeRequestFailure(error, t('sheetmusic', 'Could not save the library.'))
     showError(addError.value)
   } finally {
     isAddingLibrary.value = false
+    stopProgressPolling()
   }
 }
 
@@ -213,13 +277,18 @@ async function importLibrary() {
   const addedPath = selectedDbFile.value.path
   isImportingLibrary.value = true
   importError.value = ''
+  const progressId = 'import-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9)
+  startProgressPolling(progressId)
   try {
-    const response = await apiPost('/api/libraries', {
+    const response = await apiPost('/api/libraries' as any, {
       path: addedPath,
       import_mobilesheets: true,
-    })
+      progressId,
+    } as any)
+    stopProgressPolling()
     selectedDbFile.value = undefined
     isImportDialogOpen.value = false
+    importProgress.value = null
 
     await loadLibraries()
 
@@ -230,10 +299,12 @@ async function importLibrary() {
     }
     showSuccess(t('sheetmusic', 'MobileSheets library imported successfully.'))
   } catch (error) {
+    stopProgressPolling()
     importError.value = describeRequestFailure(error, t('sheetmusic', 'Could not import the MobileSheets library.'))
     showError(importError.value)
   } finally {
     isImportingLibrary.value = false
+    stopProgressPolling()
   }
 }
 
@@ -369,14 +440,21 @@ async function deleteLibrary() {
     <NcDialog v-if="isAddDialogOpen"
               :name="t('sheetmusic', 'Add Sheet Music Library')"
               size="normal"
-              @close="isAddDialogOpen = false">
-      <p>{{ t('sheetmusic', 'Select an empty folder from your Nextcloud files. New sheet music will be stored here.') }}</p>
-      <NcButton variant="primary" @click="openFolderPicker">
-        {{ selectedFolder?.path ?? t('sheetmusic', 'Choose empty folder from Nextcloud') }}
+              @close="!isAddingLibrary && (isAddDialogOpen = false)">
+      <p>{{ t('sheetmusic', 'Select a folder from your Nextcloud files. Sheet music files will be imported.') }}</p>
+      <NcButton variant="primary" :disabled="isAddingLibrary" @click="openFolderPicker">
+        {{ selectedFolder?.path ?? t('sheetmusic', 'Choose folder from Nextcloud') }}
       </NcButton>
+      <div v-if="isAddingLibrary && importProgress" :class="$style.progressContainer">
+        <NcProgressBar :value="importProgress.percent"
+                       size="medium"
+                       :show-value="true"
+                       :error="importProgress.status === 'error'" />
+        <p :class="$style.progressMessage">{{ importProgress.message }}</p>
+      </div>
       <p v-if="addError" :class="$style.error" role="alert">{{ addError }}</p>
       <template #actions>
-        <NcButton @click="isAddDialogOpen = false">{{ t('sheetmusic', 'Cancel') }}</NcButton>
+        <NcButton :disabled="isAddingLibrary" @click="isAddDialogOpen = false">{{ t('sheetmusic', 'Cancel') }}</NcButton>
         <NcButton variant="primary" :disabled="!selectedFolder || isAddingLibrary" @click="addLibrary">
           {{ t('sheetmusic', 'Add library') }}
         </NcButton>
@@ -386,14 +464,21 @@ async function deleteLibrary() {
     <NcDialog v-if="isImportDialogOpen"
               :name="t('sheetmusic', 'Import MobileSheets Library')"
               size="normal"
-              @close="isImportDialogOpen = false">
+              @close="!isImportingLibrary && (isImportDialogOpen = false)">
       <p>{{ t('sheetmusic', 'Select a mobilesheets.db file from your Nextcloud files to import your existing songs and metadata.') }}</p>
-      <NcButton variant="primary" @click="openDbPicker">
+      <NcButton variant="primary" :disabled="isImportingLibrary" @click="openDbPicker">
         {{ selectedDbFile?.path ?? t('sheetmusic', 'Choose mobilesheets.db from Nextcloud') }}
       </NcButton>
+      <div v-if="isImportingLibrary && importProgress" :class="$style.progressContainer">
+        <NcProgressBar :value="importProgress.percent"
+                       size="medium"
+                       :show-value="true"
+                       :error="importProgress.status === 'error'" />
+        <p :class="$style.progressMessage">{{ importProgress.message }}</p>
+      </div>
       <p v-if="importError" :class="$style.error" role="alert">{{ importError }}</p>
       <template #actions>
-        <NcButton @click="isImportDialogOpen = false">{{ t('sheetmusic', 'Cancel') }}</NcButton>
+        <NcButton :disabled="isImportingLibrary" @click="isImportDialogOpen = false">{{ t('sheetmusic', 'Cancel') }}</NcButton>
         <NcButton variant="primary" :disabled="!selectedDbFile || isImportingLibrary" @click="importLibrary">
           {{ t('sheetmusic', 'Import library') }}
         </NcButton>
@@ -465,4 +550,13 @@ async function deleteLibrary() {
 .dialogActions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; }
 .error { color: var(--color-error); }
 .viewToggle { display: flex; gap: 8px; margin: 12px 0; }
+.progressContainer {
+  margin-top: 16px;
+  width: 100%;
+}
+.progressMessage {
+  margin-top: 8px;
+  font-size: 0.9em;
+  color: var(--color-text-maxcontrast);
+}
 </style>
