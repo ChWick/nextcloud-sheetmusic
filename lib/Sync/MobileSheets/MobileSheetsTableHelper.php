@@ -111,6 +111,52 @@ final class MobileSheetsTableHelper {
 	}
 
 	/**
+	 * Filter candidate values [lowercase_key => value] to existing table columns [lowercase_key => real_column_name].
+	 *
+	 * @param array<string, string> $existingCols
+	 * @param array<string, mixed> $candidateValues
+	 * @return array<string, mixed> [real_column_name => value]
+	 */
+	public static function filterToExistingColumns(array $existingCols, array $candidateValues): array {
+		$row = [];
+		foreach ($candidateValues as $lowerKey => $val) {
+			if (isset($existingCols[$lowerKey])) {
+				$row[$existingCols[$lowerKey]] = $val;
+			}
+		}
+		return $row;
+	}
+
+	/**
+	 * Update a single row in an SQLite table.
+	 *
+	 * @param array<string, mixed> $row Column names and their corresponding values.
+	 */
+	public static function updateRow(PDO $db, string $tableName, array $row, string $idCol, mixed $idVal): void {
+		if ($row === []) {
+			return;
+		}
+
+		$sets = [];
+		$params = [':where_id' => $idVal];
+		foreach ($row as $col => $val) {
+			$p = ':u_' . strtolower(str_replace([' ', '-', '.'], '_', (string)$col));
+			$sets[] = '"' . str_replace('"', '""', (string)$col) . '" = ' . $p;
+			$params[$p] = $val;
+		}
+
+		$sql = sprintf(
+			'UPDATE "%s" SET %s WHERE "%s" = :where_id',
+			str_replace('"', '""', $tableName),
+			implode(', ', $sets),
+			str_replace('"', '""', $idCol),
+		);
+
+		$stmt = $db->prepare($sql);
+		$stmt->execute($params);
+	}
+
+	/**
 	 * Insert a single row into an SQLite table, with optional INSERT OR REPLACE.
 	 *
 	 * @param PDO $db

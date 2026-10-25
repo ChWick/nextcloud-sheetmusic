@@ -102,4 +102,27 @@ final class MobileSheetsTableHelperTest extends TestCase {
 		self::assertTrue(isset($idSet[99]));
 		self::assertFalse(isset($idSet[11]));
 	}
+
+	public function testFilterToExistingColumns(): void {
+		$cols = ['title' => 'Title', 'stars' => 'Stars'];
+		$candidates = ['title' => 'My Song', 'stars' => 4, 'nonexistent' => 'ignored'];
+
+		$filtered = MobileSheetsTableHelper::filterToExistingColumns($cols, $candidates);
+		self::assertSame(['Title' => 'My Song', 'Stars' => 4], $filtered);
+	}
+
+	public function testUpdateRow(): void {
+		$this->db->exec('CREATE TABLE TestUpdate (Id INTEGER PRIMARY KEY, Title TEXT, Stars INTEGER)');
+		$this->db->exec('INSERT INTO TestUpdate (Id, Title, Stars) VALUES (1, "Original", 2)');
+
+		MobileSheetsTableHelper::updateRow($this->db, 'TestUpdate', ['Title' => 'Modified', 'Stars' => 5], 'Id', 1);
+
+		$row = $this->db->query('SELECT * FROM TestUpdate WHERE Id = 1')->fetch();
+		self::assertSame('Modified', $row['Title']);
+		self::assertSame(5, (int)$row['Stars']);
+
+		// Empty update does nothing
+		MobileSheetsTableHelper::updateRow($this->db, 'TestUpdate', [], 'Id', 1);
+		self::assertSame('Modified', $row['Title']);
+	}
 }

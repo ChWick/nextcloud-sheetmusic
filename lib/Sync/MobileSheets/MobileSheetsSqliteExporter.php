@@ -311,13 +311,7 @@ class MobileSheetsSqliteExporter {
 					'songnumber' => $song->songNumber ?? '',
 				];
 
-				$insertRow = [];
-				foreach ($candidateValues as $lowerKey => $val) {
-					if (isset($existingCols[$lowerKey])) {
-						$insertRow[$existingCols[$lowerKey]] = $val;
-					}
-				}
-
+				$insertRow = MobileSheetsTableHelper::filterToExistingColumns($existingCols, $candidateValues);
 				MobileSheetsTableHelper::insertRow($db, 'Songs', $insertRow);
 			} else {
 				$existingModSec = MobileSheetsTimestampUtil::extractLastModifiedSec($existingSongRow);
@@ -346,20 +340,9 @@ class MobileSheetsSqliteExporter {
 					if ($song->songNumber !== null) {
 						$updateCandidates['songnumber'] = $song->songNumber;
 					}
-					$sets = [];
-					$params = [':id' => $clientId];
-					foreach ($updateCandidates as $lowerKey => $val) {
-						if (isset($existingCols[$lowerKey])) {
-							$colName = $existingCols[$lowerKey];
-							$pName = ':u_' . $lowerKey;
-							$sets[] = '"' . str_replace('"', '""', $colName) . '" = ' . $pName;
-							$params[$pName] = $val;
-						}
-					}
-					if ($sets !== []) {
-						$updStmt = $db->prepare('UPDATE Songs SET ' . implode(', ', $sets) . ' WHERE Id = :id');
-						$updStmt->execute($params);
-					}
+
+					$updateRow = MobileSheetsTableHelper::filterToExistingColumns($existingCols, $updateCandidates);
+					MobileSheetsTableHelper::updateRow($db, 'Songs', $updateRow, 'Id', $clientId);
 				}
 			}
 
@@ -383,12 +366,7 @@ class MobileSheetsSqliteExporter {
 							'creationdate' => MobileSheetsTimestampUtil::secondsToMs($song->createdAt),
 							'lastmodified' => MobileSheetsTimestampUtil::secondsToMs($song->updatedAt),
 						];
-						$noteRow = [];
-						foreach ($noteVals as $lowerKey => $val) {
-							if (isset($noteCols[$lowerKey])) {
-								$noteRow[$noteCols[$lowerKey]] = $val;
-							}
-						}
+						$noteRow = MobileSheetsTableHelper::filterToExistingColumns($noteCols, $noteVals);
 						MobileSheetsTableHelper::insertRow($db, 'SongNotes', $noteRow);
 					} else {
 						$noteColName = $noteCols['notes'] ?? ($noteCols['note'] ?? null);
@@ -498,13 +476,7 @@ class MobileSheetsSqliteExporter {
 				'height' => -1,
 			];
 
-			$insertRow = [];
-			foreach ($candidateValues as $lowerKey => $val) {
-				if (isset($existingCols[$lowerKey])) {
-					$insertRow[$existingCols[$lowerKey]] = $val;
-				}
-			}
-
+			$insertRow = MobileSheetsTableHelper::filterToExistingColumns($existingCols, $candidateValues);
 			MobileSheetsTableHelper::insertRow($db, 'Files', $insertRow, orReplace: true);
 
 			if ($metaStmt !== null) {
@@ -692,6 +664,7 @@ class MobileSheetsSqliteExporter {
 			}
 		}
 	}
+
 
 	private function resolveWebdavPathForFile(InternalSongFile $file, InternalLibrary $library, ?IUser $user): ?string {
 		if ($user !== null) {
