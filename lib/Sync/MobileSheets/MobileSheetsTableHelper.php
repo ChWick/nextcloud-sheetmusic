@@ -119,7 +119,8 @@ final class MobileSheetsTableHelper {
 	 */
 	public static function filterToExistingColumns(array $existingCols, array $candidateValues): array {
 		$row = [];
-		foreach ($candidateValues as $lowerKey => $val) {
+		foreach ($candidateValues as $key => $val) {
+			$lowerKey = strtolower((string)$key);
 			if (isset($existingCols[$lowerKey])) {
 				$row[$existingCols[$lowerKey]] = $val;
 			}

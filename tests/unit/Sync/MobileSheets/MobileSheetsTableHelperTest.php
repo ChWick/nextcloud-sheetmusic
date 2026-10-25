@@ -105,7 +105,7 @@ final class MobileSheetsTableHelperTest extends TestCase {
 
 	public function testFilterToExistingColumns(): void {
 		$cols = ['title' => 'Title', 'stars' => 'Stars'];
-		$candidates = ['title' => 'My Song', 'stars' => 4, 'nonexistent' => 'ignored'];
+		$candidates = ['Title' => 'My Song', 'STARS' => 4, 'nonexistent' => 'ignored'];
 
 		$filtered = MobileSheetsTableHelper::filterToExistingColumns($cols, $candidates);
 		self::assertSame(['Title' => 'My Song', 'Stars' => 4], $filtered);

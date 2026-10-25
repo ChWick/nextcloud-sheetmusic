@@ -627,14 +627,7 @@ class MobileSheetsSqliteExporter {
 					}
 
 					if ($existingColumns !== []) {
-						$filteredRow = [];
-						foreach ($row as $colKey => $val) {
-							$lowerKey = strtolower((string)$colKey);
-							if (isset($existingColumns[$lowerKey])) {
-								$filteredRow[$existingColumns[$lowerKey]] = $val;
-							}
-						}
-						$row = $filteredRow;
+						$row = MobileSheetsTableHelper::filterToExistingColumns($existingColumns, $row);
 					}
 
 					if ($row === []) {

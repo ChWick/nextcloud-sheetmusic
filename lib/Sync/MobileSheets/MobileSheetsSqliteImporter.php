@@ -526,9 +526,6 @@ class MobileSheetsSqliteImporter {
 						foreach ($filesOfSong as $songFile) {
 							$this->deleteSongFileAndPhysicalNode($songFile, $user);
 							$stats['filesDeleted']++;
-							if ($songFile->clientId !== null) {
-								$this->miscMapper->deleteMiscData($libraryId, 'mobilesheets', 'Files', (string)$songFile->clientId);
-							}
 						}
 						$this->songMapper->delete($song->id, hardDelete: false);
 						$stats['songsDeleted']++;
@@ -558,9 +555,6 @@ class MobileSheetsSqliteImporter {
 
 				// If this physical file node or song file record is present anywhere in the uploaded files, it was not deleted
 				if (isset($uploadedSongFileIds[$file->id]) || isset($uploadedFileNodeIds[$file->fileId])) {
-					if (!isset($uploadedFileSet[$clientId])) {
-						$this->miscMapper->deleteMiscData($libraryId, 'mobilesheets', 'Files', (string)$clientId);
-					}
 					continue;
 				}
 
@@ -673,7 +667,7 @@ class MobileSheetsSqliteImporter {
 			$uploadedRecordIds = [];
 			while ($dataRow = $rowsStmt->fetch()) {
 				$hasRows = true;
-				$recordId = isset($dataRow['Id']) ? (string)$dataRow['Id'] : md5(json_encode($dataRow, JSON_THROW_ON_ERROR));
+				$recordId = self::extractRecordId($dataRow);
 
 				// Skip rows that correspond to records tombstoned in Nextcloud
 				if ($lowerTable === 'songs' && isset($dataRow['Id']) && isset($deletedSongClientIds[(int)$dataRow['Id']])) {
@@ -706,7 +700,7 @@ class MobileSheetsSqliteImporter {
 			// Reconcile deleted rows in misc data for this table
 			$existingMiscRows = $this->miscMapper->getMiscDataForTable($libraryId, 'mobilesheets', $tableName, includeDeleted: false);
 			foreach ($existingMiscRows as $existingRow) {
-				$existingRecordId = isset($existingRow['Id']) ? (string)$existingRow['Id'] : md5(json_encode($existingRow, JSON_THROW_ON_ERROR));
+				$existingRecordId = self::extractRecordId($existingRow);
 				if (!isset($uploadedRecordIds[$existingRecordId])) {
 					$this->miscMapper->deleteMiscData($libraryId, 'mobilesheets', $tableName, $existingRecordId);
 				}
@@ -767,4 +761,10 @@ class MobileSheetsSqliteImporter {
 		return null;
 	}
 
+	/**
+	 * @param array<string, mixed> $row
+	 */
+	private static function extractRecordId(array $row): string {
+		return isset($row['Id']) ? (string)$row['Id'] : md5(json_encode($row, JSON_THROW_ON_ERROR));
+	}
 }
