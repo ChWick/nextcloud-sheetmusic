@@ -47,12 +47,8 @@ class InternalSongAttributeMapper {
 			->andWhere($qb->expr()->eq('name', $qb->createNamedParameter($name, IQueryBuilder::PARAM_STR)))
 			->setMaxResults(1);
 
-		$row = $qb->executeQuery()->fetchAssociative();
-		if ($row === false) {
-			return null;
-		}
-
-		return (string)$row['value'];
+		$value = $qb->executeQuery()->fetchOne();
+		return $value === false ? null : (string)$value;
 	}
 
 	public function setAttribute(int $songId, string $name, string $value): void {
@@ -134,14 +130,7 @@ class InternalSongAttributeMapper {
 			->where($qb->expr()->eq('s.library_id', $qb->createNamedParameter($libraryId, IQueryBuilder::PARAM_INT)))
 			->andWhere($qb->expr()->isNotNull('s.deleted_at'));
 
-		$result = $qb->executeQuery();
-		$ids = [];
-		while ($row = $result->fetchAssociative()) {
-			$ids[] = (int)$row['id'];
-		}
-		$result->closeCursor();
-
-		return $ids;
+		return array_map('intval', $qb->executeQuery()->fetchFirstColumn());
 	}
 
 	/**
