@@ -61,6 +61,10 @@ class SheetMusicFileEventListener implements IEventListener {
 			return;
 		}
 
+		if ($node->getSize() === 0) {
+			return;
+		}
+
 		$library = $this->findLibraryForNode($node);
 		if ($library === null || $library->id === null) {
 			return;
@@ -132,6 +136,10 @@ class SheetMusicFileEventListener implements IEventListener {
 		}
 
 		if ($this->reconciler->isIgnoredFilename($node->getName())) {
+			return;
+		}
+
+		if ($node->getSize() === 0) {
 			return;
 		}
 

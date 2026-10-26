@@ -93,6 +93,23 @@ final class SheetMusicFileEventListenerTest extends TestCase {
 		self::assertEmpty($songFiles);
 	}
 
+	public function testOnNodeCreatedIgnoresEmptyFiles(): void {
+		$userFolder = $this->rootFolder->getUserFolder('admin');
+		if (!$userFolder->nodeExists('Noten')) {
+			$this->createdUserNodes[] = $userFolder->newFolder('Noten');
+		}
+		$this->createTestLibrary('Noten', 'admin');
+
+		$file = $userFolder->newFile('Noten/Empty.pdf');
+		$this->createdUserNodes[] = $file;
+
+		$event = new NodeCreatedEvent($file);
+		$this->listener->handle($event);
+
+		$songFiles = $this->songFileMapper->findByFileId($file->getId(), false);
+		self::assertEmpty($songFiles);
+	}
+
 	public function testOnNodeDeletedDoesNotDeleteSongFile(): void {
 		$userFolder = $this->rootFolder->getUserFolder('admin');
 		if (!$userFolder->nodeExists('Noten')) {
