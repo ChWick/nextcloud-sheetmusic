@@ -225,39 +225,10 @@ class LibraryIntegrityService {
 		}
 
 		// Check for duplicate physical file references
-		foreach ($referencedRelativePaths as $relPath => $references) {
-			if (count($references) > 1) {
-				$songIds = array_values(array_unique(array_column($references, 'songId')));
-
-				if (count($songIds) > 1) {
-					$referencingSongs = array_values(array_filter(
-						array_map(fn ($id) => $songsById[$id] ?? null, $songIds)
-					));
-
-					$areExactDuplicates = $this->areSongsExactDuplicates($referencingSongs);
-					$songTitles = array_map(fn ($s) => sprintf('"%s" (ID %d)', $s->title, $s->id), $referencingSongs);
-
-					$issues[] = new IntegrityIssue(
-						type: IntegrityIssue::TYPE_DUPLICATE_FILE_PATH,
-						severity: IntegrityIssue::SEVERITY_ERROR,
-						message: sprintf(
-							'Multiple database entries point to the same file path "%s" (%s).',
-							basename($relPath),
-							implode(', ', $songTitles)
-						),
-						songId: $referencingSongs[0]->id ?? $references[0]['songId'],
-						songTitle: $referencingSongs[0]->title ?? $references[0]['songTitle'],
-						fileId: $references[0]['fileId'],
-						path: $relPath,
-						fixable: $areExactDuplicates,
-						details: [
-							'songIds' => $songIds,
-							'exactDuplicate' => $areExactDuplicates,
-						],
-					);
-				}
-			}
-		}
+		$issues = [
+			...$issues,
+			...$this->checkDuplicateFilePaths($referencedRelativePaths, $songsById),
+		];
 
 		// Scan folder for orphan files (files in storage not in DB)
 		if ($autoPaths) {
@@ -265,6 +236,66 @@ class LibraryIntegrityService {
 		}
 
 		// Check for songs with identical metadata (informational)
+		$issues = [
+			...$issues,
+			...$this->checkIdenticalSongs($songs),
+			...$this->checkRelationalIntegrity($libraryId, $user, $targetFolder, $reportedMissingPaths),
+		];
+
+		return $issues;
+	}
+
+	/**
+	 * @param array<string, list<array{songId: int, songTitle: string, fileId: int}>> $referencedRelativePaths
+	 * @param array<int, MobileSheetsSong> $songsById
+	 * @return list<IntegrityIssue>
+	 */
+	private function checkDuplicateFilePaths(array $referencedRelativePaths, array $songsById): array {
+		$issues = [];
+		foreach ($referencedRelativePaths as $relPath => $references) {
+			if (count($references) <= 1) {
+				continue;
+			}
+			$songIds = array_values(array_unique(array_column($references, 'songId')));
+
+			if (count($songIds) > 1) {
+				$referencingSongs = array_values(array_filter(
+					array_map(fn ($id) => $songsById[$id] ?? null, $songIds)
+				));
+
+				$areExactDuplicates = $this->areSongsExactDuplicates($referencingSongs);
+				$songTitles = array_map(fn ($s) => sprintf('"%s" (ID %d)', $s->title, $s->id), $referencingSongs);
+
+				$issues[] = new IntegrityIssue(
+					type: IntegrityIssue::TYPE_DUPLICATE_FILE_PATH,
+					severity: IntegrityIssue::SEVERITY_ERROR,
+					message: sprintf(
+						'Multiple database entries point to the same file path "%s" (%s).',
+						basename($relPath),
+						implode(', ', $songTitles)
+					),
+					songId: $referencingSongs[0]->id ?? $references[0]['songId'],
+					songTitle: $referencingSongs[0]->title ?? $references[0]['songTitle'],
+					fileId: $references[0]['fileId'],
+					path: $relPath,
+					fixable: $areExactDuplicates,
+					details: [
+						'songIds' => $songIds,
+						'exactDuplicate' => $areExactDuplicates,
+					],
+				);
+			}
+		}
+
+		return $issues;
+	}
+
+	/**
+	 * @param list<MobileSheetsSong> $songs
+	 * @return list<IntegrityIssue>
+	 */
+	private function checkIdenticalSongs(array $songs): array {
+		$issues = [];
 		$groupedByMetadata = [];
 		foreach ($songs as $s) {
 			$metaKey = $this->getCanonicalSongMetadataKey($s);
@@ -272,33 +303,29 @@ class LibraryIntegrityService {
 		}
 
 		foreach ($groupedByMetadata as $identicalSongs) {
-			if (count($identicalSongs) > 1) {
-				$identicalIds = array_map(fn ($s) => $s->id, $identicalSongs);
-				$songTitles = array_map(fn ($s) => sprintf('"%s" (ID %d)', $s->title, $s->id), $identicalSongs);
-
-				$issues[] = new IntegrityIssue(
-					type: IntegrityIssue::TYPE_IDENTICAL_SONG,
-					severity: IntegrityIssue::SEVERITY_INFO,
-					message: sprintf(
-						'Found %d songs with identical metadata (%s). Propose to merge or keep separate.',
-						count($identicalSongs),
-						implode(', ', $songTitles)
-					),
-					songId: $identicalSongs[0]->id,
-					songTitle: $identicalSongs[0]->title,
-					fixable: true,
-					details: [
-						'songIds' => $identicalIds,
-						'exactDuplicate' => true,
-					],
-				);
+			if (count($identicalSongs) <= 1) {
+				continue;
 			}
-		}
+			$identicalIds = array_map(fn ($s) => $s->id, $identicalSongs);
+			$songTitles = array_map(fn ($s) => sprintf('"%s" (ID %d)', $s->title, $s->id), $identicalSongs);
 
-		$issues = [
-			...$issues,
-			...$this->checkRelationalIntegrity($libraryId, $user, $targetFolder, $reportedMissingPaths),
-		];
+			$issues[] = new IntegrityIssue(
+				type: IntegrityIssue::TYPE_IDENTICAL_SONG,
+				severity: IntegrityIssue::SEVERITY_INFO,
+				message: sprintf(
+					'Found %d songs with identical metadata (%s). Propose to merge or keep separate.',
+					count($identicalSongs),
+					implode(', ', $songTitles)
+				),
+				songId: $identicalSongs[0]->id,
+				songTitle: $identicalSongs[0]->title,
+				fixable: true,
+				details: [
+					'songIds' => $identicalIds,
+					'exactDuplicate' => true,
+				],
+			);
+		}
 
 		return $issues;
 	}
@@ -370,6 +397,45 @@ class LibraryIntegrityService {
 	}
 
 	/**
+	 * @param list<int> $ids
+	 * @param array<string, mixed> $extraDetails
+	 */
+	private function createDuplicateClientIdIssue(
+		string $subject,
+		string $idGroupLabel,
+		int $clientId,
+		array $ids,
+		string $target,
+		?int $songId = null,
+		array $extraDetails = [],
+	): IntegrityIssue {
+		$keepId = $ids[0];
+		$duplicateIds = array_slice($ids, 1);
+
+		return new IntegrityIssue(
+			type: IntegrityIssue::TYPE_DUPLICATE_CLIENT_ID,
+			severity: IntegrityIssue::SEVERITY_WARNING,
+			message: sprintf(
+				'Duplicate %s client_id %d shared by %s IDs %s. Auto-fix will keep client_id on ID %d and reset duplicates.',
+				$subject,
+				$clientId,
+				$idGroupLabel,
+				implode(', ', $ids),
+				$keepId,
+			),
+			songId: $songId,
+			fixable: true,
+			details: [
+				'target' => $target,
+				'clientId' => $clientId,
+				'keepId' => $keepId,
+				'duplicateIds' => $duplicateIds,
+				...$extraDetails,
+			],
+		);
+	}
+
+	/**
 	 * @return list<IntegrityIssue>
 	 */
 	private function checkRelationalIntegrity(
@@ -399,51 +465,25 @@ class LibraryIntegrityService {
 
 		$duplicateSongClientIds = $this->internalSongMapper->findDuplicateClientIds($libraryId);
 		foreach ($duplicateSongClientIds as $dup) {
-			$keepId = $dup->songIds[0];
-			$duplicateIds = array_slice($dup->songIds, 1);
-			$issues[] = new IntegrityIssue(
-				type: IntegrityIssue::TYPE_DUPLICATE_CLIENT_ID,
-				severity: IntegrityIssue::SEVERITY_WARNING,
-				message: sprintf(
-					'Duplicate song client_id %d shared by song IDs %s. Auto-fix will keep client_id on ID %d and reset duplicates.',
-					$dup->clientId,
-					implode(', ', $dup->songIds),
-					$keepId,
-				),
-				songId: $keepId,
-				fixable: true,
-				details: [
-					'target' => 'song',
-					'clientId' => $dup->clientId,
-					'keepId' => $keepId,
-					'duplicateIds' => $duplicateIds,
-				],
+			$issues[] = $this->createDuplicateClientIdIssue(
+				subject: 'song',
+				idGroupLabel: 'song',
+				clientId: $dup->clientId,
+				ids: $dup->songIds,
+				target: 'song',
+				songId: $dup->songIds[0],
 			);
 		}
 
 		$duplicateEntityClientIds = $this->internalEntityMapper->findDuplicateClientIds($libraryId);
 		foreach ($duplicateEntityClientIds as $dup) {
-			$label = InternalEntityMapper::getLabel($dup->type);
-			$keepId = $dup->entityIds[0];
-			$duplicateIds = array_slice($dup->entityIds, 1);
-			$issues[] = new IntegrityIssue(
-				type: IntegrityIssue::TYPE_DUPLICATE_CLIENT_ID,
-				severity: IntegrityIssue::SEVERITY_WARNING,
-				message: sprintf(
-					'Duplicate %s client_id %d shared by entity IDs %s. Auto-fix will keep client_id on ID %d and reset duplicates.',
-					$label,
-					$dup->clientId,
-					implode(', ', $dup->entityIds),
-					$keepId,
-				),
-				fixable: true,
-				details: [
-					'target' => 'entity',
-					'entityType' => $dup->type,
-					'clientId' => $dup->clientId,
-					'keepId' => $keepId,
-					'duplicateIds' => $duplicateIds,
-				],
+			$issues[] = $this->createDuplicateClientIdIssue(
+				subject: InternalEntityMapper::getLabel($dup->type),
+				idGroupLabel: 'entity',
+				clientId: $dup->clientId,
+				ids: $dup->entityIds,
+				target: 'entity',
+				extraDetails: ['entityType' => $dup->type],
 			);
 		}
 
