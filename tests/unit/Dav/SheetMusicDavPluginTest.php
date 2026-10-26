@@ -54,6 +54,7 @@ final class SheetMusicDavPluginTest extends TestCase {
 			},
 		);
 		$this->exporter->method('generateHashcodes')->willReturn("path.pdf\n123\n1000\n500");
+		$this->exporter->method('hasLibraryData')->willReturn(true);
 
 		$this->plugin = new SheetMusicDavPlugin(
 			$this->libraryMapper,
@@ -229,6 +230,34 @@ final class SheetMusicDavPluginTest extends TestCase {
 		$body = $response->getBodyAsString();
 		self::assertSame(1, substr_count($body, 'mobilesheets.db<'));
 		self::assertStringContainsString('mobilesheets_hashcodes.txt', $body);
+	}
+
+	public function testAfterPropfindDoesNotInjectVirtualFilesWhenLibraryIsEmpty(): void {
+		$this->attachServer();
+		$this->exporter = $this->createMock(MobileSheetsSqliteExporter::class);
+		$this->exporter->method('hasLibraryData')->willReturn(false);
+
+		$plugin = new SheetMusicDavPlugin(
+			$this->libraryMapper,
+			$this->exporter,
+			$this->importer,
+			$this->logger,
+			$this->userSession,
+			null,
+			$this->rootFolder,
+		);
+
+		$request = new Request('PROPFIND', '/remote.php/dav/files/admin/My%20Noten', ['Depth' => '1']);
+		$request->setBaseUrl('/remote.php/dav/');
+
+		$response = new Response();
+		$response->setStatus(207);
+		$initialBody = '<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:"><d:response><d:href>/remote.php/dav/files/admin/My%20Noten/</d:href></d:response></d:multistatus>';
+		$response->setBody($initialBody);
+
+		$plugin->afterPropfind($request, $response);
+
+		self::assertSame($initialBody, $response->getBodyAsString());
 	}
 
 	public function testAfterPropfindPreservesUtf8CharactersWithoutHtmlEntities(): void {

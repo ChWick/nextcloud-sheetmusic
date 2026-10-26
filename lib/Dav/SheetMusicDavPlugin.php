@@ -237,7 +237,10 @@ class SheetMusicDavPlugin extends ServerPlugin {
 					continue;
 				}
 				$client = $this->registry->getClientForVirtualFile($filename);
-				$entries[] = $this->buildPropfindEntry($library, $path . '/' . $filename, $filename, $requestBody, $client);
+				$entry = $this->buildPropfindEntry($library, $path . '/' . $filename, $filename, $requestBody, $client);
+				if ($entry !== null) {
+					$entries[] = $entry;
+				}
 			}
 			if ($entries === []) {
 				return $xml;
@@ -293,7 +296,7 @@ class SheetMusicDavPlugin extends ServerPlugin {
 	 * Build a multistatus entry for a virtual file, honouring the properties
 	 * requested in the PROPFIND body.
 	 *
-	 * @return array<int|string, mixed>
+	 * @return array<int|string, mixed>|null
 	 */
 	private function buildPropfindEntry(
 		InternalLibrary $library,
@@ -301,9 +304,12 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		string $filename,
 		?string $requestBody,
 		?SyncClientInterface $client = null,
-	): array {
+	): ?array {
 		$client ??= $this->registry->getClientForVirtualFile($filename);
 		$props = $client?->getVirtualFileProperties($library, $filename, $library->userId ?? '');
+		if ($props === null) {
+			return null;
+		}
 
 		$requestType = PropFind::ALLPROPS;
 		$requested = [];

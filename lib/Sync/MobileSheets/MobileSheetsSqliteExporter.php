@@ -118,6 +118,26 @@ class MobileSheetsSqliteExporter {
 	}
 
 	/**
+	 * Check if the library has any active songs or imported schemas/data.
+	 */
+	public function hasLibraryData(InternalLibrary|array|int $library): bool {
+		$lib = $library instanceof InternalLibrary ? $library : $this->libraryMapper->resolveLibrary($library);
+		if ($lib->id === null) {
+			return false;
+		}
+
+		if ($this->songMapper->findAllForLibrary($lib->id, includeDeleted: false) !== []) {
+			return true;
+		}
+
+		if ($this->miscMapper->getMiscSchemas($lib->id, 'mobilesheets') !== []) {
+			return true;
+		}
+
+		return false;
+	}
+
+	/**
 	 * Generate the dynamic content for mobilesheets_hashcodes.txt.
 	 */
 	public function generateHashcodes(InternalLibrary|array|int $library): string {

@@ -117,7 +117,7 @@ class MobileSheetsSqliteImporter {
 
 		$updatedSongClientIds = [];
 
-		$isFreshLibrary = $this->songMapper->findAllForLibrary($lib->id) === [];
+		$isFreshLibrary = $this->songMapper->findAllForLibrary($lib->id, includeDeleted: true) === [];
 
 		// 1. Entities
 		$this->entityMerger->mergeEntities($db, $lib->id, $syncMeta, $stats);
@@ -376,7 +376,7 @@ class MobileSheetsSqliteImporter {
 			$extra = $meta['extra'] ?? [];
 
 			$metaFileId = isset($extra['file_id']) ? (int)$extra['file_id'] : null;
-			$resolvedFileId = $this->resolveFileIdFromPath($filePath, $library, $user, allowPlaceholder: $isFreshLibrary && !$syncMeta->hasMetadata);
+			$resolvedFileId = $this->resolveFileIdFromPath($filePath, $library, $user, allowPlaceholder: $isFreshLibrary && $syncMeta->getFileMeta($fileClientId) === null);
 
 			if ($resolvedFileId !== null) {
 				$fileId = $resolvedFileId;

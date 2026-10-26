@@ -53,6 +53,10 @@ class MobileSheetsSyncBackend implements SyncClientInterface {
 	}
 
 	public function getVirtualFileProperties(InternalLibrary $library, string $filename, string $userId): ?array {
+		if (!$this->exporter->hasLibraryData($library)) {
+			return null;
+		}
+
 		if ($filename === self::VIRTUAL_DB_NAME) {
 			return [
 				'size' => $this->databaseSize($library),

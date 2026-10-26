@@ -81,6 +81,7 @@ final class MobileSheetsSyncBackendTest extends TestCase {
 	public function testVirtualFileProperties(): void {
 		$library = new InternalLibrary(id: 42, userId: 'admin', path: '/Noten', updatedAt: 1234567890);
 
+		$this->exporter->method('hasLibraryData')->willReturn(true);
 		$this->exporter->method('generateHashcodes')
 			->with($library)
 			->willReturn("file.pdf\n123\n1000\n500");
@@ -106,6 +107,14 @@ final class MobileSheetsSyncBackendTest extends TestCase {
 		self::assertSame('"sm-db-42-1234567890"', $dbProps['etag']);
 
 		self::assertNull($this->backend->getVirtualFileProperties($library, 'unknown.txt', 'admin'));
+	}
+
+	public function testVirtualFilePropertiesReturnsNullWhenLibraryIsEmpty(): void {
+		$library = new InternalLibrary(id: 99, userId: 'admin', path: '/EmptyLib', updatedAt: 1234567890);
+		$this->exporter->method('hasLibraryData')->with($library)->willReturn(false);
+
+		self::assertNull($this->backend->getVirtualFileProperties($library, 'mobilesheets.db', 'admin'));
+		self::assertNull($this->backend->getVirtualFileProperties($library, 'mobilesheets_hashcodes.txt', 'admin'));
 	}
 
 	public function testHandleGetDatabase(): void {
