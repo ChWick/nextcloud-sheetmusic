@@ -13,6 +13,7 @@ use OCA\SheetMusic\Db\LibraryMapper;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPathResolver;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdf;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdfMetadata;
+use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\Files\Node;
@@ -76,13 +77,7 @@ class SongFileService {
 	}
 
 	public function uploadSongFile(IUser $user, int $libraryId, int $songId, ?array $fileInfo): ?LibraryData {
-		if ($fileInfo === null || !isset($fileInfo['tmp_name'])) {
-			throw new \InvalidArgumentException('No file uploaded');
-		}
-		if (is_uploaded_file($fileInfo['tmp_name']) === false && file_exists($fileInfo['tmp_name']) === false) {
-			throw new \InvalidArgumentException('No file uploaded');
-		}
-
+		$content = $this->readUploadedFileContent($fileInfo);
 		$fileName = basename((string)($fileInfo['name'] ?? 'song.file'));
 
 		$target = $this->resolveLibraryTarget($user, $libraryId);
@@ -90,11 +85,6 @@ class SongFileService {
 			return null;
 		}
 		['userFolder' => $userFolder, 'targetFolder' => $targetFolder, 'libraryDir' => $libraryDir] = $target;
-
-		$content = file_get_contents($fileInfo['tmp_name']);
-		if ($content === false) {
-			throw new \InvalidArgumentException('Could not read the uploaded file');
-		}
 
 		$autoPaths = $this->libraryService->isAutoPathsEnabled($user->getUID(), $libraryId);
 		$targetRelative = $this->resolveDestinationPath($userFolder, $libraryDir, $fileName, $autoPaths);
@@ -109,17 +99,7 @@ class SongFileService {
 	}
 
 	public function updateSongFile(IUser $user, int $libraryId, int $songId, int $fileId, ?array $fileInfo): ?LibraryData {
-		if ($fileInfo === null || !isset($fileInfo['tmp_name'])) {
-			throw new \InvalidArgumentException('No file uploaded');
-		}
-		if (is_uploaded_file($fileInfo['tmp_name']) === false && file_exists($fileInfo['tmp_name']) === false) {
-			throw new \InvalidArgumentException('No file uploaded');
-		}
-
-		$content = file_get_contents($fileInfo['tmp_name']);
-		if ($content === false) {
-			throw new \InvalidArgumentException('Could not read the uploaded file');
-		}
+		$content = $this->readUploadedFileContent($fileInfo);
 
 		$fileRecord = $this->internalSongFileMapper->findById($fileId);
 		if ($fileRecord === null || ($songId > 0 && $fileRecord->songId !== $songId)) {
@@ -133,42 +113,11 @@ class SongFileService {
 		}
 
 		$targetNode = $nodes[0];
-		if (!($targetNode instanceof \OCP\Files\File)) {
+		if (!($targetNode instanceof File)) {
 			throw new \RuntimeException('Target node is not a file');
 		}
 
-		// Explicitly capture previous version in Nextcloud files_versions before overwriting
-		if ($targetNode->getSize() > 0) {
-			$versionCaptured = false;
-			if ((interface_exists(\OCA\Files_Versions\Versions\IVersionManager::class) || class_exists(\OCA\Files_Versions\Versions\IVersionManager::class))
-				&& \OC::$server->has(\OCA\Files_Versions\Versions\IVersionManager::class)) {
-				try {
-					/** @var \OCA\Files_Versions\Versions\IVersionManager $versionManager */
-					$versionManager = \OC::$server->get(\OCA\Files_Versions\Versions\IVersionManager::class);
-					$versionManager->createVersion($user, $targetNode);
-					$versionCaptured = true;
-				} catch (\Throwable $e) {
-					$this->logger->warning('Could not capture file version via IVersionManager before update: ' . $e->getMessage(), [
-						'exception' => $e,
-						'fileId' => $fileId,
-					]);
-				}
-			}
-
-			if (!$versionCaptured && class_exists(\OCA\Files_Versions\Storage::class)) {
-				$relativePath = $userFolder->getRelativePath($targetNode->getPath());
-				if ($relativePath !== null) {
-					try {
-						\OCA\Files_Versions\Storage::store('/' . ltrim($relativePath, '/'));
-					} catch (\Throwable $e) {
-						$this->logger->warning('Could not capture file version before update: ' . $e->getMessage(), [
-							'exception' => $e,
-							'fileId' => $fileId,
-						]);
-					}
-				}
-			}
-		}
+		$this->captureFileVersion($user, $userFolder, $targetNode, $fileId);
 
 		// Overwrite content in place on existing File node:
 		// Preserves fileId, path, and triggers Nextcloud files_versions app to capture history
@@ -177,16 +126,10 @@ class SongFileService {
 		$fileRecord->fileSize = strlen($content);
 		$ext = strtolower(pathinfo($targetNode->getName(), PATHINFO_EXTENSION));
 		if ($ext === 'pdf') {
-			try {
-				$fileRecord->fileHash = MobileSheetsPdf::contentHash($content);
-				$pageCount = MobileSheetsPdf::pageCount($content);
-				$fileRecord->pageCount = $pageCount;
-				$fileRecord->pageOrder = $pageCount > 1 ? '1-' . $pageCount : '1';
-			} catch (\Throwable $e) {
-				$this->logger->warning('Failed to compute PDF metadata for updated song file: ' . $targetNode->getName(), [
-					'exception' => $e,
-				]);
-			}
+			$facts = $this->extractPdfFacts($content, $targetNode->getName());
+			$fileRecord->fileHash = $facts['fileHash'];
+			$fileRecord->pageCount = $facts['pageCount'];
+			$fileRecord->pageOrder = $facts['pageOrder'];
 		}
 		$fileRecord->updatedAt = time();
 		$this->internalSongFileMapper->update($fileRecord);
@@ -585,18 +528,13 @@ class SongFileService {
 		$pageOrder = '1';
 		$fileName = $file->getName();
 		$ext = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
-		if ($ext === 'pdf' && $file instanceof \OCP\Files\File) {
-			try {
-				$content = $file->getContent();
-				if (is_string($content) && $content !== '') {
-					$fileHash = MobileSheetsPdf::contentHash($content);
-					$pageCount = MobileSheetsPdf::pageCount($content);
-					$pageOrder = $pageCount > 1 ? '1-' . $pageCount : '1';
-				}
-			} catch (\Throwable $e) {
-				$this->logger->warning('Failed to compute PDF metadata for recorded song file: ' . $fileName, [
-					'exception' => $e,
-				]);
+		if ($ext === 'pdf' && $file instanceof File) {
+			$content = $file->getContent();
+			if (is_string($content)) {
+				$facts = $this->extractPdfFacts($content, $fileName);
+				$fileHash = $facts['fileHash'];
+				$pageCount = $facts['pageCount'];
+				$pageOrder = $facts['pageOrder'];
 			}
 		}
 
@@ -632,5 +570,83 @@ class SongFileService {
 		$this->libraryMapper->touch($libraryId);
 
 		$this->syncSongFileMetadata($user, '', $songId, $libraryId);
+	}
+
+	private function readUploadedFileContent(?array $fileInfo): string {
+		if ($fileInfo === null || !isset($fileInfo['tmp_name'])) {
+			throw new \InvalidArgumentException('No file uploaded');
+		}
+		if (is_uploaded_file($fileInfo['tmp_name']) === false && file_exists($fileInfo['tmp_name']) === false) {
+			throw new \InvalidArgumentException('No file uploaded');
+		}
+
+		$content = file_get_contents($fileInfo['tmp_name']);
+		if ($content === false) {
+			throw new \InvalidArgumentException('Could not read the uploaded file');
+		}
+
+		return $content;
+	}
+
+	private function captureFileVersion(IUser $user, Folder $userFolder, File $targetNode, int $fileId): void {
+		if ($targetNode->getSize() <= 0) {
+			return;
+		}
+
+		$versionCaptured = false;
+		if ((interface_exists(\OCA\Files_Versions\Versions\IVersionManager::class) || class_exists(\OCA\Files_Versions\Versions\IVersionManager::class))
+			&& \OC::$server->has(\OCA\Files_Versions\Versions\IVersionManager::class)) {
+			try {
+				/** @var \OCA\Files_Versions\Versions\IVersionManager $versionManager */
+				$versionManager = \OC::$server->get(\OCA\Files_Versions\Versions\IVersionManager::class);
+				$versionManager->createVersion($user, $targetNode);
+				$versionCaptured = true;
+			} catch (\Throwable $e) {
+				$this->logger->warning('Could not capture file version via IVersionManager before update: ' . $e->getMessage(), [
+					'exception' => $e,
+					'fileId' => $fileId,
+				]);
+			}
+		}
+
+		if (!$versionCaptured && class_exists(\OCA\Files_Versions\Storage::class)) {
+			$relativePath = $userFolder->getRelativePath($targetNode->getPath());
+			if ($relativePath !== null) {
+				try {
+					\OCA\Files_Versions\Storage::store('/' . ltrim($relativePath, '/'));
+				} catch (\Throwable $e) {
+					$this->logger->warning('Could not capture file version before update: ' . $e->getMessage(), [
+						'exception' => $e,
+						'fileId' => $fileId,
+					]);
+				}
+			}
+		}
+	}
+
+	/**
+	 * @return array{fileHash: ?string, pageCount: int, pageOrder: string}
+	 */
+	private function extractPdfFacts(string $content, string $fileName): array {
+		try {
+			if ($content !== '') {
+				$pageCount = MobileSheetsPdf::pageCount($content);
+				return [
+					'fileHash' => MobileSheetsPdf::contentHash($content),
+					'pageCount' => $pageCount,
+					'pageOrder' => $pageCount > 1 ? '1-' . $pageCount : '1',
+				];
+			}
+		} catch (\Throwable $e) {
+			$this->logger->warning('Failed to compute PDF metadata for song file: ' . $fileName, [
+				'exception' => $e,
+			]);
+		}
+
+		return [
+			'fileHash' => null,
+			'pageCount' => 1,
+			'pageOrder' => '1',
+		];
 	}
 }
