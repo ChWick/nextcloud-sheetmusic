@@ -38,11 +38,13 @@ class LibraryOrphanScanner {
 		array $songs = [],
 		array $missingSongIds = [],
 		bool $autoMatchOrphans = true,
+		?string $userFolderPath = null,
 	): void {
+		$userFolderPath ??= (string)$this->rootFolder->getUserFolder($user->getUID())->getPath();
 		$nodes = $folder->getDirectoryListing();
 		foreach ($nodes as $node) {
 			if ($node instanceof Folder) {
-				$this->scanOrphans($node, $targetFolderPath, $referencedRelativePaths, $issues, $user, $songs, $missingSongIds, $autoMatchOrphans);
+				$this->scanOrphans($node, $targetFolderPath, $referencedRelativePaths, $issues, $user, $songs, $missingSongIds, $autoMatchOrphans, $userFolderPath);
 			} elseif ($node instanceof Node) {
 				$relativeToTarget = $this->pathResolver->relativeToFolder($node->getPath(), $targetFolderPath)
 					?? $node->getName();
@@ -62,8 +64,6 @@ class LibraryOrphanScanner {
 						// ignore if path cannot be resolved
 					}
 
-					$userFolder = $this->rootFolder->getUserFolder($user->getUID());
-					$userFolderPath = (string)$userFolder->getPath();
 					$nodePath = (string)$node->getPath();
 					$userRelativePath = str_starts_with($nodePath, $userFolderPath . '/')
 						? substr($nodePath, strlen($userFolderPath) + 1)
