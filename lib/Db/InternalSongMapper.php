@@ -257,18 +257,7 @@ class InternalSongMapper {
 
 		// 2. Move entity links from droppedId to keepId
 		if ($this->entityMapper !== null) {
-			$qbLinks = $this->db->getQueryBuilder();
-			$qbLinks->select('entity_id')
-				->from(InternalEntityMapper::JUNCTION_TABLE_NAME)
-				->where($qbLinks->expr()->eq('song_id', $qbLinks->createNamedParameter($droppedId, IQueryBuilder::PARAM_INT)))
-				->andWhere($qbLinks->expr()->isNull('deleted_at'));
-			$res = $qbLinks->executeQuery();
-			$entityIds = [];
-			while ($row = $res->fetchAssociative()) {
-				$entityIds[] = (int)$row['entity_id'];
-			}
-			$res->closeCursor();
-
+			$entityIds = $this->entityMapper->findEntityIdsForSong($droppedId);
 			foreach ($entityIds as $entId) {
 				$this->entityMapper->linkSongEntity($keepId, $entId);
 				$this->entityMapper->unlinkSongEntity($droppedId, $entId, true);
@@ -504,7 +493,8 @@ class InternalSongMapper {
 			: [];
 
 		$fileNodePaths = [];
-		$fileIds = array_values(array_unique(array_filter(array_map(fn (InternalSongFile $f) => $f->fileId, $files))));
+		$fileIds = array_values(array_unique(array_filter(array_column($files, 'fileId'))));
+		$uid = $user?->getUID() ?? '';
 		if (!empty($fileIds)) {
 			try {
 				$qbCache = $this->db->getQueryBuilder();
@@ -517,7 +507,6 @@ class InternalSongMapper {
 					if (str_starts_with($p, 'files/')) {
 						$p = substr($p, 6);
 					}
-					$uid = $user !== null ? $user->getUID() : '';
 					$fileNodePaths[(int)$r['fileid']] = MobileSheetsPathResolver::WEBDAV_ROOT . '/' . $uid . '/' . ltrim($p, '/');
 				}
 				$resCache->closeCursor();
@@ -528,7 +517,7 @@ class InternalSongMapper {
 
 		$songFiles = [];
 		foreach ($files as $file) {
-			$path = $fileNodePaths[$file->fileId] ?? (MobileSheetsPathResolver::WEBDAV_ROOT . '/' . ($user !== null ? $user->getUID() : '') . '/file_' . $file->fileId . '.pdf');
+			$path = $fileNodePaths[$file->fileId] ?? (MobileSheetsPathResolver::WEBDAV_ROOT . '/' . $uid . '/file_' . $file->fileId . '.pdf');
 			$songFiles[$file->songId][] = new MobileSheetsFile(
 				id: (int)$file->id,
 				path: $path,
