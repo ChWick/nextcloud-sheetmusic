@@ -147,22 +147,14 @@ class LibraryReconciler {
 
 		if ($needsUpdate || $hash === null) {
 			if ($ext === 'pdf') {
-				try {
-					$content = $fileNode->getContent();
-					if ($content !== false && $content !== '') {
-						$newHash = MobileSheetsPdf::contentHash($content);
-						$newPageCount = MobileSheetsPdf::pageCount($content);
-						if ($hash !== $newHash || $pageCount !== $newPageCount) {
-							$hash = $newHash;
-							$pageCount = $newPageCount;
-							if (empty($pageOrder)) {
-								$pageOrder = $newPageCount > 1 ? '1-' . $newPageCount : '1';
-							}
-							$needsUpdate = true;
-						}
+				[$newHash, $newPageCount, $newPageOrder] = $this->extractPdfFacts($fileNode);
+				if ($newHash !== null && ($hash !== $newHash || $pageCount !== $newPageCount)) {
+					$hash = $newHash;
+					$pageCount = $newPageCount;
+					if (empty($pageOrder)) {
+						$pageOrder = $newPageOrder;
 					}
-				} catch (\Throwable $e) {
-					$this->logger->warning('Failed to compute PDF metadata for updated file: ' . $filename, ['exception' => $e]);
+					$needsUpdate = true;
 				}
 			}
 		}
@@ -208,16 +200,7 @@ class LibraryReconciler {
 
 		$ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
 		if ($ext === 'pdf') {
-			try {
-				$content = $fileNode->getContent();
-				if ($content !== false && $content !== '') {
-					$hash = MobileSheetsPdf::contentHash($content);
-					$pageCount = MobileSheetsPdf::pageCount($content);
-					$pageOrder = $pageCount > 1 ? '1-' . $pageCount : '1';
-				}
-			} catch (\Throwable $e) {
-				$this->logger->warning('Failed to compute PDF metadata for indexing: ' . $filename, ['exception' => $e]);
-			}
+			[$hash, $pageCount, $pageOrder] = $this->extractPdfFacts($fileNode);
 		}
 
 		$songFile = new InternalSongFile(
@@ -234,6 +217,25 @@ class LibraryReconciler {
 		);
 
 		$this->songFileMapper->insert($songFile);
+	}
+
+	/**
+	 * @return array{?int, int, string} [hash, pageCount, pageOrder]
+	 */
+	private function extractPdfFacts(File $fileNode): array {
+		try {
+			$content = $fileNode->getContent();
+			if ($content !== false && $content !== '') {
+				$hash = MobileSheetsPdf::contentHash($content);
+				$pageCount = MobileSheetsPdf::pageCount($content);
+				$pageOrder = $pageCount > 1 ? '1-' . $pageCount : '1';
+				return [$hash, $pageCount, $pageOrder];
+			}
+		} catch (\Throwable $e) {
+			$this->logger->warning('Failed to compute PDF metadata: ' . $fileNode->getName(), ['exception' => $e]);
+		}
+
+		return [null, 1, '1'];
 	}
 
 	public function extractTitleFromFilename(string $filename): string {
