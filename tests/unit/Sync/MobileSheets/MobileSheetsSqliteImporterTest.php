@@ -892,4 +892,80 @@ final class MobileSheetsSqliteImporterTest extends TestCase {
 
 		self::assertTrue($warningLogged, 'Importer must log a warning with unknown column names');
 	}
+
+	public function testImportCreatesPlaceholderFileWhenMissingInLibrary(): void {
+		$db = $this->createTestDatabase();
+		$db->exec("INSERT INTO Songs (Id, Title, SortTitle, Stars, Difficulty, Duration, Keywords, Custom, Custom2, SongId, DateCreated, LastModified) VALUES (10, 'Test Song', 'Test Song', 0, 0, 0, '', '', '', 10, 1000, 1000)");
+		$db->exec("INSERT INTO Files (Id, SongId, Path, PageOrder, FileSize, LastModified, Source, Type, SourceFilePageCount, FileHash) VALUES (20, 10, '/remote.php/dav/files/admin/Noten/Folder/Song.pdf', '1', 1024, 1000, 1, 1, 1, 12345)");
+
+		$library = new InternalLibrary(id: 1, userId: 'admin', path: 'Noten');
+
+		$songMapper = $this->createMock(InternalSongMapper::class);
+		$createdSong = new InternalSong(id: 100, libraryId: 1, title: 'Test Song', clientId: 10);
+		$songMapper->method('findByClientId')->willReturn(null);
+		$songMapper->method('findByTitle')->willReturn(null);
+		$songMapper->method('insert')->willReturn($createdSong);
+		$songMapper->method('findAllForLibrary')->willReturn([$createdSong]);
+
+		$entityMapper = $this->createMock(InternalEntityMapper::class);
+		$entityMapper->method('findAllForLibrary')->willReturn([]);
+
+		$insertedFile = null;
+		$songFileMapper = $this->createMock(InternalSongFileMapper::class);
+		$songFileMapper->method('findByUuid')->willReturn(null);
+		$songFileMapper->method('findAllForSong')->willReturn([]);
+		$songFileMapper->method('findByClientId')->willReturn(null);
+		$songFileMapper->method('insert')->willReturnCallback(function (InternalSongFile $file) use (&$insertedFile) {
+			$file->id = 200;
+			$insertedFile = $file;
+			return $file;
+		});
+
+		$attributeMapper = $this->createMock(InternalSongAttributeMapper::class);
+		$miscMapper = $this->createMock(InternalMiscMapper::class);
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('admin');
+		$userManager = $this->createMock(IUserManager::class);
+		$userManager->method('get')->with('admin')->willReturn($user);
+
+		$userFolder = $this->createMock(IUserFolder::class);
+		$userFolder->method('nodeExists')->willReturn(false);
+		$userFolder->method('getPath')->willReturn('/admin/files');
+
+		$placeholderNode = $this->createMock(File::class);
+		$placeholderNode->method('getId')->willReturn(888);
+
+		$createdFolders = [];
+		$userFolder->method('newFolder')->willReturnCallback(function (string $path) use (&$createdFolders) {
+			$createdFolders[] = $path;
+		});
+		$userFolder->method('newFile')->with('Noten/Folder/Song.pdf')->willReturn($placeholderNode);
+
+		$rootFolder = $this->createMock(IRootFolder::class);
+		$rootFolder->method('getUserFolder')->with('admin')->willReturn($userFolder);
+
+		$pathResolver = new MobileSheetsPathResolver($rootFolder);
+
+		$importer = new MobileSheetsSqliteImporter(
+			$songMapper,
+			$entityMapper,
+			$songFileMapper,
+			$attributeMapper,
+			$miscMapper,
+			$libraryMapper,
+			$pathResolver,
+			$rootFolder,
+			$userManager,
+			new NullLogger(),
+		);
+
+		$importer->importFromFile($library, $this->tempDbPath);
+
+		self::assertContains('Noten/Folder', $createdFolders);
+		self::assertNotNull($insertedFile);
+		self::assertSame(888, $insertedFile->fileId);
+		self::assertSame(100, $insertedFile->songId);
+	}
 }

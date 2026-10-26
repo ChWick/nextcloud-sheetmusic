@@ -19,6 +19,7 @@ use OCA\SheetMusic\Db\InternalSongFile;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
+use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\IUser;
 use OCP\IUserManager;
@@ -704,9 +705,14 @@ class MobileSheetsSqliteImporter {
 			if ($msPath !== null) {
 				$userFolder = $this->rootFolder->getUserFolder($user->getUID());
 				$rel = $this->pathResolver->relativeToUserFolder($msPath->internal, $user);
-				if ($rel !== null && $userFolder->nodeExists($rel)) {
-					$node = $userFolder->get($rel);
-					return $node->getId();
+				if ($rel !== null) {
+					if ($userFolder->nodeExists($rel)) {
+						return $userFolder->get($rel)->getId();
+					}
+					$placeholderId = $this->createPlaceholderFile($userFolder, $rel, $library);
+					if ($placeholderId !== null) {
+						return $placeholderId;
+					}
 				}
 			}
 		} catch (\Throwable) {
@@ -732,11 +738,73 @@ class MobileSheetsSqliteImporter {
 			if ($userFolder->nodeExists($libRel)) {
 				return $userFolder->get($libRel)->getId();
 			}
+
+			if (!str_contains($filePath, ':') && !str_starts_with($filePath, '/storage/')) {
+				$placeholderId = $this->createPlaceholderFile($userFolder, $libRel, $library);
+				if ($placeholderId !== null) {
+					return $placeholderId;
+				}
+			}
 		} catch (\Throwable) {
 			// Fall through
 		}
 
 		return null;
+	}
+
+	private function createPlaceholderFile(Folder $userFolder, string $relPath, InternalLibrary $library): ?int {
+		if (!$this->isPathInsideLibrary($relPath, $library)) {
+			return null;
+		}
+
+		try {
+			$parent = dirname($relPath);
+			if ($parent !== '.' && $parent !== '') {
+				$this->ensureParentFolderExists($userFolder, $parent);
+			}
+
+			if (!$userFolder->nodeExists($relPath)) {
+				$file = $userFolder->newFile($relPath);
+				return $file->getId();
+			}
+
+			return $userFolder->get($relPath)->getId();
+		} catch (\Throwable $e) {
+			$this->logger->warning('Failed to create placeholder file for MobileSheets sync: ' . $e->getMessage(), [
+				'exception' => $e,
+				'path' => $relPath,
+			]);
+			return null;
+		}
+	}
+
+	private function isPathInsideLibrary(string $relPath, InternalLibrary $library): bool {
+		$libPath = trim($library->path, '/');
+		if (str_ends_with(strtolower($libPath), '.db')) {
+			$libFolder = dirname($libPath);
+			$cleanLibFolder = $libFolder === '.' ? '' : $libFolder;
+		} else {
+			$cleanLibFolder = $libPath;
+		}
+
+		if ($cleanLibFolder === '') {
+			return true;
+		}
+
+		return $relPath === $cleanLibFolder || str_starts_with($relPath, $cleanLibFolder . '/');
+	}
+
+	private function ensureParentFolderExists(Folder $userFolder, string $parent): void {
+		$current = '';
+		foreach (explode('/', $parent) as $segment) {
+			if ($segment === '') {
+				continue;
+			}
+			$current = $current === '' ? $segment : "$current/$segment";
+			if (!$userFolder->nodeExists($current)) {
+				$userFolder->newFolder($current);
+			}
+		}
 	}
 
 	/**
