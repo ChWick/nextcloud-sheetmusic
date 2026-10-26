@@ -271,12 +271,9 @@ class SongController extends OCSController {
 		array $songIds = [],
 		bool $deleteFiles = true,
 	): DataResponse {
-		$libraryId = $libraryId ?? ((int)$this->request->getParam('libraryId', 0) ?: null);
+		$libraryId = $this->resolveLibraryId($libraryId);
 		$songIds = !empty($songIds) ? $songIds : (array)$this->request->getParam('songIds', []);
-		$deleteFilesParam = $this->request->getParam('deleteFiles');
-		if ($deleteFilesParam !== null) {
-			$deleteFiles = filter_var($deleteFilesParam, FILTER_VALIDATE_BOOLEAN);
-		}
+		$deleteFiles = $this->resolveDeleteFiles($deleteFiles);
 
 		if ($libraryId === null || empty($songIds)) {
 			return new DataResponse(['message' => 'libraryId and songIds are required'], Http::STATUS_BAD_REQUEST);
@@ -302,11 +299,8 @@ class SongController extends OCSController {
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'DELETE', url: '/api/songs/{id}')]
 	public function deleteSong(int $id, ?int $libraryId = null, bool $deleteFiles = true): DataResponse {
-		$libraryId = $libraryId ?? ((int)$this->request->getParam('libraryId', 0) ?: null);
-		$deleteFilesParam = $this->request->getParam('deleteFiles');
-		if ($deleteFilesParam !== null) {
-			$deleteFiles = filter_var($deleteFilesParam, FILTER_VALIDATE_BOOLEAN);
-		}
+		$libraryId = $this->resolveLibraryId($libraryId);
+		$deleteFiles = $this->resolveDeleteFiles($deleteFiles);
 
 		if ($libraryId === null) {
 			return new DataResponse(['message' => 'libraryId parameter is required'], Http::STATUS_BAD_REQUEST);
@@ -327,6 +321,15 @@ class SongController extends OCSController {
 		} catch (\Throwable $e) {
 			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
+	}
+
+	private function resolveLibraryId(?int $libraryId): ?int {
+		return $libraryId ?? ((int)$this->request->getParam('libraryId', 0) ?: null);
+	}
+
+	private function resolveDeleteFiles(bool $default = true): bool {
+		$param = $this->request->getParam('deleteFiles');
+		return $param !== null ? filter_var($param, FILTER_VALIDATE_BOOLEAN) : $default;
 	}
 
 	#[NoAdminRequired]
