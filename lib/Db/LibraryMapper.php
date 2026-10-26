@@ -44,9 +44,10 @@ class LibraryMapper {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')
 			->from(self::TABLE_NAME)
-			->where($qb->expr()->eq('id', $qb->createNamedParameter($libraryId)));
+			->where($qb->expr()->eq('id', $qb->createNamedParameter($libraryId, IQueryBuilder::PARAM_INT)))
+			->setMaxResults(1);
 
-		$row = $qb->executeQuery()->fetch();
+		$row = $qb->executeQuery()->fetchAssociative();
 
 		return $row === false ? null : InternalLibrary::fromRow($row);
 	}
