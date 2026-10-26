@@ -202,20 +202,18 @@ class InternalMiscMapper {
 	public function deleteMiscData(int $libraryId, string $clientType, string $tableName, string $recordId, bool $hardDelete = false): bool {
 		$qb = $this->db->getQueryBuilder();
 		if ($hardDelete) {
-			$qb->delete(self::DATA_TABLE_NAME)
-				->where($qb->expr()->eq('library_id', $qb->createNamedParameter($libraryId, IQueryBuilder::PARAM_INT)))
-				->andWhere($qb->expr()->eq('client_type', $qb->createNamedParameter($clientType, IQueryBuilder::PARAM_STR)))
-				->andWhere($qb->expr()->eq('table_name', $qb->createNamedParameter($tableName, IQueryBuilder::PARAM_STR)))
-				->andWhere($qb->expr()->eq('record_id', $qb->createNamedParameter($recordId, IQueryBuilder::PARAM_STR)));
+			$qb->delete(self::DATA_TABLE_NAME);
 		} else {
+			$now = time();
 			$qb->update(self::DATA_TABLE_NAME)
-				->set('deleted_at', $qb->createNamedParameter(time(), IQueryBuilder::PARAM_INT))
-				->set('updated_at', $qb->createNamedParameter(time(), IQueryBuilder::PARAM_INT))
-				->where($qb->expr()->eq('library_id', $qb->createNamedParameter($libraryId, IQueryBuilder::PARAM_INT)))
-				->andWhere($qb->expr()->eq('client_type', $qb->createNamedParameter($clientType, IQueryBuilder::PARAM_STR)))
-				->andWhere($qb->expr()->eq('table_name', $qb->createNamedParameter($tableName, IQueryBuilder::PARAM_STR)))
-				->andWhere($qb->expr()->eq('record_id', $qb->createNamedParameter($recordId, IQueryBuilder::PARAM_STR)));
+				->set('deleted_at', $qb->createNamedParameter($now, IQueryBuilder::PARAM_INT))
+				->set('updated_at', $qb->createNamedParameter($now, IQueryBuilder::PARAM_INT));
 		}
+
+		$qb->where($qb->expr()->eq('library_id', $qb->createNamedParameter($libraryId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('client_type', $qb->createNamedParameter($clientType, IQueryBuilder::PARAM_STR)))
+			->andWhere($qb->expr()->eq('table_name', $qb->createNamedParameter($tableName, IQueryBuilder::PARAM_STR)))
+			->andWhere($qb->expr()->eq('record_id', $qb->createNamedParameter($recordId, IQueryBuilder::PARAM_STR)));
 
 		return $qb->executeStatement() > 0;
 	}
@@ -227,19 +225,17 @@ class InternalMiscMapper {
 
 		$qb = $this->db->getQueryBuilder();
 		if ($hardDelete) {
-			$qb->delete(self::DATA_TABLE_NAME)
-				->where($qb->expr()->eq('library_id', $qb->createNamedParameter($libraryId, IQueryBuilder::PARAM_INT)))
-				->andWhere($qb->expr()->eq('client_type', $qb->createNamedParameter($clientType, IQueryBuilder::PARAM_STR)))
-				->andWhere($qb->expr()->eq('song_uuid', $qb->createNamedParameter($songUuid, IQueryBuilder::PARAM_STR)));
+			$qb->delete(self::DATA_TABLE_NAME);
 		} else {
 			$now = time();
 			$qb->update(self::DATA_TABLE_NAME)
 				->set('deleted_at', $qb->createNamedParameter($now, IQueryBuilder::PARAM_INT))
-				->set('updated_at', $qb->createNamedParameter($now, IQueryBuilder::PARAM_INT))
-				->where($qb->expr()->eq('library_id', $qb->createNamedParameter($libraryId, IQueryBuilder::PARAM_INT)))
-				->andWhere($qb->expr()->eq('client_type', $qb->createNamedParameter($clientType, IQueryBuilder::PARAM_STR)))
-				->andWhere($qb->expr()->eq('song_uuid', $qb->createNamedParameter($songUuid, IQueryBuilder::PARAM_STR)));
+				->set('updated_at', $qb->createNamedParameter($now, IQueryBuilder::PARAM_INT));
 		}
+
+		$qb->where($qb->expr()->eq('library_id', $qb->createNamedParameter($libraryId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->eq('client_type', $qb->createNamedParameter($clientType, IQueryBuilder::PARAM_STR)))
+			->andWhere($qb->expr()->eq('song_uuid', $qb->createNamedParameter($songUuid, IQueryBuilder::PARAM_STR)));
 
 		return $qb->executeStatement();
 	}
@@ -284,14 +280,7 @@ class InternalMiscMapper {
 				)
 			);
 
-		$result = $qb->executeQuery();
-		$ids = [];
-		while ($row = $result->fetchAssociative()) {
-			$ids[] = (int)$row['id'];
-		}
-		$result->closeCursor();
-
-		return $ids;
+		return array_map('intval', $qb->executeQuery()->fetchFirstColumn());
 	}
 
 	/**
