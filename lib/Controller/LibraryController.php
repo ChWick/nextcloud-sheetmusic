@@ -45,11 +45,7 @@ class LibraryController extends OCSController {
 		}
 
 		$import = (bool)$this->request->getParam('importExistingDb', $this->request->getParam('import_mobilesheets', $importExistingDb));
-		$progId = $progressId ?? $this->request->getParam('progressId');
-
-		if ($progId !== null && session_status() === PHP_SESSION_ACTIVE) {
-			session_write_close();
-		}
+		$progId = $this->resolveProgressId($progressId);
 
 		try {
 			$result = $this->libraryService->addLibrary($user->getUID(), $path, $import, $progId);
@@ -74,11 +70,9 @@ class LibraryController extends OCSController {
 		}
 
 		$progress = $this->libraryService->getProgress($progressId);
-		if ($progress === null) {
-			return new DataResponse(['message' => 'Progress not found'], Http::STATUS_NOT_FOUND);
-		}
-
-		return new DataResponse($progress);
+		return $progress === null
+			? new DataResponse(['message' => 'Progress not found'], Http::STATUS_NOT_FOUND)
+			: new DataResponse($progress);
 	}
 
 	#[NoAdminRequired]
@@ -90,11 +84,9 @@ class LibraryController extends OCSController {
 		}
 
 		$result = $this->libraryService->deleteLibrary($user->getUID(), $id);
-		if ($result === null) {
-			return new DataResponse([], Http::STATUS_NOT_FOUND);
-		}
-
-		return new DataResponse($result);
+		return $result === null
+			? new DataResponse([], Http::STATUS_NOT_FOUND)
+			: new DataResponse($result);
 	}
 
 	#[NoAdminRequired]
@@ -106,11 +98,9 @@ class LibraryController extends OCSController {
 		}
 
 		$result = $this->libraryService->updateSettings($user->getUID(), $id, $autoPaths, $autoPdfMetadata);
-		if ($result === null) {
-			return new DataResponse([], Http::STATUS_NOT_FOUND);
-		}
-
-		return new DataResponse(['library' => $result]);
+		return $result === null
+			? new DataResponse([], Http::STATUS_NOT_FOUND)
+			: new DataResponse(['library' => $result]);
 	}
 
 	#[NoAdminRequired]
@@ -171,11 +161,7 @@ class LibraryController extends OCSController {
 			return new DataResponse(['message' => 'User not logged in'], Http::STATUS_UNAUTHORIZED);
 		}
 
-		$progId = $progressId ?? $this->request->getParam('progressId');
-		if ($progId !== null && session_status() === PHP_SESSION_ACTIVE) {
-			session_write_close();
-		}
-
+		$progId = $this->resolveProgressId($progressId);
 		if ($progId !== null) {
 			$this->libraryService->startProgress($progId, 'Starting integrity fixes...');
 		}
@@ -203,5 +189,13 @@ class LibraryController extends OCSController {
 				Http::STATUS_OK
 			);
 		}
+	}
+
+	private function resolveProgressId(?string $progressId): ?string {
+		$progId = $progressId ?? $this->request->getParam('progressId');
+		if ($progId !== null && session_status() === PHP_SESSION_ACTIVE) {
+			session_write_close();
+		}
+		return $progId;
 	}
 }
