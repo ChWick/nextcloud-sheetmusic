@@ -446,7 +446,7 @@ class SheetMusicDavPlugin extends ServerPlugin {
 	private function findLibraryForRelativePath(string $userId, string $relPath): ?InternalLibrary {
 		foreach ($this->libraryMapper->findAllForUser($userId) as $lib) {
 			$cleanLibFolder = $this->cleanLibraryFolder($lib);
-			if ($cleanLibFolder === '' || $relPath === $cleanLibFolder || str_starts_with($relPath, $cleanLibFolder . '/')) {
+			if ($cleanLibFolder !== '' && ($relPath === $cleanLibFolder || str_starts_with($relPath, $cleanLibFolder . '/'))) {
 				return $lib;
 			}
 		}

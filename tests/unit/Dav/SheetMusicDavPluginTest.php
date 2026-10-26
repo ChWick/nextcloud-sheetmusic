@@ -334,26 +334,33 @@ final class SheetMusicDavPluginTest extends TestCase {
 
 	public function testBeforeMethodPutCreatesParentDirectoriesInLibraryFolder(): void {
 		$userFolder = $this->rootFolder->getUserFolder('admin');
-		self::assertFalse($userFolder->nodeExists('My Noten/SubFolder'));
+		if ($userFolder->nodeExists('My Noten/DavSubFolder')) {
+			$userFolder->get('My Noten/DavSubFolder')->delete();
+		}
+		self::assertFalse($userFolder->nodeExists('My Noten/DavSubFolder'));
 
-		$request = new Request('PUT', '/remote.php/dav/files/admin/My Noten/SubFolder/test.pdf');
+		$request = new Request('PUT', '/remote.php/dav/files/admin/My Noten/DavSubFolder/test.pdf');
 		$response = new Response();
 
 		$proceed = $this->plugin->beforeMethod($request, $response);
 		self::assertTrue($proceed);
-		self::assertTrue($userFolder->nodeExists('My Noten/SubFolder'));
+		self::assertTrue($userFolder->nodeExists('My Noten/DavSubFolder'));
+		$this->createdUserNodes[] = $userFolder->get('My Noten/DavSubFolder');
 	}
 
 	public function testBeforeMethodPutDoesNotCreateDirectoriesOutsideLibrary(): void {
 		$userFolder = $this->rootFolder->getUserFolder('admin');
-		self::assertFalse($userFolder->nodeExists('OtherFolder/SubFolder'));
+		if ($userFolder->nodeExists('OtherFolder/DavSubFolder')) {
+			$userFolder->get('OtherFolder/DavSubFolder')->delete();
+		}
+		self::assertFalse($userFolder->nodeExists('OtherFolder/DavSubFolder'));
 
-		$request = new Request('PUT', '/remote.php/dav/files/admin/OtherFolder/SubFolder/test.pdf');
+		$request = new Request('PUT', '/remote.php/dav/files/admin/OtherFolder/DavSubFolder/test.pdf');
 		$response = new Response();
 
 		$proceed = $this->plugin->beforeMethod($request, $response);
 		self::assertTrue($proceed);
-		self::assertFalse($userFolder->nodeExists('OtherFolder/SubFolder'));
+		self::assertFalse($userFolder->nodeExists('OtherFolder/DavSubFolder'));
 	}
 }
 

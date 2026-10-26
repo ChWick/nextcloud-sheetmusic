@@ -117,6 +117,8 @@ class MobileSheetsSqliteImporter {
 
 		$updatedSongClientIds = [];
 
+		$isFreshLibrary = $this->songMapper->findAllForLibrary($lib->id) === [];
+
 		// 1. Entities
 		$this->entityMerger->mergeEntities($db, $lib->id, $syncMeta, $stats);
 
@@ -129,7 +131,7 @@ class MobileSheetsSqliteImporter {
 		// 4. Files
 		$uploadedFileNodeIds = [];
 		$uploadedSongFileIds = [];
-		$this->mergeFiles($db, $lib, $user, $syncMeta, $stats, $uploadedFileNodeIds, $uploadedSongFileIds, $onProgress);
+		$this->mergeFiles($db, $lib, $user, $syncMeta, $stats, $uploadedFileNodeIds, $uploadedSongFileIds, $isFreshLibrary, $onProgress);
 
 		// 5. Deletions (Tombstones) if sync metadata is present
 		if ($syncMeta->hasMetadata) {
@@ -313,6 +315,7 @@ class MobileSheetsSqliteImporter {
 		array &$stats,
 		array &$uploadedFileNodeIds = [],
 		array &$uploadedSongFileIds = [],
+		bool $isFreshLibrary = false,
 		?callable $onProgress = null,
 	): void {
 		if (!MobileSheetsTableHelper::tableExists($db, 'Files')) {
@@ -373,7 +376,7 @@ class MobileSheetsSqliteImporter {
 			$extra = $meta['extra'] ?? [];
 
 			$metaFileId = isset($extra['file_id']) ? (int)$extra['file_id'] : null;
-			$resolvedFileId = $this->resolveFileIdFromPath($filePath, $library, $user);
+			$resolvedFileId = $this->resolveFileIdFromPath($filePath, $library, $user, allowPlaceholder: $isFreshLibrary && !$syncMeta->hasMetadata);
 
 			if ($resolvedFileId !== null) {
 				$fileId = $resolvedFileId;
@@ -695,7 +698,12 @@ class MobileSheetsSqliteImporter {
 		$this->miscMapper->savePragmaUserVersion($libraryId, 'mobilesheets', $userVersion);
 	}
 
-	private function resolveFileIdFromPath(string $filePath, InternalLibrary $library, ?IUser $user): ?int {
+	private function resolveFileIdFromPath(
+		string $filePath,
+		InternalLibrary $library,
+		?IUser $user,
+		bool $allowPlaceholder = false,
+	): ?int {
 		if ($user === null) {
 			return null;
 		}
@@ -709,9 +717,11 @@ class MobileSheetsSqliteImporter {
 					if ($userFolder->nodeExists($rel)) {
 						return $userFolder->get($rel)->getId();
 					}
-					$placeholderId = $this->createPlaceholderFile($userFolder, $rel, $library);
-					if ($placeholderId !== null) {
-						return $placeholderId;
+					if ($allowPlaceholder) {
+						$placeholderId = $this->createPlaceholderFile($userFolder, $rel, $library);
+						if ($placeholderId !== null) {
+							return $placeholderId;
+						}
 					}
 				}
 			}
@@ -739,7 +749,7 @@ class MobileSheetsSqliteImporter {
 				return $userFolder->get($libRel)->getId();
 			}
 
-			if (!str_contains($filePath, ':') && !str_starts_with($filePath, '/storage/')) {
+			if ($allowPlaceholder && !str_contains($filePath, ':') && !str_starts_with($filePath, '/storage/')) {
 				$placeholderId = $this->createPlaceholderFile($userFolder, $libRel, $library);
 				if ($placeholderId !== null) {
 					return $placeholderId;
@@ -788,7 +798,7 @@ class MobileSheetsSqliteImporter {
 		}
 
 		if ($cleanLibFolder === '') {
-			return true;
+			return false;
 		}
 
 		return $relPath === $cleanLibFolder || str_starts_with($relPath, $cleanLibFolder . '/');

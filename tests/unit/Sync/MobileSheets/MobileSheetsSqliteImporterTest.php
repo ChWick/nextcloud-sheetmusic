@@ -901,11 +901,17 @@ final class MobileSheetsSqliteImporterTest extends TestCase {
 		$library = new InternalLibrary(id: 1, userId: 'admin', path: 'Noten');
 
 		$songMapper = $this->createMock(InternalSongMapper::class);
-		$createdSong = new InternalSong(id: 100, libraryId: 1, title: 'Test Song', clientId: 10);
+		$createdSong = null;
 		$songMapper->method('findByClientId')->willReturn(null);
 		$songMapper->method('findByTitle')->willReturn(null);
-		$songMapper->method('insert')->willReturn($createdSong);
-		$songMapper->method('findAllForLibrary')->willReturn([$createdSong]);
+		$songMapper->method('insert')->willReturnCallback(function (InternalSong $s) use (&$createdSong) {
+			$s->id = 100;
+			$createdSong = $s;
+			return $s;
+		});
+		$songMapper->method('findAllForLibrary')->willReturnCallback(function () use (&$createdSong) {
+			return $createdSong !== null ? [$createdSong] : [];
+		});
 
 		$entityMapper = $this->createMock(InternalEntityMapper::class);
 		$entityMapper->method('findAllForLibrary')->willReturn([]);
