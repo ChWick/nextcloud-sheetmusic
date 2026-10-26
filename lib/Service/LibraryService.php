@@ -83,12 +83,12 @@ class LibraryService {
 			return null;
 		}
 
-		$cacheDir = sys_get_temp_dir() . '/sheetmusic_cache';
+		$cacheFile = $this->getCacheFilePath($libraryId);
+		$cacheDir = dirname($cacheFile);
 		if (!is_dir($cacheDir)) {
 			@mkdir($cacheDir, 0777, true);
 		}
 
-		$cacheFile = $cacheDir . '/lib_' . $libraryId . '.db';
 		$library = $this->libraryMapper->findById($libraryId);
 		if ($library === null) {
 			return null;
@@ -185,41 +185,10 @@ class LibraryService {
 
 			if ($added !== null) {
 				$libraryId = (int)$added->id;
-
-				// Check for existing physical db file to import if requested
-				if ($importExistingDb && $this->importer !== null) {
-					try {
-						$userFolder = $this->rootFolder->getUserFolder($userId);
-						$dbRel = $targetDbRel ?? ltrim(rtrim($libraryPath, '/') . '/mobilesheets.db', '/');
-
-						if ($userFolder->nodeExists($dbRel)) {
-							$node = $userFolder->get($dbRel);
-							$localFile = $node->getStorage()->getLocalFile($node->getInternalPath());
-							if ($localFile !== false && file_exists($localFile)) {
-								$this->importer->importFromFile($libraryId, $localFile, $userId, $progressCallback);
-							}
-						}
-					} catch (\Throwable $e) {
-						$this->logger->warning('Failed to import existing physical MobileSheets db', [
-							'exception' => $e,
-							'path' => $path,
-							'userId' => $userId,
-						]);
-					}
+				if ($importExistingDb) {
+					$this->importExistingPhysicalDatabase($libraryId, $libraryPath, $path, $targetDbRel, $userId, $progressCallback);
 				}
-
-				// Run initial folder reconciliation to register music files
-				if ($this->reconciler !== null) {
-					try {
-						$this->reconciler->reconcile($libraryId, $progressCallback);
-					} catch (\Throwable $e) {
-						$this->logger->warning('Initial library reconciliation failed', [
-							'exception' => $e,
-							'libraryId' => $libraryId,
-							'userId' => $userId,
-						]);
-					}
-				}
+				$this->reconcileNewLibrary($libraryId, $userId, $progressCallback);
 			}
 
 			if ($progressId !== null && $this->progressService !== null) {
@@ -263,7 +232,7 @@ class LibraryService {
 
 		$this->libraryMapper->deleteForUser($userId, $id);
 
-		$cacheFile = sys_get_temp_dir() . '/sheetmusic_cache/lib_' . $id . '.db';
+		$cacheFile = $this->getCacheFilePath($id);
 		if (file_exists($cacheFile)) {
 			@unlink($cacheFile);
 		}
@@ -272,6 +241,58 @@ class LibraryService {
 			'id' => $id,
 			'path' => $libraryPath,
 		];
+	}
+
+	private function getCacheFilePath(int $libraryId): string {
+		return sys_get_temp_dir() . '/sheetmusic_cache/lib_' . $libraryId . '.db';
+	}
+
+	private function importExistingPhysicalDatabase(
+		int $libraryId,
+		string $libraryPath,
+		string $path,
+		?string $targetDbRel,
+		string $userId,
+		callable $progressCallback,
+	): void {
+		if ($this->importer === null) {
+			return;
+		}
+
+		try {
+			$userFolder = $this->rootFolder->getUserFolder($userId);
+			$dbRel = $targetDbRel ?? ltrim(rtrim($libraryPath, '/') . '/mobilesheets.db', '/');
+
+			if ($userFolder->nodeExists($dbRel)) {
+				$node = $userFolder->get($dbRel);
+				$localFile = $node->getStorage()->getLocalFile($node->getInternalPath());
+				if ($localFile !== false && file_exists($localFile)) {
+					$this->importer->importFromFile($libraryId, $localFile, $userId, $progressCallback);
+				}
+			}
+		} catch (\Throwable $e) {
+			$this->logger->warning('Failed to import existing physical MobileSheets db', [
+				'exception' => $e,
+				'path' => $path,
+				'userId' => $userId,
+			]);
+		}
+	}
+
+	private function reconcileNewLibrary(int $libraryId, string $userId, callable $progressCallback): void {
+		if ($this->reconciler === null) {
+			return;
+		}
+
+		try {
+			$this->reconciler->reconcile($libraryId, $progressCallback);
+		} catch (\Throwable $e) {
+			$this->logger->warning('Initial library reconciliation failed', [
+				'exception' => $e,
+				'libraryId' => $libraryId,
+				'userId' => $userId,
+			]);
+		}
 	}
 
 	public function isAutoPathsEnabled(string $userId, int $libraryId): bool {
