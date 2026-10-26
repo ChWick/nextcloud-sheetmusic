@@ -159,13 +159,14 @@ class FilePathRegenerator {
 		string $databasePath,
 		?MobileSheetsHashCodesFile $hashCodes = null,
 	): MobileSheetsFileLogEntry {
-		// Relative target as produced by the naming rules
-		$relativeTarget = SongPathNamingRule::createTargetPath(
+		// Target paths produced by naming rules
+		$validTargetPaths = SongPathNamingRule::createTargetPaths(
 			$song,
 			SongPathNamingRule::getFileExtension($file->path),
 			SongPathNamingRule::fileIndexOf($song, $file),
 			SongPathNamingRule::fileCountForExtension($song, $file),
 		);
+		$relativeTarget = $validTargetPaths[0];
 
 		$source = $this->pathResolver->fromStored($file->path, $user);
 		if ($source === null) {
@@ -188,16 +189,11 @@ class FilePathRegenerator {
 
 		$userFolder = $this->rootFolder->getUserFolder($user->getUID());
 		$targetBaseRelative = $this->pathResolver->relativeToUserFolder($targetFolder->getPath(), $user) ?? '';
+		$targetPrefix = $targetBaseRelative === '' ? '' : rtrim($targetBaseRelative, '/') . '/';
 
 		if (!$userFolder->nodeExists($sourceRelative)) {
-			$candidates = SongPathNamingRule::createTargetPaths(
-				$song,
-				SongPathNamingRule::getFileExtension($file->path),
-				SongPathNamingRule::fileIndexOf($song, $file),
-				SongPathNamingRule::fileCountForExtension($song, $file),
-			);
-			foreach ($candidates as $cand) {
-				$candRel = ($targetBaseRelative === '' ? '' : rtrim($targetBaseRelative, '/') . '/') . $cand;
+			foreach ($validTargetPaths as $cand) {
+				$candRel = $targetPrefix . $cand;
 				if ($userFolder->nodeExists($candRel)) {
 					$candTarget = $this->pathResolver->forTarget($candRel, $user, $userFolder->getPath());
 
@@ -253,23 +249,16 @@ class FilePathRegenerator {
 
 		$targetRelative = $this->uniqueRelativePath(
 			$userFolder,
-			($targetBaseRelative === '' ? '' : rtrim($targetBaseRelative, '/') . '/') . $relativeTarget,
+			$targetPrefix . $relativeTarget,
 			$sourceRelative,
 		);
 		$target = $this->pathResolver->forTarget($targetRelative, $user, $userFolder->getPath());
-
-		$validTargetPaths = SongPathNamingRule::createTargetPaths(
-			$song,
-			SongPathNamingRule::getFileExtension($file->path),
-			SongPathNamingRule::fileIndexOf($song, $file),
-			SongPathNamingRule::fileCountForExtension($song, $file),
-		);
 
 		$isAlreadyInPlace = ($source->internal === $target->internal);
 		if (!$isAlreadyInPlace) {
 			foreach ($validTargetPaths as $validRel) {
 				$validInternal = $this->pathResolver->forTarget(
-					($targetBaseRelative === '' ? '' : rtrim($targetBaseRelative, '/') . '/') . $validRel,
+					$targetPrefix . $validRel,
 					$user,
 					$userFolder->getPath()
 				)->internal;
