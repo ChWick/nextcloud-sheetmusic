@@ -258,7 +258,7 @@ class InternalEntityMapper {
 	 */
 	public function findEntityIdsForSong(int $songId, ?string $type = null): array {
 		$entities = $this->findEntitiesForSong($songId, $type);
-		return array_values(array_filter(array_map(fn (InternalEntity $e) => $e->id, $entities), fn ($id) => $id !== null));
+		return array_values(array_filter(array_column($entities, 'id'), static fn (?int $id): bool => $id !== null));
 	}
 
 	/**
@@ -334,9 +334,7 @@ class InternalEntityMapper {
 	 * @param list<int> $entityIds
 	 */
 	public function setSongEntitiesForType(int $songId, string $type, array $entityIds): void {
-		$currentEntities = $this->findEntitiesForSong($songId, $type);
-		$currentIds = array_values(array_filter(array_map(fn (InternalEntity $e) => $e->id, $currentEntities), fn ($id) => $id !== null));
-
+		$currentIds = $this->findEntityIdsForSong($songId, $type);
 		$toAdd = array_diff($entityIds, $currentIds);
 		$toRemove = array_diff($currentIds, $entityIds);
 
