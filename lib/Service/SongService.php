@@ -264,34 +264,7 @@ class SongService {
 	}
 
 	public function deleteSong(IUser $user, int $songId, int $libraryId, bool $deleteFiles = true): ?LibraryData {
-		try {
-			$files = $this->internalSongFileMapper->findAllForSong($songId);
-			if ($deleteFiles) {
-				foreach ($files as $file) {
-					try {
-						$nodes = $this->rootFolder->getUserFolder($user->getUID())->getById($file->fileId);
-						if (!empty($nodes)) {
-							$nodes[0]->delete();
-						}
-					} catch (\Throwable) {
-					}
-				}
-			}
-			$this->internalSongFileMapper->deleteAllForSong($songId);
-			$this->internalSongMapper->cleanupDeletedSongData($libraryId, $songId);
-			$this->internalSongMapper->delete($songId);
-			$this->libraryMapper->touch($libraryId);
-
-			return $this->internalSongMapper->findLibraryData($libraryId, $user);
-		} catch (\Throwable $e) {
-			$this->logger->error('Could not delete song from SheetMusic library', [
-				'exception' => $e,
-				'libraryId' => $libraryId,
-				'songId' => $songId,
-			]);
-
-			throw $e;
-		}
+		return $this->batchDeleteSongs($user, $libraryId, [$songId], $deleteFiles);
 	}
 
 	/**
@@ -425,83 +398,15 @@ class SongService {
 		}
 
 		try {
-			// 1. Detach files requested for Song A
-			if (!empty($songAData['detachFileIds']) && is_array($songAData['detachFileIds'])) {
-				foreach ($songAData['detachFileIds'] as $fileId) {
-					$this->songFileService->deleteSongFile($user, $libraryId, $songAId, (int)$fileId);
-				}
-			}
+			// 1. Detach files requested for Song A & B
+			$this->detachRequestedFiles($user, $libraryId, $songAId, $songAData);
+			$this->detachRequestedFiles($user, $libraryId, $songBId, $songBData);
 
-			// 2. Detach files requested for Song B
-			if (!empty($songBData['detachFileIds']) && is_array($songBData['detachFileIds'])) {
-				foreach ($songBData['detachFileIds'] as $fileId) {
-					$this->songFileService->deleteSongFile($user, $libraryId, $songBId, (int)$fileId);
-				}
-			}
+			// 2. Update Song A & B metadata
+			$this->updateSongFromData($user, $libraryId, $songAData);
+			$this->updateSongFromData($user, $libraryId, $songBData);
 
-			// 3. Update Song A metadata
-			$this->updateSong(
-				$user,
-				$songAId,
-				$libraryId,
-				(string)($songAData['title'] ?? ''),
-				array_map('intval', $songAData['composerIds'] ?? []),
-				array_map('intval', $songAData['bookIds'] ?? []),
-				array_map('intval', $songAData['collectionIds'] ?? []),
-				array_map('intval', $songAData['artistIds'] ?? []),
-				array_map('intval', $songAData['genreIds'] ?? []),
-				array_map('intval', $songAData['keyIds'] ?? []),
-				array_map('intval', $songAData['customGroupIds'] ?? []),
-				array_map('intval', $songAData['yearIds'] ?? []),
-				array_map('intval', $songAData['signatureIds'] ?? []),
-				array_map('intval', $songAData['sourceTypeIds'] ?? []),
-				(int)($songAData['stars'] ?? 0),
-				(int)($songAData['difficulty'] ?? 0),
-				(int)($songAData['duration'] ?? 0),
-				(string)($songAData['keywords'] ?? ''),
-				(string)($songAData['custom'] ?? ''),
-				(string)($songAData['custom2'] ?? ''),
-				(string)($songAData['sortTitle'] ?? ''),
-				$songAData['bookmarks'] ?? [],
-				$songAData['audioFiles'] ?? [],
-				(string)($songAData['opus'] ?? ''),
-				(string)($songAData['catalogNumber'] ?? ''),
-				(string)($songAData['songNumber'] ?? ''),
-				array_map('intval', $songAData['instrumentIds'] ?? []),
-			);
-
-			// 4. Update Song B metadata
-			$this->updateSong(
-				$user,
-				$songBId,
-				$libraryId,
-				(string)($songBData['title'] ?? ''),
-				array_map('intval', $songBData['composerIds'] ?? []),
-				array_map('intval', $songBData['bookIds'] ?? []),
-				array_map('intval', $songBData['collectionIds'] ?? []),
-				array_map('intval', $songBData['artistIds'] ?? []),
-				array_map('intval', $songBData['genreIds'] ?? []),
-				array_map('intval', $songBData['keyIds'] ?? []),
-				array_map('intval', $songBData['customGroupIds'] ?? []),
-				array_map('intval', $songBData['yearIds'] ?? []),
-				array_map('intval', $songBData['signatureIds'] ?? []),
-				array_map('intval', $songBData['sourceTypeIds'] ?? []),
-				(int)($songBData['stars'] ?? 0),
-				(int)($songBData['difficulty'] ?? 0),
-				(int)($songBData['duration'] ?? 0),
-				(string)($songBData['keywords'] ?? ''),
-				(string)($songBData['custom'] ?? ''),
-				(string)($songBData['custom2'] ?? ''),
-				(string)($songBData['sortTitle'] ?? ''),
-				$songBData['bookmarks'] ?? [],
-				$songBData['audioFiles'] ?? [],
-				(string)($songBData['opus'] ?? ''),
-				(string)($songBData['catalogNumber'] ?? ''),
-				(string)($songBData['songNumber'] ?? ''),
-				array_map('intval', $songBData['instrumentIds'] ?? []),
-			);
-
-			// 5. Server-side audit check: Verify that no duplicate file path issues remain between song A & song B
+			// 3. Server-side audit check: Verify that no duplicate file path issues remain between song A & song B
 			if ($this->libraryIntegrityService !== null) {
 				$issues = $this->libraryIntegrityService->checkIntegrity($libraryId, $user->getUID());
 				foreach ($issues as $issue) {
@@ -528,6 +433,53 @@ class SongService {
 	}
 
 	/**
+	 * @param array<string, mixed> $songData
+	 */
+	private function detachRequestedFiles(IUser $user, int $libraryId, int $songId, array $songData): void {
+		if (!empty($songData['detachFileIds']) && is_array($songData['detachFileIds'])) {
+			foreach ($songData['detachFileIds'] as $fileId) {
+				$this->songFileService->deleteSongFile($user, $libraryId, $songId, (int)$fileId);
+			}
+		}
+	}
+
+	/**
+	 * @param array<string, mixed> $songData
+	 */
+	private function updateSongFromData(IUser $user, int $libraryId, array $songData): void {
+		$songId = (int)($songData['id'] ?? 0);
+		$this->updateSong(
+			$user,
+			$songId,
+			$libraryId,
+			(string)($songData['title'] ?? ''),
+			array_map('intval', $songData['composerIds'] ?? []),
+			array_map('intval', $songData['bookIds'] ?? []),
+			array_map('intval', $songData['collectionIds'] ?? []),
+			array_map('intval', $songData['artistIds'] ?? []),
+			array_map('intval', $songData['genreIds'] ?? []),
+			array_map('intval', $songData['keyIds'] ?? []),
+			array_map('intval', $songData['customGroupIds'] ?? []),
+			array_map('intval', $songData['yearIds'] ?? []),
+			array_map('intval', $songData['signatureIds'] ?? []),
+			array_map('intval', $songData['sourceTypeIds'] ?? []),
+			(int)($songData['stars'] ?? 0),
+			(int)($songData['difficulty'] ?? 0),
+			(int)($songData['duration'] ?? 0),
+			(string)($songData['keywords'] ?? ''),
+			(string)($songData['custom'] ?? ''),
+			(string)($songData['custom2'] ?? ''),
+			(string)($songData['sortTitle'] ?? ''),
+			$songData['bookmarks'] ?? [],
+			$songData['audioFiles'] ?? [],
+			(string)($songData['opus'] ?? ''),
+			(string)($songData['catalogNumber'] ?? ''),
+			(string)($songData['songNumber'] ?? ''),
+			array_map('intval', $songData['instrumentIds'] ?? []),
+		);
+	}
+
+	/**
 	 * Associate a song with multiple entity types. Skips null entries.
 	 * Supports both a plain list of IDs or an update spec with action ('add', 'remove', 'replace') and ids.
 	 *
@@ -539,18 +491,16 @@ class SongService {
 				continue;
 			}
 			$typeStr = (string)$type;
-			if (is_array($spec) && isset($spec['action']) && isset($spec['ids']) && is_array($spec['ids'])) {
+			if (is_array($spec) && isset($spec['action'], $spec['ids']) && is_array($spec['ids'])) {
 				$action = (string)$spec['action'];
 				$targetIds = array_map('intval', $spec['ids']);
 				if ($action === 'replace') {
 					$this->internalEntityMapper->setSongEntitiesForType($songId, $typeStr, $targetIds);
-				} elseif ($action === 'add') {
+				} elseif ($action === 'add' || $action === 'remove') {
 					$currentIds = $this->internalEntityMapper->findEntityIdsForSong($songId, $typeStr);
-					$newIds = array_values(array_unique(array_merge($currentIds, $targetIds)));
-					$this->internalEntityMapper->setSongEntitiesForType($songId, $typeStr, $newIds);
-				} elseif ($action === 'remove') {
-					$currentIds = $this->internalEntityMapper->findEntityIdsForSong($songId, $typeStr);
-					$newIds = array_values(array_diff($currentIds, $targetIds));
+					$newIds = $action === 'add'
+						? array_values(array_unique(array_merge($currentIds, $targetIds)))
+						: array_values(array_diff($currentIds, $targetIds));
 					$this->internalEntityMapper->setSongEntitiesForType($songId, $typeStr, $newIds);
 				}
 			} else {
