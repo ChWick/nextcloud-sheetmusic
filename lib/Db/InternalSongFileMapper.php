@@ -65,14 +65,7 @@ class InternalSongFileMapper {
 
 		$qb->orderBy('id', 'ASC');
 
-		$result = $qb->executeQuery();
-		$files = [];
-		while ($row = $result->fetchAssociative()) {
-			$files[] = InternalSongFile::fromRow($row);
-		}
-		$result->closeCursor();
-
-		return $files;
+		return $this->fetchFiles($qb);
 	}
 
 	/**
@@ -88,14 +81,7 @@ class InternalSongFileMapper {
 			$qb->andWhere($qb->expr()->isNull('deleted_at'));
 		}
 
-		$result = $qb->executeQuery();
-		$files = [];
-		while ($row = $result->fetchAssociative()) {
-			$files[] = InternalSongFile::fromRow($row);
-		}
-		$result->closeCursor();
-
-		return $files;
+		return $this->fetchFiles($qb);
 	}
 
 	public function findByClientId(int $songId, int $clientId): ?InternalSongFile {
@@ -174,54 +160,21 @@ class InternalSongFileMapper {
 
 	public function delete(int $id, bool $hardDelete = false): bool {
 		$file = $this->findById($id);
+		$now = time();
+
+		if ($file !== null) {
+			$this->deleteAssociatedMiscFileRecord($file, $hardDelete, $now);
+		}
+
 		$qb = $this->db->getQueryBuilder();
-
 		if ($hardDelete) {
-			if ($file !== null && $file->clientId !== null) {
-				$songQb = $this->db->getQueryBuilder();
-				$songQb->select('library_id')
-					->from(InternalSongMapper::TABLE_NAME)
-					->where($songQb->expr()->eq('id', $songQb->createNamedParameter($file->songId, IQueryBuilder::PARAM_INT)))
-					->setMaxResults(1);
-				$libId = $songQb->executeQuery()->fetchOne();
-				if ($libId !== false) {
-					$miscQb = $this->db->getQueryBuilder();
-					$miscQb->delete(InternalMiscMapper::DATA_TABLE_NAME)
-						->where($miscQb->expr()->eq('library_id', $miscQb->createNamedParameter((int)$libId, IQueryBuilder::PARAM_INT)))
-						->andWhere($miscQb->expr()->eq('table_name', $miscQb->createNamedParameter('Files', IQueryBuilder::PARAM_STR)))
-						->andWhere($miscQb->expr()->eq('record_id', $miscQb->createNamedParameter((string)$file->clientId, IQueryBuilder::PARAM_STR)));
-					$miscQb->executeStatement();
-				}
-			}
-
-			$qb->delete(self::TABLE_NAME)
-				->where($qb->expr()->eq('id', $qb->createNamedParameter($id, IQueryBuilder::PARAM_INT)));
+			$qb->delete(self::TABLE_NAME);
 		} else {
-			$now = time();
 			$qb->update(self::TABLE_NAME)
 				->set('deleted_at', $qb->createNamedParameter($now, IQueryBuilder::PARAM_INT))
-				->set('updated_at', $qb->createNamedParameter($now, IQueryBuilder::PARAM_INT))
-				->where($qb->expr()->eq('id', $qb->createNamedParameter($id, IQueryBuilder::PARAM_INT)));
-
-			if ($file !== null && $file->clientId !== null) {
-				$songQb = $this->db->getQueryBuilder();
-				$songQb->select('library_id')
-					->from(InternalSongMapper::TABLE_NAME)
-					->where($songQb->expr()->eq('id', $songQb->createNamedParameter($file->songId, IQueryBuilder::PARAM_INT)))
-					->setMaxResults(1);
-				$libId = $songQb->executeQuery()->fetchOne();
-				if ($libId !== false) {
-					$miscQb = $this->db->getQueryBuilder();
-					$miscQb->update(InternalMiscMapper::DATA_TABLE_NAME)
-						->set('deleted_at', $miscQb->createNamedParameter($now, IQueryBuilder::PARAM_INT))
-						->set('updated_at', $miscQb->createNamedParameter($now, IQueryBuilder::PARAM_INT))
-						->where($miscQb->expr()->eq('library_id', $miscQb->createNamedParameter((int)$libId, IQueryBuilder::PARAM_INT)))
-						->andWhere($miscQb->expr()->eq('table_name', $miscQb->createNamedParameter('Files', IQueryBuilder::PARAM_STR)))
-						->andWhere($miscQb->expr()->eq('record_id', $miscQb->createNamedParameter((string)$file->clientId, IQueryBuilder::PARAM_STR)));
-					$miscQb->executeStatement();
-				}
-			}
+				->set('updated_at', $qb->createNamedParameter($now, IQueryBuilder::PARAM_INT));
 		}
+		$qb->where($qb->expr()->eq('id', $qb->createNamedParameter($id, IQueryBuilder::PARAM_INT)));
 
 		return $qb->executeStatement() > 0;
 	}
@@ -229,14 +182,14 @@ class InternalSongFileMapper {
 	public function deleteAllForSong(int $songId, bool $hardDelete = false): void {
 		$qb = $this->db->getQueryBuilder();
 		if ($hardDelete) {
-			$qb->delete(self::TABLE_NAME)
-				->where($qb->expr()->eq('song_id', $qb->createNamedParameter($songId, IQueryBuilder::PARAM_INT)));
+			$qb->delete(self::TABLE_NAME);
 		} else {
+			$now = time();
 			$qb->update(self::TABLE_NAME)
-				->set('deleted_at', $qb->createNamedParameter(time(), IQueryBuilder::PARAM_INT))
-				->set('updated_at', $qb->createNamedParameter(time(), IQueryBuilder::PARAM_INT))
-				->where($qb->expr()->eq('song_id', $qb->createNamedParameter($songId, IQueryBuilder::PARAM_INT)));
+				->set('deleted_at', $qb->createNamedParameter($now, IQueryBuilder::PARAM_INT))
+				->set('updated_at', $qb->createNamedParameter($now, IQueryBuilder::PARAM_INT));
 		}
+		$qb->where($qb->expr()->eq('song_id', $qb->createNamedParameter($songId, IQueryBuilder::PARAM_INT)));
 		$qb->executeStatement();
 	}
 
@@ -255,6 +208,43 @@ class InternalSongFileMapper {
 				->andWhere($qb->expr()->isNull('s.deleted_at'));
 		}
 
+		return $this->fetchFiles($qb);
+	}
+
+	private function deleteAssociatedMiscFileRecord(InternalSongFile $file, bool $hardDelete, int $now): void {
+		if ($file->clientId === null) {
+			return;
+		}
+
+		$songQb = $this->db->getQueryBuilder();
+		$songQb->select('library_id')
+			->from(InternalSongMapper::TABLE_NAME)
+			->where($songQb->expr()->eq('id', $songQb->createNamedParameter($file->songId, IQueryBuilder::PARAM_INT)))
+			->setMaxResults(1);
+		$libId = $songQb->executeQuery()->fetchOne();
+		if ($libId === false) {
+			return;
+		}
+
+		$miscQb = $this->db->getQueryBuilder();
+		if ($hardDelete) {
+			$miscQb->delete(InternalMiscMapper::DATA_TABLE_NAME);
+		} else {
+			$miscQb->update(InternalMiscMapper::DATA_TABLE_NAME)
+				->set('deleted_at', $miscQb->createNamedParameter($now, IQueryBuilder::PARAM_INT))
+				->set('updated_at', $miscQb->createNamedParameter($now, IQueryBuilder::PARAM_INT));
+		}
+
+		$miscQb->where($miscQb->expr()->eq('library_id', $miscQb->createNamedParameter((int)$libId, IQueryBuilder::PARAM_INT)))
+			->andWhere($miscQb->expr()->eq('table_name', $miscQb->createNamedParameter('Files', IQueryBuilder::PARAM_STR)))
+			->andWhere($miscQb->expr()->eq('record_id', $miscQb->createNamedParameter((string)$file->clientId, IQueryBuilder::PARAM_STR)));
+		$miscQb->executeStatement();
+	}
+
+	/**
+	 * @return list<InternalSongFile>
+	 */
+	private function fetchFiles(IQueryBuilder $qb): array {
 		$result = $qb->executeQuery();
 		$files = [];
 		while ($row = $result->fetchAssociative()) {
