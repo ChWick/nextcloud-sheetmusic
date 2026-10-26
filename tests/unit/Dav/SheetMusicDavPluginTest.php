@@ -61,6 +61,8 @@ final class SheetMusicDavPluginTest extends TestCase {
 			$this->importer,
 			$this->logger,
 			$this->userSession,
+			null,
+			$this->rootFolder,
 		);
 	}
 
@@ -328,6 +330,30 @@ final class SheetMusicDavPluginTest extends TestCase {
 		$match = $plugin->matchVirtualPath('files/admin/My Noten/mobilesheets.db');
 		self::assertNotNull($match);
 		self::assertSame((int)$this->library->id, $match['library']->id);
+	}
+
+	public function testBeforeMethodPutCreatesParentDirectoriesInLibraryFolder(): void {
+		$userFolder = $this->rootFolder->getUserFolder('admin');
+		self::assertFalse($userFolder->nodeExists('My Noten/SubFolder'));
+
+		$request = new Request('PUT', '/remote.php/dav/files/admin/My Noten/SubFolder/test.pdf');
+		$response = new Response();
+
+		$proceed = $this->plugin->beforeMethod($request, $response);
+		self::assertTrue($proceed);
+		self::assertTrue($userFolder->nodeExists('My Noten/SubFolder'));
+	}
+
+	public function testBeforeMethodPutDoesNotCreateDirectoriesOutsideLibrary(): void {
+		$userFolder = $this->rootFolder->getUserFolder('admin');
+		self::assertFalse($userFolder->nodeExists('OtherFolder/SubFolder'));
+
+		$request = new Request('PUT', '/remote.php/dav/files/admin/OtherFolder/SubFolder/test.pdf');
+		$response = new Response();
+
+		$proceed = $this->plugin->beforeMethod($request, $response);
+		self::assertTrue($proceed);
+		self::assertFalse($userFolder->nodeExists('OtherFolder/SubFolder'));
 	}
 }
 

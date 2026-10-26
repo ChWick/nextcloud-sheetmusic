@@ -16,6 +16,7 @@ use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSqliteImporter;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSyncBackend;
 use OCA\SheetMusic\Sync\SyncClientInterface;
 use OCA\SheetMusic\Sync\SyncClientRegistry;
+use OCP\Files\IRootFolder;
 use OCP\IUserSession;
 use Psr\Log\LoggerInterface;
 use Sabre\DAV\PropFind;
@@ -65,6 +66,7 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		private LoggerInterface $logger,
 		private IUserSession $userSession,
 		?SyncClientRegistry $registry = null,
+		private ?IRootFolder $rootFolder = null,
 	) {
 		$this->registry = $registry ?? new SyncClientRegistry();
 		if ($this->registry->getClients() === []) {
@@ -109,6 +111,8 @@ class SheetMusicDavPlugin extends ServerPlugin {
 			if ($match === null) {
 				if ($method === 'PROPFIND') {
 					$this->rememberPropfindBody($request, $path);
+				} elseif ($method === 'PUT') {
+					$this->ensureParentDirectoryExistsForPut($path);
 				}
 				return true;
 			}
@@ -399,6 +403,65 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		return ['client' => $client, 'library' => $library, 'filename' => $filename];
 	}
 
+	private function ensureParentDirectoryExistsForPut(string $path): void {
+		if ($this->rootFolder === null) {
+			return;
+		}
+
+		$resolved = $this->resolveUserFolder($path);
+		if ($resolved === null) {
+			return;
+		}
+		[$userId, $relPath] = $resolved;
+		$parent = dirname($relPath);
+		if ($parent === '.' || $parent === '') {
+			return;
+		}
+
+		$library = $this->findLibraryForRelativePath($userId, $relPath);
+		if ($library === null) {
+			return;
+		}
+
+		try {
+			$userFolder = $this->rootFolder->getUserFolder($userId);
+			$current = '';
+			foreach (explode('/', $parent) as $segment) {
+				if ($segment === '') {
+					continue;
+				}
+				$current = $current === '' ? $segment : "$current/$segment";
+				if (!$userFolder->nodeExists($current)) {
+					$userFolder->newFolder($current);
+				}
+			}
+		} catch (\Throwable $e) {
+			$this->logger->warning('SheetMusicDavPlugin: Failed to ensure parent folder for PUT: ' . $e->getMessage(), [
+				'exception' => $e,
+				'path' => $path,
+			]);
+		}
+	}
+
+	private function findLibraryForRelativePath(string $userId, string $relPath): ?InternalLibrary {
+		foreach ($this->libraryMapper->findAllForUser($userId) as $lib) {
+			$cleanLibFolder = $this->cleanLibraryFolder($lib);
+			if ($cleanLibFolder === '' || $relPath === $cleanLibFolder || str_starts_with($relPath, $cleanLibFolder . '/')) {
+				return $lib;
+			}
+		}
+		return null;
+	}
+
+	private function cleanLibraryFolder(InternalLibrary $lib): string {
+		$libPath = trim($lib->path, '/');
+		if (str_ends_with(strtolower($libPath), '.db')) {
+			$libFolder = dirname($libPath);
+			return $libFolder === '.' ? '' : $libFolder;
+		}
+		return $libPath;
+	}
+
 	public function findLibraryByFolderPath(string $path): ?InternalLibrary {
 		$resolved = $this->resolveUserFolder($path);
 		if ($resolved === null) {
@@ -407,18 +470,7 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		[$userId, $folderPath] = $resolved;
 
 		foreach ($this->libraryMapper->findAllForUser($userId) as $lib) {
-			$libPath = trim($lib->path, '/');
-			// Libraries may be registered with the path to the database file itself
-			// (e.g. "/tmp/SheetMusic/mobilesheets.db"). The enclosing folder is what
-			// MobileSheets queries over WebDAV.
-			if (str_ends_with(strtolower($libPath), '.db')) {
-				$libFolder = dirname($libPath);
-				$cleanLibFolder = $libFolder === '.' ? '' : $libFolder;
-			} else {
-				$cleanLibFolder = $libPath;
-			}
-
-			if ($cleanLibFolder === $folderPath) {
+			if ($this->cleanLibraryFolder($lib) === $folderPath) {
 				return $lib;
 			}
 		}
@@ -434,6 +486,9 @@ class SheetMusicDavPlugin extends ServerPlugin {
 	 */
 	private function resolveUserFolder(string $path): ?array {
 		$path = trim($path, '/');
+		if (str_starts_with($path, 'remote.php/dav/')) {
+			$path = substr($path, strlen('remote.php/dav/'));
+		}
 		$sessionUser = $this->userSession->getUser()?->getUID();
 
 		// Legacy endpoint (remote.php/webdav): paths are relative to the files
