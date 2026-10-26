@@ -237,7 +237,6 @@ class FileManager {
 			$node = $userFolder->get(ltrim($path, '/'));
 			if ($node instanceof Folder) {
 				$targetFolder = $node;
-				$databasePath = $this->libraryService?->getDatabasePath($user->getUID(), $libraryId);
 			} else {
 				$targetFolder = $node->getParent();
 				$databasePath = $node->getStorage()->getLocalFile($node->getInternalPath());
@@ -253,8 +252,9 @@ class FileManager {
 				throw new \Exception("Library folder not found for ID $libraryId", 0, $e);
 			}
 			$targetFolder = $folderNode;
-			$databasePath = $this->libraryService?->getDatabasePath($user->getUID(), $libraryId);
 		}
+
+		$databasePath ??= $this->libraryService?->getDatabasePath($user->getUID(), $libraryId);
 
 		if ($databasePath === null || $databasePath === false) {
 			throw new \Exception("Could not retrieve local file path for library with ID $libraryId");
