@@ -25,6 +25,7 @@ use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\Files\Node;
+use OCP\IUser;
 use Psr\Log\LoggerInterface;
 
 class LibraryIntegrityFixer {
@@ -86,9 +87,7 @@ class LibraryIntegrityFixer {
 			}
 
 			try {
-				$userFolder = $this->rootFolder->getUserFolder($userId);
-				$user = $userFolder->getOwner();
-				['databasePath' => $databasePath] = $this->fileManager->libraryContext($libraryId, $user);
+				['databasePath' => $databasePath] = $this->getUserLibraryContext($libraryId, $userId);
 				if ($databasePath !== '' && file_exists($databasePath)) {
 					$db = new \PDO('sqlite:' . $databasePath);
 					$db->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
@@ -205,9 +204,7 @@ class LibraryIntegrityFixer {
 		}
 
 		if ($issueType === IntegrityIssue::TYPE_INVALID_NAMING_RULE && $songId !== null) {
-			$userFolder = $this->rootFolder->getUserFolder($userId);
-			$user = $userFolder->getOwner();
-			['databasePath' => $databasePath, 'targetFolder' => $targetFolder] = $this->fileManager->libraryContext($libraryId, $user);
+			['user' => $user, 'databasePath' => $databasePath, 'targetFolder' => $targetFolder] = $this->getUserLibraryContext($libraryId, $userId);
 			$hashCodes = MobileSheetsHashCodesFile::forDatabase($databasePath, $this->logger);
 
 			$song = $this->internalSongMapper->findSong($songId, $user);
@@ -262,9 +259,7 @@ class LibraryIntegrityFixer {
 			];
 		}
 
-		$userFolder = $this->rootFolder->getUserFolder($userId);
-		$user = $userFolder->getOwner();
-		['databasePath' => $databasePath, 'targetFolder' => $targetFolder] = $this->fileManager->libraryContext($libraryId, $user);
+		['user' => $user, 'databasePath' => $databasePath, 'targetFolder' => $targetFolder] = $this->getUserLibraryContext($libraryId, $userId);
 		$issue = $this->findPdfMetadataMismatch($libraryId, $userId, $songId, $fileId);
 		if ($issue === null) {
 			return [
@@ -293,9 +288,7 @@ class LibraryIntegrityFixer {
 	 * @return array{success: bool, fixedCount: int, message: string}
 	 */
 	public function fixAllIssues(int $libraryId, string $userId, ?string $issueType = null, ?callable $onProgress = null): array {
-		$userFolder = $this->rootFolder->getUserFolder($userId);
-		$user = $userFolder->getOwner();
-		['databasePath' => $databasePath, 'targetFolder' => $targetFolder] = $this->fileManager->libraryContext($libraryId, $user);
+		['user' => $user, 'databasePath' => $databasePath, 'targetFolder' => $targetFolder] = $this->getUserLibraryContext($libraryId, $userId);
 
 		$issues = $this->checkIntegrity($libraryId, $userId);
 		$hashCodes = MobileSheetsHashCodesFile::forDatabase($databasePath, $this->logger);
@@ -537,9 +530,7 @@ class LibraryIntegrityFixer {
 	 * @return array{success: bool, fixedCount: int, message: string}
 	 */
 	public function fixOrphanFileIssue(int $libraryId, string $userId, string $path, ?int $songId = null): array {
-		$userFolder = $this->rootFolder->getUserFolder($userId);
-		$user = $userFolder->getOwner();
-		['databasePath' => $databasePath, 'targetFolder' => $targetFolder] = $this->fileManager->libraryContext($libraryId, $user);
+		['user' => $user, 'databasePath' => $databasePath, 'targetFolder' => $targetFolder] = $this->getUserLibraryContext($libraryId, $userId);
 
 		$cleanPath = ltrim(str_replace('\\', '/', $path), '/');
 		try {
@@ -816,5 +807,20 @@ class LibraryIntegrityFixer {
 		} catch (\Throwable $e) {
 			$this->logger->debug('Could not refresh mobilesheets.db in library folder', ['exception' => $e]);
 		}
+	}
+
+	/**
+	 * @return array{user: IUser, databasePath: string, targetFolder: Folder}
+	 */
+	private function getUserLibraryContext(int $libraryId, string $userId): array {
+		$userFolder = $this->rootFolder->getUserFolder($userId);
+		$user = $userFolder->getOwner();
+		['databasePath' => $databasePath, 'targetFolder' => $targetFolder] = $this->fileManager->libraryContext($libraryId, $user);
+
+		return [
+			'user' => $user,
+			'databasePath' => $databasePath,
+			'targetFolder' => $targetFolder,
+		];
 	}
 }
