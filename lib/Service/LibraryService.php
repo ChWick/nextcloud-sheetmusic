@@ -45,29 +45,20 @@ class LibraryService {
 		$userFolder = $this->rootFolder->getUserFolder($userId);
 
 		// 1. If physical .db file exists at $libraryPath or within it as mobilesheets.db, use it
-		if (str_ends_with(strtolower($libraryPath), '.db')) {
-			try {
-				$node = $userFolder->get(ltrim($libraryPath, '/'));
+		$dbRel = str_ends_with(strtolower($libraryPath), '.db')
+			? ltrim($libraryPath, '/')
+			: ltrim(rtrim($libraryPath, '/') . '/mobilesheets.db', '/');
+
+		try {
+			if ($userFolder->nodeExists($dbRel)) {
+				$node = $userFolder->get($dbRel);
 				$localFile = $node->getStorage()->getLocalFile($node->getInternalPath());
 				if ($localFile !== false) {
 					return [$libraryPath, $localFile];
 				}
-			} catch (\Throwable $e) {
-				// Fall through to virtual export
 			}
-		} else {
-			try {
-				$dbRel = ltrim(rtrim($libraryPath, '/') . '/mobilesheets.db', '/');
-				if ($userFolder->nodeExists($dbRel)) {
-					$node = $userFolder->get($dbRel);
-					$localFile = $node->getStorage()->getLocalFile($node->getInternalPath());
-					if ($localFile !== false) {
-						return [$libraryPath, $localFile];
-					}
-				}
-			} catch (\Throwable $e) {
-				// Fall through to virtual export
-			}
+		} catch (\Throwable) {
+			// Fall through to virtual export
 		}
 
 		// 2. Purely virtual library: generate/retrieve cached SQLite file
@@ -147,19 +138,13 @@ class LibraryService {
 
 		if ($userFolder !== null) {
 			$relPath = ltrim($path, '/');
-			if ($extension === '') {
-				if ($userFolder->nodeExists($relPath)) {
-					$node = $userFolder->get($relPath);
-					if (!($node instanceof \OCP\Files\Folder)) {
-						throw new \InvalidArgumentException('Selected path is not a directory');
-					}
+			if ($userFolder->nodeExists($relPath)) {
+				$node = $userFolder->get($relPath);
+				if ($extension === '' && !($node instanceof \OCP\Files\Folder)) {
+					throw new \InvalidArgumentException('Selected path is not a directory');
 				}
-			} else {
-				if ($userFolder->nodeExists($relPath)) {
-					$node = $userFolder->get($relPath);
-					if (!($node instanceof \OCP\Files\File)) {
-						throw new \InvalidArgumentException('Selected path is not a database file');
-					}
+				if ($extension !== '' && !($node instanceof \OCP\Files\File)) {
+					throw new \InvalidArgumentException('Selected path is not a database file');
 				}
 			}
 		}
