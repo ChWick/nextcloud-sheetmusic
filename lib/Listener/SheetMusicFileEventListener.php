@@ -43,15 +43,13 @@ class SheetMusicFileEventListener implements IEventListener {
 	}
 
 	public function handle(Event $event): void {
-		if ($event instanceof NodeCreatedEvent) {
-			$this->onNodeCreated($event->getNode());
-		} elseif ($event instanceof NodeRenamedEvent) {
-			$this->onNodeRenamed($event->getSource(), $event->getTarget());
-		} elseif ($event instanceof NodeDeletedEvent) {
-			$this->onNodeDeleted($event->getNode());
-		} elseif ($event instanceof NodeWrittenEvent) {
-			$this->onNodeWritten($event->getNode());
-		}
+		match (true) {
+			$event instanceof NodeCreatedEvent => $this->onNodeCreated($event->getNode()),
+			$event instanceof NodeRenamedEvent => $this->onNodeRenamed($event->getSource(), $event->getTarget()),
+			$event instanceof NodeDeletedEvent => $this->onNodeDeleted($event->getNode()),
+			$event instanceof NodeWrittenEvent => $this->onNodeWritten($event->getNode()),
+			default => null,
+		};
 	}
 
 	public function onNodeCreated(Node $node): void {
@@ -96,27 +94,16 @@ class SheetMusicFileEventListener implements IEventListener {
 		$sourceLib = $this->findLibraryForNode($source);
 		$targetLib = $this->findLibraryForNode($target);
 
-		if ($sourceLib === null && $targetLib === null) {
-			return;
-		}
-
-		if ($sourceLib !== null && $targetLib === null) {
-			// File moved OUT of library: keep song file attachment so it shows up as missing/outside library
-			if ($sourceLib->id !== null) {
-				$this->libraryMapper->touch($sourceLib->id);
-			}
-			return;
-		}
-
 		if ($sourceLib === null && $targetLib !== null) {
 			// File moved INTO library
 			$this->onNodeCreated($target);
 			return;
 		}
 
-		// Renamed within same library (or between libraries)
-		if ($targetLib !== null && $targetLib->id !== null) {
-			$this->libraryMapper->touch($targetLib->id);
+		// Touch affected library if moved out of library or renamed within/between libraries
+		$libToTouch = $targetLib ?? $sourceLib;
+		if ($libToTouch?->id !== null) {
+			$this->libraryMapper->touch($libToTouch->id);
 		}
 	}
 
