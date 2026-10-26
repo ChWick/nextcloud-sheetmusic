@@ -50,28 +50,24 @@ final class SongSortingUtil {
 	): int {
 		if ($songA === null || $songB === null) {
 			$cmp = ($fallbackIdA ?? 0) <=> ($fallbackIdB ?? 0);
-			return $ascending === 0 ? -$cmp : $cmp;
-		}
-
-		if ($sortBy === self::MODE_MANUAL) {
+		} elseif ($sortBy === self::MODE_MANUAL) {
 			$cmp = ($fallbackIdA ?? $songA->id ?? 0) <=> ($fallbackIdB ?? $songB->id ?? 0);
-			return $ascending === 0 ? -$cmp : $cmp;
-		}
+		} else {
+			$cmp = match ($sortBy) {
+				self::MODE_DATE_CREATED => $songA->createdAt <=> $songB->createdAt,
+				self::MODE_LAST_MODIFIED => $songA->updatedAt <=> $songB->updatedAt,
+				self::MODE_RATING => $songA->rating <=> $songB->rating,
+				self::MODE_DIFFICULTY => $songA->difficulty <=> $songB->difficulty,
+				default => self::compareTitles($songA, $songB),
+			};
 
-		$cmp = match ($sortBy) {
-			self::MODE_DATE_CREATED => $songA->createdAt <=> $songB->createdAt,
-			self::MODE_LAST_MODIFIED => $songA->updatedAt <=> $songB->updatedAt,
-			self::MODE_RATING => $songA->rating <=> $songB->rating,
-			self::MODE_DIFFICULTY => $songA->difficulty <=> $songB->difficulty,
-			default => self::compareTitles($songA, $songB),
-		};
-
-		if ($cmp === 0) {
-			if ($sortBy !== self::MODE_TITLE) {
-				$cmp = self::compareTitles($songA, $songB);
-			}
-			if ($cmp === 0 && ($fallbackIdA !== null || $fallbackIdB !== null)) {
-				$cmp = ($fallbackIdA ?? 0) <=> ($fallbackIdB ?? 0);
+			if ($cmp === 0) {
+				if ($sortBy !== self::MODE_TITLE) {
+					$cmp = self::compareTitles($songA, $songB);
+				}
+				if ($cmp === 0 && ($fallbackIdA !== null || $fallbackIdB !== null)) {
+					$cmp = ($fallbackIdA ?? 0) <=> ($fallbackIdB ?? 0);
+				}
 			}
 		}
 
@@ -79,8 +75,10 @@ final class SongSortingUtil {
 	}
 
 	private static function compareTitles(InternalSong $songA, InternalSong $songB): int {
-		$titleA = ($songA->sortTitle !== null && $songA->sortTitle !== '') ? $songA->sortTitle : $songA->title;
-		$titleB = ($songB->sortTitle !== null && $songB->sortTitle !== '') ? $songB->sortTitle : $songB->title;
-		return strnatcasecmp($titleA, $titleB);
+		return strnatcasecmp(self::getEffectiveTitle($songA), self::getEffectiveTitle($songB));
+	}
+
+	private static function getEffectiveTitle(InternalSong $song): string {
+		return ($song->sortTitle !== null && $song->sortTitle !== '') ? $song->sortTitle : $song->title;
 	}
 }
