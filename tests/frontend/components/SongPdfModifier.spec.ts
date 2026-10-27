@@ -203,6 +203,10 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 
 		const axios = (await import('@nextcloud/axios')).default
 		expect(axios.get).toHaveBeenCalledWith(expect.stringContaining('/files/nextcloud-guide.pdf'), {
+			headers: {
+				'Cache-Control': 'no-cache',
+				'Pragma': 'no-cache',
+			},
 			responseType: 'arraybuffer',
 		})
 	})

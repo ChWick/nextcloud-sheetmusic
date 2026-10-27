@@ -54,7 +54,7 @@ describe('FilePreviewer.vue', () => {
 		openSpy.mockRestore()
 	})
 
-	it('fetches PDF with standard arraybuffer responseType without cache busting headers', async () => {
+	it('fetches PDF with standard arraybuffer responseType and cache busting headers', async () => {
 		const axios = (await import('@nextcloud/axios')).default
 		mount(FilePreviewer, {
 			props: {
@@ -64,6 +64,10 @@ describe('FilePreviewer.vue', () => {
 		await flushPromises()
 
 		expect(axios.get).toHaveBeenCalledWith('/files/scores/Test.pdf', {
+			headers: {
+				'Cache-Control': 'no-cache',
+				'Pragma': 'no-cache',
+			},
 			responseType: 'arraybuffer',
 		})
 	})

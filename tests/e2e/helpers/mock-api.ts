@@ -93,18 +93,52 @@ export const mockSongs = [
 ]
 
 export async function setupMockApi(page: Page) {
-	// Mock libraries list endpoint
+	const currentLibraries = [...mockLibraries]
+
+	// Mock libraries list endpoint & library creation
 	await page.route('**/api/libraries**', async (route) => {
-		await route.fulfill({
-			status: 200,
-			contentType: 'application/json',
-			body: JSON.stringify({
-				ocs: {
-					meta: { status: 'ok', statuscode: 200 },
-					data: { libraries: mockLibraries },
-				},
-			}),
-		})
+		const url = new URL(route.request().url())
+		const normalizedPath = url.pathname.replace(/\/+$/, '')
+		if (normalizedPath.endsWith('/api/libraries')) {
+			if (route.request().method() === 'POST') {
+				let postData: any = {}
+				try {
+					postData = route.request().postDataJSON() || {}
+				} catch {
+					// empty
+				}
+				const rawPath = postData.path || '/SheetMusic/NewLibrary'
+				const path = rawPath.endsWith('.db')
+					? (rawPath.substring(0, rawPath.lastIndexOf('/')) || '/')
+					: rawPath
+				const newId = currentLibraries.length > 0 ? Math.max(...currentLibraries.map(l => l.id)) + 1 : 1
+				const newLib = { id: newId, path }
+				currentLibraries.push(newLib)
+				await route.fulfill({
+					status: 201,
+					contentType: 'application/json',
+					body: JSON.stringify({
+						ocs: {
+							meta: { status: 'ok', statuscode: 201 },
+							data: { id: newId, path },
+						},
+					}),
+				})
+				return
+			}
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					ocs: {
+						meta: { status: 'ok', statuscode: 200 },
+						data: { libraries: currentLibraries },
+					},
+				}),
+			})
+			return
+		}
+		await route.fallback()
 	})
 
 	// Mock songs / library data endpoint

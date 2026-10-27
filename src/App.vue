@@ -117,7 +117,7 @@ const route = useRoute()
 /** Navigation helpers **/
 function navigateToLibrary(library: string | number) {
   const libraryId = typeof library === 'string' ? parseInt(library, 10) : library
-  router.push({ name: 'LibraryView', params: { library: libraryId, view: 'songs' } })
+  router.push({ name: 'LibraryView', params: { library: libraryId, view: 'songs' }, query: {} })
 }
 function goToView(view: ViewName) {
   if (selectedLibrary.value < 0) return
@@ -256,10 +256,21 @@ async function addLibrary() {
     isAddDialogOpen.value = false
     importProgress.value = null
 
+    const prevIds = new Set(libraries.value.map(library => library.id))
     await loadLibraries()
 
-    const addedLibrary = libraries.value.find(library => library.path === addedPath)
-    if (addedLibrary && selectedLibrary.value < 0) {
+    const targetPath = (response as any)?.data?.ocs?.data?.path ?? addedPath
+    const normalizedTargetPath = targetPath !== '/' ? targetPath.replace(/\/+$/, '') : targetPath
+    const normalizedAddedPath = addedPath !== '/' ? addedPath.replace(/\/+$/, '') : addedPath
+    const newlyAdded = libraries.value.find(library => !prevIds.has(library.id))
+    const addedLibrary = newlyAdded ?? libraries.value.find(library =>
+      library.path === targetPath ||
+      library.path === normalizedTargetPath ||
+      library.path === addedPath ||
+      library.path === normalizedAddedPath ||
+      (library.path && normalizedTargetPath && library.path.toLowerCase() === normalizedTargetPath.toLowerCase())
+    )
+    if (addedLibrary) {
       navigateToLibrary(addedLibrary.id)
     }
     showSuccess(t('sheetmusic', 'Library added successfully.'))
@@ -295,11 +306,21 @@ async function importLibrary() {
     isImportDialogOpen.value = false
     importProgress.value = null
 
+    const prevIds = new Set(libraries.value.map(library => library.id))
     await loadLibraries()
 
     const targetPath = (response as any)?.data?.ocs?.data?.path ?? (addedPath.includes('/') ? addedPath.substring(0, addedPath.lastIndexOf('/')) || '/' : addedPath)
-    const addedLibrary = libraries.value.find(library => library.path === targetPath)
-    if (addedLibrary && selectedLibrary.value < 0) {
+    const normalizedTargetPath = targetPath !== '/' ? targetPath.replace(/\/+$/, '') : targetPath
+    const normalizedAddedPath = addedPath !== '/' ? addedPath.replace(/\/+$/, '') : addedPath
+    const newlyAdded = libraries.value.find(library => !prevIds.has(library.id))
+    const addedLibrary = newlyAdded ?? libraries.value.find(library =>
+      library.path === targetPath ||
+      library.path === normalizedTargetPath ||
+      library.path === addedPath ||
+      library.path === normalizedAddedPath ||
+      (library.path && normalizedTargetPath && library.path.toLowerCase() === normalizedTargetPath.toLowerCase())
+    )
+    if (addedLibrary) {
       navigateToLibrary(addedLibrary.id)
     }
     showSuccess(t('sheetmusic', 'MobileSheets library imported successfully.'))
