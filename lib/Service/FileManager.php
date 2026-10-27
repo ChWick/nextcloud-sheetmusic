@@ -214,16 +214,11 @@ class FileManager {
 	}
 
 	/**
-	 * Resolve the library database file and the folder its files belong in.
+	 * Resolve the target folder of a library.
 	 *
-	 * Both phases of a library sync need the same context: the local path of the
-	 * library database to read songs from, and the database's parent folder as
-	 * the base the naming rules produce paths against.
-	 *
-	 * @return array{databasePath: string, targetFolder: Folder}
-	 * @throws \Exception when the library is unknown or its path cannot be resolved
+	 * @throws \Exception when the library is unknown or its folder cannot be resolved
 	 */
-	public function libraryContext(int $libraryId, IUser $user): array {
+	public function libraryFolder(int $libraryId, IUser $user): Folder {
 		$library = $this->libraryMapper->findById($libraryId);
 		if ($library === null) {
 			throw new \Exception("Library with ID $libraryId not found");
@@ -236,22 +231,47 @@ class FileManager {
 		try {
 			$node = $userFolder->get(ltrim($path, '/'));
 			if ($node instanceof Folder) {
-				$targetFolder = $node;
-			} else {
-				$targetFolder = $node->getParent();
-				$databasePath = $node->getStorage()->getLocalFile($node->getInternalPath());
+				return $node;
 			}
+			return $node->getParent();
 		} catch (\Throwable $e) {
-			// Purely virtual: resolve folder and virtual database path
+			// Purely virtual: resolve folder
 			$folderPath = rtrim($path, '/');
 			if (str_ends_with(strtolower($folderPath), '.db')) {
 				$folderPath = dirname($folderPath);
 			}
 			$folderNode = $userFolder->get(ltrim($folderPath, '/'));
-			if (!($folderNode instanceof Folder)) {
-				throw new \Exception("Library folder not found for ID $libraryId", 0, $e);
+			if ($folderNode instanceof Folder) {
+				return $folderNode;
 			}
-			$targetFolder = $folderNode;
+			throw new \Exception("Library folder not found for ID $libraryId", 0, $e);
+		}
+	}
+
+	/**
+	 * Resolve the library database file and the folder its files belong in.
+	 *
+	 * Both phases of a library sync need the same context: the local path of the
+	 * library database to read songs from, and the database's parent folder as
+	 * the base the naming rules produce paths against.
+	 *
+	 * @return array{databasePath: string, targetFolder: Folder}
+	 * @throws \Exception when the library is unknown or its path cannot be resolved
+	 */
+	public function libraryContext(int $libraryId, IUser $user): array {
+		$targetFolder = $this->libraryFolder($libraryId, $user);
+
+		$library = $this->libraryMapper->findById($libraryId);
+		$path = $library?->path ?? '';
+
+		$databasePath = null;
+		try {
+			$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+			$node = $userFolder->get(ltrim($path, '/'));
+			if (!($node instanceof Folder)) {
+				$databasePath = $node->getStorage()->getLocalFile($node->getInternalPath());
+			}
+		} catch (\Throwable) {
 		}
 
 		$databasePath ??= $this->libraryService?->getDatabasePath($user->getUID(), $libraryId);

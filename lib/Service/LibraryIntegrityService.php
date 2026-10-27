@@ -83,7 +83,7 @@ class LibraryIntegrityService {
 	public function checkIntegrity(int $libraryId, string $userId, bool $autoMatchOrphans = true): array {
 		$userFolder = $this->rootFolder->getUserFolder($userId);
 		$user = $userFolder->getOwner();
-		['targetFolder' => $targetFolder] = $this->fileManager->libraryContext($libraryId, $user);
+		$targetFolder = $this->fileManager->libraryFolder($libraryId, $user);
 
 		$songs = $this->internalSongMapper->findLibraryData($libraryId, $user)->songs;
 		$targetFolderPath = (string)$targetFolder->getPath();

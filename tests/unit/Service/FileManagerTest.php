@@ -154,11 +154,23 @@ final class FileManagerTest extends TestCase {
 		});
 
 		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->method('findById')->with(1)->willReturn(new InternalLibrary(
-			id: 1,
-			userId: self::UID,
-			path: '/Noten/mobilesheets.db',
-		));
+		$libraryMapper->method('findById')->willReturnCallback(function (int $id): ?InternalLibrary {
+			if ($id === 1) {
+				return new InternalLibrary(
+					id: 1,
+					userId: self::UID,
+					path: '/Noten/mobilesheets.db',
+				);
+			}
+			if ($id === 2) {
+				return new InternalLibrary(
+					id: 2,
+					userId: self::UID,
+					path: '/Noten',
+				);
+			}
+			return null;
+		});
 		$libraryMapper->method('findForUser')->willReturn(new InternalLibrary(
 			id: 1,
 			userId: self::UID,
@@ -1260,11 +1272,23 @@ final class FileManagerTest extends TestCase {
 		$rootFolder->method('getUserFolder')->with(self::UID)->willReturn($userFolder);
 
 		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->method('findById')->with(1)->willReturn(new InternalLibrary(
-			id: 1,
-			userId: self::UID,
-			path: '/Noten/mobilesheets.db',
-		));
+		$libraryMapper->method('findById')->willReturnCallback(function (int $id): ?InternalLibrary {
+			if ($id === 1) {
+				return new InternalLibrary(
+					id: 1,
+					userId: self::UID,
+					path: '/Noten/mobilesheets.db',
+				);
+			}
+			if ($id === 2) {
+				return new InternalLibrary(
+					id: 2,
+					userId: self::UID,
+					path: '/Noten',
+				);
+			}
+			return null;
+		});
 
 		foreach ($songs as $song) {
 			$this->storeSong($song);
@@ -1840,6 +1864,33 @@ final class FileManagerTest extends TestCase {
 		self::assertArrayHasKey('Noten/Miles/Miles - Blue (2).pdf', $this->files);
 	}
 
+	public function testLibraryFolderResolvesTargetFolderForPhysicalDb(): void {
+		$this->files['Noten/mobilesheets.db'] = 'SQLITE_BYTES';
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn(self::UID);
+
+		$folder = $this->fileManager->libraryFolder(1, $user);
+		self::assertSame(self::LIBRARY_DIR, $folder->getPath());
+	}
+
+	public function testLibraryFolderResolvesTargetFolderForVirtualFolder(): void {
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn(self::UID);
+
+		$folder = $this->fileManager->libraryFolder(2, $user);
+		self::assertSame(self::LIBRARY_DIR, $folder->getPath());
+		self::assertSame('Noten', $folder->getName());
+	}
+
+	public function testLibraryFolderThrowsWhenLibraryNotFound(): void {
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn(self::UID);
+
+		$this->expectException(\Exception::class);
+		$this->expectExceptionMessage('Library with ID 999 not found');
+		$this->fileManager->libraryFolder(999, $user);
+	}
+
 	/**
 	 * Build a Folder mock backed by the in-memory tree.
 	 *
@@ -1850,6 +1901,8 @@ final class FileManagerTest extends TestCase {
 	 */
 	private function fakeFolder(string $relative): IUserFolder {
 		$folder = $this->createMock(IUserFolder::class);
+		$folder->method('getName')->willReturn(basename($relative));
+		$folder->method('getPath')->willReturn($relative === '' ? self::USER_ROOT : self::USER_ROOT . '/' . ltrim($relative, '/'));
 
 		$folder->method('nodeExists')->willReturnCallback(
 			fn (string $path): bool => isset($this->files[$path]) || isset($this->folders[$path]),

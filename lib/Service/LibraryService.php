@@ -86,7 +86,7 @@ class LibraryService {
 		$cacheFile = $this->getCacheFilePath($libraryId);
 		$cacheDir = dirname($cacheFile);
 		if (!is_dir($cacheDir)) {
-			@mkdir($cacheDir, 0777, true);
+			@mkdir($cacheDir, 0700, true);
 		}
 
 		$library = $this->libraryMapper->findById($libraryId);
@@ -96,8 +96,10 @@ class LibraryService {
 
 		$updatedAt = $library->updatedAt;
 		if (!file_exists($cacheFile) || filemtime($cacheFile) < $updatedAt) {
+			$partPath = $cacheFile . '.' . bin2hex(random_bytes(4)) . '.part';
 			try {
-				$this->exporter->exportToFile($libraryId, $cacheFile, $userId);
+				$this->exporter->exportToFile($libraryId, $partPath, $userId);
+				rename($partPath, $cacheFile);
 			} catch (\Throwable $e) {
 				$this->logger->error('Failed to export virtual SQLite database', [
 					'exception' => $e,
@@ -105,6 +107,10 @@ class LibraryService {
 					'userId' => $userId,
 				]);
 				return null;
+			} finally {
+				if (file_exists($partPath)) {
+					@unlink($partPath);
+				}
 			}
 		}
 
@@ -236,6 +242,10 @@ class LibraryService {
 		if (file_exists($cacheFile)) {
 			@unlink($cacheFile);
 		}
+		$legacyCache = sys_get_temp_dir() . '/sheetmusic_cache/lib_' . $id . '.db';
+		if (file_exists($legacyCache) && is_writable($legacyCache)) {
+			@unlink($legacyCache);
+		}
 
 		return [
 			'id' => $id,
@@ -244,7 +254,8 @@ class LibraryService {
 	}
 
 	private function getCacheFilePath(int $libraryId): string {
-		return sys_get_temp_dir() . '/sheetmusic_cache/lib_' . $libraryId . '.db';
+		$owner = function_exists('posix_geteuid') ? (string)posix_geteuid() : (string)getmyuid();
+		return sys_get_temp_dir() . '/sheetmusic_cache_' . $owner . '/lib_' . $libraryId . '.db';
 	}
 
 	private function importExistingPhysicalDatabase(

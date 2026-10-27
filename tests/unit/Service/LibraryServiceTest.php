@@ -59,6 +59,16 @@ final class LibraryServiceTest extends TestCase {
 		self::assertFileExists($path);
 	}
 
+	public function testGetDatabasePathResolvesVirtualLibraryWithUserScopedCachePath(): void {
+		$lib = $this->createTestLibrary('/VirtualNoten', 'admin');
+		$path = $this->service->getDatabasePath('admin', (int)$lib->id);
+
+		self::assertNotNull($path);
+		self::assertFileExists($path);
+		$owner = function_exists('posix_geteuid') ? (string)posix_geteuid() : (string)getmyuid();
+		self::assertStringContainsString('sheetmusic_cache_' . $owner, $path);
+	}
+
 	public function testGetLibrariesReturnsUserLibraries(): void {
 		$lib1 = $this->createTestLibrary('/Noten/lib1.db', 'admin');
 		$lib2 = $this->createTestLibrary('/Noten/lib2.db', 'admin');
