@@ -7,12 +7,6 @@ test.describe('Song History Timeline & Trash Restoration', () => {
 	})
 
 	test('opens song history modal from song viewer, views revisions, and reverts revision', async ({ page }) => {
-		// Auto-accept confirm dialog for revert
-		page.on('dialog', async (dialog) => {
-			expect(dialog.message()).toContain('Are you sure you want to revert this song')
-			await dialog.accept()
-		})
-
 		await page.goto('/#/library/1/songs?song=5')
 
 		// Wait for song viewer to load Symphony No. 5
@@ -39,12 +33,17 @@ test.describe('Song History Timeline & Trash Restoration', () => {
 		// Verify snapshot details are displayed
 		await expect(page.getByText('Symphony No. 5 in C Minor')).toBeVisible()
 
-		// Click "Revert" on the older revision
+		// Click "Revert" on the older revision to trigger the Nextcloud confirmation dialog
 		const revertBtn = page.getByRole('button', { name: 'Revert' }).first()
 		await expect(revertBtn).toBeVisible()
 		await revertBtn.click()
 
-		// Modal should close upon successful revert
+		// Verify Nextcloud-themed confirmation dialog opens
+		const confirmDialog = page.getByRole('dialog').filter({ hasText: 'Revert song revision' })
+		await expect(confirmDialog).toBeVisible()
+		await confirmDialog.getByRole('button', { name: 'Revert to this revision' }).click()
+
+		// Modals should close upon successful revert
 		await expect(page.getByText('Song History & Revisions: Symphony No. 5')).not.toBeVisible()
 	})
 

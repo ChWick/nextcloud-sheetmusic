@@ -107,11 +107,15 @@ function getActionLabel(action: string): string {
 	}
 }
 
-async function revertTo(entry: HistoryEntry) {
-	if (!confirm(t('sheetmusic', 'Are you sure you want to revert this song to the version from {date}?', { date: formatDate(entry.createdAt) }))) {
-		return
-	}
+const pendingRevertEntry = ref<HistoryEntry | null>(null)
 
+function promptRevert(entry: HistoryEntry) {
+	pendingRevertEntry.value = entry
+}
+
+async function executeRevert() {
+	if (!pendingRevertEntry.value) return
+	const entry = pendingRevertEntry.value
 	isReverting.value = true
 	try {
 		const url = generateOcsUrl('/apps/sheetmusic/api/songs/' + props.songId + '/revert/' + entry.id)
@@ -119,6 +123,7 @@ async function revertTo(entry: HistoryEntry) {
 		const data = response.data?.ocs?.data as LibraryData
 		showSuccess(t('sheetmusic', 'Song reverted to revision from {date}', { date: formatDate(entry.createdAt) }))
 		emit('reverted', data)
+		pendingRevertEntry.value = null
 		emit('update:open', false)
 	} catch (e: any) {
 		showError(e?.response?.data?.ocs?.data?.error || t('sheetmusic', 'Failed to revert song'))
@@ -206,7 +211,7 @@ async function revertTo(entry: HistoryEntry) {
 								variant="primary"
 								:disabled="isReverting"
 								:title="t('sheetmusic', 'Revert to this version')"
-								@click="revertTo(entry)">
+								@click="promptRevert(entry)">
 								<template #icon>
 									<BackupRestore :size="16" />
 								</template>
@@ -269,7 +274,7 @@ async function revertTo(entry: HistoryEntry) {
 								variant="primary"
 								:disabled="isReverting"
 								:title="t('sheetmusic', 'Revert to this version')"
-								@click="revertTo(entry)">
+								@click="promptRevert(entry)">
 								<template #icon>
 									<BackupRestore :size="16" />
 								</template>
@@ -280,6 +285,37 @@ async function revertTo(entry: HistoryEntry) {
 				</div>
 			</div>
 		</div>
+	</NcDialog>
+
+	<!-- Nextcloud-themed Confirmation Dialog for Reverting -->
+	<NcDialog
+		v-if="pendingRevertEntry"
+		:name="t('sheetmusic', 'Revert song revision')"
+		size="normal"
+		@close="pendingRevertEntry = null">
+		<p>
+			{{ t('sheetmusic', 'Are you sure you want to revert "{title}" to the revision from {date}?', {
+				title: songTitle || props.songTitle,
+				date: formatDate(pendingRevertEntry.createdAt),
+			}) }}
+		</p>
+		<p :class="$style.revertNotice">
+			{{ t('sheetmusic', 'This will restore the song details, entity links, and attached files from this revision. A new revision snapshot will be created before applying the revert.') }}
+		</p>
+		<template #actions>
+			<NcButton @click="pendingRevertEntry = null">
+				{{ t('sheetmusic', 'Cancel') }}
+			</NcButton>
+			<NcButton
+				variant="primary"
+				:disabled="isReverting"
+				@click="executeRevert">
+				<template v-if="isReverting">
+					<NcLoadingIcon :size="16" />
+				</template>
+				{{ isReverting ? t('sheetmusic', 'Reverting…') : t('sheetmusic', 'Revert to this revision') }}
+			</NcButton>
+		</template>
 	</NcDialog>
 </template>
 
@@ -301,6 +337,12 @@ async function revertTo(entry: HistoryEntry) {
 	overflow-y: auto;
 	box-sizing: border-box;
 	padding: 8px 4px;
+}
+
+.revertNotice {
+	color: var(--color-text-maxcontrast);
+	font-size: 13px;
+	margin-top: 8px;
 }
 
 .songTitleHeader {

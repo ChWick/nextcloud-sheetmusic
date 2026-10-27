@@ -148,6 +148,16 @@ describe('SongHistoryModal.vue', () => {
 
 		await flushPromises()
 
+		// Nextcloud confirmation dialog is displayed
+		expect(document.body.textContent).toContain('Revert song revision')
+		const confirmBtn = Array.from(document.body.querySelectorAll('button')).find((b) =>
+			b.textContent?.includes('Revert to this revision'),
+		)
+		expect(confirmBtn).toBeDefined()
+		confirmBtn!.click()
+
+		await flushPromises()
+
 		expect(axios.post).toHaveBeenCalledWith('/apps/sheetmusic/api/songs/10/revert/1')
 		expect(showSuccess).toHaveBeenCalled()
 		expect(wrapper.emitted('reverted')).toBeTruthy()
