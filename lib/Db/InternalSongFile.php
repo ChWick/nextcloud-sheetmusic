@@ -48,15 +48,15 @@ class InternalSongFile {
 
 	/**
 	 * Normalizes a page order string.
-	 * MobileSheets always represents single-page files as '1-1', never '1'.
-	 * An empty or single '1' page order is normalized to '1-N' (or '1-1').
+	 * If empty, defaults to '1-N' (or '1-1').
+	 * If provided, preserves whatever MobileSheets uploaded (e.g. '1', '1-1', '1,2,3').
 	 */
 	public static function normalizePageOrder(?string $pageOrder, int $pageCount = 1): ?string {
 		if ($pageOrder === null) {
 			return null;
 		}
 		$trimmed = trim($pageOrder);
-		if ($trimmed === '' || $trimmed === '1') {
+		if ($trimmed === '') {
 			return MobileSheetsPdf::pageOrder($pageCount);
 		}
 		return $trimmed;

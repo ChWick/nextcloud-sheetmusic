@@ -431,7 +431,7 @@ class MobileSheetsSqliteImporter {
 					$stats['filesUpdated']++;
 				} else {
 					$changed = false;
-					if ($existing->pageOrder === '1' || $existing->pageOrder === '' || $existing->pageOrder === null) {
+					if ($pageOrder !== '' && $existing->pageOrder !== $pageOrder) {
 						$existing->pageOrder = $pageOrder;
 						$changed = true;
 					}

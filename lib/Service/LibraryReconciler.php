@@ -159,7 +159,7 @@ class LibraryReconciler {
 				if ($newHash !== null && ($hash !== $newHash || $pageCount !== $newPageCount)) {
 					$hash = $newHash;
 					$pageCount = $newPageCount;
-					if (empty($pageOrder) || $pageOrder === '1') {
+					if (empty($pageOrder)) {
 						$pageOrder = $newPageOrder;
 					}
 					$needsUpdate = true;

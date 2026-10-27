@@ -544,7 +544,7 @@ class SongFileService {
 				$existing->fileSize = $fileSize;
 				$existing->fileHash = $fileHash;
 				$existing->pageCount = $pageCount;
-				if ($existing->pageOrder === '' || $existing->pageOrder === '1' || $existing->pageOrder === null) {
+				if ($existing->pageOrder === '' || $existing->pageOrder === null) {
 					$existing->pageOrder = $pageOrder;
 				}
 				$existing->updatedAt = time();

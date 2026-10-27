@@ -1953,7 +1953,7 @@ final class MobileSheetsSyncTest extends TestCase {
 		self::assertStringContainsString('Song 1.pdf', $hashcodes);
 	}
 
-	public function testPageOrderSinglePageExportsAsOneDashOneAndSyncsCleanly(): void {
+	public function testPageOrderPreservesWhateverMobileSheetsUploadedAndSyncsCleanly(): void {
 		$lib = $this->createTestLibrary();
 		$adminUser = $this->userManager->get('admin');
 
@@ -1969,31 +1969,42 @@ final class MobileSheetsSyncTest extends TestCase {
 		$this->songMapper->insert($song);
 
 		$songFile = $this->attachTestFileToSong($song, 'SinglePageSong.pdf', 1);
-		// Simulate legacy database state where page_order was stored as '1'
+		// Simulate state where page_order was stored as '1'
 		$this->dbConn->executeStatement(
 			'UPDATE `*PREFIX*sheetmusic_song_files` SET `page_order` = \'1\' WHERE `id` = ?',
 			[$songFile->id]
 		);
 
-		// 1. Export database: verify Files table has PageOrder = '1-1' (never '1')
+		// 1. Export database: verify Files table exports whatever was stored ('1')
 		$exportPath = $this->tempDbPath();
 		$this->exporter->exportToFile($lib, $exportPath);
 
 		$msDb = new PDO('sqlite:' . $exportPath, options: [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
 		$files = $msDb->query('SELECT Id, PageOrder FROM Files WHERE Id = 1')->fetchAll();
 		self::assertCount(1, $files);
-		self::assertSame('1-1', $files[0]['PageOrder']);
+		self::assertSame('1', $files[0]['PageOrder']);
 
-		// 2. MobileSheets updates PageOrder to custom order (e.g. '1-1,1-1' for repeat)
-		$msDb->exec("UPDATE Files SET PageOrder = '1-1,1-1', LastModified = 2000000 WHERE Id = 1");
+		// 2. MobileSheets updates PageOrder to '1-1'
+		$msDb->exec("UPDATE Files SET PageOrder = '1-1', LastModified = 2000000 WHERE Id = 1");
 
 		// 3. MobileSheets syncs back
 		$stats = $this->importer->importFromFile($lib, $exportPath, $adminUser);
 		self::assertSame(1, $stats['filesUpdated']);
 
-		// 4. Verify Nextcloud has the updated PageOrder
+		// 4. Verify Nextcloud adopted '1-1'
 		$reloaded = $this->songFileMapper->findById($songFile->id);
 		self::assertNotNull($reloaded);
-		self::assertSame('1-1,1-1', $reloaded->pageOrder);
+		self::assertSame('1-1', $reloaded->pageOrder);
+
+		// 5. MobileSheets syncs with '1' again even when client LWW tie/older
+		$exportPath2 = $this->tempDbPath();
+		$this->exporter->exportToFile($lib, $exportPath2);
+		$msDb2 = new PDO('sqlite:' . $exportPath2, options: [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
+		$msDb2->exec("UPDATE Files SET PageOrder = '1' WHERE Id = 1");
+
+		$this->importer->importFromFile($lib, $exportPath2, $adminUser);
+		$reloaded2 = $this->songFileMapper->findById($songFile->id);
+		self::assertNotNull($reloaded2);
+		self::assertSame('1', $reloaded2->pageOrder);
 	}
 }

@@ -653,7 +653,7 @@ class MobileSheetsSqliteExporter {
 					$file->fileHash = MobileSheetsPdf::contentHash($content);
 					$pageCount = MobileSheetsPdf::pageCount($content);
 					$file->pageCount = $pageCount;
-					if (empty($file->pageOrder) || $file->pageOrder === '1') {
+					if (empty($file->pageOrder)) {
 						$file->pageOrder = MobileSheetsPdf::pageOrder($pageCount);
 					}
 				}

@@ -271,6 +271,7 @@ final class InternalSongFileMapperTest extends TestCase {
 	}
 
 	public function testInsertAndFromRowNormalizePageOrder(): void {
+		// Preserves '1' when supplied by MobileSheets
 		$file = $this->songFileMapper->insert(new InternalSongFile(
 			id: null,
 			uuid: 'file-single-page',
@@ -280,13 +281,24 @@ final class InternalSongFileMapperTest extends TestCase {
 			pageCount: 1,
 		));
 
-		self::assertSame('1-1', $file->pageOrder);
+		self::assertSame('1', $file->pageOrder);
 
 		$loaded = $this->songFileMapper->findById((int)$file->id);
 		self::assertNotNull($loaded);
-		self::assertSame('1-1', $loaded->pageOrder);
+		self::assertSame('1', $loaded->pageOrder);
 
-		// Multi-page with empty pageOrder
+		// Preserves '1-1' when supplied by MobileSheets
+		$file1b = $this->songFileMapper->insert(new InternalSongFile(
+			id: null,
+			uuid: 'file-single-page-dash',
+			songId: (int)$this->song->id,
+			fileId: 1237,
+			pageOrder: '1-1',
+			pageCount: 1,
+		));
+		self::assertSame('1-1', $file1b->pageOrder);
+
+		// Multi-page with empty pageOrder defaults to 1-N
 		$file2 = $this->songFileMapper->insert(new InternalSongFile(
 			id: null,
 			uuid: 'file-multi-page',
