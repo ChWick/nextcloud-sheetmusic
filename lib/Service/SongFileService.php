@@ -157,15 +157,19 @@ class SongFileService {
 		$this->libraryMapper->touch($libraryId);
 		$this->syncSongFileMetadata($user, '', $songId, $libraryId);
 
-		if ($songId > 0 && $this->songHistoryService !== null) {
+		if ($songId > 0) {
 			$song = $this->internalSongMapper->findById($songId);
 			if ($song !== null) {
-				$this->songHistoryService->recordSnapshot(
-					$song,
-					InternalSongHistory::ACTION_UPDATED,
-					$user->getUID(),
-					'Modified attached PDF: ' . $targetNode->getName()
-				);
+				$song->updatedAt = time();
+				$this->internalSongMapper->update($song);
+				if ($this->songHistoryService !== null) {
+					$this->songHistoryService->recordSnapshot(
+						$song,
+						InternalSongHistory::ACTION_UPDATED,
+						$user->getUID(),
+						'Modified attached PDF: ' . $targetNode->getName()
+					);
+				}
 			}
 		}
 
@@ -287,8 +291,10 @@ class SongFileService {
 				$versions = $versionManager->getVersionsForFile($user, $targetNode);
 				foreach ($versions as $v) {
 					if ((int)$v->getRevisionId() === (int)$revision) {
-						$versionManager->rollback($v);
-						$rolledBack = true;
+						$res = $versionManager->rollback($v);
+						if ($res !== false) {
+							$rolledBack = true;
+						}
 						break;
 					}
 				}
@@ -305,10 +311,9 @@ class SongFileService {
 			$userView = new \OC\Files\View('/' . $user->getUID());
 			\OCA\Files_Versions\Storage::createMissingDirectories($relativePath, $userView);
 			$success = \OCA\Files_Versions\Storage::rollback('/' . ltrim($relativePath, '/'), (int)$revision, $user);
-			if (!$success) {
-				throw new \RuntimeException('Failed to rollback file revision');
+			if ($success !== false) {
+				$rolledBack = true;
 			}
-			$rolledBack = true;
 		}
 
 		if (!$rolledBack) {
@@ -336,15 +341,19 @@ class SongFileService {
 		$this->syncSongFileMetadata($user, '', $songId, $libraryId);
 
 		$targetSongId = $fileRecord->songId;
-		if ($targetSongId > 0 && $this->songHistoryService !== null) {
+		if ($targetSongId > 0) {
 			$song = $this->internalSongMapper->findById($targetSongId);
 			if ($song !== null) {
-				$this->songHistoryService->recordSnapshot(
-					$song,
-					InternalSongHistory::ACTION_REVERTED,
-					$user->getUID(),
-					'Reverted file to revision ' . $revision . ': ' . $targetNode->getName()
-				);
+				$song->updatedAt = time();
+				$this->internalSongMapper->update($song);
+				if ($this->songHistoryService !== null) {
+					$this->songHistoryService->recordSnapshot(
+						$song,
+						InternalSongHistory::ACTION_REVERTED,
+						$user->getUID(),
+						'Reverted file to revision ' . $revision . ': ' . $targetNode->getName()
+					);
+				}
 			}
 		}
 

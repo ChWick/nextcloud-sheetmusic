@@ -376,6 +376,10 @@ async function loadAndRenderFile() {
 	try {
 		const response = await axios.get(props.filePath, {
 			responseType: 'arraybuffer',
+			headers: {
+				'Cache-Control': 'no-cache',
+				'Pragma': 'no-cache',
+			},
 		})
 
 		if (loadId !== currentLoadId) return

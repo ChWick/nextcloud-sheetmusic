@@ -98,4 +98,68 @@ test.describe('Song History Timeline & Trash Restoration', () => {
 		await expect(tableBody.getByText('Moonlight Sonata')).not.toBeVisible()
 		await expect(page.getByText('Trash is empty')).toBeVisible()
 	})
+
+	test('opens PDF version history from song viewer, views revisions, and reverts file version', async ({ page }) => {
+		await page.goto('/#/library/1/songs?song=5')
+
+		// Wait for song viewer
+		await expect(page.getByRole('heading', { name: 'Symphony No. 5' })).toBeVisible()
+
+		// Click "PDF version history" button in viewer header
+		const versionsBtn = page.getByRole('button', { name: 'PDF version history' }).first()
+		await expect(versionsBtn).toBeVisible()
+		await versionsBtn.click()
+
+		// Verify PDF Version History dialog is opened
+		const dialog = page.getByRole('dialog')
+		await expect(dialog).toBeVisible()
+		await expect(dialog.getByText('PDF Version History')).toBeVisible()
+
+		// Verify version list entries are visible
+		await expect(dialog.getByText('2.0 KB')).toBeVisible()
+
+		// Click "Revert to this version"
+		const revertBtn = dialog.getByRole('button', { name: 'Revert to this version' }).first()
+		await expect(revertBtn).toBeVisible()
+		await revertBtn.click()
+
+		// Verify success notification
+		await expect(page.getByText(/Reverted PDF to earlier version successfully/i).first()).toBeVisible()
+
+		// Dialog should close
+		await expect(dialog).toBeHidden()
+	})
+
+	test('modifies PDF in modifier, views version history, and reverts to earlier version', async ({ page }) => {
+		await page.goto('/#/library/1/songs?song=5&modifyPdf=1')
+
+		// Rotate all pages by 90 deg
+		const rotate90Btn = page.getByRole('button', { name: 'Rotate All 90° CW' }).first()
+		await expect(rotate90Btn).toBeVisible()
+		await rotate90Btn.click()
+
+		// Save rotated PDF
+		const saveBtn = page.getByRole('button', { name: 'Save Rotations' })
+		await expect(saveBtn).toBeVisible()
+		await saveBtn.click()
+
+		// Wait for save success
+		await expect(page.getByText(/Rotated PDF saved successfully/i).first()).toBeVisible()
+
+		// Now in SongViewer, open PDF version history
+		const versionsBtn = page.getByRole('button', { name: 'PDF version history' }).first()
+		await expect(versionsBtn).toBeVisible()
+		await versionsBtn.click()
+
+		const dialog = page.getByRole('dialog')
+		await expect(dialog).toBeVisible()
+
+		// Revert to earlier version
+		const revertBtn = dialog.getByRole('button', { name: 'Revert to this version' }).first()
+		await expect(revertBtn).toBeVisible()
+		await revertBtn.click()
+
+		await expect(page.getByText(/Reverted PDF to earlier version successfully/i).first()).toBeVisible()
+		await expect(dialog).toBeHidden()
+	})
 })

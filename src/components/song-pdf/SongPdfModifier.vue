@@ -196,9 +196,13 @@ async function loadPdf() {
 	selectedPages.value = []
 
 	try {
-		const targetUrl = getCacheBustedFileUrl(targetFile.value.path, `${targetFile.value.id}-${props.song.lastModified ?? ''}`)
+		const targetUrl = getCacheBustedFileUrl(targetFile.value.path, `${targetFile.value.id}-${props.song.lastModified ?? ''}-${Date.now()}`)
 		const response = await axios.get(targetUrl, {
 			responseType: 'arraybuffer',
+			headers: {
+				'Cache-Control': 'no-cache',
+				'Pragma': 'no-cache',
+			},
 		})
 		const bytes = response.data instanceof ArrayBuffer ? new Uint8Array(response.data) : new Uint8Array(response.data)
 		// Store an independent clone of bytes so pdfjs worker transfer does not detach the array buffer

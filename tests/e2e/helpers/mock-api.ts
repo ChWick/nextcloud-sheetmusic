@@ -188,7 +188,7 @@ export async function setupMockApi(page: Page) {
 		})
 	})
 
-	// Mock file upload endpoint (used when saving modified/cropped PDF)
+	// Mock file upload / update endpoint (used when saving modified/cropped PDF)
 	await page.route('**/api/libraries/*/songs/*/file/upload**', async (route) => {
 		await route.fulfill({
 			status: 200,
@@ -198,6 +198,75 @@ export async function setupMockApi(page: Page) {
 					meta: { status: 'ok', statuscode: 200 },
 					data: {
 						songs: mockSongs,
+						composers: mockComposers,
+						books: mockBooks,
+					},
+				},
+			}),
+		})
+	})
+
+	let currentMockVersions = [
+		{
+			version: '1700000000',
+			revision: 1700000000,
+			timestamp: 1700000000,
+			humanReadableTimestamp: '2023-11-14 22:13:20',
+			size: 2048,
+			name: 'Beethoven - Symphony 5.pdf',
+		},
+	]
+
+	// Mock file versions list
+	await page.route('**/api/libraries/*/songs/*/file/*/versions', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				ocs: {
+					meta: { status: 'ok', statuscode: 200 },
+					data: currentMockVersions,
+				},
+			}),
+		})
+	})
+
+	// Mock file version revert endpoint
+	await page.route('**/api/libraries/*/songs/*/file/*/versions/*/revert', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				ocs: {
+					meta: { status: 'ok', statuscode: 200 },
+					data: {
+						songs: mockSongs.map((s) => s.id === 5 ? { ...s, lastModified: Date.now() } : s),
+						composers: mockComposers,
+						books: mockBooks,
+					},
+				},
+			}),
+		})
+	})
+
+	// Mock file in-place update endpoint
+	await page.route('**/api/libraries/*/songs/*/file/*/update', async (route) => {
+		currentMockVersions.push({
+			version: String(Date.now()),
+			revision: Date.now(),
+			timestamp: Math.floor(Date.now() / 1000),
+			humanReadableTimestamp: 'Just now',
+			size: 2048,
+			name: 'Beethoven - Symphony 5.pdf',
+		})
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				ocs: {
+					meta: { status: 'ok', statuscode: 200 },
+					data: {
+						songs: mockSongs.map((s) => s.id === 5 ? { ...s, lastModified: Date.now() } : s),
 						composers: mockComposers,
 						books: mockBooks,
 					},
