@@ -36,12 +36,14 @@ final class SongHistoryServiceTest extends TestCase {
 			$this->libraryMapper,
 			$this->dbConn,
 			new NullLogger(),
+			$this->rootFolder,
 		);
 	}
 
 	protected function tearDown(): void {
 		$this->cleanupLibraryData($this->libraryId);
 		$this->tearDownRealMobileSheetsEnvironment();
+		\OC::$server->get(\OCP\IUserSession::class)->setUser(null);
 		parent::tearDown();
 	}
 
@@ -233,5 +235,74 @@ final class SongHistoryServiceTest extends TestCase {
 		// When ocFileId is <= 0 or user is null, it should return false cleanly without errors
 		self::assertFalse($this->historyService->restorePhysicalFileFromTrashIfNeeded(0, 'admin'));
 		self::assertFalse($this->historyService->restorePhysicalFileFromTrashIfNeeded(1234, null));
+	}
+
+	public function testRevertSongRestoresPhysicalFileVersion(): void {
+		$user = $this->userManager->get('admin');
+		\OC::$server->get(\OCP\IUserSession::class)->setUser($user);
+		$userFolder = $this->rootFolder->getUserFolder('admin');
+
+		$libraryFolder = $userFolder->newFolder('SongHist_Lib_' . bin2hex(random_bytes(3)));
+		$this->createdUserNodes[] = $libraryFolder;
+
+		$initialContent = '%PDF-1.4 INITIAL_UNROTATED_SCORE_12345';
+		$fileNode = $libraryFolder->newFile('score_revert_test.pdf');
+		$fileNode->putContent($initialContent);
+		$origFileId = (int)$fileNode->getId();
+
+		$song = $this->songMapper->insert(new InternalSong(
+			uuid: 'hist-song-file-revert',
+			libraryId: $this->libraryId,
+			title: 'Song with Versioned File',
+		));
+
+		$fileRecord = $this->songFileMapper->insert(new InternalSongFile(
+			uuid: 'file-hist-revert-1',
+			songId: (int)$song->id,
+			fileId: $origFileId,
+			pageOrder: '1',
+			pageCount: 1,
+			fileSize: strlen($initialContent),
+		));
+
+		// Revision 1: initial state with initial file content
+		$snap1 = $this->historyService->recordSnapshot($song, InternalSongHistory::ACTION_CREATED, 'admin');
+
+		// Ensure files_versions folder and missing parent directories exist
+		$userRoot = $userFolder->getParent();
+		if (!$userRoot->nodeExists('files_versions')) {
+			$userRoot->newFolder('files_versions');
+		}
+		$relPath = $userFolder->getRelativePath($fileNode->getPath());
+		\OCA\Files_Versions\Storage::createMissingDirectories($relPath, new \OC\Files\View('/admin'));
+
+		// Modify file content (simulating rotation or edit) and create version
+		$vm = \OC::$server->get(\OCA\Files_Versions\Versions\IVersionManager::class);
+		$vm->createVersion($user, $fileNode);
+		$modifiedContent = '%PDF-1.4 MODIFIED_ROTATED_SCORE_67890';
+		$fileNode->putContent($modifiedContent);
+
+		$fileRecord->fileSize = strlen($modifiedContent);
+		$this->songFileMapper->update($fileRecord);
+		$song->title = 'Song with Versioned File (Modified)';
+		$this->songMapper->update($song);
+
+		// Revision 2: modified state
+		$this->historyService->recordSnapshot($song, InternalSongHistory::ACTION_UPDATED, 'admin');
+
+		// Verify current content on disk is modified
+		$currentOnDisk = $libraryFolder->get('score_revert_test.pdf');
+		self::assertSame($modifiedContent, $currentOnDisk->getContent());
+
+		// Revert song back to Revision 1 via SongHistoryService
+		$this->historyService->revertSongToHistory((int)$song->id, (int)$snap1->id, 'admin');
+
+		// Verify that physical file on disk was reverted to initial content
+		$revertedOnDisk = $libraryFolder->get('score_revert_test.pdf');
+		self::assertSame($initialContent, $revertedOnDisk->getContent(), 'Physical file on disk should be restored to Revision 1 content');
+
+		// Verify song title is reverted
+		$reloadedSong = $this->songMapper->findById((int)$song->id);
+		self::assertSame('Song with Versioned File', $reloadedSong?->title);
 	}
 }

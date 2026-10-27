@@ -308,6 +308,10 @@ class SongFileService {
 		}
 
 		if (!$rolledBack && class_exists(\OCA\Files_Versions\Storage::class)) {
+			$userRoot = $userFolder->getParent();
+			if (!$userRoot->nodeExists('files_versions')) {
+				$userRoot->newFolder('files_versions');
+			}
 			$userView = new \OC\Files\View('/' . $user->getUID());
 			\OCA\Files_Versions\Storage::createMissingDirectories($relativePath, $userView);
 			$success = \OCA\Files_Versions\Storage::rollback('/' . ltrim($relativePath, '/'), (int)$revision, $user);

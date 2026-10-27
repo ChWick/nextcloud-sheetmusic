@@ -45,6 +45,12 @@ test.describe('Song History Timeline & Trash Restoration', () => {
 
 		// Modals should close upon successful revert
 		await expect(page.getByText('Song History & Revisions: Symphony No. 5')).not.toBeVisible()
+
+		// Verify success notification is shown
+		await expect(page.getByText(/Song reverted to revision from/i).first()).toBeVisible()
+
+		// Verify viewer reflects reverted title
+		await expect(page.getByRole('heading', { name: 'Symphony No. 5 in C Minor' })).toBeVisible()
 	})
 
 	test('opens song history modal from song editor', async ({ page }) => {

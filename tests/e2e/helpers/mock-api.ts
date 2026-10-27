@@ -395,7 +395,7 @@ export async function setupMockApi(page: Page) {
 				ocs: {
 					meta: { status: 'ok', statuscode: 200 },
 					data: {
-						songs: mockSongs,
+						songs: mockSongs.map((s) => s.id === 5 ? { ...s, title: 'Symphony No. 5 in C Minor', lastModified: Date.now() } : s),
 						composers: mockComposers,
 						books: mockBooks,
 					},
