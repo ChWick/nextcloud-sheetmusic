@@ -440,6 +440,14 @@ const {
 	},
 })
 
+function resetAllCurrentEdits() {
+	resetRotations()
+	resetAllCrops()
+	resetAllEnhancements()
+	restoreAllPages()
+	isVersionsModalOpen.value = false
+}
+
 function handleHeaderSave() {
 	if (activeMode.value === 'rotate') {
 		saveRotations()
@@ -901,6 +909,8 @@ watch(() => targetFile.value?.path, () => {
 			:versions="fileVersions"
 			:is-loading="isLoadingVersions"
 			:is-reverting="isRevertingVersion"
+			:has-unsaved-changes="hasAnyChange"
+			@discard-unsaved="resetAllCurrentEdits"
 			@revert="revertToVersion" />
 	</div>
 </template>

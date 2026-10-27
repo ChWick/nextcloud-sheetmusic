@@ -224,8 +224,10 @@ class SongFileService {
 						'name' => (string)$v->getSourceFileName(),
 					];
 				}
-				usort($result, static fn ($a, $b) => $b['timestamp'] <=> $a['timestamp']);
-				return $result;
+				if (!empty($result)) {
+					usort($result, static fn ($a, $b) => $b['timestamp'] <=> $a['timestamp']);
+					return $result;
+				}
 			} catch (\Throwable $e) {
 				$this->logger->warning('Could not get versions via IVersionManager: ' . $e->getMessage(), [
 					'exception' => $e,

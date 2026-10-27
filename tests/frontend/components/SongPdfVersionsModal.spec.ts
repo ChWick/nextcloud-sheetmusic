@@ -65,6 +65,22 @@ describe('SongPdfVersionsModal.vue', () => {
 			expect(wrapper.text()).toContain('No previous versions found for this file.')
 		})
 
+		it('renders unsaved changes notice and emits discard-unsaved when clicked', async () => {
+			const wrapper = mount(SongPdfVersionsModal, {
+				props: {
+					open: true,
+					isLoading: false,
+					versions: [],
+					hasUnsavedChanges: true,
+				},
+			})
+			expect(wrapper.text()).toContain('You have unsaved changes in this editing session')
+			const discardBtn = wrapper.findAll('button').find((b) => b.text().includes('Discard unsaved changes'))
+			expect(discardBtn).toBeDefined()
+			await discardBtn!.trigger('click')
+			expect(wrapper.emitted('discard-unsaved')).toHaveLength(1)
+		})
+
 		it('renders version list with dates, file sizes, and action buttons', () => {
 			const wrapper = mount(SongPdfVersionsModal, {
 				props: {

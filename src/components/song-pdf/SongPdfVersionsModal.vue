@@ -31,17 +31,20 @@ withDefaults(
 		versions?: FileVersionInfo[]
 		isLoading?: boolean
 		isReverting?: boolean
+		hasUnsavedChanges?: boolean
 	}>(),
 	{
 		versions: () => [],
 		isLoading: false,
 		isReverting: false,
+		hasUnsavedChanges: false,
 	},
 )
 
 const emit = defineEmits<{
 	'update:open': [value: boolean]
 	revert: [revision: number]
+	'discard-unsaved': []
 }>()
 </script>
 
@@ -57,6 +60,18 @@ const emit = defineEmits<{
 				{{ t('sheetmusic', 'Close') }}
 			</NcButton>
 		</template>
+
+		<div v-if="hasUnsavedChanges" :class="$style.unsavedNotice">
+			<span :class="$style.unsavedText">
+				{{ t('sheetmusic', 'You have unsaved changes in this editing session (e.g. page rotations or crops). Version history reflects saved file revisions.') }}
+			</span>
+			<NcButton
+				size="small"
+				variant="tertiary"
+				@click="emit('discard-unsaved')">
+				{{ t('sheetmusic', 'Discard unsaved changes') }}
+			</NcButton>
+		</div>
 
 		<div v-if="isLoading" :class="$style.versionsLoading">
 			<NcLoadingIcon :size="32" />
@@ -89,6 +104,24 @@ const emit = defineEmits<{
 </template>
 
 <style module>
+.unsavedNotice {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 10px 14px;
+	margin-bottom: 12px;
+	background-color: var(--color-background-hover);
+	border-left: 4px solid var(--color-warning);
+	border-radius: 4px;
+}
+
+.unsavedText {
+	font-size: 13px;
+	color: var(--color-main-text);
+	line-height: 1.4;
+}
+
 .versionsLoading {
 	display: flex;
 	flex-direction: column;
