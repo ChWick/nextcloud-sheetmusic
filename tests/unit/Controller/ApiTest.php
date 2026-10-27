@@ -524,6 +524,10 @@ final class ApiTest extends TestCase {
 		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->deleteArtist(1, 7)->getStatus());
 		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->deleteSignature(1, 7)->getStatus());
 		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->importSongMetadata()->getStatus());
+		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->getSongHistory(1)->getStatus());
+		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->revertSongHistory(1, 1)->getStatus());
+		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->getDeletedSongs(1)->getStatus());
+		self::assertEquals(Http::STATUS_UNAUTHORIZED, $controller->restoreDeletedSong(1)->getStatus());
 	}
 
 	public function testImportSongMetadataFromNextcloudPath(): void {

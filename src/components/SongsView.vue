@@ -31,6 +31,7 @@
       @open-external="songViewerRef?.openInExternalViewer()"
       @modify-pdf="openSong && openModifyPdf(openSong, songViewerRef?.selectedFile?.id)"
       @open-versions="songViewerRef?.openVersionsModal()"
+      @open-history="openSong && (isHistoryModalOpen = true)"
       @duplicate="openSong && duplicateSong(openSong)"
       @edit="openSong && openSongEdit(openSong)"
       @delete-view="songViewerRef?.promptDelete()" />
@@ -275,6 +276,13 @@
     :error="mergeError"
     @merge="executeMerge"
     @resolve-both="executeResolveBoth" />
+
+  <SongHistoryModal
+    v-if="openSong && isHistoryModalOpen"
+    v-model:open="isHistoryModalOpen"
+    :song-id="openSong.id"
+    :song-title="openSong.title"
+    @reverted="handleLibraryDataUpdate" />
 </template>
 
 <script setup lang="ts">
@@ -297,6 +305,7 @@ import SongViewHeaderButtons from './songs/SongViewHeaderButtons.vue';
 import BatchSongEditorDialog, { type BatchUpdatePayload } from '../components/song-editor/BatchSongEditorDialog.vue';
 import BatchDeleteSongsDialog from '../components/BatchDeleteSongsDialog.vue';
 import SongMergeDialog from '../components/song-editor/SongMergeDialog.vue';
+import SongHistoryModal from '../components/SongHistoryModal.vue';
 import type { Song, LibraryData, SongPrefill } from '../types/song';
 import { DEFAULT_VISIBLE_COLUMNS, type SongColumn } from '../types/song';
 import { sortSongs, type SortKey, type SortOrder } from '../utils/song-formatter';
@@ -440,6 +449,8 @@ const currentLibraryData = computed<LibraryData>(() => ({
   instruments: instruments.value,
   songs: songs.value,
 }));
+
+const isHistoryModalOpen = ref(false);
 
 const {
   isMergeDialogOpen,

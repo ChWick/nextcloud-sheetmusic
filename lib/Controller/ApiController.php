@@ -8,6 +8,7 @@ use OCA\SheetMusic\Service\EntityService;
 use OCA\SheetMusic\Service\LibraryIntegrityService;
 use OCA\SheetMusic\Service\LibraryService;
 use OCA\SheetMusic\Service\SongFileService;
+use OCA\SheetMusic\Service\SongHistoryService;
 use OCA\SheetMusic\Service\SongService;
 use OCP\AppFramework\Http\Attribute\ApiRoute;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -36,11 +37,12 @@ class ApiController extends OCSController {
 		EntityService $entityService,
 		LibraryIntegrityService $libraryIntegrityService,
 		IUserSession $userSession,
+		?SongHistoryService $songHistoryService = null,
 	) {
 		parent::__construct($appName, $request);
 
 		$this->libraryController = new LibraryController($appName, $request, $libraryService, $userSession, $libraryIntegrityService);
-		$this->songController = new SongController($appName, $request, $songService, $userSession);
+		$this->songController = new SongController($appName, $request, $songService, $userSession, $songHistoryService);
 		$this->songFileController = new SongFileController($appName, $request, $songFileService, $userSession);
 		$this->entityController = new EntityController($appName, $request, $entityService, $userSession);
 	}
@@ -258,6 +260,30 @@ class ApiController extends OCSController {
 	#[ApiRoute(verb: 'POST', url: '/api/songs/{id}/file/{fileId}/delete')]
 	public function deleteSongFile(int $id, int $fileId, ?int $libraryId = null): DataResponse {
 		return $this->songFileController->deleteSongFile($id, $fileId, $libraryId);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'GET', url: '/api/songs/{id}/history')]
+	public function getSongHistory(int $id): DataResponse {
+		return $this->songController->getSongHistory($id);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/songs/{id}/revert/{historyId}')]
+	public function revertSongHistory(int $id, int $historyId): DataResponse {
+		return $this->songController->revertSongHistory($id, $historyId);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'GET', url: '/api/libraries/{libraryId}/deleted-songs')]
+	public function getDeletedSongs(int $libraryId): DataResponse {
+		return $this->songController->getDeletedSongs($libraryId);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/songs/{id}/restore')]
+	public function restoreDeletedSong(int $id): DataResponse {
+		return $this->songController->restoreDeletedSong($id);
 	}
 
 	#[NoAdminRequired]

@@ -30,6 +30,26 @@ return [
 			'verb' => 'DELETE',
 		],
 		[
+			'name' => 'Api#getSongHistory',
+			'url' => '/api/songs/{id}/history',
+			'verb' => 'GET',
+		],
+		[
+			'name' => 'Api#revertSongHistory',
+			'url' => '/api/songs/{id}/revert/{historyId}',
+			'verb' => 'POST',
+		],
+		[
+			'name' => 'Api#getDeletedSongs',
+			'url' => '/api/libraries/{libraryId}/deleted-songs',
+			'verb' => 'GET',
+		],
+		[
+			'name' => 'Api#restoreDeletedSong',
+			'url' => '/api/songs/{id}/restore',
+			'verb' => 'POST',
+		],
+		[
 			'name' => 'Api#uploadSongFile',
 			'url' => '/api/libraries/{libraryId}/songs/{id}/file/upload',
 			'verb' => 'POST',

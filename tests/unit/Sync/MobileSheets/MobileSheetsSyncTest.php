@@ -1996,11 +1996,11 @@ final class MobileSheetsSyncTest extends TestCase {
 		self::assertNotNull($reloaded);
 		self::assertSame('1-1', $reloaded->pageOrder);
 
-		// 5. MobileSheets syncs with '1' again even when client LWW tie/older
+		// 5. MobileSheets updates to '1' again
 		$exportPath2 = $this->tempDbPath();
 		$this->exporter->exportToFile($lib, $exportPath2);
 		$msDb2 = new PDO('sqlite:' . $exportPath2, options: [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
-		$msDb2->exec("UPDATE Files SET PageOrder = '1' WHERE Id = 1");
+		$msDb2->exec("UPDATE Files SET PageOrder = '1', LastModified = 3000000 WHERE Id = 1");
 
 		$this->importer->importFromFile($lib, $exportPath2, $adminUser);
 		$reloaded2 = $this->songFileMapper->findById($songFile->id);

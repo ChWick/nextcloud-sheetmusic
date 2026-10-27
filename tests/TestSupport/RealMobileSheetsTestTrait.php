@@ -133,6 +133,7 @@ trait RealMobileSheetsTestTrait {
 		$this->dbConn->executeStatement('DELETE FROM *PREFIX*sheetmusic_song_attributes WHERE song_id IN (SELECT id FROM *PREFIX*sheetmusic_songs WHERE library_id = ?)', [$libraryId]);
 		$this->dbConn->executeStatement('DELETE FROM *PREFIX*sheetmusic_song_files WHERE song_id IN (SELECT id FROM *PREFIX*sheetmusic_songs WHERE library_id = ?)', [$libraryId]);
 		$this->dbConn->executeStatement('DELETE FROM *PREFIX*sheetmusic_song_files WHERE song_id NOT IN (SELECT id FROM *PREFIX*sheetmusic_songs)');
+		$this->dbConn->executeStatement('DELETE FROM *PREFIX*sheetmusic_song_history WHERE library_id = ?', [$libraryId]);
 		$this->dbConn->executeStatement('DELETE FROM *PREFIX*sheetmusic_songs WHERE library_id = ?', [$libraryId]);
 		$this->dbConn->executeStatement('DELETE FROM *PREFIX*sheetmusic_entities WHERE library_id = ?', [$libraryId]);
 		$this->dbConn->executeStatement('DELETE FROM *PREFIX*sheetmusic_misc_data WHERE library_id = ?', [$libraryId]);

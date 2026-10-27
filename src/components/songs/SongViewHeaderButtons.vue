@@ -11,6 +11,15 @@
     </NcButton>
     <NcButton
       variant="secondary"
+      :title="t('sheetmusic', 'Song history & revisions')"
+      :aria-label="t('sheetmusic', 'Song history & revisions')"
+      @click="$emit('openHistory')">
+      <template #icon>
+        <History :size="20" />
+      </template>
+    </NcButton>
+    <NcButton
+      variant="secondary"
       :title="t('sheetmusic', 'Save without closing')"
       :aria-label="t('sheetmusic', 'Save without closing')"
       @click="$emit('saveEdit', false)">
@@ -82,6 +91,16 @@
     <NcButton
       v-if="openSong"
       variant="secondary"
+      :title="t('sheetmusic', 'Song history & revisions')"
+      :aria-label="t('sheetmusic', 'Song history & revisions')"
+      @click="$emit('openHistory')">
+      <template #icon>
+        <History :size="20" />
+      </template>
+    </NcButton>
+    <NcButton
+      v-if="openSong"
+      variant="secondary"
       :title="t('sheetmusic', 'Duplicate song')"
       :aria-label="t('sheetmusic', 'Duplicate song')"
       @click="$emit('duplicate')">
@@ -135,6 +154,7 @@ const props = defineProps<{
 
 defineEmits<{
 	deleteEdit: []
+	openHistory: []
 	saveEdit: [close: boolean]
 	cancelCreate: []
 	saveCreate: []

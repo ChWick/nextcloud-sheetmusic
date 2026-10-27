@@ -17,8 +17,10 @@ use OCA\SheetMusic\Db\InternalSong;
 use OCA\SheetMusic\Db\InternalSongAttributeMapper;
 use OCA\SheetMusic\Db\InternalSongFile;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
+use OCA\SheetMusic\Db\InternalSongHistory;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
+use OCA\SheetMusic\Service\SongHistoryService;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\IUser;
@@ -44,6 +46,7 @@ class MobileSheetsSqliteImporter {
 		private IUserManager $userManager,
 		private LoggerInterface $logger,
 		?MobileSheetsEntityMerger $entityMerger = null,
+		private ?SongHistoryService $songHistoryService = null,
 	) {
 		$this->entityMerger = $entityMerger ?? new MobileSheetsEntityMerger(
 			$this->entityMapper,
@@ -143,6 +146,16 @@ class MobileSheetsSqliteImporter {
 
 		// 7. Update library modified timestamp
 		$this->libraryMapper->touch($lib->id);
+
+		// 8. Snapshot synced songs into history
+		if ($this->songHistoryService !== null && !empty($updatedSongClientIds)) {
+			foreach (array_keys($updatedSongClientIds) as $clientId) {
+				$song = $this->songMapper->findByClientId($lib->id, (int)$clientId);
+				if ($song !== null) {
+					$this->songHistoryService->recordSnapshot($song, InternalSongHistory::ACTION_SYNCED, $user?->getUID());
+				}
+			}
+		}
 
 		return $stats;
 	}
@@ -431,7 +444,7 @@ class MobileSheetsSqliteImporter {
 					$stats['filesUpdated']++;
 				} else {
 					$changed = false;
-					if ($pageOrder !== '' && $existing->pageOrder !== $pageOrder) {
+					if ($existing->pageOrder === '' || $existing->pageOrder === null) {
 						$existing->pageOrder = $pageOrder;
 						$changed = true;
 					}

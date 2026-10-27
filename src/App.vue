@@ -27,11 +27,12 @@ import DatabaseImport from 'vue-material-design-icons/DatabaseImport.vue'
 import SongsView from './components/SongsView.vue'
 import IntegrityView from './components/IntegrityView.vue'
 import EntitiesView from './components/EntitiesView.vue'
+import TrashView from './components/TrashView.vue'
 import LibrarySettingsDialog from './components/LibrarySettingsDialog.vue'
 
 /** Views of a library: the song view, one view per song filter, and integrity audit. */
-type ViewName = 'songs' | 'new-song' | 'integrity' | EntityType
-const VIEW_NAMES: ViewName[] = ['songs', 'new-song', 'composers', 'artists', 'books', 'collections', 'genres', 'keys', 'customgroups', 'years', 'signatures', 'sourcetypes', 'instruments', 'integrity']
+type ViewName = 'songs' | 'new-song' | 'integrity' | 'trash' | EntityType
+const VIEW_NAMES: ViewName[] = ['songs', 'new-song', 'composers', 'artists', 'books', 'collections', 'genres', 'keys', 'customgroups', 'years', 'signatures', 'sourcetypes', 'instruments', 'integrity', 'trash']
 
 interface ImportProgress {
   status: 'running' | 'completed' | 'error'
@@ -382,6 +383,7 @@ async function deleteLibrary() {
           <NcAppNavigationItem :name="t('sheetmusic', 'Source Types')" :active="selectedView === 'sourcetypes'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'sourcetypes' } }" />
           <NcAppNavigationItem :name="t('sheetmusic', 'Instruments')" :active="selectedView === 'instruments'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'instruments' } }" />
           <NcAppNavigationItem :name="t('sheetmusic', 'Integrity Audit')" :active="selectedView === 'integrity'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'integrity' } }" />
+          <NcAppNavigationItem :name="t('sheetmusic', 'Trash')" :active="selectedView === 'trash'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'trash' } }" />
 
         </template>
 
@@ -431,6 +433,7 @@ async function deleteLibrary() {
                      :selectedLibrary="selectedLibrary"
                      :standalone-create="selectedView === 'new-song'" />
           <IntegrityView v-else-if="selectedView === 'integrity'" :selectedLibrary="selectedLibrary" />
+          <TrashView v-else-if="selectedView === 'trash'" :selected-library="selectedLibrary" />
           <EntitiesView v-else
                         :key="selectedView"
                         :selectedLibrary="selectedLibrary"

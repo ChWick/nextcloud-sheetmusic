@@ -19,10 +19,12 @@ import CloseIcon from 'vue-material-design-icons/Close.vue'
 import ContentSaveOutlineIcon from 'vue-material-design-icons/ContentSaveOutline.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
+import History from 'vue-material-design-icons/History.vue'
 import AttachNextcloudFileDialog from './song-editor/AttachNextcloudFileDialog.vue'
 import SongFileSection from './song-editor/SongFileSection.vue'
 import SongMetadataFields from './song-editor/SongMetadataFields.vue'
 import DeleteSongDialog from './DeleteSongDialog.vue'
+import SongHistoryModal from './SongHistoryModal.vue'
 
 const props = withDefaults(
 	defineProps<{
@@ -197,6 +199,11 @@ function getInitialFiles(song: Song | null, pending: SongFile[] = []): SongFile[
 const currentFiles = ref<SongFile[]>(getInitialFiles(props.song))
 const pendingDeleteFiles = ref<SongFile[]>([])
 const pendingDetachFiles = ref<SongFile[]>([])
+const isHistoryOpen = ref(false)
+
+function handleReverted(data: LibraryData) {
+	emit('updated', data)
+}
 
 watch(
 	sourceSong,
@@ -621,6 +628,17 @@ defineExpose({
 						:label="t('sheetmusic', 'Song Title')"
 						required />
 				</div>
+				<NcButton
+					v-if="!isNewSong && song"
+					type="button"
+					variant="tertiary"
+					:title="t('sheetmusic', 'Song history & revisions')"
+					:aria-label="t('sheetmusic', 'Song history & revisions')"
+					@click="isHistoryOpen = true">
+					<template #icon>
+						<History :size="20" />
+					</template>
+				</NcButton>
 			</div>
 
 			<SongMetadataFields
@@ -742,6 +760,14 @@ defineExpose({
 			:library-id="libraryId"
 			:file-count="currentFiles.length"
 			@deleted="handleSongDeleted" />
+
+		<!-- Song History Modal -->
+		<SongHistoryModal
+			v-if="song && isHistoryOpen"
+			v-model:open="isHistoryOpen"
+			:song-id="song.id"
+			:song-title="song.title"
+			@reverted="handleReverted" />
 	</div>
 </template>
 

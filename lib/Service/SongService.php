@@ -8,6 +8,7 @@ use OCA\SheetMusic\Db\InternalEntity;
 use OCA\SheetMusic\Db\InternalEntityMapper;
 use OCA\SheetMusic\Db\InternalSong;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
+use OCA\SheetMusic\Db\InternalSongHistory;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryData;
 use OCA\SheetMusic\Db\LibraryMapper;
@@ -27,6 +28,7 @@ class SongService {
 		private LibraryMapper $libraryMapper,
 		private IRootFolder $rootFolder,
 		private ?LibraryIntegrityService $libraryIntegrityService = null,
+		private ?SongHistoryService $songHistoryService = null,
 	) {
 	}
 
@@ -112,6 +114,8 @@ class SongService {
 
 			$this->libraryMapper->touch($libraryId);
 
+			$this->songHistoryService?->recordSnapshot($createdSong, InternalSongHistory::ACTION_CREATED, $user->getUID());
+
 			$data = $this->internalSongMapper->findLibraryData($libraryId, $user);
 			$data->createdSongId = $songId;
 
@@ -193,6 +197,8 @@ class SongService {
 
 				$this->songFileService->syncSongFileMetadata($user, '', $songId, $libraryId);
 
+				$this->songHistoryService?->recordSnapshot($song, InternalSongHistory::ACTION_UPDATED, $user->getUID());
+
 				return $this->internalSongMapper->findLibraryData($libraryId, $user);
 			}
 
@@ -247,6 +253,7 @@ class SongService {
 				if ($song !== null) {
 					$song->updatedAt = time();
 					$this->internalSongMapper->update($song);
+					$this->songHistoryService?->recordSnapshot($song, InternalSongHistory::ACTION_UPDATED, $user->getUID());
 				}
 				$this->songFileService->syncSongFileMetadata($user, '', $sid, $libraryId);
 			}
@@ -295,6 +302,10 @@ class SongService {
 			}
 			foreach ($songIds as $songId) {
 				$songId = (int)$songId;
+				$song = $this->internalSongMapper->findById($songId);
+				if ($song !== null) {
+					$this->songHistoryService?->recordSnapshot($song, InternalSongHistory::ACTION_DELETED, $user->getUID());
+				}
 				$this->internalSongFileMapper->deleteAllForSong($songId);
 				$this->internalSongMapper->cleanupDeletedSongData($libraryId, $songId);
 				$this->internalSongMapper->delete($songId);

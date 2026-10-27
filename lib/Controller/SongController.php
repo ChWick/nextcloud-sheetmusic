@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OCA\SheetMusic\Controller;
 
+use OCA\SheetMusic\Service\SongHistoryService;
 use OCA\SheetMusic\Service\SongService;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\ApiRoute;
@@ -19,6 +20,7 @@ class SongController extends OCSController {
 		IRequest $request,
 		private SongService $songService,
 		private IUserSession $userSession,
+		private ?SongHistoryService $songHistoryService = null,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -389,6 +391,84 @@ class SongController extends OCSController {
 			return new DataResponse($result);
 		} catch (\Throwable $e) {
 			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'GET', url: '/api/songs/{id}/history')]
+	public function getSongHistory(int $id): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		if ($this->songHistoryService === null) {
+			return new DataResponse([], Http::STATUS_NOT_FOUND);
+		}
+
+		$timeline = $this->songHistoryService->getTimelineForSong($id);
+		return new DataResponse($timeline);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/songs/{id}/revert/{historyId}')]
+	public function revertSongHistory(int $id, int $historyId): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		if ($this->songHistoryService === null) {
+			return new DataResponse([], Http::STATUS_NOT_FOUND);
+		}
+
+		try {
+			$revertedSong = $this->songHistoryService->revertSongToHistory($id, $historyId, $user->getUID());
+			$libraryData = $this->songService->getSongs($user, $revertedSong->libraryId);
+			return new DataResponse($libraryData);
+		} catch (\InvalidArgumentException $e) {
+			return new DataResponse(['error' => $e->getMessage()], Http::STATUS_NOT_FOUND);
+		} catch (\Throwable $e) {
+			return new DataResponse(['error' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'GET', url: '/api/libraries/{libraryId}/deleted-songs')]
+	public function getDeletedSongs(int $libraryId): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		if ($this->songHistoryService === null) {
+			return new DataResponse([], Http::STATUS_NOT_FOUND);
+		}
+
+		$deleted = $this->songHistoryService->getDeletedSongs($libraryId);
+		return new DataResponse($deleted);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/songs/{id}/restore')]
+	public function restoreDeletedSong(int $id): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		if ($this->songHistoryService === null) {
+			return new DataResponse([], Http::STATUS_NOT_FOUND);
+		}
+
+		try {
+			$restoredSong = $this->songHistoryService->restoreDeletedSong($id, $user->getUID());
+			$libraryData = $this->songService->getSongs($user, $restoredSong->libraryId);
+			return new DataResponse($libraryData);
+		} catch (\InvalidArgumentException $e) {
+			return new DataResponse(['error' => $e->getMessage()], Http::STATUS_NOT_FOUND);
+		} catch (\Throwable $e) {
+			return new DataResponse(['error' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
 
