@@ -38,7 +38,12 @@ class LibraryController extends OCSController {
 
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'POST', url: '/api/libraries')]
-	public function addLibrary(string $path, bool $importExistingDb = true, ?string $progressId = null): DataResponse {
+	public function addLibrary(
+		string $path,
+		bool $importExistingDb = true,
+		?string $progressId = null,
+		bool $importPdfMetadata = true,
+	): DataResponse {
 		$user = $this->userSession->getUser();
 		if ($user === null) {
 			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
@@ -46,9 +51,14 @@ class LibraryController extends OCSController {
 
 		$import = (bool)$this->request->getParam('importExistingDb', $this->request->getParam('import_mobilesheets', $importExistingDb));
 		$progId = $this->resolveProgressId($progressId);
+		$importPdfMeta = filter_var(
+			$this->request->getParam('importPdfMetadata', $this->request->getParam('import_pdf_metadata', $importPdfMetadata)),
+			FILTER_VALIDATE_BOOLEAN,
+			FILTER_NULL_ON_FAILURE
+		) ?? true;
 
 		try {
-			$result = $this->libraryService->addLibrary($user->getUID(), $path, $import, $progId);
+			$result = $this->libraryService->addLibrary($user->getUID(), $path, $import, $progId, $importPdfMeta);
 			if ($result === null) {
 				return new DataResponse(['message' => 'Invalid library path'], Http::STATUS_BAD_REQUEST);
 			}

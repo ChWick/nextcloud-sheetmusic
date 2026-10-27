@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace OCA\SheetMusic\Service;
 
 use OCA\SheetMusic\Db\InternalEntity;
+use OCA\SheetMusic\Db\InternalEntityMapper;
 use OCA\SheetMusic\Db\InternalLibrary;
 use OCA\SheetMusic\Db\InternalSong;
 use OCA\SheetMusic\Db\InternalSongFile;
@@ -17,6 +18,7 @@ use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdf;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdfMetadata;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
@@ -40,6 +42,7 @@ class LibraryReconciler {
 		private IRootFolder $rootFolder,
 		private IUserManager $userManager,
 		private LoggerInterface $logger,
+		private ?InternalEntityMapper $entityMapper = null,
 	) {
 	}
 
@@ -48,7 +51,11 @@ class LibraryReconciler {
 	 *
 	 * @return array{indexed: int, pruned: int}
 	 */
-	public function reconcile(InternalLibrary|array|int $library, ?callable $onProgress = null): array {
+	public function reconcile(
+		InternalLibrary|array|int $library,
+		?callable $onProgress = null,
+		bool $importPdfMetadata = false,
+	): array {
 		$lib = $library instanceof InternalLibrary ? $library : $this->libraryMapper->resolveLibrary($library);
 		if ($lib->id === null) {
 			return ['indexed' => 0, 'pruned' => 0];
@@ -97,6 +104,7 @@ class LibraryReconciler {
 		$updatedFactsCount = 0;
 		$totalPhysical = count($physicalFiles);
 		$currentIndex = 0;
+		$entityCache = [];
 
 		// 3. Index unindexed physical files and update changed facts
 		foreach ($physicalFiles as $fileId => $fileNode) {
@@ -112,7 +120,7 @@ class LibraryReconciler {
 				continue;
 			}
 
-			$this->indexFile($lib, $fileNode);
+			$this->indexFile($lib, $fileNode, $importPdfMetadata, $entityCache);
 			$indexedCount++;
 		}
 
@@ -174,9 +182,50 @@ class LibraryReconciler {
 		return false;
 	}
 
-	public function indexFile(InternalLibrary $library, File $fileNode): void {
+	/**
+	 * @param array<string, array<string, int>> $entityCache
+	 */
+	public function indexFile(
+		InternalLibrary $library,
+		File $fileNode,
+		bool $importPdfMetadata = false,
+		array &$entityCache = [],
+	): void {
 		$filename = $fileNode->getName();
 		$title = $this->extractTitleFromFilename($filename);
+		$pdfMetadata = null;
+
+		// Calculate facts
+		$fileSize = $fileNode->getSize();
+		$hash = null;
+		$pageCount = 1;
+		$pageOrder = '1';
+
+		$ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+		if ($ext === 'pdf') {
+			try {
+				$content = $fileNode->getContent();
+				if ($content !== false && $content !== '') {
+					$hash = MobileSheetsPdf::contentHash($content);
+					$pageCount = MobileSheetsPdf::pageCount($content);
+					$pageOrder = $pageCount > 1 ? '1-' . $pageCount : '1';
+
+					if ($importPdfMetadata) {
+						try {
+							$pdfMetadata = MobileSheetsPdfMetadata::prefillFor($content);
+						} catch (\Throwable $e) {
+							$this->logger->info('Could not parse PDF metadata: ' . $filename, ['exception' => $e]);
+						}
+					}
+				}
+			} catch (\Throwable $e) {
+				$this->logger->warning('Failed to compute PDF metadata: ' . $filename, ['exception' => $e]);
+			}
+		}
+
+		if ($pdfMetadata !== null && trim($pdfMetadata['title']) !== '') {
+			$title = trim($pdfMetadata['title']);
+		}
 
 		// Check if song with that title already exists in the library
 		$song = $this->songMapper->findByTitle($library->id, $title);
@@ -190,17 +239,6 @@ class LibraryReconciler {
 				updatedAt: time(),
 			);
 			$song = $this->songMapper->insert($song);
-		}
-
-		// Calculate facts
-		$fileSize = $fileNode->getSize();
-		$hash = null;
-		$pageCount = 1;
-		$pageOrder = '1';
-
-		$ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
-		if ($ext === 'pdf') {
-			[$hash, $pageCount, $pageOrder] = $this->extractPdfFacts($fileNode);
 		}
 
 		$songFile = new InternalSongFile(
@@ -217,6 +255,106 @@ class LibraryReconciler {
 		);
 
 		$this->songFileMapper->insert($songFile);
+
+		if ($importPdfMetadata && $pdfMetadata !== null && $this->entityMapper !== null && $song->id !== null) {
+			$this->assignPdfEntitiesToSong($library->id, $song->id, $pdfMetadata, $entityCache);
+		}
+	}
+
+	/**
+	 * @param array{title: string, composers: list<string>, books: list<string>, collections: list<string>, artists: list<string>} $pdfMetadata
+	 * @param array<string, array<string, int>> $entityCache
+	 */
+	private function assignPdfEntitiesToSong(
+		int $libraryId,
+		int $songId,
+		array $pdfMetadata,
+		array &$entityCache,
+	): void {
+		if ($this->entityMapper === null) {
+			return;
+		}
+
+		$mapping = [
+			'composer' => $pdfMetadata['composers'] ?? [],
+			'collection' => $pdfMetadata['collections'] ?? [],
+			'book' => $pdfMetadata['books'] ?? [],
+			'artist' => $pdfMetadata['artists'] ?? [],
+		];
+
+		foreach ($mapping as $type => $names) {
+			foreach ($names as $name) {
+				$cleanName = trim((string)$name);
+				if ($cleanName === '') {
+					continue;
+				}
+
+				$entityId = $this->resolveOrCreateEntity($libraryId, $type, $cleanName, $entityCache);
+				if ($entityId !== null) {
+					$this->entityMapper->linkSongEntity($songId, $entityId);
+				}
+			}
+		}
+	}
+
+	/**
+	 * Find an existing entity by type and name in the library, or create a new one.
+	 * Caches results in $entityCache to guarantee identical names share the exact same entity ID.
+	 *
+	 * @param array<string, array<string, int>> $entityCache
+	 */
+	public function resolveOrCreateEntity(
+		int $libraryId,
+		string $type,
+		string $name,
+		array &$entityCache = [],
+	): ?int {
+		if ($this->entityMapper === null) {
+			return null;
+		}
+
+		$normType = InternalEntityMapper::normalizeType($type);
+		$lookupKey = mb_strtolower(trim($name), 'UTF-8');
+		if ($lookupKey === '') {
+			return null;
+		}
+
+		if (isset($entityCache[$normType][$lookupKey])) {
+			return $entityCache[$normType][$lookupKey];
+		}
+
+		$existing = $this->entityMapper->findByName($libraryId, $normType, $name);
+		if ($existing !== null && $existing->id !== null) {
+			$entityCache[$normType][$lookupKey] = $existing->id;
+			return $existing->id;
+		}
+
+		// Check if an existing entity in the library matches case-insensitively
+		$allInLib = $this->entityMapper->findAllForLibrary($libraryId, $normType);
+		foreach ($allInLib as $candidate) {
+			if ($candidate->id !== null && mb_strtolower($candidate->name, 'UTF-8') === $lookupKey) {
+				$entityCache[$normType][$lookupKey] = $candidate->id;
+				return $candidate->id;
+			}
+		}
+
+		$newEntity = new InternalEntity(
+			id: null,
+			uuid: InternalEntity::generateUuid(),
+			libraryId: $libraryId,
+			type: $normType,
+			name: $name,
+			createdAt: time(),
+			updatedAt: time(),
+		);
+
+		$created = $this->entityMapper->insert($newEntity);
+		if ($created->id !== null) {
+			$entityCache[$normType][$lookupKey] = $created->id;
+			return $created->id;
+		}
+
+		return null;
 	}
 
 	/**

@@ -126,7 +126,13 @@ class LibraryService {
 		return $this->libraryMapper->findAllForUser($userId);
 	}
 
-	public function addLibrary(string $userId, string $path, bool $importExistingDb = true, ?string $progressId = null): ?array {
+	public function addLibrary(
+		string $userId,
+		string $path,
+		bool $importExistingDb = true,
+		?string $progressId = null,
+		bool $importPdfMetadata = true,
+	): ?array {
 		if (!str_starts_with($path, '/')) {
 			return null;
 		}
@@ -194,7 +200,7 @@ class LibraryService {
 				if ($importExistingDb) {
 					$this->importExistingPhysicalDatabase($libraryId, $libraryPath, $path, $targetDbRel, $userId, $progressCallback);
 				}
-				$this->reconcileNewLibrary($libraryId, $userId, $progressCallback);
+				$this->reconcileNewLibrary($libraryId, $userId, $progressCallback, $importPdfMetadata);
 			}
 
 			if ($progressId !== null && $this->progressService !== null) {
@@ -290,13 +296,18 @@ class LibraryService {
 		}
 	}
 
-	private function reconcileNewLibrary(int $libraryId, string $userId, callable $progressCallback): void {
+	private function reconcileNewLibrary(
+		int $libraryId,
+		string $userId,
+		callable $progressCallback,
+		bool $importPdfMetadata = false,
+	): void {
 		if ($this->reconciler === null) {
 			return;
 		}
 
 		try {
-			$this->reconciler->reconcile($libraryId, $progressCallback);
+			$this->reconciler->reconcile($libraryId, $progressCallback, $importPdfMetadata);
 		} catch (\Throwable $e) {
 			$this->logger->warning('Initial library reconciliation failed', [
 				'exception' => $e,

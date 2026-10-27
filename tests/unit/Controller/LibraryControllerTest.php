@@ -190,4 +190,26 @@ final class LibraryControllerTest extends TestCase {
 		$this->assertFalse($updated->autoPaths);
 		$this->assertTrue($updated->autoPdfMetadata);
 	}
+
+	public function testAddLibraryPassesImportPdfMetadata(): void {
+		$mockService = $this->createMock(LibraryService::class);
+		$mockService->expects($this->once())
+			->method('addLibrary')
+			->with('admin', '/MyFolder', false, null, false)
+			->willReturn(['path' => '/MyFolder']);
+
+		$this->request->setParam('importPdfMetadata', false);
+		$this->request->setParam('importExistingDb', false);
+
+		$controller = new LibraryController(
+			'sheetmusic',
+			$this->request,
+			$mockService,
+			$this->userSession,
+			$this->createLibraryIntegrityService($this->libraryService),
+		);
+
+		$res = $controller->addLibrary('/MyFolder', false, null, false);
+		$this->assertSame(Http::STATUS_CREATED, $res->getStatus());
+	}
 }

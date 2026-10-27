@@ -19,6 +19,7 @@ import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcProgressBar from '@nextcloud/vue/components/NcProgressBar'
+import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import CogIcon from 'vue-material-design-icons/Cog.vue'
 import Plus from 'vue-material-design-icons/Plus.vue'
 import FolderPlusOutline from 'vue-material-design-icons/FolderPlusOutline.vue'
@@ -45,6 +46,7 @@ interface ImportProgress {
 const isAddDialogOpen = ref(false)
 const isImportDialogOpen = ref(false)
 const isSettingsDialogOpen = ref(false)
+const importPdfMetadata = ref(true)
 const selectedFolder = ref<INode>()
 const selectedDbFile = ref<INode>()
 const addError = ref('')
@@ -167,6 +169,7 @@ onMounted(async () => {
 function openAddDialog(event?: Event) {
   event?.preventDefault()
   selectedFolder.value = undefined
+  importPdfMetadata.value = true
   addError.value = ''
   importProgress.value = null
   stopProgressPolling()
@@ -244,6 +247,7 @@ async function addLibrary() {
     await apiPost('/api/libraries' as any, {
       path: addedPath,
       import_mobilesheets: false,
+      importPdfMetadata: importPdfMetadata.value,
       progressId,
     } as any)
     stopProgressPolling()
@@ -445,6 +449,14 @@ async function deleteLibrary() {
       <NcButton variant="primary" :disabled="isAddingLibrary" @click="openFolderPicker">
         {{ selectedFolder?.path ?? t('sheetmusic', 'Choose folder from Nextcloud') }}
       </NcButton>
+      <div :class="$style.dialogOptionRow">
+        <NcCheckboxRadioSwitch
+          v-model="importPdfMetadata"
+          type="switch"
+          :disabled="isAddingLibrary">
+          {{ t('sheetmusic', 'Import metadata from PDF files') }}
+        </NcCheckboxRadioSwitch>
+      </div>
       <div v-if="isAddingLibrary && importProgress" :class="$style.progressContainer">
         <NcProgressBar :value="importProgress.percent"
                        size="medium"
@@ -553,6 +565,11 @@ async function deleteLibrary() {
 .progressContainer {
   margin-top: 16px;
   width: 100%;
+}
+.dialogOptionRow {
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
 }
 .progressMessage {
   margin-top: 8px;

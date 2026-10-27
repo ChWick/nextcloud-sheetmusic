@@ -137,6 +137,7 @@ class MobileSheetsEndToEndSyncHarness {
 			$this->rootFolder,
 			$this->userManager,
 			$this->logger,
+			$this->entityMapper,
 		);
 		$this->libraryService = new LibraryService(
 			$this->libraryMapper,
