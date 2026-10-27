@@ -268,7 +268,7 @@ final class MobileSheetsDatabasePresets {
 		$db->exec("INSERT INTO Files (Id, SongId, Path, PageOrder, FileSize, LastModified, Source, Type, SourceFilePageCount, FileHash) VALUES
 			(1, 1, '/scores/song_a.pdf', '1-2', 100000, 1700000000000, 1, 1, 2, 111),
 			(2, 2, '/scores/song_b.pdf', '1-3', 150000, 1700000000000, 1, 1, 3, 222),
-			(3, 3, '/scores/encore.pdf', '1', 50000, 1700000000000, 1, 1, 1, 333)");
+			(3, 3, '/scores/encore.pdf', '1-1', 50000, 1700000000000, 1, 1, 1, 333)");
 
 		$db->exec("INSERT INTO Setlists (Id, Name, DateCreated, LastModified) VALUES
 			(1, 'Friday Jazz Club', 1000000, 1700000000000),
@@ -339,9 +339,9 @@ final class MobileSheetsDatabasePresets {
 		// Song 1 has 3 files: 1 PDF score (Type 1), 1 Image scan (Type 2), 1 Text file (Type 3)
 		$db->exec("INSERT INTO Files (Id, SongId, Path, PageOrder, FileSize, LastModified, Source, Type, Password, SourceFilePageCount, FileHash, Width, Height) VALUES
 			(1, 1, '/scores/chamber_full_score.pdf', '1,3,5,2-4', 2097152, 1700000000000, 1, 1, 'secret', 5, 111222, 1400, 1980),
-			(2, 1, '/scores/chamber_cover.png', '1', 524288, 1700000000000, 1, 2, '', 1, 333444, 1200, 1600),
-			(3, 1, '/scores/chamber_lyrics.txt', '1', 4096, 1700000000000, 1, 3, '', 1, 555666, -1, -1),
-			(4, 2, '/scores/chords.pro', '1', 2048, 1700000000000, 1, 3, '', 1, 777888, -1, -1)");
+			(2, 1, '/scores/chamber_cover.png', '1-1', 524288, 1700000000000, 1, 2, '', 1, 333444, 1200, 1600),
+			(3, 1, '/scores/chamber_lyrics.txt', '1-1', 4096, 1700000000000, 1, 3, '', 1, 555666, -1, -1),
+			(4, 2, '/scores/chords.pro', '1-1', 2048, 1700000000000, 1, 3, '', 1, 777888, -1, -1)");
 
 		return $path;
 	}
@@ -431,7 +431,7 @@ final class MobileSheetsDatabasePresets {
 		$db->exec("INSERT INTO Songs (Id, Title, SortTitle, Stars, Difficulty, Duration, DateCreated, LastModified) VALUES
 			(1, 'Minimalist Melody', 'Minimalist Melody', 3, 1, 90, 1000000, 1700000000000)");
 		$db->exec("INSERT INTO Files (Id, SongId, Path, PageOrder, FileSize, LastModified, Source, Type) VALUES
-			(1, 1, '/scores/minimal.pdf', '1', 50000, 1700000000000, 1, 1)");
+			(1, 1, '/scores/minimal.pdf', '1-1', 50000, 1700000000000, 1, 1)");
 		$db->exec("INSERT INTO Composer (Id, Name, DateCreated, LastModified) VALUES
 			(10, 'Glass, Philip', 1000000, 1700000000000)");
 		$db->exec('INSERT INTO ComposerSongs (Id, ComposerId, SongId) VALUES (1, 10, 1)');

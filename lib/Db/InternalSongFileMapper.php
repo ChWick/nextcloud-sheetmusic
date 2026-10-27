@@ -108,6 +108,9 @@ class InternalSongFileMapper {
 		if ($file->updatedAt === 0) {
 			$file->updatedAt = $now;
 		}
+		if ($file->pageOrder !== null) {
+			$file->pageOrder = InternalSongFile::normalizePageOrder($file->pageOrder, $file->pageCount);
+		}
 
 		$qb = $this->db->getQueryBuilder();
 		$qb->insert(self::TABLE_NAME)
@@ -139,6 +142,9 @@ class InternalSongFileMapper {
 
 		if ($file->updatedAt === null || $file->updatedAt <= 0) {
 			$file->updatedAt = time();
+		}
+		if ($file->pageOrder !== null) {
+			$file->pageOrder = InternalSongFile::normalizePageOrder($file->pageOrder, $file->pageCount);
 		}
 
 		$qb = $this->db->getQueryBuilder();

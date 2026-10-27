@@ -465,7 +465,7 @@ class MobileSheetsEndToEndSyncHarness {
 			$fileSize = strlen($content);
 			$fileHash = MobileSheetsPdf::contentHash($content);
 			$pageCount = MobileSheetsPdf::pageCount($content);
-			$pageOrder = $pageCount > 1 ? '1-' . $pageCount : '1';
+			$pageOrder = MobileSheetsPdf::pageOrder($pageCount);
 			$webdavPath = MobileSheetsPathResolver::WEBDAV_ROOT
 				. '/' . $this->userId
 				. ($this->libraryFolderName !== '' ? '/' . $this->libraryFolderName : '')
@@ -624,7 +624,7 @@ class MobileSheetsEndToEndSyncHarness {
 		$fileSize = strlen($content);
 		$fileHash = MobileSheetsPdf::contentHash($content);
 		$pageCount = MobileSheetsPdf::pageCount($content);
-		$effectivePageOrder = $pageOrder ?? ($pageCount > 1 ? '1-' . $pageCount : '1');
+		$effectivePageOrder = $pageOrder ?? MobileSheetsPdf::pageOrder($pageCount);
 		$webdavPath = MobileSheetsPathResolver::WEBDAV_ROOT
 			. '/' . $this->userId
 			. ($this->libraryFolderName !== '' ? '/' . $this->libraryFolderName : '')
@@ -1264,7 +1264,7 @@ class MobileSheetsEndToEndSyncHarness {
 		$fileSize = strlen($newPdfContent);
 		$fileHash = MobileSheetsPdf::contentHash($newPdfContent);
 		$pageCount = MobileSheetsPdf::pageCount($newPdfContent);
-		$pageOrder = $newPageOrder ?? ($pageCount > 1 ? '1-' . $pageCount : '1');
+		$pageOrder = $newPageOrder ?? MobileSheetsPdf::pageOrder($pageCount);
 
 		$upd = $pdo->prepare(
 			'UPDATE Files SET FileSize = :size, FileHash = :hash, SourceFilePageCount = :pages, PageOrder = :order, LastModified = :lastMod WHERE Id = :id'

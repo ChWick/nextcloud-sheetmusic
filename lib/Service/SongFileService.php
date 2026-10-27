@@ -525,7 +525,7 @@ class SongFileService {
 		$fileSize = (int)$file->getSize();
 		$fileHash = null;
 		$pageCount = 1;
-		$pageOrder = '1';
+		$pageOrder = MobileSheetsPdf::pageOrder(1);
 		$fileName = $file->getName();
 		$ext = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
 		if ($ext === 'pdf' && $file instanceof File) {
@@ -544,7 +544,7 @@ class SongFileService {
 				$existing->fileSize = $fileSize;
 				$existing->fileHash = $fileHash;
 				$existing->pageCount = $pageCount;
-				if ($existing->pageOrder === '' || $existing->pageOrder === '1') {
+				if ($existing->pageOrder === '' || $existing->pageOrder === '1' || $existing->pageOrder === null) {
 					$existing->pageOrder = $pageOrder;
 				}
 				$existing->updatedAt = time();
@@ -634,7 +634,7 @@ class SongFileService {
 				return [
 					'fileHash' => MobileSheetsPdf::contentHash($content),
 					'pageCount' => $pageCount,
-					'pageOrder' => $pageCount > 1 ? '1-' . $pageCount : '1',
+					'pageOrder' => MobileSheetsPdf::pageOrder($pageCount),
 				];
 			}
 		} catch (\Throwable $e) {
@@ -646,7 +646,7 @@ class SongFileService {
 		return [
 			'fileHash' => null,
 			'pageCount' => 1,
-			'pageOrder' => '1',
+			'pageOrder' => MobileSheetsPdf::pageOrder(1),
 		];
 	}
 }

@@ -9,6 +9,8 @@ declare(strict_types=1);
 
 namespace OCA\SheetMusic\Db;
 
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdf;
+
 class InternalSongFile {
 	public const FILE_TYPE_OTHER = 0;
 	public const FILE_TYPE_PDF = 1;
@@ -45,16 +47,36 @@ class InternalSongFile {
 	}
 
 	/**
+	 * Normalizes a page order string.
+	 * MobileSheets always represents single-page files as '1-1', never '1'.
+	 * An empty or single '1' page order is normalized to '1-N' (or '1-1').
+	 */
+	public static function normalizePageOrder(?string $pageOrder, int $pageCount = 1): ?string {
+		if ($pageOrder === null) {
+			return null;
+		}
+		$trimmed = trim($pageOrder);
+		if ($trimmed === '' || $trimmed === '1') {
+			return MobileSheetsPdf::pageOrder($pageCount);
+		}
+		return $trimmed;
+	}
+
+	/**
 	 * @param array<string, mixed> $row
 	 */
 	public static function fromRow(array $row): self {
+		$pageCount = isset($row['page_count']) ? (int)$row['page_count'] : 0;
+		$rawPageOrder = isset($row['page_order']) && $row['page_order'] !== null ? (string)$row['page_order'] : null;
+		$pageOrder = self::normalizePageOrder($rawPageOrder, $pageCount);
+
 		return new self(
 			id: isset($row['id']) ? (int)$row['id'] : null,
 			uuid: (string)$row['uuid'],
 			songId: (int)$row['song_id'],
 			fileId: (int)$row['file_id'],
-			pageOrder: isset($row['page_order']) && $row['page_order'] !== null ? (string)$row['page_order'] : null,
-			pageCount: isset($row['page_count']) ? (int)$row['page_count'] : 0,
+			pageOrder: $pageOrder,
+			pageCount: $pageCount,
 			fileSize: isset($row['file_size']) ? (int)$row['file_size'] : 0,
 			fileHash: isset($row['file_hash']) && $row['file_hash'] !== null ? (int)$row['file_hash'] : null,
 			type: isset($row['type']) ? (int)$row['type'] : 0,

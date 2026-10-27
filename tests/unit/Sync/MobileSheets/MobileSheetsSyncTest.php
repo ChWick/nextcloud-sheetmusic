@@ -1952,4 +1952,48 @@ final class MobileSheetsSyncTest extends TestCase {
 		self::assertStringNotContainsString('phantom.pdf', $hashcodes);
 		self::assertStringContainsString('Song 1.pdf', $hashcodes);
 	}
+
+	public function testPageOrderSinglePageExportsAsOneDashOneAndSyncsCleanly(): void {
+		$lib = $this->createTestLibrary();
+		$adminUser = $this->userManager->get('admin');
+
+		$song = new InternalSong(
+			uuid: 'page-order-song',
+			libraryId: $lib->id,
+			title: 'Single Page Song',
+			sortTitle: 'Single Page Song',
+			clientId: 1,
+			createdAt: 1000,
+			updatedAt: 1000,
+		);
+		$this->songMapper->insert($song);
+
+		$songFile = $this->attachTestFileToSong($song, 'SinglePageSong.pdf', 1);
+		// Simulate legacy database state where page_order was stored as '1'
+		$this->dbConn->executeStatement(
+			'UPDATE `*PREFIX*sheetmusic_song_files` SET `page_order` = \'1\' WHERE `id` = ?',
+			[$songFile->id]
+		);
+
+		// 1. Export database: verify Files table has PageOrder = '1-1' (never '1')
+		$exportPath = $this->tempDbPath();
+		$this->exporter->exportToFile($lib, $exportPath);
+
+		$msDb = new PDO('sqlite:' . $exportPath, options: [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
+		$files = $msDb->query('SELECT Id, PageOrder FROM Files WHERE Id = 1')->fetchAll();
+		self::assertCount(1, $files);
+		self::assertSame('1-1', $files[0]['PageOrder']);
+
+		// 2. MobileSheets updates PageOrder to custom order (e.g. '1-1,1-1' for repeat)
+		$msDb->exec("UPDATE Files SET PageOrder = '1-1,1-1', LastModified = 2000000 WHERE Id = 1");
+
+		// 3. MobileSheets syncs back
+		$stats = $this->importer->importFromFile($lib, $exportPath, $adminUser);
+		self::assertSame(1, $stats['filesUpdated']);
+
+		// 4. Verify Nextcloud has the updated PageOrder
+		$reloaded = $this->songFileMapper->findById($songFile->id);
+		self::assertNotNull($reloaded);
+		self::assertSame('1-1,1-1', $reloaded->pageOrder);
+	}
 }

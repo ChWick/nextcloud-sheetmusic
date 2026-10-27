@@ -159,7 +159,7 @@ class LibraryReconciler {
 				if ($newHash !== null && ($hash !== $newHash || $pageCount !== $newPageCount)) {
 					$hash = $newHash;
 					$pageCount = $newPageCount;
-					if (empty($pageOrder)) {
+					if (empty($pageOrder) || $pageOrder === '1') {
 						$pageOrder = $newPageOrder;
 					}
 					$needsUpdate = true;
@@ -199,7 +199,7 @@ class LibraryReconciler {
 		$fileSize = $fileNode->getSize();
 		$hash = null;
 		$pageCount = 1;
-		$pageOrder = '1';
+		$pageOrder = MobileSheetsPdf::pageOrder(1);
 
 		$ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
 		if ($ext === 'pdf') {
@@ -208,7 +208,7 @@ class LibraryReconciler {
 				if ($content !== false && $content !== '') {
 					$hash = MobileSheetsPdf::contentHash($content);
 					$pageCount = MobileSheetsPdf::pageCount($content);
-					$pageOrder = $pageCount > 1 ? '1-' . $pageCount : '1';
+					$pageOrder = MobileSheetsPdf::pageOrder($pageCount);
 
 					if ($importPdfMetadata) {
 						try {
@@ -366,14 +366,14 @@ class LibraryReconciler {
 			if ($content !== false && $content !== '') {
 				$hash = MobileSheetsPdf::contentHash($content);
 				$pageCount = MobileSheetsPdf::pageCount($content);
-				$pageOrder = $pageCount > 1 ? '1-' . $pageCount : '1';
+				$pageOrder = MobileSheetsPdf::pageOrder($pageCount);
 				return [$hash, $pageCount, $pageOrder];
 			}
 		} catch (\Throwable $e) {
 			$this->logger->warning('Failed to compute PDF metadata: ' . $fileNode->getName(), ['exception' => $e]);
 		}
 
-		return [null, 1, '1'];
+		return [null, 1, MobileSheetsPdf::pageOrder(1)];
 	}
 
 	public function extractTitleFromFilename(string $filename): string {

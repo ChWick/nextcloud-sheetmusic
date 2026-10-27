@@ -359,10 +359,10 @@ class MobileSheetsSqliteImporter {
 			if ($onProgress !== null) {
 				$onProgress('files', $fileIndex, $totalFiles, basename($filePath));
 			}
-			$pageOrder = (string)($row['PageOrder'] ?? '');
+			$pageCount = (int)($row['SourceFilePageCount'] ?? 1);
+			$pageOrder = InternalSongFile::normalizePageOrder((string)($row['PageOrder'] ?? ''), $pageCount) ?? MobileSheetsPdf::pageOrder($pageCount);
 			$fileSize = (int)($row['FileSize'] ?? 0);
 			$fileHash = isset($row['FileHash']) ? (int)$row['FileHash'] : null;
-			$pageCount = (int)($row['SourceFilePageCount'] ?? 1);
 			$type = (int)($row['Type'] ?? 0);
 			$lastModifiedSec = MobileSheetsTimestampUtil::extractLastModifiedSec($row);
 
@@ -429,8 +429,18 @@ class MobileSheetsSqliteImporter {
 					$existing->updatedAt = $lastModifiedSec ?: $existing->updatedAt;
 					$this->songFileMapper->update($existing);
 					$stats['filesUpdated']++;
-				} elseif (MobileSheetsTableHelper::ensureClientId($existing, $fileClientId)) {
-					$this->songFileMapper->update($existing);
+				} else {
+					$changed = false;
+					if ($existing->pageOrder === '1' || $existing->pageOrder === '' || $existing->pageOrder === null) {
+						$existing->pageOrder = $pageOrder;
+						$changed = true;
+					}
+					if (MobileSheetsTableHelper::ensureClientId($existing, $fileClientId)) {
+						$changed = true;
+					}
+					if ($changed) {
+						$this->songFileMapper->update($existing);
+					}
 				}
 			} else {
 				$newFile = new InternalSongFile(

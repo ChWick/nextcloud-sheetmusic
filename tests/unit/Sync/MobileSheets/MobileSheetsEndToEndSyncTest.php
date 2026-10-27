@@ -821,7 +821,7 @@ class MobileSheetsEndToEndSyncTest extends TestCase {
 		$origHash = (int)$clientFiles[0]['FileHash'];
 		$origSize = (int)$clientFiles[0]['FileSize'];
 		self::assertSame(1, (int)$clientFiles[0]['SourceFilePageCount']);
-		self::assertSame('1', $clientFiles[0]['PageOrder']);
+		self::assertSame('1-1', $clientFiles[0]['PageOrder']);
 
 		// 2. Replace PDF content in Nextcloud with a 4-page PDF via SongFileService::updateSongFile
 		$ncFileId = $this->harness->getNextcloudLibraryData()->songs[0]->files[0]->id;

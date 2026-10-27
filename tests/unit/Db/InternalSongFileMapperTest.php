@@ -269,4 +269,45 @@ final class InternalSongFileMapperTest extends TestCase {
 		self::assertNotNull($deletedFile);
 		self::assertNotNull($deletedFile->deletedAt);
 	}
+
+	public function testInsertAndFromRowNormalizePageOrder(): void {
+		$file = $this->songFileMapper->insert(new InternalSongFile(
+			id: null,
+			uuid: 'file-single-page',
+			songId: (int)$this->song->id,
+			fileId: 1234,
+			pageOrder: '1',
+			pageCount: 1,
+		));
+
+		self::assertSame('1-1', $file->pageOrder);
+
+		$loaded = $this->songFileMapper->findById((int)$file->id);
+		self::assertNotNull($loaded);
+		self::assertSame('1-1', $loaded->pageOrder);
+
+		// Multi-page with empty pageOrder
+		$file2 = $this->songFileMapper->insert(new InternalSongFile(
+			id: null,
+			uuid: 'file-multi-page',
+			songId: (int)$this->song->id,
+			fileId: 1235,
+			pageOrder: '',
+			pageCount: 4,
+		));
+
+		self::assertSame('1-4', $file2->pageOrder);
+
+		// Custom pageOrder should remain unchanged
+		$file3 = $this->songFileMapper->insert(new InternalSongFile(
+			id: null,
+			uuid: 'file-custom-order',
+			songId: (int)$this->song->id,
+			fileId: 1236,
+			pageOrder: '1-2,4',
+			pageCount: 4,
+		));
+
+		self::assertSame('1-2,4', $file3->pageOrder);
+	}
 }

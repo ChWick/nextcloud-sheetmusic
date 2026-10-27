@@ -167,7 +167,7 @@ trait RealMobileSheetsTestTrait {
 			uuid: 'sf_' . bin2hex(random_bytes(4)),
 			songId: $song->id,
 			fileId: (int)$fileNode->getId(),
-			pageOrder: '1',
+			pageOrder: '1-1',
 			pageCount: 1,
 			fileSize: 1024,
 			fileHash: 123456,

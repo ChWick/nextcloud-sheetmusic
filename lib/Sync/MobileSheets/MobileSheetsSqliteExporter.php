@@ -433,12 +433,17 @@ class MobileSheetsSqliteExporter {
 			$hash = $file->fileHash ?? 0;
 			$size = $file->fileSize ?? 0;
 			$pageCount = $file->pageCount ?? 1;
+			$pageOrder = InternalSongFile::normalizePageOrder($file->pageOrder, $pageCount) ?? MobileSheetsPdf::pageOrder($pageCount);
+			if ($file->pageOrder !== $pageOrder) {
+				$file->pageOrder = $pageOrder;
+				$this->songFileMapper->update($file);
+			}
 
 			$candidateValues = [
 				'id' => $clientId,
 				'songid' => $songClientId,
 				'path' => $webdavPath,
-				'pageorder' => $file->pageOrder,
+				'pageorder' => $pageOrder,
 				'filesize' => $size,
 				'lastmodified' => MobileSheetsTimestampUtil::secondsToMs($file->updatedAt),
 				'source' => 1,
@@ -648,8 +653,8 @@ class MobileSheetsSqliteExporter {
 					$file->fileHash = MobileSheetsPdf::contentHash($content);
 					$pageCount = MobileSheetsPdf::pageCount($content);
 					$file->pageCount = $pageCount;
-					if (empty($file->pageOrder)) {
-						$file->pageOrder = $pageCount > 1 ? '1-' . $pageCount : '1';
+					if (empty($file->pageOrder) || $file->pageOrder === '1') {
+						$file->pageOrder = MobileSheetsPdf::pageOrder($pageCount);
 					}
 				}
 			}
