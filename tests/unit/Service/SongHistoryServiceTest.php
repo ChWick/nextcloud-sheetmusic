@@ -228,4 +228,10 @@ final class SongHistoryServiceTest extends TestCase {
 
 		self::assertTrue($this->historyService->hasHistory((int)$song->id));
 	}
+
+	public function testRestorePhysicalFileFromTrashHandlesMissingGracefully(): void {
+		// When ocFileId is <= 0 or user is null, it should return false cleanly without errors
+		self::assertFalse($this->historyService->restorePhysicalFileFromTrashIfNeeded(0, 'admin'));
+		self::assertFalse($this->historyService->restorePhysicalFileFromTrashIfNeeded(1234, null));
+	}
 }

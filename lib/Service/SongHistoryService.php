@@ -17,6 +17,7 @@ use OCA\SheetMusic\Db\InternalSongHistoryMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
 use OCP\DB\QueryBuilder\IQueryBuilder;
+use OCP\Files\IRootFolder;
 use OCP\IDBConnection;
 use Psr\Log\LoggerInterface;
 
@@ -29,6 +30,7 @@ class SongHistoryService {
 		private LibraryMapper $libraryMapper,
 		private IDBConnection $db,
 		private LoggerInterface $logger,
+		private ?IRootFolder $rootFolder = null,
 	) {
 	}
 
@@ -240,6 +242,9 @@ class SongHistoryService {
 					$fileRecord->deletedAt = null;
 					$fileRecord->updatedAt = time();
 					$this->songFileMapper->update($fileRecord);
+
+					// Restore physical file from Nextcloud trashbin if it was moved to trash
+					$this->restorePhysicalFileFromTrashIfNeeded($fileRecord->fileId, $userId);
 				}
 			}
 		}
@@ -327,6 +332,12 @@ class SongHistoryService {
 			->where($qbFiles->expr()->eq('song_id', $qbFiles->createNamedParameter($songId, IQueryBuilder::PARAM_INT)))
 			->executeStatement();
 
+		// Restore physical files from Nextcloud trashbin if they were deleted to trash
+		$songFiles = $this->songFileMapper->findAllForSong($songId, includeDeleted: true);
+		foreach ($songFiles as $fileRecord) {
+			$this->restorePhysicalFileFromTrashIfNeeded($fileRecord->fileId, $userId);
+		}
+
 		// 3. Un-delete misc data
 		$this->undeleteSongMiscData($song->uuid);
 
@@ -336,6 +347,51 @@ class SongHistoryService {
 		$this->recordSnapshot($song, InternalSongHistory::ACTION_RESTORED, $userId, 'Restored deleted song');
 
 		return $song;
+	}
+
+	public function restorePhysicalFileFromTrashIfNeeded(int $ocFileId, ?string $userId): bool {
+		if ($ocFileId <= 0 || $userId === null || $this->rootFolder === null) {
+			return false;
+		}
+
+		try {
+			$userFolder = $this->rootFolder->getUserFolder($userId);
+			$nodes = $userFolder->getById($ocFileId);
+			if (!empty($nodes)) {
+				return true;
+			}
+
+			if ((interface_exists(\OCA\Files_Trashbin\Trash\ITrashManager::class) || class_exists(\OCA\Files_Trashbin\Trash\ITrashManager::class))
+				&& \OC::$server->has(\OCA\Files_Trashbin\Trash\ITrashManager::class)
+				&& \OC::$server->has(\OCP\IUserManager::class)) {
+				/** @var \OCA\Files_Trashbin\Trash\ITrashManager $trashManager */
+				$trashManager = \OC::$server->get(\OCA\Files_Trashbin\Trash\ITrashManager::class);
+				/** @var \OCP\IUserManager $userManager */
+				$userManager = \OC::$server->get(\OCP\IUserManager::class);
+				$user = $userManager->get($userId);
+				if ($user !== null) {
+					$items = $trashManager->listTrashRoot($user);
+					foreach ($items as $item) {
+						if ((int)$item->getId() === $ocFileId) {
+							$trashManager->restoreItem($item);
+							$this->logger->info('Restored physical file from trash for song', [
+								'fileId' => $ocFileId,
+								'userId' => $userId,
+							]);
+							return true;
+						}
+					}
+				}
+			}
+		} catch (\Throwable $e) {
+			$this->logger->warning('Could not restore physical file from trash: ' . $e->getMessage(), [
+				'exception' => $e,
+				'fileId' => $ocFileId,
+				'userId' => $userId,
+			]);
+		}
+
+		return false;
 	}
 
 	private function undeleteSongMiscData(string $songUuid): void {

@@ -6,10 +6,12 @@ namespace Service;
 
 use OCA\SheetMusic\Db\InternalSong;
 use OCA\SheetMusic\Db\InternalSongFile;
+use OCA\SheetMusic\Db\InternalSongHistoryMapper;
 use OCA\SheetMusic\Service\FileAlreadyExistsException;
 use OCA\SheetMusic\Service\FileManager;
 use OCA\SheetMusic\Service\LibraryService;
 use OCA\SheetMusic\Service\SongFileService;
+use OCA\SheetMusic\Service\SongHistoryService;
 use OCP\Files\Folder;
 use OCP\Files\IUserFolder;
 use OCP\IUser;
@@ -25,6 +27,7 @@ final class SongFileServiceTest extends TestCase {
 	private Folder $libraryFolder;
 	private int $libraryId;
 	private SongFileService $service;
+	private SongHistoryService $historyService;
 	private LibraryService $libraryService;
 	private FileManager $fileManager;
 
@@ -54,6 +57,17 @@ final class SongFileServiceTest extends TestCase {
 			$this->songFileMapper,
 			$this->songMapper,
 		);
+		$historyMapper = new InternalSongHistoryMapper($this->dbConn);
+		$this->historyService = new SongHistoryService(
+			$historyMapper,
+			$this->songMapper,
+			$this->entityMapper,
+			$this->songFileMapper,
+			$this->libraryMapper,
+			$this->dbConn,
+			$logger,
+			$this->rootFolder,
+		);
 		$this->service = new SongFileService(
 			$this->libraryService,
 			$this->fileManager,
@@ -62,6 +76,7 @@ final class SongFileServiceTest extends TestCase {
 			$this->songFileMapper,
 			$this->songMapper,
 			$this->libraryMapper,
+			$this->historyService,
 		);
 	}
 
@@ -427,5 +442,11 @@ final class SongFileServiceTest extends TestCase {
 
 		$restoredFile = $this->libraryFolder->get('score_versioned.pdf');
 		self::assertSame($initialContent, $restoredFile->getContent(), 'File content should be restored to initial version');
+
+		// Verify timeline captured update and revert
+		$timeline = $this->historyService->getTimelineForSong((int)$song->id);
+		self::assertGreaterThanOrEqual(2, count($timeline));
+		self::assertSame('reverted', $timeline[0]['action']);
+		self::assertStringContainsString('Reverted file', $timeline[0]['summary']);
 	}
 }

@@ -7,6 +7,7 @@ namespace OCA\SheetMusic\Service;
 use OCA\SheetMusic\Db\InternalEntity;
 use OCA\SheetMusic\Db\InternalSongFile;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
+use OCA\SheetMusic\Db\InternalSongHistory;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryData;
 use OCA\SheetMusic\Db\LibraryMapper;
@@ -29,11 +30,30 @@ class SongFileService {
 		private InternalSongFileMapper $internalSongFileMapper,
 		private InternalSongMapper $internalSongMapper,
 		private LibraryMapper $libraryMapper,
+		private ?SongHistoryService $songHistoryService = null,
 	) {
 	}
 
 	public function getLogger(): LoggerInterface {
 		return $this->logger;
+	}
+
+	private function resolveSongFileRecord(int $fileId, int $songId = 0): ?InternalSongFile {
+		$fileRecord = $this->internalSongFileMapper->findById($fileId);
+		if ($fileRecord !== null) {
+			if ($songId <= 0 || $fileRecord->songId === $songId) {
+				return $fileRecord;
+			}
+		}
+
+		$byFileId = $this->internalSongFileMapper->findByFileId($fileId);
+		foreach ($byFileId as $rec) {
+			if ($songId <= 0 || $rec->songId === $songId) {
+				return $rec;
+			}
+		}
+
+		return null;
 	}
 
 	public function importSongMetadata(?array $fileInfo, ?string $path, IUser $user): array {
@@ -101,8 +121,8 @@ class SongFileService {
 	public function updateSongFile(IUser $user, int $libraryId, int $songId, int $fileId, ?array $fileInfo): ?LibraryData {
 		$content = $this->readUploadedFileContent($fileInfo);
 
-		$fileRecord = $this->internalSongFileMapper->findById($fileId);
-		if ($fileRecord === null || ($songId > 0 && $fileRecord->songId !== $songId)) {
+		$fileRecord = $this->resolveSongFileRecord($fileId, $songId);
+		if ($fileRecord === null) {
 			throw new \InvalidArgumentException('Song file record not found');
 		}
 
@@ -137,6 +157,18 @@ class SongFileService {
 		$this->libraryMapper->touch($libraryId);
 		$this->syncSongFileMetadata($user, '', $songId, $libraryId);
 
+		if ($songId > 0 && $this->songHistoryService !== null) {
+			$song = $this->internalSongMapper->findById($songId);
+			if ($song !== null) {
+				$this->songHistoryService->recordSnapshot(
+					$song,
+					InternalSongHistory::ACTION_UPDATED,
+					$user->getUID(),
+					'Modified attached PDF: ' . $targetNode->getName()
+				);
+			}
+		}
+
 		return $this->internalSongMapper->findLibraryData($libraryId, $user);
 	}
 
@@ -144,7 +176,7 @@ class SongFileService {
 	 * @return list<array{version: string, revision: int, timestamp: int, humanReadableTimestamp: string, size: int, name: string}>
 	 */
 	public function getSongFileVersions(IUser $user, int $fileId): array {
-		$fileRecord = $this->internalSongFileMapper->findById($fileId);
+		$fileRecord = $this->resolveSongFileRecord($fileId);
 		if ($fileRecord === null) {
 			return [];
 		}
@@ -227,8 +259,8 @@ class SongFileService {
 	}
 
 	public function revertSongFileVersion(IUser $user, int $libraryId, int $songId, int $fileId, string|int $revision): ?LibraryData {
-		$fileRecord = $this->internalSongFileMapper->findById($fileId);
-		if ($fileRecord === null || ($songId > 0 && $fileRecord->songId !== $songId)) {
+		$fileRecord = $this->resolveSongFileRecord($fileId, $songId);
+		if ($fileRecord === null) {
 			throw new \InvalidArgumentException('Song file record not found');
 		}
 
@@ -281,8 +313,38 @@ class SongFileService {
 			throw new \RuntimeException('Failed to rollback file revision');
 		}
 
+		// Re-extract PDF facts to synchronize sheetmusic_song_files with reverted file content
+		if ($targetNode instanceof \OCP\Files\File) {
+			$revertedContent = $targetNode->getContent();
+			if (is_string($revertedContent)) {
+				$fileRecord->fileSize = strlen($revertedContent);
+				$ext = strtolower(pathinfo($targetNode->getName(), PATHINFO_EXTENSION));
+				if ($ext === 'pdf') {
+					$facts = $this->extractPdfFacts($revertedContent, $targetNode->getName());
+					$fileRecord->fileHash = $facts['fileHash'];
+					$fileRecord->pageCount = $facts['pageCount'];
+					$fileRecord->pageOrder = $facts['pageOrder'];
+				}
+				$fileRecord->updatedAt = time();
+				$this->internalSongFileMapper->update($fileRecord);
+			}
+		}
+
 		$this->libraryMapper->touch($libraryId);
 		$this->syncSongFileMetadata($user, '', $songId, $libraryId);
+
+		$targetSongId = $fileRecord->songId;
+		if ($targetSongId > 0 && $this->songHistoryService !== null) {
+			$song = $this->internalSongMapper->findById($targetSongId);
+			if ($song !== null) {
+				$this->songHistoryService->recordSnapshot(
+					$song,
+					InternalSongHistory::ACTION_REVERTED,
+					$user->getUID(),
+					'Reverted file to revision ' . $revision . ': ' . $targetNode->getName()
+				);
+			}
+		}
 
 		return $this->internalSongMapper->findLibraryData($libraryId, $user);
 	}
@@ -330,24 +392,39 @@ class SongFileService {
 		$attachedFile = $targetFolder->get($targetName);
 		$this->recordSongFile($songId, $user, $attachedFile, $libraryId);
 
+		if ($songId > 0 && $this->songHistoryService !== null) {
+			$song = $this->internalSongMapper->findById($songId);
+			if ($song !== null) {
+				$this->songHistoryService->recordSnapshot(
+					$song,
+					InternalSongHistory::ACTION_UPDATED,
+					$user->getUID(),
+					'Attached file: ' . $targetName
+				);
+			}
+		}
+
 		return $this->internalSongMapper->findLibraryData($libraryId, $user);
 	}
 
 	public function deleteSongFile(IUser $user, int $libraryId, int $songId, int $fileId): ?LibraryData {
-		$fileRecord = $this->internalSongFileMapper->findById($fileId);
-		if ($fileRecord !== null && ($songId <= 0 || $fileRecord->songId === $songId)) {
+		$fileRecord = $this->resolveSongFileRecord($fileId, $songId);
+		if ($fileRecord !== null) {
 			$targetFileId = $fileRecord->fileId;
-			$this->internalSongFileMapper->delete($fileId);
+			$targetSongId = $fileRecord->songId;
+			$this->internalSongFileMapper->delete($fileRecord->id);
 			$this->libraryMapper->touch($libraryId);
 
 			$others = $this->internalSongFileMapper->findByFileId($targetFileId);
-			$activeOthers = array_filter($others, fn (InternalSongFile $f) => $f->id !== $fileId && $f->deletedAt === null);
+			$activeOthers = array_filter($others, fn (InternalSongFile $f) => $f->id !== $fileRecord->id && $f->deletedAt === null);
 
+			$fileName = '';
 			if (empty($activeOthers)) {
 				try {
 					$userFolder = $this->rootFolder->getUserFolder($user->getUID());
 					$node = $userFolder->getById($targetFileId);
 					if (!empty($node) && $node[0] instanceof Node) {
+						$fileName = $node[0]->getName();
 						$node[0]->delete();
 					}
 				} catch (\Throwable $e) {
@@ -355,6 +432,18 @@ class SongFileService {
 						'fileId' => $targetFileId,
 						'exception' => $e,
 					]);
+				}
+			}
+
+			if ($targetSongId > 0 && $this->songHistoryService !== null) {
+				$song = $this->internalSongMapper->findById($targetSongId);
+				if ($song !== null) {
+					$this->songHistoryService->recordSnapshot(
+						$song,
+						InternalSongHistory::ACTION_UPDATED,
+						$user->getUID(),
+						'Deleted attached file' . ($fileName !== '' ? ': ' . $fileName : '')
+					);
 				}
 			}
 
@@ -366,8 +455,26 @@ class SongFileService {
 
 	public function detachSongFile(IUser $user, int $libraryId, int $songId, int $fileId): ?LibraryData {
 		try {
-			$this->internalSongFileMapper->delete($fileId);
+			$fileRecord = $this->resolveSongFileRecord($fileId, $songId);
+			if ($fileRecord === null) {
+				return null;
+			}
+
+			$targetSongId = $fileRecord->songId;
+			$this->internalSongFileMapper->delete($fileRecord->id);
 			$this->libraryMapper->touch($libraryId);
+
+			if ($targetSongId > 0 && $this->songHistoryService !== null) {
+				$song = $this->internalSongMapper->findById($targetSongId);
+				if ($song !== null) {
+					$this->songHistoryService->recordSnapshot(
+						$song,
+						InternalSongHistory::ACTION_UPDATED,
+						$user->getUID(),
+						'Detached attached file'
+					);
+				}
+			}
 
 			return $this->internalSongMapper->findLibraryData($libraryId, $user);
 		} catch (\Throwable $exception) {

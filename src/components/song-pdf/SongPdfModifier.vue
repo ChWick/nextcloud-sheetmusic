@@ -434,7 +434,10 @@ const {
 	libraryId: () => props.libraryId,
 	songId: () => props.song.id,
 	fileId: () => targetFile.value?.id,
-	onReverted: (data) => emit('saved', data, props.song.id),
+	onReverted: async (data) => {
+		emit('saved', data, props.song.id)
+		await loadPdf()
+	},
 })
 
 function handleHeaderSave() {
