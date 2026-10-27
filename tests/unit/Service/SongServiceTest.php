@@ -7,10 +7,13 @@ namespace Service;
 use OCA\SheetMusic\Db\InternalEntity;
 use OCA\SheetMusic\Db\InternalSong;
 use OCA\SheetMusic\Db\InternalSongFile;
+use OCA\SheetMusic\Db\InternalSongHistory;
+use OCA\SheetMusic\Db\InternalSongHistoryMapper;
 use OCA\SheetMusic\Db\LibraryData;
 use OCA\SheetMusic\Service\FileManager;
 use OCA\SheetMusic\Service\LibraryService;
 use OCA\SheetMusic\Service\SongFileService;
+use OCA\SheetMusic\Service\SongHistoryService;
 use OCA\SheetMusic\Service\SongService;
 use OCP\IUser;
 use PHPUnit\Framework\TestCase;
@@ -23,6 +26,7 @@ final class SongServiceTest extends TestCase {
 	private int $libraryId;
 	private IUser $user;
 	private SongService $service;
+	private SongHistoryService $historyService;
 
 	protected function setUp(): void {
 		parent::setUp();
@@ -60,6 +64,17 @@ final class SongServiceTest extends TestCase {
 		);
 		$integrityService = $this->createLibraryIntegrityService($libraryService);
 
+		$historyMapper = new InternalSongHistoryMapper($this->dbConn);
+		$this->historyService = new SongHistoryService(
+			$historyMapper,
+			$this->songMapper,
+			$this->entityMapper,
+			$this->songFileMapper,
+			$this->libraryMapper,
+			$this->dbConn,
+			$logger,
+		);
+
 		$this->service = new SongService(
 			$libraryService,
 			$songFileService,
@@ -71,6 +86,7 @@ final class SongServiceTest extends TestCase {
 			$this->libraryMapper,
 			$this->rootFolder,
 			$integrityService,
+			$this->historyService,
 		);
 	}
 
@@ -140,6 +156,15 @@ final class SongServiceTest extends TestCase {
 		self::assertSame('Updated Title', $reloaded->title);
 		self::assertSame(4, $reloaded->rating);
 		self::assertSame(2, $reloaded->difficulty);
+
+		// Verify history snapshots: should contain 2 entries (initial baseline + updated)
+		$timeline = $this->historyService->getTimelineForSong((int)$song->id);
+		self::assertCount(2, $timeline);
+		// Timeline is in descending order: index 0 is updated, index 1 is initial
+		self::assertSame(InternalSongHistory::ACTION_UPDATED, $timeline[0]['action']);
+		self::assertSame('Updated Title', $timeline[0]['snapshot']['title']);
+		self::assertSame(InternalSongHistory::ACTION_CREATED, $timeline[1]['action']);
+		self::assertSame('Original Title', $timeline[1]['snapshot']['title']);
 	}
 
 	public function testBatchUpdateSongsCallsBatchUpdateAndSyncsFiles(): void {

@@ -89,6 +89,13 @@ class SongHistoryService {
 	}
 
 	/**
+	 * Check whether a song already has at least one history entry.
+	 */
+	public function hasHistory(int $songId): bool {
+		return $this->historyMapper->findLatestForSong($songId) !== null;
+	}
+
+	/**
 	 * Record a snapshot of a song in the timeline.
 	 */
 	public function recordSnapshot(

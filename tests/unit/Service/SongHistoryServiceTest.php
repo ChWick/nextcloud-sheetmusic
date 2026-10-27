@@ -214,4 +214,18 @@ final class SongHistoryServiceTest extends TestCase {
 		self::assertNotNull($active);
 		self::assertNull($active->deletedAt);
 	}
+
+	public function testHasHistory(): void {
+		$song = $this->songMapper->insert(new InternalSong(
+			uuid: 'hist-song-check',
+			libraryId: $this->libraryId,
+			title: 'History Check',
+		));
+
+		self::assertFalse($this->historyService->hasHistory((int)$song->id));
+
+		$this->historyService->recordSnapshot($song, InternalSongHistory::ACTION_CREATED, 'admin');
+
+		self::assertTrue($this->historyService->hasHistory((int)$song->id));
+	}
 }

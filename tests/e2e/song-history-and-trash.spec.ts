@@ -27,7 +27,7 @@ test.describe('Song History Timeline & Trash Restoration', () => {
 		await expect(page.getByText('Song History & Revisions: Symphony No. 5')).toBeVisible()
 
 		// Verify timeline items are present
-		await expect(page.getByText('Current')).toBeVisible()
+		await expect(page.getByText('Current', { exact: true })).toBeVisible()
 		await expect(page.getByText(/Title: "Symphony No. 5 in C Minor"/i)).toBeVisible()
 		await expect(page.getByText('Song created')).toBeVisible()
 

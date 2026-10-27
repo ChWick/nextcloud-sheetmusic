@@ -153,4 +153,43 @@ describe('SongHistoryModal.vue', () => {
 		expect(wrapper.emitted('reverted')).toBeTruthy()
 		expect(wrapper.emitted('update:open')?.[0]).toEqual([false])
 	})
+
+	it('truncates long song title in header and shows single revision notice', async () => {
+		const longTitle = 'Ludwig van Beethoven - Symphony No. 5 in C minor, Op. 67 (Full Orchestral Score with Annotations)'
+		const mockEntries = [
+			{
+				id: 1,
+				libraryId: 1,
+				songId: 10,
+				songUuid: 'uuid-10',
+				userId: 'alice',
+				action: 'updated',
+				summary: 'Title updated',
+				snapshot: { title: longTitle },
+				createdAt: 1700010000,
+			},
+		]
+
+		vi.mocked(axios.get).mockResolvedValueOnce({
+			data: { ocs: { data: mockEntries } },
+		} as any)
+
+		mount(SongHistoryModal, {
+			props: {
+				open: true,
+				songId: 10,
+				songTitle: longTitle,
+			},
+			attachTo: document.body,
+		})
+
+		await flushPromises()
+
+		// Title should be truncated in dialog name
+		expect(document.body.textContent).toContain('…')
+		// Single revision notice should be present
+		expect(document.body.textContent).toContain('This is the only revision recorded for this song')
+		// Full song title should be visible in the song title header block
+		expect(document.body.textContent).toContain(longTitle)
+	})
 })

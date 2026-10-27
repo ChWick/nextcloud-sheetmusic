@@ -45,6 +45,14 @@ const historyList = ref<HistoryEntry[]>([])
 const expandedId = ref<number | null>(null)
 const error = ref('')
 
+const dialogTitle = computed(() => {
+	if (!props.songTitle) {
+		return t('sheetmusic', 'Song History & Revisions')
+	}
+	const title = props.songTitle.length > 40 ? props.songTitle.slice(0, 37) + '…' : props.songTitle
+	return t('sheetmusic', 'Song History & Revisions: {title}', { title })
+})
+
 async function fetchHistory() {
 	if (!props.songId) return
 	isLoading.value = true
@@ -123,10 +131,15 @@ async function revertTo(entry: HistoryEntry) {
 <template>
 	<NcDialog
 		v-if="open"
-		:name="t('sheetmusic', 'Song History & Revisions: {title}', { title: songTitle || t('sheetmusic', 'Song') })"
+		:name="dialogTitle"
 		size="large"
 		@close="emit('update:open', false)">
 		<div :class="$style.container">
+			<div v-if="songTitle" :class="$style.songTitleHeader">
+				<span :class="$style.songTitleLabel">{{ t('sheetmusic', 'Song:') }}</span>
+				<span :class="$style.songTitleText" :title="songTitle">{{ songTitle }}</span>
+			</div>
+
 			<div v-if="isLoading" :class="$style.loading">
 				<NcLoadingIcon :size="32" />
 				<p>{{ t('sheetmusic', 'Loading history...') }}</p>
@@ -142,6 +155,10 @@ async function revertTo(entry: HistoryEntry) {
 			</div>
 
 			<div v-else :class="$style.timeline">
+				<div v-if="historyList.length === 1" :class="$style.singleRevisionNotice">
+					<p>{{ t('sheetmusic', 'This is the only revision recorded for this song. Previous versions to revert to will appear here as further changes are saved.') }}</p>
+				</div>
+
 				<div
 					v-for="(entry, index) in historyList"
 					:key="entry.id"
@@ -168,6 +185,10 @@ async function revertTo(entry: HistoryEntry) {
 						</div>
 
 						<div :class="$style.actions">
+							<span v-if="index === 0" :class="$style.currentActionLabel">
+								{{ t('sheetmusic', 'Current version') }}
+							</span>
+
 							<NcButton
 								type="button"
 								variant="tertiary"
@@ -189,7 +210,7 @@ async function revertTo(entry: HistoryEntry) {
 								<template #icon>
 									<BackupRestore :size="16" />
 								</template>
-								{{ t('sheetmusic', 'Revert') }}
+								{{ isReverting ? t('sheetmusic', 'Reverting…') : t('sheetmusic', 'Revert') }}
 							</NcButton>
 						</div>
 					</div>
@@ -240,6 +261,21 @@ async function revertTo(entry: HistoryEntry) {
 								</li>
 							</ul>
 						</div>
+
+						<!-- Action bar in expanded details -->
+						<div v-if="index > 0" :class="$style.expandedRevertRow">
+							<NcButton
+								type="button"
+								variant="primary"
+								:disabled="isReverting"
+								:title="t('sheetmusic', 'Revert to this version')"
+								@click="revertTo(entry)">
+								<template #icon>
+									<BackupRestore :size="16" />
+								</template>
+								{{ isReverting ? t('sheetmusic', 'Reverting…') : t('sheetmusic', 'Revert song to this revision') }}
+							</NcButton>
+						</div>
 					</div>
 				</div>
 			</div>
@@ -248,12 +284,83 @@ async function revertTo(entry: HistoryEntry) {
 </template>
 
 <style module>
+:global(.modal-container) {
+	max-width: min(650px, 95vw) !important;
+}
+
+:global(.modal-container .dialog__title) {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
 .container {
-	min-width: 480px;
-	max-width: 650px;
+	width: 580px;
+	max-width: 100%;
 	max-height: 70vh;
 	overflow-y: auto;
+	box-sizing: border-box;
 	padding: 8px 4px;
+}
+
+.songTitleHeader {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 16px;
+	padding: 10px 14px;
+	background-color: var(--color-background-hover);
+	border-radius: var(--border-radius, 4px);
+	border: 1px solid var(--color-border);
+	min-width: 0;
+	max-width: 100%;
+	box-sizing: border-box;
+}
+
+.songTitleLabel {
+	font-weight: 600;
+	color: var(--color-text-maxcontrast);
+	white-space: nowrap;
+	flex-shrink: 0;
+}
+
+.songTitleText {
+	font-weight: 600;
+	color: var(--color-main-text);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	min-width: 0;
+}
+
+.singleRevisionNotice {
+	background-color: var(--color-background-hover);
+	border-left: 3px solid var(--color-primary-element);
+	border-radius: var(--border-radius, 4px);
+	padding: 10px 14px;
+	margin-bottom: 8px;
+	font-size: 0.85rem;
+	color: var(--color-text-maxcontrast);
+}
+
+.singleRevisionNotice p {
+	margin: 0;
+}
+
+.currentActionLabel {
+	font-size: 0.8rem;
+	color: var(--color-text-maxcontrast);
+	padding: 4px 6px;
+	font-style: italic;
+	white-space: nowrap;
+}
+
+.expandedRevertRow {
+	margin-top: 14px;
+	padding-top: 10px;
+	border-top: 1px solid var(--color-border);
+	display: flex;
+	justify-content: flex-end;
 }
 
 .loading,

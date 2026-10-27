@@ -166,6 +166,15 @@ class SongService {
 		try {
 			$song = $this->internalSongMapper->findById($songId);
 			if ($song !== null) {
+				if ($this->songHistoryService !== null && !$this->songHistoryService->hasHistory($songId)) {
+					$this->songHistoryService->recordSnapshot(
+						$song,
+						InternalSongHistory::ACTION_CREATED,
+						$user->getUID(),
+						summary: 'Initial revision before edits'
+					);
+				}
+
 				$song->title = $title;
 				$song->sortTitle = $sortTitle !== '' ? $sortTitle : null;
 				$song->rating = $stars;
@@ -236,6 +245,15 @@ class SongService {
 		try {
 			foreach ($songIds as $songId) {
 				$sid = (int)$songId;
+				$song = $this->internalSongMapper->findById($sid);
+				if ($song !== null && $this->songHistoryService !== null && !$this->songHistoryService->hasHistory($sid)) {
+					$this->songHistoryService->recordSnapshot(
+						$song,
+						InternalSongHistory::ACTION_CREATED,
+						$user->getUID(),
+						summary: 'Initial revision before edits'
+					);
+				}
 				$this->setSongEntities($sid, [
 					'composer' => $composers,
 					'book' => $books,
