@@ -279,4 +279,101 @@ export async function setupMockApi(page: Page) {
 			}),
 		})
 	})
+
+	// Mock song history endpoint
+	await page.route('**/api/songs/*/history', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				ocs: {
+					meta: { status: 'ok', statuscode: 200 },
+					data: [
+						{
+							id: 102,
+							libraryId: 1,
+							songId: 5,
+							songUuid: 'uuid-5',
+							userId: 'admin',
+							action: 'updated',
+							summary: 'Title: "Symphony No. 5 in C Minor" → "Symphony No. 5"',
+							snapshot: { title: 'Symphony No. 5', rating: 5 },
+							createdAt: 1700010000,
+						},
+						{
+							id: 101,
+							libraryId: 1,
+							songId: 5,
+							songUuid: 'uuid-5',
+							userId: 'admin',
+							action: 'created',
+							summary: 'Song created',
+							snapshot: { title: 'Symphony No. 5 in C Minor', rating: 4 },
+							createdAt: 1700000000,
+						},
+					],
+				},
+			}),
+		})
+	})
+
+	// Mock revert endpoint
+	await page.route('**/api/songs/*/revert/*', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				ocs: {
+					meta: { status: 'ok', statuscode: 200 },
+					data: {
+						songs: mockSongs,
+						composers: mockComposers,
+						books: mockBooks,
+					},
+				},
+			}),
+		})
+	})
+
+	// Mock deleted songs endpoint
+	await page.route('**/api/libraries/*/deleted-songs', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				ocs: {
+					meta: { status: 'ok', statuscode: 200 },
+					data: [
+						{
+							id: 99,
+							uuid: 'uuid-99',
+							title: 'Moonlight Sonata',
+							composers: ['Ludwig van Beethoven'],
+							fileCount: 1,
+							deletedAt: 1700005000,
+							rating: 5,
+						},
+					],
+				},
+			}),
+		})
+	})
+
+	// Mock restore endpoint
+	await page.route('**/api/songs/*/restore', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				ocs: {
+					meta: { status: 'ok', statuscode: 200 },
+					data: {
+						songs: mockSongs,
+						composers: mockComposers,
+						books: mockBooks,
+					},
+				},
+			}),
+		})
+	})
 }

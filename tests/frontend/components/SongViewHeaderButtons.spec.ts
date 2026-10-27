@@ -21,15 +21,18 @@ describe('SongViewHeaderButtons.vue', () => {
 		})
 
 		const buttons = wrapper.findAllComponents({ name: 'NcButton' })
-		expect(buttons.length).toBe(3) // Delete, Save without closing, Save and close
+		expect(buttons.length).toBe(4) // Delete, History, Save without closing, Save and close
 
 		buttons[0].trigger('click')
 		expect(wrapper.emitted('deleteEdit')).toBeTruthy()
 
 		buttons[1].trigger('click')
-		expect(wrapper.emitted('saveEdit')?.[0]).toEqual([false])
+		expect(wrapper.emitted('openHistory')).toBeTruthy()
 
 		buttons[2].trigger('click')
+		expect(wrapper.emitted('saveEdit')?.[0]).toEqual([false])
+
+		buttons[3].trigger('click')
 		expect(wrapper.emitted('saveEdit')?.[1]).toEqual([true])
 	})
 
@@ -65,8 +68,8 @@ describe('SongViewHeaderButtons.vue', () => {
 		})
 
 		const buttons = wrapper.findAllComponents({ name: 'NcButton' })
-		// Open in external, Modify PDF, PDF version history, Duplicate, Edit, Delete
-		expect(buttons.length).toBe(6)
+		// Open in external, Modify PDF, PDF version history, History, Duplicate, Edit, Delete
+		expect(buttons.length).toBe(7)
 
 		buttons[0].trigger('click')
 		expect(wrapper.emitted('openExternal')).toBeTruthy()
@@ -78,12 +81,15 @@ describe('SongViewHeaderButtons.vue', () => {
 		expect(wrapper.emitted('openVersions')).toBeTruthy()
 
 		buttons[3].trigger('click')
-		expect(wrapper.emitted('duplicate')).toBeTruthy()
+		expect(wrapper.emitted('openHistory')).toBeTruthy()
 
 		buttons[4].trigger('click')
-		expect(wrapper.emitted('edit')).toBeTruthy()
+		expect(wrapper.emitted('duplicate')).toBeTruthy()
 
 		buttons[5].trigger('click')
+		expect(wrapper.emitted('edit')).toBeTruthy()
+
+		buttons[6].trigger('click')
 		expect(wrapper.emitted('deleteView')).toBeTruthy()
 	})
 })
