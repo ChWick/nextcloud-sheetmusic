@@ -111,6 +111,9 @@ const emit = defineEmits<{
 	border-radius: var(--border-radius-large);
 	padding: 12px;
 	overflow: hidden;
+	height: 100%;
+	min-height: 0;
+	box-sizing: border-box;
 }
 
 .stackHeader {
@@ -119,6 +122,7 @@ const emit = defineEmits<{
 	gap: 6px;
 	border-bottom: 1px solid var(--color-border);
 	padding-bottom: 8px;
+	flex-shrink: 0;
 }
 
 .stackTitle {
@@ -159,11 +163,14 @@ const emit = defineEmits<{
 
 .operationsList {
 	flex: 1;
+	min-height: 0;
 	overflow-y: auto;
 	display: flex;
 	flex-direction: column;
 	gap: 8px;
-	padding-right: 4px;
+	padding-right: 6px;
+	scrollbar-width: thin;
+	scrollbar-color: var(--color-border) transparent;
 }
 
 .emptyStack {
@@ -180,5 +187,6 @@ const emit = defineEmits<{
 	flex-wrap: wrap;
 	border-top: 1px solid var(--color-border);
 	padding-top: 8px;
+	flex-shrink: 0;
 }
 </style>

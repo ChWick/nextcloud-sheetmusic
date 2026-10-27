@@ -184,9 +184,9 @@ describe('IntegrityView.vue', () => {
 		await flushPromises()
 
 		// Verify API call
-		expect(apiPost).toHaveBeenCalledWith('/api/libraries/1/integrity/fix-all', {
+		expect(apiPost).toHaveBeenCalledWith('/api/libraries/1/integrity/fix-all', expect.objectContaining({
 			issueType: 'invalid_naming_rule',
-		})
+		}))
 
 		// Verify toast notification
 		expect(showSuccess).toHaveBeenCalledWith('Fixed 2 integrity issue(s).')

@@ -439,6 +439,10 @@ watch(
 	padding: 8px 16px 16px;
 	min-width: 900px;
 	max-width: 1100px;
+	height: 80vh;
+	min-height: 520px;
+	max-height: 740px;
+	box-sizing: border-box;
 }
 
 .toolBar {
@@ -448,6 +452,7 @@ watch(
 	padding: 8px 12px;
 	background-color: var(--color-background-hover);
 	border-radius: var(--border-radius-large);
+	flex-shrink: 0;
 }
 
 .pageNav {
@@ -472,8 +477,9 @@ watch(
 	display: grid;
 	grid-template-columns: 1fr 380px;
 	gap: 16px;
-	min-height: 520px;
-	max-height: 640px;
+	flex: 1;
+	min-height: 0;
+	overflow: hidden;
 }
 
 .previewPane {
@@ -485,6 +491,9 @@ watch(
 	border-radius: var(--border-radius-large);
 	overflow: hidden;
 	padding: 12px;
+	height: 100%;
+	min-height: 0;
+	box-sizing: border-box;
 }
 
 .canvasWrapper {
@@ -493,12 +502,14 @@ watch(
 	align-items: center;
 	justify-content: center;
 	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+	max-width: 100%;
+	max-height: 100%;
 }
 
 .pageCanvas {
 	display: block;
 	max-width: 100%;
-	max-height: 580px;
+	max-height: 100%;
 	object-fit: contain;
 }
 
@@ -521,6 +532,7 @@ watch(
 	justify-content: space-between;
 	padding-top: 8px;
 	border-top: 1px solid var(--color-border);
+	flex-shrink: 0;
 }
 
 .scopeSelection {
