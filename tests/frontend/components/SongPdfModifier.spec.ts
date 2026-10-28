@@ -5,6 +5,7 @@ import { config, flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { PDFDocument } from 'pdf-lib'
 import SongPdfModifier from '../../../src/components/song-pdf/SongPdfModifier.vue'
+import { getPdfPageImageResolution } from '../../../src/components/song-pdf/pdf-enhance-engine'
 
 // Avoid teleporting child modals (NcDialog) to body so wrapper.find queries work without mocks
 config.global.stubs = { teleport: true }
@@ -1148,12 +1149,19 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		expect(updatedFiles[0].songId).toBe(mockSong.id)
 		expect(updatedFiles[0].fileId).toBe(999)
 
-		// Verify that saved PDF is a valid document with all pages preserved
+		// Verify that saved PDF is a valid document with all pages preserved and identical DPI
+		const origPdf = await PDFDocument.load(realPdfBuffer)
+		const origResPage0 = getPdfPageImageResolution(origPdf.getPage(0))
 		const arrayBuffer = await updatedFiles[0].file.arrayBuffer()
 		const savedPdf = await PDFDocument.load(arrayBuffer)
 		expect(savedPdf.getPageCount()).toBe(8)
+		const savedResPage0 = getPdfPageImageResolution(savedPdf.getPage(0))
+		expect(savedResPage0?.width).toBe(origResPage0?.width)
+		expect(savedResPage0?.height).toBe(origResPage0?.height)
+		expect(savedResPage0?.dpiX).toBeCloseTo(origResPage0!.dpiX, 2)
+		expect(savedResPage0?.dpiY).toBeCloseTo(origResPage0!.dpiY, 2)
 		expect(wrapper.emitted('saved')).toBeTruthy()
-	})
+	}, 20000)
 
 	it('resets all scan enhancements when Reset All Enhancements is clicked', async () => {
 		const wrapper = mount(SongPdfModifier, {

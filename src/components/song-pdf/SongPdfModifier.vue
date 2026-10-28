@@ -34,7 +34,7 @@ import { executeJoinTwoPages, type JoinLayout } from './pdf-join-engine'
 import { executeRotatePage } from './pdf-rotate-engine'
 import type { ScanOperation } from './scan-types'
 import { applyPipeline, createImageBuffer, imageDataToImageBuffer, imageBufferToImageData } from './scan-enhance-engine'
-import { executeEnhancePage } from './pdf-enhance-engine'
+import { executeEnhancePage, resolvePageRenderScale } from './pdf-enhance-engine'
 import { usePdfThumbnails } from './usePdfThumbnails'
 import { usePdfSplit } from './usePdfSplit'
 
@@ -607,12 +607,21 @@ async function saveRotationsAndCrops() {
 			if (isPageEnhanced(pageNum) && activePdfDoc.value) {
 				try {
 					const pageToRender = await activePdfDoc.value.getPage(pageNum)
-					const unscaled = pageToRender.getViewport({ scale: 1.0 })
-					const scale = Math.min(3.0, Math.max(1.5, 1600 / Math.max(1, unscaled.width)))
-					const vp = pageToRender.getViewport({ scale })
+					const origPage = pdfDoc.getPage(i)
+					const origSize = origPage.getSize()
+					const scale = await resolvePageRenderScale(pageToRender, origPage)
+					const unscaled = pageToRender.getViewport({ scale: 1.0, rotation: 0 })
+					const vp = pageToRender.getViewport({ scale, rotation: 0 })
+					const vpScaled = Math.abs(vp.width - unscaled.width * scale) < 2
+					const targetW = vpScaled
+						? Math.max(1, Math.round(vp.width))
+						: Math.max(1, Math.round(origSize.width * scale))
+					const targetH = vpScaled
+						? Math.max(1, Math.round(vp.height))
+						: Math.max(1, Math.round(origSize.height * scale))
 					const canvas = document.createElement('canvas')
-					canvas.width = Math.floor(vp.width)
-					canvas.height = Math.floor(vp.height)
+					canvas.width = targetW
+					canvas.height = targetH
 					const ctx = canvas.getContext('2d')
 					let rawBuffer: any = null
 					if (ctx) {
@@ -627,9 +636,7 @@ async function saveRotationsAndCrops() {
 						rawBuffer = imageDataToImageBuffer(imgData)
 					} else {
 						// Headless / test environment fallback when 2D canvas context is unavailable
-						const w = Math.max(1, Math.floor(vp.width))
-						const h = Math.max(1, Math.floor(vp.height))
-						rawBuffer = createImageBuffer(w, h, 4)
+						rawBuffer = createImageBuffer(targetW, targetH, 4)
 						rawBuffer.data.fill(255)
 					}
 
