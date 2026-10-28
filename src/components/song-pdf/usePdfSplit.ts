@@ -107,6 +107,7 @@ export function usePdfSplit(options: {
 	async function saveSplits(
 		setIsSaving: (saving: boolean) => void,
 		setErrorMessage: (msg: string) => void,
+		onProgress?: (percent: number, text: string, current?: number, total?: number) => Promise<void> | void,
 	) {
 		if (!originalPdfBytes.value || !targetFile.value) return
 		if (splitSegments.value.length === 0) {
@@ -138,6 +139,8 @@ export function usePdfSplit(options: {
 
 		setIsSaving(true)
 		setErrorMessage('')
+		const totalSegments = splitSegments.value.length
+		await onProgress?.(5, t('sheetmusic', 'Preparing PDF for splitting…'), 0, totalSegments)
 
 		try {
 			const srcPdfDoc = await PDFDocument.load(originalPdfBytes.value)
@@ -159,7 +162,20 @@ export function usePdfSplit(options: {
 			let lastLibraryData: LibraryData | null = null
 			let firstCreatedSongId: number | undefined = undefined
 
-			for (const seg of splitSegments.value) {
+			for (let segIdx = 0; segIdx < splitSegments.value.length; segIdx++) {
+				const seg = splitSegments.value[segIdx]
+				const currentSegNum = segIdx + 1
+				await onProgress?.(
+					Math.round(5 + (segIdx / Math.max(1, totalSegments)) * 85),
+					t('sheetmusic', 'Splitting segment {current} of {total}: "{title}"…', {
+						current: currentSegNum,
+						total: totalSegments,
+						title: seg.title.trim(),
+					}),
+					currentSegNum,
+					totalSegments,
+				)
+
 				// Create sub-document
 				const newPdfDoc = await PDFDocument.create()
 				const pageIndices: number[] = []
@@ -219,6 +235,16 @@ export function usePdfSplit(options: {
 				}
 
 				// Upload split PDF file
+				await onProgress?.(
+					Math.round(5 + ((segIdx + 0.5) / Math.max(1, totalSegments)) * 85),
+					t('sheetmusic', 'Uploading segment {current} of {total}: "{title}"…', {
+						current: currentSegNum,
+						total: totalSegments,
+						title: seg.title.trim(),
+					}),
+					currentSegNum,
+					totalSegments,
+				)
 				const formData = new FormData()
 				formData.append('file', splitFile)
 				const uploadRes = await apiPost('/api/libraries/{libraryId}/songs/{id}/file/upload', formData as any, {
@@ -227,6 +253,8 @@ export function usePdfSplit(options: {
 
 				lastLibraryData = uploadRes.data.ocs.data as LibraryData
 			}
+
+			await onProgress?.(95, t('sheetmusic', 'Finalizing split songs…'), totalSegments, totalSegments)
 
 			// Target song to open after splitting: the first newly created split song
 			const targetOpenSongId = firstCreatedSongId

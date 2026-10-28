@@ -1139,10 +1139,26 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		expect(saveBtn).toBeDefined()
 		await saveBtn?.trigger('click')
 		await flushPromises()
+
+		// Progress bar should be visible while saving
+		let observedProgressBar = wrapper.find('[data-test="pdf-save-progress"]').exists()
+		let maxObservedPercent = 0
 		for (let attempt = 0; attempt < 50 && wrapper.text().includes('Saving…'); attempt++) {
+			const progressBanner = wrapper.find('[data-test="pdf-save-progress"]')
+			if (progressBanner.exists()) {
+				observedProgressBar = true
+				const pctText = wrapper.find('[data-test="pdf-save-progress-percent"]').text()
+				const pctVal = Number.parseInt(pctText, 10)
+				if (!Number.isNaN(pctVal) && pctVal > maxObservedPercent) {
+					maxObservedPercent = pctVal
+				}
+			}
 			await new Promise((r) => setTimeout(r, 150))
 			await flushPromises()
 		}
+		expect(observedProgressBar).toBe(true)
+		expect(maxObservedPercent).toBeGreaterThan(0)
+		expect(wrapper.find('[data-test="pdf-save-progress"]').exists()).toBe(false)
 
 		// Verifies in-place update
 		expect(updatedFiles).toHaveLength(1)

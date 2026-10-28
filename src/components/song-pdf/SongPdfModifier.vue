@@ -94,6 +94,10 @@ const activeMode = ref<Mode>('rotate')
 
 const isLoading = ref(false)
 const isSaving = ref(false)
+const saveProgressPercent = ref(0)
+const saveProgressText = ref('')
+const saveProgressCurrent = ref(0)
+const saveProgressTotal = ref(0)
 const errorMessage = ref('')
 const totalPages = ref(0)
 const originalPdfBytes = shallowRef<Uint8Array | null>(null)
@@ -169,10 +173,44 @@ const {
 	onCancel: () => emit('cancel'),
 })
 
+async function yieldToBrowser() {
+	await nextTick()
+	await new Promise<void>((resolve) => setTimeout(resolve, 0))
+}
+
+async function updateSaveProgress(
+	percent: number,
+	text: string,
+	current = 0,
+	total = 0,
+	shouldYield = true,
+) {
+	saveProgressPercent.value = Math.max(0, Math.min(100, Math.round(percent)))
+	saveProgressText.value = text
+	saveProgressCurrent.value = current
+	saveProgressTotal.value = total
+	if (shouldYield) {
+		await yieldToBrowser()
+	} else {
+		await nextTick()
+	}
+}
+
 async function saveSplits() {
 	await executeSaveSplits(
-		(v) => { isSaving.value = v },
+		(v) => {
+			isSaving.value = v
+			if (!v) {
+				saveProgressPercent.value = 0
+				saveProgressText.value = ''
+				saveProgressCurrent.value = 0
+				saveProgressTotal.value = 0
+			}
+		},
 		(msg) => { errorMessage.value = msg },
+		async (percent, text, current = 0, total = 0) => {
+			await updateSaveProgress(percent, text, current, total, false)
+		},
 	)
 }
 
@@ -588,6 +626,8 @@ async function saveRotationsAndCrops() {
 	if (!originalPdfBytes.value || !targetFile.value) return
 	isSaving.value = true
 	errorMessage.value = ''
+	const activeTotal = Math.max(1, totalPages.value - deletedPages.value.size)
+	await updateSaveProgress(5, t('sheetmusic', 'Preparing PDF document…'), 0, activeTotal, hasAnyEnhance.value)
 
 	try {
 		const pdfDoc = await PDFDocument.load(originalPdfBytes.value)
@@ -596,6 +636,7 @@ async function saveRotationsAndCrops() {
 		let modifiedRotations = false
 		let modifiedCrops = false
 		let modifiedEnhancements = false
+		let processedCount = 0
 		for (let i = 0; i < pages.length; i++) {
 			const pageNum = i + 1
 			// Skip deleted pages from modifications
@@ -603,8 +644,23 @@ async function saveRotationsAndCrops() {
 				continue
 			}
 
+			processedCount++
+			const pageIsEnhanced = Boolean(isPageEnhanced(pageNum) && activePdfDoc.value)
+			const startPct = 5 + ((processedCount - 1) / activeTotal) * 75
+			const endPct = 5 + (processedCount / activeTotal) * 75
+
+			await updateSaveProgress(
+				startPct,
+				pageIsEnhanced
+					? t('sheetmusic', 'Enhancing page {current} of {total}…', { current: processedCount, total: activeTotal })
+					: t('sheetmusic', 'Processing page {current} of {total}…', { current: processedCount, total: activeTotal }),
+				processedCount,
+				activeTotal,
+				pageIsEnhanced,
+			)
+
 			// 1. Scan Enhancement (if configured for page)
-			if (isPageEnhanced(pageNum) && activePdfDoc.value) {
+			if (pageIsEnhanced && activePdfDoc.value) {
 				try {
 					const pageToRender = await activePdfDoc.value.getPage(pageNum)
 					const origPage = pdfDoc.getPage(i)
@@ -641,7 +697,9 @@ async function saveRotationsAndCrops() {
 					}
 
 					if (rawBuffer) {
+						await yieldToBrowser()
 						const enhancedBuffer = applyPipeline(rawBuffer, pageEnhancements.value[pageNum])
+						await yieldToBrowser()
 						await executeEnhancePage(pdfDoc, {
 							pageIndex: i,
 							enhancedImageBuffer: enhancedBuffer,
@@ -691,6 +749,16 @@ async function saveRotationsAndCrops() {
 					modifiedCrops = true
 				}
 			}
+
+			await updateSaveProgress(
+				endPct,
+				pageIsEnhanced
+					? t('sheetmusic', 'Enhanced page {current} of {total}', { current: processedCount, total: activeTotal })
+					: t('sheetmusic', 'Processed page {current} of {total}', { current: processedCount, total: activeTotal }),
+				processedCount,
+				activeTotal,
+				false,
+			)
 		}
 
 		// 4. Remove deleted pages in descending order to avoid index shifts
@@ -718,17 +786,20 @@ async function saveRotationsAndCrops() {
 			return
 		}
 
+		await updateSaveProgress(85, t('sheetmusic', 'Encoding final PDF document…'), activeTotal, activeTotal, modifiedEnhancements)
 		const modifiedBytes = await pdfDoc.save()
 		const fileName = getFileName(targetFile.value.path) || 'modified.pdf'
 		const modifiedFile = new File([modifiedBytes as Uint8Array<ArrayBuffer>], fileName, { type: 'application/pdf' })
 
 		// Update existing file in-place, preserving file ID and triggering Nextcloud file versioning
+		await updateSaveProgress(92, t('sheetmusic', 'Uploading PDF to server…'), activeTotal, activeTotal, modifiedEnhancements)
 		const formData = new FormData()
 		formData.append('file', modifiedFile)
 		const uploadRes = await (apiPost as any)('/api/libraries/{libraryId}/songs/{id}/file/{fileId}/update', formData, {
 			pathParams: { libraryId: props.libraryId, id: props.song.id, fileId: targetFile.value.id },
 		})
 
+		await updateSaveProgress(100, t('sheetmusic', 'Saved!'), activeTotal, activeTotal, false)
 		const data = uploadRes.data.ocs.data as LibraryData
 		const songTitle = props.song.title || t('sheetmusic', 'Song')
 		const hasMultipleTypes = [modifiedRotations, modifiedCrops, modifiedDeletions, modifiedEnhancements, hasAnyJoin.value].filter(Boolean).length > 1
@@ -752,6 +823,10 @@ async function saveRotationsAndCrops() {
 		showError(errorMessage.value)
 	} finally {
 		isSaving.value = false
+		saveProgressPercent.value = 0
+		saveProgressText.value = ''
+		saveProgressCurrent.value = 0
+		saveProgressTotal.value = 0
 	}
 }
 
@@ -786,10 +861,40 @@ watch(() => targetFile.value?.path, () => {
 			:is-saving="isSaving"
 			:is-loading="isLoading"
 			:split-segments-count="splitSegments.length"
+			:save-progress="saveProgressPercent"
 			@update:active-mode="activeMode = $event"
 			@update:activeMode="activeMode = $event"
 			@cancel="emit('cancel')"
 			@save="handleHeaderSave" />
+
+		<!-- Saving Progress Bar Banner -->
+		<div
+			v-if="isSaving"
+			:class="$style.saveProgressBanner"
+			data-test="pdf-save-progress">
+			<div :class="$style.saveProgressHeader">
+				<div :class="$style.saveProgressInfo">
+					<NcLoadingIcon :size="18" />
+					<span :class="$style.saveProgressText" data-test="pdf-save-progress-text">
+						{{ saveProgressText || t('sheetmusic', 'Saving PDF…') }}
+					</span>
+				</div>
+				<span :class="$style.saveProgressPercent" data-test="pdf-save-progress-percent">
+					{{ saveProgressPercent }}%
+				</span>
+			</div>
+			<div
+				:class="$style.saveProgressTrack"
+				role="progressbar"
+				:aria-valuenow="saveProgressPercent"
+				aria-valuemin="0"
+				aria-valuemax="100">
+				<div
+					:class="$style.saveProgressFill"
+					data-test="pdf-save-progress-fill"
+					:style="{ width: `${saveProgressPercent}%` }" />
+			</div>
+		</div>
 
 		<!-- Error Banner -->
 		<div v-if="errorMessage" :class="$style.errorBanner">
@@ -941,6 +1046,61 @@ watch(() => targetFile.value?.path, () => {
 	color: var(--color-primary-text);
 	padding: 8px 16px;
 	font-size: 13px;
+}
+
+.saveProgressBanner {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 10px 16px;
+	background-color: var(--color-background-hover, #f3f4f6);
+	border-bottom: 1px solid var(--color-border, #e5e7eb);
+	flex-shrink: 0;
+}
+
+.saveProgressHeader {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.saveProgressInfo {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.saveProgressText {
+	font-size: 13px;
+	font-weight: 500;
+	color: var(--color-main-text, #111827);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.saveProgressPercent {
+	font-size: 13px;
+	font-weight: 700;
+	color: var(--color-primary-element, #0082c9);
+	flex-shrink: 0;
+}
+
+.saveProgressTrack {
+	width: 100%;
+	height: 8px;
+	background-color: var(--color-border, #d1d5db);
+	border-radius: 999px;
+	overflow: hidden;
+}
+
+.saveProgressFill {
+	height: 100%;
+	background-color: var(--color-primary-element, #0082c9);
+	border-radius: 999px;
+	transition: width 0.15s ease-out;
 }
 
 .loadingArea {

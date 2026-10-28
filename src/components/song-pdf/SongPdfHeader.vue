@@ -30,6 +30,7 @@ const props = defineProps<{
 	hasAnyEnhance?: boolean
 	hasAnyJoin?: boolean
 	splitSegmentsCount: number
+	saveProgress?: number
 }>()
 
 const emit = defineEmits<{
@@ -65,7 +66,11 @@ const saveButtonTitle = computed(() => {
 
 const saveButtonText = computed(() => {
 	if (props.isSaving) {
-		return props.activeMode === 'split' ? t('sheetmusic', 'Processing…') : t('sheetmusic', 'Saving…')
+		const baseText = props.activeMode === 'split' ? t('sheetmusic', 'Processing…') : t('sheetmusic', 'Saving…')
+		if (typeof props.saveProgress === 'number' && props.saveProgress > 0) {
+			return `${baseText} (${Math.round(props.saveProgress)}%)`
+		}
+		return baseText
 	}
 	if (props.activeMode === 'rotate') {
 		return (props.hasAnyDeletion || props.hasAnyCrop || props.hasAnyEnhance || props.hasAnyJoin)
