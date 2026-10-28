@@ -18,13 +18,17 @@ use OCA\SheetMusic\Db\InternalSongHistory;
 use OCA\SheetMusic\Db\InternalSongHistoryMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
-use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdf;
-use OCP\DB\QueryBuilder\IQueryBuilder;
+use OCA\SheetMusic\Service\History\SongHistoryFileVersionService;
+use OCA\SheetMusic\Service\History\SongSnapshotHelper;
 use OCP\Files\IRootFolder;
 use OCP\IDBConnection;
 use Psr\Log\LoggerInterface;
 
 class SongHistoryService {
+	private SongSnapshotHelper $snapshotHelper;
+	private SongHistoryFileVersionService $fileVersionService;
+	private SongTrashService $trashService;
+
 	public function __construct(
 		private InternalSongHistoryMapper $historyMapper,
 		private InternalSongMapper $songMapper,
@@ -35,7 +39,31 @@ class SongHistoryService {
 		private LoggerInterface $logger,
 		private ?IRootFolder $rootFolder = null,
 		private ?InternalSongAttributeMapper $songAttributeMapper = null,
+		?SongSnapshotHelper $snapshotHelper = null,
+		?SongTrashService $trashService = null,
+		?SongHistoryFileVersionService $fileVersionService = null,
 	) {
+		$this->snapshotHelper = $snapshotHelper ?? new SongSnapshotHelper(
+			$this->entityMapper,
+			$this->songFileMapper,
+			$this->songAttributeMapper,
+		);
+		$this->fileVersionService = $fileVersionService ?? new SongHistoryFileVersionService(
+			$this->songFileMapper,
+			$this->logger,
+			$this->rootFolder,
+		);
+		$this->trashService = $trashService ?? new SongTrashService(
+			$this->songMapper,
+			$this->entityMapper,
+			$this->songFileMapper,
+			$this->libraryMapper,
+			$this->db,
+			$this->logger,
+			$this->rootFolder,
+			$this->historyMapper,
+			$this->snapshotHelper,
+		);
 	}
 
 	/**
@@ -44,57 +72,7 @@ class SongHistoryService {
 	 * @return array<string, mixed>
 	 */
 	public function buildSnapshot(InternalSong $song): array {
-		$songId = (int)$song->id;
-
-		// 1. Dynamic extraction of all public properties on InternalSong
-		$snapshot = [];
-		$reflection = new \ReflectionClass(InternalSong::class);
-		foreach ($reflection->getProperties(\ReflectionProperty::IS_PUBLIC) as $prop) {
-			$name = $prop->getName();
-			if ($name === 'updatedAt') {
-				continue;
-			}
-			$snapshot[$name] = $prop->getValue($song);
-		}
-
-		// 2. Entities grouped by normalized type
-		$entitiesByType = [];
-		$allEntities = $songId > 0 ? $this->entityMapper->findEntitiesForSong($songId) : [];
-		foreach ($allEntities as $entity) {
-			$type = InternalEntityMapper::normalizeType($entity->type);
-			$entitiesByType[$type][] = [
-				'id' => $entity->id,
-				'name' => $entity->name,
-			];
-		}
-		$snapshot['entities'] = $entitiesByType;
-
-		// 3. Files attached to song
-		$files = [];
-		$songFiles = $songId > 0 ? $this->songFileMapper->findAllForSong($songId, includeDeleted: true) : [];
-		foreach ($songFiles as $file) {
-			$files[] = [
-				'id' => $file->id,
-				'fileId' => $file->fileId,
-				'pageOrder' => $file->pageOrder,
-				'pageCount' => $file->pageCount,
-				'fileSize' => $file->fileSize,
-				'fileHash' => $file->fileHash,
-				'type' => $file->type,
-				'deletedAt' => $file->deletedAt,
-			];
-		}
-		$snapshot['files'] = $files;
-
-		// 4. Custom key-value song attributes
-		if ($songId > 0 && $this->songAttributeMapper !== null) {
-			$attributes = $this->songAttributeMapper->findAllForSong($songId);
-			if (!empty($attributes)) {
-				$snapshot['attributes'] = $attributes;
-			}
-		}
-
-		return $snapshot;
+		return $this->snapshotHelper->buildSnapshot($song);
 	}
 
 	/**
@@ -106,6 +84,8 @@ class SongHistoryService {
 
 	/**
 	 * Record a snapshot of a song in the timeline.
+	 *
+	 * @param array<string, mixed>|null $overrideSnapshot
 	 */
 	public function recordSnapshot(
 		InternalSong $song,
@@ -120,20 +100,20 @@ class SongHistoryService {
 		}
 
 		try {
-			$newSnapshot = $overrideSnapshot ?? $this->buildSnapshot($song);
+			$newSnapshot = $overrideSnapshot ?? $this->snapshotHelper->buildSnapshot($song);
 
 			// Check previous snapshot to avoid duplicate entries for redundant saves
 			$latest = $this->historyMapper->findLatestForSong($songId);
 			if ($latest !== null && $action === InternalSongHistory::ACTION_UPDATED) {
 				$oldSnapshot = $latest->getSnapshotArray();
-				if ($this->areSnapshotsEquivalent($oldSnapshot, $newSnapshot)) {
+				if ($this->snapshotHelper->areSnapshotsEquivalent($oldSnapshot, $newSnapshot)) {
 					return $latest;
 				}
 			}
 
 			if ($summary === null || trim($summary) === '') {
 				$oldSnapshot = $latest !== null ? $latest->getSnapshotArray() : null;
-				$summary = $this->generateSummary($action, $oldSnapshot, $newSnapshot);
+				$summary = $this->snapshotHelper->generateSummary($action, $oldSnapshot, $newSnapshot);
 			}
 
 			$history = new InternalSongHistory(
@@ -189,178 +169,24 @@ class SongHistoryService {
 		$snap = $history->getSnapshotArray();
 
 		// 1. Revert core and custom song properties dynamically using reflection
-		$reflection = new \ReflectionClass(InternalSong::class);
-		$immutableProps = ['id', 'uuid', 'libraryId', 'createdAt', 'updatedAt', 'deletedAt'];
-
-		// Cache constructor default values for promoted properties
-		$defaultValues = [];
-		$constructor = $reflection->getConstructor();
-		if ($constructor !== null) {
-			foreach ($constructor->getParameters() as $param) {
-				if ($param->isDefaultValueAvailable()) {
-					$defaultValues[$param->getName()] = $param->getDefaultValue();
-				}
-			}
-		}
-
-		foreach ($reflection->getProperties(\ReflectionProperty::IS_PUBLIC) as $prop) {
-			$propName = $prop->getName();
-			if (in_array($propName, $immutableProps, true)) {
-				continue;
-			}
-
-			$type = $prop->getType();
-			$typeName = $type instanceof \ReflectionNamedType ? $type->getName() : null;
-			$allowsNull = $type instanceof \ReflectionNamedType ? $type->allowsNull() : true;
-
-			if (array_key_exists($propName, $snap)) {
-				$val = $snap[$propName];
-				if ($val === null) {
-					if ($allowsNull) {
-						$song->{$propName} = null;
-					} elseif (array_key_exists($propName, $defaultValues)) {
-						$song->{$propName} = $defaultValues[$propName];
-					} else {
-						$song->{$propName} = match ($typeName) {
-							'int' => 0,
-							'string' => '',
-							'bool' => false,
-							'float' => 0.0,
-							'array' => [],
-							default => null,
-						};
-					}
-				} elseif ($typeName === 'int') {
-					$song->{$propName} = (int)$val;
-				} elseif ($typeName === 'string') {
-					$song->{$propName} = (string)$val;
-				} elseif ($typeName === 'bool') {
-					$song->{$propName} = (bool)$val;
-				} elseif ($typeName === 'float') {
-					$song->{$propName} = (float)$val;
-				} else {
-					$song->{$propName} = $val;
-				}
-			} else {
-				// Snapshot was taken before this field was added:
-				// Reset to constructor/property default value or type-safe default
-				if (array_key_exists($propName, $defaultValues)) {
-					$song->{$propName} = $defaultValues[$propName];
-				} elseif ($prop->hasDefaultValue()) {
-					$song->{$propName} = $prop->getDefaultValue();
-				} elseif (!$allowsNull) {
-					$song->{$propName} = match ($typeName) {
-						'int' => 0,
-						'string' => '',
-						'bool' => false,
-						'float' => 0.0,
-						'array' => [],
-						default => null,
-					};
-				} else {
-					$song->{$propName} = null;
-				}
-			}
-		}
-
-		// Undelete if song was deleted
+		$this->snapshotHelper->revertSongProperties($song, $snap);
 		$wasDeleted = $song->deletedAt !== null;
 		$song->deletedAt = null;
 		$song->updatedAt = time();
-
 		$this->songMapper->update($song);
 
 		// 2. Revert entity relations dynamically across all present and historical entity types
-		$snapEntities = (array)($snap['entities'] ?? []);
-		$currentEntities = $this->entityMapper->findEntitiesForSong($songId);
-		$currentTypes = array_unique(array_map(static fn ($e) => InternalEntityMapper::normalizeType($e->type), $currentEntities));
-		$allTypes = array_unique(array_merge(
-			['composer', 'artist', 'book', 'collection', 'genre', 'key', 'customgroup', 'year', 'signature', 'sourcetype', 'instrument'],
-			array_keys($snapEntities),
-			$currentTypes
-		));
-
-		foreach ($allTypes as $type) {
-			$items = (array)($snapEntities[$type] ?? []);
-			$entityIds = [];
-			foreach ($items as $item) {
-				if (!empty($item['id'])) {
-					$entityIds[] = (int)$item['id'];
-				} elseif (!empty($item['name'])) {
-					$existing = $this->entityMapper->findByName($song->libraryId, $type, (string)$item['name']);
-					if ($existing !== null && $existing->id !== null) {
-						$entityIds[] = (int)$existing->id;
-					}
-				}
-			}
-			$this->entityMapper->setSongEntitiesForType($songId, $type, array_unique($entityIds));
-		}
+		$this->snapshotHelper->revertSongEntities($song->libraryId, $songId, $snap);
 
 		// 3. Revert files page orders, deleted flags, and physical file versions
-		if (!empty($snap['files']) && is_array($snap['files'])) {
-			$currentFiles = $this->songFileMapper->findAllForSong($songId, includeDeleted: true);
-			$fileMap = [];
-			foreach ($currentFiles as $cf) {
-				$fileMap[$cf->fileId] = $cf;
-			}
-
-			$snapFileIds = [];
-			foreach ($snap['files'] as $fSnap) {
-				$fileId = (int)($fSnap['fileId'] ?? 0);
-				if ($fileId > 0) {
-					$snapFileIds[] = $fileId;
-					if (isset($fileMap[$fileId])) {
-						$fileRecord = $fileMap[$fileId];
-						if (isset($fSnap['pageOrder'])) {
-							$fileRecord->pageOrder = (string)$fSnap['pageOrder'];
-						}
-						// Restore file association if it was unlinked/soft-deleted
-						$fileRecord->deletedAt = null;
-						$fileRecord->updatedAt = time();
-						$this->songFileMapper->update($fileRecord);
-
-						// Restore physical file from Nextcloud trashbin if it was moved to trash
-						$this->restorePhysicalFileFromTrashIfNeeded($fileRecord->fileId, $userId);
-
-						// Restore physical file version if the file was modified since this snapshot
-						$this->restorePhysicalFileVersionIfNeeded(
-							$fileRecord->fileId,
-							$userId,
-							$fSnap,
-							(int)$history->createdAt,
-							$fileRecord
-						);
-					}
-				}
-			}
-
-			// Soft-delete any files that were attached after this snapshot
-			foreach ($currentFiles as $cf) {
-				if (!in_array($cf->fileId, $snapFileIds, true) && $cf->deletedAt === null) {
-					$cf->deletedAt = time();
-					$cf->updatedAt = time();
-					$this->songFileMapper->update($cf);
-				}
-			}
-		}
+		$this->revertSongFiles($songId, $snap, (int)$history->createdAt, $userId);
 
 		// 4. Revert custom song attributes if mapper is available
-		if ($this->songAttributeMapper !== null) {
-			$currentAttrs = $this->songAttributeMapper->findAllForSong($songId);
-			$snapAttrs = (array)($snap['attributes'] ?? []);
-			foreach ($currentAttrs as $name => $val) {
-				if (!array_key_exists($name, $snapAttrs)) {
-					$this->songAttributeMapper->removeAttribute($songId, (string)$name);
-				}
-			}
-			foreach ($snapAttrs as $name => $val) {
-				$this->songAttributeMapper->setAttribute($songId, (string)$name, (string)$val);
-			}
-		}
+		$this->snapshotHelper->revertSongAttributes($songId, $snap);
 
 		if ($wasDeleted) {
 			// Also un-delete misc data rows for this song
-			$this->undeleteSongMiscData($song->uuid);
+			$this->trashService->undeleteSongMiscData($song->uuid);
 		}
 
 		$this->libraryMapper->touch($song->libraryId);
@@ -378,131 +204,28 @@ class SongHistoryService {
 	 * @return list<array<string, mixed>>
 	 */
 	public function getDeletedSongs(int $libraryId): array {
-		$qb = $this->db->getQueryBuilder();
-		$qb->select('*')
-			->from(InternalSongMapper::TABLE_NAME)
-			->where($qb->expr()->eq('library_id', $qb->createNamedParameter($libraryId, IQueryBuilder::PARAM_INT)))
-			->andWhere($qb->expr()->isNotNull('deleted_at'))
-			->orderBy('deleted_at', 'DESC')
-			->setMaxResults(100);
-
-		$result = $qb->executeQuery();
-		$deletedSongs = [];
-		while ($row = $result->fetchAssociative()) {
-			$song = InternalSong::fromRow($row);
-			$songId = (int)$song->id;
-
-			// Fetch composer names
-			$composers = $this->entityMapper->findEntitiesForSong($songId, 'composer');
-			$composerNames = array_map(static fn ($c) => $c->name, $composers);
-
-			// Count attached files
-			$files = $this->songFileMapper->findAllForSong($songId, includeDeleted: true);
-
-			$deletedSongs[] = [
-				'id' => $song->id,
-				'uuid' => $song->uuid,
-				'title' => $song->title,
-				'composers' => $composerNames,
-				'fileCount' => count($files),
-				'deletedAt' => $song->deletedAt,
-				'rating' => $song->rating,
-			];
-		}
-
-		return $deletedSongs;
+		return $this->trashService->getDeletedSongs($libraryId);
 	}
 
 	/**
 	 * Restore a soft-deleted song and all its relationships.
 	 */
 	public function restoreDeletedSong(int $songId, ?string $userId = null): InternalSong {
-		$song = $this->songMapper->findById($songId);
-		if ($song === null) {
-			throw new \InvalidArgumentException('Song not found');
-		}
-
-		$now = time();
-		$song->deletedAt = null;
-		$song->updatedAt = $now;
-		$this->songMapper->update($song);
-
-		// 1. Un-delete entity relations
-		$qbLinks = $this->db->getQueryBuilder();
-		$qbLinks->update(InternalEntityMapper::JUNCTION_TABLE_NAME)
-			->set('deleted_at', $qbLinks->createNamedParameter(null, IQueryBuilder::PARAM_NULL))
-			->where($qbLinks->expr()->eq('song_id', $qbLinks->createNamedParameter($songId, IQueryBuilder::PARAM_INT)))
-			->executeStatement();
-
-		// 2. Un-delete files
-		$qbFiles = $this->db->getQueryBuilder();
-		$qbFiles->update(InternalSongFileMapper::TABLE_NAME)
-			->set('deleted_at', $qbFiles->createNamedParameter(null, IQueryBuilder::PARAM_NULL))
-			->where($qbFiles->expr()->eq('song_id', $qbFiles->createNamedParameter($songId, IQueryBuilder::PARAM_INT)))
-			->executeStatement();
-
-		// Restore physical files from Nextcloud trashbin if they were deleted to trash
-		$songFiles = $this->songFileMapper->findAllForSong($songId, includeDeleted: true);
-		foreach ($songFiles as $fileRecord) {
-			$this->restorePhysicalFileFromTrashIfNeeded($fileRecord->fileId, $userId);
-		}
-
-		// 3. Un-delete misc data
-		$this->undeleteSongMiscData($song->uuid);
-
-		$this->libraryMapper->touch($song->libraryId);
-
-		// Record restored history
-		$this->recordSnapshot($song, InternalSongHistory::ACTION_RESTORED, $userId, 'Restored deleted song');
-
-		return $song;
+		return $this->trashService->restoreDeletedSong($songId, $userId);
 	}
 
+	/**
+	 * Restore a physical file from Nextcloud trashbin back to user folder.
+	 */
 	public function restorePhysicalFileFromTrashIfNeeded(int $ocFileId, ?string $userId): bool {
-		if ($ocFileId <= 0 || $userId === null || $this->rootFolder === null) {
-			return false;
-		}
-
-		try {
-			$userFolder = $this->rootFolder->getUserFolder($userId);
-			$nodes = $userFolder->getById($ocFileId);
-			if (!empty($nodes)) {
-				return true;
-			}
-
-			if ((interface_exists(\OCA\Files_Trashbin\Trash\ITrashManager::class) || class_exists(\OCA\Files_Trashbin\Trash\ITrashManager::class))
-				&& \OC::$server->has(\OCA\Files_Trashbin\Trash\ITrashManager::class)
-				&& \OC::$server->has(\OCP\IUserManager::class)) {
-				/** @var \OCA\Files_Trashbin\Trash\ITrashManager $trashManager */
-				$trashManager = \OC::$server->get(\OCA\Files_Trashbin\Trash\ITrashManager::class);
-				/** @var \OCP\IUserManager $userManager */
-				$userManager = \OC::$server->get(\OCP\IUserManager::class);
-				$user = $userManager->get($userId);
-				if ($user !== null) {
-					$items = $trashManager->listTrashRoot($user);
-					foreach ($items as $item) {
-						if ((int)$item->getId() === $ocFileId) {
-							$trashManager->restoreItem($item);
-							$this->logger->info('Restored physical file from trash for song', [
-								'fileId' => $ocFileId,
-								'userId' => $userId,
-							]);
-							return true;
-						}
-					}
-				}
-			}
-		} catch (\Throwable $e) {
-			$this->logger->warning('Could not restore physical file from trash: ' . $e->getMessage(), [
-				'exception' => $e,
-				'fileId' => $ocFileId,
-				'userId' => $userId,
-			]);
-		}
-
-		return false;
+		return $this->trashService->restorePhysicalFileFromTrashIfNeeded($ocFileId, $userId);
 	}
 
+	/**
+	 * Restore earlier physical file version in Nextcloud files_versions if the file was modified since snapshot.
+	 *
+	 * @param array<string, mixed> $fileSnap
+	 */
 	public function restorePhysicalFileVersionIfNeeded(
 		int $ocFileId,
 		?string $userId,
@@ -510,349 +233,70 @@ class SongHistoryService {
 		int $snapshotCreatedAt,
 		InternalSongFile $fileRecord,
 	): bool {
-		if ($ocFileId <= 0 || $userId === null || $this->rootFolder === null) {
-			return false;
-		}
-
-		try {
-			$userFolder = $this->rootFolder->getUserFolder($userId);
-			$nodes = $userFolder->getById($ocFileId);
-			if (empty($nodes) || !($nodes[0] instanceof \OCP\Files\File)) {
-				return false;
-			}
-
-			/** @var \OCP\Files\File $targetNode */
-			$targetNode = $nodes[0];
-			$targetSize = (int)($fileSnap['fileSize'] ?? 0);
-			$targetHash = $fileSnap['fileHash'] ?? null;
-
-			// If current physical file already matches the snapshot size (and hash), no rollback is needed
-			if ($targetSize > 0 && (int)$targetNode->getSize() === $targetSize) {
-				if ($targetHash === null || $fileRecord->fileHash === $targetHash) {
-					return true;
-				}
-			}
-
-			$rolledBack = false;
-
-			// Ensure files_versions root and parent directories exist
-			if (class_exists(\OCA\Files_Versions\Storage::class)) {
-				$userRoot = $userFolder->getParent();
-				if (!$userRoot->nodeExists('files_versions')) {
-					$userRoot->newFolder('files_versions');
-				}
-				$relativePath = $userFolder->getRelativePath($targetNode->getPath());
-				if ($relativePath !== null && $relativePath !== false) {
-					$userView = new \OC\Files\View('/' . $userId);
-					\OCA\Files_Versions\Storage::createMissingDirectories($relativePath, $userView);
-				}
-			}
-
-			// 1. Try IVersionManager
-			if ((interface_exists(\OCA\Files_Versions\Versions\IVersionManager::class) || class_exists(\OCA\Files_Versions\Versions\IVersionManager::class))
-				&& \OC::$server->has(\OCA\Files_Versions\Versions\IVersionManager::class)
-				&& \OC::$server->has(\OCP\IUserManager::class)) {
-				/** @var \OCA\Files_Versions\Versions\IVersionManager $versionManager */
-				$versionManager = \OC::$server->get(\OCA\Files_Versions\Versions\IVersionManager::class);
-				/** @var \OCP\IUserManager $userManager */
-				$userManager = \OC::$server->get(\OCP\IUserManager::class);
-				$user = $userManager->get($userId);
-				if ($user !== null) {
-					$versions = $versionManager->getVersionsForFile($user, $targetNode);
-
-					$candidate = null;
-					if ($targetSize > 0) {
-						foreach ($versions as $v) {
-							if ((int)$v->getSize() === $targetSize) {
-								$candidate = $v;
-								break;
-							}
-						}
-					}
-
-					if ($candidate === null) {
-						foreach ($versions as $v) {
-							if ((int)$v->getRevisionId() <= ($snapshotCreatedAt + 5)) {
-								$candidate = $v;
-								break;
-							}
-						}
-					}
-
-					if ($candidate !== null) {
-						$res = $versionManager->rollback($candidate);
-						if ($res !== false) {
-							$rolledBack = true;
-						}
-					}
-				}
-			}
-
-			// 2. Fallback to Storage::rollback
-			if (!$rolledBack && class_exists(\OCA\Files_Versions\Storage::class)
-				&& \OC::$server->has(\OCP\IUserManager::class)) {
-				/** @var \OCP\IUserManager $userManager */
-				$userManager = \OC::$server->get(\OCP\IUserManager::class);
-				$user = $userManager->get($userId);
-				if ($user !== null) {
-					$relativePath = $userFolder->getRelativePath($targetNode->getPath());
-					if ($relativePath !== null && $relativePath !== false) {
-						$rawVersions = \OCA\Files_Versions\Storage::getVersions($userId, '/' . ltrim($relativePath, '/'));
-						$targetRevision = null;
-						if ($targetSize > 0) {
-							foreach ($rawVersions as $key => $v) {
-								if ((int)($v['size'] ?? 0) === $targetSize) {
-									$targetRevision = (int)($v['version'] ?? $key);
-									break;
-								}
-							}
-						}
-						if ($targetRevision === null) {
-							foreach ($rawVersions as $key => $v) {
-								$rev = (int)($v['version'] ?? $key);
-								if ($rev <= ($snapshotCreatedAt + 5)) {
-									$targetRevision = $rev;
-									break;
-								}
-							}
-						}
-
-						if ($targetRevision !== null) {
-							$res = \OCA\Files_Versions\Storage::rollback('/' . ltrim($relativePath, '/'), $targetRevision, $user);
-							if ($res !== false) {
-								$rolledBack = true;
-							}
-						}
-					}
-				}
-			}
-
-			if ($rolledBack) {
-				// Re-extract facts and update fileRecord
-				$freshNodes = $userFolder->getById($ocFileId);
-				if (!empty($freshNodes) && $freshNodes[0] instanceof \OCP\Files\File) {
-					$content = $freshNodes[0]->getContent();
-					if (is_string($content)) {
-						$fileRecord->fileSize = strlen($content);
-						$ext = strtolower(pathinfo($freshNodes[0]->getName(), PATHINFO_EXTENSION));
-						if ($ext === 'pdf') {
-							try {
-								$fileRecord->fileHash = MobileSheetsPdf::contentHash($content);
-								$fileRecord->pageCount = MobileSheetsPdf::pageCount($content);
-								$fileRecord->pageOrder = MobileSheetsPdf::pageOrder($fileRecord->pageCount);
-							} catch (\Throwable) {
-								// Keep existing
-							}
-						}
-						$fileRecord->updatedAt = time();
-						$this->songFileMapper->update($fileRecord);
-					}
-				}
-
-				$this->logger->info('Reverted physical file version during song history revert', [
-					'fileId' => $ocFileId,
-					'userId' => $userId,
-					'targetSize' => $targetSize,
-				]);
-				return true;
-			}
-		} catch (\Throwable $e) {
-			$this->logger->warning('Could not revert physical file version during song history revert: ' . $e->getMessage(), [
-				'exception' => $e,
-				'fileId' => $ocFileId,
-				'userId' => $userId,
-			]);
-		}
-
-		return false;
+		return $this->fileVersionService->restorePhysicalFileVersionIfNeeded(
+			$ocFileId,
+			$userId,
+			$fileSnap,
+			$snapshotCreatedAt,
+			$fileRecord
+		);
 	}
 
-	private function undeleteSongMiscData(string $songUuid): void {
-		if ($songUuid === '') {
+	/**
+	 * Revert files page orders, deleted flags, and physical file versions for a snapshot.
+	 *
+	 * @param array<string, mixed> $snap
+	 */
+	private function revertSongFiles(int $songId, array $snap, int $historyCreatedAt, ?string $userId): void {
+		if (empty($snap['files']) || !is_array($snap['files'])) {
 			return;
 		}
-		$qb = $this->db->getQueryBuilder();
-		$qb->update('sheetmusic_misc_data')
-			->set('deleted_at', $qb->createNamedParameter(null, IQueryBuilder::PARAM_NULL))
-			->where($qb->expr()->eq('song_uuid', $qb->createNamedParameter($songUuid, IQueryBuilder::PARAM_STR)))
-			->executeStatement();
-	}
 
-	/**
-	 * Compare two snapshots to see if meaningful fields changed.
-	 */
-	private function areSnapshotsEquivalent(array $a, array $b): bool {
-		$ignored = ['id', 'updatedAt', 'entities', 'files', 'attributes'];
-		$allKeys = array_unique(array_merge(array_keys($a), array_keys($b)));
+		$currentFiles = $this->songFileMapper->findAllForSong($songId, includeDeleted: true);
+		$fileMap = [];
+		foreach ($currentFiles as $cf) {
+			$fileMap[$cf->fileId] = $cf;
+		}
 
-		foreach ($allKeys as $k) {
-			if (in_array($k, $ignored, true)) {
+		$snapFileIds = [];
+		foreach ($snap['files'] as $fSnap) {
+			$fileId = (int)($fSnap['fileId'] ?? 0);
+			if ($fileId <= 0) {
 				continue;
 			}
-			if (($a[$k] ?? null) !== ($b[$k] ?? null)) {
-				return false;
-			}
-		}
 
-		// Check entities
-		$entA = $a['entities'] ?? [];
-		$entB = $b['entities'] ?? [];
-		if (json_encode($entA) !== json_encode($entB)) {
-			return false;
-		}
-
-		// Check files
-		$filesA = $a['files'] ?? [];
-		$filesB = $b['files'] ?? [];
-		if (json_encode($filesA) !== json_encode($filesB)) {
-			return false;
-		}
-
-		// Check custom attributes
-		$attrA = $a['attributes'] ?? [];
-		$attrB = $b['attributes'] ?? [];
-		if (json_encode($attrA) !== json_encode($attrB)) {
-			return false;
-		}
-
-		return true;
-	}
-
-	/**
-	 * Generate a readable change summary between old and new state.
-	 */
-	private function generateSummary(string $action, ?array $old, array $new): string {
-		if ($action === InternalSongHistory::ACTION_CREATED) {
-			return 'Song created';
-		}
-		if ($action === InternalSongHistory::ACTION_DELETED) {
-			return 'Song deleted';
-		}
-		if ($action === InternalSongHistory::ACTION_RESTORED) {
-			return 'Song restored from trash';
-		}
-		if ($action === InternalSongHistory::ACTION_REVERTED) {
-			return 'Reverted to revision';
-		}
-		if ($action === InternalSongHistory::ACTION_SYNCED) {
-			return 'Synced from MobileSheets';
-		}
-
-		if ($old === null) {
-			return 'Song modified';
-		}
-
-		$changes = [];
-
-		if (($old['title'] ?? '') !== ($new['title'] ?? '')) {
-			$changes[] = 'Title: "' . ($old['title'] ?? '') . '" → "' . ($new['title'] ?? '') . '"';
-		}
-		if (($old['rating'] ?? 0) !== ($new['rating'] ?? 0)) {
-			$changes[] = 'Rating: ' . ($new['rating'] ?? 0) . '★';
-		}
-		if (($old['difficulty'] ?? 0) !== ($new['difficulty'] ?? 0)) {
-			$changes[] = 'Difficulty: ' . ($new['difficulty'] ?? 0);
-		}
-		if (($old['duration'] ?? 0) !== ($new['duration'] ?? 0)) {
-			$changes[] = 'Duration: ' . ($new['duration'] ?? 0) . 's';
-		}
-		if (($old['opus'] ?? '') !== ($new['opus'] ?? '')) {
-			$changes[] = 'Opus updated';
-		}
-		if (($old['catalogNumber'] ?? '') !== ($new['catalogNumber'] ?? '')) {
-			$changes[] = 'Catalog # updated';
-		}
-
-		// Check entity differences across all present entity types
-		$oldEnts = (array)($old['entities'] ?? []);
-		$newEnts = (array)($new['entities'] ?? []);
-		$allEntityTypes = array_unique(array_merge(array_keys($oldEnts), array_keys($newEnts)));
-		$entityLabels = [
-			'composer' => 'Composers',
-			'artist' => 'Artists',
-			'collection' => 'Collections',
-			'book' => 'Books',
-			'genre' => 'Genres',
-			'key' => 'Keys',
-			'customgroup' => 'Custom Groups',
-			'year' => 'Years',
-			'signature' => 'Time Signatures',
-			'sourcetype' => 'Source Types',
-			'instrument' => 'Instruments',
-		];
-		foreach ($allEntityTypes as $t) {
-			$label = $entityLabels[$t] ?? ucfirst((string)$t) . 's';
-			$oldNames = array_column((array)($oldEnts[$t] ?? []), 'name');
-			$newNames = array_column((array)($newEnts[$t] ?? []), 'name');
-			sort($oldNames);
-			sort($newNames);
-			if ($oldNames !== $newNames) {
-				$added = array_diff($newNames, $oldNames);
-				$removed = array_diff($oldNames, $newNames);
-				if (!empty($added)) {
-					$changes[] = $label . ' added: ' . implode(', ', $added);
+			$snapFileIds[] = $fileId;
+			if (isset($fileMap[$fileId])) {
+				$fileRecord = $fileMap[$fileId];
+				if (isset($fSnap['pageOrder'])) {
+					$fileRecord->pageOrder = (string)$fSnap['pageOrder'];
 				}
-				if (!empty($removed)) {
-					$changes[] = $label . ' removed: ' . implode(', ', $removed);
-				}
+				// Restore file association if it was unlinked/soft-deleted
+				$fileRecord->deletedAt = null;
+				$fileRecord->updatedAt = time();
+				$this->songFileMapper->update($fileRecord);
+
+				// Restore physical file from Nextcloud trashbin if it was moved to trash
+				$this->trashService->restorePhysicalFileFromTrashIfNeeded($fileRecord->fileId, $userId);
+
+				// Restore physical file version if the file was modified since this snapshot
+				$this->fileVersionService->restorePhysicalFileVersionIfNeeded(
+					$fileRecord->fileId,
+					$userId,
+					$fSnap,
+					$historyCreatedAt,
+					$fileRecord
+				);
 			}
 		}
 
-		// Check files
-		$oldFiles = (array)($old['files'] ?? []);
-		$newFiles = (array)($new['files'] ?? []);
-		if (count($oldFiles) !== count($newFiles)) {
-			$changes[] = 'Attached files: ' . count($oldFiles) . ' → ' . count($newFiles);
-		}
-
-		// Check custom attributes
-		$oldAttrs = (array)($old['attributes'] ?? []);
-		$newAttrs = (array)($new['attributes'] ?? []);
-		$allAttrKeys = array_unique(array_merge(array_keys($oldAttrs), array_keys($newAttrs)));
-		foreach ($allAttrKeys as $attrKey) {
-			$oldAttrVal = $oldAttrs[$attrKey] ?? null;
-			$newAttrVal = $newAttrs[$attrKey] ?? null;
-			if ($oldAttrVal !== $newAttrVal) {
-				$humanAttr = ucfirst((string)preg_replace('/(?<!^)[A-Z]/', ' $0', (string)$attrKey));
-				if ($oldAttrVal === null) {
-					$changes[] = $humanAttr . ' added';
-				} elseif ($newAttrVal === null) {
-					$changes[] = $humanAttr . ' removed';
-				} else {
-					$changes[] = $humanAttr . ' updated';
-				}
+		// Soft-delete any files that were attached after this snapshot
+		foreach ($currentFiles as $cf) {
+			if (!in_array($cf->fileId, $snapFileIds, true) && $cf->deletedAt === null) {
+				$cf->deletedAt = time();
+				$cf->updatedAt = time();
+				$this->songFileMapper->update($cf);
 			}
 		}
-
-		// Generic fallback for any additional or custom song fields
-		$knownFields = [
-			'id', 'uuid', 'libraryId', 'clientId', 'title', 'sortTitle', 'rating',
-			'difficulty', 'duration', 'keywords', 'notes', 'opus', 'catalogNumber',
-			'songNumber', 'createdAt', 'updatedAt', 'deletedAt', 'entities', 'files', 'attributes',
-		];
-		$allSongKeys = array_unique(array_merge(array_keys($old), array_keys($new)));
-		foreach ($allSongKeys as $key) {
-			if (in_array($key, $knownFields, true)) {
-				continue;
-			}
-			$oldVal = $old[$key] ?? null;
-			$newVal = $new[$key] ?? null;
-			if ($oldVal !== $newVal) {
-				$humanLabel = ucfirst((string)preg_replace('/(?<!^)[A-Z]/', ' $0', (string)$key));
-				if ($oldVal === null && $newVal !== null) {
-					$changes[] = $humanLabel . ' set';
-				} elseif ($oldVal !== null && $newVal === null) {
-					$changes[] = $humanLabel . ' cleared';
-				} else {
-					$changes[] = $humanLabel . ' updated';
-				}
-			}
-		}
-
-		if (empty($changes)) {
-			return 'Updated song details';
-		}
-
-		return implode('; ', array_slice($changes, 0, 3));
 	}
 }
