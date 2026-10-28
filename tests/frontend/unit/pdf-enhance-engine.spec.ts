@@ -5,7 +5,10 @@ import { PDFDocument } from 'pdf-lib'
 import {
 	computeExactPageScale,
 	executeEnhancePage,
+	formatByteSize,
 	getPdfPageImageResolution,
+	inspectPdfPageResolution,
+	pruneUnreferencedPdfObjects,
 	resolvePageRenderScale,
 } from '../../../src/components/song-pdf/pdf-enhance-engine'
 import { applyPipeline, createImageBuffer } from '../../../src/components/song-pdf/scan-enhance-engine'
@@ -233,6 +236,38 @@ describe('pdf-enhance-engine', () => {
 			expect(reloadedGray8.getPageCount()).toBe(8)
 			const infoGray8 = getPdfPageImageResolution(reloadedGray8.getPage(0))
 			expect(infoGray8).not.toBeNull()
+		})
+
+		it('prunes unreferenced old pages and image streams so file size does not explode', async () => {
+			const doc = await PDFDocument.load(samplePdfBytes)
+			const initialObjectCount = doc.context.enumerateIndirectObjects().length
+
+			// Remove 7 of 8 pages and prune unreferenced objects
+			while (doc.getPageCount() > 1) {
+				doc.removePage(1)
+			}
+			const deletedCount = await pruneUnreferencedPdfObjects(doc)
+			expect(deletedCount).toBeGreaterThan(80)
+			expect(doc.context.enumerateIndirectObjects().length).toBeLessThan(initialObjectCount / 2)
+
+			const savedBytes = await doc.save()
+			// Saved 1-page PDF is drastically smaller than the 8-page 792 KB original
+			expect(savedBytes.byteLength).toBeLessThan(samplePdfBytes.byteLength * 0.2)
+		})
+
+		it('formats byte sizes and inspects page resolution accurately', async () => {
+			expect(formatByteSize(512)).toBe('512 B')
+			expect(formatByteSize(35384)).toBe('34.6 KB')
+			expect(formatByteSize(1678584)).toBe('1.60 MB')
+
+			const doc = await PDFDocument.load(samplePdfBytes)
+			const summary = await inspectPdfPageResolution(undefined, 1, doc.getPage(0))
+			expect(summary.pageNum).toBe(1)
+			expect(summary.pixelWidth).toBe(829)
+			expect(summary.pixelHeight).toBe(1173)
+			expect(summary.dpi).toBe(100)
+			expect(summary.widthMm).toBe(210)
+			expect(summary.heightMm).toBe(297)
 		})
 	})
 })

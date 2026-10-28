@@ -344,7 +344,11 @@ export function applyAdaptiveThreshold(img: ImageBuffer, options: AdaptiveThresh
 			const threshold = mean - delta
 			const v = grayData[yOffset + x]
 
-			// t in [0, 1]: 0 = full foreground (blackValue), 1 = full paper background (whiteValue)
+			// t in [0, 1]: 0 = full foreground (blackValue), 1 = full paper background (whiteValue).
+			// When softness > 0, pixels at or above threshold (v >= mean - delta) remain 100% pure
+			// paper white (t = 1), while pixels in [threshold - softness, threshold] transition
+			// smoothly from blackValue (t = 0) to whiteValue (t = 1). This gives anti-aliased soft
+			// edges on notes/staff lines without leaking scanner noise into the paper background.
 			let t: number
 			if (lowerLimit !== undefined && v <= lowerLimit) {
 				t = 0
@@ -352,8 +356,10 @@ export function applyAdaptiveThreshold(img: ImageBuffer, options: AdaptiveThresh
 				t = 1
 			} else if (softness <= 0) {
 				t = v <= threshold ? 0 : 1
+			} else if (v >= threshold) {
+				t = 1
 			} else {
-				t = Math.min(1, Math.max(0, (v - (threshold - softness)) / (2 * softness)))
+				t = Math.min(1, Math.max(0, (v - (threshold - softness)) / softness))
 			}
 
 			const outVal = Math.round(blackValue + t * (whiteValue - blackValue))
@@ -477,13 +483,34 @@ export function applyOperation(img: ImageBuffer, op: ScanOperation): ImageBuffer
 	}
 }
 
+export interface ApplyPipelineOptions {
+	/**
+	 * When true, skips the lossy DCT preview simulation for JPEG compression operations
+	 * because the final PDF exporter encodes the buffer directly to a JPEG stream.
+	 */
+	skipJpegSimulation?: boolean
+}
+
 /**
  * Sequentially executes a stack of operations on an ImageBuffer.
  */
-export function applyPipeline(img: ImageBuffer, operations: ScanOperation[]): ImageBuffer {
+export function applyPipeline(
+	img: ImageBuffer,
+	operations: ScanOperation[],
+	options?: ApplyPipelineOptions,
+): ImageBuffer {
 	let current = img
 	for (const op of operations) {
 		if (op.enabled) {
+			if (options?.skipJpegSimulation && op.type === 'compression' && op.format === 'jpeg') {
+				if ((op.colorMode ?? 'grayscale') === 'grayscale') {
+					current = applyCompression(current, {
+						...op,
+						format: 'grayscale-8bit',
+					})
+				}
+				continue
+			}
 			current = applyOperation(current, op)
 		}
 	}

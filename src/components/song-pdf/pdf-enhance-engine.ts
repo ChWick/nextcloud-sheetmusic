@@ -1,4 +1,4 @@
-import { PDFDict, PDFDocument, PDFName, type PDFPage } from 'pdf-lib'
+import { PDFArray, PDFDict, PDFDocument, PDFName, type PDFPage, PDFRawStream, PDFRef, PDFStream } from 'pdf-lib'
 import { encodeImageBufferToJpeg, packGrayscaleBits } from './jpeg-encoder'
 import { encodeImageBufferToPng } from './png-encoder'
 import type { CompressionOp, ImageBuffer, ScanOperation } from './scan-types'
@@ -8,6 +8,119 @@ export interface EnhancePageOptions {
 	enhancedImageBuffer: ImageBuffer
 	compression?: CompressionOp
 	operations?: ScanOperation[]
+}
+
+export interface PdfPageResolutionSummary {
+	pageNum: number
+	widthPt: number
+	heightPt: number
+	widthMm: number
+	heightMm: number
+	pixelWidth: number
+	pixelHeight: number
+	dpi: number
+	scale: number
+}
+
+export function formatByteSize(bytes?: number | null): string {
+	if (typeof bytes !== 'number' || !Number.isFinite(bytes) || bytes <= 0) {
+		return '—'
+	}
+	if (bytes < 1024) {
+		return `${bytes} B`
+	}
+	const kb = bytes / 1024
+	if (kb < 1024) {
+		return `${kb >= 100 ? Math.round(kb) : kb.toFixed(1)} KB`
+	}
+	const mb = kb / 1024
+	return `${mb >= 100 ? Math.round(mb) : mb.toFixed(2)} MB`
+}
+
+export function isImageBufferGrayscale(img: ImageBuffer): boolean {
+	if (img.channels === 1) return true
+	const { data, channels, width, height } = img
+	const total = width * height
+	for (let i = 0; i < total; i++) {
+		const idx = i * channels
+		const r = data[idx]
+		if (data[idx + 1] !== r || data[idx + 2] !== r) {
+			return false
+		}
+	}
+	return true
+}
+
+/**
+ * Flushes pending pdf-lib embeds and deletes all unreferenced indirect objects
+ * (such as removed/replaced pages and their old multi-megabyte `/Image` XObjects)
+ * from `pdfDoc.context.indirectObjects` so `pdfDoc.save()` does not retain dead streams.
+ */
+export async function pruneUnreferencedPdfObjects(pdfDoc: PDFDocument): Promise<number> {
+	if (typeof (pdfDoc as any).flush === 'function') {
+		await (pdfDoc as any).flush()
+	}
+
+	const ctx = pdfDoc.context
+	const activePageRefs = new Set(pdfDoc.getPages().map((p) => p.ref.toString()))
+	const removedPageRefs = new Set<string>()
+
+	for (const [ref, obj] of ctx.enumerateIndirectObjects()) {
+		const dict = obj instanceof PDFDict ? obj : ((obj as any)?.dict instanceof PDFDict ? (obj as any).dict : null)
+		if (dict) {
+			const typeName = dict.lookupMaybe(PDFName.of('Type'), PDFName)?.toString()
+			if (typeName === '/Page' && !activePageRefs.has(ref.toString())) {
+				removedPageRefs.add(ref.toString())
+			}
+		}
+	}
+
+	const reachable = new Set<string>()
+	const queue: any[] = []
+
+	const enqueue = (val: any) => {
+		if (!val) return
+		if (val instanceof PDFRef) {
+			const key = val.toString()
+			if (removedPageRefs.has(key) || reachable.has(key)) return
+			reachable.add(key)
+			queue.push(ctx.lookup(val))
+		} else {
+			queue.push(val)
+		}
+	}
+
+	enqueue(ctx.trailerInfo.Root)
+	enqueue(ctx.trailerInfo.Info)
+	enqueue(ctx.trailerInfo.Encrypt)
+
+	while (queue.length > 0) {
+		const curr = queue.pop()
+		if (!curr) continue
+		if (curr instanceof PDFRef) {
+			enqueue(curr)
+		} else if (curr instanceof PDFDict) {
+			for (const [, v] of curr.entries()) {
+				enqueue(v)
+			}
+		} else if (curr instanceof PDFArray) {
+			for (let i = 0; i < curr.size(); i++) {
+				enqueue(curr.get(i))
+			}
+		} else if (curr instanceof PDFStream || curr instanceof PDFRawStream || (curr as any)?.dict instanceof PDFDict) {
+			enqueue((curr as any).dict)
+		}
+	}
+
+	let deletedCount = 0
+	for (const [ref] of ctx.enumerateIndirectObjects()) {
+		if (!reachable.has(ref.toString())) {
+			ctx.delete(ref)
+			deletedCount++
+		}
+	}
+
+	return deletedCount
 }
 
 export function resolveActiveCompressionOp(options: EnhancePageOptions): CompressionOp | null {
@@ -67,7 +180,14 @@ export function computeExactPageScale(
 	if (low <= high) {
 		return (low + high) / 2
 	}
-	return Math.max(imgW / pageW, imgH / pageH)
+	const scaleW = imgW / pageW
+	const scaleH = imgH / pageH
+	// If aspect ratios differ by more than 10%, preserve total pixel count (geometric mean)
+	// rather than inflating the smaller dimension to match the larger one.
+	if (Math.abs(scaleW - scaleH) / Math.max(scaleW, scaleH) > 0.1) {
+		return Math.sqrt((imgW * imgH) / (pageW * pageH))
+	}
+	return Math.max(scaleW, scaleH)
 }
 
 /**
@@ -254,8 +374,8 @@ export async function resolvePageRenderScale(
 								const s = computeExactPageScale(pageH, pageW, imgW, imgH)
 								if (s > maxFullPageScale) maxFullPageScale = s
 							} else {
-								const s = Math.max(imgW / drawnW, imgH / drawnH)
-								if (drawnW * drawnH >= 0.4 * pageW * pageH) {
+								const s = computeExactPageScale(drawnW, drawnH, imgW, imgH)
+								if (drawnW * drawnH >= 0.4 * pageW * pageH || drawnW >= 0.75 * pageW || drawnH >= 0.75 * pageH) {
 									if (s > maxFullPageScale) maxFullPageScale = s
 								} else if (s > maxSubImageScale) {
 									maxSubImageScale = s
@@ -276,20 +396,19 @@ export async function resolvePageRenderScale(
 		}
 	}
 
-	let pdfLibScale = 0
+	if (maxFullPageScale > 0) {
+		return maxFullPageScale
+	}
+
 	if (pdfLibPage) {
 		const info = getPdfPageImageResolution(pdfLibPage)
 		if (info && info.scale > 0) {
-			pdfLibScale = info.scale
+			return info.scale
 		}
 	}
 
-	if (maxFullPageScale > 0 || pdfLibScale > 0) {
-		return Math.max(maxFullPageScale, pdfLibScale)
-	}
-
 	if (maxSubImageScale > 0) {
-		return hasOperatorList ? Math.max(maxSubImageScale, 300 / 72) : maxSubImageScale
+		return maxSubImageScale
 	}
 
 	// For pure vector PDF pages with a real operator list, render at 300 DPI (300 / 72)
@@ -298,6 +417,50 @@ export async function resolvePageRenderScale(
 	}
 
 	return 1.0
+}
+
+/**
+ * Inspects a PDF page (via pdfjs and/or pdf-lib) and returns its physical size, native pixel resolution, and DPI.
+ */
+export async function inspectPdfPageResolution(
+	pdfjsPage: any,
+	pageNum = 1,
+	pdfLibPage?: PDFPage,
+): Promise<PdfPageResolutionSummary> {
+	const scale = await resolvePageRenderScale(pdfjsPage, pdfLibPage)
+	let widthPt = 595.28
+	let heightPt = 841.89
+
+	if (typeof pdfjsPage?.getViewport === 'function') {
+		const rot = pdfjsPage.rotate ?? 0
+		const vp = pdfjsPage.getViewport({ scale: 1.0, rotation: rot })
+		if (vp.width > 0 && vp.height > 0) {
+			widthPt = vp.width
+			heightPt = vp.height
+		}
+	} else if (pdfLibPage) {
+		const sz = pdfLibPage.getSize()
+		widthPt = sz.width
+		heightPt = sz.height
+	}
+
+	const pixelWidth = Math.max(1, Math.round(widthPt * scale))
+	const pixelHeight = Math.max(1, Math.round(heightPt * scale))
+	const dpi = Math.max(1, Math.round(scale * 72))
+	const widthMm = Math.round((widthPt / 72) * 25.4)
+	const heightMm = Math.round((heightPt / 72) * 25.4)
+
+	return {
+		pageNum,
+		widthPt,
+		heightPt,
+		widthMm,
+		heightMm,
+		pixelWidth,
+		pixelHeight,
+		dpi,
+		scale,
+	}
 }
 
 /**
@@ -335,12 +498,16 @@ export async function executeEnhancePage(
 		embeddedImage = await pdfDoc.embedPng(pngBytes)
 
 		const embedder = (embeddedImage as any)?.embedder
-		if (embedder?.image && compressionOp) {
+		if (embedder?.image) {
+			// Always strip redundant alpha SMask for opaque scan pages
+			embedder.image.alphaChannel = null
+
 			if (
-				compressionOp.format === 'grayscale-8bit' ||
-				compressionOp.format === 'grayscale-4bit' ||
-				compressionOp.format === 'grayscale-2bit' ||
-				compressionOp.format === 'bw-1bit'
+				compressionOp &&
+				(compressionOp.format === 'grayscale-8bit' ||
+					compressionOp.format === 'grayscale-4bit' ||
+					compressionOp.format === 'grayscale-2bit' ||
+					compressionOp.format === 'bw-1bit')
 			) {
 				const bitDepth: 1 | 2 | 4 | 8 =
 					compressionOp.format === 'bw-1bit'
@@ -351,11 +518,13 @@ export async function executeEnhancePage(
 								? 4
 								: 8
 				embedder.colorSpace = 'DeviceGray'
-				embedder.image.alphaChannel = null
 				embedder.image.bitsPerComponent = bitDepth
 				embedder.image.rgbChannel = packGrayscaleBits(options.enhancedImageBuffer, bitDepth)
-			} else if (compressionOp.format === 'rgb-24bit') {
-				embedder.image.alphaChannel = null
+			} else if (!compressionOp && isImageBufferGrayscale(options.enhancedImageBuffer)) {
+				// Automatically store grayscale-only enhanced scans as single-channel /DeviceGray
+				embedder.colorSpace = 'DeviceGray'
+				embedder.image.bitsPerComponent = 8
+				embedder.image.rgbChannel = packGrayscaleBits(options.enhancedImageBuffer, 8)
 			}
 		}
 	}
@@ -371,6 +540,7 @@ export async function executeEnhancePage(
 		height: origSize.height,
 	})
 
-	// 4. Remove original page (now shifted to pageIndex + 1)
+	// 4. Remove original page (now shifted to pageIndex + 1) and prune orphaned indirect objects
 	pdfDoc.removePage(options.pageIndex + 1)
+	await pruneUnreferencedPdfObjects(pdfDoc)
 }
