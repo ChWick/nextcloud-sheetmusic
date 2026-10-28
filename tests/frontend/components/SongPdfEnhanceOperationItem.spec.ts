@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import SongPdfEnhanceOperationItem from '../../../src/components/song-pdf/SongPdfEnhanceOperationItem.vue'
-import type { AdaptiveThresholdOp, GaussianOp, GrayLevelMappingOp } from '../../../src/components/song-pdf/scan-types'
+import type { AdaptiveThresholdOp, CompressionOp, GaussianOp, GrayLevelMappingOp } from '../../../src/components/song-pdf/scan-types'
 
 describe('SongPdfEnhanceOperationItem.vue', () => {
 	it('renders Gaussian operation parameters and handles slider events', async () => {
@@ -84,13 +84,48 @@ describe('SongPdfEnhanceOperationItem.vue', () => {
 
 		expect(wrapper.text()).toContain('Adaptive Thresholding')
 		const sliders = wrapper.findAll('input[type="range"]')
-		expect(sliders.length).toBe(4) // windowSize, delta, blackValue, whiteValue
+		expect(sliders.length).toBe(5) // windowSize, delta, softness, blackValue, whiteValue
 
 		const select = wrapper.find('select')
 		expect(select.exists()).toBe(true)
 		await select.setValue('preserveColor')
 		expect(wrapper.emitted('input')).toBeTruthy()
 		expect(wrapper.emitted('change')).toBeTruthy()
+	})
+
+	it('renders Compression parameters and handles format and quality changes', async () => {
+		const op: CompressionOp = {
+			id: 'op-4',
+			type: 'compression',
+			format: 'jpeg',
+			quality: 75,
+			colorMode: 'grayscale',
+			enabled: true,
+		}
+
+		const wrapper = mount(SongPdfEnhanceOperationItem, {
+			props: {
+				operation: op,
+				index: 3,
+				total: 4,
+			},
+		})
+
+		expect(wrapper.text()).toContain('Image Compression')
+		expect(wrapper.text()).toContain('75%')
+
+		const formatSelect = wrapper.find('[data-test="compression-format-select"]')
+		const qualitySlider = wrapper.find('[data-test="compression-quality-slider"]')
+		const colorModeSelect = wrapper.find('[data-test="compression-colormode-select"]')
+		expect(formatSelect.exists()).toBe(true)
+		expect(qualitySlider.exists()).toBe(true)
+		expect(colorModeSelect.exists()).toBe(true)
+
+		await formatSelect.setValue('grayscale-8bit')
+		expect(wrapper.emitted('input')).toBeTruthy()
+		expect(wrapper.emitted('change')).toBeTruthy()
+		// Quality slider is hidden when format is lossless 8-bit grayscale
+		expect(wrapper.find('[data-test="compression-quality-slider"]').exists()).toBe(false)
 	})
 
 	it('emits toggle, move up/down, and remove actions correctly', async () => {

@@ -5,7 +5,7 @@ export interface ImageBuffer {
 	data: Uint8ClampedArray
 }
 
-export type ScanOpType = 'gaussian' | 'grayLevelMapping' | 'adaptiveThreshold'
+export type ScanOpType = 'gaussian' | 'grayLevelMapping' | 'adaptiveThreshold' | 'compression'
 
 export interface BaseScanOp {
 	id: string
@@ -35,7 +35,23 @@ export interface AdaptiveThresholdOp extends BaseScanOp {
 	lowerLimit?: number // Cutoff: pixels <= lowerLimit are unconditionally black
 	upperLimit?: number // Cutoff: pixels >= upperLimit are unconditionally white
 	colorMode?: 'binarize' | 'preserveColor'
+	softness?: number // Soft transition width (0 = hard binary, >0 = smooth ramp around local threshold)
 }
 
-export type ScanOperation = GaussianOp | GrayLevelMappingOp | AdaptiveThresholdOp
+export type CompressionFormat =
+	| 'jpeg'
+	| 'grayscale-8bit'
+	| 'grayscale-4bit'
+	| 'grayscale-2bit'
+	| 'bw-1bit'
+	| 'rgb-24bit'
+
+export interface CompressionOp extends BaseScanOp {
+	type: 'compression'
+	format: CompressionFormat
+	quality: number // 10-100 (for 'jpeg', default 75)
+	colorMode?: 'grayscale' | 'color' // for 'jpeg' (default 'grayscale')
+}
+
+export type ScanOperation = GaussianOp | GrayLevelMappingOp | AdaptiveThresholdOp | CompressionOp
 

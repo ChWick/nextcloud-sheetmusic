@@ -1,10 +1,28 @@
 import { PDFDict, PDFDocument, PDFName, type PDFPage } from 'pdf-lib'
-import type { ImageBuffer } from './scan-types'
+import { encodeImageBufferToJpeg, packGrayscaleBits } from './jpeg-encoder'
 import { encodeImageBufferToPng } from './png-encoder'
+import type { CompressionOp, ImageBuffer, ScanOperation } from './scan-types'
 
 export interface EnhancePageOptions {
 	pageIndex: number // 0-based page index
 	enhancedImageBuffer: ImageBuffer
+	compression?: CompressionOp
+	operations?: ScanOperation[]
+}
+
+export function resolveActiveCompressionOp(options: EnhancePageOptions): CompressionOp | null {
+	if (options.compression && options.compression.enabled !== false) {
+		return options.compression
+	}
+	if (options.operations) {
+		for (let i = options.operations.length - 1; i >= 0; i--) {
+			const op = options.operations[i]
+			if (op.enabled && op.type === 'compression') {
+				return op
+			}
+		}
+	}
+	return null
 }
 
 export interface PageImageResolutionInfo {
@@ -298,11 +316,49 @@ export async function executeEnhancePage(
 	const origSize = origPage.getSize()
 	const origRotation = origPage.getRotation()
 
-	// 1. Encode enhanced ImageBuffer to PNG
-	const pngBytes = await encodeImageBufferToPng(options.enhancedImageBuffer)
+	const compressionOp = resolveActiveCompressionOp(options)
+	let embeddedImage: Awaited<ReturnType<PDFDocument['embedPng']>>
 
-	// 2. Embed into PDFDocument
-	const embeddedImage = await pdfDoc.embedPng(pngBytes)
+	if (compressionOp?.format === 'jpeg') {
+		const isGray = (compressionOp.colorMode ?? 'grayscale') === 'grayscale'
+		const jpegBytes = encodeImageBufferToJpeg(
+			options.enhancedImageBuffer,
+			compressionOp.quality ?? 75,
+			isGray,
+		)
+		embeddedImage = await pdfDoc.embedJpg(jpegBytes)
+	} else {
+		// 1. Encode enhanced ImageBuffer to PNG
+		const pngBytes = await encodeImageBufferToPng(options.enhancedImageBuffer)
+
+		// 2. Embed into PDFDocument
+		embeddedImage = await pdfDoc.embedPng(pngBytes)
+
+		const embedder = (embeddedImage as any)?.embedder
+		if (embedder?.image && compressionOp) {
+			if (
+				compressionOp.format === 'grayscale-8bit' ||
+				compressionOp.format === 'grayscale-4bit' ||
+				compressionOp.format === 'grayscale-2bit' ||
+				compressionOp.format === 'bw-1bit'
+			) {
+				const bitDepth: 1 | 2 | 4 | 8 =
+					compressionOp.format === 'bw-1bit'
+						? 1
+						: compressionOp.format === 'grayscale-2bit'
+							? 2
+							: compressionOp.format === 'grayscale-4bit'
+								? 4
+								: 8
+				embedder.colorSpace = 'DeviceGray'
+				embedder.image.alphaChannel = null
+				embedder.image.bitsPerComponent = bitDepth
+				embedder.image.rgbChannel = packGrayscaleBits(options.enhancedImageBuffer, bitDepth)
+			} else if (compressionOp.format === 'rgb-24bit') {
+				embedder.image.alphaChannel = null
+			}
+		}
+	}
 
 	// 3. Insert new page at target index and draw the enhanced image filling the page
 	const newPage = pdfDoc.insertPage(options.pageIndex, [origSize.width, origSize.height])

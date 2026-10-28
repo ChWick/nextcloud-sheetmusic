@@ -4,7 +4,7 @@ import ArrowUp from 'vue-material-design-icons/ArrowUp.vue'
 import ArrowDown from 'vue-material-design-icons/ArrowDown.vue'
 import DeleteOutline from 'vue-material-design-icons/DeleteOutline.vue'
 
-import type { AdaptiveThresholdOp, GaussianOp, GrayLevelMappingOp, ScanOperation } from './scan-types'
+import type { AdaptiveThresholdOp, CompressionOp, GaussianOp, GrayLevelMappingOp, ScanOperation } from './scan-types'
 
 const props = defineProps<{
 	operation: ScanOperation
@@ -38,7 +38,9 @@ const emit = defineEmits<{
 							? t('sheetmusic', 'Gaussian Filter')
 							: operation.type === 'grayLevelMapping'
 								? t('sheetmusic', 'Gray Level Mapping (Curves)')
-								: t('sheetmusic', 'Adaptive Thresholding')
+								: operation.type === 'adaptiveThreshold'
+									? t('sheetmusic', 'Adaptive Thresholding')
+									: t('sheetmusic', 'Image Compression')
 					}}
 				</strong>
 			</div>
@@ -166,6 +168,26 @@ const emit = defineEmits<{
 				</div>
 				<div :class="$style.paramRow">
 					<label :class="$style.paramLabel">
+						{{ t('sheetmusic', 'Soft Transition (Softness):') }}
+						<strong>
+							{{ ((operation as AdaptiveThresholdOp).softness ?? 0) === 0
+								? t('sheetmusic', 'Hard (0)')
+								: (operation as AdaptiveThresholdOp).softness }}
+						</strong>
+					</label>
+					<input
+						:value="(operation as AdaptiveThresholdOp).softness ?? 0"
+						type="range"
+						min="0"
+						max="60"
+						step="1"
+						:class="$style.slider"
+						data-test="threshold-softness-slider"
+						@input="(operation as AdaptiveThresholdOp).softness = Number(($event.target as HTMLInputElement).value); emit('input')"
+						@change="emit('change')" />
+				</div>
+				<div :class="$style.paramRow">
+					<label :class="$style.paramLabel">
 						{{ t('sheetmusic', 'Custom Black Limit (Ink):') }}
 						<strong>{{ (operation as AdaptiveThresholdOp).blackValue }}</strong>
 					</label>
@@ -202,6 +224,54 @@ const emit = defineEmits<{
 						<option value="preserveColor">{{ t('sheetmusic', 'Whiten Paper, Keep Colored Notes') }}</option>
 					</select>
 				</div>
+			</template>
+
+			<!-- Image Compression Parameters -->
+			<template v-else-if="operation.type === 'compression'">
+				<div :class="$style.paramRow">
+					<label :class="$style.paramLabel">{{ t('sheetmusic', 'Compression Format / Bit Depth:') }}</label>
+					<select
+						v-model="(operation as CompressionOp).format"
+						:class="$style.select"
+						data-test="compression-format-select"
+						@change="emit('input'); emit('change')">
+						<option value="jpeg">{{ t('sheetmusic', 'JPEG (Lossy DCT)') }}</option>
+						<option value="grayscale-8bit">{{ t('sheetmusic', '8-bit Grayscale (256 shades)') }}</option>
+						<option value="grayscale-4bit">{{ t('sheetmusic', '4-bit Grayscale (16 shades)') }}</option>
+						<option value="grayscale-2bit">{{ t('sheetmusic', '2-bit Grayscale (4 shades)') }}</option>
+						<option value="bw-1bit">{{ t('sheetmusic', '1-bit B&W (2 shades)') }}</option>
+						<option value="rgb-24bit">{{ t('sheetmusic', '24-bit RGB (Lossless Color)') }}</option>
+					</select>
+				</div>
+				<template v-if="(operation as CompressionOp).format === 'jpeg'">
+					<div :class="$style.paramRow">
+						<label :class="$style.paramLabel">
+							{{ t('sheetmusic', 'JPEG Quality:') }}
+							<strong>{{ (operation as CompressionOp).quality }}%</strong>
+						</label>
+						<input
+							v-model.number="(operation as CompressionOp).quality"
+							type="range"
+							min="10"
+							max="100"
+							step="5"
+							:class="$style.slider"
+							data-test="compression-quality-slider"
+							@input="emit('input')"
+							@change="emit('change')" />
+					</div>
+					<div :class="$style.paramRow">
+						<label :class="$style.paramLabel">{{ t('sheetmusic', 'JPEG Color Space:') }}</label>
+						<select
+							v-model="(operation as CompressionOp).colorMode"
+							:class="$style.select"
+							data-test="compression-colormode-select"
+							@change="emit('input'); emit('change')">
+							<option value="grayscale">{{ t('sheetmusic', 'Grayscale (8-bit)') }}</option>
+							<option value="color">{{ t('sheetmusic', 'Color (24-bit YCbCr)') }}</option>
+						</select>
+					</div>
+				</template>
 			</template>
 		</div>
 	</div>

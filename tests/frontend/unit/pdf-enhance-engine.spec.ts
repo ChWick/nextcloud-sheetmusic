@@ -193,5 +193,46 @@ describe('pdf-enhance-engine', () => {
 				}),
 			).rejects.toThrow('out of bounds')
 		})
+
+		it('embeds JPEG and 8-bit/1-bit Grayscale compressed streams when a compression operation is active', async () => {
+			const img = createImageBuffer(32, 32, 4, 255)
+			for (let i = 0; i < 32 * 32; i++) {
+				const v = (i * 7) % 256
+				img.data[i * 4] = v
+				img.data[i * 4 + 1] = v
+				img.data[i * 4 + 2] = v
+				img.data[i * 4 + 3] = 255
+			}
+
+			// 1. JPEG Grayscale compression
+			const docJpg = await PDFDocument.load(samplePdfBytes)
+			await executeEnhancePage(docJpg, {
+				pageIndex: 0,
+				enhancedImageBuffer: img,
+				operations: [
+					{ id: 'c-jpg', type: 'compression', format: 'jpeg', quality: 60, colorMode: 'grayscale', enabled: true },
+				],
+			})
+			const savedJpgPdf = await docJpg.save()
+			const reloadedJpg = await PDFDocument.load(savedJpgPdf)
+			expect(reloadedJpg.getPageCount()).toBe(8)
+			const infoJpg = getPdfPageImageResolution(reloadedJpg.getPage(0))
+			expect(infoJpg).not.toBeNull()
+
+			// 2. 8-bit Grayscale (/DeviceGray) compression
+			const docGray8 = await PDFDocument.load(samplePdfBytes)
+			await executeEnhancePage(docGray8, {
+				pageIndex: 0,
+				enhancedImageBuffer: img,
+				operations: [
+					{ id: 'c-g8', type: 'compression', format: 'grayscale-8bit', quality: 75, enabled: true },
+				],
+			})
+			const savedGray8Pdf = await docGray8.save()
+			const reloadedGray8 = await PDFDocument.load(savedGray8Pdf)
+			expect(reloadedGray8.getPageCount()).toBe(8)
+			const infoGray8 = getPdfPageImageResolution(reloadedGray8.getPage(0))
+			expect(infoGray8).not.toBeNull()
+		})
 	})
 })

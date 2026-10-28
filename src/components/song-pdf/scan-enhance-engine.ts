@@ -1,4 +1,5 @@
-import type { AdaptiveThresholdOp, GaussianOp, GrayLevelMappingOp, ImageBuffer, ScanOperation } from './scan-types'
+import { simulateJpegCompression } from './jpeg-encoder'
+import type { AdaptiveThresholdOp, CompressionOp, GaussianOp, GrayLevelMappingOp, ImageBuffer, ScanOperation } from './scan-types'
 
 export function createImageBuffer(width: number, height: number, channels: 1 | 3 | 4 = 1, fill = 0): ImageBuffer {
 	const data = new Uint8ClampedArray(width * height * channels)
@@ -294,11 +295,13 @@ export interface AdaptiveThresholdOptions {
 	lowerLimit?: number
 	upperLimit?: number
 	colorMode?: 'binarize' | 'preserveColor'
+	softness?: number
 }
 
 /**
  * Applies Adaptive Thresholding using an O(1) Integral Image for local neighborhood mean.
- * Supports custom lower and upper limits for white/black values and color preservation mode.
+ * Supports custom lower and upper limits for white/black values, soft local thresholding,
+ * and color preservation mode.
  */
 export function applyAdaptiveThreshold(img: ImageBuffer, options: AdaptiveThresholdOptions): ImageBuffer {
 	const windowSize = Math.max(3, Math.floor(options.windowSize) | 1)
@@ -309,6 +312,7 @@ export function applyAdaptiveThreshold(img: ImageBuffer, options: AdaptiveThresh
 	const lowerLimit = options.lowerLimit
 	const upperLimit = options.upperLimit
 	const colorMode = options.colorMode ?? 'binarize'
+	const softness = Math.max(0, options.softness ?? 0)
 
 	const { width: w, height: h, channels: ch } = img
 	const gray = img.channels === 1 ? img : rgbaToGrayscale(img)
@@ -318,6 +322,7 @@ export function applyAdaptiveThreshold(img: ImageBuffer, options: AdaptiveThresh
 
 	const dst = cloneImageBuffer(img)
 	const dstData = dst.data
+	const fgScale = 1 - blackValue / 255
 
 	for (let y = 0; y < h; y++) {
 		const y1 = Math.max(0, y - r)
@@ -339,36 +344,42 @@ export function applyAdaptiveThreshold(img: ImageBuffer, options: AdaptiveThresh
 			const threshold = mean - delta
 			const v = grayData[yOffset + x]
 
-			let isBlack: boolean
+			// t in [0, 1]: 0 = full foreground (blackValue), 1 = full paper background (whiteValue)
+			let t: number
 			if (lowerLimit !== undefined && v <= lowerLimit) {
-				isBlack = true
+				t = 0
 			} else if (upperLimit !== undefined && v >= upperLimit) {
-				isBlack = false
+				t = 1
+			} else if (softness <= 0) {
+				t = v <= threshold ? 0 : 1
 			} else {
-				isBlack = v <= threshold
+				t = Math.min(1, Math.max(0, (v - (threshold - softness)) / (2 * softness)))
 			}
 
-			const outVal = isBlack ? blackValue : whiteValue
+			const outVal = Math.round(blackValue + t * (whiteValue - blackValue))
 			const idx = (yOffset + x) * ch
 
 			if (colorMode === 'preserveColor' && ch >= 3) {
-				if (isBlack) {
+				if (t <= 0) {
 					// Foreground: keep original color or scale by black value ratio
-					if (blackValue === 0) {
-						// Keep original color
-						// (already set from clone)
-					} else {
-						// Tint towards blackValue
-						const scale = 1 - blackValue / 255
-						dstData[idx] = Math.round(dstData[idx] * scale)
-						dstData[idx + 1] = Math.round(dstData[idx + 1] * scale)
-						dstData[idx + 2] = Math.round(dstData[idx + 2] * scale)
+					if (blackValue !== 0) {
+						dstData[idx] = Math.round(dstData[idx] * fgScale)
+						dstData[idx + 1] = Math.round(dstData[idx + 1] * fgScale)
+						dstData[idx + 2] = Math.round(dstData[idx + 2] * fgScale)
 					}
-				} else {
+				} else if (t >= 1) {
 					// Paper background: whiten to whiteValue
 					dstData[idx] = whiteValue
 					dstData[idx + 1] = whiteValue
 					dstData[idx + 2] = whiteValue
+				} else {
+					// Smooth transition between foreground color and paper whiteValue
+					const fgR = dstData[idx] * fgScale
+					const fgG = dstData[idx + 1] * fgScale
+					const fgB = dstData[idx + 2] * fgScale
+					dstData[idx] = Math.round(fgR * (1 - t) + whiteValue * t)
+					dstData[idx + 1] = Math.round(fgG * (1 - t) + whiteValue * t)
+					dstData[idx + 2] = Math.round(fgB * (1 - t) + whiteValue * t)
 				}
 			} else {
 				dstData[idx] = outVal
@@ -377,6 +388,54 @@ export function applyAdaptiveThreshold(img: ImageBuffer, options: AdaptiveThresh
 					dstData[idx + 2] = outVal
 				}
 			}
+		}
+	}
+
+	return dst
+}
+
+/**
+ * Applies image compression / bit-depth quantization for preview and pipeline output.
+ */
+export function applyCompression(img: ImageBuffer, op: CompressionOp): ImageBuffer {
+	if (op.format === 'jpeg') {
+		const isGray = (op.colorMode ?? 'grayscale') === 'grayscale'
+		return simulateJpegCompression(img, op.quality ?? 75, isGray)
+	}
+
+	if (op.format === 'rgb-24bit') {
+		return cloneImageBuffer(img)
+	}
+
+	// Grayscale bit-depth quantization ('grayscale-8bit' | 'grayscale-4bit' | 'grayscale-2bit' | 'bw-1bit')
+	const bitDepth =
+		op.format === 'bw-1bit'
+			? 1
+			: op.format === 'grayscale-2bit'
+				? 2
+				: op.format === 'grayscale-4bit'
+					? 4
+					: 8
+	const levels = (1 << bitDepth) - 1
+	const dst = cloneImageBuffer(img)
+	const dstData = dst.data
+	const ch = dst.channels
+	const pixelCount = dst.width * dst.height
+
+	for (let i = 0; i < pixelCount; i++) {
+		const idx = i * ch
+		const lum =
+			ch >= 3
+				? 0.299 * dstData[idx] + 0.587 * dstData[idx + 1] + 0.114 * dstData[idx + 2]
+				: dstData[idx]
+		const q =
+			bitDepth === 8
+				? Math.round(lum)
+				: Math.round((Math.round((lum / 255) * levels) / levels) * 255)
+		dstData[idx] = q
+		if (ch >= 3) {
+			dstData[idx + 1] = q
+			dstData[idx + 2] = q
 		}
 	}
 
@@ -409,7 +468,10 @@ export function applyOperation(img: ImageBuffer, op: ScanOperation): ImageBuffer
 				lowerLimit: op.lowerLimit,
 				upperLimit: op.upperLimit,
 				colorMode: op.colorMode,
+				softness: op.softness,
 			})
+		case 'compression':
+			return applyCompression(img, op)
 		default:
 			return cloneImageBuffer(img)
 	}

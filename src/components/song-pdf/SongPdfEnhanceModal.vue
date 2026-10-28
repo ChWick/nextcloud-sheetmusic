@@ -191,7 +191,7 @@ function applyPreset(preset: 'standard' | 'contrast' | 'colorClean' | 'binarize'
 		newOps = [
 			{ id: generateOpId(), type: 'gaussian', size: 3, enabled: true },
 			{ id: generateOpId(), type: 'grayLevelMapping', lowerCutoff: 40, upperCutoff: 215, colorMode: 'grayscale', enabled: true },
-			{ id: generateOpId(), type: 'adaptiveThreshold', windowSize: 25, delta: 12, blackValue: 0, whiteValue: 255, enabled: true },
+			{ id: generateOpId(), type: 'adaptiveThreshold', windowSize: 25, delta: 12, blackValue: 0, whiteValue: 255, softness: 15, enabled: true },
 		]
 	} else if (preset === 'contrast') {
 		newOps = [
@@ -200,11 +200,11 @@ function applyPreset(preset: 'standard' | 'contrast' | 'colorClean' | 'binarize'
 	} else if (preset === 'colorClean') {
 		newOps = [
 			{ id: generateOpId(), type: 'gaussian', size: 3, enabled: true },
-			{ id: generateOpId(), type: 'adaptiveThreshold', windowSize: 25, delta: 15, blackValue: 0, whiteValue: 255, colorMode: 'preserveColor', enabled: true },
+			{ id: generateOpId(), type: 'adaptiveThreshold', windowSize: 25, delta: 15, blackValue: 0, whiteValue: 255, colorMode: 'preserveColor', softness: 15, enabled: true },
 		]
 	} else if (preset === 'binarize') {
 		newOps = [
-			{ id: generateOpId(), type: 'adaptiveThreshold', windowSize: 21, delta: 10, blackValue: 0, whiteValue: 255, colorMode: 'binarize', enabled: true },
+			{ id: generateOpId(), type: 'adaptiveThreshold', windowSize: 21, delta: 10, blackValue: 0, whiteValue: 255, colorMode: 'binarize', softness: 0, enabled: true },
 		]
 	}
 
@@ -214,14 +214,16 @@ function applyPreset(preset: 'standard' | 'contrast' | 'colorClean' | 'binarize'
 }
 
 // Adding operations
-function addOperation(type: 'gaussian' | 'grayLevelMapping' | 'adaptiveThreshold') {
+function addOperation(type: 'gaussian' | 'grayLevelMapping' | 'adaptiveThreshold' | 'compression') {
 	let newOp: ScanOperation
 	if (type === 'gaussian') {
 		newOp = { id: generateOpId(), type: 'gaussian', size: 3, enabled: true }
 	} else if (type === 'grayLevelMapping') {
 		newOp = { id: generateOpId(), type: 'grayLevelMapping', lowerCutoff: 40, upperCutoff: 220, colorMode: 'color', enabled: true }
+	} else if (type === 'adaptiveThreshold') {
+		newOp = { id: generateOpId(), type: 'adaptiveThreshold', windowSize: 25, delta: 10, blackValue: 0, whiteValue: 255, colorMode: 'binarize', softness: 15, enabled: true }
 	} else {
-		newOp = { id: generateOpId(), type: 'adaptiveThreshold', windowSize: 25, delta: 10, blackValue: 0, whiteValue: 255, colorMode: 'binarize', enabled: true }
+		newOp = { id: generateOpId(), type: 'compression', format: 'jpeg', quality: 75, colorMode: 'grayscale', enabled: true }
 	}
 
 	operations.value.push(newOp)
@@ -454,7 +456,7 @@ watch(
 				: [
 					{ id: generateOpId(), type: 'gaussian', size: 3, enabled: true },
 					{ id: generateOpId(), type: 'grayLevelMapping', lowerCutoff: 40, upperCutoff: 215, colorMode: 'grayscale', enabled: true },
-					{ id: generateOpId(), type: 'adaptiveThreshold', windowSize: 25, delta: 12, blackValue: 0, whiteValue: 255, enabled: true },
+					{ id: generateOpId(), type: 'adaptiveThreshold', windowSize: 25, delta: 12, blackValue: 0, whiteValue: 255, softness: 15, enabled: true },
 				]
 			operations.value = initial
 			historyManager.clear(initial)

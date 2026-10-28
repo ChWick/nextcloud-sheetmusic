@@ -703,6 +703,7 @@ async function saveRotationsAndCrops() {
 						await executeEnhancePage(pdfDoc, {
 							pageIndex: i,
 							enhancedImageBuffer: enhancedBuffer,
+							operations: pageEnhancements.value[pageNum],
 						})
 						modifiedEnhancements = true
 					}

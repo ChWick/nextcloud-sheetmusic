@@ -13,7 +13,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
 	'applyPreset': [preset: 'standard' | 'contrast' | 'colorClean' | 'binarize']
-	'addOperation': [type: 'gaussian' | 'grayLevelMapping' | 'adaptiveThreshold']
+	'addOperation': [type: 'gaussian' | 'grayLevelMapping' | 'adaptiveThreshold' | 'compression']
 	'toggleOperation': [index: number]
 	'moveOperation': [index: number, direction: 'up' | 'down']
 	'removeOperation': [index: number]
@@ -96,6 +96,10 @@ const emit = defineEmits<{
 			<NcButton size="small" variant="secondary" data-test="add-threshold" @click="emit('addOperation', 'adaptiveThreshold')">
 				<template #icon><Plus :size="16" /></template>
 				{{ t('sheetmusic', 'Adaptive Threshold') }}
+			</NcButton>
+			<NcButton size="small" variant="secondary" data-test="add-compression" @click="emit('addOperation', 'compression')">
+				<template #icon><Plus :size="16" /></template>
+				{{ t('sheetmusic', 'Image Compression') }}
 			</NcButton>
 		</div>
 	</div>

@@ -288,5 +288,64 @@ describe('scan-enhance-engine', () => {
 			expect(dst.data[3]).toBe(255)
 		})
 	})
+
+	describe('Soft Local Threshold & Compression Operation', () => {
+		it('produces smooth grayscale transitions around the local threshold when softness > 0', () => {
+			// Uniform background ~200 with a pixel slightly below threshold
+			const src = createImageBuffer(5, 5, 1, 200)
+			// Center pixel at (2,2) has value 185; mean ~ 199.4, delta = 10 -> threshold ~ 189.4
+			src.data[2 * 5 + 2] = 185
+
+			const hard = applyAdaptiveThreshold(src, {
+				windowSize: 5,
+				delta: 10,
+				blackValue: 0,
+				whiteValue: 255,
+				softness: 0,
+			})
+			expect(hard.data[2 * 5 + 2]).toBe(0) // Hard binary step -> 0
+
+			const soft = applyAdaptiveThreshold(src, {
+				windowSize: 5,
+				delta: 10,
+				blackValue: 0,
+				whiteValue: 255,
+				softness: 20,
+			})
+			// With softness = 20, 185 is inside [threshold - 20, threshold + 20], producing an intermediate gray value
+			expect(soft.data[2 * 5 + 2]).toBeGreaterThan(30)
+			expect(soft.data[2 * 5 + 2]).toBeLessThan(200)
+		})
+
+		it('applies compression operation (JPEG simulation and grayscale bit-depth quantization) in pipeline', () => {
+			const src = createImageBuffer(16, 16, 4, 255)
+			for (let i = 0; i < 16 * 16; i++) {
+				const v = (i % 16) * 16
+				src.data[i * 4] = v
+				src.data[i * 4 + 1] = Math.min(255, v + 20)
+				src.data[i * 4 + 2] = Math.max(0, v - 20)
+				src.data[i * 4 + 3] = 255
+			}
+
+			const bwOut = applyPipeline(src, [
+				{ id: 'c1', type: 'compression', format: 'bw-1bit', quality: 75, enabled: true },
+			])
+			// Every pixel in 1-bit B&W mode must be quantized to 0 or 255 and grayscale (R=G=B)
+			for (let i = 0; i < 16 * 16; i++) {
+				const r = bwOut.data[i * 4]
+				expect(r === 0 || r === 255).toBe(true)
+				expect(bwOut.data[i * 4 + 1]).toBe(r)
+				expect(bwOut.data[i * 4 + 2]).toBe(r)
+			}
+
+			const jpgGrayOut = applyPipeline(src, [
+				{ id: 'c2', type: 'compression', format: 'jpeg', quality: 50, colorMode: 'grayscale', enabled: true },
+			])
+			for (let i = 0; i < 16 * 16; i++) {
+				expect(jpgGrayOut.data[i * 4]).toBe(jpgGrayOut.data[i * 4 + 1])
+				expect(jpgGrayOut.data[i * 4 + 1]).toBe(jpgGrayOut.data[i * 4 + 2])
+			}
+		})
+	})
 })
 

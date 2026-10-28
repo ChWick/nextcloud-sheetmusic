@@ -242,4 +242,46 @@ describe('SongPdfEnhanceModal.vue', () => {
 		// Operation stack remains rendered and accessible alongside the landscape preview
 		expect(wrapper.text()).toContain('Operation Stack')
 	})
+
+	it('supports configuring soft local threshold and adding an image compression operation', async () => {
+		const wrapper = mount(SongPdfEnhanceModal, {
+			props: {
+				open: true,
+				pageNum: 1,
+				totalPages: 1,
+				pdf: createMockPdf(),
+			},
+		})
+		await flushPromises()
+
+		// Clean Sheet preset includes Adaptive Threshold with soft local threshold (softness: 15)
+		const softnessSlider = wrapper.find('[data-test="threshold-softness-slider"]')
+		expect(softnessSlider.exists()).toBe(true)
+		expect((softnessSlider.element as HTMLInputElement).value).toBe('15')
+
+		// Add an Image Compression operation
+		const addCompressionBtn = wrapper.find('[data-test="add-compression"]')
+		expect(addCompressionBtn.exists()).toBe(true)
+		await addCompressionBtn.trigger('click')
+
+		expect(wrapper.text()).toContain('Operation Stack (4)')
+		expect(wrapper.text()).toContain('Image Compression')
+
+		const formatSelect = wrapper.find('[data-test="compression-format-select"]')
+		const qualitySlider = wrapper.find('[data-test="compression-quality-slider"]')
+		expect(formatSelect.exists()).toBe(true)
+		expect(qualitySlider.exists()).toBe(true)
+
+		// Apply and verify emitted operations include softness and compression
+		const applyBtn = wrapper.findAll('button').find(b => b.text().includes('Apply Enhancements'))
+		await applyBtn!.trigger('click')
+
+		const emitted = wrapper.emitted('apply')?.[0]?.[0] as any[]
+		expect(emitted).toHaveLength(4)
+		expect(emitted[2].type).toBe('adaptiveThreshold')
+		expect(emitted[2].softness).toBe(15)
+		expect(emitted[3].type).toBe('compression')
+		expect(emitted[3].format).toBe('jpeg')
+		expect(emitted[3].quality).toBe(75)
+	})
 })
