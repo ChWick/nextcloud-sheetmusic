@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Song } from '../../../src/types/song'
-import { formatArtists, formatBooks, formatCollections, formatComposers, formatCustomGroups, formatGenres, formatInstruments, formatKeys, formatSignatures, formatSourceTypes, formatYears, sortSongs } from '../../../src/utils/song-formatter'
+import { formatArtists, formatBooks, formatCollections, formatComposers, formatCustomGroups, formatDateTimestamp, formatGenres, formatInstruments, formatKeys, formatSignatures, formatSourceTypes, formatYears, sortSongs } from '../../../src/utils/song-formatter'
 
 describe('song-formatter utilities', () => {
 	const sampleSong: Song = {
@@ -132,5 +132,20 @@ describe('song-formatter utilities', () => {
 
 		const sortedByCreatedAsc = sortSongs(songs, 'dateCreated', 'asc')
 		expect(sortedByCreatedAsc.map(s => s.id)).toEqual([1, 3, 2])
+	})
+
+	it('formats date timestamps in both seconds and milliseconds without falling back to 1970', () => {
+		const unixSeconds = 1761687800 // 2025-10-28 in seconds
+		const unixMs = 1761687800000 // 2025-10-28 in milliseconds
+
+		const formattedSeconds = formatDateTimestamp(unixSeconds)
+		const formattedMs = formatDateTimestamp(unixMs)
+
+		expect(formattedSeconds).toContain('2025')
+		expect(formattedSeconds).not.toContain('1970')
+		expect(formattedMs).toContain('2025')
+		expect(formattedSeconds).toBe(formattedMs)
+		expect(formatDateTimestamp(null)).toBe('—')
+		expect(formatDateTimestamp(0)).toBe('—')
 	})
 })

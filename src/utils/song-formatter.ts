@@ -74,7 +74,8 @@ export function formatDifficulty(difficulty?: number | null, fallback = '—'): 
 export function formatDateTimestamp(timestamp?: number | null, fallback = '—'): string {
 	if (!timestamp || timestamp <= 0) return fallback
 	try {
-		return new Date(timestamp).toLocaleString(undefined, {
+		const ms = timestamp < 100000000000 ? timestamp * 1000 : timestamp
+		return new Date(ms).toLocaleString(undefined, {
 			year: 'numeric',
 			month: 'short',
 			day: 'numeric',

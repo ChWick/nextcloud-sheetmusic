@@ -80,6 +80,7 @@ class SongService {
 		}
 
 		try {
+			$now = time();
 			$song = new InternalSong(
 				id: null,
 				uuid: InternalEntity::generateUuid(),
@@ -94,6 +95,8 @@ class SongService {
 				opus: $opus !== '' ? $opus : null,
 				catalogNumber: $catalogNumber !== '' ? $catalogNumber : null,
 				songNumber: $songNumber !== '' ? $songNumber : null,
+				createdAt: $now,
+				updatedAt: $now,
 			);
 			$createdSong = $this->internalSongMapper->insert($song);
 			$songId = (int)$createdSong->id;

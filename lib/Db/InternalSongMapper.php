@@ -644,8 +644,12 @@ class InternalSongMapper {
 				sourceTypes: $resolve('sourcetype'),
 				bookmarks: [],
 				audioFiles: [],
-				lastModified: $song->updatedAt > 0 ? $song->updatedAt : null,
-				dateCreated: $song->createdAt > 0 ? $song->createdAt : null,
+				lastModified: $song->updatedAt > 0
+					? ($song->updatedAt < 100000000000 ? $song->updatedAt * 1000 : $song->updatedAt)
+					: null,
+				dateCreated: $song->createdAt > 0
+					? ($song->createdAt < 100000000000 ? $song->createdAt * 1000 : $song->createdAt)
+					: null,
 				stars: $song->rating,
 				difficulty: $song->difficulty,
 				duration: $song->duration,
