@@ -525,6 +525,12 @@ watch(
 							<ArrowRight :size="16" />
 						</template>
 					</NcButton>
+					<span
+						v-if="pageDpi > 0 && canvasWidth > 0 && canvasHeight > 0"
+						:class="$style.dpiBadge"
+						data-test="enhance-dpi-badge">
+						{{ pageDpi }} DPI · {{ canvasWidth }}×{{ canvasHeight }} px
+					</span>
 				</div>
 
 				<!-- Zoom & Pan Controls -->
@@ -737,6 +743,20 @@ watch(
 	font-weight: 600;
 	font-size: 13px;
 	color: var(--color-main-text);
+	white-space: nowrap;
+}
+
+.dpiBadge {
+	display: inline-flex;
+	align-items: center;
+	padding: 2px 8px;
+	margin-left: 6px;
+	border-radius: 12px;
+	background: var(--color-main-background);
+	border: 1px solid var(--color-border);
+	color: var(--color-text-maxcontrast);
+	font-size: 11px;
+	font-weight: 500;
 	white-space: nowrap;
 }
 

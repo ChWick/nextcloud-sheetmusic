@@ -10,6 +10,7 @@ import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { openFileExternally } from '../utils/file'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import FilePreviewerToolbar from './file-preview/FilePreviewerToolbar.vue'
+import { inspectPdfPageResolution, type PdfPageResolutionSummary } from './song-pdf/pdf-enhance-engine'
 
 const props = withDefaults(
 	defineProps<{
@@ -34,6 +35,8 @@ let currentRenderId = 0
 const loadedPdf = shallowRef<any>(null)
 const totalPages = ref(1)
 const currentPage = ref(1)
+const fileSizeBytes = ref<number | null>(null)
+const pageResolutions = ref<PdfPageResolutionSummary[]>([])
 
 type PageLayoutMode = 'continuous' | 'single' | 'double'
 type ZoomMode = 'fit-width' | 'fit-page' | 'custom'
@@ -353,6 +356,8 @@ async function loadAndRenderFile() {
 	totalPages.value = 1
 	currentPage.value = 1
 	rotation.value = 0
+	fileSizeBytes.value = null
+	pageResolutions.value = []
 
 	await nextTick()
 	cleanupObserver()
@@ -385,6 +390,7 @@ async function loadAndRenderFile() {
 		if (loadId !== currentLoadId) return
 
 		const pdfData = response.data instanceof ArrayBuffer ? new Uint8Array(response.data) : response.data
+		fileSizeBytes.value = typeof pdfData?.byteLength === 'number' ? pdfData.byteLength : null
 		const wasmUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/wasm/') : new URL('pdfjs-dist/wasm/', import.meta.url).href
 		const cMapUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/cmaps/') : new URL('pdfjs-dist/cmaps/', import.meta.url).href
 		const standardFontDataUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/standard_fonts/') : new URL('pdfjs-dist/standard_fonts/', import.meta.url).href
@@ -402,6 +408,21 @@ async function loadAndRenderFile() {
 		loadedPdf.value = pdf
 		totalPages.value = pdf.numPages
 		currentPage.value = 1
+
+		// Collect page resolution summaries (up to first 25 pages for responsiveness)
+		try {
+			const maxInspect = Math.min(pdf.numPages, 25)
+			const summaries: PdfPageResolutionSummary[] = []
+			for (let p = 1; p <= maxInspect; p++) {
+				const pg = await pdf.getPage(p)
+				summaries.push(await inspectPdfPageResolution(pg, p))
+			}
+			if (loadId === currentLoadId) {
+				pageResolutions.value = summaries
+			}
+		} catch {
+			// Ignore resolution inspection errors on mock or malformed PDFs
+		}
 
 		// If the document is large (>30 pages), default to single page layout for optimal performance
 		if (pdf.numPages > 30) {
@@ -466,6 +487,8 @@ defineExpose({
 			:is-custom-zoom="isCustomZoom"
 			:display-scale="isImageFile ? imageScale : effectiveScale"
 			:show-external-button="showExternalButton"
+			:file-size-bytes="fileSizeBytes"
+			:page-resolutions="pageResolutions"
 			@previous-page="prevPage"
 			@next-page="nextPage"
 			@page-layout="setPageLayout"

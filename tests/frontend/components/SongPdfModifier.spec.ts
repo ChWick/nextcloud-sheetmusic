@@ -1242,5 +1242,27 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 
 		expect(wrapper.emitted('saved')).toBeTruthy()
 	})
+
+	it('displays PDF file size and resolution info badge and toggles detailed dropdown', async () => {
+		const wrapper = mount(SongPdfModifier, {
+			props: {
+				song: mockSong,
+				libraryId: 1,
+			},
+		})
+
+		await flushPromises()
+
+		const infoTrigger = wrapper.find('[data-test="pdf-modifier-info-trigger"]')
+		expect(infoTrigger.exists()).toBe(true)
+		expect(infoTrigger.text()).toContain('773 KB')
+		expect(infoTrigger.text()).toContain('DPI')
+
+		await infoTrigger.trigger('click')
+		const dropdown = wrapper.find('[data-test="pdf-modifier-info-dropdown"]')
+		expect(dropdown.exists()).toBe(true)
+		expect(dropdown.text()).toContain('PDF File & Resolution Info')
+		expect(dropdown.text()).toContain('791,921 B')
+	})
 })
 

@@ -34,7 +34,7 @@ import { executeJoinTwoPages, type JoinLayout } from './pdf-join-engine'
 import { executeRotatePage } from './pdf-rotate-engine'
 import type { ScanOperation } from './scan-types'
 import { applyPipeline, createImageBuffer, imageDataToImageBuffer, imageBufferToImageData } from './scan-enhance-engine'
-import { executeEnhancePage, resolvePageRenderScale } from './pdf-enhance-engine'
+import { executeEnhancePage, inspectPdfPageResolution, type PdfPageResolutionSummary, pruneUnreferencedPdfObjects, resolvePageRenderScale } from './pdf-enhance-engine'
 import { usePdfThumbnails } from './usePdfThumbnails'
 import { usePdfSplit } from './usePdfSplit'
 
@@ -102,6 +102,25 @@ const errorMessage = ref('')
 const totalPages = ref(0)
 const originalPdfBytes = shallowRef<Uint8Array | null>(null)
 const activePdfDoc = shallowRef<any>(null)
+const pageResolutions = ref<PdfPageResolutionSummary[]>([])
+
+async function refreshPageResolutions(pdf: any) {
+	if (!pdf) {
+		pageResolutions.value = []
+		return
+	}
+	try {
+		const maxInspect = Math.min(pdf.numPages ?? 0, 25)
+		const list: PdfPageResolutionSummary[] = []
+		for (let p = 1; p <= maxInspect; p++) {
+			const pg = await pdf.getPage(p)
+			list.push(await inspectPdfPageResolution(pg, p))
+		}
+		pageResolutions.value = list
+	} catch {
+		pageResolutions.value = []
+	}
+}
 
 // Page-specific state (1-indexed, size totalPages)
 // pageRotations[pageIdx] = 0 | 90 | 180 | 270 (relative rotation added)
@@ -262,6 +281,7 @@ async function loadPdf() {
 		totalPages.value = pdf.numPages
 		pageRotations.value = Array(pdf.numPages).fill(0)
 		pageCrops.value = {}
+		await refreshPageResolutions(pdf)
 
 		// Initialize split segments: default with 1 segment covering all pages
 		initSplitSegments(pdf.numPages, props.song.title)
@@ -544,6 +564,7 @@ async function handleExecuteJoin(options: {
 			scale2: options.scaleB,
 		})
 
+		await pruneUnreferencedPdfObjects(pdfDoc)
 		const newBytes = await pdfDoc.save()
 		originalPdfBytes.value = newBytes
 		hasAnyJoin.value = true
@@ -598,6 +619,7 @@ async function handleExecuteJoin(options: {
 
 		activePdfDoc.value = pdf
 		totalPages.value = pdfDoc.getPageCount()
+		await refreshPageResolutions(pdf)
 
 		cleanupThumbnailObserver()
 		thumbnailCanvases.value = {}
@@ -698,7 +720,9 @@ async function saveRotationsAndCrops() {
 
 					if (rawBuffer) {
 						await yieldToBrowser()
-						const enhancedBuffer = applyPipeline(rawBuffer, pageEnhancements.value[pageNum])
+						const enhancedBuffer = applyPipeline(rawBuffer, pageEnhancements.value[pageNum], {
+							skipJpegSimulation: true,
+						})
 						await yieldToBrowser()
 						await executeEnhancePage(pdfDoc, {
 							pageIndex: i,
@@ -788,6 +812,7 @@ async function saveRotationsAndCrops() {
 		}
 
 		await updateSaveProgress(85, t('sheetmusic', 'Encoding final PDF document…'), activeTotal, activeTotal, modifiedEnhancements)
+		await pruneUnreferencedPdfObjects(pdfDoc)
 		const modifiedBytes = await pdfDoc.save()
 		const fileName = getFileName(targetFile.value.path) || 'modified.pdf'
 		const modifiedFile = new File([modifiedBytes as Uint8Array<ArrayBuffer>], fileName, { type: 'application/pdf' })
@@ -863,6 +888,8 @@ watch(() => targetFile.value?.path, () => {
 			:is-loading="isLoading"
 			:split-segments-count="splitSegments.length"
 			:save-progress="saveProgressPercent"
+			:file-size-bytes="originalPdfBytes?.byteLength ?? targetFile?.fileSize ?? null"
+			:page-resolutions="pageResolutions"
 			@update:active-mode="activeMode = $event"
 			@update:activeMode="activeMode = $event"
 			@cancel="emit('cancel')"
