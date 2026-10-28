@@ -11,6 +11,7 @@ namespace OCA\SheetMusic\Service;
 
 use OCA\SheetMusic\Db\InternalEntityMapper;
 use OCA\SheetMusic\Db\InternalSong;
+use OCA\SheetMusic\Db\InternalSongAttributeMapper;
 use OCA\SheetMusic\Db\InternalSongFile;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongHistory;
@@ -33,6 +34,7 @@ class SongHistoryService {
 		private IDBConnection $db,
 		private LoggerInterface $logger,
 		private ?IRootFolder $rootFolder = null,
+		private ?InternalSongAttributeMapper $songAttributeMapper = null,
 	) {
 	}
 
@@ -44,7 +46,18 @@ class SongHistoryService {
 	public function buildSnapshot(InternalSong $song): array {
 		$songId = (int)$song->id;
 
-		// Entities grouped by normalized type
+		// 1. Dynamic extraction of all public properties on InternalSong
+		$snapshot = [];
+		$reflection = new \ReflectionClass(InternalSong::class);
+		foreach ($reflection->getProperties(\ReflectionProperty::IS_PUBLIC) as $prop) {
+			$name = $prop->getName();
+			if ($name === 'updatedAt') {
+				continue;
+			}
+			$snapshot[$name] = $prop->getValue($song);
+		}
+
+		// 2. Entities grouped by normalized type
 		$entitiesByType = [];
 		$allEntities = $songId > 0 ? $this->entityMapper->findEntitiesForSong($songId) : [];
 		foreach ($allEntities as $entity) {
@@ -54,8 +67,9 @@ class SongHistoryService {
 				'name' => $entity->name,
 			];
 		}
+		$snapshot['entities'] = $entitiesByType;
 
-		// Files attached to song
+		// 3. Files attached to song
 		$files = [];
 		$songFiles = $songId > 0 ? $this->songFileMapper->findAllForSong($songId, includeDeleted: true) : [];
 		foreach ($songFiles as $file) {
@@ -70,26 +84,17 @@ class SongHistoryService {
 				'deletedAt' => $file->deletedAt,
 			];
 		}
+		$snapshot['files'] = $files;
 
-		return [
-			'id' => $song->id,
-			'uuid' => $song->uuid,
-			'libraryId' => $song->libraryId,
-			'title' => $song->title,
-			'sortTitle' => $song->sortTitle,
-			'rating' => $song->rating,
-			'difficulty' => $song->difficulty,
-			'duration' => $song->duration,
-			'keywords' => $song->keywords,
-			'notes' => $song->notes,
-			'opus' => $song->opus,
-			'catalogNumber' => $song->catalogNumber,
-			'songNumber' => $song->songNumber,
-			'clientId' => $song->clientId,
-			'deletedAt' => $song->deletedAt,
-			'entities' => $entitiesByType,
-			'files' => $files,
-		];
+		// 4. Custom key-value song attributes
+		if ($songId > 0 && $this->songAttributeMapper !== null) {
+			$attributes = $this->songAttributeMapper->findAllForSong($songId);
+			if (!empty($attributes)) {
+				$snapshot['attributes'] = $attributes;
+			}
+		}
+
+		return $snapshot;
 	}
 
 	/**
@@ -183,17 +188,80 @@ class SongHistoryService {
 
 		$snap = $history->getSnapshotArray();
 
-		// 1. Revert core song fields
-		$song->title = (string)($snap['title'] ?? $song->title);
-		$song->sortTitle = isset($snap['sortTitle']) && $snap['sortTitle'] !== null ? (string)$snap['sortTitle'] : null;
-		$song->rating = (int)($snap['rating'] ?? 0);
-		$song->difficulty = (int)($snap['difficulty'] ?? 0);
-		$song->duration = (int)($snap['duration'] ?? 0);
-		$song->keywords = isset($snap['keywords']) && $snap['keywords'] !== null ? (string)$snap['keywords'] : null;
-		$song->notes = isset($snap['notes']) && $snap['notes'] !== null ? (string)$snap['notes'] : null;
-		$song->opus = isset($snap['opus']) && $snap['opus'] !== null ? (string)$snap['opus'] : null;
-		$song->catalogNumber = isset($snap['catalogNumber']) && $snap['catalogNumber'] !== null ? (string)$snap['catalogNumber'] : null;
-		$song->songNumber = isset($snap['songNumber']) && $snap['songNumber'] !== null ? (string)$snap['songNumber'] : null;
+		// 1. Revert core and custom song properties dynamically using reflection
+		$reflection = new \ReflectionClass(InternalSong::class);
+		$immutableProps = ['id', 'uuid', 'libraryId', 'createdAt', 'updatedAt', 'deletedAt'];
+
+		// Cache constructor default values for promoted properties
+		$defaultValues = [];
+		$constructor = $reflection->getConstructor();
+		if ($constructor !== null) {
+			foreach ($constructor->getParameters() as $param) {
+				if ($param->isDefaultValueAvailable()) {
+					$defaultValues[$param->getName()] = $param->getDefaultValue();
+				}
+			}
+		}
+
+		foreach ($reflection->getProperties(\ReflectionProperty::IS_PUBLIC) as $prop) {
+			$propName = $prop->getName();
+			if (in_array($propName, $immutableProps, true)) {
+				continue;
+			}
+
+			$type = $prop->getType();
+			$typeName = $type instanceof \ReflectionNamedType ? $type->getName() : null;
+			$allowsNull = $type instanceof \ReflectionNamedType ? $type->allowsNull() : true;
+
+			if (array_key_exists($propName, $snap)) {
+				$val = $snap[$propName];
+				if ($val === null) {
+					if ($allowsNull) {
+						$song->{$propName} = null;
+					} elseif (array_key_exists($propName, $defaultValues)) {
+						$song->{$propName} = $defaultValues[$propName];
+					} else {
+						$song->{$propName} = match ($typeName) {
+							'int' => 0,
+							'string' => '',
+							'bool' => false,
+							'float' => 0.0,
+							'array' => [],
+							default => null,
+						};
+					}
+				} elseif ($typeName === 'int') {
+					$song->{$propName} = (int)$val;
+				} elseif ($typeName === 'string') {
+					$song->{$propName} = (string)$val;
+				} elseif ($typeName === 'bool') {
+					$song->{$propName} = (bool)$val;
+				} elseif ($typeName === 'float') {
+					$song->{$propName} = (float)$val;
+				} else {
+					$song->{$propName} = $val;
+				}
+			} else {
+				// Snapshot was taken before this field was added:
+				// Reset to constructor/property default value or type-safe default
+				if (array_key_exists($propName, $defaultValues)) {
+					$song->{$propName} = $defaultValues[$propName];
+				} elseif ($prop->hasDefaultValue()) {
+					$song->{$propName} = $prop->getDefaultValue();
+				} elseif (!$allowsNull) {
+					$song->{$propName} = match ($typeName) {
+						'int' => 0,
+						'string' => '',
+						'bool' => false,
+						'float' => 0.0,
+						'array' => [],
+						default => null,
+					};
+				} else {
+					$song->{$propName} = null;
+				}
+			}
+		}
 
 		// Undelete if song was deleted
 		$wasDeleted = $song->deletedAt !== null;
@@ -202,14 +270,17 @@ class SongHistoryService {
 
 		$this->songMapper->update($song);
 
-		// 2. Revert entity relations
+		// 2. Revert entity relations dynamically across all present and historical entity types
 		$snapEntities = (array)($snap['entities'] ?? []);
-		$knownTypes = [
-			'composer', 'artist', 'book', 'collection', 'genre',
-			'key', 'customgroup', 'year', 'signature', 'sourcetype', 'instrument',
-		];
+		$currentEntities = $this->entityMapper->findEntitiesForSong($songId);
+		$currentTypes = array_unique(array_map(static fn ($e) => InternalEntityMapper::normalizeType($e->type), $currentEntities));
+		$allTypes = array_unique(array_merge(
+			['composer', 'artist', 'book', 'collection', 'genre', 'key', 'customgroup', 'year', 'signature', 'sourcetype', 'instrument'],
+			array_keys($snapEntities),
+			$currentTypes
+		));
 
-		foreach ($knownTypes as $type) {
+		foreach ($allTypes as $type) {
 			$items = (array)($snapEntities[$type] ?? []);
 			$entityIds = [];
 			foreach ($items as $item) {
@@ -270,6 +341,20 @@ class SongHistoryService {
 					$cf->updatedAt = time();
 					$this->songFileMapper->update($cf);
 				}
+			}
+		}
+
+		// 4. Revert custom song attributes if mapper is available
+		if ($this->songAttributeMapper !== null) {
+			$currentAttrs = $this->songAttributeMapper->findAllForSong($songId);
+			$snapAttrs = (array)($snap['attributes'] ?? []);
+			foreach ($currentAttrs as $name => $val) {
+				if (!array_key_exists($name, $snapAttrs)) {
+					$this->songAttributeMapper->removeAttribute($songId, (string)$name);
+				}
+			}
+			foreach ($snapAttrs as $name => $val) {
+				$this->songAttributeMapper->setAttribute($songId, (string)$name, (string)$val);
 			}
 		}
 
@@ -597,8 +682,13 @@ class SongHistoryService {
 	 * Compare two snapshots to see if meaningful fields changed.
 	 */
 	private function areSnapshotsEquivalent(array $a, array $b): bool {
-		$keys = ['title', 'sortTitle', 'rating', 'difficulty', 'duration', 'keywords', 'notes', 'opus', 'catalogNumber', 'songNumber'];
-		foreach ($keys as $k) {
+		$ignored = ['id', 'updatedAt', 'entities', 'files', 'attributes'];
+		$allKeys = array_unique(array_merge(array_keys($a), array_keys($b)));
+
+		foreach ($allKeys as $k) {
+			if (in_array($k, $ignored, true)) {
+				continue;
+			}
 			if (($a[$k] ?? null) !== ($b[$k] ?? null)) {
 				return false;
 			}
@@ -615,6 +705,13 @@ class SongHistoryService {
 		$filesA = $a['files'] ?? [];
 		$filesB = $b['files'] ?? [];
 		if (json_encode($filesA) !== json_encode($filesB)) {
+			return false;
+		}
+
+		// Check custom attributes
+		$attrA = $a['attributes'] ?? [];
+		$attrB = $b['attributes'] ?? [];
+		if (json_encode($attrA) !== json_encode($attrB)) {
 			return false;
 		}
 
@@ -666,10 +763,25 @@ class SongHistoryService {
 			$changes[] = 'Catalog # updated';
 		}
 
-		// Check entity differences
+		// Check entity differences across all present entity types
 		$oldEnts = (array)($old['entities'] ?? []);
 		$newEnts = (array)($new['entities'] ?? []);
-		foreach (['composer' => 'Composers', 'artist' => 'Artists', 'collection' => 'Collections', 'book' => 'Books'] as $t => $label) {
+		$allEntityTypes = array_unique(array_merge(array_keys($oldEnts), array_keys($newEnts)));
+		$entityLabels = [
+			'composer' => 'Composers',
+			'artist' => 'Artists',
+			'collection' => 'Collections',
+			'book' => 'Books',
+			'genre' => 'Genres',
+			'key' => 'Keys',
+			'customgroup' => 'Custom Groups',
+			'year' => 'Years',
+			'signature' => 'Time Signatures',
+			'sourcetype' => 'Source Types',
+			'instrument' => 'Instruments',
+		];
+		foreach ($allEntityTypes as $t) {
+			$label = $entityLabels[$t] ?? ucfirst((string)$t) . 's';
 			$oldNames = array_column((array)($oldEnts[$t] ?? []), 'name');
 			$newNames = array_column((array)($newEnts[$t] ?? []), 'name');
 			sort($oldNames);
@@ -691,6 +803,50 @@ class SongHistoryService {
 		$newFiles = (array)($new['files'] ?? []);
 		if (count($oldFiles) !== count($newFiles)) {
 			$changes[] = 'Attached files: ' . count($oldFiles) . ' → ' . count($newFiles);
+		}
+
+		// Check custom attributes
+		$oldAttrs = (array)($old['attributes'] ?? []);
+		$newAttrs = (array)($new['attributes'] ?? []);
+		$allAttrKeys = array_unique(array_merge(array_keys($oldAttrs), array_keys($newAttrs)));
+		foreach ($allAttrKeys as $attrKey) {
+			$oldAttrVal = $oldAttrs[$attrKey] ?? null;
+			$newAttrVal = $newAttrs[$attrKey] ?? null;
+			if ($oldAttrVal !== $newAttrVal) {
+				$humanAttr = ucfirst((string)preg_replace('/(?<!^)[A-Z]/', ' $0', (string)$attrKey));
+				if ($oldAttrVal === null) {
+					$changes[] = $humanAttr . ' added';
+				} elseif ($newAttrVal === null) {
+					$changes[] = $humanAttr . ' removed';
+				} else {
+					$changes[] = $humanAttr . ' updated';
+				}
+			}
+		}
+
+		// Generic fallback for any additional or custom song fields
+		$knownFields = [
+			'id', 'uuid', 'libraryId', 'clientId', 'title', 'sortTitle', 'rating',
+			'difficulty', 'duration', 'keywords', 'notes', 'opus', 'catalogNumber',
+			'songNumber', 'createdAt', 'updatedAt', 'deletedAt', 'entities', 'files', 'attributes',
+		];
+		$allSongKeys = array_unique(array_merge(array_keys($old), array_keys($new)));
+		foreach ($allSongKeys as $key) {
+			if (in_array($key, $knownFields, true)) {
+				continue;
+			}
+			$oldVal = $old[$key] ?? null;
+			$newVal = $new[$key] ?? null;
+			if ($oldVal !== $newVal) {
+				$humanLabel = ucfirst((string)preg_replace('/(?<!^)[A-Z]/', ' $0', (string)$key));
+				if ($oldVal === null && $newVal !== null) {
+					$changes[] = $humanLabel . ' set';
+				} elseif ($oldVal !== null && $newVal === null) {
+					$changes[] = $humanLabel . ' cleared';
+				} else {
+					$changes[] = $humanLabel . ' updated';
+				}
+			}
 		}
 
 		if (empty($changes)) {

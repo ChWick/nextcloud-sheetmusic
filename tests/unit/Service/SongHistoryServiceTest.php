@@ -37,6 +37,7 @@ final class SongHistoryServiceTest extends TestCase {
 			$this->dbConn,
 			new NullLogger(),
 			$this->rootFolder,
+			$this->attributeMapper,
 		);
 	}
 
@@ -304,5 +305,99 @@ final class SongHistoryServiceTest extends TestCase {
 		// Verify song title is reverted
 		$reloadedSong = $this->songMapper->findById((int)$song->id);
 		self::assertSame('Song with Versioned File', $reloadedSong?->title);
+	}
+
+	public function testDynamicPropertiesAndCustomAttributesCapturedAndReverted(): void {
+		$song = $this->songMapper->insert(new InternalSong(
+			uuid: 'hist-song-dynamic',
+			libraryId: $this->libraryId,
+			title: 'Song With Attributes V1',
+			rating: 4,
+			difficulty: 2,
+			opus: 'Op. 27 No. 2',
+			catalogNumber: 'BWV 1001',
+		));
+
+		// Set initial custom attributes
+		$this->attributeMapper->setAttribute((int)$song->id, 'tempo', '120');
+		$this->attributeMapper->setAttribute((int)$song->id, 'keySignature', 'C# Minor');
+
+		// Revision 1
+		$snap1 = $this->historyService->recordSnapshot($song, InternalSongHistory::ACTION_CREATED, 'admin');
+		self::assertNotNull($snap1);
+		$snap1Arr = $snap1->getSnapshotArray();
+		self::assertSame('Song With Attributes V1', $snap1Arr['title']);
+		self::assertSame('120', $snap1Arr['attributes']['tempo'] ?? null);
+		self::assertSame('C# Minor', $snap1Arr['attributes']['keySignature'] ?? null);
+
+		// Modify song details and attributes
+		$song->title = 'Song With Attributes V2';
+		$song->rating = 5;
+		$this->songMapper->update($song);
+		$this->attributeMapper->setAttribute((int)$song->id, 'tempo', '144');
+		$this->attributeMapper->removeAttribute((int)$song->id, 'keySignature');
+		$this->attributeMapper->setAttribute((int)$song->id, 'copyright', 'Public Domain');
+
+		// Revision 2
+		$snap2 = $this->historyService->recordSnapshot($song, InternalSongHistory::ACTION_UPDATED, 'admin');
+		self::assertNotNull($snap2);
+		self::assertStringContainsString('Tempo updated', (string)$snap2->summary);
+
+		// Verify modified attributes in database
+		self::assertSame('144', $this->attributeMapper->findForSong((int)$song->id, 'tempo'));
+		self::assertNull($this->attributeMapper->findForSong((int)$song->id, 'keySignature'));
+		self::assertSame('Public Domain', $this->attributeMapper->findForSong((int)$song->id, 'copyright'));
+
+		// Revert to Revision 1
+		$this->historyService->revertSongToHistory((int)$song->id, (int)$snap1->id, 'admin');
+
+		// Verify reverted song attributes and fields
+		$reloaded = $this->songMapper->findById((int)$song->id);
+		self::assertSame('Song With Attributes V1', $reloaded?->title);
+		self::assertSame(4, $reloaded?->rating);
+		self::assertSame('120', $this->attributeMapper->findForSong((int)$song->id, 'tempo'));
+		self::assertSame('C# Minor', $this->attributeMapper->findForSong((int)$song->id, 'keySignature'));
+		self::assertNull($this->attributeMapper->findForSong((int)$song->id, 'copyright'));
+	}
+
+	public function testBackwardCompatibilityRevertingLegacySnapshotWithoutNewFields(): void {
+		$song = $this->songMapper->insert(new InternalSong(
+			uuid: 'hist-song-legacy',
+			libraryId: $this->libraryId,
+			title: 'Current Modern Song',
+			rating: 5,
+			difficulty: 3,
+			opus: 'Op. 99',
+			catalogNumber: 'Cat 42',
+			songNumber: 'Song 7',
+		));
+
+		// Manually record a legacy snapshot that is missing newer fields (e.g. opus, catalogNumber, songNumber)
+		$legacySnapshot = [
+			'title' => 'Ancient Legacy Song',
+			'rating' => 2,
+			'difficulty' => 1,
+			// opus, catalogNumber, songNumber are omitted as if recorded before those fields existed
+		];
+
+		$snap = $this->historyService->recordSnapshot(
+			$song,
+			InternalSongHistory::ACTION_CREATED,
+			'admin',
+			'Legacy snapshot',
+			$legacySnapshot
+		);
+		self::assertNotNull($snap);
+
+		// Revert to legacy snapshot
+		$reverted = $this->historyService->revertSongToHistory((int)$song->id, (int)$snap->id, 'admin');
+
+		// Verify core fields reverted and omitted fields safely reset to their defaults (null)
+		self::assertSame('Ancient Legacy Song', $reverted->title);
+		self::assertSame(2, $reverted->rating);
+		self::assertSame(1, $reverted->difficulty);
+		self::assertNull($reverted->opus);
+		self::assertNull($reverted->catalogNumber);
+		self::assertNull($reverted->songNumber);
 	}
 }

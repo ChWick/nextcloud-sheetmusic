@@ -107,6 +107,57 @@ function getActionLabel(action: string): string {
 	}
 }
 
+const KNOWN_SNAPSHOT_KEYS = new Set([
+	'id',
+	'uuid',
+	'libraryId',
+	'clientId',
+	'title',
+	'sortTitle',
+	'rating',
+	'difficulty',
+	'duration',
+	'keywords',
+	'notes',
+	'opus',
+	'catalogNumber',
+	'songNumber',
+	'createdAt',
+	'updatedAt',
+	'deletedAt',
+	'entities',
+	'files',
+	'attributes',
+])
+
+function getAdditionalFields(snapshot: Record<string, any> = {}): Record<string, any> {
+	const result: Record<string, any> = {}
+	for (const [key, val] of Object.entries(snapshot)) {
+		if (!KNOWN_SNAPSHOT_KEYS.has(key) && val !== null && val !== undefined && val !== '') {
+			result[key] = val
+		}
+	}
+	return result
+}
+
+function formatFieldName(key: string): string {
+	return key
+		.replace(/([A-Z])/g, ' $1')
+		.replace(/_/g, ' ')
+		.replace(/^./, (str) => str.toUpperCase())
+		.trim()
+}
+
+function formatFieldValue(val: any): string {
+	if (typeof val === 'boolean') {
+		return val ? t('sheetmusic', 'Yes') : t('sheetmusic', 'No')
+	}
+	if (typeof val === 'object') {
+		return JSON.stringify(val)
+	}
+	return String(val)
+}
+
 const pendingRevertEntry = ref<HistoryEntry | null>(null)
 
 function promptRevert(entry: HistoryEntry) {
@@ -245,6 +296,13 @@ async function executeRevert() {
 							<div v-if="entry.snapshot.duration" :class="$style.detailItem">
 								<strong>{{ t('sheetmusic', 'Duration') }}:</strong> {{ entry.snapshot.duration }}s
 							</div>
+							<!-- Additional dynamic fields in snapshot -->
+							<div
+								v-for="(val, key) in getAdditionalFields(entry.snapshot)"
+								:key="key"
+								:class="$style.detailItem">
+								<strong>{{ formatFieldName(String(key)) }}:</strong> {{ formatFieldValue(val) }}
+							</div>
 						</div>
 
 						<!-- Entities in snapshot -->
@@ -254,6 +312,14 @@ async function executeRevert() {
 								<span :class="$style.entityList">
 									{{ ents.map((e: any) => e.name).join(', ') }}
 								</span>
+							</div>
+						</div>
+
+						<!-- Custom attributes in snapshot -->
+						<div v-if="entry.snapshot.attributes && Object.keys(entry.snapshot.attributes).length" :class="$style.entitiesSection">
+							<div v-for="(val, name) in entry.snapshot.attributes" :key="name" :class="$style.entityRow">
+								<span :class="$style.entityType">{{ formatFieldName(String(name)) }}:</span>
+								<span :class="$style.entityList">{{ val }}</span>
 							</div>
 						</div>
 

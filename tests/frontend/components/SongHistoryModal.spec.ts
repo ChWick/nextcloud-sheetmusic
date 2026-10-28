@@ -202,4 +202,59 @@ describe('SongHistoryModal.vue', () => {
 		// Full song title should be visible in the song title header block
 		expect(document.body.textContent).toContain(longTitle)
 	})
+
+	it('displays additional dynamic fields and custom attributes in expanded details', async () => {
+		const mockEntries = [
+			{
+				id: 1,
+				libraryId: 1,
+				songId: 10,
+				songUuid: 'uuid-10',
+				userId: 'alice',
+				action: 'created',
+				summary: 'Song created',
+				snapshot: {
+					title: 'Dynamic Song',
+					rating: 4,
+					tempo: 120,
+					keySignature: 'Eb Major',
+					attributes: {
+						copyrightNotice: 'Public Domain 2026',
+						ccliNumber: '1234567',
+					},
+				},
+				createdAt: 1700010000,
+			},
+		]
+
+		vi.mocked(axios.get).mockResolvedValueOnce({
+			data: { ocs: { data: mockEntries } },
+		} as any)
+
+		mount(SongHistoryModal, {
+			props: {
+				open: true,
+				songId: 10,
+				songTitle: 'Dynamic Song',
+			},
+			attachTo: document.body,
+		})
+
+		await flushPromises()
+
+		// Click "Show details" button to expand snapshot details
+		const showDetailsBtn = Array.from(document.querySelectorAll('button')).find(b => b.getAttribute('title')?.includes('Show details'))
+		expect(showDetailsBtn).toBeDefined()
+		showDetailsBtn?.click()
+		await flushPromises()
+
+		expect(document.body.textContent).toContain('Tempo:')
+		expect(document.body.textContent).toContain('120')
+		expect(document.body.textContent).toContain('Key Signature:')
+		expect(document.body.textContent).toContain('Eb Major')
+		expect(document.body.textContent).toContain('Copyright Notice:')
+		expect(document.body.textContent).toContain('Public Domain 2026')
+		expect(document.body.textContent).toContain('Ccli Number:')
+		expect(document.body.textContent).toContain('1234567')
+	})
 })
