@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { config, mount } from '@vue/test-utils'
+import { config, flushPromises, mount } from '@vue/test-utils'
 import SongPdfEnhanceModal from '../../../src/components/song-pdf/SongPdfEnhanceModal.vue'
 
 // Avoid teleporting NcDialog to body so wrapper.find queries work without mocks
@@ -8,7 +8,10 @@ config.global.stubs = { teleport: true }
 describe('SongPdfEnhanceModal.vue', () => {
 	const createMockPdf = () => ({
 		getPage: vi.fn(() => Promise.resolve({
-			getViewport: vi.fn(() => ({ width: 400, height: 600 })),
+			getViewport: vi.fn(({ scale = 1 }: { scale?: number } = {}) => ({
+				width: 400 * scale,
+				height: 600 * scale,
+			})),
 			render: vi.fn(() => ({ promise: Promise.resolve() })),
 		})),
 	})
@@ -143,5 +146,98 @@ describe('SongPdfEnhanceModal.vue', () => {
 		await prevBtn?.trigger('click')
 		expect(wrapper.emitted('change-page')?.[1]).toEqual([1])
 	})
-})
 
+	it('supports zooming in, zooming out, wheel zoom, drag panning, and resetting zoom/pan', async () => {
+		const wrapper = mount(SongPdfEnhanceModal, {
+			props: {
+				open: true,
+				pageNum: 1,
+				totalPages: 3,
+				pdf: createMockPdf(),
+			},
+		})
+		await flushPromises()
+
+		const zoomLevelEl = wrapper.find('[data-test="enhance-zoom-level"]')
+		const zoomInBtn = wrapper.find('[data-test="enhance-zoom-in"]')
+		const zoomOutBtn = wrapper.find('[data-test="enhance-zoom-out"]')
+		const zoomResetBtn = wrapper.find('[data-test="enhance-zoom-reset"]')
+		const previewPane = wrapper.find('[data-test="enhance-preview-pane"]')
+		const canvasWrapper = wrapper.find('[data-test="enhance-canvas-wrapper"]')
+
+		expect(zoomLevelEl.text()).toBe('100%')
+		expect(zoomResetBtn.attributes('disabled')).toBeDefined()
+
+		// Zoom in twice (100% -> 125% -> 150%)
+		await zoomInBtn.trigger('click')
+		expect(zoomLevelEl.text()).toBe('125%')
+		await zoomInBtn.trigger('click')
+		expect(zoomLevelEl.text()).toBe('150%')
+		expect(zoomResetBtn.attributes('disabled')).toBeUndefined()
+
+		// Pan by dragging on the preview pane
+		await previewPane.trigger('mousedown', { button: 0, clientX: 200, clientY: 200 })
+		await previewPane.trigger('mousemove', { clientX: 260, clientY: 150 })
+		await previewPane.trigger('mouseup')
+
+		expect(canvasWrapper.attributes('style')).toContain('translate(60px, -50px)')
+
+		// Wheel zoom in
+		await previewPane.trigger('wheel', { deltaY: -100, clientX: 200, clientY: 200 })
+		expect(Number.parseInt(zoomLevelEl.text(), 10)).toBeGreaterThan(150)
+
+		// Zoom out
+		await zoomOutBtn.trigger('click')
+		expect(Number.parseInt(zoomLevelEl.text(), 10)).toBeLessThanOrEqual(150)
+
+		// Reset zoom and pan
+		await zoomResetBtn.trigger('click')
+		expect(zoomLevelEl.text()).toBe('100%')
+		expect(canvasWrapper.attributes('style')).toContain('translate(0px, 0px)')
+	})
+
+	it('renders canvas at native PDF scan DPI and fits landscape pages without overflowing the preview pane', async () => {
+		const createLandscape300DpiPdf = () => ({
+			getPage: vi.fn(() => Promise.resolve({
+				getViewport: vi.fn(({ scale = 1 }: { scale?: number } = {}) => ({
+					width: 841.89 * scale,
+					height: 595.28 * scale,
+				})),
+				getOperatorList: vi.fn(() => Promise.resolve({
+					fnArray: [10, 12, 85, 11],
+					argsArray: [
+						null,
+						[841.89, 0, 0, 595.28, 0, 0],
+						['img_landscape', 3508, 2480],
+						null,
+					],
+				})),
+				render: vi.fn(() => ({ promise: Promise.resolve() })),
+			})),
+		})
+
+		const wrapper = mount(SongPdfEnhanceModal, {
+			props: {
+				open: true,
+				pageNum: 1,
+				totalPages: 1,
+				pdf: createLandscape300DpiPdf(),
+			},
+		})
+		await flushPromises()
+
+		// Canvas backing store must match full 300 DPI native pixel dimensions (3508 x 2480)
+		const canvas = wrapper.find('canvas').element as HTMLCanvasElement
+		expect(canvas.width).toBe(3508)
+		expect(canvas.height).toBe(2480)
+
+		// Display wrapper at 100% fit must be bounded within the preview pane (<= 440px wide)
+		const canvasWrapper = wrapper.find('[data-test="enhance-canvas-wrapper"]')
+		const styleAttr = canvasWrapper.attributes('style') || ''
+		expect(styleAttr).toContain('width: 440px')
+		expect(styleAttr).toContain('height: 311px')
+
+		// Operation stack remains rendered and accessible alongside the landscape preview
+		expect(wrapper.text()).toContain('Operation Stack')
+	})
+})

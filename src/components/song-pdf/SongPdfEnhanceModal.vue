@@ -11,15 +11,18 @@ import Redo from 'vue-material-design-icons/Redo.vue'
 import EyeOutline from 'vue-material-design-icons/EyeOutline.vue'
 import EyeOffOutline from 'vue-material-design-icons/EyeOffOutline.vue'
 import RestoreIcon from 'vue-material-design-icons/Restore.vue'
+import MagnifyPlus from 'vue-material-design-icons/MagnifyPlus.vue'
+import MagnifyMinus from 'vue-material-design-icons/MagnifyMinus.vue'
+import FitToScreenOutline from 'vue-material-design-icons/FitToScreenOutline.vue'
 
 import SongPdfEnhanceStack from './SongPdfEnhanceStack.vue'
 import type { ImageBuffer, ScanOperation } from './scan-types'
 import {
 	applyPipeline,
-	createImageBuffer,
 	imageBufferToImageData,
 	imageDataToImageBuffer,
 } from './scan-enhance-engine'
+import { resolvePageRenderScale } from './pdf-enhance-engine'
 import { ScanHistoryManager } from './scan-history'
 
 const props = defineProps<{
@@ -38,12 +41,29 @@ const emit = defineEmits<{
 }>()
 
 const canvasRef = ref<HTMLCanvasElement>()
+const previewPaneRef = ref<HTMLElement>()
 const isLoadingPage = ref(false)
 const showOriginal = ref(false)
 
-// Display sizing
+// Native PDF rendered dimensions & DPI
 const canvasWidth = ref(0)
 const canvasHeight = ref(0)
+const pageDpi = ref(0)
+
+// Preview container dimensions for fitting portrait and landscape pages
+const paneWidth = ref(0)
+const paneHeight = ref(0)
+
+// Zoom and pan state
+const MIN_ZOOM = 0.5
+const MAX_ZOOM = 8.0
+const ZOOM_STEPS = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0, 4.0, 6.0, 8.0]
+const zoomLevel = ref(1.0)
+const panX = ref(0)
+const panY = ref(0)
+const isPanning = ref(false)
+let panStartX = 0
+let panStartY = 0
 
 // Cached rendered raw page image buffer before enhancement
 let originalBuffer: ImageBuffer | null = null
@@ -55,6 +75,96 @@ const canUndo = ref(false)
 const canRedo = ref(false)
 
 const applyScope = ref<'current' | 'all'>('all')
+
+function measurePreviewPane() {
+	if (!previewPaneRef.value) return
+	const w = previewPaneRef.value.clientWidth
+	const h = previewPaneRef.value.clientHeight
+	if (w > 0) paneWidth.value = w
+	if (h > 0) paneHeight.value = h
+}
+
+const baseDisplayDimensions = computed(() => {
+	const availW = paneWidth.value > 60 ? paneWidth.value - 24 : 440
+	const availH = paneHeight.value > 60 ? paneHeight.value - 24 : 520
+	const w = canvasWidth.value || 400
+	const h = canvasHeight.value || 560
+	const fitRatio = Math.min(availW / w, availH / h)
+	return {
+		width: Math.max(1, Math.round(w * fitRatio)),
+		height: Math.max(1, Math.round(h * fitRatio)),
+	}
+})
+
+const canvasWrapperStyle = computed(() => ({
+	width: `${Math.max(1, Math.round(baseDisplayDimensions.value.width * zoomLevel.value))}px`,
+	height: `${Math.max(1, Math.round(baseDisplayDimensions.value.height * zoomLevel.value))}px`,
+	transform: `translate(${panX.value}px, ${panY.value}px)`,
+}))
+
+function zoomIn() {
+	const current = zoomLevel.value
+	const next = ZOOM_STEPS.find((s) => s > current + 0.01) ?? Math.min(MAX_ZOOM, +(current * 1.25).toFixed(2))
+	zoomLevel.value = Math.min(MAX_ZOOM, next)
+}
+
+function zoomOut() {
+	const current = zoomLevel.value
+	const prev = [...ZOOM_STEPS].reverse().find((s) => s < current - 0.01) ?? Math.max(MIN_ZOOM, +(current / 1.25).toFixed(2))
+	zoomLevel.value = Math.max(MIN_ZOOM, prev)
+	if (zoomLevel.value <= 1.0) {
+		panX.value = 0
+		panY.value = 0
+	}
+}
+
+function resetZoom() {
+	zoomLevel.value = 1.0
+	panX.value = 0
+	panY.value = 0
+}
+
+function handleWheel(e: WheelEvent) {
+	const oldZoom = zoomLevel.value
+	const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15
+	const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.round(oldZoom * factor * 100) / 100))
+	if (newZoom === oldZoom) return
+
+	if (previewPaneRef.value) {
+		const rect = previewPaneRef.value.getBoundingClientRect()
+		if (rect.width > 0 && rect.height > 0) {
+			const cx = e.clientX - (rect.left + rect.width / 2)
+			const cy = e.clientY - (rect.top + rect.height / 2)
+			const ratio = newZoom / oldZoom
+			panX.value = Math.round(cx - (cx - panX.value) * ratio)
+			panY.value = Math.round(cy - (cy - panY.value) * ratio)
+		}
+	}
+
+	zoomLevel.value = newZoom
+	if (newZoom <= 1.0) {
+		panX.value = 0
+		panY.value = 0
+	}
+}
+
+function startPan(e: MouseEvent) {
+	if (e.button !== 0) return
+	isPanning.value = true
+	panStartX = e.clientX - panX.value
+	panStartY = e.clientY - panY.value
+}
+
+function onMouseMove(e: MouseEvent) {
+	if (!isPanning.value) return
+	panX.value = Math.round(e.clientX - panStartX)
+	panY.value = Math.round(e.clientY - panStartY)
+}
+
+function endPan() {
+	if (!isPanning.value) return
+	isPanning.value = false
+}
 
 function syncHistoryState() {
 	canUndo.value = historyManager.canUndo()
@@ -162,24 +272,35 @@ function resetAll() {
 	renderEnhancedPreview()
 }
 
-// Rendering
+// Rendering at native PDF resolution (preserving identical DPI)
 async function renderPage() {
 	if (!props.pdf || !canvasRef.value) return
 	isLoadingPage.value = true
+	measurePreviewPane()
 
 	try {
 		const page = await props.pdf.getPage(props.pageNum)
-		const unscaledViewport = page.getViewport({ scale: 1.0, rotation: props.rotation || 0 })
-		const maxWidth = 580
-		const maxHeight = 620
-		const scale = Math.min(maxWidth / unscaledViewport.width, maxHeight / unscaledViewport.height, 2.0)
-		const viewport = page.getViewport({ scale, rotation: props.rotation || 0 })
+		const effectiveRotation = (((page.rotate ?? 0) + (props.rotation || 0)) % 360 + 360) % 360
+		const scale = await resolvePageRenderScale(page)
+		const unscaledViewport = page.getViewport({ scale: 1.0, rotation: effectiveRotation })
+		const viewport = page.getViewport({ scale, rotation: effectiveRotation })
+
+		const vpScaled = Math.abs(viewport.width - unscaledViewport.width * scale) < 2
+		const targetW = vpScaled
+			? Math.max(1, Math.round(viewport.width))
+			: Math.max(1, Math.round(unscaledViewport.width * scale))
+		const targetH = vpScaled
+			? Math.max(1, Math.round(viewport.height))
+			: Math.max(1, Math.round(unscaledViewport.height * scale))
 
 		const canvas = canvasRef.value
-		canvas.width = Math.floor(viewport.width)
-		canvas.height = Math.floor(viewport.height)
-		canvasWidth.value = canvas.width
-		canvasHeight.value = canvas.height
+		canvas.width = targetW
+		canvas.height = targetH
+		canvasWidth.value = targetW
+		canvasHeight.value = targetH
+		pageDpi.value = Math.round(scale * 72)
+
+		measurePreviewPane()
 
 		const ctx = canvas.getContext('2d')
 		if (ctx) {
@@ -256,18 +377,31 @@ function handleKeydown(e: KeyboardEvent) {
 	}
 }
 
+function handleResize() {
+	if (props.open) {
+		measurePreviewPane()
+	}
+}
+
 onMounted(() => {
 	window.addEventListener('keydown', handleKeydown)
+	window.addEventListener('mousemove', onMouseMove)
+	window.addEventListener('mouseup', endPan)
+	window.addEventListener('resize', handleResize)
 })
 
 onUnmounted(() => {
 	window.removeEventListener('keydown', handleKeydown)
+	window.removeEventListener('mousemove', onMouseMove)
+	window.removeEventListener('mouseup', endPan)
+	window.removeEventListener('resize', handleResize)
 })
 
 watch(
 	() => props.open,
 	async (isOpen) => {
 		if (isOpen) {
+			resetZoom()
 			const initial = Array.isArray(props.initialOperations)
 				? JSON.parse(JSON.stringify(props.initialOperations))
 				: [
@@ -279,6 +413,7 @@ watch(
 			historyManager.clear(initial)
 			syncHistoryState()
 			await nextTick()
+			measurePreviewPane()
 			renderPage()
 		}
 	},
@@ -287,8 +422,10 @@ watch(
 
 watch(
 	() => [props.pageNum, props.rotation],
-	() => {
+	async () => {
 		if (props.open) {
+			await nextTick()
+			measurePreviewPane()
 			renderPage()
 		}
 	},
@@ -328,6 +465,47 @@ watch(
 						<template #icon>
 							<ArrowRight :size="16" />
 						</template>
+					</NcButton>
+				</div>
+
+				<!-- Zoom & Pan Controls -->
+				<div :class="$style.zoomControls">
+					<NcButton
+						size="small"
+						variant="secondary"
+						:disabled="zoomLevel <= MIN_ZOOM"
+						:title="t('sheetmusic', 'Zoom out')"
+						data-test="enhance-zoom-out"
+						@click="zoomOut">
+						<template #icon>
+							<MagnifyMinus :size="16" />
+						</template>
+					</NcButton>
+					<span :class="$style.zoomIndicator" data-test="enhance-zoom-level">
+						{{ Math.round(zoomLevel * 100) }}%
+					</span>
+					<NcButton
+						size="small"
+						variant="secondary"
+						:disabled="zoomLevel >= MAX_ZOOM"
+						:title="t('sheetmusic', 'Zoom in')"
+						data-test="enhance-zoom-in"
+						@click="zoomIn">
+						<template #icon>
+							<MagnifyPlus :size="16" />
+						</template>
+					</NcButton>
+					<NcButton
+						size="small"
+						variant="tertiary"
+						:disabled="zoomLevel === 1 && panX === 0 && panY === 0"
+						:title="t('sheetmusic', 'Reset zoom and pan')"
+						data-test="enhance-zoom-reset"
+						@click="resetZoom">
+						<template #icon>
+							<FitToScreenOutline :size="16" />
+						</template>
+						{{ t('sheetmusic', 'Fit') }}
 					</NcButton>
 				</div>
 
@@ -382,13 +560,25 @@ watch(
 			<!-- Main Content Area: Left Preview Canvas, Right Operations Stack -->
 			<div :class="$style.workspace">
 				<!-- Left: Preview Canvas -->
-				<div :class="$style.previewPane">
+				<div
+					ref="previewPaneRef"
+					:class="[$style.previewPane, isPanning ? $style.previewPaneGrabbing : $style.previewPaneGrab]"
+					data-test="enhance-preview-pane"
+					@wheel.prevent="handleWheel"
+					@mousedown="startPan"
+					@mousemove="onMouseMove"
+					@mouseup="endPan">
 					<div v-if="isLoadingPage" :class="$style.loadingOverlay">
 						<NcLoadingIcon :size="36" />
 						<span>{{ t('sheetmusic', 'Rendering page preview…') }}</span>
 					</div>
-					<div :class="$style.canvasWrapper">
-						<canvas ref="canvasRef" :class="$style.pageCanvas" />
+					<div :class="$style.canvasViewport">
+						<div
+							:class="$style.canvasWrapper"
+							:style="canvasWrapperStyle"
+							data-test="enhance-canvas-wrapper">
+							<canvas ref="canvasRef" :class="$style.pageCanvas" />
+						</div>
 					</div>
 				</div>
 
@@ -436,81 +626,117 @@ watch(
 	display: flex;
 	flex-direction: column;
 	gap: 12px;
-	padding: 8px 16px 16px;
-	min-width: 900px;
-	max-width: 1100px;
+	padding: 8px 12px 12px;
+	width: 850px;
+	max-width: 100%;
+	min-width: 0;
 	height: 80vh;
 	min-height: 520px;
 	max-height: 740px;
 	box-sizing: border-box;
+	overflow: hidden;
 }
 
 .toolBar {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	padding: 8px 12px;
+	flex-wrap: wrap;
+	gap: 8px;
+	padding: 6px 10px;
 	background-color: var(--color-background-hover);
 	border-radius: var(--border-radius-large);
 	flex-shrink: 0;
+	min-width: 0;
 }
 
 .pageNav {
 	display: flex;
 	align-items: center;
-	gap: 8px;
+	gap: 6px;
 }
 
 .pageIndicator {
 	font-weight: 600;
-	font-size: 14px;
+	font-size: 13px;
+	color: var(--color-main-text);
+	white-space: nowrap;
+}
+
+.zoomControls {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.zoomIndicator {
+	font-size: 12px;
+	font-weight: 600;
+	min-width: 42px;
+	text-align: center;
 	color: var(--color-main-text);
 }
 
 .toolActions {
 	display: flex;
 	align-items: center;
-	gap: 8px;
+	gap: 6px;
+	flex-wrap: wrap;
 }
 
 .workspace {
 	display: grid;
-	grid-template-columns: 1fr 380px;
+	grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
 	gap: 16px;
 	flex: 1;
+	width: 100%;
+	min-width: 0;
 	min-height: 0;
 	overflow: hidden;
 }
 
 .previewPane {
 	position: relative;
-	display: flex;
-	align-items: center;
-	justify-content: center;
 	background: #1e1e1e;
 	border-radius: var(--border-radius-large);
 	overflow: hidden;
-	padding: 12px;
+	width: 100%;
 	height: 100%;
+	min-width: 0;
 	min-height: 0;
+	box-sizing: border-box;
+	user-select: none;
+}
+
+.previewPaneGrab {
+	cursor: grab;
+}
+
+.previewPaneGrabbing {
+	cursor: grabbing;
+}
+
+.canvasViewport {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	overflow: hidden;
+	padding: 12px;
 	box-sizing: border-box;
 }
 
 .canvasWrapper {
 	position: relative;
-	display: flex;
-	align-items: center;
-	justify-content: center;
+	flex-shrink: 0;
 	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-	max-width: 100%;
-	max-height: 100%;
 }
 
 .pageCanvas {
 	display: block;
-	max-width: 100%;
-	max-height: 100%;
-	object-fit: contain;
+	width: 100%;
+	height: 100%;
 }
 
 .loadingOverlay {
@@ -530,14 +756,18 @@ watch(
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
+	flex-wrap: wrap;
+	gap: 8px;
 	padding-top: 8px;
 	border-top: 1px solid var(--color-border);
 	flex-shrink: 0;
+	min-width: 0;
 }
 
 .scopeSelection {
 	display: flex;
 	align-items: center;
+	flex-wrap: wrap;
 	gap: 12px;
 }
 
