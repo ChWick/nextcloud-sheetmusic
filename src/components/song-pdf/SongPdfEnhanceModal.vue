@@ -85,8 +85,8 @@ function measurePreviewPane() {
 }
 
 const baseDisplayDimensions = computed(() => {
-	const availW = paneWidth.value > 60 ? paneWidth.value - 24 : 440
-	const availH = paneHeight.value > 60 ? paneHeight.value - 24 : 520
+	const availW = paneWidth.value > 60 ? paneWidth.value - 16 : 960
+	const availH = paneHeight.value > 60 ? paneHeight.value - 16 : 780
 	const w = canvasWidth.value || 400
 	const h = canvasHeight.value || 560
 	const fitRatio = Math.min(availW / w, availH / h)
@@ -377,11 +377,23 @@ function handleKeydown(e: KeyboardEvent) {
 	}
 }
 
+let resizeObserver: ResizeObserver | null = null
+
 function handleResize() {
 	if (props.open) {
 		measurePreviewPane()
 	}
 }
+
+watch(previewPaneRef, (el) => {
+	resizeObserver?.disconnect()
+	if (el && typeof ResizeObserver !== 'undefined') {
+		resizeObserver = new ResizeObserver(() => {
+			measurePreviewPane()
+		})
+		resizeObserver.observe(el)
+	}
+})
 
 onMounted(() => {
 	window.addEventListener('keydown', handleKeydown)
@@ -391,6 +403,8 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+	resizeObserver?.disconnect()
+	resizeObserver = null
 	window.removeEventListener('keydown', handleKeydown)
 	window.removeEventListener('mousemove', onMouseMove)
 	window.removeEventListener('mouseup', endPan)
@@ -437,6 +451,7 @@ watch(
 		:open="open"
 		size="large"
 		:can-close="true"
+		:class="$style.enhanceModal"
 		:name="t('sheetmusic', 'Enhance Scan Quality — Page {page} of {total}', { page: pageNum, total: totalPages })"
 		@update:open="emit('update:open', $event)">
 		<div :class="$style.dialogBody">
@@ -622,17 +637,35 @@ watch(
 </template>
 
 <style module>
+.enhanceModal :global(.modal-wrapper > .modal-container) {
+	width: 96vw !important;
+	max-width: 1800px !important;
+	height: 92vh !important;
+	max-height: 92vh !important;
+}
+
+.enhanceModal :global(.modal-container__content) {
+	height: 100%;
+}
+
+.enhanceModal :global(.dialog__name) {
+	margin-block: 0 4px;
+	font-size: 17px;
+	min-height: 32px;
+	line-height: 32px;
+}
+
 .dialogBody {
 	display: flex;
 	flex-direction: column;
-	gap: 12px;
-	padding: 8px 12px 12px;
-	width: 850px;
-	max-width: 100%;
+	gap: 10px;
+	padding: 4px 8px 8px;
+	width: calc(96vw - 36px);
+	max-width: 1760px;
 	min-width: 0;
-	height: 80vh;
-	min-height: 520px;
-	max-height: 740px;
+	height: calc(92vh - 54px);
+	min-height: 600px;
+	max-height: none;
 	box-sizing: border-box;
 	overflow: hidden;
 }
@@ -723,7 +756,7 @@ watch(
 	align-items: center;
 	justify-content: center;
 	overflow: hidden;
-	padding: 12px;
+	padding: 8px;
 	box-sizing: border-box;
 }
 

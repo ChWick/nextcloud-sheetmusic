@@ -231,11 +231,11 @@ describe('SongPdfEnhanceModal.vue', () => {
 		expect(canvas.width).toBe(3508)
 		expect(canvas.height).toBe(2480)
 
-		// Display wrapper at 100% fit must be bounded within the preview pane (<= 440px wide)
+		// Display wrapper at 100% fit uses the expanded preview pane (~3x area: 960 x 679 px)
 		const canvasWrapper = wrapper.find('[data-test="enhance-canvas-wrapper"]')
 		const styleAttr = canvasWrapper.attributes('style') || ''
-		expect(styleAttr).toContain('width: 440px')
-		expect(styleAttr).toContain('height: 311px')
+		expect(styleAttr).toContain('width: 960px')
+		expect(styleAttr).toContain('height: 679px')
 
 		// Operation stack remains rendered and accessible alongside the landscape preview
 		expect(wrapper.text()).toContain('Operation Stack')
