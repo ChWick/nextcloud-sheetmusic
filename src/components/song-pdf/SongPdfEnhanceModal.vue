@@ -19,6 +19,7 @@ import SongPdfEnhanceStack from './SongPdfEnhanceStack.vue'
 import type { ImageBuffer, ScanOperation } from './scan-types'
 import {
 	applyPipeline,
+	downsampleImageBuffer,
 	imageBufferToImageData,
 	imageDataToImageBuffer,
 } from './scan-enhance-engine'
@@ -65,8 +66,9 @@ const isPanning = ref(false)
 let panStartX = 0
 let panStartY = 0
 
-// Cached rendered raw page image buffer before enhancement
+// Cached rendered raw page image buffer before enhancement, and enhanced buffer at native DPI
 let originalBuffer: ImageBuffer | null = null
+let enhancedBuffer: ImageBuffer | null = null
 
 // Operation stack and undo/redo
 const operations = ref<ScanOperation[]>([])
@@ -296,23 +298,30 @@ async function renderPage() {
 		const canvas = canvasRef.value
 		canvas.width = targetW
 		canvas.height = targetH
+		canvas.dataset.nativeWidth = String(targetW)
+		canvas.dataset.nativeHeight = String(targetH)
 		canvasWidth.value = targetW
 		canvasHeight.value = targetH
 		pageDpi.value = Math.round(scale * 72)
 
 		measurePreviewPane()
 
-		const ctx = canvas.getContext('2d')
-		if (ctx) {
-			ctx.fillStyle = '#ffffff'
-			ctx.fillRect(0, 0, canvas.width, canvas.height)
+		const srcCanvas = document.createElement('canvas')
+		srcCanvas.width = targetW
+		srcCanvas.height = targetH
+		const srcCtx = srcCanvas.getContext('2d')
+		if (srcCtx) {
+			srcCtx.imageSmoothingEnabled = true
+			srcCtx.imageSmoothingQuality = 'high'
+			srcCtx.fillStyle = '#ffffff'
+			srcCtx.fillRect(0, 0, srcCanvas.width, srcCanvas.height)
 			await page.render({
-				canvasContext: ctx,
+				canvasContext: srcCtx,
 				viewport,
 				background: 'rgb(255, 255, 255)',
 			}).promise
 
-			const rawImageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+			const rawImageData = srcCtx.getImageData(0, 0, srcCanvas.width, srcCanvas.height)
 			originalBuffer = imageDataToImageBuffer(rawImageData)
 			renderEnhancedPreview()
 		}
@@ -323,20 +332,44 @@ async function renderPage() {
 	}
 }
 
-function renderEnhancedPreview() {
-	if (!canvasRef.value || !originalBuffer) return
-	const ctx = canvasRef.value.getContext('2d')
+function paintDisplayCanvas() {
+	const canvas = canvasRef.value
+	if (!canvas || !originalBuffer) return
+	const ctx = canvas.getContext('2d')
 	if (!ctx) return
 
-	if (showOriginal.value || operations.value.filter((op) => op.enabled).length === 0) {
-		const origImgData = imageBufferToImageData(originalBuffer)
-		ctx.putImageData(origImgData, 0, 0)
-		return
-	}
+	const activeOps = operations.value.filter((op) => op.enabled)
+	const sourceBuffer = (showOriginal.value || activeOps.length === 0)
+		? originalBuffer
+		: (enhancedBuffer ?? originalBuffer)
 
-	const enhanced = applyPipeline(originalBuffer, operations.value)
-	const enhancedImgData = imageBufferToImageData(enhanced)
-	ctx.putImageData(enhancedImgData, 0, 0)
+	const dpr = typeof window !== 'undefined' ? Math.min(2, Math.max(1, window.devicePixelRatio || 1)) : 1
+	const targetDisplayW = Math.max(1, Math.round(baseDisplayDimensions.value.width * zoomLevel.value * dpr))
+	const targetDisplayH = Math.max(1, Math.round(baseDisplayDimensions.value.height * zoomLevel.value * dpr))
+
+	if (targetDisplayW < sourceBuffer.width || targetDisplayH < sourceBuffer.height) {
+		const outW = Math.min(sourceBuffer.width, targetDisplayW)
+		const outH = Math.min(sourceBuffer.height, targetDisplayH)
+		const downsampled = downsampleImageBuffer(sourceBuffer, outW, outH)
+		canvas.width = downsampled.width
+		canvas.height = downsampled.height
+		ctx.putImageData(imageBufferToImageData(downsampled), 0, 0)
+	} else {
+		canvas.width = sourceBuffer.width
+		canvas.height = sourceBuffer.height
+		ctx.putImageData(imageBufferToImageData(sourceBuffer), 0, 0)
+	}
+}
+
+function renderEnhancedPreview() {
+	if (!canvasRef.value || !originalBuffer) return
+	const activeOps = operations.value.filter((op) => op.enabled)
+	if (!showOriginal.value && activeOps.length > 0) {
+		enhancedBuffer = applyPipeline(originalBuffer, operations.value)
+	} else {
+		enhancedBuffer = null
+	}
+	paintDisplayCanvas()
 }
 
 function toggleShowOriginal() {
@@ -432,6 +465,15 @@ watch(
 		}
 	},
 	{ immediate: true },
+)
+
+watch(
+	() => [zoomLevel.value, baseDisplayDimensions.value.width, baseDisplayDimensions.value.height],
+	() => {
+		if (props.open && originalBuffer) {
+			paintDisplayCanvas()
+		}
+	},
 )
 
 watch(

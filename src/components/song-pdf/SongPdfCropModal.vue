@@ -88,6 +88,8 @@ async function renderPage() {
 
 		const canvasContext = canvas.getContext('2d')
 		if (canvasContext) {
+			canvasContext.imageSmoothingEnabled = true
+			canvasContext.imageSmoothingQuality = 'high'
 			canvasContext.fillStyle = '#ffffff'
 			canvasContext.fillRect(0, 0, canvas.width, canvas.height)
 			await page.render({

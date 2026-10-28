@@ -1,6 +1,11 @@
 import { getCurrentInstance, onUnmounted, ref, type Ref } from 'vue'
 import type { ScanOperation } from './scan-types'
-import { applyPipeline, imageDataToImageBuffer, imageBufferToImageData } from './scan-enhance-engine'
+import {
+	applyPipeline,
+	downsampleImageBuffer,
+	imageBufferToImageData,
+	imageDataToImageBuffer,
+} from './scan-enhance-engine'
 
 export function usePdfThumbnails(
 	activePdfDoc: Ref<any>,
@@ -27,32 +32,59 @@ export function usePdfThumbnails(
 	async function renderCanvasForPage(pdf: any, pageNum: number): Promise<HTMLCanvasElement | null> {
 		const page = await pdf.getPage(pageNum)
 		const unscaledViewport = page.getViewport({ scale: 1.0 })
-		const targetWidth = 140
-		const scale = targetWidth / unscaledViewport.width
-		const viewport = page.getViewport({ scale })
+
+		// Render at a high intermediate resolution (4x display width = 560px) so that
+		// pdf.js does not perform a single-pass 15x nearest-neighbour-like downscale
+		// and scan enhancement filters operate at proper resolution before area-average downsampling.
+		const displayWidth = 140
+		const thumbWidth = displayWidth * 2 // 2x HiDPI backing store (280px)
+		const supersampleWidth = displayWidth * 4 // 560px intermediate render
+		const renderScale = supersampleWidth / Math.max(1, unscaledViewport.width)
+		const viewport = page.getViewport({ scale: renderScale })
+
+		const vpScaled = Math.abs(viewport.width - unscaledViewport.width * renderScale) < 2
+		const renderW = vpScaled
+			? Math.max(1, Math.round(viewport.width))
+			: Math.max(1, Math.round(unscaledViewport.width * renderScale))
+		const renderH = vpScaled
+			? Math.max(1, Math.round(viewport.height))
+			: Math.max(1, Math.round(unscaledViewport.height * renderScale))
+
+		const thumbW = thumbWidth
+		const thumbH = Math.max(1, Math.round(renderH * (thumbW / renderW)))
+
+		const srcCanvas = document.createElement('canvas')
+		srcCanvas.width = renderW
+		srcCanvas.height = renderH
 
 		const canvas = document.createElement('canvas')
-		canvas.width = Math.floor(viewport.width)
-		canvas.height = Math.floor(viewport.height)
+		canvas.width = thumbW
+		canvas.height = thumbH
 		canvas.className = 'sheetmusic-pdf-thumbnail-canvas'
 
-		const canvasContext = canvas.getContext('2d')
-		if (canvasContext) {
-			canvasContext.fillStyle = '#ffffff'
-			canvasContext.fillRect(0, 0, canvas.width, canvas.height)
+		const srcContext = srcCanvas.getContext('2d')
+		const dstContext = canvas.getContext('2d')
+		if (srcContext && dstContext) {
+			srcContext.imageSmoothingEnabled = true
+			srcContext.imageSmoothingQuality = 'high'
+			srcContext.fillStyle = '#ffffff'
+			srcContext.fillRect(0, 0, srcCanvas.width, srcCanvas.height)
 			await page.render({
-				canvasContext,
+				canvasContext: srcContext,
 				viewport,
 				background: 'rgb(255, 255, 255)',
 			}).promise
 
+			const imgData = srcContext.getImageData(0, 0, srcCanvas.width, srcCanvas.height)
+			let buffer = imageDataToImageBuffer(imgData)
+
 			if (isPageEnhanced(pageNum)) {
-				const imgData = canvasContext.getImageData(0, 0, canvas.width, canvas.height)
-				const buffer = imageDataToImageBuffer(imgData)
-				const enhanced = applyPipeline(buffer, pageEnhancements.value[pageNum])
-				const newImgData = imageBufferToImageData(enhanced)
-				canvasContext.putImageData(newImgData, 0, 0)
+				buffer = applyPipeline(buffer, pageEnhancements.value[pageNum])
 			}
+
+			// Area-averaging (box-integration) downsampling from 560px -> 280px
+			const downsampled = downsampleImageBuffer(buffer, thumbW, thumbH)
+			dstContext.putImageData(imageBufferToImageData(downsampled), 0, 0)
 		}
 		return canvas
 	}

@@ -226,8 +226,10 @@ describe('SongPdfEnhanceModal.vue', () => {
 		})
 		await flushPromises()
 
-		// Canvas backing store must match full 300 DPI native pixel dimensions (3508 x 2480)
+		// Native buffer dimensions are preserved at full 300 DPI (3508 x 2480)
 		const canvas = wrapper.find('canvas').element as HTMLCanvasElement
+		expect(canvas.dataset.nativeWidth).toBe('3508')
+		expect(canvas.dataset.nativeHeight).toBe('2480')
 		expect(canvas.width).toBe(3508)
 		expect(canvas.height).toBe(2480)
 

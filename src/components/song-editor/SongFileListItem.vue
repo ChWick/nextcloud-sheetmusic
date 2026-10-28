@@ -6,6 +6,7 @@ import { generateFilePath } from '@nextcloud/router'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist'
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+import { downsampleImageBuffer, imageBufferToImageData, imageDataToImageBuffer } from '../song-pdf/scan-enhance-engine'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import EjectIcon from 'vue-material-design-icons/Eject.vue'
 import FileIcon from 'vue-material-design-icons/File.vue'
@@ -70,24 +71,41 @@ async function loadPdfThumbnail() {
 
 		const page = await pdf.getPage(1)
 		const unscaledViewport = page.getViewport({ scale: 1.0 })
-		// Target width 44px
-		const scale = 44 / unscaledViewport.width
-		const viewport = page.getViewport({ scale })
+		// Supersample at 6x (264px) and area-average downsample to 88px (2x HiDPI for 44px CSS width)
+		const renderScale = 264 / Math.max(1, unscaledViewport.width)
+		const viewport = page.getViewport({ scale: renderScale })
+		const vpScaled = Math.abs(viewport.width - unscaledViewport.width * renderScale) < 2
+		const renderW = vpScaled ? Math.max(1, Math.round(viewport.width)) : Math.max(1, Math.round(unscaledViewport.width * renderScale))
+		const renderH = vpScaled ? Math.max(1, Math.round(viewport.height)) : Math.max(1, Math.round(unscaledViewport.height * renderScale))
+
+		const thumbW = 88
+		const thumbH = Math.max(1, Math.round(renderH * (thumbW / renderW)))
+
+		const srcCanvas = document.createElement('canvas')
+		srcCanvas.width = renderW
+		srcCanvas.height = renderH
 
 		const canvas = document.createElement('canvas')
-		canvas.width = Math.floor(viewport.width)
-		canvas.height = Math.floor(viewport.height)
+		canvas.width = thumbW
+		canvas.height = thumbH
 		canvas.className = 'sheetmusic-file-thumb'
 
-		const canvasContext = canvas.getContext('2d')
-		if (canvasContext) {
-			canvasContext.fillStyle = '#ffffff'
-			canvasContext.fillRect(0, 0, canvas.width, canvas.height)
+		const srcContext = srcCanvas.getContext('2d')
+		const dstContext = canvas.getContext('2d')
+		if (srcContext && dstContext) {
+			srcContext.imageSmoothingEnabled = true
+			srcContext.imageSmoothingQuality = 'high'
+			srcContext.fillStyle = '#ffffff'
+			srcContext.fillRect(0, 0, srcCanvas.width, srcCanvas.height)
 			await page.render({
-				canvasContext,
+				canvasContext: srcContext,
 				viewport,
 				background: 'rgb(255, 255, 255)',
 			}).promise
+
+			const imgData = srcContext.getImageData(0, 0, srcCanvas.width, srcCanvas.height)
+			const downsampled = downsampleImageBuffer(imageDataToImageBuffer(imgData), thumbW, thumbH)
+			dstContext.putImageData(imageBufferToImageData(downsampled), 0, 0)
 
 			if (thumbnailContainer.value) {
 				thumbnailContainer.value.replaceChildren(canvas)

@@ -428,3 +428,148 @@ export function applyPipeline(img: ImageBuffer, operations: ScanOperation[]): Im
 	return current
 }
 
+/**
+ * High-quality separable 2-pass area-averaging (box-integration) image resampler.
+ * Unlike nearest-neighbour or single-pass 2x2 bilinear sampling (which drops thin
+ * staff lines and creates severe aliasing when downscaling high-DPI sheet music scans),
+ * this integrates the exact area-weighted contribution of every source pixel overlapping
+ * each destination pixel's footprint.
+ */
+export function downsampleImageBuffer(
+	src: ImageBuffer,
+	targetWidth: number,
+	targetHeight: number,
+): ImageBuffer {
+	const srcW = src.width
+	const srcH = src.height
+	const ch = src.channels
+	const dstW = Math.max(1, Math.round(targetWidth))
+	const dstH = Math.max(1, Math.round(targetHeight))
+
+	if (dstW === srcW && dstH === srcH) {
+		return cloneImageBuffer(src)
+	}
+
+	const srcData = src.data
+	const horiz = new Float32Array(dstW * srcH * ch)
+
+	// Pass 1: Horizontal resampling (srcW -> dstW)
+	if (dstW === srcW) {
+		for (let i = 0; i < srcData.length; i++) {
+			horiz[i] = srcData[i]
+		}
+	} else if (dstW < srcW) {
+		const scaleX = srcW / dstW
+		const invScaleX = 1 / scaleX
+		const x0Arr = new Float32Array(dstW)
+		const x1Arr = new Float32Array(dstW)
+		const ix0Arr = new Int32Array(dstW)
+		const ix1Arr = new Int32Array(dstW)
+
+		for (let dx = 0; dx < dstW; dx++) {
+			const x0 = dx * scaleX
+			const x1 = (dx + 1) * scaleX
+			x0Arr[dx] = x0
+			x1Arr[dx] = x1
+			ix0Arr[dx] = Math.floor(x0)
+			ix1Arr[dx] = Math.min(srcW - 1, Math.ceil(x1) - 1)
+		}
+
+		for (let y = 0; y < srcH; y++) {
+			const srcRow = y * srcW * ch
+			const dstRow = y * dstW * ch
+			for (let dx = 0; dx < dstW; dx++) {
+				const x0 = x0Arr[dx]
+				const x1 = x1Arr[dx]
+				const ix0 = ix0Arr[dx]
+				const ix1 = ix1Arr[dx]
+				const outBase = dstRow + dx * ch
+
+				for (let sx = ix0; sx <= ix1; sx++) {
+					const w = (sx + 1 < x1 ? sx + 1 : x1) - (sx > x0 ? sx : x0)
+					const inBase = srcRow + sx * ch
+					for (let c = 0; c < ch; c++) {
+						horiz[outBase + c] += srcData[inBase + c] * w
+					}
+				}
+				for (let c = 0; c < ch; c++) {
+					horiz[outBase + c] *= invScaleX
+				}
+			}
+		}
+	} else {
+		// Bilinear horizontal upscale if dstW > srcW
+		const scaleX = (srcW - 1) / Math.max(1, dstW - 1)
+		for (let y = 0; y < srcH; y++) {
+			const srcRow = y * srcW * ch
+			const dstRow = y * dstW * ch
+			for (let dx = 0; dx < dstW; dx++) {
+				const gx = dx * scaleX
+				const ix = Math.floor(gx)
+				const fx = gx - ix
+				const ix1 = Math.min(srcW - 1, ix + 1)
+				const outBase = dstRow + dx * ch
+				const in0 = srcRow + ix * ch
+				const in1 = srcRow + ix1 * ch
+				for (let c = 0; c < ch; c++) {
+					horiz[outBase + c] = srcData[in0 + c] * (1 - fx) + srcData[in1 + c] * fx
+				}
+			}
+		}
+	}
+
+	// Pass 2: Vertical resampling (srcH -> dstH)
+	const dst = createImageBuffer(dstW, dstH, ch)
+	const dstData = dst.data
+
+	if (dstH === srcH) {
+		for (let i = 0; i < dstData.length; i++) {
+			dstData[i] = Math.round(horiz[i])
+		}
+	} else if (dstH < srcH) {
+		const scaleY = srcH / dstH
+		const invScaleY = 1 / scaleY
+		const rowStride = dstW * ch
+		const acc = new Float32Array(rowStride)
+
+		for (let dy = 0; dy < dstH; dy++) {
+			const y0 = dy * scaleY
+			const y1 = (dy + 1) * scaleY
+			const iy0 = Math.floor(y0)
+			const iy1 = Math.min(srcH - 1, Math.ceil(y1) - 1)
+			acc.fill(0)
+
+			for (let sy = iy0; sy <= iy1; sy++) {
+				const w = (sy + 1 < y1 ? sy + 1 : y1) - (sy > y0 ? sy : y0)
+				const srcRow = sy * rowStride
+				for (let i = 0; i < rowStride; i++) {
+					acc[i] += horiz[srcRow + i] * w
+				}
+			}
+
+			const dstRow = dy * rowStride
+			for (let i = 0; i < rowStride; i++) {
+				dstData[dstRow + i] = Math.round(acc[i] * invScaleY)
+			}
+		}
+	} else {
+		// Bilinear vertical upscale if dstH > srcH
+		const scaleY = (srcH - 1) / Math.max(1, dstH - 1)
+		const rowStride = dstW * ch
+		for (let dy = 0; dy < dstH; dy++) {
+			const gy = dy * scaleY
+			const iy = Math.floor(gy)
+			const fy = gy - iy
+			const iy1 = Math.min(srcH - 1, iy + 1)
+			const r0 = iy * rowStride
+			const r1 = iy1 * rowStride
+			const dstRow = dy * rowStride
+			for (let i = 0; i < rowStride; i++) {
+				dstData[dstRow + i] = Math.round(horiz[r0 + i] * (1 - fy) + horiz[r1 + i] * fy)
+			}
+		}
+	}
+
+	return dst
+}
+

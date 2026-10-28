@@ -379,11 +379,11 @@ test.describe('Song PDF Modifier & Cropping E2E Flow', () => {
 		const dialog = page.getByRole('dialog')
 		await expect(dialog).toBeVisible()
 
-		// Verify native resolution canvas on Page 1 (829 x 1173 px in sample.pdf)
+		// Verify native resolution on Page 1 (829 x 1173 px in sample.pdf)
 		const canvas = dialog.locator('canvas')
 		await expect(canvas).toBeVisible()
-		await expect.poll(async () => canvas.evaluate((el: HTMLCanvasElement) => el.width)).toBe(829)
-		await expect.poll(async () => canvas.evaluate((el: HTMLCanvasElement) => el.height)).toBe(1173)
+		await expect(canvas).toHaveAttribute('data-native-width', '829')
+		await expect(canvas).toHaveAttribute('data-native-height', '1173')
 
 		// Test Zoom In and Pan
 		const zoomLevel = dialog.locator('[data-test="enhance-zoom-level"]')
@@ -420,7 +420,7 @@ test.describe('Song PDF Modifier & Cropping E2E Flow', () => {
 		await expect(dialog.getByText('Page 2 of 8', { exact: true })).toBeVisible()
 
 		// Wait for landscape page 2 to render at full native resolution
-		await expect.poll(async () => canvas.evaluate((el: HTMLCanvasElement) => el.width)).toBeGreaterThan(1600)
+		await expect.poll(async () => Number(await canvas.getAttribute('data-native-width'))).toBeGreaterThan(1600)
 
 		// Verify the Operation Stack is NOT cut off for landscape PDFs
 		const dialogBox = await dialog.boundingBox()

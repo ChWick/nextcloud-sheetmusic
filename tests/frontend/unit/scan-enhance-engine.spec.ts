@@ -8,6 +8,7 @@ import {
 	createGaussianKernel1D,
 	createGrayLevelLut,
 	createImageBuffer,
+	downsampleImageBuffer,
 	rgbaToGrayscale,
 } from '../../../src/components/song-pdf/scan-enhance-engine'
 import { ScanHistoryManager } from '../../../src/components/song-pdf/scan-history'
@@ -264,6 +265,27 @@ describe('scan-enhance-engine', () => {
 			expect(manager.canRedo()).toBe(false)
 			expect(manager.getCurrent()).toHaveLength(2)
 			expect(manager.getCurrent()[1].id).toBe('a1')
+		})
+	})
+
+	describe('Area-Averaging Downsampler (downsampleImageBuffer)', () => {
+		it('preserves thin black lines as anti-aliased grayscale instead of dropping them like nearest-neighbour', () => {
+			// 8x8 white image with a single 1px horizontal black staff line at row y = 2
+			const src = createImageBuffer(8, 8, 1, 255)
+			for (let x = 0; x < 8; x++) {
+				src.data[2 * 8 + x] = 0
+			}
+
+			// Downscale 4x to 2x2: top row covers y=0..3 (which includes y=2), bottom row covers y=4..7
+			const dst = downsampleImageBuffer(src, 2, 2)
+			expect(dst.width).toBe(2)
+			expect(dst.height).toBe(2)
+			// Top row integrates 1 black row (0) + 3 white rows (255) -> (3 * 255) / 4 = 191
+			expect(dst.data[0]).toBe(191)
+			expect(dst.data[1]).toBe(191)
+			// Bottom row is pure white (255)
+			expect(dst.data[2]).toBe(255)
+			expect(dst.data[3]).toBe(255)
 		})
 	})
 })
