@@ -99,7 +99,7 @@ class MobileSheetsEndToEndSyncHarness {
 
 		$this->entityMapper = new InternalEntityMapper($this->db);
 		$this->songFileMapper = new InternalSongFileMapper($this->db);
-		$this->songMapper = new InternalSongMapper($this->db, $this->entityMapper, $this->songFileMapper);
+		$this->songMapper = new InternalSongMapper($this->db, $this->entityMapper, $this->songFileMapper, $this->rootFolder);
 		$this->attributeMapper = new InternalSongAttributeMapper($this->db);
 		$this->miscMapper = new InternalMiscMapper($this->db);
 		$this->libraryMapper = new LibraryMapper($this->db);

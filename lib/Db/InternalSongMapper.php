@@ -23,6 +23,7 @@ use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSong;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSourceType;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsYear;
 use OCP\DB\QueryBuilder\IQueryBuilder;
+use OCP\Files\IRootFolder;
 use OCP\IDBConnection;
 use OCP\IUser;
 
@@ -33,7 +34,114 @@ class InternalSongMapper {
 		private IDBConnection $db,
 		private ?InternalEntityMapper $entityMapper = null,
 		private ?InternalSongFileMapper $songFileMapper = null,
+		private ?IRootFolder $rootFolder = null,
 	) {
+	}
+
+	/**
+	 * WebDAV path of every file id as the user sees it, keyed by file id.
+	 *
+	 * The filecache stores paths relative to the *storage*, not to the user's
+	 * folder. For the user's home storage that is "files/<relative>", but files on
+	 * other mounts - team folders ("__groupfolders/3/..."), shares, external
+	 * storage - live in a different storage whose cache path has no relation to
+	 * where the mount appears in the user's folder. Those are resolved through the
+	 * user folder, which knows the mount points.
+	 *
+	 * Files the user cannot reach are left out, so callers treat them as missing.
+	 *
+	 * @param list<int> $fileIds
+	 * @return array<int, string>
+	 */
+	private function resolveFileNodePaths(array $fileIds, ?IUser $user): array {
+		if ($fileIds === []) {
+			return [];
+		}
+
+		$uid = $user?->getUID() ?? '';
+		$webdavRoot = MobileSheetsPathResolver::WEBDAV_ROOT . '/' . $uid;
+
+		$userFolder = null;
+		$homeStorageId = null;
+		$homePrefix = 'files';
+		if ($user !== null && $this->rootFolder !== null) {
+			try {
+				$userFolder = $this->rootFolder->getUserFolder($uid);
+				$homeStorageId = $userFolder->getMountPoint()->getNumericStorageId();
+				$homePrefix = trim($userFolder->getInternalPath(), '/');
+			} catch (\Throwable) {
+				$userFolder = null;
+				$homeStorageId = null;
+			}
+		}
+
+		$paths = [];
+		// "<storage>:<cache dir>" => directory relative to the user folder; lets
+		// siblings on a foreign mount reuse one lookup instead of one per file.
+		$dirMap = [];
+		try {
+			$qb = $this->db->getQueryBuilder();
+			$qb->select('fileid', 'path', 'storage')
+				->from('filecache')
+				->where($qb->expr()->in('fileid', $qb->createNamedParameter($fileIds, IQueryBuilder::PARAM_INT_ARRAY)));
+			$result = $qb->executeQuery();
+			$rows = $result->fetchAllAssociative();
+			$result->closeCursor();
+		} catch (\Throwable) {
+			return [];
+		}
+
+		foreach ($rows as $r) {
+			$fileId = (int)$r['fileid'];
+			$cachePath = ltrim((string)$r['path'], '/');
+			$storageId = (int)$r['storage'];
+
+			// Fast path: file in the user's own home storage
+			if ($homeStorageId !== null && $storageId === $homeStorageId && str_starts_with($cachePath, $homePrefix . '/')) {
+				$paths[$fileId] = $webdavRoot . '/' . substr($cachePath, strlen($homePrefix) + 1);
+				continue;
+			}
+
+			// No user folder to resolve mounts with: legacy best effort
+			if ($userFolder === null) {
+				$p = str_starts_with($cachePath, 'files/') ? substr($cachePath, 6) : $cachePath;
+				$paths[$fileId] = $webdavRoot . '/' . $p;
+				continue;
+			}
+
+			$cacheDir = dirname($cachePath);
+			$dirKey = $storageId . ':' . $cacheDir;
+			if (isset($dirMap[$dirKey])) {
+				$dir = $dirMap[$dirKey];
+				$paths[$fileId] = $webdavRoot . '/' . ($dir === '' ? '' : $dir . '/') . basename($cachePath);
+				continue;
+			}
+
+			try {
+				$node = $userFolder->getFirstNodeById($fileId);
+				if ($node === null) {
+					continue;
+				}
+				$relative = $userFolder->getRelativePath($node->getPath());
+				if ($relative === null) {
+					continue;
+				}
+				$relative = trim($relative, '/');
+				$paths[$fileId] = $webdavRoot . '/' . $relative;
+
+				// The parent directory is only visible as a whole when the node is
+				// not itself the root of its mount (e.g. a single shared file).
+				$mountRoot = rtrim($node->getMountPoint()->getMountPoint(), '/');
+				if ($mountRoot !== rtrim($node->getPath(), '/')) {
+					$relDir = dirname($relative);
+					$dirMap[$dirKey] = $relDir === '.' ? '' : $relDir;
+				}
+			} catch (\Throwable) {
+				// Unreachable for this user: reported as missing
+			}
+		}
+
+		return $paths;
 	}
 
 	public function findById(int $id): ?InternalSong {
@@ -492,28 +600,9 @@ class InternalSongMapper {
 			? $this->songFileMapper->findAllForLibrary($libraryId)
 			: [];
 
-		$fileNodePaths = [];
 		$fileIds = array_values(array_unique(array_filter(array_column($files, 'fileId'))));
 		$uid = $user?->getUID() ?? '';
-		if (!empty($fileIds)) {
-			try {
-				$qbCache = $this->db->getQueryBuilder();
-				$qbCache->select('fileid', 'path')
-					->from('filecache')
-					->where($qbCache->expr()->in('fileid', $qbCache->createNamedParameter($fileIds, IQueryBuilder::PARAM_INT_ARRAY)));
-				$resCache = $qbCache->executeQuery();
-				while ($r = $resCache->fetchAssociative()) {
-					$p = (string)$r['path'];
-					if (str_starts_with($p, 'files/')) {
-						$p = substr($p, 6);
-					}
-					$fileNodePaths[(int)$r['fileid']] = MobileSheetsPathResolver::WEBDAV_ROOT . '/' . $uid . '/' . ltrim($p, '/');
-				}
-				$resCache->closeCursor();
-			} catch (\Throwable) {
-				// Fall through
-			}
-		}
+		$fileNodePaths = $this->resolveFileNodePaths($fileIds, $user);
 
 		$songFiles = [];
 		foreach ($files as $file) {

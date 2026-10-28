@@ -74,6 +74,7 @@ trait RealMobileSheetsTestTrait {
 			$this->dbConn,
 			$this->entityMapper,
 			$this->songFileMapper,
+			$this->rootFolder,
 		);
 
 		$this->importer = new MobileSheetsSqliteImporter(
