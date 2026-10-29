@@ -473,8 +473,14 @@ const {
   reloadLibrary: loadLibraryData,
 });
 
-async function handleInlineUpdateSong(song: Song, updates: Partial<Song>) {
-  await executeInlineSongUpdate(props.selectedLibrary, song, updates, handleLibraryDataUpdate);
+async function handleInlineUpdateSong(song: Song, updates: Record<string, any>) {
+  await executeInlineSongUpdate(
+    props.selectedLibrary,
+    song,
+    updates,
+    currentLibraryData.value,
+    handleLibraryDataUpdate,
+  );
 }
 
 async function handleApplyBatchUpdate(payload: BatchUpdatePayload) {

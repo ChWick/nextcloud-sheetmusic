@@ -173,4 +173,51 @@ describe('SongTableView.vue', () => {
 			{ stars: 4 },
 		])
 	})
+
+	it('supports inline editing of entity columns (composer, book) and duration', async () => {
+		const wrapper = mount(SongTableView, {
+			props: { songs },
+		})
+
+		const firstRow = wrapper.findAll('tbody tr')[0]
+
+		// Edit composer inline
+		const composerBtn = firstRow.find('[data-test="inline-edit-composer-btn"]')
+		expect(composerBtn.exists()).toBe(true)
+		await composerBtn.trigger('click')
+
+		const composerInput = firstRow.find('[data-test="inline-edit-input"]')
+		expect((composerInput.element as HTMLInputElement).value).toBe('Bach')
+		await composerInput.setValue('J. S. Bach, Vivaldi')
+		await composerInput.trigger('keydown.enter')
+
+		expect(wrapper.emitted('inline-update-song')?.[0]).toEqual([
+			songs[1],
+			{ composers: [{ name: 'J. S. Bach' }, { name: 'Vivaldi' }] },
+		])
+
+		// Edit book inline
+		const bookBtn = firstRow.find('[data-test="inline-edit-book-btn"]')
+		await bookBtn.trigger('click')
+		const bookInput = firstRow.find('[data-test="inline-edit-input"]')
+		await bookInput.setValue('Baroque Favorites')
+		await bookInput.trigger('keydown.enter')
+
+		expect(wrapper.emitted('inline-update-song')?.[1]).toEqual([
+			songs[1],
+			{ books: [{ title: 'Baroque Favorites' }] },
+		])
+
+		// Edit duration inline (mm:ss -> seconds)
+		const durationBtn = firstRow.find('[data-test="inline-edit-duration-btn"]')
+		await durationBtn.trigger('click')
+		const durationInput = firstRow.find('[data-test="inline-edit-input"]')
+		await durationInput.setValue('3:15')
+		await durationInput.trigger('keydown.enter')
+
+		expect(wrapper.emitted('inline-update-song')?.[2]).toEqual([
+			songs[1],
+			{ duration: 195 },
+		])
+	})
 })

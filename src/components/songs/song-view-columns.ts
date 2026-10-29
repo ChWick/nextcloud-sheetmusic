@@ -1,17 +1,43 @@
 import { translate as t } from '@nextcloud/l10n'
 import type { EntityType, FilterEntity, Song, SongColumn } from '../../types/song'
+import type { EntityLabelField, SongEntityIdField } from '../song-editor/entity-utils'
 import { formatDifficulty, formatStars, type SortKey } from '../../utils/song-formatter'
 
 export type InlineEditableField =
 	| 'title'
+	| 'composer'
+	| 'book'
+	| 'collection'
+	| 'artist'
+	| 'genre'
+	| 'key'
+	| 'customGroup'
+	| 'year'
+	| 'signature'
+	| 'sourceType'
+	| 'instrument'
 	| 'opus'
 	| 'catalogNumber'
 	| 'songNumber'
 	| 'stars'
 	| 'difficulty'
+	| 'duration'
 	| 'keywords'
 	| 'custom'
 	| 'custom2'
+
+export type SongEntityProp =
+	| 'composers'
+	| 'books'
+	| 'collections'
+	| 'artists'
+	| 'genres'
+	| 'keys'
+	| 'customGroups'
+	| 'years'
+	| 'signatures'
+	| 'sourceTypes'
+	| 'instruments'
 
 export interface TableColumnDef {
 	col: SongColumn
@@ -21,11 +47,20 @@ export interface TableColumnDef {
 
 export interface EntityColumnDef {
 	col: SongColumn
+	field: InlineEditableField
+	songProp: SongEntityProp
+	idField: SongEntityIdField
+	endpoint: string
+	nameKey: EntityLabelField
 	entityType: EntityType
 	cardLabel: () => string
+	ariaLabel: () => string
+	editTitle: () => string
 	getItems: (song: Song) => FilterEntity[]
 	getItemLabel: (item: FilterEntity) => string
 	getFilterTitle: (label: string) => string
+	formatEditValue: (song: Song) => string
+	parseEditValue: (raw: string) => Array<{ id?: number, name?: string, title?: string }>
 }
 
 export interface TextEditableColumnDef {
@@ -61,95 +96,188 @@ export const TABLE_COLUMNS: TableColumnDef[] = [
 	{ col: 'dateCreated', sortKey: 'dateCreated', label: () => t('sheetmusic', 'Created') },
 ]
 
+function parseEntityTokens(raw: string, nameKey: EntityLabelField): Array<{ name?: string, title?: string }> {
+	const seen = new Set<string>()
+	const result: Array<{ name?: string, title?: string }> = []
+	for (const part of raw.split(',')) {
+		const trimmed = part.trim()
+		if (!trimmed) continue
+		const lower = trimmed.toLocaleLowerCase()
+		if (seen.has(lower)) continue
+		seen.add(lower)
+		result.push(nameKey === 'title' ? { title: trimmed } : { name: trimmed })
+	}
+	return result
+}
+
+function makeEntityCol(config: {
+	col: SongColumn
+	field: InlineEditableField
+	songProp: SongEntityProp
+	idField: SongEntityIdField
+	endpoint: string
+	nameKey: EntityLabelField
+	entityType: EntityType
+	cardLabel: () => string
+	ariaLabel: () => string
+	editTitle: () => string
+	getFilterTitle: (label: string) => string
+}): EntityColumnDef {
+	const getItems = (s: Song): FilterEntity[] => ((s as any)[config.songProp] ?? []) as FilterEntity[]
+	const getItemLabel = (item: FilterEntity): string => ('title' in item ? item.title : item.name)
+	return {
+		...config,
+		getItems,
+		getItemLabel,
+		formatEditValue: (song: Song) => getItems(song).map(getItemLabel).filter(Boolean).join(', '),
+		parseEditValue: (raw: string) => parseEntityTokens(raw, config.nameKey),
+	}
+}
+
 export const ENTITY_COLUMNS: EntityColumnDef[] = [
-	{
+	makeEntityCol({
 		col: 'composer',
+		field: 'composer',
+		songProp: 'composers',
+		idField: 'composerIds',
+		endpoint: '/api/composers',
+		nameKey: 'name',
 		entityType: 'composers',
 		cardLabel: () => t('sheetmusic', 'Composer:'),
-		getItems: (s) => s.composers ?? [],
-		getItemLabel: (item) => ('name' in item ? item.name : item.title),
+		ariaLabel: () => t('sheetmusic', 'Composer'),
+		editTitle: () => t('sheetmusic', 'Edit composer inline'),
 		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for composer {name}', { name }),
-	},
-	{
+	}),
+	makeEntityCol({
 		col: 'book',
+		field: 'book',
+		songProp: 'books',
+		idField: 'bookIds',
+		endpoint: '/api/books',
+		nameKey: 'title',
 		entityType: 'books',
 		cardLabel: () => t('sheetmusic', 'Book:'),
-		getItems: (s) => s.books ?? [],
-		getItemLabel: (item) => ('title' in item ? item.title : item.name),
+		ariaLabel: () => t('sheetmusic', 'Book'),
+		editTitle: () => t('sheetmusic', 'Edit book inline'),
 		getFilterTitle: (title) => t('sheetmusic', 'Toggle filter for book {title}', { title }),
-	},
-	{
+	}),
+	makeEntityCol({
 		col: 'collection',
+		field: 'collection',
+		songProp: 'collections',
+		idField: 'collectionIds',
+		endpoint: '/api/collections',
+		nameKey: 'name',
 		entityType: 'collections',
 		cardLabel: () => t('sheetmusic', 'Collection:'),
-		getItems: (s) => s.collections ?? [],
-		getItemLabel: (item) => ('name' in item ? item.name : item.title),
+		ariaLabel: () => t('sheetmusic', 'Collection'),
+		editTitle: () => t('sheetmusic', 'Edit collection inline'),
 		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for collection {name}', { name }),
-	},
-	{
+	}),
+	makeEntityCol({
 		col: 'artist',
+		field: 'artist',
+		songProp: 'artists',
+		idField: 'artistIds',
+		endpoint: '/api/artists',
+		nameKey: 'name',
 		entityType: 'artists',
 		cardLabel: () => t('sheetmusic', 'Artist:'),
-		getItems: (s) => s.artists ?? [],
-		getItemLabel: (item) => ('name' in item ? item.name : item.title),
+		ariaLabel: () => t('sheetmusic', 'Artist'),
+		editTitle: () => t('sheetmusic', 'Edit artist inline'),
 		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for artist {name}', { name }),
-	},
-	{
+	}),
+	makeEntityCol({
 		col: 'genre',
+		field: 'genre',
+		songProp: 'genres',
+		idField: 'genreIds',
+		endpoint: '/api/genres',
+		nameKey: 'name',
 		entityType: 'genres',
 		cardLabel: () => t('sheetmusic', 'Genre:'),
-		getItems: (s) => s.genres ?? [],
-		getItemLabel: (item) => ('name' in item ? item.name : item.title),
+		ariaLabel: () => t('sheetmusic', 'Genre'),
+		editTitle: () => t('sheetmusic', 'Edit genre inline'),
 		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for genre {name}', { name }),
-	},
-	{
+	}),
+	makeEntityCol({
 		col: 'key',
+		field: 'key',
+		songProp: 'keys',
+		idField: 'keyIds',
+		endpoint: '/api/keys',
+		nameKey: 'name',
 		entityType: 'keys',
 		cardLabel: () => t('sheetmusic', 'Key:'),
-		getItems: (s) => s.keys ?? [],
-		getItemLabel: (item) => ('name' in item ? item.name : item.title),
+		ariaLabel: () => t('sheetmusic', 'Key'),
+		editTitle: () => t('sheetmusic', 'Edit key inline'),
 		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for key {name}', { name }),
-	},
-	{
+	}),
+	makeEntityCol({
 		col: 'customGroup',
+		field: 'customGroup',
+		songProp: 'customGroups',
+		idField: 'customGroupIds',
+		endpoint: '/api/customgroups',
+		nameKey: 'name',
 		entityType: 'customgroups',
 		cardLabel: () => t('sheetmusic', 'Custom Group:'),
-		getItems: (s) => s.customGroups ?? [],
-		getItemLabel: (item) => ('name' in item ? item.name : item.title),
+		ariaLabel: () => t('sheetmusic', 'Custom Group'),
+		editTitle: () => t('sheetmusic', 'Edit custom group inline'),
 		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for custom group {name}', { name }),
-	},
-	{
+	}),
+	makeEntityCol({
 		col: 'year',
+		field: 'year',
+		songProp: 'years',
+		idField: 'yearIds',
+		endpoint: '/api/years',
+		nameKey: 'name',
 		entityType: 'years',
 		cardLabel: () => t('sheetmusic', 'Year:'),
-		getItems: (s) => s.years ?? [],
-		getItemLabel: (item) => ('name' in item ? item.name : item.title),
+		ariaLabel: () => t('sheetmusic', 'Year'),
+		editTitle: () => t('sheetmusic', 'Edit year inline'),
 		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for year {name}', { name }),
-	},
-	{
+	}),
+	makeEntityCol({
 		col: 'signature',
+		field: 'signature',
+		songProp: 'signatures',
+		idField: 'signatureIds',
+		endpoint: '/api/signatures',
+		nameKey: 'name',
 		entityType: 'signatures',
 		cardLabel: () => t('sheetmusic', 'Time Signature:'),
-		getItems: (s) => s.signatures ?? [],
-		getItemLabel: (item) => ('name' in item ? item.name : item.title),
+		ariaLabel: () => t('sheetmusic', 'Time Signature'),
+		editTitle: () => t('sheetmusic', 'Edit time signature inline'),
 		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for signature {name}', { name }),
-	},
-	{
+	}),
+	makeEntityCol({
 		col: 'sourceType',
+		field: 'sourceType',
+		songProp: 'sourceTypes',
+		idField: 'sourceTypeIds',
+		endpoint: '/api/sourcetypes',
+		nameKey: 'name',
 		entityType: 'sourcetypes',
 		cardLabel: () => t('sheetmusic', 'Source Type:'),
-		getItems: (s) => s.sourceTypes ?? [],
-		getItemLabel: (item) => ('name' in item ? item.name : item.title),
+		ariaLabel: () => t('sheetmusic', 'Source Type'),
+		editTitle: () => t('sheetmusic', 'Edit source type inline'),
 		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for source type {name}', { name }),
-	},
-	{
+	}),
+	makeEntityCol({
 		col: 'instrument',
+		field: 'instrument',
+		songProp: 'instruments',
+		idField: 'instrumentIds',
+		endpoint: '/api/instruments',
+		nameKey: 'name',
 		entityType: 'instruments',
 		cardLabel: () => t('sheetmusic', 'Instrument:'),
-		getItems: (s) => s.instruments ?? [],
-		getItemLabel: (item) => ('name' in item ? item.name : item.title),
+		ariaLabel: () => t('sheetmusic', 'Instrument'),
+		editTitle: () => t('sheetmusic', 'Edit instrument inline'),
 		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for instrument {name}', { name }),
-	},
+	}),
 ]
 
 export const IDENTIFIER_TEXT_COLUMNS: TextEditableColumnDef[] = [
@@ -203,3 +331,23 @@ export const DIFFICULTY_SELECT_OPTIONS = [
 	{ value: 0, label: '—' },
 	...Array.from({ length: 5 }, (_, i) => ({ value: i + 1, label: formatDifficulty(i + 1) })),
 ]
+
+export function parseDurationInput(raw: string | number): number {
+	if (typeof raw === 'number') {
+		return Math.max(0, Math.round(raw))
+	}
+	const trimmed = raw.trim()
+	if (!trimmed) return 0
+	if (trimmed.includes(':')) {
+		const parts = trimmed.split(':').map((p) => Number(p.trim()))
+		if (parts.some((n) => Number.isNaN(n) || n < 0)) return 0
+		if (parts.length === 2) {
+			return Math.round(parts[0] * 60 + parts[1])
+		}
+		if (parts.length === 3) {
+			return Math.round(parts[0] * 3600 + parts[1] * 60 + parts[2])
+		}
+	}
+	const num = Number(trimmed)
+	return Number.isFinite(num) && num > 0 ? Math.round(num) : 0
+}

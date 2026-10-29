@@ -14,8 +14,10 @@ import {
 	ENTITY_COLUMNS,
 	EXTRA_TEXT_COLUMNS,
 	IDENTIFIER_TEXT_COLUMNS,
+	parseDurationInput,
 	STAR_SELECT_OPTIONS,
 	TABLE_COLUMNS,
+	type EntityColumnDef,
 	type InlineEditableField,
 } from './song-view-columns'
 
@@ -39,7 +41,7 @@ const props = withDefaults(
 const emit = defineEmits<{
 	'view-song': [song: Song]
 	'edit-song': [song: Song]
-	'inline-update-song': [song: Song, updates: Partial<Song>]
+	'inline-update-song': [song: Song, updates: Record<string, any>]
 	'filter-entity': [entityType: EntityType, entity: FilterEntity]
 	'toggle-select-song': [songId: number]
 	'select-all': [songIds: number[]]
@@ -81,6 +83,19 @@ const visibleExtraTextColumns = computed(() => EXTRA_TEXT_COLUMNS.filter((c) => 
 
 function handleInlineSave(song: Song, field: InlineEditableField, value: string | number) {
 	emit('inline-update-song', song, { [field]: value })
+}
+
+function handleInlineEntitySave(song: Song, entCol: EntityColumnDef, rawValue: string | number) {
+	emit('inline-update-song', song, {
+		[entCol.songProp]: entCol.parseEditValue(String(rawValue)),
+	})
+}
+
+function handleInlineDurationSave(song: Song, rawValue: string | number) {
+	const nextSeconds = parseDurationInput(rawValue)
+	if (nextSeconds !== (song.duration ?? 0)) {
+		emit('inline-update-song', song, { duration: nextSeconds })
+	}
 }
 
 const {
@@ -151,17 +166,24 @@ const {
 						:edit-title="t('sheetmusic', 'Edit title inline')"
 						@save="handleInlineSave(song, 'title', $event)" />
 
-					<td
+					<SongInlineEditableCell
 						v-for="entCol in visibleEntityColumns"
 						:key="entCol.col"
-						:class="$style.metaCell">
+						tag="td"
+						:class="$style.metaCell"
+						:field="entCol.field"
+						:value="entCol.formatEditValue(song)"
+						:placeholder="t('sheetmusic', 'Comma-separated…')"
+						:aria-label="entCol.ariaLabel()"
+						:edit-title="entCol.editTitle()"
+						@save="handleInlineEntitySave(song, entCol, $event)">
 						<SongEntityChips
 							:def="entCol"
 							:items="entCol.getItems(song)"
 							:is-filtered="isFiltered"
 							show-empty-dash
 							@filter-entity="(type, ent) => emit('filter-entity', type, ent)" />
-					</td>
+					</SongInlineEditableCell>
 
 					<SongInlineEditableCell
 						v-for="textCol in visibleIdentifierColumns"
@@ -200,9 +222,17 @@ const {
 						:edit-title="t('sheetmusic', 'Edit difficulty inline')"
 						@save="handleInlineSave(song, 'difficulty', $event)" />
 
-					<td v-if="isColVisible('duration')" :class="$style.metaCell">
-						{{ formatDuration(song.duration) }}
-					</td>
+					<SongInlineEditableCell
+						v-if="isColVisible('duration')"
+						tag="td"
+						:class="$style.metaCell"
+						field="duration"
+						:value="song.duration ? formatDuration(song.duration, '') : ''"
+						:display-text="formatDuration(song.duration)"
+						:placeholder="t('sheetmusic', 'mm:ss or seconds')"
+						:aria-label="t('sheetmusic', 'Duration')"
+						:edit-title="t('sheetmusic', 'Edit duration inline')"
+						@save="handleInlineDurationSave(song, $event)" />
 
 					<SongInlineEditableCell
 						v-for="extraCol in visibleExtraTextColumns"

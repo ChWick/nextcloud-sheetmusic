@@ -3,7 +3,7 @@ import { translate as t } from '@nextcloud/l10n'
 import CheckIcon from 'vue-material-design-icons/Check.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
-import { nextTick, ref } from 'vue'
+import { nextTick, ref, useId } from 'vue'
 import type { InlineEditableField } from './song-view-columns'
 
 const props = withDefaults(
@@ -14,16 +14,20 @@ const props = withDefaults(
 		displayText?: string
 		ariaLabel: string
 		editTitle: string
+		placeholder?: string
 		mode?: 'text' | 'select'
 		options?: Array<{ value: number, label: string }>
+		suggestions?: string[]
 		variant?: 'table-title' | 'table-meta' | 'card-title' | 'list-title'
 		allowEmpty?: boolean
 	}>(),
 	{
 		tag: 'div',
 		displayText: undefined,
+		placeholder: undefined,
 		mode: 'text',
 		options: () => [],
+		suggestions: () => [],
 		variant: 'table-meta',
 		allowEmpty: true,
 	},
@@ -33,6 +37,7 @@ const emit = defineEmits<{
 	save: [value: string | number]
 }>()
 
+const datalistId = `inline-datalist-${props.field}-${useId()}`
 const isEditing = ref(false)
 const draftText = ref('')
 const draftNumber = ref(0)
@@ -117,16 +122,22 @@ defineExpose({
 					{{ opt.label }}
 				</option>
 			</select>
-			<input
-				v-else
-				ref="inputRef"
-				v-model="draftText"
-				type="text"
-				:class="$style.inlineEditInput"
-				data-test="inline-edit-input"
-				:aria-label="ariaLabel"
-				@keydown.enter.prevent="commitEdit"
-				@keydown.esc.prevent="cancelEdit">
+			<template v-else>
+				<input
+					ref="inputRef"
+					v-model="draftText"
+					type="text"
+					:class="$style.inlineEditInput"
+					data-test="inline-edit-input"
+					:aria-label="ariaLabel"
+					:placeholder="placeholder"
+					:list="suggestions.length > 0 ? datalistId : undefined"
+					@keydown.enter.prevent="commitEdit"
+					@keydown.esc.prevent="cancelEdit">
+				<datalist v-if="suggestions.length > 0" :id="datalistId">
+					<option v-for="s in suggestions" :key="s" :value="s" />
+				</datalist>
+			</template>
 			<button
 				v-if="mode === 'text'"
 				type="button"
@@ -148,14 +159,16 @@ defineExpose({
 			</button>
 		</div>
 		<div v-else :class="$style.editableCellContent">
-			<span
-				:class="[
-					variant === 'table-title' && $style.tableTitle,
-					variant === 'card-title' && $style.cardTitle,
-					variant === 'list-title' && $style.listTitle,
-				]">
-				{{ displayText ?? (value ? String(value) : '—') }}
-			</span>
+			<slot>
+				<span
+					:class="[
+						variant === 'table-title' && $style.tableTitle,
+						variant === 'card-title' && $style.cardTitle,
+						variant === 'list-title' && $style.listTitle,
+					]">
+					{{ displayText ?? (value ? String(value) : '—') }}
+				</span>
+			</slot>
 			<button
 				type="button"
 				:class="[$style.inlineEditTrigger, 'sheetmusic-inline-edit-trigger']"
