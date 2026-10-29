@@ -327,12 +327,16 @@ const formattedRotation = computed(() => `${Math.round(props.rotationDeg * 10) /
 .canvasWrapper {
 	position: relative;
 	width: 100%;
+	flex: 1 1 auto;
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	padding: 12px;
 	background-color: var(--color-background-hover);
-	min-height: 180px;
+	height: 214px;
+	min-height: 214px;
+	box-sizing: border-box;
+	overflow: hidden;
 }
 
 .thumbnailSlot {
@@ -368,23 +372,33 @@ const formattedRotation = computed(() => `${Math.round(props.rotationDeg * 10) /
 }
 
 .cardFooter {
+	position: relative;
+	z-index: 2;
+	flex-shrink: 0;
+	margin-top: auto;
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	padding: 6px 10px;
+	padding: 6px 8px;
+	min-height: 40px;
+	box-sizing: border-box;
 	border-top: 1px solid var(--color-border);
 	background-color: var(--color-main-background);
-	gap: 6px;
+	gap: 4px;
 }
 
 .pageNumLabel {
 	font-size: 12px;
 	font-weight: 500;
 	color: var(--color-main-text);
+	flex: 1 1 0;
+	min-width: 0;
 	display: flex;
 	align-items: center;
 	gap: 4px;
-	flex-wrap: wrap;
+	flex-wrap: nowrap;
+	white-space: nowrap;
+	overflow: hidden;
 }
 
 .pageNumLabelDeleted {
@@ -393,15 +407,23 @@ const formattedRotation = computed(() => `${Math.round(props.rotationDeg * 10) /
 }
 
 .rotationBadge {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	min-width: 34px;
+	box-sizing: border-box;
 	background-color: var(--color-primary-element-light, rgba(0, 130, 201, 0.15));
 	color: var(--color-primary-element);
-	padding: 1px 5px;
+	padding: 1px 4px;
 	border-radius: 10px;
 	font-size: 11px;
 	font-weight: 600;
+	text-align: center;
 }
 
 .cropBadge {
+	flex-shrink: 0;
 	background-color: var(--color-primary-element-light, rgba(0, 130, 201, 0.15));
 	color: var(--color-primary-element);
 	padding: 1px 5px;
@@ -413,6 +435,7 @@ const formattedRotation = computed(() => `${Math.round(props.rotationDeg * 10) /
 .enhanceBadge {
 	display: inline-flex;
 	align-items: center;
+	flex-shrink: 0;
 	background-color: var(--color-primary-element-light, rgba(0, 130, 201, 0.15));
 	color: var(--color-primary-element);
 	padding: 1px 6px;
@@ -422,6 +445,7 @@ const formattedRotation = computed(() => `${Math.round(props.rotationDeg * 10) /
 }
 
 .deletedBadge {
+	flex-shrink: 0;
 	background-color: rgba(220, 38, 38, 0.15);
 	color: #dc2626;
 	padding: 1px 5px;
@@ -431,9 +455,18 @@ const formattedRotation = computed(() => `${Math.round(props.rotationDeg * 10) /
 }
 
 .cardActions {
+	flex: 0 0 auto;
+	margin-left: auto;
 	display: flex;
 	align-items: center;
 	gap: 2px;
+}
+
+.cardActions :global(.button-vue) {
+	--button-size: 26px;
+	min-width: 26px;
+	min-height: 26px;
+	padding-inline: 4px;
 }
 
 .selectCheckbox {

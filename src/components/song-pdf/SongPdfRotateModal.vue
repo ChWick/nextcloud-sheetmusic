@@ -295,13 +295,16 @@ onMounted(() => {
 .dialogBody {
 	display: flex;
 	flex-direction: column;
-	max-height: 88vh;
+	max-height: 86vh;
 	gap: 12px;
 	padding: 8px 16px 16px;
+	box-sizing: border-box;
+	overflow-y: auto;
 }
 
 .toolBar {
 	display: flex;
+	flex-shrink: 0;
 	align-items: center;
 	justify-content: space-between;
 	padding: 4px 8px;
@@ -331,14 +334,17 @@ onMounted(() => {
 .workspace {
 	position: relative;
 	display: flex;
+	flex: 1 1 auto;
 	justify-content: center;
 	align-items: center;
-	min-height: 380px;
-	max-height: 480px;
+	height: 412px;
+	min-height: 240px;
+	max-height: 440px;
 	overflow: hidden;
 	background-color: #2b2b2b;
 	border-radius: var(--border-radius, 6px);
 	padding: 16px;
+	box-sizing: border-box;
 }
 
 .loadingOverlay {
@@ -420,6 +426,7 @@ onMounted(() => {
 
 .footer {
 	display: flex;
+	flex-shrink: 0;
 	align-items: center;
 	justify-content: space-between;
 	padding-top: 8px;

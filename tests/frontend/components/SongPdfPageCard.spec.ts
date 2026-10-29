@@ -134,5 +134,31 @@ describe('SongPdfPageCard.vue', () => {
 
 		expect(wrapper.text()).toContain('Deleted')
 	})
+
+	it('keeps footer visible and action buttons stable when changing rotation from 0 to 90 and 270 deg', async () => {
+		const wrapper = mount(SongPdfPageCard, {
+			props: {
+				...defaultProps,
+				rotationDeg: 0,
+			},
+		})
+
+		const getActionLabels = () =>
+			wrapper.findAll('button').map((b) => b.attributes('aria-label'))
+
+		const initialLabels = getActionLabels()
+		expect(initialLabels).toContain('Rotate page 90° CCW')
+		expect(initialLabels).toContain('Rotate page 90° CW')
+		expect(wrapper.text()).toContain('p. 1')
+		expect(wrapper.text()).not.toContain('270°')
+
+		await wrapper.setProps({ rotationDeg: 90 })
+		expect(wrapper.text()).toContain('90°')
+		expect(getActionLabels()).toEqual(initialLabels)
+
+		await wrapper.setProps({ rotationDeg: 270 })
+		expect(wrapper.text()).toContain('270°')
+		expect(getActionLabels()).toEqual(initialLabels)
+	})
 })
 

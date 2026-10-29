@@ -281,7 +281,7 @@ async function loadPdf() {
 		totalPages.value = pdf.numPages
 		pageRotations.value = Array(pdf.numPages).fill(0)
 		pageCrops.value = {}
-		await refreshPageResolutions(pdf)
+		void refreshPageResolutions(pdf)
 
 		// Initialize split segments: default with 1 segment covering all pages
 		initSplitSegments(pdf.numPages, props.song.title)
@@ -619,7 +619,7 @@ async function handleExecuteJoin(options: {
 
 		activePdfDoc.value = pdf
 		totalPages.value = pdfDoc.getPageCount()
-		await refreshPageResolutions(pdf)
+		void refreshPageResolutions(pdf)
 
 		cleanupThumbnailObserver()
 		thumbnailCanvases.value = {}
@@ -1164,7 +1164,7 @@ watch(() => targetFile.value?.path, () => {
 	flex: 1;
 	min-height: 0;
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+	grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
 	align-content: start;
 	gap: 16px;
 	padding: 16px;

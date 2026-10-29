@@ -33,13 +33,21 @@ export function usePdfThumbnails(
 		const page = await pdf.getPage(pageNum)
 		const unscaledViewport = page.getViewport({ scale: 1.0 })
 
-		// Render at a high intermediate resolution (4x display width = 560px) so that
+		// Render at a high intermediate resolution (4x display size) so that
 		// pdf.js does not perform a single-pass 15x nearest-neighbour-like downscale
 		// and scan enhancement filters operate at proper resolution before area-average downsampling.
-		const displayWidth = 140
-		const thumbWidth = displayWidth * 2 // 2x HiDPI backing store (280px)
-		const supersampleWidth = displayWidth * 4 // 560px intermediate render
-		const renderScale = supersampleWidth / Math.max(1, unscaledViewport.width)
+		const maxDisplayWidth = 140
+		const maxDisplayHeight = 190
+		const displayScale = Math.min(
+			maxDisplayWidth / Math.max(1, unscaledViewport.width),
+			maxDisplayHeight / Math.max(1, unscaledViewport.height),
+		)
+		const displayW = Math.max(1, Math.round(unscaledViewport.width * displayScale))
+		const displayH = Math.max(1, Math.round(unscaledViewport.height * displayScale))
+
+		const thumbW = displayW * 2 // 2x HiDPI backing store
+		const thumbH = displayH * 2
+		const renderScale = displayScale * 4 // 4x intermediate supersample render
 		const viewport = page.getViewport({ scale: renderScale })
 
 		const vpScaled = Math.abs(viewport.width - unscaledViewport.width * renderScale) < 2
@@ -50,9 +58,6 @@ export function usePdfThumbnails(
 			? Math.max(1, Math.round(viewport.height))
 			: Math.max(1, Math.round(unscaledViewport.height * renderScale))
 
-		const thumbW = thumbWidth
-		const thumbH = Math.max(1, Math.round(renderH * (thumbW / renderW)))
-
 		const srcCanvas = document.createElement('canvas')
 		srcCanvas.width = renderW
 		srcCanvas.height = renderH
@@ -60,6 +65,8 @@ export function usePdfThumbnails(
 		const canvas = document.createElement('canvas')
 		canvas.width = thumbW
 		canvas.height = thumbH
+		canvas.style.width = `${displayW}px`
+		canvas.style.height = `${displayH}px`
 		canvas.className = 'sheetmusic-pdf-thumbnail-canvas'
 
 		const srcContext = srcCanvas.getContext('2d')

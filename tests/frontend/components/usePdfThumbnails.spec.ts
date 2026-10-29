@@ -40,6 +40,33 @@ describe('usePdfThumbnails', () => {
 
 		expect(thumbnailCanvases.value[1]).toBeDefined()
 		expect(container.firstChild).toBe(thumbnailCanvases.value[1])
+		expect(thumbnailCanvases.value[1].style.width).toBe('140px')
+		expect(thumbnailCanvases.value[1].style.height).toBe('190px')
+	})
+
+	it('fits landscape (90deg rotated) pages within 140x190 display bounds with explicit style dimensions', async () => {
+		const landscapePdf = {
+			numPages: 1,
+			getPage: vi.fn(() => Promise.resolve({
+				getViewport: vi.fn(({ scale = 1 }: { scale?: number } = {}) => ({
+					width: 842 * scale,
+					height: 595 * scale,
+				})),
+				render: vi.fn(() => ({ promise: Promise.resolve() })),
+			})),
+		}
+		const activePdfDoc = ref(landscapePdf)
+		const pageEnhancements = ref({})
+		const { renderSingleThumbnail, thumbnailCanvases } = usePdfThumbnails(activePdfDoc, pageEnhancements)
+
+		await renderSingleThumbnail(landscapePdf, 1)
+
+		const canvas = thumbnailCanvases.value[1]
+		expect(canvas).toBeDefined()
+		expect(canvas.style.width).toBe('140px')
+		expect(canvas.style.height).toBe('99px')
+		expect(canvas.width).toBe(280)
+		expect(canvas.height).toBe(198)
 	})
 
 	it('updates thumbnail for a page when enhancements change', async () => {
