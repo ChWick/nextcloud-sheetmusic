@@ -2,11 +2,24 @@
 import type { EntityType, FilterEntity, Song, SongColumn } from '../../types/song'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import CheckIcon from 'vue-material-design-icons/Check.vue'
+import CloseIcon from 'vue-material-design-icons/Close.vue'
 import EyeIcon from 'vue-material-design-icons/Eye.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { formatDateTimestamp, formatDifficulty, formatDuration, formatStars, sortSongs, type SortKey, type SortOrder } from '../../utils/song-formatter'
 import { useSongRowInteraction } from '../../composables/useSongRowInteraction'
+
+export type InlineEditableField =
+	| 'title'
+	| 'opus'
+	| 'catalogNumber'
+	| 'songNumber'
+	| 'stars'
+	| 'difficulty'
+	| 'keywords'
+	| 'custom'
+	| 'custom2'
 
 const props = withDefaults(
 	defineProps<{
@@ -26,12 +39,76 @@ const props = withDefaults(
 const emit = defineEmits<{
 	'view-song': [song: Song]
 	'edit-song': [song: Song]
+	'inline-update-song': [song: Song, updates: Partial<Song>]
 	'filter-entity': [entityType: EntityType, entity: FilterEntity]
 	'toggle-select-song': [songId: number]
 	'select-all': [songIds: number[]]
 	'update:sortKey': [key: SortKey]
 	'update:sortOrder': [order: SortOrder]
 }>()
+
+const editingSongId = ref<number | null>(null)
+const editingField = ref<InlineEditableField | null>(null)
+const inlineEditValue = ref<string>('')
+const inlineEditNumberValue = ref<number>(0)
+const inlineInputRef = ref<HTMLInputElement | HTMLInputElement[] | null>(null)
+const inlineSelectRef = ref<HTMLSelectElement | HTMLSelectElement[] | null>(null)
+
+function isEditingCell(songId: number, field: InlineEditableField): boolean {
+	return editingSongId.value === songId && editingField.value === field
+}
+
+async function startInlineEdit(song: Song, field: InlineEditableField) {
+	editingSongId.value = song.id
+	editingField.value = field
+	if (field === 'stars' || field === 'difficulty') {
+		inlineEditNumberValue.value = Number(song[field] ?? 0)
+	} else {
+		inlineEditValue.value = String(song[field] ?? '')
+	}
+	await nextTick()
+	const inputEl = Array.isArray(inlineInputRef.value) ? inlineInputRef.value[0] : inlineInputRef.value
+	if (inputEl) {
+		inputEl.focus()
+		inputEl.select?.()
+	}
+	const selectEl = Array.isArray(inlineSelectRef.value) ? inlineSelectRef.value[0] : inlineSelectRef.value
+	if (selectEl) {
+		selectEl.focus()
+	}
+}
+
+function cancelInlineEdit() {
+	editingSongId.value = null
+	editingField.value = null
+	inlineEditValue.value = ''
+}
+
+function commitInlineEdit(song: Song) {
+	const field = editingField.value
+	if (!field || editingSongId.value !== song.id) return
+
+	if (field === 'stars' || field === 'difficulty') {
+		const nextNum = Math.max(0, Math.min(5, Number(inlineEditNumberValue.value) || 0))
+		const prevNum = Number(song[field] ?? 0)
+		cancelInlineEdit()
+		if (nextNum !== prevNum) {
+			emit('inline-update-song', song, { [field]: nextNum })
+		}
+		return
+	}
+
+	const trimmed = inlineEditValue.value.trim()
+	if (field === 'title' && !trimmed) {
+		return
+	}
+
+	const prevVal = String(song[field] ?? '').trim()
+	cancelInlineEdit()
+	if (trimmed !== prevVal) {
+		emit('inline-update-song', song, { [field]: trimmed })
+	}
+}
 
 function isColVisible(col: SongColumn): boolean {
 	if (!props.visibleColumns) return true
@@ -195,10 +272,53 @@ const {
 							@click.stop
 							@change="emit('toggle-select-song', song.id)">
 					</td>
-					<td v-if="isColVisible('title')" :class="$style.titleCell">
-						<span :class="$style.songTitle">
-							{{ song.title }}
-						</span>
+					<td
+						v-if="isColVisible('title')"
+						:class="$style.titleCell"
+						@dblclick.stop="startInlineEdit(song, 'title')">
+						<div v-if="isEditingCell(song.id, 'title')" :class="$style.inlineEditContainer" @click.stop>
+							<input
+								ref="inlineInputRef"
+								v-model="inlineEditValue"
+								type="text"
+								:class="$style.inlineEditInput"
+								data-test="inline-edit-input"
+								:aria-label="t('sheetmusic', 'Song title')"
+								@keydown.enter.prevent="commitInlineEdit(song)"
+								@keydown.esc.prevent="cancelInlineEdit">
+							<button
+								type="button"
+								:class="[$style.inlineActionBtn, $style.inlineSaveBtn]"
+								data-test="inline-edit-save"
+								:title="t('sheetmusic', 'Save')"
+								:aria-label="t('sheetmusic', 'Save')"
+								@click.stop="commitInlineEdit(song)">
+								<CheckIcon :size="14" />
+							</button>
+							<button
+								type="button"
+								:class="[$style.inlineActionBtn, $style.inlineCancelBtn]"
+								data-test="inline-edit-cancel"
+								:title="t('sheetmusic', 'Cancel')"
+								:aria-label="t('sheetmusic', 'Cancel')"
+								@click.stop="cancelInlineEdit">
+								<CloseIcon :size="14" />
+							</button>
+						</div>
+						<div v-else :class="$style.editableCellContent">
+							<span :class="$style.songTitle">
+								{{ song.title }}
+							</span>
+							<button
+								type="button"
+								:class="$style.inlineEditTrigger"
+								data-test="inline-edit-title-btn"
+								:title="t('sheetmusic', 'Edit title inline')"
+								:aria-label="t('sheetmusic', 'Edit title inline')"
+								@click.stop="startInlineEdit(song, 'title')">
+								<PencilIcon :size="14" />
+							</button>
+						</div>
 					</td>
 					<td v-if="isColVisible('composer')" :class="$style.metaCell">
 						<template v-if="song.composers && song.composers.length > 0">
@@ -365,32 +485,342 @@ const {
 						</template>
 						<span v-else :class="$style.emptyText">—</span>
 					</td>
-					<td v-if="isColVisible('opus')" :class="$style.metaCell">
-						{{ song.opus || '—' }}
+					<td
+						v-if="isColVisible('opus')"
+						:class="$style.metaCell"
+						@dblclick.stop="startInlineEdit(song, 'opus')">
+						<div v-if="isEditingCell(song.id, 'opus')" :class="$style.inlineEditContainer" @click.stop>
+							<input
+								ref="inlineInputRef"
+								v-model="inlineEditValue"
+								type="text"
+								:class="$style.inlineEditInput"
+								data-test="inline-edit-input"
+								:aria-label="t('sheetmusic', 'Opus')"
+								@keydown.enter.prevent="commitInlineEdit(song)"
+								@keydown.esc.prevent="cancelInlineEdit">
+							<button
+								type="button"
+								:class="[$style.inlineActionBtn, $style.inlineSaveBtn]"
+								data-test="inline-edit-save"
+								:title="t('sheetmusic', 'Save')"
+								@click.stop="commitInlineEdit(song)">
+								<CheckIcon :size="14" />
+							</button>
+							<button
+								type="button"
+								:class="[$style.inlineActionBtn, $style.inlineCancelBtn]"
+								data-test="inline-edit-cancel"
+								:title="t('sheetmusic', 'Cancel')"
+								@click.stop="cancelInlineEdit">
+								<CloseIcon :size="14" />
+							</button>
+						</div>
+						<div v-else :class="$style.editableCellContent">
+							<span>{{ song.opus || '—' }}</span>
+							<button
+								type="button"
+								:class="$style.inlineEditTrigger"
+								data-test="inline-edit-opus-btn"
+								:title="t('sheetmusic', 'Edit opus inline')"
+								@click.stop="startInlineEdit(song, 'opus')">
+								<PencilIcon :size="14" />
+							</button>
+						</div>
 					</td>
-					<td v-if="isColVisible('catalogNumber')" :class="$style.metaCell">
-						{{ song.catalogNumber || '—' }}
+					<td
+						v-if="isColVisible('catalogNumber')"
+						:class="$style.metaCell"
+						@dblclick.stop="startInlineEdit(song, 'catalogNumber')">
+						<div v-if="isEditingCell(song.id, 'catalogNumber')" :class="$style.inlineEditContainer" @click.stop>
+							<input
+								ref="inlineInputRef"
+								v-model="inlineEditValue"
+								type="text"
+								:class="$style.inlineEditInput"
+								data-test="inline-edit-input"
+								:aria-label="t('sheetmusic', 'Catalog No.')"
+								@keydown.enter.prevent="commitInlineEdit(song)"
+								@keydown.esc.prevent="cancelInlineEdit">
+							<button
+								type="button"
+								:class="[$style.inlineActionBtn, $style.inlineSaveBtn]"
+								data-test="inline-edit-save"
+								:title="t('sheetmusic', 'Save')"
+								@click.stop="commitInlineEdit(song)">
+								<CheckIcon :size="14" />
+							</button>
+							<button
+								type="button"
+								:class="[$style.inlineActionBtn, $style.inlineCancelBtn]"
+								data-test="inline-edit-cancel"
+								:title="t('sheetmusic', 'Cancel')"
+								@click.stop="cancelInlineEdit">
+								<CloseIcon :size="14" />
+							</button>
+						</div>
+						<div v-else :class="$style.editableCellContent">
+							<span>{{ song.catalogNumber || '—' }}</span>
+							<button
+								type="button"
+								:class="$style.inlineEditTrigger"
+								data-test="inline-edit-catalogNumber-btn"
+								:title="t('sheetmusic', 'Edit catalog number inline')"
+								@click.stop="startInlineEdit(song, 'catalogNumber')">
+								<PencilIcon :size="14" />
+							</button>
+						</div>
 					</td>
-					<td v-if="isColVisible('songNumber')" :class="$style.metaCell">
-						{{ song.songNumber || '—' }}
+					<td
+						v-if="isColVisible('songNumber')"
+						:class="$style.metaCell"
+						@dblclick.stop="startInlineEdit(song, 'songNumber')">
+						<div v-if="isEditingCell(song.id, 'songNumber')" :class="$style.inlineEditContainer" @click.stop>
+							<input
+								ref="inlineInputRef"
+								v-model="inlineEditValue"
+								type="text"
+								:class="$style.inlineEditInput"
+								data-test="inline-edit-input"
+								:aria-label="t('sheetmusic', 'Song No.')"
+								@keydown.enter.prevent="commitInlineEdit(song)"
+								@keydown.esc.prevent="cancelInlineEdit">
+							<button
+								type="button"
+								:class="[$style.inlineActionBtn, $style.inlineSaveBtn]"
+								data-test="inline-edit-save"
+								:title="t('sheetmusic', 'Save')"
+								@click.stop="commitInlineEdit(song)">
+								<CheckIcon :size="14" />
+							</button>
+							<button
+								type="button"
+								:class="[$style.inlineActionBtn, $style.inlineCancelBtn]"
+								data-test="inline-edit-cancel"
+								:title="t('sheetmusic', 'Cancel')"
+								@click.stop="cancelInlineEdit">
+								<CloseIcon :size="14" />
+							</button>
+						</div>
+						<div v-else :class="$style.editableCellContent">
+							<span>{{ song.songNumber || '—' }}</span>
+							<button
+								type="button"
+								:class="$style.inlineEditTrigger"
+								data-test="inline-edit-songNumber-btn"
+								:title="t('sheetmusic', 'Edit song number inline')"
+								@click.stop="startInlineEdit(song, 'songNumber')">
+								<PencilIcon :size="14" />
+							</button>
+						</div>
 					</td>
-					<td v-if="isColVisible('stars')" :class="$style.metaCell">
-						{{ formatStars(song.stars) }}
+					<td
+						v-if="isColVisible('stars')"
+						:class="$style.metaCell"
+						@dblclick.stop="startInlineEdit(song, 'stars')">
+						<div v-if="isEditingCell(song.id, 'stars')" :class="$style.inlineEditContainer" @click.stop>
+							<select
+								ref="inlineSelectRef"
+								v-model.number="inlineEditNumberValue"
+								:class="$style.inlineEditSelect"
+								data-test="inline-edit-select"
+								:aria-label="t('sheetmusic', 'Rating')"
+								@change="commitInlineEdit(song)"
+								@keydown.enter.prevent="commitInlineEdit(song)"
+								@keydown.esc.prevent="cancelInlineEdit">
+								<option :value="0">—</option>
+								<option v-for="n in 5" :key="n" :value="n">{{ formatStars(n) }}</option>
+							</select>
+							<button
+								type="button"
+								:class="[$style.inlineActionBtn, $style.inlineCancelBtn]"
+								data-test="inline-edit-cancel"
+								:title="t('sheetmusic', 'Cancel')"
+								@click.stop="cancelInlineEdit">
+								<CloseIcon :size="14" />
+							</button>
+						</div>
+						<div v-else :class="$style.editableCellContent">
+							<span>{{ formatStars(song.stars) }}</span>
+							<button
+								type="button"
+								:class="$style.inlineEditTrigger"
+								data-test="inline-edit-stars-btn"
+								:title="t('sheetmusic', 'Edit rating inline')"
+								@click.stop="startInlineEdit(song, 'stars')">
+								<PencilIcon :size="14" />
+							</button>
+						</div>
 					</td>
-					<td v-if="isColVisible('difficulty')" :class="$style.metaCell">
-						{{ formatDifficulty(song.difficulty) }}
+					<td
+						v-if="isColVisible('difficulty')"
+						:class="$style.metaCell"
+						@dblclick.stop="startInlineEdit(song, 'difficulty')">
+						<div v-if="isEditingCell(song.id, 'difficulty')" :class="$style.inlineEditContainer" @click.stop>
+							<select
+								ref="inlineSelectRef"
+								v-model.number="inlineEditNumberValue"
+								:class="$style.inlineEditSelect"
+								data-test="inline-edit-select"
+								:aria-label="t('sheetmusic', 'Difficulty')"
+								@change="commitInlineEdit(song)"
+								@keydown.enter.prevent="commitInlineEdit(song)"
+								@keydown.esc.prevent="cancelInlineEdit">
+								<option :value="0">—</option>
+								<option v-for="n in 5" :key="n" :value="n">{{ formatDifficulty(n) }}</option>
+							</select>
+							<button
+								type="button"
+								:class="[$style.inlineActionBtn, $style.inlineCancelBtn]"
+								data-test="inline-edit-cancel"
+								:title="t('sheetmusic', 'Cancel')"
+								@click.stop="cancelInlineEdit">
+								<CloseIcon :size="14" />
+							</button>
+						</div>
+						<div v-else :class="$style.editableCellContent">
+							<span>{{ formatDifficulty(song.difficulty) }}</span>
+							<button
+								type="button"
+								:class="$style.inlineEditTrigger"
+								data-test="inline-edit-difficulty-btn"
+								:title="t('sheetmusic', 'Edit difficulty inline')"
+								@click.stop="startInlineEdit(song, 'difficulty')">
+								<PencilIcon :size="14" />
+							</button>
+						</div>
 					</td>
 					<td v-if="isColVisible('duration')" :class="$style.metaCell">
 						{{ formatDuration(song.duration) }}
 					</td>
-					<td v-if="isColVisible('keywords')" :class="$style.metaCell">
-						{{ song.keywords || '—' }}
+					<td
+						v-if="isColVisible('keywords')"
+						:class="$style.metaCell"
+						@dblclick.stop="startInlineEdit(song, 'keywords')">
+						<div v-if="isEditingCell(song.id, 'keywords')" :class="$style.inlineEditContainer" @click.stop>
+							<input
+								ref="inlineInputRef"
+								v-model="inlineEditValue"
+								type="text"
+								:class="$style.inlineEditInput"
+								data-test="inline-edit-input"
+								:aria-label="t('sheetmusic', 'Keywords')"
+								@keydown.enter.prevent="commitInlineEdit(song)"
+								@keydown.esc.prevent="cancelInlineEdit">
+							<button
+								type="button"
+								:class="[$style.inlineActionBtn, $style.inlineSaveBtn]"
+								data-test="inline-edit-save"
+								:title="t('sheetmusic', 'Save')"
+								@click.stop="commitInlineEdit(song)">
+								<CheckIcon :size="14" />
+							</button>
+							<button
+								type="button"
+								:class="[$style.inlineActionBtn, $style.inlineCancelBtn]"
+								data-test="inline-edit-cancel"
+								:title="t('sheetmusic', 'Cancel')"
+								@click.stop="cancelInlineEdit">
+								<CloseIcon :size="14" />
+							</button>
+						</div>
+						<div v-else :class="$style.editableCellContent">
+							<span>{{ song.keywords || '—' }}</span>
+							<button
+								type="button"
+								:class="$style.inlineEditTrigger"
+								data-test="inline-edit-keywords-btn"
+								:title="t('sheetmusic', 'Edit keywords inline')"
+								@click.stop="startInlineEdit(song, 'keywords')">
+								<PencilIcon :size="14" />
+							</button>
+						</div>
 					</td>
-					<td v-if="isColVisible('custom')" :class="$style.metaCell">
-						{{ song.custom || '—' }}
+					<td
+						v-if="isColVisible('custom')"
+						:class="$style.metaCell"
+						@dblclick.stop="startInlineEdit(song, 'custom')">
+						<div v-if="isEditingCell(song.id, 'custom')" :class="$style.inlineEditContainer" @click.stop>
+							<input
+								ref="inlineInputRef"
+								v-model="inlineEditValue"
+								type="text"
+								:class="$style.inlineEditInput"
+								data-test="inline-edit-input"
+								:aria-label="t('sheetmusic', 'Custom')"
+								@keydown.enter.prevent="commitInlineEdit(song)"
+								@keydown.esc.prevent="cancelInlineEdit">
+							<button
+								type="button"
+								:class="[$style.inlineActionBtn, $style.inlineSaveBtn]"
+								data-test="inline-edit-save"
+								:title="t('sheetmusic', 'Save')"
+								@click.stop="commitInlineEdit(song)">
+								<CheckIcon :size="14" />
+							</button>
+							<button
+								type="button"
+								:class="[$style.inlineActionBtn, $style.inlineCancelBtn]"
+								data-test="inline-edit-cancel"
+								:title="t('sheetmusic', 'Cancel')"
+								@click.stop="cancelInlineEdit">
+								<CloseIcon :size="14" />
+							</button>
+						</div>
+						<div v-else :class="$style.editableCellContent">
+							<span>{{ song.custom || '—' }}</span>
+							<button
+								type="button"
+								:class="$style.inlineEditTrigger"
+								data-test="inline-edit-custom-btn"
+								:title="t('sheetmusic', 'Edit custom field inline')"
+								@click.stop="startInlineEdit(song, 'custom')">
+								<PencilIcon :size="14" />
+							</button>
+						</div>
 					</td>
-					<td v-if="isColVisible('custom2')" :class="$style.metaCell">
-						{{ song.custom2 || '—' }}
+					<td
+						v-if="isColVisible('custom2')"
+						:class="$style.metaCell"
+						@dblclick.stop="startInlineEdit(song, 'custom2')">
+						<div v-if="isEditingCell(song.id, 'custom2')" :class="$style.inlineEditContainer" @click.stop>
+							<input
+								ref="inlineInputRef"
+								v-model="inlineEditValue"
+								type="text"
+								:class="$style.inlineEditInput"
+								data-test="inline-edit-input"
+								:aria-label="t('sheetmusic', 'Custom 2')"
+								@keydown.enter.prevent="commitInlineEdit(song)"
+								@keydown.esc.prevent="cancelInlineEdit">
+							<button
+								type="button"
+								:class="[$style.inlineActionBtn, $style.inlineSaveBtn]"
+								data-test="inline-edit-save"
+								:title="t('sheetmusic', 'Save')"
+								@click.stop="commitInlineEdit(song)">
+								<CheckIcon :size="14" />
+							</button>
+							<button
+								type="button"
+								:class="[$style.inlineActionBtn, $style.inlineCancelBtn]"
+								data-test="inline-edit-cancel"
+								:title="t('sheetmusic', 'Cancel')"
+								@click.stop="cancelInlineEdit">
+								<CloseIcon :size="14" />
+							</button>
+						</div>
+						<div v-else :class="$style.editableCellContent">
+							<span>{{ song.custom2 || '—' }}</span>
+							<button
+								type="button"
+								:class="$style.inlineEditTrigger"
+								data-test="inline-edit-custom2-btn"
+								:title="t('sheetmusic', 'Edit custom 2 field inline')"
+								@click.stop="startInlineEdit(song, 'custom2')">
+								<PencilIcon :size="14" />
+							</button>
+						</div>
 					</td>
 					<td v-if="isColVisible('lastModified')" :class="$style.dateCell">
 						{{ formatDateTimestamp(song.lastModified) }}
@@ -521,6 +951,113 @@ const {
 .songTitle {
 	color: var(--color-primary-element);
 	text-decoration: underline;
+}
+
+.editableCellContent {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	max-width: 100%;
+}
+
+.inlineEditTrigger {
+	appearance: none;
+	-webkit-appearance: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	padding: 0;
+	margin: 0;
+	border: 1px solid transparent;
+	border-radius: 4px;
+	background: transparent;
+	color: var(--color-text-maxcontrast);
+	cursor: pointer;
+	opacity: 0;
+	flex-shrink: 0;
+	transition: opacity 0.15s ease, color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.tableRow:hover .inlineEditTrigger,
+.inlineEditTrigger:focus,
+.inlineEditTrigger:focus-visible {
+	opacity: 0.75;
+}
+
+.inlineEditTrigger:hover {
+	opacity: 1 !important;
+	color: var(--color-primary-element);
+	background-color: var(--color-main-background);
+	border-color: var(--color-border);
+}
+
+.inlineEditContainer {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	width: 100%;
+	min-width: 160px;
+}
+
+.inlineEditInput {
+	flex: 1;
+	min-width: 110px;
+	padding: 4px 8px;
+	border: 1px solid var(--color-primary-element);
+	border-radius: 4px;
+	font: inherit;
+	font-weight: 500;
+	background-color: var(--color-main-background);
+	color: var(--color-main-text);
+	box-sizing: border-box;
+}
+
+.inlineEditSelect {
+	padding: 4px 6px;
+	border: 1px solid var(--color-primary-element);
+	border-radius: 4px;
+	font: inherit;
+	background-color: var(--color-main-background);
+	color: var(--color-main-text);
+}
+
+.inlineActionBtn {
+	appearance: none;
+	-webkit-appearance: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	padding: 0;
+	margin: 0;
+	border: 1px solid var(--color-border);
+	border-radius: 4px;
+	background-color: var(--color-main-background);
+	color: var(--color-main-text);
+	cursor: pointer;
+	flex-shrink: 0;
+}
+
+.inlineSaveBtn {
+	color: var(--color-element-success, #16a34a);
+}
+
+.inlineSaveBtn:hover {
+	background-color: var(--color-background-hover);
+	border-color: var(--color-element-success, #16a34a);
+}
+
+.inlineCancelBtn {
+	color: var(--color-text-maxcontrast);
+}
+
+.inlineCancelBtn:hover {
+	background-color: var(--color-background-hover);
+	color: var(--color-error, #dc2626);
+	border-color: var(--color-error, #dc2626);
 }
 
 .metaCell {

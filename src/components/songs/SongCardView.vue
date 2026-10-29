@@ -2,8 +2,11 @@
 import type { EntityType, FilterEntity, Song, SongColumn } from '../../types/song'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import CheckIcon from 'vue-material-design-icons/Check.vue'
+import CloseIcon from 'vue-material-design-icons/Close.vue'
 import EyeIcon from 'vue-material-design-icons/Eye.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
+import { nextTick, ref } from 'vue'
 import { formatDateTimestamp, formatDifficulty, formatDuration, formatStars } from '../../utils/song-formatter'
 import { useSongRowInteraction } from '../../composables/useSongRowInteraction'
 
@@ -17,9 +20,41 @@ const props = defineProps<{
 const emit = defineEmits<{
 	'view-song': [song: Song]
 	'edit-song': [song: Song]
+	'inline-update-song': [song: Song, updates: Partial<Song>]
 	'filter-entity': [entityType: EntityType, entity: FilterEntity]
 	'toggle-select-song': [songId: number]
 }>()
+
+const editingSongId = ref<number | null>(null)
+const inlineTitleValue = ref<string>('')
+const inlineInputRef = ref<HTMLInputElement | HTMLInputElement[] | null>(null)
+
+async function startInlineTitleEdit(song: Song) {
+	editingSongId.value = song.id
+	inlineTitleValue.value = song.title ?? ''
+	await nextTick()
+	const el = Array.isArray(inlineInputRef.value) ? inlineInputRef.value[0] : inlineInputRef.value
+	if (el) {
+		el.focus()
+		el.select?.()
+	}
+}
+
+function cancelInlineTitleEdit() {
+	editingSongId.value = null
+	inlineTitleValue.value = ''
+}
+
+function commitInlineTitleEdit(song: Song) {
+	if (editingSongId.value !== song.id) return
+	const trimmed = inlineTitleValue.value.trim()
+	if (!trimmed) return
+	const prev = (song.title ?? '').trim()
+	cancelInlineTitleEdit()
+	if (trimmed !== prev) {
+		emit('inline-update-song', song, { title: trimmed })
+	}
+}
 
 function isColVisible(col: SongColumn): boolean {
 	if (!props.visibleColumns) return true
@@ -57,9 +92,48 @@ const {
 					:title="t('sheetmusic', 'Select song')"
 					@click.stop
 					@change="emit('toggle-select-song', song.id)">
-				<span v-if="isColVisible('title')" :class="$style.cardTitle">
-					{{ song.title }}
-				</span>
+				<template v-if="isColVisible('title')">
+					<div v-if="editingSongId === song.id" :class="$style.inlineEditContainer" @click.stop>
+						<input
+							ref="inlineInputRef"
+							v-model="inlineTitleValue"
+							type="text"
+							:class="$style.inlineEditInput"
+							data-test="inline-edit-input"
+							:aria-label="t('sheetmusic', 'Song title')"
+							@keydown.enter.prevent="commitInlineTitleEdit(song)"
+							@keydown.esc.prevent="cancelInlineTitleEdit">
+						<button
+							type="button"
+							:class="[$style.inlineActionBtn, $style.inlineSaveBtn]"
+							data-test="inline-edit-save"
+							:title="t('sheetmusic', 'Save')"
+							@click.stop="commitInlineTitleEdit(song)">
+							<CheckIcon :size="14" />
+						</button>
+						<button
+							type="button"
+							:class="[$style.inlineActionBtn, $style.inlineCancelBtn]"
+							data-test="inline-edit-cancel"
+							:title="t('sheetmusic', 'Cancel')"
+							@click.stop="cancelInlineTitleEdit">
+							<CloseIcon :size="14" />
+						</button>
+					</div>
+					<div v-else :class="$style.titleRow" @dblclick.stop="startInlineTitleEdit(song)">
+						<span :class="$style.cardTitle">
+							{{ song.title }}
+						</span>
+						<button
+							type="button"
+							:class="$style.inlineEditTrigger"
+							data-test="inline-edit-title-btn"
+							:title="t('sheetmusic', 'Edit title inline')"
+							@click.stop="startInlineTitleEdit(song)">
+							<PencilIcon :size="14" />
+						</button>
+					</div>
+				</template>
 			</div>
 
 			<div :class="$style.cardBody">
@@ -370,6 +444,92 @@ const {
 	text-align: left;
 	min-width: 0;
 	word-break: break-word;
+}
+
+.titleRow {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	flex: 1;
+}
+
+.inlineEditTrigger {
+	appearance: none;
+	-webkit-appearance: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	padding: 0;
+	margin: 0;
+	border: 1px solid transparent;
+	border-radius: 4px;
+	background: transparent;
+	color: var(--color-text-maxcontrast);
+	cursor: pointer;
+	opacity: 0;
+	flex-shrink: 0;
+	transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.songCard:hover .inlineEditTrigger,
+.inlineEditTrigger:focus {
+	opacity: 0.75;
+}
+
+.inlineEditTrigger:hover {
+	opacity: 1 !important;
+	color: var(--color-primary-element);
+	background-color: var(--color-main-background);
+	border-color: var(--color-border);
+}
+
+.inlineEditContainer {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	flex: 1;
+	min-width: 0;
+}
+
+.inlineEditInput {
+	flex: 1;
+	min-width: 100px;
+	padding: 4px 8px;
+	border: 1px solid var(--color-primary-element);
+	border-radius: 4px;
+	font: inherit;
+	font-weight: 500;
+	background-color: var(--color-main-background);
+	color: var(--color-main-text);
+}
+
+.inlineActionBtn {
+	appearance: none;
+	-webkit-appearance: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	padding: 0;
+	margin: 0;
+	border: 1px solid var(--color-border);
+	border-radius: 4px;
+	background-color: var(--color-main-background);
+	color: var(--color-main-text);
+	cursor: pointer;
+	flex-shrink: 0;
+}
+
+.inlineSaveBtn {
+	color: var(--color-element-success, #16a34a);
+}
+
+.inlineCancelBtn {
+	color: var(--color-text-maxcontrast);
 }
 
 .songCard:hover .cardTitle {

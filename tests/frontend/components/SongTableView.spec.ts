@@ -98,4 +98,79 @@ describe('SongTableView.vue', () => {
 		await beethovenBtn?.trigger('click')
 		expect(wrapper.emitted('filter-entity')?.[0]).toEqual(['composers', { id: 1, name: 'Beethoven' }])
 	})
+
+	it('supports inline editing of song title via inline edit button or double-click and emits inline-update-song', async () => {
+		const wrapper = mount(SongTableView, {
+			props: { songs },
+		})
+
+		// First row is Air on the G String (songs[1])
+		const firstRow = wrapper.findAll('tbody tr')[0]
+		const inlineBtn = firstRow.find('[data-test="inline-edit-title-btn"]')
+		expect(inlineBtn.exists()).toBe(true)
+
+		await inlineBtn.trigger('click')
+		expect(wrapper.emitted('view-song')).toBeFalsy()
+
+		const input = firstRow.find('[data-test="inline-edit-input"]')
+		expect(input.exists()).toBe(true)
+		expect((input.element as HTMLInputElement).value).toBe('Air on the G String')
+
+		await input.setValue('Air on the G String (BWV 1068)')
+		await input.trigger('keydown.enter')
+
+		expect(wrapper.emitted('inline-update-song')?.[0]).toEqual([
+			songs[1],
+			{ title: 'Air on the G String (BWV 1068)' },
+		])
+		expect(firstRow.find('[data-test="inline-edit-input"]').exists()).toBe(false)
+	})
+
+	it('supports cancelling inline edit with Escape or cancel button without emitting inline-update-song', async () => {
+		const wrapper = mount(SongTableView, {
+			props: { songs },
+		})
+
+		const secondRow = wrapper.findAll('tbody tr')[1]
+		const titleCell = secondRow.findAll('td')[1]
+		await titleCell.trigger('dblclick')
+
+		const input = secondRow.find('[data-test="inline-edit-input"]')
+		expect(input.exists()).toBe(true)
+		await input.setValue('Changed Title')
+		await input.trigger('keydown.esc')
+
+		expect(wrapper.emitted('inline-update-song')).toBeFalsy()
+		expect(secondRow.find('[data-test="inline-edit-input"]').exists()).toBe(false)
+	})
+
+	it('supports inline editing of scalar fields such as opus and stars', async () => {
+		const wrapper = mount(SongTableView, {
+			props: { songs },
+		})
+
+		const firstRow = wrapper.findAll('tbody tr')[0]
+		const opusBtn = firstRow.find('[data-test="inline-edit-opus-btn"]')
+		await opusBtn.trigger('click')
+
+		const opusInput = firstRow.find('[data-test="inline-edit-input"]')
+		await opusInput.setValue('BWV 1068')
+		const saveBtn = firstRow.find('[data-test="inline-edit-save"]')
+		await saveBtn.trigger('click')
+
+		expect(wrapper.emitted('inline-update-song')?.[0]).toEqual([
+			songs[1],
+			{ opus: 'BWV 1068' },
+		])
+
+		const starsBtn = firstRow.find('[data-test="inline-edit-stars-btn"]')
+		await starsBtn.trigger('click')
+		const starsSelect = firstRow.find('[data-test="inline-edit-select"]')
+		await starsSelect.setValue('4')
+
+		expect(wrapper.emitted('inline-update-song')?.[1]).toEqual([
+			songs[1],
+			{ stars: 4 },
+		])
+	})
 })
