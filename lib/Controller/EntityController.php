@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace OCA\MobileSheetsManager\Controller;
+namespace OCA\SheetMusic\Controller;
 
-use OCA\MobileSheetsManager\Service\EntityService;
+use OCA\SheetMusic\Service\EntityService;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\ApiRoute;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -26,71 +26,67 @@ class EntityController extends OCSController {
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'POST', url: '/api/composers')]
 	public function createComposer(?int $libraryId = null, ?string $name = null): DataResponse {
-		$name = $name ?? (string)$this->request->getParam('name', '');
-		return $this->handleCreate('composer', $libraryId, $name);
+		return $this->handleCreate('composer', $libraryId, $this->resolveParam($name, 'name'));
 	}
 
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'POST', url: '/api/books')]
 	public function createBook(?int $libraryId = null, ?string $title = null): DataResponse {
-		$title = $title ?? (string)$this->request->getParam('title', '');
-		return $this->handleCreate('book', $libraryId, $title);
+		return $this->handleCreate('book', $libraryId, $this->resolveParam($title, 'title'));
 	}
 
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'POST', url: '/api/collections')]
 	public function createCollection(?int $libraryId = null, ?string $name = null): DataResponse {
-		$name = $name ?? (string)$this->request->getParam('name', '');
-		return $this->handleCreate('collection', $libraryId, $name);
+		return $this->handleCreate('collection', $libraryId, $this->resolveParam($name, 'name'));
 	}
 
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'POST', url: '/api/artists')]
 	public function createArtist(?int $libraryId = null, ?string $name = null): DataResponse {
-		$name = $name ?? (string)$this->request->getParam('name', '');
-		return $this->handleCreate('artist', $libraryId, $name);
+		return $this->handleCreate('artist', $libraryId, $this->resolveParam($name, 'name'));
 	}
 
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'POST', url: '/api/genres')]
 	public function createGenre(?int $libraryId = null, ?string $name = null): DataResponse {
-		$name = $name ?? (string)$this->request->getParam('name', '');
-		return $this->handleCreate('genre', $libraryId, $name);
+		return $this->handleCreate('genre', $libraryId, $this->resolveParam($name, 'name'));
 	}
 
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'POST', url: '/api/keys')]
 	public function createKey(?int $libraryId = null, ?string $name = null): DataResponse {
-		$name = $name ?? (string)$this->request->getParam('name', '');
-		return $this->handleCreate('key', $libraryId, $name);
+		return $this->handleCreate('key', $libraryId, $this->resolveParam($name, 'name'));
 	}
 
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'POST', url: '/api/customgroups')]
 	public function createCustomGroup(?int $libraryId = null, ?string $name = null): DataResponse {
-		$name = $name ?? (string)$this->request->getParam('name', '');
-		return $this->handleCreate('customgroup', $libraryId, $name);
+		return $this->handleCreate('customgroup', $libraryId, $this->resolveParam($name, 'name'));
 	}
 
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'POST', url: '/api/years')]
 	public function createYear(?int $libraryId = null, ?string $name = null, ?string $year = null): DataResponse {
-		$val = $name ?? $year ?? (string)$this->request->getParam('name', (string)$this->request->getParam('year', ''));
-		return $this->handleCreate('year', $libraryId, $val);
+		return $this->handleCreate('year', $libraryId, $this->resolveParam($name ?? $year, 'name', 'year'));
 	}
 
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'POST', url: '/api/signatures')]
 	public function createSignature(?int $libraryId = null, ?string $name = null): DataResponse {
-		$name = $name ?? (string)$this->request->getParam('name', '');
-		return $this->handleCreate('signature', $libraryId, $name);
+		return $this->handleCreate('signature', $libraryId, $this->resolveParam($name, 'name'));
 	}
 
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'POST', url: '/api/sourcetypes')]
 	public function createSourceType(?int $libraryId = null, ?string $name = null): DataResponse {
-		$name = $name ?? (string)$this->request->getParam('name', (string)$this->request->getParam('type', ''));
-		return $this->handleCreate('sourcetype', $libraryId, $name);
+		return $this->handleCreate('sourcetype', $libraryId, $this->resolveParam($name, 'name', 'type'));
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/instruments')]
+	public function createInstrument(?int $libraryId = null, ?string $name = null): DataResponse {
+		return $this->handleCreate('instrument', $libraryId, $this->resolveParam($name, 'name'));
 	}
 
 	#[NoAdminRequired]
@@ -154,6 +150,12 @@ class EntityController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	#[ApiRoute(verb: 'DELETE', url: '/api/instruments/{id}')]
+	public function deleteInstrument(int $id, ?int $libraryId = null): DataResponse {
+		return $this->handleDelete('instruments', $id, $libraryId);
+	}
+
+	#[NoAdminRequired]
 	#[ApiRoute(verb: 'POST', url: '/api/entities/merge')]
 	public function mergeEntities(
 		?int $libraryId = null,
@@ -193,6 +195,19 @@ class EntityController extends OCSController {
 		} catch (\Throwable $e) {
 			return new DataResponse(['error' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
+	}
+
+	private function resolveParam(?string $explicit, string ...$fallbackKeys): string {
+		if ($explicit !== null && $explicit !== '') {
+			return $explicit;
+		}
+		foreach ($fallbackKeys as $key) {
+			$val = (string)$this->request->getParam($key, '');
+			if ($val !== '') {
+				return $val;
+			}
+		}
+		return (string)$explicit;
 	}
 
 	private function handleCreate(string $type, ?int $libraryId, string $value): DataResponse {
@@ -242,4 +257,3 @@ class EntityController extends OCSController {
 		}
 	}
 }
-

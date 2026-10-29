@@ -1,6 +1,6 @@
 {
-	"name": "nextcloud/mobilesheetsmanager",
-	"description": "Bar",
+	"name": "nextcloud/sheetmusic",
+	"description": "Sheet music manager for Nextcloud",
 	"license": "AGPL-3.0-or-later",
 	"authors": [
 		{
@@ -10,7 +10,7 @@
 	],
 	"autoload": {
 		"psr-4": {
-			"OCA\\MobileSheetsManager\\": "lib/"
+			"OCA\\SheetMusic\\": "lib/"
 		}
 	},
 	"scripts": {
@@ -24,7 +24,9 @@
 		"cs:check": "php-cs-fixer fix --dry-run --diff",
 		"cs:fix": "php-cs-fixer fix",
 		"psalm": "psalm --threads=1 --no-cache",
-		"test:unit": "phpunit tests -c tests/phpunit.xml --colors=always --fail-on-warning --fail-on-risky",
+		"test:unit": "phpunit -c tests/phpunit.xml --colors=always --fail-on-warning --fail-on-risky",
+		"test:unit:core": "phpunit -c tests/phpunit.xml --testsuite core --colors=always --fail-on-warning --fail-on-risky",
+		"test:unit:mobilesheets": "phpunit -c tests/phpunit.xml --testsuite mobilesheets --colors=always --fail-on-warning --fail-on-risky",
 		"openapi": "generate-spec",
 		"rector": "rector && composer cs:fix"
 	},

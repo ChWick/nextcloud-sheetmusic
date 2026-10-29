@@ -45,7 +45,7 @@ export function apiGet<P extends GetPath>(
 	},
 ): Promise<AxiosResponse<ExtractResponse<paths[P]['get']>>> {
 	const url = generateOcsUrl(
-		'/apps/mobilesheetsmanager' + path,
+		'/apps/sheetmusic' + path,
 		options?.pathParams as Record<string, string | number> | undefined,
 	)
 	return options?.queryParams !== undefined ? axios.get(url, { params: options.queryParams }) : axios.get(url)
@@ -63,7 +63,7 @@ export function apiPost<P extends PostPath>(
 	},
 ): Promise<AxiosResponse<ExtractResponse<paths[P]['post']>>> {
 	const url = generateOcsUrl(
-		'/apps/mobilesheetsmanager' + path,
+		'/apps/sheetmusic' + path,
 		options?.pathParams as Record<string, string | number> | undefined,
 	)
 	return options?.config !== undefined ? axios.post(url, body, options.config) : axios.post(url, body)
@@ -80,7 +80,7 @@ export function apiDelete<P extends DeletePath>(
 	},
 ): Promise<AxiosResponse<ExtractResponse<paths[P]['delete']>>> {
 	const url = generateOcsUrl(
-		'/apps/mobilesheetsmanager' + path,
+		'/apps/sheetmusic' + path,
 		options?.pathParams as Record<string, string | number> | undefined,
 	)
 	return options?.queryParams !== undefined ? axios.delete(url, { params: options.queryParams }) : axios.delete(url)

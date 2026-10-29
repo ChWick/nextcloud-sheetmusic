@@ -4,19 +4,19 @@ declare(strict_types=1);
 
 namespace TestSupport;
 
-use OCA\MobileSheetsManager\Db\LibraryMapper;
-use OCA\MobileSheetsManager\Db\SongMapper;
-use OCA\MobileSheetsManager\Service\LibraryService;
-use OCP\Files\Folder;
+use OCA\SheetMusic\Db\InternalLibrary;
+use OCA\SheetMusic\Db\LibraryMapper;
+use OCA\SheetMusic\Service\LibraryService;
+use OCA\SheetMusic\Sync\MobileSheets\SongMapper;
 use OCP\Files\IRootFolder;
-use OCP\Files\IUserFolder;
 use OCP\Files\Node;
 use OCP\Files\Storage\IStorage;
 use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 
 trait TestUtils {
 	protected function createSongMapper(?LoggerInterface $logger = null): SongMapper {
-		return new SongMapper($logger ?? $this->createMock(LoggerInterface::class));
+		return new SongMapper($logger ?? new NullLogger());
 	}
 
 	protected function createLibraryService(): LibraryService {
@@ -31,9 +31,8 @@ trait TestUtils {
 	): LibraryService {
 		return new LibraryService(
 			$libraryMapper,
-			$this->createSongMapper(),
 			$rootFolder ?? $this->createMock(IRootFolder::class),
-			$this->createMock(LoggerInterface::class),
+			new NullLogger(),
 		);
 	}
 
@@ -46,7 +45,11 @@ trait TestUtils {
 		$libraryMapper = $this->createMock(LibraryMapper::class);
 		$libraryMapper->method('findForUser')
 			->with($userId, $libraryId)
-			->willReturn(['id' => $libraryId, 'path' => $libraryPath]);
+			->willReturn(new InternalLibrary(
+				id: $libraryId,
+				userId: $userId,
+				path: $libraryPath,
+			));
 
 		$storage = $this->createMock(IStorage::class);
 		$storage->method('getLocalFile')->willReturn($databasePath);

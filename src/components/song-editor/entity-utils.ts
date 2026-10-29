@@ -10,6 +10,7 @@ export type SongEntityIdField =
 	| 'yearIds'
 	| 'signatureIds'
 	| 'sourceTypeIds'
+	| 'instrumentIds'
 
 type EntityOption = {
 	id: number
@@ -82,6 +83,7 @@ export async function resolveSongEntityIds(
 		yearIds: [],
 		signatureIds: [],
 		sourceTypeIds: [],
+		instrumentIds: [],
 	}
 
 	for (const selection of selections) {

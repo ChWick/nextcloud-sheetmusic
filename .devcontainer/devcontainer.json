@@ -1,8 +1,8 @@
 {
-  "name": "Nextcloud App Dev (SQLite)",
+  "name": "Sheet Music App Dev (SQLite)",
   "dockerComposeFile": "docker-compose.yml",
   "service": "nextcloud",
-  "workspaceFolder": "/var/www/html/apps-extra/mobilesheetsmanager",
+  "workspaceFolder": "/var/www/html/apps-extra/sheetmusic",
   
   "customizations": {
     "vscode": {

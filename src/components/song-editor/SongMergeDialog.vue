@@ -1,51 +1,26 @@
 <script setup lang="ts">
-import type { Artist, Book, Collection, Composer, Genre, IntegrityIssue, Key, LibraryData, Song, SongFile } from '../../types/song'
+import type { IntegrityIssue, LibraryData, Song } from '../../types/song'
 import { computed, ref, watch } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
-import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
-import NcSelect from '@nextcloud/vue/components/NcSelect'
-import NcTextField from '@nextcloud/vue/components/NcTextField'
 import AlertIcon from 'vue-material-design-icons/Alert.vue'
-import ArrowLeftIcon from 'vue-material-design-icons/ArrowLeft.vue'
-import ArrowRightIcon from 'vue-material-design-icons/ArrowRight.vue'
-import FileDocumentIcon from 'vue-material-design-icons/FileDocument.vue'
 import FileMultipleIcon from 'vue-material-design-icons/FileMultiple.vue'
 import MergeIcon from 'vue-material-design-icons/Merge.vue'
-import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
-import TrashCanOutlineIcon from 'vue-material-design-icons/TrashCanOutline.vue'
-import { getFileName, openFileExternally } from '../../utils/file'
+import SongMergeModeView from './SongMergeModeView.vue'
+import SongResolveBothModeView from './SongResolveBothModeView.vue'
+import {
+	areEntitiesEqual,
+	toSelectOptions,
+	wouldSongsCollide,
+	type FieldName,
+	type MergeMode,
+	type MergedSongData,
+	type ResolveBothSongData,
+} from './song-merge-utils'
 
-export interface MergedSongData {
-	title: string
-	composerIds: number[]
-	bookIds: number[]
-	collectionIds: number[]
-	artistIds: number[]
-	genreIds: number[]
-	keyIds: number[]
-	customGroupIds: number[]
-	yearIds: number[]
-	signatureIds: number[]
-	sourceTypeIds: number[]
-	stars: number
-	difficulty: number
-	duration: number
-	keywords: string
-	custom: string
-	custom2: string
-	sortTitle: string
-}
-
-export interface ResolveBothSongData extends MergedSongData {
-	id: number
-	detachFileIds: number[]
-}
-
-type MergeMode = 'merge' | 'keepBoth'
-type FieldName = 'title' | 'composers' | 'books' | 'collections' | 'artists' | 'genres' | 'keys' | 'keywords'
+export type { MergedSongData, ResolveBothSongData }
 
 const props = withDefaults(
 	defineProps<{
@@ -82,14 +57,6 @@ function songById(id: number): Song | undefined {
 	return props.libraryData?.songs.find(s => s.id === id)
 }
 
-function entityName<T extends { id: number; name?: string; title?: string; year?: number }>(e: T): string {
-	return e.name ?? e.title ?? String((e as { year?: number }).year ?? e.id)
-}
-
-function toSelectOptions<T extends { id: number; name?: string; title?: string; year?: number }>(items: T[] = []): { id: number; label: string }[] {
-	return items.map(e => ({ id: e.id, label: entityName(e) }))
-}
-
 const songIds = computed<number[]>(() => props.issue.details?.songIds ?? [])
 const songA = computed<Song | undefined>(() => songById(songIds.value[0]))
 const songB = computed<Song | undefined>(() => songById(songIds.value[1]))
@@ -102,9 +69,8 @@ const droppedId = computed<number>(() => {
 })
 
 // -----------------------------------------------------------------------
-// Mode 1: Merged Result Fields (3-column layout)
+// Mode 1: Merged Result Fields
 // -----------------------------------------------------------------------
-
 const mergedTitle = ref('')
 const mergedComposers = ref<{ id: number; label: string }[]>([])
 const mergedBooks = ref<{ id: number; label: string }[]>([])
@@ -114,13 +80,6 @@ const mergedGenres = ref<{ id: number; label: string }[]>([])
 const mergedKeys = ref<{ id: number; label: string }[]>([])
 const mergedKeywords = ref('')
 const mergedSortTitle = ref('')
-
-function areEntitiesEqual(a?: { id: number }[], b?: { id: number }[]): boolean {
-	const idsA = (a ?? []).map(e => e.id).sort((x, y) => x - y)
-	const idsB = (b ?? []).map(e => e.id).sort((x, y) => x - y)
-	if (idsA.length !== idsB.length) return false
-	return idsA.every((id, idx) => id === idsB[idx])
-}
 
 function prefillMerged() {
 	const a = songA.value
@@ -150,9 +109,8 @@ function prefillMerged() {
 }
 
 // -----------------------------------------------------------------------
-// Mode 2: Separate Song Fields (2-column side-by-side editing)
+// Mode 2: Separate Song Fields
 // -----------------------------------------------------------------------
-
 const songA_title = ref('')
 const songA_composers = ref<{ id: number; label: string }[]>([])
 const songA_books = ref<{ id: number; label: string }[]>([])
@@ -207,46 +165,24 @@ watch(() => props.open, open => {
 	}
 }, { immediate: true })
 
-// Conflict detector for Mode 2: checks if saving Song A & Song B in their current state would trigger a library integrity audit issue.
 const wouldCollide = computed(() => {
 	if (mode.value !== 'keepBoth') return false
-
-	const activeFilesA = (songA.value?.files ?? []).filter(f => !songA_detachedFiles.value.includes(f.id))
-	const activeFilesB = (songB.value?.files ?? []).filter(f => !songB_detachedFiles.value.includes(f.id))
-
-	// Check 1: Shared physical file path collision
-	// If both songs still share active attached file paths (even if titles or metadata differ), keeping both will cause duplicate file path conflicts or cross-song file dependencies
-	if (activeFilesA.length > 0 && activeFilesB.length > 0) {
-		const pathsA = new Set(activeFilesA.map(f => f.path))
-		const sharesPhysicalFile = activeFilesB.some(f => pathsA.has(f.path))
-		if (sharesPhysicalFile) {
-			return true
-		}
-	}
-
-	// Check 2: Naming rule / target path collision
-	// When both songs have identical titles and folder-defining metadata + matching active file extensions
-	const sameTitle = songA_title.value.trim().toLowerCase() === songB_title.value.trim().toLowerCase()
-	const sameComposers = areEntitiesEqual(songA_composers.value, songB_composers.value)
-	const sameArtists = areEntitiesEqual(songA_artists.value, songB_artists.value)
-	const sameBooks = areEntitiesEqual(songA_books.value, songB_books.value)
-	const sameCollections = areEntitiesEqual(songA_collections.value, songB_collections.value)
-
-	if (sameTitle && sameComposers && sameArtists && sameBooks && sameCollections && activeFilesA.length > 0 && activeFilesB.length > 0) {
-		const extsA = new Set(activeFilesA.map(f => {
-			const ext = f.path.split('.').pop()
-			return ext ? ext.toLowerCase() : ''
-		}))
-		const hasOverlappingExtension = activeFilesB.some(f => {
-			const ext = f.path.split('.').pop()
-			return extsA.has(ext ? ext.toLowerCase() : '')
-		})
-		if (hasOverlappingExtension) {
-			return true
-		}
-	}
-
-	return false
+	return wouldSongsCollide({
+		songA: songA.value,
+		songB: songB.value,
+		titleA: songA_title.value,
+		titleB: songB_title.value,
+		composersA: songA_composers.value,
+		composersB: songB_composers.value,
+		artistsA: songA_artists.value,
+		artistsB: songB_artists.value,
+		booksA: songA_books.value,
+		booksB: songB_books.value,
+		collectionsA: songA_collections.value,
+		collectionsB: songB_collections.value,
+		detachedFilesA: songA_detachedFiles.value,
+		detachedFilesB: songB_detachedFiles.value,
+	})
 })
 
 function differentiateTitles() {
@@ -275,7 +211,7 @@ function copyField(field: FieldName, from: 'A' | 'B') {
 	}
 }
 
-// Transfer helper for Mode 2 (A -> B or B -> A)
+// Transfer helper for Mode 2
 function copyFieldsBetweenSongs(from: 'A' | 'B') {
 	if (from === 'A') {
 		songB_title.value = songA_title.value
@@ -314,11 +250,6 @@ const collectionOptions = computed(() => toSelectOptions(props.libraryData?.coll
 const artistOptions = computed(() => toSelectOptions(props.libraryData?.artists ?? []))
 const genreOptions = computed(() => toSelectOptions(props.libraryData?.genres ?? []))
 const keyOptions = computed(() => toSelectOptions(props.libraryData?.keys ?? []))
-
-function formatList(items?: { name?: string; title?: string }[]): string {
-	if (!items || items.length === 0) return t('mobilesheetsmanager', '(None)')
-	return items.map(entityName).join(', ')
-}
 
 function submit() {
 	if (mode.value === 'merge') {
@@ -403,7 +334,7 @@ function submit() {
 <template>
 	<NcDialog
 		v-if="open"
-		:name="t('mobilesheetsmanager', 'Duplicate Songs Resolution')"
+		:name="t('sheetmusic', 'Duplicate Songs Resolution')"
 		size="full"
 		@close="emit('update:open', false)">
 
@@ -413,22 +344,22 @@ function submit() {
 				:variant="mode === 'merge' ? 'primary' : 'secondary'"
 				@click="mode = 'merge'">
 				<template #icon><MergeIcon :size="16" /></template>
-				{{ t('mobilesheetsmanager', 'Merge into 1 Song') }}
+				{{ t('sheetmusic', 'Merge into 1 Song') }}
 			</NcButton>
 			<NcButton
 				:variant="mode === 'keepBoth' ? 'primary' : 'secondary'"
 				@click="mode = 'keepBoth'">
 				<template #icon><FileMultipleIcon :size="16" /></template>
-				{{ t('mobilesheetsmanager', 'Keep as 2 Separate Songs (Resolve Conflicts)') }}
+				{{ t('sheetmusic', 'Keep as 2 Separate Songs (Resolve Conflicts)') }}
 			</NcButton>
 		</div>
 
 		<p :class="$style.hint">
 			<template v-if="mode === 'merge'">
-				{{ t('mobilesheetsmanager', 'Choose which song ID to keep. Use arrows to copy values from Song A or Song B into the merged result. Fields pre-fill if both songs agree.') }}
+				{{ t('sheetmusic', 'Choose which song ID to keep. Use arrows to copy values from Song A or Song B into the merged result. Fields pre-fill if both songs agree.') }}
 			</template>
 			<template v-else>
-				{{ t('mobilesheetsmanager', 'Keep both songs in your library as separate entries. Adapt titles, metadata, or detach files to resolve path conflicts.') }}
+				{{ t('sheetmusic', 'Keep both songs in your library as separate entries. Adapt titles, metadata, or detach files to resolve path conflicts.') }}
 			</template>
 		</p>
 
@@ -436,7 +367,7 @@ function submit() {
 		<div v-if="error" :class="$style.conflictWarning">
 			<AlertIcon :size="20" />
 			<div :class="$style.warningText">
-				<strong>{{ t('mobilesheetsmanager', 'Error') }}</strong>
+				<strong>{{ t('sheetmusic', 'Error') }}</strong>
 				<p>{{ error }}</p>
 			</div>
 		</div>
@@ -445,531 +376,72 @@ function submit() {
 		<div v-if="wouldCollide" :class="$style.conflictWarning">
 			<AlertIcon :size="20" />
 			<div :class="$style.warningText">
-				<strong>{{ t('mobilesheetsmanager', 'Conflict Not Resolved') }}</strong>
-				<p>{{ t('mobilesheetsmanager', 'Saving would recreate a duplicate file path or naming conflict in the library audit. Adapt at least one title, metadata field, or detach a file to differentiate them.') }}</p>
+				<strong>{{ t('sheetmusic', 'Conflict Not Resolved') }}</strong>
+				<p>{{ t('sheetmusic', 'Saving would recreate a duplicate file path or naming conflict in the library audit. Adapt at least one title, metadata field, or detach a file to differentiate them.') }}</p>
 			</div>
 			<NcButton variant="primary" type="tertiary" @click="differentiateTitles">
-				{{ t('mobilesheetsmanager', 'Differentiate Titles') }}
+				{{ t('sheetmusic', 'Differentiate Titles') }}
 			</NcButton>
 		</div>
 
-		<!-- MODE 1: MERGE INTO 1 SONG (3-Column Aligned Grid) -->
-		<div v-if="mode === 'merge'" :class="$style.comparisonGrid">
+		<!-- MODE 1: MERGE INTO 1 SONG -->
+		<SongMergeModeView
+			v-if="mode === 'merge'"
+			v-model:keep-id="keepId"
+			v-model:merged-title="mergedTitle"
+			v-model:merged-composers="mergedComposers"
+			v-model:merged-books="mergedBooks"
+			v-model:merged-collections="mergedCollections"
+			v-model:merged-artists="mergedArtists"
+			v-model:merged-genres="mergedGenres"
+			v-model:merged-keys="mergedKeys"
+			v-model:merged-keywords="mergedKeywords"
+			:song-a="songA"
+			:song-b="songB"
+			:composer-options="composerOptions"
+			:book-options="bookOptions"
+			:collection-options="collectionOptions"
+			:artist-options="artistOptions"
+			:genre-options="genreOptions"
+			:key-options="keyOptions"
+			@copy-field="copyField" />
 
-			<!-- Column Headers -->
-			<div :class="[$style.headerCol, $style.songLeft]">
-				<strong>{{ t('mobilesheetsmanager', 'Song A') }}</strong>
-				<span :class="$style.idBadge">ID {{ songA?.id }}</span>
-				<NcCheckboxRadioSwitch
-					:checked="keepId === (songA?.id ?? 0)"
-					type="radio"
-					name="keepId"
-					:value="String(songA?.id)"
-					@update:checked="keepId = songA?.id ?? 0">
-					{{ t('mobilesheetsmanager', 'Keep ID') }}
-				</NcCheckboxRadioSwitch>
-			</div>
-
-			<div :class="[$style.headerCol, $style.songMerged]">
-				<MergeIcon :size="18" />
-				<strong>{{ t('mobilesheetsmanager', 'Merged Result') }}</strong>
-				<span :class="$style.idBadge">Keeping ID {{ keepId }}</span>
-			</div>
-
-			<div :class="[$style.headerCol, $style.songRight]">
-				<strong>{{ t('mobilesheetsmanager', 'Song B') }}</strong>
-				<span :class="$style.idBadge">ID {{ songB?.id }}</span>
-				<NcCheckboxRadioSwitch
-					:checked="keepId === (songB?.id ?? 0)"
-					type="radio"
-					name="keepId"
-					:value="String(songB?.id)"
-					@update:checked="keepId = songB?.id ?? 0">
-					{{ t('mobilesheetsmanager', 'Keep ID') }}
-				</NcCheckboxRadioSwitch>
-			</div>
-
-			<!-- Row: Title -->
-			<div :class="$style.cellA">
-				<div :class="$style.fieldInfo">
-					<span :class="$style.label">{{ t('mobilesheetsmanager', 'Title') }}</span>
-					<span :class="$style.val">{{ songA?.title || '-' }}</span>
-				</div>
-				<NcButton type="tertiary" :title="t('mobilesheetsmanager', 'Use Song A Title')" @click="copyField('title', 'A')">
-					<template #icon><ArrowRightIcon :size="16" /></template>
-				</NcButton>
-			</div>
-			<div :class="$style.cellMerged">
-				<NcTextField
-					:label="t('mobilesheetsmanager', 'Title')"
-					:value="mergedTitle"
-					@update:value="mergedTitle = $event" />
-			</div>
-			<div :class="$style.cellB">
-				<NcButton type="tertiary" :title="t('mobilesheetsmanager', 'Use Song B Title')" @click="copyField('title', 'B')">
-					<template #icon><ArrowLeftIcon :size="16" /></template>
-				</NcButton>
-				<div :class="[$style.fieldInfo, $style.alignRight]">
-					<span :class="$style.label">{{ t('mobilesheetsmanager', 'Title') }}</span>
-					<span :class="$style.val">{{ songB?.title || '-' }}</span>
-				</div>
-			</div>
-
-			<!-- Row: Composers -->
-			<div :class="$style.cellA">
-				<div :class="$style.fieldInfo">
-					<span :class="$style.label">{{ t('mobilesheetsmanager', 'Composers') }}</span>
-					<span :class="$style.val">{{ formatList(songA?.composers) }}</span>
-				</div>
-				<NcButton type="tertiary" :title="t('mobilesheetsmanager', 'Use Song A Composers')" @click="copyField('composers', 'A')">
-					<template #icon><ArrowRightIcon :size="16" /></template>
-				</NcButton>
-			</div>
-			<div :class="$style.cellMerged">
-				<label :class="$style.fieldLabel">{{ t('mobilesheetsmanager', 'Composers') }}</label>
-				<NcSelect
-					v-model="mergedComposers"
-					:options="composerOptions"
-					:multiple="true"
-					label="label"
-					track-by="id" />
-			</div>
-			<div :class="$style.cellB">
-				<NcButton type="tertiary" :title="t('mobilesheetsmanager', 'Use Song B Composers')" @click="copyField('composers', 'B')">
-					<template #icon><ArrowLeftIcon :size="16" /></template>
-				</NcButton>
-				<div :class="[$style.fieldInfo, $style.alignRight]">
-					<span :class="$style.label">{{ t('mobilesheetsmanager', 'Composers') }}</span>
-					<span :class="$style.val">{{ formatList(songB?.composers) }}</span>
-				</div>
-			</div>
-
-			<!-- Row: Books -->
-			<div :class="$style.cellA">
-				<div :class="$style.fieldInfo">
-					<span :class="$style.label">{{ t('mobilesheetsmanager', 'Books') }}</span>
-					<span :class="$style.val">{{ formatList(songA?.books) }}</span>
-				</div>
-				<NcButton type="tertiary" :title="t('mobilesheetsmanager', 'Use Song A Books')" @click="copyField('books', 'A')">
-					<template #icon><ArrowRightIcon :size="16" /></template>
-				</NcButton>
-			</div>
-			<div :class="$style.cellMerged">
-				<label :class="$style.fieldLabel">{{ t('mobilesheetsmanager', 'Books') }}</label>
-				<NcSelect
-					v-model="mergedBooks"
-					:options="bookOptions"
-					:multiple="true"
-					label="label"
-					track-by="id" />
-			</div>
-			<div :class="$style.cellB">
-				<NcButton type="tertiary" :title="t('mobilesheetsmanager', 'Use Song B Books')" @click="copyField('books', 'B')">
-					<template #icon><ArrowLeftIcon :size="16" /></template>
-				</NcButton>
-				<div :class="[$style.fieldInfo, $style.alignRight]">
-					<span :class="$style.label">{{ t('mobilesheetsmanager', 'Books') }}</span>
-					<span :class="$style.val">{{ formatList(songB?.books) }}</span>
-				</div>
-			</div>
-
-			<!-- Row: Collections -->
-			<div :class="$style.cellA">
-				<div :class="$style.fieldInfo">
-					<span :class="$style.label">{{ t('mobilesheetsmanager', 'Collections') }}</span>
-					<span :class="$style.val">{{ formatList(songA?.collections) }}</span>
-				</div>
-				<NcButton type="tertiary" :title="t('mobilesheetsmanager', 'Use Song A Collections')" @click="copyField('collections', 'A')">
-					<template #icon><ArrowRightIcon :size="16" /></template>
-				</NcButton>
-			</div>
-			<div :class="$style.cellMerged">
-				<label :class="$style.fieldLabel">{{ t('mobilesheetsmanager', 'Collections') }}</label>
-				<NcSelect
-					v-model="mergedCollections"
-					:options="collectionOptions"
-					:multiple="true"
-					label="label"
-					track-by="id" />
-			</div>
-			<div :class="$style.cellB">
-				<NcButton type="tertiary" :title="t('mobilesheetsmanager', 'Use Song B Collections')" @click="copyField('collections', 'B')">
-					<template #icon><ArrowLeftIcon :size="16" /></template>
-				</NcButton>
-				<div :class="[$style.fieldInfo, $style.alignRight]">
-					<span :class="$style.label">{{ t('mobilesheetsmanager', 'Collections') }}</span>
-					<span :class="$style.val">{{ formatList(songB?.collections) }}</span>
-				</div>
-			</div>
-
-			<!-- Row: Artists -->
-			<div :class="$style.cellA">
-				<div :class="$style.fieldInfo">
-					<span :class="$style.label">{{ t('mobilesheetsmanager', 'Artists') }}</span>
-					<span :class="$style.val">{{ formatList(songA?.artists) }}</span>
-				</div>
-				<NcButton type="tertiary" :title="t('mobilesheetsmanager', 'Use Song A Artists')" @click="copyField('artists', 'A')">
-					<template #icon><ArrowRightIcon :size="16" /></template>
-				</NcButton>
-			</div>
-			<div :class="$style.cellMerged">
-				<label :class="$style.fieldLabel">{{ t('mobilesheetsmanager', 'Artists') }}</label>
-				<NcSelect
-					v-model="mergedArtists"
-					:options="artistOptions"
-					:multiple="true"
-					label="label"
-					track-by="id" />
-			</div>
-			<div :class="$style.cellB">
-				<NcButton type="tertiary" :title="t('mobilesheetsmanager', 'Use Song B Artists')" @click="copyField('artists', 'B')">
-					<template #icon><ArrowLeftIcon :size="16" /></template>
-				</NcButton>
-				<div :class="[$style.fieldInfo, $style.alignRight]">
-					<span :class="$style.label">{{ t('mobilesheetsmanager', 'Artists') }}</span>
-					<span :class="$style.val">{{ formatList(songB?.artists) }}</span>
-				</div>
-			</div>
-
-			<!-- Row: Genres -->
-			<div :class="$style.cellA">
-				<div :class="$style.fieldInfo">
-					<span :class="$style.label">{{ t('mobilesheetsmanager', 'Genres') }}</span>
-					<span :class="$style.val">{{ formatList(songA?.genres) }}</span>
-				</div>
-				<NcButton type="tertiary" :title="t('mobilesheetsmanager', 'Use Song A Genres')" @click="copyField('genres', 'A')">
-					<template #icon><ArrowRightIcon :size="16" /></template>
-				</NcButton>
-			</div>
-			<div :class="$style.cellMerged">
-				<label :class="$style.fieldLabel">{{ t('mobilesheetsmanager', 'Genres') }}</label>
-				<NcSelect
-					v-model="mergedGenres"
-					:options="genreOptions"
-					:multiple="true"
-					label="label"
-					track-by="id" />
-			</div>
-			<div :class="$style.cellB">
-				<NcButton type="tertiary" :title="t('mobilesheetsmanager', 'Use Song B Genres')" @click="copyField('genres', 'B')">
-					<template #icon><ArrowLeftIcon :size="16" /></template>
-				</NcButton>
-				<div :class="[$style.fieldInfo, $style.alignRight]">
-					<span :class="$style.label">{{ t('mobilesheetsmanager', 'Genres') }}</span>
-					<span :class="$style.val">{{ formatList(songB?.genres) }}</span>
-				</div>
-			</div>
-
-			<!-- Row: Keys -->
-			<div :class="$style.cellA">
-				<div :class="$style.fieldInfo">
-					<span :class="$style.label">{{ t('mobilesheetsmanager', 'Keys') }}</span>
-					<span :class="$style.val">{{ formatList(songA?.keys) }}</span>
-				</div>
-				<NcButton type="tertiary" :title="t('mobilesheetsmanager', 'Use Song A Keys')" @click="copyField('keys', 'A')">
-					<template #icon><ArrowRightIcon :size="16" /></template>
-				</NcButton>
-			</div>
-			<div :class="$style.cellMerged">
-				<label :class="$style.fieldLabel">{{ t('mobilesheetsmanager', 'Keys') }}</label>
-				<NcSelect
-					v-model="mergedKeys"
-					:options="keyOptions"
-					:multiple="true"
-					label="label"
-					track-by="id" />
-			</div>
-			<div :class="$style.cellB">
-				<NcButton type="tertiary" :title="t('mobilesheetsmanager', 'Use Song B Keys')" @click="copyField('keys', 'B')">
-					<template #icon><ArrowLeftIcon :size="16" /></template>
-				</NcButton>
-				<div :class="[$style.fieldInfo, $style.alignRight]">
-					<span :class="$style.label">{{ t('mobilesheetsmanager', 'Keys') }}</span>
-					<span :class="$style.val">{{ formatList(songB?.keys) }}</span>
-				</div>
-			</div>
-
-			<!-- Row: Keywords -->
-			<div :class="$style.cellA">
-				<div :class="$style.fieldInfo">
-					<span :class="$style.label">{{ t('mobilesheetsmanager', 'Keywords') }}</span>
-					<span :class="$style.val">{{ songA?.keywords || '-' }}</span>
-				</div>
-				<NcButton type="tertiary" :title="t('mobilesheetsmanager', 'Use Song A Keywords')" @click="copyField('keywords', 'A')">
-					<template #icon><ArrowRightIcon :size="16" /></template>
-				</NcButton>
-			</div>
-			<div :class="$style.cellMerged">
-				<NcTextField
-					:label="t('mobilesheetsmanager', 'Keywords')"
-					:value="mergedKeywords"
-					@update:value="mergedKeywords = $event" />
-			</div>
-			<div :class="$style.cellB">
-				<NcButton type="tertiary" :title="t('mobilesheetsmanager', 'Use Song B Keywords')" @click="copyField('keywords', 'B')">
-					<template #icon><ArrowLeftIcon :size="16" /></template>
-				</NcButton>
-				<div :class="[$style.fieldInfo, $style.alignRight]">
-					<span :class="$style.label">{{ t('mobilesheetsmanager', 'Keywords') }}</span>
-					<span :class="$style.val">{{ songB?.keywords || '-' }}</span>
-				</div>
-			</div>
-
-			<!-- Row: Attached Files -->
-			<div :class="$style.cellA">
-				<div :class="$style.fieldInfo">
-					<span :class="$style.label">{{ t('mobilesheetsmanager', 'Attached Files') }}</span>
-					<ul v-if="songA?.files?.length" :class="$style.fileList">
-						<li v-for="f in songA.files" :key="f.id" :class="$style.fileItem">
-							<FileDocumentIcon :size="16" />
-							<span :class="$style.fileName">{{ getFileName(f.path) }}</span>
-							<NcButton type="tertiary" :title="t('mobilesheetsmanager', 'Open File')" @click="openFileExternally(f.path)">
-								<template #icon><OpenInNewIcon :size="14" /></template>
-							</NcButton>
-						</li>
-					</ul>
-					<span v-else :class="$style.val">{{ t('mobilesheetsmanager', '(None)') }}</span>
-				</div>
-			</div>
-			<div :class="$style.cellMerged">
-				<div :class="$style.filesNotice">
-					<strong>{{ t('mobilesheetsmanager', 'Attached Files Policy') }}</strong>
-					<p>{{ t('mobilesheetsmanager', 'All files from both songs will be attached to Song ID {id}. Duplicate files are merged automatically.', { id: String(keepId) }) }}</p>
-				</div>
-			</div>
-			<div :class="$style.cellB">
-				<div :class="[$style.fieldInfo, $style.alignRight]">
-					<span :class="$style.label">{{ t('mobilesheetsmanager', 'Attached Files') }}</span>
-					<ul v-if="songB?.files?.length" :class="$style.fileList">
-						<li v-for="f in songB.files" :key="f.id" :class="$style.fileItem">
-							<FileDocumentIcon :size="16" />
-							<span :class="$style.fileName">{{ getFileName(f.path) }}</span>
-							<NcButton type="tertiary" :title="t('mobilesheetsmanager', 'Open File')" @click="openFileExternally(f.path)">
-								<template #icon><OpenInNewIcon :size="14" /></template>
-							</NcButton>
-						</li>
-					</ul>
-					<span v-else :class="$style.val">{{ t('mobilesheetsmanager', '(None)') }}</span>
-				</div>
-			</div>
-		</div>
-
-		<!-- MODE 2: KEEP BOTH SONGS AS SEPARATE ENTITIES (Side-by-Side Editable Grid) -->
-		<div v-else-if="mode === 'keepBoth'" :class="$style.keepBothGrid">
-
-			<!-- Column Headers -->
-			<div :class="[$style.headerCol, $style.songLeft]">
-				<strong>{{ t('mobilesheetsmanager', 'Song A') }}</strong>
-				<span :class="$style.idBadge">ID {{ songA?.id }}</span>
-				<NcButton type="tertiary" :title="t('mobilesheetsmanager', 'Copy Song A values to Song B')" @click="copyFieldsBetweenSongs('A')">
-					<template #icon><ArrowRightIcon :size="16" /></template>
-					{{ t('mobilesheetsmanager', 'Copy all to B') }}
-				</NcButton>
-			</div>
-
-			<div :class="[$style.headerCol, $style.songRight]">
-				<NcButton type="tertiary" :title="t('mobilesheetsmanager', 'Copy Song B values to Song A')" @click="copyFieldsBetweenSongs('B')">
-					<template #icon><ArrowLeftIcon :size="16" /></template>
-					{{ t('mobilesheetsmanager', 'Copy all to A') }}
-				</NcButton>
-				<strong>{{ t('mobilesheetsmanager', 'Song B') }}</strong>
-				<span :class="$style.idBadge">ID {{ songB?.id }}</span>
-			</div>
-
-			<!-- Row: Title -->
-			<div :class="$style.cellEditable">
-				<NcTextField
-					:label="t('mobilesheetsmanager', 'Song A Title')"
-					:value="songA_title"
-					@update:value="songA_title = $event" />
-			</div>
-			<div :class="$style.cellEditable">
-				<NcTextField
-					:label="t('mobilesheetsmanager', 'Song B Title')"
-					:value="songB_title"
-					@update:value="songB_title = $event" />
-			</div>
-
-			<!-- Row: Composers -->
-			<div :class="$style.cellEditable">
-				<label :class="$style.fieldLabel">{{ t('mobilesheetsmanager', 'Song A Composers') }}</label>
-				<NcSelect
-					v-model="songA_composers"
-					:options="composerOptions"
-					:multiple="true"
-					label="label"
-					track-by="id" />
-			</div>
-			<div :class="$style.cellEditable">
-				<label :class="$style.fieldLabel">{{ t('mobilesheetsmanager', 'Song B Composers') }}</label>
-				<NcSelect
-					v-model="songB_composers"
-					:options="composerOptions"
-					:multiple="true"
-					label="label"
-					track-by="id" />
-			</div>
-
-			<!-- Row: Books -->
-			<div :class="$style.cellEditable">
-				<label :class="$style.fieldLabel">{{ t('mobilesheetsmanager', 'Song A Books') }}</label>
-				<NcSelect
-					v-model="songA_books"
-					:options="bookOptions"
-					:multiple="true"
-					label="label"
-					track-by="id" />
-			</div>
-			<div :class="$style.cellEditable">
-				<label :class="$style.fieldLabel">{{ t('mobilesheetsmanager', 'Song B Books') }}</label>
-				<NcSelect
-					v-model="songB_books"
-					:options="bookOptions"
-					:multiple="true"
-					label="label"
-					track-by="id" />
-			</div>
-
-			<!-- Row: Collections -->
-			<div :class="$style.cellEditable">
-				<label :class="$style.fieldLabel">{{ t('mobilesheetsmanager', 'Song A Collections') }}</label>
-				<NcSelect
-					v-model="songA_collections"
-					:options="collectionOptions"
-					:multiple="true"
-					label="label"
-					track-by="id" />
-			</div>
-			<div :class="$style.cellEditable">
-				<label :class="$style.fieldLabel">{{ t('mobilesheetsmanager', 'Song B Collections') }}</label>
-				<NcSelect
-					v-model="songB_collections"
-					:options="collectionOptions"
-					:multiple="true"
-					label="label"
-					track-by="id" />
-			</div>
-
-			<!-- Row: Artists -->
-			<div :class="$style.cellEditable">
-				<label :class="$style.fieldLabel">{{ t('mobilesheetsmanager', 'Song A Artists') }}</label>
-				<NcSelect
-					v-model="songA_artists"
-					:options="artistOptions"
-					:multiple="true"
-					label="label"
-					track-by="id" />
-			</div>
-			<div :class="$style.cellEditable">
-				<label :class="$style.fieldLabel">{{ t('mobilesheetsmanager', 'Song B Artists') }}</label>
-				<NcSelect
-					v-model="songB_artists"
-					:options="artistOptions"
-					:multiple="true"
-					label="label"
-					track-by="id" />
-			</div>
-
-			<!-- Row: Genres -->
-			<div :class="$style.cellEditable">
-				<label :class="$style.fieldLabel">{{ t('mobilesheetsmanager', 'Song A Genres') }}</label>
-				<NcSelect
-					v-model="songA_genres"
-					:options="genreOptions"
-					:multiple="true"
-					label="label"
-					track-by="id" />
-			</div>
-			<div :class="$style.cellEditable">
-				<label :class="$style.fieldLabel">{{ t('mobilesheetsmanager', 'Song B Genres') }}</label>
-				<NcSelect
-					v-model="songB_genres"
-					:options="genreOptions"
-					:multiple="true"
-					label="label"
-					track-by="id" />
-			</div>
-
-			<!-- Row: Keys -->
-			<div :class="$style.cellEditable">
-				<label :class="$style.fieldLabel">{{ t('mobilesheetsmanager', 'Song A Keys') }}</label>
-				<NcSelect
-					v-model="songA_keys"
-					:options="keyOptions"
-					:multiple="true"
-					label="label"
-					track-by="id" />
-			</div>
-			<div :class="$style.cellEditable">
-				<label :class="$style.fieldLabel">{{ t('mobilesheetsmanager', 'Song B Keys') }}</label>
-				<NcSelect
-					v-model="songB_keys"
-					:options="keyOptions"
-					:multiple="true"
-					label="label"
-					track-by="id" />
-			</div>
-
-			<!-- Row: Keywords -->
-			<div :class="$style.cellEditable">
-				<NcTextField
-					:label="t('mobilesheetsmanager', 'Song A Keywords')"
-					:value="songA_keywords"
-					@update:value="songA_keywords = $event" />
-			</div>
-			<div :class="$style.cellEditable">
-				<NcTextField
-					:label="t('mobilesheetsmanager', 'Song B Keywords')"
-					:value="songB_keywords"
-					@update:value="songB_keywords = $event" />
-			</div>
-
-			<!-- Row: Attached Files -->
-			<div :class="$style.cellEditable">
-				<label :class="$style.fieldLabel">{{ t('mobilesheetsmanager', 'Song A Files') }}</label>
-				<ul v-if="songA?.files?.length" :class="$style.fileList">
-					<li v-for="f in songA.files" :key="f.id" :class="[$style.fileItem, songA_detachedFiles.includes(f.id) && $style.detachedFile]">
-						<FileDocumentIcon :size="16" />
-						<span :class="$style.fileName">{{ getFileName(f.path) }}</span>
-						<NcButton type="tertiary" :title="t('mobilesheetsmanager', 'Open File')" @click="openFileExternally(f.path)">
-							<template #icon><OpenInNewIcon :size="14" /></template>
-						</NcButton>
-						<NcButton
-							:variant="songA_detachedFiles.includes(f.id) ? 'secondary' : 'tertiary'"
-							:title="songA_detachedFiles.includes(f.id) ? t('mobilesheetsmanager', 'Keep File') : t('mobilesheetsmanager', 'Detach File from Song A')"
-							@click="toggleDetachFile('A', f.id)">
-							<template #icon><TrashCanOutlineIcon :size="14" /></template>
-						</NcButton>
-					</li>
-				</ul>
-				<span v-else :class="$style.val">{{ t('mobilesheetsmanager', '(None)') }}</span>
-			</div>
-
-			<div :class="$style.cellEditable">
-				<label :class="$style.fieldLabel">{{ t('mobilesheetsmanager', 'Song B Files') }}</label>
-				<ul v-if="songB?.files?.length" :class="$style.fileList">
-					<li v-for="f in songB.files" :key="f.id" :class="[$style.fileItem, songB_detachedFiles.includes(f.id) && $style.detachedFile]">
-						<FileDocumentIcon :size="16" />
-						<span :class="$style.fileName">{{ getFileName(f.path) }}</span>
-						<NcButton type="tertiary" :title="t('mobilesheetsmanager', 'Open File')" @click="openFileExternally(f.path)">
-							<template #icon><OpenInNewIcon :size="14" /></template>
-						</NcButton>
-						<NcButton
-							:variant="songB_detachedFiles.includes(f.id) ? 'secondary' : 'tertiary'"
-							:title="songB_detachedFiles.includes(f.id) ? t('mobilesheetsmanager', 'Keep File') : t('mobilesheetsmanager', 'Detach File from Song B')"
-							@click="toggleDetachFile('B', f.id)">
-							<template #icon><TrashCanOutlineIcon :size="14" /></template>
-						</NcButton>
-					</li>
-				</ul>
-				<span v-else :class="$style.val">{{ t('mobilesheetsmanager', '(None)') }}</span>
-			</div>
-		</div>
+		<!-- MODE 2: KEEP BOTH SONGS AS SEPARATE ENTITIES -->
+		<SongResolveBothModeView
+			v-else-if="mode === 'keepBoth'"
+			v-model:song-a_title="songA_title"
+			v-model:song-b_title="songB_title"
+			v-model:song-a_composers="songA_composers"
+			v-model:song-b_composers="songB_composers"
+			v-model:song-a_books="songA_books"
+			v-model:song-b_books="songB_books"
+			v-model:song-a_collections="songA_collections"
+			v-model:song-b_collections="songB_collections"
+			v-model:song-a_artists="songA_artists"
+			v-model:song-b_artists="songB_artists"
+			v-model:song-a_genres="songA_genres"
+			v-model:song-b_genres="songB_genres"
+			v-model:song-a_keys="songA_keys"
+			v-model:song-b_keys="songB_keys"
+			v-model:song-a_keywords="songA_keywords"
+			v-model:song-b_keywords="songB_keywords"
+			:song-a="songA"
+			:song-b="songB"
+			:song-a_detached-files="songA_detachedFiles"
+			:song-b_detached-files="songB_detachedFiles"
+			:composer-options="composerOptions"
+			:book-options="bookOptions"
+			:collection-options="collectionOptions"
+			:artist-options="artistOptions"
+			:genre-options="genreOptions"
+			:key-options="keyOptions"
+			@copy-fields-between-songs="copyFieldsBetweenSongs"
+			@toggle-detach-file="toggleDetachFile" />
 
 		<!-- Dialog Footer Actions -->
 		<div :class="$style.dialogActions">
 			<NcButton @click="emit('update:open', false)">
-				{{ t('mobilesheetsmanager', 'Cancel') }}
+				{{ t('sheetmusic', 'Cancel') }}
 			</NcButton>
 
 			<!-- Submit for Mode 1 ("merge") -->
@@ -982,7 +454,7 @@ function submit() {
 					<NcLoadingIcon v-if="isMerging" :size="16" />
 					<MergeIcon v-else :size="16" />
 				</template>
-				{{ isMerging ? t('mobilesheetsmanager', 'Merging…') : t('mobilesheetsmanager', 'Merge Songs') }}
+				{{ isMerging ? t('sheetmusic', 'Merging…') : t('sheetmusic', 'Merge Songs') }}
 			</NcButton>
 
 			<!-- Submit for Mode 2 ("keepBoth") -->
@@ -995,7 +467,7 @@ function submit() {
 					<NcLoadingIcon v-if="isMerging" :size="16" />
 					<FileMultipleIcon v-else :size="16" />
 				</template>
-				{{ isMerging ? t('mobilesheetsmanager', 'Saving…') : t('mobilesheetsmanager', 'Save & Resolve Conflicts') }}
+				{{ isMerging ? t('sheetmusic', 'Saving…') : t('sheetmusic', 'Save & Resolve Conflicts') }}
 			</NcButton>
 		</div>
 	</NcDialog>
@@ -1036,170 +508,6 @@ function submit() {
 .warningText p {
 	margin: 2px 0 0;
 	font-size: 0.85rem;
-}
-
-.comparisonGrid {
-	display: grid;
-	grid-template-columns: 1fr 1.3fr 1fr;
-	gap: 12px 16px;
-	align-items: center;
-}
-
-.keepBothGrid {
-	display: grid;
-	grid-template-columns: 1fr 1fr;
-	gap: 12px 16px;
-	align-items: center;
-}
-
-.headerCol {
-	display: flex;
-	align-items: center;
-	flex-wrap: wrap;
-	gap: 8px;
-	font-weight: 600;
-	padding: 12px;
-	border-radius: var(--border-radius-large, 8px);
-	border: 1px solid var(--color-border);
-}
-
-.songLeft {
-	background: var(--color-background-hover);
-	border-left: 4px solid var(--color-primary-element);
-}
-
-.songRight {
-	background: var(--color-background-hover);
-	border-left: 4px solid var(--color-warning);
-}
-
-.songMerged {
-	background: var(--color-main-background);
-	border-left: 4px solid var(--color-success);
-}
-
-.idBadge {
-	background: var(--color-background-dark);
-	padding: 2px 8px;
-	border-radius: var(--border-radius-pill, 16px);
-	font-size: 0.8rem;
-	font-weight: normal;
-}
-
-.cellA {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 8px;
-	padding: 10px 12px;
-	background: var(--color-background-hover);
-	border-radius: var(--border-radius, 4px);
-	border: 1px solid var(--color-border);
-	min-height: 48px;
-}
-
-.cellB {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 8px;
-	padding: 10px 12px;
-	background: var(--color-background-hover);
-	border-radius: var(--border-radius, 4px);
-	border: 1px solid var(--color-border);
-	min-height: 48px;
-}
-
-.cellMerged {
-	display: flex;
-	flex-direction: column;
-	justify-content: center;
-	min-height: 48px;
-}
-
-.cellEditable {
-	display: flex;
-	flex-direction: column;
-	justify-content: center;
-	min-height: 48px;
-}
-
-.fieldInfo {
-	display: flex;
-	flex-direction: column;
-	gap: 2px;
-	overflow: hidden;
-}
-
-.alignRight {
-	align-items: flex-end;
-	text-align: right;
-}
-
-.label {
-	font-size: 0.75rem;
-	font-weight: 600;
-	color: var(--color-text-maxcontrast);
-	text-transform: uppercase;
-	letter-spacing: 0.5px;
-}
-
-.val {
-	font-size: 0.9rem;
-	color: var(--color-main-text);
-	word-break: break-word;
-}
-
-.fieldLabel {
-	font-size: 0.85rem;
-	font-weight: 600;
-	color: var(--color-text-maxcontrast);
-	margin-bottom: -6px;
-}
-
-.fileList {
-	margin: 4px 0 0;
-	padding: 0;
-	list-style: none;
-	display: flex;
-	flex-direction: column;
-	gap: 4px;
-}
-
-.fileItem {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	font-size: 0.8rem;
-	padding: 2px 6px;
-	border-radius: var(--border-radius, 4px);
-	background: var(--color-main-background);
-	border: 1px solid var(--color-border);
-}
-
-.detachedFile {
-	opacity: 0.5;
-	text-decoration: line-through;
-}
-
-.fileName {
-	flex: 1;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.filesNotice {
-	padding: 8px 12px;
-	border-radius: var(--border-radius, 4px);
-	background: var(--color-background-hover);
-	border: 1px solid var(--color-border);
-	font-size: 0.85rem;
-}
-
-.filesNotice p {
-	margin: 2px 0 0;
-	color: var(--color-text-maxcontrast);
 }
 
 .dialogActions {

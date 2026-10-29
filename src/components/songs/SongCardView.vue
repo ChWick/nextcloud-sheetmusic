@@ -4,8 +4,12 @@ import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import EyeIcon from 'vue-material-design-icons/Eye.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
+import { computed } from 'vue'
 import { formatDateTimestamp, formatDifficulty, formatDuration, formatStars } from '../../utils/song-formatter'
 import { useSongRowInteraction } from '../../composables/useSongRowInteraction'
+import SongEntityChips from './SongEntityChips.vue'
+import SongInlineEditableCell from './SongInlineEditableCell.vue'
+import { ENTITY_COLUMNS } from './song-view-columns'
 
 const props = defineProps<{
 	songs: Song[]
@@ -17,6 +21,7 @@ const props = defineProps<{
 const emit = defineEmits<{
 	'view-song': [song: Song]
 	'edit-song': [song: Song]
+	'inline-update-song': [song: Song, updates: Partial<Song>]
 	'filter-entity': [entityType: EntityType, entity: FilterEntity]
 	'toggle-select-song': [songId: number]
 }>()
@@ -25,6 +30,8 @@ function isColVisible(col: SongColumn): boolean {
 	if (!props.visibleColumns) return true
 	return props.visibleColumns.includes(col)
 }
+
+const visibleEntityColumns = computed(() => ENTITY_COLUMNS.filter((c) => isColVisible(c.col)))
 
 const {
 	handleTouchStart,
@@ -54,212 +61,77 @@ const {
 					type="checkbox"
 					:checked="selectedSongIds?.includes(song.id)"
 					:class="$style.selectCheckbox"
-					:title="t('mobilesheetsmanager', 'Select song')"
+					:title="t('sheetmusic', 'Select song')"
 					@click.stop
 					@change="emit('toggle-select-song', song.id)">
-				<span v-if="isColVisible('title')" :class="$style.cardTitle">
-					{{ song.title }}
-				</span>
+				<SongInlineEditableCell
+					v-if="isColVisible('title')"
+					field="title"
+					variant="card-title"
+					:allow-empty="false"
+					:value="song.title"
+					:display-text="song.title"
+					:aria-label="t('sheetmusic', 'Song title')"
+					:edit-title="t('sheetmusic', 'Edit title inline')"
+					@save="emit('inline-update-song', song, { title: String($event) })" />
 			</div>
 
 			<div :class="$style.cardBody">
-				<div v-if="isColVisible('composer') && song.composers && song.composers.length > 0" :class="$style.metaRow">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Composer:') }}</span>
-					<div :class="$style.chipGroup">
-						<template v-for="(c, idx) in song.composers" :key="c.id">
-							<button
-								type="button"
-								:class="[$style.filterChip, isFiltered?.('composers', c.id) && $style.activeChip]"
-								:title="t('mobilesheetsmanager', 'Toggle filter for composer {name}', { name: c.name })"
-								@click.stop="emit('filter-entity', 'composers', c)">
-								{{ c.name }}
-							</button>
-							<template v-if="idx < song.composers.length - 1">, </template>
-						</template>
+				<template v-for="entCol in visibleEntityColumns" :key="entCol.col">
+					<div v-if="entCol.getItems(song).length > 0" :class="$style.metaRow">
+						<span :class="$style.metaLabel">{{ entCol.cardLabel() }}</span>
+						<div :class="$style.chipGroup">
+							<SongEntityChips
+								:def="entCol"
+								:items="entCol.getItems(song)"
+								:is-filtered="isFiltered"
+								@filter-entity="(type, ent) => emit('filter-entity', type, ent)" />
+						</div>
 					</div>
-				</div>
+				</template>
 
-				<div v-if="isColVisible('book') && song.books && song.books.length > 0" :class="$style.metaRow">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Book:') }}</span>
-					<div :class="$style.chipGroup">
-						<template v-for="(b, idx) in song.books" :key="b.id">
-							<button
-								type="button"
-								:class="[$style.filterChip, isFiltered?.('books', b.id) && $style.activeChip]"
-								:title="t('mobilesheetsmanager', 'Toggle filter for book {title}', { title: b.title })"
-								@click.stop="emit('filter-entity', 'books', b)">
-								{{ b.title }}
-							</button>
-							<template v-if="idx < song.books.length - 1">, </template>
-						</template>
-					</div>
+				<div v-if="isColVisible('opus') && song.opus" :class="$style.metaRow">
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Opus:') }}</span>
+					<span>{{ song.opus }}</span>
 				</div>
-
-				<div v-if="isColVisible('collection') && song.collections && song.collections.length > 0" :class="$style.metaRow">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Collection:') }}</span>
-					<div :class="$style.chipGroup">
-						<template v-for="(col, idx) in song.collections" :key="col.id">
-							<button
-								type="button"
-								:class="[$style.filterChip, isFiltered?.('collections', col.id) && $style.activeChip]"
-								:title="t('mobilesheetsmanager', 'Toggle filter for collection {name}', { name: col.name })"
-								@click.stop="emit('filter-entity', 'collections', col)">
-								{{ col.name }}
-							</button>
-							<template v-if="idx < song.collections.length - 1">, </template>
-						</template>
-					</div>
+				<div v-if="isColVisible('catalogNumber') && song.catalogNumber" :class="$style.metaRow">
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Catalog No.:') }}</span>
+					<span>{{ song.catalogNumber }}</span>
 				</div>
-
-				<div v-if="isColVisible('artist') && song.artists && song.artists.length > 0" :class="$style.metaRow">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Artist:') }}</span>
-					<div :class="$style.chipGroup">
-						<template v-for="(art, idx) in song.artists" :key="art.id">
-							<button
-								type="button"
-								:class="[$style.filterChip, isFiltered?.('artists', art.id) && $style.activeChip]"
-								:title="t('mobilesheetsmanager', 'Toggle filter for artist {name}', { name: art.name })"
-								@click.stop="emit('filter-entity', 'artists', art)">
-								{{ art.name }}
-							</button>
-							<template v-if="idx < song.artists.length - 1">, </template>
-						</template>
-					</div>
+				<div v-if="isColVisible('songNumber') && song.songNumber" :class="$style.metaRow">
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Song No.:') }}</span>
+					<span>{{ song.songNumber }}</span>
 				</div>
-
-				<div v-if="isColVisible('genre') && song.genres && song.genres.length > 0" :class="$style.metaRow">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Genre:') }}</span>
-					<div :class="$style.chipGroup">
-						<template v-for="(g, idx) in song.genres" :key="g.id">
-							<button
-								type="button"
-								:class="[$style.filterChip, isFiltered?.('genres', g.id) && $style.activeChip]"
-								:title="t('mobilesheetsmanager', 'Toggle filter for genre {name}', { name: g.name })"
-								@click.stop="emit('filter-entity', 'genres', g)">
-								{{ g.name }}
-							</button>
-							<template v-if="idx < song.genres.length - 1">, </template>
-						</template>
-					</div>
-				</div>
-
-				<div v-if="isColVisible('key') && song.keys && song.keys.length > 0" :class="$style.metaRow">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Key:') }}</span>
-					<div :class="$style.chipGroup">
-						<template v-for="(k, idx) in song.keys" :key="k.id">
-							<button
-								type="button"
-								:class="[$style.filterChip, isFiltered?.('keys', k.id) && $style.activeChip]"
-								:title="t('mobilesheetsmanager', 'Toggle filter for key {name}', { name: k.name })"
-								@click.stop="emit('filter-entity', 'keys', k)">
-								{{ k.name }}
-							</button>
-							<template v-if="idx < song.keys.length - 1">, </template>
-						</template>
-					</div>
-				</div>
-
-				<div v-if="isColVisible('customGroup') && song.customGroups && song.customGroups.length > 0" :class="$style.metaRow">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Custom Group:') }}</span>
-					<div :class="$style.chipGroup">
-						<template v-for="(cg, idx) in song.customGroups" :key="cg.id">
-							<button
-								type="button"
-								:class="[$style.filterChip, isFiltered?.('customgroups', cg.id) && $style.activeChip]"
-								:title="t('mobilesheetsmanager', 'Toggle filter for custom group {name}', { name: cg.name })"
-								@click.stop="emit('filter-entity', 'customgroups', cg)">
-								{{ cg.name }}
-							</button>
-							<template v-if="idx < song.customGroups.length - 1">, </template>
-						</template>
-					</div>
-				</div>
-
-				<div v-if="isColVisible('year') && song.years && song.years.length > 0" :class="$style.metaRow">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Year:') }}</span>
-					<div :class="$style.chipGroup">
-						<template v-for="(y, idx) in song.years" :key="y.id">
-							<button
-								type="button"
-								:class="[$style.filterChip, isFiltered?.('years', y.id) && $style.activeChip]"
-								:title="t('mobilesheetsmanager', 'Toggle filter for year {name}', { name: y.name })"
-								@click.stop="emit('filter-entity', 'years', y)">
-								{{ y.name }}
-							</button>
-							<template v-if="idx < song.years.length - 1">, </template>
-						</template>
-					</div>
-				</div>
-
-				<div v-if="isColVisible('signature') && song.signatures && song.signatures.length > 0" :class="$style.metaRow">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Time Signature:') }}</span>
-					<div :class="$style.chipGroup">
-						<template v-for="(s, idx) in song.signatures" :key="s.id">
-							<button
-								type="button"
-								:class="[$style.filterChip, isFiltered?.('signatures', s.id) && $style.activeChip]"
-								:title="t('mobilesheetsmanager', 'Toggle filter for signature {name}', { name: s.name })"
-								@click.stop="emit('filter-entity', 'signatures', s)">
-								{{ s.name }}
-							</button>
-							<template v-if="idx < song.signatures.length - 1">, </template>
-						</template>
-					</div>
-				</div>
-
-				<div v-if="isColVisible('sourceType') && song.sourceTypes && song.sourceTypes.length > 0" :class="$style.metaRow">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Source Type:') }}</span>
-					<div :class="$style.chipGroup">
-						<template v-for="(st, idx) in song.sourceTypes" :key="st.id">
-							<button
-								type="button"
-								:class="[$style.filterChip, isFiltered?.('sourcetypes', st.id) && $style.activeChip]"
-								:title="t('mobilesheetsmanager', 'Toggle filter for source type {name}', { name: st.name })"
-								@click.stop="emit('filter-entity', 'sourcetypes', st)">
-								{{ st.name }}
-							</button>
-							<template v-if="idx < song.sourceTypes.length - 1">, </template>
-						</template>
-					</div>
-				</div>
-
 				<div v-if="isColVisible('stars') && song.stars" :class="$style.metaRow">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Rating:') }}</span>
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Rating:') }}</span>
 					<span>{{ formatStars(song.stars) }}</span>
 				</div>
-
 				<div v-if="isColVisible('difficulty') && song.difficulty" :class="$style.metaRow">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Difficulty:') }}</span>
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Difficulty:') }}</span>
 					<span>{{ formatDifficulty(song.difficulty) }}</span>
 				</div>
-
 				<div v-if="isColVisible('duration') && song.duration" :class="$style.metaRow">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Duration:') }}</span>
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Duration:') }}</span>
 					<span>{{ formatDuration(song.duration) }}</span>
 				</div>
-
 				<div v-if="isColVisible('keywords') && song.keywords" :class="$style.metaRow">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Keywords:') }}</span>
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Keywords:') }}</span>
 					<span>{{ song.keywords }}</span>
 				</div>
-
 				<div v-if="isColVisible('custom') && song.custom" :class="$style.metaRow">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Custom:') }}</span>
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Custom:') }}</span>
 					<span>{{ song.custom }}</span>
 				</div>
-
 				<div v-if="isColVisible('custom2') && song.custom2" :class="$style.metaRow">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Custom 2:') }}</span>
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Custom 2:') }}</span>
 					<span>{{ song.custom2 }}</span>
 				</div>
-
 				<div v-if="isColVisible('lastModified') && song.lastModified" :class="$style.metaRow">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Last modified:') }}</span>
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Last modified:') }}</span>
 					<span>{{ formatDateTimestamp(song.lastModified) }}</span>
 				</div>
-
 				<div v-if="isColVisible('dateCreated') && song.dateCreated" :class="$style.metaRow">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Created:') }}</span>
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Created:') }}</span>
 					<span>{{ formatDateTimestamp(song.dateCreated) }}</span>
 				</div>
 			</div>
@@ -267,8 +139,8 @@ const {
 			<div :class="$style.cardActions" @click.stop>
 				<NcButton
 					size="small"
-					:title="t('mobilesheetsmanager', 'Edit song')"
-					:aria-label="t('mobilesheetsmanager', 'Edit song')"
+					:title="t('sheetmusic', 'Edit song')"
+					:aria-label="t('sheetmusic', 'Edit song')"
 					@click="emit('edit-song', song)">
 					<template #icon>
 						<PencilIcon :size="18" />
@@ -276,8 +148,8 @@ const {
 				</NcButton>
 				<NcButton
 					size="small"
-					:title="t('mobilesheetsmanager', 'View song')"
-					:aria-label="t('mobilesheetsmanager', 'View song')"
+					:title="t('sheetmusic', 'View song')"
+					:aria-label="t('sheetmusic', 'View song')"
 					@click="emit('view-song', song)">
 					<template #icon>
 						<EyeIcon :size="18" />
@@ -311,6 +183,10 @@ const {
 	border-color: var(--color-primary-element);
 }
 
+.songCard:hover :global(.sheetmusic-inline-edit-trigger) {
+	opacity: 0.75;
+}
+
 .selectedCard {
 	border-color: var(--color-primary-element);
 	background-color: var(--color-background-hover);
@@ -332,17 +208,6 @@ const {
 	cursor: pointer;
 	flex-shrink: 0;
 	accent-color: var(--color-primary-element);
-}
-
-.cardTitle {
-	color: var(--color-main-text);
-	text-align: left;
-	min-width: 0;
-	word-break: break-word;
-}
-
-.songCard:hover .cardTitle {
-	color: var(--color-primary-element);
 }
 
 .cardBody {
@@ -368,50 +233,6 @@ const {
 .chipGroup {
 	display: inline;
 	color: var(--color-text-maxcontrast);
-}
-
-.filterChip {
-	appearance: none;
-	-webkit-appearance: none;
-	background: transparent !important;
-	border: none !important;
-	border-radius: 0 !important;
-	box-shadow: none !important;
-	outline: none !important;
-	padding: 0 !important;
-	margin: 0 !important;
-	font: inherit;
-	color: var(--color-text-maxcontrast);
-	cursor: pointer;
-	text-align: left;
-	display: inline;
-	text-decoration: none;
-	transition: color 0.15s ease;
-}
-
-.filterChip:hover,
-.filterChip:focus,
-.filterChip:active {
-	background: transparent !important;
-	border: none !important;
-	box-shadow: none !important;
-	color: var(--color-primary-element) !important;
-	text-decoration: underline;
-}
-
-.activeChip {
-	color: var(--color-primary-element) !important;
-	font-weight: 600;
-	text-decoration: underline;
-}
-
-.activeChip:hover,
-.activeChip:focus,
-.activeChip:active {
-	background: transparent !important;
-	border: none !important;
-	box-shadow: none !important;
-	color: var(--color-primary-element-hover, var(--color-primary-element)) !important;
 }
 
 .cardActions {

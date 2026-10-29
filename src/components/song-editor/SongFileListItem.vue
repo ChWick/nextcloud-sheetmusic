@@ -6,6 +6,7 @@ import { generateFilePath } from '@nextcloud/router'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist'
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+import { downsampleImageBuffer, imageBufferToImageData, imageDataToImageBuffer } from '../song-pdf/scan-enhance-engine'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import EjectIcon from 'vue-material-design-icons/Eject.vue'
 import FileIcon from 'vue-material-design-icons/File.vue'
@@ -52,9 +53,9 @@ async function loadPdfThumbnail() {
 		})
 
 		const pdfData = response.data instanceof ArrayBuffer ? new Uint8Array(response.data) : response.data
-		const wasmUrl = typeof generateFilePath === 'function' ? generateFilePath('mobilesheetsmanager', 'js', 'pdfjs/wasm/') : new URL('pdfjs-dist/wasm/', import.meta.url).href
-		const cMapUrl = typeof generateFilePath === 'function' ? generateFilePath('mobilesheetsmanager', 'js', 'pdfjs/cmaps/') : new URL('pdfjs-dist/cmaps/', import.meta.url).href
-		const standardFontDataUrl = typeof generateFilePath === 'function' ? generateFilePath('mobilesheetsmanager', 'js', 'pdfjs/standard_fonts/') : new URL('pdfjs-dist/standard_fonts/', import.meta.url).href
+		const wasmUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/wasm/') : new URL('pdfjs-dist/wasm/', import.meta.url).href
+		const cMapUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/cmaps/') : new URL('pdfjs-dist/cmaps/', import.meta.url).href
+		const standardFontDataUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/standard_fonts/') : new URL('pdfjs-dist/standard_fonts/', import.meta.url).href
 
 		const pdf = await getDocument({
 			data: pdfData,
@@ -70,24 +71,41 @@ async function loadPdfThumbnail() {
 
 		const page = await pdf.getPage(1)
 		const unscaledViewport = page.getViewport({ scale: 1.0 })
-		// Target width 44px
-		const scale = 44 / unscaledViewport.width
-		const viewport = page.getViewport({ scale })
+		// Supersample at 6x (264px) and area-average downsample to 88px (2x HiDPI for 44px CSS width)
+		const renderScale = 264 / Math.max(1, unscaledViewport.width)
+		const viewport = page.getViewport({ scale: renderScale })
+		const vpScaled = Math.abs(viewport.width - unscaledViewport.width * renderScale) < 2
+		const renderW = vpScaled ? Math.max(1, Math.round(viewport.width)) : Math.max(1, Math.round(unscaledViewport.width * renderScale))
+		const renderH = vpScaled ? Math.max(1, Math.round(viewport.height)) : Math.max(1, Math.round(unscaledViewport.height * renderScale))
+
+		const thumbW = 88
+		const thumbH = Math.max(1, Math.round(renderH * (thumbW / renderW)))
+
+		const srcCanvas = document.createElement('canvas')
+		srcCanvas.width = renderW
+		srcCanvas.height = renderH
 
 		const canvas = document.createElement('canvas')
-		canvas.width = Math.floor(viewport.width)
-		canvas.height = Math.floor(viewport.height)
-		canvas.className = 'mobilesheetsmanager-file-thumb'
+		canvas.width = thumbW
+		canvas.height = thumbH
+		canvas.className = 'sheetmusic-file-thumb'
 
-		const canvasContext = canvas.getContext('2d')
-		if (canvasContext) {
-			canvasContext.fillStyle = '#ffffff'
-			canvasContext.fillRect(0, 0, canvas.width, canvas.height)
+		const srcContext = srcCanvas.getContext('2d')
+		const dstContext = canvas.getContext('2d')
+		if (srcContext && dstContext) {
+			srcContext.imageSmoothingEnabled = true
+			srcContext.imageSmoothingQuality = 'high'
+			srcContext.fillStyle = '#ffffff'
+			srcContext.fillRect(0, 0, srcCanvas.width, srcCanvas.height)
 			await page.render({
-				canvasContext,
+				canvasContext: srcContext,
 				viewport,
 				background: 'rgb(255, 255, 255)',
 			}).promise
+
+			const imgData = srcContext.getImageData(0, 0, srcCanvas.width, srcCanvas.height)
+			const downsampled = downsampleImageBuffer(imageDataToImageBuffer(imgData), thumbW, thumbH)
+			dstContext.putImageData(imageBufferToImageData(downsampled), 0, 0)
 
 			if (thumbnailContainer.value) {
 				thumbnailContainer.value.replaceChildren(canvas)
@@ -131,8 +149,8 @@ watch(() => props.file.path, () => {
 			<NcButton
 				type="button"
 				variant="secondary"
-				:aria-label="t('mobilesheetsmanager', 'Open {file} in external viewer', { file: getFileName(file.path) })"
-				:title="t('mobilesheetsmanager', 'Open in external viewer')"
+				:aria-label="t('sheetmusic', 'Open {file} in external viewer', { file: getFileName(file.path) })"
+				:title="t('sheetmusic', 'Open in external viewer')"
 				@click="emit('openExternal', file)">
 				<template #icon>
 					<OpenInNewIcon :size="20" />
@@ -142,8 +160,8 @@ watch(() => props.file.path, () => {
 				type="button"
 				variant="tertiary"
 				:disabled="disabled"
-				:aria-label="t('mobilesheetsmanager', 'Detach file {file} from song', { file: getFileName(file.path) })"
-				:title="t('mobilesheetsmanager', 'Detach file from song (keep file in storage)')"
+				:aria-label="t('sheetmusic', 'Detach file {file} from song', { file: getFileName(file.path) })"
+				:title="t('sheetmusic', 'Detach file from song (keep file in storage)')"
 				@click="emit('detach', file)">
 				<template #icon>
 					<EjectIcon :size="20" />
@@ -153,8 +171,8 @@ watch(() => props.file.path, () => {
 				type="button"
 				variant="error"
 				:disabled="disabled"
-				:aria-label="t('mobilesheetsmanager', 'Delete file {file}', { file: getFileName(file.path) })"
-				:title="t('mobilesheetsmanager', 'Delete file from storage')"
+				:aria-label="t('sheetmusic', 'Delete file {file}', { file: getFileName(file.path) })"
+				:title="t('sheetmusic', 'Delete file from storage')"
 				@click="emit('delete', file)">
 				<template #icon>
 					<DeleteIcon :size="20" />
@@ -199,7 +217,7 @@ watch(() => props.file.path, () => {
 	justify-content: center;
 }
 
-.thumbSlot :global(.mobilesheetsmanager-file-thumb),
+.thumbSlot :global(.sheetmusic-file-thumb),
 .imgThumb {
 	display: block;
 	max-width: 100%;

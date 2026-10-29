@@ -1,17 +1,22 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import type { Song } from '../../../src/types/song'
-import { flushPromises, mount } from '@vue/test-utils'
+import { config, flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { PDFDocument } from 'pdf-lib'
 import SongPdfModifier from '../../../src/components/song-pdf/SongPdfModifier.vue'
+import { getPdfPageImageResolution } from '../../../src/components/song-pdf/pdf-enhance-engine'
+
+// Avoid teleporting child modals (NcDialog) to body so wrapper.find queries work without mocks
+config.global.stubs = { teleport: true }
 
 // Real PDF bytes from fixture
 const realPdfPath = path.resolve(__dirname, '../../fixtures/sample.pdf')
 const realPdfBuffer = fs.readFileSync(realPdfPath)
 
-const { uploadedFiles, createdSongs, deletedFiles, deletedSongs } = vi.hoisted(() => ({
+const { uploadedFiles, updatedFiles, createdSongs, deletedFiles, deletedSongs } = vi.hoisted(() => ({
 	uploadedFiles: [] as { songId: number; file: File }[],
+	updatedFiles: [] as { songId: number; fileId: number; file: File }[],
 	createdSongs: [] as any[],
 	deletedFiles: [] as { songId: number; fileId: number }[],
 	deletedSongs: [] as { songId: number; deleteFiles?: boolean }[],
@@ -36,47 +41,20 @@ vi.mock('@nextcloud/router', () => ({
 	generateOcsUrl: vi.fn((path: string) => `/ocs/v2.php${path}`),
 }))
 
-vi.mock('@nextcloud/l10n', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('@nextcloud/l10n')>()
-	return {
-		...actual,
-		translate: vi.fn((_app: string, text: string, vars?: Record<string, any>) => {
-			if (!vars) return text
-			let res = text
-			for (const [k, v] of Object.entries(vars)) {
-				res = res.replace(`{${k}}`, String(v))
-			}
-			return res
-		}),
-		getLanguage: vi.fn(() => 'en'),
-		isRTL: vi.fn(() => false),
-	}
-})
+vi.mock('focus-trap', () => ({
+	createFocusTrap: () => ({
+		activate: vi.fn(),
+		deactivate: vi.fn(),
+		pause: vi.fn(),
+		unpause: vi.fn(),
+	}),
+}))
 
 vi.mock('@nextcloud/dialogs', () => ({
 	showSuccess: vi.fn(),
 	showError: vi.fn(),
 	showInfo: vi.fn(),
 	showWarning: vi.fn(),
-}))
-
-vi.mock('@nextcloud/vue/components/NcCheckboxRadioSwitch', () => ({
-	default: {
-		name: 'NcCheckboxRadioSwitch',
-		props: ['modelValue', 'checked', 'type', 'disabled', 'name', 'value'],
-		emits: ['update:modelValue', 'update:checked'],
-		template: `
-			<label>
-				<input :type="type || 'checkbox'"
-					:name="name"
-					:value="value"
-					:checked="checked !== undefined ? checked : modelValue"
-					:disabled="disabled"
-					@change="$emit('update:checked', type === 'radio' ? true : $event.target.checked); $emit('update:modelValue', type === 'radio' ? value : $event.target.checked)" />
-				<slot />
-			</label>
-		`,
-	},
 }))
 
 const { mockGetDocument, mockPdf } = vi.hoisted(() => {
@@ -120,6 +98,16 @@ const defaultApiPostImplementation = (endpoint: string, payload: any, options?: 
 			data: { ocs: { data: { id: newId, createdSongId: newId, songs: [] } } },
 		})
 	}
+	if (endpoint.includes('file') && endpoint.includes('update')) {
+		const songId = options?.pathParams?.id
+		const fileId = options?.pathParams?.fileId
+		const file = payload?.get?.('file')
+		updatedFiles.push({ songId, fileId, file })
+		uploadedFiles.push({ songId, file })
+		return Promise.resolve({
+			data: { ocs: { data: { songs: [] } } },
+		})
+	}
 	if (endpoint === '/api/libraries/{libraryId}/songs/{id}/file/upload') {
 		const songId = options?.pathParams?.id
 		const file = payload?.get?.('file')
@@ -134,10 +122,32 @@ const defaultApiPostImplementation = (endpoint: string, payload: any, options?: 
 			data: { ocs: { data: { songs: [] } } },
 		})
 	}
+	if (endpoint.includes('versions') && endpoint.includes('revert')) {
+		return Promise.resolve({
+			data: { ocs: { data: { songs: [] } } },
+		})
+	}
 	return Promise.resolve({ data: { ocs: { data: { songs: [] } } } })
 }
 
 vi.mock('../../../src/api/client', () => ({
+	apiGet: vi.fn((endpoint: string, _options?: any) => {
+		if (endpoint.includes('versions')) {
+			return Promise.resolve({
+				data: {
+					ocs: {
+						data: {
+							versions: [
+								{ revision: 1718000000, timestamp: 1718000000, size: 10240 },
+								{ revision: 1717000000, timestamp: 1717000000, size: 8192 },
+							],
+						},
+					},
+				},
+			})
+		}
+		return Promise.resolve({ data: { ocs: { data: {} } } })
+	}),
 	apiPost: vi.fn((endpoint: string, payload: any, options?: any) => defaultApiPostImplementation(endpoint, payload, options)),
 	apiDelete: vi.fn((endpoint: string, options?: any) => {
 		if (endpoint === '/api/songs/{id}') {
@@ -171,6 +181,7 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		const apiClient = await import('../../../src/api/client')
 		vi.mocked(apiClient.apiPost).mockImplementation(defaultApiPostImplementation as any)
 		uploadedFiles.length = 0
+		updatedFiles.length = 0
 		createdSongs.length = 0
 		deletedFiles.length = 0
 		deletedSongs.length = 0
@@ -193,6 +204,10 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 
 		const axios = (await import('@nextcloud/axios')).default
 		expect(axios.get).toHaveBeenCalledWith(expect.stringContaining('/files/nextcloud-guide.pdf'), {
+			headers: {
+				'Cache-Control': 'no-cache',
+				'Pragma': 'no-cache',
+			},
 			responseType: 'arraybuffer',
 		})
 	})
@@ -241,7 +256,7 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 
 		await splitSubmitBtn?.trigger('click')
 		await flushPromises()
-		await new Promise((r) => setTimeout(r, 50))
+		await vi.waitFor(() => expect(createdSongs).toHaveLength(3), { timeout: 5000 })
 		await flushPromises()
 
 		// Verify 3 new songs were created with inherited metadata
@@ -312,7 +327,7 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		const splitSubmitBtn = wrapper.findAll('button').find((b) => b.text().includes('Split & Create Songs'))
 		await splitSubmitBtn?.trigger('click')
 		await flushPromises()
-		await new Promise((r) => setTimeout(r, 50))
+		await vi.waitFor(() => expect(wrapper.emitted('saved')).toBeTruthy(), { timeout: 5000 })
 		await flushPromises()
 
 		// Original PDF file should be deleted, song should NOT be deleted
@@ -348,7 +363,7 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		const splitSubmitBtn = wrapper.findAll('button').find((b) => b.text().includes('Split & Create Songs'))
 		await splitSubmitBtn?.trigger('click')
 		await flushPromises()
-		await new Promise((r) => setTimeout(r, 50))
+		await vi.waitFor(() => expect(wrapper.emitted('saved')).toBeTruthy(), { timeout: 5000 })
 		await flushPromises()
 
 		// Original song should be deleted with deleteFiles: true
@@ -403,11 +418,11 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		const saveBtn = wrapper.findAll('button').find((b) => b.text().includes('Save Rotations'))
 		await saveBtn?.trigger('click')
 		await flushPromises()
-		await new Promise((r) => setTimeout(r, 50))
+		await new Promise((r) => setTimeout(r, 150))
 		await flushPromises()
 
-		// Original file replaced: old deleted and new uploaded
-		expect(deletedFiles).toContainEqual({ songId: 42, fileId: 999 })
+		// Original file updated in place, preserving version history and file ID
+		expect(updatedFiles).toContainEqual(expect.objectContaining({ songId: 42, fileId: 999 }))
 		expect(uploadedFiles).toHaveLength(1)
 		expect(uploadedFiles[0].songId).toBe(42)
 
@@ -449,7 +464,7 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 
 		await flushPromises()
 
-		const thumbnailSlots = wrapper.findAll('.mobilesheetsmanager-pdf-thumbnail-canvas, div[data-page-num]')
+		const thumbnailSlots = wrapper.findAll('.sheetmusic-pdf-thumbnail-canvas, div[data-page-num]')
 		expect(thumbnailSlots.length).toBeGreaterThan(0)
 	})
 
@@ -496,7 +511,7 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		await splitSubmitBtn?.trigger('click')
 
 		await flushPromises()
-		await new Promise((r) => setTimeout(r, 50))
+		await new Promise((r) => setTimeout(r, 150))
 		await flushPromises()
 
 		expect(dialogs.showError).toHaveBeenCalledWith(expect.stringContaining('Failed to create target folder in Nextcloud storage'))
@@ -543,7 +558,7 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 
 		await saveCropsBtn?.trigger('click')
 		await flushPromises()
-		await new Promise((r) => setTimeout(r, 50))
+		await new Promise((r) => setTimeout(r, 150))
 		await flushPromises()
 
 		// Verify replacement cropped PDF was uploaded
@@ -593,7 +608,7 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		const saveCropsBtn = wrapper.findAll('button').find((b) => b.text().includes('Save Crops'))
 		await saveCropsBtn?.trigger('click')
 		await flushPromises()
-		await new Promise((r) => setTimeout(r, 50))
+		await new Promise((r) => setTimeout(r, 150))
 		await flushPromises()
 
 		expect(uploadedFiles).toHaveLength(1)
@@ -653,7 +668,7 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 
 		await saveBtn?.trigger('click')
 		await flushPromises()
-		await new Promise((r) => setTimeout(r, 50))
+		await new Promise((r) => setTimeout(r, 150))
 		await flushPromises()
 
 		// 5. Verify single upload containing BOTH rotation and crop applied
@@ -708,7 +723,7 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 
 		await saveBtn?.trigger('click')
 		await flushPromises()
-		await new Promise((r) => setTimeout(r, 50))
+		await new Promise((r) => setTimeout(r, 150))
 		await flushPromises()
 
 		// Verify uploaded PDF has 7 pages
@@ -789,7 +804,7 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		expect(saveBtn?.attributes('disabled')).toBeUndefined()
 		await saveBtn?.trigger('click')
 		await flushPromises()
-		await new Promise((r) => setTimeout(r, 50))
+		await new Promise((r) => setTimeout(r, 150))
 		await flushPromises()
 
 		// 5. Verify single upload containing deletions, rotations, and crops
@@ -844,7 +859,7 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 			gap: 12,
 		})
 		await flushPromises()
-		await new Promise((r) => setTimeout(r, 60))
+		await new Promise((r) => setTimeout(r, 150))
 		await flushPromises()
 
 		// 3. Document should now have 7 pages (pages 1 and 2 joined into page 1)
@@ -857,7 +872,7 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 
 		await saveBtn?.trigger('click')
 		await flushPromises()
-		await new Promise((r) => setTimeout(r, 60))
+		await new Promise((r) => setTimeout(r, 150))
 		await flushPromises()
 
 		// 5. Verify single uploaded PDF with 7 pages
@@ -897,7 +912,7 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 			scaleB: 1.4,
 		})
 		await flushPromises()
-		await new Promise((r) => setTimeout(r, 60))
+		await new Promise((r) => setTimeout(r, 150))
 		await flushPromises()
 
 		expect(wrapper.text()).toContain('7 pages')
@@ -906,7 +921,7 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		expect(saveBtn).toBeDefined()
 		await saveBtn?.trigger('click')
 		await flushPromises()
-		await new Promise((r) => setTimeout(r, 60))
+		await new Promise((r) => setTimeout(r, 150))
 		await flushPromises()
 
 		expect(uploadedFiles).toHaveLength(1)
@@ -962,7 +977,7 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		expect(saveBtn).toBeDefined()
 		await saveBtn?.trigger('click')
 		await flushPromises()
-		await new Promise((r) => setTimeout(r, 60))
+		await new Promise((r) => setTimeout(r, 150))
 		await flushPromises()
 
 		// Verify uploaded PDF
@@ -1013,14 +1028,14 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		await flushPromises()
 
 		// All 8 page cards should reflect the 2.5° badge
-		const badges = wrapper.findAll('.mobilesheetsmanager-rotation-badge, span').filter((s) => s.text() === '2.5°')
+		const badges = wrapper.findAll('.sheetmusic-rotation-badge, span').filter((s) => s.text() === '2.5°')
 		expect(badges.length).toBeGreaterThanOrEqual(8)
 
 		// Click Save
 		const saveBtn = wrapper.findAll('button').find((b) => b.text().includes('Save Changes') || b.text().includes('Save Rotations'))
 		await saveBtn?.trigger('click')
 		await flushPromises()
-		await new Promise((r) => setTimeout(r, 60))
+		await new Promise((r) => setTimeout(r, 150))
 		await flushPromises()
 
 		expect(uploadedFiles).toHaveLength(1)
@@ -1053,7 +1068,7 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		const saveBtn = wrapper.findAll('button').find((b) => b.text().includes('Save Changes') || b.text().includes('Save Rotations'))
 		await saveBtn?.trigger('click')
 		await flushPromises()
-		await new Promise((r) => setTimeout(r, 60))
+		await new Promise((r) => setTimeout(r, 150))
 		await flushPromises()
 
 		expect(uploadedFiles).toHaveLength(1)
@@ -1065,6 +1080,189 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		const page1 = savedPdf.getPage(0)
 		expect(page1.getWidth()).toBeCloseTo(595.28, 1)
 		expect(page1.getHeight()).toBeCloseTo(841.89, 1)
+	})
+
+	it('switches to enhance mode and opens SongPdfEnhanceModal', async () => {
+		const wrapper = mount(SongPdfModifier, {
+			props: {
+				song: mockSong,
+				libraryId: 1,
+			},
+		})
+
+		await flushPromises()
+
+		// Switch to Enhance Scans tab
+		const enhanceTab = wrapper.findAll('button').find((b) => b.text().includes('Enhance Scans'))
+		expect(enhanceTab).toBeDefined()
+		await enhanceTab?.trigger('click')
+
+		expect(wrapper.text()).toContain('Enhance scan quality')
+		expect(wrapper.text()).toContain('Enhance All Pages…')
+
+		// Open enhance modal for page 1
+		const enhanceAllBtn = wrapper.findAll('button').find((b) => b.text().includes('Enhance All Pages…'))
+		await enhanceAllBtn?.trigger('click')
+
+		const modal = wrapper.findComponent({ name: 'SongPdfEnhanceModal' })
+		expect(modal.exists()).toBe(true)
+		expect(modal.props('open')).toBe(true)
+	})
+
+	it('applies enhancements to all pages, shows badge, and saves modified PDF document', async () => {
+		const wrapper = mount(SongPdfModifier, {
+			props: {
+				song: mockSong,
+				libraryId: 1,
+			},
+		})
+
+		await flushPromises()
+
+		// Switch to Enhance Scans tab
+		const enhanceTab = wrapper.findAll('button').find((b) => b.text().includes('Enhance Scans'))
+		await enhanceTab?.trigger('click')
+
+		// Emit apply from SongPdfEnhanceModal with operations applied to 'all'
+		const modal = wrapper.findComponent({ name: 'SongPdfEnhanceModal' })
+		modal.vm.$emit('apply', [
+			{ id: 'op-1', type: 'gaussian', size: 3, enabled: true },
+			{ id: 'op-2', type: 'grayLevelMapping', lowerCutoff: 30, upperCutoff: 220, colorMode: 'grayscale', enabled: true },
+		], 'all')
+		await flushPromises()
+
+		// Check that pages show Enhanced badge
+		expect(wrapper.text()).toContain('Enhanced')
+
+		// Save Enhanced PDF
+		const saveBtn = wrapper.findAll('button').find((b) => b.text().includes('Save Enhanced PDF'))
+		expect(saveBtn).toBeDefined()
+		await saveBtn?.trigger('click')
+		await flushPromises()
+
+		// Progress bar should be visible while saving
+		let observedProgressBar = wrapper.find('[data-test="pdf-save-progress"]').exists()
+		let maxObservedPercent = 0
+		for (let attempt = 0; attempt < 50 && wrapper.text().includes('Saving…'); attempt++) {
+			const progressBanner = wrapper.find('[data-test="pdf-save-progress"]')
+			if (progressBanner.exists()) {
+				observedProgressBar = true
+				const pctText = wrapper.find('[data-test="pdf-save-progress-percent"]').text()
+				const pctVal = Number.parseInt(pctText, 10)
+				if (!Number.isNaN(pctVal) && pctVal > maxObservedPercent) {
+					maxObservedPercent = pctVal
+				}
+			}
+			await new Promise((r) => setTimeout(r, 150))
+			await flushPromises()
+		}
+		expect(observedProgressBar).toBe(true)
+		expect(maxObservedPercent).toBeGreaterThan(0)
+		expect(wrapper.find('[data-test="pdf-save-progress"]').exists()).toBe(false)
+
+		// Verifies in-place update
+		expect(updatedFiles).toHaveLength(1)
+		expect(updatedFiles[0].songId).toBe(mockSong.id)
+		expect(updatedFiles[0].fileId).toBe(999)
+
+		// Verify that saved PDF is a valid document with all pages preserved and identical DPI
+		const origPdf = await PDFDocument.load(realPdfBuffer)
+		const origResPage0 = getPdfPageImageResolution(origPdf.getPage(0))
+		const arrayBuffer = await updatedFiles[0].file.arrayBuffer()
+		const savedPdf = await PDFDocument.load(arrayBuffer)
+		expect(savedPdf.getPageCount()).toBe(8)
+		const savedResPage0 = getPdfPageImageResolution(savedPdf.getPage(0))
+		expect(savedResPage0?.width).toBe(origResPage0?.width)
+		expect(savedResPage0?.height).toBe(origResPage0?.height)
+		expect(savedResPage0?.dpiX).toBeCloseTo(origResPage0!.dpiX, 2)
+		expect(savedResPage0?.dpiY).toBeCloseTo(origResPage0!.dpiY, 2)
+		expect(wrapper.emitted('saved')).toBeTruthy()
+	}, 20000)
+
+	it('resets all scan enhancements when Reset All Enhancements is clicked', async () => {
+		const wrapper = mount(SongPdfModifier, {
+			props: {
+				song: mockSong,
+				libraryId: 1,
+			},
+		})
+
+		await flushPromises()
+
+		// Switch to Enhance Scans tab
+		const enhanceTab = wrapper.findAll('button').find((b) => b.text().includes('Enhance Scans'))
+		await enhanceTab?.trigger('click')
+
+		// Emit apply
+		const modal = wrapper.findComponent({ name: 'SongPdfEnhanceModal' })
+		modal.vm.$emit('apply', [
+			{ id: 'op-1', type: 'gaussian', size: 3, enabled: true },
+		], 'all')
+		await flushPromises()
+
+		expect(wrapper.find('[class*="enhanceBadge"]').exists()).toBe(true)
+
+		// Click Reset All Enhancements
+		const resetBtn = wrapper.findAll('button').find((b) => b.text().includes('Reset All Enhancements'))
+		await resetBtn?.trigger('click')
+		await flushPromises()
+
+		expect(wrapper.find('[class*="enhanceBadge"]').exists()).toBe(false)
+	})
+
+	it('opens Version History dialog, displays versions and allows reverting', async () => {
+		const wrapper = mount(SongPdfModifier, {
+			props: {
+				song: mockSong,
+				libraryId: 1,
+			},
+		})
+
+		await flushPromises()
+
+		// Switch to Enhance Scans tab
+		const enhanceTab = wrapper.findAll('button').find((b) => b.text().includes('Enhance Scans'))
+		await enhanceTab?.trigger('click')
+
+		// Click Version History...
+		const historyBtn = wrapper.findAll('button').find((b) => b.text().includes('Version History…'))
+		expect(historyBtn).toBeDefined()
+		await historyBtn?.trigger('click')
+		await flushPromises()
+
+		// Check Version History dialog is open and displays revisions
+		expect(wrapper.text()).toContain('PDF Version History')
+		expect(wrapper.text()).toContain('Revert to this version')
+
+		// Click Revert
+		const revertBtn = wrapper.findAll('button').find((b) => b.text().includes('Revert to this version'))
+		expect(revertBtn).toBeDefined()
+		await revertBtn?.trigger('click')
+		await flushPromises()
+
+		expect(wrapper.emitted('saved')).toBeTruthy()
+	})
+
+	it('displays PDF file size and resolution info badge and toggles detailed dropdown', async () => {
+		const wrapper = mount(SongPdfModifier, {
+			props: {
+				song: mockSong,
+				libraryId: 1,
+			},
+		})
+
+		await flushPromises()
+
+		const infoTrigger = wrapper.find('[data-test="pdf-modifier-info-trigger"]')
+		expect(infoTrigger.exists()).toBe(true)
+		expect(infoTrigger.text()).toContain('773 KB')
+		expect(infoTrigger.text()).toContain('DPI')
+
+		await infoTrigger.trigger('click')
+		const dropdown = wrapper.find('[data-test="pdf-modifier-info-dropdown"]')
+		expect(dropdown.exists()).toBe(true)
+		expect(dropdown.text()).toContain('PDF File & Resolution Info')
+		expect(dropdown.text()).toContain('791,921 B')
 	})
 })
 

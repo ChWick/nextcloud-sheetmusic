@@ -7,7 +7,7 @@ declare(strict_types=1);
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-namespace OCA\MobileSheetsManager\Service;
+namespace OCA\SheetMusic\Service;
 
 use JsonSerializable;
 
@@ -24,6 +24,12 @@ class IntegrityIssue implements JsonSerializable {
 	public const TYPE_IDENTICAL_SONG = 'identical_song';
 	public const TYPE_PDF_METADATA_MISMATCH = 'pdf_metadata_mismatch';
 	public const TYPE_PDF_METADATA_UNREADABLE = 'pdf_metadata_unreadable';
+	public const TYPE_ORPHAN_ENTITY_ASSIGNMENT = 'orphan_entity_assignment';
+	public const TYPE_ORPHAN_SONG_FILE = 'orphan_song_file';
+	public const TYPE_SONG_WITHOUT_FILES = 'song_without_files';
+	public const TYPE_DUPLICATE_CLIENT_ID = 'duplicate_client_id';
+	public const TYPE_ORPHAN_SONG_ATTRIBUTE = 'orphan_song_attribute';
+	public const TYPE_ORPHAN_MISC_DATA = 'orphan_misc_data';
 
 	public const SEVERITY_ERROR = 'error';
 	public const SEVERITY_WARNING = 'warning';

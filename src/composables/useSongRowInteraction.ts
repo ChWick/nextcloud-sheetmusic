@@ -75,6 +75,13 @@ export function useSongRowInteraction(
 		}
 	}
 
+	function clearLongPressResetTimer(): void {
+		if (longPressResetTimer) {
+			clearTimeout(longPressResetTimer)
+			longPressResetTimer = null
+		}
+	}
+
 	function handleTouchStart(songId: number, e: TouchEvent): void {
 		if (e.touches.length !== 1) return
 		if (isInteractiveElement(e.target)) return
@@ -85,9 +92,7 @@ export function useSongRowInteraction(
 		touchTimer = setTimeout(() => {
 			isLongPressing.value = true
 			lastLongPressTime = Date.now()
-			if (longPressResetTimer) {
-				clearTimeout(longPressResetTimer)
-			}
+			clearLongPressResetTimer()
 			longPressResetTimer = setTimeout(() => {
 				isLongPressing.value = false
 				longPressResetTimer = null
@@ -136,10 +141,7 @@ export function useSongRowInteraction(
 			e.stopPropagation()
 			isLongPressing.value = false
 			lastLongPressTime = 0
-			if (longPressResetTimer) {
-				clearTimeout(longPressResetTimer)
-				longPressResetTimer = null
-			}
+			clearLongPressResetTimer()
 			return
 		}
 		onViewSong?.(song)
@@ -148,10 +150,7 @@ export function useSongRowInteraction(
 	if (getCurrentInstance()) {
 		onBeforeUnmount(() => {
 			cancelTouch()
-			if (longPressResetTimer) {
-				clearTimeout(longPressResetTimer)
-				longPressResetTimer = null
-			}
+			clearLongPressResetTimer()
 		})
 	}
 

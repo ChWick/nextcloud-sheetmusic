@@ -1,10 +1,13 @@
 services:
   nextcloud:
-    image: ghcr.io/nextcloud/nextcloud-dev-php85:master
+    build:
+      context: .
+      dockerfile: Dockerfile
     ports:
       - "3480:80"
     volumes:
-      - ..:/var/www/html/apps-extra/mobilesheetsmanager
-      
+      - ..:/var/www/html/apps-extra/sheetmusic
     environment:
       - WITH_XDEBUG=true
+      - NEXTCLOUD_TRUSTED_DOMAINS=*
+      - NEXTCLOUD_AUTOINSTALL_APPS=sheetmusic groupfolders

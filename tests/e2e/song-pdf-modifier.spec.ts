@@ -362,6 +362,75 @@ test.describe('Song PDF Modifier & Cropping E2E Flow', () => {
 		// 5. Verify success toast
 		await expect(page.getByText(/saved successfully/i).first()).toBeVisible()
 	})
+
+	test('supports zoom, pan, native DPI resolution, and uncut operation stack for landscape pages in Enhance Scans dialog', async ({ page }) => {
+		await page.goto('/#/library/1/songs?song=5&modifyPdf=1')
+
+		// Switch to Enhance Scans tab
+		const enhanceTab = page.getByRole('button', { name: 'Enhance Scans' })
+		await expect(enhanceTab).toBeVisible()
+		await enhanceTab.click()
+
+		// Open Enhance modal on page 1
+		const enhanceAllBtn = page.getByRole('button', { name: 'Enhance All Pages…' })
+		await expect(enhanceAllBtn).toBeVisible()
+		await enhanceAllBtn.click()
+
+		const dialog = page.getByRole('dialog')
+		await expect(dialog).toBeVisible()
+
+		// Verify native resolution on Page 1 (829 x 1173 px in sample.pdf)
+		const canvas = dialog.locator('canvas')
+		await expect(canvas).toBeVisible()
+		await expect(canvas).toHaveAttribute('data-native-width', '829')
+		await expect(canvas).toHaveAttribute('data-native-height', '1173')
+
+		// Test Zoom In and Pan
+		const zoomLevel = dialog.locator('[data-test="enhance-zoom-level"]')
+		const zoomInBtn = dialog.locator('[data-test="enhance-zoom-in"]')
+		const zoomResetBtn = dialog.locator('[data-test="enhance-zoom-reset"]')
+		const previewPane = dialog.locator('[data-test="enhance-preview-pane"]')
+		const canvasWrapper = dialog.locator('[data-test="enhance-canvas-wrapper"]')
+
+		await expect(zoomLevel).toHaveText('100%')
+		await zoomInBtn.click()
+		await zoomInBtn.click()
+		await expect(zoomLevel).toHaveText('150%')
+
+		// Drag to pan on preview pane
+		const paneBox = await previewPane.boundingBox()
+		expect(paneBox).not.toBeNull()
+		const startX = paneBox!.x + paneBox!.width / 2
+		const startY = paneBox!.y + paneBox!.height / 2
+		await page.mouse.move(startX, startY)
+		await page.mouse.down()
+		await page.mouse.move(startX + 45, startY - 30)
+		await page.mouse.up()
+
+		await expect(canvasWrapper).toHaveAttribute('style', /translate\(45px, -30px\)/)
+
+		// Reset zoom and pan
+		await zoomResetBtn.click()
+		await expect(zoomLevel).toHaveText('100%')
+		await expect(canvasWrapper).toHaveAttribute('style', /translate\(0px(?:, 0px)?\)/)
+
+		// Navigate to Page 2 (which is a 1190.55 x 841.89 landscape page in sample.pdf)
+		const nextBtn = dialog.getByTitle('Next page')
+		await nextBtn.click()
+		await expect(dialog.getByText('Page 2 of 8', { exact: true })).toBeVisible()
+
+		// Wait for landscape page 2 to render at full native resolution
+		await expect.poll(async () => Number(await canvas.getAttribute('data-native-width'))).toBeGreaterThan(1600)
+
+		// Verify the Operation Stack is NOT cut off for landscape PDFs
+		const dialogBox = await dialog.boundingBox()
+		const addThresholdBtn = dialog.locator('[data-test="add-threshold"]')
+		await expect(addThresholdBtn).toBeVisible()
+		const btnBox = await addThresholdBtn.boundingBox()
+		expect(dialogBox).not.toBeNull()
+		expect(btnBox).not.toBeNull()
+		expect(btnBox!.x + btnBox!.width).toBeLessThanOrEqual(dialogBox!.x + dialogBox!.width)
+	})
 })
 
 

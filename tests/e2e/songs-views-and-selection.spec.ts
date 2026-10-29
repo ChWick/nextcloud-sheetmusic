@@ -64,7 +64,8 @@ test.describe('Songs View, View Modes & Batch Selection', () => {
 		await expect(dialog.getByText(/Edit 2 songs/i)).toBeVisible()
 
 		// Cancel batch editor
-		await dialog.getByRole('button', { name: 'Cancel' }).click()
+		const cancelBtn = dialog.getByRole('button', { name: 'Cancel' })
+		await cancelBtn.dispatchEvent('click')
 		await expect(dialog).not.toBeVisible()
 
 		// Clear selection

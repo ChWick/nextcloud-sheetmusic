@@ -4,130 +4,124 @@ declare(strict_types=1);
 
 namespace Controller;
 
-use OCA\MobileSheetsManager\Controller\EntityController;
-use OCA\MobileSheetsManager\Service\EntityService;
+use OCA\SheetMusic\Controller\EntityController;
+use OCA\SheetMusic\Db\InternalEntity;
+use OCA\SheetMusic\Service\EntityService;
+use OCA\SheetMusic\Service\LibraryService;
 use OCP\AppFramework\Http;
 use OCP\IRequest;
 use OCP\IUser;
-use OCP\IUserSession;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
+use TestSupport\FakeUserSession;
+use TestSupport\RealMobileSheetsTestTrait;
 
 final class EntityControllerTest extends TestCase {
-	public function testCreateEndpointsValidateParams(): void {
-		$userSession = $this->createMock(IUserSession::class);
-		$userSession->method('getUser')->willReturn($this->createMock(IUser::class));
+	use RealMobileSheetsTestTrait;
 
-		$request = $this->createMock(IRequest::class);
-		$request->method('getParam')->willReturn('');
+	private int $libraryId;
+	private IUser $user;
+	private FakeUserSession $userSession;
+	private EntityService $entityService;
+	private EntityController $controller;
 
-		$controller = new EntityController(
-			'mobilesheetsmanager',
+	protected function setUp(): void {
+		parent::setUp();
+		$this->setUpRealMobileSheetsEnvironment();
+		$library = $this->createTestLibrary('EntityController Test Lib');
+		$this->libraryId = (int)$library->id;
+		$this->user = $this->userManager->get($library->userId);
+
+		$logger = new NullLogger();
+		$libraryService = new LibraryService($this->libraryMapper, $this->rootFolder, $logger, exporter: $this->exporter);
+		$this->entityService = new EntityService(
+			$libraryService,
+			$logger,
+			$this->entityMapper,
+			$this->songMapper,
+			$this->libraryMapper,
+		);
+
+		$this->userSession = new FakeUserSession($this->user);
+		$request = \OC::$server->get(IRequest::class);
+
+		$this->controller = new EntityController(
+			'sheetmusic',
 			$request,
-			$this->createMock(EntityService::class),
-			$userSession,
+			$this->entityService,
+			$this->userSession,
 		);
-
-		$this->assertSame(Http::STATUS_BAD_REQUEST, $controller->createComposer(null, 'Bach')->getStatus());
-		$this->assertSame(Http::STATUS_BAD_REQUEST, $controller->createComposer(1, '  ')->getStatus());
-		$this->assertSame(Http::STATUS_BAD_REQUEST, $controller->createBook(1, null)->getStatus());
-		$this->assertSame(Http::STATUS_BAD_REQUEST, $controller->createCollection(null, 'Jazz')->getStatus());
-		$this->assertSame(Http::STATUS_BAD_REQUEST, $controller->createArtist(1, '')->getStatus());
 	}
 
-	public function testCreateComposerDelegatesToService(): void {
-		$user = $this->createMock(IUser::class);
-		$userSession = $this->createMock(IUserSession::class);
-		$userSession->method('getUser')->willReturn($user);
+	protected function tearDown(): void {
+		$this->tearDownRealMobileSheetsEnvironment();
+		parent::tearDown();
+	}
 
-		$entityService = $this->createMock(EntityService::class);
-		$entityService->expects($this->once())
-			->method('createEntity')
-			->with($user, 1, 'composer', 'Bach')
-			->willReturn(['id' => 10, 'name' => 'Bach']);
+	public function testCreateEndpointsValidateParams(): void {
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $this->controller->createComposer(null, 'Bach')->getStatus());
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $this->controller->createComposer($this->libraryId, '  ')->getStatus());
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $this->controller->createBook($this->libraryId, null)->getStatus());
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $this->controller->createCollection(null, 'Jazz')->getStatus());
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $this->controller->createArtist($this->libraryId, '')->getStatus());
+	}
 
-		$controller = new EntityController(
-			'mobilesheetsmanager',
-			$this->createMock(IRequest::class),
-			$entityService,
-			$userSession,
-		);
-
-		$res = $controller->createComposer(1, 'Bach');
+	public function testCreateComposer(): void {
+		$res = $this->controller->createComposer($this->libraryId, 'Bach');
 		$this->assertSame(Http::STATUS_CREATED, $res->getStatus());
-		$this->assertSame(['id' => 10, 'name' => 'Bach'], $res->getData());
+		$data = $res->getData();
+		$this->assertArrayHasKey('id', $data);
+		$this->assertSame('Bach', $data['name']);
+
+		$composers = $this->entityMapper->findAllForLibrary($this->libraryId, 'composer');
+		$this->assertCount(1, $composers);
+		$this->assertSame('Bach', $composers[0]->name);
 	}
 
-	public function testDeleteEndpointsValidateParamsAndDelegate(): void {
-		$user = $this->createMock(IUser::class);
-		$userSession = $this->createMock(IUserSession::class);
-		$userSession->method('getUser')->willReturn($user);
+	public function testDeleteEndpointsValidateParamsAndDeletes(): void {
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $this->controller->deleteComposer(10, null)->getStatus());
 
-		$entityService = $this->createMock(EntityService::class);
-		$entityService->expects($this->once())
-			->method('deleteEntity')
-			->with($user, 1, 'composers', 10)
-			->willReturn(['songs' => []]);
+		$composer = $this->entityMapper->insert(new InternalEntity(
+			uuid: 'composer-del-uuid',
+			libraryId: $this->libraryId,
+			type: 'composer',
+			name: 'Beethoven',
+		));
 
-		$controller = new EntityController(
-			'mobilesheetsmanager',
-			$this->createMock(IRequest::class),
-			$entityService,
-			$userSession,
-		);
-
-		$this->assertSame(Http::STATUS_BAD_REQUEST, $controller->deleteComposer(10, null)->getStatus());
-
-		$res = $controller->deleteComposer(10, 1);
+		$res = $this->controller->deleteComposer($composer->id, $this->libraryId);
 		$this->assertSame(Http::STATUS_OK, $res->getStatus());
-		$this->assertSame(['songs' => []], $res->getData());
+
+		$composers = $this->entityMapper->findAllForLibrary($this->libraryId, 'composer');
+		$this->assertEmpty($composers);
 	}
 
 	public function testMergeEntitiesValidatesParams(): void {
-		$userSession = $this->createMock(IUserSession::class);
-		$userSession->method('getUser')->willReturn($this->createMock(IUser::class));
-
-		$request = $this->createMock(IRequest::class);
-		$request->method('getParam')->willReturnCallback(fn(string $k) => match ($k) {
-			'libraryId' => 0,
-			'entityType' => '',
-			'keepId' => 0,
-			'duplicateIds' => [],
-			default => null,
-		});
-
-		$controller = new EntityController(
-			'mobilesheetsmanager',
-			$request,
-			$this->createMock(EntityService::class),
-			$userSession,
-		);
-
-		$this->assertSame(Http::STATUS_BAD_REQUEST, $controller->mergeEntities(null, null, null, null)->getStatus());
-		$this->assertSame(Http::STATUS_BAD_REQUEST, $controller->mergeEntities(1, 'composers', 5, [5])->getStatus()); // duplicateIds == keepId
-		$this->assertSame(Http::STATUS_BAD_REQUEST, $controller->mergeEntities(1, '', 5, [6])->getStatus());
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $this->controller->mergeEntities(null, null, null, null)->getStatus());
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $this->controller->mergeEntities($this->libraryId, 'composers', 5, [5])->getStatus()); // duplicateIds == keepId
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $this->controller->mergeEntities($this->libraryId, '', 5, [6])->getStatus());
 	}
 
-	public function testMergeEntitiesDelegatesToService(): void {
-		$user = $this->createMock(IUser::class);
-		$userSession = $this->createMock(IUserSession::class);
-		$userSession->method('getUser')->willReturn($user);
+	public function testMergeEntities(): void {
+		$c1 = $this->entityMapper->insert(new InternalEntity(
+			uuid: 'merge-c1',
+			libraryId: $this->libraryId,
+			type: 'composer',
+			name: 'Mozart',
+		));
+		$c2 = $this->entityMapper->insert(new InternalEntity(
+			uuid: 'merge-c2',
+			libraryId: $this->libraryId,
+			type: 'composer',
+			name: 'W. A. Mozart',
+		));
 
-		$entityService = $this->createMock(EntityService::class);
-		$entityService->expects($this->once())
-			->method('mergeEntities')
-			->with($user, 1, 'composers', 50, [5])
-			->willReturn(['mergedCount' => 1, 'libraryData' => []]);
-
-		$controller = new EntityController(
-			'mobilesheetsmanager',
-			$this->createMock(IRequest::class),
-			$entityService,
-			$userSession,
-		);
-
-		$res = $controller->mergeEntities(1, 'composers', 50, [5]);
+		$res = $this->controller->mergeEntities($this->libraryId, 'composers', $c1->id, [$c2->id]);
 		$this->assertSame(Http::STATUS_OK, $res->getStatus());
-		$this->assertSame(['mergedCount' => 1, 'libraryData' => []], $res->getData());
+		$data = $res->getData();
+		$this->assertSame(1, $data['mergedCount']);
+
+		$composers = $this->entityMapper->findAllForLibrary($this->libraryId, 'composer');
+		$this->assertCount(1, $composers);
+		$this->assertSame('Mozart', $composers[0]->name);
 	}
 }
-

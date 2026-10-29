@@ -1,24 +1,24 @@
 <template>
   <ViewHeader
     :title="config.plural"
-    :create-label="t('mobilesheetsmanager', 'New {entity}', { entity: config.singular })"
+    :create-label="t('sheetmusic', 'New {entity}', { entity: config.singular })"
     @create="openCreateDialog">
     <NcButton
-      :title="t('mobilesheetsmanager', 'Merge duplicates')"
-      :aria-label="t('mobilesheetsmanager', 'Merge duplicates')"
+      :title="t('sheetmusic', 'Merge duplicates')"
+      :aria-label="t('sheetmusic', 'Merge duplicates')"
       @click="openMergeDialog()">
       <template #icon>
         <MergeIcon :size="20" />
       </template>
-      {{ t('mobilesheetsmanager', 'Merge duplicates') }}
+      {{ t('sheetmusic', 'Merge duplicates') }}
     </NcButton>
   </ViewHeader>
   <div :class="$style.entitiesArea">
     <div :class="$style.searchWrapper">
       <NcTextField
         v-model="searchQuery"
-        :placeholder="t('mobilesheetsmanager', 'Search {entities}…', { entities: config.plural.toLowerCase() })"
-        :label="t('mobilesheetsmanager', 'Search {entities}', { entities: config.plural.toLowerCase() })"
+        :placeholder="t('sheetmusic', 'Search {entities}…', { entities: config.plural.toLowerCase() })"
+        :label="t('sheetmusic', 'Search {entities}', { entities: config.plural.toLowerCase() })"
         :class="$style.searchInput" />
     </div>
     <div :class="$style.listColumn">
@@ -31,7 +31,7 @@
             @touchcancel="handleRowTouchCancel">
           <button type="button"
                   :class="$style.entityButton"
-                  :title="t('mobilesheetsmanager', 'Show the songs with this {entity}', { entity: config.singular })"
+                  :title="t('sheetmusic', 'Show the songs with this {entity}', { entity: config.singular })"
                   @click="showSongsOf(entity)">
             {{ entityLabel(entity) }}
           </button>
@@ -40,8 +40,8 @@
             <NcButton
               size="small"
               :class="$style.mergeButton"
-              :aria-label="t('mobilesheetsmanager', 'Merge {entity}', { entity: config.singular })"
-              :title="t('mobilesheetsmanager', 'Merge {entity}', { entity: config.singular })"
+              :aria-label="t('sheetmusic', 'Merge {entity}', { entity: config.singular })"
+              :title="t('sheetmusic', 'Merge {entity}', { entity: config.singular })"
               @click="openMergeDialog(entity)">
               <template #icon>
                 <MergeIcon :size="18" />
@@ -50,8 +50,8 @@
             <NcButton variant="error"
                       size="small"
                       :class="$style.deleteButton"
-                      :aria-label="t('mobilesheetsmanager', 'Delete {entity}', { entity: config.singular })"
-                      :title="t('mobilesheetsmanager', 'Delete {entity}', { entity: config.singular })"
+                      :aria-label="t('sheetmusic', 'Delete {entity}', { entity: config.singular })"
+                      :title="t('sheetmusic', 'Delete {entity}', { entity: config.singular })"
                       @click="openDeleteDialog(entity)">
               <template #icon>
                 <DeleteIcon :size="18" />
@@ -61,44 +61,44 @@
         </li>
         <li v-if="!isLoading && !fileError && visibleEntities.length === 0">
           {{ searchQuery.trim() && entities.length > 0
-            ? t('mobilesheetsmanager', 'No {entities} match the search query.', { entities: config.plural.toLowerCase() })
-            : t('mobilesheetsmanager', 'No {entities} in this library yet.', { entities: config.plural.toLowerCase() }) }}
+            ? t('sheetmusic', 'No {entities} match the search query.', { entities: config.plural.toLowerCase() })
+            : t('sheetmusic', 'No {entities} in this library yet.', { entities: config.plural.toLowerCase() }) }}
         </li>
       </ul>
       <p v-if="fileError" :class="$style.error" role="alert">{{ fileError }}</p>
     </div>
 
     <NcDialog v-if="isCreateDialogOpen"
-              :name="t('mobilesheetsmanager', 'New {entity}', { entity: config.singular })"
+              :name="t('sheetmusic', 'New {entity}', { entity: config.singular })"
               size="normal"
               @close="closeCreateDialog">
-      <p>{{ t('mobilesheetsmanager', 'The new {entity} can be assigned to songs right afterwards.', { entity: config.singular }) }}</p>
+      <p>{{ t('sheetmusic', 'The new {entity} can be assigned to songs right afterwards.', { entity: config.singular }) }}</p>
       <NcTextField
         v-model="newEntityName"
         :placeholder="namePlaceholder"
         @keyup.enter="createEntity" />
       <p v-if="createError" :class="$style.error" role="alert">{{ createError }}</p>
       <template #actions>
-        <NcButton @click="closeCreateDialog">{{ t('mobilesheetsmanager', 'Cancel') }}</NcButton>
+        <NcButton @click="closeCreateDialog">{{ t('sheetmusic', 'Cancel') }}</NcButton>
         <NcButton variant="primary"
                   :disabled="isCreating || !newEntityName.trim()"
                   @click="createEntity">
-          {{ t('mobilesheetsmanager', 'Create {entity}', { entity: config.singular }) }}
+          {{ t('sheetmusic', 'Create {entity}', { entity: config.singular }) }}
         </NcButton>
       </template>
     </NcDialog>
 
     <NcDialog v-if="isDeleteDialogOpen"
-              :name="t('mobilesheetsmanager', 'Delete {entity}', { entity: config.singular }, { escape: false })"
+              :name="t('sheetmusic', 'Delete {entity}', { entity: config.singular }, { escape: false })"
               size="normal"
               @close="closeDeleteDialog">
-      <p>{{ t('mobilesheetsmanager', 'Delete "{name}"?', { name: entityToDelete ? entityLabel(entityToDelete) : '' }, { escape: false }) }}</p>
-      <p>{{ t('mobilesheetsmanager', 'All songs stay in the library. Only the {entity} entry is removed from them.', { entity: config.singular }, { escape: false }) }}</p>
+      <p>{{ t('sheetmusic', 'Delete "{name}"?', { name: entityToDelete ? entityLabel(entityToDelete) : '' }, { escape: false }) }}</p>
+      <p>{{ t('sheetmusic', 'All songs stay in the library. Only the {entity} entry is removed from them.', { entity: config.singular }, { escape: false }) }}</p>
       <p v-if="deleteError" :class="$style.error" role="alert">{{ deleteError }}</p>
       <template #actions>
-        <NcButton @click="closeDeleteDialog">{{ t('mobilesheetsmanager', 'Cancel') }}</NcButton>
+        <NcButton @click="closeDeleteDialog">{{ t('sheetmusic', 'Cancel') }}</NcButton>
         <NcButton variant="error" :disabled="isDeleting" @click="deleteEntity">
-          {{ t('mobilesheetsmanager', 'Delete {entity}', { entity: config.singular }, { escape: false }) }}
+          {{ t('sheetmusic', 'Delete {entity}', { entity: config.singular }, { escape: false }) }}
         </NcButton>
       </template>
     </NcDialog>
@@ -147,8 +147,8 @@ const router = useRouter()
 
 /** Everything this shared view needs to know about the entity kind it shows. */
 interface EntityConfig {
-  createEndpoint: '/api/composers' | '/api/artists' | '/api/books' | '/api/collections' | '/api/genres' | '/api/keys' | '/api/customgroups' | '/api/years' | '/api/signatures' | '/api/sourcetypes'
-  deleteEndpoint: '/api/composers/{id}' | '/api/artists/{id}' | '/api/books/{id}' | '/api/collections/{id}' | '/api/genres/{id}' | '/api/keys/{id}' | '/api/customgroups/{id}' | '/api/years/{id}' | '/api/signatures/{id}' | '/api/sourcetypes/{id}'
+  createEndpoint: '/api/composers' | '/api/artists' | '/api/books' | '/api/collections' | '/api/genres' | '/api/keys' | '/api/customgroups' | '/api/years' | '/api/signatures' | '/api/sourcetypes' | '/api/instruments'
+  deleteEndpoint: '/api/composers/{id}' | '/api/artists/{id}' | '/api/books/{id}' | '/api/collections/{id}' | '/api/genres/{id}' | '/api/keys/{id}' | '/api/customgroups/{id}' | '/api/years/{id}' | '/api/signatures/{id}' | '/api/sourcetypes/{id}' | '/api/instruments/{id}'
   nameKey: 'name' | 'title'
   singular: string
   plural: string
@@ -159,71 +159,78 @@ const entityConfigs: Record<EntityType, EntityConfig> = {
     createEndpoint: '/api/composers',
     deleteEndpoint: '/api/composers/{id}',
     nameKey: 'name',
-    singular: t('mobilesheetsmanager', 'composer'),
-    plural: t('mobilesheetsmanager', 'Composers'),
+    singular: t('sheetmusic', 'composer'),
+    plural: t('sheetmusic', 'Composers'),
   },
   artists: {
     createEndpoint: '/api/artists',
     deleteEndpoint: '/api/artists/{id}',
     nameKey: 'name',
-    singular: t('mobilesheetsmanager', 'artist'),
-    plural: t('mobilesheetsmanager', 'Artists'),
+    singular: t('sheetmusic', 'artist'),
+    plural: t('sheetmusic', 'Artists'),
   },
   books: {
     createEndpoint: '/api/books',
     deleteEndpoint: '/api/books/{id}',
     nameKey: 'title',
-    singular: t('mobilesheetsmanager', 'book'),
-    plural: t('mobilesheetsmanager', 'Books'),
+    singular: t('sheetmusic', 'book'),
+    plural: t('sheetmusic', 'Books'),
   },
   collections: {
     createEndpoint: '/api/collections',
     deleteEndpoint: '/api/collections/{id}',
     nameKey: 'name',
-    singular: t('mobilesheetsmanager', 'collection'),
-    plural: t('mobilesheetsmanager', 'Collections'),
+    singular: t('sheetmusic', 'collection'),
+    plural: t('sheetmusic', 'Collections'),
   },
   genres: {
     createEndpoint: '/api/genres',
     deleteEndpoint: '/api/genres/{id}',
     nameKey: 'name',
-    singular: t('mobilesheetsmanager', 'genre'),
-    plural: t('mobilesheetsmanager', 'Genres'),
+    singular: t('sheetmusic', 'genre'),
+    plural: t('sheetmusic', 'Genres'),
   },
   keys: {
     createEndpoint: '/api/keys',
     deleteEndpoint: '/api/keys/{id}',
     nameKey: 'name',
-    singular: t('mobilesheetsmanager', 'key'),
-    plural: t('mobilesheetsmanager', 'Keys'),
+    singular: t('sheetmusic', 'key'),
+    plural: t('sheetmusic', 'Keys'),
   },
   customgroups: {
     createEndpoint: '/api/customgroups',
     deleteEndpoint: '/api/customgroups/{id}',
     nameKey: 'name',
-    singular: t('mobilesheetsmanager', 'custom group'),
-    plural: t('mobilesheetsmanager', 'Custom Groups'),
+    singular: t('sheetmusic', 'custom group'),
+    plural: t('sheetmusic', 'Custom Groups'),
   },
   years: {
     createEndpoint: '/api/years',
     deleteEndpoint: '/api/years/{id}',
     nameKey: 'name',
-    singular: t('mobilesheetsmanager', 'year'),
-    plural: t('mobilesheetsmanager', 'Years'),
+    singular: t('sheetmusic', 'year'),
+    plural: t('sheetmusic', 'Years'),
   },
   signatures: {
     createEndpoint: '/api/signatures',
     deleteEndpoint: '/api/signatures/{id}',
     nameKey: 'name',
-    singular: t('mobilesheetsmanager', 'time signature'),
-    plural: t('mobilesheetsmanager', 'Time Signatures'),
+    singular: t('sheetmusic', 'time signature'),
+    plural: t('sheetmusic', 'Time Signatures'),
   },
   sourcetypes: {
     createEndpoint: '/api/sourcetypes',
     deleteEndpoint: '/api/sourcetypes/{id}',
     nameKey: 'name',
-    singular: t('mobilesheetsmanager', 'source type'),
-    plural: t('mobilesheetsmanager', 'Source Types'),
+    singular: t('sheetmusic', 'source type'),
+    plural: t('sheetmusic', 'Source Types'),
+  },
+  instruments: {
+    createEndpoint: '/api/instruments',
+    deleteEndpoint: '/api/instruments/{id}',
+    nameKey: 'name',
+    singular: t('sheetmusic', 'instrument'),
+    plural: t('sheetmusic', 'Instruments'),
   },
 }
 
@@ -241,6 +248,7 @@ const {
   years,
   signatures,
   sourceTypes,
+  instruments,
   fileError,
   isLoading,
   handleLibraryDataUpdate,
@@ -258,6 +266,7 @@ const entities = computed<FilterEntity[]>(() => {
   if (props.entityType === 'years') return years.value
   if (props.entityType === 'signatures') return signatures.value
   if (props.entityType === 'sourcetypes') return sourceTypes.value
+  if (props.entityType === 'instruments') return instruments.value
   return []
 })
 
@@ -283,18 +292,21 @@ function entityLabel(entity: FilterEntity): string {
 
 const namePlaceholder = computed(() => {
   if (config.value.nameKey === 'title') {
-    return t('mobilesheetsmanager', 'Enter a title')
+    return t('sheetmusic', 'Enter a title')
   }
   if (props.entityType === 'years') {
-    return t('mobilesheetsmanager', 'Enter a year')
+    return t('sheetmusic', 'Enter a year')
   }
   if (props.entityType === 'signatures') {
-    return t('mobilesheetsmanager', 'Enter a time signature (e.g. 4/4)')
+    return t('sheetmusic', 'Enter a time signature (e.g. 4/4)')
   }
   if (props.entityType === 'sourcetypes') {
-    return t('mobilesheetsmanager', 'Enter a source type')
+    return t('sheetmusic', 'Enter a source type')
   }
-  return t('mobilesheetsmanager', 'Enter a name')
+  if (props.entityType === 'instruments') {
+    return t('sheetmusic', 'Enter an instrument name')
+  }
+  return t('sheetmusic', 'Enter a name')
 })
 
 /** The entries of the kind this view manages that the song carries. */
@@ -323,8 +335,8 @@ const entitySongCounts = computed(() => {
 function songCountLabel(entity: FilterEntity): string {
   const count = entitySongCounts.value.get(entity.id) ?? 0
   const unit = count === 1
-    ? t('mobilesheetsmanager', 'song')
-    : t('mobilesheetsmanager', 'songs')
+    ? t('sheetmusic', 'song')
+    : t('sheetmusic', 'songs')
   return `${count} ${unit}`
 }
 
@@ -410,9 +422,9 @@ async function createEntity() {
     await apiPost(postEndpoint as any, body as any)
     closeCreateDialog()
     await loadLibraryData(props.selectedLibrary)
-    showSuccess(t('mobilesheetsmanager', '{entity} "{name}" created successfully.', { entity: config.value.singular, name }, { escape: false }))
+    showSuccess(t('sheetmusic', '{entity} "{name}" created successfully.', { entity: config.value.singular, name }, { escape: false }))
   } catch {
-    createError.value = t('mobilesheetsmanager', 'Could not create the {entity}.', { entity: config.value.singular }, { escape: false })
+    createError.value = t('sheetmusic', 'Could not create the {entity}.', { entity: config.value.singular }, { escape: false })
     showError(createError.value)
   } finally {
     isCreating.value = false
@@ -451,12 +463,12 @@ async function deleteEntity() {
     closeDeleteDialog()
     handleLibraryDataUpdate(response.data.ocs.data)
     if (entityName) {
-      showSuccess(t('mobilesheetsmanager', '{entity} "{name}" deleted successfully.', { entity: config.value.singular, name: entityName }, { escape: false }))
+      showSuccess(t('sheetmusic', '{entity} "{name}" deleted successfully.', { entity: config.value.singular, name: entityName }, { escape: false }))
     } else {
-      showSuccess(t('mobilesheetsmanager', '{entity} deleted successfully.', { entity: config.value.singular }, { escape: false }))
+      showSuccess(t('sheetmusic', '{entity} deleted successfully.', { entity: config.value.singular }, { escape: false }))
     }
   } catch {
-    deleteError.value = t('mobilesheetsmanager', 'Could not delete the {entity}.', { entity: config.value.singular }, { escape: false })
+    deleteError.value = t('sheetmusic', 'Could not delete the {entity}.', { entity: config.value.singular }, { escape: false })
     showError(deleteError.value)
   } finally {
     isDeleting.value = false

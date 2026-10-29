@@ -16,25 +16,29 @@ const emit = defineEmits<{
 }>()
 
 const columnOptions: { key: SongColumn; label: string }[] = [
-	{ key: 'title', label: t('mobilesheetsmanager', 'Title') },
-	{ key: 'composer', label: t('mobilesheetsmanager', 'Composer') },
-	{ key: 'book', label: t('mobilesheetsmanager', 'Book') },
-	{ key: 'collection', label: t('mobilesheetsmanager', 'Collection') },
-	{ key: 'artist', label: t('mobilesheetsmanager', 'Artist') },
-	{ key: 'genre', label: t('mobilesheetsmanager', 'Genre') },
-	{ key: 'key', label: t('mobilesheetsmanager', 'Key') },
-	{ key: 'customGroup', label: t('mobilesheetsmanager', 'Custom Group') },
-	{ key: 'year', label: t('mobilesheetsmanager', 'Year') },
-	{ key: 'signature', label: t('mobilesheetsmanager', 'Time Signature') },
-	{ key: 'sourceType', label: t('mobilesheetsmanager', 'Source Type') },
-	{ key: 'stars', label: t('mobilesheetsmanager', 'Rating') },
-	{ key: 'difficulty', label: t('mobilesheetsmanager', 'Difficulty') },
-	{ key: 'duration', label: t('mobilesheetsmanager', 'Duration') },
-	{ key: 'keywords', label: t('mobilesheetsmanager', 'Keywords') },
-	{ key: 'custom', label: t('mobilesheetsmanager', 'Custom') },
-	{ key: 'custom2', label: t('mobilesheetsmanager', 'Custom 2') },
-	{ key: 'lastModified', label: t('mobilesheetsmanager', 'Last modified') },
-	{ key: 'dateCreated', label: t('mobilesheetsmanager', 'Date created') },
+	{ key: 'title', label: t('sheetmusic', 'Title') },
+	{ key: 'composer', label: t('sheetmusic', 'Composer') },
+	{ key: 'book', label: t('sheetmusic', 'Book') },
+	{ key: 'collection', label: t('sheetmusic', 'Collection') },
+	{ key: 'artist', label: t('sheetmusic', 'Artist') },
+	{ key: 'genre', label: t('sheetmusic', 'Genre') },
+	{ key: 'key', label: t('sheetmusic', 'Key') },
+	{ key: 'customGroup', label: t('sheetmusic', 'Custom Group') },
+	{ key: 'year', label: t('sheetmusic', 'Year') },
+	{ key: 'signature', label: t('sheetmusic', 'Time Signature') },
+	{ key: 'sourceType', label: t('sheetmusic', 'Source Type') },
+	{ key: 'stars', label: t('sheetmusic', 'Rating') },
+	{ key: 'difficulty', label: t('sheetmusic', 'Difficulty') },
+	{ key: 'duration', label: t('sheetmusic', 'Duration') },
+	{ key: 'keywords', label: t('sheetmusic', 'Keywords') },
+	{ key: 'custom', label: t('sheetmusic', 'Custom') },
+	{ key: 'custom2', label: t('sheetmusic', 'Custom 2') },
+	{ key: 'instrument', label: t('sheetmusic', 'Instrument') },
+	{ key: 'opus', label: t('sheetmusic', 'Opus') },
+	{ key: 'catalogNumber', label: t('sheetmusic', 'Catalog Number (BWV, etc.)') },
+	{ key: 'songNumber', label: t('sheetmusic', 'Song Number') },
+	{ key: 'lastModified', label: t('sheetmusic', 'Last modified') },
+	{ key: 'dateCreated', label: t('sheetmusic', 'Date created') },
 ]
 
 function isVisible(key: SongColumn): boolean {
@@ -57,8 +61,8 @@ function toggleColumn(key: SongColumn) {
 <template>
 	<div :class="$style.toggleWrapper">
 		<NcActions
-			:aria-label="t('mobilesheetsmanager', 'Select visible columns')"
-			:title="t('mobilesheetsmanager', 'Select visible columns')">
+			:aria-label="t('sheetmusic', 'Select visible columns')"
+			:title="t('sheetmusic', 'Select visible columns')">
 			<template #icon>
 				<ViewColumnIcon :size="20" />
 			</template>

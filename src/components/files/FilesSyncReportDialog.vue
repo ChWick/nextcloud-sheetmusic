@@ -32,11 +32,11 @@ const stats = computed(() => computeSyncStats(props.log))
 <template>
 	<NcDialog
 		v-if="open"
-		:name="t('mobilesheetsmanager', 'Sync report')"
+		:name="t('sheetmusic', 'Sync report')"
 		size="large"
 		@close="emit('update:open', false)">
 		<div v-if="isRunning" :class="$style.running">
-			{{ t('mobilesheetsmanager', 'Syncing file paths and metadata…') }}
+			{{ t('sheetmusic', 'Syncing file paths and metadata…') }}
 		</div>
 		<template v-else>
 			<p v-if="runError" :class="$style.runError" role="alert">{{ runError }}</p>
@@ -47,17 +47,17 @@ const stats = computed(() => computeSyncStats(props.log))
 					<NcButton
 						:variant="filter === 'info' ? 'primary' : 'secondary'"
 						@click="emit('update:filter', 'info')">
-						{{ t('mobilesheetsmanager', 'All') }}
+						{{ t('sheetmusic', 'All') }}
 					</NcButton>
 					<NcButton
 						:variant="filter === 'warning' ? 'primary' : 'secondary'"
 						@click="emit('update:filter', 'warning')">
-						{{ t('mobilesheetsmanager', 'Warnings and higher') }}
+						{{ t('sheetmusic', 'Warnings and higher') }}
 					</NcButton>
 					<NcButton
 						:variant="filter === 'error' ? 'primary' : 'secondary'"
 						@click="emit('update:filter', 'error')">
-						{{ t('mobilesheetsmanager', 'Errors only') }}
+						{{ t('sheetmusic', 'Errors only') }}
 					</NcButton>
 				</div>
 
@@ -68,11 +68,11 @@ const stats = computed(() => computeSyncStats(props.log))
 						:entry="entry"
 						@open-song="emit('openSong', entry)" />
 				</ul>
-				<p v-if="visibleLog.length === 0">{{ t('mobilesheetsmanager', 'No matching entries.') }}</p>
+				<p v-if="visibleLog.length === 0">{{ t('sheetmusic', 'No matching entries.') }}</p>
 			</template>
 		</template>
 		<div :class="$style.dialogActions">
-			<NcButton @click="emit('update:open', false)">{{ t('mobilesheetsmanager', 'Close') }}</NcButton>
+			<NcButton @click="emit('update:open', false)">{{ t('sheetmusic', 'Close') }}</NcButton>
 		</div>
 	</NcDialog>
 </template>

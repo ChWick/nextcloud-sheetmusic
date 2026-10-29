@@ -93,18 +93,52 @@ export const mockSongs = [
 ]
 
 export async function setupMockApi(page: Page) {
-	// Mock libraries list endpoint
+	const currentLibraries = [...mockLibraries]
+
+	// Mock libraries list endpoint & library creation
 	await page.route('**/api/libraries**', async (route) => {
-		await route.fulfill({
-			status: 200,
-			contentType: 'application/json',
-			body: JSON.stringify({
-				ocs: {
-					meta: { status: 'ok', statuscode: 200 },
-					data: { libraries: mockLibraries },
-				},
-			}),
-		})
+		const url = new URL(route.request().url())
+		const normalizedPath = url.pathname.replace(/\/+$/, '')
+		if (normalizedPath.endsWith('/api/libraries')) {
+			if (route.request().method() === 'POST') {
+				let postData: any = {}
+				try {
+					postData = route.request().postDataJSON() || {}
+				} catch {
+					// empty
+				}
+				const rawPath = postData.path || '/SheetMusic/NewLibrary'
+				const path = rawPath.endsWith('.db')
+					? (rawPath.substring(0, rawPath.lastIndexOf('/')) || '/')
+					: rawPath
+				const newId = currentLibraries.length > 0 ? Math.max(...currentLibraries.map(l => l.id)) + 1 : 1
+				const newLib = { id: newId, path }
+				currentLibraries.push(newLib)
+				await route.fulfill({
+					status: 201,
+					contentType: 'application/json',
+					body: JSON.stringify({
+						ocs: {
+							meta: { status: 'ok', statuscode: 201 },
+							data: { id: newId, path },
+						},
+					}),
+				})
+				return
+			}
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					ocs: {
+						meta: { status: 'ok', statuscode: 200 },
+						data: { libraries: currentLibraries },
+					},
+				}),
+			})
+			return
+		}
+		await route.fallback()
 	})
 
 	// Mock songs / library data endpoint
@@ -188,7 +222,7 @@ export async function setupMockApi(page: Page) {
 		})
 	})
 
-	// Mock file upload endpoint (used when saving modified/cropped PDF)
+	// Mock file upload / update endpoint (used when saving modified/cropped PDF)
 	await page.route('**/api/libraries/*/songs/*/file/upload**', async (route) => {
 		await route.fulfill({
 			status: 200,
@@ -198,6 +232,75 @@ export async function setupMockApi(page: Page) {
 					meta: { status: 'ok', statuscode: 200 },
 					data: {
 						songs: mockSongs,
+						composers: mockComposers,
+						books: mockBooks,
+					},
+				},
+			}),
+		})
+	})
+
+	let currentMockVersions = [
+		{
+			version: '1700000000',
+			revision: 1700000000,
+			timestamp: 1700000000,
+			humanReadableTimestamp: '2023-11-14 22:13:20',
+			size: 2048,
+			name: 'Beethoven - Symphony 5.pdf',
+		},
+	]
+
+	// Mock file versions list
+	await page.route('**/api/libraries/*/songs/*/file/*/versions', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				ocs: {
+					meta: { status: 'ok', statuscode: 200 },
+					data: currentMockVersions,
+				},
+			}),
+		})
+	})
+
+	// Mock file version revert endpoint
+	await page.route('**/api/libraries/*/songs/*/file/*/versions/*/revert', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				ocs: {
+					meta: { status: 'ok', statuscode: 200 },
+					data: {
+						songs: mockSongs.map((s) => s.id === 5 ? { ...s, lastModified: Date.now() } : s),
+						composers: mockComposers,
+						books: mockBooks,
+					},
+				},
+			}),
+		})
+	})
+
+	// Mock file in-place update endpoint
+	await page.route('**/api/libraries/*/songs/*/file/*/update', async (route) => {
+		currentMockVersions.push({
+			version: String(Date.now()),
+			revision: Date.now(),
+			timestamp: Math.floor(Date.now() / 1000),
+			humanReadableTimestamp: 'Just now',
+			size: 2048,
+			name: 'Beethoven - Symphony 5.pdf',
+		})
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				ocs: {
+					meta: { status: 'ok', statuscode: 200 },
+					data: {
+						songs: mockSongs.map((s) => s.id === 5 ? { ...s, lastModified: Date.now() } : s),
 						composers: mockComposers,
 						books: mockBooks,
 					},
@@ -274,6 +377,103 @@ export async function setupMockApi(page: Page) {
 						success: true,
 						fixedCount: 1,
 						message: 'Applied autofix to 1 issue(s).',
+					},
+				},
+			}),
+		})
+	})
+
+	// Mock song history endpoint
+	await page.route('**/api/songs/*/history', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				ocs: {
+					meta: { status: 'ok', statuscode: 200 },
+					data: [
+						{
+							id: 102,
+							libraryId: 1,
+							songId: 5,
+							songUuid: 'uuid-5',
+							userId: 'admin',
+							action: 'updated',
+							summary: 'Title: "Symphony No. 5 in C Minor" → "Symphony No. 5"',
+							snapshot: { title: 'Symphony No. 5', rating: 5 },
+							createdAt: 1700010000,
+						},
+						{
+							id: 101,
+							libraryId: 1,
+							songId: 5,
+							songUuid: 'uuid-5',
+							userId: 'admin',
+							action: 'created',
+							summary: 'Song created',
+							snapshot: { title: 'Symphony No. 5 in C Minor', rating: 4 },
+							createdAt: 1700000000,
+						},
+					],
+				},
+			}),
+		})
+	})
+
+	// Mock revert endpoint
+	await page.route('**/api/songs/*/revert/*', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				ocs: {
+					meta: { status: 'ok', statuscode: 200 },
+					data: {
+						songs: mockSongs.map((s) => s.id === 5 ? { ...s, title: 'Symphony No. 5 in C Minor', lastModified: Date.now() } : s),
+						composers: mockComposers,
+						books: mockBooks,
+					},
+				},
+			}),
+		})
+	})
+
+	// Mock deleted songs endpoint
+	await page.route('**/api/libraries/*/deleted-songs', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				ocs: {
+					meta: { status: 'ok', statuscode: 200 },
+					data: [
+						{
+							id: 99,
+							uuid: 'uuid-99',
+							title: 'Moonlight Sonata',
+							composers: ['Ludwig van Beethoven'],
+							fileCount: 1,
+							deletedAt: 1700005000,
+							rating: 5,
+						},
+					],
+				},
+			}),
+		})
+	})
+
+	// Mock restore endpoint
+	await page.route('**/api/songs/*/restore', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				ocs: {
+					meta: { status: 'ok', statuscode: 200 },
+					data: {
+						songs: mockSongs,
+						composers: mockComposers,
+						books: mockBooks,
 					},
 				},
 			}),

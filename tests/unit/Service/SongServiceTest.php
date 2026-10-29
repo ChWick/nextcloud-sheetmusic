@@ -4,238 +4,328 @@ declare(strict_types=1);
 
 namespace Service;
 
-use OCA\MobileSheetsManager\Db\SongMapper;
-use OCA\MobileSheetsManager\Service\FileManager;
-use OCA\MobileSheetsManager\Service\SongFileService;
-use OCA\MobileSheetsManager\Service\SongService;
+use OCA\SheetMusic\Db\InternalEntity;
+use OCA\SheetMusic\Db\InternalSong;
+use OCA\SheetMusic\Db\InternalSongFile;
+use OCA\SheetMusic\Db\InternalSongHistory;
+use OCA\SheetMusic\Db\InternalSongHistoryMapper;
+use OCA\SheetMusic\Db\LibraryData;
+use OCA\SheetMusic\Service\FileManager;
+use OCA\SheetMusic\Service\LibraryService;
+use OCA\SheetMusic\Service\SongFileService;
+use OCA\SheetMusic\Service\SongHistoryService;
+use OCA\SheetMusic\Service\SongService;
 use OCP\IUser;
 use PHPUnit\Framework\TestCase;
-use Psr\Log\LoggerInterface;
-use TestSupport\TestUtils;
+use Psr\Log\NullLogger;
+use TestSupport\RealMobileSheetsTestTrait;
 
 final class SongServiceTest extends TestCase {
-	use TestUtils;
+	use RealMobileSheetsTestTrait;
 
-	public function testGetSongsReturnsLibraryData(): void {
-		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
-		$user = $this->createMock(IUser::class);
-		$user->method('getUID')->willReturn('admin');
+	private int $libraryId;
+	private IUser $user;
+	private SongService $service;
+	private SongHistoryService $historyService;
 
-		$libraryService = $this->createLibraryServiceForDatabase('admin', 1, '/Noten/library.db', $fixture['path']);
-		$songMapper = $this->createSongMapper();
+	protected function setUp(): void {
+		parent::setUp();
+		$this->setUpRealMobileSheetsEnvironment();
+		$library = $this->createTestLibrary('SongService Test Lib');
+		$this->libraryId = (int)$library->id;
 
-		$service = new SongService(
-			$libraryService,
-			$songMapper,
-			$this->createMock(SongFileService::class),
-			$this->createMock(FileManager::class),
-			$this->createMock(LoggerInterface::class),
-		);
-
-		try {
-			self::assertSame([], $service->getSongs($user, 1)['songs']);
-		} finally {
-			unlink($fixture['path']);
+		$user = $this->userManager->get($library->userId);
+		self::assertNotNull($user);
+		$this->user = $user;
+		$userFolder = $this->rootFolder->getUserFolder($library->userId);
+		if (!$userFolder->nodeExists('SongService Test Lib')) {
+			$this->createdUserNodes[] = $userFolder->newFolder('SongService Test Lib');
 		}
-	}
 
-	public function testCreateSongReturnsCreatedIdAndData(): void {
-		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
-		$user = $this->createMock(IUser::class);
-		$user->method('getUID')->willReturn('admin');
-
-		$libraryService = $this->createLibraryServiceForDatabase('admin', 1, '/Noten/library.db', $fixture['path']);
-		$songMapper = $this->createSongMapper();
-
-		$service = new SongService(
+		$logger = new NullLogger();
+		$libraryService = new LibraryService($this->libraryMapper, $this->rootFolder, $logger, exporter: $this->exporter);
+		$fileManager = new FileManager(
+			$this->libraryMapper,
+			$this->rootFolder,
+			$this->pathResolver,
+			$logger,
 			$libraryService,
-			$songMapper,
-			$this->createMock(SongFileService::class),
-			$this->createMock(FileManager::class),
-			$this->createMock(LoggerInterface::class),
+			$this->songFileMapper,
+			$this->songMapper,
 		);
-
-		try {
-			$res = $service->createSong($user, 1, 'Take Five');
-			self::assertSame(1, $res['createdSongId']);
-			self::assertSame('Take Five', $res['songs'][0]->title);
-		} finally {
-			unlink($fixture['path']);
-		}
-	}
-
-	public function testUpdateSongSyncsMetadata(): void {
-		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
-		$fixture['connection']->exec("INSERT INTO Songs (Id, Title) VALUES (42, 'Take Five')");
-		$user = $this->createMock(IUser::class);
-		$user->method('getUID')->willReturn('admin');
-
-		$libraryService = $this->createLibraryServiceForDatabase('admin', 1, '/Noten/library.db', $fixture['path']);
-		$songMapper = $this->createSongMapper();
-
-		$songFileService = $this->createMock(SongFileService::class);
-		$songFileService->expects($this->once())
-			->method('syncSongFileMetadata')
-			->with($user, $fixture['path'], 42);
-
-		$service = new SongService(
+		$songFileService = new SongFileService(
 			$libraryService,
-			$songMapper,
-			$songFileService,
-			$this->createMock(FileManager::class),
-			$this->createMock(LoggerInterface::class),
-		);
-
-		try {
-			$result = $service->updateSong($user, 42, 1, 'Blue Bossa');
-			self::assertSame('Blue Bossa', $result['songs'][0]->title);
-			self::assertSame('Blue Bossa', $fixture['connection']->query('SELECT Title FROM Songs WHERE Id = 42')->fetchColumn());
-		} finally {
-			unlink($fixture['path']);
-		}
-	}
-
-	public function testBatchUpdateSongsCallsBatchUpdateAndSyncsFiles(): void {
-		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
-		$fixture['connection']->exec("INSERT INTO Songs (Id, Title) VALUES (42, 'Take Five'), (43, 'Blue Bossa')");
-		$fixture['connection']->exec("INSERT INTO Composer (Id, Name) VALUES (10, 'Bach')");
-		$user = $this->createMock(IUser::class);
-		$user->method('getUID')->willReturn('admin');
-
-		$libraryService = $this->createLibraryServiceForDatabase('admin', 1, '/Noten/library.db', $fixture['path']);
-		$songMapper = $this->createSongMapper();
-
-		$songFileService = $this->createMock(SongFileService::class);
-		$songFileService->expects($this->exactly(2))->method('syncSongFileMetadata');
-
-		$service = new SongService(
-			$libraryService,
-			$songMapper,
-			$songFileService,
-			$this->createMock(FileManager::class),
-			$this->createMock(LoggerInterface::class),
-		);
-
-		try {
-			$result = $service->batchUpdateSongs($user, 1, [42, 43], ['action' => 'add', 'ids' => [10]]);
-			self::assertCount(2, $result['songs']);
-			self::assertSame(2, (int)$fixture['connection']->query('SELECT COUNT(*) FROM ComposerSongs WHERE ComposerId = 10')->fetchColumn());
-		} finally {
-			unlink($fixture['path']);
-		}
-	}
-
-	public function testResolveBothSongsPreservesSharedFileOnDetach(): void {
-		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
-		$fixture['connection']->exec("INSERT INTO Songs (Id, Title) VALUES (60, 'Song A'), (61, 'Song B')");
-		$user = $this->createMock(IUser::class);
-		$user->method('getUID')->willReturn('admin');
-
-		$libraryService = $this->createLibraryServiceForDatabase('admin', 1, '/Noten/library.db', $fixture['path']);
-
-		$songMapper = $this->createSongMapper();
-
-		$songFileService = $this->createMock(SongFileService::class);
-		$songFileService->expects($this->once())
-			->method('deleteSongFile')
-			->with($user, 1, 60, 207);
-
-		$fileManager = $this->createMock(FileManager::class);
-		$targetFolder = $this->createMock(\OCP\Files\Folder::class);
-		$fileManager->method('libraryContext')->willReturn([
-			'databasePath' => $fixture['path'],
-			'targetFolder' => $targetFolder,
-		]);
-
-		$integrityService = $this->createMock(\OCA\MobileSheetsManager\Service\LibraryIntegrityService::class);
-		$integrityService->method('checkIntegrity')->willReturn([]);
-
-		$service = new SongService(
-			$libraryService,
-			$songMapper,
-			$songFileService,
 			$fileManager,
-			$this->createMock(LoggerInterface::class),
-			$integrityService,
+			$this->rootFolder,
+			$logger,
+			$this->songFileMapper,
+			$this->songMapper,
+			$this->libraryMapper,
+		);
+		$integrityService = $this->createLibraryIntegrityService($libraryService);
+
+		$historyMapper = new InternalSongHistoryMapper($this->dbConn);
+		$this->historyService = new SongHistoryService(
+			$historyMapper,
+			$this->songMapper,
+			$this->entityMapper,
+			$this->songFileMapper,
+			$this->libraryMapper,
+			$this->dbConn,
+			$logger,
 		);
 
-		$res = $service->resolveBothSongs(
-			$user,
-			1,
-			['id' => 60, 'title' => 'Song A', 'detachFileIds' => [207]],
-			['id' => 61, 'title' => 'Song B', 'detachFileIds' => []],
-		);
-
-		self::assertCount(2, $res['songs']);
-		self::assertSame('Song A', $fixture['connection']->query('SELECT Title FROM Songs WHERE Id = 60')->fetchColumn());
-		unlink($fixture['path']);
-	}
-
-	public function testResolveBothSongsWithRealDatabaseIntegration(): void {
-		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
-		$databasePath = $fixture['path'];
-		$database = $fixture['connection'];
-
-		$database->exec("INSERT INTO Songs (Id, Title) VALUES (60, 'Nachspiel'), (61, 'Nachspiel')");
-		$database->exec("INSERT INTO Files (Id, SongId, Path) VALUES (101, 60, '/remote.php/dav/files/admin/Noten/Nachspiel.pdf'), (102, 61, '/remote.php/dav/files/admin/Noten/Nachspiel.pdf')");
-
-		$user = $this->createMock(IUser::class);
-		$user->method('getUID')->willReturn('admin');
-
-		$libraryService = $this->createLibraryServiceForDatabase(
-			'admin',
-			1,
-			'/Noten/library.db',
-			$databasePath,
-		);
-
-		$logger = $this->createMock(LoggerInterface::class);
-		$songMapper = new SongMapper($logger);
-
-		$rootFolder = $this->createMock(\OCP\Files\IRootFolder::class);
-		$userFolder = $this->createMock(\OCP\Files\IUserFolder::class);
-		$userFolder->method('getOwner')->willReturn($user);
-		$userFolder->method('getPath')->willReturn('/admin/files');
-		$userFolder->method('get')->with('Noten')->willReturn($this->createMock(\OCP\Files\Folder::class));
-		$rootFolder->method('getUserFolder')->with('admin')->willReturn($userFolder);
-
-		$fileManager = $this->createMock(FileManager::class);
-		$targetFolder = $this->createMock(\OCP\Files\Folder::class);
-		$fileManager->method('libraryContext')->willReturn([
-			'databasePath' => $databasePath,
-			'targetFolder' => $targetFolder,
-		]);
-
-		$songFileService = new SongFileService($libraryService, $songMapper, $fileManager, $rootFolder, $logger);
-
-		$service = new SongService(
+		$this->service = new SongService(
 			$libraryService,
-			$songMapper,
 			$songFileService,
 			$fileManager,
 			$logger,
-			null,
+			$this->songMapper,
+			$this->entityMapper,
+			$this->songFileMapper,
+			$this->libraryMapper,
+			$this->rootFolder,
+			$integrityService,
+			$this->historyService,
+		);
+	}
+
+	protected function tearDown(): void {
+		$this->tearDownRealMobileSheetsEnvironment();
+		parent::tearDown();
+	}
+
+	public function testGetSongsReturnsLibraryData(): void {
+		$this->songMapper->insert(new InternalSong(
+			id: null,
+			uuid: 's1-uuid',
+			libraryId: $this->libraryId,
+			title: 'Song One',
+		));
+
+		$data = $this->service->getSongs($this->user, $this->libraryId);
+		self::assertNotNull($data);
+		self::assertCount(1, $data->songs);
+		self::assertSame('Song One', $data->songs[0]->title);
+	}
+
+	public function testCreateSongReturnsCreatedIdAndData(): void {
+		$res = $this->service->createSong(
+			$this->user,
+			$this->libraryId,
+			'Take Five',
+			opus: 'Op. 27 No. 2',
+			catalogNumber: 'BWV 565',
+			songNumber: '88',
 		);
 
-		// Execute resolveBothSongs with detaching file 101 from Song 60
-		$res = $service->resolveBothSongs(
-			$user,
-			1,
-			['id' => 60, 'title' => 'Nachspiel', 'detachFileIds' => [101]],
-			['id' => 61, 'title' => 'Nachspiel', 'detachFileIds' => []],
+		self::assertNotNull($res);
+		$createdId = $res->createdSongId;
+		self::assertNotNull($createdId);
+		self::assertGreaterThan(0, $createdId);
+
+		$savedSong = $this->songMapper->findById($createdId);
+		self::assertNotNull($savedSong);
+		self::assertSame('Take Five', $savedSong->title);
+		self::assertSame('Op. 27 No. 2', $savedSong->opus);
+		self::assertSame('BWV 565', $savedSong->catalogNumber);
+		self::assertSame('88', $savedSong->songNumber);
+	}
+
+	public function testUpdateSongSyncsMetadata(): void {
+		$song = $this->songMapper->insert(new InternalSong(
+			id: null,
+			uuid: 'update-uuid',
+			libraryId: $this->libraryId,
+			title: 'Original Title',
+		));
+
+		$res = $this->service->updateSong(
+			$this->user,
+			(int)$song->id,
+			$this->libraryId,
+			'Updated Title',
+			stars: 4,
+			difficulty: 2,
 		);
 
-		self::assertIsArray($res);
-		// Verify file 101 was successfully removed from database for Song 60
-		$stmt = $database->query('SELECT COUNT(*) FROM Files WHERE SongId = 60');
-		self::assertSame(0, (int)$stmt->fetchColumn());
+		self::assertNotNull($res);
+		self::assertNotEmpty($res->songs);
+		$reloaded = $this->songMapper->findById((int)$song->id);
+		self::assertNotNull($reloaded);
+		self::assertSame('Updated Title', $reloaded->title);
+		self::assertSame(4, $reloaded->rating);
+		self::assertSame(2, $reloaded->difficulty);
 
-		// Verify file 102 remains attached to Song 61
-		$stmt = $database->query('SELECT COUNT(*) FROM Files WHERE SongId = 61');
-		self::assertSame(1, (int)$stmt->fetchColumn());
+		// Verify history snapshots: should contain 2 entries (initial baseline + updated)
+		$timeline = $this->historyService->getTimelineForSong((int)$song->id);
+		self::assertCount(2, $timeline);
+		// Timeline is in descending order: index 0 is updated, index 1 is initial
+		self::assertSame(InternalSongHistory::ACTION_UPDATED, $timeline[0]['action']);
+		self::assertSame('Updated Title', $timeline[0]['snapshot']['title']);
+		self::assertSame(InternalSongHistory::ACTION_CREATED, $timeline[1]['action']);
+		self::assertSame('Original Title', $timeline[1]['snapshot']['title']);
+	}
 
-		if (file_exists($databasePath)) {
-			unlink($databasePath);
-		}
+	public function testBatchUpdateSongsCallsBatchUpdateAndSyncsFiles(): void {
+		$s1 = $this->songMapper->insert(new InternalSong(
+			id: null,
+			uuid: 'b1-uuid',
+			libraryId: $this->libraryId,
+			title: 'Batch Song 1',
+		));
+		$s2 = $this->songMapper->insert(new InternalSong(
+			id: null,
+			uuid: 'b2-uuid',
+			libraryId: $this->libraryId,
+			title: 'Batch Song 2',
+		));
+
+		$composer = $this->entityMapper->insert(new InternalEntity(
+			id: null,
+			uuid: 'comp-uuid',
+			libraryId: $this->libraryId,
+			type: 'composer',
+			name: 'Gershwin',
+		));
+
+		$result = $this->service->batchUpdateSongs(
+			$this->user,
+			$this->libraryId,
+			[(int)$s1->id, (int)$s2->id],
+			composers: ['action' => 'add', 'ids' => [(int)$composer->id]],
+		);
+
+		self::assertNotNull($result);
+		self::assertCount(2, $result->songs);
+
+		$s1Composers = $this->entityMapper->findEntityIdsForSong((int)$s1->id, 'composer');
+		$s2Composers = $this->entityMapper->findEntityIdsForSong((int)$s2->id, 'composer');
+		self::assertSame([(int)$composer->id], $s1Composers);
+		self::assertSame([(int)$composer->id], $s2Composers);
+	}
+
+	public function testResolveBothSongsPreservesSharedFileOnDetach(): void {
+		$songA = $this->songMapper->insert(new InternalSong(
+			id: null,
+			uuid: 'u-60',
+			libraryId: $this->libraryId,
+			title: 'Old Song A',
+		));
+		$songB = $this->songMapper->insert(new InternalSong(
+			id: null,
+			uuid: 'u-61',
+			libraryId: $this->libraryId,
+			title: 'Song B',
+		));
+
+		$file = $this->songFileMapper->insert(new InternalSongFile(
+			id: null,
+			uuid: 'f-60',
+			songId: (int)$songA->id,
+			fileId: 207,
+		));
+
+		$res = $this->service->resolveBothSongs(
+			$this->user,
+			$this->libraryId,
+			['id' => (int)$songA->id, 'title' => 'Song A', 'detachFileIds' => [(int)$file->id]],
+			['id' => (int)$songB->id, 'title' => 'Song B Renamed', 'detachFileIds' => []],
+		);
+
+		self::assertInstanceOf(LibraryData::class, $res);
+		self::assertCount(2, $res->songs);
+
+		$reloadedA = $this->songMapper->findById((int)$songA->id);
+		$reloadedB = $this->songMapper->findById((int)$songB->id);
+		self::assertSame('Song A', $reloadedA->title);
+		self::assertSame('Song B Renamed', $reloadedB->title);
+
+		// File is detached (soft-deleted)
+		$reloadedFile = $this->songFileMapper->findById((int)$file->id);
+		self::assertNotNull($reloadedFile);
+		self::assertNotNull($reloadedFile->deletedAt);
+	}
+
+	public function testDeleteSongWithInternalDatabase(): void {
+		$song = $this->songMapper->insert(new InternalSong(
+			id: null,
+			uuid: 'del-uuid',
+			libraryId: $this->libraryId,
+			title: 'Song To Delete',
+		));
+
+		$result = $this->service->deleteSong($this->user, (int)$song->id, $this->libraryId);
+		self::assertNotNull($result);
+		self::assertEmpty($result->songs);
+
+		$reloaded = $this->songMapper->findById((int)$song->id);
+		self::assertNotNull($reloaded);
+		self::assertNotNull($reloaded->deletedAt);
+	}
+
+	public function testBatchDeleteSongsDeletesMultipleSongs(): void {
+		$s1 = $this->songMapper->insert(new InternalSong(
+			id: null,
+			uuid: 'bdel-1',
+			libraryId: $this->libraryId,
+			title: 'Delete 1',
+		));
+		$s2 = $this->songMapper->insert(new InternalSong(
+			id: null,
+			uuid: 'bdel-2',
+			libraryId: $this->libraryId,
+			title: 'Delete 2',
+		));
+
+		$result = $this->service->batchDeleteSongs(
+			$this->user,
+			$this->libraryId,
+			[(int)$s1->id, (int)$s2->id],
+			deleteFiles: false,
+		);
+
+		self::assertNotNull($result);
+		self::assertEmpty($result->songs);
+
+		$reloaded1 = $this->songMapper->findById((int)$s1->id);
+		$reloaded2 = $this->songMapper->findById((int)$s2->id);
+		self::assertNotNull($reloaded1->deletedAt);
+		self::assertNotNull($reloaded2->deletedAt);
+	}
+
+	public function testMergeSongMergesRecords(): void {
+		$keep = $this->songMapper->insert(new InternalSong(
+			id: null,
+			uuid: 'm-keep',
+			libraryId: $this->libraryId,
+			title: 'Keep Song',
+		));
+		$drop = $this->songMapper->insert(new InternalSong(
+			id: null,
+			uuid: 'm-drop',
+			libraryId: $this->libraryId,
+			title: 'Drop Song',
+		));
+
+		$composer = $this->entityMapper->insert(new InternalEntity(
+			id: null,
+			uuid: 'c-drop',
+			libraryId: $this->libraryId,
+			type: 'composer',
+			name: 'Ravel',
+		));
+		$this->entityMapper->linkSongEntity((int)$drop->id, (int)$composer->id);
+
+		$result = $this->service->mergeSong($this->user, $this->libraryId, (int)$keep->id, (int)$drop->id, []);
+		self::assertNotNull($result);
+
+		// Keep song now has the composer
+		$keepComposers = $this->entityMapper->findEntityIdsForSong((int)$keep->id, 'composer');
+		self::assertSame([(int)$composer->id], $keepComposers);
+
+		// Dropped song is deleted
+		$droppedSong = $this->songMapper->findById((int)$drop->id);
+		self::assertNotNull($droppedSong->deletedAt);
 	}
 }

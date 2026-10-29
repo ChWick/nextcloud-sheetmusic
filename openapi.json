@@ -1,7 +1,7 @@
 {
     "openapi": "3.0.3",
     "info": {
-        "title": "mobilesheetsmanager",
+        "title": "sheetmusic",
         "version": "0.0.1",
         "description": "Foo",
         "license": {
@@ -47,7 +47,7 @@
         }
     },
     "paths": {
-        "/ocs/v2.php/apps/mobilesheetsmanager/api": {
+        "/ocs/v2.php/apps/sheetmusic/api": {
             "get": {
                 "operationId": "api-index",
                 "summary": "An example API endpoint",

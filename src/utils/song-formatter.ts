@@ -1,53 +1,57 @@
 import type { Song } from '../types/song'
 
+function formatNamedEntities<T>(
+	items?: T[] | null,
+	getName: (item: T) => string = (item: any) => item?.name ?? '',
+	fallback = '—',
+): string {
+	if (!items || items.length === 0) return fallback
+	const names = items.map(getName).filter(Boolean)
+	return names.length > 0 ? names.join(', ') : fallback
+}
+
 export function formatComposers(song: Song, fallback = '—'): string {
-	if (!song.composers || song.composers.length === 0) return fallback
-	return song.composers.map(c => c.name).join(', ')
+	return formatNamedEntities(song.composers, c => c.name, fallback)
 }
 
 export function formatBooks(song: Song, fallback = '—'): string {
-	if (!song.books || song.books.length === 0) return fallback
-	return song.books.map(b => b.title).join(', ')
+	return formatNamedEntities(song.books, b => b.title, fallback)
 }
 
 export function formatCollections(song: Song, fallback = '—'): string {
-	if (!song.collections || song.collections.length === 0) return fallback
-	return song.collections.map(c => c.name).join(', ')
+	return formatNamedEntities(song.collections, c => c.name, fallback)
 }
 
 export function formatArtists(song: Song, fallback = '—'): string {
-	if (!song.artists || song.artists.length === 0) return fallback
-	return song.artists.map(a => a.name).join(', ')
+	return formatNamedEntities(song.artists, a => a.name, fallback)
 }
 
 export function formatGenres(song: Song, fallback = '—'): string {
-	if (!song.genres || song.genres.length === 0) return fallback
-	return song.genres.map(g => g.name).join(', ')
+	return formatNamedEntities(song.genres, g => g.name, fallback)
 }
 
 export function formatKeys(song: Song, fallback = '—'): string {
-	if (!song.keys || song.keys.length === 0) return fallback
-	return song.keys.map(k => k.name).join(', ')
+	return formatNamedEntities(song.keys, k => k.name, fallback)
 }
 
 export function formatCustomGroups(song: Song, fallback = '—'): string {
-	if (!song.customGroups || song.customGroups.length === 0) return fallback
-	return song.customGroups.map(cg => cg.name).join(', ')
+	return formatNamedEntities(song.customGroups, cg => cg.name, fallback)
 }
 
 export function formatYears(song: Song, fallback = '—'): string {
-	if (!song.years || song.years.length === 0) return fallback
-	return song.years.map(y => y.name).join(', ')
+	return formatNamedEntities(song.years, y => y.name, fallback)
 }
 
 export function formatSignatures(song: Song, fallback = '—'): string {
-	if (!song.signatures || song.signatures.length === 0) return fallback
-	return song.signatures.map(s => s.name).join(', ')
+	return formatNamedEntities(song.signatures, s => s.name, fallback)
 }
 
 export function formatSourceTypes(song: Song, fallback = '—'): string {
-	if (!song.sourceTypes || song.sourceTypes.length === 0) return fallback
-	return song.sourceTypes.map(st => st.name).join(', ')
+	return formatNamedEntities(song.sourceTypes, st => st.name, fallback)
+}
+
+export function formatInstruments(song: Song, fallback = '—'): string {
+	return formatNamedEntities(song.instruments, i => i.name, fallback)
 }
 
 export function formatDuration(seconds?: number | null, fallback = '—'): string {
@@ -70,7 +74,8 @@ export function formatDifficulty(difficulty?: number | null, fallback = '—'): 
 export function formatDateTimestamp(timestamp?: number | null, fallback = '—'): string {
 	if (!timestamp || timestamp <= 0) return fallback
 	try {
-		return new Date(timestamp).toLocaleString(undefined, {
+		const ms = timestamp < 100000000000 ? timestamp * 1000 : timestamp
+		return new Date(ms).toLocaleString(undefined, {
 			year: 'numeric',
 			month: 'short',
 			day: 'numeric',
@@ -82,95 +87,37 @@ export function formatDateTimestamp(timestamp?: number | null, fallback = '—')
 	}
 }
 
-export type SortKey = 'title' | 'composer' | 'book' | 'collection' | 'artist' | 'genre' | 'key' | 'customGroup' | 'year' | 'signature' | 'sourceType' | 'stars' | 'difficulty' | 'duration' | 'keywords' | 'custom' | 'custom2' | 'lastModified' | 'dateCreated'
+export type SortKey = 'title' | 'composer' | 'book' | 'collection' | 'artist' | 'genre' | 'key' | 'customGroup' | 'year' | 'signature' | 'sourceType' | 'instrument' | 'opus' | 'catalogNumber' | 'songNumber' | 'stars' | 'difficulty' | 'duration' | 'keywords' | 'custom' | 'custom2' | 'lastModified' | 'dateCreated'
 export type SortOrder = 'asc' | 'desc'
+
+const NUMERIC_SORT_KEYS = new Set<SortKey>(['lastModified', 'dateCreated', 'stars', 'difficulty', 'duration'])
+
+const ENTITY_FORMATTERS: Partial<Record<SortKey, (song: Song) => string>> = {
+	composer: a => formatComposers(a, ''),
+	book: a => formatBooks(a, ''),
+	collection: a => formatCollections(a, ''),
+	artist: a => formatArtists(a, ''),
+	genre: a => formatGenres(a, ''),
+	key: a => formatKeys(a, ''),
+	customGroup: a => formatCustomGroups(a, ''),
+	year: a => formatYears(a, ''),
+	signature: a => formatSignatures(a, ''),
+	sourceType: a => formatSourceTypes(a, ''),
+	instrument: a => formatInstruments(a, ''),
+}
 
 export function sortSongs(songs: Song[], sortKey: SortKey, sortOrder: SortOrder): Song[] {
 	return [...songs].sort((a, b) => {
 		let cmp = 0
 
-		if (sortKey === 'lastModified') {
-			const valA = a.lastModified ?? 0
-			const valB = b.lastModified ?? 0
-			cmp = valA - valB
-		} else if (sortKey === 'dateCreated') {
-			const valA = a.dateCreated ?? 0
-			const valB = b.dateCreated ?? 0
-			cmp = valA - valB
-		} else if (sortKey === 'stars') {
-			const valA = a.stars ?? 0
-			const valB = b.stars ?? 0
-			cmp = valA - valB
-		} else if (sortKey === 'difficulty') {
-			const valA = a.difficulty ?? 0
-			const valB = b.difficulty ?? 0
-			cmp = valA - valB
-		} else if (sortKey === 'duration') {
-			const valA = a.duration ?? 0
-			const valB = b.duration ?? 0
+		if (NUMERIC_SORT_KEYS.has(sortKey)) {
+			const valA = ((a as any)[sortKey] as number | undefined) ?? 0
+			const valB = ((b as any)[sortKey] as number | undefined) ?? 0
 			cmp = valA - valB
 		} else {
-			let valA = ''
-			let valB = ''
-
-			switch (sortKey) {
-				case 'title':
-					valA = a.title ?? ''
-					valB = b.title ?? ''
-					break
-				case 'composer':
-					valA = formatComposers(a, '')
-					valB = formatComposers(b, '')
-					break
-				case 'book':
-					valA = formatBooks(a, '')
-					valB = formatBooks(b, '')
-					break
-				case 'collection':
-					valA = formatCollections(a, '')
-					valB = formatCollections(b, '')
-					break
-				case 'artist':
-					valA = formatArtists(a, '')
-					valB = formatArtists(b, '')
-					break
-				case 'genre':
-					valA = formatGenres(a, '')
-					valB = formatGenres(b, '')
-					break
-				case 'key':
-					valA = formatKeys(a, '')
-					valB = formatKeys(b, '')
-					break
-				case 'customGroup':
-					valA = formatCustomGroups(a, '')
-					valB = formatCustomGroups(b, '')
-					break
-				case 'year':
-					valA = formatYears(a, '')
-					valB = formatYears(b, '')
-					break
-				case 'signature':
-					valA = formatSignatures(a, '')
-					valB = formatSignatures(b, '')
-					break
-				case 'sourceType':
-					valA = formatSourceTypes(a, '')
-					valB = formatSourceTypes(b, '')
-					break
-				case 'keywords':
-					valA = a.keywords ?? ''
-					valB = b.keywords ?? ''
-					break
-				case 'custom':
-					valA = a.custom ?? ''
-					valB = b.custom ?? ''
-					break
-				case 'custom2':
-					valA = a.custom2 ?? ''
-					valB = b.custom2 ?? ''
-					break
-			}
+			const formatter = ENTITY_FORMATTERS[sortKey]
+			const valA = formatter ? formatter(a) : String((a as any)[sortKey] ?? '')
+			const valB = formatter ? formatter(b) : String((b as any)[sortKey] ?? '')
 
 			cmp = valA.localeCompare(valB, undefined, { sensitivity: 'base', numeric: true })
 		}

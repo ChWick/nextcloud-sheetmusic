@@ -75,7 +75,7 @@ describe('BatchSongEditorDialog.vue', () => {
 		})
 
 		const checkboxes = wrapper.findAllComponents({ name: 'NcCheckboxRadioSwitch' })
-		expect(checkboxes.length).toBe(10)
+		expect(checkboxes.length).toBe(11)
 
 		// Enable composers and books
 		await checkboxes[0].setValue(true)

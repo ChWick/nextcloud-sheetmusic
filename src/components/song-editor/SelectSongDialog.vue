@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Artist, Book, Collection, Composer, CustomGroup, Genre, Key, LibraryData, Signature, Song, SourceType, Year } from '../../types/song'
+import type { Artist, Book, Collection, Composer, CustomGroup, Genre, Instrument, Key, LibraryData, Signature, Song, SourceType, Year } from '../../types/song'
 import { computed, ref } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
@@ -43,6 +43,7 @@ const selectedCustomGroups = ref<CustomGroup[]>([])
 const selectedYears = ref<Year[]>([])
 const selectedSignatures = ref<Signature[]>([])
 const selectedSourceTypes = ref<SourceType[]>([])
+const selectedInstruments = ref<Instrument[]>([])
 
 const allSongs = computed<Song[]>(() => props.libraryData?.songs ?? [])
 const composers = computed<Composer[]>(() => props.libraryData?.composers ?? [])
@@ -55,6 +56,7 @@ const customGroups = computed<CustomGroup[]>(() => props.libraryData?.customGrou
 const years = computed<Year[]>(() => props.libraryData?.years ?? [])
 const signatures = computed<Signature[]>(() => props.libraryData?.signatures ?? [])
 const sourceTypes = computed<SourceType[]>(() => props.libraryData?.sourceTypes ?? [])
+const instruments = computed<Instrument[]>(() => props.libraryData?.instruments ?? [])
 
 function clearFilters() {
 	searchTitle.value = ''
@@ -69,6 +71,7 @@ function clearFilters() {
 	selectedYears.value = []
 	selectedSignatures.value = []
 	selectedSourceTypes.value = []
+	selectedInstruments.value = []
 }
 
 function matchesCategory<T extends { id: number }>(songItems: T[] | undefined, selected: T[]): boolean {
@@ -103,6 +106,7 @@ const filteredSongs = computed<Song[]>(() => {
 		if (!matchesCategory(song.years, selectedYears.value)) return false
 		if (!matchesCategory(song.signatures, selectedSignatures.value)) return false
 		if (!matchesCategory(song.sourceTypes, selectedSourceTypes.value)) return false
+		if (!matchesCategory(song.instruments, selectedInstruments.value)) return false
 
 		return true
 	})
@@ -114,7 +118,7 @@ function getSongSubtext(song: Song): string {
 		parts.push(song.composers.map((c) => c.name).join(', '))
 	}
 	if (song.keys?.length) {
-		parts.push(t('mobilesheetsmanager', 'Key: {key}', { key: song.keys.map((k) => k.name).join(', ') }))
+		parts.push(t('sheetmusic', 'Key: {key}', { key: song.keys.map((k) => k.name).join(', ') }))
 	}
 	if (song.books?.length) {
 		parts.push(song.books.map((b) => b.title).join(', '))
@@ -126,12 +130,12 @@ function getSongSubtext(song: Song): string {
 <template>
 	<NcDialog
 		v-if="open"
-		:name="t('mobilesheetsmanager', 'Find Existing Song')"
+		:name="t('sheetmusic', 'Find Existing Song')"
 		size="large"
 		@close="emit('update:open', false)">
 		<div :class="$style.dialogContent">
 			<p :class="$style.introText">
-				{{ t('mobilesheetsmanager', 'Search and select an existing song to link with "{filename}".', { filename }) }}
+				{{ t('sheetmusic', 'Search and select an existing song to link with "{filename}".', { filename }) }}
 			</p>
 
 			<NcButton
@@ -144,7 +148,7 @@ function getSongSubtext(song: Song): string {
 					<ChevronUpIcon v-if="filtersExpanded" :size="18" />
 					<ChevronDownIcon v-else :size="18" />
 				</template>
-				{{ filtersExpanded ? t('mobilesheetsmanager', 'Hide filters') : t('mobilesheetsmanager', 'Show filters') }}
+				{{ filtersExpanded ? t('sheetmusic', 'Hide filters') : t('sheetmusic', 'Show filters') }}
 			</NcButton>
 
 			<div
@@ -163,6 +167,7 @@ function getSongSubtext(song: Song): string {
 					v-model:selected-years="selectedYears"
 					v-model:selected-signatures="selectedSignatures"
 					v-model:selected-source-types="selectedSourceTypes"
+					v-model:selected-instruments="selectedInstruments"
 					:composers="composers"
 					:books="books"
 					:collections="collections"
@@ -173,17 +178,18 @@ function getSongSubtext(song: Song): string {
 					:years="years"
 					:signatures="signatures"
 					:source-types="sourceTypes"
+					:instruments="instruments"
 					@clear="clearFilters" />
 			</div>
 
 			<div :class="$style.resultsCount">
-				{{ t('mobilesheetsmanager', '{count} song(s) found', { count: filteredSongs.length }) }}
+				{{ t('sheetmusic', '{count} song(s) found', { count: filteredSongs.length }) }}
 			</div>
 
 			<div :class="$style.songListContainer">
 				<div v-if="filteredSongs.length === 0" :class="$style.emptyState">
 					<MusicIcon :size="40" />
-					<p>{{ t('mobilesheetsmanager', 'No songs match the current search filters.') }}</p>
+					<p>{{ t('sheetmusic', 'No songs match the current search filters.') }}</p>
 				</div>
 
 				<ul v-else :class="$style.songList">
@@ -193,7 +199,7 @@ function getSongSubtext(song: Song): string {
 							<span v-if="getSongSubtext(song)" :class="$style.songSubtext">{{ getSongSubtext(song) }}</span>
 							<span :class="$style.fileBadge">
 								<PaperclipIcon :size="14" />
-								{{ t('mobilesheetsmanager', '{count} file(s)', { count: song.files?.length ?? 0 }) }}
+								{{ t('sheetmusic', '{count} file(s)', { count: song.files?.length ?? 0 }) }}
 							</span>
 						</div>
 
@@ -202,7 +208,7 @@ function getSongSubtext(song: Song): string {
 							size="small"
 							:disabled="isAttaching"
 							@click="emit('selectSong', song.id)">
-							{{ isAttaching ? t('mobilesheetsmanager', 'Linking…') : t('mobilesheetsmanager', 'Select & Attach') }}
+							{{ isAttaching ? t('sheetmusic', 'Linking…') : t('sheetmusic', 'Select & Attach') }}
 						</NcButton>
 					</li>
 				</ul>
@@ -211,7 +217,7 @@ function getSongSubtext(song: Song): string {
 
 		<template #actions>
 			<NcButton @click="emit('update:open', false)">
-				{{ t('mobilesheetsmanager', 'Cancel') }}
+				{{ t('sheetmusic', 'Cancel') }}
 			</NcButton>
 		</template>
 	</NcDialog>

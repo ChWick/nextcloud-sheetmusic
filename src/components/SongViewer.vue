@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Artist, Book, Collection, Composer, CustomGroup, Genre, Key, LibraryData, Signature, Song, SongFile, SourceType, Year } from '../types/song'
+import type { Artist, Book, Collection, Composer, CustomGroup, Genre, Instrument, Key, LibraryData, Signature, Song, SongFile, SourceType, Year } from '../types/song'
 
 import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
@@ -26,6 +26,7 @@ import MagnifyPlus from 'vue-material-design-icons/MagnifyPlus.vue'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import FileDocumentEditOutline from 'vue-material-design-icons/FileDocumentEditOutline.vue'
+import History from 'vue-material-design-icons/History.vue'
 import RotateRight from 'vue-material-design-icons/RotateRight.vue'
 import ViewColumn from 'vue-material-design-icons/ViewColumn.vue'
 import ViewDay from 'vue-material-design-icons/ViewDay.vue'
@@ -34,6 +35,8 @@ import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } fr
 import SongEditor from './SongEditor.vue'
 import DeleteSongDialog from './DeleteSongDialog.vue'
 import FilePreviewer from './FilePreviewer.vue'
+import SongPdfVersionsModal from './song-pdf/SongPdfVersionsModal.vue'
+import { useFileVersions } from './song-pdf/useFileVersions'
 
 const props = withDefaults(
 	defineProps<{
@@ -49,6 +52,7 @@ const props = withDefaults(
 		years?: Year[]
 		signatures?: Signature[]
 		sourceTypes?: SourceType[]
+		instruments?: Instrument[]
 		hideHeader?: boolean
 	}>(),
 	{
@@ -64,6 +68,7 @@ const props = withDefaults(
 		years: () => [],
 		signatures: () => [],
 		sourceTypes: () => [],
+		instruments: () => [],
 		hideHeader: false,
 	},
 )
@@ -101,6 +106,7 @@ const songCustomGroups = computed(() => props.song?.customGroups ?? [])
 const songYears = computed(() => props.song?.years ?? [])
 const songSignatures = computed(() => props.song?.signatures ?? [])
 const songSourceTypes = computed(() => props.song?.sourceTypes ?? [])
+const songInstruments = computed(() => props.song?.instruments ?? [])
 const songBookmarks = computed(() => props.song?.bookmarks ?? [])
 const songAudioFiles = computed(() => props.song?.audioFiles ?? [])
 const songFiles = computed(() => props.song?.files ?? [])
@@ -171,8 +177,25 @@ watch(
 	{ immediate: true },
 )
 
+const {
+	isVersionsModalOpen,
+	fileVersions,
+	isLoadingVersions,
+	isRevertingVersion,
+	openVersionsModal,
+	revertToVersion,
+} = useFileVersions({
+	libraryId: () => props.libraryId,
+	songId: () => props.song?.id,
+	fileId: () => selectedFile.value?.id,
+	onReverted: (data) => {
+		handleUpdated(data)
+	},
+})
+
 defineExpose({
 	openInExternalViewer,
+	openVersionsModal,
 	promptDelete: () => { isDeleteDialogOpen.value = true },
 	startEditing: () => { isEditing.value = true },
 	selectedFile,
@@ -184,8 +207,8 @@ defineExpose({
 		<header v-if="song && !hideHeader" :class="$style.header">
 			<div :class="$style.headerTop">
 				<NcButton
-					:title="t('mobilesheetsmanager', 'Back to songs')"
-					:aria-label="t('mobilesheetsmanager', 'Back to songs')"
+					:title="t('sheetmusic', 'Back to songs')"
+					:aria-label="t('sheetmusic', 'Back to songs')"
 					@click="emit('back')">
 					<template #icon>
 						<ArrowLeftIcon :size="20" />
@@ -196,8 +219,8 @@ defineExpose({
 					<NcButton
 						v-if="selectedFile"
 						variant="secondary"
-						:title="t('mobilesheetsmanager', 'Open in external viewer')"
-						:aria-label="t('mobilesheetsmanager', 'Open in external viewer')"
+						:title="t('sheetmusic', 'Open in external viewer')"
+						:aria-label="t('sheetmusic', 'Open in external viewer')"
 						@click="openInExternalViewer">
 						<template #icon>
 							<OpenInNewIcon :size="20" />
@@ -206,17 +229,27 @@ defineExpose({
 					<NcButton
 						v-if="song && isSelectedFilePdf"
 						variant="secondary"
-						:title="t('mobilesheetsmanager', 'Modify PDF (rotate, crop, split)')"
-						:aria-label="t('mobilesheetsmanager', 'Modify PDF (rotate, crop, split)')"
+						:title="t('sheetmusic', 'Modify PDF (rotate, crop, enhance, split)')"
+						:aria-label="t('sheetmusic', 'Modify PDF (rotate, crop, enhance, split)')"
 						@click="emit('modify-pdf', song, selectedFile?.id)">
 						<template #icon>
 							<FileDocumentEditOutline :size="20" />
 						</template>
 					</NcButton>
 					<NcButton
+						v-if="song && isSelectedFilePdf"
 						variant="secondary"
-						:title="t('mobilesheetsmanager', 'Edit song')"
-						:aria-label="t('mobilesheetsmanager', 'Edit song')"
+						:title="t('sheetmusic', 'PDF version history')"
+						:aria-label="t('sheetmusic', 'PDF version history')"
+						@click="openVersionsModal">
+						<template #icon>
+							<History :size="20" />
+						</template>
+					</NcButton>
+					<NcButton
+						variant="secondary"
+						:title="t('sheetmusic', 'Edit song')"
+						:aria-label="t('sheetmusic', 'Edit song')"
 						@click="isEditing = true">
 						<template #icon>
 							<PencilIcon :size="20" />
@@ -224,8 +257,8 @@ defineExpose({
 					</NcButton>
 					<NcButton
 						variant="error"
-						:title="t('mobilesheetsmanager', 'Delete song')"
-						:aria-label="t('mobilesheetsmanager', 'Delete song')"
+						:title="t('sheetmusic', 'Delete song')"
+						:aria-label="t('sheetmusic', 'Delete song')"
 						@click="isDeleteDialogOpen = true">
 						<template #icon>
 							<DeleteIcon :size="20" />
@@ -236,75 +269,75 @@ defineExpose({
 
 			<div v-if="!isEditing && (songComposers.length > 0 || songBooks.length > 0 || songCollections.length > 0 || songArtists.length > 0 || songGenres.length > 0 || songKeys.length > 0 || songCustomGroups.length > 0 || songYears.length > 0 || songSignatures.length > 0 || songSourceTypes.length > 0 || song.stars || song.difficulty || song.duration || song.keywords || song.custom || song.custom2)" :class="$style.metadata">
 				<div v-if="songComposers.length > 0" :class="$style.metaItem">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Composer:') }}</span>
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Composer:') }}</span>
 					<span>{{ songComposers.map((c) => c.name).join(', ') }}</span>
 				</div>
 				<div v-if="songBooks.length > 0" :class="$style.metaItem">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Book:') }}</span>
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Book:') }}</span>
 					<span>{{ songBooks.map((b) => b.title).join(', ') }}</span>
 				</div>
 				<div v-if="songCollections.length > 0" :class="$style.metaItem">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Collection:') }}</span>
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Collection:') }}</span>
 					<span>{{ songCollections.map((c) => c.name).join(', ') }}</span>
 				</div>
 				<div v-if="songArtists.length > 0" :class="$style.metaItem">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Artist:') }}</span>
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Artist:') }}</span>
 					<span>{{ songArtists.map((a) => a.name).join(', ') }}</span>
 				</div>
 				<div v-if="songGenres.length > 0" :class="$style.metaItem">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Genre:') }}</span>
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Genre:') }}</span>
 					<span>{{ songGenres.map((g) => g.name).join(', ') }}</span>
 				</div>
 				<div v-if="songKeys.length > 0" :class="$style.metaItem">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Key:') }}</span>
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Key:') }}</span>
 					<span>{{ songKeys.map((k) => k.name).join(', ') }}</span>
 				</div>
 				<div v-if="songCustomGroups.length > 0" :class="$style.metaItem">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Custom Group:') }}</span>
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Custom Group:') }}</span>
 					<span>{{ songCustomGroups.map((cg) => cg.name).join(', ') }}</span>
 				</div>
 				<div v-if="songYears.length > 0" :class="$style.metaItem">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Year:') }}</span>
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Year:') }}</span>
 					<span>{{ songYears.map((y) => y.name).join(', ') }}</span>
 				</div>
 				<div v-if="songSignatures.length > 0" :class="$style.metaItem">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Time Signature:') }}</span>
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Time Signature:') }}</span>
 					<span>{{ songSignatures.map((s) => s.name).join(', ') }}</span>
 				</div>
 				<div v-if="songSourceTypes.length > 0" :class="$style.metaItem">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Source Type:') }}</span>
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Source Type:') }}</span>
 					<span>{{ songSourceTypes.map((st) => st.name).join(', ') }}</span>
 				</div>
 				<div v-if="songBookmarks.length > 0" :class="$style.metaItem">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Bookmarks:') }}</span>
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Bookmarks:') }}</span>
 					<span>{{ songBookmarks.map((b) => `${b.name} (p. ${b.pageNum})`).join(', ') }}</span>
 				</div>
 				<div v-if="songAudioFiles.length > 0" :class="$style.metaItem">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Audio Files:') }}</span>
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Audio Files:') }}</span>
 					<span>{{ songAudioFiles.map((a) => a.title || a.file).join(', ') }}</span>
 				</div>
 				<div v-if="song.stars" :class="$style.metaItem">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Rating:') }}</span>
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Rating:') }}</span>
 					<span>{{ formatStars(song.stars) }}</span>
 				</div>
 				<div v-if="song.difficulty" :class="$style.metaItem">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Difficulty:') }}</span>
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Difficulty:') }}</span>
 					<span>{{ formatDifficulty(song.difficulty) }}</span>
 				</div>
 				<div v-if="song.duration" :class="$style.metaItem">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Duration:') }}</span>
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Duration:') }}</span>
 					<span>{{ formatDuration(song.duration) }}</span>
 				</div>
 				<div v-if="song.keywords" :class="$style.metaItem">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Keywords:') }}</span>
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Keywords:') }}</span>
 					<span>{{ song.keywords }}</span>
 				</div>
 				<div v-if="song.custom" :class="$style.metaItem">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Custom:') }}</span>
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Custom:') }}</span>
 					<span>{{ song.custom }}</span>
 				</div>
 				<div v-if="song.custom2" :class="$style.metaItem">
-					<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Custom 2:') }}</span>
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Custom 2:') }}</span>
 					<span>{{ song.custom2 }}</span>
 				</div>
 			</div>
@@ -313,67 +346,83 @@ defineExpose({
 		<!-- Metadata bar when header is integrated into top bar -->
 		<div v-if="song && hideHeader && !isEditing && (songComposers.length > 0 || songBooks.length > 0 || songCollections.length > 0 || songArtists.length > 0 || songGenres.length > 0 || songKeys.length > 0 || songCustomGroups.length > 0 || songYears.length > 0 || songSignatures.length > 0 || songSourceTypes.length > 0 || song.stars || song.difficulty || song.duration || song.keywords || song.custom || song.custom2)" :class="$style.metadata">
 			<div v-if="songComposers.length > 0" :class="$style.metaItem">
-				<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Composer:') }}</span>
+				<span :class="$style.metaLabel">{{ t('sheetmusic', 'Composer:') }}</span>
 				<span>{{ songComposers.map((c) => c.name).join(', ') }}</span>
 			</div>
 			<div v-if="songBooks.length > 0" :class="$style.metaItem">
-				<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Book:') }}</span>
+				<span :class="$style.metaLabel">{{ t('sheetmusic', 'Book:') }}</span>
 				<span>{{ songBooks.map((b) => b.title).join(', ') }}</span>
 			</div>
 			<div v-if="songCollections.length > 0" :class="$style.metaItem">
-				<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Collection:') }}</span>
+				<span :class="$style.metaLabel">{{ t('sheetmusic', 'Collection:') }}</span>
 				<span>{{ songCollections.map((c) => c.name).join(', ') }}</span>
 			</div>
 			<div v-if="songArtists.length > 0" :class="$style.metaItem">
-				<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Artist:') }}</span>
+				<span :class="$style.metaLabel">{{ t('sheetmusic', 'Artist:') }}</span>
 				<span>{{ songArtists.map((a) => a.name).join(', ') }}</span>
 			</div>
 			<div v-if="songGenres.length > 0" :class="$style.metaItem">
-				<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Genre:') }}</span>
+				<span :class="$style.metaLabel">{{ t('sheetmusic', 'Genre:') }}</span>
 				<span>{{ songGenres.map((g) => g.name).join(', ') }}</span>
 			</div>
 			<div v-if="songKeys.length > 0" :class="$style.metaItem">
-				<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Key:') }}</span>
+				<span :class="$style.metaLabel">{{ t('sheetmusic', 'Key:') }}</span>
 				<span>{{ songKeys.map((k) => k.name).join(', ') }}</span>
 			</div>
 			<div v-if="songCustomGroups.length > 0" :class="$style.metaItem">
-				<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Custom Group:') }}</span>
+				<span :class="$style.metaLabel">{{ t('sheetmusic', 'Custom Group:') }}</span>
 				<span>{{ songCustomGroups.map((cg) => cg.name).join(', ') }}</span>
 			</div>
 			<div v-if="songYears.length > 0" :class="$style.metaItem">
-				<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Year:') }}</span>
+				<span :class="$style.metaLabel">{{ t('sheetmusic', 'Year:') }}</span>
 				<span>{{ songYears.map((y) => y.name).join(', ') }}</span>
 			</div>
 			<div v-if="songSignatures.length > 0" :class="$style.metaItem">
-				<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Time Signature:') }}</span>
+				<span :class="$style.metaLabel">{{ t('sheetmusic', 'Time Signature:') }}</span>
 				<span>{{ songSignatures.map((s) => s.name).join(', ') }}</span>
 			</div>
 			<div v-if="songSourceTypes.length > 0" :class="$style.metaItem">
-				<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Source Type:') }}</span>
+				<span :class="$style.metaLabel">{{ t('sheetmusic', 'Source Type:') }}</span>
 				<span>{{ songSourceTypes.map((st) => st.name).join(', ') }}</span>
 			</div>
+			<div v-if="songInstruments.length > 0" :class="$style.metaItem">
+				<span :class="$style.metaLabel">{{ t('sheetmusic', 'Instrument:') }}</span>
+				<span>{{ songInstruments.map((i) => i.name).join(', ') }}</span>
+			</div>
+			<div v-if="song.opus" :class="$style.metaItem">
+				<span :class="$style.metaLabel">{{ t('sheetmusic', 'Opus:') }}</span>
+				<span>{{ song.opus }}</span>
+			</div>
+			<div v-if="song.catalogNumber" :class="$style.metaItem">
+				<span :class="$style.metaLabel">{{ t('sheetmusic', 'Catalog No.:') }}</span>
+				<span>{{ song.catalogNumber }}</span>
+			</div>
+			<div v-if="song.songNumber" :class="$style.metaItem">
+				<span :class="$style.metaLabel">{{ t('sheetmusic', 'Song No.:') }}</span>
+				<span>{{ song.songNumber }}</span>
+			</div>
 			<div v-if="song.stars" :class="$style.metaItem">
-				<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Rating:') }}</span>
+				<span :class="$style.metaLabel">{{ t('sheetmusic', 'Rating:') }}</span>
 				<span>{{ formatStars(song.stars) }}</span>
 			</div>
 			<div v-if="song.difficulty" :class="$style.metaItem">
-				<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Difficulty:') }}</span>
+				<span :class="$style.metaLabel">{{ t('sheetmusic', 'Difficulty:') }}</span>
 				<span>{{ formatDifficulty(song.difficulty) }}</span>
 			</div>
 			<div v-if="song.duration" :class="$style.metaItem">
-				<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Duration:') }}</span>
+				<span :class="$style.metaLabel">{{ t('sheetmusic', 'Duration:') }}</span>
 				<span>{{ formatDuration(song.duration) }}</span>
 			</div>
 			<div v-if="song.keywords" :class="$style.metaItem">
-				<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Keywords:') }}</span>
+				<span :class="$style.metaLabel">{{ t('sheetmusic', 'Keywords:') }}</span>
 				<span>{{ song.keywords }}</span>
 			</div>
 			<div v-if="song.custom" :class="$style.metaItem">
-				<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Custom:') }}</span>
+				<span :class="$style.metaLabel">{{ t('sheetmusic', 'Custom:') }}</span>
 				<span>{{ song.custom }}</span>
 			</div>
 			<div v-if="song.custom2" :class="$style.metaItem">
-				<span :class="$style.metaLabel">{{ t('mobilesheetsmanager', 'Custom 2:') }}</span>
+				<span :class="$style.metaLabel">{{ t('sheetmusic', 'Custom 2:') }}</span>
 				<span>{{ song.custom2 }}</span>
 			</div>
 		</div>
@@ -393,6 +442,7 @@ defineExpose({
 			:years="years"
 			:signatures="signatures"
 			:source-types="sourceTypes"
+			:instruments="instruments"
 			@saved="handleSaved"
 			@updated="handleUpdated"
 			@cancel="isEditing = false" />
@@ -402,7 +452,7 @@ defineExpose({
 			<div v-if="songFiles.length > 1" :class="$style.fileTabs">
 				<NcRadioGroup
 					:model-value="selectedFileId"
-					:label="t('mobilesheetsmanager', 'Files of this song')"
+					:label="t('sheetmusic', 'Files of this song')"
 					hide-label
 					@update:model-value="selectFile">
 					<NcRadioGroupButton
@@ -420,7 +470,7 @@ defineExpose({
 				:file-path="previewFilePath"
 				:show-external-button="false" />
 			<div v-else :class="$style.error">
-				{{ t('mobilesheetsmanager', 'No file available for this song.') }}
+				{{ songFiles.length === 0 ? t('sheetmusic', 'No files attached to this song.') : t('sheetmusic', 'Missing file: The file does not exist on the file system.') }}
 			</div>
 		</template>
 
@@ -430,6 +480,13 @@ defineExpose({
 			:library-id="libraryId ?? -1"
 			:file-count="songFiles.length"
 			@deleted="handleSongDeleted" />
+
+		<SongPdfVersionsModal
+			v-model:open="isVersionsModalOpen"
+			:versions="fileVersions"
+			:is-loading="isLoadingVersions"
+			:is-reverting="isRevertingVersion"
+			@revert="revertToVersion" />
 	</div>
 </template>
 
@@ -623,7 +680,7 @@ defineExpose({
 	padding: 24px;
 }
 
-.pdfViewer :global(.mobilesheetsmanager-pdf-page) {
+.pdfViewer :global(.sheetmusic-pdf-page) {
 	display: block;
 	max-width: 100%;
 	height: auto;

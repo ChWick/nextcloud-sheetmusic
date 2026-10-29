@@ -42,16 +42,44 @@ test.describe('Navigation & Library Management', () => {
 		await expect(page.getByRole('heading', { name: 'Songs' })).toBeVisible()
 	})
 
-	test('opens and interacts with Add Library dialog', async ({ page }) => {
-		page.on('console', msg => console.log('BROWSER LOG:', msg.text()))
-		// Click the Add MobileSheets Library footer item
-		await page.getByText('Add MobileSheets Library').click()
+	test('opens and interacts with Add Library dialogs', async ({ page }) => {
+		// Open footer actions menu
+		await page.getByRole('button', { name: 'Add library' }).click()
+
+		// Click Import MobileSheets library
+		await page.getByText('Import MobileSheets library').click()
 
 		// Verify dialog appears
-		await expect(page.getByText('Select a MobileSheets .db file from your Nextcloud files.')).toBeVisible()
+		await expect(page.getByText('Select a mobilesheets.db file from your Nextcloud files')).toBeVisible()
 
 		// Close dialog
 		await page.getByRole('button', { name: 'Cancel' }).click()
-		await expect(page.getByText('Select a MobileSheets .db file from your Nextcloud files.')).not.toBeVisible()
+		await expect(page.getByText('Select a mobilesheets.db file from your Nextcloud files')).not.toBeVisible()
+
+		// Open footer actions menu again
+		await page.getByRole('button', { name: 'Add library' }).click()
+
+		// Click Add Sheet Music library
+		await page.getByText('Add Sheet Music library').click()
+
+		// Verify folder add dialog appears
+		await expect(page.getByText('Select a folder from your Nextcloud files. Sheet music files will be imported.')).toBeVisible()
+
+		// Close dialog
+		await page.getByRole('button', { name: 'Cancel' }).click()
+		await expect(page.getByText('Select a folder from your Nextcloud files. Sheet music files will be imported.')).not.toBeVisible()
+	})
+
+	test('switches library via select dropdown and directly opens it', async ({ page }) => {
+		// Verify currently on library 1
+		await expect(page).toHaveURL(/#\/library\/1\/songs/)
+
+		// Select dropdown should have Secondary.db (id: 2)
+		const select = page.locator('select')
+		await expect(select).toBeVisible()
+		await select.selectOption('2')
+
+		// Should immediately navigate and open library 2
+		await expect(page).toHaveURL(/#\/library\/2\/songs/)
 	})
 })

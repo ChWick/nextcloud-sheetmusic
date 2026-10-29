@@ -1,16 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { config, mount } from '@vue/test-utils'
 import SongPdfCropModal from '../../../src/components/song-pdf/SongPdfCropModal.vue'
 import type { PageCrop } from '../../../src/components/song-pdf/crop-types'
 
-// Minimal stub for Nextcloud design system dialog wrapper
-vi.mock('@nextcloud/vue/components/NcDialog', () => ({
-	default: {
-		name: 'NcDialog',
-		props: ['open', 'name'],
-		template: '<div v-if="open" role="dialog" class="nc-dialog"><slot /></div>',
-	},
-}))
+// Avoid teleporting NcDialog to body so wrapper.find queries work without mocks
+config.global.stubs = { teleport: true }
 
 describe('SongPdfCropModal.vue (Minimal mocks component interaction)', () => {
 	const createMockPdf = () => ({

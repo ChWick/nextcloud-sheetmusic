@@ -54,7 +54,7 @@ describe('FilePreviewer.vue', () => {
 		openSpy.mockRestore()
 	})
 
-	it('fetches PDF with standard arraybuffer responseType without cache busting headers', async () => {
+	it('fetches PDF with standard arraybuffer responseType and cache busting headers', async () => {
 		const axios = (await import('@nextcloud/axios')).default
 		mount(FilePreviewer, {
 			props: {
@@ -64,6 +64,10 @@ describe('FilePreviewer.vue', () => {
 		await flushPromises()
 
 		expect(axios.get).toHaveBeenCalledWith('/files/scores/Test.pdf', {
+			headers: {
+				'Cache-Control': 'no-cache',
+				'Pragma': 'no-cache',
+			},
 			responseType: 'arraybuffer',
 		})
 	})
@@ -113,7 +117,7 @@ describe('FilePreviewer.vue', () => {
 		await flushPromises()
 
 		// For continuous layout (<30 pages defaults to continuous), placeholders are created
-		const placeholders = wrapper.findAll('.mobilesheetsmanager-page-placeholder')
+		const placeholders = wrapper.findAll('.sheetmusic-page-placeholder')
 		expect(placeholders.length).toBe(5)
 		expect(placeholders[0].attributes('data-page-num')).toBe('1')
 		expect(placeholders[4].attributes('data-page-num')).toBe('5')
@@ -154,5 +158,47 @@ describe('FilePreviewer.vue', () => {
 		expect(mockGetViewport).toHaveBeenCalledWith(expect.objectContaining({
 			rotation: 90,
 		}))
+	})
+
+	it('shows missing file message when PDF request returns 404', async () => {
+		const axios = (await import('@nextcloud/axios')).default
+		vi.mocked(axios.get).mockRejectedValueOnce({
+			response: { status: 404 },
+		})
+
+		const wrapper = mount(FilePreviewer, {
+			props: {
+				filePath: '/files/scores/NonExistent.pdf',
+			},
+		})
+		await flushPromises()
+
+		expect(wrapper.text()).toContain('Missing file: The file does not exist on the file system.')
+	})
+
+	it('shows missing file message when filePath is empty', async () => {
+		const wrapper = mount(FilePreviewer, {
+			props: {
+				filePath: '',
+			},
+		})
+		await flushPromises()
+
+		expect(wrapper.text()).toContain('Missing file: The file does not exist on the file system.')
+	})
+
+	it('shows missing file message when image fails to load', async () => {
+		const wrapper = mount(FilePreviewer, {
+			props: {
+				filePath: '/files/scores/MissingImage.png',
+			},
+		})
+		await flushPromises()
+
+		const img = wrapper.find('img')
+		expect(img.exists()).toBe(true)
+
+		await img.trigger('error')
+		expect(wrapper.text()).toContain('Missing file: The file does not exist on the file system.')
 	})
 })

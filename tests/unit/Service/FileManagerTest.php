@@ -9,20 +9,25 @@ declare(strict_types=1);
 
 namespace Service;
 
-use OCA\MobileSheetsManager\Db\LibraryMapper;
-use OCA\MobileSheetsManager\Db\MobileSheetsArtist;
-use OCA\MobileSheetsManager\Db\MobileSheetsBook;
-use OCA\MobileSheetsManager\Db\MobileSheetsCollection;
-use OCA\MobileSheetsManager\Db\MobileSheetsComposer;
-use OCA\MobileSheetsManager\Db\MobileSheetsFile;
-use OCA\MobileSheetsManager\Db\MobileSheetsSong;
-use OCA\MobileSheetsManager\Db\SongMapper;
-use OCA\MobileSheetsManager\Service\FileManager;
-use OCA\MobileSheetsManager\Service\MobileSheetsFileLogEntry;
-use OCA\MobileSheetsManager\Service\MobileSheetsHashCodesFile;
-use OCA\MobileSheetsManager\Service\MobileSheetsPathResolver;
-use OCA\MobileSheetsManager\Service\MobileSheetsPdfMetadata;
-use OCA\MobileSheetsManager\Service\SyncException;
+use OCA\SheetMusic\Db\InternalLibrary;
+use OCA\SheetMusic\Db\InternalSongFileMapper;
+use OCA\SheetMusic\Db\InternalSongMapper;
+use OCA\SheetMusic\Db\LibraryData;
+use OCA\SheetMusic\Db\LibraryMapper;
+use OCA\SheetMusic\Service\FileManager;
+use OCA\SheetMusic\Service\SyncException;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsArtist;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsBook;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsCollection;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsComposer;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsFile;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsFileLogEntry;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsHashCodesFile;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsKey;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPathResolver;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdfMetadata;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSong;
+use OCA\SheetMusic\Sync\MobileSheets\SongMapper;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
@@ -30,12 +35,13 @@ use OCP\Files\IUserFolder;
 use OCP\Files\Node;
 use OCP\Files\Storage\IStorage;
 use OCP\IUser;
-use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 use TestSupport\TestUtils;
-use function OCA\MobileSheetsManager\Service\fileIndexOf;
-use function OCA\MobileSheetsManager\Service\fileIndexPrefix;
+use function OCA\SheetMusic\Service\fileIndexOf;
+use function OCA\SheetMusic\Service\fileIndexPrefix;
 
 /**
  * Covers FileManager::regenerateFilePath(), which moves a MobileSheets file to its
@@ -134,12 +140,52 @@ final class FileManagerTest extends TestCase {
 
 	/** A FileManager wired to the fake tree and the given SongMapper. */
 	private function makeFileManager(SongMapper $songMapper): FileManager {
+		$internalSongMapper = $this->createMock(InternalSongMapper::class);
+		$internalSongMapper->method('findSong')->willReturnCallback(function (int $songId, IUser $user) {
+			return $this->songMapper->findSong($this->databaseFixture['path'], $songId);
+		});
+		$internalSongMapper->method('findLibraryData')->willReturnCallback(function (int $libraryId, IUser $user) {
+			return ['songs' => $this->songMapper->findSongs($this->databaseFixture['path'])];
+		});
+
+		$internalSongFileMapper = $this->createMock(InternalSongFileMapper::class);
+		$internalSongFileMapper->method('findByFileId')->willReturnCallback(function (int $fileId) {
+			return [];
+		});
+
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$libraryMapper->method('findById')->willReturnCallback(function (int $id): ?InternalLibrary {
+			if ($id === 1) {
+				return new InternalLibrary(
+					id: 1,
+					userId: self::UID,
+					path: '/Noten/mobilesheets.db',
+				);
+			}
+			if ($id === 2) {
+				return new InternalLibrary(
+					id: 2,
+					userId: self::UID,
+					path: '/Noten',
+				);
+			}
+			return null;
+		});
+		$libraryMapper->method('findForUser')->willReturn(new InternalLibrary(
+			id: 1,
+			userId: self::UID,
+			path: '/Noten/mobilesheets.db',
+		));
+
 		return new FileManager(
-			$this->createMock(LibraryMapper::class),
-			$songMapper,
+			$libraryMapper,
 			$this->rootFolder,
 			new MobileSheetsPathResolver($this->rootFolder),
-			$this->createMock(LoggerInterface::class),
+			new NullLogger(),
+			null,
+			$internalSongFileMapper,
+			$internalSongMapper,
+			$songMapper,
 		);
 	}
 
@@ -221,10 +267,10 @@ final class FileManagerTest extends TestCase {
 			[],
 			[],
 			[],
-			[new \OCA\MobileSheetsManager\Db\MobileSheetsKey(1, 'Ebm')],
+			[new MobileSheetsKey(1, 'Ebm')],
 		);
 
-		$paths = \OCA\MobileSheetsManager\Service\createTargetPaths($song, '.pdf');
+		$paths = \OCA\SheetMusic\Service\createTargetPaths($song, '.pdf');
 
 		self::assertCount(2, $paths);
 		self::assertSame('Dave Brubeck/Dave Brubeck - Take Five in E♭m.pdf', $paths[0]);
@@ -245,10 +291,10 @@ final class FileManagerTest extends TestCase {
 				[],
 				[],
 				[],
-				[new \OCA\MobileSheetsManager\Db\MobileSheetsKey(1, $keyName)],
+				[new MobileSheetsKey(1, $keyName)],
 			);
 
-			$path = \OCA\MobileSheetsManager\Service\createTargetPath($song, '.pdf');
+			$path = \OCA\SheetMusic\Service\createTargetPath($song, '.pdf');
 			self::assertSame(
 				'Bach/Bach - Take Five in ' . $expected[$index] . '.pdf',
 				$path,
@@ -267,12 +313,12 @@ final class FileManagerTest extends TestCase {
 			[],
 			[],
 			[],
-			[new \OCA\MobileSheetsManager\Db\MobileSheetsKey(1, 'Blues')],
+			[new MobileSheetsKey(1, 'Blues')],
 		);
 
 		self::assertSame(
 			'Bach/Bach - Blue in Blues.pdf',
-			\OCA\MobileSheetsManager\Service\createTargetPath($song, '.pdf'),
+			\OCA\SheetMusic\Service\createTargetPath($song, '.pdf'),
 		);
 	}
 
@@ -285,7 +331,7 @@ final class FileManagerTest extends TestCase {
 			[new MobileSheetsBook(1, 'Book?.')],
 		);
 
-		$path = \OCA\MobileSheetsManager\Service\createTargetPath($song, '.pdf');
+		$path = \OCA\SheetMusic\Service\createTargetPath($song, '.pdf');
 
 		self::assertSame('Bad-Composer/Bad-Composer - Book-/Bad-Composer - Book- - Song - Name.pdf', $path);
 		foreach (explode('/', $path) as $segment) {
@@ -305,7 +351,7 @@ final class FileManagerTest extends TestCase {
 
 		self::assertSame(
 			'_CON/_CON - Take Five.pdf',
-			\OCA\MobileSheetsManager\Service\createTargetPath($song, '.pdf'),
+			\OCA\SheetMusic\Service\createTargetPath($song, '.pdf'),
 		);
 	}
 
@@ -317,7 +363,7 @@ final class FileManagerTest extends TestCase {
 			[new MobileSheetsComposer(1, 'Miles')],
 		);
 
-		$path = \OCA\MobileSheetsManager\Service\createTargetPath($song, '.pdf');
+		$path = \OCA\SheetMusic\Service\createTargetPath($song, '.pdf');
 		$fileName = basename($path);
 
 		self::assertLessThanOrEqual(250, strlen($fileName));
@@ -335,7 +381,7 @@ final class FileManagerTest extends TestCase {
 			[new MobileSheetsCollection(1, 'Jazz')],
 		);
 
-		$path = \OCA\MobileSheetsManager\Service\createTargetPath($song, '.part');
+		$path = \OCA\SheetMusic\Service\createTargetPath($song, '.part');
 
 		self::assertStringEndsWith('Take Five-part', $path);
 		self::assertFalse(str_ends_with($path, '.part'));
@@ -351,7 +397,7 @@ final class FileManagerTest extends TestCase {
 			'two dots' => ['..'],
 			'only dots' => ['.....'],
 			'only spaces' => ['     '],
-			'trailing spaces and dots' => ["  Song title...   "],
+			'trailing spaces and dots' => ['  Song title...   '],
 			'leading dots' => ['...Song'],
 			'path separators' => ['../folder\\song'],
 			'windows reserved characters' => ['a<b>c:d"e/f\\g|h?i*j'],
@@ -383,13 +429,13 @@ final class FileManagerTest extends TestCase {
 			'artist fallback' => new MobileSheetsSong(1, 'Take Five', [], [], [], [], [new MobileSheetsArtist(1, $name)]),
 			'book' => new MobileSheetsSong(1, 'Take Five', [], [new MobileSheetsComposer(1, 'Bach')], [new MobileSheetsBook(1, $name)]),
 			'collection' => new MobileSheetsSong(1, 'Take Five', [], [], [], [new MobileSheetsCollection(1, $name)]),
-			'key' => new MobileSheetsSong(1, 'Take Five', [], [new MobileSheetsComposer(1, 'Bach')], [], [], [], [], [new \OCA\MobileSheetsManager\Db\MobileSheetsKey(1, $name)]),
+			'key' => new MobileSheetsSong(1, 'Take Five', [], [new MobileSheetsComposer(1, 'Bach')], [], [], [], [], [new MobileSheetsKey(1, $name)]),
 		];
 
 		foreach ($cases as $component => $song) {
 			try {
-				$paths = \OCA\MobileSheetsManager\Service\createTargetPaths($song, '.pdf');
-			} catch (\OCA\MobileSheetsManager\Service\NoNamingRuleException $exception) {
+				$paths = \OCA\SheetMusic\Service\createTargetPaths($song, '.pdf');
+			} catch (\OCA\SheetMusic\Service\NoNamingRuleException $exception) {
 				// An empty composer, artist, and collection is intentionally not a
 				// naming rule; callers already handle this domain exception.
 				self::assertSame('', $name, sprintf('Unexpected missing naming rule for %s', $component));
@@ -422,10 +468,10 @@ final class FileManagerTest extends TestCase {
 			[new MobileSheetsCollection(1, '...'), new MobileSheetsCollection(2, "\xFF")],
 			[new MobileSheetsArtist(1, 'Artist/Name')],
 			[],
-			[new \OCA\MobileSheetsManager\Db\MobileSheetsKey(1, "Key\tName")],
+			[new MobileSheetsKey(1, "Key\tName")],
 		);
 
-		$paths = \OCA\MobileSheetsManager\Service\createTargetPaths($song, '.pdf');
+		$paths = \OCA\SheetMusic\Service\createTargetPaths($song, '.pdf');
 
 		self::assertNotEmpty($paths);
 		foreach ($paths as $path) {
@@ -453,11 +499,11 @@ final class FileManagerTest extends TestCase {
 				new MobileSheetsSong(1, 'Title', [], [], [], [], [new MobileSheetsArtist(1, $name)]),
 				new MobileSheetsSong(1, 'Title', [], [new MobileSheetsComposer(1, 'Composer')], [new MobileSheetsBook(1, $name)]),
 				new MobileSheetsSong(1, 'Title', [], [], [], [new MobileSheetsCollection(1, $name)]),
-				new MobileSheetsSong(1, 'Title', [], [new MobileSheetsComposer(1, 'Composer')], [], [], [], [], [new \OCA\MobileSheetsManager\Db\MobileSheetsKey(1, $name)]),
+				new MobileSheetsSong(1, 'Title', [], [new MobileSheetsComposer(1, 'Composer')], [], [], [], [], [new MobileSheetsKey(1, $name)]),
 			];
 
 			foreach ($cases as $song) {
-				$paths = \OCA\MobileSheetsManager\Service\createTargetPaths($song, '.pdf');
+				$paths = \OCA\SheetMusic\Service\createTargetPaths($song, '.pdf');
 				self::assertNotEmpty($paths, sprintf('No path generated for byte 0x%02X', $byte));
 				foreach ($paths as $path) {
 					foreach (explode('/', $path) as $segment) {
@@ -494,7 +540,7 @@ final class FileManagerTest extends TestCase {
 		];
 
 		foreach ($extensions as $extension) {
-			$paths = \OCA\MobileSheetsManager\Service\createTargetPaths($song, $extension);
+			$paths = \OCA\SheetMusic\Service\createTargetPaths($song, $extension);
 			self::assertNotEmpty($paths, 'No path generated for extension ' . bin2hex($extension));
 			foreach ($paths as $path) {
 				foreach (explode('/', $path) as $segment) {
@@ -1065,7 +1111,7 @@ final class FileManagerTest extends TestCase {
 			[$this->sourceWebdav('Noten/other.pdf'), '-205429089', '1789249491000', '809049'],
 		]);
 
-		$hashCodes = MobileSheetsHashCodesFile::parse($hashFile, $this->createMock(LoggerInterface::class));
+		$hashCodes = MobileSheetsHashCodesFile::parse($hashFile, new NullLogger());
 		$this->regenerate($this->collectionSong(), 'Noten/source/SomeFile.pdf', hashCodes: $hashCodes);
 
 		// FileManager does not save; the caller does. Verify the in-memory edit.
@@ -1098,7 +1144,7 @@ final class FileManagerTest extends TestCase {
 		];
 		$this->folders = ['Noten' => true, 'Noten/A' => true, 'Noten/A/B' => true, 'Noten/Jazz' => true];
 
-		$hashCodes = MobileSheetsHashCodesFile::parse($hashFile, $this->createMock(LoggerInterface::class));
+		$hashCodes = MobileSheetsHashCodesFile::parse($hashFile, new NullLogger());
 
 		$this->regenerate($this->collectionSong(), 'Noten/A/B/SomeFile.pdf', hashCodes: $hashCodes);
 
@@ -1119,7 +1165,7 @@ final class FileManagerTest extends TestCase {
 		$this->files = ['Noten/Jazz/Jazz - Take Five.pdf' => 'PAYLOAD'];
 		$this->folders = ['Noten' => true, 'Noten/Jazz' => true];
 
-		$hashCodes = MobileSheetsHashCodesFile::parse($hashFile, $this->createMock(LoggerInterface::class));
+		$hashCodes = MobileSheetsHashCodesFile::parse($hashFile, new NullLogger());
 		$this->regenerate($this->collectionSong(), 'Noten/Jazz/Jazz - Take Five.pdf', hashCodes: $hashCodes);
 
 		self::assertFalse($hashCodes->isDirty(), 'a no-op must not touch the hash codes file');
@@ -1130,7 +1176,7 @@ final class FileManagerTest extends TestCase {
 			[$this->sourceWebdav('Noten/unrelated.pdf'), '1', '2', '3'],
 		]);
 
-		$hashCodes = MobileSheetsHashCodesFile::parse($hashFile, $this->createMock(LoggerInterface::class));
+		$hashCodes = MobileSheetsHashCodesFile::parse($hashFile, new NullLogger());
 		$this->regenerate($this->collectionSong(), 'Noten/source/SomeFile.pdf', hashCodes: $hashCodes);
 
 		// The move still happens; there is simply no entry to rename.
@@ -1226,18 +1272,50 @@ final class FileManagerTest extends TestCase {
 		$rootFolder->method('getUserFolder')->with(self::UID)->willReturn($userFolder);
 
 		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->method('findById')->with(1)->willReturn(['id' => 1, 'path' => '/Noten/mobilesheets.db']);
+		$libraryMapper->method('findById')->willReturnCallback(function (int $id): ?InternalLibrary {
+			if ($id === 1) {
+				return new InternalLibrary(
+					id: 1,
+					userId: self::UID,
+					path: '/Noten/mobilesheets.db',
+				);
+			}
+			if ($id === 2) {
+				return new InternalLibrary(
+					id: 2,
+					userId: self::UID,
+					path: '/Noten',
+				);
+			}
+			return null;
+		});
 
 		foreach ($songs as $song) {
 			$this->storeSong($song);
 		}
 
+		$internalSongMapper = $this->createMock(InternalSongMapper::class);
+		$internalSongMapper->method('findSong')->willReturnCallback(function (int $songId, IUser $user) {
+			return $this->songMapper->findSong($this->databaseFixture['path'], $songId);
+		});
+		$internalSongMapper->method('findLibraryData')->willReturnCallback(function (int $libraryId, IUser $user) {
+			return new LibraryData(songs: $this->songMapper->findSongs($this->databaseFixture['path']));
+		});
+
+		$internalSongFileMapper = $this->createMock(InternalSongFileMapper::class);
+		$internalSongFileMapper->method('findByFileId')->willReturnCallback(function (int $fileId) {
+			return [];
+		});
+
 		return new FileManager(
 			$libraryMapper,
-			$this->songMapper,
 			$rootFolder,
 			new MobileSheetsPathResolver($rootFolder),
-			$logger ?? $this->createMock(LoggerInterface::class),
+			$logger ?? new NullLogger(),
+			null,
+			$internalSongFileMapper,
+			$internalSongMapper,
+			$this->songMapper,
 		);
 	}
 
@@ -1529,10 +1607,9 @@ final class FileManagerTest extends TestCase {
 
 		$fileManager = new FileManager(
 			$libraryMapper,
-			$this->songMapper,
 			$this->rootFolder,
 			new MobileSheetsPathResolver($this->rootFolder),
-			$this->createMock(LoggerInterface::class),
+			new NullLogger(),
 		);
 
 		$this->expectException(\Exception::class);
@@ -1648,7 +1725,7 @@ final class FileManagerTest extends TestCase {
 	public function testRegenerateSongFilePathsUpdatesTheHashCodesFile(): void {
 		$source = $this->sourceWebdav('Noten/old/SomeFile.pdf');
 		$hashFile = $this->writeHashCodesFile([[$source, '1', '2', '3']]);
-		$hashCodes = MobileSheetsHashCodesFile::parse($hashFile, $this->createMock(LoggerInterface::class));
+		$hashCodes = MobileSheetsHashCodesFile::parse($hashFile, new NullLogger());
 
 		$song = new MobileSheetsSong(
 			1,
@@ -1787,6 +1864,33 @@ final class FileManagerTest extends TestCase {
 		self::assertArrayHasKey('Noten/Miles/Miles - Blue (2).pdf', $this->files);
 	}
 
+	public function testLibraryFolderResolvesTargetFolderForPhysicalDb(): void {
+		$this->files['Noten/mobilesheets.db'] = 'SQLITE_BYTES';
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn(self::UID);
+
+		$folder = $this->fileManager->libraryFolder(1, $user);
+		self::assertSame(self::LIBRARY_DIR, $folder->getPath());
+	}
+
+	public function testLibraryFolderResolvesTargetFolderForVirtualFolder(): void {
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn(self::UID);
+
+		$folder = $this->fileManager->libraryFolder(2, $user);
+		self::assertSame(self::LIBRARY_DIR, $folder->getPath());
+		self::assertSame('Noten', $folder->getName());
+	}
+
+	public function testLibraryFolderThrowsWhenLibraryNotFound(): void {
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn(self::UID);
+
+		$this->expectException(\Exception::class);
+		$this->expectExceptionMessage('Library with ID 999 not found');
+		$this->fileManager->libraryFolder(999, $user);
+	}
+
 	/**
 	 * Build a Folder mock backed by the in-memory tree.
 	 *
@@ -1797,6 +1901,8 @@ final class FileManagerTest extends TestCase {
 	 */
 	private function fakeFolder(string $relative): IUserFolder {
 		$folder = $this->createMock(IUserFolder::class);
+		$folder->method('getName')->willReturn(basename($relative));
+		$folder->method('getPath')->willReturn($relative === '' ? self::USER_ROOT : self::USER_ROOT . '/' . ltrim($relative, '/'));
 
 		$folder->method('nodeExists')->willReturnCallback(
 			fn (string $path): bool => isset($this->files[$path]) || isset($this->folders[$path]),

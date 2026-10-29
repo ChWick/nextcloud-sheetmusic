@@ -48,7 +48,7 @@ defineExpose({ openUploadPicker })
 <template>
 	<div :class="$style.fileSection">
 		<div :class="$style.fileSectionHeader">
-			<label :class="$style.label">{{ t('mobilesheetsmanager', 'Attached Files') }}</label>
+			<label :class="$style.label">{{ t('sheetmusic', 'Attached Files') }}</label>
 			<div :class="$style.fileButtons">
 				<input
 					ref="fileInput"
@@ -59,22 +59,22 @@ defineExpose({ openUploadPicker })
 					type="button"
 					:class="$style.fileActionButton"
 					:disabled="isSaving"
-					:title="t('mobilesheetsmanager', 'Upload file from computer')"
-					:aria-label="t('mobilesheetsmanager', 'Upload file from computer')"
+					:title="t('sheetmusic', 'Upload file from computer')"
+					:aria-label="t('sheetmusic', 'Upload file from computer')"
 					@click="openUploadPicker">
 					<UploadIcon :size="20" aria-hidden="true" />
-					{{ t('mobilesheetsmanager', 'Upload') }}
+					{{ t('sheetmusic', 'Upload') }}
 				</button>
 
 				<button
 					type="button"
 					:class="$style.fileActionButton"
 					:disabled="isSaving"
-					:title="t('mobilesheetsmanager', 'Choose file from Nextcloud')"
-					:aria-label="t('mobilesheetsmanager', 'Choose file from Nextcloud')"
+					:title="t('sheetmusic', 'Choose file from Nextcloud')"
+					:aria-label="t('sheetmusic', 'Choose file from Nextcloud')"
 					@click="emit('chooseNextcloudFile')">
 					<FolderIcon :size="20" aria-hidden="true" />
-					{{ t('mobilesheetsmanager', 'Choose from Nextcloud') }}
+					{{ t('sheetmusic', 'Choose from Nextcloud') }}
 				</button>
 			</div>
 		</div>
@@ -90,7 +90,7 @@ defineExpose({ openUploadPicker })
 				@delete="emit('delete', $event)" />
 		</ul>
 		<p v-else :class="$style.noFiles">
-			{{ t('mobilesheetsmanager', 'No files attached to this song.') }}
+			{{ t('sheetmusic', 'No files attached to this song.') }}
 		</p>
 
 		<SongPendingNotice

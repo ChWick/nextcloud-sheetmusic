@@ -128,6 +128,7 @@ describe('IntegrityView.vue', () => {
 			fileId: 100,
 			entityType: undefined,
 			entityId: undefined,
+			path: 'Noten/OldName.pdf',
 		})
 
 		// Verify success toast notification contains song title
@@ -183,9 +184,9 @@ describe('IntegrityView.vue', () => {
 		await flushPromises()
 
 		// Verify API call
-		expect(apiPost).toHaveBeenCalledWith('/api/libraries/1/integrity/fix-all', {
+		expect(apiPost).toHaveBeenCalledWith('/api/libraries/1/integrity/fix-all', expect.objectContaining({
 			issueType: 'invalid_naming_rule',
-		})
+		}))
 
 		// Verify toast notification
 		expect(showSuccess).toHaveBeenCalledWith('Fixed 2 integrity issue(s).')
@@ -295,6 +296,129 @@ describe('IntegrityView.vue', () => {
 		await flushPromises()
 
 		expect(showError).toHaveBeenCalledWith('Database corrupted or locked')
+	})
+
+	it('renders missing file issues under Missing Files group and not as naming rules', async () => {
+		const mockMissingIssue: IntegrityIssue = {
+			type: 'missing_file',
+			severity: 'error',
+			message: 'File "missing.pdf" referenced by song "Prelude in C" does not exist in Nextcloud storage.',
+			songId: 10,
+			songTitle: 'Prelude in C',
+			fileId: 100,
+			path: 'Noten/missing.pdf',
+			fixable: false,
+		}
+
+		vi.mocked(apiGet).mockResolvedValueOnce({
+			data: {
+				ocs: {
+					data: {
+						issues: [mockMissingIssue],
+					},
+				},
+			},
+		} as any)
+
+		const wrapper = mount(IntegrityView, {
+			props: { selectedLibrary: 1 },
+		})
+		await flushPromises()
+
+		expect(wrapper.text()).toContain('Missing Files')
+		expect(wrapper.text()).not.toContain('Invalid Naming Rules')
+		expect(wrapper.text()).toContain('Prelude in C')
+		expect(wrapper.text()).toContain('does not exist in Nextcloud storage')
+	})
+
+	it('fixes a fixable orphan file issue and shows success toast with song title', async () => {
+		const mockOrphanIssue: IntegrityIssue = {
+			type: 'orphan_file',
+			severity: 'warning',
+			message: 'File "Moonlight Sonata.pdf" exists in library storage but is not linked to any song.',
+			songId: 42,
+			songTitle: 'Moonlight Sonata',
+			path: 'Moonlight Sonata.pdf',
+			fixable: true,
+		}
+
+		vi.mocked(apiGet).mockResolvedValueOnce({
+			data: {
+				ocs: {
+					data: {
+						issues: [mockOrphanIssue],
+					},
+				},
+			},
+		} as any)
+
+		vi.mocked(apiPost).mockResolvedValueOnce({
+			data: {
+				ocs: {
+					data: {
+						success: true,
+						fixedCount: 1,
+						message: 'Linked orphan file "Moonlight Sonata.pdf" to song "Moonlight Sonata".',
+					},
+				},
+			},
+		} as any)
+
+		const wrapper = mount(IntegrityView, {
+			props: { selectedLibrary: 1 },
+		})
+		await flushPromises()
+
+		expect(wrapper.text()).toContain('Orphan Files')
+		expect(wrapper.text()).toContain('Moonlight Sonata')
+
+		const autoFixBtn = wrapper.findAll('button').find(b => b.text().includes('Auto-Fix Issue'))
+		expect(autoFixBtn).toBeDefined()
+		await autoFixBtn!.trigger('click')
+		await flushPromises()
+
+		expect(apiPost).toHaveBeenCalledWith('/api/libraries/1/integrity/fix', {
+			issueType: 'orphan_file',
+			songId: 42,
+			fileId: undefined,
+			entityType: undefined,
+			entityId: undefined,
+			path: 'Moonlight Sonata.pdf',
+		})
+
+		expect(showSuccess).toHaveBeenCalledWith('Linked orphan file to "Moonlight Sonata".')
+		expect(wrapper.text()).not.toContain('Moonlight Sonata.pdf')
+	})
+
+	it('passes autoMatchOrphans=0 query param when autoMatchOrphans toggle is disabled', async () => {
+		vi.mocked(apiGet).mockResolvedValue({
+			data: {
+				ocs: {
+					data: {
+						issues: [],
+					},
+				},
+			},
+		} as any)
+
+		const wrapper = mount(IntegrityView, {
+			props: { selectedLibrary: 1 },
+		})
+		await flushPromises()
+
+		expect(apiGet).toHaveBeenCalledWith('/api/libraries/1/integrity')
+
+		// Find the switch component or input and toggle it off
+		const toggle = wrapper.findComponent({ name: 'NcCheckboxRadioSwitch' })
+		expect(toggle.exists()).toBe(true)
+		await toggle.vm.$emit('update:modelValue', false)
+		await flushPromises()
+
+		expect(apiGet).toHaveBeenCalledWith('/api/libraries/1/integrity', {
+			queryParams: {
+				autoMatchOrphans: '0',
+			},
+		})
 	})
 })
 

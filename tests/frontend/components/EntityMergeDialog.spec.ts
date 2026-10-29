@@ -138,7 +138,7 @@ describe('EntityMergeDialog.vue', () => {
 		await vm.submitMerge()
 
 		expect(axios.post).toHaveBeenCalledWith(
-			'/ocs/v2.php/apps/mobilesheetsmanager/api/entities/merge',
+			'/ocs/v2.php/apps/sheetmusic/api/entities/merge',
 			{
 				libraryId: 1,
 				entityType: 'composers',

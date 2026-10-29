@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Song } from '../../../src/types/song'
-import { formatArtists, formatBooks, formatCollections, formatComposers, formatCustomGroups, formatGenres, formatKeys, formatSignatures, formatSourceTypes, formatYears, sortSongs } from '../../../src/utils/song-formatter'
+import { formatArtists, formatBooks, formatCollections, formatComposers, formatCustomGroups, formatDateTimestamp, formatGenres, formatInstruments, formatKeys, formatSignatures, formatSourceTypes, formatYears, sortSongs } from '../../../src/utils/song-formatter'
 
 describe('song-formatter utilities', () => {
 	const sampleSong: Song = {
@@ -16,6 +16,7 @@ describe('song-formatter utilities', () => {
 		years: [{ id: 8, name: '1808', year: 1808 }],
 		signatures: [{ id: 9, name: '2/4' }],
 		sourceTypes: [{ id: 11, name: 'Sheet Music', type: 'Sheet Music' }],
+		instruments: [{ id: 12, name: 'Piano' }],
 	}
 
 	const emptySong: Song = {
@@ -74,6 +75,24 @@ describe('song-formatter utilities', () => {
 		expect(formatSourceTypes(emptySong)).toBe('—')
 	})
 
+	it('formats instruments correctly', () => {
+		expect(formatInstruments(sampleSong)).toBe('Piano')
+		expect(formatInstruments(emptySong)).toBe('—')
+	})
+
+	it('sorts songs by instrument and opus', () => {
+		const songs: Song[] = [
+			{ id: 1, title: 'Song 1', instruments: [{ id: 1, name: 'Violin' }], opus: 'Op. 20' },
+			{ id: 2, title: 'Song 2', instruments: [{ id: 2, name: 'Cello' }], opus: 'Op. 5' },
+		]
+
+		const sortedByInst = sortSongs(songs, 'instrument', 'asc')
+		expect(sortedByInst[0].id).toBe(2) // Cello before Violin
+
+		const sortedByOpus = sortSongs(songs, 'opus', 'asc')
+		expect(sortedByOpus[0].id).toBe(2) // Op. 5 before Op. 20 with numeric sort
+	})
+
 	it('sorts songs by title ascending and descending', () => {
 		const songs: Song[] = [
 			{ id: 1, title: 'B Song' },
@@ -113,5 +132,20 @@ describe('song-formatter utilities', () => {
 
 		const sortedByCreatedAsc = sortSongs(songs, 'dateCreated', 'asc')
 		expect(sortedByCreatedAsc.map(s => s.id)).toEqual([1, 3, 2])
+	})
+
+	it('formats date timestamps in both seconds and milliseconds without falling back to 1970', () => {
+		const unixSeconds = 1761687800 // 2025-10-28 in seconds
+		const unixMs = 1761687800000 // 2025-10-28 in milliseconds
+
+		const formattedSeconds = formatDateTimestamp(unixSeconds)
+		const formattedMs = formatDateTimestamp(unixMs)
+
+		expect(formattedSeconds).toContain('2025')
+		expect(formattedSeconds).not.toContain('1970')
+		expect(formattedMs).toContain('2025')
+		expect(formattedSeconds).toBe(formattedMs)
+		expect(formatDateTimestamp(null)).toBe('—')
+		expect(formatDateTimestamp(0)).toBe('—')
 	})
 })

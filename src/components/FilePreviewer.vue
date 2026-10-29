@@ -10,6 +10,7 @@ import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { openFileExternally } from '../utils/file'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import FilePreviewerToolbar from './file-preview/FilePreviewerToolbar.vue'
+import { inspectPdfPageResolution, type PdfPageResolutionSummary } from './song-pdf/pdf-enhance-engine'
 
 const props = withDefaults(
 	defineProps<{
@@ -34,6 +35,8 @@ let currentRenderId = 0
 const loadedPdf = shallowRef<any>(null)
 const totalPages = ref(1)
 const currentPage = ref(1)
+const fileSizeBytes = ref<number | null>(null)
+const pageResolutions = ref<PdfPageResolutionSummary[]>([])
 
 type PageLayoutMode = 'continuous' | 'single' | 'double'
 type ZoomMode = 'fit-width' | 'fit-page' | 'custom'
@@ -260,7 +263,7 @@ async function renderCurrentView() {
 			const canvas = document.createElement('canvas')
 			canvas.width = Math.floor(viewport.width)
 			canvas.height = Math.floor(viewport.height)
-			canvas.className = 'mobilesheetsmanager-pdf-page'
+			canvas.className = 'sheetmusic-pdf-page'
 			canvas.style.display = 'block'
 			canvas.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.2)'
 
@@ -289,7 +292,7 @@ async function renderCurrentView() {
 		if (typeof IntersectionObserver === 'undefined') {
 			for (const pageNumber of pagesToRender) {
 				const placeholder = document.createElement('div')
-				placeholder.className = 'mobilesheetsmanager-page-placeholder'
+				placeholder.className = 'sheetmusic-page-placeholder'
 				placeholder.dataset.pageNum = String(pageNumber)
 				pdfContainer.value.append(placeholder)
 				await renderPage(pageNumber, placeholder)
@@ -316,7 +319,7 @@ async function renderCurrentView() {
 
 		for (const pageNumber of pagesToRender) {
 			const placeholder = document.createElement('div')
-			placeholder.className = 'mobilesheetsmanager-page-placeholder'
+			placeholder.className = 'sheetmusic-page-placeholder'
 			placeholder.dataset.pageNum = String(pageNumber)
 			// Estimated placeholder size to stabilize scroll bar
 			placeholder.style.minWidth = '200px'
@@ -353,6 +356,8 @@ async function loadAndRenderFile() {
 	totalPages.value = 1
 	currentPage.value = 1
 	rotation.value = 0
+	fileSizeBytes.value = null
+	pageResolutions.value = []
 
 	await nextTick()
 	cleanupObserver()
@@ -362,7 +367,7 @@ async function loadAndRenderFile() {
 
 	if (!props.filePath) {
 		isLoading.value = false
-		errorMessage.value = t('mobilesheetsmanager', 'No file available.')
+		errorMessage.value = t('sheetmusic', 'Missing file: The file does not exist on the file system.')
 		return
 	}
 
@@ -376,14 +381,19 @@ async function loadAndRenderFile() {
 	try {
 		const response = await axios.get(props.filePath, {
 			responseType: 'arraybuffer',
+			headers: {
+				'Cache-Control': 'no-cache',
+				'Pragma': 'no-cache',
+			},
 		})
 
 		if (loadId !== currentLoadId) return
 
 		const pdfData = response.data instanceof ArrayBuffer ? new Uint8Array(response.data) : response.data
-		const wasmUrl = typeof generateFilePath === 'function' ? generateFilePath('mobilesheetsmanager', 'js', 'pdfjs/wasm/') : new URL('pdfjs-dist/wasm/', import.meta.url).href
-		const cMapUrl = typeof generateFilePath === 'function' ? generateFilePath('mobilesheetsmanager', 'js', 'pdfjs/cmaps/') : new URL('pdfjs-dist/cmaps/', import.meta.url).href
-		const standardFontDataUrl = typeof generateFilePath === 'function' ? generateFilePath('mobilesheetsmanager', 'js', 'pdfjs/standard_fonts/') : new URL('pdfjs-dist/standard_fonts/', import.meta.url).href
+		fileSizeBytes.value = typeof pdfData?.byteLength === 'number' ? pdfData.byteLength : null
+		const wasmUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/wasm/') : new URL('pdfjs-dist/wasm/', import.meta.url).href
+		const cMapUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/cmaps/') : new URL('pdfjs-dist/cmaps/', import.meta.url).href
+		const standardFontDataUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/standard_fonts/') : new URL('pdfjs-dist/standard_fonts/', import.meta.url).href
 
 		const pdf = await getDocument({
 			data: pdfData,
@@ -399,22 +409,46 @@ async function loadAndRenderFile() {
 		totalPages.value = pdf.numPages
 		currentPage.value = 1
 
+		// Collect page resolution summaries (up to first 25 pages for responsiveness)
+		try {
+			const maxInspect = Math.min(pdf.numPages, 25)
+			const summaries: PdfPageResolutionSummary[] = []
+			for (let p = 1; p <= maxInspect; p++) {
+				const pg = await pdf.getPage(p)
+				summaries.push(await inspectPdfPageResolution(pg, p))
+			}
+			if (loadId === currentLoadId) {
+				pageResolutions.value = summaries
+			}
+		} catch {
+			// Ignore resolution inspection errors on mock or malformed PDFs
+		}
+
 		// If the document is large (>30 pages), default to single page layout for optimal performance
 		if (pdf.numPages > 30) {
 			pageLayout.value = 'single'
 		}
 
 		await renderCurrentView()
-	} catch (error) {
+	} catch (error: any) {
 		console.error('Failed to load or render PDF:', error)
 		if (loadId === currentLoadId) {
-			errorMessage.value = t('mobilesheetsmanager', 'Could not load the selected file.')
+			const status = error?.response?.status ?? error?.status
+			if (status === 404) {
+				errorMessage.value = t('sheetmusic', 'Missing file: The file does not exist on the file system.')
+			} else {
+				errorMessage.value = t('sheetmusic', 'Could not load the selected file.')
+			}
 		}
 	} finally {
 		if (loadId === currentLoadId) {
 			isLoading.value = false
 		}
 	}
+}
+
+function handleImageError() {
+	errorMessage.value = t('sheetmusic', 'Missing file: The file does not exist on the file system.')
 }
 
 function handleResize() {
@@ -453,6 +487,8 @@ defineExpose({
 			:is-custom-zoom="isCustomZoom"
 			:display-scale="isImageFile ? imageScale : effectiveScale"
 			:show-external-button="showExternalButton"
+			:file-size-bytes="fileSizeBytes"
+			:page-resolutions="pageResolutions"
 			@previous-page="prevPage"
 			@next-page="nextPage"
 			@page-layout="setPageLayout"
@@ -464,7 +500,7 @@ defineExpose({
 			@open-external="openInExternalViewer" />
 
 		<div v-if="isLoading" :class="$style.loading">
-			<NcLoadingIcon :size="32" :name="t('mobilesheetsmanager', 'Loading file...')" />
+			<NcLoadingIcon :size="32" :name="t('sheetmusic', 'Loading file...')" />
 		</div>
 
 		<p v-if="errorMessage" :class="$style.error" role="alert">
@@ -476,7 +512,8 @@ defineExpose({
 				:src="filePath"
 				:alt="filePath"
 				:style="imageStyle"
-				:class="$style.previewImage">
+				:class="$style.previewImage"
+				@error="handleImageError">
 		</div>
 
 		<div
@@ -485,7 +522,7 @@ defineExpose({
 			:class="[$style.pdfContainer, $style[`layout-${pageLayout}`]]" />
 
 		<div v-if="!isLoading && !errorMessage && isUnsupportedFile" :class="$style.unsupported">
-			<p>{{ t('mobilesheetsmanager', 'Preview is not available for this file type.') }}</p>
+			<p>{{ t('sheetmusic', 'Preview is not available for this file type.') }}</p>
 			<NcButton
 				v-if="showExternalButton"
 				variant="primary"
@@ -493,7 +530,7 @@ defineExpose({
 				<template #icon>
 					<OpenInNewIcon :size="18" />
 				</template>
-				{{ t('mobilesheetsmanager', 'Open File Externally') }}
+				{{ t('sheetmusic', 'Open File Externally') }}
 			</NcButton>
 		</div>
 	</div>

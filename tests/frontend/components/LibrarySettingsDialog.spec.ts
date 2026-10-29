@@ -126,7 +126,7 @@ describe('LibrarySettingsDialog.vue', () => {
 		await checkboxes[0].setValue(false)
 
 		expect(axios.put).toHaveBeenCalledWith(
-			'/ocs/v2.php/apps/mobilesheetsmanager/api/libraries/1/settings',
+			'/ocs/v2.php/apps/sheetmusic/api/libraries/1/settings',
 			{ autoPaths: false },
 			expect.objectContaining({
 				headers: { 'OCS-APIREQUEST': 'true', Accept: 'application/json' },
@@ -160,7 +160,7 @@ describe('LibrarySettingsDialog.vue', () => {
 		await checkboxes[1].setValue(false)
 
 		expect(axios.put).toHaveBeenCalledWith(
-			'/ocs/v2.php/apps/mobilesheetsmanager/api/libraries/1/settings',
+			'/ocs/v2.php/apps/sheetmusic/api/libraries/1/settings',
 			{ autoPdfMetadata: false },
 			expect.objectContaining({
 				headers: { 'OCS-APIREQUEST': 'true', Accept: 'application/json' },

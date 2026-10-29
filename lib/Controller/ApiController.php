@@ -2,26 +2,20 @@
 
 declare(strict_types=1);
 
-namespace OCA\MobileSheetsManager\Controller;
+namespace OCA\SheetMusic\Controller;
 
-use OCA\MobileSheetsManager\Service\LibraryIntegrityService;
-use OCA\MobileSheetsManager\Service\MobileSheetsPathResolver;
-use OCA\MobileSheetsManager\Db\LibraryMapper;
-use OCA\MobileSheetsManager\Db\SongMapper;
-use OCA\MobileSheetsManager\Service\EntityService;
-use OCA\MobileSheetsManager\Service\FileManager;
-use OCA\MobileSheetsManager\Service\LibraryService;
-use OCA\MobileSheetsManager\Service\SongFileService;
-use OCA\MobileSheetsManager\Service\SongService;
-use OCP\AppFramework\Http;
+use OCA\SheetMusic\Service\EntityService;
+use OCA\SheetMusic\Service\LibraryIntegrityService;
+use OCA\SheetMusic\Service\LibraryService;
+use OCA\SheetMusic\Service\SongFileService;
+use OCA\SheetMusic\Service\SongHistoryService;
+use OCA\SheetMusic\Service\SongService;
 use OCP\AppFramework\Http\Attribute\ApiRoute;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\OCSController;
-use OCP\Files\IRootFolder;
 use OCP\IRequest;
 use OCP\IUserSession;
-use Psr\Log\LoggerInterface;
 
 /**
  * Main API controller facade delegating to specialized domain controllers and services.
@@ -37,31 +31,20 @@ class ApiController extends OCSController {
 	public function __construct(
 		string $appName,
 		IRequest $request,
-		LibraryMapper $libraryMapper,
-		SongMapper $songMapper,
-		IRootFolder $rootFolder,
-		LoggerInterface $logger,
+		LibraryService $libraryService,
+		SongService $songService,
+		SongFileService $songFileService,
+		EntityService $entityService,
+		LibraryIntegrityService $libraryIntegrityService,
 		IUserSession $userSession,
-		FileManager $fileManager,
-		?LibraryService $libraryService = null,
-		?SongService $songService = null,
-		?SongFileService $songFileService = null,
-		?EntityService $entityService = null,
-		?LibraryIntegrityService $libraryIntegrityService = null,
+		?SongHistoryService $songHistoryService = null,
 	) {
 		parent::__construct($appName, $request);
 
-		$libService = $libraryService ?? new LibraryService($libraryMapper, $songMapper, $rootFolder, $logger);
-		$pathResolver = new MobileSheetsPathResolver($rootFolder);
-		$integritySvc = $libraryIntegrityService ?? new LibraryIntegrityService($libService, $songMapper, $fileManager, $rootFolder, $pathResolver, $logger);
-		$fileSvc = $songFileService ?? new SongFileService($libService, $songMapper, $fileManager, $rootFolder, $logger);
-		$sngService = $songService ?? new SongService($libService, $songMapper, $fileSvc, $fileManager, $logger, $integritySvc);
-		$entService = $entityService ?? new EntityService($libService, $songMapper, $logger, $fileManager);
-
-		$this->libraryController = new LibraryController($appName, $request, $libService, $userSession, $integritySvc);
-		$this->songController = new SongController($appName, $request, $sngService, $userSession);
-		$this->songFileController = new SongFileController($appName, $request, $fileSvc, $userSession);
-		$this->entityController = new EntityController($appName, $request, $entService, $userSession);
+		$this->libraryController = new LibraryController($appName, $request, $libraryService, $userSession, $libraryIntegrityService);
+		$this->songController = new SongController($appName, $request, $songService, $userSession, $songHistoryService);
+		$this->songFileController = new SongFileController($appName, $request, $songFileService, $userSession);
+		$this->entityController = new EntityController($appName, $request, $entityService, $userSession);
 	}
 
 	#[NoAdminRequired]
@@ -78,8 +61,19 @@ class ApiController extends OCSController {
 
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'POST', url: '/api/libraries')]
-	public function addLibrary(string $path): DataResponse {
-		return $this->libraryController->addLibrary($path);
+	public function addLibrary(
+		string $path,
+		bool $importExistingDb = true,
+		?string $progressId = null,
+		bool $importPdfMetadata = true,
+	): DataResponse {
+		return $this->libraryController->addLibrary($path, $importExistingDb, $progressId, $importPdfMetadata);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'GET', url: '/api/libraries/progress/{progressId}')]
+	public function getProgress(string $progressId): DataResponse {
+		return $this->libraryController->getProgress($progressId);
 	}
 
 	#[NoAdminRequired]
@@ -90,8 +84,8 @@ class ApiController extends OCSController {
 
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'GET', url: '/api/libraries/{id}/integrity')]
-	public function getIntegrity(int $id): DataResponse {
-		return $this->libraryController->getIntegrity($id);
+	public function getIntegrity(int $id, bool|string $autoMatchOrphans = true): DataResponse {
+		return $this->libraryController->getIntegrity($id, $autoMatchOrphans);
 	}
 
 	#[NoAdminRequired]
@@ -103,8 +97,15 @@ class ApiController extends OCSController {
 		?int $fileId = null,
 		?string $entityType = null,
 		?int $entityId = null,
+		?string $path = null,
 	): DataResponse {
-		return $this->libraryController->fixIntegrityIssue($id, $issueType, $songId, $fileId, $entityType, $entityId);
+		return $this->libraryController->fixIntegrityIssue($id, $issueType, $songId, $fileId, $entityType, $entityId, $path);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/libraries/{id}/integrity/fix-all')]
+	public function fixAllIntegrityIssues(int $id, ?string $issueType = null, ?string $progressId = null): DataResponse {
+		return $this->libraryController->fixAllIntegrityIssues($id, $issueType, $progressId);
 	}
 
 	#[NoAdminRequired]
@@ -172,6 +173,16 @@ class ApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/songs-batch-delete')]
+	public function batchDeleteSongs(
+		?int $libraryId = null,
+		array $songIds = [],
+		bool $deleteFiles = true,
+	): DataResponse {
+		return $this->songController->batchDeleteSongs($libraryId, $songIds, $deleteFiles);
+	}
+
+	#[NoAdminRequired]
 	#[ApiRoute(verb: 'POST', url: '/api/songs/merge')]
 	public function mergeSong(
 		?int $libraryId = null,
@@ -217,6 +228,24 @@ class ApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/libraries/{libraryId}/songs/{id}/file/{fileId}/update')]
+	public function updateSongFile(int $id, int $fileId, int $libraryId): DataResponse {
+		return $this->songFileController->updateSongFile($id, $fileId, $libraryId);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'GET', url: '/api/libraries/{libraryId}/songs/{id}/file/{fileId}/versions')]
+	public function getSongFileVersions(int $id, int $fileId, int $libraryId): DataResponse {
+		return $this->songFileController->getSongFileVersions($id, $fileId, $libraryId);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/libraries/{libraryId}/songs/{id}/file/{fileId}/versions/{revision}/revert')]
+	public function revertSongFileVersion(int $id, int $fileId, int $libraryId, string $revision): DataResponse {
+		return $this->songFileController->revertSongFileVersion($id, $fileId, $libraryId, $revision);
+	}
+
+	#[NoAdminRequired]
 	#[ApiRoute(verb: 'POST', url: '/api/songs/{id}/file/attach')]
 	public function attachNextcloudFile(
 		int $id,
@@ -231,6 +260,30 @@ class ApiController extends OCSController {
 	#[ApiRoute(verb: 'POST', url: '/api/songs/{id}/file/{fileId}/delete')]
 	public function deleteSongFile(int $id, int $fileId, ?int $libraryId = null): DataResponse {
 		return $this->songFileController->deleteSongFile($id, $fileId, $libraryId);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'GET', url: '/api/songs/{id}/history')]
+	public function getSongHistory(int $id): DataResponse {
+		return $this->songController->getSongHistory($id);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/songs/{id}/revert/{historyId}')]
+	public function revertSongHistory(int $id, int $historyId): DataResponse {
+		return $this->songController->revertSongHistory($id, $historyId);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'GET', url: '/api/libraries/{libraryId}/deleted-songs')]
+	public function getDeletedSongs(int $libraryId): DataResponse {
+		return $this->songController->getDeletedSongs($libraryId);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/songs/{id}/restore')]
+	public function restoreDeletedSong(int $id): DataResponse {
+		return $this->songController->restoreDeletedSong($id);
 	}
 
 	#[NoAdminRequired]
@@ -300,6 +353,12 @@ class ApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/instruments')]
+	public function createInstrument(?int $libraryId = null, ?string $name = null): DataResponse {
+		return $this->entityController->createInstrument($libraryId, $name);
+	}
+
+	#[NoAdminRequired]
 	#[ApiRoute(verb: 'DELETE', url: '/api/composers/{id}')]
 	public function deleteComposer(int $id, ?int $libraryId = null): DataResponse {
 		return $this->entityController->deleteComposer($id, $libraryId);
@@ -357,6 +416,12 @@ class ApiController extends OCSController {
 	#[ApiRoute(verb: 'DELETE', url: '/api/sourcetypes/{id}')]
 	public function deleteSourceType(int $id, ?int $libraryId = null): DataResponse {
 		return $this->entityController->deleteSourceType($id, $libraryId);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'DELETE', url: '/api/instruments/{id}')]
+	public function deleteInstrument(int $id, ?int $libraryId = null): DataResponse {
+		return $this->entityController->deleteInstrument($id, $libraryId);
 	}
 
 	#[NoAdminRequired]

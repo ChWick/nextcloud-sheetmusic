@@ -10,25 +10,25 @@ defineProps<{
 <template>
 	<div>
 		<div :class="$style.stats">
-			<span :class="$style.chip">{{ t('mobilesheetsmanager', '{count} files checked', { count: stats.files }) }}</span>
+			<span :class="$style.chip">{{ t('sheetmusic', '{count} files checked', { count: stats.files }) }}</span>
 			<span v-if="stats.moved" :class="$style.chip">
-				{{ t('mobilesheetsmanager', '{count} moved', { count: stats.moved }) }}
+				{{ t('sheetmusic', '{count} moved', { count: stats.moved }) }}
 			</span>
 			<span v-if="stats.updated" :class="$style.chip">
-				{{ t('mobilesheetsmanager', '{count} document properties updated', { count: stats.updated }) }}
+				{{ t('sheetmusic', '{count} document properties updated', { count: stats.updated }) }}
 			</span>
 			<span v-if="stats.current" :class="$style.chip">
-				{{ t('mobilesheetsmanager', '{count} already up to date', { count: stats.current }) }}
+				{{ t('sheetmusic', '{count} already up to date', { count: stats.current }) }}
 			</span>
 			<span v-if="stats.warnings" :class="[$style.chip, $style.warningChip]">
-				⚠ {{ t('mobilesheetsmanager', '{count} warnings', { count: stats.warnings }) }}
+				⚠ {{ t('sheetmusic', '{count} warnings', { count: stats.warnings }) }}
 			</span>
 			<span v-if="stats.errors" :class="[$style.chip, $style.errorChip]">
-				✖ {{ t('mobilesheetsmanager', '{count} errors', { count: stats.errors }) }}
+				✖ {{ t('sheetmusic', '{count} errors', { count: stats.errors }) }}
 			</span>
 		</div>
 		<p v-if="stats.warnings === 0 && stats.errors === 0" :class="$style.allGood">
-			{{ t('mobilesheetsmanager', 'Everything is up to date: file paths and metadata.') }}
+			{{ t('sheetmusic', 'Everything is up to date: file paths and metadata.') }}
 		</p>
 	</div>
 </template>

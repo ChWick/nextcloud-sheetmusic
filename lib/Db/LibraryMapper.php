@@ -7,13 +7,13 @@ declare(strict_types=1);
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-namespace OCA\MobileSheetsManager\Db;
+namespace OCA\SheetMusic\Db;
 
 use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\IDBConnection;
 
 class LibraryMapper {
-	public const TABLE_NAME = 'mobilesheets_libraries';
+	public const TABLE_NAME = 'sheetmusic_libraries';
 
 	public function __construct(
 		private IDBConnection $db,
@@ -21,11 +21,11 @@ class LibraryMapper {
 	}
 
 	/**
-	 * @return list<array{id: int, path: string, autoPaths: bool, autoPdfMetadata: bool}>
+	 * @return list<InternalLibrary>
 	 */
 	public function findAllForUser(string $userId): array {
 		$qb = $this->db->getQueryBuilder();
-		$qb->select('id', 'path', 'auto_paths', 'auto_pdf_metadata')
+		$qb->select('*')
 			->from(self::TABLE_NAME)
 			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId, IQueryBuilder::PARAM_STR)))
 			->orderBy('path', 'ASC');
@@ -33,27 +33,52 @@ class LibraryMapper {
 		$result = $qb->executeQuery();
 		$results = [];
 		while ($row = $result->fetchAssociative()) {
-			$results[] = [
-				'id' => (int)$row['id'],
-				'path' => (string)$row['path'],
-				'autoPaths' => self::autoPathsOf($row),
-				'autoPdfMetadata' => self::autoPdfMetadataOf($row),
-			];
+			$results[] = InternalLibrary::fromRow($row);
 		}
 		$result->closeCursor();
 
 		return $results;
 	}
 
-	public function findById(int $libraryId): ?array {
+	public function findById(int $libraryId): ?InternalLibrary {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')
 			->from(self::TABLE_NAME)
-			->where($qb->expr()->eq('id', $qb->createNamedParameter($libraryId)));
+			->where($qb->expr()->eq('id', $qb->createNamedParameter($libraryId, IQueryBuilder::PARAM_INT)))
+			->setMaxResults(1);
 
-		$row = $qb->executeQuery()->fetch();
+		$row = $qb->executeQuery()->fetchAssociative();
 
-		return $row === false ? null : $row;
+		return $row === false ? null : InternalLibrary::fromRow($row);
+	}
+
+	public function findModelById(int $libraryId): ?InternalLibrary {
+		return $this->findById($libraryId);
+	}
+
+	public function resolveLibrary(InternalLibrary|array|int $library): InternalLibrary {
+		if ($library instanceof InternalLibrary) {
+			return $library;
+		}
+
+		if (is_int($library)) {
+			$model = $this->findModelById($library);
+			if ($model === null) {
+				throw new \InvalidArgumentException('Library not found: ' . $library);
+			}
+			return $model;
+		}
+
+		return InternalLibrary::fromRow($library);
+	}
+
+	public function touch(int $libraryId, ?int $timestamp = null): void {
+		$now = $timestamp ?? time();
+		$qb = $this->db->getQueryBuilder();
+		$qb->update(self::TABLE_NAME)
+			->set('updated_at', $qb->createNamedParameter($now, IQueryBuilder::PARAM_INT))
+			->where($qb->expr()->eq('id', $qb->createNamedParameter($libraryId, IQueryBuilder::PARAM_INT)));
+		$qb->executeStatement();
 	}
 
 	public function addForUser(string $userId, string $path): void {
@@ -68,12 +93,15 @@ class LibraryMapper {
 			return;
 		}
 
+		$now = time();
 		$qb = $this->db->getQueryBuilder();
 		$qb->insert(self::TABLE_NAME)
 			->setValue('user_id', $qb->createNamedParameter($userId, IQueryBuilder::PARAM_STR))
 			->setValue('path', $qb->createNamedParameter($path, IQueryBuilder::PARAM_STR))
 			->setValue('auto_paths', $qb->createNamedParameter(true, IQueryBuilder::PARAM_BOOL))
-			->setValue('auto_pdf_metadata', $qb->createNamedParameter(true, IQueryBuilder::PARAM_BOOL));
+			->setValue('auto_pdf_metadata', $qb->createNamedParameter(true, IQueryBuilder::PARAM_BOOL))
+			->setValue('created_at', $qb->createNamedParameter($now, IQueryBuilder::PARAM_INT))
+			->setValue('updated_at', $qb->createNamedParameter($now, IQueryBuilder::PARAM_INT));
 		$qb->executeStatement();
 	}
 
@@ -96,11 +124,11 @@ class LibraryMapper {
 	}
 
 	/**
-	 * @return array{id: int, path: string, autoPaths: bool, autoPdfMetadata: bool}|null
+	 * @return InternalLibrary|null
 	 */
-	public function findForUser(string $userId, int $id): ?array {
+	public function findForUser(string $userId, int $id): ?InternalLibrary {
 		$qb = $this->db->getQueryBuilder();
-		$qb->select('id', 'path', 'auto_paths', 'auto_pdf_metadata')
+		$qb->select('*')
 			->from(self::TABLE_NAME)
 			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId, IQueryBuilder::PARAM_STR)))
 			->andWhere($qb->expr()->eq('id', $qb->createNamedParameter($id, IQueryBuilder::PARAM_INT)))
@@ -112,22 +140,7 @@ class LibraryMapper {
 			return null;
 		}
 
-		return [
-			'id' => (int)$row['id'],
-			'path' => (string)$row['path'],
-			'autoPaths' => self::autoPathsOf($row),
-			'autoPdfMetadata' => self::autoPdfMetadataOf($row),
-		];
-	}
-
-	public function setAutoPathsForUser(string $userId, int $id, bool $autoPaths): void {
-		$qb = $this->db->getQueryBuilder();
-		$qb->update(self::TABLE_NAME)
-			->set('auto_paths', $qb->createNamedParameter($autoPaths, IQueryBuilder::PARAM_BOOL))
-			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId, IQueryBuilder::PARAM_STR)))
-			->andWhere($qb->expr()->eq('id', $qb->createNamedParameter($id, IQueryBuilder::PARAM_INT)));
-
-		$qb->executeStatement();
+		return InternalLibrary::fromRow($row);
 	}
 
 	public function setSettingsForUser(string $userId, int $id, ?bool $autoPaths = null, ?bool $autoPdfMetadata = null): void {
@@ -149,31 +162,5 @@ class LibraryMapper {
 		if ($hasChanges) {
 			$qb->executeStatement();
 		}
-	}
-
-	/**
-	 * @param array<string, mixed> $library
-	 */
-	public static function autoPathsOf(array $library): bool {
-		if (array_key_exists('autoPaths', $library)) {
-			return (bool)$library['autoPaths'];
-		}
-		if (array_key_exists('auto_paths', $library) && $library['auto_paths'] !== null) {
-			return (bool)$library['auto_paths'];
-		}
-		return true;
-	}
-
-	/**
-	 * @param array<string, mixed> $library
-	 */
-	public static function autoPdfMetadataOf(array $library): bool {
-		if (array_key_exists('autoPdfMetadata', $library)) {
-			return (bool)$library['autoPdfMetadata'];
-		}
-		if (array_key_exists('auto_pdf_metadata', $library) && $library['auto_pdf_metadata'] !== null) {
-			return (bool)$library['auto_pdf_metadata'];
-		}
-		return true;
 	}
 }

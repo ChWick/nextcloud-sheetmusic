@@ -7,6 +7,21 @@ import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import { computed, ref, watch } from 'vue'
 import { formatDateTimestamp, formatDifficulty, formatDuration, formatStars, sortSongs, type SortKey, type SortOrder } from '../../utils/song-formatter'
 import { useSongRowInteraction } from '../../composables/useSongRowInteraction'
+import SongEntityChips from './SongEntityChips.vue'
+import SongInlineEditableCell from './SongInlineEditableCell.vue'
+import {
+	DIFFICULTY_SELECT_OPTIONS,
+	ENTITY_COLUMNS,
+	EXTRA_TEXT_COLUMNS,
+	IDENTIFIER_TEXT_COLUMNS,
+	parseDurationInput,
+	STAR_SELECT_OPTIONS,
+	TABLE_COLUMNS,
+	type EntityColumnDef,
+	type InlineEditableField,
+} from './song-view-columns'
+
+export type { InlineEditableField } from './song-view-columns'
 
 const props = withDefaults(
 	defineProps<{
@@ -20,12 +35,13 @@ const props = withDefaults(
 	{
 		sortKey: 'title',
 		sortOrder: 'asc',
-	}
+	},
 )
 
 const emit = defineEmits<{
 	'view-song': [song: Song]
 	'edit-song': [song: Song]
+	'inline-update-song': [song: Song, updates: Record<string, any>]
 	'filter-entity': [entityType: EntityType, entity: FilterEntity]
 	'toggle-select-song': [songId: number]
 	'select-all': [songIds: number[]]
@@ -41,34 +57,16 @@ function isColVisible(col: SongColumn): boolean {
 const localSortKey = ref<SortKey>(props.sortKey)
 const localSortOrder = ref<SortOrder>(props.sortOrder)
 
-watch(
-	() => props.sortKey,
-	(newVal) => {
-		localSortKey.value = newVal
-	}
-)
-
-watch(
-	() => props.sortOrder,
-	(newVal) => {
-		localSortOrder.value = newVal
-	}
-)
+watch(() => props.sortKey, (newVal) => { localSortKey.value = newVal })
+watch(() => props.sortOrder, (newVal) => { localSortOrder.value = newVal })
 
 function toggleSort(key: SortKey) {
-	let newKey = key
-	let newOrder: SortOrder = 'asc'
-
-	if (localSortKey.value === key) {
-		newOrder = localSortOrder.value === 'asc' ? 'desc' : 'asc'
-	} else {
-		newKey = key
-		newOrder = 'asc'
-	}
-
-	localSortKey.value = newKey
+	const newOrder: SortOrder = localSortKey.value === key
+		? (localSortOrder.value === 'asc' ? 'desc' : 'asc')
+		: 'asc'
+	localSortKey.value = key
 	localSortOrder.value = newOrder
-	emit('update:sortKey', newKey)
+	emit('update:sortKey', key)
 	emit('update:sortOrder', newOrder)
 }
 
@@ -78,6 +76,27 @@ function sortIndicator(key: SortKey): string {
 }
 
 const sortedSongs = computed(() => sortSongs(props.songs, localSortKey.value, localSortOrder.value))
+const visibleTableColumns = computed(() => TABLE_COLUMNS.filter((c) => isColVisible(c.col)))
+const visibleEntityColumns = computed(() => ENTITY_COLUMNS.filter((c) => isColVisible(c.col)))
+const visibleIdentifierColumns = computed(() => IDENTIFIER_TEXT_COLUMNS.filter((c) => isColVisible(c.col)))
+const visibleExtraTextColumns = computed(() => EXTRA_TEXT_COLUMNS.filter((c) => isColVisible(c.col)))
+
+function handleInlineSave(song: Song, field: InlineEditableField, value: string | number) {
+	emit('inline-update-song', song, { [field]: value })
+}
+
+function handleInlineEntitySave(song: Song, entCol: EntityColumnDef, rawValue: string | number) {
+	emit('inline-update-song', song, {
+		[entCol.songProp]: entCol.parseEditValue(String(rawValue)),
+	})
+}
+
+function handleInlineDurationSave(song: Song, rawValue: string | number) {
+	const nextSeconds = parseDurationInput(rawValue)
+	if (nextSeconds !== (song.duration ?? 0)) {
+		emit('inline-update-song', song, { duration: nextSeconds })
+	}
+}
 
 const {
 	handleTouchStart,
@@ -100,68 +119,18 @@ const {
 						<input
 							type="checkbox"
 							:checked="songs.length > 0 && songs.every((s) => selectedSongIds?.includes(s.id))"
-							:title="t('mobilesheetsmanager', 'Select all songs')"
+							:title="t('sheetmusic', 'Select all songs')"
 							@change="emit('select-all', songs.map((s) => s.id))">
 					</th>
-					<th v-if="isColVisible('title')" :class="$style.sortableHeader" @click="toggleSort('title')">
-						{{ t('mobilesheetsmanager', 'Title') }}{{ sortIndicator('title') }}
-					</th>
-					<th v-if="isColVisible('composer')" :class="$style.sortableHeader" @click="toggleSort('composer')">
-						{{ t('mobilesheetsmanager', 'Composer') }}{{ sortIndicator('composer') }}
-					</th>
-					<th v-if="isColVisible('book')" :class="$style.sortableHeader" @click="toggleSort('book')">
-						{{ t('mobilesheetsmanager', 'Book') }}{{ sortIndicator('book') }}
-					</th>
-					<th v-if="isColVisible('collection')" :class="$style.sortableHeader" @click="toggleSort('collection')">
-						{{ t('mobilesheetsmanager', 'Collection') }}{{ sortIndicator('collection') }}
-					</th>
-					<th v-if="isColVisible('artist')" :class="$style.sortableHeader" @click="toggleSort('artist')">
-						{{ t('mobilesheetsmanager', 'Artist') }}{{ sortIndicator('artist') }}
-					</th>
-					<th v-if="isColVisible('genre')" :class="$style.sortableHeader" @click="toggleSort('genre')">
-						{{ t('mobilesheetsmanager', 'Genre') }}{{ sortIndicator('genre') }}
-					</th>
-					<th v-if="isColVisible('key')" :class="$style.sortableHeader" @click="toggleSort('key')">
-						{{ t('mobilesheetsmanager', 'Key') }}{{ sortIndicator('key') }}
-					</th>
-					<th v-if="isColVisible('customGroup')" :class="$style.sortableHeader" @click="toggleSort('customGroup')">
-						{{ t('mobilesheetsmanager', 'Custom Group') }}{{ sortIndicator('customGroup') }}
-					</th>
-					<th v-if="isColVisible('year')" :class="$style.sortableHeader" @click="toggleSort('year')">
-						{{ t('mobilesheetsmanager', 'Year') }}{{ sortIndicator('year') }}
-					</th>
-					<th v-if="isColVisible('signature')" :class="$style.sortableHeader" @click="toggleSort('signature')">
-						{{ t('mobilesheetsmanager', 'Time Signature') }}{{ sortIndicator('signature') }}
-					</th>
-					<th v-if="isColVisible('sourceType')" :class="$style.sortableHeader" @click="toggleSort('sourceType')">
-						{{ t('mobilesheetsmanager', 'Source Type') }}{{ sortIndicator('sourceType') }}
-					</th>
-					<th v-if="isColVisible('stars')" :class="$style.sortableHeader" @click="toggleSort('stars')">
-						{{ t('mobilesheetsmanager', 'Rating') }}{{ sortIndicator('stars') }}
-					</th>
-					<th v-if="isColVisible('difficulty')" :class="$style.sortableHeader" @click="toggleSort('difficulty')">
-						{{ t('mobilesheetsmanager', 'Difficulty') }}{{ sortIndicator('difficulty') }}
-					</th>
-					<th v-if="isColVisible('duration')" :class="$style.sortableHeader" @click="toggleSort('duration')">
-						{{ t('mobilesheetsmanager', 'Duration') }}{{ sortIndicator('duration') }}
-					</th>
-					<th v-if="isColVisible('keywords')" :class="$style.sortableHeader" @click="toggleSort('keywords')">
-						{{ t('mobilesheetsmanager', 'Keywords') }}{{ sortIndicator('keywords') }}
-					</th>
-					<th v-if="isColVisible('custom')" :class="$style.sortableHeader" @click="toggleSort('custom')">
-						{{ t('mobilesheetsmanager', 'Custom') }}{{ sortIndicator('custom') }}
-					</th>
-					<th v-if="isColVisible('custom2')" :class="$style.sortableHeader" @click="toggleSort('custom2')">
-						{{ t('mobilesheetsmanager', 'Custom 2') }}{{ sortIndicator('custom2') }}
-					</th>
-					<th v-if="isColVisible('lastModified')" :class="$style.sortableHeader" @click="toggleSort('lastModified')">
-						{{ t('mobilesheetsmanager', 'Last modified') }}{{ sortIndicator('lastModified') }}
-					</th>
-					<th v-if="isColVisible('dateCreated')" :class="$style.sortableHeader" @click="toggleSort('dateCreated')">
-						{{ t('mobilesheetsmanager', 'Created') }}{{ sortIndicator('dateCreated') }}
+					<th
+						v-for="colDef in visibleTableColumns"
+						:key="colDef.col"
+						:class="$style.sortableHeader"
+						@click="toggleSort(colDef.sortKey)">
+						{{ colDef.label() }}{{ sortIndicator(colDef.sortKey) }}
 					</th>
 					<th :class="$style.actionsHeader">
-						{{ t('mobilesheetsmanager', 'Actions') }}
+						{{ t('sheetmusic', 'Actions') }}
 					</th>
 				</tr>
 			</thead>
@@ -179,183 +148,103 @@ const {
 						<input
 							type="checkbox"
 							:checked="selectedSongIds?.includes(song.id)"
-							:title="t('mobilesheetsmanager', 'Select song')"
+							:title="t('sheetmusic', 'Select song')"
 							@click.stop
 							@change="emit('toggle-select-song', song.id)">
 					</td>
-					<td v-if="isColVisible('title')" :class="$style.titleCell">
-						<span :class="$style.songTitle">
-							{{ song.title }}
-						</span>
-					</td>
-					<td v-if="isColVisible('composer')" :class="$style.metaCell">
-						<template v-if="song.composers && song.composers.length > 0">
-							<span v-for="(comp, idx) in song.composers" :key="comp.id">
-								<button
-									type="button"
-									:class="[$style.filterChip, isFiltered?.('composers', comp.id) && $style.activeChip]"
-									:title="t('mobilesheetsmanager', 'Toggle filter for composer {name}', { name: comp.name })"
-									@click.stop="emit('filter-entity', 'composers', comp)">
-									{{ comp.name }}
-								</button>
-								<template v-if="idx < song.composers.length - 1">, </template>
-							</span>
-						</template>
-						<span v-else :class="$style.emptyText">—</span>
-					</td>
-					<td v-if="isColVisible('book')" :class="$style.metaCell">
-						<template v-if="song.books && song.books.length > 0">
-							<span v-for="(bk, idx) in song.books" :key="bk.id">
-								<button
-									type="button"
-									:class="[$style.filterChip, isFiltered?.('books', bk.id) && $style.activeChip]"
-									:title="t('mobilesheetsmanager', 'Toggle filter for book {title}', { title: bk.title })"
-									@click.stop="emit('filter-entity', 'books', bk)">
-									{{ bk.title }}
-								</button>
-								<template v-if="idx < song.books.length - 1">, </template>
-							</span>
-						</template>
-						<span v-else :class="$style.emptyText">—</span>
-					</td>
-					<td v-if="isColVisible('collection')" :class="$style.metaCell">
-						<template v-if="song.collections && song.collections.length > 0">
-							<span v-for="(col, idx) in song.collections" :key="col.id">
-								<button
-									type="button"
-									:class="[$style.filterChip, isFiltered?.('collections', col.id) && $style.activeChip]"
-									:title="t('mobilesheetsmanager', 'Toggle filter for collection {name}', { name: col.name })"
-									@click.stop="emit('filter-entity', 'collections', col)">
-									{{ col.name }}
-								</button>
-								<template v-if="idx < song.collections.length - 1">, </template>
-							</span>
-						</template>
-						<span v-else :class="$style.emptyText">—</span>
-					</td>
-					<td v-if="isColVisible('artist')" :class="$style.metaCell">
-						<template v-if="song.artists && song.artists.length > 0">
-							<span v-for="(art, idx) in song.artists" :key="art.id">
-								<button
-									type="button"
-									:class="[$style.filterChip, isFiltered?.('artists', art.id) && $style.activeChip]"
-									:title="t('mobilesheetsmanager', 'Toggle filter for artist {name}', { name: art.name })"
-									@click.stop="emit('filter-entity', 'artists', art)">
-									{{ art.name }}
-								</button>
-								<template v-if="idx < song.artists.length - 1">, </template>
-							</span>
-						</template>
-						<span v-else :class="$style.emptyText">—</span>
-					</td>
-					<td v-if="isColVisible('genre')" :class="$style.metaCell">
-						<template v-if="song.genres && song.genres.length > 0">
-							<span v-for="(g, idx) in song.genres" :key="g.id">
-								<button
-									type="button"
-									:class="[$style.filterChip, isFiltered?.('genres', g.id) && $style.activeChip]"
-									:title="t('mobilesheetsmanager', 'Toggle filter for genre {name}', { name: g.name })"
-									@click.stop="emit('filter-entity', 'genres', g)">
-									{{ g.name }}
-								</button>
-								<template v-if="idx < song.genres.length - 1">, </template>
-							</span>
-						</template>
-						<span v-else :class="$style.emptyText">—</span>
-					</td>
-					<td v-if="isColVisible('key')" :class="$style.metaCell">
-						<template v-if="song.keys && song.keys.length > 0">
-							<span v-for="(k, idx) in song.keys" :key="k.id">
-								<button
-									type="button"
-									:class="[$style.filterChip, isFiltered?.('keys', k.id) && $style.activeChip]"
-									:title="t('mobilesheetsmanager', 'Toggle filter for key {name}', { name: k.name })"
-									@click.stop="emit('filter-entity', 'keys', k)">
-									{{ k.name }}
-								</button>
-								<template v-if="idx < song.keys.length - 1">, </template>
-							</span>
-						</template>
-						<span v-else :class="$style.emptyText">—</span>
-					</td>
-					<td v-if="isColVisible('customGroup')" :class="$style.metaCell">
-						<template v-if="song.customGroups && song.customGroups.length > 0">
-							<span v-for="(cg, idx) in song.customGroups" :key="cg.id">
-								<button
-									type="button"
-									:class="[$style.filterChip, isFiltered?.('customgroups', cg.id) && $style.activeChip]"
-									:title="t('mobilesheetsmanager', 'Toggle filter for custom group {name}', { name: cg.name })"
-									@click.stop="emit('filter-entity', 'customgroups', cg)">
-									{{ cg.name }}
-								</button>
-								<template v-if="idx < song.customGroups.length - 1">, </template>
-							</span>
-						</template>
-						<span v-else :class="$style.emptyText">—</span>
-					</td>
-					<td v-if="isColVisible('year')" :class="$style.metaCell">
-						<template v-if="song.years && song.years.length > 0">
-							<span v-for="(y, idx) in song.years" :key="y.id">
-								<button
-									type="button"
-									:class="[$style.filterChip, isFiltered?.('years', y.id) && $style.activeChip]"
-									:title="t('mobilesheetsmanager', 'Toggle filter for year {name}', { name: y.name })"
-									@click.stop="emit('filter-entity', 'years', y)">
-									{{ y.name }}
-								</button>
-								<template v-if="idx < song.years.length - 1">, </template>
-							</span>
-						</template>
-						<span v-else :class="$style.emptyText">—</span>
-					</td>
-					<td v-if="isColVisible('signature')" :class="$style.metaCell">
-						<template v-if="song.signatures && song.signatures.length > 0">
-							<span v-for="(s, idx) in song.signatures" :key="s.id">
-								<button
-									type="button"
-									:class="[$style.filterChip, isFiltered?.('signatures', s.id) && $style.activeChip]"
-									:title="t('mobilesheetsmanager', 'Toggle filter for signature {name}', { name: s.name })"
-									@click.stop="emit('filter-entity', 'signatures', s)">
-									{{ s.name }}
-								</button>
-								<template v-if="idx < song.signatures.length - 1">, </template>
-							</span>
-						</template>
-						<span v-else :class="$style.emptyText">—</span>
-					</td>
-					<td v-if="isColVisible('sourceType')" :class="$style.metaCell">
-						<template v-if="song.sourceTypes && song.sourceTypes.length > 0">
-							<span v-for="(st, idx) in song.sourceTypes" :key="st.id">
-								<button
-									type="button"
-									:class="[$style.filterChip, isFiltered?.('sourcetypes', st.id) && $style.activeChip]"
-									:title="t('mobilesheetsmanager', 'Toggle filter for source type {name}', { name: st.name })"
-									@click.stop="emit('filter-entity', 'sourcetypes', st)">
-									{{ st.name }}
-								</button>
-								<template v-if="idx < song.sourceTypes.length - 1">, </template>
-							</span>
-						</template>
-						<span v-else :class="$style.emptyText">—</span>
-					</td>
-					<td v-if="isColVisible('stars')" :class="$style.metaCell">
-						{{ formatStars(song.stars) }}
-					</td>
-					<td v-if="isColVisible('difficulty')" :class="$style.metaCell">
-						{{ formatDifficulty(song.difficulty) }}
-					</td>
-					<td v-if="isColVisible('duration')" :class="$style.metaCell">
-						{{ formatDuration(song.duration) }}
-					</td>
-					<td v-if="isColVisible('keywords')" :class="$style.metaCell">
-						{{ song.keywords || '—' }}
-					</td>
-					<td v-if="isColVisible('custom')" :class="$style.metaCell">
-						{{ song.custom || '—' }}
-					</td>
-					<td v-if="isColVisible('custom2')" :class="$style.metaCell">
-						{{ song.custom2 || '—' }}
-					</td>
+
+					<SongInlineEditableCell
+						v-if="isColVisible('title')"
+						tag="td"
+						:class="$style.titleCell"
+						field="title"
+						variant="table-title"
+						:allow-empty="false"
+						:value="song.title"
+						:display-text="song.title"
+						:aria-label="t('sheetmusic', 'Song title')"
+						:edit-title="t('sheetmusic', 'Edit title inline')"
+						@save="handleInlineSave(song, 'title', $event)" />
+
+					<SongInlineEditableCell
+						v-for="entCol in visibleEntityColumns"
+						:key="entCol.col"
+						tag="td"
+						:class="$style.metaCell"
+						:field="entCol.field"
+						:value="entCol.formatEditValue(song)"
+						:placeholder="t('sheetmusic', 'Comma-separated…')"
+						:aria-label="entCol.ariaLabel()"
+						:edit-title="entCol.editTitle()"
+						@save="handleInlineEntitySave(song, entCol, $event)">
+						<SongEntityChips
+							:def="entCol"
+							:items="entCol.getItems(song)"
+							:is-filtered="isFiltered"
+							show-empty-dash
+							@filter-entity="(type, ent) => emit('filter-entity', type, ent)" />
+					</SongInlineEditableCell>
+
+					<SongInlineEditableCell
+						v-for="textCol in visibleIdentifierColumns"
+						:key="textCol.col"
+						tag="td"
+						:class="$style.metaCell"
+						:field="textCol.field"
+						:value="song[textCol.field]"
+						:aria-label="textCol.ariaLabel()"
+						:edit-title="textCol.editTitle()"
+						@save="handleInlineSave(song, textCol.field, $event)" />
+
+					<SongInlineEditableCell
+						v-if="isColVisible('stars')"
+						tag="td"
+						:class="$style.metaCell"
+						field="stars"
+						mode="select"
+						:options="STAR_SELECT_OPTIONS"
+						:value="song.stars"
+						:display-text="formatStars(song.stars)"
+						:aria-label="t('sheetmusic', 'Rating')"
+						:edit-title="t('sheetmusic', 'Edit rating inline')"
+						@save="handleInlineSave(song, 'stars', $event)" />
+
+					<SongInlineEditableCell
+						v-if="isColVisible('difficulty')"
+						tag="td"
+						:class="$style.metaCell"
+						field="difficulty"
+						mode="select"
+						:options="DIFFICULTY_SELECT_OPTIONS"
+						:value="song.difficulty"
+						:display-text="formatDifficulty(song.difficulty)"
+						:aria-label="t('sheetmusic', 'Difficulty')"
+						:edit-title="t('sheetmusic', 'Edit difficulty inline')"
+						@save="handleInlineSave(song, 'difficulty', $event)" />
+
+					<SongInlineEditableCell
+						v-if="isColVisible('duration')"
+						tag="td"
+						:class="$style.metaCell"
+						field="duration"
+						:value="song.duration ? formatDuration(song.duration, '') : ''"
+						:display-text="formatDuration(song.duration)"
+						:placeholder="t('sheetmusic', 'mm:ss or seconds')"
+						:aria-label="t('sheetmusic', 'Duration')"
+						:edit-title="t('sheetmusic', 'Edit duration inline')"
+						@save="handleInlineDurationSave(song, $event)" />
+
+					<SongInlineEditableCell
+						v-for="extraCol in visibleExtraTextColumns"
+						:key="extraCol.col"
+						tag="td"
+						:class="$style.metaCell"
+						:field="extraCol.field"
+						:value="song[extraCol.field]"
+						:aria-label="extraCol.ariaLabel()"
+						:edit-title="extraCol.editTitle()"
+						@save="handleInlineSave(song, extraCol.field, $event)" />
+
 					<td v-if="isColVisible('lastModified')" :class="$style.dateCell">
 						{{ formatDateTimestamp(song.lastModified) }}
 					</td>
@@ -366,8 +255,8 @@ const {
 						<div :class="$style.actionsGroup">
 							<NcButton
 								size="small"
-								:title="t('mobilesheetsmanager', 'Edit song')"
-								:aria-label="t('mobilesheetsmanager', 'Edit song')"
+								:title="t('sheetmusic', 'Edit song')"
+								:aria-label="t('sheetmusic', 'Edit song')"
 								@click="emit('edit-song', song)">
 								<template #icon>
 									<PencilIcon :size="18" />
@@ -375,8 +264,8 @@ const {
 							</NcButton>
 							<NcButton
 								size="small"
-								:title="t('mobilesheetsmanager', 'View song')"
-								:aria-label="t('mobilesheetsmanager', 'View song')"
+								:title="t('sheetmusic', 'View song')"
+								:aria-label="t('sheetmusic', 'View song')"
 								@click="emit('view-song', song)">
 								<template #icon>
 									<EyeIcon :size="18" />
@@ -469,8 +358,8 @@ const {
 	background-color: var(--color-background-hover);
 }
 
-.tableRow:hover .songTitle {
-	color: var(--color-primary-element-hover, var(--color-primary-element));
+.tableRow:hover :global(.sheetmusic-inline-edit-trigger) {
+	opacity: 0.75;
 }
 
 .songTable td {
@@ -482,11 +371,6 @@ const {
 	font-weight: 600;
 }
 
-.songTitle {
-	color: var(--color-primary-element);
-	text-decoration: underline;
-}
-
 .metaCell {
 	color: var(--color-text-maxcontrast);
 }
@@ -495,54 +379,6 @@ const {
 	color: var(--color-text-maxcontrast);
 	white-space: nowrap;
 	font-size: 0.85rem;
-}
-
-.filterChip {
-	appearance: none;
-	-webkit-appearance: none;
-	background: transparent !important;
-	border: none !important;
-	border-radius: 0 !important;
-	box-shadow: none !important;
-	outline: none !important;
-	padding: 0 !important;
-	margin: 0 !important;
-	font: inherit;
-	color: var(--color-text-maxcontrast);
-	cursor: pointer;
-	text-align: left;
-	display: inline;
-	text-decoration: none;
-	transition: color 0.15s ease;
-}
-
-.filterChip:hover,
-.filterChip:focus,
-.filterChip:active {
-	background: transparent !important;
-	border: none !important;
-	box-shadow: none !important;
-	color: var(--color-primary-element) !important;
-	text-decoration: underline;
-}
-
-.activeChip {
-	color: var(--color-primary-element) !important;
-	font-weight: 600;
-	text-decoration: underline;
-}
-
-.activeChip:hover,
-.activeChip:focus,
-.activeChip:active {
-	background: transparent !important;
-	border: none !important;
-	box-shadow: none !important;
-	color: var(--color-primary-element-hover, var(--color-primary-element)) !important;
-}
-
-.emptyText {
-	color: var(--color-text-maxcontrast);
 }
 
 .actionsCell {

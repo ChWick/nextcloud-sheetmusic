@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { INode } from '@nextcloud/files'
-import type { Artist, Book, Collection, Composer, CreatedSongData, CustomGroup, Genre, Key, LibraryData, PendingAddition, PendingAttachment, PendingUpload, Signature, Song, SongFile, SongPrefill, SourceType, Year } from '../types/song'
+import type { Artist, Book, Collection, Composer, CreatedSongData, CustomGroup, Genre, Instrument, Key, LibraryData, PendingAddition, PendingAttachment, PendingUpload, Signature, Song, SongFile, SongPrefill, SourceType, Year } from '../types/song'
 
 import axios from '@nextcloud/axios'
 import { FilePickerClosed, getFilePickerBuilder, showError, showInfo, showSuccess } from '@nextcloud/dialogs'
@@ -19,10 +19,12 @@ import CloseIcon from 'vue-material-design-icons/Close.vue'
 import ContentSaveOutlineIcon from 'vue-material-design-icons/ContentSaveOutline.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
+import History from 'vue-material-design-icons/History.vue'
 import AttachNextcloudFileDialog from './song-editor/AttachNextcloudFileDialog.vue'
 import SongFileSection from './song-editor/SongFileSection.vue'
 import SongMetadataFields from './song-editor/SongMetadataFields.vue'
 import DeleteSongDialog from './DeleteSongDialog.vue'
+import SongHistoryModal from './SongHistoryModal.vue'
 
 const props = withDefaults(
 	defineProps<{
@@ -41,6 +43,7 @@ const props = withDefaults(
 		years?: Year[]
 		signatures?: Signature[]
 		sourceTypes?: SourceType[]
+		instruments?: Instrument[]
 		/** Metadata read from an imported PDF, prefilled into a new song. */
 		prefill?: SongPrefill | null
 		/** The imported PDF itself, staged as the new song's file. */
@@ -59,6 +62,7 @@ const props = withDefaults(
 		years: () => [],
 		signatures: () => [],
 		sourceTypes: () => [],
+		instruments: () => [],
 		prefill: null,
 		importedFile: null,
 		importedNextcloudNode: null,
@@ -81,8 +85,8 @@ const isNewSong = computed(() => !props.song)
 
 /** Label of the primary button, also used by the notices about staged file changes. */
 const saveActionLabel = computed(() => (isNewSong.value
-	? t('mobilesheetsmanager', 'Create song')
-	: t('mobilesheetsmanager', 'Save and Close')))
+	? t('sheetmusic', 'Create song')
+	: t('sheetmusic', 'Save and Close')))
 
 const sourceSong = computed(() => props.song ?? props.duplicateSong)
 
@@ -96,6 +100,7 @@ const createCustomGroupTag = createEntityTag(props.customGroups, (group) => grou
 const createYearTag = createEntityTag(props.years, (year) => year.name, (name) => ({ name }))
 const createSignatureTag = createEntityTag(props.signatures, (signature) => signature.name, (name) => ({ name }))
 const createSourceTypeTag = createEntityTag(props.sourceTypes, (sourceType) => sourceType.name, (name) => ({ name }))
+const createInstrumentTag = createEntityTag(props.instruments, (instrument) => instrument.name, (name) => ({ name }))
 
 const title = ref(sourceSong.value?.title ?? props.prefill?.title ?? '')
 const selectedComposers = ref<Array<Composer | { name: string, id?: number }>>(
@@ -148,7 +153,15 @@ const selectedSourceTypes = ref<Array<SourceType | { name: string, id?: number }
 		? matchSelected(props.sourceTypes, sourceSong.value.sourceTypes)
 		: [],
 )
+const selectedInstruments = ref<Array<Instrument | { name: string, id?: number }>>(
+	sourceSong.value
+		? matchSelected(props.instruments, sourceSong.value.instruments)
+		: [],
+)
 
+const opus = ref<string>(sourceSong.value?.opus ?? '')
+const catalogNumber = ref<string>(sourceSong.value?.catalogNumber ?? '')
+const songNumber = ref<string>(sourceSong.value?.songNumber ?? '')
 const stars = ref<number>(sourceSong.value?.stars ?? 0)
 const difficulty = ref<number>(sourceSong.value?.difficulty ?? 0)
 const duration = ref<number>(sourceSong.value?.duration ?? 0)
@@ -186,6 +199,11 @@ function getInitialFiles(song: Song | null, pending: SongFile[] = []): SongFile[
 const currentFiles = ref<SongFile[]>(getInitialFiles(props.song))
 const pendingDeleteFiles = ref<SongFile[]>([])
 const pendingDetachFiles = ref<SongFile[]>([])
+const isHistoryOpen = ref(false)
+
+function handleReverted(data: LibraryData) {
+	emit('updated', data)
+}
 
 watch(
 	sourceSong,
@@ -201,6 +219,10 @@ watch(
 		selectedYears.value = matchSelected(props.years, newSong?.years)
 		selectedSignatures.value = matchSelected(props.signatures, newSong?.signatures)
 		selectedSourceTypes.value = matchSelected(props.sourceTypes, newSong?.sourceTypes)
+		selectedInstruments.value = matchSelected(props.instruments, newSong?.instruments)
+		opus.value = newSong?.opus ?? ''
+		catalogNumber.value = newSong?.catalogNumber ?? ''
+		songNumber.value = newSong?.songNumber ?? ''
 		stars.value = newSong?.stars ?? 0
 		difficulty.value = newSong?.difficulty ?? 0
 		duration.value = newSong?.duration ?? 0
@@ -281,14 +303,14 @@ const pendingAdditions = computed<PendingAddition[]>(() => [
 		key: attachment.key,
 		name: attachment.name,
 		hint: attachment.action === 'move'
-			? t('mobilesheetsmanager', 'Move from Nextcloud')
-			: t('mobilesheetsmanager', 'Copy from Nextcloud'),
+			? t('sheetmusic', 'Move from Nextcloud')
+			: t('sheetmusic', 'Copy from Nextcloud'),
 		remove: () => removePendingAttachment(attachment),
 	})),
 	...pendingUploads.value.map((upload): PendingAddition => ({
 		key: upload.key,
 		name: upload.name,
-		hint: t('mobilesheetsmanager', 'Upload from this computer'),
+		hint: t('sheetmusic', 'Upload from this computer'),
 		remove: () => removePendingUpload(upload),
 	})),
 ])
@@ -358,21 +380,21 @@ function handleFileUpload(file: File) {
 	stageUpload(file)
 	const songTitle = title.value?.trim()
 	const infoMsg = songTitle
-		? t('mobilesheetsmanager', 'The file will be added to "{title}" when you save.', { title: songTitle })
-		: t('mobilesheetsmanager', 'The file is added to the song when you save.')
+		? t('sheetmusic', 'The file will be added to "{title}" when you save.', { title: songTitle })
+		: t('sheetmusic', 'The file is added to the song when you save.')
 	successMessage.value = infoMsg
 	showInfo(infoMsg)
 }
 
 async function openNextcloudPicker() {
 	errorMessage.value = ''
-	const picker = getFilePickerBuilder(t('mobilesheetsmanager', 'Select a file for this song'))
+	const picker = getFilePickerBuilder(t('sheetmusic', 'Select a file for this song'))
 		.setMultiSelect(false)
 		.setCanPick((node) => node.type === 'file')
 		.setButtonFactory(([node]) => [{
 			label: node
-				? t('mobilesheetsmanager', 'Select {file}', { file: node.basename })
-				: t('mobilesheetsmanager', 'Select a file'),
+				? t('sheetmusic', 'Select {file}', { file: node.basename })
+				: t('sheetmusic', 'Select a file'),
 			callback: () => {},
 			disabled: !node || node.type !== 'file',
 			variant: 'primary',
@@ -388,7 +410,7 @@ async function openNextcloudPicker() {
 		}
 	} catch (error) {
 		if (!(error instanceof FilePickerClosed)) {
-			errorMessage.value = t('mobilesheetsmanager', 'Could not select a file from Nextcloud.')
+			errorMessage.value = t('sheetmusic', 'Could not select a file from Nextcloud.')
 			showError(errorMessage.value)
 		}
 	}
@@ -410,8 +432,8 @@ function stageAttachNextcloudFile() {
 	selectedNextcloudNode.value = undefined
 	const songTitle = title.value?.trim()
 	const infoMsg = songTitle
-		? t('mobilesheetsmanager', 'The file will be added to "{title}" when you save.', { title: songTitle })
-		: t('mobilesheetsmanager', 'The file is added to the song when you save.')
+		? t('sheetmusic', 'The file will be added to "{title}" when you save.', { title: songTitle })
+		: t('sheetmusic', 'The file is added to the song when you save.')
 	successMessage.value = infoMsg
 	showInfo(infoMsg)
 }
@@ -426,7 +448,7 @@ async function saveSong(closeAfter: boolean) {
 	}
 
 	if (!title.value.trim()) {
-		errorMessage.value = t('mobilesheetsmanager', 'Song title cannot be empty.')
+		errorMessage.value = t('sheetmusic', 'Song title cannot be empty.')
 		showError(errorMessage.value)
 		return
 	}
@@ -478,6 +500,7 @@ async function saveSong(closeAfter: boolean) {
 			{ idField: 'yearIds', endpoint: '/api/years', labelField: 'name', selected: selectedYears.value, options: props.years },
 			{ idField: 'signatureIds', endpoint: '/api/signatures', labelField: 'name', selected: selectedSignatures.value, options: props.signatures },
 			{ idField: 'sourceTypeIds', endpoint: '/api/sourcetypes', labelField: 'name', selected: selectedSourceTypes.value, options: props.sourceTypes },
+			{ idField: 'instrumentIds', endpoint: '/api/instruments', labelField: 'name', selected: selectedInstruments.value, options: props.instruments },
 		], async (endpoint, labelField, label) => {
 			const response = await apiPost(endpoint, {
 				libraryId: props.libraryId,
@@ -493,6 +516,9 @@ async function saveSong(closeAfter: boolean) {
 			libraryId: props.libraryId,
 			title: title.value.trim(),
 			...entityIds,
+			opus: opus.value.trim(),
+			catalogNumber: catalogNumber.value.trim(),
+			songNumber: songNumber.value.trim(),
 			stars: Number(stars.value) || 0,
 			difficulty: Number(difficulty.value) || 0,
 			duration: Number(duration.value) || 0,
@@ -543,17 +569,17 @@ async function saveSong(closeAfter: boolean) {
 		const songTitle = title.value?.trim()
 		if (detachedFileCount > 0) {
 			successMessage.value = songTitle
-				? t('mobilesheetsmanager', 'Song "{title}" updated successfully. {count} file(s) detached and kept in storage.', { title: songTitle, count: detachedFileCount })
-				: t('mobilesheetsmanager', 'Song updated successfully. {count} file(s) detached and kept in storage.', { count: detachedFileCount })
+				? t('sheetmusic', 'Song "{title}" updated successfully. {count} file(s) detached and kept in storage.', { title: songTitle, count: detachedFileCount })
+				: t('sheetmusic', 'Song updated successfully. {count} file(s) detached and kept in storage.', { count: detachedFileCount })
 			showSuccess(successMessage.value)
 		} else {
 			successMessage.value = isNewSong.value
 				? songTitle
-					? t('mobilesheetsmanager', 'Song "{title}" created successfully.', { title: songTitle })
-					: t('mobilesheetsmanager', 'Song created successfully.')
+					? t('sheetmusic', 'Song "{title}" created successfully.', { title: songTitle })
+					: t('sheetmusic', 'Song created successfully.')
 				: songTitle
-					? t('mobilesheetsmanager', 'Song "{title}" updated successfully.', { title: songTitle })
-					: t('mobilesheetsmanager', 'Song updated successfully.')
+					? t('sheetmusic', 'Song "{title}" updated successfully.', { title: songTitle })
+					: t('sheetmusic', 'Song updated successfully.')
 			showSuccess(successMessage.value)
 		}
 		if (closeAfter) {
@@ -566,8 +592,8 @@ async function saveSong(closeAfter: boolean) {
 		}
 	} catch (error) {
 		const fallback = isNewSong.value
-			? t('mobilesheetsmanager', 'Failed to create the song.')
-			: t('mobilesheetsmanager', 'Failed to save song changes.')
+			? t('sheetmusic', 'Failed to create the song.')
+			: t('sheetmusic', 'Failed to save song changes.')
 		errorMessage.value = describeRequestFailure(error, fallback)
 		showError(errorMessage.value)
 	} finally {
@@ -598,10 +624,21 @@ defineExpose({
 					<NcTextField
 						id="song-title-input"
 						v-model="title"
-						:placeholder="isNewSong ? t('mobilesheetsmanager', 'New Song') : t('mobilesheetsmanager', 'Enter song title')"
-						:label="t('mobilesheetsmanager', 'Song Title')"
+						:placeholder="isNewSong ? t('sheetmusic', 'New Song') : t('sheetmusic', 'Enter song title')"
+						:label="t('sheetmusic', 'Song Title')"
 						required />
 				</div>
+				<NcButton
+					v-if="!isNewSong && song"
+					type="button"
+					variant="tertiary"
+					:title="t('sheetmusic', 'Song history & revisions')"
+					:aria-label="t('sheetmusic', 'Song history & revisions')"
+					@click="isHistoryOpen = true">
+					<template #icon>
+						<History :size="20" />
+					</template>
+				</NcButton>
 			</div>
 
 			<SongMetadataFields
@@ -615,6 +652,10 @@ defineExpose({
 				v-model:selected-years="selectedYears"
 				v-model:selected-signatures="selectedSignatures"
 				v-model:selected-source-types="selectedSourceTypes"
+				v-model:selected-instruments="selectedInstruments"
+				v-model:opus="opus"
+				v-model:catalog-number="catalogNumber"
+				v-model:song-number="songNumber"
 				v-model:stars="stars"
 				v-model:difficulty="difficulty"
 				v-model:duration="duration"
@@ -632,6 +673,7 @@ defineExpose({
 				:years="years"
 				:signatures="signatures"
 				:source-types="sourceTypes"
+				:instruments="instruments"
 				:create-composer-tag="createComposerTag"
 				:create-book-tag="createBookTag"
 				:create-collection-tag="createCollectionTag"
@@ -641,7 +683,8 @@ defineExpose({
 				:create-custom-group-tag="createCustomGroupTag"
 				:create-year-tag="createYearTag"
 				:create-signature-tag="createSignatureTag"
-				:create-source-type-tag="createSourceTypeTag" />
+				:create-source-type-tag="createSourceTypeTag"
+				:create-instrument-tag="createInstrumentTag" />
 
 			<SongFileSection
 				ref="fileSection"
@@ -668,8 +711,8 @@ defineExpose({
 					type="button"
 					variant="secondary"
 					:disabled="isSaving"
-					:title="t('mobilesheetsmanager', 'Cancel')"
-					:aria-label="t('mobilesheetsmanager', 'Cancel')"
+					:title="t('sheetmusic', 'Cancel')"
+					:aria-label="t('sheetmusic', 'Cancel')"
 					@click="emit('cancel')">
 					<template #icon>
 						<CloseIcon :size="20" />
@@ -681,8 +724,8 @@ defineExpose({
 					type="button"
 					variant="secondary"
 					:disabled="isSaving"
-					:title="t('mobilesheetsmanager', 'Save without closing')"
-					:aria-label="t('mobilesheetsmanager', 'Save without closing')"
+					:title="t('sheetmusic', 'Save without closing')"
+					:aria-label="t('sheetmusic', 'Save without closing')"
 					@click="saveSong(false)">
 					<template #icon>
 						<ContentSaveOutlineIcon :size="20" />
@@ -717,6 +760,14 @@ defineExpose({
 			:library-id="libraryId"
 			:file-count="currentFiles.length"
 			@deleted="handleSongDeleted" />
+
+		<!-- Song History Modal -->
+		<SongHistoryModal
+			v-if="song && isHistoryOpen"
+			v-model:open="isHistoryOpen"
+			:song-id="song.id"
+			:song-title="song.title"
+			@reverted="handleReverted" />
 	</div>
 </template>
 

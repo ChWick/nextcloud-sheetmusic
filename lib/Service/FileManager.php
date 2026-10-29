@@ -7,12 +7,19 @@ declare(strict_types=1);
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-namespace OCA\MobileSheetsManager\Service;
+namespace OCA\SheetMusic\Service;
 
-use OCA\MobileSheetsManager\Db\LibraryMapper;
-use OCA\MobileSheetsManager\Db\MobileSheetsFile;
-use OCA\MobileSheetsManager\Db\MobileSheetsSong;
-use OCA\MobileSheetsManager\Db\SongMapper;
+use OCA\SheetMusic\Db\InternalSongFileMapper;
+use OCA\SheetMusic\Db\InternalSongMapper;
+use OCA\SheetMusic\Db\LibraryMapper;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsFile;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsFileLogEntry;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsHashCodesFile;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPath;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPathResolver;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdfMetadata;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSong;
+use OCA\SheetMusic\Sync\MobileSheets\SongMapper;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
@@ -20,208 +27,48 @@ use OCP\IUser;
 use Psr\Log\LoggerInterface;
 
 function getFileExtension(string $filename): string {
-	$extension = pathinfo($filename, PATHINFO_EXTENSION);
-
-	return $extension !== '' ? '.' . $extension : '';
+	return SongPathNamingRule::getFileExtension($filename);
 }
 
-/**
- * Zero-padded index prefix used to tell the files of a multi-file song apart,
- * e.g. "001 " producing "001 Miles - Real Book - Blue.pdf".
- *
- * Files with different extensions (e.g. .pdf and .mid) do not compete for the
- * same file name and keep their plain, unprefixed name.
- *
- * A song with a single file (or only one file for given extension) keeps its plain, unprefixed name.
- */
 function fileIndexPrefix(?int $fileIndex, int $fileCount): string {
-	if ($fileIndex === null || $fileCount < 2) {
-		return '';
-	}
-
-	return sprintf('%03d ', $fileIndex);
+	return SongPathNamingRule::fileIndexPrefix($fileIndex, $fileCount);
 }
 
-/**
- * 1-based position of $file within $song among files sharing the same extension,
- * or null when it is not listed there.
- */
 function fileIndexOf(MobileSheetsSong $song, MobileSheetsFile $file): ?int {
-	$ext = strtolower(getFileExtension($file->path));
-	$position = 0;
-	foreach ($song->files as $candidate) {
-		if (strtolower(getFileExtension($candidate->path)) === $ext) {
-			$position++;
-			if ($candidate->id === $file->id) {
-				return $position;
-			}
-		}
-	}
-
-	return null;
+	return SongPathNamingRule::fileIndexOf($song, $file);
 }
 
-/** Number of files in $song sharing the same extension as $file. */
 function fileCountForExtension(MobileSheetsSong $song, MobileSheetsFile $file): int {
-	$ext = strtolower(getFileExtension($file->path));
-	$count = 0;
-	foreach ($song->files as $candidate) {
-		if (strtolower(getFileExtension($candidate->path)) === $ext) {
-			$count++;
-		}
-	}
-
-	return $count;
+	return SongPathNamingRule::fileCountForExtension($song, $file);
 }
 
-/**
- * Normalize a generated path for Windows, Linux, and Nextcloud's 250-byte
- * filename limit before it is used for a folder or file operation.
- */
 function normalizeGeneratedPath(string $path): string {
-	$path = str_replace('\\', '/', $path);
-	$segments = array_map(
-		static fn (string $segment): string => normalizeGeneratedPathSegment($segment),
-		explode('/', trim($path, '/')),
-	);
-
-	return implode('/', $segments);
+	return SongPathNamingRule::normalizeGeneratedPath($path);
 }
 
 function normalizeGeneratedPathSegment(string $segment): string {
-	$segment = mb_scrub($segment, 'UTF-8');
-	$segment = str_replace(['<', '>', ':', '"', '/', '\\', '|', '?', '*'], '-', $segment);
-	$segment = preg_replace('/[\x00-\x1F\x7F]/', '-', $segment) ?? '';
-	$segment = rtrim($segment, " .");
-
-	if ($segment === '' || $segment === '.' || $segment === '..') {
-		$segment = 'untitled';
-	}
-
-	// Windows treats these device names as reserved, even when an extension follows.
-	$windowsBasename = rtrim(explode('.', $segment, 2)[0], " .");
-	if (preg_match('/^(CON|PRN|AUX|NUL|CONIN\$|CONOUT\$|COM[1-9¹²³]|LPT[1-9¹²³])$/iu', $windowsBasename) === 1
-		|| strcasecmp($segment, '.htaccess') === 0) {
-		$segment = '_' . $segment;
-	}
-
-	// Nextcloud reserves these suffixes for incomplete uploads.
-	foreach (['.filepart', '.part'] as $forbiddenExtension) {
-		if (str_ends_with(strtolower($segment), $forbiddenExtension)) {
-			$segment = substr($segment, 0, -strlen($forbiddenExtension)) . '-' . substr($forbiddenExtension, 1);
-			break;
-		}
-	}
-
-	// Nextcloud's file cache permits at most 250 bytes per filename; keep a file
-	// extension intact when shortening long generated file names.
-	$extension = getFileExtension($segment);
-	$name = $extension === '' ? $segment : substr($segment, 0, -strlen($extension));
-	$extensionBytes = min(strlen($extension), 250);
-	$extension = mb_strcut($extension, 0, $extensionBytes, 'UTF-8');
-	$name = mb_strcut($name, 0, 250 - strlen($extension), 'UTF-8');
-
-	return rtrim($name . $extension, " .") ?: 'untitled';
+	return SongPathNamingRule::normalizeGeneratedPathSegment($segment);
 }
 
 function normalizeKeyNameForGeneratedPath(string $name): string {
-	$name = mb_scrub($name, 'UTF-8');
-	$name = preg_replace('/([A-Ga-g])#(?=(?:m|M)?(?:\s|$|[,0-9]))/u', '$1♯', $name) ?? $name;
-
-	return preg_replace('/([A-Ga-g])b(?=(?:m|M)?(?:\s|$|[,0-9]))/u', '$1♭', $name) ?? $name;
+	return SongPathNamingRule::normalizeKeyNameForGeneratedPath($name);
 }
 
-/**
- * @return list<string> all valid target paths for a song given its composers, artists, books, and collections
- */
+function extractNonEmptyEntityNames(array $entities, string $property = 'name'): array {
+	return SongPathNamingRule::extractNonEmptyEntityNames($entities, $property);
+}
+
+function sortStringsByLengthDescending(array $items): array {
+	return SongPathNamingRule::sortStringsByLengthDescending($items);
+}
+
 function createTargetPaths(
 	MobileSheetsSong $song,
 	string $ext,
 	?int $fileIndex = null,
 	int $fileCount = 1,
 ): array {
-	$filePrefix = fileIndexPrefix($fileIndex, $fileCount);
-	$ext = $ext === '' ? '' : normalizeGeneratedPathSegment($ext);
-
-	// 1. Composers and Artists: sort alphabetically and join full list
-	$compArtistNames = [];
-	foreach ($song->composers as $c) {
-		if ($c->name !== '') {
-			$compArtistNames[] = $c->name;
-		}
-	}
-	if (empty($compArtistNames)) {
-		foreach ($song->artists as $a) {
-			if ($a->name !== '') {
-				$compArtistNames[] = $a->name;
-			}
-		}
-	}
-	sort($compArtistNames, SORT_STRING);
-	$compArtist = implode(', ', array_map(
-		static fn (string $name): string => normalizeGeneratedPathSegment($name),
-		$compArtistNames,
-	));
-
-	// 2. Books and Collections: sort by length descending (longest string first), then alphabetically ascending
-	$sortByNameStability = static function (array $items): array {
-		usort($items, static function (string $a, string $b): int {
-			$lenA = mb_strlen($a);
-			$lenB = mb_strlen($b);
-			if ($lenA !== $lenB) {
-				return $lenB <=> $lenA;
-			}
-			return strcmp($a, $b);
-		});
-		return $items;
-	};
-
-	$bookTitles = array_values(array_filter(array_map(static fn($b) => $b->title, $song->books), static fn($t) => $t !== ''));
-	$bookTitles = $sortByNameStability($bookTitles);
-
-	$collectionNames = array_values(array_filter(array_map(static fn($c) => $c->name, $song->collections), static fn($n) => $n !== ''));
-	$collectionNames = $sortByNameStability($collectionNames);
-
-	$book = $bookTitles === [] ? '' : normalizeGeneratedPathSegment($bookTitles[0]);
-	$collection = $collectionNames === [] ? '' : normalizeGeneratedPathSegment($collectionNames[0]);
-
-	$keyNames = array_values(array_filter(array_map(static fn($k) => $k->name, $song->keys), static fn($n) => $n !== ''));
-	sort($keyNames, SORT_STRING);
-	$keyString = implode(', ', array_map(
-		static fn (string $name): string => normalizeGeneratedPathSegment(normalizeKeyNameForGeneratedPath($name)),
-		$keyNames,
-	));
-
-	$songTitle = normalizeGeneratedPathSegment($song->title);
-	$songTitlePart = $keyString !== '' ? "{$songTitle} in {$keyString}" : $songTitle;
-
-	if ($compArtist !== '') {
-		if ($book !== '') {
-			$folder = $compArtist . DIRECTORY_SEPARATOR . "{$compArtist} - {$book}";
-			$fileName = "{$compArtist} - {$book} - {$songTitlePart}";
-			return [normalizeGeneratedPath($folder . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext)];
-		}
-		if ($collection !== '') {
-			$folder = $compArtist . DIRECTORY_SEPARATOR . "{$compArtist} - {$collection}";
-			$fileName = "{$compArtist} - {$collection} - {$songTitlePart}";
-			return [normalizeGeneratedPath($folder . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext)];
-		}
-		$folder = $compArtist;
-		$fileName = "{$compArtist} - {$songTitlePart}";
-		return [
-			normalizeGeneratedPath($folder . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext),
-			normalizeGeneratedPath($filePrefix . $fileName . $ext),
-		];
-	}
-	if ($collection !== '') {
-		$folder = $collection;
-		$fileName = "{$collection} - {$songTitlePart}";
-		return [
-			normalizeGeneratedPath($folder . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext),
-			normalizeGeneratedPath($filePrefix . $fileName . $ext),
-		];
-	}
-	throw new NoNamingRuleException('No composer, artist, or collection');
+	return SongPathNamingRule::createTargetPaths($song, $ext, $fileIndex, $fileCount);
 }
 
 function createTargetPath(
@@ -230,22 +77,34 @@ function createTargetPath(
 	?int $fileIndex = null,
 	int $fileCount = 1,
 ): string {
-	$paths = createTargetPaths($song, $ext, $fileIndex, $fileCount);
-
-	return $paths[0];
+	return SongPathNamingRule::createTargetPath($song, $ext, $fileIndex, $fileCount);
 }
 
 class FileManager {
 	/** Highest counter tried when a file name has to be made unique. */
-	private const MAX_UNIQUE_NAME_ATTEMPTS = 1000;
+	public const MAX_UNIQUE_NAME_ATTEMPTS = FilePathRegenerator::MAX_UNIQUE_NAME_ATTEMPTS;
+
+	private FilePathRegenerator $pathRegenerator;
 
 	public function __construct(
 		private LibraryMapper $libraryMapper,
-		private SongMapper $songMapper,
 		private IRootFolder $rootFolder,
 		private MobileSheetsPathResolver $pathResolver,
 		private LoggerInterface $logger,
+		private ?LibraryService $libraryService = null,
+		private ?InternalSongFileMapper $internalSongFileMapper = null,
+		private ?InternalSongMapper $internalSongMapper = null,
+		private ?SongMapper $songMapper = null,
+		?FilePathRegenerator $pathRegenerator = null,
 	) {
+		$this->pathRegenerator = $pathRegenerator ?? new FilePathRegenerator(
+			$this->rootFolder,
+			$this->pathResolver,
+			$this->logger,
+			$this->internalSongFileMapper,
+			$this->songMapper,
+			$this->internalSongMapper,
+		);
 	}
 
 	/**
@@ -304,38 +163,7 @@ class FileManager {
 	 * @throws \RuntimeException when even the last variant is taken
 	 */
 	public function uniqueRelativePath(Folder $userFolder, string $targetRelative, ?string $keepRelative = null): string {
-		$targetRelative = ltrim($targetRelative, '/');
-		$keepRelative = $keepRelative === null ? null : ltrim($keepRelative, '/');
-
-		if ($targetRelative === $keepRelative || !$userFolder->nodeExists($targetRelative)) {
-			return $targetRelative;
-		}
-
-		// "X.pdf" -> "X (2).pdf", keeping the folder and the extension untouched.
-		$fileName = basename($targetRelative);
-		$extension = getFileExtension($fileName);
-		$base = $extension === '' ? $fileName : substr($fileName, 0, -strlen($extension));
-		if ($base === '') {
-			// Dot files such as ".hidden" have no name part to count up.
-			$base = $fileName;
-			$extension = '';
-		}
-		$directory = str_replace(DIRECTORY_SEPARATOR, '/', dirname($targetRelative));
-		$prefix = ($directory === '' || $directory === '.') ? '' : rtrim($directory, '/') . '/';
-
-		for ($counter = 2; $counter <= self::MAX_UNIQUE_NAME_ATTEMPTS; $counter++) {
-			$candidate = $prefix . $base . ' (' . $counter . ')' . $extension;
-			if ($candidate === $keepRelative || !$userFolder->nodeExists($candidate)) {
-				return $candidate;
-			}
-		}
-
-		throw new \RuntimeException(sprintf(
-			'Cannot find a free file name for "%s" in "%s": %d variants are taken',
-			$targetRelative,
-			$userFolder->getPath(),
-			self::MAX_UNIQUE_NAME_ATTEMPTS,
-		));
+		return $this->pathRegenerator->uniqueRelativePath($userFolder, $targetRelative, $keepRelative);
 	}
 
 	/**
@@ -352,13 +180,15 @@ class FileManager {
 	 */
 	public function regenerateFilePaths(int $libraryId, IUser $user): array {
 		$library = $this->libraryMapper->findById($libraryId);
-		if ($library !== null && !LibraryMapper::autoPathsOf($library)) {
+		if ($library !== null && !$library->autoPaths) {
 			return [];
 		}
 
 		['databasePath' => $databasePath, 'targetFolder' => $targetFolder] = $this->libraryContext($libraryId, $user);
 
-		$songs = $this->songMapper->findSongs($databasePath);
+		$songs = $this->internalSongMapper !== null
+			? $this->internalSongMapper->findLibraryData($libraryId, $user)->songs
+			: ($this->songMapper !== null ? $this->songMapper->findSongs($databasePath) : []);
 
 		// MobileSheets stores absolute WebDAV paths that sit next to the library
 		// database, so regenerated files belong in the database's parent folder -
@@ -384,6 +214,41 @@ class FileManager {
 	}
 
 	/**
+	 * Resolve the target folder of a library.
+	 *
+	 * @throws \Exception when the library is unknown or its folder cannot be resolved
+	 */
+	public function libraryFolder(int $libraryId, IUser $user): Folder {
+		$library = $this->libraryMapper->findById($libraryId);
+		if ($library === null) {
+			throw new \Exception("Library with ID $libraryId not found");
+		}
+
+		$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+		$path = $library->path;
+
+		// Try to resolve as physical file node first (for backward compatibility and test mocks)
+		try {
+			$node = $userFolder->get(ltrim($path, '/'));
+			if ($node instanceof Folder) {
+				return $node;
+			}
+			return $node->getParent();
+		} catch (\Throwable $e) {
+			// Purely virtual: resolve folder
+			$folderPath = rtrim($path, '/');
+			if (str_ends_with(strtolower($folderPath), '.db')) {
+				$folderPath = dirname($folderPath);
+			}
+			$folderNode = $userFolder->get(ltrim($folderPath, '/'));
+			if ($folderNode instanceof Folder) {
+				return $folderNode;
+			}
+			throw new \Exception("Library folder not found for ID $libraryId", 0, $e);
+		}
+	}
+
+	/**
 	 * Resolve the library database file and the folder its files belong in.
 	 *
 	 * Both phases of a library sync need the same context: the local path of the
@@ -394,23 +259,30 @@ class FileManager {
 	 * @throws \Exception when the library is unknown or its path cannot be resolved
 	 */
 	public function libraryContext(int $libraryId, IUser $user): array {
+		$targetFolder = $this->libraryFolder($libraryId, $user);
+
 		$library = $this->libraryMapper->findById($libraryId);
-		if ($library === null) {
-			throw new \Exception("Library with ID $libraryId not found");
+		$path = $library?->path ?? '';
+
+		$databasePath = null;
+		try {
+			$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+			$node = $userFolder->get(ltrim($path, '/'));
+			if (!($node instanceof Folder)) {
+				$databasePath = $node->getStorage()->getLocalFile($node->getInternalPath());
+			}
+		} catch (\Throwable) {
 		}
 
-		$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+		$databasePath ??= $this->libraryService?->getDatabasePath($user->getUID(), $libraryId);
 
-		$path = $library['path'] ?? '';
-		$node = $userFolder->get(ltrim($path, '/'));
-		$databasePath = $node->getStorage()->getLocalFile($node->getInternalPath());
-		if ($databasePath === false) {
+		if ($databasePath === null || $databasePath === false) {
 			throw new \Exception("Could not retrieve local file path for library with ID $libraryId");
 		}
 
 		return [
 			'databasePath' => $databasePath,
-			'targetFolder' => $node->getParent(),
+			'targetFolder' => $targetFolder,
 		];
 	}
 
@@ -432,12 +304,13 @@ class FileManager {
 		int $songId,
 		IUser $user,
 		Folder $targetFolder,
-		string $databasePath,
+		string $databasePath = '',
 		?MobileSheetsHashCodesFile $hashCodes = null,
 	): void {
-		$song = $this->songMapper->findSong($databasePath, $songId);
+		$song = $this->internalSongMapper?->findSong($songId, $user)
+			?? ($this->songMapper !== null && $databasePath !== '' ? $this->songMapper->findSong($databasePath, $songId) : null);
 		if ($song === null) {
-			throw new \RuntimeException("Song with ID $songId not found in the library '$databasePath'");
+			throw new \RuntimeException("Song with ID $songId not found");
 		}
 
 		$this->regenerateSongFiles($song, $user, $targetFolder, $databasePath, $hashCodes);
@@ -533,23 +406,7 @@ class FileManager {
 	 * instead of a file link.
 	 */
 	public function nodeIdOfStoredFile(string $webdavPath, IUser $user): ?int {
-		$path = $this->pathResolver->fromStored($webdavPath, $user);
-		if ($path === null) {
-			return null;
-		}
-
-		$relative = $this->pathResolver->relativeToUserFolder($path->internal, $user);
-		if ($relative === null || $relative === '') {
-			return null;
-		}
-
-		try {
-			$id = $this->rootFolder->getUserFolder($user->getUID())->get($relative)->getId();
-		} catch (\Throwable) {
-			return null;
-		}
-
-		return $id > 0 ? $id : null;
+		return $this->pathRegenerator->nodeIdOfStoredFile($webdavPath, $user);
 	}
 
 	/**
@@ -573,239 +430,13 @@ class FileManager {
 		string $databasePath,
 		?MobileSheetsHashCodesFile $hashCodes = null,
 	): MobileSheetsFileLogEntry {
-		// Relative target as produced by the naming rules, e.g.
-		// "Miles/Miles - Real Book/Miles - Real Book - Blue.pdf". Songs with more
-		// than one file would otherwise all map onto the same name, so each file
-		// gets its position as a prefix: "001 Miles - Real Book - Blue.pdf".
-		$relativeTarget = createTargetPath(
-			$song,
-			getFileExtension($file->path),
-			fileIndexOf($song, $file),
-			fileCountForExtension($song, $file),
-		);
-
-		// The four path variants:
-		//   sourceWebdav / sourceInternal  - where the database says the file is
-		//   targetWebdav / targetInternal  - where the naming rules want it
-		$source = $this->pathResolver->fromStored($file->path, $user);
-		if ($source === null) {
-			throw new SyncException(MobileSheetsFileLogEntry::CODE_SOURCE_OUTSIDE_LIBRARY, sprintf(
-				'Cannot regenerate file %d: stored path "%s" is not below "%s"',
-				$file->id,
-				$file->path,
-				$this->pathResolver->webdavRoot($user),
-			));
-		}
-
-		$sourceRelative = $this->pathResolver->relativeToUserFolder($source->internal, $user);
-		if ($sourceRelative === null) {
-			throw new SyncException(MobileSheetsFileLogEntry::CODE_SOURCE_OUTSIDE_LIBRARY, sprintf(
-				'Cannot regenerate file %d: source "%s" escapes the user folder',
-				$file->id,
-				$source->internal,
-			));
-		}
-
-		// Filesystem work always happens on the internal path.
-		$userFolder = $this->rootFolder->getUserFolder($user->getUID());
-
-		// The naming rules produce paths below the library folder, while uniqueRelativePath()
-		// and the node lookups work with paths relative to the user folder - a target that
-		// is checked against the wrong base would look free and another song's file would
-		// be replaced. Two songs that share a title map onto the same target, so a taken
-		// name gets a counter instead.
-		$targetBaseRelative = $this->pathResolver->relativeToUserFolder($targetFolder->getPath(), $user) ?? '';
-
-		if (!$userFolder->nodeExists($sourceRelative)) {
-			$candidates = createTargetPaths(
-				$song,
-				getFileExtension($file->path),
-				fileIndexOf($song, $file),
-				fileCountForExtension($song, $file),
-			);
-			foreach ($candidates as $cand) {
-				$candRel = ($targetBaseRelative === '' ? '' : rtrim($targetBaseRelative, '/') . '/') . $cand;
-				if ($userFolder->nodeExists($candRel)) {
-					$candTarget = $this->pathResolver->forTarget($candRel, $user, $userFolder->getPath());
-
-					// If candidate target file is ALREADY referenced by another song in DB,
-					// duplicate the file so this song gets its own distinct file copy.
-					if ($this->songMapper->isPathReferencedByOtherSong($databasePath, $candTarget->webdav, $song->id)) {
-						$existingNode = $userFolder->get($candRel);
-						if ($existingNode instanceof \OCP\Files\File) {
-							$targetRelative = $this->uniqueRelativePath($userFolder, $candRel, '');
-							$this->ensureParentFolder($userFolder, $targetRelative);
-							$copiedNode = $existingNode->copy($targetRelative);
-							$copiedTarget = $this->pathResolver->forTarget($targetRelative, $user, $userFolder->getPath());
-							$facts = MobileSheetsFileFacts::fromNode($copiedNode);
-							$this->songMapper->updateFile($databasePath, $file->id, $copiedTarget->webdav, $facts);
-							$hashCodes?->updatePath($source->webdav, $copiedTarget->webdav);
-
-							return $this->logEntry(
-								$song,
-								$file,
-								sprintf('Copied file for separate song to "%s"', $targetRelative),
-								MobileSheetsFileLogEntry::LEVEL_INFO,
-								MobileSheetsFileLogEntry::CODE_PATH_MOVED,
-								$this->nodeIdOfStoredFile($copiedTarget->webdav, $user),
-							);
-						}
-						continue;
-					}
-
-					$targetNode = $userFolder->get($candRel);
-					$facts = MobileSheetsFileFacts::fromNode($targetNode);
-					$this->songMapper->updateFile($databasePath, $file->id, $candTarget->webdav, $facts);
-					$hashCodes?->updatePath($source->webdav, $candTarget->webdav);
-
-					return $this->logEntry(
-						$song,
-						$file,
-						sprintf('Linked to existing target file at "%s"', $candRel),
-						MobileSheetsFileLogEntry::LEVEL_INFO,
-						MobileSheetsFileLogEntry::CODE_PATH_MOVED,
-						$this->nodeIdOfStoredFile($candTarget->webdav, $user),
-					);
-				}
-			}
-
-			throw new SyncException(MobileSheetsFileLogEntry::CODE_SOURCE_MISSING, sprintf(
-				'Cannot regenerate file %d: source "%s" does not exist',
-				$file->id,
-				$source->webdav,
-			));
-		}
-
-		$targetRelative = $this->uniqueRelativePath(
-			$userFolder,
-			($targetBaseRelative === '' ? '' : rtrim($targetBaseRelative, '/') . '/') . $relativeTarget,
-			$sourceRelative,
-		);
-		$target = $this->pathResolver->forTarget($targetRelative, $user, $userFolder->getPath());
-
-		$validTargetPaths = createTargetPaths(
-			$song,
-			getFileExtension($file->path),
-			fileIndexOf($song, $file),
-			fileCountForExtension($song, $file),
-		);
-
-		$isAlreadyInPlace = ($source->internal === $target->internal);
-		if (!$isAlreadyInPlace) {
-			foreach ($validTargetPaths as $validRel) {
-				$validInternal = $this->pathResolver->forTarget(
-					($targetBaseRelative === '' ? '' : rtrim($targetBaseRelative, '/') . '/') . $validRel,
-					$user,
-					$userFolder->getPath()
-				)->internal;
-
-				if ($source->internal === $validInternal) {
-					$isAlreadyInPlace = true;
-					break;
-				}
-			}
-		}
-
-		if ($isAlreadyInPlace) {
-			// Check if this path is shared/referenced by another song in DB
-			if ($this->songMapper->isPathReferencedByOtherSong($databasePath, $source->webdav, $song->id)) {
-				$existingNode = $userFolder->get($sourceRelative);
-				if ($existingNode instanceof \OCP\Files\File) {
-					$targetRelative = $this->uniqueRelativePath($userFolder, $sourceRelative, '');
-					$this->ensureParentFolder($userFolder, $targetRelative);
-					$copiedNode = $existingNode->copy($targetRelative);
-					$copiedTarget = $this->pathResolver->forTarget($targetRelative, $user, $userFolder->getPath());
-					$facts = MobileSheetsFileFacts::fromNode($copiedNode);
-					$this->songMapper->updateFile($databasePath, $file->id, $copiedTarget->webdav, $facts);
-					$hashCodes?->updatePath($source->webdav, $copiedTarget->webdav);
-
-					return $this->logEntry(
-						$song,
-						$file,
-						sprintf('Copied file for separate song to "%s"', $targetRelative),
-						MobileSheetsFileLogEntry::LEVEL_INFO,
-						MobileSheetsFileLogEntry::CODE_PATH_MOVED,
-						$this->nodeIdOfStoredFile($copiedTarget->webdav, $user),
-					);
-				}
-			}
-
-			// Already in place. This also covers a file that already carries the counter
-			// this run would produce, so running twice does not rename it again.
-			$this->logger->debug('MobileSheets file already at its target path', [
-				'fileId' => $file->id,
-				'path' => $source->internal,
-			]);
-
-			return $this->logEntry(
-				$song,
-				$file,
-				'Already at its regenerated path',
-				MobileSheetsFileLogEntry::LEVEL_INFO,
-				MobileSheetsFileLogEntry::CODE_PATH_CURRENT,
-				$this->nodeIdOfStoredFile($file->path, $user),
-			);
-		}
-
-		// Regenerated paths usually live in folders that do not exist yet.
-		$createdFolders = $this->ensureParentFolder($userFolder, $targetRelative);
-
-		// Node::move() resolves against the filesystem root, so it needs the full
-		// internal path rather than one relative to the user folder. A move does not
-		// touch the file's content, so its metadata is read up front and used to
-		// refresh LastModified (and the derived fields) alongside the new path.
-		$sourceNode = $userFolder->get($sourceRelative);
-		$facts = MobileSheetsFileFacts::fromNode($sourceNode);
-		$sourceNode->move($target->internal);
-
-		try {
-			$this->songMapper->updateFile($databasePath, $file->id, $target->webdav, $facts);
-		} catch (\Throwable $exception) {
-			$this->revertMove(
-				$userFolder,
-				$targetRelative,
-				$source->internal,
-				$createdFolders,
-				$file,
-				$target,
-				$exception,
-			);
-
-			throw new SyncException(
-				MobileSheetsFileLogEntry::CODE_PATH_PERSIST_FAILED,
-				sprintf(
-					'Could not persist the new path for file %d; the move was reverted',
-					$file->id,
-				),
-				$exception,
-			);
-		}
-
-		// Only tidy up once the move and the database update both succeeded: doing it
-		// earlier would break the revert above, which needs the source folder back.
-		$emptyFolderBoundary = $this->pathResolver->relativeToUserFolder($targetFolder->getPath(), $user) ?? '';
-		$removedFolders = $this->removeEmptyParentFolders($userFolder, $sourceRelative, $emptyFolderBoundary);
-
-		// The hash codes file keys files by their WebDAV path, so it needs the
-		// rename too. Hash, modification time and size are unchanged by a move.
-		$hashCodes?->updatePath($source->webdav, $target->webdav);
-
-		$this->logger->info('Moved MobileSheets file and updated the database', [
-			'fileId' => $file->id,
-			'sourceInternal' => $source->internal,
-			'targetInternal' => $target->internal,
-			'targetWebdav' => $target->webdav,
-			'createdFolders' => $createdFolders,
-			'removedEmptyFolders' => $removedFolders,
-		]);
-
-		return $this->logEntry(
+		return $this->pathRegenerator->regenerateFilePath(
 			$song,
 			$file,
-			sprintf('Moved to "%s"', $targetRelative),
-			MobileSheetsFileLogEntry::LEVEL_INFO,
-			MobileSheetsFileLogEntry::CODE_PATH_MOVED,
-			$this->nodeIdOfStoredFile($target->webdav, $user),
+			$user,
+			$targetFolder,
+			$databasePath,
+			$hashCodes,
 		);
 	}
 
@@ -837,167 +468,16 @@ class FileManager {
 		string $databasePath,
 		?MobileSheetsHashCodesFile $hashCodes = null,
 	): string {
-		if (!str_ends_with(strtolower($file->path), '.pdf')) {
-			return MobileSheetsFileLogEntry::CODE_NOT_PDF;
-		}
+		$syncer = new FileMetadataSyncer(
+			rootFolder: $this->rootFolder,
+			pathResolver: $this->pathResolver,
+			logger: $this->logger,
+			internalSongFileMapper: $this->internalSongFileMapper,
+			songMapper: $this->songMapper,
+			internalSongMapper: $this->internalSongMapper,
+		);
 
-		$path = $this->pathOfStoredFile($file->path, $user);
-		if ($path === null) {
-			throw new SyncException(MobileSheetsFileLogEntry::CODE_SOURCE_OUTSIDE_LIBRARY, sprintf(
-				'Cannot sync the metadata of file %d: stored path "%s" is not below "%s"',
-				$file->id,
-				$file->path,
-				$this->pathResolver->webdavRoot($user),
-			));
-		}
-
-		$relative = $this->pathResolver->relativeToUserFolder($path->internal, $user) ?? '';
-		$userFolder = $this->rootFolder->getUserFolder($user->getUID());
-
-		try {
-			$node = $userFolder->get($relative);
-		} catch (\Throwable) {
-			throw new SyncException(
-				MobileSheetsFileLogEntry::CODE_METADATA_FILE_MISSING,
-				sprintf('Cannot sync the metadata of file %d: "%s" does not exist', $file->id, $file->path),
-			);
-		}
-
-		if (!($node instanceof File)) {
-			throw new SyncException(
-				MobileSheetsFileLogEntry::CODE_METADATA_NOT_A_FILE,
-				sprintf('Cannot sync the metadata of file %d: "%s" is not a file', $file->id, $file->path),
-			);
-		}
-
-		try {
-			$content = $node->getContent();
-		} catch (\Throwable $exception) {
-			throw new SyncException(
-				MobileSheetsFileLogEntry::CODE_METADATA_UNREADABLE,
-				sprintf('Cannot sync the metadata of file %d: "%s" could not be read', $file->id, $file->path),
-				$exception,
-			);
-		}
-		if (!is_string($content) || $content === '') {
-			throw new SyncException(
-				MobileSheetsFileLogEntry::CODE_METADATA_UNREADABLE,
-				sprintf('Cannot sync the metadata of file %d: "%s" is empty', $file->id, $file->path),
-			);
-		}
-
-		try {
-			$upToDate = MobileSheetsPdfMetadata::matchesSong($content, $song);
-		} catch (\Throwable) {
-			// Properties that cannot be read are worth rewriting: writing may
-			// repair what reading could not make sense of.
-			$upToDate = false;
-		}
-		if ($upToDate) {
-			return MobileSheetsFileLogEntry::CODE_METADATA_CURRENT;
-		}
-
-		try {
-			$node->putContent(
-				MobileSheetsPdfMetadata::withInfo($content, MobileSheetsPdfMetadata::fieldsFor($song)),
-			);
-		} catch (\Throwable $exception) {
-			throw new SyncException(
-				MobileSheetsFileLogEntry::CODE_METADATA_WRITE_FAILED,
-				sprintf('Cannot sync the metadata of file %d: "%s" could not be written', $file->id, $file->path),
-				$exception,
-			);
-		}
-
-		try {
-			// The bytes changed, so the hash, size and timestamp stored for
-			// the file have to follow them - everywhere they are kept.
-			$facts = MobileSheetsFileFacts::fromNode($node);
-			$this->songMapper->updateFile($databasePath, $file->id, $file->path, $facts);
-			$hashCodes?->updateFacts(
-				$file->path,
-				(string)$facts->fileHash,
-				(string)$facts->lastModified,
-				(string)$facts->fileSize,
-			);
-		} catch (\Throwable $exception) {
-			throw new SyncException(
-				MobileSheetsFileLogEntry::CODE_METADATA_FACTS_FAILED,
-				sprintf(
-					'The metadata of file %d was written, but the database was not refreshed',
-					$file->id,
-				),
-				$exception,
-			);
-		}
-
-		return MobileSheetsFileLogEntry::CODE_METADATA_UPDATED;
-	}
-
-	/**
-	 * Delete the now-empty folders a moved-out file left behind.
-	 *
-	 * Walks upwards from the source's parent, stopping at the first folder that still
-	 * has content and never touching $boundaryRelative itself, so the library folder
-	 * (and anything above it) is safe.
-	 *
-	 * @param string $sourceRelative path relative to the user folder
-	 * @param string $boundaryRelative folder to stop at, relative to the user folder
-	 *                                 ('' means the user folder itself)
-	 * @return list<string> the relative paths that were deleted, deepest first
-	 */
-	private function removeEmptyParentFolders(
-		Folder $userFolder,
-		string $sourceRelative,
-		string $boundaryRelative,
-	): array {
-		$boundaryRelative = trim($boundaryRelative, '/');
-		$removed = [];
-
-		$parent = str_replace(DIRECTORY_SEPARATOR, '/', dirname($sourceRelative));
-
-		while ($parent !== '' && $parent !== '.' && $parent !== '/') {
-			$parent = trim($parent, '/');
-			if ($parent === '' || $parent === $boundaryRelative) {
-				break;
-			}
-			// Never leave the boundary folder's subtree.
-			if ($boundaryRelative !== '' && !str_starts_with($parent, $boundaryRelative . '/')) {
-				break;
-			}
-
-			$next = str_replace(DIRECTORY_SEPARATOR, '/', dirname($parent));
-
-			try {
-				if (!$userFolder->nodeExists($parent)) {
-					$parent = $next;
-					continue;
-				}
-
-				$node = $userFolder->get($parent);
-				if (!($node instanceof Folder) || count($node->getDirectoryListing()) > 0) {
-					// Still has content, so every ancestor does too.
-					break;
-				}
-
-				$node->delete();
-				$removed[] = $parent;
-			} catch (\Throwable $exception) {
-				// Leaving an empty folder behind is cosmetic; never fail the move over it.
-				$this->logger->warning('Could not remove an empty source folder', [
-					'folder' => $parent,
-					'exception' => $exception,
-				]);
-				break;
-			}
-
-			if ($next === $parent) {
-				break;
-			}
-			$parent = $next;
-		}
-
-		return $removed;
+		return $syncer->syncMetadataIntoFile($song, $file, $user, $databasePath, $hashCodes);
 	}
 
 	/**
@@ -1007,85 +487,6 @@ class FileManager {
 	 * @return list<string> the relative paths that were created, shallowest first
 	 */
 	public function ensureParentFolder(Folder $userFolder, string $targetRelative): array {
-		$parent = str_replace(DIRECTORY_SEPARATOR, '/', dirname($targetRelative));
-		if ($parent === '' || $parent === '.' || $parent === '/') {
-			return [];
-		}
-
-		$created = [];
-		$current = '';
-		foreach (explode('/', $parent) as $segment) {
-			if ($segment === '') {
-				continue;
-			}
-			$current = $current === '' ? $segment : "$current/$segment";
-			if (!$userFolder->nodeExists($current)) {
-				$userFolder->newFolder($current);
-				$created[] = $current;
-			}
-		}
-
-		return $created;
-	}
-
-	/**
-	 * Undo a move whose database update failed, so the tree and database stay in sync.
-	 *
-	 * @param string $sourceInternal full internal path the file came from
-	 * @param list<string> $createdFolders
-	 */
-	private function revertMove(
-		Folder $userFolder,
-		string $targetRelative,
-		string $sourceInternal,
-		array $createdFolders,
-		MobileSheetsFile $file,
-		MobileSheetsPath $target,
-		\Throwable $cause,
-	): void {
-		try {
-			$userFolderPath = $userFolder->getPath();
-			if ($sourceInternal === $userFolderPath) {
-				$sourceRelative = '';
-			} elseif (str_starts_with($sourceInternal, $userFolderPath . '/')) {
-				$sourceRelative = substr($sourceInternal, strlen($userFolderPath) + 1);
-			} else {
-				$sourceRelative = null;
-			}
-
-			if ($sourceRelative !== null && $userFolder->nodeExists($sourceRelative) && $sourceRelative !== $targetRelative) {
-				$sourceRelative = $this->uniqueRelativePath($userFolder, $sourceRelative, $targetRelative);
-				$sourceInternal = $userFolderPath . '/' . $sourceRelative;
-			}
-			$userFolder->get($targetRelative)->move($sourceInternal);
-		} catch (\Throwable $revertException) {
-			$this->logger->error('Could not revert the file move; file and database are now inconsistent', [
-				'fileId' => $file->id,
-				'expectedInternal' => $target->internal,
-				'databaseWebdav' => $file->path,
-				'exception' => $revertException,
-			]);
-
-			return;
-		}
-
-		// Best-effort cleanup so the aborted move leaves no empty folders behind.
-		foreach (array_reverse($createdFolders) as $folder) {
-			try {
-				$node = $userFolder->get($folder);
-				if (count($node->getDirectoryListing()) === 0) {
-					$node->delete();
-				}
-			} catch (\Throwable) {
-				// Leaving an empty folder behind is harmless; the file move is what matters.
-			}
-		}
-
-		$this->logger->warning('Reverted the file move because the database update failed', [
-			'fileId' => $file->id,
-			'restoredInternal' => $sourceInternal,
-			'removedFolders' => $createdFolders,
-			'exception' => $cause,
-		]);
+		return $this->pathRegenerator->ensureParentFolder($userFolder, $targetRelative);
 	}
 }

@@ -5,6 +5,7 @@ import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import AlertCircleIcon from 'vue-material-design-icons/AlertCircle.vue'
 import AlertIcon from 'vue-material-design-icons/Alert.vue'
+import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import FileMultipleIcon from 'vue-material-design-icons/FileMultiple.vue'
 import InformationIcon from 'vue-material-design-icons/Information.vue'
 import MergeIcon from 'vue-material-design-icons/Merge.vue'
@@ -20,6 +21,7 @@ const emit = defineEmits<{
 	fixIssue: [issue: IntegrityIssue]
 	mergeSongs: [issue: IntegrityIssue, mode?: 'merge' | 'keepBoth']
 	fixOrphanFile: [issue: IntegrityIssue]
+	deleteMissingFile: [issue: IntegrityIssue]
 }>()
 
 /** True when this is a duplicate or identical song issue between distinct songs (needs merge dialog, not auto-fix) */
@@ -46,14 +48,22 @@ const isDuplicateBetweenSongs = computed(() =>
 
 		<p :class="$style.message">{{ issue.message }}</p>
 
-		<div v-if="issue.path || issue.suggestedPath" :class="$style.paths">
+		<div v-if="issue.path || issue.suggestedPath || issue.type === 'invalid_naming_rule'" :class="$style.paths">
 			<div v-if="issue.path" :class="$style.pathLine">
-				<span :class="$style.pathLabel">{{ t('mobilesheetsmanager', 'Current Path:') }}</span>
+				<span :class="$style.pathLabel">{{ t('sheetmusic', 'Current Path:') }}</span>
 				<code>{{ issue.path }}</code>
 			</div>
+			<div v-if="issue.type === 'orphan_file' && issue.songTitle" :class="$style.pathLine">
+				<span :class="$style.pathLabel">{{ t('sheetmusic', 'Matched Song:') }}</span>
+				<span>{{ issue.songTitle }}</span>
+			</div>
 			<div v-if="issue.suggestedPath" :class="$style.pathLine">
-				<span :class="$style.pathLabel">{{ t('mobilesheetsmanager', 'Suggested Path:') }}</span>
+				<span :class="$style.pathLabel">{{ t('sheetmusic', 'Expected Path:') }}</span>
 				<code>{{ issue.suggestedPath }}</code>
+			</div>
+			<div v-else-if="issue.type === 'invalid_naming_rule'" :class="$style.pathLine">
+				<span :class="$style.pathLabel">{{ t('sheetmusic', 'Expected Path:') }}</span>
+				<span :class="$style.pathNote">{{ t('sheetmusic', 'Cannot determine expected path: Song needs a Composer, Artist, or Collection.') }}</span>
 			</div>
 		</div>
 
@@ -63,18 +73,30 @@ const isDuplicateBetweenSongs = computed(() =>
 				variant="secondary"
 				type="tertiary"
 				@click="emit('openSong', issue.songId!)">
-				{{ t('mobilesheetsmanager', 'Edit Song') }}
+				{{ t('sheetmusic', 'Edit Song') }}
 			</NcButton>
 
-			<NcButton
-				v-if="issue.type === 'orphan_file'"
-				variant="primary"
-				@click="emit('fixOrphanFile', issue)">
-				<template #icon>
-					<WrenchIcon :size="16" />
-				</template>
-				{{ t('mobilesheetsmanager', 'Fix Orphan File') }}
-			</NcButton>
+			<template v-if="issue.type === 'orphan_file'">
+				<NcButton
+					v-if="issue.fixable"
+					variant="primary"
+					:disabled="isFixing"
+					@click="emit('fixIssue', issue)">
+					<template #icon>
+						<WrenchIcon :size="16" />
+					</template>
+					{{ isFixing ? t('sheetmusic', 'Fixing…') : t('sheetmusic', 'Auto-Fix Issue') }}
+				</NcButton>
+
+				<NcButton
+					:variant="issue.fixable ? 'secondary' : 'primary'"
+					@click="emit('fixOrphanFile', issue)">
+					<template #icon>
+						<WrenchIcon :size="16" />
+					</template>
+					{{ t('sheetmusic', 'Fix Orphan File') }}
+				</NcButton>
+			</template>
 
 			<template v-else-if="isDuplicateBetweenSongs">
 				<NcButton
@@ -84,7 +106,7 @@ const isDuplicateBetweenSongs = computed(() =>
 					<template #icon>
 						<FileMultipleIcon :size="16" />
 					</template>
-					{{ t('mobilesheetsmanager', 'Keep as Two') }}
+					{{ t('sheetmusic', 'Keep as Two') }}
 				</NcButton>
 
 				<NcButton
@@ -94,7 +116,19 @@ const isDuplicateBetweenSongs = computed(() =>
 					<template #icon>
 						<MergeIcon :size="16" />
 					</template>
-					{{ isFixing ? t('mobilesheetsmanager', 'Merging…') : t('mobilesheetsmanager', 'Merge Songs') }}
+					{{ isFixing ? t('sheetmusic', 'Merging…') : t('sheetmusic', 'Merge Songs') }}
+				</NcButton>
+			</template>
+
+			<template v-else-if="issue.type === 'missing_file'">
+				<NcButton
+					variant="error"
+					:disabled="isFixing"
+					@click="emit('deleteMissingFile', issue)">
+					<template #icon>
+						<DeleteIcon :size="16" />
+					</template>
+					{{ isFixing ? t('sheetmusic', 'Deleting…') : t('sheetmusic', 'Delete File') }}
 				</NcButton>
 			</template>
 
@@ -106,7 +140,7 @@ const isDuplicateBetweenSongs = computed(() =>
 				<template #icon>
 					<WrenchIcon :size="16" />
 				</template>
-				{{ isFixing ? t('mobilesheetsmanager', 'Fixing…') : t('mobilesheetsmanager', 'Auto-Fix Issue') }}
+				{{ isFixing ? t('sheetmusic', 'Fixing…') : t('sheetmusic', 'Auto-Fix Issue') }}
 			</NcButton>
 		</div>
 	</li>
@@ -179,6 +213,11 @@ const isDuplicateBetweenSongs = computed(() =>
 .pathLabel {
 	font-weight: 600;
 	white-space: nowrap;
+}
+
+.pathNote {
+	font-style: italic;
+	color: var(--color-text-maxcontrast);
 }
 
 .actions {

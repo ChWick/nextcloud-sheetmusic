@@ -2,9 +2,10 @@
 
 declare(strict_types=1);
 
-namespace OCA\MobileSheetsManager\Controller;
+namespace OCA\SheetMusic\Controller;
 
-use OCA\MobileSheetsManager\Service\SongService;
+use OCA\SheetMusic\Service\SongHistoryService;
+use OCA\SheetMusic\Service\SongService;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\ApiRoute;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -19,6 +20,7 @@ class SongController extends OCSController {
 		IRequest $request,
 		private SongService $songService,
 		private IUserSession $userSession,
+		private ?SongHistoryService $songHistoryService = null,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -74,21 +76,14 @@ class SongController extends OCSController {
 			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
 		}
 
-		$genreIds = !empty($genreIds) ? $genreIds : (array)$this->request->getParam('genreIds', []);
-		$keyIds = !empty($keyIds) ? $keyIds : (array)$this->request->getParam('keyIds', []);
-		$customGroupIds = !empty($customGroupIds) ? $customGroupIds : (array)$this->request->getParam('customGroupIds', []);
-		$yearIds = !empty($yearIds) ? $yearIds : (array)$this->request->getParam('yearIds', []);
-		$signatureIds = !empty($signatureIds) ? $signatureIds : (array)$this->request->getParam('signatureIds', []);
-		$sourceTypeIds = !empty($sourceTypeIds) ? $sourceTypeIds : (array)$this->request->getParam('sourceTypeIds', []);
-		$stars = (int)$this->request->getParam('stars', 0);
-		$difficulty = (int)$this->request->getParam('difficulty', 0);
-		$duration = (int)$this->request->getParam('duration', 0);
-		$keywords = (string)$this->request->getParam('keywords', '');
-		$custom = (string)$this->request->getParam('custom', '');
-		$custom2 = (string)$this->request->getParam('custom2', '');
-		$sortTitle = (string)$this->request->getParam('sortTitle', '');
-		$bookmarks = (array)$this->request->getParam('bookmarks', []);
-		$audioFiles = (array)$this->request->getParam('audioFiles', []);
+		$payload = $this->extractSongPayload([
+			'genreIds' => $genreIds,
+			'keyIds' => $keyIds,
+			'customGroupIds' => $customGroupIds,
+			'yearIds' => $yearIds,
+			'signatureIds' => $signatureIds,
+			'sourceTypeIds' => $sourceTypeIds,
+		]);
 
 		try {
 			$result = $this->songService->createSong(
@@ -99,21 +94,25 @@ class SongController extends OCSController {
 				$bookIds,
 				$collectionIds,
 				$artistIds,
-				$genreIds,
-				$keyIds,
-				$customGroupIds,
-				$yearIds,
-				$signatureIds,
-				$sourceTypeIds,
-				$stars,
-				$difficulty,
-				$duration,
-				$keywords,
-				$custom,
-				$custom2,
-				$sortTitle,
-				$bookmarks,
-				$audioFiles,
+				$payload['genreIds'],
+				$payload['keyIds'],
+				$payload['customGroupIds'],
+				$payload['yearIds'],
+				$payload['signatureIds'],
+				$payload['sourceTypeIds'],
+				$payload['stars'],
+				$payload['difficulty'],
+				$payload['duration'],
+				$payload['keywords'],
+				$payload['custom'],
+				$payload['custom2'],
+				$payload['sortTitle'],
+				$payload['bookmarks'],
+				$payload['audioFiles'],
+				$payload['opus'],
+				$payload['catalogNumber'],
+				$payload['songNumber'],
+				$payload['instrumentIds'],
 			);
 
 			if ($result === null) {
@@ -144,7 +143,7 @@ class SongController extends OCSController {
 		array $sourceTypeIds = [],
 	): DataResponse {
 		$title = $title ?? (string)$this->request->getParam('title', '');
-		if ($libraryId === null || $title === '') {
+		if ($libraryId === null || trim($title) === '') {
 			return new DataResponse([], Http::STATUS_BAD_REQUEST);
 		}
 
@@ -153,21 +152,14 @@ class SongController extends OCSController {
 			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
 		}
 
-		$genreIds = !empty($genreIds) ? $genreIds : (array)$this->request->getParam('genreIds', []);
-		$keyIds = !empty($keyIds) ? $keyIds : (array)$this->request->getParam('keyIds', []);
-		$customGroupIds = !empty($customGroupIds) ? $customGroupIds : (array)$this->request->getParam('customGroupIds', []);
-		$yearIds = !empty($yearIds) ? $yearIds : (array)$this->request->getParam('yearIds', []);
-		$signatureIds = !empty($signatureIds) ? $signatureIds : (array)$this->request->getParam('signatureIds', []);
-		$sourceTypeIds = !empty($sourceTypeIds) ? $sourceTypeIds : (array)$this->request->getParam('sourceTypeIds', []);
-		$stars = (int)$this->request->getParam('stars', 0);
-		$difficulty = (int)$this->request->getParam('difficulty', 0);
-		$duration = (int)$this->request->getParam('duration', 0);
-		$keywords = (string)$this->request->getParam('keywords', '');
-		$custom = (string)$this->request->getParam('custom', '');
-		$custom2 = (string)$this->request->getParam('custom2', '');
-		$sortTitle = (string)$this->request->getParam('sortTitle', '');
-		$bookmarks = (array)$this->request->getParam('bookmarks', []);
-		$audioFiles = (array)$this->request->getParam('audioFiles', []);
+		$payload = $this->extractSongPayload([
+			'genreIds' => $genreIds,
+			'keyIds' => $keyIds,
+			'customGroupIds' => $customGroupIds,
+			'yearIds' => $yearIds,
+			'signatureIds' => $signatureIds,
+			'sourceTypeIds' => $sourceTypeIds,
+		]);
 
 		try {
 			$result = $this->songService->updateSong(
@@ -179,21 +171,25 @@ class SongController extends OCSController {
 				$bookIds,
 				$collectionIds,
 				$artistIds,
-				$genreIds,
-				$keyIds,
-				$customGroupIds,
-				$yearIds,
-				$signatureIds,
-				$sourceTypeIds,
-				$stars,
-				$difficulty,
-				$duration,
-				$keywords,
-				$custom,
-				$custom2,
-				$sortTitle,
-				$bookmarks,
-				$audioFiles,
+				$payload['genreIds'],
+				$payload['keyIds'],
+				$payload['customGroupIds'],
+				$payload['yearIds'],
+				$payload['signatureIds'],
+				$payload['sourceTypeIds'],
+				$payload['stars'],
+				$payload['difficulty'],
+				$payload['duration'],
+				$payload['keywords'],
+				$payload['custom'],
+				$payload['custom2'],
+				$payload['sortTitle'],
+				$payload['bookmarks'],
+				$payload['audioFiles'],
+				$payload['opus'],
+				$payload['catalogNumber'],
+				$payload['songNumber'],
+				$payload['instrumentIds'],
 			);
 
 			if ($result === null) {
@@ -221,6 +217,7 @@ class SongController extends OCSController {
 		?array $years = null,
 		?array $signatures = null,
 		?array $sourceTypes = null,
+		?array $instruments = null,
 	): DataResponse {
 		if ($libraryId === null || empty($songIds)) {
 			return new DataResponse([], Http::STATUS_BAD_REQUEST);
@@ -230,6 +227,9 @@ class SongController extends OCSController {
 		if ($user === null) {
 			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
 		}
+
+		$instruments = $instruments ?? (array)$this->request->getParam('instruments', []);
+		$instruments = empty($instruments) ? null : $instruments;
 
 		$genres = $genres ?? $this->request->getParam('genres');
 		$keys = $keys ?? $this->request->getParam('keys');
@@ -253,6 +253,7 @@ class SongController extends OCSController {
 				$years,
 				$signatures,
 				$sourceTypes,
+				$instruments,
 			);
 
 			if ($result === null) {
@@ -266,13 +267,42 @@ class SongController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/songs-batch-delete')]
+	public function batchDeleteSongs(
+		?int $libraryId = null,
+		array $songIds = [],
+		bool $deleteFiles = true,
+	): DataResponse {
+		$libraryId = $this->resolveLibraryId($libraryId);
+		$songIds = !empty($songIds) ? $songIds : (array)$this->request->getParam('songIds', []);
+		$deleteFiles = $this->resolveDeleteFiles($deleteFiles);
+
+		if ($libraryId === null || empty($songIds)) {
+			return new DataResponse(['message' => 'libraryId and songIds are required'], Http::STATUS_BAD_REQUEST);
+		}
+
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		try {
+			$result = $this->songService->batchDeleteSongs($user, $libraryId, $songIds, $deleteFiles);
+			if ($result === null) {
+				return new DataResponse(['message' => 'Library not found'], Http::STATUS_NOT_FOUND);
+			}
+
+			return new DataResponse($result);
+		} catch (\Throwable $e) {
+			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	#[NoAdminRequired]
 	#[ApiRoute(verb: 'DELETE', url: '/api/songs/{id}')]
 	public function deleteSong(int $id, ?int $libraryId = null, bool $deleteFiles = true): DataResponse {
-		$libraryId = $libraryId ?? ((int)$this->request->getParam('libraryId', 0) ?: null);
-		$deleteFilesParam = $this->request->getParam('deleteFiles');
-		if ($deleteFilesParam !== null) {
-			$deleteFiles = filter_var($deleteFilesParam, FILTER_VALIDATE_BOOLEAN);
-		}
+		$libraryId = $this->resolveLibraryId($libraryId);
+		$deleteFiles = $this->resolveDeleteFiles($deleteFiles);
 
 		if ($libraryId === null) {
 			return new DataResponse(['message' => 'libraryId parameter is required'], Http::STATUS_BAD_REQUEST);
@@ -293,6 +323,15 @@ class SongController extends OCSController {
 		} catch (\Throwable $e) {
 			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
+	}
+
+	private function resolveLibraryId(?int $libraryId): ?int {
+		return $libraryId ?? ((int)$this->request->getParam('libraryId', 0) ?: null);
+	}
+
+	private function resolveDeleteFiles(bool $default = true): bool {
+		$param = $this->request->getParam('deleteFiles');
+		return $param !== null ? filter_var($param, FILTER_VALIDATE_BOOLEAN) : $default;
 	}
 
 	#[NoAdminRequired]
@@ -342,7 +381,7 @@ class SongController extends OCSController {
 
 		try {
 			$result = $this->songService->resolveBothSongs($user, $libraryId, $songA, $songB);
-			if (isset($result['error'])) {
+			if (is_array($result) && isset($result['error'])) {
 				return new DataResponse(['message' => $result['error']], Http::STATUS_CONFLICT);
 			}
 			if ($result === null) {
@@ -353,5 +392,113 @@ class SongController extends OCSController {
 		} catch (\Throwable $e) {
 			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'GET', url: '/api/songs/{id}/history')]
+	public function getSongHistory(int $id): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		if ($this->songHistoryService === null) {
+			return new DataResponse([], Http::STATUS_NOT_FOUND);
+		}
+
+		$timeline = $this->songHistoryService->getTimelineForSong($id);
+		return new DataResponse($timeline);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/songs/{id}/revert/{historyId}')]
+	public function revertSongHistory(int $id, int $historyId): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		if ($this->songHistoryService === null) {
+			return new DataResponse([], Http::STATUS_NOT_FOUND);
+		}
+
+		try {
+			$revertedSong = $this->songHistoryService->revertSongToHistory($id, $historyId, $user->getUID());
+			$libraryData = $this->songService->getSongs($user, $revertedSong->libraryId);
+			return new DataResponse($libraryData);
+		} catch (\InvalidArgumentException $e) {
+			return new DataResponse(['error' => $e->getMessage()], Http::STATUS_NOT_FOUND);
+		} catch (\Throwable $e) {
+			return new DataResponse(['error' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'GET', url: '/api/libraries/{libraryId}/deleted-songs')]
+	public function getDeletedSongs(int $libraryId): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		if ($this->songHistoryService === null) {
+			return new DataResponse([], Http::STATUS_NOT_FOUND);
+		}
+
+		$deleted = $this->songHistoryService->getDeletedSongs($libraryId);
+		return new DataResponse($deleted);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/songs/{id}/restore')]
+	public function restoreDeletedSong(int $id): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		if ($this->songHistoryService === null) {
+			return new DataResponse([], Http::STATUS_NOT_FOUND);
+		}
+
+		try {
+			$restoredSong = $this->songHistoryService->restoreDeletedSong($id, $user->getUID());
+			$libraryData = $this->songService->getSongs($user, $restoredSong->libraryId);
+			return new DataResponse($libraryData);
+		} catch (\InvalidArgumentException $e) {
+			return new DataResponse(['error' => $e->getMessage()], Http::STATUS_NOT_FOUND);
+		} catch (\Throwable $e) {
+			return new DataResponse(['error' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	/**
+	 * Extracts song fields from the incoming request.
+	 *
+	 * @param array<string, mixed> $overrides Explicit method arguments overriding request params.
+	 * @return array<string, mixed>
+	 */
+	private function extractSongPayload(array $overrides = []): array {
+		return [
+			'genreIds' => !empty($overrides['genreIds']) ? (array)$overrides['genreIds'] : (array)$this->request->getParam('genreIds', []),
+			'keyIds' => !empty($overrides['keyIds']) ? (array)$overrides['keyIds'] : (array)$this->request->getParam('keyIds', []),
+			'customGroupIds' => !empty($overrides['customGroupIds']) ? (array)$overrides['customGroupIds'] : (array)$this->request->getParam('customGroupIds', []),
+			'yearIds' => !empty($overrides['yearIds']) ? (array)$overrides['yearIds'] : (array)$this->request->getParam('yearIds', []),
+			'signatureIds' => !empty($overrides['signatureIds']) ? (array)$overrides['signatureIds'] : (array)$this->request->getParam('signatureIds', []),
+			'sourceTypeIds' => !empty($overrides['sourceTypeIds']) ? (array)$overrides['sourceTypeIds'] : (array)$this->request->getParam('sourceTypeIds', []),
+			'stars' => (int)$this->request->getParam('stars', 0),
+			'difficulty' => (int)$this->request->getParam('difficulty', 0),
+			'duration' => (int)$this->request->getParam('duration', 0),
+			'keywords' => (string)$this->request->getParam('keywords', ''),
+			'custom' => (string)$this->request->getParam('custom', ''),
+			'custom2' => (string)$this->request->getParam('custom2', ''),
+			'sortTitle' => (string)$this->request->getParam('sortTitle', ''),
+			'bookmarks' => (array)$this->request->getParam('bookmarks', []),
+			'audioFiles' => (array)$this->request->getParam('audioFiles', []),
+			'opus' => (string)$this->request->getParam('opus', ''),
+			'catalogNumber' => (string)$this->request->getParam('catalogNumber', (string)$this->request->getParam('catalog_number', '')),
+			'songNumber' => (string)$this->request->getParam('songNumber', (string)$this->request->getParam('song_number', '')),
+			'instrumentIds' => (array)$this->request->getParam('instrumentIds', (array)$this->request->getParam('instrument_ids', [])),
+		];
 	}
 }

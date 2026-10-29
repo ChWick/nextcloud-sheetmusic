@@ -79,8 +79,12 @@ describe('SongMetadataFields.vue', () => {
 			'Years',
 			'Time Signatures',
 			'Source Types',
+			'Instruments',
 		])
 		for (const fieldId of [
+			'song-opus-input',
+			'song-catalog-number-input',
+			'song-song-number-input',
 			'song-rating-input',
 			'song-difficulty-input',
 			'song-duration-input',

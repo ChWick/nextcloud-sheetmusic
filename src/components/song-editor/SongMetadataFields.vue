@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Artist, Book, Collection, Composer, CustomGroup, Genre, Key, Signature, SourceType, Year } from '../../types/song'
+import type { Artist, Book, Collection, Composer, CustomGroup, Genre, Instrument, Key, Signature, SourceType, Year } from '../../types/song'
 import { translate as t } from '@nextcloud/l10n'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
@@ -18,6 +18,7 @@ withDefaults(defineProps<{
 	years: Year[]
 	signatures: Signature[]
 	sourceTypes: SourceType[]
+	instruments?: Instrument[]
 	createComposerTag: (name: string) => Composer | NamedTag
 	createBookTag: (title: string) => Book | BookTag
 	createCollectionTag: (name: string) => Collection | NamedTag
@@ -28,6 +29,7 @@ withDefaults(defineProps<{
 	createYearTag: (name: string) => Year | NamedTag
 	createSignatureTag: (name: string) => Signature | NamedTag
 	createSourceTypeTag: (name: string) => SourceType | NamedTag
+	createInstrumentTag?: (name: string) => Instrument | NamedTag
 }>(), {
 	composers: () => [],
 	books: () => [],
@@ -39,6 +41,7 @@ withDefaults(defineProps<{
 	years: () => [],
 	signatures: () => [],
 	sourceTypes: () => [],
+	instruments: () => [],
 })
 
 const selectedComposers = defineModel<Array<Composer | NamedTag>>('selectedComposers', { required: true })
@@ -51,7 +54,11 @@ const selectedCustomGroups = defineModel<Array<CustomGroup | NamedTag>>('selecte
 const selectedYears = defineModel<Array<Year | NamedTag>>('selectedYears', { required: true })
 const selectedSignatures = defineModel<Array<Signature | NamedTag>>('selectedSignatures', { required: true })
 const selectedSourceTypes = defineModel<Array<SourceType | NamedTag>>('selectedSourceTypes', { required: true })
+const selectedInstruments = defineModel<Array<Instrument | NamedTag>>('selectedInstruments', { default: () => [] })
 
+const opus = defineModel<string>('opus', { default: '' })
+const catalogNumber = defineModel<string>('catalogNumber', { default: '' })
+const songNumber = defineModel<string>('songNumber', { default: '' })
 const stars = defineModel<number>('stars', { required: true })
 const difficulty = defineModel<number>('difficulty', { required: true })
 const duration = defineModel<number>('duration', { required: true })
@@ -71,10 +78,10 @@ const tempo = defineModel<number>('tempo', { required: true })
 				:taggable="true"
 				:create-option="createComposerTag"
 				:close-on-select="false"
-				:input-label="t('mobilesheetsmanager', 'Composers')"
+				:input-label="t('sheetmusic', 'Composers')"
 				label="name"
 				track-by="name"
-				:placeholder="t('mobilesheetsmanager', 'Select or type a composer…')" />
+				:placeholder="t('sheetmusic', 'Select or type a composer…')" />
 		</div>
 
 		<div :class="$style.formGroup">
@@ -85,10 +92,10 @@ const tempo = defineModel<number>('tempo', { required: true })
 				:taggable="true"
 				:create-option="createBookTag"
 				:close-on-select="false"
-				:input-label="t('mobilesheetsmanager', 'Books / Albums')"
+				:input-label="t('sheetmusic', 'Books / Albums')"
 				label="title"
 				track-by="title"
-				:placeholder="t('mobilesheetsmanager', 'Select or type a book/album…')" />
+				:placeholder="t('sheetmusic', 'Select or type a book/album…')" />
 		</div>
 
 		<div :class="$style.formGroup">
@@ -99,10 +106,10 @@ const tempo = defineModel<number>('tempo', { required: true })
 				:taggable="true"
 				:create-option="createCollectionTag"
 				:close-on-select="false"
-				:input-label="t('mobilesheetsmanager', 'Collections')"
+				:input-label="t('sheetmusic', 'Collections')"
 				label="name"
 				track-by="name"
-				:placeholder="t('mobilesheetsmanager', 'Select or type a collection…')" />
+				:placeholder="t('sheetmusic', 'Select or type a collection…')" />
 		</div>
 
 		<div :class="$style.formGroup">
@@ -113,10 +120,10 @@ const tempo = defineModel<number>('tempo', { required: true })
 				:taggable="true"
 				:create-option="createArtistTag"
 				:close-on-select="false"
-				:input-label="t('mobilesheetsmanager', 'Artists')"
+				:input-label="t('sheetmusic', 'Artists')"
 				label="name"
 				track-by="name"
-				:placeholder="t('mobilesheetsmanager', 'Select or type an artist…')" />
+				:placeholder="t('sheetmusic', 'Select or type an artist…')" />
 		</div>
 
 		<div :class="$style.formGroup">
@@ -127,10 +134,10 @@ const tempo = defineModel<number>('tempo', { required: true })
 				:taggable="true"
 				:create-option="createGenreTag"
 				:close-on-select="false"
-				:input-label="t('mobilesheetsmanager', 'Genres')"
+				:input-label="t('sheetmusic', 'Genres')"
 				label="name"
 				track-by="name"
-				:placeholder="t('mobilesheetsmanager', 'Select or type a genre…')" />
+				:placeholder="t('sheetmusic', 'Select or type a genre…')" />
 		</div>
 
 		<div :class="$style.formGroup">
@@ -141,10 +148,10 @@ const tempo = defineModel<number>('tempo', { required: true })
 				:taggable="true"
 				:create-option="createKeyTag"
 				:close-on-select="false"
-				:input-label="t('mobilesheetsmanager', 'Keys')"
+				:input-label="t('sheetmusic', 'Keys')"
 				label="name"
 				track-by="name"
-				:placeholder="t('mobilesheetsmanager', 'Select or type a key…')" />
+				:placeholder="t('sheetmusic', 'Select or type a key…')" />
 		</div>
 
 		<div :class="$style.formGroup">
@@ -155,10 +162,10 @@ const tempo = defineModel<number>('tempo', { required: true })
 				:taggable="true"
 				:create-option="createCustomGroupTag"
 				:close-on-select="false"
-				:input-label="t('mobilesheetsmanager', 'Custom Groups')"
+				:input-label="t('sheetmusic', 'Custom Groups')"
 				label="name"
 				track-by="name"
-				:placeholder="t('mobilesheetsmanager', 'Select or type a custom group…')" />
+				:placeholder="t('sheetmusic', 'Select or type a custom group…')" />
 		</div>
 
 		<div :class="$style.formGroup">
@@ -169,10 +176,10 @@ const tempo = defineModel<number>('tempo', { required: true })
 				:taggable="true"
 				:create-option="createYearTag"
 				:close-on-select="false"
-				:input-label="t('mobilesheetsmanager', 'Years')"
+				:input-label="t('sheetmusic', 'Years')"
 				label="name"
 				track-by="name"
-				:placeholder="t('mobilesheetsmanager', 'Select or type a year…')" />
+				:placeholder="t('sheetmusic', 'Select or type a year…')" />
 		</div>
 
 		<div :class="$style.formGroup">
@@ -183,10 +190,10 @@ const tempo = defineModel<number>('tempo', { required: true })
 				:taggable="true"
 				:create-option="createSignatureTag"
 				:close-on-select="false"
-				:input-label="t('mobilesheetsmanager', 'Time Signatures')"
+				:input-label="t('sheetmusic', 'Time Signatures')"
 				label="name"
 				track-by="name"
-				:placeholder="t('mobilesheetsmanager', 'Select or type a time signature (e.g. 4/4)…')" />
+				:placeholder="t('sheetmusic', 'Select or type a time signature (e.g. 4/4)…')" />
 		</div>
 
 		<div :class="$style.formGroup">
@@ -197,13 +204,48 @@ const tempo = defineModel<number>('tempo', { required: true })
 				:taggable="true"
 				:create-option="createSourceTypeTag"
 				:close-on-select="false"
-				:input-label="t('mobilesheetsmanager', 'Source Types')"
+				:input-label="t('sheetmusic', 'Source Types')"
 				label="name"
 				track-by="name"
-				:placeholder="t('mobilesheetsmanager', 'Select or type a source type…')" />
+				:placeholder="t('sheetmusic', 'Select or type a source type…')" />
+		</div>
+
+		<div :class="$style.formGroup">
+			<NcSelect
+				v-model="selectedInstruments"
+				:options="instruments"
+				:multiple="true"
+				:taggable="true"
+				:create-option="createInstrumentTag"
+				:close-on-select="false"
+				:input-label="t('sheetmusic', 'Instruments')"
+				label="name"
+				track-by="name"
+				:placeholder="t('sheetmusic', 'Select or type an instrument…')" />
 		</div>
 
 		<div :class="$style.attributesGrid">
+			<div :class="$style.formGroup">
+				<NcTextField
+					id="song-opus-input"
+					v-model="opus"
+					:placeholder="t('sheetmusic', 'Opus (e.g. Op. 28 No. 4)…')"
+					:label="t('sheetmusic', 'Opus')" />
+			</div>
+			<div :class="$style.formGroup">
+				<NcTextField
+					id="song-catalog-number-input"
+					v-model="catalogNumber"
+					:placeholder="t('sheetmusic', 'Catalog No. (BWV, KV, etc.)…')"
+					:label="t('sheetmusic', 'Catalog Number')" />
+			</div>
+			<div :class="$style.formGroup">
+				<NcTextField
+					id="song-song-number-input"
+					v-model="songNumber"
+					:placeholder="t('sheetmusic', 'Song No. (e.g. 88 or 104/5)…')"
+					:label="t('sheetmusic', 'Song Number')" />
+			</div>
 			<div :class="$style.formGroup">
 				<NcTextField
 					id="song-rating-input"
@@ -211,8 +253,8 @@ const tempo = defineModel<number>('tempo', { required: true })
 					type="number"
 					:min="0"
 					:max="5"
-					:placeholder="t('mobilesheetsmanager', '0-5')"
-					:label="t('mobilesheetsmanager', 'Rating (Stars 0-5)')" />
+					:placeholder="t('sheetmusic', '0-5')"
+					:label="t('sheetmusic', 'Rating (Stars 0-5)')" />
 			</div>
 			<div :class="$style.formGroup">
 				<NcTextField
@@ -221,8 +263,8 @@ const tempo = defineModel<number>('tempo', { required: true })
 					type="number"
 					:min="0"
 					:max="5"
-					:placeholder="t('mobilesheetsmanager', '0-5')"
-					:label="t('mobilesheetsmanager', 'Difficulty (0-5)')" />
+					:placeholder="t('sheetmusic', '0-5')"
+					:label="t('sheetmusic', 'Difficulty (0-5)')" />
 			</div>
 			<div :class="$style.formGroup">
 				<NcTextField
@@ -230,37 +272,37 @@ const tempo = defineModel<number>('tempo', { required: true })
 					v-model.number="duration"
 					type="number"
 					:min="0"
-					:placeholder="t('mobilesheetsmanager', 'Seconds (e.g. 180)')"
-					:label="t('mobilesheetsmanager', 'Duration (seconds)')" />
+					:placeholder="t('sheetmusic', 'Seconds (e.g. 180)')"
+					:label="t('sheetmusic', 'Duration (seconds)')" />
 			</div>
 			<div :class="$style.formGroup">
 				<NcTextField
 					id="song-keywords-input"
 					v-model="keywords"
-					:placeholder="t('mobilesheetsmanager', 'Keywords / tags…')"
-					:label="t('mobilesheetsmanager', 'Keywords')" />
+					:placeholder="t('sheetmusic', 'Keywords / tags…')"
+					:label="t('sheetmusic', 'Keywords')" />
 			</div>
 			<div :class="$style.formGroup">
 				<NcTextField
 					id="song-custom-input"
 					v-model="custom"
-					:placeholder="t('mobilesheetsmanager', 'Custom field…')"
-					:label="t('mobilesheetsmanager', 'Custom')" />
+					:placeholder="t('sheetmusic', 'Custom field…')"
+					:label="t('sheetmusic', 'Custom')" />
 			</div>
 			<div :class="$style.formGroup">
 				<NcTextField
 					id="song-custom2-input"
 					v-model="custom2"
-					:placeholder="t('mobilesheetsmanager', 'Custom field 2…')"
-					:label="t('mobilesheetsmanager', 'Custom 2')" />
+					:placeholder="t('sheetmusic', 'Custom field 2…')"
+					:label="t('sheetmusic', 'Custom 2')" />
 			</div>
 			<div :class="$style.formGroup">
 				<NcTextField
 					id="song-tempo-input"
 					:model-value="tempo ? String(tempo) : ''"
 					type="number"
-					:placeholder="t('mobilesheetsmanager', 'Tempo (BPM)…')"
-					:label="t('mobilesheetsmanager', 'Tempo (BPM)')"
+					:placeholder="t('sheetmusic', 'Tempo (BPM)…')"
+					:label="t('sheetmusic', 'Tempo (BPM)')"
 					@update:model-value="tempo = Number($event) || 0" />
 			</div>
 		</div>

@@ -47,8 +47,35 @@ describe('FilesIntegrityIssueItem.vue', () => {
 		})
 
 		expect(wrapper.text()).toContain('Auto-Fix Issue')
+		expect(wrapper.text()).toContain('Current Path:')
+		expect(wrapper.text()).toContain('Noten/OldPath.pdf')
+		expect(wrapper.text()).toContain('Expected Path:')
+		expect(wrapper.text()).toContain('Noten/NewPath.pdf')
 		expect(wrapper.text()).not.toContain('Merge Songs')
 		expect(wrapper.text()).not.toContain('Keep as Two')
+	})
+
+	it('renders explanation when expected path cannot be determined for invalid naming rule', () => {
+		const issue: IntegrityIssue = {
+			type: 'invalid_naming_rule',
+			severity: 'warning',
+			message: 'File path does not match standard naming rule.',
+			songId: 60,
+			songTitle: 'Nachspiel',
+			fileId: 207,
+			path: 'Noten/OldPath.pdf',
+			suggestedPath: null,
+			fixable: false,
+		}
+
+		const wrapper = mount(FilesIntegrityIssueItem, {
+			props: { issue },
+		})
+
+		expect(wrapper.text()).toContain('Current Path:')
+		expect(wrapper.text()).toContain('Noten/OldPath.pdf')
+		expect(wrapper.text()).toContain('Expected Path:')
+		expect(wrapper.text()).toContain('Cannot determine expected path: Song needs a Composer, Artist, or Collection.')
 	})
 
 	it('renders merge and keep as two buttons for identical_song issue', () => {
@@ -72,5 +99,76 @@ describe('FilesIntegrityIssueItem.vue', () => {
 		expect(wrapper.text()).toContain('Found 2 songs with identical metadata.')
 		expect(wrapper.text()).toContain('Merge Songs')
 		expect(wrapper.text()).toContain('Keep as Two')
+	})
+
+	it('renders Auto-Fix Issue and Fix Orphan File when orphan file is fixable', async () => {
+		const issue: IntegrityIssue = {
+			type: 'orphan_file',
+			severity: 'warning',
+			message: 'File "Moonlight.pdf" exists in library storage but is not linked to any song.',
+			songId: 42,
+			songTitle: 'Moonlight Sonata',
+			path: 'Moonlight.pdf',
+			fixable: true,
+		}
+
+		const wrapper = mount(FilesIntegrityIssueItem, {
+			props: { issue },
+		})
+
+		expect(wrapper.text()).toContain('Auto-Fix Issue')
+		expect(wrapper.text()).toContain('Fix Orphan File')
+		expect(wrapper.text()).toContain('Moonlight Sonata')
+
+		const autoFixBtn = wrapper.findAll('button').find(b => b.text().includes('Auto-Fix Issue'))
+		expect(autoFixBtn).toBeDefined()
+		await autoFixBtn!.trigger('click')
+
+		expect(wrapper.emitted('fixIssue')).toHaveLength(1)
+		expect(wrapper.emitted('fixIssue')![0]).toEqual([issue])
+	})
+
+	it('does not render Auto-Fix Issue when orphan file is not fixable', () => {
+		const issue: IntegrityIssue = {
+			type: 'orphan_file',
+			severity: 'warning',
+			message: 'File "Unknown.pdf" exists in library storage but is not linked to any song.',
+			path: 'Unknown.pdf',
+			fixable: false,
+		}
+
+		const wrapper = mount(FilesIntegrityIssueItem, {
+			props: { issue },
+		})
+
+		expect(wrapper.text()).not.toContain('Auto-Fix Issue')
+		expect(wrapper.text()).toContain('Fix Orphan File')
+	})
+
+	it('renders Delete File button for missing_file issue and emits deleteMissingFile when clicked', async () => {
+		const issue: IntegrityIssue = {
+			type: 'missing_file',
+			severity: 'error',
+			message: 'File "Missing.pdf" referenced by song "Prelude" does not exist in Nextcloud storage.',
+			songId: 10,
+			songTitle: 'Prelude',
+			fileId: 99,
+			path: 'Noten/Missing.pdf',
+			fixable: false,
+		}
+
+		const wrapper = mount(FilesIntegrityIssueItem, {
+			props: { issue },
+		})
+
+		expect(wrapper.text()).toContain('Delete File')
+		expect(wrapper.text()).toContain('Edit Song')
+
+		const deleteBtn = wrapper.findAll('button').find(b => b.text().includes('Delete File'))
+		expect(deleteBtn).toBeDefined()
+		await deleteBtn!.trigger('click')
+
+		expect(wrapper.emitted('deleteMissingFile')).toHaveLength(1)
+		expect(wrapper.emitted('deleteMissingFile')![0]).toEqual([issue])
 	})
 })

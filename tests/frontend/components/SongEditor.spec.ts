@@ -196,7 +196,7 @@ describe('SongEditor.vue', () => {
 		expect(createButton.attributes('type')).toBe('button')
 		await createButton.trigger('click')
 
-		expect(axios.post).toHaveBeenCalledWith('/ocs/v2.php/apps/mobilesheetsmanager/api/songs', expect.objectContaining({
+		expect(axios.post).toHaveBeenCalledWith('/ocs/v2.php/apps/sheetmusic/api/songs', expect.objectContaining({
 			libraryId: 1,
 			title: 'New Song',
 		}))
@@ -218,6 +218,7 @@ describe('SongEditor.vue', () => {
 			years: [{ id: 5, year: 2020, name: '2020' }],
 			signatures: [{ id: 6, name: '4/4' }],
 			sourceTypes: [{ id: 7, type: 'Digital', name: 'Digital' }],
+			instruments: [{ id: 8, name: 'Piano' }],
 		}
 		const wrapper = mount(SongEditor, {
 			props: {
@@ -242,7 +243,7 @@ describe('SongEditor.vue', () => {
 		await wrapper.find('form').trigger('submit.prevent')
 
 		expect(axios.post).toHaveBeenCalledTimes(1)
-		expect(axios.post).toHaveBeenCalledWith('/ocs/v2.php/apps/mobilesheetsmanager/api/songs', expect.objectContaining({
+		expect(axios.post).toHaveBeenCalledWith('/ocs/v2.php/apps/sheetmusic/api/songs', expect.objectContaining({
 			composerIds: [1],
 			bookIds: [10],
 			collectionIds: [100],
@@ -253,6 +254,7 @@ describe('SongEditor.vue', () => {
 			yearIds: [5],
 			signatureIds: [6],
 			sourceTypeIds: [7],
+			instrumentIds: [8],
 		}))
 	})
 
@@ -285,12 +287,12 @@ describe('SongEditor.vue', () => {
 
 		expect(axios.post).toHaveBeenNthCalledWith(
 			1,
-			'/ocs/v2.php/apps/mobilesheetsmanager/api/composers',
+			'/ocs/v2.php/apps/sheetmusic/api/composers',
 			{ libraryId: 1, name: 'New Composer' },
 		)
 		expect(axios.post).toHaveBeenNthCalledWith(
 			2,
-			'/ocs/v2.php/apps/mobilesheetsmanager/api/songs',
+			'/ocs/v2.php/apps/sheetmusic/api/songs',
 			expect.objectContaining({ composerIds: [77] }),
 		)
 		await flushPromises()
@@ -413,7 +415,7 @@ describe('SongEditor.vue', () => {
 		await flushPromises()
 
 		expect(axios.post).toHaveBeenCalledWith(
-			'/ocs/v2.php/apps/mobilesheetsmanager/api/songs/5/file/50/detach',
+			'/ocs/v2.php/apps/sheetmusic/api/songs/5/file/50/detach',
 			{ libraryId: 1 },
 		)
 		expect(wrapper.text()).toContain('1 file(s) detached and kept in storage.')
@@ -508,7 +510,7 @@ describe('SongEditor.vue', () => {
 		await wrapper.find('form').trigger('submit.prevent')
 
 		expect(axios.post).toHaveBeenCalledWith(
-			'/ocs/v2.php/apps/mobilesheetsmanager/api/songs',
+			'/ocs/v2.php/apps/sheetmusic/api/songs',
 			{
 				libraryId: 1,
 				title: 'New Symphony',
@@ -522,6 +524,10 @@ describe('SongEditor.vue', () => {
 				yearIds: [],
 				signatureIds: [],
 				sourceTypeIds: [],
+				instrumentIds: [],
+				opus: '',
+				catalogNumber: '',
+				songNumber: '',
 				stars: 0,
 				difficulty: 0,
 				duration: 0,
@@ -537,7 +543,7 @@ describe('SongEditor.vue', () => {
 
 		// Upload endpoint call
 		expect(axios.post).toHaveBeenCalledWith(
-			'/ocs/v2.php/apps/mobilesheetsmanager/api/libraries/1/songs/99/file/upload',
+			'/ocs/v2.php/apps/sheetmusic/api/libraries/1/songs/99/file/upload',
 			expect.any(FormData),
 		)
 
@@ -590,7 +596,7 @@ describe('SongEditor.vue', () => {
 		expect(wrapper.text()).not.toContain('Beethoven - Symphony 5.pdf')
 		await wrapper.find('form').trigger('submit.prevent')
 
-		expect(axios.post).toHaveBeenCalledWith('/ocs/v2.php/apps/mobilesheetsmanager/api/songs', expect.objectContaining({
+		expect(axios.post).toHaveBeenCalledWith('/ocs/v2.php/apps/sheetmusic/api/songs', expect.objectContaining({
 			libraryId: 1,
 			title: 'Symphony No. 5',
 			composerIds: [1],
@@ -655,7 +661,7 @@ describe('SongEditor.vue', () => {
 		await wrapper.find('form').trigger('submit.prevent')
 
 		expect(axios.post).toHaveBeenCalledWith(
-			'/ocs/v2.php/apps/mobilesheetsmanager/api/songs/10',
+			'/ocs/v2.php/apps/sheetmusic/api/songs/10',
 			{
 				libraryId: 1,
 				title: 'Existing Song',
@@ -669,6 +675,10 @@ describe('SongEditor.vue', () => {
 				yearIds: [],
 				signatureIds: [],
 				sourceTypeIds: [],
+				instrumentIds: [],
+				opus: '',
+				catalogNumber: '',
+				songNumber: '',
 				stars: 5,
 				difficulty: 3,
 				duration: 240,
