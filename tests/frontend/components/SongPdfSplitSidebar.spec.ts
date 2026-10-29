@@ -76,5 +76,39 @@ describe('SongPdfSplitSidebar.vue', () => {
 
 		expect(wrapper.emitted('update:originalSongAction')?.[0]).toEqual(['delete-file'])
 	})
+
+	it('renders a separate scrollable segment list pane for many splits and scrolls down when a new segment is added', async () => {
+		const manySegments: SplitSegment[] = Array.from({ length: 20 }, (_, i) => ({
+			id: `seg-${i + 1}`,
+			title: `Part ${i + 1}`,
+			startPage: i + 1,
+			endPage: i + 1,
+		}))
+
+		const wrapper = mount(SongPdfSplitSidebar, {
+			props: {
+				...defaultProps,
+				totalPages: 25,
+				segments: manySegments,
+			},
+		})
+
+		const listEl = wrapper.find('[data-test="split-segment-list"]')
+		expect(listEl.exists()).toBe(true)
+		expect(listEl.findAll('input[type="number"]').length).toBe(40)
+
+		Object.defineProperty(listEl.element, 'scrollHeight', { value: 1800, configurable: true })
+		listEl.element.scrollTop = 0
+
+		await wrapper.setProps({
+			segments: [
+				...manySegments,
+				{ id: 'seg-21', title: 'Part 21', startPage: 21, endPage: 21 },
+			],
+		})
+		await wrapper.vm.$nextTick()
+
+		expect(listEl.element.scrollTop).toBe(1800)
+	})
 })
 

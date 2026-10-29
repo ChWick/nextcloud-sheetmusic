@@ -1064,7 +1064,9 @@ watch(() => targetFile.value?.path, () => {
 	display: flex;
 	flex-direction: column;
 	width: 100%;
-	height: 100%;
+	height: calc(100vh - var(--header-height, 50px) - 80px);
+	max-height: calc(100vh - var(--header-height, 50px) - 80px);
+	min-height: 420px;
 	background-color: var(--color-main-background);
 	overflow: hidden;
 }
@@ -1153,14 +1155,17 @@ watch(() => targetFile.value?.path, () => {
 	display: flex;
 	flex-direction: column;
 	min-width: 0;
+	min-height: 0;
 	height: 100%;
 	overflow: hidden;
 }
 
 .grid {
 	flex: 1;
+	min-height: 0;
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+	align-content: start;
 	gap: 16px;
 	padding: 16px;
 	overflow-y: auto;

@@ -23,7 +23,7 @@ export function getSegmentColor(segIndex: number): string {
 </script>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
@@ -59,10 +59,24 @@ const selectedRangeText = computed(() => {
 	const max = Math.max(...props.selectedPages)
 	return `${min}–${max}`
 })
+
+const segmentListRef = ref<HTMLElement | null>(null)
+
+watch(
+	() => props.segments.length,
+	async (newLen, oldLen) => {
+		if (newLen > oldLen) {
+			await nextTick()
+			if (segmentListRef.value) {
+				segmentListRef.value.scrollTop = segmentListRef.value.scrollHeight
+			}
+		}
+	},
+)
 </script>
 
 <template>
-	<aside :class="$style.splitSidebar">
+	<aside :class="$style.splitSidebar" data-test="split-sidebar">
 		<div :class="$style.sidebarHeader">
 			<h4>{{ t('sheetmusic', 'Split Segments') }}</h4>
 			<NcButton size="small" variant="secondary" @click="emit('add-segment')">
@@ -78,7 +92,10 @@ const selectedRangeText = computed(() => {
 		</p>
 
 		<!-- Segments list -->
-		<div :class="$style.segmentList">
+		<div
+			ref="segmentListRef"
+			:class="$style.segmentList"
+			data-test="split-segment-list">
 			<div
 				v-for="(seg, idx) in segments"
 				:key="seg.id"
@@ -154,20 +171,25 @@ const selectedRangeText = computed(() => {
 <style module>
 .splitSidebar {
 	width: 320px;
+	height: 100%;
+	max-height: 100%;
+	min-height: 0;
+	box-sizing: border-box;
 	border-left: 1px solid var(--color-border);
 	background-color: var(--color-main-background);
 	display: flex;
 	flex-direction: column;
 	padding: 16px;
-	overflow-y: auto;
+	overflow: hidden;
 	flex-shrink: 0;
-	gap: 16px;
+	gap: 12px;
 }
 
 .sidebarHeader {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
+	flex-shrink: 0;
 }
 
 .sidebarHeader h4 {
@@ -179,12 +201,18 @@ const selectedRangeText = computed(() => {
 	font-size: 12px;
 	color: var(--color-text-maxcontrast);
 	margin: 0;
+	flex-shrink: 0;
 }
 
 .segmentList {
 	display: flex;
 	flex-direction: column;
 	gap: 12px;
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	scrollbar-gutter: stable;
+	padding-right: 4px;
 }
 
 .segmentCard {
