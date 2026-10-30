@@ -63,6 +63,25 @@ class InternalSongFile {
 	}
 
 	/**
+	 * Page order to keep after a file's page count changed.
+	 *
+	 * An empty order, or the default whole-file order derived from the old page
+	 * count (e.g. '1-1' recorded while the file was still empty), is replaced
+	 * with the whole-file order for the new count. A custom order set by
+	 * MobileSheets (e.g. '1,3,2') is preserved.
+	 */
+	public static function refreshPageOrder(?string $currentOrder, int $oldPageCount, int $newPageCount): string {
+		$current = trim((string)$currentOrder);
+		if ($current === ''
+			|| $current === MobileSheetsPdf::pageOrder($oldPageCount)
+			|| $current === MobileSheetsPdf::pageOrder(1)
+			|| $current === '1') {
+			return MobileSheetsPdf::pageOrder($newPageCount);
+		}
+		return $current;
+	}
+
+	/**
 	 * @param array<string, mixed> $row
 	 */
 	public static function fromRow(array $row): self {

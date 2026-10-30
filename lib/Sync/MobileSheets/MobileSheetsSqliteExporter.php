@@ -434,6 +434,11 @@ class MobileSheetsSqliteExporter {
 			$size = $file->fileSize ?? 0;
 			$pageCount = $file->pageCount ?? 1;
 			$pageOrder = InternalSongFile::normalizePageOrder($file->pageOrder, $pageCount) ?? MobileSheetsPdf::pageOrder($pageCount);
+			// Repair records stuck on a single-page order ('1-1') although the
+			// file has more pages (indexed while the upload was still empty).
+			if ($pageCount > 1) {
+				$pageOrder = InternalSongFile::refreshPageOrder($pageOrder, 1, $pageCount);
+			}
 			if ($file->pageOrder !== $pageOrder) {
 				$file->pageOrder = $pageOrder;
 				$this->songFileMapper->update($file);

@@ -109,8 +109,10 @@ class SongFileService {
 		$autoPaths = $this->libraryService->isAutoPathsEnabled($user->getUID(), $libraryId);
 		$targetRelative = $this->resolveDestinationPath($userFolder, $libraryDir, $fileName, $autoPaths);
 		$this->ensureParentFolder($userFolder, $targetRelative);
-		$targetFile = $userFolder->newFile($targetRelative);
-		$targetFile->putContent($content);
+		// Create the file with its content in one step: an empty newFile()
+		// followed by putContent() lets file listeners index a 0-byte PDF and
+		// record a stale page count / page order of '1-1'.
+		$targetFile = $userFolder->newFile($targetRelative, $content);
 
 		$this->cleanupAutoIndexedStubForNewUpload($songId, (int)$targetFile->getId());
 		$this->recordSongFile($songId, $user, $targetFile, $libraryId);
@@ -665,10 +667,8 @@ class SongFileService {
 			if ($existing->fileId === (int)$file->getId()) {
 				$existing->fileSize = $fileSize;
 				$existing->fileHash = $fileHash;
+				$existing->pageOrder = InternalSongFile::refreshPageOrder($existing->pageOrder, $existing->pageCount, $pageCount);
 				$existing->pageCount = $pageCount;
-				if ($existing->pageOrder === '' || $existing->pageOrder === null) {
-					$existing->pageOrder = $pageOrder;
-				}
 				$existing->updatedAt = time();
 				$this->internalSongFileMapper->update($existing);
 				$this->libraryMapper->touch($libraryId);

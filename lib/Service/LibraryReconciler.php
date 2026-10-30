@@ -155,13 +155,11 @@ class LibraryReconciler {
 
 		if ($needsUpdate || $hash === null) {
 			if ($ext === 'pdf') {
-				[$newHash, $newPageCount, $newPageOrder] = $this->extractPdfFacts($fileNode);
+				[$newHash, $newPageCount] = $this->extractPdfFacts($fileNode);
 				if ($newHash !== null && ($hash !== $newHash || $pageCount !== $newPageCount)) {
 					$hash = $newHash;
+					$pageOrder = InternalSongFile::refreshPageOrder($pageOrder, $pageCount, $newPageCount);
 					$pageCount = $newPageCount;
-					if (empty($pageOrder)) {
-						$pageOrder = $newPageOrder;
-					}
 					$needsUpdate = true;
 				}
 			}
