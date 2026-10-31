@@ -9,7 +9,6 @@ import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } fr
 import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
 import { generateFilePath } from '@nextcloud/router'
-import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist'
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { PDFDocument, degrees } from 'pdf-lib'
@@ -21,7 +20,9 @@ import type { OriginalSongAction } from './OriginalSongActionSelector.vue'
 
 import SongPdfHeader from './SongPdfHeader.vue'
 import SongPdfToolbar from './SongPdfToolbar.vue'
-import SongPdfPageCard, { type SplitSegmentSummary } from './SongPdfPageCard.vue'
+import SongPdfSaveProgress from './SongPdfSaveProgress.vue'
+import SongPdfLoadingState from './SongPdfLoadingState.vue'
+import SongPdfPageGrid from './SongPdfPageGrid.vue'
 import SongPdfSplitSidebar, { getSegmentColor, type SplitSegment } from './SongPdfSplitSidebar.vue'
 import SongPdfVersionsModal from './SongPdfVersionsModal.vue'
 import { useFileVersions } from './useFileVersions'
@@ -896,33 +897,10 @@ watch(() => targetFile.value?.path, () => {
 			@save="handleHeaderSave" />
 
 		<!-- Saving Progress Bar Banner -->
-		<div
+		<SongPdfSaveProgress
 			v-if="isSaving"
-			:class="$style.saveProgressBanner"
-			data-test="pdf-save-progress">
-			<div :class="$style.saveProgressHeader">
-				<div :class="$style.saveProgressInfo">
-					<NcLoadingIcon :size="18" />
-					<span :class="$style.saveProgressText" data-test="pdf-save-progress-text">
-						{{ saveProgressText || t('sheetmusic', 'Saving PDF…') }}
-					</span>
-				</div>
-				<span :class="$style.saveProgressPercent" data-test="pdf-save-progress-percent">
-					{{ saveProgressPercent }}%
-				</span>
-			</div>
-			<div
-				:class="$style.saveProgressTrack"
-				role="progressbar"
-				:aria-valuenow="saveProgressPercent"
-				aria-valuemin="0"
-				aria-valuemax="100">
-				<div
-					:class="$style.saveProgressFill"
-					data-test="pdf-save-progress-fill"
-					:style="{ width: `${saveProgressPercent}%` }" />
-			</div>
-		</div>
+			:progress-text="saveProgressText"
+			:progress-percent="saveProgressPercent" />
 
 		<!-- Error Banner -->
 		<div v-if="errorMessage" :class="$style.errorBanner">
@@ -930,10 +908,7 @@ watch(() => targetFile.value?.path, () => {
 		</div>
 
 		<!-- Main Workspace Area -->
-		<div v-if="isLoading" :class="$style.loadingArea">
-			<NcLoadingIcon :size="48" />
-			<span>{{ t('sheetmusic', 'Loading PDF pages…') }}</span>
-		</div>
+		<SongPdfLoadingState v-if="isLoading" />
 
 		<div v-else :class="$style.contentLayout">
 			<!-- Left / Main Panel: Page Preview Grid -->
@@ -961,31 +936,26 @@ watch(() => targetFile.value?.path, () => {
 					@clear-selection="selectedPages = []" />
 
 				<!-- Thumbnail Grid -->
-				<div :class="$style.grid">
-					<SongPdfPageCard
-						v-for="pageNum in totalPages"
-						:key="pageNum"
-						:page-num="pageNum"
-						:active-mode="activeMode"
-						:is-selected="selectedPages.includes(pageNum)"
-						:is-cropped="isPageCropped(pageNum)"
-						:is-enhanced="isPageEnhanced(pageNum)"
-						:is-deleted="isPageDeleted(pageNum)"
-						:rotation-deg="pageRotations[pageNum - 1] || 0"
-						:crop-indicator-text="getCropIndicatorText(pageNum)"
-						:enhance-indicator-text="getEnhanceIndicatorText(pageNum)"
-						:page-segments="getPageSegmentsSummary(pageNum)"
-						:total-pages="totalPages"
-						:can-delete="remainingPagesCount > 1"
-						@card-click="activeMode === 'split' ? togglePageSelection(pageNum) : undefined"
-						@open-crop-modal="openCropModal(pageNum)"
-						@open-enhance-modal="openEnhanceModal(pageNum)"
-						@rotate-page="rotatePage(pageNum - 1, $event)"
-						@open-rotate-modal="openRotateModal(pageNum)"
-						@open-join-modal="openJoinModal(pageNum, $event)"
-						@toggle-delete-page="toggleDeletePage(pageNum)"
-						@set-container-ref="setContainerRef" />
-				</div>
+				<SongPdfPageGrid
+					:total-pages="totalPages"
+					:active-mode="activeMode"
+					:selected-pages="selectedPages"
+					:is-page-cropped="isPageCropped"
+					:is-page-enhanced="isPageEnhanced"
+					:is-page-deleted="isPageDeleted"
+					:page-rotations="pageRotations"
+					:get-crop-indicator-text="getCropIndicatorText"
+					:get-enhance-indicator-text="getEnhanceIndicatorText"
+					:get-page-segments-summary="getPageSegmentsSummary"
+					:remaining-pages-count="remainingPagesCount"
+					@card-click="activeMode === 'split' ? togglePageSelection($event) : undefined"
+					@open-crop-modal="openCropModal"
+					@open-enhance-modal="openEnhanceModal"
+					@rotate-page="rotatePage"
+					@open-rotate-modal="openRotateModal"
+					@open-join-modal="openJoinModal"
+					@toggle-delete-page="toggleDeletePage"
+					@set-container-ref="setContainerRef" />
 			</div>
 
 			<SongPdfSplitSidebar
@@ -1078,71 +1048,6 @@ watch(() => targetFile.value?.path, () => {
 	font-size: 13px;
 }
 
-.saveProgressBanner {
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-	padding: 10px 16px;
-	background-color: var(--color-background-hover, #f3f4f6);
-	border-bottom: 1px solid var(--color-border, #e5e7eb);
-	flex-shrink: 0;
-}
-
-.saveProgressHeader {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 12px;
-}
-
-.saveProgressInfo {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	min-width: 0;
-}
-
-.saveProgressText {
-	font-size: 13px;
-	font-weight: 500;
-	color: var(--color-main-text, #111827);
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
-
-.saveProgressPercent {
-	font-size: 13px;
-	font-weight: 700;
-	color: var(--color-primary-element, #0082c9);
-	flex-shrink: 0;
-}
-
-.saveProgressTrack {
-	width: 100%;
-	height: 8px;
-	background-color: var(--color-border, #d1d5db);
-	border-radius: 999px;
-	overflow: hidden;
-}
-
-.saveProgressFill {
-	height: 100%;
-	background-color: var(--color-primary-element, #0082c9);
-	border-radius: 999px;
-	transition: width 0.15s ease-out;
-}
-
-.loadingArea {
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	justify-content: center;
-	height: 100%;
-	gap: 12px;
-	color: var(--color-text-maxcontrast);
-}
-
 .contentLayout {
 	display: flex;
 	flex: 1;
@@ -1158,16 +1063,5 @@ watch(() => targetFile.value?.path, () => {
 	min-height: 0;
 	height: 100%;
 	overflow: hidden;
-}
-
-.grid {
-	flex: 1;
-	min-height: 0;
-	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
-	align-content: start;
-	gap: 16px;
-	padding: 16px;
-	overflow-y: auto;
 }
 </style>
