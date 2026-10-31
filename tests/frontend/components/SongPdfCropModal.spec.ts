@@ -181,5 +181,35 @@ describe('SongPdfCropModal.vue (Minimal mocks component interaction)', () => {
 		const overlay = wrapper.find('[data-test="crop-overlay"]')
 		expect(overlay.exists()).toBe(true)
 	})
+
+	it('supports zoom controls and wires up modular subcomponents', async () => {
+		const wrapper = mount(SongPdfCropModal, {
+			props: {
+				open: true,
+				pageNum: 1,
+				totalPages: 3,
+				allPagesCount: 3,
+				pdf: createMockPdf(),
+			},
+		})
+
+		// Modular components are present
+		expect(wrapper.findComponent({ name: 'SongPdfCropToolbar' }).exists()).toBe(true)
+		expect(wrapper.findComponent({ name: 'SongPdfCropWorkspace' }).exists()).toBe(true)
+		expect(wrapper.findComponent({ name: 'SongPdfCropFooter' }).exists()).toBe(true)
+
+		// Initial zoom is 100%
+		expect(wrapper.find('[data-test="crop-zoom-level"]').text()).toBe('100%')
+
+		// Click zoom in
+		const zoomInBtn = wrapper.find('[data-test="crop-zoom-in"]')
+		await zoomInBtn.trigger('click')
+		expect(wrapper.find('[data-test="crop-zoom-level"]').text()).toBe('125%')
+
+		// Click fit to screen
+		const zoomFitBtn = wrapper.find('[data-test="crop-zoom-fit"]')
+		await zoomFitBtn.trigger('click')
+		expect(wrapper.find('[data-test="crop-zoom-level"]').text()).toBe('100%')
+	})
 })
 

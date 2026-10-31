@@ -1,16 +1,10 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
-import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
-import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
-import CheckIcon from 'vue-material-design-icons/Check.vue'
-import CloseIcon from 'vue-material-design-icons/Close.vue'
-import ArrowLeft from 'vue-material-design-icons/ArrowLeft.vue'
-import ArrowRight from 'vue-material-design-icons/ArrowRight.vue'
-import RestoreIcon from 'vue-material-design-icons/Restore.vue'
-import ContentCut from 'vue-material-design-icons/ContentCut.vue'
-import SongPdfCropOverlay from './SongPdfCropOverlay.vue'
+import SongPdfCropToolbar from './SongPdfCropToolbar.vue'
+import SongPdfCropWorkspace from './SongPdfCropWorkspace.vue'
+import SongPdfCropFooter from './SongPdfCropFooter.vue'
 import type { PageCrop } from './crop-types'
 
 const props = defineProps<{
@@ -29,13 +23,29 @@ const emit = defineEmits<{
 	'change-page': [newPage: number]
 }>()
 
-const canvasRef = ref<HTMLCanvasElement>()
-const workspaceRef = ref<HTMLDivElement>()
+const workspaceCompRef = ref<InstanceType<typeof SongPdfCropWorkspace>>()
 const isLoadingPage = ref(false)
 
 // Display & coordinate mapping
 const canvasWidth = ref(0)
 const canvasHeight = ref(0)
+
+// Zoom levels
+const MIN_ZOOM = 0.5
+const MAX_ZOOM = 3.0
+const zoomLevel = ref(1.0)
+
+function zoomIn() {
+	zoomLevel.value = Math.min(MAX_ZOOM, Math.round((zoomLevel.value + 0.25) * 100) / 100)
+}
+
+function zoomOut() {
+	zoomLevel.value = Math.max(MIN_ZOOM, Math.round((zoomLevel.value - 0.25) * 100) / 100)
+}
+
+function zoomReset() {
+	zoomLevel.value = 1.0
+}
 
 // Normalized crop box: fractions [0..1] relative to displayed canvas width & height
 // cropLeft, cropTop, cropWidth, cropHeight
@@ -58,17 +68,8 @@ const isCustomCropped = computed(() => {
 	)
 })
 
-// Crop box margins in % for feedback display
-const cropSummary = computed(() => {
-	const top = Math.round(cropBox.value.top * 100)
-	const right = Math.round((1 - (cropBox.value.left + cropBox.value.width)) * 100)
-	const bottom = Math.round((1 - (cropBox.value.top + cropBox.value.height)) * 100)
-	const left = Math.round(cropBox.value.left * 100)
-	return { top, right, bottom, left }
-})
-
 async function renderPage() {
-	if (!props.pdf || !canvasRef.value) return
+	if (!props.pdf) return
 	isLoadingPage.value = true
 
 	try {
@@ -77,42 +78,45 @@ async function renderPage() {
 		const effectiveRotation = (((page.rotate ?? 0) + (props.rotation || 0)) % 360 + 360) % 360
 		const unscaledViewport = page.getViewport({ scale: 1.0, rotation: effectiveRotation })
 
-		// Dynamic maximum bounds based on available workspace area and viewport
-		let maxWidth = 560
-		let maxHeight = 620
-		if (workspaceRef.value) {
-			const rect = workspaceRef.value.getBoundingClientRect()
+		// Dynamic bounds based on available workspace area to make the preview large and clear
+		let availableWidth = 850
+		let availableHeight = 850
+		const wsEl = workspaceCompRef.value?.workspaceRef
+		if (wsEl) {
+			const rect = wsEl.getBoundingClientRect()
 			if (rect.width > 64) {
-				maxWidth = Math.max(220, Math.min(560, Math.floor(rect.width - 32)))
+				availableWidth = Math.max(220, Math.floor(rect.width - 32))
 			}
 			if (rect.height > 64) {
-				maxHeight = Math.max(220, Math.min(620, Math.floor(rect.height - 32)))
+				availableHeight = Math.max(220, Math.floor(rect.height - 32))
 			}
 		} else if (typeof window !== 'undefined') {
-			maxWidth = Math.max(220, Math.min(560, Math.floor(window.innerWidth - 64)))
-			maxHeight = Math.max(220, Math.min(620, Math.floor(window.innerHeight * 0.52)))
+			availableWidth = Math.max(220, Math.floor(window.innerWidth * 0.85))
+			availableHeight = Math.max(220, Math.floor(window.innerHeight * 0.68))
 		}
 
-		const scale = Math.min(maxWidth / unscaledViewport.width, maxHeight / unscaledViewport.height, 2.0)
+		const scale = Math.min(availableWidth / unscaledViewport.width, availableHeight / unscaledViewport.height, 3.0)
 		const viewport = page.getViewport({ scale, rotation: effectiveRotation })
 
-		const canvas = canvasRef.value
-		canvas.width = Math.floor(viewport.width)
-		canvas.height = Math.floor(viewport.height)
-		canvasWidth.value = canvas.width
-		canvasHeight.value = canvas.height
+		const canvas = workspaceCompRef.value?.canvasRef
+		if (canvas) {
+			canvas.width = Math.floor(viewport.width)
+			canvas.height = Math.floor(viewport.height)
+			canvasWidth.value = canvas.width
+			canvasHeight.value = canvas.height
 
-		const canvasContext = canvas.getContext('2d')
-		if (canvasContext) {
-			canvasContext.imageSmoothingEnabled = true
-			canvasContext.imageSmoothingQuality = 'high'
-			canvasContext.fillStyle = '#ffffff'
-			canvasContext.fillRect(0, 0, canvas.width, canvas.height)
-			await page.render({
-				canvasContext,
-				viewport,
-				background: 'rgb(255, 255, 255)',
-			}).promise
+			const canvasContext = canvas.getContext('2d')
+			if (canvasContext) {
+				canvasContext.imageSmoothingEnabled = true
+				canvasContext.imageSmoothingQuality = 'high'
+				canvasContext.fillStyle = '#ffffff'
+				canvasContext.fillRect(0, 0, canvas.width, canvas.height)
+				await page.render({
+					canvasContext,
+					viewport,
+					background: 'rgb(255, 255, 255)',
+				}).promise
+			}
 		}
 	} catch (e) {
 		console.warn(`Failed to render crop preview for page ${props.pageNum}:`, e)
@@ -149,22 +153,18 @@ function handleClose() {
 	emit('update:open', false)
 }
 
-function prevPage() {
-	if (props.pageNum > 1) {
-		emit('change-page', props.pageNum - 1)
-	}
-}
-
-function nextPage() {
-	if (props.pageNum < props.totalPages) {
-		emit('change-page', props.pageNum + 1)
+function handlePageChange(newPage: number) {
+	if (newPage >= 1 && newPage <= props.totalPages) {
+		zoomReset()
+		emit('change-page', newPage)
 	}
 }
 
 let resizeObserver: ResizeObserver | null = null
 
 onMounted(() => {
-	if (typeof ResizeObserver !== 'undefined' && workspaceRef.value) {
+	const wsEl = workspaceCompRef.value?.workspaceRef
+	if (typeof ResizeObserver !== 'undefined' && wsEl) {
 		let lastWidth = 0
 		let lastHeight = 0
 		resizeObserver = new ResizeObserver((entries) => {
@@ -179,7 +179,7 @@ onMounted(() => {
 				}
 			}
 		})
-		resizeObserver.observe(workspaceRef.value)
+		resizeObserver.observe(wsEl)
 	}
 })
 
@@ -211,274 +211,85 @@ watch(
 		:open="open"
 		size="large"
 		:can-close="true"
+		:class="$style.cropModal"
 		:name="t('sheetmusic', 'Crop Page {page} of {total}', { page: pageNum, total: totalPages })"
 		@update:open="emit('update:open', $event)">
 		<div :class="$style.dialogBody">
-			<!-- Header / Instruction Bar -->
-			<div :class="$style.toolBar">
-				<div :class="$style.pageNav">
-					<NcButton
-						size="small"
-						variant="secondary"
-						:disabled="pageNum <= 1"
-						:title="t('sheetmusic', 'Previous page')"
-						@click="prevPage">
-						<template #icon>
-							<ArrowLeft :size="16" />
-						</template>
-					</NcButton>
-					<span :class="$style.pageIndicator">
-						{{ t('sheetmusic', 'Page {page} of {total}', { page: pageNum, total: totalPages }) }}
-					</span>
-					<NcButton
-						size="small"
-						variant="secondary"
-						:disabled="pageNum >= totalPages"
-						:title="t('sheetmusic', 'Next page')"
-						@click="nextPage">
-						<template #icon>
-							<ArrowRight :size="16" />
-						</template>
-					</NcButton>
-				</div>
+			<!-- Header Toolbar (Page Nav, Zoom, Presets) -->
+			<SongPdfCropToolbar
+				:page-num="pageNum"
+				:total-pages="totalPages"
+				:zoom-level="zoomLevel"
+				:min-zoom="MIN_ZOOM"
+				:max-zoom="MAX_ZOOM"
+				:is-custom-cropped="isCustomCropped"
+				@change-page="handlePageChange"
+				@zoom-in="zoomIn"
+				@zoom-out="zoomOut"
+				@zoom-reset="zoomReset"
+				@apply-preset="applyPreset"
+				@reset-crop="resetCrop" />
 
-				<div :class="$style.toolActions">
-					<NcButton
-						size="small"
-						variant="secondary"
-						:title="t('sheetmusic', 'Trim 5% margin from all edges')"
-						@click="applyPreset(5)">
-						{{ t('sheetmusic', 'Trim 5%') }}
-					</NcButton>
-					<NcButton
-						size="small"
-						variant="secondary"
-						:title="t('sheetmusic', 'Trim 10% margin from all edges')"
-						@click="applyPreset(10)">
-						{{ t('sheetmusic', 'Trim 10%') }}
-					</NcButton>
-					<NcButton
-						size="small"
-						variant="tertiary"
-						:disabled="!isCustomCropped"
-						:title="t('sheetmusic', 'Reset to full page')"
-						@click="resetCrop">
-						<template #icon>
-							<RestoreIcon :size="16" />
-						</template>
-						{{ t('sheetmusic', 'Reset to Full Page') }}
-					</NcButton>
-				</div>
-			</div>
-
-			<!-- Main Crop Workspace -->
-			<div ref="workspaceRef" :class="$style.workspace">
-				<div
-					v-if="isLoadingPage"
-					:class="$style.loadingOverlay">
-					<NcLoadingIcon :size="36" />
-				</div>
-
-				<div
-					:class="$style.canvasWrapper"
-					:style="{ width: `${canvasWidth}px`, height: `${canvasHeight}px` }">
-					<!-- Rendered PDF Canvas -->
-					<canvas ref="canvasRef" :class="$style.pageCanvas" />
-
-					<!-- Interactive Drag & Selection Overlay -->
-					<SongPdfCropOverlay
-						v-model:crop-box="cropBox"
-						:canvas-width="canvasWidth"
-						:canvas-height="canvasHeight"
-						:is-custom-cropped="isCustomCropped" />
-				</div>
-			</div>
+			<!-- Main Crop Workspace (with Zoom & Pan) -->
+			<SongPdfCropWorkspace
+				ref="workspaceCompRef"
+				v-model:crop-box="cropBox"
+				:canvas-width="canvasWidth"
+				:canvas-height="canvasHeight"
+				:zoom-level="zoomLevel"
+				:is-loading-page="isLoadingPage"
+				:is-custom-cropped="isCustomCropped"
+				@zoom-change="zoomLevel = $event" />
 
 			<!-- Footer Settings & Actions -->
-			<div :class="$style.footer">
-				<div :class="$style.scopeSelector">
-					<span :class="$style.scopeLabel">{{ t('sheetmusic', 'Apply crop to:') }}</span>
-					<label :class="$style.radioOption">
-						<input
-							v-model="applyScope"
-							type="radio"
-							value="current"
-							name="cropScope">
-						<span>{{ t('sheetmusic', 'Page {page} only', { page: pageNum }) }}</span>
-					</label>
-					<label :class="$style.radioOption">
-						<input
-							v-model="applyScope"
-							type="radio"
-							value="all"
-							name="cropScope">
-						<span>{{ t('sheetmusic', 'All pages ({count})', { count: allPagesCount }) }}</span>
-					</label>
-				</div>
-
-				<div :class="$style.actionButtons">
-					<NcButton
-						variant="secondary"
-						@click="handleClose">
-						{{ t('sheetmusic', 'Cancel') }}
-					</NcButton>
-					<NcButton
-						variant="primary"
-						@click="handleApply">
-						<template #icon>
-							<CheckIcon :size="18" />
-						</template>
-						{{ t('sheetmusic', 'Apply Crop') }}
-					</NcButton>
-				</div>
-			</div>
+			<SongPdfCropFooter
+				v-model:apply-scope="applyScope"
+				:page-num="pageNum"
+				:all-pages-count="allPagesCount"
+				@cancel="handleClose"
+				@apply="handleApply" />
 		</div>
 	</NcDialog>
 </template>
 
 <style module>
+.cropModal :global(.modal-container),
+.cropModal :global(.dialog) {
+	width: 95vw !important;
+	max-width: 1600px !important;
+}
+
+.cropModal :global(.dialog__name) {
+	margin-block: 0 4px;
+	font-size: 17px;
+	min-height: 32px;
+	line-height: 32px;
+}
+
 .dialogBody {
 	display: flex;
 	flex-direction: column;
-	max-height: 85vh;
-	gap: 12px;
-	padding: 8px 16px 16px;
-}
-
-.toolBar {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	padding: 6px 8px;
-	background-color: var(--color-background-hover);
-	border-radius: var(--border-radius, 4px);
-	gap: 8px;
-	flex-wrap: wrap;
-	flex-shrink: 0;
-}
-
-.pageNav {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	flex-shrink: 0;
-}
-
-.pageIndicator {
-	font-size: 13px;
-	font-weight: 600;
-}
-
-.toolActions {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	flex-wrap: wrap;
-}
-
-.workspace {
-	position: relative;
-	display: flex;
-	align-items: safe center;
-	justify-content: safe center;
-	min-height: 240px;
-	max-height: 640px;
-	flex: 1 1 auto;
-	background-color: #2b2b2b;
-	border-radius: 6px;
-	padding: 16px;
-	overflow: auto;
-	box-sizing: border-box;
-}
-
-.loadingOverlay {
-	position: absolute;
-	inset: 0;
-	background-color: rgba(0, 0, 0, 0.4);
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	z-index: 20;
-}
-
-.canvasWrapper {
-	position: relative;
-	margin: auto;
-	box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-	user-select: none;
-	touch-action: none;
-	flex-shrink: 0;
-}
-
-.pageCanvas {
-	display: block;
+	gap: 10px;
+	padding: 4px 12px 12px;
 	width: 100%;
-	height: 100%;
+	height: calc(92vh - 60px);
+	min-height: 520px;
+	max-height: 94vh;
+	box-sizing: border-box;
+	overflow: hidden;
 }
 
-.footer {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	padding-top: 12px;
-	border-top: 1px solid var(--color-border);
-	flex-wrap: wrap;
-	gap: 12px;
-	flex-shrink: 0;
-}
+@media (max-width: 768px) {
+	.cropModal :global(.modal-container),
+	.cropModal :global(.dialog) {
+		width: 98vw !important;
+	}
 
-.scopeSelector {
-	display: flex;
-	align-items: center;
-	gap: 16px;
-	flex-wrap: wrap;
-}
-
-.scopeLabel {
-	font-size: 13px;
-	font-weight: 600;
-}
-
-.radioOption {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	font-size: 13px;
-	cursor: pointer;
-}
-
-.actionButtons {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	margin-left: auto;
-}
-
-@media (max-width: 600px) {
 	.dialogBody {
-		padding: 6px 10px 12px;
+		height: calc(96vh - 50px);
+		min-height: 360px;
+		padding: 4px 8px 8px;
 		gap: 8px;
-		max-height: 90vh;
-	}
-
-	.toolBar {
-		padding: 4px 6px;
-		gap: 6px;
-	}
-
-	.workspace {
-		padding: 12px;
-		min-height: 200px;
-	}
-
-	.footer {
-		padding-top: 8px;
-		gap: 8px;
-	}
-
-	.scopeSelector {
-		gap: 8px;
-		font-size: 12px;
 	}
 }
 </style>
