@@ -140,10 +140,12 @@ final class MobileSheetsTableHelper {
 
 		$sets = [];
 		$params = [':where_id' => $idVal];
+		$paramCols = [':where_id' => $idCol];
 		foreach ($row as $col => $val) {
 			$p = ':u_' . strtolower(str_replace([' ', '-', '.'], '_', (string)$col));
 			$sets[] = '"' . str_replace('"', '""', (string)$col) . '" = ' . $p;
 			$params[$p] = $val;
+			$paramCols[$p] = (string)$col;
 		}
 
 		$sql = sprintf(
@@ -154,7 +156,44 @@ final class MobileSheetsTableHelper {
 		);
 
 		$stmt = $db->prepare($sql);
-		$stmt->execute($params);
+		foreach ($params as $param => $val) {
+			$colName = $paramCols[$param];
+			if (is_int($val)) {
+				$stmt->bindValue($param, $val, PDO::PARAM_INT);
+			} elseif (is_null($val)) {
+				$stmt->bindValue($param, null, PDO::PARAM_NULL);
+			} elseif (self::isBlobValue($tableName, $colName, $val)) {
+				$stmt->bindValue($param, $val, PDO::PARAM_LOB);
+			} else {
+				$stmt->bindValue($param, $val, PDO::PARAM_STR);
+			}
+		}
+		$stmt->execute();
+	}
+
+	/**
+	 * Determine if a column value should be bound as a binary BLOB in SQLite.
+	 */
+	public static function isBlobValue(string $tableName, string $colName, mixed $val): bool {
+		if (!is_string($val)) {
+			return false;
+		}
+
+		$lowerTable = strtolower($tableName);
+		$lowerCol = strtolower($colName);
+
+		// Known MobileSheets baseline schema BLOB columns
+		if (
+			($lowerTable === 'annotationpoints' && $lowerCol === 'points')
+			|| ($lowerTable === 'batchmidisysex' && $lowerCol === 'sysexbytes')
+			|| ($lowerTable === 'midiactionsysex' && $lowerCol === 'sysexbytes')
+			|| ($lowerTable === 'midisysex' && $lowerCol === 'sysexbytes')
+			|| ($lowerTable === 'smartmidisysex' && $lowerCol === 'sysexbytes')
+		) {
+			return true;
+		}
+
+		return str_contains($val, "\0") || !mb_check_encoding($val, 'UTF-8');
 	}
 
 	/**
@@ -185,7 +224,20 @@ final class MobileSheetsTableHelper {
 		);
 
 		$stmt = $db->prepare($sql);
-		$stmt->execute(array_values($row));
+		$i = 1;
+		foreach ($row as $col => $val) {
+			if (is_int($val)) {
+				$stmt->bindValue($i, $val, PDO::PARAM_INT);
+			} elseif (is_null($val)) {
+				$stmt->bindValue($i, null, PDO::PARAM_NULL);
+			} elseif (self::isBlobValue($tableName, (string)$col, $val)) {
+				$stmt->bindValue($i, $val, PDO::PARAM_LOB);
+			} else {
+				$stmt->bindValue($i, $val, PDO::PARAM_STR);
+			}
+			$i++;
+		}
+		$stmt->execute();
 	}
 
 	/**

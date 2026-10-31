@@ -161,4 +161,18 @@ final class InternalMiscMapperTest extends TestCase {
 		self::assertEmpty($this->miscMapper->findOrphanMiscData($this->libraryId));
 		self::assertEmpty($this->miscMapper->getMiscDataForTable($this->libraryId, 'mobilesheets', 'Bookmarks', includeDeleted: false));
 	}
+
+	public function testSaveAndGetMiscDataWithBinaryBlobPreservesBytes(): void {
+		$binaryWithNulls = "\x00\x01\x00\xFF\x00\xFE\x10";
+		$this->miscMapper->saveMiscData($this->libraryId, 'mobilesheets', 'AnnotationPoints', '1', [
+			'Id' => 1,
+			'AnnotationId' => 10,
+			'Points' => $binaryWithNulls,
+			'Count' => 7,
+		]);
+
+		$rows = $this->miscMapper->getMiscDataForTable($this->libraryId, 'mobilesheets', 'AnnotationPoints');
+		self::assertCount(1, $rows);
+		self::assertSame($binaryWithNulls, $rows[0]['Points']);
+	}
 }

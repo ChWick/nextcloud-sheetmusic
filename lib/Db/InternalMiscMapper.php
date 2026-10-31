@@ -179,7 +179,7 @@ class InternalMiscMapper {
 			}
 			return $res;
 		}
-		if (is_string($value) && !mb_check_encoding($value, 'UTF-8')) {
+		if (is_string($value) && (!mb_check_encoding($value, 'UTF-8') || str_contains($value, "\0"))) {
 			return '__b64:' . base64_encode($value);
 		}
 		return $value;

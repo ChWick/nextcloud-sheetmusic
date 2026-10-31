@@ -225,4 +225,34 @@ final class MobileSheetsTableHelperTest extends TestCase {
 		// Non-existent table does nothing
 		MobileSheetsTableHelper::insertIfEmpty($this->db, 'NonExistentTable', ['Id' => 1]);
 	}
+
+	public function testInsertAndQueryBlobPreservesBlobStorageClass(): void {
+		$this->db->exec('CREATE TABLE AnnotationPoints (Id INTEGER PRIMARY KEY, AnnotationId INTEGER, Points BLOB, Count INTEGER)');
+
+		$binary = "\x00\x01\x02\x03\x00\xFF\xFE\x00";
+		MobileSheetsTableHelper::insertRow($this->db, 'AnnotationPoints', [
+			'Id' => 1,
+			'AnnotationId' => 42,
+			'Points' => $binary,
+			'Count' => 8,
+		]);
+
+		$row = $this->db->query('SELECT Id, AnnotationId, typeof(Points) AS t, length(Points) AS l, Points, Count FROM AnnotationPoints WHERE Id = 1')->fetch();
+		self::assertIsArray($row);
+		self::assertSame('blob', $row['t'], 'Storage class for Points must be blob, not text');
+		self::assertSame(8, (int)$row['l'], 'Length of Points blob must not be truncated at null bytes');
+		self::assertSame($binary, $row['Points']);
+
+		$updatedBinary = "\x00\xAA\xBB\x00\xCC";
+		MobileSheetsTableHelper::updateRow($this->db, 'AnnotationPoints', [
+			'Points' => $updatedBinary,
+			'Count' => 5,
+		], 'Id', 1);
+
+		$updRow = $this->db->query('SELECT typeof(Points) AS t, length(Points) AS l, Points, Count FROM AnnotationPoints WHERE Id = 1')->fetch();
+		self::assertIsArray($updRow);
+		self::assertSame('blob', $updRow['t']);
+		self::assertSame(5, (int)$updRow['l']);
+		self::assertSame($updatedBinary, $updRow['Points']);
+	}
 }
