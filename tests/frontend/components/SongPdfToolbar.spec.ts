@@ -137,5 +137,15 @@ describe('SongPdfToolbar.vue', () => {
 		await clearBtn?.trigger('click')
 		expect(wrapper.emitted('clear-selection')).toBeTruthy()
 	})
+
+	it('renders with toolbar accessibility role and structured groups following Nextcloud UX patterns', () => {
+		const wrapper = mount(SongPdfToolbar, {
+			props: defaultProps,
+		})
+
+		const toolbarEl = wrapper.find('[role="toolbar"]')
+		expect(toolbarEl.exists()).toBe(true)
+		expect(toolbarEl.attributes('aria-label')).toBe('PDF modifier toolbar')
+	})
 })
 
