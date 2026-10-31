@@ -106,104 +106,89 @@ const saveButtonText = computed(() => {
 
 <template>
 	<header :class="$style.header">
-		<div :class="$style.topRow">
-			<div :class="$style.headerLeft">
-				<NcButton
-					variant="secondary"
-					:title="t('sheetmusic', 'Back to song')"
-					:aria-label="t('sheetmusic', 'Back to song')"
-					@click="emit('cancel')">
-					<template #icon>
-						<CloseIcon :size="20" />
-					</template>
-					{{ t('sheetmusic', 'Cancel') }}
-				</NcButton>
-				<div :class="$style.fileMeta">
-					<span :class="$style.songTitle" :title="song.title">{{ song.title }}</span>
-					<span v-if="targetFile" :class="$style.fileName">
-						({{ getFileName(targetFile.path) }} — {{ hasAnyDeletion ? `${remainingPagesCount} / ${totalPages}` : totalPages }} {{ totalPages === 1 ? t('sheetmusic', 'page') : t('sheetmusic', 'pages') }})
-					</span>
+		<!-- Left: Cancel Button, Song Title, File Details & Resolution Info -->
+		<div :class="$style.headerLeft">
+			<NcButton
+				variant="secondary"
+				:title="t('sheetmusic', 'Back to song')"
+				:aria-label="t('sheetmusic', 'Back to song')"
+				@click="emit('cancel')">
+				<template #icon>
+					<CloseIcon :size="20" />
+				</template>
+				<span :class="$style.cancelBtnText">{{ t('sheetmusic', 'Cancel') }}</span>
+			</NcButton>
+			<div :class="$style.fileMeta">
+				<span :class="$style.songTitle" :title="song.title">{{ song.title }}</span>
+				<span v-if="targetFile" :class="$style.fileName">
+					({{ getFileName(targetFile.path) }} — {{ hasAnyDeletion ? `${remainingPagesCount} / ${totalPages}` : totalPages }} {{ totalPages === 1 ? t('sheetmusic', 'page') : t('sheetmusic', 'pages') }})
+				</span>
+				<div
+					v-if="formattedFileSize !== '—' || primaryResolution"
+					:class="$style.infoPopoverWrap">
+					<button
+						type="button"
+						:class="$style.infoBadgeBtn"
+						data-test="pdf-modifier-info-trigger"
+						:title="t('sheetmusic', 'Show PDF file size and resolution details')"
+						@click="showInfoDropdown = !showInfoDropdown">
+						<InformationOutline :size="15" />
+						<span v-if="formattedFileSize !== '—'">{{ formattedFileSize }}</span>
+						<span v-if="formattedFileSize !== '—' && primaryResolution">·</span>
+						<span v-if="primaryResolution">
+							{{ primaryResolution.dpi }} DPI ({{ primaryResolution.pixelWidth }}×{{ primaryResolution.pixelHeight }} px)
+						</span>
+					</button>
 					<div
-						v-if="formattedFileSize !== '—' || primaryResolution"
-						:class="$style.infoPopoverWrap">
-						<button
-							type="button"
-							:class="$style.infoBadgeBtn"
-							data-test="pdf-modifier-info-trigger"
-							:title="t('sheetmusic', 'Show PDF file size and resolution details')"
-							@click="showInfoDropdown = !showInfoDropdown">
-							<InformationOutline :size="15" />
-							<span v-if="formattedFileSize !== '—'">{{ formattedFileSize }}</span>
-							<span v-if="formattedFileSize !== '—' && primaryResolution">·</span>
-							<span v-if="primaryResolution">
-								{{ primaryResolution.dpi }} DPI ({{ primaryResolution.pixelWidth }}×{{ primaryResolution.pixelHeight }} px)
+						v-if="showInfoDropdown"
+						:class="$style.infoDropdown"
+						data-test="pdf-modifier-info-dropdown">
+						<div :class="$style.infoDropdownHeader">
+							<strong>{{ t('sheetmusic', 'PDF File & Resolution Info') }}</strong>
+							<button
+								type="button"
+								:class="$style.infoCloseBtn"
+								@click="showInfoDropdown = false">
+								×
+							</button>
+						</div>
+						<div :class="$style.infoGrid">
+							<span :class="$style.infoLabel">{{ t('sheetmusic', 'File size:') }}</span>
+							<span :class="$style.infoVal" data-test="pdf-info-filesize">
+								{{ formattedFileSize }}
+								<template v-if="fileSizeBytes"> ({{ fileSizeBytes.toLocaleString() }} B)</template>
 							</span>
-						</button>
-						<div
-							v-if="showInfoDropdown"
-							:class="$style.infoDropdown"
-							data-test="pdf-modifier-info-dropdown">
-							<div :class="$style.infoDropdownHeader">
-								<strong>{{ t('sheetmusic', 'PDF File & Resolution Info') }}</strong>
-								<button
-									type="button"
-									:class="$style.infoCloseBtn"
-									@click="showInfoDropdown = false">
-									×
-								</button>
-							</div>
-							<div :class="$style.infoGrid">
-								<span :class="$style.infoLabel">{{ t('sheetmusic', 'File size:') }}</span>
-								<span :class="$style.infoVal" data-test="pdf-info-filesize">
-									{{ formattedFileSize }}
-									<template v-if="fileSizeBytes"> ({{ fileSizeBytes.toLocaleString() }} B)</template>
+							<span :class="$style.infoLabel">{{ t('sheetmusic', 'Pages:') }}</span>
+							<span :class="$style.infoVal">{{ hasAnyDeletion ? `${remainingPagesCount} / ${totalPages}` : totalPages }}</span>
+							<template v-if="primaryResolution">
+								<span :class="$style.infoLabel">{{ t('sheetmusic', 'Resolution:') }}</span>
+								<span :class="$style.infoVal" data-test="pdf-info-resolution">
+									{{ primaryResolution.pixelWidth }} × {{ primaryResolution.pixelHeight }} px ({{ primaryResolution.dpi }} DPI)
 								</span>
-								<span :class="$style.infoLabel">{{ t('sheetmusic', 'Pages:') }}</span>
-								<span :class="$style.infoVal">{{ hasAnyDeletion ? `${remainingPagesCount} / ${totalPages}` : totalPages }}</span>
-								<template v-if="primaryResolution">
-									<span :class="$style.infoLabel">{{ t('sheetmusic', 'Resolution:') }}</span>
-									<span :class="$style.infoVal" data-test="pdf-info-resolution">
-										{{ primaryResolution.pixelWidth }} × {{ primaryResolution.pixelHeight }} px ({{ primaryResolution.dpi }} DPI)
-									</span>
-									<span :class="$style.infoLabel">{{ t('sheetmusic', 'Page size:') }}</span>
-									<span :class="$style.infoVal">
-										{{ primaryResolution.widthMm }} × {{ primaryResolution.heightMm }} mm ({{ Math.round(primaryResolution.widthPt) }} × {{ Math.round(primaryResolution.heightPt) }} pt)
-									</span>
-								</template>
-							</div>
+								<span :class="$style.infoLabel">{{ t('sheetmusic', 'Page size:') }}</span>
+								<span :class="$style.infoVal">
+									{{ primaryResolution.widthMm }} × {{ primaryResolution.heightMm }} mm ({{ Math.round(primaryResolution.widthPt) }} × {{ Math.round(primaryResolution.heightPt) }} pt)
+								</span>
+							</template>
+						</div>
+						<div
+							v-if="pageResolutions && pageResolutions.length > 1"
+							:class="$style.perPageList">
+							<div :class="$style.perPageTitle">{{ t('sheetmusic', 'Per-Page Resolution') }}</div>
 							<div
-								v-if="pageResolutions && pageResolutions.length > 1"
-								:class="$style.perPageList">
-								<div :class="$style.perPageTitle">{{ t('sheetmusic', 'Per-Page Resolution') }}</div>
-								<div
-									v-for="pr in pageResolutions"
-									:key="pr.pageNum"
-									:class="$style.perPageRow">
-									<span>{{ t('sheetmusic', 'Page {n}', { n: pr.pageNum }) }}</span>
-									<span>{{ pr.pixelWidth }}×{{ pr.pixelHeight }} px · {{ pr.dpi }} DPI · {{ pr.widthMm }}×{{ pr.heightMm }} mm</span>
-								</div>
+								v-for="pr in pageResolutions"
+								:key="pr.pageNum"
+								:class="$style.perPageRow">
+								<span>{{ t('sheetmusic', 'Page {n}', { n: pr.pageNum }) }}</span>
+								<span>{{ pr.pixelWidth }}×{{ pr.pixelHeight }} px · {{ pr.dpi }} DPI · {{ pr.widthMm }}×{{ pr.heightMm }} mm</span>
 							</div>
 						</div>
 					</div>
 				</div>
 			</div>
-
-			<div :class="$style.headerRight">
-				<NcButton
-					variant="primary"
-					:disabled="saveButtonDisabled"
-					:title="saveButtonTitle"
-					@click="emit('save')">
-					<template #icon>
-						<CallSplit v-if="activeMode === 'split'" :size="20" />
-						<ContentSaveOutlineIcon v-else :size="20" />
-					</template>
-					{{ saveButtonText }}
-				</NcButton>
-			</div>
 		</div>
 
-		<!-- Mode Switcher Tabs -->
+		<!-- Center: Mode Switcher Tabs -->
 		<nav :class="$style.modeTabs" :aria-label="t('sheetmusic', 'PDF edit modes')">
 			<button
 				type="button"
@@ -238,6 +223,21 @@ const saveButtonText = computed(() => {
 				<span :class="$style.tabLabel">{{ t('sheetmusic', 'Split PDF') }}</span>
 			</button>
 		</nav>
+
+		<!-- Right: Save / Split Button -->
+		<div :class="$style.headerRight">
+			<NcButton
+				variant="primary"
+				:disabled="saveButtonDisabled"
+				:title="saveButtonTitle"
+				@click="emit('save')">
+				<template #icon>
+					<CallSplit v-if="activeMode === 'split'" :size="20" />
+					<ContentSaveOutlineIcon v-else :size="20" />
+				</template>
+				{{ saveButtonText }}
+			</NcButton>
+		</div>
 	</header>
 </template>
 
@@ -249,13 +249,9 @@ const saveButtonText = computed(() => {
 	padding: 8px 16px;
 	border-bottom: 1px solid var(--color-border);
 	background-color: var(--color-main-background);
-	gap: 12px;
+	gap: 16px;
 	flex-shrink: 0;
 	min-width: 0;
-}
-
-.topRow {
-	display: contents;
 }
 
 .headerLeft {
@@ -263,7 +259,12 @@ const saveButtonText = computed(() => {
 	align-items: center;
 	gap: 12px;
 	min-width: 0;
-	flex: 1;
+	flex: 1 1 0;
+	overflow: hidden;
+}
+
+.cancelBtnText {
+	display: inline;
 }
 
 .fileMeta {
@@ -271,7 +272,29 @@ const saveButtonText = computed(() => {
 	align-items: center;
 	gap: 8px;
 	min-width: 0;
-	flex-wrap: wrap;
+	flex-shrink: 1;
+	overflow: hidden;
+}
+
+.songTitle {
+	font-weight: bold;
+	font-size: 16px;
+	color: var(--color-main-text);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	max-width: 240px;
+	flex-shrink: 1;
+}
+
+.fileName {
+	color: var(--color-text-maxcontrast);
+	font-size: 13px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	max-width: 280px;
+	flex-shrink: 2;
 }
 
 .infoPopoverWrap {
@@ -374,33 +397,16 @@ const saveButtonText = computed(() => {
 	font-size: 11px;
 }
 
-.songTitle {
-	font-weight: bold;
-	font-size: 16px;
-	color: var(--color-main-text);
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	max-width: 240px;
-}
-
-.fileName {
-	color: var(--color-text-maxcontrast);
-	font-size: 13px;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	max-width: 280px;
-}
-
 .modeTabs {
 	display: flex;
 	align-items: center;
+	justify-content: center;
 	background-color: var(--color-background-hover);
 	padding: 3px;
 	border-radius: var(--border-radius-large, 8px);
 	gap: 2px;
 	flex-shrink: 0;
+	margin: 0 auto;
 }
 
 .tabButton {
@@ -438,39 +444,45 @@ const saveButtonText = computed(() => {
 .headerRight {
 	display: flex;
 	align-items: center;
+	justify-content: flex-end;
 	gap: 8px;
+	flex: 1 1 0;
 	flex-shrink: 0;
+	margin-left: auto;
 }
 
-/* Tablet & Mobile responsive layout */
+/* Tablet & Mobile responsive layout: 2-tier CSS Grid */
 @media (max-width: 960px) {
 	.header {
-		flex-direction: column;
-		align-items: stretch;
-		gap: 10px;
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		grid-template-areas:
+			"left right"
+			"tabs tabs";
+		align-items: center;
+		gap: 10px 12px;
 		padding: 8px 12px;
 	}
 
-	.topRow {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		width: 100%;
-		gap: 8px;
+	.headerLeft {
+		grid-area: left;
+		min-width: 0;
+		overflow: hidden;
 	}
 
-	.songTitle {
-		max-width: 180px;
-	}
-
-	.fileName {
-		max-width: 200px;
+	.headerRight {
+		grid-area: right;
+		justify-self: end;
+		margin-left: 0;
+		flex: none;
 	}
 
 	.modeTabs {
+		grid-area: tabs;
 		width: 100%;
 		display: flex;
 		box-sizing: border-box;
+		margin: 0;
 	}
 
 	.tabButton {
@@ -479,16 +491,38 @@ const saveButtonText = computed(() => {
 		padding: 6px 8px;
 		font-size: 12px;
 	}
+
+	.infoPopoverWrap {
+		display: none;
+	}
+
+	.songTitle {
+		max-width: 180px;
+	}
+
+	.fileName {
+		max-width: 180px;
+	}
 }
 
-@media (max-width: 540px) {
+@media (max-width: 600px) {
 	.fileName {
 		display: none;
 	}
 
 	.songTitle {
-		max-width: 140px;
+		max-width: 150px;
 		font-size: 14px;
+	}
+}
+
+@media (max-width: 480px) {
+	.cancelBtnText {
+		display: none;
+	}
+
+	.songTitle {
+		max-width: 130px;
 	}
 
 	.tabButton {

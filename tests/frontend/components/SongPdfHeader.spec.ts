@@ -124,5 +124,32 @@ describe('SongPdfHeader.vue', () => {
 		const titleSpan = wrapper.find('span[title="Autumn Leaves"]')
 		expect(titleSpan.exists()).toBe(true)
 	})
+
+	it('separates cancel and save buttons in dedicated containers to prevent layout overlay', () => {
+		const wrapper = mount(SongPdfHeader, {
+			props: {
+				...defaultProps,
+				hasAnyChange: true,
+			},
+		})
+
+		// Root header contains left area, mode tabs, and right area as top-level children
+		const header = wrapper.find('header')
+		expect(header.exists()).toBe(true)
+		const children = header.element.children
+		expect(children.length).toBe(3)
+
+		// Cancel button is inside child 0 (headerLeft)
+		const leftEl = children[0] as HTMLElement
+		expect(leftEl.querySelector('button')?.textContent).toContain('Cancel')
+
+		// Mode tabs are in child 1 (nav)
+		const centerNav = children[1] as HTMLElement
+		expect(centerNav.tagName.toLowerCase()).toBe('nav')
+
+		// Save button is inside child 2 (headerRight)
+		const rightEl = children[2] as HTMLElement
+		expect(rightEl.querySelector('button')?.textContent).toContain('Save')
+	})
 })
 
