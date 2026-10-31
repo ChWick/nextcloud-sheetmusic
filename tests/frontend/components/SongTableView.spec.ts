@@ -5,6 +5,8 @@ import type { Song } from '../../../src/types/song'
 
 vi.mock('@nextcloud/l10n', () => ({
 	translate: (_app: string, text: string) => text,
+	getLanguage: () => 'en',
+	isRTL: () => false,
 }))
 
 describe('SongTableView.vue', () => {
@@ -174,36 +176,112 @@ describe('SongTableView.vue', () => {
 		])
 	})
 
-	it('supports inline editing of entity columns (composer, book) and duration', async () => {
+	it('supports inline editing of entity columns with proposals (composer, collection, book) and duration', async () => {
+		const libraryComposers = [
+			{ id: 1, name: 'Beethoven' },
+			{ id: 2, name: 'Bach' },
+			{ id: 3, name: 'Mozart' },
+		]
+		const libraryCollections = [
+			{ id: 100, name: 'Symphonies' },
+			{ id: 101, name: 'Concertos' },
+		]
 		const wrapper = mount(SongTableView, {
-			props: { songs },
+			props: {
+				songs,
+				composers: libraryComposers,
+				collections: libraryCollections,
+			},
 		})
 
 		const firstRow = wrapper.findAll('tbody tr')[0]
 
-		// Edit composer inline
+		// Edit composer inline - should have proposals from props
 		const composerBtn = firstRow.find('[data-test="inline-edit-composer-btn"]')
 		expect(composerBtn.exists()).toBe(true)
 		await composerBtn.trigger('click')
 
-		const composerInput = firstRow.find('[data-test="inline-edit-input"]')
-		expect((composerInput.element as HTMLInputElement).value).toBe('Bach')
-		await composerInput.setValue('J. S. Bach, Vivaldi')
-		await composerInput.trigger('keydown.enter')
+		const composerSelect = firstRow.findComponent({ name: 'NcSelect' })
+		expect(composerSelect.exists()).toBe(true)
+		expect(composerSelect.props('options')).toEqual(libraryComposers)
+
+		// Add an existing composer (Mozart) and a new one (Vivaldi)
+		const createComposer = composerSelect.props('createOption')
+		const vivaldi = createComposer('Vivaldi')
+		expect(vivaldi).toEqual({ name: 'Vivaldi' })
+
+		// Existing composer resolves to option with ID
+		const mozart = createComposer('Mozart')
+		expect(mozart).toEqual({ id: 3, name: 'Mozart' })
+
+		await composerSelect.vm.$emit('update:modelValue', [
+			{ id: 2, name: 'Bach' },
+			mozart,
+			vivaldi,
+		])
+
+		const composerSaveBtn = firstRow.find('[data-test="inline-edit-save"]')
+		await composerSaveBtn.trigger('click')
 
 		expect(wrapper.emitted('inline-update-song')?.[0]).toEqual([
 			songs[1],
-			{ composers: [{ name: 'J. S. Bach' }, { name: 'Vivaldi' }] },
+			{
+				composers: [
+					{ id: 2, name: 'Bach' },
+					{ id: 3, name: 'Mozart' },
+					{ name: 'Vivaldi' },
+				],
+			},
 		])
 
-		// Edit book inline
-		const bookBtn = firstRow.find('[data-test="inline-edit-book-btn"]')
-		await bookBtn.trigger('click')
-		const bookInput = firstRow.find('[data-test="inline-edit-input"]')
-		await bookInput.setValue('Baroque Favorites')
-		await bookInput.trigger('keydown.enter')
+		// Edit collection inline - proposals from props
+		const collectionBtn = firstRow.find('[data-test="inline-edit-collection-btn"]')
+		expect(collectionBtn.exists()).toBe(true)
+		await collectionBtn.trigger('click')
+
+		const collectionSelect = firstRow.findComponent({ name: 'NcSelect' })
+		expect(collectionSelect.exists()).toBe(true)
+		expect(collectionSelect.props('options')).toEqual(libraryCollections)
+
+		const createCollection = collectionSelect.props('createOption')
+		const baroqueCol = createCollection('Baroque Gems')
+		expect(baroqueCol).toEqual({ name: 'Baroque Gems' })
+
+		await collectionSelect.vm.$emit('update:modelValue', [
+			libraryCollections[1],
+			baroqueCol,
+		])
+
+		const collectionSaveBtn = firstRow.find('[data-test="inline-edit-save"]')
+		await collectionSaveBtn.trigger('click')
 
 		expect(wrapper.emitted('inline-update-song')?.[1]).toEqual([
+			songs[1],
+			{
+				collections: [
+					{ id: 101, name: 'Concertos' },
+					{ name: 'Baroque Gems' },
+				],
+			},
+		])
+
+		// Edit book inline - fallback proposals gathered from songs
+		const bookBtn = firstRow.find('[data-test="inline-edit-book-btn"]')
+		await bookBtn.trigger('click')
+		const bookSelect = firstRow.findComponent({ name: 'NcSelect' })
+		expect(bookSelect.props('options')).toEqual([
+			{ id: 10, title: 'Classics Vol 1' },
+		])
+
+		const createBookOption = bookSelect.props('createOption')
+		const baroqueBook = createBookOption('Baroque Favorites')
+		expect(baroqueBook).toEqual({ title: 'Baroque Favorites' })
+
+		await bookSelect.vm.$emit('update:modelValue', [baroqueBook])
+		const bookSaveBtn = firstRow.find('[data-test="inline-edit-save"]')
+		await bookSaveBtn.trigger('click')
+
+		expect(wrapper.emitted('inline-update-song')?.[2]).toEqual([
 			songs[1],
 			{ books: [{ title: 'Baroque Favorites' }] },
 		])
@@ -215,7 +293,7 @@ describe('SongTableView.vue', () => {
 		await durationInput.setValue('3:15')
 		await durationInput.trigger('keydown.enter')
 
-		expect(wrapper.emitted('inline-update-song')?.[2]).toEqual([
+		expect(wrapper.emitted('inline-update-song')?.[3]).toEqual([
 			songs[1],
 			{ duration: 195 },
 		])

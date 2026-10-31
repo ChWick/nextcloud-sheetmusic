@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { EntityType, FilterEntity, Song, SongColumn } from '../../types/song'
+import type { Artist, Book, Collection, Composer, CustomGroup, EntityType, FilterEntity, Genre, Instrument, Key, Signature, Song, SongColumn, SourceType, Year } from '../../types/song'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import EyeIcon from 'vue-material-design-icons/Eye.vue'
@@ -7,6 +7,7 @@ import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import { computed, ref, watch } from 'vue'
 import { formatDateTimestamp, formatDifficulty, formatDuration, formatStars, sortSongs, type SortKey, type SortOrder } from '../../utils/song-formatter'
 import { useSongRowInteraction } from '../../composables/useSongRowInteraction'
+import { createEntityTag } from '../song-editor/entity-utils'
 import SongEntityChips from './SongEntityChips.vue'
 import SongInlineEditableCell from './SongInlineEditableCell.vue'
 import {
@@ -31,10 +32,32 @@ const props = withDefaults(
 		sortKey?: SortKey
 		sortOrder?: SortOrder
 		visibleColumns?: SongColumn[]
+		composers?: Composer[]
+		books?: Book[]
+		collections?: Collection[]
+		artists?: Artist[]
+		genres?: Genre[]
+		keys?: Key[]
+		customGroups?: CustomGroup[]
+		years?: Year[]
+		signatures?: Signature[]
+		sourceTypes?: SourceType[]
+		instruments?: Instrument[]
 	}>(),
 	{
 		sortKey: 'title',
 		sortOrder: 'asc',
+		composers: () => [],
+		books: () => [],
+		collections: () => [],
+		artists: () => [],
+		genres: () => [],
+		keys: () => [],
+		customGroups: () => [],
+		years: () => [],
+		signatures: () => [],
+		sourceTypes: () => [],
+		instruments: () => [],
 	},
 )
 
@@ -81,13 +104,45 @@ const visibleEntityColumns = computed(() => ENTITY_COLUMNS.filter((c) => isColVi
 const visibleIdentifierColumns = computed(() => IDENTIFIER_TEXT_COLUMNS.filter((c) => isColVisible(c.col)))
 const visibleExtraTextColumns = computed(() => EXTRA_TEXT_COLUMNS.filter((c) => isColVisible(c.col)))
 
+function getEntityOptions(entCol: EntityColumnDef): any[] {
+	const propOptions = (props[entCol.songProp] ?? []) as any[]
+	if (propOptions.length > 0) return propOptions
+	const map = new Map<string, any>()
+	for (const song of props.songs) {
+		for (const item of entCol.getItems(song)) {
+			const label = entCol.getItemLabel(item).trim()
+			const key = label.toLowerCase()
+			if (key && !map.has(key)) {
+				map.set(key, item)
+			}
+		}
+	}
+	return Array.from(map.values())
+}
+
+function getEntityTagCreator(entCol: EntityColumnDef): (val: string) => any {
+	const options = getEntityOptions(entCol)
+	return createEntityTag(
+		options,
+		(item: any) => entCol.getItemLabel(item),
+		(val: string) => (entCol.nameKey === 'title' ? { title: val } : { name: val }),
+	)
+}
+
 function handleInlineSave(song: Song, field: InlineEditableField, value: string | number) {
 	emit('inline-update-song', song, { [field]: value })
 }
 
-function handleInlineEntitySave(song: Song, entCol: EntityColumnDef, rawValue: string | number) {
+function handleInlineEntitySave(
+	song: Song,
+	entCol: EntityColumnDef,
+	rawValue: string | number | Array<{ id?: number, name?: string, title?: string }>,
+) {
+	const parsed = Array.isArray(rawValue)
+		? rawValue
+		: entCol.parseEditValue(String(rawValue))
 	emit('inline-update-song', song, {
-		[entCol.songProp]: entCol.parseEditValue(String(rawValue)),
+		[entCol.songProp]: parsed,
 	})
 }
 
@@ -172,8 +227,13 @@ const {
 						tag="td"
 						:class="$style.metaCell"
 						:field="entCol.field"
+						mode="entity"
+						:entity-options="getEntityOptions(entCol)"
+						:entity-label-key="entCol.nameKey"
+						:create-entity-tag="getEntityTagCreator(entCol)"
+						:initial-entities="entCol.getItems(song)"
 						:value="entCol.formatEditValue(song)"
-						:placeholder="t('sheetmusic', 'Comma-separated…')"
+						:placeholder="t('sheetmusic', 'Select or type…')"
 						:aria-label="entCol.ariaLabel()"
 						:edit-title="entCol.editTitle()"
 						@save="handleInlineEntitySave(song, entCol, $event)">
