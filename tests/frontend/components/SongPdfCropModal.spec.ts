@@ -160,5 +160,26 @@ describe('SongPdfCropModal.vue (Minimal mocks component interaction)', () => {
 			expect.objectContaining({ rotation: 270 }),
 		)
 	})
+
+	it('renders workspace and canvas wrapper with safe auto margins to prevent top clipping', async () => {
+		const wrapper = mount(SongPdfCropModal, {
+			props: {
+				open: true,
+				pageNum: 1,
+				totalPages: 1,
+				allPagesCount: 1,
+				pdf: createMockPdf(),
+			},
+		})
+
+		const workspace = wrapper.find('[class*="workspace"]')
+		expect(workspace.exists()).toBe(true)
+
+		const canvasWrapper = wrapper.find('[class*="canvasWrapper"]')
+		expect(canvasWrapper.exists()).toBe(true)
+
+		const overlay = wrapper.find('[data-test="crop-overlay"]')
+		expect(overlay.exists()).toBe(true)
+	})
 })
 

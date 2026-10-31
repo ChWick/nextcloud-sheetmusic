@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
@@ -30,6 +30,7 @@ const emit = defineEmits<{
 }>()
 
 const canvasRef = ref<HTMLCanvasElement>()
+const workspaceRef = ref<HTMLDivElement>()
 const isLoadingPage = ref(false)
 
 // Display & coordinate mapping
@@ -75,9 +76,23 @@ async function renderPage() {
 		// We use a high resolution viewport to ensure clear text when cropping
 		const effectiveRotation = (((page.rotate ?? 0) + (props.rotation || 0)) % 360 + 360) % 360
 		const unscaledViewport = page.getViewport({ scale: 1.0, rotation: effectiveRotation })
-		// Fit inside viewport (max width ~560px, max height ~620px)
-		const maxWidth = 560
-		const maxHeight = 620
+
+		// Dynamic maximum bounds based on available workspace area and viewport
+		let maxWidth = 560
+		let maxHeight = 620
+		if (workspaceRef.value) {
+			const rect = workspaceRef.value.getBoundingClientRect()
+			if (rect.width > 64) {
+				maxWidth = Math.max(220, Math.min(560, Math.floor(rect.width - 32)))
+			}
+			if (rect.height > 64) {
+				maxHeight = Math.max(220, Math.min(620, Math.floor(rect.height - 32)))
+			}
+		} else if (typeof window !== 'undefined') {
+			maxWidth = Math.max(220, Math.min(560, Math.floor(window.innerWidth - 64)))
+			maxHeight = Math.max(220, Math.min(620, Math.floor(window.innerHeight * 0.52)))
+		}
+
 		const scale = Math.min(maxWidth / unscaledViewport.width, maxHeight / unscaledViewport.height, 2.0)
 		const viewport = page.getViewport({ scale, rotation: effectiveRotation })
 
@@ -145,6 +160,33 @@ function nextPage() {
 		emit('change-page', props.pageNum + 1)
 	}
 }
+
+let resizeObserver: ResizeObserver | null = null
+
+onMounted(() => {
+	if (typeof ResizeObserver !== 'undefined' && workspaceRef.value) {
+		let lastWidth = 0
+		let lastHeight = 0
+		resizeObserver = new ResizeObserver((entries) => {
+			const entry = entries[0]
+			if (!entry) return
+			const { width, height } = entry.contentRect
+			if (Math.abs(width - lastWidth) > 30 || Math.abs(height - lastHeight) > 30) {
+				lastWidth = width
+				lastHeight = height
+				if (props.open) {
+					void renderPage()
+				}
+			}
+		})
+		resizeObserver.observe(workspaceRef.value)
+	}
+})
+
+onUnmounted(() => {
+	resizeObserver?.disconnect()
+	resizeObserver = null
+})
 
 watch(
 	() => [props.open, props.pageNum, props.rotation],
@@ -230,7 +272,7 @@ watch(
 			</div>
 
 			<!-- Main Crop Workspace -->
-			<div :class="$style.workspace">
+			<div ref="workspaceRef" :class="$style.workspace">
 				<div
 					v-if="isLoadingPage"
 					:class="$style.loadingOverlay">
@@ -307,15 +349,19 @@ watch(
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	padding: 4px 8px;
+	padding: 6px 8px;
 	background-color: var(--color-background-hover);
 	border-radius: var(--border-radius, 4px);
+	gap: 8px;
+	flex-wrap: wrap;
+	flex-shrink: 0;
 }
 
 .pageNav {
 	display: flex;
 	align-items: center;
 	gap: 8px;
+	flex-shrink: 0;
 }
 
 .pageIndicator {
@@ -325,20 +371,24 @@ watch(
 
 .toolActions {
 	display: flex;
+	align-items: center;
 	gap: 8px;
+	flex-wrap: wrap;
 }
 
 .workspace {
 	position: relative;
 	display: flex;
-	align-items: center;
-	justify-content: center;
-	min-height: 380px;
+	align-items: safe center;
+	justify-content: safe center;
+	min-height: 240px;
 	max-height: 640px;
+	flex: 1 1 auto;
 	background-color: #2b2b2b;
 	border-radius: 6px;
 	padding: 16px;
 	overflow: auto;
+	box-sizing: border-box;
 }
 
 .loadingOverlay {
@@ -353,9 +403,11 @@ watch(
 
 .canvasWrapper {
 	position: relative;
+	margin: auto;
 	box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
 	user-select: none;
 	touch-action: none;
+	flex-shrink: 0;
 }
 
 .pageCanvas {
@@ -372,12 +424,14 @@ watch(
 	border-top: 1px solid var(--color-border);
 	flex-wrap: wrap;
 	gap: 12px;
+	flex-shrink: 0;
 }
 
 .scopeSelector {
 	display: flex;
 	align-items: center;
 	gap: 16px;
+	flex-wrap: wrap;
 }
 
 .scopeLabel {
@@ -399,5 +453,32 @@ watch(
 	gap: 8px;
 	margin-left: auto;
 }
-</style>
 
+@media (max-width: 600px) {
+	.dialogBody {
+		padding: 6px 10px 12px;
+		gap: 8px;
+		max-height: 90vh;
+	}
+
+	.toolBar {
+		padding: 4px 6px;
+		gap: 6px;
+	}
+
+	.workspace {
+		padding: 12px;
+		min-height: 200px;
+	}
+
+	.footer {
+		padding-top: 8px;
+		gap: 8px;
+	}
+
+	.scopeSelector {
+		gap: 8px;
+		font-size: 12px;
+	}
+}
+</style>
