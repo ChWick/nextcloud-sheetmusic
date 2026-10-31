@@ -1064,4 +1064,16 @@ watch(() => targetFile.value?.path, () => {
 	height: 100%;
 	overflow: hidden;
 }
+
+@media (max-width: 840px) {
+	.container {
+		height: calc(100vh - var(--header-height, 50px));
+		max-height: 100vh;
+		min-height: 360px;
+	}
+
+	.contentLayout {
+		flex-direction: column;
+	}
+}
 </style>

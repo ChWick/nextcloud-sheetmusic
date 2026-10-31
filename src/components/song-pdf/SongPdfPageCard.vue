@@ -326,4 +326,15 @@ const formattedRotation = computed(() => `${Math.round(props.rotationDeg * 10) /
 	font-weight: 600;
 }
 
+@media (max-width: 480px) {
+	.cardFooter {
+		padding: 4px 6px;
+		gap: 2px;
+		min-height: 34px;
+	}
+
+	.pageNumLabel {
+		font-size: 11px;
+	}
+}
 </style>

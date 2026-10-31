@@ -189,10 +189,19 @@ const emit = defineEmits<{
 }
 
 .cardActions :global(.button-vue) {
-	--button-size: 26px;
-	min-width: 26px;
-	min-height: 26px;
+	--button-size: 28px;
+	min-width: 28px;
+	min-height: 28px;
 	padding-inline: 4px;
+}
+
+@media (max-width: 480px) {
+	.cardActions :global(.button-vue) {
+		--button-size: 26px;
+		min-width: 26px;
+		min-height: 26px;
+		padding-inline: 2px;
+	}
 }
 
 .selectCheckbox {

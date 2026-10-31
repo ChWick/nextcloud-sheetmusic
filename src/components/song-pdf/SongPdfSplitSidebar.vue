@@ -281,4 +281,15 @@ watch(
 .assignBtn {
 	align-self: flex-start;
 }
+
+@media (max-width: 840px) {
+	.splitSidebar {
+		width: 100%;
+		border-left: none;
+		border-top: 1px solid var(--color-border);
+		max-height: 280px;
+		min-height: 180px;
+		padding: 12px;
+	}
+}
 </style>
