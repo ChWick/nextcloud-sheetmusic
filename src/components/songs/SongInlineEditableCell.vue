@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { translate as t } from '@nextcloud/l10n'
+import NcSelect from '@nextcloud/vue/components/NcSelect'
 import CheckIcon from 'vue-material-design-icons/Check.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
@@ -15,9 +16,14 @@ const props = withDefaults(
 		ariaLabel: string
 		editTitle: string
 		placeholder?: string
-		mode?: 'text' | 'select'
+		mode?: 'text' | 'select' | 'entity'
 		options?: Array<{ value: number, label: string }>
 		suggestions?: string[]
+		entityOptions?: any[]
+		entityLabelKey?: string
+		entityTrackBy?: string
+		createEntityTag?: (val: string) => any
+		initialEntities?: any[]
 		variant?: 'table-title' | 'table-meta' | 'card-title' | 'list-title'
 		allowEmpty?: boolean
 	}>(),
@@ -28,27 +34,79 @@ const props = withDefaults(
 		mode: 'text',
 		options: () => [],
 		suggestions: () => [],
+		entityOptions: () => [],
+		entityLabelKey: 'name',
+		entityTrackBy: undefined,
+		createEntityTag: undefined,
+		initialEntities: () => [],
 		variant: 'table-meta',
 		allowEmpty: true,
 	},
 )
 
 const emit = defineEmits<{
-	save: [value: string | number]
+	save: [value: string | number | any[]]
 }>()
 
 const datalistId = `inline-datalist-${props.field}-${useId()}`
 const isEditing = ref(false)
 const draftText = ref('')
 const draftNumber = ref(0)
+const draftEntities = ref<any[]>([])
+const initialEntitiesSnapshot = ref<any[]>([])
 const inputRef = ref<HTMLInputElement | null>(null)
 const selectRef = ref<HTMLSelectElement | null>(null)
+const entitySelectRef = ref<any>(null)
+
+function defaultCreateEntityTag(name: string): any {
+	const trimmed = name.trim()
+	if (!trimmed) return null
+	const labelKey = props.entityLabelKey || 'name'
+	const normalized = trimmed.toLocaleLowerCase()
+	const existing = props.entityOptions.find((opt) => String(opt[labelKey] ?? '').trim().toLocaleLowerCase() === normalized)
+	if (existing) return existing
+	return { [labelKey]: trimmed }
+}
+
+function resolveCreateOption(val: string): any {
+	if (props.createEntityTag) {
+		return props.createEntityTag(val)
+	}
+	return defaultCreateEntityTag(val)
+}
+
+function areEntitiesEqual(a: any[], b: any[], labelKey: string): boolean {
+	if (a.length !== b.length) return false
+	for (let i = 0; i < a.length; i++) {
+		const idA = a[i]?.id
+		const idB = b[i]?.id
+		if (idA !== undefined && idB !== undefined) {
+			if (idA !== idB) return false
+		} else {
+			const labelA = String(a[i]?.[labelKey] ?? '').trim().toLocaleLowerCase()
+			const labelB = String(b[i]?.[labelKey] ?? '').trim().toLocaleLowerCase()
+			if (labelA !== labelB) return false
+		}
+	}
+	return true
+}
 
 async function startEdit() {
 	if (isEditing.value) return
 	isEditing.value = true
 	if (props.mode === 'select') {
 		draftNumber.value = Number(props.value ?? 0)
+	} else if (props.mode === 'entity') {
+		const initial = props.initialEntities ?? []
+		const options = props.entityOptions ?? []
+		const labelKey = props.entityLabelKey || 'name'
+		const mapped = initial.map((item) => {
+			const label = String((item as any)[labelKey] ?? '').trim().toLocaleLowerCase()
+			const found = options.find((opt) => String((opt as any)[labelKey] ?? '').trim().toLocaleLowerCase() === label)
+			return found ?? item
+		})
+		draftEntities.value = [...mapped]
+		initialEntitiesSnapshot.value = [...mapped]
 	} else {
 		draftText.value = String(props.value ?? '')
 	}
@@ -60,11 +118,17 @@ async function startEdit() {
 	if (selectRef.value) {
 		selectRef.value.focus()
 	}
+	if (entitySelectRef.value) {
+		const searchInput = (entitySelectRef.value as any).$el?.querySelector?.('input')
+		searchInput?.focus?.()
+	}
 }
 
 function cancelEdit() {
 	isEditing.value = false
 	draftText.value = ''
+	draftEntities.value = []
+	initialEntitiesSnapshot.value = []
 }
 
 function commitEdit() {
@@ -76,6 +140,17 @@ function commitEdit() {
 		cancelEdit()
 		if (nextNum !== prevNum) {
 			emit('save', nextNum)
+		}
+		return
+	}
+
+	if (props.mode === 'entity') {
+		const result = [...draftEntities.value]
+		const labelKey = props.entityLabelKey || 'name'
+		const unchanged = areEntitiesEqual(initialEntitiesSnapshot.value, result, labelKey)
+		cancelEdit()
+		if (!unchanged) {
+			emit('save', result)
 		}
 		return
 	}
@@ -105,7 +180,7 @@ defineExpose({
 		@dblclick.stop="startEdit">
 		<div
 			v-if="isEditing"
-			:class="$style.inlineEditContainer"
+			:class="[$style.inlineEditContainer, mode === 'entity' && $style.inlineEditEntityContainer]"
 			@click.stop
 			@dblclick.stop>
 			<select
@@ -122,6 +197,29 @@ defineExpose({
 					{{ opt.label }}
 				</option>
 			</select>
+			<div
+				v-else-if="mode === 'entity'"
+				:class="$style.entitySelectWrapper"
+				data-test="inline-edit-entity-container"
+				@keydown.enter.ctrl.prevent="commitEdit"
+				@keydown.enter.meta.prevent="commitEdit"
+				@keydown.esc.prevent="cancelEdit">
+				<NcSelect
+					ref="entitySelectRef"
+					v-model="draftEntities"
+					:options="entityOptions"
+					:multiple="true"
+					:taggable="true"
+					:create-option="resolveCreateOption"
+					:close-on-select="false"
+					:label-outside="true"
+					:aria-label-combobox="ariaLabel"
+					:label="entityLabelKey"
+					:track-by="entityTrackBy || entityLabelKey"
+					:placeholder="placeholder || t('sheetmusic', 'Select or type…')"
+					:append-to-body="true"
+					data-test="inline-edit-entity-select" />
+			</div>
 			<template v-else>
 				<input
 					ref="inputRef"
@@ -139,7 +237,7 @@ defineExpose({
 				</datalist>
 			</template>
 			<button
-				v-if="mode === 'text'"
+				v-if="mode === 'text' || mode === 'entity'"
 				type="button"
 				:class="[$style.inlineActionBtn, $style.inlineSaveBtn]"
 				data-test="inline-edit-save"
@@ -251,6 +349,31 @@ defineExpose({
 	gap: 4px;
 	width: 100%;
 	min-width: 140px;
+}
+
+.inlineEditEntityContainer {
+	min-width: 220px;
+	max-width: 440px;
+}
+
+.entitySelectWrapper {
+	flex: 1;
+	min-width: 170px;
+}
+
+.entitySelectWrapper :global(.multiselect),
+.entitySelectWrapper :global(.select),
+.entitySelectWrapper :global(.nc-select) {
+	width: 100%;
+	min-height: 32px;
+	background-color: var(--color-main-background);
+}
+
+.entitySelectWrapper :global(.vs__dropdown-toggle) {
+	border-color: var(--color-primary-element);
+	border-radius: 4px;
+	padding: 2px 4px;
+	background-color: var(--color-main-background);
 }
 
 .inlineEditInput {

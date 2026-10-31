@@ -5,6 +5,8 @@ import type { Song } from '../../../src/types/song'
 
 vi.mock('@nextcloud/l10n', () => ({
 	translate: (_app: string, text: string) => text,
+	getLanguage: () => 'en',
+	isRTL: () => false,
 }))
 
 describe('SongCardView.vue', () => {
