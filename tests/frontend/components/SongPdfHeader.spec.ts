@@ -111,5 +111,18 @@ describe('SongPdfHeader.vue', () => {
 		expect(saveBtn).toBeDefined()
 		expect(saveBtn?.attributes('disabled')).toBeDefined()
 	})
+
+	it('renders accessible navigation tabs and title tooltip for responsive layouts', () => {
+		const wrapper = mount(SongPdfHeader, {
+			props: defaultProps,
+		})
+
+		const nav = wrapper.find('nav')
+		expect(nav.exists()).toBe(true)
+		expect(nav.attributes('aria-label')).toBe('PDF edit modes')
+
+		const titleSpan = wrapper.find('span[title="Autumn Leaves"]')
+		expect(titleSpan.exists()).toBe(true)
+	})
 })
 
