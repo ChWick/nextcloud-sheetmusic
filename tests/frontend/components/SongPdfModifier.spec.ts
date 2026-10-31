@@ -693,6 +693,72 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		expect(cropBox.height).toBeCloseTo(841.89 * 0.8, 1)
 	})
 
+	it('supports rotating 180° first and then cropping, applying correct CropBox', async () => {
+		const wrapper = mount(SongPdfModifier, {
+			props: {
+				song: mockSong,
+				libraryId: 1,
+			},
+		})
+
+		await flushPromises()
+
+		// 1. Rotate page 1 by 180° (click CW twice)
+		const rotateCwBtn = wrapper.findAll('button').find((b) => b.attributes('title')?.includes('Rotate page 90° CW'))
+		expect(rotateCwBtn).toBeDefined()
+		await rotateCwBtn?.trigger('click')
+		await flushPromises()
+		await rotateCwBtn?.trigger('click')
+		await flushPromises()
+
+		// 2. Switch to Crop mode
+		const cropTab = wrapper.findAll('button').find((b) => b.text().includes('Crop Pages'))
+		await cropTab?.trigger('click')
+		await flushPromises()
+
+		// 3. Open Crop modal for page 1
+		const page1CropBtn = wrapper.findAll('button').find((b) => b.attributes('title')?.includes('Crop page 1'))
+		expect(page1CropBtn).toBeDefined()
+		await page1CropBtn?.trigger('click')
+		await flushPromises()
+
+		const cropModal = wrapper.findComponent({ name: 'SongPdfCropModal' })
+		expect(cropModal.exists()).toBe(true)
+		expect(cropModal.props('rotation')).toBe(180)
+
+		// Apply crop with top half (crop: left: 0, top: 0, width: 1, height: 0.5)
+		cropModal.vm.$emit('apply', { left: 0, top: 0, width: 1, height: 0.5 }, 'current')
+		await flushPromises()
+
+		// 4. Save modifications
+		const saveBtn = wrapper.findAll('button').find((b) => b.text().includes('Save Crops') || b.text().includes('Save Changes'))
+		expect(saveBtn).toBeDefined()
+		expect(saveBtn?.attributes('disabled')).toBeUndefined()
+
+		await saveBtn?.trigger('click')
+		await flushPromises()
+		await new Promise((r) => setTimeout(r, 150))
+		await flushPromises()
+
+		expect(uploadedFiles).toHaveLength(1)
+		const arrayBuffer = await uploadedFiles[0].file.arrayBuffer()
+		const savedPdf = await PDFDocument.load(arrayBuffer)
+
+		const page1 = savedPdf.getPage(0)
+		expect(page1.getRotation().angle).toBe(180)
+
+		// For 180° rotation, crop top half (top: 0, height: 0.5):
+		// x = 0 + 595.276 * (1 - 0 - 1) = 0
+		// y = 0 + 841.89 * 0 = 0
+		// width = 595.276
+		// height = 841.89 * 0.5 = 420.945
+		const cropBox = page1.getCropBox()
+		expect(cropBox.x).toBeCloseTo(0, 1)
+		expect(cropBox.y).toBeCloseTo(0, 1)
+		expect(cropBox.width).toBeCloseTo(595.28, 1)
+		expect(cropBox.height).toBeCloseTo(841.89 * 0.5, 1)
+	})
+
 	it('supports deleting a single page and saves PDF with page removed', async () => {
 		const wrapper = mount(SongPdfModifier, {
 			props: {

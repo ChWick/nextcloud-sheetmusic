@@ -150,7 +150,8 @@ async function renderThumbnails() {
 	try {
 		// Load dimensions and render Page A
 		const pdfPageA = await props.pdf.getPage(pageA.value)
-		const vpA = pdfPageA.getViewport({ scale: 1.0, rotation: rotA.value })
+		const effectiveRotA = (((pdfPageA.rotate ?? 0) + (rotA.value || 0)) % 360 + 360) % 360
+		const vpA = pdfPageA.getViewport({ scale: 1.0, rotation: effectiveRotA })
 		pageDimA.value = { width: vpA.width, height: vpA.height }
 		if (pageA.value === 1) {
 			stdDim.value = { width: vpA.width, height: vpA.height }
@@ -158,7 +159,7 @@ async function renderThumbnails() {
 
 		if (canvasARef.value) {
 			const renderScale = Math.min(1.0, 320 / Math.max(vpA.width, vpA.height))
-			const renderVpA = pdfPageA.getViewport({ scale: renderScale, rotation: rotA.value })
+			const renderVpA = pdfPageA.getViewport({ scale: renderScale, rotation: effectiveRotA })
 			const cA = cropA.value
 			if (cA && (cA.left > 0.005 || cA.top > 0.005 || cA.width < 0.995 || cA.height < 0.995)) {
 				const offCanvas = typeof document !== 'undefined' ? document.createElement('canvas') : null
@@ -197,12 +198,13 @@ async function renderThumbnails() {
 
 		// Load dimensions and render Page B
 		const pdfPageB = await props.pdf.getPage(pageB.value)
-		const vpB = pdfPageB.getViewport({ scale: 1.0, rotation: rotB.value })
+		const effectiveRotB = (((pdfPageB.rotate ?? 0) + (rotB.value || 0)) % 360 + 360) % 360
+		const vpB = pdfPageB.getViewport({ scale: 1.0, rotation: effectiveRotB })
 		pageDimB.value = { width: vpB.width, height: vpB.height }
 
 		if (canvasBRef.value) {
 			const renderScale = Math.min(1.0, 320 / Math.max(vpB.width, vpB.height))
-			const renderVpB = pdfPageB.getViewport({ scale: renderScale, rotation: rotB.value })
+			const renderVpB = pdfPageB.getViewport({ scale: renderScale, rotation: effectiveRotB })
 			const cB = cropB.value
 			if (cB && (cB.left > 0.005 || cB.top > 0.005 || cB.width < 0.995 || cB.height < 0.995)) {
 				const offCanvas = typeof document !== 'undefined' ? document.createElement('canvas') : null

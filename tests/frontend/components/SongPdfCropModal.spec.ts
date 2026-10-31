@@ -128,5 +128,37 @@ describe('SongPdfCropModal.vue (Minimal mocks component interaction)', () => {
 		await nextBtn?.trigger('click')
 		expect(wrapper.emitted('change-page')?.[1]).toEqual([3])
 	})
+
+	it('computes effective rotation taking both PDF file orientation (page.rotate) and UI rotation into account', async () => {
+		const getViewportSpy = vi.fn(() => ({ width: 400, height: 600 }))
+		const mockPdfWithRotation = {
+			getPage: vi.fn(() => Promise.resolve({
+				rotate: 180, // PDF file orientation is 180°
+				getViewport: getViewportSpy,
+				render: vi.fn(() => ({ promise: Promise.resolve() })),
+			})),
+		}
+
+		mount(SongPdfCropModal, {
+			props: {
+				open: true,
+				pageNum: 1,
+				totalPages: 1,
+				allPagesCount: 1,
+				rotation: 90, // UI rotated 90°
+				pdf: mockPdfWithRotation,
+			},
+		})
+
+		// Wait for renderPage to complete
+		await vi.waitFor(() => {
+			expect(getViewportSpy).toHaveBeenCalled()
+		})
+
+		// Net rotation should be (180 + 90) % 360 = 270°
+		expect(getViewportSpy).toHaveBeenCalledWith(
+			expect.objectContaining({ rotation: 270 }),
+		)
+	})
 })
 

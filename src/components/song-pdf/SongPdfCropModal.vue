@@ -73,12 +73,13 @@ async function renderPage() {
 	try {
 		const page = await props.pdf.getPage(props.pageNum)
 		// We use a high resolution viewport to ensure clear text when cropping
-		const unscaledViewport = page.getViewport({ scale: 1.0, rotation: props.rotation || 0 })
+		const effectiveRotation = (((page.rotate ?? 0) + (props.rotation || 0)) % 360 + 360) % 360
+		const unscaledViewport = page.getViewport({ scale: 1.0, rotation: effectiveRotation })
 		// Fit inside viewport (max width ~560px, max height ~620px)
 		const maxWidth = 560
 		const maxHeight = 620
 		const scale = Math.min(maxWidth / unscaledViewport.width, maxHeight / unscaledViewport.height, 2.0)
-		const viewport = page.getViewport({ scale, rotation: props.rotation || 0 })
+		const viewport = page.getViewport({ scale, rotation: effectiveRotation })
 
 		const canvas = canvasRef.value
 		canvas.width = Math.floor(viewport.width)

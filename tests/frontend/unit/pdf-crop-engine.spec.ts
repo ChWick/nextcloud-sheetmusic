@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { PDFDocument, rgb, degrees } from 'pdf-lib'
 import fs from 'node:fs'
 import path from 'node:path'
+import { createCanvas } from '@napi-rs/canvas'
+import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { computeCropBoxForRotation, type PageCrop } from '../../../src/components/song-pdf/crop-types'
 
 /**
@@ -203,6 +205,106 @@ describe('PDF Crop Engine (Real PDF documents & zero mocks)', () => {
 		const r270 = reloaded.getPage(3)
 		expect(r270.getRotation().angle).toBe(270)
 		expect(r270.getCropBox()).toEqual({ x: 60, y: 120, width: 100, height: 240 })
+	})
+
+	it('crops top white / bottom black PDF correctly with and without rotation, verifying resulting color', async () => {
+		async function renderPdfPageToCanvas(pdfBytes: Uint8Array, pageNum = 1) {
+			const loaded = await pdfjs.getDocument({ data: pdfBytes.slice() }).promise
+			const page = await loaded.getPage(pageNum)
+			const vp = page.getViewport({ scale: 1.0 })
+			const canvas = createCanvas(Math.floor(vp.width), Math.floor(vp.height))
+			const ctx = canvas.getContext('2d')
+			await page.render({ canvasContext: ctx, viewport: vp }).promise
+			return { canvas, ctx, vp }
+		}
+
+		// Helper to create a PDF page where top half is WHITE and bottom half is BLACK in user coordinates
+		async function createTopWhiteBottomBlackPdf(fileRotation = 0) {
+			const doc = await PDFDocument.create()
+			const page = doc.addPage([100, 100])
+			// bottom half: y 0..50 is BLACK
+			page.drawRectangle({ x: 0, y: 0, width: 100, height: 50, color: rgb(0, 0, 0) })
+			// top half: y 50..100 is WHITE
+			page.drawRectangle({ x: 0, y: 50, width: 100, height: 50, color: rgb(1, 1, 1) })
+			if (fileRotation !== 0) {
+				page.setRotation(degrees(fileRotation))
+			}
+			return await doc.save()
+		}
+
+		// 1. Without rotation (0°):
+		// On screen, top half is WHITE, bottom half is BLACK.
+		// Crop top half (top: 0, height: 0.5):
+		{
+			const rawPdf = await createTopWhiteBottomBlackPdf(0)
+			const doc = await PDFDocument.load(rawPdf)
+			const page = doc.getPage(0)
+			const crop: PageCrop = { left: 0, top: 0, width: 1, height: 0.5 }
+			const { x, y, width: origW, height: origH } = page.getCropBox()
+			const box = computeCropBoxForRotation(x, y, origW, origH, crop, 0)
+			page.setCropBox(box.x, box.y, box.width, box.height)
+			const saved = await doc.save()
+
+			const rendered = await renderPdfPageToCanvas(saved)
+			const pixel = rendered.ctx.getImageData(50, 25, 1, 1).data
+			// Should be WHITE: r=255, g=255, b=255
+			expect(pixel[0]).toBeGreaterThan(200)
+			expect(pixel[1]).toBeGreaterThan(200)
+			expect(pixel[2]).toBeGreaterThan(200)
+		}
+
+		// 2. With 180° rotation:
+		// User rotates 180° first.
+		// On screen, page is upside down: top half is BLACK, bottom half is WHITE.
+		// User crops the displayed top half (crop: top: 0, height: 0.5).
+		// Result should be BLACK!
+		{
+			const rawPdf = await createTopWhiteBottomBlackPdf(0)
+			const doc = await PDFDocument.load(rawPdf)
+			const page = doc.getPage(0)
+			page.setRotation(degrees(180))
+			const crop: PageCrop = { left: 0, top: 0, width: 1, height: 0.5 }
+			const { x, y, width: origW, height: origH } = page.getCropBox()
+			const box = computeCropBoxForRotation(x, y, origW, origH, crop, 180)
+			page.setCropBox(box.x, box.y, box.width, box.height)
+			const saved = await doc.save()
+
+			const rendered = await renderPdfPageToCanvas(saved)
+			const pixel = rendered.ctx.getImageData(50, 25, 1, 1).data
+			// Should be BLACK: r=0, g=0, b=0
+			expect(pixel[0]).toBeLessThan(50)
+			expect(pixel[1]).toBeLessThan(50)
+			expect(pixel[2]).toBeLessThan(50)
+		}
+
+		// 3. With PDF file orientation (file already rotated 180° in metadata):
+		// The file has page.rotate = 180°.
+		// In the viewer, bottom black is at top, top white is at bottom.
+		// User rotates 180° to bring it upright (netAngle = 0°).
+		// On screen, top half is now WHITE.
+		// User crops top half (crop: top: 0, height: 0.5).
+		// Result should be WHITE!
+		{
+			const rawPdf = await createTopWhiteBottomBlackPdf(180)
+			const doc = await PDFDocument.load(rawPdf)
+			const page = doc.getPage(0)
+			const currentAngle = page.getRotation().angle // 180
+			const userRotation = 180
+			const netAngle = (currentAngle + userRotation) % 360 // 0
+			page.setRotation(degrees(netAngle))
+			const crop: PageCrop = { left: 0, top: 0, width: 1, height: 0.5 }
+			const { x, y, width: origW, height: origH } = page.getCropBox()
+			const box = computeCropBoxForRotation(x, y, origW, origH, crop, netAngle)
+			page.setCropBox(box.x, box.y, box.width, box.height)
+			const saved = await doc.save()
+
+			const rendered = await renderPdfPageToCanvas(saved)
+			const pixel = rendered.ctx.getImageData(50, 25, 1, 1).data
+			// Should be WHITE: r=255, g=255, b=255
+			expect(pixel[0]).toBeGreaterThan(200)
+			expect(pixel[1]).toBeGreaterThan(200)
+			expect(pixel[2]).toBeGreaterThan(200)
+		}
 	})
 })
 
