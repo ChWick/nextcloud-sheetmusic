@@ -12,7 +12,6 @@ namespace Dav;
 use OCA\SheetMusic\Dav\SheetMusicDavPlugin;
 use OCA\SheetMusic\Db\InternalLibrary;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSqliteExporter;
-use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSqliteImporter;
 use OCA\SheetMusic\Sync\SyncClientRegistry;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
@@ -44,17 +43,19 @@ final class SheetMusicDavPluginTest extends TestCase {
 		self::assertNotNull($lib);
 		$this->library = $lib;
 
-		$this->exporter = $this->createMock(MobileSheetsSqliteExporter::class);
-		$this->importer = $this->createMock(MobileSheetsSqliteImporter::class);
 		$this->logger = new NullLogger();
 
-		$this->exporter->method('exportToFile')->willReturnCallback(
-			function ($library, string $target): void {
-				file_put_contents($target, 'SQLite format 3' . "\0" . str_repeat('x', 84));
-			},
+		$song = new \OCA\SheetMusic\Db\InternalSong(
+			id: null,
+			uuid: 'score-song-uuid',
+			libraryId: (int)$this->library->id,
+			title: 'Score Song',
+			clientId: 1,
+			createdAt: 2000,
+			updatedAt: 2000,
 		);
-		$this->exporter->method('generateHashcodes')->willReturn("path.pdf\n123\n1000\n500");
-		$this->exporter->method('hasLibraryData')->willReturn(true);
+		$createdSong = $this->songMapper->insert($song);
+		$this->attachTestFileToSong($createdSong, 'score.pdf', 1);
 
 		$this->plugin = new SheetMusicDavPlugin(
 			$this->libraryMapper,
@@ -126,7 +127,8 @@ final class SheetMusicDavPluginTest extends TestCase {
 		self::assertFalse($this->plugin->beforeMethod($request, $response));
 		self::assertSame(200, $response->getStatus());
 		self::assertSame('application/x-sqlite3', $response->getHeader('Content-Type'));
-		self::assertSame('100', $response->getHeader('Content-Length'));
+		$contentLength = (int)$response->getHeader('Content-Length');
+		self::assertGreaterThan(0, $contentLength);
 		self::assertStringStartsWith('SQLite format 3', $response->getBodyAsString());
 	}
 
@@ -137,16 +139,15 @@ final class SheetMusicDavPluginTest extends TestCase {
 		self::assertFalse($this->plugin->beforeMethod($request, $response));
 		self::assertSame(200, $response->getStatus());
 		self::assertSame('text/plain; charset=utf-8', $response->getHeader('Content-Type'));
-		self::assertSame("path.pdf\n123\n1000\n500", $response->getBodyAsString());
+		self::assertStringContainsString('score.pdf', $response->getBodyAsString());
 	}
 
 	public function testHandlePutDatabaseImportsAndReturns204(): void {
-		$this->importer->expects(self::once())
-			->method('importFromFile')
-			->with($this->library, self::isType('string'))
-			->willReturn(['songsUpdated' => 1]);
+		$tempDb = $this->tempDbPath();
+		$this->exporter->exportToFile($this->library, $tempDb);
+		$dbBytes = (string)file_get_contents($tempDb);
 
-		$request = new Request('PUT', '/files/admin/My%20Noten/mobilesheets.db', [], 'fake-db-binary');
+		$request = new Request('PUT', '/files/admin/My%20Noten/mobilesheets.db', [], $dbBytes);
 		$response = new Response();
 
 		self::assertFalse($this->plugin->beforeMethod($request, $response));
@@ -171,7 +172,7 @@ final class SheetMusicDavPluginTest extends TestCase {
 		self::assertSame([$response], RecordingSapi::$sent);
 		$body = $response->getBodyAsString();
 		self::assertStringContainsString('/remote.php/dav/files/admin/My%20Noten/mobilesheets.db', $body);
-		self::assertStringContainsString('<d:getcontentlength>100</d:getcontentlength>', $body);
+		self::assertMatchesRegularExpression('|<d:getcontentlength>[1-9][0-9]*</d:getcontentlength>|', $body);
 		self::assertStringContainsString('application/x-sqlite3', $body);
 	}
 
@@ -204,10 +205,12 @@ final class SheetMusicDavPluginTest extends TestCase {
 		], $hrefs);
 
 		$lengths = array_map(
-			static fn (\DOMNode $n) => $n->textContent,
+			static fn (\DOMNode $n) => (int)$n->textContent,
 			iterator_to_array($document->getElementsByTagNameNS('DAV:', 'getcontentlength')),
 		);
-		self::assertSame(['100', (string)strlen("path.pdf\n123\n1000\n500")], $lengths);
+		self::assertCount(2, $lengths);
+		self::assertGreaterThan(0, $lengths[0]);
+		self::assertGreaterThan(0, $lengths[1]);
 		// Only the requested properties are returned; unknown ones are reported as missing.
 		self::assertSame(0, $document->getElementsByTagNameNS('DAV:', 'getcontenttype')->length);
 		self::assertSame(2, $document->getElementsByTagNameNS('DAV:', 'quota-used-bytes')->length);
@@ -233,29 +236,18 @@ final class SheetMusicDavPluginTest extends TestCase {
 	}
 
 	public function testAfterPropfindDoesNotInjectVirtualFilesWhenLibraryIsEmpty(): void {
+		$emptyLib = $this->createTestLibrary('/EmptyNotenLib', 'admin');
 		$this->attachServer();
-		$this->exporter = $this->createMock(MobileSheetsSqliteExporter::class);
-		$this->exporter->method('hasLibraryData')->willReturn(false);
 
-		$plugin = new SheetMusicDavPlugin(
-			$this->libraryMapper,
-			$this->exporter,
-			$this->importer,
-			$this->logger,
-			$this->userSession,
-			null,
-			$this->rootFolder,
-		);
-
-		$request = new Request('PROPFIND', '/remote.php/dav/files/admin/My%20Noten', ['Depth' => '1']);
+		$request = new Request('PROPFIND', '/remote.php/dav/files/admin/EmptyNotenLib', ['Depth' => '1']);
 		$request->setBaseUrl('/remote.php/dav/');
 
 		$response = new Response();
 		$response->setStatus(207);
-		$initialBody = '<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:"><d:response><d:href>/remote.php/dav/files/admin/My%20Noten/</d:href></d:response></d:multistatus>';
+		$initialBody = '<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:"><d:response><d:href>/remote.php/dav/files/admin/EmptyNotenLib/</d:href></d:response></d:multistatus>';
 		$response->setBody($initialBody);
 
-		$plugin->afterPropfind($request, $response);
+		$this->plugin->afterPropfind($request, $response);
 
 		self::assertSame($initialBody, $response->getBodyAsString());
 	}

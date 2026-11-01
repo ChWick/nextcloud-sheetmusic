@@ -10,28 +10,44 @@ declare(strict_types=1);
 namespace Sync\MobileSheets;
 
 use OCA\SheetMusic\Db\InternalLibrary;
-use OCA\SheetMusic\Db\LibraryMapper;
-use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSqliteExporter;
-use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSqliteImporter;
+use OCA\SheetMusic\Db\InternalSong;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSyncBackend;
 use OCA\SheetMusic\Sync\SyncClientRegistry;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use Sabre\HTTP\Request;
 use Sabre\HTTP\Response;
+use TestSupport\RealMobileSheetsTestTrait;
 
 final class MobileSheetsSyncBackendTest extends TestCase {
-	private MobileSheetsSqliteExporter $exporter;
-	private MobileSheetsSqliteImporter $importer;
-	private LibraryMapper $libraryMapper;
+	use RealMobileSheetsTestTrait;
+
 	private MobileSheetsSyncBackend $backend;
 	private SyncClientRegistry $registry;
+	private InternalLibrary $library;
 
 	protected function setUp(): void {
 		parent::setUp();
-		$this->exporter = $this->createMock(MobileSheetsSqliteExporter::class);
-		$this->importer = $this->createMock(MobileSheetsSqliteImporter::class);
-		$this->libraryMapper = $this->createMock(LibraryMapper::class);
+		$this->setUpRealMobileSheetsEnvironment();
+
+		$this->library = $this->createTestLibrary('/SyncNoten', 'admin');
+		$this->dbConn->executeStatement('UPDATE *PREFIX*sheetmusic_libraries SET updated_at = 2000 WHERE id = ?', [$this->library->id]);
+		$lib = $this->libraryMapper->findModelById((int)$this->library->id);
+		self::assertNotNull($lib);
+		$this->library = $lib;
+
+		// Add a song with a PDF file so the library is populated with real data
+		$song = new InternalSong(
+			id: null,
+			uuid: 'backend-song-uuid-1',
+			libraryId: (int)$this->library->id,
+			title: 'Sync Song',
+			clientId: 1,
+			createdAt: 2000,
+			updatedAt: 2000,
+		);
+		$createdSong = $this->songMapper->insert($song);
+		$this->attachTestFileToSong($createdSong, 'sync_score.pdf', 1);
 
 		$this->backend = new MobileSheetsSyncBackend(
 			$this->exporter,
@@ -41,6 +57,11 @@ final class MobileSheetsSyncBackendTest extends TestCase {
 		);
 
 		$this->registry = new SyncClientRegistry([$this->backend]);
+	}
+
+	protected function tearDown(): void {
+		$this->tearDownRealMobileSheetsEnvironment();
+		parent::tearDown();
 	}
 
 	public function testClientTypeAndVirtualFiles(): void {
@@ -65,142 +86,104 @@ final class MobileSheetsSyncBackendTest extends TestCase {
 	}
 
 	public function testExportAndImportDelegation(): void {
-		$this->exporter->expects(self::once())
-			->method('exportToFile')
-			->with(42, '/tmp/target.db', 'admin');
+		$targetPath = $this->tempDbPath();
+		$this->backend->exportLibrary((int)$this->library->id, $targetPath, 'admin');
 
-		$this->backend->exportLibrary(42, '/tmp/target.db', 'admin');
+		self::assertFileExists($targetPath);
+		$content = (string)file_get_contents($targetPath);
+		self::assertStringStartsWith("SQLite format 3\0", $content);
 
-		$this->importer->expects(self::once())
-			->method('importFromFile')
-			->with(42, '/tmp/source.db', 'admin');
-
-		$this->backend->importLibrary(42, '/tmp/source.db', 'admin');
+		// Import the exported file back into the library
+		$this->backend->importLibrary((int)$this->library->id, $targetPath, 'admin');
+		$songs = $this->songMapper->findAllForLibrary((int)$this->library->id);
+		self::assertCount(1, $songs);
 	}
 
 	public function testVirtualFileProperties(): void {
-		$library = new InternalLibrary(id: 42, userId: 'admin', path: '/Noten', updatedAt: 1234567890);
-
-		$this->exporter->method('hasLibraryData')->willReturn(true);
-		$this->exporter->method('generateHashcodes')
-			->with($library)
-			->willReturn("file.pdf\n123\n1000\n500");
-
-		$hashProps = $this->backend->getVirtualFileProperties($library, 'mobilesheets_hashcodes.txt', 'admin');
+		$hashProps = $this->backend->getVirtualFileProperties($this->library, 'mobilesheets_hashcodes.txt', 'admin');
 		self::assertNotNull($hashProps);
 		self::assertSame('text/plain; charset=utf-8', $hashProps['contentType']);
-		self::assertSame(1234567890, $hashProps['lastModified']);
-		self::assertSame(strlen("file.pdf\n123\n1000\n500"), $hashProps['size']);
-		self::assertSame('"sm-hash-42-1234567890"', $hashProps['etag']);
+		self::assertSame($this->library->updatedAt, $hashProps['lastModified']);
+		self::assertGreaterThan(0, $hashProps['size']);
+		self::assertSame('"sm-hash-' . $this->library->id . '-2000"', $hashProps['etag']);
 
-		$this->exporter->method('exportToFile')->willReturnCallback(
-			function ($lib, string $target): void {
-				file_put_contents($target, 'SQLite format 3' . "\0" . str_repeat('x', 84));
-			},
-		);
-
-		$dbProps = $this->backend->getVirtualFileProperties($library, 'mobilesheets.db', 'admin');
+		$dbProps = $this->backend->getVirtualFileProperties($this->library, 'mobilesheets.db', 'admin');
 		self::assertNotNull($dbProps);
 		self::assertSame('application/x-sqlite3', $dbProps['contentType']);
-		self::assertSame(1234567890, $dbProps['lastModified']);
-		self::assertSame(100, $dbProps['size']);
-		self::assertSame('"sm-db-42-1234567890"', $dbProps['etag']);
+		self::assertSame($this->library->updatedAt, $dbProps['lastModified']);
+		self::assertGreaterThan(0, $dbProps['size']);
+		self::assertSame('"sm-db-' . $this->library->id . '-2000"', $dbProps['etag']);
 
-		self::assertNull($this->backend->getVirtualFileProperties($library, 'unknown.txt', 'admin'));
+		self::assertNull($this->backend->getVirtualFileProperties($this->library, 'unknown.txt', 'admin'));
 	}
 
 	public function testVirtualFilePropertiesReturnsNullWhenLibraryIsEmpty(): void {
-		$library = new InternalLibrary(id: 99, userId: 'admin', path: '/EmptyLib', updatedAt: 1234567890);
-		$this->exporter->method('hasLibraryData')->with($library)->willReturn(false);
+		$emptyLib = $this->createTestLibrary('/EmptyLibForSync', 'admin');
 
-		self::assertNull($this->backend->getVirtualFileProperties($library, 'mobilesheets.db', 'admin'));
-		self::assertNull($this->backend->getVirtualFileProperties($library, 'mobilesheets_hashcodes.txt', 'admin'));
+		self::assertNull($this->backend->getVirtualFileProperties($emptyLib, 'mobilesheets.db', 'admin'));
+		self::assertNull($this->backend->getVirtualFileProperties($emptyLib, 'mobilesheets_hashcodes.txt', 'admin'));
 	}
 
 	public function testDatabaseSizeReturnsZeroWhenExportThrows(): void {
-		$library = new InternalLibrary(id: 999, userId: 'admin', path: '/ErrorLib', updatedAt: 999999999);
-		$this->exporter->method('exportToFile')->willThrowException(new \RuntimeException('Disk full or DB export error'));
+		$invalidLib = new InternalLibrary(id: null, userId: 'admin', path: '/NoId', updatedAt: time());
 
-		$size = $this->backend->databaseSize($library);
-		self::assertSame(0, $size, 'databaseSize must return 0 when exportToFile throws an exception');
+		$size = $this->backend->databaseSize($invalidLib);
+		self::assertSame(0, $size, 'databaseSize must return 0 when library has no ID');
 	}
 
 	public function testHandleGetDatabase(): void {
-		$library = new InternalLibrary(id: 42, userId: 'admin', path: '/Noten', updatedAt: 1234567890);
-		$this->exporter->method('exportToFile')->willReturnCallback(
-			function ($lib, string $target): void {
-				file_put_contents($target, 'SQLite format 3' . "\0" . str_repeat('x', 84));
-			},
-		);
-
-		$request = new Request('GET', '/remote.php/dav/files/admin/Noten/mobilesheets.db');
+		$request = new Request('GET', '/remote.php/dav/files/admin/SyncNoten/mobilesheets.db');
 		$response = new Response();
 
-		$handled = $this->backend->handleGet($request, $response, $library, 'mobilesheets.db', false);
+		$handled = $this->backend->handleGet($request, $response, $this->library, 'mobilesheets.db', false);
 		self::assertFalse($handled);
 		self::assertSame(200, $response->getStatus());
 		self::assertSame('application/x-sqlite3', $response->getHeader('Content-Type'));
-		self::assertSame('"sm-db-42-1234567890"', $response->getHeader('ETag'));
-		self::assertSame(100, (int)$response->getHeader('Content-Length'));
+		self::assertSame('"sm-db-' . $this->library->id . '-2000"', $response->getHeader('ETag'));
+		self::assertGreaterThan(0, (int)$response->getHeader('Content-Length'));
 
 		// Test 304 Not Modified when ETag matches
-		$ifNoneMatchRequest = new Request('GET', '/remote.php/dav/files/admin/Noten/mobilesheets.db', [
-			'If-None-Match' => '"sm-db-42-1234567890"',
+		$ifNoneMatchRequest = new Request('GET', '/remote.php/dav/files/admin/SyncNoten/mobilesheets.db', [
+			'If-None-Match' => '"sm-db-' . $this->library->id . '-2000"',
 		]);
 		$notModifiedResponse = new Response();
-		$handled304 = $this->backend->handleGet($ifNoneMatchRequest, $notModifiedResponse, $library, 'mobilesheets.db', false);
+		$handled304 = $this->backend->handleGet($ifNoneMatchRequest, $notModifiedResponse, $this->library, 'mobilesheets.db', false);
 		self::assertFalse($handled304);
 		self::assertSame(304, $notModifiedResponse->getStatus());
 	}
 
 	public function testHandlePutDatabase(): void {
-		$library = new InternalLibrary(id: 42, userId: 'admin', path: '/Noten', updatedAt: 1234567890);
-		$updatedLibrary = new InternalLibrary(id: 42, userId: 'admin', path: '/Noten', updatedAt: 1234567999);
+		$targetPath = $this->tempDbPath();
+		$this->backend->exportLibrary((int)$this->library->id, $targetPath, 'admin');
+		$dbBytes = (string)file_get_contents($targetPath);
 
-		$this->importer->expects(self::once())
-			->method('importFromFile')
-			->with($library, self::isType('string'));
-
-		$this->libraryMapper->expects(self::once())
-			->method('touch')
-			->with(42);
-
-		$this->libraryMapper->expects(self::once())
-			->method('findModelById')
-			->with(42)
-			->willReturn($updatedLibrary);
-
-		$request = new Request('PUT', '/remote.php/dav/files/admin/Noten/mobilesheets.db', [], 'dummy db content');
+		$request = new Request('PUT', '/remote.php/dav/files/admin/SyncNoten/mobilesheets.db', [], $dbBytes);
 		$response = new Response();
 
-		$handled = $this->backend->handlePut($request, $response, $library, 'mobilesheets.db');
+		$handled = $this->backend->handlePut($request, $response, $this->library, 'mobilesheets.db');
 		self::assertFalse($handled);
 		self::assertSame(204, $response->getStatus());
-		self::assertSame('"sm-db-42-1234567999"', $response->getHeader('ETag'));
+		$etag = $response->getHeader('ETag');
+		self::assertNotNull($etag);
+		self::assertStringStartsWith('"sm-db-' . $this->library->id . '-', $etag);
 	}
 
 	public function testHandleGetHashcodes(): void {
-		$library = new InternalLibrary(id: 42, userId: 'admin', path: '/Noten', updatedAt: 1234567890);
-		$this->exporter->method('generateHashcodes')
-			->with($library)
-			->willReturn("file.pdf\n123\n1000\n500");
-
-		$request = new Request('GET', '/remote.php/dav/files/admin/Noten/mobilesheets_hashcodes.txt');
+		$request = new Request('GET', '/remote.php/dav/files/admin/SyncNoten/mobilesheets_hashcodes.txt');
 		$response = new Response();
 
-		$handled = $this->backend->handleGet($request, $response, $library, 'mobilesheets_hashcodes.txt', false);
-		self::assertFalse($handled); // In SabreDAV convention, false stops propagation because request was handled
+		$handled = $this->backend->handleGet($request, $response, $this->library, 'mobilesheets_hashcodes.txt', false);
+		self::assertFalse($handled);
 		self::assertSame(200, $response->getStatus());
 		self::assertSame('text/plain; charset=utf-8', $response->getHeader('Content-Type'));
-		self::assertSame("file.pdf\n123\n1000\n500", $response->getBodyAsString());
+		self::assertStringContainsString('sync_score.pdf', $response->getBodyAsString());
 	}
 
 	public function testHandlePutHashcodesAcknowledged(): void {
-		$library = new InternalLibrary(id: 42, userId: 'admin', path: '/Noten', updatedAt: 1234567890);
-		$request = new Request('PUT', '/remote.php/dav/files/admin/Noten/mobilesheets_hashcodes.txt');
+		$request = new Request('PUT', '/remote.php/dav/files/admin/SyncNoten/mobilesheets_hashcodes.txt');
 		$response = new Response();
 
-		$handled = $this->backend->handlePut($request, $response, $library, 'mobilesheets_hashcodes.txt');
+		$handled = $this->backend->handlePut($request, $response, $this->library, 'mobilesheets_hashcodes.txt');
 		self::assertFalse($handled);
 		self::assertSame(204, $response->getStatus());
 	}

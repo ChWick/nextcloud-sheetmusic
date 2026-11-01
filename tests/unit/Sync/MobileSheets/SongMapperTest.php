@@ -24,7 +24,6 @@ use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSourceType;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsYear;
 use OCA\SheetMusic\Sync\MobileSheets\SongMapper;
 use PHPUnit\Framework\TestCase;
-use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
 final class SongMapperTest extends TestCase {
@@ -314,9 +313,16 @@ final class SongMapperTest extends TestCase {
 	public function testCreateSongRejectsALibraryWithoutACreationDate(): void {
 		$databasePath = $this->songsDatabase(null);
 
+		$logger = new class extends \Psr\Log\AbstractLogger {
+			public int $errorCount = 0;
+			public function log($level, \Stringable|string $message, array $context = []): void {
+				if ($level === \Psr\Log\LogLevel::ERROR) {
+					$this->errorCount++;
+				}
+			}
+		};
+
 		try {
-			$logger = $this->createMock(LoggerInterface::class);
-			$logger->expects($this->once())->method('error');
 			$mapper = new SongMapper($logger);
 
 			$this->expectException(\RuntimeException::class);
@@ -324,6 +330,7 @@ final class SongMapperTest extends TestCase {
 			$mapper->createSong($databasePath, 'Cantata', [], [], [], []);
 		} finally {
 			unlink($databasePath);
+			self::assertSame(1, $logger->errorCount);
 		}
 	}
 
@@ -331,9 +338,16 @@ final class SongMapperTest extends TestCase {
 	public function testCreateSongRejectsALibraryWithoutLastModified(): void {
 		$databasePath = $this->songsDatabase('CreationDate', false);
 
+		$logger = new class extends \Psr\Log\AbstractLogger {
+			public int $errorCount = 0;
+			public function log($level, \Stringable|string $message, array $context = []): void {
+				if ($level === \Psr\Log\LogLevel::ERROR) {
+					$this->errorCount++;
+				}
+			}
+		};
+
 		try {
-			$logger = $this->createMock(LoggerInterface::class);
-			$logger->expects($this->once())->method('error');
 			$mapper = new SongMapper($logger);
 
 			$this->expectException(\RuntimeException::class);
@@ -341,6 +355,7 @@ final class SongMapperTest extends TestCase {
 			$mapper->createSong($databasePath, 'Cantata', [], [], [], []);
 		} finally {
 			unlink($databasePath);
+			self::assertSame(1, $logger->errorCount);
 		}
 	}
 
@@ -352,9 +367,16 @@ final class SongMapperTest extends TestCase {
 		$database->exec('CREATE TABLE Songs(Id INTEGER PRIMARY KEY, Title VARCHAR(255), SortTitle VARCHAR(255), SongId INTEGER, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
 		$database->exec('CREATE TABLE Files(Id INTEGER PRIMARY KEY, SongId INTEGER, Path VARCHAR(255))');
 
+		$logger = new class extends \Psr\Log\AbstractLogger {
+			public int $errorCount = 0;
+			public function log($level, \Stringable|string $message, array $context = []): void {
+				if ($level === \Psr\Log\LogLevel::ERROR) {
+					$this->errorCount++;
+				}
+			}
+		};
+
 		try {
-			$logger = $this->createMock(LoggerInterface::class);
-			$logger->expects($this->once())->method('error');
 			$mapper = new SongMapper($logger);
 
 			$this->expectException(\RuntimeException::class);
@@ -368,6 +390,7 @@ final class SongMapperTest extends TestCase {
 			));
 		} finally {
 			unlink($databasePath);
+			self::assertSame(1, $logger->errorCount);
 		}
 	}
 
