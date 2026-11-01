@@ -2027,4 +2027,74 @@ class MobileSheetsEndToEndSyncTest extends TestCase {
 		$this->harness->sync();
 		$this->harness->sync();
 	}
+
+	/**
+	 * Test Case:
+	 * Nextcloud library has existing user collections and a song with movements/bookmarks.
+	 * When synced to MobileSheets, the virtual/exported SQLite database must avoid Collections.Id
+	 * collisions between user collections and the automatically generated movement collection.
+	 */
+	public function testExportMovementsWithExistingCollectionsSyncsToMobileSheets(): void {
+		$this->harness->setupEmptyLibraries(folderName: 'MovementsCollectionLib', autoPaths: false);
+
+		// 1. Create two user collections in Nextcloud
+		$colSymphonies = $this->harness->ncCreateEntity('collection', 'Symphonies');
+		$colConcertos = $this->harness->ncCreateEntity('collection', 'Concertos');
+
+		// 2. Create a song in Nextcloud with a 10-page PDF and movements (bookmarks with page ranges)
+		$this->harness->ncCreateSong(
+			title: 'Symphony No. 5 in C Minor, Op. 67',
+			fileName: 'beethoven_symphony_5.pdf',
+			options: [
+				'pages' => 10,
+				'collectionIds' => [$colSymphonies],
+				'bookmarks' => [
+					['name' => 'I. Allegro con brio', 'pageNum' => 1, 'endPage' => 3],
+					['name' => 'II. Andante con moto', 'pageNum' => 4, 'endPage' => 6],
+					['name' => 'III. Scherzo. Allegro', 'pageNum' => 7, 'endPage' => 8],
+					['name' => 'IV. Allegro', 'pageNum' => 9, 'endPage' => 10],
+				],
+			],
+		);
+
+		// 3. Sync to MobileSheets client - this must succeed without Collections.Id UNIQUE constraint collision
+		$this->harness->sync();
+
+		// 4. Verify client mobilesheets.db
+		$clientCollections = $this->harness->getClientTableRows('Collections');
+		// Should have 'Symphonies', 'Concertos', and the movement collection 'Symphony No. 5 in C Minor, Op. 67'
+		self::assertCount(3, $clientCollections);
+		$collectionNames = array_column($clientCollections, 'Name');
+		self::assertContains('Symphonies', $collectionNames);
+		self::assertContains('Concertos', $collectionNames);
+		self::assertContains('Symphony No. 5 in C Minor, Op. 67', $collectionNames);
+
+		// Verify distinct IDs (no collisions)
+		$collectionIds = array_column($clientCollections, 'Id');
+		self::assertSame(count($collectionIds), count(array_unique($collectionIds)), 'Collection IDs must be unique');
+
+		// Verify Songs table: master song + 4 child movement songs
+		$clientSongs = $this->harness->getClientTableRows('Songs');
+		self::assertCount(5, $clientSongs);
+		$masterSongs = array_values(array_filter($clientSongs, static fn ($s): bool => $s['Title'] === 'Symphony No. 5 in C Minor, Op. 67'));
+		self::assertCount(1, $masterSongs);
+
+		$movementSongs = array_values(array_filter($clientSongs, static fn ($s): bool => str_contains((string)$s['Title'], 'Symphony No. 5 in C Minor, Op. 67 - ')));
+		self::assertCount(4, $movementSongs);
+
+		// Verify CollectionSong table: child movements belong to the Symphony No. 5 collection
+		$movementCol = array_values(array_filter($clientCollections, static fn ($c): bool => $c['Name'] === 'Symphony No. 5 in C Minor, Op. 67'))[0];
+		$movementColId = (int)$movementCol['Id'];
+
+		$clientCollSong = $this->harness->getClientTableRows('CollectionSong');
+		$movementCollSongEntries = array_values(array_filter($clientCollSong, static fn ($cs): bool => (int)$cs['CollectionId'] === $movementColId));
+		self::assertCount(4, $movementCollSongEntries);
+
+		// 5. Subsequent sync must remain stable and conflict-free
+		$this->harness->sync();
+		$this->harness->sync();
+
+		$clientSongsAfter = $this->harness->getClientTableRows('Songs');
+		self::assertCount(5, $clientSongsAfter);
+	}
 }

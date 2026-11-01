@@ -53,6 +53,9 @@ class MobileSheetsEntityMerger {
 
 			while ($row = $rowsStmt->fetch()) {
 				$clientId = (int)$row['Id'];
+				if ($tableName === 'Collections' && $syncMeta->isMovementCollection($clientId)) {
+					continue;
+				}
 				$name = trim((string)($row[$nameCol] ?? ''));
 				if ($name === '') {
 					continue;

@@ -537,6 +537,9 @@ class MobileSheetsSqliteExporter {
 				$db->exec("DELETE FROM _nc_sync_metadata WHERE entity_type = 'file' AND client_id NOT IN (SELECT Id FROM Files)");
 			}
 			$db->exec("DELETE FROM _nc_sync_metadata WHERE entity_type = 'song_movement' AND client_id NOT IN (SELECT Id FROM Songs)");
+			if (MobileSheetsTableHelper::tableExists($db, 'Collections')) {
+				$db->exec("DELETE FROM _nc_sync_metadata WHERE entity_type = 'movement_collection' AND client_id NOT IN (SELECT Id FROM Collections)");
+			}
 		}
 	}
 
@@ -609,7 +612,7 @@ class MobileSheetsSqliteExporter {
 			// 2. Option B: Export child songs for movements if file and songs table exist
 			if ($hasSongsTable && $hasFilesTable && $firstFile !== null && !empty($webdavPath)) {
 				$collectionId = ($hasCollectionsTable && $hasCollectionSongTable)
-					? $this->getOrCreateMovementCollection($db, $song, $existingCollCols, $usedCollIds, $nextCollId)
+					? $this->getOrCreateMovementCollection($db, $song, $existingCollCols, $usedCollIds, $nextCollId, $metaStmt)
 					: null;
 
 				$this->exportChildMovements(
@@ -642,6 +645,9 @@ class MobileSheetsSqliteExporter {
 		array $bookmarks,
 		array $existingBmCols,
 	): void {
+		$del = $db->prepare('DELETE FROM Bookmarks WHERE SongId = :songId');
+		$del->execute([':songId' => $songClientId]);
+
 		foreach ($bookmarks as $bm) {
 			$candidateValues = [
 				'songid' => $songClientId,
@@ -664,12 +670,30 @@ class MobileSheetsSqliteExporter {
 		array $existingCollCols,
 		array &$usedCollIds,
 		int &$nextCollId,
+		?\PDOStatement $metaStmt = null,
 	): int {
 		$checkColl = $db->prepare('SELECT Id FROM Collections WHERE Name = :name LIMIT 1');
 		$checkColl->execute([':name' => $song->title]);
 		$existingCollId = $checkColl->fetchColumn();
 		if ($existingCollId !== false && $existingCollId !== null) {
-			return (int)$existingCollId;
+			$existingId = (int)$existingCollId;
+			if ($metaStmt !== null) {
+				$checkMeta = $db->prepare("SELECT 1 FROM _nc_sync_metadata WHERE entity_type = 'movement_collection' AND client_id = :client_id LIMIT 1");
+				$checkMeta->execute([':client_id' => $existingId]);
+				if ($checkMeta->fetchColumn() === false) {
+					$existingUserEntity = $this->entityMapper->findByClientId($song->libraryId, 'collection', $existingId);
+					if ($existingUserEntity === null) {
+						$metaStmt->execute([
+							':type' => 'movement_collection',
+							':uuid' => $song->uuid . ':movement_collection',
+							':client_id' => $existingId,
+							':updated_at' => $song->updatedAt,
+							':extra_json' => json_encode(['parent_uuid' => $song->uuid, 'parent_id' => $song->id], JSON_THROW_ON_ERROR),
+						]);
+					}
+				}
+			}
+			return $existingId;
 		}
 
 		$newCollId = MobileSheetsTableHelper::nextClientId($usedCollIds, $nextCollId, null);
@@ -683,6 +707,17 @@ class MobileSheetsSqliteExporter {
 		];
 		$collRow = MobileSheetsTableHelper::filterToExistingColumns($existingCollCols, $collCandidate);
 		MobileSheetsTableHelper::insertRow($db, 'Collections', $collRow);
+
+		if ($metaStmt !== null) {
+			$metaStmt->execute([
+				':type' => 'movement_collection',
+				':uuid' => $song->uuid . ':movement_collection',
+				':client_id' => $newCollId,
+				':updated_at' => $song->updatedAt,
+				':extra_json' => json_encode(['parent_uuid' => $song->uuid, 'parent_id' => $song->id], JSON_THROW_ON_ERROR),
+			]);
+		}
+
 		return $newCollId;
 	}
 

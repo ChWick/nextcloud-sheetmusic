@@ -391,6 +391,119 @@ final class SheetMusicDavPluginTest extends TestCase {
 		self::assertTrue($proceed);
 		self::assertFalse($userFolder->nodeExists('OtherFolder/DavSubFolder'));
 	}
+
+	public function testWebDavPropfindAndGetWithRealExporterAndMovementsAndCollections(): void {
+		// 1. Create a user collection in Nextcloud
+		$collection = new \OCA\SheetMusic\Db\InternalEntity(
+			id: null,
+			uuid: 'coll-uuid-1',
+			libraryId: (int)$this->library->id,
+			name: 'Chamber Works',
+			type: 'collection',
+			clientId: 1,
+			createdAt: 2000,
+			updatedAt: 2000,
+		);
+		$createdCollection = $this->entityMapper->insert($collection);
+
+		// 2. Create a song with a file and movements
+		$song = new \OCA\SheetMusic\Db\InternalSong(
+			id: null,
+			uuid: 'song-uuid-1',
+			libraryId: (int)$this->library->id,
+			title: 'String Quartet No. 14',
+			clientId: 1,
+			createdAt: 2000,
+			updatedAt: 2000,
+		);
+		$createdSong = $this->songMapper->insert($song);
+		$this->attachTestFileToSong($createdSong, 'quartet.pdf', 1);
+
+		$this->bookmarkMapper->setBookmarksForSong((int)$createdSong->id, [
+			['name' => 'I. Adagio', 'pageNum' => 1, 'endPage' => 2],
+			['name' => 'II. Vivace', 'pageNum' => 3, 'endPage' => 4],
+		]);
+
+		// 3. Plugin with REAL MobileSheetsSqliteExporter
+		$realExporter = new MobileSheetsSqliteExporter(
+			$this->songMapper,
+			$this->entityMapper,
+			$this->songFileMapper,
+			$this->attributeMapper,
+			$this->miscMapper,
+			$this->libraryMapper,
+			$this->pathResolver,
+			$this->rootFolder,
+			$this->userManager,
+			$this->logger,
+			null,
+			$this->bookmarkMapper,
+		);
+
+		$plugin = new SheetMusicDavPlugin(
+			$this->libraryMapper,
+			$realExporter,
+			$this->importer,
+			$this->logger,
+			$this->userSession,
+			null,
+			$this->rootFolder,
+		);
+
+		$server = new Server();
+		$server->setBaseUri('/remote.php/dav/');
+		$server->sapi = new RecordingSapi();
+		RecordingSapi::$sent = [];
+		$plugin->initialize($server);
+
+		// 4. Test WebDAV PROPFIND on mobilesheets.db
+		$propfindReq = new Request('PROPFIND', '/remote.php/dav/files/admin/My%20Noten/mobilesheets.db', ['Depth' => '0']);
+		$propfindReq->setBaseUrl('/remote.php/dav/');
+		$propfindResp = new Response();
+
+		self::assertFalse($plugin->beforeMethod($propfindReq, $propfindResp));
+		self::assertSame(207, $propfindResp->getStatus());
+		$propfindXml = $propfindResp->getBodyAsString();
+
+		// Extract getcontentlength from XML
+		$dom = new \DOMDocument();
+		self::assertTrue($dom->loadXML($propfindXml));
+		$lengths = $dom->getElementsByTagNameNS('DAV:', 'getcontentlength');
+		self::assertSame(1, $lengths->length);
+		$lengthValue = (int)$lengths->item(0)->textContent;
+		self::assertGreaterThan(0, $lengthValue, 'mobilesheets.db size in PROPFIND must be > 0 bytes');
+
+		// 5. Test WebDAV GET on mobilesheets.db
+		$getReq = new Request('GET', '/remote.php/dav/files/admin/My%20Noten/mobilesheets.db');
+		$getReq->setBaseUrl('/remote.php/dav/');
+		$getResp = new Response();
+
+		self::assertFalse($plugin->beforeMethod($getReq, $getResp));
+		self::assertSame(200, $getResp->getStatus());
+		self::assertSame('application/x-sqlite3', $getResp->getHeader('Content-Type'));
+		$contentLength = (int)$getResp->getHeader('Content-Length');
+		self::assertSame($lengthValue, $contentLength);
+
+		$dbStream = $getResp->getBody();
+		$dbContent = is_resource($dbStream) ? (string)stream_get_contents($dbStream) : (string)$dbStream;
+		self::assertStringStartsWith("SQLite format 3\0", $dbContent);
+
+		// 6. Verify SQLite database integrity & content
+		$tempDb = $this->tempDbPath();
+		file_put_contents($tempDb, $dbContent);
+		$pdo = new \PDO('sqlite:' . $tempDb);
+
+		// Collections: 1 user collection + 1 movement collection without ID collision
+		$collRows = $pdo->query('SELECT Id, Name FROM Collections ORDER BY Id ASC')->fetchAll(\PDO::FETCH_ASSOC);
+		self::assertCount(2, $collRows);
+		self::assertSame('Chamber Works', $collRows[0]['Name']);
+		self::assertSame('String Quartet No. 14', $collRows[1]['Name']);
+		self::assertNotSame((int)$collRows[0]['Id'], (int)$collRows[1]['Id']);
+
+		// Songs: 1 master song + 2 child movement songs
+		$songRows = $pdo->query('SELECT Id, Title FROM Songs ORDER BY Id ASC')->fetchAll(\PDO::FETCH_ASSOC);
+		self::assertCount(3, $songRows);
+	}
 }
 
 /**

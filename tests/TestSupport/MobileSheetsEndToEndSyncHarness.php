@@ -200,6 +200,8 @@ class MobileSheetsEndToEndSyncHarness {
 			$this->libraryMapper,
 			$this->rootFolder,
 			$this->integrityService,
+			null,
+			$this->bookmarkMapper,
 		);
 		$this->entityService = new EntityService(
 			$this->libraryService,
@@ -875,7 +877,7 @@ class MobileSheetsEndToEndSyncHarness {
 			keywords: $options['keywords'] ?? '',
 			custom: $options['custom'] ?? '',
 			sortTitle: $options['sortTitle'] ?? '',
-			bookmarks: [],
+			bookmarks: $options['bookmarks'] ?? [],
 			audioFiles: [],
 			opus: $options['opus'] ?? '',
 			catalogNumber: $options['catalogNumber'] ?? '',
@@ -1002,7 +1004,7 @@ class MobileSheetsEndToEndSyncHarness {
 			keywords: $options['keywords'] ?? ($existing->keywords ?? ''),
 			custom: $options['custom'] ?? ($existing->notes ?? ''),
 			sortTitle: $options['sortTitle'] ?? ($existing->sortTitle ?? ''),
-			bookmarks: [],
+			bookmarks: $options['bookmarks'] ?? [],
 			audioFiles: [],
 			opus: $options['opus'] ?? ($existing->opus ?? ''),
 			catalogNumber: $options['catalogNumber'] ?? ($existing->catalogNumber ?? ''),
@@ -1663,13 +1665,14 @@ class MobileSheetsEndToEndSyncHarness {
 			MobileSheetsTableHelper::tableExists($clientPdo, '_nc_sync_metadata'),
 			'mobilesheets.db must contain _nc_sync_metadata table'
 		);
-		$metaSongCount = (int)$clientPdo->query("SELECT COUNT(*) FROM _nc_sync_metadata WHERE entity_type = 'song'")->fetchColumn();
+		$metaSongCount = (int)$clientPdo->query("SELECT COUNT(*) FROM _nc_sync_metadata WHERE entity_type IN ('song', 'song_movement')")->fetchColumn();
 		$dbSongCount = (int)$clientPdo->query('SELECT COUNT(*) FROM Songs')->fetchColumn();
 		Assert::assertSame($dbSongCount, $metaSongCount, '_nc_sync_metadata song count must match Songs count');
 
+		$movementCount = (int)$clientPdo->query("SELECT COUNT(*) FROM _nc_sync_metadata WHERE entity_type = 'song_movement'")->fetchColumn();
 		$metaFileCount = (int)$clientPdo->query("SELECT COUNT(*) FROM _nc_sync_metadata WHERE entity_type = 'file'")->fetchColumn();
 		$dbFileCount = (int)$clientPdo->query('SELECT COUNT(*) FROM Files')->fetchColumn();
-		Assert::assertSame($dbFileCount, $metaFileCount, '_nc_sync_metadata file count must match Files count');
+		Assert::assertSame($dbFileCount, $metaFileCount + $movementCount, '_nc_sync_metadata file count + movement count must match Files count');
 
 		// 4. Verify physical files & mobilesheets_hashcodes.txt match Files table
 		$libraryFolder = $this->getLibraryFolder();

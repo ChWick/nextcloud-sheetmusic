@@ -92,6 +92,10 @@ final class MobileSheetsSyncMetadata {
 		return isset($this->byTypeAndId['song_movement'][$clientId]);
 	}
 
+	public function isMovementCollection(int $clientId): bool {
+		return isset($this->byTypeAndId['movement_collection'][$clientId]);
+	}
+
 	/**
 	 * @return array{uuid: string, client_id: ?int, updated_at: int, extra: array<string, mixed>}|null
 	 */

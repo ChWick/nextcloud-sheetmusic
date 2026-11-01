@@ -117,6 +117,14 @@ final class MobileSheetsSyncBackendTest extends TestCase {
 		self::assertNull($this->backend->getVirtualFileProperties($library, 'mobilesheets_hashcodes.txt', 'admin'));
 	}
 
+	public function testDatabaseSizeReturnsZeroWhenExportThrows(): void {
+		$library = new InternalLibrary(id: 999, userId: 'admin', path: '/ErrorLib', updatedAt: 999999999);
+		$this->exporter->method('exportToFile')->willThrowException(new \RuntimeException('Disk full or DB export error'));
+
+		$size = $this->backend->databaseSize($library);
+		self::assertSame(0, $size, 'databaseSize must return 0 when exportToFile throws an exception');
+	}
+
 	public function testHandleGetDatabase(): void {
 		$library = new InternalLibrary(id: 42, userId: 'admin', path: '/Noten', updatedAt: 1234567890);
 		$this->exporter->method('exportToFile')->willReturnCallback(
