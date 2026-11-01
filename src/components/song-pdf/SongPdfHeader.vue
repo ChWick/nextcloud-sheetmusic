@@ -480,13 +480,22 @@ const saveButtonText = computed(() => {
 	.modeTabs {
 		grid-area: tabs;
 		width: 100%;
+		max-width: 100%;
 		display: flex;
 		box-sizing: border-box;
 		margin: 0;
+		overflow-x: auto;
+		-webkit-overflow-scrolling: touch;
+		scrollbar-width: none;
+		justify-content: flex-start;
+	}
+
+	.modeTabs::-webkit-scrollbar {
+		display: none;
 	}
 
 	.tabButton {
-		flex: 1;
+		flex: 1 0 auto;
 		min-height: 38px;
 		padding: 6px 8px;
 		font-size: 12px;
@@ -514,6 +523,18 @@ const saveButtonText = computed(() => {
 		max-width: 150px;
 		font-size: 14px;
 	}
+
+	.modeTabs {
+		flex-wrap: wrap;
+		gap: 4px;
+		overflow-x: visible;
+	}
+
+	.tabButton {
+		flex: 1 1 calc(50% - 4px);
+		min-width: 120px;
+		padding: 6px 6px;
+	}
 }
 
 @media (max-width: 480px) {
@@ -528,6 +549,7 @@ const saveButtonText = computed(() => {
 	.tabButton {
 		padding: 6px 4px;
 		gap: 4px;
+		font-size: 11.5px;
 	}
 }
 </style>
