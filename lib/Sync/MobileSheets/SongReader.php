@@ -125,7 +125,7 @@ class SongReader extends AbstractDatabaseMapper {
 						(int)$row['Id'],
 						(int)$row['SongId'],
 						(string)$row['Name'],
-						(int)$row['PageNum'],
+						(int)$row['PageNum'] + 1,
 						isset($row['ShowInLibrary']) ? (int)$row['ShowInLibrary'] : 0,
 					);
 				}

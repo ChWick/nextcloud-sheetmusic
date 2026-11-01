@@ -2077,11 +2077,13 @@ class MobileSheetsEndToEndSyncTest extends TestCase {
 		self::assertCount(1, $clientSongs);
 		self::assertSame('Symphony No. 5 in C Minor, Op. 67', $clientSongs[0]['Title']);
 
-		// Verify Bookmarks table: 4 movements exported with ShowInLibrary = 1
+		// Verify Bookmarks table: 4 movements exported with ShowInLibrary = 1 (0-indexed)
 		$clientBookmarks = $this->harness->getClientTableRows('Bookmarks');
 		self::assertCount(4, $clientBookmarks);
 		$bmNames = array_column($clientBookmarks, 'Name');
 		self::assertSame(['I. Allegro con brio', 'II. Andante con moto', 'III. Scherzo. Allegro', 'IV. Allegro'], $bmNames);
+		$bmPages = array_map(static fn ($b) => (int)$b['PageNum'], $clientBookmarks);
+		self::assertSame([0, 3, 6, 8], $bmPages);
 		foreach ($clientBookmarks as $bm) {
 			self::assertSame(1, (int)$bm['ShowInLibrary']);
 		}

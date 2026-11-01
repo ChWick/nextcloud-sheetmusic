@@ -495,11 +495,13 @@ final class SheetMusicDavPluginTest extends TestCase {
 		self::assertCount(1, $songRows);
 		self::assertSame('String Quartet No. 14', $songRows[0]['Title']);
 
-		// Bookmarks: 2 bookmarks exported on master song
+		// Bookmarks: 2 bookmarks exported on master song (0-indexed in SQLite)
 		$bmRows = $pdo->query('SELECT Name, PageNum, ShowInLibrary FROM Bookmarks ORDER BY PageNum ASC')->fetchAll(\PDO::FETCH_ASSOC);
 		self::assertCount(2, $bmRows);
 		self::assertSame('I. Adagio', $bmRows[0]['Name']);
+		self::assertSame(0, (int)$bmRows[0]['PageNum']);
 		self::assertSame('II. Vivace', $bmRows[1]['Name']);
+		self::assertSame(2, (int)$bmRows[1]['PageNum']);
 		self::assertSame(1, (int)$bmRows[0]['ShowInLibrary']);
 	}
 }

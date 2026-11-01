@@ -437,19 +437,19 @@ final class MobileSheetsSqliteExporterTest extends TestCase {
 		self::assertCount(1, $songRows);
 		self::assertSame('Moonlight Sonata', $songRows[0]['Title']);
 
-		// 2. Bookmarks exported on master song with ShowInLibrary = 1
+		// 2. Bookmarks exported on master song with ShowInLibrary = 1 (0-indexed in SQLite)
 		$bmRows = $db->query('SELECT SongId, Name, PageNum, ShowInLibrary FROM Bookmarks ORDER BY PageNum ASC')->fetchAll(PDO::FETCH_ASSOC);
 		self::assertCount(3, $bmRows);
 		self::assertSame(10, (int)$bmRows[0]['SongId']);
 		self::assertSame('I. Adagio sostenuto', $bmRows[0]['Name']);
-		self::assertSame(1, (int)$bmRows[0]['PageNum']);
+		self::assertSame(0, (int)$bmRows[0]['PageNum']);
 		self::assertSame(1, (int)$bmRows[0]['ShowInLibrary']);
 
 		self::assertSame('II. Allegretto', $bmRows[1]['Name']);
-		self::assertSame(5, (int)$bmRows[1]['PageNum']);
+		self::assertSame(4, (int)$bmRows[1]['PageNum']);
 
 		self::assertSame('III. Presto agitato', $bmRows[2]['Name']);
-		self::assertSame(8, (int)$bmRows[2]['PageNum']);
+		self::assertSame(7, (int)$bmRows[2]['PageNum']);
 
 		// 3. Exactly 1 file pointing to parent PDF
 		$fileRows = $db->query('SELECT SongId, PageOrder FROM Files ORDER BY Id ASC')->fetchAll(PDO::FETCH_ASSOC);

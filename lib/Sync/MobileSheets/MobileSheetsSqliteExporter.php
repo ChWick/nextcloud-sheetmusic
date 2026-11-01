@@ -594,7 +594,7 @@ class MobileSheetsSqliteExporter {
 			$candidateValues = [
 				'songid' => $songClientId,
 				'name' => $bm->name,
-				'pagenum' => $bm->pageNum,
+				'pagenum' => max(0, $bm->pageNum - 1),
 				'showinlibrary' => $bm->showInLibrary,
 				'datecreated' => MobileSheetsTimestampUtil::secondsToMs($bm->createdAt),
 				'lastmodified' => MobileSheetsTimestampUtil::secondsToMs($bm->updatedAt),

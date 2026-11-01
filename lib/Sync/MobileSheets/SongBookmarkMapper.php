@@ -32,7 +32,7 @@ class SongBookmarkMapper extends AbstractDatabaseMapper {
 				(int)$row['Id'],
 				(int)$row['SongId'],
 				(string)$row['Name'],
-				(int)$row['PageNum'],
+				(int)$row['PageNum'] + 1,
 				isset($row['ShowInLibrary']) ? (int)$row['ShowInLibrary'] : 0,
 			);
 		}
@@ -64,7 +64,7 @@ class SongBookmarkMapper extends AbstractDatabaseMapper {
 			$this->insertRow($database, 'Bookmarks', [
 				'SongId' => $songId,
 				'Name' => $name,
-				'PageNum' => $pageNum,
+				'PageNum' => max(0, $pageNum - 1),
 				'ShowInLibrary' => $showInLibrary,
 			] + $this->dateColumns($database, 'Bookmarks'));
 		}
