@@ -102,6 +102,7 @@ class MobileSheetsSqliteExporter {
 				$this->entityExporter->exportSongEntityLinks($db, $lib->id, $validSongIds);
 				$this->exportFiles($db, $lib, $user);
 				$this->exportBookmarksAndMovements($db, $lib, $user);
+				$this->ensureSongAndPageDefaults($db);
 				$this->cleanOrphanSongReferences($db);
 
 				$db->commit();
@@ -317,7 +318,6 @@ class MobileSheetsSqliteExporter {
 
 				$insertRow = MobileSheetsTableHelper::filterToExistingColumns($existingCols, $candidateValues);
 				MobileSheetsTableHelper::insertRow($db, 'Songs', $insertRow);
-				$this->ensureSongDefaults($db, (int)$clientId);
 			} else {
 				$existingModSec = MobileSheetsTimestampUtil::extractLastModifiedSec($existingSongRow);
 				if (($existingModSec > 0 && $song->updatedAt > $existingModSec) || trim((string)($existingSongRow['Title'] ?? '')) !== $song->title) {
@@ -349,7 +349,6 @@ class MobileSheetsSqliteExporter {
 					$updateRow = MobileSheetsTableHelper::filterToExistingColumns($existingCols, $updateCandidates);
 					MobileSheetsTableHelper::updateRow($db, 'Songs', $updateRow, 'Id', $clientId);
 				}
-				$this->ensureSongDefaults($db, (int)$clientId);
 			}
 
 			if ($hasNotesTable) {
@@ -786,7 +785,6 @@ class MobileSheetsSqliteExporter {
 			];
 			$songRow = MobileSheetsTableHelper::filterToExistingColumns($existingSongCols, $songCandidate);
 			MobileSheetsTableHelper::insertRow($db, 'Songs', $songRow);
-			$this->ensureSongDefaults($db, (int)$movementClientId);
 
 			// Child File entry pointing to parent file with PageOrder
 			$movementFileId = MobileSheetsTableHelper::nextClientId($usedFileIds, $nextFileId, null);
@@ -977,40 +975,172 @@ class MobileSheetsSqliteExporter {
 		}
 	}
 
-	private function ensureSongDefaults(PDO $db, int $songClientId): void {
-		if (MobileSheetsTableHelper::tableExists($db, 'AutoScroll')) {
-			$stmt = $db->prepare('SELECT 1 FROM AutoScroll WHERE SongId = ? LIMIT 1');
-			$stmt->execute([$songClientId]);
-			if ($stmt->fetchColumn() === false) {
-				MobileSheetsTableHelper::insertRow($db, 'AutoScroll', [
-					'SongId' => $songClientId,
-					'Behavior' => 0,
-					'PauseDuration' => 8000,
-					'Speed' => 3,
-					'FixedDuration' => 1000,
-					'ScrollPercent' => 20,
-					'ScrollOnLoad' => 0,
-					'TimeBeforeScroll' => 2000,
-				]);
-			}
+	private function ensureSongAndPageDefaults(PDO $db): void {
+		if (!MobileSheetsTableHelper::tableExists($db, 'Songs')) {
+			return;
 		}
 
-		if (MobileSheetsTableHelper::tableExists($db, 'MetronomeSettings')) {
-			$stmt = $db->prepare('SELECT 1 FROM MetronomeSettings WHERE SongId = ? LIMIT 1');
-			$stmt->execute([$songClientId]);
-			if ($stmt->fetchColumn() === false) {
-				MobileSheetsTableHelper::insertRow($db, 'MetronomeSettings', [
-					'SongId' => $songClientId,
-					'Sig1' => 2,
-					'Sig2' => 0,
-					'Subdivision' => 0,
-					'SoundFX' => 0,
-					'AccentFirst' => 0,
-					'AutoStart' => 0,
-					'CountIn' => 0,
-					'NumberCount' => 1,
-					'AutoTurn' => 0,
-				]);
+		$songIds = $db->query('SELECT Id FROM Songs')->fetchAll(PDO::FETCH_COLUMN);
+		if (empty($songIds)) {
+			return;
+		}
+
+		$hasFiles = MobileSheetsTableHelper::tableExists($db, 'Files');
+		$hasAutoScroll = MobileSheetsTableHelper::tableExists($db, 'AutoScroll');
+		$hasMetronome = MobileSheetsTableHelper::tableExists($db, 'MetronomeSettings');
+		$hasLayers = MobileSheetsTableHelper::tableExists($db, 'Layers');
+		$hasCrop = MobileSheetsTableHelper::tableExists($db, 'Crop');
+		$hasZoom = MobileSheetsTableHelper::tableExists($db, 'ZoomPerPage');
+		$hasBeats = MobileSheetsTableHelper::tableExists($db, 'MetronomeBeatsPerPage');
+
+		$filesStmt = $hasFiles ? $db->prepare('SELECT PageOrder, SourceFilePageCount FROM Files WHERE SongId = ? ORDER BY Id ASC') : null;
+		$autoScrollStmt = $hasAutoScroll ? $db->prepare('SELECT 1 FROM AutoScroll WHERE SongId = ? LIMIT 1') : null;
+		$metroStmt = $hasMetronome ? $db->prepare('SELECT 1 FROM MetronomeSettings WHERE SongId = ? LIMIT 1') : null;
+		$layerStmt = $hasLayers ? $db->prepare('SELECT 1 FROM Layers WHERE SongId = ? AND Page = ? LIMIT 1') : null;
+		$cropStmt = $hasCrop ? $db->prepare('SELECT 1 FROM Crop WHERE SongId = ? AND Page = ? LIMIT 1') : null;
+		$zoomStmt = $hasZoom ? $db->prepare('SELECT 1 FROM ZoomPerPage WHERE SongId = ? AND Page = ? LIMIT 1') : null;
+		$beatsStmt = $hasBeats ? $db->prepare('SELECT 1 FROM MetronomeBeatsPerPage WHERE SongId = ? AND Page = ? LIMIT 1') : null;
+
+		$autoScrollCols = $hasAutoScroll ? MobileSheetsTableHelper::getTableColumns($db, 'AutoScroll') : [];
+		$metroCols = $hasMetronome ? MobileSheetsTableHelper::getTableColumns($db, 'MetronomeSettings') : [];
+		$layerCols = $hasLayers ? MobileSheetsTableHelper::getTableColumns($db, 'Layers') : [];
+		$cropCols = $hasCrop ? MobileSheetsTableHelper::getTableColumns($db, 'Crop') : [];
+		$zoomCols = $hasZoom ? MobileSheetsTableHelper::getTableColumns($db, 'ZoomPerPage') : [];
+		$beatsCols = $hasBeats ? MobileSheetsTableHelper::getTableColumns($db, 'MetronomeBeatsPerPage') : [];
+
+		foreach ($songIds as $songClientId) {
+			$songClientId = (int)$songClientId;
+
+			// Ensure AutoScroll
+			if ($hasAutoScroll && $autoScrollStmt !== null) {
+				$autoScrollStmt->execute([$songClientId]);
+				if ($autoScrollStmt->fetchColumn() === false) {
+					$row = MobileSheetsTableHelper::filterToExistingColumns($autoScrollCols, [
+						'SongId' => $songClientId,
+						'Behavior' => 0,
+						'PauseDuration' => 8000,
+						'Speed' => 3,
+						'FixedDuration' => 1000,
+						'ScrollPercent' => 20,
+						'ScrollOnLoad' => 0,
+						'TimeBeforeScroll' => 2000,
+					]);
+					MobileSheetsTableHelper::insertRow($db, 'AutoScroll', $row);
+				}
+			}
+
+			// Ensure MetronomeSettings
+			if ($hasMetronome && $metroStmt !== null) {
+				$metroStmt->execute([$songClientId]);
+				if ($metroStmt->fetchColumn() === false) {
+					$row = MobileSheetsTableHelper::filterToExistingColumns($metroCols, [
+						'SongId' => $songClientId,
+						'Sig1' => 2,
+						'Sig2' => 0,
+						'Subdivision' => 0,
+						'SoundFX' => 0,
+						'AccentFirst' => 0,
+						'AutoStart' => 0,
+						'CountIn' => 0,
+						'NumberCount' => 1,
+						'AutoTurn' => 0,
+					]);
+					MobileSheetsTableHelper::insertRow($db, 'MetronomeSettings', $row);
+				}
+			}
+
+			// Calculate total pages from Files
+			$totalPages = 0;
+			if ($filesStmt !== null) {
+				$filesStmt->execute([$songClientId]);
+				while ($fRow = $filesStmt->fetch(PDO::FETCH_ASSOC)) {
+					$order = trim((string)($fRow['PageOrder'] ?? ''));
+					if ($order !== '') {
+						$tokens = explode(',', $order);
+						$filePages = 0;
+						foreach ($tokens as $token) {
+							$token = trim($token);
+							if (str_contains($token, '-')) {
+								$parts = explode('-', $token);
+								$start = (int)($parts[0] ?? 1);
+								$end = (int)($parts[1] ?? $start);
+								$filePages += max(1, abs($end - $start) + 1);
+							} elseif (is_numeric($token)) {
+								$filePages++;
+							}
+						}
+						$totalPages += max(1, $filePages);
+					} else {
+						$totalPages += max(1, (int)($fRow['SourceFilePageCount'] ?? 1));
+					}
+				}
+			}
+			if ($totalPages === 0) {
+				$totalPages = 1;
+			}
+
+			// Ensure per-page records (0-indexed)
+			for ($p = 0; $p < $totalPages; $p++) {
+				if ($hasLayers && $layerStmt !== null) {
+					$layerStmt->execute([$songClientId, $p]);
+					if ($layerStmt->fetchColumn() === false) {
+						$row = MobileSheetsTableHelper::filterToExistingColumns($layerCols, [
+							'SongId' => $songClientId,
+							'Page' => $p,
+							'LayerIndex' => 0,
+							'Name' => 'Layer 1',
+							'Visible' => 1,
+						]);
+						MobileSheetsTableHelper::insertRow($db, 'Layers', $row);
+					}
+				}
+
+				if ($hasCrop && $cropStmt !== null) {
+					$cropStmt->execute([$songClientId, $p]);
+					if ($cropStmt->fetchColumn() === false) {
+						$row = MobileSheetsTableHelper::filterToExistingColumns($cropCols, [
+							'SongId' => $songClientId,
+							'Page' => $p,
+							'Left' => 0,
+							'Top' => 0,
+							'Right' => 0,
+							'Bottom' => 0,
+							'Rotation' => 0,
+						]);
+						MobileSheetsTableHelper::insertRow($db, 'Crop', $row);
+					}
+				}
+
+				if ($hasZoom && $zoomStmt !== null) {
+					$zoomStmt->execute([$songClientId, $p]);
+					if ($zoomStmt->fetchColumn() === false) {
+						$row = MobileSheetsTableHelper::filterToExistingColumns($zoomCols, [
+							'SongId' => $songClientId,
+							'Page' => $p,
+							'Zoom' => 100.0,
+							'PortPanX' => 0.0,
+							'PortPanY' => 0.0,
+							'LandZoom' => 100.0,
+							'LandPanX' => 0.0,
+							'LandPanY' => 0.0,
+							'FirstHalfY' => 0,
+							'SecondHalfY' => 0,
+						]);
+						MobileSheetsTableHelper::insertRow($db, 'ZoomPerPage', $row);
+					}
+				}
+
+				if ($hasBeats && $beatsStmt !== null) {
+					$beatsStmt->execute([$songClientId, $p]);
+					if ($beatsStmt->fetchColumn() === false) {
+						$row = MobileSheetsTableHelper::filterToExistingColumns($beatsCols, [
+							'SongId' => $songClientId,
+							'Page' => $p,
+							'BeatsPerPage' => 0,
+						]);
+						MobileSheetsTableHelper::insertRow($db, 'MetronomeBeatsPerPage', $row);
+					}
+				}
 			}
 		}
 	}

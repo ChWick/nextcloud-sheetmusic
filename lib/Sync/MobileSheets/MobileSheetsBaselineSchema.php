@@ -168,4 +168,102 @@ final class MobileSheetsBaselineSchema {
 		'CREATE INDEX year_year_id_idx ON YearsSongs(YearId)',
 		'CREATE INDEX zoom_song_id_idx ON ZoomPerPage(SongId)',
 	];
+
+	/**
+	 * Standard default source types seeded by MobileSheets when defaults are initialized.
+	 *
+	 * @var list<array{Id: int, Type: string, SortBy: int, Ascending: int, DateCreated: int, LastModified: int}>
+	 */
+	public const DEFAULT_SOURCE_TYPES = [
+		['Id' => 1, 'Type' => 'Sheet Music', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 2, 'Type' => 'Tab', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 3, 'Type' => 'Lyrics', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 4, 'Type' => 'Chords', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 5, 'Type' => 'Lead Sheet', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 6, 'Type' => 'Charts', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+	];
+
+	/**
+	 * Standard default musical keys seeded by MobileSheets when defaults are initialized.
+	 *
+	 * @var list<array{Id: int, Name: string, SortBy: int, Ascending: int, DateCreated: int, LastModified: int}>
+	 */
+	public const DEFAULT_KEYS = [
+		['Id' => 1, 'Name' => 'C', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 2, 'Name' => 'Cm', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 3, 'Name' => 'C#', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 4, 'Name' => 'C#m', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 5, 'Name' => 'Db', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 6, 'Name' => 'Dbm', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 7, 'Name' => 'D', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 8, 'Name' => 'Dm', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 9, 'Name' => 'D#', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 10, 'Name' => 'D#m', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 11, 'Name' => 'Eb', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 12, 'Name' => 'Ebm', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 13, 'Name' => 'E', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 14, 'Name' => 'Em', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 15, 'Name' => 'F', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 16, 'Name' => 'Fm', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 17, 'Name' => 'F#', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 18, 'Name' => 'F#m', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 19, 'Name' => 'Gb', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 20, 'Name' => 'Gbm', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 21, 'Name' => 'G', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 22, 'Name' => 'Gm', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 23, 'Name' => 'G#', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 24, 'Name' => 'G#m', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 25, 'Name' => 'Ab', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 26, 'Name' => 'Abm', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 27, 'Name' => 'A', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 28, 'Name' => 'Am', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 29, 'Name' => 'A#', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 30, 'Name' => 'A#m', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 31, 'Name' => 'Bb', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 32, 'Name' => 'Bbm', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 33, 'Name' => 'B', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 34, 'Name' => 'Bm', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+	];
+
+	/**
+	 * Standard default genres seeded by MobileSheets when defaults are initialized.
+	 *
+	 * @var list<array{Id: int, Type: string, SortBy: int, Ascending: int, DateCreated: int, LastModified: int}>
+	 */
+	public const DEFAULT_GENRES = [
+		['Id' => 1, 'Type' => 'Acapella', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 2, 'Type' => 'Acoustic', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 3, 'Type' => 'Alternative', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 4, 'Type' => 'Ballad', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 5, 'Type' => 'Big Band', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 6, 'Type' => 'Bluegrass', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 7, 'Type' => 'Blues', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 8, 'Type' => 'Christmas', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 9, 'Type' => 'Classical', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 10, 'Type' => 'Contemporary', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 11, 'Type' => 'Country', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 12, 'Type' => 'Dance', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 13, 'Type' => 'Death Metal', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 14, 'Type' => 'Disco', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 15, 'Type' => 'Folk', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 16, 'Type' => 'Hip Hop', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 17, 'Type' => 'Instrumental', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 18, 'Type' => 'Jazz', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 19, 'Type' => 'Mambo', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 20, 'Type' => 'Metal', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 21, 'Type' => 'Musicals', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 22, 'Type' => 'Oldies', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 23, 'Type' => 'Other', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 24, 'Type' => 'Pop', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 25, 'Type' => 'Punk', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 26, 'Type' => 'Rhythm and Blues', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 27, 'Type' => 'Ragtime', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 28, 'Type' => 'Rap', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 29, 'Type' => 'Rock', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 30, 'Type' => 'Soundtrack', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 31, 'Type' => 'Techno', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 32, 'Type' => 'Vocal', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 33, 'Type' => 'Waltz', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+		['Id' => 34, 'Type' => 'Worship', 'SortBy' => 1, 'Ascending' => 1, 'DateCreated' => 0, 'LastModified' => 0],
+	];
 }

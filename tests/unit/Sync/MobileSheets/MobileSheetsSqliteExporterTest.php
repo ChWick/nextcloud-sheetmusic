@@ -527,4 +527,79 @@ final class MobileSheetsSqliteExporterTest extends TestCase {
 		self::assertSame(3, (int)$collRows[1]['Id']);
 		self::assertSame('Moonlight Sonata', $collRows[1]['Name']);
 	}
+
+	public function testExportEnsuresLayersCropAndZoomPerPageDefaultsForSongsAndMovements(): void {
+		$library = $this->createTestLibrary('/PageDefaultsLib', 'admin');
+
+		$song = new InternalSong(
+			id: null,
+			uuid: 'page-defaults-song-uuid',
+			libraryId: (int)$library->id,
+			title: 'Multi-Page Score',
+			clientId: 1,
+			createdAt: 2000,
+			updatedAt: 2000,
+		);
+		$createdSong = $this->songMapper->insert($song);
+		$songFile = $this->attachTestFileToSong($createdSong, 'Score.pdf', 1);
+		$songFile->pageCount = 3;
+		$songFile->pageOrder = '1-3';
+		$this->songFileMapper->update($songFile);
+
+		$this->bookmarkMapper->setBookmarksForSong((int)$createdSong->id, [
+			[
+				'name' => 'Movement 1',
+				'pageNum' => 1,
+				'endPage' => 2,
+				'position' => 0,
+			],
+		]);
+
+		$this->exporter->exportToFile($library, $this->tempDbPath);
+
+		self::assertFileExists($this->tempDbPath);
+		$db = new PDO('sqlite:' . $this->tempDbPath);
+
+		$songs = $db->query('SELECT Id, Title FROM Songs ORDER BY Id ASC')->fetchAll(PDO::FETCH_ASSOC);
+		self::assertCount(2, $songs);
+		$masterId = (int)$songs[0]['Id'];
+		$childId = (int)$songs[1]['Id'];
+
+		// Master song (3 pages: 0, 1, 2)
+		$masterLayers = $db->query("SELECT Page, Name, Visible FROM Layers WHERE SongId = $masterId ORDER BY Page ASC")->fetchAll(PDO::FETCH_ASSOC);
+		self::assertCount(3, $masterLayers);
+		self::assertSame(0, (int)$masterLayers[0]['Page']);
+		self::assertSame('Layer 1', $masterLayers[0]['Name']);
+		self::assertSame(1, (int)$masterLayers[0]['Visible']);
+
+		$masterCrops = $db->query("SELECT Page, Left, Top FROM Crop WHERE SongId = $masterId ORDER BY Page ASC")->fetchAll(PDO::FETCH_ASSOC);
+		self::assertCount(3, $masterCrops);
+
+		$masterZooms = $db->query("SELECT Page, Zoom FROM ZoomPerPage WHERE SongId = $masterId ORDER BY Page ASC")->fetchAll(PDO::FETCH_ASSOC);
+		self::assertCount(3, $masterZooms);
+		self::assertEquals(100.0, (float)$masterZooms[0]['Zoom']);
+
+		$masterBeats = $db->query("SELECT Page, BeatsPerPage FROM MetronomeBeatsPerPage WHERE SongId = $masterId ORDER BY Page ASC")->fetchAll(PDO::FETCH_ASSOC);
+		self::assertCount(3, $masterBeats);
+
+		// Child movement song (2 pages: 0, 1)
+		$childLayers = $db->query("SELECT Page, Name, Visible FROM Layers WHERE SongId = $childId ORDER BY Page ASC")->fetchAll(PDO::FETCH_ASSOC);
+		self::assertCount(2, $childLayers);
+
+		$childCrops = $db->query("SELECT Page, Left, Top FROM Crop WHERE SongId = $childId ORDER BY Page ASC")->fetchAll(PDO::FETCH_ASSOC);
+		self::assertCount(2, $childCrops);
+
+		$childZooms = $db->query("SELECT Page, Zoom FROM ZoomPerPage WHERE SongId = $childId ORDER BY Page ASC")->fetchAll(PDO::FETCH_ASSOC);
+		self::assertCount(2, $childZooms);
+
+		$childBeats = $db->query("SELECT Page, BeatsPerPage FROM MetronomeBeatsPerPage WHERE SongId = $childId ORDER BY Page ASC")->fetchAll(PDO::FETCH_ASSOC);
+		self::assertCount(2, $childBeats);
+
+		// AutoScroll and MetronomeSettings exist for both
+		$autoScrollCount = (int)$db->query('SELECT count(*) FROM AutoScroll')->fetchColumn();
+		self::assertSame(2, $autoScrollCount);
+
+		$metronomeCount = (int)$db->query('SELECT count(*) FROM MetronomeSettings')->fetchColumn();
+		self::assertSame(2, $metronomeCount);
+	}
 }
