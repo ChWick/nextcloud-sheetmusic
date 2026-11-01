@@ -105,6 +105,8 @@ trait RealMobileSheetsTestTrait {
 			$this->rootFolder,
 			$this->userManager,
 			$logger,
+			null,
+			$this->bookmarkMapper,
 		);
 	}
 

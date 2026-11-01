@@ -8,6 +8,7 @@ use OCA\SheetMusic\Db\InternalEntityMapper;
 use OCA\SheetMusic\Db\InternalLibrary;
 use OCA\SheetMusic\Db\InternalMiscMapper;
 use OCA\SheetMusic\Db\InternalSongAttributeMapper;
+use OCA\SheetMusic\Db\InternalSongBookmarkMapper;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryData;
@@ -60,6 +61,7 @@ class MobileSheetsEndToEndSyncHarness {
 	public InternalEntityMapper $entityMapper;
 	public InternalSongFileMapper $songFileMapper;
 	public InternalSongAttributeMapper $attributeMapper;
+	public InternalSongBookmarkMapper $bookmarkMapper;
 	public InternalMiscMapper $miscMapper;
 	public LibraryMapper $libraryMapper;
 
@@ -99,8 +101,15 @@ class MobileSheetsEndToEndSyncHarness {
 
 		$this->entityMapper = new InternalEntityMapper($this->db);
 		$this->songFileMapper = new InternalSongFileMapper($this->db);
-		$this->songMapper = new InternalSongMapper($this->db, $this->entityMapper, $this->songFileMapper, $this->rootFolder);
 		$this->attributeMapper = new InternalSongAttributeMapper($this->db);
+		$this->bookmarkMapper = new InternalSongBookmarkMapper($this->db);
+		$this->songMapper = new InternalSongMapper(
+			$this->db,
+			$this->entityMapper,
+			$this->songFileMapper,
+			$this->rootFolder,
+			$this->bookmarkMapper,
+		);
 		$this->miscMapper = new InternalMiscMapper($this->db);
 		$this->libraryMapper = new LibraryMapper($this->db);
 
@@ -128,6 +137,8 @@ class MobileSheetsEndToEndSyncHarness {
 			$this->rootFolder,
 			$this->userManager,
 			$this->logger,
+			null,
+			$this->bookmarkMapper,
 		);
 
 		$this->reconciler = new LibraryReconciler(

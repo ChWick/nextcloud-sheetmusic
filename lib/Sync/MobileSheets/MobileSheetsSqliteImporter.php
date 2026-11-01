@@ -203,6 +203,9 @@ class MobileSheetsSqliteImporter {
 		while ($row = $songsStmt->fetch()) {
 			$songIndex++;
 			$clientId = (int)$row['Id'];
+			if ($syncMeta->isSongMovement($clientId)) {
+				continue;
+			}
 			$title = trim((string)($row['Title'] ?? ''));
 			if ($onProgress !== null) {
 				$onProgress('songs', $songIndex, $totalSongs, $title);
@@ -368,6 +371,9 @@ class MobileSheetsSqliteImporter {
 			$fileIndex++;
 			$fileClientId = (int)$row['Id'];
 			$songClientId = (int)$row['SongId'];
+			if ($syncMeta->isSongMovement($songClientId)) {
+				continue;
+			}
 			$filePath = (string)($row['Path'] ?? '');
 			if ($onProgress !== null) {
 				$onProgress('files', $fileIndex, $totalFiles, basename($filePath));

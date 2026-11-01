@@ -974,4 +974,95 @@ final class MobileSheetsSqliteImporterTest extends TestCase {
 		self::assertSame(888, $insertedFile->fileId);
 		self::assertSame(100, $insertedFile->songId);
 	}
+
+	public function testImportIgnoresChildMovementSongsAndFiles(): void {
+		$db = $this->createTestDatabase();
+		$db->exec('CREATE TABLE _nc_sync_metadata (id INTEGER PRIMARY KEY AUTOINCREMENT, entity_type TEXT NOT NULL, uuid TEXT NOT NULL, client_id INTEGER, updated_at INTEGER NOT NULL, extra_json TEXT)');
+
+		// Insert master song (id 10) and child movement song (id 11)
+		$db->exec("INSERT INTO Songs (Id, Title, SortTitle, Stars, Difficulty, Duration, Keywords, Custom, Custom2, SongId, DateCreated, LastModified) VALUES (10, 'Moonlight Sonata', 'Moonlight Sonata', 0, 0, 0, '', '', '', 10, 1000, 2000)");
+		$db->exec("INSERT INTO Songs (Id, Title, SortTitle, Stars, Difficulty, Duration, Keywords, Custom, Custom2, SongId, DateCreated, LastModified) VALUES (11, 'Moonlight Sonata - I. Adagio', 'Moonlight Sonata - I. Adagio', 0, 0, 0, '', '', '', 11, 1000, 2000)");
+
+		// Mark song 11 as song_movement
+		$db->exec("INSERT INTO _nc_sync_metadata (entity_type, uuid, client_id, updated_at, extra_json) VALUES ('song_movement', 'bm-uuid-1', 11, 2000, '{\"masterSongId\":10,\"startPage\":1,\"endPage\":4}')");
+
+		// Files for master and child
+		$db->exec("INSERT INTO Files (Id, SongId, Path, PageOrder, FileSize, LastModified, Source, Type, SourceFilePageCount, FileHash) VALUES (100, 10, '/remote.php/dav/files/admin/Noten/Sonata.pdf', '1-15', 204800, 2000, 1, 1, 15, 111)");
+		$db->exec("INSERT INTO Files (Id, SongId, Path, PageOrder, FileSize, LastModified, Source, Type, SourceFilePageCount, FileHash) VALUES (101, 11, '/remote.php/dav/files/admin/Noten/Sonata.pdf', '1-4', 204800, 2000, 1, 1, 15, 111)");
+
+		$library = new InternalLibrary(id: 1, userId: 'admin', path: 'Noten');
+
+		$createdSongs = [];
+		$songMapper = $this->createMock(InternalSongMapper::class);
+		$songMapper->method('findByClientId')->willReturn(null);
+		$songMapper->method('findByTitle')->willReturn(null);
+		$songMapper->method('insert')->willReturnCallback(function (InternalSong $s) use (&$createdSongs) {
+			$s->id = count($createdSongs) + 1;
+			$createdSongs[] = $s;
+			return $s;
+		});
+		$songMapper->method('findAllForLibrary')->willReturnCallback(function () use (&$createdSongs) {
+			return $createdSongs;
+		});
+
+		$entityMapper = $this->createMock(InternalEntityMapper::class);
+		$entityMapper->method('findAllForLibrary')->willReturn([]);
+
+		$createdFiles = [];
+		$songFileMapper = $this->createMock(InternalSongFileMapper::class);
+		$songFileMapper->method('findByUuid')->willReturn(null);
+		$songFileMapper->method('findAllForSong')->willReturn([]);
+		$songFileMapper->method('findByClientId')->willReturn(null);
+		$songFileMapper->method('insert')->willReturnCallback(function (InternalSongFile $file) use (&$createdFiles) {
+			$file->id = count($createdFiles) + 1;
+			$createdFiles[] = $file;
+			return $file;
+		});
+
+		$attributeMapper = $this->createMock(InternalSongAttributeMapper::class);
+		$miscMapper = $this->createMock(InternalMiscMapper::class);
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('admin');
+		$userManager = $this->createMock(IUserManager::class);
+		$userManager->method('get')->with('admin')->willReturn($user);
+
+		$fileNode = $this->createMock(File::class);
+		$fileNode->method('getId')->willReturn(777);
+
+		$userFolder = $this->createMock(IUserFolder::class);
+		$userFolder->method('getPath')->willReturn('/admin/files');
+		$userFolder->method('nodeExists')->with('Noten/Sonata.pdf')->willReturn(true);
+		$userFolder->method('get')->with('Noten/Sonata.pdf')->willReturn($fileNode);
+
+		$rootFolder = $this->createMock(IRootFolder::class);
+		$rootFolder->method('getUserFolder')->with('admin')->willReturn($userFolder);
+
+		$pathResolver = new MobileSheetsPathResolver($rootFolder);
+
+		$importer = new MobileSheetsSqliteImporter(
+			$songMapper,
+			$entityMapper,
+			$songFileMapper,
+			$attributeMapper,
+			$miscMapper,
+			$libraryMapper,
+			$pathResolver,
+			$rootFolder,
+			$userManager,
+			new NullLogger(),
+		);
+
+		$importer->importFromFile($library, $this->tempDbPath);
+
+		// Verify only 1 song created (the master song), child movement song was skipped
+		self::assertCount(1, $createdSongs);
+		self::assertSame('Moonlight Sonata', $createdSongs[0]->title);
+		self::assertSame(10, $createdSongs[0]->clientId);
+
+		// Verify only 1 file created, child movement file was skipped
+		self::assertCount(1, $createdFiles);
+		self::assertSame(100, $createdFiles[0]->clientId);
+	}
 }

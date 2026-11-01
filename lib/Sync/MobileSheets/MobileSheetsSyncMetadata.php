@@ -88,6 +88,17 @@ final class MobileSheetsSyncMetadata {
 		return $this->byTypeAndId['song'][$clientId] ?? null;
 	}
 
+	public function isSongMovement(int $clientId): bool {
+		return isset($this->byTypeAndId['song_movement'][$clientId]);
+	}
+
+	/**
+	 * @return array{uuid: string, client_id: ?int, updated_at: int, extra: array<string, mixed>}|null
+	 */
+	public function getMovementMeta(int $clientId): ?array {
+		return $this->byTypeAndId['song_movement'][$clientId] ?? null;
+	}
+
 	/**
 	 * Find file metadata by client ID.
 	 *

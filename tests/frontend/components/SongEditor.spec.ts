@@ -617,7 +617,7 @@ describe('SongEditor.vue', () => {
 			custom2: 'No. 2',
 			notes: [{ note: 'Practice slowly', title: 'Practice' }],
 			tempos: [120],
-			bookmarks: [{ name: 'Coda', pageNum: 8 }],
+			bookmarks: [{ name: 'Coda', pageNum: 8, endPage: null }],
 			audioFiles: [{ title: 'Backing', file: 'backing.mp3' }],
 		}))
 		expect(axios.post).toHaveBeenCalledTimes(1)

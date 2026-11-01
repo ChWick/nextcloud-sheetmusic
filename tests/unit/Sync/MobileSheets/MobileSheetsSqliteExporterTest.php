@@ -15,6 +15,8 @@ use OCA\SheetMusic\Db\InternalLibrary;
 use OCA\SheetMusic\Db\InternalMiscMapper;
 use OCA\SheetMusic\Db\InternalSong;
 use OCA\SheetMusic\Db\InternalSongAttributeMapper;
+use OCA\SheetMusic\Db\InternalSongBookmark;
+use OCA\SheetMusic\Db\InternalSongBookmarkMapper;
 use OCA\SheetMusic\Db\InternalSongFile;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
@@ -698,5 +700,134 @@ final class MobileSheetsSqliteExporterTest extends TestCase {
 		self::assertCount(1, $songRows);
 		self::assertSame(10, (int)$songRows[0]['Id']);
 		self::assertSame('Has File', $songRows[0]['Title']);
+	}
+
+	public function testExportMovementsAsChildSongsAndBookmarksOptionB(): void {
+		$library = new InternalLibrary(id: 1, userId: 'user1', path: 'SheetMusic');
+		$songMapper = $this->createMock(InternalSongMapper::class);
+		$entityMapper = $this->createMock(InternalEntityMapper::class);
+		$songFileMapper = $this->createMock(InternalSongFileMapper::class);
+		$attributeMapper = $this->createMock(InternalSongAttributeMapper::class);
+		$miscMapper = $this->createMock(InternalMiscMapper::class);
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$bookmarkMapper = $this->createMock(InternalSongBookmarkMapper::class);
+		$pathResolver = $this->createMock(MobileSheetsPathResolver::class);
+		$rootFolder = $this->createMock(IRootFolder::class);
+		$userManager = $this->createMock(IUserManager::class);
+		$logger = new NullLogger();
+
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('user1');
+		$userManager->method('get')->with('user1')->willReturn($user);
+
+		$userFolder = $this->createMock(IUserFolder::class);
+		$rootFolder->method('getUserFolder')->with('user1')->willReturn($userFolder);
+
+		$fileNode = $this->createMock(File::class);
+		$fileNode->method('getPath')->willReturn('/user1/files/SheetMusic/Sonata.pdf');
+		$userFolder->method('getById')->with(101)->willReturn([$fileNode]);
+
+		$pathResolver->method('fromInternal')->with('/user1/files/SheetMusic/Sonata.pdf', $user)->willReturn(
+			new MobileSheetsPath('/user1/files/SheetMusic/Sonata.pdf', '/remote.php/dav/files/user1/SheetMusic/Sonata.pdf')
+		);
+
+		$libraryMapper->method('resolveLibrary')->willReturn($library);
+		$attributeMapper->method('findAllForLibrary')->with(1)->willReturn([]);
+
+		$song = new InternalSong(
+			id: 1,
+			uuid: 'sonata-uuid-123',
+			libraryId: 1,
+			title: 'Moonlight Sonata',
+			clientId: 10,
+		);
+		$songMapper->method('findAllForLibrary')->willReturn([$song]);
+
+		$file = new InternalSongFile(
+			id: 1,
+			uuid: 'f-1',
+			songId: 1,
+			fileId: 101,
+			clientId: 100,
+			pageOrder: '1-15',
+			pageCount: 15,
+			type: 1,
+		);
+		$songFileMapper->method('findAllForLibrary')->with(1, false)->willReturn([$file]);
+		$miscMapper->method('getMiscSchemas')->with(1, 'mobilesheets')->willReturn([]);
+
+		$bookmarks = [
+			new InternalSongBookmark(
+				id: 1,
+				songId: 1,
+				name: 'I. Adagio sostenuto',
+				pageNum: 1,
+				endPage: 4,
+				position: 0,
+			),
+			new InternalSongBookmark(
+				id: 2,
+				songId: 1,
+				name: 'II. Allegretto',
+				pageNum: 5,
+				endPage: 7,
+				position: 1,
+			),
+			new InternalSongBookmark(
+				id: 3,
+				songId: 1,
+				name: 'III. Presto agitato',
+				pageNum: 8,
+				endPage: 15,
+				position: 2,
+			),
+		];
+		$bookmarkMapper->method('findAllForLibrary')->with(1)->willReturn([1 => $bookmarks]);
+
+		$exporter = new MobileSheetsSqliteExporter(
+			$songMapper,
+			$entityMapper,
+			$songFileMapper,
+			$attributeMapper,
+			$miscMapper,
+			$libraryMapper,
+			$pathResolver,
+			$rootFolder,
+			$userManager,
+			$logger,
+			null,
+			$bookmarkMapper,
+		);
+
+		$exporter->exportToFile($library, $this->tempDbPath);
+
+		self::assertFileExists($this->tempDbPath);
+		$db = new PDO('sqlite:' . $this->tempDbPath);
+
+		// 1. Master song + 3 child movement songs exported into Songs table
+		$songRows = $db->query('SELECT Id, Title, SortTitle FROM Songs ORDER BY Id ASC')->fetchAll(PDO::FETCH_ASSOC);
+		self::assertCount(4, $songRows);
+		self::assertSame('Moonlight Sonata', $songRows[0]['Title']);
+		self::assertSame('Moonlight Sonata - I. Adagio sostenuto', $songRows[1]['Title']);
+		self::assertSame('Moonlight Sonata - II. Allegretto', $songRows[2]['Title']);
+		self::assertSame('Moonlight Sonata - III. Presto agitato', $songRows[3]['Title']);
+
+		// 2. Bookmarks exported on master song
+		$bmRows = $db->query('SELECT SongId, Name, PageNum FROM Bookmarks ORDER BY PageNum ASC')->fetchAll(PDO::FETCH_ASSOC);
+		self::assertCount(3, $bmRows);
+		self::assertSame(10, (int)$bmRows[0]['SongId']);
+		self::assertSame('I. Adagio sostenuto', $bmRows[0]['Name']);
+		self::assertSame(1, (int)$bmRows[0]['PageNum']);
+
+		// 3. Child files pointing to parent PDF with pageOrder
+		$fileRows = $db->query('SELECT SongId, PageOrder FROM Files ORDER BY Id ASC')->fetchAll(PDO::FETCH_ASSOC);
+		self::assertCount(4, $fileRows);
+		self::assertSame('1-4', $fileRows[1]['PageOrder']);
+		self::assertSame('5-7', $fileRows[2]['PageOrder']);
+		self::assertSame('8-15', $fileRows[3]['PageOrder']);
+
+		// 4. _nc_sync_metadata tracks child movements
+		$metaRows = $db->query("SELECT entity_type, client_id, extra_json FROM _nc_sync_metadata WHERE entity_type = 'song_movement'")->fetchAll(PDO::FETCH_ASSOC);
+		self::assertCount(3, $metaRows);
 	}
 }
