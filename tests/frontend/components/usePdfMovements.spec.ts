@@ -1,8 +1,9 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { computed, ref, shallowRef } from 'vue'
 import { usePdfMovements } from '../../../src/components/song-pdf/usePdfMovements'
-import type { Song } from '../../../src/types/song'
+import type { Song, SongFile } from '../../../src/types/song'
 import { apiPost } from '../../../src/api/client'
+import { PDFDocument } from 'pdf-lib'
 
 vi.mock('../../../src/api/client', () => ({
 	apiPost: vi.fn(),
@@ -14,7 +15,11 @@ vi.mock('@nextcloud/dialogs', () => ({
 }))
 
 describe('usePdfMovements.ts', () => {
-	function setupTest(numPages = 10) {
+	function setupTest(numPages = 10, options: {
+		originalPdfBytes?: Uint8Array | null
+		targetFile?: SongFile
+		autoPdfMetadata?: boolean
+	} = {}) {
 		const song = computed<Song>(() => ({
 			id: 42,
 			title: 'Piano Sonata No. 14',
@@ -26,6 +31,10 @@ describe('usePdfMovements.ts', () => {
 		const libraryId = computed(() => 1)
 		const totalPages = ref(numPages)
 		const activePdfDoc = shallowRef<any>(null)
+		const originalPdfBytes = ref<Uint8Array | null>(options.originalPdfBytes ?? null)
+		const targetFile = computed<SongFile | undefined>(() => options.targetFile)
+		const autoPdfMetadata = computed(() => options.autoPdfMetadata ?? true)
+		const onPdfUpdated = vi.fn()
 		const onSaved = vi.fn()
 		const onCancel = vi.fn()
 
@@ -34,11 +43,26 @@ describe('usePdfMovements.ts', () => {
 			libraryId,
 			totalPages,
 			activePdfDoc,
+			originalPdfBytes,
+			targetFile,
+			autoPdfMetadata,
+			onPdfUpdated,
 			onSaved,
 			onCancel,
 		})
 
-		return { movements, song, totalPages, activePdfDoc, onSaved, onCancel }
+		return {
+			movements,
+			song,
+			totalPages,
+			activePdfDoc,
+			originalPdfBytes,
+			targetFile,
+			autoPdfMetadata,
+			onPdfUpdated,
+			onSaved,
+			onCancel,
+		}
 	}
 
 	beforeEach(() => {
@@ -163,6 +187,100 @@ describe('usePdfMovements.ts', () => {
 			}),
 			{ pathParams: { id: 42 } },
 		)
+		expect(onSaved).toHaveBeenCalledWith({ id: 42, title: 'Piano Sonata No. 14' }, 42)
+	})
+
+	it('adds a new movement from page selection', () => {
+		const { movements } = setupTest(10)
+		movements.initMovementsFromSong([])
+		movements.addMovementFromSelection(3, 7)
+
+		expect(movements.movements.value).toHaveLength(1)
+		expect(movements.movements.value[0]).toEqual({
+			id: 'mvt-1',
+			name: 'Movement 1',
+			pageNum: 3,
+			endPage: 7,
+		})
+	})
+
+	it('embeds PDF Table of Contents and uploads modified PDF when autoPdfMetadata is enabled', async () => {
+		const doc = await PDFDocument.create()
+		doc.addPage([200, 200])
+		doc.addPage([200, 200])
+		doc.addPage([200, 200])
+		const pdfBytes = await doc.save()
+
+		const { movements, onSaved, onPdfUpdated } = setupTest(3, {
+			originalPdfBytes: pdfBytes,
+			targetFile: { id: 99, path: '/library/sonata.pdf' } as unknown as SongFile,
+			autoPdfMetadata: true,
+		})
+
+		movements.initMovementsFromSong([])
+		movements.addMovementFromSelection(1, 2)
+		movements.updateMovement(movements.movements.value[0].id, { name: 'I. Allegro' })
+
+		// Mock song update
+		vi.mocked(apiPost).mockResolvedValueOnce({
+			data: { ocs: { data: { id: 42, title: 'Piano Sonata No. 14' } } },
+		} as any)
+
+		// Mock file update
+		vi.mocked(apiPost).mockResolvedValueOnce({
+			data: { ocs: { data: { id: 42, title: 'Piano Sonata No. 14 with updated PDF' } } },
+		} as any)
+
+		await movements.executeSaveMovements()
+
+		// Should have called song metadata update
+		expect(apiPost).toHaveBeenCalledWith(
+			'/api/songs/{id}',
+			expect.any(Object),
+			{ pathParams: { id: 42 } },
+		)
+
+		// Should have called file update with FormData
+		expect(apiPost).toHaveBeenCalledWith(
+			'/api/libraries/{libraryId}/songs/{id}/file/{fileId}/update',
+			expect.any(FormData),
+			{ pathParams: { libraryId: 1, id: 42, fileId: 99 } },
+		)
+
+		expect(onPdfUpdated).toHaveBeenCalled()
+		expect(onSaved).toHaveBeenCalledWith(
+			{ id: 42, title: 'Piano Sonata No. 14 with updated PDF' },
+			42,
+		)
+	})
+
+	it('does not upload or modify PDF file when autoPdfMetadata is false', async () => {
+		const doc = await PDFDocument.create()
+		doc.addPage([200, 200])
+		const pdfBytes = await doc.save()
+
+		const { movements, onSaved, onPdfUpdated } = setupTest(1, {
+			originalPdfBytes: pdfBytes,
+			targetFile: { id: 99, path: '/library/sonata.pdf' } as unknown as SongFile,
+			autoPdfMetadata: false,
+		})
+
+		movements.initMovementsFromSong([])
+		movements.addMovement()
+
+		vi.mocked(apiPost).mockResolvedValueOnce({
+			data: { ocs: { data: { id: 42, title: 'Piano Sonata No. 14' } } },
+		} as any)
+
+		await movements.executeSaveMovements()
+
+		expect(apiPost).toHaveBeenCalledTimes(1)
+		expect(apiPost).toHaveBeenCalledWith(
+			'/api/songs/{id}',
+			expect.any(Object),
+			{ pathParams: { id: 42 } },
+		)
+		expect(onPdfUpdated).not.toHaveBeenCalled()
 		expect(onSaved).toHaveBeenCalledWith({ id: 42, title: 'Piano Sonata No. 14' }, 42)
 	})
 })

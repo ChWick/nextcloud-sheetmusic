@@ -22,6 +22,7 @@ import SongPdfHeader from './SongPdfHeader.vue'
 import SongPdfToolbar from './SongPdfToolbar.vue'
 import SongPdfSaveProgress from './SongPdfSaveProgress.vue'
 import SongPdfLoadingState from './SongPdfLoadingState.vue'
+import SongPdfPageCard, { type MovementPageSummary } from './SongPdfPageCard.vue'
 import SongPdfPageGrid from './SongPdfPageGrid.vue'
 import SongPdfSplitSidebar, { getSegmentColor, type SplitSegment } from './SongPdfSplitSidebar.vue'
 import SongPdfVersionsModal from './SongPdfVersionsModal.vue'
@@ -49,6 +50,7 @@ const props = withDefaults(
 		song: Song
 		fileId?: string | number
 		libraryId: number
+		autoPdfMetadata?: boolean
 		books?: Book[]
 		composers?: Composer[]
 		collections?: Collection[]
@@ -62,6 +64,7 @@ const props = withDefaults(
 		instruments?: Instrument[]
 	}>(),
 	{
+		autoPdfMetadata: true,
 		books: () => [],
 		composers: () => [],
 		collections: () => [],
@@ -201,6 +204,7 @@ const {
 	isExtractingOutline,
 	initMovementsFromSong,
 	addMovement,
+	addMovementFromSelection,
 	removeMovement,
 	updateMovement,
 	assignPagesToMovement,
@@ -211,9 +215,32 @@ const {
 	libraryId: computed(() => props.libraryId),
 	totalPages,
 	activePdfDoc,
+	originalPdfBytes,
+	targetFile,
+	autoPdfMetadata: computed(() => props.autoPdfMetadata ?? true),
+	onPdfUpdated: async (bytes: Uint8Array) => {
+		originalPdfBytes.value = bytes
+	},
 	onSaved: (data, targetSongId) => emit('saved', data, targetSongId),
 	onCancel: () => emit('cancel'),
 })
+
+function getPageMovementsSummary(pageNum: number): MovementPageSummary[] {
+	if (activeMode.value !== 'movements') return []
+	const res: MovementPageSummary[] = []
+	movements.value.forEach((m, idx) => {
+		const start = m.pageNum
+		const end = m.endPage ?? m.pageNum
+		if (pageNum >= start && pageNum <= end) {
+			res.push({
+				id: m.id,
+				name: m.name,
+				index: idx + 1,
+			})
+		}
+	})
+	return res
+}
 
 async function yieldToBrowser() {
 	await nextTick()
@@ -986,6 +1013,7 @@ watch(() => targetFile.value?.path, () => {
 					:get-crop-indicator-text="getCropIndicatorText"
 					:get-enhance-indicator-text="getEnhanceIndicatorText"
 					:get-page-segments-summary="getPageSegmentsSummary"
+					:get-page-movements-summary="getPageMovementsSummary"
 					:remaining-pages-count="remainingPagesCount"
 					@card-click="(activeMode === 'split' || activeMode === 'movements') ? togglePageSelection($event) : undefined"
 					@open-crop-modal="openCropModal"
@@ -1014,12 +1042,20 @@ watch(() => targetFile.value?.path, () => {
 				:total-pages="totalPages"
 				:selected-pages="selectedPages"
 				:is-extracting-outline="isExtractingOutline"
+				:auto-pdf-metadata="props.autoPdfMetadata ?? true"
 				@add-movement="addMovement"
+				@add-movement-from-selection="() => {
+					if (selectedPages.length > 0) {
+						addMovementFromSelection(Math.min(...selectedPages), Math.max(...selectedPages))
+						selectedPages = []
+					}
+				}"
 				@remove-movement="removeMovement"
 				@update-movement="updateMovement"
 				@assign-selected="(id) => {
 					if (selectedPages.length > 0) {
 						assignPagesToMovement(id, Math.min(...selectedPages), Math.max(...selectedPages))
+						selectedPages = []
 					}
 				}"
 				@extract-outline="extractFromPdfOutline" />

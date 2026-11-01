@@ -70,6 +70,7 @@
       :song="openSong"
       :file-id="route.query.fileId as string"
       :library-id="selectedLibrary"
+      :auto-pdf-metadata="autoPdfMetadata"
       :composers="composers"
       :books="books"
       :collections="collections"
@@ -343,11 +344,20 @@ import SongCardView from './songs/SongCardView.vue';
 import SongSimpleListView from './songs/SongSimpleListView.vue';
 import SongPagination, { type PageSize } from './songs/SongPagination.vue';
 import { executeInlineSongUpdate } from './songs/song-inline-update';
+import type { Library } from '../types/library';
 
 // Props from parent (App.vue)
-const props = withDefaults(defineProps<{ selectedLibrary: number; standaloneCreate?: boolean }>(), {
+const props = withDefaults(defineProps<{
+  selectedLibrary: number;
+  libraries?: Library[];
+  standaloneCreate?: boolean;
+}>(), {
+  libraries: () => [],
   standaloneCreate: false,
 });
+
+const currentLibrary = computed(() => props.libraries.find(lib => lib.id === props.selectedLibrary));
+const autoPdfMetadata = computed(() => currentLibrary.value?.autoPdfMetadata ?? true);
 
 const songViewerRef = ref<InstanceType<typeof SongViewer> | null>(null);
 const songEditorRef = ref<InstanceType<typeof SongEditor> | null>(null);

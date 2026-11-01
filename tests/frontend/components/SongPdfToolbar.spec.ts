@@ -138,6 +138,22 @@ describe('SongPdfToolbar.vue', () => {
 		expect(wrapper.emitted('clear-selection')).toBeTruthy()
 	})
 
+	it('renders selection count badge and Clear Selection button in movements mode', async () => {
+		const wrapper = mount(SongPdfToolbar, {
+			props: {
+				...defaultProps,
+				activeMode: 'movements',
+				selectedPagesCount: 4,
+			},
+		})
+
+		expect(wrapper.text()).toContain('4 pages selected')
+		const clearBtn = wrapper.findAll('button').find((b) => b.text().includes('Clear Selection (4)'))
+		expect(clearBtn).toBeDefined()
+		await clearBtn?.trigger('click')
+		expect(wrapper.emitted('clear-selection')).toBeTruthy()
+	})
+
 	it('renders with toolbar accessibility role and structured groups following Nextcloud UX patterns', () => {
 		const wrapper = mount(SongPdfToolbar, {
 			props: defaultProps,

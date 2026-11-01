@@ -452,6 +452,7 @@ async function deleteLibrary() {
         <template v-if="selectedLibrary >= 0">
           <SongsView v-if="selectedView === 'songs' || selectedView === 'new-song'"
                      :selectedLibrary="selectedLibrary"
+                     :libraries="libraries"
                      :standalone-create="selectedView === 'new-song'" />
           <IntegrityView v-else-if="selectedView === 'integrity'" :selectedLibrary="selectedLibrary" />
           <TrashView v-else-if="selectedView === 'trash'" :selected-library="selectedLibrary" />

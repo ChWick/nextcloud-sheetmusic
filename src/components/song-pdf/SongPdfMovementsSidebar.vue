@@ -15,15 +15,18 @@ const props = withDefaults(
 		totalPages: number
 		selectedPages?: number[]
 		isExtractingOutline?: boolean
+		autoPdfMetadata?: boolean
 	}>(),
 	{
 		selectedPages: () => [],
 		isExtractingOutline: false,
+		autoPdfMetadata: true,
 	},
 )
 
 const emit = defineEmits<{
 	'add-movement': []
+	'add-movement-from-selection': []
 	'remove-movement': [id: string]
 	'update-movement': [id: string, updates: Partial<MovementSegment>]
 	'assign-selected': [id: string]
@@ -61,6 +64,17 @@ const selectedRangeText = computed(() => {
 					<FormatListBulleted :size="18" />
 				</template>
 				{{ isExtractingOutline ? t('sheetmusic', 'Detecting…') : t('sheetmusic', 'Import from PDF Outline') }}
+			</NcButton>
+			<NcButton
+				v-if="selectedRangeText"
+				variant="primary"
+				:title="t('sheetmusic', 'Add new movement from selected pages ({range})', { range: selectedRangeText })"
+				:aria-label="t('sheetmusic', 'Add from Selection ({range})', { range: selectedRangeText })"
+				@click="emit('add-movement-from-selection')">
+				<template #icon>
+					<PlusIcon :size="18" />
+				</template>
+				{{ t('sheetmusic', 'Add from Selection ({range})', { range: selectedRangeText }) }}
 			</NcButton>
 			<NcButton
 				variant="secondary"
@@ -136,6 +150,7 @@ const selectedRangeText = computed(() => {
 						size="small"
 						variant="secondary"
 						:title="t('sheetmusic', 'Assign selected pages ({range}) to this movement', { range: selectedRangeText })"
+						:aria-label="t('sheetmusic', 'Pages {range}', { range: selectedRangeText })"
 						@click="emit('assign-selected', mvt.id)">
 						<template #icon>
 							<ArrowRight :size="14" />
@@ -149,6 +164,9 @@ const selectedRangeText = computed(() => {
 		<!-- Helpful note -->
 		<div :class="$style.footerNote">
 			<small>{{ t('sheetmusic', 'Movements allow instant navigation across sections and sync seamlessly to MobileSheets.') }}</small>
+			<small v-if="autoPdfMetadata" :class="$style.tocSyncNote">
+				{{ t('sheetmusic', 'Table of Contents will also be stored in the PDF (library setting enabled).') }}
+			</small>
 		</div>
 	</aside>
 </template>
@@ -163,6 +181,13 @@ const selectedRangeText = computed(() => {
 	height: 100%;
 	flex-shrink: 0;
 	box-sizing: border-box;
+}
+
+.tocSyncNote {
+	margin-top: 6px;
+	display: block;
+	color: var(--color-text-maxcontrast);
+	font-style: italic;
 }
 
 .actionsHeader {

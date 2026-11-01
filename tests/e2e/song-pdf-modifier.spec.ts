@@ -448,6 +448,55 @@ test.describe('Song PDF Modifier & Cropping E2E Flow', () => {
 		await page.getByRole('button', { name: 'Add Movement' }).click()
 		await expect(page.getByPlaceholder('e.g. I. Allegro').first()).toBeVisible()
 	})
+
+	test('allows selecting PDF pages to create movements and assign page ranges', async ({ page }) => {
+		await page.goto('/#/library/1/songs?song=5&modifyPdf=1')
+
+		const movementsTab = page.getByRole('button', { name: 'Movements' })
+		await expect(movementsTab).toBeVisible()
+		await movementsTab.click()
+
+		// Verify movements sidebar is visible
+		await expect(page.getByRole('region', { name: 'Movements management sidebar' })).toBeVisible()
+
+		// Click the first page in the grid to select it
+		const firstPageCard = page.locator('[data-test="pdf-page-grid"] > div').first()
+		await expect(firstPageCard).toBeVisible()
+		await firstPageCard.click()
+
+		// Toolbar shows selection count
+		await expect(page.getByText('1 pages selected')).toBeVisible()
+
+		// Sidebar displays "Add from Selection" button
+		const addFromSelectionBtn = page.getByRole('button', { name: /Add from Selection/ })
+		await expect(addFromSelectionBtn).toBeVisible()
+		await addFromSelectionBtn.click()
+
+		// A movement card is created and movement indicator is displayed
+		await expect(page.getByPlaceholder('e.g. I. Allegro').first()).toBeVisible()
+		await expect(firstPageCard).toContainText('#1')
+
+		// Now select page 2 in grid
+		const secondPageCard = page.locator('[data-test="pdf-page-grid"] > div').nth(1)
+		await secondPageCard.click()
+		await expect(page.getByText('1 pages selected')).toBeVisible()
+
+		// Assign selected page 2 to movement 1
+		const assignBtn = page.locator('[data-test="movement-card-0"]').getByRole('button', { name: /Pages 2/ })
+		await expect(assignBtn).toBeVisible()
+		await assignBtn.click()
+
+		// Page 2 now has movement indicator #1
+		await expect(secondPageCard).toContainText('#1')
+
+		// Save movements
+		const saveBtn = page.getByRole('button', { name: 'Save Movements' })
+		await expect(saveBtn).toBeVisible()
+		await saveBtn.click()
+
+		// Toast or modal confirms saved
+		await expect(page.getByText(/Saved movements for/).first()).toBeVisible({ timeout: 10000 })
+	})
 })
 
 

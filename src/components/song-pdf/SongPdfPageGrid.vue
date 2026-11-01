@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import SongPdfPageCard, { type SplitSegmentSummary } from './SongPdfPageCard.vue'
+import SongPdfPageCard, { type MovementPageSummary, type SplitSegmentSummary } from './SongPdfPageCard.vue'
 
 withDefaults(
 	defineProps<{
 		totalPages: number
-		activeMode: 'rotate' | 'crop' | 'enhance' | 'split'
+		activeMode: 'rotate' | 'crop' | 'enhance' | 'split' | 'movements'
 		selectedPages?: number[]
 		isPageCropped: (pageNum: number) => boolean
 		isPageEnhanced: (pageNum: number) => boolean
@@ -13,6 +13,7 @@ withDefaults(
 		getCropIndicatorText: (pageNum: number) => string
 		getEnhanceIndicatorText: (pageNum: number) => string
 		getPageSegmentsSummary: (pageNum: number) => SplitSegmentSummary[]
+		getPageMovementsSummary?: (pageNum: number) => MovementPageSummary[]
 		remainingPagesCount: number
 	}>(),
 	{
@@ -48,6 +49,7 @@ const emit = defineEmits<{
 			:crop-indicator-text="getCropIndicatorText(pageNum)"
 			:enhance-indicator-text="getEnhanceIndicatorText(pageNum)"
 			:page-segments="getPageSegmentsSummary(pageNum)"
+			:page-movements="getPageMovementsSummary ? getPageMovementsSummary(pageNum) : []"
 			:total-pages="totalPages"
 			:can-delete="remainingPagesCount > 1"
 			@card-click="emit('card-click', pageNum)"

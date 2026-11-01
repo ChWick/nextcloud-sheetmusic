@@ -124,6 +124,23 @@ describe('SongPdfPageCard.vue', () => {
 		expect(wrapper.emitted('card-click')?.[0]).toEqual([1])
 	})
 
+	it('emits card-click in movements mode and displays movement pills', async () => {
+		const wrapper = mount(SongPdfPageCard, {
+			props: {
+				...defaultProps,
+				activeMode: 'movements',
+				isSelected: true,
+				pageMovements: [
+					{ id: 'mvt-1', name: 'I. Allegro', index: 1 },
+				],
+			},
+		})
+
+		expect(wrapper.text()).toContain('#1')
+		await wrapper.trigger('click')
+		expect(wrapper.emitted('card-click')?.[0]).toEqual([1])
+	})
+
 	it('shows deleted overlay and strikes through page label when deleted', () => {
 		const wrapper = mount(SongPdfPageCard, {
 			props: {

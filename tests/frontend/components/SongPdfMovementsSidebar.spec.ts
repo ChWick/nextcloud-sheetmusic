@@ -77,4 +77,30 @@ describe('SongPdfMovementsSidebar.vue', () => {
 
 		expect(wrapper.emitted('assign-selected')?.[0]).toEqual(['mvt-1'])
 	})
+
+	it('emits add-movement-from-selection when Add from Selection button is clicked', async () => {
+		const wrapper = mount(SongPdfMovementsSidebar, {
+			props: {
+				...defaultProps,
+				selectedPages: [2, 3, 4],
+			},
+		})
+
+		const addSelectionBtn = wrapper.findAll('button').find((b) => b.text().includes('Add from Selection (2–4)'))
+		expect(addSelectionBtn).toBeDefined()
+		await addSelectionBtn?.trigger('click')
+
+		expect(wrapper.emitted('add-movement-from-selection')).toBeDefined()
+	})
+
+	it('shows PDF Table of Contents library note when autoPdfMetadata is enabled', () => {
+		const wrapper = mount(SongPdfMovementsSidebar, {
+			props: {
+				...defaultProps,
+				autoPdfMetadata: true,
+			},
+		})
+
+		expect(wrapper.text()).toContain('Table of Contents will also be stored in the PDF')
+	})
 })

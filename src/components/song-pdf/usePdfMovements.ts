@@ -3,7 +3,9 @@ import { translate as t } from '@nextcloud/l10n'
 import { showError, showSuccess } from '@nextcloud/dialogs'
 import { apiPost } from '../../api/client'
 import { describeRequestFailure } from '../../utils/api'
-import type { Bookmark, LibraryData, Song } from '../../types/song'
+import { getFileName } from '../../utils/file'
+import type { Bookmark, LibraryData, Song, SongFile } from '../../types/song'
+import { embedMovementsInPdfBytes } from './pdf-outline-engine'
 
 export type MovementSegment = {
 	id: string
@@ -17,10 +19,25 @@ export function usePdfMovements(options: {
 	libraryId: ComputedRef<number> | Ref<number>
 	totalPages: Ref<number>
 	activePdfDoc: ShallowRef<any>
+	originalPdfBytes?: Ref<Uint8Array | null> | ShallowRef<Uint8Array | null>
+	targetFile?: ComputedRef<SongFile | undefined> | Ref<SongFile | undefined>
+	autoPdfMetadata?: ComputedRef<boolean> | Ref<boolean>
+	onPdfUpdated?: (bytes: Uint8Array) => Promise<void> | void
 	onSaved: (data: LibraryData, targetSongId?: number) => void
 	onCancel: () => void
 }) {
-	const { song, libraryId, totalPages, activePdfDoc, onSaved, onCancel } = options
+	const {
+		song,
+		libraryId,
+		totalPages,
+		activePdfDoc,
+		originalPdfBytes,
+		targetFile,
+		autoPdfMetadata,
+		onPdfUpdated,
+		onSaved,
+		onCancel,
+	} = options
 
 	const movements = ref<MovementSegment[]>([])
 	const isExtractingOutline = ref(false)
@@ -59,6 +76,19 @@ export function usePdfMovements(options: {
 		})
 	}
 
+	function addMovementFromSelection(startPage: number, endPage: number) {
+		movementCounter++
+		const s = Math.max(1, Math.min(startPage, endPage))
+		const total = totalPages.value > 0 ? totalPages.value : Math.max(startPage, endPage)
+		const e = Math.min(total, Math.max(startPage, endPage))
+		movements.value.push({
+			id: `mvt-${movementCounter}`,
+			name: `${t('sheetmusic', 'Movement')} ${movements.value.length + 1}`,
+			pageNum: s,
+			endPage: e,
+		})
+	}
+
 	function removeMovement(id: string) {
 		movements.value = movements.value.filter((m) => m.id !== id)
 	}
@@ -84,7 +114,10 @@ export function usePdfMovements(options: {
 	}
 
 	function assignPagesToMovement(id: string, startPage: number, endPage: number) {
-		updateMovement(id, { pageNum: startPage, endPage })
+		const s = Math.max(1, Math.min(startPage, endPage))
+		const total = totalPages.value > 0 ? totalPages.value : Math.max(startPage, endPage)
+		const e = Math.min(total, Math.max(startPage, endPage))
+		updateMovement(id, { pageNum: s, endPage: e })
 	}
 
 	async function extractFromPdfOutline(): Promise<number> {
@@ -206,12 +239,38 @@ export function usePdfMovements(options: {
 		}
 
 		try {
-			onProgress?.(70, t('sheetmusic', 'Updating song metadata…'))
+			onProgress?.(50, t('sheetmusic', 'Updating song metadata…'))
 			const response = await apiPost('/api/songs/{id}', payload, {
 				pathParams: { id: currentSong.id },
 			})
+			let data = response.data.ocs.data as LibraryData
+
+			if (autoPdfMetadata?.value !== false && originalPdfBytes?.value && targetFile?.value && /\.pdf$/i.test(targetFile.value.path)) {
+				onProgress?.(75, t('sheetmusic', 'Updating PDF Table of Contents…'))
+				const outlineItems = validMovements.map((m) => ({
+					title: m.name.trim(),
+					pageNum: m.pageNum,
+				}))
+				const updatedBytes = await embedMovementsInPdfBytes(originalPdfBytes.value, outlineItems)
+				originalPdfBytes.value = updatedBytes
+
+				onProgress?.(90, t('sheetmusic', 'Uploading PDF to server…'))
+				const fileName = getFileName(targetFile.value.path) || 'song.pdf'
+				const modifiedFile = new File([updatedBytes as Uint8Array<ArrayBuffer>], fileName, { type: 'application/pdf' })
+				const formData = new FormData()
+				formData.append('file', modifiedFile)
+
+				const uploadRes = await (apiPost as any)('/api/libraries/{libraryId}/songs/{id}/file/{fileId}/update', formData, {
+					pathParams: { libraryId: libraryId.value, id: currentSong.id, fileId: targetFile.value.id },
+				})
+				data = uploadRes.data.ocs.data as LibraryData
+
+				if (onPdfUpdated) {
+					await onPdfUpdated(updatedBytes)
+				}
+			}
+
 			onProgress?.(100, t('sheetmusic', 'Done!'))
-			const data = response.data.ocs.data as LibraryData
 			showSuccess(t('sheetmusic', 'Saved movements for "{title}".', { title: currentSong.title }))
 			onSaved(data, currentSong.id)
 		} catch (e) {
@@ -224,6 +283,7 @@ export function usePdfMovements(options: {
 		isExtractingOutline,
 		initMovementsFromSong,
 		addMovement,
+		addMovementFromSelection,
 		removeMovement,
 		updateMovement,
 		assignPagesToMovement,

@@ -11,10 +11,16 @@ export interface SplitSegmentSummary {
 	color: string
 }
 
+export interface MovementPageSummary {
+	id: string
+	name: string
+	index: number
+}
+
 const props = withDefaults(
 	defineProps<{
 		pageNum: number
-		activeMode: 'rotate' | 'crop' | 'enhance' | 'split'
+		activeMode: 'rotate' | 'crop' | 'enhance' | 'split' | 'movements'
 		isSelected?: boolean
 		isCropped?: boolean
 		isEnhanced?: boolean
@@ -23,6 +29,7 @@ const props = withDefaults(
 		cropIndicatorText?: string
 		enhanceIndicatorText?: string
 		pageSegments?: SplitSegmentSummary[]
+		pageMovements?: MovementPageSummary[]
 		totalPages: number
 		canDelete?: boolean
 	}>(),
@@ -35,6 +42,7 @@ const props = withDefaults(
 		cropIndicatorText: '',
 		enhanceIndicatorText: '',
 		pageSegments: () => [],
+		pageMovements: () => [],
 		canDelete: true,
 	},
 )
@@ -51,7 +59,7 @@ const emit = defineEmits<{
 }>()
 
 function handleCardClick() {
-	if (props.activeMode === 'split') {
+	if (props.activeMode === 'split' || props.activeMode === 'movements') {
 		emit('card-click', props.pageNum)
 	} else if (props.activeMode === 'crop' && !props.isDeleted) {
 		emit('open-crop-modal')
@@ -83,6 +91,17 @@ const formattedRotation = computed(() => `${Math.round(props.rotationDeg * 10) /
 				:style="{ backgroundColor: seg.color }"
 				:title="seg.title">
 				{{ seg.index }}
+			</span>
+		</div>
+
+		<!-- Movement indicators bar in movements mode -->
+		<div v-if="activeMode === 'movements' && pageMovements.length > 0" :class="$style.segmentPills">
+			<span
+				v-for="mvt in pageMovements"
+				:key="mvt.id"
+				:class="[$style.segmentPill, $style.movementPill]"
+				:title="mvt.name">
+				#{{ mvt.index }}
 			</span>
 		</div>
 
@@ -194,6 +213,14 @@ const formattedRotation = computed(() => `${Math.round(props.rotationDeg * 10) /
 	font-size: 10px;
 	font-weight: bold;
 	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.movementPill {
+	background-color: var(--color-primary-element);
+	width: auto;
+	min-width: 20px;
+	padding: 0 4px;
+	border-radius: 10px;
 }
 
 .canvasWrapper {

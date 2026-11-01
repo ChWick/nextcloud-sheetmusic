@@ -305,12 +305,18 @@ const emit = defineEmits<{
 		<!-- Movements Toolbar -->
 		<template v-if="activeMode === 'movements'">
 			<div :class="$style.toolbarGroup">
-				<span :class="$style.toolbarTitle">{{ t('sheetmusic', 'Movements:') }}</span>
+				<span :class="$style.toolbarTitle">
+					{{ t('sheetmusic', 'Select pages in grid to assign to movements:') }}
+				</span>
+				<span v-if="selectedPagesCount > 0" :class="$style.selectionBadge">
+					{{ t('sheetmusic', '{count} pages selected', { count: selectedPagesCount }) }}
+				</span>
 				<NcButton
 					v-if="selectedPagesCount > 0"
 					size="small"
-					variant="secondary"
-					:title="t('sheetmusic', 'Clear selected pages')"
+					variant="tertiary"
+					:title="t('sheetmusic', 'Clear Selection ({count})', { count: selectedPagesCount })"
+					:aria-label="t('sheetmusic', 'Clear Selection ({count})', { count: selectedPagesCount })"
 					@click="emit('clear-selection')">
 					<template #icon>
 						<CloseIcon :size="16" />
