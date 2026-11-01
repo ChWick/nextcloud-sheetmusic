@@ -11,6 +11,8 @@ import DeleteRestore from 'vue-material-design-icons/DeleteRestore.vue'
 import CropIcon from 'vue-material-design-icons/Crop.vue'
 import Tune from 'vue-material-design-icons/Tune.vue'
 import History from 'vue-material-design-icons/History.vue'
+import RestoreIcon from 'vue-material-design-icons/Restore.vue'
+import CloseIcon from 'vue-material-design-icons/Close.vue'
 
 defineProps<{
 	activeMode: 'rotate' | 'crop' | 'enhance' | 'split'
@@ -118,7 +120,10 @@ const emit = defineEmits<{
 					:title="t('sheetmusic', 'Reset all page rotations')"
 					:aria-label="t('sheetmusic', 'Reset all page rotations')"
 					@click="emit('reset-rotations')">
-					{{ t('sheetmusic', 'Reset All') }}
+					<template #icon>
+						<RestoreIcon :size="16" />
+					</template>
+					<span :class="$style.btnText">{{ t('sheetmusic', 'Reset All') }}</span>
 				</NcButton>
 				<NcButton
 					v-if="hasAnyDeletion"
@@ -130,7 +135,7 @@ const emit = defineEmits<{
 					<template #icon>
 						<DeleteRestore :size="16" />
 					</template>
-					{{ t('sheetmusic', 'Restore Deleted ({count})', { count: deletedPagesCount }) }}
+					<span :class="$style.btnText">{{ t('sheetmusic', 'Restore Deleted ({count})', { count: deletedPagesCount }) }}</span>
 				</NcButton>
 			</div>
 		</template>
@@ -190,7 +195,10 @@ const emit = defineEmits<{
 					:title="t('sheetmusic', 'Reset all page crops to full page')"
 					:aria-label="t('sheetmusic', 'Reset all page crops to full page')"
 					@click="emit('reset-all-crops')">
-					{{ t('sheetmusic', 'Reset All Crops') }}
+					<template #icon>
+						<RestoreIcon :size="16" />
+					</template>
+					<span :class="$style.btnText">{{ t('sheetmusic', 'Reset All Crops') }}</span>
 				</NcButton>
 				<NcButton
 					v-if="hasAnyDeletion"
@@ -202,7 +210,7 @@ const emit = defineEmits<{
 					<template #icon>
 						<DeleteRestore :size="16" />
 					</template>
-					{{ t('sheetmusic', 'Restore Deleted ({count})', { count: deletedPagesCount }) }}
+					<span :class="$style.btnText">{{ t('sheetmusic', 'Restore Deleted ({count})', { count: deletedPagesCount }) }}</span>
 				</NcButton>
 			</div>
 		</template>
@@ -250,7 +258,10 @@ const emit = defineEmits<{
 					:title="t('sheetmusic', 'Reset all page enhancements')"
 					:aria-label="t('sheetmusic', 'Reset all page enhancements')"
 					@click="emit('reset-all-enhancements')">
-					{{ t('sheetmusic', 'Reset All Enhancements') }}
+					<template #icon>
+						<RestoreIcon :size="16" />
+					</template>
+					<span :class="$style.btnText">{{ t('sheetmusic', 'Reset All Enhancements') }}</span>
 				</NcButton>
 				<NcButton
 					v-if="hasAnyDeletion"
@@ -262,7 +273,7 @@ const emit = defineEmits<{
 					<template #icon>
 						<DeleteRestore :size="16" />
 					</template>
-					{{ t('sheetmusic', 'Restore Deleted ({count})', { count: deletedPagesCount }) }}
+					<span :class="$style.btnText">{{ t('sheetmusic', 'Restore Deleted ({count})', { count: deletedPagesCount }) }}</span>
 				</NcButton>
 			</div>
 		</template>
@@ -283,7 +294,10 @@ const emit = defineEmits<{
 					:title="t('sheetmusic', 'Clear selection')"
 					:aria-label="t('sheetmusic', 'Clear selection')"
 					@click="emit('clear-selection')">
-					{{ t('sheetmusic', 'Clear Selection') }}
+					<template #icon>
+						<CloseIcon :size="16" />
+					</template>
+					<span :class="$style.btnText">{{ t('sheetmusic', 'Clear Selection') }}</span>
 				</NcButton>
 			</div>
 		</template>
@@ -361,13 +375,43 @@ const emit = defineEmits<{
 	}
 }
 
-@media (max-width: 600px) {
+@media (max-width: 768px) {
+	.toolbar {
+		padding: 6px 10px;
+		gap: 6px;
+		flex-direction: row;
+		flex-wrap: wrap;
+	}
+
 	.toolbarTitle {
 		display: none;
 	}
 
+	/* Flattens the group wrappers so buttons flow continuously horizontally */
 	.toolbarGroup {
-		gap: 4px;
+		display: contents;
+	}
+
+	.toolbarGroupEnd {
+		margin-left: 0;
+	}
+
+	/* On mobile screens, hide button text so buttons flow horizontally as compact icon buttons until space runs out */
+	.btnText {
+		display: none;
+	}
+
+	.toolbar :global(.button-vue__text) {
+		display: none;
+	}
+
+	.toolbar :global(.button-vue) {
+		--button-padding: var(--button-radius, 8px);
+		line-height: 1;
+		width: var(--button-size, 34px);
+		min-width: var(--button-size, 34px);
+		padding: 0;
+		justify-content: center;
 	}
 }
 </style>

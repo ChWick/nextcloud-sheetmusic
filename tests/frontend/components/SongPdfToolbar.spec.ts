@@ -147,5 +147,26 @@ describe('SongPdfToolbar.vue', () => {
 		expect(toolbarEl.exists()).toBe(true)
 		expect(toolbarEl.attributes('aria-label')).toBe('PDF modifier toolbar')
 	})
+
+	it('ensures all buttons have titles and icons for mobile horizontal flow', () => {
+		const wrapper = mount(SongPdfToolbar, {
+			props: {
+				...defaultProps,
+				hasAnyRotation: true,
+				hasAnyDeletion: true,
+				deletedPagesCount: 1,
+			},
+		})
+
+		const buttons = wrapper.findAll('button')
+		expect(buttons.length).toBeGreaterThan(0)
+		for (const btn of buttons) {
+			// Each button should have an aria-label or title for accessibility when text is hidden on mobile
+			const label = btn.attributes('aria-label') || btn.attributes('title')
+			expect(label).toBeTruthy()
+			// Each button should contain an SVG icon
+			expect(btn.find('svg').exists()).toBe(true)
+		}
+	})
 })
 
