@@ -35,6 +35,11 @@ class SongService {
 	}
 
 	public function getSongs(IUser $user, int $libraryId): ?LibraryData {
+		$library = $this->libraryMapper->findForUser($user->getUID(), $libraryId);
+		if ($library === null) {
+			return null;
+		}
+
 		try {
 			return $this->internalSongMapper->findLibraryData($libraryId, $user);
 		} catch (\Throwable $e) {
@@ -78,6 +83,11 @@ class SongService {
 	): ?LibraryData {
 		$title = trim($title);
 		if ($title === '') {
+			return null;
+		}
+
+		$library = $this->libraryMapper->findForUser($user->getUID(), $libraryId);
+		if ($library === null) {
 			return null;
 		}
 
@@ -172,9 +182,14 @@ class SongService {
 			return null;
 		}
 
+		$library = $this->libraryMapper->findForUser($user->getUID(), $libraryId);
+		if ($library === null) {
+			return null;
+		}
+
 		try {
 			$song = $this->internalSongMapper->findById($songId);
-			if ($song !== null) {
+			if ($song !== null && $song->libraryId === $libraryId) {
 				if ($this->songHistoryService !== null && !$this->songHistoryService->hasHistory($songId)) {
 					$this->songHistoryService->recordSnapshot(
 						$song,
@@ -302,6 +317,14 @@ class SongService {
 	}
 
 	public function deleteSong(IUser $user, int $songId, int $libraryId, bool $deleteFiles = true): ?LibraryData {
+		$library = $this->libraryMapper->findForUser($user->getUID(), $libraryId);
+		if ($library === null) {
+			return null;
+		}
+		$song = $this->internalSongMapper->findById($songId);
+		if ($song === null || $song->libraryId !== $libraryId) {
+			return null;
+		}
 		return $this->batchDeleteSongs($user, $libraryId, [$songId], $deleteFiles);
 	}
 

@@ -20,9 +20,34 @@ trait TestUtils {
 	}
 
 	protected function createLibraryService(): LibraryService {
+		if (property_exists($this, 'libraryMapper') && isset($this->libraryMapper) && property_exists($this, 'rootFolder') && isset($this->rootFolder)) {
+			return new LibraryService(
+				$this->libraryMapper,
+				$this->rootFolder,
+				new NullLogger(),
+			);
+		}
 		return $this->createLibraryServiceWithMapper(
 			$this->createMock(LibraryMapper::class),
 		);
+	}
+
+	public static function minimalPdf(
+		string $trailerExtra = '',
+		string $infoBody = '/Title (Take Five) /Creator (Unit test)',
+	): string {
+		$objects = "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n"
+			. "2 0 obj << /Type /Pages /Count 1 /Kids [3 0 R] >> endobj\n"
+			. "3 0 obj << /Type /Page /Parent 2 0 R >> endobj\n"
+			. '4 0 obj << ' . $infoBody . " >> endobj\n";
+
+		$xrefOffset = strlen("%PDF-1.4\n" . $objects);
+
+		return "%PDF-1.4\n"
+			. $objects
+			. "xref\n0 5\n0000000000 65535 f \n"
+			. 'trailer << /Size 5 /Root 1 0 R /Info 4 0 R' . $trailerExtra . " >>\n"
+			. "startxref\n{$xrefOffset}\n%%EOF\n";
 	}
 
 	protected function createLibraryServiceWithMapper(

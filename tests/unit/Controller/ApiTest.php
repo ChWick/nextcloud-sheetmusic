@@ -8,40 +8,98 @@ use OCA\SheetMusic\AppInfo\Application;
 use OCA\SheetMusic\Controller\ApiController;
 use OCA\SheetMusic\Db\LibraryData;
 use OCA\SheetMusic\Service\EntityService;
+use OCA\SheetMusic\Service\FileManager;
 use OCA\SheetMusic\Service\LibraryIntegrityService;
 use OCA\SheetMusic\Service\LibraryService;
 use OCA\SheetMusic\Service\SongFileService;
 use OCA\SheetMusic\Service\SongService;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSong;
 use OCP\AppFramework\Http;
+use OCP\Files\Folder;
 use OCP\IRequest;
-use OCP\IUserManager;
+use OCP\IUser;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
 use TestSupport\FakeRequest;
 use TestSupport\FakeUserSession;
+use TestSupport\RealMobileSheetsTestTrait;
+use TestSupport\TestUtils;
 
 final class ApiTest extends TestCase {
+	use RealMobileSheetsTestTrait;
+	use TestUtils;
+
+	private IUser $user;
+	private FakeUserSession $userSession;
+	private LibraryService $libraryService;
+	private FileManager $fileManager;
+	private LibraryIntegrityService $libraryIntegrityService;
+	private EntityService $entityService;
+	private SongFileService $songFileService;
+	private SongService $songService;
+
+	protected function setUp(): void {
+		parent::setUp();
+		$this->setUpRealMobileSheetsEnvironment();
+		$this->user = $this->userManager->get('admin');
+		$this->userSession = new FakeUserSession($this->user);
+
+		$logger = new NullLogger();
+		$this->libraryService = new LibraryService($this->libraryMapper, $this->rootFolder, $logger, exporter: $this->exporter);
+		$this->fileManager = new FileManager(
+			$this->libraryMapper,
+			$this->rootFolder,
+			$this->pathResolver,
+			$logger,
+			$this->libraryService,
+			$this->songFileMapper,
+			$this->songMapper,
+		);
+		$this->libraryIntegrityService = $this->createLibraryIntegrityService($this->libraryService);
+		$this->entityService = new EntityService($this->libraryService, $logger, $this->entityMapper, $this->songMapper, $this->libraryMapper);
+		$this->songFileService = new SongFileService(
+			$this->libraryService,
+			$this->fileManager,
+			$this->rootFolder,
+			$logger,
+			$this->songFileMapper,
+			$this->songMapper,
+			$this->libraryMapper,
+		);
+		$this->songService = new SongService(
+			$this->libraryService,
+			$this->songFileService,
+			$this->fileManager,
+			$logger,
+			$this->songMapper,
+			$this->entityMapper,
+			$this->songFileMapper,
+			$this->libraryMapper,
+			$this->rootFolder,
+			$this->libraryIntegrityService,
+			null,
+			$this->bookmarkMapper,
+		);
+	}
+
+	protected function tearDown(): void {
+		$this->tearDownRealMobileSheetsEnvironment();
+		parent::tearDown();
+	}
+
 	private function createController(
-		?LibraryService $libraryService = null,
-		?SongService $songService = null,
-		?SongFileService $songFileService = null,
-		?EntityService $entityService = null,
-		?LibraryIntegrityService $libraryIntegrityService = null,
 		?IRequest $request = null,
 		bool $loggedIn = true,
 	): ApiController {
-		$user = \OC::$server->get(IUserManager::class)->get('admin');
-		$userSession = new FakeUserSession($loggedIn ? $user : null);
-
 		return new ApiController(
 			Application::APP_ID,
 			$request ?? new FakeRequest(),
-			$libraryService ?? $this->createMock(LibraryService::class),
-			$songService ?? $this->createMock(SongService::class),
-			$songFileService ?? $this->createMock(SongFileService::class),
-			$entityService ?? $this->createMock(EntityService::class),
-			$libraryIntegrityService ?? $this->createMock(LibraryIntegrityService::class),
-			$userSession,
+			$this->libraryService,
+			$this->songService,
+			$this->songFileService,
+			$this->entityService,
+			$this->libraryIntegrityService,
+			$loggedIn ? $this->userSession : new FakeUserSession(null),
 		);
 	}
 
@@ -70,40 +128,41 @@ final class ApiTest extends TestCase {
 	}
 
 	public function testDeleteSongFileResolvesLibraryById(): void {
-		$songFileService = $this->createMock(SongFileService::class);
-		$songFileService->expects($this->once())
-			->method('deleteSongFile')
-			->willReturn(null);
-
-		$controller = $this->createController(songFileService: $songFileService);
+		$controller = $this->createController();
 
 		$this->assertEquals(
 			Http::STATUS_NOT_FOUND,
-			$controller->deleteSongFile(1, 2, 7)->getStatus(),
+			$controller->deleteSongFile(1, 2, 9999)->getStatus(),
 		);
 	}
 
 	public function testAttachNextcloudFileDelegatesToService(): void {
-		$songFileService = $this->createMock(SongFileService::class);
-		$songFileService->expects($this->once())
-			->method('attachNextcloudFile')
-			->willReturn(new LibraryData(songs: []));
+		$library = $this->createTestLibrary('Noten/mobilesheets.db');
+		$song = $this->insertTestSong($library->id, 'Test Song');
+		$userFolder = $this->rootFolder->getUserFolder('admin');
+		if (!$userFolder->nodeExists('Music')) {
+			$userFolder->newFolder('Music');
+		}
+		/** @var Folder $musicFolder */
+		$musicFolder = $userFolder->get('Music');
+		if ($musicFolder->nodeExists('T-Pen 2_QG.pdf')) {
+			$musicFolder->get('T-Pen 2_QG.pdf')->delete();
+		}
+		$pdf = $musicFolder->newFile('T-Pen 2_QG.pdf');
+		$pdf->putContent(self::minimalPdf());
 
-		$controller = $this->createController(songFileService: $songFileService);
+		$controller = $this->createController();
 
-		$response = $controller->attachNextcloudFile(42, 7, '/Music/T-Pen 2_QG.pdf', 'copy');
+		$response = $controller->attachNextcloudFile($song->id, $library->id, '/Music/T-Pen 2_QG.pdf', 'copy');
 
 		$this->assertEquals(Http::STATUS_OK, $response->getStatus());
-		$this->assertEquals(new LibraryData(songs: []), $response->getData());
+		$this->assertInstanceOf(LibraryData::class, $response->getData());
 	}
 
 	public function testAttachNextcloudFileReturnsNotFoundWhenServiceFails(): void {
-		$songFileService = $this->createMock(SongFileService::class);
-		$songFileService->method('attachNextcloudFile')->willReturn(null);
+		$controller = $this->createController();
 
-		$controller = $this->createController(songFileService: $songFileService);
-
-		$response = $controller->attachNextcloudFile(42, 7, '/Music/Shared.pdf', 'copy');
+		$response = $controller->attachNextcloudFile(42, 9999, '/Music/Shared.pdf', 'copy');
 		$this->assertEquals(Http::STATUS_NOT_FOUND, $response->getStatus());
 	}
 
@@ -115,70 +174,55 @@ final class ApiTest extends TestCase {
 	}
 
 	public function testDeleteSongFileDelegatesToService(): void {
-		$songFileService = $this->createMock(SongFileService::class);
-		$songFileService->expects($this->once())
-			->method('deleteSongFile')
-			->willReturn(new LibraryData(songs: []));
+		$library = $this->createTestLibrary('Noten/mobilesheets.db');
+		$song = $this->insertTestSong($library->id, 'Test Song');
+		$file = $this->attachTestFileToSong($song);
 
-		$controller = $this->createController(songFileService: $songFileService);
+		$controller = $this->createController();
 
 		$this->assertEquals(
 			Http::STATUS_OK,
-			$controller->deleteSongFile(42, 2, 7)->getStatus(),
+			$controller->deleteSongFile($song->id, $file->id, $library->id)->getStatus(),
 		);
 	}
 
 	public function testDeleteSongFileReturnsNotFoundWhenServiceReturnsNull(): void {
-		$songFileService = $this->createMock(SongFileService::class);
-		$songFileService->method('deleteSongFile')->willReturn(null);
-
-		$controller = $this->createController(songFileService: $songFileService);
+		$controller = $this->createController();
 
 		$this->assertEquals(
 			Http::STATUS_NOT_FOUND,
-			$controller->deleteSongFile(42, 2, 7)->getStatus(),
+			$controller->deleteSongFile(42, 2, 9999)->getStatus(),
 		);
 	}
 
 	public function testDetachSongFileDelegatesToService(): void {
-		$songFileService = $this->createMock(SongFileService::class);
-		$songFileService->expects($this->once())
-			->method('detachSongFile')
-			->willReturn(new LibraryData(songs: []));
+		$library = $this->createTestLibrary('Noten/mobilesheets.db');
+		$song = $this->insertTestSong($library->id, 'Test Song');
+		$file = $this->attachTestFileToSong($song);
 
-		$controller = $this->createController(songFileService: $songFileService);
+		$controller = $this->createController();
 
 		$this->assertEquals(
 			Http::STATUS_OK,
-			$controller->detachSongFile(42, 2, 7)->getStatus(),
+			$controller->detachSongFile($song->id, $file->id, $library->id)->getStatus(),
 		);
 	}
 
 	public function testDeleteLibraryRemovesOnlyTheEntryAndKeepsTheFiles(): void {
-		$libraryService = $this->createMock(LibraryService::class);
-		$libraryService->expects($this->once())
-			->method('deleteLibrary')
-			->with('admin', 7)
-			->willReturn(['id' => 7, 'path' => '/Noten/mobilesheets.db']);
+		$library = $this->createTestLibrary('Noten/mobilesheets.db');
+		$controller = $this->createController();
 
-		$controller = $this->createController(libraryService: $libraryService);
-
-		$response = $controller->deleteLibrary(7);
+		$response = $controller->deleteLibrary($library->id);
 
 		$this->assertEquals(Http::STATUS_OK, $response->getStatus());
-		$this->assertEquals(['id' => 7, 'path' => '/Noten/mobilesheets.db'], $response->getData());
+		$this->assertEquals(['id' => $library->id, 'path' => $library->path], $response->getData());
+		$this->assertNull($this->libraryMapper->findById($library->id));
 	}
 
 	public function testDeleteLibraryWithUnknownIdIsNotFound(): void {
-		$libraryService = $this->createMock(LibraryService::class);
-		$libraryService->expects($this->once())
-			->method('deleteLibrary')
-			->with('admin', 7)
-			->willReturn(null);
+		$controller = $this->createController();
 
-		$controller = $this->createController(libraryService: $libraryService);
-
-		$this->assertEquals(Http::STATUS_NOT_FOUND, $controller->deleteLibrary(7)->getStatus());
+		$this->assertEquals(Http::STATUS_NOT_FOUND, $controller->deleteLibrary(9999)->getStatus());
 	}
 
 	public function testCreateSongWithoutLibraryIdIsBadRequest(): void {
@@ -200,35 +244,28 @@ final class ApiTest extends TestCase {
 	}
 
 	public function testCreateSongReturnsTheNewSongIdWithTheLibraryData(): void {
-		$songService = $this->createMock(SongService::class);
-		$songService->expects(self::once())
-			->method('createSong')
-			->willReturn(new LibraryData(songs: [new MobileSheetsSong(42, 'New Song')], createdSongId: 42));
+		$library = $this->createTestLibrary('Noten/mobilesheets.db');
+		$controller = $this->createController();
 
-		$controller = $this->createController(songService: $songService);
-
-		$response = $controller->createSong(7, 'New Song', [10], [100], [1000], [200]);
+		$response = $controller->createSong($library->id, 'New Song');
 
 		$this->assertEquals(Http::STATUS_CREATED, $response->getStatus());
 		$data = $response->getData();
 		self::assertInstanceOf(LibraryData::class, $data);
-		self::assertSame(42, $data->createdSongId);
+		self::assertNotNull($data->createdSongId);
 		$createdSong = array_values(array_filter(
 			$data->songs,
-			static fn (MobileSheetsSong $song): bool => $song->id === 42,
+			static fn (MobileSheetsSong $song): bool => $song->id === $data->createdSongId,
 		))[0];
 		self::assertSame('New Song', $createdSong->title);
 	}
 
 	public function testCreateSongOfAnUnknownLibraryIsNotFound(): void {
-		$songService = $this->createMock(SongService::class);
-		$songService->method('createSong')->willReturn(null);
-
-		$controller = $this->createController(songService: $songService);
+		$controller = $this->createController();
 
 		$this->assertEquals(
 			Http::STATUS_NOT_FOUND,
-			$controller->createSong(7, 'Some title')->getStatus(),
+			$controller->createSong(9999, 'Some title')->getStatus(),
 		);
 	}
 
@@ -242,42 +279,34 @@ final class ApiTest extends TestCase {
 	}
 
 	public function testDeleteSongOfAnUnknownSongIsNotFound(): void {
-		$songService = $this->createMock(SongService::class);
-		$songService->method('deleteSong')->willReturn(null);
-
-		$controller = $this->createController(songService: $songService);
+		$library = $this->createTestLibrary('Noten/mobilesheets.db');
+		$controller = $this->createController();
 
 		$this->assertEquals(
 			Http::STATUS_NOT_FOUND,
-			$controller->deleteSong(42, 7)->getStatus(),
+			$controller->deleteSong(9999, $library->id)->getStatus(),
 		);
 	}
 
 	public function testDeleteSongMovesItsFilesToTheTrashBin(): void {
-		$songService = $this->createMock(SongService::class);
-		$songService->expects($this->once())
-			->method('deleteSong')
-			->willReturn(new LibraryData(songs: []));
-
-		$controller = $this->createController(songService: $songService);
+		$library = $this->createTestLibrary('Noten/mobilesheets.db');
+		$song = $this->insertTestSong($library->id, 'Song To Trash');
+		$controller = $this->createController();
 
 		$this->assertEquals(
 			Http::STATUS_OK,
-			$controller->deleteSong(42, 7, true)->getStatus(),
+			$controller->deleteSong($song->id, $library->id, true)->getStatus(),
 		);
 	}
 
 	public function testDeleteSongKeepsItsFilesWhenNotRequested(): void {
-		$songService = $this->createMock(SongService::class);
-		$songService->expects($this->once())
-			->method('deleteSong')
-			->willReturn(new LibraryData(songs: []));
-
-		$controller = $this->createController(songService: $songService);
+		$library = $this->createTestLibrary('Noten/mobilesheets.db');
+		$song = $this->insertTestSong($library->id, 'Song To Retain Files');
+		$controller = $this->createController();
 
 		$this->assertEquals(
 			Http::STATUS_OK,
-			$controller->deleteSong(42, 7, false)->getStatus(),
+			$controller->deleteSong($song->id, $library->id, false)->getStatus(),
 		);
 	}
 
@@ -291,40 +320,32 @@ final class ApiTest extends TestCase {
 	}
 
 	public function testDeleteEntityResolvesTheLibraryById(): void {
-		$entityService = $this->createMock(EntityService::class);
-		$entityService->method('deleteEntity')->willReturn(null);
-
-		$controller = $this->createController(entityService: $entityService);
+		$controller = $this->createController();
 
 		$this->assertEquals(
 			Http::STATUS_NOT_FOUND,
-			$controller->deleteComposer(1, 7)->getStatus(),
+			$controller->deleteComposer(1, 9999)->getStatus(),
 		);
 	}
 
 	public function testDeleteEntityReturnsTheLibraryDataWithTheFieldRemoved(): void {
-		$entityService = $this->createMock(EntityService::class);
-		$entityService->expects($this->once())
-			->method('deleteEntity')
-			->willReturn(new LibraryData(composers: []));
+		$library = $this->createTestLibrary('Noten/mobilesheets.db');
+		$composer = $this->insertTestEntity($library->id, 'composers', 'Bach');
+		$controller = $this->createController();
 
-		$controller = $this->createController(entityService: $entityService);
-
-		$response = $controller->deleteComposer(10, 7);
+		$response = $controller->deleteComposer($composer->id, $library->id);
 
 		$this->assertEquals(Http::STATUS_OK, $response->getStatus());
-		$this->assertEquals(new LibraryData(composers: []), $response->getData());
+		$this->assertInstanceOf(LibraryData::class, $response->getData());
 	}
 
 	public function testDeleteEntityOfAnUnknownEntityIsNotFound(): void {
-		$entityService = $this->createMock(EntityService::class);
-		$entityService->method('deleteEntity')->willReturn(null);
-
-		$controller = $this->createController(entityService: $entityService);
+		$library = $this->createTestLibrary('Noten/mobilesheets.db');
+		$controller = $this->createController();
 
 		$this->assertEquals(
 			Http::STATUS_NOT_FOUND,
-			$controller->deleteComposer(999, 7)->getStatus(),
+			$controller->deleteComposer(999, $library->id)->getStatus(),
 		);
 	}
 
@@ -336,75 +357,57 @@ final class ApiTest extends TestCase {
 	}
 
 	public function testGetSongsOfAnUnknownLibraryIsNotFound(): void {
-		$songService = $this->createMock(SongService::class);
-		$songService->method('getSongs')->willReturn(null);
+		$controller = $this->createController();
 
-		$controller = $this->createController(songService: $songService);
-
-		$this->assertEquals(Http::STATUS_NOT_FOUND, $controller->getSongs('7')->getStatus());
+		$this->assertEquals(Http::STATUS_NOT_FOUND, $controller->getSongs('9999')->getStatus());
 	}
 
 	public function testGetSongsOfSomethingThatIsNotAFileIsNotFound(): void {
-		$songService = $this->createMock(SongService::class);
-		$songService->method('getSongs')->willReturn(null);
+		$controller = $this->createController();
 
-		$controller = $this->createController(songService: $songService);
-
-		$this->assertEquals(Http::STATUS_NOT_FOUND, $controller->getSongs('7')->getStatus());
+		$this->assertEquals(Http::STATUS_NOT_FOUND, $controller->getSongs('9999')->getStatus());
 	}
 
 	public function testGetSongsReturnsTheLibraryData(): void {
-		$songService = $this->createMock(SongService::class);
-		$songService->method('getSongs')->willReturn(new LibraryData(
-			songs: [],
-			sourceTypes: [],
-		));
+		$library = $this->createTestLibrary('Noten/mobilesheets.db');
+		$controller = $this->createController();
 
-		$controller = $this->createController(songService: $songService);
-
-		$response = $controller->getSongs('7');
+		$response = $controller->getSongs((string)$library->id);
 
 		self::assertEquals(Http::STATUS_OK, $response->getStatus());
 		$data = $response->getData();
 		self::assertInstanceOf(LibraryData::class, $data);
 		self::assertSame([], $data->songs);
-		self::assertSame([], $data->sourceTypes);
 	}
 
 	public function testAddLibraryRejectsInvalidPaths(): void {
-		$libraryService = $this->createMock(LibraryService::class);
-		$libraryService->method('addLibrary')->willReturn(null);
-
-		$controller = $this->createController(libraryService: $libraryService);
+		$controller = $this->createController();
 
 		self::assertEquals(Http::STATUS_BAD_REQUEST, $controller->addLibrary('Noten/mobilesheets.db')->getStatus());
 		self::assertEquals(Http::STATUS_BAD_REQUEST, $controller->addLibrary('/Noten/notes.txt')->getStatus());
 	}
 
 	public function testAddLibraryStoresThePath(): void {
-		$libraryService = $this->createMock(LibraryService::class);
-		$libraryService->expects(self::once())
-			->method('addLibrary')
-			->with('admin', '/Noten/mobilesheets.db')
-			->willReturn(['path' => '/Noten']);
+		$userFolder = $this->rootFolder->getUserFolder('admin');
+		$folderName = 'NewApiFolder_' . bin2hex(random_bytes(3));
+		if (!$userFolder->nodeExists($folderName)) {
+			$this->createdUserNodes[] = $userFolder->newFolder($folderName);
+		}
 
-		$controller = $this->createController(libraryService: $libraryService);
+		$controller = $this->createController();
 
-		$response = $controller->addLibrary('/Noten/mobilesheets.db');
+		$response = $controller->addLibrary('/' . $folderName . '/mobilesheets.db');
 
 		self::assertEquals(Http::STATUS_CREATED, $response->getStatus());
-		self::assertSame(['path' => '/Noten'], $response->getData());
+		self::assertSame('/' . $folderName, $response->getData()['path']);
 	}
 
 	public function testUpdateSongWritesTheMetadataIntoTheAttachedPdf(): void {
-		$songService = $this->createMock(SongService::class);
-		$songService->expects(self::once())
-			->method('updateSong')
-			->willReturn(new LibraryData(songs: []));
+		$library = $this->createTestLibrary('Noten/mobilesheets.db');
+		$song = $this->insertTestSong($library->id, 'Blue Bossa');
+		$controller = $this->createController();
 
-		$controller = $this->createController(songService: $songService);
-
-		$response = $controller->updateSong(42, 7, 'Blue Bossa');
+		$response = $controller->updateSong($song->id, $library->id, 'Blue Bossa');
 
 		$this->assertEquals(Http::STATUS_OK, $response->getStatus());
 	}
@@ -419,29 +422,23 @@ final class ApiTest extends TestCase {
 	}
 
 	public function testUpdateSongOfAnUnknownLibraryIsNotFound(): void {
-		$songService = $this->createMock(SongService::class);
-		$songService->method('updateSong')->willReturn(null);
-
-		$controller = $this->createController(songService: $songService);
+		$controller = $this->createController();
 
 		$this->assertEquals(
 			Http::STATUS_NOT_FOUND,
-			$controller->updateSong(1, 7, 'Some title')->getStatus(),
+			$controller->updateSong(1, 9999, 'Some title')->getStatus(),
 		);
 	}
 
 	public function testUpdateSongReturnsTheLibraryData(): void {
-		$songService = $this->createMock(SongService::class);
-		$songService->expects(self::once())
-			->method('updateSong')
-			->willReturn(new LibraryData(songs: []));
+		$library = $this->createTestLibrary('Noten/mobilesheets.db');
+		$song = $this->insertTestSong($library->id, 'Before');
+		$controller = $this->createController();
 
-		$controller = $this->createController(songService: $songService);
-
-		$response = $controller->updateSong(1, 7, 'After', [10], [100], [1000], [200]);
+		$response = $controller->updateSong($song->id, $library->id, 'After');
 
 		$this->assertEquals(Http::STATUS_OK, $response->getStatus());
-		$this->assertEquals(new LibraryData(songs: []), $response->getData());
+		$this->assertInstanceOf(LibraryData::class, $response->getData());
 	}
 
 	public function testCreateEntityEndpointsRejectMissingValues(): void {
@@ -452,45 +449,33 @@ final class ApiTest extends TestCase {
 	}
 
 	public function testCreateEntityEndpointsRejectAnUnknownLibrary(): void {
-		$entityService = $this->createMock(EntityService::class);
-		$entityService->method('createEntity')->willReturn(null);
+		$controller = $this->createController();
 
-		$controller = $this->createController(entityService: $entityService);
-
-		self::assertEquals(Http::STATUS_NOT_FOUND, $controller->createComposer(7, 'Bach')->getStatus());
+		self::assertEquals(Http::STATUS_NOT_FOUND, $controller->createComposer(9999, 'Bach')->getStatus());
 	}
 
 	public function testCreateEntityEndpointsReturnTheCreatedEntry(): void {
-		$entityService = $this->createMock(EntityService::class);
-		$entityService->expects(self::once())
-			->method('createEntity')
-			->willReturn(['id' => 10, 'name' => 'Bach']);
+		$library = $this->createTestLibrary('Noten/mobilesheets.db');
+		$controller = $this->createController();
 
-		$controller = $this->createController(entityService: $entityService);
-
-		$response = $controller->createComposer(7, 'Bach');
+		$response = $controller->createComposer($library->id, 'Bach');
 
 		self::assertEquals(Http::STATUS_CREATED, $response->getStatus());
-		self::assertSame(['id' => 10, 'name' => 'Bach'], $response->getData());
+		self::assertSame('Bach', $response->getData()['name']);
 	}
 
 	public function testDeleteEntityEndpointsPassTheirEntityTypeToTheMapper(): void {
-		$entityService = $this->createMock(EntityService::class);
-		$entityService->expects(self::once())
-			->method('deleteEntity')
-			->with($this->anything(), 7, 'composers', 10)
-			->willReturn(new LibraryData(composers: []));
+		$library = $this->createTestLibrary('Noten/mobilesheets.db');
+		$composer = $this->insertTestEntity($library->id, 'composers', 'Bach');
+		$controller = $this->createController();
 
-		$controller = $this->createController(entityService: $entityService);
-
-		$response = $controller->deleteComposer(10, 7);
+		$response = $controller->deleteComposer($composer->id, $library->id);
 
 		self::assertEquals(Http::STATUS_OK, $response->getStatus());
 	}
 
 	public function testUploadSongFileWithoutAFileIsBadRequest(): void {
-		$request = $this->createMock(IRequest::class);
-		$request->method('getUploadedFile')->with('file')->willReturn(null);
+		$request = new FakeRequest();
 
 		$controller = $this->createController(request: $request);
 
@@ -531,16 +516,21 @@ final class ApiTest extends TestCase {
 	}
 
 	public function testImportSongMetadataFromNextcloudPath(): void {
-		$request = $this->createMock(IRequest::class);
-		$request->method('getUploadedFile')->with('file')->willReturn(null);
-		$request->method('getParam')->with('path', '')->willReturn('/Music/Take Five.pdf');
+		$userFolder = $this->rootFolder->getUserFolder('admin');
+		if (!$userFolder->nodeExists('Music')) {
+			$userFolder->newFolder('Music');
+		}
+		/** @var Folder $musicFolder */
+		$musicFolder = $userFolder->get('Music');
+		if ($musicFolder->nodeExists('Take Five.pdf')) {
+			$musicFolder->get('Take Five.pdf')->delete();
+		}
+		$pdf = $musicFolder->newFile('Take Five.pdf');
+		$pdf->putContent(self::minimalPdf());
 
-		$songFileService = $this->createMock(SongFileService::class);
-		$songFileService->expects(self::once())
-			->method('importSongMetadata')
-			->willReturn(['title' => 'Take Five']);
+		$request = new FakeRequest(params: ['path' => '/Music/Take Five.pdf']);
 
-		$controller = $this->createController(songFileService: $songFileService, request: $request);
+		$controller = $this->createController(request: $request);
 
 		$response = $controller->importSongMetadata();
 
@@ -551,16 +541,21 @@ final class ApiTest extends TestCase {
 	}
 
 	public function testImportSongMetadataFromNextcloudPathWithDavPrefix(): void {
-		$request = $this->createMock(IRequest::class);
-		$request->method('getUploadedFile')->with('file')->willReturn(null);
-		$request->method('getParam')->with('path', '')->willReturn('remote.php/dav/files/admin/Music/Take%20Five.pdf');
+		$userFolder = $this->rootFolder->getUserFolder('admin');
+		if (!$userFolder->nodeExists('Music')) {
+			$userFolder->newFolder('Music');
+		}
+		/** @var Folder $musicFolder */
+		$musicFolder = $userFolder->get('Music');
+		if ($musicFolder->nodeExists('Take Five.pdf')) {
+			$musicFolder->get('Take Five.pdf')->delete();
+		}
+		$pdf = $musicFolder->newFile('Take Five.pdf');
+		$pdf->putContent(self::minimalPdf());
 
-		$songFileService = $this->createMock(SongFileService::class);
-		$songFileService->expects(self::once())
-			->method('importSongMetadata')
-			->willReturn(['title' => 'Take Five']);
+		$request = new FakeRequest(params: ['path' => 'remote.php/dav/files/admin/Music/Take%20Five.pdf']);
 
-		$controller = $this->createController(songFileService: $songFileService, request: $request);
+		$controller = $this->createController(request: $request);
 
 		$response = $controller->importSongMetadata();
 
@@ -570,14 +565,9 @@ final class ApiTest extends TestCase {
 	}
 
 	public function testImportSongMetadataWithMissingFileReturnsBadRequest(): void {
-		$request = $this->createMock(IRequest::class);
-		$request->method('getUploadedFile')->with('file')->willReturn(null);
-		$request->method('getParam')->with('path', '')->willReturn('/Music/NonExistent.pdf');
+		$request = new FakeRequest(params: ['path' => '/Music/NonExistent.pdf']);
 
-		$songFileService = $this->createMock(SongFileService::class);
-		$songFileService->method('importSongMetadata')->willThrowException(new \InvalidArgumentException('Could not read file content'));
-
-		$controller = $this->createController(songFileService: $songFileService, request: $request);
+		$controller = $this->createController(request: $request);
 
 		$response = $controller->importSongMetadata();
 

@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace TestSupport;
 
+use OCA\SheetMusic\Db\InternalEntity;
 use OCA\SheetMusic\Db\InternalEntityMapper;
 use OCA\SheetMusic\Db\InternalLibrary;
 use OCA\SheetMusic\Db\InternalMiscMapper;
@@ -158,6 +159,31 @@ trait RealMobileSheetsTestTrait {
 		$lib = $firstMatch instanceof InternalLibrary ? $firstMatch : $libs[0];
 		$this->createdLibraryIds[] = (int)$lib->id;
 		return $lib;
+	}
+
+	protected function insertTestSong(int $libraryId, string $title): InternalSong {
+		$song = new InternalSong(
+			id: null,
+			uuid: InternalEntity::generateUuid(),
+			libraryId: $libraryId,
+			title: $title,
+			createdAt: time(),
+			updatedAt: time(),
+		);
+		return $this->songMapper->insert($song);
+	}
+
+	protected function insertTestEntity(int $libraryId, string $type, string $name): InternalEntity {
+		$entity = new InternalEntity(
+			id: null,
+			uuid: InternalEntity::generateUuid(),
+			libraryId: $libraryId,
+			type: InternalEntityMapper::normalizeType($type),
+			name: $name,
+			createdAt: time(),
+			updatedAt: time(),
+		);
+		return $this->entityMapper->insert($entity);
 	}
 
 	protected function attachTestFileToSong(InternalSong $song, string $fileName = 'score.pdf', ?int $clientId = null): InternalSongFile {
