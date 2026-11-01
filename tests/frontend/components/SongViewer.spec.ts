@@ -483,4 +483,34 @@ describe('SongViewer.vue', () => {
 		expect(wrapper.text()).toContain('2.0 KB')
 		expect(wrapper.text()).toContain('Revert to this version')
 	})
+
+	it('renders movements bar and updates target page when clicking a movement', async () => {
+		const songWithMovements: Song = {
+			...mockSong,
+			bookmarks: [
+				{ id: 1, songId: 42, name: 'I. Allegro', pageNum: 1, endPage: 4 },
+				{ id: 2, songId: 42, name: 'II. Adagio', pageNum: 5, endPage: 8 },
+			],
+		}
+
+		const wrapper = mount(SongViewer, {
+			props: { song: songWithMovements, libraryId: 1, hideHeader: true },
+			...globalStubs,
+		})
+
+		await settle()
+
+		// Movements bar should be visible with formatted ranges
+		expect(wrapper.text()).toContain('Movements:')
+		expect(wrapper.text()).toContain('I. Allegro (pp. 1–4)')
+		expect(wrapper.text()).toContain('II. Adagio (pp. 5–8)')
+
+		// Find movement button and click it
+		const movementBtns = wrapper.findAll('button').filter((b) => b.text().includes('II. Adagio'))
+		expect(movementBtns.length).toBeGreaterThan(0)
+		await movementBtns[0].trigger('click')
+		await settle()
+
+		expect((wrapper.vm as any).activeMovementPage).toBe(5)
+	})
 })

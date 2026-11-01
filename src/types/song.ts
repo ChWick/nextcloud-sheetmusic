@@ -11,7 +11,15 @@ export type Year = { id: number; year: number; name: string }
 export type Signature = { id: number; name: string }
 export type SourceType = { id: number; type: string; name: string }
 export type Instrument = { id: number; name: string }
-export type Bookmark = { id: number; songId: number; name: string; pageNum: number; showInLibrary?: number }
+export type Bookmark = {
+	id?: number
+	songId?: number
+	name: string
+	pageNum: number
+	endPage?: number | null
+	position?: number
+	showInLibrary?: number
+}
 export type AudioFile = { id: number; songId: number; title: string; file: string }
 export type SongFile = components['schemas']['SongFile']
 export type Song = components['schemas']['Song'] & {

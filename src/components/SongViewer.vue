@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Artist, Book, Collection, Composer, CustomGroup, Genre, Instrument, Key, LibraryData, Signature, Song, SongFile, SourceType, Year } from '../types/song'
+import type { Artist, Book, Bookmark, Collection, Composer, CustomGroup, Genre, Instrument, Key, LibraryData, Signature, Song, SongFile, SourceType, Year } from '../types/song'
 
 import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
@@ -123,6 +123,23 @@ function getFileLabel(file: SongFile, index: number): string {
 	const truncated = name.length > 30 ? `${name.slice(0, 29)}…` : name
 	return `${index + 1}. ${truncated}`
 }
+
+const activeMovementPage = ref<number | undefined>(undefined)
+
+function jumpToBookmark(pageNum: number) {
+	activeMovementPage.value = pageNum
+}
+
+function formatBookmarkLabel(bm: Bookmark): string {
+	if (bm.endPage && bm.endPage > bm.pageNum) {
+		return `${bm.name} (pp. ${bm.pageNum}–${bm.endPage})`
+	}
+	return `${bm.name} (p. ${bm.pageNum})`
+}
+
+watch(() => props.song?.id, () => {
+	activeMovementPage.value = undefined
+})
 
 function selectFile(fileId: string) {
 	selectedFileId.value = fileId
@@ -309,8 +326,17 @@ defineExpose({
 					<span>{{ songSourceTypes.map((st) => st.name).join(', ') }}</span>
 				</div>
 				<div v-if="songBookmarks.length > 0" :class="$style.metaItem">
-					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Bookmarks:') }}</span>
-					<span>{{ songBookmarks.map((b) => `${b.name} (p. ${b.pageNum})`).join(', ') }}</span>
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Movements:') }}</span>
+					<div :class="$style.metaLinkList">
+						<button
+							v-for="(bm, idx) in songBookmarks"
+							:key="bm.id ?? `meta-bm-${idx}`"
+							type="button"
+							:class="$style.metaLinkBtn"
+							@click="jumpToBookmark(bm.pageNum)">
+							{{ formatBookmarkLabel(bm) }}
+						</button>
+					</div>
 				</div>
 				<div v-if="songAudioFiles.length > 0" :class="$style.metaItem">
 					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Audio Files:') }}</span>
@@ -464,10 +490,30 @@ defineExpose({
 				</NcRadioGroup>
 			</div>
 
+			<div
+				v-if="songBookmarks.length > 0"
+				:class="$style.movementsBar"
+				role="region"
+				:aria-label="t('sheetmusic', 'Movements and Bookmarks')">
+				<span :class="$style.movementsLabel">{{ t('sheetmusic', 'Movements:') }}</span>
+				<div :class="$style.movementsList">
+					<button
+						v-for="(bm, idx) in songBookmarks"
+						:key="bm.id ?? `bm-${idx}`"
+						type="button"
+						:class="[$style.movementChip, activeMovementPage === bm.pageNum && $style.movementChipActive]"
+						:title="t('sheetmusic', 'Jump to {name}', { name: bm.name })"
+						@click="jumpToBookmark(bm.pageNum)">
+						{{ formatBookmarkLabel(bm) }}
+					</button>
+				</div>
+			</div>
+
 			<FilePreviewer
 				v-if="selectedFile?.path"
 				:key="`${selectedFile.id}-${selectedFile.path}-${song?.lastModified ?? ''}-${previewVersion}`"
 				:file-path="previewFilePath"
+				:target-page="activeMovementPage"
 				:show-external-button="false" />
 			<div v-else :class="$style.error">
 				{{ songFiles.length === 0 ? t('sheetmusic', 'No files attached to this song.') : t('sheetmusic', 'Missing file: The file does not exist on the file system.') }}
@@ -552,12 +598,81 @@ defineExpose({
 	min-height: 200px;
 }
 
+.metaLinkList {
+	display: inline-flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.metaLinkBtn {
+	background: none;
+	border: none;
+	padding: 0;
+	color: var(--color-primary-element);
+	text-decoration: underline;
+	cursor: pointer;
+	font-size: inherit;
+
+	&:hover {
+		color: var(--color-primary-element-hover, var(--color-primary-element));
+	}
+}
+
 .fileTabs {
 	display: flex;
 	align-items: center;
 	margin-bottom: 8px;
 	padding: 2px;
 	overflow-x: auto;
+}
+
+.movementsBar {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 12px;
+	margin-bottom: 8px;
+	background: var(--color-background-hover);
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius-pill, 16px);
+	overflow-x: auto;
+	box-sizing: border-box;
+}
+
+.movementsLabel {
+	font-weight: 600;
+	font-size: 0.85rem;
+	white-space: nowrap;
+	color: var(--color-text-maxcontrast);
+}
+
+.movementsList {
+	display: flex;
+	flex-wrap: nowrap;
+	gap: 6px;
+}
+
+.movementChip {
+	background: var(--color-main-background);
+	color: var(--color-main-text);
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius-pill, 16px);
+	padding: 3px 10px;
+	font-size: 0.85rem;
+	cursor: pointer;
+	white-space: nowrap;
+	transition: background-color 0.15s ease, border-color 0.15s ease;
+
+	&:hover {
+		background: var(--color-background-hover);
+		border-color: var(--color-primary-element);
+	}
+}
+
+.movementChipActive {
+	background: var(--color-primary-element);
+	color: var(--color-primary-element-text);
+	border-color: var(--color-primary-element);
 }
 
 .toolbar {

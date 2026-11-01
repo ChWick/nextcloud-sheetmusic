@@ -17,10 +17,12 @@ const props = withDefaults(
 		filePath: string
 		showExternalButton?: boolean
 		hideToolbar?: boolean
+		targetPage?: number
 	}>(),
 	{
 		showExternalButton: true,
 		hideToolbar: false,
+		targetPage: undefined,
 	},
 )
 
@@ -118,6 +120,22 @@ function nextPage() {
 		currentPage.value = Math.min(totalPages.value, currentPage.value + 1)
 	}
 	renderCurrentView()
+}
+
+function goToPage(targetPage: number) {
+	if (targetPage < 1) targetPage = 1
+	if (totalPages.value > 0 && targetPage > totalPages.value) {
+		targetPage = totalPages.value
+	}
+	currentPage.value = targetPage
+	if (pageLayout.value === 'continuous') {
+		const placeholder = pdfContainer.value?.querySelector(`[data-page-num="${targetPage}"]`) as HTMLElement | null
+		if (placeholder) {
+			placeholder.scrollIntoView({ behavior: 'smooth', block: 'start' })
+		}
+	} else {
+		renderCurrentView()
+	}
 }
 
 function setPageLayout(mode: PageLayoutMode) {
@@ -407,7 +425,7 @@ async function loadAndRenderFile() {
 
 		loadedPdf.value = pdf
 		totalPages.value = pdf.numPages
-		currentPage.value = 1
+		currentPage.value = props.targetPage && props.targetPage >= 1 ? Math.min(props.targetPage, pdf.numPages) : 1
 
 		// Collect page resolution summaries (up to first 25 pages for responsiveness)
 		try {
@@ -468,8 +486,20 @@ onUnmounted(() => {
 
 watch(() => props.filePath, loadAndRenderFile, { immediate: true })
 
+watch(
+	() => props.targetPage,
+	(newPage) => {
+		if (newPage && newPage >= 1) {
+			goToPage(newPage)
+		}
+	},
+)
+
 defineExpose({
 	openInExternalViewer,
+	goToPage,
+	currentPage,
+	totalPages,
 })
 </script>
 
