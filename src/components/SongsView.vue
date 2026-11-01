@@ -211,7 +211,7 @@
     <template v-else-if="!standaloneCreate">
       <SongTableView
         v-if="viewMode === 'table'"
-        :songs="filteredSongs"
+        :songs="paginatedSongs"
         :selected-song-ids="selectedSongIds"
         :is-filtered="isFiltered"
         :visible-columns="visibleColumns"
@@ -236,7 +236,7 @@
         @select-all="selectAll" />
       <SongCardView
         v-else-if="viewMode === 'cards'"
-        :songs="sortedSongs"
+        :songs="paginatedSongs"
         :selected-song-ids="selectedSongIds"
         :is-filtered="isFiltered"
         :visible-columns="visibleColumns"
@@ -247,7 +247,7 @@
         @toggle-select-song="toggleSelect" />
       <SongSimpleListView
         v-else
-        :songs="sortedSongs"
+        :songs="paginatedSongs"
         :selected-song-ids="selectedSongIds"
         :is-filtered="isFiltered"
         :visible-columns="visibleColumns"
@@ -256,6 +256,12 @@
         @inline-update-song="handleInlineUpdateSong"
         @filter-entity="toggleFilter"
         @toggle-select-song="toggleSelect" />
+
+      <SongPagination
+        v-if="filteredSongs.length > 0"
+        v-model:current-page="currentPage"
+        v-model:page-size="pageSize"
+        :total-items="filteredSongs.length" />
     </template>
   </div>
 
@@ -335,6 +341,7 @@ import SongViewToggle, { type ViewMode } from './songs/SongViewToggle.vue';
 import SongTableView from './songs/SongTableView.vue';
 import SongCardView from './songs/SongCardView.vue';
 import SongSimpleListView from './songs/SongSimpleListView.vue';
+import SongPagination, { type PageSize } from './songs/SongPagination.vue';
 import { executeInlineSongUpdate } from './songs/song-inline-update';
 
 // Props from parent (App.vue)
@@ -551,6 +558,58 @@ const {
 // Computed filtered list
 const filteredSongs = computed(() => filterSongs(songs.value));
 const sortedSongs = computed(() => sortSongs(filteredSongs.value, sortKey.value, sortOrder.value));
+
+const DEFAULT_PAGE_SIZE: PageSize = 50;
+
+const pageSize = ref<PageSize>((() => {
+  try {
+    const saved = localStorage.getItem('sheetmusic_songs_page_size');
+    if (saved === 'all') return 'all';
+    if (saved) {
+      const num = parseInt(saved, 10);
+      if (!isNaN(num) && num > 0) return num;
+    }
+  } catch {
+    // fallback
+  }
+  return DEFAULT_PAGE_SIZE;
+})());
+
+watch(pageSize, (newSize) => {
+  try {
+    localStorage.setItem('sheetmusic_songs_page_size', String(newSize));
+  } catch {
+    // ignore
+  }
+});
+
+const currentPage = ref(1);
+
+// When search, filter selections, sorting, or library change, reset page to 1
+watch([searchTitle, withoutFiles, selectedComposers, selectedBooks, selectedCollections, selectedArtists, selectedGenres, selectedKeys, selectedCustomGroups, selectedYears, selectedSignatures, selectedSourceTypes, selectedInstruments, () => props.selectedLibrary], () => {
+  currentPage.value = 1;
+});
+
+watch([sortKey, sortOrder], () => {
+  currentPage.value = 1;
+});
+
+// Clamp current page if total filtered items shrink
+watch([filteredSongs, pageSize], () => {
+  const maxPage = pageSize.value === 'all' ? 1 : Math.max(1, Math.ceil(filteredSongs.value.length / (pageSize.value as number)));
+  if (currentPage.value > maxPage) {
+    currentPage.value = maxPage;
+  }
+});
+
+const paginatedSongs = computed(() => {
+  if (pageSize.value === 'all') {
+    return sortedSongs.value;
+  }
+  const size = typeof pageSize.value === 'number' ? pageSize.value : 50;
+  const start = (currentPage.value - 1) * size;
+  return sortedSongs.value.slice(start, start + size);
+});
 
 // Watch for library prop changes
 watch(() => props.selectedLibrary, (newLib) => {
