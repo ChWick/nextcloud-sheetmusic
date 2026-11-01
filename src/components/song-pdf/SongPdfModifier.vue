@@ -38,6 +38,8 @@ import { applyPipeline, createImageBuffer, imageDataToImageBuffer, imageBufferTo
 import { executeEnhancePage, inspectPdfPageResolution, type PdfPageResolutionSummary, pruneUnreferencedPdfObjects, resolvePageRenderScale } from './pdf-enhance-engine'
 import { usePdfThumbnails } from './usePdfThumbnails'
 import { usePdfSplit } from './usePdfSplit'
+import SongPdfMovementsSidebar from './SongPdfMovementsSidebar.vue'
+import { usePdfMovements } from './usePdfMovements'
 
 GlobalWorkerOptions.workerSrc = pdfWorker
 
@@ -90,7 +92,7 @@ const targetFile = computed<SongFile | undefined>(() => {
 })
 
 // State
-type Mode = 'rotate' | 'split' | 'crop' | 'enhance'
+type Mode = 'rotate' | 'split' | 'crop' | 'enhance' | 'movements'
 const activeMode = ref<Mode>('rotate')
 
 const isLoading = ref(false)
@@ -193,6 +195,26 @@ const {
 	onCancel: () => emit('cancel'),
 })
 
+// Movements state & operations
+const {
+	movements,
+	isExtractingOutline,
+	initMovementsFromSong,
+	addMovement,
+	removeMovement,
+	updateMovement,
+	assignPagesToMovement,
+	extractFromPdfOutline,
+	executeSaveMovements,
+} = usePdfMovements({
+	song: computed(() => props.song),
+	libraryId: computed(() => props.libraryId),
+	totalPages,
+	activePdfDoc,
+	onSaved: (data, targetSongId) => emit('saved', data, targetSongId),
+	onCancel: () => emit('cancel'),
+})
+
 async function yieldToBrowser() {
 	await nextTick()
 	await new Promise<void>((resolve) => setTimeout(resolve, 0))
@@ -286,6 +308,7 @@ async function loadPdf() {
 
 		// Initialize split segments: default with 1 segment covering all pages
 		initSplitSegments(pdf.numPages, props.song.title)
+		initMovementsFromSong(props.song.bookmarks)
 
 		await nextTick()
 		initThumbnailObserver(pdf)
@@ -511,6 +534,19 @@ function resetAllCurrentEdits() {
 	isVersionsModalOpen.value = false
 }
 
+async function saveMovements() {
+	isSaving.value = true
+	try {
+		await executeSaveMovements(async (pct, text) => {
+			await updateSaveProgress(pct, text, 0, 0, false)
+		})
+	} finally {
+		isSaving.value = false
+		saveProgressPercent.value = 0
+		saveProgressText.value = ''
+	}
+}
+
 function handleHeaderSave() {
 	if (activeMode.value === 'rotate') {
 		saveRotations()
@@ -520,6 +556,8 @@ function handleHeaderSave() {
 		saveEnhancements()
 	} else if (activeMode.value === 'split') {
 		saveSplits()
+	} else if (activeMode.value === 'movements') {
+		saveMovements()
 	}
 }
 
@@ -888,6 +926,7 @@ watch(() => targetFile.value?.path, () => {
 			:is-saving="isSaving"
 			:is-loading="isLoading"
 			:split-segments-count="splitSegments.length"
+			:movements-count="movements.length"
 			:save-progress="saveProgressPercent"
 			:file-size-bytes="originalPdfBytes?.byteLength ?? targetFile?.fileSize ?? null"
 			:page-resolutions="pageResolutions"
@@ -948,7 +987,7 @@ watch(() => targetFile.value?.path, () => {
 					:get-enhance-indicator-text="getEnhanceIndicatorText"
 					:get-page-segments-summary="getPageSegmentsSummary"
 					:remaining-pages-count="remainingPagesCount"
-					@card-click="activeMode === 'split' ? togglePageSelection($event) : undefined"
+					@card-click="(activeMode === 'split' || activeMode === 'movements') ? togglePageSelection($event) : undefined"
 					@open-crop-modal="openCropModal"
 					@open-enhance-modal="openEnhanceModal"
 					@rotate-page="rotatePage"
@@ -968,6 +1007,22 @@ watch(() => targetFile.value?.path, () => {
 				@add-segment="addSegment"
 				@remove-segment="removeSegment"
 				@assign-selected="assignSelectedPagesToSegment" />
+
+			<SongPdfMovementsSidebar
+				v-if="activeMode === 'movements'"
+				:movements="movements"
+				:total-pages="totalPages"
+				:selected-pages="selectedPages"
+				:is-extracting-outline="isExtractingOutline"
+				@add-movement="addMovement"
+				@remove-movement="removeMovement"
+				@update-movement="updateMovement"
+				@assign-selected="(id) => {
+					if (selectedPages.length > 0) {
+						assignPagesToMovement(id, Math.min(...selectedPages), Math.max(...selectedPages))
+					}
+				}"
+				@extract-outline="extractFromPdfOutline" />
 		</div>
 
 		<!-- Page Crop Modal -->

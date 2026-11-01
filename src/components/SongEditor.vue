@@ -172,8 +172,8 @@ const tempo = ref<number>(sourceSong.value?.tempos?.[0]?.tempo ?? 0)
 const notes = ref<Array<{ id?: number, note: string, title?: string }>>(
 	(sourceSong.value?.notes ?? []).map((n) => ({ note: n.note, title: n.title ?? '' })),
 )
-const bookmarks = ref<Array<{ id?: number, name: string, pageNum: number }>>(
-	(sourceSong.value?.bookmarks ?? []).map((b) => ({ name: b.name, pageNum: b.pageNum })),
+const bookmarks = ref<Array<{ id?: number, name: string, pageNum: number, endPage?: number | null }>>(
+	(sourceSong.value?.bookmarks ?? []).map((b) => ({ name: b.name, pageNum: b.pageNum, endPage: b.endPage ?? null })),
 )
 const audioFiles = ref<Array<{ id?: number, title?: string, file: string }>>(
 	(sourceSong.value?.audioFiles ?? []).map((a) => ({ title: a.title, file: a.file })),
@@ -239,6 +239,7 @@ watch(
 			...(props.song ? { id: b.id } : {}),
 			name: b.name,
 			pageNum: b.pageNum,
+			endPage: b.endPage ?? null,
 		}))
 		audioFiles.value = (newSong?.audioFiles ?? []).map((a) => ({
 			...(props.song ? { id: a.id } : {}),

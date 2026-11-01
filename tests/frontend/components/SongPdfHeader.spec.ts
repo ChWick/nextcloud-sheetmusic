@@ -152,14 +152,14 @@ describe('SongPdfHeader.vue', () => {
 		expect(rightEl.querySelector('button')?.textContent).toContain('Save')
 	})
 
-	it('renders all 4 mode tabs with accessible titles and labels for responsive flow', () => {
+	it('renders all 5 mode tabs with accessible titles and labels for responsive flow', () => {
 		const wrapper = mount(SongPdfHeader, {
 			props: defaultProps,
 		})
 
 		const tabs = wrapper.findAll('nav button')
-		expect(tabs.length).toBe(4)
-		const expectedTitles = ['Rotate Pages', 'Crop Pages', 'Enhance Scans', 'Split PDF']
+		expect(tabs.length).toBe(5)
+		const expectedTitles = ['Rotate Pages', 'Crop Pages', 'Enhance Scans', 'Split PDF', 'Movements & Bookmarks']
 		for (const title of expectedTitles) {
 			const found = tabs.find((t) => t.attributes('title') === title || t.text().includes(title))
 			expect(found).toBeDefined()

@@ -15,7 +15,7 @@ import RestoreIcon from 'vue-material-design-icons/Restore.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 
 defineProps<{
-	activeMode: 'rotate' | 'crop' | 'enhance' | 'split'
+	activeMode: 'rotate' | 'crop' | 'enhance' | 'split' | 'movements'
 	totalPages: number
 	hasAnyRotation: boolean
 	hasAnyCrop: boolean
@@ -298,6 +298,24 @@ const emit = defineEmits<{
 						<CloseIcon :size="16" />
 					</template>
 					<span :class="$style.btnText">{{ t('sheetmusic', 'Clear Selection') }}</span>
+				</NcButton>
+			</div>
+		</template>
+
+		<!-- Movements Toolbar -->
+		<template v-if="activeMode === 'movements'">
+			<div :class="$style.toolbarGroup">
+				<span :class="$style.toolbarTitle">{{ t('sheetmusic', 'Movements:') }}</span>
+				<NcButton
+					v-if="selectedPagesCount > 0"
+					size="small"
+					variant="secondary"
+					:title="t('sheetmusic', 'Clear selected pages')"
+					@click="emit('clear-selection')">
+					<template #icon>
+						<CloseIcon :size="16" />
+					</template>
+					<span :class="$style.btnText">{{ t('sheetmusic', 'Clear Selection ({count})', { count: selectedPagesCount }) }}</span>
 				</NcButton>
 			</div>
 		</template>

@@ -12,10 +12,11 @@ import RotateRight from 'vue-material-design-icons/RotateRight.vue'
 import CropIcon from 'vue-material-design-icons/Crop.vue'
 import Tune from 'vue-material-design-icons/Tune.vue'
 import CallSplit from 'vue-material-design-icons/CallSplit.vue'
+import BookmarkMusicOutline from 'vue-material-design-icons/BookmarkMusicOutline.vue'
 import ContentSaveOutlineIcon from 'vue-material-design-icons/ContentSaveOutline.vue'
 import InformationOutline from 'vue-material-design-icons/InformationOutline.vue'
 
-export type Mode = 'rotate' | 'crop' | 'enhance' | 'split'
+export type Mode = 'rotate' | 'crop' | 'enhance' | 'split' | 'movements'
 
 const props = defineProps<{
 	song: Song
@@ -32,6 +33,7 @@ const props = defineProps<{
 	hasAnyEnhance?: boolean
 	hasAnyJoin?: boolean
 	splitSegmentsCount: number
+	movementsCount?: number
 	saveProgress?: number
 	fileSizeBytes?: number | null
 	pageResolutions?: PdfPageResolutionSummary[]
@@ -59,10 +61,16 @@ const saveButtonDisabled = computed(() => {
 	if (props.activeMode === 'split') {
 		return props.splitSegmentsCount === 0
 	}
+	if (props.activeMode === 'movements') {
+		return (props.movementsCount ?? 0) === 0
+	}
 	return !props.hasAnyChange || props.remainingPagesCount === 0
 })
 
 const saveButtonTitle = computed(() => {
+	if (props.activeMode === 'movements') {
+		return t('sheetmusic', 'Save movements')
+	}
 	if (props.activeMode === 'rotate') {
 		return (props.hasAnyDeletion || props.hasAnyCrop || props.hasAnyEnhance || props.hasAnyJoin)
 			? t('sheetmusic', 'Save changes')
@@ -86,6 +94,9 @@ const saveButtonText = computed(() => {
 			return `${baseText} (${Math.round(props.saveProgress)}%)`
 		}
 		return baseText
+	}
+	if (props.activeMode === 'movements') {
+		return t('sheetmusic', 'Save Movements')
 	}
 	if (props.activeMode === 'rotate') {
 		return (props.hasAnyDeletion || props.hasAnyCrop || props.hasAnyEnhance || props.hasAnyJoin)
@@ -221,6 +232,14 @@ const saveButtonText = computed(() => {
 				@click="emit('update:activeMode', 'split')">
 				<CallSplit :size="18" />
 				<span :class="$style.tabLabel">{{ t('sheetmusic', 'Split PDF') }}</span>
+			</button>
+			<button
+				type="button"
+				:class="[$style.tabButton, activeMode === 'movements' && $style.tabButtonActive]"
+				:title="t('sheetmusic', 'Movements & Bookmarks')"
+				@click="emit('update:activeMode', 'movements')">
+				<BookmarkMusicOutline :size="18" />
+				<span :class="$style.tabLabel">{{ t('sheetmusic', 'Movements') }}</span>
 			</button>
 		</nav>
 
