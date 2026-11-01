@@ -192,24 +192,17 @@ final class LibraryControllerTest extends TestCase {
 	}
 
 	public function testAddLibraryPassesImportPdfMetadata(): void {
-		$mockService = $this->createMock(LibraryService::class);
-		$mockService->expects($this->once())
-			->method('addLibrary')
-			->with('admin', '/MyFolder', false, null, false)
-			->willReturn(['path' => '/MyFolder']);
+		$folder = '/TestImportPdfMetadataFolder';
+		$userFolder = $this->rootFolder->getUserFolder('admin');
+		if (!$userFolder->nodeExists(ltrim($folder, '/'))) {
+			$userFolder->newFolder(ltrim($folder, '/'));
+		}
 
 		$this->request->setParam('importPdfMetadata', false);
 		$this->request->setParam('importExistingDb', false);
 
-		$controller = new LibraryController(
-			'sheetmusic',
-			$this->request,
-			$mockService,
-			$this->userSession,
-			$this->createLibraryIntegrityService($this->libraryService),
-		);
-
-		$res = $controller->addLibrary('/MyFolder', false, null, false);
+		$res = $this->controller->addLibrary($folder, false, null, false);
 		$this->assertSame(Http::STATUS_CREATED, $res->getStatus());
+		$this->assertSame(['path' => $folder], $res->getData());
 	}
 }
