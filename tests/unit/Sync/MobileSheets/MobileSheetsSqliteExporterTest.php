@@ -830,4 +830,109 @@ final class MobileSheetsSqliteExporterTest extends TestCase {
 		$metaRows = $db->query("SELECT entity_type, client_id, extra_json FROM _nc_sync_metadata WHERE entity_type = 'song_movement'")->fetchAll(PDO::FETCH_ASSOC);
 		self::assertCount(3, $metaRows);
 	}
+
+	public function testExportMovementsWithExistingCollectionsAvoidsIdCollision(): void {
+		$library = new InternalLibrary(id: 1, userId: 'user1', path: 'SheetMusic');
+		$songMapper = $this->createMock(InternalSongMapper::class);
+		$entityMapper = $this->createMock(InternalEntityMapper::class);
+		$songFileMapper = $this->createMock(InternalSongFileMapper::class);
+		$attributeMapper = $this->createMock(InternalSongAttributeMapper::class);
+		$miscMapper = $this->createMock(InternalMiscMapper::class);
+		$libraryMapper = $this->createMock(LibraryMapper::class);
+		$bookmarkMapper = $this->createMock(InternalSongBookmarkMapper::class);
+		$pathResolver = $this->createMock(MobileSheetsPathResolver::class);
+		$rootFolder = $this->createMock(IRootFolder::class);
+		$userManager = $this->createMock(IUserManager::class);
+		$logger = new NullLogger();
+
+		$user = $this->createMock(IUser::class);
+		$user->method('getUID')->willReturn('user1');
+		$userManager->method('get')->with('user1')->willReturn($user);
+
+		$userFolder = $this->createMock(IUserFolder::class);
+		$rootFolder->method('getUserFolder')->with('user1')->willReturn($userFolder);
+
+		$fileNode = $this->createMock(File::class);
+		$fileNode->method('getPath')->willReturn('/user1/files/SheetMusic/Sonata.pdf');
+		$userFolder->method('getById')->with(101)->willReturn([$fileNode]);
+
+		$pathResolver->method('fromInternal')->with('/user1/files/SheetMusic/Sonata.pdf', $user)->willReturn(
+			new MobileSheetsPath('/user1/files/SheetMusic/Sonata.pdf', '/remote.php/dav/files/user1/SheetMusic/Sonata.pdf')
+		);
+
+		$libraryMapper->method('resolveLibrary')->willReturn($library);
+		$attributeMapper->method('findAllForLibrary')->with(1)->willReturn([]);
+
+		// Library has an existing collection with clientId 2
+		$existingCollection = new \OCA\SheetMusic\Db\InternalEntity(
+			id: 1,
+			libraryId: 1,
+			name: 'Existing Collection',
+			type: 'collection',
+			clientId: 2,
+		);
+		$entityMapper->method('findAllForLibrary')->willReturn([$existingCollection]);
+
+		$song = new InternalSong(
+			id: 1,
+			uuid: 'sonata-uuid-123',
+			libraryId: 1,
+			title: 'Moonlight Sonata',
+			clientId: 1,
+		);
+		$songMapper->method('findAllForLibrary')->willReturn([$song]);
+
+		$file = new InternalSongFile(
+			id: 1,
+			uuid: 'f-1',
+			songId: 1,
+			fileId: 101,
+			clientId: 1,
+			pageOrder: '1-10',
+			pageCount: 10,
+			type: 1,
+		);
+		$songFileMapper->method('findAllForLibrary')->with(1, false)->willReturn([$file]);
+		$miscMapper->method('getMiscSchemas')->with(1, 'mobilesheets')->willReturn([]);
+
+		$bookmarks = [
+			new InternalSongBookmark(
+				id: 1,
+				songId: 1,
+				name: 'I. Adagio sostenuto',
+				pageNum: 1,
+				endPage: 4,
+				position: 0,
+			),
+		];
+		$bookmarkMapper->method('findAllForLibrary')->with(1)->willReturn([1 => $bookmarks]);
+
+		$exporter = new MobileSheetsSqliteExporter(
+			$songMapper,
+			$entityMapper,
+			$songFileMapper,
+			$attributeMapper,
+			$miscMapper,
+			$libraryMapper,
+			$pathResolver,
+			$rootFolder,
+			$userManager,
+			$logger,
+			null,
+			$bookmarkMapper,
+		);
+
+		$exporter->exportToFile($library, $this->tempDbPath);
+
+		self::assertFileExists($this->tempDbPath);
+		$db = new PDO('sqlite:' . $this->tempDbPath);
+
+		// Both the existing collection and the new movement collection exist with distinct IDs
+		$collRows = $db->query('SELECT Id, Name FROM Collections ORDER BY Id ASC')->fetchAll(PDO::FETCH_ASSOC);
+		self::assertCount(2, $collRows);
+		self::assertSame(2, (int)$collRows[0]['Id']);
+		self::assertSame('Existing Collection', $collRows[0]['Name']);
+		self::assertSame(3, (int)$collRows[1]['Id']);
+		self::assertSame('Moonlight Sonata', $collRows[1]['Name']);
+	}
 }

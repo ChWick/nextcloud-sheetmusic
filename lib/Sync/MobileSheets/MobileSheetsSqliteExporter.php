@@ -578,10 +578,22 @@ class MobileSheetsSqliteExporter {
 		$existingCollCols = $hasCollectionsTable ? MobileSheetsTableHelper::getTableColumns($db, 'Collections') : [];
 		$existingCollSongCols = $hasCollectionSongTable ? MobileSheetsTableHelper::getTableColumns($db, 'CollectionSong') : [];
 
+		$existingCollIds = $hasCollectionsTable ? $db->query('SELECT Id FROM Collections')->fetchAll(PDO::FETCH_COLUMN) : [];
+		$usedCollIds = [];
+		$maxCollId = 0;
+		foreach ($existingCollIds as $cid) {
+			$cid = (int)$cid;
+			$usedCollIds[$cid] = true;
+			if ($cid > $maxCollId) {
+				$maxCollId = $cid;
+			}
+		}
+		$nextCollId = $maxCollId + 1;
+
 		$metaStmt = $hasSyncMeta ? $db->prepare('INSERT INTO _nc_sync_metadata (entity_type, uuid, client_id, updated_at, extra_json) VALUES (:type, :uuid, :client_id, :updated_at, :extra_json)') : null;
 
 		foreach ($songs as $song) {
-			if ($song->clientId === null || !isset($libraryBookmarks[$song->id])) {
+			if ($song->clientId === null || empty($libraryBookmarks[$song->id])) {
 				continue;
 			}
 
@@ -597,7 +609,7 @@ class MobileSheetsSqliteExporter {
 			// 2. Option B: Export child songs for movements if file and songs table exist
 			if ($hasSongsTable && $hasFilesTable && $firstFile !== null && !empty($webdavPath)) {
 				$collectionId = ($hasCollectionsTable && $hasCollectionSongTable)
-					? $this->getOrCreateMovementCollection($db, $song, $existingCollCols, $nextSongId)
+					? $this->getOrCreateMovementCollection($db, $song, $existingCollCols, $usedCollIds, $nextCollId)
 					: null;
 
 				$this->exportChildMovements(
@@ -644,12 +656,14 @@ class MobileSheetsSqliteExporter {
 
 	/**
 	 * @param array<string, bool> $existingCollCols
+	 * @param array<int, bool> $usedCollIds
 	 */
 	private function getOrCreateMovementCollection(
 		PDO $db,
 		InternalSong $song,
 		array $existingCollCols,
-		int &$nextSongId,
+		array &$usedCollIds,
+		int &$nextCollId,
 	): int {
 		$checkColl = $db->prepare('SELECT Id FROM Collections WHERE Name = :name LIMIT 1');
 		$checkColl->execute([':name' => $song->title]);
@@ -658,8 +672,7 @@ class MobileSheetsSqliteExporter {
 			return (int)$existingCollId;
 		}
 
-		$usedCollIds = [];
-		$newCollId = MobileSheetsTableHelper::nextClientId($usedCollIds, $nextSongId, null);
+		$newCollId = MobileSheetsTableHelper::nextClientId($usedCollIds, $nextCollId, null);
 		$collCandidate = [
 			'id' => $newCollId,
 			'name' => $song->title,
