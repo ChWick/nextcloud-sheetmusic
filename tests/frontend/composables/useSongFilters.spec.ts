@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { noneEntryOf, UNASSIGNED_ID, useSongFilters } from '../../../src/composables/useSongFilters'
+import { isMobileViewport, noneEntryOf, resetFilterBarState, UNASSIGNED_ID, useSongFilters } from '../../../src/composables/useSongFilters'
 import type { Song } from '../../../src/types/song'
 
 vi.mock('@nextcloud/l10n', () => ({
@@ -181,5 +181,47 @@ describe('useSongFilters composable with unassigned matching', () => {
 		mockRoute.query = { search: 'handel' }
 		const { filterSongs: filter3 } = useSongFilters(options)
 		expect(filter3(songsWithAccents).map(s => s.id)).toEqual([3])
+	})
+
+	describe('filterBarVisible responsive defaults', () => {
+		it('detects mobile viewport correctly', () => {
+			window.innerWidth = 500
+			expect(isMobileViewport()).toBe(true)
+
+			window.innerWidth = 768
+			expect(isMobileViewport()).toBe(true)
+
+			window.innerWidth = 769
+			expect(isMobileViewport()).toBe(false)
+
+			window.innerWidth = 1200
+			expect(isMobileViewport()).toBe(false)
+		})
+
+		it('defaults to closed (false) in mobile view and can be toggled', () => {
+			resetFilterBarState({ isMobile: true })
+			const { filterBarVisible, toggleFilterBar } = useSongFilters(options)
+
+			expect(filterBarVisible.value).toBe(false)
+
+			toggleFilterBar()
+			expect(filterBarVisible.value).toBe(true)
+
+			toggleFilterBar()
+			expect(filterBarVisible.value).toBe(false)
+		})
+
+		it('defaults to open (true) in desktop view and can be toggled', () => {
+			resetFilterBarState({ isMobile: false })
+			const { filterBarVisible, toggleFilterBar } = useSongFilters(options)
+
+			expect(filterBarVisible.value).toBe(true)
+
+			toggleFilterBar()
+			expect(filterBarVisible.value).toBe(false)
+
+			toggleFilterBar()
+			expect(filterBarVisible.value).toBe(true)
+		})
 	})
 })

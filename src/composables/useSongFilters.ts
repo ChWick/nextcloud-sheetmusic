@@ -53,11 +53,43 @@ export function noneEntryOf(entityType: EntityType): FilterEntity {
 	}
 }
 
-/** Whether the filter bar is shown; the choice is remembered across views. */
-const filterBarVisible = ref(true)
+/** Whether the current viewport width is considered mobile (<= 768px). */
+export function isMobileViewport(): boolean {
+	if (typeof window === 'undefined') return false
+	return window.innerWidth <= 768
+}
 
-function toggleFilterBar(): void {
+let userExplicitlyToggled = false
+
+/** Whether the filter bar is shown; defaults to closed on mobile (<= 768px) and open on desktop. */
+export const filterBarVisible = ref(!isMobileViewport())
+
+if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+	const mediaQuery = window.matchMedia('(max-width: 768px)')
+	const handleMediaChange = (e: MediaQueryListEvent | MediaQueryList) => {
+		if (!userExplicitlyToggled) {
+			filterBarVisible.value = !e.matches
+		}
+	}
+	if (mediaQuery.addEventListener) {
+		mediaQuery.addEventListener('change', handleMediaChange)
+	} else if ('addListener' in mediaQuery) {
+		(mediaQuery as any).addListener(handleMediaChange)
+	}
+}
+
+export function toggleFilterBar(): void {
+	userExplicitlyToggled = true
 	filterBarVisible.value = !filterBarVisible.value
+}
+
+export function resetFilterBarState(options?: { isMobile?: boolean }): void {
+	userExplicitlyToggled = false
+	if (options?.isMobile !== undefined) {
+		filterBarVisible.value = !options.isMobile
+	} else {
+		filterBarVisible.value = !isMobileViewport()
+	}
 }
 
 /**
