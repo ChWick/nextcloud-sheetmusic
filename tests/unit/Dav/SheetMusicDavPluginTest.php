@@ -485,16 +485,22 @@ final class SheetMusicDavPluginTest extends TestCase {
 		file_put_contents($tempDb, $dbContent);
 		$pdo = new \PDO('sqlite:' . $tempDb);
 
-		// Collections: 1 user collection + 1 movement collection without ID collision
+		// Collections: 1 user collection
 		$collRows = $pdo->query('SELECT Id, Name FROM Collections ORDER BY Id ASC')->fetchAll(\PDO::FETCH_ASSOC);
-		self::assertCount(2, $collRows);
+		self::assertCount(1, $collRows);
 		self::assertSame('Chamber Works', $collRows[0]['Name']);
-		self::assertSame('String Quartet No. 14', $collRows[1]['Name']);
-		self::assertNotSame((int)$collRows[0]['Id'], (int)$collRows[1]['Id']);
 
-		// Songs: 1 master song + 2 child movement songs
+		// Songs: 1 master song
 		$songRows = $pdo->query('SELECT Id, Title FROM Songs ORDER BY Id ASC')->fetchAll(\PDO::FETCH_ASSOC);
-		self::assertCount(3, $songRows);
+		self::assertCount(1, $songRows);
+		self::assertSame('String Quartet No. 14', $songRows[0]['Title']);
+
+		// Bookmarks: 2 bookmarks exported on master song
+		$bmRows = $pdo->query('SELECT Name, PageNum, ShowInLibrary FROM Bookmarks ORDER BY PageNum ASC')->fetchAll(\PDO::FETCH_ASSOC);
+		self::assertCount(2, $bmRows);
+		self::assertSame('I. Adagio', $bmRows[0]['Name']);
+		self::assertSame('II. Vivace', $bmRows[1]['Name']);
+		self::assertSame(1, (int)$bmRows[0]['ShowInLibrary']);
 	}
 }
 

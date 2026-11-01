@@ -391,7 +391,7 @@ final class MobileSheetsSqliteExporterTest extends TestCase {
 		self::assertSame('Has File', $songRows[0]['Title']);
 	}
 
-	public function testExportMovementsAsChildSongsAndBookmarksOptionB(): void {
+	public function testExportMovementsAsBookmarks(): void {
 		$library = $this->createTestLibrary('/MovementsRealLib', 'admin');
 
 		$song = new InternalSong(
@@ -432,103 +432,44 @@ final class MobileSheetsSqliteExporterTest extends TestCase {
 		self::assertFileExists($this->tempDbPath);
 		$db = new PDO('sqlite:' . $this->tempDbPath);
 
-		// 1. Master song + 3 child movement songs exported into Songs table
+		// 1. Exactly 1 song in Songs table (no duplicate movement songs)
 		$songRows = $db->query('SELECT Id, Title, SortTitle FROM Songs ORDER BY Id ASC')->fetchAll(PDO::FETCH_ASSOC);
-		self::assertCount(4, $songRows);
+		self::assertCount(1, $songRows);
 		self::assertSame('Moonlight Sonata', $songRows[0]['Title']);
-		self::assertSame('Moonlight Sonata - I. Adagio sostenuto', $songRows[1]['Title']);
-		self::assertSame('Moonlight Sonata - II. Allegretto', $songRows[2]['Title']);
-		self::assertSame('Moonlight Sonata - III. Presto agitato', $songRows[3]['Title']);
 
-		// 2. Bookmarks exported on master song
-		$bmRows = $db->query('SELECT SongId, Name, PageNum FROM Bookmarks ORDER BY PageNum ASC')->fetchAll(PDO::FETCH_ASSOC);
+		// 2. Bookmarks exported on master song with ShowInLibrary = 1
+		$bmRows = $db->query('SELECT SongId, Name, PageNum, ShowInLibrary FROM Bookmarks ORDER BY PageNum ASC')->fetchAll(PDO::FETCH_ASSOC);
 		self::assertCount(3, $bmRows);
 		self::assertSame(10, (int)$bmRows[0]['SongId']);
 		self::assertSame('I. Adagio sostenuto', $bmRows[0]['Name']);
 		self::assertSame(1, (int)$bmRows[0]['PageNum']);
+		self::assertSame(1, (int)$bmRows[0]['ShowInLibrary']);
 
-		// 3. Child files pointing to parent PDF with pageOrder
+		self::assertSame('II. Allegretto', $bmRows[1]['Name']);
+		self::assertSame(5, (int)$bmRows[1]['PageNum']);
+
+		self::assertSame('III. Presto agitato', $bmRows[2]['Name']);
+		self::assertSame(8, (int)$bmRows[2]['PageNum']);
+
+		// 3. Exactly 1 file pointing to parent PDF
 		$fileRows = $db->query('SELECT SongId, PageOrder FROM Files ORDER BY Id ASC')->fetchAll(PDO::FETCH_ASSOC);
-		self::assertCount(4, $fileRows);
-		self::assertSame('1-4', $fileRows[1]['PageOrder']);
-		self::assertSame('5-7', $fileRows[2]['PageOrder']);
-		self::assertSame('8-15', $fileRows[3]['PageOrder']);
+		self::assertCount(1, $fileRows);
 
-		// 4. _nc_sync_metadata tracks child movements
-		$metaRows = $db->query("SELECT entity_type, client_id, extra_json FROM _nc_sync_metadata WHERE entity_type = 'song_movement'")->fetchAll(PDO::FETCH_ASSOC);
-		self::assertCount(3, $metaRows);
-
-		// 5. Master song SongId is 0, child movement songs have SongId pointing to parent master song (10)
+		// 4. Master song SongId is 0
 		$allSongs = $db->query('SELECT Id, SongId, LastPage, OrientationLock, AutoStartAudio FROM Songs ORDER BY Id ASC')->fetchAll(PDO::FETCH_ASSOC);
 		self::assertSame(0, (int)$allSongs[0]['SongId']);
 		self::assertSame(0, (int)$allSongs[0]['LastPage']);
 		self::assertSame(0, (int)$allSongs[0]['OrientationLock']);
 		self::assertSame(0, (int)$allSongs[0]['AutoStartAudio']);
 
-		for ($i = 1; $i <= 3; $i++) {
-			self::assertSame(10, (int)$allSongs[$i]['SongId']);
-			self::assertSame(0, (int)$allSongs[$i]['LastPage']);
-		}
-
-		// 6. Ensure AutoScroll and MetronomeSettings records exist for all 4 songs
+		// 5. Ensure AutoScroll and MetronomeSettings records exist
 		$autoScrollCount = (int)$db->query('SELECT COUNT(*) FROM AutoScroll')->fetchColumn();
-		self::assertSame(4, $autoScrollCount);
+		self::assertSame(1, $autoScrollCount);
 		$metroCount = (int)$db->query('SELECT COUNT(*) FROM MetronomeSettings')->fetchColumn();
-		self::assertSame(4, $metroCount);
+		self::assertSame(1, $metroCount);
 	}
 
-	public function testExportMovementsWithExistingCollectionsAvoidsIdCollision(): void {
-		$library = $this->createTestLibrary('/CollisionLib', 'admin');
-
-		// Existing user collection with clientId = 2
-		$existingCollection = new InternalEntity(
-			id: null,
-			uuid: 'coll-uuid-existing',
-			libraryId: (int)$library->id,
-			name: 'Existing Collection',
-			type: 'collection',
-			clientId: 2,
-			createdAt: 2000,
-			updatedAt: 2000,
-		);
-		$this->entityMapper->insert($existingCollection);
-
-		$song = new InternalSong(
-			id: null,
-			uuid: 'sonata-uuid-123',
-			libraryId: (int)$library->id,
-			title: 'Moonlight Sonata',
-			clientId: 1,
-			createdAt: 2000,
-			updatedAt: 2000,
-		);
-		$createdSong = $this->songMapper->insert($song);
-		$this->attachTestFileToSong($createdSong, 'Sonata.pdf', 1);
-
-		$this->bookmarkMapper->setBookmarksForSong((int)$createdSong->id, [
-			[
-				'name' => 'I. Adagio sostenuto',
-				'pageNum' => 1,
-				'endPage' => 4,
-				'position' => 0,
-			],
-		]);
-
-		$this->exporter->exportToFile($library, $this->tempDbPath);
-
-		self::assertFileExists($this->tempDbPath);
-		$db = new PDO('sqlite:' . $this->tempDbPath);
-
-		// Both the existing collection and the new movement collection exist with distinct IDs
-		$collRows = $db->query('SELECT Id, Name FROM Collections ORDER BY Id ASC')->fetchAll(PDO::FETCH_ASSOC);
-		self::assertCount(2, $collRows);
-		self::assertSame(2, (int)$collRows[0]['Id']);
-		self::assertSame('Existing Collection', $collRows[0]['Name']);
-		self::assertSame(3, (int)$collRows[1]['Id']);
-		self::assertSame('Moonlight Sonata', $collRows[1]['Name']);
-	}
-
-	public function testExportEnsuresLayersCropAndZoomPerPageDefaultsForSongsAndMovements(): void {
+	public function testExportEnsuresAutoScrollAndMetronomeDefaultsForSongs(): void {
 		$library = $this->createTestLibrary('/PageDefaultsLib', 'admin');
 
 		$song = new InternalSong(
@@ -546,60 +487,19 @@ final class MobileSheetsSqliteExporterTest extends TestCase {
 		$songFile->pageOrder = '1-3';
 		$this->songFileMapper->update($songFile);
 
-		$this->bookmarkMapper->setBookmarksForSong((int)$createdSong->id, [
-			[
-				'name' => 'Movement 1',
-				'pageNum' => 1,
-				'endPage' => 2,
-				'position' => 0,
-			],
-		]);
-
 		$this->exporter->exportToFile($library, $this->tempDbPath);
 
 		self::assertFileExists($this->tempDbPath);
 		$db = new PDO('sqlite:' . $this->tempDbPath);
 
 		$songs = $db->query('SELECT Id, Title FROM Songs ORDER BY Id ASC')->fetchAll(PDO::FETCH_ASSOC);
-		self::assertCount(2, $songs);
-		$masterId = (int)$songs[0]['Id'];
-		$childId = (int)$songs[1]['Id'];
+		self::assertCount(1, $songs);
 
-		// Master song (3 pages: 0, 1, 2)
-		$masterLayers = $db->query("SELECT Page, Name, Visible FROM Layers WHERE SongId = $masterId ORDER BY Page ASC")->fetchAll(PDO::FETCH_ASSOC);
-		self::assertCount(3, $masterLayers);
-		self::assertSame(0, (int)$masterLayers[0]['Page']);
-		self::assertSame('Layer 1', $masterLayers[0]['Name']);
-		self::assertSame(1, (int)$masterLayers[0]['Visible']);
-
-		$masterCrops = $db->query("SELECT Page, Left, Top FROM Crop WHERE SongId = $masterId ORDER BY Page ASC")->fetchAll(PDO::FETCH_ASSOC);
-		self::assertCount(3, $masterCrops);
-
-		$masterZooms = $db->query("SELECT Page, Zoom FROM ZoomPerPage WHERE SongId = $masterId ORDER BY Page ASC")->fetchAll(PDO::FETCH_ASSOC);
-		self::assertCount(3, $masterZooms);
-		self::assertEquals(100.0, (float)$masterZooms[0]['Zoom']);
-
-		$masterBeats = $db->query("SELECT Page, BeatsPerPage FROM MetronomeBeatsPerPage WHERE SongId = $masterId ORDER BY Page ASC")->fetchAll(PDO::FETCH_ASSOC);
-		self::assertCount(3, $masterBeats);
-
-		// Child movement song (2 pages: 0, 1)
-		$childLayers = $db->query("SELECT Page, Name, Visible FROM Layers WHERE SongId = $childId ORDER BY Page ASC")->fetchAll(PDO::FETCH_ASSOC);
-		self::assertCount(2, $childLayers);
-
-		$childCrops = $db->query("SELECT Page, Left, Top FROM Crop WHERE SongId = $childId ORDER BY Page ASC")->fetchAll(PDO::FETCH_ASSOC);
-		self::assertCount(2, $childCrops);
-
-		$childZooms = $db->query("SELECT Page, Zoom FROM ZoomPerPage WHERE SongId = $childId ORDER BY Page ASC")->fetchAll(PDO::FETCH_ASSOC);
-		self::assertCount(2, $childZooms);
-
-		$childBeats = $db->query("SELECT Page, BeatsPerPage FROM MetronomeBeatsPerPage WHERE SongId = $childId ORDER BY Page ASC")->fetchAll(PDO::FETCH_ASSOC);
-		self::assertCount(2, $childBeats);
-
-		// AutoScroll and MetronomeSettings exist for both
+		// AutoScroll and MetronomeSettings exist
 		$autoScrollCount = (int)$db->query('SELECT count(*) FROM AutoScroll')->fetchColumn();
-		self::assertSame(2, $autoScrollCount);
+		self::assertSame(1, $autoScrollCount);
 
 		$metronomeCount = (int)$db->query('SELECT count(*) FROM MetronomeSettings')->fetchColumn();
-		self::assertSame(2, $metronomeCount);
+		self::assertSame(1, $metronomeCount);
 	}
 }

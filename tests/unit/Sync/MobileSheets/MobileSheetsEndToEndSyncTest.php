@@ -2062,39 +2062,35 @@ class MobileSheetsEndToEndSyncTest extends TestCase {
 
 		// 4. Verify client mobilesheets.db
 		$clientCollections = $this->harness->getClientTableRows('Collections');
-		// Should have 'Symphonies', 'Concertos', and the movement collection 'Symphony No. 5 in C Minor, Op. 67'
-		self::assertCount(3, $clientCollections);
+		// Exactly user collections: 'Symphonies' and 'Concertos'
+		self::assertCount(2, $clientCollections);
 		$collectionNames = array_column($clientCollections, 'Name');
 		self::assertContains('Symphonies', $collectionNames);
 		self::assertContains('Concertos', $collectionNames);
-		self::assertContains('Symphony No. 5 in C Minor, Op. 67', $collectionNames);
 
 		// Verify distinct IDs (no collisions)
 		$collectionIds = array_column($clientCollections, 'Id');
 		self::assertSame(count($collectionIds), count(array_unique($collectionIds)), 'Collection IDs must be unique');
 
-		// Verify Songs table: master song + 4 child movement songs
+		// Verify Songs table: exactly 1 master song (movements are native Bookmarks)
 		$clientSongs = $this->harness->getClientTableRows('Songs');
-		self::assertCount(5, $clientSongs);
-		$masterSongs = array_values(array_filter($clientSongs, static fn ($s): bool => $s['Title'] === 'Symphony No. 5 in C Minor, Op. 67'));
-		self::assertCount(1, $masterSongs);
+		self::assertCount(1, $clientSongs);
+		self::assertSame('Symphony No. 5 in C Minor, Op. 67', $clientSongs[0]['Title']);
 
-		$movementSongs = array_values(array_filter($clientSongs, static fn ($s): bool => str_contains((string)$s['Title'], 'Symphony No. 5 in C Minor, Op. 67 - ')));
-		self::assertCount(4, $movementSongs);
-
-		// Verify CollectionSong table: child movements belong to the Symphony No. 5 collection
-		$movementCol = array_values(array_filter($clientCollections, static fn ($c): bool => $c['Name'] === 'Symphony No. 5 in C Minor, Op. 67'))[0];
-		$movementColId = (int)$movementCol['Id'];
-
-		$clientCollSong = $this->harness->getClientTableRows('CollectionSong');
-		$movementCollSongEntries = array_values(array_filter($clientCollSong, static fn ($cs): bool => (int)$cs['CollectionId'] === $movementColId));
-		self::assertCount(4, $movementCollSongEntries);
+		// Verify Bookmarks table: 4 movements exported with ShowInLibrary = 1
+		$clientBookmarks = $this->harness->getClientTableRows('Bookmarks');
+		self::assertCount(4, $clientBookmarks);
+		$bmNames = array_column($clientBookmarks, 'Name');
+		self::assertSame(['I. Allegro con brio', 'II. Andante con moto', 'III. Scherzo. Allegro', 'IV. Allegro'], $bmNames);
+		foreach ($clientBookmarks as $bm) {
+			self::assertSame(1, (int)$bm['ShowInLibrary']);
+		}
 
 		// 5. Subsequent sync must remain stable and conflict-free
 		$this->harness->sync();
 		$this->harness->sync();
 
 		$clientSongsAfter = $this->harness->getClientTableRows('Songs');
-		self::assertCount(5, $clientSongsAfter);
+		self::assertCount(1, $clientSongsAfter);
 	}
 }
