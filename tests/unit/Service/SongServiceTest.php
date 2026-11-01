@@ -87,6 +87,7 @@ final class SongServiceTest extends TestCase {
 			$this->rootFolder,
 			$integrityService,
 			$this->historyService,
+			$this->bookmarkMapper,
 		);
 	}
 
@@ -130,6 +131,43 @@ final class SongServiceTest extends TestCase {
 		self::assertSame('Op. 27 No. 2', $savedSong->opus);
 		self::assertSame('BWV 565', $savedSong->catalogNumber);
 		self::assertSame('88', $savedSong->songNumber);
+	}
+
+	public function testCreateSongWithBookmarksAndMovements(): void {
+		$res = $this->service->createSong(
+			$this->user,
+			$this->libraryId,
+			'Moonlight Sonata',
+			bookmarks: [
+				['name' => 'I. Adagio sostenuto', 'pageNum' => 1, 'endPage' => 4],
+				['name' => 'II. Allegretto', 'pageNum' => 5, 'endPage' => 7],
+				['name' => 'III. Presto agitato', 'pageNum' => 8, 'endPage' => 15],
+			],
+		);
+
+		self::assertNotNull($res);
+		$createdId = $res->createdSongId;
+		self::assertNotNull($createdId);
+
+		$bms = $this->bookmarkMapper->findForSong($createdId);
+		self::assertCount(3, $bms);
+		self::assertSame('I. Adagio sostenuto', $bms[0]->name);
+		self::assertSame(1, $bms[0]->pageNum);
+		self::assertSame(4, $bms[0]->endPage);
+
+		$data = $this->service->getSongs($this->user, $this->libraryId);
+		self::assertNotNull($data);
+		$found = null;
+		foreach ($data->songs as $s) {
+			if ($s->id === $createdId) {
+				$found = $s;
+				break;
+			}
+		}
+		self::assertNotNull($found);
+		self::assertCount(3, $found->bookmarks);
+		self::assertSame('III. Presto agitato', $found->bookmarks[2]->name);
+		self::assertSame(15, $found->bookmarks[2]->endPage);
 	}
 
 	public function testUpdateSongSyncsMetadata(): void {

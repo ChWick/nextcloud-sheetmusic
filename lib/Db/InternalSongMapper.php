@@ -35,6 +35,7 @@ class InternalSongMapper {
 		private ?InternalEntityMapper $entityMapper = null,
 		private ?InternalSongFileMapper $songFileMapper = null,
 		private ?IRootFolder $rootFolder = null,
+		private ?InternalSongBookmarkMapper $bookmarkMapper = null,
 	) {
 	}
 
@@ -372,6 +373,14 @@ class InternalSongMapper {
 			}
 		}
 
+		// 2b. Move bookmarks from droppedId to keepId
+		$bmQb = $this->db->getQueryBuilder();
+		$bmQb->update(InternalSongBookmarkMapper::TABLE_NAME)
+			->set('song_id', $bmQb->createNamedParameter($keepId, IQueryBuilder::PARAM_INT))
+			->set('updated_at', $bmQb->createNamedParameter(time(), IQueryBuilder::PARAM_INT))
+			->where($bmQb->expr()->eq('song_id', $bmQb->createNamedParameter($droppedId, IQueryBuilder::PARAM_INT)));
+		$bmQb->executeStatement();
+
 		// 3. Remove attributes and misc_data of dropped song, bump keepId updated_at, and delete dropped song
 		$droppedSong = $this->findById($droppedId);
 		if ($droppedSong !== null) {
@@ -407,6 +416,11 @@ class InternalSongMapper {
 		$attrQb->delete(InternalSongAttributeMapper::TABLE_NAME)
 			->where($attrQb->expr()->eq('song_id', $attrQb->createNamedParameter($songId, IQueryBuilder::PARAM_INT)));
 		$attrQb->executeStatement();
+
+		$bmQb = $this->db->getQueryBuilder();
+		$bmQb->delete(InternalSongBookmarkMapper::TABLE_NAME)
+			->where($bmQb->expr()->eq('song_id', $bmQb->createNamedParameter($songId, IQueryBuilder::PARAM_INT)));
+		$bmQb->executeStatement();
 
 		if ($song !== null) {
 			$now = time();
@@ -600,6 +614,10 @@ class InternalSongMapper {
 			? $this->songFileMapper->findAllForLibrary($libraryId)
 			: [];
 
+		$songBookmarks = $this->bookmarkMapper !== null
+			? $this->bookmarkMapper->findAllForLibrary($libraryId)
+			: [];
+
 		$fileIds = array_values(array_unique(array_filter(array_column($files, 'fileId'))));
 		$uid = $user?->getUID() ?? '';
 		$fileNodePaths = $this->resolveFileNodePaths($fileIds, $user);
@@ -642,7 +660,10 @@ class InternalSongMapper {
 				years: $resolve('year'),
 				signatures: $resolve('signature'),
 				sourceTypes: $resolve('sourcetype'),
-				bookmarks: [],
+				bookmarks: array_map(
+					static fn (InternalSongBookmark $bm) => $bm->toMobileSheetsBookmark(),
+					$songBookmarks[$sid] ?? []
+				),
 				audioFiles: [],
 				lastModified: $song->updatedAt > 0
 					? ($song->updatedAt < 100000000000 ? $song->updatedAt * 1000 : $song->updatedAt)

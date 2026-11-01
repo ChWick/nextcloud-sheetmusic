@@ -14,6 +14,7 @@ use OCA\SheetMusic\Db\InternalLibrary;
 use OCA\SheetMusic\Db\InternalMiscMapper;
 use OCA\SheetMusic\Db\InternalSong;
 use OCA\SheetMusic\Db\InternalSongAttributeMapper;
+use OCA\SheetMusic\Db\InternalSongBookmarkMapper;
 use OCA\SheetMusic\Db\InternalSongFile;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
@@ -42,6 +43,7 @@ trait RealMobileSheetsTestTrait {
 	protected InternalEntityMapper $entityMapper;
 	protected InternalSongFileMapper $songFileMapper;
 	protected InternalSongAttributeMapper $attributeMapper;
+	protected InternalSongBookmarkMapper $bookmarkMapper;
 	protected InternalMiscMapper $miscMapper;
 	protected LibraryMapper $libraryMapper;
 	protected IRootFolder $rootFolder;
@@ -64,6 +66,7 @@ trait RealMobileSheetsTestTrait {
 		$this->entityMapper = new InternalEntityMapper($this->dbConn);
 		$this->songFileMapper = new InternalSongFileMapper($this->dbConn);
 		$this->attributeMapper = new InternalSongAttributeMapper($this->dbConn);
+		$this->bookmarkMapper = new InternalSongBookmarkMapper($this->dbConn);
 		$this->miscMapper = new InternalMiscMapper($this->dbConn);
 		$this->libraryMapper = new LibraryMapper($this->dbConn);
 		$this->rootFolder = \OC::$server->get(IRootFolder::class);
@@ -75,6 +78,7 @@ trait RealMobileSheetsTestTrait {
 			$this->entityMapper,
 			$this->songFileMapper,
 			$this->rootFolder,
+			$this->bookmarkMapper,
 		);
 
 		$this->importer = new MobileSheetsSqliteImporter(

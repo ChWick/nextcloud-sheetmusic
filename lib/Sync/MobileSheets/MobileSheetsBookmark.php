@@ -18,11 +18,12 @@ class MobileSheetsBookmark implements JsonSerializable {
 		public readonly string $name,
 		public readonly int $pageNum,
 		public readonly int $showInLibrary = 0,
+		public readonly ?int $endPage = null,
 	) {
 	}
 
 	/**
-	 * @return array{id: int, songId: int, name: string, pageNum: int, showInLibrary: int}
+	 * @return array{id: int, songId: int, name: string, pageNum: int, showInLibrary: int, endPage?: int|null}
 	 */
 	public function jsonSerialize(): array {
 		return [
@@ -31,6 +32,7 @@ class MobileSheetsBookmark implements JsonSerializable {
 			'name' => $this->name,
 			'pageNum' => $this->pageNum,
 			'showInLibrary' => $this->showInLibrary,
+			'endPage' => $this->endPage,
 		];
 	}
 }

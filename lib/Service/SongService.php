@@ -7,6 +7,7 @@ namespace OCA\SheetMusic\Service;
 use OCA\SheetMusic\Db\InternalEntity;
 use OCA\SheetMusic\Db\InternalEntityMapper;
 use OCA\SheetMusic\Db\InternalSong;
+use OCA\SheetMusic\Db\InternalSongBookmarkMapper;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongHistory;
 use OCA\SheetMusic\Db\InternalSongMapper;
@@ -29,6 +30,7 @@ class SongService {
 		private IRootFolder $rootFolder,
 		private ?LibraryIntegrityService $libraryIntegrityService = null,
 		private ?SongHistoryService $songHistoryService = null,
+		private ?InternalSongBookmarkMapper $internalSongBookmarkMapper = null,
 	) {
 	}
 
@@ -114,6 +116,10 @@ class SongService {
 				'sourcetype' => $sourceTypeIds,
 				'instrument' => $instrumentIds,
 			]);
+
+			if ($this->internalSongBookmarkMapper !== null && !empty($bookmarks)) {
+				$this->internalSongBookmarkMapper->setBookmarksForSong($songId, $bookmarks);
+			}
 
 			$this->libraryMapper->touch($libraryId);
 
@@ -204,6 +210,10 @@ class SongService {
 					'sourcetype' => $sourceTypeIds,
 					'instrument' => $instrumentIds,
 				]);
+
+				if ($this->internalSongBookmarkMapper !== null) {
+					$this->internalSongBookmarkMapper->setBookmarksForSong($songId, $bookmarks);
+				}
 
 				$this->libraryMapper->touch($libraryId);
 
@@ -328,6 +338,7 @@ class SongService {
 					$this->songHistoryService?->recordSnapshot($song, InternalSongHistory::ACTION_DELETED, $user->getUID());
 				}
 				$this->internalSongFileMapper->deleteAllForSong($songId);
+				$this->internalSongBookmarkMapper?->deleteForSong($songId);
 				$this->internalSongMapper->cleanupDeletedSongData($libraryId, $songId);
 				$this->internalSongMapper->delete($songId);
 			}
