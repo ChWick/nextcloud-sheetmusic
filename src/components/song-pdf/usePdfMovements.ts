@@ -195,6 +195,7 @@ export function usePdfMovements(options: {
 			opus: currentSong.opus ?? '',
 			catalogNumber: currentSong.catalogNumber ?? '',
 			songNumber: currentSong.songNumber ?? '',
+			audioFiles: currentSong.audioFiles ?? [],
 			bookmarks: validMovements.map((m, idx) => ({
 				name: m.name.trim(),
 				pageNum: m.pageNum,

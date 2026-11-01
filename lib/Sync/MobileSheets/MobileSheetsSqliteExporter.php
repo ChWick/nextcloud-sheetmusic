@@ -12,7 +12,9 @@ namespace OCA\SheetMusic\Sync\MobileSheets;
 use OCA\SheetMusic\Db\InternalEntityMapper;
 use OCA\SheetMusic\Db\InternalLibrary;
 use OCA\SheetMusic\Db\InternalMiscMapper;
+use OCA\SheetMusic\Db\InternalSong;
 use OCA\SheetMusic\Db\InternalSongAttributeMapper;
+use OCA\SheetMusic\Db\InternalSongBookmark;
 use OCA\SheetMusic\Db\InternalSongBookmarkMapper;
 use OCA\SheetMusic\Db\InternalSongFile;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
@@ -589,122 +591,186 @@ class MobileSheetsSqliteExporter {
 
 			// 1. Export Bookmarks to Bookmarks table on master song
 			if ($hasBookmarksTable) {
-				foreach ($bookmarks as $bm) {
-					$candidateValues = [
-						'songid' => $song->clientId,
-						'name' => $bm->name,
-						'pagenum' => $bm->pageNum,
-						'showinlibrary' => $bm->showInLibrary,
-					];
-					$bmRow = MobileSheetsTableHelper::filterToExistingColumns($existingBmCols, $candidateValues);
-					MobileSheetsTableHelper::insertRow($db, 'Bookmarks', $bmRow);
-				}
+				$this->exportMasterBookmarks($db, $song->clientId, $bookmarks, $existingBmCols);
 			}
 
 			// 2. Option B: Export child songs for movements if file and songs table exist
-			if ($hasSongsTable && $hasFilesTable && $firstFile !== null && $webdavPath !== null && $webdavPath !== '') {
-				$collectionId = null;
-				// Create a Collection for this piece if Collections table exists
-				if ($hasCollectionsTable && $hasCollectionSongTable) {
-					$checkColl = $db->prepare('SELECT Id FROM Collections WHERE Name = :name LIMIT 1');
-					$checkColl->execute([':name' => $song->title]);
-					$existingCollId = $checkColl->fetchColumn();
-					if ($existingCollId !== false && $existingCollId !== null) {
-						$collectionId = (int)$existingCollId;
-					} else {
-						$usedCollIds = [];
-						$newCollId = MobileSheetsTableHelper::nextClientId($usedCollIds, $nextSongId, null);
-						$collCandidate = [
-							'id' => $newCollId,
-							'name' => $song->title,
-							'sortby' => 1,
-							'ascending' => 1,
-							'datecreated' => MobileSheetsTimestampUtil::secondsToMs($song->createdAt),
-							'lastmodified' => MobileSheetsTimestampUtil::secondsToMs($song->updatedAt),
-						];
-						$collRow = MobileSheetsTableHelper::filterToExistingColumns($existingCollCols, $collCandidate);
-						MobileSheetsTableHelper::insertRow($db, 'Collections', $collRow);
-						$collectionId = $newCollId;
-					}
-				}
+			if ($hasSongsTable && $hasFilesTable && $firstFile !== null && !empty($webdavPath)) {
+				$collectionId = ($hasCollectionsTable && $hasCollectionSongTable)
+					? $this->getOrCreateMovementCollection($db, $song, $existingCollCols, $nextSongId)
+					: null;
 
-				foreach ($bookmarks as $idx => $bm) {
-					// Allocate movement child song ID
-					$movementClientId = MobileSheetsTableHelper::nextClientId($usedSongIds, $nextSongId, null);
+				$this->exportChildMovements(
+					$db,
+					$song,
+					$bookmarks,
+					$firstFile,
+					$webdavPath,
+					$collectionId,
+					$usedSongIds,
+					$nextSongId,
+					$usedFileIds,
+					$nextFileId,
+					$existingSongCols,
+					$existingFileCols,
+					$existingCollSongCols,
+					$metaStmt,
+				);
+			}
+		}
+	}
 
-					$mvtTitle = $song->title . ' - ' . $bm->name;
-					$mvtSortTitle = ($song->sortTitle ?? $song->title) . ' - ' . sprintf('%02d', $idx + 1);
+	/**
+	 * @param InternalSongBookmark[] $bookmarks
+	 * @param array<string, bool> $existingBmCols
+	 */
+	private function exportMasterBookmarks(
+		PDO $db,
+		int $songClientId,
+		array $bookmarks,
+		array $existingBmCols,
+	): void {
+		foreach ($bookmarks as $bm) {
+			$candidateValues = [
+				'songid' => $songClientId,
+				'name' => $bm->name,
+				'pagenum' => $bm->pageNum,
+				'showinlibrary' => $bm->showInLibrary,
+			];
+			$bmRow = MobileSheetsTableHelper::filterToExistingColumns($existingBmCols, $candidateValues);
+			MobileSheetsTableHelper::insertRow($db, 'Bookmarks', $bmRow);
+		}
+	}
 
-					$songCandidate = [
-						'id' => $movementClientId,
-						'title' => $mvtTitle,
-						'sorttitle' => $mvtSortTitle,
-						'stars' => $song->rating,
-						'difficulty' => $song->difficulty,
-						'duration' => 0,
-						'keywords' => $song->keywords ?? '',
-						'songid' => $movementClientId,
-						'datecreated' => MobileSheetsTimestampUtil::secondsToMs($song->createdAt),
-						'creationdate' => MobileSheetsTimestampUtil::secondsToMs($song->createdAt),
-						'lastmodified' => MobileSheetsTimestampUtil::secondsToMs($song->updatedAt),
-						'opus' => $song->opus ?? '',
-						'catalognumber' => $song->catalogNumber ?? '',
-					];
-					$songRow = MobileSheetsTableHelper::filterToExistingColumns($existingSongCols, $songCandidate);
-					MobileSheetsTableHelper::insertRow($db, 'Songs', $songRow);
+	/**
+	 * @param array<string, bool> $existingCollCols
+	 */
+	private function getOrCreateMovementCollection(
+		PDO $db,
+		InternalSong $song,
+		array $existingCollCols,
+		int &$nextSongId,
+	): int {
+		$checkColl = $db->prepare('SELECT Id FROM Collections WHERE Name = :name LIMIT 1');
+		$checkColl->execute([':name' => $song->title]);
+		$existingCollId = $checkColl->fetchColumn();
+		if ($existingCollId !== false && $existingCollId !== null) {
+			return (int)$existingCollId;
+		}
 
-					// Child File entry pointing to parent file with PageOrder
-					$movementFileId = MobileSheetsTableHelper::nextClientId($usedFileIds, $nextFileId, null);
-					$startPage = $bm->pageNum;
-					$endPage = $bm->endPage ?? $bm->pageNum;
-					$pageOrder = $endPage > $startPage ? ($startPage . '-' . $endPage) : (string)$startPage;
+		$usedCollIds = [];
+		$newCollId = MobileSheetsTableHelper::nextClientId($usedCollIds, $nextSongId, null);
+		$collCandidate = [
+			'id' => $newCollId,
+			'name' => $song->title,
+			'sortby' => 1,
+			'ascending' => 1,
+			'datecreated' => MobileSheetsTimestampUtil::secondsToMs($song->createdAt),
+			'lastmodified' => MobileSheetsTimestampUtil::secondsToMs($song->updatedAt),
+		];
+		$collRow = MobileSheetsTableHelper::filterToExistingColumns($existingCollCols, $collCandidate);
+		MobileSheetsTableHelper::insertRow($db, 'Collections', $collRow);
+		return $newCollId;
+	}
 
-					$fileCandidate = [
-						'id' => $movementFileId,
-						'songid' => $movementClientId,
-						'path' => $webdavPath,
-						'pageorder' => $pageOrder,
-						'filesize' => $firstFile->fileSize ?? 0,
-						'lastmodified' => MobileSheetsTimestampUtil::secondsToMs($firstFile->updatedAt),
-						'source' => 1,
-						'type' => $firstFile->type,
-						'password' => '',
-						'sourcefilepagecount' => $firstFile->pageCount ?? 1,
-						'filehash' => $firstFile->fileHash ?? 0,
-						'width' => -1,
-						'height' => -1,
-					];
-					$fileRow = MobileSheetsTableHelper::filterToExistingColumns($existingFileCols, $fileCandidate);
-					MobileSheetsTableHelper::insertRow($db, 'Files', $fileRow);
+	/**
+	 * @param InternalSongBookmark[] $bookmarks
+	 * @param array<int, bool> $usedSongIds
+	 * @param array<int, bool> $usedFileIds
+	 * @param array<string, bool> $existingSongCols
+	 * @param array<string, bool> $existingFileCols
+	 * @param array<string, bool> $existingCollSongCols
+	 */
+	private function exportChildMovements(
+		PDO $db,
+		InternalSong $song,
+		array $bookmarks,
+		InternalSongFile $firstFile,
+		string $webdavPath,
+		?int $collectionId,
+		array &$usedSongIds,
+		int &$nextSongId,
+		array &$usedFileIds,
+		int &$nextFileId,
+		array $existingSongCols,
+		array $existingFileCols,
+		array $existingCollSongCols,
+		?\PDOStatement $metaStmt,
+	): void {
+		foreach ($bookmarks as $idx => $bm) {
+			$movementClientId = MobileSheetsTableHelper::nextClientId($usedSongIds, $nextSongId, null);
 
-					// Link to collection
-					if ($collectionId !== null && $hasCollectionSongTable) {
-						$collSongCandidate = [
-							'collectionid' => $collectionId,
-							'songid' => $movementClientId,
-						];
-						$collSongRow = MobileSheetsTableHelper::filterToExistingColumns($existingCollSongCols, $collSongCandidate);
-						MobileSheetsTableHelper::insertRow($db, 'CollectionSong', $collSongRow);
-					}
+			$mvtTitle = $song->title . ' - ' . $bm->name;
+			$mvtSortTitle = ($song->sortTitle ?? $song->title) . ' - ' . sprintf('%02d', $idx + 1);
 
-					// Metadata tracking to prevent re-importing child song as separate piece
-					if ($metaStmt !== null) {
-						$extra = [
-							'parent_uuid' => $song->uuid,
-							'parent_id' => $song->id,
-							'movement_id' => $bm->id,
-							'start_page' => $bm->pageNum,
-							'end_page' => $bm->endPage,
-						];
-						$metaStmt->execute([
-							':type' => 'song_movement',
-							':uuid' => $song->uuid . ':movement:' . ($bm->id ?? $idx),
-							':client_id' => $movementClientId,
-							':updated_at' => $song->updatedAt,
-							':extra_json' => json_encode($extra, JSON_THROW_ON_ERROR),
-						]);
-					}
-				}
+			$songCandidate = [
+				'id' => $movementClientId,
+				'title' => $mvtTitle,
+				'sorttitle' => $mvtSortTitle,
+				'stars' => $song->rating,
+				'difficulty' => $song->difficulty,
+				'duration' => 0,
+				'keywords' => $song->keywords ?? '',
+				'songid' => $movementClientId,
+				'datecreated' => MobileSheetsTimestampUtil::secondsToMs($song->createdAt),
+				'creationdate' => MobileSheetsTimestampUtil::secondsToMs($song->createdAt),
+				'lastmodified' => MobileSheetsTimestampUtil::secondsToMs($song->updatedAt),
+				'opus' => $song->opus ?? '',
+				'catalognumber' => $song->catalogNumber ?? '',
+			];
+			$songRow = MobileSheetsTableHelper::filterToExistingColumns($existingSongCols, $songCandidate);
+			MobileSheetsTableHelper::insertRow($db, 'Songs', $songRow);
+
+			// Child File entry pointing to parent file with PageOrder
+			$movementFileId = MobileSheetsTableHelper::nextClientId($usedFileIds, $nextFileId, null);
+			$startPage = $bm->pageNum;
+			$endPage = $bm->endPage ?? $bm->pageNum;
+			$pageOrder = $endPage > $startPage ? ($startPage . '-' . $endPage) : (string)$startPage;
+
+			$fileCandidate = [
+				'id' => $movementFileId,
+				'songid' => $movementClientId,
+				'path' => $webdavPath,
+				'pageorder' => $pageOrder,
+				'filesize' => $firstFile->fileSize ?? 0,
+				'lastmodified' => MobileSheetsTimestampUtil::secondsToMs($firstFile->updatedAt),
+				'source' => 1,
+				'type' => $firstFile->type,
+				'password' => '',
+				'sourcefilepagecount' => $firstFile->pageCount ?? 1,
+				'filehash' => $firstFile->fileHash ?? 0,
+				'width' => -1,
+				'height' => -1,
+			];
+			$fileRow = MobileSheetsTableHelper::filterToExistingColumns($existingFileCols, $fileCandidate);
+			MobileSheetsTableHelper::insertRow($db, 'Files', $fileRow);
+
+			// Link to collection
+			if ($collectionId !== null && !empty($existingCollSongCols)) {
+				$collSongCandidate = [
+					'collectionid' => $collectionId,
+					'songid' => $movementClientId,
+				];
+				$collSongRow = MobileSheetsTableHelper::filterToExistingColumns($existingCollSongCols, $collSongCandidate);
+				MobileSheetsTableHelper::insertRow($db, 'CollectionSong', $collSongRow);
+			}
+
+			// Metadata tracking to prevent re-importing child song as separate piece
+			if ($metaStmt !== null) {
+				$extra = [
+					'parent_uuid' => $song->uuid,
+					'parent_id' => $song->id,
+					'movement_id' => $bm->id,
+					'start_page' => $bm->pageNum,
+					'end_page' => $bm->endPage,
+				];
+				$metaStmt->execute([
+					':type' => 'song_movement',
+					':uuid' => $song->uuid . ':movement:' . ($bm->id ?? $idx),
+					':client_id' => $movementClientId,
+					':updated_at' => $song->updatedAt,
+					':extra_json' => json_encode($extra, JSON_THROW_ON_ERROR),
+				]);
 			}
 		}
 	}
