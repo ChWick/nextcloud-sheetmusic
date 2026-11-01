@@ -457,6 +457,24 @@ final class MobileSheetsSqliteExporterTest extends TestCase {
 		// 4. _nc_sync_metadata tracks child movements
 		$metaRows = $db->query("SELECT entity_type, client_id, extra_json FROM _nc_sync_metadata WHERE entity_type = 'song_movement'")->fetchAll(PDO::FETCH_ASSOC);
 		self::assertCount(3, $metaRows);
+
+		// 5. Master song SongId is 0, child movement songs have SongId pointing to parent master song (10)
+		$allSongs = $db->query('SELECT Id, SongId, LastPage, OrientationLock, AutoStartAudio FROM Songs ORDER BY Id ASC')->fetchAll(PDO::FETCH_ASSOC);
+		self::assertSame(0, (int)$allSongs[0]['SongId']);
+		self::assertSame(0, (int)$allSongs[0]['LastPage']);
+		self::assertSame(0, (int)$allSongs[0]['OrientationLock']);
+		self::assertSame(0, (int)$allSongs[0]['AutoStartAudio']);
+
+		for ($i = 1; $i <= 3; $i++) {
+			self::assertSame(10, (int)$allSongs[$i]['SongId']);
+			self::assertSame(0, (int)$allSongs[$i]['LastPage']);
+		}
+
+		// 6. Ensure AutoScroll and MetronomeSettings records exist for all 4 songs
+		$autoScrollCount = (int)$db->query('SELECT COUNT(*) FROM AutoScroll')->fetchColumn();
+		self::assertSame(4, $autoScrollCount);
+		$metroCount = (int)$db->query('SELECT COUNT(*) FROM MetronomeSettings')->fetchColumn();
+		self::assertSame(4, $metroCount);
 	}
 
 	public function testExportMovementsWithExistingCollectionsAvoidsIdCollision(): void {

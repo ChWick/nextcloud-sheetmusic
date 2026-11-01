@@ -300,7 +300,13 @@ class MobileSheetsSqliteExporter {
 					'keywords' => $song->keywords ?? '',
 					'custom' => $custom,
 					'custom2' => $custom2,
-					'songid' => $clientId,
+					'lastpage' => 0,
+					'orientationlock' => 0,
+					'autostartaudio' => 0,
+					'verticalzoom' => 1.0,
+					'sharpen' => 0,
+					'sharpenlevel' => 4,
+					'songid' => 0,
 					'datecreated' => MobileSheetsTimestampUtil::secondsToMs($song->createdAt),
 					'creationdate' => MobileSheetsTimestampUtil::secondsToMs($song->createdAt),
 					'lastmodified' => MobileSheetsTimestampUtil::secondsToMs($song->updatedAt),
@@ -311,6 +317,7 @@ class MobileSheetsSqliteExporter {
 
 				$insertRow = MobileSheetsTableHelper::filterToExistingColumns($existingCols, $candidateValues);
 				MobileSheetsTableHelper::insertRow($db, 'Songs', $insertRow);
+				$this->ensureSongDefaults($db, (int)$clientId);
 			} else {
 				$existingModSec = MobileSheetsTimestampUtil::extractLastModifiedSec($existingSongRow);
 				if (($existingModSec > 0 && $song->updatedAt > $existingModSec) || trim((string)($existingSongRow['Title'] ?? '')) !== $song->title) {
@@ -342,6 +349,7 @@ class MobileSheetsSqliteExporter {
 					$updateRow = MobileSheetsTableHelper::filterToExistingColumns($existingCols, $updateCandidates);
 					MobileSheetsTableHelper::updateRow($db, 'Songs', $updateRow, 'Id', $clientId);
 				}
+				$this->ensureSongDefaults($db, (int)$clientId);
 			}
 
 			if ($hasNotesTable) {
@@ -654,6 +662,8 @@ class MobileSheetsSqliteExporter {
 				'name' => $bm->name,
 				'pagenum' => $bm->pageNum,
 				'showinlibrary' => $bm->showInLibrary,
+				'datecreated' => MobileSheetsTimestampUtil::secondsToMs($bm->createdAt),
+				'lastmodified' => MobileSheetsTimestampUtil::secondsToMs($bm->updatedAt),
 			];
 			$bmRow = MobileSheetsTableHelper::filterToExistingColumns($existingBmCols, $candidateValues);
 			MobileSheetsTableHelper::insertRow($db, 'Bookmarks', $bmRow);
@@ -759,7 +769,15 @@ class MobileSheetsSqliteExporter {
 				'difficulty' => $song->difficulty,
 				'duration' => 0,
 				'keywords' => $song->keywords ?? '',
-				'songid' => $movementClientId,
+				'custom' => '',
+				'custom2' => '',
+				'lastpage' => 0,
+				'orientationlock' => 0,
+				'autostartaudio' => 0,
+				'verticalzoom' => 1.0,
+				'sharpen' => 0,
+				'sharpenlevel' => 4,
+				'songid' => $song->clientId,
 				'datecreated' => MobileSheetsTimestampUtil::secondsToMs($song->createdAt),
 				'creationdate' => MobileSheetsTimestampUtil::secondsToMs($song->createdAt),
 				'lastmodified' => MobileSheetsTimestampUtil::secondsToMs($song->updatedAt),
@@ -768,6 +786,7 @@ class MobileSheetsSqliteExporter {
 			];
 			$songRow = MobileSheetsTableHelper::filterToExistingColumns($existingSongCols, $songCandidate);
 			MobileSheetsTableHelper::insertRow($db, 'Songs', $songRow);
+			$this->ensureSongDefaults($db, (int)$movementClientId);
 
 			// Child File entry pointing to parent file with PageOrder
 			$movementFileId = MobileSheetsTableHelper::nextClientId($usedFileIds, $nextFileId, null);
@@ -955,6 +974,44 @@ class MobileSheetsSqliteExporter {
 			$this->songFileMapper->update($file);
 		} catch (\Throwable) {
 			// Best effort fallback
+		}
+	}
+
+	private function ensureSongDefaults(PDO $db, int $songClientId): void {
+		if (MobileSheetsTableHelper::tableExists($db, 'AutoScroll')) {
+			$stmt = $db->prepare('SELECT 1 FROM AutoScroll WHERE SongId = ? LIMIT 1');
+			$stmt->execute([$songClientId]);
+			if ($stmt->fetchColumn() === false) {
+				MobileSheetsTableHelper::insertRow($db, 'AutoScroll', [
+					'SongId' => $songClientId,
+					'Behavior' => 0,
+					'PauseDuration' => 8000,
+					'Speed' => 3,
+					'FixedDuration' => 1000,
+					'ScrollPercent' => 20,
+					'ScrollOnLoad' => 0,
+					'TimeBeforeScroll' => 2000,
+				]);
+			}
+		}
+
+		if (MobileSheetsTableHelper::tableExists($db, 'MetronomeSettings')) {
+			$stmt = $db->prepare('SELECT 1 FROM MetronomeSettings WHERE SongId = ? LIMIT 1');
+			$stmt->execute([$songClientId]);
+			if ($stmt->fetchColumn() === false) {
+				MobileSheetsTableHelper::insertRow($db, 'MetronomeSettings', [
+					'SongId' => $songClientId,
+					'Sig1' => 2,
+					'Sig2' => 0,
+					'Subdivision' => 0,
+					'SoundFX' => 0,
+					'AccentFirst' => 0,
+					'AutoStart' => 0,
+					'CountIn' => 0,
+					'NumberCount' => 1,
+					'AutoTurn' => 0,
+				]);
+			}
 		}
 	}
 }

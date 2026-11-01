@@ -90,6 +90,54 @@ final class MobileSheetsEntityExporterTest extends TestCase {
 		$this->assertCount(2, $meta);
 	}
 
+	public function testExportEntitiesMaintainsIndependentClientIdPerTable(): void {
+		$this->sqliteDb->exec('CREATE TABLE Composer (Id INTEGER PRIMARY KEY, Name TEXT, LastModified INTEGER, DateCreated INTEGER, SortBy INTEGER, Ascending INTEGER)');
+		$this->sqliteDb->exec('CREATE TABLE Collections (Id INTEGER PRIMARY KEY, Name TEXT, LastModified INTEGER, DateCreated INTEGER, SortBy INTEGER, Ascending INTEGER)');
+		$this->sqliteDb->exec('CREATE TABLE Books (Id INTEGER PRIMARY KEY, Title TEXT, LastModified INTEGER, DateCreated INTEGER, SortBy INTEGER, Ascending INTEGER)');
+
+		$coll = new InternalEntity(
+			uuid: 'coll-uuid-1',
+			libraryId: $this->libraryId,
+			type: 'collection',
+			name: 'My Collection',
+			clientId: null,
+		);
+		$this->entityMapper->insert($coll);
+
+		$comp = new InternalEntity(
+			uuid: 'comp-uuid-x',
+			libraryId: $this->libraryId,
+			type: 'composer',
+			name: 'Beethoven',
+			clientId: null,
+		);
+		$this->entityMapper->insert($comp);
+
+		$book = new InternalEntity(
+			uuid: 'book-uuid-1',
+			libraryId: $this->libraryId,
+			type: 'book',
+			name: 'Songbook',
+			clientId: null,
+		);
+		$this->entityMapper->insert($book);
+
+		$this->entityExporter->exportEntities($this->sqliteDb, $this->libraryId);
+
+		$collRows = $this->sqliteDb->query('SELECT Id, Name FROM Collections')->fetchAll();
+		$compRows = $this->sqliteDb->query('SELECT Id, Name FROM Composer')->fetchAll();
+		$bookRows = $this->sqliteDb->query('SELECT Id, Title FROM Books')->fetchAll();
+
+		$this->assertCount(1, $collRows);
+		$this->assertSame(1, (int)$collRows[0]['Id']);
+
+		$this->assertCount(1, $compRows);
+		$this->assertSame(1, (int)$compRows[0]['Id'], 'Composer table must start at Id 1, not be offset by Collections');
+
+		$this->assertCount(1, $bookRows);
+		$this->assertSame(1, (int)$bookRows[0]['Id'], 'Books table must start at Id 1, not be offset by other tables');
+	}
+
 	public function testExportSongEntityLinksRespectsValidSongIdsAndOrdering(): void {
 		$this->sqliteDb->exec('CREATE TABLE Composer (Id INTEGER PRIMARY KEY, Name TEXT, SortBy INTEGER, Ascending INTEGER)');
 		$this->sqliteDb->exec('CREATE TABLE ComposerSongs (Id INTEGER PRIMARY KEY, ComposerId INTEGER, SongId INTEGER)');

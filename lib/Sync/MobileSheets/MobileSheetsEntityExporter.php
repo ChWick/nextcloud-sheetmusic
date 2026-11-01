@@ -37,79 +37,87 @@ class MobileSheetsEntityExporter {
 	 */
 	public function exportEntities(PDO $db, int $libraryId): void {
 		$entities = $this->entityMapper->findAllForLibrary($libraryId, includeDeleted: false);
-		[$usedIds, $nextId] = MobileSheetsTableHelper::initClientIdTracking($entities);
+		$entitiesByTable = [];
+		foreach ($entities as $entity) {
+			$config = self::ENTITY_TABLE_CONFIG[$entity->type] ?? self::ENTITY_TABLE_CONFIG['customgroup'];
+			$entitiesByTable[$config['table']][] = $entity;
+		}
 
 		$hasSyncMeta = MobileSheetsTableHelper::tableExists($db, '_nc_sync_metadata');
 		$metaStmt = $hasSyncMeta ? $db->prepare('INSERT INTO _nc_sync_metadata (entity_type, uuid, client_id, updated_at, extra_json) VALUES (:type, :uuid, :client_id, :updated_at, :extra_json)') : null;
 
-		foreach ($entities as $entity) {
-			$config = self::ENTITY_TABLE_CONFIG[$entity->type] ?? self::ENTITY_TABLE_CONFIG['customgroup'];
-
-			$tableName = MobileSheetsTableHelper::resolveTable($db, $config['table']);
+		foreach ($entitiesByTable as $targetTable => $tableEntities) {
+			$tableName = MobileSheetsTableHelper::resolveTable($db, $targetTable);
 			if ($tableName === null) {
 				continue;
 			}
 
-			$clientId = MobileSheetsTableHelper::nextClientId($usedIds, $nextId, $entity->clientId);
-			if ($entity->clientId !== $clientId) {
-				$entity->clientId = $clientId;
-				$this->entityMapper->update($entity);
-			}
+			[$usedIds, $nextId] = MobileSheetsTableHelper::initClientIdTracking($tableEntities);
 
-			$existingEntityRow = MobileSheetsTableHelper::findRowById($db, $tableName, $clientId);
+			foreach ($tableEntities as $entity) {
+				$config = self::ENTITY_TABLE_CONFIG[$entity->type] ?? self::ENTITY_TABLE_CONFIG['customgroup'];
 
-			$existingCols = MobileSheetsTableHelper::getTableColumns($db, $tableName);
-			$nameCol = MobileSheetsTableHelper::resolveEntityNameColumn($existingCols, $config['nameCol']) ?? $config['nameCol'];
-			$val = (strtolower($nameCol) === 'year') ? (int)$entity->name : $entity->name;
-			$hasSortCols = isset($existingCols['sortby']) && isset($existingCols['ascending']);
-			$dateCreatedCol = $existingCols['datecreated'] ?? ($existingCols['creationdate'] ?? null);
-			$lastModCol = $existingCols['lastmodified'] ?? null;
-
-			if ($existingEntityRow === null) {
-				$insertRow = [
-					'Id' => $clientId,
-					$nameCol => $val,
-				];
-
-				if ($hasSortCols) {
-					$insertRow[$existingCols['sortby']] = $entity->sortBy;
-					$insertRow[$existingCols['ascending']] = $entity->ascending;
-				}
-				if ($dateCreatedCol !== null) {
-					$insertRow[$dateCreatedCol] = MobileSheetsTimestampUtil::secondsToMs($entity->createdAt);
-				}
-				if ($lastModCol !== null) {
-					$insertRow[$lastModCol] = MobileSheetsTimestampUtil::secondsToMs($entity->updatedAt);
+				$clientId = MobileSheetsTableHelper::nextClientId($usedIds, $nextId, $entity->clientId);
+				if ($entity->clientId !== $clientId) {
+					$entity->clientId = $clientId;
+					$this->entityMapper->update($entity);
 				}
 
-				MobileSheetsTableHelper::insertRow($db, $tableName, $insertRow);
-			} else {
-				$existingModSec = MobileSheetsTimestampUtil::extractLastModifiedSec($existingEntityRow);
-				$sortChanged = $hasSortCols && (
-					(int)($existingEntityRow[$existingCols['sortby']] ?? 1) !== $entity->sortBy
-					|| (int)($existingEntityRow[$existingCols['ascending']] ?? 1) !== $entity->ascending
-				);
-				if (($existingModSec > 0 && $entity->updatedAt > $existingModSec) || trim((string)($existingEntityRow[$nameCol] ?? '')) !== (string)$val || $sortChanged) {
-					$updateValues = [$nameCol => $val];
+				$existingEntityRow = MobileSheetsTableHelper::findRowById($db, $tableName, $clientId);
+
+				$existingCols = MobileSheetsTableHelper::getTableColumns($db, $tableName);
+				$nameCol = MobileSheetsTableHelper::resolveEntityNameColumn($existingCols, $config['nameCol']) ?? $config['nameCol'];
+				$val = (strtolower($nameCol) === 'year') ? (int)$entity->name : $entity->name;
+				$hasSortCols = isset($existingCols['sortby']) && isset($existingCols['ascending']);
+				$dateCreatedCol = $existingCols['datecreated'] ?? ($existingCols['creationdate'] ?? null);
+				$lastModCol = $existingCols['lastmodified'] ?? null;
+
+				if ($existingEntityRow === null) {
+					$insertRow = [
+						'Id' => $clientId,
+						$nameCol => $val,
+					];
+
 					if ($hasSortCols) {
-						$updateValues[$existingCols['sortby']] = $entity->sortBy;
-						$updateValues[$existingCols['ascending']] = $entity->ascending;
+						$insertRow[$existingCols['sortby']] = $entity->sortBy;
+						$insertRow[$existingCols['ascending']] = $entity->ascending;
+					}
+					if ($dateCreatedCol !== null) {
+						$insertRow[$dateCreatedCol] = MobileSheetsTimestampUtil::secondsToMs($entity->createdAt);
 					}
 					if ($lastModCol !== null) {
-						$updateValues[$lastModCol] = MobileSheetsTimestampUtil::secondsToMs($entity->updatedAt);
+						$insertRow[$lastModCol] = MobileSheetsTimestampUtil::secondsToMs($entity->updatedAt);
 					}
-					MobileSheetsTableHelper::updateRow($db, $tableName, $updateValues, 'Id', $clientId);
-				}
-			}
 
-			if ($metaStmt !== null) {
-				$metaStmt->execute([
-					':type' => 'entity:' . $entity->type,
-					':uuid' => $entity->uuid,
-					':client_id' => $clientId,
-					':updated_at' => $entity->updatedAt,
-					':extra_json' => json_encode(['original_type' => $entity->type, 'name' => $entity->name], JSON_THROW_ON_ERROR),
-				]);
+					MobileSheetsTableHelper::insertRow($db, $tableName, $insertRow);
+				} else {
+					$existingModSec = MobileSheetsTimestampUtil::extractLastModifiedSec($existingEntityRow);
+					$sortChanged = $hasSortCols && (
+						(int)($existingEntityRow[$existingCols['sortby']] ?? 1) !== $entity->sortBy
+						|| (int)($existingEntityRow[$existingCols['ascending']] ?? 1) !== $entity->ascending
+					);
+					if (($existingModSec > 0 && $entity->updatedAt > $existingModSec) || trim((string)($existingEntityRow[$nameCol] ?? '')) !== (string)$val || $sortChanged) {
+						$updateValues = [$nameCol => $val];
+						if ($hasSortCols) {
+							$updateValues[$existingCols['sortby']] = $entity->sortBy;
+							$updateValues[$existingCols['ascending']] = $entity->ascending;
+						}
+						if ($lastModCol !== null) {
+							$updateValues[$lastModCol] = MobileSheetsTimestampUtil::secondsToMs($entity->updatedAt);
+						}
+						MobileSheetsTableHelper::updateRow($db, $tableName, $updateValues, 'Id', $clientId);
+					}
+				}
+
+				if ($metaStmt !== null) {
+					$metaStmt->execute([
+						':type' => 'entity:' . $entity->type,
+						':uuid' => $entity->uuid,
+						':client_id' => $clientId,
+						':updated_at' => $entity->updatedAt,
+						':extra_json' => json_encode(['original_type' => $entity->type, 'name' => $entity->name], JSON_THROW_ON_ERROR),
+					]);
+				}
 			}
 		}
 	}
