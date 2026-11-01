@@ -11,7 +11,6 @@ namespace Service;
 
 use OCA\SheetMusic\Db\InternalEntity;
 use OCA\SheetMusic\Db\InternalEntityMapper;
-use OCA\SheetMusic\Db\InternalLibrary;
 use OCA\SheetMusic\Db\InternalMiscMapper;
 use OCA\SheetMusic\Db\InternalSong;
 use OCA\SheetMusic\Db\InternalSongAttributeMapper;
@@ -47,11 +46,17 @@ final class LibraryIntegrityServiceTest extends TestCase {
 	protected function setUp(): void {
 		parent::setUp();
 		$this->setUpRealMobileSheetsEnvironment();
-		$this->cleanupLibraryData(1);
+		$this->cleanupLibraryData(1, deleteLibraryRow: false);
+		if ($this->libraryMapper->findById(1) === null) {
+			$this->dbConn->executeStatement(
+				'INSERT INTO *PREFIX*sheetmusic_libraries (id, user_id, path, created_at, updated_at) VALUES (1, ?, ?, ?, ?)',
+				['user1', '/Noten/library.db', time(), time()]
+			);
+		}
 	}
 
 	protected function tearDown(): void {
-		$this->cleanupLibraryData(1);
+		$this->cleanupLibraryData(1, deleteLibraryRow: true);
 		$this->tearDownRealMobileSheetsEnvironment();
 		parent::tearDown();
 	}
@@ -393,9 +398,12 @@ final class LibraryIntegrityServiceTest extends TestCase {
 			['Noten/Bach - Joshua.pdf' => $pdf],
 		);
 
-		$libraryService = $this->createMock(\OCA\SheetMusic\Service\LibraryService::class);
-		$libraryService->method('isAutoPathsEnabled')->willReturn(true);
-		$libraryService->method('isAutoPdfMetadataEnabled')->willReturn(false);
+		$this->libraryMapper->setSettingsForUser('user1', 1, autoPaths: true, autoPdfMetadata: false);
+		$libraryService = new LibraryService(
+			$this->libraryMapper,
+			$this->rootFolder,
+			new NullLogger(),
+		);
 
 		$service = $this->createIntegrityService(
 			$libraryService,
@@ -677,16 +685,10 @@ final class LibraryIntegrityServiceTest extends TestCase {
 	}
 
 	public function testCheckIntegrityWhenAutoPathsDisabledReportsNoNamingOrOrphanIssues(): void {
-		$libraryMapper = $this->createMock(\OCA\SheetMusic\Db\LibraryMapper::class);
-		$libraryMapper->method('findForUser')->with('user1', 1)->willReturn(new InternalLibrary(
-			id: 1,
-			userId: 'user1',
-			path: '/Noten/library.db',
-			autoPaths: false,
-		));
+		$this->libraryMapper->setSettingsForUser('user1', 1, autoPaths: false);
 		$libraryService = new LibraryService(
-			$libraryMapper,
-			$this->createMock(IRootFolder::class),
+			$this->libraryMapper,
+			$this->rootFolder,
 			new NullLogger(),
 		);
 
@@ -740,8 +742,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		array $files = [],
 		?InternalSongMapper $internalSongMapper = null,
 	): array {
-		$user = $this->createMock(\OCP\IUser::class);
-		$user->method('getUID')->willReturn('user1');
+		$user = $this->userManager->get('user1');
 
 		$storage = $this->createMock(IStorage::class);
 		$storage->method('getLocalFile')->willReturn($databasePath);
@@ -772,21 +773,13 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$rootFolder = $this->createMock(IRootFolder::class);
 		$rootFolder->method('getUserFolder')->willReturn($userFolder);
 
-		$libraryMapper = $this->createMock(\OCA\SheetMusic\Db\LibraryMapper::class);
-		$libraryMapper->method('findById')->willReturnCallback(function (int $id) {
-			$found = $this->libraryMapper->findById($id);
-			if ($found !== null) {
-				return $found;
-			}
-			return new InternalLibrary(
-				id: $id,
-				userId: 'user1',
-				path: '/Noten/library.db',
+		if ($this->libraryMapper->findById(1) === null) {
+			$this->dbConn->executeStatement(
+				'INSERT INTO *PREFIX*sheetmusic_libraries (id, user_id, path, created_at, updated_at) VALUES (1, ?, ?, ?, ?)',
+				['user1', '/Noten/library.db', time(), time()]
 			);
-		});
-		$libraryMapper->method('touch')->willReturnCallback(function (int $id) {
-			$this->libraryMapper->touch($id);
-		});
+		}
+		$libraryMapper = $this->libraryMapper;
 
 		if ($internalSongMapper === null) {
 			$songMapper = $this->createSongMapper();
@@ -856,7 +849,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager('dummy.db', $targetFolder);
 
 		$libId = 1;
-		$this->cleanupLibraryData($libId);
+		$this->cleanupLibraryData($libId, deleteLibraryRow: false);
 
 		$entity = $this->entityMapper->insert(new InternalEntity(
 			uuid: 'ent-orph-assign',
@@ -885,7 +878,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager('dummy.db', $targetFolder);
 
 		$libId = 1;
-		$this->cleanupLibraryData($libId);
+		$this->cleanupLibraryData($libId, deleteLibraryRow: false);
 
 		$entity = $this->entityMapper->insert(new InternalEntity(
 			uuid: 'ent-fix-assign',
@@ -918,7 +911,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager('dummy.db', $targetFolder);
 
 		$libId = 1;
-		$this->cleanupLibraryData($libId);
+		$this->cleanupLibraryData($libId, deleteLibraryRow: false);
 
 		$this->songMapper->insert(new InternalSong(uuid: 'dup-s1', libraryId: $libId, title: 'S1', clientId: 123));
 		$this->songMapper->insert(new InternalSong(uuid: 'dup-s2', libraryId: $libId, title: 'S2', clientId: 123));
@@ -945,7 +938,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager('dummy.db', $targetFolder);
 
 		$libId = 1;
-		$this->cleanupLibraryData($libId);
+		$this->cleanupLibraryData($libId, deleteLibraryRow: false);
 
 		$this->songMapper->insert(new InternalSong(uuid: 'fix-dup-s1', libraryId: $libId, title: 'S1', clientId: 123));
 		$this->songMapper->insert(new InternalSong(uuid: 'fix-dup-s2', libraryId: $libId, title: 'S2', clientId: 123));
@@ -976,7 +969,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager('dummy.db', $targetFolder);
 
 		$libId = 1;
-		$this->cleanupLibraryData($libId);
+		$this->cleanupLibraryData($libId, deleteLibraryRow: false);
 
 		$song = $this->songMapper->insert(new InternalSong(
 			uuid: 'empty-song-uuid',
@@ -1008,7 +1001,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager('dummy.db', $targetFolder);
 
 		$libId = 1;
-		$this->cleanupLibraryData($libId);
+		$this->cleanupLibraryData($libId, deleteLibraryRow: false);
 
 		$song = $this->songMapper->insert(new InternalSong(
 			uuid: 'missing-file-song-uuid',
@@ -1059,7 +1052,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager('dummy.db', $targetFolder);
 
 		$libId = 1;
-		$this->cleanupLibraryData($libId);
+		$this->cleanupLibraryData($libId, deleteLibraryRow: false);
 
 		$song = $this->songMapper->insert(new InternalSong(
 			uuid: 'missing-file-fix-uuid',
@@ -1118,7 +1111,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager('dummy.db', $targetFolder);
 
 		$libId = 1;
-		$this->cleanupLibraryData($libId);
+		$this->cleanupLibraryData($libId, deleteLibraryRow: false);
 
 		$song = $this->songMapper->insert(new InternalSong(
 			uuid: 'orphan-file-song-uuid',
@@ -1160,7 +1153,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager('dummy.db', $targetFolder);
 
 		$libId = 1;
-		$this->cleanupLibraryData($libId);
+		$this->cleanupLibraryData($libId, deleteLibraryRow: false);
 
 		$song = $this->songMapper->insert(new InternalSong(
 			uuid: 'orphan-attr-song-uuid',
@@ -1196,7 +1189,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager('dummy.db', $targetFolder);
 
 		$libId = 1;
-		$this->cleanupLibraryData($libId);
+		$this->cleanupLibraryData($libId, deleteLibraryRow: false);
 
 		$song = $this->songMapper->insert(new InternalSong(
 			uuid: 'orphan-misc-song-uuid',
@@ -1235,7 +1228,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager('dummy.db', $targetFolder);
 
 		$libId = 1;
-		$this->cleanupLibraryData($libId);
+		$this->cleanupLibraryData($libId, deleteLibraryRow: false);
 
 		// 1. Orphan entity assignment
 		$entity = $this->entityMapper->insert(new InternalEntity(

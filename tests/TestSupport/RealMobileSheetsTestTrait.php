@@ -136,7 +136,7 @@ trait RealMobileSheetsTestTrait {
 		$this->createdUserNodes = [];
 	}
 
-	protected function cleanupLibraryData(int $libraryId): void {
+	protected function cleanupLibraryData(int $libraryId, bool $deleteLibraryRow = true): void {
 		$this->dbConn->executeStatement('DELETE FROM *PREFIX*sheetmusic_song_entities WHERE song_id IN (SELECT id FROM *PREFIX*sheetmusic_songs WHERE library_id = ?)', [$libraryId]);
 		$this->dbConn->executeStatement('DELETE FROM *PREFIX*sheetmusic_song_attributes WHERE song_id IN (SELECT id FROM *PREFIX*sheetmusic_songs WHERE library_id = ?)', [$libraryId]);
 		$this->dbConn->executeStatement('DELETE FROM *PREFIX*sheetmusic_song_files WHERE song_id IN (SELECT id FROM *PREFIX*sheetmusic_songs WHERE library_id = ?)', [$libraryId]);
@@ -146,7 +146,9 @@ trait RealMobileSheetsTestTrait {
 		$this->dbConn->executeStatement('DELETE FROM *PREFIX*sheetmusic_entities WHERE library_id = ?', [$libraryId]);
 		$this->dbConn->executeStatement('DELETE FROM *PREFIX*sheetmusic_misc_data WHERE library_id = ?', [$libraryId]);
 		$this->dbConn->executeStatement('DELETE FROM *PREFIX*sheetmusic_misc_schema WHERE library_id = ?', [$libraryId]);
-		$this->dbConn->executeStatement('DELETE FROM *PREFIX*sheetmusic_libraries WHERE id = ?', [$libraryId]);
+		if ($deleteLibraryRow) {
+			$this->dbConn->executeStatement('DELETE FROM *PREFIX*sheetmusic_libraries WHERE id = ?', [$libraryId]);
+		}
 	}
 
 	protected function createTestLibrary(?string $path = null, ?string $userId = null): InternalLibrary {
