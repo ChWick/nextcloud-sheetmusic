@@ -93,6 +93,7 @@ final class FileManagerTest extends TestCase {
 	private IRootFolder $rootFolder;
 	private SongMapper $songMapper;
 	private IUserFolder $userFolder;
+	private IUser $user;
 
 	protected function setUp(): void {
 		$this->databaseFixture = \TestSupport\MobileSheetsTestDatabase::create();
@@ -108,8 +109,7 @@ final class FileManagerTest extends TestCase {
 		$this->deletedFolders = [];
 		$this->nodeIds = [];
 
-		$user = $this->createMock(IUser::class);
-		$user->method('getUID')->willReturn(self::UID);
+		$this->user = \OC::$server->get(\OCP\IUserManager::class)->get(self::UID);
 
 		$this->userFolder = $this->fakeFolder('');
 		$this->userFolder->method('getPath')->willReturn(self::USER_ROOT);
@@ -234,10 +234,7 @@ final class FileManagerTest extends TestCase {
 	}
 
 	private function user(): IUser {
-		$user = $this->createMock(IUser::class);
-		$user->method('getUID')->willReturn(self::UID);
-
-		return $user;
+		return $this->user;
 	}
 
 	private function sourceWebdav(string $relative): string {
@@ -1602,8 +1599,7 @@ final class FileManagerTest extends TestCase {
 	}
 
 	public function testRegenerateFilePathsThrowsWhenTheLibraryIsUnknown(): void {
-		$libraryMapper = $this->createMock(LibraryMapper::class);
-		$libraryMapper->method('findById')->with(99)->willReturn(null);
+		$libraryMapper = new LibraryMapper(\OC::$server->get(\OCP\IDBConnection::class));
 
 		$fileManager = new FileManager(
 			$libraryMapper,
@@ -1853,12 +1849,9 @@ final class FileManagerTest extends TestCase {
 		);
 		$file = $song->files[0];
 
-		$user = $this->createMock(IUser::class);
-		$user->method('getUID')->willReturn(self::UID);
-
 		$this->storeSong($song);
 		$this->recordPathReference('/remote.php/dav/files/admin/Noten/Miles/Miles - Blue.pdf', 99);
-		$entry = $this->fileManager->regenerateFilePath($song, $file, $user, $this->libraryFolder, $this->databaseFixture['path']);
+		$entry = $this->fileManager->regenerateFilePath($song, $file, $this->user, $this->libraryFolder, $this->databaseFixture['path']);
 
 		self::assertSame(MobileSheetsFileLogEntry::CODE_PATH_MOVED, $entry->code);
 		self::assertArrayHasKey('Noten/Miles/Miles - Blue (2).pdf', $this->files);
@@ -1866,29 +1859,21 @@ final class FileManagerTest extends TestCase {
 
 	public function testLibraryFolderResolvesTargetFolderForPhysicalDb(): void {
 		$this->files['Noten/mobilesheets.db'] = 'SQLITE_BYTES';
-		$user = $this->createMock(IUser::class);
-		$user->method('getUID')->willReturn(self::UID);
 
-		$folder = $this->fileManager->libraryFolder(1, $user);
+		$folder = $this->fileManager->libraryFolder(1, $this->user);
 		self::assertSame(self::LIBRARY_DIR, $folder->getPath());
 	}
 
 	public function testLibraryFolderResolvesTargetFolderForVirtualFolder(): void {
-		$user = $this->createMock(IUser::class);
-		$user->method('getUID')->willReturn(self::UID);
-
-		$folder = $this->fileManager->libraryFolder(2, $user);
+		$folder = $this->fileManager->libraryFolder(2, $this->user);
 		self::assertSame(self::LIBRARY_DIR, $folder->getPath());
 		self::assertSame('Noten', $folder->getName());
 	}
 
 	public function testLibraryFolderThrowsWhenLibraryNotFound(): void {
-		$user = $this->createMock(IUser::class);
-		$user->method('getUID')->willReturn(self::UID);
-
 		$this->expectException(\Exception::class);
 		$this->expectExceptionMessage('Library with ID 999 not found');
-		$this->fileManager->libraryFolder(999, $user);
+		$this->fileManager->libraryFolder(999, $this->user);
 	}
 
 	/**
