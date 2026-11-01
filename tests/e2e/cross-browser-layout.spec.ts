@@ -15,6 +15,10 @@ test.describe('Cross-Browser & Multi-Viewport Layout Integrity', () => {
 			await page.goto('/#/library/1/songs')
 
 			// Filter bar should be visible and maintain container boundaries
+			const showFiltersBtn = page.getByRole('button', { name: 'Show filters' })
+			if (await showFiltersBtn.isVisible()) {
+				await showFiltersBtn.click()
+			}
 			const filterBar = page.locator('[role="region"][aria-label="Song filters"]')
 			await expect(filterBar).toBeVisible()
 
@@ -30,7 +34,7 @@ test.describe('Cross-Browser & Multi-Viewport Layout Integrity', () => {
 			await page.goto('/#/library/1/songs?song=5')
 			await page.getByRole('button', { name: 'Edit song' }).click()
 
-			const titleInput = page.getByLabel('Title')
+			const titleInput = page.getByLabel('Song Title')
 			await expect(titleInput).toBeVisible()
 			const titleBox = await titleInput.boundingBox()
 			expect(titleBox).not.toBeNull()

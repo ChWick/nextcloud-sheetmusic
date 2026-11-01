@@ -94,4 +94,16 @@ test.describe('Song Viewer UI & Icon Buttons', () => {
 		await expect(page.getByLabel('Song Title')).toBeVisible()
 		await expect(page.locator('form').getByRole('button', { name: 'Save and Close' })).toBeVisible()
 	})
+
+	test('renders movements badges and jumps to movement page when clicked', async ({ page }) => {
+		// Movements bar displays both movements
+		const mvt1 = page.getByRole('button', { name: /I\. Allegro con brio/i })
+		const mvt2 = page.getByRole('button', { name: /II\. Andante con moto/i })
+		await expect(mvt1).toBeVisible()
+		await expect(mvt2).toBeVisible()
+
+		// Clicking movement 1 jumps to start page
+		await mvt1.click()
+		await expect(page.getByText(/Page 1–1 of 1|Page 1 of 1/)).toBeVisible()
+	})
 })

@@ -75,7 +75,7 @@ const emit = defineEmits<{
 					size="small"
 					variant="secondary"
 					:title="t('sheetmusic', 'Rotate by custom angle / fine deskew')"
-					:aria-label="t('sheetmusic', 'Rotate by custom angle / fine deskew')"
+					:aria-label="t('sheetmusic', 'Rotate by Angle…')"
 					@click="emit('open-rotate-modal')">
 					<template #icon>
 						<Rotate360 :size="16" />
@@ -92,7 +92,7 @@ const emit = defineEmits<{
 					size="small"
 					variant="secondary"
 					:title="t('sheetmusic', 'Join two pages into a single page')"
-					:aria-label="t('sheetmusic', 'Join two pages into a single page')"
+					:aria-label="t('sheetmusic', 'Join Pages…')"
 					@click="emit('open-join-modal')">
 					<template #icon>
 						<TableMergeCells :size="16" />
@@ -103,7 +103,7 @@ const emit = defineEmits<{
 					size="small"
 					variant="secondary"
 					:title="t('sheetmusic', 'View file version history and revert changes')"
-					:aria-label="t('sheetmusic', 'View file version history and revert changes')"
+					:aria-label="t('sheetmusic', 'Version History…')"
 					@click="emit('open-versions-modal')">
 					<template #icon>
 						<History :size="16" />
@@ -130,7 +130,7 @@ const emit = defineEmits<{
 					size="small"
 					variant="tertiary"
 					:title="t('sheetmusic', 'Restore all deleted pages')"
-					:aria-label="t('sheetmusic', 'Restore all deleted pages')"
+					:aria-label="t('sheetmusic', 'Restore Deleted ({count})', { count: deletedPagesCount })"
 					@click="emit('restore-all-pages')">
 					<template #icon>
 						<DeleteRestore :size="16" />
@@ -150,7 +150,7 @@ const emit = defineEmits<{
 					size="small"
 					variant="secondary"
 					:title="t('sheetmusic', 'Crop first page and apply to all')"
-					:aria-label="t('sheetmusic', 'Crop first page and apply to all')"
+					:aria-label="t('sheetmusic', 'Crop All Pages…')"
 					@click="emit('open-crop-modal')">
 					<template #icon>
 						<CropIcon :size="16" />
@@ -167,7 +167,7 @@ const emit = defineEmits<{
 					size="small"
 					variant="secondary"
 					:title="t('sheetmusic', 'Join two pages into a single page')"
-					:aria-label="t('sheetmusic', 'Join two pages into a single page')"
+					:aria-label="t('sheetmusic', 'Join Pages…')"
 					@click="emit('open-join-modal')">
 					<template #icon>
 						<TableMergeCells :size="16" />
@@ -178,7 +178,7 @@ const emit = defineEmits<{
 					size="small"
 					variant="secondary"
 					:title="t('sheetmusic', 'View file version history and revert changes')"
-					:aria-label="t('sheetmusic', 'View file version history and revert changes')"
+					:aria-label="t('sheetmusic', 'Version History…')"
 					@click="emit('open-versions-modal')">
 					<template #icon>
 						<History :size="16" />
@@ -193,7 +193,7 @@ const emit = defineEmits<{
 					variant="tertiary"
 					:disabled="!hasAnyCrop"
 					:title="t('sheetmusic', 'Reset all page crops to full page')"
-					:aria-label="t('sheetmusic', 'Reset all page crops to full page')"
+					:aria-label="t('sheetmusic', 'Reset All Crops')"
 					@click="emit('reset-all-crops')">
 					<template #icon>
 						<RestoreIcon :size="16" />
@@ -205,7 +205,7 @@ const emit = defineEmits<{
 					size="small"
 					variant="tertiary"
 					:title="t('sheetmusic', 'Restore all deleted pages')"
-					:aria-label="t('sheetmusic', 'Restore all deleted pages')"
+					:aria-label="t('sheetmusic', 'Restore Deleted ({count})', { count: deletedPagesCount })"
 					@click="emit('restore-all-pages')">
 					<template #icon>
 						<DeleteRestore :size="16" />
@@ -225,7 +225,7 @@ const emit = defineEmits<{
 					size="small"
 					variant="secondary"
 					:title="t('sheetmusic', 'Configure scan enhancement and apply to all pages')"
-					:aria-label="t('sheetmusic', 'Configure scan enhancement and apply to all pages')"
+					:aria-label="t('sheetmusic', 'Enhance All Pages…')"
 					@click="emit('open-enhance-modal')">
 					<template #icon>
 						<Tune :size="16" />
@@ -241,7 +241,7 @@ const emit = defineEmits<{
 					size="small"
 					variant="secondary"
 					:title="t('sheetmusic', 'View file version history and revert changes')"
-					:aria-label="t('sheetmusic', 'View file version history and revert changes')"
+					:aria-label="t('sheetmusic', 'Version History…')"
 					@click="emit('open-versions-modal')">
 					<template #icon>
 						<History :size="16" />
@@ -256,7 +256,7 @@ const emit = defineEmits<{
 					variant="tertiary"
 					:disabled="!hasAnyEnhance"
 					:title="t('sheetmusic', 'Reset all page enhancements')"
-					:aria-label="t('sheetmusic', 'Reset all page enhancements')"
+					:aria-label="t('sheetmusic', 'Reset All Enhancements')"
 					@click="emit('reset-all-enhancements')">
 					<template #icon>
 						<RestoreIcon :size="16" />
@@ -268,7 +268,7 @@ const emit = defineEmits<{
 					size="small"
 					variant="tertiary"
 					:title="t('sheetmusic', 'Restore all deleted pages')"
-					:aria-label="t('sheetmusic', 'Restore all deleted pages')"
+					:aria-label="t('sheetmusic', 'Restore Deleted ({count})', { count: deletedPagesCount })"
 					@click="emit('restore-all-pages')">
 					<template #icon>
 						<DeleteRestore :size="16" />

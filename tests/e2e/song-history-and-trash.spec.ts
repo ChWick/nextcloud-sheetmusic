@@ -81,7 +81,7 @@ test.describe('Song History Timeline & Trash Restoration', () => {
 		await page.goto('/#/library/1/songs')
 
 		// Find and click Trash in sidebar navigation
-		const nav = page.locator('.app-navigation, [role="navigation"]')
+		const nav = page.locator('.app-navigation').first()
 		await expect(nav).toBeVisible()
 		await nav.locator('.app-navigation-entry__name').getByText('Trash', { exact: true }).click()
 

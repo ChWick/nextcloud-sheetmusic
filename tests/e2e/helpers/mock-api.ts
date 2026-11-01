@@ -72,6 +72,10 @@ export const mockSongs = [
 		notes: [{ id: 1, songId: 5, note: 'Play allegro con brio', title: 'Tempo note' }],
 		tempos: [{ id: 1, songId: 5, tempo: 120 }],
 		files: [{ id: 50, path: '/dav/files/admin/Noten/Beethoven - Symphony 5.pdf' }],
+		bookmarks: [
+			{ id: 1, songId: 5, name: 'I. Allegro con brio', pageNum: 1, endPage: 4, position: 0 },
+			{ id: 2, songId: 5, name: 'II. Andante con moto', pageNum: 5, endPage: 8, position: 1 },
+		],
 	},
 	{
 		id: 6,

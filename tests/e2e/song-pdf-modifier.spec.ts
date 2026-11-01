@@ -431,6 +431,23 @@ test.describe('Song PDF Modifier & Cropping E2E Flow', () => {
 		expect(btnBox).not.toBeNull()
 		expect(btnBox!.x + btnBox!.width).toBeLessThanOrEqual(dialogBox!.x + dialogBox!.width)
 	})
+
+	test('switches to Movements mode, views movements sidebar, and allows adding a movement', async ({ page }) => {
+		await page.goto('/#/library/1/songs?song=5&modifyPdf=1')
+
+		const movementsTab = page.getByRole('button', { name: 'Movements' })
+		await expect(movementsTab).toBeVisible()
+		await movementsTab.click()
+
+		// Verify movements sidebar is visible
+		await expect(page.getByRole('region', { name: 'Movements management sidebar' })).toBeVisible()
+		await expect(page.getByRole('button', { name: 'Import from PDF Outline' })).toBeVisible()
+		await expect(page.getByRole('button', { name: 'Add Movement' })).toBeVisible()
+
+		// Click Add Movement
+		await page.getByRole('button', { name: 'Add Movement' }).click()
+		await expect(page.getByPlaceholder('e.g. I. Allegro').first()).toBeVisible()
+	})
 })
 
 

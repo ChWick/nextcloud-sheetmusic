@@ -8,7 +8,7 @@ test.describe('Navigation & Library Management', () => {
 	})
 
 	test('navigates between all app section views from sidebar', async ({ page }) => {
-		const nav = page.locator('.app-navigation, [role="navigation"]')
+		const nav = page.locator('.app-navigation').first()
 		await expect(nav).toBeVisible()
 
 		// Navigate to Composers
@@ -75,7 +75,7 @@ test.describe('Navigation & Library Management', () => {
 		await expect(page).toHaveURL(/#\/library\/1\/songs/)
 
 		// Select dropdown should have Secondary.db (id: 2)
-		const select = page.locator('select')
+		const select = page.locator('.app-navigation select')
 		await expect(select).toBeVisible()
 		await select.selectOption('2')
 

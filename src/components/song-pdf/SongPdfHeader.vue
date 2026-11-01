@@ -471,7 +471,7 @@ const saveButtonText = computed(() => {
 }
 
 /* Tablet & Mobile responsive layout: 2-tier CSS Grid */
-@media (max-width: 960px) {
+@media (max-width: 1400px) {
 	.header {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) auto;
