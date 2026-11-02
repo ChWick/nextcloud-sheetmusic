@@ -222,7 +222,11 @@ export function useSongFilters(options: () => FilterOptions) {
 		['instruments', 'instruments'],
 	]
 
-	/** The songs that carry every active filter selection. */
+	/**
+	 * Filter songs matching active criteria:
+	 * - Multiple selections within the same entity type match with OR (e.g. Composer = Bach OR Mozart).
+	 * - Different entity types, title search query, and "without files" match with AND.
+	 */
 	function filterSongs(songs: Song[]): Song[] {
 		const titleQuery = normalizeSearchString(titleFilterOf())
 		const requireNoFiles = withoutFilesFilterOf()

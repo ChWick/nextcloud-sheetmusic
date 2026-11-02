@@ -183,6 +183,55 @@ describe('useSongFilters composable with unassigned matching', () => {
 		expect(filter3(songsWithAccents).map(s => s.id)).toEqual([3])
 	})
 
+	it('filters songs with OR for multiple selections within the same entity type and AND across different entity types and title', () => {
+		const songs: Song[] = [
+			{
+				id: 1,
+				title: 'Adagio in G minor',
+				composers: [{ id: 10, name: 'J.S. Bach' }],
+				genres: [{ id: 100, name: 'Classical' }],
+			},
+			{
+				id: 2,
+				title: 'Adagio in E major',
+				composers: [{ id: 20, name: 'W.A. Mozart' }],
+				genres: [{ id: 100, name: 'Classical' }],
+			},
+			{
+				id: 3,
+				title: 'Allegro',
+				composers: [{ id: 10, name: 'J.S. Bach' }],
+				genres: [{ id: 100, name: 'Classical' }],
+			},
+			{
+				id: 4,
+				title: 'Adagio in C minor',
+				composers: [{ id: 30, name: 'L.v. Beethoven' }],
+				genres: [{ id: 100, name: 'Classical' }],
+			},
+			{
+				id: 5,
+				title: 'Adagio in D major',
+				composers: [{ id: 20, name: 'W.A. Mozart' }],
+				genres: [{ id: 200, name: 'Jazz' }],
+			},
+		]
+
+		// Filter: Title="Adagio" AND Composer=("J.S. Bach" OR "W.A. Mozart")
+		mockRoute.query = { title: 'Adagio', composers: '10,20' }
+		const { filterSongs: filterOR } = useSongFilters(options)
+		const res1 = filterOR(songs)
+		// Should include both Bach's Adagio and Mozart's Adagios (ids: 1, 2, 5), but exclude Allegro (id 3) and Beethoven's Adagio (id 4)
+		expect(res1.map(s => s.id)).toEqual([1, 2, 5])
+
+		// Add different entity type: Genre="Classical" (id 100)
+		// Should AND with the previous filters: Adagios of Bach OR Mozart, AND Classical
+		mockRoute.query = { title: 'Adagio', composers: '10,20', genres: '100' }
+		const { filterSongs: filterAND } = useSongFilters(options)
+		const res2 = filterAND(songs)
+		expect(res2.map(s => s.id)).toEqual([1, 2])
+	})
+
 	describe('filterBarVisible responsive defaults', () => {
 		it('detects mobile viewport correctly', () => {
 			window.innerWidth = 500
