@@ -7,6 +7,7 @@
 import { translate as t } from '@nextcloud/l10n'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import ChevronLeft from 'vue-material-design-icons/ChevronLeft.vue'
 import ChevronRight from 'vue-material-design-icons/ChevronRight.vue'
 import Close from 'vue-material-design-icons/Close.vue'
@@ -17,10 +18,14 @@ withDefaults(
 		open: boolean
 		pageNum: number
 		totalPages: number
+		highResUrl?: string
 		thumbnailUrl?: string
+		isLoadingHighRes?: boolean
 	}>(),
 	{
+		highResUrl: '',
 		thumbnailUrl: '',
+		isLoadingHighRes: false,
 	},
 )
 
@@ -88,13 +93,19 @@ const emit = defineEmits<{
 			</NcButton>
 		</template>
 
-		<div :class="$style.zoomContent">
+		<div :class="$style.zoomContent" data-test="zoom-modal-content">
 			<div :class="$style.imageContainer">
+				<div v-if="isLoadingHighRes && !highResUrl" :class="$style.loadingBadge" data-test="loading-high-res">
+					<NcLoadingIcon :size="16" />
+					<span>{{ t('sheetmusic', 'Rendering high resolution…') }}</span>
+				</div>
+
 				<img
-					v-if="thumbnailUrl"
-					:src="thumbnailUrl"
+					v-if="highResUrl || thumbnailUrl"
+					:src="highResUrl || thumbnailUrl"
 					:alt="t('sheetmusic', 'Page {p} zoomed preview', { p: pageNum })"
-					:class="$style.zoomedImage" />
+					:class="$style.zoomedImage"
+					data-test="zoom-image" />
 				<div v-else :class="$style.placeholder">
 					<span>{{ t('sheetmusic', 'Page {p}', { p: pageNum }) }}</span>
 				</div>
@@ -110,32 +121,50 @@ const emit = defineEmits<{
 	justify-content: center;
 	padding: 12px 0;
 	width: 100%;
-	height: 70vh;
+	height: 75vh;
 	box-sizing: border-box;
 }
 
 .imageContainer {
+	position: relative;
 	max-width: 100%;
 	max-height: 100%;
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+	box-shadow: 0 4px 24px rgba(0, 0, 0, 0.18);
 	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius-large, 8px);
 	background-color: #fff;
-	overflow: hidden;
+	overflow: auto;
+}
+
+.loadingBadge {
+	position: absolute;
+	top: 12px;
+	right: 12px;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 10px;
+	border-radius: var(--border-radius-pill, 16px);
+	background: rgba(0, 0, 0, 0.7);
+	color: #fff;
+	font-size: 0.8rem;
+	z-index: 10;
 }
 
 .zoomedImage {
 	max-width: 100%;
-	max-height: 68vh;
+	max-height: 73vh;
 	object-fit: contain;
 	display: block;
+	image-rendering: high-quality;
 }
 
 .placeholder {
-	width: 400px;
-	height: 560px;
+	width: 440px;
+	height: 600px;
 	display: flex;
 	align-items: center;
 	justify-content: center;

@@ -38,6 +38,27 @@ describe('usePageOrderThumbnails', () => {
 		expect(isLoading.value).toBe(false)
 	})
 
+	it('renders high-res page on demand via getHighResPage', async () => {
+		const mockPage = {
+			getViewport: vi.fn(() => ({ width: 1200, height: 1600 })),
+			render: vi.fn(() => ({ promise: Promise.resolve() })),
+		}
+		const mockPdf = {
+			numPages: 2,
+			getPage: vi.fn(() => Promise.resolve(mockPage)),
+		}
+
+		const pdfRef = ref<any>(mockPdf)
+		const filePathRef = ref('')
+		const totalPagesRef = ref(2)
+
+		const { getHighResPage, highResCache } = usePageOrderThumbnails(pdfRef, filePathRef, totalPagesRef)
+
+		const highRes = await getHighResPage(1)
+		expect(highRes).toBeDefined()
+		expect(highResCache.value[1]).toBe(highRes)
+	})
+
 	it('resets thumbnails when filePath or pdf changes', async () => {
 		const mockPage = {
 			getViewport: vi.fn(() => ({ width: 600, height: 800 })),

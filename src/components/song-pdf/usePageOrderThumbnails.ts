@@ -14,7 +14,9 @@ export function usePageOrderThumbnails(
 	totalPages: Ref<number>,
 ) {
 	const thumbnails = ref<Record<number, string>>({})
+	const highResCache = ref<Record<number, string>>({})
 	const isLoading = ref(false)
+	const isLoadingHighRes = ref(false)
 	const internalPdf = ref<any>(null)
 
 	let activeSessionId = 0
@@ -57,11 +59,10 @@ export function usePageOrderThumbnails(
 		}
 	}
 
-	async function renderPageThumbnail(pdf: any, pageNum: number): Promise<string> {
+	async function renderPageImage(pdf: any, pageNum: number, maxDim = 340): Promise<string> {
 		try {
 			const page = await pdf.getPage(pageNum)
 			const unscaledViewport = page.getViewport({ scale: 1.0 })
-			const maxDim = 340
 			const scale = Math.min(
 				maxDim / Math.max(1, unscaledViewport.width),
 				maxDim / Math.max(1, unscaledViewport.height),
@@ -85,12 +86,13 @@ export function usePageOrderThumbnails(
 
 			let dataUrl = ''
 			try {
-				dataUrl = canvas.toDataURL ? canvas.toDataURL('image/jpeg', 0.85) : ''
+				dataUrl = canvas.toDataURL ? canvas.toDataURL('image/jpeg', maxDim > 500 ? 0.92 : 0.85) : ''
 			} catch {
 				// Fallback if toDataURL throws
 			}
 			if (!dataUrl || dataUrl === 'data:,') {
-				dataUrl = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="${viewport.width}" height="${viewport.height}"><rect width="100%" height="100%" fill="%23ffffff"/><text x="50%" y="50%" font-size="20" text-anchor="middle" fill="%23999">${pageNum}</text></svg>`
+				const label = maxDim > 500 ? `High-Res Page ${pageNum}` : `${pageNum}`
+				dataUrl = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="${viewport.width}" height="${viewport.height}"><rect width="100%" height="100%" fill="%23ffffff"/><text x="50%" y="50%" font-size="${maxDim > 500 ? 32 : 20}" text-anchor="middle" fill="%23666">${label}</text></svg>`
 			}
 
 			return dataUrl
@@ -99,26 +101,50 @@ export function usePageOrderThumbnails(
 		}
 	}
 
-	async function loadAllThumbnails() {
+	async function getHighResPage(pageNum: number): Promise<string> {
+		if (highResCache.value[pageNum]) {
+			return highResCache.value[pageNum]
+		}
+
+		isLoadingHighRes.value = true
+		try {
+			const pdf = await resolvePdf()
+			if (!pdf) return ''
+
+			const url = await renderPageImage(pdf, pageNum, 1600)
+			if (url) {
+				highResCache.value = {
+					...highResCache.value,
+					[pageNum]: url,
+				}
+			}
+			return url
+		} finally {
+			isLoadingHighRes.value = false
+		}
+	}
+
+	async function loadThumbnails() {
 		const sessionId = ++activeSessionId
 		isLoading.value = true
 
 		try {
 			const pdf = await resolvePdf()
-			if (sessionId !== activeSessionId || !pdf) {
-				isLoading.value = false
+			if (!pdf || sessionId !== activeSessionId) {
 				return
 			}
 
-			const count = totalPages.value || (pdf.numPages ?? 0)
+			const count = totalPages.value || pdf.numPages || 1
+			const results: Record<number, string> = {}
+
+			// Render thumbnails sequentially to keep memory usage smooth
 			for (let p = 1; p <= count; p++) {
 				if (sessionId !== activeSessionId) return
-				if (!thumbnails.value[p]) {
-					const dataUrl = await renderPageThumbnail(pdf, p)
-					if (sessionId !== activeSessionId) return
-					if (dataUrl) {
-						thumbnails.value[p] = dataUrl
-					}
+				const url = await renderPageImage(pdf, p, 340)
+				if (sessionId !== activeSessionId) return
+				if (url) {
+					results[p] = url
+					thumbnails.value = { ...results }
 				}
 			}
 		} finally {
@@ -129,18 +155,22 @@ export function usePageOrderThumbnails(
 	}
 
 	watch(
-		[pdfProp, filePath, totalPages],
+		() => [pdfProp.value, filePath.value, totalPages.value],
 		() => {
-			thumbnails.value = {}
 			internalPdf.value = null
-			void loadAllThumbnails()
+			thumbnails.value = {}
+			highResCache.value = {}
+			loadThumbnails()
 		},
 		{ immediate: true },
 	)
 
 	return {
 		thumbnails,
+		highResCache,
 		isLoading,
-		loadAllThumbnails,
+		isLoadingHighRes,
+		getHighResPage,
+		loadThumbnails,
 	}
 }
