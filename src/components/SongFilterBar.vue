@@ -9,6 +9,9 @@ import NcTextField from '@nextcloud/vue/components/NcTextField'
 import FilterOffIcon from 'vue-material-design-icons/FilterOff.vue'
 import { computed } from 'vue'
 import { noneEntryOf } from '../composables/useSongFilters'
+import { useCtrlKey } from '../composables/useCtrlKey'
+
+const { isCtrlPressed } = useCtrlKey()
 
 const props = withDefaults(
 	defineProps<{
@@ -191,7 +194,7 @@ function clearAllFilters() {
 				:model-value="selectedComposers"
 				:options="composerOptions"
 				:multiple="true"
-				:close-on-select="false"
+				:keep-open="isCtrlPressed"
 				:placeholder="t('sheetmusic', 'Filter by composer…')"
 				:input-label="t('sheetmusic', 'Composers')"
 				label="name"
@@ -205,7 +208,7 @@ function clearAllFilters() {
 				:model-value="selectedBooks"
 				:options="bookOptions"
 				:multiple="true"
-				:close-on-select="false"
+				:keep-open="isCtrlPressed"
 				:placeholder="t('sheetmusic', 'Filter by book…')"
 				:input-label="t('sheetmusic', 'Books')"
 				label="title"
@@ -219,7 +222,7 @@ function clearAllFilters() {
 				:model-value="selectedCollections"
 				:options="collectionOptions"
 				:multiple="true"
-				:close-on-select="false"
+				:keep-open="isCtrlPressed"
 				:placeholder="t('sheetmusic', 'Filter by collection…')"
 				:input-label="t('sheetmusic', 'Collections')"
 				label="name"
@@ -233,7 +236,7 @@ function clearAllFilters() {
 				:model-value="selectedArtists"
 				:options="artistOptions"
 				:multiple="true"
-				:close-on-select="false"
+				:keep-open="isCtrlPressed"
 				:placeholder="t('sheetmusic', 'Filter by artist…')"
 				:input-label="t('sheetmusic', 'Artists')"
 				label="name"
@@ -247,7 +250,7 @@ function clearAllFilters() {
 				:model-value="selectedGenres"
 				:options="genreOptions"
 				:multiple="true"
-				:close-on-select="false"
+				:keep-open="isCtrlPressed"
 				:placeholder="t('sheetmusic', 'Filter by genre…')"
 				:input-label="t('sheetmusic', 'Genres')"
 				label="name"
@@ -261,7 +264,7 @@ function clearAllFilters() {
 				:model-value="selectedKeys"
 				:options="keyOptions"
 				:multiple="true"
-				:close-on-select="false"
+				:keep-open="isCtrlPressed"
 				:placeholder="t('sheetmusic', 'Filter by key…')"
 				:input-label="t('sheetmusic', 'Keys')"
 				label="name"
@@ -275,7 +278,7 @@ function clearAllFilters() {
 				:model-value="selectedCustomGroups"
 				:options="customGroupOptions"
 				:multiple="true"
-				:close-on-select="false"
+				:keep-open="isCtrlPressed"
 				:placeholder="t('sheetmusic', 'Filter by custom group…')"
 				:input-label="t('sheetmusic', 'Custom Groups')"
 				label="name"
@@ -289,7 +292,7 @@ function clearAllFilters() {
 				:model-value="selectedYears"
 				:options="yearOptions"
 				:multiple="true"
-				:close-on-select="false"
+				:keep-open="isCtrlPressed"
 				:placeholder="t('sheetmusic', 'Filter by year…')"
 				:input-label="t('sheetmusic', 'Years')"
 				label="name"
@@ -303,7 +306,7 @@ function clearAllFilters() {
 				:model-value="selectedSignatures"
 				:options="signatureOptions"
 				:multiple="true"
-				:close-on-select="false"
+				:keep-open="isCtrlPressed"
 				:placeholder="t('sheetmusic', 'Filter by time signature…')"
 				:input-label="t('sheetmusic', 'Time Signatures')"
 				label="name"
@@ -317,7 +320,7 @@ function clearAllFilters() {
 				:model-value="selectedSourceTypes"
 				:options="sourceTypeOptions"
 				:multiple="true"
-				:close-on-select="false"
+				:keep-open="isCtrlPressed"
 				:placeholder="t('sheetmusic', 'Filter by source type…')"
 				:input-label="t('sheetmusic', 'Source Types')"
 				label="name"
@@ -331,7 +334,7 @@ function clearAllFilters() {
 				:model-value="selectedInstruments"
 				:options="instrumentOptions"
 				:multiple="true"
-				:close-on-select="false"
+				:keep-open="isCtrlPressed"
 				:placeholder="t('sheetmusic', 'Filter by instrument…')"
 				:input-label="t('sheetmusic', 'Instruments')"
 				label="name"
