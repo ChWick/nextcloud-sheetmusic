@@ -85,6 +85,11 @@ return [
 			'verb' => 'POST',
 		],
 		[
+			'name' => 'Api#updateSongFilePageOrder',
+			'url' => '/api/songs/{id}/file/{fileId}/page-order',
+			'verb' => 'POST',
+		],
+		[
 			'name' => 'Api#createComposer',
 			'url' => '/api/composers',
 			'verb' => 'POST',

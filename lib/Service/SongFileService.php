@@ -506,6 +506,50 @@ class SongFileService {
 		}
 	}
 
+	public function updateSongFilePageOrder(IUser $user, int $libraryId, int $songId, int $fileId, ?string $pageOrder): ?LibraryData {
+		try {
+			$fileRecord = $this->resolveSongFileRecord($fileId, $songId);
+			if ($fileRecord === null) {
+				return null;
+			}
+
+			$normalized = InternalSongFile::normalizePageOrder($pageOrder, $fileRecord->pageCount);
+			$fileRecord->pageOrder = $normalized;
+			$now = time();
+			$fileRecord->updatedAt = $now;
+			$this->internalSongFileMapper->update($fileRecord);
+
+			$targetSongId = $fileRecord->songId;
+			if ($targetSongId > 0) {
+				$song = $this->internalSongMapper->findById($targetSongId);
+				if ($song !== null) {
+					$song->updatedAt = $now;
+					$this->internalSongMapper->update($song);
+					if ($this->songHistoryService !== null) {
+						$this->songHistoryService->recordSnapshot(
+							$song,
+							InternalSongHistory::ACTION_UPDATED,
+							$user->getUID(),
+							'Updated page order to ' . ($normalized ?? 'default')
+						);
+					}
+				}
+			}
+
+			$this->libraryMapper->touch($libraryId);
+			return $this->internalSongMapper->findLibraryData($libraryId, $user);
+		} catch (\Throwable $exception) {
+			$this->logger->error('Could not update song file page order', [
+				'exception' => $exception,
+				'userId' => $user->getUID(),
+				'libraryId' => $libraryId,
+				'songId' => $songId,
+				'fileId' => $fileId,
+			]);
+			throw $exception;
+		}
+	}
+
 	public function syncSongFileMetadata(IUser $user, string $databasePath = '', int $songId = 0, ?int $libraryId = null): void {
 		if ($libraryId !== null && !$this->libraryService->isAutoPdfMetadataEnabled($user->getUID(), $libraryId)) {
 			return;

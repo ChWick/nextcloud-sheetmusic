@@ -302,6 +302,12 @@ class ApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/songs/{id}/file/{fileId}/page-order')]
+	public function updateSongFilePageOrder(int $id, int $fileId, ?int $libraryId = null, ?string $pageOrder = null): DataResponse {
+		return $this->songFileController->updateSongFilePageOrder($id, $fileId, $libraryId, $pageOrder);
+	}
+
+	#[NoAdminRequired]
 	#[ApiRoute(verb: 'POST', url: '/api/composers')]
 	public function createComposer(?int $libraryId = null, ?string $name = null): DataResponse {
 		return $this->entityController->createComposer($libraryId, $name);

@@ -206,6 +206,38 @@ final class SongFileControllerTest extends TestCase {
 		$this->assertEmpty($files);
 	}
 
+	public function testUpdateSongFilePageOrder(): void {
+		$song = $this->songMapper->insert(new InternalSong(
+			uuid: 'page-order-song-uuid',
+			libraryId: $this->libraryId,
+			title: 'Song with Page Order',
+		));
+
+		$fileNode = $this->libFolder->newFile('page-order-test.pdf');
+		$fileNode->putContent('%PDF-1.4 test');
+		$this->createdUserNodes[] = $fileNode;
+
+		$songFile = $this->songFileMapper->insert(new InternalSongFile(
+			songId: (int)$song->id,
+			fileId: $fileNode->getId(),
+			pageCount: 4,
+			pageOrder: '1-4',
+			type: SongFileMapper::FILE_TYPE_PDF,
+		));
+
+		$res = $this->controller->updateSongFilePageOrder(
+			id: (int)$song->id,
+			fileId: (int)$songFile->id,
+			libraryId: $this->libraryId,
+			pageOrder: '1-2, 4',
+		);
+
+		$this->assertSame(Http::STATUS_OK, $res->getStatus());
+		$updated = $this->songFileMapper->findById((int)$songFile->id);
+		$this->assertNotNull($updated);
+		$this->assertSame('1-2, 4', $updated->pageOrder);
+	}
+
 	public function testUpdateSongFile(): void {
 		$song = $this->songMapper->insert(new InternalSong(
 			uuid: 'update-file-song-uuid',

@@ -264,6 +264,15 @@ class SongFileController extends OCSController {
 		);
 	}
 
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/songs/{id}/file/{fileId}/page-order')]
+	public function updateSongFilePageOrder(int $id, int $fileId, ?int $libraryId = null, ?string $pageOrder = null): DataResponse {
+		return $this->handleSongFileAction(
+			$libraryId,
+			fn (IUser $user, int $libId): ?LibraryData => $this->songFileService->updateSongFilePageOrder($user, $libId, $id, $fileId, $pageOrder),
+		);
+	}
+
 	/**
 	 * @param callable(IUser, int): ?LibraryData $action
 	 */

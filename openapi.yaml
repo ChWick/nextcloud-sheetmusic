@@ -316,6 +316,42 @@ paths:
               schema:
                 $ref: '#/components/schemas/OcsEnvelopeLibraryData'
 
+  /api/songs/{id}/file/{fileId}/page-order:
+    post:
+      summary: Update the page ordering for an attached song file
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: fileId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - libraryId
+              properties:
+                libraryId:
+                  type: integer
+                pageOrder:
+                  type: string
+                  nullable: true
+      responses:
+        '200':
+          description: Refreshed library data after updating page order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OcsEnvelopeLibraryData'
+
   /api/composers:
     post:
       summary: Create a composer
@@ -594,6 +630,11 @@ components:
           type: integer
         path:
           type: string
+        pageOrder:
+          type: string
+          nullable: true
+        pageCount:
+          type: integer
 
     Song:
       type: object
