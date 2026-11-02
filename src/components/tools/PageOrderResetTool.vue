@@ -1,0 +1,358 @@
+<script setup lang="ts">
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
+import axios from '@nextcloud/axios'
+import { generateOcsUrl } from '@nextcloud/router'
+import { translate as t } from '@nextcloud/l10n'
+import NcButton from '@nextcloud/vue/components/NcButton'
+import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
+import { showError, showSuccess } from '@nextcloud/dialogs'
+import RotateLeft from 'vue-material-design-icons/RotateLeft.vue'
+import CheckAll from 'vue-material-design-icons/CheckAll.vue'
+import { apiGet, apiPost } from '../../api/client'
+import { describeRequestFailure } from '../../utils/api'
+import type { PageOrderAuditItem, PageOrderAuditResult, PageOrderFilterMode } from '../../types/tools'
+import PageOrderAuditSummary from './PageOrderAuditSummary.vue'
+import PageOrderFilterBar from './PageOrderFilterBar.vue'
+import PageOrderTable from './PageOrderTable.vue'
+import PageOrderProgressDialog from './PageOrderProgressDialog.vue'
+
+const props = defineProps<{
+	selectedLibrary: number
+}>()
+
+const router = useRouter()
+
+const isLoading = ref(false)
+const isBatchResetting = ref(false)
+const resettingId = ref<number | null>(null)
+const auditResult = ref<PageOrderAuditResult>({
+	totalFiles: 0,
+	stuckCount: 0,
+	customCount: 0,
+	normalCount: 0,
+	items: [],
+})
+
+const filterMode = ref<PageOrderFilterMode>('stuck')
+const searchQuery = ref('')
+const selectedIds = ref<Set<number>>(new Set())
+
+interface ProgressState {
+	percent: number
+	message: string
+}
+const batchProgress = ref<ProgressState | null>(null)
+let progressPollingTimer: ReturnType<typeof setInterval> | null = null
+
+function startProgressPolling(progressId: string) {
+	stopProgressPolling()
+	batchProgress.value = {
+		percent: 0,
+		message: t('sheetmusic', 'Starting page order reset…'),
+	}
+	progressPollingTimer = setInterval(async () => {
+		try {
+			const url = generateOcsUrl('/apps/sheetmusic/api/libraries/progress/' + encodeURIComponent(progressId))
+			const res = await axios.get(url)
+			const data = res?.data?.ocs?.data
+			if (data && typeof data === 'object') {
+				batchProgress.value = {
+					percent: Number(data.percent ?? 0),
+					message: String(data.message ?? ''),
+				}
+				if (data.status === 'completed' || data.status === 'error') {
+					stopProgressPolling()
+				}
+			}
+		} catch {
+			// ignore transient polling errors
+		}
+	}, 300)
+}
+
+function stopProgressPolling() {
+	if (progressPollingTimer !== null) {
+		clearInterval(progressPollingTimer)
+		progressPollingTimer = null
+	}
+}
+
+async function loadAudit() {
+	if (props.selectedLibrary < 0) return
+
+	isLoading.value = true
+	try {
+		const res = await apiGet(`/api/libraries/${props.selectedLibrary}/tools/page-order-audit` as any)
+		const data = res.data?.ocs?.data as PageOrderAuditResult
+		if (data) {
+			auditResult.value = data
+			// If there are no stuck files, default to 'all' so user sees files
+			if (data.stuckCount === 0 && filterMode.value === 'stuck') {
+				filterMode.value = 'all'
+			}
+		}
+	} catch (error) {
+		console.error('Failed to audit page orders:', error)
+		showError(describeRequestFailure(error, t('sheetmusic', 'Failed to audit page orders.')))
+	} finally {
+		isLoading.value = false
+	}
+}
+
+const filteredItems = computed(() => {
+	const query = searchQuery.value.trim().toLowerCase()
+	return auditResult.value.items.filter((item) => {
+		// Filter by mode
+		if (filterMode.value === 'stuck' && !item.isStuckOneToOne) {
+			return false
+		}
+		if (filterMode.value === 'all-1-1' && item.pageOrder !== '1-1' && item.pageOrder !== '1') {
+			return false
+		}
+		if (filterMode.value === 'custom' && !item.isCustom) {
+			return false
+		}
+
+		// Filter by search query
+		if (query !== '') {
+			const titleMatches = item.songTitle.toLowerCase().includes(query)
+			const fileMatches = item.fileName.toLowerCase().includes(query)
+			if (!titleMatches && !fileMatches) {
+				return false
+			}
+		}
+
+		return true
+	})
+})
+
+function toggleSelect(id: number) {
+	const next = new Set(selectedIds.value)
+	if (next.has(id)) {
+		next.delete(id)
+	} else {
+		next.add(id)
+	}
+	selectedIds.value = next
+}
+
+function selectAllFiltered(selectAll: boolean) {
+	if (!selectAll) {
+		selectedIds.value = new Set()
+		return
+	}
+	const next = new Set(selectedIds.value)
+	for (const item of filteredItems.value) {
+		next.add(item.id)
+	}
+	selectedIds.value = next
+}
+
+async function resetSingleItem(item: PageOrderAuditItem) {
+	resettingId.value = item.id
+	try {
+		await apiPost(`/api/libraries/${props.selectedLibrary}/tools/reset-page-orders` as any, {
+			fileIds: [item.id],
+			mode: 'stuck',
+		} as any)
+		showSuccess(t('sheetmusic', 'Page ordering for "{title}" reset to {order}.', {
+			title: item.songTitle,
+			order: item.suggestedPageOrder,
+		}))
+		await loadAudit()
+	} catch (error) {
+		console.error('Failed to reset item page order:', error)
+		showError(describeRequestFailure(error, t('sheetmusic', 'Failed to reset page ordering.')))
+	} finally {
+		resettingId.value = null
+	}
+}
+
+async function resetBatch(fileIds: number[] | null, mode: PageOrderFilterMode = 'stuck') {
+	if (props.selectedLibrary < 0) return
+
+	isBatchResetting.value = true
+	const progressId = 'tool-page-order-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9)
+	startProgressPolling(progressId)
+
+	try {
+		const payload: Record<string, unknown> = {
+			progressId,
+			mode,
+		}
+		if (fileIds !== null && fileIds.length > 0) {
+			payload.fileIds = fileIds
+		}
+
+		const res = await apiPost(`/api/libraries/${props.selectedLibrary}/tools/reset-page-orders` as any, payload as any)
+		stopProgressPolling()
+
+		const result = res.data?.ocs?.data
+		const count = result?.resetCount ?? (fileIds ? fileIds.length : 0)
+		showSuccess(t('sheetmusic', 'Successfully reset page ordering for {count} file(s).', { count }))
+		selectedIds.value = new Set()
+		await loadAudit()
+	} catch (error) {
+		stopProgressPolling()
+		console.error('Failed to batch reset page ordering:', error)
+		showError(describeRequestFailure(error, t('sheetmusic', 'Failed to batch reset page ordering.')))
+	} finally {
+		isBatchResetting.value = false
+		stopProgressPolling()
+		batchProgress.value = null
+	}
+}
+
+function resetSelected() {
+	const ids = Array.from(selectedIds.value)
+	if (ids.length === 0) return
+	resetBatch(ids)
+}
+
+function resetAllFiltered() {
+	const ids = filteredItems.value.map(i => i.id)
+	if (ids.length === 0) return
+	resetBatch(ids)
+}
+
+function openSong(songId: number) {
+	if (songId <= 0) return
+	router.push({
+		name: 'LibraryView',
+		params: { library: String(props.selectedLibrary), view: 'songs' },
+		query: { song: String(songId), edit: '1' },
+	})
+}
+
+watch(() => props.selectedLibrary, (newLib) => {
+	if (newLib >= 0) {
+		selectedIds.value = new Set()
+		loadAudit()
+	}
+}, { immediate: true })
+</script>
+
+<template>
+	<div :class="$style.toolRoot" data-test="page-order-reset-tool">
+		<div :class="$style.toolHeader">
+			<div :class="$style.toolTitleArea">
+				<h2 :class="$style.toolTitle">{{ t('sheetmusic', 'Reset Page Ordering') }}</h2>
+				<p :class="$style.toolDescription">
+					{{ t('sheetmusic', 'Multi-page files that were previously split or imported may be restricted to "1-1", causing only the first page to be displayed. This tool restores the complete page range (1-N) semi-automatically or in batch.') }}
+				</p>
+			</div>
+
+			<div :class="$style.batchActions">
+				<NcButton
+					variant="secondary"
+					:disabled="isBatchResetting || selectedIds.size === 0"
+					data-test="reset-selected-btn"
+					@click="resetSelected">
+					<template #icon>
+						<CheckAll :size="18" />
+					</template>
+					{{ t('sheetmusic', 'Reset Selected ({count})', { count: selectedIds.size }) }}
+				</NcButton>
+
+				<NcButton
+					variant="primary"
+					:disabled="isBatchResetting || filteredItems.length === 0"
+					data-test="reset-all-filtered-btn"
+					@click="resetAllFiltered">
+					<template #icon>
+						<RotateLeft :size="18" />
+					</template>
+					{{ t('sheetmusic', 'Reset All Filtered ({count})', { count: filteredItems.length }) }}
+				</NcButton>
+			</div>
+		</div>
+
+		<PageOrderAuditSummary
+			:total-files="auditResult.totalFiles"
+			:stuck-count="auditResult.stuckCount"
+			:custom-count="auditResult.customCount"
+			:normal-count="auditResult.normalCount" />
+
+		<PageOrderFilterBar
+			v-model:filter-mode="filterMode"
+			v-model:search-query="searchQuery"
+			:stuck-count="auditResult.stuckCount"
+			:total-files="auditResult.totalFiles"
+			:disabled="isLoading || isBatchResetting"
+			@refresh="loadAudit" />
+
+		<div v-if="isLoading && auditResult.items.length === 0" :class="$style.loadingState">
+			<NcLoadingIcon :size="36" />
+			<span>{{ t('sheetmusic', 'Scanning library song files and page orders…') }}</span>
+		</div>
+
+		<PageOrderTable
+			v-else
+			:items="filteredItems"
+			:selected-ids="selectedIds"
+			:resetting-id="resettingId"
+			:disabled="isBatchResetting"
+			@toggle-select="toggleSelect"
+			@select-all="selectAllFiltered"
+			@reset-item="resetSingleItem"
+			@open-song="openSong" />
+
+		<PageOrderProgressDialog
+			:open="isBatchResetting"
+			:percent="batchProgress ? batchProgress.percent : 0"
+			:message="batchProgress ? batchProgress.message : ''" />
+	</div>
+</template>
+
+<style module>
+.toolRoot {
+	display: flex;
+	flex-direction: column;
+	width: 100%;
+}
+
+.toolHeader {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 16px;
+	margin-bottom: 20px;
+}
+
+.toolTitleArea {
+	max-width: 680px;
+}
+
+.toolTitle {
+	margin: 0 0 6px 0;
+	font-size: 1.4rem;
+	font-weight: 700;
+	color: var(--color-main-text, #222);
+}
+
+.toolDescription {
+	margin: 0;
+	font-size: 0.92rem;
+	line-height: 1.45;
+	color: var(--color-text-maxcontrast, #666);
+}
+
+.batchActions {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+
+.loadingState {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 16px;
+	padding: 60px 20px;
+	color: var(--color-text-maxcontrast, #666);
+}
+</style>
