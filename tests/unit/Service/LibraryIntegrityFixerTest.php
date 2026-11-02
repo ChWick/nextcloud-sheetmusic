@@ -180,7 +180,7 @@ final class LibraryIntegrityFixerTest extends TestCase {
 		$updated = $this->songFileMapper->findById($file->id);
 		self::assertNotNull($updated);
 		self::assertSame(4, $updated->pageCount);
-		self::assertSame('1-4', $updated->pageOrder);
+		self::assertSame('1-1', $updated->pageOrder);
 	}
 
 	public function testFixStuckPageOrderUpdatesDatabase(): void {

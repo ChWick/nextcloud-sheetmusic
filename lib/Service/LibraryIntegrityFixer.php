@@ -540,7 +540,7 @@ class LibraryIntegrityFixer {
 
 		$fileRecord->pageCount = $actualPageCount;
 		$trimmedOrder = trim((string)($fileRecord->pageOrder ?? ''));
-		if ($trimmedOrder === '1-1' || $trimmedOrder === '1' || $trimmedOrder === '') {
+		if ($trimmedOrder === '') {
 			$fileRecord->pageOrder = \OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdf::pageOrder($actualPageCount);
 		}
 
@@ -630,7 +630,7 @@ class LibraryIntegrityFixer {
 			}
 		}
 
-		if ($detected <= 0 && $fileRecord->path !== '') {
+		if ($detected <= 0 && isset($fileRecord->path) && $fileRecord->path !== '') {
 			try {
 				$pathObj = $this->pathResolver->fromStored($fileRecord->path, $user);
 				if ($pathObj !== null) {

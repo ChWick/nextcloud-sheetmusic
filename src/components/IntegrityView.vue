@@ -145,7 +145,6 @@ const groupedIssues = computed(() => {
 			else if (type === 'duplicate_client_id') title = t('sheetmusic', 'Duplicate Client IDs')
 			else if (type === 'orphan_song_attribute') title = t('sheetmusic', 'Orphan Song Attributes')
 			else if (type === 'orphan_misc_data') title = t('sheetmusic', 'Orphan Sync Data')
-			else if (type === 'stuck_page_order') title = t('sheetmusic', 'Page Order Mismatches (Stuck at 1-1)')
 			else if (type === 'page_count_mismatch') title = t('sheetmusic', 'Page Count Mismatches')
 
 			groups[type] = {

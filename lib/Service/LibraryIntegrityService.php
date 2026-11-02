@@ -198,7 +198,7 @@ class LibraryIntegrityService {
 						}
 					}
 
-					// 1. Check for physical vs stored page count mismatch
+					// Check for physical vs stored page count mismatch
 					$recordedPageCount = max(1, (int)($file->pageCount ?? 0));
 					if ($physicalPageCount !== null && $physicalPageCount !== $recordedPageCount) {
 						$issues[] = new IntegrityIssue(
@@ -214,27 +214,6 @@ class LibraryIntegrityService {
 							details: [
 								'pageCount' => $physicalPageCount,
 								'recordedPageCount' => $recordedPageCount,
-							],
-						);
-					}
-
-					// 2. Check for stuck page order (1-1 when file is multi-page)
-					$effectivePageCount = $physicalPageCount ?? max(1, $file->pageCount);
-					if ($effectivePageCount > 1 && ($trimmedOrder === '1-1' || $trimmedOrder === '1')) {
-						$issues[] = new IntegrityIssue(
-							type: IntegrityIssue::TYPE_STUCK_PAGE_ORDER,
-							severity: IntegrityIssue::SEVERITY_WARNING,
-							message: sprintf('File "%s" has %d pages, but page order is set to "%s".', basename($file->path), $effectivePageCount, $trimmedOrder),
-							songId: $song->id,
-							songTitle: $song->title,
-							fileId: $file->id,
-							path: $relativeToTarget,
-							suggestedPath: null,
-							fixable: true,
-							details: [
-								'pageCount' => $effectivePageCount,
-								'pageOrder' => $trimmedOrder,
-								'suggestedOrder' => \OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdf::pageOrder($effectivePageCount),
 							],
 						);
 					}

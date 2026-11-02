@@ -2004,11 +2004,9 @@ final class LibraryIntegrityServiceTest extends TestCase {
 			self::assertSame(1, $mismatchIssues[0]->details['recordedPageCount']);
 			self::assertTrue($mismatchIssues[0]->fixable);
 
+			// Page order (e.g. 1-1) is not reported as an integrity issue by default (handled in tools)
 			$stuckIssues = array_values(array_filter($issues, fn ($i) => $i->type === IntegrityIssue::TYPE_STUCK_PAGE_ORDER));
-			self::assertCount(1, $stuckIssues);
-			self::assertSame(3, $stuckIssues[0]->details['pageCount']);
-			self::assertSame('1-1', $stuckIssues[0]->details['pageOrder']);
-			self::assertSame('1-3', $stuckIssues[0]->details['suggestedOrder']);
+			self::assertCount(0, $stuckIssues);
 		} finally {
 			unlink($databasePath);
 		}
