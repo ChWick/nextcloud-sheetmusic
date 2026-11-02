@@ -12,10 +12,12 @@ import CheckAll from 'vue-material-design-icons/CheckAll.vue'
 import { apiGet, apiPost } from '../../api/client'
 import { describeRequestFailure } from '../../utils/api'
 import type { PageOrderAuditItem, PageOrderAuditResult, PageOrderFilterMode } from '../../types/tools'
+import type { SongFile } from '../../types/song'
 import PageOrderAuditSummary from './PageOrderAuditSummary.vue'
 import PageOrderFilterBar from './PageOrderFilterBar.vue'
 import PageOrderTable from './PageOrderTable.vue'
 import PageOrderProgressDialog from './PageOrderProgressDialog.vue'
+import SongPageOrderModal from '../song-pdf/SongPageOrderModal.vue'
 
 const props = defineProps<{
 	selectedLibrary: number
@@ -37,6 +39,30 @@ const auditResult = ref<PageOrderAuditResult>({
 const filterMode = ref<PageOrderFilterMode>('stuck')
 const searchQuery = ref('')
 const selectedIds = ref<Set<number>>(new Set())
+
+const editingItem = ref<PageOrderAuditItem | null>(null)
+const isEditModalOpen = ref(false)
+
+const editingFile = computed<SongFile | null>(() => {
+	if (!editingItem.value) return null
+	return {
+		id: editingItem.value.id,
+		path: editingItem.value.path,
+		pageOrder: editingItem.value.pageOrder,
+		pageCount: editingItem.value.actualPageCount,
+	}
+})
+
+function openEditItem(item: PageOrderAuditItem) {
+	editingItem.value = item
+	isEditModalOpen.value = true
+}
+
+async function onEditSaved() {
+	isEditModalOpen.value = false
+	editingItem.value = null
+	await loadAudit()
+}
 
 interface ProgressState {
 	percent: number
@@ -296,12 +322,21 @@ watch(() => props.selectedLibrary, (newLib) => {
 			@toggle-select="toggleSelect"
 			@select-all="selectAllFiltered"
 			@reset-item="resetSingleItem"
+			@edit-item="openEditItem"
 			@open-song="openSong" />
 
 		<PageOrderProgressDialog
 			:open="isBatchResetting"
 			:percent="batchProgress ? batchProgress.percent : 0"
 			:message="batchProgress ? batchProgress.message : ''" />
+
+		<SongPageOrderModal
+			v-if="isEditModalOpen"
+			v-model:open="isEditModalOpen"
+			:file="editingFile"
+			:song-id="editingItem?.songId ?? 0"
+			:library-id="selectedLibrary"
+			@saved="onEditSaved" />
 	</div>
 </template>
 

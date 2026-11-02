@@ -28,6 +28,7 @@ const emit = defineEmits<{
 				role="tab"
 				:aria-selected="filterMode === 'stuck'"
 				:class="[$style.tabButton, filterMode === 'stuck' && $style.tabActive, filterMode === 'stuck' && stuckCount > 0 && $style.tabWarning]"
+				:title="t('sheetmusic', 'Files with 2+ pages locked to only the first page (1-1). Resetting restores the full page range.')"
 				data-test="filter-stuck"
 				@click="emit('update:filterMode', 'stuck')">
 				{{ t('sheetmusic', 'Stuck at 1-1') }}
@@ -39,6 +40,7 @@ const emit = defineEmits<{
 				role="tab"
 				:aria-selected="filterMode === 'all-1-1'"
 				:class="[$style.tabButton, filterMode === 'all-1-1' && $style.tabActive]"
+				:title="t('sheetmusic', 'All files whose page order is 1-1, including valid 1-page lead sheets as well as stuck files.')"
 				data-test="filter-all-1-1"
 				@click="emit('update:filterMode', 'all-1-1')">
 				{{ t('sheetmusic', 'All with 1-1') }}
@@ -49,6 +51,7 @@ const emit = defineEmits<{
 				role="tab"
 				:aria-selected="filterMode === 'custom'"
 				:class="[$style.tabButton, filterMode === 'custom' && $style.tabActive]"
+				:title="t('sheetmusic', 'Files with custom ordering (e.g. repeated or rearranged pages).')"
 				data-test="filter-custom"
 				@click="emit('update:filterMode', 'custom')">
 				{{ t('sheetmusic', 'Custom Order') }}
@@ -59,6 +62,7 @@ const emit = defineEmits<{
 				role="tab"
 				:aria-selected="filterMode === 'all'"
 				:class="[$style.tabButton, filterMode === 'all' && $style.tabActive]"
+				:title="t('sheetmusic', 'All PDF files in this library.')"
 				data-test="filter-all"
 				@click="emit('update:filterMode', 'all')">
 				{{ t('sheetmusic', 'All Files') }}

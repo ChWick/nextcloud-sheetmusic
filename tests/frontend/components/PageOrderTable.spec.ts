@@ -82,6 +82,48 @@ describe('PageOrderTable', () => {
 		expect(wrapper.emitted('reset-item')?.[0]).toEqual([mockItems[0]])
 	})
 
+	it('emits edit-item when clicking row edit button', async () => {
+		const wrapper = mount(PageOrderTable, {
+			props: {
+				items: mockItems,
+				selectedIds: new Set(),
+			},
+			global: {
+				stubs: {
+					NcButton: {
+						template: '<button @click="$emit(\'click\')"><slot /></button>',
+					},
+					NcCheckboxRadioSwitch: true,
+				},
+			},
+		})
+
+		const editBtn = wrapper.find('[data-test="edit-row-btn-101"]')
+		await editBtn.trigger('click')
+
+		expect(wrapper.emitted('edit-item')?.[0]).toEqual([mockItems[0]])
+	})
+
+	it('emits toggle-select when clicking a row', async () => {
+		const wrapper = mount(PageOrderTable, {
+			props: {
+				items: mockItems,
+				selectedIds: new Set(),
+			},
+			global: {
+				stubs: {
+					NcButton: true,
+					NcCheckboxRadioSwitch: true,
+				},
+			},
+		})
+
+		const row = wrapper.find('[data-test="page-order-row-101"]')
+		await row.trigger('click')
+
+		expect(wrapper.emitted('toggle-select')?.[0]).toEqual([101])
+	})
+
 	it('renders empty state when items is empty', () => {
 		const wrapper = mount(PageOrderTable, {
 			props: {

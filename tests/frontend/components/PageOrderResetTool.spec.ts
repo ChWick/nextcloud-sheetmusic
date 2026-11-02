@@ -141,4 +141,36 @@ describe('PageOrderResetTool', () => {
 			}),
 		)
 	})
+
+	it('opens edit page order modal when edit event is triggered', async () => {
+		const wrapper = mount(PageOrderResetTool, {
+			props: { selectedLibrary: 1 },
+			global: {
+				stubs: {
+					NcButton: {
+						template: '<button :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
+						props: ['disabled'],
+					},
+					NcLoadingIcon: true,
+					NcDialog: true,
+					NcProgressBar: true,
+					NcCheckboxRadioSwitch: true,
+					NcTextField: true,
+					SongPageOrderModal: {
+						template: '<div data-test="song-page-order-modal-stub" :data-open="open" />',
+						props: ['open', 'file', 'songId', 'libraryId'],
+					},
+				},
+			},
+		})
+
+		await vi.waitFor(() => {
+			expect(apiGet).toHaveBeenCalled()
+		})
+
+		const editBtn = wrapper.find('[data-test="edit-row-btn-1"]')
+		await editBtn.trigger('click')
+
+		expect(wrapper.find('[data-test="song-page-order-modal-stub"]').exists()).toBe(true)
+	})
 })
