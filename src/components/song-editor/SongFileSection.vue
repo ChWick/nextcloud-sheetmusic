@@ -22,6 +22,7 @@ const emit = defineEmits<{
 	openExternal: [file: SongFile]
 	detach: [file: SongFile]
 	delete: [file: SongFile]
+	editPageOrder: [file: SongFile]
 	restoreDelete: [file: SongFile]
 	restoreDetach: [file: SongFile]
 	removeAddition: [addition: PendingAddition]
@@ -87,7 +88,8 @@ defineExpose({ openUploadPicker })
 				:disabled="isSaving"
 				@open-external="emit('openExternal', $event)"
 				@detach="emit('detach', $event)"
-				@delete="emit('delete', $event)" />
+				@delete="emit('delete', $event)"
+				@edit-page-order="emit('editPageOrder', $event)" />
 		</ul>
 		<p v-else :class="$style.noFiles">
 			{{ t('sheetmusic', 'No files attached to this song.') }}

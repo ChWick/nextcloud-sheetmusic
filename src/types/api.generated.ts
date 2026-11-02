@@ -481,6 +481,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/songs/{id}/file/{fileId}/page-order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Update the page ordering for an attached song file */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                    fileId: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        libraryId: number;
+                        pageOrder?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Refreshed library data after updating page order */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["OcsEnvelopeLibraryData"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/composers": {
         parameters: {
             query?: never;
@@ -885,6 +931,8 @@ export interface components {
         SongFile: {
             id: number;
             path: string;
+            pageOrder?: string | null;
+            pageCount?: number;
         };
         Song: {
             id: number;

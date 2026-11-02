@@ -26,6 +26,7 @@ import MagnifyPlus from 'vue-material-design-icons/MagnifyPlus.vue'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import FileDocumentEditOutline from 'vue-material-design-icons/FileDocumentEditOutline.vue'
+import FormatListNumbered from 'vue-material-design-icons/FormatListNumbered.vue'
 import History from 'vue-material-design-icons/History.vue'
 import RotateRight from 'vue-material-design-icons/RotateRight.vue'
 import ViewColumn from 'vue-material-design-icons/ViewColumn.vue'
@@ -40,6 +41,7 @@ import SongPdfVersionsModal from './song-pdf/SongPdfVersionsModal.vue'
 import { useFileVersions } from './song-pdf/useFileVersions'
 import SongViewerMetadata from './song-viewer/SongViewerMetadata.vue'
 import SongViewerBookmarksBar from './song-viewer/SongViewerBookmarksBar.vue'
+import SongPageOrderModal from './song-pdf/SongPageOrderModal.vue'
 
 const props = withDefaults(
 	defineProps<{
@@ -154,6 +156,15 @@ function selectFile(fileId: string) {
 }
 
 const previewVersion = ref(Date.now())
+const isPageOrderModalOpen = ref(false)
+
+function handlePageOrderSaved(data: LibraryData, updatedFile: SongFile) {
+	if (selectedFile.value && selectedFile.value.id === updatedFile.id) {
+		selectedFile.value = { ...selectedFile.value, pageOrder: updatedFile.pageOrder }
+	}
+	previewVersion.value = Date.now()
+	emit('updated', data)
+}
 
 function handleSaved(data: LibraryData, songId?: number) {
 	previewVersion.value = Date.now()
@@ -272,6 +283,16 @@ defineExpose({
 						</template>
 					</NcButton>
 					<NcButton
+						v-if="song && isSelectedFilePdf"
+						variant="secondary"
+						:title="t('sheetmusic', 'Edit page order')"
+						:aria-label="t('sheetmusic', 'Edit page order')"
+						@click="isPageOrderModalOpen = true">
+						<template #icon>
+							<FormatListNumbered :size="20" />
+						</template>
+					</NcButton>
+					<NcButton
 						variant="secondary"
 						:title="t('sheetmusic', 'Edit song')"
 						:aria-label="t('sheetmusic', 'Edit song')"
@@ -376,6 +397,7 @@ defineExpose({
 				v-if="selectedFile?.path"
 				:key="`${selectedFile.id}-${selectedFile.path}-${song?.lastModified ?? ''}-${previewVersion}`"
 				:file-path="previewFilePath"
+				:page-order="selectedFile?.pageOrder"
 				:target-page="activeBookmarkPage"
 				:show-external-button="false" />
 			<div v-else :class="$style.error">
@@ -396,6 +418,15 @@ defineExpose({
 			:is-loading="isLoadingVersions"
 			:is-reverting="isRevertingVersion"
 			@revert="revertToVersion" />
+
+		<!-- Page Order Modal -->
+		<SongPageOrderModal
+			v-if="song && selectedFile && isPageOrderModalOpen"
+			v-model:open="isPageOrderModalOpen"
+			:file="selectedFile"
+			:song-id="song.id"
+			:library-id="libraryId ?? -1"
+			@saved="handlePageOrderSaved" />
 	</div>
 </template>
 

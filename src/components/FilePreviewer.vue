@@ -11,6 +11,7 @@ import { openFileExternally } from '../utils/file'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import FilePreviewerToolbar from './file-preview/FilePreviewerToolbar.vue'
 import { inspectPdfPageResolution, type PdfPageResolutionSummary } from './song-pdf/pdf-enhance-engine'
+import { parsePageOrder } from '../utils/page-order'
 
 const props = withDefaults(
 	defineProps<{
@@ -18,11 +19,13 @@ const props = withDefaults(
 		showExternalButton?: boolean
 		hideToolbar?: boolean
 		targetPage?: number
+		pageOrder?: string | null
 	}>(),
 	{
 		showExternalButton: true,
 		hideToolbar: false,
 		targetPage: undefined,
+		pageOrder: undefined,
 	},
 )
 
@@ -129,7 +132,8 @@ function goToPage(targetPage: number) {
 	}
 	currentPage.value = targetPage
 	if (pageLayout.value === 'continuous') {
-		const placeholder = pdfContainer.value?.querySelector(`[data-page-num="${targetPage}"]`) as HTMLElement | null
+		const placeholder = (pdfContainer.value?.querySelector(`[data-page-index="${targetPage}"]`) as HTMLElement | null)
+			?? (pdfContainer.value?.querySelector(`[data-page-num="${targetPage}"]`) as HTMLElement | null)
 		if (placeholder) {
 			placeholder.scrollIntoView({ behavior: 'smooth', block: 'start' })
 		}
@@ -218,7 +222,8 @@ async function renderCurrentView() {
 
 	const renderId = ++currentRenderId
 	const pdf = loadedPdf.value
-	const total = pdf.numPages
+	const ordered = parsePageOrder(props.pageOrder, pdf.numPages)
+	const total = ordered.length
 
 	await nextTick()
 	if (!pdfContainer.value || renderId !== currentRenderId) return
@@ -226,23 +231,24 @@ async function renderCurrentView() {
 	cleanupObserver()
 	pdfContainer.value.replaceChildren()
 
-	let pagesToRender: number[] = []
+	let pagesToRender: Array<{ pageNum: number; index: number }> = []
 	if (pageLayout.value === 'single') {
-		pagesToRender = [Math.min(Math.max(1, currentPage.value), total)]
+		const idx = Math.min(Math.max(1, currentPage.value), total) - 1
+		pagesToRender = [{ pageNum: ordered[idx] || 1, index: idx + 1 }]
 	} else if (pageLayout.value === 'double') {
-		const start = Math.min(Math.max(1, currentPage.value), total)
-		pagesToRender = [start]
-		if (start + 1 <= total) {
-			pagesToRender.push(start + 1)
+		const idx = Math.min(Math.max(1, currentPage.value), total) - 1
+		pagesToRender = [{ pageNum: ordered[idx] || 1, index: idx + 1 }]
+		if (idx + 1 < total) {
+			pagesToRender.push({ pageNum: ordered[idx + 1], index: idx + 2 })
 		}
 	} else {
-		pagesToRender = Array.from({ length: total }, (_, i) => i + 1)
+		pagesToRender = ordered.map((p, idx) => ({ pageNum: p, index: idx + 1 }))
 	}
 
 	// Calculate base scale using first page
 	let scale = 1.25
 	try {
-		const firstPage = await pdf.getPage(pagesToRender[0] || 1)
+		const firstPage = await pdf.getPage(pagesToRender[0]?.pageNum || 1)
 		const pageRotation = (((firstPage.rotate ?? 0) + rotation.value) % 360 + 360) % 360
 		const unscaledViewport = firstPage.getViewport({ scale: 1.0, rotation: pageRotation })
 
@@ -266,10 +272,12 @@ async function renderCurrentView() {
 	scale = Math.max(0.2, Math.min(scale, 4.0))
 	effectiveScale.value = scale
 
+	const renderedPlaceholders = new Set<HTMLElement>()
+
 	// Helper to render a specific page into its placeholder
 	const renderPage = async (pageNumber: number, placeholder: HTMLElement) => {
-		if (renderId !== currentRenderId || renderedPages.has(pageNumber)) return
-		renderedPages.add(pageNumber)
+		if (renderId !== currentRenderId || renderedPlaceholders.has(placeholder)) return
+		renderedPlaceholders.add(placeholder)
 
 		try {
 			const page = await pdf.getPage(pageNumber)
@@ -308,12 +316,13 @@ async function renderCurrentView() {
 
 	if (pageLayout.value === 'continuous') {
 		if (typeof IntersectionObserver === 'undefined') {
-			for (const pageNumber of pagesToRender) {
+			for (const item of pagesToRender) {
 				const placeholder = document.createElement('div')
 				placeholder.className = 'sheetmusic-page-placeholder'
-				placeholder.dataset.pageNum = String(pageNumber)
+				placeholder.dataset.pageNum = String(item.pageNum)
+				placeholder.dataset.pageIndex = String(item.index)
 				pdfContainer.value.append(placeholder)
-				await renderPage(pageNumber, placeholder)
+				await renderPage(item.pageNum, placeholder)
 			}
 			return
 		}
@@ -322,9 +331,10 @@ async function renderCurrentView() {
 			(entries) => {
 				for (const entry of entries) {
 					if (entry.isIntersecting) {
-						const pageNum = Number((entry.target as HTMLElement).dataset.pageNum)
-						if (pageNum && !renderedPages.has(pageNum)) {
-							renderPage(pageNum, entry.target as HTMLElement)
+						const targetEl = entry.target as HTMLElement
+						const pageNum = Number(targetEl.dataset.pageNum)
+						if (pageNum && !renderedPlaceholders.has(targetEl)) {
+							renderPage(pageNum, targetEl)
 						}
 					}
 				}
@@ -335,10 +345,11 @@ async function renderCurrentView() {
 			},
 		)
 
-		for (const pageNumber of pagesToRender) {
+		for (const item of pagesToRender) {
 			const placeholder = document.createElement('div')
 			placeholder.className = 'sheetmusic-page-placeholder'
-			placeholder.dataset.pageNum = String(pageNumber)
+			placeholder.dataset.pageNum = String(item.pageNum)
+			placeholder.dataset.pageIndex = String(item.index)
 			// Estimated placeholder size to stabilize scroll bar
 			placeholder.style.minWidth = '200px'
 			placeholder.style.minHeight = `${Math.round(800 * (effectiveScale.value / 1.25))}px`
@@ -352,17 +363,18 @@ async function renderCurrentView() {
 			intersectionObserver.observe(placeholder)
 
 			// Render the first page immediately so the user always sees content right away
-			if (pageNumber === pagesToRender[0]) {
-				renderPage(pageNumber, placeholder)
+			if (item === pagesToRender[0]) {
+				renderPage(item.pageNum, placeholder)
 			}
 		}
 	} else {
 		// Single or double page mode: render immediately
-		for (const pageNumber of pagesToRender) {
+		for (const item of pagesToRender) {
 			const placeholder = document.createElement('div')
-			placeholder.dataset.pageNum = String(pageNumber)
+			placeholder.dataset.pageNum = String(item.pageNum)
+			placeholder.dataset.pageIndex = String(item.index)
 			pdfContainer.value.append(placeholder)
-			await renderPage(pageNumber, placeholder)
+			await renderPage(item.pageNum, placeholder)
 		}
 	}
 }
@@ -424,8 +436,9 @@ async function loadAndRenderFile() {
 		if (loadId !== currentLoadId) return
 
 		loadedPdf.value = pdf
-		totalPages.value = pdf.numPages
-		currentPage.value = props.targetPage && props.targetPage >= 1 ? Math.min(props.targetPage, pdf.numPages) : 1
+		const ordered = parsePageOrder(props.pageOrder, pdf.numPages)
+		totalPages.value = ordered.length
+		currentPage.value = props.targetPage && props.targetPage >= 1 ? Math.min(props.targetPage, totalPages.value) : 1
 
 		// Collect page resolution summaries (up to first 25 pages for responsiveness)
 		try {
@@ -485,6 +498,18 @@ onUnmounted(() => {
 })
 
 watch(() => props.filePath, loadAndRenderFile, { immediate: true })
+
+watch(
+	() => props.pageOrder,
+	() => {
+		if (loadedPdf.value) {
+			const ordered = parsePageOrder(props.pageOrder, loadedPdf.value.numPages)
+			totalPages.value = ordered.length
+			currentPage.value = 1
+			renderCurrentView()
+		}
+	},
+)
 
 watch(
 	() => props.targetPage,

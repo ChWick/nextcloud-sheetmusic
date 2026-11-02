@@ -25,6 +25,7 @@ import SongFileSection from './song-editor/SongFileSection.vue'
 import SongMetadataFields from './song-editor/SongMetadataFields.vue'
 import DeleteSongDialog from './DeleteSongDialog.vue'
 import SongHistoryModal from './SongHistoryModal.vue'
+import SongPageOrderModal from './song-pdf/SongPageOrderModal.vue'
 
 const props = withDefaults(
 	defineProps<{
@@ -200,6 +201,18 @@ const currentFiles = ref<SongFile[]>(getInitialFiles(props.song))
 const pendingDeleteFiles = ref<SongFile[]>([])
 const pendingDetachFiles = ref<SongFile[]>([])
 const isHistoryOpen = ref(false)
+const isPageOrderModalOpen = ref(false)
+const selectedPageOrderFile = ref<SongFile | null>(null)
+
+function openPageOrderModal(file: SongFile) {
+	selectedPageOrderFile.value = file
+	isPageOrderModalOpen.value = true
+}
+
+function handlePageOrderSaved(data: LibraryData, updatedFile: SongFile) {
+	currentFiles.value = currentFiles.value.map((f) => (f.id === updatedFile.id ? { ...f, pageOrder: updatedFile.pageOrder } : f))
+	emit('updated', data)
+}
 
 function handleReverted(data: LibraryData) {
 	emit('updated', data)
@@ -700,6 +713,7 @@ defineExpose({
 				@open-external="openInExternalViewer"
 				@detach="stageDetachFile"
 				@delete="stageDeleteFile"
+				@edit-page-order="openPageOrderModal"
 				@restore-delete="restoreDeletedFile"
 				@restore-detach="restoreDetachedFile"
 				@remove-addition="(addition) => addition.remove()" />
@@ -769,6 +783,15 @@ defineExpose({
 			:song-id="song.id"
 			:song-title="song.title"
 			@reverted="handleReverted" />
+
+		<!-- Page Order Modal -->
+		<SongPageOrderModal
+			v-if="song && isPageOrderModalOpen"
+			v-model:open="isPageOrderModalOpen"
+			:file="selectedPageOrderFile"
+			:song-id="song.id"
+			:library-id="libraryId"
+			@saved="handlePageOrderSaved" />
 	</div>
 </template>
 

@@ -10,6 +10,7 @@ import { downsampleImageBuffer, imageBufferToImageData, imageDataToImageBuffer }
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import EjectIcon from 'vue-material-design-icons/Eject.vue'
 import FileIcon from 'vue-material-design-icons/File.vue'
+import FormatListNumbered from 'vue-material-design-icons/FormatListNumbered.vue'
 import MusicIcon from 'vue-material-design-icons/Music.vue'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
@@ -26,6 +27,7 @@ const emit = defineEmits<{
 	openExternal: [file: SongFile]
 	detach: [file: SongFile]
 	delete: [file: SongFile]
+	editPageOrder: [file: SongFile]
 }>()
 
 const thumbnailContainer = ref<HTMLElement>()
@@ -144,6 +146,12 @@ watch(() => props.file.path, () => {
 		<div :class="$style.fileInfo">
 			<span :class="$style.fileName">{{ getFileName(file.path) }}</span>
 			<span :class="$style.filePathText">{{ file.path }}</span>
+			<div v-if="isPdf" :class="$style.pageOrderBadge" :title="t('sheetmusic', 'MobileSheets Page Order')">
+				<FormatListNumbered :size="14" aria-hidden="true" />
+				<span :class="$style.pageOrderText">
+					{{ file.pageOrder ? t('sheetmusic', 'Pages: {order}', { order: file.pageOrder }) : (file.pageCount && file.pageCount > 1 ? t('sheetmusic', 'Pages: 1-{count}', { count: file.pageCount }) : t('sheetmusic', '1 page')) }}
+				</span>
+			</div>
 		</div>
 		<div :class="$style.fileActions">
 			<NcButton
@@ -176,6 +184,18 @@ watch(() => props.file.path, () => {
 				@click="emit('delete', file)">
 				<template #icon>
 					<DeleteIcon :size="20" />
+				</template>
+			</NcButton>
+			<NcButton
+				v-if="isPdf"
+				type="button"
+				variant="secondary"
+				:disabled="disabled"
+				:aria-label="t('sheetmusic', 'Edit page order for {file}', { file: getFileName(file.path) })"
+				:title="t('sheetmusic', 'Edit page order')"
+				@click="emit('editPageOrder', file)">
+				<template #icon>
+					<FormatListNumbered :size="20" />
 				</template>
 			</NcButton>
 		</div>
@@ -250,6 +270,22 @@ watch(() => props.file.path, () => {
 .filePathText {
 	font-size: 0.8rem;
 	color: var(--color-text-maxcontrast);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.pageOrderBadge {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	margin-top: 2px;
+	color: var(--color-primary-element);
+	font-size: 0.75rem;
+	font-weight: 500;
+}
+
+.pageOrderText {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;

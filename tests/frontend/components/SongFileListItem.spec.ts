@@ -79,4 +79,24 @@ describe('SongFileListItem', () => {
 		expect(detachBtn.attributes('disabled')).toBeDefined()
 		expect(deleteBtn.attributes('disabled')).toBeDefined()
 	})
+
+	it('renders page order badge and emits editPageOrder when button is clicked', async () => {
+		const wrapper = mount(SongFileListItem, {
+			props: {
+				file: {
+					...mockFile,
+					pageCount: 3,
+					pageOrder: '1-3',
+				},
+			},
+			...globalStubs,
+		})
+
+		expect(wrapper.text()).toContain('Pages: 1-3')
+		const editPageOrderBtn = wrapper.findAll('button')[3]
+		expect(editPageOrderBtn).toBeDefined()
+		await editPageOrderBtn.trigger('click')
+
+		expect(wrapper.emitted('editPageOrder')).toBeTruthy()
+	})
 })
