@@ -272,4 +272,51 @@ final class LibraryToolServiceTest extends TestCase {
 		self::assertNotNull($updated);
 		self::assertSame('1-6', $updated->pageOrder);
 	}
+
+	public function testAuditPageOrdersHealsStaleOnePageCountWhenPhysicalPdfHasMorePages(): void {
+		$lib = $this->createTestLibrary();
+		$this->setupLibraryFolder($lib);
+		$user = $this->rootFolder->getUserFolder($lib->userId)->getOwner();
+		$userFolder = $this->rootFolder->getUserFolder($lib->userId);
+		$libFolder = $userFolder->get(trim($lib->path, '/'));
+
+		// Physical file has 3 pages
+		$pdfContent = "<< /Type /Pages /Count 3 /Kids [] >>\n";
+		$pdfNode = $libFolder->newFile('multi-page-split.pdf', $pdfContent);
+		$this->createdUserNodes[] = $pdfNode;
+
+		$song = $this->songMapper->insert(new InternalSong(
+			id: null,
+			uuid: 'song-uuid-stale',
+			libraryId: $lib->id,
+			title: 'Song with stale 1-1',
+		));
+
+		// Recorded in DB as 1 page with 1-1
+		$file = $this->songFileMapper->insert(new InternalSongFile(
+			id: null,
+			uuid: 'file-uuid-stale',
+			songId: $song->id,
+			fileId: (int)$pdfNode->getId(),
+			pageOrder: '1-1',
+			pageCount: 1,
+			fileSize: strlen($pdfContent),
+			type: InternalSongFile::FILE_TYPE_PDF,
+			createdAt: time(),
+			updatedAt: time(),
+		));
+
+		$audit = $this->toolService->auditPageOrders($lib->id, $user);
+
+		self::assertSame(1, $audit['totalFiles']);
+		self::assertSame(1, $audit['stuckCount'], 'Physical multi-page file should be classified as stuck at 1-1');
+		self::assertTrue($audit['items'][0]['isStuckOneToOne']);
+		self::assertSame(3, $audit['items'][0]['actualPageCount']);
+		self::assertSame('1-3', $audit['items'][0]['suggestedPageOrder']);
+
+		// Verify database was healed
+		$reloaded = $this->songFileMapper->findById($file->id);
+		self::assertNotNull($reloaded);
+		self::assertSame(3, $reloaded->pageCount);
+	}
 }

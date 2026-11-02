@@ -17,6 +17,7 @@ use OCA\SheetMusic\Db\LibraryMapper;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPathResolver;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdf;
 use OCP\Files\File;
+use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\IUser;
 use Psr\Log\LoggerInterface;
@@ -77,30 +78,24 @@ class LibraryToolService {
 				}
 
 				$pageCount = max(1, $file->pageCount);
-				$actualPageCount = $pageCount;
+				$actualPageCount = $this->resolveActualPdfPageCount(
+					(int)($file->fileId ?? 0),
+					$path,
+					$pageCount,
+					$user,
+					$targetFolder,
+					$targetFolderPath,
+				);
 
-				// Verify physical file if stored count is only 1 page
-				if ($pageCount <= 1) {
+				// If physical PDF has more pages than stored, heal pageCount in database
+				if ($actualPageCount > $file->pageCount && $file->id > 0) {
 					try {
-						$pathObj = $this->pathResolver->fromStored($path, $user);
-						if ($pathObj !== null) {
-							$relativeToTarget = $this->pathResolver->relativeToFolder($pathObj->internal, $targetFolderPath);
-							$cleanRelative = ltrim($relativeToTarget, '/');
-							if ($cleanRelative !== '' && $targetFolder->nodeExists($cleanRelative)) {
-								$node = $targetFolder->get($cleanRelative);
-								if ($node instanceof File) {
-									$content = $node->getContent();
-									if (is_string($content) && $content !== '') {
-										$detected = MobileSheetsPdf::pageCount($content);
-										if ($detected > 1) {
-											$actualPageCount = $detected;
-										}
-									}
-								}
-							}
+						$fileRecord = $this->internalSongFileMapper->findById((int)$file->id);
+						if ($fileRecord !== null) {
+							$fileRecord->pageCount = $actualPageCount;
+							$this->internalSongFileMapper->update($fileRecord);
 						}
 					} catch (\Throwable) {
-						// Fall back to recorded pageCount
 					}
 				}
 
@@ -238,26 +233,15 @@ class LibraryToolService {
 			}
 
 			// Determine page count
-			$actualPageCount = max(1, $fileRecord->pageCount);
-			if ($actualPageCount <= 1) {
-				try {
-					$pathObj = $this->pathResolver->fromStored($file->path, $user);
-					if ($pathObj !== null) {
-						$rel = ltrim($this->pathResolver->relativeToFolder($pathObj->internal, $targetFolderPath), '/');
-						if ($rel !== '' && $targetFolder->nodeExists($rel)) {
-							$node = $targetFolder->get($rel);
-							if ($node instanceof File) {
-								$cnt = $node->getContent();
-								if (is_string($cnt) && $cnt !== '') {
-									$actualPageCount = max(1, MobileSheetsPdf::pageCount($cnt));
-								}
-							}
-						}
-					}
-				} catch (\Throwable) {
-					// Keep stored page count
-				}
-			}
+			$storedCount = max(1, $fileRecord->pageCount);
+			$actualPageCount = $this->resolveActualPdfPageCount(
+				(int)$fileRecord->fileId,
+				$file->path,
+				$storedCount,
+				$user,
+				$targetFolder,
+				$targetFolderPath,
+			);
 
 			$newOrder = MobileSheetsPdf::pageOrder($actualPageCount);
 			$fileRecord->pageCount = $actualPageCount;
@@ -296,5 +280,83 @@ class LibraryToolService {
 			'resetCount' => $resetCount,
 			'message' => sprintf('Successfully reset page ordering for %d file(s).', $resetCount),
 		];
+	}
+
+	/**
+	 * Reliably resolve the physical PDF file node and extract its true page count.
+	 */
+	public function resolveActualPdfPageCount(
+		int $fileId,
+		string $path,
+		int $storedPageCount,
+		IUser $user,
+		?Folder $targetFolder,
+		string $targetFolderPath,
+	): int {
+		$actual = max(1, $storedPageCount);
+
+		try {
+			$node = null;
+
+			// 1. Direct Nextcloud fileId lookup in user folder or root folder
+			if ($fileId > 0) {
+				try {
+					$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+					$nodes = $userFolder->getById($fileId);
+					if (!empty($nodes) && $nodes[0] instanceof File) {
+						$node = $nodes[0];
+					} else {
+						$rootNodes = $this->rootFolder->getById($fileId);
+						if (!empty($rootNodes) && $rootNodes[0] instanceof File) {
+							$node = $rootNodes[0];
+						}
+					}
+				} catch (\Throwable) {
+					// Fall through to path resolution
+				}
+			}
+
+			// 2. Path-based resolution via target folder and pathResolver
+			if ($node === null) {
+				try {
+					$pathObj = $this->pathResolver->fromStored($path, $user);
+					if ($pathObj !== null) {
+						if ($targetFolder !== null) {
+							$relativeToTarget = $this->pathResolver->relativeToFolder($pathObj->internal, $targetFolderPath);
+							if ($relativeToTarget !== null) {
+								$cleanRelative = ltrim($relativeToTarget, '/');
+								if ($cleanRelative !== '' && $targetFolder->nodeExists($cleanRelative)) {
+									$candidate = $targetFolder->get($cleanRelative);
+									if ($candidate instanceof File) {
+										$node = $candidate;
+									}
+								}
+							}
+						}
+						if ($node === null && $this->rootFolder->nodeExists($pathObj->internal)) {
+							$candidate = $this->rootFolder->get($pathObj->internal);
+							if ($candidate instanceof File) {
+								$node = $candidate;
+							}
+						}
+					}
+				} catch (\Throwable) {
+				}
+			}
+
+			// 3. Extract actual page count from physical PDF content
+			if ($node instanceof File) {
+				$content = $node->getContent();
+				if (is_string($content) && $content !== '') {
+					$detected = MobileSheetsPdf::pageCount($content);
+					if ($detected > 0) {
+						$actual = $detected;
+					}
+				}
+			}
+		} catch (\Throwable) {
+		}
+
+		return $actual;
 	}
 }

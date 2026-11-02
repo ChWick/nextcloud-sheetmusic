@@ -164,11 +164,29 @@ class LibraryIntegrityService {
 					}
 
 					$trimmedOrder = trim((string)($file->pageOrder ?? ''));
-					if ($file->pageCount > 1 && ($trimmedOrder === '1-1' || $trimmedOrder === '1')) {
+					$effectivePageCount = max(1, $file->pageCount);
+					if ($effectivePageCount <= 1 && $existingPdfPath !== null && str_ends_with(strtolower($file->path), '.pdf')) {
+						try {
+							if ($targetFolder->nodeExists($existingPdfPath)) {
+								$pdfNode = $targetFolder->get($existingPdfPath);
+								if ($pdfNode instanceof File) {
+									$pdfContent = $pdfNode->getContent();
+									if (is_string($pdfContent) && $pdfContent !== '') {
+										$detected = \OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdf::pageCount($pdfContent);
+										if ($detected > 1) {
+											$effectivePageCount = $detected;
+										}
+									}
+								}
+							}
+						} catch (\Throwable) {
+						}
+					}
+					if ($effectivePageCount > 1 && ($trimmedOrder === '1-1' || $trimmedOrder === '1')) {
 						$issues[] = new IntegrityIssue(
 							type: IntegrityIssue::TYPE_STUCK_PAGE_ORDER,
 							severity: IntegrityIssue::SEVERITY_WARNING,
-							message: sprintf('File "%s" has %d pages, but page order is set to "%s".', basename($file->path), $file->pageCount, $trimmedOrder),
+							message: sprintf('File "%s" has %d pages, but page order is set to "%s".', basename($file->path), $effectivePageCount, $trimmedOrder),
 							songId: $song->id,
 							songTitle: $song->title,
 							fileId: $file->id,
@@ -176,9 +194,9 @@ class LibraryIntegrityService {
 							suggestedPath: null,
 							fixable: true,
 							details: [
-								'pageCount' => $file->pageCount,
+								'pageCount' => $effectivePageCount,
 								'pageOrder' => $trimmedOrder,
-								'suggestedOrder' => \OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdf::pageOrder($file->pageCount),
+								'suggestedOrder' => \OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdf::pageOrder($effectivePageCount),
 							],
 						);
 					}
