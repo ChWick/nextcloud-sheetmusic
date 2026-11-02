@@ -200,6 +200,16 @@ return [
 			'verb' => 'POST',
 		],
 		[
+			'name' => 'Api#auditPageOrders',
+			'url' => '/api/libraries/{id}/tools/page-order-audit',
+			'verb' => 'GET',
+		],
+		[
+			'name' => 'Api#resetPageOrders',
+			'url' => '/api/libraries/{id}/tools/reset-page-orders',
+			'verb' => 'POST',
+		],
+		[
 			'name' => 'Api#createSignature',
 			'url' => '/api/signatures',
 			'verb' => 'POST',

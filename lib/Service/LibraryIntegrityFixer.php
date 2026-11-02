@@ -203,6 +203,10 @@ class LibraryIntegrityFixer {
 			];
 		}
 
+		if ($issueType === IntegrityIssue::TYPE_STUCK_PAGE_ORDER && $fileId !== null) {
+			return $this->fixStuckPageOrder($libraryId, $userId, $fileId);
+		}
+
 		if ($issueType === IntegrityIssue::TYPE_INVALID_NAMING_RULE && $songId !== null) {
 			['user' => $user, 'databasePath' => $databasePath, 'targetFolder' => $targetFolder] = $this->getUserLibraryContext($libraryId, $userId);
 			$hashCodes = MobileSheetsHashCodesFile::forDatabase($databasePath, $this->logger);
@@ -444,6 +448,18 @@ class LibraryIntegrityFixer {
 				} catch (\Throwable $e) {
 					$this->logger->warning('Cannot auto-fix missing file: ' . $e->getMessage());
 				}
+			} elseif ($issue->type === IntegrityIssue::TYPE_STUCK_PAGE_ORDER && $issue->fileId !== null) {
+				try {
+					$res = $this->fixStuckPageOrder($libraryId, $userId, $issue->fileId);
+					if ($res['success']) {
+						$fixedCount++;
+					} else {
+						$errors[] = $res['message'];
+					}
+				} catch (\Throwable $e) {
+					$this->logger->warning('Cannot auto-fix stuck page order: ' . $e->getMessage());
+					$errors[] = 'Failed to reset page order: ' . $e->getMessage();
+				}
 			}
 		}
 
@@ -472,6 +488,40 @@ class LibraryIntegrityFixer {
 			'success' => $success,
 			'fixedCount' => $fixedCount,
 			'message' => $message,
+		];
+	}
+
+	public function fixStuckPageOrder(int $libraryId, string $userId, int $fileId): array {
+		$fileRecord = $this->internalSongFileMapper->findById($fileId);
+		if ($fileRecord === null) {
+			return [
+				'success' => false,
+				'fixedCount' => 0,
+				'message' => 'Song file record not found.',
+			];
+		}
+
+		$pageCount = max(1, $fileRecord->pageCount);
+		$newOrder = \OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdf::pageOrder($pageCount);
+		$fileRecord->pageOrder = $newOrder;
+		$now = time();
+		$fileRecord->updatedAt = $now;
+		$this->internalSongFileMapper->update($fileRecord);
+
+		if ($fileRecord->songId > 0) {
+			$song = $this->internalSongMapper->findById($fileRecord->songId);
+			if ($song !== null) {
+				$song->updatedAt = $now;
+				$this->internalSongMapper->update($song);
+			}
+		}
+
+		$this->libraryMapper->touch($libraryId);
+
+		return [
+			'success' => true,
+			'fixedCount' => 1,
+			'message' => sprintf('Reset page order to "%s".', $newOrder),
 		];
 	}
 

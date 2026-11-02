@@ -30,6 +30,7 @@ class IntegrityIssue implements JsonSerializable {
 	public const TYPE_DUPLICATE_CLIENT_ID = 'duplicate_client_id';
 	public const TYPE_ORPHAN_SONG_ATTRIBUTE = 'orphan_song_attribute';
 	public const TYPE_ORPHAN_MISC_DATA = 'orphan_misc_data';
+	public const TYPE_STUCK_PAGE_ORDER = 'stuck_page_order';
 
 	public const SEVERITY_ERROR = 'error';
 	public const SEVERITY_WARNING = 'warning';

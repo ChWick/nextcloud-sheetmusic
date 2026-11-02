@@ -118,6 +118,23 @@ class ApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	#[ApiRoute(verb: 'GET', url: '/api/libraries/{id}/tools/page-order-audit')]
+	public function auditPageOrders(int $id): DataResponse {
+		return $this->libraryController->auditPageOrders($id);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/libraries/{id}/tools/reset-page-orders')]
+	public function resetPageOrders(
+		int $id,
+		?array $fileIds = null,
+		string $mode = 'stuck',
+		?string $progressId = null,
+	): DataResponse {
+		return $this->libraryController->resetPageOrders($id, $fileIds, $mode, $progressId);
+	}
+
+	#[NoAdminRequired]
 	#[ApiRoute(verb: 'GET', url: '/api/songs')]
 	public function getSongs(?string $id = null): DataResponse {
 		return $this->songController->getSongs($id);

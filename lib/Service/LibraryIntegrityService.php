@@ -163,6 +163,26 @@ class LibraryIntegrityService {
 						}
 					}
 
+					$trimmedOrder = trim((string)($file->pageOrder ?? ''));
+					if ($file->pageCount > 1 && ($trimmedOrder === '1-1' || $trimmedOrder === '1')) {
+						$issues[] = new IntegrityIssue(
+							type: IntegrityIssue::TYPE_STUCK_PAGE_ORDER,
+							severity: IntegrityIssue::SEVERITY_WARNING,
+							message: sprintf('File "%s" has %d pages, but page order is set to "%s".', basename($file->path), $file->pageCount, $trimmedOrder),
+							songId: $song->id,
+							songTitle: $song->title,
+							fileId: $file->id,
+							path: $relativeToTarget,
+							suggestedPath: null,
+							fixable: true,
+							details: [
+								'pageCount' => $file->pageCount,
+								'pageOrder' => $trimmedOrder,
+								'suggestedOrder' => \OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdf::pageOrder($file->pageCount),
+							],
+						);
+					}
+
 					// Check naming rule compliance
 					$isCompliant = !$autoPaths || !$hasNamingRule;
 					if ($autoPaths && $hasNamingRule) {

@@ -6,6 +6,7 @@ namespace OCA\SheetMusic\Controller;
 
 use OCA\SheetMusic\Service\LibraryIntegrityService;
 use OCA\SheetMusic\Service\LibraryService;
+use OCA\SheetMusic\Service\LibraryToolService;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\ApiRoute;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -21,6 +22,7 @@ class LibraryController extends OCSController {
 		private LibraryService $libraryService,
 		private IUserSession $userSession,
 		private LibraryIntegrityService $integrityService,
+		private ?LibraryToolService $toolService = null,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -196,6 +198,75 @@ class LibraryController extends OCSController {
 			}
 			return new DataResponse(
 				['success' => false, 'message' => 'Error batch-fixing integrity issues: ' . $e->getMessage()],
+				Http::STATUS_OK
+			);
+		}
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'GET', url: '/api/libraries/{id}/tools/page-order-audit')]
+	public function auditPageOrders(int $id): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse(['message' => 'User not logged in'], Http::STATUS_UNAUTHORIZED);
+		}
+
+		if ($this->toolService === null) {
+			return new DataResponse(['message' => 'Tool service unavailable'], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+
+		try {
+			$result = $this->toolService->auditPageOrders($id, $user);
+			return new DataResponse($result, Http::STATUS_OK);
+		} catch (\Throwable $e) {
+			return new DataResponse(
+				['message' => 'Error auditing page orders: ' . $e->getMessage()],
+				Http::STATUS_INTERNAL_SERVER_ERROR
+			);
+		}
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/libraries/{id}/tools/reset-page-orders')]
+	public function resetPageOrders(
+		int $id,
+		?array $fileIds = null,
+		string $mode = 'stuck',
+		?string $progressId = null,
+	): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse(['message' => 'User not logged in'], Http::STATUS_UNAUTHORIZED);
+		}
+
+		if ($this->toolService === null) {
+			return new DataResponse(['message' => 'Tool service unavailable'], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+
+		$progId = $this->resolveProgressId($progressId);
+		if ($progId !== null) {
+			$this->libraryService->startProgress($progId, 'Starting page order reset…');
+		}
+
+		$onProgress = null;
+		if ($progId !== null) {
+			$onProgress = function (string $stage, int $current, int $total, ?string $detail = null) use ($progId): void {
+				$this->libraryService->updateProgress($progId, $stage, $current, $total, $detail ?? '');
+			};
+		}
+
+		try {
+			$result = $this->toolService->resetPageOrders($id, $user, $fileIds, $mode, $onProgress);
+			if ($progId !== null) {
+				$this->libraryService->completeProgress($progId, $result['message'] ?? 'Page order reset complete');
+			}
+			return new DataResponse($result, Http::STATUS_OK);
+		} catch (\Throwable $e) {
+			if ($progId !== null) {
+				$this->libraryService->failProgress($progId, $e->getMessage());
+			}
+			return new DataResponse(
+				['success' => false, 'message' => 'Error resetting page orders: ' . $e->getMessage()],
 				Http::STATUS_OK
 			);
 		}
