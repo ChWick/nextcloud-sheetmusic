@@ -24,7 +24,7 @@ final class SongBookmarkMapperTest extends TestCase {
 
 		$database = new \PDO('sqlite:' . $this->databasePath);
 		$database->exec('CREATE TABLE Bookmarks(Id INTEGER PRIMARY KEY, SongId INTEGER, Name VARCHAR(255), PageNum INTEGER, ShowInLibrary INTEGER DEFAULT 0, DateCreated INTEGER DEFAULT 0, LastModified INTEGER DEFAULT 0)');
-		$database->exec("INSERT INTO Bookmarks (Id, SongId, Name, PageNum, ShowInLibrary) VALUES (1, 10, 'Intro', 1, 1)");
+		$database->exec("INSERT INTO Bookmarks (Id, SongId, Name, PageNum, ShowInLibrary) VALUES (1, 10, 'Intro', 0, 1)");
 
 		$this->bookmarkMapper = new SongBookmarkMapper(new NullLogger());
 	}

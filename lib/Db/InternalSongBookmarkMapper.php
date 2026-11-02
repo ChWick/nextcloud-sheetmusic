@@ -155,5 +155,11 @@ class InternalSongBookmarkMapper {
 			$qb->executeStatement();
 			$position++;
 		}
+
+		$touchQb = $this->db->getQueryBuilder();
+		$touchQb->update('sheetmusic_songs')
+			->set('updated_at', $touchQb->createNamedParameter($now, IQueryBuilder::PARAM_INT))
+			->where($touchQb->expr()->eq('id', $touchQb->createNamedParameter($songId, IQueryBuilder::PARAM_INT)))
+			->executeStatement();
 	}
 }

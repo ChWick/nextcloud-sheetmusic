@@ -265,6 +265,9 @@ class MobileSheetsSqliteExporter {
 
 		$songs = $this->songMapper->findAllForLibrary($libraryId, includeDeleted: false);
 		$attributesBySong = $this->attributeMapper->findAllForLibrary($libraryId);
+		$libraryBookmarks = $this->bookmarkMapper !== null
+			? $this->bookmarkMapper->findAllForLibrary($libraryId)
+			: [];
 		[$usedIds, $nextId] = MobileSheetsTableHelper::initClientIdTracking($songs);
 
 		$metaStmt = $hasSyncMeta ? $db->prepare('INSERT INTO _nc_sync_metadata (entity_type, uuid, client_id, updated_at, extra_json) VALUES (:type, :uuid, :client_id, :updated_at, :extra_json)') : null;
@@ -290,6 +293,15 @@ class MobileSheetsSqliteExporter {
 			$custom = $attrs['custom'] ?? '';
 			$custom2 = $attrs['custom2'] ?? '';
 
+			$effectiveUpdatedAt = $song->updatedAt;
+			if (!empty($libraryBookmarks[$song->id])) {
+				foreach ($libraryBookmarks[$song->id] as $bm) {
+					if ($bm->updatedAt > $effectiveUpdatedAt) {
+						$effectiveUpdatedAt = $bm->updatedAt;
+					}
+				}
+			}
+
 			if ($existingSongRow === null) {
 				$candidateValues = [
 					'id' => $clientId,
@@ -310,7 +322,7 @@ class MobileSheetsSqliteExporter {
 					'songid' => 0,
 					'datecreated' => MobileSheetsTimestampUtil::secondsToMs($song->createdAt),
 					'creationdate' => MobileSheetsTimestampUtil::secondsToMs($song->createdAt),
-					'lastmodified' => MobileSheetsTimestampUtil::secondsToMs($song->updatedAt),
+					'lastmodified' => MobileSheetsTimestampUtil::secondsToMs($effectiveUpdatedAt),
 					'opus' => $song->opus ?? '',
 					'catalognumber' => $song->catalogNumber ?? '',
 					'songnumber' => $song->songNumber ?? '',
@@ -320,7 +332,7 @@ class MobileSheetsSqliteExporter {
 				MobileSheetsTableHelper::insertRow($db, 'Songs', $insertRow);
 			} else {
 				$existingModSec = MobileSheetsTimestampUtil::extractLastModifiedSec($existingSongRow);
-				if (($existingModSec > 0 && $song->updatedAt > $existingModSec) || trim((string)($existingSongRow['Title'] ?? '')) !== $song->title) {
+				if (($existingModSec > 0 && $effectiveUpdatedAt > $existingModSec) || trim((string)($existingSongRow['Title'] ?? '')) !== $song->title) {
 					$updateCandidates = [
 						'title' => $song->title,
 						'sorttitle' => $song->sortTitle ?? '',
@@ -328,7 +340,7 @@ class MobileSheetsSqliteExporter {
 						'difficulty' => $song->difficulty,
 						'duration' => $song->duration,
 						'keywords' => $song->keywords ?? '',
-						'lastmodified' => MobileSheetsTimestampUtil::secondsToMs($song->updatedAt),
+						'lastmodified' => MobileSheetsTimestampUtil::secondsToMs($effectiveUpdatedAt),
 					];
 					if (isset($attrs['custom'])) {
 						$updateCandidates['custom'] = $custom;
@@ -592,6 +604,7 @@ class MobileSheetsSqliteExporter {
 
 		foreach ($bookmarks as $bm) {
 			$candidateValues = [
+				'id' => $bm->id,
 				'songid' => $songClientId,
 				'name' => $bm->name,
 				'pagenum' => max(0, $bm->pageNum - 1),

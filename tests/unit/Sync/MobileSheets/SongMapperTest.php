@@ -36,7 +36,7 @@ final class SongMapperTest extends TestCase {
 
 		$database->exec("INSERT INTO Songs (Id, Title, SortTitle, Stars, Difficulty, Duration, Keywords, Custom, Custom2) VALUES (1, 'Zebra', 'Zebra', 5, 3, 240, 'jazz, fast', 'Key C', 'Arrangement A'), (2, 'Alpha', 'Alpha', 0, 0, 0, '', '', '')");
 		$database->exec("INSERT INTO Files (Id, SongId, Path) VALUES (1, 1, '/remote.php/dav/files/admin/Noten/Zebra.pdf'), (2, 2, '/remote.php/dav/files/admin/Noten/Alpha.pdf')");
-		$database->exec("INSERT INTO Bookmarks (Id, SongId, Name, PageNum, ShowInLibrary) VALUES (1, 1, 'Chorus', 2, 1)");
+		$database->exec("INSERT INTO Bookmarks (Id, SongId, Name, PageNum, ShowInLibrary) VALUES (1, 1, 'Chorus', 1, 1)");
 		$database->exec("INSERT INTO AudioFiles (Id, SongId, Title, File) VALUES (1, 1, 'Audio Track', 'track1.mp3')");
 
 		$database->exec("INSERT INTO Composer (Id, Name) VALUES (10, 'Beethoven'), (20, 'Bach')");

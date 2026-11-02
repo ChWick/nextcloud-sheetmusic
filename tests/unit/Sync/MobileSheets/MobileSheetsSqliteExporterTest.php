@@ -502,4 +502,70 @@ final class MobileSheetsSqliteExporterTest extends TestCase {
 		$metronomeCount = (int)$db->query('SELECT count(*) FROM MetronomeSettings')->fetchColumn();
 		self::assertSame(1, $metronomeCount);
 	}
+
+	public function testExportMultipleBookmarksOnSamePage(): void {
+		$library = $this->createTestLibrary('/SamePageBookmarksLib', 'admin');
+
+		$song = new InternalSong(
+			id: null,
+			uuid: 'same-page-bm-song',
+			libraryId: (int)$library->id,
+			title: 'Two Short Preludes',
+			clientId: 42,
+			createdAt: 1000,
+			updatedAt: 1000,
+		);
+		$createdSong = $this->songMapper->insert($song);
+		$this->attachTestFileToSong($createdSong, 'Preludes.pdf', 100);
+
+		$this->bookmarkMapper->setBookmarksForSong((int)$createdSong->id, [
+			[
+				'name' => 'Prelude No. 1',
+				'pageNum' => 1,
+				'endPage' => 1,
+				'position' => 0,
+			],
+			[
+				'name' => 'Prelude No. 2',
+				'pageNum' => 1,
+				'endPage' => 2,
+				'position' => 1,
+			],
+			[
+				'name' => 'Prelude No. 3',
+				'pageNum' => 2,
+				'endPage' => 2,
+				'position' => 2,
+			],
+		]);
+
+		$this->exporter->exportToFile($library, $this->tempDbPath);
+
+		self::assertFileExists($this->tempDbPath);
+		$db = new PDO('sqlite:' . $this->tempDbPath);
+
+		// Assert all 3 bookmarks are exported without deduplication
+		$bmRows = $db->query('SELECT Id, SongId, Name, PageNum, ShowInLibrary FROM Bookmarks ORDER BY PageNum ASC, Id ASC')->fetchAll(PDO::FETCH_ASSOC);
+		self::assertCount(3, $bmRows);
+
+		// Both Prelude 1 and 2 target PageNum 0 (Nextcloud page 1)
+		self::assertSame('Prelude No. 1', $bmRows[0]['Name']);
+		self::assertSame(0, (int)$bmRows[0]['PageNum']);
+		self::assertSame(42, (int)$bmRows[0]['SongId']);
+		self::assertSame(1, (int)$bmRows[0]['ShowInLibrary']);
+
+		self::assertSame('Prelude No. 2', $bmRows[1]['Name']);
+		self::assertSame(0, (int)$bmRows[1]['PageNum']);
+		self::assertSame(42, (int)$bmRows[1]['SongId']);
+		self::assertSame(1, (int)$bmRows[1]['ShowInLibrary']);
+
+		// Prelude 3 targets PageNum 1 (Nextcloud page 2)
+		self::assertSame('Prelude No. 3', $bmRows[2]['Name']);
+		self::assertSame(1, (int)$bmRows[2]['PageNum']);
+
+		// Verify Songs.LastModified reflects the newer bookmark update time
+		$songRow = $db->query('SELECT LastModified FROM Songs WHERE Id = 42')->fetch(PDO::FETCH_ASSOC);
+		self::assertNotNull($songRow);
+		self::assertGreaterThan(1000000, (int)$songRow['LastModified']);
+	}
 }
