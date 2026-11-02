@@ -27,7 +27,6 @@ import {
 import type { LibraryData, SongFile } from '../../types/song'
 import SongPageOrderPresets from './SongPageOrderPresets.vue'
 import SongPageOrderGrid from './SongPageOrderGrid.vue'
-import SongPageOrderSequence from './SongPageOrderSequence.vue'
 import SongPageOrderZoomModal from './SongPageOrderZoomModal.vue'
 import { usePageOrderThumbnails } from './usePageOrderThumbnails'
 
@@ -49,20 +48,21 @@ const isSaving = ref(false)
 const errorMessage = ref('')
 
 // Card width / zoom for parallel preview grid
-const cardWidth = ref(240)
-const MIN_CARD_WIDTH = 160
-const MAX_CARD_WIDTH = 420
+const DEFAULT_CARD_WIDTH = 160
+const cardWidth = ref(DEFAULT_CARD_WIDTH)
+const MIN_CARD_WIDTH = 110
+const MAX_CARD_WIDTH = 320
 
 function zoomIn() {
-	cardWidth.value = Math.min(MAX_CARD_WIDTH, cardWidth.value + 40)
+	cardWidth.value = Math.min(MAX_CARD_WIDTH, cardWidth.value + 30)
 }
 
 function zoomOut() {
-	cardWidth.value = Math.max(MIN_CARD_WIDTH, cardWidth.value - 40)
+	cardWidth.value = Math.max(MIN_CARD_WIDTH, cardWidth.value - 30)
 }
 
 function resetZoom() {
-	cardWidth.value = 240
+	cardWidth.value = DEFAULT_CARD_WIDTH
 }
 
 // Zoom / Lightbox modal state for individual page inspection
@@ -337,13 +337,6 @@ async function handleSave() {
 					@zoom="openPageZoom" />
 			</div>
 
-			<!-- Resulting Page Sequence Preview -->
-			<SongPageOrderSequence
-				v-if="isValid"
-				:pages="pageSequence"
-				:disabled="isSaving"
-				@remove="removeSequenceItem" />
-
 			<p v-if="errorMessage" :class="$style.errorText" role="alert">
 				{{ errorMessage }}
 			</p>
@@ -367,17 +360,66 @@ async function handleSave() {
 .largeDialog :global(.modal-container) {
 	width: 94vw !important;
 	max-width: 1440px !important;
-	height: 88vh !important;
-	max-height: 920px !important;
+	height: 90vh !important;
+	max-height: 940px !important;
+	display: flex !important;
+	flex-direction: column !important;
+	overflow: hidden !important;
+}
+
+.largeDialog :global(.modal-container__content) {
+	display: flex !important;
+	flex-direction: column !important;
+	flex: 1 1 auto !important;
+	min-height: 0 !important;
+	height: 100% !important;
+	overflow: hidden !important;
+}
+
+.largeDialog :global(.dialog) {
+	display: flex !important;
+	flex-direction: column !important;
+	flex: 1 1 auto !important;
+	min-height: 0 !important;
+	height: 100% !important;
+	overflow: hidden !important;
+}
+
+.largeDialog :global(.dialog__wrapper) {
+	display: flex !important;
+	flex-direction: column !important;
+	flex: 1 1 auto !important;
+	min-height: 0 !important;
+	overflow: hidden !important;
+}
+
+.largeDialog :global(.dialog__content) {
+	display: flex !important;
+	flex-direction: column !important;
+	flex: 1 1 auto !important;
+	min-height: 0 !important;
+	overflow-y: auto !important;
+	overflow-x: hidden !important;
+	padding: 4px 16px 12px 16px !important;
+}
+
+.largeDialog :global(.dialog__actions) {
+	flex-shrink: 0 !important;
+	background-color: var(--color-main-background, #fff) !important;
+	border-top: 1px solid var(--color-border) !important;
+	padding: 10px 18px !important;
+	margin: 0 !important;
+	z-index: 50 !important;
+	box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.06) !important;
 }
 
 .dialogContent {
 	display: flex;
 	flex-direction: column;
-	gap: 14px;
-	padding: 4px 0;
+	gap: 12px;
+	padding: 2px 0 8px 0;
 	min-width: 0;
-	height: 100%;
+	width: 100%;
 	box-sizing: border-box;
 }
 

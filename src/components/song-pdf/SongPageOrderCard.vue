@@ -30,7 +30,7 @@ const props = withDefaults(
 		sequenceTotal: null,
 		thumbnailUrl: '',
 		occurrenceCount: 0,
-		cardWidth: 220,
+		cardWidth: 160,
 		disabled: false,
 		showRemove: false,
 		draggable: false,
@@ -54,7 +54,7 @@ const isSequenceMode = computed(() => props.sequenceIndex !== null)
 const isInOrder = computed(() => props.occurrenceCount > 0)
 const cardStyle = computed(() => ({
 	width: `${props.cardWidth}px`,
-	minWidth: `${Math.min(props.cardWidth, 140)}px`,
+	minWidth: `${Math.min(props.cardWidth, 110)}px`,
 }))
 </script>
 
@@ -86,12 +86,12 @@ const cardStyle = computed(() => ({
 					:title="t('sheetmusic', 'Drag to reorder or add to page order')"
 					aria-hidden="true"
 					data-test="card-drag-handle">
-					<DragVertical :size="16" />
+					<DragVertical :size="15" />
 				</span>
 				<span v-if="isSequenceMode" :class="$style.sequenceBadge" data-test="sequence-badge">
 					#{{ (sequenceIndex ?? 0) + 1 }}
 				</span>
-				<span :class="$style.pageNumber">
+				<span :class="$style.pageNumber" :title="t('sheetmusic', 'Page {p}', { p: pageNum })">
 					{{ t('sheetmusic', 'Page {p}', { p: pageNum }) }}
 				</span>
 			</div>
@@ -129,7 +129,7 @@ const cardStyle = computed(() => ({
 				:aria-label="t('sheetmusic', 'Zoom in on page {p}', { p: pageNum })"
 				data-test="card-zoom-btn"
 				@click.stop="emit('zoom', pageNum)">
-				<MagnifyPlus :size="18" />
+				<MagnifyPlus :size="15" />
 			</button>
 		</div>
 
@@ -144,7 +144,7 @@ const cardStyle = computed(() => ({
 					:aria-label="t('sheetmusic', 'Remove position #{pos} from page order', { pos: (sequenceIndex ?? 0) + 1 })"
 					data-test="card-remove-btn"
 					@click="emit('remove', sequenceIndex ?? 0)">
-					<DeleteOutline :size="16" />
+					<DeleteOutline :size="14" />
 					<span>{{ t('sheetmusic', 'Remove') }}</span>
 				</button>
 				<button
@@ -155,7 +155,7 @@ const cardStyle = computed(() => ({
 					:aria-label="t('sheetmusic', 'Duplicate page {p}', { p: pageNum })"
 					data-test="card-add-btn"
 					@click="emit('append', pageNum)">
-					<Plus :size="16" />
+					<Plus :size="14" />
 					<span>{{ t('sheetmusic', 'Copy') }}</span>
 				</button>
 			</template>
@@ -169,7 +169,7 @@ const cardStyle = computed(() => ({
 					:aria-label="t('sheetmusic', 'Add page {p} to order', { p: pageNum })"
 					data-test="card-add-btn"
 					@click="emit('append', pageNum)">
-					<Plus :size="16" />
+					<Plus :size="14" />
 					<span>{{ t('sheetmusic', 'Add to Order') }}</span>
 				</button>
 			</template>
@@ -186,14 +186,15 @@ const cardStyle = computed(() => ({
 	border-radius: var(--border-radius-large, 8px);
 	background-color: var(--color-main-background, #fff);
 	overflow: visible;
-	box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
 	transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
 	box-sizing: border-box;
+	user-select: none;
 }
 
 .card:hover {
 	transform: translateY(-2px);
-	box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 	border-color: var(--color-primary-element);
 }
 
@@ -251,17 +252,21 @@ const cardStyle = computed(() => ({
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	padding: 8px 10px;
+	padding: 5px 7px;
 	border-bottom: 1px solid var(--color-border);
 	background-color: var(--color-background-hover);
 	border-top-left-radius: inherit;
 	border-top-right-radius: inherit;
+	min-height: 26px;
+	gap: 4px;
 }
 
 .titleArea {
 	display: flex;
 	align-items: center;
-	gap: 6px;
+	gap: 4px;
+	min-width: 0;
+	overflow: hidden;
 }
 
 .dragHandle {
@@ -269,9 +274,10 @@ const cardStyle = computed(() => ({
 	align-items: center;
 	justify-content: center;
 	color: var(--color-text-maxcontrast);
-	opacity: 0.7;
+	opacity: 0.65;
 	cursor: grab;
 	margin-right: -2px;
+	flex-shrink: 0;
 }
 
 .dragHandle:hover {
@@ -283,25 +289,30 @@ const cardStyle = computed(() => ({
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	padding: 1px 6px;
+	padding: 1px 5px;
 	border-radius: var(--border-radius-pill, 10px);
 	background: var(--color-primary-element, #0082c9);
 	color: #fff;
 	font-weight: 700;
-	font-size: 0.78rem;
+	font-size: 0.72rem;
+	flex-shrink: 0;
 }
 
 .pageNumber {
 	font-weight: 600;
-	font-size: 0.85rem;
+	font-size: 0.78rem;
 	color: var(--color-main-text);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .badge {
-	font-size: 0.75rem;
+	font-size: 0.68rem;
 	font-weight: 600;
-	padding: 2px 6px;
+	padding: 1px 5px;
 	border-radius: var(--border-radius-pill, 10px);
+	flex-shrink: 0;
 }
 
 .badgeActive {
@@ -342,26 +353,26 @@ const cardStyle = computed(() => ({
 }
 
 .placeholderText {
-	font-size: 1.1rem;
+	font-size: 0.95rem;
 	font-weight: 600;
 	color: var(--color-text-maxcontrast);
 }
 
 .zoomBtn {
 	position: absolute;
-	top: 8px;
-	right: 8px;
+	top: 5px;
+	right: 5px;
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	width: 32px;
-	height: 32px;
+	width: 26px;
+	height: 26px;
 	border-radius: 50%;
 	border: 1px solid var(--color-border);
 	background-color: rgba(255, 255, 255, 0.9);
 	color: var(--color-main-text);
 	cursor: pointer;
-	box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
 	transition: background-color 0.15s ease, transform 0.15s ease;
 	opacity: 0.85;
 }
@@ -379,12 +390,13 @@ const cardStyle = computed(() => ({
 .cardFooter {
 	display: flex;
 	align-items: center;
-	gap: 6px;
-	padding: 6px 8px;
+	gap: 4px;
+	padding: 4px 6px;
 	border-top: 1px solid var(--color-border);
 	background-color: var(--color-background-hover);
 	border-bottom-left-radius: inherit;
 	border-bottom-right-radius: inherit;
+	min-height: 26px;
 }
 
 .addBtn,
@@ -393,14 +405,15 @@ const cardStyle = computed(() => ({
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	gap: 4px;
-	padding: 6px 8px;
+	gap: 2px;
+	padding: 4px 4px;
 	border-radius: var(--border-radius, 4px);
 	border: 1px solid var(--color-border);
-	font-size: 0.78rem;
+	font-size: 0.72rem;
 	font-weight: 600;
 	cursor: pointer;
 	transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+	white-space: nowrap;
 }
 
 .addBtn {

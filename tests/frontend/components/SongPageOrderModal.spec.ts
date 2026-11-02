@@ -242,11 +242,11 @@ describe('SongPageOrderModal.vue', () => {
 		const zoomInBtn = wrapper.find('button[aria-label="Larger preview"]')
 		expect(zoomInBtn.exists()).toBe(true)
 		await zoomInBtn.trigger('click')
-		expect(wrapper.text()).toContain('280px')
+		expect(wrapper.text()).toContain('190px')
 
 		const zoomOutBtn = wrapper.find('button[aria-label="Smaller preview"]')
 		await zoomOutBtn.trigger('click')
-		expect(wrapper.text()).toContain('240px')
+		expect(wrapper.text()).toContain('160px')
 	})
 
 	it('calls apiPost and emits saved event upon saving valid page order', async () => {

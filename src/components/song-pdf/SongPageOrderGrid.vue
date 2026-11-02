@@ -26,7 +26,7 @@ const props = withDefaults(
 	{
 		pageThumbnails: () => ({}),
 		pageOccurrences: () => ({}),
-		cardWidth: 240,
+		cardWidth: 160,
 		disabled: false,
 	},
 )
@@ -48,6 +48,10 @@ const isSourceMode = computed(() => viewMode.value === 'all-pages')
 
 const showSourceSection = computed(() => isBothMode.value || isSourceMode.value)
 const showSequenceSection = computed(() => isBothMode.value || isSequenceMode.value)
+
+// Height calculation: guarantees container is always large enough so that at least one row of cards is completely visible
+const minShelfHeight = computed(() => Math.round(props.cardWidth * 1.414 + 75))
+const maxShelfHeight = computed(() => Math.max(Math.round(props.cardWidth * 1.414 + 85), 320))
 
 // Drag and drop composable
 const {
@@ -141,7 +145,7 @@ function onDropEndZone(event: DragEvent) {
 				aria-label="Original PDF Pages">
 				<div :class="$style.sectionHeader">
 					<div :class="$style.sectionTitle">
-						<FileDocumentMultipleOutline :size="18" :class="$style.sectionIcon" />
+						<FileDocumentMultipleOutline :size="16" :class="$style.sectionIcon" />
 						<span :class="$style.titleText">
 							{{ t('sheetmusic', 'Original PDF Pages ({count})', { count: totalPages }) }}
 						</span>
@@ -155,6 +159,8 @@ function onDropEndZone(event: DragEvent) {
 					:class="$style.shelfGrid"
 					:style="{
 						gridTemplateColumns: `repeat(auto-fill, minmax(${cardWidth}px, 1fr))`,
+						minHeight: `${minShelfHeight}px`,
+						maxHeight: `${maxShelfHeight}px`,
 					}"
 					data-test="source-pages-grid">
 					<SongPageOrderCard
@@ -178,7 +184,7 @@ function onDropEndZone(event: DragEvent) {
 			<div v-if="isBothMode" :class="$style.flowDivider" aria-hidden="true">
 				<div :class="$style.flowLine" />
 				<span :class="$style.flowBadge">
-					<ArrowDown :size="14" />
+					<ArrowDown :size="13" />
 					{{ t('sheetmusic', 'Drag pages down to build order') }}
 				</span>
 				<div :class="$style.flowLine" />
@@ -192,7 +198,7 @@ function onDropEndZone(event: DragEvent) {
 				aria-label="Resulting Page Order">
 				<div :class="$style.sectionHeader">
 					<div :class="$style.sectionTitle">
-						<FormatListNumbered :size="18" :class="$style.sectionIcon" />
+						<FormatListNumbered :size="16" :class="$style.sectionIcon" />
 						<span :class="$style.titleText">
 							{{ t('sheetmusic', 'Resulting Order ({count})', { count: pageSequence.length }) }}
 						</span>
@@ -208,6 +214,8 @@ function onDropEndZone(event: DragEvent) {
 					:class="$style.shelfGrid"
 					:style="{
 						gridTemplateColumns: `repeat(auto-fill, minmax(${cardWidth}px, 1fr))`,
+						minHeight: `${minShelfHeight}px`,
+						maxHeight: `${maxShelfHeight}px`,
 					}"
 					data-test="sequence-grid">
 					<SongPageOrderCard
@@ -240,14 +248,14 @@ function onDropEndZone(event: DragEvent) {
 							isOverEndZone && $style.endDropSlotActive,
 							draggedItem && $style.endDropSlotVisible,
 						]"
-						:style="{ minWidth: `${Math.min(cardWidth, 140)}px`, maxWidth: `${cardWidth}px` }"
+						:style="{ minWidth: `${Math.min(cardWidth, 110)}px`, maxWidth: `${cardWidth}px` }"
 						:title="t('sheetmusic', 'Drop here to add to end of order')"
 						data-test="sequence-end-drop-slot"
 						@dragover="handleEndZoneDragOver"
 						@dragleave="handleEndZoneDragLeave"
 						@drop="onDropEndZone">
-						<Plus :size="24" :class="$style.endDropIcon" />
-						<span :class="$style.endDropText">{{ t('sheetmusic', 'Drop here for end') }}</span>
+						<Plus :size="20" :class="$style.endDropIcon" />
+						<span :class="$style.endDropText">{{ t('sheetmusic', 'Drop for end') }}</span>
 					</div>
 				</div>
 
@@ -258,6 +266,7 @@ function onDropEndZone(event: DragEvent) {
 						$style.emptySequenceZone,
 						isOverEndZone && $style.emptySequenceZoneActive,
 					]"
+					:style="{ minHeight: `${minShelfHeight}px` }"
 					data-test="empty-sequence"
 					@dragover="handleEndZoneDragOver"
 					@dragleave="handleEndZoneDragLeave"
@@ -277,8 +286,8 @@ function onDropEndZone(event: DragEvent) {
 	flex-direction: column;
 	width: 100%;
 	flex: 1 1 auto;
-	min-height: 260px;
-	gap: 10px;
+	min-height: 200px;
+	gap: 8px;
 }
 
 .gridToolbar {
@@ -295,20 +304,20 @@ function onDropEndZone(event: DragEvent) {
 	display: inline-flex;
 	background-color: var(--color-background-hover);
 	border-radius: var(--border-radius-pill, 20px);
-	padding: 3px;
+	padding: 2px;
 	gap: 2px;
 }
 
 .modeBtn {
 	display: inline-flex;
 	align-items: center;
-	gap: 6px;
+	gap: 5px;
 	border: none;
 	background: transparent;
 	color: var(--color-text-maxcontrast);
-	padding: 5px 12px;
-	border-radius: var(--border-radius-pill, 18px);
-	font-size: 0.8rem;
+	padding: 4px 10px;
+	border-radius: var(--border-radius-pill, 16px);
+	font-size: 0.78rem;
 	font-weight: 600;
 	cursor: pointer;
 	transition: background-color 0.15s ease, color 0.15s ease;
@@ -321,29 +330,29 @@ function onDropEndZone(event: DragEvent) {
 .modeBtnActive {
 	background-color: var(--color-main-background, #fff);
 	color: var(--color-primary-element);
-	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .gridHint {
-	font-size: 0.78rem;
+	font-size: 0.75rem;
 	color: var(--color-text-maxcontrast);
 }
 
 .viewsContainer {
 	display: flex;
 	flex-direction: column;
-	gap: 14px;
+	gap: 10px;
 	width: 100%;
 }
 
 .section {
 	display: flex;
 	flex-direction: column;
-	gap: 8px;
+	gap: 6px;
 	background-color: var(--color-background-hover);
 	border: 1px solid var(--color-border);
 	border-radius: var(--border-radius-large, 8px);
-	padding: 10px 12px;
+	padding: 8px 10px;
 }
 
 .sectionHeader {
@@ -357,7 +366,7 @@ function onDropEndZone(event: DragEvent) {
 .sectionTitle {
 	display: flex;
 	align-items: center;
-	gap: 6px;
+	gap: 5px;
 }
 
 .sectionIcon {
@@ -366,28 +375,28 @@ function onDropEndZone(event: DragEvent) {
 
 .titleText {
 	font-weight: 700;
-	font-size: 0.88rem;
+	font-size: 0.84rem;
 	color: var(--color-main-text);
 }
 
 .sectionDescription {
-	font-size: 0.78rem;
+	font-size: 0.74rem;
 	color: var(--color-text-maxcontrast);
 }
 
 .shelfGrid {
 	display: grid;
-	gap: 12px;
-	max-height: 340px;
+	gap: 10px;
 	overflow-y: auto;
-	padding: 6px 4px 10px 4px;
+	padding: 4px 2px 8px 2px;
+	box-sizing: border-box;
 }
 
 .flowDivider {
 	display: flex;
 	align-items: center;
-	gap: 10px;
-	margin: -4px 0;
+	gap: 8px;
+	margin: -2px 0;
 	user-select: none;
 }
 
@@ -401,11 +410,11 @@ function onDropEndZone(event: DragEvent) {
 	display: inline-flex;
 	align-items: center;
 	gap: 4px;
-	padding: 2px 10px;
+	padding: 1px 8px;
 	background-color: var(--color-background-hover);
 	border: 1px dashed var(--color-border);
-	border-radius: var(--border-radius-pill, 12px);
-	font-size: 0.75rem;
+	border-radius: var(--border-radius-pill, 10px);
+	font-size: 0.72rem;
 	color: var(--color-text-maxcontrast);
 }
 
@@ -419,9 +428,10 @@ function onDropEndZone(event: DragEvent) {
 	border-radius: var(--border-radius-large, 8px);
 	background-color: rgba(0, 0, 0, 0.02);
 	color: var(--color-text-maxcontrast);
-	gap: 6px;
+	gap: 4px;
 	transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
 	cursor: pointer;
+	box-sizing: border-box;
 }
 
 .endDropSlotVisible {
@@ -440,23 +450,23 @@ function onDropEndZone(event: DragEvent) {
 }
 
 .endDropText {
-	font-size: 0.78rem;
+	font-size: 0.72rem;
 	font-weight: 600;
 	text-align: center;
-	padding: 0 8px;
+	padding: 0 4px;
 }
 
 .emptySequenceZone {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	min-height: 140px;
 	border: 2px dashed var(--color-border);
 	border-radius: var(--border-radius-large, 8px);
 	background-color: rgba(0, 0, 0, 0.02);
-	padding: 24px;
+	padding: 16px;
 	text-align: center;
 	transition: border-color 0.15s ease, background-color 0.15s ease;
+	box-sizing: border-box;
 }
 
 .emptySequenceZoneActive {
@@ -465,7 +475,7 @@ function onDropEndZone(event: DragEvent) {
 }
 
 .emptySequenceText {
-	font-size: 0.85rem;
+	font-size: 0.8rem;
 	color: var(--color-text-maxcontrast);
 	margin: 0;
 }
