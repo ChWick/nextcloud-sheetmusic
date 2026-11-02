@@ -1330,5 +1330,23 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		expect(dropdown.text()).toContain('PDF File & Resolution Info')
 		expect(dropdown.text()).toContain('791,921 B')
 	})
+
+	it('opens Page Order dialog from header button', async () => {
+		const wrapper = mount(SongPdfModifier, {
+			props: {
+				song: mockSong,
+				libraryId: 1,
+			},
+		})
+
+		await flushPromises()
+
+		const pageOrderBtn = wrapper.findAll('button').find((b) => b.text().includes('Page Order…'))
+		expect(pageOrderBtn).toBeDefined()
+		await pageOrderBtn?.trigger('click')
+		await flushPromises()
+
+		expect(wrapper.text()).toContain('Edit Page Order')
+	})
 })
 

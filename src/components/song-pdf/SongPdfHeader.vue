@@ -15,6 +15,7 @@ import CallSplit from 'vue-material-design-icons/CallSplit.vue'
 import BookmarkMusicOutline from 'vue-material-design-icons/BookmarkMusicOutline.vue'
 import ContentSaveOutlineIcon from 'vue-material-design-icons/ContentSaveOutline.vue'
 import InformationOutline from 'vue-material-design-icons/InformationOutline.vue'
+import FormatListNumbered from 'vue-material-design-icons/FormatListNumbered.vue'
 
 export type Mode = 'rotate' | 'crop' | 'enhance' | 'split' | 'bookmarks'
 
@@ -54,6 +55,7 @@ const emit = defineEmits<{
 	'cancel': []
 	'update:activeMode': [mode: Mode]
 	'save': []
+	'open-page-order-modal': []
 }>()
 
 const saveButtonDisabled = computed(() => {
@@ -243,8 +245,19 @@ const saveButtonText = computed(() => {
 			</button>
 		</nav>
 
-		<!-- Right: Save / Split Button -->
+		<!-- Right: Page Order & Save / Split Button -->
 		<div :class="$style.headerRight">
+			<NcButton
+				variant="secondary"
+				:disabled="isSaving || isLoading"
+				:title="t('sheetmusic', 'Edit page order')"
+				:aria-label="t('sheetmusic', 'Page Order…')"
+				@click="emit('open-page-order-modal')">
+				<template #icon>
+					<FormatListNumbered :size="20" />
+				</template>
+				{{ t('sheetmusic', 'Page Order…') }}
+			</NcButton>
 			<NcButton
 				variant="primary"
 				:disabled="saveButtonDisabled"

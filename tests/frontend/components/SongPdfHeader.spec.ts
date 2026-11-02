@@ -147,9 +147,10 @@ describe('SongPdfHeader.vue', () => {
 		const centerNav = children[1] as HTMLElement
 		expect(centerNav.tagName.toLowerCase()).toBe('nav')
 
-		// Save button is inside child 2 (headerRight)
+		// Action buttons (Page Order, Save) are inside child 2 (headerRight)
 		const rightEl = children[2] as HTMLElement
-		expect(rightEl.querySelector('button')?.textContent).toContain('Save')
+		expect(rightEl.textContent).toContain('Save')
+		expect(rightEl.textContent).toContain('Page Order')
 	})
 
 	it('renders all 5 mode tabs with accessible titles and labels for responsive flow', () => {
@@ -165,6 +166,18 @@ describe('SongPdfHeader.vue', () => {
 			expect(found).toBeDefined()
 			expect(found?.find('svg').exists()).toBe(true)
 		}
+	})
+
+	it('emits open-page-order-modal when Page Order button is clicked', async () => {
+		const wrapper = mount(SongPdfHeader, {
+			props: defaultProps,
+		})
+
+		const pageOrderBtn = wrapper.findAll('button').find((b) => b.text().includes('Page Order'))
+		expect(pageOrderBtn).toBeDefined()
+		await pageOrderBtn?.trigger('click')
+
+		expect(wrapper.emitted('open-page-order-modal')).toBeTruthy()
 	})
 })
 

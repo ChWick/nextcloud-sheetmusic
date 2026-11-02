@@ -41,7 +41,6 @@ import SongPdfVersionsModal from './song-pdf/SongPdfVersionsModal.vue'
 import { useFileVersions } from './song-pdf/useFileVersions'
 import SongViewerMetadata from './song-viewer/SongViewerMetadata.vue'
 import SongViewerBookmarksBar from './song-viewer/SongViewerBookmarksBar.vue'
-import SongPageOrderModal from './song-pdf/SongPageOrderModal.vue'
 
 const props = withDefaults(
 	defineProps<{
@@ -156,15 +155,6 @@ function selectFile(fileId: string) {
 }
 
 const previewVersion = ref(Date.now())
-const isPageOrderModalOpen = ref(false)
-
-function handlePageOrderSaved(data: LibraryData, updatedFile: SongFile) {
-	if (selectedFile.value && selectedFile.value.id === updatedFile.id) {
-		selectedFile.value = { ...selectedFile.value, pageOrder: updatedFile.pageOrder }
-	}
-	previewVersion.value = Date.now()
-	emit('updated', data)
-}
 
 function handleSaved(data: LibraryData, songId?: number) {
 	previewVersion.value = Date.now()
@@ -280,16 +270,6 @@ defineExpose({
 						@click="openVersionsModal">
 						<template #icon>
 							<History :size="20" />
-						</template>
-					</NcButton>
-					<NcButton
-						v-if="song && isSelectedFilePdf"
-						variant="secondary"
-						:title="t('sheetmusic', 'Edit page order')"
-						:aria-label="t('sheetmusic', 'Edit page order')"
-						@click="isPageOrderModalOpen = true">
-						<template #icon>
-							<FormatListNumbered :size="20" />
 						</template>
 					</NcButton>
 					<NcButton
@@ -418,15 +398,6 @@ defineExpose({
 			:is-loading="isLoadingVersions"
 			:is-reverting="isRevertingVersion"
 			@revert="revertToVersion" />
-
-		<!-- Page Order Modal -->
-		<SongPageOrderModal
-			v-if="song && selectedFile && isPageOrderModalOpen"
-			v-model:open="isPageOrderModalOpen"
-			:file="selectedFile"
-			:song-id="song.id"
-			:library-id="libraryId ?? -1"
-			@saved="handlePageOrderSaved" />
 	</div>
 </template>
 

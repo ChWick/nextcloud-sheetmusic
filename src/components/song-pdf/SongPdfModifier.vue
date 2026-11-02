@@ -28,6 +28,7 @@ import SongPdfSplitSidebar, { getSegmentColor, type SplitSegment } from './SongP
 import SongPdfVersionsModal from './SongPdfVersionsModal.vue'
 import { useFileVersions } from './useFileVersions'
 import SongPdfCropModal from './SongPdfCropModal.vue'
+import SongPageOrderModal from './SongPageOrderModal.vue'
 import SongPdfJoinModal from './SongPdfJoinModal.vue'
 import SongPdfRotateModal from './SongPdfRotateModal.vue'
 import SongPdfEnhanceModal from './SongPdfEnhanceModal.vue'
@@ -144,6 +145,13 @@ const deletedPages = ref<Set<number>>(new Set())
 // Enhance modal state
 const isEnhanceModalOpen = ref(false)
 const enhanceModalPage = ref(1)
+
+// Page Order modal state
+const isPageOrderModalOpen = ref(false)
+
+function handlePageOrderSaved(data: LibraryData) {
+	emit('saved', data, props.song.id)
+}
 
 
 // Crop modal state
@@ -960,6 +968,7 @@ watch(() => targetFile.value?.path, () => {
 			@update:active-mode="activeMode = $event"
 			@update:activeMode="activeMode = $event"
 			@cancel="emit('cancel')"
+			@open-page-order-modal="isPageOrderModalOpen = true"
 			@save="handleHeaderSave" />
 
 		<!-- Saving Progress Bar Banner -->
@@ -1117,6 +1126,16 @@ watch(() => targetFile.value?.path, () => {
 			:has-unsaved-changes="hasAnyChange"
 			@discard-unsaved="resetAllCurrentEdits"
 			@revert="revertToVersion" />
+
+		<!-- Page Order Modal -->
+		<SongPageOrderModal
+			v-if="targetFile && isPageOrderModalOpen"
+			v-model:open="isPageOrderModalOpen"
+			:file="targetFile"
+			:song-id="song.id"
+			:library-id="libraryId"
+			:pdf="activePdfDoc"
+			@saved="handlePageOrderSaved" />
 	</div>
 </template>
 
