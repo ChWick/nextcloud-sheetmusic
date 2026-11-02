@@ -8,28 +8,37 @@ import { computed } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import MagnifyPlus from 'vue-material-design-icons/MagnifyPlus.vue'
 import Plus from 'vue-material-design-icons/Plus.vue'
+import DeleteOutline from 'vue-material-design-icons/DeleteOutline.vue'
 
 const props = withDefaults(
 	defineProps<{
 		pageNum: number
+		sequenceIndex?: number | null
+		sequenceTotal?: number | null
 		thumbnailUrl?: string
 		occurrenceCount?: number
 		cardWidth?: number
 		disabled?: boolean
+		showRemove?: boolean
 	}>(),
 	{
+		sequenceIndex: null,
+		sequenceTotal: null,
 		thumbnailUrl: '',
 		occurrenceCount: 0,
 		cardWidth: 220,
 		disabled: false,
+		showRemove: false,
 	},
 )
 
 const emit = defineEmits<{
 	append: [pageNum: number]
+	remove: [sequenceIndex: number]
 	zoom: [pageNum: number]
 }>()
 
+const isSequenceMode = computed(() => props.sequenceIndex !== null)
 const isInOrder = computed(() => props.occurrenceCount > 0)
 const cardStyle = computed(() => ({
 	width: `${props.cardWidth}px`,
@@ -44,12 +53,19 @@ const cardStyle = computed(() => ({
 			isInOrder && $style.cardInOrder,
 			disabled && $style.cardDisabled,
 		]"
-		:style="cardStyle">
-		<!-- Header with page number & occurrence badge -->
+		:style="cardStyle"
+		:data-test="isSequenceMode ? `seq-card-${sequenceIndex}-${pageNum}` : `page-card-${pageNum}`">
+		<!-- Header with page number / sequence position -->
 		<div :class="$style.cardHeader">
-			<span :class="$style.pageNumber">
-				{{ t('sheetmusic', 'Page {p}', { p: pageNum }) }}
-			</span>
+			<div :class="$style.titleArea">
+				<span v-if="isSequenceMode" :class="$style.sequenceBadge" data-test="sequence-badge">
+					#{{ (sequenceIndex ?? 0) + 1 }}
+				</span>
+				<span :class="$style.pageNumber">
+					{{ t('sheetmusic', 'Page {p}', { p: pageNum }) }}
+				</span>
+			</div>
+
 			<span
 				:class="[
 					$style.badge,
@@ -69,7 +85,8 @@ const cardStyle = computed(() => ({
 				:src="thumbnailUrl"
 				:alt="t('sheetmusic', 'Page {p} preview', { p: pageNum })"
 				:class="$style.previewImage"
-				loading="lazy" />
+				loading="lazy"
+				data-test="page-thumbnail-img" />
 			<div v-else :class="$style.placeholder">
 				<span :class="$style.placeholderText">{{ t('sheetmusic', 'Page {p}', { p: pageNum }) }}</span>
 			</div>
@@ -80,6 +97,7 @@ const cardStyle = computed(() => ({
 				:class="$style.zoomBtn"
 				:title="t('sheetmusic', 'Zoom in on page {p}', { p: pageNum })"
 				:aria-label="t('sheetmusic', 'Zoom in on page {p}', { p: pageNum })"
+				data-test="card-zoom-btn"
 				@click.stop="emit('zoom', pageNum)">
 				<MagnifyPlus :size="18" />
 			</button>
@@ -87,16 +105,44 @@ const cardStyle = computed(() => ({
 
 		<!-- Card Actions Footer -->
 		<div :class="$style.cardFooter">
-			<button
-				type="button"
-				:class="$style.addBtn"
-				:disabled="disabled"
-				:title="t('sheetmusic', 'Add page {p} to order', { p: pageNum })"
-				:aria-label="t('sheetmusic', 'Add page {p} to order', { p: pageNum })"
-				@click="emit('append', pageNum)">
-				<Plus :size="16" />
-				<span>{{ t('sheetmusic', 'Add to Order') }}</span>
-			</button>
+			<template v-if="isSequenceMode && showRemove">
+				<button
+					type="button"
+					:class="$style.removeBtn"
+					:disabled="disabled"
+					:title="t('sheetmusic', 'Remove position #{pos} from page order', { pos: (sequenceIndex ?? 0) + 1 })"
+					:aria-label="t('sheetmusic', 'Remove position #{pos} from page order', { pos: (sequenceIndex ?? 0) + 1 })"
+					data-test="card-remove-btn"
+					@click="emit('remove', sequenceIndex ?? 0)">
+					<DeleteOutline :size="16" />
+					<span>{{ t('sheetmusic', 'Remove') }}</span>
+				</button>
+				<button
+					type="button"
+					:class="$style.addBtn"
+					:disabled="disabled"
+					:title="t('sheetmusic', 'Duplicate page {p}', { p: pageNum })"
+					:aria-label="t('sheetmusic', 'Duplicate page {p}', { p: pageNum })"
+					data-test="card-add-btn"
+					@click="emit('append', pageNum)">
+					<Plus :size="16" />
+					<span>{{ t('sheetmusic', 'Copy') }}</span>
+				</button>
+			</template>
+
+			<template v-else>
+				<button
+					type="button"
+					:class="$style.addBtn"
+					:disabled="disabled"
+					:title="t('sheetmusic', 'Add page {p} to order', { p: pageNum })"
+					:aria-label="t('sheetmusic', 'Add page {p} to order', { p: pageNum })"
+					data-test="card-add-btn"
+					@click="emit('append', pageNum)">
+					<Plus :size="16" />
+					<span>{{ t('sheetmusic', 'Add to Order') }}</span>
+				</button>
+			</template>
 		</div>
 	</div>
 </template>
@@ -107,20 +153,21 @@ const cardStyle = computed(() => ({
 	flex-direction: column;
 	border: 1px solid var(--color-border);
 	border-radius: var(--border-radius-large, 8px);
-	background-color: var(--color-main-background);
+	background-color: var(--color-main-background, #fff);
 	overflow: hidden;
-	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-	transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+	box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+	transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
 	box-sizing: border-box;
 }
 
 .card:hover {
-	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+	transform: translateY(-2px);
+	box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
 	border-color: var(--color-primary-element);
 }
 
 .cardInOrder {
-	border-color: var(--color-primary-element-light, #0082c9);
+	border-color: var(--color-primary-element, #0082c9);
 }
 
 .cardDisabled {
@@ -132,9 +179,27 @@ const cardStyle = computed(() => ({
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	padding: 6px 10px;
-	background-color: var(--color-background-hover);
+	padding: 8px 10px;
 	border-bottom: 1px solid var(--color-border);
+	background-color: var(--color-background-hover);
+}
+
+.titleArea {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.sequenceBadge {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 1px 6px;
+	border-radius: var(--border-radius-pill, 10px);
+	background: var(--color-primary-element, #0082c9);
+	color: #fff;
+	font-weight: 700;
+	font-size: 0.78rem;
 }
 
 .pageNumber {
@@ -144,27 +209,27 @@ const cardStyle = computed(() => ({
 }
 
 .badge {
-	font-size: 0.72rem;
-	padding: 1px 6px;
-	border-radius: var(--border-radius-pill, 10px);
+	font-size: 0.75rem;
 	font-weight: 600;
+	padding: 2px 6px;
+	border-radius: var(--border-radius-pill, 10px);
 }
 
 .badgeActive {
-	background-color: var(--color-primary-element);
-	color: var(--color-primary-element-text);
+	background-color: var(--color-primary-element-light, rgba(0, 130, 201, 0.15));
+	color: var(--color-primary-element, #0082c9);
 }
 
 .badgeMuted {
-	background-color: var(--color-background-darker, rgba(0, 0, 0, 0.06));
+	background-color: var(--color-background-hover);
 	color: var(--color-text-maxcontrast);
 }
 
 .previewWrapper {
 	position: relative;
 	width: 100%;
-	aspect-ratio: 0.707; /* Standard A4 sheet aspect ratio */
-	background-color: #f7f7f7;
+	aspect-ratio: 0.707; /* A4 aspect ratio */
+	background-color: #fff;
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -176,15 +241,14 @@ const cardStyle = computed(() => ({
 	height: 100%;
 	object-fit: contain;
 	display: block;
-	user-select: none;
 }
 
 .placeholder {
+	width: 100%;
+	height: 100%;
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	width: 100%;
-	height: 100%;
 	background-color: var(--color-background-hover);
 }
 
@@ -192,66 +256,81 @@ const cardStyle = computed(() => ({
 	font-size: 1.1rem;
 	font-weight: 600;
 	color: var(--color-text-maxcontrast);
-	opacity: 0.5;
 }
 
 .zoomBtn {
 	position: absolute;
 	top: 8px;
 	right: 8px;
-	width: 32px;
-	height: 32px;
-	border-radius: 50%;
-	background: rgba(255, 255, 255, 0.92);
-	border: 1px solid rgba(0, 0, 0, 0.15);
-	color: #222;
 	display: flex;
 	align-items: center;
 	justify-content: center;
+	width: 32px;
+	height: 32px;
+	border-radius: 50%;
+	border: 1px solid var(--color-border);
+	background-color: rgba(255, 255, 255, 0.9);
+	color: var(--color-main-text);
 	cursor: pointer;
-	box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+	box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
 	transition: background-color 0.15s ease, transform 0.15s ease;
 	opacity: 0.85;
 }
 
-.zoomBtn:hover {
-	background: #fff;
+.card:hover .zoomBtn {
 	opacity: 1;
+}
+
+.zoomBtn:hover {
+	background-color: #fff;
 	transform: scale(1.1);
 	color: var(--color-primary-element);
 }
 
 .cardFooter {
-	padding: 6px;
-	background-color: var(--color-main-background);
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 8px;
 	border-top: 1px solid var(--color-border);
+	background-color: var(--color-background-hover);
 }
 
-.addBtn {
-	display: flex;
+.addBtn,
+.removeBtn {
+	flex: 1;
+	display: inline-flex;
 	align-items: center;
 	justify-content: center;
 	gap: 4px;
-	width: 100%;
-	padding: 5px 8px;
-	font-size: 0.8rem;
-	font-weight: 500;
-	background-color: var(--color-background-hover);
-	border: 1px solid var(--color-border);
+	padding: 6px 8px;
 	border-radius: var(--border-radius, 4px);
-	color: var(--color-main-text);
+	border: 1px solid var(--color-border);
+	font-size: 0.78rem;
+	font-weight: 600;
 	cursor: pointer;
-	transition: background-color 0.15s ease, border-color 0.15s ease;
+	transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
-.addBtn:hover:not(:disabled) {
-	background-color: var(--color-primary-light, #e0f2fe);
-	border-color: var(--color-primary-element);
+.addBtn {
+	background-color: var(--color-main-background, #fff);
 	color: var(--color-primary-element);
 }
 
-.addBtn:disabled {
-	opacity: 0.5;
-	cursor: not-allowed;
+.addBtn:hover:not(:disabled) {
+	background-color: var(--color-primary-element);
+	border-color: var(--color-primary-element);
+	color: var(--color-primary-element-text, #fff);
+}
+
+.removeBtn {
+	background-color: var(--color-main-background, #fff);
+	color: var(--color-error, #e74c3c);
+}
+
+.removeBtn:hover:not(:disabled) {
+	background-color: var(--color-error, #e74c3c);
+	border-color: var(--color-error, #e74c3c);
+	color: #fff;
 }
 </style>

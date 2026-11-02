@@ -36,6 +36,23 @@ describe('SongPageOrderCard.vue', () => {
 		expect(wrapper.text()).toContain('Unused')
 	})
 
+	it('renders sequence badge and remove button in sequence mode', async () => {
+		const wrapper = mount(SongPageOrderCard, {
+			props: {
+				pageNum: 1,
+				sequenceIndex: 2,
+				sequenceTotal: 3,
+				showRemove: true,
+			},
+		})
+
+		expect(wrapper.find('[data-test="sequence-badge"]').text()).toBe('#3')
+		const removeBtn = wrapper.find('[data-test="card-remove-btn"]')
+		expect(removeBtn.exists()).toBe(true)
+		await removeBtn.trigger('click')
+		expect(wrapper.emitted('remove')).toEqual([[2]])
+	})
+
 	it('emits append when Add to Order button is clicked', async () => {
 		const wrapper = mount(SongPageOrderCard, {
 			props: {
@@ -43,9 +60,9 @@ describe('SongPageOrderCard.vue', () => {
 			},
 		})
 
-		const addBtn = wrapper.findAll('button').find((b) => b.text().includes('Add to Order'))
-		expect(addBtn).toBeDefined()
-		await addBtn!.trigger('click')
+		const addBtn = wrapper.find('[data-test="card-add-btn"]')
+		expect(addBtn.exists()).toBe(true)
+		await addBtn.trigger('click')
 		expect(wrapper.emitted('append')).toEqual([[4]])
 	})
 
@@ -56,7 +73,7 @@ describe('SongPageOrderCard.vue', () => {
 			},
 		})
 
-		const zoomBtn = wrapper.find('button[aria-label="Zoom in on page 3"]')
+		const zoomBtn = wrapper.find('[data-test="card-zoom-btn"]')
 		expect(zoomBtn.exists()).toBe(true)
 		await zoomBtn.trigger('click')
 		expect(wrapper.emitted('zoom')).toEqual([[3]])

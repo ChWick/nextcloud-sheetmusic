@@ -20,6 +20,8 @@ vi.mock('@nextcloud/dialogs', () => ({
 	showError: vi.fn(),
 }))
 
+const mockGetHighResPage = vi.fn(() => Promise.resolve('mock-high-res'))
+
 vi.mock('../../../src/components/song-pdf/usePageOrderThumbnails', () => ({
 	usePageOrderThumbnails: vi.fn(() => ({
 		thumbnails: {
@@ -28,8 +30,13 @@ vi.mock('../../../src/components/song-pdf/usePageOrderThumbnails', () => ({
 			3: 'thumb-data-3',
 			4: 'thumb-data-4',
 		},
+		highResCache: {
+			1: 'mock-high-res-1',
+		},
 		isLoading: false,
-		loadAllThumbnails: vi.fn(),
+		isLoadingHighRes: false,
+		getHighResPage: mockGetHighResPage,
+		loadThumbnails: vi.fn(),
 	})),
 }))
 
@@ -73,6 +80,26 @@ describe('SongPageOrderModal.vue', () => {
 		expect(input.element.value).toBe('1-4')
 	})
 
+	it('renders repeated pages in resulting preview when page order is set to 1, 2, 1', () => {
+		const wrapper = mount(SongPageOrderModal, {
+			props: {
+				open: true,
+				file: {
+					...sampleFile,
+					pageOrder: '1, 2, 1',
+				},
+				songId: 1,
+				libraryId: 2,
+			},
+		})
+
+		const seqCards = wrapper.findAll('[data-test^="seq-card-"]')
+		expect(seqCards.length).toBe(3)
+		expect(wrapper.find('[data-test="seq-card-0-1"]').exists()).toBe(true)
+		expect(wrapper.find('[data-test="seq-card-1-2"]').exists()).toBe(true)
+		expect(wrapper.find('[data-test="seq-card-2-1"]').exists()).toBe(true)
+	})
+
 	it('updates input and preview when a preset button is clicked', async () => {
 		const wrapper = mount(SongPageOrderModal, {
 			props: {
@@ -91,7 +118,7 @@ describe('SongPageOrderModal.vue', () => {
 		expect(input.element.value).toBe('4, 3, 2, 1')
 	})
 
-	it('appends page number when clicking Add to Order on page card', async () => {
+	it('appends page number when switching to source pages and clicking Add to Order', async () => {
 		const wrapper = mount(SongPageOrderModal, {
 			props: {
 				open: true,
@@ -103,6 +130,11 @@ describe('SongPageOrderModal.vue', () => {
 				libraryId: 2,
 			},
 		})
+
+		// Switch to all source pages tab
+		const sourceTab = wrapper.find('[data-test="mode-source-btn"]')
+		await sourceTab.trigger('click')
+
 		const addPage3Btn = wrapper.find('button[aria-label="Add page 3 to order"]')
 		expect(addPage3Btn.exists()).toBe(true)
 		await addPage3Btn.trigger('click')
@@ -111,7 +143,24 @@ describe('SongPageOrderModal.vue', () => {
 		expect(input.element.value).toBe('1-3')
 	})
 
-	it('removes item from sequence when clicking remove button on chip', async () => {
+	it('requests high resolution render when opening page zoom', async () => {
+		const wrapper = mount(SongPageOrderModal, {
+			props: {
+				open: true,
+				file: sampleFile,
+				songId: 1,
+				libraryId: 2,
+			},
+		})
+
+		const zoomBtn = wrapper.find('[data-test="card-zoom-btn"]')
+		expect(zoomBtn.exists()).toBe(true)
+		await zoomBtn.trigger('click')
+
+		expect(mockGetHighResPage).toHaveBeenCalledWith(1)
+	})
+
+	it('removes item from sequence when clicking remove button on card or chip', async () => {
 		const wrapper = mount(SongPageOrderModal, {
 			props: {
 				open: true,
@@ -123,10 +172,10 @@ describe('SongPageOrderModal.vue', () => {
 				libraryId: 2,
 			},
 		})
-		const removeBtns = wrapper.findAll('button[aria-label^="Remove position"]')
-		expect(removeBtns.length).toBe(3)
-		// Remove position 2 (page 2)
-		await removeBtns[1].trigger('click')
+		const cardRemoveBtns = wrapper.findAll('[data-test="card-remove-btn"]')
+		expect(cardRemoveBtns.length).toBe(3)
+		// Remove position 2 (page 2) via preview card remove button
+		await cardRemoveBtns[1].trigger('click')
 
 		const input = wrapper.find('input')
 		expect(input.element.value).toBe('1, 3')

@@ -72,17 +72,20 @@ const zoomPageNum = ref(1)
 function openPageZoom(pageNum: number) {
 	zoomPageNum.value = pageNum
 	isZoomModalOpen.value = true
+	getHighResPage(pageNum)
 }
 
 function prevZoomPage() {
 	if (zoomPageNum.value > 1) {
 		zoomPageNum.value--
+		getHighResPage(zoomPageNum.value)
 	}
 }
 
 function nextZoomPage() {
 	if (zoomPageNum.value < totalPages.value) {
 		zoomPageNum.value++
+		getHighResPage(zoomPageNum.value)
 	}
 }
 
@@ -92,7 +95,13 @@ const filePath = computed(() => props.file?.path ?? '')
 const pdfRef = computed(() => props.pdf ?? null)
 
 // Thumbnails composable
-const { thumbnails, isLoading: isLoadingThumbnails } = usePageOrderThumbnails(
+const {
+	thumbnails,
+	highResCache,
+	isLoading: isLoadingThumbnails,
+	isLoadingHighRes,
+	getHighResPage,
+} = usePageOrderThumbnails(
 	pdfRef,
 	filePath,
 	totalPages,
@@ -298,12 +307,14 @@ async function handleSave() {
 					<NcLoadingIcon v-if="isLoadingThumbnails" :size="16" />
 				</div>
 				<SongPageOrderGrid
+					:page-sequence="pageSequence"
 					:total-pages="totalPages"
 					:page-thumbnails="thumbnails"
 					:page-occurrences="pageOccurrences"
 					:card-width="cardWidth"
 					:disabled="isSaving"
 					@append="appendPage"
+					@remove-sequence-index="removeSequenceItem"
 					@zoom="openPageZoom" />
 			</div>
 
@@ -324,7 +335,9 @@ async function handleSave() {
 			v-model:open="isZoomModalOpen"
 			:page-num="zoomPageNum"
 			:total-pages="totalPages"
+			:high-res-url="highResCache[zoomPageNum]"
 			:thumbnail-url="thumbnails[zoomPageNum]"
+			:is-loading-high-res="isLoadingHighRes"
 			@prev="prevZoomPage"
 			@next="nextZoomPage"
 			@append="appendPage" />
