@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import SongPdfPageCard, { type MovementPageSummary, type SplitSegmentSummary } from './SongPdfPageCard.vue'
+import SongPdfPageCard, { type BookmarkPageSummary, type SplitSegmentSummary } from './SongPdfPageCard.vue'
 
 withDefaults(
 	defineProps<{
 		totalPages: number
-		activeMode: 'rotate' | 'crop' | 'enhance' | 'split' | 'movements'
+		activeMode: 'rotate' | 'crop' | 'enhance' | 'split' | 'bookmarks'
 		selectedPages?: number[]
 		isPageCropped: (pageNum: number) => boolean
 		isPageEnhanced: (pageNum: number) => boolean
@@ -13,7 +13,7 @@ withDefaults(
 		getCropIndicatorText: (pageNum: number) => string
 		getEnhanceIndicatorText: (pageNum: number) => string
 		getPageSegmentsSummary: (pageNum: number) => SplitSegmentSummary[]
-		getPageMovementsSummary?: (pageNum: number) => MovementPageSummary[]
+		getPageBookmarksSummary?: (pageNum: number) => BookmarkPageSummary[]
 		remainingPagesCount: number
 	}>(),
 	{
@@ -49,7 +49,7 @@ const emit = defineEmits<{
 			:crop-indicator-text="getCropIndicatorText(pageNum)"
 			:enhance-indicator-text="getEnhanceIndicatorText(pageNum)"
 			:page-segments="getPageSegmentsSummary(pageNum)"
-			:page-movements="getPageMovementsSummary ? getPageMovementsSummary(pageNum) : []"
+			:page-bookmarks="getPageBookmarksSummary ? getPageBookmarksSummary(pageNum) : []"
 			:total-pages="totalPages"
 			:can-delete="remainingPagesCount > 1"
 			@card-click="emit('card-click', pageNum)"

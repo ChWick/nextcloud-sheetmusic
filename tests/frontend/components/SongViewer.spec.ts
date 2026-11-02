@@ -484,8 +484,8 @@ describe('SongViewer.vue', () => {
 		expect(wrapper.text()).toContain('Revert to this version')
 	})
 
-	it('renders movements bar and updates target page when clicking a movement', async () => {
-		const songWithMovements: Song = {
+	it('renders bookmarks bar and updates target page when clicking a bookmark', async () => {
+		const songWithBookmarks: Song = {
 			...mockSong,
 			bookmarks: [
 				{ id: 1, songId: 42, name: 'I. Allegro', pageNum: 1, endPage: 4 },
@@ -494,23 +494,23 @@ describe('SongViewer.vue', () => {
 		}
 
 		const wrapper = mount(SongViewer, {
-			props: { song: songWithMovements, libraryId: 1, hideHeader: true },
+			props: { song: songWithBookmarks, libraryId: 1, hideHeader: true },
 			...globalStubs,
 		})
 
 		await settle()
 
-		// Movements bar should be visible with formatted ranges
-		expect(wrapper.text()).toContain('Movements:')
+		// Bookmarks bar should be visible with formatted ranges
+		expect(wrapper.text()).toContain('Bookmarks:')
 		expect(wrapper.text()).toContain('I. Allegro (pp. 1–4)')
 		expect(wrapper.text()).toContain('II. Adagio (pp. 5–8)')
 
-		// Find movement button and click it
-		const movementBtns = wrapper.findAll('button').filter((b) => b.text().includes('II. Adagio'))
-		expect(movementBtns.length).toBeGreaterThan(0)
-		await movementBtns[0].trigger('click')
+		// Find bookmark button and click it
+		const bookmarkBtns = wrapper.findAll('button').filter((b) => b.text().includes('II. Adagio'))
+		expect(bookmarkBtns.length).toBeGreaterThan(0)
+		await bookmarkBtns[0].trigger('click')
 		await settle()
 
-		expect((wrapper.vm as any).activeMovementPage).toBe(5)
+		expect((wrapper.vm as any).activeBookmarkPage).toBe(5)
 	})
 })

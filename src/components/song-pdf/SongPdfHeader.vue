@@ -16,7 +16,7 @@ import BookmarkMusicOutline from 'vue-material-design-icons/BookmarkMusicOutline
 import ContentSaveOutlineIcon from 'vue-material-design-icons/ContentSaveOutline.vue'
 import InformationOutline from 'vue-material-design-icons/InformationOutline.vue'
 
-export type Mode = 'rotate' | 'crop' | 'enhance' | 'split' | 'movements'
+export type Mode = 'rotate' | 'crop' | 'enhance' | 'split' | 'bookmarks'
 
 const props = defineProps<{
 	song: Song
@@ -33,7 +33,7 @@ const props = defineProps<{
 	hasAnyEnhance?: boolean
 	hasAnyJoin?: boolean
 	splitSegmentsCount: number
-	movementsCount?: number
+	bookmarksCount?: number
 	saveProgress?: number
 	fileSizeBytes?: number | null
 	pageResolutions?: PdfPageResolutionSummary[]
@@ -61,15 +61,15 @@ const saveButtonDisabled = computed(() => {
 	if (props.activeMode === 'split') {
 		return props.splitSegmentsCount === 0
 	}
-	if (props.activeMode === 'movements') {
-		return (props.movementsCount ?? 0) === 0
+	if (props.activeMode === 'bookmarks') {
+		return (props.bookmarksCount ?? 0) === 0
 	}
 	return !props.hasAnyChange || props.remainingPagesCount === 0
 })
 
 const saveButtonTitle = computed(() => {
-	if (props.activeMode === 'movements') {
-		return t('sheetmusic', 'Save movements')
+	if (props.activeMode === 'bookmarks') {
+		return t('sheetmusic', 'Save bookmarks')
 	}
 	if (props.activeMode === 'rotate') {
 		return (props.hasAnyDeletion || props.hasAnyCrop || props.hasAnyEnhance || props.hasAnyJoin)
@@ -95,8 +95,8 @@ const saveButtonText = computed(() => {
 		}
 		return baseText
 	}
-	if (props.activeMode === 'movements') {
-		return t('sheetmusic', 'Save Movements')
+	if (props.activeMode === 'bookmarks') {
+		return t('sheetmusic', 'Save Bookmarks')
 	}
 	if (props.activeMode === 'rotate') {
 		return (props.hasAnyDeletion || props.hasAnyCrop || props.hasAnyEnhance || props.hasAnyJoin)
@@ -235,11 +235,11 @@ const saveButtonText = computed(() => {
 			</button>
 			<button
 				type="button"
-				:class="[$style.tabButton, activeMode === 'movements' && $style.tabButtonActive]"
-				:title="t('sheetmusic', 'Movements & Bookmarks')"
-				@click="emit('update:activeMode', 'movements')">
+				:class="[$style.tabButton, activeMode === 'bookmarks' && $style.tabButtonActive]"
+				:title="t('sheetmusic', 'Bookmarks')"
+				@click="emit('update:activeMode', 'bookmarks')">
 				<BookmarkMusicOutline :size="18" />
-				<span :class="$style.tabLabel">{{ t('sheetmusic', 'Movements') }}</span>
+				<span :class="$style.tabLabel">{{ t('sheetmusic', 'Bookmarks') }}</span>
 			</button>
 		</nav>
 

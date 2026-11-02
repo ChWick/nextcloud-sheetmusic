@@ -15,7 +15,7 @@ import RestoreIcon from 'vue-material-design-icons/Restore.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 
 defineProps<{
-	activeMode: 'rotate' | 'crop' | 'enhance' | 'split' | 'movements'
+	activeMode: 'rotate' | 'crop' | 'enhance' | 'split' | 'bookmarks' | 'movements'
 	totalPages: number
 	hasAnyRotation: boolean
 	hasAnyCrop: boolean
@@ -302,11 +302,11 @@ const emit = defineEmits<{
 			</div>
 		</template>
 
-		<!-- Movements Toolbar -->
-		<template v-if="activeMode === 'movements'">
+		<!-- Bookmarks Toolbar -->
+		<template v-if="activeMode === 'bookmarks' || activeMode === 'movements'">
 			<div :class="$style.toolbarGroup">
 				<span :class="$style.toolbarTitle">
-					{{ t('sheetmusic', 'Select pages in grid to assign to movements:') }}
+					{{ t('sheetmusic', 'Select pages in grid to assign to bookmarks:') }}
 				</span>
 				<span v-if="selectedPagesCount > 0" :class="$style.selectionBadge">
 					{{ t('sheetmusic', '{count} pages selected', { count: selectedPagesCount }) }}

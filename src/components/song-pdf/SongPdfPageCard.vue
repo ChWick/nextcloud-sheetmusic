@@ -11,16 +11,17 @@ export interface SplitSegmentSummary {
 	color: string
 }
 
-export interface MovementPageSummary {
+export interface BookmarkPageSummary {
 	id: string
 	name: string
 	index: number
 }
+export type MovementPageSummary = BookmarkPageSummary
 
 const props = withDefaults(
 	defineProps<{
 		pageNum: number
-		activeMode: 'rotate' | 'crop' | 'enhance' | 'split' | 'movements'
+		activeMode: 'rotate' | 'crop' | 'enhance' | 'split' | 'bookmarks' | 'movements'
 		isSelected?: boolean
 		isCropped?: boolean
 		isEnhanced?: boolean
@@ -29,6 +30,7 @@ const props = withDefaults(
 		cropIndicatorText?: string
 		enhanceIndicatorText?: string
 		pageSegments?: SplitSegmentSummary[]
+		pageBookmarks?: BookmarkPageSummary[]
 		pageMovements?: MovementPageSummary[]
 		totalPages: number
 		canDelete?: boolean
@@ -42,10 +44,16 @@ const props = withDefaults(
 		cropIndicatorText: '',
 		enhanceIndicatorText: '',
 		pageSegments: () => [],
+		pageBookmarks: () => [],
 		pageMovements: () => [],
 		canDelete: true,
 	},
 )
+
+const activeBookmarkSummaries = computed<BookmarkPageSummary[]>(() => {
+	if (props.pageBookmarks && props.pageBookmarks.length > 0) return props.pageBookmarks
+	return props.pageMovements || []
+})
 
 const emit = defineEmits<{
 	'card-click': [pageNum: number]
@@ -59,7 +67,7 @@ const emit = defineEmits<{
 }>()
 
 function handleCardClick() {
-	if (props.activeMode === 'split' || props.activeMode === 'movements') {
+	if (props.activeMode === 'split' || props.activeMode === 'bookmarks' || props.activeMode === 'movements') {
 		emit('card-click', props.pageNum)
 	} else if (props.activeMode === 'crop' && !props.isDeleted) {
 		emit('open-crop-modal')
@@ -94,14 +102,14 @@ const formattedRotation = computed(() => `${Math.round(props.rotationDeg * 10) /
 			</span>
 		</div>
 
-		<!-- Movement indicators bar in movements mode -->
-		<div v-if="activeMode === 'movements' && pageMovements.length > 0" :class="$style.segmentPills">
+		<!-- Bookmark indicators bar in bookmarks mode -->
+		<div v-if="(activeMode === 'bookmarks' || activeMode === 'movements') && activeBookmarkSummaries.length > 0" :class="$style.segmentPills">
 			<span
-				v-for="mvt in pageMovements"
-				:key="mvt.id"
-				:class="[$style.segmentPill, $style.movementPill]"
-				:title="mvt.name">
-				#{{ mvt.index }}
+				v-for="bm in activeBookmarkSummaries"
+				:key="bm.id"
+				:class="[$style.segmentPill, $style.bookmarkPill]"
+				:title="bm.name">
+				#{{ bm.index }}
 			</span>
 		</div>
 
@@ -215,7 +223,7 @@ const formattedRotation = computed(() => `${Math.round(props.rotationDeg * 10) /
 	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
-.movementPill {
+.bookmarkPill {
 	background-color: var(--color-primary-element);
 	width: auto;
 	min-width: 20px;

@@ -77,16 +77,18 @@ export async function setPdfDocumentOutline(
  * Loads a PDF byte buffer, embeds the provided outline items as the document's
  * Table of Contents, and returns the serialized modified PDF bytes.
  */
-export async function embedMovementsInPdfBytes(
+export async function embedBookmarksInPdfBytes(
 	pdfBytes: Uint8Array,
-	movements: Array<{ name?: string; title?: string; pageNum: number }>,
+	bookmarks: Array<{ name?: string; title?: string; pageNum: number }>,
 ): Promise<Uint8Array> {
 	const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true })
-	const items: PdfOutlineItem[] = movements.map((m) => ({
-		title: String(m.title ?? m.name ?? '').trim(),
-		pageNum: m.pageNum,
+	const items: PdfOutlineItem[] = bookmarks.map((b) => ({
+		title: String(b.title ?? b.name ?? '').trim(),
+		pageNum: b.pageNum,
 	}))
 
 	await setPdfDocumentOutline(pdfDoc, items)
 	return await pdfDoc.save()
 }
+
+export const embedMovementsInPdfBytes = embedBookmarksInPdfBytes

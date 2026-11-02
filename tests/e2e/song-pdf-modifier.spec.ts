@@ -432,32 +432,32 @@ test.describe('Song PDF Modifier & Cropping E2E Flow', () => {
 		expect(btnBox!.x + btnBox!.width).toBeLessThanOrEqual(dialogBox!.x + dialogBox!.width)
 	})
 
-	test('switches to Movements mode, views movements sidebar, and allows adding a movement', async ({ page }) => {
+	test('switches to Bookmarks mode, views bookmarks sidebar, and allows adding a bookmark', async ({ page }) => {
 		await page.goto('/#/library/1/songs?song=5&modifyPdf=1')
 
-		const movementsTab = page.getByRole('button', { name: 'Movements' })
-		await expect(movementsTab).toBeVisible()
-		await movementsTab.click()
+		const bookmarksTab = page.getByRole('button', { name: 'Bookmarks' })
+		await expect(bookmarksTab).toBeVisible()
+		await bookmarksTab.click()
 
-		// Verify movements sidebar is visible
-		await expect(page.getByRole('region', { name: 'Movements management sidebar' })).toBeVisible()
+		// Verify bookmarks sidebar is visible
+		await expect(page.getByRole('region', { name: 'Bookmarks management sidebar' })).toBeVisible()
 		await expect(page.getByRole('button', { name: 'Import from PDF Outline' })).toBeVisible()
-		await expect(page.getByRole('button', { name: 'Add Movement' })).toBeVisible()
+		await expect(page.getByRole('button', { name: 'Add Bookmark' })).toBeVisible()
 
-		// Click Add Movement
-		await page.getByRole('button', { name: 'Add Movement' }).click()
-		await expect(page.getByPlaceholder('e.g. I. Allegro').first()).toBeVisible()
+		// Click Add Bookmark
+		await page.getByRole('button', { name: 'Add Bookmark' }).click()
+		await expect(page.getByPlaceholder('e.g. Intro or Allegro').first()).toBeVisible()
 	})
 
-	test('allows selecting PDF pages to create movements and assign page ranges', async ({ page }) => {
+	test('allows selecting PDF pages to create bookmarks and assign page ranges', async ({ page }) => {
 		await page.goto('/#/library/1/songs?song=5&modifyPdf=1')
 
-		const movementsTab = page.getByRole('button', { name: 'Movements' })
-		await expect(movementsTab).toBeVisible()
-		await movementsTab.click()
+		const bookmarksTab = page.getByRole('button', { name: 'Bookmarks' })
+		await expect(bookmarksTab).toBeVisible()
+		await bookmarksTab.click()
 
-		// Verify movements sidebar is visible
-		await expect(page.getByRole('region', { name: 'Movements management sidebar' })).toBeVisible()
+		// Verify bookmarks sidebar is visible
+		await expect(page.getByRole('region', { name: 'Bookmarks management sidebar' })).toBeVisible()
 
 		// Click the first page in the grid to select it
 		const firstPageCard = page.locator('[data-test="pdf-page-grid"] > div').first()
@@ -472,8 +472,8 @@ test.describe('Song PDF Modifier & Cropping E2E Flow', () => {
 		await expect(addFromSelectionBtn).toBeVisible()
 		await addFromSelectionBtn.click()
 
-		// A movement card is created and movement indicator is displayed
-		await expect(page.getByPlaceholder('e.g. I. Allegro').first()).toBeVisible()
+		// A bookmark card is created and bookmark indicator is displayed
+		await expect(page.getByPlaceholder('e.g. Intro or Allegro').first()).toBeVisible()
 		await expect(firstPageCard).toContainText('#1')
 
 		// Now select page 2 in grid
@@ -481,21 +481,21 @@ test.describe('Song PDF Modifier & Cropping E2E Flow', () => {
 		await secondPageCard.click()
 		await expect(page.getByText('1 pages selected')).toBeVisible()
 
-		// Assign selected page 2 to movement 1
-		const assignBtn = page.locator('[data-test="movement-card-0"]').getByRole('button', { name: /Pages 2/ })
+		// Assign selected page 2 to bookmark 1
+		const assignBtn = page.locator('[data-test="bookmark-card-0"]').getByRole('button', { name: /Pages 2/ })
 		await expect(assignBtn).toBeVisible()
 		await assignBtn.click()
 
-		// Page 2 now has movement indicator #1
+		// Page 2 now has bookmark indicator #1
 		await expect(secondPageCard).toContainText('#1')
 
-		// Save movements
-		const saveBtn = page.getByRole('button', { name: 'Save Movements' })
+		// Save bookmarks
+		const saveBtn = page.getByRole('button', { name: 'Save Bookmarks' })
 		await expect(saveBtn).toBeVisible()
 		await saveBtn.click()
 
 		// Toast or modal confirms saved
-		await expect(page.getByText(/Saved movements for/).first()).toBeVisible({ timeout: 10000 })
+		await expect(page.getByText(/Saved bookmarks for/).first()).toBeVisible({ timeout: 10000 })
 	})
 })
 

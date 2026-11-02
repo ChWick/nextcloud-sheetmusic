@@ -22,7 +22,7 @@ import SongPdfHeader from './SongPdfHeader.vue'
 import SongPdfToolbar from './SongPdfToolbar.vue'
 import SongPdfSaveProgress from './SongPdfSaveProgress.vue'
 import SongPdfLoadingState from './SongPdfLoadingState.vue'
-import SongPdfPageCard, { type MovementPageSummary } from './SongPdfPageCard.vue'
+import SongPdfPageCard, { type BookmarkPageSummary } from './SongPdfPageCard.vue'
 import SongPdfPageGrid from './SongPdfPageGrid.vue'
 import SongPdfSplitSidebar, { getSegmentColor, type SplitSegment } from './SongPdfSplitSidebar.vue'
 import SongPdfVersionsModal from './SongPdfVersionsModal.vue'
@@ -39,8 +39,8 @@ import { applyPipeline, createImageBuffer, imageDataToImageBuffer, imageBufferTo
 import { executeEnhancePage, inspectPdfPageResolution, type PdfPageResolutionSummary, pruneUnreferencedPdfObjects, resolvePageRenderScale } from './pdf-enhance-engine'
 import { usePdfThumbnails } from './usePdfThumbnails'
 import { usePdfSplit } from './usePdfSplit'
-import SongPdfMovementsSidebar from './SongPdfMovementsSidebar.vue'
-import { usePdfMovements } from './usePdfMovements'
+import SongPdfBookmarksSidebar from './SongPdfBookmarksSidebar.vue'
+import { usePdfBookmarks } from './usePdfBookmarks'
 
 GlobalWorkerOptions.workerSrc = pdfWorker
 
@@ -95,7 +95,7 @@ const targetFile = computed<SongFile | undefined>(() => {
 })
 
 // State
-type Mode = 'rotate' | 'split' | 'crop' | 'enhance' | 'movements'
+type Mode = 'rotate' | 'split' | 'crop' | 'enhance' | 'bookmarks'
 const activeMode = ref<Mode>('rotate')
 
 const isLoading = ref(false)
@@ -198,19 +198,19 @@ const {
 	onCancel: () => emit('cancel'),
 })
 
-// Movements state & operations
+// Bookmarks state & operations
 const {
-	movements,
+	bookmarks,
 	isExtractingOutline,
-	initMovementsFromSong,
-	addMovement,
-	addMovementFromSelection,
-	removeMovement,
-	updateMovement,
-	assignPagesToMovement,
+	initBookmarksFromSong,
+	addBookmark,
+	addBookmarkFromSelection,
+	removeBookmark,
+	updateBookmark,
+	assignPagesToBookmark,
 	extractFromPdfOutline,
-	executeSaveMovements,
-} = usePdfMovements({
+	executeSaveBookmarks,
+} = usePdfBookmarks({
 	song: computed(() => props.song),
 	libraryId: computed(() => props.libraryId),
 	totalPages,
@@ -225,16 +225,16 @@ const {
 	onCancel: () => emit('cancel'),
 })
 
-function getPageMovementsSummary(pageNum: number): MovementPageSummary[] {
-	if (activeMode.value !== 'movements') return []
-	const res: MovementPageSummary[] = []
-	movements.value.forEach((m, idx) => {
-		const start = m.pageNum
-		const end = m.endPage ?? m.pageNum
+function getPageBookmarksSummary(pageNum: number): BookmarkPageSummary[] {
+	if (activeMode.value !== 'bookmarks') return []
+	const res: BookmarkPageSummary[] = []
+	bookmarks.value.forEach((b, idx) => {
+		const start = b.pageNum
+		const end = b.endPage ?? b.pageNum
 		if (pageNum >= start && pageNum <= end) {
 			res.push({
-				id: m.id,
-				name: m.name,
+				id: b.id,
+				name: b.name,
 				index: idx + 1,
 			})
 		}
@@ -335,7 +335,7 @@ async function loadPdf() {
 
 		// Initialize split segments: default with 1 segment covering all pages
 		initSplitSegments(pdf.numPages, props.song.title)
-		initMovementsFromSong(props.song.bookmarks)
+		initBookmarksFromSong(props.song.bookmarks)
 
 		await nextTick()
 		initThumbnailObserver(pdf)
@@ -561,10 +561,10 @@ function resetAllCurrentEdits() {
 	isVersionsModalOpen.value = false
 }
 
-async function saveMovements() {
+async function saveBookmarks() {
 	isSaving.value = true
 	try {
-		await executeSaveMovements(async (pct, text) => {
+		await executeSaveBookmarks(async (pct, text) => {
 			await updateSaveProgress(pct, text, 0, 0, false)
 		})
 	} finally {
@@ -583,8 +583,8 @@ function handleHeaderSave() {
 		saveEnhancements()
 	} else if (activeMode.value === 'split') {
 		saveSplits()
-	} else if (activeMode.value === 'movements') {
-		saveMovements()
+	} else if (activeMode.value === 'bookmarks') {
+		saveBookmarks()
 	}
 }
 
@@ -953,7 +953,7 @@ watch(() => targetFile.value?.path, () => {
 			:is-saving="isSaving"
 			:is-loading="isLoading"
 			:split-segments-count="splitSegments.length"
-			:movements-count="movements.length"
+			:bookmarks-count="bookmarks.length"
 			:save-progress="saveProgressPercent"
 			:file-size-bytes="originalPdfBytes?.byteLength ?? targetFile?.fileSize ?? null"
 			:page-resolutions="pageResolutions"
@@ -1013,9 +1013,9 @@ watch(() => targetFile.value?.path, () => {
 					:get-crop-indicator-text="getCropIndicatorText"
 					:get-enhance-indicator-text="getEnhanceIndicatorText"
 					:get-page-segments-summary="getPageSegmentsSummary"
-					:get-page-movements-summary="getPageMovementsSummary"
+					:get-page-bookmarks-summary="getPageBookmarksSummary"
 					:remaining-pages-count="remainingPagesCount"
-					@card-click="(activeMode === 'split' || activeMode === 'movements') ? togglePageSelection($event) : undefined"
+					@card-click="(activeMode === 'split' || activeMode === 'bookmarks') ? togglePageSelection($event) : undefined"
 					@open-crop-modal="openCropModal"
 					@open-enhance-modal="openEnhanceModal"
 					@rotate-page="rotatePage"
@@ -1036,25 +1036,25 @@ watch(() => targetFile.value?.path, () => {
 				@remove-segment="removeSegment"
 				@assign-selected="assignSelectedPagesToSegment" />
 
-			<SongPdfMovementsSidebar
-				v-if="activeMode === 'movements'"
-				:movements="movements"
+			<SongPdfBookmarksSidebar
+				v-if="activeMode === 'bookmarks'"
+				:bookmarks="bookmarks"
 				:total-pages="totalPages"
 				:selected-pages="selectedPages"
 				:is-extracting-outline="isExtractingOutline"
 				:auto-pdf-metadata="props.autoPdfMetadata ?? true"
-				@add-movement="addMovement"
-				@add-movement-from-selection="() => {
+				@add-bookmark="addBookmark"
+				@add-bookmark-from-selection="() => {
 					if (selectedPages.length > 0) {
-						addMovementFromSelection(Math.min(...selectedPages), Math.max(...selectedPages))
+						addBookmarkFromSelection(Math.min(...selectedPages), Math.max(...selectedPages))
 						selectedPages = []
 					}
 				}"
-				@remove-movement="removeMovement"
-				@update-movement="updateMovement"
+				@remove-bookmark="removeBookmark"
+				@update-bookmark="updateBookmark"
 				@assign-selected="(id) => {
 					if (selectedPages.length > 0) {
-						assignPagesToMovement(id, Math.min(...selectedPages), Math.max(...selectedPages))
+						assignPagesToBookmark(id, Math.min(...selectedPages), Math.max(...selectedPages))
 						selectedPages = []
 					}
 				}"

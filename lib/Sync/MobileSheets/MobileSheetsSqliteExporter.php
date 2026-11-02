@@ -101,7 +101,7 @@ class MobileSheetsSqliteExporter {
 				$this->exportSongs($db, $lib->id, $validSongIds);
 				$this->entityExporter->exportSongEntityLinks($db, $lib->id, $validSongIds);
 				$this->exportFiles($db, $lib, $user);
-				$this->exportBookmarksAndMovements($db, $lib, $user);
+				$this->exportBookmarks($db, $lib, $user);
 				$this->ensureSongAndPageDefaults($db);
 				$this->cleanOrphanSongReferences($db);
 
@@ -550,7 +550,7 @@ class MobileSheetsSqliteExporter {
 		}
 	}
 
-	private function exportBookmarksAndMovements(
+	private function exportBookmarks(
 		PDO $db,
 		InternalLibrary $library,
 		?IUser $user,

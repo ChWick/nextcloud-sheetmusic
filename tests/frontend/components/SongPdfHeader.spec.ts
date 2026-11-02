@@ -159,7 +159,7 @@ describe('SongPdfHeader.vue', () => {
 
 		const tabs = wrapper.findAll('nav button')
 		expect(tabs.length).toBe(5)
-		const expectedTitles = ['Rotate Pages', 'Crop Pages', 'Enhance Scans', 'Split PDF', 'Movements & Bookmarks']
+		const expectedTitles = ['Rotate Pages', 'Crop Pages', 'Enhance Scans', 'Split PDF', 'Bookmarks']
 		for (const title of expectedTitles) {
 			const found = tabs.find((t) => t.attributes('title') === title || t.text().includes(title))
 			expect(found).toBeDefined()

@@ -75,7 +75,7 @@ describe('usePdfMovements.ts', () => {
 
 		expect(movements.movements.value).toHaveLength(1)
 		expect(movements.movements.value[0]).toEqual({
-			id: 'mvt-1',
+			id: 'bm-1',
 			name: 'I. Adagio sostenuto',
 			pageNum: 1,
 			endPage: 4,
@@ -146,9 +146,9 @@ describe('usePdfMovements.ts', () => {
 		const count = await movements.extractFromPdfOutline()
 		expect(count).toBe(3)
 		expect(movements.movements.value).toEqual([
-			{ id: 'mvt-1', name: 'I. Allegro', pageNum: 1, endPage: 4 },
-			{ id: 'mvt-2', name: 'II. Adagio', pageNum: 5, endPage: 9 },
-			{ id: 'mvt-3', name: 'III. Presto', pageNum: 10, endPage: 15 },
+			{ id: 'bm-1', name: 'I. Allegro', pageNum: 1, endPage: 4 },
+			{ id: 'bm-2', name: 'II. Adagio', pageNum: 5, endPage: 9 },
+			{ id: 'bm-3', name: 'III. Presto', pageNum: 10, endPage: 15 },
 		])
 	})
 
@@ -197,8 +197,8 @@ describe('usePdfMovements.ts', () => {
 
 		expect(movements.movements.value).toHaveLength(1)
 		expect(movements.movements.value[0]).toEqual({
-			id: 'mvt-1',
-			name: 'Movement 1',
+			id: 'bm-1',
+			name: 'Bookmark 1',
 			pageNum: 3,
 			endPage: 7,
 		})

@@ -124,10 +124,10 @@ function getFileLabel(file: SongFile, index: number): string {
 	return `${index + 1}. ${truncated}`
 }
 
-const activeMovementPage = ref<number | undefined>(undefined)
+const activeBookmarkPage = ref<number | undefined>(undefined)
 
 function jumpToBookmark(pageNum: number) {
-	activeMovementPage.value = pageNum
+	activeBookmarkPage.value = pageNum
 }
 
 function formatBookmarkLabel(bm: Bookmark): string {
@@ -138,7 +138,7 @@ function formatBookmarkLabel(bm: Bookmark): string {
 }
 
 watch(() => props.song?.id, () => {
-	activeMovementPage.value = undefined
+	activeBookmarkPage.value = undefined
 })
 
 function selectFile(fileId: string) {
@@ -326,7 +326,7 @@ defineExpose({
 					<span>{{ songSourceTypes.map((st) => st.name).join(', ') }}</span>
 				</div>
 				<div v-if="songBookmarks.length > 0" :class="$style.metaItem">
-					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Movements:') }}</span>
+					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Bookmarks:') }}</span>
 					<div :class="$style.metaLinkList">
 						<button
 							v-for="(bm, idx) in songBookmarks"
@@ -492,16 +492,16 @@ defineExpose({
 
 			<div
 				v-if="songBookmarks.length > 0"
-				:class="$style.movementsBar"
+				:class="$style.bookmarksBar"
 				role="region"
-				:aria-label="t('sheetmusic', 'Movements and Bookmarks')">
-				<span :class="$style.movementsLabel">{{ t('sheetmusic', 'Movements:') }}</span>
-				<div :class="$style.movementsList">
+				:aria-label="t('sheetmusic', 'Bookmarks')">
+				<span :class="$style.bookmarksLabel">{{ t('sheetmusic', 'Bookmarks:') }}</span>
+				<div :class="$style.bookmarksList">
 					<button
 						v-for="(bm, idx) in songBookmarks"
 						:key="bm.id ?? `bm-${idx}`"
 						type="button"
-						:class="[$style.movementChip, activeMovementPage === bm.pageNum && $style.movementChipActive]"
+						:class="[$style.bookmarkChip, activeBookmarkPage === bm.pageNum && $style.bookmarkChipActive]"
 						:title="t('sheetmusic', 'Jump to {name}', { name: bm.name })"
 						@click="jumpToBookmark(bm.pageNum)">
 						{{ formatBookmarkLabel(bm) }}
@@ -513,7 +513,7 @@ defineExpose({
 				v-if="selectedFile?.path"
 				:key="`${selectedFile.id}-${selectedFile.path}-${song?.lastModified ?? ''}-${previewVersion}`"
 				:file-path="previewFilePath"
-				:target-page="activeMovementPage"
+				:target-page="activeBookmarkPage"
 				:show-external-button="false" />
 			<div v-else :class="$style.error">
 				{{ songFiles.length === 0 ? t('sheetmusic', 'No files attached to this song.') : t('sheetmusic', 'Missing file: The file does not exist on the file system.') }}
@@ -626,7 +626,7 @@ defineExpose({
 	overflow-x: auto;
 }
 
-.movementsBar {
+.bookmarksBar {
 	display: flex;
 	align-items: center;
 	gap: 8px;
@@ -639,20 +639,20 @@ defineExpose({
 	box-sizing: border-box;
 }
 
-.movementsLabel {
+.bookmarksLabel {
 	font-weight: 600;
 	font-size: 0.85rem;
 	white-space: nowrap;
 	color: var(--color-text-maxcontrast);
 }
 
-.movementsList {
+.bookmarksList {
 	display: flex;
 	flex-wrap: nowrap;
 	gap: 6px;
 }
 
-.movementChip {
+.bookmarkChip {
 	background: var(--color-main-background);
 	color: var(--color-main-text);
 	border: 1px solid var(--color-border);
@@ -669,7 +669,7 @@ defineExpose({
 	}
 }
 
-.movementChipActive {
+.bookmarkChipActive {
 	background: var(--color-primary-element);
 	color: var(--color-primary-element-text);
 	border-color: var(--color-primary-element);
