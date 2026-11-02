@@ -517,8 +517,19 @@ class LibraryIntegrityFixer {
 			];
 		}
 
-		['user' => $user, 'targetFolder' => $targetFolder] = $this->getUserLibraryContext($libraryId, $userId);
-		$actualPageCount = $this->resolvePhysicalPageCount($fileRecord, $user, $targetFolder);
+		$user = null;
+		$targetFolder = null;
+		try {
+			['user' => $user, 'targetFolder' => $targetFolder] = $this->getUserLibraryContext($libraryId, $userId);
+		} catch (\Throwable) {
+			try {
+				$userFolder = $this->rootFolder->getUserFolder($userId);
+				$user = $userFolder->getOwner();
+			} catch (\Throwable) {
+			}
+		}
+
+		$actualPageCount = $user !== null ? $this->resolvePhysicalPageCount($fileRecord, $user, $targetFolder) : 0;
 		if ($actualPageCount <= 0) {
 			return [
 				'success' => false,
@@ -564,8 +575,19 @@ class LibraryIntegrityFixer {
 			];
 		}
 
-		['user' => $user, 'targetFolder' => $targetFolder] = $this->getUserLibraryContext($libraryId, $userId);
-		$actualPageCount = $this->resolvePhysicalPageCount($fileRecord, $user, $targetFolder);
+		$user = null;
+		$targetFolder = null;
+		try {
+			['user' => $user, 'targetFolder' => $targetFolder] = $this->getUserLibraryContext($libraryId, $userId);
+		} catch (\Throwable) {
+			try {
+				$userFolder = $this->rootFolder->getUserFolder($userId);
+				$user = $userFolder->getOwner();
+			} catch (\Throwable) {
+			}
+		}
+
+		$actualPageCount = $user !== null ? $this->resolvePhysicalPageCount($fileRecord, $user, $targetFolder) : 0;
 		$pageCount = $actualPageCount > 0 ? $actualPageCount : max(1, $fileRecord->pageCount);
 
 		$newOrder = \OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdf::pageOrder($pageCount);

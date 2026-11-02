@@ -103,16 +103,39 @@ class MobileSheetsPdf {
 			return '';
 		}
 
-		if (preg_match_all(self::STREAM_BODY, $content, $matches) === false) {
-			return '';
-		}
-
 		$extra = '';
-		foreach ($matches[1] as $body) {
+		$offset = 0;
+		$length = strlen($content);
+
+		// Use strpos search instead of regex to avoid PCRE backtrack limits on large binary streams (e.g. embedded images)
+		while ($offset < $length && ($pos = strpos($content, 'stream', $offset)) !== false) {
+			if ($pos > 0 && substr($content, $pos - 3, 3) === 'end') {
+				$offset = $pos + 6;
+				continue;
+			}
+			$start = $pos + 6;
+			if (isset($content[$start]) && $content[$start] === "\r") {
+				$start++;
+			}
+			if (isset($content[$start]) && $content[$start] === "\n") {
+				$start++;
+			}
+			$end = strpos($content, 'endstream', $start);
+			if ($end === false) {
+				break;
+			}
+			$body = substr($content, $start, $end - $start);
+			if (str_ends_with($body, "\r\n")) {
+				$body = substr($body, 0, -2);
+			} elseif (str_ends_with($body, "\n") || str_ends_with($body, "\r")) {
+				$body = substr($body, 0, -1);
+			}
+
 			$inflated = self::inflate($body);
 			if ($inflated !== '') {
-				$extra .= $inflated;
+				$extra .= $inflated . "\n";
 			}
+			$offset = $end + 9;
 		}
 
 		return $extra;

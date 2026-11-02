@@ -100,6 +100,21 @@ final class MobileSheetsPdfTest extends TestCase {
 		self::assertSame([], $errors);
 	}
 
+	public function testPageCountHandlesLargeStreamWithoutPcreBacktrackLimit(): void {
+		// A large uncompressed or binary image stream (e.g. 1.2 MB) should not prevent
+		// subsequent compressed object streams from being unpacked and counted.
+		$largeData = str_repeat('A', 1200000);
+		$pagesData = '<< /Type /Page /Parent 2 0 R >> << /Type /Page /Parent 2 0 R >> << /Type /Page /Parent 2 0 R >>';
+		$stream = gzcompress($pagesData, 9);
+		self::assertNotFalse($stream);
+
+		$pdf = "1 0 obj << /Length " . strlen($largeData) . " >>\nstream\n" . $largeData . "\nendstream\nendobj\n"
+			. "2 0 obj << /Type /ObjStm /N 3 /Filter /FlateDecode /Length " . strlen($stream) . " >>\nstream\n" . $stream . "\nendstream\nendobj\n"
+			. "3 0 obj << /Type /Pages /Count 3 /Kids [] >> endobj\n";
+
+		self::assertSame(3, MobileSheetsPdf::pageCount($pdf));
+	}
+
 	/** The PHP errors $call raises, so tests can insist on silence. */
 	private static function collectErrors(callable $call): array {
 		$errors = [];

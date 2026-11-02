@@ -15,6 +15,7 @@ class MobileSheetsFile {
 		public readonly string $path,
 		public readonly ?string $pageOrder = null,
 		public readonly int $pageCount = 0,
+		public readonly int $fileId = 0,
 	) {
 	}
 }

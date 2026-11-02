@@ -635,6 +635,7 @@ class InternalSongMapper {
 				path: $path,
 				pageOrder: $file->pageOrder,
 				pageCount: (int)$file->pageCount,
+				fileId: (int)$file->fileId,
 			);
 		}
 
