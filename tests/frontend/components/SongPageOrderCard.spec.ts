@@ -53,6 +53,50 @@ describe('SongPageOrderCard.vue', () => {
 		expect(wrapper.emitted('remove')).toEqual([[2]])
 	})
 
+	it('renders drag handle and draggable attribute when draggable is true', () => {
+		const wrapper = mount(SongPageOrderCard, {
+			props: {
+				pageNum: 1,
+				draggable: true,
+				disabled: false,
+			},
+		})
+
+		expect(wrapper.attributes('draggable')).toBe('true')
+		expect(wrapper.find('[data-test="card-drag-handle"]').exists()).toBe(true)
+	})
+
+	it('does not allow dragging when disabled is true', () => {
+		const wrapper = mount(SongPageOrderCard, {
+			props: {
+				pageNum: 1,
+				draggable: true,
+				disabled: true,
+			},
+		})
+
+		expect(wrapper.attributes('draggable')).toBe('false')
+		expect(wrapper.find('[data-test="card-drag-handle"]').exists()).toBe(false)
+	})
+
+	it('applies drop indicator classes', () => {
+		const leftWrapper = mount(SongPageOrderCard, {
+			props: {
+				pageNum: 1,
+				dropIndicator: 'left',
+			},
+		})
+		expect(leftWrapper.classes().some((c) => c.includes('dropIndicatorLeft'))).toBe(true)
+
+		const rightWrapper = mount(SongPageOrderCard, {
+			props: {
+				pageNum: 1,
+				dropIndicator: 'right',
+			},
+		})
+		expect(rightWrapper.classes().some((c) => c.includes('dropIndicatorRight'))).toBe(true)
+	})
+
 	it('emits append when Add to Order button is clicked', async () => {
 		const wrapper = mount(SongPageOrderCard, {
 			props: {

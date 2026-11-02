@@ -9,6 +9,7 @@ import { translate as t } from '@nextcloud/l10n'
 import MagnifyPlus from 'vue-material-design-icons/MagnifyPlus.vue'
 import Plus from 'vue-material-design-icons/Plus.vue'
 import DeleteOutline from 'vue-material-design-icons/DeleteOutline.vue'
+import DragVertical from 'vue-material-design-icons/DragVertical.vue'
 
 const props = withDefaults(
 	defineProps<{
@@ -20,6 +21,9 @@ const props = withDefaults(
 		cardWidth?: number
 		disabled?: boolean
 		showRemove?: boolean
+		draggable?: boolean
+		isDragging?: boolean
+		dropIndicator?: 'left' | 'right' | null
 	}>(),
 	{
 		sequenceIndex: null,
@@ -29,6 +33,9 @@ const props = withDefaults(
 		cardWidth: 220,
 		disabled: false,
 		showRemove: false,
+		draggable: false,
+		isDragging: false,
+		dropIndicator: null,
 	},
 )
 
@@ -36,6 +43,11 @@ const emit = defineEmits<{
 	append: [pageNum: number]
 	remove: [sequenceIndex: number]
 	zoom: [pageNum: number]
+	dragstart: [event: DragEvent]
+	dragend: [event: DragEvent]
+	dragover: [event: DragEvent]
+	dragleave: [event: DragEvent]
+	drop: [event: DragEvent]
 }>()
 
 const isSequenceMode = computed(() => props.sequenceIndex !== null)
@@ -52,12 +64,30 @@ const cardStyle = computed(() => ({
 			$style.card,
 			isInOrder && $style.cardInOrder,
 			disabled && $style.cardDisabled,
+			isDragging && $style.cardDragging,
+			draggable && !disabled && $style.cardDraggable,
+			dropIndicator === 'left' && $style.dropIndicatorLeft,
+			dropIndicator === 'right' && $style.dropIndicatorRight,
 		]"
 		:style="cardStyle"
-		:data-test="isSequenceMode ? `seq-card-${sequenceIndex}-${pageNum}` : `page-card-${pageNum}`">
-		<!-- Header with page number / sequence position -->
+		:draggable="draggable && !disabled"
+		:data-test="isSequenceMode ? `seq-card-${sequenceIndex}-${pageNum}` : `page-card-${pageNum}`"
+		@dragstart="emit('dragstart', $event)"
+		@dragend="emit('dragend', $event)"
+		@dragover="emit('dragover', $event)"
+		@dragleave="emit('dragleave', $event)"
+		@drop="emit('drop', $event)">
+		<!-- Header with drag handle, page number / sequence position -->
 		<div :class="$style.cardHeader">
 			<div :class="$style.titleArea">
+				<span
+					v-if="draggable && !disabled"
+					:class="$style.dragHandle"
+					:title="t('sheetmusic', 'Drag to reorder or add to page order')"
+					aria-hidden="true"
+					data-test="card-drag-handle">
+					<DragVertical :size="16" />
+				</span>
 				<span v-if="isSequenceMode" :class="$style.sequenceBadge" data-test="sequence-badge">
 					#{{ (sequenceIndex ?? 0) + 1 }}
 				</span>
@@ -149,14 +179,15 @@ const cardStyle = computed(() => ({
 
 <style module>
 .card {
+	position: relative;
 	display: flex;
 	flex-direction: column;
 	border: 1px solid var(--color-border);
 	border-radius: var(--border-radius-large, 8px);
 	background-color: var(--color-main-background, #fff);
-	overflow: hidden;
+	overflow: visible;
 	box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
-	transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+	transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
 	box-sizing: border-box;
 }
 
@@ -164,6 +195,47 @@ const cardStyle = computed(() => ({
 	transform: translateY(-2px);
 	box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
 	border-color: var(--color-primary-element);
+}
+
+.cardDraggable {
+	cursor: grab;
+}
+
+.cardDraggable:active {
+	cursor: grabbing;
+}
+
+.cardDragging {
+	opacity: 0.45;
+	border-style: dashed;
+	border-color: var(--color-primary-element);
+	transform: scale(0.97);
+}
+
+.dropIndicatorLeft::before {
+	content: '';
+	position: absolute;
+	top: -4px;
+	bottom: -4px;
+	left: -6px;
+	width: 4px;
+	border-radius: 2px;
+	background-color: var(--color-primary-element, #0082c9);
+	box-shadow: 0 0 6px var(--color-primary-element, #0082c9);
+	z-index: 20;
+}
+
+.dropIndicatorRight::after {
+	content: '';
+	position: absolute;
+	top: -4px;
+	bottom: -4px;
+	right: -6px;
+	width: 4px;
+	border-radius: 2px;
+	background-color: var(--color-primary-element, #0082c9);
+	box-shadow: 0 0 6px var(--color-primary-element, #0082c9);
+	z-index: 20;
 }
 
 .cardInOrder {
@@ -182,12 +254,29 @@ const cardStyle = computed(() => ({
 	padding: 8px 10px;
 	border-bottom: 1px solid var(--color-border);
 	background-color: var(--color-background-hover);
+	border-top-left-radius: inherit;
+	border-top-right-radius: inherit;
 }
 
 .titleArea {
 	display: flex;
 	align-items: center;
 	gap: 6px;
+}
+
+.dragHandle {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--color-text-maxcontrast);
+	opacity: 0.7;
+	cursor: grab;
+	margin-right: -2px;
+}
+
+.dragHandle:hover {
+	opacity: 1;
+	color: var(--color-primary-element);
 }
 
 .sequenceBadge {
@@ -294,6 +383,8 @@ const cardStyle = computed(() => ({
 	padding: 6px 8px;
 	border-top: 1px solid var(--color-border);
 	background-color: var(--color-background-hover);
+	border-bottom-left-radius: inherit;
+	border-bottom-right-radius: inherit;
 }
 
 .addBtn,
