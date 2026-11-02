@@ -32,8 +32,8 @@ import AccountStar from 'vue-material-design-icons/AccountStar.vue'
 import BookIcon from 'vue-material-design-icons/Book.vue'
 import FolderMultiple from 'vue-material-design-icons/FolderMultiple.vue'
 import DramaMasks from 'vue-material-design-icons/DramaMasks.vue'
-import KeyVariant from 'vue-material-design-icons/KeyVariant.vue'
-import AccountGroup from 'vue-material-design-icons/AccountGroup.vue'
+import MusicClefTreble from 'vue-material-design-icons/MusicClefTreble.vue'
+import TagIcon from 'vue-material-design-icons/Tag.vue'
 import Calendar from 'vue-material-design-icons/Calendar.vue'
 import Metronome from 'vue-material-design-icons/Metronome.vue'
 import FileDocumentOutline from 'vue-material-design-icons/FileDocumentOutline.vue'
@@ -448,12 +448,12 @@ async function deleteLibrary() {
           </NcAppNavigationItem>
           <NcAppNavigationItem :name="t('sheetmusic', 'Keys')" :active="selectedView === 'keys'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'keys' } }">
             <template #icon>
-              <KeyVariant :size="20" />
+              <MusicClefTreble :size="20" />
             </template>
           </NcAppNavigationItem>
           <NcAppNavigationItem :name="t('sheetmusic', 'Custom Groups')" :active="selectedView === 'customgroups'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'customgroups' } }">
             <template #icon>
-              <AccountGroup :size="20" />
+              <TagIcon :size="20" />
             </template>
           </NcAppNavigationItem>
           <NcAppNavigationItem :name="t('sheetmusic', 'Years')" :active="selectedView === 'years'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'years' } }">
