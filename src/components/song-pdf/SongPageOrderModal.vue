@@ -14,7 +14,6 @@ import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import FormatListNumbered from 'vue-material-design-icons/FormatListNumbered.vue'
 import Check from 'vue-material-design-icons/Check.vue'
 import Close from 'vue-material-design-icons/Close.vue'
-import Restore from 'vue-material-design-icons/Restore.vue'
 import InformationOutline from 'vue-material-design-icons/InformationOutline.vue'
 import { apiPost } from '../../api/client'
 import { describeRequestFailure } from '../../utils/api'
@@ -25,6 +24,9 @@ import {
 	validatePageOrder,
 } from '../../utils/page-order'
 import type { LibraryData, SongFile } from '../../types/song'
+import SongPageOrderPresets from './SongPageOrderPresets.vue'
+import SongPageOrderPalette from './SongPageOrderPalette.vue'
+import SongPageOrderSequence from './SongPageOrderSequence.vue'
 
 const props = defineProps<{
 	open: boolean
@@ -186,79 +188,23 @@ async function handleSave() {
 			</div>
 
 			<!-- Preset actions -->
-			<div :class="$style.presetsSection">
-				<span :class="$style.sectionLabel">{{ t('sheetmusic', 'Presets:') }}</span>
-				<div :class="$style.presetButtons">
-					<NcButton
-						size="small"
-						variant="tertiary"
-						:disabled="isSaving"
-						@click="applyPreset('all')">
-						<template #icon>
-							<Restore :size="16" />
-						</template>
-						{{ t('sheetmusic', 'All Pages (1-{count})', { count: totalPages }) }}
-					</NcButton>
-					<NcButton
-						size="small"
-						variant="tertiary"
-						:disabled="isSaving"
-						@click="applyPreset('repeat')">
-						{{ t('sheetmusic', 'Repeat All (1-{count}, 1-{count})', { count: totalPages }) }}
-					</NcButton>
-					<NcButton
-						v-if="totalPages > 1"
-						size="small"
-						variant="tertiary"
-						:disabled="isSaving"
-						@click="applyPreset('reverse')">
-						{{ t('sheetmusic', 'Reverse Order') }}
-					</NcButton>
-				</div>
-			</div>
+			<SongPageOrderPresets
+				:total-pages="totalPages"
+				:disabled="isSaving"
+				@select="applyPreset" />
 
 			<!-- Clickable Page Number Palette -->
-			<div v-if="totalPages > 1" :class="$style.paletteSection">
-				<span :class="$style.sectionLabel">{{ t('sheetmusic', 'Add Page to Sequence:') }}</span>
-				<div :class="$style.paletteGrid">
-					<button
-						v-for="p in totalPages"
-						:key="`palette-page-${p}`"
-						type="button"
-						:class="$style.paletteChip"
-						:title="t('sheetmusic', 'Append Page {page} to order', { page: p })"
-						@click="appendPage(p)">
-						+ {{ t('sheetmusic', 'Page {p}', { p }) }}
-					</button>
-				</div>
-			</div>
+			<SongPageOrderPalette
+				:total-pages="totalPages"
+				:disabled="isSaving"
+				@append="appendPage" />
 
 			<!-- Resulting Page Sequence Preview -->
-			<div v-if="isValid && pageSequence.length > 0" :class="$style.previewSection">
-				<div :class="$style.previewHeader">
-					<span :class="$style.sectionLabel">{{ t('sheetmusic', 'Resulting Page Order:') }}</span>
-					<span :class="$style.previewCountBadge">
-						{{ t('sheetmusic', '{count} page in sequence | {count} pages in sequence', { count: pageSequence.length }, pageSequence.length) }}
-					</span>
-				</div>
-				<div :class="$style.pageChipsList">
-					<div
-						v-for="(page, idx) in pageSequence"
-						:key="`seq-${idx}-${page}`"
-						:class="$style.pageChip">
-						<span :class="$style.chipIndex">{{ idx + 1 }}</span>
-						<span :class="$style.chipLabel">{{ t('sheetmusic', 'Page {p}', { p: page }) }}</span>
-						<button
-							type="button"
-							:class="$style.chipRemoveBtn"
-							:title="t('sheetmusic', 'Remove from sequence')"
-							:aria-label="t('sheetmusic', 'Remove position {pos}', { pos: idx + 1 })"
-							@click="removeSequenceItem(idx)">
-							&times;
-						</button>
-					</div>
-				</div>
-			</div>
+			<SongPageOrderSequence
+				v-if="isValid"
+				:pages="pageSequence"
+				:disabled="isSaving"
+				@remove="removeSequenceItem" />
 
 			<!-- MobileSheets format guidance notice -->
 			<div :class="$style.helpNotice">
@@ -306,12 +252,10 @@ async function handleSave() {
 	display: flex;
 	flex-direction: column;
 	min-width: 0;
-	overflow: hidden;
 }
 
 .fileName {
 	font-weight: 600;
-	font-size: 1rem;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
@@ -334,138 +278,14 @@ async function handleSave() {
 	margin: 0;
 }
 
-.presetsSection {
-	display: flex;
-	flex-direction: column;
-	gap: 8px;
-}
-
-.sectionLabel {
-	font-weight: 600;
-	font-size: 0.85rem;
-	color: var(--color-text-maxcontrast);
-}
-
-.presetButtons {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 8px;
-}
-
-.paletteSection {
-	display: flex;
-	flex-direction: column;
-	gap: 8px;
-}
-
-.paletteGrid {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 6px;
-	max-height: 120px;
-	overflow-y: auto;
-}
-
-.paletteChip {
-	display: inline-flex;
-	align-items: center;
-	padding: 4px 10px;
-	font-size: 0.85rem;
-	border: 1px solid var(--color-border);
-	background: var(--color-main-background);
-	color: var(--color-main-text);
-	border-radius: var(--border-radius-pill, 16px);
-	cursor: pointer;
-	transition: background-color 0.15s ease;
-}
-
-.paletteChip:hover {
-	background: var(--color-background-hover);
-	border-color: var(--color-primary-element);
-}
-
-.previewSection {
-	display: flex;
-	flex-direction: column;
-	gap: 8px;
-	padding: 12px;
-	background: var(--color-background-hover);
-	border-radius: var(--border-radius, 4px);
-}
-
-.previewHeader {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-}
-
-.previewCountBadge {
-	font-size: 0.8rem;
-	color: var(--color-text-maxcontrast);
-	font-weight: 500;
-}
-
-.pageChipsList {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 6px;
-	max-height: 140px;
-	overflow-y: auto;
-	padding: 2px;
-}
-
-.pageChip {
-	display: inline-flex;
-	align-items: center;
-	gap: 6px;
-	padding: 4px 8px;
-	background: var(--color-main-background);
-	border: 1px solid var(--color-border);
-	border-radius: var(--border-radius, 4px);
-	font-size: 0.85rem;
-}
-
-.chipIndex {
-	font-size: 0.75rem;
-	font-weight: 700;
-	color: var(--color-primary-element);
-	background: var(--color-background-hover);
-	padding: 1px 4px;
-	border-radius: 2px;
-}
-
-.chipLabel {
-	font-weight: 500;
-}
-
-.chipRemoveBtn {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	width: 18px;
-	height: 18px;
-	border: none;
-	background: transparent;
-	color: var(--color-text-maxcontrast);
-	font-size: 14px;
-	cursor: pointer;
-	border-radius: 50%;
-	line-height: 1;
-}
-
-.chipRemoveBtn:hover {
-	background: var(--color-background-darker);
-	color: var(--color-error);
-}
-
 .helpNotice {
 	display: flex;
-	align-items: flex-start;
 	gap: 10px;
 	padding: 10px 12px;
 	background-color: var(--color-background-hover);
-	border-left: 3px solid var(--color-primary-element);
-	border-radius: 0 var(--border-radius, 4px) var(--border-radius, 4px) 0;
+	border-radius: var(--border-radius, 4px);
+	font-size: 0.85rem;
+	line-height: 1.4;
 }
 
 .helpIcon {
@@ -478,9 +298,6 @@ async function handleSave() {
 	display: flex;
 	flex-direction: column;
 	gap: 2px;
-	font-size: 0.8rem;
-	color: var(--color-text-maxcontrast);
-	line-height: 1.35;
 }
 
 .errorText {
