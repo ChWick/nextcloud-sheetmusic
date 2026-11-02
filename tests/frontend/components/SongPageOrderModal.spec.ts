@@ -181,6 +181,54 @@ describe('SongPageOrderModal.vue', () => {
 		expect(input.element.value).toBe('1, 3')
 	})
 
+	it('inserts page into sequence when dropping source page onto grid', async () => {
+		const wrapper = mount(SongPageOrderModal, {
+			props: {
+				open: true,
+				file: {
+					...sampleFile,
+					pageOrder: '1-2',
+				},
+				songId: 1,
+				libraryId: 2,
+			},
+		})
+
+		const grid = wrapper.findComponent({ name: 'SongPageOrderGrid' })
+		expect(grid.exists()).toBe(true)
+
+		// Simulate insert-at event (e.g. Page 4 dropped at index 1 between 1 and 2)
+		grid.vm.$emit('insert-at', 4, 1)
+		await wrapper.vm.$nextTick()
+
+		const input = wrapper.find('input')
+		expect(input.element.value).toBe('1, 4, 2')
+	})
+
+	it('reorders sequence when reorder-sequence event is emitted', async () => {
+		const wrapper = mount(SongPageOrderModal, {
+			props: {
+				open: true,
+				file: {
+					...sampleFile,
+					pageOrder: '1, 2, 3',
+				},
+				songId: 1,
+				libraryId: 2,
+			},
+		})
+
+		const grid = wrapper.findComponent({ name: 'SongPageOrderGrid' })
+		expect(grid.exists()).toBe(true)
+
+		// Move item from index 2 (Page 3) to index 0
+		grid.vm.$emit('reorder-sequence', 2, 0)
+		await wrapper.vm.$nextTick()
+
+		const input = wrapper.find('input')
+		expect(input.element.value).toBe('3, 1, 2')
+	})
+
 	it('adjusts preview size with zoom controls', async () => {
 		const wrapper = mount(SongPageOrderModal, {
 			props: {

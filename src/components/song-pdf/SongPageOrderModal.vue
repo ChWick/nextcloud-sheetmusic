@@ -149,6 +149,23 @@ function appendPage(pageNum: number) {
 	pageOrderInput.value = formatPageOrder(updated)
 }
 
+function insertPageAt(pageNum: number, targetIndex: number) {
+	const current = isValid.value ? [...pageSequence.value] : []
+	const clampedIndex = Math.max(0, Math.min(targetIndex, current.length))
+	current.splice(clampedIndex, 0, pageNum)
+	pageOrderInput.value = formatPageOrder(current)
+}
+
+function reorderSequence(fromIndex: number, toIndex: number) {
+	if (fromIndex === toIndex || !isValid.value) return
+	const current = [...pageSequence.value]
+	if (fromIndex < 0 || fromIndex >= current.length) return
+	const [item] = current.splice(fromIndex, 1)
+	const clampedIndex = Math.max(0, Math.min(toIndex, current.length))
+	current.splice(clampedIndex, 0, item)
+	pageOrderInput.value = formatPageOrder(current)
+}
+
 function removeSequenceItem(index: number) {
 	if (pageSequence.value.length <= 1) return
 	const updated = [...pageSequence.value]
@@ -314,6 +331,8 @@ async function handleSave() {
 					:card-width="cardWidth"
 					:disabled="isSaving"
 					@append="appendPage"
+					@insert-at="insertPageAt"
+					@reorder-sequence="reorderSequence"
 					@remove-sequence-index="removeSequenceItem"
 					@zoom="openPageZoom" />
 			</div>
