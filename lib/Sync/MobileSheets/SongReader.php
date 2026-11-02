@@ -78,12 +78,14 @@ class SongReader extends AbstractDatabaseMapper {
 
 		$songFiles = [];
 		if ($this->hasTable($database, 'Files')) {
-			$stmt = $database->query('SELECT Id, SongId, Path FROM Files');
+			$stmt = $database->query('SELECT Id, SongId, Path, PageOrder, SourceFilePageCount FROM Files');
 			if ($stmt !== false) {
 				while ($row = $stmt->fetch()) {
 					$songFiles[(int)$row['SongId']][] = new MobileSheetsFile(
 						(int)$row['Id'],
 						(string)$row['Path'],
+						isset($row['PageOrder']) ? (string)$row['PageOrder'] : null,
+						isset($row['SourceFilePageCount']) ? (int)$row['SourceFilePageCount'] : 0,
 					);
 				}
 			}

@@ -44,7 +44,7 @@ class SongFileMapper extends AbstractDatabaseMapper {
 
 		// Ordered by Id so a song's files always come back in the same order: their
 		// position decides the numeric prefix in the regenerated file name.
-		$statement = $database->query('SELECT Id, Path FROM Files WHERE SongId = ' . $songId . ' ORDER BY Id ASC');
+		$statement = $database->query('SELECT Id, Path, PageOrder, SourceFilePageCount FROM Files WHERE SongId = ' . $songId . ' ORDER BY Id ASC');
 
 		$files = [];
 		if ($statement !== false) {
@@ -52,6 +52,8 @@ class SongFileMapper extends AbstractDatabaseMapper {
 				$files[] = new MobileSheetsFile(
 					(int)$row['Id'],
 					(string)$row['Path'],
+					isset($row['PageOrder']) ? (string)$row['PageOrder'] : null,
+					isset($row['SourceFilePageCount']) ? (int)$row['SourceFilePageCount'] : 0,
 				);
 			}
 		}

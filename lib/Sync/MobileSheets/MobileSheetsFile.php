@@ -13,6 +13,8 @@ class MobileSheetsFile {
 	public function __construct(
 		public readonly int $id,
 		public readonly string $path,
+		public readonly ?string $pageOrder = null,
+		public readonly int $pageCount = 0,
 	) {
 	}
 }

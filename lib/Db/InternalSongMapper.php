@@ -633,6 +633,8 @@ class InternalSongMapper {
 			$songFiles[$file->songId][] = new MobileSheetsFile(
 				id: (int)$file->id,
 				path: $path,
+				pageOrder: $file->pageOrder,
+				pageCount: (int)$file->pageCount,
 			);
 		}
 

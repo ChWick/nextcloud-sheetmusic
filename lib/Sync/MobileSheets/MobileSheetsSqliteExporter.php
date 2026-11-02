@@ -467,6 +467,7 @@ class MobileSheetsSqliteExporter {
 			}
 			if ($file->pageOrder !== $pageOrder) {
 				$file->pageOrder = $pageOrder;
+				$file->updatedAt = time();
 				$this->songFileMapper->update($file);
 			}
 
@@ -598,18 +599,57 @@ class MobileSheetsSqliteExporter {
 		array $bookmarks,
 		array $existingBmCols,
 	): void {
+		$stmt = $db->prepare('SELECT * FROM Bookmarks WHERE SongId = :songId');
+		$stmt->execute([':songId' => $songClientId]);
+		$existingRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+		$existingByName = [];
+		$usedIds = [];
+		foreach ($existingRows as $r) {
+			$rId = (int)$r['Id'];
+			$usedIds[$rId] = true;
+			$existingByName[(string)$r['Name']] = $r;
+			$existingByName[trim((string)$r['Name'])] = $r;
+		}
+
 		$del = $db->prepare('DELETE FROM Bookmarks WHERE SongId = :songId');
 		$del->execute([':songId' => $songClientId]);
 
+		$nextId = $usedIds !== [] ? max(array_keys($usedIds)) + 1 : 1;
+
 		foreach ($bookmarks as $bm) {
+			$existingRow = $existingByName[$bm->name] ?? ($existingByName[trim($bm->name)] ?? null);
+			$targetId = isset($existingRow['Id']) ? (int)$existingRow['Id'] : null;
+			$targetName = isset($existingRow['Name']) ? $existingRow['Name'] : $bm->name;
+			if ($targetId === null) {
+				$candidateId = $bm->id ?? $nextId;
+				if (!isset($usedIds[$candidateId])) {
+					$targetId = $candidateId;
+				} else {
+					while (isset($usedIds[$nextId])) {
+						$nextId++;
+					}
+					$targetId = $nextId;
+				}
+			}
+			$usedIds[$targetId] = true;
+
+			$dateCreated = (isset($existingRow['DateCreated']) && (int)($existingRow['DateCreated'] / 1000) === $bm->createdAt)
+				? $existingRow['DateCreated']
+				: MobileSheetsTimestampUtil::secondsToMs($bm->createdAt);
+
+			$lastModified = (isset($existingRow['LastModified']) && (int)($existingRow['LastModified'] / 1000) === $bm->updatedAt)
+				? $existingRow['LastModified']
+				: MobileSheetsTimestampUtil::secondsToMs($bm->updatedAt);
+
 			$candidateValues = [
-				'id' => $bm->id,
+				'id' => $targetId,
 				'songid' => $songClientId,
-				'name' => $bm->name,
+				'name' => $targetName,
 				'pagenum' => max(0, $bm->pageNum - 1),
 				'showinlibrary' => $bm->showInLibrary,
-				'datecreated' => MobileSheetsTimestampUtil::secondsToMs($bm->createdAt),
-				'lastmodified' => MobileSheetsTimestampUtil::secondsToMs($bm->updatedAt),
+				'datecreated' => $dateCreated,
+				'lastmodified' => $lastModified,
 			];
 			$bmRow = MobileSheetsTableHelper::filterToExistingColumns($existingBmCols, $candidateValues);
 			MobileSheetsTableHelper::insertRow($db, 'Bookmarks', $bmRow);
@@ -719,7 +759,12 @@ class MobileSheetsSqliteExporter {
 			return;
 		}
 
-		if ($file->fileSize !== null && $file->fileSize > 0 && $file->fileHash !== null) {
+		$needsCheck = $file->fileSize === null
+			|| $file->fileSize <= 0
+			|| $file->fileHash === null
+			|| empty($file->pageOrder);
+
+		if (!$needsCheck) {
 			return;
 		}
 
@@ -731,21 +776,44 @@ class MobileSheetsSqliteExporter {
 			}
 			$node = $nodes[0];
 			$realSize = $node->getSize();
+			$changed = false;
 			if ($file->fileSize === null || $file->fileSize <= 0) {
 				$file->fileSize = $realSize;
+				$changed = true;
 			}
-			if ($file->fileHash === null) {
+
+			$ext = strtolower(pathinfo($node->getName(), PATHINFO_EXTENSION));
+			$pageOrderChanged = false;
+			if ($ext === 'pdf') {
 				$content = $node->getContent();
 				if ($content !== false && $content !== '') {
-					$file->fileHash = MobileSheetsPdf::contentHash($content);
-					$pageCount = MobileSheetsPdf::pageCount($content);
-					$file->pageCount = $pageCount;
-					if (empty($file->pageOrder)) {
-						$file->pageOrder = MobileSheetsPdf::pageOrder($pageCount);
+					if ($file->fileHash === null) {
+						$file->fileHash = MobileSheetsPdf::contentHash($content);
+						$changed = true;
+					}
+					$realPageCount = MobileSheetsPdf::pageCount($content);
+					if ($file->pageCount <= 1 && $realPageCount > 1) {
+						$newOrder = InternalSongFile::refreshPageOrder($file->pageOrder, $file->pageCount, $realPageCount);
+						if ($newOrder !== $file->pageOrder) {
+							$file->pageOrder = $newOrder;
+							$pageOrderChanged = true;
+						}
+						$file->pageCount = $realPageCount;
+						$changed = true;
+					} elseif (empty($file->pageOrder)) {
+						$file->pageOrder = MobileSheetsPdf::pageOrder($realPageCount);
+						$pageOrderChanged = true;
+						$changed = true;
 					}
 				}
 			}
-			$this->songFileMapper->update($file);
+
+			if ($changed) {
+				if ($pageOrderChanged) {
+					$file->updatedAt = time();
+				}
+				$this->songFileMapper->update($file);
+			}
 		} catch (\Throwable) {
 			// Best effort fallback
 		}
