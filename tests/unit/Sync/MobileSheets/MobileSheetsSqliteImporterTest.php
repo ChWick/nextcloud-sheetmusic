@@ -343,7 +343,7 @@ final class MobileSheetsSqliteImporterTest extends TestCase {
 		// 1. Import from MobileSheets DB
 		$stats = $this->importer->importFromFile($library, $this->tempDbPath);
 		self::assertSame(1, $stats['songsCreated']);
-		self::assertSame(10, $stats['entitiesCreated']);
+		self::assertSame(11, $stats['entitiesCreated']);
 		self::assertSame(1, $stats['filesCreated']);
 
 		// 2. Export back to SQLite DB

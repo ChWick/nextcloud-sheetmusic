@@ -13,6 +13,7 @@ use OCA\SheetMusic\Db\InternalEntity;
 use OCA\SheetMusic\Db\InternalEntityMapper;
 use OCA\SheetMusic\Db\InternalLibrary;
 use OCA\SheetMusic\Db\InternalMiscMapper;
+use OCA\SheetMusic\Db\InternalSetlistItemMapper;
 use OCA\SheetMusic\Db\InternalSong;
 use OCA\SheetMusic\Db\InternalSongAttributeMapper;
 use OCA\SheetMusic\Db\InternalSongFile;
@@ -47,11 +48,13 @@ class MobileSheetsSqliteImporter {
 		private LoggerInterface $logger,
 		?MobileSheetsEntityMerger $entityMerger = null,
 		private ?SongHistoryService $songHistoryService = null,
+		private ?InternalSetlistItemMapper $setlistItemMapper = null,
 	) {
 		$this->entityMerger = $entityMerger ?? new MobileSheetsEntityMerger(
 			$this->entityMapper,
 			$this->songMapper,
 			$this->miscMapper,
+			$this->setlistItemMapper,
 		);
 	}
 

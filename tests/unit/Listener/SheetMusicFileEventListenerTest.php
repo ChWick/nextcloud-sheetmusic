@@ -82,6 +82,9 @@ final class SheetMusicFileEventListenerTest extends TestCase {
 		}
 		$this->createTestLibrary('Noten', 'admin');
 
+		if ($userFolder->nodeExists('Noten/mobilesheets.db')) {
+			$userFolder->get('Noten/mobilesheets.db')->delete();
+		}
 		$file = $userFolder->newFile('Noten/mobilesheets.db');
 		$file->putContent('sqlite');
 		$this->createdUserNodes[] = $file;

@@ -24,15 +24,17 @@ import CogIcon from 'vue-material-design-icons/Cog.vue'
 import Plus from 'vue-material-design-icons/Plus.vue'
 import FolderPlusOutline from 'vue-material-design-icons/FolderPlusOutline.vue'
 import DatabaseImport from 'vue-material-design-icons/DatabaseImport.vue'
+import PlaylistMusic from 'vue-material-design-icons/PlaylistMusic.vue'
 import SongsView from './components/SongsView.vue'
+import SetlistsView from './components/SetlistsView.vue'
 import IntegrityView from './components/IntegrityView.vue'
 import EntitiesView from './components/EntitiesView.vue'
 import TrashView from './components/TrashView.vue'
 import LibrarySettingsDialog from './components/LibrarySettingsDialog.vue'
 
 /** Views of a library: the song view, one view per song filter, and integrity audit. */
-type ViewName = 'songs' | 'new-song' | 'integrity' | 'trash' | EntityType
-const VIEW_NAMES: ViewName[] = ['songs', 'new-song', 'composers', 'artists', 'books', 'collections', 'genres', 'keys', 'customgroups', 'years', 'signatures', 'sourcetypes', 'instruments', 'integrity', 'trash']
+type ViewName = 'songs' | 'new-song' | 'setlists' | 'integrity' | 'trash' | EntityType
+const VIEW_NAMES: ViewName[] = ['songs', 'new-song', 'setlists', 'composers', 'artists', 'books', 'collections', 'genres', 'keys', 'customgroups', 'years', 'signatures', 'sourcetypes', 'instruments', 'integrity', 'trash']
 
 interface ImportProgress {
   status: 'running' | 'completed' | 'error'
@@ -392,6 +394,11 @@ async function deleteLibrary() {
         <!-- view toggle – only for the selected library; choosing one starts without filters -->
         <template v-if="selectedLibrary >= 0">
           <NcAppNavigationItem :name="t('sheetmusic', 'Songs')" :active="selectedView === 'songs' || selectedView === 'new-song'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'songs' } }" />
+          <NcAppNavigationItem :name="t('sheetmusic', 'Setlists')" :active="selectedView === 'setlists'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'setlists' } }">
+            <template #icon>
+              <PlaylistMusic :size="20" />
+            </template>
+          </NcAppNavigationItem>
           <NcAppNavigationItem :name="t('sheetmusic', 'Composers')" :active="selectedView === 'composers'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'composers' } }" />
           <NcAppNavigationItem :name="t('sheetmusic', 'Artists')" :active="selectedView === 'artists'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'artists' } }" />
           <NcAppNavigationItem :name="t('sheetmusic', 'Books')" :active="selectedView === 'books'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'books' } }" />
@@ -454,6 +461,7 @@ async function deleteLibrary() {
                      :selectedLibrary="selectedLibrary"
                      :libraries="libraries"
                      :standalone-create="selectedView === 'new-song'" />
+          <SetlistsView v-else-if="selectedView === 'setlists'" :selected-library="selectedLibrary" />
           <IntegrityView v-else-if="selectedView === 'integrity'" :selectedLibrary="selectedLibrary" />
           <TrashView v-else-if="selectedView === 'trash'" :selected-library="selectedLibrary" />
           <EntitiesView v-else

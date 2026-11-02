@@ -32,6 +32,7 @@ import ViewColumn from 'vue-material-design-icons/ViewColumn.vue'
 import ViewDay from 'vue-material-design-icons/ViewDay.vue'
 import ViewStream from 'vue-material-design-icons/ViewStream.vue'
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import SongEditor from './SongEditor.vue'
 import DeleteSongDialog from './DeleteSongDialog.vue'
 import FilePreviewer from './FilePreviewer.vue'
@@ -124,7 +125,10 @@ function getFileLabel(file: SongFile, index: number): string {
 	return `${index + 1}. ${truncated}`
 }
 
-const activeBookmarkPage = ref<number | undefined>(undefined)
+const route = useRoute()
+const pageParam = route?.query?.page
+const initialPage = typeof pageParam === 'string' ? parseInt(pageParam, 10) : undefined
+const activeBookmarkPage = ref<number | undefined>(initialPage)
 
 function jumpToBookmark(pageNum: number) {
 	activeBookmarkPage.value = pageNum
@@ -138,8 +142,17 @@ function formatBookmarkLabel(bm: Bookmark): string {
 }
 
 watch(() => props.song?.id, () => {
-	activeBookmarkPage.value = undefined
+	const p = route?.query?.page
+	activeBookmarkPage.value = typeof p === 'string' ? parseInt(p, 10) : undefined
 })
+
+if (route) {
+	watch(() => route.query?.page, (newPage) => {
+		if (newPage) {
+			activeBookmarkPage.value = parseInt(newPage as string, 10)
+		}
+	})
+}
 
 function selectFile(fileId: string) {
 	selectedFileId.value = fileId

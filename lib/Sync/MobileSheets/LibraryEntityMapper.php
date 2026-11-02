@@ -24,6 +24,7 @@ class LibraryEntityMapper extends AbstractDatabaseMapper {
 		'composers' => ['table' => 'Composer', 'linkTable' => 'ComposerSongs', 'linkColumn' => 'ComposerId'],
 		'books' => ['table' => 'Books', 'linkTable' => 'BookSongs', 'linkColumn' => 'BookId'],
 		'collections' => ['table' => 'Collections', 'linkTable' => 'CollectionSong', 'linkColumn' => 'CollectionId'],
+		'setlists' => ['table' => 'Setlists', 'linkTable' => 'SetlistSong', 'linkColumn' => 'SetlistId'],
 		'artists' => ['table' => 'Artists', 'linkTable' => 'ArtistsSongs', 'linkColumn' => 'ArtistId'],
 		'genres' => ['table' => 'Genres', 'linkTable' => 'GenresSongs', 'linkColumn' => 'GenreId'],
 		'keys' => ['table' => 'Keys', 'linkTable' => 'KeySongs', 'linkColumn' => 'KeyId'],
@@ -40,6 +41,7 @@ class LibraryEntityMapper extends AbstractDatabaseMapper {
 		'composers' => ['tables' => ['Composer'], 'columns' => ['Name']],
 		'books' => ['tables' => ['Books'], 'columns' => ['Title']],
 		'collections' => ['tables' => ['Collections'], 'columns' => ['Name']],
+		'setlists' => ['tables' => ['Setlists'], 'columns' => ['Name']],
 		'artists' => ['tables' => ['Artists'], 'columns' => ['Name']],
 		'genres' => ['tables' => ['Genres'], 'columns' => ['Type', 'Name']],
 		'keys' => ['tables' => ['Key', 'Keys'], 'columns' => ['Name', 'Key']],
@@ -70,6 +72,10 @@ class LibraryEntityMapper extends AbstractDatabaseMapper {
 
 	public function createCollection(string $databasePath, string $name): int {
 		return $this->createGenericEntity($databasePath, ['Collections'], ['Name'], $name);
+	}
+
+	public function createSetlist(string $databasePath, string $name): int {
+		return $this->createGenericEntity($databasePath, ['Setlists'], ['Name'], $name);
 	}
 
 	public function createArtist(string $databasePath, string $name): int {

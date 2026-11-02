@@ -422,6 +422,11 @@ class InternalSongMapper {
 			->where($bmQb->expr()->eq('song_id', $bmQb->createNamedParameter($songId, IQueryBuilder::PARAM_INT)));
 		$bmQb->executeStatement();
 
+		$siQb = $this->db->getQueryBuilder();
+		$siQb->delete(InternalSetlistItemMapper::TABLE_NAME)
+			->where($siQb->expr()->eq('song_id', $siQb->createNamedParameter($songId, IQueryBuilder::PARAM_INT)));
+		$siQb->executeStatement();
+
 		if ($song !== null) {
 			$now = time();
 			$miscQb = $this->db->getQueryBuilder();

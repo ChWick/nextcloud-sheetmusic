@@ -129,3 +129,29 @@ export interface IntegrityIssue {
 		[key: string]: unknown
 	} | null
 }
+
+export interface SetlistItem {
+	id?: number
+	setlistId: number
+	songId: number
+	bookmarkId?: number | null
+	position: number
+	songTitle?: string | null
+	bookmarkName?: string | null
+	pageNum?: number | null
+	endPage?: number | null
+	duration?: number | null
+	artist?: string | null
+}
+
+export interface Setlist {
+	id: number
+	uuid?: string
+	name: string
+	sortBy?: number
+	ascending?: number
+	itemCount?: number
+	items?: SetlistItem[]
+	createdAt?: number
+	updatedAt?: number
+}

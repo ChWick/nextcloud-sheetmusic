@@ -1381,7 +1381,11 @@ final class MobileSheetsSyncTest extends TestCase {
 		}
 
 		$stats = $this->importer->importFromFile($lib, $dbPath);
-		self::assertSame(1, $stats['miscTablesSynced']);
+		if ($tableName === 'Setlists') {
+			self::assertSame(1, $stats['entitiesCreated']);
+		} else {
+			self::assertSame(1, $stats['miscTablesSynced']);
+		}
 
 		// Verify stored in internal Nextcloud misc data
 		$rows = $this->miscMapper->getMiscDataForTable($lib->id, 'mobilesheets', $tableName);

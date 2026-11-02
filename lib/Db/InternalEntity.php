@@ -16,6 +16,7 @@ use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsComposer;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsCustomGroup;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsGenre;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsKey;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSetlist;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSignature;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSourceType;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsYear;
@@ -88,6 +89,7 @@ class InternalEntity {
 			'composer' => new MobileSheetsComposer($id, $this->name),
 			'book' => new MobileSheetsBook($id, $this->name),
 			'collection' => new MobileSheetsCollection($id, $this->name),
+			'setlist' => new MobileSheetsSetlist($id, $this->name),
 			'artist' => new MobileSheetsArtist($id, $this->name),
 			'genre' => new MobileSheetsGenre($id, $this->name),
 			'key' => new MobileSheetsKey($id, $this->name),

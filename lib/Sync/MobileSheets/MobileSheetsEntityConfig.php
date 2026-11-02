@@ -48,6 +48,13 @@ final class MobileSheetsEntityConfig {
 			'linkCol' => 'CollectionId',
 			'hasSort' => true,
 		],
+		'setlist' => [
+			'table' => 'Setlists',
+			'nameCol' => 'Name',
+			'linkTable' => 'SetlistSong',
+			'linkCol' => 'SetlistId',
+			'hasSort' => true,
+		],
 		'genre' => [
 			'table' => 'Genres',
 			'nameCol' => 'Type',
@@ -129,6 +136,12 @@ final class MobileSheetsEntityConfig {
 			'linkTable' => 'CollectionSong',
 			'linkCol' => 'CollectionId',
 		],
+		'Setlists' => [
+			'type' => 'setlist',
+			'nameCol' => 'Name',
+			'linkTable' => 'SetlistSong',
+			'linkCol' => 'SetlistId',
+		],
 		'Genres' => [
 			'type' => 'genre',
 			'nameCol' => 'Type',
@@ -195,6 +208,8 @@ final class MobileSheetsEntityConfig {
 		'booksongs',
 		'collections',
 		'collectionsong',
+		'setlists',
+		'setlistsong',
 		'genres',
 		'genressongs',
 		'keys',

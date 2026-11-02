@@ -219,5 +219,45 @@ return [
 			'url' => '/api/entities/merge',
 			'verb' => 'POST',
 		],
+		[
+			'name' => 'Api#getSetlists',
+			'url' => '/api/libraries/{libraryId}/setlists',
+			'verb' => 'GET',
+		],
+		[
+			'name' => 'Api#getSetlist',
+			'url' => '/api/libraries/{libraryId}/setlists/{id}',
+			'verb' => 'GET',
+		],
+		[
+			'name' => 'Api#createSetlist',
+			'url' => '/api/setlists',
+			'verb' => 'POST',
+		],
+		[
+			'name' => 'Api#updateSetlist',
+			'url' => '/api/setlists/{id}',
+			'verb' => 'POST',
+		],
+		[
+			'name' => 'Api#deleteSetlist',
+			'url' => '/api/setlists/{id}',
+			'verb' => 'DELETE',
+		],
+		[
+			'name' => 'Api#addSetlistItem',
+			'url' => '/api/setlists/{id}/items',
+			'verb' => 'POST',
+		],
+		[
+			'name' => 'Api#removeSetlistItem',
+			'url' => '/api/setlists/{id}/items/{itemId}',
+			'verb' => 'DELETE',
+		],
+		[
+			'name' => 'Api#reorderSetlistItems',
+			'url' => '/api/setlists/{id}/reorder',
+			'verb' => 'POST',
+		],
 	],
 ];

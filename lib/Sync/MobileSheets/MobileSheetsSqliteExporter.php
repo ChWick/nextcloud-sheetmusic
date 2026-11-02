@@ -12,6 +12,7 @@ namespace OCA\SheetMusic\Sync\MobileSheets;
 use OCA\SheetMusic\Db\InternalEntityMapper;
 use OCA\SheetMusic\Db\InternalLibrary;
 use OCA\SheetMusic\Db\InternalMiscMapper;
+use OCA\SheetMusic\Db\InternalSetlistItemMapper;
 use OCA\SheetMusic\Db\InternalSong;
 use OCA\SheetMusic\Db\InternalSongAttributeMapper;
 use OCA\SheetMusic\Db\InternalSongBookmark;
@@ -50,10 +51,12 @@ class MobileSheetsSqliteExporter {
 		private LoggerInterface $logger,
 		?MobileSheetsEntityExporter $entityExporter = null,
 		private ?InternalSongBookmarkMapper $bookmarkMapper = null,
+		private ?InternalSetlistItemMapper $setlistItemMapper = null,
 	) {
 		$this->entityExporter = $entityExporter ?? new MobileSheetsEntityExporter(
 			$this->entityMapper,
 			$this->songMapper,
+			$this->setlistItemMapper,
 		);
 	}
 

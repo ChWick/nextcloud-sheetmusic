@@ -7,6 +7,7 @@ namespace OCA\SheetMusic\Controller;
 use OCA\SheetMusic\Service\EntityService;
 use OCA\SheetMusic\Service\LibraryIntegrityService;
 use OCA\SheetMusic\Service\LibraryService;
+use OCA\SheetMusic\Service\SetlistService;
 use OCA\SheetMusic\Service\SongFileService;
 use OCA\SheetMusic\Service\SongHistoryService;
 use OCA\SheetMusic\Service\SongService;
@@ -27,6 +28,7 @@ class ApiController extends OCSController {
 	private SongController $songController;
 	private SongFileController $songFileController;
 	private EntityController $entityController;
+	private SetlistController $setlistController;
 
 	public function __construct(
 		string $appName,
@@ -38,6 +40,7 @@ class ApiController extends OCSController {
 		LibraryIntegrityService $libraryIntegrityService,
 		IUserSession $userSession,
 		?SongHistoryService $songHistoryService = null,
+		?SetlistService $setlistService = null,
 	) {
 		parent::__construct($appName, $request);
 
@@ -45,6 +48,12 @@ class ApiController extends OCSController {
 		$this->songController = new SongController($appName, $request, $songService, $userSession, $songHistoryService);
 		$this->songFileController = new SongFileController($appName, $request, $songFileService, $userSession);
 		$this->entityController = new EntityController($appName, $request, $entityService, $userSession);
+		$this->setlistController = new SetlistController(
+			$appName,
+			$request,
+			$setlistService ?? \OC::$server->get(SetlistService::class),
+			$userSession,
+		);
 	}
 
 	#[NoAdminRequired]
@@ -433,5 +442,53 @@ class ApiController extends OCSController {
 		mixed $duplicateIds = null,
 	): DataResponse {
 		return $this->entityController->mergeEntities($libraryId, $entityType, $keepId, $duplicateIds);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'GET', url: '/api/libraries/{libraryId}/setlists')]
+	public function getSetlists(int $libraryId): DataResponse {
+		return $this->setlistController->getSetlists($libraryId);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'GET', url: '/api/libraries/{libraryId}/setlists/{id}')]
+	public function getSetlist(int $libraryId, int $id): DataResponse {
+		return $this->setlistController->getSetlist($libraryId, $id);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/setlists')]
+	public function createSetlist(?int $libraryId = null, ?string $name = null): DataResponse {
+		return $this->setlistController->createSetlist($libraryId, $name);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/setlists/{id}')]
+	public function updateSetlist(int $id, ?int $libraryId = null, ?string $name = null, ?int $sortBy = null, ?int $ascending = null): DataResponse {
+		return $this->setlistController->updateSetlist($id, $libraryId, $name, $sortBy, $ascending);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'DELETE', url: '/api/setlists/{id}')]
+	public function deleteSetlist(int $id, ?int $libraryId = null): DataResponse {
+		return $this->setlistController->deleteSetlist($id, $libraryId);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/setlists/{id}/items')]
+	public function addSetlistItem(int $id, ?int $libraryId = null, ?int $songId = null, ?int $bookmarkId = null, ?int $position = null): DataResponse {
+		return $this->setlistController->addItem($id, $libraryId, $songId, $bookmarkId, $position);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'DELETE', url: '/api/setlists/{id}/items/{itemId}')]
+	public function removeSetlistItem(int $id, int $itemId, ?int $libraryId = null): DataResponse {
+		return $this->setlistController->removeItem($id, $itemId, $libraryId);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/setlists/{id}/reorder')]
+	public function reorderSetlistItems(int $id, ?int $libraryId = null, ?array $itemIds = null): DataResponse {
+		return $this->setlistController->reorderItems($id, $libraryId, $itemIds);
 	}
 }

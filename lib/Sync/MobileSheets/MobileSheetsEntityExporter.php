@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace OCA\SheetMusic\Sync\MobileSheets;
 
 use OCA\SheetMusic\Db\InternalEntityMapper;
+use OCA\SheetMusic\Db\InternalSetlistItemMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Util\SongSortingUtil;
 use PDO;
@@ -29,6 +30,7 @@ class MobileSheetsEntityExporter {
 	public function __construct(
 		private InternalEntityMapper $entityMapper,
 		private InternalSongMapper $songMapper,
+		private ?InternalSetlistItemMapper $setlistItemMapper = null,
 	) {
 	}
 
@@ -110,12 +112,21 @@ class MobileSheetsEntityExporter {
 				}
 
 				if ($metaStmt !== null) {
+					$extra = ['original_type' => $entity->type, 'name' => $entity->name];
+					if ($entity->type === 'setlist' && $this->setlistItemMapper !== null) {
+						$items = $this->setlistItemMapper->findForSetlist((int)$entity->id);
+						$extra['items'] = array_map(fn ($it) => [
+							'songId' => $it->songId,
+							'bookmarkId' => $it->bookmarkId,
+							'position' => $it->position,
+						], $items);
+					}
 					$metaStmt->execute([
 						':type' => 'entity:' . $entity->type,
 						':uuid' => $entity->uuid,
 						':client_id' => $clientId,
 						':updated_at' => $entity->updatedAt,
-						':extra_json' => json_encode(['original_type' => $entity->type, 'name' => $entity->name], JSON_THROW_ON_ERROR),
+						':extra_json' => json_encode($extra, JSON_THROW_ON_ERROR),
 					]);
 				}
 			}
@@ -170,6 +181,9 @@ class MobileSheetsEntityExporter {
 			}
 
 			$type = $entity->type;
+			if ($type === 'setlist') {
+				continue;
+			}
 			$config = self::ENTITY_TABLE_CONFIG[$type] ?? self::ENTITY_TABLE_CONFIG['customgroup'];
 			$linkTable = $config['linkTable'];
 			$linkCol = $config['linkCol'];
@@ -233,6 +247,9 @@ class MobileSheetsEntityExporter {
 		// Prune stale link rows that were pre-populated from misc_data but are no longer active in Nextcloud
 		foreach (MobileSheetsEntityConfig::BY_TABLE as $cfg) {
 			$linkTable = $cfg['linkTable'];
+			if ($linkTable === 'SetlistSong') {
+				continue;
+			}
 			$linkCol = $cfg['linkCol'];
 			if (!MobileSheetsTableHelper::tableExists($db, $linkTable)) {
 				continue;
@@ -253,6 +270,72 @@ class MobileSheetsEntityExporter {
 			if ($idsToDelete !== []) {
 				$db->exec("DELETE FROM {$quotedTable} WHERE Id IN (" . implode(',', $idsToDelete) . ')');
 			}
+		}
+
+		$this->exportSetlistSongs($db, $libraryId, $songClientMap, $entityClientMap);
+	}
+
+	/**
+	 * @param array<int, int> $songClientMap
+	 * @param array<int, int> $entityClientMap
+	 */
+	private function exportSetlistSongs(
+		PDO $db,
+		int $libraryId,
+		array $songClientMap,
+		array $entityClientMap,
+	): void {
+		if ($this->setlistItemMapper === null || !MobileSheetsTableHelper::tableExists($db, 'SetlistSong')) {
+			return;
+		}
+
+		$setlists = $this->entityMapper->findAllForLibrary($libraryId, 'setlist', includeDeleted: false);
+		$activeSetlistClientIds = [];
+
+		$existingOrderStmt = $db->prepare('SELECT SongId FROM SetlistSong WHERE SetlistId = ? ORDER BY Id ASC');
+		$delStmt = $db->prepare('DELETE FROM SetlistSong WHERE SetlistId = ?');
+		$insertStmt = $db->prepare('INSERT INTO SetlistSong (SetlistId, SongId) VALUES (?, ?)');
+
+		foreach ($setlists as $setlist) {
+			$setlistClientId = $entityClientMap[$setlist->id] ?? $setlist->clientId;
+			if ($setlistClientId === null) {
+				continue;
+			}
+			$activeSetlistClientIds[$setlistClientId] = true;
+
+			$items = $this->setlistItemMapper->findForSetlist((int)$setlist->id);
+			$orderedSongClientIds = [];
+			foreach ($items as $item) {
+				$songClientId = $songClientMap[$item->songId] ?? null;
+				if ($songClientId === null) {
+					$song = $this->songMapper->findById($item->songId);
+					$songClientId = $song?->clientId;
+				}
+				if ($songClientId !== null) {
+					$orderedSongClientIds[] = (int)$songClientId;
+				}
+			}
+
+			$existingOrderStmt->execute([$setlistClientId]);
+			$existingOrder = array_map('intval', $existingOrderStmt->fetchAll(PDO::FETCH_COLUMN));
+
+			if ($existingOrder === $orderedSongClientIds) {
+				continue;
+			}
+
+			$delStmt->execute([$setlistClientId]);
+
+			foreach ($orderedSongClientIds as $songClientId) {
+				$insertStmt->execute([$setlistClientId, $songClientId]);
+			}
+		}
+
+		if ($activeSetlistClientIds !== []) {
+			$placeholders = implode(',', array_fill(0, count($activeSetlistClientIds), '?'));
+			$pruneStmt = $db->prepare("DELETE FROM SetlistSong WHERE SetlistId NOT IN ($placeholders)");
+			$pruneStmt->execute(array_keys($activeSetlistClientIds));
+		} else {
+			$db->exec('DELETE FROM SetlistSong');
 		}
 	}
 }

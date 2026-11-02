@@ -12,6 +12,8 @@ namespace OCA\SheetMusic\Sync\MobileSheets;
 use OCA\SheetMusic\Db\InternalEntity;
 use OCA\SheetMusic\Db\InternalEntityMapper;
 use OCA\SheetMusic\Db\InternalMiscMapper;
+use OCA\SheetMusic\Db\InternalSetlistItem;
+use OCA\SheetMusic\Db\InternalSetlistItemMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use PDO;
 
@@ -26,6 +28,7 @@ class MobileSheetsEntityMerger {
 		private InternalEntityMapper $entityMapper,
 		private InternalSongMapper $songMapper,
 		private InternalMiscMapper $miscMapper,
+		private ?InternalSetlistItemMapper $setlistItemMapper = null,
 	) {
 	}
 
@@ -63,7 +66,7 @@ class MobileSheetsEntityMerger {
 
 				$lastModifiedSec = MobileSheetsTimestampUtil::extractLastModifiedSec($row);
 				$dateCreatedSec = MobileSheetsTimestampUtil::extractDateCreatedSec($row);
-				$sortBy = isset($row['SortBy']) ? (int)$row['SortBy'] : 1;
+				$sortBy = isset($row['SortBy']) ? (int)$row['SortBy'] : ($config['type'] === 'setlist' ? 0 : 1);
 				$ascending = isset($row['Ascending']) ? (int)$row['Ascending'] : 1;
 
 				// Determine original internal type if recorded in metadata
@@ -217,6 +220,11 @@ class MobileSheetsEntityMerger {
 			$linkCol = $config['linkCol'];
 			$type = $config['type'];
 
+			if ($type === 'setlist') {
+				$this->mergeSetlistItems($db, $libraryId, $syncMeta, $ncAuthoritativeEntityIds);
+				continue;
+			}
+
 			if (!MobileSheetsTableHelper::tableExists($db, $linkTable)) {
 				continue;
 			}
@@ -350,6 +358,72 @@ class MobileSheetsEntityMerger {
 					}
 					$this->miscMapper->deleteMiscData($libraryId, 'mobilesheets', $tableName, (string)$clientId);
 				}
+			}
+		}
+	}
+
+	/**
+	 * @param array<int, bool> $ncAuthoritativeEntityIds
+	 */
+	private function mergeSetlistItems(
+		PDO $db,
+		int $libraryId,
+		?MobileSheetsSyncMetadata $syncMeta,
+		array $ncAuthoritativeEntityIds,
+	): void {
+		if ($this->setlistItemMapper === null || !MobileSheetsTableHelper::tableExists($db, 'SetlistSong')) {
+			return;
+		}
+
+		$stmt = $db->query('SELECT Id, SetlistId, SongId FROM SetlistSong ORDER BY Id ASC');
+		if ($stmt === false) {
+			return;
+		}
+
+		$songsBySetlistClientId = [];
+		while ($row = $stmt->fetch()) {
+			$sClientId = (int)$row['SongId'];
+			$eClientId = (int)$row['SetlistId'];
+			$songsBySetlistClientId[$eClientId][] = $sClientId;
+		}
+
+		$setlists = $this->entityMapper->findAllForLibrary($libraryId, 'setlist', includeDeleted: false);
+		foreach ($setlists as $setlist) {
+			if ($setlist->clientId === null || isset($ncAuthoritativeEntityIds[$setlist->id])) {
+				continue;
+			}
+
+			$clientSongIds = $songsBySetlistClientId[$setlist->clientId] ?? [];
+			$existingItems = $this->setlistItemMapper->findForSetlist((int)$setlist->id);
+
+			$existingBookmarkByPositionAndSong = [];
+			foreach ($existingItems as $it) {
+				$existingBookmarkByPositionAndSong[$it->position . ':' . $it->songId] = $it->bookmarkId;
+			}
+
+			$this->setlistItemMapper->deleteForSetlist((int)$setlist->id);
+
+			$pos = 0;
+			$now = time();
+			foreach ($clientSongIds as $sClientId) {
+				$song = $this->songMapper->findByClientId($libraryId, $sClientId);
+				if ($song === null || $song->id === null) {
+					continue;
+				}
+
+				$bookmarkId = $existingBookmarkByPositionAndSong[$pos . ':' . $song->id] ?? null;
+
+				$item = new InternalSetlistItem(
+					id: null,
+					setlistId: (int)$setlist->id,
+					songId: (int)$song->id,
+					bookmarkId: $bookmarkId,
+					position: $pos,
+					createdAt: $now,
+					updatedAt: $now,
+				);
+				$this->setlistItemMapper->insert($item);
+				$pos++;
 			}
 		}
 	}

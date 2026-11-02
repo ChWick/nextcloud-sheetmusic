@@ -162,4 +162,42 @@ class InternalSongBookmarkMapper {
 			->where($touchQb->expr()->eq('id', $touchQb->createNamedParameter($songId, IQueryBuilder::PARAM_INT)))
 			->executeStatement();
 	}
+
+	public function findById(int $id): ?InternalSongBookmark {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from(self::TABLE_NAME)
+			->where($qb->expr()->eq('id', $qb->createNamedParameter($id, IQueryBuilder::PARAM_INT)))
+			->setMaxResults(1);
+
+		$row = $qb->executeQuery()->fetchAssociative();
+		if ($row === false) {
+			return null;
+		}
+
+		return InternalSongBookmark::fromRow($row);
+	}
+
+	public function insert(InternalSongBookmark $bookmark): InternalSongBookmark {
+		$now = time();
+		$qb = $this->db->getQueryBuilder();
+		$qb->insert(self::TABLE_NAME)
+			->values([
+				'song_id' => $qb->createNamedParameter($bookmark->songId, IQueryBuilder::PARAM_INT),
+				'name' => $qb->createNamedParameter($bookmark->name, IQueryBuilder::PARAM_STR),
+				'page_num' => $qb->createNamedParameter($bookmark->pageNum, IQueryBuilder::PARAM_INT),
+				'end_page' => $qb->createNamedParameter($bookmark->endPage, IQueryBuilder::PARAM_INT),
+				'position' => $qb->createNamedParameter($bookmark->position, IQueryBuilder::PARAM_INT),
+				'show_in_library' => $qb->createNamedParameter($bookmark->showInLibrary, IQueryBuilder::PARAM_INT),
+				'created_at' => $qb->createNamedParameter($bookmark->createdAt > 0 ? $bookmark->createdAt : $now, IQueryBuilder::PARAM_INT),
+				'updated_at' => $qb->createNamedParameter($bookmark->updatedAt > 0 ? $bookmark->updatedAt : $now, IQueryBuilder::PARAM_INT),
+			]);
+
+		$qb->executeStatement();
+		$bookmark->id = (int)$this->db->lastInsertId(self::TABLE_NAME);
+		$bookmark->createdAt = $bookmark->createdAt > 0 ? $bookmark->createdAt : $now;
+		$bookmark->updatedAt = $bookmark->updatedAt > 0 ? $bookmark->updatedAt : $now;
+
+		return $bookmark;
+	}
 }

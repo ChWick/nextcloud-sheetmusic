@@ -11,6 +11,7 @@ use OCA\SheetMusic\Service\EntityService;
 use OCA\SheetMusic\Service\FileManager;
 use OCA\SheetMusic\Service\LibraryIntegrityService;
 use OCA\SheetMusic\Service\LibraryService;
+use OCA\SheetMusic\Service\SetlistService;
 use OCA\SheetMusic\Service\SongFileService;
 use OCA\SheetMusic\Service\SongService;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSong;
@@ -37,6 +38,7 @@ final class ApiTest extends TestCase {
 	private EntityService $entityService;
 	private SongFileService $songFileService;
 	private SongService $songService;
+	private SetlistService $setlistService;
 
 	protected function setUp(): void {
 		parent::setUp();
@@ -80,6 +82,14 @@ final class ApiTest extends TestCase {
 			null,
 			$this->bookmarkMapper,
 		);
+		$this->setlistService = new SetlistService(
+			$this->libraryMapper,
+			$this->entityMapper,
+			$this->setlistItemMapper,
+			$this->songMapper,
+			$this->bookmarkMapper,
+			$logger,
+		);
 	}
 
 	protected function tearDown(): void {
@@ -100,6 +110,8 @@ final class ApiTest extends TestCase {
 			$this->entityService,
 			$this->libraryIntegrityService,
 			$loggedIn ? $this->userSession : new FakeUserSession(null),
+			null,
+			$this->setlistService,
 		);
 	}
 
@@ -573,5 +585,56 @@ final class ApiTest extends TestCase {
 
 		self::assertEquals(Http::STATUS_BAD_REQUEST, $response->getStatus());
 		self::assertEquals(['message' => 'Could not read file content'], $response->getData());
+	}
+
+	public function testSetlistsApiEndpoints(): void {
+		$lib = $this->createTestLibrary('ApiSetlistLib', 'admin');
+
+		$controller = $this->createController();
+
+		// 1. Create setlist
+		$createReq = new FakeRequest(params: ['libraryId' => (int)$lib->id, 'name' => 'Live Set']);
+		$controller = $this->createController(request: $createReq);
+		$createRes = $controller->createSetlist();
+		self::assertEquals(Http::STATUS_CREATED, $createRes->getStatus());
+		$setlistData = $createRes->getData();
+		self::assertSame('Live Set', $setlistData['name']);
+		$setlistId = (int)$setlistData['id'];
+
+		// 2. List setlists
+		$listRes = $controller->getSetlists((int)$lib->id);
+		self::assertEquals(Http::STATUS_OK, $listRes->getStatus());
+		self::assertCount(1, $listRes->getData());
+
+		// 3. Create song and add to setlist
+		$song = $this->songMapper->insert(new \OCA\SheetMusic\Db\InternalSong(
+			uuid: \OCA\SheetMusic\Db\InternalEntity::generateUuid(),
+			libraryId: (int)$lib->id,
+			title: 'Song 1',
+		));
+
+		$addItemReq = new FakeRequest(params: ['libraryId' => (int)$lib->id, 'songId' => (int)$song->id]);
+		$controller = $this->createController(request: $addItemReq);
+		$addItemRes = $controller->addSetlistItem($setlistId);
+		self::assertEquals(Http::STATUS_CREATED, $addItemRes->getStatus());
+		$itemData = $addItemRes->getData();
+		$itemId = (int)$itemData->id;
+
+		// 4. Get setlist details
+		$getRes = $controller->getSetlist((int)$lib->id, $setlistId);
+		self::assertEquals(Http::STATUS_OK, $getRes->getStatus());
+		self::assertCount(1, $getRes->getData()['items']);
+
+		// 5. Remove item
+		$removeReq = new FakeRequest(params: ['libraryId' => (int)$lib->id]);
+		$controller = $this->createController(request: $removeReq);
+		$removeRes = $controller->removeSetlistItem($setlistId, $itemId);
+		self::assertEquals(Http::STATUS_OK, $removeRes->getStatus());
+
+		// 6. Delete setlist
+		$delReq = new FakeRequest(params: ['libraryId' => (int)$lib->id]);
+		$controller = $this->createController(request: $delReq);
+		$delRes = $controller->deleteSetlist($setlistId);
+		self::assertEquals(Http::STATUS_OK, $delRes->getStatus());
 	}
 }
