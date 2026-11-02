@@ -50,4 +50,35 @@ describe('useSetlists composable', () => {
 
     expect(totalDurationFormatted.value).toBe('3:25')
   })
+
+  it('updates item bookmark via updateItemBookmark', async () => {
+    const { selectedSetlist, selectedSetlistItems, updateItemBookmark } = useSetlists(() => 1)
+    selectedSetlist.value = { id: 1, name: 'Live' }
+    selectedSetlistItems.value = [
+      { id: 101, setlistId: 1, songId: 10, position: 0, bookmarkId: null },
+    ]
+
+    vi.mocked(axios.post).mockResolvedValue({
+      data: {
+        ocs: {
+          data: {
+            id: 101,
+            setlistId: 1,
+            songId: 10,
+            bookmarkId: 5,
+            bookmarkName: 'Adagio',
+            pageNum: 3,
+            position: 0,
+          },
+        },
+      },
+    } as any)
+
+    await updateItemBookmark(101, 5)
+    await flushPromises()
+
+    expect(selectedSetlistItems.value[0].bookmarkId).toBe(5)
+    expect(selectedSetlistItems.value[0].bookmarkName).toBe('Adagio')
+    expect(selectedSetlistItems.value[0].pageNum).toBe(3)
+  })
 })

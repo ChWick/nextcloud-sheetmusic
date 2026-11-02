@@ -183,6 +183,41 @@ class SetlistController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/setlists/{id}/items/{itemId}')]
+	public function updateItem(int $id, int $itemId, ?int $libraryId = null, ?int $bookmarkId = null): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		$libraryId = $libraryId ?? (int)$this->request->getParam('libraryId', 0);
+		if ($libraryId <= 0) {
+			return new DataResponse([], Http::STATUS_BAD_REQUEST);
+		}
+
+		$params = $this->request->getParams();
+		$hasBookmarkParam = array_key_exists('bookmarkId', $params);
+		if ($hasBookmarkParam) {
+			$rawBookmark = $params['bookmarkId'];
+			$bookmarkId = ($rawBookmark !== null && $rawBookmark !== '') ? (int)$rawBookmark : null;
+		}
+
+		$item = $this->setlistService->updateItem(
+			$user,
+			$libraryId,
+			$id,
+			$itemId,
+			$bookmarkId,
+			$hasBookmarkParam,
+		);
+		if ($item === null) {
+			return new DataResponse([], Http::STATUS_NOT_FOUND);
+		}
+
+		return new DataResponse($item);
+	}
+
+	#[NoAdminRequired]
 	#[ApiRoute(verb: 'DELETE', url: '/api/setlists/{id}/items/{itemId}')]
 	public function removeItem(int $id, int $itemId, ?int $libraryId = null): DataResponse {
 		$user = $this->userSession->getUser();

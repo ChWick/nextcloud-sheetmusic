@@ -13,6 +13,7 @@ use OCA\SheetMusic\Db\InternalEntity;
 use OCA\SheetMusic\Db\InternalEntityMapper;
 use OCA\SheetMusic\Db\InternalLibrary;
 use OCA\SheetMusic\Db\InternalSong;
+use OCA\SheetMusic\Db\InternalSongBookmarkMapper;
 use OCA\SheetMusic\Db\InternalSongFile;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
@@ -43,6 +44,7 @@ class LibraryReconciler {
 		private IUserManager $userManager,
 		private LoggerInterface $logger,
 		private ?InternalEntityMapper $entityMapper = null,
+		private ?InternalSongBookmarkMapper $bookmarkMapper = null,
 	) {
 	}
 
@@ -192,6 +194,7 @@ class LibraryReconciler {
 		$filename = $fileNode->getName();
 		$title = $this->extractTitleFromFilename($filename);
 		$pdfMetadata = null;
+		$pdfBookmarks = [];
 
 		// Calculate facts
 		$fileSize = $fileNode->getSize();
@@ -213,6 +216,12 @@ class LibraryReconciler {
 							$pdfMetadata = MobileSheetsPdfMetadata::prefillFor($content);
 						} catch (\Throwable $e) {
 							$this->logger->info('Could not parse PDF metadata: ' . $filename, ['exception' => $e]);
+						}
+
+						try {
+							$pdfBookmarks = MobileSheetsPdf::bookmarks($content);
+						} catch (\Throwable $e) {
+							$this->logger->info('Could not extract PDF bookmarks: ' . $filename, ['exception' => $e]);
 						}
 					}
 				}
@@ -256,6 +265,13 @@ class LibraryReconciler {
 
 		if ($importPdfMetadata && $pdfMetadata !== null && $this->entityMapper !== null && $song->id !== null) {
 			$this->assignPdfEntitiesToSong($library->id, $song->id, $pdfMetadata, $entityCache);
+		}
+
+		if ($importPdfMetadata && !empty($pdfBookmarks) && $this->bookmarkMapper !== null && $song->id !== null) {
+			$existingBookmarks = $this->bookmarkMapper->findForSong($song->id);
+			if (empty($existingBookmarks)) {
+				$this->bookmarkMapper->setBookmarksForSong($song->id, $pdfBookmarks);
+			}
 		}
 	}
 

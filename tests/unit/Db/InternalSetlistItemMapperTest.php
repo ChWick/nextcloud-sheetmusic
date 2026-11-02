@@ -11,9 +11,8 @@ namespace Db;
 
 use OCA\SheetMusic\Db\InternalEntity;
 use OCA\SheetMusic\Db\InternalSetlistItem;
-use OCA\SheetMusic\Db\InternalSetlistItemMapper;
-use OCA\SheetMusic\Db\InternalSongBookmark;
 use OCA\SheetMusic\Db\InternalSong;
+use OCA\SheetMusic\Db\InternalSongBookmark;
 use PHPUnit\Framework\TestCase;
 use TestSupport\RealMobileSheetsTestTrait;
 

@@ -10,7 +10,6 @@ declare(strict_types=1);
 namespace Service;
 
 use OCA\SheetMusic\Db\InternalEntity;
-use OCA\SheetMusic\Db\InternalSetlistItemMapper;
 use OCA\SheetMusic\Db\InternalSong;
 use OCA\SheetMusic\Db\InternalSongBookmark;
 use OCA\SheetMusic\Service\SetlistService;
@@ -143,5 +142,73 @@ final class SetlistServiceTest extends TestCase {
 
 		$detailsFinal = $this->setlistService->getSetlist($user, (int)$lib->id, (int)$setlist->id);
 		self::assertCount(1, $detailsFinal['items']);
+	}
+
+	public function testUpdateItemBookmark(): void {
+		$user = $this->userManager->get('admin');
+		self::assertNotNull($user);
+		$lib = $this->createTestLibrary('SetlistUpdateLib', 'admin');
+
+		$setlist = $this->setlistService->createSetlist($user, (int)$lib->id, 'Update Test Setlist');
+		self::assertNotNull($setlist);
+
+		$song = $this->songMapper->insert(new InternalSong(
+			uuid: InternalEntity::generateUuid(),
+			libraryId: (int)$lib->id,
+			title: 'Brandenburg Concerto',
+		));
+
+		$bm1 = $this->bookmarkMapper->insert(new InternalSongBookmark(
+			id: null,
+			songId: (int)$song->id,
+			name: 'I. Allegro',
+			pageNum: 1,
+		));
+
+		$bm2 = $this->bookmarkMapper->insert(new InternalSongBookmark(
+			id: null,
+			songId: (int)$song->id,
+			name: 'II. Andante',
+			pageNum: 5,
+		));
+
+		$otherSong = $this->songMapper->insert(new InternalSong(
+			uuid: InternalEntity::generateUuid(),
+			libraryId: (int)$lib->id,
+			title: 'Other Piece',
+		));
+		$bmOther = $this->bookmarkMapper->insert(new InternalSongBookmark(
+			id: null,
+			songId: (int)$otherSong->id,
+			name: 'Other Movement',
+			pageNum: 1,
+		));
+
+		// 1. Add item with no bookmark (entire song)
+		$item = $this->setlistService->addItem($user, (int)$lib->id, (int)$setlist->id, (int)$song->id);
+		self::assertNotNull($item);
+		self::assertNull($item->bookmarkId);
+
+		// 2. Update to bookmark bm1
+		$updated = $this->setlistService->updateItem($user, (int)$lib->id, (int)$setlist->id, (int)$item->id, (int)$bm1->id);
+		self::assertNotNull($updated);
+		self::assertSame((int)$bm1->id, $updated->bookmarkId);
+		self::assertSame('I. Allegro', $updated->bookmarkName);
+
+		// 3. Update to bookmark bm2
+		$updated2 = $this->setlistService->updateItem($user, (int)$lib->id, (int)$setlist->id, (int)$item->id, (int)$bm2->id);
+		self::assertNotNull($updated2);
+		self::assertSame((int)$bm2->id, $updated2->bookmarkId);
+		self::assertSame('II. Andante', $updated2->bookmarkName);
+
+		// 4. Update back to null (entire song)
+		$updated3 = $this->setlistService->updateItem($user, (int)$lib->id, (int)$setlist->id, (int)$item->id, null);
+		self::assertNotNull($updated3);
+		self::assertNull($updated3->bookmarkId);
+		self::assertNull($updated3->bookmarkName);
+
+		// 5. Attempt assigning bookmark from another song -> returns null (rejected)
+		$invalid = $this->setlistService->updateItem($user, (int)$lib->id, (int)$setlist->id, (int)$item->id, (int)$bmOther->id);
+		self::assertNull($invalid);
 	}
 }

@@ -69,8 +69,31 @@
                 @click="emit('open-song', item)">
                 {{ item.songTitle || t('sheetmusic', 'Untitled song') }}
               </button>
+
+              <!-- Inline bookmark dropdown when song has bookmarks -->
+              <div
+                v-if="getSongBookmarks(item.songId).length > 0"
+                :class="[$style.inlineBookmarkPicker, item.bookmarkId ? $style.hasBookmark : $style.noBookmark]">
+                <BookmarkMusicOutline :size="14" :class="$style.bookmarkIcon" />
+                <select
+                  :value="item.bookmarkId ?? ''"
+                  :class="$style.inlineBookmarkSelect"
+                  :title="t('sheetmusic', 'Change bookmark')"
+                  :aria-label="t('sheetmusic', 'Change bookmark for {song}', { song: item.songTitle || '' })"
+                  @change="onBookmarkSelect(item, $event)">
+                  <option value="">{{ t('sheetmusic', 'Entire song') }}</option>
+                  <option
+                    v-for="bm in getSongBookmarks(item.songId)"
+                    :key="bm.id"
+                    :value="bm.id">
+                    {{ bm.name }} (p. {{ bm.pageNum }})
+                  </option>
+                </select>
+              </div>
+
+              <!-- Static badge fallback if availableSongs is not loaded yet and item already had bookmark -->
               <span
-                v-if="item.bookmarkName"
+                v-else-if="item.bookmarkName"
                 :class="$style.bookmarkBadge"
                 :title="t('sheetmusic', 'Bookmark page {page}', { page: item.pageNum ?? 1 })">
                 <BookmarkMusicOutline :size="14" :class="$style.bookmarkIcon" />
@@ -101,6 +124,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
@@ -110,20 +134,50 @@ import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import PlusIcon from 'vue-material-design-icons/Plus.vue'
 import PlaylistPlay from 'vue-material-design-icons/PlaylistPlay.vue'
 import BookmarkMusicOutline from 'vue-material-design-icons/BookmarkMusicOutline.vue'
-import type { SetlistItem } from '../../types/song'
+import type { Bookmark, SetlistItem, Song } from '../../types/song'
 import { formatDuration } from '../../utils/song-formatter'
 
-defineProps<{
-  items: SetlistItem[]
-  isLoading: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    items: SetlistItem[]
+    availableSongs?: Song[]
+    isLoading: boolean
+  }>(),
+  {
+    availableSongs: () => [],
+  },
+)
 
 const emit = defineEmits<{
   'move': [fromIndex: number, toIndex: number]
   'open-song': [item: SetlistItem]
+  'update-bookmark': [item: SetlistItem, bookmarkId: number | null]
   'remove': [item: SetlistItem]
   'add-item': []
 }>()
+
+const bookmarksBySongId = computed<Record<number, Bookmark[]>>(() => {
+  const map: Record<number, Bookmark[]> = {}
+  for (const song of props.availableSongs) {
+    if (song.id && song.bookmarks && song.bookmarks.length > 0) {
+      map[song.id] = song.bookmarks
+    }
+  }
+  return map
+})
+
+function getSongBookmarks(songId: number): Bookmark[] {
+  return bookmarksBySongId.value[songId] ?? []
+}
+
+function onBookmarkSelect(item: SetlistItem, event: Event) {
+  const target = event.target as HTMLSelectElement
+  const value = target.value
+  const bookmarkId = value ? parseInt(value, 10) : null
+  if (item.bookmarkId !== bookmarkId) {
+    emit('update-bookmark', item, bookmarkId)
+  }
+}
 </script>
 
 <style module>
@@ -236,6 +290,60 @@ const emit = defineEmits<{
   border-radius: 12px;
   font-size: 0.8rem;
   font-weight: 500;
+}
+
+.inlineBookmarkPicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  padding: 1px 6px;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.inlineBookmarkPicker.hasBookmark {
+  background-color: var(--color-primary-element-light, rgba(0, 130, 201, 0.12));
+  color: var(--color-primary-element, #0082c9);
+}
+
+.inlineBookmarkPicker.noBookmark {
+  background-color: var(--color-background-hover, rgba(127, 127, 127, 0.08));
+  color: var(--color-text-maxcontrast, #555);
+  border: 1px dashed var(--color-border, #ccc);
+}
+
+.inlineBookmarkPicker:hover {
+  opacity: 0.9;
+}
+
+.inlineBookmarkSelect {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 500;
+  padding: 2px 14px 2px 2px;
+  cursor: pointer;
+  outline: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='%23666'%3E%3Cpath%20d='M7%2010l5%205%205-5z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0 center;
+  background-size: 14px;
+}
+
+.inlineBookmarkSelect:focus-visible {
+  outline: 2px solid var(--color-primary-element, #0082c9);
+  border-radius: 4px;
+}
+
+.inlineBookmarkSelect option {
+  background-color: var(--color-main-background, #fff);
+  color: var(--color-main-text, #222);
 }
 
 .bookmarkIcon {

@@ -233,6 +233,56 @@ class SetlistService {
 		return $this->internalSetlistItemMapper->findById((int)$inserted->id);
 	}
 
+	public function updateItem(
+		IUser $user,
+		int $libraryId,
+		int $setlistId,
+		int $itemId,
+		?int $bookmarkId = null,
+		bool $hasBookmarkParam = true,
+	): ?InternalSetlistItem {
+		if ($this->findUserLibrary($user, $libraryId) === null) {
+			return null;
+		}
+
+		$setlist = $this->findActiveSetlist($libraryId, $setlistId);
+		if ($setlist === null) {
+			return null;
+		}
+
+		$item = $this->internalSetlistItemMapper->findById($itemId);
+		if ($item === null || $item->setlistId !== $setlistId) {
+			return null;
+		}
+
+		$changed = false;
+		if ($hasBookmarkParam) {
+			if ($bookmarkId !== null) {
+				$bm = $this->internalSongBookmarkMapper->findById($bookmarkId);
+				if ($bm === null || $bm->songId !== $item->songId) {
+					return null;
+				}
+			}
+			if ($item->bookmarkId !== $bookmarkId) {
+				$item->bookmarkId = $bookmarkId;
+				$changed = true;
+			}
+		}
+
+		if ($changed) {
+			$now = time();
+			$item->updatedAt = $now;
+			$this->internalSetlistItemMapper->update($item);
+
+			// Touch setlist and library
+			$setlist->updatedAt = $now;
+			$this->internalEntityMapper->update($setlist);
+			$this->libraryMapper->touch($libraryId);
+		}
+
+		return $this->internalSetlistItemMapper->findById($itemId);
+	}
+
 	public function removeItem(IUser $user, int $libraryId, int $setlistId, int $itemId): bool {
 		if ($this->findUserLibrary($user, $libraryId) === null) {
 			return false;

@@ -81,6 +81,15 @@ class MobileSheetsPdf {
 	}
 
 	/**
+	 * Extract bookmarks (document outline) from the PDF.
+	 *
+	 * @return list<array{name: string, pageNum: int, endPage: ?int}>
+	 */
+	public static function bookmarks(string $content): array {
+		return MobileSheetsPdfBookmarks::extractBookmarks($content);
+	}
+
+	/**
 	 * Decompressed bodies of the PDF's Flate compressed streams.
 	 *
 	 * Compressed object streams hide the page objects from a plain text search,

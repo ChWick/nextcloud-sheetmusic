@@ -209,4 +209,92 @@ describe('SetlistsView.vue', () => {
 			}),
 		)
 	})
+
+	it('renders inline bookmark select and updates bookmark on selection', async () => {
+		const mockSongs = [
+			{
+				id: 1,
+				title: 'First Song',
+				bookmarks: [
+					{ id: 10, name: 'Allegro', pageNum: 1 },
+					{ id: 11, name: 'Adagio', pageNum: 3 },
+				],
+			},
+		]
+		const mockSetlists = [
+			{ id: 10, name: 'Concert Gig', itemCount: 1 },
+		]
+		const mockSetlistDetails = {
+			id: 10,
+			name: 'Concert Gig',
+			itemCount: 1,
+			items: [
+				{
+					id: 101,
+					setlistId: 10,
+					songId: 1,
+					songTitle: 'First Song',
+					bookmarkId: null,
+					bookmarkName: null,
+					position: 0,
+					duration: 180,
+				},
+			],
+		}
+
+		vi.mocked(axios.get).mockImplementation((url: string) => {
+			if (url.includes('/api/songs')) {
+				return Promise.resolve({ data: { ocs: { data: { songs: mockSongs } } } }) as any
+			}
+			if (url.includes('/api/libraries/1/setlists/10')) {
+				return Promise.resolve({ data: { ocs: { data: mockSetlistDetails } } }) as any
+			}
+			return Promise.resolve({ data: { ocs: { data: mockSetlists } } }) as any
+		})
+
+		vi.mocked(axios.post).mockResolvedValue({
+			data: {
+				ocs: {
+					data: {
+						id: 101,
+						setlistId: 10,
+						songId: 1,
+						songTitle: 'First Song',
+						bookmarkId: 11,
+						bookmarkName: 'Adagio',
+						pageNum: 3,
+						position: 0,
+					},
+				},
+			},
+		} as any)
+
+		const wrapper = mount(SetlistsView, {
+			props: {
+				selectedLibrary: 1,
+			},
+		})
+
+		await flushPromises()
+
+		const select = wrapper.find('select')
+		expect(select.exists()).toBe(true)
+
+		const options = select.findAll('option')
+		expect(options).toHaveLength(3) // Entire song + Allegro + Adagio
+		expect(options[0].text()).toBe('Entire song')
+		expect(options[1].text()).toBe('Allegro (p. 1)')
+		expect(options[2].text()).toBe('Adagio (p. 3)')
+
+		await select.setValue('11')
+		await flushPromises()
+
+		expect(axios.post).toHaveBeenCalledWith(
+			'/apps/sheetmusic/api/setlists/10/items/101',
+			expect.objectContaining({
+				libraryId: 1,
+				bookmarkId: 11,
+			}),
+		)
+	})
 })

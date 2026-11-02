@@ -33,6 +33,7 @@ final class LibraryReconcilerTest extends TestCase {
 			$this->userManager,
 			new NullLogger(),
 			$this->entityMapper,
+			$this->bookmarkMapper,
 		);
 	}
 
@@ -217,6 +218,52 @@ final class LibraryReconcilerTest extends TestCase {
 		// No entities linked
 		$composers = $this->entityMapper->findEntitiesForSong((int)$song->id, 'composer');
 		self::assertEmpty($composers);
+	}
+
+	public function testReconcileExtractsPdfBookmarksWhenPresent(): void {
+		$userFolder = $this->rootFolder->getUserFolder('admin');
+		$folderName = 'Reconcile_Bm_' . bin2hex(random_bytes(4));
+		$libFolder = $userFolder->newFolder($folderName);
+		$this->createdUserNodes[] = $libFolder;
+
+		$library = $this->createTestLibrary('/' . $folderName . '/lib.db', 'admin');
+
+		// Create a PDF with outline bookmarks
+		$objects = "1 0 obj << /Type /Catalog /Pages 2 0 R /Outlines 5 0 R >> endobj\n"
+			. "2 0 obj << /Type /Pages /Count 3 /Kids [3 0 R 4 0 R 7 0 R] >> endobj\n"
+			. "3 0 obj << /Type /Page /Parent 2 0 R >> endobj\n"
+			. "4 0 obj << /Type /Page /Parent 2 0 R >> endobj\n"
+			. "7 0 obj << /Type /Page /Parent 2 0 R >> endobj\n"
+			. "5 0 obj << /Type /Outlines /First 6 0 R /Last 8 0 R /Count 2 >> endobj\n"
+			. "6 0 obj << /Title (Movement 1: Allegro) /Parent 5 0 R /Next 8 0 R /Dest [3 0 R /Fit] >> endobj\n"
+			. "8 0 obj << /Title (Movement 2: Adagio) /Parent 5 0 R /Prev 6 0 R /Dest [4 0 R /Fit] >> endobj\n";
+
+		$xrefOffset = strlen("%PDF-1.4\n" . $objects);
+		$pdf = "%PDF-1.4\n"
+			. $objects
+			. "xref\n0 9\n0000000000 65535 f \n"
+			. "trailer << /Size 9 /Root 1 0 R >>\n"
+			. "startxref\n{$xrefOffset}\n%%EOF\n";
+
+		$file = $libFolder->newFile('Sonata.pdf');
+		$file->putContent($pdf);
+		$this->createdUserNodes[] = $file;
+
+		$result = $this->reconciler->reconcile($library, importPdfMetadata: true);
+		self::assertSame(1, $result['indexed']);
+
+		$song = $this->songMapper->findByTitle((int)$library->id, 'Sonata');
+		self::assertNotNull($song);
+
+		$bookmarks = $this->bookmarkMapper->findForSong((int)$song->id);
+		self::assertCount(2, $bookmarks);
+		self::assertSame('Movement 1: Allegro', $bookmarks[0]->name);
+		self::assertSame(1, $bookmarks[0]->pageNum);
+		self::assertSame(1, $bookmarks[0]->endPage);
+
+		self::assertSame('Movement 2: Adagio', $bookmarks[1]->name);
+		self::assertSame(2, $bookmarks[1]->pageNum);
+		self::assertSame(3, $bookmarks[1]->endPage);
 	}
 
 	private static function minimalPdf(): string {

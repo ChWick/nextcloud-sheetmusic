@@ -481,6 +481,12 @@ class ApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/setlists/{id}/items/{itemId}')]
+	public function updateSetlistItem(int $id, int $itemId, ?int $libraryId = null, ?int $bookmarkId = null): DataResponse {
+		return $this->setlistController->updateItem($id, $itemId, $libraryId, $bookmarkId);
+	}
+
+	#[NoAdminRequired]
 	#[ApiRoute(verb: 'DELETE', url: '/api/setlists/{id}/items/{itemId}')]
 	public function removeSetlistItem(int $id, int $itemId, ?int $libraryId = null): DataResponse {
 		return $this->setlistController->removeItem($id, $itemId, $libraryId);

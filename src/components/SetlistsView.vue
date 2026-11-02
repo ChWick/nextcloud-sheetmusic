@@ -26,9 +26,11 @@
 
         <SetlistItemsTable
           :items="selectedSetlistItems"
+          :available-songs="songs"
           :is-loading="isLoadingItems"
           @move="moveItem"
           @open-song="openItemSong"
+          @update-bookmark="handleUpdateItemBookmark"
           @remove="removeItem"
           @add-item="openAddItemDialog" />
       </template>
@@ -113,9 +115,16 @@ const {
   renameSetlist,
   deleteSetlist,
   addItem,
+  updateItemBookmark,
   removeItem,
   moveItem,
 } = useSetlists(() => props.selectedLibrary)
+
+function handleUpdateItemBookmark(item: SetlistItem, bookmarkId: number | null) {
+  if (item.id) {
+    updateItemBookmark(item.id, bookmarkId)
+  }
+}
 
 // Create Dialog
 const isCreateDialogOpen = ref(false)

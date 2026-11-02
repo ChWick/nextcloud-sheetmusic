@@ -10,7 +10,6 @@ declare(strict_types=1);
 namespace Sync\MobileSheets;
 
 use OCA\SheetMusic\Db\InternalEntity;
-use OCA\SheetMusic\Db\InternalSetlistItem;
 use OCA\SheetMusic\Db\InternalSong;
 use OCA\SheetMusic\Db\InternalSongBookmark;
 use OCA\SheetMusic\Service\SetlistService;

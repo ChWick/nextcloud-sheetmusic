@@ -52,6 +52,20 @@ export async function addSetlistItem(
 	return response.data?.ocs?.data
 }
 
+export async function updateSetlistItem(
+	libraryId: number,
+	setlistId: number,
+	itemId: number,
+	data: { bookmarkId?: number | null },
+): Promise<SetlistItem> {
+	const url = generateOcsUrl('/apps/sheetmusic/api/setlists/' + setlistId + '/items/' + itemId)
+	const response = await axios.post(url, {
+		libraryId,
+		...data,
+	})
+	return response.data?.ocs?.data
+}
+
 export async function removeSetlistItem(
 	libraryId: number,
 	setlistId: number,

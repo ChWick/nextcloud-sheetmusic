@@ -8,6 +8,7 @@ import {
   updateSetlist as apiUpdateSetlist,
   deleteSetlist as apiDeleteSetlist,
   addSetlistItem as apiAddSetlistItem,
+  updateSetlistItem as apiUpdateSetlistItem,
   removeSetlistItem as apiRemoveSetlistItem,
   reorderSetlistItems as apiReorderSetlistItems,
 } from '../api/setlists'
@@ -127,6 +128,21 @@ export function useSetlists(getLibraryId: () => number) {
     }
   }
 
+  async function updateItemBookmark(itemId: number, bookmarkId: number | null): Promise<void> {
+    const libraryId = getLibraryId()
+    if (!selectedSetlist.value) return
+    try {
+      const updated = await apiUpdateSetlistItem(libraryId, selectedSetlist.value.id, itemId, { bookmarkId })
+      const index = selectedSetlistItems.value.findIndex(it => it.id === itemId)
+      if (index !== -1 && updated) {
+        selectedSetlistItems.value.splice(index, 1, updated)
+      }
+    } catch (err: unknown) {
+      errorMessage.value = err instanceof Error ? err.message : t('sheetmusic', 'Could not update bookmark')
+      await loadCurrentSetlistItems()
+    }
+  }
+
   async function removeItem(item: SetlistItem): Promise<void> {
     const libraryId = getLibraryId()
     if (!selectedSetlist.value || !item.id) return
@@ -179,6 +195,7 @@ export function useSetlists(getLibraryId: () => number) {
     renameSetlist,
     deleteSetlist,
     addItem,
+    updateItemBookmark,
     removeItem,
     moveItem,
   }

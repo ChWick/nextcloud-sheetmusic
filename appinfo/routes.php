@@ -250,6 +250,11 @@ return [
 			'verb' => 'POST',
 		],
 		[
+			'name' => 'Api#updateSetlistItem',
+			'url' => '/api/setlists/{id}/items/{itemId}',
+			'verb' => 'POST',
+		],
+		[
 			'name' => 'Api#removeSetlistItem',
 			'url' => '/api/setlists/{id}/items/{itemId}',
 			'verb' => 'DELETE',

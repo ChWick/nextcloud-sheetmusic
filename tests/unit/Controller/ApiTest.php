@@ -625,6 +625,19 @@ final class ApiTest extends TestCase {
 		self::assertEquals(Http::STATUS_OK, $getRes->getStatus());
 		self::assertCount(1, $getRes->getData()['items']);
 
+		// 4b. Create bookmark and update item inline
+		$bm = $this->bookmarkMapper->insert(new \OCA\SheetMusic\Db\InternalSongBookmark(
+			id: null,
+			songId: (int)$song->id,
+			name: 'Movement I',
+			pageNum: 1,
+		));
+		$updateItemReq = new FakeRequest(params: ['libraryId' => (int)$lib->id, 'bookmarkId' => (int)$bm->id]);
+		$controller = $this->createController(request: $updateItemReq);
+		$updateItemRes = $controller->updateSetlistItem($setlistId, $itemId);
+		self::assertEquals(Http::STATUS_OK, $updateItemRes->getStatus());
+		self::assertSame((int)$bm->id, $updateItemRes->getData()->bookmarkId);
+
 		// 5. Remove item
 		$removeReq = new FakeRequest(params: ['libraryId' => (int)$lib->id]);
 		$controller = $this->createController(request: $removeReq);
