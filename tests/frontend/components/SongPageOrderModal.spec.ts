@@ -20,6 +20,19 @@ vi.mock('@nextcloud/dialogs', () => ({
 	showError: vi.fn(),
 }))
 
+vi.mock('../../../src/components/song-pdf/usePageOrderThumbnails', () => ({
+	usePageOrderThumbnails: vi.fn(() => ({
+		thumbnails: {
+			1: 'thumb-data-1',
+			2: 'thumb-data-2',
+			3: 'thumb-data-3',
+			4: 'thumb-data-4',
+		},
+		isLoading: false,
+		loadAllThumbnails: vi.fn(),
+	})),
+}))
+
 describe('SongPageOrderModal.vue', () => {
 	const sampleFile: SongFile = {
 		id: 10,
@@ -78,7 +91,7 @@ describe('SongPageOrderModal.vue', () => {
 		expect(input.element.value).toBe('4, 3, 2, 1')
 	})
 
-	it('appends page number when clicking palette chip', async () => {
+	it('appends page number when clicking Add to Order on page card', async () => {
 		const wrapper = mount(SongPageOrderModal, {
 			props: {
 				open: true,
@@ -90,10 +103,9 @@ describe('SongPageOrderModal.vue', () => {
 				libraryId: 2,
 			},
 		})
-		const buttons = wrapper.findAll('button')
-		const page3Btn = buttons.find((b) => b.text().includes('+ Page 3'))
-		expect(page3Btn).toBeDefined()
-		await page3Btn!.trigger('click')
+		const addPage3Btn = wrapper.find('button[aria-label="Add page 3 to order"]')
+		expect(addPage3Btn.exists()).toBe(true)
+		await addPage3Btn.trigger('click')
 
 		const input = wrapper.find('input')
 		expect(input.element.value).toBe('1-3')
@@ -118,6 +130,26 @@ describe('SongPageOrderModal.vue', () => {
 
 		const input = wrapper.find('input')
 		expect(input.element.value).toBe('1, 3')
+	})
+
+	it('adjusts preview size with zoom controls', async () => {
+		const wrapper = mount(SongPageOrderModal, {
+			props: {
+				open: true,
+				file: sampleFile,
+				songId: 1,
+				libraryId: 2,
+			},
+		})
+
+		const zoomInBtn = wrapper.find('button[aria-label="Larger preview"]')
+		expect(zoomInBtn.exists()).toBe(true)
+		await zoomInBtn.trigger('click')
+		expect(wrapper.text()).toContain('280px')
+
+		const zoomOutBtn = wrapper.find('button[aria-label="Smaller preview"]')
+		await zoomOutBtn.trigger('click')
+		expect(wrapper.text()).toContain('240px')
 	})
 
 	it('calls apiPost and emits saved event upon saving valid page order', async () => {
