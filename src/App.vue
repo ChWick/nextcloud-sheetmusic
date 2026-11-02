@@ -39,17 +39,19 @@ import Metronome from 'vue-material-design-icons/Metronome.vue'
 import FileDocumentOutline from 'vue-material-design-icons/FileDocumentOutline.vue'
 import GuitarAcoustic from 'vue-material-design-icons/GuitarAcoustic.vue'
 import ShieldCheck from 'vue-material-design-icons/ShieldCheck.vue'
+import Wrench from 'vue-material-design-icons/Wrench.vue'
 import TrashCanOutline from 'vue-material-design-icons/TrashCanOutline.vue'
 import SongsView from './components/SongsView.vue'
 import SetlistsView from './components/SetlistsView.vue'
 import IntegrityView from './components/IntegrityView.vue'
+import ToolsView from './components/ToolsView.vue'
 import EntitiesView from './components/EntitiesView.vue'
 import TrashView from './components/TrashView.vue'
 import LibrarySettingsDialog from './components/LibrarySettingsDialog.vue'
 
-/** Views of a library: the song view, one view per song filter, and integrity audit. */
-type ViewName = 'songs' | 'new-song' | 'setlists' | 'integrity' | 'trash' | EntityType
-const VIEW_NAMES: ViewName[] = ['songs', 'new-song', 'setlists', 'composers', 'artists', 'books', 'collections', 'genres', 'keys', 'customgroups', 'years', 'signatures', 'sourcetypes', 'instruments', 'integrity', 'trash']
+/** Views of a library: the song view, one view per song filter, integrity audit, and tools. */
+type ViewName = 'songs' | 'new-song' | 'setlists' | 'integrity' | 'tools' | 'trash' | EntityType
+const VIEW_NAMES: ViewName[] = ['songs', 'new-song', 'setlists', 'composers', 'artists', 'books', 'collections', 'genres', 'keys', 'customgroups', 'years', 'signatures', 'sourcetypes', 'instruments', 'integrity', 'tools', 'trash']
 
 interface ImportProgress {
   status: 'running' | 'completed' | 'error'
@@ -481,6 +483,11 @@ async function deleteLibrary() {
               <ShieldCheck :size="20" />
             </template>
           </NcAppNavigationItem>
+          <NcAppNavigationItem :name="t('sheetmusic', 'Tools')" :active="selectedView === 'tools'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'tools' } }">
+            <template #icon>
+              <Wrench :size="20" />
+            </template>
+          </NcAppNavigationItem>
           <NcAppNavigationItem :name="t('sheetmusic', 'Trash')" :active="selectedView === 'trash'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'trash' } }">
             <template #icon>
               <TrashCanOutline :size="20" />
@@ -537,6 +544,7 @@ async function deleteLibrary() {
                      :standalone-create="selectedView === 'new-song'" />
           <SetlistsView v-else-if="selectedView === 'setlists'" :selected-library="selectedLibrary" />
           <IntegrityView v-else-if="selectedView === 'integrity'" :selectedLibrary="selectedLibrary" />
+          <ToolsView v-else-if="selectedView === 'tools'" :selected-library="selectedLibrary" />
           <TrashView v-else-if="selectedView === 'trash'" :selected-library="selectedLibrary" />
           <EntitiesView v-else
                         :key="selectedView"

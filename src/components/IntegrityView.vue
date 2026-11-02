@@ -145,6 +145,7 @@ const groupedIssues = computed(() => {
 			else if (type === 'duplicate_client_id') title = t('sheetmusic', 'Duplicate Client IDs')
 			else if (type === 'orphan_song_attribute') title = t('sheetmusic', 'Orphan Song Attributes')
 			else if (type === 'orphan_misc_data') title = t('sheetmusic', 'Orphan Sync Data')
+			else if (type === 'stuck_page_order') title = t('sheetmusic', 'Page Order Mismatches (Stuck at 1-1)')
 
 			groups[type] = {
 				type,
@@ -431,6 +432,14 @@ function openSong(songId: number) {
 						<RefreshIcon :size="20" />
 					</template>
 					{{ t('sheetmusic', 'Re-audit Library') }}
+				</NcButton>
+				<NcButton
+					variant="secondary"
+					@click="router.push({ name: 'LibraryView', params: { library: selectedLibrary, view: 'tools' }, query: { tool: 'page-order-reset' } })">
+					<template #icon>
+						<WrenchIcon :size="20" />
+					</template>
+					{{ t('sheetmusic', 'Page Order Tool') }}
 				</NcButton>
 			</ViewHeader>
 
