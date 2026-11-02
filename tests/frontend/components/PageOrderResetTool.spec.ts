@@ -74,7 +74,7 @@ describe('PageOrderResetTool', () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
 		vi.mocked(apiGet).mockResolvedValue({
-			data: { ocs: { data: mockAuditData } },
+			data: { ocs: { data: structuredClone(mockAuditData) } },
 		} as any)
 		vi.mocked(apiPost).mockResolvedValue({
 			data: { ocs: { data: { success: true, resetCount: 1 } } },
@@ -140,6 +140,50 @@ describe('PageOrderResetTool', () => {
 				mode: 'stuck',
 			}),
 		)
+
+		await vi.waitFor(() => {
+			expect(wrapper.find('[data-test="page-order-row-1"]').exists()).toBe(false)
+		})
+	})
+
+	it('simultaneously removes single reset item from the list when reset is clicked', async () => {
+		const wrapper = mount(PageOrderResetTool, {
+			props: { selectedLibrary: 1 },
+			global: {
+				stubs: {
+					NcButton: {
+						template: '<button :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
+						props: ['disabled'],
+					},
+					NcLoadingIcon: true,
+					NcDialog: true,
+					NcProgressBar: true,
+					NcCheckboxRadioSwitch: true,
+					NcTextField: true,
+				},
+			},
+		})
+
+		await vi.waitFor(() => {
+			expect(apiGet).toHaveBeenCalled()
+		})
+
+		expect(wrapper.find('[data-test="page-order-row-1"]').exists()).toBe(true)
+
+		const resetBtn = wrapper.find('[data-test="reset-row-btn-1"]')
+		await resetBtn.trigger('click')
+
+		expect(apiPost).toHaveBeenCalledWith(
+			'/api/libraries/1/tools/reset-page-orders',
+			expect.objectContaining({
+				fileIds: [1],
+				mode: 'stuck',
+			}),
+		)
+
+		await vi.waitFor(() => {
+			expect(wrapper.find('[data-test="page-order-row-1"]').exists()).toBe(false)
+		})
 	})
 
 	it('opens edit page order modal when edit event is triggered', async () => {

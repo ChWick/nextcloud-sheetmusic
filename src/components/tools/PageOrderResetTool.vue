@@ -42,6 +42,8 @@ const selectedIds = ref<Set<number>>(new Set())
 
 const editingItem = ref<PageOrderAuditItem | null>(null)
 const isEditModalOpen = ref(false)
+const fixedIds = ref<Set<number>>(new Set())
+let hasInitialLoaded = false
 
 const editingFile = computed<SongFile | null>(() => {
 	if (!editingItem.value) return null
@@ -58,10 +60,84 @@ function openEditItem(item: PageOrderAuditItem) {
 	isEditModalOpen.value = true
 }
 
-async function onEditSaved() {
+function removeFixedItems(ids: number[]) {
+	if (!ids || ids.length === 0) return
+	const idSet = new Set(ids)
+	for (const id of ids) {
+		fixedIds.value.add(id)
+	}
+
+	let removedStuck = 0
+	let removedCustom = 0
+	let removedNormal = 0
+
+	auditResult.value.items = auditResult.value.items.filter((item) => {
+		if (idSet.has(item.id)) {
+			if (item.isStuckOneToOne) {
+				removedStuck++
+			} else if (item.isCustom) {
+				removedCustom++
+			} else {
+				removedNormal++
+			}
+			return false
+		}
+		return true
+	})
+
+	auditResult.value.stuckCount = Math.max(0, auditResult.value.stuckCount - removedStuck)
+	auditResult.value.customCount = Math.max(0, auditResult.value.customCount - removedCustom)
+	auditResult.value.normalCount = Math.max(0, auditResult.value.normalCount - removedNormal)
+	auditResult.value.totalFiles = Math.max(0, auditResult.value.totalFiles - (removedStuck + removedCustom + removedNormal))
+
+	const nextSelected = new Set(selectedIds.value)
+	for (const id of ids) {
+		nextSelected.delete(id)
+	}
+	selectedIds.value = nextSelected
+}
+
+function onEditSaved(_libraryData?: unknown, updatedFile?: SongFile) {
+	const item = editingItem.value
 	isEditModalOpen.value = false
 	editingItem.value = null
-	await loadAudit()
+
+	if (!item) return
+
+	const newOrder = updatedFile?.pageOrder ?? item.pageOrder
+	const isNowStuck = (newOrder === '1-1' || newOrder === '1') && item.actualPageCount > 1
+	const isNowCustom = newOrder !== item.suggestedPageOrder
+
+	// If it was reset to suggested page order, remove it as fixed
+	if (newOrder === item.suggestedPageOrder) {
+		removeFixedItems([item.id])
+		return
+	}
+
+	// If it was stuck and is no longer stuck:
+	if (item.isStuckOneToOne && !isNowStuck && filterMode.value === 'stuck') {
+		removeFixedItems([item.id])
+		return
+	}
+
+	// Update item in place
+	item.pageOrder = newOrder
+	if (item.isStuckOneToOne !== isNowStuck) {
+		if (item.isStuckOneToOne && !isNowStuck) {
+			auditResult.value.stuckCount = Math.max(0, auditResult.value.stuckCount - 1)
+		} else if (!item.isStuckOneToOne && isNowStuck) {
+			auditResult.value.stuckCount++
+		}
+		item.isStuckOneToOne = isNowStuck
+	}
+	if (item.isCustom !== isNowCustom) {
+		if (item.isCustom && !isNowCustom) {
+			auditResult.value.customCount = Math.max(0, auditResult.value.customCount - 1)
+		} else if (!item.isCustom && isNowCustom) {
+			auditResult.value.customCount++
+		}
+		item.isCustom = isNowCustom
+	}
 }
 
 interface ProgressState {
@@ -112,10 +188,16 @@ async function loadAudit() {
 		const res = await apiGet(`/api/libraries/${props.selectedLibrary}/tools/page-order-audit` as any)
 		const data = res.data?.ocs?.data as PageOrderAuditResult
 		if (data) {
+			if (fixedIds.value.size > 0) {
+				data.items = data.items.filter(item => !fixedIds.value.has(item.id))
+			}
 			auditResult.value = data
-			// If there are no stuck files, default to 'all' so user sees files
-			if (data.stuckCount === 0 && filterMode.value === 'stuck') {
-				filterMode.value = 'all'
+			// Only on the initial scan of the library, if there are no stuck files, default to 'all'
+			if (!hasInitialLoaded) {
+				hasInitialLoaded = true
+				if (data.stuckCount === 0 && filterMode.value === 'stuck') {
+					filterMode.value = 'all'
+				}
 			}
 		}
 	} catch (error) {
@@ -129,6 +211,10 @@ async function loadAudit() {
 const filteredItems = computed(() => {
 	const query = searchQuery.value.trim().toLowerCase()
 	return auditResult.value.items.filter((item) => {
+		if (fixedIds.value.has(item.id)) {
+			return false
+		}
+
 		// Filter by mode
 		if (filterMode.value === 'stuck' && !item.isStuckOneToOne) {
 			return false
@@ -186,7 +272,7 @@ async function resetSingleItem(item: PageOrderAuditItem) {
 			title: item.songTitle,
 			order: item.suggestedPageOrder,
 		}))
-		await loadAudit()
+		removeFixedItems([item.id])
 	} catch (error) {
 		console.error('Failed to reset item page order:', error)
 		showError(describeRequestFailure(error, t('sheetmusic', 'Failed to reset page ordering.')))
@@ -198,6 +284,9 @@ async function resetSingleItem(item: PageOrderAuditItem) {
 async function resetBatch(fileIds: number[] | null, mode: PageOrderFilterMode = 'stuck') {
 	if (props.selectedLibrary < 0) return
 
+	const targetIds = fileIds ?? filteredItems.value.map(i => i.id)
+	if (targetIds.length === 0) return
+
 	isBatchResetting.value = true
 	const progressId = 'tool-page-order-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9)
 	startProgressPolling(progressId)
@@ -206,19 +295,16 @@ async function resetBatch(fileIds: number[] | null, mode: PageOrderFilterMode = 
 		const payload: Record<string, unknown> = {
 			progressId,
 			mode,
-		}
-		if (fileIds !== null && fileIds.length > 0) {
-			payload.fileIds = fileIds
+			fileIds: targetIds,
 		}
 
 		const res = await apiPost(`/api/libraries/${props.selectedLibrary}/tools/reset-page-orders` as any, payload as any)
 		stopProgressPolling()
 
 		const result = res.data?.ocs?.data
-		const count = result?.resetCount ?? (fileIds ? fileIds.length : 0)
+		const count = result?.resetCount ?? targetIds.length
 		showSuccess(t('sheetmusic', 'Successfully reset page ordering for {count} file(s).', { count }))
-		selectedIds.value = new Set()
-		await loadAudit()
+		removeFixedItems(targetIds)
 	} catch (error) {
 		stopProgressPolling()
 		console.error('Failed to batch reset page ordering:', error)
@@ -254,6 +340,8 @@ function openSong(songId: number) {
 watch(() => props.selectedLibrary, (newLib) => {
 	if (newLib >= 0) {
 		selectedIds.value = new Set()
+		fixedIds.value = new Set()
+		hasInitialLoaded = false
 		loadAudit()
 	}
 }, { immediate: true })
