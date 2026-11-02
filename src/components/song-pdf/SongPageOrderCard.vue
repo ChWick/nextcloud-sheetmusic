@@ -10,6 +10,7 @@ import MagnifyPlus from 'vue-material-design-icons/MagnifyPlus.vue'
 import Plus from 'vue-material-design-icons/Plus.vue'
 import DeleteOutline from 'vue-material-design-icons/DeleteOutline.vue'
 import DragVertical from 'vue-material-design-icons/DragVertical.vue'
+import ContentCopy from 'vue-material-design-icons/ContentCopy.vue'
 
 const props = withDefaults(
 	defineProps<{
@@ -138,32 +139,30 @@ const cardStyle = computed(() => ({
 			<template v-if="isSequenceMode && showRemove">
 				<button
 					type="button"
-					:class="$style.removeBtn"
+					:class="[$style.actionBtn, $style.removeBtn]"
 					:disabled="disabled"
 					:title="t('sheetmusic', 'Remove position #{pos} from page order', { pos: (sequenceIndex ?? 0) + 1 })"
 					:aria-label="t('sheetmusic', 'Remove position #{pos} from page order', { pos: (sequenceIndex ?? 0) + 1 })"
 					data-test="card-remove-btn"
 					@click="emit('remove', sequenceIndex ?? 0)">
-					<DeleteOutline :size="14" />
-					<span>{{ t('sheetmusic', 'Remove') }}</span>
+					<DeleteOutline :size="16" />
 				</button>
 				<button
 					type="button"
-					:class="$style.addBtn"
+					:class="[$style.actionBtn, $style.copyBtn]"
 					:disabled="disabled"
 					:title="t('sheetmusic', 'Duplicate page {p}', { p: pageNum })"
 					:aria-label="t('sheetmusic', 'Duplicate page {p}', { p: pageNum })"
 					data-test="card-add-btn"
 					@click="emit('append', pageNum)">
-					<Plus :size="14" />
-					<span>{{ t('sheetmusic', 'Copy') }}</span>
+					<ContentCopy :size="15" />
 				</button>
 			</template>
 
 			<template v-else>
 				<button
 					type="button"
-					:class="$style.addBtn"
+					:class="[$style.actionBtn, $style.addBtn]"
 					:disabled="disabled"
 					:title="t('sheetmusic', 'Add page {p} to order', { p: pageNum })"
 					:aria-label="t('sheetmusic', 'Add page {p} to order', { p: pageNum })"
@@ -390,23 +389,22 @@ const cardStyle = computed(() => ({
 .cardFooter {
 	display: flex;
 	align-items: center;
-	gap: 4px;
+	gap: 6px;
 	padding: 4px 6px;
 	border-top: 1px solid var(--color-border);
 	background-color: var(--color-background-hover);
 	border-bottom-left-radius: inherit;
 	border-bottom-right-radius: inherit;
-	min-height: 26px;
+	min-height: 28px;
 }
 
-.addBtn,
-.removeBtn {
+.actionBtn {
 	flex: 1;
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	gap: 2px;
-	padding: 4px 4px;
+	gap: 4px;
+	padding: 4px 6px;
 	border-radius: var(--border-radius, 4px);
 	border: 1px solid var(--color-border);
 	font-size: 0.72rem;
@@ -416,12 +414,14 @@ const cardStyle = computed(() => ({
 	white-space: nowrap;
 }
 
-.addBtn {
+.addBtn,
+.copyBtn {
 	background-color: var(--color-main-background, #fff);
 	color: var(--color-primary-element);
 }
 
-.addBtn:hover:not(:disabled) {
+.addBtn:hover:not(:disabled),
+.copyBtn:hover:not(:disabled) {
 	background-color: var(--color-primary-element);
 	border-color: var(--color-primary-element);
 	color: var(--color-primary-element-text, #fff);

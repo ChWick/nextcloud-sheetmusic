@@ -53,6 +53,30 @@ describe('SongPageOrderCard.vue', () => {
 		expect(wrapper.emitted('remove')).toEqual([[2]])
 	})
 
+	it('renders icon-only remove and copy buttons without text in sequence mode', async () => {
+		const wrapper = mount(SongPageOrderCard, {
+			props: {
+				pageNum: 2,
+				sequenceIndex: 0,
+				sequenceTotal: 1,
+				showRemove: true,
+			},
+		})
+
+		const removeBtn = wrapper.find('[data-test="card-remove-btn"]')
+		const copyBtn = wrapper.find('[data-test="card-add-btn"]')
+		expect(removeBtn.exists()).toBe(true)
+		expect(copyBtn.exists()).toBe(true)
+
+		// No text inside the buttons (icon-only)
+		expect(removeBtn.text()).toBe('')
+		expect(copyBtn.text()).toBe('')
+
+		// Copy button emits append for duplicate
+		await copyBtn.trigger('click')
+		expect(wrapper.emitted('append')).toEqual([[2]])
+	})
+
 	it('renders drag handle and draggable attribute when draggable is true', () => {
 		const wrapper = mount(SongPageOrderCard, {
 			props: {
