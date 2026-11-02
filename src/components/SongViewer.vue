@@ -38,6 +38,8 @@ import DeleteSongDialog from './DeleteSongDialog.vue'
 import FilePreviewer from './FilePreviewer.vue'
 import SongPdfVersionsModal from './song-pdf/SongPdfVersionsModal.vue'
 import { useFileVersions } from './song-pdf/useFileVersions'
+import SongViewerMetadata from './song-viewer/SongViewerMetadata.vue'
+import SongViewerBookmarksBar from './song-viewer/SongViewerBookmarksBar.vue'
 
 const props = withDefaults(
 	defineProps<{
@@ -132,13 +134,6 @@ const activeBookmarkPage = ref<number | undefined>(initialPage)
 
 function jumpToBookmark(pageNum: number) {
 	activeBookmarkPage.value = pageNum
-}
-
-function formatBookmarkLabel(bm: Bookmark): string {
-	if (bm.endPage && bm.endPage > bm.pageNum) {
-		return `${bm.name} (pp. ${bm.pageNum}–${bm.endPage})`
-	}
-	return `${bm.name} (p. ${bm.pageNum})`
 }
 
 watch(() => props.song?.id, () => {
@@ -297,174 +292,43 @@ defineExpose({
 				</div>
 			</div>
 
-			<div v-if="!isEditing && (songComposers.length > 0 || songBooks.length > 0 || songCollections.length > 0 || songArtists.length > 0 || songGenres.length > 0 || songKeys.length > 0 || songCustomGroups.length > 0 || songYears.length > 0 || songSignatures.length > 0 || songSourceTypes.length > 0 || song.stars || song.difficulty || song.duration || song.keywords || song.custom || song.custom2)" :class="$style.metadata">
-				<div v-if="songComposers.length > 0" :class="$style.metaItem">
-					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Composer:') }}</span>
-					<span>{{ songComposers.map((c) => c.name).join(', ') }}</span>
-				</div>
-				<div v-if="songBooks.length > 0" :class="$style.metaItem">
-					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Book:') }}</span>
-					<span>{{ songBooks.map((b) => b.title).join(', ') }}</span>
-				</div>
-				<div v-if="songCollections.length > 0" :class="$style.metaItem">
-					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Collection:') }}</span>
-					<span>{{ songCollections.map((c) => c.name).join(', ') }}</span>
-				</div>
-				<div v-if="songArtists.length > 0" :class="$style.metaItem">
-					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Artist:') }}</span>
-					<span>{{ songArtists.map((a) => a.name).join(', ') }}</span>
-				</div>
-				<div v-if="songGenres.length > 0" :class="$style.metaItem">
-					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Genre:') }}</span>
-					<span>{{ songGenres.map((g) => g.name).join(', ') }}</span>
-				</div>
-				<div v-if="songKeys.length > 0" :class="$style.metaItem">
-					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Key:') }}</span>
-					<span>{{ songKeys.map((k) => k.name).join(', ') }}</span>
-				</div>
-				<div v-if="songCustomGroups.length > 0" :class="$style.metaItem">
-					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Custom Group:') }}</span>
-					<span>{{ songCustomGroups.map((cg) => cg.name).join(', ') }}</span>
-				</div>
-				<div v-if="songYears.length > 0" :class="$style.metaItem">
-					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Year:') }}</span>
-					<span>{{ songYears.map((y) => y.name).join(', ') }}</span>
-				</div>
-				<div v-if="songSignatures.length > 0" :class="$style.metaItem">
-					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Time Signature:') }}</span>
-					<span>{{ songSignatures.map((s) => s.name).join(', ') }}</span>
-				</div>
-				<div v-if="songSourceTypes.length > 0" :class="$style.metaItem">
-					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Source Type:') }}</span>
-					<span>{{ songSourceTypes.map((st) => st.name).join(', ') }}</span>
-				</div>
-				<div v-if="songBookmarks.length > 0" :class="$style.metaItem">
-					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Bookmarks:') }}</span>
-					<div :class="$style.metaLinkList">
-						<button
-							v-for="(bm, idx) in songBookmarks"
-							:key="bm.id ?? `meta-bm-${idx}`"
-							type="button"
-							:class="$style.metaLinkBtn"
-							@click="jumpToBookmark(bm.pageNum)">
-							{{ formatBookmarkLabel(bm) }}
-						</button>
-					</div>
-				</div>
-				<div v-if="songAudioFiles.length > 0" :class="$style.metaItem">
-					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Audio Files:') }}</span>
-					<span>{{ songAudioFiles.map((a) => a.title || a.file).join(', ') }}</span>
-				</div>
-				<div v-if="song.stars" :class="$style.metaItem">
-					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Rating:') }}</span>
-					<span>{{ formatStars(song.stars) }}</span>
-				</div>
-				<div v-if="song.difficulty" :class="$style.metaItem">
-					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Difficulty:') }}</span>
-					<span>{{ formatDifficulty(song.difficulty) }}</span>
-				</div>
-				<div v-if="song.duration" :class="$style.metaItem">
-					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Duration:') }}</span>
-					<span>{{ formatDuration(song.duration) }}</span>
-				</div>
-				<div v-if="song.keywords" :class="$style.metaItem">
-					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Keywords:') }}</span>
-					<span>{{ song.keywords }}</span>
-				</div>
-				<div v-if="song.custom" :class="$style.metaItem">
-					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Custom:') }}</span>
-					<span>{{ song.custom }}</span>
-				</div>
-				<div v-if="song.custom2" :class="$style.metaItem">
-					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Custom 2:') }}</span>
-					<span>{{ song.custom2 }}</span>
-				</div>
-			</div>
+			<SongViewerMetadata
+				v-if="!isEditing"
+				:song="song"
+				:composers="songComposers"
+				:books="songBooks"
+				:collections="songCollections"
+				:artists="songArtists"
+				:genres="songGenres"
+				:keys="songKeys"
+				:custom-groups="songCustomGroups"
+				:years="songYears"
+				:signatures="songSignatures"
+				:source-types="songSourceTypes"
+				:instruments="songInstruments"
+				:bookmarks="songBookmarks"
+				:audio-files="songAudioFiles"
+				@jump-to-bookmark="jumpToBookmark" />
 		</header>
 
 		<!-- Metadata bar when header is integrated into top bar -->
-		<div v-if="song && hideHeader && !isEditing && (songComposers.length > 0 || songBooks.length > 0 || songCollections.length > 0 || songArtists.length > 0 || songGenres.length > 0 || songKeys.length > 0 || songCustomGroups.length > 0 || songYears.length > 0 || songSignatures.length > 0 || songSourceTypes.length > 0 || song.stars || song.difficulty || song.duration || song.keywords || song.custom || song.custom2)" :class="$style.metadata">
-			<div v-if="songComposers.length > 0" :class="$style.metaItem">
-				<span :class="$style.metaLabel">{{ t('sheetmusic', 'Composer:') }}</span>
-				<span>{{ songComposers.map((c) => c.name).join(', ') }}</span>
-			</div>
-			<div v-if="songBooks.length > 0" :class="$style.metaItem">
-				<span :class="$style.metaLabel">{{ t('sheetmusic', 'Book:') }}</span>
-				<span>{{ songBooks.map((b) => b.title).join(', ') }}</span>
-			</div>
-			<div v-if="songCollections.length > 0" :class="$style.metaItem">
-				<span :class="$style.metaLabel">{{ t('sheetmusic', 'Collection:') }}</span>
-				<span>{{ songCollections.map((c) => c.name).join(', ') }}</span>
-			</div>
-			<div v-if="songArtists.length > 0" :class="$style.metaItem">
-				<span :class="$style.metaLabel">{{ t('sheetmusic', 'Artist:') }}</span>
-				<span>{{ songArtists.map((a) => a.name).join(', ') }}</span>
-			</div>
-			<div v-if="songGenres.length > 0" :class="$style.metaItem">
-				<span :class="$style.metaLabel">{{ t('sheetmusic', 'Genre:') }}</span>
-				<span>{{ songGenres.map((g) => g.name).join(', ') }}</span>
-			</div>
-			<div v-if="songKeys.length > 0" :class="$style.metaItem">
-				<span :class="$style.metaLabel">{{ t('sheetmusic', 'Key:') }}</span>
-				<span>{{ songKeys.map((k) => k.name).join(', ') }}</span>
-			</div>
-			<div v-if="songCustomGroups.length > 0" :class="$style.metaItem">
-				<span :class="$style.metaLabel">{{ t('sheetmusic', 'Custom Group:') }}</span>
-				<span>{{ songCustomGroups.map((cg) => cg.name).join(', ') }}</span>
-			</div>
-			<div v-if="songYears.length > 0" :class="$style.metaItem">
-				<span :class="$style.metaLabel">{{ t('sheetmusic', 'Year:') }}</span>
-				<span>{{ songYears.map((y) => y.name).join(', ') }}</span>
-			</div>
-			<div v-if="songSignatures.length > 0" :class="$style.metaItem">
-				<span :class="$style.metaLabel">{{ t('sheetmusic', 'Time Signature:') }}</span>
-				<span>{{ songSignatures.map((s) => s.name).join(', ') }}</span>
-			</div>
-			<div v-if="songSourceTypes.length > 0" :class="$style.metaItem">
-				<span :class="$style.metaLabel">{{ t('sheetmusic', 'Source Type:') }}</span>
-				<span>{{ songSourceTypes.map((st) => st.name).join(', ') }}</span>
-			</div>
-			<div v-if="songInstruments.length > 0" :class="$style.metaItem">
-				<span :class="$style.metaLabel">{{ t('sheetmusic', 'Instrument:') }}</span>
-				<span>{{ songInstruments.map((i) => i.name).join(', ') }}</span>
-			</div>
-			<div v-if="song.opus" :class="$style.metaItem">
-				<span :class="$style.metaLabel">{{ t('sheetmusic', 'Opus:') }}</span>
-				<span>{{ song.opus }}</span>
-			</div>
-			<div v-if="song.catalogNumber" :class="$style.metaItem">
-				<span :class="$style.metaLabel">{{ t('sheetmusic', 'Catalog No.:') }}</span>
-				<span>{{ song.catalogNumber }}</span>
-			</div>
-			<div v-if="song.songNumber" :class="$style.metaItem">
-				<span :class="$style.metaLabel">{{ t('sheetmusic', 'Song No.:') }}</span>
-				<span>{{ song.songNumber }}</span>
-			</div>
-			<div v-if="song.stars" :class="$style.metaItem">
-				<span :class="$style.metaLabel">{{ t('sheetmusic', 'Rating:') }}</span>
-				<span>{{ formatStars(song.stars) }}</span>
-			</div>
-			<div v-if="song.difficulty" :class="$style.metaItem">
-				<span :class="$style.metaLabel">{{ t('sheetmusic', 'Difficulty:') }}</span>
-				<span>{{ formatDifficulty(song.difficulty) }}</span>
-			</div>
-			<div v-if="song.duration" :class="$style.metaItem">
-				<span :class="$style.metaLabel">{{ t('sheetmusic', 'Duration:') }}</span>
-				<span>{{ formatDuration(song.duration) }}</span>
-			</div>
-			<div v-if="song.keywords" :class="$style.metaItem">
-				<span :class="$style.metaLabel">{{ t('sheetmusic', 'Keywords:') }}</span>
-				<span>{{ song.keywords }}</span>
-			</div>
-			<div v-if="song.custom" :class="$style.metaItem">
-				<span :class="$style.metaLabel">{{ t('sheetmusic', 'Custom:') }}</span>
-				<span>{{ song.custom }}</span>
-			</div>
-			<div v-if="song.custom2" :class="$style.metaItem">
-				<span :class="$style.metaLabel">{{ t('sheetmusic', 'Custom 2:') }}</span>
-				<span>{{ song.custom2 }}</span>
-			</div>
-		</div>
+		<SongViewerMetadata
+			v-if="song && hideHeader && !isEditing"
+			:song="song"
+			:composers="songComposers"
+			:books="songBooks"
+			:collections="songCollections"
+			:artists="songArtists"
+			:genres="songGenres"
+			:keys="songKeys"
+			:custom-groups="songCustomGroups"
+			:years="songYears"
+			:signatures="songSignatures"
+			:source-types="songSourceTypes"
+			:instruments="songInstruments"
+			:bookmarks="songBookmarks"
+			:audio-files="songAudioFiles"
+			@jump-to-bookmark="jumpToBookmark" />
 
 		<!-- Song Editor View -->
 		<SongEditor
@@ -503,24 +367,10 @@ defineExpose({
 				</NcRadioGroup>
 			</div>
 
-			<div
-				v-if="songBookmarks.length > 0"
-				:class="$style.bookmarksBar"
-				role="region"
-				:aria-label="t('sheetmusic', 'Bookmarks')">
-				<span :class="$style.bookmarksLabel">{{ t('sheetmusic', 'Bookmarks:') }}</span>
-				<div :class="$style.bookmarksList">
-					<button
-						v-for="(bm, idx) in songBookmarks"
-						:key="bm.id ?? `bm-${idx}`"
-						type="button"
-						:class="[$style.bookmarkChip, activeBookmarkPage === bm.pageNum && $style.bookmarkChipActive]"
-						:title="t('sheetmusic', 'Jump to {name}', { name: bm.name })"
-						@click="jumpToBookmark(bm.pageNum)">
-						{{ formatBookmarkLabel(bm) }}
-					</button>
-				</div>
-			</div>
+			<SongViewerBookmarksBar
+				:bookmarks="songBookmarks"
+				:active-bookmark-page="activeBookmarkPage"
+				@jump="jumpToBookmark" />
 
 			<FilePreviewer
 				v-if="selectedFile?.path"

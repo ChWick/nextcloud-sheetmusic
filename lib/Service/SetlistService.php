@@ -35,8 +35,7 @@ class SetlistService {
 	 * @return list<array<string, mixed>>|null
 	 */
 	public function getSetlists(IUser $user, int $libraryId): ?array {
-		$library = $this->libraryMapper->findForUser($user->getUID(), $libraryId);
-		if ($library === null) {
+		if ($this->findUserLibrary($user, $libraryId) === null) {
 			return null;
 		}
 
@@ -70,13 +69,12 @@ class SetlistService {
 	 * @return array<string, mixed>|null
 	 */
 	public function getSetlist(IUser $user, int $libraryId, int $id): ?array {
-		$library = $this->libraryMapper->findForUser($user->getUID(), $libraryId);
-		if ($library === null) {
+		if ($this->findUserLibrary($user, $libraryId) === null) {
 			return null;
 		}
 
-		$setlist = $this->internalEntityMapper->findById($id);
-		if ($setlist === null || $setlist->libraryId !== $libraryId || $setlist->type !== 'setlist' || $setlist->deletedAt !== null) {
+		$setlist = $this->findActiveSetlist($libraryId, $id);
+		if ($setlist === null) {
 			return null;
 		}
 
@@ -96,12 +94,7 @@ class SetlistService {
 
 	public function createSetlist(IUser $user, int $libraryId, string $name): ?InternalEntity {
 		$name = trim($name);
-		if ($name === '') {
-			return null;
-		}
-
-		$library = $this->libraryMapper->findForUser($user->getUID(), $libraryId);
-		if ($library === null) {
+		if ($name === '' || $this->findUserLibrary($user, $libraryId) === null) {
 			return null;
 		}
 
@@ -132,13 +125,12 @@ class SetlistService {
 		?int $sortBy = null,
 		?int $ascending = null,
 	): ?InternalEntity {
-		$library = $this->libraryMapper->findForUser($user->getUID(), $libraryId);
-		if ($library === null) {
+		if ($this->findUserLibrary($user, $libraryId) === null) {
 			return null;
 		}
 
-		$setlist = $this->internalEntityMapper->findById($id);
-		if ($setlist === null || $setlist->libraryId !== $libraryId || $setlist->type !== 'setlist' || $setlist->deletedAt !== null) {
+		$setlist = $this->findActiveSetlist($libraryId, $id);
+		if ($setlist === null) {
 			return null;
 		}
 
@@ -171,8 +163,7 @@ class SetlistService {
 	}
 
 	public function deleteSetlist(IUser $user, int $libraryId, int $id): bool {
-		$library = $this->libraryMapper->findForUser($user->getUID(), $libraryId);
-		if ($library === null) {
+		if ($this->findUserLibrary($user, $libraryId) === null) {
 			return false;
 		}
 
@@ -196,13 +187,12 @@ class SetlistService {
 		?int $bookmarkId = null,
 		?int $position = null,
 	): ?InternalSetlistItem {
-		$library = $this->libraryMapper->findForUser($user->getUID(), $libraryId);
-		if ($library === null) {
+		if ($this->findUserLibrary($user, $libraryId) === null) {
 			return null;
 		}
 
-		$setlist = $this->internalEntityMapper->findById($setlistId);
-		if ($setlist === null || $setlist->libraryId !== $libraryId || $setlist->type !== 'setlist' || $setlist->deletedAt !== null) {
+		$setlist = $this->findActiveSetlist($libraryId, $setlistId);
+		if ($setlist === null) {
 			return null;
 		}
 
@@ -244,8 +234,7 @@ class SetlistService {
 	}
 
 	public function removeItem(IUser $user, int $libraryId, int $setlistId, int $itemId): bool {
-		$library = $this->libraryMapper->findForUser($user->getUID(), $libraryId);
-		if ($library === null) {
+		if ($this->findUserLibrary($user, $libraryId) === null) {
 			return false;
 		}
 
@@ -271,8 +260,7 @@ class SetlistService {
 	 * @param list<int> $itemIds
 	 */
 	public function reorderItems(IUser $user, int $libraryId, int $setlistId, array $itemIds): bool {
-		$library = $this->libraryMapper->findForUser($user->getUID(), $libraryId);
-		if ($library === null) {
+		if ($this->findUserLibrary($user, $libraryId) === null) {
 			return false;
 		}
 
@@ -289,5 +277,17 @@ class SetlistService {
 		$this->libraryMapper->touch($libraryId);
 
 		return true;
+	}
+
+	private function findUserLibrary(IUser $user, int $libraryId): ?\OCA\SheetMusic\Db\InternalLibrary {
+		return $this->libraryMapper->findForUser($user->getUID(), $libraryId);
+	}
+
+	private function findActiveSetlist(int $libraryId, int $setlistId): ?InternalEntity {
+		$setlist = $this->internalEntityMapper->findById($setlistId);
+		if ($setlist === null || $setlist->libraryId !== $libraryId || $setlist->type !== 'setlist' || $setlist->deletedAt !== null) {
+			return null;
+		}
+		return $setlist;
 	}
 }
