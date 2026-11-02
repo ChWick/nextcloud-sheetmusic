@@ -167,7 +167,7 @@ function nextPage() {
 					</td>
 					<td :class="$style.colStatus">
 						<span v-if="item.isStuckOneToOne" :class="[$style.badge, $style.badgeWarning]" data-test="status-stuck">
-							{{ t('sheetmusic', 'Stuck at 1-1') }}
+							{{ t('sheetmusic', '1-1 (>1 Pages)') }}
 						</span>
 						<span v-else-if="item.isCustom" :class="[$style.badge, $style.badgeInfo]" data-test="status-custom">
 							{{ t('sheetmusic', 'Custom') }}

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import RefreshIcon from 'vue-material-design-icons/Refresh.vue'
 import type { PageOrderFilterMode } from '../../types/tools'
@@ -10,12 +11,14 @@ defineProps<{
 	searchQuery: string
 	stuckCount: number
 	totalFiles: number
+	onlyMultiPage?: boolean
 	disabled?: boolean
 }>()
 
 const emit = defineEmits<{
 	'update:filterMode': [mode: PageOrderFilterMode]
 	'update:searchQuery': [query: string]
+	'update:onlyMultiPage': [value: boolean]
 	refresh: []
 }>()
 </script>
@@ -28,10 +31,10 @@ const emit = defineEmits<{
 				role="tab"
 				:aria-selected="filterMode === 'stuck'"
 				:class="[$style.tabButton, filterMode === 'stuck' && $style.tabActive, filterMode === 'stuck' && stuckCount > 0 && $style.tabWarning]"
-				:title="t('sheetmusic', 'Files with 2+ pages locked to only the first page (1-1). Resetting restores the full page range.')"
+				:title="t('sheetmusic', 'Files with 2+ pages whose page order is 1-1. Resetting restores the full page range.')"
 				data-test="filter-stuck"
 				@click="emit('update:filterMode', 'stuck')">
-				{{ t('sheetmusic', 'Stuck at 1-1') }}
+				{{ t('sheetmusic', '1-1 (>1 Pages)') }}
 				<span v-if="stuckCount > 0" :class="$style.badge">{{ stuckCount }}</span>
 			</button>
 
@@ -40,10 +43,10 @@ const emit = defineEmits<{
 				role="tab"
 				:aria-selected="filterMode === 'all-1-1'"
 				:class="[$style.tabButton, filterMode === 'all-1-1' && $style.tabActive]"
-				:title="t('sheetmusic', 'All files whose page order is 1-1, including valid 1-page lead sheets as well as stuck files.')"
+				:title="t('sheetmusic', 'Files whose page order is 1-1.')"
 				data-test="filter-all-1-1"
 				@click="emit('update:filterMode', 'all-1-1')">
-				{{ t('sheetmusic', 'All with 1-1') }}
+				{{ t('sheetmusic', 'All 1-1') }}
 			</button>
 
 			<button
@@ -71,6 +74,16 @@ const emit = defineEmits<{
 		</div>
 
 		<div :class="$style.actionsArea">
+			<div :class="$style.multiPageToggle">
+				<NcCheckboxRadioSwitch
+					type="checkbox"
+					:model-value="onlyMultiPage ?? true"
+					data-test="toggle-multi-page"
+					@update:model-value="emit('update:onlyMultiPage', $event)">
+					{{ t('sheetmusic', '>1 pages only') }}
+				</NcCheckboxRadioSwitch>
+			</div>
+
 			<div :class="$style.searchWrapper">
 				<NcTextField
 					:value="searchQuery"
@@ -193,5 +206,12 @@ const emit = defineEmits<{
 .searchWrapper {
 	max-width: 260px;
 	flex: 1;
+}
+
+.multiPageToggle {
+	display: inline-flex;
+	align-items: center;
+	white-space: nowrap;
+	font-size: 0.88rem;
 }
 </style>

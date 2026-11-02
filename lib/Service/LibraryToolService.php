@@ -100,12 +100,13 @@ class LibraryToolService {
 				}
 
 				$pageOrder = trim((string)($file->pageOrder ?? ''));
+				$effectivePageCount = max($actualPageCount, $pageCount);
 				if ($pageOrder === '') {
-					$pageOrder = MobileSheetsPdf::pageOrder($actualPageCount);
+					$pageOrder = MobileSheetsPdf::pageOrder($effectivePageCount);
 				}
 
-				$suggestedPageOrder = MobileSheetsPdf::pageOrder($actualPageCount);
-				$isStuckOneToOne = ($pageOrder === '1-1' || $pageOrder === '1') && $actualPageCount > 1;
+				$suggestedPageOrder = MobileSheetsPdf::pageOrder($effectivePageCount);
+				$isStuckOneToOne = ($pageOrder === '1-1' || $pageOrder === '1') && $effectivePageCount > 1;
 				$isCustom = $pageOrder !== $suggestedPageOrder;
 
 				if ($isStuckOneToOne) {
@@ -125,7 +126,7 @@ class LibraryToolService {
 					'path' => $path,
 					'pageOrder' => $pageOrder,
 					'pageCount' => $pageCount,
-					'actualPageCount' => $actualPageCount,
+					'actualPageCount' => $effectivePageCount,
 					'suggestedPageOrder' => $suggestedPageOrder,
 					'isStuckOneToOne' => $isStuckOneToOne,
 					'isCustom' => $isCustom,
@@ -194,7 +195,18 @@ class LibraryToolService {
 				$pageCount = max(1, $file->pageCount);
 
 				if ($mode === 'stuck') {
-					if (($pageOrder === '1-1' || $pageOrder === '1') && $pageCount > 1) {
+					$effective = $pageCount;
+					if ($effective <= 1) {
+						$effective = $this->resolveActualPdfPageCount(
+							(int)($file->fileId ?? 0),
+							$file->path,
+							$pageCount,
+							$user,
+							$targetFolder,
+							$targetFolderPath,
+						);
+					}
+					if (($pageOrder === '1-1' || $pageOrder === '1') && $effective > 1) {
 						$filesToReset[] = ['song' => $song, 'file' => $file];
 					}
 				} elseif ($mode === 'all-1-1') {

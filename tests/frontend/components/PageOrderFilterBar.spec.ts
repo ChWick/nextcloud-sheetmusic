@@ -58,4 +58,31 @@ describe('PageOrderFilterBar', () => {
 
 		expect(wrapper.emitted('refresh')).toBeTruthy()
 	})
+
+	it('emits update:onlyMultiPage when multi-page toggle changes', async () => {
+		const wrapper = mount(PageOrderFilterBar, {
+			props: {
+				filterMode: 'all-1-1',
+				searchQuery: '',
+				stuckCount: 0,
+				totalFiles: 5,
+				onlyMultiPage: true,
+			},
+			global: {
+				stubs: {
+					NcButton: true,
+					NcTextField: true,
+					NcCheckboxRadioSwitch: {
+						template: '<input type="checkbox" :checked="modelValue" @change="$emit(\'update:modelValue\', !modelValue)" />',
+						props: ['modelValue'],
+					},
+				},
+			},
+		})
+
+		const checkbox = wrapper.find('[data-test="toggle-multi-page"]')
+		await checkbox.trigger('change')
+
+		expect(wrapper.emitted('update:onlyMultiPage')?.[0]).toEqual([false])
+	})
 })

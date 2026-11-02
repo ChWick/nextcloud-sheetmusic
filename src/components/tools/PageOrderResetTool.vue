@@ -38,6 +38,7 @@ const auditResult = ref<PageOrderAuditResult>({
 
 const filterMode = ref<PageOrderFilterMode>('stuck')
 const searchQuery = ref('')
+const onlyMultiPage = ref(true)
 const selectedIds = ref<Set<number>>(new Set())
 
 const editingItem = ref<PageOrderAuditItem | null>(null)
@@ -215,15 +216,28 @@ const filteredItems = computed(() => {
 			return false
 		}
 
+		const pages = Math.max(item.actualPageCount || 0, item.pageCount || 0)
+		const isOneToOne = item.pageOrder === '1-1' || item.pageOrder === '1'
+		const isMultiPage = pages > 1
+
+		// If multi-page filter is enabled, require >1 pages
+		if (onlyMultiPage.value && !isMultiPage) {
+			return false
+		}
+
 		// Filter by mode
-		if (filterMode.value === 'stuck' && !item.isStuckOneToOne) {
-			return false
-		}
-		if (filterMode.value === 'all-1-1' && item.pageOrder !== '1-1' && item.pageOrder !== '1') {
-			return false
-		}
-		if (filterMode.value === 'custom' && !item.isCustom) {
-			return false
+		if (filterMode.value === 'stuck') {
+			if (!isOneToOne || !isMultiPage) {
+				return false
+			}
+		} else if (filterMode.value === 'all-1-1') {
+			if (!isOneToOne) {
+				return false
+			}
+		} else if (filterMode.value === 'custom') {
+			if (!item.isCustom) {
+				return false
+			}
 		}
 
 		// Filter by search query
@@ -391,6 +405,7 @@ watch(() => props.selectedLibrary, (newLib) => {
 		<PageOrderFilterBar
 			v-model:filter-mode="filterMode"
 			v-model:search-query="searchQuery"
+			v-model:only-multi-page="onlyMultiPage"
 			:stuck-count="auditResult.stuckCount"
 			:total-files="auditResult.totalFiles"
 			:disabled="isLoading || isBatchResetting"

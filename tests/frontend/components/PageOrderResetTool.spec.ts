@@ -68,6 +68,20 @@ describe('PageOrderResetTool', () => {
 				isStuckOneToOne: false,
 				isCustom: false,
 			},
+			{
+				id: 4,
+				songId: 40,
+				songTitle: 'Single Page Lead Sheet',
+				fileId: 4,
+				fileName: 'single.pdf',
+				path: '/Music/single.pdf',
+				pageOrder: '1-1',
+				pageCount: 1,
+				actualPageCount: 1,
+				suggestedPageOrder: '1-1',
+				isStuckOneToOne: false,
+				isCustom: false,
+			},
 		],
 	}
 
@@ -216,5 +230,46 @@ describe('PageOrderResetTool', () => {
 		await editBtn.trigger('click')
 
 		expect(wrapper.find('[data-test="song-page-order-modal-stub"]').exists()).toBe(true)
+	})
+
+	it('filters 1-1 by multi-page (>1 pages) by default in all-1-1 mode and includes single page when toggle is unchecked', async () => {
+		const wrapper = mount(PageOrderResetTool, {
+			props: { selectedLibrary: 1 },
+			global: {
+				stubs: {
+					NcButton: {
+						template: '<button :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
+						props: ['disabled'],
+					},
+					NcLoadingIcon: true,
+					NcDialog: true,
+					NcProgressBar: true,
+					NcCheckboxRadioSwitch: {
+						template: '<input type="checkbox" :checked="modelValue" @change="$emit(\'update:modelValue\', !modelValue)" />',
+						props: ['modelValue'],
+					},
+					NcTextField: true,
+				},
+			},
+		})
+
+		await vi.waitFor(() => {
+			expect(apiGet).toHaveBeenCalled()
+		})
+
+		// Switch to all-1-1 tab
+		const all11Tab = wrapper.find('[data-test="filter-all-1-1"]')
+		await all11Tab.trigger('click')
+
+		// By default onlyMultiPage is true: item 1 (3 pages) is shown, item 4 (1 page) is hidden
+		expect(wrapper.find('[data-test="page-order-row-1"]').exists()).toBe(true)
+		expect(wrapper.find('[data-test="page-order-row-4"]').exists()).toBe(false)
+
+		// Uncheck onlyMultiPage toggle
+		const toggle = wrapper.find('[data-test="toggle-multi-page"]')
+		await toggle.trigger('change')
+
+		// Now item 4 (single page) also appears
+		expect(wrapper.find('[data-test="page-order-row-4"]').exists()).toBe(true)
 	})
 })
