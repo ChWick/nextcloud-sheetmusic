@@ -2095,4 +2095,154 @@ class MobileSheetsEndToEndSyncTest extends TestCase {
 		$clientSongsAfter = $this->harness->getClientTableRows('Songs');
 		self::assertCount(1, $clientSongsAfter);
 	}
+
+	/**
+	 * Test that changes to bookmarks made on the MobileSheets client (adding new bookmarks,
+	 * renaming/editing bookmark pages, and deleting bookmarks) are synchronized to Nextcloud server.
+	 */
+	public function testClientAddsModifiesAndDeletesBookmarksAndSyncsToServer(): void {
+		$this->harness->setupEmptyLibraries();
+
+		// 1. Create a song with 3 bookmarks on Nextcloud
+		$songId = $this->harness->ncCreateSong(
+			title: 'Clarinet Concerto in A Major, K. 622',
+			fileName: 'clarinet_concerto.pdf',
+			options: [
+				'pages' => 10,
+				'bookmarks' => [
+					['name' => 'I. Allegro', 'pageNum' => 1, 'endPage' => 3],
+					['name' => 'II. Adagio', 'pageNum' => 4, 'endPage' => 6],
+					['name' => 'III. Rondo. Allegro', 'pageNum' => 7, 'endPage' => 10],
+				],
+			],
+		);
+
+		// 2. Initial sync from Nextcloud to MobileSheets
+		$this->harness->sync();
+
+		$clientSongs = $this->harness->getClientTableRows('Songs');
+		self::assertCount(1, $clientSongs);
+		$clientSongId = (int)$clientSongs[0]['Id'];
+
+		$clientBookmarks = $this->harness->getClientTableRows('Bookmarks');
+		self::assertCount(3, $clientBookmarks);
+
+		$serverBmsBefore = $this->harness->bookmarkMapper->findForSong($songId);
+		self::assertCount(3, $serverBmsBefore);
+		$allegroId = $serverBmsBefore[0]->id;
+		$adagioId = $serverBmsBefore[1]->id;
+		$rondoId = $serverBmsBefore[2]->id;
+
+		// 3. Make bookmark changes on MobileSheets client SQLite DB:
+		// - Update Allegro (change name and page)
+		// - Delete Adagio
+		// - Add new Cadenza bookmark
+		$clientDb = $this->harness->openSqlite($this->harness->clientDbPath);
+		$newerMs = ($this->harness->nextTimestamp() + 100) * 1000;
+
+		// Update Allegro: rename to 'I. Allegro maestoso' and move to page 1 (0-indexed => page 2)
+		$clientDb->exec("UPDATE Bookmarks SET Name = 'I. Allegro maestoso', PageNum = 1, LastModified = {$newerMs} WHERE SongId = {$clientSongId} AND Name = 'I. Allegro'");
+
+		// Delete Adagio
+		$clientDb->exec("DELETE FROM Bookmarks WHERE SongId = {$clientSongId} AND Name = 'II. Adagio'");
+
+		// Add new bookmark 'Cadenza' at page 4 (0-indexed => page 5)
+		$clientDb->exec("INSERT INTO Bookmarks (SongId, Name, PageNum, ShowInLibrary, DateCreated, LastModified) VALUES ({$clientSongId}, 'Cadenza', 4, 1, {$newerMs}, {$newerMs})");
+
+		// 4. Sync client changes back to Nextcloud server
+		$this->harness->sync();
+
+		// 5. Assert server bookmarks match the client's edits
+		$serverBmsAfter = $this->harness->bookmarkMapper->findForSong($songId);
+		self::assertCount(3, $serverBmsAfter, 'Server should have 3 bookmarks (Allegro updated, Adagio deleted, Cadenza added, Rondo kept)');
+
+		$bmsByName = [];
+		foreach ($serverBmsAfter as $bm) {
+			$bmsByName[$bm->name] = $bm;
+		}
+
+		self::assertArrayHasKey('I. Allegro maestoso', $bmsByName, 'Allegro must be renamed');
+		self::assertSame($allegroId, $bmsByName['I. Allegro maestoso']->id, 'Allegro bookmark ID must be preserved');
+		self::assertSame(2, $bmsByName['I. Allegro maestoso']->pageNum, 'Allegro page must be updated to 2 (1-indexed)');
+
+		self::assertArrayNotHasKey('II. Adagio', $bmsByName, 'Adagio bookmark must be deleted on server');
+
+		self::assertArrayHasKey('Cadenza', $bmsByName, 'Cadenza bookmark must be added to server');
+		self::assertSame(5, $bmsByName['Cadenza']->pageNum, 'Cadenza page must be 5 (1-indexed)');
+
+		self::assertArrayHasKey('III. Rondo. Allegro', $bmsByName, 'Rondo bookmark must be kept');
+		self::assertSame($rondoId, $bmsByName['III. Rondo. Allegro']->id, 'Rondo ID must be preserved');
+		self::assertSame(7, $bmsByName['III. Rondo. Allegro']->pageNum);
+
+		// 6. Sync again to verify roundtrip stability
+		$this->harness->sync();
+
+		$clientBookmarksFinal = $this->harness->getClientTableRows('Bookmarks');
+		self::assertCount(3, $clientBookmarksFinal);
+		$finalNames = array_column($clientBookmarksFinal, 'Name');
+		self::assertContains('I. Allegro maestoso', $finalNames);
+		self::assertContains('Cadenza', $finalNames);
+		self::assertContains('III. Rondo. Allegro', $finalNames);
+		self::assertNotContains('II. Adagio', $finalNames);
+	}
+
+	/**
+	 * Test that when a user creates a new song with bookmarks in the MobileSheets client,
+	 * the song and its bookmarks are synchronized to Nextcloud server.
+	 */
+	public function testClientCreatesNewSongWithBookmarksAndSyncsToServer(): void {
+		$this->harness->setupEmptyLibraries();
+
+		// 1. Create a song with 6 pages on the MobileSheets client
+		$clientSongId = $this->harness->clientCreateSong(
+			title: 'Brandenburg Concerto No. 3 in G Major, BWV 1048',
+			fileName: 'brandenburg_3.pdf',
+			options: [
+				'pages' => 6,
+			],
+		);
+
+		// 2. Add bookmarks to the song on the client
+		$clientDb = $this->harness->openSqlite($this->harness->clientDbPath);
+		$tsMs = $this->harness->nextTimestamp() * 1000;
+
+		$clientDb->exec("INSERT INTO Bookmarks (SongId, Name, PageNum, ShowInLibrary, DateCreated, LastModified) VALUES
+			({$clientSongId}, 'I. [Allegro]', 0, 1, {$tsMs}, {$tsMs}),
+			({$clientSongId}, 'II. Adagio', 2, 1, {$tsMs}, {$tsMs}),
+			({$clientSongId}, 'III. Allegro', 3, 1, {$tsMs}, {$tsMs})");
+
+		// 3. Sync from client to Nextcloud
+		$this->harness->sync();
+
+		// 4. Verify Nextcloud created the song and imported its bookmarks
+		$ncData = $this->harness->getNextcloudLibraryData();
+		self::assertCount(1, $ncData->songs);
+		$ncSong = $ncData->songs[0];
+		self::assertSame('Brandenburg Concerto No. 3 in G Major, BWV 1048', $ncSong->title);
+
+		$serverBms = $this->harness->bookmarkMapper->findForSong($ncSong->id);
+		self::assertCount(3, $serverBms);
+		self::assertSame('I. [Allegro]', $serverBms[0]->name);
+		self::assertSame(1, $serverBms[0]->pageNum);
+		self::assertSame(2, $serverBms[0]->endPage);
+
+		self::assertSame('II. Adagio', $serverBms[1]->name);
+		self::assertSame(3, $serverBms[1]->pageNum);
+		self::assertSame(3, $serverBms[1]->endPage);
+
+		self::assertSame('III. Allegro', $serverBms[2]->name);
+		self::assertSame(4, $serverBms[2]->pageNum);
+
+		// 5. Subsequent sync roundtrip stability
+		$this->harness->sync();
+
+		$clientBmsFinal = $this->harness->getClientTableRows('Bookmarks');
+		self::assertCount(3, $clientBmsFinal);
+		self::assertSame('I. [Allegro]', $clientBmsFinal[0]['Name']);
+		self::assertSame(0, (int)$clientBmsFinal[0]['PageNum']);
+		self::assertSame('II. Adagio', $clientBmsFinal[1]['Name']);
+		self::assertSame(2, (int)$clientBmsFinal[1]['PageNum']);
+		self::assertSame('III. Allegro', $clientBmsFinal[2]['Name']);
+		self::assertSame(3, (int)$clientBmsFinal[2]['PageNum']);
+	}
 }

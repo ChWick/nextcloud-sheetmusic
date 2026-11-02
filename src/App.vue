@@ -24,7 +24,22 @@ import CogIcon from 'vue-material-design-icons/Cog.vue'
 import Plus from 'vue-material-design-icons/Plus.vue'
 import FolderPlusOutline from 'vue-material-design-icons/FolderPlusOutline.vue'
 import DatabaseImport from 'vue-material-design-icons/DatabaseImport.vue'
+import FolderMusicOutline from 'vue-material-design-icons/FolderMusicOutline.vue'
+import Music from 'vue-material-design-icons/Music.vue'
 import PlaylistMusic from 'vue-material-design-icons/PlaylistMusic.vue'
+import AccountMusic from 'vue-material-design-icons/AccountMusic.vue'
+import AccountStar from 'vue-material-design-icons/AccountStar.vue'
+import BookIcon from 'vue-material-design-icons/Book.vue'
+import FolderMultiple from 'vue-material-design-icons/FolderMultiple.vue'
+import DramaMasks from 'vue-material-design-icons/DramaMasks.vue'
+import KeyVariant from 'vue-material-design-icons/KeyVariant.vue'
+import AccountGroup from 'vue-material-design-icons/AccountGroup.vue'
+import Calendar from 'vue-material-design-icons/Calendar.vue'
+import Metronome from 'vue-material-design-icons/Metronome.vue'
+import FileDocumentOutline from 'vue-material-design-icons/FileDocumentOutline.vue'
+import GuitarAcoustic from 'vue-material-design-icons/GuitarAcoustic.vue'
+import ShieldCheck from 'vue-material-design-icons/ShieldCheck.vue'
+import TrashCanOutline from 'vue-material-design-icons/TrashCanOutline.vue'
 import SongsView from './components/SongsView.vue'
 import SetlistsView from './components/SetlistsView.vue'
 import IntegrityView from './components/IntegrityView.vue'
@@ -385,6 +400,9 @@ async function deleteLibrary() {
       <!-- Sidebar (navigation) -->
       <NcAppNavigation :aria-label="t('sheetmusic', 'Sheet Music libraries')">
         <NcAppNavigationItem :name="t('sheetmusic', 'Library')">
+          <template #icon>
+            <FolderMusicOutline :size="20" />
+          </template>
           <select v-model="selectedLibrary" :class="$style.librarySelect" @change="navigateToLibrary(selectedLibrary)">
             <option disabled value="-1">{{ t('sheetmusic', 'Select library') }}</option>
             <option v-for="library in libraries" :key="library.id" :value="library.id">{{ library.path }}</option>
@@ -393,25 +411,81 @@ async function deleteLibrary() {
 
         <!-- view toggle – only for the selected library; choosing one starts without filters -->
         <template v-if="selectedLibrary >= 0">
-          <NcAppNavigationItem :name="t('sheetmusic', 'Songs')" :active="selectedView === 'songs' || selectedView === 'new-song'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'songs' } }" />
+          <NcAppNavigationItem :name="t('sheetmusic', 'Songs')" :active="selectedView === 'songs' || selectedView === 'new-song'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'songs' } }">
+            <template #icon>
+              <Music :size="20" />
+            </template>
+          </NcAppNavigationItem>
           <NcAppNavigationItem :name="t('sheetmusic', 'Setlists')" :active="selectedView === 'setlists'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'setlists' } }">
             <template #icon>
               <PlaylistMusic :size="20" />
             </template>
           </NcAppNavigationItem>
-          <NcAppNavigationItem :name="t('sheetmusic', 'Composers')" :active="selectedView === 'composers'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'composers' } }" />
-          <NcAppNavigationItem :name="t('sheetmusic', 'Artists')" :active="selectedView === 'artists'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'artists' } }" />
-          <NcAppNavigationItem :name="t('sheetmusic', 'Books')" :active="selectedView === 'books'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'books' } }" />
-          <NcAppNavigationItem :name="t('sheetmusic', 'Collections')" :active="selectedView === 'collections'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'collections' } }" />
-          <NcAppNavigationItem :name="t('sheetmusic', 'Genres')" :active="selectedView === 'genres'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'genres' } }" />
-          <NcAppNavigationItem :name="t('sheetmusic', 'Keys')" :active="selectedView === 'keys'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'keys' } }" />
-          <NcAppNavigationItem :name="t('sheetmusic', 'Custom Groups')" :active="selectedView === 'customgroups'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'customgroups' } }" />
-          <NcAppNavigationItem :name="t('sheetmusic', 'Years')" :active="selectedView === 'years'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'years' } }" />
-          <NcAppNavigationItem :name="t('sheetmusic', 'Time Signatures')" :active="selectedView === 'signatures'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'signatures' } }" />
-          <NcAppNavigationItem :name="t('sheetmusic', 'Source Types')" :active="selectedView === 'sourcetypes'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'sourcetypes' } }" />
-          <NcAppNavigationItem :name="t('sheetmusic', 'Instruments')" :active="selectedView === 'instruments'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'instruments' } }" />
-          <NcAppNavigationItem :name="t('sheetmusic', 'Integrity Audit')" :active="selectedView === 'integrity'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'integrity' } }" />
-          <NcAppNavigationItem :name="t('sheetmusic', 'Trash')" :active="selectedView === 'trash'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'trash' } }" />
+          <NcAppNavigationItem :name="t('sheetmusic', 'Composers')" :active="selectedView === 'composers'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'composers' } }">
+            <template #icon>
+              <AccountMusic :size="20" />
+            </template>
+          </NcAppNavigationItem>
+          <NcAppNavigationItem :name="t('sheetmusic', 'Artists')" :active="selectedView === 'artists'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'artists' } }">
+            <template #icon>
+              <AccountStar :size="20" />
+            </template>
+          </NcAppNavigationItem>
+          <NcAppNavigationItem :name="t('sheetmusic', 'Books')" :active="selectedView === 'books'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'books' } }">
+            <template #icon>
+              <BookIcon :size="20" />
+            </template>
+          </NcAppNavigationItem>
+          <NcAppNavigationItem :name="t('sheetmusic', 'Collections')" :active="selectedView === 'collections'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'collections' } }">
+            <template #icon>
+              <FolderMultiple :size="20" />
+            </template>
+          </NcAppNavigationItem>
+          <NcAppNavigationItem :name="t('sheetmusic', 'Genres')" :active="selectedView === 'genres'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'genres' } }">
+            <template #icon>
+              <DramaMasks :size="20" />
+            </template>
+          </NcAppNavigationItem>
+          <NcAppNavigationItem :name="t('sheetmusic', 'Keys')" :active="selectedView === 'keys'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'keys' } }">
+            <template #icon>
+              <KeyVariant :size="20" />
+            </template>
+          </NcAppNavigationItem>
+          <NcAppNavigationItem :name="t('sheetmusic', 'Custom Groups')" :active="selectedView === 'customgroups'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'customgroups' } }">
+            <template #icon>
+              <AccountGroup :size="20" />
+            </template>
+          </NcAppNavigationItem>
+          <NcAppNavigationItem :name="t('sheetmusic', 'Years')" :active="selectedView === 'years'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'years' } }">
+            <template #icon>
+              <Calendar :size="20" />
+            </template>
+          </NcAppNavigationItem>
+          <NcAppNavigationItem :name="t('sheetmusic', 'Time Signatures')" :active="selectedView === 'signatures'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'signatures' } }">
+            <template #icon>
+              <Metronome :size="20" />
+            </template>
+          </NcAppNavigationItem>
+          <NcAppNavigationItem :name="t('sheetmusic', 'Source Types')" :active="selectedView === 'sourcetypes'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'sourcetypes' } }">
+            <template #icon>
+              <FileDocumentOutline :size="20" />
+            </template>
+          </NcAppNavigationItem>
+          <NcAppNavigationItem :name="t('sheetmusic', 'Instruments')" :active="selectedView === 'instruments'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'instruments' } }">
+            <template #icon>
+              <GuitarAcoustic :size="20" />
+            </template>
+          </NcAppNavigationItem>
+          <NcAppNavigationItem :name="t('sheetmusic', 'Integrity Audit')" :active="selectedView === 'integrity'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'integrity' } }">
+            <template #icon>
+              <ShieldCheck :size="20" />
+            </template>
+          </NcAppNavigationItem>
+          <NcAppNavigationItem :name="t('sheetmusic', 'Trash')" :active="selectedView === 'trash'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'trash' } }">
+            <template #icon>
+              <TrashCanOutline :size="20" />
+            </template>
+          </NcAppNavigationItem>
 
         </template>
 

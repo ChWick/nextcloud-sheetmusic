@@ -125,6 +125,10 @@ class MobileSheetsEndToEndSyncHarness {
 			$this->rootFolder,
 			$this->userManager,
 			$this->logger,
+			null,
+			null,
+			null,
+			$this->bookmarkMapper,
 		);
 		$this->exporter = new MobileSheetsSqliteExporter(
 			$this->songMapper,

@@ -16,6 +16,8 @@ use OCA\SheetMusic\Db\InternalMiscMapper;
 use OCA\SheetMusic\Db\InternalSetlistItemMapper;
 use OCA\SheetMusic\Db\InternalSong;
 use OCA\SheetMusic\Db\InternalSongAttributeMapper;
+use OCA\SheetMusic\Db\InternalSongBookmark;
+use OCA\SheetMusic\Db\InternalSongBookmarkMapper;
 use OCA\SheetMusic\Db\InternalSongFile;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongHistory;
@@ -49,6 +51,7 @@ class MobileSheetsSqliteImporter {
 		?MobileSheetsEntityMerger $entityMerger = null,
 		private ?SongHistoryService $songHistoryService = null,
 		private ?InternalSetlistItemMapper $setlistItemMapper = null,
+		private ?InternalSongBookmarkMapper $bookmarkMapper = null,
 	) {
 		$this->entityMerger = $entityMerger ?? new MobileSheetsEntityMerger(
 			$this->entityMapper,
@@ -144,7 +147,10 @@ class MobileSheetsSqliteImporter {
 			$this->processDeletions($db, $lib->id, $user, $syncMeta, $stats, $updatedSongClientIds, $uploadedFileNodeIds, $uploadedSongFileIds);
 		}
 
-		// 6. Misc Tables (Setlists, Bookmarks, Annotations, AudioFiles, etc.)
+		// 6. Bookmarks
+		$this->mergeBookmarks($db, $lib->id, $updatedSongClientIds, $syncMeta, $isFreshLibrary);
+
+		// 7. Misc Tables (Setlists, Bookmarks, Annotations, AudioFiles, etc.)
 		$this->mergeMiscTables($db, $lib, $user, $stats);
 
 		// 7. Update library modified timestamp
@@ -622,6 +628,172 @@ class MobileSheetsSqliteImporter {
 					'fileId' => $targetFileId,
 					'exception' => $e,
 				]);
+			}
+		}
+	}
+
+	/**
+	 * @param array<int, bool> $updatedSongClientIds
+	 */
+	private function mergeBookmarks(
+		PDO $db,
+		int $libraryId,
+		array $updatedSongClientIds,
+		MobileSheetsSyncMetadata $syncMeta,
+		bool $isFreshLibrary,
+	): void {
+		if ($this->bookmarkMapper === null || !MobileSheetsTableHelper::tableExists($db, 'Bookmarks')) {
+			return;
+		}
+
+		$stmt = $db->query('SELECT * FROM Bookmarks ORDER BY SongId ASC, PageNum ASC, Id ASC');
+		if ($stmt === false) {
+			return;
+		}
+
+		$clientBookmarksBySongId = [];
+		while ($row = $stmt->fetch()) {
+			$songClientId = (int)($row['SongId'] ?? 0);
+			if ($songClientId > 0) {
+				$clientBookmarksBySongId[$songClientId][] = $row;
+			}
+		}
+
+		$songs = $this->songMapper->findAllForLibrary($libraryId, includeDeleted: true);
+		foreach ($songs as $song) {
+			if ($song->clientId === null || $song->deletedAt !== null) {
+				continue;
+			}
+
+			$songClientId = $song->clientId;
+			$clientBookmarks = $clientBookmarksBySongId[$songClientId] ?? [];
+
+			// Determine if client bookmarks are authoritative
+			$meta = $syncMeta->getSongMeta($songClientId);
+			$metaUpdatedAt = (int)($meta['updated_at'] ?? 0);
+
+			$clientLatestSec = 0;
+			foreach ($clientBookmarks as $cbm) {
+				$cbmModified = MobileSheetsTimestampUtil::extractLastModifiedSec($cbm);
+				if ($cbmModified > $clientLatestSec) {
+					$clientLatestSec = $cbmModified;
+				}
+			}
+
+			$clientWins = $isFreshLibrary
+				|| isset($updatedSongClientIds[$songClientId])
+				|| $clientLatestSec > $song->updatedAt
+				|| ($song->updatedAt <= $metaUpdatedAt && ($clientBookmarks !== [] || $syncMeta->hasMetadata));
+
+			if (!$clientWins && !$syncMeta->hasMetadata && ($clientLatestSec >= $song->updatedAt || isset($updatedSongClientIds[$songClientId]))) {
+				$clientWins = true;
+			}
+
+			if (!$clientWins) {
+				continue;
+			}
+
+			$existingBookmarks = $this->bookmarkMapper->findForSong($song->id);
+			$existingById = [];
+			$existingByName = [];
+			foreach ($existingBookmarks as $bm) {
+				if ($bm->id !== null) {
+					$existingById[$bm->id] = $bm;
+				}
+				$existingByName[$bm->name] = $bm;
+			}
+
+			$matchedIds = [];
+			$position = 0;
+			$hasChanges = false;
+
+			foreach ($clientBookmarks as $cbm) {
+				$cbmId = (int)($cbm['Id'] ?? 0);
+				$name = trim((string)($cbm['Name'] ?? ''));
+				if ($name === '') {
+					continue;
+				}
+
+				$pageNum = max(1, ((int)($cbm['PageNum'] ?? 0)) + 1);
+				$showInLib = isset($cbm['ShowInLibrary']) ? (int)$cbm['ShowInLibrary'] : 1;
+				$createdSec = MobileSheetsTimestampUtil::extractDateCreatedSec($cbm);
+				$modifiedSec = MobileSheetsTimestampUtil::extractLastModifiedSec($cbm);
+
+				$matched = null;
+				if ($cbmId > 0 && isset($existingById[$cbmId])) {
+					$matched = $existingById[$cbmId];
+				} elseif (isset($existingByName[$name]) && !isset($matchedIds[$existingByName[$name]->id])) {
+					$matched = $existingByName[$name];
+				}
+
+				if ($matched !== null) {
+					$matchedIds[$matched->id] = true;
+					if ($matched->name !== $name
+						|| $matched->pageNum !== $pageNum
+						|| $matched->showInLibrary !== $showInLib
+						|| $matched->position !== $position) {
+						$matched->name = $name;
+						$matched->pageNum = $pageNum;
+						$matched->showInLibrary = $showInLib;
+						$matched->position = $position;
+						if ($modifiedSec > 0) {
+							$matched->updatedAt = $modifiedSec;
+						}
+						$this->bookmarkMapper->update($matched);
+						$hasChanges = true;
+					}
+				} else {
+					$newBm = new InternalSongBookmark(
+						id: $cbmId > 0 && $this->bookmarkMapper->findById($cbmId) === null ? $cbmId : null,
+						songId: $song->id,
+						name: $name,
+						pageNum: $pageNum,
+						endPage: null,
+						position: $position,
+						showInLibrary: $showInLib,
+						createdAt: $createdSec ?: time(),
+						updatedAt: $modifiedSec ?: time(),
+					);
+					$this->bookmarkMapper->insert($newBm);
+					if ($newBm->id !== null) {
+						$matchedIds[$newBm->id] = true;
+					}
+					$hasChanges = true;
+				}
+
+				$position++;
+			}
+
+			foreach ($existingBookmarks as $oldBm) {
+				if ($oldBm->id !== null && !isset($matchedIds[$oldBm->id])) {
+					$this->setlistItemMapper?->nullifyBookmark($oldBm->id);
+					$this->bookmarkMapper->delete($oldBm->id);
+					$hasChanges = true;
+				}
+			}
+
+			// Recalculate endPage based on sequence of bookmarks
+			$currentBookmarks = $this->bookmarkMapper->findForSong($song->id);
+			$count = count($currentBookmarks);
+			for ($i = 0; $i < $count; $i++) {
+				$cur = $currentBookmarks[$i];
+				$calculatedEnd = null;
+				if ($i + 1 < $count) {
+					$nextPage = $currentBookmarks[$i + 1]->pageNum;
+					$calculatedEnd = $nextPage > $cur->pageNum ? ($nextPage - 1) : $cur->pageNum;
+				}
+				if ($cur->endPage !== $calculatedEnd && $calculatedEnd !== null) {
+					$cur->endPage = $calculatedEnd;
+					$this->bookmarkMapper->update($cur);
+				}
+			}
+
+			if ($hasChanges) {
+				$newUpdatedAt = max($song->updatedAt, $clientLatestSec);
+				if ($newUpdatedAt > $song->updatedAt) {
+					$song->updatedAt = $newUpdatedAt;
+					$this->songMapper->update($song);
+				}
 			}
 		}
 	}

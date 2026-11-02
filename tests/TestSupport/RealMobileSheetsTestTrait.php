@@ -99,6 +99,7 @@ trait RealMobileSheetsTestTrait {
 			null,
 			null,
 			$this->setlistItemMapper,
+			$this->bookmarkMapper,
 		);
 
 		$this->exporter = new MobileSheetsSqliteExporter(

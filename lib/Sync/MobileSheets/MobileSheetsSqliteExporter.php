@@ -574,19 +574,16 @@ class MobileSheetsSqliteExporter {
 		}
 
 		$libraryBookmarks = $this->bookmarkMapper->findAllForLibrary($library->id);
-		if (empty($libraryBookmarks)) {
-			return;
-		}
 
 		$songs = $this->songMapper->findAllForLibrary($library->id, includeDeleted: false);
 		$existingBmCols = MobileSheetsTableHelper::getTableColumns($db, 'Bookmarks');
 
 		foreach ($songs as $song) {
-			if ($song->clientId === null || empty($libraryBookmarks[$song->id])) {
+			if ($song->clientId === null) {
 				continue;
 			}
 
-			$bookmarks = $libraryBookmarks[$song->id];
+			$bookmarks = $libraryBookmarks[$song->id] ?? [];
 			$this->exportMasterBookmarks($db, $song->clientId, $bookmarks, $existingBmCols);
 		}
 	}

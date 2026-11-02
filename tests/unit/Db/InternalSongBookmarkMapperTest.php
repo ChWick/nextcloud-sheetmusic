@@ -152,4 +152,68 @@ final class InternalSongBookmarkMapperTest extends TestCase {
 		self::assertSame(1, $bms[0]->pageNum); // Clamped to 1
 		self::assertSame(2, $bms[0]->endPage);
 	}
+
+	public function testInsertUpdateAndDelete(): void {
+		$songId = (int)$this->song->id;
+
+		$bm = new \OCA\SheetMusic\Db\InternalSongBookmark(
+			id: null,
+			songId: $songId,
+			name: 'Adagio',
+			pageNum: 3,
+			endPage: 6,
+			position: 1,
+			showInLibrary: 1,
+		);
+
+		$inserted = $this->bookmarkMapper->insert($bm);
+		self::assertNotNull($inserted->id);
+		self::assertGreaterThan(0, $inserted->id);
+
+		$fetched = $this->bookmarkMapper->findById($inserted->id);
+		self::assertNotNull($fetched);
+		self::assertSame('Adagio', $fetched->name);
+		self::assertSame(3, $fetched->pageNum);
+
+		$fetched->name = 'Adagio maestoso';
+		$fetched->pageNum = 4;
+		$this->bookmarkMapper->update($fetched);
+
+		$updated = $this->bookmarkMapper->findById($inserted->id);
+		self::assertSame('Adagio maestoso', $updated->name);
+		self::assertSame(4, $updated->pageNum);
+
+		$this->bookmarkMapper->delete($inserted->id);
+		self::assertNull($this->bookmarkMapper->findById($inserted->id));
+	}
+
+	public function testSetBookmarksPreservesExistingIds(): void {
+		$songId = (int)$this->song->id;
+
+		$this->bookmarkMapper->setBookmarksForSong($songId, [
+			['name' => 'Mvt 1', 'pageNum' => 1, 'endPage' => 3],
+			['name' => 'Mvt 2', 'pageNum' => 4, 'endPage' => 6],
+		]);
+
+		$initial = $this->bookmarkMapper->findForSong($songId);
+		self::assertCount(2, $initial);
+		$id1 = $initial[0]->id;
+		$id2 = $initial[1]->id;
+
+		// Update Mvt 1 by name without id, and add Mvt 3
+		$this->bookmarkMapper->setBookmarksForSong($songId, [
+			['name' => 'Mvt 1', 'pageNum' => 2, 'endPage' => 4],
+			['id' => $id2, 'name' => 'Mvt 2 Renamed', 'pageNum' => 5, 'endPage' => 7],
+			['name' => 'Mvt 3', 'pageNum' => 8, 'endPage' => 10],
+		]);
+
+		$updated = $this->bookmarkMapper->findForSong($songId);
+		self::assertCount(3, $updated);
+		self::assertSame($id1, $updated[0]->id);
+		self::assertSame(2, $updated[0]->pageNum);
+		self::assertSame($id2, $updated[1]->id);
+		self::assertSame('Mvt 2 Renamed', $updated[1]->name);
+		self::assertNotSame($id1, $updated[2]->id);
+		self::assertNotSame($id2, $updated[2]->id);
+	}
 }
