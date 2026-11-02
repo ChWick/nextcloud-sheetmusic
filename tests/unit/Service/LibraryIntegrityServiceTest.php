@@ -1972,6 +1972,48 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		unlink($fixture['path']);
 	}
 
+	public function testCheckIntegrityDetectsPageCountMismatchAndStuckPageOrder(): void {
+		$libraryService = $this->createLibraryService();
+		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
+		$databasePath = $fixture['path'];
+		$database = $fixture['connection'];
+		$database->exec("INSERT INTO Songs (Id, Title) VALUES (1, 'Multi Page Score')");
+		$database->exec("INSERT INTO Files (Id, SongId, Path, SourceFilePageCount, PageOrder) VALUES (10, 1, '/remote.php/dav/files/user1/Noten/multipage.pdf', 1, '1-1')");
+
+		$pdfNode = $this->createMock(File::class);
+		$pdfNode->method('getContent')->willReturn("<< /Type /Pages /Count 3 /Kids [] >>\n");
+		$pdfNode->method('getName')->willReturn('multipage.pdf');
+		$pdfNode->method('getPath')->willReturn('/user1/files/Noten/multipage.pdf');
+
+		$targetFolder = $this->createMock(Folder::class);
+		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
+		$targetFolder->method('nodeExists')->willReturn(true);
+		$targetFolder->method('get')->willReturn($pdfNode);
+		$targetFolder->method('getDirectoryListing')->willReturn([$pdfNode]);
+
+		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager($databasePath, $targetFolder);
+
+		try {
+			$service = $this->createIntegrityService($libraryService, $fileManager, $rootFolder, $pathResolver, databasePath: $databasePath);
+			$issues = $service->checkIntegrity(1, 'user1', autoMatchOrphans: false);
+
+			$mismatchIssues = array_values(array_filter($issues, fn ($i) => $i->type === IntegrityIssue::TYPE_PAGE_COUNT_MISMATCH));
+			self::assertCount(1, $mismatchIssues);
+			self::assertSame(IntegrityIssue::SEVERITY_WARNING, $mismatchIssues[0]->severity);
+			self::assertSame(3, $mismatchIssues[0]->details['pageCount']);
+			self::assertSame(1, $mismatchIssues[0]->details['recordedPageCount']);
+			self::assertTrue($mismatchIssues[0]->fixable);
+
+			$stuckIssues = array_values(array_filter($issues, fn ($i) => $i->type === IntegrityIssue::TYPE_STUCK_PAGE_ORDER));
+			self::assertCount(1, $stuckIssues);
+			self::assertSame(3, $stuckIssues[0]->details['pageCount']);
+			self::assertSame('1-1', $stuckIssues[0]->details['pageOrder']);
+			self::assertSame('1-3', $stuckIssues[0]->details['suggestedOrder']);
+		} finally {
+			unlink($databasePath);
+		}
+	}
+
 	private static function minimalPdf(): string {
 		return "%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n3 0 obj\n<< /Type /Page /Parent 2 0 R >>\nendobj\nxref\n0 4\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \ntrailer\n<< /Size 4 /Root 1 0 R >>\nstartxref\n164\n%%EOF";
 	}

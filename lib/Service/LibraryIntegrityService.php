@@ -164,8 +164,8 @@ class LibraryIntegrityService {
 					}
 
 					$trimmedOrder = trim((string)($file->pageOrder ?? ''));
-					$effectivePageCount = max(1, $file->pageCount);
-					if ($effectivePageCount <= 1 && $existingPdfPath !== null && str_ends_with(strtolower($file->path), '.pdf')) {
+					$physicalPageCount = null;
+					if ($existingPdfPath !== null && str_ends_with(strtolower($file->path), '.pdf')) {
 						try {
 							if ($targetFolder->nodeExists($existingPdfPath)) {
 								$pdfNode = $targetFolder->get($existingPdfPath);
@@ -173,8 +173,8 @@ class LibraryIntegrityService {
 									$pdfContent = $pdfNode->getContent();
 									if (is_string($pdfContent) && $pdfContent !== '') {
 										$detected = \OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdf::pageCount($pdfContent);
-										if ($detected > 1) {
-											$effectivePageCount = $detected;
+										if ($detected > 0) {
+											$physicalPageCount = $detected;
 										}
 									}
 								}
@@ -182,6 +182,44 @@ class LibraryIntegrityService {
 						} catch (\Throwable) {
 						}
 					}
+					if ($physicalPageCount === null && $file->fileId > 0 && str_ends_with(strtolower($file->path), '.pdf')) {
+						try {
+							$nodes = $userFolder->getById($file->fileId);
+							if (!empty($nodes) && $nodes[0] instanceof File) {
+								$pdfContent = $nodes[0]->getContent();
+								if (is_string($pdfContent) && $pdfContent !== '') {
+									$detected = \OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdf::pageCount($pdfContent);
+									if ($detected > 0) {
+										$physicalPageCount = $detected;
+									}
+								}
+							}
+						} catch (\Throwable) {
+						}
+					}
+
+					// 1. Check for physical vs stored page count mismatch
+					$recordedPageCount = max(1, (int)($file->pageCount ?? 0));
+					if ($physicalPageCount !== null && $physicalPageCount !== $recordedPageCount) {
+						$issues[] = new IntegrityIssue(
+							type: IntegrityIssue::TYPE_PAGE_COUNT_MISMATCH,
+							severity: IntegrityIssue::SEVERITY_WARNING,
+							message: sprintf('File "%s" has %d physical pages, but database records %d pages.', basename($file->path), $physicalPageCount, $recordedPageCount),
+							songId: $song->id,
+							songTitle: $song->title,
+							fileId: $file->id,
+							path: $relativeToTarget,
+							suggestedPath: null,
+							fixable: true,
+							details: [
+								'pageCount' => $physicalPageCount,
+								'recordedPageCount' => $recordedPageCount,
+							],
+						);
+					}
+
+					// 2. Check for stuck page order (1-1 when file is multi-page)
+					$effectivePageCount = $physicalPageCount ?? max(1, $file->pageCount);
 					if ($effectivePageCount > 1 && ($trimmedOrder === '1-1' || $trimmedOrder === '1')) {
 						$issues[] = new IntegrityIssue(
 							type: IntegrityIssue::TYPE_STUCK_PAGE_ORDER,

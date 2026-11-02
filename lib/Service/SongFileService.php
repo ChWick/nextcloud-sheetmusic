@@ -96,7 +96,14 @@ class SongFileService {
 		}
 	}
 
-	public function uploadSongFile(IUser $user, int $libraryId, int $songId, ?array $fileInfo): ?LibraryData {
+	public function uploadSongFile(
+		IUser $user,
+		int $libraryId,
+		int $songId,
+		?array $fileInfo,
+		?int $explicitPageCount = null,
+		?string $explicitPageOrder = null,
+	): ?LibraryData {
 		$content = $this->readUploadedFileContent($fileInfo);
 		$fileName = basename((string)($fileInfo['name'] ?? 'song.file'));
 
@@ -115,7 +122,7 @@ class SongFileService {
 		$targetFile = $userFolder->newFile($targetRelative, $content);
 
 		$this->cleanupAutoIndexedStubForNewUpload($songId, (int)$targetFile->getId());
-		$this->recordSongFile($songId, $user, $targetFile, $libraryId);
+		$this->recordSongFile($songId, $user, $targetFile, $libraryId, $explicitPageCount, $explicitPageOrder, $content);
 
 		return $this->internalSongMapper->findLibraryData($libraryId, $user);
 	}
@@ -689,20 +696,40 @@ class SongFileService {
 		IUser $user,
 		Node $file,
 		int $libraryId,
+		?int $explicitPageCount = null,
+		?string $explicitPageOrder = null,
+		?string $uploadedContent = null,
 	): void {
 		$fileSize = (int)$file->getSize();
 		$fileHash = null;
-		$pageCount = 1;
-		$pageOrder = MobileSheetsPdf::pageOrder(1);
+		$pageCount = $explicitPageCount !== null && $explicitPageCount > 0 ? $explicitPageCount : 1;
+		$pageOrder = $explicitPageOrder !== null && $explicitPageOrder !== ''
+			? $explicitPageOrder
+			: MobileSheetsPdf::pageOrder($pageCount);
 		$fileName = $file->getName();
 		$ext = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
-		if ($ext === 'pdf' && $file instanceof File) {
-			$content = $file->getContent();
-			if (is_string($content)) {
+		if ($ext === 'pdf') {
+			$content = $uploadedContent;
+			if ($content === null && $file instanceof File) {
+				$raw = $file->getContent();
+				if (is_string($raw)) {
+					$content = $raw;
+				}
+			}
+			if (is_string($content) && $content !== '') {
 				$facts = $this->extractPdfFacts($content, $fileName);
 				$fileHash = $facts['fileHash'];
-				$pageCount = $facts['pageCount'];
-				$pageOrder = $facts['pageOrder'];
+				$detectedCount = (int)$facts['pageCount'];
+				if ($explicitPageCount !== null && $explicitPageCount > 0) {
+					$pageCount = $explicitPageCount;
+				} elseif ($detectedCount > 0) {
+					$pageCount = $detectedCount;
+				}
+				if ($explicitPageOrder !== null && $explicitPageOrder !== '') {
+					$pageOrder = $explicitPageOrder;
+				} else {
+					$pageOrder = MobileSheetsPdf::pageOrder($pageCount);
+				}
 			}
 		}
 

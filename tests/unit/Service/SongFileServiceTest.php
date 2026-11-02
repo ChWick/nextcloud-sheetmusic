@@ -287,6 +287,40 @@ final class SongFileServiceTest extends TestCase {
 		self::assertTrue($this->libraryFolder->nodeExists('new_no_reloc.pdf'));
 	}
 
+	public function testUploadSongFileStoresExplicitPageCountAndOrder(): void {
+		$song = $this->songMapper->insert(new InternalSong(
+			id: null,
+			uuid: 's-upload-explicit-pages',
+			libraryId: $this->libraryId,
+			title: 'Song Explicit Pages',
+		));
+
+		$tmpFile = tempnam(sys_get_temp_dir(), 'test_upload_pages_');
+		file_put_contents($tmpFile, '%PDF-1.4 split score content');
+
+		try {
+			$result = $this->service->uploadSongFile(
+				$this->user,
+				$this->libraryId,
+				(int)$song->id,
+				[
+					'tmp_name' => $tmpFile,
+					'name' => 'split_part.pdf',
+				],
+				explicitPageCount: 5,
+				explicitPageOrder: '1-5',
+			);
+			self::assertNotNull($result);
+
+			$files = $this->songFileMapper->findAllForSong((int)$song->id);
+			self::assertCount(1, $files);
+			self::assertSame(5, $files[0]->pageCount);
+			self::assertSame('1-5', $files[0]->pageOrder);
+		} finally {
+			unlink($tmpFile);
+		}
+	}
+
 	public function testSyncSongFileMetadataSkippedWhenAutoPdfMetadataDisabled(): void {
 		$song = $this->songMapper->insert(new InternalSong(
 			id: null,

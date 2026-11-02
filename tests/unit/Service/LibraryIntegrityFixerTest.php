@@ -132,4 +132,103 @@ final class LibraryIntegrityFixerTest extends TestCase {
 		self::assertNotNull($this->songFileMapper->findById($file->id)->deletedAt);
 		self::assertEmpty($this->songFileMapper->findAllForSong($song->id));
 	}
+
+	public function testFixPageCountMismatchUpdatesDatabase(): void {
+		$lib = $this->createTestLibrary();
+		$userFolder = $this->rootFolder->getUserFolder($lib->userId);
+		$libPath = trim($lib->path, '/');
+		if (!$userFolder->nodeExists($libPath)) {
+			$userFolder->newFolder($libPath);
+		}
+		$libFolder = $userFolder->get($libPath);
+
+		// Physical file has 4 pages
+		$pdfContent = "<< /Type /Pages /Count 4 /Kids [] >>\n";
+		$pdfNode = $libFolder->newFile('mismatch.pdf', $pdfContent);
+
+		$song = $this->songMapper->insert(new InternalSong(
+			id: null,
+			uuid: 'test-song-mismatch',
+			libraryId: $lib->id,
+			title: 'Mismatch Song',
+		));
+
+		// Stored with stale count of 1 and order 1-1
+		$file = $this->songFileMapper->insert(new InternalSongFile(
+			id: null,
+			uuid: 'test-file-mismatch',
+			songId: $song->id,
+			fileId: (int)$pdfNode->getId(),
+			pageOrder: '1-1',
+			pageCount: 1,
+			fileSize: strlen($pdfContent),
+			type: InternalSongFile::FILE_TYPE_PDF,
+			createdAt: time(),
+			updatedAt: time(),
+		));
+
+		$res = $this->fixer->fixIssue(
+			$lib->id,
+			$lib->userId,
+			IntegrityIssue::TYPE_PAGE_COUNT_MISMATCH,
+			fileId: $file->id,
+		);
+
+		self::assertTrue($res['success']);
+		self::assertSame(1, $res['fixedCount']);
+
+		$updated = $this->songFileMapper->findById($file->id);
+		self::assertNotNull($updated);
+		self::assertSame(4, $updated->pageCount);
+		self::assertSame('1-4', $updated->pageOrder);
+	}
+
+	public function testFixStuckPageOrderUpdatesDatabase(): void {
+		$lib = $this->createTestLibrary();
+		$userFolder = $this->rootFolder->getUserFolder($lib->userId);
+		$libPath = trim($lib->path, '/');
+		if (!$userFolder->nodeExists($libPath)) {
+			$userFolder->newFolder($libPath);
+		}
+		$libFolder = $userFolder->get($libPath);
+
+		// Physical file has 3 pages
+		$pdfContent = "<< /Type /Pages /Count 3 /Kids [] >>\n";
+		$pdfNode = $libFolder->newFile('stuck.pdf', $pdfContent);
+
+		$song = $this->songMapper->insert(new InternalSong(
+			id: null,
+			uuid: 'test-song-stuck',
+			libraryId: $lib->id,
+			title: 'Stuck Song',
+		));
+
+		$file = $this->songFileMapper->insert(new InternalSongFile(
+			id: null,
+			uuid: 'test-file-stuck',
+			songId: $song->id,
+			fileId: (int)$pdfNode->getId(),
+			pageOrder: '1-1',
+			pageCount: 1,
+			fileSize: strlen($pdfContent),
+			type: InternalSongFile::FILE_TYPE_PDF,
+			createdAt: time(),
+			updatedAt: time(),
+		));
+
+		$res = $this->fixer->fixIssue(
+			$lib->id,
+			$lib->userId,
+			IntegrityIssue::TYPE_STUCK_PAGE_ORDER,
+			fileId: $file->id,
+		);
+
+		self::assertTrue($res['success']);
+		self::assertSame(1, $res['fixedCount']);
+
+		$updated = $this->songFileMapper->findById($file->id);
+		self::assertNotNull($updated);
+		self::assertSame(3, $updated->pageCount);
+		self::assertSame('1-3', $updated->pageOrder);
+	}
 }

@@ -245,8 +245,11 @@ export function usePdfSplit(options: {
 					currentSegNum,
 					totalSegments,
 				)
+				const segPageCount = seg.endPage - seg.startPage + 1
 				const formData = new FormData()
 				formData.append('file', splitFile)
+				formData.append('pageCount', String(segPageCount))
+				formData.append('pageOrder', `1-${segPageCount}`)
 				const uploadRes = await apiPost('/api/libraries/{libraryId}/songs/{id}/file/upload', formData as any, {
 					pathParams: { libraryId: libraryId.value, id: newSongId },
 				})

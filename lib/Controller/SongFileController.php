@@ -60,8 +60,13 @@ class SongFileController extends OCSController {
 			return $errorResponse;
 		}
 
+		$pageCountParam = $this->request->getParam('pageCount');
+		$pageCount = $pageCountParam !== null && is_numeric($pageCountParam) ? (int)$pageCountParam : null;
+		$pageOrder = $this->request->getParam('pageOrder');
+		$pageOrder = is_string($pageOrder) && trim($pageOrder) !== '' ? trim($pageOrder) : null;
+
 		try {
-			$result = $this->songFileService->uploadSongFile($user, $libraryId, $id, $fileInfo);
+			$result = $this->songFileService->uploadSongFile($user, $libraryId, $id, $fileInfo, $pageCount, $pageOrder);
 			if ($result === null) {
 				return new DataResponse([], Http::STATUS_NOT_FOUND);
 			}

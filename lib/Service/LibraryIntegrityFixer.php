@@ -207,6 +207,10 @@ class LibraryIntegrityFixer {
 			return $this->fixStuckPageOrder($libraryId, $userId, $fileId);
 		}
 
+		if ($issueType === IntegrityIssue::TYPE_PAGE_COUNT_MISMATCH && $fileId !== null) {
+			return $this->fixPageCountMismatch($libraryId, $userId, $fileId);
+		}
+
 		if ($issueType === IntegrityIssue::TYPE_INVALID_NAMING_RULE && $songId !== null) {
 			['user' => $user, 'databasePath' => $databasePath, 'targetFolder' => $targetFolder] = $this->getUserLibraryContext($libraryId, $userId);
 			$hashCodes = MobileSheetsHashCodesFile::forDatabase($databasePath, $this->logger);
@@ -460,6 +464,18 @@ class LibraryIntegrityFixer {
 					$this->logger->warning('Cannot auto-fix stuck page order: ' . $e->getMessage());
 					$errors[] = 'Failed to reset page order: ' . $e->getMessage();
 				}
+			} elseif ($issue->type === IntegrityIssue::TYPE_PAGE_COUNT_MISMATCH && $issue->fileId !== null) {
+				try {
+					$res = $this->fixPageCountMismatch($libraryId, $userId, $issue->fileId);
+					if ($res['success']) {
+						$fixedCount++;
+					} else {
+						$errors[] = $res['message'];
+					}
+				} catch (\Throwable $e) {
+					$this->logger->warning('Cannot auto-fix page count mismatch: ' . $e->getMessage());
+					$errors[] = 'Failed to fix page count: ' . $e->getMessage();
+				}
 			}
 		}
 
@@ -491,6 +507,53 @@ class LibraryIntegrityFixer {
 		];
 	}
 
+	public function fixPageCountMismatch(int $libraryId, string $userId, int $fileId): array {
+		$fileRecord = $this->internalSongFileMapper->findById($fileId);
+		if ($fileRecord === null) {
+			return [
+				'success' => false,
+				'fixedCount' => 0,
+				'message' => 'Song file record not found.',
+			];
+		}
+
+		['user' => $user, 'targetFolder' => $targetFolder] = $this->getUserLibraryContext($libraryId, $userId);
+		$actualPageCount = $this->resolvePhysicalPageCount($fileRecord, $user, $targetFolder);
+		if ($actualPageCount <= 0) {
+			return [
+				'success' => false,
+				'fixedCount' => 0,
+				'message' => 'Could not determine physical page count from file.',
+			];
+		}
+
+		$fileRecord->pageCount = $actualPageCount;
+		$trimmedOrder = trim((string)($fileRecord->pageOrder ?? ''));
+		if ($trimmedOrder === '1-1' || $trimmedOrder === '1' || $trimmedOrder === '') {
+			$fileRecord->pageOrder = \OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdf::pageOrder($actualPageCount);
+		}
+
+		$now = time();
+		$fileRecord->updatedAt = $now;
+		$this->internalSongFileMapper->update($fileRecord);
+
+		if ($fileRecord->songId > 0) {
+			$song = $this->internalSongMapper->findById($fileRecord->songId);
+			if ($song !== null) {
+				$song->updatedAt = $now;
+				$this->internalSongMapper->update($song);
+			}
+		}
+
+		$this->libraryMapper->touch($libraryId);
+
+		return [
+			'success' => true,
+			'fixedCount' => 1,
+			'message' => sprintf('Updated page count to %d.', $actualPageCount),
+		];
+	}
+
 	public function fixStuckPageOrder(int $libraryId, string $userId, int $fileId): array {
 		$fileRecord = $this->internalSongFileMapper->findById($fileId);
 		if ($fileRecord === null) {
@@ -501,9 +564,13 @@ class LibraryIntegrityFixer {
 			];
 		}
 
-		$pageCount = max(1, $fileRecord->pageCount);
+		['user' => $user, 'targetFolder' => $targetFolder] = $this->getUserLibraryContext($libraryId, $userId);
+		$actualPageCount = $this->resolvePhysicalPageCount($fileRecord, $user, $targetFolder);
+		$pageCount = $actualPageCount > 0 ? $actualPageCount : max(1, $fileRecord->pageCount);
+
 		$newOrder = \OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdf::pageOrder($pageCount);
 		$fileRecord->pageOrder = $newOrder;
+		$fileRecord->pageCount = $pageCount;
 		$now = time();
 		$fileRecord->updatedAt = $now;
 		$this->internalSongFileMapper->update($fileRecord);
@@ -523,6 +590,56 @@ class LibraryIntegrityFixer {
 			'fixedCount' => 1,
 			'message' => sprintf('Reset page order to "%s".', $newOrder),
 		];
+	}
+
+	private function resolvePhysicalPageCount(InternalSongFile $fileRecord, IUser $user, ?Folder $targetFolder): int {
+		$detected = 0;
+		if ($fileRecord->fileId > 0) {
+			try {
+				$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+				$nodes = $userFolder->getById($fileRecord->fileId);
+				if (!empty($nodes) && $nodes[0] instanceof File) {
+					$content = $nodes[0]->getContent();
+					if (is_string($content) && $content !== '') {
+						$detected = \OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdf::pageCount($content);
+					}
+				}
+			} catch (\Throwable) {
+			}
+		}
+
+		if ($detected <= 0 && $fileRecord->path !== '') {
+			try {
+				$pathObj = $this->pathResolver->fromStored($fileRecord->path, $user);
+				if ($pathObj !== null) {
+					if ($targetFolder !== null) {
+						$targetFolderPath = (string)$targetFolder->getPath();
+						$rel = $this->pathResolver->relativeToFolder($pathObj->internal, $targetFolderPath);
+						if ($rel !== null && $targetFolder->nodeExists(ltrim($rel, '/'))) {
+							$node = $targetFolder->get(ltrim($rel, '/'));
+							if ($node instanceof File) {
+								$content = $node->getContent();
+								if (is_string($content) && $content !== '') {
+									$detected = \OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdf::pageCount($content);
+								}
+							}
+						}
+					}
+					if ($detected <= 0 && $this->rootFolder->nodeExists($pathObj->internal)) {
+						$node = $this->rootFolder->get($pathObj->internal);
+						if ($node instanceof File) {
+							$content = $node->getContent();
+							if (is_string($content) && $content !== '') {
+								$detected = \OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdf::pageCount($content);
+							}
+						}
+					}
+				}
+			} catch (\Throwable) {
+			}
+		}
+
+		return $detected;
 	}
 
 	private function findPdfMetadataMismatch(int $libraryId, string $userId, int $songId, int $fileId): ?IntegrityIssue {
