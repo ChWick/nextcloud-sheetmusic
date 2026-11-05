@@ -11,56 +11,81 @@ import FileDocumentIcon from 'vue-material-design-icons/FileDocument.vue'
 import MergeIcon from 'vue-material-design-icons/Merge.vue'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import { getFileName, openFileExternally } from '../../utils/file'
-import { formatEntityList, type FieldName } from './song-merge-utils'
+import {
+	ENTITY_COLUMNS,
+	SONG_SCALAR_FIELDS,
+	formatEntityList,
+	type FieldName,
+	type SelectOption,
+	type SongEditableDraft,
+	type SongEntityProp,
+	type SongScalarFieldDef,
+	type SongScalarProp,
+} from './song-merge-utils'
 
-defineProps<{
+const props = defineProps<{
 	songA?: Song
 	songB?: Song
 	keepId: number
-	mergedTitle: string
-	mergedComposers: { id: number; label: string }[]
-	mergedBooks: { id: number; label: string }[]
-	mergedCollections: { id: number; label: string }[]
-	mergedArtists: { id: number; label: string }[]
-	mergedGenres: { id: number; label: string }[]
-	mergedKeys: { id: number; label: string }[]
-	mergedKeywords: string
-	composerOptions: { id: number; label: string }[]
-	bookOptions: { id: number; label: string }[]
-	collectionOptions: { id: number; label: string }[]
-	artistOptions: { id: number; label: string }[]
-	genreOptions: { id: number; label: string }[]
-	keyOptions: { id: number; label: string }[]
+	draft: SongEditableDraft
+	optionsMap: Record<SongEntityProp, SelectOption[]>
 }>()
 
 const emit = defineEmits<{
 	'update:keepId': [id: number]
-	'update:mergedTitle': [val: string]
-	'update:mergedComposers': [val: { id: number; label: string }[]]
-	'update:mergedBooks': [val: { id: number; label: string }[]]
-	'update:mergedCollections': [val: { id: number; label: string }[]]
-	'update:mergedArtists': [val: { id: number; label: string }[]]
-	'update:mergedGenres': [val: { id: number; label: string }[]]
-	'update:mergedKeys': [val: { id: number; label: string }[]]
-	'update:mergedKeywords': [val: string]
+	'update:title': [val: string]
+	'update:entity': [prop: SongEntityProp, val: SelectOption[]]
+	'update:scalar': [key: SongScalarProp, val: string | number | null]
 	copyField: [field: FieldName, from: 'A' | 'B']
+	copyAll: [from: 'A' | 'B']
 }>()
+
+function getSongEntities(song: Song | undefined, prop: SongEntityProp): { id?: number; name?: string; title?: string; year?: number }[] | undefined {
+	return (song as Record<string, unknown> | undefined)?.[prop] as { id?: number; name?: string; title?: string; year?: number }[] | undefined
+}
+
+function getScalarModelValue(field: SongScalarFieldDef): string {
+	const val = props.draft.scalars[field.key]
+	if (field.type === 'number') {
+		return val !== null && val !== undefined && Number(val) > 0 ? String(val) : ''
+	}
+	return String(val ?? '')
+}
+
+function onScalarInput(field: SongScalarFieldDef, raw: string | number) {
+	if (field.type === 'number') {
+		const num = Number(raw)
+		emit('update:scalar', field.key, Number.isFinite(num) && num > 0 ? num : null)
+	} else {
+		emit('update:scalar', field.key, String(raw ?? ''))
+	}
+}
 </script>
 
 <template>
-	<div :class="$style.comparisonGrid">
+	<div :class="$style.comparisonGrid" data-test="merge-mode-grid">
 		<!-- Column Headers -->
 		<div :class="[$style.headerCol, $style.songLeft]">
 			<strong>{{ t('sheetmusic', 'Song A') }}</strong>
 			<span :class="$style.idBadge">ID {{ songA?.id }}</span>
 			<NcCheckboxRadioSwitch
-				:checked="keepId === (songA?.id ?? 0)"
+				:model-value="String(keepId)"
 				type="radio"
 				name="keepId"
-				:value="String(songA?.id)"
-				@update:checked="emit('update:keepId', songA?.id ?? 0)">
+				:value="String(songA?.id ?? 0)"
+				data-test="keep-id-a"
+				@update:model-value="emit('update:keepId', Number($event))">
 				{{ t('sheetmusic', 'Keep ID') }}
 			</NcCheckboxRadioSwitch>
+			<NcButton
+				variant="tertiary"
+				type="button"
+				:title="t('sheetmusic', 'Use all values from Song A')"
+				data-test="copy-all-from-a"
+				@click="emit('copyAll', 'A')">
+				<template #icon><ArrowRightIcon :size="16" /></template>
+				{{ t('sheetmusic', 'Use all A') }}
+			</NcButton>
 		</div>
 
 		<div :class="[$style.headerCol, $style.songMerged]">
@@ -70,14 +95,24 @@ const emit = defineEmits<{
 		</div>
 
 		<div :class="[$style.headerCol, $style.songRight]">
+			<NcButton
+				variant="tertiary"
+				type="button"
+				:title="t('sheetmusic', 'Use all values from Song B')"
+				data-test="copy-all-from-b"
+				@click="emit('copyAll', 'B')">
+				<template #icon><ArrowLeftIcon :size="16" /></template>
+				{{ t('sheetmusic', 'Use all B') }}
+			</NcButton>
 			<strong>{{ t('sheetmusic', 'Song B') }}</strong>
 			<span :class="$style.idBadge">ID {{ songB?.id }}</span>
 			<NcCheckboxRadioSwitch
-				:checked="keepId === (songB?.id ?? 0)"
+				:model-value="String(keepId)"
 				type="radio"
 				name="keepId"
-				:value="String(songB?.id)"
-				@update:checked="emit('update:keepId', songB?.id ?? 0)">
+				:value="String(songB?.id ?? 0)"
+				data-test="keep-id-b"
+				@update:model-value="emit('update:keepId', Number($event))">
 				{{ t('sheetmusic', 'Keep ID') }}
 			</NcCheckboxRadioSwitch>
 		</div>
@@ -86,233 +121,130 @@ const emit = defineEmits<{
 		<div :class="$style.cellA">
 			<div :class="$style.fieldInfo">
 				<span :class="$style.label">{{ t('sheetmusic', 'Title') }}</span>
-				<span :class="$style.val">{{ songA?.title || '-' }}</span>
+				<span :class="$style.val" data-test="val-a-title">{{ songA?.title || '-' }}</span>
 			</div>
-			<NcButton type="tertiary" :title="t('sheetmusic', 'Use Song A Title')" @click="emit('copyField', 'title', 'A')">
+			<NcButton
+				variant="tertiary"
+				type="button"
+				:title="t('sheetmusic', 'Use Song A Title')"
+				:aria-label="t('sheetmusic', 'Use Song A Title')"
+				data-test="copy-from-a-title"
+				@click="emit('copyField', 'title', 'A')">
 				<template #icon><ArrowRightIcon :size="16" /></template>
 			</NcButton>
 		</div>
-		<div :class="$style.cellMerged">
+		<div :class="$style.cellMerged" data-test="merged-field-title">
 			<NcTextField
+				id="merge-title-input"
 				:label="t('sheetmusic', 'Title')"
-				:value="mergedTitle"
-				@update:value="emit('update:mergedTitle', $event)" />
+				:model-value="draft.title"
+				@update:model-value="emit('update:title', String($event ?? ''))" />
 		</div>
 		<div :class="$style.cellB">
-			<NcButton type="tertiary" :title="t('sheetmusic', 'Use Song B Title')" @click="emit('copyField', 'title', 'B')">
+			<NcButton
+				variant="tertiary"
+				type="button"
+				:title="t('sheetmusic', 'Use Song B Title')"
+				:aria-label="t('sheetmusic', 'Use Song B Title')"
+				data-test="copy-from-b-title"
+				@click="emit('copyField', 'title', 'B')">
 				<template #icon><ArrowLeftIcon :size="16" /></template>
 			</NcButton>
 			<div :class="[$style.fieldInfo, $style.alignRight]">
 				<span :class="$style.label">{{ t('sheetmusic', 'Title') }}</span>
-				<span :class="$style.val">{{ songB?.title || '-' }}</span>
+				<span :class="$style.val" data-test="val-b-title">{{ songB?.title || '-' }}</span>
 			</div>
 		</div>
 
-		<!-- Row: Composers -->
-		<div :class="$style.cellA">
-			<div :class="$style.fieldInfo">
-				<span :class="$style.label">{{ t('sheetmusic', 'Composers') }}</span>
-				<span :class="$style.val">{{ formatEntityList(songA?.composers) }}</span>
+		<!-- Rows: All Entity Types (from ENTITY_COLUMNS single source of truth) -->
+		<template v-for="col in ENTITY_COLUMNS" :key="col.songProp">
+			<div :class="$style.cellA">
+				<div :class="$style.fieldInfo">
+					<span :class="$style.label">{{ col.pluralLabel() }}</span>
+					<span :class="$style.val" :data-test="`val-a-${col.songProp}`">{{ formatEntityList(getSongEntities(songA, col.songProp)) }}</span>
+				</div>
+				<NcButton
+					variant="tertiary"
+					type="button"
+					:title="t('sheetmusic', 'Use Song A {field}', { field: col.pluralLabel() })"
+					:aria-label="t('sheetmusic', 'Use Song A {field}', { field: col.pluralLabel() })"
+					:data-test="`copy-from-a-${col.songProp}`"
+					@click="emit('copyField', col.songProp, 'A')">
+					<template #icon><ArrowRightIcon :size="16" /></template>
+				</NcButton>
 			</div>
-			<NcButton type="tertiary" :title="t('sheetmusic', 'Use Song A Composers')" @click="emit('copyField', 'composers', 'A')">
-				<template #icon><ArrowRightIcon :size="16" /></template>
-			</NcButton>
-		</div>
-		<div :class="$style.cellMerged">
-			<label :class="$style.fieldLabel">{{ t('sheetmusic', 'Composers') }}</label>
-			<NcSelect
-				:value="mergedComposers"
-				:options="composerOptions"
-				:multiple="true"
-				label="label"
-				track-by="id"
-				@update:value="emit('update:mergedComposers', $event)" />
-		</div>
-		<div :class="$style.cellB">
-			<NcButton type="tertiary" :title="t('sheetmusic', 'Use Song B Composers')" @click="emit('copyField', 'composers', 'B')">
-				<template #icon><ArrowLeftIcon :size="16" /></template>
-			</NcButton>
-			<div :class="[$style.fieldInfo, $style.alignRight]">
-				<span :class="$style.label">{{ t('sheetmusic', 'Composers') }}</span>
-				<span :class="$style.val">{{ formatEntityList(songB?.composers) }}</span>
+			<div :class="$style.cellMerged" :data-test="`merged-field-${col.songProp}`">
+				<label :class="$style.fieldLabel">{{ col.pluralLabel() }}</label>
+				<NcSelect
+					:model-value="draft.entities[col.songProp]"
+					:options="optionsMap[col.songProp] ?? []"
+					:multiple="true"
+					:input-label="col.pluralLabel()"
+					label="label"
+					track-by="id"
+					@update:model-value="emit('update:entity', col.songProp, ($event ?? []) as SelectOption[])" />
 			</div>
-		</div>
+			<div :class="$style.cellB">
+				<NcButton
+					variant="tertiary"
+					type="button"
+					:title="t('sheetmusic', 'Use Song B {field}', { field: col.pluralLabel() })"
+					:aria-label="t('sheetmusic', 'Use Song B {field}', { field: col.pluralLabel() })"
+					:data-test="`copy-from-b-${col.songProp}`"
+					@click="emit('copyField', col.songProp, 'B')">
+					<template #icon><ArrowLeftIcon :size="16" /></template>
+				</NcButton>
+				<div :class="[$style.fieldInfo, $style.alignRight]">
+					<span :class="$style.label">{{ col.pluralLabel() }}</span>
+					<span :class="$style.val" :data-test="`val-b-${col.songProp}`">{{ formatEntityList(getSongEntities(songB, col.songProp)) }}</span>
+				</div>
+			</div>
+		</template>
 
-		<!-- Row: Books -->
-		<div :class="$style.cellA">
-			<div :class="$style.fieldInfo">
-				<span :class="$style.label">{{ t('sheetmusic', 'Books') }}</span>
-				<span :class="$style.val">{{ formatEntityList(songA?.books) }}</span>
+		<!-- Rows: All Scalar Fields (from SONG_SCALAR_FIELDS single source of truth) -->
+		<template v-for="field in SONG_SCALAR_FIELDS" :key="field.key">
+			<div :class="$style.cellA">
+				<div :class="$style.fieldInfo">
+					<span :class="$style.label">{{ field.label() }}</span>
+					<span :class="$style.val" :data-test="`val-a-${field.key}`">{{ field.formatDisplay(songA) }}</span>
+				</div>
+				<NcButton
+					variant="tertiary"
+					type="button"
+					:title="t('sheetmusic', 'Use Song A {field}', { field: field.label() })"
+					:aria-label="t('sheetmusic', 'Use Song A {field}', { field: field.label() })"
+					:data-test="`copy-from-a-${field.key}`"
+					@click="emit('copyField', field.key, 'A')">
+					<template #icon><ArrowRightIcon :size="16" /></template>
+				</NcButton>
 			</div>
-			<NcButton type="tertiary" :title="t('sheetmusic', 'Use Song A Books')" @click="emit('copyField', 'books', 'A')">
-				<template #icon><ArrowRightIcon :size="16" /></template>
-			</NcButton>
-		</div>
-		<div :class="$style.cellMerged">
-			<label :class="$style.fieldLabel">{{ t('sheetmusic', 'Books') }}</label>
-			<NcSelect
-				:value="mergedBooks"
-				:options="bookOptions"
-				:multiple="true"
-				label="label"
-				track-by="id"
-				@update:value="emit('update:mergedBooks', $event)" />
-		</div>
-		<div :class="$style.cellB">
-			<NcButton type="tertiary" :title="t('sheetmusic', 'Use Song B Books')" @click="emit('copyField', 'books', 'B')">
-				<template #icon><ArrowLeftIcon :size="16" /></template>
-			</NcButton>
-			<div :class="[$style.fieldInfo, $style.alignRight]">
-				<span :class="$style.label">{{ t('sheetmusic', 'Books') }}</span>
-				<span :class="$style.val">{{ formatEntityList(songB?.books) }}</span>
+			<div :class="$style.cellMerged" :data-test="`merged-field-${field.key}`">
+				<NcTextField
+					:id="`merge-${field.key}-input`"
+					:type="field.type"
+					:min="field.min"
+					:max="field.max"
+					:label="field.inputLabel()"
+					:placeholder="field.placeholder()"
+					:model-value="getScalarModelValue(field)"
+					@update:model-value="onScalarInput(field, $event)" />
 			</div>
-		</div>
-
-		<!-- Row: Collections -->
-		<div :class="$style.cellA">
-			<div :class="$style.fieldInfo">
-				<span :class="$style.label">{{ t('sheetmusic', 'Collections') }}</span>
-				<span :class="$style.val">{{ formatEntityList(songA?.collections) }}</span>
+			<div :class="$style.cellB">
+				<NcButton
+					variant="tertiary"
+					type="button"
+					:title="t('sheetmusic', 'Use Song B {field}', { field: field.label() })"
+					:aria-label="t('sheetmusic', 'Use Song B {field}', { field: field.label() })"
+					:data-test="`copy-from-b-${field.key}`"
+					@click="emit('copyField', field.key, 'B')">
+					<template #icon><ArrowLeftIcon :size="16" /></template>
+				</NcButton>
+				<div :class="[$style.fieldInfo, $style.alignRight]">
+					<span :class="$style.label">{{ field.label() }}</span>
+					<span :class="$style.val" :data-test="`val-b-${field.key}`">{{ field.formatDisplay(songB) }}</span>
+				</div>
 			</div>
-			<NcButton type="tertiary" :title="t('sheetmusic', 'Use Song A Collections')" @click="emit('copyField', 'collections', 'A')">
-				<template #icon><ArrowRightIcon :size="16" /></template>
-			</NcButton>
-		</div>
-		<div :class="$style.cellMerged">
-			<label :class="$style.fieldLabel">{{ t('sheetmusic', 'Collections') }}</label>
-			<NcSelect
-				:value="mergedCollections"
-				:options="collectionOptions"
-				:multiple="true"
-				label="label"
-				track-by="id"
-				@update:value="emit('update:mergedCollections', $event)" />
-		</div>
-		<div :class="$style.cellB">
-			<NcButton type="tertiary" :title="t('sheetmusic', 'Use Song B Collections')" @click="emit('copyField', 'collections', 'B')">
-				<template #icon><ArrowLeftIcon :size="16" /></template>
-			</NcButton>
-			<div :class="[$style.fieldInfo, $style.alignRight]">
-				<span :class="$style.label">{{ t('sheetmusic', 'Collections') }}</span>
-				<span :class="$style.val">{{ formatEntityList(songB?.collections) }}</span>
-			</div>
-		</div>
-
-		<!-- Row: Artists -->
-		<div :class="$style.cellA">
-			<div :class="$style.fieldInfo">
-				<span :class="$style.label">{{ t('sheetmusic', 'Artists') }}</span>
-				<span :class="$style.val">{{ formatEntityList(songA?.artists) }}</span>
-			</div>
-			<NcButton type="tertiary" :title="t('sheetmusic', 'Use Song A Artists')" @click="emit('copyField', 'artists', 'A')">
-				<template #icon><ArrowRightIcon :size="16" /></template>
-			</NcButton>
-		</div>
-		<div :class="$style.cellMerged">
-			<label :class="$style.fieldLabel">{{ t('sheetmusic', 'Artists') }}</label>
-			<NcSelect
-				:value="mergedArtists"
-				:options="artistOptions"
-				:multiple="true"
-				label="label"
-				track-by="id"
-				@update:value="emit('update:mergedArtists', $event)" />
-		</div>
-		<div :class="$style.cellB">
-			<NcButton type="tertiary" :title="t('sheetmusic', 'Use Song B Artists')" @click="emit('copyField', 'artists', 'B')">
-				<template #icon><ArrowLeftIcon :size="16" /></template>
-			</NcButton>
-			<div :class="[$style.fieldInfo, $style.alignRight]">
-				<span :class="$style.label">{{ t('sheetmusic', 'Artists') }}</span>
-				<span :class="$style.val">{{ formatEntityList(songB?.artists) }}</span>
-			</div>
-		</div>
-
-		<!-- Row: Genres -->
-		<div :class="$style.cellA">
-			<div :class="$style.fieldInfo">
-				<span :class="$style.label">{{ t('sheetmusic', 'Genres') }}</span>
-				<span :class="$style.val">{{ formatEntityList(songA?.genres) }}</span>
-			</div>
-			<NcButton type="tertiary" :title="t('sheetmusic', 'Use Song A Genres')" @click="emit('copyField', 'genres', 'A')">
-				<template #icon><ArrowRightIcon :size="16" /></template>
-			</NcButton>
-		</div>
-		<div :class="$style.cellMerged">
-			<label :class="$style.fieldLabel">{{ t('sheetmusic', 'Genres') }}</label>
-			<NcSelect
-				:value="mergedGenres"
-				:options="genreOptions"
-				:multiple="true"
-				label="label"
-				track-by="id"
-				@update:value="emit('update:mergedGenres', $event)" />
-		</div>
-		<div :class="$style.cellB">
-			<NcButton type="tertiary" :title="t('sheetmusic', 'Use Song B Genres')" @click="emit('copyField', 'genres', 'B')">
-				<template #icon><ArrowLeftIcon :size="16" /></template>
-			</NcButton>
-			<div :class="[$style.fieldInfo, $style.alignRight]">
-				<span :class="$style.label">{{ t('sheetmusic', 'Genres') }}</span>
-				<span :class="$style.val">{{ formatEntityList(songB?.genres) }}</span>
-			</div>
-		</div>
-
-		<!-- Row: Keys -->
-		<div :class="$style.cellA">
-			<div :class="$style.fieldInfo">
-				<span :class="$style.label">{{ t('sheetmusic', 'Keys') }}</span>
-				<span :class="$style.val">{{ formatEntityList(songA?.keys) }}</span>
-			</div>
-			<NcButton type="tertiary" :title="t('sheetmusic', 'Use Song A Keys')" @click="emit('copyField', 'keys', 'A')">
-				<template #icon><ArrowRightIcon :size="16" /></template>
-			</NcButton>
-		</div>
-		<div :class="$style.cellMerged">
-			<label :class="$style.fieldLabel">{{ t('sheetmusic', 'Keys') }}</label>
-			<NcSelect
-				:value="mergedKeys"
-				:options="keyOptions"
-				:multiple="true"
-				label="label"
-				track-by="id"
-				@update:value="emit('update:mergedKeys', $event)" />
-		</div>
-		<div :class="$style.cellB">
-			<NcButton type="tertiary" :title="t('sheetmusic', 'Use Song B Keys')" @click="emit('copyField', 'keys', 'B')">
-				<template #icon><ArrowLeftIcon :size="16" /></template>
-			</NcButton>
-			<div :class="[$style.fieldInfo, $style.alignRight]">
-				<span :class="$style.label">{{ t('sheetmusic', 'Keys') }}</span>
-				<span :class="$style.val">{{ formatEntityList(songB?.keys) }}</span>
-			</div>
-		</div>
-
-		<!-- Row: Keywords -->
-		<div :class="$style.cellA">
-			<div :class="$style.fieldInfo">
-				<span :class="$style.label">{{ t('sheetmusic', 'Keywords') }}</span>
-				<span :class="$style.val">{{ songA?.keywords || '-' }}</span>
-			</div>
-			<NcButton type="tertiary" :title="t('sheetmusic', 'Use Song A Keywords')" @click="emit('copyField', 'keywords', 'A')">
-				<template #icon><ArrowRightIcon :size="16" /></template>
-			</NcButton>
-		</div>
-		<div :class="$style.cellMerged">
-			<NcTextField
-				:label="t('sheetmusic', 'Keywords')"
-				:value="mergedKeywords"
-				@update:value="emit('update:mergedKeywords', $event)" />
-		</div>
-		<div :class="$style.cellB">
-			<NcButton type="tertiary" :title="t('sheetmusic', 'Use Song B Keywords')" @click="emit('copyField', 'keywords', 'B')">
-				<template #icon><ArrowLeftIcon :size="16" /></template>
-			</NcButton>
-			<div :class="[$style.fieldInfo, $style.alignRight]">
-				<span :class="$style.label">{{ t('sheetmusic', 'Keywords') }}</span>
-				<span :class="$style.val">{{ songB?.keywords || '-' }}</span>
-			</div>
-		</div>
+		</template>
 
 		<!-- Row: Attached Files -->
 		<div :class="$style.cellA">
@@ -322,7 +254,7 @@ const emit = defineEmits<{
 					<li v-for="f in songA.files" :key="f.id" :class="$style.fileItem">
 						<FileDocumentIcon :size="16" />
 						<span :class="$style.fileName">{{ getFileName(f.path) }}</span>
-						<NcButton type="tertiary" :title="t('sheetmusic', 'Open File')" @click="openFileExternally(f.path)">
+						<NcButton variant="tertiary" type="button" :title="t('sheetmusic', 'Open File')" @click="openFileExternally(f.path)">
 							<template #icon><OpenInNewIcon :size="14" /></template>
 						</NcButton>
 					</li>
@@ -343,7 +275,7 @@ const emit = defineEmits<{
 					<li v-for="f in songB.files" :key="f.id" :class="$style.fileItem">
 						<FileDocumentIcon :size="16" />
 						<span :class="$style.fileName">{{ getFileName(f.path) }}</span>
-						<NcButton type="tertiary" :title="t('sheetmusic', 'Open File')" @click="openFileExternally(f.path)">
+						<NcButton variant="tertiary" type="button" :title="t('sheetmusic', 'Open File')" @click="openFileExternally(f.path)">
 							<template #icon><OpenInNewIcon :size="14" /></template>
 						</NcButton>
 					</li>
@@ -489,4 +421,3 @@ const emit = defineEmits<{
 	color: var(--color-text-maxcontrast);
 }
 </style>
-

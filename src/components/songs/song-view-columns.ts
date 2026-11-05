@@ -1,7 +1,7 @@
 import { translate as t } from '@nextcloud/l10n'
 import type { EntityType, FilterEntity, Song, SongColumn } from '../../types/song'
 import type { EntityLabelField, SongEntityIdField } from '../song-editor/entity-utils'
-import { formatDifficulty, formatStars, type SortKey } from '../../utils/song-formatter'
+import { formatDifficulty, formatDuration, formatStars, type SortKey } from '../../utils/song-formatter'
 
 export type InlineEditableField =
 	| 'title'
@@ -41,6 +41,28 @@ export type SongEntityProp =
 	| 'instruments'
 	| 'arrangers'
 
+export type SongScalarProp =
+	| 'opus'
+	| 'catalogNumber'
+	| 'songNumber'
+	| 'stars'
+	| 'difficulty'
+	| 'duration'
+	| 'keywords'
+	| 'custom'
+	| 'custom2'
+
+export interface SongScalarFieldDef {
+	key: SongScalarProp
+	type: 'text' | 'number'
+	min?: number
+	max?: number
+	label: () => string
+	inputLabel: () => string
+	placeholder: () => string
+	formatDisplay: (song?: Song) => string
+}
+
 export interface TableColumnDef {
 	col: SongColumn
 	sortKey: SortKey
@@ -57,6 +79,7 @@ export interface EntityColumnDef {
 	entityType: EntityType
 	cardLabel: () => string
 	ariaLabel: () => string
+	pluralLabel: () => string
 	editTitle: () => string
 	getItems: (song: Song) => FilterEntity[]
 	getItemLabel: (item: FilterEntity) => string
@@ -123,6 +146,7 @@ function makeEntityCol(config: {
 	entityType: EntityType
 	cardLabel: () => string
 	ariaLabel: () => string
+	pluralLabel: () => string
 	editTitle: () => string
 	getFilterTitle: (label: string) => string
 }): EntityColumnDef {
@@ -148,6 +172,7 @@ export const ENTITY_COLUMNS: EntityColumnDef[] = [
 		entityType: 'composers',
 		cardLabel: () => t('sheetmusic', 'Composer:'),
 		ariaLabel: () => t('sheetmusic', 'Composer'),
+		pluralLabel: () => t('sheetmusic', 'Composers'),
 		editTitle: () => t('sheetmusic', 'Edit composer inline'),
 		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for composer {name}', { name }),
 	}),
@@ -161,6 +186,7 @@ export const ENTITY_COLUMNS: EntityColumnDef[] = [
 		entityType: 'books',
 		cardLabel: () => t('sheetmusic', 'Book:'),
 		ariaLabel: () => t('sheetmusic', 'Book'),
+		pluralLabel: () => t('sheetmusic', 'Books'),
 		editTitle: () => t('sheetmusic', 'Edit book inline'),
 		getFilterTitle: (title) => t('sheetmusic', 'Toggle filter for book {title}', { title }),
 	}),
@@ -174,6 +200,7 @@ export const ENTITY_COLUMNS: EntityColumnDef[] = [
 		entityType: 'collections',
 		cardLabel: () => t('sheetmusic', 'Collection:'),
 		ariaLabel: () => t('sheetmusic', 'Collection'),
+		pluralLabel: () => t('sheetmusic', 'Collections'),
 		editTitle: () => t('sheetmusic', 'Edit collection inline'),
 		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for collection {name}', { name }),
 	}),
@@ -187,6 +214,7 @@ export const ENTITY_COLUMNS: EntityColumnDef[] = [
 		entityType: 'artists',
 		cardLabel: () => t('sheetmusic', 'Artist:'),
 		ariaLabel: () => t('sheetmusic', 'Artist'),
+		pluralLabel: () => t('sheetmusic', 'Artists'),
 		editTitle: () => t('sheetmusic', 'Edit artist inline'),
 		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for artist {name}', { name }),
 	}),
@@ -200,6 +228,7 @@ export const ENTITY_COLUMNS: EntityColumnDef[] = [
 		entityType: 'genres',
 		cardLabel: () => t('sheetmusic', 'Genre:'),
 		ariaLabel: () => t('sheetmusic', 'Genre'),
+		pluralLabel: () => t('sheetmusic', 'Genres'),
 		editTitle: () => t('sheetmusic', 'Edit genre inline'),
 		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for genre {name}', { name }),
 	}),
@@ -213,6 +242,7 @@ export const ENTITY_COLUMNS: EntityColumnDef[] = [
 		entityType: 'keys',
 		cardLabel: () => t('sheetmusic', 'Key:'),
 		ariaLabel: () => t('sheetmusic', 'Key'),
+		pluralLabel: () => t('sheetmusic', 'Keys'),
 		editTitle: () => t('sheetmusic', 'Edit key inline'),
 		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for key {name}', { name }),
 	}),
@@ -226,6 +256,7 @@ export const ENTITY_COLUMNS: EntityColumnDef[] = [
 		entityType: 'customgroups',
 		cardLabel: () => t('sheetmusic', 'Custom Group:'),
 		ariaLabel: () => t('sheetmusic', 'Custom Group'),
+		pluralLabel: () => t('sheetmusic', 'Custom Groups'),
 		editTitle: () => t('sheetmusic', 'Edit custom group inline'),
 		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for custom group {name}', { name }),
 	}),
@@ -239,6 +270,7 @@ export const ENTITY_COLUMNS: EntityColumnDef[] = [
 		entityType: 'years',
 		cardLabel: () => t('sheetmusic', 'Year:'),
 		ariaLabel: () => t('sheetmusic', 'Year'),
+		pluralLabel: () => t('sheetmusic', 'Years'),
 		editTitle: () => t('sheetmusic', 'Edit year inline'),
 		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for year {name}', { name }),
 	}),
@@ -252,6 +284,7 @@ export const ENTITY_COLUMNS: EntityColumnDef[] = [
 		entityType: 'signatures',
 		cardLabel: () => t('sheetmusic', 'Time Signature:'),
 		ariaLabel: () => t('sheetmusic', 'Time Signature'),
+		pluralLabel: () => t('sheetmusic', 'Time Signatures'),
 		editTitle: () => t('sheetmusic', 'Edit time signature inline'),
 		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for signature {name}', { name }),
 	}),
@@ -265,6 +298,7 @@ export const ENTITY_COLUMNS: EntityColumnDef[] = [
 		entityType: 'sourcetypes',
 		cardLabel: () => t('sheetmusic', 'Source Type:'),
 		ariaLabel: () => t('sheetmusic', 'Source Type'),
+		pluralLabel: () => t('sheetmusic', 'Source Types'),
 		editTitle: () => t('sheetmusic', 'Edit source type inline'),
 		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for source type {name}', { name }),
 	}),
@@ -278,6 +312,7 @@ export const ENTITY_COLUMNS: EntityColumnDef[] = [
 		entityType: 'instruments',
 		cardLabel: () => t('sheetmusic', 'Instrument:'),
 		ariaLabel: () => t('sheetmusic', 'Instrument'),
+		pluralLabel: () => t('sheetmusic', 'Instruments'),
 		editTitle: () => t('sheetmusic', 'Edit instrument inline'),
 		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for instrument {name}', { name }),
 	}),
@@ -291,9 +326,94 @@ export const ENTITY_COLUMNS: EntityColumnDef[] = [
 		entityType: 'arrangers',
 		cardLabel: () => t('sheetmusic', 'Arranger:'),
 		ariaLabel: () => t('sheetmusic', 'Arranger'),
+		pluralLabel: () => t('sheetmusic', 'Arrangers'),
 		editTitle: () => t('sheetmusic', 'Edit arranger inline'),
 		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for arranger {name}', { name }),
 	}),
+]
+
+/**
+ * Single source of truth for all scalar metadata fields of a song (excluding title).
+ * Used across SongMergeDialog, SongMergeModeView, SongResolveBothModeView, etc.
+ */
+export const SONG_SCALAR_FIELDS: SongScalarFieldDef[] = [
+	{
+		key: 'opus',
+		type: 'text',
+		label: () => t('sheetmusic', 'Opus'),
+		inputLabel: () => t('sheetmusic', 'Opus'),
+		placeholder: () => t('sheetmusic', 'Opus (e.g. Op. 28 No. 4)…'),
+		formatDisplay: (song?: Song) => song?.opus || '-',
+	},
+	{
+		key: 'catalogNumber',
+		type: 'text',
+		label: () => t('sheetmusic', 'Catalog Number'),
+		inputLabel: () => t('sheetmusic', 'Catalog Number'),
+		placeholder: () => t('sheetmusic', 'Catalog No. (BWV, KV, etc.)…'),
+		formatDisplay: (song?: Song) => song?.catalogNumber || '-',
+	},
+	{
+		key: 'songNumber',
+		type: 'text',
+		label: () => t('sheetmusic', 'Song Number'),
+		inputLabel: () => t('sheetmusic', 'Song Number'),
+		placeholder: () => t('sheetmusic', 'Song No. (e.g. 88 or 104/5)…'),
+		formatDisplay: (song?: Song) => song?.songNumber || '-',
+	},
+	{
+		key: 'stars',
+		type: 'number',
+		min: 0,
+		max: 5,
+		label: () => t('sheetmusic', 'Rating'),
+		inputLabel: () => t('sheetmusic', 'Rating (Stars 0-5)'),
+		placeholder: () => t('sheetmusic', '0-5'),
+		formatDisplay: (song?: Song) => (song?.stars && song.stars > 0) ? `${formatStars(song.stars)} (${song.stars})` : '-',
+	},
+	{
+		key: 'difficulty',
+		type: 'number',
+		min: 0,
+		max: 5,
+		label: () => t('sheetmusic', 'Difficulty'),
+		inputLabel: () => t('sheetmusic', 'Difficulty (0-5)'),
+		placeholder: () => t('sheetmusic', '0-5'),
+		formatDisplay: (song?: Song) => (song?.difficulty && song.difficulty > 0) ? `${formatDifficulty(song.difficulty)} (${song.difficulty})` : '-',
+	},
+	{
+		key: 'duration',
+		type: 'number',
+		min: 0,
+		label: () => t('sheetmusic', 'Duration'),
+		inputLabel: () => t('sheetmusic', 'Duration (seconds)'),
+		placeholder: () => t('sheetmusic', 'Seconds (e.g. 180)'),
+		formatDisplay: (song?: Song) => (song?.duration && song.duration > 0) ? `${formatDuration(song.duration, '-')} (${song.duration}s)` : '-',
+	},
+	{
+		key: 'keywords',
+		type: 'text',
+		label: () => t('sheetmusic', 'Keywords'),
+		inputLabel: () => t('sheetmusic', 'Keywords'),
+		placeholder: () => t('sheetmusic', 'Keywords / tags…'),
+		formatDisplay: (song?: Song) => song?.keywords || '-',
+	},
+	{
+		key: 'custom',
+		type: 'text',
+		label: () => t('sheetmusic', 'Custom'),
+		inputLabel: () => t('sheetmusic', 'Custom'),
+		placeholder: () => t('sheetmusic', 'Custom field…'),
+		formatDisplay: (song?: Song) => song?.custom || '-',
+	},
+	{
+		key: 'custom2',
+		type: 'text',
+		label: () => t('sheetmusic', 'Custom 2'),
+		inputLabel: () => t('sheetmusic', 'Custom 2'),
+		placeholder: () => t('sheetmusic', 'Custom field 2…'),
+		formatDisplay: (song?: Song) => song?.custom2 || '-',
+	},
 ]
 
 export const IDENTIFIER_TEXT_COLUMNS: TextEditableColumnDef[] = [

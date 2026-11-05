@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
+	ENTITY_COLUMNS,
+	SONG_SCALAR_FIELDS,
 	areEntitiesEqual,
+	copyFieldIntoDraft,
+	createDraftFromSong,
+	createMergedDraft,
+	draftToMergedSongData,
 	entityName,
 	formatEntityList,
 	toSelectOptions,
@@ -9,6 +15,78 @@ import {
 import type { Song } from '../../../src/types/song'
 
 describe('song-merge-utils', () => {
+	describe('single source of truth coverage', () => {
+		it('includes all 12 entity types and all 9 scalar fields', () => {
+			expect(ENTITY_COLUMNS.map(c => c.songProp)).toEqual([
+				'composers',
+				'books',
+				'collections',
+				'artists',
+				'genres',
+				'keys',
+				'customGroups',
+				'years',
+				'signatures',
+				'sourceTypes',
+				'instruments',
+				'arrangers',
+			])
+			expect(SONG_SCALAR_FIELDS.map(f => f.key)).toEqual([
+				'opus',
+				'catalogNumber',
+				'songNumber',
+				'stars',
+				'difficulty',
+				'duration',
+				'keywords',
+				'custom',
+				'custom2',
+			])
+		})
+
+		it('creates merged draft, copies fields, and converts to MergedSongData', () => {
+			const songA: Song = {
+				id: 1,
+				title: 'Chorale',
+				composers: [{ id: 10, name: 'Bach' }],
+				arrangers: [{ id: 20, name: 'Busoni' }],
+				duration: 180,
+				stars: 5,
+				opus: 'BWV 639',
+			}
+			const songB: Song = {
+				id: 2,
+				title: 'Chorale Prelude',
+				composers: [{ id: 10, name: 'Bach' }],
+				arrangers: [{ id: 21, name: 'Reger' }],
+				duration: 200,
+				stars: 5,
+				opus: 'BWV 639',
+			}
+
+			const merged = createMergedDraft(songA, songB)
+			expect(merged.title).toBe('')
+			expect(merged.entities.composers).toEqual([{ id: 10, label: 'Bach' }])
+			expect(merged.entities.arrangers).toEqual([])
+			expect(merged.scalars.stars).toBe(5)
+			expect(merged.scalars.duration).toBeNull()
+			expect(merged.scalars.opus).toBe('BWV 639')
+
+			copyFieldIntoDraft(merged, 'title', songA)
+			copyFieldIntoDraft(merged, 'arrangers', songB)
+			copyFieldIntoDraft(merged, 'duration', songA)
+
+			const data = draftToMergedSongData(merged)
+			expect(data.title).toBe('Chorale')
+			expect(data.composerIds).toEqual([10])
+			expect(data.arrangerIds).toEqual([21])
+			expect(data.duration).toBe(180)
+			expect(data.stars).toBe(5)
+			expect(data.difficulty).toBeNull()
+			expect(data.opus).toBe('BWV 639')
+		})
+	})
+
 	describe('entityName', () => {
 		it('returns name, title, year, or id string in priority order', () => {
 			expect(entityName({ id: 1, name: 'Bach' })).toBe('Bach')
@@ -162,4 +240,3 @@ describe('song-merge-utils', () => {
 		})
 	})
 })
-

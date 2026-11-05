@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import SongMergeDialog from '../../../src/components/song-editor/SongMergeDialog.vue'
+import { ENTITY_COLUMNS, SONG_SCALAR_FIELDS } from '../../../src/components/song-editor/song-merge-utils'
 import type { IntegrityIssue, LibraryData, Song } from '../../../src/types/song'
 
 vi.mock('@nextcloud/l10n', () => ({
@@ -22,10 +23,24 @@ const mockSongA: Song = {
 	composers: [{ id: 1, name: 'Brosig' }],
 	books: [{ id: 10, title: 'Freie Orgelmusik' }],
 	collections: [{ id: 100, name: 'Grün' }],
-	artists: [],
-	genres: [],
-	keys: [],
+	artists: [{ id: 201, name: 'Organist A' }],
+	genres: [{ id: 301, name: 'Romantic' }],
+	keys: [{ id: 401, name: 'G Major' }],
+	customGroups: [{ id: 501, name: 'Choir A' }],
+	years: [{ id: 601, year: 1880, name: '1880' }],
+	signatures: [{ id: 701, name: '4/4' }],
+	sourceTypes: [{ id: 801, type: 'Score', name: 'Score' }],
+	instruments: [{ id: 901, name: 'Organ' }],
+	arrangers: [{ id: 1001, name: 'Karl Straube' }],
+	opus: 'Op. 12',
+	catalogNumber: 'MB 12',
+	songNumber: '7',
+	stars: 4,
+	difficulty: 3,
+	duration: 210,
 	keywords: 'organ, postludium',
+	custom: 'Pedal solo',
+	custom2: 'Manual II',
 	files: [{ id: 207, path: '/remote.php/dav/files/admin/Noten/Brosig/Nachspiel.pdf', type: 1 }],
 }
 
@@ -36,9 +51,23 @@ const mockSongB: Song = {
 	books: [{ id: 10, title: 'Freie Orgelmusik' }],
 	collections: [{ id: 100, name: 'Grün' }],
 	artists: [],
-	genres: [],
-	keys: [],
+	genres: [{ id: 302, name: 'Liturgical' }],
+	keys: [{ id: 402, name: 'D Major' }],
+	customGroups: [],
+	years: [{ id: 602, year: 1885, name: '1885' }],
+	signatures: [{ id: 702, name: '3/4' }],
+	sourceTypes: [],
+	instruments: [{ id: 902, name: 'Harmonium' }],
+	arrangers: [{ id: 1002, name: 'Max Reger' }],
+	opus: 'Op. 15',
+	catalogNumber: 'MB 15',
+	songNumber: '9',
+	stars: 5,
+	difficulty: 4,
+	duration: 185,
 	keywords: 'organ',
+	custom: 'Festival',
+	custom2: 'Manual I',
 	files: [{ id: 208, path: '/remote.php/dav/files/admin/Noten/Brosig/Nachspiel2.pdf', type: 1 }],
 }
 
@@ -47,9 +76,15 @@ const mockLibraryData: LibraryData = {
 	composers: [{ id: 1, name: 'Brosig' }],
 	books: [{ id: 10, title: 'Freie Orgelmusik' }],
 	collections: [{ id: 100, name: 'Grün' }],
-	artists: [],
-	genres: [],
-	keys: [],
+	artists: [{ id: 201, name: 'Organist A' }],
+	genres: [{ id: 301, name: 'Romantic' }, { id: 302, name: 'Liturgical' }],
+	keys: [{ id: 401, name: 'G Major' }, { id: 402, name: 'D Major' }],
+	customGroups: [{ id: 501, name: 'Choir A' }],
+	years: [{ id: 601, year: 1880, name: '1880' }, { id: 602, year: 1885, name: '1885' }],
+	signatures: [{ id: 701, name: '4/4' }, { id: 702, name: '3/4' }],
+	sourceTypes: [{ id: 801, type: 'Score', name: 'Score' }],
+	instruments: [{ id: 901, name: 'Organ' }, { id: 902, name: 'Harmonium' }],
+	arrangers: [{ id: 1001, name: 'Karl Straube' }, { id: 1002, name: 'Max Reger' }],
 }
 
 const mockIssue: IntegrityIssue = {
@@ -63,62 +98,85 @@ const mockIssue: IntegrityIssue = {
 	},
 }
 
-const globalStubs = {
+// Only stub NcDialog so it renders inline without portal/teleport; keep real NcTextField, NcSelect, NcButton, NcCheckboxRadioSwitch!
+const realUiMountOptions = {
 	global: {
 		stubs: {
 			NcDialog: {
 				template: '<div class="nc-dialog-stub"><slot /></div>',
 				props: ['name', 'open', 'size'],
 			},
-			NcButton: {
-				template: '<button :class="variant" :title="title" @click="$emit(\'click\')"><slot /><slot name="icon" /></button>',
-				props: ['variant', 'title'],
-			},
-			NcTextField: {
-				template: '<div class="nc-textfield-stub"><input :value="value" @input="$emit(\'update:value\', $event.target.value)" /></div>',
-				props: ['value', 'label'],
-			},
-			NcSelect: {
-				template: '<div class="nc-select-stub"></div>',
-				props: ['value', 'options'],
-			},
 		},
 	},
 }
 
-describe('SongMergeDialog.vue', () => {
-	it('renders dialog and pre-fills agreeing fields while leaving differing fields empty', () => {
+describe('SongMergeDialog.vue (with real @nextcloud/vue controls)', () => {
+	it('renders all entity types and scalar fields from single source of truth in Mode 1', () => {
 		const wrapper = mount(SongMergeDialog, {
 			props: {
 				open: true,
 				issue: mockIssue,
 				libraryData: mockLibraryData,
 			},
-			...globalStubs,
+			...realUiMountOptions,
 		})
 
 		expect(wrapper.text()).toContain('Song A')
 		expect(wrapper.text()).toContain('Song B')
 		expect(wrapper.text()).toContain('Merged Result')
+
+		// Every entity in ENTITY_COLUMNS must be rendered
+		for (const col of ENTITY_COLUMNS) {
+			expect(wrapper.find(`[data-test="merged-field-${col.songProp}"]`).exists()).toBe(true)
+			expect(wrapper.find(`[data-test="copy-from-a-${col.songProp}"]`).exists()).toBe(true)
+			expect(wrapper.find(`[data-test="copy-from-b-${col.songProp}"]`).exists()).toBe(true)
+		}
+
+		// Every scalar in SONG_SCALAR_FIELDS must be rendered
+		for (const field of SONG_SCALAR_FIELDS) {
+			expect(wrapper.find(`[data-test="merged-field-${field.key}"]`).exists()).toBe(true)
+			expect(wrapper.find(`[data-test="copy-from-a-${field.key}"]`).exists()).toBe(true)
+			expect(wrapper.find(`[data-test="copy-from-b-${field.key}"]`).exists()).toBe(true)
+		}
+
+		// Agreeing entities (Composers: Brosig) are pre-filled in the real NcSelect DOM
+		expect(wrapper.find('[data-test="merged-field-composers"]').text()).toContain('Brosig')
+		// Differing title starts empty in the real NcTextField <input>
+		const titleInput = wrapper.find('input#merge-title-input').element as HTMLInputElement
+		expect(titleInput.value).toBe('')
 	})
 
-	it('emits merge event when submitting in Mode 1', async () => {
+	it('updates real NcTextField and NcSelect DOM values when clicking arrow buttons and emits full merge payload', async () => {
 		const wrapper = mount(SongMergeDialog, {
 			props: {
 				open: true,
 				issue: mockIssue,
 				libraryData: mockLibraryData,
 			},
-			...globalStubs,
+			...realUiMountOptions,
 		})
 
-		const useTitleABtn = wrapper.findAll('button').find(b => b.attributes('title')?.includes('Use Song A Title'))
-		expect(useTitleABtn).toBeDefined()
-		await useTitleABtn?.trigger('click')
+		// Click arrow to copy Title from Song A -> real input element updates
+		await wrapper.find('[data-test="copy-from-a-title"]').trigger('click')
+		const titleInput = wrapper.find('input#merge-title-input').element as HTMLInputElement
+		expect(titleInput.value).toBe('Nachspiel in G')
 
-		const mergeButton = wrapper.findAll('button').find(b => b.text().includes('Merge Songs'))
-		expect(mergeButton).toBeDefined()
-		await mergeButton?.trigger('click')
+		// Click arrow to copy Arrangers from Song B -> real NcSelect shows Max Reger
+		await wrapper.find('[data-test="copy-from-b-arrangers"]').trigger('click')
+		expect(wrapper.find('[data-test="merged-field-arrangers"]').text()).toContain('Max Reger')
+
+		// Click arrow to copy Duration from Song A -> real duration input updates to "210"
+		await wrapper.find('[data-test="copy-from-a-duration"]').trigger('click')
+		const durationInput = wrapper.find('input#merge-duration-input').element as HTMLInputElement
+		expect(durationInput.value).toBe('210')
+
+		// Click arrow to copy Stars from Song B -> real stars input updates to "5"
+		await wrapper.find('[data-test="copy-from-b-stars"]').trigger('click')
+		const starsInput = wrapper.find('input#merge-stars-input').element as HTMLInputElement
+		expect(starsInput.value).toBe('5')
+
+		// Click Merge Songs button
+		await wrapper.find('[data-test="submit-merge-btn"]').trigger('click')
 
 		const mergeEmits = wrapper.emitted('merge')
 		expect(mergeEmits).toBeDefined()
@@ -127,37 +185,74 @@ describe('SongMergeDialog.vue', () => {
 			droppedId: 61,
 			merged: {
 				title: 'Nachspiel in G',
+				composerIds: [1],
+				bookIds: [10],
+				collectionIds: [100],
+				arrangerIds: [1002],
+				duration: 210,
+				stars: 5,
+				difficulty: null,
 			},
 		})
 	})
 
-	it('switches to Mode 2 (Keep both songs) and emits resolveBoth', async () => {
+	it('switches to Mode 2 (Keep both songs), renders all entities & scalars, copies fields via arrows, and emits resolveBoth', async () => {
 		const wrapper = mount(SongMergeDialog, {
 			props: {
 				open: true,
 				issue: mockIssue,
 				libraryData: mockLibraryData,
 			},
-			...globalStubs,
+			...realUiMountOptions,
 		})
 
-		const buttons = wrapper.findAll('button')
-		const keepBothBtn = buttons.find(b => b.text().includes('Keep as 2 Separate Songs'))
-		expect(keepBothBtn).toBeDefined()
-		await keepBothBtn?.trigger('click')
-
+		await wrapper.find('[data-test="mode-keep-both-btn"]').trigger('click')
 		expect(wrapper.text()).toContain('Keep both songs in your library as separate entries')
 
-		const updatedButtons = wrapper.findAll('button')
-		const saveBothBtn = updatedButtons.find(b => b.text().includes('Save & Resolve Conflicts'))
-		expect(saveBothBtn).toBeDefined()
-		await saveBothBtn?.trigger('click')
+		// Every entity and scalar is rendered for both Song A and Song B
+		for (const col of ENTITY_COLUMNS) {
+			expect(wrapper.find(`[data-test="field-a-${col.songProp}"]`).exists()).toBe(true)
+			expect(wrapper.find(`[data-test="field-b-${col.songProp}"]`).exists()).toBe(true)
+		}
+		for (const field of SONG_SCALAR_FIELDS) {
+			expect(wrapper.find(`[data-test="field-a-${field.key}"]`).exists()).toBe(true)
+			expect(wrapper.find(`[data-test="field-b-${field.key}"]`).exists()).toBe(true)
+		}
+
+		// Copy Song A duration (210) to Song B via per-field arrow
+		await wrapper.find('[data-test="copy-a-to-b-duration"]').trigger('click')
+		const durationBInput = wrapper.find('input#resolve-b-duration-input').element as HTMLInputElement
+		expect(durationBInput.value).toBe('210')
+
+		// Copy Song B arrangers (Max Reger) to Song A via per-field arrow
+		await wrapper.find('[data-test="copy-b-to-a-arrangers"]').trigger('click')
+		expect(wrapper.find('[data-test="field-a-arrangers"]').text()).toContain('Max Reger')
+
+		await wrapper.find('[data-test="submit-resolve-both-btn"]').trigger('click')
 
 		const resolveEmits = wrapper.emitted('resolveBoth')
 		expect(resolveEmits).toBeDefined()
 		expect(resolveEmits?.[0]?.[0]).toMatchObject({
-			songA: { id: 60, title: 'Nachspiel in G' },
-			songB: { id: 61, title: 'Nachspiel in D' },
+			songA: {
+				id: 60,
+				title: 'Nachspiel in G',
+				arrangerIds: [1002],
+				instrumentIds: [901],
+				duration: 210,
+				stars: 4,
+				difficulty: 3,
+				opus: 'Op. 12',
+			},
+			songB: {
+				id: 61,
+				title: 'Nachspiel in D',
+				arrangerIds: [1002],
+				instrumentIds: [902],
+				duration: 210,
+				stars: 5,
+				difficulty: 4,
+				opus: 'Op. 15',
+			},
 		})
 	})
 
@@ -169,7 +264,7 @@ describe('SongMergeDialog.vue', () => {
 				libraryData: mockLibraryData,
 				initialMode: 'keepBoth',
 			},
-			...globalStubs,
+			...realUiMountOptions,
 		})
 
 		expect(wrapper.text()).toContain('Keep both songs in your library as separate entries')
@@ -183,7 +278,7 @@ describe('SongMergeDialog.vue', () => {
 				libraryData: mockLibraryData,
 				error: 'Conflict cannot be resolved: Song A and Song B still share the same physical file or path in storage.',
 			},
-			...globalStubs,
+			...realUiMountOptions,
 		})
 
 		expect(wrapper.text()).toContain('Conflict cannot be resolved: Song A and Song B still share the same physical file or path in storage.')

@@ -11,13 +11,22 @@ import MergeIcon from 'vue-material-design-icons/Merge.vue'
 import SongMergeModeView from './SongMergeModeView.vue'
 import SongResolveBothModeView from './SongResolveBothModeView.vue'
 import {
-	areEntitiesEqual,
-	toSelectOptions,
+	buildLibraryOptionsMap,
+	copyDraftToDraft,
+	copyFieldIntoDraft,
+	copySingleFieldDraftToDraft,
+	createDraftFromSong,
+	createMergedDraft,
+	draftToMergedSongData,
 	wouldSongsCollide,
 	type FieldName,
 	type MergeMode,
 	type MergedSongData,
 	type ResolveBothSongData,
+	type SelectOption,
+	type SongEditableDraft,
+	type SongEntityProp,
+	type SongScalarProp,
 } from './song-merge-utils'
 
 export type { MergedSongData, ResolveBothSongData }
@@ -68,174 +77,123 @@ const droppedId = computed<number>(() => {
 	return ids.find(id => id !== keepId.value) ?? ids[1] ?? 0
 })
 
-// -----------------------------------------------------------------------
-// Mode 1: Merged Result Fields
-// -----------------------------------------------------------------------
-const mergedTitle = ref('')
-const mergedComposers = ref<{ id: number; label: string }[]>([])
-const mergedBooks = ref<{ id: number; label: string }[]>([])
-const mergedCollections = ref<{ id: number; label: string }[]>([])
-const mergedArtists = ref<{ id: number; label: string }[]>([])
-const mergedGenres = ref<{ id: number; label: string }[]>([])
-const mergedKeys = ref<{ id: number; label: string }[]>([])
-const mergedKeywords = ref('')
-const mergedSortTitle = ref('')
+// Mode 1: Merged Result Draft
+const mergedDraft = ref<SongEditableDraft>(createMergedDraft())
 
-function prefillMerged() {
-	const a = songA.value
-	const b = songB.value
-	if (!a || !b) {
-		mergedTitle.value = a?.title ?? ''
-		mergedComposers.value = toSelectOptions(a?.composers)
-		mergedBooks.value = toSelectOptions(a?.books)
-		mergedCollections.value = toSelectOptions(a?.collections)
-		mergedArtists.value = toSelectOptions(a?.artists)
-		mergedGenres.value = toSelectOptions(a?.genres)
-		mergedKeys.value = toSelectOptions(a?.keys)
-		mergedKeywords.value = a?.keywords ?? ''
-		mergedSortTitle.value = a?.sortTitle ?? ''
-		return
-	}
+// Mode 2: Separate Song Drafts
+const songADraft = ref<SongEditableDraft>(createDraftFromSong())
+const songBDraft = ref<SongEditableDraft>(createDraftFromSong())
+const songADetachedFiles = ref<number[]>([])
+const songBDetachedFiles = ref<number[]>([])
 
-	mergedTitle.value = (a.title.trim() === b.title.trim()) ? a.title : ''
-	mergedComposers.value = areEntitiesEqual(a.composers, b.composers) ? toSelectOptions(a.composers) : []
-	mergedBooks.value = areEntitiesEqual(a.books, b.books) ? toSelectOptions(a.books) : []
-	mergedCollections.value = areEntitiesEqual(a.collections, b.collections) ? toSelectOptions(a.collections) : []
-	mergedArtists.value = areEntitiesEqual(a.artists, b.artists) ? toSelectOptions(a.artists) : []
-	mergedGenres.value = areEntitiesEqual(a.genres, b.genres) ? toSelectOptions(a.genres) : []
-	mergedKeys.value = areEntitiesEqual(a.keys, b.keys) ? toSelectOptions(a.keys) : []
-	mergedKeywords.value = ((a.keywords ?? '').trim() === (b.keywords ?? '').trim()) ? (a.keywords ?? '') : ''
-	mergedSortTitle.value = ((a.sortTitle ?? '').trim() === (b.sortTitle ?? '').trim()) ? (a.sortTitle ?? '') : ''
+function resetAllDrafts() {
+	mergedDraft.value = createMergedDraft(songA.value, songB.value)
+	songADraft.value = createDraftFromSong(songA.value)
+	songBDraft.value = createDraftFromSong(songB.value)
+	songADetachedFiles.value = []
+	songBDetachedFiles.value = []
 }
 
-// -----------------------------------------------------------------------
-// Mode 2: Separate Song Fields
-// -----------------------------------------------------------------------
-const songA_title = ref('')
-const songA_composers = ref<{ id: number; label: string }[]>([])
-const songA_books = ref<{ id: number; label: string }[]>([])
-const songA_collections = ref<{ id: number; label: string }[]>([])
-const songA_artists = ref<{ id: number; label: string }[]>([])
-const songA_genres = ref<{ id: number; label: string }[]>([])
-const songA_keys = ref<{ id: number; label: string }[]>([])
-const songA_keywords = ref('')
-const songA_detachedFiles = ref<number[]>([])
+watch(
+	() => [props.open, songA.value?.id, songB.value?.id] as const,
+	([open]) => {
+		if (open) {
+			mode.value = props.initialMode ?? 'merge'
+			keepId.value = songIds.value[0] ?? 0
+			resetAllDrafts()
+		}
+	},
+	{ immediate: true },
+)
 
-const songB_title = ref('')
-const songB_composers = ref<{ id: number; label: string }[]>([])
-const songB_books = ref<{ id: number; label: string }[]>([])
-const songB_collections = ref<{ id: number; label: string }[]>([])
-const songB_artists = ref<{ id: number; label: string }[]>([])
-const songB_genres = ref<{ id: number; label: string }[]>([])
-const songB_keys = ref<{ id: number; label: string }[]>([])
-const songB_keywords = ref('')
-const songB_detachedFiles = ref<number[]>([])
-
-function prefillKeepBoth() {
-	const a = songA.value
-	const b = songB.value
-
-	songA_title.value = a?.title ?? ''
-	songA_composers.value = toSelectOptions(a?.composers)
-	songA_books.value = toSelectOptions(a?.books)
-	songA_collections.value = toSelectOptions(a?.collections)
-	songA_artists.value = toSelectOptions(a?.artists)
-	songA_genres.value = toSelectOptions(a?.genres)
-	songA_keys.value = toSelectOptions(a?.keys)
-	songA_keywords.value = a?.keywords ?? ''
-	songA_detachedFiles.value = []
-
-	songB_title.value = b?.title ?? ''
-	songB_composers.value = toSelectOptions(b?.composers)
-	songB_books.value = toSelectOptions(b?.books)
-	songB_collections.value = toSelectOptions(b?.collections)
-	songB_artists.value = toSelectOptions(b?.artists)
-	songB_genres.value = toSelectOptions(b?.genres)
-	songB_keys.value = toSelectOptions(b?.keys)
-	songB_keywords.value = b?.keywords ?? ''
-	songB_detachedFiles.value = []
-}
-
-watch(() => props.open, open => {
-	if (open) {
-		mode.value = props.initialMode ?? 'merge'
-		keepId.value = songIds.value[0] ?? 0
-		prefillMerged()
-		prefillKeepBoth()
-	}
-}, { immediate: true })
+const optionsMap = computed(() => buildLibraryOptionsMap(props.libraryData, songA.value, songB.value))
 
 const wouldCollide = computed(() => {
 	if (mode.value !== 'keepBoth') return false
 	return wouldSongsCollide({
 		songA: songA.value,
 		songB: songB.value,
-		titleA: songA_title.value,
-		titleB: songB_title.value,
-		composersA: songA_composers.value,
-		composersB: songB_composers.value,
-		artistsA: songA_artists.value,
-		artistsB: songB_artists.value,
-		booksA: songA_books.value,
-		booksB: songB_books.value,
-		collectionsA: songA_collections.value,
-		collectionsB: songB_collections.value,
-		detachedFilesA: songA_detachedFiles.value,
-		detachedFilesB: songB_detachedFiles.value,
+		titleA: songADraft.value.title,
+		titleB: songBDraft.value.title,
+		composersA: songADraft.value.entities.composers ?? [],
+		composersB: songBDraft.value.entities.composers ?? [],
+		artistsA: songADraft.value.entities.artists ?? [],
+		artistsB: songBDraft.value.entities.artists ?? [],
+		booksA: songADraft.value.entities.books ?? [],
+		booksB: songBDraft.value.entities.books ?? [],
+		collectionsA: songADraft.value.entities.collections ?? [],
+		collectionsB: songBDraft.value.entities.collections ?? [],
+		detachedFilesA: songADetachedFiles.value,
+		detachedFilesB: songBDetachedFiles.value,
 	})
 })
 
 function differentiateTitles() {
-	if (!songA_title.value.endsWith(' (1)')) {
-		songA_title.value = songA_title.value.trim() + ' (1)'
+	if (!songADraft.value.title.endsWith(' (1)')) {
+		songADraft.value.title = songADraft.value.title.trim() + ' (1)'
 	}
-	if (!songB_title.value.endsWith(' (2)')) {
-		songB_title.value = songB_title.value.trim() + ' (2)'
+	if (!songBDraft.value.title.endsWith(' (2)')) {
+		songBDraft.value.title = songBDraft.value.title.trim() + ' (2)'
 	}
 }
 
-// Transfer helper for Mode 1
+// Mode 1 handlers
 function copyField(field: FieldName, from: 'A' | 'B') {
-	const s = from === 'A' ? songA.value : songB.value
-	if (!s) return
-
-	switch (field) {
-		case 'title': mergedTitle.value = s.title; break
-		case 'keywords': mergedKeywords.value = s.keywords ?? ''; break
-		case 'composers': mergedComposers.value = toSelectOptions(s.composers); break
-		case 'books': mergedBooks.value = toSelectOptions(s.books); break
-		case 'collections': mergedCollections.value = toSelectOptions(s.collections); break
-		case 'artists': mergedArtists.value = toSelectOptions(s.artists); break
-		case 'genres': mergedGenres.value = toSelectOptions(s.genres); break
-		case 'keys': mergedKeys.value = toSelectOptions(s.keys); break
-	}
+	copyFieldIntoDraft(mergedDraft.value, field, from === 'A' ? songA.value : songB.value)
 }
 
-// Transfer helper for Mode 2
+function copyAllIntoMerged(from: 'A' | 'B') {
+	const source = from === 'A' ? songA.value : songB.value
+	if (!source) return
+	mergedDraft.value = createDraftFromSong(source)
+}
+
+function updateMergedTitle(val: string) {
+	mergedDraft.value.title = val
+}
+
+function updateMergedEntity(prop: SongEntityProp, val: SelectOption[]) {
+	mergedDraft.value.entities[prop] = val
+}
+
+function updateMergedScalar(key: SongScalarProp, val: string | number | null) {
+	mergedDraft.value.scalars[key] = val
+}
+
+// Mode 2 handlers
 function copyFieldsBetweenSongs(from: 'A' | 'B') {
 	if (from === 'A') {
-		songB_title.value = songA_title.value
-		songB_composers.value = [...songA_composers.value]
-		songB_books.value = [...songA_books.value]
-		songB_collections.value = [...songA_collections.value]
-		songB_artists.value = [...songA_artists.value]
-		songB_genres.value = [...songA_genres.value]
-		songB_keys.value = [...songA_keys.value]
-		songB_keywords.value = songA_keywords.value
+		copyDraftToDraft(songADraft.value, songBDraft.value)
 	} else {
-		songA_title.value = songB_title.value
-		songA_composers.value = [...songB_composers.value]
-		songA_books.value = [...songB_books.value]
-		songA_collections.value = [...songB_collections.value]
-		songA_artists.value = [...songB_artists.value]
-		songA_genres.value = [...songB_genres.value]
-		songA_keys.value = [...songB_keys.value]
-		songA_keywords.value = songB_keywords.value
+		copyDraftToDraft(songBDraft.value, songADraft.value)
 	}
+}
+
+function copySingleFieldBetweenSongs(field: FieldName, from: 'A' | 'B') {
+	if (from === 'A') {
+		copySingleFieldDraftToDraft(songADraft.value, songBDraft.value, field)
+	} else {
+		copySingleFieldDraftToDraft(songBDraft.value, songADraft.value, field)
+	}
+}
+
+function updateResolveTitle(target: 'A' | 'B', val: string) {
+	const draft = target === 'A' ? songADraft.value : songBDraft.value
+	draft.title = val
+}
+
+function updateResolveEntity(target: 'A' | 'B', prop: SongEntityProp, val: SelectOption[]) {
+	const draft = target === 'A' ? songADraft.value : songBDraft.value
+	draft.entities[prop] = val
+}
+
+function updateResolveScalar(target: 'A' | 'B', key: SongScalarProp, val: string | number | null) {
+	const draft = target === 'A' ? songADraft.value : songBDraft.value
+	draft.scalars[key] = val
 }
 
 function toggleDetachFile(target: 'A' | 'B', fileId: number) {
-	const list = target === 'A' ? songA_detachedFiles : songB_detachedFiles
+	const list = target === 'A' ? songADetachedFiles : songBDetachedFiles
 	if (list.value.includes(fileId)) {
 		list.value = list.value.filter(id => id !== fileId)
 	} else {
@@ -243,39 +201,12 @@ function toggleDetachFile(target: 'A' | 'B', fileId: number) {
 	}
 }
 
-// Option lists
-const composerOptions = computed(() => toSelectOptions(props.libraryData?.composers ?? []))
-const bookOptions = computed(() => toSelectOptions(props.libraryData?.books ?? []))
-const collectionOptions = computed(() => toSelectOptions(props.libraryData?.collections ?? []))
-const artistOptions = computed(() => toSelectOptions(props.libraryData?.artists ?? []))
-const genreOptions = computed(() => toSelectOptions(props.libraryData?.genres ?? []))
-const keyOptions = computed(() => toSelectOptions(props.libraryData?.keys ?? []))
-
 function submit() {
 	if (mode.value === 'merge') {
 		emit('merge', {
 			keepId: keepId.value,
 			droppedId: droppedId.value,
-			merged: {
-				title: mergedTitle.value,
-				composerIds: mergedComposers.value.map(e => e.id),
-				bookIds: mergedBooks.value.map(e => e.id),
-				collectionIds: mergedCollections.value.map(e => e.id),
-				artistIds: mergedArtists.value.map(e => e.id),
-				genreIds: mergedGenres.value.map(e => e.id),
-				keyIds: mergedKeys.value.map(e => e.id),
-				customGroupIds: [],
-				yearIds: [],
-				signatureIds: [],
-				sourceTypeIds: [],
-				stars: Math.max(songA.value?.stars ?? 0, songB.value?.stars ?? 0),
-				difficulty: Math.max(songA.value?.difficulty ?? 0, songB.value?.difficulty ?? 0),
-				duration: Math.max(songA.value?.duration ?? 0, songB.value?.duration ?? 0),
-				keywords: mergedKeywords.value,
-				custom: songA.value?.custom ?? songB.value?.custom ?? '',
-				custom2: songA.value?.custom2 ?? songB.value?.custom2 ?? '',
-				sortTitle: mergedSortTitle.value,
-			},
+			merged: draftToMergedSongData(mergedDraft.value),
 		})
 	} else {
 		if (wouldCollide.value) {
@@ -284,47 +215,13 @@ function submit() {
 		emit('resolveBoth', {
 			songA: {
 				id: songA.value?.id ?? 0,
-				title: songA_title.value,
-				composerIds: songA_composers.value.map(e => e.id),
-				bookIds: songA_books.value.map(e => e.id),
-				collectionIds: songA_collections.value.map(e => e.id),
-				artistIds: songA_artists.value.map(e => e.id),
-				genreIds: songA_genres.value.map(e => e.id),
-				keyIds: songA_keys.value.map(e => e.id),
-				customGroupIds: [],
-				yearIds: [],
-				signatureIds: [],
-				sourceTypeIds: [],
-				stars: songA.value?.stars ?? 0,
-				difficulty: songA.value?.difficulty ?? 0,
-				duration: songA.value?.duration ?? 0,
-				keywords: songA_keywords.value,
-				custom: songA.value?.custom ?? '',
-				custom2: songA.value?.custom2 ?? '',
-				sortTitle: songA.value?.sortTitle ?? '',
-				detachFileIds: [...songA_detachedFiles.value],
+				...draftToMergedSongData(songADraft.value),
+				detachFileIds: [...songADetachedFiles.value],
 			},
 			songB: {
 				id: songB.value?.id ?? 0,
-				title: songB_title.value,
-				composerIds: songB_composers.value.map(e => e.id),
-				bookIds: songB_books.value.map(e => e.id),
-				collectionIds: songB_collections.value.map(e => e.id),
-				artistIds: songB_artists.value.map(e => e.id),
-				genreIds: songB_genres.value.map(e => e.id),
-				keyIds: songB_keys.value.map(e => e.id),
-				customGroupIds: [],
-				yearIds: [],
-				signatureIds: [],
-				sourceTypeIds: [],
-				stars: songB.value?.stars ?? 0,
-				difficulty: songB.value?.difficulty ?? 0,
-				duration: songB.value?.duration ?? 0,
-				keywords: songB_keywords.value,
-				custom: songB.value?.custom ?? '',
-				custom2: songB.value?.custom2 ?? '',
-				sortTitle: songB.value?.sortTitle ?? '',
-				detachFileIds: [...songB_detachedFiles.value],
+				...draftToMergedSongData(songBDraft.value),
+				detachFileIds: [...songBDetachedFiles.value],
 			},
 		})
 	}
@@ -341,13 +238,17 @@ function submit() {
 		<!-- Mode Switcher -->
 		<div :class="$style.modeSwitchBar">
 			<NcButton
+				type="button"
 				:variant="mode === 'merge' ? 'primary' : 'secondary'"
+				data-test="mode-merge-btn"
 				@click="mode = 'merge'">
 				<template #icon><MergeIcon :size="16" /></template>
 				{{ t('sheetmusic', 'Merge into 1 Song') }}
 			</NcButton>
 			<NcButton
+				type="button"
 				:variant="mode === 'keepBoth' ? 'primary' : 'secondary'"
+				data-test="mode-keep-both-btn"
 				@click="mode = 'keepBoth'">
 				<template #icon><FileMultipleIcon :size="16" /></template>
 				{{ t('sheetmusic', 'Keep as 2 Separate Songs (Resolve Conflicts)') }}
@@ -379,7 +280,7 @@ function submit() {
 				<strong>{{ t('sheetmusic', 'Conflict Not Resolved') }}</strong>
 				<p>{{ t('sheetmusic', 'Saving would recreate a duplicate file path or naming conflict in the library audit. Adapt at least one title, metadata field, or detach a file to differentiate them.') }}</p>
 			</div>
-			<NcButton variant="primary" type="tertiary" @click="differentiateTitles">
+			<NcButton variant="tertiary" type="button" data-test="differentiate-titles-btn" @click="differentiateTitles">
 				{{ t('sheetmusic', 'Differentiate Titles') }}
 			</NcButton>
 		</div>
@@ -388,67 +289,46 @@ function submit() {
 		<SongMergeModeView
 			v-if="mode === 'merge'"
 			v-model:keep-id="keepId"
-			v-model:merged-title="mergedTitle"
-			v-model:merged-composers="mergedComposers"
-			v-model:merged-books="mergedBooks"
-			v-model:merged-collections="mergedCollections"
-			v-model:merged-artists="mergedArtists"
-			v-model:merged-genres="mergedGenres"
-			v-model:merged-keys="mergedKeys"
-			v-model:merged-keywords="mergedKeywords"
 			:song-a="songA"
 			:song-b="songB"
-			:composer-options="composerOptions"
-			:book-options="bookOptions"
-			:collection-options="collectionOptions"
-			:artist-options="artistOptions"
-			:genre-options="genreOptions"
-			:key-options="keyOptions"
-			@copy-field="copyField" />
+			:draft="mergedDraft"
+			:options-map="optionsMap"
+			@update:title="updateMergedTitle"
+			@update:entity="updateMergedEntity"
+			@update:scalar="updateMergedScalar"
+			@copy-field="copyField"
+			@copy-all="copyAllIntoMerged" />
 
 		<!-- MODE 2: KEEP BOTH SONGS AS SEPARATE ENTITIES -->
 		<SongResolveBothModeView
 			v-else-if="mode === 'keepBoth'"
-			v-model:song-a_title="songA_title"
-			v-model:song-b_title="songB_title"
-			v-model:song-a_composers="songA_composers"
-			v-model:song-b_composers="songB_composers"
-			v-model:song-a_books="songA_books"
-			v-model:song-b_books="songB_books"
-			v-model:song-a_collections="songA_collections"
-			v-model:song-b_collections="songB_collections"
-			v-model:song-a_artists="songA_artists"
-			v-model:song-b_artists="songB_artists"
-			v-model:song-a_genres="songA_genres"
-			v-model:song-b_genres="songB_genres"
-			v-model:song-a_keys="songA_keys"
-			v-model:song-b_keys="songB_keys"
-			v-model:song-a_keywords="songA_keywords"
-			v-model:song-b_keywords="songB_keywords"
 			:song-a="songA"
 			:song-b="songB"
-			:song-a_detached-files="songA_detachedFiles"
-			:song-b_detached-files="songB_detachedFiles"
-			:composer-options="composerOptions"
-			:book-options="bookOptions"
-			:collection-options="collectionOptions"
-			:artist-options="artistOptions"
-			:genre-options="genreOptions"
-			:key-options="keyOptions"
+			:draft-a="songADraft"
+			:draft-b="songBDraft"
+			:detached-files-a="songADetachedFiles"
+			:detached-files-b="songBDetachedFiles"
+			:options-map="optionsMap"
+			@update:title="updateResolveTitle"
+			@update:entity="updateResolveEntity"
+			@update:scalar="updateResolveScalar"
 			@copy-fields-between-songs="copyFieldsBetweenSongs"
+			@copy-single-field-between-songs="copySingleFieldBetweenSongs"
 			@toggle-detach-file="toggleDetachFile" />
 
 		<!-- Dialog Footer Actions -->
 		<div :class="$style.dialogActions">
-			<NcButton @click="emit('update:open', false)">
+			<NcButton type="button" data-test="cancel-merge-btn" @click="emit('update:open', false)">
 				{{ t('sheetmusic', 'Cancel') }}
 			</NcButton>
 
 			<!-- Submit for Mode 1 ("merge") -->
 			<NcButton
 				v-if="mode === 'merge'"
+				type="button"
 				variant="primary"
-				:disabled="isMerging || !songA || !songB || !mergedTitle.trim()"
+				:disabled="isMerging || !songA || !songB || !mergedDraft.title.trim()"
+				data-test="submit-merge-btn"
 				@click="submit">
 				<template #icon>
 					<NcLoadingIcon v-if="isMerging" :size="16" />
@@ -460,8 +340,10 @@ function submit() {
 			<!-- Submit for Mode 2 ("keepBoth") -->
 			<NcButton
 				v-else
+				type="button"
 				variant="primary"
-				:disabled="isMerging || wouldCollide || !songA_title.trim() || !songB_title.trim()"
+				:disabled="isMerging || wouldCollide || !songADraft.title.trim() || !songBDraft.title.trim()"
+				data-test="submit-resolve-both-btn"
 				@click="submit">
 				<template #icon>
 					<NcLoadingIcon v-if="isMerging" :size="16" />

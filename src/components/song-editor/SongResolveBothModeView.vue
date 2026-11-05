@@ -10,72 +10,80 @@ import FileDocumentIcon from 'vue-material-design-icons/FileDocument.vue'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import TrashCanOutlineIcon from 'vue-material-design-icons/TrashCanOutline.vue'
 import { getFileName, openFileExternally } from '../../utils/file'
+import {
+	ENTITY_COLUMNS,
+	SONG_SCALAR_FIELDS,
+	type FieldName,
+	type SelectOption,
+	type SongEditableDraft,
+	type SongEntityProp,
+	type SongScalarFieldDef,
+	type SongScalarProp,
+} from './song-merge-utils'
 
-defineProps<{
+const props = defineProps<{
 	songA?: Song
 	songB?: Song
-	songA_title: string
-	songB_title: string
-	songA_composers: { id: number; label: string }[]
-	songB_composers: { id: number; label: string }[]
-	songA_books: { id: number; label: string }[]
-	songB_books: { id: number; label: string }[]
-	songA_collections: { id: number; label: string }[]
-	songB_collections: { id: number; label: string }[]
-	songA_artists: { id: number; label: string }[]
-	songB_artists: { id: number; label: string }[]
-	songA_genres: { id: number; label: string }[]
-	songB_genres: { id: number; label: string }[]
-	songA_keys: { id: number; label: string }[]
-	songB_keys: { id: number; label: string }[]
-	songA_keywords: string
-	songB_keywords: string
-	songA_detachedFiles: number[]
-	songB_detachedFiles: number[]
-	composerOptions: { id: number; label: string }[]
-	bookOptions: { id: number; label: string }[]
-	collectionOptions: { id: number; label: string }[]
-	artistOptions: { id: number; label: string }[]
-	genreOptions: { id: number; label: string }[]
-	keyOptions: { id: number; label: string }[]
+	draftA: SongEditableDraft
+	draftB: SongEditableDraft
+	detachedFilesA: number[]
+	detachedFilesB: number[]
+	optionsMap: Record<SongEntityProp, SelectOption[]>
 }>()
 
 const emit = defineEmits<{
-	'update:songA_title': [val: string]
-	'update:songB_title': [val: string]
-	'update:songA_composers': [val: { id: number; label: string }[]]
-	'update:songB_composers': [val: { id: number; label: string }[]]
-	'update:songA_books': [val: { id: number; label: string }[]]
-	'update:songB_books': [val: { id: number; label: string }[]]
-	'update:songA_collections': [val: { id: number; label: string }[]]
-	'update:songB_collections': [val: { id: number; label: string }[]]
-	'update:songA_artists': [val: { id: number; label: string }[]]
-	'update:songB_artists': [val: { id: number; label: string }[]]
-	'update:songA_genres': [val: { id: number; label: string }[]]
-	'update:songB_genres': [val: { id: number; label: string }[]]
-	'update:songA_keys': [val: { id: number; label: string }[]]
-	'update:songB_keys': [val: { id: number; label: string }[]]
-	'update:songA_keywords': [val: string]
-	'update:songB_keywords': [val: string]
+	'update:title': [target: 'A' | 'B', val: string]
+	'update:entity': [target: 'A' | 'B', prop: SongEntityProp, val: SelectOption[]]
+	'update:scalar': [target: 'A' | 'B', key: SongScalarProp, val: string | number | null]
 	copyFieldsBetweenSongs: [from: 'A' | 'B']
+	copySingleFieldBetweenSongs: [field: FieldName, from: 'A' | 'B']
 	toggleDetachFile: [target: 'A' | 'B', fileId: number]
 }>()
+
+function getScalarModelValue(draft: SongEditableDraft, field: SongScalarFieldDef): string {
+	const val = draft.scalars[field.key]
+	if (field.type === 'number') {
+		return val !== null && val !== undefined && Number(val) > 0 ? String(val) : ''
+	}
+	return String(val ?? '')
+}
+
+function onScalarInput(target: 'A' | 'B', field: SongScalarFieldDef, raw: string | number) {
+	if (field.type === 'number') {
+		const num = Number(raw)
+		emit('update:scalar', target, field.key, Number.isFinite(num) && num > 0 ? num : null)
+	} else {
+		emit('update:scalar', target, field.key, String(raw ?? ''))
+	}
+}
 </script>
 
 <template>
-	<div :class="$style.keepBothGrid">
+	<div :class="$style.keepBothGrid" data-test="resolve-both-grid">
 		<!-- Column Headers -->
 		<div :class="[$style.headerCol, $style.songLeft]">
 			<strong>{{ t('sheetmusic', 'Song A') }}</strong>
 			<span :class="$style.idBadge">ID {{ songA?.id }}</span>
-			<NcButton type="tertiary" :title="t('sheetmusic', 'Copy Song A values to Song B')" @click="emit('copyFieldsBetweenSongs', 'A')">
+			<NcButton
+				variant="tertiary"
+				type="button"
+				:title="t('sheetmusic', 'Copy Song A values to Song B')"
+				data-test="copy-all-to-b"
+				@click="emit('copyFieldsBetweenSongs', 'A')">
 				<template #icon><ArrowRightIcon :size="16" /></template>
 				{{ t('sheetmusic', 'Copy all to B') }}
 			</NcButton>
 		</div>
 
+		<div :class="$style.headerCenter" />
+
 		<div :class="[$style.headerCol, $style.songRight]">
-			<NcButton type="tertiary" :title="t('sheetmusic', 'Copy Song B values to Song A')" @click="emit('copyFieldsBetweenSongs', 'B')">
+			<NcButton
+				variant="tertiary"
+				type="button"
+				:title="t('sheetmusic', 'Copy Song B values to Song A')"
+				data-test="copy-all-to-a"
+				@click="emit('copyFieldsBetweenSongs', 'B')">
 				<template #icon><ArrowLeftIcon :size="16" /></template>
 				{{ t('sheetmusic', 'Copy all to A') }}
 			</NcButton>
@@ -84,178 +92,148 @@ const emit = defineEmits<{
 		</div>
 
 		<!-- Row: Title -->
-		<div :class="$style.cellEditable">
+		<div :class="$style.cellEditable" data-test="field-a-title">
 			<NcTextField
+				id="resolve-a-title-input"
 				:label="t('sheetmusic', 'Song A Title')"
-				:value="songA_title"
-				@update:value="emit('update:songA_title', $event)" />
+				:model-value="draftA.title"
+				@update:model-value="emit('update:title', 'A', String($event ?? ''))" />
 		</div>
-		<div :class="$style.cellEditable">
+		<div :class="$style.transferCell">
+			<NcButton
+				variant="tertiary"
+				type="button"
+				:title="t('sheetmusic', 'Copy Song A Title to Song B')"
+				:aria-label="t('sheetmusic', 'Copy Song A Title to Song B')"
+				data-test="copy-a-to-b-title"
+				@click="emit('copySingleFieldBetweenSongs', 'title', 'A')">
+				<template #icon><ArrowRightIcon :size="16" /></template>
+			</NcButton>
+			<NcButton
+				variant="tertiary"
+				type="button"
+				:title="t('sheetmusic', 'Copy Song B Title to Song A')"
+				:aria-label="t('sheetmusic', 'Copy Song B Title to Song A')"
+				data-test="copy-b-to-a-title"
+				@click="emit('copySingleFieldBetweenSongs', 'title', 'B')">
+				<template #icon><ArrowLeftIcon :size="16" /></template>
+			</NcButton>
+		</div>
+		<div :class="$style.cellEditable" data-test="field-b-title">
 			<NcTextField
+				id="resolve-b-title-input"
 				:label="t('sheetmusic', 'Song B Title')"
-				:value="songB_title"
-				@update:value="emit('update:songB_title', $event)" />
+				:model-value="draftB.title"
+				@update:model-value="emit('update:title', 'B', String($event ?? ''))" />
 		</div>
 
-		<!-- Row: Composers -->
-		<div :class="$style.cellEditable">
-			<label :class="$style.fieldLabel">{{ t('sheetmusic', 'Song A Composers') }}</label>
-			<NcSelect
-				:value="songA_composers"
-				:options="composerOptions"
-				:multiple="true"
-				label="label"
-				track-by="id"
-				@update:value="emit('update:songA_composers', $event)" />
-		</div>
-		<div :class="$style.cellEditable">
-			<label :class="$style.fieldLabel">{{ t('sheetmusic', 'Song B Composers') }}</label>
-			<NcSelect
-				:value="songB_composers"
-				:options="composerOptions"
-				:multiple="true"
-				label="label"
-				track-by="id"
-				@update:value="emit('update:songB_composers', $event)" />
-		</div>
+		<!-- Rows: All Entity Types (from ENTITY_COLUMNS single source of truth) -->
+		<template v-for="col in ENTITY_COLUMNS" :key="col.songProp">
+			<div :class="$style.cellEditable" :data-test="`field-a-${col.songProp}`">
+				<label :class="$style.fieldLabel">{{ t('sheetmusic', 'Song A {field}', { field: col.pluralLabel() }) }}</label>
+				<NcSelect
+					:model-value="draftA.entities[col.songProp]"
+					:options="optionsMap[col.songProp] ?? []"
+					:multiple="true"
+					:input-label="t('sheetmusic', 'Song A {field}', { field: col.pluralLabel() })"
+					label="label"
+					track-by="id"
+					@update:model-value="emit('update:entity', 'A', col.songProp, ($event ?? []) as SelectOption[])" />
+			</div>
+			<div :class="$style.transferCell">
+				<NcButton
+					variant="tertiary"
+					type="button"
+					:title="t('sheetmusic', 'Copy Song A {field} to Song B', { field: col.pluralLabel() })"
+					:aria-label="t('sheetmusic', 'Copy Song A {field} to Song B', { field: col.pluralLabel() })"
+					:data-test="`copy-a-to-b-${col.songProp}`"
+					@click="emit('copySingleFieldBetweenSongs', col.songProp, 'A')">
+					<template #icon><ArrowRightIcon :size="16" /></template>
+				</NcButton>
+				<NcButton
+					variant="tertiary"
+					type="button"
+					:title="t('sheetmusic', 'Copy Song B {field} to Song A', { field: col.pluralLabel() })"
+					:aria-label="t('sheetmusic', 'Copy Song B {field} to Song A', { field: col.pluralLabel() })"
+					:data-test="`copy-b-to-a-${col.songProp}`"
+					@click="emit('copySingleFieldBetweenSongs', col.songProp, 'B')">
+					<template #icon><ArrowLeftIcon :size="16" /></template>
+				</NcButton>
+			</div>
+			<div :class="$style.cellEditable" :data-test="`field-b-${col.songProp}`">
+				<label :class="$style.fieldLabel">{{ t('sheetmusic', 'Song B {field}', { field: col.pluralLabel() }) }}</label>
+				<NcSelect
+					:model-value="draftB.entities[col.songProp]"
+					:options="optionsMap[col.songProp] ?? []"
+					:multiple="true"
+					:input-label="t('sheetmusic', 'Song B {field}', { field: col.pluralLabel() })"
+					label="label"
+					track-by="id"
+					@update:model-value="emit('update:entity', 'B', col.songProp, ($event ?? []) as SelectOption[])" />
+			</div>
+		</template>
 
-		<!-- Row: Books -->
-		<div :class="$style.cellEditable">
-			<label :class="$style.fieldLabel">{{ t('sheetmusic', 'Song A Books') }}</label>
-			<NcSelect
-				:value="songA_books"
-				:options="bookOptions"
-				:multiple="true"
-				label="label"
-				track-by="id"
-				@update:value="emit('update:songA_books', $event)" />
-		</div>
-		<div :class="$style.cellEditable">
-			<label :class="$style.fieldLabel">{{ t('sheetmusic', 'Song B Books') }}</label>
-			<NcSelect
-				:value="songB_books"
-				:options="bookOptions"
-				:multiple="true"
-				label="label"
-				track-by="id"
-				@update:value="emit('update:songB_books', $event)" />
-		</div>
-
-		<!-- Row: Collections -->
-		<div :class="$style.cellEditable">
-			<label :class="$style.fieldLabel">{{ t('sheetmusic', 'Song A Collections') }}</label>
-			<NcSelect
-				:value="songA_collections"
-				:options="collectionOptions"
-				:multiple="true"
-				label="label"
-				track-by="id"
-				@update:value="emit('update:songA_collections', $event)" />
-		</div>
-		<div :class="$style.cellEditable">
-			<label :class="$style.fieldLabel">{{ t('sheetmusic', 'Song B Collections') }}</label>
-			<NcSelect
-				:value="songB_collections"
-				:options="collectionOptions"
-				:multiple="true"
-				label="label"
-				track-by="id"
-				@update:value="emit('update:songB_collections', $event)" />
-		</div>
-
-		<!-- Row: Artists -->
-		<div :class="$style.cellEditable">
-			<label :class="$style.fieldLabel">{{ t('sheetmusic', 'Song A Artists') }}</label>
-			<NcSelect
-				:value="songA_artists"
-				:options="artistOptions"
-				:multiple="true"
-				label="label"
-				track-by="id"
-				@update:value="emit('update:songA_artists', $event)" />
-		</div>
-		<div :class="$style.cellEditable">
-			<label :class="$style.fieldLabel">{{ t('sheetmusic', 'Song B Artists') }}</label>
-			<NcSelect
-				:value="songB_artists"
-				:options="artistOptions"
-				:multiple="true"
-				label="label"
-				track-by="id"
-				@update:value="emit('update:songB_artists', $event)" />
-		</div>
-
-		<!-- Row: Genres -->
-		<div :class="$style.cellEditable">
-			<label :class="$style.fieldLabel">{{ t('sheetmusic', 'Song A Genres') }}</label>
-			<NcSelect
-				:value="songA_genres"
-				:options="genreOptions"
-				:multiple="true"
-				label="label"
-				track-by="id"
-				@update:value="emit('update:songA_genres', $event)" />
-		</div>
-		<div :class="$style.cellEditable">
-			<label :class="$style.fieldLabel">{{ t('sheetmusic', 'Song B Genres') }}</label>
-			<NcSelect
-				:value="songB_genres"
-				:options="genreOptions"
-				:multiple="true"
-				label="label"
-				track-by="id"
-				@update:value="emit('update:songB_genres', $event)" />
-		</div>
-
-		<!-- Row: Keys -->
-		<div :class="$style.cellEditable">
-			<label :class="$style.fieldLabel">{{ t('sheetmusic', 'Song A Keys') }}</label>
-			<NcSelect
-				:value="songA_keys"
-				:options="keyOptions"
-				:multiple="true"
-				label="label"
-				track-by="id"
-				@update:value="emit('update:songA_keys', $event)" />
-		</div>
-		<div :class="$style.cellEditable">
-			<label :class="$style.fieldLabel">{{ t('sheetmusic', 'Song B Keys') }}</label>
-			<NcSelect
-				:value="songB_keys"
-				:options="keyOptions"
-				:multiple="true"
-				label="label"
-				track-by="id"
-				@update:value="emit('update:songB_keys', $event)" />
-		</div>
-
-		<!-- Row: Keywords -->
-		<div :class="$style.cellEditable">
-			<NcTextField
-				:label="t('sheetmusic', 'Song A Keywords')"
-				:value="songA_keywords"
-				@update:value="emit('update:songA_keywords', $event)" />
-		</div>
-		<div :class="$style.cellEditable">
-			<NcTextField
-				:label="t('sheetmusic', 'Song B Keywords')"
-				:value="songB_keywords"
-				@update:value="emit('update:songB_keywords', $event)" />
-		</div>
+		<!-- Rows: All Scalar Fields (from SONG_SCALAR_FIELDS single source of truth) -->
+		<template v-for="field in SONG_SCALAR_FIELDS" :key="field.key">
+			<div :class="$style.cellEditable" :data-test="`field-a-${field.key}`">
+				<NcTextField
+					:id="`resolve-a-${field.key}-input`"
+					:type="field.type"
+					:min="field.min"
+					:max="field.max"
+					:label="t('sheetmusic', 'Song A {field}', { field: field.inputLabel() })"
+					:placeholder="field.placeholder()"
+					:model-value="getScalarModelValue(draftA, field)"
+					@update:model-value="onScalarInput('A', field, $event)" />
+			</div>
+			<div :class="$style.transferCell">
+				<NcButton
+					variant="tertiary"
+					type="button"
+					:title="t('sheetmusic', 'Copy Song A {field} to Song B', { field: field.label() })"
+					:aria-label="t('sheetmusic', 'Copy Song A {field} to Song B', { field: field.label() })"
+					:data-test="`copy-a-to-b-${field.key}`"
+					@click="emit('copySingleFieldBetweenSongs', field.key, 'A')">
+					<template #icon><ArrowRightIcon :size="16" /></template>
+				</NcButton>
+				<NcButton
+					variant="tertiary"
+					type="button"
+					:title="t('sheetmusic', 'Copy Song B {field} to Song A', { field: field.label() })"
+					:aria-label="t('sheetmusic', 'Copy Song B {field} to Song A', { field: field.label() })"
+					:data-test="`copy-b-to-a-${field.key}`"
+					@click="emit('copySingleFieldBetweenSongs', field.key, 'B')">
+					<template #icon><ArrowLeftIcon :size="16" /></template>
+				</NcButton>
+			</div>
+			<div :class="$style.cellEditable" :data-test="`field-b-${field.key}`">
+				<NcTextField
+					:id="`resolve-b-${field.key}-input`"
+					:type="field.type"
+					:min="field.min"
+					:max="field.max"
+					:label="t('sheetmusic', 'Song B {field}', { field: field.inputLabel() })"
+					:placeholder="field.placeholder()"
+					:model-value="getScalarModelValue(draftB, field)"
+					@update:model-value="onScalarInput('B', field, $event)" />
+			</div>
+		</template>
 
 		<!-- Row: Attached Files -->
 		<div :class="$style.cellEditable">
 			<label :class="$style.fieldLabel">{{ t('sheetmusic', 'Song A Files') }}</label>
 			<ul v-if="songA?.files?.length" :class="$style.fileList">
-				<li v-for="f in songA.files" :key="f.id" :class="[$style.fileItem, songA_detachedFiles.includes(f.id) && $style.detachedFile]">
+				<li v-for="f in songA.files" :key="f.id" :class="[$style.fileItem, detachedFilesA.includes(f.id) && $style.detachedFile]">
 					<FileDocumentIcon :size="16" />
 					<span :class="$style.fileName">{{ getFileName(f.path) }}</span>
-					<NcButton type="tertiary" :title="t('sheetmusic', 'Open File')" @click="openFileExternally(f.path)">
+					<NcButton variant="tertiary" type="button" :title="t('sheetmusic', 'Open File')" @click="openFileExternally(f.path)">
 						<template #icon><OpenInNewIcon :size="14" /></template>
 					</NcButton>
 					<NcButton
-						:variant="songA_detachedFiles.includes(f.id) ? 'secondary' : 'tertiary'"
-						:title="songA_detachedFiles.includes(f.id) ? t('sheetmusic', 'Keep File') : t('sheetmusic', 'Detach File from Song A')"
+						type="button"
+						:variant="detachedFilesA.includes(f.id) ? 'secondary' : 'tertiary'"
+						:title="detachedFilesA.includes(f.id) ? t('sheetmusic', 'Keep File') : t('sheetmusic', 'Detach File from Song A')"
+						:data-test="`detach-file-a-${f.id}`"
 						@click="emit('toggleDetachFile', 'A', f.id)">
 						<template #icon><TrashCanOutlineIcon :size="14" /></template>
 					</NcButton>
@@ -264,18 +242,22 @@ const emit = defineEmits<{
 			<span v-else :class="$style.val">{{ t('sheetmusic', '(None)') }}</span>
 		</div>
 
+		<div :class="$style.transferCell" />
+
 		<div :class="$style.cellEditable">
 			<label :class="$style.fieldLabel">{{ t('sheetmusic', 'Song B Files') }}</label>
 			<ul v-if="songB?.files?.length" :class="$style.fileList">
-				<li v-for="f in songB.files" :key="f.id" :class="[$style.fileItem, songB_detachedFiles.includes(f.id) && $style.detachedFile]">
+				<li v-for="f in songB.files" :key="f.id" :class="[$style.fileItem, detachedFilesB.includes(f.id) && $style.detachedFile]">
 					<FileDocumentIcon :size="16" />
 					<span :class="$style.fileName">{{ getFileName(f.path) }}</span>
-					<NcButton type="tertiary" :title="t('sheetmusic', 'Open File')" @click="openFileExternally(f.path)">
+					<NcButton variant="tertiary" type="button" :title="t('sheetmusic', 'Open File')" @click="openFileExternally(f.path)">
 						<template #icon><OpenInNewIcon :size="14" /></template>
 					</NcButton>
 					<NcButton
-						:variant="songB_detachedFiles.includes(f.id) ? 'secondary' : 'tertiary'"
-						:title="songB_detachedFiles.includes(f.id) ? t('sheetmusic', 'Keep File') : t('sheetmusic', 'Detach File from Song B')"
+						type="button"
+						:variant="detachedFilesB.includes(f.id) ? 'secondary' : 'tertiary'"
+						:title="detachedFilesB.includes(f.id) ? t('sheetmusic', 'Keep File') : t('sheetmusic', 'Detach File from Song B')"
+						:data-test="`detach-file-b-${f.id}`"
 						@click="emit('toggleDetachFile', 'B', f.id)">
 						<template #icon><TrashCanOutlineIcon :size="14" /></template>
 					</NcButton>
@@ -289,7 +271,7 @@ const emit = defineEmits<{
 <style module>
 .keepBothGrid {
 	display: grid;
-	grid-template-columns: 1fr 1fr;
+	grid-template-columns: 1fr auto 1fr;
 	gap: 12px 16px;
 	align-items: center;
 }
@@ -303,6 +285,10 @@ const emit = defineEmits<{
 	padding: 12px;
 	border-radius: var(--border-radius-large, 8px);
 	border: 1px solid var(--color-border);
+}
+
+.headerCenter {
+	min-width: 64px;
 }
 
 .songLeft {
@@ -328,6 +314,13 @@ const emit = defineEmits<{
 	flex-direction: column;
 	justify-content: center;
 	min-height: 48px;
+}
+
+.transferCell {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 4px;
 }
 
 .fieldLabel {
@@ -375,4 +368,3 @@ const emit = defineEmits<{
 	white-space: nowrap;
 }
 </style>
-

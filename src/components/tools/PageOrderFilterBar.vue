@@ -86,10 +86,12 @@ const emit = defineEmits<{
 
 			<div :class="$style.searchWrapper">
 				<NcTextField
+					:model-value="searchQuery"
 					:value="searchQuery"
 					:placeholder="t('sheetmusic', 'Search song or file…')"
 					data-test="page-order-search"
-					@update:value="emit('update:searchQuery', $event)" />
+					@update:model-value="emit('update:searchQuery', String($event ?? ''))"
+					@update:value="emit('update:searchQuery', String($event ?? ''))" />
 			</div>
 
 			<NcButton

@@ -1,6 +1,10 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import SongResolveBothModeView from '../../../src/components/song-editor/SongResolveBothModeView.vue'
+import {
+	buildLibraryOptionsMap,
+	createDraftFromSong,
+} from '../../../src/components/song-editor/song-merge-utils'
 import type { Song } from '../../../src/types/song'
 
 vi.mock('@nextcloud/l10n', () => ({
@@ -19,114 +23,63 @@ vi.mock('@nextcloud/l10n', () => ({
 const mockSongA: Song = {
 	id: 10,
 	title: 'Song Alpha',
+	arrangers: [{ id: 5, name: 'Arranger A' }],
+	duration: 150,
 	files: [{ id: 100, path: '/files/Alpha.pdf', type: 1 }],
 }
 
 const mockSongB: Song = {
 	id: 20,
 	title: 'Song Beta',
+	arrangers: [{ id: 6, name: 'Arranger B' }],
+	duration: 210,
 	files: [{ id: 200, path: '/files/Beta.pdf', type: 1 }],
 }
 
-const globalStubs = {
-	global: {
-		stubs: {
-			NcButton: {
-				template: '<button :title="title" @click="$emit(\'click\')"><slot /></button>',
-				props: ['title'],
-			},
-			NcTextField: {
-				template: '<input :value="value" @input="$emit(\'update:value\', $event.target.value)" />',
-				props: ['value'],
-			},
-			NcSelect: {
-				template: '<div class="select-stub" />',
-				props: ['value', 'options'],
-			},
-		},
-	},
-}
-
 describe('SongResolveBothModeView.vue', () => {
-	it('renders Song A and Song B inputs', () => {
+	it('renders Song A and Song B inputs with real @nextcloud/vue controls', () => {
 		const wrapper = mount(SongResolveBothModeView, {
 			props: {
 				songA: mockSongA,
 				songB: mockSongB,
-				songA_title: 'Song Alpha',
-				songB_title: 'Song Beta',
-				songA_composers: [],
-				songB_composers: [],
-				songA_books: [],
-				songB_books: [],
-				songA_collections: [],
-				songB_collections: [],
-				songA_artists: [],
-				songB_artists: [],
-				songA_genres: [],
-				songB_genres: [],
-				songA_keys: [],
-				songB_keys: [],
-				songA_keywords: '',
-				songB_keywords: '',
-				songA_detachedFiles: [],
-				songB_detachedFiles: [],
-				composerOptions: [],
-				bookOptions: [],
-				collectionOptions: [],
-				artistOptions: [],
-				genreOptions: [],
-				keyOptions: [],
+				draftA: createDraftFromSong(mockSongA),
+				draftB: createDraftFromSong(mockSongB),
+				detachedFilesA: [],
+				detachedFilesB: [],
+				optionsMap: buildLibraryOptionsMap({}, mockSongA, mockSongB),
 			},
-			...globalStubs,
 		})
 
 		expect(wrapper.text()).toContain('Song A')
 		expect(wrapper.text()).toContain('Song B')
 		expect(wrapper.text()).toContain('Copy all to B')
 		expect(wrapper.text()).toContain('Copy all to A')
+		expect((wrapper.find('input#resolve-a-title-input').element as HTMLInputElement).value).toBe('Song Alpha')
+		expect((wrapper.find('input#resolve-b-title-input').element as HTMLInputElement).value).toBe('Song Beta')
+		expect((wrapper.find('input#resolve-a-duration-input').element as HTMLInputElement).value).toBe('150')
+		expect((wrapper.find('input#resolve-b-duration-input').element as HTMLInputElement).value).toBe('210')
 	})
 
-	it('emits copyFieldsBetweenSongs and toggleDetachFile', async () => {
+	it('emits copyFieldsBetweenSongs, copySingleFieldBetweenSongs, and toggleDetachFile', async () => {
 		const wrapper = mount(SongResolveBothModeView, {
 			props: {
 				songA: mockSongA,
 				songB: mockSongB,
-				songA_title: 'Song Alpha',
-				songB_title: 'Song Beta',
-				songA_composers: [],
-				songB_composers: [],
-				songA_books: [],
-				songB_books: [],
-				songA_collections: [],
-				songB_collections: [],
-				songA_artists: [],
-				songB_artists: [],
-				songA_genres: [],
-				songB_genres: [],
-				songA_keys: [],
-				songB_keys: [],
-				songA_keywords: '',
-				songB_keywords: '',
-				songA_detachedFiles: [],
-				songB_detachedFiles: [],
-				composerOptions: [],
-				bookOptions: [],
-				collectionOptions: [],
-				artistOptions: [],
-				genreOptions: [],
-				keyOptions: [],
+				draftA: createDraftFromSong(mockSongA),
+				draftB: createDraftFromSong(mockSongB),
+				detachedFilesA: [],
+				detachedFilesB: [],
+				optionsMap: buildLibraryOptionsMap({}, mockSongA, mockSongB),
 			},
-			...globalStubs,
 		})
 
-		const copyToBBtn = wrapper.findAll('button').find(b => b.text().includes('Copy all to B'))
-		await copyToBBtn?.trigger('click')
+		await wrapper.find('[data-test="copy-all-to-b"]').trigger('click')
 		expect(wrapper.emitted('copyFieldsBetweenSongs')?.[0]).toEqual(['A'])
 
-		const detachBtn = wrapper.findAll('button').find(b => b.attributes('title')?.includes('Detach File from Song A'))
-		await detachBtn?.trigger('click')
+		await wrapper.find('[data-test="copy-a-to-b-arrangers"]').trigger('click')
+		expect(wrapper.emitted('copySingleFieldBetweenSongs')?.[0]).toEqual(['arrangers', 'A'])
+
+		await wrapper.find('[data-test="detach-file-a-100"]').trigger('click')
 		expect(wrapper.emitted('toggleDetachFile')?.[0]).toEqual(['A', 100])
 	})
 })
-

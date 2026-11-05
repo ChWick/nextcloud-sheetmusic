@@ -55,6 +55,16 @@ export const mockSourceTypes = [
 	{ id: 7001, name: 'Score', type: 'Score' },
 ]
 
+export const mockInstruments = [
+	{ id: 8000, name: 'Organ' },
+	{ id: 8001, name: 'Piano' },
+]
+
+export const mockArrangers = [
+	{ id: 9000, name: 'Ferruccio Busoni' },
+	{ id: 9001, name: 'Franz Liszt' },
+]
+
 export const mockSongs = [
 	{
 		id: 5,
@@ -69,6 +79,12 @@ export const mockSongs = [
 		years: [mockYears[1]],
 		signatures: [mockSignatures[0]],
 		sourceTypes: [mockSourceTypes[0]],
+		instruments: [mockInstruments[0]],
+		arrangers: [mockArrangers[0]],
+		opus: 'Op. 67',
+		duration: 420,
+		stars: 5,
+		difficulty: 4,
 		notes: [{ id: 1, songId: 5, note: 'Play allegro con brio', title: 'Tempo note' }],
 		tempos: [{ id: 1, songId: 5, tempo: 120 }],
 		files: [{ id: 50, path: '/dav/files/admin/Noten/Beethoven - Symphony 5.pdf' }],
@@ -90,6 +106,12 @@ export const mockSongs = [
 		years: [mockYears[0]],
 		signatures: [mockSignatures[1]],
 		sourceTypes: [mockSourceTypes[1]],
+		instruments: [mockInstruments[1]],
+		arrangers: [mockArrangers[1]],
+		opus: 'KV 626',
+		duration: 310,
+		stars: 4,
+		difficulty: 3,
 		notes: [],
 		tempos: [],
 		files: [{ id: 51, path: '/dav/files/admin/Noten/Mozart - Requiem.pdf' }],
@@ -165,6 +187,8 @@ export async function setupMockApi(page: Page) {
 						years: mockYears,
 						signatures: mockSignatures,
 						sourceTypes: mockSourceTypes,
+						instruments: mockInstruments,
+						arrangers: mockArrangers,
 						createdSongId: 99,
 					},
 				},

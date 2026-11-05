@@ -379,4 +379,70 @@ final class SongServiceTest extends TestCase {
 		$droppedSong = $this->songMapper->findById((int)$drop->id);
 		self::assertNotNull($droppedSong->deletedAt);
 	}
+
+	public function testMergeSongAppliesMergedMetadataAndEntities(): void {
+		$keep = $this->songMapper->insert(new InternalSong(
+			id: null,
+			uuid: 'm-keep-2',
+			libraryId: $this->libraryId,
+			title: 'Original Keep',
+			duration: 120,
+			rating: 3,
+		));
+		$drop = $this->songMapper->insert(new InternalSong(
+			id: null,
+			uuid: 'm-drop-2',
+			libraryId: $this->libraryId,
+			title: 'Original Drop',
+			duration: 240,
+			rating: 5,
+		));
+
+		$composerA = $this->entityMapper->insert(new InternalEntity(
+			id: null,
+			uuid: 'comp-a',
+			libraryId: $this->libraryId,
+			type: 'composer',
+			name: 'Bach',
+		));
+		$composerB = $this->entityMapper->insert(new InternalEntity(
+			id: null,
+			uuid: 'comp-b',
+			libraryId: $this->libraryId,
+			type: 'composer',
+			name: 'Handel',
+		));
+		$arrangerB = $this->entityMapper->insert(new InternalEntity(
+			id: null,
+			uuid: 'arr-b',
+			libraryId: $this->libraryId,
+			type: 'arranger',
+			name: 'Busoni',
+		));
+		$this->entityMapper->linkSongEntity((int)$keep->id, (int)$composerA->id);
+		$this->entityMapper->linkSongEntity((int)$drop->id, (int)$composerB->id);
+		$this->entityMapper->linkSongEntity((int)$drop->id, (int)$arrangerB->id);
+
+		$result = $this->service->mergeSong($this->user, $this->libraryId, (int)$keep->id, (int)$drop->id, [
+			'title' => 'Merged Bach-Busoni',
+			'composerIds' => [(int)$composerA->id],
+			'arrangerIds' => [(int)$arrangerB->id],
+			'duration' => 240,
+			'stars' => 5,
+			'opus' => 'BWV 1004',
+		]);
+		self::assertNotNull($result);
+
+		$updatedKeep = $this->songMapper->findById((int)$keep->id);
+		self::assertNotNull($updatedKeep);
+		self::assertSame('Merged Bach-Busoni', $updatedKeep->title);
+		self::assertSame(240, $updatedKeep->duration);
+		self::assertSame(5, $updatedKeep->rating);
+		self::assertNull($updatedKeep->difficulty);
+		self::assertSame('BWV 1004', $updatedKeep->opus);
+
+		// Only the selected composer (composerA) and arranger (arrangerB) are linked to keep song
+		self::assertSame([(int)$composerA->id], $this->entityMapper->findEntityIdsForSong((int)$keep->id, 'composer'));
+		self::assertSame([(int)$arrangerB->id], $this->entityMapper->findEntityIdsForSong((int)$keep->id, 'arranger'));
+	}
 }

@@ -1,5 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import axios from '@nextcloud/axios'
 import IntegrityView from '../../../src/components/IntegrityView.vue'
 import type { IntegrityIssue } from '../../../src/types/song'
 import { showError, showSuccess } from '@nextcloud/dialogs'
@@ -419,6 +420,122 @@ describe('IntegrityView.vue', () => {
 				autoMatchOrphans: '0',
 			},
 		})
+	})
+
+	it('opens Duplicate Songs Resolution dialog from an integrity issue, copies fields via arrow buttons, and submits merge', async () => {
+		const duplicateIssue: IntegrityIssue = {
+			type: 'duplicate_file_path',
+			severity: 'error',
+			message: 'Multiple database entries point to the same file path',
+			songId: 60,
+			songTitle: 'Nachspiel in G',
+			fixable: false,
+			details: {
+				songIds: [60, 61],
+				exactDuplicate: false,
+			},
+		}
+
+		vi.mocked(apiGet)
+			.mockResolvedValueOnce({
+				data: {
+					ocs: {
+						data: {
+							issues: [duplicateIssue],
+						},
+					},
+				},
+			} as any)
+			.mockResolvedValueOnce({
+				data: {
+					ocs: {
+						data: {
+							songs: [
+								{
+									id: 60,
+									title: 'Nachspiel in G',
+									composers: [{ id: 1, name: 'Brosig' }],
+									arrangers: [{ id: 11, name: 'Straube' }],
+									duration: 210,
+									stars: 4,
+									files: [{ id: 207, path: '/files/Nachspiel.pdf', type: 1 }],
+								},
+								{
+									id: 61,
+									title: 'Nachspiel in D',
+									composers: [{ id: 1, name: 'Brosig' }],
+									arrangers: [{ id: 12, name: 'Reger' }],
+									duration: 180,
+									stars: 5,
+									files: [{ id: 208, path: '/files/Nachspiel2.pdf', type: 1 }],
+								},
+							],
+							composers: [{ id: 1, name: 'Brosig' }],
+							arrangers: [{ id: 11, name: 'Straube' }, { id: 12, name: 'Reger' }],
+						},
+					},
+				},
+			} as any)
+
+		vi.mocked(axios.post).mockResolvedValueOnce({
+			data: {
+				ocs: {
+					data: {
+						songs: [],
+					},
+				},
+			},
+		} as any)
+
+		const wrapper = mount(IntegrityView, {
+			props: { selectedLibrary: 1 },
+			global: {
+				stubs: {
+					NcDialog: {
+						template: '<div class="nc-dialog-stub"><slot /></div>',
+						props: ['name', 'open', 'size'],
+					},
+				},
+			},
+		})
+		await flushPromises()
+
+		// Click "Merge Songs" on the duplicate issue item
+		const openMergeBtn = wrapper.findAll('button').find(b => b.text().includes('Merge Songs'))
+		expect(openMergeBtn).toBeDefined()
+		await openMergeBtn!.trigger('click')
+		await flushPromises()
+
+		// Click arrow buttons inside the dialog and verify real input / select DOM updates
+		await wrapper.find('[data-test="copy-from-a-title"]').trigger('click')
+		expect((wrapper.find('input#merge-title-input').element as HTMLInputElement).value).toBe('Nachspiel in G')
+
+		await wrapper.find('[data-test="copy-from-b-arrangers"]').trigger('click')
+		expect(wrapper.find('[data-test="merged-field-arrangers"]').text()).toContain('Reger')
+
+		await wrapper.find('[data-test="copy-from-a-duration"]').trigger('click')
+		expect((wrapper.find('input#merge-duration-input').element as HTMLInputElement).value).toBe('210')
+
+		// Submit merge
+		await wrapper.find('[data-test="submit-merge-btn"]').trigger('click')
+		await flushPromises()
+
+		expect(axios.post).toHaveBeenCalledWith(
+			'/ocs/v2.php/apps/sheetmusic/api/songs/merge',
+			expect.objectContaining({
+				libraryId: 1,
+				keepId: 60,
+				droppedId: 61,
+				merged: expect.objectContaining({
+					title: 'Nachspiel in G',
+					composerIds: [1],
+					arrangerIds: [12],
+					duration: 210,
+				}),
+			}),
+			expect.any(Object),
+		)
+		expect(showSuccess).toHaveBeenCalledWith('Songs merged successfully into "Nachspiel in G".')
 	})
 })
 

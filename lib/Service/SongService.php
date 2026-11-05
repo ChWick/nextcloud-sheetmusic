@@ -7,6 +7,7 @@ namespace OCA\SheetMusic\Service;
 use OCA\SheetMusic\Db\InternalEntity;
 use OCA\SheetMusic\Db\InternalEntityMapper;
 use OCA\SheetMusic\Db\InternalSong;
+use OCA\SheetMusic\Db\InternalSongBookmark;
 use OCA\SheetMusic\Db\InternalSongBookmarkMapper;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongHistory;
@@ -399,10 +400,10 @@ class SongService {
 	 */
 	public function mergeSong(IUser $user, int $libraryId, int $keepId, int $droppedId, array $merged): ?LibraryData {
 		try {
+			$this->internalSongMapper->mergeSongs($libraryId, $keepId, $droppedId);
 			if (!empty($merged['title'])) {
 				$this->updateSongFromData($user, $libraryId, ['id' => $keepId] + $merged);
 			}
-			$this->internalSongMapper->mergeSongs($libraryId, $keepId, $droppedId);
 			$this->libraryMapper->touch($libraryId);
 
 			return $this->internalSongMapper->findLibraryData($libraryId, $user);
@@ -506,6 +507,19 @@ class SongService {
 	 */
 	private function updateSongFromData(IUser $user, int $libraryId, array $songData): void {
 		$songId = (int)($songData['id'] ?? 0);
+		$bookmarks = array_key_exists('bookmarks', $songData) && is_array($songData['bookmarks'])
+			? $songData['bookmarks']
+			: array_map(
+				static fn (InternalSongBookmark $b): array => [
+					'id' => $b->id,
+					'name' => $b->name,
+					'pageNum' => $b->pageNum,
+					'endPage' => $b->endPage,
+					'position' => $b->position,
+					'showInLibrary' => $b->showInLibrary ? 1 : 0,
+				],
+				$this->internalSongBookmarkMapper !== null ? $this->internalSongBookmarkMapper->findForSong($songId) : [],
+			);
 		$this->updateSong(
 			$user,
 			$songId,
@@ -528,7 +542,7 @@ class SongService {
 			(string)($songData['custom'] ?? ''),
 			(string)($songData['custom2'] ?? ''),
 			(string)($songData['sortTitle'] ?? ''),
-			$songData['bookmarks'] ?? [],
+			$bookmarks,
 			$songData['audioFiles'] ?? [],
 			(string)($songData['opus'] ?? ''),
 			(string)($songData['catalogNumber'] ?? ''),
