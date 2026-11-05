@@ -61,6 +61,7 @@
                 :signatures="signatures"
                 :source-types="sourceTypes"
                 :instruments="instruments"
+                :arrangers="arrangers"
                 @saved="handleSaved"
                 @updated="handleLibraryDataUpdate"
                 @deleted="handleDeleted"
@@ -82,6 +83,7 @@
       :signatures="signatures"
       :source-types="sourceTypes"
       :instruments="instruments"
+      :arrangers="arrangers"
       @saved="handlePdfModifierSaved"
       @cancel="closeModifyPdf" />
     <SongViewer
@@ -102,6 +104,7 @@
       :signatures="signatures"
       :source-types="sourceTypes"
       :instruments="instruments"
+      :arrangers="arrangers"
       @back="goBackToSongs"
       @modify-pdf="openModifyPdf"
       @saved="handleSaved"
@@ -168,6 +171,7 @@
       v-model:selected-signatures="selectedSignatures"
       v-model:selected-source-types="selectedSourceTypes"
       v-model:selected-instruments="selectedInstruments"
+      v-model:selected-arrangers="selectedArrangers"
       :composers="composers"
       :books="books"
       :collections="collections"
@@ -179,6 +183,7 @@
       :signatures="signatures"
       :source-types="sourceTypes"
       :instruments="instruments"
+      :arrangers="arrangers"
       @clear="clearFilters"/>
     </div>
     <SongEditor v-if="isCreatingSong"
@@ -197,6 +202,7 @@
                 :signatures="signatures"
                 :source-types="sourceTypes"
                 :instruments="instruments"
+                :arrangers="arrangers"
                 :duplicate-song="duplicateSourceSong"
                 :prefill="importPrefill"
                 :imported-file="importedFile"
@@ -227,6 +233,7 @@
         :signatures="signatures"
         :source-types="sourceTypes"
         :instruments="instruments"
+        :arrangers="arrangers"
         v-model:sort-key="sortKey"
         v-model:sort-order="sortOrder"
         @view-song="openSongView"
@@ -280,6 +287,7 @@
     :signatures="signatures"
     :source-types="sourceTypes"
     :instruments="instruments"
+    :arrangers="arrangers"
     @apply="handleApplyBatchUpdate" />
 
   <BatchDeleteSongsDialog
@@ -418,6 +426,7 @@ const {
   signatures,
   sourceTypes,
   instruments,
+  arrangers,
   fileError,
   isLoading,
   handleLibraryDataUpdate,
@@ -460,8 +469,8 @@ const isModifyPdfInUrl = computed(() => route.query.modifyPdf !== undefined && r
 
 // The filter bar reads and writes its selections in the URL query, so the browser
 // history restores them when going back or forward.
-const { searchTitle, withoutFiles, selectedComposers, selectedBooks, selectedCollections, selectedArtists, selectedGenres, selectedKeys, selectedCustomGroups, selectedYears, selectedSignatures, selectedSourceTypes, selectedInstruments, filterSongs, clearFilters, filterBarVisible, toggleFilterBar, isFiltered, toggleFilter } =
-  useSongFilters(() => ({ composers: composers.value, books: books.value, collections: collections.value, artists: artists.value, genres: genres.value, keys: keys.value, customGroups: customGroups.value, years: years.value, signatures: signatures.value, sourceTypes: sourceTypes.value, instruments: instruments.value }));
+const { searchTitle, withoutFiles, selectedComposers, selectedBooks, selectedCollections, selectedArtists, selectedGenres, selectedKeys, selectedCustomGroups, selectedYears, selectedSignatures, selectedSourceTypes, selectedInstruments, selectedArrangers, filterSongs, clearFilters, filterBarVisible, toggleFilterBar, isFiltered, toggleFilter } =
+  useSongFilters(() => ({ composers: composers.value, books: books.value, collections: collections.value, artists: artists.value, genres: genres.value, keys: keys.value, customGroups: customGroups.value, years: years.value, signatures: signatures.value, sourceTypes: sourceTypes.value, instruments: instruments.value, arrangers: arrangers.value }));
 
 const { selectedSongIds, selectedCount, isSelected, toggleSelect, selectAll, isAllSelected, clearSelection } = useSongSelection();
 const isBatchEditorOpen = ref(false);
@@ -479,6 +488,7 @@ const currentLibraryData = computed<LibraryData>(() => ({
   signatures: signatures.value,
   sourceTypes: sourceTypes.value,
   instruments: instruments.value,
+  arrangers: arrangers.value,
   songs: songs.value,
 }));
 
@@ -596,7 +606,7 @@ watch(pageSize, (newSize) => {
 const currentPage = ref(1);
 
 // When search, filter selections, sorting, or library change, reset page to 1
-watch([searchTitle, withoutFiles, selectedComposers, selectedBooks, selectedCollections, selectedArtists, selectedGenres, selectedKeys, selectedCustomGroups, selectedYears, selectedSignatures, selectedSourceTypes, selectedInstruments, () => props.selectedLibrary], () => {
+watch([searchTitle, withoutFiles, selectedComposers, selectedBooks, selectedCollections, selectedArtists, selectedGenres, selectedKeys, selectedCustomGroups, selectedYears, selectedSignatures, selectedSourceTypes, selectedInstruments, selectedArrangers, () => props.selectedLibrary], () => {
   currentPage.value = 1;
 });
 

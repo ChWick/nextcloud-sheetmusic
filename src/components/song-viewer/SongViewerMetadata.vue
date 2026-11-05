@@ -44,6 +44,10 @@
       <span :class="$style.metaLabel">{{ t('sheetmusic', 'Instrument:') }}</span>
       <span>{{ instruments.map((i) => i.name).join(', ') }}</span>
     </div>
+    <div v-if="arrangers.length > 0" :class="$style.metaItem">
+      <span :class="$style.metaLabel">{{ t('sheetmusic', 'Arranger:') }}</span>
+      <span>{{ arrangers.map((a) => a.name).join(', ') }}</span>
+    </div>
     <div v-if="bookmarks.length > 0" :class="$style.metaItem">
       <span :class="$style.metaLabel">{{ t('sheetmusic', 'Bookmarks:') }}</span>
       <div :class="$style.metaLinkList">
@@ -106,7 +110,7 @@ import { translate as t } from '@nextcloud/l10n'
 import type { AudioFile, Bookmark, Entity, Song } from '../../types/song'
 import { formatDifficulty, formatDuration, formatStars } from '../../utils/song-formatter'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   song: Song
   composers: Entity[]
   books: Entity[]
@@ -119,9 +123,12 @@ const props = defineProps<{
   signatures: Entity[]
   sourceTypes: Entity[]
   instruments: Entity[]
+  arrangers?: Entity[]
   bookmarks: Bookmark[]
   audioFiles: AudioFile[]
-}>()
+}>(), {
+  arrangers: () => [],
+})
 
 const emit = defineEmits<{
   'jump-to-bookmark': [pageNum: number]
@@ -146,6 +153,7 @@ const hasMetadata = computed(() => {
     || props.signatures.length > 0
     || props.sourceTypes.length > 0
     || props.instruments.length > 0
+    || props.arrangers.length > 0
     || props.bookmarks.length > 0
     || props.audioFiles.length > 0
     || !!props.song.opus

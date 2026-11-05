@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { INode } from '@nextcloud/files'
-import type { Artist, Book, Collection, Composer, CreatedSongData, CustomGroup, Genre, Instrument, Key, LibraryData, PendingAddition, PendingAttachment, PendingUpload, Signature, Song, SongFile, SongPrefill, SourceType, Year } from '../types/song'
+import type { Arranger, Artist, Book, Collection, Composer, CreatedSongData, CustomGroup, Genre, Instrument, Key, LibraryData, PendingAddition, PendingAttachment, PendingUpload, Signature, Song, SongFile, SongPrefill, SourceType, Year } from '../types/song'
 
 import axios from '@nextcloud/axios'
 import { FilePickerClosed, getFilePickerBuilder, showError, showInfo, showSuccess } from '@nextcloud/dialogs'
@@ -45,6 +45,7 @@ const props = withDefaults(
 		signatures?: Signature[]
 		sourceTypes?: SourceType[]
 		instruments?: Instrument[]
+		arrangers?: Arranger[]
 		/** Metadata read from an imported PDF, prefilled into a new song. */
 		prefill?: SongPrefill | null
 		/** The imported PDF itself, staged as the new song's file. */
@@ -64,6 +65,7 @@ const props = withDefaults(
 		signatures: () => [],
 		sourceTypes: () => [],
 		instruments: () => [],
+		arrangers: () => [],
 		prefill: null,
 		importedFile: null,
 		importedNextcloudNode: null,
@@ -102,6 +104,7 @@ const createYearTag = createEntityTag(props.years, (year) => year.name, (name) =
 const createSignatureTag = createEntityTag(props.signatures, (signature) => signature.name, (name) => ({ name }))
 const createSourceTypeTag = createEntityTag(props.sourceTypes, (sourceType) => sourceType.name, (name) => ({ name }))
 const createInstrumentTag = createEntityTag(props.instruments, (instrument) => instrument.name, (name) => ({ name }))
+const createArrangerTag = createEntityTag(props.arrangers, (arranger) => arranger.name, (name) => ({ name }))
 
 const title = ref(sourceSong.value?.title ?? props.prefill?.title ?? '')
 const selectedComposers = ref<Array<Composer | { name: string, id?: number }>>(
@@ -157,6 +160,11 @@ const selectedSourceTypes = ref<Array<SourceType | { name: string, id?: number }
 const selectedInstruments = ref<Array<Instrument | { name: string, id?: number }>>(
 	sourceSong.value
 		? matchSelected(props.instruments, sourceSong.value.instruments)
+		: [],
+)
+const selectedArrangers = ref<Array<Arranger | { name: string, id?: number }>>(
+	sourceSong.value
+		? matchSelected(props.arrangers, sourceSong.value.arrangers)
 		: [],
 )
 
@@ -233,6 +241,7 @@ watch(
 		selectedSignatures.value = matchSelected(props.signatures, newSong?.signatures)
 		selectedSourceTypes.value = matchSelected(props.sourceTypes, newSong?.sourceTypes)
 		selectedInstruments.value = matchSelected(props.instruments, newSong?.instruments)
+		selectedArrangers.value = matchSelected(props.arrangers, newSong?.arrangers)
 		opus.value = newSong?.opus ?? ''
 		catalogNumber.value = newSong?.catalogNumber ?? ''
 		songNumber.value = newSong?.songNumber ?? ''
@@ -515,6 +524,7 @@ async function saveSong(closeAfter: boolean) {
 			{ idField: 'signatureIds', endpoint: '/api/signatures', labelField: 'name', selected: selectedSignatures.value, options: props.signatures },
 			{ idField: 'sourceTypeIds', endpoint: '/api/sourcetypes', labelField: 'name', selected: selectedSourceTypes.value, options: props.sourceTypes },
 			{ idField: 'instrumentIds', endpoint: '/api/instruments', labelField: 'name', selected: selectedInstruments.value, options: props.instruments },
+			{ idField: 'arrangerIds', endpoint: '/api/arrangers', labelField: 'name', selected: selectedArrangers.value, options: props.arrangers },
 		], async (endpoint, labelField, label) => {
 			const response = await apiPost(endpoint, {
 				libraryId: props.libraryId,
@@ -667,6 +677,7 @@ defineExpose({
 				v-model:selected-signatures="selectedSignatures"
 				v-model:selected-source-types="selectedSourceTypes"
 				v-model:selected-instruments="selectedInstruments"
+				v-model:selected-arrangers="selectedArrangers"
 				v-model:opus="opus"
 				v-model:catalog-number="catalogNumber"
 				v-model:song-number="songNumber"
@@ -688,6 +699,7 @@ defineExpose({
 				:signatures="signatures"
 				:source-types="sourceTypes"
 				:instruments="instruments"
+				:arrangers="arrangers"
 				:create-composer-tag="createComposerTag"
 				:create-book-tag="createBookTag"
 				:create-collection-tag="createCollectionTag"
@@ -698,7 +710,8 @@ defineExpose({
 				:create-year-tag="createYearTag"
 				:create-signature-tag="createSignatureTag"
 				:create-source-type-tag="createSourceTypeTag"
-				:create-instrument-tag="createInstrumentTag" />
+				:create-instrument-tag="createInstrumentTag"
+				:create-arranger-tag="createArrangerTag" />
 
 			<SongFileSection
 				ref="fileSection"

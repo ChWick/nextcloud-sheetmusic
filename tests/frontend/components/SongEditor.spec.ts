@@ -219,6 +219,7 @@ describe('SongEditor.vue', () => {
 			signatures: [{ id: 6, name: '4/4' }],
 			sourceTypes: [{ id: 7, type: 'Digital', name: 'Digital' }],
 			instruments: [{ id: 8, name: 'Piano' }],
+			arrangers: [{ id: 9, name: 'Quincy Jones' }],
 		}
 		const wrapper = mount(SongEditor, {
 			props: {
@@ -255,6 +256,7 @@ describe('SongEditor.vue', () => {
 			signatureIds: [6],
 			sourceTypeIds: [7],
 			instrumentIds: [8],
+			arrangerIds: [9],
 		}))
 	})
 
@@ -525,6 +527,7 @@ describe('SongEditor.vue', () => {
 				signatureIds: [],
 				sourceTypeIds: [],
 				instrumentIds: [],
+				arrangerIds: [],
 				opus: '',
 				catalogNumber: '',
 				songNumber: '',
@@ -676,6 +679,7 @@ describe('SongEditor.vue', () => {
 				signatureIds: [],
 				sourceTypeIds: [],
 				instrumentIds: [],
+				arrangerIds: [],
 				opus: '',
 				catalogNumber: '',
 				songNumber: '',

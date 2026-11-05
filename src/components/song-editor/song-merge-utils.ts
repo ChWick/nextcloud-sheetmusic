@@ -13,6 +13,7 @@ export interface MergedSongData {
 	signatureIds: number[]
 	sourceTypeIds: number[]
 	instrumentIds?: number[]
+	arrangerIds?: number[]
 	opus?: string
 	catalogNumber?: string
 	songNumber?: string

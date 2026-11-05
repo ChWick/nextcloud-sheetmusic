@@ -80,6 +80,7 @@ describe('SongMetadataFields.vue', () => {
 			'Time Signatures',
 			'Source Types',
 			'Instruments',
+			'Arrangers',
 		])
 		for (const fieldId of [
 			'song-opus-input',

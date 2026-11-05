@@ -34,6 +34,7 @@ const columnOptions: { key: SongColumn; label: string }[] = [
 	{ key: 'custom', label: t('sheetmusic', 'Custom') },
 	{ key: 'custom2', label: t('sheetmusic', 'Custom 2') },
 	{ key: 'instrument', label: t('sheetmusic', 'Instrument') },
+	{ key: 'arranger', label: t('sheetmusic', 'Arranger') },
 	{ key: 'opus', label: t('sheetmusic', 'Opus') },
 	{ key: 'catalogNumber', label: t('sheetmusic', 'Catalog Number (BWV, etc.)') },
 	{ key: 'songNumber', label: t('sheetmusic', 'Song Number') },

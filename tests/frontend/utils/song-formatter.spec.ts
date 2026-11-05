@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Song } from '../../../src/types/song'
-import { formatArtists, formatBooks, formatCollections, formatComposers, formatCustomGroups, formatDateTimestamp, formatGenres, formatInstruments, formatKeys, formatSignatures, formatSourceTypes, formatYears, sortSongs } from '../../../src/utils/song-formatter'
+import { formatArrangers, formatArtists, formatBooks, formatCollections, formatComposers, formatCustomGroups, formatDateTimestamp, formatGenres, formatInstruments, formatKeys, formatSignatures, formatSourceTypes, formatYears, sortSongs } from '../../../src/utils/song-formatter'
 
 describe('song-formatter utilities', () => {
 	const sampleSong: Song = {
@@ -17,6 +17,7 @@ describe('song-formatter utilities', () => {
 		signatures: [{ id: 9, name: '2/4' }],
 		sourceTypes: [{ id: 11, name: 'Sheet Music', type: 'Sheet Music' }],
 		instruments: [{ id: 12, name: 'Piano' }],
+		arrangers: [{ id: 13, name: 'Liszt' }],
 	}
 
 	const emptySong: Song = {
@@ -80,14 +81,22 @@ describe('song-formatter utilities', () => {
 		expect(formatInstruments(emptySong)).toBe('—')
 	})
 
-	it('sorts songs by instrument and opus', () => {
+	it('formats arrangers correctly', () => {
+		expect(formatArrangers(sampleSong)).toBe('Liszt')
+		expect(formatArrangers(emptySong)).toBe('—')
+	})
+
+	it('sorts songs by instrument, arranger, and opus', () => {
 		const songs: Song[] = [
-			{ id: 1, title: 'Song 1', instruments: [{ id: 1, name: 'Violin' }], opus: 'Op. 20' },
-			{ id: 2, title: 'Song 2', instruments: [{ id: 2, name: 'Cello' }], opus: 'Op. 5' },
+			{ id: 1, title: 'Song 1', instruments: [{ id: 1, name: 'Violin' }], arrangers: [{ id: 1, name: 'Zappa' }], opus: 'Op. 20' },
+			{ id: 2, title: 'Song 2', instruments: [{ id: 2, name: 'Cello' }], arrangers: [{ id: 2, name: 'Adams' }], opus: 'Op. 5' },
 		]
 
 		const sortedByInst = sortSongs(songs, 'instrument', 'asc')
 		expect(sortedByInst[0].id).toBe(2) // Cello before Violin
+
+		const sortedByArr = sortSongs(songs, 'arranger', 'asc')
+		expect(sortedByArr[0].id).toBe(2) // Adams before Zappa
 
 		const sortedByOpus = sortSongs(songs, 'opus', 'asc')
 		expect(sortedByOpus[0].id).toBe(2) // Op. 5 before Op. 20 with numeric sort

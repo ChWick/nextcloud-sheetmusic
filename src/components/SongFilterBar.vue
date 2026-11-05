@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Artist, Book, Collection, Composer, CustomGroup, Genre, Instrument, Key, Signature, SourceType, Year } from '../types/song'
+import type { Arranger, Artist, Book, Collection, Composer, CustomGroup, Genre, Instrument, Key, Signature, SourceType, Year } from '../types/song'
 
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
@@ -28,6 +28,7 @@ const props = withDefaults(
 		signatures?: Signature[]
 		sourceTypes?: SourceType[]
 		instruments?: Instrument[]
+		arrangers?: Arranger[]
 		selectedComposers?: Composer[]
 		selectedBooks?: Book[]
 		selectedCollections?: Collection[]
@@ -39,6 +40,7 @@ const props = withDefaults(
 		selectedSignatures?: Signature[]
 		selectedSourceTypes?: SourceType[]
 		selectedInstruments?: Instrument[]
+		selectedArrangers?: Arranger[]
 	}>(),
 	{
 		searchTitle: '',
@@ -54,6 +56,7 @@ const props = withDefaults(
 		signatures: () => [],
 		sourceTypes: () => [],
 		instruments: () => [],
+		arrangers: () => [],
 		selectedComposers: () => [],
 		selectedBooks: () => [],
 		selectedCollections: () => [],
@@ -65,6 +68,7 @@ const props = withDefaults(
 		selectedSignatures: () => [],
 		selectedSourceTypes: () => [],
 		selectedInstruments: () => [],
+		selectedArrangers: () => [],
 	},
 )
 
@@ -82,6 +86,7 @@ const emit = defineEmits<{
 	'update:selectedSignatures': [signatures: Signature[]]
 	'update:selectedSourceTypes': [sourceTypes: SourceType[]]
 	'update:selectedInstruments': [instruments: Instrument[]]
+	'update:selectedArrangers': [arrangers: Arranger[]]
 	'clear': []
 }>()
 
@@ -145,6 +150,11 @@ const instrumentOptions = computed(() => [
 	...props.instruments,
 ])
 
+const arrangerOptions = computed(() => [
+	noneEntryOf('arrangers') as Arranger,
+	...props.arrangers,
+])
+
 const hasActiveFilters = computed(() => {
 	return (
 		Boolean(props.searchTitle?.trim())
@@ -160,6 +170,7 @@ const hasActiveFilters = computed(() => {
 		|| props.selectedSignatures.length > 0
 		|| props.selectedSourceTypes.length > 0
 		|| props.selectedInstruments.length > 0
+		|| props.selectedArrangers.length > 0
 	)
 })
 
@@ -341,6 +352,20 @@ function clearAllFilters() {
 				track-by="id"
 				:class="$style.select"
 				@update:model-value="emit('update:selectedInstruments', $event)" />
+		</div>
+
+		<div :class="$style.filterGroup">
+			<NcSelect
+				:model-value="selectedArrangers"
+				:options="arrangerOptions"
+				:multiple="true"
+				:keep-open="isCtrlPressed"
+				:placeholder="t('sheetmusic', 'Filter by arranger…')"
+				:input-label="t('sheetmusic', 'Arrangers')"
+				label="name"
+				track-by="id"
+				:class="$style.select"
+				@update:model-value="emit('update:selectedArrangers', $event)" />
 		</div>
 
 		<div v-if="hasActiveFilters" :class="$style.actions">

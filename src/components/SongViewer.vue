@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Artist, Book, Bookmark, Collection, Composer, CustomGroup, Genre, Instrument, Key, LibraryData, Signature, Song, SongFile, SourceType, Year } from '../types/song'
+import type { Arranger, Artist, Book, Bookmark, Collection, Composer, CustomGroup, Genre, Instrument, Key, LibraryData, Signature, Song, SongFile, SourceType, Year } from '../types/song'
 
 import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
@@ -57,6 +57,7 @@ const props = withDefaults(
 		signatures?: Signature[]
 		sourceTypes?: SourceType[]
 		instruments?: Instrument[]
+		arrangers?: Arranger[]
 		hideHeader?: boolean
 	}>(),
 	{
@@ -73,6 +74,7 @@ const props = withDefaults(
 		signatures: () => [],
 		sourceTypes: () => [],
 		instruments: () => [],
+		arrangers: () => [],
 		hideHeader: false,
 	},
 )
@@ -111,6 +113,7 @@ const songYears = computed(() => props.song?.years ?? [])
 const songSignatures = computed(() => props.song?.signatures ?? [])
 const songSourceTypes = computed(() => props.song?.sourceTypes ?? [])
 const songInstruments = computed(() => props.song?.instruments ?? [])
+const songArrangers = computed(() => props.song?.arrangers ?? [])
 const songBookmarks = computed(() => props.song?.bookmarks ?? [])
 const songAudioFiles = computed(() => props.song?.audioFiles ?? [])
 const songFiles = computed(() => props.song?.files ?? [])
@@ -307,6 +310,7 @@ defineExpose({
 				:signatures="songSignatures"
 				:source-types="songSourceTypes"
 				:instruments="songInstruments"
+				:arrangers="songArrangers"
 				:bookmarks="songBookmarks"
 				:audio-files="songAudioFiles"
 				@jump-to-bookmark="jumpToBookmark" />
@@ -327,6 +331,7 @@ defineExpose({
 			:signatures="songSignatures"
 			:source-types="songSourceTypes"
 			:instruments="songInstruments"
+			:arrangers="songArrangers"
 			:bookmarks="songBookmarks"
 			:audio-files="songAudioFiles"
 			@jump-to-bookmark="jumpToBookmark" />
@@ -347,6 +352,7 @@ defineExpose({
 			:signatures="signatures"
 			:source-types="sourceTypes"
 			:instruments="instruments"
+			:arrangers="arrangers"
 			@saved="handleSaved"
 			@updated="handleUpdated"
 			@cancel="isEditing = false" />

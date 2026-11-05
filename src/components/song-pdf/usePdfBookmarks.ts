@@ -220,6 +220,7 @@ export function usePdfBookmarks(options: {
 			signatureIds: (currentSong.signatures ?? []).map((s) => s.id),
 			sourceTypeIds: (currentSong.sourceTypes ?? []).map((st) => st.id),
 			instrumentIds: (currentSong.instruments ?? []).map((i) => i.id),
+			arrangerIds: (currentSong.arrangers ?? []).map((a) => a.id),
 			stars: currentSong.stars ?? 0,
 			difficulty: currentSong.difficulty ?? 0,
 			duration: currentSong.duration ?? 0,

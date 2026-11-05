@@ -6,7 +6,7 @@ import { resolveSongEntityIds } from '../song-editor/entity-utils'
 import { ENTITY_COLUMNS } from './song-view-columns'
 import type { LibraryData, Song } from '../../types/song'
 
-export type InlineSongUpdates = Partial<Omit<Song, 'composers' | 'books' | 'collections' | 'artists' | 'genres' | 'keys' | 'customGroups' | 'years' | 'signatures' | 'sourceTypes' | 'instruments'>> & {
+export type InlineSongUpdates = Partial<Omit<Song, 'composers' | 'books' | 'collections' | 'artists' | 'genres' | 'keys' | 'customGroups' | 'years' | 'signatures' | 'sourceTypes' | 'instruments' | 'arrangers'>> & {
 	composers?: Array<{ id?: number, name?: string }>
 	books?: Array<{ id?: number, title?: string }>
 	collections?: Array<{ id?: number, name?: string }>
@@ -18,6 +18,7 @@ export type InlineSongUpdates = Partial<Omit<Song, 'composers' | 'books' | 'coll
 	signatures?: Array<{ id?: number, name?: string }>
 	sourceTypes?: Array<{ id?: number, name?: string }>
 	instruments?: Array<{ id?: number, name?: string }>
+	arrangers?: Array<{ id?: number, name?: string }>
 }
 
 export async function executeInlineSongUpdate(

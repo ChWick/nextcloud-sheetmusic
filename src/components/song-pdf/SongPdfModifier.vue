@@ -4,7 +4,7 @@ export type { OriginalSongAction } from './OriginalSongActionSelector.vue'
 </script>
 
 <script setup lang="ts">
-import type { Song, SongFile, Book, Composer, Collection, Artist, Genre, Instrument, Key, CustomGroup, Year, Signature, SourceType, LibraryData } from '../../types/song'
+import type { Song, SongFile, Book, Composer, Collection, Artist, Genre, Instrument, Arranger, Key, CustomGroup, Year, Signature, SourceType, LibraryData } from '../../types/song'
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
@@ -63,6 +63,7 @@ const props = withDefaults(
 		signatures?: Signature[]
 		sourceTypes?: SourceType[]
 		instruments?: Instrument[]
+		arrangers?: Arranger[]
 	}>(),
 	{
 		autoPdfMetadata: true,
@@ -77,6 +78,7 @@ const props = withDefaults(
 		signatures: () => [],
 		sourceTypes: () => [],
 		instruments: () => [],
+		arrangers: () => [],
 	},
 )
 

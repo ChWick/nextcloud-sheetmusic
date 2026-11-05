@@ -158,6 +158,7 @@ export function usePdfSplit(options: {
 			const signatureIds = (currentSong.signatures ?? []).map((s) => s.id)
 			const sourceTypeIds = (currentSong.sourceTypes ?? []).map((st) => st.id)
 			const instrumentIds = (currentSong.instruments ?? []).map((i) => i.id)
+			const arrangerIds = (currentSong.arrangers ?? []).map((a) => a.id)
 
 			let lastLibraryData: LibraryData | null = null
 			let firstCreatedSongId: number | undefined = undefined
@@ -213,6 +214,7 @@ export function usePdfSplit(options: {
 					signatureIds,
 					sourceTypeIds,
 					instrumentIds,
+					arrangerIds,
 					opus: currentSong.opus ?? '',
 					catalogNumber: currentSong.catalogNumber ?? '',
 					songNumber: currentSong.songNumber ?? '',

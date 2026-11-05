@@ -51,7 +51,7 @@ import LibrarySettingsDialog from './components/LibrarySettingsDialog.vue'
 
 /** Views of a library: the song view, one view per song filter, integrity audit, and tools. */
 type ViewName = 'songs' | 'new-song' | 'setlists' | 'integrity' | 'tools' | 'trash' | EntityType
-const VIEW_NAMES: ViewName[] = ['songs', 'new-song', 'setlists', 'composers', 'artists', 'books', 'collections', 'genres', 'keys', 'customgroups', 'years', 'signatures', 'sourcetypes', 'instruments', 'integrity', 'tools', 'trash']
+const VIEW_NAMES: ViewName[] = ['songs', 'new-song', 'setlists', 'composers', 'artists', 'books', 'collections', 'genres', 'keys', 'customgroups', 'years', 'signatures', 'sourcetypes', 'instruments', 'arrangers', 'integrity', 'tools', 'trash']
 
 interface ImportProgress {
   status: 'running' | 'completed' | 'error'
@@ -476,6 +476,11 @@ async function deleteLibrary() {
           <NcAppNavigationItem :name="t('sheetmusic', 'Instruments')" :active="selectedView === 'instruments'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'instruments' } }">
             <template #icon>
               <GuitarAcoustic :size="20" />
+            </template>
+          </NcAppNavigationItem>
+          <NcAppNavigationItem :name="t('sheetmusic', 'Arrangers')" :active="selectedView === 'arrangers'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'arrangers' } }">
+            <template #icon>
+              <AccountMusic :size="20" />
             </template>
           </NcAppNavigationItem>
           <NcAppNavigationItem :name="t('sheetmusic', 'Integrity Audit')" :active="selectedView === 'integrity'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'integrity' } }">

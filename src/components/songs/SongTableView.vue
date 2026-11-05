@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Artist, Book, Collection, Composer, CustomGroup, EntityType, FilterEntity, Genre, Instrument, Key, Signature, Song, SongColumn, SourceType, Year } from '../../types/song'
+import type { Arranger, Artist, Book, Collection, Composer, CustomGroup, EntityType, FilterEntity, Genre, Instrument, Key, Signature, Song, SongColumn, SourceType, Year } from '../../types/song'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import EyeIcon from 'vue-material-design-icons/Eye.vue'
@@ -43,6 +43,7 @@ const props = withDefaults(
 		signatures?: Signature[]
 		sourceTypes?: SourceType[]
 		instruments?: Instrument[]
+		arrangers?: Arranger[]
 	}>(),
 	{
 		sortKey: 'title',
@@ -58,6 +59,7 @@ const props = withDefaults(
 		signatures: () => [],
 		sourceTypes: () => [],
 		instruments: () => [],
+		arrangers: () => [],
 	},
 )
 

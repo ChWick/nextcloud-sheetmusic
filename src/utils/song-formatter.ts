@@ -54,6 +54,10 @@ export function formatInstruments(song: Song, fallback = '—'): string {
 	return formatNamedEntities(song.instruments, i => i.name, fallback)
 }
 
+export function formatArrangers(song: Song, fallback = '—'): string {
+	return formatNamedEntities(song.arrangers, a => a.name, fallback)
+}
+
 export function formatDuration(seconds?: number | null, fallback = '—'): string {
 	if (!seconds || seconds <= 0) return fallback
 	const mins = Math.floor(seconds / 60)
@@ -87,7 +91,7 @@ export function formatDateTimestamp(timestamp?: number | null, fallback = '—')
 	}
 }
 
-export type SortKey = 'title' | 'composer' | 'book' | 'collection' | 'artist' | 'genre' | 'key' | 'customGroup' | 'year' | 'signature' | 'sourceType' | 'instrument' | 'opus' | 'catalogNumber' | 'songNumber' | 'stars' | 'difficulty' | 'duration' | 'keywords' | 'custom' | 'custom2' | 'lastModified' | 'dateCreated'
+export type SortKey = 'title' | 'composer' | 'book' | 'collection' | 'artist' | 'genre' | 'key' | 'customGroup' | 'year' | 'signature' | 'sourceType' | 'instrument' | 'arranger' | 'opus' | 'catalogNumber' | 'songNumber' | 'stars' | 'difficulty' | 'duration' | 'keywords' | 'custom' | 'custom2' | 'lastModified' | 'dateCreated'
 export type SortOrder = 'asc' | 'desc'
 
 const NUMERIC_SORT_KEYS = new Set<SortKey>(['lastModified', 'dateCreated', 'stars', 'difficulty', 'duration'])
@@ -104,6 +108,7 @@ const ENTITY_FORMATTERS: Partial<Record<SortKey, (song: Song) => string>> = {
 	signature: a => formatSignatures(a, ''),
 	sourceType: a => formatSourceTypes(a, ''),
 	instrument: a => formatInstruments(a, ''),
+	arranger: a => formatArrangers(a, ''),
 }
 
 export function sortSongs(songs: Song[], sortKey: SortKey, sortOrder: SortOrder): Song[] {

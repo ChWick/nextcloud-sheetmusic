@@ -147,8 +147,8 @@ const router = useRouter()
 
 /** Everything this shared view needs to know about the entity kind it shows. */
 interface EntityConfig {
-  createEndpoint: '/api/composers' | '/api/artists' | '/api/books' | '/api/collections' | '/api/genres' | '/api/keys' | '/api/customgroups' | '/api/years' | '/api/signatures' | '/api/sourcetypes' | '/api/instruments'
-  deleteEndpoint: '/api/composers/{id}' | '/api/artists/{id}' | '/api/books/{id}' | '/api/collections/{id}' | '/api/genres/{id}' | '/api/keys/{id}' | '/api/customgroups/{id}' | '/api/years/{id}' | '/api/signatures/{id}' | '/api/sourcetypes/{id}' | '/api/instruments/{id}'
+  createEndpoint: '/api/composers' | '/api/artists' | '/api/books' | '/api/collections' | '/api/genres' | '/api/keys' | '/api/customgroups' | '/api/years' | '/api/signatures' | '/api/sourcetypes' | '/api/instruments' | '/api/arrangers'
+  deleteEndpoint: '/api/composers/{id}' | '/api/artists/{id}' | '/api/books/{id}' | '/api/collections/{id}' | '/api/genres/{id}' | '/api/keys/{id}' | '/api/customgroups/{id}' | '/api/years/{id}' | '/api/signatures/{id}' | '/api/sourcetypes/{id}' | '/api/instruments/{id}' | '/api/arrangers/{id}'
   nameKey: 'name' | 'title'
   singular: string
   plural: string
@@ -232,6 +232,13 @@ const entityConfigs: Record<EntityType, EntityConfig> = {
     singular: t('sheetmusic', 'instrument'),
     plural: t('sheetmusic', 'Instruments'),
   },
+  arrangers: {
+    createEndpoint: '/api/arrangers',
+    deleteEndpoint: '/api/arrangers/{id}',
+    nameKey: 'name',
+    singular: t('sheetmusic', 'arranger'),
+    plural: t('sheetmusic', 'Arrangers'),
+  },
 }
 
 const config = computed<EntityConfig>(() => entityConfigs[props.entityType])
@@ -249,6 +256,7 @@ const {
   signatures,
   sourceTypes,
   instruments,
+  arrangers,
   fileError,
   isLoading,
   handleLibraryDataUpdate,
@@ -267,6 +275,7 @@ const entities = computed<FilterEntity[]>(() => {
   if (props.entityType === 'signatures') return signatures.value
   if (props.entityType === 'sourcetypes') return sourceTypes.value
   if (props.entityType === 'instruments') return instruments.value
+  if (props.entityType === 'arrangers') return arrangers.value
   return []
 })
 

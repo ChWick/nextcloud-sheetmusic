@@ -1,4 +1,4 @@
-import type { Artist, Book, Collection, Composer, CustomGroup, EntityType, FilterEntity, Genre, Instrument, Key, Signature, Song, SourceType, Year } from '../types/song'
+import type { Arranger, Artist, Book, Collection, Composer, CustomGroup, EntityType, FilterEntity, Genre, Instrument, Key, Signature, Song, SourceType, Year } from '../types/song'
 import { translate as t } from '@nextcloud/l10n'
 import { computed, ref } from 'vue'
 import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
@@ -19,9 +19,10 @@ export interface FilterOptions {
 	sourceTypes?: SourceType[]
 	sourcetypes?: SourceType[]
 	instruments?: Instrument[]
+	arrangers?: Arranger[]
 }
 
-const FILTER_TYPES: EntityType[] = ['composers', 'artists', 'books', 'collections', 'genres', 'keys', 'customgroups', 'years', 'signatures', 'sourcetypes', 'instruments']
+const FILTER_TYPES: EntityType[] = ['composers', 'artists', 'books', 'collections', 'genres', 'keys', 'customgroups', 'years', 'signatures', 'sourcetypes', 'instruments', 'arrangers']
 
 export const UNASSIGNED_ID = -1
 
@@ -50,6 +51,8 @@ export function noneEntryOf(entityType: EntityType): FilterEntity {
 			return { id: UNASSIGNED_ID, name: t('sheetmusic', '(No source type)'), type: t('sheetmusic', '(No source type)') }
 		case 'instruments':
 			return { id: UNASSIGNED_ID, name: t('sheetmusic', '(No instrument)') }
+		case 'arrangers':
+			return { id: UNASSIGNED_ID, name: t('sheetmusic', '(No arranger)') }
 	}
 }
 
@@ -220,6 +223,7 @@ export function useSongFilters(options: () => FilterOptions) {
 		['signatures', 'signatures'],
 		['sourcetypes', 'sourceTypes'],
 		['instruments', 'instruments'],
+		['arrangers', 'arrangers'],
 	]
 
 	/**
@@ -286,6 +290,7 @@ export function useSongFilters(options: () => FilterOptions) {
 	const selectedSignatures = createSelectedComputed<Signature>('signatures')
 	const selectedSourceTypes = createSelectedComputed<SourceType>('sourcetypes')
 	const selectedInstruments = createSelectedComputed<Instrument>('instruments')
+	const selectedArrangers = createSelectedComputed<Arranger>('arrangers')
 
 	return {
 		searchTitle,
@@ -301,6 +306,7 @@ export function useSongFilters(options: () => FilterOptions) {
 		selectedSignatures,
 		selectedSourceTypes,
 		selectedInstruments,
+		selectedArrangers,
 		hasActiveFilters,
 		isFiltered,
 		toggleFilter,

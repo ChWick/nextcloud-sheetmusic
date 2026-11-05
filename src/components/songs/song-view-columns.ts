@@ -16,6 +16,7 @@ export type InlineEditableField =
 	| 'signature'
 	| 'sourceType'
 	| 'instrument'
+	| 'arranger'
 	| 'opus'
 	| 'catalogNumber'
 	| 'songNumber'
@@ -38,6 +39,7 @@ export type SongEntityProp =
 	| 'signatures'
 	| 'sourceTypes'
 	| 'instruments'
+	| 'arrangers'
 
 export interface TableColumnDef {
 	col: SongColumn
@@ -83,6 +85,7 @@ export const TABLE_COLUMNS: TableColumnDef[] = [
 	{ col: 'signature', sortKey: 'signature', label: () => t('sheetmusic', 'Time Signature') },
 	{ col: 'sourceType', sortKey: 'sourceType', label: () => t('sheetmusic', 'Source Type') },
 	{ col: 'instrument', sortKey: 'instrument', label: () => t('sheetmusic', 'Instrument') },
+	{ col: 'arranger', sortKey: 'arranger', label: () => t('sheetmusic', 'Arranger') },
 	{ col: 'opus', sortKey: 'opus', label: () => t('sheetmusic', 'Opus') },
 	{ col: 'catalogNumber', sortKey: 'catalogNumber', label: () => t('sheetmusic', 'Catalog No.') },
 	{ col: 'songNumber', sortKey: 'songNumber', label: () => t('sheetmusic', 'Song No.') },
@@ -277,6 +280,19 @@ export const ENTITY_COLUMNS: EntityColumnDef[] = [
 		ariaLabel: () => t('sheetmusic', 'Instrument'),
 		editTitle: () => t('sheetmusic', 'Edit instrument inline'),
 		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for instrument {name}', { name }),
+	}),
+	makeEntityCol({
+		col: 'arranger',
+		field: 'arranger',
+		songProp: 'arrangers',
+		idField: 'arrangerIds',
+		endpoint: '/api/arrangers',
+		nameKey: 'name',
+		entityType: 'arrangers',
+		cardLabel: () => t('sheetmusic', 'Arranger:'),
+		ariaLabel: () => t('sheetmusic', 'Arranger'),
+		editTitle: () => t('sheetmusic', 'Edit arranger inline'),
+		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for arranger {name}', { name }),
 	}),
 ]
 

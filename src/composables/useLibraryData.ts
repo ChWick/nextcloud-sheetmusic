@@ -1,4 +1,4 @@
-import type { Artist, Book, Collection, Composer, CustomGroup, Genre, Instrument, Key, LibraryData, Signature, Song, SourceType, Year } from '../types/song'
+import type { Arranger, Artist, Book, Collection, Composer, CustomGroup, Genre, Instrument, Key, LibraryData, Signature, Song, SourceType, Year } from '../types/song'
 import { apiGet } from '../api/client'
 import { showError } from '@nextcloud/dialogs'
 import { translate as t } from '@nextcloud/l10n'
@@ -18,6 +18,7 @@ export function useLibraryData() {
 	const signatures = ref<Signature[]>([])
 	const sourceTypes = ref<SourceType[]>([])
 	const instruments = ref<Instrument[]>([])
+	const arrangers = ref<Arranger[]>([])
 	const fileError = ref('')
 	const isLoading = ref(false)
 
@@ -34,6 +35,7 @@ export function useLibraryData() {
 		signatures.value = data.signatures ?? []
 		sourceTypes.value = data.sourceTypes ?? []
 		instruments.value = data.instruments ?? []
+		arrangers.value = data.arrangers ?? []
 	}
 
 	async function loadLibraryData(id: number) {
@@ -63,6 +65,7 @@ export function useLibraryData() {
 		signatures,
 		sourceTypes,
 		instruments,
+		arrangers,
 		fileError,
 		isLoading,
 		handleLibraryDataUpdate,
