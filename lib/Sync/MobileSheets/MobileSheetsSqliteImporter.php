@@ -224,9 +224,9 @@ class MobileSheetsSqliteImporter {
 			}
 
 			$sortTitle = (string)($row['SortTitle'] ?? '');
-			$stars = (int)($row['Stars'] ?? 0);
-			$difficulty = (int)($row['Difficulty'] ?? 0);
-			$duration = (int)($row['Duration'] ?? 0);
+			$stars = isset($row['Stars']) && (int)$row['Stars'] > 0 ? (int)$row['Stars'] : null;
+			$difficulty = isset($row['Difficulty']) && (int)$row['Difficulty'] > 0 ? (int)$row['Difficulty'] : null;
+			$duration = isset($row['Duration']) && (int)$row['Duration'] > 0 ? (int)$row['Duration'] : null;
 			$keywords = (string)($row['Keywords'] ?? '');
 			$custom = (string)($row['Custom'] ?? '');
 			$custom2 = (string)($row['Custom2'] ?? '');

@@ -104,6 +104,15 @@ final class InternalSongMapperTest extends TestCase {
 		self::assertGreaterThan(0, $saved->id);
 		self::assertGreaterThan(0, $saved->createdAt);
 		self::assertGreaterThan(0, $saved->updatedAt);
+		self::assertNull($saved->rating);
+		self::assertNull($saved->difficulty);
+		self::assertNull($saved->duration);
+
+		$found = $this->mapper->findById((int)$saved->id);
+		self::assertNotNull($found);
+		self::assertNull($found->rating);
+		self::assertNull($found->difficulty);
+		self::assertNull($found->duration);
 	}
 
 	public function testDeleteAndRestore(): void {

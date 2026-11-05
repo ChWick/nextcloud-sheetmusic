@@ -436,6 +436,15 @@ class SongController extends OCSController {
 			? (array)$overrides[$key]
 			: (array)$this->request->getParam($key, []);
 
+		$resolvePositiveInt = function (string $key): ?int {
+			$raw = $this->request->getParam($key);
+			if ($raw === null || $raw === '') {
+				return null;
+			}
+			$val = (int)$raw;
+			return $val > 0 ? $val : null;
+		};
+
 		return [
 			'composerIds' => $resolveList('composerIds'),
 			'bookIds' => $resolveList('bookIds'),
@@ -447,9 +456,9 @@ class SongController extends OCSController {
 			'yearIds' => $resolveList('yearIds'),
 			'signatureIds' => $resolveList('signatureIds'),
 			'sourceTypeIds' => $resolveList('sourceTypeIds'),
-			'stars' => (int)$this->request->getParam('stars', 0),
-			'difficulty' => (int)$this->request->getParam('difficulty', 0),
-			'duration' => (int)$this->request->getParam('duration', 0),
+			'stars' => $resolvePositiveInt('stars'),
+			'difficulty' => $resolvePositiveInt('difficulty'),
+			'duration' => $resolvePositiveInt('duration'),
 			'keywords' => (string)$this->request->getParam('keywords', ''),
 			'custom' => (string)$this->request->getParam('custom', ''),
 			'custom2' => (string)$this->request->getParam('custom2', ''),

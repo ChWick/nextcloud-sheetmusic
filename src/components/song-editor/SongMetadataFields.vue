@@ -64,9 +64,9 @@ const selectedArrangers = defineModel<Array<Arranger | NamedTag>>('selectedArran
 const opus = defineModel<string>('opus', { default: '' })
 const catalogNumber = defineModel<string>('catalogNumber', { default: '' })
 const songNumber = defineModel<string>('songNumber', { default: '' })
-const stars = defineModel<number>('stars', { required: true })
-const difficulty = defineModel<number>('difficulty', { required: true })
-const duration = defineModel<number>('duration', { required: true })
+const stars = defineModel<number | null>('stars', { default: null })
+const difficulty = defineModel<number | null>('difficulty', { default: null })
+const duration = defineModel<number | null>('duration', { default: null })
 const keywords = defineModel<string>('keywords', { required: true })
 const custom = defineModel<string>('custom', { required: true })
 const custom2 = defineModel<string>('custom2', { required: true })
@@ -129,31 +129,40 @@ const entityFields = computed(() => [
 			<div :class="$style.formGroup">
 				<NcTextField
 					id="song-rating-input"
-					v-model.number="stars"
+					:value="stars ? String(stars) : ''"
+					:model-value="stars ? String(stars) : ''"
 					type="number"
 					:min="0"
 					:max="5"
 					:placeholder="t('sheetmusic', '0-5')"
-					:label="t('sheetmusic', 'Rating (Stars 0-5)')" />
+					:label="t('sheetmusic', 'Rating (Stars 0-5)')"
+					@update:value="stars = Number($event) > 0 ? Number($event) : null"
+					@update:model-value="stars = Number($event) > 0 ? Number($event) : null" />
 			</div>
 			<div :class="$style.formGroup">
 				<NcTextField
 					id="song-difficulty-input"
-					v-model.number="difficulty"
+					:value="difficulty ? String(difficulty) : ''"
+					:model-value="difficulty ? String(difficulty) : ''"
 					type="number"
 					:min="0"
 					:max="5"
 					:placeholder="t('sheetmusic', '0-5')"
-					:label="t('sheetmusic', 'Difficulty (0-5)')" />
+					:label="t('sheetmusic', 'Difficulty (0-5)')"
+					@update:value="difficulty = Number($event) > 0 ? Number($event) : null"
+					@update:model-value="difficulty = Number($event) > 0 ? Number($event) : null" />
 			</div>
 			<div :class="$style.formGroup">
 				<NcTextField
 					id="song-duration-input"
-					v-model.number="duration"
+					:value="duration ? String(duration) : ''"
+					:model-value="duration ? String(duration) : ''"
 					type="number"
 					:min="0"
 					:placeholder="t('sheetmusic', 'Seconds (e.g. 180)')"
-					:label="t('sheetmusic', 'Duration (seconds)')" />
+					:label="t('sheetmusic', 'Duration (seconds)')"
+					@update:value="duration = Number($event) > 0 ? Number($event) : null"
+					@update:model-value="duration = Number($event) > 0 ? Number($event) : null" />
 			</div>
 			<div :class="$style.formGroup">
 				<NcTextField

@@ -97,15 +97,12 @@ class Version1002Date20261009120000 extends SimpleMigrationStep {
 			]);
 			$table->addColumn('rating', Types::SMALLINT, [
 				'notnull' => false,
-				'default' => 0,
 			]);
 			$table->addColumn('difficulty', Types::SMALLINT, [
 				'notnull' => false,
-				'default' => 0,
 			]);
 			$table->addColumn('duration', Types::INTEGER, [
 				'notnull' => false,
-				'default' => 0,
 			]);
 			$table->addColumn('keywords', Types::TEXT, [
 				'notnull' => false,

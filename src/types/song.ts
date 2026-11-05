@@ -34,9 +34,9 @@ export type Song = components['schemas']['Song'] & {
 	arrangers?: Arranger[]
 	bookmarks?: Bookmark[]
 	audioFiles?: AudioFile[]
-	stars?: number
-	difficulty?: number
-	duration?: number
+	stars?: number | null
+	difficulty?: number | null
+	duration?: number | null
 	keywords?: string
 	custom?: string
 	custom2?: string

@@ -258,6 +258,10 @@ class InternalSongMapper {
 			$song->updatedAt = $now;
 		}
 
+		$song->rating = ($song->rating !== null && $song->rating > 0) ? $song->rating : null;
+		$song->difficulty = ($song->difficulty !== null && $song->difficulty > 0) ? $song->difficulty : null;
+		$song->duration = ($song->duration !== null && $song->duration > 0) ? $song->duration : null;
+
 		$qb = $this->db->getQueryBuilder();
 		$qb->insert(self::TABLE_NAME)
 			->values([
@@ -293,6 +297,10 @@ class InternalSongMapper {
 		if ($song->updatedAt === null || $song->updatedAt <= 0) {
 			$song->updatedAt = time();
 		}
+
+		$song->rating = ($song->rating !== null && $song->rating > 0) ? $song->rating : null;
+		$song->difficulty = ($song->difficulty !== null && $song->difficulty > 0) ? $song->difficulty : null;
+		$song->duration = ($song->duration !== null && $song->duration > 0) ? $song->duration : null;
 
 		$qb = $this->db->getQueryBuilder();
 		$qb->update(self::TABLE_NAME)

@@ -34,9 +34,9 @@ describe('SongMetadataFields.vue', () => {
 		selectedYears: [],
 		selectedSignatures: [],
 		selectedSourceTypes: [],
-		stars: 0,
-		difficulty: 0,
-		duration: 0,
+		stars: null,
+		difficulty: null,
+		duration: null,
 		keywords: '',
 		custom: '',
 		custom2: '',
@@ -96,6 +96,10 @@ describe('SongMetadataFields.vue', () => {
 		]) {
 			expect(wrapper.find(`#${fieldId}`).exists()).toBe(true)
 		}
+
+		expect((wrapper.find('#song-rating-input').element as HTMLInputElement).value).toBe('')
+		expect((wrapper.find('#song-difficulty-input').element as HTMLInputElement).value).toBe('')
+		expect((wrapper.find('#song-duration-input').element as HTMLInputElement).value).toBe('')
 	})
 
 	it('emits newly tagged entity selections back to the editor model', async () => {

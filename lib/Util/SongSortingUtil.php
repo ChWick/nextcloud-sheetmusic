@@ -56,8 +56,8 @@ final class SongSortingUtil {
 			$cmp = match ($sortBy) {
 				self::MODE_DATE_CREATED => $songA->createdAt <=> $songB->createdAt,
 				self::MODE_LAST_MODIFIED => $songA->updatedAt <=> $songB->updatedAt,
-				self::MODE_RATING => $songA->rating <=> $songB->rating,
-				self::MODE_DIFFICULTY => $songA->difficulty <=> $songB->difficulty,
+				self::MODE_RATING => ($songA->rating ?? 0) <=> ($songB->rating ?? 0),
+				self::MODE_DIFFICULTY => ($songA->difficulty ?? 0) <=> ($songB->difficulty ?? 0),
 				default => self::compareTitles($songA, $songB),
 			};
 

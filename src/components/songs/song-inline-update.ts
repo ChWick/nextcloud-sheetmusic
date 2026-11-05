@@ -59,9 +59,15 @@ export async function executeInlineSongUpdate(
 			opus: (updates.opus !== undefined ? updates.opus : song.opus ?? '').trim(),
 			catalogNumber: (updates.catalogNumber !== undefined ? updates.catalogNumber : song.catalogNumber ?? '').trim(),
 			songNumber: (updates.songNumber !== undefined ? updates.songNumber : song.songNumber ?? '').trim(),
-			stars: Number(updates.stars !== undefined ? updates.stars : song.stars) || 0,
-			difficulty: Number(updates.difficulty !== undefined ? updates.difficulty : song.difficulty) || 0,
-			duration: Number(updates.duration !== undefined ? updates.duration : song.duration) || 0,
+			stars: Number(updates.stars !== undefined ? updates.stars : song.stars) > 0
+				? Number(updates.stars !== undefined ? updates.stars : song.stars)
+				: null,
+			difficulty: Number(updates.difficulty !== undefined ? updates.difficulty : song.difficulty) > 0
+				? Number(updates.difficulty !== undefined ? updates.difficulty : song.difficulty)
+				: null,
+			duration: Number(updates.duration !== undefined ? updates.duration : song.duration) > 0
+				? Number(updates.duration !== undefined ? updates.duration : song.duration)
+				: null,
 			keywords: (updates.keywords !== undefined ? updates.keywords : song.keywords ?? '').trim(),
 			custom: (updates.custom !== undefined ? updates.custom : song.custom ?? '').trim(),
 			custom2: (updates.custom2 !== undefined ? updates.custom2 : song.custom2 ?? '').trim(),

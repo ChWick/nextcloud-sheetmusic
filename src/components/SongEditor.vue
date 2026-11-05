@@ -132,9 +132,9 @@ const selectedArrangers = ref<Array<Arranger | { name: string, id?: number }>>(m
 const opus = ref<string>(sourceSong.value?.opus ?? '')
 const catalogNumber = ref<string>(sourceSong.value?.catalogNumber ?? '')
 const songNumber = ref<string>(sourceSong.value?.songNumber ?? '')
-const stars = ref<number>(sourceSong.value?.stars ?? 0)
-const difficulty = ref<number>(sourceSong.value?.difficulty ?? 0)
-const duration = ref<number>(sourceSong.value?.duration ?? 0)
+const stars = ref<number | null>(sourceSong.value?.stars || null)
+const difficulty = ref<number | null>(sourceSong.value?.difficulty || null)
+const duration = ref<number | null>(sourceSong.value?.duration || null)
 const keywords = ref<string>(sourceSong.value?.keywords ?? '')
 const custom = ref<string>(sourceSong.value?.custom ?? '')
 const custom2 = ref<string>(sourceSong.value?.custom2 ?? '')
@@ -221,9 +221,9 @@ watch(
 		opus.value = newSong?.opus ?? ''
 		catalogNumber.value = newSong?.catalogNumber ?? ''
 		songNumber.value = newSong?.songNumber ?? ''
-		stars.value = newSong?.stars ?? 0
-		difficulty.value = newSong?.difficulty ?? 0
-		duration.value = newSong?.duration ?? 0
+		stars.value = newSong?.stars || null
+		difficulty.value = newSong?.difficulty || null
+		duration.value = newSong?.duration || null
 		keywords.value = newSong?.keywords ?? ''
 		custom.value = newSong?.custom ?? ''
 		custom2.value = newSong?.custom2 ?? ''
@@ -303,9 +303,9 @@ async function saveSong(closeAfter: boolean) {
 			opus: opus.value.trim(),
 			catalogNumber: catalogNumber.value.trim(),
 			songNumber: songNumber.value.trim(),
-			stars: Number(stars.value) || 0,
-			difficulty: Number(difficulty.value) || 0,
-			duration: Number(duration.value) || 0,
+			stars: Number(stars.value) > 0 ? Number(stars.value) : null,
+			difficulty: Number(difficulty.value) > 0 ? Number(difficulty.value) : null,
+			duration: Number(duration.value) > 0 ? Number(duration.value) : null,
 			keywords: keywords.value.trim(),
 			custom: custom.value.trim(),
 			custom2: custom2.value.trim(),

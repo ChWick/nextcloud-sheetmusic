@@ -67,9 +67,9 @@ class SongService {
 		array $yearIds = [],
 		array $signatureIds = [],
 		array $sourceTypeIds = [],
-		int $stars = 0,
-		int $difficulty = 0,
-		int $duration = 0,
+		?int $stars = null,
+		?int $difficulty = null,
+		?int $duration = null,
 		string $keywords = '',
 		string $custom = '',
 		string $custom2 = '',
@@ -158,9 +158,9 @@ class SongService {
 		array $yearIds = [],
 		array $signatureIds = [],
 		array $sourceTypeIds = [],
-		int $stars = 0,
-		int $difficulty = 0,
-		int $duration = 0,
+		?int $stars = null,
+		?int $difficulty = null,
+		?int $duration = null,
 		string $keywords = '',
 		string $custom = '',
 		string $custom2 = '',
@@ -422,9 +422,9 @@ class SongService {
 		InternalSong $song,
 		string $title,
 		string $sortTitle,
-		int $stars,
-		int $difficulty,
-		int $duration,
+		?int $stars,
+		?int $difficulty,
+		?int $duration,
 		string $keywords,
 		string $custom,
 		string $opus,
@@ -433,9 +433,9 @@ class SongService {
 	): void {
 		$song->title = $title;
 		$song->sortTitle = $sortTitle !== '' ? $sortTitle : null;
-		$song->rating = $stars;
-		$song->difficulty = $difficulty;
-		$song->duration = $duration;
+		$song->rating = ($stars !== null && $stars > 0) ? $stars : null;
+		$song->difficulty = ($difficulty !== null && $difficulty > 0) ? $difficulty : null;
+		$song->duration = ($duration !== null && $duration > 0) ? $duration : null;
 		$song->keywords = $keywords !== '' ? $keywords : null;
 		$song->notes = $custom !== '' ? $custom : null;
 		$song->opus = $opus !== '' ? $opus : null;
@@ -521,9 +521,9 @@ class SongService {
 			array_map('intval', $songData['yearIds'] ?? []),
 			array_map('intval', $songData['signatureIds'] ?? []),
 			array_map('intval', $songData['sourceTypeIds'] ?? []),
-			(int)($songData['stars'] ?? 0),
-			(int)($songData['difficulty'] ?? 0),
-			(int)($songData['duration'] ?? 0),
+			isset($songData['stars']) && (int)$songData['stars'] > 0 ? (int)$songData['stars'] : null,
+			isset($songData['difficulty']) && (int)$songData['difficulty'] > 0 ? (int)$songData['difficulty'] : null,
+			isset($songData['duration']) && (int)$songData['duration'] > 0 ? (int)$songData['duration'] : null,
 			(string)($songData['keywords'] ?? ''),
 			(string)($songData['custom'] ?? ''),
 			(string)($songData['custom2'] ?? ''),
