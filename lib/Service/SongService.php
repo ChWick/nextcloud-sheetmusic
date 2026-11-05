@@ -99,18 +99,10 @@ class SongService {
 				uuid: InternalEntity::generateUuid(),
 				libraryId: $libraryId,
 				title: $title,
-				sortTitle: $sortTitle !== '' ? $sortTitle : null,
-				rating: $stars,
-				difficulty: $difficulty,
-				duration: $duration,
-				keywords: $keywords !== '' ? $keywords : null,
-				notes: $custom !== '' ? $custom : null,
-				opus: $opus !== '' ? $opus : null,
-				catalogNumber: $catalogNumber !== '' ? $catalogNumber : null,
-				songNumber: $songNumber !== '' ? $songNumber : null,
 				createdAt: $now,
 				updatedAt: $now,
 			);
+			$this->applySongMetadata($song, $title, $sortTitle, $stars, $difficulty, $duration, $keywords, $custom, $opus, $catalogNumber, $songNumber);
 			$createdSong = $this->internalSongMapper->insert($song);
 			$songId = (int)$createdSong->id;
 
@@ -202,16 +194,7 @@ class SongService {
 					);
 				}
 
-				$song->title = $title;
-				$song->sortTitle = $sortTitle !== '' ? $sortTitle : null;
-				$song->rating = $stars;
-				$song->difficulty = $difficulty;
-				$song->duration = $duration;
-				$song->keywords = $keywords !== '' ? $keywords : null;
-				$song->notes = $custom !== '' ? $custom : null;
-				$song->opus = $opus !== '' ? $opus : null;
-				$song->catalogNumber = $catalogNumber !== '' ? $catalogNumber : null;
-				$song->songNumber = $songNumber !== '' ? $songNumber : null;
+				$this->applySongMetadata($song, $title, $sortTitle, $stars, $difficulty, $duration, $keywords, $custom, $opus, $catalogNumber, $songNumber);
 				$song->updatedAt = time();
 				$this->internalSongMapper->update($song);
 
@@ -417,29 +400,7 @@ class SongService {
 	public function mergeSong(IUser $user, int $libraryId, int $keepId, int $droppedId, array $merged): ?LibraryData {
 		try {
 			if (!empty($merged['title'])) {
-				$this->updateSong(
-					user: $user,
-					songId: $keepId,
-					libraryId: $libraryId,
-					title: $merged['title'],
-					composerIds: $merged['composerIds'] ?? [],
-					bookIds: $merged['bookIds'] ?? [],
-					collectionIds: $merged['collectionIds'] ?? [],
-					artistIds: $merged['artistIds'] ?? [],
-					genreIds: $merged['genreIds'] ?? [],
-					keyIds: $merged['keyIds'] ?? [],
-					customGroupIds: $merged['customGroupIds'] ?? [],
-					yearIds: $merged['yearIds'] ?? [],
-					signatureIds: $merged['signatureIds'] ?? [],
-					sourceTypeIds: $merged['sourceTypeIds'] ?? [],
-					stars: (int)($merged['stars'] ?? 0),
-					difficulty: (int)($merged['difficulty'] ?? 0),
-					duration: (int)($merged['duration'] ?? 0),
-					keywords: (string)($merged['keywords'] ?? ''),
-					custom: (string)($merged['custom'] ?? ''),
-					custom2: (string)($merged['custom2'] ?? ''),
-					sortTitle: (string)($merged['sortTitle'] ?? ''),
-				);
+				$this->updateSongFromData($user, $libraryId, ['id' => $keepId] + $merged);
 			}
 			$this->internalSongMapper->mergeSongs($libraryId, $keepId, $droppedId);
 			$this->libraryMapper->touch($libraryId);
@@ -455,6 +416,31 @@ class SongService {
 
 			throw $e;
 		}
+	}
+
+	private function applySongMetadata(
+		InternalSong $song,
+		string $title,
+		string $sortTitle,
+		int $stars,
+		int $difficulty,
+		int $duration,
+		string $keywords,
+		string $custom,
+		string $opus,
+		string $catalogNumber,
+		string $songNumber,
+	): void {
+		$song->title = $title;
+		$song->sortTitle = $sortTitle !== '' ? $sortTitle : null;
+		$song->rating = $stars;
+		$song->difficulty = $difficulty;
+		$song->duration = $duration;
+		$song->keywords = $keywords !== '' ? $keywords : null;
+		$song->notes = $custom !== '' ? $custom : null;
+		$song->opus = $opus !== '' ? $opus : null;
+		$song->catalogNumber = $catalogNumber !== '' ? $catalogNumber : null;
+		$song->songNumber = $songNumber !== '' ? $songNumber : null;
 	}
 
 	/**

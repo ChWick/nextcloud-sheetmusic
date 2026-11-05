@@ -570,41 +570,14 @@ class InternalSongMapper {
 			? $this->entityMapper->findAllForLibrary($libraryId)
 			: [];
 
-		$composers = [];
-		$books = [];
-		$collections = [];
-		$artists = [];
-		$genres = [];
-		$keys = [];
-		$customGroups = [];
-		$years = [];
-		$signatures = [];
-		$sourceTypes = [];
-		$instruments = [];
-		$arrangers = [];
+		$groupedEntities = [];
 		$entitiesById = [];
 
 		foreach ($entities as $e) {
 			$eid = (int)$e->id;
 			$entitiesById[$eid] = $e;
 			$type = InternalEntityMapper::normalizeType($e->type);
-			$msEntity = $e->toMobileSheetsEntity($type);
-
-			match ($type) {
-				'composer' => $composers[] = $msEntity,
-				'book' => $books[] = $msEntity,
-				'collection' => $collections[] = $msEntity,
-				'artist' => $artists[] = $msEntity,
-				'genre' => $genres[] = $msEntity,
-				'key' => $keys[] = $msEntity,
-				'customgroup' => $customGroups[] = $msEntity,
-				'year' => $years[] = $msEntity,
-				'signature' => $signatures[] = $msEntity,
-				'sourcetype' => $sourceTypes[] = $msEntity,
-				'instrument' => $instruments[] = $msEntity,
-				'arranger' => $arrangers[] = $msEntity,
-				default => null,
-			};
+			$groupedEntities[$type][] = $e->toMobileSheetsEntity($type);
 		}
 
 		$songs = $this->findAllForLibrary($libraryId);
@@ -699,18 +672,18 @@ class InternalSongMapper {
 
 		return new LibraryData(
 			songs: $resultSongs,
-			composers: $composers,
-			books: $books,
-			collections: $collections,
-			artists: $artists,
-			genres: $genres,
-			keys: $keys,
-			customGroups: $customGroups,
-			years: $years,
-			signatures: $signatures,
-			sourceTypes: $sourceTypes,
-			instruments: $instruments,
-			arrangers: $arrangers,
+			composers: $groupedEntities['composer'] ?? [],
+			books: $groupedEntities['book'] ?? [],
+			collections: $groupedEntities['collection'] ?? [],
+			artists: $groupedEntities['artist'] ?? [],
+			genres: $groupedEntities['genre'] ?? [],
+			keys: $groupedEntities['key'] ?? [],
+			customGroups: $groupedEntities['customgroup'] ?? [],
+			years: $groupedEntities['year'] ?? [],
+			signatures: $groupedEntities['signature'] ?? [],
+			sourceTypes: $groupedEntities['sourcetype'] ?? [],
+			instruments: $groupedEntities['instrument'] ?? [],
+			arrangers: $groupedEntities['arranger'] ?? [],
 		);
 	}
 }

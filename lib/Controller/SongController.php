@@ -77,6 +77,10 @@ class SongController extends OCSController {
 		}
 
 		$payload = $this->extractSongPayload([
+			'composerIds' => $composerIds,
+			'bookIds' => $bookIds,
+			'collectionIds' => $collectionIds,
+			'artistIds' => $artistIds,
 			'genreIds' => $genreIds,
 			'keyIds' => $keyIds,
 			'customGroupIds' => $customGroupIds,
@@ -86,35 +90,7 @@ class SongController extends OCSController {
 		]);
 
 		try {
-			$result = $this->songService->createSong(
-				$user,
-				$libraryId,
-				$title,
-				$composerIds,
-				$bookIds,
-				$collectionIds,
-				$artistIds,
-				$payload['genreIds'],
-				$payload['keyIds'],
-				$payload['customGroupIds'],
-				$payload['yearIds'],
-				$payload['signatureIds'],
-				$payload['sourceTypeIds'],
-				$payload['stars'],
-				$payload['difficulty'],
-				$payload['duration'],
-				$payload['keywords'],
-				$payload['custom'],
-				$payload['custom2'],
-				$payload['sortTitle'],
-				$payload['bookmarks'],
-				$payload['audioFiles'],
-				$payload['opus'],
-				$payload['catalogNumber'],
-				$payload['songNumber'],
-				$payload['instrumentIds'],
-				$payload['arrangerIds'],
-			);
+			$result = $this->songService->createSong($user, $libraryId, $title, ...$payload);
 
 			if ($result === null) {
 				return new DataResponse([], Http::STATUS_NOT_FOUND);
@@ -154,6 +130,10 @@ class SongController extends OCSController {
 		}
 
 		$payload = $this->extractSongPayload([
+			'composerIds' => $composerIds,
+			'bookIds' => $bookIds,
+			'collectionIds' => $collectionIds,
+			'artistIds' => $artistIds,
 			'genreIds' => $genreIds,
 			'keyIds' => $keyIds,
 			'customGroupIds' => $customGroupIds,
@@ -163,36 +143,7 @@ class SongController extends OCSController {
 		]);
 
 		try {
-			$result = $this->songService->updateSong(
-				$user,
-				$id,
-				$libraryId,
-				$title,
-				$composerIds,
-				$bookIds,
-				$collectionIds,
-				$artistIds,
-				$payload['genreIds'],
-				$payload['keyIds'],
-				$payload['customGroupIds'],
-				$payload['yearIds'],
-				$payload['signatureIds'],
-				$payload['sourceTypeIds'],
-				$payload['stars'],
-				$payload['difficulty'],
-				$payload['duration'],
-				$payload['keywords'],
-				$payload['custom'],
-				$payload['custom2'],
-				$payload['sortTitle'],
-				$payload['bookmarks'],
-				$payload['audioFiles'],
-				$payload['opus'],
-				$payload['catalogNumber'],
-				$payload['songNumber'],
-				$payload['instrumentIds'],
-				$payload['arrangerIds'],
-			);
+			$result = $this->songService->updateSong($user, $id, $libraryId, $title, ...$payload);
 
 			if ($result === null) {
 				return new DataResponse([], Http::STATUS_NOT_FOUND);
@@ -231,19 +182,6 @@ class SongController extends OCSController {
 			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
 		}
 
-		$instruments = $instruments ?? (array)$this->request->getParam('instruments', []);
-		$instruments = empty($instruments) ? null : $instruments;
-
-		$arrangers = $arrangers ?? (array)$this->request->getParam('arrangers', []);
-		$arrangers = empty($arrangers) ? null : $arrangers;
-
-		$genres = $genres ?? $this->request->getParam('genres');
-		$keys = $keys ?? $this->request->getParam('keys');
-		$customGroups = $customGroups ?? $this->request->getParam('customGroups');
-		$years = $years ?? $this->request->getParam('years');
-		$signatures = $signatures ?? $this->request->getParam('signatures');
-		$sourceTypes = $sourceTypes ?? $this->request->getParam('sourceTypes');
-
 		try {
 			$result = $this->songService->batchUpdateSongs(
 				$user,
@@ -253,14 +191,14 @@ class SongController extends OCSController {
 				$books,
 				$collections,
 				$artists,
-				$genres,
-				$keys,
-				$customGroups,
-				$years,
-				$signatures,
-				$sourceTypes,
-				$instruments,
-				$arrangers,
+				$this->resolveBatchParam('genres', $genres),
+				$this->resolveBatchParam('keys', $keys),
+				$this->resolveBatchParam('customGroups', $customGroups),
+				$this->resolveBatchParam('years', $years),
+				$this->resolveBatchParam('signatures', $signatures),
+				$this->resolveBatchParam('sourceTypes', $sourceTypes),
+				$this->resolveBatchParam('instruments', $instruments),
+				$this->resolveBatchParam('arrangers', $arrangers),
 			);
 
 			if ($result === null) {
@@ -479,6 +417,14 @@ class SongController extends OCSController {
 		}
 	}
 
+	private function resolveBatchParam(string $name, ?array $value): ?array {
+		if ($value !== null) {
+			return $value;
+		}
+		$raw = $this->request->getParam($name);
+		return is_array($raw) && $raw !== [] ? $raw : null;
+	}
+
 	/**
 	 * Extracts song fields from the incoming request.
 	 *
@@ -486,13 +432,21 @@ class SongController extends OCSController {
 	 * @return array<string, mixed>
 	 */
 	private function extractSongPayload(array $overrides = []): array {
+		$resolveList = fn (string $key): array => !empty($overrides[$key])
+			? (array)$overrides[$key]
+			: (array)$this->request->getParam($key, []);
+
 		return [
-			'genreIds' => !empty($overrides['genreIds']) ? (array)$overrides['genreIds'] : (array)$this->request->getParam('genreIds', []),
-			'keyIds' => !empty($overrides['keyIds']) ? (array)$overrides['keyIds'] : (array)$this->request->getParam('keyIds', []),
-			'customGroupIds' => !empty($overrides['customGroupIds']) ? (array)$overrides['customGroupIds'] : (array)$this->request->getParam('customGroupIds', []),
-			'yearIds' => !empty($overrides['yearIds']) ? (array)$overrides['yearIds'] : (array)$this->request->getParam('yearIds', []),
-			'signatureIds' => !empty($overrides['signatureIds']) ? (array)$overrides['signatureIds'] : (array)$this->request->getParam('signatureIds', []),
-			'sourceTypeIds' => !empty($overrides['sourceTypeIds']) ? (array)$overrides['sourceTypeIds'] : (array)$this->request->getParam('sourceTypeIds', []),
+			'composerIds' => $resolveList('composerIds'),
+			'bookIds' => $resolveList('bookIds'),
+			'collectionIds' => $resolveList('collectionIds'),
+			'artistIds' => $resolveList('artistIds'),
+			'genreIds' => $resolveList('genreIds'),
+			'keyIds' => $resolveList('keyIds'),
+			'customGroupIds' => $resolveList('customGroupIds'),
+			'yearIds' => $resolveList('yearIds'),
+			'signatureIds' => $resolveList('signatureIds'),
+			'sourceTypeIds' => $resolveList('sourceTypeIds'),
 			'stars' => (int)$this->request->getParam('stars', 0),
 			'difficulty' => (int)$this->request->getParam('difficulty', 0),
 			'duration' => (int)$this->request->getParam('duration', 0),
