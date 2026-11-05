@@ -418,6 +418,7 @@ async function deleteLibrary() {
               <Music :size="20" />
             </template>
           </NcAppNavigationItem>
+          <li role="separator" :class="$style.navSeparator" aria-hidden="true" />
           <NcAppNavigationItem :name="t('sheetmusic', 'Setlists')" :active="selectedView === 'setlists'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'setlists' } }">
             <template #icon>
               <PlaylistMusic :size="20" />
@@ -483,6 +484,7 @@ async function deleteLibrary() {
               <AccountMusic :size="20" />
             </template>
           </NcAppNavigationItem>
+          <li role="separator" :class="$style.navSeparator" aria-hidden="true" />
           <NcAppNavigationItem :name="t('sheetmusic', 'Integrity Audit')" :active="selectedView === 'integrity'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'integrity' } }">
             <template #icon>
               <ShieldCheck :size="20" />
@@ -493,6 +495,7 @@ async function deleteLibrary() {
               <Wrench :size="20" />
             </template>
           </NcAppNavigationItem>
+          <li role="separator" :class="$style.navSeparator" aria-hidden="true" />
           <NcAppNavigationItem :name="t('sheetmusic', 'Trash')" :active="selectedView === 'trash'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'trash' } }">
             <template #icon>
               <TrashCanOutline :size="20" />
@@ -672,6 +675,11 @@ async function deleteLibrary() {
 .libraryButton { width: 100%; padding: 8px 16px; border: 0; background: transparent; color: inherit; font: inherit; text-align: start; cursor: pointer; }
 .libraryButton[aria-pressed='true'] { background: var(--color-background-hover); }
 .librarySelect { width: 100%; padding: 8px; margin: 8px 0; }
+.navSeparator {
+  list-style: none;
+  border-top: 1px solid var(--color-border);
+  margin: 4px 8px;
+}
 .contentError { margin: 16px; color: var(--color-error); }
 .songArea { display: grid; grid-template-columns: minmax(220px, 320px) minmax(0, 1fr); gap: 24px; align-items: start; }
 .songList { margin: 0; padding: 0; list-style: none; }
