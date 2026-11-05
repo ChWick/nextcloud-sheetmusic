@@ -173,7 +173,7 @@ class SongSnapshotHelper {
 		$currentEntities = $this->entityMapper->findEntitiesForSong($songId);
 		$currentTypes = array_unique(array_map(static fn ($e) => InternalEntityMapper::normalizeType($e->type), $currentEntities));
 		$allTypes = array_unique(array_merge(
-			['composer', 'artist', 'book', 'collection', 'genre', 'key', 'customgroup', 'year', 'signature', 'sourcetype', 'instrument'],
+			['composer', 'artist', 'book', 'collection', 'genre', 'key', 'customgroup', 'year', 'signature', 'sourcetype', 'instrument', 'arranger'],
 			array_keys($snapEntities),
 			$currentTypes
 		));
@@ -324,6 +324,7 @@ class SongSnapshotHelper {
 			'signature' => 'Time Signatures',
 			'sourcetype' => 'Source Types',
 			'instrument' => 'Instruments',
+			'arranger' => 'Arrangers',
 		];
 		foreach ($allEntityTypes as $t) {
 			$label = $entityLabels[$t] ?? ucfirst((string)$t) . 's';

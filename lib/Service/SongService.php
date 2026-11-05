@@ -80,6 +80,7 @@ class SongService {
 		string $catalogNumber = '',
 		string $songNumber = '',
 		array $instrumentIds = [],
+		array $arrangerIds = [],
 	): ?LibraryData {
 		$title = trim($title);
 		if ($title === '') {
@@ -125,6 +126,7 @@ class SongService {
 				'signature' => $signatureIds,
 				'sourcetype' => $sourceTypeIds,
 				'instrument' => $instrumentIds,
+				'arranger' => $arrangerIds,
 			]);
 
 			if ($this->internalSongBookmarkMapper !== null && !empty($bookmarks)) {
@@ -177,6 +179,7 @@ class SongService {
 		string $catalogNumber = '',
 		string $songNumber = '',
 		array $instrumentIds = [],
+		array $arrangerIds = [],
 	): ?LibraryData {
 		if ($title === '') {
 			return null;
@@ -224,6 +227,7 @@ class SongService {
 					'signature' => $signatureIds,
 					'sourcetype' => $sourceTypeIds,
 					'instrument' => $instrumentIds,
+					'arranger' => $arrangerIds,
 				]);
 
 				if ($this->internalSongBookmarkMapper !== null) {
@@ -265,6 +269,7 @@ class SongService {
 		?array $signatures = null,
 		?array $sourceTypes = null,
 		?array $instruments = null,
+		?array $arrangers = null,
 	): ?LibraryData {
 		if (empty($songIds)) {
 			return null;
@@ -294,6 +299,7 @@ class SongService {
 					'signature' => $signatures,
 					'sourcetype' => $sourceTypes,
 					'instrument' => $instruments,
+					'arranger' => $arrangers,
 				]);
 				$song = $this->internalSongMapper->findById($sid);
 				if ($song !== null) {
@@ -542,6 +548,7 @@ class SongService {
 			(string)($songData['catalogNumber'] ?? ''),
 			(string)($songData['songNumber'] ?? ''),
 			array_map('intval', $songData['instrumentIds'] ?? []),
+			array_map('intval', $songData['arrangerIds'] ?? []),
 		);
 	}
 

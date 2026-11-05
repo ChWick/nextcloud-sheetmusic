@@ -66,7 +66,7 @@ class EntityService {
 	}
 
 	/**
-	 * @param 'composers'|'books'|'collections'|'artists'|'genres'|'keys'|'customgroups'|'years'|'signatures'|'sourcetypes'|'instruments' $entityType
+	 * @param 'composers'|'books'|'collections'|'artists'|'genres'|'keys'|'customgroups'|'years'|'signatures'|'sourcetypes'|'instruments'|'arrangers' $entityType
 	 */
 	public function deleteEntity(IUser $user, int $libraryId, string $entityType, int $id): ?LibraryData {
 		$library = $this->libraryMapper->findForUser($user->getUID(), $libraryId);

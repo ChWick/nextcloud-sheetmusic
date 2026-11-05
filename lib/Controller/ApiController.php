@@ -194,8 +194,10 @@ class ApiController extends OCSController {
 		?array $years = null,
 		?array $signatures = null,
 		?array $sourceTypes = null,
+		?array $instruments = null,
+		?array $arrangers = null,
 	): DataResponse {
-		return $this->songController->batchUpdateSongs($libraryId, $songIds, $composers, $books, $collections, $artists, $genres, $keys, $customGroups, $years, $signatures, $sourceTypes);
+		return $this->songController->batchUpdateSongs($libraryId, $songIds, $composers, $books, $collections, $artists, $genres, $keys, $customGroups, $years, $signatures, $sourceTypes, $instruments, $arrangers);
 	}
 
 	#[NoAdminRequired]
@@ -391,6 +393,12 @@ class ApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/arrangers')]
+	public function createArranger(?int $libraryId = null, ?string $name = null): DataResponse {
+		return $this->entityController->createArranger($libraryId, $name);
+	}
+
+	#[NoAdminRequired]
 	#[ApiRoute(verb: 'DELETE', url: '/api/composers/{id}')]
 	public function deleteComposer(int $id, ?int $libraryId = null): DataResponse {
 		return $this->entityController->deleteComposer($id, $libraryId);
@@ -454,6 +462,12 @@ class ApiController extends OCSController {
 	#[ApiRoute(verb: 'DELETE', url: '/api/instruments/{id}')]
 	public function deleteInstrument(int $id, ?int $libraryId = null): DataResponse {
 		return $this->entityController->deleteInstrument($id, $libraryId);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'DELETE', url: '/api/arrangers/{id}')]
+	public function deleteArranger(int $id, ?int $libraryId = null): DataResponse {
+		return $this->entityController->deleteArranger($id, $libraryId);
 	}
 
 	#[NoAdminRequired]

@@ -90,6 +90,12 @@ class EntityController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/arrangers')]
+	public function createArranger(?int $libraryId = null, ?string $name = null): DataResponse {
+		return $this->handleCreate('arranger', $libraryId, $this->resolveParam($name, 'name'));
+	}
+
+	#[NoAdminRequired]
 	#[ApiRoute(verb: 'DELETE', url: '/api/composers/{id}')]
 	public function deleteComposer(int $id, ?int $libraryId = null): DataResponse {
 		return $this->handleDelete('composers', $id, $libraryId);
@@ -153,6 +159,12 @@ class EntityController extends OCSController {
 	#[ApiRoute(verb: 'DELETE', url: '/api/instruments/{id}')]
 	public function deleteInstrument(int $id, ?int $libraryId = null): DataResponse {
 		return $this->handleDelete('instruments', $id, $libraryId);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'DELETE', url: '/api/arrangers/{id}')]
+	public function deleteArranger(int $id, ?int $libraryId = null): DataResponse {
+		return $this->handleDelete('arrangers', $id, $libraryId);
 	}
 
 	#[NoAdminRequired]

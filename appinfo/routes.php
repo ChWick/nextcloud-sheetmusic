@@ -135,6 +135,11 @@ return [
 			'verb' => 'POST',
 		],
 		[
+			'name' => 'Api#createArranger',
+			'url' => '/api/arrangers',
+			'verb' => 'POST',
+		],
+		[
 			'name' => 'Api#deleteComposer',
 			'url' => '/api/composers/{id}',
 			'verb' => 'DELETE',
@@ -177,6 +182,11 @@ return [
 		[
 			'name' => 'Api#deleteInstrument',
 			'url' => '/api/instruments/{id}',
+			'verb' => 'DELETE',
+		],
+		[
+			'name' => 'Api#deleteArranger',
+			'url' => '/api/arrangers/{id}',
 			'verb' => 'DELETE',
 		],
 		[

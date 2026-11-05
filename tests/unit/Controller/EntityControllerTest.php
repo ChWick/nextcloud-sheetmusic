@@ -78,6 +78,23 @@ final class EntityControllerTest extends TestCase {
 		$this->assertSame('Bach', $composers[0]->name);
 	}
 
+	public function testCreateAndDeleteArranger(): void {
+		$res = $this->controller->createArranger($this->libraryId, 'Quincy Jones');
+		$this->assertSame(Http::STATUS_CREATED, $res->getStatus());
+		$data = $res->getData();
+		$this->assertArrayHasKey('id', $data);
+		$this->assertSame('Quincy Jones', $data['name']);
+
+		$arrangers = $this->entityMapper->findAllForLibrary($this->libraryId, 'arranger');
+		$this->assertCount(1, $arrangers);
+		$this->assertSame('Quincy Jones', $arrangers[0]->name);
+
+		$delRes = $this->controller->deleteArranger($arrangers[0]->id, $this->libraryId);
+		$this->assertSame(Http::STATUS_OK, $delRes->getStatus());
+
+		$this->assertEmpty($this->entityMapper->findAllForLibrary($this->libraryId, 'arranger'));
+	}
+
 	public function testDeleteEndpointsValidateParamsAndDeletes(): void {
 		$this->assertSame(Http::STATUS_BAD_REQUEST, $this->controller->deleteComposer(10, null)->getStatus());
 

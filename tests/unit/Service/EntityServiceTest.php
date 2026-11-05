@@ -61,6 +61,7 @@ final class EntityServiceTest extends TestCase {
 		$signature = $this->service->createEntity($this->user, $this->libraryId, 'signature', '3/4');
 		$sourceType = $this->service->createEntity($this->user, $this->libraryId, 'sourcetype', 'Lead Sheet');
 		$instrument = $this->service->createEntity($this->user, $this->libraryId, 'instrument', 'Organ');
+		$arranger = $this->service->createEntity($this->user, $this->libraryId, 'arranger', 'Quincy Jones');
 		$year = $this->service->createEntity($this->user, $this->libraryId, 'year', '1959');
 
 		self::assertNotNull($composer);
@@ -84,6 +85,9 @@ final class EntityServiceTest extends TestCase {
 
 		self::assertNotNull($instrument);
 		self::assertSame('Organ', $instrument['name']);
+
+		self::assertNotNull($arranger);
+		self::assertSame('Quincy Jones', $arranger['name']);
 
 		self::assertNotNull($year);
 		self::assertSame(1959, $year['year']);

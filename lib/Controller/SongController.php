@@ -113,6 +113,7 @@ class SongController extends OCSController {
 				$payload['catalogNumber'],
 				$payload['songNumber'],
 				$payload['instrumentIds'],
+				$payload['arrangerIds'],
 			);
 
 			if ($result === null) {
@@ -190,6 +191,7 @@ class SongController extends OCSController {
 				$payload['catalogNumber'],
 				$payload['songNumber'],
 				$payload['instrumentIds'],
+				$payload['arrangerIds'],
 			);
 
 			if ($result === null) {
@@ -218,6 +220,7 @@ class SongController extends OCSController {
 		?array $signatures = null,
 		?array $sourceTypes = null,
 		?array $instruments = null,
+		?array $arrangers = null,
 	): DataResponse {
 		if ($libraryId === null || empty($songIds)) {
 			return new DataResponse([], Http::STATUS_BAD_REQUEST);
@@ -230,6 +233,9 @@ class SongController extends OCSController {
 
 		$instruments = $instruments ?? (array)$this->request->getParam('instruments', []);
 		$instruments = empty($instruments) ? null : $instruments;
+
+		$arrangers = $arrangers ?? (array)$this->request->getParam('arrangers', []);
+		$arrangers = empty($arrangers) ? null : $arrangers;
 
 		$genres = $genres ?? $this->request->getParam('genres');
 		$keys = $keys ?? $this->request->getParam('keys');
@@ -254,6 +260,7 @@ class SongController extends OCSController {
 				$signatures,
 				$sourceTypes,
 				$instruments,
+				$arrangers,
 			);
 
 			if ($result === null) {
@@ -499,6 +506,7 @@ class SongController extends OCSController {
 			'catalogNumber' => (string)$this->request->getParam('catalogNumber', (string)$this->request->getParam('catalog_number', '')),
 			'songNumber' => (string)$this->request->getParam('songNumber', (string)$this->request->getParam('song_number', '')),
 			'instrumentIds' => (array)$this->request->getParam('instrumentIds', (array)$this->request->getParam('instrument_ids', [])),
+			'arrangerIds' => (array)$this->request->getParam('arrangerIds', (array)$this->request->getParam('arranger_ids', [])),
 		];
 	}
 }

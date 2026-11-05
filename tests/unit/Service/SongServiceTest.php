@@ -226,12 +226,20 @@ final class SongServiceTest extends TestCase {
 			type: 'composer',
 			name: 'Gershwin',
 		));
+		$arranger = $this->entityMapper->insert(new InternalEntity(
+			id: null,
+			uuid: 'arr-uuid',
+			libraryId: $this->libraryId,
+			type: 'arranger',
+			name: 'Quincy Jones',
+		));
 
 		$result = $this->service->batchUpdateSongs(
 			$this->user,
 			$this->libraryId,
 			[(int)$s1->id, (int)$s2->id],
 			composers: ['action' => 'add', 'ids' => [(int)$composer->id]],
+			arrangers: ['action' => 'add', 'ids' => [(int)$arranger->id]],
 		);
 
 		self::assertNotNull($result);
@@ -241,6 +249,11 @@ final class SongServiceTest extends TestCase {
 		$s2Composers = $this->entityMapper->findEntityIdsForSong((int)$s2->id, 'composer');
 		self::assertSame([(int)$composer->id], $s1Composers);
 		self::assertSame([(int)$composer->id], $s2Composers);
+
+		$s1Arrangers = $this->entityMapper->findEntityIdsForSong((int)$s1->id, 'arranger');
+		$s2Arrangers = $this->entityMapper->findEntityIdsForSong((int)$s2->id, 'arranger');
+		self::assertSame([(int)$arranger->id], $s1Arrangers);
+		self::assertSame([(int)$arranger->id], $s2Arrangers);
 	}
 
 	public function testResolveBothSongsPreservesSharedFileOnDetach(): void {
