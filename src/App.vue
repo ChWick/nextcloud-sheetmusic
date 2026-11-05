@@ -264,7 +264,7 @@ async function addLibrary() {
   const progressId = 'import-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9)
   startProgressPolling(progressId)
   try {
-    await apiPost('/api/libraries' as any, {
+    const response = await apiPost('/api/libraries' as any, {
       path: addedPath,
       import_mobilesheets: false,
       importPdfMetadata: importPdfMetadata.value,
