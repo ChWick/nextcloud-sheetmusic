@@ -233,6 +233,7 @@ function submit() {
 		v-if="open"
 		:name="t('sheetmusic', 'Duplicate Songs Resolution')"
 		size="full"
+		:class="$style.mergeDialog"
 		@close="emit('update:open', false)">
 
 		<!-- Mode Switcher -->
@@ -356,6 +357,12 @@ function submit() {
 </template>
 
 <style module>
+.mergeDialog :global(.modal-container),
+.mergeDialog :global(.dialog) {
+	width: min(1320px, 94vw) !important;
+	max-width: 1320px !important;
+}
+
 .modeSwitchBar {
 	display: flex;
 	gap: 12px;

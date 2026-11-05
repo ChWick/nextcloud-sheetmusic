@@ -189,6 +189,7 @@ async function executeRevert() {
 		v-if="open"
 		:name="dialogTitle"
 		size="large"
+		:class="$style.historyModal"
 		@close="emit('update:open', false)">
 		<div :class="$style.container">
 			<div v-if="songTitle" :class="$style.songTitleHeader">
@@ -386,11 +387,11 @@ async function executeRevert() {
 </template>
 
 <style module>
-:global(.modal-container) {
+.historyModal :global(.modal-container) {
 	max-width: min(650px, 95vw) !important;
 }
 
-:global(.modal-container .dialog__title) {
+.historyModal :global(.modal-container .dialog__title) {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
