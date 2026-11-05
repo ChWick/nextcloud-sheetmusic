@@ -47,6 +47,8 @@ final class InternalEntityTest extends TestCase {
 			['sourcetypes', 'Lead Sheet', MobileSheetsSourceType::class, 'name', 'Lead Sheet'],
 			['instrument', 'Piano', MobileSheetsCustomGroup::class, 'name', 'Piano'],
 			['instruments', 'Piano', MobileSheetsCustomGroup::class, 'name', 'Piano'],
+			['arranger', 'Quincy Jones', MobileSheetsCustomGroup::class, 'name', 'Quincy Jones'],
+			['arrangers', 'Quincy Jones', MobileSheetsCustomGroup::class, 'name', 'Quincy Jones'],
 			['unknown', 'Other', MobileSheetsCustomGroup::class, 'name', 'Other'],
 		];
 

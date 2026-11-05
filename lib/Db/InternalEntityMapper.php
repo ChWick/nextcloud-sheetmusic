@@ -180,9 +180,8 @@ class InternalEntityMapper {
 				->where($unlinkQb->expr()->eq('entity_id', $unlinkQb->createNamedParameter($id, IQueryBuilder::PARAM_INT)));
 			$unlinkQb->executeStatement();
 
-			if ($entity !== null && $entity->clientId !== null) {
-				$cfg = \OCA\SheetMusic\Sync\MobileSheets\MobileSheetsEntityConfig::BY_TYPE[$entity->type]
-					?? \OCA\SheetMusic\Sync\MobileSheets\MobileSheetsEntityConfig::BY_TYPE['customgroup'];
+			if ($entity !== null && $entity->clientId !== null && isset(\OCA\SheetMusic\Sync\MobileSheets\MobileSheetsEntityConfig::BY_TYPE[$entity->type])) {
+				$cfg = \OCA\SheetMusic\Sync\MobileSheets\MobileSheetsEntityConfig::BY_TYPE[$entity->type];
 				$miscQb = $this->db->getQueryBuilder();
 				$miscQb->delete(InternalMiscMapper::DATA_TABLE_NAME)
 					->where($miscQb->expr()->eq('library_id', $miscQb->createNamedParameter($entity->libraryId, IQueryBuilder::PARAM_INT)))
@@ -208,9 +207,8 @@ class InternalEntityMapper {
 				->andWhere($unlinkQb->expr()->isNull('deleted_at'));
 			$unlinkQb->executeStatement();
 
-			if ($entity !== null && $entity->clientId !== null) {
-				$cfg = \OCA\SheetMusic\Sync\MobileSheets\MobileSheetsEntityConfig::BY_TYPE[$entity->type]
-					?? \OCA\SheetMusic\Sync\MobileSheets\MobileSheetsEntityConfig::BY_TYPE['customgroup'];
+			if ($entity !== null && $entity->clientId !== null && isset(\OCA\SheetMusic\Sync\MobileSheets\MobileSheetsEntityConfig::BY_TYPE[$entity->type])) {
+				$cfg = \OCA\SheetMusic\Sync\MobileSheets\MobileSheetsEntityConfig::BY_TYPE[$entity->type];
 				$miscQb = $this->db->getQueryBuilder();
 				$miscQb->update(InternalMiscMapper::DATA_TABLE_NAME)
 					->set('deleted_at', $miscQb->createNamedParameter($now, IQueryBuilder::PARAM_INT))
@@ -463,6 +461,7 @@ class InternalEntityMapper {
 			'signatures' => 'signature',
 			'sourcetypes' => 'sourcetype',
 			'instruments' => 'instrument',
+			'arrangers' => 'arranger',
 			default => $t,
 		};
 	}
@@ -486,6 +485,7 @@ class InternalEntityMapper {
 				'signature' => 'time signatures',
 				'sourcetype' => 'source types',
 				'instrument' => 'instruments',
+				'arranger' => 'arrangers',
 				default => $norm . 's',
 			};
 		}

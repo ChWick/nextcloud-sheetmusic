@@ -54,6 +54,7 @@ class MobileSheetsSong {
 		public readonly string $catalogNumber = '',
 		public readonly string $songNumber = '',
 		public readonly array $instruments = [],
+		public readonly array $arrangers = [],
 	) {
 	}
 }

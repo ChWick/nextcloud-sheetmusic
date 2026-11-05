@@ -41,7 +41,10 @@ class MobileSheetsEntityExporter {
 		$entities = $this->entityMapper->findAllForLibrary($libraryId, includeDeleted: false);
 		$entitiesByTable = [];
 		foreach ($entities as $entity) {
-			$config = self::ENTITY_TABLE_CONFIG[$entity->type] ?? self::ENTITY_TABLE_CONFIG['customgroup'];
+			if (!isset(self::ENTITY_TABLE_CONFIG[$entity->type])) {
+				continue;
+			}
+			$config = self::ENTITY_TABLE_CONFIG[$entity->type];
 			$entitiesByTable[$config['table']][] = $entity;
 		}
 
@@ -181,10 +184,10 @@ class MobileSheetsEntityExporter {
 			}
 
 			$type = $entity->type;
-			if ($type === 'setlist') {
+			if ($type === 'setlist' || !isset(self::ENTITY_TABLE_CONFIG[$type])) {
 				continue;
 			}
-			$config = self::ENTITY_TABLE_CONFIG[$type] ?? self::ENTITY_TABLE_CONFIG['customgroup'];
+			$config = self::ENTITY_TABLE_CONFIG[$type];
 			$linkTable = $config['linkTable'];
 			$linkCol = $config['linkCol'];
 

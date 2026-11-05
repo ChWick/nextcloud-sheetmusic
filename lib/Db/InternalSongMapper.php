@@ -561,7 +561,8 @@ class InternalSongMapper {
 	 *     years: list<MobileSheetsYear>,
 	 *     signatures: list<MobileSheetsSignature>,
 	 *     sourceTypes: list<MobileSheetsSourceType>,
-	 *     instruments: list<MobileSheetsCustomGroup>
+	 *     instruments: list<MobileSheetsCustomGroup>,
+	 *     arrangers: list<MobileSheetsCustomGroup>
 	 * }
 	 */
 	public function findLibraryData(int $libraryId, ?IUser $user = null): LibraryData {
@@ -580,6 +581,7 @@ class InternalSongMapper {
 		$signatures = [];
 		$sourceTypes = [];
 		$instruments = [];
+		$arrangers = [];
 		$entitiesById = [];
 
 		foreach ($entities as $e) {
@@ -600,6 +602,7 @@ class InternalSongMapper {
 				'signature' => $signatures[] = $msEntity,
 				'sourcetype' => $sourceTypes[] = $msEntity,
 				'instrument' => $instruments[] = $msEntity,
+				'arranger' => $arrangers[] = $msEntity,
 				default => null,
 			};
 		}
@@ -690,6 +693,7 @@ class InternalSongMapper {
 				catalogNumber: $song->catalogNumber ?? '',
 				songNumber: $song->songNumber ?? '',
 				instruments: $resolve('instrument'),
+				arrangers: $resolve('arranger'),
 			);
 		}
 
@@ -706,6 +710,7 @@ class InternalSongMapper {
 			signatures: $signatures,
 			sourceTypes: $sourceTypes,
 			instruments: $instruments,
+			arrangers: $arrangers,
 		);
 	}
 }

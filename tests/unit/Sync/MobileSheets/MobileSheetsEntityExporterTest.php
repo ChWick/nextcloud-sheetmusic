@@ -182,4 +182,35 @@ final class MobileSheetsEntityExporterTest extends TestCase {
 		$this->assertSame(1, (int)$links[0]['ComposerId']);
 		$this->assertSame(10, (int)$links[0]['SongId']);
 	}
+
+	public function testExportIgnoresArrangerEntitiesAndLinks(): void {
+		$this->sqliteDb->exec('CREATE TABLE Composer (Id INTEGER PRIMARY KEY, Name TEXT, LastModified INTEGER, DateCreated INTEGER, SortBy INTEGER, Ascending INTEGER)');
+		$this->sqliteDb->exec('CREATE TABLE CustomGroup (Id INTEGER PRIMARY KEY, Name TEXT, LastModified INTEGER, DateCreated INTEGER, SortBy INTEGER, Ascending INTEGER)');
+		$this->sqliteDb->exec('CREATE TABLE ComposerSongs (Id INTEGER PRIMARY KEY, ComposerId INTEGER, SongId INTEGER)');
+		$this->sqliteDb->exec('CREATE TABLE CustomGroupSongs (Id INTEGER PRIMARY KEY, GroupId INTEGER, SongId INTEGER)');
+		$this->sqliteDb->exec('CREATE TABLE _nc_sync_metadata (entity_type TEXT, uuid TEXT, client_id INTEGER, updated_at INTEGER, extra_json TEXT)');
+
+		$arranger = $this->entityMapper->insert(new InternalEntity(
+			uuid: 'arranger-1',
+			libraryId: $this->libraryId,
+			type: 'arranger',
+			name: 'Quincy Jones',
+		));
+
+		$song = $this->songMapper->insert(new InternalSong(
+			uuid: 'song-arr',
+			libraryId: $this->libraryId,
+			title: 'Fly Me to the Moon',
+			clientId: 10,
+		));
+
+		$this->entityMapper->linkSongEntity((int)$song->id, (int)$arranger->id);
+
+		$this->entityExporter->exportEntities($this->sqliteDb, $this->libraryId);
+		$this->entityExporter->exportSongEntityLinks($this->sqliteDb, $this->libraryId, [(int)$song->id => true]);
+
+		$this->assertEmpty($this->sqliteDb->query('SELECT * FROM CustomGroup')->fetchAll());
+		$this->assertEmpty($this->sqliteDb->query('SELECT * FROM CustomGroupSongs')->fetchAll());
+		$this->assertEmpty($this->sqliteDb->query('SELECT * FROM _nc_sync_metadata')->fetchAll());
+	}
 }

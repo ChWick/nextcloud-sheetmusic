@@ -35,6 +35,7 @@ class LibraryData implements \JsonSerializable {
 	 * @param list<MobileSheetsSignature> $signatures
 	 * @param list<MobileSheetsSourceType> $sourceTypes
 	 * @param list<MobileSheetsEntity> $instruments
+	 * @param list<MobileSheetsEntity> $arrangers
 	 */
 	public function __construct(
 		public array $songs = [],
@@ -49,6 +50,7 @@ class LibraryData implements \JsonSerializable {
 		public array $signatures = [],
 		public array $sourceTypes = [],
 		public array $instruments = [],
+		public array $arrangers = [],
 		public ?int $createdSongId = null,
 	) {
 	}
@@ -70,6 +72,7 @@ class LibraryData implements \JsonSerializable {
 			signatures: $data['signatures'] ?? [],
 			sourceTypes: $data['sourceTypes'] ?? [],
 			instruments: $data['instruments'] ?? [],
+			arrangers: $data['arrangers'] ?? [],
 			createdSongId: isset($data['createdSongId']) ? (int)$data['createdSongId'] : null,
 		);
 	}
@@ -91,6 +94,7 @@ class LibraryData implements \JsonSerializable {
 			'signatures' => $this->signatures,
 			'sourceTypes' => $this->sourceTypes,
 			'instruments' => $this->instruments,
+			'arrangers' => $this->arrangers,
 		];
 		if ($this->createdSongId !== null) {
 			$data['createdSongId'] = $this->createdSongId;

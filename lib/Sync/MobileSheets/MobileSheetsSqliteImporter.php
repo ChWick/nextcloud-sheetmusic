@@ -825,8 +825,8 @@ class MobileSheetsSqliteImporter {
 		$entities = $this->entityMapper->findAllForLibrary($libraryId, includeDeleted: true);
 		$deletedEntityClientIdsByTable = [];
 		foreach ($entities as $e) {
-			if ($e->clientId !== null && $e->deletedAt !== null) {
-				$cfg = MobileSheetsEntityConfig::BY_TYPE[$e->type] ?? MobileSheetsEntityConfig::BY_TYPE['customgroup'];
+			$cfg = MobileSheetsEntityConfig::BY_TYPE[$e->type] ?? null;
+			if ($e->clientId !== null && $e->deletedAt !== null && $cfg !== null) {
 				$deletedEntityClientIdsByTable[strtolower($cfg['table'])][$e->clientId] = true;
 			}
 		}

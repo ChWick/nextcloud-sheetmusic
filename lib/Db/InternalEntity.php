@@ -98,6 +98,7 @@ class InternalEntity {
 			'signature' => new MobileSheetsSignature($id, $this->name),
 			'sourcetype' => new MobileSheetsSourceType($id, $this->name),
 			'instrument' => new MobileSheetsCustomGroup($id, $this->name),
+			'arranger' => new MobileSheetsCustomGroup($id, $this->name),
 			default => new MobileSheetsCustomGroup($id, $this->name),
 		};
 	}

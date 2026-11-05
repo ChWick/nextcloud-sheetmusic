@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace Sync\MobileSheets;
 
+use OCA\SheetMusic\Db\InternalEntity;
 use OCA\SheetMusic\Db\InternalSong;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSqliteImporter;
 use OCP\Files\File;
@@ -511,5 +512,44 @@ final class MobileSheetsSqliteImporterTest extends TestCase {
 		// Verify movement collection was NOT imported as a new user collection in Nextcloud
 		$createdCollections = $this->entityMapper->findAllForLibrary((int)$library->id);
 		self::assertCount(0, $createdCollections);
+	}
+
+	public function testImportPreservesExistingArrangersAndSongArrangerLinks(): void {
+		$library = $this->createTestLibrary('ArrangerImportLib', 'admin');
+
+		$song = $this->songMapper->insert(new InternalSong(
+			id: null,
+			uuid: 'song-arr-1',
+			libraryId: (int)$library->id,
+			title: 'Fly Me to the Moon',
+			clientId: 10,
+			createdAt: 1000,
+			updatedAt: 1000,
+		));
+
+		$arranger = $this->entityMapper->insert(new InternalEntity(
+			id: null,
+			uuid: 'arr-uuid-1',
+			libraryId: (int)$library->id,
+			type: 'arranger',
+			name: 'Quincy Jones',
+		));
+		$this->entityMapper->linkSongEntity((int)$song->id, (int)$arranger->id);
+
+		$db = $this->createTestDatabase();
+		$db->exec("INSERT INTO Songs (Id, Title, SortTitle, Stars, Difficulty, Duration, Keywords, Custom, Custom2, SongId, DateCreated, LastModified) VALUES (10, 'Fly Me to the Moon (Edited)', 'Fly Me to the Moon', 4, 0, 0, '', '', '', 10, 1000, 2000000)");
+
+		$this->importer->importFromFile($library, $this->tempDbPath);
+
+		$updatedSong = $this->songMapper->findById((int)$song->id);
+		self::assertNotNull($updatedSong);
+		self::assertSame('Fly Me to the Moon (Edited)', $updatedSong->title);
+
+		$arrangers = $this->entityMapper->findAllForLibrary((int)$library->id, 'arranger');
+		self::assertCount(1, $arrangers);
+		self::assertSame('Quincy Jones', $arrangers[0]->name);
+
+		$arrangerIds = $this->entityMapper->findEntityIdsForSong((int)$song->id, 'arranger');
+		self::assertSame([(int)$arranger->id], $arrangerIds);
 	}
 }
