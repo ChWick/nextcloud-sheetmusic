@@ -420,16 +420,29 @@ describe('SongViewer.vue', () => {
 		expect(updatedUrl).not.toBe(initialUrl)
 	})
 
-	it('renders PDF version history button in header actions for PDF files', async () => {
+	it('renders file toolbar with info button and PDF actions for PDF files', async () => {
 		const wrapper = mount(SongViewer, {
-			props: { song: mockSong, libraryId: 1, hideHeader: false },
+			props: { song: mockSong, libraryId: 1, hideHeader: true },
 			...globalStubs,
 		})
 
 		await settle()
 
-		const versionBtn = wrapper.findAll('button').find((b) => b.attributes('title') === 'PDF version history')
+		const fileToolbar = wrapper.find('[data-test="song-file-toolbar"]')
+		expect(fileToolbar.exists()).toBe(true)
+		expect(fileToolbar.text()).toContain('TestSonata.pdf')
+
+		const infoBtn = fileToolbar.find('[data-test="pdf-file-info-trigger"]')
+		expect(infoBtn.exists()).toBe(true)
+		await infoBtn.trigger('click')
+		expect(fileToolbar.find('[data-test="pdf-file-info-dropdown"]').exists()).toBe(true)
+
+		const versionBtn = fileToolbar.findAll('button').find((b) => b.attributes('title') === 'PDF version history')
+		const modifyBtn = fileToolbar.findAll('button').find((b) => b.attributes('title') === 'Modify PDF (rotate, crop, enhance, split)')
+		const externalBtn = fileToolbar.findAll('button').find((b) => b.attributes('title') === 'Open in external viewer')
 		expect(versionBtn).toBeDefined()
+		expect(modifyBtn).toBeDefined()
+		expect(externalBtn).toBeDefined()
 	})
 
 	it('does not render PDF version history button for non-PDF files', async () => {

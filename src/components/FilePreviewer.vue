@@ -525,6 +525,8 @@ defineExpose({
 	goToPage,
 	currentPage,
 	totalPages,
+	fileSizeBytes,
+	pageResolutions,
 })
 </script>
 
@@ -542,8 +544,6 @@ defineExpose({
 			:is-custom-zoom="isCustomZoom"
 			:display-scale="isImageFile ? imageScale : effectiveScale"
 			:show-external-button="showExternalButton"
-			:file-size-bytes="fileSizeBytes"
-			:page-resolutions="pageResolutions"
 			@previous-page="prevPage"
 			@next-page="nextPage"
 			@page-layout="setPageLayout"

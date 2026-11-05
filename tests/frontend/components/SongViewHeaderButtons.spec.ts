@@ -56,40 +56,30 @@ describe('SongViewHeaderButtons.vue', () => {
 		expect(wrapper.emitted('saveCreate')).toBeTruthy()
 	})
 
-	it('renders view buttons when viewing song with PDF file selected', () => {
+	it('renders song-level view buttons when viewing a song', () => {
 		const wrapper = mount(SongViewHeaderButtons, {
 			props: {
 				isEditInUrl: false,
 				openSong: mockSong,
 				standaloneCreate: false,
 				isModifyPdfInUrl: false,
-				selectedFile: { id: 10, path: 'score.pdf' },
 			},
 		})
 
 		const buttons = wrapper.findAllComponents({ name: 'NcButton' })
-		// Open in external, Modify PDF, PDF version history, History, Duplicate, Edit, Delete
-		expect(buttons.length).toBe(7)
+		// History, Duplicate, Edit, Delete
+		expect(buttons.length).toBe(4)
 
 		buttons[0].trigger('click')
-		expect(wrapper.emitted('openExternal')).toBeTruthy()
-
-		buttons[1].trigger('click')
-		expect(wrapper.emitted('modifyPdf')).toBeTruthy()
-
-		buttons[2].trigger('click')
-		expect(wrapper.emitted('openVersions')).toBeTruthy()
-
-		buttons[3].trigger('click')
 		expect(wrapper.emitted('openHistory')).toBeTruthy()
 
-		buttons[4].trigger('click')
+		buttons[1].trigger('click')
 		expect(wrapper.emitted('duplicate')).toBeTruthy()
 
-		buttons[5].trigger('click')
+		buttons[2].trigger('click')
 		expect(wrapper.emitted('edit')).toBeTruthy()
 
-		buttons[6].trigger('click')
+		buttons[3].trigger('click')
 		expect(wrapper.emitted('deleteView')).toBeTruthy()
 	})
 })

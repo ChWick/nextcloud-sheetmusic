@@ -59,36 +59,6 @@
   </template>
   <template v-else-if="!standaloneCreate && !isEditInUrl && !isModifyPdfInUrl">
     <NcButton
-      v-if="selectedFile"
-      variant="secondary"
-      :title="t('sheetmusic', 'Open in external viewer')"
-      :aria-label="t('sheetmusic', 'Open in external viewer')"
-      @click="$emit('openExternal')">
-      <template #icon>
-        <OpenInNewIcon :size="20" />
-      </template>
-    </NcButton>
-    <NcButton
-      v-if="openSong && isSelectedPdf"
-      variant="secondary"
-      :title="t('sheetmusic', 'Modify PDF (rotate, crop, enhance, split)')"
-      :aria-label="t('sheetmusic', 'Modify PDF (rotate, crop, enhance, split)')"
-      @click="$emit('modifyPdf')">
-      <template #icon>
-        <FileDocumentEditOutline :size="20" />
-      </template>
-    </NcButton>
-    <NcButton
-      v-if="openSong && isSelectedPdf"
-      variant="secondary"
-      :title="t('sheetmusic', 'PDF version history')"
-      :aria-label="t('sheetmusic', 'PDF version history')"
-      @click="$emit('openVersions')">
-      <template #icon>
-        <History :size="20" />
-      </template>
-    </NcButton>
-    <NcButton
       v-if="openSong"
       variant="secondary"
       :title="t('sheetmusic', 'Song history & revisions')"
@@ -130,26 +100,22 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
 import { t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import CheckIcon from 'vue-material-design-icons/Check.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 import ContentSaveOutlineIcon from 'vue-material-design-icons/ContentSaveOutline.vue'
-import FileDocumentEditOutline from 'vue-material-design-icons/FileDocumentEditOutline.vue'
 import History from 'vue-material-design-icons/History.vue'
 import ContentCopyIcon from 'vue-material-design-icons/ContentCopy.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
-import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
-import type { Song, SongFile } from '../../types/song'
+import type { Song } from '../../types/song'
 
-const props = defineProps<{
+defineProps<{
 	isEditInUrl: boolean
 	openSong: Song | null
 	standaloneCreate: boolean
 	isModifyPdfInUrl: boolean
-	selectedFile?: SongFile | null
 }>()
 
 defineEmits<{
@@ -158,15 +124,8 @@ defineEmits<{
 	saveEdit: [close: boolean]
 	cancelCreate: []
 	saveCreate: []
-	openExternal: []
-	modifyPdf: []
-	openVersions: []
 	duplicate: []
 	edit: []
 	deleteView: []
 }>()
-
-const isSelectedPdf = computed(() =>
-	props.selectedFile?.path?.toLowerCase().endsWith('.pdf') ?? false,
-)
 </script>
