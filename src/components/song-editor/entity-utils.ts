@@ -58,6 +58,12 @@ export function createEntityTag<T extends { id: number }, TTag>(
 	return (name) => findExistingEntity(options, name, labelOf) ?? makeTag(name)
 }
 
+export function createNamedTag<T extends { id: number; name: string }>(
+	options: T[],
+): (name: string) => T | { name: string } {
+	return createEntityTag(options, (entity) => entity.name, (name) => ({ name }))
+}
+
 export function prefillByName<T extends { id: number }, TTag>(
 	names: string[] | undefined,
 	options: T[],

@@ -1,23 +1,18 @@
 <script setup lang="ts">
-import type { INode } from '@nextcloud/files'
-import type { Arranger, Artist, Book, Collection, Composer, CreatedSongData, CustomGroup, Genre, Instrument, Key, LibraryData, PendingAddition, PendingAttachment, PendingUpload, Signature, Song, SongFile, SongPrefill, SourceType, Year } from '../types/song'
+import type { Arranger, Artist, Book, Collection, Composer, CreatedSongData, CustomGroup, Genre, Instrument, Key, LibraryData, Signature, Song, SongFile, SongPrefill, SourceType, Year } from '../types/song'
 
-import axios from '@nextcloud/axios'
-import { FilePickerClosed, getFilePickerBuilder, showError, showInfo, showSuccess } from '@nextcloud/dialogs'
+import { showError, showSuccess } from '@nextcloud/dialogs'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
-import NcDialog from '@nextcloud/vue/components/NcDialog'
-import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import { apiPost } from '../api/client'
 import { describeRequestFailure } from '../utils/api'
-import { openFileExternally } from '../utils/file'
-import { createEntityTag, matchSelected, prefillByName, resolveSongEntityIds } from './song-editor/entity-utils'
+import { createEntityTag, createNamedTag, matchSelected, prefillByName, resolveSongEntityIds } from './song-editor/entity-utils'
+import { useSongEditorFiles } from './song-editor/useSongEditorFiles'
 import { computed, ref, watch } from 'vue'
 import CheckIcon from 'vue-material-design-icons/Check.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 import ContentSaveOutlineIcon from 'vue-material-design-icons/ContentSaveOutline.vue'
-import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import History from 'vue-material-design-icons/History.vue'
 import AttachNextcloudFileDialog from './song-editor/AttachNextcloudFileDialog.vue'
@@ -83,28 +78,26 @@ const emit = defineEmits<{
 	cancel: []
 }>()
 
-/** A new song has no id yet: it is created in the library when the editor is saved. */
 const isNewSong = computed(() => !props.song)
 
-/** Label of the primary button, also used by the notices about staged file changes. */
 const saveActionLabel = computed(() => (isNewSong.value
 	? t('sheetmusic', 'Create song')
 	: t('sheetmusic', 'Save and Close')))
 
 const sourceSong = computed(() => props.song ?? props.duplicateSong)
 
-const createComposerTag = createEntityTag(props.composers, (composer) => composer.name, (name) => ({ name }))
+const createComposerTag = createNamedTag(props.composers)
 const createBookTag = createEntityTag(props.books, (book) => book.title, (title) => ({ title }))
-const createCollectionTag = createEntityTag(props.collections, (collection) => collection.name, (name) => ({ name }))
-const createArtistTag = createEntityTag(props.artists, (artist) => artist.name, (name) => ({ name }))
-const createGenreTag = createEntityTag(props.genres, (genre) => genre.name, (name) => ({ name }))
-const createKeyTag = createEntityTag(props.keys, (key) => key.name, (name) => ({ name }))
-const createCustomGroupTag = createEntityTag(props.customGroups, (group) => group.name, (name) => ({ name }))
-const createYearTag = createEntityTag(props.years, (year) => year.name, (name) => ({ name }))
-const createSignatureTag = createEntityTag(props.signatures, (signature) => signature.name, (name) => ({ name }))
-const createSourceTypeTag = createEntityTag(props.sourceTypes, (sourceType) => sourceType.name, (name) => ({ name }))
-const createInstrumentTag = createEntityTag(props.instruments, (instrument) => instrument.name, (name) => ({ name }))
-const createArrangerTag = createEntityTag(props.arrangers, (arranger) => arranger.name, (name) => ({ name }))
+const createCollectionTag = createNamedTag(props.collections)
+const createArtistTag = createNamedTag(props.artists)
+const createGenreTag = createNamedTag(props.genres)
+const createKeyTag = createNamedTag(props.keys)
+const createCustomGroupTag = createNamedTag(props.customGroups)
+const createYearTag = createNamedTag(props.years)
+const createSignatureTag = createNamedTag(props.signatures)
+const createSourceTypeTag = createNamedTag(props.sourceTypes)
+const createInstrumentTag = createNamedTag(props.instruments)
+const createArrangerTag = createNamedTag(props.arrangers)
 
 const title = ref(sourceSong.value?.title ?? props.prefill?.title ?? '')
 const selectedComposers = ref<Array<Composer | { name: string, id?: number }>>(
@@ -127,46 +120,14 @@ const selectedArtists = ref<Array<Artist | { name: string, id?: number }>>(
 		? matchSelected(props.artists, sourceSong.value.artists)
 		: prefillByName(props.prefill?.artists, props.artists, (artist) => artist.name, createArtistTag),
 )
-const selectedGenres = ref<Array<Genre | { name: string, id?: number }>>(
-	sourceSong.value
-		? matchSelected(props.genres, sourceSong.value.genres)
-		: [],
-)
-const selectedKeys = ref<Array<Key | { name: string, id?: number }>>(
-	sourceSong.value
-		? matchSelected(props.keys, sourceSong.value.keys)
-		: [],
-)
-const selectedCustomGroups = ref<Array<CustomGroup | { name: string, id?: number }>>(
-	sourceSong.value
-		? matchSelected(props.customGroups, sourceSong.value.customGroups)
-		: [],
-)
-const selectedYears = ref<Array<Year | { name: string, id?: number }>>(
-	sourceSong.value
-		? matchSelected(props.years, sourceSong.value.years)
-		: [],
-)
-const selectedSignatures = ref<Array<Signature | { name: string, id?: number }>>(
-	sourceSong.value
-		? matchSelected(props.signatures, sourceSong.value.signatures)
-		: [],
-)
-const selectedSourceTypes = ref<Array<SourceType | { name: string, id?: number }>>(
-	sourceSong.value
-		? matchSelected(props.sourceTypes, sourceSong.value.sourceTypes)
-		: [],
-)
-const selectedInstruments = ref<Array<Instrument | { name: string, id?: number }>>(
-	sourceSong.value
-		? matchSelected(props.instruments, sourceSong.value.instruments)
-		: [],
-)
-const selectedArrangers = ref<Array<Arranger | { name: string, id?: number }>>(
-	sourceSong.value
-		? matchSelected(props.arrangers, sourceSong.value.arrangers)
-		: [],
-)
+const selectedGenres = ref<Array<Genre | { name: string, id?: number }>>(matchSelected(props.genres, sourceSong.value?.genres))
+const selectedKeys = ref<Array<Key | { name: string, id?: number }>>(matchSelected(props.keys, sourceSong.value?.keys))
+const selectedCustomGroups = ref<Array<CustomGroup | { name: string, id?: number }>>(matchSelected(props.customGroups, sourceSong.value?.customGroups))
+const selectedYears = ref<Array<Year | { name: string, id?: number }>>(matchSelected(props.years, sourceSong.value?.years))
+const selectedSignatures = ref<Array<Signature | { name: string, id?: number }>>(matchSelected(props.signatures, sourceSong.value?.signatures))
+const selectedSourceTypes = ref<Array<SourceType | { name: string, id?: number }>>(matchSelected(props.sourceTypes, sourceSong.value?.sourceTypes))
+const selectedInstruments = ref<Array<Instrument | { name: string, id?: number }>>(matchSelected(props.instruments, sourceSong.value?.instruments))
+const selectedArrangers = ref<Array<Arranger | { name: string, id?: number }>>(matchSelected(props.arrangers, sourceSong.value?.arrangers))
 
 const opus = ref<string>(sourceSong.value?.opus ?? '')
 const catalogNumber = ref<string>(sourceSong.value?.catalogNumber ?? '')
@@ -188,29 +149,44 @@ const audioFiles = ref<Array<{ id?: number, title?: string, file: string }>>(
 	(sourceSong.value?.audioFiles ?? []).map((a) => ({ title: a.title, file: a.file })),
 )
 
-function getServerFiles(song: Song | null): SongFile[] {
-	return song?.files ? [...song.files] : []
-}
-
-/**
- * The database id is what a deletion targets and it survives a rename, while the path of a
- * file changes as soon as the song's files are renumbered.
- */
-function isStagedForDeletion(file: SongFile, pending: SongFile[]): boolean {
-	return pending.some((candidate) => candidate.id === file.id)
-}
-
-/** Files of a song the editor shows, i.e. without the ones staged for deletion. */
-function getInitialFiles(song: Song | null, pending: SongFile[] = []): SongFile[] {
-	return getServerFiles(song).filter((file) => !isStagedForDeletion(file, pending))
-}
-
-const currentFiles = ref<SongFile[]>(getInitialFiles(props.song))
-const pendingDeleteFiles = ref<SongFile[]>([])
-const pendingDetachFiles = ref<SongFile[]>([])
+const isSaving = ref(false)
+const errorMessage = ref('')
+const successMessage = ref('')
+const fileSection = ref<{ openUploadPicker: () => void }>()
 const isHistoryOpen = ref(false)
 const isPageOrderModalOpen = ref(false)
 const selectedPageOrderFile = ref<SongFile | null>(null)
+const isDeleteDialogOpen = ref(false)
+
+const {
+	currentFiles,
+	pendingDeleteFiles,
+	pendingDetachFiles,
+	pendingAdditions,
+	isAttachDialogOpen,
+	selectedNextcloudNode,
+	attachAction,
+	syncFilesOnSongChange,
+	updateFilePageOrder,
+	stageDeleteFile,
+	stageDetachFile,
+	openInExternalViewer,
+	restoreDeletedFile,
+	restoreDetachedFile,
+	handleFileUpload,
+	openNextcloudPicker,
+	stageAttachNextcloudFile,
+	getPendingRemovalRequests,
+	getPendingAdditionRequests,
+} = useSongEditorFiles({
+	getSong: () => props.song,
+	getLibraryId: () => props.libraryId,
+	getTitle: () => title.value,
+	importedFile: props.importedFile,
+	importedNextcloudNode: props.importedNextcloudNode,
+	onError: (msg) => { errorMessage.value = msg },
+	onSuccess: (msg) => { successMessage.value = msg },
+})
 
 function openPageOrderModal(file: SongFile) {
 	selectedPageOrderFile.value = file
@@ -218,7 +194,7 @@ function openPageOrderModal(file: SongFile) {
 }
 
 function handlePageOrderSaved(data: LibraryData, updatedFile: SongFile) {
-	currentFiles.value = currentFiles.value.map((f) => (f.id === updatedFile.id ? { ...f, pageOrder: updatedFile.pageOrder } : f))
+	updateFilePageOrder(updatedFile)
 	emit('updated', data)
 }
 
@@ -269,197 +245,9 @@ watch(
 			file: a.file,
 		}))
 
-		// A refresh in place keeps the deletions and detachments staged in this session.
-		const sameSong = !!props.song && newSong?.id === previousSong?.id
-		const pendingDel = sameSong
-			? pendingDeleteFiles.value.map(
-				(file) => newSong.files?.find((candidate) => candidate.id === file.id) ?? file,
-			)
-			: []
-		const pendingDet = sameSong
-			? pendingDetachFiles.value.map(
-				(file) => newSong.files?.find((candidate) => candidate.id === file.id) ?? file,
-			)
-			: []
-
-		if (!sameSong) {
-			pendingAttachments.value = []
-			pendingUploads.value = []
-		}
-
-		pendingDeleteFiles.value = pendingDel
-		pendingDetachFiles.value = pendingDet
-		const allStaged = [...pendingDel, ...pendingDet]
-		currentFiles.value = getInitialFiles(props.song, allStaged)
+		syncFilesOnSongChange(newSong, previousSong)
 	},
 )
-
-const isSaving = ref(false)
-const errorMessage = ref('')
-const successMessage = ref('')
-const fileSection = ref<{ openUploadPicker: () => void }>()
-
-// Nextcloud file attach dialog state
-const isAttachDialogOpen = ref(false)
-const selectedNextcloudNode = ref<INode>()
-const attachAction = ref<'copy' | 'move'>('copy')
-
-const pendingAttachments = ref<PendingAttachment[]>([])
-const pendingUploads = ref<PendingUpload[]>([])
-let pendingAdditionKey = 0
-
-function removePendingAttachment(attachment: PendingAttachment) {
-	pendingAttachments.value = pendingAttachments.value.filter((candidate) => candidate.key !== attachment.key)
-}
-
-function removePendingUpload(upload: PendingUpload) {
-	pendingUploads.value = pendingUploads.value.filter((candidate) => candidate.key !== upload.key)
-}
-
-/**
- * Files that are added to the song when it is saved. Attaching and uploading only stage
- * here: moving the file in the library folder and the database update happen on save, so
- * cancelling leaves the library untouched.
- */
-const pendingAdditions = computed<PendingAddition[]>(() => [
-	...pendingAttachments.value.map((attachment): PendingAddition => ({
-		key: attachment.key,
-		name: attachment.name,
-		hint: attachment.action === 'move'
-			? t('sheetmusic', 'Move from Nextcloud')
-			: t('sheetmusic', 'Copy from Nextcloud'),
-		remove: () => removePendingAttachment(attachment),
-	})),
-	...pendingUploads.value.map((upload): PendingAddition => ({
-		key: upload.key,
-		name: upload.name,
-		hint: t('sheetmusic', 'Upload from this computer'),
-		remove: () => removePendingUpload(upload),
-	})),
-])
-
-function stageAttachment(path: string, name: string, action: 'copy' | 'move') {
-	pendingAttachments.value.push({ key: `attachment-${++pendingAdditionKey}`, path, name, action })
-}
-
-function stageUpload(file: File) {
-	pendingUploads.value.push({ key: `upload-${++pendingAdditionKey}`, file, name: file.name })
-}
-
-// An imported PDF is the new song's file right away; it is uploaded on save like
-// any other staged addition.
-if (props.importedFile) {
-	stageUpload(props.importedFile)
-}
-if (props.importedNextcloudNode) {
-	stageAttachment(props.importedNextcloudNode.path, props.importedNextcloudNode.name, props.importedNextcloudNode.action ?? 'copy')
-}
-
-function stageDeleteFile(file: SongFile) {
-	currentFiles.value = currentFiles.value.filter((f) => f.id !== file.id)
-	pendingDetachFiles.value = pendingDetachFiles.value.filter((f) => f.id !== file.id)
-	if (!isStagedForDeletion(file, pendingDeleteFiles.value)) {
-		pendingDeleteFiles.value.push(file)
-	}
-}
-
-function stageDetachFile(file: SongFile) {
-	currentFiles.value = currentFiles.value.filter((f) => f.id !== file.id)
-	pendingDeleteFiles.value = pendingDeleteFiles.value.filter((f) => f.id !== file.id)
-	if (!isStagedForDeletion(file, pendingDetachFiles.value)) {
-		pendingDetachFiles.value.push(file)
-	}
-}
-
-/**
- * Open an attached file in an external viewer: the file's URL goes to a new browser
- * tab, where the PDF is shown by the browser's own viewer or handed to the system's
- * PDF application.
- */
-function openInExternalViewer(file: SongFile) {
-	openFileExternally(file.path)
-}
-
-function restoreDeletedFile(file: SongFile) {
-	pendingDeleteFiles.value = pendingDeleteFiles.value.filter((f) => f.id !== file.id)
-	if (!currentFiles.value.some((f) => f.id === file.id)) {
-		currentFiles.value.push(file)
-	}
-}
-
-function restoreDetachedFile(file: SongFile) {
-	pendingDetachFiles.value = pendingDetachFiles.value.filter((f) => f.id !== file.id)
-	if (!currentFiles.value.some((f) => f.id === file.id)) {
-		currentFiles.value.push(file)
-	}
-}
-
-/**
- * Choosing a file on the computer only stages it. The upload - including the move into
- * the library folder - runs when the song is saved, just like a staged deletion.
- */
-function handleFileUpload(file: File) {
-	errorMessage.value = ''
-	stageUpload(file)
-	const songTitle = title.value?.trim()
-	const infoMsg = songTitle
-		? t('sheetmusic', 'The file will be added to "{title}" when you save.', { title: songTitle })
-		: t('sheetmusic', 'The file is added to the song when you save.')
-	successMessage.value = infoMsg
-	showInfo(infoMsg)
-}
-
-async function openNextcloudPicker() {
-	errorMessage.value = ''
-	const picker = getFilePickerBuilder(t('sheetmusic', 'Select a file for this song'))
-		.setMultiSelect(false)
-		.setCanPick((node) => node.type === 'file')
-		.setButtonFactory(([node]) => [{
-			label: node
-				? t('sheetmusic', 'Select {file}', { file: node.basename })
-				: t('sheetmusic', 'Select a file'),
-			callback: () => {},
-			disabled: !node || node.type !== 'file',
-			variant: 'primary',
-		}])
-		.build()
-
-	try {
-		const [picked] = await picker.pickNodes()
-		if (picked) {
-			selectedNextcloudNode.value = picked
-			attachAction.value = 'copy'
-			isAttachDialogOpen.value = true
-		}
-	} catch (error) {
-		if (!(error instanceof FilePickerClosed)) {
-			errorMessage.value = t('sheetmusic', 'Could not select a file from Nextcloud.')
-			showError(errorMessage.value)
-		}
-	}
-}
-
-/**
- * Attaching a Nextcloud file only stages it. The copy or move inside the library folder
- * and the database entry are done when the song is saved, so cancelling changes nothing.
- */
-function stageAttachNextcloudFile() {
-	const node = selectedNextcloudNode.value
-	if (!node) {
-		return
-	}
-
-	errorMessage.value = ''
-	stageAttachment(node.path, node.basename, attachAction.value)
-	isAttachDialogOpen.value = false
-	selectedNextcloudNode.value = undefined
-	const songTitle = title.value?.trim()
-	const infoMsg = songTitle
-		? t('sheetmusic', 'The file will be added to "{title}" when you save.', { title: songTitle })
-		: t('sheetmusic', 'The file is added to the song when you save.')
-	successMessage.value = infoMsg
-	showInfo(infoMsg)
-}
 
 function openUploadPicker() {
 	fileSection.value?.openUploadPicker()
@@ -479,37 +267,12 @@ async function saveSong(closeAfter: boolean) {
 	errorMessage.value = ''
 	isSaving.value = true
 
-	// Snapshot: props.song is null while a new song is being created.
 	const existingSong = props.song
 	const detachedFileCount = existingSong ? pendingDetachFiles.value.length : 0
 
 	try {
-		// Process pending file deletions - a new song has none, it has no id yet.
-		if (existingSong && pendingDeleteFiles.value.length > 0) {
-			for (const file of pendingDeleteFiles.value) {
-				if (file.id > 0) {
-					await apiPost('/api/songs/{id}/file/{fileId}/delete', {
-						libraryId: props.libraryId,
-					}, {
-						pathParams: { id: existingSong.id, fileId: file.id },
-					})
-				}
-			}
-			pendingDeleteFiles.value = []
-		}
-
-		// Process pending file detachments
-		if (existingSong && pendingDetachFiles.value.length > 0) {
-			for (const file of pendingDetachFiles.value) {
-				if (file.id > 0) {
-					await apiPost('/api/songs/{id}/file/{fileId}/detach', {
-						libraryId: props.libraryId,
-					}, {
-						pathParams: { id: existingSong.id, fileId: file.id },
-					})
-				}
-			}
-			pendingDetachFiles.value = []
+		for (const runRemoval of getPendingRemovalRequests(existingSong)) {
+			await runRemoval()
 		}
 
 		const entityIds = await resolveSongEntityIds([
@@ -533,9 +296,6 @@ async function saveSong(closeAfter: boolean) {
 			return response.data.ocs.data.id
 		})
 
-		// The song is created or updated before the staged file additions: those need the
-		// song's id, and the naming rules use the composers, artists and collections the
-		// user just saved.
 		const payload = {
 			libraryId: props.libraryId,
 			title: title.value.trim(),
@@ -559,36 +319,11 @@ async function saveSong(closeAfter: boolean) {
 			: await apiPost('/api/songs', payload)
 
 		let data = response.data.ocs.data as LibraryData
-		// A new song only has an id once the server created it.
 		const songId: number | undefined = existingSong?.id ?? (data as CreatedSongData).createdSongId
 
-		// Staged file additions are applied to the song that now exists. Each addition
-		// renumbers the song's files, so the data of the last one is what the parent gets.
-		if (songId !== undefined) {
-			for (const attachment of pendingAttachments.value) {
-				const attachResponse = await apiPost('/api/songs/{id}/file/attach', {
-					libraryId: props.libraryId,
-					sourcePath: attachment.path,
-					action: attachment.action,
-				}, {
-					pathParams: { id: songId },
-				})
-				data = attachResponse.data.ocs.data as LibraryData
-			}
-
-			for (const upload of pendingUploads.value) {
-				const formData = new FormData()
-				formData.append('file', upload.file)
-
-				const uploadResponse = await apiPost('/api/libraries/{libraryId}/songs/{id}/file/upload', formData as any, {
-					pathParams: { libraryId: props.libraryId, id: songId },
-				})
-				data = uploadResponse.data.ocs.data as LibraryData
-			}
+		for (const runAddition of getPendingAdditionRequests(songId)) {
+			data = (await runAddition()).data.ocs.data as LibraryData
 		}
-
-		pendingAttachments.value = []
-		pendingUploads.value = []
 
 		const songTitle = title.value?.trim()
 		if (detachedFileCount > 0) {
@@ -609,9 +344,6 @@ async function saveSong(closeAfter: boolean) {
 		if (closeAfter) {
 			emit('saved', data, songId)
 		} else {
-			// The editor stays open: the refreshed data flows back in and the editor
-			// updates in place, so the file list shows the saved files and the form
-			// holds what was just written to the song.
 			emit('updated', data)
 		}
 	} catch (error) {
@@ -624,8 +356,6 @@ async function saveSong(closeAfter: boolean) {
 		isSaving.value = false
 	}
 }
-
-const isDeleteDialogOpen = ref(false)
 
 function handleSongDeleted(data: LibraryData | undefined, songId: number) {
 	emit('deleted', data, songId)

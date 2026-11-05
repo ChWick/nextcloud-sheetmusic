@@ -1,6 +1,6 @@
 <template>
   <ViewHeader
-    :title="standaloneCreate ? (duplicateSourceSong ? t('sheetmusic', 'Duplicate: {title}', { title: duplicateSourceSong.title }) : t('sheetmusic', 'Create Song')) : songIdInUrl !== null ? (isModifyPdfInUrl ? (openSong?.title ? t('sheetmusic', 'Modify PDF: {title}', { title: openSong.title }) : t('sheetmusic', 'Modify PDF')) : (isEditInUrl ? (openSong?.title ? t('sheetmusic', 'Edit: {title}', { title: openSong.title }) : t('sheetmusic', 'Edit song')) : (openSong?.title ?? t('sheetmusic', 'Songs')))) : t('sheetmusic', 'Songs')"
+    :title="headerTitle"
     :show-back="songIdInUrl !== null || standaloneCreate"
     :create-label="songIdInUrl === null && !standaloneCreate ? t('sheetmusic', 'New song') : undefined"
     :import-label="songIdInUrl === null && !standaloneCreate ? t('sheetmusic', 'Import') : undefined"
@@ -50,18 +50,7 @@
                 ref="songEditorRef"
                 :song="openSong"
                 :library-id="selectedLibrary"
-                :composers="composers"
-                :books="books"
-                :collections="collections"
-                :artists="artists"
-                :genres="genres"
-                :keys="keys"
-                :custom-groups="customGroups"
-                :years="years"
-                :signatures="signatures"
-                :source-types="sourceTypes"
-                :instruments="instruments"
-                :arrangers="arrangers"
+                v-bind="entityListsProps"
                 @saved="handleSaved"
                 @updated="handleLibraryDataUpdate"
                 @deleted="handleDeleted"
@@ -72,18 +61,7 @@
       :file-id="route.query.fileId as string"
       :library-id="selectedLibrary"
       :auto-pdf-metadata="autoPdfMetadata"
-      :composers="composers"
-      :books="books"
-      :collections="collections"
-      :artists="artists"
-      :genres="genres"
-      :keys="keys"
-      :custom-groups="customGroups"
-      :years="years"
-      :signatures="signatures"
-      :source-types="sourceTypes"
-      :instruments="instruments"
-      :arrangers="arrangers"
+      v-bind="entityListsProps"
       @saved="handlePdfModifierSaved"
       @cancel="closeModifyPdf" />
     <SongViewer
@@ -93,18 +71,7 @@
       :hide-header="true"
       :song="openSong"
       :library-id="selectedLibrary"
-      :composers="composers"
-      :books="books"
-      :collections="collections"
-      :artists="artists"
-      :genres="genres"
-      :keys="keys"
-      :custom-groups="customGroups"
-      :years="years"
-      :signatures="signatures"
-      :source-types="sourceTypes"
-      :instruments="instruments"
-      :arrangers="arrangers"
+      v-bind="entityListsProps"
       @back="goBackToSongs"
       @modify-pdf="openModifyPdf"
       @saved="handleSaved"
@@ -172,18 +139,7 @@
       v-model:selected-source-types="selectedSourceTypes"
       v-model:selected-instruments="selectedInstruments"
       v-model:selected-arrangers="selectedArrangers"
-      :composers="composers"
-      :books="books"
-      :collections="collections"
-      :artists="artists"
-      :genres="genres"
-      :keys="keys"
-      :custom-groups="customGroups"
-      :years="years"
-      :signatures="signatures"
-      :source-types="sourceTypes"
-      :instruments="instruments"
-      :arrangers="arrangers"
+      v-bind="entityListsProps"
       @clear="clearFilters"/>
     </div>
     <SongEditor v-if="isCreatingSong"
@@ -191,18 +147,7 @@
                 :song="null"
                 :library-id="selectedLibrary"
                 :hide-actions="standaloneCreate"
-                :composers="composers"
-                :books="books"
-                :collections="collections"
-                :artists="artists"
-                :genres="genres"
-                :keys="keys"
-                :custom-groups="customGroups"
-                :years="years"
-                :signatures="signatures"
-                :source-types="sourceTypes"
-                :instruments="instruments"
-                :arrangers="arrangers"
+                v-bind="entityListsProps"
                 :duplicate-song="duplicateSourceSong"
                 :prefill="importPrefill"
                 :imported-file="importedFile"
@@ -222,18 +167,7 @@
         :selected-song-ids="selectedSongIds"
         :is-filtered="isFiltered"
         :visible-columns="visibleColumns"
-        :composers="composers"
-        :books="books"
-        :collections="collections"
-        :artists="artists"
-        :genres="genres"
-        :keys="keys"
-        :custom-groups="customGroups"
-        :years="years"
-        :signatures="signatures"
-        :source-types="sourceTypes"
-        :instruments="instruments"
-        :arrangers="arrangers"
+        v-bind="entityListsProps"
         v-model:sort-key="sortKey"
         v-model:sort-order="sortOrder"
         @view-song="openSongView"
@@ -276,18 +210,7 @@
   <BatchSongEditorDialog
     v-model:open="isBatchEditorOpen"
     :selected-count="selectedCount"
-    :composers="composers"
-    :books="books"
-    :collections="collections"
-    :artists="artists"
-    :genres="genres"
-    :keys="keys"
-    :custom-groups="customGroups"
-    :years="years"
-    :signatures="signatures"
-    :source-types="sourceTypes"
-    :instruments="instruments"
-    :arrangers="arrangers"
+    v-bind="entityListsProps"
     @apply="handleApplyBatchUpdate" />
 
   <BatchDeleteSongsDialog
@@ -467,16 +390,29 @@ const isEditInUrl = computed(() => route.query.edit !== undefined && route.query
 /** The URL asks for the PDF modifier view ("?song=12&modifyPdf=1"). */
 const isModifyPdfInUrl = computed(() => route.query.modifyPdf !== undefined && route.query.modifyPdf !== null);
 
-// The filter bar reads and writes its selections in the URL query, so the browser
-// history restores them when going back or forward.
-const { searchTitle, withoutFiles, selectedComposers, selectedBooks, selectedCollections, selectedArtists, selectedGenres, selectedKeys, selectedCustomGroups, selectedYears, selectedSignatures, selectedSourceTypes, selectedInstruments, selectedArrangers, filterSongs, clearFilters, filterBarVisible, toggleFilterBar, isFiltered, toggleFilter } =
-  useSongFilters(() => ({ composers: composers.value, books: books.value, collections: collections.value, artists: artists.value, genres: genres.value, keys: keys.value, customGroups: customGroups.value, years: years.value, signatures: signatures.value, sourceTypes: sourceTypes.value, instruments: instruments.value, arrangers: arrangers.value }));
+const headerTitle = computed(() => {
+  if (props.standaloneCreate) {
+    return duplicateSourceSong.value
+      ? t('sheetmusic', 'Duplicate: {title}', { title: duplicateSourceSong.value.title })
+      : t('sheetmusic', 'Create Song');
+  }
+  if (songIdInUrl.value !== null) {
+    if (isModifyPdfInUrl.value) {
+      return openSong.value?.title
+        ? t('sheetmusic', 'Modify PDF: {title}', { title: openSong.value.title })
+        : t('sheetmusic', 'Modify PDF');
+    }
+    if (isEditInUrl.value) {
+      return openSong.value?.title
+        ? t('sheetmusic', 'Edit: {title}', { title: openSong.value.title })
+        : t('sheetmusic', 'Edit song');
+    }
+    return openSong.value?.title ?? t('sheetmusic', 'Songs');
+  }
+  return t('sheetmusic', 'Songs');
+});
 
-const { selectedSongIds, selectedCount, isSelected, toggleSelect, selectAll, isAllSelected, clearSelection } = useSongSelection();
-const isBatchEditorOpen = ref(false);
-const isBatchDeleteDialogOpen = ref(false);
-
-const currentLibraryData = computed<LibraryData>(() => ({
+const entityListsProps = computed(() => ({
   composers: composers.value,
   books: books.value,
   collections: collections.value,
@@ -489,6 +425,19 @@ const currentLibraryData = computed<LibraryData>(() => ({
   sourceTypes: sourceTypes.value,
   instruments: instruments.value,
   arrangers: arrangers.value,
+}));
+
+// The filter bar reads and writes its selections in the URL query, so the browser
+// history restores them when going back or forward.
+const { searchTitle, withoutFiles, selectedComposers, selectedBooks, selectedCollections, selectedArtists, selectedGenres, selectedKeys, selectedCustomGroups, selectedYears, selectedSignatures, selectedSourceTypes, selectedInstruments, selectedArrangers, filterSongs, clearFilters, filterBarVisible, toggleFilterBar, isFiltered, toggleFilter } =
+  useSongFilters(() => entityListsProps.value);
+
+const { selectedSongIds, selectedCount, isSelected, toggleSelect, selectAll, isAllSelected, clearSelection } = useSongSelection();
+const isBatchEditorOpen = ref(false);
+const isBatchDeleteDialogOpen = ref(false);
+
+const currentLibraryData = computed<LibraryData>(() => ({
+  ...entityListsProps.value,
   songs: songs.value,
 }));
 
