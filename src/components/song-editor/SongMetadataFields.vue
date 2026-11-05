@@ -3,11 +3,12 @@ import type { Arranger, Artist, Book, Collection, Composer, CustomGroup, Genre, 
 import { translate as t } from '@nextcloud/l10n'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
+import { computed } from 'vue'
 
 type NamedTag = { name: string, id?: number }
 type BookTag = { title: string, id?: number }
 
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
 	composers: Composer[]
 	books: Book[]
 	collections: Collection[]
@@ -70,176 +71,37 @@ const keywords = defineModel<string>('keywords', { required: true })
 const custom = defineModel<string>('custom', { required: true })
 const custom2 = defineModel<string>('custom2', { required: true })
 const tempo = defineModel<number>('tempo', { required: true })
+
+const entityFields = computed(() => [
+	{ key: 'composers', model: selectedComposers, options: props.composers, createOption: props.createComposerTag, inputLabel: t('sheetmusic', 'Composers'), label: 'name', placeholder: t('sheetmusic', 'Select or type a composer…') },
+	{ key: 'books', model: selectedBooks, options: props.books, createOption: props.createBookTag, inputLabel: t('sheetmusic', 'Books / Albums'), label: 'title', placeholder: t('sheetmusic', 'Select or type a book/album…') },
+	{ key: 'collections', model: selectedCollections, options: props.collections, createOption: props.createCollectionTag, inputLabel: t('sheetmusic', 'Collections'), label: 'name', placeholder: t('sheetmusic', 'Select or type a collection…') },
+	{ key: 'artists', model: selectedArtists, options: props.artists, createOption: props.createArtistTag, inputLabel: t('sheetmusic', 'Artists'), label: 'name', placeholder: t('sheetmusic', 'Select or type an artist…') },
+	{ key: 'genres', model: selectedGenres, options: props.genres, createOption: props.createGenreTag, inputLabel: t('sheetmusic', 'Genres'), label: 'name', placeholder: t('sheetmusic', 'Select or type a genre…') },
+	{ key: 'keys', model: selectedKeys, options: props.keys, createOption: props.createKeyTag, inputLabel: t('sheetmusic', 'Keys'), label: 'name', placeholder: t('sheetmusic', 'Select or type a key…') },
+	{ key: 'customGroups', model: selectedCustomGroups, options: props.customGroups, createOption: props.createCustomGroupTag, inputLabel: t('sheetmusic', 'Custom Groups'), label: 'name', placeholder: t('sheetmusic', 'Select or type a custom group…') },
+	{ key: 'years', model: selectedYears, options: props.years, createOption: props.createYearTag, inputLabel: t('sheetmusic', 'Years'), label: 'name', placeholder: t('sheetmusic', 'Select or type a year…') },
+	{ key: 'signatures', model: selectedSignatures, options: props.signatures, createOption: props.createSignatureTag, inputLabel: t('sheetmusic', 'Time Signatures'), label: 'name', placeholder: t('sheetmusic', 'Select or type a time signature (e.g. 4/4)…') },
+	{ key: 'sourceTypes', model: selectedSourceTypes, options: props.sourceTypes, createOption: props.createSourceTypeTag, inputLabel: t('sheetmusic', 'Source Types'), label: 'name', placeholder: t('sheetmusic', 'Select or type a source type…') },
+	{ key: 'instruments', model: selectedInstruments, options: props.instruments, createOption: props.createInstrumentTag, inputLabel: t('sheetmusic', 'Instruments'), label: 'name', placeholder: t('sheetmusic', 'Select or type an instrument…') },
+	{ key: 'arrangers', model: selectedArrangers, options: props.arrangers, createOption: props.createArrangerTag, inputLabel: t('sheetmusic', 'Arrangers'), label: 'name', placeholder: t('sheetmusic', 'Select or type an arranger…') },
+])
 </script>
 
 <template>
 	<div>
-		<div :class="$style.formGroup">
+		<div v-for="field in entityFields" :key="field.key" :class="$style.formGroup">
 			<NcSelect
-				v-model="selectedComposers"
-				:options="composers"
+				v-model="field.model.value"
+				:options="field.options"
 				:multiple="true"
 				:taggable="true"
-				:create-option="createComposerTag"
+				:create-option="field.createOption"
 				:close-on-select="false"
-				:input-label="t('sheetmusic', 'Composers')"
-				label="name"
-				track-by="name"
-				:placeholder="t('sheetmusic', 'Select or type a composer…')" />
-		</div>
-
-		<div :class="$style.formGroup">
-			<NcSelect
-				v-model="selectedBooks"
-				:options="books"
-				:multiple="true"
-				:taggable="true"
-				:create-option="createBookTag"
-				:close-on-select="false"
-				:input-label="t('sheetmusic', 'Books / Albums')"
-				label="title"
-				track-by="title"
-				:placeholder="t('sheetmusic', 'Select or type a book/album…')" />
-		</div>
-
-		<div :class="$style.formGroup">
-			<NcSelect
-				v-model="selectedCollections"
-				:options="collections"
-				:multiple="true"
-				:taggable="true"
-				:create-option="createCollectionTag"
-				:close-on-select="false"
-				:input-label="t('sheetmusic', 'Collections')"
-				label="name"
-				track-by="name"
-				:placeholder="t('sheetmusic', 'Select or type a collection…')" />
-		</div>
-
-		<div :class="$style.formGroup">
-			<NcSelect
-				v-model="selectedArtists"
-				:options="artists"
-				:multiple="true"
-				:taggable="true"
-				:create-option="createArtistTag"
-				:close-on-select="false"
-				:input-label="t('sheetmusic', 'Artists')"
-				label="name"
-				track-by="name"
-				:placeholder="t('sheetmusic', 'Select or type an artist…')" />
-		</div>
-
-		<div :class="$style.formGroup">
-			<NcSelect
-				v-model="selectedGenres"
-				:options="genres"
-				:multiple="true"
-				:taggable="true"
-				:create-option="createGenreTag"
-				:close-on-select="false"
-				:input-label="t('sheetmusic', 'Genres')"
-				label="name"
-				track-by="name"
-				:placeholder="t('sheetmusic', 'Select or type a genre…')" />
-		</div>
-
-		<div :class="$style.formGroup">
-			<NcSelect
-				v-model="selectedKeys"
-				:options="keys"
-				:multiple="true"
-				:taggable="true"
-				:create-option="createKeyTag"
-				:close-on-select="false"
-				:input-label="t('sheetmusic', 'Keys')"
-				label="name"
-				track-by="name"
-				:placeholder="t('sheetmusic', 'Select or type a key…')" />
-		</div>
-
-		<div :class="$style.formGroup">
-			<NcSelect
-				v-model="selectedCustomGroups"
-				:options="customGroups"
-				:multiple="true"
-				:taggable="true"
-				:create-option="createCustomGroupTag"
-				:close-on-select="false"
-				:input-label="t('sheetmusic', 'Custom Groups')"
-				label="name"
-				track-by="name"
-				:placeholder="t('sheetmusic', 'Select or type a custom group…')" />
-		</div>
-
-		<div :class="$style.formGroup">
-			<NcSelect
-				v-model="selectedYears"
-				:options="years"
-				:multiple="true"
-				:taggable="true"
-				:create-option="createYearTag"
-				:close-on-select="false"
-				:input-label="t('sheetmusic', 'Years')"
-				label="name"
-				track-by="name"
-				:placeholder="t('sheetmusic', 'Select or type a year…')" />
-		</div>
-
-		<div :class="$style.formGroup">
-			<NcSelect
-				v-model="selectedSignatures"
-				:options="signatures"
-				:multiple="true"
-				:taggable="true"
-				:create-option="createSignatureTag"
-				:close-on-select="false"
-				:input-label="t('sheetmusic', 'Time Signatures')"
-				label="name"
-				track-by="name"
-				:placeholder="t('sheetmusic', 'Select or type a time signature (e.g. 4/4)…')" />
-		</div>
-
-		<div :class="$style.formGroup">
-			<NcSelect
-				v-model="selectedSourceTypes"
-				:options="sourceTypes"
-				:multiple="true"
-				:taggable="true"
-				:create-option="createSourceTypeTag"
-				:close-on-select="false"
-				:input-label="t('sheetmusic', 'Source Types')"
-				label="name"
-				track-by="name"
-				:placeholder="t('sheetmusic', 'Select or type a source type…')" />
-		</div>
-
-		<div :class="$style.formGroup">
-			<NcSelect
-				v-model="selectedInstruments"
-				:options="instruments"
-				:multiple="true"
-				:taggable="true"
-				:create-option="createInstrumentTag"
-				:close-on-select="false"
-				:input-label="t('sheetmusic', 'Instruments')"
-				label="name"
-				track-by="name"
-				:placeholder="t('sheetmusic', 'Select or type an instrument…')" />
-		</div>
-
-		<div :class="$style.formGroup">
-			<NcSelect
-				v-model="selectedArrangers"
-				:options="arrangers"
-				:multiple="true"
-				:taggable="true"
-				:create-option="createArrangerTag"
-				:close-on-select="false"
-				:input-label="t('sheetmusic', 'Arrangers')"
-				label="name"
-				track-by="name"
-				:placeholder="t('sheetmusic', 'Select or type an arranger…')" />
+				:input-label="field.inputLabel"
+				:label="field.label"
+				:track-by="field.label"
+				:placeholder="field.placeholder" />
 		</div>
 
 		<div :class="$style.attributesGrid">

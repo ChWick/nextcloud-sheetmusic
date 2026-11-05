@@ -95,82 +95,122 @@ const withoutFilesModel = computed({
 	set: (val: boolean) => emit('update:withoutFiles', val),
 })
 
-const composerOptions = computed(() => [
-	noneEntryOf('composers') as Composer,
-	...props.composers,
-])
-
-const bookOptions = computed(() => [
-	noneEntryOf('books') as Book,
-	...props.books,
-])
-
-const collectionOptions = computed(() => [
-	noneEntryOf('collections') as Collection,
-	...props.collections,
-])
-
-const artistOptions = computed(() => [
-	noneEntryOf('artists') as Artist,
-	...props.artists,
-])
-
-const genreOptions = computed(() => [
-	noneEntryOf('genres') as Genre,
-	...props.genres,
-])
-
-const keyOptions = computed(() => [
-	noneEntryOf('keys') as Key,
-	...props.keys,
-])
-
-const customGroupOptions = computed(() => [
-	noneEntryOf('customgroups') as CustomGroup,
-	...props.customGroups,
-])
-
-const yearOptions = computed(() => [
-	noneEntryOf('years') as Year,
-	...props.years,
-])
-
-const signatureOptions = computed(() => [
-	noneEntryOf('signatures') as Signature,
-	...props.signatures,
-])
-
-const sourceTypeOptions = computed(() => [
-	noneEntryOf('sourcetypes') as SourceType,
-	...props.sourceTypes,
-])
-
-const instrumentOptions = computed(() => [
-	noneEntryOf('instruments') as Instrument,
-	...props.instruments,
-])
-
-const arrangerOptions = computed(() => [
-	noneEntryOf('arrangers') as Arranger,
-	...props.arrangers,
+const filterFields = computed(() => [
+	{
+		key: 'composers',
+		selected: props.selectedComposers,
+		options: [noneEntryOf('composers') as Composer, ...props.composers],
+		placeholder: t('sheetmusic', 'Filter by composer…'),
+		inputLabel: t('sheetmusic', 'Composers'),
+		label: 'name',
+		onUpdate: (val: Composer[]) => emit('update:selectedComposers', val),
+	},
+	{
+		key: 'books',
+		selected: props.selectedBooks,
+		options: [noneEntryOf('books') as Book, ...props.books],
+		placeholder: t('sheetmusic', 'Filter by book…'),
+		inputLabel: t('sheetmusic', 'Books'),
+		label: 'title',
+		onUpdate: (val: Book[]) => emit('update:selectedBooks', val),
+	},
+	{
+		key: 'collections',
+		selected: props.selectedCollections,
+		options: [noneEntryOf('collections') as Collection, ...props.collections],
+		placeholder: t('sheetmusic', 'Filter by collection…'),
+		inputLabel: t('sheetmusic', 'Collections'),
+		label: 'name',
+		onUpdate: (val: Collection[]) => emit('update:selectedCollections', val),
+	},
+	{
+		key: 'artists',
+		selected: props.selectedArtists,
+		options: [noneEntryOf('artists') as Artist, ...props.artists],
+		placeholder: t('sheetmusic', 'Filter by artist…'),
+		inputLabel: t('sheetmusic', 'Artists'),
+		label: 'name',
+		onUpdate: (val: Artist[]) => emit('update:selectedArtists', val),
+	},
+	{
+		key: 'genres',
+		selected: props.selectedGenres,
+		options: [noneEntryOf('genres') as Genre, ...props.genres],
+		placeholder: t('sheetmusic', 'Filter by genre…'),
+		inputLabel: t('sheetmusic', 'Genres'),
+		label: 'name',
+		onUpdate: (val: Genre[]) => emit('update:selectedGenres', val),
+	},
+	{
+		key: 'keys',
+		selected: props.selectedKeys,
+		options: [noneEntryOf('keys') as Key, ...props.keys],
+		placeholder: t('sheetmusic', 'Filter by key…'),
+		inputLabel: t('sheetmusic', 'Keys'),
+		label: 'name',
+		onUpdate: (val: Key[]) => emit('update:selectedKeys', val),
+	},
+	{
+		key: 'customGroups',
+		selected: props.selectedCustomGroups,
+		options: [noneEntryOf('customgroups') as CustomGroup, ...props.customGroups],
+		placeholder: t('sheetmusic', 'Filter by custom group…'),
+		inputLabel: t('sheetmusic', 'Custom Groups'),
+		label: 'name',
+		onUpdate: (val: CustomGroup[]) => emit('update:selectedCustomGroups', val),
+	},
+	{
+		key: 'years',
+		selected: props.selectedYears,
+		options: [noneEntryOf('years') as Year, ...props.years],
+		placeholder: t('sheetmusic', 'Filter by year…'),
+		inputLabel: t('sheetmusic', 'Years'),
+		label: 'name',
+		onUpdate: (val: Year[]) => emit('update:selectedYears', val),
+	},
+	{
+		key: 'signatures',
+		selected: props.selectedSignatures,
+		options: [noneEntryOf('signatures') as Signature, ...props.signatures],
+		placeholder: t('sheetmusic', 'Filter by time signature…'),
+		inputLabel: t('sheetmusic', 'Time Signatures'),
+		label: 'name',
+		onUpdate: (val: Signature[]) => emit('update:selectedSignatures', val),
+	},
+	{
+		key: 'sourceTypes',
+		selected: props.selectedSourceTypes,
+		options: [noneEntryOf('sourcetypes') as SourceType, ...props.sourceTypes],
+		placeholder: t('sheetmusic', 'Filter by source type…'),
+		inputLabel: t('sheetmusic', 'Source Types'),
+		label: 'name',
+		onUpdate: (val: SourceType[]) => emit('update:selectedSourceTypes', val),
+	},
+	{
+		key: 'instruments',
+		selected: props.selectedInstruments,
+		options: [noneEntryOf('instruments') as Instrument, ...props.instruments],
+		placeholder: t('sheetmusic', 'Filter by instrument…'),
+		inputLabel: t('sheetmusic', 'Instruments'),
+		label: 'name',
+		onUpdate: (val: Instrument[]) => emit('update:selectedInstruments', val),
+	},
+	{
+		key: 'arrangers',
+		selected: props.selectedArrangers,
+		options: [noneEntryOf('arrangers') as Arranger, ...props.arrangers],
+		placeholder: t('sheetmusic', 'Filter by arranger…'),
+		inputLabel: t('sheetmusic', 'Arrangers'),
+		label: 'name',
+		onUpdate: (val: Arranger[]) => emit('update:selectedArrangers', val),
+	},
 ])
 
 const hasActiveFilters = computed(() => {
 	return (
 		Boolean(props.searchTitle?.trim())
 		|| props.withoutFiles
-		|| props.selectedComposers.length > 0
-		|| props.selectedBooks.length > 0
-		|| props.selectedCollections.length > 0
-		|| props.selectedArtists.length > 0
-		|| props.selectedGenres.length > 0
-		|| props.selectedKeys.length > 0
-		|| props.selectedCustomGroups.length > 0
-		|| props.selectedYears.length > 0
-		|| props.selectedSignatures.length > 0
-		|| props.selectedSourceTypes.length > 0
-		|| props.selectedInstruments.length > 0
-		|| props.selectedArrangers.length > 0
+		|| filterFields.value.some((f) => f.selected.length > 0)
 	)
 })
 
@@ -200,172 +240,18 @@ function clearAllFilters() {
 			</NcCheckboxRadioSwitch>
 		</div>
 
-		<div :class="$style.filterGroup">
+		<div v-for="field in filterFields" :key="field.key" :class="$style.filterGroup">
 			<NcSelect
-				:model-value="selectedComposers"
-				:options="composerOptions"
+				:model-value="field.selected"
+				:options="field.options"
 				:multiple="true"
 				:keep-open="isCtrlPressed"
-				:placeholder="t('sheetmusic', 'Filter by composer…')"
-				:input-label="t('sheetmusic', 'Composers')"
-				label="name"
+				:placeholder="field.placeholder"
+				:input-label="field.inputLabel"
+				:label="field.label"
 				track-by="id"
 				:class="$style.select"
-				@update:model-value="emit('update:selectedComposers', $event)" />
-		</div>
-
-		<div :class="$style.filterGroup">
-			<NcSelect
-				:model-value="selectedBooks"
-				:options="bookOptions"
-				:multiple="true"
-				:keep-open="isCtrlPressed"
-				:placeholder="t('sheetmusic', 'Filter by book…')"
-				:input-label="t('sheetmusic', 'Books')"
-				label="title"
-				track-by="id"
-				:class="$style.select"
-				@update:model-value="emit('update:selectedBooks', $event)" />
-		</div>
-
-		<div :class="$style.filterGroup">
-			<NcSelect
-				:model-value="selectedCollections"
-				:options="collectionOptions"
-				:multiple="true"
-				:keep-open="isCtrlPressed"
-				:placeholder="t('sheetmusic', 'Filter by collection…')"
-				:input-label="t('sheetmusic', 'Collections')"
-				label="name"
-				track-by="id"
-				:class="$style.select"
-				@update:model-value="emit('update:selectedCollections', $event)" />
-		</div>
-
-		<div :class="$style.filterGroup">
-			<NcSelect
-				:model-value="selectedArtists"
-				:options="artistOptions"
-				:multiple="true"
-				:keep-open="isCtrlPressed"
-				:placeholder="t('sheetmusic', 'Filter by artist…')"
-				:input-label="t('sheetmusic', 'Artists')"
-				label="name"
-				track-by="id"
-				:class="$style.select"
-				@update:model-value="emit('update:selectedArtists', $event)" />
-		</div>
-
-		<div :class="$style.filterGroup">
-			<NcSelect
-				:model-value="selectedGenres"
-				:options="genreOptions"
-				:multiple="true"
-				:keep-open="isCtrlPressed"
-				:placeholder="t('sheetmusic', 'Filter by genre…')"
-				:input-label="t('sheetmusic', 'Genres')"
-				label="name"
-				track-by="id"
-				:class="$style.select"
-				@update:model-value="emit('update:selectedGenres', $event)" />
-		</div>
-
-		<div :class="$style.filterGroup">
-			<NcSelect
-				:model-value="selectedKeys"
-				:options="keyOptions"
-				:multiple="true"
-				:keep-open="isCtrlPressed"
-				:placeholder="t('sheetmusic', 'Filter by key…')"
-				:input-label="t('sheetmusic', 'Keys')"
-				label="name"
-				track-by="id"
-				:class="$style.select"
-				@update:model-value="emit('update:selectedKeys', $event)" />
-		</div>
-
-		<div :class="$style.filterGroup">
-			<NcSelect
-				:model-value="selectedCustomGroups"
-				:options="customGroupOptions"
-				:multiple="true"
-				:keep-open="isCtrlPressed"
-				:placeholder="t('sheetmusic', 'Filter by custom group…')"
-				:input-label="t('sheetmusic', 'Custom Groups')"
-				label="name"
-				track-by="id"
-				:class="$style.select"
-				@update:model-value="emit('update:selectedCustomGroups', $event)" />
-		</div>
-
-		<div :class="$style.filterGroup">
-			<NcSelect
-				:model-value="selectedYears"
-				:options="yearOptions"
-				:multiple="true"
-				:keep-open="isCtrlPressed"
-				:placeholder="t('sheetmusic', 'Filter by year…')"
-				:input-label="t('sheetmusic', 'Years')"
-				label="name"
-				track-by="id"
-				:class="$style.select"
-				@update:model-value="emit('update:selectedYears', $event)" />
-		</div>
-
-		<div :class="$style.filterGroup">
-			<NcSelect
-				:model-value="selectedSignatures"
-				:options="signatureOptions"
-				:multiple="true"
-				:keep-open="isCtrlPressed"
-				:placeholder="t('sheetmusic', 'Filter by time signature…')"
-				:input-label="t('sheetmusic', 'Time Signatures')"
-				label="name"
-				track-by="id"
-				:class="$style.select"
-				@update:model-value="emit('update:selectedSignatures', $event)" />
-		</div>
-
-		<div :class="$style.filterGroup">
-			<NcSelect
-				:model-value="selectedSourceTypes"
-				:options="sourceTypeOptions"
-				:multiple="true"
-				:keep-open="isCtrlPressed"
-				:placeholder="t('sheetmusic', 'Filter by source type…')"
-				:input-label="t('sheetmusic', 'Source Types')"
-				label="name"
-				track-by="id"
-				:class="$style.select"
-				@update:model-value="emit('update:selectedSourceTypes', $event)" />
-		</div>
-
-		<div :class="$style.filterGroup">
-			<NcSelect
-				:model-value="selectedInstruments"
-				:options="instrumentOptions"
-				:multiple="true"
-				:keep-open="isCtrlPressed"
-				:placeholder="t('sheetmusic', 'Filter by instrument…')"
-				:input-label="t('sheetmusic', 'Instruments')"
-				label="name"
-				track-by="id"
-				:class="$style.select"
-				@update:model-value="emit('update:selectedInstruments', $event)" />
-		</div>
-
-		<div :class="$style.filterGroup">
-			<NcSelect
-				:model-value="selectedArrangers"
-				:options="arrangerOptions"
-				:multiple="true"
-				:keep-open="isCtrlPressed"
-				:placeholder="t('sheetmusic', 'Filter by arranger…')"
-				:input-label="t('sheetmusic', 'Arrangers')"
-				label="name"
-				track-by="id"
-				:class="$style.select"
-				@update:model-value="emit('update:selectedArrangers', $event)" />
+				@update:model-value="field.onUpdate($event)" />
 		</div>
 
 		<div v-if="hasActiveFilters" :class="$style.actions">

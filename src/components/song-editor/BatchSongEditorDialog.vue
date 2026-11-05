@@ -5,7 +5,7 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
-import { computed, ref, watch } from 'vue'
+import { computed, reactive, watch } from 'vue'
 
 export type BatchAction = 'add' | 'replace' | 'remove'
 
@@ -29,6 +29,29 @@ export interface BatchUpdatePayload {
 	arrangers?: CategoryBatchUpdate
 }
 
+type CategoryKey = keyof BatchUpdatePayload
+
+interface CategoryState {
+	enabled: boolean
+	action: BatchAction
+	selected: Array<{ id: number }>
+}
+
+const CATEGORY_KEYS: CategoryKey[] = [
+	'composers',
+	'books',
+	'collections',
+	'artists',
+	'genres',
+	'keys',
+	'customGroups',
+	'years',
+	'signatures',
+	'sourceTypes',
+	'instruments',
+	'arrangers',
+]
+
 const props = defineProps<{
 	open: boolean
 	selectedCount: number
@@ -51,172 +74,51 @@ const emit = defineEmits<{
 	'apply': [payload: BatchUpdatePayload]
 }>()
 
-// Category enable flags
-const enableComposers = ref(false)
-const enableBooks = ref(false)
-const enableCollections = ref(false)
-const enableArtists = ref(false)
-const enableGenres = ref(false)
-const enableKeys = ref(false)
-const enableCustomGroups = ref(false)
-const enableYears = ref(false)
-const enableSignatures = ref(false)
-const enableSourceTypes = ref(false)
-const enableInstruments = ref(false)
-const enableArrangers = ref(false)
-
-// Actions
-const composerAction = ref<BatchAction>('add')
-const bookAction = ref<BatchAction>('add')
-const collectionAction = ref<BatchAction>('add')
-const artistAction = ref<BatchAction>('add')
-const genreAction = ref<BatchAction>('add')
-const keyAction = ref<BatchAction>('add')
-const customGroupAction = ref<BatchAction>('add')
-const yearAction = ref<BatchAction>('add')
-const signatureAction = ref<BatchAction>('add')
-const sourceTypeAction = ref<BatchAction>('add')
-const instrumentAction = ref<BatchAction>('add')
-const arrangerAction = ref<BatchAction>('add')
-
-// Selected entity arrays
-const selectedComposers = ref<Composer[]>([])
-const selectedBooks = ref<Book[]>([])
-const selectedCollections = ref<Collection[]>([])
-const selectedArtists = ref<Artist[]>([])
-const selectedGenres = ref<Genre[]>([])
-const selectedKeys = ref<Key[]>([])
-const selectedCustomGroups = ref<CustomGroup[]>([])
-const selectedYears = ref<Year[]>([])
-const selectedSignatures = ref<Signature[]>([])
-const selectedSourceTypes = ref<SourceType[]>([])
-const selectedInstruments = ref<Instrument[]>([])
-const selectedArrangers = ref<Arranger[]>([])
+const state = reactive<Record<CategoryKey, CategoryState>>(
+	Object.fromEntries(
+		CATEGORY_KEYS.map((key) => [key, { enabled: false, action: 'add' as BatchAction, selected: [] }]),
+	) as Record<CategoryKey, CategoryState>,
+)
 
 function resetForm() {
-	enableComposers.value = false
-	enableBooks.value = false
-	enableCollections.value = false
-	enableArtists.value = false
-	enableGenres.value = false
-	enableKeys.value = false
-	enableCustomGroups.value = false
-	enableYears.value = false
-	enableSignatures.value = false
-	enableSourceTypes.value = false
-	enableInstruments.value = false
-	enableArrangers.value = false
-
-	composerAction.value = 'add'
-	bookAction.value = 'add'
-	collectionAction.value = 'add'
-	artistAction.value = 'add'
-	genreAction.value = 'add'
-	keyAction.value = 'add'
-	customGroupAction.value = 'add'
-	yearAction.value = 'add'
-	signatureAction.value = 'add'
-	sourceTypeAction.value = 'add'
-	instrumentAction.value = 'add'
-	arrangerAction.value = 'add'
-
-	selectedComposers.value = []
-	selectedBooks.value = []
-	selectedCollections.value = []
-	selectedArtists.value = []
-	selectedGenres.value = []
-	selectedKeys.value = []
-	selectedCustomGroups.value = []
-	selectedYears.value = []
-	selectedSignatures.value = []
-	selectedSourceTypes.value = []
-	selectedInstruments.value = []
-	selectedArrangers.value = []
+	for (const key of CATEGORY_KEYS) {
+		state[key].enabled = false
+		state[key].action = 'add'
+		state[key].selected = []
+	}
 }
 
 watch(() => props.open, (isOpen) => {
 	if (isOpen) resetForm()
 })
 
-const isAnythingEnabled = computed(() => {
-	return enableComposers.value || enableBooks.value || enableCollections.value || enableArtists.value || enableGenres.value || enableKeys.value || enableCustomGroups.value || enableYears.value || enableSignatures.value || enableSourceTypes.value || enableInstruments.value || enableArrangers.value
-})
+const categories = computed(() => [
+	{ key: 'composers' as const, label: t('sheetmusic', 'Composers'), placeholder: t('sheetmusic', 'Select composers…'), optionLabel: 'name', radioName: 'composer-action', options: props.composers },
+	{ key: 'books' as const, label: t('sheetmusic', 'Books'), placeholder: t('sheetmusic', 'Select books…'), optionLabel: 'title', radioName: 'book-action', options: props.books },
+	{ key: 'collections' as const, label: t('sheetmusic', 'Collections'), placeholder: t('sheetmusic', 'Select collections…'), optionLabel: 'name', radioName: 'collection-action', options: props.collections },
+	{ key: 'artists' as const, label: t('sheetmusic', 'Artists'), placeholder: t('sheetmusic', 'Select artists…'), optionLabel: 'name', radioName: 'artist-action', options: props.artists },
+	{ key: 'genres' as const, label: t('sheetmusic', 'Genres'), placeholder: t('sheetmusic', 'Select genres…'), optionLabel: 'name', radioName: 'genre-action', options: props.genres || [] },
+	{ key: 'keys' as const, label: t('sheetmusic', 'Keys'), placeholder: t('sheetmusic', 'Select keys…'), optionLabel: 'name', radioName: 'key-action', options: props.keys || [] },
+	{ key: 'customGroups' as const, label: t('sheetmusic', 'Custom Groups'), placeholder: t('sheetmusic', 'Select custom groups…'), optionLabel: 'name', radioName: 'custom-group-action', options: props.customGroups || [] },
+	{ key: 'years' as const, label: t('sheetmusic', 'Years'), placeholder: t('sheetmusic', 'Select years…'), optionLabel: 'name', radioName: 'year-action', options: props.years || [] },
+	{ key: 'signatures' as const, label: t('sheetmusic', 'Time Signatures'), placeholder: t('sheetmusic', 'Select time signatures…'), optionLabel: 'name', radioName: 'signature-action', options: props.signatures || [] },
+	{ key: 'sourceTypes' as const, label: t('sheetmusic', 'Source Types'), placeholder: t('sheetmusic', 'Select source types…'), optionLabel: 'name', radioName: 'source-type-action', options: props.sourceTypes || [] },
+	{ key: 'instruments' as const, label: t('sheetmusic', 'Instruments'), placeholder: t('sheetmusic', 'Select instruments…'), optionLabel: 'name', radioName: 'instrument-action', options: props.instruments || [] },
+	{ key: 'arrangers' as const, label: t('sheetmusic', 'Arrangers'), placeholder: t('sheetmusic', 'Select arrangers…'), optionLabel: 'name', radioName: 'arranger-action', options: props.arrangers || [] },
+])
+
+const isAnythingEnabled = computed(() => CATEGORY_KEYS.some((key) => state[key].enabled))
 
 function handleApply() {
 	if (!isAnythingEnabled.value) return
 
 	const payload: BatchUpdatePayload = {}
-
-	if (enableComposers.value) {
-		payload.composers = {
-			action: composerAction.value,
-			ids: selectedComposers.value.map((c) => c.id),
-		}
-	}
-	if (enableBooks.value) {
-		payload.books = {
-			action: bookAction.value,
-			ids: selectedBooks.value.map((b) => b.id),
-		}
-	}
-	if (enableCollections.value) {
-		payload.collections = {
-			action: collectionAction.value,
-			ids: selectedCollections.value.map((c) => c.id),
-		}
-	}
-	if (enableArtists.value) {
-		payload.artists = {
-			action: artistAction.value,
-			ids: selectedArtists.value.map((a) => a.id),
-		}
-	}
-	if (enableGenres.value) {
-		payload.genres = {
-			action: genreAction.value,
-			ids: selectedGenres.value.map((g) => g.id),
-		}
-	}
-	if (enableKeys.value) {
-		payload.keys = {
-			action: keyAction.value,
-			ids: selectedKeys.value.map((k) => k.id),
-		}
-	}
-	if (enableCustomGroups.value) {
-		payload.customGroups = {
-			action: customGroupAction.value,
-			ids: selectedCustomGroups.value.map((cg) => cg.id),
-		}
-	}
-	if (enableYears.value) {
-		payload.years = {
-			action: yearAction.value,
-			ids: selectedYears.value.map((y) => y.id),
-		}
-	}
-	if (enableSignatures.value) {
-		payload.signatures = {
-			action: signatureAction.value,
-			ids: selectedSignatures.value.map((s) => s.id),
-		}
-	}
-	if (enableSourceTypes.value) {
-		payload.sourceTypes = {
-			action: sourceTypeAction.value,
-			ids: selectedSourceTypes.value.map((st) => st.id),
-		}
-	}
-	if (enableInstruments.value) {
-		payload.instruments = {
-			action: instrumentAction.value,
-			ids: selectedInstruments.value.map((i) => i.id),
-		}
-	}
-	if (enableArrangers.value) {
-		payload.arrangers = {
-			action: arrangerAction.value,
-			ids: selectedArrangers.value.map((a) => a.id),
+	for (const key of CATEGORY_KEYS) {
+		if (state[key].enabled) {
+			payload[key] = {
+				action: state[key].action,
+				ids: state[key].selected.map((item) => item.id),
+			}
 		}
 	}
 
@@ -245,386 +147,33 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 				{{ t('sheetmusic', 'Select which metadata fields to update across all {count} selected songs.', { count: selectedCount }) }}
 			</p>
 
-			<!-- Composers Section -->
-			<div :class="$style.fieldGroup">
+			<div v-for="cat in categories" :key="cat.key" :class="$style.fieldGroup">
 				<div :class="$style.fieldHeader">
 					<NcCheckboxRadioSwitch
-						v-model="enableComposers"
+						v-model="state[cat.key].enabled"
 						type="checkbox">
-						{{ t('sheetmusic', 'Composers') }}
+						{{ cat.label }}
 					</NcCheckboxRadioSwitch>
 				</div>
-				<div v-if="enableComposers" :class="$style.fieldBody">
+				<div v-if="state[cat.key].enabled" :class="$style.fieldBody">
 					<div :class="$style.actionSelector">
 						<label v-for="opt in actionOptions" :key="opt.value" :class="$style.radioLabel">
 							<input
-								v-model="composerAction"
+								v-model="state[cat.key].action"
 								type="radio"
-								:name="'composer-action'"
+								:name="cat.radioName"
 								:value="opt.value">
 							{{ opt.label }}
 						</label>
 					</div>
 					<NcSelect
-						v-model="selectedComposers"
-						:options="composers"
+						v-model="state[cat.key].selected"
+						:options="cat.options"
 						:multiple="true"
 						:close-on-select="false"
-						:input-label="t('sheetmusic', 'Composers')"
-						:placeholder="t('sheetmusic', 'Select composers…')"
-						label="name"
-						track-by="id" />
-				</div>
-			</div>
-
-			<!-- Books Section -->
-			<div :class="$style.fieldGroup">
-				<div :class="$style.fieldHeader">
-					<NcCheckboxRadioSwitch
-						v-model="enableBooks"
-						type="checkbox">
-						{{ t('sheetmusic', 'Books') }}
-					</NcCheckboxRadioSwitch>
-				</div>
-				<div v-if="enableBooks" :class="$style.fieldBody">
-					<div :class="$style.actionSelector">
-						<label v-for="opt in actionOptions" :key="opt.value" :class="$style.radioLabel">
-							<input
-								v-model="bookAction"
-								type="radio"
-								:name="'book-action'"
-								:value="opt.value">
-							{{ opt.label }}
-						</label>
-					</div>
-					<NcSelect
-						v-model="selectedBooks"
-						:options="books"
-						:multiple="true"
-						:close-on-select="false"
-						:input-label="t('sheetmusic', 'Books')"
-						:placeholder="t('sheetmusic', 'Select books…')"
-						label="title"
-						track-by="id" />
-				</div>
-			</div>
-
-			<!-- Collections Section -->
-			<div :class="$style.fieldGroup">
-				<div :class="$style.fieldHeader">
-					<NcCheckboxRadioSwitch
-						v-model="enableCollections"
-						type="checkbox">
-						{{ t('sheetmusic', 'Collections') }}
-					</NcCheckboxRadioSwitch>
-				</div>
-				<div v-if="enableCollections" :class="$style.fieldBody">
-					<div :class="$style.actionSelector">
-						<label v-for="opt in actionOptions" :key="opt.value" :class="$style.radioLabel">
-							<input
-								v-model="collectionAction"
-								type="radio"
-								:name="'collection-action'"
-								:value="opt.value">
-							{{ opt.label }}
-						</label>
-					</div>
-					<NcSelect
-						v-model="selectedCollections"
-						:options="collections"
-						:multiple="true"
-						:close-on-select="false"
-						:input-label="t('sheetmusic', 'Collections')"
-						:placeholder="t('sheetmusic', 'Select collections…')"
-						label="name"
-						track-by="id" />
-				</div>
-			</div>
-
-			<!-- Artists Section -->
-			<div :class="$style.fieldGroup">
-				<div :class="$style.fieldHeader">
-					<NcCheckboxRadioSwitch
-						v-model="enableArtists"
-						type="checkbox">
-						{{ t('sheetmusic', 'Artists') }}
-					</NcCheckboxRadioSwitch>
-				</div>
-				<div v-if="enableArtists" :class="$style.fieldBody">
-					<div :class="$style.actionSelector">
-						<label v-for="opt in actionOptions" :key="opt.value" :class="$style.radioLabel">
-							<input
-								v-model="artistAction"
-								type="radio"
-								:name="'artist-action'"
-								:value="opt.value">
-							{{ opt.label }}
-						</label>
-					</div>
-					<NcSelect
-						v-model="selectedArtists"
-						:options="artists"
-						:multiple="true"
-						:close-on-select="false"
-						:input-label="t('sheetmusic', 'Artists')"
-						:placeholder="t('sheetmusic', 'Select artists…')"
-						label="name"
-						track-by="id" />
-				</div>
-			</div>
-
-			<!-- Genres Section -->
-			<div :class="$style.fieldGroup">
-				<div :class="$style.fieldHeader">
-					<NcCheckboxRadioSwitch
-						v-model="enableGenres"
-						type="checkbox">
-						{{ t('sheetmusic', 'Genres') }}
-					</NcCheckboxRadioSwitch>
-				</div>
-				<div v-if="enableGenres" :class="$style.fieldBody">
-					<div :class="$style.actionSelector">
-						<label v-for="opt in actionOptions" :key="opt.value" :class="$style.radioLabel">
-							<input
-								v-model="genreAction"
-								type="radio"
-								:name="'genre-action'"
-								:value="opt.value">
-							{{ opt.label }}
-						</label>
-					</div>
-					<NcSelect
-						v-model="selectedGenres"
-						:options="genres || []"
-						:multiple="true"
-						:close-on-select="false"
-						:input-label="t('sheetmusic', 'Genres')"
-						:placeholder="t('sheetmusic', 'Select genres…')"
-						label="name"
-						track-by="id" />
-				</div>
-			</div>
-
-			<!-- Keys Section -->
-			<div :class="$style.fieldGroup">
-				<div :class="$style.fieldHeader">
-					<NcCheckboxRadioSwitch
-						v-model="enableKeys"
-						type="checkbox">
-						{{ t('sheetmusic', 'Keys') }}
-					</NcCheckboxRadioSwitch>
-				</div>
-				<div v-if="enableKeys" :class="$style.fieldBody">
-					<div :class="$style.actionSelector">
-						<label v-for="opt in actionOptions" :key="opt.value" :class="$style.radioLabel">
-							<input
-								v-model="keyAction"
-								type="radio"
-								:name="'key-action'"
-								:value="opt.value">
-							{{ opt.label }}
-						</label>
-					</div>
-					<NcSelect
-						v-model="selectedKeys"
-						:options="keys || []"
-						:multiple="true"
-						:close-on-select="false"
-						:input-label="t('sheetmusic', 'Keys')"
-						:placeholder="t('sheetmusic', 'Select keys…')"
-						label="name"
-						track-by="id" />
-				</div>
-			</div>
-
-			<!-- Custom Groups Section -->
-			<div :class="$style.fieldGroup">
-				<div :class="$style.fieldHeader">
-					<NcCheckboxRadioSwitch
-						v-model="enableCustomGroups"
-						type="checkbox">
-						{{ t('sheetmusic', 'Custom Groups') }}
-					</NcCheckboxRadioSwitch>
-				</div>
-				<div v-if="enableCustomGroups" :class="$style.fieldBody">
-					<div :class="$style.actionSelector">
-						<label v-for="opt in actionOptions" :key="opt.value" :class="$style.radioLabel">
-							<input
-								v-model="customGroupAction"
-								type="radio"
-								:name="'custom-group-action'"
-								:value="opt.value">
-							{{ opt.label }}
-						</label>
-					</div>
-					<NcSelect
-						v-model="selectedCustomGroups"
-						:options="customGroups || []"
-						:multiple="true"
-						:close-on-select="false"
-						:input-label="t('sheetmusic', 'Custom Groups')"
-						:placeholder="t('sheetmusic', 'Select custom groups…')"
-						label="name"
-						track-by="id" />
-				</div>
-			</div>
-
-			<!-- Years Section -->
-			<div :class="$style.fieldGroup">
-				<div :class="$style.fieldHeader">
-					<NcCheckboxRadioSwitch
-						v-model="enableYears"
-						type="checkbox">
-						{{ t('sheetmusic', 'Years') }}
-					</NcCheckboxRadioSwitch>
-				</div>
-				<div v-if="enableYears" :class="$style.fieldBody">
-					<div :class="$style.actionSelector">
-						<label v-for="opt in actionOptions" :key="opt.value" :class="$style.radioLabel">
-							<input
-								v-model="yearAction"
-								type="radio"
-								:name="'year-action'"
-								:value="opt.value">
-							{{ opt.label }}
-						</label>
-					</div>
-					<NcSelect
-						v-model="selectedYears"
-						:options="years || []"
-						:multiple="true"
-						:close-on-select="false"
-						:input-label="t('sheetmusic', 'Years')"
-						:placeholder="t('sheetmusic', 'Select years…')"
-						label="name"
-						track-by="id" />
-				</div>
-			</div>
-
-			<!-- Time Signatures Section -->
-			<div :class="$style.fieldGroup">
-				<div :class="$style.fieldHeader">
-					<NcCheckboxRadioSwitch
-						v-model="enableSignatures"
-						type="checkbox">
-						{{ t('sheetmusic', 'Time Signatures') }}
-					</NcCheckboxRadioSwitch>
-				</div>
-				<div v-if="enableSignatures" :class="$style.fieldBody">
-					<div :class="$style.actionSelector">
-						<label v-for="opt in actionOptions" :key="opt.value" :class="$style.radioLabel">
-							<input
-								v-model="signatureAction"
-								type="radio"
-								:name="'signature-action'"
-								:value="opt.value">
-							{{ opt.label }}
-						</label>
-					</div>
-					<NcSelect
-						v-model="selectedSignatures"
-						:options="signatures || []"
-						:multiple="true"
-						:close-on-select="false"
-						:input-label="t('sheetmusic', 'Time Signatures')"
-						:placeholder="t('sheetmusic', 'Select time signatures…')"
-						label="name"
-						track-by="id" />
-				</div>
-			</div>
-
-			<!-- Source Types Section -->
-			<div :class="$style.fieldGroup">
-				<div :class="$style.fieldHeader">
-					<NcCheckboxRadioSwitch
-						v-model="enableSourceTypes"
-						type="checkbox">
-						{{ t('sheetmusic', 'Source Types') }}
-					</NcCheckboxRadioSwitch>
-				</div>
-				<div v-if="enableSourceTypes" :class="$style.fieldBody">
-					<div :class="$style.actionSelector">
-						<label v-for="opt in actionOptions" :key="opt.value" :class="$style.radioLabel">
-							<input
-								v-model="sourceTypeAction"
-								type="radio"
-								:name="'source-type-action'"
-								:value="opt.value">
-							{{ opt.label }}
-						</label>
-					</div>
-					<NcSelect
-						v-model="selectedSourceTypes"
-						:options="sourceTypes || []"
-						:multiple="true"
-						:close-on-select="false"
-						:input-label="t('sheetmusic', 'Source Types')"
-						:placeholder="t('sheetmusic', 'Select source types…')"
-						label="name"
-						track-by="id" />
-				</div>
-			</div>
-
-			<!-- Instruments Section -->
-			<div :class="$style.fieldGroup">
-				<div :class="$style.fieldHeader">
-					<NcCheckboxRadioSwitch
-						v-model="enableInstruments"
-						type="checkbox">
-						{{ t('sheetmusic', 'Instruments') }}
-					</NcCheckboxRadioSwitch>
-				</div>
-				<div v-if="enableInstruments" :class="$style.fieldBody">
-					<div :class="$style.actionSelector">
-						<label v-for="opt in actionOptions" :key="opt.value" :class="$style.radioLabel">
-							<input
-								v-model="instrumentAction"
-								type="radio"
-								:name="'instrument-action'"
-								:value="opt.value">
-							{{ opt.label }}
-						</label>
-					</div>
-					<NcSelect
-						v-model="selectedInstruments"
-						:options="instruments || []"
-						:multiple="true"
-						:close-on-select="false"
-						:input-label="t('sheetmusic', 'Instruments')"
-						:placeholder="t('sheetmusic', 'Select instruments…')"
-						label="name"
-						track-by="id" />
-				</div>
-			</div>
-
-			<!-- Arrangers Section -->
-			<div :class="$style.fieldGroup">
-				<div :class="$style.fieldHeader">
-					<NcCheckboxRadioSwitch
-						v-model="enableArrangers"
-						type="checkbox">
-						{{ t('sheetmusic', 'Arrangers') }}
-					</NcCheckboxRadioSwitch>
-				</div>
-				<div v-if="enableArrangers" :class="$style.fieldBody">
-					<div :class="$style.actionSelector">
-						<label v-for="opt in actionOptions" :key="opt.value" :class="$style.radioLabel">
-							<input
-								v-model="arrangerAction"
-								type="radio"
-								:name="'arranger-action'"
-								:value="opt.value">
-							{{ opt.label }}
-						</label>
-					</div>
-					<NcSelect
-						v-model="selectedArrangers"
-						:options="arrangers || []"
-						:multiple="true"
-						:close-on-select="false"
-						:input-label="t('sheetmusic', 'Arrangers')"
-						:placeholder="t('sheetmusic', 'Select arrangers…')"
-						label="name"
+						:input-label="cat.label"
+						:placeholder="cat.placeholder"
+						:label="cat.optionLabel"
 						track-by="id" />
 				</div>
 			</div>
