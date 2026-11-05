@@ -1,15 +1,15 @@
 <script setup lang="ts">
-import type { Arranger, Artist, Book, Collection, Composer, CustomGroup, Genre, Instrument, Key, LibraryData, Signature, Song, SourceType, Year } from '../../types/song'
-import { computed, ref } from 'vue'
+import type { Arranger, Artist, Book, Collection, Composer, CustomGroup, FilterEntity, Genre, Instrument, Key, LibraryData, Signature, Song, SourceType, Year } from '../../types/song'
+import { computed, ref, type Ref } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import SongFilterBar from '../SongFilterBar.vue'
+import { ENTITY_COLUMNS, type SongEntityProp } from '../songs/song-view-columns'
 import MusicIcon from 'vue-material-design-icons/Music.vue'
 import PaperclipIcon from 'vue-material-design-icons/Paperclip.vue'
 import ChevronDownIcon from 'vue-material-design-icons/ChevronDown.vue'
 import ChevronUpIcon from 'vue-material-design-icons/ChevronUp.vue'
-import { noneEntryOf } from '../../composables/useSongFilters'
 
 const props = defineProps<{
 	open: boolean
@@ -60,21 +60,27 @@ const sourceTypes = computed<SourceType[]>(() => props.libraryData?.sourceTypes 
 const instruments = computed<Instrument[]>(() => props.libraryData?.instruments ?? [])
 const arrangers = computed<Arranger[]>(() => props.libraryData?.arrangers ?? [])
 
+const selectedFiltersByProp: Record<SongEntityProp, Ref<FilterEntity[]>> = {
+	composers: selectedComposers,
+	books: selectedBooks,
+	collections: selectedCollections,
+	artists: selectedArtists,
+	genres: selectedGenres,
+	keys: selectedKeys,
+	customGroups: selectedCustomGroups,
+	years: selectedYears,
+	signatures: selectedSignatures,
+	sourceTypes: selectedSourceTypes,
+	instruments: selectedInstruments,
+	arrangers: selectedArrangers,
+}
+
 function clearFilters() {
 	searchTitle.value = ''
 	withoutFiles.value = false
-	selectedComposers.value = []
-	selectedBooks.value = []
-	selectedCollections.value = []
-	selectedArtists.value = []
-	selectedGenres.value = []
-	selectedKeys.value = []
-	selectedCustomGroups.value = []
-	selectedYears.value = []
-	selectedSignatures.value = []
-	selectedSourceTypes.value = []
-	selectedInstruments.value = []
-	selectedArrangers.value = []
+	for (const col of ENTITY_COLUMNS) {
+		selectedFiltersByProp[col.songProp].value = []
+	}
 }
 
 function matchesCategory<T extends { id: number }>(songItems: T[] | undefined, selected: T[]): boolean {
@@ -99,18 +105,11 @@ const filteredSongs = computed<Song[]>(() => {
 			return false
 		}
 
-		if (!matchesCategory(song.composers, selectedComposers.value)) return false
-		if (!matchesCategory(song.books, selectedBooks.value)) return false
-		if (!matchesCategory(song.collections, selectedCollections.value)) return false
-		if (!matchesCategory(song.artists, selectedArtists.value)) return false
-		if (!matchesCategory(song.genres, selectedGenres.value)) return false
-		if (!matchesCategory(song.keys, selectedKeys.value)) return false
-		if (!matchesCategory(song.customGroups, selectedCustomGroups.value)) return false
-		if (!matchesCategory(song.years, selectedYears.value)) return false
-		if (!matchesCategory(song.signatures, selectedSignatures.value)) return false
-		if (!matchesCategory(song.sourceTypes, selectedSourceTypes.value)) return false
-		if (!matchesCategory(song.instruments, selectedInstruments.value)) return false
-		if (!matchesCategory(song.arrangers, selectedArrangers.value)) return false
+		for (const col of ENTITY_COLUMNS) {
+			if (!matchesCategory(col.getItems(song), selectedFiltersByProp[col.songProp].value)) {
+				return false
+			}
+		}
 
 		return true
 	})

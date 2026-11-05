@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Arranger, Artist, Book, Collection, Composer, CustomGroup, Genre, Instrument, Key, Signature, SourceType, Year } from '../types/song'
+import type { Arranger, Artist, Book, Collection, Composer, CustomGroup, FilterEntity, Genre, Instrument, Key, Signature, SourceType, Year } from '../types/song'
 
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
@@ -8,6 +8,7 @@ import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import FilterOffIcon from 'vue-material-design-icons/FilterOff.vue'
 import { computed } from 'vue'
+import { ENTITY_COLUMNS, type SongEntityProp } from './songs/song-view-columns'
 import { noneEntryOf } from '../composables/useSongFilters'
 import { useCtrlKey } from '../composables/useCtrlKey'
 
@@ -95,116 +96,35 @@ const withoutFilesModel = computed({
 	set: (val: boolean) => emit('update:withoutFiles', val),
 })
 
-const filterFields = computed(() => [
-	{
-		key: 'composers',
-		selected: props.selectedComposers,
-		options: [noneEntryOf('composers') as Composer, ...props.composers],
-		placeholder: t('sheetmusic', 'Filter by composer…'),
-		inputLabel: t('sheetmusic', 'Composers'),
-		label: 'name',
-		onUpdate: (val: Composer[]) => emit('update:selectedComposers', val),
-	},
-	{
-		key: 'books',
-		selected: props.selectedBooks,
-		options: [noneEntryOf('books') as Book, ...props.books],
-		placeholder: t('sheetmusic', 'Filter by book…'),
-		inputLabel: t('sheetmusic', 'Books'),
-		label: 'title',
-		onUpdate: (val: Book[]) => emit('update:selectedBooks', val),
-	},
-	{
-		key: 'collections',
-		selected: props.selectedCollections,
-		options: [noneEntryOf('collections') as Collection, ...props.collections],
-		placeholder: t('sheetmusic', 'Filter by collection…'),
-		inputLabel: t('sheetmusic', 'Collections'),
-		label: 'name',
-		onUpdate: (val: Collection[]) => emit('update:selectedCollections', val),
-	},
-	{
-		key: 'artists',
-		selected: props.selectedArtists,
-		options: [noneEntryOf('artists') as Artist, ...props.artists],
-		placeholder: t('sheetmusic', 'Filter by artist…'),
-		inputLabel: t('sheetmusic', 'Artists'),
-		label: 'name',
-		onUpdate: (val: Artist[]) => emit('update:selectedArtists', val),
-	},
-	{
-		key: 'genres',
-		selected: props.selectedGenres,
-		options: [noneEntryOf('genres') as Genre, ...props.genres],
-		placeholder: t('sheetmusic', 'Filter by genre…'),
-		inputLabel: t('sheetmusic', 'Genres'),
-		label: 'name',
-		onUpdate: (val: Genre[]) => emit('update:selectedGenres', val),
-	},
-	{
-		key: 'keys',
-		selected: props.selectedKeys,
-		options: [noneEntryOf('keys') as Key, ...props.keys],
-		placeholder: t('sheetmusic', 'Filter by key…'),
-		inputLabel: t('sheetmusic', 'Keys'),
-		label: 'name',
-		onUpdate: (val: Key[]) => emit('update:selectedKeys', val),
-	},
-	{
-		key: 'customGroups',
-		selected: props.selectedCustomGroups,
-		options: [noneEntryOf('customgroups') as CustomGroup, ...props.customGroups],
-		placeholder: t('sheetmusic', 'Filter by custom group…'),
-		inputLabel: t('sheetmusic', 'Custom Groups'),
-		label: 'name',
-		onUpdate: (val: CustomGroup[]) => emit('update:selectedCustomGroups', val),
-	},
-	{
-		key: 'years',
-		selected: props.selectedYears,
-		options: [noneEntryOf('years') as Year, ...props.years],
-		placeholder: t('sheetmusic', 'Filter by year…'),
-		inputLabel: t('sheetmusic', 'Years'),
-		label: 'name',
-		onUpdate: (val: Year[]) => emit('update:selectedYears', val),
-	},
-	{
-		key: 'signatures',
-		selected: props.selectedSignatures,
-		options: [noneEntryOf('signatures') as Signature, ...props.signatures],
-		placeholder: t('sheetmusic', 'Filter by time signature…'),
-		inputLabel: t('sheetmusic', 'Time Signatures'),
-		label: 'name',
-		onUpdate: (val: Signature[]) => emit('update:selectedSignatures', val),
-	},
-	{
-		key: 'sourceTypes',
-		selected: props.selectedSourceTypes,
-		options: [noneEntryOf('sourcetypes') as SourceType, ...props.sourceTypes],
-		placeholder: t('sheetmusic', 'Filter by source type…'),
-		inputLabel: t('sheetmusic', 'Source Types'),
-		label: 'name',
-		onUpdate: (val: SourceType[]) => emit('update:selectedSourceTypes', val),
-	},
-	{
-		key: 'instruments',
-		selected: props.selectedInstruments,
-		options: [noneEntryOf('instruments') as Instrument, ...props.instruments],
-		placeholder: t('sheetmusic', 'Filter by instrument…'),
-		inputLabel: t('sheetmusic', 'Instruments'),
-		label: 'name',
-		onUpdate: (val: Instrument[]) => emit('update:selectedInstruments', val),
-	},
-	{
-		key: 'arrangers',
-		selected: props.selectedArrangers,
-		options: [noneEntryOf('arrangers') as Arranger, ...props.arrangers],
-		placeholder: t('sheetmusic', 'Filter by arranger…'),
-		inputLabel: t('sheetmusic', 'Arrangers'),
-		label: 'name',
-		onUpdate: (val: Arranger[]) => emit('update:selectedArrangers', val),
-	},
-])
+const SELECTED_PROP_BY_ENTITY: Record<SongEntityProp, keyof typeof props> = {
+	composers: 'selectedComposers',
+	books: 'selectedBooks',
+	collections: 'selectedCollections',
+	artists: 'selectedArtists',
+	genres: 'selectedGenres',
+	keys: 'selectedKeys',
+	customGroups: 'selectedCustomGroups',
+	years: 'selectedYears',
+	signatures: 'selectedSignatures',
+	sourceTypes: 'selectedSourceTypes',
+	instruments: 'selectedInstruments',
+	arrangers: 'selectedArrangers',
+}
+
+const filterFields = computed(() =>
+	ENTITY_COLUMNS.map((col) => {
+		const selectedKey = SELECTED_PROP_BY_ENTITY[col.songProp]
+		return {
+			key: col.songProp,
+			selected: (props[selectedKey] ?? []) as FilterEntity[],
+			options: [noneEntryOf(col.entityType), ...((props[col.songProp] ?? []) as FilterEntity[])],
+			placeholder: col.filterPlaceholder(),
+			inputLabel: col.pluralLabel(),
+			label: col.nameKey,
+			onUpdate: (val: FilterEntity[]) => (emit as any)(`update:${selectedKey}`, val),
+		}
+	}),
+)
 
 const hasActiveFilters = computed(() => {
 	return (

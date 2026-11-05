@@ -6,6 +6,7 @@ import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwit
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
 import { computed, reactive, watch } from 'vue'
+import { ENTITY_COLUMNS, type SongEntityProp } from '../songs/song-view-columns'
 
 export type BatchAction = 'add' | 'replace' | 'remove'
 
@@ -14,22 +15,9 @@ export interface CategoryBatchUpdate {
 	ids: number[]
 }
 
-export interface BatchUpdatePayload {
-	composers?: CategoryBatchUpdate
-	books?: CategoryBatchUpdate
-	collections?: CategoryBatchUpdate
-	artists?: CategoryBatchUpdate
-	genres?: CategoryBatchUpdate
-	keys?: CategoryBatchUpdate
-	customGroups?: CategoryBatchUpdate
-	years?: CategoryBatchUpdate
-	signatures?: CategoryBatchUpdate
-	sourceTypes?: CategoryBatchUpdate
-	instruments?: CategoryBatchUpdate
-	arrangers?: CategoryBatchUpdate
-}
+export type BatchUpdatePayload = Partial<Record<SongEntityProp, CategoryBatchUpdate>>
 
-type CategoryKey = keyof BatchUpdatePayload
+type CategoryKey = SongEntityProp
 
 interface CategoryState {
 	enabled: boolean
@@ -37,20 +25,7 @@ interface CategoryState {
 	selected: Array<{ id: number }>
 }
 
-const CATEGORY_KEYS: CategoryKey[] = [
-	'composers',
-	'books',
-	'collections',
-	'artists',
-	'genres',
-	'keys',
-	'customGroups',
-	'years',
-	'signatures',
-	'sourceTypes',
-	'instruments',
-	'arrangers',
-]
+const CATEGORY_KEYS: CategoryKey[] = ENTITY_COLUMNS.map((col) => col.songProp)
 
 const props = defineProps<{
 	open: boolean
@@ -92,20 +67,16 @@ watch(() => props.open, (isOpen) => {
 	if (isOpen) resetForm()
 })
 
-const categories = computed(() => [
-	{ key: 'composers' as const, label: t('sheetmusic', 'Composers'), placeholder: t('sheetmusic', 'Select composers…'), optionLabel: 'name', radioName: 'composer-action', options: props.composers },
-	{ key: 'books' as const, label: t('sheetmusic', 'Books'), placeholder: t('sheetmusic', 'Select books…'), optionLabel: 'title', radioName: 'book-action', options: props.books },
-	{ key: 'collections' as const, label: t('sheetmusic', 'Collections'), placeholder: t('sheetmusic', 'Select collections…'), optionLabel: 'name', radioName: 'collection-action', options: props.collections },
-	{ key: 'artists' as const, label: t('sheetmusic', 'Artists'), placeholder: t('sheetmusic', 'Select artists…'), optionLabel: 'name', radioName: 'artist-action', options: props.artists },
-	{ key: 'genres' as const, label: t('sheetmusic', 'Genres'), placeholder: t('sheetmusic', 'Select genres…'), optionLabel: 'name', radioName: 'genre-action', options: props.genres || [] },
-	{ key: 'keys' as const, label: t('sheetmusic', 'Keys'), placeholder: t('sheetmusic', 'Select keys…'), optionLabel: 'name', radioName: 'key-action', options: props.keys || [] },
-	{ key: 'customGroups' as const, label: t('sheetmusic', 'Custom Groups'), placeholder: t('sheetmusic', 'Select custom groups…'), optionLabel: 'name', radioName: 'custom-group-action', options: props.customGroups || [] },
-	{ key: 'years' as const, label: t('sheetmusic', 'Years'), placeholder: t('sheetmusic', 'Select years…'), optionLabel: 'name', radioName: 'year-action', options: props.years || [] },
-	{ key: 'signatures' as const, label: t('sheetmusic', 'Time Signatures'), placeholder: t('sheetmusic', 'Select time signatures…'), optionLabel: 'name', radioName: 'signature-action', options: props.signatures || [] },
-	{ key: 'sourceTypes' as const, label: t('sheetmusic', 'Source Types'), placeholder: t('sheetmusic', 'Select source types…'), optionLabel: 'name', radioName: 'source-type-action', options: props.sourceTypes || [] },
-	{ key: 'instruments' as const, label: t('sheetmusic', 'Instruments'), placeholder: t('sheetmusic', 'Select instruments…'), optionLabel: 'name', radioName: 'instrument-action', options: props.instruments || [] },
-	{ key: 'arrangers' as const, label: t('sheetmusic', 'Arrangers'), placeholder: t('sheetmusic', 'Select arrangers…'), optionLabel: 'name', radioName: 'arranger-action', options: props.arrangers || [] },
-])
+const categories = computed(() =>
+	ENTITY_COLUMNS.map((col) => ({
+		key: col.songProp,
+		label: col.pluralLabel(),
+		placeholder: col.selectPlaceholder(),
+		optionLabel: col.nameKey,
+		radioName: `${col.col.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}-action`,
+		options: (props[col.songProp] ?? []) as Array<{ id: number }>,
+	})),
+)
 
 const isAnythingEnabled = computed(() => CATEGORY_KEYS.some((key) => state[key].enabled))
 

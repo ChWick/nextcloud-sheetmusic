@@ -118,11 +118,9 @@
 </template>
 
 <script setup lang="ts">
-import type { Artist, Book, Collection, Composer, CustomGroup, EntityType, FilterEntity, Genre, Key, LibraryData, Signature, Song, SourceType, Year } from '../types/song'
+import type { EntityType, FilterEntity, LibraryData, Song } from '../types/song'
 
 import { translate as t } from '@nextcloud/l10n'
-import axios from '@nextcloud/axios'
-import { generateOcsUrl } from '@nextcloud/router'
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import NcButton from '@nextcloud/vue/components/NcButton'
@@ -132,6 +130,7 @@ import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import MergeIcon from 'vue-material-design-icons/Merge.vue'
 import ViewHeader from './ViewHeader.vue'
 import EntityMergeDialog from './EntityMergeDialog.vue'
+import { ENTITY_COLUMNS, type SongEntityProp } from './songs/song-view-columns'
 import { useLibraryData } from '../composables/useLibraryData'
 import { apiDelete, apiPost } from '../api/client'
 import { showError, showSuccess } from '@nextcloud/dialogs'
@@ -147,101 +146,27 @@ const router = useRouter()
 
 /** Everything this shared view needs to know about the entity kind it shows. */
 interface EntityConfig {
-  createEndpoint: '/api/composers' | '/api/artists' | '/api/books' | '/api/collections' | '/api/genres' | '/api/keys' | '/api/customgroups' | '/api/years' | '/api/signatures' | '/api/sourcetypes' | '/api/instruments' | '/api/arrangers'
-  deleteEndpoint: '/api/composers/{id}' | '/api/artists/{id}' | '/api/books/{id}' | '/api/collections/{id}' | '/api/genres/{id}' | '/api/keys/{id}' | '/api/customgroups/{id}' | '/api/years/{id}' | '/api/signatures/{id}' | '/api/sourcetypes/{id}' | '/api/instruments/{id}' | '/api/arrangers/{id}'
+  createEndpoint: string
+  deleteEndpoint: string
   nameKey: 'name' | 'title'
   singular: string
   plural: string
 }
 
-const entityConfigs: Record<EntityType, EntityConfig> = {
-  composers: {
-    createEndpoint: '/api/composers',
-    deleteEndpoint: '/api/composers/{id}',
-    nameKey: 'name',
-    singular: t('sheetmusic', 'composer'),
-    plural: t('sheetmusic', 'Composers'),
-  },
-  artists: {
-    createEndpoint: '/api/artists',
-    deleteEndpoint: '/api/artists/{id}',
-    nameKey: 'name',
-    singular: t('sheetmusic', 'artist'),
-    plural: t('sheetmusic', 'Artists'),
-  },
-  books: {
-    createEndpoint: '/api/books',
-    deleteEndpoint: '/api/books/{id}',
-    nameKey: 'title',
-    singular: t('sheetmusic', 'book'),
-    plural: t('sheetmusic', 'Books'),
-  },
-  collections: {
-    createEndpoint: '/api/collections',
-    deleteEndpoint: '/api/collections/{id}',
-    nameKey: 'name',
-    singular: t('sheetmusic', 'collection'),
-    plural: t('sheetmusic', 'Collections'),
-  },
-  genres: {
-    createEndpoint: '/api/genres',
-    deleteEndpoint: '/api/genres/{id}',
-    nameKey: 'name',
-    singular: t('sheetmusic', 'genre'),
-    plural: t('sheetmusic', 'Genres'),
-  },
-  keys: {
-    createEndpoint: '/api/keys',
-    deleteEndpoint: '/api/keys/{id}',
-    nameKey: 'name',
-    singular: t('sheetmusic', 'key'),
-    plural: t('sheetmusic', 'Keys'),
-  },
-  customgroups: {
-    createEndpoint: '/api/customgroups',
-    deleteEndpoint: '/api/customgroups/{id}',
-    nameKey: 'name',
-    singular: t('sheetmusic', 'custom group'),
-    plural: t('sheetmusic', 'Custom Groups'),
-  },
-  years: {
-    createEndpoint: '/api/years',
-    deleteEndpoint: '/api/years/{id}',
-    nameKey: 'name',
-    singular: t('sheetmusic', 'year'),
-    plural: t('sheetmusic', 'Years'),
-  },
-  signatures: {
-    createEndpoint: '/api/signatures',
-    deleteEndpoint: '/api/signatures/{id}',
-    nameKey: 'name',
-    singular: t('sheetmusic', 'time signature'),
-    plural: t('sheetmusic', 'Time Signatures'),
-  },
-  sourcetypes: {
-    createEndpoint: '/api/sourcetypes',
-    deleteEndpoint: '/api/sourcetypes/{id}',
-    nameKey: 'name',
-    singular: t('sheetmusic', 'source type'),
-    plural: t('sheetmusic', 'Source Types'),
-  },
-  instruments: {
-    createEndpoint: '/api/instruments',
-    deleteEndpoint: '/api/instruments/{id}',
-    nameKey: 'name',
-    singular: t('sheetmusic', 'instrument'),
-    plural: t('sheetmusic', 'Instruments'),
-  },
-  arrangers: {
-    createEndpoint: '/api/arrangers',
-    deleteEndpoint: '/api/arrangers/{id}',
-    nameKey: 'name',
-    singular: t('sheetmusic', 'arranger'),
-    plural: t('sheetmusic', 'Arrangers'),
-  },
-}
+const currentEntityCol = computed(() =>
+  ENTITY_COLUMNS.find((col) => col.entityType === props.entityType) ?? ENTITY_COLUMNS[0],
+)
 
-const config = computed<EntityConfig>(() => entityConfigs[props.entityType])
+const config = computed<EntityConfig>(() => {
+  const col = currentEntityCol.value
+  return {
+    createEndpoint: col.endpoint,
+    deleteEndpoint: `${col.endpoint}/{id}`,
+    nameKey: col.nameKey,
+    singular: col.singularLabel(),
+    plural: col.pluralLabel(),
+  }
+})
 
 const {
   songs,
@@ -263,20 +188,24 @@ const {
   loadLibraryData,
 } = useLibraryData()
 
+const libraryEntitiesByProp = {
+  composers,
+  books,
+  collections,
+  artists,
+  genres,
+  keys,
+  customGroups,
+  years,
+  signatures,
+  sourceTypes,
+  instruments,
+  arrangers,
+} satisfies Record<SongEntityProp, { value: FilterEntity[] }>
+
 const entities = computed<FilterEntity[]>(() => {
-  if (props.entityType === 'composers') return composers.value
-  if (props.entityType === 'artists') return artists.value
-  if (props.entityType === 'books') return books.value
-  if (props.entityType === 'collections') return collections.value
-  if (props.entityType === 'genres') return genres.value
-  if (props.entityType === 'keys') return keys.value
-  if (props.entityType === 'customgroups') return customGroups.value
-  if (props.entityType === 'years') return years.value
-  if (props.entityType === 'signatures') return signatures.value
-  if (props.entityType === 'sourcetypes') return sourceTypes.value
-  if (props.entityType === 'instruments') return instruments.value
-  if (props.entityType === 'arrangers') return arrangers.value
-  return []
+  const prop = currentEntityCol.value?.songProp
+  return prop ? libraryEntitiesByProp[prop].value : []
 })
 
 /** Entry whose delete dialog is open. */
@@ -320,13 +249,7 @@ const namePlaceholder = computed(() => {
 
 /** The entries of the kind this view manages that the song carries. */
 function entitiesOfSong(song: Song): FilterEntity[] {
-  if (props.entityType === 'customgroups') {
-    return song.customGroups ?? []
-  }
-  if (props.entityType === 'sourcetypes') {
-    return song.sourceTypes ?? []
-  }
-  return song[props.entityType] ?? []
+  return currentEntityCol.value.getItems(song)
 }
 
 /** Number of distinct songs carrying each entry in this view. */

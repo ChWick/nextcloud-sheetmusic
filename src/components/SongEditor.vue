@@ -9,7 +9,8 @@ import { apiPost } from '../api/client'
 import { describeRequestFailure } from '../utils/api'
 import { createEntityTag, createNamedTag, matchSelected, prefillByName, resolveSongEntityIds } from './song-editor/entity-utils'
 import { useSongEditorFiles } from './song-editor/useSongEditorFiles'
-import { computed, ref, watch } from 'vue'
+import { ENTITY_COLUMNS, type SongEntityProp } from './songs/song-view-columns'
+import { computed, ref, watch, type Ref } from 'vue'
 import CheckIcon from 'vue-material-design-icons/Check.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 import ContentSaveOutlineIcon from 'vue-material-design-icons/ContentSaveOutline.vue'
@@ -202,22 +203,31 @@ function handleReverted(data: LibraryData) {
 	emit('updated', data)
 }
 
+const selectedEntitiesByProp: Record<SongEntityProp, Ref<Array<{ id?: number, name?: string, title?: string }>>> = {
+	composers: selectedComposers,
+	books: selectedBooks,
+	collections: selectedCollections,
+	artists: selectedArtists,
+	genres: selectedGenres,
+	keys: selectedKeys,
+	customGroups: selectedCustomGroups,
+	years: selectedYears,
+	signatures: selectedSignatures,
+	sourceTypes: selectedSourceTypes,
+	instruments: selectedInstruments,
+	arrangers: selectedArrangers,
+}
+
 watch(
 	sourceSong,
 	(newSong, previousSong) => {
 		title.value = newSong?.title ?? ''
-		selectedComposers.value = matchSelected(props.composers, newSong?.composers)
-		selectedBooks.value = matchSelected(props.books, newSong?.books)
-		selectedCollections.value = matchSelected(props.collections, newSong?.collections)
-		selectedArtists.value = matchSelected(props.artists, newSong?.artists)
-		selectedGenres.value = matchSelected(props.genres, newSong?.genres)
-		selectedKeys.value = matchSelected(props.keys, newSong?.keys)
-		selectedCustomGroups.value = matchSelected(props.customGroups, newSong?.customGroups)
-		selectedYears.value = matchSelected(props.years, newSong?.years)
-		selectedSignatures.value = matchSelected(props.signatures, newSong?.signatures)
-		selectedSourceTypes.value = matchSelected(props.sourceTypes, newSong?.sourceTypes)
-		selectedInstruments.value = matchSelected(props.instruments, newSong?.instruments)
-		selectedArrangers.value = matchSelected(props.arrangers, newSong?.arrangers)
+		for (const col of ENTITY_COLUMNS) {
+			selectedEntitiesByProp[col.songProp].value = matchSelected(
+				(props[col.songProp] ?? []) as Array<{ id: number }>,
+				newSong?.[col.songProp] as Array<{ id: number }> | undefined,
+			)
+		}
 		opus.value = newSong?.opus ?? ''
 		catalogNumber.value = newSong?.catalogNumber ?? ''
 		songNumber.value = newSong?.songNumber ?? ''
@@ -275,26 +285,22 @@ async function saveSong(closeAfter: boolean) {
 			await runRemoval()
 		}
 
-		const entityIds = await resolveSongEntityIds([
-			{ idField: 'composerIds', endpoint: '/api/composers', labelField: 'name', selected: selectedComposers.value, options: props.composers },
-			{ idField: 'bookIds', endpoint: '/api/books', labelField: 'title', selected: selectedBooks.value, options: props.books },
-			{ idField: 'collectionIds', endpoint: '/api/collections', labelField: 'name', selected: selectedCollections.value, options: props.collections },
-			{ idField: 'artistIds', endpoint: '/api/artists', labelField: 'name', selected: selectedArtists.value, options: props.artists },
-			{ idField: 'genreIds', endpoint: '/api/genres', labelField: 'name', selected: selectedGenres.value, options: props.genres },
-			{ idField: 'keyIds', endpoint: '/api/keys', labelField: 'name', selected: selectedKeys.value, options: props.keys },
-			{ idField: 'customGroupIds', endpoint: '/api/customgroups', labelField: 'name', selected: selectedCustomGroups.value, options: props.customGroups },
-			{ idField: 'yearIds', endpoint: '/api/years', labelField: 'name', selected: selectedYears.value, options: props.years },
-			{ idField: 'signatureIds', endpoint: '/api/signatures', labelField: 'name', selected: selectedSignatures.value, options: props.signatures },
-			{ idField: 'sourceTypeIds', endpoint: '/api/sourcetypes', labelField: 'name', selected: selectedSourceTypes.value, options: props.sourceTypes },
-			{ idField: 'instrumentIds', endpoint: '/api/instruments', labelField: 'name', selected: selectedInstruments.value, options: props.instruments },
-			{ idField: 'arrangerIds', endpoint: '/api/arrangers', labelField: 'name', selected: selectedArrangers.value, options: props.arrangers },
-		], async (endpoint, labelField, label) => {
-			const response = await apiPost(endpoint, {
-				libraryId: props.libraryId,
-				[labelField]: label,
-			})
-			return response.data.ocs.data.id
-		})
+		const entityIds = await resolveSongEntityIds(
+			ENTITY_COLUMNS.map((col) => ({
+				idField: col.idField,
+				endpoint: col.endpoint as any,
+				labelField: col.nameKey,
+				selected: selectedEntitiesByProp[col.songProp].value,
+				options: (props[col.songProp] ?? []) as Array<{ id: number, name?: string, title?: string }>,
+			})),
+			async (endpoint, labelField, label) => {
+				const response = await apiPost(endpoint, {
+					libraryId: props.libraryId,
+					[labelField]: label,
+				})
+				return response.data.ocs.data.id
+			},
+		)
 
 		const payload = {
 			libraryId: props.libraryId,

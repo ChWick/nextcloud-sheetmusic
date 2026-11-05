@@ -79,7 +79,10 @@ export interface EntityColumnDef {
 	entityType: EntityType
 	cardLabel: () => string
 	ariaLabel: () => string
+	singularLabel: () => string
 	pluralLabel: () => string
+	selectPlaceholder: () => string
+	filterPlaceholder: () => string
 	editTitle: () => string
 	getItems: (song: Song) => FilterEntity[]
 	getItemLabel: (item: FilterEntity) => string
@@ -146,7 +149,10 @@ function makeEntityCol(config: {
 	entityType: EntityType
 	cardLabel: () => string
 	ariaLabel: () => string
+	singularLabel: () => string
 	pluralLabel: () => string
+	selectPlaceholder: () => string
+	filterPlaceholder: () => string
 	editTitle: () => string
 	getFilterTitle: (label: string) => string
 }): EntityColumnDef {
@@ -172,7 +178,10 @@ export const ENTITY_COLUMNS: EntityColumnDef[] = [
 		entityType: 'composers',
 		cardLabel: () => t('sheetmusic', 'Composer:'),
 		ariaLabel: () => t('sheetmusic', 'Composer'),
+		singularLabel: () => t('sheetmusic', 'composer'),
 		pluralLabel: () => t('sheetmusic', 'Composers'),
+		selectPlaceholder: () => t('sheetmusic', 'Select composers…'),
+		filterPlaceholder: () => t('sheetmusic', 'Filter by composer…'),
 		editTitle: () => t('sheetmusic', 'Edit composer inline'),
 		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for composer {name}', { name }),
 	}),
@@ -186,7 +195,10 @@ export const ENTITY_COLUMNS: EntityColumnDef[] = [
 		entityType: 'books',
 		cardLabel: () => t('sheetmusic', 'Book:'),
 		ariaLabel: () => t('sheetmusic', 'Book'),
+		singularLabel: () => t('sheetmusic', 'book'),
 		pluralLabel: () => t('sheetmusic', 'Books'),
+		selectPlaceholder: () => t('sheetmusic', 'Select books…'),
+		filterPlaceholder: () => t('sheetmusic', 'Filter by book…'),
 		editTitle: () => t('sheetmusic', 'Edit book inline'),
 		getFilterTitle: (title) => t('sheetmusic', 'Toggle filter for book {title}', { title }),
 	}),
@@ -200,7 +212,10 @@ export const ENTITY_COLUMNS: EntityColumnDef[] = [
 		entityType: 'collections',
 		cardLabel: () => t('sheetmusic', 'Collection:'),
 		ariaLabel: () => t('sheetmusic', 'Collection'),
+		singularLabel: () => t('sheetmusic', 'collection'),
 		pluralLabel: () => t('sheetmusic', 'Collections'),
+		selectPlaceholder: () => t('sheetmusic', 'Select collections…'),
+		filterPlaceholder: () => t('sheetmusic', 'Filter by collection…'),
 		editTitle: () => t('sheetmusic', 'Edit collection inline'),
 		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for collection {name}', { name }),
 	}),
@@ -214,7 +229,10 @@ export const ENTITY_COLUMNS: EntityColumnDef[] = [
 		entityType: 'artists',
 		cardLabel: () => t('sheetmusic', 'Artist:'),
 		ariaLabel: () => t('sheetmusic', 'Artist'),
+		singularLabel: () => t('sheetmusic', 'artist'),
 		pluralLabel: () => t('sheetmusic', 'Artists'),
+		selectPlaceholder: () => t('sheetmusic', 'Select artists…'),
+		filterPlaceholder: () => t('sheetmusic', 'Filter by artist…'),
 		editTitle: () => t('sheetmusic', 'Edit artist inline'),
 		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for artist {name}', { name }),
 	}),
@@ -228,7 +246,10 @@ export const ENTITY_COLUMNS: EntityColumnDef[] = [
 		entityType: 'genres',
 		cardLabel: () => t('sheetmusic', 'Genre:'),
 		ariaLabel: () => t('sheetmusic', 'Genre'),
+		singularLabel: () => t('sheetmusic', 'genre'),
 		pluralLabel: () => t('sheetmusic', 'Genres'),
+		selectPlaceholder: () => t('sheetmusic', 'Select genres…'),
+		filterPlaceholder: () => t('sheetmusic', 'Filter by genre…'),
 		editTitle: () => t('sheetmusic', 'Edit genre inline'),
 		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for genre {name}', { name }),
 	}),
@@ -242,7 +263,10 @@ export const ENTITY_COLUMNS: EntityColumnDef[] = [
 		entityType: 'keys',
 		cardLabel: () => t('sheetmusic', 'Key:'),
 		ariaLabel: () => t('sheetmusic', 'Key'),
+		singularLabel: () => t('sheetmusic', 'key'),
 		pluralLabel: () => t('sheetmusic', 'Keys'),
+		selectPlaceholder: () => t('sheetmusic', 'Select keys…'),
+		filterPlaceholder: () => t('sheetmusic', 'Filter by key…'),
 		editTitle: () => t('sheetmusic', 'Edit key inline'),
 		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for key {name}', { name }),
 	}),
@@ -256,7 +280,10 @@ export const ENTITY_COLUMNS: EntityColumnDef[] = [
 		entityType: 'customgroups',
 		cardLabel: () => t('sheetmusic', 'Custom Group:'),
 		ariaLabel: () => t('sheetmusic', 'Custom Group'),
+		singularLabel: () => t('sheetmusic', 'custom group'),
 		pluralLabel: () => t('sheetmusic', 'Custom Groups'),
+		selectPlaceholder: () => t('sheetmusic', 'Select custom groups…'),
+		filterPlaceholder: () => t('sheetmusic', 'Filter by custom group…'),
 		editTitle: () => t('sheetmusic', 'Edit custom group inline'),
 		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for custom group {name}', { name }),
 	}),
@@ -270,7 +297,10 @@ export const ENTITY_COLUMNS: EntityColumnDef[] = [
 		entityType: 'years',
 		cardLabel: () => t('sheetmusic', 'Year:'),
 		ariaLabel: () => t('sheetmusic', 'Year'),
+		singularLabel: () => t('sheetmusic', 'year'),
 		pluralLabel: () => t('sheetmusic', 'Years'),
+		selectPlaceholder: () => t('sheetmusic', 'Select years…'),
+		filterPlaceholder: () => t('sheetmusic', 'Filter by year…'),
 		editTitle: () => t('sheetmusic', 'Edit year inline'),
 		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for year {name}', { name }),
 	}),
@@ -284,7 +314,10 @@ export const ENTITY_COLUMNS: EntityColumnDef[] = [
 		entityType: 'signatures',
 		cardLabel: () => t('sheetmusic', 'Time Signature:'),
 		ariaLabel: () => t('sheetmusic', 'Time Signature'),
+		singularLabel: () => t('sheetmusic', 'time signature'),
 		pluralLabel: () => t('sheetmusic', 'Time Signatures'),
+		selectPlaceholder: () => t('sheetmusic', 'Select time signatures…'),
+		filterPlaceholder: () => t('sheetmusic', 'Filter by time signature…'),
 		editTitle: () => t('sheetmusic', 'Edit time signature inline'),
 		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for signature {name}', { name }),
 	}),
@@ -298,7 +331,10 @@ export const ENTITY_COLUMNS: EntityColumnDef[] = [
 		entityType: 'sourcetypes',
 		cardLabel: () => t('sheetmusic', 'Source Type:'),
 		ariaLabel: () => t('sheetmusic', 'Source Type'),
+		singularLabel: () => t('sheetmusic', 'source type'),
 		pluralLabel: () => t('sheetmusic', 'Source Types'),
+		selectPlaceholder: () => t('sheetmusic', 'Select source types…'),
+		filterPlaceholder: () => t('sheetmusic', 'Filter by source type…'),
 		editTitle: () => t('sheetmusic', 'Edit source type inline'),
 		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for source type {name}', { name }),
 	}),
@@ -312,7 +348,10 @@ export const ENTITY_COLUMNS: EntityColumnDef[] = [
 		entityType: 'instruments',
 		cardLabel: () => t('sheetmusic', 'Instrument:'),
 		ariaLabel: () => t('sheetmusic', 'Instrument'),
+		singularLabel: () => t('sheetmusic', 'instrument'),
 		pluralLabel: () => t('sheetmusic', 'Instruments'),
+		selectPlaceholder: () => t('sheetmusic', 'Select instruments…'),
+		filterPlaceholder: () => t('sheetmusic', 'Filter by instrument…'),
 		editTitle: () => t('sheetmusic', 'Edit instrument inline'),
 		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for instrument {name}', { name }),
 	}),
@@ -326,7 +365,10 @@ export const ENTITY_COLUMNS: EntityColumnDef[] = [
 		entityType: 'arrangers',
 		cardLabel: () => t('sheetmusic', 'Arranger:'),
 		ariaLabel: () => t('sheetmusic', 'Arranger'),
+		singularLabel: () => t('sheetmusic', 'arranger'),
 		pluralLabel: () => t('sheetmusic', 'Arrangers'),
+		selectPlaceholder: () => t('sheetmusic', 'Select arrangers…'),
+		filterPlaceholder: () => t('sheetmusic', 'Filter by arranger…'),
 		editTitle: () => t('sheetmusic', 'Edit arranger inline'),
 		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for arranger {name}', { name }),
 	}),

@@ -5,6 +5,7 @@ import { apiPost } from '../../api/client'
 import { describeRequestFailure } from '../../utils/api'
 import { getFileName } from '../../utils/file'
 import type { Bookmark, LibraryData, Song, SongFile } from '../../types/song'
+import { ENTITY_COLUMNS } from '../songs/song-view-columns'
 import { embedBookmarksInPdfBytes } from './pdf-outline-engine'
 
 export type BookmarkSegment = {
@@ -209,21 +210,12 @@ export function usePdfBookmarks(options: {
 			libraryId: libraryId.value,
 			title: currentSong.title,
 			sortTitle: currentSong.sortTitle ?? '',
-			composerIds: (currentSong.composers ?? []).map((c) => c.id),
-			bookIds: (currentSong.books ?? []).map((b) => b.id),
-			collectionIds: (currentSong.collections ?? []).map((c) => c.id),
-			artistIds: (currentSong.artists ?? []).map((a) => a.id),
-			genreIds: (currentSong.genres ?? []).map((g) => g.id),
-			keyIds: (currentSong.keys ?? []).map((k) => k.id),
-			customGroupIds: (currentSong.customGroups ?? []).map((cg) => cg.id),
-			yearIds: (currentSong.years ?? []).map((y) => y.id),
-			signatureIds: (currentSong.signatures ?? []).map((s) => s.id),
-			sourceTypeIds: (currentSong.sourceTypes ?? []).map((st) => st.id),
-			instrumentIds: (currentSong.instruments ?? []).map((i) => i.id),
-			arrangerIds: (currentSong.arrangers ?? []).map((a) => a.id),
-			stars: currentSong.stars ?? 0,
-			difficulty: currentSong.difficulty ?? 0,
-			duration: currentSong.duration ?? 0,
+			...Object.fromEntries(
+				ENTITY_COLUMNS.map((col) => [col.idField, col.getItems(currentSong).map((item) => item.id)]),
+			),
+			stars: Number(currentSong.stars) > 0 ? Number(currentSong.stars) : null,
+			difficulty: Number(currentSong.difficulty) > 0 ? Number(currentSong.difficulty) : null,
+			duration: Number(currentSong.duration) > 0 ? Number(currentSong.duration) : null,
 			keywords: currentSong.keywords ?? '',
 			custom: currentSong.custom ?? '',
 			custom2: currentSong.custom2 ?? '',

@@ -2,6 +2,7 @@ import type { Arranger, Artist, Book, Collection, Composer, CustomGroup, EntityT
 import { translate as t } from '@nextcloud/l10n'
 import { computed, ref } from 'vue'
 import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
+import { ENTITY_COLUMNS } from '../components/songs/song-view-columns'
 import { normalizeSearchString } from '../utils/string'
 
 /** The entries the filters can select; they resolve the ids stored in the URL. */
@@ -22,7 +23,7 @@ export interface FilterOptions {
 	arrangers?: Arranger[]
 }
 
-const FILTER_TYPES: EntityType[] = ['composers', 'artists', 'books', 'collections', 'genres', 'keys', 'customgroups', 'years', 'signatures', 'sourcetypes', 'instruments', 'arrangers']
+const FILTER_TYPES: EntityType[] = ENTITY_COLUMNS.map((col) => col.entityType)
 
 export const UNASSIGNED_ID = -1
 
@@ -177,7 +178,8 @@ export function useSongFilters(options: () => FilterOptions) {
 	/** The entries behind the ids of one filter parameter, in the order of the URL. */
 	function selectedOf(entityType: EntityType): FilterEntity[] {
 		const opts = options()
-		const entries = ((opts[entityType] ?? (entityType === 'customgroups' ? opts.customGroups : entityType === 'sourcetypes' ? opts.sourceTypes : [])) ?? []) as FilterEntity[]
+		const col = ENTITY_COLUMNS.find((c) => c.entityType === entityType)
+		const entries = ((opts[entityType] ?? (col ? opts[col.songProp] : [])) ?? []) as FilterEntity[]
 		const noneEntry = noneEntryOf(entityType)
 		return idsOf(entityType).map(id => {
 			if (id === UNASSIGNED_ID) {
@@ -211,21 +213,6 @@ export function useSongFilters(options: () => FilterOptions) {
 		return false
 	}
 
-	const ENTITY_SONG_PROPERTY_MAP: Array<[EntityType, keyof Song]> = [
-		['composers', 'composers'],
-		['books', 'books'],
-		['collections', 'collections'],
-		['artists', 'artists'],
-		['genres', 'genres'],
-		['keys', 'keys'],
-		['customgroups', 'customGroups'],
-		['years', 'years'],
-		['signatures', 'signatures'],
-		['sourcetypes', 'sourceTypes'],
-		['instruments', 'instruments'],
-		['arrangers', 'arrangers'],
-	]
-
 	/**
 	 * Filter songs matching active criteria:
 	 * - Multiple selections within the same entity type match with OR (e.g. Composer = Bach OR Mozart).
@@ -234,10 +221,10 @@ export function useSongFilters(options: () => FilterOptions) {
 	function filterSongs(songs: Song[]): Song[] {
 		const titleQuery = normalizeSearchString(titleFilterOf())
 		const requireNoFiles = withoutFilesFilterOf()
-		const activeFilters = ENTITY_SONG_PROPERTY_MAP
-			.map(([entityType, songKey]) => ({
-				songKey,
-				ids: new Set(idsOf(entityType)),
+		const activeFilters = ENTITY_COLUMNS
+			.map((col) => ({
+				getItems: col.getItems,
+				ids: new Set(idsOf(col.entityType)),
 			}))
 			.filter(f => f.ids.size > 0)
 
@@ -248,8 +235,8 @@ export function useSongFilters(options: () => FilterOptions) {
 			if (requireNoFiles && song.files && song.files.length > 0) {
 				return false
 			}
-			for (const { songKey, ids } of activeFilters) {
-				if (!matchesCategory(song[songKey] as { id: number }[] | undefined, ids)) {
+			for (const { getItems, ids } of activeFilters) {
+				if (!matchesCategory(getItems(song), ids)) {
 					return false
 				}
 			}
