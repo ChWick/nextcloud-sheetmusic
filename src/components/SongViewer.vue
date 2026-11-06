@@ -21,6 +21,7 @@ import { useFileVersions } from './song-pdf/useFileVersions'
 import SongViewerMetadata from './song-viewer/SongViewerMetadata.vue'
 import SongViewerBookmarksBar from './song-viewer/SongViewerBookmarksBar.vue'
 import SongViewerFileToolbar from './song-viewer/SongViewerFileToolbar.vue'
+import { extractEntityLists } from './songs/song-view-columns'
 
 const props = withDefaults(
 	defineProps<{
@@ -80,20 +81,8 @@ const isSelectedFilePdf = computed(() => {
 	return path.endsWith('.pdf')
 })
 
-const songComposers = computed(() => props.song?.composers ?? [])
-const songBooks = computed(() => props.song?.books ?? [])
-const songCollections = computed(() => props.song?.collections ?? [])
-const songArtists = computed(() => props.song?.artists ?? [])
-const songGenres = computed(() => props.song?.genres ?? [])
-const songKeys = computed(() => props.song?.keys ?? [])
-const songCustomGroups = computed(() => props.song?.customGroups ?? [])
-const songYears = computed(() => props.song?.years ?? [])
-const songSignatures = computed(() => props.song?.signatures ?? [])
-const songSourceTypes = computed(() => props.song?.sourceTypes ?? [])
-const songInstruments = computed(() => props.song?.instruments ?? [])
-const songArrangers = computed(() => props.song?.arrangers ?? [])
+const entityListsProps = computed(() => extractEntityLists(props))
 const songBookmarks = computed(() => props.song?.bookmarks ?? [])
-const songAudioFiles = computed(() => props.song?.audioFiles ?? [])
 const songFiles = computed(() => props.song?.files ?? [])
 
 /** The file of the active tab, falling back to the first file of the song. */
@@ -247,20 +236,6 @@ defineExpose({
 			<SongViewerMetadata
 				v-if="!isEditing"
 				:song="song"
-				:composers="songComposers"
-				:books="songBooks"
-				:collections="songCollections"
-				:artists="songArtists"
-				:genres="songGenres"
-				:keys="songKeys"
-				:custom-groups="songCustomGroups"
-				:years="songYears"
-				:signatures="songSignatures"
-				:source-types="songSourceTypes"
-				:instruments="songInstruments"
-				:arrangers="songArrangers"
-				:bookmarks="songBookmarks"
-				:audio-files="songAudioFiles"
 				@jump-to-bookmark="jumpToBookmark" />
 		</header>
 
@@ -268,20 +243,6 @@ defineExpose({
 		<SongViewerMetadata
 			v-if="song && hideHeader && !isEditing"
 			:song="song"
-			:composers="songComposers"
-			:books="songBooks"
-			:collections="songCollections"
-			:artists="songArtists"
-			:genres="songGenres"
-			:keys="songKeys"
-			:custom-groups="songCustomGroups"
-			:years="songYears"
-			:signatures="songSignatures"
-			:source-types="songSourceTypes"
-			:instruments="songInstruments"
-			:arrangers="songArrangers"
-			:bookmarks="songBookmarks"
-			:audio-files="songAudioFiles"
 			@jump-to-bookmark="jumpToBookmark" />
 
 		<!-- Song Editor View -->
@@ -289,18 +250,7 @@ defineExpose({
 			v-if="song && isEditing"
 			:song="song"
 			:library-id="libraryId"
-			:composers="composers"
-			:books="books"
-			:collections="collections"
-			:artists="artists"
-			:genres="genres"
-			:keys="keys"
-			:custom-groups="customGroups"
-			:years="years"
-			:signatures="signatures"
-			:source-types="sourceTypes"
-			:instruments="instruments"
-			:arrangers="arrangers"
+			v-bind="entityListsProps"
 			@saved="handleSaved"
 			@updated="handleUpdated"
 			@cancel="isEditing = false" />

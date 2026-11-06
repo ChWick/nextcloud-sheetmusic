@@ -254,6 +254,7 @@ class SongService {
 		?array $sourceTypes = null,
 		?array $instruments = null,
 		?array $arrangers = null,
+		?array $scalars = null,
 	): ?LibraryData {
 		if (empty($songIds)) {
 			return null;
@@ -287,6 +288,9 @@ class SongService {
 				]);
 				$song = $this->internalSongMapper->findById($sid);
 				if ($song !== null) {
+					if (!empty($scalars)) {
+						$this->applyBatchScalarUpdates($song, $scalars);
+					}
 					$song->updatedAt = time();
 					$this->internalSongMapper->update($song);
 					$this->songHistoryService?->recordSnapshot($song, InternalSongHistory::ACTION_UPDATED, $user->getUID());
@@ -303,6 +307,40 @@ class SongService {
 				'songIds' => $songIds,
 			]);
 			throw $e;
+		}
+	}
+
+	/**
+	 * Apply scalar field updates from a batch update payload onto an InternalSong.
+	 *
+	 * @param array<string, mixed> $scalars
+	 */
+	private function applyBatchScalarUpdates(InternalSong $song, array $scalars): void {
+		$stringMap = [
+			'opus' => 'opus',
+			'catalogNumber' => 'catalogNumber',
+			'songNumber' => 'songNumber',
+			'keywords' => 'keywords',
+			'custom' => 'notes',
+		];
+		foreach ($stringMap as $payloadKey => $prop) {
+			if (array_key_exists($payloadKey, $scalars)) {
+				$trimmed = trim((string)($scalars[$payloadKey] ?? ''));
+				$song->{$prop} = $trimmed !== '' ? $trimmed : null;
+			}
+		}
+
+		$intMap = [
+			'stars' => 'rating',
+			'difficulty' => 'difficulty',
+			'duration' => 'duration',
+		];
+		foreach ($intMap as $payloadKey => $prop) {
+			if (array_key_exists($payloadKey, $scalars)) {
+				$raw = $scalars[$payloadKey];
+				$val = ($raw !== null && $raw !== '') ? (int)$raw : 0;
+				$song->{$prop} = $val > 0 ? $val : null;
+			}
 		}
 	}
 

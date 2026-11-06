@@ -240,6 +240,12 @@ final class SongServiceTest extends TestCase {
 			[(int)$s1->id, (int)$s2->id],
 			composers: ['action' => 'add', 'ids' => [(int)$composer->id]],
 			arrangers: ['action' => 'add', 'ids' => [(int)$arranger->id]],
+			scalars: [
+				'opus' => 'Op. 42',
+				'stars' => 4,
+				'duration' => 195,
+				'keywords' => 'swing, bigband',
+			],
 		);
 
 		self::assertNotNull($result);
@@ -254,6 +260,17 @@ final class SongServiceTest extends TestCase {
 		$s2Arrangers = $this->entityMapper->findEntityIdsForSong((int)$s2->id, 'arranger');
 		self::assertSame([(int)$arranger->id], $s1Arrangers);
 		self::assertSame([(int)$arranger->id], $s2Arrangers);
+
+		$updatedS1 = $this->songMapper->findById((int)$s1->id);
+		$updatedS2 = $this->songMapper->findById((int)$s2->id);
+		self::assertSame('Op. 42', $updatedS1?->opus);
+		self::assertSame('Op. 42', $updatedS2?->opus);
+		self::assertSame(4, $updatedS1?->rating);
+		self::assertSame(4, $updatedS2?->rating);
+		self::assertSame(195, $updatedS1?->duration);
+		self::assertSame(195, $updatedS2?->duration);
+		self::assertSame('swing, bigband', $updatedS1?->keywords);
+		self::assertSame('swing, bigband', $updatedS2?->keywords);
 	}
 
 	public function testResolveBothSongsPreservesSharedFileOnDetach(): void {

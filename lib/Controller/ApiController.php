@@ -217,8 +217,9 @@ class ApiController extends OCSController {
 		?array $sourceTypes = null,
 		?array $instruments = null,
 		?array $arrangers = null,
+		?array $scalars = null,
 	): DataResponse {
-		return $this->songController->batchUpdateSongs($libraryId, $songIds, $composers, $books, $collections, $artists, $genres, $keys, $customGroups, $years, $signatures, $sourceTypes, $instruments, $arrangers);
+		return $this->songController->batchUpdateSongs($libraryId, $songIds, $composers, $books, $collections, $artists, $genres, $keys, $customGroups, $years, $signatures, $sourceTypes, $instruments, $arrangers, $scalars);
 	}
 
 	#[NoAdminRequired]

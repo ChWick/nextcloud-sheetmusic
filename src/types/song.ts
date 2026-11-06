@@ -23,7 +23,12 @@ export type Bookmark = {
 }
 export type AudioFile = { id: number; songId: number; title: string; file: string }
 export type SongFile = components['schemas']['SongFile']
-export type Song = components['schemas']['Song'] & {
+
+export interface SongEntityLists {
+	composers?: Composer[]
+	books?: Book[]
+	collections?: Collection[]
+	artists?: Artist[]
 	genres?: Genre[]
 	keys?: Key[]
 	customGroups?: CustomGroup[]
@@ -32,6 +37,9 @@ export type Song = components['schemas']['Song'] & {
 	sourceTypes?: SourceType[]
 	instruments?: Instrument[]
 	arrangers?: Arranger[]
+}
+
+export type Song = components['schemas']['Song'] & SongEntityLists & {
 	bookmarks?: Bookmark[]
 	audioFiles?: AudioFile[]
 	stars?: number | null
@@ -45,26 +53,10 @@ export type Song = components['schemas']['Song'] & {
 	catalogNumber?: string
 	songNumber?: string
 }
-export type LibraryData = components['schemas']['LibraryData'] & {
-	genres?: Genre[]
-	keys?: Key[]
-	customGroups?: CustomGroup[]
-	years?: Year[]
-	signatures?: Signature[]
-	sourceTypes?: SourceType[]
-	instruments?: Instrument[]
-	arrangers?: Arranger[]
+export type LibraryData = components['schemas']['LibraryData'] & SongEntityLists & {
 	songs: Song[]
 }
-export type CreatedSongData = components['schemas']['CreatedSongData'] & {
-	genres?: Genre[]
-	keys?: Key[]
-	customGroups?: CustomGroup[]
-	years?: Year[]
-	signatures?: Signature[]
-	sourceTypes?: SourceType[]
-	instruments?: Instrument[]
-	arrangers?: Arranger[]
+export type CreatedSongData = components['schemas']['CreatedSongData'] & SongEntityLists & {
 	songs: Song[]
 }
 export type FileLogLevel = components['schemas']['FileLogLevel']

@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import BatchSongEditorDialog from '../../../src/components/song-editor/BatchSongEditorDialog.vue'
+import { ENTITY_COLUMNS, SONG_SCALAR_FIELDS } from '../../../src/components/songs/song-view-columns'
 
 vi.mock('@nextcloud/l10n', () => ({
 	translate: (_app: string, text: string, vars?: Record<string, any>) => {
@@ -26,7 +27,7 @@ describe('BatchSongEditorDialog.vue', () => {
 	const years = [{ id: 8, name: '1970', year: 1970 }]
 	const signatures = [{ id: 9, name: '4/4' }]
 
-	it('renders dialog with multi-song editing options', () => {
+	it('renders dialog with all entity and scalar editing options', () => {
 		const wrapper = mount(BatchSongEditorDialog, {
 			props: {
 				open: true,
@@ -45,18 +46,16 @@ describe('BatchSongEditorDialog.vue', () => {
 		})
 
 		expect(document.body.textContent).toContain('Batch edit 3 songs')
-		expect(document.body.textContent).toContain('Composers')
-		expect(document.body.textContent).toContain('Books')
-		expect(document.body.textContent).toContain('Collections')
-		expect(document.body.textContent).toContain('Artists')
-		expect(document.body.textContent).toContain('Genres')
-		expect(document.body.textContent).toContain('Keys')
-		expect(document.body.textContent).toContain('Custom Groups')
-		expect(document.body.textContent).toContain('Years')
-		expect(document.body.textContent).toContain('Time Signatures')
+		for (const col of ENTITY_COLUMNS) {
+			expect(document.body.textContent).toContain(col.pluralLabel())
+		}
+		for (const field of SONG_SCALAR_FIELDS) {
+			expect(document.body.textContent).toContain(field.label())
+		}
+		wrapper.unmount()
 	})
 
-	it('toggles field checkboxes and emits apply payload', async () => {
+	it('toggles entity and scalar field checkboxes and emits apply payload', async () => {
 		const wrapper = mount(BatchSongEditorDialog, {
 			props: {
 				open: true,
@@ -75,11 +74,28 @@ describe('BatchSongEditorDialog.vue', () => {
 		})
 
 		const checkboxes = wrapper.findAllComponents({ name: 'NcCheckboxRadioSwitch' })
-		expect(checkboxes.length).toBe(12)
+		expect(checkboxes.length).toBe(ENTITY_COLUMNS.length + SONG_SCALAR_FIELDS.length)
 
 		// Enable composers and books
 		await checkboxes[0].setValue(true)
 		await checkboxes[1].setValue(true)
+
+		// Enable opus and duration scalar fields
+		const opusIndex = ENTITY_COLUMNS.length + SONG_SCALAR_FIELDS.findIndex((f) => f.key === 'opus')
+		const durationIndex = ENTITY_COLUMNS.length + SONG_SCALAR_FIELDS.findIndex((f) => f.key === 'duration')
+		await checkboxes[opusIndex].setValue(true)
+		await checkboxes[durationIndex].setValue(true)
+		await wrapper.vm.$nextTick()
+
+		const opusInput = document.body.querySelector('#batch-opus-input') as HTMLInputElement
+		const durationInput = document.body.querySelector('#batch-duration-input') as HTMLInputElement
+		expect(opusInput).toBeTruthy()
+		expect(durationInput).toBeTruthy()
+
+		opusInput.value = 'Op. 9'
+		opusInput.dispatchEvent(new Event('input', { bubbles: true }))
+		durationInput.value = '210'
+		durationInput.dispatchEvent(new Event('input', { bubbles: true }))
 		await wrapper.vm.$nextTick()
 
 		const applyButton = wrapper.findAllComponents({ name: 'NcButton' }).find(b => b.text().includes('Apply to 3 songs'))
@@ -89,7 +105,12 @@ describe('BatchSongEditorDialog.vue', () => {
 		expect(wrapper.emitted('apply')?.[0]).toEqual([{
 			composers: { action: 'add', ids: [] },
 			books: { action: 'add', ids: [] },
+			scalars: {
+				opus: 'Op. 9',
+				duration: 210,
+			},
 		}])
+		wrapper.unmount()
 	})
 
 	it('emits update:open false when cancelled or closed', async () => {
@@ -108,5 +129,6 @@ describe('BatchSongEditorDialog.vue', () => {
 		const cancelButton = wrapper.findAllComponents({ name: 'NcButton' }).find(b => b.text().includes('Cancel'))
 		await cancelButton?.trigger('click')
 		expect(wrapper.emitted('update:open')?.[0]).toEqual([false])
+		wrapper.unmount()
 	})
 })

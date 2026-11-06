@@ -5,6 +5,7 @@ import { PDFDocument, degrees } from 'pdf-lib'
 import { apiDelete, apiPost } from '../../api/client'
 import { describeRequestFailure } from '../../utils/api'
 import type { LibraryData, Song, SongFile } from '../../types/song'
+import { ENTITY_COLUMNS, SONG_SCALAR_FIELDS } from '../songs/song-view-columns'
 import type { OriginalSongAction } from './OriginalSongActionSelector.vue'
 import { getSegmentColor, type SplitSegment } from './SongPdfSplitSidebar.vue'
 import type { SplitSegmentSummary } from './SongPdfPageCard.vue'
@@ -147,18 +148,16 @@ export function usePdfSplit(options: {
 
 			// Base metadata to inherit from song
 			const currentSong = song.value
-			const composerIds = (currentSong.composers ?? []).map((c) => c.id)
-			const bookIds = (currentSong.books ?? []).map((b) => b.id)
-			const collectionIds = (currentSong.collections ?? []).map((c) => c.id)
-			const artistIds = (currentSong.artists ?? []).map((a) => a.id)
-			const genreIds = (currentSong.genres ?? []).map((g) => g.id)
-			const keyIds = (currentSong.keys ?? []).map((k) => k.id)
-			const customGroupIds = (currentSong.customGroups ?? []).map((cg) => cg.id)
-			const yearIds = (currentSong.years ?? []).map((y) => y.id)
-			const signatureIds = (currentSong.signatures ?? []).map((s) => s.id)
-			const sourceTypeIds = (currentSong.sourceTypes ?? []).map((st) => st.id)
-			const instrumentIds = (currentSong.instruments ?? []).map((i) => i.id)
-			const arrangerIds = (currentSong.arrangers ?? []).map((a) => a.id)
+			const inheritedMetadata: Record<string, unknown> = {}
+			for (const col of ENTITY_COLUMNS) {
+				inheritedMetadata[col.idField] = col.getItems(currentSong).map((item) => item.id)
+			}
+			for (const field of SONG_SCALAR_FIELDS) {
+				const raw = currentSong[field.key]
+				inheritedMetadata[field.key] = field.type === 'number'
+					? (typeof raw === 'number' && raw > 0 ? raw : undefined)
+					: (raw ?? '')
+			}
 
 			let lastLibraryData: LibraryData | null = null
 			let firstCreatedSongId: number | undefined = undefined
@@ -203,26 +202,7 @@ export function usePdfSplit(options: {
 				const createSongRes = await apiPost('/api/songs', {
 					libraryId: libraryId.value,
 					title: seg.title.trim(),
-					composerIds,
-					bookIds,
-					collectionIds,
-					artistIds,
-					genreIds,
-					keyIds,
-					customGroupIds,
-					yearIds,
-					signatureIds,
-					sourceTypeIds,
-					instrumentIds,
-					arrangerIds,
-					opus: currentSong.opus ?? '',
-					catalogNumber: currentSong.catalogNumber ?? '',
-					songNumber: currentSong.songNumber ?? '',
-					stars: currentSong.stars ?? 0,
-					difficulty: currentSong.difficulty ?? 0,
-					keywords: currentSong.keywords ?? '',
-					custom: currentSong.custom ?? '',
-					custom2: currentSong.custom2 ?? '',
+					...inheritedMetadata,
 				} as any)
 
 				const createdData = createSongRes.data.ocs.data as any

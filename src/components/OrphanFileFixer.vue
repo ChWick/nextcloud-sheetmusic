@@ -17,6 +17,7 @@ import { getFileName } from '../utils/file'
 import FilePreviewer from './FilePreviewer.vue'
 import SongEditor from './SongEditor.vue'
 import SelectSongDialog from './song-editor/SelectSongDialog.vue'
+import { extractEntityLists } from './songs/song-view-columns'
 import ViewHeader from './ViewHeader.vue'
 
 const props = defineProps<{
@@ -207,16 +208,7 @@ onMounted(() => {
 				ref="songEditorRef"
 				:song="null"
 				:library-id="selectedLibrary"
-				:composers="libraryData?.composers ?? []"
-				:books="libraryData?.books ?? []"
-				:collections="libraryData?.collections ?? []"
-				:artists="libraryData?.artists ?? []"
-				:genres="libraryData?.genres ?? []"
-				:keys="libraryData?.keys ?? []"
-				:custom-groups="libraryData?.customGroups ?? []"
-				:years="libraryData?.years ?? []"
-				:signatures="libraryData?.signatures ?? []"
-				:source-types="libraryData?.sourceTypes ?? []"
+				v-bind="extractEntityLists(libraryData)"
 				:imported-nextcloud-node="{ path: userRelativePath, name: filename, action: 'move' }"
 				:prefill="{ title: suggestedTitle }"
 				@saved="handleSongSaved"

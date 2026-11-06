@@ -1,12 +1,19 @@
 <script setup lang="ts">
-import type { Arranger, Artist, Book, Collection, Composer, CustomGroup, Genre, Instrument, Key, Signature, SourceType, Year } from '../../types/song'
+import type { SongEntityLists } from '../../types/song'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
+import NcTextField from '@nextcloud/vue/components/NcTextField'
 import { computed, reactive, watch } from 'vue'
-import { ENTITY_COLUMNS, type SongEntityProp } from '../songs/song-view-columns'
+import {
+	ENTITY_COLUMNS,
+	SONG_SCALAR_FIELDS,
+	type SongEntityProp,
+	type SongScalarFieldDef,
+	type SongScalarProp,
+} from '../songs/song-view-columns'
 
 export type BatchAction = 'add' | 'replace' | 'remove'
 
@@ -15,7 +22,11 @@ export interface CategoryBatchUpdate {
 	ids: number[]
 }
 
-export type BatchUpdatePayload = Partial<Record<SongEntityProp, CategoryBatchUpdate>>
+export type BatchScalarUpdates = Partial<Record<SongScalarProp, string | number | null>>
+
+export type BatchUpdatePayload = Partial<Record<SongEntityProp, CategoryBatchUpdate>> & {
+	scalars?: BatchScalarUpdates
+}
 
 type CategoryKey = SongEntityProp
 
@@ -25,23 +36,17 @@ interface CategoryState {
 	selected: Array<{ id: number }>
 }
 
-const CATEGORY_KEYS: CategoryKey[] = ENTITY_COLUMNS.map((col) => col.songProp)
+interface ScalarFieldState {
+	enabled: boolean
+	value: string | number | null
+}
 
-const props = defineProps<{
+const CATEGORY_KEYS: CategoryKey[] = ENTITY_COLUMNS.map((col) => col.songProp)
+const SCALAR_KEYS: SongScalarProp[] = SONG_SCALAR_FIELDS.map((field) => field.key)
+
+const props = defineProps<SongEntityLists & {
 	open: boolean
 	selectedCount: number
-	composers: Composer[]
-	books: Book[]
-	collections: Collection[]
-	artists: Artist[]
-	genres?: Genre[]
-	keys?: Key[]
-	customGroups?: CustomGroup[]
-	years?: Year[]
-	signatures?: Signature[]
-	sourceTypes?: SourceType[]
-	instruments?: Instrument[]
-	arrangers?: Arranger[]
 }>()
 
 const emit = defineEmits<{
@@ -55,11 +60,24 @@ const state = reactive<Record<CategoryKey, CategoryState>>(
 	) as Record<CategoryKey, CategoryState>,
 )
 
+const scalarState = reactive<Record<SongScalarProp, ScalarFieldState>>(
+	Object.fromEntries(
+		SONG_SCALAR_FIELDS.map((field) => [
+			field.key,
+			{ enabled: false, value: field.type === 'number' ? null : '' },
+		]),
+	) as Record<SongScalarProp, ScalarFieldState>,
+)
+
 function resetForm() {
 	for (const key of CATEGORY_KEYS) {
 		state[key].enabled = false
 		state[key].action = 'add'
 		state[key].selected = []
+	}
+	for (const field of SONG_SCALAR_FIELDS) {
+		scalarState[field.key].enabled = false
+		scalarState[field.key].value = field.type === 'number' ? null : ''
 	}
 }
 
@@ -78,7 +96,27 @@ const categories = computed(() =>
 	})),
 )
 
-const isAnythingEnabled = computed(() => CATEGORY_KEYS.some((key) => state[key].enabled))
+const isAnythingEnabled = computed(() =>
+	CATEGORY_KEYS.some((key) => state[key].enabled)
+	|| SCALAR_KEYS.some((key) => scalarState[key].enabled),
+)
+
+function getScalarModelValue(field: SongScalarFieldDef): string {
+	const val = scalarState[field.key].value
+	if (field.type === 'number') {
+		return val !== null && val !== undefined && Number(val) > 0 ? String(val) : ''
+	}
+	return String(val ?? '')
+}
+
+function onScalarInput(field: SongScalarFieldDef, raw: string | number) {
+	if (field.type === 'number') {
+		const num = Number(raw)
+		scalarState[field.key].value = Number.isFinite(num) && num > 0 ? num : null
+	} else {
+		scalarState[field.key].value = String(raw ?? '')
+	}
+}
 
 function handleApply() {
 	if (!isAnythingEnabled.value) return
@@ -91,6 +129,18 @@ function handleApply() {
 				ids: state[key].selected.map((item) => item.id),
 			}
 		}
+	}
+
+	const scalars: BatchScalarUpdates = {}
+	let hasScalars = false
+	for (const field of SONG_SCALAR_FIELDS) {
+		if (scalarState[field.key].enabled) {
+			scalars[field.key] = scalarState[field.key].value
+			hasScalars = true
+		}
+	}
+	if (hasScalars) {
+		payload.scalars = scalars
 	}
 
 	emit('apply', payload)
@@ -146,6 +196,30 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 						:placeholder="cat.placeholder"
 						:label="cat.optionLabel"
 						track-by="id" />
+				</div>
+			</div>
+
+			<div v-for="field in SONG_SCALAR_FIELDS" :key="field.key" :class="$style.fieldGroup">
+				<div :class="$style.fieldHeader">
+					<NcCheckboxRadioSwitch
+						v-model="scalarState[field.key].enabled"
+						type="checkbox"
+						:data-test="`batch-scalar-checkbox-${field.key}`">
+						{{ field.label() }}
+					</NcCheckboxRadioSwitch>
+				</div>
+				<div v-if="scalarState[field.key].enabled" :class="$style.fieldBody">
+					<NcTextField
+						:id="`batch-${field.key}-input`"
+						:type="field.type"
+						:min="field.min"
+						:max="field.max"
+						:label="field.inputLabel()"
+						:placeholder="field.placeholder()"
+						:value="getScalarModelValue(field)"
+						:model-value="getScalarModelValue(field)"
+						@update:value="onScalarInput(field, $event)"
+						@update:model-value="onScalarInput(field, $event)" />
 				</div>
 			</div>
 

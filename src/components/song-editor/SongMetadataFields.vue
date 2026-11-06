@@ -3,7 +3,14 @@ import type { Arranger, Artist, Book, Collection, Composer, CustomGroup, Genre, 
 import { translate as t } from '@nextcloud/l10n'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
-import { computed } from 'vue'
+import { computed, type Ref } from 'vue'
+import {
+	ENTITY_COLUMNS,
+	SONG_SCALAR_FIELDS,
+	type SongEntityProp,
+	type SongScalarFieldDef,
+	type SongScalarProp,
+} from '../songs/song-view-columns'
 
 type NamedTag = { name: string, id?: number }
 type BookTag = { title: string, id?: number }
@@ -72,20 +79,75 @@ const custom = defineModel<string>('custom', { required: true })
 const custom2 = defineModel<string>('custom2', { required: true })
 const tempo = defineModel<number>('tempo', { required: true })
 
-const entityFields = computed(() => [
-	{ key: 'composers', model: selectedComposers, options: props.composers, createOption: props.createComposerTag, inputLabel: t('sheetmusic', 'Composers'), label: 'name', placeholder: t('sheetmusic', 'Select or type a composer…') },
-	{ key: 'books', model: selectedBooks, options: props.books, createOption: props.createBookTag, inputLabel: t('sheetmusic', 'Books / Albums'), label: 'title', placeholder: t('sheetmusic', 'Select or type a book/album…') },
-	{ key: 'collections', model: selectedCollections, options: props.collections, createOption: props.createCollectionTag, inputLabel: t('sheetmusic', 'Collections'), label: 'name', placeholder: t('sheetmusic', 'Select or type a collection…') },
-	{ key: 'artists', model: selectedArtists, options: props.artists, createOption: props.createArtistTag, inputLabel: t('sheetmusic', 'Artists'), label: 'name', placeholder: t('sheetmusic', 'Select or type an artist…') },
-	{ key: 'genres', model: selectedGenres, options: props.genres, createOption: props.createGenreTag, inputLabel: t('sheetmusic', 'Genres'), label: 'name', placeholder: t('sheetmusic', 'Select or type a genre…') },
-	{ key: 'keys', model: selectedKeys, options: props.keys, createOption: props.createKeyTag, inputLabel: t('sheetmusic', 'Keys'), label: 'name', placeholder: t('sheetmusic', 'Select or type a key…') },
-	{ key: 'customGroups', model: selectedCustomGroups, options: props.customGroups, createOption: props.createCustomGroupTag, inputLabel: t('sheetmusic', 'Custom Groups'), label: 'name', placeholder: t('sheetmusic', 'Select or type a custom group…') },
-	{ key: 'years', model: selectedYears, options: props.years, createOption: props.createYearTag, inputLabel: t('sheetmusic', 'Years'), label: 'name', placeholder: t('sheetmusic', 'Select or type a year…') },
-	{ key: 'signatures', model: selectedSignatures, options: props.signatures, createOption: props.createSignatureTag, inputLabel: t('sheetmusic', 'Time Signatures'), label: 'name', placeholder: t('sheetmusic', 'Select or type a time signature (e.g. 4/4)…') },
-	{ key: 'sourceTypes', model: selectedSourceTypes, options: props.sourceTypes, createOption: props.createSourceTypeTag, inputLabel: t('sheetmusic', 'Source Types'), label: 'name', placeholder: t('sheetmusic', 'Select or type a source type…') },
-	{ key: 'instruments', model: selectedInstruments, options: props.instruments, createOption: props.createInstrumentTag, inputLabel: t('sheetmusic', 'Instruments'), label: 'name', placeholder: t('sheetmusic', 'Select or type an instrument…') },
-	{ key: 'arrangers', model: selectedArrangers, options: props.arrangers, createOption: props.createArrangerTag, inputLabel: t('sheetmusic', 'Arrangers'), label: 'name', placeholder: t('sheetmusic', 'Select or type an arranger…') },
-])
+const entityModels: Record<SongEntityProp, Ref<any[]>> = {
+	composers: selectedComposers,
+	books: selectedBooks,
+	collections: selectedCollections,
+	artists: selectedArtists,
+	genres: selectedGenres,
+	keys: selectedKeys,
+	customGroups: selectedCustomGroups,
+	years: selectedYears,
+	signatures: selectedSignatures,
+	sourceTypes: selectedSourceTypes,
+	instruments: selectedInstruments,
+	arrangers: selectedArrangers,
+}
+
+const entityFields = computed(() => {
+	const createTagHandlers: Record<SongEntityProp, ((val: string) => any) | undefined> = {
+		composers: props.createComposerTag,
+		books: props.createBookTag,
+		collections: props.createCollectionTag,
+		artists: props.createArtistTag,
+		genres: props.createGenreTag,
+		keys: props.createKeyTag,
+		customGroups: props.createCustomGroupTag,
+		years: props.createYearTag,
+		signatures: props.createSignatureTag,
+		sourceTypes: props.createSourceTypeTag,
+		instruments: props.createInstrumentTag,
+		arrangers: props.createArrangerTag,
+	}
+	return ENTITY_COLUMNS.map((col) => ({
+		key: col.songProp,
+		model: entityModels[col.songProp],
+		options: props[col.songProp] ?? [],
+		createOption: createTagHandlers[col.songProp],
+		inputLabel: col.editorInputLabel(),
+		label: col.nameKey,
+		placeholder: col.editorPlaceholder(),
+	}))
+})
+
+const scalarModels: Record<SongScalarProp, Ref<any>> = {
+	opus,
+	catalogNumber,
+	songNumber,
+	stars,
+	difficulty,
+	duration,
+	keywords,
+	custom,
+	custom2,
+}
+
+function getScalarModelValue(field: SongScalarFieldDef): string {
+	const val = scalarModels[field.key].value
+	if (field.type === 'number') {
+		return val !== null && val !== undefined && Number(val) > 0 ? String(val) : ''
+	}
+	return String(val ?? '')
+}
+
+function onScalarInput(field: SongScalarFieldDef, raw: string | number) {
+	if (field.type === 'number') {
+		const num = Number(raw)
+		scalarModels[field.key].value = Number.isFinite(num) && num > 0 ? num : null
+	} else {
+		scalarModels[field.key].value = String(raw ?? '')
+	}
+}
 </script>
 
 <template>
@@ -105,85 +167,18 @@ const entityFields = computed(() => [
 		</div>
 
 		<div :class="$style.attributesGrid">
-			<div :class="$style.formGroup">
+			<div v-for="field in SONG_SCALAR_FIELDS" :key="field.key" :class="$style.formGroup">
 				<NcTextField
-					id="song-opus-input"
-					v-model="opus"
-					:placeholder="t('sheetmusic', 'Opus (e.g. Op. 28 No. 4)…')"
-					:label="t('sheetmusic', 'Opus')" />
-			</div>
-			<div :class="$style.formGroup">
-				<NcTextField
-					id="song-catalog-number-input"
-					v-model="catalogNumber"
-					:placeholder="t('sheetmusic', 'Catalog No. (BWV, KV, etc.)…')"
-					:label="t('sheetmusic', 'Catalog Number')" />
-			</div>
-			<div :class="$style.formGroup">
-				<NcTextField
-					id="song-song-number-input"
-					v-model="songNumber"
-					:placeholder="t('sheetmusic', 'Song No. (e.g. 88 or 104/5)…')"
-					:label="t('sheetmusic', 'Song Number')" />
-			</div>
-			<div :class="$style.formGroup">
-				<NcTextField
-					id="song-rating-input"
-					:value="stars ? String(stars) : ''"
-					:model-value="stars ? String(stars) : ''"
-					type="number"
-					:min="0"
-					:max="5"
-					:placeholder="t('sheetmusic', '0-5')"
-					:label="t('sheetmusic', 'Rating (Stars 0-5)')"
-					@update:value="stars = Number($event) > 0 ? Number($event) : null"
-					@update:model-value="stars = Number($event) > 0 ? Number($event) : null" />
-			</div>
-			<div :class="$style.formGroup">
-				<NcTextField
-					id="song-difficulty-input"
-					:value="difficulty ? String(difficulty) : ''"
-					:model-value="difficulty ? String(difficulty) : ''"
-					type="number"
-					:min="0"
-					:max="5"
-					:placeholder="t('sheetmusic', '0-5')"
-					:label="t('sheetmusic', 'Difficulty (0-5)')"
-					@update:value="difficulty = Number($event) > 0 ? Number($event) : null"
-					@update:model-value="difficulty = Number($event) > 0 ? Number($event) : null" />
-			</div>
-			<div :class="$style.formGroup">
-				<NcTextField
-					id="song-duration-input"
-					:value="duration ? String(duration) : ''"
-					:model-value="duration ? String(duration) : ''"
-					type="number"
-					:min="0"
-					:placeholder="t('sheetmusic', 'Seconds (e.g. 180)')"
-					:label="t('sheetmusic', 'Duration (seconds)')"
-					@update:value="duration = Number($event) > 0 ? Number($event) : null"
-					@update:model-value="duration = Number($event) > 0 ? Number($event) : null" />
-			</div>
-			<div :class="$style.formGroup">
-				<NcTextField
-					id="song-keywords-input"
-					v-model="keywords"
-					:placeholder="t('sheetmusic', 'Keywords / tags…')"
-					:label="t('sheetmusic', 'Keywords')" />
-			</div>
-			<div :class="$style.formGroup">
-				<NcTextField
-					id="song-custom-input"
-					v-model="custom"
-					:placeholder="t('sheetmusic', 'Custom field…')"
-					:label="t('sheetmusic', 'Custom')" />
-			</div>
-			<div :class="$style.formGroup">
-				<NcTextField
-					id="song-custom2-input"
-					v-model="custom2"
-					:placeholder="t('sheetmusic', 'Custom field 2…')"
-					:label="t('sheetmusic', 'Custom 2')" />
+					:id="field.editorInputId"
+					:value="getScalarModelValue(field)"
+					:model-value="getScalarModelValue(field)"
+					:type="field.type"
+					:min="field.min"
+					:max="field.max"
+					:placeholder="field.placeholder()"
+					:label="field.inputLabel()"
+					@update:value="onScalarInput(field, $event)"
+					@update:model-value="onScalarInput(field, $event)" />
 			</div>
 			<div :class="$style.formGroup">
 				<NcTextField

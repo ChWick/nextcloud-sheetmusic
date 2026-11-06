@@ -232,6 +232,7 @@ class SongController extends OCSController {
 		?array $sourceTypes = null,
 		?array $instruments = null,
 		?array $arrangers = null,
+		?array $scalars = null,
 	): DataResponse {
 		if ($libraryId === null || empty($songIds)) {
 			return new DataResponse([], Http::STATUS_BAD_REQUEST);
@@ -247,10 +248,10 @@ class SongController extends OCSController {
 				$user,
 				$libraryId,
 				$songIds,
-				$composers,
-				$books,
-				$collections,
-				$artists,
+				$this->resolveBatchParam('composers', $composers),
+				$this->resolveBatchParam('books', $books),
+				$this->resolveBatchParam('collections', $collections),
+				$this->resolveBatchParam('artists', $artists),
 				$this->resolveBatchParam('genres', $genres),
 				$this->resolveBatchParam('keys', $keys),
 				$this->resolveBatchParam('customGroups', $customGroups),
@@ -259,6 +260,7 @@ class SongController extends OCSController {
 				$this->resolveBatchParam('sourceTypes', $sourceTypes),
 				$this->resolveBatchParam('instruments', $instruments),
 				$this->resolveBatchParam('arrangers', $arrangers),
+				$this->resolveBatchParam('scalars', $scalars),
 			);
 
 			if ($result === null) {
