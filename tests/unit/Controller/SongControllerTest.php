@@ -6,6 +6,7 @@ namespace Controller;
 
 use OCA\SheetMusic\Controller\SongController;
 use OCA\SheetMusic\Db\InternalSong;
+use OCA\SheetMusic\Db\InternalSongFile;
 use OCA\SheetMusic\Db\InternalSongHistoryMapper;
 use OCA\SheetMusic\Db\LibraryData;
 use OCA\SheetMusic\Service\FileManager;
@@ -16,6 +17,7 @@ use OCA\SheetMusic\Service\SongService;
 use OCP\AppFramework\Http;
 use OCP\IRequest;
 use OCP\IUser;
+use OCP\Route\IRouter;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use TestSupport\FakeUserSession;
@@ -234,5 +236,81 @@ final class SongControllerTest extends TestCase {
 		// Verify trash is now empty
 		$deletedAfter = $this->controller->getDeletedSongs($this->libraryId)->getData();
 		$this->assertEmpty($deletedAfter);
+	}
+
+	public function testRouterResolvesMergeAndResolveBothWithoutBeingShadowedByUpdateSong(): void {
+		$router = \OC::$server->get(IRouter::class);
+		if (property_exists($router, 'cache')) {
+			$cacheProp = new \ReflectionProperty($router, 'cache');
+			$cacheProp->setAccessible(true);
+			$cacheProp->getValue($router)->clear();
+		}
+		$ctxProp = new \ReflectionProperty(\OC\Route\Router::class, 'context');
+		$ctxProp->setAccessible(true);
+		$ctxProp->getValue($router)->setMethod('POST');
+
+		$mergeMatch = $router->findMatchingRoute('/ocsapp/apps/sheetmusic/api/songs/merge');
+		$this->assertSame('mergeSong', $mergeMatch['caller'][2] ?? null);
+
+		$resolveBothMatch = $router->findMatchingRoute('/ocsapp/apps/sheetmusic/api/songs/resolve-both');
+		$this->assertSame('resolveBothSongs', $resolveBothMatch['caller'][2] ?? null);
+
+		$updateMatch = $router->findMatchingRoute('/ocsapp/apps/sheetmusic/api/songs/42');
+		$this->assertSame('updateSong', $updateMatch['caller'][2] ?? null);
+		$this->assertSame('42', $updateMatch['id'] ?? null);
+	}
+
+	public function testMergeSongEndpointMergesSongsAndDeduplicatesSharedFile(): void {
+		$keepSong = $this->songMapper->insert(new InternalSong(
+			uuid: 'uuid-keep-song',
+			libraryId: $this->libraryId,
+			title: 'Keep Song',
+		));
+		$dropSong = $this->songMapper->insert(new InternalSong(
+			uuid: 'uuid-drop-song',
+			libraryId: $this->libraryId,
+			title: 'Drop Song',
+		));
+
+		// Both songs point to shared fileId 700, and dropSong also has unique fileId 701
+		$this->songFileMapper->insert(new InternalSongFile(
+			uuid: 'file-keep-700',
+			songId: (int)$keepSong->id,
+			fileId: 700,
+		));
+		$this->songFileMapper->insert(new InternalSongFile(
+			uuid: 'file-drop-700',
+			songId: (int)$dropSong->id,
+			fileId: 700,
+		));
+		$this->songFileMapper->insert(new InternalSongFile(
+			uuid: 'file-drop-701',
+			songId: (int)$dropSong->id,
+			fileId: 701,
+		));
+
+		$res = $this->controller->mergeSong(
+			$this->libraryId,
+			(int)$keepSong->id,
+			(int)$dropSong->id,
+			[
+				'title' => 'Merged Song Title',
+				'duration' => 195,
+				'stars' => 5,
+			],
+		);
+
+		$this->assertSame(Http::STATUS_OK, $res->getStatus());
+		$data = $res->getData();
+		$this->assertInstanceOf(LibraryData::class, $data);
+		$this->assertCount(1, $data->songs);
+		$this->assertSame('Merged Song Title', $data->songs[0]->title);
+		$this->assertSame(195, $data->songs[0]->duration);
+		$this->assertSame(5, $data->songs[0]->stars);
+
+		// Shared fileId 700 is deduplicated so keepSong has exactly 2 active files (700 and 701)
+		$activeFiles = $this->songFileMapper->findAllForSong((int)$keepSong->id);
+		$this->assertCount(2, $activeFiles);
+		$this->assertSame([700, 701], array_map(static fn (InternalSongFile $f): int => $f->fileId, $activeFiles));
 	}
 }

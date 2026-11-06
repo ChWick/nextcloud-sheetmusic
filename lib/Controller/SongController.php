@@ -103,7 +103,67 @@ class SongController extends OCSController {
 	}
 
 	#[NoAdminRequired]
-	#[ApiRoute(verb: 'POST', url: '/api/songs/{id}')]
+	#[ApiRoute(verb: 'POST', url: '/api/songs/merge')]
+	public function mergeSong(
+		?int $libraryId = null,
+		?int $keepId = null,
+		?int $droppedId = null,
+		array $merged = [],
+	): DataResponse {
+		if ($libraryId === null || $keepId === null || $droppedId === null) {
+			return new DataResponse(['message' => 'libraryId, keepId and droppedId are required'], Http::STATUS_BAD_REQUEST);
+		}
+
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		try {
+			$result = $this->songService->mergeSong($user, $libraryId, $keepId, $droppedId, $merged);
+			if ($result === null) {
+				return new DataResponse(['message' => 'Library not found'], Http::STATUS_NOT_FOUND);
+			}
+
+			return new DataResponse($result);
+		} catch (\Throwable $e) {
+			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/songs/resolve-both')]
+	public function resolveBothSongs(
+		?int $libraryId = null,
+		?array $songA = null,
+		?array $songB = null,
+	): DataResponse {
+		if ($libraryId === null || $songA === null || $songB === null) {
+			return new DataResponse(['message' => 'libraryId, songA, and songB are required'], Http::STATUS_BAD_REQUEST);
+		}
+
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		try {
+			$result = $this->songService->resolveBothSongs($user, $libraryId, $songA, $songB);
+			if (is_array($result) && isset($result['error'])) {
+				return new DataResponse(['message' => $result['error']], Http::STATUS_CONFLICT);
+			}
+			if ($result === null) {
+				return new DataResponse(['message' => 'Library not found'], Http::STATUS_NOT_FOUND);
+			}
+
+			return new DataResponse($result);
+		} catch (\Throwable $e) {
+			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/songs/{id}', requirements: ['id' => '\d+'])]
 	public function updateSong(
 		int $id,
 		?int $libraryId = null,
@@ -244,7 +304,7 @@ class SongController extends OCSController {
 	}
 
 	#[NoAdminRequired]
-	#[ApiRoute(verb: 'DELETE', url: '/api/songs/{id}')]
+	#[ApiRoute(verb: 'DELETE', url: '/api/songs/{id}', requirements: ['id' => '\d+'])]
 	public function deleteSong(int $id, ?int $libraryId = null, bool $deleteFiles = true): DataResponse {
 		$libraryId = $this->resolveLibraryId($libraryId);
 		$deleteFiles = $this->resolveDeleteFiles($deleteFiles);
@@ -277,66 +337,6 @@ class SongController extends OCSController {
 	private function resolveDeleteFiles(bool $default = true): bool {
 		$param = $this->request->getParam('deleteFiles');
 		return $param !== null ? filter_var($param, FILTER_VALIDATE_BOOLEAN) : $default;
-	}
-
-	#[NoAdminRequired]
-	#[ApiRoute(verb: 'POST', url: '/api/songs/merge')]
-	public function mergeSong(
-		?int $libraryId = null,
-		?int $keepId = null,
-		?int $droppedId = null,
-		array $merged = [],
-	): DataResponse {
-		if ($libraryId === null || $keepId === null || $droppedId === null) {
-			return new DataResponse(['message' => 'libraryId, keepId and droppedId are required'], Http::STATUS_BAD_REQUEST);
-		}
-
-		$user = $this->userSession->getUser();
-		if ($user === null) {
-			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
-		}
-
-		try {
-			$result = $this->songService->mergeSong($user, $libraryId, $keepId, $droppedId, $merged);
-			if ($result === null) {
-				return new DataResponse(['message' => 'Library not found'], Http::STATUS_NOT_FOUND);
-			}
-
-			return new DataResponse($result);
-		} catch (\Throwable $e) {
-			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
-		}
-	}
-
-	#[NoAdminRequired]
-	#[ApiRoute(verb: 'POST', url: '/api/songs/resolve-both')]
-	public function resolveBothSongs(
-		?int $libraryId = null,
-		?array $songA = null,
-		?array $songB = null,
-	): DataResponse {
-		if ($libraryId === null || $songA === null || $songB === null) {
-			return new DataResponse(['message' => 'libraryId, songA, and songB are required'], Http::STATUS_BAD_REQUEST);
-		}
-
-		$user = $this->userSession->getUser();
-		if ($user === null) {
-			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
-		}
-
-		try {
-			$result = $this->songService->resolveBothSongs($user, $libraryId, $songA, $songB);
-			if (is_array($result) && isset($result['error'])) {
-				return new DataResponse(['message' => $result['error']], Http::STATUS_CONFLICT);
-			}
-			if ($result === null) {
-				return new DataResponse(['message' => 'Library not found'], Http::STATUS_NOT_FOUND);
-			}
-
-			return new DataResponse($result);
-		} catch (\Throwable $e) {
-			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
-		}
 	}
 
 	#[NoAdminRequired]

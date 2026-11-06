@@ -20,14 +20,26 @@ return [
 			'verb' => 'POST',
 		],
 		[
+			'name' => 'Api#mergeSong',
+			'url' => '/api/songs/merge',
+			'verb' => 'POST',
+		],
+		[
+			'name' => 'Api#resolveBothSongs',
+			'url' => '/api/songs/resolve-both',
+			'verb' => 'POST',
+		],
+		[
 			'name' => 'Api#updateSong',
 			'url' => '/api/songs/{id}',
 			'verb' => 'POST',
+			'requirements' => ['id' => '\d+'],
 		],
 		[
 			'name' => 'Api#deleteSong',
 			'url' => '/api/songs/{id}',
 			'verb' => 'DELETE',
+			'requirements' => ['id' => '\d+'],
 		],
 		[
 			'name' => 'Api#getSongHistory',

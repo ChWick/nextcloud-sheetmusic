@@ -160,7 +160,28 @@ class ApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
-	#[ApiRoute(verb: 'POST', url: '/api/songs/{id}')]
+	#[ApiRoute(verb: 'POST', url: '/api/songs/merge')]
+	public function mergeSong(
+		?int $libraryId = null,
+		?int $keepId = null,
+		?int $droppedId = null,
+		array $merged = [],
+	): DataResponse {
+		return $this->songController->mergeSong($libraryId, $keepId, $droppedId, $merged);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/songs/resolve-both')]
+	public function resolveBothSongs(
+		?int $libraryId = null,
+		?array $songA = null,
+		?array $songB = null,
+	): DataResponse {
+		return $this->songController->resolveBothSongs($libraryId, $songA, $songB);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/songs/{id}', requirements: ['id' => '\d+'])]
 	public function updateSong(
 		int $id,
 		?int $libraryId = null,
@@ -211,28 +232,7 @@ class ApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
-	#[ApiRoute(verb: 'POST', url: '/api/songs/merge')]
-	public function mergeSong(
-		?int $libraryId = null,
-		?int $keepId = null,
-		?int $droppedId = null,
-		array $merged = [],
-	): DataResponse {
-		return $this->songController->mergeSong($libraryId, $keepId, $droppedId, $merged);
-	}
-
-	#[NoAdminRequired]
-	#[ApiRoute(verb: 'POST', url: '/api/songs/resolve-both')]
-	public function resolveBothSongs(
-		?int $libraryId = null,
-		?array $songA = null,
-		?array $songB = null,
-	): DataResponse {
-		return $this->songController->resolveBothSongs($libraryId, $songA, $songB);
-	}
-
-	#[NoAdminRequired]
-	#[ApiRoute(verb: 'DELETE', url: '/api/songs/{id}')]
+	#[ApiRoute(verb: 'DELETE', url: '/api/songs/{id}', requirements: ['id' => '\d+'])]
 	public function deleteSong(int $id, ?int $libraryId = null, bool $deleteFiles = true): DataResponse {
 		return $this->songController->deleteSong($id, $libraryId, $deleteFiles);
 	}

@@ -363,14 +363,46 @@ class InternalSongMapper {
 			return;
 		}
 
-		// 1. Move files from droppedId to keepId
-		$qbFiles = $this->db->getQueryBuilder();
-		$qbFiles->update(InternalSongFileMapper::TABLE_NAME)
-			->set('song_id', $qbFiles->createNamedParameter($keepId, IQueryBuilder::PARAM_INT))
-			->set('updated_at', $qbFiles->createNamedParameter(time(), IQueryBuilder::PARAM_INT))
-			->where($qbFiles->expr()->eq('song_id', $qbFiles->createNamedParameter($droppedId, IQueryBuilder::PARAM_INT)))
-			->andWhere($qbFiles->expr()->isNull('deleted_at'));
-		$qbFiles->executeStatement();
+		$now = time();
+
+		// 1. Move files from droppedId to keepId, deduplicating shared file_ids
+		if ($this->songFileMapper !== null) {
+			$keepFiles = $this->songFileMapper->findAllForSong($keepId);
+			$keepFileIds = [];
+			foreach ($keepFiles as $kf) {
+				if ($kf->fileId > 0) {
+					$keepFileIds[$kf->fileId] = true;
+				}
+			}
+
+			$droppedFiles = $this->songFileMapper->findAllForSong($droppedId);
+			foreach ($droppedFiles as $df) {
+				if ($df->id === null) {
+					continue;
+				}
+				if ($df->fileId > 0 && isset($keepFileIds[$df->fileId])) {
+					$this->songFileMapper->delete($df->id);
+				} else {
+					$qbMoveFile = $this->db->getQueryBuilder();
+					$qbMoveFile->update(InternalSongFileMapper::TABLE_NAME)
+						->set('song_id', $qbMoveFile->createNamedParameter($keepId, IQueryBuilder::PARAM_INT))
+						->set('updated_at', $qbMoveFile->createNamedParameter($now, IQueryBuilder::PARAM_INT))
+						->where($qbMoveFile->expr()->eq('id', $qbMoveFile->createNamedParameter($df->id, IQueryBuilder::PARAM_INT)));
+					$qbMoveFile->executeStatement();
+					if ($df->fileId > 0) {
+						$keepFileIds[$df->fileId] = true;
+					}
+				}
+			}
+		} else {
+			$qbFiles = $this->db->getQueryBuilder();
+			$qbFiles->update(InternalSongFileMapper::TABLE_NAME)
+				->set('song_id', $qbFiles->createNamedParameter($keepId, IQueryBuilder::PARAM_INT))
+				->set('updated_at', $qbFiles->createNamedParameter($now, IQueryBuilder::PARAM_INT))
+				->where($qbFiles->expr()->eq('song_id', $qbFiles->createNamedParameter($droppedId, IQueryBuilder::PARAM_INT)))
+				->andWhere($qbFiles->expr()->isNull('deleted_at'));
+			$qbFiles->executeStatement();
+		}
 
 		// 2. Move entity links from droppedId to keepId
 		if ($this->entityMapper !== null) {

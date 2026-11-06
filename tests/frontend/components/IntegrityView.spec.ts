@@ -477,7 +477,7 @@ describe('IntegrityView.vue', () => {
 				},
 			} as any)
 
-		vi.mocked(axios.post).mockResolvedValueOnce({
+		vi.mocked(apiPost).mockResolvedValueOnce({
 			data: {
 				ocs: {
 					data: {
@@ -520,8 +520,8 @@ describe('IntegrityView.vue', () => {
 		await wrapper.find('[data-test="submit-merge-btn"]').trigger('click')
 		await flushPromises()
 
-		expect(axios.post).toHaveBeenCalledWith(
-			'/ocs/v2.php/apps/sheetmusic/api/songs/merge',
+		expect(apiPost).toHaveBeenCalledWith(
+			'/api/songs/merge',
 			expect.objectContaining({
 				libraryId: 1,
 				keepId: 60,
@@ -533,9 +533,9 @@ describe('IntegrityView.vue', () => {
 					duration: 210,
 				}),
 			}),
-			expect.any(Object),
 		)
 		expect(showSuccess).toHaveBeenCalledWith('Songs merged successfully into "Nachspiel in G".')
+		expect(wrapper.text()).toContain('All System Checks Passed!')
 	})
 })
 

@@ -328,16 +328,12 @@ async function executeMerge(payload: {
 	isMerging.value = true
 	integrityError.value = ''
 	try {
-		await axios.post(
-			`/ocs/v2.php/apps/sheetmusic/api/songs/merge`,
-			{
-				libraryId: props.selectedLibrary,
-				keepId: payload.keepId,
-				droppedId: payload.droppedId,
-				merged: payload.merged,
-			},
-			{ headers: { 'OCS-APIREQUEST': 'true', Accept: 'application/json' } },
-		)
+		await apiPost('/api/songs/merge', {
+			libraryId: props.selectedLibrary,
+			keepId: payload.keepId,
+			droppedId: payload.droppedId,
+			merged: payload.merged,
+		})
 		isMergeDialogOpen.value = false
 		const keepTitle = (payload.merged?.title as string | undefined) ?? mergeIssue.value?.songTitle
 		if (mergingKey.value) {
