@@ -4,6 +4,8 @@ import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
+import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
+import NcProgressBar from '@nextcloud/vue/components/NcProgressBar'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import { computed, reactive, watch } from 'vue'
@@ -47,6 +49,9 @@ const SCALAR_KEYS: SongScalarProp[] = SONG_SCALAR_FIELDS.map((field) => field.ke
 const props = defineProps<SongEntityLists & {
 	open: boolean
 	selectedCount: number
+	isApplying?: boolean
+	progressPercent?: number
+	progressMessage?: string
 }>()
 
 const emit = defineEmits<{
@@ -119,7 +124,7 @@ function onScalarInput(field: SongScalarFieldDef, raw: string | number) {
 }
 
 function handleApply() {
-	if (!isAnythingEnabled.value) return
+	if (!isAnythingEnabled.value || props.isApplying) return
 
 	const payload: BatchUpdatePayload = {}
 	for (const key of CATEGORY_KEYS) {
@@ -147,6 +152,7 @@ function handleApply() {
 }
 
 function handleClose() {
+	if (props.isApplying) return
 	emit('update:open', false)
 }
 
@@ -172,6 +178,7 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 				<div :class="$style.fieldHeader">
 					<NcCheckboxRadioSwitch
 						v-model="state[cat.key].enabled"
+						:disabled="isApplying"
 						type="checkbox">
 						{{ cat.label }}
 					</NcCheckboxRadioSwitch>
@@ -181,6 +188,7 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 						<label v-for="opt in actionOptions" :key="opt.value" :class="$style.radioLabel">
 							<input
 								v-model="state[cat.key].action"
+								:disabled="isApplying"
 								type="radio"
 								:name="cat.radioName"
 								:value="opt.value">
@@ -189,6 +197,7 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 					</div>
 					<NcSelect
 						v-model="state[cat.key].selected"
+						:disabled="isApplying"
 						:options="cat.options"
 						:multiple="true"
 						:close-on-select="false"
@@ -203,6 +212,7 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 				<div :class="$style.fieldHeader">
 					<NcCheckboxRadioSwitch
 						v-model="scalarState[field.key].enabled"
+						:disabled="isApplying"
 						type="checkbox"
 						:data-test="`batch-scalar-checkbox-${field.key}`">
 						{{ field.label() }}
@@ -211,6 +221,7 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 				<div v-if="scalarState[field.key].enabled" :class="$style.fieldBody">
 					<NcTextField
 						:id="`batch-${field.key}-input`"
+						:disabled="isApplying"
 						:type="field.type"
 						:min="field.min"
 						:max="field.max"
@@ -223,15 +234,28 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 				</div>
 			</div>
 
+			<div v-if="isApplying" :class="$style.progressContainer" data-test="batch-edit-progress">
+				<NcProgressBar
+					:value="progressPercent ?? 0"
+					size="medium"
+					:show-value="true" />
+				<p :class="$style.progressMessage">
+					{{ progressMessage || t('sheetmusic', 'Updating {count} songs…', { count: selectedCount }) }}
+				</p>
+			</div>
+
 			<div :class="$style.dialogActions">
-				<NcButton @click="handleClose">
+				<NcButton :disabled="isApplying" @click="handleClose">
 					{{ t('sheetmusic', 'Cancel') }}
 				</NcButton>
 				<NcButton
 					variant="primary"
-					:disabled="!isAnythingEnabled"
+					:disabled="!isAnythingEnabled || isApplying"
 					@click="handleApply">
-					{{ t('sheetmusic', 'Apply to {count} songs', { count: selectedCount }) }}
+					<template v-if="isApplying" #icon>
+						<NcLoadingIcon :size="16" />
+					</template>
+					{{ isApplying ? t('sheetmusic', 'Applying…') : t('sheetmusic', 'Apply to {count} songs', { count: selectedCount }) }}
 				</NcButton>
 			</div>
 		</div>
@@ -288,6 +312,19 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 	align-items: center;
 	gap: 4px;
 	cursor: pointer;
+}
+
+.progressContainer {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 8px 0 4px;
+}
+
+.progressMessage {
+	margin: 0;
+	font-size: 0.85rem;
+	color: var(--color-text-maxcontrast);
 }
 
 .dialogActions {

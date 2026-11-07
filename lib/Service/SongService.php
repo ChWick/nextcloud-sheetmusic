@@ -255,15 +255,28 @@ class SongService {
 		?array $instruments = null,
 		?array $arrangers = null,
 		?array $scalars = null,
+		?string $progressId = null,
 	): ?LibraryData {
 		if (empty($songIds)) {
 			return null;
 		}
 
+		$total = count($songIds);
+		if ($progressId !== null) {
+			$this->libraryService->startProgress($progressId, 'Updating songs…');
+		}
+
 		try {
-			foreach ($songIds as $songId) {
+			foreach (array_values($songIds) as $index => $songId) {
+				$current = $index + 1;
 				$sid = (int)$songId;
 				$song = $this->internalSongMapper->findById($sid);
+				if ($progressId !== null) {
+					$detail = $song !== null && $song->title !== ''
+						? "Updating song $current of $total: {$song->title}"
+						: "Updating song $current of $total";
+					$this->libraryService->updateProgress($progressId, 'batch-update', $current, $total, $detail);
+				}
 				if ($song !== null && $this->songHistoryService !== null && !$this->songHistoryService->hasHistory($sid)) {
 					$this->songHistoryService->recordSnapshot(
 						$song,
@@ -298,9 +311,20 @@ class SongService {
 				$this->songFileService->syncSongFileMetadata($user, '', $sid, $libraryId);
 			}
 			$this->libraryMapper->touch($libraryId);
+			if ($progressId !== null) {
+				$this->libraryService->updateProgress($progressId, 'finalizing', $total, $total, 'Finalizing…');
+			}
 
-			return $this->internalSongMapper->findLibraryData($libraryId, $user);
+			$data = $this->internalSongMapper->findLibraryData($libraryId, $user);
+			if ($progressId !== null) {
+				$this->libraryService->completeProgress($progressId, 'Batch update complete');
+			}
+
+			return $data;
 		} catch (\Throwable $e) {
+			if ($progressId !== null) {
+				$this->libraryService->failProgress($progressId, $e->getMessage());
+			}
 			$this->logger->error('Could not batch update songs in SheetMusic library', [
 				'exception' => $e,
 				'libraryId' => $libraryId,

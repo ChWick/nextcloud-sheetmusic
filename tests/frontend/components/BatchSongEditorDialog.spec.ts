@@ -131,4 +131,32 @@ describe('BatchSongEditorDialog.vue', () => {
 		expect(wrapper.emitted('update:open')?.[0]).toEqual([false])
 		wrapper.unmount()
 	})
+
+	it('renders progress bar and disables controls while applying', () => {
+		const wrapper = mount(BatchSongEditorDialog, {
+			props: {
+				open: true,
+				selectedCount: 5,
+				isApplying: true,
+				progressPercent: 60,
+				progressMessage: 'Updating song 3 of 5: Autumn Leaves',
+				composers,
+				books,
+				collections,
+				artists,
+			},
+			attachTo: document.body,
+		})
+
+		const progressEl = document.body.querySelector('[data-test="batch-edit-progress"]')
+		expect(progressEl).toBeTruthy()
+		expect(progressEl?.textContent).toContain('Updating song 3 of 5: Autumn Leaves')
+
+		const applyButton = wrapper.findAllComponents({ name: 'NcButton' }).find(b => b.text().includes('Applying…'))
+		expect(applyButton?.props('disabled')).toBe(true)
+
+		const cancelButton = wrapper.findAllComponents({ name: 'NcButton' }).find(b => b.text().includes('Cancel'))
+		expect(cancelButton?.props('disabled')).toBe(true)
+		wrapper.unmount()
+	})
 })

@@ -206,6 +206,9 @@
   <BatchSongEditorDialog
     v-model:open="isBatchEditorOpen"
     :selected-count="selectedCount"
+    :is-applying="isApplyingBatchUpdate"
+    :progress-percent="batchUpdateProgressPercent"
+    :progress-message="batchUpdateProgressMessage"
     v-bind="entityListsProps"
     @apply="handleApplyBatchUpdate" />
 
@@ -262,7 +265,7 @@ import { useSongSelection } from '../composables/useSongSelection';
 import { useLibraryData } from '../composables/useLibraryData';
 import { useSongImport } from '../composables/useSongImport';
 import { useSongMerge } from '../composables/useSongMerge';
-import { apiPost } from '../api/client';
+import { apiGet, apiPost } from '../api/client';
 import SongColumnToggle from './songs/SongColumnToggle.vue';
 import SongSortControl from './songs/SongSortControl.vue';
 import SongViewToggle, { type ViewMode } from './songs/SongViewToggle.vue';
@@ -430,6 +433,43 @@ const { searchTitle, withoutFiles, selectedComposers, selectedBooks, selectedCol
 
 const { selectedSongIds, selectedCount, isSelected, toggleSelect, selectAll, isAllSelected, clearSelection } = useSongSelection();
 const isBatchEditorOpen = ref(false);
+const isApplyingBatchUpdate = ref(false);
+const batchUpdateProgressPercent = ref(0);
+const batchUpdateProgressMessage = ref('');
+let batchProgressTimer: ReturnType<typeof setInterval> | null = null;
+
+function stopBatchProgressPolling() {
+  if (batchProgressTimer !== null) {
+    clearInterval(batchProgressTimer);
+    batchProgressTimer = null;
+  }
+}
+
+function startBatchProgressPolling(progressId: string, count: number) {
+  stopBatchProgressPolling();
+  batchUpdateProgressPercent.value = 0;
+  batchUpdateProgressMessage.value = t('sheetmusic', 'Updating {count} songs…', { count });
+  batchProgressTimer = setInterval(async () => {
+    try {
+      const res = await apiGet('/api/libraries/progress/{progressId}', {
+        pathParams: { progressId },
+      });
+      const data = res?.data?.ocs?.data as Record<string, unknown> | undefined;
+      if (data && typeof data === 'object') {
+        batchUpdateProgressPercent.value = Number(data.percent ?? 0);
+        if (data.message) {
+          batchUpdateProgressMessage.value = String(data.message);
+        }
+        if (data.status === 'completed' || data.status === 'error') {
+          stopBatchProgressPolling();
+        }
+      }
+    } catch {
+      // Ignore transient polling errors
+    }
+  }, 300);
+}
+
 const isBatchDeleteDialogOpen = ref(false);
 
 const currentLibraryData = computed<LibraryData>(() => ({
@@ -467,14 +507,19 @@ async function handleInlineUpdateSong(song: Song, updates: Record<string, any>) 
 }
 
 async function handleApplyBatchUpdate(payload: BatchUpdatePayload) {
-  if (selectedSongIds.value.length === 0) return;
+  if (selectedSongIds.value.length === 0 || isApplyingBatchUpdate.value) return;
   const count = selectedSongIds.value.length;
+  const progressId = `batch-edit-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+  isApplyingBatchUpdate.value = true;
+  startBatchProgressPolling(progressId, count);
   try {
     const response = await apiPost('/api/songs-batch-update', {
       libraryId: props.selectedLibrary,
       songIds: selectedSongIds.value,
+      progressId,
       ...payload,
-    });
+    } as any);
+    batchUpdateProgressPercent.value = 100;
     isBatchEditorOpen.value = false;
     clearSelection();
     if (response.data?.ocs?.data) {
@@ -484,6 +529,9 @@ async function handleApplyBatchUpdate(payload: BatchUpdatePayload) {
   } catch (error) {
     console.error('Failed to batch update songs:', error);
     showError(describeRequestFailure(error, t('sheetmusic', 'Failed to update selected songs.')));
+  } finally {
+    stopBatchProgressPolling();
+    isApplyingBatchUpdate.value = false;
   }
 }
 

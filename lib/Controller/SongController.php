@@ -233,6 +233,7 @@ class SongController extends OCSController {
 		?array $instruments = null,
 		?array $arrangers = null,
 		?array $scalars = null,
+		?string $progressId = null,
 	): DataResponse {
 		if ($libraryId === null || empty($songIds)) {
 			return new DataResponse([], Http::STATUS_BAD_REQUEST);
@@ -242,6 +243,9 @@ class SongController extends OCSController {
 		if ($user === null) {
 			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
 		}
+
+		$rawProgressId = $progressId ?? $this->request->getParam('progressId');
+		$resolvedProgressId = is_string($rawProgressId) && trim($rawProgressId) !== '' ? trim($rawProgressId) : null;
 
 		try {
 			$result = $this->songService->batchUpdateSongs(
@@ -261,6 +265,7 @@ class SongController extends OCSController {
 				$this->resolveBatchParam('instruments', $instruments),
 				$this->resolveBatchParam('arrangers', $arrangers),
 				$this->resolveBatchParam('scalars', $scalars),
+				$resolvedProgressId,
 			);
 
 			if ($result === null) {

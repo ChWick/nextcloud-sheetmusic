@@ -8,6 +8,7 @@ use OCA\SheetMusic\Service\EntityService;
 use OCA\SheetMusic\Service\LibraryIntegrityService;
 use OCA\SheetMusic\Service\LibraryService;
 use OCA\SheetMusic\Service\SetlistService;
+use OCA\SheetMusic\Service\SongAnnotationService;
 use OCA\SheetMusic\Service\SongFileService;
 use OCA\SheetMusic\Service\SongHistoryService;
 use OCA\SheetMusic\Service\SongService;
@@ -29,6 +30,7 @@ class ApiController extends OCSController {
 	private SongFileController $songFileController;
 	private EntityController $entityController;
 	private SetlistController $setlistController;
+	private SongAnnotationController $songAnnotationController;
 
 	public function __construct(
 		string $appName,
@@ -41,6 +43,7 @@ class ApiController extends OCSController {
 		IUserSession $userSession,
 		?SongHistoryService $songHistoryService = null,
 		?SetlistService $setlistService = null,
+		?SongAnnotationService $songAnnotationService = null,
 	) {
 		parent::__construct($appName, $request);
 
@@ -52,6 +55,12 @@ class ApiController extends OCSController {
 			$appName,
 			$request,
 			$setlistService ?? \OC::$server->get(SetlistService::class),
+			$userSession,
+		);
+		$this->songAnnotationController = new SongAnnotationController(
+			$appName,
+			$request,
+			$songAnnotationService ?? \OC::$server->get(SongAnnotationService::class),
 			$userSession,
 		);
 	}
@@ -218,8 +227,9 @@ class ApiController extends OCSController {
 		?array $instruments = null,
 		?array $arrangers = null,
 		?array $scalars = null,
+		?string $progressId = null,
 	): DataResponse {
-		return $this->songController->batchUpdateSongs($libraryId, $songIds, $composers, $books, $collections, $artists, $genres, $keys, $customGroups, $years, $signatures, $sourceTypes, $instruments, $arrangers, $scalars);
+		return $this->songController->batchUpdateSongs($libraryId, $songIds, $composers, $books, $collections, $artists, $genres, $keys, $customGroups, $years, $signatures, $sourceTypes, $instruments, $arrangers, $scalars, $progressId);
 	}
 
 	#[NoAdminRequired]
@@ -534,5 +544,23 @@ class ApiController extends OCSController {
 	#[ApiRoute(verb: 'POST', url: '/api/setlists/{id}/reorder')]
 	public function reorderSetlistItems(int $id, ?int $libraryId = null, ?array $itemIds = null): DataResponse {
 		return $this->setlistController->reorderItems($id, $libraryId, $itemIds);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'GET', url: '/api/songs/{songId}/annotations')]
+	public function getSongAnnotations(int $songId, ?int $fileId = null): DataResponse {
+		return $this->songAnnotationController->getAnnotations($songId, $fileId);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/songs/{songId}/annotations')]
+	public function saveSongAnnotation(int $songId): DataResponse {
+		return $this->songAnnotationController->saveAnnotation($songId);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'DELETE', url: '/api/annotations/{id}')]
+	public function deleteSongAnnotation(int $id): DataResponse {
+		return $this->songAnnotationController->deleteAnnotation($id);
 	}
 }

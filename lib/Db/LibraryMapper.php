@@ -143,6 +143,23 @@ class LibraryMapper {
 		return InternalLibrary::fromRow($row);
 	}
 
+	public function findByPathForUser(string $userId, string $path): ?InternalLibrary {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from(self::TABLE_NAME)
+			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId, IQueryBuilder::PARAM_STR)))
+			->andWhere($qb->expr()->eq('path', $qb->createNamedParameter($path, IQueryBuilder::PARAM_STR)))
+			->setMaxResults(1);
+
+		$row = $qb->executeQuery()->fetchAssociative();
+
+		if ($row === false) {
+			return null;
+		}
+
+		return InternalLibrary::fromRow($row);
+	}
+
 	public function setSettingsForUser(string $userId, int $id, ?bool $autoPaths = null, ?bool $autoPdfMetadata = null): void {
 		$qb = $this->db->getQueryBuilder();
 		$qb->update(self::TABLE_NAME)
