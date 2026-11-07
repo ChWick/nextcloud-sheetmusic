@@ -5,6 +5,8 @@ import type { PdfPageResolutionSummary } from '../song-pdf/pdf-enhance-engine'
 import { computed, ref } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import EyeOffOutline from 'vue-material-design-icons/EyeOffOutline.vue'
+import EyeOutline from 'vue-material-design-icons/EyeOutline.vue'
 import FileDocumentEditOutline from 'vue-material-design-icons/FileDocumentEditOutline.vue'
 import FileDocumentOutline from 'vue-material-design-icons/FileDocumentOutline.vue'
 import History from 'vue-material-design-icons/History.vue'
@@ -21,12 +23,14 @@ const props = withDefaults(
 		totalPages?: number
 		fileSizeBytes?: number | null
 		pageResolutions?: PdfPageResolutionSummary[]
+		showAnnotations?: boolean
 	}>(),
 	{
 		currentPage: 1,
 		totalPages: 1,
 		fileSizeBytes: null,
 		pageResolutions: () => [],
+		showAnnotations: true,
 	},
 )
 
@@ -34,6 +38,7 @@ const emit = defineEmits<{
 	'open-external': []
 	'modify-pdf': []
 	'open-versions': []
+	'toggle-annotations': []
 }>()
 
 const showInfoDropdown = ref(false)
@@ -134,6 +139,19 @@ const activePageResolution = computed<PdfPageResolutionSummary | null>(() => {
 				@click="emit('open-external')">
 				<template #icon>
 					<OpenInNewIcon :size="18" />
+				</template>
+			</NcButton>
+			<NcButton
+				v-if="isPdf"
+				size="small"
+				variant="secondary"
+				:title="showAnnotations ? t('sheetmusic', 'Hide annotations') : t('sheetmusic', 'Show annotations')"
+				:aria-label="showAnnotations ? t('sheetmusic', 'Hide annotations') : t('sheetmusic', 'Show annotations')"
+				data-test="toggle-annotations-button"
+				@click="emit('toggle-annotations')">
+				<template #icon>
+					<EyeOutline v-if="showAnnotations" :size="18" />
+					<EyeOffOutline v-else :size="18" />
 				</template>
 			</NcButton>
 			<NcButton

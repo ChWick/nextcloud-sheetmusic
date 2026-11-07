@@ -373,8 +373,9 @@ describe('SongViewer.vue', () => {
 		})
 
 		await settle()
-		expect(axios.get).toHaveBeenCalledTimes(1)
-		const initialUrl = vi.mocked(axios.get).mock.calls[0][0]
+		const initialFileCalls = vi.mocked(axios.get).mock.calls.filter(([url]) => String(url).includes('/dav/files/'))
+		expect(initialFileCalls).toHaveLength(1)
+		const initialUrl = initialFileCalls[0][0]
 		expect(initialUrl).toContain('/dav/files/admin/Noten/TestSonata.pdf')
 		expect(initialUrl).toMatch(/\?t=100--\d+/)
 
@@ -388,8 +389,9 @@ describe('SongViewer.vue', () => {
 		await saveBtn.trigger('click')
 		await settle()
 
-		expect(axios.get).toHaveBeenCalledTimes(2)
-		const postSaveUrl = vi.mocked(axios.get).mock.calls[1][0]
+		const postSaveFileCalls = vi.mocked(axios.get).mock.calls.filter(([url]) => String(url).includes('/dav/files/'))
+		expect(postSaveFileCalls).toHaveLength(2)
+		const postSaveUrl = postSaveFileCalls[1][0]
 		expect(postSaveUrl).toContain('/dav/files/admin/Noten/TestSonata.pdf')
 		// The timestamp query parameter in postSaveUrl must be updated
 		expect(postSaveUrl).not.toBe(initialUrl)
@@ -402,8 +404,9 @@ describe('SongViewer.vue', () => {
 		})
 
 		await settle()
-		expect(axios.get).toHaveBeenCalledTimes(1)
-		const initialUrl = vi.mocked(axios.get).mock.calls[0][0]
+		const initialFileCalls = vi.mocked(axios.get).mock.calls.filter(([url]) => String(url).includes('/dav/files/'))
+		expect(initialFileCalls).toHaveLength(1)
+		const initialUrl = initialFileCalls[0][0]
 
 		// Update song prop with updated lastModified timestamp
 		await wrapper.setProps({
@@ -414,8 +417,9 @@ describe('SongViewer.vue', () => {
 		})
 		await settle()
 
-		expect(axios.get).toHaveBeenCalledTimes(2)
-		const updatedUrl = vi.mocked(axios.get).mock.calls[1][0]
+		const updatedFileCalls = vi.mocked(axios.get).mock.calls.filter(([url]) => String(url).includes('/dav/files/'))
+		expect(updatedFileCalls).toHaveLength(2)
+		const updatedUrl = updatedFileCalls[1][0]
 		expect(updatedUrl).toContain('1700000000')
 		expect(updatedUrl).not.toBe(initialUrl)
 	})
@@ -525,5 +529,82 @@ describe('SongViewer.vue', () => {
 		await settle()
 
 		expect((wrapper.vm as any).activeBookmarkPage).toBe(5)
+	})
+
+	it('fetches annotations using fileId when present', async () => {
+		const songWithFileId: Song = {
+			...mockSong,
+			files: [
+				{ id: 2304, fileId: 1701, path: '/dav/files/admin/Noten/TakeFive.pdf' },
+			],
+		}
+
+		mount(SongViewer, {
+			props: { song: songWithFileId, libraryId: 1 },
+			...globalStubs,
+		})
+
+		await settle()
+
+		// Should call fetchSongAnnotations with fileId (1701)
+		const annCalls = vi.mocked(axios.get).mock.calls.filter((c) =>
+			typeof c[0] === 'string' && c[0].includes('/annotations'),
+		)
+		expect(annCalls.length).toBeGreaterThanOrEqual(1)
+		expect(annCalls[0][1]).toEqual({ params: { fileId: 1701 } })
+	})
+
+	it('fetches annotations using file.id as fallback when fileId is absent', async () => {
+		const songWithoutFileId: Song = {
+			...mockSong,
+			files: [
+				{ id: 2304, path: '/dav/files/admin/Noten/TakeFive.pdf' },
+			],
+		}
+
+		mount(SongViewer, {
+			props: { song: songWithoutFileId, libraryId: 1 },
+			...globalStubs,
+		})
+
+		await settle()
+
+		const annCalls = vi.mocked(axios.get).mock.calls.filter((c) =>
+			typeof c[0] === 'string' && c[0].includes('/annotations'),
+		)
+		expect(annCalls.length).toBeGreaterThanOrEqual(1)
+		expect(annCalls[0][1]).toEqual({ params: { fileId: 2304 } })
+	})
+
+	it('re-fetches annotations with updated fileId when switching selected file', async () => {
+		const multiFileSong: Song = {
+			...mockSong,
+			files: [
+				{ id: 101, fileId: 1701, path: '/dav/files/admin/Noten/Movement1.pdf' },
+				{ id: 102, fileId: 1702, path: '/dav/files/admin/Noten/Movement2.pdf' },
+			],
+		}
+
+		const wrapper = mount(SongViewer, {
+			props: { song: multiFileSong, libraryId: 1 },
+			...globalStubs,
+		})
+
+		await settle()
+
+		// Initial load with first file (fileId: 1701)
+		let annCalls = vi.mocked(axios.get).mock.calls.filter((c) =>
+			typeof c[0] === 'string' && c[0].includes('/annotations'),
+		)
+		expect(annCalls.some((c) => c[1]?.params?.fileId === 1701)).toBe(true)
+
+		// Switch file
+		await (wrapper.vm as any).selectFile('102')
+		await settle()
+
+		annCalls = vi.mocked(axios.get).mock.calls.filter((c) =>
+			typeof c[0] === 'string' && c[0].includes('/annotations'),
+		)
+		expect(annCalls.some((c) => c[1]?.params?.fileId === 1702)).toBe(true)
 	})
 })

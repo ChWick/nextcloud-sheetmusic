@@ -22,6 +22,8 @@ import SongViewerMetadata from './song-viewer/SongViewerMetadata.vue'
 import SongViewerBookmarksBar from './song-viewer/SongViewerBookmarksBar.vue'
 import SongViewerFileToolbar from './song-viewer/SongViewerFileToolbar.vue'
 import { extractEntityLists } from './songs/song-view-columns'
+import { fetchSongAnnotations } from '../api/annotations'
+import type { SheetAnnotation } from '../types/annotation'
 
 const props = withDefaults(
 	defineProps<{
@@ -189,12 +191,39 @@ const {
 	},
 })
 
+const annotations = ref<SheetAnnotation[]>([])
+
+async function loadAnnotations() {
+	if (!props.song?.id) {
+		annotations.value = []
+		return
+	}
+	try {
+		const targetFileId = selectedFile.value?.fileId ?? selectedFile.value?.id
+		annotations.value = await fetchSongAnnotations(props.song.id, targetFileId)
+	} catch (error) {
+		console.error('Failed to load annotations:', error)
+		annotations.value = []
+	}
+}
+
+watch(
+	[() => props.song?.id, () => selectedFile.value?.id, () => selectedFile.value?.fileId],
+	() => {
+		loadAnnotations()
+	},
+	{ immediate: true },
+)
+
 defineExpose({
 	openInExternalViewer,
 	openVersionsModal,
 	promptDelete: () => { isDeleteDialogOpen.value = true },
 	startEditing: () => { isEditing.value = true },
 	selectedFile,
+	annotations,
+	loadAnnotations,
+	selectFile,
 })
 </script>
 
@@ -280,9 +309,11 @@ defineExpose({
 				:total-pages="filePreviewerRef?.totalPages ?? 1"
 				:file-size-bytes="filePreviewerRef?.fileSizeBytes ?? null"
 				:page-resolutions="filePreviewerRef?.pageResolutions ?? []"
+				:show-annotations="filePreviewerRef?.showAnnotationsState ?? true"
 				@open-external="openInExternalViewer"
 				@modify-pdf="song && emit('modify-pdf', song, selectedFile.id)"
-				@open-versions="openVersionsModal" />
+				@open-versions="openVersionsModal"
+				@toggle-annotations="filePreviewerRef?.toggleAnnotations()" />
 
 			<SongViewerBookmarksBar
 				:bookmarks="songBookmarks"
@@ -296,7 +327,8 @@ defineExpose({
 				:file-path="previewFilePath"
 				:page-order="selectedFile?.pageOrder"
 				:target-page="activeBookmarkPage"
-				:show-external-button="false" />
+				:show-external-button="false"
+				:annotations="annotations" />
 			<div v-else :class="$style.error">
 				{{ songFiles.length === 0 ? t('sheetmusic', 'No files attached to this song.') : t('sheetmusic', 'Missing file: The file does not exist on the file system.') }}
 			</div>

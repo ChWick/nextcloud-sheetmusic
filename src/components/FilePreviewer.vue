@@ -12,6 +12,7 @@ import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import FilePreviewerToolbar from './file-preview/FilePreviewerToolbar.vue'
 import { inspectPdfPageResolution, type PdfPageResolutionSummary } from './song-pdf/pdf-enhance-engine'
 import { parsePageOrder } from '../utils/page-order'
+import type { SheetAnnotation } from '../types/annotation'
 
 const props = withDefaults(
 	defineProps<{
@@ -20,12 +21,16 @@ const props = withDefaults(
 		hideToolbar?: boolean
 		targetPage?: number
 		pageOrder?: string | null
+		annotations?: SheetAnnotation[]
+		showAnnotations?: boolean
 	}>(),
 	{
 		showExternalButton: true,
 		hideToolbar: false,
 		targetPage: undefined,
 		pageOrder: undefined,
+		annotations: () => [],
+		showAnnotations: true,
 	},
 )
 
@@ -52,6 +57,139 @@ const customScale = ref(1.0)
 const effectiveScale = ref(1.0)
 const rotation = ref(0)
 const imageScale = ref(1.0)
+const showAnnotationsState = ref(props.showAnnotations ?? true)
+
+function toggleAnnotations() {
+	showAnnotationsState.value = !showAnnotationsState.value
+	updateAnnotationOverlaysVisibility()
+}
+
+function updateAnnotationOverlaysVisibility() {
+	if (!pdfContainer.value) return
+	const overlays = pdfContainer.value.querySelectorAll<SVGElement>('.sheetmusic-annotation-overlay')
+	overlays.forEach((el) => {
+		el.style.display = showAnnotationsState.value ? 'block' : 'none'
+	})
+}
+
+function refreshAnnotationOverlays() {
+	if (!pdfContainer.value) return
+	const placeholders = pdfContainer.value.querySelectorAll<HTMLElement>('[data-page-num]')
+	placeholders.forEach((el) => {
+		const existing = el.querySelectorAll('.sheetmusic-annotation-overlay')
+		existing.forEach((node) => node.remove())
+
+		const pageNum = Number(el.dataset.pageNum)
+		if (pageNum && el.querySelector('canvas')) {
+			const overlay = createAnnotationSvg(pageNum)
+			if (overlay) {
+				el.appendChild(overlay)
+			}
+		}
+	})
+}
+
+watch(
+	() => props.annotations,
+	() => {
+		refreshAnnotationOverlays()
+	},
+	{ deep: true },
+)
+
+watch(
+	() => props.showAnnotations,
+	(val) => {
+		showAnnotationsState.value = val ?? true
+		updateAnnotationOverlaysVisibility()
+	},
+)
+
+function createAnnotationSvg(pageNum: number): SVGElement | null {
+	const pageAnns = (props.annotations || []).filter(
+		(a) => !a.deletedAt && (a.pageNumber === pageNum || a.pageNumber === pageNum - 1),
+	)
+	if (pageAnns.length === 0) return null
+
+	const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+	svg.setAttribute('viewBox', '0 0 1000 1000')
+	svg.setAttribute('preserveAspectRatio', 'none')
+	svg.setAttribute('class', 'sheetmusic-annotation-overlay')
+	svg.setAttribute('data-test', 'annotation-overlay')
+	svg.style.position = 'absolute'
+	svg.style.top = '0'
+	svg.style.left = '0'
+	svg.style.width = '100%'
+	svg.style.height = '100%'
+	svg.style.pointerEvents = 'none'
+	svg.style.display = showAnnotationsState.value ? 'block' : 'none'
+
+	for (const ann of pageAnns) {
+		if ((ann.type === 'drawing' || ann.type === 'highlight' || (ann.type === 'shape' && ann.data?.path)) && ann.data?.path) {
+			const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+			path.setAttribute('d', ann.data.path)
+			path.setAttribute('stroke', ann.style?.stroke || '#ff0000')
+			path.setAttribute('stroke-width', String(ann.style?.strokeWidth || 2.0))
+			path.setAttribute('opacity', String(ann.style?.opacity ?? 1.0))
+			path.setAttribute('fill', 'none')
+			path.setAttribute('stroke-linecap', 'round')
+			path.setAttribute('stroke-linejoin', 'round')
+			if (ann.type === 'highlight') {
+				path.style.mixBlendMode = 'multiply'
+			}
+			svg.appendChild(path)
+		} else if (ann.type === 'shape') {
+			const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect')
+			rect.setAttribute('x', String(ann.x * 1000))
+			rect.setAttribute('y', String(ann.y * 1000))
+			rect.setAttribute('width', String(ann.width * 1000))
+			rect.setAttribute('height', String(ann.height * 1000))
+			rect.setAttribute('stroke', ann.style?.stroke || '#ff0000')
+			rect.setAttribute('stroke-width', String(ann.style?.strokeWidth || 2.0))
+			rect.setAttribute('fill', ann.style?.fill || 'transparent')
+			svg.appendChild(rect)
+		} else if (ann.type === 'stamp') {
+			const text = document.createElementNS('http://www.w3.org/2000/svg', 'text')
+			text.setAttribute('x', String(ann.x * 1000))
+			const fontSize = ann.style?.fontSize || 40
+			text.setAttribute('y', String((ann.y * 1000) + (fontSize * 0.8)))
+			text.setAttribute('fill', ann.style?.color || '#000000')
+			text.setAttribute('font-size', String(fontSize))
+			text.setAttribute('font-family', 'sans-serif, music, Bravura, "Noto Music"')
+			text.setAttribute('data-test', 'annotation-stamp')
+			text.textContent = ann.data?.displaySymbol || ann.data?.symbol || ''
+			svg.appendChild(text)
+		} else if (ann.type === 'text' && ann.data?.text) {
+			const text = document.createElementNS('http://www.w3.org/2000/svg', 'text')
+			text.setAttribute('x', String(ann.x * 1000))
+			text.setAttribute('y', String((ann.y * 1000) + (ann.data.fontSize || 16)))
+			text.setAttribute('fill', ann.style?.color || '#000000')
+			text.setAttribute('font-size', String(ann.data.fontSize || 16))
+			text.setAttribute('font-family', ann.data.fontFamily || 'sans-serif')
+			text.textContent = ann.data.text
+			svg.appendChild(text)
+		} else if (ann.type === 'link') {
+			const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect')
+			rect.setAttribute('x', String(ann.x * 1000))
+			rect.setAttribute('y', String(ann.y * 1000))
+			rect.setAttribute('width', String(ann.width * 1000))
+			rect.setAttribute('height', String(ann.height * 1000))
+			rect.style.pointerEvents = 'auto'
+			rect.style.cursor = 'pointer'
+			rect.style.fill = 'rgba(0, 120, 255, 0.2)'
+			rect.style.stroke = 'rgba(0, 120, 255, 0.6)'
+			rect.style.strokeWidth = '1.5'
+			rect.onclick = () => {
+				if (typeof ann.data?.targetPage === 'number') {
+					goToPage(ann.data.targetPage + 1)
+				}
+			}
+			svg.appendChild(rect)
+		}
+	}
+
+	return svg
+}
 
 const zoomSteps = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 4.0]
 
@@ -306,8 +444,13 @@ async function renderCurrentView() {
 
 			if (renderId === currentRenderId) {
 				placeholder.replaceChildren(canvas)
+				placeholder.style.position = 'relative'
 				placeholder.style.minHeight = ''
 				placeholder.style.minWidth = ''
+				const overlay = createAnnotationSvg(pageNumber)
+				if (overlay) {
+					placeholder.appendChild(overlay)
+				}
 			}
 		} catch (err) {
 			console.warn(`Could not render page ${pageNumber}:`, err)
@@ -527,6 +670,8 @@ defineExpose({
 	totalPages,
 	fileSizeBytes,
 	pageResolutions,
+	showAnnotationsState,
+	toggleAnnotations,
 })
 </script>
 
@@ -544,6 +689,7 @@ defineExpose({
 			:is-custom-zoom="isCustomZoom"
 			:display-scale="isImageFile ? imageScale : effectiveScale"
 			:show-external-button="showExternalButton"
+			:show-annotations="showAnnotationsState"
 			@previous-page="prevPage"
 			@next-page="nextPage"
 			@page-layout="setPageLayout"
@@ -552,7 +698,8 @@ defineExpose({
 			@zoom-out="zoomOut"
 			@fit-width="setZoomMode('fit-width')"
 			@rotate="rotateClockwise"
-			@open-external="openInExternalViewer" />
+			@open-external="openInExternalViewer"
+			@toggle-annotations="toggleAnnotations" />
 
 		<div v-if="isLoading" :class="$style.loading">
 			<NcLoadingIcon :size="32" :name="t('sheetmusic', 'Loading file...')" />

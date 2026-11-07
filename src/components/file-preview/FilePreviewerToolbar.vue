@@ -3,6 +3,8 @@ import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import ChevronLeft from 'vue-material-design-icons/ChevronLeft.vue'
 import ChevronRight from 'vue-material-design-icons/ChevronRight.vue'
+import EyeOffOutline from 'vue-material-design-icons/EyeOffOutline.vue'
+import EyeOutline from 'vue-material-design-icons/EyeOutline.vue'
 import FitToScreenOutline from 'vue-material-design-icons/FitToScreenOutline.vue'
 import MagnifyMinus from 'vue-material-design-icons/MagnifyMinus.vue'
 import MagnifyPlus from 'vue-material-design-icons/MagnifyPlus.vue'
@@ -24,8 +26,10 @@ withDefaults(defineProps<{
 	isCustomZoom: boolean
 	displayScale: number
 	showExternalButton?: boolean
+	showAnnotations?: boolean
 }>(), {
 	showExternalButton: true,
+	showAnnotations: true,
 })
 
 const emit = defineEmits<{
@@ -38,6 +42,7 @@ const emit = defineEmits<{
 	fitWidth: []
 	rotate: []
 	openExternal: []
+	toggleAnnotations: []
 }>()
 </script>
 
@@ -153,6 +158,20 @@ const emit = defineEmits<{
 				:aria-label="t('sheetmusic', 'Rotate clockwise')"
 				@click="emit('rotate')">
 				<template #icon><RotateRight :size="18" /></template>
+			</NcButton>
+
+			<NcButton
+				v-if="isPdf"
+				variant="secondary"
+				size="small"
+				:title="showAnnotations ? t('sheetmusic', 'Hide annotations') : t('sheetmusic', 'Show annotations')"
+				:aria-label="showAnnotations ? t('sheetmusic', 'Hide annotations') : t('sheetmusic', 'Show annotations')"
+				data-test="toggle-annotations-button"
+				@click="emit('toggleAnnotations')">
+				<template #icon>
+					<EyeOutline v-if="showAnnotations" :size="18" />
+					<EyeOffOutline v-else :size="18" />
+				</template>
 			</NcButton>
 
 			<NcButton
