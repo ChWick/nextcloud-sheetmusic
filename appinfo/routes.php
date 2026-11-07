@@ -301,5 +301,20 @@ return [
 			'url' => '/api/setlists/{id}/reorder',
 			'verb' => 'POST',
 		],
+		[
+			'name' => 'Api#getSongAnnotations',
+			'url' => '/api/songs/{songId}/annotations',
+			'verb' => 'GET',
+		],
+		[
+			'name' => 'Api#saveSongAnnotation',
+			'url' => '/api/songs/{songId}/annotations',
+			'verb' => 'POST',
+		],
+		[
+			'name' => 'Api#deleteSongAnnotation',
+			'url' => '/api/annotations/{id}',
+			'verb' => 'DELETE',
+		],
 	],
 ];
