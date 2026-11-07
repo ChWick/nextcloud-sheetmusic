@@ -13,6 +13,7 @@ import FilePreviewerToolbar from './file-preview/FilePreviewerToolbar.vue'
 import { inspectPdfPageResolution, type PdfPageResolutionSummary } from './song-pdf/pdf-enhance-engine'
 import { parsePageOrder } from '../utils/page-order'
 import type { SheetAnnotation } from '../types/annotation'
+import { generateSmoothSvgPath, getAnnotationDashArray } from '../utils/annotation'
 
 const props = withDefaults(
 	defineProps<{
@@ -125,11 +126,20 @@ function createAnnotationSvg(pageNum: number): SVGElement | null {
 	svg.style.display = showAnnotationsState.value ? 'block' : 'none'
 
 	for (const ann of pageAnns) {
-		if ((ann.type === 'drawing' || ann.type === 'highlight' || (ann.type === 'shape' && ann.data?.path)) && ann.data?.path) {
+		const dashArray = getAnnotationDashArray(ann)
+
+		if ((ann.type === 'drawing' || ann.type === 'highlight' || (ann.type === 'shape' && (ann.data?.path || ann.data?.points)))) {
 			const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
-			path.setAttribute('d', ann.data.path)
+			const isSmooth = ann.data?.smoothMode !== false && ann.data?.drawMode !== 1
+			const d = (ann.data?.points && ann.data.points.length > 0)
+				? generateSmoothSvgPath(ann.data.points, isSmooth)
+				: (ann.data?.path || '')
+			path.setAttribute('d', d)
 			path.setAttribute('stroke', ann.style?.stroke || '#ff0000')
 			path.setAttribute('stroke-width', String(ann.style?.strokeWidth || 2.0))
+			if (dashArray) {
+				path.setAttribute('stroke-dasharray', dashArray)
+			}
 			path.setAttribute('opacity', String(ann.style?.opacity ?? 1.0))
 			path.setAttribute('fill', 'none')
 			path.setAttribute('stroke-linecap', 'round')
@@ -146,6 +156,9 @@ function createAnnotationSvg(pageNum: number): SVGElement | null {
 			rect.setAttribute('height', String(ann.height * 1000))
 			rect.setAttribute('stroke', ann.style?.stroke || '#ff0000')
 			rect.setAttribute('stroke-width', String(ann.style?.strokeWidth || 2.0))
+			if (dashArray) {
+				rect.setAttribute('stroke-dasharray', dashArray)
+			}
 			rect.setAttribute('fill', ann.style?.fill || 'transparent')
 			svg.appendChild(rect)
 		} else if (ann.type === 'stamp') {

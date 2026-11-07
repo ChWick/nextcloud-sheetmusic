@@ -12,6 +12,9 @@ export interface AnnotationStyle {
 	blendMode?: 'normal' | 'multiply' | string
 	color?: string
 	fill?: string
+	lineStyle?: 'solid' | 'dashed' | 'dotted' | string
+	strokeDashArray?: string
+	fontSize?: number
 }
 
 export interface AnnotationData {
@@ -21,9 +24,15 @@ export interface AnnotationData {
 	fontSize?: number
 	fontFamily?: string
 	symbol?: string
+	displaySymbol?: string
 	targetPage?: number
 	targetX?: number
 	targetY?: number
+	penMode?: number
+	drawMode?: number
+	smoothMode?: number
+	lineWidth?: number
+	[key: string]: unknown
 }
 
 export interface SheetAnnotation {

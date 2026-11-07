@@ -150,8 +150,8 @@ describe('SongAnnotationOverlay.vue', () => {
 		const drawings = wrapper.findAll('[data-test="annotation-drawing"]')
 		expect(drawings).toHaveLength(2) // 1 drawing + 1 highlight
 
-		// Verify drawing attributes
-		expect(drawings[0].attributes('d')).toBe('M 100 100 L 200 200 L 300 250')
+		// Verify drawing attributes (Catmull-Rom cubic Bezier smoothed)
+		expect(drawings[0].attributes('d')).toBe('M 100.0 100.0 C 116.7 116.7, 166.7 175.0, 200.0 200.0 C 233.3 225.0, 283.3 241.7, 300.0 250.0')
 		expect(drawings[0].attributes('stroke')).toBe('#ff0000')
 
 		// Verify highlight attributes
@@ -215,5 +215,50 @@ describe('SongAnnotationOverlay.vue', () => {
 		})
 
 		expect(wrapper.find('[data-test="annotation-overlay"]').exists()).toBe(false)
+	})
+
+	it('renders dashed lines and handles linear non-smooth drawing mode', () => {
+		const dashedAnnotations: SheetAnnotation[] = [
+			{
+				id: 10,
+				uuid: 'ann-dashed-1',
+				songId: 10,
+				fileId: 20,
+				pageNumber: 1,
+				layerIndex: 0,
+				type: 'drawing',
+				x: 0.1,
+				y: 0.1,
+				width: 0.5,
+				height: 0.5,
+				style: {
+					stroke: '#00ff00',
+					strokeWidth: 4,
+					lineStyle: 'dashed',
+					strokeDashArray: '16, 12',
+				},
+				data: {
+					smoothMode: false,
+					points: [
+						{ x: 0.1, y: 0.1 },
+						{ x: 0.3, y: 0.3 },
+						{ x: 0.5, y: 0.5 },
+					],
+				},
+			},
+		]
+
+		const wrapper = mount(SongAnnotationOverlay, {
+			props: {
+				annotations: dashedAnnotations,
+				pageNumber: 1,
+				visible: true,
+			},
+		})
+
+		const drawing = wrapper.find('[data-test="annotation-drawing"]')
+		expect(drawing.exists()).toBe(true)
+		expect(drawing.attributes('stroke-dasharray')).toBe('16, 12')
+		expect(drawing.attributes('d')).toBe('M 100.0 100.0 L 300.0 300.0 L 500.0 500.0')
 	})
 })

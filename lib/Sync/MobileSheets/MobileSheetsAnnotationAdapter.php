@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace OCA\SheetMusic\Sync\MobileSheets;
 
 use OCA\SheetMusic\Db\InternalSongAnnotation;
+use OCA\SheetMusic\Util\SvgCurveUtil;
 use PDO;
 
 class MobileSheetsAnnotationAdapter {
@@ -249,23 +250,42 @@ class MobileSheetsAnnotationAdapter {
 		$strokeColor = self::argbToHex($lineColorInt);
 		$lineWidth = isset($draw['LineWidth']) ? (float)$draw['LineWidth'] : 2.0;
 
+		$penMode = (int)($draw['PenMode'] ?? 1);
+		$smoothMode = (int)($draw['SmoothMode'] ?? 0);
+		$drawMode = (int)($draw['DrawMode'] ?? 0);
+
 		$bbox = !empty($points) ? self::calculateBoundingBox($points) : ['x' => 0.0, 'y' => 0.0, 'width' => 0.0, 'height' => 0.0];
-		$pathD = !empty($points) ? self::generateSvgPath($points) : '';
+		$pathD = !empty($points) ? self::generateSvgPath($points, smooth: $drawMode !== 4) : '';
+
+		$lineStyle = match ($penMode) {
+			2 => 'dotted',
+			3 => 'dashed',
+			default => 'solid',
+		};
+		$strokeDashArray = match ($penMode) {
+			2 => '4, 8',
+			3 => '16, 12',
+			default => null,
+		};
 
 		$style = [
 			'stroke' => $strokeColor,
 			'strokeWidth' => round($lineWidth / ($sourceW > 0 ? $sourceW : 595.0) * 1000, 2),
 			'opacity' => $opacity,
 			'blendMode' => $type === 'highlight' ? 'multiply' : 'normal',
+			'lineStyle' => $lineStyle,
 		];
+		if ($strokeDashArray !== null) {
+			$style['strokeDashArray'] = $strokeDashArray;
+		}
 
 		$data = array_merge($baseClientMeta, [
 			'path' => $pathD,
 			'points' => $points,
 			'drawId' => (int)($draw['Id'] ?? $baseId),
-			'drawMode' => (int)($draw['DrawMode'] ?? 0),
-			'penMode' => (int)($draw['PenMode'] ?? 1),
-			'smoothMode' => (int)($draw['SmoothMode'] ?? 0),
+			'drawMode' => $drawMode,
+			'penMode' => $penMode,
+			'smoothMode' => $smoothMode,
 			'fillColor' => (int)($draw['FillColor'] ?? 0),
 			'lineWidth' => $lineWidth,
 		]);
@@ -601,7 +621,21 @@ class MobileSheetsAnnotationAdapter {
 					$drawMode = isset($ann->data['drawMode']) && is_numeric($ann->data['drawMode'])
 						? (int)$ann->data['drawMode']
 						: ($ann->type === 'shape' ? 1 : ($ann->type === 'highlight' ? 2 : 0));
-					$penMode = (int)($ann->data['penMode'] ?? 1);
+
+					if (isset($ann->data['penMode']) && is_numeric($ann->data['penMode'])) {
+						$penMode = (int)$ann->data['penMode'];
+					} else {
+						$lineStyle = (string)($ann->style['lineStyle'] ?? '');
+						$dashArray = (string)($ann->style['strokeDashArray'] ?? '');
+						if ($lineStyle === 'dashed' || ($dashArray !== '' && !str_starts_with($dashArray, '4,'))) {
+							$penMode = 3;
+						} elseif ($lineStyle === 'dotted' || str_starts_with($dashArray, '4,')) {
+							$penMode = 2;
+						} else {
+							$penMode = $ann->type === 'shape' ? 0 : 1;
+						}
+					}
+
 					$smoothMode = (int)($ann->data['smoothMode'] ?? 0);
 					$fillColor = (int)($ann->data['fillColor'] ?? 0);
 					$drawId = isset($ann->data['drawId']) && is_numeric($ann->data['drawId']) ? (int)$ann->data['drawId'] : $baseId;
@@ -834,26 +868,12 @@ class MobileSheetsAnnotationAdapter {
 
 	/**
 	 * Generate SVG path string with 0..1000 coordinate space.
+	 * Applies Catmull-Rom cubic Bezier curve smoothing for freehand strokes with 3+ points.
 	 *
 	 * @param list<array{x: float, y: float}> $points
 	 */
-	public static function generateSvgPath(array $points): string {
-		if (empty($points)) {
-			return '';
-		}
-
-		$d = '';
-		foreach ($points as $i => $pt) {
-			$sx = round($pt['x'] * 1000, 1);
-			$sy = round($pt['y'] * 1000, 1);
-			if ($i === 0) {
-				$d .= "M $sx $sy";
-			} else {
-				$d .= " L $sx $sy";
-			}
-		}
-
-		return $d;
+	public static function generateSvgPath(array $points, bool $smooth = true): string {
+		return SvgCurveUtil::generateSvgPath($points, $smooth);
 	}
 
 	/**
@@ -861,28 +881,7 @@ class MobileSheetsAnnotationAdapter {
 	 * @return array{x: float, y: float, width: float, height: float}
 	 */
 	public static function calculateBoundingBox(array $points): array {
-		if (empty($points)) {
-			return ['x' => 0.0, 'y' => 0.0, 'width' => 0.0, 'height' => 0.0];
-		}
-
-		$minX = 1.0;
-		$minY = 1.0;
-		$maxX = 0.0;
-		$maxY = 0.0;
-
-		foreach ($points as $pt) {
-			$minX = min($minX, $pt['x']);
-			$minY = min($minY, $pt['y']);
-			$maxX = max($maxX, $pt['x']);
-			$maxY = max($maxY, $pt['y']);
-		}
-
-		return [
-			'x' => round($minX, 4),
-			'y' => round($minY, 4),
-			'width' => round(max(0.001, $maxX - $minX), 4),
-			'height' => round(max(0.001, $maxY - $minY), 4),
-		];
+		return SvgCurveUtil::calculateBoundingBox($points);
 	}
 
 	public static function generateDeterministicUuid(string $prefix, int $id): string {

@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace OCA\SheetMusic\Sync\ForScore;
 
 use OCA\SheetMusic\Db\InternalSongAnnotation;
+use OCA\SheetMusic\Util\SvgCurveUtil;
 
 class ForScoreAnnotationAdapter {
 	public const DEFAULT_PDF_WIDTH = 595.0; // standard A4 points (72 DPI)
@@ -106,12 +107,7 @@ class ForScoreAnnotationAdapter {
 				$lineWidth = (float)($rec['lineWidth'] ?? 2.0);
 				$isHighlight = $typeStr === 'highlight' || $opacity < 0.6;
 
-				$pathD = '';
-				foreach ($normalizedPoints as $i => $pt) {
-					$sx = round($pt['x'] * 1000, 1);
-					$sy = round($pt['y'] * 1000, 1);
-					$pathD .= ($i === 0 ? "M $sx $sy" : " L $sx $sy");
-				}
+				$pathD = SvgCurveUtil::generateSvgPath($normalizedPoints, smooth: true);
 
 				$annotations[] = new InternalSongAnnotation(
 					id: null,

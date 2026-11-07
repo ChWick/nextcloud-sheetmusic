@@ -213,4 +213,105 @@ final class MobileSheetsAnnotationAdapterTest extends TestCase {
 		self::assertEqualsWithDelta(0.25, $imported[0]->x, 0.01);
 		self::assertEqualsWithDelta(0.35, $imported[0]->y, 0.01);
 	}
+
+	public function testDashedAndDottedLineStyleImportExport(): void {
+		$db = new PDO('sqlite::memory:');
+		$db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+		foreach (['AnnotationsBase', 'DrawAnnotations', 'AnnotationPoints'] as $table) {
+			$db->exec(MobileSheetsBaselineSchema::TABLES[$table]);
+		}
+
+		$canonical = [
+			new InternalSongAnnotation(
+				id: 1,
+				uuid: 'test-dashed-uuid',
+				songId: 10,
+				fileId: 20,
+				pageNumber: 0,
+				layerIndex: 0,
+				type: 'drawing',
+				x: 0.1,
+				y: 0.1,
+				width: 0.5,
+				height: 0.5,
+				style: [
+					'stroke' => '#e91e63',
+					'strokeWidth' => 4.0,
+					'opacity' => 1.0,
+					'lineStyle' => 'dashed',
+					'strokeDashArray' => '16, 12',
+				],
+				data: [
+					'points' => [['x' => 0.1, 'y' => 0.1], ['x' => 0.6, 'y' => 0.6]],
+				],
+			),
+			new InternalSongAnnotation(
+				id: 2,
+				uuid: 'test-dotted-uuid',
+				songId: 10,
+				fileId: 20,
+				pageNumber: 0,
+				layerIndex: 0,
+				type: 'drawing',
+				x: 0.2,
+				y: 0.2,
+				width: 0.4,
+				height: 0.4,
+				style: [
+					'stroke' => '#00ff00',
+					'strokeWidth' => 2.0,
+					'opacity' => 1.0,
+					'lineStyle' => 'dotted',
+				],
+				data: [
+					'points' => [['x' => 0.2, 'y' => 0.2], ['x' => 0.6, 'y' => 0.6]],
+				],
+			),
+		];
+
+		$this->adapter->exportAnnotations($db, clientSongId: 10, annotations: $canonical);
+
+		$drawRows = $db->query('SELECT * FROM DrawAnnotations ORDER BY Id ASC')->fetchAll(PDO::FETCH_ASSOC);
+		self::assertCount(2, $drawRows);
+		self::assertSame(3, (int)$drawRows[0]['PenMode'], 'Dashed stroke must export with PenMode = 3');
+		self::assertSame(2, (int)$drawRows[1]['PenMode'], 'Dotted stroke must export with PenMode = 2');
+
+		// Import back and verify lineStyle and strokeDashArray are reconstructed
+		$imported = $this->adapter->importAnnotations($db, songId: 10, fileId: 20, clientSongId: 10);
+		self::assertCount(2, $imported);
+		self::assertSame('dashed', $imported[0]->style['lineStyle']);
+		self::assertSame('16, 12', $imported[0]->style['strokeDashArray']);
+		self::assertSame(3, $imported[0]->data['penMode']);
+
+		self::assertSame('dotted', $imported[1]->style['lineStyle']);
+		self::assertSame('4, 8', $imported[1]->style['strokeDashArray']);
+		self::assertSame(2, $imported[1]->data['penMode']);
+	}
+
+	public function testCurveSmoothingWithCatmullRom(): void {
+		$points = [
+			['x' => 0.1, 'y' => 0.1],
+			['x' => 0.2, 'y' => 0.4],
+			['x' => 0.5, 'y' => 0.3],
+			['x' => 0.8, 'y' => 0.7],
+		];
+
+		$smoothed = MobileSheetsAnnotationAdapter::generateSvgPath($points, smooth: true);
+		self::assertStringStartsWith('M 100 100', $smoothed);
+		self::assertStringContainsString('C', $smoothed, '3+ points must be smoothed with cubic Bezier curves');
+
+		$linear = MobileSheetsAnnotationAdapter::generateSvgPath($points, smooth: false);
+		self::assertStringStartsWith('M 100 100', $linear);
+		self::assertStringContainsString('L', $linear);
+		self::assertStringNotContainsString('C', $linear);
+
+		// Two points should always be linear
+		$twoPoints = [
+			['x' => 0.1, 'y' => 0.1],
+			['x' => 0.9, 'y' => 0.9],
+		];
+		$twoPath = MobileSheetsAnnotationAdapter::generateSvgPath($twoPoints, smooth: true);
+		self::assertSame('M 100 100 L 900 900', $twoPath);
+	}
 }

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { SheetAnnotation } from '../../types/annotation'
 import { computed } from 'vue'
+import { generateSmoothSvgPath, getAnnotationDashArray } from '../../utils/annotation'
 
 const props = withDefaults(
 	defineProps<{
@@ -28,6 +29,15 @@ const activeAnnotations = computed(() => {
 		return a.pageNumber === props.pageNumber || a.pageNumber === props.pageNumber - 1
 	})
 })
+
+function getAnnotationPath(item: SheetAnnotation): string {
+	const points = item.data?.points
+	if (points && points.length > 0) {
+		const isSmooth = item.data?.smoothMode !== false && item.data?.drawMode !== 1
+		return generateSmoothSvgPath(points, isSmooth)
+	}
+	return item.data?.path || ''
+}
 </script>
 
 <template>
@@ -40,10 +50,11 @@ const activeAnnotations = computed(() => {
 		<template v-for="item in activeAnnotations" :key="item.uuid || item.id">
 			<!-- Freehand drawing, highlight, or path-based shape/line -->
 			<path
-				v-if="(item.type === 'drawing' || item.type === 'highlight' || (item.type === 'shape' && item.data?.path)) && item.data?.path"
-				:d="item.data.path"
+				v-if="(item.type === 'drawing' || item.type === 'highlight' || (item.type === 'shape' && (item.data?.path || item.data?.points)))"
+				:d="getAnnotationPath(item)"
 				:stroke="item.style?.stroke || '#ff0000'"
 				:stroke-width="item.style?.strokeWidth || 2.0"
+				:stroke-dasharray="getAnnotationDashArray(item)"
 				:opacity="item.style?.opacity ?? 1.0"
 				:style="{ mixBlendMode: item.style?.blendMode || (item.type === 'highlight' ? 'multiply' : 'normal') }"
 				fill="none"
@@ -60,6 +71,7 @@ const activeAnnotations = computed(() => {
 				:height="item.height * 1000"
 				:stroke="item.style?.stroke || '#ff0000'"
 				:stroke-width="item.style?.strokeWidth || 2.0"
+				:stroke-dasharray="getAnnotationDashArray(item)"
 				:fill="item.style?.fill || 'transparent'"
 				data-test="annotation-shape" />
 
