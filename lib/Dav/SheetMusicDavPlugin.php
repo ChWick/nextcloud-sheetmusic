@@ -277,6 +277,10 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		?SyncClientInterface $client = null,
 	): bool {
 		$entry = $this->buildPropfindEntry($library, $path, $filename, $request->getBodyAsString(), $client);
+		if ($entry === null) {
+			$response->setStatus(404);
+			return false;
+		}
 
 		$xml = $this->generateMultiStatus([$entry]);
 		$response->setStatus(207);

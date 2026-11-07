@@ -15,6 +15,7 @@ use OCA\SheetMusic\Db\InternalLibrary;
 use OCA\SheetMusic\Db\InternalMiscMapper;
 use OCA\SheetMusic\Db\InternalSetlistItemMapper;
 use OCA\SheetMusic\Db\InternalSong;
+use OCA\SheetMusic\Db\InternalSongAnnotationMapper;
 use OCA\SheetMusic\Db\InternalSongAttributeMapper;
 use OCA\SheetMusic\Db\InternalSongBookmarkMapper;
 use OCA\SheetMusic\Db\InternalSongFile;
@@ -46,6 +47,7 @@ trait RealMobileSheetsTestTrait {
 	protected InternalSongFileMapper $songFileMapper;
 	protected InternalSongAttributeMapper $attributeMapper;
 	protected InternalSongBookmarkMapper $bookmarkMapper;
+	protected InternalSongAnnotationMapper $annotationMapper;
 	protected InternalSetlistItemMapper $setlistItemMapper;
 	protected InternalMiscMapper $miscMapper;
 	protected LibraryMapper $libraryMapper;
@@ -70,6 +72,7 @@ trait RealMobileSheetsTestTrait {
 		$this->songFileMapper = new InternalSongFileMapper($this->dbConn);
 		$this->attributeMapper = new InternalSongAttributeMapper($this->dbConn);
 		$this->bookmarkMapper = new InternalSongBookmarkMapper($this->dbConn);
+		$this->annotationMapper = new InternalSongAnnotationMapper($this->dbConn);
 		$this->setlistItemMapper = new InternalSetlistItemMapper($this->dbConn);
 		$this->miscMapper = new InternalMiscMapper($this->dbConn);
 		$this->libraryMapper = new LibraryMapper($this->dbConn);
@@ -146,6 +149,7 @@ trait RealMobileSheetsTestTrait {
 
 	protected function cleanupLibraryData(int $libraryId, bool $deleteLibraryRow = true): void {
 		$this->dbConn->executeStatement('DELETE FROM *PREFIX*sheetmusic_setlist_items WHERE setlist_id IN (SELECT id FROM *PREFIX*sheetmusic_entities WHERE library_id = ?)', [$libraryId]);
+		$this->dbConn->executeStatement('DELETE FROM *PREFIX*sheetmusic_annotations WHERE song_id IN (SELECT id FROM *PREFIX*sheetmusic_songs WHERE library_id = ?)', [$libraryId]);
 		$this->dbConn->executeStatement('DELETE FROM *PREFIX*sheetmusic_bookmarks WHERE song_id IN (SELECT id FROM *PREFIX*sheetmusic_songs WHERE library_id = ?)', [$libraryId]);
 		$this->dbConn->executeStatement('DELETE FROM *PREFIX*sheetmusic_song_entities WHERE song_id IN (SELECT id FROM *PREFIX*sheetmusic_songs WHERE library_id = ?)', [$libraryId]);
 		$this->dbConn->executeStatement('DELETE FROM *PREFIX*sheetmusic_song_attributes WHERE song_id IN (SELECT id FROM *PREFIX*sheetmusic_songs WHERE library_id = ?)', [$libraryId]);

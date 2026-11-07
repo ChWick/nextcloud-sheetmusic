@@ -23,6 +23,7 @@ use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongHistory;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
+use OCA\SheetMusic\Service\SongAnnotationService;
 use OCA\SheetMusic\Service\SongHistoryService;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
@@ -52,6 +53,7 @@ class MobileSheetsSqliteImporter {
 		private ?SongHistoryService $songHistoryService = null,
 		private ?InternalSetlistItemMapper $setlistItemMapper = null,
 		private ?InternalSongBookmarkMapper $bookmarkMapper = null,
+		private ?SongAnnotationService $annotationService = null,
 	) {
 		$this->entityMerger = $entityMerger ?? new MobileSheetsEntityMerger(
 			$this->entityMapper,
@@ -150,10 +152,13 @@ class MobileSheetsSqliteImporter {
 		// 6. Bookmarks
 		$this->mergeBookmarks($db, $lib->id, $updatedSongClientIds, $syncMeta, $isFreshLibrary);
 
-		// 7. Misc Tables (Setlists, Bookmarks, Annotations, AudioFiles, etc.)
+		// 7. Annotations
+		$this->mergeAnnotations($db, $lib, $updatedSongClientIds);
+
+		// 8. Misc Tables (Setlists, Bookmarks, AudioFiles, etc.)
 		$this->mergeMiscTables($db, $lib, $user, $stats);
 
-		// 7. Update library modified timestamp
+		// 9. Update library modified timestamp
 		$this->libraryMapper->touch($lib->id);
 
 		// 8. Snapshot synced songs into history
@@ -442,7 +447,25 @@ class MobileSheetsSqliteImporter {
 					} elseif ($byClientId->deletedAt !== null) {
 						$byClientId->clientId = null;
 						$this->songFileMapper->update($byClientId);
+					} else {
+						$oldFileId = $byClientId->fileId;
+						$byClientId->fileId = $fileId;
+						$this->songFileMapper->update($byClientId);
+						$existing = $byClientId;
+						if ($oldFileId > 0 && $fileId > 0 && $this->annotationService !== null) {
+							$oldAnns = $this->annotationService->getAnnotationsForSong($song->id, $oldFileId, includeDeleted: true);
+							foreach ($oldAnns as $oldAnn) {
+								$oldAnn->fileId = $fileId;
+								$this->annotationService->saveAnnotation($oldAnn);
+							}
+						}
 					}
+				}
+			} else {
+				$byClientId = $this->songFileMapper->findByClientId($song->id, $fileClientId);
+				if ($byClientId !== null && $byClientId->id !== $existing->id) {
+					$byClientId->clientId = null;
+					$this->songFileMapper->update($byClientId);
 				}
 			}
 
@@ -795,6 +818,48 @@ class MobileSheetsSqliteImporter {
 					$this->songMapper->update($song);
 				}
 			}
+		}
+	}
+
+	/**
+	 * @param array<int, bool> $updatedSongClientIds
+	 */
+	private function mergeAnnotations(PDO $db, InternalLibrary $lib, array $updatedSongClientIds): void {
+		if ($this->annotationService === null) {
+			return;
+		}
+		if (!MobileSheetsTableHelper::tableExists($db, 'AnnotationsBase')) {
+			return;
+		}
+
+		$clientSongIdsWithAnnotations = [];
+		$stmt = $db->query('SELECT DISTINCT SongId FROM AnnotationsBase');
+		if ($stmt !== false) {
+			while ($cid = $stmt->fetchColumn()) {
+				if (is_numeric($cid)) {
+					$clientSongIdsWithAnnotations[(int)$cid] = true;
+				}
+			}
+		}
+
+		$songs = $this->songMapper->findAllForLibrary($lib->id, includeDeleted: true);
+		foreach ($songs as $song) {
+			if ($song->clientId === null || $song->id === null) {
+				continue;
+			}
+
+			$hasIncoming = isset($clientSongIdsWithAnnotations[$song->clientId]);
+			$hasExisting = $this->annotationService->getAnnotationsForSong($song->id, includeDeleted: false) !== [];
+			$isUpdated = isset($updatedSongClientIds[$song->clientId]);
+
+			if (!$hasIncoming && !$hasExisting && !$isUpdated) {
+				continue;
+			}
+
+			$files = $this->songFileMapper->findAllForSong($song->id);
+			$fileId = !empty($files) ? ($files[0]->fileId ?? 0) : 0;
+
+			$this->annotationService->importFromMobileSheets($db, $song->id, $fileId, $song->clientId);
 		}
 	}
 

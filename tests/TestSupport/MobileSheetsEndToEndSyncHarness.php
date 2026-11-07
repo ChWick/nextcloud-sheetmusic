@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace OCA\SheetMusic\Tests\TestSupport;
 
+use OCA\SheetMusic\Db\InternalAnnotationSyncMapper;
 use OCA\SheetMusic\Db\InternalEntityMapper;
 use OCA\SheetMusic\Db\InternalLibrary;
 use OCA\SheetMusic\Db\InternalMiscMapper;
+use OCA\SheetMusic\Db\InternalSongAnnotationMapper;
 use OCA\SheetMusic\Db\InternalSongAttributeMapper;
 use OCA\SheetMusic\Db\InternalSongBookmarkMapper;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
@@ -20,6 +22,7 @@ use OCA\SheetMusic\Service\IntegrityIssue;
 use OCA\SheetMusic\Service\LibraryIntegrityService;
 use OCA\SheetMusic\Service\LibraryReconciler;
 use OCA\SheetMusic\Service\LibraryService;
+use OCA\SheetMusic\Service\SongAnnotationService;
 use OCA\SheetMusic\Service\SongFileService;
 use OCA\SheetMusic\Service\SongService;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsBaselineSchema;
@@ -64,6 +67,9 @@ class MobileSheetsEndToEndSyncHarness {
 	public InternalSongBookmarkMapper $bookmarkMapper;
 	public InternalMiscMapper $miscMapper;
 	public LibraryMapper $libraryMapper;
+	public InternalSongAnnotationMapper $annotationMapper;
+	public InternalAnnotationSyncMapper $annotationSyncMapper;
+	public SongAnnotationService $annotationService;
 
 	public MobileSheetsPathResolver $pathResolver;
 	public MobileSheetsSqliteImporter $importer;
@@ -112,6 +118,13 @@ class MobileSheetsEndToEndSyncHarness {
 		);
 		$this->miscMapper = new InternalMiscMapper($this->db);
 		$this->libraryMapper = new LibraryMapper($this->db);
+		$this->annotationMapper = new InternalSongAnnotationMapper($this->db);
+		$this->annotationSyncMapper = new InternalAnnotationSyncMapper($this->db);
+		$this->annotationService = new SongAnnotationService(
+			$this->annotationMapper,
+			$this->annotationSyncMapper,
+			songFileMapper: $this->songFileMapper,
+		);
 
 		$this->pathResolver = new MobileSheetsPathResolver($this->rootFolder, $this->userManager);
 		$this->importer = new MobileSheetsSqliteImporter(
@@ -129,6 +142,7 @@ class MobileSheetsEndToEndSyncHarness {
 			null,
 			null,
 			$this->bookmarkMapper,
+			$this->annotationService,
 		);
 		$this->exporter = new MobileSheetsSqliteExporter(
 			$this->songMapper,
@@ -143,6 +157,8 @@ class MobileSheetsEndToEndSyncHarness {
 			$this->logger,
 			null,
 			$this->bookmarkMapper,
+			null,
+			$this->annotationService,
 		);
 
 		$this->reconciler = new LibraryReconciler(
@@ -271,6 +287,11 @@ class MobileSheetsEndToEndSyncHarness {
 		bool $autoPaths = false,
 		bool $autoPdfMetadata = false,
 	): int {
+		$this->cleanup();
+		if (!is_dir($this->tempDir)) {
+			mkdir($this->tempDir, 0777, true);
+			mkdir($this->clientFilesDir, 0777, true);
+		}
 		$this->libraryFolderName = trim($folderName, '/');
 		$userFolder = $this->rootFolder->getUserFolder($this->userId);
 		if ($userFolder->nodeExists($this->libraryFolderName)) {
@@ -310,6 +331,10 @@ class MobileSheetsEndToEndSyncHarness {
 			$pdo->exec($idxDdl);
 		}
 		file_put_contents($this->clientHashCodesPath, '');
+		$this->clientDbDirty = true;
+	}
+
+	public function markClientDbDirty(): void {
 		$this->clientDbDirty = true;
 	}
 
@@ -1847,22 +1872,31 @@ class MobileSheetsEndToEndSyncHarness {
 		} catch (\Throwable) {
 		}
 
-		$tables = [
-			'sheetmusic_song_entities',
-			'sheetmusic_song_files',
-			'sheetmusic_song_attributes',
-			'sheetmusic_misc_data',
-			'sheetmusic_misc_schema',
-			'sheetmusic_songs',
-			'sheetmusic_entities',
-			'sheetmusic_libraries',
-		];
-		foreach ($tables as $table) {
-			try {
-				$qb = $this->db->getQueryBuilder();
-				$qb->delete($table)->executeStatement();
-			} catch (\Throwable) {
+		try {
+			$libs = $this->libraryMapper->findAllForUser($this->userId);
+			$libIds = [];
+			foreach ($libs as $l) {
+				if ($l->id !== null) {
+					$libIds[] = (int)$l->id;
+				}
 			}
+			if ($this->libraryId > 0 && !in_array($this->libraryId, $libIds, true)) {
+				$libIds[] = $this->libraryId;
+			}
+			if (!empty($libIds)) {
+				$inList = implode(',', $libIds);
+				$this->db->executeStatement("DELETE FROM *PREFIX*sheetmusic_annotation_sync WHERE annotation_id IN (SELECT id FROM *PREFIX*sheetmusic_annotations WHERE song_id IN (SELECT id FROM *PREFIX*sheetmusic_songs WHERE library_id IN ($inList)))");
+				$this->db->executeStatement("DELETE FROM *PREFIX*sheetmusic_annotations WHERE song_id IN (SELECT id FROM *PREFIX*sheetmusic_songs WHERE library_id IN ($inList))");
+				$this->db->executeStatement("DELETE FROM *PREFIX*sheetmusic_song_files WHERE song_id IN (SELECT id FROM *PREFIX*sheetmusic_songs WHERE library_id IN ($inList))");
+				$this->db->executeStatement("DELETE FROM *PREFIX*sheetmusic_song_entities WHERE song_id IN (SELECT id FROM *PREFIX*sheetmusic_songs WHERE library_id IN ($inList))");
+				$this->db->executeStatement("DELETE FROM *PREFIX*sheetmusic_song_attributes WHERE song_id IN (SELECT id FROM *PREFIX*sheetmusic_songs WHERE library_id IN ($inList))");
+				$this->db->executeStatement("DELETE FROM *PREFIX*sheetmusic_songs WHERE library_id IN ($inList)");
+				$this->db->executeStatement("DELETE FROM *PREFIX*sheetmusic_entities WHERE library_id IN ($inList)");
+				$this->db->executeStatement("DELETE FROM *PREFIX*sheetmusic_misc_data WHERE library_id IN ($inList)");
+				$this->db->executeStatement("DELETE FROM *PREFIX*sheetmusic_misc_schema WHERE library_id IN ($inList)");
+				$this->db->executeStatement("DELETE FROM *PREFIX*sheetmusic_libraries WHERE id IN ($inList)");
+			}
+		} catch (\Throwable) {
 		}
 
 		$this->removeDirectoryRecursive($this->tempDir);

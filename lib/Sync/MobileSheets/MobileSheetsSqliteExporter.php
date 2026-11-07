@@ -20,6 +20,7 @@ use OCA\SheetMusic\Db\InternalSongFile;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
+use OCA\SheetMusic\Service\SongAnnotationService;
 use OCP\Files\File;
 use OCP\Files\IRootFolder;
 use OCP\IUser;
@@ -51,6 +52,7 @@ class MobileSheetsSqliteExporter {
 		?MobileSheetsEntityExporter $entityExporter = null,
 		private ?InternalSongBookmarkMapper $bookmarkMapper = null,
 		private ?InternalSetlistItemMapper $setlistItemMapper = null,
+		private ?SongAnnotationService $annotationService = null,
 	) {
 		$this->entityExporter = $entityExporter ?? new MobileSheetsEntityExporter(
 			$this->entityMapper,
@@ -104,6 +106,7 @@ class MobileSheetsSqliteExporter {
 				$this->entityExporter->exportSongEntityLinks($db, $lib->id, $validSongIds);
 				$this->exportFiles($db, $lib, $user);
 				$this->exportBookmarks($db, $lib, $user);
+				$this->exportAnnotations($db, $lib, $validSongIds);
 				$this->ensureSongAndPageDefaults($db);
 				$this->cleanOrphanSongReferences($db);
 
@@ -551,6 +554,9 @@ class MobileSheetsSqliteExporter {
 					$db->exec(sprintf('DELETE FROM "%s" WHERE BaseId IS NULL OR BaseId NOT IN (SELECT Id FROM AnnotationsBase)', str_replace('"', '""', $tableName)));
 				}
 			}
+			if (MobileSheetsTableHelper::tableExists($db, 'AnnotationPoints')) {
+				$db->exec('DELETE FROM AnnotationPoints WHERE AnnotationId IS NULL OR AnnotationId NOT IN (SELECT Id FROM AnnotationsBase)');
+			}
 		}
 
 		if (MobileSheetsTableHelper::tableExists($db, '_nc_sync_metadata')) {
@@ -674,6 +680,9 @@ class MobileSheetsSqliteExporter {
 
 				$lowerTable = strtolower($tableName);
 				if ($lowerTable === 'files') {
+					continue;
+				}
+				if ($this->annotationService !== null && in_array($lowerTable, ['annotationsbase', 'annotationpoints', 'drawannotations', 'stampannotations', 'textboxannotations'], true)) {
 					continue;
 				}
 
@@ -878,6 +887,30 @@ class MobileSheetsSqliteExporter {
 					MobileSheetsTableHelper::insertRow($db, 'MetronomeSettings', $row);
 				}
 			}
+		}
+	}
+
+	/**
+	 * @param array<int, bool>|list<int> $validSongIds
+	 */
+	private function exportAnnotations(PDO $db, InternalLibrary $library, array $validSongIds): void {
+		if ($this->annotationService === null) {
+			return;
+		}
+
+		$songs = $this->songMapper->findAllForLibrary($library->id, includeDeleted: false);
+		foreach ($songs as $song) {
+			if ($song->clientId === null || $song->id === null) {
+				continue;
+			}
+			$isValid = isset($validSongIds[$song->id])
+				|| isset($validSongIds[$song->clientId])
+				|| in_array($song->id, $validSongIds, true)
+				|| in_array($song->clientId, $validSongIds, true);
+			if (!$isValid) {
+				continue;
+			}
+			$this->annotationService->exportToMobileSheets($db, $song->id, $song->clientId);
 		}
 	}
 }
