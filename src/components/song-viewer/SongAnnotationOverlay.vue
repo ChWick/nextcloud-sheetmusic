@@ -76,7 +76,7 @@ const activeAnnotations = computed(() => {
 			<!-- Stamp Annotation -->
 			<text
 				v-else-if="item.type === 'stamp'"
-				:x="Math.round(item.x * 10000) / 10"
+				:x="Math.round((item.x + (item.width || 0) * 0.25) * 10000) / 10"
 				:y="Math.round((item.y + (item.height || 0) / 2) * 10000) / 10"
 				:fill="item.style?.color || '#000000'"
 				:font-size="item.style?.fontSize || 40"
