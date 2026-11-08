@@ -103,8 +103,8 @@ final class SvgCurveUtil {
 
 		// Half-height of the opening (aperture)
 		$h = $aperture !== null && $aperture > 0
-			? min(45.0, max(14.0, $aperture * 4.5))
-			: min(35.0, max(16.0, $len * 0.12));
+			? min(22.0, max(7.0, (float)$aperture * 2.0))
+			: min(18.0, max(8.0, $len * 0.05));
 
 		if (!$isDecrescendo) {
 			// Crescendo (<): closed at p1, open at p2
@@ -156,8 +156,8 @@ final class SvgCurveUtil {
 		$ny = $dx / $len;
 
 		$h = $aperture !== null && $aperture > 0
-			? min(45.0, max(14.0, $aperture * 4.5))
-			: min(35.0, max(16.0, $len * 0.12));
+			? min(22.0, max(7.0, (float)$aperture * 2.0))
+			: min(18.0, max(8.0, $len * 0.05));
 
 		if (!$isDecrescendo) {
 			$pts = [

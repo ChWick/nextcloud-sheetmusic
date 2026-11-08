@@ -212,6 +212,15 @@ final class MobileSheetsAnnotationAdapterTest extends TestCase {
 		self::assertSame('♩', $imported[0]->data['displaySymbol']);
 		self::assertEqualsWithDelta(0.25, $imported[0]->x, 0.01);
 		self::assertEqualsWithDelta(0.35, $imported[0]->y, 0.01);
+
+		// Test double flat and double sharp mapping
+		self::assertSame('𝄫', MobileSheetsAnnotationAdapter::mapMobileSheetsSymbol('bb'));
+		self::assertSame('𝄫', MobileSheetsAnnotationAdapter::mapMobileSheetsSymbol('BB'));
+		self::assertSame('𝄪', MobileSheetsAnnotationAdapter::mapMobileSheetsSymbol('##'));
+		self::assertSame('𝄪', MobileSheetsAnnotationAdapter::mapMobileSheetsSymbol('x'));
+		self::assertSame('bb', MobileSheetsAnnotationAdapter::mapToMobileSheetsSymbol('𝄫'));
+		self::assertSame('bb', MobileSheetsAnnotationAdapter::mapToMobileSheetsSymbol('♭♭'));
+		self::assertSame('x', MobileSheetsAnnotationAdapter::mapToMobileSheetsSymbol('𝄪'));
 	}
 
 	public function testDashedAndDottedLineStyleImportExport(): void {

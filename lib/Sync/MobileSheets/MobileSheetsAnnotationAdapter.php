@@ -205,7 +205,7 @@ class MobileSheetsAnnotationAdapter {
 
 			return new InternalSongAnnotation(
 				id: null,
-				uuid: self::generateDeterministicUuid('mobilesheets_text', $baseId),
+				uuid: self::generateDeterministicUuid("mobilesheets_text_{$songId}", $baseId),
 				songId: $songId,
 				fileId: $fileId,
 				pageNumber: $page,
@@ -248,7 +248,7 @@ class MobileSheetsAnnotationAdapter {
 
 			return new InternalSongAnnotation(
 				id: null,
-				uuid: self::generateDeterministicUuid('mobilesheets_stamp', $baseId),
+				uuid: self::generateDeterministicUuid("mobilesheets_stamp_{$songId}", $baseId),
 				songId: $songId,
 				fileId: $fileId,
 				pageNumber: $page,
@@ -321,7 +321,7 @@ class MobileSheetsAnnotationAdapter {
 
 		return new InternalSongAnnotation(
 			id: null,
-			uuid: self::generateDeterministicUuid('mobilesheets', $baseId),
+			uuid: self::generateDeterministicUuid("mobilesheets_{$songId}", $baseId),
 			songId: $songId,
 			fileId: $fileId,
 			pageNumber: $page,
@@ -346,13 +346,37 @@ class MobileSheetsAnnotationAdapter {
 		return match ($symbol) {
 			'q' => '♩',
 			'e' => '♪',
+			'ee' => '♫',
 			'h' => '𝅗𝅥',
 			'w' => '𝅝',
 			's' => '𝅘𝅥𝅯',
 			'b' => '♭',
-			'#' => '♯',
+			'bb', 'BB' => '𝄫',
+			'#', 'sharp' => '♯',
+			'##', 'x', 'X' => '𝄪',
 			'n' => '♮',
 			'∫' => '𝄋',
+			default => $symbol,
+		};
+	}
+
+	/**
+	 * Map standard Unicode music glyphs back to MobileSheets font codes.
+	 */
+	public static function mapToMobileSheetsSymbol(string $symbol): string {
+		return match ($symbol) {
+			'♩' => 'q',
+			'♪' => 'e',
+			'♫' => 'ee',
+			'𝅗𝅥' => 'h',
+			'𝅝' => 'w',
+			'𝅘𝅥𝅯' => 's',
+			'♭' => 'b',
+			'𝄫', '♭♭' => 'bb',
+			'♯' => '#',
+			'𝄪' => 'x',
+			'♮' => 'n',
+			'𝄋' => '∫',
 			default => $symbol,
 		};
 	}
@@ -608,7 +632,8 @@ class MobileSheetsAnnotationAdapter {
 					$color = self::hexToArgb((string)($ann->style['color'] ?? '#000000'));
 					$size = (float)($ann->data['size'] ?? 40.0);
 					$font = (int)($ann->data['font'] ?? 1);
-					$symbol = (string)($ann->data['symbol'] ?? 'q');
+					$rawSymbol = (string)($ann->data['symbol'] ?? $ann->data['displaySymbol'] ?? 'q');
+					$symbol = self::mapToMobileSheetsSymbol($rawSymbol);
 					$stampType = (int)($ann->data['stampType'] ?? 2);
 					$filePath = (string)($ann->data['filePath'] ?? '');
 					$stampId = isset($ann->data['stampId']) && is_numeric($ann->data['stampId']) ? (int)$ann->data['stampId'] : $baseId;
