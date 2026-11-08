@@ -208,16 +208,17 @@ export function getAnnotationDisplaySymbol(item: SheetAnnotation): string {
 		w: '𝅝',
 		s: '𝅘𝅥𝅯',
 		b: '♭',
-		bb: '♭♭',
-		BB: '♭♭',
-		'𝄫': '♭♭',
+		bb: '𝄫',
+		BB: '𝄫',
+		'𝄫': '𝄫',
+		'♭♭': '𝄫',
 		'#': '♯',
 		'##': '𝄪',
 		x: '𝄪',
 		X: '𝄪',
 		n: '♮',
-		'∫': '♭♭',
-		'𝄋': '♭♭',
+		'∫': '𝄫',
+		'𝄋': '𝄫',
 	}
 
 	if (map[sym]) {
