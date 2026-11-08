@@ -107,8 +107,8 @@ export function generateHairpinPath(
 
 	// Half-height of the opening (aperture)
 	const h = aperture && aperture > 0
-		? Math.min(45, Math.max(14, aperture * 4.5))
-		: Math.min(35, Math.max(16, len * 0.12))
+		? Math.min(22, Math.max(7, aperture * 2.0))
+		: Math.min(18, Math.max(8, len * 0.05))
 
 	if (!isDecrescendo) {
 		// Crescendo (<): closed at p1, open at p2
@@ -155,20 +155,35 @@ export function getAnnotationFontFamily(family?: string | number | null): string
  * Map music symbols to standard Unicode display glyphs.
  */
 export function getAnnotationDisplaySymbol(item: SheetAnnotation): string {
-	if (item.data?.displaySymbol) {
-		return item.data.displaySymbol
-	}
 	const sym = item.data?.symbol || ''
+	const disp = item.data?.displaySymbol || ''
+
 	const map: Record<string, string> = {
 		q: '♩',
 		e: '♪',
+		ee: '♫',
 		h: '𝅗𝅥',
 		w: '𝅝',
 		s: '𝅘𝅥𝅯',
 		b: '♭',
+		bb: '𝄫',
+		BB: '𝄫',
 		'#': '♯',
+		'##': '𝄪',
+		x: '𝄪',
+		X: '𝄪',
 		n: '♮',
 		'∫': '𝄋',
+	}
+
+	if (map[sym]) {
+		return map[sym]
+	}
+	if (map[disp]) {
+		return map[disp]
+	}
+	if (disp) {
+		return disp
 	}
 	return map[sym] || sym
 }

@@ -229,12 +229,12 @@ describe('FilePreviewer.vue Annotation Rendering & Reactivity', () => {
 		expect(linePath.element.tagName.toLowerCase()).toBe('path')
 		expect(linePath.attributes('d')).toBe('M 100.0 700.0 L 300.0 700.0')
 
-		// Note stamp should render as <text> with central baseline and music font-family
+		// Note stamp should render as <text> centered at (x + w/2, y + h/2) with central baseline and music font-family
 		const stampText = overlay.find('[data-test="annotation-stamp"]')
 		expect(stampText.exists()).toBe(true)
 		expect(stampText.text()).toBe('♩')
-		expect(stampText.attributes('x')).toBe('500')
-		expect(stampText.attributes('y')).toBe('400')
+		expect(stampText.attributes('x')).toBe('525')
+		expect(stampText.attributes('y')).toBe('425')
 		expect(stampText.attributes('dominant-baseline')).toBe('central')
 		expect(stampText.attributes('text-anchor')).toBe('middle')
 		expect(stampText.attributes('font-family')).toContain('Bravura')

@@ -198,6 +198,13 @@ describe('annotation utils', () => {
 				data: { symbol: 'q' },
 			}
 			expect(getAnnotationDisplaySymbol(ann)).toBe('♩')
+
+			// Double flat and double sharp
+			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: 'bb' } })).toBe('𝄫')
+			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: 'BB' } })).toBe('𝄫')
+			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: '##' } })).toBe('𝄪')
+			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: 'x' } })).toBe('𝄪')
+			expect(getAnnotationDisplaySymbol({ ...ann, data: { displaySymbol: 'bb' } })).toBe('𝄫')
 		})
 	})
 
