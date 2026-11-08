@@ -84,7 +84,7 @@ const activeAnnotations = computed(() => {
 				:font-weight="isStampDynamicOrOrnament(item) ? 'bold' : undefined"
 				text-anchor="middle"
 				dominant-baseline="central"
-				font-family="'Noto Music', 'Bravura', 'Segoe UI Symbol', 'Apple Symbols', 'DejaVu Sans', sans-serif"
+				font-family="'Noto Music', 'Segoe UI Symbol', 'Apple Symbols', 'DejaVu Sans', sans-serif"
 				data-test="annotation-stamp">
 				{{ getAnnotationDisplaySymbol(item) }}
 			</text>

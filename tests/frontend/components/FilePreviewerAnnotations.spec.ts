@@ -238,7 +238,6 @@ describe('FilePreviewer.vue Annotation Rendering & Reactivity', () => {
 		expect(stampText.attributes('y')).toBe('425')
 		expect(stampText.attributes('dominant-baseline')).toBe('central')
 		expect(stampText.attributes('text-anchor')).toBe('middle')
-		expect(stampText.attributes('font-family')).toContain('Bravura')
 		expect(stampText.attributes('font-family')).toContain('Noto Music')
 	})
 
