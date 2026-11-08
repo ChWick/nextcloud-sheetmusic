@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import type { SheetAnnotation } from '../../types/annotation'
 import { computed } from 'vue'
-import { generateSmoothSvgPath, getAnnotationDashArray } from '../../utils/annotation'
+import {
+	getAnnotationDashArray,
+	getAnnotationDisplaySymbol,
+	getAnnotationFontFamily,
+	getAnnotationPath,
+} from '../../utils/annotation'
 
 const props = withDefaults(
 	defineProps<{
@@ -29,21 +34,6 @@ const activeAnnotations = computed(() => {
 		return a.pageNumber === props.pageNumber || a.pageNumber === props.pageNumber - 1
 	})
 })
-
-function getAnnotationPath(item: SheetAnnotation): string {
-	const points = item.data?.points
-	if (points && points.length > 0) {
-		const isSmooth = item.type !== 'shape' && item.data?.smoothMode !== false && item.data?.drawMode !== 1 && item.data?.drawMode !== 4
-		return generateSmoothSvgPath(points, isSmooth)
-	}
-	if (item.data?.path) {
-		return item.data.path
-	}
-	if (item.type === 'shape' && (item.width || item.height)) {
-		return `M ${(item.x * 1000).toFixed(1)} ${(item.y * 1000).toFixed(1)} L ${((item.x + item.width) * 1000).toFixed(1)} ${((item.y + item.height) * 1000).toFixed(1)}`
-	}
-	return ''
-}
 </script>
 
 <template>
@@ -54,9 +44,9 @@ function getAnnotationPath(item: SheetAnnotation): string {
 		viewBox="0 0 1000 1000"
 		preserveAspectRatio="none">
 		<template v-for="item in activeAnnotations" :key="item.uuid || item.id">
-			<!-- Freehand drawing, highlight, or path-based shape/line -->
+			<!-- Freehand drawing, highlight, or path-based shape/line/hairpin -->
 			<path
-				v-if="(item.type === 'drawing' || item.type === 'highlight' || (item.type === 'shape' && (item.data?.path || (item.data?.points && item.data.points.length > 0) || item.data?.drawMode === 0 || item.data?.drawMode === 4)))"
+				v-if="(item.type === 'drawing' || item.type === 'highlight' || (item.type === 'shape' && (item.data?.path || (item.data?.points && item.data.points.length > 0) || item.data?.drawMode === 0 || item.data?.drawMode === 4 || item.data?.drawMode === 5 || item.data?.isHairpin)))"
 				:d="getAnnotationPath(item)"
 				:stroke="item.style?.stroke || '#ff0000'"
 				:stroke-width="item.style?.strokeWidth || 2.0"
@@ -92,17 +82,18 @@ function getAnnotationPath(item: SheetAnnotation): string {
 				dominant-baseline="central"
 				font-family="'Bravura', 'Noto Music', 'Segoe UI Symbol', 'Apple Symbols', 'DejaVu Sans', sans-serif"
 				data-test="annotation-stamp">
-				{{ item.data?.displaySymbol || item.data?.symbol || '' }}
+				{{ getAnnotationDisplaySymbol(item) }}
 			</text>
 
 			<!-- Text Annotation -->
 			<text
 				v-else-if="item.type === 'text' && item.data?.text"
 				:x="item.x * 1000"
-				:y="(item.y * 1000) + (item.data.fontSize || 16)"
+				:y="item.y * 1000"
 				:fill="item.style?.color || '#000000'"
-				:font-size="item.data.fontSize || 16"
-				:font-family="item.data.fontFamily || 'sans-serif'"
+				:font-size="item.style?.fontSize || item.data?.scaledFontSize || (item.data?.fontSize ? (item.data.fontSize < 100 ? Math.round(item.data.fontSize / (item.data?.sourceWidth || 596) * 1000) : item.data.fontSize) : 24)"
+				:font-family="getAnnotationFontFamily(item.style?.fontFamily || item.data?.fontFamily)"
+				dominant-baseline="hanging"
 				data-test="annotation-text">
 				{{ item.data.text }}
 			</text>

@@ -13,7 +13,12 @@ import FilePreviewerToolbar from './file-preview/FilePreviewerToolbar.vue'
 import { inspectPdfPageResolution, type PdfPageResolutionSummary } from './song-pdf/pdf-enhance-engine'
 import { parsePageOrder } from '../utils/page-order'
 import type { SheetAnnotation } from '../types/annotation'
-import { generateSmoothSvgPath, getAnnotationDashArray } from '../utils/annotation'
+import {
+	getAnnotationDashArray,
+	getAnnotationDisplaySymbol,
+	getAnnotationFontFamily,
+	getAnnotationPath,
+} from '../utils/annotation'
 
 const props = withDefaults(
 	defineProps<{
@@ -131,21 +136,14 @@ function createAnnotationSvg(pageNum: number): SVGElement | null {
 			Boolean(ann.data?.path) ||
 			(Array.isArray(ann.data?.points) && ann.data.points.length > 0) ||
 			ann.data?.drawMode === 0 ||
-			ann.data?.drawMode === 4
+			ann.data?.drawMode === 4 ||
+			ann.data?.drawMode === 5 ||
+			ann.data?.isHairpin
 		)
 
 		if ((ann.type === 'drawing' || ann.type === 'highlight' || isLineShape)) {
 			const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
-			const isSmooth = ann.type !== 'shape' && ann.data?.smoothMode !== false && ann.data?.drawMode !== 1 && ann.data?.drawMode !== 4
-			let d = ''
-			if (ann.data?.points && ann.data.points.length > 0) {
-				d = generateSmoothSvgPath(ann.data.points, isSmooth)
-			} else if (ann.data?.path) {
-				d = ann.data.path
-			} else if (ann.type === 'shape') {
-				d = `M ${(ann.x * 1000).toFixed(1)} ${(ann.y * 1000).toFixed(1)} L ${((ann.x + ann.width) * 1000).toFixed(1)} ${((ann.y + ann.height) * 1000).toFixed(1)}`
-			}
-			path.setAttribute('d', d)
+			path.setAttribute('d', getAnnotationPath(ann))
 			path.setAttribute('stroke', ann.style?.stroke || '#ff0000')
 			path.setAttribute('stroke-width', String(ann.style?.strokeWidth || 2.0))
 			if (dashArray) {
@@ -185,15 +183,19 @@ function createAnnotationSvg(pageNum: number): SVGElement | null {
 			text.setAttribute('font-size', String(fontSize))
 			text.setAttribute('font-family', '\'Bravura\', \'Noto Music\', \'Segoe UI Symbol\', \'Apple Symbols\', \'DejaVu Sans\', sans-serif')
 			text.setAttribute('data-test', 'annotation-stamp')
-			text.textContent = ann.data?.displaySymbol || ann.data?.symbol || ''
+			text.textContent = getAnnotationDisplaySymbol(ann)
 			svg.appendChild(text)
 		} else if (ann.type === 'text' && ann.data?.text) {
 			const text = document.createElementNS('http://www.w3.org/2000/svg', 'text')
+			const fontSize = ann.style?.fontSize || ann.data?.scaledFontSize || (ann.data?.fontSize ? (ann.data.fontSize < 100 ? Math.round(ann.data.fontSize / (ann.data?.sourceWidth || 596) * 1000) : ann.data.fontSize) : 24)
+			const fontFamily = getAnnotationFontFamily(ann.style?.fontFamily || ann.data?.fontFamily)
 			text.setAttribute('x', String(ann.x * 1000))
-			text.setAttribute('y', String((ann.y * 1000) + (ann.data.fontSize || 16)))
+			text.setAttribute('y', String(ann.y * 1000))
 			text.setAttribute('fill', ann.style?.color || '#000000')
-			text.setAttribute('font-size', String(ann.data.fontSize || 16))
-			text.setAttribute('font-family', ann.data.fontFamily || 'sans-serif')
+			text.setAttribute('font-size', String(fontSize))
+			text.setAttribute('font-family', fontFamily)
+			text.setAttribute('dominant-baseline', 'hanging')
+			text.setAttribute('data-test', 'annotation-text')
 			text.textContent = ann.data.text
 			svg.appendChild(text)
 		} else if (ann.type === 'link') {

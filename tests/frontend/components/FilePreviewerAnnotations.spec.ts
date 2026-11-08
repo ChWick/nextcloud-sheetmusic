@@ -240,4 +240,74 @@ describe('FilePreviewer.vue Annotation Rendering & Reactivity', () => {
 		expect(stampText.attributes('font-family')).toContain('Bravura')
 		expect(stampText.attributes('font-family')).toContain('Noto Music')
 	})
+
+	it('renders text annotations with hanging baseline, valid font family, and crescendo hairpins', async () => {
+		const textAndCrescendoAnns: SheetAnnotation[] = [
+			{
+				id: 30,
+				uuid: 'text-1',
+				songId: 10,
+				fileId: 100,
+				pageNumber: 1,
+				layerIndex: 0,
+				type: 'text',
+				x: 0.5,
+				y: 0.6,
+				width: 0.1,
+				height: 0.05,
+				style: { color: '#000000', fontSize: 60 },
+				data: {
+					text: 'foo',
+					fontFamily: '0', // MobileSheets raw integer font family
+					fontSize: 36,
+				},
+			},
+			{
+				id: 31,
+				uuid: 'crescendo-1',
+				songId: 10,
+				fileId: 100,
+				pageNumber: 1,
+				layerIndex: 0,
+				type: 'shape',
+				x: 0.1,
+				y: 0.7,
+				width: 0.2,
+				height: 0.03,
+				style: { stroke: '#000000', strokeWidth: 2 },
+				data: {
+					drawMode: 4,
+					points: [{ x: 0.1, y: 0.7 }, { x: 0.3, y: 0.7 }],
+				},
+			},
+		]
+
+		const wrapper = mount(FilePreviewer, {
+			props: {
+				filePath: '/dav/files/admin/Noten/piece.pdf',
+				annotations: textAndCrescendoAnns,
+				showAnnotations: true,
+			},
+		})
+
+		await flushPromises()
+		const overlay = wrapper.find('.sheetmusic-annotation-overlay')
+		expect(overlay.exists()).toBe(true)
+
+		// Text should have hanging baseline, valid font-family (not "0"), and proper y coordinate
+		const textEl = overlay.find('[data-test="annotation-text"]')
+		expect(textEl.exists()).toBe(true)
+		expect(textEl.text()).toBe('foo')
+		expect(textEl.attributes('x')).toBe('500')
+		expect(textEl.attributes('y')).toBe('600')
+		expect(textEl.attributes('font-family')).toBe('sans-serif')
+		expect(textEl.attributes('dominant-baseline')).toBe('hanging')
+		expect(textEl.attributes('font-size')).toBe('60')
+
+		// Crescendo should render as hairpin path (<)
+		const hairpin = overlay.find('[data-test="annotation-shape"]')
+		expect(hairpin.exists()).toBe(true)
+		expect(hairpin.element.tagName.toLowerCase()).toBe('path')
+		expect(hairpin.attributes('d')).toContain('L 100.0 700.0')
+	})
 })

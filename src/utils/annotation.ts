@@ -82,3 +82,121 @@ export function getAnnotationDashArray(item: SheetAnnotation): string | undefine
 
 	return undefined
 }
+
+/**
+ * Generate an SVG path for a crescendo (<) or decrescendo (>) hairpin.
+ */
+export function generateHairpinPath(
+	p1: { x: number; y: number },
+	p2: { x: number; y: number },
+	isDecrescendo = false,
+	aperture?: number,
+): string {
+	const x1 = p1.x * 1000
+	const y1 = p1.y * 1000
+	const x2 = p2.x * 1000
+	const y2 = p2.y * 1000
+
+	const dx = x2 - x1
+	const dy = y2 - y1
+	const len = Math.hypot(dx, dy) || 1.0
+
+	// Unit perpendicular vector
+	const nx = -dy / len
+	const ny = dx / len
+
+	// Half-height of the opening (aperture)
+	const h = aperture && aperture > 0
+		? Math.min(45, Math.max(14, aperture * 4.5))
+		: Math.min(35, Math.max(16, len * 0.12))
+
+	if (!isDecrescendo) {
+		// Crescendo (<): closed at p1, open at p2
+		const topX = (x2 + nx * h).toFixed(1)
+		const topY = (y2 + ny * h).toFixed(1)
+		const midX = x1.toFixed(1)
+		const midY = y1.toFixed(1)
+		const botX = (x2 - nx * h).toFixed(1)
+		const botY = (y2 - ny * h).toFixed(1)
+		return `M ${topX} ${topY} L ${midX} ${midY} L ${botX} ${botY}`
+	}
+
+	// Decrescendo (>): open at p1, closed at p2
+	const topX = (x1 + nx * h).toFixed(1)
+	const topY = (y1 + ny * h).toFixed(1)
+	const midX = x2.toFixed(1)
+	const midY = y2.toFixed(1)
+	const botX = (x1 - nx * h).toFixed(1)
+	const botY = (y1 - ny * h).toFixed(1)
+	return `M ${topX} ${topY} L ${midX} ${midY} L ${botX} ${botY}`
+}
+
+/**
+ * Sanitize and map font family names, converting MobileSheets integer codes to CSS font families.
+ */
+export function getAnnotationFontFamily(family?: string | number | null): string {
+	if (!family || family === '0' || family === 0) {
+		return 'sans-serif'
+	}
+	if (family === '1' || family === 1) {
+		return 'serif'
+	}
+	if (family === '2' || family === 2) {
+		return 'monospace'
+	}
+	const str = String(family).trim()
+	if (/^\d+$/.test(str)) {
+		return 'sans-serif'
+	}
+	return str
+}
+
+/**
+ * Map music symbols to standard Unicode display glyphs.
+ */
+export function getAnnotationDisplaySymbol(item: SheetAnnotation): string {
+	if (item.data?.displaySymbol) {
+		return item.data.displaySymbol
+	}
+	const sym = item.data?.symbol || ''
+	const map: Record<string, string> = {
+		q: '♩',
+		e: '♪',
+		h: '𝅗𝅥',
+		w: '𝅝',
+		s: '𝅘𝅥𝅯',
+		b: '♭',
+		'#': '♯',
+		n: '♮',
+		'∫': '𝄋',
+	}
+	return map[sym] || sym
+}
+
+/**
+ * Compute the SVG path `d` attribute for an annotation.
+ */
+export function getAnnotationPath(item: SheetAnnotation): string {
+	const points = item.data?.points
+	const isHairpin = item.data?.isHairpin || item.data?.drawMode === 4 || item.data?.drawMode === 5
+	if (isHairpin && points && points.length >= 2) {
+		const isDecrescendo = item.data?.drawMode === 5
+		const aperture = typeof item.data?.aperture === 'number' ? item.data.aperture : undefined
+		return generateHairpinPath(points[0], points[1], isDecrescendo, aperture)
+	}
+
+	if (points && points.length > 0) {
+		const isSmooth = item.type !== 'shape' && item.data?.smoothMode !== false && item.data?.drawMode !== 1 && item.data?.drawMode !== 4 && item.data?.drawMode !== 5
+		return generateSmoothSvgPath(points, isSmooth)
+	}
+
+	if (item.data?.path) {
+		return item.data.path
+	}
+
+	if (item.type === 'shape' && (item.width || item.height)) {
+		return `M ${(item.x * 1000).toFixed(1)} ${(item.y * 1000).toFixed(1)} L ${((item.x + item.width) * 1000).toFixed(1)} ${((item.y + item.height) * 1000).toFixed(1)}`
+	}
+
+	return ''
+}
