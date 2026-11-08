@@ -188,6 +188,7 @@ class MobileSheetsAnnotationAdapter {
 
 			$data = array_merge($baseClientMeta, [
 				'text' => $text,
+				'points' => $points,
 				'fontSize' => $fontSize,
 				'scaledFontSize' => $scaledFontSize,
 				'fontFamily' => $fontFamily,
