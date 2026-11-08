@@ -276,14 +276,19 @@ class MobileSheetsAnnotationAdapter {
 		$smoothMode = (int)($draw['SmoothMode'] ?? 0);
 		$drawMode = (int)($draw['DrawMode'] ?? 0);
 
+		$strokeWidthNorm = round($lineWidth / ($sourceW > 0 ? $sourceW : 595.0) * 1000, 2);
 		$isHairpin = ($type === 'shape' || $rawType === 6) && ($drawMode === 4 || $drawMode === 5) && count($points) >= 2;
+		$isArrow = ($type === 'shape' || $rawType === 6) && ($drawMode === 0 || ($draw['isArrow'] ?? false)) && count($points) === 2;
 		if ($isHairpin) {
 			$isDecrescendo = ($drawMode === 5);
 			$pathD = SvgCurveUtil::generateHairpinPath($points[0], $points[1], $isDecrescendo, $aperture);
 			$bbox = SvgCurveUtil::calculateHairpinBoundingBox($points[0], $points[1], $isDecrescendo, $aperture);
+		} elseif ($isArrow) {
+			$pathD = SvgCurveUtil::generateArrowPath($points[0], $points[1], $strokeWidthNorm);
+			$bbox = SvgCurveUtil::calculateArrowBoundingBox($points[0], $points[1], $strokeWidthNorm);
 		} else {
 			$bbox = !empty($points) ? self::calculateBoundingBox($points) : ['x' => 0.0, 'y' => 0.0, 'width' => 0.0, 'height' => 0.0];
-			$pathD = !empty($points) ? self::generateSvgPath($points, smooth: $type !== 'shape' && $drawMode !== 4) : '';
+			$pathD = !empty($points) ? self::generateSvgPath($points, smooth: $type !== 'shape' && $drawMode !== 4 && $drawMode !== 0) : '';
 		}
 
 		$lineStyle = match ($penMode) {
@@ -299,13 +304,28 @@ class MobileSheetsAnnotationAdapter {
 
 		$style = [
 			'stroke' => $strokeColor,
-			'strokeWidth' => round($lineWidth / ($sourceW > 0 ? $sourceW : 595.0) * 1000, 2),
+			'strokeWidth' => $strokeWidthNorm,
 			'opacity' => $opacity,
 			'blendMode' => $type === 'highlight' ? 'multiply' : 'normal',
 			'lineStyle' => $lineStyle,
 		];
 		if ($strokeDashArray !== null) {
 			$style['strokeDashArray'] = $strokeDashArray;
+		}
+
+		$shapeType = null;
+		if ($type === 'shape' || $rawType === 6) {
+			if ($isArrow) {
+				$shapeType = 'arrow';
+			} elseif ($isHairpin) {
+				$shapeType = ($drawMode === 5) ? 'decrescendo' : 'crescendo';
+			} elseif ($drawMode === 1) {
+				$shapeType = 'line';
+			} elseif ($drawMode === 2) {
+				$shapeType = 'rectangle';
+			} elseif ($drawMode === 3) {
+				$shapeType = 'circle';
+			}
 		}
 
 		$data = array_merge($baseClientMeta, [
@@ -318,7 +338,11 @@ class MobileSheetsAnnotationAdapter {
 			'fillColor' => (int)($draw['FillColor'] ?? 0),
 			'lineWidth' => $lineWidth,
 			'isHairpin' => $isHairpin,
+			'isArrow' => $isArrow,
 		]);
+		if ($shapeType !== null) {
+			$data['shapeType'] = $shapeType;
+		}
 
 		return new InternalSongAnnotation(
 			id: null,
@@ -676,9 +700,17 @@ class MobileSheetsAnnotationAdapter {
 				if ($drawInsert !== null) {
 					$lineColor = self::hexToArgb((string)($ann->style['stroke'] ?? '#ff0000'));
 					$strokeW = (float)($ann->data['lineWidth'] ?? ($ann->style['strokeWidth'] ?? 2.0));
-					$drawMode = isset($ann->data['drawMode']) && is_numeric($ann->data['drawMode'])
-						? (int)$ann->data['drawMode']
-						: ($ann->type === 'shape' ? 1 : ($ann->type === 'highlight' ? 2 : 0));
+					if (isset($ann->data['drawMode']) && is_numeric($ann->data['drawMode'])) {
+						$drawMode = (int)$ann->data['drawMode'];
+					} elseif (($ann->data['isArrow'] ?? false) || ($ann->data['shapeType'] ?? '') === 'arrow') {
+						$drawMode = 0;
+					} elseif (($ann->data['isHairpin'] ?? false) || in_array($ann->data['shapeType'] ?? '', ['crescendo', 'decrescendo', 'hairpin'], true)) {
+						$drawMode = (($ann->data['shapeType'] ?? '') === 'decrescendo' || ($ann->data['isDecrescendo'] ?? false)) ? 5 : 4;
+					} elseif (($ann->data['shapeType'] ?? '') === 'line') {
+						$drawMode = 1;
+					} else {
+						$drawMode = ($ann->type === 'shape' ? 1 : ($ann->type === 'highlight' ? 2 : 0));
+					}
 
 					if (isset($ann->data['penMode']) && is_numeric($ann->data['penMode'])) {
 						$penMode = (int)$ann->data['penMode'];

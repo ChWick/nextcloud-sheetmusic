@@ -388,4 +388,57 @@ final class MobileSheetsAnnotationAdapterTest extends TestCase {
 		self::assertSame('sans-serif', $imported[0]->style['fontFamily']);
 		self::assertEquals(50.0, $imported[0]->style['fontSize']); // 25 / 500 * 1000 = 50.0
 	}
+
+	public function testImportAndExportArrowShapeAnnotations(): void {
+		$db = new PDO('sqlite::memory:');
+		$db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+		foreach (['AnnotationsBase', 'DrawAnnotations', 'AnnotationPoints'] as $t) {
+			$db->exec(MobileSheetsBaselineSchema::TABLES[$t]);
+		}
+
+		$canonical = [
+			new InternalSongAnnotation(
+				id: 1,
+				uuid: 'test-arrow-uuid',
+				songId: 10,
+				fileId: 20,
+				pageNumber: 0,
+				layerIndex: 0,
+				type: 'shape',
+				x: 0.1,
+				y: 0.5,
+				width: 0.4,
+				height: 0.05,
+				style: [
+					'stroke' => '#000000',
+					'strokeWidth' => 2.0,
+				],
+				data: [
+					'shapeType' => 'arrow',
+					'isArrow' => true,
+					'drawMode' => 0,
+					'points' => [['x' => 0.1, 'y' => 0.5], ['x' => 0.5, 'y' => 0.5]],
+				],
+			),
+		];
+
+		$this->adapter->exportAnnotations($db, clientSongId: 10, annotations: $canonical);
+
+		$baseRows = $db->query('SELECT * FROM AnnotationsBase')->fetchAll(PDO::FETCH_ASSOC);
+		self::assertCount(1, $baseRows);
+		self::assertSame(6, (int)$baseRows[0]['Type']); // Shape Type = 6
+
+		$drawRows = $db->query('SELECT * FROM DrawAnnotations')->fetchAll(PDO::FETCH_ASSOC);
+		self::assertCount(1, $drawRows);
+		self::assertSame(0, (int)$drawRows[0]['DrawMode']); // Arrow DrawMode = 0
+
+		$imported = $this->adapter->importAnnotations($db, songId: 10, fileId: 20, clientSongId: 10);
+		self::assertCount(1, $imported);
+		self::assertSame('shape', $imported[0]->type);
+		self::assertTrue($imported[0]->data['isArrow']);
+		self::assertSame('arrow', $imported[0]->data['shapeType']);
+		self::assertSame(0, $imported[0]->data['drawMode']);
+		self::assertStringStartsWith('M 100 500 L 500 500', $imported[0]->data['path']);
+		self::assertStringContainsString('L 500 500 L ', $imported[0]->data['path']);
+	}
 }
