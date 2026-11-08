@@ -7,6 +7,7 @@ import {
 	getAnnotationFontFamily,
 	getAnnotationPath,
 	getAnnotationTextPosition,
+	isStampDynamicOrOrnament,
 } from '../../utils/annotation'
 
 const props = withDefaults(
@@ -79,6 +80,8 @@ const activeAnnotations = computed(() => {
 				:y="Math.round((item.y + (item.height || 0) / 2) * 10000) / 10"
 				:fill="item.style?.color || '#000000'"
 				:font-size="item.style?.fontSize || 40"
+				:font-style="isStampDynamicOrOrnament(item) ? 'italic' : undefined"
+				:font-weight="isStampDynamicOrOrnament(item) ? 'bold' : undefined"
 				text-anchor="middle"
 				dominant-baseline="central"
 				font-family="'Bravura', 'Noto Music', 'Segoe UI Symbol', 'Apple Symbols', 'DejaVu Sans', sans-serif"

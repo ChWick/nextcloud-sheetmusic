@@ -223,6 +223,15 @@ final class MobileSheetsAnnotationAdapterTest extends TestCase {
 		self::assertSame('∫', MobileSheetsAnnotationAdapter::mapToMobileSheetsSymbol('♭♭'));
 		self::assertSame('∫', MobileSheetsAnnotationAdapter::mapToMobileSheetsSymbol('∫'));
 		self::assertSame('x', MobileSheetsAnnotationAdapter::mapToMobileSheetsSymbol('𝄪'));
+
+		// Test trill, pianissimo and dynamics mappings
+		self::assertSame('tr', MobileSheetsAnnotationAdapter::mapMobileSheetsSymbol('m'));
+		self::assertSame('tr', MobileSheetsAnnotationAdapter::mapMobileSheetsSymbol('tr'));
+		self::assertSame('pp', MobileSheetsAnnotationAdapter::mapMobileSheetsSymbol('π'));
+		self::assertSame('pp', MobileSheetsAnnotationAdapter::mapMobileSheetsSymbol('\pi'));
+		self::assertSame('pp', MobileSheetsAnnotationAdapter::mapMobileSheetsSymbol('pp'));
+		self::assertSame('m', MobileSheetsAnnotationAdapter::mapToMobileSheetsSymbol('tr'));
+		self::assertSame('π', MobileSheetsAnnotationAdapter::mapToMobileSheetsSymbol('pp'));
 	}
 
 	public function testDashedAndDottedLineStyleImportExport(): void {
@@ -440,5 +449,63 @@ final class MobileSheetsAnnotationAdapterTest extends TestCase {
 		self::assertSame(3, $imported[0]->data['drawMode']);
 		self::assertStringStartsWith('M 100 500 L 500 500', $imported[0]->data['path']);
 		self::assertStringContainsString('L 500 500 L ', $imported[0]->data['path']);
+	}
+
+	public function testUnpackPointsStrokesMultiStrokeAndSegmentedFormat(): void {
+		$w = 600.0;
+		$h = 800.0;
+
+		// 1. Format 0 multi-stroke: [0.0, total_coords, line_width, x1, y1, x2, y2, FM, FM, x3, y3, FM, FM]
+		$doublesFmt0 = [
+			0.0, 10.0, 2.0,
+			60.0, 80.0, 120.0, 160.0,
+			MobileSheetsAnnotationAdapter::FLOAT_MAX, MobileSheetsAnnotationAdapter::FLOAT_MAX,
+			300.0, 400.0,
+			MobileSheetsAnnotationAdapter::FLOAT_MAX, MobileSheetsAnnotationAdapter::FLOAT_MAX,
+		];
+		$blobFmt0 = '';
+		foreach ($doublesFmt0 as $d) {
+			$blobFmt0 .= pack('d', (float)$d);
+		}
+
+		$strokes = MobileSheetsAnnotationAdapter::unpackPointsStrokes($blobFmt0, $w, $h);
+		self::assertCount(2, $strokes);
+		self::assertCount(2, $strokes[0]);
+		self::assertEqualsWithDelta(0.1, $strokes[0][0]['x'], 0.001);
+		self::assertEqualsWithDelta(0.1, $strokes[0][0]['y'], 0.001);
+		self::assertEqualsWithDelta(0.2, $strokes[0][1]['x'], 0.001);
+		self::assertEqualsWithDelta(0.2, $strokes[0][1]['y'], 0.001);
+
+		self::assertCount(1, $strokes[1]);
+		self::assertEqualsWithDelta(0.5, $strokes[1][0]['x'], 0.001);
+		self::assertEqualsWithDelta(0.5, $strokes[1][0]['y'], 0.001);
+
+		// 2. Segmented format (doubles[0] == 1.0 with segments)
+		// Segment 1 (len 6): [6.0, pressure, x1, y1, x2, y2, FM, FM]
+		// Segment 2 (len 6, continuous with seg 1): [6.0, pressure, x2, y2, x3, y3, FM, FM]
+		// Segment 3 (len 6, discontinuous): [6.0, pressure, x4, y4, x5, y5, FM, FM]
+		$doublesSeg = [
+			1.0,
+			6.0, 1.5, 60.0, 80.0, 120.0, 160.0, MobileSheetsAnnotationAdapter::FLOAT_MAX, MobileSheetsAnnotationAdapter::FLOAT_MAX,
+			6.0, 1.5, 120.0, 160.0, 180.0, 240.0, MobileSheetsAnnotationAdapter::FLOAT_MAX, MobileSheetsAnnotationAdapter::FLOAT_MAX,
+			6.0, 1.5, 300.0, 400.0, 360.0, 480.0, MobileSheetsAnnotationAdapter::FLOAT_MAX, MobileSheetsAnnotationAdapter::FLOAT_MAX,
+		];
+		$blobSeg = '';
+		foreach ($doublesSeg as $d) {
+			$blobSeg .= pack('d', (float)$d);
+		}
+
+		$segStrokes = MobileSheetsAnnotationAdapter::unpackPointsStrokes($blobSeg, $w, $h);
+		self::assertCount(2, $segStrokes);
+		// Stroke 1 should merge connected segments 1 & 2 without duplicating the junction point
+		self::assertCount(3, $segStrokes[0]);
+		self::assertEqualsWithDelta(0.1, $segStrokes[0][0]['x'], 0.001);
+		self::assertEqualsWithDelta(0.2, $segStrokes[0][1]['x'], 0.001);
+		self::assertEqualsWithDelta(0.3, $segStrokes[0][2]['x'], 0.001);
+
+		// Stroke 2 is discontinuous
+		self::assertCount(2, $segStrokes[1]);
+		self::assertEqualsWithDelta(0.5, $segStrokes[1][0]['x'], 0.001);
+		self::assertEqualsWithDelta(0.6, $segStrokes[1][1]['x'], 0.001);
 	}
 }

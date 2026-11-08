@@ -152,10 +152,12 @@ class MobileSheetsAnnotationAdapter {
 			}
 		}
 
+		$strokes = [];
 		$points = [];
 		$aperture = null;
 		if (is_string($pointsBlob) && strlen($pointsBlob) >= 16) {
-			$points = self::unpackPointsBlob($pointsBlob, $sourceW, $sourceH);
+			$strokes = self::unpackPointsStrokes($pointsBlob, $sourceW, $sourceH);
+			$points = !empty($strokes) ? array_merge(...$strokes) : [];
 			if (strlen($pointsBlob) === 40) {
 				$unpackedDoubles = array_values(unpack('d*', $pointsBlob) ?: []);
 				if (count($unpackedDoubles) === 5) {
@@ -288,7 +290,21 @@ class MobileSheetsAnnotationAdapter {
 			$bbox = SvgCurveUtil::calculateArrowBoundingBox($points[0], $points[1], $strokeWidthNorm);
 		} else {
 			$bbox = !empty($points) ? self::calculateBoundingBox($points) : ['x' => 0.0, 'y' => 0.0, 'width' => 0.0, 'height' => 0.0];
-			$pathD = !empty($points) ? self::generateSvgPath($points, smooth: $type !== 'shape' && $drawMode !== 4) : '';
+			if (!empty($strokes)) {
+				$smooth = $type !== 'shape' && $drawMode !== 4;
+				$pathParts = [];
+				foreach ($strokes as $s) {
+					$part = self::generateSvgPath($s, smooth: $smooth);
+					if ($part !== '') {
+						$pathParts[] = $part;
+					}
+				}
+				$pathD = implode(' ', $pathParts);
+			} elseif (!empty($points)) {
+				$pathD = self::generateSvgPath($points, smooth: $type !== 'shape' && $drawMode !== 4);
+			} else {
+				$pathD = '';
+			}
 		}
 
 		$lineStyle = match ($penMode) {
@@ -328,6 +344,7 @@ class MobileSheetsAnnotationAdapter {
 
 		$data = array_merge($baseClientMeta, [
 			'path' => $pathD,
+			'strokes' => $strokes,
 			'points' => $points,
 			'drawId' => (int)($draw['Id'] ?? $baseId),
 			'drawMode' => $drawMode,
@@ -378,6 +395,17 @@ class MobileSheetsAnnotationAdapter {
 			'#', 'sharp' => '♯',
 			'##', 'x', 'X' => '𝄪',
 			'n' => '♮',
+			'm', 'tr' => 'tr',
+			'π', '\pi', 'pp' => 'pp',
+			'p' => 'p',
+			'f' => 'f',
+			'ff' => 'ff',
+			'fff' => 'fff',
+			'ppp' => 'ppp',
+			'mp' => 'mp',
+			'mf' => 'mf',
+			'fp' => 'fp',
+			'sfz' => 'sfz',
 			default => $symbol,
 		};
 	}
@@ -398,6 +426,8 @@ class MobileSheetsAnnotationAdapter {
 			'♯' => '#',
 			'𝄪' => 'x',
 			'♮' => 'n',
+			'tr' => 'm',
+			'pp' => 'π',
 			default => $symbol,
 		};
 	}
@@ -759,7 +789,8 @@ class MobileSheetsAnnotationAdapter {
 						if (!empty($points) && is_array($points)) {
 							$strokeW = (float)($ann->data['lineWidth'] ?? ($ann->style['strokeWidth'] ?? 2.0));
 							$aperture = isset($ann->data['aperture']) ? (float)$ann->data['aperture'] : null;
-							[$blob, $count] = self::packPointsBlob($points, $srcW, $srcH, $ann->type, $strokeW, $aperture, $drawMode);
+							$strokes = isset($ann->data['strokes']) && is_array($ann->data['strokes']) ? $ann->data['strokes'] : [];
+							[$blob, $count] = self::packPointsBlob($points, $srcW, $srcH, $ann->type, $strokeW, $aperture, $drawMode, $strokes);
 						} else {
 							$blob = '';
 							$count = 0;
@@ -779,11 +810,12 @@ class MobileSheetsAnnotationAdapter {
 	}
 
 	/**
-	 * Unpack MobileSheets binary Points BLOB of IEEE 754 64-bit doubles into normalized [0..1] coordinates.
+	 * Unpack MobileSheets binary Points BLOB of IEEE 754 64-bit doubles into a list of strokes,
+	 * where each stroke is a list of normalized [0..1] coordinates.
 	 *
-	 * @return list<array{x: float, y: float}>
+	 * @return list<list<array{x: float, y: float}>>
 	 */
-	public static function unpackPointsBlob(string $blob, float $sourceW, float $sourceH): array {
+	public static function unpackPointsStrokes(string $blob, float $sourceW, float $sourceH): array {
 		$len = strlen($blob);
 		$doublesCount = intdiv($len, 8);
 		if ($doublesCount < 2) {
@@ -791,85 +823,117 @@ class MobileSheetsAnnotationAdapter {
 		}
 
 		$doubles = array_values(unpack('d*', $blob) ?: []);
-		$points = [];
-
 		$w = $sourceW > 0 ? $sourceW : 595.0;
 		$h = $sourceH > 0 ? $sourceH : 842.0;
+		$strokes = [];
 
-		// Check if this is a segmented stroke (starts with 1.0, 6.0)
-		if (count($doubles) >= 7 && $doubles[0] == 1.0 && $doubles[1] == 6.0) {
+		// Check if this is a segmented stroke format (starts with 1.0, where doubles[1] is segment length, not total count)
+		if (count($doubles) >= 7 && $doubles[0] == 1.0 && ((int)$doubles[1] + 3 !== count($doubles))) {
 			$i = 1;
+			$currentStroke = [];
 			while ($i < count($doubles)) {
-				// Each segment: 6.0, pressure, x1, y1, x2, y2, [FLOAT_MAX, FLOAT_MAX]
-				if ($doubles[$i] == 6.0 && $i + 5 < count($doubles)) {
-					$x1 = $doubles[$i + 2];
-					$y1 = $doubles[$i + 3];
-					$x2 = $doubles[$i + 4];
-					$y2 = $doubles[$i + 5];
-
-					if (empty($points)) {
-						$points[] = ['x' => round($x1 / $w, 5), 'y' => round($y1 / $h, 5)];
-					}
-					$points[] = ['x' => round($x2 / $w, 5), 'y' => round($y2 / $h, 5)];
-
-					$i += 6;
-					while ($i < count($doubles) && abs($doubles[$i] - self::FLOAT_MAX) < 1e30) {
-						$i++;
-					}
-				} else {
-					$i++;
+				$segLen = (int)$doubles[$i];
+				if ($segLen <= 0 || $i + 1 >= count($doubles)) {
+					break;
 				}
-			}
-			return $points;
-		}
 
-		// Check if this is a MobileSheets stroke format with header [0.0, stroke_len, line_width, x0, y0, ...]
-		if ($doubles[0] == 0.0 && count($doubles) >= 5) {
-			$i = 0;
-			while ($i < count($doubles)) {
-				if ($doubles[$i] == 0.0 && $i + 2 < count($doubles)) {
-					// Header: [0, stroke_count, line_width]
-					$i += 3;
-				}
-				if ($i + 1 < count($doubles)) {
-					$x = $doubles[$i];
-					$y = $doubles[$i + 1];
-					if (abs($x - self::FLOAT_MAX) >= 1e30 && abs($y - self::FLOAT_MAX) >= 1e30) {
-						$points[] = [
+				$segPoints = [];
+				for ($j = $i + 2; $j < $i + $segLen; $j += 2) {
+					if ($j + 1 < count($doubles)) {
+						$x = $doubles[$j];
+						$y = $doubles[$j + 1];
+						if (abs($x - self::FLOAT_MAX) < 1e30 || abs($y - self::FLOAT_MAX) < 1e30) {
+							break;
+						}
+						$segPoints[] = [
 							'x' => round($x / $w, 5),
 							'y' => round($y / $h, 5),
 						];
 					}
-					$i += 2;
-				} else {
+				}
+
+				if (!empty($segPoints)) {
+					if (!empty($currentStroke)) {
+						$lastPt = end($currentStroke);
+						$firstPt = $segPoints[0];
+						if (abs($lastPt['x'] - $firstPt['x']) < 1e-4 && abs($lastPt['y'] - $firstPt['y']) < 1e-4) {
+							for ($k = 1; $k < count($segPoints); $k++) {
+								$currentStroke[] = $segPoints[$k];
+							}
+						} else {
+							$strokes[] = $currentStroke;
+							$currentStroke = $segPoints;
+						}
+					} else {
+						$currentStroke = $segPoints;
+					}
+				}
+
+				$i += $segLen;
+				while ($i < count($doubles) && abs($doubles[$i] - self::FLOAT_MAX) < 1e30) {
 					$i++;
 				}
 			}
-			return $points;
+			if (!empty($currentStroke)) {
+				$strokes[] = $currentStroke;
+			}
+			return $strokes;
 		}
 
-		// Simple list of coordinate pairs: [x1, y1, x2, y2, ...]
-		for ($i = 0; $i + 1 < count($doubles); $i += 2) {
+		// Standard format with header [penMode/flag, total_coords, line_width] or raw coordinate pairs
+		$i = (count($doubles) >= 3 && ($doubles[0] == 0.0 || (int)$doubles[1] + 3 === count($doubles))) ? 3 : 0;
+		$currentStroke = [];
+		while ($i < count($doubles)) {
 			$x = $doubles[$i];
-			$y = $doubles[$i + 1];
-
-			if (abs($x - self::FLOAT_MAX) < 1e30 || abs($y - self::FLOAT_MAX) < 1e30) {
+			if (abs($x - self::FLOAT_MAX) < 1e30) {
+				if (!empty($currentStroke)) {
+					$strokes[] = $currentStroke;
+					$currentStroke = [];
+				}
+				$i++;
 				continue;
 			}
-
-			$points[] = [
-				'x' => round($x / $w, 5),
-				'y' => round($y / $h, 5),
-			];
+			if ($i + 1 < count($doubles)) {
+				$y = $doubles[$i + 1];
+				if (abs($y - self::FLOAT_MAX) < 1e30) {
+					if (!empty($currentStroke)) {
+						$strokes[] = $currentStroke;
+						$currentStroke = [];
+					}
+					$i += 2;
+					continue;
+				}
+				$currentStroke[] = [
+					'x' => round($x / $w, 5),
+					'y' => round($y / $h, 5),
+				];
+				$i += 2;
+			} else {
+				$i++;
+			}
+		}
+		if (!empty($currentStroke)) {
+			$strokes[] = $currentStroke;
 		}
 
-		return $points;
+		return $strokes;
+	}
+
+	/**
+	 * Unpack MobileSheets binary Points BLOB of IEEE 754 64-bit doubles into normalized [0..1] coordinates.
+	 *
+	 * @return list<array{x: float, y: float}>
+	 */
+	public static function unpackPointsBlob(string $blob, float $sourceW, float $sourceH): array {
+		$strokes = self::unpackPointsStrokes($blob, $sourceW, $sourceH);
+		return !empty($strokes) ? array_merge(...$strokes) : [];
 	}
 
 	/**
 	 * Pack normalized [0..1] coordinate pairs into MobileSheets binary BLOB of IEEE doubles.
 	 *
 	 * @param list<array{x: float, y: float}> $points
+	 * @param list<list<array{x: float, y: float}>> $strokes
 	 * @return array{string, int} [blob, count]
 	 */
 	public static function packPointsBlob(
@@ -880,8 +944,9 @@ class MobileSheetsAnnotationAdapter {
 		float $lineWidth = 2.0,
 		?float $aperture = null,
 		int $drawMode = 0,
+		array $strokes = [],
 	): array {
-		if (empty($points)) {
+		if (empty($points) && empty($strokes)) {
 			return ['', 0];
 		}
 
@@ -890,13 +955,24 @@ class MobileSheetsAnnotationAdapter {
 		$h = $sourceH > 0 ? $sourceH : 842.0;
 
 		if ($type === 'drawing' || $type === 'highlight') {
-			$coordCount = (float)(2 * count($points));
+			$strokeList = !empty($strokes) ? $strokes : [$points];
+			$strokeDoubles = [];
+			foreach ($strokeList as $stk) {
+				if (empty($stk)) {
+					continue;
+				}
+				foreach ($stk as $pt) {
+					$strokeDoubles[] = (float)$pt['x'] * $w;
+					$strokeDoubles[] = (float)$pt['y'] * $h;
+				}
+				$strokeDoubles[] = self::FLOAT_MAX;
+				$strokeDoubles[] = self::FLOAT_MAX;
+			}
 			$doubles[] = 0.0;
-			$doubles[] = $coordCount;
+			$doubles[] = (float)count($strokeDoubles);
 			$doubles[] = $lineWidth;
-			foreach ($points as $pt) {
-				$doubles[] = (float)$pt['x'] * $w;
-				$doubles[] = (float)$pt['y'] * $h;
+			foreach ($strokeDoubles as $sd) {
+				$doubles[] = $sd;
 			}
 		} elseif ($type === 'shape' && ($drawMode === 4 || $drawMode === 5 || $aperture !== null) && count($points) === 2) {
 			$doubles[] = (float)$points[0]['x'] * $w;

@@ -219,6 +219,21 @@ export function getAnnotationDisplaySymbol(item: SheetAnnotation): string {
 		n: '♮',
 		'∫': '𝄫',
 		'𝄋': '𝄫',
+		m: 'tr',
+		tr: 'tr',
+		'𝆖': 'tr',
+		'π': 'pp',
+		'\\pi': 'pp',
+		pp: 'pp',
+		p: 'p',
+		f: 'f',
+		ff: 'ff',
+		fff: 'fff',
+		ppp: 'ppp',
+		mp: 'mp',
+		mf: 'mf',
+		fp: 'fp',
+		sfz: 'sfz',
 	}
 
 	if (map[sym]) {
@@ -231,6 +246,14 @@ export function getAnnotationDisplaySymbol(item: SheetAnnotation): string {
 		return disp
 	}
 	return map[sym] || sym
+}
+
+/**
+ * Check if a stamp symbol represents a dynamic or ornament marking.
+ */
+export function isStampDynamicOrOrnament(item: SheetAnnotation): boolean {
+	const symbol = getAnnotationDisplaySymbol(item)
+	return ['tr', 'pp', 'p', 'f', 'ff', 'fff', 'ppp', 'mp', 'mf', 'fp', 'sfz'].includes(symbol)
 }
 
 /**
@@ -255,8 +278,17 @@ export function getAnnotationPath(item: SheetAnnotation): string {
 		return generateArrowPath(points[0], points[1], sw)
 	}
 
+	const isSmooth = item.type !== 'shape' && item.data?.smoothMode !== false && item.data?.drawMode !== 1 && item.data?.drawMode !== 4 && item.data?.drawMode !== 5
+
+	const strokes = item.data?.strokes
+	if (Array.isArray(strokes) && strokes.length > 0) {
+		return strokes
+			.map((s: Array<{ x: number; y: number }>) => generateSmoothSvgPath(s, isSmooth))
+			.filter(Boolean)
+			.join(' ')
+	}
+
 	if (points && points.length > 0) {
-		const isSmooth = item.type !== 'shape' && item.data?.smoothMode !== false && item.data?.drawMode !== 1 && item.data?.drawMode !== 4 && item.data?.drawMode !== 5
 		return generateSmoothSvgPath(points, isSmooth)
 	}
 

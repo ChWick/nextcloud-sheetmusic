@@ -13,6 +13,7 @@ import {
 	getAnnotationFontFamily,
 	getAnnotationPath,
 	getAnnotationTextPosition,
+	isStampDynamicOrOrnament,
 } from '../../../src/utils/annotation'
 import type { SheetAnnotation } from '../../../src/types/annotation'
 
@@ -226,6 +227,36 @@ describe('annotation utils', () => {
 			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: 'x' } })).toBe('𝄪')
 			expect(getAnnotationDisplaySymbol({ ...ann, data: { displaySymbol: 'bb' } })).toBe('𝄫')
 			expect(getAnnotationDisplaySymbol({ ...ann, data: { displaySymbol: '♭♭' } })).toBe('𝄫')
+
+			// Trills and dynamics
+			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: 'm' } })).toBe('tr')
+			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: 'tr' } })).toBe('tr')
+			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: 'π' } })).toBe('pp')
+			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: '\\pi' } })).toBe('pp')
+			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: 'p' } })).toBe('p')
+			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: 'f' } })).toBe('f')
+			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: 'sfz' } })).toBe('sfz')
+		})
+	})
+
+	describe('isStampDynamicOrOrnament', () => {
+		it('identifies dynamics and ornament symbols', () => {
+			const base: SheetAnnotation = {
+				id: 1,
+				pageNumber: 0,
+				layerIndex: 0,
+				type: 'stamp',
+				x: 0,
+				y: 0,
+				width: 0.1,
+				height: 0.1,
+			}
+			expect(isStampDynamicOrOrnament({ ...base, data: { symbol: 'm' } })).toBe(true)
+			expect(isStampDynamicOrOrnament({ ...base, data: { symbol: 'π' } })).toBe(true)
+			expect(isStampDynamicOrOrnament({ ...base, data: { symbol: 'pp' } })).toBe(true)
+			expect(isStampDynamicOrOrnament({ ...base, data: { symbol: 'f' } })).toBe(true)
+			expect(isStampDynamicOrOrnament({ ...base, data: { symbol: 'q' } })).toBe(false)
+			expect(isStampDynamicOrOrnament({ ...base, data: { symbol: 'b' } })).toBe(false)
 		})
 	})
 
@@ -290,6 +321,32 @@ describe('annotation utils', () => {
 			}
 			const path = getAnnotationPath(ann)
 			expect(path).toContain(' Q ')
+		})
+
+		it('renders multiple independent strokes separated by M commands when strokes array is present', () => {
+			const ann: SheetAnnotation = {
+				id: 4,
+				pageNumber: 0,
+				layerIndex: 0,
+				type: 'drawing',
+				x: 0.1,
+				y: 0.1,
+				width: 0.5,
+				height: 0.5,
+				data: {
+					drawMode: 0,
+					strokes: [
+						[{ x: 0.1, y: 0.1 }, { x: 0.2, y: 0.2 }],
+						[{ x: 0.4, y: 0.4 }, { x: 0.5, y: 0.5 }],
+					],
+				},
+			}
+			const path = getAnnotationPath(ann)
+			// Should contain two distinct M subpaths
+			const mMatches = path.match(/M /g)
+			expect(mMatches).toHaveLength(2)
+			expect(path).toContain('M 100.0 100.0 L 200.0 200.0')
+			expect(path).toContain('M 400.0 400.0 L 500.0 500.0')
 		})
 	})
 
