@@ -194,7 +194,7 @@ function createAnnotationSvg(pageNum: number): SVGElement | null {
 				text.setAttribute('font-style', 'italic')
 				text.setAttribute('font-weight', 'bold')
 			}
-			text.setAttribute('font-family', '\'Bravura\', \'Noto Music\', \'Segoe UI Symbol\', \'Apple Symbols\', \'DejaVu Sans\', sans-serif')
+			text.setAttribute('font-family', '\'Noto Music\', \'Bravura\', \'Segoe UI Symbol\', \'Apple Symbols\', \'DejaVu Sans\', sans-serif')
 			text.setAttribute('data-test', 'annotation-stamp')
 			text.textContent = getAnnotationDisplaySymbol(ann)
 			svg.appendChild(text)
