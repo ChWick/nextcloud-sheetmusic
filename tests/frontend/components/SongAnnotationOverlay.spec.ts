@@ -260,7 +260,7 @@ describe('SongAnnotationOverlay.vue', () => {
 
 		const drawing = wrapper.find('[data-test="annotation-drawing"]')
 		expect(drawing.exists()).toBe(true)
-		expect(drawing.attributes('stroke-dasharray')).toBe('18, 10')
+		expect(drawing.attributes('stroke-dasharray')).toBe('9, 5')
 		expect(drawing.attributes('d')).toBe('M 100.0 100.0 L 300.0 300.0 L 500.0 500.0')
 	})
 })

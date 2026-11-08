@@ -292,7 +292,7 @@ final class MobileSheetsAnnotationAdapterTest extends TestCase {
 		$imported = $this->adapter->importAnnotations($db, songId: 10, fileId: 20, clientSongId: 10);
 		self::assertCount(2, $imported);
 		self::assertSame('dashed', $imported[0]->style['lineStyle']);
-		self::assertSame('18, 10', $imported[0]->style['strokeDashArray']);
+		self::assertSame('15, 8', $imported[0]->style['strokeDashArray']);
 		self::assertSame(3, $imported[0]->data['penMode']);
 
 		self::assertSame('dotted', $imported[1]->style['lineStyle']);

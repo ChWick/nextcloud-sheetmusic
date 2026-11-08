@@ -90,7 +90,7 @@ describe('annotation utils', () => {
 				...baseAnnotation,
 				style: { lineStyle: 'dashed' },
 			}
-			expect(getAnnotationDashArray(ann)).toBe('18, 10')
+			expect(getAnnotationDashArray(ann)).toBe('6, 4')
 		})
 
 		it('returns dotted pattern for lineStyle dotted', () => {
@@ -106,7 +106,7 @@ describe('annotation utils', () => {
 				...baseAnnotation,
 				data: { penMode: 3 },
 			}
-			expect(getAnnotationDashArray(ann)).toBe('18, 10')
+			expect(getAnnotationDashArray(ann)).toBe('6, 4')
 		})
 
 		it('returns dotted pattern for penMode 2', () => {
@@ -118,11 +118,17 @@ describe('annotation utils', () => {
 		})
 
 		it('scales dashes and gaps dynamically based on stroke width', () => {
-			const ann: SheetAnnotation = {
+			const ann8: SheetAnnotation = {
+				...baseAnnotation,
+				style: { lineStyle: 'dashed', strokeWidth: 8 },
+			}
+			expect(getAnnotationDashArray(ann8)).toBe('18, 10')
+
+			const ann16: SheetAnnotation = {
 				...baseAnnotation,
 				style: { lineStyle: 'dashed', strokeWidth: 16 },
 			}
-			expect(getAnnotationDashArray(ann)).toBe('20, 12')
+			expect(getAnnotationDashArray(ann16)).toBe('36, 20')
 		})
 
 		it('returns undefined for solid lines (penMode 1 or default)', () => {

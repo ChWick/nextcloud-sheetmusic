@@ -56,18 +56,19 @@ export function generateSmoothSvgPath(points: Array<{ x: number; y: number }>, s
 
 /**
  * Determine the stroke-dasharray for an annotation.
- * Dashes scale with stroke width and feature wider dash segments matching MobileSheets.
+ * Dashes scale with stroke width so thicker lines have proportionally
+ * longer dash segments (e.g. thickness 16 has dashes twice as long as thickness 8).
  */
 export function getAnnotationDashArray(item: SheetAnnotation): string | undefined {
 	const raw = item.style?.strokeDashArray
-	const isDashed = item.style?.lineStyle === 'dashed' || item.data?.penMode === 3 || raw === '16, 12' || raw === '18, 10' || raw === '36, 20'
+	const isDashed = item.style?.lineStyle === 'dashed' || item.data?.penMode === 3 || raw === '16, 12' || raw === '18, 10' || raw === '36, 20' || raw === '9, 5'
 	const isDotted = item.style?.lineStyle === 'dotted' || item.data?.penMode === 2 || raw === '4, 8' || raw === '4, 12'
 
 	const sw = Number(item.style?.strokeWidth) || 2.0
 
 	if (isDashed) {
-		const dash = Math.max(18, Math.round(sw * 1.25))
-		const gap = Math.max(10, Math.round(sw * 0.75))
+		const dash = Math.max(6, Math.round(sw * 2.25))
+		const gap = Math.max(4, Math.round(sw * 1.25))
 		return `${dash}, ${gap}`
 	}
 

@@ -298,7 +298,7 @@ class MobileSheetsAnnotationAdapter {
 		};
 		$strokeDashArray = match ($penMode) {
 			2 => '4, 12',
-			3 => '18, 10',
+			3 => (string)round(max(6, $strokeWidthNorm * 2.25)) . ', ' . (string)round(max(4, $strokeWidthNorm * 1.25)),
 			default => null,
 		};
 
