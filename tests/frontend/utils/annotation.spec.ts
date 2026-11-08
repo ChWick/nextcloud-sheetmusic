@@ -229,13 +229,13 @@ describe('annotation utils', () => {
 			expect(getAnnotationDisplaySymbol({ ...ann, data: { displaySymbol: '♭♭' } })).toBe('𝄫')
 
 			// Trills and dynamics
-			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: 'm' } })).toBe('tr')
-			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: 'tr' } })).toBe('tr')
-			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: 'π' } })).toBe('pp')
-			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: '\\pi' } })).toBe('pp')
-			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: 'p' } })).toBe('p')
-			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: 'f' } })).toBe('f')
-			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: 'sfz' } })).toBe('sfz')
+			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: 'm' } })).toBe('𝆖')
+			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: 'tr' } })).toBe('𝆖')
+			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: 'π' } })).toBe('𝆏𝆏')
+			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: '\\pi' } })).toBe('𝆏𝆏')
+			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: 'p' } })).toBe('𝆏')
+			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: 'f' } })).toBe('𝆑')
+			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: 'sfz' } })).toBe('𝆍𝆑𝆎')
 		})
 	})
 

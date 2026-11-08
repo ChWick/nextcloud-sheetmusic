@@ -225,13 +225,21 @@ final class MobileSheetsAnnotationAdapterTest extends TestCase {
 		self::assertSame('x', MobileSheetsAnnotationAdapter::mapToMobileSheetsSymbol('𝄪'));
 
 		// Test trill, pianissimo and dynamics mappings
-		self::assertSame('tr', MobileSheetsAnnotationAdapter::mapMobileSheetsSymbol('m'));
-		self::assertSame('tr', MobileSheetsAnnotationAdapter::mapMobileSheetsSymbol('tr'));
-		self::assertSame('pp', MobileSheetsAnnotationAdapter::mapMobileSheetsSymbol('π'));
-		self::assertSame('pp', MobileSheetsAnnotationAdapter::mapMobileSheetsSymbol('\pi'));
-		self::assertSame('pp', MobileSheetsAnnotationAdapter::mapMobileSheetsSymbol('pp'));
+		self::assertSame('𝆖', MobileSheetsAnnotationAdapter::mapMobileSheetsSymbol('m'));
+		self::assertSame('𝆖', MobileSheetsAnnotationAdapter::mapMobileSheetsSymbol('tr'));
+		self::assertSame('𝆏𝆏', MobileSheetsAnnotationAdapter::mapMobileSheetsSymbol('π'));
+		self::assertSame('𝆏𝆏', MobileSheetsAnnotationAdapter::mapMobileSheetsSymbol('\pi'));
+		self::assertSame('𝆏𝆏', MobileSheetsAnnotationAdapter::mapMobileSheetsSymbol('pp'));
+		self::assertSame('𝆏', MobileSheetsAnnotationAdapter::mapMobileSheetsSymbol('p'));
+		self::assertSame('𝆑', MobileSheetsAnnotationAdapter::mapMobileSheetsSymbol('f'));
+		self::assertSame('𝆍𝆑𝆎', MobileSheetsAnnotationAdapter::mapMobileSheetsSymbol('sfz'));
+		self::assertSame('m', MobileSheetsAnnotationAdapter::mapToMobileSheetsSymbol('𝆖'));
 		self::assertSame('m', MobileSheetsAnnotationAdapter::mapToMobileSheetsSymbol('tr'));
+		self::assertSame('π', MobileSheetsAnnotationAdapter::mapToMobileSheetsSymbol('𝆏𝆏'));
 		self::assertSame('π', MobileSheetsAnnotationAdapter::mapToMobileSheetsSymbol('pp'));
+		self::assertSame('p', MobileSheetsAnnotationAdapter::mapToMobileSheetsSymbol('𝆏'));
+		self::assertSame('f', MobileSheetsAnnotationAdapter::mapToMobileSheetsSymbol('𝆑'));
+		self::assertSame('sfz', MobileSheetsAnnotationAdapter::mapToMobileSheetsSymbol('𝆍𝆑𝆎'));
 	}
 
 	public function testDashedAndDottedLineStyleImportExport(): void {

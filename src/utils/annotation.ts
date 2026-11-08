@@ -219,21 +219,31 @@ export function getAnnotationDisplaySymbol(item: SheetAnnotation): string {
 		n: '♮',
 		'∫': '𝄫',
 		'𝄋': '𝄫',
-		m: 'tr',
-		tr: 'tr',
-		'𝆖': 'tr',
-		'π': 'pp',
-		'\\pi': 'pp',
-		pp: 'pp',
-		p: 'p',
-		f: 'f',
-		ff: 'ff',
-		fff: 'fff',
-		ppp: 'ppp',
-		mp: 'mp',
-		mf: 'mf',
-		fp: 'fp',
-		sfz: 'sfz',
+		m: '𝆖',
+		tr: '𝆖',
+		'𝆖': '𝆖',
+		'π': '𝆏𝆏',
+		'\\pi': '𝆏𝆏',
+		pp: '𝆏𝆏',
+		'𝆏𝆏': '𝆏𝆏',
+		p: '𝆏',
+		'𝆏': '𝆏',
+		f: '𝆑',
+		'𝆑': '𝆑',
+		ff: '𝆑𝆑',
+		'𝆑𝆑': '𝆑𝆑',
+		fff: '𝆑𝆑𝆑',
+		'𝆑𝆑𝆑': '𝆑𝆑𝆑',
+		ppp: '𝆏𝆏𝆏',
+		'𝆏𝆏𝆏': '𝆏𝆏𝆏',
+		mp: '𝆐𝆏',
+		'𝆐𝆏': '𝆐𝆏',
+		mf: '𝆐𝆑',
+		'𝆐𝆑': '𝆐𝆑',
+		fp: '𝆑𝆏',
+		'𝆑𝆏': '𝆑𝆏',
+		sfz: '𝆍𝆑𝆎',
+		'𝆍𝆑𝆎': '𝆍𝆑𝆎',
 	}
 
 	if (map[sym]) {
@@ -252,6 +262,26 @@ export function getAnnotationDisplaySymbol(item: SheetAnnotation): string {
  * Check if a stamp symbol represents a dynamic or ornament marking.
  */
 export function isStampDynamicOrOrnament(item: SheetAnnotation): boolean {
+	const symbol = getAnnotationDisplaySymbol(item)
+	return [
+		'𝆖', 'tr',
+		'𝆏', 'p',
+		'𝆏𝆏', 'pp',
+		'𝆏𝆏𝆏', 'ppp',
+		'𝆑', 'f',
+		'𝆑𝆑', 'ff',
+		'𝆑𝆑𝆑', 'fff',
+		'𝆐𝆏', 'mp',
+		'𝆐𝆑', 'mf',
+		'𝆑𝆏', 'fp',
+		'𝆍𝆑𝆎', 'sfz',
+	].includes(symbol)
+}
+
+/**
+ * Check if a stamp uses legacy ASCII text representation (requiring faux italic/bold).
+ */
+export function isLegacyTextDynamic(item: SheetAnnotation): boolean {
 	const symbol = getAnnotationDisplaySymbol(item)
 	return ['tr', 'pp', 'p', 'f', 'ff', 'fff', 'ppp', 'mp', 'mf', 'fp', 'sfz'].includes(symbol)
 }

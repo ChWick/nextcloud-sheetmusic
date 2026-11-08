@@ -19,7 +19,7 @@ import {
 	getAnnotationFontFamily,
 	getAnnotationPath,
 	getAnnotationTextPosition,
-	isStampDynamicOrOrnament,
+	isLegacyTextDynamic,
 } from '../utils/annotation'
 
 const props = withDefaults(
@@ -190,7 +190,7 @@ function createAnnotationSvg(pageNum: number): SVGElement | null {
 			text.setAttribute('dominant-baseline', 'central')
 			text.setAttribute('fill', ann.style?.color || '#000000')
 			text.setAttribute('font-size', String(fontSize))
-			if (isStampDynamicOrOrnament(ann)) {
+			if (isLegacyTextDynamic(ann)) {
 				text.setAttribute('font-style', 'italic')
 				text.setAttribute('font-weight', 'bold')
 			}
