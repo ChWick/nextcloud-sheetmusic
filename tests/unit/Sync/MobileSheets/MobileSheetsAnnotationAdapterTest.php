@@ -214,12 +214,14 @@ final class MobileSheetsAnnotationAdapterTest extends TestCase {
 		self::assertEqualsWithDelta(0.35, $imported[0]->y, 0.01);
 
 		// Test double flat and double sharp mapping
-		self::assertSame('𝄫', MobileSheetsAnnotationAdapter::mapMobileSheetsSymbol('bb'));
-		self::assertSame('𝄫', MobileSheetsAnnotationAdapter::mapMobileSheetsSymbol('BB'));
+		self::assertSame('♭♭', MobileSheetsAnnotationAdapter::mapMobileSheetsSymbol('bb'));
+		self::assertSame('♭♭', MobileSheetsAnnotationAdapter::mapMobileSheetsSymbol('BB'));
+		self::assertSame('♭♭', MobileSheetsAnnotationAdapter::mapMobileSheetsSymbol('∫'));
 		self::assertSame('𝄪', MobileSheetsAnnotationAdapter::mapMobileSheetsSymbol('##'));
 		self::assertSame('𝄪', MobileSheetsAnnotationAdapter::mapMobileSheetsSymbol('x'));
-		self::assertSame('bb', MobileSheetsAnnotationAdapter::mapToMobileSheetsSymbol('𝄫'));
-		self::assertSame('bb', MobileSheetsAnnotationAdapter::mapToMobileSheetsSymbol('♭♭'));
+		self::assertSame('∫', MobileSheetsAnnotationAdapter::mapToMobileSheetsSymbol('𝄫'));
+		self::assertSame('∫', MobileSheetsAnnotationAdapter::mapToMobileSheetsSymbol('♭♭'));
+		self::assertSame('∫', MobileSheetsAnnotationAdapter::mapToMobileSheetsSymbol('∫'));
 		self::assertSame('x', MobileSheetsAnnotationAdapter::mapToMobileSheetsSymbol('𝄪'));
 	}
 

@@ -351,11 +351,10 @@ class MobileSheetsAnnotationAdapter {
 			'w' => '𝅝',
 			's' => '𝅘𝅥𝅯',
 			'b' => '♭',
-			'bb', 'BB' => '𝄫',
+			'bb', 'BB', '∫', '𝄫' => '♭♭',
 			'#', 'sharp' => '♯',
 			'##', 'x', 'X' => '𝄪',
 			'n' => '♮',
-			'∫' => '𝄋',
 			default => $symbol,
 		};
 	}
@@ -372,11 +371,10 @@ class MobileSheetsAnnotationAdapter {
 			'𝅝' => 'w',
 			'𝅘𝅥𝅯' => 's',
 			'♭' => 'b',
-			'𝄫', '♭♭' => 'bb',
+			'𝄫', '♭♭', '∫', 'bb', 'BB' => '∫',
 			'♯' => '#',
 			'𝄪' => 'x',
 			'♮' => 'n',
-			'𝄋' => '∫',
 			default => $symbol,
 		};
 	}
