@@ -170,7 +170,7 @@ describe('annotation utils', () => {
 	})
 
 	describe('getAnnotationDisplaySymbol', () => {
-		it('returns displaySymbol if present', () => {
+		it('returns mapped displaySymbol if known', () => {
 			const ann: SheetAnnotation = {
 				id: 1,
 				pageNumber: 0,
@@ -182,7 +182,7 @@ describe('annotation utils', () => {
 				height: 0.1,
 				data: { displaySymbol: '𝄋', symbol: '∫' },
 			}
-			expect(getAnnotationDisplaySymbol(ann)).toBe('𝄋')
+			expect(getAnnotationDisplaySymbol(ann)).toBe('♭♭')
 		})
 
 		it('maps known symbols when displaySymbol is missing', () => {
@@ -200,11 +200,13 @@ describe('annotation utils', () => {
 			expect(getAnnotationDisplaySymbol(ann)).toBe('♩')
 
 			// Double flat and double sharp
-			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: 'bb' } })).toBe('𝄫')
-			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: 'BB' } })).toBe('𝄫')
+			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: 'bb' } })).toBe('♭♭')
+			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: 'BB' } })).toBe('♭♭')
+			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: '∫' } })).toBe('♭♭')
+			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: '𝄫' } })).toBe('♭♭')
 			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: '##' } })).toBe('𝄪')
 			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: 'x' } })).toBe('𝄪')
-			expect(getAnnotationDisplaySymbol({ ...ann, data: { displaySymbol: 'bb' } })).toBe('𝄫')
+			expect(getAnnotationDisplaySymbol({ ...ann, data: { displaySymbol: 'bb' } })).toBe('♭♭')
 		})
 	})
 

@@ -175,8 +175,8 @@ function createAnnotationSvg(pageNum: number): SVGElement | null {
 		} else if (ann.type === 'stamp') {
 			const text = document.createElementNS('http://www.w3.org/2000/svg', 'text')
 			const fontSize = ann.style?.fontSize || 40
-			const cx = Math.round((ann.x + (ann.width || 0) / 2) * 10000) / 10
-			const cy = Math.round((ann.y + (ann.height || 0) / 2) * 10000) / 10
+			const cx = Math.round((ann.x + (ann.width || 0) * 0.2) * 10000) / 10
+			const cy = Math.round((ann.y + (ann.height || 0) * 0.25) * 10000) / 10
 			text.setAttribute('x', String(cx))
 			text.setAttribute('y', String(cy))
 			text.setAttribute('text-anchor', 'middle')
