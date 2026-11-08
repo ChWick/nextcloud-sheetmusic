@@ -416,7 +416,7 @@ final class MobileSheetsAnnotationAdapterTest extends TestCase {
 				data: [
 					'shapeType' => 'arrow',
 					'isArrow' => true,
-					'drawMode' => 0,
+					'drawMode' => 3,
 					'points' => [['x' => 0.1, 'y' => 0.5], ['x' => 0.5, 'y' => 0.5]],
 				],
 			),
@@ -430,14 +430,14 @@ final class MobileSheetsAnnotationAdapterTest extends TestCase {
 
 		$drawRows = $db->query('SELECT * FROM DrawAnnotations')->fetchAll(PDO::FETCH_ASSOC);
 		self::assertCount(1, $drawRows);
-		self::assertSame(0, (int)$drawRows[0]['DrawMode']); // Arrow DrawMode = 0
+		self::assertSame(3, (int)$drawRows[0]['DrawMode']); // Arrow DrawMode = 3
 
 		$imported = $this->adapter->importAnnotations($db, songId: 10, fileId: 20, clientSongId: 10);
 		self::assertCount(1, $imported);
 		self::assertSame('shape', $imported[0]->type);
 		self::assertTrue($imported[0]->data['isArrow']);
 		self::assertSame('arrow', $imported[0]->data['shapeType']);
-		self::assertSame(0, $imported[0]->data['drawMode']);
+		self::assertSame(3, $imported[0]->data['drawMode']);
 		self::assertStringStartsWith('M 100 500 L 500 500', $imported[0]->data['path']);
 		self::assertStringContainsString('L 500 500 L ', $imported[0]->data['path']);
 	}

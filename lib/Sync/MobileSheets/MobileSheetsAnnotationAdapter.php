@@ -278,7 +278,7 @@ class MobileSheetsAnnotationAdapter {
 
 		$strokeWidthNorm = round($lineWidth / ($sourceW > 0 ? $sourceW : 595.0) * 1000, 2);
 		$isHairpin = ($type === 'shape' || $rawType === 6) && ($drawMode === 4 || $drawMode === 5) && count($points) >= 2;
-		$isArrow = ($type === 'shape' || $rawType === 6) && ($drawMode === 0 || ($draw['isArrow'] ?? false)) && count($points) === 2;
+		$isArrow = ($type === 'shape' || $rawType === 6) && ($drawMode === 3 || ($draw['isArrow'] ?? false) || ($draw['shapeType'] ?? '') === 'arrow') && count($points) === 2;
 		if ($isHairpin) {
 			$isDecrescendo = ($drawMode === 5);
 			$pathD = SvgCurveUtil::generateHairpinPath($points[0], $points[1], $isDecrescendo, $aperture);
@@ -288,7 +288,7 @@ class MobileSheetsAnnotationAdapter {
 			$bbox = SvgCurveUtil::calculateArrowBoundingBox($points[0], $points[1], $strokeWidthNorm);
 		} else {
 			$bbox = !empty($points) ? self::calculateBoundingBox($points) : ['x' => 0.0, 'y' => 0.0, 'width' => 0.0, 'height' => 0.0];
-			$pathD = !empty($points) ? self::generateSvgPath($points, smooth: $type !== 'shape' && $drawMode !== 4 && $drawMode !== 0) : '';
+			$pathD = !empty($points) ? self::generateSvgPath($points, smooth: $type !== 'shape' && $drawMode !== 4) : '';
 		}
 
 		$lineStyle = match ($penMode) {
@@ -319,12 +319,10 @@ class MobileSheetsAnnotationAdapter {
 				$shapeType = 'arrow';
 			} elseif ($isHairpin) {
 				$shapeType = ($drawMode === 5) ? 'decrescendo' : 'crescendo';
-			} elseif ($drawMode === 1) {
+			} elseif ($drawMode === 0 || $drawMode === 1) {
 				$shapeType = 'line';
 			} elseif ($drawMode === 2) {
 				$shapeType = 'rectangle';
-			} elseif ($drawMode === 3) {
-				$shapeType = 'circle';
 			}
 		}
 
@@ -703,13 +701,13 @@ class MobileSheetsAnnotationAdapter {
 					if (isset($ann->data['drawMode']) && is_numeric($ann->data['drawMode'])) {
 						$drawMode = (int)$ann->data['drawMode'];
 					} elseif (($ann->data['isArrow'] ?? false) || ($ann->data['shapeType'] ?? '') === 'arrow') {
-						$drawMode = 0;
+						$drawMode = 3;
 					} elseif (($ann->data['isHairpin'] ?? false) || in_array($ann->data['shapeType'] ?? '', ['crescendo', 'decrescendo', 'hairpin'], true)) {
 						$drawMode = (($ann->data['shapeType'] ?? '') === 'decrescendo' || ($ann->data['isDecrescendo'] ?? false)) ? 5 : 4;
 					} elseif (($ann->data['shapeType'] ?? '') === 'line') {
-						$drawMode = 1;
+						$drawMode = 0;
 					} else {
-						$drawMode = ($ann->type === 'shape' ? 1 : ($ann->type === 'highlight' ? 2 : 0));
+						$drawMode = ($ann->type === 'shape' ? 0 : ($ann->type === 'highlight' ? 2 : 0));
 					}
 
 					if (isset($ann->data['penMode']) && is_numeric($ann->data['penMode'])) {
