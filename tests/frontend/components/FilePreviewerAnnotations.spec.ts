@@ -229,19 +229,19 @@ describe('FilePreviewer.vue Annotation Rendering & Reactivity', () => {
 		expect(linePath.element.tagName.toLowerCase()).toBe('path')
 		expect(linePath.attributes('d')).toBe('M 100.0 700.0 L 300.0 700.0')
 
-		// Note stamp should render as <text> centered at (x + w * 0.2, y + h * 0.25) with central baseline and music font-family
+		// Note stamp should render as <text> centered at (x + w/2, y + h/2) with central baseline and music font-family
 		const stampText = overlay.find('[data-test="annotation-stamp"]')
 		expect(stampText.exists()).toBe(true)
 		expect(stampText.text()).toBe('♩')
-		expect(stampText.attributes('x')).toBe('510')
-		expect(stampText.attributes('y')).toBe('412.5')
+		expect(stampText.attributes('x')).toBe('525')
+		expect(stampText.attributes('y')).toBe('425')
 		expect(stampText.attributes('dominant-baseline')).toBe('central')
 		expect(stampText.attributes('text-anchor')).toBe('middle')
 		expect(stampText.attributes('font-family')).toContain('Bravura')
 		expect(stampText.attributes('font-family')).toContain('Noto Music')
 	})
 
-	it('renders text annotations with hanging baseline, valid font family, and crescendo hairpins', async () => {
+	it('renders text annotations with alphabetic baseline, valid font family, and crescendo hairpins', async () => {
 		const textAndCrescendoAnns: SheetAnnotation[] = [
 			{
 				id: 30,
@@ -294,14 +294,14 @@ describe('FilePreviewer.vue Annotation Rendering & Reactivity', () => {
 		const overlay = wrapper.find('.sheetmusic-annotation-overlay')
 		expect(overlay.exists()).toBe(true)
 
-		// Text should have hanging baseline, valid font-family (not "0"), and proper y coordinate
+		// Text should have alphabetic baseline, valid font-family (not "0"), and proper coordinates
 		const textEl = overlay.find('[data-test="annotation-text"]')
 		expect(textEl.exists()).toBe(true)
 		expect(textEl.text()).toBe('foo')
-		expect(textEl.attributes('x')).toBe('500')
-		expect(textEl.attributes('y')).toBe('600')
+		expect(textEl.attributes('x')).toBe('508')
+		expect(textEl.attributes('y')).toBe('641.5')
 		expect(textEl.attributes('font-family')).toBe('sans-serif')
-		expect(textEl.attributes('dominant-baseline')).toBe('hanging')
+		expect(textEl.attributes('dominant-baseline')).toBe('alphabetic')
 		expect(textEl.attributes('font-size')).toBe('60')
 
 		// Crescendo should render as hairpin path (<)

@@ -18,6 +18,7 @@ import {
 	getAnnotationDisplaySymbol,
 	getAnnotationFontFamily,
 	getAnnotationPath,
+	getAnnotationTextPosition,
 } from '../utils/annotation'
 
 const props = withDefaults(
@@ -175,8 +176,8 @@ function createAnnotationSvg(pageNum: number): SVGElement | null {
 		} else if (ann.type === 'stamp') {
 			const text = document.createElementNS('http://www.w3.org/2000/svg', 'text')
 			const fontSize = ann.style?.fontSize || 40
-			const cx = Math.round((ann.x + (ann.width || 0) * 0.2) * 10000) / 10
-			const cy = Math.round((ann.y + (ann.height || 0) * 0.25) * 10000) / 10
+			const cx = Math.round((ann.x + (ann.width || 0) / 2) * 10000) / 10
+			const cy = Math.round((ann.y + (ann.height || 0) / 2) * 10000) / 10
 			text.setAttribute('x', String(cx))
 			text.setAttribute('y', String(cy))
 			text.setAttribute('text-anchor', 'middle')
@@ -191,12 +192,16 @@ function createAnnotationSvg(pageNum: number): SVGElement | null {
 			const text = document.createElementNS('http://www.w3.org/2000/svg', 'text')
 			const fontSize = ann.style?.fontSize || ann.data?.scaledFontSize || (ann.data?.fontSize ? (ann.data.fontSize < 100 ? Math.round(ann.data.fontSize / (ann.data?.sourceWidth || 596) * 1000) : ann.data.fontSize) : 24)
 			const fontFamily = getAnnotationFontFamily(ann.style?.fontFamily || ann.data?.fontFamily)
-			text.setAttribute('x', String(ann.x * 1000))
-			text.setAttribute('y', String(ann.y * 1000))
+			const textPos = getAnnotationTextPosition(ann)
+			text.setAttribute('x', String(textPos.x))
+			text.setAttribute('y', String(textPos.y))
 			text.setAttribute('fill', ann.style?.color || '#000000')
 			text.setAttribute('font-size', String(fontSize))
 			text.setAttribute('font-family', fontFamily)
-			text.setAttribute('dominant-baseline', 'hanging')
+			text.setAttribute('dominant-baseline', textPos.dominantBaseline)
+			if (textPos.textAnchor) {
+				text.setAttribute('text-anchor', textPos.textAnchor)
+			}
 			text.setAttribute('data-test', 'annotation-text')
 			text.textContent = ann.data.text
 			svg.appendChild(text)

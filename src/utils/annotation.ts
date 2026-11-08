@@ -217,3 +217,59 @@ export function getAnnotationPath(item: SheetAnnotation): string {
 
 	return ''
 }
+
+/**
+ * Compute the rendered position, dominant baseline, and text anchor for text annotations.
+ */
+export function getAnnotationTextPosition(ann: SheetAnnotation): {
+	x: number
+	y: number
+	dominantBaseline: string
+	textAnchor: string
+} {
+	const points = ann.data?.points
+	const textAlign = ann.data?.textAlign
+
+	let anchor = 'start'
+	if (textAlign === 1) {
+		anchor = 'middle'
+	} else if (textAlign === 2) {
+		anchor = 'end'
+	}
+
+	if (points && points.length >= 3) {
+		// In MobileSheets TextboxAnnotations, point 2 (3rd point) is the text baseline origin (x, y)
+		let x = points[2].x
+		if (textAlign === 1 && ann.width) {
+			x = ann.x + ann.width / 2
+		} else if (textAlign === 2 && ann.width) {
+			x = ann.x + ann.width - (points[2].x - ann.x)
+		}
+		return {
+			x: Math.round(x * 10000) / 10,
+			y: Math.round(points[2].y * 10000) / 10,
+			dominantBaseline: 'alphabetic',
+			textAnchor: anchor,
+		}
+	}
+
+	// Fallback when 3 points are not stored:
+	// Move down and right into the textbox to match MobileSheets text padding and baseline
+	const fontSize = ann.style?.fontSize || ann.data?.scaledFontSize || 24
+	const padX = ann.width && ann.width > 0 ? ann.width * 0.08 : 0.008
+	const padY = ann.height && ann.height > 0 ? ann.height * 0.83 : (fontSize / 1000) * 0.9
+
+	let x = ann.x + padX
+	if (textAlign === 1 && ann.width) {
+		x = ann.x + ann.width / 2
+	} else if (textAlign === 2 && ann.width) {
+		x = ann.x + ann.width - padX
+	}
+
+	return {
+		x: Math.round(x * 10000) / 10,
+		y: Math.round((ann.y + padY) * 10000) / 10,
+		dominantBaseline: 'alphabetic',
+		textAnchor: anchor,
+	}
+}

@@ -6,6 +6,7 @@ import {
 	getAnnotationDisplaySymbol,
 	getAnnotationFontFamily,
 	getAnnotationPath,
+	getAnnotationTextPosition,
 } from '../../utils/annotation'
 
 const props = withDefaults(
@@ -74,8 +75,8 @@ const activeAnnotations = computed(() => {
 			<!-- Stamp Annotation -->
 			<text
 				v-else-if="item.type === 'stamp'"
-				:x="Math.round((item.x + (item.width || 0) * 0.2) * 10000) / 10"
-				:y="Math.round((item.y + (item.height || 0) * 0.25) * 10000) / 10"
+				:x="Math.round((item.x + (item.width || 0) / 2) * 10000) / 10"
+				:y="Math.round((item.y + (item.height || 0) / 2) * 10000) / 10"
 				:fill="item.style?.color || '#000000'"
 				:font-size="item.style?.fontSize || 40"
 				text-anchor="middle"
@@ -88,12 +89,13 @@ const activeAnnotations = computed(() => {
 			<!-- Text Annotation -->
 			<text
 				v-else-if="item.type === 'text' && item.data?.text"
-				:x="item.x * 1000"
-				:y="item.y * 1000"
+				:x="getAnnotationTextPosition(item).x"
+				:y="getAnnotationTextPosition(item).y"
 				:fill="item.style?.color || '#000000'"
 				:font-size="item.style?.fontSize || item.data?.scaledFontSize || (item.data?.fontSize ? (item.data.fontSize < 100 ? Math.round(item.data.fontSize / (item.data?.sourceWidth || 596) * 1000) : item.data.fontSize) : 24)"
 				:font-family="getAnnotationFontFamily(item.style?.fontFamily || item.data?.fontFamily)"
-				dominant-baseline="hanging"
+				:dominant-baseline="getAnnotationTextPosition(item).dominantBaseline"
+				:text-anchor="getAnnotationTextPosition(item).textAnchor"
 				data-test="annotation-text">
 				{{ item.data.text }}
 			</text>

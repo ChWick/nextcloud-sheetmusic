@@ -11,6 +11,7 @@ import {
 	getAnnotationDisplaySymbol,
 	getAnnotationFontFamily,
 	getAnnotationPath,
+	getAnnotationTextPosition,
 } from '../../../src/utils/annotation'
 import type { SheetAnnotation } from '../../../src/types/annotation'
 
@@ -228,6 +229,52 @@ describe('annotation utils', () => {
 			}
 			const path = getAnnotationPath(ann)
 			expect(path).toContain('L 100.0 500.0')
+		})
+	})
+
+	describe('getAnnotationTextPosition', () => {
+		it('uses 3rd point as baseline origin when available', () => {
+			const ann: SheetAnnotation = {
+				id: 1,
+				pageNumber: 0,
+				layerIndex: 0,
+				type: 'text',
+				x: 0.5667,
+				y: 0.6683,
+				width: 0.1141,
+				height: 0.0734,
+				data: {
+					points: [
+						{ x: 0.5667, y: 0.6683 },
+						{ x: 0.6808, y: 0.7417 },
+						{ x: 0.5751, y: 0.7295 },
+					],
+				},
+			}
+			const pos = getAnnotationTextPosition(ann)
+			expect(pos.x).toBe(575.1)
+			expect(pos.y).toBe(729.5)
+			expect(pos.dominantBaseline).toBe('alphabetic')
+			expect(pos.textAnchor).toBe('start')
+		})
+
+		it('calculates proper offset into textbox when points are absent', () => {
+			const ann: SheetAnnotation = {
+				id: 2,
+				pageNumber: 0,
+				layerIndex: 0,
+				type: 'text',
+				x: 0.5,
+				y: 0.6,
+				width: 0.1,
+				height: 0.05,
+				data: {},
+			}
+			const pos = getAnnotationTextPosition(ann)
+			expect(pos.x).toBe(508)
+			expect(pos.y).toBe(641.5)
+			expect(pos.dominantBaseline).toBe('alphabetic')
+			expect(pos.textAnchor).toBe('start')
 		})
 	})
 })
