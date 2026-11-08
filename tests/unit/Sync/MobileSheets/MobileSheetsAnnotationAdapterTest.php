@@ -314,4 +314,67 @@ final class MobileSheetsAnnotationAdapterTest extends TestCase {
 		$twoPath = MobileSheetsAnnotationAdapter::generateSvgPath($twoPoints, smooth: true);
 		self::assertSame('M 100 100 L 900 900', $twoPath);
 	}
+
+	public function testCrescendoHairpinImportAndExport(): void {
+		$db = new PDO('sqlite::memory:');
+		$db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+		foreach (['AnnotationsBase', 'DrawAnnotations', 'AnnotationPoints', 'TextboxAnnotations'] as $t) {
+			$db->exec(MobileSheetsBaselineSchema::TABLES[$t]);
+		}
+
+		$canonical = [
+			new InternalSongAnnotation(
+				id: 1,
+				uuid: 'test-crescendo-uuid',
+				songId: 10,
+				fileId: 20,
+				pageNumber: 0,
+				layerIndex: 0,
+				type: 'shape',
+				x: 0.1,
+				y: 0.5,
+				width: 0.2,
+				height: 0.03,
+				style: [
+					'stroke' => '#000000',
+					'strokeWidth' => 2.0,
+				],
+				data: [
+					'drawMode' => 4,
+					'isHairpin' => true,
+					'aperture' => 4.0,
+					'points' => [['x' => 0.1, 'y' => 0.5], ['x' => 0.3, 'y' => 0.5]],
+				],
+			),
+		];
+
+		$this->adapter->exportAnnotations($db, clientSongId: 10, annotations: $canonical);
+
+		$imported = $this->adapter->importAnnotations($db, songId: 10, fileId: 20, clientSongId: 10);
+		self::assertCount(1, $imported);
+		self::assertTrue($imported[0]->data['isHairpin']);
+		self::assertSame(4, $imported[0]->data['drawMode']);
+		self::assertStringStartsWith('M 300', $imported[0]->data['path']);
+		self::assertStringContainsString('L 100 500', $imported[0]->data['path']);
+	}
+
+	public function testTextboxFontFamilyAndFontSizeScaling(): void {
+		$db = new PDO('sqlite::memory:');
+		$db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+		foreach (['AnnotationsBase', 'DrawAnnotations', 'AnnotationPoints', 'TextboxAnnotations'] as $t) {
+			$db->exec(MobileSheetsBaselineSchema::TABLES[$t]);
+		}
+
+		$db->exec('INSERT INTO AnnotationsBase (Id, SongId, Page, Type, Opacity, Zoom, ZoomY, Version, SourcePageWidth, SourcePageHeight, Layer)
+			VALUES (1, 10, 0, 0, 100, 1.0, 1.0, 3, 500.0, 800.0, 0)');
+		$db->exec("INSERT INTO TextboxAnnotations (Id, BaseId, TextColor, Text, FontFamily, FontSize, FontStyle, FillColor, BorderColor, TextAlign, HasBorder, BorderWidth, AutoSize, LineSpacing)
+			VALUES (1, 1, -16777216, 'Allegro', 0, 25.0, 0, 0, -16777216, 0, 0, 0.5, 1, 1.0)");
+
+		$imported = $this->adapter->importAnnotations($db, songId: 10, fileId: 20, clientSongId: 10);
+		self::assertCount(1, $imported);
+		self::assertSame('Allegro', $imported[0]->data['text']);
+		self::assertSame('sans-serif', $imported[0]->data['fontFamily']);
+		self::assertSame('sans-serif', $imported[0]->style['fontFamily']);
+		self::assertEquals(50.0, $imported[0]->style['fontSize']); // 25 / 500 * 1000 = 50.0
+	}
 }

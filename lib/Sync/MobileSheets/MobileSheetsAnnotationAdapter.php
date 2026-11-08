@@ -153,8 +153,16 @@ class MobileSheetsAnnotationAdapter {
 		}
 
 		$points = [];
+		$aperture = null;
 		if (is_string($pointsBlob) && strlen($pointsBlob) >= 16) {
 			$points = self::unpackPointsBlob($pointsBlob, $sourceW, $sourceH);
+			if (strlen($pointsBlob) === 40) {
+				$unpackedDoubles = array_values(unpack('d*', $pointsBlob) ?: []);
+				if (count($unpackedDoubles) === 5) {
+					$aperture = (float)$unpackedDoubles[4];
+					$baseClientMeta['aperture'] = $aperture;
+				}
+			}
 		}
 
 		$type = match ($rawType) {
@@ -169,12 +177,21 @@ class MobileSheetsAnnotationAdapter {
 			$textColor = self::argbToHex((int)($textbox['TextColor'] ?? -16777216));
 			$text = (string)($textbox['Text'] ?? '');
 			$fontSize = (float)($textbox['FontSize'] ?? 14.0);
+			$rawFontFamily = (string)($textbox['FontFamily'] ?? '0');
+			$fontFamily = match ($rawFontFamily) {
+				'1' => 'serif',
+				'2' => 'monospace',
+				default => 'sans-serif',
+			};
+			$scaledFontSize = round($fontSize / ($sourceW > 0 ? $sourceW : 595.0) * 1000, 1);
 			$bbox = !empty($points) ? self::calculateBoundingBox($points) : ['x' => 0.1, 'y' => 0.1, 'width' => 0.3, 'height' => 0.05];
 
 			$data = array_merge($baseClientMeta, [
 				'text' => $text,
 				'fontSize' => $fontSize,
-				'fontFamily' => (string)($textbox['FontFamily'] ?? '0'),
+				'scaledFontSize' => $scaledFontSize,
+				'fontFamily' => $fontFamily,
+				'rawFontFamily' => $rawFontFamily,
 				'textboxId' => (int)($textbox['Id'] ?? $baseId),
 				'fontStyle' => (int)($textbox['FontStyle'] ?? 0),
 				'fillColor' => (int)($textbox['FillColor'] ?? 0),
@@ -198,7 +215,11 @@ class MobileSheetsAnnotationAdapter {
 				y: $bbox['y'],
 				width: $bbox['width'],
 				height: $bbox['height'],
-				style: ['color' => $textColor],
+				style: [
+					'color' => $textColor,
+					'fontSize' => $scaledFontSize,
+					'fontFamily' => $fontFamily,
+				],
 				data: $data,
 			);
 		}
@@ -254,8 +275,15 @@ class MobileSheetsAnnotationAdapter {
 		$smoothMode = (int)($draw['SmoothMode'] ?? 0);
 		$drawMode = (int)($draw['DrawMode'] ?? 0);
 
-		$bbox = !empty($points) ? self::calculateBoundingBox($points) : ['x' => 0.0, 'y' => 0.0, 'width' => 0.0, 'height' => 0.0];
-		$pathD = !empty($points) ? self::generateSvgPath($points, smooth: $type !== 'shape' && $drawMode !== 4) : '';
+		$isHairpin = ($type === 'shape' || $rawType === 6) && ($drawMode === 4 || $drawMode === 5) && count($points) >= 2;
+		if ($isHairpin) {
+			$isDecrescendo = ($drawMode === 5);
+			$pathD = SvgCurveUtil::generateHairpinPath($points[0], $points[1], $isDecrescendo, $aperture);
+			$bbox = SvgCurveUtil::calculateHairpinBoundingBox($points[0], $points[1], $isDecrescendo, $aperture);
+		} else {
+			$bbox = !empty($points) ? self::calculateBoundingBox($points) : ['x' => 0.0, 'y' => 0.0, 'width' => 0.0, 'height' => 0.0];
+			$pathD = !empty($points) ? self::generateSvgPath($points, smooth: $type !== 'shape' && $drawMode !== 4) : '';
+		}
 
 		$lineStyle = match ($penMode) {
 			2 => 'dotted',
@@ -288,6 +316,7 @@ class MobileSheetsAnnotationAdapter {
 			'smoothMode' => $smoothMode,
 			'fillColor' => (int)($draw['FillColor'] ?? 0),
 			'lineWidth' => $lineWidth,
+			'isHairpin' => $isHairpin,
 		]);
 
 		return new InternalSongAnnotation(
@@ -514,7 +543,12 @@ class MobileSheetsAnnotationAdapter {
 					$color = self::hexToArgb((string)($ann->style['color'] ?? '#000000'));
 					$text = (string)($ann->data['text'] ?? '');
 					$size = (float)($ann->data['fontSize'] ?? 14.0);
-					$fontFamily = (int)($ann->data['fontFamily'] ?? 0);
+					$rawFf = $ann->data['rawFontFamily'] ?? $ann->data['fontFamily'] ?? 0;
+					$fontFamily = match ($rawFf) {
+						1, '1', 'serif' => 1,
+						2, '2', 'monospace' => 2,
+						default => 0,
+					};
 					$fontStyle = (int)($ann->data['fontStyle'] ?? 0);
 					$fillColor = (int)($ann->data['fillColor'] ?? 0);
 					$borderColor = (int)($ann->data['borderColor'] ?? 0);
@@ -670,7 +704,8 @@ class MobileSheetsAnnotationAdapter {
 						$points = $ann->data['points'] ?? [];
 						if (!empty($points) && is_array($points)) {
 							$strokeW = (float)($ann->data['lineWidth'] ?? ($ann->style['strokeWidth'] ?? 2.0));
-							[$blob, $count] = self::packPointsBlob($points, $srcW, $srcH, $ann->type, $strokeW);
+							$aperture = isset($ann->data['aperture']) ? (float)$ann->data['aperture'] : null;
+							[$blob, $count] = self::packPointsBlob($points, $srcW, $srcH, $ann->type, $strokeW, $aperture, $drawMode);
 						} else {
 							$blob = '';
 							$count = 0;
@@ -789,6 +824,8 @@ class MobileSheetsAnnotationAdapter {
 		float $sourceH,
 		string $type = 'drawing',
 		float $lineWidth = 2.0,
+		?float $aperture = null,
+		int $drawMode = 0,
 	): array {
 		if (empty($points)) {
 			return ['', 0];
@@ -807,6 +844,12 @@ class MobileSheetsAnnotationAdapter {
 				$doubles[] = (float)$pt['x'] * $w;
 				$doubles[] = (float)$pt['y'] * $h;
 			}
+		} elseif ($type === 'shape' && ($drawMode === 4 || $drawMode === 5 || $aperture !== null) && count($points) === 2) {
+			$doubles[] = (float)$points[0]['x'] * $w;
+			$doubles[] = (float)$points[0]['y'] * $h;
+			$doubles[] = (float)$points[1]['x'] * $w;
+			$doubles[] = (float)$points[1]['y'] * $h;
+			$doubles[] = $aperture !== null ? (float)$aperture : 4.0;
 		} else {
 			foreach ($points as $pt) {
 				$doubles[] = (float)$pt['x'] * $w;

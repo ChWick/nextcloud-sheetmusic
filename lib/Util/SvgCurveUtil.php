@@ -72,6 +72,111 @@ final class SvgCurveUtil {
 	}
 
 	/**
+	 * Generate an SVG path for a crescendo (<) or decrescendo (>) hairpin wedge.
+	 *
+	 * @param array{x: float, y: float} $p1 Start point [0..1]
+	 * @param array{x: float, y: float} $p2 End point [0..1]
+	 * @param bool $isDecrescendo False for crescendo (<), true for decrescendo (>)
+	 * @param float|null $aperture Opening height in points or null for proportional
+	 */
+	public static function generateHairpinPath(
+		array $p1,
+		array $p2,
+		bool $isDecrescendo = false,
+		?float $aperture = null,
+	): string {
+		$x1 = $p1['x'] * 1000.0;
+		$y1 = $p1['y'] * 1000.0;
+		$x2 = $p2['x'] * 1000.0;
+		$y2 = $p2['y'] * 1000.0;
+
+		$dx = $x2 - $x1;
+		$dy = $y2 - $y1;
+		$len = hypot($dx, $dy);
+		if ($len < 0.001) {
+			$len = 1.0;
+		}
+
+		// Unit perpendicular vector
+		$nx = -$dy / $len;
+		$ny = $dx / $len;
+
+		// Half-height of the opening (aperture)
+		$h = $aperture !== null && $aperture > 0
+			? min(45.0, max(14.0, $aperture * 4.5))
+			: min(35.0, max(16.0, $len * 0.12));
+
+		if (!$isDecrescendo) {
+			// Crescendo (<): closed at p1, open at p2
+			$topX = round($x2 + $nx * $h, 1);
+			$topY = round($y2 + $ny * $h, 1);
+			$midX = round($x1, 1);
+			$midY = round($y1, 1);
+			$botX = round($x2 - $nx * $h, 1);
+			$botY = round($y2 - $ny * $h, 1);
+
+			return "M $topX $topY L $midX $midY L $botX $botY";
+		}
+
+		// Decrescendo (>): open at p1, closed at p2
+		$topX = round($x1 + $nx * $h, 1);
+		$topY = round($y1 + $ny * $h, 1);
+		$midX = round($x2, 1);
+		$midY = round($y2, 1);
+		$botX = round($x1 - $nx * $h, 1);
+		$botY = round($y1 - $ny * $h, 1);
+
+		return "M $topX $topY L $midX $midY L $botX $botY";
+	}
+
+	/**
+	 * Calculate bounding box for a hairpin.
+	 *
+	 * @return array{x: float, y: float, width: float, height: float}
+	 */
+	public static function calculateHairpinBoundingBox(
+		array $p1,
+		array $p2,
+		bool $isDecrescendo = false,
+		?float $aperture = null,
+	): array {
+		$x1 = $p1['x'] * 1000.0;
+		$y1 = $p1['y'] * 1000.0;
+		$x2 = $p2['x'] * 1000.0;
+		$y2 = $p2['y'] * 1000.0;
+
+		$dx = $x2 - $x1;
+		$dy = $y2 - $y1;
+		$len = hypot($dx, $dy);
+		if ($len < 0.001) {
+			$len = 1.0;
+		}
+
+		$nx = -$dy / $len;
+		$ny = $dx / $len;
+
+		$h = $aperture !== null && $aperture > 0
+			? min(45.0, max(14.0, $aperture * 4.5))
+			: min(35.0, max(16.0, $len * 0.12));
+
+		if (!$isDecrescendo) {
+			$pts = [
+				['x' => ($x2 + $nx * $h) / 1000.0, 'y' => ($y2 + $ny * $h) / 1000.0],
+				['x' => $p1['x'], 'y' => $p1['y']],
+				['x' => ($x2 - $nx * $h) / 1000.0, 'y' => ($y2 - $ny * $h) / 1000.0],
+			];
+		} else {
+			$pts = [
+				['x' => ($x1 + $nx * $h) / 1000.0, 'y' => ($y1 + $ny * $h) / 1000.0],
+				['x' => $p2['x'], 'y' => $p2['y']],
+				['x' => ($x1 - $nx * $h) / 1000.0, 'y' => ($y1 - $ny * $h) / 1000.0],
+			];
+		}
+
+		return self::calculateBoundingBox($pts);
+	}
+
+	/**
 	 * @param list<array{x: float, y: float}> $points
 	 * @return array{x: float, y: float, width: float, height: float}
 	 */

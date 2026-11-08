@@ -112,11 +112,13 @@ class SongAnnotationService {
 
 		foreach ($imported as $ann) {
 			$clientRecId = (string)($ann->data['clientRecordId'] ?? '');
+			$scopedClientRecId = $clientRecId !== '' ? "{$songId}:{$clientRecId}" : '';
 			if ($clientRecId !== '' && $this->syncMapper !== null) {
-				$existingId = $this->syncMapper->findAnnotationId('mobilesheets', $clientRecId);
+				$existingId = $this->syncMapper->findAnnotationId('mobilesheets', $scopedClientRecId)
+					?? $this->syncMapper->findAnnotationId('mobilesheets', $clientRecId);
 				if ($existingId !== null) {
 					$existingAnn = $this->annotationMapper->findById($existingId);
-					if ($existingAnn !== null) {
+					if ($existingAnn !== null && $existingAnn->songId === $songId) {
 						$ann->id = $existingAnn->id;
 						$ann->uuid = $existingAnn->uuid;
 					}
@@ -145,7 +147,7 @@ class SongAnnotationService {
 			if ($savedAnn->id !== null) {
 				$importedUuids[$savedAnn->uuid] = true;
 				if ($clientRecId !== '' && $this->syncMapper !== null) {
-					$this->syncMapper->link($savedAnn->id, 'mobilesheets', $clientRecId);
+					$this->syncMapper->link($savedAnn->id, 'mobilesheets', $scopedClientRecId);
 				}
 			}
 			$saved[] = $savedAnn;
@@ -185,8 +187,13 @@ class SongAnnotationService {
 			foreach ($annotations as $ann) {
 				if ($ann->id !== null) {
 					$recId = $this->syncMapper->findClientRecordId($ann->id, 'mobilesheets');
-					if ($recId !== null && is_numeric($recId)) {
-						$clientRecordIds[$ann->id] = (int)$recId;
+					if ($recId !== null) {
+						if (str_contains($recId, ':')) {
+							$recId = explode(':', $recId, 2)[1];
+						}
+						if (is_numeric($recId)) {
+							$clientRecordIds[$ann->id] = (int)$recId;
+						}
 					}
 				}
 			}
@@ -203,7 +210,7 @@ class SongAnnotationService {
 
 		if ($this->syncMapper !== null && !empty($mapped)) {
 			foreach ($mapped as $annId => $baseId) {
-				$this->syncMapper->link($annId, 'mobilesheets', (string)$baseId);
+				$this->syncMapper->link($annId, 'mobilesheets', "{$songId}:{$baseId}");
 			}
 		}
 	}

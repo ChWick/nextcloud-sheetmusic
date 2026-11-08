@@ -56,4 +56,31 @@ final class SvgCurveUtilTest extends TestCase {
 		$this->assertEquals(0.3, $bbox['width']);
 		$this->assertEquals(0.5, $bbox['height']);
 	}
+
+	public function testGenerateHairpinPathCrescendo(): void {
+		$p1 = ['x' => 0.1, 'y' => 0.5];
+		$p2 = ['x' => 0.3, 'y' => 0.5];
+		$path = SvgCurveUtil::generateHairpinPath($p1, $p2, isDecrescendo: false);
+		$this->assertStringStartsWith('M 300', $path);
+		$this->assertStringContainsString('L 100 500', $path);
+		$this->assertStringContainsString('L 300', $path);
+	}
+
+	public function testGenerateHairpinPathDecrescendo(): void {
+		$p1 = ['x' => 0.1, 'y' => 0.5];
+		$p2 = ['x' => 0.3, 'y' => 0.5];
+		$path = SvgCurveUtil::generateHairpinPath($p1, $p2, isDecrescendo: true);
+		$this->assertStringStartsWith('M 100', $path);
+		$this->assertStringContainsString('L 300 500', $path);
+		$this->assertStringContainsString('L 100', $path);
+	}
+
+	public function testCalculateHairpinBoundingBox(): void {
+		$p1 = ['x' => 0.1, 'y' => 0.5];
+		$p2 = ['x' => 0.3, 'y' => 0.5];
+		$bbox = SvgCurveUtil::calculateHairpinBoundingBox($p1, $p2, isDecrescendo: false);
+		$this->assertEquals(0.1, $bbox['x']);
+		$this->assertEquals(0.2, $bbox['width']);
+		$this->assertGreaterThan(0.01, $bbox['height']);
+	}
 }
