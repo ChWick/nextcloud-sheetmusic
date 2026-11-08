@@ -328,7 +328,7 @@ describe('FilePreviewer.vue Annotation Rendering & Reactivity', () => {
 				height: 0.05,
 				style: { stroke: '#000000', strokeWidth: 2 },
 				data: {
-					drawMode: 0,
+					drawMode: 3,
 					isArrow: true,
 					points: [{ x: 0.1, y: 0.5 }, { x: 0.5, y: 0.5 }],
 				},

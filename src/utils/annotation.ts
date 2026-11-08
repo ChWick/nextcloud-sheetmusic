@@ -246,7 +246,7 @@ export function getAnnotationPath(item: SheetAnnotation): string {
 	const isArrow = Boolean(
 		item.data?.isArrow ||
 		item.data?.shapeType === 'arrow' ||
-		((item.type === 'shape' || item.data?.mobilesheetsType === 6) && item.data?.drawMode === 0 && item.data?.shapeType !== 'line')
+		((item.type === 'shape' || item.data?.mobilesheetsType === 6) && item.data?.drawMode === 3)
 	)
 	if (isArrow && points && points.length === 2) {
 		const sw = Number(item.style?.strokeWidth) || 2.0
@@ -254,7 +254,7 @@ export function getAnnotationPath(item: SheetAnnotation): string {
 	}
 
 	if (points && points.length > 0) {
-		const isSmooth = item.type !== 'shape' && item.data?.smoothMode !== false && item.data?.drawMode !== 1 && item.data?.drawMode !== 4 && item.data?.drawMode !== 5 && item.data?.drawMode !== 0
+		const isSmooth = item.type !== 'shape' && item.data?.smoothMode !== false && item.data?.drawMode !== 1 && item.data?.drawMode !== 4 && item.data?.drawMode !== 5
 		return generateSmoothSvgPath(points, isSmooth)
 	}
 

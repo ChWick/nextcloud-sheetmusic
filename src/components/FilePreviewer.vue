@@ -137,6 +137,8 @@ function createAnnotationSvg(pageNum: number): SVGElement | null {
 			Boolean(ann.data?.path) ||
 			(Array.isArray(ann.data?.points) && ann.data.points.length > 0) ||
 			ann.data?.drawMode === 0 ||
+			ann.data?.drawMode === 1 ||
+			ann.data?.drawMode === 3 ||
 			ann.data?.drawMode === 4 ||
 			ann.data?.drawMode === 5 ||
 			ann.data?.isHairpin ||

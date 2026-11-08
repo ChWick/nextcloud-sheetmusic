@@ -241,7 +241,7 @@ describe('annotation utils', () => {
 			expect(path).toContain('L 100.0 500.0')
 		})
 
-		it('generates arrow path for shape with isArrow or drawMode 0', () => {
+		it('generates arrow path for shape with isArrow or drawMode 3', () => {
 			const ann: SheetAnnotation = {
 				id: 2,
 				pageNumber: 0,
@@ -252,13 +252,36 @@ describe('annotation utils', () => {
 				width: 0.4,
 				height: 0.05,
 				data: {
-					drawMode: 0,
+					drawMode: 3,
 					isArrow: true,
 					points: [{ x: 0.1, y: 0.5 }, { x: 0.5, y: 0.5 }],
 				},
 			}
 			const path = getAnnotationPath(ann)
 			expect(path).toMatch(/^M 100\.0 500\.0 L 500\.0 500\.0 M \d+\.\d+ \d+\.\d+ L 500\.0 500\.0 L \d+\.\d+ \d+\.\d+$/)
+		})
+
+		it('applies curve smoothing for drawing annotations with drawMode 0', () => {
+			const ann: SheetAnnotation = {
+				id: 3,
+				pageNumber: 0,
+				layerIndex: 0,
+				type: 'drawing',
+				x: 0.1,
+				y: 0.1,
+				width: 0.2,
+				height: 0.2,
+				data: {
+					drawMode: 0,
+					points: [
+						{ x: 0.1, y: 0.1 },
+						{ x: 0.2, y: 0.2 },
+						{ x: 0.3, y: 0.25 },
+					],
+				},
+			}
+			const path = getAnnotationPath(ann)
+			expect(path).toContain(' Q ')
 		})
 	})
 

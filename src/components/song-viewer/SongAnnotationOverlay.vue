@@ -47,7 +47,7 @@ const activeAnnotations = computed(() => {
 		<template v-for="item in activeAnnotations" :key="item.uuid || item.id">
 			<!-- Freehand drawing, highlight, or path-based shape/line/hairpin -->
 			<path
-				v-if="(item.type === 'drawing' || item.type === 'highlight' || (item.type === 'shape' && (item.data?.path || (item.data?.points && item.data.points.length > 0) || item.data?.drawMode === 0 || item.data?.drawMode === 4 || item.data?.drawMode === 5 || item.data?.isHairpin || item.data?.isArrow || item.data?.shapeType === 'arrow' || item.data?.shapeType === 'line')))"
+				v-if="(item.type === 'drawing' || item.type === 'highlight' || (item.type === 'shape' && (item.data?.path || (item.data?.points && item.data.points.length > 0) || item.data?.drawMode === 0 || item.data?.drawMode === 1 || item.data?.drawMode === 3 || item.data?.drawMode === 4 || item.data?.drawMode === 5 || item.data?.isHairpin || item.data?.isArrow || item.data?.shapeType === 'arrow' || item.data?.shapeType === 'line')))"
 				:d="getAnnotationPath(item)"
 				:stroke="item.style?.stroke || '#ff0000'"
 				:stroke-width="item.style?.strokeWidth || 2.0"
