@@ -298,7 +298,7 @@ class MobileSheetsAnnotationAdapter {
 		};
 		$strokeDashArray = match ($penMode) {
 			2 => '4, 12',
-			3 => '36, 20',
+			3 => '18, 10',
 			default => null,
 		};
 

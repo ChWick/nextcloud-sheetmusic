@@ -90,7 +90,7 @@ describe('annotation utils', () => {
 				...baseAnnotation,
 				style: { lineStyle: 'dashed' },
 			}
-			expect(getAnnotationDashArray(ann)).toBe('36, 20')
+			expect(getAnnotationDashArray(ann)).toBe('18, 10')
 		})
 
 		it('returns dotted pattern for lineStyle dotted', () => {
@@ -106,7 +106,7 @@ describe('annotation utils', () => {
 				...baseAnnotation,
 				data: { penMode: 3 },
 			}
-			expect(getAnnotationDashArray(ann)).toBe('36, 20')
+			expect(getAnnotationDashArray(ann)).toBe('18, 10')
 		})
 
 		it('returns dotted pattern for penMode 2', () => {
@@ -122,7 +122,7 @@ describe('annotation utils', () => {
 				...baseAnnotation,
 				style: { lineStyle: 'dashed', strokeWidth: 16 },
 			}
-			expect(getAnnotationDashArray(ann)).toBe('40, 24')
+			expect(getAnnotationDashArray(ann)).toBe('20, 12')
 		})
 
 		it('returns undefined for solid lines (penMode 1 or default)', () => {
