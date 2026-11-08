@@ -139,7 +139,10 @@ function createAnnotationSvg(pageNum: number): SVGElement | null {
 			ann.data?.drawMode === 0 ||
 			ann.data?.drawMode === 4 ||
 			ann.data?.drawMode === 5 ||
-			ann.data?.isHairpin
+			ann.data?.isHairpin ||
+			ann.data?.isArrow ||
+			ann.data?.shapeType === 'arrow' ||
+			ann.data?.shapeType === 'line'
 		)
 
 		if ((ann.type === 'drawing' || ann.type === 'highlight' || isLineShape)) {

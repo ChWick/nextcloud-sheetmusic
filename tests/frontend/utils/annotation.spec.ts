@@ -5,6 +5,7 @@
 
 import { describe, expect, it } from 'vitest'
 import {
+	generateArrowPath,
 	generateHairpinPath,
 	generateSmoothSvgPath,
 	getAnnotationDashArray,
@@ -149,6 +150,15 @@ describe('annotation utils', () => {
 		})
 	})
 
+	describe('generateArrowPath', () => {
+		it('generates arrow path pointing towards p2', () => {
+			const p1 = { x: 0.1, y: 0.5 }
+			const p2 = { x: 0.5, y: 0.5 }
+			const path = generateArrowPath(p1, p2, 2.0)
+			expect(path).toMatch(/^M 100\.0 500\.0 L 500\.0 500\.0 M \d+\.\d+ \d+\.\d+ L 500\.0 500\.0 L \d+\.\d+ \d+\.\d+$/)
+		})
+	})
+
 	describe('getAnnotationFontFamily', () => {
 		it('maps numeric or 0 to sans-serif', () => {
 			expect(getAnnotationFontFamily('0')).toBe('sans-serif')
@@ -229,6 +239,26 @@ describe('annotation utils', () => {
 			}
 			const path = getAnnotationPath(ann)
 			expect(path).toContain('L 100.0 500.0')
+		})
+
+		it('generates arrow path for shape with isArrow or drawMode 0', () => {
+			const ann: SheetAnnotation = {
+				id: 2,
+				pageNumber: 0,
+				layerIndex: 0,
+				type: 'shape',
+				x: 0.1,
+				y: 0.5,
+				width: 0.4,
+				height: 0.05,
+				data: {
+					drawMode: 0,
+					isArrow: true,
+					points: [{ x: 0.1, y: 0.5 }, { x: 0.5, y: 0.5 }],
+				},
+			}
+			const path = getAnnotationPath(ann)
+			expect(path).toMatch(/^M 100\.0 500\.0 L 500\.0 500\.0 M \d+\.\d+ \d+\.\d+ L 500\.0 500\.0 L \d+\.\d+ \d+\.\d+$/)
 		})
 	})
 

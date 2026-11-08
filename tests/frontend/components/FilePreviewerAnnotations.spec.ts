@@ -187,7 +187,8 @@ describe('FilePreviewer.vue Annotation Rendering & Reactivity', () => {
 				height: 0.001,
 				style: { stroke: '#000000', strokeWidth: 3 },
 				data: {
-					drawMode: 0,
+					drawMode: 1,
+					shapeType: 'line',
 					points: [{ x: 0.1, y: 0.7 }, { x: 0.3, y: 0.7 }],
 				},
 			},
@@ -309,5 +310,46 @@ describe('FilePreviewer.vue Annotation Rendering & Reactivity', () => {
 		expect(hairpin.exists()).toBe(true)
 		expect(hairpin.element.tagName.toLowerCase()).toBe('path')
 		expect(hairpin.attributes('d')).toContain('L 100.0 700.0')
+	})
+
+	it('renders arrow shapes as path with arrowhead', async () => {
+		const arrowAnn: SheetAnnotation[] = [
+			{
+				id: 40,
+				uuid: 'arrow-shape-1',
+				songId: 10,
+				fileId: 100,
+				pageNumber: 1,
+				layerIndex: 0,
+				type: 'shape',
+				x: 0.1,
+				y: 0.5,
+				width: 0.4,
+				height: 0.05,
+				style: { stroke: '#000000', strokeWidth: 2 },
+				data: {
+					drawMode: 0,
+					isArrow: true,
+					points: [{ x: 0.1, y: 0.5 }, { x: 0.5, y: 0.5 }],
+				},
+			},
+		]
+
+		const wrapper = mount(FilePreviewer, {
+			props: {
+				filePath: '/dav/files/admin/Noten/piece.pdf',
+				annotations: arrowAnn,
+				showAnnotations: true,
+			},
+		})
+
+		await flushPromises()
+		const overlay = wrapper.find('.sheetmusic-annotation-overlay')
+		expect(overlay.exists()).toBe(true)
+
+		const arrowEl = overlay.find('[data-test="annotation-shape"]')
+		expect(arrowEl.exists()).toBe(true)
+		expect(arrowEl.element.tagName.toLowerCase()).toBe('path')
+		expect(arrowEl.attributes('d')).toMatch(/^M 100\.0 500\.0 L 500\.0 500\.0 M \d+\.\d+ \d+\.\d+ L 500\.0 500\.0 L \d+\.\d+ \d+\.\d+$/)
 	})
 })

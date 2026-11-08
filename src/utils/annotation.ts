@@ -132,6 +132,47 @@ export function generateHairpinPath(
 }
 
 /**
+ * Generate an SVG path for an arrow with arrowhead pointing at p2.
+ */
+export function generateArrowPath(
+	p1: { x: number; y: number },
+	p2: { x: number; y: number },
+	strokeWidth?: number,
+): string {
+	const x1 = p1.x * 1000
+	const y1 = p1.y * 1000
+	const x2 = p2.x * 1000
+	const y2 = p2.y * 1000
+
+	const dx = x2 - x1
+	const dy = y2 - y1
+	const len = Math.hypot(dx, dy) || 1.0
+
+	const ux = dx / len
+	const uy = dy / len
+	const nx = -uy
+	const ny = ux
+
+	const sw = typeof strokeWidth === 'number' && strokeWidth > 0 ? strokeWidth : 2.0
+	const headLen = Math.min(len * 0.4, Math.max(16.0, 10.0 + sw * 2.8))
+	const headWidth = headLen * 0.45
+
+	const baseX = x2 - ux * headLen
+	const baseY = y2 - uy * headLen
+
+	const sx1 = x1.toFixed(1)
+	const sy1 = y1.toFixed(1)
+	const sx2 = x2.toFixed(1)
+	const sy2 = y2.toFixed(1)
+	const w1x = (baseX + nx * headWidth).toFixed(1)
+	const w1y = (baseY + ny * headWidth).toFixed(1)
+	const w2x = (baseX - nx * headWidth).toFixed(1)
+	const w2y = (baseY - ny * headWidth).toFixed(1)
+
+	return `M ${sx1} ${sy1} L ${sx2} ${sy2} M ${w1x} ${w1y} L ${sx2} ${sy2} L ${w2x} ${w2y}`
+}
+
+/**
  * Sanitize and map font family names, converting MobileSheets integer codes to CSS font families.
  */
 export function getAnnotationFontFamily(family?: string | number | null): string {
@@ -195,15 +236,25 @@ export function getAnnotationDisplaySymbol(item: SheetAnnotation): string {
  */
 export function getAnnotationPath(item: SheetAnnotation): string {
 	const points = item.data?.points
-	const isHairpin = item.data?.isHairpin || item.data?.drawMode === 4 || item.data?.drawMode === 5
+	const isHairpin = item.data?.isHairpin || item.data?.drawMode === 4 || item.data?.drawMode === 5 || item.data?.shapeType === 'crescendo' || item.data?.shapeType === 'decrescendo'
 	if (isHairpin && points && points.length >= 2) {
-		const isDecrescendo = item.data?.drawMode === 5
+		const isDecrescendo = item.data?.drawMode === 5 || item.data?.shapeType === 'decrescendo'
 		const aperture = typeof item.data?.aperture === 'number' ? item.data.aperture : undefined
 		return generateHairpinPath(points[0], points[1], isDecrescendo, aperture)
 	}
 
+	const isArrow = Boolean(
+		item.data?.isArrow ||
+		item.data?.shapeType === 'arrow' ||
+		((item.type === 'shape' || item.data?.mobilesheetsType === 6) && item.data?.drawMode === 0 && item.data?.shapeType !== 'line')
+	)
+	if (isArrow && points && points.length === 2) {
+		const sw = Number(item.style?.strokeWidth) || 2.0
+		return generateArrowPath(points[0], points[1], sw)
+	}
+
 	if (points && points.length > 0) {
-		const isSmooth = item.type !== 'shape' && item.data?.smoothMode !== false && item.data?.drawMode !== 1 && item.data?.drawMode !== 4 && item.data?.drawMode !== 5
+		const isSmooth = item.type !== 'shape' && item.data?.smoothMode !== false && item.data?.drawMode !== 1 && item.data?.drawMode !== 4 && item.data?.drawMode !== 5 && item.data?.drawMode !== 0
 		return generateSmoothSvgPath(points, isSmooth)
 	}
 
