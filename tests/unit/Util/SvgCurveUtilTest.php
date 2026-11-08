@@ -37,11 +37,11 @@ final class SvgCurveUtilTest extends TestCase {
 			['x' => 0.3, 'y' => 0.25],
 		];
 		$path = SvgCurveUtil::generateSvgPath($points, smooth: true);
-		$this->assertStringContainsString(' C ', $path);
-		$this->assertSame('M 100 100 C 116.7 116.7, 166.7 175, 200 200 C 233.3 225, 283.3 241.7, 300 250', $path);
+		$this->assertStringContainsString(' Q ', $path);
+		$this->assertSame('M 100 100 Q 200 200, 250 225 L 300 250', $path);
 
 		$linearPath = SvgCurveUtil::generateSvgPath($points, smooth: false);
-		$this->assertStringNotContainsString(' C ', $linearPath);
+		$this->assertStringNotContainsString(' Q ', $linearPath);
 		$this->assertSame('M 100 100 L 200 200 L 300 250', $linearPath);
 	}
 

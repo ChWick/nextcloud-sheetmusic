@@ -281,15 +281,15 @@ final class MobileSheetsAnnotationAdapterTest extends TestCase {
 		$imported = $this->adapter->importAnnotations($db, songId: 10, fileId: 20, clientSongId: 10);
 		self::assertCount(2, $imported);
 		self::assertSame('dashed', $imported[0]->style['lineStyle']);
-		self::assertSame('16, 12', $imported[0]->style['strokeDashArray']);
+		self::assertSame('36, 20', $imported[0]->style['strokeDashArray']);
 		self::assertSame(3, $imported[0]->data['penMode']);
 
 		self::assertSame('dotted', $imported[1]->style['lineStyle']);
-		self::assertSame('4, 8', $imported[1]->style['strokeDashArray']);
+		self::assertSame('4, 12', $imported[1]->style['strokeDashArray']);
 		self::assertSame(2, $imported[1]->data['penMode']);
 	}
 
-	public function testCurveSmoothingWithCatmullRom(): void {
+	public function testCurveSmoothingWithQuadraticBezier(): void {
 		$points = [
 			['x' => 0.1, 'y' => 0.1],
 			['x' => 0.2, 'y' => 0.4],
@@ -299,12 +299,12 @@ final class MobileSheetsAnnotationAdapterTest extends TestCase {
 
 		$smoothed = MobileSheetsAnnotationAdapter::generateSvgPath($points, smooth: true);
 		self::assertStringStartsWith('M 100 100', $smoothed);
-		self::assertStringContainsString('C', $smoothed, '3+ points must be smoothed with cubic Bezier curves');
+		self::assertStringContainsString('Q', $smoothed, '3+ points must be smoothed with quadratic Bezier curves');
 
 		$linear = MobileSheetsAnnotationAdapter::generateSvgPath($points, smooth: false);
 		self::assertStringStartsWith('M 100 100', $linear);
 		self::assertStringContainsString('L', $linear);
-		self::assertStringNotContainsString('C', $linear);
+		self::assertStringNotContainsString('Q', $linear);
 
 		// Two points should always be linear
 		$twoPoints = [

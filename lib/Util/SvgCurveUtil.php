@@ -15,7 +15,8 @@ namespace OCA\SheetMusic\Util;
 final class SvgCurveUtil {
 	/**
 	 * Generate SVG path string with 0..1000 coordinate space.
-	 * Applies Catmull-Rom cubic Bezier curve smoothing for freehand strokes with 3+ points.
+	 * Applies quadratic Bezier midpoint curve smoothing (Android Path.quadTo algorithm)
+	 * for freehand strokes with 3+ points.
 	 *
 	 * @param list<array{x: float, y: float}> $points Normalized [0..1] coordinates
 	 */
@@ -53,23 +54,19 @@ final class SvgCurveUtil {
 			return $d;
 		}
 
-		// Catmull-Rom spline converted to cubic Bezier curves
+		// Quadratic Bezier midpoint smoothing: connects midpoints between successive control points
 		$d = "M $sx0 $sy0";
-		for ($i = 0; $i < $count - 1; $i++) {
-			$p0 = $filtered[max(0, $i - 1)];
-			$p1 = $filtered[$i];
-			$p2 = $filtered[$i + 1];
-			$p3 = $filtered[min($count - 1, $i + 2)];
+		for ($i = 1; $i < $count - 1; $i++) {
+			$cx = round($filtered[$i]['x'] * 1000, 1);
+			$cy = round($filtered[$i]['y'] * 1000, 1);
+			$endX = round((($filtered[$i]['x'] + $filtered[$i + 1]['x']) / 2.0) * 1000, 1);
+			$endY = round((($filtered[$i]['y'] + $filtered[$i + 1]['y']) / 2.0) * 1000, 1);
 
-			$cp1x = round(($p1['x'] + ($p2['x'] - $p0['x']) / 6.0) * 1000, 1);
-			$cp1y = round(($p1['y'] + ($p2['y'] - $p0['y']) / 6.0) * 1000, 1);
-			$cp2x = round(($p2['x'] - ($p3['x'] - $p1['x']) / 6.0) * 1000, 1);
-			$cp2y = round(($p2['y'] - ($p3['y'] - $p1['y']) / 6.0) * 1000, 1);
-			$endX = round($p2['x'] * 1000, 1);
-			$endY = round($p2['y'] * 1000, 1);
-
-			$d .= " C $cp1x $cp1y, $cp2x $cp2y, $endX $endY";
+			$d .= " Q $cx $cy, $endX $endY";
 		}
+		$lastX = round($filtered[$count - 1]['x'] * 1000, 1);
+		$lastY = round($filtered[$count - 1]['y'] * 1000, 1);
+		$d .= " L $lastX $lastY";
 
 		return $d;
 	}

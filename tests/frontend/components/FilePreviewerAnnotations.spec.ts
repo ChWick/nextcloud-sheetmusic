@@ -170,4 +170,74 @@ describe('FilePreviewer.vue Annotation Rendering & Reactivity', () => {
 		await flushPromises()
 		expect(overlay.attributes('style')).toContain('display: block')
 	})
+
+	it('renders straight line shapes and note stamps accurately', async () => {
+		const shapeAndStampAnns: SheetAnnotation[] = [
+			{
+				id: 20,
+				uuid: 'line-shape-1',
+				songId: 10,
+				fileId: 100,
+				pageNumber: 1,
+				layerIndex: 0,
+				type: 'shape',
+				x: 0.1,
+				y: 0.7,
+				width: 0.2,
+				height: 0.001,
+				style: { stroke: '#000000', strokeWidth: 3 },
+				data: {
+					drawMode: 0,
+					points: [{ x: 0.1, y: 0.7 }, { x: 0.3, y: 0.7 }],
+				},
+			},
+			{
+				id: 21,
+				uuid: 'note-stamp-1',
+				songId: 10,
+				fileId: 100,
+				pageNumber: 1,
+				layerIndex: 0,
+				type: 'stamp',
+				x: 0.5,
+				y: 0.4,
+				width: 0.05,
+				height: 0.05,
+				style: { color: '#000000', fontSize: 68 },
+				data: {
+					symbol: 'q',
+					displaySymbol: '♩',
+				},
+			},
+		]
+
+		const wrapper = mount(FilePreviewer, {
+			props: {
+				filePath: '/dav/files/admin/Noten/piece.pdf',
+				annotations: shapeAndStampAnns,
+				showAnnotations: true,
+			},
+		})
+
+		await flushPromises()
+		const overlay = wrapper.find('.sheetmusic-annotation-overlay')
+		expect(overlay.exists()).toBe(true)
+
+		// Straight line should render as <path> not <rect>
+		const linePath = overlay.find('[data-test="annotation-shape"]')
+		expect(linePath.exists()).toBe(true)
+		expect(linePath.element.tagName.toLowerCase()).toBe('path')
+		expect(linePath.attributes('d')).toBe('M 100.0 700.0 L 300.0 700.0')
+
+		// Note stamp should render as <text> with central baseline and music font-family
+		const stampText = overlay.find('[data-test="annotation-stamp"]')
+		expect(stampText.exists()).toBe(true)
+		expect(stampText.text()).toBe('♩')
+		expect(stampText.attributes('x')).toBe('500')
+		expect(stampText.attributes('y')).toBe('400')
+		expect(stampText.attributes('dominant-baseline')).toBe('central')
+		expect(stampText.attributes('text-anchor')).toBe('middle')
+		expect(stampText.attributes('font-family')).toContain('Bravura')
+		expect(stampText.attributes('font-family')).toContain('Noto Music')
+	})
 })

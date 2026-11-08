@@ -24,15 +24,15 @@ describe('annotation utils', () => {
 			])).toBe('M 100.0 200.0 L 300.0 400.0')
 		})
 
-		it('applies Catmull-Rom cubic Bezier curve smoothing for 3+ points when smooth is true', () => {
+		it('applies quadratic Bezier curve smoothing for 3+ points when smooth is true', () => {
 			const points = [
 				{ x: 0.1, y: 0.1 },
 				{ x: 0.2, y: 0.2 },
 				{ x: 0.3, y: 0.25 },
 			]
 			const path = generateSmoothSvgPath(points, true)
-			expect(path).toContain(' C ')
-			expect(path).toBe('M 100.0 100.0 C 116.7 116.7, 166.7 175.0, 200.0 200.0 C 233.3 225.0, 283.3 241.7, 300.0 250.0')
+			expect(path).toContain(' Q ')
+			expect(path).toBe('M 100.0 100.0 Q 200.0 200.0, 250.0 225.0 L 300.0 250.0')
 		})
 
 		it('uses linear segments for 3+ points when smooth is false', () => {
@@ -42,7 +42,7 @@ describe('annotation utils', () => {
 				{ x: 0.3, y: 0.25 },
 			]
 			const path = generateSmoothSvgPath(points, false)
-			expect(path).not.toContain(' C ')
+			expect(path).not.toContain(' Q ')
 			expect(path).toBe('M 100.0 100.0 L 200.0 200.0 L 300.0 250.0')
 		})
 
@@ -81,7 +81,7 @@ describe('annotation utils', () => {
 				...baseAnnotation,
 				style: { lineStyle: 'dashed' },
 			}
-			expect(getAnnotationDashArray(ann)).toBe('16, 12')
+			expect(getAnnotationDashArray(ann)).toBe('36, 20')
 		})
 
 		it('returns dotted pattern for lineStyle dotted', () => {
@@ -89,7 +89,7 @@ describe('annotation utils', () => {
 				...baseAnnotation,
 				style: { lineStyle: 'dotted' },
 			}
-			expect(getAnnotationDashArray(ann)).toBe('4, 8')
+			expect(getAnnotationDashArray(ann)).toBe('1, 12')
 		})
 
 		it('returns dashed pattern for penMode 3', () => {
@@ -97,7 +97,7 @@ describe('annotation utils', () => {
 				...baseAnnotation,
 				data: { penMode: 3 },
 			}
-			expect(getAnnotationDashArray(ann)).toBe('16, 12')
+			expect(getAnnotationDashArray(ann)).toBe('36, 20')
 		})
 
 		it('returns dotted pattern for penMode 2', () => {
@@ -105,7 +105,15 @@ describe('annotation utils', () => {
 				...baseAnnotation,
 				data: { penMode: 2 },
 			}
-			expect(getAnnotationDashArray(ann)).toBe('4, 8')
+			expect(getAnnotationDashArray(ann)).toBe('1, 12')
+		})
+
+		it('scales dashes and gaps dynamically based on stroke width', () => {
+			const ann: SheetAnnotation = {
+				...baseAnnotation,
+				style: { lineStyle: 'dashed', strokeWidth: 16 },
+			}
+			expect(getAnnotationDashArray(ann)).toBe('40, 24')
 		})
 
 		it('returns undefined for solid lines (penMode 1 or default)', () => {

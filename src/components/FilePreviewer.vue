@@ -127,13 +127,24 @@ function createAnnotationSvg(pageNum: number): SVGElement | null {
 
 	for (const ann of pageAnns) {
 		const dashArray = getAnnotationDashArray(ann)
+		const isLineShape = ann.type === 'shape' && (
+			Boolean(ann.data?.path) ||
+			(Array.isArray(ann.data?.points) && ann.data.points.length > 0) ||
+			ann.data?.drawMode === 0 ||
+			ann.data?.drawMode === 4
+		)
 
-		if ((ann.type === 'drawing' || ann.type === 'highlight' || (ann.type === 'shape' && (ann.data?.path || ann.data?.points)))) {
+		if ((ann.type === 'drawing' || ann.type === 'highlight' || isLineShape)) {
 			const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
-			const isSmooth = ann.data?.smoothMode !== false && ann.data?.drawMode !== 1
-			const d = (ann.data?.points && ann.data.points.length > 0)
-				? generateSmoothSvgPath(ann.data.points, isSmooth)
-				: (ann.data?.path || '')
+			const isSmooth = ann.type !== 'shape' && ann.data?.smoothMode !== false && ann.data?.drawMode !== 1 && ann.data?.drawMode !== 4
+			let d = ''
+			if (ann.data?.points && ann.data.points.length > 0) {
+				d = generateSmoothSvgPath(ann.data.points, isSmooth)
+			} else if (ann.data?.path) {
+				d = ann.data.path
+			} else if (ann.type === 'shape') {
+				d = `M ${(ann.x * 1000).toFixed(1)} ${(ann.y * 1000).toFixed(1)} L ${((ann.x + ann.width) * 1000).toFixed(1)} ${((ann.y + ann.height) * 1000).toFixed(1)}`
+			}
 			path.setAttribute('d', d)
 			path.setAttribute('stroke', ann.style?.stroke || '#ff0000')
 			path.setAttribute('stroke-width', String(ann.style?.strokeWidth || 2.0))
@@ -147,6 +158,7 @@ function createAnnotationSvg(pageNum: number): SVGElement | null {
 			if (ann.type === 'highlight') {
 				path.style.mixBlendMode = 'multiply'
 			}
+			path.setAttribute('data-test', ann.type === 'shape' ? 'annotation-shape' : 'annotation-drawing')
 			svg.appendChild(path)
 		} else if (ann.type === 'shape') {
 			const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect')
@@ -160,15 +172,18 @@ function createAnnotationSvg(pageNum: number): SVGElement | null {
 				rect.setAttribute('stroke-dasharray', dashArray)
 			}
 			rect.setAttribute('fill', ann.style?.fill || 'transparent')
+			rect.setAttribute('data-test', 'annotation-shape')
 			svg.appendChild(rect)
 		} else if (ann.type === 'stamp') {
 			const text = document.createElementNS('http://www.w3.org/2000/svg', 'text')
-			text.setAttribute('x', String(ann.x * 1000))
 			const fontSize = ann.style?.fontSize || 40
-			text.setAttribute('y', String((ann.y * 1000) + (fontSize * 0.8)))
+			text.setAttribute('x', String(ann.x * 1000))
+			text.setAttribute('y', String(ann.y * 1000))
+			text.setAttribute('text-anchor', 'middle')
+			text.setAttribute('dominant-baseline', 'central')
 			text.setAttribute('fill', ann.style?.color || '#000000')
 			text.setAttribute('font-size', String(fontSize))
-			text.setAttribute('font-family', 'sans-serif, music, Bravura, "Noto Music"')
+			text.setAttribute('font-family', '\'Bravura\', \'Noto Music\', \'Segoe UI Symbol\', \'Apple Symbols\', \'DejaVu Sans\', sans-serif')
 			text.setAttribute('data-test', 'annotation-stamp')
 			text.textContent = ann.data?.displaySymbol || ann.data?.symbol || ''
 			svg.appendChild(text)

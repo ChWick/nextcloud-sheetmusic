@@ -6,7 +6,7 @@
 import type { SheetAnnotation } from '../types/annotation'
 
 /**
- * Generate an SVG path with Catmull-Rom cubic Bezier curve smoothing for 3+ points.
+ * Generate an SVG path with quadratic Bezier midpoint curve smoothing (matching MobileSheets & Android Path.quadTo).
  */
 export function generateSmoothSvgPath(points: Array<{ x: number; y: number }>, smooth = true): string {
 	if (!points || points.length === 0) {
@@ -38,39 +38,47 @@ export function generateSmoothSvgPath(points: Array<{ x: number; y: number }>, s
 		return d
 	}
 
+	// Quadratic Bezier midpoint smoothing: connects midpoints between successive control points
 	let d = `M ${sx0} ${sy0}`
-	for (let i = 0; i < count - 1; i++) {
-		const p0 = filtered[Math.max(0, i - 1)]
-		const p1 = filtered[i]
-		const p2 = filtered[i + 1]
-		const p3 = filtered[Math.min(count - 1, i + 2)]
-
-		const cp1x = ((p1.x + (p2.x - p0.x) / 6.0) * 1000).toFixed(1)
-		const cp1y = ((p1.y + (p2.y - p0.y) / 6.0) * 1000).toFixed(1)
-		const cp2x = ((p2.x - (p3.x - p1.x) / 6.0) * 1000).toFixed(1)
-		const cp2y = ((p2.y - (p3.y - p1.y) / 6.0) * 1000).toFixed(1)
-		const endX = (p2.x * 1000).toFixed(1)
-		const endY = (p2.y * 1000).toFixed(1)
-
-		d += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${endX} ${endY}`
+	for (let i = 1; i < count - 1; i++) {
+		const cx = (filtered[i].x * 1000).toFixed(1)
+		const cy = (filtered[i].y * 1000).toFixed(1)
+		const endX = (((filtered[i].x + filtered[i + 1].x) / 2) * 1000).toFixed(1)
+		const endY = (((filtered[i].y + filtered[i + 1].y) / 2) * 1000).toFixed(1)
+		d += ` Q ${cx} ${cy}, ${endX} ${endY}`
 	}
+	const lastX = (filtered[count - 1].x * 1000).toFixed(1)
+	const lastY = (filtered[count - 1].y * 1000).toFixed(1)
+	d += ` L ${lastX} ${lastY}`
 
 	return d
 }
 
 /**
  * Determine the stroke-dasharray for an annotation.
- * Supports explicit strokeDashArray, lineStyle ('dashed' | 'dotted'), and MobileSheets penMode (3 = dashed, 2 = dotted).
+ * Dashes scale with stroke width and feature wider dash segments matching MobileSheets.
  */
 export function getAnnotationDashArray(item: SheetAnnotation): string | undefined {
-	if (item.style?.strokeDashArray) {
-		return item.style.strokeDashArray
+	const raw = item.style?.strokeDashArray
+	const isDashed = item.style?.lineStyle === 'dashed' || item.data?.penMode === 3 || raw === '16, 12' || raw === '36, 20'
+	const isDotted = item.style?.lineStyle === 'dotted' || item.data?.penMode === 2 || raw === '4, 8' || raw === '4, 12'
+
+	const sw = Number(item.style?.strokeWidth) || 2.0
+
+	if (isDashed) {
+		const dash = Math.max(36, Math.round(sw * 2.5))
+		const gap = Math.max(20, Math.round(sw * 1.5))
+		return `${dash}, ${gap}`
 	}
-	if (item.style?.lineStyle === 'dashed' || item.data?.penMode === 3) {
-		return '16, 12'
+
+	if (isDotted) {
+		const gap = Math.max(12, Math.round(sw * 2.0))
+		return `1, ${gap}`
 	}
-	if (item.style?.lineStyle === 'dotted' || item.data?.penMode === 2) {
-		return '4, 8'
+
+	if (raw) {
+		return raw
 	}
+
 	return undefined
 }

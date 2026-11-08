@@ -33,10 +33,16 @@ const activeAnnotations = computed(() => {
 function getAnnotationPath(item: SheetAnnotation): string {
 	const points = item.data?.points
 	if (points && points.length > 0) {
-		const isSmooth = item.data?.smoothMode !== false && item.data?.drawMode !== 1
+		const isSmooth = item.type !== 'shape' && item.data?.smoothMode !== false && item.data?.drawMode !== 1 && item.data?.drawMode !== 4
 		return generateSmoothSvgPath(points, isSmooth)
 	}
-	return item.data?.path || ''
+	if (item.data?.path) {
+		return item.data.path
+	}
+	if (item.type === 'shape' && (item.width || item.height)) {
+		return `M ${(item.x * 1000).toFixed(1)} ${(item.y * 1000).toFixed(1)} L ${((item.x + item.width) * 1000).toFixed(1)} ${((item.y + item.height) * 1000).toFixed(1)}`
+	}
+	return ''
 }
 </script>
 
@@ -50,7 +56,7 @@ function getAnnotationPath(item: SheetAnnotation): string {
 		<template v-for="item in activeAnnotations" :key="item.uuid || item.id">
 			<!-- Freehand drawing, highlight, or path-based shape/line -->
 			<path
-				v-if="(item.type === 'drawing' || item.type === 'highlight' || (item.type === 'shape' && (item.data?.path || item.data?.points)))"
+				v-if="(item.type === 'drawing' || item.type === 'highlight' || (item.type === 'shape' && (item.data?.path || (item.data?.points && item.data.points.length > 0) || item.data?.drawMode === 0 || item.data?.drawMode === 4)))"
 				:d="getAnnotationPath(item)"
 				:stroke="item.style?.stroke || '#ff0000'"
 				:stroke-width="item.style?.strokeWidth || 2.0"
@@ -79,10 +85,12 @@ function getAnnotationPath(item: SheetAnnotation): string {
 			<text
 				v-else-if="item.type === 'stamp'"
 				:x="item.x * 1000"
-				:y="(item.y * 1000) + (item.style?.fontSize ? item.style.fontSize * 0.8 : 32)"
+				:y="item.y * 1000"
 				:fill="item.style?.color || '#000000'"
 				:font-size="item.style?.fontSize || 40"
-				font-family="sans-serif, music, Bravura, 'Noto Music'"
+				text-anchor="middle"
+				dominant-baseline="central"
+				font-family="'Bravura', 'Noto Music', 'Segoe UI Symbol', 'Apple Symbols', 'DejaVu Sans', sans-serif"
 				data-test="annotation-stamp">
 				{{ item.data?.displaySymbol || item.data?.symbol || '' }}
 			</text>

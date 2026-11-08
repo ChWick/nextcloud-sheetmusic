@@ -255,7 +255,7 @@ class MobileSheetsAnnotationAdapter {
 		$drawMode = (int)($draw['DrawMode'] ?? 0);
 
 		$bbox = !empty($points) ? self::calculateBoundingBox($points) : ['x' => 0.0, 'y' => 0.0, 'width' => 0.0, 'height' => 0.0];
-		$pathD = !empty($points) ? self::generateSvgPath($points, smooth: $drawMode !== 4) : '';
+		$pathD = !empty($points) ? self::generateSvgPath($points, smooth: $type !== 'shape' && $drawMode !== 4) : '';
 
 		$lineStyle = match ($penMode) {
 			2 => 'dotted',
@@ -263,8 +263,8 @@ class MobileSheetsAnnotationAdapter {
 			default => 'solid',
 		};
 		$strokeDashArray = match ($penMode) {
-			2 => '4, 8',
-			3 => '16, 12',
+			2 => '4, 12',
+			3 => '36, 20',
 			default => null,
 		};
 
@@ -311,7 +311,7 @@ class MobileSheetsAnnotationAdapter {
 	 * Map MobileSheets music font character to standard Unicode glyph for web rendering.
 	 */
 	public static function mapMobileSheetsSymbol(string $symbol, int $font = 1): string {
-		if ($font !== 1) {
+		if ($font > 1) {
 			return $symbol;
 		}
 		return match ($symbol) {
@@ -627,9 +627,9 @@ class MobileSheetsAnnotationAdapter {
 					} else {
 						$lineStyle = (string)($ann->style['lineStyle'] ?? '');
 						$dashArray = (string)($ann->style['strokeDashArray'] ?? '');
-						if ($lineStyle === 'dashed' || ($dashArray !== '' && !str_starts_with($dashArray, '4,'))) {
+						if ($lineStyle === 'dashed' || ($dashArray !== '' && !str_starts_with($dashArray, '4,') && !str_starts_with($dashArray, '1,'))) {
 							$penMode = 3;
-						} elseif ($lineStyle === 'dotted' || str_starts_with($dashArray, '4,')) {
+						} elseif ($lineStyle === 'dotted' || str_starts_with($dashArray, '4,') || str_starts_with($dashArray, '1,')) {
 							$penMode = 2;
 						} else {
 							$penMode = $ann->type === 'shape' ? 0 : 1;
