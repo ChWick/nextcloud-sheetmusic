@@ -177,6 +177,106 @@ final class SvgCurveUtil {
 	}
 
 	/**
+	 * Generate an SVG path for an arrow with arrowhead pointing at p2.
+	 *
+	 * @param array{x: float, y: float} $p1 Start point (normalized 0..1)
+	 * @param array{x: float, y: float} $p2 End point (tip of arrowhead, normalized 0..1)
+	 * @param float|null $strokeWidth Stroke width in normalized points or null for default
+	 */
+	public static function generateArrowPath(
+		array $p1,
+		array $p2,
+		?float $strokeWidth = null,
+	): string {
+		$x1 = $p1['x'] * 1000.0;
+		$y1 = $p1['y'] * 1000.0;
+		$x2 = $p2['x'] * 1000.0;
+		$y2 = $p2['y'] * 1000.0;
+
+		$dx = $x2 - $x1;
+		$dy = $y2 - $y1;
+		$len = hypot($dx, $dy);
+		if ($len < 0.001) {
+			$len = 1.0;
+		}
+
+		$ux = $dx / $len;
+		$uy = $dy / $len;
+		$nx = -$uy;
+		$ny = $ux;
+
+		$sw = $strokeWidth !== null && $strokeWidth > 0 ? $strokeWidth : 2.0;
+		$headLen = min($len * 0.4, max(16.0, 10.0 + $sw * 2.8));
+		$headWidth = $headLen * 0.45;
+
+		$baseX = $x2 - $ux * $headLen;
+		$baseY = $y2 - $uy * $headLen;
+
+		$sx1 = round($x1, 1);
+		$sy1 = round($y1, 1);
+		$sx2 = round($x2, 1);
+		$sy2 = round($y2, 1);
+		$w1x = round($baseX + $nx * $headWidth, 1);
+		$w1y = round($baseY + $ny * $headWidth, 1);
+		$w2x = round($baseX - $nx * $headWidth, 1);
+		$w2y = round($baseY - $ny * $headWidth, 1);
+
+		return "M $sx1 $sy1 L $sx2 $sy2 M $w1x $w1y L $sx2 $sy2 L $w2x $w2y";
+	}
+
+	/**
+	 * Calculate bounding box for an arrow including arrowhead wings.
+	 *
+	 * @param array{x: float, y: float} $p1 Start point (normalized 0..1)
+	 * @param array{x: float, y: float} $p2 End point (tip of arrowhead, normalized 0..1)
+	 * @param float|null $strokeWidth Stroke width in normalized points or null for default
+	 * @return array{x: float, y: float, width: float, height: float}
+	 */
+	public static function calculateArrowBoundingBox(
+		array $p1,
+		array $p2,
+		?float $strokeWidth = null,
+	): array {
+		$x1 = $p1['x'] * 1000.0;
+		$y1 = $p1['y'] * 1000.0;
+		$x2 = $p2['x'] * 1000.0;
+		$y2 = $p2['y'] * 1000.0;
+
+		$dx = $x2 - $x1;
+		$dy = $y2 - $y1;
+		$len = hypot($dx, $dy);
+		if ($len < 0.001) {
+			$len = 1.0;
+		}
+
+		$ux = $dx / $len;
+		$uy = $dy / $len;
+		$nx = -$uy;
+		$ny = $ux;
+
+		$sw = $strokeWidth !== null && $strokeWidth > 0 ? $strokeWidth : 2.0;
+		$headLen = min($len * 0.4, max(16.0, 10.0 + $sw * 2.8));
+		$headWidth = $headLen * 0.45;
+
+		$baseX = $x2 - $ux * $headLen;
+		$baseY = $y2 - $uy * $headLen;
+
+		$w1x = $baseX + $nx * $headWidth;
+		$w1y = $baseY + $ny * $headWidth;
+		$w2x = $baseX - $nx * $headWidth;
+		$w2y = $baseY - $ny * $headWidth;
+
+		$pts = [
+			['x' => $p1['x'], 'y' => $p1['y']],
+			['x' => $p2['x'], 'y' => $p2['y']],
+			['x' => $w1x / 1000.0, 'y' => $w1y / 1000.0],
+			['x' => $w2x / 1000.0, 'y' => $w2y / 1000.0],
+		];
+
+		return self::calculateBoundingBox($pts);
+	}
+
+	/**
 	 * @param list<array{x: float, y: float}> $points
 	 * @return array{x: float, y: float, width: float, height: float}
 	 */

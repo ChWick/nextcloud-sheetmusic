@@ -83,4 +83,22 @@ final class SvgCurveUtilTest extends TestCase {
 		$this->assertEquals(0.2, $bbox['width']);
 		$this->assertGreaterThan(0.01, $bbox['height']);
 	}
+
+	public function testGenerateArrowPath(): void {
+		$p1 = ['x' => 0.1, 'y' => 0.5];
+		$p2 = ['x' => 0.5, 'y' => 0.5];
+		$path = SvgCurveUtil::generateArrowPath($p1, $p2, 2.0);
+		$this->assertStringStartsWith('M 100 500 L 500 500', $path);
+		$this->assertStringContainsString('M ', $path);
+		$this->assertStringContainsString('L 500 500 L ', $path);
+	}
+
+	public function testCalculateArrowBoundingBox(): void {
+		$p1 = ['x' => 0.1, 'y' => 0.5];
+		$p2 = ['x' => 0.5, 'y' => 0.5];
+		$bbox = SvgCurveUtil::calculateArrowBoundingBox($p1, $p2, 2.0);
+		$this->assertEquals(0.1, $bbox['x']);
+		$this->assertEquals(0.4, $bbox['width']);
+		$this->assertGreaterThan(0.01, $bbox['height']);
+	}
 }
