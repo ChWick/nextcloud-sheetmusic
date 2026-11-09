@@ -41,8 +41,10 @@ import GuitarAcoustic from 'vue-material-design-icons/GuitarAcoustic.vue'
 import ShieldCheck from 'vue-material-design-icons/ShieldCheck.vue'
 import Wrench from 'vue-material-design-icons/Wrench.vue'
 import TrashCanOutline from 'vue-material-design-icons/TrashCanOutline.vue'
+import FolderSyncOutline from 'vue-material-design-icons/FolderSyncOutline.vue'
 import SongsView from './components/SongsView.vue'
 import SetlistsView from './components/SetlistsView.vue'
+import SublibrariesView from './components/SublibrariesView.vue'
 import IntegrityView from './components/IntegrityView.vue'
 import ToolsView from './components/ToolsView.vue'
 import EntitiesView from './components/EntitiesView.vue'
@@ -50,8 +52,8 @@ import TrashView from './components/TrashView.vue'
 import LibrarySettingsDialog from './components/LibrarySettingsDialog.vue'
 
 /** Views of a library: the song view, one view per song filter, integrity audit, and tools. */
-type ViewName = 'songs' | 'new-song' | 'setlists' | 'integrity' | 'tools' | 'trash' | EntityType
-const VIEW_NAMES: ViewName[] = ['songs', 'new-song', 'setlists', 'composers', 'artists', 'books', 'collections', 'genres', 'keys', 'customgroups', 'years', 'signatures', 'sourcetypes', 'instruments', 'arrangers', 'integrity', 'tools', 'trash']
+type ViewName = 'songs' | 'new-song' | 'setlists' | 'sublibraries' | 'integrity' | 'tools' | 'trash' | EntityType
+const VIEW_NAMES: ViewName[] = ['songs', 'new-song', 'setlists', 'composers', 'artists', 'books', 'collections', 'genres', 'keys', 'customgroups', 'years', 'signatures', 'sourcetypes', 'instruments', 'arrangers', 'sublibraries', 'integrity', 'tools', 'trash']
 
 interface ImportProgress {
   status: 'running' | 'completed' | 'error'
@@ -141,6 +143,10 @@ function navigateToLibrary(library: string | number) {
 function goToView(view: ViewName) {
   if (selectedLibrary.value < 0) return
   router.push({ name: 'LibraryView', params: { library: selectedLibrary.value, view } })
+}
+function handleOpenSublibraries() {
+  isSettingsDialogOpen.value = false
+  goToView('sublibraries')
 }
 
 /*** Route watcher – sync state with URL ***/
@@ -485,6 +491,11 @@ async function deleteLibrary() {
             </template>
           </NcAppNavigationItem>
           <li role="separator" :class="$style.navSeparator" aria-hidden="true" />
+          <NcAppNavigationItem :name="t('sheetmusic', 'Sub-Libraries')" :active="selectedView === 'sublibraries'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'sublibraries' } }">
+            <template #icon>
+              <FolderSyncOutline :size="20" />
+            </template>
+          </NcAppNavigationItem>
           <NcAppNavigationItem :name="t('sheetmusic', 'Integrity Audit')" :active="selectedView === 'integrity'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'integrity' } }">
             <template #icon>
               <ShieldCheck :size="20" />
@@ -551,6 +562,9 @@ async function deleteLibrary() {
                      :libraries="libraries"
                      :standalone-create="selectedView === 'new-song'" />
           <SetlistsView v-else-if="selectedView === 'setlists'" :selected-library="selectedLibrary" />
+          <SublibrariesView v-else-if="selectedView === 'sublibraries'"
+                            :selected-library="selectedLibrary"
+                            :libraries="libraries" />
           <IntegrityView v-else-if="selectedView === 'integrity'" :selectedLibrary="selectedLibrary" />
           <ToolsView v-else-if="selectedView === 'tools'" :selected-library="selectedLibrary" />
           <TrashView v-else-if="selectedView === 'trash'" :selected-library="selectedLibrary" />
@@ -641,7 +655,8 @@ async function deleteLibrary() {
       :libraries="libraries"
       @close="isSettingsDialogOpen = false"
       @delete="openDeleteDialog"
-      @update:libraries="libraries = $event" />
+      @update:libraries="libraries = $event"
+      @open-sublibraries="handleOpenSublibraries" />
   </div>
 </template>
 

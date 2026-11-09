@@ -6,8 +6,8 @@ import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
-import { showError, showSuccess } from '@nextcloud/dialogs'
 import TrashCanOutline from 'vue-material-design-icons/TrashCanOutline.vue'
+import FolderSyncOutline from 'vue-material-design-icons/FolderSyncOutline.vue'
 import { describeRequestFailure } from '../utils/api'
 import type { Library } from '../types/library'
 
@@ -20,6 +20,7 @@ const emit = defineEmits<{
 	close: []
 	delete: []
 	'update:libraries': [libraries: Library[]]
+	'open-sublibraries': []
 }>()
 
 const isSaving = ref(false)
@@ -40,33 +41,36 @@ const autoPdfMetadataModel = computed({
 	},
 })
 
-async function updateSetting(settings: { autoPaths?: boolean, autoPdfMetadata?: boolean }) {
-	if (props.selectedLibrary < 0) return
+async function updateSetting(settings: { autoPaths?: boolean; autoPdfMetadata?: boolean }) {
 	isSaving.value = true
 	saveError.value = ''
 	try {
 		const response = await axios.put(
 			`/ocs/v2.php/apps/sheetmusic/api/libraries/${props.selectedLibrary}/settings`,
 			settings,
-			{ headers: { 'OCS-APIREQUEST': 'true', Accept: 'application/json' } },
+			{
+				headers: {
+					'OCS-APIREQUEST': 'true',
+					Accept: 'application/json',
+				},
+			},
 		)
-		const updatedLib = response.data?.ocs?.data?.library as Library | undefined
-		if (updatedLib) {
-			const updatedList = props.libraries.map(lib => lib.id === updatedLib.id ? { ...lib, ...updatedLib } : lib)
+		const updatedLibrary = response.data?.ocs?.data?.library as Library | undefined
+		if (updatedLibrary) {
+			const updatedList = props.libraries.map(lib =>
+				lib.id === updatedLibrary.id ? { ...lib, ...updatedLibrary } : lib,
+			)
 			emit('update:libraries', updatedList)
 		}
-		showSuccess(t('sheetmusic', 'Library settings saved successfully.'))
 	} catch (error) {
 		console.error('Failed to update library settings:', error)
 		saveError.value = describeRequestFailure(error, t('sheetmusic', 'Could not save library settings.'))
-		showError(saveError.value)
 	} finally {
 		isSaving.value = false
 	}
 }
 
 function handleDelete() {
-	emit('close')
 	emit('delete')
 }
 </script>
@@ -86,13 +90,13 @@ function handleDelete() {
 					v-model="autoPathsModel"
 					type="switch"
 					:disabled="isSaving">
-					{{ t('sheetmusic', 'Automatic file path handling') }}
+					{{ t('sheetmusic', 'Automatic file and directory organization') }}
 				</NcCheckboxRadioSwitch>
 				<NcLoadingIcon v-if="isSaving" :size="20" :class="$style.loading" />
 			</div>
 
 			<p :class="$style.description">
-				{{ t('sheetmusic', 'When enabled, files are automatically organized and moved to subfolders based on song metadata (composer, artist, collection). When disabled, files remain in the library root folder and paths are never automatically changed.') }}
+				{{ t('sheetmusic', 'When enabled, song files are automatically organized into folders by composer and named according to their title. When disabled, files remain in their original locations.') }}
 			</p>
 
 			<h4 :class="[$style.sectionTitle, $style.sectionMargin]">
@@ -112,6 +116,23 @@ function handleDelete() {
 			<p :class="$style.description">
 				{{ t('sheetmusic', 'When enabled, song metadata is automatically written to attached PDF files when saving songs. When disabled, PDF files are left unmodified.') }}
 			</p>
+
+			<h4 :class="[$style.sectionTitle, $style.sectionMargin]">
+				{{ t('sheetmusic', 'Sub-Libraries (MobileSheets Sync)') }}
+			</h4>
+			<p :class="$style.description">
+				{{ t('sheetmusic', 'Define filtered sub-libraries (e.g. by instrument or composer) that expose virtual WebDAV folders for MobileSheets sync.') }}
+			</p>
+
+			<NcButton
+				type="button"
+				:class="$style.openSublibBtn"
+				@click="emit('open-sublibraries')">
+				<template #icon>
+					<FolderSyncOutline :size="18" />
+				</template>
+				{{ t('sheetmusic', 'Manage Sub-Libraries') }}
+			</NcButton>
 
 			<h4 :class="[$style.sectionTitle, $style.dangerSectionMargin]">
 				{{ t('sheetmusic', 'Danger Zone') }}
@@ -207,9 +228,12 @@ function handleDelete() {
 	line-height: 1.4;
 }
 
+.openSublibBtn {
+	margin-top: 8px;
+}
+
 .error {
 	color: var(--color-error);
 	margin-top: 10px;
 }
 </style>
-

@@ -6,7 +6,10 @@ import type { Library } from '../../../src/types/library'
 
 vi.mock('@nextcloud/axios', () => ({
 	default: {
+		get: vi.fn(),
 		put: vi.fn(),
+		post: vi.fn(),
+		delete: vi.fn(),
 	},
 }))
 
@@ -74,6 +77,15 @@ describe('LibrarySettingsDialog.vue', () => {
 
 	beforeEach(() => {
 		vi.resetAllMocks()
+		vi.mocked(axios.get).mockResolvedValue({
+			data: {
+				ocs: {
+					data: {
+						sublibraries: [],
+					},
+				},
+			},
+		} as any)
 	})
 
 	it('renders dialog with settings enabled for library 1', () => {
@@ -199,10 +211,25 @@ describe('LibrarySettingsDialog.vue', () => {
 			},
 		})
 
-		const closeButton = wrapper.find('button')
+		const closeButton = wrapper.find('.actions button')
 		await closeButton.trigger('click')
 
 		expect(wrapper.emitted('close')).toBeTruthy()
+	})
+
+	it('emits open-sublibraries when manage sub-libraries button is clicked', async () => {
+		const wrapper = mount(LibrarySettingsDialog, {
+			props: {
+				selectedLibrary: 1,
+				libraries: mockLibraries,
+			},
+		})
+
+		const manageButton = wrapper.findAll('button').find(b => b.text().includes('Manage Sub-Libraries'))
+		expect(manageButton).toBeDefined()
+		await manageButton!.trigger('click')
+
+		expect(wrapper.emitted('open-sublibraries')).toBeTruthy()
 	})
 })
 
