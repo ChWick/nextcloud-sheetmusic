@@ -76,32 +76,49 @@ const activeAnnotations = computed(() => {
 				:fill="item.style?.fill || 'transparent'"
 				data-test="annotation-shape" />
 
-			<!-- Stamp Annotation: Exact vector path centered in viewport, with fallback to font text -->
-			<svg
-				v-if="item.type === 'stamp' && getStampVector(item)"
-				:x="Math.round(item.x * 10000) / 10"
-				:y="Math.round(item.y * 10000) / 10"
-				:width="Math.round((item.width || 0.04) * 10000) / 10"
-				:height="Math.round((item.height || 0.04) * 10000) / 10"
-				:viewBox="getStampVector(item)!.viewBox"
-				preserveAspectRatio="xMidYMid meet"
-				data-test="annotation-stamp">
-				<path :d="getStampVector(item)!.d" :fill="item.style?.color || '#000000'" />
-			</svg>
-			<text
-				v-else-if="item.type === 'stamp'"
-				:x="Math.round((item.x + (item.width || 0.04) / 2) * 10000) / 10"
-				:y="Math.round((item.y + (item.height || 0.04) / 2) * 10000) / 10"
-				:fill="item.style?.color || '#000000'"
-				:font-size="item.style?.fontSize || 40"
-				:font-style="isStampItalic(item) ? 'italic' : undefined"
-				:font-weight="isStampBold(item) ? 'bold' : undefined"
-				text-anchor="middle"
-				dominant-baseline="central"
-				:font-family="getStampFontFamily(item)"
-				data-test="annotation-stamp">
-				{{ getAnnotationDisplaySymbol(item) }}
-			</text>
+			<!-- Stamp Annotation: Bounding box (debug) + centered vector SVG / text -->
+			<template v-else-if="item.type === 'stamp'">
+				<!-- Debug bounding box -->
+				<rect
+					:x="Math.round(item.x * 10000) / 10"
+					:y="Math.round(item.y * 10000) / 10"
+					:width="Math.round((item.width || 0.04) * 10000) / 10"
+					:height="Math.round((item.height || 0.04) * 10000) / 10"
+					fill="rgba(0, 112, 243, 0.08)"
+					stroke="#0070f3"
+					stroke-width="1.5"
+					stroke-dasharray="3 3"
+					data-test="annotation-stamp-bbox" />
+
+				<!-- Vector stamp -->
+				<svg
+					v-if="getStampVector(item)"
+					:x="Math.round(item.x * 10000) / 10"
+					:y="Math.round(item.y * 10000) / 10"
+					:width="Math.round((item.width || 0.04) * 10000) / 10"
+					:height="Math.round((item.height || 0.04) * 10000) / 10"
+					:viewBox="getStampVector(item)!.viewBox"
+					preserveAspectRatio="xMidYMid meet"
+					data-test="annotation-stamp">
+					<path :d="getStampVector(item)!.d" :fill="item.style?.color || '#000000'" />
+				</svg>
+
+				<!-- Fallback text stamp -->
+				<text
+					v-else
+					:x="Math.round((item.x + (item.width || 0.04) / 2) * 10000) / 10"
+					:y="Math.round((item.y + (item.height || 0.04) / 2) * 10000) / 10"
+					:fill="item.style?.color || '#000000'"
+					:font-size="item.style?.fontSize || 40"
+					:font-style="isStampItalic(item) ? 'italic' : undefined"
+					:font-weight="isStampBold(item) ? 'bold' : undefined"
+					text-anchor="middle"
+					dominant-baseline="central"
+					:font-family="getStampFontFamily(item)"
+					data-test="annotation-stamp">
+					{{ getAnnotationDisplaySymbol(item) }}
+				</text>
+			</template>
 
 			<!-- Text Annotation -->
 			<text

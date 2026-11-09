@@ -230,6 +230,14 @@ describe('FilePreviewer.vue Annotation Rendering & Reactivity', () => {
 		expect(linePath.element.tagName.toLowerCase()).toBe('path')
 		expect(linePath.attributes('d')).toBe('M 100.0 700.0 L 300.0 700.0')
 
+		// Debug bounding box
+		const stampBbox = overlay.find('[data-test="annotation-stamp-bbox"]')
+		expect(stampBbox.exists()).toBe(true)
+		expect(stampBbox.attributes('x')).toBe('500')
+		expect(stampBbox.attributes('y')).toBe('400')
+		expect(stampBbox.attributes('width')).toBe('50')
+		expect(stampBbox.attributes('height')).toBe('50')
+
 		// Note stamp should render as vector <svg> centered on tap box with viewBox and path
 		const stampSvg = overlay.find('[data-test="annotation-stamp"]')
 		expect(stampSvg.exists()).toBe(true)
