@@ -11,6 +11,8 @@ namespace Dav;
 
 use OCA\SheetMusic\Dav\SheetMusicDavPlugin;
 use OCA\SheetMusic\Db\InternalLibrary;
+use OCA\SheetMusic\Db\SublibraryMapper;
+use OCA\SheetMusic\Service\SublibraryService;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSqliteExporter;
 use OCA\SheetMusic\Sync\SyncClientRegistry;
 use PHPUnit\Framework\TestCase;
@@ -57,6 +59,12 @@ final class SheetMusicDavPluginTest extends TestCase {
 		$createdSong = $this->songMapper->insert($song);
 		$this->attachTestFileToSong($createdSong, 'score.pdf', 1);
 
+		$this->sublibraryService = new SublibraryService(
+			new SublibraryMapper($this->dbConn),
+			$this->entityMapper,
+			$this->dbConn,
+		);
+
 		$this->plugin = new SheetMusicDavPlugin(
 			$this->libraryMapper,
 			$this->exporter,
@@ -65,6 +73,7 @@ final class SheetMusicDavPluginTest extends TestCase {
 			$this->userSession,
 			null,
 			$this->rootFolder,
+			$this->sublibraryService,
 		);
 	}
 
@@ -503,6 +512,65 @@ final class SheetMusicDavPluginTest extends TestCase {
 		self::assertSame('II. Vivace', $bmRows[1]['Name']);
 		self::assertSame(2, (int)$bmRows[1]['PageNum']);
 		self::assertSame(1, (int)$bmRows[0]['ShowInLibrary']);
+	}
+
+	public function testSublibraryVirtualPathAndPropfind(): void {
+		$server = $this->attachServer();
+
+		$sub = $this->sublibraryService->createSublibrary((int)$this->library->id, 'Organ Repertoire', 'orgel', [
+			'instrument' => ['Orgel'],
+		]);
+
+		// 1. matchVirtualPath with sublibrary (_SubLibraries_ and legacy .sublibraries)
+		$match = $this->plugin->matchVirtualPath('files/admin/My Noten/_SubLibraries_/orgel/mobilesheets.db');
+		self::assertNotNull($match);
+		self::assertSame($this->library->id, $match['library']->id);
+		self::assertSame('mobilesheets.db', $match['filename']);
+		self::assertNotNull($match['sublibrary']);
+		self::assertSame('orgel', $match['sublibrary']->slug);
+
+		$legacyMatch = $this->plugin->matchVirtualPath('files/admin/My Noten/.sublibraries/orgel/mobilesheets.db');
+		self::assertNotNull($legacyMatch);
+		self::assertSame('orgel', $legacyMatch['sublibrary']->slug);
+
+		// 2. PROPFIND on _SubLibraries_ collection
+		$req = new Request('PROPFIND', '/files/admin/My%20Noten/_SubLibraries_', ['Depth' => '1']);
+		$res = new Response();
+		self::assertFalse($this->plugin->beforeMethod($req, $res));
+		self::assertSame(207, $res->getStatus());
+		$body = (string)$res->getBody();
+		self::assertStringContainsString('_SubLibraries_', $body);
+		self::assertStringContainsString('orgel', $body);
+
+		// 3. PROPFIND on _SubLibraries_/orgel collection
+		$reqSub = new Request('PROPFIND', '/files/admin/My%20Noten/_SubLibraries_/orgel', ['Depth' => '1']);
+		$resSub = new Response();
+		self::assertFalse($this->plugin->beforeMethod($reqSub, $resSub));
+		self::assertSame(207, $resSub->getStatus());
+		$bodySub = (string)$resSub->getBody();
+		self::assertStringContainsString('mobilesheets.db', $bodySub);
+		self::assertStringContainsString('mobilesheets_hashcodes.txt', $bodySub);
+	}
+
+	public function testSublibraryFileUploadPutRoutesToMasterLibrary(): void {
+		$this->attachServer();
+		$this->sublibraryService->createSublibrary((int)$this->library->id, 'Organ Repertoire', 'orgel', [
+			'instrument' => ['Orgel'],
+		]);
+
+		$fileContent = '%PDF-1.4 test score';
+		$req = new Request('PUT', '/files/admin/My%20Noten/_SubLibraries_/orgel/UploadScore.pdf');
+		$req->setBody($fileContent);
+		$res = new Response();
+
+		self::assertFalse($this->plugin->beforeMethod($req, $res));
+		self::assertSame(201, $res->getStatus());
+
+		// Verify physical file was saved in master library directory
+		$userFolder = $this->rootFolder->getUserFolder('admin');
+		self::assertTrue($userFolder->nodeExists('My Noten/UploadScore.pdf'));
+		$savedNode = $userFolder->get('My Noten/UploadScore.pdf');
+		self::assertSame($fileContent, $savedNode->getContent());
 	}
 }
 

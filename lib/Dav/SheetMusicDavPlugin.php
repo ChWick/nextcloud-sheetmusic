@@ -10,7 +10,9 @@ declare(strict_types=1);
 namespace OCA\SheetMusic\Dav;
 
 use OCA\SheetMusic\Db\InternalLibrary;
+use OCA\SheetMusic\Db\InternalSublibrary;
 use OCA\SheetMusic\Db\LibraryMapper;
+use OCA\SheetMusic\Service\SublibraryService;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSqliteExporter;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSqliteImporter;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSyncBackend;
@@ -44,6 +46,7 @@ use Sabre\HTTP\ResponseInterface;
 class SheetMusicDavPlugin extends ServerPlugin {
 	public const VIRTUAL_DB_NAME = 'mobilesheets.db';
 	public const VIRTUAL_HASH_NAME = 'mobilesheets_hashcodes.txt';
+	public const SUBLIBRARIES_DIR = '_SubLibraries_';
 
 	private const OC_NS = 'http://owncloud.org/ns';
 
@@ -67,6 +70,7 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		private IUserSession $userSession,
 		?SyncClientRegistry $registry = null,
 		private ?IRootFolder $rootFolder = null,
+		private ?SublibraryService $sublibraryService = null,
 	) {
 		$this->registry = $registry ?? new SyncClientRegistry();
 		if ($this->registry->getClients() === []) {
@@ -110,8 +114,16 @@ class SheetMusicDavPlugin extends ServerPlugin {
 			$match = $this->matchVirtualPath($path);
 			if ($match === null) {
 				if ($method === 'PROPFIND') {
+					if ($this->handleSublibraryFolderPropfind($request, $response, $path)) {
+						$this->sendResponse($response);
+						return false;
+					}
 					$this->rememberPropfindBody($request, $path);
 				} elseif ($method === 'PUT') {
+					if ($this->handleSublibraryFileUploadPut($request, $response, $path)) {
+						$this->sendResponse($response);
+						return false;
+					}
 					$this->ensureParentDirectoryExistsForPut($path);
 				}
 				return true;
@@ -120,11 +132,12 @@ class SheetMusicDavPlugin extends ServerPlugin {
 			$client = $match['client'];
 			$library = $match['library'];
 			$filename = $match['filename'];
+			$sublibrary = $match['sublibrary'] ?? null;
 
 			$handled = !match ($method) {
-				'GET', 'HEAD' => $client->handleGet($request, $response, $library, $filename, $method === 'HEAD'),
-				'PUT' => $client->handlePut($request, $response, $library, $filename),
-				'PROPFIND' => $this->handlePropfindFile($request, $response, $library, $path, $filename, $client),
+				'GET', 'HEAD' => $client->handleGet($request, $response, $library, $filename, $method === 'HEAD', $sublibrary),
+				'PUT' => $client->handlePut($request, $response, $library, $filename, $sublibrary),
+				'PROPFIND' => $this->handlePropfindFile($request, $response, $library, $path, $filename, $client, $sublibrary),
 				// The files cannot be removed; acknowledge so clients that delete
 				// before re-uploading keep going.
 				'DELETE' => $this->acknowledge($response),
@@ -242,6 +255,19 @@ class SheetMusicDavPlugin extends ServerPlugin {
 					$entries[] = $entry;
 				}
 			}
+
+			if ($this->sublibraryService !== null && $library->id !== null) {
+				$sublibs = $this->sublibraryService->getSublibraries((int)$library->id);
+				if (!empty($sublibs) && !in_array(self::SUBLIBRARIES_DIR, $existing, true)) {
+					$entries[] = $this->buildDirectoryPropfindEntry(
+						$path . '/' . self::SUBLIBRARIES_DIR,
+						self::SUBLIBRARIES_DIR,
+						$requestBody,
+						$library->updatedAt,
+					);
+				}
+			}
+
 			if ($entries === []) {
 				return $xml;
 			}
@@ -275,8 +301,9 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		string $path,
 		string $filename,
 		?SyncClientInterface $client = null,
+		?InternalSublibrary $sublibrary = null,
 	): bool {
-		$entry = $this->buildPropfindEntry($library, $path, $filename, $request->getBodyAsString(), $client);
+		$entry = $this->buildPropfindEntry($library, $path, $filename, $request->getBodyAsString(), $client, $sublibrary);
 		if ($entry === null) {
 			$response->setStatus(404);
 			return false;
@@ -308,9 +335,10 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		string $filename,
 		?string $requestBody,
 		?SyncClientInterface $client = null,
+		?InternalSublibrary $sublibrary = null,
 	): ?array {
 		$client ??= $this->registry->getClientForVirtualFile($filename);
-		$props = $client?->getVirtualFileProperties($library, $filename, $library->userId ?? '');
+		$props = $client?->getVirtualFileProperties($library, $filename, $library->userId ?? '', $sublibrary);
 		if ($props === null) {
 			return null;
 		}
@@ -327,8 +355,10 @@ class SheetMusicDavPlugin extends ServerPlugin {
 
 		$size = $props['size'] ?? 0;
 		$contentType = $props['contentType'] ?? 'application/octet-stream';
-		$lastModified = $props['lastModified'] ?? ($library->updatedAt ?: time());
-		$etag = $props['etag'] ?? sprintf('"sm-%d-%d"', $library->id, $library->updatedAt);
+		$lastModified = $props['lastModified'] ?? max($library->updatedAt ?: time(), $sublibrary?->updatedAt ?? 0);
+		$etag = $props['etag'] ?? ($sublibrary !== null
+			? sprintf('"sm-%d-%d-%d"', $library->id, $sublibrary->id, $lastModified)
+			: sprintf('"sm-%d-%d"', $library->id, $library->updatedAt));
 
 		$propFind = new PropFind($path, $requested, 0, $requestType);
 		$propFind->set('{DAV:}displayname', $filename);
@@ -338,6 +368,42 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		$propFind->set('{DAV:}getetag', $etag);
 		$propFind->set('{DAV:}resourcetype', new ResourceType());
 		$propFind->set('{' . self::OC_NS . '}size', $size);
+		$propFind->set('{' . self::OC_NS . '}permissions', 'RGDNVW');
+
+		$entry = $propFind->getResultForMultiStatus();
+		$entry['href'] = $path;
+		return $entry;
+	}
+
+	/**
+	 * Build a multistatus entry for a virtual directory/collection.
+	 *
+	 * @return array<int|string, mixed>
+	 */
+	private function buildDirectoryPropfindEntry(
+		string $path,
+		string $displayname,
+		?string $requestBody,
+		int $lastModified = 0,
+	): array {
+		$requestType = PropFind::ALLPROPS;
+		$requested = [];
+		if ($requestBody !== null && trim($requestBody) !== '' && $this->server !== null) {
+			try {
+				$propFindXml = $this->server->xml->expect('{DAV:}propfind', $requestBody);
+				if ($propFindXml instanceof PropFindRequest && !$propFindXml->allProp) {
+					$requestType = PropFind::NORMAL;
+					$requested = $propFindXml->properties;
+				}
+			} catch (\Throwable) {
+				// Fall back to ALLPROPS
+			}
+		}
+
+		$propFind = new PropFind($path, $requested, 0, $requestType);
+		$propFind->set('{DAV:}displayname', $displayname);
+		$propFind->set('{DAV:}getlastmodified', new GetLastModified($lastModified ?: time()));
+		$propFind->set('{DAV:}resourcetype', new ResourceType(['{DAV:}collection']));
 		$propFind->set('{' . self::OC_NS . '}permissions', 'RGDNVW');
 
 		$entry = $propFind->getResultForMultiStatus();
@@ -394,7 +460,7 @@ class SheetMusicDavPlugin extends ServerPlugin {
 	}
 
 	/**
-	 * @return array{client: SyncClientInterface, library: InternalLibrary, filename: string}|null
+	 * @return array{client: SyncClientInterface, library: InternalLibrary, filename: string, sublibrary: ?InternalSublibrary}|null
 	 */
 	public function matchVirtualPath(string $path): ?array {
 		$path = trim($path, '/');
@@ -405,12 +471,195 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		}
 
 		$folder = dirname($path);
-		$library = $this->findLibraryByFolderPath($folder === '.' ? '' : $folder);
+		$folder = ($folder === '.' ? '' : $folder);
+
+		$resolvedSub = $this->resolveSublibraryFromPath($folder);
+		if ($resolvedSub !== null) {
+			[$library, $sublibrary] = $resolvedSub;
+			return ['client' => $client, 'library' => $library, 'filename' => $filename, 'sublibrary' => $sublibrary];
+		}
+
+		$library = $this->findLibraryByFolderPath($folder);
 		if ($library === null) {
 			return null;
 		}
 
-		return ['client' => $client, 'library' => $library, 'filename' => $filename];
+		return ['client' => $client, 'library' => $library, 'filename' => $filename, 'sublibrary' => null];
+	}
+
+	/**
+	 * @return array{0: InternalLibrary, 1: InternalSublibrary}|null
+	 */
+	private function resolveSublibraryFromPath(string $folder): ?array {
+		$resolved = $this->resolveUserFolder($folder);
+		if ($resolved === null) {
+			return null;
+		}
+		[$userId, $relPath] = $resolved;
+		if (!preg_match('#^(.+?)/(?:\.sublibraries|_SubLibraries_)/([^/]+)$#', $relPath, $m)) {
+			return null;
+		}
+		$parentFolder = $m[1];
+		$slug = $m[2];
+
+		$library = $this->findLibraryForRelativePath($userId, $parentFolder);
+		if ($library === null || $this->sublibraryService === null || $library->id === null) {
+			return null;
+		}
+
+		$sublib = $this->sublibraryService->getSublibraryBySlug((int)$library->id, $slug);
+		if ($sublib === null) {
+			return null;
+		}
+
+		return [$library, $sublib];
+	}
+
+	private function handleSublibraryFolderPropfind(
+		RequestInterface $request,
+		ResponseInterface $response,
+		string $path,
+	): bool {
+		$resolved = $this->resolveUserFolder($path);
+		if ($resolved === null) {
+			return false;
+		}
+		[$userId, $relPath] = $resolved;
+
+		// Case 1: {LibraryFolder}/_SubLibraries_ or {LibraryFolder}/.sublibraries
+		if (preg_match('#^(.+?)/(?:\.sublibraries|_SubLibraries_)$#', $relPath, $m)) {
+			$parentFolder = $m[1];
+			$library = $this->findLibraryForRelativePath($userId, $parentFolder);
+			if ($library === null || $this->sublibraryService === null || $library->id === null) {
+				return false;
+			}
+
+			$depth = $request->getHeader('Depth') ?? '1';
+			$entries = [];
+			$entries[] = $this->buildDirectoryPropfindEntry($path, basename($path), $request->getBodyAsString(), $library->updatedAt);
+
+			if ($depth !== '0') {
+				foreach ($this->sublibraryService->getSublibraries((int)$library->id) as $sublib) {
+					$entries[] = $this->buildDirectoryPropfindEntry(
+						$path . '/' . $sublib->slug,
+						$sublib->slug,
+						$request->getBodyAsString(),
+						$sublib->updatedAt,
+					);
+				}
+			}
+
+			$response->setStatus(207);
+			$response->setHeader('Content-Type', 'application/xml; charset=utf-8');
+			$response->setHeader('Vary', 'Brief,Prefer');
+			$response->setBody($this->generateMultiStatus($entries));
+			return true;
+		}
+
+		// Case 2: {LibraryFolder}/_SubLibraries_/{slug} or {LibraryFolder}/.sublibraries/{slug}
+		if (preg_match('#^(.+?)/(?:\.sublibraries|_SubLibraries_)/([^/]+)$#', $relPath, $m)) {
+			$parentFolder = $m[1];
+			$slug = $m[2];
+			$library = $this->findLibraryForRelativePath($userId, $parentFolder);
+			if ($library === null || $this->sublibraryService === null || $library->id === null) {
+				return false;
+			}
+
+			$sublibrary = $this->sublibraryService->getSublibraryBySlug((int)$library->id, $slug);
+			if ($sublibrary === null) {
+				return false;
+			}
+
+			$depth = $request->getHeader('Depth') ?? '1';
+			$entries = [];
+			$entries[] = $this->buildDirectoryPropfindEntry($path, $sublibrary->slug, $request->getBodyAsString(), $sublibrary->updatedAt);
+
+			if ($depth !== '0') {
+				foreach ($this->registry->getAllVirtualFileNames() as $filename) {
+					$client = $this->registry->getClientForVirtualFile($filename);
+					$entry = $this->buildPropfindEntry($library, $path . '/' . $filename, $filename, $request->getBodyAsString(), $client, $sublibrary);
+					if ($entry !== null) {
+						$entries[] = $entry;
+					}
+				}
+			}
+
+			$response->setStatus(207);
+			$response->setHeader('Content-Type', 'application/xml; charset=utf-8');
+			$response->setHeader('Vary', 'Brief,Prefer');
+			$response->setBody($this->generateMultiStatus($entries));
+			return true;
+		}
+
+		return false;
+	}
+
+	private function handleSublibraryFileUploadPut(
+		RequestInterface $request,
+		ResponseInterface $response,
+		string $path,
+	): bool {
+		$resolved = $this->resolveUserFolder($path);
+		if ($resolved === null) {
+			return false;
+		}
+		[$userId, $relPath] = $resolved;
+
+		// e.g. {parentFolder}/_SubLibraries_/{slug}/{uploadedFileName}
+		if (!preg_match('#^(.+?)/(?:\.sublibraries|_SubLibraries_)/([^/]+)/(.+)$#', $relPath, $m)) {
+			return false;
+		}
+		$parentFolder = $m[1];
+		$slug = $m[2];
+		$uploadedName = $m[3];
+
+		if ($this->registry->getClientForVirtualFile($uploadedName) !== null) {
+			return false;
+		}
+
+		$library = $this->findLibraryForRelativePath($userId, $parentFolder);
+		if ($library === null || $this->rootFolder === null) {
+			return false;
+		}
+
+		try {
+			$userFolder = $this->rootFolder->getUserFolder($userId);
+			$targetRelPath = $parentFolder . '/' . $uploadedName;
+			$targetDir = dirname($targetRelPath);
+
+			$current = '';
+			foreach (explode('/', $targetDir) as $segment) {
+				if ($segment === '') {
+					continue;
+				}
+				$current = $current === '' ? $segment : "$current/$segment";
+				if (!$userFolder->nodeExists($current)) {
+					$userFolder->newFolder($current);
+				}
+			}
+
+			$body = $request->getBody();
+			$content = is_resource($body) ? (string)stream_get_contents($body) : (string)$body;
+
+			if ($userFolder->nodeExists($targetRelPath)) {
+				$node = $userFolder->get($targetRelPath);
+				if ($node instanceof \OCP\Files\File) {
+					$node->putContent($content);
+				}
+			} else {
+				$userFolder->newFile($targetRelPath, $content);
+			}
+
+			$response->setStatus(201);
+			return true;
+		} catch (\Throwable $e) {
+			$this->logger->error('Failed to handle sublibrary file upload PUT: ' . $e->getMessage(), [
+				'exception' => $e,
+				'path' => $path,
+			]);
+			$response->setStatus(500);
+			return true;
+		}
 	}
 
 	private function ensureParentDirectoryExistsForPut(string $path): void {
