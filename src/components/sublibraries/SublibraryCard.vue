@@ -232,7 +232,7 @@ const matchingCount = computed(() => {
 	background-color: var(--color-main-background);
 	border: 1px solid var(--color-border);
 	border-radius: var(--border-radius, 4px);
-	color: var(--color-primary-element-text, var(--color-main-text));
+	color: var(--color-main-text);
 	word-break: break-all;
 }
 
@@ -260,7 +260,8 @@ const matchingCount = computed(() => {
 	padding: 3px 10px;
 	border-radius: var(--border-radius-pill, 12px);
 	background-color: var(--color-primary-element-light, rgba(0, 130, 201, 0.12));
-	color: var(--color-primary-element-text, var(--color-main-text));
+	border: 1px solid var(--color-border);
+	color: var(--color-main-text);
 	font-size: 0.8rem;
 }
 

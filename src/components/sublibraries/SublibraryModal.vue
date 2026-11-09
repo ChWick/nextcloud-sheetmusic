@@ -347,7 +347,7 @@ function handleSave() {
 	background-color: var(--color-main-background);
 	border: 1px solid var(--color-border);
 	border-radius: var(--border-radius, 4px);
-	color: var(--color-primary-element-text, var(--color-main-text));
+	color: var(--color-main-text);
 	word-break: break-all;
 }
 
