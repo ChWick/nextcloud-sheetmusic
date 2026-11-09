@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, unref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import axios from '@nextcloud/axios'
 import { generateOcsUrl } from '@nextcloud/router'
 import { showError, showSuccess } from '@nextcloud/dialogs'
@@ -121,6 +122,18 @@ async function copySublibraryPath(slug: string) {
 	} catch (e) {
 		console.error('Failed to copy WebDAV path:', e)
 		showError(t('sheetmusic', 'Could not copy path to clipboard.'))
+	}
+}
+
+const router = useRouter()
+
+function handleViewSongs(sub: Sublibrary) {
+	if (router) {
+		router.push({
+			name: 'LibraryView',
+			params: { library: props.selectedLibrary, view: 'songs' },
+			query: { sublibraries: sub.slug || String(sub.id) },
+		})
 	}
 }
 
@@ -271,7 +284,8 @@ watch(
 					:is-copied="copiedSlug === sub.slug"
 					@edit="openEditModal"
 					@delete="promptDelete"
-					@copy-path="copySublibraryPath" />
+					@copy-path="copySublibraryPath"
+					@view-songs="handleViewSongs" />
 			</div>
 		</div>
 

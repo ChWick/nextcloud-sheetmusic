@@ -4,6 +4,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import SublibrariesView from '../../../src/components/SublibrariesView.vue'
 import type { Library, Sublibrary } from '../../../src/types/library'
 
+const mockRouter = { push: vi.fn() }
+vi.mock('vue-router', () => ({
+	useRouter: () => mockRouter,
+}))
+
 vi.mock('@nextcloud/axios', () => ({
 	default: {
 		get: vi.fn(),
@@ -266,6 +271,37 @@ describe('SublibrariesView.vue', () => {
 		await copyBtn.trigger('click')
 
 		expect(navigator.clipboard.writeText).toHaveBeenCalledWith('/Noten/_SubLibraries_/organ')
+	})
+
+	it('navigates to songs view filtered by sub-library when View songs is clicked', async () => {
+		vi.mocked(axios.get).mockResolvedValueOnce({
+			data: {
+				ocs: {
+					data: {
+						sublibraries: mockSublibraries,
+					},
+				},
+			},
+		} as any)
+
+		const wrapper = mount(SublibrariesView, {
+			props: {
+				selectedLibrary: 1,
+				libraries: mockLibraries,
+			},
+		})
+
+		await (new Promise(resolve => setTimeout(resolve, 0)))
+
+		const viewSongsBtn = wrapper.findAll('button').find(b => b.text().includes('View songs'))
+		expect(viewSongsBtn).toBeDefined()
+		await viewSongsBtn!.trigger('click')
+
+		expect(mockRouter.push).toHaveBeenCalledWith({
+			name: 'LibraryView',
+			params: { library: 1, view: 'songs' },
+			query: { sublibraries: 'organ' },
+		})
 	})
 
 	it('creates a new sub-library via modal', async () => {

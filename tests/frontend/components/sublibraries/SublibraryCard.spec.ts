@@ -106,4 +106,21 @@ describe('SublibraryCard.vue', () => {
 
 		expect(wrapper.emitted('copyPath')?.[0]).toEqual(['organ'])
 	})
+
+	it('emits viewSongs event when view songs button is clicked', async () => {
+		const wrapper = mount(SublibraryCard, {
+			props: {
+				sub: mockSub,
+				libraryFolderPath: '/SheetMusic',
+				songs: mockSongs,
+				isCopied: false,
+			},
+		})
+
+		const viewBtn = wrapper.findAll('button').find(b => b.text().includes('View songs'))
+		expect(viewBtn).toBeDefined()
+		await viewBtn!.trigger('click')
+
+		expect(wrapper.emitted('viewSongs')?.[0]).toEqual([mockSub])
+	})
 })

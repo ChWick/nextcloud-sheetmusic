@@ -8,6 +8,7 @@ import Check from 'vue-material-design-icons/Check.vue'
 import PencilOutline from 'vue-material-design-icons/PencilOutline.vue'
 import TrashCanOutline from 'vue-material-design-icons/TrashCanOutline.vue'
 import MusicNote from 'vue-material-design-icons/MusicNote.vue'
+import ArrowRight from 'vue-material-design-icons/ArrowRight.vue'
 import { countMatchingSongs } from '../../utils/sublibrary'
 import type { Sublibrary } from '../../types/library'
 import type { Song } from '../../types/song'
@@ -23,6 +24,7 @@ const emit = defineEmits<{
 	edit: [sub: Sublibrary]
 	delete: [sub: Sublibrary]
 	copyPath: [slug: string]
+	viewSongs: [sub: Sublibrary]
 }>()
 
 const relativePath = computed(() => {
@@ -95,7 +97,7 @@ const matchingCount = computed(() => {
 			</div>
 		</div>
 
-		<!-- Footer info: Matching song count -->
+		<!-- Footer info: Matching song count and direct view button -->
 		<div :class="$style.cardFooter">
 			<div :class="$style.matchCount">
 				<MusicNote :size="16" />
@@ -106,6 +108,18 @@ const matchingCount = computed(() => {
 					{{ t('sheetmusic', 'Synchronized sub-library') }}
 				</span>
 			</div>
+			<NcButton
+				type="button"
+				variant="secondary"
+				size="small"
+				:title="t('sheetmusic', 'View songs in this sub-library')"
+				:aria-label="t('sheetmusic', 'View songs in this sub-library')"
+				@click="emit('viewSongs', sub)">
+				<template #icon>
+					<ArrowRight :size="16" />
+				</template>
+				{{ t('sheetmusic', 'View songs') }}
+			</NcButton>
 		</div>
 	</div>
 </template>
