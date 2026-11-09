@@ -571,6 +571,27 @@ final class SheetMusicDavPluginTest extends TestCase {
 		self::assertTrue($userFolder->nodeExists('My Noten/UploadScore.pdf'));
 		$savedNode = $userFolder->get('My Noten/UploadScore.pdf');
 		self::assertSame($fileContent, $savedNode->getContent());
+
+		// Verify GET on virtual sublibrary file downloads the physical file
+		$getReq = new Request('GET', '/files/admin/My%20Noten/_SubLibraries_/orgel/UploadScore.pdf');
+		$getRes = new Response();
+		self::assertFalse($this->plugin->beforeMethod($getReq, $getRes));
+		self::assertSame(200, $getRes->getStatus());
+		self::assertSame($fileContent, stream_get_contents($getRes->getBody()));
+
+		// Verify HEAD on virtual sublibrary file
+		$headReq = new Request('HEAD', '/files/admin/My%20Noten/_SubLibraries_/orgel/UploadScore.pdf');
+		$headRes = new Response();
+		self::assertFalse($this->plugin->beforeMethod($headReq, $headRes));
+		self::assertSame(200, $headRes->getStatus());
+		self::assertSame((string)strlen($fileContent), $headRes->getHeader('Content-Length'));
+
+		// Verify PROPFIND on virtual sublibrary file
+		$propReq = new Request('PROPFIND', '/files/admin/My%20Noten/_SubLibraries_/orgel/UploadScore.pdf');
+		$propRes = new Response();
+		self::assertFalse($this->plugin->beforeMethod($propReq, $propRes));
+		self::assertSame(207, $propRes->getStatus());
+		self::assertStringContainsString('UploadScore.pdf', $propRes->getBodyAsString());
 	}
 }
 

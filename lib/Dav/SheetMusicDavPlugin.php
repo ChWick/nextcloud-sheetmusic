@@ -118,6 +118,10 @@ class SheetMusicDavPlugin extends ServerPlugin {
 						$this->sendResponse($response);
 						return false;
 					}
+					if ($this->handleSublibraryFilePropfind($request, $response, $path)) {
+						$this->sendResponse($response);
+						return false;
+					}
 					$this->rememberPropfindBody($request, $path);
 				} elseif ($method === 'PUT') {
 					if ($this->handleSublibraryFileUploadPut($request, $response, $path)) {
@@ -125,6 +129,11 @@ class SheetMusicDavPlugin extends ServerPlugin {
 						return false;
 					}
 					$this->ensureParentDirectoryExistsForPut($path);
+				} elseif ($method === 'GET' || $method === 'HEAD') {
+					if ($this->handleSublibraryFileDownloadGet($request, $response, $path, $method === 'HEAD')) {
+						$this->sendResponse($response);
+						return false;
+					}
 				}
 				return true;
 			}
@@ -650,6 +659,147 @@ class SheetMusicDavPlugin extends ServerPlugin {
 			]);
 			$response->setStatus(500);
 			return true;
+		}
+	}
+
+	private function handleSublibraryFileDownloadGet(
+		RequestInterface $request,
+		ResponseInterface $response,
+		string $path,
+		bool $isHead,
+	): bool {
+		$resolved = $this->resolveUserFolder($path);
+		if ($resolved === null) {
+			return false;
+		}
+		[$userId, $relPath] = $resolved;
+
+		if (!preg_match('#^(.+?)/(?:\.sublibraries|_SubLibraries_)/([^/]+)/(.+)$#', $relPath, $m)) {
+			return false;
+		}
+		$parentFolder = $m[1];
+		$slug = $m[2];
+		$fileName = rawurldecode($m[3]);
+
+		if ($this->registry->getClientForVirtualFile($fileName) !== null) {
+			return false;
+		}
+
+		$library = $this->findLibraryForRelativePath($userId, $parentFolder);
+		if ($library === null || $this->rootFolder === null) {
+			return false;
+		}
+
+		try {
+			$userFolder = $this->rootFolder->getUserFolder($userId);
+			$targetRelPath = $parentFolder . '/' . $fileName;
+			if (!$userFolder->nodeExists($targetRelPath)) {
+				return false;
+			}
+			$node = $userFolder->get($targetRelPath);
+			if (!($node instanceof \OCP\Files\File)) {
+				return false;
+			}
+
+			$size = $node->getSize();
+			$mime = $node->getMimeType() ?: 'application/octet-stream';
+			$etag = '"' . $node->getEtag() . '"';
+			$lastModified = $node->getMTime();
+
+			$ifNoneMatch = $request->getHeader('If-None-Match');
+			if ($ifNoneMatch !== null && trim($ifNoneMatch) === $etag) {
+				$response->setStatus(304);
+				return true;
+			}
+
+			$response->setStatus(200);
+			$response->setHeader('Content-Type', $mime);
+			$response->setHeader('Content-Length', (string)$size);
+			$response->setHeader('ETag', $etag);
+			$response->setHeader('Last-Modified', gmdate('D, d M Y H:i:s GMT', $lastModified));
+			if (!$isHead) {
+				$response->setBody($node->fopen('rb'));
+			}
+			return true;
+		} catch (\Throwable) {
+			return false;
+		}
+	}
+
+	private function handleSublibraryFilePropfind(
+		RequestInterface $request,
+		ResponseInterface $response,
+		string $path,
+	): bool {
+		$resolved = $this->resolveUserFolder($path);
+		if ($resolved === null) {
+			return false;
+		}
+		[$userId, $relPath] = $resolved;
+
+		if (!preg_match('#^(.+?)/(?:\.sublibraries|_SubLibraries_)/([^/]+)/(.+)$#', $relPath, $m)) {
+			return false;
+		}
+		$parentFolder = $m[1];
+		$slug = $m[2];
+		$fileName = rawurldecode($m[3]);
+
+		if ($this->registry->getClientForVirtualFile($fileName) !== null) {
+			return false;
+		}
+
+		$library = $this->findLibraryForRelativePath($userId, $parentFolder);
+		if ($library === null || $this->rootFolder === null) {
+			return false;
+		}
+
+		try {
+			$userFolder = $this->rootFolder->getUserFolder($userId);
+			$targetRelPath = $parentFolder . '/' . $fileName;
+			if (!$userFolder->nodeExists($targetRelPath)) {
+				return false;
+			}
+			$node = $userFolder->get($targetRelPath);
+			if (!($node instanceof \OCP\Files\File)) {
+				return false;
+			}
+
+			$size = $node->getSize();
+			$contentType = $node->getMimeType() ?: 'application/octet-stream';
+			$lastModified = $node->getMTime();
+			$etag = '"' . $node->getEtag() . '"';
+
+			$requestType = PropFind::ALLPROPS;
+			$requested = [];
+			$requestBody = $request->getBodyAsString();
+			if ($requestBody !== '' && $this->server !== null) {
+				$propFindXml = $this->server->xml->expect('{DAV:}propfind', $requestBody);
+				if ($propFindXml instanceof PropFindRequest && !$propFindXml->allProp) {
+					$requestType = PropFind::NORMAL;
+					$requested = $propFindXml->properties;
+				}
+			}
+
+			$propFind = new PropFind($path, $requested, 0, $requestType);
+			$propFind->set('{DAV:}displayname', basename($fileName));
+			$propFind->set('{DAV:}getlastmodified', new GetLastModified($lastModified));
+			$propFind->set('{DAV:}getcontentlength', $size);
+			$propFind->set('{DAV:}getcontenttype', $contentType);
+			$propFind->set('{DAV:}getetag', $etag);
+			$propFind->set('{DAV:}resourcetype', new ResourceType());
+			$propFind->set('{' . self::OC_NS . '}size', $size);
+			$propFind->set('{' . self::OC_NS . '}permissions', 'RGDNVW');
+
+			$entry = $propFind->getResultForMultiStatus();
+			$entry['href'] = $path;
+
+			$response->setStatus(207);
+			$response->setHeader('Content-Type', 'application/xml; charset=utf-8');
+			$response->setHeader('Vary', 'Brief,Prefer');
+			$response->setBody($this->generateMultiStatus([$entry]));
+			return true;
+		} catch (\Throwable) {
+			return false;
 		}
 	}
 
