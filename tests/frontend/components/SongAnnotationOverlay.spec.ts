@@ -174,8 +174,8 @@ describe('SongAnnotationOverlay.vue', () => {
 		const stampEl = wrapper.find('[data-test="annotation-stamp"]')
 		expect(stampEl.exists()).toBe(true)
 		expect(stampEl.element.tagName.toLowerCase()).toBe('svg')
-		expect(stampEl.attributes('x')).toBe('275') // (0.3 - 0.05 / 2) * 1000
-		expect(stampEl.attributes('y')).toBe('375') // (0.4 - 0.05 / 2) * 1000
+		expect(stampEl.attributes('x')).toBe('300') // 0.3 * 1000
+		expect(stampEl.attributes('y')).toBe('400') // 0.4 * 1000
 		expect(stampEl.attributes('width')).toBe('50')
 		expect(stampEl.attributes('height')).toBe('50')
 		expect(stampEl.attributes('viewBox')).toBe('0 0 180 549')
@@ -216,8 +216,8 @@ describe('SongAnnotationOverlay.vue', () => {
 		expect(stampText.exists()).toBe(true)
 		expect(stampText.element.tagName.toLowerCase()).toBe('text')
 		expect(stampText.text()).toBe('custom-mark')
-		expect(stampText.attributes('x')).toBe('500')
-		expect(stampText.attributes('y')).toBe('600')
+		expect(stampText.attributes('x')).toBe('525') // (0.5 + 0.05/2) * 1000
+		expect(stampText.attributes('y')).toBe('625') // (0.6 + 0.05/2) * 1000
 		expect(stampText.attributes('text-anchor')).toBe('middle')
 		expect(stampText.attributes('dominant-baseline')).toBe('central')
 	})

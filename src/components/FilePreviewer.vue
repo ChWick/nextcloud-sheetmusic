@@ -188,8 +188,8 @@ function createAnnotationSvg(pageNum: number): SVGElement | null {
 				const svgStamp = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
 				const w = Math.round((ann.width || 0.04) * 10000) / 10
 				const h = Math.round((ann.height || 0.04) * 10000) / 10
-				const x = Math.round((ann.x - (ann.width || 0.04) / 2) * 10000) / 10
-				const y = Math.round((ann.y - (ann.height || 0.04) / 2) * 10000) / 10
+				const x = Math.round(ann.x * 10000) / 10
+				const y = Math.round(ann.y * 10000) / 10
 				svgStamp.setAttribute('x', String(x))
 				svgStamp.setAttribute('y', String(y))
 				svgStamp.setAttribute('width', String(w))
@@ -206,8 +206,8 @@ function createAnnotationSvg(pageNum: number): SVGElement | null {
 			} else {
 				const text = document.createElementNS('http://www.w3.org/2000/svg', 'text')
 				const fontSize = ann.style?.fontSize || 40
-				const cx = Math.round(ann.x * 10000) / 10
-				const cy = Math.round(ann.y * 10000) / 10
+				const cx = Math.round((ann.x + (ann.width || 0.04) / 2) * 10000) / 10
+				const cy = Math.round((ann.y + (ann.height || 0.04) / 2) * 10000) / 10
 				text.setAttribute('x', String(cx))
 				text.setAttribute('y', String(cy))
 				text.setAttribute('text-anchor', 'middle')

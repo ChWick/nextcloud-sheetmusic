@@ -79,8 +79,8 @@ const activeAnnotations = computed(() => {
 			<!-- Stamp Annotation: Exact vector path centered in viewport, with fallback to font text -->
 			<svg
 				v-if="item.type === 'stamp' && getStampVector(item)"
-				:x="Math.round((item.x - (item.width || 0.04) / 2) * 10000) / 10"
-				:y="Math.round((item.y - (item.height || 0.04) / 2) * 10000) / 10"
+				:x="Math.round(item.x * 10000) / 10"
+				:y="Math.round(item.y * 10000) / 10"
 				:width="Math.round((item.width || 0.04) * 10000) / 10"
 				:height="Math.round((item.height || 0.04) * 10000) / 10"
 				:viewBox="getStampVector(item)!.viewBox"
@@ -90,8 +90,8 @@ const activeAnnotations = computed(() => {
 			</svg>
 			<text
 				v-else-if="item.type === 'stamp'"
-				:x="Math.round(item.x * 10000) / 10"
-				:y="Math.round(item.y * 10000) / 10"
+				:x="Math.round((item.x + (item.width || 0.04) / 2) * 10000) / 10"
+				:y="Math.round((item.y + (item.height || 0.04) / 2) * 10000) / 10"
 				:fill="item.style?.color || '#000000'"
 				:font-size="item.style?.fontSize || 40"
 				:font-style="isStampItalic(item) ? 'italic' : undefined"

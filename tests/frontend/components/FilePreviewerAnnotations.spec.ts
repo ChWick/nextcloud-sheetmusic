@@ -234,8 +234,8 @@ describe('FilePreviewer.vue Annotation Rendering & Reactivity', () => {
 		const stampSvg = overlay.find('[data-test="annotation-stamp"]')
 		expect(stampSvg.exists()).toBe(true)
 		expect(stampSvg.element.tagName.toLowerCase()).toBe('svg')
-		expect(stampSvg.attributes('x')).toBe('475') // (0.5 - 0.05 / 2) * 1000
-		expect(stampSvg.attributes('y')).toBe('375') // (0.4 - 0.05 / 2) * 1000
+		expect(stampSvg.attributes('x')).toBe('500') // 0.5 * 1000
+		expect(stampSvg.attributes('y')).toBe('400') // 0.4 * 1000
 		expect(stampSvg.attributes('width')).toBe('50')
 		expect(stampSvg.attributes('height')).toBe('50')
 		expect(stampSvg.attributes('viewBox')).toBe('0 0 180 549')
