@@ -594,37 +594,79 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		return false;
 	}
 
+	/**
+	 * @return array{userId: string, library: InternalLibrary, parentFolder: string, slug: string, fileName: string, targetRelPath: string}|null
+	 */
+	private function resolveSublibraryFilePath(string $path): ?array {
+		$resolved = $this->resolveUserFolder($path);
+		if ($resolved === null) {
+			return null;
+		}
+		[$userId, $relPath] = $resolved;
+
+		if (!preg_match('#^(.+?)/(?:\.sublibraries|_SubLibraries_)/([^/]+)/(.+)$#', $relPath, $m)) {
+			return null;
+		}
+		$parentFolder = $m[1];
+		$slug = $m[2];
+		$fileName = rawurldecode($m[3]);
+
+		if ($this->registry->getClientForVirtualFile($fileName) !== null) {
+			return null;
+		}
+
+		$library = $this->findLibraryForRelativePath($userId, $parentFolder);
+		if ($library === null || $this->rootFolder === null) {
+			return null;
+		}
+
+		return [
+			'userId' => $userId,
+			'library' => $library,
+			'parentFolder' => $parentFolder,
+			'slug' => $slug,
+			'fileName' => $fileName,
+			'targetRelPath' => $parentFolder . '/' . $fileName,
+		];
+	}
+
+	/**
+	 * @return array{0: array{userId: string, library: InternalLibrary, parentFolder: string, slug: string, fileName: string, targetRelPath: string}, 1: \OCP\Files\File}|null
+	 */
+	private function resolveSublibraryPhysicalFile(string $path): ?array {
+		$info = $this->resolveSublibraryFilePath($path);
+		if ($info === null || $this->rootFolder === null) {
+			return null;
+		}
+
+		try {
+			$userFolder = $this->rootFolder->getUserFolder($info['userId']);
+			if (!$userFolder->nodeExists($info['targetRelPath'])) {
+				return null;
+			}
+			$node = $userFolder->get($info['targetRelPath']);
+			if (!($node instanceof \OCP\Files\File)) {
+				return null;
+			}
+			return [$info, $node];
+		} catch (\Throwable) {
+			return null;
+		}
+	}
+
 	private function handleSublibraryFileUploadPut(
 		RequestInterface $request,
 		ResponseInterface $response,
 		string $path,
 	): bool {
-		$resolved = $this->resolveUserFolder($path);
-		if ($resolved === null) {
-			return false;
-		}
-		[$userId, $relPath] = $resolved;
-
-		// e.g. {parentFolder}/_SubLibraries_/{slug}/{uploadedFileName}
-		if (!preg_match('#^(.+?)/(?:\.sublibraries|_SubLibraries_)/([^/]+)/(.+)$#', $relPath, $m)) {
-			return false;
-		}
-		$parentFolder = $m[1];
-		$slug = $m[2];
-		$uploadedName = $m[3];
-
-		if ($this->registry->getClientForVirtualFile($uploadedName) !== null) {
-			return false;
-		}
-
-		$library = $this->findLibraryForRelativePath($userId, $parentFolder);
-		if ($library === null || $this->rootFolder === null) {
+		$info = $this->resolveSublibraryFilePath($path);
+		if ($info === null || $this->rootFolder === null) {
 			return false;
 		}
 
 		try {
-			$userFolder = $this->rootFolder->getUserFolder($userId);
-			$targetRelPath = $parentFolder . '/' . $uploadedName;
+			$userFolder = $this->rootFolder->getUserFolder($info['userId']);
+			$targetRelPath = $info['targetRelPath'];
 			$targetDir = dirname($targetRelPath);
 
 			$current = '';
@@ -668,62 +710,32 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		string $path,
 		bool $isHead,
 	): bool {
-		$resolved = $this->resolveUserFolder($path);
+		$resolved = $this->resolveSublibraryPhysicalFile($path);
 		if ($resolved === null) {
 			return false;
 		}
-		[$userId, $relPath] = $resolved;
+		[, $node] = $resolved;
 
-		if (!preg_match('#^(.+?)/(?:\.sublibraries|_SubLibraries_)/([^/]+)/(.+)$#', $relPath, $m)) {
-			return false;
-		}
-		$parentFolder = $m[1];
-		$slug = $m[2];
-		$fileName = rawurldecode($m[3]);
+		$size = $node->getSize();
+		$mime = $node->getMimeType() ?: 'application/octet-stream';
+		$etag = '"' . $node->getEtag() . '"';
+		$lastModified = $node->getMTime();
 
-		if ($this->registry->getClientForVirtualFile($fileName) !== null) {
-			return false;
-		}
-
-		$library = $this->findLibraryForRelativePath($userId, $parentFolder);
-		if ($library === null || $this->rootFolder === null) {
-			return false;
-		}
-
-		try {
-			$userFolder = $this->rootFolder->getUserFolder($userId);
-			$targetRelPath = $parentFolder . '/' . $fileName;
-			if (!$userFolder->nodeExists($targetRelPath)) {
-				return false;
-			}
-			$node = $userFolder->get($targetRelPath);
-			if (!($node instanceof \OCP\Files\File)) {
-				return false;
-			}
-
-			$size = $node->getSize();
-			$mime = $node->getMimeType() ?: 'application/octet-stream';
-			$etag = '"' . $node->getEtag() . '"';
-			$lastModified = $node->getMTime();
-
-			$ifNoneMatch = $request->getHeader('If-None-Match');
-			if ($ifNoneMatch !== null && trim($ifNoneMatch) === $etag) {
-				$response->setStatus(304);
-				return true;
-			}
-
-			$response->setStatus(200);
-			$response->setHeader('Content-Type', $mime);
-			$response->setHeader('Content-Length', (string)$size);
-			$response->setHeader('ETag', $etag);
-			$response->setHeader('Last-Modified', gmdate('D, d M Y H:i:s GMT', $lastModified));
-			if (!$isHead) {
-				$response->setBody($node->fopen('rb'));
-			}
+		$ifNoneMatch = $request->getHeader('If-None-Match');
+		if ($ifNoneMatch !== null && trim($ifNoneMatch) === $etag) {
+			$response->setStatus(304);
 			return true;
-		} catch (\Throwable) {
-			return false;
 		}
+
+		$response->setStatus(200);
+		$response->setHeader('Content-Type', $mime);
+		$response->setHeader('Content-Length', (string)$size);
+		$response->setHeader('ETag', $etag);
+		$response->setHeader('Last-Modified', gmdate('D, d M Y H:i:s GMT', $lastModified));
+		if (!$isHead) {
+			$response->setBody($node->fopen('rb'));
+		}
+		return true;
 	}
 
 	private function handleSublibraryFilePropfind(
@@ -731,76 +743,46 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		ResponseInterface $response,
 		string $path,
 	): bool {
-		$resolved = $this->resolveUserFolder($path);
+		$resolved = $this->resolveSublibraryPhysicalFile($path);
 		if ($resolved === null) {
 			return false;
 		}
-		[$userId, $relPath] = $resolved;
+		[$info, $node] = $resolved;
 
-		if (!preg_match('#^(.+?)/(?:\.sublibraries|_SubLibraries_)/([^/]+)/(.+)$#', $relPath, $m)) {
-			return false;
-		}
-		$parentFolder = $m[1];
-		$slug = $m[2];
-		$fileName = rawurldecode($m[3]);
+		$size = $node->getSize();
+		$contentType = $node->getMimeType() ?: 'application/octet-stream';
+		$lastModified = $node->getMTime();
+		$etag = '"' . $node->getEtag() . '"';
 
-		if ($this->registry->getClientForVirtualFile($fileName) !== null) {
-			return false;
-		}
-
-		$library = $this->findLibraryForRelativePath($userId, $parentFolder);
-		if ($library === null || $this->rootFolder === null) {
-			return false;
-		}
-
-		try {
-			$userFolder = $this->rootFolder->getUserFolder($userId);
-			$targetRelPath = $parentFolder . '/' . $fileName;
-			if (!$userFolder->nodeExists($targetRelPath)) {
-				return false;
+		$requestType = PropFind::ALLPROPS;
+		$requested = [];
+		$requestBody = $request->getBodyAsString();
+		if ($requestBody !== '' && $this->server !== null) {
+			$propFindXml = $this->server->xml->expect('{DAV:}propfind', $requestBody);
+			if ($propFindXml instanceof PropFindRequest && !$propFindXml->allProp) {
+				$requestType = PropFind::NORMAL;
+				$requested = $propFindXml->properties;
 			}
-			$node = $userFolder->get($targetRelPath);
-			if (!($node instanceof \OCP\Files\File)) {
-				return false;
-			}
-
-			$size = $node->getSize();
-			$contentType = $node->getMimeType() ?: 'application/octet-stream';
-			$lastModified = $node->getMTime();
-			$etag = '"' . $node->getEtag() . '"';
-
-			$requestType = PropFind::ALLPROPS;
-			$requested = [];
-			$requestBody = $request->getBodyAsString();
-			if ($requestBody !== '' && $this->server !== null) {
-				$propFindXml = $this->server->xml->expect('{DAV:}propfind', $requestBody);
-				if ($propFindXml instanceof PropFindRequest && !$propFindXml->allProp) {
-					$requestType = PropFind::NORMAL;
-					$requested = $propFindXml->properties;
-				}
-			}
-
-			$propFind = new PropFind($path, $requested, 0, $requestType);
-			$propFind->set('{DAV:}displayname', basename($fileName));
-			$propFind->set('{DAV:}getlastmodified', new GetLastModified($lastModified));
-			$propFind->set('{DAV:}getcontentlength', $size);
-			$propFind->set('{DAV:}getcontenttype', $contentType);
-			$propFind->set('{DAV:}getetag', $etag);
-			$propFind->set('{DAV:}resourcetype', new ResourceType());
-			$propFind->set('{' . self::OC_NS . '}size', $size);
-			$propFind->set('{' . self::OC_NS . '}permissions', 'RGDNVW');
-
-			$entry = $propFind->getResultForMultiStatus();
-			$entry['href'] = $path;
-
-			$response->setStatus(207);
-			$response->setHeader('Content-Type', 'application/xml; charset=utf-8');
-			$response->setHeader('Vary', 'Brief,Prefer');
-			$response->setBody($this->generateMultiStatus([$entry]));
-			return true;
-		} catch (\Throwable) {
-			return false;
 		}
+
+		$propFind = new PropFind($path, $requested, 0, $requestType);
+		$propFind->set('{DAV:}displayname', basename($info['fileName']));
+		$propFind->set('{DAV:}getlastmodified', new GetLastModified($lastModified));
+		$propFind->set('{DAV:}getcontentlength', $size);
+		$propFind->set('{DAV:}getcontenttype', $contentType);
+		$propFind->set('{DAV:}getetag', $etag);
+		$propFind->set('{DAV:}resourcetype', new ResourceType());
+		$propFind->set('{' . self::OC_NS . '}size', $size);
+		$propFind->set('{' . self::OC_NS . '}permissions', 'RGDNVW');
+
+		$entry = $propFind->getResultForMultiStatus();
+		$entry['href'] = $path;
+
+		$response->setStatus(207);
+		$response->setHeader('Content-Type', 'application/xml; charset=utf-8');
+		$response->setHeader('Vary', 'Brief,Prefer');
+		$response->setBody($this->generateMultiStatus([$entry]));
+		return true;
 	}
 
 	private function ensureParentDirectoryExistsForPut(string $path): void {

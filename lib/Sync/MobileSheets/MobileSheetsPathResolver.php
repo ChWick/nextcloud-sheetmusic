@@ -47,16 +47,14 @@ class MobileSheetsPathResolver {
 	 */
 	public function fromStored(string $webdavPath, IUser $user): ?MobileSheetsPath {
 		$webdavRoot = $this->webdavRoot($user);
+		$relative = null;
 		if (str_starts_with($webdavPath, $webdavRoot . '/')) {
 			$relative = substr($webdavPath, strlen($webdavRoot) + 1);
-			$normalizedRelative = $this->stripSublibrarySegment($relative);
-			$internal = $this->normalize($this->internalRoot($user) . '/' . rawurldecode($normalizedRelative));
-			$canonicalWebdav = $this->webdavRoot($user) . '/' . $normalizedRelative;
-			return new MobileSheetsPath($internal, $canonicalWebdav);
+		} elseif (str_starts_with($webdavPath, self::LEGACY_WEBDAV_ROOT . '/')) {
+			$relative = substr($webdavPath, strlen(self::LEGACY_WEBDAV_ROOT) + 1);
 		}
 
-		if (str_starts_with($webdavPath, self::LEGACY_WEBDAV_ROOT . '/')) {
-			$relative = substr($webdavPath, strlen(self::LEGACY_WEBDAV_ROOT) + 1);
+		if ($relative !== null) {
 			$normalizedRelative = $this->stripSublibrarySegment($relative);
 			$internal = $this->normalize($this->internalRoot($user) . '/' . rawurldecode($normalizedRelative));
 			$canonicalWebdav = $this->webdavRoot($user) . '/' . $normalizedRelative;

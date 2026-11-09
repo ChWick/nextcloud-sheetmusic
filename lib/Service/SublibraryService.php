@@ -104,8 +104,7 @@ class SublibraryService {
 
 		foreach ($filters as $type => $values) {
 			$type = InternalEntityMapper::normalizeType((string)$type);
-			$allowedValues = is_array($values) ? array_values($values) : [$values];
-			$cleanValues = array_values(array_filter(array_map(static fn ($v) => trim((string)$v), $allowedValues), static fn ($v) => $v !== ''));
+			$cleanValues = $this->cleanFilterValues($values);
 
 			if (empty($cleanValues)) {
 				continue;
@@ -174,23 +173,12 @@ class SublibraryService {
 
 		foreach ($filters as $type => $values) {
 			$type = InternalEntityMapper::normalizeType((string)$type);
-			$allowedValues = is_array($values) ? array_values($values) : [$values];
-			$cleanValues = array_map(static fn ($v) => mb_strtolower(trim((string)$v)), $allowedValues);
-
+			$cleanValues = $this->cleanFilterValues($values);
 			if (empty($cleanValues)) {
 				continue;
 			}
 
-			$entities = $this->entityMapper->findEntitiesForSong($songId, $type);
-			$found = false;
-			foreach ($entities as $entity) {
-				if (in_array(mb_strtolower(trim($entity->name)), $cleanValues, true)) {
-					$found = true;
-					break;
-				}
-			}
-
-			if (!$found) {
+			if (!$this->songMatchesFilter($songId, $type, $cleanValues)) {
 				return false;
 			}
 		}
@@ -215,26 +203,12 @@ class SublibraryService {
 
 		foreach ($filters as $type => $values) {
 			$type = InternalEntityMapper::normalizeType((string)$type);
-			$allowedValues = is_array($values) ? array_values($values) : [$values];
-			$cleanValues = array_values(array_filter(array_map(static fn ($v) => trim((string)$v), $allowedValues), static fn ($v) => $v !== ''));
-
+			$cleanValues = $this->cleanFilterValues($values);
 			if (empty($cleanValues)) {
 				continue;
 			}
 
-			// Check if already matches this filter
-			$entities = $this->entityMapper->findEntitiesForSong($songId, $type);
-			$alreadyMatches = false;
-			$lowerAllowed = array_map(static fn ($v) => mb_strtolower($v), $cleanValues);
-
-			foreach ($entities as $entity) {
-				if (in_array(mb_strtolower(trim($entity->name)), $lowerAllowed, true)) {
-					$alreadyMatches = true;
-					break;
-				}
-			}
-
-			if (!$alreadyMatches) {
+			if (!$this->songMatchesFilter($songId, $type, $cleanValues)) {
 				// Inject the primary (first) value
 				$targetName = $cleanValues[0];
 				$entity = $this->entityMapper->findByName($sublibrary->libraryId, $type, $targetName);
@@ -269,8 +243,10 @@ class SublibraryService {
 
 		foreach ($filters as $type => $values) {
 			$type = InternalEntityMapper::normalizeType((string)$type);
-			$allowedValues = is_array($values) ? array_values($values) : [$values];
-			$cleanValues = array_map(static fn ($v) => mb_strtolower(trim((string)$v)), $allowedValues);
+			$cleanValues = array_map(static fn ($v) => mb_strtolower($v), $this->cleanFilterValues($values));
+			if (empty($cleanValues)) {
+				continue;
+			}
 
 			$entities = $this->entityMapper->findEntitiesForSong($songId, $type);
 			foreach ($entities as $entity) {
@@ -279,6 +255,31 @@ class SublibraryService {
 				}
 			}
 		}
+	}
+
+	/**
+	 * @param list<string> $cleanValues Case-insensitive allowed values
+	 */
+	private function songMatchesFilter(int $songId, string $type, array $cleanValues): bool {
+		$entities = $this->entityMapper->findEntitiesForSong($songId, $type);
+		$lowerAllowed = array_map(static fn ($v) => mb_strtolower($v), $cleanValues);
+		foreach ($entities as $entity) {
+			if (in_array(mb_strtolower(trim($entity->name)), $lowerAllowed, true)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	private function cleanFilterValues(mixed $values): array {
+		$allowed = is_array($values) ? array_values($values) : [$values];
+		return array_values(array_filter(
+			array_map(static fn ($v) => trim((string)$v), $allowed),
+			static fn ($v) => $v !== ''
+		));
 	}
 
 	private function sanitizeSlug(string $name): string {
