@@ -15,3 +15,20 @@ export function normalizeSearchString(str: string | null | undefined): string {
 		.trim()
 }
 
+/**
+ * Converts a string into a clean URL- and path-safe slug:
+ * - Lowercases and trims whitespace
+ * - Replaces whitespace, underscores, and consecutive hyphens with a single hyphen
+ * - Strips characters that are not unicode letters, numbers, or hyphens
+ * - Trims leading and trailing hyphens
+ */
+export function slugify(text: string | null | undefined): string {
+	if (!text) return ''
+	return text
+		.toLowerCase()
+		.trim()
+		.replace(/[^\p{L}\p{N}\s-]/gu, '')
+		.replace(/[\s_-]+/g, '-')
+		.replace(/^-+|-+$/g, '')
+}
+
