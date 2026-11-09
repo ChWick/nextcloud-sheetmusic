@@ -274,4 +274,82 @@ describe('useSongFilters composable with unassigned matching', () => {
 			expect(filterBarVisible.value).toBe(true)
 		})
 	})
+
+	describe('sublibrary filtering', () => {
+		const mockSublibraries = [
+			{
+				id: 1,
+				libraryId: 1,
+				name: 'Organ Repertoire',
+				slug: 'organ',
+				filters: { instrument: ['Orgel'] },
+			},
+			{
+				id: 2,
+				libraryId: 1,
+				name: 'Bach Repertoire',
+				slug: 'bach',
+				filters: { composer: ['Bach'] },
+			},
+		]
+
+		const subOptions = () => ({
+			...options(),
+			sublibraries: mockSublibraries,
+		})
+
+		const subSongs = [
+			{
+				id: 1,
+				title: 'Toccata in D minor',
+				instruments: [{ id: 1, name: 'Orgel' }],
+				composers: [{ id: 20, name: 'Bach' }],
+			},
+			{
+				id: 2,
+				title: 'Klavier Concerto',
+				instruments: [{ id: 2, name: 'Klavier' }],
+				composers: [{ id: 20, name: 'Bach' }],
+			},
+			{
+				id: 3,
+				title: 'Trumpet Voluntary',
+				instruments: [{ id: 3, name: 'Trompete' }],
+				composers: [{ id: 30, name: 'Clarke' }],
+			},
+		] as unknown as Song[]
+
+		it('resolves selectedSublibraries from slug in query', () => {
+			mockRoute.query = { sublibraries: 'organ' }
+			const { selectedSublibraries, hasActiveFilters } = useSongFilters(subOptions)
+
+			expect(selectedSublibraries.value).toHaveLength(1)
+			expect(selectedSublibraries.value[0].name).toBe('Organ Repertoire')
+			expect(hasActiveFilters.value).toBe(true)
+		})
+
+		it('filters songs by sub-library filter rules', () => {
+			mockRoute.query = { sublibraries: 'organ' }
+			const { filterSongs } = useSongFilters(subOptions)
+
+			const filtered = filterSongs(subSongs)
+			expect(filtered.map(s => s.id)).toEqual([1])
+		})
+
+		it('filters songs matching any of multiple selected sub-libraries (OR logic)', () => {
+			mockRoute.query = { sublibraries: 'organ,bach' }
+			const { filterSongs } = useSongFilters(subOptions)
+
+			const filtered = filterSongs(subSongs)
+			expect(filtered.map(s => s.id)).toEqual([1, 2])
+		})
+
+		it('clears sublibraries query parameter on clearFilters', () => {
+			mockRoute.query = { sublibraries: 'organ', title: 'test' }
+			const { clearFilters } = useSongFilters(subOptions)
+
+			clearFilters()
+			expect(mockRouter.push).toHaveBeenCalledWith({ query: {} })
+		})
+	})
 })

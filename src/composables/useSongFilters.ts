@@ -1,9 +1,11 @@
 import type { Arranger, Artist, Book, Collection, Composer, CustomGroup, EntityType, FilterEntity, Genre, Instrument, Key, Signature, Song, SourceType, Year } from '../types/song'
+import type { Sublibrary } from '../types/library'
 import { translate as t } from '@nextcloud/l10n'
 import { computed, ref } from 'vue'
 import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
 import { ENTITY_COLUMNS } from '../components/songs/song-view-columns'
 import { normalizeSearchString } from '../utils/string'
+import { matchesSublibraryFilters } from '../utils/sublibrary'
 
 /** The entries the filters can select; they resolve the ids stored in the URL. */
 export interface FilterOptions {
@@ -21,6 +23,7 @@ export interface FilterOptions {
 	sourcetypes?: SourceType[]
 	instruments?: Instrument[]
 	arrangers?: Arranger[]
+	sublibraries?: Sublibrary[]
 }
 
 const FILTER_TYPES: EntityType[] = ENTITY_COLUMNS.map((col) => col.entityType)
@@ -200,8 +203,38 @@ export function useSongFilters(options: () => FilterOptions) {
 		router.push({ query })
 	}
 
+	function sublibraryValuesOf(): string[] {
+		const raw = route.query.sublibraries ?? route.query.sublibrary
+		const values = (Array.isArray(raw) ? raw : [raw]).filter(value => value !== null && value !== undefined)
+		return [...new Set(values.flatMap(value => String(value).split(',')).map(s => s.trim().toLowerCase()).filter(Boolean))]
+	}
+
+	const selectedSublibraries = computed<Sublibrary[]>({
+		get: () => {
+			const vals = sublibraryValuesOf()
+			if (vals.length === 0) return []
+			const available = options().sublibraries ?? []
+			return available.filter(sub =>
+				vals.includes(String(sub.id)) || (sub.slug && vals.includes(sub.slug.toLowerCase()))
+			)
+		},
+		set: (value: Sublibrary[]) => {
+			const query: LocationQueryRaw = { ...route.query }
+			delete query.sublibrary
+			if (value.length === 0) {
+				delete query.sublibraries
+			} else {
+				query.sublibraries = value.map(sub => sub.slug || String(sub.id)).join(',')
+			}
+			router.push({ query })
+		},
+	})
+
 	const hasActiveFilters = computed(() =>
-		Boolean(titleFilterOf().trim()) || withoutFilesFilterOf() || FILTER_TYPES.some(entityType => idsOf(entityType).length > 0)
+		Boolean(titleFilterOf().trim())
+		|| withoutFilesFilterOf()
+		|| sublibraryValuesOf().length > 0
+		|| FILTER_TYPES.some(entityType => idsOf(entityType).length > 0)
 	)
 
 	function matchesCategory<T extends { id: number }>(songItems: T[] | undefined, selectedIds: Set<number>): boolean {
@@ -221,6 +254,7 @@ export function useSongFilters(options: () => FilterOptions) {
 	function filterSongs(songs: Song[]): Song[] {
 		const titleQuery = normalizeSearchString(titleFilterOf())
 		const requireNoFiles = withoutFilesFilterOf()
+		const activeSubs = selectedSublibraries.value
 		const activeFilters = ENTITY_COLUMNS
 			.map((col) => ({
 				getItems: col.getItems,
@@ -234,6 +268,12 @@ export function useSongFilters(options: () => FilterOptions) {
 			}
 			if (requireNoFiles && song.files && song.files.length > 0) {
 				return false
+			}
+			if (activeSubs.length > 0) {
+				const matchesAnySub = activeSubs.some(sub => matchesSublibraryFilters(sub.filters, song))
+				if (!matchesAnySub) {
+					return false
+				}
 			}
 			for (const { getItems, ids } of activeFilters) {
 				if (!matchesCategory(getItems(song), ids)) {
@@ -253,6 +293,8 @@ export function useSongFilters(options: () => FilterOptions) {
 		delete query.without_files
 		delete query.noFiles
 		delete query.no_files
+		delete query.sublibraries
+		delete query.sublibrary
 		for (const entityType of FILTER_TYPES) {
 			delete query[entityType]
 		}
@@ -294,6 +336,7 @@ export function useSongFilters(options: () => FilterOptions) {
 		selectedSourceTypes,
 		selectedInstruments,
 		selectedArrangers,
+		selectedSublibraries,
 		hasActiveFilters,
 		isFiltered,
 		toggleFilter,

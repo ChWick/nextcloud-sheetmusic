@@ -32,4 +32,41 @@ describe('SongFilterBar.vue', () => {
 		await wrapper.vm.$nextTick()
 		expect(composerSelect.props('keepOpen')).toBe(false)
 	})
+
+	it('renders sub-library select dropdown when sublibraries are present', async () => {
+		const mockSub = {
+			id: 10,
+			libraryId: 1,
+			name: 'Organ Repertoire',
+			slug: 'organ',
+			filters: { instrument: ['Orgel'] },
+		}
+
+		const wrapper = mount(SongFilterBar, {
+			props: {
+				sublibraries: [mockSub],
+				selectedSublibraries: [],
+			},
+		})
+
+		const selects = wrapper.findAllComponents({ name: 'NcSelect' })
+		const subSelect = selects.find(s => s.props('inputLabel') === 'Sub-Libraries')
+		expect(subSelect).toBeDefined()
+		expect(subSelect!.props('options')).toEqual([mockSub])
+
+		await subSelect!.vm.$emit('update:modelValue', [mockSub])
+		expect(wrapper.emitted('update:selectedSublibraries')?.[0]).toEqual([[mockSub]])
+	})
+
+	it('does not render sub-library select dropdown when sublibraries list is empty', () => {
+		const wrapper = mount(SongFilterBar, {
+			props: {
+				sublibraries: [],
+			},
+		})
+
+		const selects = wrapper.findAllComponents({ name: 'NcSelect' })
+		const subSelect = selects.find(s => s.props('inputLabel') === 'Sub-Libraries')
+		expect(subSelect).toBeUndefined()
+	})
 })

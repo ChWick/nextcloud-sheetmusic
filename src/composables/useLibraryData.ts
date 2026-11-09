@@ -1,4 +1,7 @@
 import type { Arranger, Artist, Book, Collection, Composer, CustomGroup, Genre, Instrument, Key, LibraryData, Signature, Song, SourceType, Year } from '../types/song'
+import type { Sublibrary } from '../types/library'
+import axios from '@nextcloud/axios'
+import { generateOcsUrl } from '@nextcloud/router'
 import { apiGet } from '../api/client'
 import { showError } from '@nextcloud/dialogs'
 import { translate as t } from '@nextcloud/l10n'
@@ -19,6 +22,7 @@ export function useLibraryData() {
 	const sourceTypes = ref<SourceType[]>([])
 	const instruments = ref<Instrument[]>([])
 	const arrangers = ref<Arranger[]>([])
+	const sublibraries = ref<Sublibrary[]>([])
 	const fileError = ref('')
 	const isLoading = ref(false)
 
@@ -38,11 +42,25 @@ export function useLibraryData() {
 		arrangers.value = data.arrangers ?? []
 	}
 
+	async function loadSublibraries(id: number) {
+		try {
+			const res = await axios.get(generateOcsUrl(`/apps/sheetmusic/api/libraries/${id}/sublibraries`), {
+				headers: { 'OCS-APIREQUEST': 'true', Accept: 'application/json' },
+			})
+			sublibraries.value = res.data?.ocs?.data?.sublibraries ?? []
+		} catch {
+			sublibraries.value = []
+		}
+	}
+
 	async function loadLibraryData(id: number) {
 		isLoading.value = true
 		fileError.value = ''
 		try {
-			const response = await apiGet('/api/songs', { queryParams: { id } })
+			const [response] = await Promise.all([
+				apiGet('/api/songs', { queryParams: { id } }),
+				loadSublibraries(id),
+			])
 			handleLibraryDataUpdate(response.data.ocs.data)
 		} catch (error) {
 			fileError.value = describeRequestFailure(error, t('sheetmusic', 'Could not load this library.'))
@@ -66,9 +84,11 @@ export function useLibraryData() {
 		sourceTypes,
 		instruments,
 		arrangers,
+		sublibraries,
 		fileError,
 		isLoading,
 		handleLibraryDataUpdate,
 		loadLibraryData,
+		loadSublibraries,
 	}
 }

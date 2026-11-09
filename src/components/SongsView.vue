@@ -135,6 +135,7 @@
       v-model:selected-source-types="selectedSourceTypes"
       v-model:selected-instruments="selectedInstruments"
       v-model:selected-arrangers="selectedArrangers"
+      v-model:selected-sublibraries="selectedSublibraries"
       v-bind="entityListsProps"
       @clear="clearFilters"/>
     </div>
@@ -349,6 +350,7 @@ const {
   sourceTypes,
   instruments,
   arrangers,
+  sublibraries,
   fileError,
   isLoading,
   handleLibraryDataUpdate,
@@ -424,11 +426,12 @@ const entityListsProps = computed(() => ({
   sourceTypes: sourceTypes.value,
   instruments: instruments.value,
   arrangers: arrangers.value,
+  sublibraries: sublibraries.value,
 }));
 
 // The filter bar reads and writes its selections in the URL query, so the browser
 // history restores them when going back or forward.
-const { searchTitle, withoutFiles, selectedComposers, selectedBooks, selectedCollections, selectedArtists, selectedGenres, selectedKeys, selectedCustomGroups, selectedYears, selectedSignatures, selectedSourceTypes, selectedInstruments, selectedArrangers, filterSongs, clearFilters, filterBarVisible, toggleFilterBar, isFiltered, toggleFilter } =
+const { searchTitle, withoutFiles, selectedComposers, selectedBooks, selectedCollections, selectedArtists, selectedGenres, selectedKeys, selectedCustomGroups, selectedYears, selectedSignatures, selectedSourceTypes, selectedInstruments, selectedArrangers, selectedSublibraries, filterSongs, clearFilters, filterBarVisible, toggleFilterBar, isFiltered, toggleFilter } =
   useSongFilters(() => entityListsProps.value);
 
 const { selectedSongIds, selectedCount, isSelected, toggleSelect, selectAll, isAllSelected, clearSelection } = useSongSelection();
@@ -599,7 +602,7 @@ watch(pageSize, (newSize) => {
 const currentPage = ref(1);
 
 // When search, filter selections, sorting, or library change, reset page to 1
-watch([searchTitle, withoutFiles, selectedComposers, selectedBooks, selectedCollections, selectedArtists, selectedGenres, selectedKeys, selectedCustomGroups, selectedYears, selectedSignatures, selectedSourceTypes, selectedInstruments, selectedArrangers, () => props.selectedLibrary], () => {
+watch([searchTitle, withoutFiles, selectedComposers, selectedBooks, selectedCollections, selectedArtists, selectedGenres, selectedKeys, selectedCustomGroups, selectedYears, selectedSignatures, selectedSourceTypes, selectedInstruments, selectedArrangers, selectedSublibraries, () => props.selectedLibrary], () => {
   currentPage.value = 1;
 });
 

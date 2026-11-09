@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Arranger, Artist, Book, Collection, Composer, CustomGroup, FilterEntity, Genre, Instrument, Key, Signature, SourceType, Year } from '../types/song'
+import type { Sublibrary } from '../types/library'
 
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
@@ -30,6 +31,7 @@ const props = withDefaults(
 		sourceTypes?: SourceType[]
 		instruments?: Instrument[]
 		arrangers?: Arranger[]
+		sublibraries?: Sublibrary[]
 		selectedComposers?: Composer[]
 		selectedBooks?: Book[]
 		selectedCollections?: Collection[]
@@ -42,6 +44,7 @@ const props = withDefaults(
 		selectedSourceTypes?: SourceType[]
 		selectedInstruments?: Instrument[]
 		selectedArrangers?: Arranger[]
+		selectedSublibraries?: Sublibrary[]
 	}>(),
 	{
 		searchTitle: '',
@@ -58,6 +61,7 @@ const props = withDefaults(
 		sourceTypes: () => [],
 		instruments: () => [],
 		arrangers: () => [],
+		sublibraries: () => [],
 		selectedComposers: () => [],
 		selectedBooks: () => [],
 		selectedCollections: () => [],
@@ -70,6 +74,7 @@ const props = withDefaults(
 		selectedSourceTypes: () => [],
 		selectedInstruments: () => [],
 		selectedArrangers: () => [],
+		selectedSublibraries: () => [],
 	},
 )
 
@@ -88,6 +93,7 @@ const emit = defineEmits<{
 	'update:selectedSourceTypes': [sourceTypes: SourceType[]]
 	'update:selectedInstruments': [instruments: Instrument[]]
 	'update:selectedArrangers': [arrangers: Arranger[]]
+	'update:selectedSublibraries': [sublibraries: Sublibrary[]]
 	'clear': []
 }>()
 
@@ -130,6 +136,7 @@ const hasActiveFilters = computed(() => {
 	return (
 		Boolean(props.searchTitle?.trim())
 		|| props.withoutFiles
+		|| (props.selectedSublibraries && props.selectedSublibraries.length > 0)
 		|| filterFields.value.some((f) => f.selected.length > 0)
 	)
 })
@@ -158,6 +165,20 @@ function clearAllFilters() {
 				type="checkbox">
 				{{ t('sheetmusic', 'Without files') }}
 			</NcCheckboxRadioSwitch>
+		</div>
+
+		<div v-if="sublibraries && sublibraries.length > 0" :class="$style.filterGroup">
+			<NcSelect
+				:model-value="selectedSublibraries"
+				:options="sublibraries"
+				:multiple="true"
+				:keep-open="isCtrlPressed"
+				:placeholder="t('sheetmusic', 'Filter by sub-library…')"
+				:input-label="t('sheetmusic', 'Sub-Libraries')"
+				label="name"
+				track-by="id"
+				:class="$style.select"
+				@update:model-value="emit('update:selectedSublibraries', $event)" />
 		</div>
 
 		<div v-for="field in filterFields" :key="field.key" :class="$style.filterGroup">
