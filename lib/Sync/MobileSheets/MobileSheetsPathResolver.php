@@ -49,18 +49,31 @@ class MobileSheetsPathResolver {
 		$webdavRoot = $this->webdavRoot($user);
 		if (str_starts_with($webdavPath, $webdavRoot . '/')) {
 			$relative = substr($webdavPath, strlen($webdavRoot) + 1);
-			$internal = $this->normalize($this->internalRoot($user) . '/' . rawurldecode($relative));
-			return new MobileSheetsPath($internal, $webdavPath);
+			$normalizedRelative = $this->stripSublibrarySegment($relative);
+			$internal = $this->normalize($this->internalRoot($user) . '/' . rawurldecode($normalizedRelative));
+			$canonicalWebdav = $this->webdavRoot($user) . '/' . $normalizedRelative;
+			return new MobileSheetsPath($internal, $canonicalWebdav);
 		}
 
 		if (str_starts_with($webdavPath, self::LEGACY_WEBDAV_ROOT . '/')) {
 			$relative = substr($webdavPath, strlen(self::LEGACY_WEBDAV_ROOT) + 1);
-			$internal = $this->normalize($this->internalRoot($user) . '/' . rawurldecode($relative));
-			$canonicalWebdav = $this->webdavRoot($user) . '/' . $relative;
+			$normalizedRelative = $this->stripSublibrarySegment($relative);
+			$internal = $this->normalize($this->internalRoot($user) . '/' . rawurldecode($normalizedRelative));
+			$canonicalWebdav = $this->webdavRoot($user) . '/' . $normalizedRelative;
 			return new MobileSheetsPath($internal, $canonicalWebdav);
 		}
 
 		return null;
+	}
+
+	/**
+	 * Strip virtual sublibrary directory segments if present.
+	 * E.g. "test2/_SubLibraries_/organ/file.pdf" -> "test2/file.pdf"
+	 * or "_SubLibraries_/organ/file.pdf" -> "file.pdf"
+	 */
+	public function stripSublibrarySegment(string $path): string {
+		$stripped = preg_replace('#(?<=^|/)(?:\.sublibraries|_SubLibraries_)/[^/]+/#', '', $path);
+		return $stripped ?? $path;
 	}
 
 	/**

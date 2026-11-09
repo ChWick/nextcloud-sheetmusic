@@ -82,6 +82,35 @@ final class MobileSheetsPathResolverTest extends TestCase {
 		self::assertSame(self::WEBDAV_ROOT . '/Noten/sub/file.pdf', $path->webdav);
 	}
 
+	public function testFromStoredNormalizesVirtualSublibraryPath(): void {
+		$path = $this->resolver()->fromStored(
+			self::WEBDAV_ROOT . '/Noten/_SubLibraries_/organ/piece.pdf',
+			$this->user(),
+		);
+
+		self::assertInstanceOf(MobileSheetsPath::class, $path);
+		self::assertSame('/admin/files/Noten/piece.pdf', $path->internal);
+		self::assertSame(self::WEBDAV_ROOT . '/Noten/piece.pdf', $path->webdav);
+	}
+
+	public function testFromStoredNormalizesLegacyDotSublibrariesPath(): void {
+		$path = $this->resolver()->fromStored(
+			self::WEBDAV_ROOT . '/Noten/.sublibraries/organ/subfolder/piece.pdf',
+			$this->user(),
+		);
+
+		self::assertInstanceOf(MobileSheetsPath::class, $path);
+		self::assertSame('/admin/files/Noten/subfolder/piece.pdf', $path->internal);
+		self::assertSame(self::WEBDAV_ROOT . '/Noten/subfolder/piece.pdf', $path->webdav);
+	}
+
+	public function testStripSublibrarySegment(): void {
+		self::assertSame('Noten/piece.pdf', $this->resolver()->stripSublibrarySegment('Noten/_SubLibraries_/organ/piece.pdf'));
+		self::assertSame('piece.pdf', $this->resolver()->stripSublibrarySegment('_SubLibraries_/organ/piece.pdf'));
+		self::assertSame('Noten/piece.pdf', $this->resolver()->stripSublibrarySegment('Noten/.sublibraries/organ/piece.pdf'));
+		self::assertSame('Noten/normal/piece.pdf', $this->resolver()->stripSublibrarySegment('Noten/normal/piece.pdf'));
+	}
+
 	public function testFromStoredReturnsNullForAPathOfAnotherUser(): void {
 		self::assertNull($this->resolver()->fromStored('/remote.php/dav/files/other/Noten/file.pdf', $this->user()));
 	}

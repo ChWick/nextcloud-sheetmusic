@@ -1023,6 +1023,7 @@ class MobileSheetsSqliteImporter {
 
 		try {
 			$clean = ltrim($filePath, '/');
+			$clean = $this->pathResolver->stripSublibrarySegment($clean);
 			$userFolder = $this->rootFolder->getUserFolder($user->getUID());
 			if ($userFolder->nodeExists($clean)) {
 				return $userFolder->get($clean)->getId();

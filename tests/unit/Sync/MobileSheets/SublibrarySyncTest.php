@@ -206,4 +206,71 @@ final class SublibrarySyncTest extends TestCase {
 
 		@unlink($dbPath);
 	}
+
+	public function testImportNewSongWithVirtualSublibraryFilePathResolvesAndCleansUpStub(): void {
+		$sub = $this->sublibraryService->createSublibrary($this->testLibId, 'Organ Sublib', 'orgel', [
+			'instrument' => ['Orgel'],
+		]);
+
+		// 1. Simulate auto-indexer creating a stub song when the score file was uploaded via WebDAV PUT
+		$userFolder = $this->rootFolder->getUserFolder('admin');
+		$folder = $userFolder->get('SublibSyncTest');
+		$fileNode = $folder->newFile('20261109_143351.pdf');
+		$fileNode->putContent("%PDF-1.4 Test Score\n");
+		$this->createdUserNodes[] = $fileNode;
+
+		$stubSong = $this->insertTestSong($this->testLibId, '20261109 143351');
+		$stubFile = new \OCA\SheetMusic\Db\InternalSongFile(
+			uuid: 'sf_stub_' . bin2hex(random_bytes(4)),
+			songId: $stubSong->id,
+			fileId: (int)$fileNode->getId(),
+			pageOrder: '1-1',
+			pageCount: 1,
+			fileSize: 1024,
+			fileHash: 123456,
+			type: 1,
+			clientId: null,
+			createdAt: time(),
+			updatedAt: time(),
+		);
+		$this->songFileMapper->insert($stubFile);
+
+		// 2. Export baseline database
+		$dbPath = $this->tempDbPath();
+		$this->exporter->exportToFile($this->testLibId, $dbPath, null, $sub);
+
+		// 3. Simulate tablet adding "Song2" and referencing the file under the virtual sublibrary WebDAV path
+		$db = new PDO('sqlite:' . $dbPath);
+		$db->exec("INSERT INTO Songs (Title) VALUES ('Song2')");
+		$newSongClientId = (int)$db->lastInsertId();
+
+		$storedPath = '/remote.php/dav/files/admin/SublibSyncTest/_SubLibraries_/orgel/20261109_143351.pdf';
+		$stmt = $db->prepare("INSERT INTO Files (SongId, Path, PageOrder, SourceFilePageCount, FileSize) VALUES (?, ?, '1-1', 1, 1024)");
+		$stmt->execute([$newSongClientId, $storedPath]);
+
+		// 4. Import SQLite database back into server
+		$stats = $this->importer->importFromFile($this->testLibId, $dbPath, null, null, $sub);
+		self::assertSame(1, $stats['songsCreated']);
+		self::assertSame(1, $stats['filesCreated']);
+
+		// 5. Verify Song2 has the file attached
+		$song2 = $this->songMapper->findByClientId($this->testLibId, $newSongClientId);
+		self::assertNotNull($song2);
+		self::assertSame('Song2', $song2->title);
+
+		$files = $this->songFileMapper->findAllForSong((int)$song2->id, includeDeleted: false);
+		self::assertCount(1, $files);
+		self::assertSame((int)$fileNode->getId(), $files[0]->fileId);
+
+		// 6. Verify stub song was cleaned up
+		$danglingSong = $this->songMapper->findById((int)$stubSong->id);
+		self::assertNull($danglingSong);
+
+		// 7. Verify Song2 received sublibrary auto-tagging
+		$instruments = $this->entityMapper->findEntitiesForSong((int)$song2->id, 'instrument');
+		self::assertCount(1, $instruments);
+		self::assertSame('Orgel', $instruments[0]->name);
+
+		@unlink($dbPath);
+	}
 }
