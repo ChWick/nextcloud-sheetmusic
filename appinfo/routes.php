@@ -316,5 +316,25 @@ return [
 			'url' => '/api/annotations/{id}',
 			'verb' => 'DELETE',
 		],
+		[
+			'name' => 'Library#getSublibraries',
+			'url' => '/api/libraries/{id}/sublibraries',
+			'verb' => 'GET',
+		],
+		[
+			'name' => 'Library#createSublibrary',
+			'url' => '/api/libraries/{id}/sublibraries',
+			'verb' => 'POST',
+		],
+		[
+			'name' => 'Library#updateSublibrary',
+			'url' => '/api/libraries/{id}/sublibraries/{subId}',
+			'verb' => 'PUT',
+		],
+		[
+			'name' => 'Library#deleteSublibrary',
+			'url' => '/api/libraries/{id}/sublibraries/{subId}',
+			'verb' => 'DELETE',
+		],
 	],
 ];

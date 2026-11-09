@@ -7,6 +7,7 @@ namespace OCA\SheetMusic\Controller;
 use OCA\SheetMusic\Service\LibraryIntegrityService;
 use OCA\SheetMusic\Service\LibraryService;
 use OCA\SheetMusic\Service\LibraryToolService;
+use OCA\SheetMusic\Service\SublibraryService;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\ApiRoute;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -23,6 +24,7 @@ class LibraryController extends OCSController {
 		private IUserSession $userSession,
 		private LibraryIntegrityService $integrityService,
 		private ?LibraryToolService $toolService = null,
+		private ?SublibraryService $sublibraryService = null,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -270,6 +272,76 @@ class LibraryController extends OCSController {
 				Http::STATUS_OK
 			);
 		}
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'GET', url: '/api/libraries/{id}/sublibraries')]
+	public function getSublibraries(int $id): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		if ($this->sublibraryService === null) {
+			return new DataResponse([], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+
+		return new DataResponse([
+			'sublibraries' => $this->sublibraryService->getSublibraries($id),
+		]);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/libraries/{id}/sublibraries')]
+	public function createSublibrary(int $id, string $name, string $slug = '', array $filters = []): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		if ($this->sublibraryService === null) {
+			return new DataResponse([], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+
+		$filters = (array)$this->request->getParam('filters', $filters);
+		$sublib = $this->sublibraryService->createSublibrary($id, $name, $slug, $filters);
+
+		return new DataResponse($sublib, Http::STATUS_CREATED);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'PUT', url: '/api/libraries/{id}/sublibraries/{subId}')]
+	public function updateSublibrary(int $id, int $subId, string $name, string $slug = '', array $filters = []): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		if ($this->sublibraryService === null) {
+			return new DataResponse([], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+
+		$filters = (array)$this->request->getParam('filters', $filters);
+		$sublib = $this->sublibraryService->updateSublibrary($subId, $name, $slug, $filters);
+
+		return new DataResponse($sublib, Http::STATUS_OK);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'DELETE', url: '/api/libraries/{id}/sublibraries/{subId}')]
+	public function deleteSublibrary(int $id, int $subId): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		if ($this->sublibraryService === null) {
+			return new DataResponse([], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+
+		$success = $this->sublibraryService->deleteSublibrary($subId);
+
+		return new DataResponse(['success' => $success], Http::STATUS_OK);
 	}
 
 	private function resolveProgressId(?string $progressId): ?string {

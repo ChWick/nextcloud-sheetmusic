@@ -6,9 +6,11 @@ namespace Controller;
 
 use OCA\SheetMusic\Controller\LibraryController;
 use OCA\SheetMusic\Db\InternalLibrary;
+use OCA\SheetMusic\Db\SublibraryMapper;
 use OCA\SheetMusic\Service\IntegrityIssue;
 use OCA\SheetMusic\Service\LibraryIntegrityService;
 use OCA\SheetMusic\Service\LibraryService;
+use OCA\SheetMusic\Service\SublibraryService;
 use OCP\AppFramework\Http;
 use OCP\IUser;
 use PHPUnit\Framework\TestCase;
@@ -36,12 +38,20 @@ final class LibraryControllerTest extends TestCase {
 		$this->userSession = new FakeUserSession($this->user);
 		$this->request = new FakeRequest();
 
+		$sublibraryService = new SublibraryService(
+			new SublibraryMapper($this->dbConn),
+			$this->entityMapper,
+			$this->dbConn,
+		);
+
 		$this->controller = new LibraryController(
 			'sheetmusic',
 			$this->request,
 			$this->libraryService,
 			$this->userSession,
 			$this->createLibraryIntegrityService($this->libraryService),
+			null,
+			$sublibraryService,
 		);
 	}
 
@@ -204,5 +214,44 @@ final class LibraryControllerTest extends TestCase {
 		$res = $this->controller->addLibrary($folder, false, null, false);
 		$this->assertSame(Http::STATUS_CREATED, $res->getStatus());
 		$this->assertSame(['path' => $folder], $res->getData());
+	}
+
+	public function testSublibraryEndpointsCrud(): void {
+		$library = $this->createTestLibrary('Sublib CRUD Lib');
+		$libId = (int)$library->id;
+
+		// 1. Initial list should be empty
+		$res = $this->controller->getSublibraries($libId);
+		$this->assertSame(Http::STATUS_OK, $res->getStatus());
+		$this->assertSame(['sublibraries' => []], $res->getData());
+
+		// 2. Create sublibrary
+		$createRes = $this->controller->createSublibrary($libId, 'Organ Book', 'orgel', ['instrument' => ['Orgel']]);
+		$this->assertSame(Http::STATUS_CREATED, $createRes->getStatus());
+		$created = $createRes->getData();
+		$this->assertSame('Organ Book', $created->name);
+		$this->assertSame('orgel', $created->slug);
+		$subId = (int)$created->id;
+
+		// 3. Update sublibrary
+		$updateRes = $this->controller->updateSublibrary($libId, $subId, 'Organ & Piano', 'orgel-piano', ['instrument' => ['Orgel', 'Klavier']]);
+		$this->assertSame(Http::STATUS_OK, $updateRes->getStatus());
+		$updated = $updateRes->getData();
+		$this->assertSame('Organ & Piano', $updated->name);
+		$this->assertSame('orgel-piano', $updated->slug);
+
+		// 4. List sublibraries
+		$listRes = $this->controller->getSublibraries($libId);
+		$this->assertSame(Http::STATUS_OK, $listRes->getStatus());
+		$this->assertCount(1, $listRes->getData()['sublibraries']);
+
+		// 5. Delete sublibrary
+		$delRes = $this->controller->deleteSublibrary($libId, $subId);
+		$this->assertSame(Http::STATUS_OK, $delRes->getStatus());
+		$this->assertSame(['success' => true], $delRes->getData());
+
+		// 6. List should be empty again
+		$listResAfter = $this->controller->getSublibraries($libId);
+		$this->assertSame(['sublibraries' => []], $listResAfter->getData());
 	}
 }
