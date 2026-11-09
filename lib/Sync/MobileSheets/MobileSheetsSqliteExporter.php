@@ -20,7 +20,9 @@ use OCA\SheetMusic\Db\InternalSongFile;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
+use OCA\SheetMusic\Db\InternalSublibrary;
 use OCA\SheetMusic\Service\SongAnnotationService;
+use OCA\SheetMusic\Service\SublibraryService;
 use OCP\Files\File;
 use OCP\Files\IRootFolder;
 use OCP\IUser;
@@ -53,6 +55,7 @@ class MobileSheetsSqliteExporter {
 		private ?InternalSongBookmarkMapper $bookmarkMapper = null,
 		private ?InternalSetlistItemMapper $setlistItemMapper = null,
 		private ?SongAnnotationService $annotationService = null,
+		private ?SublibraryService $sublibraryService = null,
 	) {
 		$this->entityExporter = $entityExporter ?? new MobileSheetsEntityExporter(
 			$this->entityMapper,
@@ -64,7 +67,12 @@ class MobileSheetsSqliteExporter {
 	/**
 	 * Export the entire library state to a MobileSheets-compatible SQLite database file.
 	 */
-	public function exportToFile(InternalLibrary|array|int $library, string $targetSqlitePath): void {
+	public function exportToFile(
+		InternalLibrary|array|int $library,
+		string $targetSqlitePath,
+		IUser|string|null $user = null,
+		?InternalSublibrary $sublibrary = null,
+	): void {
 		$origPrecision = ini_get('precision');
 		ini_set('precision', '-1');
 
@@ -97,15 +105,21 @@ class MobileSheetsSqliteExporter {
 
 			$db->beginTransaction();
 			try {
-				$user = $this->userManager->get($lib->userId);
+				$userObj = is_string($user) ? $this->userManager->get($user) : ($user instanceof IUser ? $user : $this->userManager->get($lib->userId));
 
-				$this->exportMiscData($db, $lib->id, $user);
-				$validSongIds = $this->getSongIdsWithValidFiles($db, $lib, $user);
-				$this->entityExporter->exportEntities($db, $lib->id);
+				$this->exportMiscData($db, $lib->id, $userObj);
+				$validSongIds = $this->getSongIdsWithValidFiles($db, $lib, $userObj);
+				if ($sublibrary !== null && $this->sublibraryService !== null) {
+					$matchingSongIds = $this->sublibraryService->getMatchingSongIds($sublibrary);
+					$validSongIds = array_intersect_key($validSongIds, $matchingSongIds);
+					$this->entityExporter->exportEntities($db, $lib->id, $validSongIds);
+				} else {
+					$this->entityExporter->exportEntities($db, $lib->id);
+				}
 				$this->exportSongs($db, $lib->id, $validSongIds);
 				$this->entityExporter->exportSongEntityLinks($db, $lib->id, $validSongIds);
-				$this->exportFiles($db, $lib, $user);
-				$this->exportBookmarks($db, $lib, $user);
+				$this->exportFiles($db, $lib, $userObj);
+				$this->exportBookmarks($db, $lib, $userObj);
 				$this->exportAnnotations($db, $lib, $validSongIds);
 				$this->ensureSongAndPageDefaults($db);
 				$this->cleanOrphanSongReferences($db);
@@ -131,10 +145,14 @@ class MobileSheetsSqliteExporter {
 	/**
 	 * Check if the library has any active songs or imported schemas/data.
 	 */
-	public function hasLibraryData(InternalLibrary|array|int $library): bool {
+	public function hasLibraryData(InternalLibrary|array|int $library, ?InternalSublibrary $sublibrary = null): bool {
 		$lib = $library instanceof InternalLibrary ? $library : $this->libraryMapper->resolveLibrary($library);
 		if ($lib->id === null) {
 			return false;
+		}
+
+		if ($sublibrary !== null && $this->sublibraryService !== null) {
+			return $this->sublibraryService->getMatchingSongIds($sublibrary) !== [];
 		}
 
 		if ($this->songMapper->findAllForLibrary($lib->id, includeDeleted: false) !== []) {
@@ -151,11 +169,15 @@ class MobileSheetsSqliteExporter {
 	/**
 	 * Generate the dynamic content for mobilesheets_hashcodes.txt.
 	 */
-	public function generateHashcodes(InternalLibrary|array|int $library): string {
+	public function generateHashcodes(InternalLibrary|array|int $library, ?InternalSublibrary $sublibrary = null): string {
 		$lib = $library instanceof InternalLibrary ? $library : $this->libraryMapper->resolveLibrary($library);
 		if ($lib->id === null) {
 			return '';
 		}
+
+		$matchingSongIds = ($sublibrary !== null && $this->sublibraryService !== null)
+			? $this->sublibraryService->getMatchingSongIds($sublibrary)
+			: null;
 
 		$user = $this->userManager->get($lib->userId);
 		$files = $this->songFileMapper->findAllForLibrary($lib->id, includeDeleted: false);
@@ -164,6 +186,9 @@ class MobileSheetsSqliteExporter {
 		$handledPaths = [];
 
 		foreach ($files as $file) {
+			if ($matchingSongIds !== null && !isset($matchingSongIds[$file->songId])) {
+				continue;
+			}
 			$this->ensureAccurateFileFacts($file, $user);
 			$webdavPath = $this->resolveWebdavPathForFile($file, $lib, $user);
 			if ($webdavPath === null || $webdavPath === '' || isset($handledPaths[$webdavPath])) {

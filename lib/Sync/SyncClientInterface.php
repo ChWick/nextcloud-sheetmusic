@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace OCA\SheetMusic\Sync;
 
 use OCA\SheetMusic\Db\InternalLibrary;
+use OCA\SheetMusic\Db\InternalSublibrary;
 use Sabre\HTTP\RequestInterface;
 use Sabre\HTTP\ResponseInterface;
 
@@ -37,12 +38,12 @@ interface SyncClientInterface {
 	/**
 	 * Export the library data for this client to a destination file path.
 	 */
-	public function exportLibrary(int $libraryId, string $destinationPath, string $userId): void;
+	public function exportLibrary(int $libraryId, string $destinationPath, string $userId, ?InternalSublibrary $sublibrary = null): void;
 
 	/**
 	 * Import client data from a source file path into the internal database.
 	 */
-	public function importLibrary(int $libraryId, string $sourcePath, string $userId): void;
+	public function importLibrary(int $libraryId, string $sourcePath, string $userId, ?InternalSublibrary $sublibrary = null): void;
 
 	/**
 	 * Handle a WebDAV GET or HEAD request for a virtual file.
@@ -55,6 +56,7 @@ interface SyncClientInterface {
 		InternalLibrary $library,
 		string $filename,
 		bool $isHead,
+		?InternalSublibrary $sublibrary = null,
 	): bool;
 
 	/**
@@ -67,6 +69,7 @@ interface SyncClientInterface {
 		ResponseInterface $response,
 		InternalLibrary $library,
 		string $filename,
+		?InternalSublibrary $sublibrary = null,
 	): bool;
 
 	/**
@@ -74,5 +77,5 @@ interface SyncClientInterface {
 	 *
 	 * @return array{size: int, contentType: string, lastModified: int}|null
 	 */
-	public function getVirtualFileProperties(InternalLibrary $library, string $filename, string $userId): ?array;
+	public function getVirtualFileProperties(InternalLibrary $library, string $filename, string $userId, ?InternalSublibrary $sublibrary = null): ?array;
 }

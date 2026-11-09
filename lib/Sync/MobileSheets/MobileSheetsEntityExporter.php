@@ -36,13 +36,47 @@ class MobileSheetsEntityExporter {
 
 	/**
 	 * Export all active entities to SQLite tables.
+	 *
+	 * @param array<int, bool>|null $validSongIds Optional map of allowed song IDs to filter entities and setlists
 	 */
-	public function exportEntities(PDO $db, int $libraryId): void {
+	public function exportEntities(PDO $db, int $libraryId, ?array $validSongIds = null): void {
 		$entities = $this->entityMapper->findAllForLibrary($libraryId, includeDeleted: false);
 		$entitiesByTable = [];
 		foreach ($entities as $entity) {
 			if (!isset(self::ENTITY_TABLE_CONFIG[$entity->type])) {
 				continue;
+			}
+			if ($validSongIds !== null) {
+				if ($entity->type === 'setlist') {
+					if ($this->setlistItemMapper !== null) {
+						$items = $this->setlistItemMapper->findForSetlist((int)$entity->id);
+						if ($items === []) {
+							continue;
+						}
+						$allMatch = true;
+						foreach ($items as $item) {
+							if (!isset($validSongIds[$item->songId])) {
+								$allMatch = false;
+								break;
+							}
+						}
+						if (!$allMatch) {
+							continue;
+						}
+					}
+				} else {
+					$songIds = $this->entityMapper->findSongIdsForEntity((int)$entity->id);
+					$hasMatchingSong = false;
+					foreach ($songIds as $sid) {
+						if (isset($validSongIds[$sid])) {
+							$hasMatchingSong = true;
+							break;
+						}
+					}
+					if (!$hasMatchingSong) {
+						continue;
+					}
+				}
 			}
 			$config = self::ENTITY_TABLE_CONFIG[$entity->type];
 			$entitiesByTable[$config['table']][] = $entity;

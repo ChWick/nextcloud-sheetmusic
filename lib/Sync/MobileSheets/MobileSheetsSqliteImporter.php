@@ -22,9 +22,11 @@ use OCA\SheetMusic\Db\InternalSongFile;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongHistory;
 use OCA\SheetMusic\Db\InternalSongMapper;
+use OCA\SheetMusic\Db\InternalSublibrary;
 use OCA\SheetMusic\Db\LibraryMapper;
 use OCA\SheetMusic\Service\SongAnnotationService;
 use OCA\SheetMusic\Service\SongHistoryService;
+use OCA\SheetMusic\Service\SublibraryService;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\IUser;
@@ -54,6 +56,7 @@ class MobileSheetsSqliteImporter {
 		private ?InternalSetlistItemMapper $setlistItemMapper = null,
 		private ?InternalSongBookmarkMapper $bookmarkMapper = null,
 		private ?SongAnnotationService $annotationService = null,
+		private ?SublibraryService $sublibraryService = null,
 	) {
 		$this->entityMerger = $entityMerger ?? new MobileSheetsEntityMerger(
 			$this->entityMapper,
@@ -91,6 +94,7 @@ class MobileSheetsSqliteImporter {
 		string $sqlitePath,
 		IUser|string|null $user = null,
 		?callable $onProgress = null,
+		?InternalSublibrary $sublibrary = null,
 	): array {
 		$lib = $library instanceof InternalLibrary ? $library : $this->libraryMapper->resolveLibrary($library);
 		if ($lib->id === null) {
@@ -139,6 +143,16 @@ class MobileSheetsSqliteImporter {
 		// 3. Song-Entity Links
 		$this->entityMerger->mergeSongEntityLinks($db, $lib->id, $updatedSongClientIds, $syncMeta);
 
+		// If this is a sublibrary sync, enforce the sublibrary filter invariant ("Prevent Dropping")
+		if ($sublibrary !== null && $this->sublibraryService !== null) {
+			foreach (array_keys($updatedSongClientIds) as $clientId) {
+				$song = $this->songMapper->findByClientId($lib->id, (int)$clientId);
+				if ($song !== null && $song->id !== null) {
+					$this->sublibraryService->ensureSongMatchesSublibrary($sublibrary, (int)$song->id);
+				}
+			}
+		}
+
 		// 4. Files
 		$uploadedFileNodeIds = [];
 		$uploadedSongFileIds = [];
@@ -146,7 +160,7 @@ class MobileSheetsSqliteImporter {
 
 		// 5. Deletions (Tombstones) if sync metadata is present
 		if ($syncMeta->hasMetadata) {
-			$this->processDeletions($db, $lib->id, $user, $syncMeta, $stats, $updatedSongClientIds, $uploadedFileNodeIds, $uploadedSongFileIds);
+			$this->processDeletions($db, $lib->id, $user, $syncMeta, $stats, $updatedSongClientIds, $uploadedFileNodeIds, $uploadedSongFileIds, $sublibrary);
 		}
 
 		// 6. Bookmarks
@@ -551,6 +565,7 @@ class MobileSheetsSqliteImporter {
 		array $updatedSongClientIds = [],
 		array $uploadedFileNodeIds = [],
 		array $uploadedSongFileIds = [],
+		?InternalSublibrary $sublibrary = null,
 	): void {
 		// 1. Deleted Songs
 		$songEntries = $syncMeta->getEntriesByType('song');
@@ -570,13 +585,19 @@ class MobileSheetsSqliteImporter {
 						if ($song->updatedAt > $metaUpdatedAt) {
 							continue;
 						}
-						$filesOfSong = $this->songFileMapper->findAllForSong($song->id, includeDeleted: false);
-						foreach ($filesOfSong as $songFile) {
-							$this->deleteSongFileAndPhysicalNode($songFile, $user);
-							$stats['filesDeleted']++;
+						if ($sublibrary !== null && $this->sublibraryService !== null) {
+							// Sublibrary soft removal: detach sublibrary attributes
+							$this->sublibraryService->removeSublibraryAttributes($sublibrary, (int)$song->id);
+							$stats['songsDeleted']++;
+						} else {
+							$filesOfSong = $this->songFileMapper->findAllForSong($song->id, includeDeleted: false);
+							foreach ($filesOfSong as $songFile) {
+								$this->deleteSongFileAndPhysicalNode($songFile, $user);
+								$stats['filesDeleted']++;
+							}
+							$this->songMapper->delete($song->id, hardDelete: false);
+							$stats['songsDeleted']++;
 						}
-						$this->songMapper->delete($song->id, hardDelete: false);
-						$stats['songsDeleted']++;
 					}
 					$this->miscMapper->deleteMiscData($libraryId, 'mobilesheets', 'Songs', (string)$clientId);
 					$songUuid = $song?->uuid ?? $meta['uuid'] ?? null;
@@ -590,39 +611,41 @@ class MobileSheetsSqliteImporter {
 		// 2. Deleted Entities
 		$this->entityMerger->processEntityDeletions($db, $libraryId, $syncMeta, $stats);
 
-		// 3. Deleted Files
-		$fileEntries = $syncMeta->getEntriesByType('file');
-		if (!empty($fileEntries) && MobileSheetsTableHelper::tableExists($db, 'Files')) {
-			$uploadedFileSet = MobileSheetsTableHelper::getTableIdSet($db, 'Files');
+		// 3. Deleted Files (only in full library sync, never prune physical master files from sublibrary)
+		if ($sublibrary === null) {
+			$fileEntries = $syncMeta->getEntriesByType('file');
+			if (!empty($fileEntries) && MobileSheetsTableHelper::tableExists($db, 'Files')) {
+				$uploadedFileSet = MobileSheetsTableHelper::getTableIdSet($db, 'Files');
 
-			foreach ($fileEntries as $clientId => $meta) {
-				$file = $this->songFileMapper->findByUuid($meta['uuid']);
-				if ($file === null) {
-					continue;
-				}
-
-				// If this physical file node or song file record is present anywhere in the uploaded files, it was not deleted
-				if (isset($uploadedSongFileIds[$file->id]) || isset($uploadedFileNodeIds[$file->fileId])) {
-					continue;
-				}
-
-				if ($file->deletedAt === null) {
-					$metaUpdatedAt = (int)($meta['updated_at'] ?? 0);
-					$parentSong = $this->songMapper->findById($file->songId);
-					$parentSongMeta = ($parentSong !== null && $parentSong->clientId !== null)
-						? $syncMeta->getSongMeta($parentSong->clientId)
-						: null;
-					$parentSongWonLww = $parentSong !== null
-						&& $parentSong->clientId !== null
-						&& !isset($updatedSongClientIds[$parentSong->clientId])
-						&& $parentSongMeta !== null
-						&& $parentSong->updatedAt > (int)($parentSongMeta['updated_at'] ?? 0);
-					// LWW: If Nextcloud has newer edits to this file or its parent song since baseline export, Nextcloud wins
-					if ($file->updatedAt > $metaUpdatedAt || $parentSongWonLww) {
+				foreach ($fileEntries as $clientId => $meta) {
+					$file = $this->songFileMapper->findByUuid($meta['uuid']);
+					if ($file === null) {
 						continue;
 					}
-					$this->deleteSongFileAndPhysicalNode($file, $user);
-					$stats['filesDeleted']++;
+
+					// If this physical file node or song file record is present anywhere in the uploaded files, it was not deleted
+					if (isset($uploadedSongFileIds[$file->id]) || isset($uploadedFileNodeIds[$file->fileId])) {
+						continue;
+					}
+
+					if ($file->deletedAt === null) {
+						$metaUpdatedAt = (int)($meta['updated_at'] ?? 0);
+						$parentSong = $this->songMapper->findById($file->songId);
+						$parentSongMeta = ($parentSong !== null && $parentSong->clientId !== null)
+							? $syncMeta->getSongMeta($parentSong->clientId)
+							: null;
+						$parentSongWonLww = $parentSong !== null
+							&& $parentSong->clientId !== null
+							&& !isset($updatedSongClientIds[$parentSong->clientId])
+							&& $parentSongMeta !== null
+							&& $parentSong->updatedAt > (int)($parentSongMeta['updated_at'] ?? 0);
+						// LWW: If Nextcloud has newer edits to this file or its parent song since baseline export, Nextcloud wins
+						if ($file->updatedAt > $metaUpdatedAt || $parentSongWonLww) {
+							continue;
+						}
+						$this->deleteSongFileAndPhysicalNode($file, $user);
+						$stats['filesDeleted']++;
+					}
 				}
 			}
 		}
