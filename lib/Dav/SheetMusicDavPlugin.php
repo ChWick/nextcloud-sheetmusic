@@ -557,18 +557,9 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		}
 
 		// Case 2: {LibraryFolder}/_SubLibraries_/{slug} or {LibraryFolder}/.sublibraries/{slug}
-		if (preg_match('#^(.+?)/(?:\.sublibraries|_SubLibraries_)/([^/]+)$#', $relPath, $m)) {
-			$parentFolder = $m[1];
-			$slug = $m[2];
-			$library = $this->findLibraryForRelativePath($userId, $parentFolder);
-			if ($library === null || $this->sublibraryService === null || $library->id === null) {
-				return false;
-			}
-
-			$sublibrary = $this->sublibraryService->getSublibraryBySlug((int)$library->id, $slug);
-			if ($sublibrary === null) {
-				return false;
-			}
+		$resolvedSub = $this->resolveSublibraryFromPath($path);
+		if ($resolvedSub !== null) {
+			[$library, $sublibrary] = $resolvedSub;
 
 			$depth = $request->getHeader('Depth') ?? '1';
 			$entries = [];

@@ -228,13 +228,13 @@ function getMatchingSongCount(sub: Sublibrary): number | null {
 			}
 
 			const propName = entityType.endsWith('s') ? entityType : `${entityType}s`
-			const songEntities = (song as any)[propName] as { name: string }[] | undefined
+			const songEntities = (song as any)[propName] as { name?: string; title?: string }[] | undefined
 			if (!songEntities || songEntities.length === 0) {
 				return false
 			}
 
 			const hasMatch = songEntities.some(ent => {
-				const entName = ent.name?.toLowerCase().trim()
+				const entName = (ent.title || ent.name || '').toLowerCase().trim()
 				return expectedValues.includes(entName)
 			})
 
@@ -319,7 +319,7 @@ async function saveSublibrary() {
 			.map(v => v.trim())
 			.filter(Boolean)
 		if (vals.length > 0) {
-			filters[rule.type] = vals
+			filters[rule.type] = Array.from(new Set([...(filters[rule.type] || []), ...vals]))
 			hasFilterValues = true
 		}
 	}
