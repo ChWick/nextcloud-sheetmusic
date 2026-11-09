@@ -19,7 +19,9 @@ import {
 	getAnnotationFontFamily,
 	getAnnotationPath,
 	getAnnotationTextPosition,
-	isLegacyTextDynamic,
+	getStampFontFamily,
+	isStampItalic,
+	isStampBold,
 } from '../utils/annotation'
 
 const props = withDefaults(
@@ -190,11 +192,13 @@ function createAnnotationSvg(pageNum: number): SVGElement | null {
 			text.setAttribute('dominant-baseline', 'central')
 			text.setAttribute('fill', ann.style?.color || '#000000')
 			text.setAttribute('font-size', String(fontSize))
-			if (isLegacyTextDynamic(ann)) {
+			if (isStampItalic(ann)) {
 				text.setAttribute('font-style', 'italic')
+			}
+			if (isStampBold(ann)) {
 				text.setAttribute('font-weight', 'bold')
 			}
-			text.setAttribute('font-family', '\'Noto Music\', \'Segoe UI Symbol\', \'Apple Symbols\', \'DejaVu Sans\', sans-serif')
+			text.setAttribute('font-family', getStampFontFamily(ann))
 			text.setAttribute('data-test', 'annotation-stamp')
 			text.textContent = getAnnotationDisplaySymbol(ann)
 			svg.appendChild(text)

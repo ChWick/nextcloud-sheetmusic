@@ -287,6 +287,40 @@ export function isLegacyTextDynamic(item: SheetAnnotation): boolean {
 }
 
 /**
+ * Check if a stamp symbol represents a number / digit (e.g. tuplet, fingering, measure number).
+ */
+export function isNumericStamp(item: SheetAnnotation): boolean {
+	const symbol = getAnnotationDisplaySymbol(item)
+	return /^\d+$/.test(symbol.trim())
+}
+
+/**
+ * Check if a stamp should be rendered in italic (numeric stamps and legacy ASCII dynamics).
+ */
+export function isStampItalic(item: SheetAnnotation): boolean {
+	return isNumericStamp(item) || isLegacyTextDynamic(item)
+}
+
+/**
+ * Check if a stamp should be rendered bold (numeric stamps and legacy ASCII dynamics).
+ */
+export function isStampBold(item: SheetAnnotation): boolean {
+	return isNumericStamp(item) || isLegacyTextDynamic(item)
+}
+
+/**
+ * Get the appropriate font-family stack for a stamp annotation.
+ * Numbers use the served Century Schoolbook (TeX Gyre Schola) serif font for authentic music score typography.
+ * Music symbols use Noto Music.
+ */
+export function getStampFontFamily(item: SheetAnnotation): string {
+	if (isNumericStamp(item)) {
+		return "'Century Schoolbook', 'TeX Gyre Schola', 'Baskerville', 'Times New Roman', 'Noto Serif', serif"
+	}
+	return "'Noto Music', 'Segoe UI Symbol', 'Apple Symbols', 'DejaVu Sans', sans-serif"
+}
+
+/**
  * Compute the SVG path `d` attribute for an annotation.
  */
 export function getAnnotationPath(item: SheetAnnotation): string {

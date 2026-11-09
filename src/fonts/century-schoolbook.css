@@ -1,0 +1,65 @@
+/* Century Schoolbook / TeX Gyre Schola fonts for musical numbers and scores */
+@font-face {
+	font-family: 'Century Schoolbook';
+	font-style: normal;
+	font-weight: 400;
+	font-display: swap;
+	src: url('./texgyreschola-regular.woff') format('woff');
+}
+
+@font-face {
+	font-family: 'Century Schoolbook';
+	font-style: italic;
+	font-weight: 400;
+	font-display: swap;
+	src: url('./texgyreschola-italic.woff') format('woff');
+}
+
+@font-face {
+	font-family: 'Century Schoolbook';
+	font-style: normal;
+	font-weight: 700;
+	font-display: swap;
+	src: url('./texgyreschola-bold.woff') format('woff');
+}
+
+@font-face {
+	font-family: 'Century Schoolbook';
+	font-style: italic;
+	font-weight: 700;
+	font-display: swap;
+	src: url('./texgyreschola-bolditalic.woff') format('woff');
+}
+
+/* Also register as TeX Gyre Schola alias */
+@font-face {
+	font-family: 'TeX Gyre Schola';
+	font-style: normal;
+	font-weight: 400;
+	font-display: swap;
+	src: url('./texgyreschola-regular.woff') format('woff');
+}
+
+@font-face {
+	font-family: 'TeX Gyre Schola';
+	font-style: italic;
+	font-weight: 400;
+	font-display: swap;
+	src: url('./texgyreschola-italic.woff') format('woff');
+}
+
+@font-face {
+	font-family: 'TeX Gyre Schola';
+	font-style: normal;
+	font-weight: 700;
+	font-display: swap;
+	src: url('./texgyreschola-bold.woff') format('woff');
+}
+
+@font-face {
+	font-family: 'TeX Gyre Schola';
+	font-style: italic;
+	font-weight: 700;
+	font-display: swap;
+	src: url('./texgyreschola-bolditalic.woff') format('woff');
+}

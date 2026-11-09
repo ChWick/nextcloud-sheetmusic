@@ -7,7 +7,9 @@ import {
 	getAnnotationFontFamily,
 	getAnnotationPath,
 	getAnnotationTextPosition,
-	isLegacyTextDynamic,
+	getStampFontFamily,
+	isStampItalic,
+	isStampBold,
 } from '../../utils/annotation'
 
 const props = withDefaults(
@@ -80,11 +82,11 @@ const activeAnnotations = computed(() => {
 				:y="Math.round((item.y + (item.height || 0) / 2) * 10000) / 10"
 				:fill="item.style?.color || '#000000'"
 				:font-size="item.style?.fontSize || 40"
-				:font-style="isLegacyTextDynamic(item) ? 'italic' : undefined"
-				:font-weight="isLegacyTextDynamic(item) ? 'bold' : undefined"
+				:font-style="isStampItalic(item) ? 'italic' : undefined"
+				:font-weight="isStampBold(item) ? 'bold' : undefined"
 				text-anchor="middle"
 				dominant-baseline="central"
-				font-family="'Noto Music', 'Segoe UI Symbol', 'Apple Symbols', 'DejaVu Sans', sans-serif"
+				:font-family="getStampFontFamily(item)"
 				data-test="annotation-stamp">
 				{{ getAnnotationDisplaySymbol(item) }}
 			</text>

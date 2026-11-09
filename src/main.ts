@@ -1,4 +1,5 @@
 import '@fontsource/noto-music'
+import './fonts/century-schoolbook.css'
 import { createApp } from 'vue'
 import App from './App.vue'
 import { router } from './router'

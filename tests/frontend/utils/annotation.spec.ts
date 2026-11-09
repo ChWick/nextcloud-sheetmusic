@@ -13,7 +13,11 @@ import {
 	getAnnotationFontFamily,
 	getAnnotationPath,
 	getAnnotationTextPosition,
+	getStampFontFamily,
+	isNumericStamp,
+	isStampBold,
 	isStampDynamicOrOrnament,
+	isStampItalic,
 } from '../../../src/utils/annotation'
 import type { SheetAnnotation } from '../../../src/types/annotation'
 
@@ -257,6 +261,36 @@ describe('annotation utils', () => {
 			expect(isStampDynamicOrOrnament({ ...base, data: { symbol: 'f' } })).toBe(true)
 			expect(isStampDynamicOrOrnament({ ...base, data: { symbol: 'q' } })).toBe(false)
 			expect(isStampDynamicOrOrnament({ ...base, data: { symbol: 'b' } })).toBe(false)
+		})
+	})
+
+	describe('isNumericStamp and getStampFontFamily', () => {
+		const base: SheetAnnotation = {
+			id: 1,
+			pageNumber: 0,
+			layerIndex: 0,
+			type: 'stamp',
+			x: 0,
+			y: 0,
+			width: 0.1,
+			height: 0.1,
+		}
+
+		it('identifies numeric stamps and returns Century Schoolbook font stack', () => {
+			expect(isNumericStamp({ ...base, data: { symbol: '6' } })).toBe(true)
+			expect(isNumericStamp({ ...base, data: { symbol: '3' } })).toBe(true)
+			expect(isNumericStamp({ ...base, data: { symbol: '12' } })).toBe(true)
+			expect(isNumericStamp({ ...base, data: { symbol: 'q' } })).toBe(false)
+			expect(isNumericStamp({ ...base, data: { symbol: 'm' } })).toBe(false)
+
+			expect(getStampFontFamily({ ...base, data: { symbol: '6' } })).toContain('Century Schoolbook')
+			expect(getStampFontFamily({ ...base, data: { symbol: '6' } })).toContain('TeX Gyre Schola')
+			expect(getStampFontFamily({ ...base, data: { symbol: 'q' } })).toContain('Noto Music')
+
+			expect(isStampItalic({ ...base, data: { symbol: '6' } })).toBe(true)
+			expect(isStampBold({ ...base, data: { symbol: '6' } })).toBe(true)
+			expect(isStampItalic({ ...base, data: { symbol: 'q' } })).toBe(false)
+			expect(isStampBold({ ...base, data: { symbol: 'q' } })).toBe(false)
 		})
 	})
 
