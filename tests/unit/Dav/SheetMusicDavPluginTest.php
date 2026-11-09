@@ -14,6 +14,7 @@ use OCA\SheetMusic\Db\InternalLibrary;
 use OCA\SheetMusic\Db\SublibraryMapper;
 use OCA\SheetMusic\Service\SublibraryService;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSqliteExporter;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSqliteImporter;
 use OCA\SheetMusic\Sync\SyncClientRegistry;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
@@ -59,10 +60,50 @@ final class SheetMusicDavPluginTest extends TestCase {
 		$createdSong = $this->songMapper->insert($song);
 		$this->attachTestFileToSong($createdSong, 'score.pdf', 1);
 
+		$instOrgel = $this->insertTestEntity((int)$this->library->id, 'instrument', 'Orgel');
+		$this->entityMapper->linkSongEntity((int)$createdSong->id, (int)$instOrgel->id);
+
 		$this->sublibraryService = new SublibraryService(
 			new SublibraryMapper($this->dbConn),
 			$this->entityMapper,
 			$this->dbConn,
+		);
+
+		$this->importer = new MobileSheetsSqliteImporter(
+			$this->songMapper,
+			$this->entityMapper,
+			$this->songFileMapper,
+			$this->attributeMapper,
+			$this->miscMapper,
+			$this->libraryMapper,
+			$this->pathResolver,
+			$this->rootFolder,
+			$this->userManager,
+			$this->logger,
+			null,
+			null,
+			$this->setlistItemMapper,
+			$this->bookmarkMapper,
+			null,
+			$this->sublibraryService,
+		);
+
+		$this->exporter = new MobileSheetsSqliteExporter(
+			$this->songMapper,
+			$this->entityMapper,
+			$this->songFileMapper,
+			$this->attributeMapper,
+			$this->miscMapper,
+			$this->libraryMapper,
+			$this->pathResolver,
+			$this->rootFolder,
+			$this->userManager,
+			$this->logger,
+			null,
+			$this->bookmarkMapper,
+			$this->setlistItemMapper,
+			null,
+			$this->sublibraryService,
 		);
 
 		$this->plugin = new SheetMusicDavPlugin(
@@ -592,6 +633,103 @@ final class SheetMusicDavPluginTest extends TestCase {
 		self::assertFalse($this->plugin->beforeMethod($propReq, $propRes));
 		self::assertSame(207, $propRes->getStatus());
 		self::assertStringContainsString('UploadScore.pdf', $propRes->getBodyAsString());
+	}
+
+	public function testSublibraryFullWebdavSyncLifecycle(): void {
+		$this->attachServer();
+		$sub = $this->sublibraryService->createSublibrary((int)$this->library->id, 'Organ Repertoire', 'orgel', [
+			'instrument' => ['Orgel'],
+		]);
+
+		// Baseline database export (tablet has synced the sublibrary before adding a new song)
+		$tempDb = tempnam(sys_get_temp_dir(), 'e2e_ms_') . '.db';
+		$this->exporter->exportToFile((int)$this->library->id, $tempDb, null, $sub);
+
+		// Step 1: MobileSheets uploads new score PDF via WebDAV PUT to virtual sublibrary path
+		$fileContent = "%PDF-1.4 E2E Test Score\n";
+		$putFileReq = new Request('PUT', '/files/admin/My%20Noten/_SubLibraries_/orgel/OrganChorale.pdf');
+		$putFileReq->setBody($fileContent);
+		$putFileRes = new Response();
+		self::assertFalse($this->plugin->beforeMethod($putFileReq, $putFileRes));
+		self::assertSame(201, $putFileRes->getStatus());
+
+		// Verify physical file was placed in master library folder
+		$userFolder = $this->rootFolder->getUserFolder('admin');
+		self::assertTrue($userFolder->nodeExists('My Noten/OrganChorale.pdf'));
+		$fileNode = $userFolder->get('My Noten/OrganChorale.pdf');
+		self::assertSame($fileContent, $fileNode->getContent());
+
+		// Step 2: Simulate Nextcloud auto-indexing the newly uploaded physical file
+		$stubSong = $this->insertTestSong((int)$this->library->id, 'OrganChorale');
+		$stubFile = new \OCA\SheetMusic\Db\InternalSongFile(
+			uuid: 'sf_stub_' . bin2hex(random_bytes(4)),
+			songId: $stubSong->id,
+			fileId: (int)$fileNode->getId(),
+			pageOrder: '1-1',
+			pageCount: 1,
+			fileSize: strlen($fileContent),
+			fileHash: 123456,
+			type: 1,
+			clientId: null,
+			createdAt: time(),
+			updatedAt: time(),
+		);
+		$this->songFileMapper->insert($stubFile);
+
+		// Step 3: Client adds Song2 to its database and uploads mobilesheets.db via WebDAV PUT
+		$db = new \PDO('sqlite:' . $tempDb);
+		$db->exec("INSERT INTO Songs (Title) VALUES ('Song2')");
+		$song2ClientId = (int)$db->lastInsertId();
+
+		$storedPath = '/remote.php/dav/files/admin/My Noten/_SubLibraries_/orgel/OrganChorale.pdf';
+		$stmt = $db->prepare("INSERT INTO Files (SongId, Path, PageOrder, SourceFilePageCount, FileSize) VALUES (?, ?, '1-1', 1, 1024)");
+		$stmt->execute([$song2ClientId, $storedPath]);
+
+		$putDbReq = new Request('PUT', '/files/admin/My%20Noten/_SubLibraries_/orgel/mobilesheets.db');
+		$putDbReq->setBody(fopen($tempDb, 'rb'));
+		$putDbRes = new Response();
+		self::assertFalse($this->plugin->beforeMethod($putDbReq, $putDbRes));
+		@unlink($tempDb);
+
+		// Step 4: Verify Song2 in Nextcloud has the file attached and stub song is pruned
+		$song2 = $this->songMapper->findByClientId((int)$this->library->id, $song2ClientId);
+		self::assertNotNull($song2);
+		self::assertSame('Song2', $song2->title);
+
+		$attachedFiles = $this->songFileMapper->findAllForSong((int)$song2->id, includeDeleted: false);
+		self::assertCount(1, $attachedFiles);
+		self::assertSame((int)$fileNode->getId(), $attachedFiles[0]->fileId);
+
+		// Stub song must be deleted
+		$stubCheck = $this->songMapper->findById((int)$stubSong->id);
+		self::assertNull($stubCheck);
+
+		// Song2 must have received sublibrary auto-tagging
+		$instruments = $this->entityMapper->findEntitiesForSong((int)$song2->id, 'instrument');
+		self::assertCount(1, $instruments);
+		self::assertSame('Orgel', $instruments[0]->name);
+
+		// Step 5: MobileSheets downloads the score file via WebDAV GET
+		$getScoreReq = new Request('GET', '/files/admin/My%20Noten/_SubLibraries_/orgel/OrganChorale.pdf');
+		$getScoreRes = new Response();
+		self::assertFalse($this->plugin->beforeMethod($getScoreReq, $getScoreRes));
+		self::assertSame(200, $getScoreRes->getStatus());
+		self::assertSame($fileContent, stream_get_contents($getScoreRes->getBody()));
+
+		// Step 6: MobileSheets downloads database via WebDAV GET
+		$getDbReq = new Request('GET', '/files/admin/My%20Noten/_SubLibraries_/orgel/mobilesheets.db');
+		$getDbRes = new Response();
+		self::assertFalse($this->plugin->beforeMethod($getDbReq, $getDbRes));
+		self::assertSame(200, $getDbRes->getStatus());
+
+		// Step 7: MobileSheets downloads hashcodes via WebDAV GET
+		$getHashReq = new Request('GET', '/files/admin/My%20Noten/_SubLibraries_/orgel/mobilesheets_hashcodes.txt');
+		$getHashRes = new Response();
+		self::assertFalse($this->plugin->beforeMethod($getHashReq, $getHashRes));
+		self::assertSame(200, $getHashRes->getStatus());
+		$hashBody = $getHashRes->getBody();
+		$hashContent = is_resource($hashBody) ? stream_get_contents($hashBody) : (string)$hashBody;
+		self::assertStringContainsString('OrganChorale.pdf', $hashContent);
 	}
 }
 
