@@ -170,14 +170,7 @@ describe('SongAnnotationOverlay.vue', () => {
 		expect(linkEl.attributes('x')).toBe('800') // 0.8 * 1000
 		expect(linkEl.attributes('y')).toBe('850') // 0.85 * 1000
 
-		// Verify stamp debug bounding box and self-contained vector SVG centered within it
-		const stampBbox = wrapper.find('[data-test="annotation-stamp-bbox"]')
-		expect(stampBbox.exists()).toBe(true)
-		expect(stampBbox.attributes('x')).toBe('300')
-		expect(stampBbox.attributes('y')).toBe('400')
-		expect(stampBbox.attributes('width')).toBe('50')
-		expect(stampBbox.attributes('height')).toBe('50')
-
+		// Verify stamp element renders as self-contained vector SVG centered within viewport
 		const stampEl = wrapper.find('[data-test="annotation-stamp"]')
 		expect(stampEl.exists()).toBe(true)
 		expect(stampEl.element.tagName.toLowerCase()).toBe('svg')

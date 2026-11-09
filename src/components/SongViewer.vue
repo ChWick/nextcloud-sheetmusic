@@ -309,7 +309,7 @@ defineExpose({
 				:total-pages="filePreviewerRef?.totalPages ?? 1"
 				:file-size-bytes="filePreviewerRef?.fileSizeBytes ?? null"
 				:page-resolutions="filePreviewerRef?.pageResolutions ?? []"
-				:show-annotations="filePreviewerRef?.showAnnotationsState ?? true"
+				:show-annotations="filePreviewerRef?.showAnnotationsState ?? false"
 				@open-external="openInExternalViewer"
 				@modify-pdf="song && emit('modify-pdf', song, selectedFile.id)"
 				@open-versions="openVersionsModal"

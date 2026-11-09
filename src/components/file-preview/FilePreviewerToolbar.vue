@@ -29,7 +29,7 @@ withDefaults(defineProps<{
 	showAnnotations?: boolean
 }>(), {
 	showExternalButton: true,
-	showAnnotations: true,
+	showAnnotations: false,
 })
 
 const emit = defineEmits<{
@@ -164,8 +164,8 @@ const emit = defineEmits<{
 				v-if="isPdf"
 				variant="secondary"
 				size="small"
-				:title="showAnnotations ? t('sheetmusic', 'Hide annotations') : t('sheetmusic', 'Show annotations')"
-				:aria-label="showAnnotations ? t('sheetmusic', 'Hide annotations') : t('sheetmusic', 'Show annotations')"
+				:title="showAnnotations ? t('sheetmusic', 'Hide annotations (experimental)') : t('sheetmusic', 'Show annotations (experimental)')"
+				:aria-label="showAnnotations ? t('sheetmusic', 'Hide annotations (experimental)') : t('sheetmusic', 'Show annotations (experimental)')"
 				data-test="toggle-annotations-button"
 				@click="emit('toggleAnnotations')">
 				<template #icon>

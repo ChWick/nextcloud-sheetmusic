@@ -30,7 +30,7 @@ const props = withDefaults(
 		totalPages: 1,
 		fileSizeBytes: null,
 		pageResolutions: () => [],
-		showAnnotations: true,
+		showAnnotations: false,
 	},
 )
 
@@ -145,8 +145,8 @@ const activePageResolution = computed<PdfPageResolutionSummary | null>(() => {
 				v-if="isPdf"
 				size="small"
 				variant="secondary"
-				:title="showAnnotations ? t('sheetmusic', 'Hide annotations') : t('sheetmusic', 'Show annotations')"
-				:aria-label="showAnnotations ? t('sheetmusic', 'Hide annotations') : t('sheetmusic', 'Show annotations')"
+				:title="showAnnotations ? t('sheetmusic', 'Hide annotations (experimental)') : t('sheetmusic', 'Show annotations (experimental)')"
+				:aria-label="showAnnotations ? t('sheetmusic', 'Hide annotations (experimental)') : t('sheetmusic', 'Show annotations (experimental)')"
 				data-test="toggle-annotations-button"
 				@click="emit('toggle-annotations')">
 				<template #icon>

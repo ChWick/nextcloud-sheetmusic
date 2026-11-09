@@ -41,7 +41,7 @@ const props = withDefaults(
 		targetPage: undefined,
 		pageOrder: undefined,
 		annotations: () => [],
-		showAnnotations: true,
+		showAnnotations: false,
 	},
 )
 
@@ -68,7 +68,7 @@ const customScale = ref(1.0)
 const effectiveScale = ref(1.0)
 const rotation = ref(0)
 const imageScale = ref(1.0)
-const showAnnotationsState = ref(props.showAnnotations ?? true)
+const showAnnotationsState = ref(props.showAnnotations ?? false)
 
 function toggleAnnotations() {
 	showAnnotationsState.value = !showAnnotationsState.value
@@ -111,7 +111,7 @@ watch(
 watch(
 	() => props.showAnnotations,
 	(val) => {
-		showAnnotationsState.value = val ?? true
+		showAnnotationsState.value = val ?? false
 		updateAnnotationOverlaysVisibility()
 	},
 )
@@ -183,27 +183,13 @@ function createAnnotationSvg(pageNum: number): SVGElement | null {
 			rect.setAttribute('data-test', 'annotation-shape')
 			svg.appendChild(rect)
 		} else if (ann.type === 'stamp') {
-			const w = Math.round((ann.width || 0.04) * 10000) / 10
-			const h = Math.round((ann.height || 0.04) * 10000) / 10
-			const x = Math.round(ann.x * 10000) / 10
-			const y = Math.round(ann.y * 10000) / 10
-
-			// Debug bounding box
-			const bboxRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect')
-			bboxRect.setAttribute('x', String(x))
-			bboxRect.setAttribute('y', String(y))
-			bboxRect.setAttribute('width', String(w))
-			bboxRect.setAttribute('height', String(h))
-			bboxRect.setAttribute('fill', 'rgba(0, 112, 243, 0.08)')
-			bboxRect.setAttribute('stroke', '#0070f3')
-			bboxRect.setAttribute('stroke-width', '1.5')
-			bboxRect.setAttribute('stroke-dasharray', '3 3')
-			bboxRect.setAttribute('data-test', 'annotation-stamp-bbox')
-			svg.appendChild(bboxRect)
-
 			const vector = getStampVector(ann)
 			if (vector) {
 				const svgStamp = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+				const w = Math.round((ann.width || 0.04) * 10000) / 10
+				const h = Math.round((ann.height || 0.04) * 10000) / 10
+				const x = Math.round(ann.x * 10000) / 10
+				const y = Math.round(ann.y * 10000) / 10
 				svgStamp.setAttribute('x', String(x))
 				svgStamp.setAttribute('y', String(y))
 				svgStamp.setAttribute('width', String(w))
