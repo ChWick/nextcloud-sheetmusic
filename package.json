@@ -25,7 +25,7 @@
     "@nextcloud/vue": "^9.14.0",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^6.3.289",
-    "vue": "^3.5.35",
+    "vue": "^3.5.45",
     "vue-material-design-icons": "^5.3.1",
     "vue-router": "^4.6.4",
     "watch": "^0.13.0"
