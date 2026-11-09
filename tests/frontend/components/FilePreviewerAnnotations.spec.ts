@@ -230,15 +230,19 @@ describe('FilePreviewer.vue Annotation Rendering & Reactivity', () => {
 		expect(linePath.element.tagName.toLowerCase()).toBe('path')
 		expect(linePath.attributes('d')).toBe('M 100.0 700.0 L 300.0 700.0')
 
-		// Note stamp should render as <text> centered at (x + w*0.25, y + h/2) with central baseline and music font-family
-		const stampText = overlay.find('[data-test="annotation-stamp"]')
-		expect(stampText.exists()).toBe(true)
-		expect(stampText.text()).toBe('♩')
-		expect(stampText.attributes('x')).toBe('512.5')
-		expect(stampText.attributes('y')).toBe('425')
-		expect(stampText.attributes('dominant-baseline')).toBe('central')
-		expect(stampText.attributes('text-anchor')).toBe('middle')
-		expect(stampText.attributes('font-family')).toContain('Noto Music')
+		// Note stamp should render as vector <svg> centered on tap box with viewBox and path
+		const stampSvg = overlay.find('[data-test="annotation-stamp"]')
+		expect(stampSvg.exists()).toBe(true)
+		expect(stampSvg.element.tagName.toLowerCase()).toBe('svg')
+		expect(stampSvg.attributes('x')).toBe('475') // (0.5 - 0.05 / 2) * 1000
+		expect(stampSvg.attributes('y')).toBe('375') // (0.4 - 0.05 / 2) * 1000
+		expect(stampSvg.attributes('width')).toBe('50')
+		expect(stampSvg.attributes('height')).toBe('50')
+		expect(stampSvg.attributes('viewBox')).toBe('0 0 180 549')
+		expect(stampSvg.attributes('preserveAspectRatio')).toBe('xMidYMid meet')
+		const stampPath = stampSvg.find('path')
+		expect(stampPath.exists()).toBe(true)
+		expect(stampPath.attributes('fill')).toBe('#000000')
 	})
 
 	it('renders text annotations with alphabetic baseline, valid font family, and crescendo hairpins', async () => {

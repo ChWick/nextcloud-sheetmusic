@@ -14,6 +14,7 @@ import {
 	getAnnotationPath,
 	getAnnotationTextPosition,
 	getStampFontFamily,
+	getStampVector,
 	isNumericStamp,
 	isStampBold,
 	isStampDynamicOrOrnament,
@@ -291,6 +292,64 @@ describe('annotation utils', () => {
 			expect(isStampBold({ ...base, data: { symbol: '6' } })).toBe(true)
 			expect(isStampItalic({ ...base, data: { symbol: 'q' } })).toBe(false)
 			expect(isStampBold({ ...base, data: { symbol: 'q' } })).toBe(false)
+		})
+	})
+
+	describe('getStampVector', () => {
+		const base: SheetAnnotation = {
+			id: 1,
+			pageNumber: 0,
+			layerIndex: 0,
+			type: 'stamp',
+			x: 0.3,
+			y: 0.4,
+			width: 0.05,
+			height: 0.05,
+		}
+
+		it('returns vector paths with viewBox for standard music notes and accidentals', () => {
+			const noteVector = getStampVector({ ...base, data: { symbol: 'q' } })
+			expect(noteVector).not.toBeNull()
+			expect(noteVector?.viewBox).toBe('0 0 180 549')
+			expect(noteVector?.d).toContain('M143 415')
+
+			const flatVector = getStampVector({ ...base, data: { symbol: 'b' } })
+			expect(flatVector).not.toBeNull()
+			expect(flatVector?.viewBox).toBe('0 0 199 670')
+
+			const dblFlatVector = getStampVector({ ...base, data: { symbol: '∫' } })
+			expect(dblFlatVector).not.toBeNull()
+			expect(dblFlatVector?.viewBox).toBe('0 0 367 670')
+		})
+
+		it('returns vector paths for dynamics and ornaments', () => {
+			const ppVector = getStampVector({ ...base, data: { symbol: 'π' } })
+			expect(ppVector).not.toBeNull()
+			expect(ppVector?.viewBox).toBe('0 0 807 440')
+
+			const mordentVector = getStampVector({ ...base, data: { symbol: 'm' } })
+			expect(mordentVector).not.toBeNull()
+			expect(mordentVector?.viewBox).toBe('0 0 450 403')
+
+			const fVector = getStampVector({ ...base, data: { symbol: 'f' } })
+			expect(fVector).not.toBeNull()
+			expect(fVector?.viewBox).toBe('0 0 516 584')
+		})
+
+		it('returns musical serif vector paths for single digits', () => {
+			const digit6Vector = getStampVector({ ...base, data: { symbol: '6' } })
+			expect(digit6Vector).not.toBeNull()
+			expect(digit6Vector?.viewBox).toBe('0 0 543 720')
+
+			const digit0Vector = getStampVector({ ...base, data: { symbol: '0' } })
+			expect(digit0Vector).not.toBeNull()
+			expect(digit0Vector?.viewBox).toBe('0 0 532 720')
+		})
+
+		it('returns null for unknown / custom text stamps to allow fallback to <text>', () => {
+			expect(getStampVector({ ...base, data: { symbol: 'custom-text' } })).toBeNull()
+			expect(getStampVector(null)).toBeNull()
+			expect(getStampVector(undefined)).toBeNull()
 		})
 	})
 

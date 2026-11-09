@@ -4,6 +4,9 @@
  */
 
 import type { SheetAnnotation } from '../types/annotation'
+import { STAMP_VECTORS, type StampVector } from './stampVectors'
+
+export { STAMP_VECTORS, type StampVector } from './stampVectors'
 
 /**
  * Generate an SVG path with quadratic Bezier midpoint curve smoothing (matching MobileSheets & Android Path.quadTo).
@@ -318,6 +321,33 @@ export function getStampFontFamily(item: SheetAnnotation): string {
 		return "'Century Schoolbook', 'TeX Gyre Schola', 'Baskerville', 'Times New Roman', 'Noto Serif', serif"
 	}
 	return "'Noto Music', 'Segoe UI Symbol', 'Apple Symbols', 'DejaVu Sans', sans-serif"
+}
+
+/**
+ * Get the SVG vector definition for a stamp annotation.
+ * Returns null if the symbol is not in the vector library (falls back to <text>).
+ */
+export function getStampVector(item: SheetAnnotation | null | undefined): StampVector | null {
+	if (!item) {
+		return null
+	}
+
+	const sym = item.data?.symbol?.trim() || ''
+	const disp = item.data?.displaySymbol?.trim() || ''
+
+	if (sym && STAMP_VECTORS[sym]) {
+		return STAMP_VECTORS[sym]
+	}
+	if (disp && STAMP_VECTORS[disp]) {
+		return STAMP_VECTORS[disp]
+	}
+
+	const mapped = getAnnotationDisplaySymbol(item)
+	if (mapped && STAMP_VECTORS[mapped]) {
+		return STAMP_VECTORS[mapped]
+	}
+
+	return null
 }
 
 /**

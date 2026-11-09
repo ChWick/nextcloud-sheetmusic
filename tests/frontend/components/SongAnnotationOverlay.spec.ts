@@ -170,13 +170,56 @@ describe('SongAnnotationOverlay.vue', () => {
 		expect(linkEl.attributes('x')).toBe('800') // 0.8 * 1000
 		expect(linkEl.attributes('y')).toBe('850') // 0.85 * 1000
 
-		// Verify stamp element
+		// Verify stamp element renders as self-contained vector SVG centered on tap box
 		const stampEl = wrapper.find('[data-test="annotation-stamp"]')
 		expect(stampEl.exists()).toBe(true)
-		expect(stampEl.text()).toBe('♩')
-		expect(stampEl.attributes('font-size')).toBe('36')
-		expect(stampEl.attributes('text-anchor')).toBe('middle')
-		expect(stampEl.attributes('dominant-baseline')).toBe('central')
+		expect(stampEl.element.tagName.toLowerCase()).toBe('svg')
+		expect(stampEl.attributes('x')).toBe('275') // (0.3 - 0.05 / 2) * 1000
+		expect(stampEl.attributes('y')).toBe('375') // (0.4 - 0.05 / 2) * 1000
+		expect(stampEl.attributes('width')).toBe('50')
+		expect(stampEl.attributes('height')).toBe('50')
+		expect(stampEl.attributes('viewBox')).toBe('0 0 180 549')
+		expect(stampEl.attributes('preserveAspectRatio')).toBe('xMidYMid meet')
+		const pathEl = stampEl.find('path')
+		expect(pathEl.exists()).toBe(true)
+		expect(pathEl.attributes('fill')).toBe('#000000')
+	})
+
+	it('renders fallback text element for unmapped custom stamp symbols', () => {
+		const unmappedStamp: SheetAnnotation[] = [
+			{
+				id: 99,
+				uuid: 'ann-custom-stamp-1',
+				songId: 10,
+				fileId: 20,
+				pageNumber: 1,
+				layerIndex: 0,
+				type: 'stamp',
+				x: 0.5,
+				y: 0.6,
+				width: 0.05,
+				height: 0.05,
+				style: { color: '#ff0000', fontSize: 32 },
+				data: { symbol: 'custom-mark' },
+			},
+		]
+
+		const wrapper = mount(SongAnnotationOverlay, {
+			props: {
+				annotations: unmappedStamp,
+				pageNumber: 1,
+				visible: true,
+			},
+		})
+
+		const stampText = wrapper.find('[data-test="annotation-stamp"]')
+		expect(stampText.exists()).toBe(true)
+		expect(stampText.element.tagName.toLowerCase()).toBe('text')
+		expect(stampText.text()).toBe('custom-mark')
+		expect(stampText.attributes('x')).toBe('500')
+		expect(stampText.attributes('y')).toBe('600')
+		expect(stampText.attributes('text-anchor')).toBe('middle')
+		expect(stampText.attributes('dominant-baseline')).toBe('central')
 	})
 
 	it('emits jump-to-page event when a navigation link is clicked', async () => {

@@ -20,6 +20,7 @@ import {
 	getAnnotationPath,
 	getAnnotationTextPosition,
 	getStampFontFamily,
+	getStampVector,
 	isStampItalic,
 	isStampBold,
 } from '../utils/annotation'
@@ -182,26 +183,48 @@ function createAnnotationSvg(pageNum: number): SVGElement | null {
 			rect.setAttribute('data-test', 'annotation-shape')
 			svg.appendChild(rect)
 		} else if (ann.type === 'stamp') {
-			const text = document.createElementNS('http://www.w3.org/2000/svg', 'text')
-			const fontSize = ann.style?.fontSize || 40
-			const cx = Math.round((ann.x + (ann.width || 0) * 0.25) * 10000) / 10
-			const cy = Math.round((ann.y + (ann.height || 0) / 2) * 10000) / 10
-			text.setAttribute('x', String(cx))
-			text.setAttribute('y', String(cy))
-			text.setAttribute('text-anchor', 'middle')
-			text.setAttribute('dominant-baseline', 'central')
-			text.setAttribute('fill', ann.style?.color || '#000000')
-			text.setAttribute('font-size', String(fontSize))
-			if (isStampItalic(ann)) {
-				text.setAttribute('font-style', 'italic')
+			const vector = getStampVector(ann)
+			if (vector) {
+				const svgStamp = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+				const w = Math.round((ann.width || 0.04) * 10000) / 10
+				const h = Math.round((ann.height || 0.04) * 10000) / 10
+				const x = Math.round((ann.x - (ann.width || 0.04) / 2) * 10000) / 10
+				const y = Math.round((ann.y - (ann.height || 0.04) / 2) * 10000) / 10
+				svgStamp.setAttribute('x', String(x))
+				svgStamp.setAttribute('y', String(y))
+				svgStamp.setAttribute('width', String(w))
+				svgStamp.setAttribute('height', String(h))
+				svgStamp.setAttribute('viewBox', vector.viewBox)
+				svgStamp.setAttribute('preserveAspectRatio', 'xMidYMid meet')
+				svgStamp.setAttribute('data-test', 'annotation-stamp')
+
+				const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+				path.setAttribute('d', vector.d)
+				path.setAttribute('fill', ann.style?.color || '#000000')
+				svgStamp.appendChild(path)
+				svg.appendChild(svgStamp)
+			} else {
+				const text = document.createElementNS('http://www.w3.org/2000/svg', 'text')
+				const fontSize = ann.style?.fontSize || 40
+				const cx = Math.round(ann.x * 10000) / 10
+				const cy = Math.round(ann.y * 10000) / 10
+				text.setAttribute('x', String(cx))
+				text.setAttribute('y', String(cy))
+				text.setAttribute('text-anchor', 'middle')
+				text.setAttribute('dominant-baseline', 'central')
+				text.setAttribute('fill', ann.style?.color || '#000000')
+				text.setAttribute('font-size', String(fontSize))
+				if (isStampItalic(ann)) {
+					text.setAttribute('font-style', 'italic')
+				}
+				if (isStampBold(ann)) {
+					text.setAttribute('font-weight', 'bold')
+				}
+				text.setAttribute('font-family', getStampFontFamily(ann))
+				text.setAttribute('data-test', 'annotation-stamp')
+				text.textContent = getAnnotationDisplaySymbol(ann)
+				svg.appendChild(text)
 			}
-			if (isStampBold(ann)) {
-				text.setAttribute('font-weight', 'bold')
-			}
-			text.setAttribute('font-family', getStampFontFamily(ann))
-			text.setAttribute('data-test', 'annotation-stamp')
-			text.textContent = getAnnotationDisplaySymbol(ann)
-			svg.appendChild(text)
 		} else if (ann.type === 'text' && ann.data?.text) {
 			const text = document.createElementNS('http://www.w3.org/2000/svg', 'text')
 			const fontSize = ann.style?.fontSize || ann.data?.scaledFontSize || (ann.data?.fontSize ? (ann.data.fontSize < 100 ? Math.round(ann.data.fontSize / (ann.data?.sourceWidth || 596) * 1000) : ann.data.fontSize) : 24)
