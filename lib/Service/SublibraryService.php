@@ -103,7 +103,7 @@ class SublibraryService {
 		$matchingSongIds = null;
 
 		foreach ($filters as $type => $values) {
-			$type = strtolower(trim((string)$type));
+			$type = InternalEntityMapper::normalizeType((string)$type);
 			$allowedValues = is_array($values) ? array_values($values) : [$values];
 			$cleanValues = array_values(array_filter(array_map(static fn ($v) => trim((string)$v), $allowedValues), static fn ($v) => $v !== ''));
 
@@ -173,7 +173,7 @@ class SublibraryService {
 		}
 
 		foreach ($filters as $type => $values) {
-			$type = strtolower(trim((string)$type));
+			$type = InternalEntityMapper::normalizeType((string)$type);
 			$allowedValues = is_array($values) ? array_values($values) : [$values];
 			$cleanValues = array_map(static fn ($v) => mb_strtolower(trim((string)$v)), $allowedValues);
 
@@ -214,7 +214,7 @@ class SublibraryService {
 		$modified = false;
 
 		foreach ($filters as $type => $values) {
-			$type = strtolower(trim((string)$type));
+			$type = InternalEntityMapper::normalizeType((string)$type);
 			$allowedValues = is_array($values) ? array_values($values) : [$values];
 			$cleanValues = array_values(array_filter(array_map(static fn ($v) => trim((string)$v), $allowedValues), static fn ($v) => $v !== ''));
 
@@ -268,7 +268,7 @@ class SublibraryService {
 		}
 
 		foreach ($filters as $type => $values) {
-			$type = strtolower(trim((string)$type));
+			$type = InternalEntityMapper::normalizeType((string)$type);
 			$allowedValues = is_array($values) ? array_values($values) : [$values];
 			$cleanValues = array_map(static fn ($v) => mb_strtolower(trim((string)$v)), $allowedValues);
 

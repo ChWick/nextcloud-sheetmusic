@@ -145,10 +145,15 @@ class MobileSheetsSqliteImporter {
 
 		// If this is a sublibrary sync, enforce the sublibrary filter invariant ("Prevent Dropping")
 		if ($sublibrary !== null && $this->sublibraryService !== null) {
-			foreach (array_keys($updatedSongClientIds) as $clientId) {
+			$uploadedSongIds = MobileSheetsTableHelper::getTableIdSet($db, 'Songs');
+			foreach (array_keys($uploadedSongIds) as $clientId) {
 				$song = $this->songMapper->findByClientId($lib->id, (int)$clientId);
 				if ($song !== null && $song->id !== null) {
-					$this->sublibraryService->ensureSongMatchesSublibrary($sublibrary, (int)$song->id);
+					if ($this->sublibraryService->ensureSongMatchesSublibrary($sublibrary, (int)$song->id)) {
+						$song->updatedAt = time();
+						$this->songMapper->update($song);
+						$updatedSongClientIds[$clientId] = true;
+					}
 				}
 			}
 		}

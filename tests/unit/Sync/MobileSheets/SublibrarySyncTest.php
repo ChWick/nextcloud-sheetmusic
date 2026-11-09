@@ -273,4 +273,47 @@ final class SublibrarySyncTest extends TestCase {
 
 		@unlink($dbPath);
 	}
+
+	public function testImportModifyingSongComposerPreservesSublibraryFilter(): void {
+		// 1. Master library has a song with composer Foo
+		$song = $this->insertTestSong($this->testLibId, 'Sonata in F');
+		$composerFoo = $this->insertTestEntity($this->testLibId, 'composer', 'Foo');
+		$this->entityMapper->linkSongEntity((int)$song->id, (int)$composerFoo->id);
+		$this->attachTestFileToSong($song, 'sonata_f.pdf', clientId: 10);
+
+		// Sublibrary filters on composers = Foo (using plural key to verify normalization)
+		$sub = $this->sublibraryService->createSublibrary($this->testLibId, 'Foo Library', 'foo-lib', [
+			'composers' => ['Foo'],
+		]);
+
+		// 2. Export baseline database for the sublibrary
+		$dbPath = $this->tempDbPath();
+		$this->exporter->exportToFile($this->testLibId, $dbPath, null, $sub);
+
+		// 3. Client changes composer on tablet from Foo to Bar
+		$db = new PDO('sqlite:' . $dbPath);
+		$songClientId = (int)$db->query("SELECT Id FROM Songs WHERE Title = 'Sonata in F'")->fetchColumn();
+		self::assertGreaterThan(0, $songClientId);
+
+		$db->exec("INSERT INTO Composer (Name) VALUES ('Bar')");
+		$barId = (int)$db->lastInsertId();
+
+		// Replace Foo link with Bar link
+		$db->exec("DELETE FROM ComposerSongs WHERE SongId = $songClientId");
+		$stmt = $db->prepare('INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (?, ?)');
+		$stmt->execute([$barId, $songClientId]);
+
+		// 4. Import back
+		$this->importer->importFromFile($this->testLibId, $dbPath, null, null, $sub);
+
+		// 5. Verify that Bar was added AND Foo was retained to prevent dropping from the sublibrary
+		$composers = $this->entityMapper->findEntitiesForSong((int)$song->id, 'composer');
+		$composerNames = array_map(static fn ($c) => $c->name, $composers);
+
+		self::assertContains('Bar', $composerNames);
+		self::assertContains('Foo', $composerNames);
+		self::assertTrue($this->sublibraryService->matchesSong($sub, (int)$song->id));
+
+		@unlink($dbPath);
+	}
 }
