@@ -81,7 +81,7 @@ class LibraryMapper {
 		$qb->executeStatement();
 	}
 
-	public function addForUser(string $userId, string $path): void {
+	public function addForUser(string $userId, string $path, ?int $folderId = null): void {
 		$check = $this->db->getQueryBuilder();
 		$check->select('path')
 			->from(self::TABLE_NAME)
@@ -98,11 +98,52 @@ class LibraryMapper {
 		$qb->insert(self::TABLE_NAME)
 			->setValue('user_id', $qb->createNamedParameter($userId, IQueryBuilder::PARAM_STR))
 			->setValue('path', $qb->createNamedParameter($path, IQueryBuilder::PARAM_STR))
+			->setValue('folder_id', $qb->createNamedParameter($folderId, IQueryBuilder::PARAM_INT))
 			->setValue('auto_paths', $qb->createNamedParameter(true, IQueryBuilder::PARAM_BOOL))
 			->setValue('auto_pdf_metadata', $qb->createNamedParameter(true, IQueryBuilder::PARAM_BOOL))
 			->setValue('created_at', $qb->createNamedParameter($now, IQueryBuilder::PARAM_INT))
 			->setValue('updated_at', $qb->createNamedParameter($now, IQueryBuilder::PARAM_INT));
 		$qb->executeStatement();
+	}
+
+	public function updateFolderId(int $libraryId, int $folderId): void {
+		$qb = $this->db->getQueryBuilder();
+		$qb->update(self::TABLE_NAME)
+			->set('folder_id', $qb->createNamedParameter($folderId, IQueryBuilder::PARAM_INT))
+			->where($qb->expr()->eq('id', $qb->createNamedParameter($libraryId, IQueryBuilder::PARAM_INT)));
+		$qb->executeStatement();
+	}
+
+	public function findByFolderId(int $folderId): ?InternalLibrary {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from(self::TABLE_NAME)
+			->where($qb->expr()->eq('folder_id', $qb->createNamedParameter($folderId, IQueryBuilder::PARAM_INT)))
+			->setMaxResults(1);
+
+		$row = $qb->executeQuery()->fetchAssociative();
+
+		return $row === false ? null : InternalLibrary::fromRow($row);
+	}
+
+	/**
+	 * @return list<InternalLibrary>
+	 */
+	public function findAllNotOwnedBy(string $userId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from(self::TABLE_NAME)
+			->where($qb->expr()->neq('user_id', $qb->createNamedParameter($userId, IQueryBuilder::PARAM_STR)))
+			->orderBy('path', 'ASC');
+
+		$result = $qb->executeQuery();
+		$results = [];
+		while ($row = $result->fetchAssociative()) {
+			$results[] = InternalLibrary::fromRow($row);
+		}
+		$result->closeCursor();
+
+		return $results;
 	}
 
 	/**

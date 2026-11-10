@@ -18,6 +18,12 @@ class InternalLibrary implements \JsonSerializable {
 		public bool $autoPdfMetadata = true,
 		public int $createdAt = 0,
 		public int $updatedAt = 0,
+		public ?int $folderId = null,
+		public bool $isShared = false,
+		public string $ownerId = '',
+		public string $ownerDisplayName = '',
+		public string $permission = 'admin',
+		public bool $canWrite = true,
 	) {
 	}
 
@@ -33,6 +39,12 @@ class InternalLibrary implements \JsonSerializable {
 			autoPdfMetadata: isset($row['auto_pdf_metadata']) ? (bool)$row['auto_pdf_metadata'] : (isset($row['autoPdfMetadata']) ? (bool)$row['autoPdfMetadata'] : true),
 			createdAt: (int)($row['created_at'] ?? $row['createdAt'] ?? 0),
 			updatedAt: (int)($row['updated_at'] ?? $row['updatedAt'] ?? 0),
+			folderId: isset($row['folder_id']) && $row['folder_id'] !== null ? (int)$row['folder_id'] : (isset($row['folderId']) && $row['folderId'] !== null ? (int)$row['folderId'] : null),
+			isShared: isset($row['is_shared']) ? (bool)$row['is_shared'] : (isset($row['isShared']) ? (bool)$row['isShared'] : false),
+			ownerId: (string)($row['owner_id'] ?? $row['ownerId'] ?? ''),
+			ownerDisplayName: (string)($row['owner_display_name'] ?? $row['ownerDisplayName'] ?? ''),
+			permission: (string)($row['permission'] ?? 'admin'),
+			canWrite: isset($row['can_write']) ? (bool)$row['can_write'] : (isset($row['canWrite']) ? (bool)$row['canWrite'] : true),
 		);
 	}
 
@@ -44,22 +56,34 @@ class InternalLibrary implements \JsonSerializable {
 			'id' => $this->id,
 			'userId' => $this->userId,
 			'path' => $this->path,
+			'folderId' => $this->folderId,
 			'autoPaths' => $this->autoPaths,
 			'autoPdfMetadata' => $this->autoPdfMetadata,
 			'createdAt' => $this->createdAt,
 			'updatedAt' => $this->updatedAt,
+			'isShared' => $this->isShared,
+			'ownerId' => $this->ownerId ?: $this->userId,
+			'ownerDisplayName' => $this->ownerDisplayName,
+			'permission' => $this->permission,
+			'canWrite' => $this->canWrite,
 		];
 	}
 
 	/**
-	 * @return array{id: int|null, path: string, autoPaths: bool, autoPdfMetadata: bool}
+	 * @return array{id: int|null, path: string, folderId: int|null, autoPaths: bool, autoPdfMetadata: bool, isShared: bool, ownerId: string, ownerDisplayName: string, permission: string, canWrite: bool}
 	 */
 	public function jsonSerialize(): array {
 		return [
 			'id' => $this->id,
 			'path' => $this->path,
+			'folderId' => $this->folderId,
 			'autoPaths' => $this->autoPaths,
 			'autoPdfMetadata' => $this->autoPdfMetadata,
+			'isShared' => $this->isShared,
+			'ownerId' => $this->ownerId ?: $this->userId,
+			'ownerDisplayName' => $this->ownerDisplayName,
+			'permission' => $this->permission,
+			'canWrite' => $this->canWrite,
 		];
 	}
 }
