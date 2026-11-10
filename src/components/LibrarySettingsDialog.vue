@@ -7,10 +7,12 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
+import NcSelectUsers, { type NcSelectUsersModel } from '@nextcloud/vue/components/NcSelectUsers'
 import TrashCanOutline from 'vue-material-design-icons/TrashCanOutline.vue'
 import FolderSyncOutline from 'vue-material-design-icons/FolderSyncOutline.vue'
 import ShareVariantOutline from 'vue-material-design-icons/ShareVariantOutline.vue'
 import AccountOutline from 'vue-material-design-icons/AccountOutline.vue'
+import AccountGroupOutline from 'vue-material-design-icons/AccountGroupOutline.vue'
 import LinkVariant from 'vue-material-design-icons/LinkVariant.vue'
 import ContentCopy from 'vue-material-design-icons/ContentCopy.vue'
 import Check from 'vue-material-design-icons/Check.vue'
@@ -36,13 +38,23 @@ const currentLibrary = computed(() => props.libraries.find(lib => lib.id === pro
 const isSharedLibrary = computed(() => Boolean(currentLibrary.value?.isShared))
 
 // Sharing state
+interface ShareeOption extends NcSelectUsersModel {
+	shareType: number
+	shareWith: string
+}
+
 const shares = ref<LibraryShare[]>([])
 const isLoadingShares = ref(false)
 const shareError = ref('')
-const newShareUser = ref('')
 const newSharePermission = ref<'read' | 'write'>('read')
 const isCreatingShare = ref(false)
 const copiedToken = ref<string | null>(null)
+
+const shareeOptions = ref<ShareeOption[]>([])
+const selectedSharee = ref<ShareeOption | null>(null)
+const isSearchingSharees = ref(false)
+const currentShareSearch = ref('')
+let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
 
 const autoPathsModel = computed({
 	get: () => currentLibrary.value?.autoPaths ?? true,
@@ -104,6 +116,7 @@ async function loadShares() {
 			},
 		)
 		shares.value = response.data?.ocs?.data?.shares ?? []
+		await searchSharees(currentShareSearch.value)
 	} catch (error) {
 		console.error('Failed to load shares:', error)
 		shareError.value = describeRequestFailure(error, t('sheetmusic', 'Could not load shares.'))
@@ -112,16 +125,136 @@ async function loadShares() {
 	}
 }
 
+async function searchSharees(search: string = '') {
+	isSearchingSharees.value = true
+	try {
+		const response = await axios.get('/ocs/v2.php/apps/files_sharing/api/v1/sharees', {
+			params: {
+				format: 'json',
+				itemType: 'folder',
+				search,
+				perPage: 25,
+			},
+			headers: {
+				'OCS-APIREQUEST': 'true',
+				Accept: 'application/json',
+			},
+		})
+		const data = response.data?.ocs?.data ?? {}
+		const rawUsers: any[] = [
+			...(data.exact?.users ?? []),
+			...(data.users ?? []),
+		]
+		const rawGroups: any[] = [
+			...(data.exact?.groups ?? []),
+			...(data.groups ?? []),
+		]
+
+		const existingUserShares = new Set(
+			shares.value
+				.filter(s => s.shareType === 0)
+				.map(s => s.shareWith.toLowerCase()),
+		)
+		const existingGroupShares = new Set(
+			shares.value
+				.filter(s => s.shareType === 1)
+				.map(s => s.shareWith.toLowerCase()),
+		)
+
+		const results: ShareeOption[] = []
+		const seenIds = new Set<string>()
+
+		for (const u of rawUsers) {
+			const shareWith = u.value?.shareWith || u.label
+			const id = `user:${shareWith}`
+			if (!shareWith || seenIds.has(id)) continue
+			seenIds.add(id)
+
+			if (existingUserShares.has(shareWith.toLowerCase())) continue
+			if (currentLibrary.value?.ownerId && currentLibrary.value.ownerId.toLowerCase() === shareWith.toLowerCase()) continue
+
+			results.push({
+				id,
+				displayName: u.label || shareWith,
+				user: shareWith,
+				subname: u.subline || (u.shareWithDisplayNameUnique && u.shareWithDisplayNameUnique !== u.label ? `@${shareWith}` : ''),
+				isNoUser: false,
+				shareType: 0,
+				shareWith,
+			})
+		}
+
+		for (const g of rawGroups) {
+			const shareWith = g.value?.shareWith || g.label
+			const id = `group:${shareWith}`
+			if (!shareWith || seenIds.has(id)) continue
+			seenIds.add(id)
+
+			if (existingGroupShares.has(shareWith.toLowerCase())) continue
+
+			results.push({
+				id,
+				displayName: g.label || shareWith,
+				subname: t('sheetmusic', 'Group'),
+				isNoUser: true,
+				shareType: 1,
+				shareWith,
+			})
+		}
+
+		shareeOptions.value = results
+	} catch (error) {
+		console.error('Failed to search sharees:', error)
+	} finally {
+		isSearchingSharees.value = false
+	}
+}
+
+function onSearchSharees(query: string) {
+	currentShareSearch.value = query
+	if (searchDebounceTimer) {
+		clearTimeout(searchDebounceTimer)
+	}
+	searchDebounceTimer = setTimeout(() => {
+		searchSharees(query)
+	}, 200)
+}
+
+function createShareeOption(val: string): ShareeOption {
+	const trimmed = val.trim()
+	return {
+		id: `user:${trimmed}`,
+		displayName: trimmed,
+		user: trimmed,
+		subname: '',
+		isNoUser: false,
+		shareType: 0,
+		shareWith: trimmed,
+	}
+}
+
 async function addShare(shareType: 'user' | 'link' = 'user') {
-	if (shareType === 'user' && !newShareUser.value.trim()) {
+	let targetShareWith = ''
+	let actualShareType: number = 0
+
+	if (shareType === 'link') {
+		actualShareType = 3
+	} else if (selectedSharee.value) {
+		targetShareWith = selectedSharee.value.shareWith
+		actualShareType = selectedSharee.value.shareType
+	} else if (currentShareSearch.value.trim()) {
+		targetShareWith = currentShareSearch.value.trim()
+		actualShareType = 0
+	} else {
 		return
 	}
+
 	isCreatingShare.value = true
 	shareError.value = ''
 	try {
 		const payload = {
-			shareWith: shareType === 'user' ? newShareUser.value.trim() : '',
-			shareType,
+			shareWith: targetShareWith,
+			shareType: actualShareType,
 			permission: newSharePermission.value,
 		}
 		const response = await axios.post(
@@ -137,9 +270,14 @@ async function addShare(shareType: 'user' | 'link' = 'user') {
 		const created = response.data?.ocs?.data as LibraryShare | undefined
 		if (created) {
 			shares.value = [...shares.value, created]
-			newShareUser.value = ''
+			selectedSharee.value = null
+			currentShareSearch.value = ''
+			await searchSharees('')
 		} else {
 			await loadShares()
+			selectedSharee.value = null
+			currentShareSearch.value = ''
+			await searchSharees('')
 		}
 	} catch (error) {
 		console.error('Failed to create share:', error)
@@ -186,6 +324,7 @@ async function deleteShare(share: LibraryShare) {
 			},
 		)
 		shares.value = shares.value.filter(s => s.id !== share.id)
+		await searchSharees(currentShareSearch.value)
 	} catch (error) {
 		console.error('Failed to remove share:', error)
 		shareError.value = describeRequestFailure(error, t('sheetmusic', 'Could not delete share.'))
@@ -300,18 +439,26 @@ onMounted(() => {
 				</p>
 
 				<div :class="$style.addShareRow">
-					<NcTextField
-						v-model="newShareUser"
-						:placeholder="t('sheetmusic', 'Nextcloud username or group')"
-						:disabled="isCreatingShare"
-						@keydown.enter="addShare('user')" />
+					<div :class="$style.shareUserInputWrapper">
+						<NcSelectUsers
+							v-model="selectedSharee"
+							:options="shareeOptions"
+							:loading="isSearchingSharees"
+							:placeholder="t('sheetmusic', 'Search for user or group…')"
+							:input-label="t('sheetmusic', 'User or group')"
+							:label-outside="true"
+							:disabled="isCreatingShare"
+							:taggable="true"
+							:create-option="createShareeOption"
+							@search="onSearchSharees" />
+					</div>
 					<select v-model="newSharePermission" :class="$style.permSelect" :disabled="isCreatingShare">
 						<option value="read">{{ t('sheetmusic', 'Read-only') }}</option>
 						<option value="write">{{ t('sheetmusic', 'Read & Write') }}</option>
 					</select>
 					<NcButton
 						variant="primary"
-						:disabled="!newShareUser.trim() || isCreatingShare"
+						:disabled="(!selectedSharee && !currentShareSearch.trim()) || isCreatingShare"
 						@click="addShare('user')">
 						{{ t('sheetmusic', 'Share') }}
 					</NcButton>
@@ -334,12 +481,15 @@ onMounted(() => {
 				<div v-if="shares.length > 0" :class="$style.sharesList">
 					<div v-for="share in shares" :key="share.id" :class="$style.shareItem">
 						<div :class="$style.shareItemInfo">
-							<component :is="share.shareType === 3 ? LinkVariant : AccountOutline" :size="18" :class="$style.shareIcon" />
+							<component :is="share.shareType === 3 ? LinkVariant : (share.shareType === 1 ? AccountGroupOutline : AccountOutline)" :size="18" :class="$style.shareIcon" />
 							<div :class="$style.shareItemDetails">
 								<span :class="$style.shareName">
 									{{ share.shareType === 3 ? t('sheetmusic', 'Public Link Share') : (share.shareWithDisplayName || share.shareWith) }}
 								</span>
-								<span v-if="share.shareType !== 3" :class="$style.shareUserSub">
+								<span v-if="share.shareType === 1" :class="$style.shareUserSub">
+									{{ t('sheetmusic', 'Group') }}
+								</span>
+								<span v-else-if="share.shareType === 0 && share.shareWith" :class="$style.shareUserSub">
 									@{{ share.shareWith }}
 								</span>
 								<span v-if="share.publicUrl" :class="$style.webdavUrlText" :title="share.publicUrl">
@@ -505,6 +655,11 @@ onMounted(() => {
 	align-items: center;
 	gap: 8px;
 	margin-top: 10px;
+}
+
+.shareUserInputWrapper {
+	flex: 1;
+	min-width: 0;
 }
 
 .linkShareRow {
