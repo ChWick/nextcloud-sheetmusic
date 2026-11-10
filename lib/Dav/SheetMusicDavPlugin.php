@@ -705,21 +705,24 @@ class SheetMusicDavPlugin extends ServerPlugin {
 					$library = $subInfo['library'];
 					$fileName = rawurldecode($context['relPath']);
 					if ($this->registry->getClientForVirtualFile($fileName) === null) {
-						$libPath = trim($library->path, '/');
+						$parentLibId = $this->libraryShareService->getParentLibraryId((int)$library->id);
+						$parentLib = $this->libraryMapper->findById($parentLibId);
+						$ownerLib = $parentLib ?? $library;
+						$libPath = trim($ownerLib->path, '/');
 						if (str_ends_with(strtolower($libPath), '.db')) {
 							$libPath = dirname($libPath);
 							$libPath = ($libPath === '.' ? '' : $libPath);
 						}
 						$targetPath = $libPath === '' ? $fileName : $libPath . '/' . $fileName;
 						try {
-							$userFolder = $this->rootFolder->getUserFolder($library->userId);
+							$userFolder = $this->rootFolder->getUserFolder($ownerLib->userId);
 							if ($userFolder->nodeExists($targetPath)) {
 								$node = $userFolder->get($targetPath);
 								if ($node instanceof \OCP\Files\File) {
 									return [
 										[
-											'userId' => $library->userId,
-											'library' => $library,
+											'userId' => $ownerLib->userId,
+											'library' => $ownerLib,
 											'parentFolder' => $libPath,
 											'slug' => $subInfo['sublibrary']->slug,
 											'fileName' => $fileName,
@@ -742,16 +745,34 @@ class SheetMusicDavPlugin extends ServerPlugin {
 				$folder = ($folder === '.' ? '' : $folder);
 				$fileName = rawurldecode(basename($relPath));
 				if ($folder !== '' && $this->registry->getClientForVirtualFile($fileName) === null) {
-					$sharedLib = $this->libraryShareService->findSharedLibraryByFolderPath($context['userId'], $folder);
+					$checkFolder = $folder;
+					$subPath = $fileName;
+					$sharedLib = null;
+					while ($checkFolder !== '' && $checkFolder !== '.') {
+						$candidate = $this->libraryShareService->findSharedLibraryByFolderPath($context['userId'], $checkFolder);
+						if ($candidate !== null && $candidate->sublibraryId !== null) {
+							$sharedLib = $candidate;
+							break;
+						}
+						$subPath = basename($checkFolder) . '/' . $subPath;
+						$checkFolder = dirname($checkFolder);
+						$checkFolder = ($checkFolder === '.' ? '' : $checkFolder);
+					}
+					if ($sharedLib === null && $folder !== '') {
+						$sharedLib = $this->libraryShareService->findSharedLibraryByFolderPath($context['userId'], $folder);
+						$subPath = $fileName;
+					}
+
 					if ($sharedLib !== null && $sharedLib->sublibraryId !== null) {
-						$parentLib = $this->libraryMapper->findById((int)$sharedLib->id >= LibraryShareService::SUBLIBRARY_ID_OFFSET ? ((int)$sharedLib->id - LibraryShareService::SUBLIBRARY_ID_OFFSET) : (int)$sharedLib->id);
+						$parentLibId = $this->libraryShareService->getParentLibraryId((int)$sharedLib->id);
+						$parentLib = $this->libraryMapper->findById($parentLibId);
 						$ownerLib = $parentLib ?? $sharedLib;
 						$ownerLibPath = trim($ownerLib->path, '/');
 						if (str_ends_with(strtolower($ownerLibPath), '.db')) {
 							$ownerLibPath = dirname($ownerLibPath);
 							$ownerLibPath = ($ownerLibPath === '.' ? '' : $ownerLibPath);
 						}
-						$targetPath = $ownerLibPath === '' ? $fileName : $ownerLibPath . '/' . $fileName;
+						$targetPath = $ownerLibPath === '' ? $subPath : $ownerLibPath . '/' . $subPath;
 						try {
 							$userFolder = $this->rootFolder->getUserFolder($ownerLib->userId);
 							if ($userFolder->nodeExists($targetPath)) {
@@ -795,12 +816,72 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		}
 	}
 
+	/**
+	 * @return array{userId: string, library: InternalLibrary, parentFolder: string, slug: string, fileName: string, targetRelPath: string}|null
+	 */
+	private function resolveSublibraryUploadInfo(string $path): ?array {
+		$info = $this->resolveSublibraryFilePath($path);
+		if ($info !== null) {
+			return $info;
+		}
+
+		$context = $this->resolveDavContext($path);
+		if ($context !== null && $context['userId'] !== null && $this->libraryShareService !== null && $this->rootFolder !== null) {
+			$relPath = $context['relPath'];
+			$folder = dirname($relPath);
+			$folder = ($folder === '.' ? '' : $folder);
+			$fileName = rawurldecode(basename($relPath));
+			if ($folder !== '' && $this->registry->getClientForVirtualFile($fileName) === null) {
+				$checkFolder = $folder;
+				$subPath = $fileName;
+				$sharedLib = null;
+				while ($checkFolder !== '' && $checkFolder !== '.') {
+					$candidate = $this->libraryShareService->findSharedLibraryByFolderPath($context['userId'], $checkFolder);
+					if ($candidate !== null && $candidate->sublibraryId !== null) {
+						$sharedLib = $candidate;
+						break;
+					}
+					$subPath = basename($checkFolder) . '/' . $subPath;
+					$checkFolder = dirname($checkFolder);
+					$checkFolder = ($checkFolder === '.' ? '' : $checkFolder);
+				}
+				if ($sharedLib === null && $folder !== '') {
+					$sharedLib = $this->libraryShareService->findSharedLibraryByFolderPath($context['userId'], $folder);
+					$subPath = $fileName;
+				}
+
+				if ($sharedLib !== null && $sharedLib->sublibraryId !== null && $sharedLib->canWrite) {
+					$parentLibId = $this->libraryShareService->getParentLibraryId((int)$sharedLib->id);
+					$parentLib = $this->libraryMapper->findById($parentLibId);
+					$ownerLib = $parentLib ?? $sharedLib;
+					$ownerLibPath = trim($ownerLib->path, '/');
+					if (str_ends_with(strtolower($ownerLibPath), '.db')) {
+						$ownerLibPath = dirname($ownerLibPath);
+						$ownerLibPath = ($ownerLibPath === '.' ? '' : $ownerLibPath);
+					}
+					$targetPath = $ownerLibPath === '' ? $subPath : $ownerLibPath . '/' . $subPath;
+
+					return [
+						'userId' => $ownerLib->userId,
+						'library' => $ownerLib,
+						'parentFolder' => $ownerLibPath,
+						'slug' => $sharedLib->sublibraryName ?? '',
+						'fileName' => $fileName,
+						'targetRelPath' => $targetPath,
+					];
+				}
+			}
+		}
+
+		return null;
+	}
+
 	private function handleSublibraryFileUploadPut(
 		RequestInterface $request,
 		ResponseInterface $response,
 		string $path,
 	): bool {
-		$info = $this->resolveSublibraryFilePath($path);
+		$info = $this->resolveSublibraryUploadInfo($path);
 		if ($info === null || $this->rootFolder === null) {
 			return false;
 		}

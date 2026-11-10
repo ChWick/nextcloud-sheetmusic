@@ -39,6 +39,7 @@ class InternalSongMapper {
 		private ?IRootFolder $rootFolder = null,
 		private ?InternalSongBookmarkMapper $bookmarkMapper = null,
 		private ?SublibraryService $sublibraryService = null,
+		private ?LibraryMapper $libraryMapper = null,
 	) {
 	}
 
@@ -161,6 +162,10 @@ class InternalSongMapper {
 		try {
 			$ownerFolder = $this->rootFolder->getUserFolder($library->userId);
 			$libPath = trim($library->path, '/');
+			if ($library->sublibraryId !== null && str_contains($libPath, ' / ')) {
+				$parts = explode(' / ', $libPath, 2);
+				$libPath = trim($parts[0], '/');
+			}
 			if (str_ends_with(strtolower($libPath), '.db')) {
 				$libPath = dirname($libPath);
 				$libPath = ($libPath === '.' ? '' : $libPath);
@@ -174,6 +179,62 @@ class InternalSongMapper {
 						$rel = $baseNode->getRelativePath($rootNodes[0]->getPath());
 						if ($rel !== null && $rel !== false) {
 							$paths[$file->fileId] = '/public.php/dav/files/' . $publicToken . '/' . ltrim($rel, '/');
+						}
+					}
+				} catch (\Throwable) {
+					// Missing file
+				}
+			}
+		} catch (\Throwable) {
+			// Folder lookup failed
+		}
+
+		return $paths;
+	}
+
+	/**
+	 * @param list<InternalSongFile> $files
+	 * @return array<int, string>
+	 */
+	private function resolveSublibraryFileNodePaths(
+		array $files,
+		InternalLibrary $library,
+		IUser $user,
+		int $parentLibraryId,
+	): array {
+		if ($files === [] || $this->rootFolder === null) {
+			return [];
+		}
+
+		$paths = [];
+		try {
+			$ownerUserId = $library->ownerId ?? $library->userId;
+			$ownerFolder = $this->rootFolder->getUserFolder($ownerUserId);
+			$libraryMapper = $this->libraryMapper ?? new LibraryMapper($this->db);
+			$parentLib = $libraryMapper->findById($parentLibraryId);
+			$parentPath = $parentLib !== null ? $parentLib->path : $library->path;
+			if (str_contains($parentPath, ' / ')) {
+				$parts = explode(' / ', $parentPath, 2);
+				$parentPath = $parts[0];
+			}
+			$libPath = trim($parentPath, '/');
+			if (str_ends_with(strtolower($libPath), '.db')) {
+				$libPath = dirname($libPath);
+				$libPath = ($libPath === '.' ? '' : $libPath);
+			}
+			$baseNode = $libPath === '' ? $ownerFolder : $ownerFolder->get($libPath);
+
+			$uid = $user->getUID();
+			$sublibMount = trim($library->path, '/');
+
+			foreach ($files as $file) {
+				try {
+					$rootNodes = $this->rootFolder->getById($file->fileId);
+					if (!empty($rootNodes)) {
+						$rel = $baseNode->getRelativePath($rootNodes[0]->getPath());
+						if ($rel !== null && $rel !== false) {
+							$relClean = ltrim($rel, '/');
+							$paths[$file->fileId] = MobileSheetsPathResolver::WEBDAV_ROOT . '/' . $uid . '/' . ($sublibMount === '' ? '' : $sublibMount . '/') . $relClean;
 						}
 					}
 				} catch (\Throwable) {
@@ -697,9 +758,23 @@ class InternalSongMapper {
 
 		$fileIds = array_values(array_unique(array_filter(array_column($files, 'fileId'))));
 		$uid = $user?->getUID() ?? '';
-		$fileNodePaths = $publicToken !== null && $library !== null
-			? $this->resolvePublicFileNodePaths($files, $library, $publicToken)
-			: $this->resolveFileNodePaths($fileIds, $user);
+		$fileNodePaths = [];
+		if ($publicToken !== null && $library !== null) {
+			$fileNodePaths = $this->resolvePublicFileNodePaths($files, $library, $publicToken);
+		} elseif ($user !== null) {
+			$fileNodePaths = $this->resolveFileNodePaths($fileIds, $user);
+			if ($library !== null && ($library->sublibraryId !== null || $sublibrary !== null)) {
+				$sublibPaths = $this->resolveSublibraryFileNodePaths($files, $library, $user, $libraryId);
+				foreach ($sublibPaths as $fid => $p) {
+					$fileNodePaths[$fid] = $p;
+				}
+			} elseif ($library !== null && $library->isShared) {
+				$sublibPaths = $this->resolveSublibraryFileNodePaths($files, $library, $user, $libraryId);
+				foreach ($sublibPaths as $fid => $p) {
+					$fileNodePaths[$fid] ??= $p;
+				}
+			}
+		}
 
 		$songFiles = [];
 		foreach ($files as $file) {

@@ -12,6 +12,10 @@ namespace Db;
 use OCA\SheetMusic\Db\InternalSong;
 use OCA\SheetMusic\Db\InternalSongFile;
 use OCA\SheetMusic\Db\InternalSongMapper;
+use OCA\SheetMusic\Db\InternalSublibrary;
+use OCA\SheetMusic\Db\SublibraryMapper;
+use OCA\SheetMusic\Service\LibraryShareService;
+use OCA\SheetMusic\Service\SublibraryService;
 use PHPUnit\Framework\TestCase;
 use TestSupport\RealMobileSheetsTestTrait;
 
@@ -210,5 +214,55 @@ final class InternalSongMapperTest extends TestCase {
 		self::assertCount(1, $songs);
 		self::assertSame((int)$emptySong->id, $songs[0]->id);
 		self::assertSame('Empty Song', $songs[0]->title);
+	}
+
+	public function testFindLibraryDataWithSharedSublibraryResolvesVirtualPath(): void {
+		$lib = $this->createTestLibrary('MySublibNoten', 'admin');
+		$adminFolder = $this->rootFolder->getUserFolder('admin');
+		if (!$adminFolder->nodeExists('MySublibNoten')) {
+			$this->createdUserNodes[] = $adminFolder->newFolder('MySublibNoten');
+		}
+		$libFolder = $adminFolder->get('MySublibNoten');
+		$pdfFile = $libFolder->newFile('Score1.pdf', '%PDF-1.4 test score content');
+		$this->createdUserNodes[] = $pdfFile;
+		$fileId = (int)$pdfFile->getId();
+
+		$song = $this->mapper->insert(new InternalSong(
+			id: null,
+			uuid: 'sub-s1',
+			libraryId: (int)$lib->id,
+			title: 'Sublib Score Song',
+		));
+
+		$this->songFileMapper->insert(new InternalSongFile(
+			id: null,
+			uuid: 'sub-f1',
+			songId: (int)$song->id,
+			fileId: $fileId,
+		));
+
+		$subMapper = new SublibraryMapper($this->dbConn);
+		$sub = $subMapper->insert(new InternalSublibrary(
+			libraryId: (int)$lib->id,
+			name: 'Organ',
+			slug: 'organ',
+		));
+
+		// Shared library representation for user 'carol'
+		$shared = clone $lib;
+		$shared->id = LibraryShareService::SUBLIBRARY_ID_OFFSET + (int)$sub->id;
+		$shared->path = '/SharedOrgan';
+		$shared->sublibraryId = $sub->id;
+		$shared->sublibraryName = $sub->name;
+		$shared->isShared = true;
+		$shared->ownerId = 'admin';
+
+		$carolUser = $this->createMock(\OCP\IUser::class);
+		$carolUser->method('getUID')->willReturn('carol');
+
+		$data = $this->mapper->findLibraryData((int)$lib->id, $carolUser, null, $shared, $sub);
+		self::assertNotEmpty($data->songs);
+		self::assertNotEmpty($data->songs[0]->files);
+		self::assertSame('/remote.php/dav/files/carol/SharedOrgan/Score1.pdf', $data->songs[0]->files[0]->path);
 	}
 }

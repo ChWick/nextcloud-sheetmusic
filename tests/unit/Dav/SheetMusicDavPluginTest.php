@@ -116,6 +116,8 @@ final class SheetMusicDavPluginTest extends TestCase {
 			$this->shareManager,
 			$this->userManager,
 			null,
+			null,
+			new SublibraryMapper($this->dbConn),
 		);
 
 		$this->plugin = new SheetMusicDavPlugin(
@@ -646,6 +648,66 @@ final class SheetMusicDavPluginTest extends TestCase {
 		self::assertFalse($this->plugin->beforeMethod($propReq, $propRes));
 		self::assertSame(207, $propRes->getStatus());
 		self::assertStringContainsString('UploadScore.pdf', $propRes->getBodyAsString());
+	}
+
+	public function testPublicSublibraryFileDownloadGet(): void {
+		$this->attachServer('/public.php/dav/');
+		$sub = $this->sublibraryService->createSublibrary((int)$this->library->id, 'Organ Repertoire', 'orgel', [
+			'instrument' => ['Orgel'],
+		]);
+
+		$fileContent = '%PDF-1.4 public organ score';
+		$adminFolder = $this->rootFolder->getUserFolder('admin');
+		$adminFolder->newFile('My Noten/PublicPiece.pdf', $fileContent);
+
+		$folderId = $this->shareService->ensureSublibraryFolderId($sub, $this->library);
+		self::assertNotNull($folderId);
+
+		$mockShare = $this->createMock(\OCP\Share\IShare::class);
+		$mockFolder = $this->createMock(\OCP\Files\Folder::class);
+		$mockFolder->method('getId')->willReturn($folderId);
+		$mockShare->method('getNode')->willReturn($mockFolder);
+		$mockShare->method('getTarget')->willReturn('/My Noten/_SubLibraries_/orgel');
+		$mockShare->method('getSharedBy')->willReturn('admin');
+		$mockShare->method('getToken')->willReturn('pubSubToken');
+		$this->shareManager->method('getShareByToken')->with('pubSubToken')->willReturn($mockShare);
+
+		$getReq = new Request('GET', '/public.php/dav/files/pubSubToken/PublicPiece.pdf');
+		$getRes = new Response();
+		self::assertFalse($this->plugin->beforeMethod($getReq, $getRes));
+		self::assertSame(200, $getRes->getStatus());
+		self::assertSame($fileContent, stream_get_contents($getRes->getBody()));
+	}
+
+	public function testSharedSublibraryFileDownloadGet(): void {
+		$this->attachServer();
+		$sub = $this->sublibraryService->createSublibrary((int)$this->library->id, 'Organ Repertoire', 'orgel', [
+			'instrument' => ['Orgel'],
+		]);
+
+		$fileContent = '%PDF-1.4 shared organ score for bob';
+		$adminFolder = $this->rootFolder->getUserFolder('admin');
+		$adminFolder->newFile('My Noten/BobPiece.pdf', $fileContent);
+
+		$folderId = $this->shareService->ensureSublibraryFolderId($sub, $this->library);
+		self::assertNotNull($folderId);
+
+		$bobFolder = $this->rootFolder->getUserFolder('bob');
+		if (!$bobFolder->nodeExists('BobOrgan')) {
+			$this->createdUserNodes[] = $bobFolder->newFolder('BobOrgan');
+		}
+		$bobOrganNode = $bobFolder->get('BobOrgan');
+		$sub->folderId = $bobOrganNode->getId();
+		(new SublibraryMapper($this->dbConn))->updateFolderId($sub->id, $bobOrganNode->getId());
+
+		$bobUser = $this->userManager->get('bob');
+		$this->userSession->setUser($bobUser);
+
+		$getReq = new Request('GET', '/files/bob/BobOrgan/BobPiece.pdf');
+		$getRes = new Response();
+		self::assertFalse($this->plugin->beforeMethod($getReq, $getRes));
+		self::assertSame(200, $getRes->getStatus());
+		self::assertSame($fileContent, stream_get_contents($getRes->getBody()));
 	}
 
 	public function testSublibraryFullWebdavSyncLifecycle(): void {

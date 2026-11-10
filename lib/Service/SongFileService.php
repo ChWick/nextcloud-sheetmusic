@@ -45,7 +45,8 @@ class SongFileService {
 		if ($libraryId >= LibraryShareService::SUBLIBRARY_ID_OFFSET && $this->sublibraryService !== null) {
 			$sublibrary = $this->sublibraryService->getSublibrary($libraryId - LibraryShareService::SUBLIBRARY_ID_OFFSET);
 		}
-		return $this->internalSongMapper->findLibraryData($targetLibraryId, $user, null, null, $sublibrary);
+		$library = $this->libraryService->getAccessibleLibrary($user->getUID(), $libraryId);
+		return $this->internalSongMapper->findLibraryData($targetLibraryId, $user, null, $library, $sublibrary);
 	}
 
 	private function resolveSongFileRecord(int $fileId, int $songId = 0): ?InternalSongFile {

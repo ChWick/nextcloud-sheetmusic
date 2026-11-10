@@ -22,9 +22,11 @@ use OCA\SheetMusic\Db\InternalSongFile;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
+use OCA\SheetMusic\Db\SublibraryMapper;
 use OCA\SheetMusic\Service\FileManager;
 use OCA\SheetMusic\Service\LibraryIntegrityService;
 use OCA\SheetMusic\Service\LibraryService;
+use OCA\SheetMusic\Service\SublibraryService;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPathResolver;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSqliteExporter;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSqliteImporter;
@@ -80,12 +82,16 @@ trait RealMobileSheetsTestTrait {
 		$this->userManager = \OC::$server->get(IUserManager::class);
 		$logger = new NullLogger();
 		$this->pathResolver = new MobileSheetsPathResolver($this->rootFolder);
+		$sublibraryMapper = new SublibraryMapper($this->dbConn);
+		$sublibraryService = new SublibraryService($sublibraryMapper, $this->entityMapper, $this->dbConn);
 		$this->songMapper = new InternalSongMapper(
 			$this->dbConn,
 			$this->entityMapper,
 			$this->songFileMapper,
 			$this->rootFolder,
 			$this->bookmarkMapper,
+			$sublibraryService,
+			$this->libraryMapper,
 		);
 
 		$this->importer = new MobileSheetsSqliteImporter(
