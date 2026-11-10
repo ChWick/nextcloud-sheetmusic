@@ -16,7 +16,7 @@ import ViewHeader from './ViewHeader.vue'
 import SublibraryCard from './sublibraries/SublibraryCard.vue'
 import SublibraryModal from './sublibraries/SublibraryModal.vue'
 import DeleteSublibraryDialog from './sublibraries/DeleteSublibraryDialog.vue'
-import SublibraryShareDialog from './sublibraries/SublibraryShareDialog.vue'
+import ShareDialog from './ShareDialog.vue'
 
 import { useLibraryData } from '../composables/useLibraryData'
 import type { Library, Sublibrary } from '../types/library'
@@ -330,7 +330,7 @@ watch(
 			@close="isDeleteConfirmOpen = false" />
 
 		<!-- Share Modal -->
-		<SublibraryShareDialog
+		<ShareDialog
 			v-if="isShareOpen && sharingSub"
 			:library-id="selectedLibrary"
 			:sublibrary="sharingSub"
