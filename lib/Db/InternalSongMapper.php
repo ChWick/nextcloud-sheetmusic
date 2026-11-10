@@ -150,57 +150,17 @@ class InternalSongMapper {
 	}
 
 	/**
+	 * Resolves WebDAV paths for files viewed through a virtual context (public share link or shared sub-library).
+	 *
 	 * @param list<InternalSongFile> $files
 	 * @return array<int, string>
 	 */
-	private function resolvePublicFileNodePaths(array $files, InternalLibrary $library, string $publicToken): array {
-		if ($files === [] || $this->rootFolder === null) {
-			return [];
-		}
-
-		$paths = [];
-		try {
-			$ownerFolder = $this->rootFolder->getUserFolder($library->userId);
-			$libPath = trim($library->path, '/');
-			if ($library->sublibraryId !== null && str_contains($libPath, ' / ')) {
-				$parts = explode(' / ', $libPath, 2);
-				$libPath = trim($parts[0], '/');
-			}
-			if (str_ends_with(strtolower($libPath), '.db')) {
-				$libPath = dirname($libPath);
-				$libPath = ($libPath === '.' ? '' : $libPath);
-			}
-			$baseNode = $libPath === '' ? $ownerFolder : $ownerFolder->get($libPath);
-
-			foreach ($files as $file) {
-				try {
-					$rootNodes = $this->rootFolder->getById($file->fileId);
-					if (!empty($rootNodes)) {
-						$rel = $baseNode->getRelativePath($rootNodes[0]->getPath());
-						if ($rel !== null && $rel !== false) {
-							$paths[$file->fileId] = '/public.php/dav/files/' . $publicToken . '/' . ltrim($rel, '/');
-						}
-					}
-				} catch (\Throwable) {
-					// Missing file
-				}
-			}
-		} catch (\Throwable) {
-			// Folder lookup failed
-		}
-
-		return $paths;
-	}
-
-	/**
-	 * @param list<InternalSongFile> $files
-	 * @return array<int, string>
-	 */
-	private function resolveSublibraryFileNodePaths(
+	private function resolveVirtualFileNodePaths(
 		array $files,
 		InternalLibrary $library,
-		IUser $user,
-		int $parentLibraryId,
+		?IUser $user = null,
+		?string $publicToken = null,
+		?int $parentLibraryId = null,
 	): array {
 		if ($files === [] || $this->rootFolder === null) {
 			return [];
@@ -211,7 +171,7 @@ class InternalSongMapper {
 			$ownerUserId = $library->ownerId ?? $library->userId;
 			$ownerFolder = $this->rootFolder->getUserFolder($ownerUserId);
 			$libraryMapper = $this->libraryMapper ?? new LibraryMapper($this->db);
-			$parentLib = $libraryMapper->findById($parentLibraryId);
+			$parentLib = $parentLibraryId !== null ? $libraryMapper->findById($parentLibraryId) : null;
 			$parentPath = $parentLib !== null ? $parentLib->path : $library->path;
 			if (str_contains($parentPath, ' / ')) {
 				$parts = explode(' / ', $parentPath, 2);
@@ -224,8 +184,9 @@ class InternalSongMapper {
 			}
 			$baseNode = $libPath === '' ? $ownerFolder : $ownerFolder->get($libPath);
 
-			$uid = $user->getUID();
-			$sublibMount = trim($library->path, '/');
+			$prefix = $publicToken !== null
+				? ('/public.php/dav/files/' . $publicToken)
+				: (MobileSheetsPathResolver::WEBDAV_ROOT . '/' . ($user?->getUID() ?? '') . (trim($library->path, '/') === '' ? '' : '/' . trim($library->path, '/')));
 
 			foreach ($files as $file) {
 				try {
@@ -233,8 +194,7 @@ class InternalSongMapper {
 					if (!empty($rootNodes)) {
 						$rel = $baseNode->getRelativePath($rootNodes[0]->getPath());
 						if ($rel !== null && $rel !== false) {
-							$relClean = ltrim($rel, '/');
-							$paths[$file->fileId] = MobileSheetsPathResolver::WEBDAV_ROOT . '/' . $uid . '/' . ($sublibMount === '' ? '' : $sublibMount . '/') . $relClean;
+							$paths[$file->fileId] = $prefix . '/' . ltrim($rel, '/');
 						}
 					}
 				} catch (\Throwable) {
@@ -760,17 +720,17 @@ class InternalSongMapper {
 		$uid = $user?->getUID() ?? '';
 		$fileNodePaths = [];
 		if ($publicToken !== null && $library !== null) {
-			$fileNodePaths = $this->resolvePublicFileNodePaths($files, $library, $publicToken);
+			$fileNodePaths = $this->resolveVirtualFileNodePaths($files, $library, publicToken: $publicToken, parentLibraryId: $libraryId);
 		} elseif ($user !== null) {
 			$fileNodePaths = $this->resolveFileNodePaths($fileIds, $user);
 			if ($library !== null && ($library->sublibraryId !== null || $sublibrary !== null)) {
-				$sublibPaths = $this->resolveSublibraryFileNodePaths($files, $library, $user, $libraryId);
-				foreach ($sublibPaths as $fid => $p) {
+				$virtualPaths = $this->resolveVirtualFileNodePaths($files, $library, user: $user, parentLibraryId: $libraryId);
+				foreach ($virtualPaths as $fid => $p) {
 					$fileNodePaths[$fid] = $p;
 				}
 			} elseif ($library !== null && $library->isShared) {
-				$sublibPaths = $this->resolveSublibraryFileNodePaths($files, $library, $user, $libraryId);
-				foreach ($sublibPaths as $fid => $p) {
+				$virtualPaths = $this->resolveVirtualFileNodePaths($files, $library, user: $user, parentLibraryId: $libraryId);
+				foreach ($virtualPaths as $fid => $p) {
 					$fileNodePaths[$fid] ??= $p;
 				}
 			}

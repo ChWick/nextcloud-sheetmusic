@@ -84,12 +84,7 @@ class EntityService {
 
 			$this->libraryMapper->touch($targetLibraryId);
 
-			$sublibrary = null;
-			if ($libraryId >= LibraryShareService::SUBLIBRARY_ID_OFFSET && $this->sublibraryService !== null) {
-				$sublibrary = $this->sublibraryService->getSublibrary($libraryId - LibraryShareService::SUBLIBRARY_ID_OFFSET);
-			}
-
-			return $this->internalSongMapper->findLibraryData($targetLibraryId, $user, null, null, $sublibrary);
+			return $this->getLibraryDataForResponse($user, $libraryId, $targetLibraryId);
 		} catch (\Throwable $e) {
 			$this->logger->error('Could not delete entity from SheetMusic library', [
 				'exception' => $e,
@@ -127,14 +122,9 @@ class EntityService {
 
 			$this->libraryMapper->touch($targetLibraryId);
 
-			$sublibrary = null;
-			if ($libraryId >= LibraryShareService::SUBLIBRARY_ID_OFFSET && $this->sublibraryService !== null) {
-				$sublibrary = $this->sublibraryService->getSublibrary($libraryId - LibraryShareService::SUBLIBRARY_ID_OFFSET);
-			}
-
 			return [
 				'mergedCount' => $merged,
-				'libraryData' => $this->internalSongMapper->findLibraryData($targetLibraryId, $user, null, null, $sublibrary),
+				'libraryData' => $this->getLibraryDataForResponse($user, $libraryId, $targetLibraryId),
 			];
 		} catch (\Throwable $e) {
 			$this->logger->error('Could not merge entities in SheetMusic library', [
@@ -146,5 +136,13 @@ class EntityService {
 			]);
 			throw $e;
 		}
+	}
+
+	private function getLibraryDataForResponse(IUser $user, int $libraryId, int $targetLibraryId): ?LibraryData {
+		$sublibrary = null;
+		if ($libraryId >= LibraryShareService::SUBLIBRARY_ID_OFFSET && $this->sublibraryService !== null) {
+			$sublibrary = $this->sublibraryService->getSublibrary($libraryId - LibraryShareService::SUBLIBRARY_ID_OFFSET);
+		}
+		return $this->internalSongMapper->findLibraryData($targetLibraryId, $user, null, null, $sublibrary);
 	}
 }

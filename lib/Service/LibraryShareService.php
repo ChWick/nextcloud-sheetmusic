@@ -277,6 +277,30 @@ class LibraryShareService {
 		return $libraryId;
 	}
 
+	private function buildSublibraryLibrary(
+		InternalLibrary $parentLib,
+		InternalSublibrary $sub,
+		string $path,
+		int $folderId,
+		bool $isShared,
+		string $ownerId,
+		string $permission,
+		bool $canWrite,
+	): InternalLibrary {
+		$shared = clone $parentLib;
+		$shared->id = self::SUBLIBRARY_ID_OFFSET + (int)$sub->id;
+		$shared->path = $path;
+		$shared->sublibraryId = $sub->id;
+		$shared->sublibraryName = $sub->name;
+		$shared->folderId = $folderId;
+		$shared->isShared = $isShared;
+		$shared->ownerId = $ownerId;
+		$shared->ownerDisplayName = $this->getDisplayName($ownerId);
+		$shared->permission = $permission;
+		$shared->canWrite = $canWrite;
+		return $shared;
+	}
+
 	public function getAccessibleLibrary(string $userId, int $libraryId): ?InternalLibrary {
 		if ($libraryId >= self::SUBLIBRARY_ID_OFFSET) {
 			$sublibId = $libraryId - self::SUBLIBRARY_ID_OFFSET;
@@ -291,18 +315,16 @@ class LibraryShareService {
 
 			if ($lib->userId === $userId) {
 				$this->ensureSublibraryFolderId($sublib, $lib);
-				$obj = clone $lib;
-				$obj->id = $libraryId;
-				$obj->path = $lib->path . ' / ' . $sublib->name;
-				$obj->sublibraryId = $sublib->id;
-				$obj->sublibraryName = $sublib->name;
-				$obj->folderId = $sublib->folderId;
-				$obj->isShared = false;
-				$obj->ownerId = $userId;
-				$obj->ownerDisplayName = $this->getDisplayName($userId);
-				$obj->permission = self::ACCESS_ADMIN;
-				$obj->canWrite = true;
-				return $obj;
+				return $this->buildSublibraryLibrary(
+					$lib,
+					$sublib,
+					$lib->path . ' / ' . $sublib->name,
+					(int)$sublib->folderId,
+					false,
+					$userId,
+					self::ACCESS_ADMIN,
+					true,
+				);
 			}
 
 			$folderId = $this->ensureSublibraryFolderId($sublib, $lib);
@@ -320,18 +342,16 @@ class LibraryShareService {
 				$canWrite = $node->isUpdateable() && $node->isCreatable();
 				$rel = $userFolder->getRelativePath($node->getPath());
 
-				$shared = clone $lib;
-				$shared->id = $libraryId;
-				$shared->path = '/' . ltrim($rel, '/');
-				$shared->sublibraryId = $sublib->id;
-				$shared->sublibraryName = $sublib->name;
-				$shared->folderId = $folderId;
-				$shared->isShared = true;
-				$shared->ownerId = $lib->userId;
-				$shared->ownerDisplayName = $this->getDisplayName($lib->userId);
-				$shared->permission = $canWrite ? self::ACCESS_WRITE : self::ACCESS_READ;
-				$shared->canWrite = $canWrite;
-				return $shared;
+				return $this->buildSublibraryLibrary(
+					$lib,
+					$sublib,
+					'/' . ltrim($rel, '/'),
+					$folderId,
+					true,
+					$lib->userId,
+					$canWrite ? self::ACCESS_WRITE : self::ACCESS_READ,
+					$canWrite,
+				);
 			} catch (\Throwable) {
 				return null;
 			}
@@ -487,17 +507,16 @@ class LibraryShareService {
 					$permission = $canWrite ? self::ACCESS_WRITE : self::ACCESS_READ;
 					$rel = $userFolder->getRelativePath($node->getPath());
 
-					$sharedSub = clone $parentLib;
-					$sharedSub->id = $syntheticId;
-					$sharedSub->path = '/' . ltrim($rel, '/');
-					$sharedSub->sublibraryId = $fSub->id;
-					$sharedSub->sublibraryName = $fSub->name;
-					$sharedSub->folderId = $fSub->folderId;
-					$sharedSub->isShared = true;
-					$sharedSub->ownerId = $parentLib->userId;
-					$sharedSub->ownerDisplayName = $this->getDisplayName($parentLib->userId);
-					$sharedSub->permission = $permission;
-					$sharedSub->canWrite = $canWrite;
+					$sharedSub = $this->buildSublibraryLibrary(
+						$parentLib,
+						$fSub,
+						'/' . ltrim($rel, '/'),
+						$fSub->folderId,
+						true,
+						$parentLib->userId,
+						$permission,
+						$canWrite,
+					);
 
 					$result[] = $sharedSub;
 					$handledIds[$syntheticId] = true;
@@ -557,18 +576,16 @@ class LibraryShareService {
 						}
 
 						$canWrite = $node->isUpdateable() && $node->isCreatable();
-						$shared = clone $parentLib;
-						$shared->id = self::SUBLIBRARY_ID_OFFSET + (int)$sub->id;
-						$shared->path = '/' . $clean;
-						$shared->sublibraryId = $sub->id;
-						$shared->sublibraryName = $sub->name;
-						$shared->folderId = $folderId;
-						$shared->isShared = true;
-						$shared->ownerId = $parentLib->userId;
-						$shared->ownerDisplayName = $this->getDisplayName($parentLib->userId);
-						$shared->permission = $canWrite ? self::ACCESS_WRITE : self::ACCESS_READ;
-						$shared->canWrite = $canWrite;
-						return $shared;
+						return $this->buildSublibraryLibrary(
+							$parentLib,
+							$sub,
+							'/' . $clean,
+							$folderId,
+							true,
+							$parentLib->userId,
+							$canWrite ? self::ACCESS_WRITE : self::ACCESS_READ,
+							$canWrite,
+						);
 					}
 				}
 			}
@@ -615,17 +632,16 @@ class LibraryShareService {
 				if ($sub !== null) {
 					$parentLib = $this->libraryMapper->findById((int)$sub->libraryId);
 					if ($parentLib !== null) {
-						$shared = clone $parentLib;
-						$shared->id = self::SUBLIBRARY_ID_OFFSET + (int)$sub->id;
-						$shared->path = $parentLib->path . ' / ' . $sub->name;
-						$shared->sublibraryId = $sub->id;
-						$shared->sublibraryName = $sub->name;
-						$shared->folderId = $folderId;
-						$shared->isShared = true;
-						$shared->ownerId = $parentLib->userId;
-						$shared->ownerDisplayName = $this->getDisplayName($parentLib->userId);
-						$shared->permission = self::ACCESS_READ;
-						$shared->canWrite = false;
+						$shared = $this->buildSublibraryLibrary(
+							$parentLib,
+							$sub,
+							$parentLib->path . ' / ' . $sub->name,
+							$folderId,
+							true,
+							$parentLib->userId,
+							self::ACCESS_READ,
+							false,
+						);
 
 						return [
 							'library' => $shared,

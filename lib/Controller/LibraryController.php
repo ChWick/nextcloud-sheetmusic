@@ -398,6 +398,15 @@ class LibraryController extends OCSController {
 		}
 	}
 
+	private function parseShareType(mixed $rawShareType): int {
+		return match ($rawShareType) {
+			'user', IShare::TYPE_USER, (string)IShare::TYPE_USER => IShare::TYPE_USER,
+			'group', IShare::TYPE_GROUP, (string)IShare::TYPE_GROUP => IShare::TYPE_GROUP,
+			'link', 'public', IShare::TYPE_LINK, (string)IShare::TYPE_LINK => IShare::TYPE_LINK,
+			default => is_numeric($rawShareType) ? (int)$rawShareType : IShare::TYPE_USER,
+		};
+	}
+
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'POST', url: '/api/libraries/{id}/shares')]
 	public function createShare(
@@ -417,13 +426,7 @@ class LibraryController extends OCSController {
 		}
 
 		$shareWith = (string)$this->request->getParam('shareWith', $shareWith);
-		$rawShareType = $this->request->getParam('shareType', $shareType);
-		$parsedShareType = match ($rawShareType) {
-			'user', IShare::TYPE_USER, (string)IShare::TYPE_USER => IShare::TYPE_USER,
-			'group', IShare::TYPE_GROUP, (string)IShare::TYPE_GROUP => IShare::TYPE_GROUP,
-			'link', IShare::TYPE_LINK, (string)IShare::TYPE_LINK => IShare::TYPE_LINK,
-			default => is_numeric($rawShareType) ? (int)$rawShareType : IShare::TYPE_USER,
-		};
+		$parsedShareType = $this->parseShareType($this->request->getParam('shareType', $shareType));
 		$permission = (string)$this->request->getParam('permission', $permission);
 		$password = $this->request->getParam('password', $password);
 
@@ -536,13 +539,7 @@ class LibraryController extends OCSController {
 		}
 
 		$shareWith = (string)$this->request->getParam('shareWith', $shareWith);
-		$rawShareType = $this->request->getParam('shareType', $shareType);
-		$parsedShareType = match ($rawShareType) {
-			'user', IShare::TYPE_USER, (string)IShare::TYPE_USER => IShare::TYPE_USER,
-			'group', IShare::TYPE_GROUP, (string)IShare::TYPE_GROUP => IShare::TYPE_GROUP,
-			'link', 'public', IShare::TYPE_LINK, (string)IShare::TYPE_LINK => IShare::TYPE_LINK,
-			default => (int)$rawShareType,
-		};
+		$parsedShareType = $this->parseShareType($this->request->getParam('shareType', $shareType));
 		$permission = (string)$this->request->getParam('permission', $permission);
 		$password = $this->request->getParam('password', $password);
 
