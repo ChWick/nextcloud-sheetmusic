@@ -53,27 +53,33 @@ class MobileSheetsSyncBackend implements SyncClientInterface {
 		$this->importer->importFromFile($libraryId, $sourcePath, $userId, null, $sublibrary);
 	}
 
-	public function getVirtualFileProperties(InternalLibrary $library, string $filename, string $userId, ?InternalSublibrary $sublibrary = null): ?array {
+	public function getVirtualFileProperties(
+		InternalLibrary $library,
+		string $filename,
+		string $userId,
+		?InternalSublibrary $sublibrary = null,
+		?string $publicToken = null,
+	): ?array {
 		if (!$this->exporter->hasLibraryData($library, $sublibrary)) {
 			return null;
 		}
 
 		if ($filename === self::VIRTUAL_DB_NAME) {
 			return [
-				'size' => $this->databaseSize($library, $sublibrary),
+				'size' => $this->databaseSize($library, $sublibrary, $userId, $publicToken),
 				'contentType' => self::DB_CONTENT_TYPE,
 				'lastModified' => $library->updatedAt,
-				'etag' => $this->etagFor($library, $filename, $sublibrary),
+				'etag' => $this->etagFor($library, $filename, $sublibrary, $userId, $publicToken),
 			];
 		}
 
 		if ($filename === self::VIRTUAL_HASH_NAME) {
-			$hashcodes = $this->exporter->generateHashcodes($library, $sublibrary);
+			$hashcodes = $this->exporter->generateHashcodes($library, $sublibrary, $userId, $publicToken);
 			return [
 				'size' => strlen($hashcodes),
 				'contentType' => self::HASH_CONTENT_TYPE,
 				'lastModified' => $library->updatedAt,
-				'etag' => $this->etagFor($library, $filename, $sublibrary),
+				'etag' => $this->etagFor($library, $filename, $sublibrary, $userId, $publicToken),
 			];
 		}
 
@@ -87,13 +93,15 @@ class MobileSheetsSyncBackend implements SyncClientInterface {
 		string $filename,
 		bool $isHead,
 		?InternalSublibrary $sublibrary = null,
+		?string $userId = null,
+		?string $publicToken = null,
 	): bool {
 		if ($filename === self::VIRTUAL_DB_NAME) {
-			return $this->handleGetDatabase($request, $response, $library, $isHead, $sublibrary);
+			return $this->handleGetDatabase($request, $response, $library, $isHead, $sublibrary, $userId, $publicToken);
 		}
 
 		if ($filename === self::VIRTUAL_HASH_NAME) {
-			return $this->handleGetHashcodes($request, $response, $library, $isHead, $sublibrary);
+			return $this->handleGetHashcodes($request, $response, $library, $isHead, $sublibrary, $userId, $publicToken);
 		}
 
 		return true;
@@ -105,13 +113,22 @@ class MobileSheetsSyncBackend implements SyncClientInterface {
 		InternalLibrary $library,
 		string $filename,
 		?InternalSublibrary $sublibrary = null,
+		?string $userId = null,
+		bool $canWrite = true,
 	): bool {
+		if (!$canWrite) {
+			$response->setStatus(403);
+			$response->setHeader('Content-Type', 'text/plain; charset=utf-8');
+			$response->setBody('Forbidden: This library is shared as read-only.');
+			return false;
+		}
+
 		if ($filename === self::VIRTUAL_DB_NAME) {
-			return $this->handlePutDatabase($request, $response, $library, $sublibrary);
+			return $this->handlePutDatabase($request, $response, $library, $sublibrary, $userId);
 		}
 
 		if ($filename === self::VIRTUAL_HASH_NAME) {
-			return $this->handlePutHashcodes($response, $library, $sublibrary);
+			return $this->handlePutHashcodes($response, $library, $sublibrary, $userId);
 		}
 
 		return true;
@@ -123,15 +140,17 @@ class MobileSheetsSyncBackend implements SyncClientInterface {
 		InternalLibrary $library,
 		bool $isHead,
 		?InternalSublibrary $sublibrary = null,
+		?string $userId = null,
+		?string $publicToken = null,
 	): bool {
-		$etag = $this->etagFor($library, self::VIRTUAL_DB_NAME, $sublibrary);
+		$etag = $this->etagFor($library, self::VIRTUAL_DB_NAME, $sublibrary, $userId, $publicToken);
 
 		if ($this->checkNotModified($request, $response, $etag)) {
 			return false;
 		}
 
 		try {
-			$cachePath = $this->ensureDatabaseExport($library, $sublibrary);
+			$cachePath = $this->ensureDatabaseExport($library, $sublibrary, $userId, $publicToken);
 		} catch (\Throwable $e) {
 			$this->logger->error('Failed to export MobileSheets database for WebDAV: ' . $e->getMessage(), [
 				'exception' => $e,
@@ -157,6 +176,7 @@ class MobileSheetsSyncBackend implements SyncClientInterface {
 		ResponseInterface $response,
 		InternalLibrary $library,
 		?InternalSublibrary $sublibrary = null,
+		?string $userId = null,
 	): bool {
 		$body = $request->getBody();
 		$tempUpload = tempnam(sys_get_temp_dir(), 'sm_upload_') . '.db';
@@ -170,7 +190,7 @@ class MobileSheetsSyncBackend implements SyncClientInterface {
 		}
 
 		try {
-			$this->importer->importFromFile($library, $tempUpload, null, null, $sublibrary);
+			$this->importer->importFromFile($library, $tempUpload, $userId, null, $sublibrary);
 		} finally {
 			if (file_exists($tempUpload)) {
 				@unlink($tempUpload);
@@ -184,7 +204,7 @@ class MobileSheetsSyncBackend implements SyncClientInterface {
 		$updated ??= $library;
 
 		$response->setStatus(204);
-		$response->setHeader('ETag', $this->etagFor($updated, self::VIRTUAL_DB_NAME, $sublibrary));
+		$response->setHeader('ETag', $this->etagFor($updated, self::VIRTUAL_DB_NAME, $sublibrary, $userId));
 		return false;
 	}
 
@@ -194,14 +214,16 @@ class MobileSheetsSyncBackend implements SyncClientInterface {
 		InternalLibrary $library,
 		bool $isHead,
 		?InternalSublibrary $sublibrary = null,
+		?string $userId = null,
+		?string $publicToken = null,
 	): bool {
-		$etag = $this->etagFor($library, self::VIRTUAL_HASH_NAME, $sublibrary);
+		$etag = $this->etagFor($library, self::VIRTUAL_HASH_NAME, $sublibrary, $userId, $publicToken);
 
 		if ($this->checkNotModified($request, $response, $etag)) {
 			return false;
 		}
 
-		$hashcodes = $this->exporter->generateHashcodes($library, $sublibrary);
+		$hashcodes = $this->exporter->generateHashcodes($library, $sublibrary, $userId, $publicToken);
 		$this->setSuccessHeaders($response, self::HASH_CONTENT_TYPE, strlen($hashcodes), $etag, $library);
 
 		if (!$isHead) {
@@ -244,21 +266,32 @@ class MobileSheetsSyncBackend implements SyncClientInterface {
 		return false;
 	}
 
-	public function ensureDatabaseExport(InternalLibrary $library, ?InternalSublibrary $sublibrary = null): string {
+	public function ensureDatabaseExport(
+		InternalLibrary $library,
+		?InternalSublibrary $sublibrary = null,
+		?string $userId = null,
+		?string $publicToken = null,
+	): string {
 		$owner = function_exists('posix_geteuid') ? (string)posix_geteuid() : get_current_user();
 		$tempDir = sys_get_temp_dir() . '/sheetmusic_dav_cache_' . $owner;
 		if (!is_dir($tempDir)) {
 			@mkdir($tempDir, 0700, true);
 		}
 		$subSuffix = $sublibrary !== null ? '_sub_' . (int)$sublibrary->id : '';
-		$prefix = $tempDir . '/sm_' . (int)$library->id . $subSuffix . '_';
+		$userSuffix = '';
+		if ($publicToken !== null) {
+			$userSuffix = '_pub_' . $publicToken;
+		} elseif ($userId !== null && $userId !== $library->userId) {
+			$userSuffix = '_u_' . $userId;
+		}
+		$prefix = $tempDir . '/sm_' . (int)$library->id . $userSuffix . $subSuffix . '_';
 		$timestamp = max($library->updatedAt, $sublibrary?->updatedAt ?? 0);
 		$cachePath = $prefix . $timestamp . '.db';
 
 		if (!file_exists($cachePath)) {
 			$partPath = $cachePath . '.' . bin2hex(random_bytes(4)) . '.part';
 			try {
-				$this->exporter->exportToFile($library, $partPath, null, $sublibrary);
+				$this->exporter->exportToFile($library, $partPath, $userId, $sublibrary, $publicToken);
 				rename($partPath, $cachePath);
 			} finally {
 				if (file_exists($partPath)) {
@@ -277,9 +310,14 @@ class MobileSheetsSyncBackend implements SyncClientInterface {
 		return $cachePath;
 	}
 
-	public function databaseSize(InternalLibrary $library, ?InternalSublibrary $sublibrary = null): int {
+	public function databaseSize(
+		InternalLibrary $library,
+		?InternalSublibrary $sublibrary = null,
+		?string $userId = null,
+		?string $publicToken = null,
+	): int {
 		try {
-			return (int)filesize($this->ensureDatabaseExport($library, $sublibrary));
+			return (int)filesize($this->ensureDatabaseExport($library, $sublibrary, $userId, $publicToken));
 		} catch (\Throwable $e) {
 			$this->logger->warning('Could not determine size of virtual MobileSheets database', [
 				'exception' => $e,
@@ -289,12 +327,25 @@ class MobileSheetsSyncBackend implements SyncClientInterface {
 		}
 	}
 
-	public function etagFor(InternalLibrary $library, string $filename, ?InternalSublibrary $sublibrary = null): string {
+	public function etagFor(
+		InternalLibrary $library,
+		string $filename,
+		?InternalSublibrary $sublibrary = null,
+		?string $userId = null,
+		?string $publicToken = null,
+	): string {
 		$prefix = $filename === self::VIRTUAL_DB_NAME ? 'sm-db' : 'sm-hash';
-		if ($sublibrary !== null) {
-			return sprintf('"%s-%d-%d-%d"', $prefix, $library->id, $sublibrary->id, max($library->updatedAt, $sublibrary->updatedAt));
+		$userPart = '';
+		if ($publicToken !== null) {
+			$userPart = '-pub-' . $publicToken;
+		} elseif ($userId !== null && $userId !== $library->userId) {
+			$userPart = '-u-' . $userId;
 		}
-		return sprintf('"%s-%d-%d"', $prefix, $library->id, $library->updatedAt);
+		$ts = max($library->updatedAt, $sublibrary?->updatedAt ?? 0);
+		if ($sublibrary !== null) {
+			return sprintf('"%s-%d%s-%d-%d"', $prefix, $library->id, $userPart, $sublibrary->id, $ts);
+		}
+		return sprintf('"%s-%d%s-%d"', $prefix, $library->id, $userPart, $ts);
 	}
 
 	private function httpDate(InternalLibrary $library): string {

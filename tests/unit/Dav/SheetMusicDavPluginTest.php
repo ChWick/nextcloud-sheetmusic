@@ -12,6 +12,7 @@ namespace Dav;
 use OCA\SheetMusic\Dav\SheetMusicDavPlugin;
 use OCA\SheetMusic\Db\InternalLibrary;
 use OCA\SheetMusic\Db\SublibraryMapper;
+use OCA\SheetMusic\Service\LibraryShareService;
 use OCA\SheetMusic\Service\SublibraryService;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSqliteExporter;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSqliteImporter;
@@ -32,6 +33,8 @@ final class SheetMusicDavPluginTest extends TestCase {
 	private FakeUserSession $userSession;
 	private SheetMusicDavPlugin $plugin;
 	private InternalLibrary $library;
+	private ?LibraryShareService $shareService = null;
+	private ?\OCP\Share\IManager $shareManager = null;
 
 	protected function setUp(): void {
 		parent::setUp();
@@ -106,6 +109,15 @@ final class SheetMusicDavPluginTest extends TestCase {
 			$this->sublibraryService,
 		);
 
+		$this->shareManager = $this->createMock(\OCP\Share\IManager::class);
+		$this->shareService = new LibraryShareService(
+			$this->libraryMapper,
+			$this->rootFolder,
+			$this->shareManager,
+			$this->userManager,
+			null,
+		);
+
 		$this->plugin = new SheetMusicDavPlugin(
 			$this->libraryMapper,
 			$this->exporter,
@@ -115,6 +127,7 @@ final class SheetMusicDavPluginTest extends TestCase {
 			null,
 			$this->rootFolder,
 			$this->sublibraryService,
+			$this->shareService,
 		);
 	}
 
@@ -730,6 +743,58 @@ final class SheetMusicDavPluginTest extends TestCase {
 		$hashBody = $getHashRes->getBody();
 		$hashContent = is_resource($hashBody) ? stream_get_contents($hashBody) : (string)$hashBody;
 		self::assertStringContainsString('OrganChorale.pdf', $hashContent);
+	}
+
+	public function testPublicLinkWebdavSyncExportsDbAndBlocksPut(): void {
+		$folderId = $this->shareService->ensureLibraryFolderId($this->library);
+		self::assertNotNull($folderId);
+
+		$mockShare = $this->createMock(\OCP\Share\IShare::class);
+		$mockFolder = $this->createMock(\OCP\Files\Folder::class);
+		$mockFolder->method('getId')->willReturn($folderId);
+
+		$mockShare->method('getNode')->willReturn($mockFolder);
+		$mockShare->method('getTarget')->willReturn('/My Noten');
+		$mockShare->method('getSharedBy')->willReturn('admin');
+		$mockShare->method('getToken')->willReturn('pubLinkToken123');
+
+		$this->shareManager->method('getShareByToken')->with('pubLinkToken123')->willReturn($mockShare);
+
+		// Match virtual path via legacy public-files
+		$match = $this->plugin->matchVirtualPath('public-files/pubLinkToken123/mobilesheets.db');
+		self::assertNotNull($match);
+		self::assertSame((int)$this->library->id, (int)$match['library']->id);
+		self::assertFalse($match['canWrite']);
+		self::assertSame('pubLinkToken123', $match['publicToken']);
+
+		// GET mobilesheets.db via legacy public link returns 200
+		$getReq = new Request('GET', '/public-files/pubLinkToken123/mobilesheets.db');
+		$getRes = new Response();
+		self::assertFalse($this->plugin->beforeMethod($getReq, $getRes));
+		self::assertSame(200, $getRes->getStatus());
+		self::assertSame('application/x-sqlite3', $getRes->getHeader('Content-Type'));
+
+		// PUT mobilesheets.db via public link returns 403 Forbidden
+		$putReq = new Request('PUT', '/public-files/pubLinkToken123/mobilesheets.db');
+		$putRes = new Response();
+		self::assertFalse($this->plugin->beforeMethod($putReq, $putRes));
+		self::assertSame(403, $putRes->getStatus());
+
+		// Test public DAV endpoint under /public.php/dav/
+		$this->attachServer('/public.php/dav/');
+		$pubDavReq = new Request('GET', '/public.php/dav/files/pubLinkToken123/mobilesheets.db');
+		$pubDavReq->setBaseUrl('/public.php/dav/');
+		$pubDavRes = new Response();
+		self::assertFalse($this->plugin->beforeMethod($pubDavReq, $pubDavRes));
+		self::assertSame(200, $pubDavRes->getStatus());
+		self::assertSame('application/x-sqlite3', $pubDavRes->getHeader('Content-Type'));
+
+		// PUT under public DAV endpoint returns 403 Forbidden
+		$pubDavPutReq = new Request('PUT', '/public.php/dav/files/pubLinkToken123/mobilesheets.db');
+		$pubDavPutReq->setBaseUrl('/public.php/dav/');
+		$pubDavPutRes = new Response();
+		self::assertFalse($this->plugin->beforeMethod($pubDavPutReq, $pubDavPutRes));
+		self::assertSame(403, $pubDavPutRes->getStatus());
 	}
 }
 

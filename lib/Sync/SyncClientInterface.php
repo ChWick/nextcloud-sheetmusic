@@ -57,6 +57,8 @@ interface SyncClientInterface {
 		string $filename,
 		bool $isHead,
 		?InternalSublibrary $sublibrary = null,
+		?string $userId = null,
+		?string $publicToken = null,
 	): bool;
 
 	/**
@@ -70,6 +72,8 @@ interface SyncClientInterface {
 		InternalLibrary $library,
 		string $filename,
 		?InternalSublibrary $sublibrary = null,
+		?string $userId = null,
+		bool $canWrite = true,
 	): bool;
 
 	/**
@@ -77,5 +81,11 @@ interface SyncClientInterface {
 	 *
 	 * @return array{size: int, contentType: string, lastModified: int}|null
 	 */
-	public function getVirtualFileProperties(InternalLibrary $library, string $filename, string $userId, ?InternalSublibrary $sublibrary = null): ?array;
+	public function getVirtualFileProperties(
+		InternalLibrary $library,
+		string $filename,
+		string $userId,
+		?InternalSublibrary $sublibrary = null,
+		?string $publicToken = null,
+	): ?array;
 }

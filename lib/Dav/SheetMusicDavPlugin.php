@@ -12,6 +12,7 @@ namespace OCA\SheetMusic\Dav;
 use OCA\SheetMusic\Db\InternalLibrary;
 use OCA\SheetMusic\Db\InternalSublibrary;
 use OCA\SheetMusic\Db\LibraryMapper;
+use OCA\SheetMusic\Service\LibraryShareService;
 use OCA\SheetMusic\Service\SublibraryService;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSqliteExporter;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSqliteImporter;
@@ -71,6 +72,7 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		?SyncClientRegistry $registry = null,
 		private ?IRootFolder $rootFolder = null,
 		private ?SublibraryService $sublibraryService = null,
+		private ?LibraryShareService $libraryShareService = null,
 	) {
 		$this->registry = $registry ?? new SyncClientRegistry();
 		if ($this->registry->getClients() === []) {
@@ -142,11 +144,14 @@ class SheetMusicDavPlugin extends ServerPlugin {
 			$library = $match['library'];
 			$filename = $match['filename'];
 			$sublibrary = $match['sublibrary'] ?? null;
+			$targetUserId = $match['userId'] ?? $library->userId;
+			$publicToken = $match['publicToken'] ?? null;
+			$canWrite = $match['canWrite'] ?? true;
 
 			$handled = !match ($method) {
-				'GET', 'HEAD' => $client->handleGet($request, $response, $library, $filename, $method === 'HEAD', $sublibrary),
-				'PUT' => $client->handlePut($request, $response, $library, $filename, $sublibrary),
-				'PROPFIND' => $this->handlePropfindFile($request, $response, $library, $path, $filename, $client, $sublibrary),
+				'GET', 'HEAD' => $client->handleGet($request, $response, $library, $filename, $method === 'HEAD', $sublibrary, $targetUserId, $publicToken),
+				'PUT' => $client->handlePut($request, $response, $library, $filename, $sublibrary, $targetUserId, $canWrite),
+				'PROPFIND' => $this->handlePropfindFile($request, $response, $library, $path, $filename, $client, $sublibrary, $targetUserId, $publicToken, $canWrite),
 				// The files cannot be removed; acknowledge so clients that delete
 				// before re-uploading keep going.
 				'DELETE' => $this->acknowledge($response),
@@ -193,6 +198,7 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		}
 
 		$path = trim($request->getPath(), '/');
+		$context = $this->resolveDavContext($path);
 
 		try {
 			$library = $this->findLibraryByFolderPath($path);
@@ -207,27 +213,34 @@ class SheetMusicDavPlugin extends ServerPlugin {
 			return;
 		}
 
+		$targetUserId = $context['userId'] ?? $library->userId;
+		$publicToken = $context['publicToken'] ?? null;
+		$canWrite = $library->isShared ? ($library->canWrite ?? false) : true;
+		if ($publicToken !== null) {
+			$canWrite = false;
+		}
+
 		$this->logger->info(sprintf('SheetMusicDavPlugin: afterPropfind injected into path=%s for library=%d', $path, $library->id));
 
 		$body = $response->getBody();
 		if (is_callable($body)) {
 			// Streamed multistatus (legacy endpoint): the listing is produced
 			// lazily while the response is sent, so it can only be consumed once.
-			$response->setBody(function () use ($body, $library, $path, $requestBody): void {
+			$response->setBody(function () use ($body, $library, $path, $requestBody, $targetUserId, $publicToken, $canWrite): void {
 				ob_start();
 				try {
 					$body();
 				} finally {
 					$xml = (string)ob_get_clean();
 				}
-				echo $this->injectVirtualEntries($xml, $library, $path, $requestBody);
+				echo $this->injectVirtualEntries($xml, $library, $path, $requestBody, $targetUserId, $publicToken, $canWrite);
 			});
 			$response->removeHeader('Content-Length');
 			return;
 		}
 
 		$xml = $response->getBodyAsString();
-		$newBody = $this->injectVirtualEntries($xml, $library, $path, $requestBody);
+		$newBody = $this->injectVirtualEntries($xml, $library, $path, $requestBody, $targetUserId, $publicToken, $canWrite);
 		if ($newBody !== $xml) {
 			$response->setBody($newBody);
 			$response->setHeader('Content-Length', (string)strlen($newBody));
@@ -239,7 +252,15 @@ class SheetMusicDavPlugin extends ServerPlugin {
 	 *
 	 * @return string the listing with the entries, or unchanged on failure
 	 */
-	private function injectVirtualEntries(string $xml, InternalLibrary $library, string $path, ?string $requestBody): string {
+	private function injectVirtualEntries(
+		string $xml,
+		InternalLibrary $library,
+		string $path,
+		?string $requestBody,
+		?string $userId = null,
+		?string $publicToken = null,
+		bool $canWrite = true,
+	): string {
 		if ($xml === '') {
 			return $xml;
 		}
@@ -259,7 +280,7 @@ class SheetMusicDavPlugin extends ServerPlugin {
 					continue;
 				}
 				$client = $this->registry->getClientForVirtualFile($filename);
-				$entry = $this->buildPropfindEntry($library, $path . '/' . $filename, $filename, $requestBody, $client);
+				$entry = $this->buildPropfindEntry($library, $path . '/' . $filename, $filename, $requestBody, $client, null, $userId, $publicToken, $canWrite);
 				if ($entry !== null) {
 					$entries[] = $entry;
 				}
@@ -311,8 +332,11 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		string $filename,
 		?SyncClientInterface $client = null,
 		?InternalSublibrary $sublibrary = null,
+		?string $userId = null,
+		?string $publicToken = null,
+		bool $canWrite = true,
 	): bool {
-		$entry = $this->buildPropfindEntry($library, $path, $filename, $request->getBodyAsString(), $client, $sublibrary);
+		$entry = $this->buildPropfindEntry($library, $path, $filename, $request->getBodyAsString(), $client, $sublibrary, $userId, $publicToken, $canWrite);
 		if ($entry === null) {
 			$response->setStatus(404);
 			return false;
@@ -345,9 +369,13 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		?string $requestBody,
 		?SyncClientInterface $client = null,
 		?InternalSublibrary $sublibrary = null,
+		?string $userId = null,
+		?string $publicToken = null,
+		bool $canWrite = true,
 	): ?array {
 		$client ??= $this->registry->getClientForVirtualFile($filename);
-		$props = $client?->getVirtualFileProperties($library, $filename, $library->userId ?? '', $sublibrary);
+		$targetUserId = $userId ?? $library->userId ?? '';
+		$props = $client?->getVirtualFileProperties($library, $filename, $targetUserId, $sublibrary, $publicToken);
 		if ($props === null) {
 			return null;
 		}
@@ -377,7 +405,7 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		$propFind->set('{DAV:}getetag', $etag);
 		$propFind->set('{DAV:}resourcetype', new ResourceType());
 		$propFind->set('{' . self::OC_NS . '}size', $size);
-		$propFind->set('{' . self::OC_NS . '}permissions', 'RGDNVW');
+		$propFind->set('{' . self::OC_NS . '}permissions', $canWrite ? 'RGDNVW' : 'RG');
 
 		$entry = $propFind->getResultForMultiStatus();
 		$entry['href'] = $path;
@@ -469,7 +497,7 @@ class SheetMusicDavPlugin extends ServerPlugin {
 	}
 
 	/**
-	 * @return array{client: SyncClientInterface, library: InternalLibrary, filename: string, sublibrary: ?InternalSublibrary}|null
+	 * @return array{client: SyncClientInterface, library: InternalLibrary, filename: string, sublibrary: ?InternalSublibrary, userId: ?string, publicToken: ?string, canWrite: bool}|null
 	 */
 	public function matchVirtualPath(string $path): ?array {
 		$path = trim($path, '/');
@@ -482,10 +510,21 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		$folder = dirname($path);
 		$folder = ($folder === '.' ? '' : $folder);
 
+		$context = $this->resolveDavContext($folder);
+
 		$resolvedSub = $this->resolveSublibraryFromPath($folder);
 		if ($resolvedSub !== null) {
 			[$library, $sublibrary] = $resolvedSub;
-			return ['client' => $client, 'library' => $library, 'filename' => $filename, 'sublibrary' => $sublibrary];
+			$canWrite = $library->isShared ? ($library->canWrite ?? false) : true;
+			return [
+				'client' => $client,
+				'library' => $library,
+				'filename' => $filename,
+				'sublibrary' => $sublibrary,
+				'userId' => $context['userId'] ?? $library->userId,
+				'publicToken' => $context['publicToken'] ?? null,
+				'canWrite' => $canWrite,
+			];
 		}
 
 		$library = $this->findLibraryByFolderPath($folder);
@@ -493,7 +532,20 @@ class SheetMusicDavPlugin extends ServerPlugin {
 			return null;
 		}
 
-		return ['client' => $client, 'library' => $library, 'filename' => $filename, 'sublibrary' => null];
+		$canWrite = $library->isShared ? ($library->canWrite ?? false) : true;
+		if ($context !== null && $context['publicToken'] !== null) {
+			$canWrite = false;
+		}
+
+		return [
+			'client' => $client,
+			'library' => $library,
+			'filename' => $filename,
+			'sublibrary' => null,
+			'userId' => $context['userId'] ?? $library->userId,
+			'publicToken' => $context['publicToken'] ?? null,
+			'canWrite' => $canWrite,
+		];
 	}
 
 	/**
@@ -801,7 +853,7 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		}
 
 		$library = $this->findLibraryForRelativePath($userId, $relPath);
-		if ($library === null) {
+		if ($library === null || ($library->isShared && !$library->canWrite)) {
 			return;
 		}
 
@@ -826,10 +878,22 @@ class SheetMusicDavPlugin extends ServerPlugin {
 	}
 
 	private function findLibraryForRelativePath(string $userId, string $relPath): ?InternalLibrary {
+		$cleanRel = trim($relPath, '/');
 		foreach ($this->libraryMapper->findAllForUser($userId) as $lib) {
 			$cleanLibFolder = $this->cleanLibraryFolder($lib);
-			if ($cleanLibFolder !== '' && ($relPath === $cleanLibFolder || str_starts_with($relPath, $cleanLibFolder . '/'))) {
+			if ($cleanLibFolder !== '' && ($cleanRel === $cleanLibFolder || str_starts_with($cleanRel, $cleanLibFolder . '/'))) {
 				return $lib;
+			}
+		}
+		if ($this->libraryShareService !== null) {
+			$accessible = $this->libraryShareService->getAccessibleLibraries($userId);
+			foreach ($accessible as $lib) {
+				if ($lib->isShared) {
+					$cleanLibFolder = $this->cleanLibraryFolder($lib);
+					if ($cleanLibFolder !== '' && ($cleanRel === $cleanLibFolder || str_starts_with($cleanRel, $cleanLibFolder . '/'))) {
+						return $lib;
+					}
+				}
 			}
 		}
 		return null;
@@ -845,11 +909,21 @@ class SheetMusicDavPlugin extends ServerPlugin {
 	}
 
 	public function findLibraryByFolderPath(string $path): ?InternalLibrary {
-		$resolved = $this->resolveUserFolder($path);
-		if ($resolved === null) {
+		$context = $this->resolveDavContext($path);
+		if ($context === null) {
 			return null;
 		}
-		[$userId, $folderPath] = $resolved;
+
+		if ($context['publicToken'] !== null) {
+			$info = $this->libraryShareService?->findLibraryByPublicToken($context['publicToken']);
+			return $info['library'] ?? null;
+		}
+
+		$userId = $context['userId'];
+		if ($userId === null) {
+			return null;
+		}
+		$folderPath = $context['relPath'];
 
 		foreach ($this->libraryMapper->findAllForUser($userId) as $lib) {
 			if ($this->cleanLibraryFolder($lib) === $folderPath) {
@@ -857,6 +931,100 @@ class SheetMusicDavPlugin extends ServerPlugin {
 			}
 		}
 
+		if ($this->libraryShareService !== null) {
+			$shared = $this->libraryShareService->findSharedLibraryByFolderPath($userId, $folderPath);
+			if ($shared !== null) {
+				return $shared;
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * @return array{userId: ?string, publicToken: ?string, relPath: string}|null
+	 */
+	private function resolveDavContext(string $path): ?array {
+		$path = trim($path, '/');
+		if (str_starts_with($path, 'remote.php/dav/')) {
+			$path = substr($path, strlen('remote.php/dav/'));
+		}
+		if (str_starts_with($path, 'public.php/dav/')) {
+			$path = substr($path, strlen('public.php/dav/'));
+		}
+		$sessionUser = $this->userSession->getUser()?->getUID();
+
+		// Legacy public endpoint (/public.php/webdav): share is at root, token is the auth user
+		if ($this->isLegacyPublicWebdav()) {
+			$token = $this->resolvePublicWebdavToken();
+			return $token === null ? null : [
+				'userId' => null,
+				'publicToken' => $token,
+				'relPath' => $path,
+			];
+		}
+
+		// Legacy endpoint (remote.php/webdav): paths are relative to the files
+		// root of the authenticated user.
+		if ($this->isLegacyWebdav()) {
+			return $sessionUser === null ? null : [
+				'userId' => $sessionUser,
+				'publicToken' => null,
+				'relPath' => $path,
+			];
+		}
+
+		$parts = explode('/', $path);
+		if (count($parts) < 2) {
+			return null;
+		}
+
+		// Public DAV endpoint (/public.php/dav/files/<token>/...)
+		if ($this->isPublicDav()) {
+			if ($parts[0] === 'files' && $parts[1] !== '') {
+				return [
+					'userId' => null,
+					'publicToken' => $parts[1],
+					'relPath' => implode('/', array_slice($parts, 2)),
+				];
+			}
+			return null;
+		}
+
+		if ($parts[0] === 'files' && $parts[1] !== '') {
+			$userId = $parts[1];
+			if ($sessionUser !== null && $sessionUser !== $userId) {
+				return null;
+			}
+			return [
+				'userId' => $userId,
+				'publicToken' => null,
+				'relPath' => implode('/', array_slice($parts, 2)),
+			];
+		}
+
+		if ($parts[0] === 'public-files' && $parts[1] !== '') {
+			return [
+				'userId' => null,
+				'publicToken' => $parts[1],
+				'relPath' => implode('/', array_slice($parts, 2)),
+			];
+		}
+
+		return null;
+	}
+
+	private function resolvePublicWebdavToken(): ?string {
+		if (isset($_SERVER['PHP_AUTH_USER']) && $_SERVER['PHP_AUTH_USER'] !== '') {
+			return $_SERVER['PHP_AUTH_USER'];
+		}
+		$auth = $this->server?->httpRequest->getHeader('Authorization');
+		if ($auth && str_starts_with(strtolower($auth), 'basic ')) {
+			$decoded = base64_decode(substr($auth, 6), true);
+			if ($decoded && str_contains($decoded, ':')) {
+				return explode(':', $decoded, 2)[0];
+			}
+		}
 		return null;
 	}
 
@@ -867,34 +1035,25 @@ class SheetMusicDavPlugin extends ServerPlugin {
 	 * @return array{0: string, 1: string}|null
 	 */
 	private function resolveUserFolder(string $path): ?array {
-		$path = trim($path, '/');
-		if (str_starts_with($path, 'remote.php/dav/')) {
-			$path = substr($path, strlen('remote.php/dav/'));
-		}
-		$sessionUser = $this->userSession->getUser()?->getUID();
-
-		// Legacy endpoint (remote.php/webdav): paths are relative to the files
-		// root of the authenticated user.
-		if ($this->isLegacyWebdav()) {
-			return $sessionUser === null ? null : [$sessionUser, $path];
-		}
-
-		$parts = explode('/', $path);
-		if (count($parts) < 2 || $parts[0] !== 'files' || $parts[1] === '') {
+		$context = $this->resolveDavContext($path);
+		if ($context === null || $context['userId'] === null) {
 			return null;
 		}
+		return [$context['userId'], $context['relPath']];
+	}
 
-		$userId = $parts[1];
-		// Never expose a library to anybody but its owner.
-		if ($sessionUser !== $userId) {
-			return null;
-		}
-
-		return [$userId, implode('/', array_slice($parts, 2))];
+	private function isPublicDav(): bool {
+		$baseUri = $this->server?->getBaseUri() ?? '';
+		return str_contains($baseUri, 'public.php');
 	}
 
 	private function isLegacyWebdav(): bool {
 		$baseUri = $this->server?->getBaseUri() ?? '';
-		return str_ends_with(rtrim($baseUri, '/'), '/webdav');
+		return !str_contains($baseUri, 'public.php') && str_ends_with(rtrim($baseUri, '/'), '/webdav');
+	}
+
+	private function isLegacyPublicWebdav(): bool {
+		$baseUri = $this->server?->getBaseUri() ?? '';
+		return str_contains($baseUri, 'public.php') && str_ends_with(rtrim($baseUri, '/'), '/webdav');
 	}
 }
