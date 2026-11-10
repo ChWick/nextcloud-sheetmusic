@@ -43,6 +43,7 @@ import ShieldCheck from 'vue-material-design-icons/ShieldCheck.vue'
 import Wrench from 'vue-material-design-icons/Wrench.vue'
 import TrashCanOutline from 'vue-material-design-icons/TrashCanOutline.vue'
 import FolderSyncOutline from 'vue-material-design-icons/FolderSyncOutline.vue'
+import ShareVariantOutline from 'vue-material-design-icons/ShareVariantOutline.vue'
 import SongsView from './components/SongsView.vue'
 import SetlistsView from './components/SetlistsView.vue'
 import SublibrariesView from './components/SublibrariesView.vue'
@@ -51,6 +52,7 @@ import ToolsView from './components/ToolsView.vue'
 import EntitiesView from './components/EntitiesView.vue'
 import TrashView from './components/TrashView.vue'
 import LibrarySettingsDialog from './components/LibrarySettingsDialog.vue'
+import ShareDialog from './components/ShareDialog.vue'
 
 /** Views of a library: the song view, one view per song filter, integrity audit, and tools. */
 type ViewName = 'songs' | 'new-song' | 'setlists' | 'sublibraries' | 'integrity' | 'tools' | 'trash' | EntityType
@@ -69,6 +71,7 @@ interface ImportProgress {
 const isAddDialogOpen = ref(false)
 const isImportDialogOpen = ref(false)
 const isSettingsDialogOpen = ref(false)
+const isShareDialogOpen = ref(false)
 const importPdfMetadata = ref(true)
 const selectedFolder = ref<INode>()
 const selectedDbFile = ref<INode>()
@@ -571,6 +574,17 @@ async function deleteLibrary() {
                   {{ t('sheetmusic', 'Import MobileSheets library') }}
                 </NcActionButton>
               </NcActions>
+              <NcButton v-if="selectedLibrary >= 0 && currentLibrary && !currentLibrary.isShared"
+                        type="button"
+                        variant="tertiary"
+                        :title="t('sheetmusic', 'Share library')"
+                        :aria-label="t('sheetmusic', 'Share library')"
+                        :class="$style.settingsButton"
+                        @click="isShareDialogOpen = true">
+                <template #icon>
+                  <ShareVariantOutline :size="20" />
+                </template>
+              </NcButton>
               <NcButton v-if="selectedLibrary >= 0"
                         type="button"
                         variant="tertiary"
@@ -693,6 +707,12 @@ async function deleteLibrary() {
       @delete="openDeleteDialog"
       @update:libraries="libraries = $event"
       @open-sublibraries="handleOpenSublibraries" />
+
+    <ShareDialog
+      v-if="isShareDialogOpen && selectedLibrary >= 0 && currentLibrary"
+      :library-id="selectedLibrary"
+      :library-name="selectedLibraryPath"
+      @close="isShareDialogOpen = false" />
   </div>
 </template>
 
