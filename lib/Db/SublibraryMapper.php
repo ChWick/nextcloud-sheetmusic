@@ -91,6 +91,7 @@ class SublibraryMapper {
 				'filters_json' => $qb->createNamedParameter($filtersJson, IQueryBuilder::PARAM_STR),
 				'created_at' => $qb->createNamedParameter($sublibrary->createdAt, IQueryBuilder::PARAM_INT),
 				'updated_at' => $qb->createNamedParameter($sublibrary->updatedAt, IQueryBuilder::PARAM_INT),
+				'folder_id' => $qb->createNamedParameter($sublibrary->folderId, IQueryBuilder::PARAM_INT),
 			]);
 
 		$qb->executeStatement();
@@ -126,5 +127,46 @@ class SublibraryMapper {
 			->where($qb->expr()->eq('id', $qb->createNamedParameter($id, IQueryBuilder::PARAM_INT)));
 
 		return $qb->executeStatement() > 0;
+	}
+
+	public function updateFolderId(int $sublibraryId, int $folderId): void {
+		$qb = $this->db->getQueryBuilder();
+		$qb->update(self::TABLE_NAME)
+			->set('folder_id', $qb->createNamedParameter($folderId, IQueryBuilder::PARAM_INT))
+			->where($qb->expr()->eq('id', $qb->createNamedParameter($sublibraryId, IQueryBuilder::PARAM_INT)));
+		$qb->executeStatement();
+	}
+
+	public function findByFolderId(int $folderId): ?InternalSublibrary {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from(self::TABLE_NAME)
+			->where($qb->expr()->eq('folder_id', $qb->createNamedParameter($folderId, IQueryBuilder::PARAM_INT)))
+			->setMaxResults(1);
+
+		$row = $qb->executeQuery()->fetchAssociative();
+
+		return $row === false ? null : InternalSublibrary::fromRow($row);
+	}
+
+	/**
+	 * @return list<InternalSublibrary>
+	 */
+	public function findAllNotOwnedBy(string $userId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('s.*')
+			->from(self::TABLE_NAME, 's')
+			->innerJoin('s', LibraryMapper::TABLE_NAME, 'l', $qb->expr()->eq('s.library_id', 'l.id'))
+			->where($qb->expr()->neq('l.user_id', $qb->createNamedParameter($userId, IQueryBuilder::PARAM_STR)))
+			->orderBy('s.name', 'ASC');
+
+		$result = $qb->executeQuery();
+		$results = [];
+		while ($row = $result->fetchAssociative()) {
+			$results[] = InternalSublibrary::fromRow($row);
+		}
+		$result->closeCursor();
+
+		return $results;
 	}
 }

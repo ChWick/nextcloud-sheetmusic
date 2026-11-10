@@ -23,6 +23,12 @@ class InternalSublibrary implements JsonSerializable {
 		public array $filters = [],
 		public int $createdAt = 0,
 		public int $updatedAt = 0,
+		public ?int $folderId = null,
+		public bool $isShared = false,
+		public string $ownerId = '',
+		public string $ownerDisplayName = '',
+		public string $permission = 'admin',
+		public bool $canWrite = true,
 	) {
 	}
 
@@ -52,6 +58,12 @@ class InternalSublibrary implements JsonSerializable {
 			filters: $filters,
 			createdAt: (int)($row['created_at'] ?? $row['createdAt'] ?? 0),
 			updatedAt: (int)($row['updated_at'] ?? $row['updatedAt'] ?? 0),
+			folderId: isset($row['folder_id']) && $row['folder_id'] !== null ? (int)$row['folder_id'] : (isset($row['folderId']) && $row['folderId'] !== null ? (int)$row['folderId'] : null),
+			isShared: isset($row['is_shared']) ? (bool)$row['is_shared'] : (isset($row['isShared']) ? (bool)$row['isShared'] : false),
+			ownerId: (string)($row['owner_id'] ?? $row['ownerId'] ?? ''),
+			ownerDisplayName: (string)($row['owner_display_name'] ?? $row['ownerDisplayName'] ?? ''),
+			permission: (string)($row['permission'] ?? 'admin'),
+			canWrite: isset($row['can_write']) ? (bool)$row['can_write'] : (isset($row['canWrite']) ? (bool)$row['canWrite'] : true),
 		);
 	}
 
@@ -67,6 +79,12 @@ class InternalSublibrary implements JsonSerializable {
 			'filters' => $this->filters,
 			'createdAt' => $this->createdAt,
 			'updatedAt' => $this->updatedAt,
+			'folderId' => $this->folderId,
+			'isShared' => $this->isShared,
+			'ownerId' => $this->ownerId,
+			'ownerDisplayName' => $this->ownerDisplayName,
+			'permission' => $this->permission,
+			'canWrite' => $this->canWrite,
 		];
 	}
 
@@ -81,6 +99,12 @@ class InternalSublibrary implements JsonSerializable {
 			'name' => $this->name,
 			'slug' => $this->slug,
 			'filters' => $this->filters,
+			'folderId' => $this->folderId,
+			'isShared' => $this->isShared,
+			'ownerId' => $this->ownerId,
+			'ownerDisplayName' => $this->ownerDisplayName,
+			'permission' => $this->permission,
+			'canWrite' => $this->canWrite,
 		];
 	}
 }
