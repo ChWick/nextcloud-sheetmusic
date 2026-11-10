@@ -59,7 +59,7 @@
   </template>
   <template v-else-if="!standaloneCreate && !isEditInUrl && !isModifyPdfInUrl">
     <NcButton
-      v-if="openSong"
+      v-if="openSong && canWrite"
       variant="secondary"
       :title="t('sheetmusic', 'Song history & revisions')"
       :aria-label="t('sheetmusic', 'Song history & revisions')"

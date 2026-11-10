@@ -42,6 +42,7 @@ const props = withDefaults(
 		instruments?: Instrument[]
 		arrangers?: Arranger[]
 		hideHeader?: boolean
+		canWrite?: boolean
 	}>(),
 	{
 		song: null,
@@ -59,6 +60,7 @@ const props = withDefaults(
 		instruments: () => [],
 		arrangers: () => [],
 		hideHeader: false,
+		canWrite: true,
 	},
 )
 
@@ -240,7 +242,7 @@ defineExpose({
 					</template>
 				</NcButton>
 				<h3 :class="$style.title">{{ song.title }}</h3>
-				<div v-if="!isEditing" :class="$style.headerActions">
+				<div v-if="!isEditing && canWrite" :class="$style.headerActions">
 					<NcButton
 						variant="secondary"
 						:title="t('sheetmusic', 'Edit song')"
@@ -310,6 +312,7 @@ defineExpose({
 				:file-size-bytes="filePreviewerRef?.fileSizeBytes ?? null"
 				:page-resolutions="filePreviewerRef?.pageResolutions ?? []"
 				:show-annotations="filePreviewerRef?.showAnnotationsState ?? false"
+				:can-write="canWrite"
 				@open-external="openInExternalViewer"
 				@modify-pdf="song && emit('modify-pdf', song, selectedFile.id)"
 				@open-versions="openVersionsModal"

@@ -24,6 +24,7 @@ const props = withDefaults(
 		fileSizeBytes?: number | null
 		pageResolutions?: PdfPageResolutionSummary[]
 		showAnnotations?: boolean
+		canWrite?: boolean
 	}>(),
 	{
 		currentPage: 1,
@@ -31,6 +32,7 @@ const props = withDefaults(
 		fileSizeBytes: null,
 		pageResolutions: () => [],
 		showAnnotations: false,
+		canWrite: true,
 	},
 )
 
@@ -155,7 +157,7 @@ const activePageResolution = computed<PdfPageResolutionSummary | null>(() => {
 				</template>
 			</NcButton>
 			<NcButton
-				v-if="isPdf"
+				v-if="isPdf && canWrite !== false"
 				size="small"
 				variant="secondary"
 				:title="t('sheetmusic', 'Modify PDF (rotate, crop, enhance, split)')"
@@ -166,7 +168,7 @@ const activePageResolution = computed<PdfPageResolutionSummary | null>(() => {
 				</template>
 			</NcButton>
 			<NcButton
-				v-if="isPdf"
+				v-if="isPdf && canWrite !== false"
 				size="small"
 				variant="secondary"
 				:title="t('sheetmusic', 'PDF version history')"
