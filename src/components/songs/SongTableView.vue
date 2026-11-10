@@ -44,6 +44,7 @@ const props = withDefaults(
 		sourceTypes?: SourceType[]
 		instruments?: Instrument[]
 		arrangers?: Arranger[]
+		canWrite?: boolean
 	}>(),
 	{
 		sortKey: 'title',
@@ -60,6 +61,7 @@ const props = withDefaults(
 		sourceTypes: () => [],
 		instruments: () => [],
 		arrangers: () => [],
+		canWrite: true,
 	},
 )
 
@@ -221,6 +223,7 @@ const {
 						:display-text="song.title"
 						:aria-label="t('sheetmusic', 'Song title')"
 						:edit-title="t('sheetmusic', 'Edit title inline')"
+						:can-write="canWrite"
 						@save="handleInlineSave(song, 'title', $event)" />
 
 					<SongInlineEditableCell
@@ -238,6 +241,7 @@ const {
 						:placeholder="t('sheetmusic', 'Select or type…')"
 						:aria-label="entCol.ariaLabel()"
 						:edit-title="entCol.editTitle()"
+						:can-write="canWrite"
 						@save="handleInlineEntitySave(song, entCol, $event)">
 						<SongEntityChips
 							:def="entCol"
@@ -256,6 +260,7 @@ const {
 						:value="song[textCol.field]"
 						:aria-label="textCol.ariaLabel()"
 						:edit-title="textCol.editTitle()"
+						:can-write="canWrite"
 						@save="handleInlineSave(song, textCol.field, $event)" />
 
 					<SongInlineEditableCell
@@ -269,6 +274,7 @@ const {
 						:display-text="formatStars(song.stars)"
 						:aria-label="t('sheetmusic', 'Rating')"
 						:edit-title="t('sheetmusic', 'Edit rating inline')"
+						:can-write="canWrite"
 						@save="handleInlineSave(song, 'stars', $event)" />
 
 					<SongInlineEditableCell
@@ -282,6 +288,7 @@ const {
 						:display-text="formatDifficulty(song.difficulty)"
 						:aria-label="t('sheetmusic', 'Difficulty')"
 						:edit-title="t('sheetmusic', 'Edit difficulty inline')"
+						:can-write="canWrite"
 						@save="handleInlineSave(song, 'difficulty', $event)" />
 
 					<SongInlineEditableCell
@@ -294,6 +301,7 @@ const {
 						:placeholder="t('sheetmusic', 'mm:ss or seconds')"
 						:aria-label="t('sheetmusic', 'Duration')"
 						:edit-title="t('sheetmusic', 'Edit duration inline')"
+						:can-write="canWrite"
 						@save="handleInlineDurationSave(song, $event)" />
 
 					<SongInlineEditableCell
@@ -305,6 +313,7 @@ const {
 						:value="song[extraCol.field]"
 						:aria-label="extraCol.ariaLabel()"
 						:edit-title="extraCol.editTitle()"
+						:can-write="canWrite"
 						@save="handleInlineSave(song, extraCol.field, $event)" />
 
 					<td v-if="isColVisible('lastModified')" :class="$style.dateCell">
@@ -316,6 +325,7 @@ const {
 					<td :class="$style.actionsCell" @click.stop>
 						<div :class="$style.actionsGroup">
 							<NcButton
+								v-if="canWrite !== false"
 								size="small"
 								:title="t('sheetmusic', 'Edit song')"
 								:aria-label="t('sheetmusic', 'Edit song')"

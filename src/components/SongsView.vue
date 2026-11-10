@@ -68,6 +68,7 @@
       :hide-header="true"
       :song="openSong"
       :library-id="selectedLibrary"
+      :can-write="canWrite"
       v-bind="entityListsProps"
       @back="goBackToSongs"
       @modify-pdf="openModifyPdf"
@@ -167,6 +168,7 @@
         :selected-song-ids="selectedSongIds"
         :is-filtered="isFiltered"
         :visible-columns="visibleColumns"
+        :can-write="canWrite"
         v-bind="entityListsProps"
         v-model:sort-key="sortKey"
         v-model:sort-order="sortOrder"
@@ -182,6 +184,7 @@
         :selected-song-ids="selectedSongIds"
         :is-filtered="isFiltered"
         :visible-columns="visibleColumns"
+        :can-write="canWrite"
         @view-song="openSongView"
         @edit-song="openSongEdit"
         @inline-update-song="handleInlineUpdateSong"
@@ -193,6 +196,7 @@
         :selected-song-ids="selectedSongIds"
         :is-filtered="isFiltered"
         :visible-columns="visibleColumns"
+        :can-write="canWrite"
         @view-song="openSongView"
         @edit-song="openSongEdit"
         @inline-update-song="handleInlineUpdateSong"
@@ -243,6 +247,7 @@
 <script setup lang="ts">
 import { t } from '@nextcloud/l10n';
 import { showError, showSuccess } from '@nextcloud/dialogs';
+import { loadState } from '@nextcloud/initial-state';
 import { describeRequestFailure } from '../utils/api';
 import { ref, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -290,8 +295,14 @@ const props = withDefaults(defineProps<{
   standaloneCreate: false,
 });
 
+const isPublicShare = Boolean(loadState('sheetmusic', 'isPublicShare', false));
 const currentLibrary = computed(() => props.libraries.find(lib => lib.id === props.selectedLibrary));
-const canWrite = computed(() => currentLibrary.value ? (currentLibrary.value.canWrite ?? true) : true);
+const canWrite = computed(() => {
+  if (isPublicShare) {
+    return false;
+  }
+  return currentLibrary.value ? (currentLibrary.value.canWrite ?? true) : true;
+});
 const autoPdfMetadata = computed(() => currentLibrary.value?.autoPdfMetadata ?? true);
 
 const songViewerRef = ref<InstanceType<typeof SongViewer> | null>(null);

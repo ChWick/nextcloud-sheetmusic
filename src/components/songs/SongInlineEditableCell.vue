@@ -26,6 +26,7 @@ const props = withDefaults(
 		initialEntities?: any[]
 		variant?: 'table-title' | 'table-meta' | 'card-title' | 'list-title'
 		allowEmpty?: boolean
+		canWrite?: boolean
 	}>(),
 	{
 		tag: 'div',
@@ -41,6 +42,7 @@ const props = withDefaults(
 		initialEntities: () => [],
 		variant: 'table-meta',
 		allowEmpty: true,
+		canWrite: true,
 	},
 )
 
@@ -92,6 +94,7 @@ function areEntitiesEqual(a: any[], b: any[], labelKey: string): boolean {
 }
 
 async function startEdit() {
+	if (props.canWrite === false) return
 	if (isEditing.value) return
 	isEditing.value = true
 	if (props.mode === 'select') {
@@ -268,6 +271,7 @@ defineExpose({
 				</span>
 			</slot>
 			<button
+				v-if="canWrite !== false"
 				type="button"
 				:class="[$style.inlineEditTrigger, 'sheetmusic-inline-edit-trigger']"
 				:data-test="`inline-edit-${field}-btn`"

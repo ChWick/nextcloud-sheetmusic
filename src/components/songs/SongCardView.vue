@@ -11,12 +11,18 @@ import SongEntityChips from './SongEntityChips.vue'
 import SongInlineEditableCell from './SongInlineEditableCell.vue'
 import { ENTITY_COLUMNS } from './song-view-columns'
 
-const props = defineProps<{
-	songs: Song[]
-	selectedSongIds?: number[]
-	isFiltered?: (entityType: EntityType, id: number) => boolean
-	visibleColumns?: SongColumn[]
-}>()
+const props = withDefaults(
+	defineProps<{
+		songs: Song[]
+		selectedSongIds?: number[]
+		isFiltered?: (entityType: EntityType, id: number) => boolean
+		visibleColumns?: SongColumn[]
+		canWrite?: boolean
+	}>(),
+	{
+		canWrite: true,
+	},
+)
 
 const emit = defineEmits<{
 	'view-song': [song: Song]
@@ -73,6 +79,7 @@ const {
 					:display-text="song.title"
 					:aria-label="t('sheetmusic', 'Song title')"
 					:edit-title="t('sheetmusic', 'Edit title inline')"
+					:can-write="canWrite"
 					@save="emit('inline-update-song', song, { title: String($event) })" />
 			</div>
 
@@ -138,6 +145,7 @@ const {
 
 			<div :class="$style.cardActions" @click.stop>
 				<NcButton
+					v-if="canWrite !== false"
 					size="small"
 					:title="t('sheetmusic', 'Edit song')"
 					:aria-label="t('sheetmusic', 'Edit song')"
