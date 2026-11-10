@@ -90,6 +90,23 @@ describe('SublibraryCard.vue', () => {
 		expect(wrapper.emitted('delete')?.[0]).toEqual([mockSub])
 	})
 
+	it('emits share event when share button is clicked', async () => {
+		const wrapper = mount(SublibraryCard, {
+			props: {
+				sub: mockSub,
+				libraryFolderPath: '/SheetMusic',
+				songs: mockSongs,
+				isCopied: false,
+			},
+		})
+
+		const shareBtn = wrapper.findAll('button').find(b => b.attributes('aria-label') === 'Share sub-library' || b.attributes('title') === 'Share sub-library')
+		expect(shareBtn).toBeDefined()
+		await shareBtn!.trigger('click')
+
+		expect(wrapper.emitted('share')?.[0]).toEqual([mockSub])
+	})
+
 	it('emits copyPath event when copy button is clicked', async () => {
 		const wrapper = mount(SublibraryCard, {
 			props: {

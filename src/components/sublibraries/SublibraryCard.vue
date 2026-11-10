@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import FolderSyncOutline from 'vue-material-design-icons/FolderSyncOutline.vue'
+import ShareVariantOutline from 'vue-material-design-icons/ShareVariantOutline.vue'
 import ContentCopy from 'vue-material-design-icons/ContentCopy.vue'
 import Check from 'vue-material-design-icons/Check.vue'
 import PencilOutline from 'vue-material-design-icons/PencilOutline.vue'
@@ -29,6 +30,7 @@ const props = withDefaults(
 const emit = defineEmits<{
 	edit: [sub: Sublibrary]
 	delete: [sub: Sublibrary]
+	share: [sub: Sublibrary]
 	copyPath: [slug: string]
 	viewSongs: [sub: Sublibrary]
 }>()
@@ -53,6 +55,16 @@ const matchingCount = computed(() => {
 				</div>
 			</div>
 			<div v-if="canWrite !== false" :class="$style.cardActions">
+				<NcButton
+					type="button"
+					variant="tertiary"
+					:title="t('sheetmusic', 'Share sub-library')"
+					:aria-label="t('sheetmusic', 'Share sub-library')"
+					@click="emit('share', sub)">
+					<template #icon>
+						<ShareVariantOutline :size="18" />
+					</template>
+				</NcButton>
 				<NcButton
 					type="button"
 					variant="tertiary"

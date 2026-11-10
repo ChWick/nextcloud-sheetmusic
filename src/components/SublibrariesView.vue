@@ -16,6 +16,7 @@ import ViewHeader from './ViewHeader.vue'
 import SublibraryCard from './sublibraries/SublibraryCard.vue'
 import SublibraryModal from './sublibraries/SublibraryModal.vue'
 import DeleteSublibraryDialog from './sublibraries/DeleteSublibraryDialog.vue'
+import SublibraryShareDialog from './sublibraries/SublibraryShareDialog.vue'
 
 import { useLibraryData } from '../composables/useLibraryData'
 import type { Library, Sublibrary } from '../types/library'
@@ -82,6 +83,15 @@ const formError = ref('')
 const isDeleteConfirmOpen = ref(false)
 const deletingSub = ref<Sublibrary | null>(null)
 const isDeleting = ref(false)
+
+// Share state
+const isShareOpen = ref(false)
+const sharingSub = ref<Sublibrary | null>(null)
+
+function openShareDialog(sub: Sublibrary) {
+	sharingSub.value = sub
+	isShareOpen.value = true
+}
 
 const currentLibrary = computed(() => {
 	return props.libraries.find(l => l.id === props.selectedLibrary)
@@ -289,6 +299,7 @@ watch(
 					:can-write="canWrite"
 					@edit="openEditModal"
 					@delete="promptDelete"
+					@share="openShareDialog"
 					@copy-path="copySublibraryPath"
 					@view-songs="handleViewSongs" />
 			</div>
@@ -317,6 +328,14 @@ watch(
 			:is-deleting="isDeleting"
 			@confirm="confirmDelete"
 			@close="isDeleteConfirmOpen = false" />
+
+		<!-- Share Modal -->
+		<SublibraryShareDialog
+			v-if="isShareOpen && sharingSub"
+			:library-id="selectedLibrary"
+			:sublibrary="sharingSub"
+			:sublibrary-path="`${libraryFolderPath}/_SubLibraries_/${sharingSub.slug}`"
+			@close="isShareOpen = false" />
 	</div>
 </template>
 
