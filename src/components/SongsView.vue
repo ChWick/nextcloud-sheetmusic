@@ -2,9 +2,9 @@
   <ViewHeader
     :title="headerTitle"
     :show-back="songIdInUrl !== null || standaloneCreate"
-    :create-label="songIdInUrl === null && !standaloneCreate ? t('sheetmusic', 'New song') : undefined"
-    :import-label="songIdInUrl === null && !standaloneCreate ? t('sheetmusic', 'Import') : undefined"
-    :import-nextcloud-label="songIdInUrl === null && !standaloneCreate ? t('sheetmusic', 'Import from Nextcloud') : undefined"
+    :create-label="songIdInUrl === null && !standaloneCreate && canWrite ? t('sheetmusic', 'New song') : undefined"
+    :import-label="songIdInUrl === null && !standaloneCreate && canWrite ? t('sheetmusic', 'Import') : undefined"
+    :import-nextcloud-label="songIdInUrl === null && !standaloneCreate && canWrite ? t('sheetmusic', 'Import from Nextcloud') : undefined"
     :filter-bar-visible="songIdInUrl === null && !standaloneCreate ? filterBarVisible : undefined"
     :show-filter-toggle="songIdInUrl === null && !standaloneCreate"
     @back="goBackToSongs"
@@ -23,6 +23,7 @@
       :open-song="openSong"
       :standalone-create="standaloneCreate"
       :is-modify-pdf-in-url="isModifyPdfInUrl"
+      :can-write="canWrite"
       @delete-edit="songEditorRef?.promptDelete()"
       @save-edit="(close) => songEditorRef?.saveSong(close)"
       @cancel-create="goBackToSongs"
@@ -78,7 +79,7 @@
     <div v-if="!standaloneCreate && selectedCount > 0" :class="$style.selectionBanner">
       <span :class="$style.selectionCount">{{ t('sheetmusic', '{count} songs selected', { count: selectedCount }) }}</span>
       <NcButton
-        v-if="selectedCount === 2"
+        v-if="canWrite && selectedCount === 2"
         size="small"
         variant="secondary"
         :title="t('sheetmusic', 'Compare & Merge selected 2 songs')"
@@ -90,6 +91,7 @@
         {{ t('sheetmusic', 'Compare / Merge') }}
       </NcButton>
       <NcButton
+        v-if="canWrite"
         size="small"
         variant="primary"
         :title="t('sheetmusic', 'Edit selected ({count})', { count: selectedCount })"
@@ -100,6 +102,7 @@
         </template>
       </NcButton>
       <NcButton
+        v-if="canWrite"
         size="small"
         variant="error"
         :title="t('sheetmusic', 'Delete selected ({count})', { count: selectedCount })"
@@ -288,6 +291,7 @@ const props = withDefaults(defineProps<{
 });
 
 const currentLibrary = computed(() => props.libraries.find(lib => lib.id === props.selectedLibrary));
+const canWrite = computed(() => currentLibrary.value ? (currentLibrary.value.canWrite ?? true) : true);
 const autoPdfMetadata = computed(() => currentLibrary.value?.autoPdfMetadata ?? true);
 
 const songViewerRef = ref<InstanceType<typeof SongViewer> | null>(null);

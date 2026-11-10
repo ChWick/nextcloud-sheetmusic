@@ -24,7 +24,7 @@
             <span :class="$style.setlistName">{{ setlist.name }}</span>
           </button>
           <span :class="$style.itemCountBadge">{{ setlist.itemCount ?? 0 }}</span>
-          <div :class="$style.rowActions">
+          <div v-if="canWrite !== false" :class="$style.rowActions">
             <NcButton
               size="small"
               :title="t('sheetmusic', 'Rename setlist')"
@@ -66,14 +66,20 @@ import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import type { Setlist } from '../../types/song'
 
-defineProps<{
-  visibleSetlists: Setlist[]
-  totalSetlistsCount: number
-  selectedSetlist: Setlist | null
-  searchQuery: string
-  isLoading: boolean
-  errorMessage: string
-}>()
+withDefaults(
+  defineProps<{
+    visibleSetlists: Setlist[]
+    totalSetlistsCount: number
+    selectedSetlist: Setlist | null
+    searchQuery: string
+    isLoading: boolean
+    errorMessage: string
+    canWrite?: boolean
+  }>(),
+  {
+    canWrite: true,
+  },
+)
 
 const emit = defineEmits<{
   'update:searchQuery': [query: string]

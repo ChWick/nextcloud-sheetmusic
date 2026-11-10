@@ -1,7 +1,7 @@
 <template>
   <ViewHeader
     :title="t('sheetmusic', 'Setlists')"
-    :create-label="t('sheetmusic', 'New setlist')"
+    :create-label="canWrite ? t('sheetmusic', 'New setlist') : undefined"
     @create="openCreateDialog" />
 
   <div :class="$style.setlistsArea">
@@ -12,6 +12,7 @@
       :selected-setlist="selectedSetlist"
       :is-loading="isLoading"
       :error-message="errorMessage"
+      :can-write="canWrite"
       @select="selectSetlist"
       @rename="openRenameDialog"
       @delete="openDeleteDialog" />
@@ -22,12 +23,14 @@
           :name="selectedSetlist.name"
           :item-count="selectedSetlistItems.length"
           :total-duration-formatted="totalDurationFormatted"
+          :can-write="canWrite"
           @add-item="openAddItemDialog" />
 
         <SetlistItemsTable
           :items="selectedSetlistItems"
           :available-songs="songs"
           :is-loading="isLoadingItems"
+          :can-write="canWrite"
           @move="moveItem"
           @open-song="openItemSong"
           @update-bookmark="handleUpdateItemBookmark"
@@ -92,9 +95,15 @@ import type { Setlist, SetlistItem } from '../types/song'
 import { useLibraryData } from '../composables/useLibraryData'
 import { useSetlists } from '../composables/useSetlists'
 
-const props = defineProps<{
-  selectedLibrary: number
-}>()
+const props = withDefaults(
+  defineProps<{
+    selectedLibrary: number
+    canWrite?: boolean
+  }>(),
+  {
+    canWrite: true,
+  },
+)
 
 const router = useRouter()
 const { songs, loadLibraryData } = useLibraryData()

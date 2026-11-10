@@ -25,6 +25,8 @@ const props = defineProps<{
 	libraries: Library[]
 }>()
 
+const canWrite = computed(() => currentLibrary.value ? (currentLibrary.value.canWrite ?? true) : true)
+
 const {
 	songs,
 	instruments,
@@ -218,6 +220,7 @@ watch(
 	<div :class="$style.wrapper" data-test="sublibraries-view">
 		<ViewHeader :title="t('sheetmusic', 'Sub-Libraries (MobileSheets Sync)')">
 			<NcButton
+				v-if="canWrite"
 				type="button"
 				variant="primary"
 				@click="openCreateModal">
@@ -262,6 +265,7 @@ watch(
 					{{ t('sheetmusic', 'Create your first sub-library to filter songs for MobileSheets tablet sync.') }}
 				</p>
 				<NcButton
+					v-if="canWrite"
 					type="button"
 					variant="primary"
 					:class="$style.emptyActionBtn"
@@ -282,6 +286,7 @@ watch(
 					:library-folder-path="libraryFolderPath"
 					:songs="songList"
 					:is-copied="copiedSlug === sub.slug"
+					:can-write="canWrite"
 					@edit="openEditModal"
 					@delete="promptDelete"
 					@copy-path="copySublibraryPath"

@@ -69,7 +69,7 @@
       </template>
     </NcButton>
     <NcButton
-      v-if="openSong"
+      v-if="openSong && canWrite"
       variant="secondary"
       :title="t('sheetmusic', 'Duplicate song')"
       :aria-label="t('sheetmusic', 'Duplicate song')"
@@ -79,6 +79,7 @@
       </template>
     </NcButton>
     <NcButton
+      v-if="canWrite"
       variant="secondary"
       :title="t('sheetmusic', 'Edit song')"
       :aria-label="t('sheetmusic', 'Edit song')"
@@ -88,6 +89,7 @@
       </template>
     </NcButton>
     <NcButton
+      v-if="canWrite"
       variant="error"
       :title="t('sheetmusic', 'Delete song')"
       :aria-label="t('sheetmusic', 'Delete song')"
@@ -111,12 +113,15 @@ import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import type { Song } from '../../types/song'
 
-defineProps<{
+const props = withDefaults(defineProps<{
 	isEditInUrl: boolean
 	openSong: Song | null
 	standaloneCreate: boolean
 	isModifyPdfInUrl: boolean
-}>()
+	canWrite?: boolean
+}>(), {
+	canWrite: true,
+})
 
 defineEmits<{
 	deleteEdit: []

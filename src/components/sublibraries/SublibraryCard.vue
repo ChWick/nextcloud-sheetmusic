@@ -13,12 +13,18 @@ import { countMatchingSongs } from '../../utils/sublibrary'
 import type { Sublibrary } from '../../types/library'
 import type { Song } from '../../types/song'
 
-const props = defineProps<{
-	sub: Sublibrary
-	libraryFolderPath: string
-	songs: Song[]
-	isCopied: boolean
-}>()
+const props = withDefaults(
+	defineProps<{
+		sub: Sublibrary
+		libraryFolderPath: string
+		songs: Song[]
+		isCopied: boolean
+		canWrite?: boolean
+	}>(),
+	{
+		canWrite: true,
+	},
+)
 
 const emit = defineEmits<{
 	edit: [sub: Sublibrary]
@@ -46,7 +52,7 @@ const matchingCount = computed(() => {
 					<span :class="$style.slugBadge">{{ sub.slug }}</span>
 				</div>
 			</div>
-			<div :class="$style.cardActions">
+			<div v-if="canWrite !== false" :class="$style.cardActions">
 				<NcButton
 					type="button"
 					variant="tertiary"

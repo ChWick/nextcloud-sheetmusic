@@ -1,6 +1,26 @@
 import type { components } from './api.generated'
 
-export type Library = components['schemas']['Library']
+export type Library = components['schemas']['Library'] & {
+	folderId?: number | null
+	isShared?: boolean
+	ownerId?: string | null
+	ownerDisplayName?: string | null
+	permission?: 'admin' | 'write' | 'read'
+	canWrite?: boolean
+}
+
+export interface LibraryShare {
+	id: number | string
+	fullId: string
+	shareType: number
+	shareWith: string
+	shareWithDisplayName?: string
+	permission: 'read' | 'write'
+	canWrite: boolean
+	token?: string | null
+	publicUrl?: string | null
+	webdavUrl?: string | null
+}
 
 export interface Sublibrary {
 	id?: number

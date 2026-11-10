@@ -9,7 +9,7 @@
     <p :class="$style.emptyDetailHint">
       {{ t('sheetmusic', 'Add songs or specific bookmarks (movements) to build your performance list.') }}
     </p>
-    <NcButton variant="primary" @click="emit('add-item')">
+    <NcButton v-if="canWrite !== false" variant="primary" @click="emit('add-item')">
       <template #icon>
         <PlusIcon :size="20" />
       </template>
@@ -22,10 +22,10 @@
       <thead>
         <tr>
           <th :class="$style.colPos">#</th>
-          <th :class="$style.colOrder">{{ t('sheetmusic', 'Order') }}</th>
+          <th v-if="canWrite !== false" :class="$style.colOrder">{{ t('sheetmusic', 'Order') }}</th>
           <th :class="$style.colTitle">{{ t('sheetmusic', 'Song / Bookmark') }}</th>
           <th :class="$style.colDuration">{{ t('sheetmusic', 'Duration') }}</th>
-          <th :class="$style.colActions">{{ t('sheetmusic', 'Actions') }}</th>
+          <th v-if="canWrite !== false" :class="$style.colActions">{{ t('sheetmusic', 'Actions') }}</th>
         </tr>
       </thead>
       <tbody>
@@ -36,7 +36,7 @@
           <td :class="$style.colPos">
             <span :class="$style.posBadge">{{ index + 1 }}</span>
           </td>
-          <td :class="$style.colOrder">
+          <td v-if="canWrite !== false" :class="$style.colOrder">
             <div :class="$style.reorderButtons">
               <NcButton
                 size="small"
@@ -72,7 +72,7 @@
 
               <!-- Inline bookmark dropdown when song has bookmarks -->
               <div
-                v-if="getSongBookmarks(item.songId).length > 0"
+                v-if="canWrite !== false && getSongBookmarks(item.songId).length > 0"
                 :class="[$style.inlineBookmarkPicker, item.bookmarkId ? $style.hasBookmark : $style.noBookmark]">
                 <BookmarkMusicOutline :size="14" :class="$style.bookmarkIcon" />
                 <select
@@ -105,7 +105,7 @@
           <td :class="$style.colDuration">
             {{ item.duration ? formatDuration(item.duration) : '—' }}
           </td>
-          <td :class="$style.colActions">
+          <td v-if="canWrite !== false" :class="$style.colActions">
             <NcButton
               variant="error"
               size="small"
@@ -142,9 +142,11 @@ const props = withDefaults(
     items: SetlistItem[]
     availableSongs?: Song[]
     isLoading: boolean
+    canWrite?: boolean
   }>(),
   {
     availableSongs: () => [],
+    canWrite: true,
   },
 )
 

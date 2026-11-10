@@ -8,6 +8,7 @@
       </span>
     </div>
     <NcButton
+      v-if="canWrite !== false"
       variant="primary"
       @click="emit('add-item')">
       <template #icon>
@@ -23,11 +24,17 @@ import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import PlusIcon from 'vue-material-design-icons/Plus.vue'
 
-defineProps<{
-  name: string
-  itemCount: number
-  totalDurationFormatted?: string | null
-}>()
+withDefaults(
+  defineProps<{
+    name: string
+    itemCount: number
+    totalDurationFormatted?: string | null
+    canWrite?: boolean
+  }>(),
+  {
+    canWrite: true,
+  },
+)
 
 const emit = defineEmits<{
   'add-item': []
