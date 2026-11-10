@@ -21,16 +21,52 @@ class LibraryService {
 		private ?MobileSheetsSqliteImporter $importer = null,
 		private ?LibraryReconciler $reconciler = null,
 		private ?ImportProgressService $progressService = null,
+		private ?LibraryShareService $shareService = null,
 	) {
 	}
 
 	public function resolveLibraryPath(string $userId, int $libraryId): ?string {
-		$library = $this->libraryMapper->findForUser($userId, $libraryId);
+		$library = $this->getAccessibleLibrary($userId, $libraryId);
 		if ($library === null) {
 			return null;
 		}
 
 		return $library->path;
+	}
+
+	public function getAccessibleLibrary(string $userId, int $libraryId): ?InternalLibrary {
+		if ($this->shareService !== null) {
+			return $this->shareService->getAccessibleLibrary($userId, $libraryId);
+		}
+		return $this->libraryMapper->findForUser($userId, $libraryId);
+	}
+
+	public function canReadLibrary(string $userId, int|InternalLibrary $library): bool {
+		if ($this->shareService !== null) {
+			return $this->shareService->canRead($userId, $library);
+		}
+		$lib = is_int($library) ? $this->libraryMapper->findById($library) : $library;
+		return $lib !== null && $lib->userId === $userId;
+	}
+
+	public function canWriteLibrary(string $userId, int|InternalLibrary $library): bool {
+		if ($this->shareService !== null) {
+			return $this->shareService->canWrite($userId, $library);
+		}
+		$lib = is_int($library) ? $this->libraryMapper->findById($library) : $library;
+		return $lib !== null && $lib->userId === $userId;
+	}
+
+	public function isLibraryOwner(string $userId, int|InternalLibrary $library): bool {
+		if ($this->shareService !== null) {
+			return $this->shareService->isOwner($userId, $library);
+		}
+		$lib = is_int($library) ? $this->libraryMapper->findById($library) : $library;
+		return $lib !== null && $lib->userId === $userId;
+	}
+
+	public function getShareService(): ?LibraryShareService {
+		return $this->shareService;
 	}
 
 	/**
@@ -123,6 +159,9 @@ class LibraryService {
 	}
 
 	public function getLibraries(string $userId): array {
+		if ($this->shareService !== null) {
+			return $this->shareService->getAccessibleLibraries($userId);
+		}
 		return $this->libraryMapper->findAllForUser($userId);
 	}
 
@@ -143,6 +182,7 @@ class LibraryService {
 		}
 
 		$userFolder = null;
+		$folderId = null;
 		try {
 			$userFolder = $this->rootFolder->getUserFolder($userId);
 		} catch (\Throwable $e) {
@@ -158,6 +198,8 @@ class LibraryService {
 				if ($extension !== '' && !($node instanceof \OCP\Files\File)) {
 					throw new \InvalidArgumentException('Selected path is not a database file');
 				}
+				$folderNode = $node instanceof \OCP\Files\Folder ? $node : $node->getParent();
+				$folderId = $folderNode?->getId();
 			}
 		}
 
@@ -173,6 +215,19 @@ class LibraryService {
 			$libraryPath = rtrim($libraryPath, '/');
 		}
 
+		if ($folderId === null && $userFolder !== null) {
+			$cleanLibRel = ltrim($libraryPath, '/');
+			try {
+				if ($cleanLibRel === '') {
+					$folderId = $userFolder->getId();
+				} elseif ($userFolder->nodeExists($cleanLibRel)) {
+					$folderId = $userFolder->get($cleanLibRel)->getId();
+				}
+			} catch (\Throwable) {
+				// Ignore
+			}
+		}
+
 		if ($progressId !== null && $this->progressService !== null) {
 			$this->progressService->start($progressId, 'Initializing library...');
 		}
@@ -185,7 +240,7 @@ class LibraryService {
 		};
 
 		try {
-			$this->libraryMapper->addForUser($userId, $libraryPath);
+			$this->libraryMapper->addForUser($userId, $libraryPath, $folderId);
 			$libraries = $this->libraryMapper->findAllForUser($userId);
 			$added = null;
 			foreach ($libraries as $lib) {
@@ -237,11 +292,15 @@ class LibraryService {
 	}
 
 	public function deleteLibrary(string $userId, int $id): ?array {
-		$libraryPath = $this->resolveLibraryPath($userId, $id);
-		if ($libraryPath === null) {
+		$lib = $this->libraryMapper->findById($id);
+		if ($lib === null) {
 			return null;
 		}
+		if (!$this->isLibraryOwner($userId, $lib)) {
+			throw new \OCP\Security\SecurityException('Only the library owner can delete the library');
+		}
 
+		$libraryPath = $lib->path;
 		$this->libraryMapper->deleteForUser($userId, $id);
 
 		$cacheFile = $this->getCacheFilePath($id);
@@ -333,6 +392,13 @@ class LibraryService {
 		?bool $autoPaths = null,
 		?bool $autoPdfMetadata = null,
 	): ?InternalLibrary {
+		$lib = $this->libraryMapper->findById($libraryId);
+		if ($lib === null) {
+			return null;
+		}
+		if (!$this->isLibraryOwner($userId, $lib)) {
+			throw new \OCP\Security\SecurityException('Only the library owner can update library settings');
+		}
 		$this->libraryMapper->setSettingsForUser($userId, $libraryId, $autoPaths, $autoPdfMetadata);
 		return $this->libraryMapper->findForUser($userId, $libraryId);
 	}

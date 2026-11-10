@@ -4,17 +4,22 @@ declare(strict_types=1);
 
 namespace OCA\SheetMusic\Controller;
 
+use OCA\SheetMusic\Exception\SecurityException;
 use OCA\SheetMusic\Service\LibraryIntegrityService;
 use OCA\SheetMusic\Service\LibraryService;
+use OCA\SheetMusic\Service\LibraryShareService;
 use OCA\SheetMusic\Service\LibraryToolService;
 use OCA\SheetMusic\Service\SublibraryService;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\ApiRoute;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
+use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
+use OCP\AppFramework\Http\Attribute\PublicPage;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\OCSController;
 use OCP\IRequest;
 use OCP\IUserSession;
+use OCP\Share\IShare;
 
 class LibraryController extends OCSController {
 	public function __construct(
@@ -25,14 +30,27 @@ class LibraryController extends OCSController {
 		private LibraryIntegrityService $integrityService,
 		private ?LibraryToolService $toolService = null,
 		private ?SublibraryService $sublibraryService = null,
+		private ?LibraryShareService $shareService = null,
 	) {
 		parent::__construct($appName, $request);
 	}
 
+	#[PublicPage]
+	#[NoCSRFRequired]
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'GET', url: '/api/libraries')]
 	public function getLibraries(): DataResponse {
 		$user = $this->userSession->getUser();
+		$publicToken = $this->request->getHeader('X-Public-Share-Token') ?? $this->request->getParam('token');
+
+		if ($publicToken !== null && $publicToken !== '') {
+			$info = $this->shareService?->findLibraryByPublicToken($publicToken);
+			if ($info !== null) {
+				return new DataResponse(['libraries' => [$info['library']]]);
+			}
+			return new DataResponse([], Http::STATUS_FORBIDDEN);
+		}
+
 		if ($user === null) {
 			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
 		}
@@ -274,10 +292,24 @@ class LibraryController extends OCSController {
 		}
 	}
 
+	#[PublicPage]
+	#[NoCSRFRequired]
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'GET', url: '/api/libraries/{id}/sublibraries')]
 	public function getSublibraries(int $id): DataResponse {
 		$user = $this->userSession->getUser();
+		$publicToken = $this->request->getHeader('X-Public-Share-Token') ?? $this->request->getParam('token');
+
+		if ($publicToken !== null && $publicToken !== '') {
+			$info = $this->shareService?->findLibraryByPublicToken($publicToken);
+			if ($info === null || (int)$info['library']->id !== $id) {
+				return new DataResponse([], Http::STATUS_FORBIDDEN);
+			}
+			return new DataResponse([
+				'sublibraries' => $this->sublibraryService?->getSublibraries($id) ?? [],
+			]);
+		}
+
 		if ($user === null) {
 			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
 		}
@@ -342,6 +374,122 @@ class LibraryController extends OCSController {
 		$success = $this->sublibraryService->deleteSublibrary($subId);
 
 		return new DataResponse(['success' => $success], Http::STATUS_OK);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'GET', url: '/api/libraries/{id}/shares')]
+	public function getShares(int $id): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		if ($this->shareService === null) {
+			return new DataResponse(['message' => 'Share service not available'], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+
+		try {
+			$shares = $this->shareService->getShares($id, $user->getUID());
+			return new DataResponse(['shares' => $shares]);
+		} catch (SecurityException $e) {
+			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_FORBIDDEN);
+		} catch (\Throwable $e) {
+			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/libraries/{id}/shares')]
+	public function createShare(
+		int $id,
+		string $shareWith = '',
+		int|string $shareType = IShare::TYPE_USER,
+		string $permission = 'read',
+		?string $password = null,
+	): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		if ($this->shareService === null) {
+			return new DataResponse(['message' => 'Share service not available'], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+
+		$shareWith = (string)$this->request->getParam('shareWith', $shareWith);
+		$rawShareType = $this->request->getParam('shareType', $shareType);
+		$parsedShareType = match ($rawShareType) {
+			'user', IShare::TYPE_USER, (string)IShare::TYPE_USER => IShare::TYPE_USER,
+			'group', IShare::TYPE_GROUP, (string)IShare::TYPE_GROUP => IShare::TYPE_GROUP,
+			'link', IShare::TYPE_LINK, (string)IShare::TYPE_LINK => IShare::TYPE_LINK,
+			default => is_numeric($rawShareType) ? (int)$rawShareType : IShare::TYPE_USER,
+		};
+		$permission = (string)$this->request->getParam('permission', $permission);
+		$password = $this->request->getParam('password', $password);
+
+		try {
+			$share = $this->shareService->createShare(
+				$id,
+				$user->getUID(),
+				$parsedShareType,
+				$shareWith,
+				$permission,
+				$password,
+			);
+			return new DataResponse($share, Http::STATUS_CREATED);
+		} catch (SecurityException $e) {
+			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_FORBIDDEN);
+		} catch (\InvalidArgumentException $e) {
+			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_BAD_REQUEST);
+		} catch (\Throwable $e) {
+			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'PUT', url: '/api/libraries/{id}/shares/{shareId}')]
+	public function updateShare(int $id, string $shareId, string $permission = 'read'): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		if ($this->shareService === null) {
+			return new DataResponse(['message' => 'Share service not available'], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+
+		$permission = (string)$this->request->getParam('permission', $permission);
+
+		try {
+			$share = $this->shareService->updateShare($id, $user->getUID(), $shareId, $permission);
+			return new DataResponse($share, Http::STATUS_OK);
+		} catch (SecurityException $e) {
+			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_FORBIDDEN);
+		} catch (\Throwable $e) {
+			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'DELETE', url: '/api/libraries/{id}/shares/{shareId}')]
+	public function deleteShare(int $id, string $shareId): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		if ($this->shareService === null) {
+			return new DataResponse(['message' => 'Share service not available'], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+
+		try {
+			$this->shareService->deleteShare($id, $user->getUID(), $shareId);
+			return new DataResponse(['success' => true], Http::STATUS_OK);
+		} catch (SecurityException $e) {
+			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_FORBIDDEN);
+		} catch (\Throwable $e) {
+			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
 	}
 
 	private function resolveProgressId(?string $progressId): ?string {

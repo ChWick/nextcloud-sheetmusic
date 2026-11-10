@@ -10,9 +10,13 @@ use OCA\SheetMusic\Db\SublibraryMapper;
 use OCA\SheetMusic\Service\IntegrityIssue;
 use OCA\SheetMusic\Service\LibraryIntegrityService;
 use OCA\SheetMusic\Service\LibraryService;
+use OCA\SheetMusic\Service\LibraryShareService;
 use OCA\SheetMusic\Service\SublibraryService;
 use OCP\AppFramework\Http;
+use OCP\Constants;
 use OCP\IUser;
+use OCP\Share\IManager as IShareManager;
+use OCP\Share\IShare;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use TestSupport\FakeRequest;
@@ -26,6 +30,8 @@ final class LibraryControllerTest extends TestCase {
 	private FakeUserSession $userSession;
 	private FakeRequest $request;
 	private LibraryService $libraryService;
+	private LibraryShareService $shareService;
+	private IShareManager $shareManager;
 	private LibraryController $controller;
 
 	protected function setUp(): void {
@@ -44,6 +50,15 @@ final class LibraryControllerTest extends TestCase {
 			$this->dbConn,
 		);
 
+		$this->shareManager = $this->createMock(IShareManager::class);
+		$this->shareService = new LibraryShareService(
+			$this->libraryMapper,
+			$this->rootFolder,
+			$this->shareManager,
+			$this->userManager,
+			null,
+		);
+
 		$this->controller = new LibraryController(
 			'sheetmusic',
 			$this->request,
@@ -52,6 +67,7 @@ final class LibraryControllerTest extends TestCase {
 			$this->createLibraryIntegrityService($this->libraryService),
 			null,
 			$sublibraryService,
+			$this->shareService,
 		);
 	}
 
@@ -253,5 +269,58 @@ final class LibraryControllerTest extends TestCase {
 		// 6. List should be empty again
 		$listResAfter = $this->controller->getSublibraries($libId);
 		$this->assertSame(['sublibraries' => []], $listResAfter->getData());
+	}
+
+	public function testShareEndpointsCrud(): void {
+		$userFolder = $this->rootFolder->getUserFolder('admin');
+		if (!$userFolder->nodeExists('ShareFolder')) {
+			$this->createdUserNodes[] = $userFolder->newFolder('ShareFolder');
+		}
+		$library = $this->createTestLibrary('ShareFolder');
+		$libId = (int)$library->id;
+
+		$mockShare = $this->createMock(IShare::class);
+		$mockShare->method('getId')->willReturn('55');
+		$mockShare->method('getFullId')->willReturn('ocinternal:55');
+		$mockShare->method('getShareType')->willReturn(IShare::TYPE_USER);
+		$mockShare->method('getSharedWith')->willReturn('bob');
+		$mockShare->method('getPermissions')->willReturn(Constants::PERMISSION_READ);
+		$mockShare->method('getToken')->willReturn(null);
+		$mockShare->method('getSharedBy')->willReturn('admin');
+
+		$newShare = $this->createMock(IShare::class);
+		$this->shareManager->method('newShare')->willReturn($newShare);
+		$this->shareManager->method('createShare')->willReturn($mockShare);
+		$this->shareManager->method('getSharesBy')->willReturnCallback(fn ($by, $type) => $type === IShare::TYPE_USER ? [$mockShare] : []);
+		$this->shareManager->method('getShareById')->willReturn($mockShare);
+		$this->shareManager->method('updateShare')->willReturn($mockShare);
+
+		// 1. Get shares
+		$getRes = $this->controller->getShares($libId);
+		$this->assertSame(Http::STATUS_OK, $getRes->getStatus());
+		$this->assertCount(1, $getRes->getData()['shares']);
+		$this->assertSame('55', $getRes->getData()['shares'][0]['id']);
+
+		// 2. Create share
+		$createRes = $this->controller->createShare($libId, 'bob', IShare::TYPE_USER, 'read');
+		$this->assertSame(Http::STATUS_CREATED, $createRes->getStatus());
+		$this->assertSame('bob', $createRes->getData()['shareWith']);
+
+		// 3. Update share
+		$updateRes = $this->controller->updateShare($libId, '55', 'write');
+		$this->assertSame(Http::STATUS_OK, $updateRes->getStatus());
+
+		// 4. Delete share
+		$this->shareManager->expects(self::once())->method('deleteShare')->with($mockShare);
+		$delRes = $this->controller->deleteShare($libId, '55');
+		$this->assertSame(Http::STATUS_OK, $delRes->getStatus());
+		$this->assertSame(['success' => true], $delRes->getData());
+
+		// 5. Unauthenticated rejection
+		$this->userSession->setUser(null);
+		$this->assertSame(Http::STATUS_UNAUTHORIZED, $this->controller->getShares($libId)->getStatus());
+		$this->assertSame(Http::STATUS_UNAUTHORIZED, $this->controller->createShare($libId, 'bob')->getStatus());
+		$this->assertSame(Http::STATUS_UNAUTHORIZED, $this->controller->updateShare($libId, '55', 'write')->getStatus());
+		$this->assertSame(Http::STATUS_UNAUTHORIZED, $this->controller->deleteShare($libId, '55')->getStatus());
 	}
 }

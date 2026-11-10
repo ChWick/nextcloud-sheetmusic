@@ -336,5 +336,25 @@ return [
 			'url' => '/api/libraries/{id}/sublibraries/{subId}',
 			'verb' => 'DELETE',
 		],
+		[
+			'name' => 'Library#getShares',
+			'url' => '/api/libraries/{id}/shares',
+			'verb' => 'GET',
+		],
+		[
+			'name' => 'Library#createShare',
+			'url' => '/api/libraries/{id}/shares',
+			'verb' => 'POST',
+		],
+		[
+			'name' => 'Library#updateShare',
+			'url' => '/api/libraries/{id}/shares/{shareId}',
+			'verb' => 'PUT',
+		],
+		[
+			'name' => 'Library#deleteShare',
+			'url' => '/api/libraries/{id}/shares/{shareId}',
+			'verb' => 'DELETE',
+		],
 	],
 ];
