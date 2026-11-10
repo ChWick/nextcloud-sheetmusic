@@ -75,6 +75,8 @@ class SheetMusicPublicShareTemplateProvider implements IPublicShareTemplateProvi
 		$this->initialState->provideInitialState('publicLibrary', [
 			'id' => (int)$library->id,
 			'path' => $library->path,
+			'sublibraryId' => $library->sublibraryId,
+			'sublibraryName' => $library->sublibraryName,
 			'isShared' => true,
 			'ownerId' => $library->userId,
 			'ownerDisplayName' => $ownerName,

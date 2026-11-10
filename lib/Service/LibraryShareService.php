@@ -10,7 +10,9 @@ declare(strict_types=1);
 namespace OCA\SheetMusic\Service;
 
 use OCA\SheetMusic\Db\InternalLibrary;
+use OCA\SheetMusic\Db\InternalSublibrary;
 use OCA\SheetMusic\Db\LibraryMapper;
+use OCA\SheetMusic\Db\SublibraryMapper;
 use OCA\SheetMusic\Exception\SecurityException;
 use OCP\Constants;
 use OCP\Files\Folder;
@@ -28,6 +30,8 @@ class LibraryShareService {
 	public const ACCESS_WRITE = 'write';
 	public const ACCESS_ADMIN = 'admin';
 
+	public const SUBLIBRARY_ID_OFFSET = 1_000_000;
+
 	public function __construct(
 		private LibraryMapper $libraryMapper,
 		private IRootFolder $rootFolder,
@@ -35,7 +39,79 @@ class LibraryShareService {
 		private ?IUserManager $userManager = null,
 		private ?IURLGenerator $urlGenerator = null,
 		private ?LoggerInterface $logger = null,
+		private ?SublibraryMapper $sublibraryMapper = null,
 	) {
+	}
+
+	public function ensureSublibraryFolderId(InternalSublibrary $sublib, ?InternalLibrary $library = null): ?int {
+		if ($sublib->folderId !== null && $sublib->folderId > 0) {
+			return $sublib->folderId;
+		}
+		if ($sublib->id === null) {
+			return null;
+		}
+
+		$lib = $library ?? $this->libraryMapper->findById($sublib->libraryId);
+		if ($lib === null) {
+			return null;
+		}
+
+		try {
+			$libFolder = $this->getLibraryFolderNode($lib);
+			if ($libFolder === null) {
+				return null;
+			}
+
+			if (!$libFolder->nodeExists('_SubLibraries_')) {
+				$libFolder->newFolder('_SubLibraries_');
+			}
+			$subDirNode = $libFolder->get('_SubLibraries_');
+			if (!($subDirNode instanceof Folder)) {
+				return null;
+			}
+
+			if (!$subDirNode->nodeExists($sublib->slug)) {
+				$subDirNode->newFolder($sublib->slug);
+			}
+			$folderNode = $subDirNode->get($sublib->slug);
+			if ($folderNode instanceof Folder) {
+				$folderId = $folderNode->getId();
+				$sublib->folderId = $folderId;
+				$this->sublibraryMapper?->updateFolderId($sublib->id, $folderId);
+				return $folderId;
+			}
+		} catch (\Throwable $e) {
+			$this->logger?->warning('Failed to ensure sublibrary folder: ' . $e->getMessage(), [
+				'exception' => $e,
+				'sublibraryId' => $sublib->id,
+			]);
+		}
+
+		return null;
+	}
+
+	public function getSublibraryFolderNode(InternalSublibrary $sublib, ?InternalLibrary $library = null): ?Folder {
+		$lib = $library ?? $this->libraryMapper->findById($sublib->libraryId);
+		if ($lib === null) {
+			return null;
+		}
+
+		$folderId = $this->ensureSublibraryFolderId($sublib, $lib);
+		if ($folderId === null) {
+			return null;
+		}
+
+		try {
+			$userFolder = $this->rootFolder->getUserFolder($lib->userId);
+			$nodes = $userFolder->getById($folderId);
+			if (!empty($nodes) && $nodes[0] instanceof Folder) {
+				return $nodes[0];
+			}
+		} catch (\Throwable) {
+			// Ignore
+		}
+
+		return null;
 	}
 
 	public function ensureLibraryFolderId(InternalLibrary $library): ?int {
@@ -81,6 +157,67 @@ class LibraryShareService {
 	}
 
 	public function getAccess(string $userId, int|InternalLibrary $library): string {
+		if (is_int($library) && $library >= self::SUBLIBRARY_ID_OFFSET) {
+			$sublibId = $library - self::SUBLIBRARY_ID_OFFSET;
+			$sublib = $this->sublibraryMapper?->findById($sublibId);
+			if ($sublib === null) {
+				return self::ACCESS_NONE;
+			}
+			$parentLib = $this->libraryMapper->findById($sublib->libraryId);
+			if ($parentLib === null) {
+				return self::ACCESS_NONE;
+			}
+			if ($parentLib->userId === $userId) {
+				return self::ACCESS_ADMIN;
+			}
+			$folderId = $this->ensureSublibraryFolderId($sublib, $parentLib);
+			if ($folderId === null) {
+				return self::ACCESS_NONE;
+			}
+			try {
+				$userFolder = $this->rootFolder->getUserFolder($userId);
+				$nodes = $userFolder->getById($folderId);
+				if (empty($nodes) || !$nodes[0]->isReadable()) {
+					return self::ACCESS_NONE;
+				}
+				$node = $nodes[0];
+				if ($node->isUpdateable() && $node->isCreatable()) {
+					return self::ACCESS_WRITE;
+				}
+				return self::ACCESS_READ;
+			} catch (\Throwable) {
+				return self::ACCESS_NONE;
+			}
+		}
+
+		if ($library instanceof InternalLibrary && $library->sublibraryId !== null) {
+			if ($library->userId === $userId) {
+				return self::ACCESS_ADMIN;
+			}
+			$folderId = $library->folderId;
+			if ($folderId === null && $this->sublibraryMapper !== null) {
+				$sub = $this->sublibraryMapper->findById($library->sublibraryId);
+				$folderId = $sub ? $this->ensureSublibraryFolderId($sub, $library) : null;
+			}
+			if ($folderId === null) {
+				return self::ACCESS_NONE;
+			}
+			try {
+				$userFolder = $this->rootFolder->getUserFolder($userId);
+				$nodes = $userFolder->getById($folderId);
+				if (empty($nodes) || !$nodes[0]->isReadable()) {
+					return self::ACCESS_NONE;
+				}
+				$node = $nodes[0];
+				if ($node->isUpdateable() && $node->isCreatable()) {
+					return self::ACCESS_WRITE;
+				}
+				return self::ACCESS_READ;
+			} catch (\Throwable) {
+				return self::ACCESS_NONE;
+			}
+		}
+
 		$lib = is_int($library) ? $this->libraryMapper->findById($library) : $library;
 		if ($lib === null || $lib->id === null) {
 			return self::ACCESS_NONE;
@@ -131,6 +268,92 @@ class LibraryShareService {
 	}
 
 	public function getAccessibleLibrary(string $userId, int $libraryId): ?InternalLibrary {
+		if ($libraryId >= self::SUBLIBRARY_ID_OFFSET) {
+			$sublibId = $libraryId - self::SUBLIBRARY_ID_OFFSET;
+			$sublib = $this->sublibraryMapper?->findById($sublibId);
+			if ($sublib === null) {
+				return null;
+			}
+			$lib = $this->libraryMapper->findById($sublib->libraryId);
+			if ($lib === null && $this->sublibraryMapper !== null) {
+				$sub = $this->sublibraryMapper->findByFolderId($folderId);
+				if ($sub !== null) {
+					$parentLib = $this->libraryMapper->findById($sub->libraryId);
+					if ($parentLib !== null) {
+						$shared = clone $parentLib;
+						$shared->id = self::SUBLIBRARY_ID_OFFSET + (int)$sub->id;
+						$shared->path = $parentLib->path . ' / ' . $sub->name;
+						$shared->sublibraryId = $sub->id;
+						$shared->sublibraryName = $sub->name;
+						$shared->folderId = $folderId;
+						$shared->isShared = true;
+						$shared->ownerId = $parentLib->userId;
+						$shared->ownerDisplayName = $this->getDisplayName($parentLib->userId);
+						$shared->permission = self::ACCESS_READ;
+						$shared->canWrite = false;
+
+						return [
+							'library' => $shared,
+							'sublibrary' => $sub,
+							'token' => $token,
+							'share' => $share,
+						];
+					}
+				}
+			}
+
+			if ($lib === null) {
+				return null;
+			}
+
+			if ($lib->userId === $userId) {
+				$this->ensureSublibraryFolderId($sublib, $lib);
+				$obj = clone $lib;
+				$obj->id = $libraryId;
+				$obj->path = $lib->path . ' / ' . $sublib->name;
+				$obj->sublibraryId = $sublib->id;
+				$obj->sublibraryName = $sublib->name;
+				$obj->folderId = $sublib->folderId;
+				$obj->isShared = false;
+				$obj->ownerId = $userId;
+				$obj->ownerDisplayName = $this->getDisplayName($userId);
+				$obj->permission = self::ACCESS_ADMIN;
+				$obj->canWrite = true;
+				return $obj;
+			}
+
+			$folderId = $this->ensureSublibraryFolderId($sublib, $lib);
+			if ($folderId === null) {
+				return null;
+			}
+
+			try {
+				$userFolder = $this->rootFolder->getUserFolder($userId);
+				$nodes = $userFolder->getById($folderId);
+				if (empty($nodes) || !$nodes[0]->isReadable()) {
+					return null;
+				}
+				$node = $nodes[0];
+				$canWrite = $node->isUpdateable() && $node->isCreatable();
+				$rel = $userFolder->getRelativePath($node->getPath());
+
+				$shared = clone $lib;
+				$shared->id = $libraryId;
+				$shared->path = '/' . ltrim($rel, '/');
+				$shared->sublibraryId = $sublib->id;
+				$shared->sublibraryName = $sublib->name;
+				$shared->folderId = $folderId;
+				$shared->isShared = true;
+				$shared->ownerId = $lib->userId;
+				$shared->ownerDisplayName = $this->getDisplayName($lib->userId);
+				$shared->permission = $canWrite ? self::ACCESS_WRITE : self::ACCESS_READ;
+				$shared->canWrite = $canWrite;
+				return $shared;
+			} catch (\Throwable) {
+				return null;
+			}
+		}
+
 		$lib = $this->libraryMapper->findById($libraryId);
 		if ($lib === null) {
 			return null;
@@ -245,6 +468,65 @@ class LibraryShareService {
 			]);
 		}
 
+		// 3. Shared sub-libraries
+		try {
+			if ($this->sublibraryMapper !== null) {
+				$foreignSublibraries = $this->sublibraryMapper->findAllNotOwnedBy($userId);
+				$userFolder = $this->rootFolder->getUserFolder($userId);
+
+				foreach ($foreignSublibraries as $fSub) {
+					if ($fSub->id === null || $fSub->folderId === null) {
+						continue;
+					}
+
+					$syntheticId = self::SUBLIBRARY_ID_OFFSET + (int)$fSub->id;
+					if (isset($handledIds[$syntheticId])) {
+						continue;
+					}
+
+					$parentLib = $this->libraryMapper->findById($fSub->libraryId);
+					if ($parentLib === null) {
+						continue;
+					}
+
+					// If the entire parent library is already accessible to the user, skip sublibrary
+					if (isset($handledIds[$parentLib->id])) {
+						continue;
+					}
+
+					$nodes = $userFolder->getById($fSub->folderId);
+					if (empty($nodes) || !$nodes[0]->isReadable()) {
+						continue;
+					}
+
+					$node = $nodes[0];
+					$canWrite = $node->isUpdateable() && $node->isCreatable();
+					$permission = $canWrite ? self::ACCESS_WRITE : self::ACCESS_READ;
+					$rel = $userFolder->getRelativePath($node->getPath());
+
+					$sharedSub = clone $parentLib;
+					$sharedSub->id = $syntheticId;
+					$sharedSub->path = '/' . ltrim($rel, '/');
+					$sharedSub->sublibraryId = $fSub->id;
+					$sharedSub->sublibraryName = $fSub->name;
+					$sharedSub->folderId = $fSub->folderId;
+					$sharedSub->isShared = true;
+					$sharedSub->ownerId = $parentLib->userId;
+					$sharedSub->ownerDisplayName = $this->getDisplayName($parentLib->userId);
+					$sharedSub->permission = $permission;
+					$sharedSub->canWrite = $canWrite;
+
+					$result[] = $sharedSub;
+					$handledIds[$syntheticId] = true;
+				}
+			}
+		} catch (\Throwable $e) {
+			$this->logger?->warning('Error querying shared sub-libraries for user: ' . $e->getMessage(), [
+				'exception' => $e,
+				'userId' => $userId,
+			]);
+		}
+
 		return $result;
 	}
 
@@ -266,23 +548,49 @@ class LibraryShareService {
 
 			$folderId = $node->getId();
 			$lib = $this->libraryMapper->findByFolderId($folderId);
-			if ($lib === null || $lib->userId === $userId) {
-				return null;
+			if ($lib !== null && $lib->userId !== $userId) {
+				if (!$node->isReadable()) {
+					return null;
+				}
+
+				$canWrite = $node->isUpdateable() && $node->isCreatable();
+				$shared = clone $lib;
+				$shared->path = '/' . $clean;
+				$shared->isShared = true;
+				$shared->ownerId = $lib->userId;
+				$shared->ownerDisplayName = $this->getDisplayName($lib->userId);
+				$shared->permission = $canWrite ? self::ACCESS_WRITE : self::ACCESS_READ;
+				$shared->canWrite = $canWrite;
+				return $shared;
 			}
 
-			if (!$node->isReadable()) {
-				return null;
+			if ($this->sublibraryMapper !== null) {
+				$sub = $this->sublibraryMapper->findByFolderId($folderId);
+				if ($sub !== null) {
+					$parentLib = $this->libraryMapper->findById($sub->libraryId);
+					if ($parentLib !== null && $parentLib->userId !== $userId) {
+						if (!$node->isReadable()) {
+							return null;
+						}
+
+						$canWrite = $node->isUpdateable() && $node->isCreatable();
+						$shared = clone $parentLib;
+						$shared->id = self::SUBLIBRARY_ID_OFFSET + (int)$sub->id;
+						$shared->path = '/' . $clean;
+						$shared->sublibraryId = $sub->id;
+						$shared->sublibraryName = $sub->name;
+						$shared->folderId = $folderId;
+						$shared->isShared = true;
+						$shared->ownerId = $parentLib->userId;
+						$shared->ownerDisplayName = $this->getDisplayName($parentLib->userId);
+						$shared->permission = $canWrite ? self::ACCESS_WRITE : self::ACCESS_READ;
+						$shared->canWrite = $canWrite;
+						return $shared;
+					}
+				}
 			}
 
-			$canWrite = $node->isUpdateable() && $node->isCreatable();
-			$shared = clone $lib;
-			$shared->path = '/' . $clean;
-			$shared->isShared = true;
-			$shared->ownerId = $lib->userId;
-			$shared->ownerDisplayName = $this->getDisplayName($lib->userId);
-			$shared->permission = $canWrite ? self::ACCESS_WRITE : self::ACCESS_READ;
-			$shared->canWrite = $canWrite;
-			return $shared;
+			return null;
 		} catch (\Throwable) {
 			return null;
 		}
@@ -316,6 +624,33 @@ class LibraryShareService {
 				if ($lib !== null && $lib->folderId === null && $lib->id !== null) {
 					$this->libraryMapper->updateFolderId($lib->id, $folderId);
 					$lib->folderId = $folderId;
+				}
+			}
+
+			if ($lib === null && $this->sublibraryMapper !== null) {
+				$sub = $this->sublibraryMapper->findByFolderId($folderId);
+				if ($sub !== null) {
+					$parentLib = $this->libraryMapper->findById($sub->libraryId);
+					if ($parentLib !== null) {
+						$shared = clone $parentLib;
+						$shared->id = self::SUBLIBRARY_ID_OFFSET + (int)$sub->id;
+						$shared->path = $parentLib->path . ' / ' . $sub->name;
+						$shared->sublibraryId = $sub->id;
+						$shared->sublibraryName = $sub->name;
+						$shared->folderId = $folderId;
+						$shared->isShared = true;
+						$shared->ownerId = $parentLib->userId;
+						$shared->ownerDisplayName = $this->getDisplayName($parentLib->userId);
+						$shared->permission = self::ACCESS_READ;
+						$shared->canWrite = false;
+
+						return [
+							'library' => $shared,
+							'sublibrary' => $sub,
+							'token' => $token,
+							'share' => $share,
+						];
+					}
 				}
 			}
 
@@ -469,6 +804,201 @@ class LibraryShareService {
 		}
 
 		$this->shareManager->deleteShare($share);
+	}
+
+	/**
+	 * @return array{sublibrary: InternalSublibrary, library: InternalLibrary}|null
+	 */
+	public function findSublibraryByFolderId(int $folderId): ?array {
+		if ($this->sublibraryMapper === null) {
+			return null;
+		}
+
+		$sublib = $this->sublibraryMapper->findByFolderId($folderId);
+		if ($sublib === null) {
+			return null;
+		}
+
+		$lib = $this->libraryMapper->findById($sublib->libraryId);
+		if ($lib === null) {
+			return null;
+		}
+
+		return [
+			'sublibrary' => $sublib,
+			'library' => $lib,
+		];
+	}
+
+	/**
+	 * @return array{sublibrary: InternalSublibrary, library: InternalLibrary, token: string, share: IShare}|null
+	 */
+	public function findSublibraryByPublicToken(string $token): ?array {
+		if ($this->shareManager === null) {
+			return null;
+		}
+
+		try {
+			$share = $this->shareManager->getShareByToken($token);
+			if ($share === null) {
+				return null;
+			}
+
+			$node = $share->getNode();
+			if (!($node instanceof Folder)) {
+				return null;
+			}
+
+			$info = $this->findSublibraryByFolderId($node->getId());
+			if ($info === null) {
+				return null;
+			}
+
+			return [
+				'sublibrary' => $info['sublibrary'],
+				'library' => $info['library'],
+				'token' => $token,
+				'share' => $share,
+			];
+		} catch (\Throwable) {
+			return null;
+		}
+	}
+
+	/**
+	 * @return list<array<string, mixed>>
+	 */
+	public function getSublibraryShares(int $libraryId, int $sublibraryId, string $userId): array {
+		$lib = $this->libraryMapper->findById($libraryId);
+		if ($lib === null || $lib->userId !== $userId) {
+			throw new SecurityException('Only the library owner can manage shares');
+		}
+
+		$sublib = $this->sublibraryMapper?->findById($sublibraryId);
+		if ($sublib === null || (int)$sublib->libraryId !== $libraryId) {
+			throw new \InvalidArgumentException('Sublibrary not found');
+		}
+
+		if ($this->shareManager === null) {
+			return [];
+		}
+
+		$node = $this->getSublibraryFolderNode($sublib, $lib);
+		if ($node === null) {
+			return [];
+		}
+
+		$shares = [];
+		foreach ([IShare::TYPE_USER, IShare::TYPE_GROUP, IShare::TYPE_LINK] as $type) {
+			try {
+				$found = $this->shareManager->getSharesBy($userId, $type, $node, false, -1);
+				foreach ($found as $s) {
+					$shares[] = $this->formatShare($s);
+				}
+			} catch (\Throwable $e) {
+				$this->logger?->warning('Failed to query shares for sublibrary: ' . $e->getMessage(), [
+					'exception' => $e,
+					'sublibraryId' => $sublibraryId,
+					'type' => $type,
+				]);
+			}
+		}
+
+		return $shares;
+	}
+
+	/**
+	 * @return array<string, mixed>
+	 */
+	public function createSublibraryShare(
+		int $libraryId,
+		int $sublibraryId,
+		string $userId,
+		int $shareType,
+		string $shareWith,
+		string $permission,
+		?string $password = null,
+	): array {
+		$lib = $this->libraryMapper->findById($libraryId);
+		if ($lib === null || $lib->userId !== $userId) {
+			throw new SecurityException('Only the library owner can manage shares');
+		}
+
+		$sublib = $this->sublibraryMapper?->findById($sublibraryId);
+		if ($sublib === null || (int)$sublib->libraryId !== $libraryId) {
+			throw new \InvalidArgumentException('Sublibrary not found');
+		}
+
+		if ($this->shareManager === null) {
+			throw new \RuntimeException('Nextcloud ShareManager is not available');
+		}
+
+		$node = $this->getSublibraryFolderNode($sublib, $lib);
+		if ($node === null) {
+			throw new \InvalidArgumentException('Sublibrary folder node not found');
+		}
+
+		$perms = ($permission === 'write')
+			? (Constants::PERMISSION_READ | Constants::PERMISSION_UPDATE | Constants::PERMISSION_CREATE | Constants::PERMISSION_DELETE)
+			: Constants::PERMISSION_READ;
+
+		$share = $this->shareManager->newShare();
+		$share->setNode($node);
+		$share->setShareType($shareType);
+		$share->setSharedBy($userId);
+
+		if ($shareType !== IShare::TYPE_LINK) {
+			$share->setSharedWith($shareWith);
+		}
+		if ($password !== null && trim($password) !== '') {
+			$share->setPassword(trim($password));
+		}
+		$share->setPermissions($perms);
+
+		$created = $this->shareManager->createShare($share);
+		return $this->formatShare($created);
+	}
+
+	/**
+	 * @return array<string, mixed>
+	 */
+	public function updateSublibraryShare(
+		int $libraryId,
+		int $sublibraryId,
+		string $userId,
+		int|string $shareId,
+		string $permission,
+	): array {
+		$lib = $this->libraryMapper->findById($libraryId);
+		if ($lib === null || $lib->userId !== $userId) {
+			throw new SecurityException('Only the library owner can manage shares');
+		}
+
+		$sublib = $this->sublibraryMapper?->findById($sublibraryId);
+		if ($sublib === null || (int)$sublib->libraryId !== $libraryId) {
+			throw new \InvalidArgumentException('Sublibrary not found');
+		}
+
+		return $this->updateShare($libraryId, $userId, $shareId, $permission);
+	}
+
+	public function deleteSublibraryShare(
+		int $libraryId,
+		int $sublibraryId,
+		string $userId,
+		int|string $shareId,
+	): void {
+		$lib = $this->libraryMapper->findById($libraryId);
+		if ($lib === null || $lib->userId !== $userId) {
+			throw new SecurityException('Only the library owner can manage shares');
+		}
+
+		$sublib = $this->sublibraryMapper?->findById($sublibraryId);
+		if ($sublib === null || (int)$sublib->libraryId !== $libraryId) {
+			throw new \InvalidArgumentException('Sublibrary not found');
+		}
+
+		$this->deleteShare($libraryId, $userId, $shareId);
 	}
 
 	private function getLibraryFolderNode(InternalLibrary $lib): ?Folder {

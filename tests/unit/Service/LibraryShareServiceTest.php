@@ -10,6 +10,8 @@ declare(strict_types=1);
 namespace Service;
 
 use OCA\SheetMusic\Db\InternalLibrary;
+use OCA\SheetMusic\Db\InternalSublibrary;
+use OCA\SheetMusic\Db\SublibraryMapper;
 use OCA\SheetMusic\Exception\SecurityException;
 use OCA\SheetMusic\Service\LibraryShareService;
 use OCP\Constants;
@@ -26,16 +28,20 @@ final class LibraryShareServiceTest extends TestCase {
 	use RealMobileSheetsTestTrait;
 
 	private LibraryShareService $shareService;
+	private SublibraryMapper $sublibraryMapper;
 
 	protected function setUp(): void {
 		parent::setUp();
 		$this->setUpRealMobileSheetsEnvironment();
+		$this->sublibraryMapper = new SublibraryMapper($this->dbConn);
 		$this->shareService = new LibraryShareService(
 			$this->libraryMapper,
 			$this->rootFolder,
 			null,
 			$this->userManager,
 			null,
+			null,
+			$this->sublibraryMapper,
 		);
 	}
 
@@ -169,5 +175,114 @@ final class LibraryShareServiceTest extends TestCase {
 		self::assertSame('admin', $result['library']->ownerId);
 		self::assertFalse($result['library']->canWrite);
 		self::assertSame('xyzSecretToken', $result['token']);
+	}
+
+	public function testEnsureSublibraryFolderIdCreatesFolder(): void {
+		$lib = $this->createTestLibrary('/Noten/sublib_folder_test.db', 'admin');
+		$sub = new InternalSublibrary(
+			libraryId: (int)$lib->id,
+			name: 'Organ Works',
+			slug: 'organ',
+		);
+		$createdSub = $this->sublibraryMapper->insert($sub);
+
+		$folderId = $this->shareService->ensureSublibraryFolderId($createdSub, $lib);
+		self::assertNotNull($folderId);
+		self::assertGreaterThan(0, $folderId);
+
+		$node = $this->shareService->getSublibraryFolderNode($createdSub, $lib);
+		self::assertNotNull($node);
+		self::assertSame($folderId, $node->getId());
+	}
+
+	public function testSublibraryShareCrud(): void {
+		$lib = $this->createTestLibrary('/Noten/sublib_share_crud.db', 'admin');
+		$sub = $this->sublibraryMapper->insert(new InternalSublibrary(
+			libraryId: (int)$lib->id,
+			name: 'Choir Pieces',
+			slug: 'choir',
+		));
+
+		$shareManager = $this->createMock(IShareManager::class);
+		$urlGen = $this->createMock(IURLGenerator::class);
+		$urlGen->method('getAbsoluteURL')->willReturnCallback(fn ($path) => 'https://cloud.test' . $path);
+
+		$service = new LibraryShareService(
+			$this->libraryMapper,
+			$this->rootFolder,
+			$shareManager,
+			$this->userManager,
+			$urlGen,
+			null,
+			$this->sublibraryMapper,
+		);
+
+		$mockShare = $this->createMock(IShare::class);
+		$mockShare->method('getId')->willReturn('201');
+		$mockShare->method('getFullId')->willReturn('ocinternal:201');
+		$mockShare->method('getShareType')->willReturn(IShare::TYPE_USER);
+		$mockShare->method('getSharedWith')->willReturn('carol');
+		$mockShare->method('getPermissions')->willReturn(Constants::PERMISSION_READ);
+		$mockShare->method('getToken')->willReturn(null);
+		$mockShare->method('getSharedBy')->willReturn('admin');
+
+		$newShare = $this->createMock(IShare::class);
+		$shareManager->method('newShare')->willReturn($newShare);
+		$shareManager->method('createShare')->willReturn($mockShare);
+		$shareManager->method('getSharesBy')->willReturnCallback(fn ($by, $type) => $type === IShare::TYPE_USER ? [$mockShare] : []);
+		$shareManager->method('getShareById')->willReturn($mockShare);
+
+		// Get sublibrary shares
+		$shares = $service->getSublibraryShares((int)$lib->id, (int)$sub->id, 'admin');
+		self::assertCount(1, $shares);
+		self::assertSame('201', $shares[0]['id']);
+		self::assertSame('carol', $shares[0]['shareWith']);
+
+		// Create sublibrary share
+		$created = $service->createSublibraryShare((int)$lib->id, (int)$sub->id, 'admin', IShare::TYPE_USER, 'carol', 'read');
+		self::assertSame('carol', $created['shareWith']);
+
+		// Delete sublibrary share
+		$shareManager->expects(self::once())->method('deleteShare')->with($mockShare);
+		$service->deleteSublibraryShare((int)$lib->id, (int)$sub->id, 'admin', '201');
+	}
+
+	public function testFindSublibraryByPublicToken(): void {
+		$lib = $this->createTestLibrary('/Noten/sublib_public_test.db', 'admin');
+		$sub = $this->sublibraryMapper->insert(new InternalSublibrary(
+			libraryId: (int)$lib->id,
+			name: 'Solo Flute',
+			slug: 'flute',
+		));
+		$folderId = $this->shareService->ensureSublibraryFolderId($sub, $lib);
+		self::assertNotNull($folderId);
+
+		$shareManager = $this->createMock(IShareManager::class);
+		$mockShare = $this->createMock(IShare::class);
+		$mockFolder = $this->createMock(Folder::class);
+		$mockFolder->method('getId')->willReturn($folderId);
+
+		$mockShare->method('getNode')->willReturn($mockFolder);
+		$mockShare->method('getTarget')->willReturn('/Noten/_SubLibraries_/flute');
+		$mockShare->method('getSharedBy')->willReturn('admin');
+		$mockShare->method('getToken')->willReturn('subSecretToken');
+		$shareManager->method('getShareByToken')->with('subSecretToken')->willReturn($mockShare);
+
+		$service = new LibraryShareService(
+			$this->libraryMapper,
+			$this->rootFolder,
+			$shareManager,
+			$this->userManager,
+			null,
+			null,
+			$this->sublibraryMapper,
+		);
+
+		$result = $service->findLibraryByPublicToken('subSecretToken');
+		self::assertNotNull($result);
+		self::assertSame(LibraryShareService::SUBLIBRARY_ID_OFFSET + (int)$sub->id, (int)$result['library']->id);
+		self::assertSame((int)$sub->id, $result['library']->sublibraryId);
+		self::assertTrue($result['library']->isShared);
+		self::assertSame('subSecretToken', $result['token']);
 	}
 }

@@ -149,6 +149,37 @@ class ApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	#[ApiRoute(verb: 'GET', url: '/api/libraries/{id}/sublibraries/{subId}/shares')]
+	public function getSublibraryShares(int $id, int $subId): DataResponse {
+		return $this->libraryController->getSublibraryShares($id, $subId);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/libraries/{id}/sublibraries/{subId}/shares')]
+	public function createSublibraryShare(
+		int $id,
+		int $subId,
+		string $shareWith = '',
+		int|string $shareType = IShare::TYPE_USER,
+		string $permission = 'read',
+		?string $password = null,
+	): DataResponse {
+		return $this->libraryController->createSublibraryShare($id, $subId, $shareWith, $shareType, $permission, $password);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'PUT', url: '/api/libraries/{id}/sublibraries/{subId}/shares/{shareId}')]
+	public function updateSublibraryShare(int $id, int $subId, string $shareId, string $permission = 'read'): DataResponse {
+		return $this->libraryController->updateSublibraryShare($id, $subId, $shareId, $permission);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'DELETE', url: '/api/libraries/{id}/sublibraries/{subId}/shares/{shareId}')]
+	public function deleteSublibraryShare(int $id, int $subId, string $shareId): DataResponse {
+		return $this->libraryController->deleteSublibraryShare($id, $subId, $shareId);
+	}
+
+	#[NoAdminRequired]
 	#[ApiRoute(verb: 'GET', url: '/api/libraries/{id}/integrity')]
 	public function getIntegrity(int $id, bool|string $autoMatchOrphans = true): DataResponse {
 		return $this->libraryController->getIntegrity($id, $autoMatchOrphans);

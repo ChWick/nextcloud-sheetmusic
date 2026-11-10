@@ -6,6 +6,7 @@ namespace Controller;
 
 use OCA\SheetMusic\Controller\LibraryController;
 use OCA\SheetMusic\Db\InternalLibrary;
+use OCA\SheetMusic\Db\InternalSublibrary;
 use OCA\SheetMusic\Db\SublibraryMapper;
 use OCA\SheetMusic\Service\IntegrityIssue;
 use OCA\SheetMusic\Service\LibraryIntegrityService;
@@ -44,8 +45,9 @@ final class LibraryControllerTest extends TestCase {
 		$this->userSession = new FakeUserSession($this->user);
 		$this->request = new FakeRequest();
 
+		$sublibraryMapper = new SublibraryMapper($this->dbConn);
 		$sublibraryService = new SublibraryService(
-			new SublibraryMapper($this->dbConn),
+			$sublibraryMapper,
 			$this->entityMapper,
 			$this->dbConn,
 		);
@@ -57,6 +59,8 @@ final class LibraryControllerTest extends TestCase {
 			$this->shareManager,
 			$this->userManager,
 			null,
+			null,
+			$sublibraryMapper,
 		);
 
 		$this->controller = new LibraryController(
@@ -322,5 +326,65 @@ final class LibraryControllerTest extends TestCase {
 		$this->assertSame(Http::STATUS_UNAUTHORIZED, $this->controller->createShare($libId, 'bob')->getStatus());
 		$this->assertSame(Http::STATUS_UNAUTHORIZED, $this->controller->updateShare($libId, '55', 'write')->getStatus());
 		$this->assertSame(Http::STATUS_UNAUTHORIZED, $this->controller->deleteShare($libId, '55')->getStatus());
+	}
+
+	public function testSublibraryShareEndpointsCrud(): void {
+		$userFolder = $this->rootFolder->getUserFolder('admin');
+		if (!$userFolder->nodeExists('ShareFolder2')) {
+			$this->createdUserNodes[] = $userFolder->newFolder('ShareFolder2');
+		}
+		$library = $this->createTestLibrary('ShareFolder2');
+		$libId = (int)$library->id;
+
+		$subMapper = new SublibraryMapper($this->dbConn);
+		$sub = $subMapper->insert(new InternalSublibrary(
+			libraryId: $libId,
+			name: 'Organ Choir',
+			slug: 'organ-choir',
+		));
+		$subId = (int)$sub->id;
+
+		$mockShare = $this->createMock(IShare::class);
+		$mockShare->method('getId')->willReturn('77');
+		$mockShare->method('getFullId')->willReturn('ocinternal:77');
+		$mockShare->method('getShareType')->willReturn(IShare::TYPE_USER);
+		$mockShare->method('getSharedWith')->willReturn('alice');
+		$mockShare->method('getPermissions')->willReturn(Constants::PERMISSION_READ);
+		$mockShare->method('getToken')->willReturn(null);
+		$mockShare->method('getSharedBy')->willReturn('admin');
+
+		$newShare = $this->createMock(IShare::class);
+		$this->shareManager->method('newShare')->willReturn($newShare);
+		$this->shareManager->method('createShare')->willReturn($mockShare);
+		$this->shareManager->method('getSharesBy')->willReturnCallback(fn ($by, $type) => $type === IShare::TYPE_USER ? [$mockShare] : []);
+		$this->shareManager->method('getShareById')->willReturn($mockShare);
+		$this->shareManager->method('updateShare')->willReturn($mockShare);
+
+		// 1. Get sublibrary shares
+		$getRes = $this->controller->getSublibraryShares($libId, $subId);
+		$this->assertSame(Http::STATUS_OK, $getRes->getStatus());
+		$this->assertCount(1, $getRes->getData()['shares']);
+		$this->assertSame('77', $getRes->getData()['shares'][0]['id']);
+
+		// 2. Create sublibrary share
+		$createRes = $this->controller->createSublibraryShare($libId, $subId, 'alice', IShare::TYPE_USER, 'read');
+		$this->assertSame(Http::STATUS_CREATED, $createRes->getStatus());
+		$this->assertSame('alice', $createRes->getData()['shareWith']);
+
+		// 3. Update sublibrary share
+		$updateRes = $this->controller->updateSublibraryShare($libId, $subId, '77', 'write');
+		$this->assertSame(Http::STATUS_OK, $updateRes->getStatus());
+
+		// 4. Delete sublibrary share
+		$this->shareManager->expects(self::once())->method('deleteShare')->with($mockShare);
+		$delRes = $this->controller->deleteSublibraryShare($libId, $subId, '77');
+		$this->assertSame(Http::STATUS_OK, $delRes->getStatus());
+
+		// 5. Unauthenticated rejection
+		$this->userSession->setUser(null);
+		$this->assertSame(Http::STATUS_UNAUTHORIZED, $this->controller->getSublibraryShares($libId, $subId)->getStatus());
+		$this->assertSame(Http::STATUS_UNAUTHORIZED, $this->controller->createSublibraryShare($libId, $subId, 'alice')->getStatus());
+		$this->assertSame(Http::STATUS_UNAUTHORIZED, $this->controller->updateSublibraryShare($libId, $subId, '77', 'write')->getStatus());
+		$this->assertSame(Http::STATUS_UNAUTHORIZED, $this->controller->deleteSublibraryShare($libId, $subId, '77')->getStatus());
 	}
 }

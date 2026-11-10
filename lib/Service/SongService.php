@@ -33,16 +33,30 @@ class SongService {
 		private ?SongHistoryService $songHistoryService = null,
 		private ?InternalSongBookmarkMapper $internalSongBookmarkMapper = null,
 		private ?LibraryShareService $libraryShareService = null,
+		private ?SublibraryService $sublibraryService = null,
 	) {
 	}
 
 	public function getSongs(IUser $user, int $libraryId): ?LibraryData {
-		if (!$this->libraryService->canReadLibrary($user->getUID(), $libraryId)) {
+		$library = $this->libraryService->getAccessibleLibrary($user->getUID(), $libraryId);
+		if ($library === null || !$this->libraryService->canReadLibrary($user->getUID(), $library)) {
 			return null;
 		}
 
+		$sublibrary = null;
+		$targetLibraryId = $libraryId;
+		if ($library->sublibraryId !== null && $this->sublibraryService !== null) {
+			$sublibrary = $this->sublibraryService->getSublibrary($library->sublibraryId);
+			$targetLibraryId = (int)($sublibrary?->libraryId ?? $libraryId);
+		} elseif ($libraryId >= LibraryShareService::SUBLIBRARY_ID_OFFSET && $this->sublibraryService !== null) {
+			$sublibrary = $this->sublibraryService->getSublibrary($libraryId - LibraryShareService::SUBLIBRARY_ID_OFFSET);
+			if ($sublibrary !== null) {
+				$targetLibraryId = (int)$sublibrary->libraryId;
+			}
+		}
+
 		try {
-			return $this->internalSongMapper->findLibraryData($libraryId, $user);
+			return $this->internalSongMapper->findLibraryData($targetLibraryId, $user, null, $library, $sublibrary);
 		} catch (\Throwable $e) {
 			$this->logger->error('Could not load songs from SheetMusic library', [
 				'exception' => $e,
@@ -61,12 +75,15 @@ class SongService {
 		}
 
 		$library = $info['library'];
+		$sublibrary = $info['sublibrary'] ?? null;
+		$targetLibraryId = ($sublibrary !== null) ? (int)$sublibrary->libraryId : $libraryId;
 		try {
 			return $this->internalSongMapper->findLibraryData(
-				$libraryId,
+				$targetLibraryId,
 				null,
 				$publicToken,
 				$library,
+				$sublibrary,
 			);
 		} catch (\Throwable $e) {
 			$this->logger->error('Could not load songs for public token', [
@@ -117,12 +134,21 @@ class SongService {
 			return null;
 		}
 
+		$sublibrary = null;
+		$targetLibraryId = $libraryId;
+		if ($libraryId >= LibraryShareService::SUBLIBRARY_ID_OFFSET && $this->sublibraryService !== null) {
+			$sublibrary = $this->sublibraryService->getSublibrary($libraryId - LibraryShareService::SUBLIBRARY_ID_OFFSET);
+			if ($sublibrary !== null) {
+				$targetLibraryId = (int)$sublibrary->libraryId;
+			}
+		}
+
 		try {
 			$now = time();
 			$song = new InternalSong(
 				id: null,
 				uuid: InternalEntity::generateUuid(),
-				libraryId: $libraryId,
+				libraryId: $targetLibraryId,
 				title: $title,
 				createdAt: $now,
 				updatedAt: $now,
@@ -146,11 +172,15 @@ class SongService {
 				'arranger' => $arrangerIds,
 			]);
 
+			if ($sublibrary !== null && $this->sublibraryService !== null) {
+				$this->sublibraryService->ensureSongMatchesSublibrary($sublibrary, $songId);
+			}
+
 			if ($this->internalSongBookmarkMapper !== null && !empty($bookmarks)) {
 				$this->internalSongBookmarkMapper->setBookmarksForSong($songId, $bookmarks);
 			}
 
-			$this->libraryMapper->touch($libraryId);
+			$this->libraryMapper->touch($targetLibraryId);
 
 			$this->songHistoryService?->recordSnapshot($createdSong, InternalSongHistory::ACTION_CREATED, $user->getUID());
 

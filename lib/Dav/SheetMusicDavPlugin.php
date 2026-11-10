@@ -273,6 +273,11 @@ class SheetMusicDavPlugin extends ServerPlugin {
 			$document->encoding = 'UTF-8';
 
 			$existing = $this->listedFilenames($document);
+			$sublibrary = null;
+			if ($library->sublibraryId !== null && $this->sublibraryService !== null) {
+				$sublibrary = $this->sublibraryService->getSublibrary($library->sublibraryId);
+			}
+
 			$entries = [];
 			foreach ($this->registry->getAllVirtualFileNames() as $filename) {
 				// A real file of that name takes precedence over the virtual one.
@@ -280,13 +285,13 @@ class SheetMusicDavPlugin extends ServerPlugin {
 					continue;
 				}
 				$client = $this->registry->getClientForVirtualFile($filename);
-				$entry = $this->buildPropfindEntry($library, $path . '/' . $filename, $filename, $requestBody, $client, null, $userId, $publicToken, $canWrite);
+				$entry = $this->buildPropfindEntry($library, $path . '/' . $filename, $filename, $requestBody, $client, $sublibrary, $userId, $publicToken, $canWrite);
 				if ($entry !== null) {
 					$entries[] = $entry;
 				}
 			}
 
-			if ($this->sublibraryService !== null && $library->id !== null) {
+			if ($this->sublibraryService !== null && $library->id !== null && $library->sublibraryId === null) {
 				$sublibs = $this->sublibraryService->getSublibraries((int)$library->id);
 				if (!empty($sublibs) && !in_array(self::SUBLIBRARIES_DIR, $existing, true)) {
 					$entries[] = $this->buildDirectoryPropfindEntry(
@@ -537,11 +542,16 @@ class SheetMusicDavPlugin extends ServerPlugin {
 			$canWrite = false;
 		}
 
+		$sublibrary = null;
+		if ($library->sublibraryId !== null && $this->sublibraryService !== null) {
+			$sublibrary = $this->sublibraryService->getSublibrary($library->sublibraryId);
+		}
+
 		return [
 			'client' => $client,
 			'library' => $library,
 			'filename' => $filename,
-			'sublibrary' => null,
+			'sublibrary' => $sublibrary,
 			'userId' => $context['userId'] ?? $library->userId,
 			'publicToken' => $context['publicToken'] ?? null,
 			'canWrite' => $canWrite,
@@ -687,7 +697,86 @@ class SheetMusicDavPlugin extends ServerPlugin {
 	 */
 	private function resolveSublibraryPhysicalFile(string $path): ?array {
 		$info = $this->resolveSublibraryFilePath($path);
-		if ($info === null || $this->rootFolder === null) {
+		if ($info === null) {
+			$context = $this->resolveDavContext($path);
+			if ($context !== null && $context['publicToken'] !== null && $this->libraryShareService !== null && $this->rootFolder !== null) {
+				$subInfo = $this->libraryShareService->findSublibraryByPublicToken($context['publicToken']);
+				if ($subInfo !== null) {
+					$library = $subInfo['library'];
+					$fileName = rawurldecode($context['relPath']);
+					if ($this->registry->getClientForVirtualFile($fileName) === null) {
+						$libPath = trim($library->path, '/');
+						if (str_ends_with(strtolower($libPath), '.db')) {
+							$libPath = dirname($libPath);
+							$libPath = ($libPath === '.' ? '' : $libPath);
+						}
+						$targetPath = $libPath === '' ? $fileName : $libPath . '/' . $fileName;
+						try {
+							$userFolder = $this->rootFolder->getUserFolder($library->userId);
+							if ($userFolder->nodeExists($targetPath)) {
+								$node = $userFolder->get($targetPath);
+								if ($node instanceof \OCP\Files\File) {
+									return [
+										[
+											'userId' => $library->userId,
+											'library' => $library,
+											'parentFolder' => $libPath,
+											'slug' => $subInfo['sublibrary']->slug,
+											'fileName' => $fileName,
+											'targetRelPath' => $targetPath,
+										],
+										$node,
+									];
+								}
+							}
+						} catch (\Throwable) {
+							// Fall through
+						}
+					}
+				}
+			}
+
+			if ($context !== null && $context['userId'] !== null && $this->libraryShareService !== null && $this->rootFolder !== null) {
+				$relPath = $context['relPath'];
+				$folder = dirname($relPath);
+				$folder = ($folder === '.' ? '' : $folder);
+				$fileName = rawurldecode(basename($relPath));
+				if ($folder !== '' && $this->registry->getClientForVirtualFile($fileName) === null) {
+					$sharedLib = $this->libraryShareService->findSharedLibraryByFolderPath($context['userId'], $folder);
+					if ($sharedLib !== null && $sharedLib->sublibraryId !== null) {
+						$parentLib = $this->libraryMapper->findById((int)$sharedLib->id >= LibraryShareService::SUBLIBRARY_ID_OFFSET ? ((int)$sharedLib->id - LibraryShareService::SUBLIBRARY_ID_OFFSET) : (int)$sharedLib->id);
+						$ownerLib = $parentLib ?? $sharedLib;
+						$ownerLibPath = trim($ownerLib->path, '/');
+						if (str_ends_with(strtolower($ownerLibPath), '.db')) {
+							$ownerLibPath = dirname($ownerLibPath);
+							$ownerLibPath = ($ownerLibPath === '.' ? '' : $ownerLibPath);
+						}
+						$targetPath = $ownerLibPath === '' ? $fileName : $ownerLibPath . '/' . $fileName;
+						try {
+							$userFolder = $this->rootFolder->getUserFolder($ownerLib->userId);
+							if ($userFolder->nodeExists($targetPath)) {
+								$node = $userFolder->get($targetPath);
+								if ($node instanceof \OCP\Files\File) {
+									return [
+										[
+											'userId' => $ownerLib->userId,
+											'library' => $ownerLib,
+											'parentFolder' => $ownerLibPath,
+											'slug' => $sharedLib->sublibraryName ?? '',
+											'fileName' => $fileName,
+											'targetRelPath' => $targetPath,
+										],
+										$node,
+									];
+								}
+							}
+						} catch (\Throwable) {
+							// Fall through
+						}
+					}
+				}
+			}
+
 			return null;
 		}
 

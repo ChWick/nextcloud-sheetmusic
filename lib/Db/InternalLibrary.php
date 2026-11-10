@@ -24,6 +24,8 @@ class InternalLibrary implements \JsonSerializable {
 		public string $ownerDisplayName = '',
 		public string $permission = 'admin',
 		public bool $canWrite = true,
+		public ?int $sublibraryId = null,
+		public ?string $sublibraryName = null,
 	) {
 	}
 
@@ -45,6 +47,8 @@ class InternalLibrary implements \JsonSerializable {
 			ownerDisplayName: (string)($row['owner_display_name'] ?? $row['ownerDisplayName'] ?? ''),
 			permission: (string)($row['permission'] ?? 'admin'),
 			canWrite: isset($row['can_write']) ? (bool)$row['can_write'] : (isset($row['canWrite']) ? (bool)$row['canWrite'] : true),
+			sublibraryId: isset($row['sublibrary_id']) && $row['sublibrary_id'] !== null ? (int)$row['sublibrary_id'] : (isset($row['sublibraryId']) && $row['sublibraryId'] !== null ? (int)$row['sublibraryId'] : null),
+			sublibraryName: isset($row['sublibrary_name']) ? (string)$row['sublibrary_name'] : (isset($row['sublibraryName']) ? (string)$row['sublibraryName'] : null),
 		);
 	}
 
@@ -66,11 +70,13 @@ class InternalLibrary implements \JsonSerializable {
 			'ownerDisplayName' => $this->ownerDisplayName,
 			'permission' => $this->permission,
 			'canWrite' => $this->canWrite,
+			'sublibraryId' => $this->sublibraryId,
+			'sublibraryName' => $this->sublibraryName,
 		];
 	}
 
 	/**
-	 * @return array{id: int|null, path: string, folderId: int|null, autoPaths: bool, autoPdfMetadata: bool, isShared: bool, ownerId: string, ownerDisplayName: string, permission: string, canWrite: bool}
+	 * @return array{id: int|null, path: string, folderId: int|null, autoPaths: bool, autoPdfMetadata: bool, isShared: bool, ownerId: string, ownerDisplayName: string, permission: string, canWrite: bool, sublibraryId?: int|null, sublibraryName?: string|null}
 	 */
 	public function jsonSerialize(): array {
 		return [
@@ -84,6 +90,8 @@ class InternalLibrary implements \JsonSerializable {
 			'ownerDisplayName' => $this->ownerDisplayName,
 			'permission' => $this->permission,
 			'canWrite' => $this->canWrite,
+			'sublibraryId' => $this->sublibraryId,
+			'sublibraryName' => $this->sublibraryName,
 		];
 	}
 }

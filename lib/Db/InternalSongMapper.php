@@ -17,6 +17,8 @@ use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsCustomGroup;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsFile;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsGenre;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsKey;
+use OCA\SheetMusic\Db\InternalSublibrary;
+use OCA\SheetMusic\Service\SublibraryService;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPathResolver;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSignature;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSong;
@@ -36,6 +38,7 @@ class InternalSongMapper {
 		private ?InternalSongFileMapper $songFileMapper = null,
 		private ?IRootFolder $rootFolder = null,
 		private ?InternalSongBookmarkMapper $bookmarkMapper = null,
+		private ?SublibraryService $sublibraryService = null,
 	) {
 	}
 
@@ -649,6 +652,7 @@ class InternalSongMapper {
 		?IUser $user = null,
 		?string $publicToken = null,
 		?InternalLibrary $library = null,
+		?InternalSublibrary $sublibrary = null,
 	): LibraryData {
 		$entities = $this->entityMapper !== null
 			? $this->entityMapper->findAllForLibrary($libraryId)
@@ -682,6 +686,14 @@ class InternalSongMapper {
 		$songBookmarks = $this->bookmarkMapper !== null
 			? $this->bookmarkMapper->findAllForLibrary($libraryId)
 			: [];
+
+		if ($sublibrary !== null && $this->sublibraryService !== null) {
+			$matchingIds = $this->sublibraryService->getMatchingSongIds($sublibrary);
+			$songs = array_values(array_filter($songs, fn($s) => isset($matchingIds[(int)$s->id])));
+			$files = array_values(array_filter($files, fn($f) => isset($matchingIds[(int)$f->songId])));
+			$songBookmarks = array_values(array_filter($songBookmarks, fn($b) => isset($matchingIds[(int)$b->songId])));
+			$songEntities = array_intersect_key($songEntities, $matchingIds);
+		}
 
 		$fileIds = array_values(array_unique(array_filter(array_column($files, 'fileId'))));
 		$uid = $user?->getUID() ?? '';
