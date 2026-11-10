@@ -10,11 +10,14 @@ use OCA\SheetMusic\Db\InternalSongFile;
 use OCA\SheetMusic\Db\InternalSongHistory;
 use OCA\SheetMusic\Db\InternalSongHistoryMapper;
 use OCA\SheetMusic\Db\LibraryData;
+use OCA\SheetMusic\Db\SublibraryMapper;
 use OCA\SheetMusic\Service\FileManager;
 use OCA\SheetMusic\Service\LibraryService;
+use OCA\SheetMusic\Service\LibraryShareService;
 use OCA\SheetMusic\Service\SongFileService;
 use OCA\SheetMusic\Service\SongHistoryService;
 use OCA\SheetMusic\Service\SongService;
+use OCA\SheetMusic\Service\SublibraryService;
 use OCP\IUser;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
@@ -27,6 +30,7 @@ final class SongServiceTest extends TestCase {
 	private IUser $user;
 	private SongService $service;
 	private SongHistoryService $historyService;
+	private SublibraryService $sublibraryService;
 
 	protected function setUp(): void {
 		parent::setUp();
@@ -43,7 +47,25 @@ final class SongServiceTest extends TestCase {
 		}
 
 		$logger = new NullLogger();
-		$libraryService = new LibraryService($this->libraryMapper, $this->rootFolder, $logger, exporter: $this->exporter);
+		$sublibraryMapper = new SublibraryMapper($this->dbConn);
+		$shareService = new LibraryShareService(
+			$this->libraryMapper,
+			$this->rootFolder,
+			null,
+			$this->userManager,
+			null,
+			null,
+			$sublibraryMapper,
+		);
+		$this->sublibraryService = new SublibraryService($sublibraryMapper, $this->entityMapper, $this->dbConn);
+
+		$libraryService = new LibraryService(
+			$this->libraryMapper,
+			$this->rootFolder,
+			$logger,
+			exporter: $this->exporter,
+			shareService: $shareService,
+		);
 		$fileManager = new FileManager(
 			$this->libraryMapper,
 			$this->rootFolder,
@@ -61,6 +83,7 @@ final class SongServiceTest extends TestCase {
 			$this->songFileMapper,
 			$this->songMapper,
 			$this->libraryMapper,
+			sublibraryService: $this->sublibraryService,
 		);
 		$integrityService = $this->createLibraryIntegrityService($libraryService);
 
@@ -88,6 +111,7 @@ final class SongServiceTest extends TestCase {
 			$integrityService,
 			$this->historyService,
 			$this->bookmarkMapper,
+			sublibraryService: $this->sublibraryService,
 		);
 	}
 
@@ -461,5 +485,54 @@ final class SongServiceTest extends TestCase {
 		// Only the selected composer (composerA) and arranger (arrangerB) are linked to keep song
 		self::assertSame([(int)$composerA->id], $this->entityMapper->findEntityIdsForSong((int)$keep->id, 'composer'));
 		self::assertSame([(int)$arrangerB->id], $this->entityMapper->findEntityIdsForSong((int)$keep->id, 'arranger'));
+	}
+
+	public function testUpdateSongWithSharedSublibrary(): void {
+		$song = $this->songMapper->insert(new InternalSong(
+			id: null,
+			uuid: 'sub-song-1',
+			libraryId: $this->libraryId,
+			title: 'Sublib Original Song',
+		));
+
+		$sub = $this->sublibraryService->createSublibrary($this->libraryId, 'Violin Sublib', 'violin', []);
+		$subLibraryId = LibraryShareService::SUBLIBRARY_ID_OFFSET + (int)$sub->id;
+
+		$result = $this->service->updateSong(
+			$this->user,
+			(int)$song->id,
+			$subLibraryId,
+			'Sublib Updated Song',
+			opus: 'Op. 12',
+		);
+
+		self::assertNotNull($result);
+		$updated = $this->songMapper->findById((int)$song->id);
+		self::assertNotNull($updated);
+		self::assertSame('Sublib Updated Song', $updated->title);
+		self::assertSame('Op. 12', $updated->opus);
+		self::assertSame($this->libraryId, $updated->libraryId);
+
+		// Returns the updated library data
+		self::assertCount(1, $result->songs);
+		self::assertSame('Sublib Updated Song', $result->songs[0]->title);
+	}
+
+	public function testDeleteSongWithSharedSublibrary(): void {
+		$song = $this->songMapper->insert(new InternalSong(
+			id: null,
+			uuid: 'sub-song-2',
+			libraryId: $this->libraryId,
+			title: 'Sublib Song To Delete',
+		));
+
+		$sub = $this->sublibraryService->createSublibrary($this->libraryId, 'Cello Sublib', 'cello', []);
+		$subLibraryId = LibraryShareService::SUBLIBRARY_ID_OFFSET + (int)$sub->id;
+
+		$result = $this->service->deleteSong($this->user, (int)$song->id, $subLibraryId);
+		self::assertNotNull($result);
+
+		$deletedSong = $this->songMapper->findById((int)$song->id);
+		self::assertNotNull($deletedSong->deletedAt);
 	}
 }

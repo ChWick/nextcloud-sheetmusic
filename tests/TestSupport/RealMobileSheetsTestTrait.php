@@ -160,6 +160,7 @@ trait RealMobileSheetsTestTrait {
 		$this->dbConn->executeStatement('DELETE FROM *PREFIX*sheetmusic_entities WHERE library_id = ?', [$libraryId]);
 		$this->dbConn->executeStatement('DELETE FROM *PREFIX*sheetmusic_misc_data WHERE library_id = ?', [$libraryId]);
 		$this->dbConn->executeStatement('DELETE FROM *PREFIX*sheetmusic_misc_schema WHERE library_id = ?', [$libraryId]);
+		$this->dbConn->executeStatement('DELETE FROM *PREFIX*sheetmusic_sublibraries WHERE library_id = ?', [$libraryId]);
 		if ($deleteLibraryRow) {
 			$this->dbConn->executeStatement('DELETE FROM *PREFIX*sheetmusic_libraries WHERE id = ?', [$libraryId]);
 		}

@@ -31,11 +31,21 @@ class SongFileService {
 		private InternalSongMapper $internalSongMapper,
 		private LibraryMapper $libraryMapper,
 		private ?SongHistoryService $songHistoryService = null,
+		private ?SublibraryService $sublibraryService = null,
 	) {
 	}
 
 	public function getLogger(): LoggerInterface {
 		return $this->logger;
+	}
+
+	private function findLibraryDataForResponse(IUser $user, int $libraryId): LibraryData {
+		$targetLibraryId = $this->libraryService->getTargetLibraryId($libraryId);
+		$sublibrary = null;
+		if ($libraryId >= LibraryShareService::SUBLIBRARY_ID_OFFSET && $this->sublibraryService !== null) {
+			$sublibrary = $this->sublibraryService->getSublibrary($libraryId - LibraryShareService::SUBLIBRARY_ID_OFFSET);
+		}
+		return $this->internalSongMapper->findLibraryData($targetLibraryId, $user, null, null, $sublibrary);
 	}
 
 	private function resolveSongFileRecord(int $fileId, int $songId = 0): ?InternalSongFile {
@@ -121,10 +131,11 @@ class SongFileService {
 		// record a stale page count / page order of '1-1'.
 		$targetFile = $userFolder->newFile($targetRelative, $content);
 
+		$targetLibraryId = $this->libraryService->getTargetLibraryId($libraryId);
 		$this->cleanupAutoIndexedStubForNewUpload($songId, (int)$targetFile->getId());
-		$this->recordSongFile($songId, $user, $targetFile, $libraryId, $explicitPageCount, $explicitPageOrder, $content);
+		$this->recordSongFile($songId, $user, $targetFile, $targetLibraryId, $explicitPageCount, $explicitPageOrder, $content);
 
-		return $this->internalSongMapper->findLibraryData($libraryId, $user);
+		return $this->findLibraryDataForResponse($user, $libraryId);
 	}
 
 	public function updateSongFile(IUser $user, int $libraryId, int $songId, int $fileId, ?array $fileInfo): ?LibraryData {
@@ -163,8 +174,9 @@ class SongFileService {
 		$fileRecord->updatedAt = time();
 		$this->internalSongFileMapper->update($fileRecord);
 
-		$this->libraryMapper->touch($libraryId);
-		$this->syncSongFileMetadata($user, '', $songId, $libraryId);
+		$targetLibraryId = $this->libraryService->getTargetLibraryId($libraryId);
+		$this->libraryMapper->touch($targetLibraryId);
+		$this->syncSongFileMetadata($user, '', $songId, $targetLibraryId);
 
 		if ($songId > 0) {
 			$song = $this->internalSongMapper->findById($songId);
@@ -182,7 +194,7 @@ class SongFileService {
 			}
 		}
 
-		return $this->internalSongMapper->findLibraryData($libraryId, $user);
+		return $this->findLibraryDataForResponse($user, $libraryId);
 	}
 
 	/**
@@ -350,8 +362,9 @@ class SongFileService {
 			}
 		}
 
-		$this->libraryMapper->touch($libraryId);
-		$this->syncSongFileMetadata($user, '', $songId, $libraryId);
+		$targetLibraryId = $this->libraryService->getTargetLibraryId($libraryId);
+		$this->libraryMapper->touch($targetLibraryId);
+		$this->syncSongFileMetadata($user, '', $songId, $targetLibraryId);
 
 		$targetSongId = $fileRecord->songId;
 		if ($targetSongId > 0) {
@@ -370,7 +383,7 @@ class SongFileService {
 			}
 		}
 
-		return $this->internalSongMapper->findLibraryData($libraryId, $user);
+		return $this->findLibraryDataForResponse($user, $libraryId);
 	}
 
 	public function attachNextcloudFile(
@@ -414,7 +427,8 @@ class SongFileService {
 		}
 
 		$attachedFile = $targetFolder->get($targetName);
-		$this->recordSongFile($songId, $user, $attachedFile, $libraryId);
+		$targetLibraryId = $this->libraryService->getTargetLibraryId($libraryId);
+		$this->recordSongFile($songId, $user, $attachedFile, $targetLibraryId);
 
 		if ($songId > 0 && $this->songHistoryService !== null) {
 			$song = $this->internalSongMapper->findById($songId);
@@ -428,7 +442,7 @@ class SongFileService {
 			}
 		}
 
-		return $this->internalSongMapper->findLibraryData($libraryId, $user);
+		return $this->findLibraryDataForResponse($user, $libraryId);
 	}
 
 	public function deleteSongFile(IUser $user, int $libraryId, int $songId, int $fileId): ?LibraryData {
@@ -437,7 +451,8 @@ class SongFileService {
 			$targetFileId = $fileRecord->fileId;
 			$targetSongId = $fileRecord->songId;
 			$this->internalSongFileMapper->delete($fileRecord->id);
-			$this->libraryMapper->touch($libraryId);
+			$targetLibraryId = $this->libraryService->getTargetLibraryId($libraryId);
+			$this->libraryMapper->touch($targetLibraryId);
 
 			$others = $this->internalSongFileMapper->findByFileId($targetFileId);
 			$activeOthers = array_filter($others, fn (InternalSongFile $f) => $f->id !== $fileRecord->id && $f->deletedAt === null);
@@ -471,7 +486,7 @@ class SongFileService {
 				}
 			}
 
-			return $this->internalSongMapper->findLibraryData($libraryId, $user);
+			return $this->findLibraryDataForResponse($user, $libraryId);
 		}
 
 		return null;
@@ -486,7 +501,8 @@ class SongFileService {
 
 			$targetSongId = $fileRecord->songId;
 			$this->internalSongFileMapper->delete($fileRecord->id);
-			$this->libraryMapper->touch($libraryId);
+			$targetLibraryId = $this->libraryService->getTargetLibraryId($libraryId);
+			$this->libraryMapper->touch($targetLibraryId);
 
 			if ($targetSongId > 0 && $this->songHistoryService !== null) {
 				$song = $this->internalSongMapper->findById($targetSongId);
@@ -500,7 +516,7 @@ class SongFileService {
 				}
 			}
 
-			return $this->internalSongMapper->findLibraryData($libraryId, $user);
+			return $this->findLibraryDataForResponse($user, $libraryId);
 		} catch (\Throwable $exception) {
 			$this->logger->error('Could not detach a file from a song', [
 				'exception' => $exception,
@@ -543,8 +559,9 @@ class SongFileService {
 				}
 			}
 
-			$this->libraryMapper->touch($libraryId);
-			return $this->internalSongMapper->findLibraryData($libraryId, $user);
+			$targetLibraryId = $this->libraryService->getTargetLibraryId($libraryId);
+			$this->libraryMapper->touch($targetLibraryId);
+			return $this->findLibraryDataForResponse($user, $libraryId);
 		} catch (\Throwable $exception) {
 			$this->logger->error('Could not update song file page order', [
 				'exception' => $exception,
@@ -566,8 +583,9 @@ class SongFileService {
 			return;
 		}
 
+		$targetLibraryId = $this->libraryService->getTargetLibraryId($libraryId);
 		$song = null;
-		$data = $this->internalSongMapper->findLibraryData($libraryId, $user);
+		$data = $this->internalSongMapper->findLibraryData($targetLibraryId, $user);
 		foreach ($data->songs as $s) {
 			if ($s->id === $songId) {
 				$song = $s;

@@ -69,6 +69,13 @@ class LibraryService {
 		return $this->shareService;
 	}
 
+	public function getTargetLibraryId(int $libraryId): int {
+		if ($this->shareService !== null) {
+			return $this->shareService->getParentLibraryId($libraryId);
+		}
+		return $libraryId;
+	}
+
 	/**
 	 * @return array{0: string, 1: string}|null array of [libraryPath, databasePath], or null if library is missing or invalid
 	 */

@@ -134,13 +134,10 @@ class SongService {
 			return null;
 		}
 
+		$targetLibraryId = $this->libraryService->getTargetLibraryId($libraryId);
 		$sublibrary = null;
-		$targetLibraryId = $libraryId;
 		if ($libraryId >= LibraryShareService::SUBLIBRARY_ID_OFFSET && $this->sublibraryService !== null) {
 			$sublibrary = $this->sublibraryService->getSublibrary($libraryId - LibraryShareService::SUBLIBRARY_ID_OFFSET);
-			if ($sublibrary !== null) {
-				$targetLibraryId = (int)$sublibrary->libraryId;
-			}
 		}
 
 		try {
@@ -184,7 +181,7 @@ class SongService {
 
 			$this->songHistoryService?->recordSnapshot($createdSong, InternalSongHistory::ACTION_CREATED, $user->getUID());
 
-			$data = $this->internalSongMapper->findLibraryData($libraryId, $user);
+			$data = $this->getSongs($user, $libraryId) ?? $this->internalSongMapper->findLibraryData($targetLibraryId, $user);
 			$data->createdSongId = $songId;
 
 			return $data;
@@ -236,9 +233,11 @@ class SongService {
 			return null;
 		}
 
+		$targetLibraryId = $this->libraryService->getTargetLibraryId($libraryId);
+
 		try {
 			$song = $this->internalSongMapper->findById($songId);
-			if ($song !== null && $song->libraryId === $libraryId) {
+			if ($song !== null && $song->libraryId === $targetLibraryId) {
 				if ($this->songHistoryService !== null && !$this->songHistoryService->hasHistory($songId)) {
 					$this->songHistoryService->recordSnapshot(
 						$song,
@@ -271,13 +270,13 @@ class SongService {
 					$this->internalSongBookmarkMapper->setBookmarksForSong($songId, $bookmarks);
 				}
 
-				$this->libraryMapper->touch($libraryId);
+				$this->libraryMapper->touch($targetLibraryId);
 
-				$this->songFileService->syncSongFileMetadata($user, '', $songId, $libraryId);
+				$this->songFileService->syncSongFileMetadata($user, '', $songId, $targetLibraryId);
 
 				$this->songHistoryService?->recordSnapshot($song, InternalSongHistory::ACTION_UPDATED, $user->getUID());
 
-				return $this->internalSongMapper->findLibraryData($libraryId, $user);
+				return $this->getSongs($user, $libraryId) ?? $this->internalSongMapper->findLibraryData($targetLibraryId, $user);
 			}
 
 			return null;
@@ -314,6 +313,11 @@ class SongService {
 			return null;
 		}
 
+		if (!$this->libraryService->canWriteLibrary($user->getUID(), $libraryId)) {
+			return null;
+		}
+
+		$targetLibraryId = $this->libraryService->getTargetLibraryId($libraryId);
 		$total = count($songIds);
 		if ($progressId !== null) {
 			$this->libraryService->startProgress($progressId, 'Updating songs…');
@@ -324,13 +328,16 @@ class SongService {
 				$current = $index + 1;
 				$sid = (int)$songId;
 				$song = $this->internalSongMapper->findById($sid);
+				if ($song === null || $song->libraryId !== $targetLibraryId) {
+					continue;
+				}
 				if ($progressId !== null) {
-					$detail = $song !== null && $song->title !== ''
+					$detail = $song->title !== ''
 						? "Updating song $current of $total: {$song->title}"
 						: "Updating song $current of $total";
 					$this->libraryService->updateProgress($progressId, 'batch-update', $current, $total, $detail);
 				}
-				if ($song !== null && $this->songHistoryService !== null && !$this->songHistoryService->hasHistory($sid)) {
+				if ($this->songHistoryService !== null && !$this->songHistoryService->hasHistory($sid)) {
 					$this->songHistoryService->recordSnapshot(
 						$song,
 						InternalSongHistory::ACTION_CREATED,
@@ -361,14 +368,14 @@ class SongService {
 					$this->internalSongMapper->update($song);
 					$this->songHistoryService?->recordSnapshot($song, InternalSongHistory::ACTION_UPDATED, $user->getUID());
 				}
-				$this->songFileService->syncSongFileMetadata($user, '', $sid, $libraryId);
+				$this->songFileService->syncSongFileMetadata($user, '', $sid, $targetLibraryId);
 			}
-			$this->libraryMapper->touch($libraryId);
+			$this->libraryMapper->touch($targetLibraryId);
 			if ($progressId !== null) {
 				$this->libraryService->updateProgress($progressId, 'finalizing', $total, $total, 'Finalizing…');
 			}
 
-			$data = $this->internalSongMapper->findLibraryData($libraryId, $user);
+			$data = $this->getSongs($user, $libraryId) ?? $this->internalSongMapper->findLibraryData($targetLibraryId, $user);
 			if ($progressId !== null) {
 				$this->libraryService->completeProgress($progressId, 'Batch update complete');
 			}
@@ -425,8 +432,9 @@ class SongService {
 		if (!$this->libraryService->canWriteLibrary($user->getUID(), $libraryId)) {
 			return null;
 		}
+		$targetLibraryId = $this->libraryService->getTargetLibraryId($libraryId);
 		$song = $this->internalSongMapper->findById($songId);
-		if ($song === null || $song->libraryId !== $libraryId) {
+		if ($song === null || $song->libraryId !== $targetLibraryId) {
 			return null;
 		}
 		return $this->batchDeleteSongs($user, $libraryId, [$songId], $deleteFiles);
@@ -440,8 +448,9 @@ class SongService {
 		if (!$this->libraryService->canWriteLibrary($user->getUID(), $libraryId)) {
 			return null;
 		}
+		$targetLibraryId = $this->libraryService->getTargetLibraryId($libraryId);
 		if ($songIds === []) {
-			return $this->internalSongMapper->findLibraryData($libraryId, $user);
+			return $this->getSongs($user, $libraryId) ?? $this->internalSongMapper->findLibraryData($targetLibraryId, $user);
 		}
 
 		try {
@@ -469,12 +478,12 @@ class SongService {
 				}
 				$this->internalSongFileMapper->deleteAllForSong($songId);
 				$this->internalSongBookmarkMapper?->deleteForSong($songId);
-				$this->internalSongMapper->cleanupDeletedSongData($libraryId, $songId);
+				$this->internalSongMapper->cleanupDeletedSongData($targetLibraryId, $songId);
 				$this->internalSongMapper->delete($songId);
 			}
-			$this->libraryMapper->touch($libraryId);
+			$this->libraryMapper->touch($targetLibraryId);
 
-			return $this->internalSongMapper->findLibraryData($libraryId, $user);
+			return $this->getSongs($user, $libraryId) ?? $this->internalSongMapper->findLibraryData($targetLibraryId, $user);
 		} catch (\Throwable $e) {
 			$this->logger->error('Could not batch delete songs from SheetMusic library', [
 				'exception' => $e,
@@ -516,14 +525,18 @@ class SongService {
 	 * } $merged
 	 */
 	public function mergeSong(IUser $user, int $libraryId, int $keepId, int $droppedId, array $merged): ?LibraryData {
+		if (!$this->libraryService->canWriteLibrary($user->getUID(), $libraryId)) {
+			return null;
+		}
+		$targetLibraryId = $this->libraryService->getTargetLibraryId($libraryId);
 		try {
-			$this->internalSongMapper->mergeSongs($libraryId, $keepId, $droppedId);
+			$this->internalSongMapper->mergeSongs($targetLibraryId, $keepId, $droppedId);
 			if (!empty($merged['title'])) {
 				$this->updateSongFromData($user, $libraryId, ['id' => $keepId] + $merged);
 			}
-			$this->libraryMapper->touch($libraryId);
+			$this->libraryMapper->touch($targetLibraryId);
 
-			return $this->internalSongMapper->findLibraryData($libraryId, $user);
+			return $this->getSongs($user, $libraryId) ?? $this->internalSongMapper->findLibraryData($targetLibraryId, $user);
 		} catch (\Throwable $e) {
 			$this->logger->error('Could not merge songs in SheetMusic library', [
 				'exception' => $e,

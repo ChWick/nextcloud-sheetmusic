@@ -19,6 +19,7 @@ class EntityService {
 		private InternalEntityMapper $internalEntityMapper,
 		private InternalSongMapper $internalSongMapper,
 		private LibraryMapper $libraryMapper,
+		private ?SublibraryService $sublibraryService = null,
 	) {
 	}
 
@@ -32,17 +33,19 @@ class EntityService {
 			return null;
 		}
 
+		$targetLibraryId = $this->libraryService->getTargetLibraryId($libraryId);
+
 		try {
 			$normType = InternalEntityMapper::normalizeType($entityType);
 			$entity = new InternalEntity(
 				id: null,
 				uuid: InternalEntity::generateUuid(),
-				libraryId: $libraryId,
+				libraryId: $targetLibraryId,
 				type: $normType,
 				name: $nameOrTitle,
 			);
 			$created = $this->internalEntityMapper->insert($entity);
-			$this->libraryMapper->touch($libraryId);
+			$this->libraryMapper->touch($targetLibraryId);
 
 			$key = $normType === 'book' ? 'title' : 'name';
 			$result = ['id' => $created->id, $key => $nameOrTitle];
@@ -72,14 +75,21 @@ class EntityService {
 			return null;
 		}
 
+		$targetLibraryId = $this->libraryService->getTargetLibraryId($libraryId);
+
 		try {
 			if (!$this->internalEntityMapper->delete($id)) {
 				return null;
 			}
 
-			$this->libraryMapper->touch($libraryId);
+			$this->libraryMapper->touch($targetLibraryId);
 
-			return $this->internalSongMapper->findLibraryData($libraryId, $user);
+			$sublibrary = null;
+			if ($libraryId >= LibraryShareService::SUBLIBRARY_ID_OFFSET && $this->sublibraryService !== null) {
+				$sublibrary = $this->sublibraryService->getSublibrary($libraryId - LibraryShareService::SUBLIBRARY_ID_OFFSET);
+			}
+
+			return $this->internalSongMapper->findLibraryData($targetLibraryId, $user, null, null, $sublibrary);
 		} catch (\Throwable $e) {
 			$this->logger->error('Could not delete entity from SheetMusic library', [
 				'exception' => $e,
@@ -106,18 +116,25 @@ class EntityService {
 			return null;
 		}
 
+		$targetLibraryId = $this->libraryService->getTargetLibraryId($libraryId);
+
 		try {
 			$normType = InternalEntityMapper::normalizeType($entityType);
-			$merged = $this->internalEntityMapper->mergeEntities($libraryId, $normType, $keepId, $duplicateIds);
+			$merged = $this->internalEntityMapper->mergeEntities($targetLibraryId, $normType, $keepId, $duplicateIds);
 			if ($merged <= 0) {
 				return null;
 			}
 
-			$this->libraryMapper->touch($libraryId);
+			$this->libraryMapper->touch($targetLibraryId);
+
+			$sublibrary = null;
+			if ($libraryId >= LibraryShareService::SUBLIBRARY_ID_OFFSET && $this->sublibraryService !== null) {
+				$sublibrary = $this->sublibraryService->getSublibrary($libraryId - LibraryShareService::SUBLIBRARY_ID_OFFSET);
+			}
 
 			return [
 				'mergedCount' => $merged,
-				'libraryData' => $this->internalSongMapper->findLibraryData($libraryId, $user),
+				'libraryData' => $this->internalSongMapper->findLibraryData($targetLibraryId, $user, null, null, $sublibrary),
 			];
 		} catch (\Throwable $e) {
 			$this->logger->error('Could not merge entities in SheetMusic library', [

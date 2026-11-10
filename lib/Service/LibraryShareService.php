@@ -267,6 +267,16 @@ class LibraryShareService {
 		return $access === self::ACCESS_ADMIN;
 	}
 
+	public function getParentLibraryId(int $libraryId): int {
+		if ($libraryId >= self::SUBLIBRARY_ID_OFFSET && $this->sublibraryMapper !== null) {
+			$sublib = $this->sublibraryMapper->findById($libraryId - self::SUBLIBRARY_ID_OFFSET);
+			if ($sublib !== null) {
+				return (int)$sublib->libraryId;
+			}
+		}
+		return $libraryId;
+	}
+
 	public function getAccessibleLibrary(string $userId, int $libraryId): ?InternalLibrary {
 		if ($libraryId >= self::SUBLIBRARY_ID_OFFSET) {
 			$sublibId = $libraryId - self::SUBLIBRARY_ID_OFFSET;
@@ -275,33 +285,6 @@ class LibraryShareService {
 				return null;
 			}
 			$lib = $this->libraryMapper->findById($sublib->libraryId);
-			if ($lib === null && $this->sublibraryMapper !== null) {
-				$sub = $this->sublibraryMapper->findByFolderId($folderId);
-				if ($sub !== null) {
-					$parentLib = $this->libraryMapper->findById($sub->libraryId);
-					if ($parentLib !== null) {
-						$shared = clone $parentLib;
-						$shared->id = self::SUBLIBRARY_ID_OFFSET + (int)$sub->id;
-						$shared->path = $parentLib->path . ' / ' . $sub->name;
-						$shared->sublibraryId = $sub->id;
-						$shared->sublibraryName = $sub->name;
-						$shared->folderId = $folderId;
-						$shared->isShared = true;
-						$shared->ownerId = $parentLib->userId;
-						$shared->ownerDisplayName = $this->getDisplayName($parentLib->userId);
-						$shared->permission = self::ACCESS_READ;
-						$shared->canWrite = false;
-
-						return [
-							'library' => $shared,
-							'sublibrary' => $sub,
-							'token' => $token,
-							'share' => $share,
-						];
-					}
-				}
-			}
-
 			if ($lib === null) {
 				return null;
 			}
@@ -630,7 +613,7 @@ class LibraryShareService {
 			if ($lib === null && $this->sublibraryMapper !== null) {
 				$sub = $this->sublibraryMapper->findByFolderId($folderId);
 				if ($sub !== null) {
-					$parentLib = $this->libraryMapper->findById($sub->libraryId);
+					$parentLib = $this->libraryMapper->findById((int)$sub->libraryId);
 					if ($parentLib !== null) {
 						$shared = clone $parentLib;
 						$shared->id = self::SUBLIBRARY_ID_OFFSET + (int)$sub->id;

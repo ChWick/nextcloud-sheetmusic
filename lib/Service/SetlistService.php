@@ -40,7 +40,8 @@ class SetlistService {
 			return null;
 		}
 
-		$setlists = $this->internalEntityMapper->findAllForLibrary($libraryId, 'setlist', includeDeleted: false);
+		$targetLibraryId = $this->resolveTargetLibraryId($libraryId);
+		$setlists = $this->internalEntityMapper->findAllForLibrary($targetLibraryId, 'setlist', includeDeleted: false);
 		if (empty($setlists)) {
 			return [];
 		}
@@ -70,7 +71,8 @@ class SetlistService {
 	 * @return list<array<string, mixed>>
 	 */
 	public function getSetlistsForPublicToken(int $libraryId): array {
-		$setlists = $this->internalEntityMapper->findAllForLibrary($libraryId, 'setlist', includeDeleted: false);
+		$targetLibraryId = $this->resolveTargetLibraryId($libraryId);
+		$setlists = $this->internalEntityMapper->findAllForLibrary($targetLibraryId, 'setlist', includeDeleted: false);
 		if (empty($setlists)) {
 			return [];
 		}
@@ -152,11 +154,12 @@ class SetlistService {
 			return null;
 		}
 
+		$targetLibraryId = $this->resolveTargetLibraryId($libraryId);
 		$now = time();
 		$setlist = new InternalEntity(
 			id: null,
 			uuid: InternalEntity::generateUuid(),
-			libraryId: $libraryId,
+			libraryId: $targetLibraryId,
 			type: 'setlist',
 			name: $name,
 			sortBy: SongSortingUtil::MODE_MANUAL,
@@ -166,7 +169,7 @@ class SetlistService {
 		);
 
 		$created = $this->internalEntityMapper->insert($setlist);
-		$this->libraryMapper->touch($libraryId);
+		$this->libraryMapper->touch($targetLibraryId);
 
 		return $created;
 	}
@@ -208,9 +211,10 @@ class SetlistService {
 		}
 
 		if ($changed) {
+			$targetLibraryId = $this->resolveTargetLibraryId($libraryId);
 			$setlist->updatedAt = time();
 			$this->internalEntityMapper->update($setlist);
-			$this->libraryMapper->touch($libraryId);
+			$this->libraryMapper->touch($targetLibraryId);
 		}
 
 		return $setlist;
@@ -221,14 +225,15 @@ class SetlistService {
 			return false;
 		}
 
+		$targetLibraryId = $this->resolveTargetLibraryId($libraryId);
 		$setlist = $this->internalEntityMapper->findById($id);
-		if ($setlist === null || $setlist->libraryId !== $libraryId || $setlist->type !== 'setlist') {
+		if ($setlist === null || $setlist->libraryId !== $targetLibraryId || $setlist->type !== 'setlist') {
 			return false;
 		}
 
 		$this->internalSetlistItemMapper->deleteForSetlist($id);
 		$this->internalEntityMapper->delete($id);
-		$this->libraryMapper->touch($libraryId);
+		$this->libraryMapper->touch($targetLibraryId);
 
 		return true;
 	}
@@ -250,8 +255,9 @@ class SetlistService {
 			return null;
 		}
 
+		$targetLibraryId = $this->resolveTargetLibraryId($libraryId);
 		$song = $this->internalSongMapper->findById($songId);
-		if ($song === null || $song->libraryId !== $libraryId || $song->deletedAt !== null) {
+		if ($song === null || $song->libraryId !== $targetLibraryId || $song->deletedAt !== null) {
 			return null;
 		}
 
@@ -282,7 +288,7 @@ class SetlistService {
 		// Touch setlist and library
 		$setlist->updatedAt = $now;
 		$this->internalEntityMapper->update($setlist);
-		$this->libraryMapper->touch($libraryId);
+		$this->libraryMapper->touch($targetLibraryId);
 
 		return $this->internalSetlistItemMapper->findById((int)$inserted->id);
 	}
@@ -324,6 +330,7 @@ class SetlistService {
 		}
 
 		if ($changed) {
+			$targetLibraryId = $this->resolveTargetLibraryId($libraryId);
 			$now = time();
 			$item->updatedAt = $now;
 			$this->internalSetlistItemMapper->update($item);
@@ -331,7 +338,7 @@ class SetlistService {
 			// Touch setlist and library
 			$setlist->updatedAt = $now;
 			$this->internalEntityMapper->update($setlist);
-			$this->libraryMapper->touch($libraryId);
+			$this->libraryMapper->touch($targetLibraryId);
 		}
 
 		return $this->internalSetlistItemMapper->findById($itemId);
@@ -347,6 +354,7 @@ class SetlistService {
 			return false;
 		}
 
+		$targetLibraryId = $this->resolveTargetLibraryId($libraryId);
 		$this->internalSetlistItemMapper->delete($itemId);
 
 		$now = time();
@@ -355,7 +363,7 @@ class SetlistService {
 			$setlist->updatedAt = $now;
 			$this->internalEntityMapper->update($setlist);
 		}
-		$this->libraryMapper->touch($libraryId);
+		$this->libraryMapper->touch($targetLibraryId);
 
 		return true;
 	}
@@ -368,8 +376,9 @@ class SetlistService {
 			return false;
 		}
 
+		$targetLibraryId = $this->resolveTargetLibraryId($libraryId);
 		$setlist = $this->internalEntityMapper->findById($setlistId);
-		if ($setlist === null || $setlist->libraryId !== $libraryId || $setlist->type !== 'setlist') {
+		if ($setlist === null || $setlist->libraryId !== $targetLibraryId || $setlist->type !== 'setlist') {
 			return false;
 		}
 
@@ -378,9 +387,16 @@ class SetlistService {
 		$now = time();
 		$setlist->updatedAt = $now;
 		$this->internalEntityMapper->update($setlist);
-		$this->libraryMapper->touch($libraryId);
+		$this->libraryMapper->touch($targetLibraryId);
 
 		return true;
+	}
+
+	private function resolveTargetLibraryId(int $libraryId): int {
+		if ($this->libraryService !== null) {
+			return $this->libraryService->getTargetLibraryId($libraryId);
+		}
+		return $libraryId;
 	}
 
 	private function findUserLibrary(IUser $user, int $libraryId): ?\OCA\SheetMusic\Db\InternalLibrary {
@@ -401,8 +417,9 @@ class SetlistService {
 	}
 
 	private function findActiveSetlist(int $libraryId, int $setlistId): ?InternalEntity {
+		$targetLibraryId = $this->resolveTargetLibraryId($libraryId);
 		$setlist = $this->internalEntityMapper->findById($setlistId);
-		if ($setlist === null || $setlist->libraryId !== $libraryId || $setlist->type !== 'setlist' || $setlist->deletedAt !== null) {
+		if ($setlist === null || $setlist->libraryId !== $targetLibraryId || $setlist->type !== 'setlist' || $setlist->deletedAt !== null) {
 			return null;
 		}
 		return $setlist;
