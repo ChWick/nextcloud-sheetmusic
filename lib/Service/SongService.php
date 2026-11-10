@@ -32,12 +32,12 @@ class SongService {
 		private ?LibraryIntegrityService $libraryIntegrityService = null,
 		private ?SongHistoryService $songHistoryService = null,
 		private ?InternalSongBookmarkMapper $internalSongBookmarkMapper = null,
+		private ?LibraryShareService $libraryShareService = null,
 	) {
 	}
 
 	public function getSongs(IUser $user, int $libraryId): ?LibraryData {
-		$library = $this->libraryMapper->findForUser($user->getUID(), $libraryId);
-		if ($library === null) {
+		if (!$this->libraryService->canReadLibrary($user->getUID(), $libraryId)) {
 			return null;
 		}
 
@@ -48,6 +48,31 @@ class SongService {
 				'exception' => $e,
 				'libraryId' => $libraryId,
 				'userId' => $user->getUID(),
+			]);
+
+			throw $e;
+		}
+	}
+
+	public function getSongsForPublicToken(string $publicToken, int $libraryId): ?LibraryData {
+		$info = $this->libraryShareService?->findLibraryByPublicToken($publicToken);
+		if ($info === null || (int)$info['library']->id !== $libraryId) {
+			return null;
+		}
+
+		$library = $info['library'];
+		try {
+			return $this->internalSongMapper->findLibraryData(
+				$libraryId,
+				null,
+				$publicToken,
+				$library,
+			);
+		} catch (\Throwable $e) {
+			$this->logger->error('Could not load songs for public token', [
+				'exception' => $e,
+				'libraryId' => $libraryId,
+				'publicToken' => $publicToken,
 			]);
 
 			throw $e;
@@ -88,8 +113,7 @@ class SongService {
 			return null;
 		}
 
-		$library = $this->libraryMapper->findForUser($user->getUID(), $libraryId);
-		if ($library === null) {
+		if (!$this->libraryService->canWriteLibrary($user->getUID(), $libraryId)) {
 			return null;
 		}
 
@@ -178,8 +202,7 @@ class SongService {
 			return null;
 		}
 
-		$library = $this->libraryMapper->findForUser($user->getUID(), $libraryId);
-		if ($library === null) {
+		if (!$this->libraryService->canWriteLibrary($user->getUID(), $libraryId)) {
 			return null;
 		}
 
@@ -369,8 +392,7 @@ class SongService {
 	}
 
 	public function deleteSong(IUser $user, int $songId, int $libraryId, bool $deleteFiles = true): ?LibraryData {
-		$library = $this->libraryMapper->findForUser($user->getUID(), $libraryId);
-		if ($library === null) {
+		if (!$this->libraryService->canWriteLibrary($user->getUID(), $libraryId)) {
 			return null;
 		}
 		$song = $this->internalSongMapper->findById($songId);
@@ -385,6 +407,9 @@ class SongService {
 	 * @return array<string, mixed>|null
 	 */
 	public function batchDeleteSongs(IUser $user, int $libraryId, array $songIds, bool $deleteFiles = true): ?LibraryData {
+		if (!$this->libraryService->canWriteLibrary($user->getUID(), $libraryId)) {
+			return null;
+		}
 		if ($songIds === []) {
 			return $this->internalSongMapper->findLibraryData($libraryId, $user);
 		}

@@ -28,6 +28,7 @@ class SetlistService {
 		private InternalSongMapper $internalSongMapper,
 		private InternalSongBookmarkMapper $internalSongBookmarkMapper,
 		private LoggerInterface $logger,
+		private ?LibraryService $libraryService = null,
 	) {
 	}
 
@@ -66,6 +67,59 @@ class SetlistService {
 	}
 
 	/**
+	 * @return list<array<string, mixed>>
+	 */
+	public function getSetlistsForPublicToken(int $libraryId): array {
+		$setlists = $this->internalEntityMapper->findAllForLibrary($libraryId, 'setlist', includeDeleted: false);
+		if (empty($setlists)) {
+			return [];
+		}
+
+		$setlistIds = array_map(fn ($s) => (int)$s->id, $setlists);
+		$counts = $this->internalSetlistItemMapper->getItemCountForSetlists($setlistIds);
+
+		$result = [];
+		foreach ($setlists as $s) {
+			$id = (int)$s->id;
+			$result[] = [
+				'id' => $id,
+				'uuid' => $s->uuid,
+				'name' => $s->name,
+				'sortBy' => $s->sortBy,
+				'ascending' => $s->ascending,
+				'itemCount' => $counts[$id] ?? 0,
+				'createdAt' => $s->createdAt,
+				'updatedAt' => $s->updatedAt,
+			];
+		}
+
+		return $result;
+	}
+
+	/**
+	 * @return array<string, mixed>|null
+	 */
+	public function getSetlistForPublicToken(int $libraryId, int $id): ?array {
+		$setlist = $this->findActiveSetlist($libraryId, $id);
+		if ($setlist === null) {
+			return null;
+		}
+
+		$items = $this->internalSetlistItemMapper->findForSetlist($id);
+
+		return [
+			'id' => $setlist->id,
+			'uuid' => $setlist->uuid,
+			'name' => $setlist->name,
+			'sortBy' => $setlist->sortBy,
+			'ascending' => $setlist->ascending,
+			'items' => $items,
+			'createdAt' => $setlist->createdAt,
+			'updatedAt' => $setlist->updatedAt,
+		];
+	}
+
+	/**
 	 * @return array<string, mixed>|null
 	 */
 	public function getSetlist(IUser $user, int $libraryId, int $id): ?array {
@@ -94,7 +148,7 @@ class SetlistService {
 
 	public function createSetlist(IUser $user, int $libraryId, string $name): ?InternalEntity {
 		$name = trim($name);
-		if ($name === '' || $this->findUserLibrary($user, $libraryId) === null) {
+		if ($name === '' || $this->findUserWritableLibrary($user, $libraryId) === null) {
 			return null;
 		}
 
@@ -125,7 +179,7 @@ class SetlistService {
 		?int $sortBy = null,
 		?int $ascending = null,
 	): ?InternalEntity {
-		if ($this->findUserLibrary($user, $libraryId) === null) {
+		if ($this->findUserWritableLibrary($user, $libraryId) === null) {
 			return null;
 		}
 
@@ -163,7 +217,7 @@ class SetlistService {
 	}
 
 	public function deleteSetlist(IUser $user, int $libraryId, int $id): bool {
-		if ($this->findUserLibrary($user, $libraryId) === null) {
+		if ($this->findUserWritableLibrary($user, $libraryId) === null) {
 			return false;
 		}
 
@@ -187,7 +241,7 @@ class SetlistService {
 		?int $bookmarkId = null,
 		?int $position = null,
 	): ?InternalSetlistItem {
-		if ($this->findUserLibrary($user, $libraryId) === null) {
+		if ($this->findUserWritableLibrary($user, $libraryId) === null) {
 			return null;
 		}
 
@@ -241,7 +295,7 @@ class SetlistService {
 		?int $bookmarkId = null,
 		bool $hasBookmarkParam = true,
 	): ?InternalSetlistItem {
-		if ($this->findUserLibrary($user, $libraryId) === null) {
+		if ($this->findUserWritableLibrary($user, $libraryId) === null) {
 			return null;
 		}
 
@@ -284,7 +338,7 @@ class SetlistService {
 	}
 
 	public function removeItem(IUser $user, int $libraryId, int $setlistId, int $itemId): bool {
-		if ($this->findUserLibrary($user, $libraryId) === null) {
+		if ($this->findUserWritableLibrary($user, $libraryId) === null) {
 			return false;
 		}
 
@@ -310,7 +364,7 @@ class SetlistService {
 	 * @param list<int> $itemIds
 	 */
 	public function reorderItems(IUser $user, int $libraryId, int $setlistId, array $itemIds): bool {
-		if ($this->findUserLibrary($user, $libraryId) === null) {
+		if ($this->findUserWritableLibrary($user, $libraryId) === null) {
 			return false;
 		}
 
@@ -330,6 +384,19 @@ class SetlistService {
 	}
 
 	private function findUserLibrary(IUser $user, int $libraryId): ?\OCA\SheetMusic\Db\InternalLibrary {
+		if ($this->libraryService !== null) {
+			return $this->libraryService->getAccessibleLibrary($user->getUID(), $libraryId);
+		}
+		return $this->libraryMapper->findForUser($user->getUID(), $libraryId);
+	}
+
+	private function findUserWritableLibrary(IUser $user, int $libraryId): ?\OCA\SheetMusic\Db\InternalLibrary {
+		if ($this->libraryService !== null) {
+			if (!$this->libraryService->canWriteLibrary($user->getUID(), $libraryId)) {
+				return null;
+			}
+			return $this->libraryService->getAccessibleLibrary($user->getUID(), $libraryId);
+		}
 		return $this->libraryMapper->findForUser($user->getUID(), $libraryId);
 	}
 

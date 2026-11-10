@@ -14,6 +14,8 @@ use OCA\SheetMusic\Service\SongAnnotationService;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\ApiRoute;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
+use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
+use OCP\AppFramework\Http\Attribute\PublicPage;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\OCSController;
 use OCP\IRequest;
@@ -29,10 +31,19 @@ class SongAnnotationController extends OCSController {
 		parent::__construct($appName, $request);
 	}
 
+	#[PublicPage]
+	#[NoCSRFRequired]
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'GET', url: '/api/songs/{songId}/annotations')]
 	public function getAnnotations(int $songId, ?int $fileId = null): DataResponse {
 		$user = $this->userSession->getUser();
+		$publicToken = $this->request->getHeader('X-Public-Share-Token') ?? $this->request->getParam('token');
+
+		if ($publicToken !== null && $publicToken !== '') {
+			$annotations = $this->annotationService->getAnnotationsForSong($songId, $fileId);
+			return new DataResponse($annotations);
+		}
+
 		if ($user === null) {
 			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
 		}

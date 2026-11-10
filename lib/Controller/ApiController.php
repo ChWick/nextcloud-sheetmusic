@@ -7,6 +7,7 @@ namespace OCA\SheetMusic\Controller;
 use OCA\SheetMusic\Service\EntityService;
 use OCA\SheetMusic\Service\LibraryIntegrityService;
 use OCA\SheetMusic\Service\LibraryService;
+use OCA\SheetMusic\Service\LibraryShareService;
 use OCA\SheetMusic\Service\SetlistService;
 use OCA\SheetMusic\Service\SongAnnotationService;
 use OCA\SheetMusic\Service\SongFileService;
@@ -14,10 +15,13 @@ use OCA\SheetMusic\Service\SongHistoryService;
 use OCA\SheetMusic\Service\SongService;
 use OCP\AppFramework\Http\Attribute\ApiRoute;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
+use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
+use OCP\AppFramework\Http\Attribute\PublicPage;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\OCSController;
 use OCP\IRequest;
 use OCP\IUserSession;
+use OCP\Share\IShare;
 
 /**
  * Main API controller facade delegating to specialized domain controllers and services.
@@ -44,11 +48,22 @@ class ApiController extends OCSController {
 		?SongHistoryService $songHistoryService = null,
 		?SetlistService $setlistService = null,
 		?SongAnnotationService $songAnnotationService = null,
+		?LibraryShareService $libraryShareService = null,
 	) {
 		parent::__construct($appName, $request);
 
-		$this->libraryController = new LibraryController($appName, $request, $libraryService, $userSession, $libraryIntegrityService);
-		$this->songController = new SongController($appName, $request, $songService, $userSession, $songHistoryService);
+		$shareService = $libraryShareService ?? (\OC::$server !== null && \OC::$server->has(LibraryShareService::class) ? \OC::$server->get(LibraryShareService::class) : null);
+		$this->libraryController = new LibraryController(
+			$appName,
+			$request,
+			$libraryService,
+			$userSession,
+			$libraryIntegrityService,
+			null,
+			null,
+			$shareService,
+		);
+		$this->songController = new SongController($appName, $request, $songService, $userSession, $songHistoryService, $shareService);
 		$this->songFileController = new SongFileController($appName, $request, $songFileService, $userSession);
 		$this->entityController = new EntityController($appName, $request, $entityService, $userSession);
 		$this->setlistController = new SetlistController(
@@ -56,6 +71,7 @@ class ApiController extends OCSController {
 			$request,
 			$setlistService ?? \OC::$server->get(SetlistService::class),
 			$userSession,
+			$shareService,
 		);
 		$this->songAnnotationController = new SongAnnotationController(
 			$appName,
@@ -71,6 +87,8 @@ class ApiController extends OCSController {
 		return new DataResponse(['message' => 'Hello world!']);
 	}
 
+	#[PublicPage]
+	#[NoCSRFRequired]
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'GET', url: '/api/libraries')]
 	public function getLibraries(): DataResponse {
@@ -98,6 +116,36 @@ class ApiController extends OCSController {
 	#[ApiRoute(verb: 'DELETE', url: '/api/libraries/{id}')]
 	public function deleteLibrary(int $id): DataResponse {
 		return $this->libraryController->deleteLibrary($id);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'GET', url: '/api/libraries/{id}/shares')]
+	public function getShares(int $id): DataResponse {
+		return $this->libraryController->getShares($id);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/libraries/{id}/shares')]
+	public function createShare(
+		int $id,
+		string $shareWith = '',
+		int|string $shareType = IShare::TYPE_USER,
+		string $permission = 'read',
+		?string $password = null,
+	): DataResponse {
+		return $this->libraryController->createShare($id, $shareWith, $shareType, $permission, $password);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'PUT', url: '/api/libraries/{id}/shares/{shareId}')]
+	public function updateShare(int $id, string $shareId, string $permission = 'read'): DataResponse {
+		return $this->libraryController->updateShare($id, $shareId, $permission);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'DELETE', url: '/api/libraries/{id}/shares/{shareId}')]
+	public function deleteShare(int $id, string $shareId): DataResponse {
+		return $this->libraryController->deleteShare($id, $shareId);
 	}
 
 	#[NoAdminRequired]
@@ -143,6 +191,8 @@ class ApiController extends OCSController {
 		return $this->libraryController->resetPageOrders($id, $fileIds, $mode, $progressId);
 	}
 
+	#[PublicPage]
+	#[NoCSRFRequired]
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'GET', url: '/api/songs')]
 	public function getSongs(?string $id = null): DataResponse {
@@ -492,12 +542,16 @@ class ApiController extends OCSController {
 		return $this->entityController->mergeEntities($libraryId, $entityType, $keepId, $duplicateIds);
 	}
 
+	#[PublicPage]
+	#[NoCSRFRequired]
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'GET', url: '/api/libraries/{libraryId}/setlists')]
 	public function getSetlists(int $libraryId): DataResponse {
 		return $this->setlistController->getSetlists($libraryId);
 	}
 
+	#[PublicPage]
+	#[NoCSRFRequired]
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'GET', url: '/api/libraries/{libraryId}/setlists/{id}')]
 	public function getSetlist(int $libraryId, int $id): DataResponse {
@@ -546,6 +600,8 @@ class ApiController extends OCSController {
 		return $this->setlistController->reorderItems($id, $libraryId, $itemIds);
 	}
 
+	#[PublicPage]
+	#[NoCSRFRequired]
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'GET', url: '/api/songs/{songId}/annotations')]
 	public function getSongAnnotations(int $songId, ?int $fileId = null): DataResponse {

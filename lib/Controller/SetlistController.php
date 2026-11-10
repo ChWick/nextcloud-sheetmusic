@@ -9,10 +9,13 @@ declare(strict_types=1);
 
 namespace OCA\SheetMusic\Controller;
 
+use OCA\SheetMusic\Service\LibraryShareService;
 use OCA\SheetMusic\Service\SetlistService;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\ApiRoute;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
+use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
+use OCP\AppFramework\Http\Attribute\PublicPage;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\OCSController;
 use OCP\IRequest;
@@ -24,14 +27,28 @@ class SetlistController extends OCSController {
 		IRequest $request,
 		private SetlistService $setlistService,
 		private IUserSession $userSession,
+		private ?LibraryShareService $shareService = null,
 	) {
 		parent::__construct($appName, $request);
 	}
 
+	#[PublicPage]
+	#[NoCSRFRequired]
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'GET', url: '/api/libraries/{libraryId}/setlists')]
 	public function getSetlists(int $libraryId): DataResponse {
 		$user = $this->userSession->getUser();
+		$publicToken = $this->request->getHeader('X-Public-Share-Token') ?? $this->request->getParam('token');
+
+		if ($publicToken !== null && $publicToken !== '') {
+			$info = $this->shareService?->findLibraryByPublicToken($publicToken);
+			if ($info === null || (int)$info['library']->id !== $libraryId) {
+				return new DataResponse([], Http::STATUS_FORBIDDEN);
+			}
+			$setlists = $this->setlistService->getSetlistsForPublicToken($libraryId);
+			return new DataResponse($setlists);
+		}
+
 		if ($user === null) {
 			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
 		}
@@ -44,10 +61,26 @@ class SetlistController extends OCSController {
 		return new DataResponse($setlists);
 	}
 
+	#[PublicPage]
+	#[NoCSRFRequired]
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'GET', url: '/api/libraries/{libraryId}/setlists/{id}')]
 	public function getSetlist(int $libraryId, int $id): DataResponse {
 		$user = $this->userSession->getUser();
+		$publicToken = $this->request->getHeader('X-Public-Share-Token') ?? $this->request->getParam('token');
+
+		if ($publicToken !== null && $publicToken !== '') {
+			$info = $this->shareService?->findLibraryByPublicToken($publicToken);
+			if ($info === null || (int)$info['library']->id !== $libraryId) {
+				return new DataResponse([], Http::STATUS_FORBIDDEN);
+			}
+			$setlist = $this->setlistService->getSetlistForPublicToken($libraryId, $id);
+			if ($setlist === null) {
+				return new DataResponse([], Http::STATUS_NOT_FOUND);
+			}
+			return new DataResponse($setlist);
+		}
+
 		if ($user === null) {
 			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
 		}

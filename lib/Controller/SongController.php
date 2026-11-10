@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace OCA\SheetMusic\Controller;
 
+use OCA\SheetMusic\Service\LibraryShareService;
 use OCA\SheetMusic\Service\SongHistoryService;
 use OCA\SheetMusic\Service\SongService;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\ApiRoute;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
+use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
+use OCP\AppFramework\Http\Attribute\PublicPage;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\OCSController;
 use OCP\IRequest;
@@ -21,10 +24,13 @@ class SongController extends OCSController {
 		private SongService $songService,
 		private IUserSession $userSession,
 		private ?SongHistoryService $songHistoryService = null,
+		private ?LibraryShareService $shareService = null,
 	) {
 		parent::__construct($appName, $request);
 	}
 
+	#[PublicPage]
+	#[NoCSRFRequired]
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'GET', url: '/api/songs')]
 	public function getSongs(?string $id = null): DataResponse {
@@ -34,6 +40,22 @@ class SongController extends OCSController {
 		}
 
 		$user = $this->userSession->getUser();
+		$publicToken = $this->request->getHeader('X-Public-Share-Token') ?? $this->request->getParam('token');
+
+		if ($publicToken !== null && $publicToken !== '') {
+			$info = $this->shareService?->findLibraryByPublicToken($publicToken);
+			if ($info === null || (int)$info['library']->id !== $libraryId) {
+				return new DataResponse([], Http::STATUS_FORBIDDEN);
+			}
+
+			$data = $this->songService->getSongsForPublicToken($publicToken, $libraryId);
+			if ($data === null) {
+				return new DataResponse([], Http::STATUS_NOT_FOUND);
+			}
+
+			return new DataResponse($data);
+		}
+
 		if ($user === null) {
 			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
 		}

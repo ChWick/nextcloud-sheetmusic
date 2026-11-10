@@ -145,6 +145,45 @@ class InternalSongMapper {
 		return $paths;
 	}
 
+	/**
+	 * @param list<InternalSongFile> $files
+	 * @return array<int, string>
+	 */
+	private function resolvePublicFileNodePaths(array $files, InternalLibrary $library, string $publicToken): array {
+		if ($files === [] || $this->rootFolder === null) {
+			return [];
+		}
+
+		$paths = [];
+		try {
+			$ownerFolder = $this->rootFolder->getUserFolder($library->userId);
+			$libPath = trim($library->path, '/');
+			if (str_ends_with(strtolower($libPath), '.db')) {
+				$libPath = dirname($libPath);
+				$libPath = ($libPath === '.' ? '' : $libPath);
+			}
+			$baseNode = $libPath === '' ? $ownerFolder : $ownerFolder->get($libPath);
+
+			foreach ($files as $file) {
+				try {
+					$rootNodes = $this->rootFolder->getById($file->fileId);
+					if (!empty($rootNodes)) {
+						$rel = $baseNode->getRelativePath($rootNodes[0]->getPath());
+						if ($rel !== null && $rel !== false) {
+							$paths[$file->fileId] = '/public.php/dav/files/' . $publicToken . '/' . ltrim($rel, '/');
+						}
+					}
+				} catch (\Throwable) {
+					// Missing file
+				}
+			}
+		} catch (\Throwable) {
+			// Folder lookup failed
+		}
+
+		return $paths;
+	}
+
 	public function findById(int $id): ?InternalSong {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')
@@ -605,7 +644,12 @@ class InternalSongMapper {
 	 *     arrangers: list<MobileSheetsCustomGroup>
 	 * }
 	 */
-	public function findLibraryData(int $libraryId, ?IUser $user = null): LibraryData {
+	public function findLibraryData(
+		int $libraryId,
+		?IUser $user = null,
+		?string $publicToken = null,
+		?InternalLibrary $library = null,
+	): LibraryData {
 		$entities = $this->entityMapper !== null
 			? $this->entityMapper->findAllForLibrary($libraryId)
 			: [];
@@ -641,11 +685,15 @@ class InternalSongMapper {
 
 		$fileIds = array_values(array_unique(array_filter(array_column($files, 'fileId'))));
 		$uid = $user?->getUID() ?? '';
-		$fileNodePaths = $this->resolveFileNodePaths($fileIds, $user);
+		$fileNodePaths = $publicToken !== null && $library !== null
+			? $this->resolvePublicFileNodePaths($files, $library, $publicToken)
+			: $this->resolveFileNodePaths($fileIds, $user);
 
 		$songFiles = [];
 		foreach ($files as $file) {
-			$path = $fileNodePaths[$file->fileId] ?? (MobileSheetsPathResolver::WEBDAV_ROOT . '/' . $uid . '/file_' . $file->fileId . '.pdf');
+			$path = $fileNodePaths[$file->fileId] ?? ($publicToken !== null
+				? ('/public.php/dav/files/' . $publicToken . '/file_' . $file->fileId . '.pdf')
+				: (MobileSheetsPathResolver::WEBDAV_ROOT . '/' . $uid . '/file_' . $file->fileId . '.pdf'));
 			$songFiles[$file->songId][] = new MobileSheetsFile(
 				id: (int)$file->id,
 				path: $path,

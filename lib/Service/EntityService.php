@@ -28,8 +28,7 @@ class EntityService {
 			return null;
 		}
 
-		$library = $this->libraryMapper->findForUser($user->getUID(), $libraryId);
-		if ($library === null) {
+		if (!$this->libraryService->canWriteLibrary($user->getUID(), $libraryId)) {
 			return null;
 		}
 
@@ -69,8 +68,7 @@ class EntityService {
 	 * @param 'composers'|'books'|'collections'|'artists'|'genres'|'keys'|'customgroups'|'years'|'signatures'|'sourcetypes'|'instruments'|'arrangers' $entityType
 	 */
 	public function deleteEntity(IUser $user, int $libraryId, string $entityType, int $id): ?LibraryData {
-		$library = $this->libraryMapper->findForUser($user->getUID(), $libraryId);
-		if ($library === null) {
+		if (!$this->libraryService->canWriteLibrary($user->getUID(), $libraryId)) {
 			return null;
 		}
 
@@ -104,8 +102,7 @@ class EntityService {
 			return null;
 		}
 
-		$library = $this->libraryMapper->findForUser($user->getUID(), $libraryId);
-		if ($library === null) {
+		if (!$this->libraryService->canWriteLibrary($user->getUID(), $libraryId)) {
 			return null;
 		}
 
