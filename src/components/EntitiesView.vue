@@ -1,9 +1,10 @@
 <template>
   <ViewHeader
     :title="config.plural"
-    :create-label="t('sheetmusic', 'New {entity}', { entity: config.singular })"
+    :create-label="effectiveCanWrite ? t('sheetmusic', 'New {entity}', { entity: config.singular }) : undefined"
     @create="openCreateDialog">
     <NcButton
+      v-if="effectiveCanWrite"
       :title="t('sheetmusic', 'Merge duplicates')"
       :aria-label="t('sheetmusic', 'Merge duplicates')"
       @click="openMergeDialog()">
@@ -25,9 +26,9 @@
       <ul :class="$style.entityList">
         <li v-for="entity in visibleEntities"
             :key="entity.id"
-            :class="[$style.entityRow, revealedDeleteEntityId === entity.id && $style.deleteRevealed]"
-            @touchstart="handleRowTouchStart($event)"
-            @touchend="handleRowTouchEnd(entity, $event)"
+            :class="[$style.entityRow, revealedDeleteEntityId === entity.id && effectiveCanWrite && $style.deleteRevealed]"
+            @touchstart="effectiveCanWrite && handleRowTouchStart($event)"
+            @touchend="effectiveCanWrite && handleRowTouchEnd(entity, $event)"
             @touchcancel="handleRowTouchCancel">
           <button type="button"
                   :class="$style.entityButton"
@@ -36,7 +37,7 @@
             {{ entityLabel(entity) }}
           </button>
           <span :class="$style.entitySongCount">{{ songCountLabel(entity) }}</span>
-          <div :class="$style.rowActions">
+          <div v-if="effectiveCanWrite" :class="$style.rowActions">
             <NcButton
               size="small"
               :class="$style.mergeButton"
@@ -123,6 +124,7 @@ import type { EntityType, FilterEntity, LibraryData, Song } from '../types/song'
 import { translate as t } from '@nextcloud/l10n'
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { loadState } from '@nextcloud/initial-state'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
@@ -136,11 +138,20 @@ import { apiDelete, apiPost } from '../api/client'
 import { showError, showSuccess } from '@nextcloud/dialogs'
 import { normalizeSearchString } from '../utils/string'
 
-const props = defineProps<{
-  selectedLibrary: number
-  /** Which of the song filters this view manages: composers, artists, books, collections, genres, keys, customgroups, years, signatures or sourcetypes. */
-  entityType: EntityType
-}>()
+const props = withDefaults(
+  defineProps<{
+    selectedLibrary: number
+    /** Which of the song filters this view manages: composers, artists, books, collections, genres, keys, customgroups, years, signatures or sourcetypes. */
+    entityType: EntityType
+    canWrite?: boolean
+  }>(),
+  {
+    canWrite: true,
+  },
+)
+
+const isPublicShare = Boolean(loadState('sheetmusic', 'isPublicShare', false))
+const effectiveCanWrite = computed(() => !isPublicShare && props.canWrite !== false)
 
 const router = useRouter()
 

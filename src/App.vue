@@ -606,7 +606,8 @@ async function deleteLibrary() {
           <EntitiesView v-else
                         :key="selectedView"
                         :selectedLibrary="selectedLibrary"
-                        :entity-type="selectedView" />
+                        :entity-type="selectedView"
+                        :can-write="!isPublicShare && (currentLibrary?.canWrite ?? true)" />
         </template>
 
         <p v-if="fileError" :class="$style.contentError" role="alert">{{ fileError }}</p>
