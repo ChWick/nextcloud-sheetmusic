@@ -20,11 +20,13 @@ const props = withDefaults(
 	defineProps<{
 		libraryId: number
 		libraryName?: string
+		ownerId?: string | null
 		sublibrary?: Sublibrary | null
 		sublibraryPath?: string
 	}>(),
 	{
 		libraryName: '',
+		ownerId: '',
 		sublibrary: null,
 		sublibraryPath: '',
 	},
@@ -126,35 +128,63 @@ async function searchSharees(search: string = '') {
 			...(data.groups ?? []),
 		]
 
-		const existingShareWiths = new Set(
+		const existingUserShares = new Set(
 			shares.value
-				.filter(s => s.shareType !== 3)
-				.map(s => s.shareWith),
+				.filter(s => s.shareType === 0)
+				.map(s => s.shareWith.toLowerCase()),
+		)
+		const existingGroupShares = new Set(
+			shares.value
+				.filter(s => s.shareType === 1)
+				.map(s => s.shareWith.toLowerCase()),
 		)
 
-		const userOptions: ShareeOption[] = rawUsers
-			.filter((u: any) => !existingShareWiths.has(u.value?.shareWith))
-			.map((u: any) => ({
-				id: `user:${u.value?.shareWith}`,
-				label: u.label || u.value?.shareWith,
+		const results: ShareeOption[] = []
+		const seenIds = new Set<string>()
+
+		for (const u of rawUsers) {
+			const shareWith = u.value?.shareWith || u.label
+			if (!shareWith) continue
+			const id = `user:${shareWith}`
+			if (seenIds.has(id)) continue
+			seenIds.add(id)
+
+			if (existingUserShares.has(shareWith.toLowerCase())) continue
+			if (props.ownerId && props.ownerId.toLowerCase() === shareWith.toLowerCase()) continue
+
+			results.push({
+				id,
+				displayName: u.label || shareWith,
+				user: shareWith,
+				subname: u.subline || (u.shareWithDisplayNameUnique && u.shareWithDisplayNameUnique !== u.label ? `@${shareWith}` : (u.label !== shareWith ? `@${shareWith}` : '')),
 				icon: 'icon-user',
-				subline: `@${u.value?.shareWith}`,
+				isNoUser: false,
 				shareType: 0,
-				shareWith: u.value?.shareWith,
-			}))
+				shareWith,
+			})
+		}
 
-		const groupOptions: ShareeOption[] = rawGroups
-			.filter((g: any) => !existingShareWiths.has(g.value?.shareWith))
-			.map((g: any) => ({
-				id: `group:${g.value?.shareWith}`,
-				label: g.label || g.value?.shareWith,
+		for (const g of rawGroups) {
+			const shareWith = g.value?.shareWith || g.label
+			if (!shareWith) continue
+			const id = `group:${shareWith}`
+			if (seenIds.has(id)) continue
+			seenIds.add(id)
+
+			if (existingGroupShares.has(shareWith.toLowerCase())) continue
+
+			results.push({
+				id,
+				displayName: g.label || shareWith,
+				subname: t('sheetmusic', 'Group'),
 				icon: 'icon-group',
-				subline: t('sheetmusic', 'Group'),
+				isNoUser: true,
 				shareType: 1,
-				shareWith: g.value?.shareWith,
-			}))
+				shareWith,
+			})
+		}
 
-		shareeOptions.value = [...userOptions, ...groupOptions]
+		shareeOptions.value = results
 	} catch (err) {
 		console.error('Failed to search sharees:', err)
 	} finally {
@@ -170,10 +200,6 @@ function handleShareeSearch(search: string) {
 	searchDebounceTimer = setTimeout(() => {
 		searchSharees(search)
 	}, 200)
-}
-
-function handleSelectSharee(option: ShareeOption | null) {
-	selectedSharee.value = option
 }
 
 async function addShare(shareType: 'user_or_group' | 'link' = 'user_or_group') {
@@ -303,17 +329,19 @@ onMounted(() => {
 			<div :class="$style.addShareRow">
 				<div :class="$style.shareUserInputWrapper">
 					<NcSelectUsers
-						:model-value="selectedSharee"
+						v-model="selectedSharee"
 						:options="shareeOptions"
 						:loading="isSearchingSharees"
 						:placeholder="t('sheetmusic', 'Search Nextcloud users or groups…')"
-						:aria-label="t('sheetmusic', 'Search Nextcloud users or groups')"
-						@search="handleShareeSearch"
-						@update:model-value="handleSelectSharee" />
+						:input-label="t('sheetmusic', 'User or group')"
+						:label-outside="true"
+						:disabled="isCreatingShare"
+						@search="handleShareeSearch" />
 				</div>
 				<select
 					v-model="newSharePermission"
 					:class="$style.permSelect"
+					:disabled="isCreatingShare"
 					:aria-label="t('sheetmusic', 'Permission')">
 					<option value="read">{{ t('sheetmusic', 'Read-only') }}</option>
 					<option value="write">{{ t('sheetmusic', 'Read & Write') }}</option>
@@ -321,7 +349,7 @@ onMounted(() => {
 				<NcButton
 					type="button"
 					variant="primary"
-					:disabled="!selectedSharee || isCreatingShare"
+					:disabled="(!selectedSharee && !currentShareSearch.trim()) || isCreatingShare"
 					@click="addShare('user_or_group')">
 					<template #icon>
 						<ShareVariantOutline :size="18" />

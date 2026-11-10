@@ -199,6 +199,7 @@ function handleDelete() {
 			v-if="isShareDialogOpen"
 			:library-id="selectedLibrary"
 			:library-name="currentLibrary?.path"
+			:owner-id="currentLibrary?.ownerId"
 			@close="isShareDialogOpen = false" />
 
 		<template #actions>

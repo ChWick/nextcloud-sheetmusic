@@ -193,4 +193,70 @@ describe('ShareDialog.vue', () => {
 			expect.anything(),
 		)
 	})
+
+	it('populates NcSelectUsers options with proper displayName and user attributes', async () => {
+		vi.mocked(axios.get).mockImplementation(async (url: string) => {
+			if (url.includes('/shares')) {
+				return { data: { ocs: { data: { shares: [] } } } } as any
+			}
+			if (url.includes('/sharees')) {
+				return {
+					data: {
+						ocs: {
+							data: {
+								exact: { users: [], groups: [] },
+								users: [
+									{
+										label: 'Bob The Builder',
+										subline: '',
+										value: { shareType: 0, shareWith: 'bob' },
+										shareWithDisplayNameUnique: 'bob',
+									},
+								],
+								groups: [
+									{
+										label: 'Sopranos',
+										value: { shareType: 1, shareWith: 'sopranos' },
+									},
+								],
+							},
+						},
+					},
+				} as any
+			}
+			return { data: { ocs: { data: {} } } } as any
+		})
+
+		const wrapper = mount(ShareDialog, {
+			props: {
+				libraryId: 1,
+				libraryName: 'Choir Noten',
+				ownerId: 'admin',
+			},
+		})
+
+		await vi.waitFor(() => {
+			const selectUsers = wrapper.findComponent({ name: 'NcSelectUsers' })
+			expect(selectUsers.exists()).toBe(true)
+			const options = selectUsers.props('options') as any[]
+			expect(options.length).toBe(2)
+			expect(options[0]).toMatchObject({
+				id: 'user:bob',
+				displayName: 'Bob The Builder',
+				user: 'bob',
+				subname: '@bob',
+				isNoUser: false,
+				shareType: 0,
+				shareWith: 'bob',
+			})
+			expect(options[1]).toMatchObject({
+				id: 'group:sopranos',
+				displayName: 'Sopranos',
+				subname: 'Group',
+				isNoUser: true,
+				shareType: 1,
+				shareWith: 'sopranos',
+			})
+		})
+	})
 })

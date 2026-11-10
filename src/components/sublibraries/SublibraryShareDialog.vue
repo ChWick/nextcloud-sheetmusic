@@ -6,6 +6,7 @@ defineProps<{
 	libraryId: number
 	sublibrary: Sublibrary
 	sublibraryPath?: string
+	ownerId?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -16,6 +17,7 @@ const emit = defineEmits<{
 <template>
 	<ShareDialog
 		:library-id="libraryId"
+		:owner-id="ownerId"
 		:sublibrary="sublibrary"
 		:sublibrary-path="sublibraryPath"
 		@close="emit('close')" />

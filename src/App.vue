@@ -712,6 +712,7 @@ async function deleteLibrary() {
       v-if="isShareDialogOpen && selectedLibrary >= 0 && currentLibrary"
       :library-id="selectedLibrary"
       :library-name="selectedLibraryPath"
+      :owner-id="currentLibrary.ownerId"
       @close="isShareDialogOpen = false" />
   </div>
 </template>
