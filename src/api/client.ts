@@ -1,6 +1,18 @@
 import type { paths } from '../types/api.generated'
 import axios, { type AxiosRequestConfig, type AxiosResponse } from '@nextcloud/axios'
 import { generateOcsUrl } from '@nextcloud/router'
+import { loadState } from '@nextcloud/initial-state'
+
+const publicSharingToken = loadState('sheetmusic', 'publicSharingToken', '')
+if (publicSharingToken) {
+	axios.interceptors.request.use((config) => {
+		config.headers = config.headers || {}
+		config.headers['X-Public-Share-Token'] = publicSharingToken
+		config.params = config.params || {}
+		config.params.token = publicSharingToken
+		return config
+	})
+}
 
 type GetPath = {
 	[K in keyof paths]: paths[K] extends { get: unknown } ? K : never

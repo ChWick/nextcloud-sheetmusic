@@ -5,6 +5,7 @@ import type { Library } from './types/library.ts'
 
 import axios from '@nextcloud/axios'
 import { FilePickerClosed, getFilePickerBuilder, showError, showSuccess } from '@nextcloud/dialogs'
+import { loadState } from '@nextcloud/initial-state'
 import { translate as t } from '@nextcloud/l10n'
 import { generateOcsUrl, generateUrl } from '@nextcloud/router'
 import { describeRequestFailure } from './utils/api'
@@ -118,6 +119,10 @@ function stopProgressPolling() {
     progressPollingTimer = null
   }
 }
+const isPublicShare = Boolean(loadState('sheetmusic', 'isPublicShare', false))
+const publicSharingToken = loadState('sheetmusic', 'publicSharingToken', '')
+const publicLibrary = loadState('sheetmusic', 'publicLibrary', null) as Library | null
+
 const libraries = ref<Library[]>([])
 const selectedLibrary = ref<number>(-1)
 const selectedView = ref<ViewName>('songs')
@@ -126,10 +131,24 @@ const isDeleteDialogOpen = ref(false)
 const isDeletingLibrary = ref(false)
 const deleteError = ref('')
 
+/** Currently selected library object */
+const currentLibrary = computed(
+  () => libraries.value.find(library => library.id === selectedLibrary.value),
+)
+
 /** Path of the currently selected library, used to name it in the delete dialog */
 const selectedLibraryPath = computed(
-  () => libraries.value.find(library => library.id === selectedLibrary.value)?.path ?? '',
+  () => currentLibrary.value?.path ?? '',
 )
+
+function formatLibraryOption(library: Library): string {
+  if (library.isShared) {
+    const owner = library.ownerDisplayName || library.ownerId || t('sheetmusic', 'unknown')
+    const ro = library.canWrite === false ? ` [${t('sheetmusic', 'Read-only')}]` : ''
+    return `${library.path} (${t('sheetmusic', 'shared by {owner}', { owner })})${ro}`
+  }
+  return library.path
+}
 
 /*** Router ***/
 const router = useRouter()
@@ -171,6 +190,10 @@ import { apiDelete, apiGet, apiPost } from './api/client'
 /*** Libraries ***/
 /** Load the user's libraries - also used to refresh the list after adding or removing one */
 async function loadLibraries() {
+  if (isPublicShare && publicLibrary) {
+    libraries.value = [publicLibrary]
+    return
+  }
   try {
     const response = await apiGet('/api/libraries')
     libraries.value = response.data.ocs.data.libraries
@@ -185,7 +208,12 @@ onMounted(async () => {
   await loadLibraries()
   const activeRouteLibrary = route.params.library as string | undefined
 
-  if (libraries.value.length > 0 && !activeRouteLibrary) {
+  if (isPublicShare && publicLibrary) {
+    selectedLibrary.value = publicLibrary.id
+    if (!activeRouteLibrary || activeRouteLibrary !== String(publicLibrary.id)) {
+      navigateToLibrary(publicLibrary.id)
+    }
+  } else if (libraries.value.length > 0 && !activeRouteLibrary) {
     // Only set a default if the user landed on the root page matching no library
     navigateToLibrary(libraries.value[0].id)
   }
@@ -411,9 +439,12 @@ async function deleteLibrary() {
           <template #icon>
             <FolderMusicOutline :size="20" />
           </template>
-          <select v-model="selectedLibrary" :class="$style.librarySelect" @change="navigateToLibrary(selectedLibrary)">
+          <span v-if="isPublicShare" :class="$style.librarySelect" style="display: flex; align-items: center; font-weight: 500; padding: 0 8px;">
+            {{ publicLibrary?.path ?? selectedLibraryPath }}
+          </span>
+          <select v-else v-model="selectedLibrary" :class="$style.librarySelect" @change="navigateToLibrary(selectedLibrary)">
             <option disabled value="-1">{{ t('sheetmusic', 'Select library') }}</option>
-            <option v-for="library in libraries" :key="library.id" :value="library.id">{{ library.path }}</option>
+            <option v-for="library in libraries" :key="library.id" :value="library.id">{{ formatLibraryOption(library) }}</option>
           </select>
         </NcAppNavigationItem>
 
@@ -496,26 +527,28 @@ async function deleteLibrary() {
               <FolderSyncOutline :size="20" />
             </template>
           </NcAppNavigationItem>
-          <NcAppNavigationItem :name="t('sheetmusic', 'Integrity Audit')" :active="selectedView === 'integrity'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'integrity' } }">
-            <template #icon>
-              <ShieldCheck :size="20" />
-            </template>
-          </NcAppNavigationItem>
-          <NcAppNavigationItem :name="t('sheetmusic', 'Tools')" :active="selectedView === 'tools'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'tools' } }">
-            <template #icon>
-              <Wrench :size="20" />
-            </template>
-          </NcAppNavigationItem>
-          <li role="separator" :class="$style.navSeparator" aria-hidden="true" />
-          <NcAppNavigationItem :name="t('sheetmusic', 'Trash')" :active="selectedView === 'trash'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'trash' } }">
-            <template #icon>
-              <TrashCanOutline :size="20" />
-            </template>
-          </NcAppNavigationItem>
+          <template v-if="!isPublicShare">
+            <NcAppNavigationItem :name="t('sheetmusic', 'Integrity Audit')" :active="selectedView === 'integrity'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'integrity' } }">
+              <template #icon>
+                <ShieldCheck :size="20" />
+              </template>
+            </NcAppNavigationItem>
+            <NcAppNavigationItem :name="t('sheetmusic', 'Tools')" :active="selectedView === 'tools'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'tools' } }">
+              <template #icon>
+                <Wrench :size="20" />
+              </template>
+            </NcAppNavigationItem>
+            <li role="separator" :class="$style.navSeparator" aria-hidden="true" />
+            <NcAppNavigationItem :name="t('sheetmusic', 'Trash')" :active="selectedView === 'trash'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'trash' } }">
+              <template #icon>
+                <TrashCanOutline :size="20" />
+              </template>
+            </NcAppNavigationItem>
+          </template>
 
         </template>
 
-        <template #footer>
+        <template v-if="!isPublicShare" #footer>
           <div :class="$style.footerArea">
             <div :class="$style.footerRow">
               <NcActions
@@ -561,7 +594,9 @@ async function deleteLibrary() {
                      :selectedLibrary="selectedLibrary"
                      :libraries="libraries"
                      :standalone-create="selectedView === 'new-song'" />
-          <SetlistsView v-else-if="selectedView === 'setlists'" :selected-library="selectedLibrary" />
+          <SetlistsView v-else-if="selectedView === 'setlists'"
+                        :selected-library="selectedLibrary"
+                        :can-write="!isPublicShare && (currentLibrary?.canWrite ?? true)" />
           <SublibrariesView v-else-if="selectedView === 'sublibraries'"
                             :selected-library="selectedLibrary"
                             :libraries="libraries" />
