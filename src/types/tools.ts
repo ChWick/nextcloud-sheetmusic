@@ -33,4 +33,5 @@ export interface ToolDefinition {
 	name: string
 	description: string
 	icon?: any
+	badge?: string
 }
