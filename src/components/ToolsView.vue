@@ -1,14 +1,20 @@
 <script setup lang="ts">
+/**
+ * SPDX-FileCopyrightText: 2026 Nextcloud GmbH and Nextcloud contributors
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ */
+
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
 import FormatListNumbered from 'vue-material-design-icons/FormatListNumbered.vue'
-import Wrench from 'vue-material-design-icons/Wrench.vue'
 import type { ToolDefinition } from '../types/tools'
 import ViewHeader from './ViewHeader.vue'
 import PageOrderResetTool from './tools/PageOrderResetTool.vue'
+import ToolsOverview from './tools/ToolsOverview.vue'
+import ToolChips from './tools/ToolChips.vue'
 
-const props = defineProps<{
+defineProps<{
 	selectedLibrary: number
 }>()
 
@@ -24,7 +30,7 @@ const availableTools: ToolDefinition[] = [
 	},
 ]
 
-const activeToolId = ref<string>('page-order-reset')
+const activeToolId = ref<string | null>(null)
 
 // Sync with route query ?tool=
 watch(
@@ -32,45 +38,53 @@ watch(
 	(toolQuery) => {
 		if (typeof toolQuery === 'string' && availableTools.some(tool => tool.id === toolQuery)) {
 			activeToolId.value = toolQuery
+		} else {
+			activeToolId.value = null
 		}
 	},
 	{ immediate: true },
 )
 
-function selectTool(id: string) {
+function selectTool(id: string | null) {
 	activeToolId.value = id
+	const nextQuery = { ...route.query }
+	if (id) {
+		nextQuery.tool = id
+	} else {
+		delete nextQuery.tool
+	}
 	router.replace({
-		query: {
-			...route.query,
-			tool: id,
-		},
+		query: nextQuery,
 	})
 }
 
 const activeTool = computed(() => {
-	return availableTools.find(t => t.id === activeToolId.value) ?? availableTools[0]
+	return availableTools.find(t => t.id === activeToolId.value) ?? null
 })
 </script>
 
 <template>
 	<div :class="$style.container" data-test="tools-view">
-		<ViewHeader :title="t('sheetmusic', 'Library Tools')">
-			<div v-if="availableTools.length > 1" :class="$style.toolSelector">
-				<button
-					v-for="tool in availableTools"
-					:key="tool.id"
-					type="button"
-					:class="[$style.toolTab, activeToolId === tool.id && $style.toolTabActive]"
-					@click="selectTool(tool.id)">
-					<component :is="tool.icon" :size="18" />
-					<span>{{ tool.name }}</span>
-				</button>
-			</div>
+		<ViewHeader
+			:title="activeTool ? activeTool.name : t('sheetmusic', 'Library Tools')"
+			:show-back="Boolean(activeTool)"
+			:back-title="t('sheetmusic', 'Back to tools')"
+			@back="selectTool(null)">
+			<ToolChips
+				v-if="activeTool && availableTools.length > 1"
+				:tools="availableTools"
+				:active-tool-id="activeToolId"
+				@select="selectTool" />
 		</ViewHeader>
 
 		<div :class="$style.content">
+			<ToolsOverview
+				v-if="!activeTool"
+				:tools="availableTools"
+				@select="selectTool" />
+
 			<PageOrderResetTool
-				v-if="activeToolId === 'page-order-reset'"
+				v-else-if="activeToolId === 'page-order-reset'"
 				:selected-library="selectedLibrary" />
 		</div>
 	</div>
@@ -91,30 +105,5 @@ const activeTool = computed(() => {
 	width: 100%;
 	box-sizing: border-box;
 	margin: 0 auto;
-}
-
-.toolSelector {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-}
-
-.toolTab {
-	display: inline-flex;
-	align-items: center;
-	gap: 6px;
-	padding: 6px 12px;
-	border-radius: var(--border-radius-pill, 18px);
-	border: 1px solid var(--color-border, #ccc);
-	background: transparent;
-	color: var(--color-main-text, #333);
-	cursor: pointer;
-	font-size: 0.85rem;
-}
-
-.toolTabActive {
-	background: var(--color-primary-element, #0082c9);
-	border-color: var(--color-primary-element, #0082c9);
-	color: var(--color-primary-element-text, #fff);
 }
 </style>
