@@ -109,6 +109,8 @@ trait RealMobileSheetsTestTrait {
 			null,
 			$this->setlistItemMapper,
 			$this->bookmarkMapper,
+			null,
+			$sublibraryService,
 		);
 
 		$this->exporter = new MobileSheetsSqliteExporter(
@@ -125,6 +127,8 @@ trait RealMobileSheetsTestTrait {
 			null,
 			$this->bookmarkMapper,
 			$this->setlistItemMapper,
+			null,
+			$sublibraryService,
 		);
 	}
 
@@ -151,6 +155,22 @@ trait RealMobileSheetsTestTrait {
 			}
 		}
 		$this->createdUserNodes = [];
+
+		try {
+			if ($this->rootFolder instanceof \OC\Files\Node\LazyRoot) {
+				$p = new \ReflectionProperty(\OC\Files\Node\LazyFolder::class, 'folder');
+				$real = $p->getValue($this->rootFolder);
+				if ($real !== null && property_exists($real, 'userFolderCache')) {
+					$pCache = new \ReflectionProperty($real, 'userFolderCache');
+					$cache = $pCache->getValue($real);
+					if (method_exists($cache, 'clear')) {
+						$cache->clear();
+					}
+				}
+			}
+		} catch (\Throwable) {
+			// Ignore
+		}
 	}
 
 	protected function cleanupLibraryData(int $libraryId, bool $deleteLibraryRow = true): void {

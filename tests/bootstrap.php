@@ -20,6 +20,7 @@ require_once __DIR__ . '/TestSupport/MobileSheetsEndToEndSyncHarness.php';
 require_once __DIR__ . '/TestSupport/InternalQueryResult.php';
 require_once __DIR__ . '/TestSupport/FakeUserSession.php';
 require_once __DIR__ . '/TestSupport/FakeRequest.php';
+require_once __DIR__ . '/TestSupport/RecordingSapi.php';
 
 \OC_App::loadApp(OCA\SheetMusic\AppInfo\Application::APP_ID);
 OC_Hook::clear();
