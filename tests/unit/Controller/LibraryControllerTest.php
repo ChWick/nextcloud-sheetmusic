@@ -387,4 +387,32 @@ final class LibraryControllerTest extends TestCase {
 		$this->assertSame(Http::STATUS_UNAUTHORIZED, $this->controller->updateSublibraryShare($libId, $subId, '77', 'write')->getStatus());
 		$this->assertSame(Http::STATUS_UNAUTHORIZED, $this->controller->deleteSublibraryShare($libId, $subId, '77')->getStatus());
 	}
+
+	public function testGetAllSharesOverviewEndpoint(): void {
+		$userFolder = $this->rootFolder->getUserFolder('admin');
+		if (!$userFolder->nodeExists('OverviewFolder')) {
+			$this->createdUserNodes[] = $userFolder->newFolder('OverviewFolder');
+		}
+		$library = $this->createTestLibrary('OverviewFolder');
+		$libId = (int)$library->id;
+
+		$subMapper = new SublibraryMapper($this->dbConn);
+		$subMapper->insert(new InternalSublibrary(
+			libraryId: $libId,
+			name: 'Choir Flute',
+			slug: 'choir-flute',
+			filters: ['genre' => ['Choir']],
+		));
+
+		$res = $this->controller->getAllSharesOverview($libId);
+		$this->assertSame(Http::STATUS_OK, $res->getStatus());
+		$data = $res->getData();
+		$this->assertSame($libId, $data['library']['id']);
+		$this->assertSame('OverviewFolder', $data['library']['name']);
+		$this->assertCount(1, $data['sublibraries']);
+		$this->assertSame('Choir Flute', $data['sublibraries'][0]['name']);
+
+		$this->userSession->setUser(null);
+		$this->assertSame(Http::STATUS_UNAUTHORIZED, $this->controller->getAllSharesOverview($libId)->getStatus());
+	}
 }

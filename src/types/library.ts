@@ -31,3 +31,19 @@ export interface Sublibrary {
 	createdAt?: number
 	updatedAt?: number
 }
+
+export interface SharesOverview {
+	library: {
+		id: number
+		name: string
+		path: string
+		shares: LibraryShare[]
+	}
+	sublibraries: Array<{
+		id: number
+		name: string
+		slug: string
+		filters: Record<string, string[] | string>
+		shares: LibraryShare[]
+	}>
+}

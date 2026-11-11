@@ -47,6 +47,7 @@ import ShareVariantOutline from 'vue-material-design-icons/ShareVariantOutline.v
 import SongsView from './components/SongsView.vue'
 import SetlistsView from './components/SetlistsView.vue'
 import SublibrariesView from './components/SublibrariesView.vue'
+import SharesView from './components/SharesView.vue'
 import IntegrityView from './components/IntegrityView.vue'
 import ToolsView from './components/ToolsView.vue'
 import EntitiesView from './components/EntitiesView.vue'
@@ -55,8 +56,8 @@ import LibrarySettingsDialog from './components/LibrarySettingsDialog.vue'
 import ShareDialog from './components/ShareDialog.vue'
 
 /** Views of a library: the song view, one view per song filter, integrity audit, and tools. */
-type ViewName = 'songs' | 'new-song' | 'setlists' | 'sublibraries' | 'integrity' | 'tools' | 'trash' | EntityType
-const VIEW_NAMES: ViewName[] = ['songs', 'new-song', 'setlists', 'composers', 'artists', 'books', 'collections', 'genres', 'keys', 'customgroups', 'years', 'signatures', 'sourcetypes', 'instruments', 'arrangers', 'sublibraries', 'integrity', 'tools', 'trash']
+type ViewName = 'songs' | 'new-song' | 'setlists' | 'sublibraries' | 'shares' | 'integrity' | 'tools' | 'trash' | EntityType
+const VIEW_NAMES: ViewName[] = ['songs', 'new-song', 'setlists', 'composers', 'artists', 'books', 'collections', 'genres', 'keys', 'customgroups', 'years', 'signatures', 'sourcetypes', 'instruments', 'arrangers', 'sublibraries', 'shares', 'integrity', 'tools', 'trash']
 
 interface ImportProgress {
   status: 'running' | 'completed' | 'error'
@@ -530,6 +531,13 @@ async function deleteLibrary() {
               <FolderSyncOutline :size="20" />
             </template>
           </NcAppNavigationItem>
+          <template v-if="!isPublicShare && (!currentLibrary || !currentLibrary.isShared)">
+            <NcAppNavigationItem :name="t('sheetmusic', 'Shares')" :active="selectedView === 'shares'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'shares' } }">
+              <template #icon>
+                <ShareVariantOutline :size="20" />
+              </template>
+            </NcAppNavigationItem>
+          </template>
           <template v-if="!isPublicShare">
             <NcAppNavigationItem :name="t('sheetmusic', 'Integrity Audit')" :active="selectedView === 'integrity'" :to="{ name: 'LibraryView', params: { library: selectedLibrary, view: 'integrity' } }">
               <template #icon>
@@ -614,6 +622,10 @@ async function deleteLibrary() {
           <SublibrariesView v-else-if="selectedView === 'sublibraries'"
                             :selected-library="selectedLibrary"
                             :libraries="libraries" />
+          <SharesView v-else-if="selectedView === 'shares'"
+                      :selected-library="selectedLibrary"
+                      :libraries="libraries"
+                      @open-sublibraries="goToView('sublibraries')" />
           <IntegrityView v-else-if="selectedView === 'integrity'" :selectedLibrary="selectedLibrary" />
           <ToolsView v-else-if="selectedView === 'tools'" :selected-library="selectedLibrary" />
           <TrashView v-else-if="selectedView === 'trash'" :selected-library="selectedLibrary" />

@@ -398,6 +398,28 @@ class LibraryController extends OCSController {
 		}
 	}
 
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'GET', url: '/api/libraries/{id}/shares/overview')]
+	public function getAllSharesOverview(int $id): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		if ($this->shareService === null) {
+			return new DataResponse(['message' => 'Share service not available'], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+
+		try {
+			$overview = $this->shareService->getAllSharesOverview($id, $user->getUID());
+			return new DataResponse($overview);
+		} catch (SecurityException $e) {
+			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_FORBIDDEN);
+		} catch (\Throwable $e) {
+			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
 	private function parseShareType(mixed $rawShareType): int {
 		return match ($rawShareType) {
 			'user', IShare::TYPE_USER, (string)IShare::TYPE_USER => IShare::TYPE_USER,

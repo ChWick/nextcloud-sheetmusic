@@ -713,6 +713,60 @@ class LibraryShareService {
 	}
 
 	/**
+	 * Returns an overview of all shares for a library, including main library shares and all sublibrary shares.
+	 *
+	 * @return array{
+	 *     library: array{id: int, name: string, path: string, shares: list<array<string, mixed>>},
+	 *     sublibraries: list<array{id: int, name: string, slug: string, filterRules: array<string, mixed>, shares: list<array<string, mixed>>}>
+	 * }
+	 */
+	public function getAllSharesOverview(int $libraryId, string $userId): array {
+		$lib = $this->libraryMapper->findById($libraryId);
+		if ($lib === null || $lib->userId !== $userId) {
+			throw new SecurityException('Only the library owner can manage shares');
+		}
+
+		$mainShares = $this->getShares($libraryId, $userId);
+		$sublibrariesData = [];
+
+		if ($this->sublibraryMapper !== null) {
+			$sublibs = $this->sublibraryMapper->findAllForLibrary($libraryId);
+			foreach ($sublibs as $sub) {
+				$subShares = [];
+				try {
+					$subShares = $this->getSublibraryShares($libraryId, (int)$sub->id, $userId);
+				} catch (\Throwable $e) {
+					$this->logger?->warning('Failed to get sublibrary shares for overview: ' . $e->getMessage());
+				}
+				$sublibrariesData[] = [
+					'id' => (int)$sub->id,
+					'name' => $sub->name,
+					'slug' => $sub->slug,
+					'filters' => $sub->filters,
+					'shares' => $subShares,
+				];
+			}
+		}
+
+		$cleanPath = trim($lib->path, '/');
+		$libName = basename($cleanPath);
+		if (str_ends_with(strtolower($cleanPath), '.db')) {
+			$parentDir = dirname($cleanPath);
+			$libName = $parentDir !== '.' ? basename($parentDir) : $libName;
+		}
+
+		return [
+			'library' => [
+				'id' => $libraryId,
+				'name' => $libName,
+				'path' => $lib->path,
+				'shares' => $mainShares,
+			],
+			'sublibraries' => $sublibrariesData,
+		];
+	}
+
+	/**
 	 * @return array<string, mixed>
 	 */
 	public function createShare(

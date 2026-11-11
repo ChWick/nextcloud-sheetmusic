@@ -285,4 +285,24 @@ final class LibraryShareServiceTest extends TestCase {
 		self::assertTrue($result['library']->isShared);
 		self::assertSame('subSecretToken', $result['token']);
 	}
+
+	public function testGetAllSharesOverview(): void {
+		$lib = $this->createTestLibrary('/Noten/overview_test.db', 'admin');
+		$sub = $this->sublibraryMapper->insert(new InternalSublibrary(
+			libraryId: (int)$lib->id,
+			name: 'Choir Voices',
+			slug: 'choir',
+			filters: ['genre' => ['Choral']],
+		));
+
+		$overview = $this->shareService->getAllSharesOverview((int)$lib->id, 'admin');
+		self::assertNotNull($overview);
+		self::assertSame((int)$lib->id, $overview['library']['id']);
+		self::assertIsArray($overview['library']['shares']);
+		self::assertCount(1, $overview['sublibraries']);
+		self::assertSame((int)$sub->id, $overview['sublibraries'][0]['id']);
+		self::assertSame('Choir Voices', $overview['sublibraries'][0]['name']);
+		self::assertSame(['genre' => ['Choral']], $overview['sublibraries'][0]['filters']);
+		self::assertIsArray($overview['sublibraries'][0]['shares']);
+	}
 }
