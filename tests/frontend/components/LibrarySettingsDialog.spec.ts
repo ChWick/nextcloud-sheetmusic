@@ -69,6 +69,22 @@ vi.mock('@nextcloud/vue/components/NcLoadingIcon', () => ({
 	},
 }))
 
+vi.mock('@nextcloud/vue/components/NcSelect', () => ({
+	default: {
+		name: 'NcSelect',
+		props: ['modelValue', 'options', 'disabled'],
+		emits: ['update:modelValue'],
+		template: `
+			<select
+				:value="modelValue ? modelValue.id : ''"
+				:disabled="disabled"
+				@change="$emit('update:modelValue', options ? options.find(o => o.id === $event.target.value) : null)">
+				<option v-for="opt in options" :key="opt.id" :value="opt.id">{{ opt.label }}</option>
+			</select>
+		`,
+	},
+}))
+
 describe('LibrarySettingsDialog.vue', () => {
 	const mockLibraries: Library[] = [
 		{ id: 1, path: '/Noten/library.db', autoPaths: true, autoPdfMetadata: true },
@@ -215,6 +231,94 @@ describe('LibrarySettingsDialog.vue', () => {
 		await closeButton.trigger('click')
 
 		expect(wrapper.emitted('close')).toBeTruthy()
+	})
+
+	it('updates namingRulePreset and calls PUT endpoint, emitting updated libraries', async () => {
+		vi.mocked(axios.put).mockResolvedValueOnce({
+			data: {
+				ocs: {
+					data: {
+						library: { id: 1, path: '/Noten/library.db', autoPaths: true, autoPdfMetadata: true, namingRulePreset: 'artist' },
+					},
+				},
+			},
+		})
+
+		const wrapper = mount(LibrarySettingsDialog, {
+			props: {
+				selectedLibrary: 1,
+				libraries: mockLibraries,
+			},
+		})
+
+		const select = wrapper.find('select')
+		await select.setValue('artist')
+
+		expect(axios.put).toHaveBeenCalledWith(
+			'/ocs/v2.php/apps/sheetmusic/api/libraries/1/settings',
+			{ namingRulePreset: 'artist' },
+			expect.objectContaining({
+				headers: { 'OCS-APIREQUEST': 'true', Accept: 'application/json' },
+			}),
+		)
+
+		expect(wrapper.emitted('update:libraries')).toBeTruthy()
+		const emittedLibs = wrapper.emitted('update:libraries')![0][0] as Library[]
+		expect(emittedLibs.find(l => l.id === 1)?.namingRulePreset).toBe('artist')
+	})
+
+	it('updates namingRulePreset to disabled and calls PUT endpoint', async () => {
+		vi.mocked(axios.put).mockResolvedValueOnce({
+			data: {
+				ocs: {
+					data: {
+						library: { id: 1, path: '/Noten/library.db', autoPaths: true, autoPdfMetadata: true, namingRulePreset: 'disabled' },
+					},
+				},
+			},
+		})
+
+		const wrapper = mount(LibrarySettingsDialog, {
+			props: {
+				selectedLibrary: 1,
+				libraries: mockLibraries,
+			},
+		})
+
+		const select = wrapper.find('select')
+		await select.setValue('disabled')
+
+		expect(axios.put).toHaveBeenCalledWith(
+			'/ocs/v2.php/apps/sheetmusic/api/libraries/1/settings',
+			{ namingRulePreset: 'disabled' },
+			expect.objectContaining({
+				headers: { 'OCS-APIREQUEST': 'true', Accept: 'application/json' },
+			}),
+		)
+
+		const emittedLibs = wrapper.emitted('update:libraries')![0][0] as Library[]
+		expect(emittedLibs.find(l => l.id === 1)?.namingRulePreset).toBe('disabled')
+	})
+
+	it('toggles naming rule help explanation box', async () => {
+		const wrapper = mount(LibrarySettingsDialog, {
+			props: {
+				selectedLibrary: 1,
+				libraries: mockLibraries,
+			},
+		})
+
+		expect(wrapper.text()).not.toContain('Understanding File Organization')
+
+		const helpButton = wrapper.findAll('button').find(b => b.text().includes('Help & examples'))
+		expect(helpButton).toBeDefined()
+		await helpButton!.trigger('click')
+
+		expect(wrapper.text()).toContain('Understanding File Organization')
+		expect(wrapper.text()).toContain('Hide help')
+
+		await helpButton!.trigger('click')
+		expect(wrapper.text()).not.toContain('Understanding File Organization')
 	})
 
 	it('emits open-sublibraries when manage sub-libraries button is clicked', async () => {

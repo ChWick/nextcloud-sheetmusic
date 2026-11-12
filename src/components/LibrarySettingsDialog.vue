@@ -5,6 +5,8 @@ import { translate as t } from '@nextcloud/l10n'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
+import NcSelect from '@nextcloud/vue/components/NcSelect'
+import HelpCircleOutline from 'vue-material-design-icons/HelpCircleOutline.vue'
 import TrashCanOutline from 'vue-material-design-icons/TrashCanOutline.vue'
 import FolderSyncOutline from 'vue-material-design-icons/FolderSyncOutline.vue'
 import ShareVariantOutline from 'vue-material-design-icons/ShareVariantOutline.vue'
@@ -27,6 +29,7 @@ const emit = defineEmits<{
 const isSaving = ref(false)
 const saveError = ref('')
 const isShareDialogOpen = ref(false)
+const isNamingHelpOpen = ref(false)
 const currentLibrary = computed(() => props.libraries.find(lib => lib.id === props.selectedLibrary))
 const isSharedLibrary = computed(() => Boolean(currentLibrary.value?.isShared))
 
@@ -44,7 +47,51 @@ const autoPdfMetadataModel = computed({
 	},
 })
 
-async function updateSetting(settings: { autoPaths?: boolean; autoPdfMetadata?: boolean }) {
+const namingRulePresetModel = computed({
+	get: () => currentLibrary.value?.namingRulePreset ?? 'auto',
+	set: (val: string) => {
+		updateSetting({ namingRulePreset: val })
+	},
+})
+
+const namingPresetOptions = computed(() => [
+	{
+		id: 'auto',
+		label: t('sheetmusic', 'Automatic (smart guess)'),
+		description: t('sheetmusic', 'Adapts per song: uses Artist for modern bands, Composer for classical, Collection for songbooks.'),
+	},
+	{
+		id: 'composer',
+		label: t('sheetmusic', 'Composer-based'),
+		description: t('sheetmusic', 'Always prioritize composer (e.g. Composer / Composer - Book / Title).'),
+	},
+	{
+		id: 'artist',
+		label: t('sheetmusic', 'Artist-based'),
+		description: t('sheetmusic', 'Always prioritize artist/band (e.g. Artist / Artist - Book / Title).'),
+	},
+	{
+		id: 'collection',
+		label: t('sheetmusic', 'Collection / Book-based'),
+		description: t('sheetmusic', 'Prioritize book or collection folders.'),
+	},
+	{
+		id: 'disabled',
+		label: t('sheetmusic', 'Disabled (flat / no subfolders)'),
+		description: t('sheetmusic', 'Uploads stay directly in the library root folder without automatic subfolders or renaming.'),
+	},
+])
+
+const selectedNamingOption = computed({
+	get: () => namingPresetOptions.value.find(opt => opt.id === namingRulePresetModel.value) ?? namingPresetOptions.value[0],
+	set: (opt: { id: string } | null) => {
+		if (opt?.id) {
+			namingRulePresetModel.value = opt.id
+		}
+	},
+})
+
+async function updateSetting(settings: { autoPaths?: boolean; autoPdfMetadata?: boolean; namingRulePreset?: string }) {
 	isSaving.value = true
 	saveError.value = ''
 	try {
@@ -128,6 +175,93 @@ function handleDelete() {
 					<p :class="$style.settingDescription">
 						{{ t('sheetmusic', 'When importing new songs, attempt to extract titles, composers, and page counts from PDF metadata.') }}
 					</p>
+				</div>
+
+				<div :class="$style.settingRow">
+					<div :class="$style.settingHeaderWithHelp">
+						<label :class="$style.settingLabel">
+							{{ t('sheetmusic', 'Song file organization & naming rule') }}
+						</label>
+						<NcButton
+							type="button"
+							variant="tertiary"
+							size="small"
+							:class="$style.helpToggleBtn"
+							@click="isNamingHelpOpen = !isNamingHelpOpen">
+							<template #icon>
+								<HelpCircleOutline :size="16" />
+							</template>
+							{{ isNamingHelpOpen ? t('sheetmusic', 'Hide help') : t('sheetmusic', 'Help & examples') }}
+						</NcButton>
+					</div>
+					<NcSelect
+						v-model="selectedNamingOption"
+						:options="namingPresetOptions"
+						:clearable="false"
+						:disabled="isSaving" />
+					<p :class="$style.settingSelectDescription">
+						{{ selectedNamingOption?.description }}
+					</p>
+
+					<!-- Collapsible Help Guide -->
+					<div v-if="isNamingHelpOpen" :class="$style.namingHelpBox">
+						<h5 :class="$style.namingHelpTitle">
+							{{ t('sheetmusic', 'Understanding File Organization & Naming Rules') }}
+						</h5>
+						<p :class="$style.namingHelpIntro">
+							{{ t('sheetmusic', 'Sheet Music can keep song files organized in consistent folders based on your song metadata, keeping physical files and MobileSheets sync in harmony.') }}
+						</p>
+
+						<div :class="$style.presetHelpItem">
+							<div :class="$style.presetHelpHeader">
+								<strong>{{ t('sheetmusic', 'Automatic (smart guess) [Recommended]') }}</strong>
+							</div>
+							<p :class="$style.presetHelpDesc">
+								{{ t('sheetmusic', 'Intelligently determines the best folder structure for each individual song:') }}
+							</p>
+							<ul :class="$style.presetHelpList">
+								<li>{{ t('sheetmusic', 'Modern band / pop songs: grouped by Artist (e.g. The Beatles/The Beatles - Abbey Road/The Beatles - Abbey Road - Come Together.pdf)') }}</li>
+								<li>{{ t('sheetmusic', 'Classical music (detected by Opus, catalog numbers, or orchestra performers): grouped by Composer (e.g. Beethoven/Beethoven - Sonatas/Beethoven - Sonatas - Moonlight Sonata.pdf)') }}</li>
+								<li>{{ t('sheetmusic', 'Songbooks without artist/composer: grouped by Book/Collection (e.g. Real Book/Real Book - Autumn Leaves.pdf)') }}</li>
+							</ul>
+						</div>
+
+						<div :class="$style.presetHelpItem">
+							<div :class="$style.presetHelpHeader">
+								<strong>{{ t('sheetmusic', 'Composer-based') }}</strong>
+							</div>
+							<p :class="$style.presetHelpDesc">
+								{{ t('sheetmusic', 'Always groups files under the Composer (Composer/Composer - Book/Song.pdf). Falls back to artist only if composer is blank. Ideal for classical, choral, and traditional sheet music.') }}
+							</p>
+						</div>
+
+						<div :class="$style.presetHelpItem">
+							<div :class="$style.presetHelpHeader">
+								<strong>{{ t('sheetmusic', 'Artist-based') }}</strong>
+							</div>
+							<p :class="$style.presetHelpDesc">
+								{{ t('sheetmusic', 'Always groups files under the Artist or Band name (Artist/Artist - Book/Song.pdf). Falls back to composer only if artist is blank. Ideal for pop, rock, and modern bands.') }}
+							</p>
+						</div>
+
+						<div :class="$style.presetHelpItem">
+							<div :class="$style.presetHelpHeader">
+								<strong>{{ t('sheetmusic', 'Collection / Book-based') }}</strong>
+							</div>
+							<p :class="$style.presetHelpDesc">
+								{{ t('sheetmusic', 'Groups files primarily by Book, Collection, or Anthology name (Book/Book - Title.pdf). Ideal for collections of standards, hymnals, and fake books.') }}
+							</p>
+						</div>
+
+						<div :class="$style.presetHelpItem">
+							<div :class="$style.presetHelpHeader">
+								<strong>{{ t('sheetmusic', 'Disabled (flat / no subfolders)') }}</strong>
+							</div>
+							<p :class="$style.presetHelpDesc">
+								{{ t('sheetmusic', 'No automatic folder organization or renaming occurs. Newly uploaded files stay directly in the library root folder (e.g. MyLibrary/Song.pdf), and existing files are left in their current locations. Library integrity checks will not flag naming rules.') }}
+							</p>
+						</div>
+					</div>
 				</div>
 
 				<!-- Sub-libraries section -->
@@ -278,6 +412,84 @@ function handleDelete() {
 	flex-direction: column;
 	gap: 4px;
 	padding: 8px 0;
+}
+
+.settingHeaderWithHelp {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+}
+
+.helpToggleBtn {
+	margin: 0;
+	padding: 0 6px;
+	font-size: 0.8rem;
+}
+
+.namingHelpBox {
+	margin-top: 8px;
+	padding: 12px 14px;
+	border-radius: var(--border-radius-large, 8px);
+	background-color: var(--color-background-hover);
+	border: 1px solid var(--color-border);
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.namingHelpTitle {
+	margin: 0;
+	font-size: 0.92rem;
+	font-weight: 600;
+	color: var(--color-main-text);
+}
+
+.namingHelpIntro {
+	margin: 0;
+	font-size: 0.85rem;
+	color: var(--color-text-maxcontrast);
+}
+
+.presetHelpItem {
+	padding: 6px 0 2px 0;
+	border-top: 1px solid var(--color-border);
+}
+
+.presetHelpHeader {
+	font-size: 0.88rem;
+	color: var(--color-main-text);
+	margin-bottom: 2px;
+}
+
+.presetHelpDesc {
+	margin: 0;
+	font-size: 0.82rem;
+	color: var(--color-text-maxcontrast);
+}
+
+.presetHelpList {
+	margin: 4px 0 0 0;
+	padding-left: 18px;
+	font-size: 0.82rem;
+	color: var(--color-text-maxcontrast);
+}
+
+.presetHelpList li {
+	margin-bottom: 2px;
+}
+
+.settingLabel {
+	font-weight: 600;
+	font-size: 0.9rem;
+	margin-bottom: 2px;
+	color: var(--color-main-text);
+}
+
+.settingSelectDescription {
+	margin: 2px 0 0 0;
+	font-size: 0.85rem;
+	color: var(--color-text-maxcontrast);
 }
 
 .settingDescription,

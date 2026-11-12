@@ -1,5 +1,7 @@
 import type { components } from './api.generated'
 
+export type NamingRulePreset = 'auto' | 'composer' | 'artist' | 'collection' | 'disabled'
+
 export type Library = components['schemas']['Library'] & {
 	folderId?: number | null
 	isShared?: boolean
@@ -7,6 +9,9 @@ export type Library = components['schemas']['Library'] & {
 	ownerDisplayName?: string | null
 	permission?: 'admin' | 'write' | 'read'
 	canWrite?: boolean
+	autoPaths?: boolean
+	autoPdfMetadata?: boolean
+	namingRulePreset?: NamingRulePreset
 }
 
 export interface LibraryShare {
