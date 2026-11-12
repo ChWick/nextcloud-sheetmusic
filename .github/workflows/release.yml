@@ -1,0 +1,65 @@
+name: Build and publish app release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+env:
+  APP_NAME: sheetmusic
+
+jobs:
+  build_and_publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          path: ${{ env.APP_NAME }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: ${{ env.APP_NAME }}/package-lock.json
+
+      - name: Build frontend
+        run: |
+          cd ${{ env.APP_NAME }}
+          npm ci
+          npm run build
+
+      - name: Package app
+        run: |
+          tar --exclude='${{ env.APP_NAME }}/.git*' \
+              --exclude='${{ env.APP_NAME }}/.github' \
+              --exclude='${{ env.APP_NAME }}/.devcontainer' \
+              --exclude='${{ env.APP_NAME }}/node_modules' \
+              --exclude='${{ env.APP_NAME }}/tests' \
+              --exclude='${{ env.APP_NAME }}/playwright-report' \
+              --exclude='${{ env.APP_NAME }}/test-results' \
+              --exclude='${{ env.APP_NAME }}/vendor-bin' \
+              -czvf ${{ env.APP_NAME }}.tar.gz ${{ env.APP_NAME }}
+
+      - name: Attach tarball to GitHub release
+        uses: svenstaro/upload-release-action@v2
+        id: attach_to_release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: ${{ env.APP_NAME }}.tar.gz
+          asset_name: ${{ env.APP_NAME }}.tar.gz
+          tag: ${{ github.ref }}
+          overwrite: true
+
+      - name: Upload app to Nextcloud App Store
+        uses: nextcloud-releases/nextcloud-appstore-push-action@v1
+        with:
+          app_name: ${{ env.APP_NAME }}
+          appstore_token: ${{ secrets.APPSTORE_TOKEN }}
+          download_url: ${{ steps.attach_to_release.outputs.browser_download_url }}
+          app_private_key: ${{ secrets.APP_PRIVATE_KEY }}
+          nightly: ${{ github.event.release.prerelease }}
