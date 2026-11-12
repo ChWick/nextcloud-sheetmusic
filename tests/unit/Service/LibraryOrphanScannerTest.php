@@ -13,7 +13,9 @@ use OCA\SheetMusic\Service\FileManager;
 use OCA\SheetMusic\Service\LibraryOrphanScanner;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsComposer;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsFile;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsKey;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSong;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsYear;
 use PHPUnit\Framework\TestCase;
 use TestSupport\RealMobileSheetsTestTrait;
 
@@ -120,5 +122,109 @@ final class LibraryOrphanScannerTest extends TestCase {
 
 		self::assertNotNull($candidate);
 		self::assertSame(10, $candidate->id);
+	}
+
+	public function testFindOrphanFileCandidateSongDisambiguatesByKey(): void {
+		$songD = new MobileSheetsSong(
+			id: 20,
+			title: 'Sonata',
+			files: [],
+			composers: [new MobileSheetsComposer(id: 1, name: 'Beethoven')],
+			keys: [new MobileSheetsKey(id: 1, name: 'D')],
+		);
+		$songF = new MobileSheetsSong(
+			id: 21,
+			title: 'Sonata',
+			files: [],
+			composers: [new MobileSheetsComposer(id: 1, name: 'Beethoven')],
+			keys: [new MobileSheetsKey(id: 2, name: 'F')],
+		);
+
+		$candidate = $this->scanner->findOrphanFileCandidateSong(
+			'Beethoven/Beethoven - Sonata in D.pdf',
+			[$songD, $songF],
+			[],
+		);
+
+		self::assertNotNull($candidate);
+		self::assertSame(20, $candidate->id);
+	}
+
+	public function testFindOrphanFileCandidateSongDisambiguatesByOpus(): void {
+		$songOp10 = new MobileSheetsSong(
+			id: 30,
+			title: 'Sonata',
+			opus: 'Op. 10 No. 3',
+			files: [],
+			composers: [new MobileSheetsComposer(id: 1, name: 'Beethoven')],
+		);
+		$songOp13 = new MobileSheetsSong(
+			id: 31,
+			title: 'Sonata',
+			opus: 'Op. 13',
+			files: [],
+			composers: [new MobileSheetsComposer(id: 1, name: 'Beethoven')],
+		);
+
+		$candidate = $this->scanner->findOrphanFileCandidateSong(
+			'Beethoven/Beethoven - Sonata, Op. 10 No. 3.pdf',
+			[$songOp10, $songOp13],
+			[],
+		);
+
+		self::assertNotNull($candidate);
+		self::assertSame(30, $candidate->id);
+	}
+
+	public function testFindOrphanFileCandidateSongDisambiguatesByCatalogNumber(): void {
+		$songKV545 = new MobileSheetsSong(
+			id: 40,
+			title: 'Sonata',
+			catalogNumber: 'KV 545',
+			files: [],
+			composers: [new MobileSheetsComposer(id: 2, name: 'Mozart')],
+		);
+		$songKV331 = new MobileSheetsSong(
+			id: 41,
+			title: 'Sonata',
+			catalogNumber: 'KV 331',
+			files: [],
+			composers: [new MobileSheetsComposer(id: 2, name: 'Mozart')],
+		);
+
+		$candidate = $this->scanner->findOrphanFileCandidateSong(
+			'Mozart/Mozart - Sonata, KV 545.pdf',
+			[$songKV545, $songKV331],
+			[],
+		);
+
+		self::assertNotNull($candidate);
+		self::assertSame(40, $candidate->id);
+	}
+
+	public function testFindOrphanFileCandidateSongDisambiguatesByYear(): void {
+		$song1958 = new MobileSheetsSong(
+			id: 50,
+			title: 'Autumn Leaves',
+			files: [],
+			composers: [new MobileSheetsComposer(id: 3, name: 'Kosma')],
+			years: [new MobileSheetsYear(id: 1, year: 1958)],
+		);
+		$song1980 = new MobileSheetsSong(
+			id: 51,
+			title: 'Autumn Leaves',
+			files: [],
+			composers: [new MobileSheetsComposer(id: 3, name: 'Kosma')],
+			years: [new MobileSheetsYear(id: 2, year: 1980)],
+		);
+
+		$candidate = $this->scanner->findOrphanFileCandidateSong(
+			'Kosma/Kosma - Autumn Leaves (1958).pdf',
+			[$song1958, $song1980],
+			[],
+		);
+
+		self::assertNotNull($candidate);
+		self::assertSame(50, $candidate->id);
 	}
 }

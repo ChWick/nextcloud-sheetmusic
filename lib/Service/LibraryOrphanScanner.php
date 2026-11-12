@@ -241,6 +241,68 @@ class LibraryOrphanScanner {
 			static fn (MobileSheetsSong $s): array => array_map(static fn ($col) => $col->name, $s->collections),
 			static fn (MobileSheetsSong $s): array => array_map(static fn ($a) => $a->name, $s->artists),
 			static fn (MobileSheetsSong $s): array => array_map(static fn ($b) => $b->title, $s->books),
+			static function (MobileSheetsSong $s): array {
+				$cat = trim((string)($s->catalogNumber ?? ''));
+				if ($cat === '') {
+					return [];
+				}
+				$res = [$cat];
+				if (str_contains($cat, ' ')) {
+					$res[] = str_replace(' ', '', $cat);
+				}
+				return array_unique($res);
+			},
+			static function (MobileSheetsSong $s): array {
+				$opus = trim((string)($s->opus ?? ''));
+				if ($opus === '') {
+					return [];
+				}
+				$res = [$opus];
+				if (preg_match('/^op\.?\s*(\d.*)$/i', $opus, $m) === 1) {
+					$res[] = "Op. {$m[1]}";
+					$res[] = "Op {$m[1]}";
+					$res[] = "Op.{$m[1]}";
+				} else {
+					$res[] = "Op. {$opus}";
+					$res[] = "Op {$opus}";
+				}
+				return array_unique($res);
+			},
+			static function (MobileSheetsSong $s): array {
+				$keys = [];
+				foreach ($s->keys as $k) {
+					$name = trim($k->name ?? '');
+					if ($name === '') {
+						continue;
+					}
+					$keys[] = "in {$name}";
+					$normalizedKey = SongPathNamingRule::normalizeKeyNameForGeneratedPath($name);
+					if ($normalizedKey !== $name) {
+						$keys[] = "in {$normalizedKey}";
+					}
+					if (mb_strlen($name) > 2) {
+						$keys[] = $name;
+					}
+				}
+				return $keys;
+			},
+			static function (MobileSheetsSong $s): array {
+				$years = [];
+				foreach ($s->years as $y) {
+					$yVal = trim((string)($y->name ?? $y->year ?? ''));
+					if ($yVal !== '' && $yVal !== '0') {
+						$years[] = $yVal;
+					}
+				}
+				return array_unique($years);
+			},
+			static function (MobileSheetsSong $s): array {
+				$num = trim((string)($s->songNumber ?? ''));
+				if ($num === '') {
+					return [];
+				}
+				return ["No. {$num}", "No.{$num}", $num];
+			},
 			static fn (MobileSheetsSong $s): array => array_map(static fn ($g) => $g->name, $s->genres),
 			static fn (MobileSheetsSong $s): array => array_map(static fn ($cg) => $cg->name, $s->customGroups),
 		];
