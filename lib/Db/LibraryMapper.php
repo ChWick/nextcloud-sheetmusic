@@ -101,6 +101,7 @@ class LibraryMapper {
 			->setValue('folder_id', $qb->createNamedParameter($folderId, IQueryBuilder::PARAM_INT))
 			->setValue('auto_paths', $qb->createNamedParameter(true, IQueryBuilder::PARAM_BOOL))
 			->setValue('auto_pdf_metadata', $qb->createNamedParameter(true, IQueryBuilder::PARAM_BOOL))
+			->setValue('naming_rule_preset', $qb->createNamedParameter('auto', IQueryBuilder::PARAM_STR))
 			->setValue('created_at', $qb->createNamedParameter($now, IQueryBuilder::PARAM_INT))
 			->setValue('updated_at', $qb->createNamedParameter($now, IQueryBuilder::PARAM_INT));
 		$qb->executeStatement();
@@ -201,7 +202,7 @@ class LibraryMapper {
 		return InternalLibrary::fromRow($row);
 	}
 
-	public function setSettingsForUser(string $userId, int $id, ?bool $autoPaths = null, ?bool $autoPdfMetadata = null): void {
+	public function setSettingsForUser(string $userId, int $id, ?bool $autoPaths = null, ?bool $autoPdfMetadata = null, ?string $namingRulePreset = null): void {
 		$qb = $this->db->getQueryBuilder();
 		$qb->update(self::TABLE_NAME)
 			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId, IQueryBuilder::PARAM_STR)))
@@ -214,6 +215,10 @@ class LibraryMapper {
 		}
 		if ($autoPdfMetadata !== null) {
 			$qb->set('auto_pdf_metadata', $qb->createNamedParameter($autoPdfMetadata, IQueryBuilder::PARAM_BOOL));
+			$hasChanges = true;
+		}
+		if ($namingRulePreset !== null) {
+			$qb->set('naming_rule_preset', $qb->createNamedParameter($namingRulePreset, IQueryBuilder::PARAM_STR));
 			$hasChanges = true;
 		}
 
