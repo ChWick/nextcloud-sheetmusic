@@ -47,7 +47,7 @@ type ExtractResponse<T> = T extends { responses: { 200: { content: { 'applicatio
 		: unknown
 
 /**
- * Type-safe GET request wrapper for MobileSheets Manager API
+ * Type-safe GET request wrapper for Sheet Music API
  */
 export function apiGet<P extends GetPath>(
 	path: P,
@@ -64,7 +64,7 @@ export function apiGet<P extends GetPath>(
 }
 
 /**
- * Type-safe POST request wrapper for MobileSheets Manager API
+ * Type-safe POST request wrapper for Sheet Music API
  */
 export function apiPost<P extends PostPath>(
 	path: P,
@@ -82,7 +82,7 @@ export function apiPost<P extends PostPath>(
 }
 
 /**
- * Type-safe DELETE request wrapper for MobileSheets Manager API
+ * Type-safe DELETE request wrapper for Sheet Music API
  */
 export function apiDelete<P extends DeletePath>(
 	path: P,

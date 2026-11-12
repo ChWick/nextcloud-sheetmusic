@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: MobileSheets Manager API
+  title: Sheet Music API
   description: API specification connecting PHP backend endpoints with TypeScript frontend types.
   version: 1.0.0
 

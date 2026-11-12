@@ -1,4 +1,4 @@
-# Sheet Music (Nextcloud MobileSheets Manager)
+# Sheet Music for Nextcloud
 
 [![Nextcloud](https://img.shields.io/badge/Nextcloud-31%20--%2037-0082c9?logo=nextcloud&logoColor=white)](https://apps.nextcloud.com/)
 [![License: AGPL-3.0-or-later](https://img.shields.io/badge/License-AGPL--3.0--or--later-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
