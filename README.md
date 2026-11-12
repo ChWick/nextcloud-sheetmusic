@@ -139,7 +139,7 @@ No need to install desktop PDF editors—Sheet Music includes built-in tools tai
 1. Clone or extract this repository into your Nextcloud `apps-extra/` (or `apps/`) directory:
    ```bash
    cd /path/to/nextcloud/apps-extra
-   git clone https://github.com/ChWick/nextcloud-mobilesheets-manager.git sheetmusic
+   git clone https://github.com/ChWick/nextcloud-sheetmusic.git sheetmusic
    ```
 2. Enable the app using the Nextcloud command line:
    ```bash
@@ -233,5 +233,5 @@ This project is licensed under the **GNU Affero General Public License v3.0 or l
 ## Author & Support
 
 - **Author**: Christoph Wick ([wick.chr.info@gmail.com](mailto:wick.chr.info@gmail.com))
-- **Bug Tracker & Issues**: [GitHub Issues](https://github.com/ChWick/nextcloud-mobilesheets-manager/issues)
+- **Bug Tracker & Issues**: [GitHub Issues](https://github.com/ChWick/nextcloud-sheetmusic/issues)
 - **Nextcloud Developer Documentation**: [https://docs.nextcloud.com/](https://docs.nextcloud.com/)
