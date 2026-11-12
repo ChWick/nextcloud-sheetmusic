@@ -158,6 +158,7 @@ class FilePathRegenerator {
 		Folder $targetFolder,
 		string $databasePath,
 		?MobileSheetsHashCodesFile $hashCodes = null,
+		string $preset = SongPathNamingRule::PRESET_AUTO,
 	): MobileSheetsFileLogEntry {
 		// Target paths produced by naming rules
 		$validTargetPaths = SongPathNamingRule::createTargetPaths(
@@ -165,6 +166,7 @@ class FilePathRegenerator {
 			SongPathNamingRule::getFileExtension($file->path),
 			SongPathNamingRule::fileIndexOf($song, $file),
 			SongPathNamingRule::fileCountForExtension($song, $file),
+			$preset,
 		);
 		$relativeTarget = $validTargetPaths[0];
 

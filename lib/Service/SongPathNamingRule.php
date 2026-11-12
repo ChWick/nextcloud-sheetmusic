@@ -13,6 +13,20 @@ use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsFile;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSong;
 
 class SongPathNamingRule {
+	public const PRESET_AUTO = 'auto';
+	public const PRESET_COMPOSER = 'composer';
+	public const PRESET_ARTIST = 'artist';
+	public const PRESET_COLLECTION = 'collection';
+	public const PRESET_DISABLED = 'disabled';
+
+	public const PRESETS = [
+		self::PRESET_AUTO,
+		self::PRESET_COMPOSER,
+		self::PRESET_ARTIST,
+		self::PRESET_COLLECTION,
+		self::PRESET_DISABLED,
+	];
+
 	public static function getFileExtension(string $filename): string {
 		$extension = pathinfo($filename, PATHINFO_EXTENSION);
 
@@ -161,6 +175,196 @@ class SongPathNamingRule {
 		return $result;
 	}
 
+	public static function hasClassicalIndicators(MobileSheetsSong $song): bool {
+		if (trim((string)($song->opus ?? '')) !== '' || trim((string)($song->catalogNumber ?? '')) !== '') {
+			return true;
+		}
+
+		$genreNames = self::extractNonEmptyEntityNames($song->genres);
+		foreach ($genreNames as $genre) {
+			if (preg_match('/classical|baroque|romantic|renaissance|choral|orchestr|sacred|church|cantata|sonata|symphon|opera/i', $genre) === 1) {
+				return true;
+			}
+		}
+
+		$sourceTypeNames = self::extractNonEmptyEntityNames($song->sourceTypes);
+		foreach ($sourceTypeNames as $source) {
+			if (preg_match('/classical|urtext|henle|b[aä]renreiter|breitkopf|peters/i', $source) === 1) {
+				return true;
+			}
+		}
+
+		$artistNames = self::extractNonEmptyEntityNames($song->artists);
+		foreach ($artistNames as $artist) {
+			if (preg_match('/orchestra|philharmonic|philharmonie|orchester|symphony|sinfonie|choir|chor|ensemble|quartet|quartett|quintet|quintett|trio|conductor|dirigent/i', $artist) === 1) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static function joinEntityNames(array $names): string {
+		sort($names, SORT_STRING);
+		return implode(', ', array_map(
+			static fn (string $name): string => self::normalizeGeneratedPathSegment($name),
+			$names,
+		));
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	private static function buildPathsForEntity(
+		string $entityName,
+		string $book,
+		string $collection,
+		string $songTitlePart,
+		string $filePrefix,
+		string $ext,
+	): array {
+		if ($entityName === '') {
+			return [];
+		}
+
+		if ($book !== '') {
+			$folder = $entityName . DIRECTORY_SEPARATOR . "{$entityName} - {$book}";
+			$fileName = "{$entityName} - {$book} - {$songTitlePart}";
+			return [self::normalizeGeneratedPath($folder . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext)];
+		}
+
+		if ($collection !== '') {
+			$folder = $entityName . DIRECTORY_SEPARATOR . "{$entityName} - {$collection}";
+			$fileName = "{$entityName} - {$collection} - {$songTitlePart}";
+			return [self::normalizeGeneratedPath($folder . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext)];
+		}
+
+		$folder = $entityName;
+		$fileName = "{$entityName} - {$songTitlePart}";
+		return [
+			self::normalizeGeneratedPath($folder . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext),
+			self::normalizeGeneratedPath($filePrefix . $fileName . $ext),
+		];
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	private static function buildPathsForCollectionBook(
+		string $collBook,
+		string $secondaryEntity,
+		string $songTitlePart,
+		string $filePrefix,
+		string $ext,
+	): array {
+		if ($collBook === '') {
+			return [];
+		}
+
+		if ($secondaryEntity !== '') {
+			$folder = $collBook . DIRECTORY_SEPARATOR . "{$collBook} - {$secondaryEntity}";
+			$fileName = "{$collBook} - {$secondaryEntity} - {$songTitlePart}";
+			return [
+				self::normalizeGeneratedPath($folder . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext),
+				self::normalizeGeneratedPath($collBook . DIRECTORY_SEPARATOR . $filePrefix . "{$collBook} - {$songTitlePart}" . $ext),
+			];
+		}
+
+		$folder = $collBook;
+		$fileName = "{$collBook} - {$songTitlePart}";
+		return [
+			self::normalizeGeneratedPath($folder . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext),
+			self::normalizeGeneratedPath($filePrefix . $fileName . $ext),
+		];
+	}
+
+	public static function titleContainsComponent(string $title, string $component): bool {
+		$cleanTitle = mb_strtolower(trim($title));
+		$cleanComp = mb_strtolower(trim($component));
+		if ($cleanComp === '' || $cleanTitle === '') {
+			return false;
+		}
+
+		if (str_contains($cleanTitle, $cleanComp)) {
+			return true;
+		}
+
+		$unaccentedTitle = str_replace(['♯', '♭', '.'], ['#', 'b', ''], $cleanTitle);
+		$unaccentedComp = str_replace(['♯', '♭', '.'], ['#', 'b', ''], $cleanComp);
+
+		return str_contains($unaccentedTitle, $unaccentedComp);
+	}
+
+	public static function buildSongTitlePart(MobileSheetsSong $song): string {
+		$songTitle = self::normalizeGeneratedPathSegment($song->title);
+
+		// 1. Key: e.g. "in G", "in C♯m"
+		$keyNames = self::extractNonEmptyEntityNames($song->keys);
+		sort($keyNames, SORT_STRING);
+		$normalizedKeyNames = array_map(
+			static fn (string $name): string => self::normalizeGeneratedPathSegment(self::normalizeKeyNameForGeneratedPath($name)),
+			$keyNames,
+		);
+		$keyString = implode(', ', $normalizedKeyNames);
+
+		$keyPart = '';
+		if ($keyString !== '') {
+			$alreadyHasKey = false;
+			foreach ($normalizedKeyNames as $k) {
+				if (self::titleContainsComponent($songTitle, 'in ' . $k) || self::titleContainsComponent($songTitle, ' ' . $k)) {
+					$alreadyHasKey = true;
+					break;
+				}
+			}
+			if (!$alreadyHasKey) {
+				$keyPart = " in {$keyString}";
+			}
+		}
+
+		$result = $songTitle . $keyPart;
+
+		// 2. Catalog number & Opus: e.g. "KV 545", "Op. 27 No. 2"
+		$catOpusParts = [];
+		$catalog = trim((string)($song->catalogNumber ?? ''));
+		if ($catalog !== '' && !self::titleContainsComponent($result, $catalog)) {
+			$catOpusParts[] = self::normalizeGeneratedPathSegment($catalog);
+		}
+
+		$opus = trim((string)($song->opus ?? ''));
+		if ($opus !== '' && !self::titleContainsComponent($result, $opus)) {
+			$catOpusParts[] = self::normalizeGeneratedPathSegment($opus);
+		}
+
+		if (!empty($catOpusParts)) {
+			$result .= ', ' . implode(', ', $catOpusParts);
+		}
+
+		// 3. Song / Hymn Number: e.g. "142" -> "(No. 142)"
+		$songNumber = trim((string)($song->songNumber ?? ''));
+		if ($songNumber !== '' && !self::titleContainsComponent($result, $songNumber)) {
+			$normNumber = self::normalizeGeneratedPathSegment($songNumber);
+			$formattedNumber = preg_match('/^no\.?\s*/i', $normNumber) === 1 ? $normNumber : "No. {$normNumber}";
+			$result .= " ({$formattedNumber})";
+		}
+
+		// 4. Year: e.g. "1969" -> "(1969)"
+		$yearValues = [];
+		foreach ($song->years as $yearObj) {
+			$yVal = trim((string)($yearObj->name ?? $yearObj->year ?? ''));
+			if ($yVal !== '' && $yVal !== '0') {
+				$yearValues[] = $yVal;
+			}
+		}
+		if (!empty($yearValues)) {
+			$yearStr = implode(', ', array_unique($yearValues));
+			if (!self::titleContainsComponent($result, $yearStr)) {
+				$result .= ' (' . self::normalizeGeneratedPathSegment($yearStr) . ')';
+			}
+		}
+
+		return $result;
+	}
+
 	/**
 	 * @return list<string> all valid target paths for a song given its composers, artists, books, and collections
 	 */
@@ -169,64 +373,96 @@ class SongPathNamingRule {
 		string $ext,
 		?int $fileIndex = null,
 		int $fileCount = 1,
+		string $preset = self::PRESET_AUTO,
 	): array {
 		$filePrefix = self::fileIndexPrefix($fileIndex, $fileCount);
 		$ext = $ext === '' ? '' : self::normalizeGeneratedPathSegment($ext);
 
-		// 1. Composers and Artists: sort alphabetically and join full list
-		$compArtistNames = self::extractNonEmptyEntityNames($song->composers);
-		if (empty($compArtistNames)) {
-			$compArtistNames = self::extractNonEmptyEntityNames($song->artists);
-		}
-		sort($compArtistNames, SORT_STRING);
-		$compArtist = implode(', ', array_map(
-			static fn (string $name): string => self::normalizeGeneratedPathSegment($name),
-			$compArtistNames,
-		));
+		$composerNames = self::extractNonEmptyEntityNames($song->composers);
+		$artistNames = self::extractNonEmptyEntityNames($song->artists);
+		$composerStr = self::joinEntityNames($composerNames);
+		$artistStr = self::joinEntityNames($artistNames);
 
-		// 2. Books and Collections: sort by length descending (longest string first), then alphabetically ascending
 		$bookTitles = self::sortStringsByLengthDescending(self::extractNonEmptyEntityNames($song->books, 'title'));
 		$collectionNames = self::sortStringsByLengthDescending(self::extractNonEmptyEntityNames($song->collections));
 
 		$book = $bookTitles === [] ? '' : self::normalizeGeneratedPathSegment($bookTitles[0]);
 		$collection = $collectionNames === [] ? '' : self::normalizeGeneratedPathSegment($collectionNames[0]);
+		$collBook = $book !== '' ? $book : $collection;
 
-		$keyNames = self::extractNonEmptyEntityNames($song->keys);
-		sort($keyNames, SORT_STRING);
-		$keyString = implode(', ', array_map(
-			static fn (string $name): string => self::normalizeGeneratedPathSegment(self::normalizeKeyNameForGeneratedPath($name)),
-			$keyNames,
-		));
+		$songTitlePart = self::buildSongTitlePart($song);
 
-		$songTitle = self::normalizeGeneratedPathSegment($song->title);
-		$songTitlePart = $keyString !== '' ? "{$songTitle} in {$keyString}" : $songTitle;
-
-		if ($compArtist !== '') {
-			if ($book !== '') {
-				$folder = $compArtist . DIRECTORY_SEPARATOR . "{$compArtist} - {$book}";
-				$fileName = "{$compArtist} - {$book} - {$songTitlePart}";
-				return [self::normalizeGeneratedPath($folder . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext)];
-			}
-			if ($collection !== '') {
-				$folder = $compArtist . DIRECTORY_SEPARATOR . "{$compArtist} - {$collection}";
-				$fileName = "{$compArtist} - {$collection} - {$songTitlePart}";
-				return [self::normalizeGeneratedPath($folder . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext)];
-			}
-			$folder = $compArtist;
-			$fileName = "{$compArtist} - {$songTitlePart}";
-			return [
-				self::normalizeGeneratedPath($folder . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext),
-				self::normalizeGeneratedPath($filePrefix . $fileName . $ext),
-			];
+		if ($preset === self::PRESET_DISABLED || $preset === 'none') {
+			throw new NoNamingRuleException('Naming rule is disabled for this library');
 		}
-		if ($collection !== '') {
-			$folder = $collection;
-			$fileName = "{$collection} - {$songTitlePart}";
-			return [
-				self::normalizeGeneratedPath($folder . DIRECTORY_SEPARATOR . $filePrefix . $fileName . $ext),
-				self::normalizeGeneratedPath($filePrefix . $fileName . $ext),
-			];
+
+		if ($preset === self::PRESET_COLLECTION) {
+			if ($collBook !== '') {
+				$sec = $composerStr !== '' ? $composerStr : $artistStr;
+				return self::buildPathsForCollectionBook($collBook, $sec, $songTitlePart, $filePrefix, $ext);
+			}
+			// Fallback to composer or artist if no book/collection
+			$primary = $composerStr !== '' ? $composerStr : $artistStr;
+			if ($primary !== '') {
+				return self::buildPathsForEntity($primary, $book, $collection, $songTitlePart, $filePrefix, $ext);
+			}
+			throw new NoNamingRuleException('No composer, artist, or collection');
 		}
+
+		if ($preset === self::PRESET_ARTIST) {
+			if ($artistStr !== '') {
+				return self::buildPathsForEntity($artistStr, $book, $collection, $songTitlePart, $filePrefix, $ext);
+			}
+			if ($composerStr !== '') {
+				return self::buildPathsForEntity($composerStr, $book, $collection, $songTitlePart, $filePrefix, $ext);
+			}
+			if ($collBook !== '') {
+				return self::buildPathsForCollectionBook($collBook, '', $songTitlePart, $filePrefix, $ext);
+			}
+			throw new NoNamingRuleException('No composer, artist, or collection');
+		}
+
+		if ($preset === self::PRESET_COMPOSER) {
+			if ($composerStr !== '') {
+				return self::buildPathsForEntity($composerStr, $book, $collection, $songTitlePart, $filePrefix, $ext);
+			}
+			if ($artistStr !== '') {
+				return self::buildPathsForEntity($artistStr, $book, $collection, $songTitlePart, $filePrefix, $ext);
+			}
+			if ($collBook !== '') {
+				return self::buildPathsForCollectionBook($collBook, '', $songTitlePart, $filePrefix, $ext);
+			}
+			throw new NoNamingRuleException('No composer, artist, or collection');
+		}
+
+		// Default: PRESET_AUTO
+		// 1. Both composer and artist are present: smart guess
+		if ($composerStr !== '' && $artistStr !== '') {
+			$preferComposer = self::hasClassicalIndicators($song);
+			$primary = $preferComposer ? $composerStr : $artistStr;
+			$secondary = $preferComposer ? $artistStr : $composerStr;
+
+			$primaryPaths = self::buildPathsForEntity($primary, $book, $collection, $songTitlePart, $filePrefix, $ext);
+			$secondaryPaths = self::buildPathsForEntity($secondary, $book, $collection, $songTitlePart, $filePrefix, $ext);
+
+			return array_values(array_unique(array_merge($primaryPaths, $secondaryPaths)));
+		}
+
+		// 2. Only composer is present
+		if ($composerStr !== '') {
+			return self::buildPathsForEntity($composerStr, $book, $collection, $songTitlePart, $filePrefix, $ext);
+		}
+
+		// 3. Only artist is present
+		if ($artistStr !== '') {
+			return self::buildPathsForEntity($artistStr, $book, $collection, $songTitlePart, $filePrefix, $ext);
+		}
+
+		// 4. Neither composer nor artist, but book or collection is present
+		if ($collBook !== '') {
+			return self::buildPathsForCollectionBook($collBook, '', $songTitlePart, $filePrefix, $ext);
+		}
+
 		throw new NoNamingRuleException('No composer, artist, or collection');
 	}
 
@@ -235,8 +471,9 @@ class SongPathNamingRule {
 		string $ext,
 		?int $fileIndex = null,
 		int $fileCount = 1,
+		string $preset = self::PRESET_AUTO,
 	): string {
-		$paths = self::createTargetPaths($song, $ext, $fileIndex, $fileCount);
+		$paths = self::createTargetPaths($song, $ext, $fileIndex, $fileCount, $preset);
 
 		return $paths[0];
 	}

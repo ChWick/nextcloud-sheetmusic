@@ -103,6 +103,7 @@ class LibraryIntegrityService {
 
 		$autoPaths = $this->libraryService->isAutoPathsEnabled($userId, $libraryId);
 		$autoPdfMetadata = $this->libraryService->isAutoPdfMetadataEnabled($userId, $libraryId);
+		$preset = $this->libraryService->getNamingRulePreset($userId, $libraryId);
 		$namingRuleIssuesBySong = [];
 		$reportedMissingPaths = [];
 
@@ -141,6 +142,7 @@ class LibraryIntegrityService {
 							getFileExtension($file->path),
 							fileIndexOf($song, $file),
 							fileCountForExtension($song, $file),
+							$preset,
 						);
 					} catch (NoNamingRuleException) {
 						// Song missing composer, artist, or collection - keeps existing name

@@ -62,13 +62,22 @@ function sortStringsByLengthDescending(array $items): array {
 	return SongPathNamingRule::sortStringsByLengthDescending($items);
 }
 
+function titleContainsComponent(string $title, string $component): bool {
+	return SongPathNamingRule::titleContainsComponent($title, $component);
+}
+
+function buildSongTitlePart(MobileSheetsSong $song): string {
+	return SongPathNamingRule::buildSongTitlePart($song);
+}
+
 function createTargetPaths(
 	MobileSheetsSong $song,
 	string $ext,
 	?int $fileIndex = null,
 	int $fileCount = 1,
+	string $preset = SongPathNamingRule::PRESET_AUTO,
 ): array {
-	return SongPathNamingRule::createTargetPaths($song, $ext, $fileIndex, $fileCount);
+	return SongPathNamingRule::createTargetPaths($song, $ext, $fileIndex, $fileCount, $preset);
 }
 
 function createTargetPath(
@@ -76,8 +85,9 @@ function createTargetPath(
 	string $ext,
 	?int $fileIndex = null,
 	int $fileCount = 1,
+	string $preset = SongPathNamingRule::PRESET_AUTO,
 ): string {
-	return SongPathNamingRule::createTargetPath($song, $ext, $fileIndex, $fileCount);
+	return SongPathNamingRule::createTargetPath($song, $ext, $fileIndex, $fileCount, $preset);
 }
 
 class FileManager {
@@ -180,9 +190,11 @@ class FileManager {
 	 */
 	public function regenerateFilePaths(int $libraryId, IUser $user): array {
 		$library = $this->libraryMapper->findById($libraryId);
-		if ($library !== null && !$library->autoPaths) {
+		if ($library !== null && (!$library->autoPaths || $library->namingRulePreset === SongPathNamingRule::PRESET_DISABLED || $library->namingRulePreset === 'none')) {
 			return [];
 		}
+
+		$preset = $library?->namingRulePreset ?? SongPathNamingRule::PRESET_AUTO;
 
 		['databasePath' => $databasePath, 'targetFolder' => $targetFolder] = $this->libraryContext($libraryId, $user);
 
@@ -202,7 +214,7 @@ class FileManager {
 		$log = [];
 		try {
 			foreach ($songs as $song) {
-				$this->regenerateSongFiles($song, $user, $targetFolder, $databasePath, $hashCodes, $log);
+				$this->regenerateSongFiles($song, $user, $targetFolder, $databasePath, $hashCodes, $preset, $log);
 			}
 		} finally {
 			// Save even when the run aborts, so the hash codes file keeps matching
@@ -306,6 +318,7 @@ class FileManager {
 		Folder $targetFolder,
 		string $databasePath = '',
 		?MobileSheetsHashCodesFile $hashCodes = null,
+		?string $preset = null,
 	): void {
 		$song = $this->internalSongMapper?->findSong($songId, $user)
 			?? ($this->songMapper !== null && $databasePath !== '' ? $this->songMapper->findSong($databasePath, $songId) : null);
@@ -313,7 +326,16 @@ class FileManager {
 			throw new \RuntimeException("Song with ID $songId not found");
 		}
 
-		$this->regenerateSongFiles($song, $user, $targetFolder, $databasePath, $hashCodes);
+		if ($preset === null && $this->internalSongMapper !== null) {
+			$internalSong = $this->internalSongMapper->findById($songId);
+			if ($internalSong !== null && $internalSong->libraryId !== null) {
+				$lib = $this->libraryMapper->findById($internalSong->libraryId);
+				$preset = $lib?->namingRulePreset;
+			}
+		}
+		$preset ??= SongPathNamingRule::PRESET_AUTO;
+
+		$this->regenerateSongFiles($song, $user, $targetFolder, $databasePath, $hashCodes, $preset);
 	}
 
 	/**
@@ -335,11 +357,12 @@ class FileManager {
 		Folder $targetFolder,
 		string $databasePath,
 		?MobileSheetsHashCodesFile $hashCodes,
+		string $preset = SongPathNamingRule::PRESET_AUTO,
 		?array &$log = null,
 	): void {
 		foreach ($song->files as $file) {
 			try {
-				$entry = $this->regenerateFilePath($song, $file, $user, $targetFolder, $databasePath, $hashCodes);
+				$entry = $this->regenerateFilePath($song, $file, $user, $targetFolder, $databasePath, $hashCodes, $preset);
 				if ($log !== null) {
 					$log[] = $entry;
 				}
@@ -429,6 +452,7 @@ class FileManager {
 		Folder $targetFolder,
 		string $databasePath,
 		?MobileSheetsHashCodesFile $hashCodes = null,
+		string $preset = SongPathNamingRule::PRESET_AUTO,
 	): MobileSheetsFileLogEntry {
 		return $this->pathRegenerator->regenerateFilePath(
 			$song,
@@ -437,6 +461,7 @@ class FileManager {
 			$targetFolder,
 			$databasePath,
 			$hashCodes,
+			$preset,
 		);
 	}
 

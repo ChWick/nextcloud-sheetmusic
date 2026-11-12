@@ -11,11 +11,15 @@ namespace Service;
 
 use OCA\SheetMusic\Service\NoNamingRuleException;
 use OCA\SheetMusic\Service\SongPathNamingRule;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsArtist;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsBook;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsCollection;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsComposer;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsFile;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsGenre;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsKey;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSong;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsYear;
 use PHPUnit\Framework\TestCase;
 
 final class SongPathNamingRuleTest extends TestCase {
@@ -65,9 +69,187 @@ final class SongPathNamingRuleTest extends TestCase {
 		self::assertSame('Joseph Kosma/Joseph Kosma - Real Book/Joseph Kosma - Real Book - Autumn Leaves in G.pdf', $path);
 	}
 
+	public function testCreateTargetPathWithArtistOnlyInAuto(): void {
+		$song = new MobileSheetsSong(
+			id: 11,
+			title: 'Wonderwall',
+			artists: [new MobileSheetsArtist(1, 'Oasis')],
+		);
+
+		$pathAuto = SongPathNamingRule::createTargetPath($song, '.pdf', preset: SongPathNamingRule::PRESET_AUTO);
+		self::assertSame('Oasis/Oasis - Wonderwall.pdf', $pathAuto);
+
+		$pathArtist = SongPathNamingRule::createTargetPath($song, '.pdf', preset: SongPathNamingRule::PRESET_ARTIST);
+		self::assertSame('Oasis/Oasis - Wonderwall.pdf', $pathArtist);
+
+		// In composer preset, falls back to artist
+		$pathComposer = SongPathNamingRule::createTargetPath($song, '.pdf', preset: SongPathNamingRule::PRESET_COMPOSER);
+		self::assertSame('Oasis/Oasis - Wonderwall.pdf', $pathComposer);
+	}
+
+	public function testCreateTargetPathWithBothModernSongDefaultsToArtistInAuto(): void {
+		$song = new MobileSheetsSong(
+			id: 12,
+			title: 'Come Together',
+			composers: [
+				new MobileSheetsComposer(1, 'John Lennon'),
+				new MobileSheetsComposer(2, 'Paul McCartney'),
+			],
+			artists: [new MobileSheetsArtist(3, 'The Beatles')],
+			books: [new MobileSheetsBook(4, 'Abbey Road')],
+		);
+
+		// In Auto mode: modern song (no classical indicators) -> Artist leads!
+		$pathAuto = SongPathNamingRule::createTargetPath($song, '.pdf', preset: SongPathNamingRule::PRESET_AUTO);
+		self::assertSame('The Beatles/The Beatles - Abbey Road/The Beatles - Abbey Road - Come Together.pdf', $pathAuto);
+
+		// Multiple valid paths returned: both artist and composer are valid for integrity checking
+		$allPaths = SongPathNamingRule::createTargetPaths($song, '.pdf', preset: SongPathNamingRule::PRESET_AUTO);
+		self::assertContains('The Beatles/The Beatles - Abbey Road/The Beatles - Abbey Road - Come Together.pdf', $allPaths);
+		self::assertContains('John Lennon, Paul McCartney/John Lennon, Paul McCartney - Abbey Road/John Lennon, Paul McCartney - Abbey Road - Come Together.pdf', $allPaths);
+
+		// Strict composer preset forces composer
+		$pathComposer = SongPathNamingRule::createTargetPath($song, '.pdf', preset: SongPathNamingRule::PRESET_COMPOSER);
+		self::assertSame('John Lennon, Paul McCartney/John Lennon, Paul McCartney - Abbey Road/John Lennon, Paul McCartney - Abbey Road - Come Together.pdf', $pathComposer);
+	}
+
+	public function testCreateTargetPathWithBothClassicalSongDefaultsToComposerInAuto(): void {
+		$song = new MobileSheetsSong(
+			id: 13,
+			title: 'Symphony No. 5',
+			opus: 'Op. 67',
+			composers: [new MobileSheetsComposer(1, 'Ludwig van Beethoven')],
+			artists: [new MobileSheetsArtist(2, 'Berliner Philharmoniker')],
+		);
+
+		// In Auto mode: has Opus and orchestra in artist -> Composer leads, and Opus is included in filename
+		$pathAuto = SongPathNamingRule::createTargetPath($song, '.pdf', preset: SongPathNamingRule::PRESET_AUTO);
+		self::assertSame('Ludwig van Beethoven/Ludwig van Beethoven - Symphony No. 5, Op. 67.pdf', $pathAuto);
+
+		// Strict artist preset forces artist
+		$pathArtist = SongPathNamingRule::createTargetPath($song, '.pdf', preset: SongPathNamingRule::PRESET_ARTIST);
+		self::assertSame('Berliner Philharmoniker/Berliner Philharmoniker - Symphony No. 5, Op. 67.pdf', $pathArtist);
+	}
+
+	public function testCreateTargetPathWithBookOnlyInAuto(): void {
+		$song = new MobileSheetsSong(
+			id: 14,
+			title: 'All of Me',
+			books: [new MobileSheetsBook(1, 'The Real Book')],
+		);
+
+		// In Auto mode: no composer/artist, but book exists -> files under Book!
+		$path = SongPathNamingRule::createTargetPath($song, '.pdf', preset: SongPathNamingRule::PRESET_AUTO);
+		self::assertSame('The Real Book/The Real Book - All of Me.pdf', $path);
+	}
+
+	public function testCreateTargetPathWithCollectionPreset(): void {
+		$song = new MobileSheetsSong(
+			id: 15,
+			title: 'Tune',
+			composers: [new MobileSheetsComposer(1, 'Miles Davis')],
+			collections: [new MobileSheetsCollection(2, 'Jazz Standards')],
+		);
+
+		$path = SongPathNamingRule::createTargetPath($song, '.pdf', preset: SongPathNamingRule::PRESET_COLLECTION);
+		self::assertSame('Jazz Standards/Jazz Standards - Miles Davis/Jazz Standards - Miles Davis - Tune.pdf', $path);
+	}
+
+	public function testCreateTargetPathsThrowsWhenPresetIsDisabled(): void {
+		$song = new MobileSheetsSong(
+			id: 16,
+			title: 'Any Song',
+			composers: [new MobileSheetsComposer(1, 'Bach')],
+		);
+		$this->expectException(NoNamingRuleException::class);
+		$this->expectExceptionMessage('Naming rule is disabled for this library');
+		SongPathNamingRule::createTargetPaths($song, '.pdf', preset: SongPathNamingRule::PRESET_DISABLED);
+	}
+
 	public function testCreateTargetPathsThrowsWhenNoNamingEntityExists(): void {
 		$song = new MobileSheetsSong(id: 1, title: 'No Composer Song');
 		$this->expectException(NoNamingRuleException::class);
 		SongPathNamingRule::createTargetPaths($song, '.pdf');
+	}
+
+	public function testConflictResolutionViaKeyDAndF(): void {
+		$sonataD = new MobileSheetsSong(
+			id: 20,
+			title: 'Sonata',
+			composers: [new MobileSheetsComposer(1, 'Beethoven')],
+			keys: [new MobileSheetsKey(1, 'D')],
+		);
+		$sonataF = new MobileSheetsSong(
+			id: 21,
+			title: 'Sonata',
+			composers: [new MobileSheetsComposer(1, 'Beethoven')],
+			keys: [new MobileSheetsKey(2, 'F')],
+		);
+
+		$pathD = SongPathNamingRule::createTargetPath($sonataD, '.pdf');
+		$pathF = SongPathNamingRule::createTargetPath($sonataF, '.pdf');
+
+		self::assertSame('Beethoven/Beethoven - Sonata in D.pdf', $pathD);
+		self::assertSame('Beethoven/Beethoven - Sonata in F.pdf', $pathF);
+		self::assertNotSame($pathD, $pathF);
+	}
+
+	public function testConflictResolutionViaOpusAndCatalogNumber(): void {
+		$mozart = new MobileSheetsSong(
+			id: 22,
+			title: 'Sonata',
+			catalogNumber: 'KV 545',
+			composers: [new MobileSheetsComposer(1, 'Mozart')],
+			keys: [new MobileSheetsKey(1, 'C')],
+		);
+		$beethoven = new MobileSheetsSong(
+			id: 23,
+			title: 'Sonata',
+			opus: 'Op. 10 No. 3',
+			composers: [new MobileSheetsComposer(2, 'Beethoven')],
+			keys: [new MobileSheetsKey(2, 'D')],
+		);
+
+		$pathMozart = SongPathNamingRule::createTargetPath($mozart, '.pdf');
+		$pathBeethoven = SongPathNamingRule::createTargetPath($beethoven, '.pdf');
+
+		self::assertSame('Mozart/Mozart - Sonata in C, KV 545.pdf', $pathMozart);
+		self::assertSame('Beethoven/Beethoven - Sonata in D, Op. 10 No. 3.pdf', $pathBeethoven);
+	}
+
+	public function testConflictResolutionViaYearAndSongNumber(): void {
+		$hymn = new MobileSheetsSong(
+			id: 24,
+			title: 'Amazing Grace',
+			songNumber: '142',
+			composers: [new MobileSheetsComposer(1, 'John Newton')],
+		);
+		$songWithYear = new MobileSheetsSong(
+			id: 25,
+			title: 'Autumn Leaves',
+			composers: [new MobileSheetsComposer(2, 'Joseph Kosma')],
+			years: [new MobileSheetsYear(1, 1945)],
+		);
+
+		$pathHymn = SongPathNamingRule::createTargetPath($hymn, '.pdf');
+		$pathYear = SongPathNamingRule::createTargetPath($songWithYear, '.pdf');
+
+		self::assertSame('John Newton/John Newton - Amazing Grace (No. 142).pdf', $pathHymn);
+		self::assertSame('Joseph Kosma/Joseph Kosma - Autumn Leaves (1945).pdf', $pathYear);
+	}
+
+	public function testSmartDeduplicationPreventsRedundancy(): void {
+		// When the user already typed "in D" or "KV 545" or "(1958)" into the title
+		$song = new MobileSheetsSong(
+			id: 26,
+			title: 'Sonata in D, KV 545 (1958)',
+			catalogNumber: 'KV 545',
+			composers: [new MobileSheetsComposer(1, 'Mozart')],
+			keys: [new MobileSheetsKey(1, 'D')],
+			years: [new MobileSheetsYear(1, 1958)],
+		);
+
+		$path = SongPathNamingRule::createTargetPath($song, '.pdf');
+		self::assertSame('Mozart/Mozart - Sonata in D, KV 545 (1958).pdf', $path);
 	}
 }
