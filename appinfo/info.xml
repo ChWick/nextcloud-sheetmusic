@@ -5,7 +5,7 @@
 	<name>Sheet Music</name>
 	<summary>Manage and synchronize sheet music, scores, and chord charts</summary>
 	<description>Sheet Music app for Nextcloud. Manage, organize, and synchronize sheet music across devices.</description>
-	<version>1.0.2</version>
+	<version>1.0.0</version>
 	<licence>AGPL-3.0-or-later</licence>
 	<author mail="wick.chr.info@gmail.com" homepage="">Christoph Wick</author>
 	<namespace>SheetMusic</namespace>
