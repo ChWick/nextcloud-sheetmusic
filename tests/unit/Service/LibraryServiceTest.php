@@ -224,10 +224,12 @@ final class LibraryServiceTest extends TestCase {
 	public function testUpdateSettingsUpdatesAndReturnsLibrary(): void {
 		$lib = $this->createTestLibrary('/Noten/update_settings.db', 'admin');
 
-		$result = $this->service->updateSettings('admin', (int)$lib->id, false, true);
+		$result = $this->service->updateSettings('admin', (int)$lib->id, false, true, 'artist');
 		self::assertNotNull($result);
 		self::assertFalse($result->autoPaths);
 		self::assertTrue($result->autoPdfMetadata);
+		self::assertSame('artist', $result->namingRulePreset);
+		self::assertSame('artist', $this->service->getNamingRulePreset('admin', (int)$lib->id));
 	}
 
 	public function testUpdateSettingsReturnsNullWhenLibraryNotFound(): void {

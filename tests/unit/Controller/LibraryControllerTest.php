@@ -207,18 +207,20 @@ final class LibraryControllerTest extends TestCase {
 	public function testUpdateSettingsSuccess(): void {
 		$library = $this->createTestLibrary('Settings Lib');
 
-		$response = $this->controller->updateSettings((int)$library->id, false, true);
+		$response = $this->controller->updateSettings((int)$library->id, false, true, 'artist');
 		$this->assertSame(Http::STATUS_OK, $response->getStatus());
 		$data = $response->getData();
 		$this->assertArrayHasKey('library', $data);
 		$this->assertInstanceOf(InternalLibrary::class, $data['library']);
 		$this->assertFalse($data['library']->autoPaths);
 		$this->assertTrue($data['library']->autoPdfMetadata);
+		$this->assertSame('artist', $data['library']->namingRulePreset);
 
 		$updated = $this->libraryMapper->findForUser('admin', (int)$library->id);
 		$this->assertNotNull($updated);
 		$this->assertFalse($updated->autoPaths);
 		$this->assertTrue($updated->autoPdfMetadata);
+		$this->assertSame('artist', $updated->namingRulePreset);
 	}
 
 	public function testAddLibraryPassesImportPdfMetadata(): void {

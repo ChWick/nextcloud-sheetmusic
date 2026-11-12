@@ -393,11 +393,18 @@ class LibraryService {
 		return $library?->autoPdfMetadata ?? true;
 	}
 
+	public function getNamingRulePreset(string $userId, int $libraryId): string {
+		$targetLibraryId = $this->getTargetLibraryId($libraryId);
+		$library = $this->libraryMapper->findById($targetLibraryId);
+		return $library?->namingRulePreset ?? SongPathNamingRule::PRESET_AUTO;
+	}
+
 	public function updateSettings(
 		string $userId,
 		int $libraryId,
 		?bool $autoPaths = null,
 		?bool $autoPdfMetadata = null,
+		?string $namingRulePreset = null,
 	): ?InternalLibrary {
 		$lib = $this->libraryMapper->findById($libraryId);
 		if ($lib === null) {
@@ -406,7 +413,10 @@ class LibraryService {
 		if (!$this->isLibraryOwner($userId, $lib)) {
 			throw new \OCP\Security\SecurityException('Only the library owner can update library settings');
 		}
-		$this->libraryMapper->setSettingsForUser($userId, $libraryId, $autoPaths, $autoPdfMetadata);
+		if ($namingRulePreset !== null && !in_array($namingRulePreset, SongPathNamingRule::PRESETS, true)) {
+			throw new \InvalidArgumentException('Invalid naming rule preset: ' . $namingRulePreset);
+		}
+		$this->libraryMapper->setSettingsForUser($userId, $libraryId, $autoPaths, $autoPdfMetadata, $namingRulePreset);
 		return $this->libraryMapper->findForUser($userId, $libraryId);
 	}
 }
