@@ -1,6 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import FilePreviewer from '../../../src/components/FilePreviewer.vue'
+import { MemoryFileBinaryCache } from '../../../src/utils/file-cache'
 import * as fileUtils from '../../../src/utils/file'
 
 vi.mock('@nextcloud/axios', () => ({
@@ -70,6 +71,44 @@ describe('FilePreviewer.vue', () => {
 			},
 			responseType: 'arraybuffer',
 		})
+	})
+
+	it('uses cached binary data from binaryCache without fetching over network', async () => {
+		const axios = (await import('@nextcloud/axios')).default
+		vi.mocked(axios.get).mockClear()
+
+		const customCache = new MemoryFileBinaryCache()
+		const cachedBytes = new Uint8Array([37, 80, 68, 70])
+		customCache.set('/files/scores/Cached.pdf?v=1@1', cachedBytes)
+
+		mount(FilePreviewer, {
+			props: {
+				filePath: '/files/scores/Cached.pdf?v=1@1',
+				binaryCache: customCache,
+			},
+		})
+		await flushPromises()
+
+		expect(axios.get).not.toHaveBeenCalled()
+	})
+
+	it('stores fetched bytes in binaryCache and omits no-cache headers when version parameter is present', async () => {
+		const axios = (await import('@nextcloud/axios')).default
+		vi.mocked(axios.get).mockClear()
+
+		const customCache = new MemoryFileBinaryCache()
+		mount(FilePreviewer, {
+			props: {
+				filePath: '/files/scores/Versioned.pdf?v=10@100',
+				binaryCache: customCache,
+			},
+		})
+		await flushPromises()
+
+		expect(axios.get).toHaveBeenCalledWith('/files/scores/Versioned.pdf?v=10@100', {
+			responseType: 'arraybuffer',
+		})
+		expect(customCache.has('/files/scores/Versioned.pdf?v=10@100')).toBe(true)
 	})
 
 	it('automatically defaults to single page layout when PDF has more than 30 pages', async () => {

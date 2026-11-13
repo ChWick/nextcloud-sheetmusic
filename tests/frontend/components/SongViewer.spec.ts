@@ -4,6 +4,7 @@ import axios from '@nextcloud/axios'
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
+import { defaultFileBinaryCache } from '../../../src/utils/file-cache'
 import SongViewer from '../../../src/components/SongViewer.vue'
 
 // ── Mocks ──────────────────────────────────────────────────────────────────────
@@ -148,6 +149,7 @@ function pdfCanvasCount(wrapper: ReturnType<typeof mount>): number {
 
 describe('SongViewer.vue', () => {
 	beforeEach(() => {
+		defaultFileBinaryCache.clear()
 		vi.resetAllMocks()
 		setupAxiosMock()
 	})
@@ -349,7 +351,7 @@ describe('SongViewer.vue', () => {
 		const img = wrapper.find('img')
 		expect(img.exists()).toBe(true)
 		expect(img.attributes('src')).toContain('/dav/files/admin/Noten/sheet.png')
-		expect(img.attributes('src')).toMatch(/\?t=101--\d+/)
+		expect(img.attributes('src')).toMatch(/[?&]v=101%40/)
 
 		// Toolbar should be visible with zoom and rotate
 		const zoomInBtn = wrapper.findAll('button').find((btn) => btn.attributes('title') === 'Zoom in')
@@ -377,7 +379,7 @@ describe('SongViewer.vue', () => {
 		expect(initialFileCalls).toHaveLength(1)
 		const initialUrl = initialFileCalls[0][0]
 		expect(initialUrl).toContain('/dav/files/admin/Noten/TestSonata.pdf')
-		expect(initialUrl).toMatch(/\?t=100--\d+/)
+		expect(initialUrl).toMatch(/[?&]v=100%40/)
 
 		// Open editor
 		const editBtn = wrapper.findAll('button').find((btn) => btn.attributes('title') === 'Edit song')
@@ -422,6 +424,27 @@ describe('SongViewer.vue', () => {
 		const updatedUrl = updatedFileCalls[1][0]
 		expect(updatedUrl).toContain('1700000000')
 		expect(updatedUrl).not.toBe(initialUrl)
+	})
+
+	it('reuses cached PDF without re-downloading when song prop is updated with identical version', async () => {
+		const wrapper = mount(SongViewer, {
+			props: { song: mockSong, libraryId: 1 },
+			...globalStubs,
+		})
+
+		await settle()
+		const initialFileCalls = vi.mocked(axios.get).mock.calls.filter(([url]) => String(url).includes('/dav/files/'))
+		expect(initialFileCalls).toHaveLength(1)
+
+		// Re-set song prop with the exact same content / file version
+		await wrapper.setProps({
+			song: { ...mockSong },
+		})
+		await settle()
+
+		const afterPropsCalls = vi.mocked(axios.get).mock.calls.filter(([url]) => String(url).includes('/dav/files/'))
+		// Should NOT make an additional download request
+		expect(afterPropsCalls).toHaveLength(1)
 	})
 
 	it('renders file toolbar with info button and PDF actions for PDF files', async () => {
