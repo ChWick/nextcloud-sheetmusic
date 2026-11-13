@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import { config, flushPromises, mount } from '@vue/test-utils'
 import SongPdfEnhanceModal from '../../../src/components/song-pdf/SongPdfEnhanceModal.vue'
+import {
+	MemoryStorageAdapter,
+	registerFilterType,
+	unregisterFilterType,
+	type FilterDefinition,
+} from '../../../src/components/song-pdf/pdf-enhance-settings'
+import type { BaseScanOp } from '../../../src/components/song-pdf/scan-types'
 
 // Avoid teleporting NcDialog to body so wrapper.find queries work without mocks
 config.global.stubs = { teleport: true }
@@ -283,5 +290,128 @@ describe('SongPdfEnhanceModal.vue', () => {
 		expect(emitted[3].type).toBe('compression')
 		expect(emitted[3].format).toBe('jpeg')
 		expect(emitted[3].quality).toBe(75)
+	})
+
+	it('persists last used filters and apply scope to storage and restores them on subsequent modal opens', async () => {
+		const storage = new MemoryStorageAdapter()
+
+		// First session: open with default settings, add compression, select 'current' scope, apply
+		const wrapper1 = mount(SongPdfEnhanceModal, {
+			props: {
+				open: true,
+				pageNum: 1,
+				totalPages: 3,
+				pdf: createMockPdf(),
+				storageAdapter: storage,
+			},
+		})
+		await flushPromises()
+
+		// Add compression
+		const addCompressionBtn = wrapper1.find('[data-test="add-compression"]')
+		await addCompressionBtn.trigger('click')
+
+		// Select "Current Page Only" scope
+		const currentScopeRadio = wrapper1.findAll('input[type="radio"]').find(r => (r.element as HTMLInputElement).value === 'current')
+		expect(currentScopeRadio).toBeDefined()
+		await currentScopeRadio?.setValue()
+
+		// Apply enhancements
+		const applyBtn1 = wrapper1.findAll('button').find(b => b.text().includes('Apply Enhancements'))
+		await applyBtn1?.trigger('click')
+
+		expect(wrapper1.emitted('apply')?.[0]?.[1]).toBe('current')
+
+		// Second session: open without initialOperations using the same storage adapter
+		const wrapper2 = mount(SongPdfEnhanceModal, {
+			props: {
+				open: true,
+				pageNum: 2,
+				totalPages: 3,
+				pdf: createMockPdf(),
+				storageAdapter: storage,
+			},
+		})
+		await flushPromises()
+
+		// Should restore 4 operations (including Image Compression)
+		expect(wrapper2.text()).toContain('Operation Stack (4)')
+		expect(wrapper2.text()).toContain('Image Compression')
+
+		// Should restore 'current' scope
+		const selectedRadio = wrapper2.findAll('input[type="radio"]').find(r => (r.element as HTMLInputElement).checked)
+		expect((selectedRadio?.element as HTMLInputElement).value).toBe('current')
+	})
+
+	it('uses last-used filter parameter defaults when adding a filter step', async () => {
+		const storage = new MemoryStorageAdapter()
+
+		// Pre-configure storage with Gaussian size: 7
+		storage.setItem('sheetmusic_pdf_enhance_settings', JSON.stringify({
+			version: 1,
+			operations: [],
+			applyScope: 'all',
+			filterDefaults: {
+				gaussian: { size: 7 },
+			},
+		}))
+
+		const wrapper = mount(SongPdfEnhanceModal, {
+			props: {
+				open: true,
+				pageNum: 1,
+				totalPages: 3,
+				pdf: createMockPdf(),
+				initialOperations: [],
+				storageAdapter: storage,
+			},
+		})
+		await flushPromises()
+
+		// Add Gaussian filter
+		const addGaussianBtn = wrapper.find('[data-test="add-gaussian"]')
+		await addGaussianBtn.trigger('click')
+
+		// Verify kernel size label has 7
+		expect(wrapper.text()).toContain('Filter Kernel Size (px): 7')
+	})
+
+	it('supports registering custom filter extensions and displaying them in the stack', async () => {
+		interface DeskewOp extends BaseScanOp {
+			type: 'deskew'
+			angle: number
+		}
+
+		const deskewDef: FilterDefinition<DeskewOp> = {
+			type: 'deskew',
+			label: 'Custom Deskew Filter',
+			createDefault: (id = 'op-deskew-1') => ({
+				id,
+				type: 'deskew',
+				angle: 1.5,
+				enabled: true,
+			}),
+		}
+
+		registerFilterType(deskewDef)
+
+		try {
+			const wrapper = mount(SongPdfEnhanceModal, {
+				props: {
+					open: true,
+					pageNum: 1,
+					totalPages: 3,
+					pdf: createMockPdf(),
+					initialOperations: [
+						{ id: 'op-deskew-1', type: 'deskew', angle: 1.5, enabled: true } as any,
+					],
+				},
+			})
+			await flushPromises()
+
+			expect(wrapper.text()).toContain('Custom Deskew Filter')
+		} finally {
+			unregisterFilterType('deskew')
+		}
 	})
 })
