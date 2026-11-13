@@ -5,7 +5,8 @@ export interface ImageBuffer {
 	data: Uint8ClampedArray
 }
 
-export type ScanOpType = 'gaussian' | 'grayLevelMapping' | 'adaptiveThreshold' | 'compression'
+export type KnownScanOpType = 'gaussian' | 'grayLevelMapping' | 'adaptiveThreshold' | 'compression'
+export type ScanOpType = KnownScanOpType | (string & {})
 
 export interface BaseScanOp {
 	id: string
@@ -53,5 +54,11 @@ export interface CompressionOp extends BaseScanOp {
 	colorMode?: 'grayscale' | 'color' // for 'jpeg' (default 'grayscale')
 }
 
-export type ScanOperation = GaussianOp | GrayLevelMappingOp | AdaptiveThresholdOp | CompressionOp
+export interface CustomScanOp extends BaseScanOp {
+	type: Exclude<string, KnownScanOpType>
+	[key: string]: any
+}
+
+export type ScanOperation = GaussianOp | GrayLevelMappingOp | AdaptiveThresholdOp | CompressionOp | CustomScanOp
+
 
