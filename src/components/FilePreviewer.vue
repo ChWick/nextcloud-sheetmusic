@@ -24,6 +24,7 @@ import {
 	isStampItalic,
 	isStampBold,
 } from '../utils/annotation'
+import { defaultFileBinaryCache, type FileBinaryCache } from '../utils/file-cache'
 
 const props = withDefaults(
 	defineProps<{
@@ -34,6 +35,7 @@ const props = withDefaults(
 		pageOrder?: string | null
 		annotations?: SheetAnnotation[]
 		showAnnotations?: boolean
+		binaryCache?: FileBinaryCache
 	}>(),
 	{
 		showExternalButton: true,
@@ -42,6 +44,7 @@ const props = withDefaults(
 		pageOrder: undefined,
 		annotations: () => [],
 		showAnnotations: false,
+		binaryCache: () => defaultFileBinaryCache,
 	},
 )
 
@@ -626,24 +629,40 @@ async function loadAndRenderFile() {
 	isLoading.value = true
 
 	try {
-		const response = await axios.get(props.filePath, {
-			responseType: 'arraybuffer',
-			headers: {
-				'Cache-Control': 'no-cache',
-				'Pragma': 'no-cache',
-			},
-		})
+		const cache = props.binaryCache ?? defaultFileBinaryCache
+		const cacheKey = props.filePath
+		let pdfData: Uint8Array | null = cache.get(cacheKey)
+
+		if (!pdfData) {
+			const hasVersionParam = props.filePath.includes('v=') || props.filePath.includes('t=')
+			const response = await axios.get(props.filePath, {
+				responseType: 'arraybuffer',
+				...(hasVersionParam ? {} : {
+					headers: {
+						'Cache-Control': 'no-cache',
+						'Pragma': 'no-cache',
+					},
+				}),
+			})
+
+			if (loadId !== currentLoadId) return
+
+			const raw = response.data instanceof ArrayBuffer ? new Uint8Array(response.data) : response.data
+			pdfData = raw
+			if (pdfData) {
+				cache.set(cacheKey, pdfData)
+			}
+		}
 
 		if (loadId !== currentLoadId) return
 
-		const pdfData = response.data instanceof ArrayBuffer ? new Uint8Array(response.data) : response.data
 		fileSizeBytes.value = typeof pdfData?.byteLength === 'number' ? pdfData.byteLength : null
 		const wasmUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/wasm/') : new URL('pdfjs-dist/wasm/', import.meta.url).href
 		const cMapUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/cmaps/') : new URL('pdfjs-dist/cmaps/', import.meta.url).href
 		const standardFontDataUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/standard_fonts/') : new URL('pdfjs-dist/standard_fonts/', import.meta.url).href
 
 		const pdf = await getDocument({
-			data: pdfData,
+			data: pdfData ? pdfData.slice() : pdfData,
 			cMapUrl,
 			cMapPacked: true,
 			standardFontDataUrl,

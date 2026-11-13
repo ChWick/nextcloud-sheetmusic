@@ -7,7 +7,8 @@ import NcRadioGroup from '@nextcloud/vue/components/NcRadioGroup'
 import NcRadioGroupButton from '@nextcloud/vue/components/NcRadioGroupButton'
 import { GlobalWorkerOptions } from 'pdfjs-dist'
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
-import { getCacheBustedFileUrl, getFileName, openFileExternally } from '../utils/file'
+import { getFileName, openFileExternally } from '../utils/file'
+import { getFileVersionToken, getVersionedFileUrl } from '../utils/file-version'
 import ArrowLeftIcon from 'vue-material-design-icons/ArrowLeft.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
@@ -128,17 +129,23 @@ function selectFile(fileId: string) {
 	selectedFileId.value = fileId
 }
 
-const previewVersion = ref(Date.now())
+const localVersionBump = ref(0)
 
 function handleSaved(data: LibraryData, songId?: number) {
-	previewVersion.value = Date.now()
+	localVersionBump.value++
 	isEditing.value = false
 	emit('saved', data, songId)
 }
 
+const fileVersionToken = computed(() => {
+	if (!selectedFile.value) return ''
+	const baseToken = getFileVersionToken(selectedFile.value, props.song)
+	return localVersionBump.value > 0 ? `${baseToken}-b${localVersionBump.value}` : baseToken
+})
+
 const previewFilePath = computed(() => {
 	if (!selectedFile.value?.path) return ''
-	return getCacheBustedFileUrl(selectedFile.value.path, `${selectedFile.value.id}-${props.song?.lastModified ?? ''}-${previewVersion.value}`)
+	return getVersionedFileUrl(selectedFile.value.path, fileVersionToken.value)
 })
 
 function openInExternalViewer() {
@@ -149,7 +156,7 @@ function openInExternalViewer() {
 }
 
 function handleUpdated(data: LibraryData) {
-	previewVersion.value = Date.now()
+	localVersionBump.value++
 	emit('updated', data)
 }
 
@@ -169,7 +176,6 @@ watch(
 watch(
 	() => props.song,
 	(newSong) => {
-		previewVersion.value = Date.now()
 		const files = newSong?.files ?? []
 		const keepsSelection = files.some((file) => String(file.id) === selectedFileId.value)
 		selectedFileId.value = keepsSelection ? selectedFileId.value : (files[0] ? String(files[0].id) : '')
@@ -326,7 +332,7 @@ defineExpose({
 			<FilePreviewer
 				v-if="selectedFile?.path"
 				ref="filePreviewerRef"
-				:key="`${selectedFile.id}-${selectedFile.path}-${song?.lastModified ?? ''}-${previewVersion}`"
+				:key="`${selectedFile.id}-${fileVersionToken}`"
 				:file-path="previewFilePath"
 				:page-order="selectedFile?.pageOrder"
 				:target-page="activeBookmarkPage"
