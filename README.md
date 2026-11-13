@@ -1,6 +1,6 @@
 # Sheet Music for Nextcloud
 
-[![Nextcloud](https://img.shields.io/badge/Nextcloud-31%20--%2037-0082c9?logo=nextcloud&logoColor=white)](https://apps.nextcloud.com/)
+[![Nextcloud](https://img.shields.io/badge/Nextcloud-31%20--%2036-0082c9?logo=nextcloud&logoColor=white)](https://apps.nextcloud.com/)
 [![License: AGPL-3.0-or-later](https://img.shields.io/badge/License-AGPL--3.0--or--later-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![Vue 3](https://img.shields.io/badge/Vue.js-3.5-4FC08D?logo=vuedotjs&logoColor=white)](https://vuejs.org/)
 [![PHP](https://img.shields.io/badge/PHP-8.1+-777BB4?logo=php&logoColor=white)](https://www.php.net/)
@@ -119,7 +119,7 @@ No need to install desktop PDF editors—Sheet Music includes built-in tools tai
 
 ## Requirements
 
-- **Nextcloud**: `31.0.0` to `37.x`
+- **Nextcloud**: `31.0.0` to `36.x`
 - **PHP**: `8.1` or higher (with `pdo`, `sqlite3`, `zlib`, `mbstring`, and `gd` extensions enabled)
 - **Database**: MariaDB / MySQL, PostgreSQL, or SQLite (managed by Nextcloud)
 - **Client App (optional for tablet sync)**: MobileSheets by Zubersoft (v3.x or later recommended)
