@@ -5,6 +5,7 @@ import ArrowDown from 'vue-material-design-icons/ArrowDown.vue'
 import DeleteOutline from 'vue-material-design-icons/DeleteOutline.vue'
 
 import type { AdaptiveThresholdOp, CompressionOp, GaussianOp, GrayLevelMappingOp, ScanOperation } from './scan-types'
+import { getFilterDefinition } from './pdf-enhance-settings'
 
 const props = defineProps<{
 	operation: ScanOperation
@@ -40,7 +41,9 @@ const emit = defineEmits<{
 								? t('sheetmusic', 'Gray Level Mapping (Curves)')
 								: operation.type === 'adaptiveThreshold'
 									? t('sheetmusic', 'Adaptive Thresholding')
-									: t('sheetmusic', 'Image Compression')
+									: operation.type === 'compression'
+										? t('sheetmusic', 'Image Compression')
+										: ((operation as any).label || getFilterDefinition(operation.type)?.label || operation.type)
 					}}
 				</strong>
 			</div>

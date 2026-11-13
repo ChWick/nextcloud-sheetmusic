@@ -16,7 +16,7 @@ import MagnifyMinus from 'vue-material-design-icons/MagnifyMinus.vue'
 import FitToScreenOutline from 'vue-material-design-icons/FitToScreenOutline.vue'
 
 import SongPdfEnhanceStack from './SongPdfEnhanceStack.vue'
-import type { ImageBuffer, ScanOperation } from './scan-types'
+import type { ImageBuffer, ScanOperation, ScanOpType } from './scan-types'
 import {
 	applyPipeline,
 	downsampleImageBuffer,
@@ -25,15 +25,26 @@ import {
 } from './scan-enhance-engine'
 import { resolvePageRenderScale } from './pdf-enhance-engine'
 import { ScanHistoryManager } from './scan-history'
+import type { StorageAdapter } from '../../utils/settings-store'
+import { generateDefaultOpId } from './filter-registry'
+import { usePdfEnhanceSettings } from './usePdfEnhanceSettings'
 
-const props = defineProps<{
-	open: boolean
-	pageNum: number
-	totalPages: number
-	pdf: any
-	initialOperations?: ScanOperation[] | null
-	rotation?: number
-}>()
+const props = withDefaults(
+	defineProps<{
+		open: boolean
+		pageNum: number
+		totalPages: number
+		pdf: any
+		initialOperations?: ScanOperation[] | null
+		rotation?: number
+		storageAdapter?: StorageAdapter
+	}>(),
+	{
+		initialOperations: null,
+		rotation: 0,
+		storageAdapter: undefined,
+	},
+)
 
 const emit = defineEmits<{
 	'update:open': [value: boolean]
@@ -70,13 +81,21 @@ let panStartY = 0
 let originalBuffer: ImageBuffer | null = null
 let enhancedBuffer: ImageBuffer | null = null
 
+// PDF enhancement settings composable
+const {
+	getInitialOperations,
+	getInitialScope,
+	saveSettings,
+	createOperation,
+} = usePdfEnhanceSettings({ storageAdapter: props.storageAdapter })
+
 // Operation stack and undo/redo
 const operations = ref<ScanOperation[]>([])
 const historyManager = new ScanHistoryManager()
 const canUndo = ref(false)
 const canRedo = ref(false)
 
-const applyScope = ref<'current' | 'all'>('all')
+const applyScope = ref<'current' | 'all'>(getInitialScope())
 
 function measurePreviewPane() {
 	if (!previewPaneRef.value) return
@@ -179,9 +198,8 @@ function recordHistory() {
 }
 
 // Generate unique ID for operations
-let opCounter = 0
 function generateOpId(): string {
-	return `op-${Date.now()}-${++opCounter}`
+	return generateDefaultOpId()
 }
 
 // Default presets
@@ -214,18 +232,8 @@ function applyPreset(preset: 'standard' | 'contrast' | 'colorClean' | 'binarize'
 }
 
 // Adding operations
-function addOperation(type: 'gaussian' | 'grayLevelMapping' | 'adaptiveThreshold' | 'compression') {
-	let newOp: ScanOperation
-	if (type === 'gaussian') {
-		newOp = { id: generateOpId(), type: 'gaussian', size: 3, enabled: true }
-	} else if (type === 'grayLevelMapping') {
-		newOp = { id: generateOpId(), type: 'grayLevelMapping', lowerCutoff: 40, upperCutoff: 220, colorMode: 'color', enabled: true }
-	} else if (type === 'adaptiveThreshold') {
-		newOp = { id: generateOpId(), type: 'adaptiveThreshold', windowSize: 25, delta: 10, blackValue: 0, whiteValue: 255, colorMode: 'binarize', softness: 15, enabled: true }
-	} else {
-		newOp = { id: generateOpId(), type: 'compression', format: 'jpeg', quality: 75, colorMode: 'grayscale', enabled: true }
-	}
-
+function addOperation(type: ScanOpType) {
+	const newOp = createOperation(type, undefined, generateOpId)
 	operations.value.push(newOp)
 	recordHistory()
 	renderEnhancedPreview()
@@ -393,6 +401,7 @@ function nextPage() {
 }
 
 function handleApply() {
+	saveSettings(operations.value, applyScope.value)
 	emit('apply', operations.value, applyScope.value)
 	emit('update:open', false)
 }
@@ -451,14 +460,9 @@ watch(
 	async (isOpen) => {
 		if (isOpen) {
 			resetZoom()
-			const initial = Array.isArray(props.initialOperations)
-				? JSON.parse(JSON.stringify(props.initialOperations))
-				: [
-					{ id: generateOpId(), type: 'gaussian', size: 3, enabled: true },
-					{ id: generateOpId(), type: 'grayLevelMapping', lowerCutoff: 40, upperCutoff: 215, colorMode: 'grayscale', enabled: true },
-					{ id: generateOpId(), type: 'adaptiveThreshold', windowSize: 25, delta: 12, blackValue: 0, whiteValue: 255, softness: 15, enabled: true },
-				]
+			const initial = getInitialOperations(props.initialOperations, generateOpId)
 			operations.value = initial
+			applyScope.value = getInitialScope()
 			historyManager.clear(initial)
 			syncHistoryState()
 			await nextTick()

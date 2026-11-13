@@ -5,7 +5,7 @@ import Plus from 'vue-material-design-icons/Plus.vue'
 import Tune from 'vue-material-design-icons/Tune.vue'
 
 import SongPdfEnhanceOperationItem from './SongPdfEnhanceOperationItem.vue'
-import type { ScanOperation } from './scan-types'
+import type { ScanOperation, ScanOpType } from './scan-types'
 
 const props = defineProps<{
 	operations: ScanOperation[]
@@ -13,7 +13,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
 	'applyPreset': [preset: 'standard' | 'contrast' | 'colorClean' | 'binarize']
-	'addOperation': [type: 'gaussian' | 'grayLevelMapping' | 'adaptiveThreshold' | 'compression']
+	'addOperation': [type: ScanOpType]
 	'toggleOperation': [index: number]
 	'moveOperation': [index: number, direction: 'up' | 'down']
 	'removeOperation': [index: number]
