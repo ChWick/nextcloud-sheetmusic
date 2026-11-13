@@ -858,6 +858,110 @@ final class SheetMusicDavPluginTest extends TestCase {
 		self::assertFalse($this->plugin->beforeMethod($pubDavPutReq, $pubDavPutRes));
 		self::assertSame(403, $pubDavPutRes->getStatus());
 	}
+
+	public function testIsSyncClientDetection(): void {
+		$desktopReq = new Request('GET', '/', ['User-Agent' => 'Mozilla/5.0 (Windows) mirall/3.14.0 (Nextcloud, windows-10.0.19045 ClientArchitecture: x86_64)']);
+		self::assertTrue($this->plugin->isSyncClient($desktopReq));
+
+		$androidReq = new Request('GET', '/', ['User-Agent' => 'Mozilla/5.0 (Android) Nextcloud-android/3.30.0']);
+		self::assertTrue($this->plugin->isSyncClient($androidReq));
+
+		$iosReq = new Request('GET', '/', ['User-Agent' => 'Mozilla/5.0 (iOS) Nextcloud-iOS/5.0.0']);
+		self::assertTrue($this->plugin->isSyncClient($iosReq));
+
+		$csyncReq = new Request('GET', '/', ['User-Agent' => 'Mozilla/5.0 (Linux) csyncoC/1.0']);
+		self::assertTrue($this->plugin->isSyncClient($csyncReq));
+
+		$msReq = new Request('GET', '/', ['User-Agent' => 'MobileSheets/3.8.4']);
+		self::assertFalse($this->plugin->isSyncClient($msReq));
+
+		$okhttpReq = new Request('GET', '/', ['User-Agent' => 'okhttp/4.9.2']);
+		self::assertFalse($this->plugin->isSyncClient($okhttpReq));
+
+		$browserReq = new Request('GET', '/', ['User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36']);
+		self::assertFalse($this->plugin->isSyncClient($browserReq));
+
+		$emptyReq = new Request('GET', '/');
+		self::assertFalse($this->plugin->isSyncClient($emptyReq));
+	}
+
+	public function testIsSublibraryContainerPath(): void {
+		self::assertTrue($this->plugin->isSublibraryContainerPath('files/admin/My Noten/_SubLibraries_'));
+		self::assertTrue($this->plugin->isSublibraryContainerPath('files/admin/My Noten/_SubLibraries_/orgel'));
+		self::assertTrue($this->plugin->isSublibraryContainerPath('files/admin/My Noten/_SubLibraries_/orgel/mobilesheets.db'));
+		self::assertTrue($this->plugin->isSublibraryContainerPath('files/admin/My Noten/.sublibraries/orgel'));
+
+		self::assertFalse($this->plugin->isSublibraryContainerPath('files/admin/My Noten'));
+		self::assertFalse($this->plugin->isSublibraryContainerPath('files/admin/My Noten/mobilesheets.db'));
+		self::assertFalse($this->plugin->isSublibraryContainerPath('files/admin/My Noten/score.pdf'));
+		self::assertFalse($this->plugin->isSublibraryContainerPath('files/bob/BobOrgan/BobPiece.pdf'));
+	}
+
+	public function testSublibrariesNotVisibleToSyncClientsDuringPropfind(): void {
+		$this->attachServer();
+		$this->sublibraryService->createSublibrary((int)$this->library->id, 'Organ Repertoire', 'orgel', [
+			'instrument' => ['Orgel'],
+		]);
+
+		$syncClientUa = 'Mozilla/5.0 (Windows) mirall/3.14.0 (Nextcloud, windows-10.0.19045)';
+
+		// 1. Nextcloud sync client PROPFIND on library folder
+		$reqSync = new Request('PROPFIND', '/remote.php/dav/files/admin/My%20Noten', [
+			'Depth' => '1',
+			'User-Agent' => $syncClientUa,
+		]);
+		$reqSync->setBaseUrl('/remote.php/dav/');
+
+		$resSync = new Response();
+		$resSync->setStatus(207);
+		$resSync->setBody('<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:"><d:response><d:href>/remote.php/dav/files/admin/My%20Noten/</d:href></d:response></d:multistatus>');
+
+		$this->plugin->afterPropfind($reqSync, $resSync);
+
+		$bodySync = $resSync->getBodyAsString();
+		// Virtual database files are still present
+		self::assertStringContainsString('mobilesheets.db', $bodySync);
+		self::assertStringContainsString('mobilesheets_hashcodes.txt', $bodySync);
+		// But _SubLibraries_ is NOT injected for the sync client
+		self::assertStringNotContainsString('_SubLibraries_', $bodySync);
+
+		// 2. Non-sync client (e.g. MobileSheets) PROPFIND on library folder
+		$reqMs = new Request('PROPFIND', '/remote.php/dav/files/admin/My%20Noten', [
+			'Depth' => '1',
+			'User-Agent' => 'MobileSheets/3.8.4',
+		]);
+		$reqMs->setBaseUrl('/remote.php/dav/');
+
+		$resMs = new Response();
+		$resMs->setStatus(207);
+		$resMs->setBody('<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:"><d:response><d:href>/remote.php/dav/files/admin/My%20Noten/</d:href></d:response></d:multistatus>');
+
+		$this->plugin->afterPropfind($reqMs, $resMs);
+
+		$bodyMs = $resMs->getBodyAsString();
+		self::assertStringContainsString('mobilesheets.db', $bodyMs);
+		self::assertStringContainsString('mobilesheets_hashcodes.txt', $bodyMs);
+		// _SubLibraries_ IS injected for non-sync clients
+		self::assertStringContainsString('_SubLibraries_', $bodyMs);
+
+		// 3. Direct PROPFIND on _SubLibraries_ by sync client is bypassed (returns true so SabreDAV returns 404)
+		$directSyncReq = new Request('PROPFIND', '/files/admin/My%20Noten/_SubLibraries_', [
+			'Depth' => '1',
+			'User-Agent' => $syncClientUa,
+		]);
+		$directSyncRes = new Response();
+		self::assertTrue($this->plugin->beforeMethod($directSyncReq, $directSyncRes));
+
+		// 4. Direct PROPFIND on _SubLibraries_ by non-sync client is handled
+		$directMsReq = new Request('PROPFIND', '/files/admin/My%20Noten/_SubLibraries_', [
+			'Depth' => '1',
+			'User-Agent' => 'MobileSheets/3.8.4',
+		]);
+		$directMsRes = new Response();
+		self::assertFalse($this->plugin->beforeMethod($directMsReq, $directMsRes));
+		self::assertSame(207, $directMsRes->getStatus());
+		self::assertStringContainsString('orgel', (string)$directMsRes->getBody());
+	}
 }
 
 /**

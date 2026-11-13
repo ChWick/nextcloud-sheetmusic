@@ -20,6 +20,7 @@ use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSyncBackend;
 use OCA\SheetMusic\Sync\SyncClientInterface;
 use OCA\SheetMusic\Sync\SyncClientRegistry;
 use OCP\Files\IRootFolder;
+use OCP\IRequest;
 use OCP\IUserSession;
 use Psr\Log\LoggerInterface;
 use Sabre\DAV\PropFind;
@@ -48,6 +49,8 @@ class SheetMusicDavPlugin extends ServerPlugin {
 	public const VIRTUAL_DB_NAME = 'mobilesheets.db';
 	public const VIRTUAL_HASH_NAME = 'mobilesheets_hashcodes.txt';
 	public const SUBLIBRARIES_DIR = '_SubLibraries_';
+	public const SUBLIBRARIES_DIR_LEGACY = '.sublibraries';
+	public const SUBLIBRARIES_DIR_PATTERN = '(?:\.sublibraries|_SubLibraries_)';
 
 	private const OC_NS = 'http://owncloud.org/ns';
 
@@ -73,7 +76,9 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		private ?IRootFolder $rootFolder = null,
 		private ?SublibraryService $sublibraryService = null,
 		private ?LibraryShareService $libraryShareService = null,
+		private ?SyncClientDetector $syncClientDetector = null,
 	) {
+		$this->syncClientDetector ??= new SyncClientDetector();
 		$this->registry = $registry ?? new SyncClientRegistry();
 		if ($this->registry->getClients() === []) {
 			$this->registry->registerClient(new MobileSheetsSyncBackend(
@@ -113,6 +118,10 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		));
 
 		try {
+			if ($this->isSyncClient($request) && $this->isSublibraryContainerPath($path)) {
+				return true;
+			}
+
 			$match = $this->matchVirtualPath($path);
 			if ($match === null) {
 				if ($method === 'PROPFIND') {
@@ -220,27 +229,34 @@ class SheetMusicDavPlugin extends ServerPlugin {
 			$canWrite = false;
 		}
 
-		$this->logger->info(sprintf('SheetMusicDavPlugin: afterPropfind injected into path=%s for library=%d', $path, $library->id));
+		$isSyncClient = $this->isSyncClient($request);
+
+		$this->logger->info(sprintf(
+			'SheetMusicDavPlugin: afterPropfind injected into path=%s for library=%d isSyncClient=%s',
+			$path,
+			$library->id,
+			$isSyncClient ? 'yes' : 'no'
+		));
 
 		$body = $response->getBody();
 		if (is_callable($body)) {
 			// Streamed multistatus (legacy endpoint): the listing is produced
 			// lazily while the response is sent, so it can only be consumed once.
-			$response->setBody(function () use ($body, $library, $path, $requestBody, $targetUserId, $publicToken, $canWrite): void {
+			$response->setBody(function () use ($body, $library, $path, $requestBody, $targetUserId, $publicToken, $canWrite, $isSyncClient): void {
 				ob_start();
 				try {
 					$body();
 				} finally {
 					$xml = (string)ob_get_clean();
 				}
-				echo $this->injectVirtualEntries($xml, $library, $path, $requestBody, $targetUserId, $publicToken, $canWrite);
+				echo $this->injectVirtualEntries($xml, $library, $path, $requestBody, $targetUserId, $publicToken, $canWrite, !$isSyncClient);
 			});
 			$response->removeHeader('Content-Length');
 			return;
 		}
 
 		$xml = $response->getBodyAsString();
-		$newBody = $this->injectVirtualEntries($xml, $library, $path, $requestBody, $targetUserId, $publicToken, $canWrite);
+		$newBody = $this->injectVirtualEntries($xml, $library, $path, $requestBody, $targetUserId, $publicToken, $canWrite, !$isSyncClient);
 		if ($newBody !== $xml) {
 			$response->setBody($newBody);
 			$response->setHeader('Content-Length', (string)strlen($newBody));
@@ -260,6 +276,7 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		?string $userId = null,
 		?string $publicToken = null,
 		bool $canWrite = true,
+		bool $includeSublibraries = true,
 	): string {
 		if ($xml === '') {
 			return $xml;
@@ -291,7 +308,7 @@ class SheetMusicDavPlugin extends ServerPlugin {
 				}
 			}
 
-			if ($this->sublibraryService !== null && $library->id !== null && $library->sublibraryId === null) {
+			if ($includeSublibraries && $this->sublibraryService !== null && $library->id !== null && $library->sublibraryId === null) {
 				$sublibs = $this->sublibraryService->getSublibraries((int)$library->id);
 				if (!empty($sublibs) && !in_array(self::SUBLIBRARIES_DIR, $existing, true)) {
 					$entries[] = $this->buildDirectoryPropfindEntry(
@@ -567,7 +584,7 @@ class SheetMusicDavPlugin extends ServerPlugin {
 			return null;
 		}
 		[$userId, $relPath] = $resolved;
-		if (!preg_match('#^(.+?)/(?:\.sublibraries|_SubLibraries_)/([^/]+)$#', $relPath, $m)) {
+		if (!preg_match('#^(.+?)/' . self::SUBLIBRARIES_DIR_PATTERN . '/([^/]+)$#', $relPath, $m)) {
 			return null;
 		}
 		$parentFolder = $m[1];
@@ -591,6 +608,10 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		ResponseInterface $response,
 		string $path,
 	): bool {
+		if ($this->isSyncClient($request)) {
+			return false;
+		}
+
 		$resolved = $this->resolveUserFolder($path);
 		if ($resolved === null) {
 			return false;
@@ -598,7 +619,7 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		[$userId, $relPath] = $resolved;
 
 		// Case 1: {LibraryFolder}/_SubLibraries_ or {LibraryFolder}/.sublibraries
-		if (preg_match('#^(.+?)/(?:\.sublibraries|_SubLibraries_)$#', $relPath, $m)) {
+		if (preg_match('#^(.+?)/' . self::SUBLIBRARIES_DIR_PATTERN . '$#', $relPath, $m)) {
 			$parentFolder = $m[1];
 			$library = $this->findLibraryForRelativePath($userId, $parentFolder);
 			if ($library === null || $this->sublibraryService === null || $library->id === null) {
@@ -666,7 +687,7 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		}
 		[$userId, $relPath] = $resolved;
 
-		if (!preg_match('#^(.+?)/(?:\.sublibraries|_SubLibraries_)/([^/]+)/(.+)$#', $relPath, $m)) {
+		if (!preg_match('#^(.+?)/' . self::SUBLIBRARIES_DIR_PATTERN . '/([^/]+)/(.+)$#', $relPath, $m)) {
 			return null;
 		}
 		$parentFolder = $m[1];
@@ -1173,5 +1194,20 @@ class SheetMusicDavPlugin extends ServerPlugin {
 	private function isLegacyPublicWebdav(): bool {
 		$baseUri = $this->server?->getBaseUri() ?? '';
 		return str_contains($baseUri, 'public.php') && str_ends_with(rtrim($baseUri, '/'), '/webdav');
+	}
+
+	/**
+	 * Check if the incoming WebDAV request originates from an official sync client
+	 * (Nextcloud desktop client / mirall, Nextcloud Android, Nextcloud iOS).
+	 */
+	public function isSyncClient(RequestInterface $request): bool {
+		return $this->syncClientDetector?->isSyncClient($request) ?? false;
+	}
+
+	/**
+	 * Check if a path points to or inside the virtual sublibraries container directory.
+	 */
+	public function isSublibraryContainerPath(string $path): bool {
+		return (bool)preg_match('#(?:^|/)' . self::SUBLIBRARIES_DIR_PATTERN . '(?:/|$)#i', trim($path, '/'));
 	}
 }
