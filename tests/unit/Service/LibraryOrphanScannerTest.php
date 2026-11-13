@@ -227,4 +227,29 @@ final class LibraryOrphanScannerTest extends TestCase {
 		self::assertNotNull($candidate);
 		self::assertSame(50, $candidate->id);
 	}
+
+	public function testFindOrphanFileCandidateSongDoesNotFalsePositiveOnWordsStartingWithKeyLetter(): void {
+		$songD = new MobileSheetsSong(
+			id: 60,
+			title: 'Dancing in December',
+			files: [],
+			keys: [new MobileSheetsKey(id: 1, name: 'D')],
+		);
+		$songOther = new MobileSheetsSong(
+			id: 61,
+			title: 'Dancing in December',
+			files: [],
+			keys: [new MobileSheetsKey(id: 2, name: 'G')],
+		);
+
+		// "Dancing in December.pdf" has no musical key in the filename (it's the word "December").
+		// Therefore neither candidate is a uniquely disambiguated key match.
+		$candidate = $this->scanner->findOrphanFileCandidateSong(
+			'Dancing in December.pdf',
+			[$songD, $songOther],
+			[],
+		);
+
+		self::assertNull($candidate);
+	}
 }

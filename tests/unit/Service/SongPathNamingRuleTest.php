@@ -252,4 +252,73 @@ final class SongPathNamingRuleTest extends TestCase {
 		$path = SongPathNamingRule::createTargetPath($song, '.pdf');
 		self::assertSame('Mozart/Mozart - Sonata in D, KV 545 (1958).pdf', $path);
 	}
+
+	public function testTitleContainsKeyRecognizesMusicalKeys(): void {
+		self::assertTrue(SongPathNamingRule::titleContainsKey('Sonata in D', 'D'));
+		self::assertTrue(SongPathNamingRule::titleContainsKey('Sonata in D, Op. 10', 'D'));
+		self::assertTrue(SongPathNamingRule::titleContainsKey('Sonata in D major', 'D'));
+		self::assertTrue(SongPathNamingRule::titleContainsKey('Sonata in D-Dur', 'D'));
+		self::assertTrue(SongPathNamingRule::titleContainsKey('Sonata in Dm', 'Dm'));
+		self::assertTrue(SongPathNamingRule::titleContainsKey('Sonata in D minor', 'Dm'));
+		self::assertTrue(SongPathNamingRule::titleContainsKey('Sonata in D-Moll', 'Dm'));
+		self::assertTrue(SongPathNamingRule::titleContainsKey('Sonata in C# minor', 'C#m'));
+		self::assertTrue(SongPathNamingRule::titleContainsKey('Sonata in C♯m', 'C#m'));
+		self::assertTrue(SongPathNamingRule::titleContainsKey('Sonata in Bb major', 'Bb'));
+		self::assertTrue(SongPathNamingRule::titleContainsKey('Sonata (D major)', 'D'));
+		self::assertTrue(SongPathNamingRule::titleContainsKey('Sonata (D)', 'D'));
+		self::assertTrue(SongPathNamingRule::titleContainsKey('Sonata [D]', 'D'));
+		self::assertTrue(SongPathNamingRule::titleContainsKey('Sonata - D Major', 'D'));
+		self::assertTrue(SongPathNamingRule::titleContainsKey('Sonata D-Dur', 'D'));
+		self::assertTrue(SongPathNamingRule::titleContainsKey('Sonata, Dm', 'Dm'));
+		self::assertTrue(SongPathNamingRule::titleContainsKey('Sonata (Dm)', 'Dm'));
+	}
+
+	public function testTitleContainsKeyDoesNotMatchOrdinaryWords(): void {
+		self::assertFalse(SongPathNamingRule::titleContainsKey('Night and Day', 'D'));
+		self::assertFalse(SongPathNamingRule::titleContainsKey('Song For You', 'F'));
+		self::assertFalse(SongPathNamingRule::titleContainsKey('Beauty and the Beast', 'A'));
+		self::assertFalse(SongPathNamingRule::titleContainsKey('Come Together', 'C'));
+		self::assertFalse(SongPathNamingRule::titleContainsKey('Stand by Me', 'B'));
+		self::assertFalse(SongPathNamingRule::titleContainsKey('Take It Easy', 'E'));
+		self::assertFalse(SongPathNamingRule::titleContainsKey('My Girl', 'G'));
+		self::assertFalse(SongPathNamingRule::titleContainsKey('Once in a Lifetime', 'A'));
+		self::assertFalse(SongPathNamingRule::titleContainsKey('Dancing in December', 'D'));
+		self::assertFalse(SongPathNamingRule::titleContainsKey('Lost in France', 'F'));
+		self::assertFalse(SongPathNamingRule::titleContainsKey('Walking in Darkness', 'D'));
+		self::assertFalse(SongPathNamingRule::titleContainsKey('Here I Am', 'Am'));
+		self::assertFalse(SongPathNamingRule::titleContainsKey('American Pie', 'Am'));
+		self::assertFalse(SongPathNamingRule::titleContainsKey('Air on the G String', 'G'));
+	}
+
+	public function testCreateTargetPathRetainsKeyWhenTitleContainsWordStartingWithKeyLetter(): void {
+		$songDay = new MobileSheetsSong(
+			id: 30,
+			title: 'Night and Day',
+			composers: [new MobileSheetsComposer(1, 'Cole Porter')],
+			keys: [new MobileSheetsKey(1, 'D')],
+		);
+		$songForYou = new MobileSheetsSong(
+			id: 31,
+			title: 'Song For You',
+			artists: [new MobileSheetsArtist(1, 'Leon Russell')],
+			keys: [new MobileSheetsKey(2, 'F')],
+		);
+		$songDecember = new MobileSheetsSong(
+			id: 32,
+			title: 'Dancing in December',
+			artists: [new MobileSheetsArtist(2, 'Taylor')],
+			keys: [new MobileSheetsKey(3, 'D')],
+		);
+		$songLifetime = new MobileSheetsSong(
+			id: 33,
+			title: 'Once in a Lifetime',
+			artists: [new MobileSheetsArtist(3, 'Talking Heads')],
+			keys: [new MobileSheetsKey(4, 'A')],
+		);
+
+		self::assertSame('Cole Porter/Cole Porter - Night and Day in D.pdf', SongPathNamingRule::createTargetPath($songDay, '.pdf'));
+		self::assertSame('Leon Russell/Leon Russell - Song For You in F.pdf', SongPathNamingRule::createTargetPath($songForYou, '.pdf'));
+		self::assertSame('Taylor/Taylor - Dancing in December in D.pdf', SongPathNamingRule::createTargetPath($songDecember, '.pdf'));
+		self::assertSame('Talking Heads/Talking Heads - Once in a Lifetime in A.pdf', SongPathNamingRule::createTargetPath($songLifetime, '.pdf'));
+	}
 }

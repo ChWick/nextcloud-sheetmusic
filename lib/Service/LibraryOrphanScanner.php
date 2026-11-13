@@ -269,24 +269,6 @@ class LibraryOrphanScanner {
 				return array_unique($res);
 			},
 			static function (MobileSheetsSong $s): array {
-				$keys = [];
-				foreach ($s->keys as $k) {
-					$name = trim($k->name ?? '');
-					if ($name === '') {
-						continue;
-					}
-					$keys[] = "in {$name}";
-					$normalizedKey = SongPathNamingRule::normalizeKeyNameForGeneratedPath($name);
-					if ($normalizedKey !== $name) {
-						$keys[] = "in {$normalizedKey}";
-					}
-					if (mb_strlen($name) > 2) {
-						$keys[] = $name;
-					}
-				}
-				return $keys;
-			},
-			static function (MobileSheetsSong $s): array {
 				$years = [];
 				foreach ($s->years as $y) {
 					$yVal = trim((string)($y->name ?? $y->year ?? ''));
@@ -312,6 +294,23 @@ class LibraryOrphanScanner {
 			if ($singleMatch !== null) {
 				return ['matched' => $singleMatch, 'hasCandidates' => true];
 			}
+		}
+
+		// Key disambiguation using exact musical key parser (avoids false-positive word matches like "in December")
+		$candidatesWithKeyMatch = array_values(array_filter($candidates, static function (MobileSheetsSong $s) use ($fileName): bool {
+			foreach ($s->keys as $k) {
+				$name = trim($k->name ?? '');
+				if ($name !== '' && SongPathNamingRule::titleContainsKey($fileName, $name)) {
+					return true;
+				}
+			}
+			return false;
+		}));
+		if (count($candidatesWithKeyMatch) === 1) {
+			return ['matched' => $candidatesWithKeyMatch[0], 'hasCandidates' => true];
+		}
+		if (count($candidatesWithKeyMatch) > 1) {
+			$candidates = $candidatesWithKeyMatch;
 		}
 
 		return ['matched' => null, 'hasCandidates' => true];

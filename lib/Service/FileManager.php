@@ -66,6 +66,10 @@ function titleContainsComponent(string $title, string $component): bool {
 	return SongPathNamingRule::titleContainsComponent($title, $component);
 }
 
+function titleContainsKey(string $title, string $key): bool {
+	return SongPathNamingRule::titleContainsKey($title, $key);
+}
+
 function buildSongTitlePart(MobileSheetsSong $song): string {
 	return SongPathNamingRule::buildSongTitlePart($song);
 }

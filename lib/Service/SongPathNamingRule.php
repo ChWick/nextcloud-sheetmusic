@@ -295,6 +295,120 @@ class SongPathNamingRule {
 		return str_contains($unaccentedTitle, $unaccentedComp);
 	}
 
+	/**
+	 * Parse a musical key string into base note, accidental, and mode.
+	 *
+	 * @return array{note: string, accidental: string, mode: string}|null
+	 */
+	public static function parseKeyComponents(string $key): ?array {
+		$clean = trim($key);
+		if ($clean === '') {
+			return null;
+		}
+
+		$norm = str_replace(['♯', '♭'], ['#', 'b'], $clean);
+
+		if (preg_match('/^([A-Ga-gHh])(?:(#|b|sharp|flat)|(is|es|s))?(?:[-_\s]?(major|minor|dur|moll|maj|min|m))?$/i', $norm, $m) === 1) {
+			$note = strtoupper($m[1]);
+			$accRaw = strtolower($m[2] ?? $m[3] ?? '');
+			$modeRaw = strtolower($m[4] ?? '');
+
+			$acc = match ($accRaw) {
+				'#', 'sharp', 'is' => '#',
+				'b', 'flat', 'es', 's' => 'b',
+				default => '',
+			};
+
+			$isMinor = in_array($modeRaw, ['m', 'min', 'minor', 'moll'], true);
+			$mode = $isMinor ? 'minor' : 'major';
+
+			return [
+				'note' => $note,
+				'accidental' => $acc,
+				'mode' => $mode,
+			];
+		}
+
+		return null;
+	}
+
+	/**
+	 * Determine if a song title or path already contains the specified musical key.
+	 */
+	public static function titleContainsKey(string $title, string $key): bool {
+		$title = trim($title);
+		$key = trim($key);
+		if ($title === '' || $key === '') {
+			return false;
+		}
+
+		$parsed = self::parseKeyComponents($key);
+		if ($parsed === null) {
+			return (bool)preg_match('/\b' . preg_quote($key, '/') . '\b/iu', $title);
+		}
+
+		$note = $parsed['note'];
+		$acc = $parsed['accidental'];
+		$mode = $parsed['mode'];
+
+		if ($acc === '#') {
+			$notePattern = $note . '(?:[#♯]|[-_\s]*(?:sharp|is))';
+		} elseif ($acc === 'b') {
+			$notePattern = $note . '(?:[b♭]|[-_\s]*(?:flat|es|s))';
+		} else {
+			$notePattern = $note;
+		}
+
+		// What can legitimately follow a key in a title:
+		// - end of title
+		// - punctuation / brackets
+		// - standard movement/opus/catalog numbers or digits
+		$validFollowers = '(?:\s*(?:op|no|nr|kv|bwv|hob|woo|twv|hwv|rv|\d)|[,;:\(\)\[\]\/\-._]|\s*$)';
+
+		// 1. "in <Key>" context:
+		if ($mode === 'minor') {
+			$inMinorPattern = '/\bin\s+' . $notePattern . '(?:m\b|[-_\s]*(?:minor|moll|min)\b)/iu';
+			if (preg_match($inMinorPattern, $title) === 1) {
+				return true;
+			}
+		} else {
+			$inMajorPattern = '/\bin\s+' . $notePattern . '(?:[-_\s]*(?:major|dur|maj)\b|' . $validFollowers . ')/iu';
+			if (preg_match($inMajorPattern, $title) === 1) {
+				return true;
+			}
+		}
+
+		// 2. Parenthesized or bracketed: e.g. "(D)", "[D]", "(D major)", "(Dm)", "(C# minor)"
+		if ($mode === 'minor') {
+			$parenPattern = '/[\(\[]\s*' . $notePattern . '(?:\s*(?:minor|moll|min|m))\s*[\)\]]/iu';
+		} else {
+			$parenPattern = '/[\(\[]\s*' . $notePattern . '(?:\s*(?:major|dur|maj))?\s*[\)\]]/iu';
+		}
+		if (preg_match($parenPattern, $title) === 1) {
+			return true;
+		}
+
+		// 3. Explicit mode words (even without "in"): e.g. "D Major", "D-Dur", "D Minor", "D-Moll"
+		if ($mode === 'minor') {
+			$explicitMinor = '/(?:^|[\s,;:\(\)\[\]\/\-_])' . $notePattern . '[-_\s]*(?:minor|moll|min)\b/iu';
+			if (preg_match($explicitMinor, $title) === 1) {
+				return true;
+			}
+			// Delimited short minor: e.g. ", Dm", "- Dm", "/ Dm"
+			$delimitedMinor = '/(?:[,;:\/\-_]\s*)' . $notePattern . 'm\b/iu';
+			if (preg_match($delimitedMinor, $title) === 1) {
+				return true;
+			}
+		} else {
+			$explicitMajor = '/(?:^|[\s,;:\(\)\[\]\/\-_])' . $notePattern . '[-_\s]+(?:major|dur)\b/iu';
+			if (preg_match($explicitMajor, $title) === 1) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
 	public static function buildSongTitlePart(MobileSheetsSong $song): string {
 		$songTitle = self::normalizeGeneratedPathSegment($song->title);
 
@@ -310,8 +424,9 @@ class SongPathNamingRule {
 		$keyPart = '';
 		if ($keyString !== '') {
 			$alreadyHasKey = false;
-			foreach ($normalizedKeyNames as $k) {
-				if (self::titleContainsComponent($songTitle, 'in ' . $k) || self::titleContainsComponent($songTitle, ' ' . $k)) {
+			$allKeyVariants = array_unique([...$keyNames, ...$normalizedKeyNames]);
+			foreach ($allKeyVariants as $k) {
+				if (self::titleContainsKey($songTitle, $k)) {
 					$alreadyHasKey = true;
 					break;
 				}
