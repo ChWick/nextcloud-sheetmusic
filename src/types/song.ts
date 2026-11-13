@@ -22,7 +22,7 @@ export type Bookmark = {
 	showInLibrary?: number
 }
 export type AudioFile = { id: number; songId: number; title: string; file: string }
-export type SongFile = components['schemas']['SongFile'] & { fileId?: number }
+export type SongFile = components['schemas']['SongFile'] & { fileId?: number; updatedAt?: number | null }
 
 export interface SongEntityLists {
 	composers?: Composer[]

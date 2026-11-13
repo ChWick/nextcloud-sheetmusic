@@ -747,6 +747,9 @@ class InternalSongMapper {
 				pageOrder: $file->pageOrder,
 				pageCount: (int)$file->pageCount,
 				fileId: (int)$file->fileId,
+				updatedAt: $file->updatedAt > 0
+					? ($file->updatedAt < 100000000000 ? $file->updatedAt * 1000 : $file->updatedAt)
+					: null,
 			);
 		}
 
