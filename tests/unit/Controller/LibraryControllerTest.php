@@ -41,7 +41,7 @@ final class LibraryControllerTest extends TestCase {
 		$this->user = $this->userManager->get('admin');
 
 		$logger = new NullLogger();
-		$this->libraryService = new LibraryService($this->libraryMapper, $this->rootFolder, $logger, exporter: $this->exporter);
+		$this->libraryService = new LibraryService($this->libraryMapper, $this->rootFolder, $logger, exporter: $this->exporter, progressService: new \OCA\SheetMusic\Service\ImportProgressService());
 		$this->userSession = new FakeUserSession($this->user);
 		$this->request = new FakeRequest();
 
@@ -142,7 +142,10 @@ final class LibraryControllerTest extends TestCase {
 				private array $issues,
 			) {
 			}
-			public function checkIntegrity(int $libraryId, ?string $userId = null, bool $autoMatchOrphans = true): array {
+			public function checkIntegrity(int $libraryId, ?string $userId = null, bool $autoMatchOrphans = true, ?callable $onProgress = null): array {
+				if ($onProgress !== null) {
+					$onProgress('audit', 1, 1, 'Song 1');
+				}
 				return $this->issues;
 			}
 		};
@@ -155,7 +158,7 @@ final class LibraryControllerTest extends TestCase {
 			$fakeIntegrity,
 		);
 
-		$response = $controller->getIntegrity(1);
+		$response = $controller->getIntegrity(1, progressId: 'test-audit-progress');
 		$this->assertSame(Http::STATUS_OK, $response->getStatus());
 		$data = $response->getData();
 		$this->assertArrayHasKey('issues', $data);
@@ -164,6 +167,10 @@ final class LibraryControllerTest extends TestCase {
 			'songIds' => [60, 61],
 			'exactDuplicate' => false,
 		], $data['issues'][0]['details']);
+
+		$progress = $this->libraryService->getProgress('test-audit-progress');
+		$this->assertNotNull($progress);
+		$this->assertSame('completed', $progress['status']);
 	}
 
 	public function testGetIntegrityPassesAutoMatchOrphansOption(): void {
@@ -174,7 +181,7 @@ final class LibraryControllerTest extends TestCase {
 				?bool &$capturedOption,
 			) {
 			}
-			public function checkIntegrity(int $libraryId, ?string $userId = null, bool $autoMatchOrphans = true): array {
+			public function checkIntegrity(int $libraryId, ?string $userId = null, bool $autoMatchOrphans = true, ?callable $onProgress = null): array {
 				$this->captured = $autoMatchOrphans;
 				return [];
 			}

@@ -65,11 +65,23 @@ class ImportProgressService {
 				}
 			} elseif ($stage === 'fixing' || $stage === 'fix') {
 				$percent = (int)round(($current / $total) * 90);
+			} elseif ($stage === 'audit' || $stage === 'auditing') {
+				$percent = 5 + (int)round(($current / $total) * 82);
+			} elseif ($stage === 'entities') {
+				$percent = 3;
+			} elseif ($stage === 'orphans') {
+				$percent = 90;
 			} elseif ($stage === 'finalizing') {
 				$percent = 95;
 			} else {
 				$percent = (int)round(($current / $total) * 99);
 			}
+		} elseif ($stage === 'entities') {
+			$percent = 3;
+		} elseif ($stage === 'orphans') {
+			$percent = 90;
+		} elseif ($stage === 'finalizing') {
+			$percent = 95;
 		}
 		$percent = max(0, min(99, $percent));
 
@@ -78,6 +90,9 @@ class ImportProgressService {
 			'files' => $total > 0 ? "Importing file $current of $total" . ($detail !== '' ? ": $detail" : '') : 'Importing files...',
 			'reconcile' => $total > 0 ? "Importing file $current of $total" . ($detail !== '' ? ": $detail" : '') : 'Importing files...',
 			'fixing', 'fix' => $total > 0 ? "Fixing issue $current of $total" . ($detail !== '' ? ": $detail" : '') : 'Fixing issues...',
+			'audit', 'auditing' => $total > 0 ? "Auditing song $current of $total" . ($detail !== '' ? ": $detail" : '') : 'Auditing library songs...',
+			'entities' => $detail ?: 'Checking database entities...',
+			'orphans' => $detail ?: 'Scanning storage for orphan files...',
 			'finalizing' => $detail ?: 'Finalizing...',
 			default => $detail ?: 'Processing...',
 		};

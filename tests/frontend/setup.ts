@@ -25,3 +25,19 @@ if (typeof (Uint8Array.prototype as any).toHex === 'undefined') {
 if (typeof (globalThis as any).Iterator === 'undefined') {
 	;(globalThis as any).Iterator = class {}
 }
+
+if (typeof (Map as any).groupBy === 'undefined') {
+	;(Map as any).groupBy = function <K, T>(items: Iterable<T>, keySelector: (item: T) => K): Map<K, T[]> {
+		const map = new Map<K, T[]>()
+		for (const item of items) {
+			const key = keySelector(item)
+			const list = map.get(key)
+			if (list) {
+				list.push(item)
+			} else {
+				map.set(key, [item])
+			}
+		}
+		return map
+	}
+}

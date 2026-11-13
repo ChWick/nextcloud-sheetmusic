@@ -78,9 +78,14 @@ class LibraryIntegrityService {
 	 * 3. Naming rule mismatches (files that deviate from the standard naming conventions).
 	 * 4. Orphan files (files present in the library directory structure not referenced by any song).
 	 *
+	 * @param callable(string, int, int, string|null): void|null $onProgress
 	 * @return list<IntegrityIssue>
 	 */
-	public function checkIntegrity(int $libraryId, string $userId, bool $autoMatchOrphans = true): array {
+	public function checkIntegrity(int $libraryId, string $userId, bool $autoMatchOrphans = true, ?callable $onProgress = null): array {
+		if ($onProgress !== null) {
+			$onProgress('entities', 0, 1, 'Checking database entities...');
+		}
+
 		$userFolder = $this->rootFolder->getUserFolder($userId);
 		$user = $userFolder->getOwner();
 		$targetFolder = $this->fileManager->libraryFolder($libraryId, $user);
@@ -107,7 +112,13 @@ class LibraryIntegrityService {
 		$namingRuleIssuesBySong = [];
 		$reportedMissingPaths = [];
 
+		$totalSongs = count($songs);
+		$songIndex = 0;
 		foreach ($songs as $song) {
+			$songIndex++;
+			if ($onProgress !== null) {
+				$onProgress('audit', $songIndex, $totalSongs, $song->title);
+			}
 			foreach ($song->files as $file) {
 				$pathObj = $this->pathResolver->fromStored($file->path, $user);
 				if ($pathObj === null) {
@@ -289,7 +300,14 @@ class LibraryIntegrityService {
 
 		// Scan folder for orphan files (files in storage not in DB)
 		if ($autoPaths) {
+			if ($onProgress !== null) {
+				$onProgress('orphans', 0, 1, 'Scanning storage for orphan files...');
+			}
 			$this->orphanScanner->scanOrphans($targetFolder, $targetFolderPath, $referencedRelativePaths, $issues, $user, $songs, $missingSongIds, $autoMatchOrphans);
+		}
+
+		if ($onProgress !== null) {
+			$onProgress('finalizing', 0, 1, 'Checking relational integrity...');
 		}
 
 		// Check for songs with identical metadata (informational)

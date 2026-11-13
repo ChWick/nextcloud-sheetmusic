@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from '@nextcloud/axios'
 import { generateOcsUrl } from '@nextcloud/router'
@@ -29,7 +29,7 @@ const props = defineProps<{
 
 const router = useRouter()
 
-interface FixProgress {
+interface ProgressInfo {
 	status: 'running' | 'completed' | 'error'
 	stage: string
 	current: number
@@ -40,9 +40,76 @@ interface FixProgress {
 
 // Integrity Audit state
 const isCheckingIntegrity = ref(false)
+const auditProgress = ref<ProgressInfo | null>(null)
+const auditElapsedTime = ref(0)
+let auditTimer: ReturnType<typeof setInterval> | null = null
+let auditPollingTimer: ReturnType<typeof setInterval> | null = null
+
 const isBatchFixing = ref(false)
-const fixProgress = ref<FixProgress | null>(null)
+const fixProgress = ref<ProgressInfo | null>(null)
 let progressPollingTimer: ReturnType<typeof setInterval> | null = null
+
+function formatDuration(seconds: number): string {
+	const mins = Math.floor(seconds / 60)
+	const secs = seconds % 60
+	if (mins > 0) {
+		return `${mins}m ${secs < 10 ? '0' : ''}${secs}s`
+	}
+	return `${secs}s`
+}
+
+function startAuditProgressPolling(progressId: string) {
+	stopAuditProgressPolling()
+	auditElapsedTime.value = 0
+	const startTime = Date.now()
+
+	auditTimer = setInterval(() => {
+		auditElapsedTime.value = Math.floor((Date.now() - startTime) / 1000)
+	}, 1000)
+
+	auditProgress.value = {
+		status: 'running',
+		stage: 'starting',
+		current: 0,
+		total: 0,
+		percent: 0,
+		message: t('sheetmusic', 'Auditing library files and database integrity…'),
+	}
+
+	auditPollingTimer = setInterval(async () => {
+		try {
+			const url = generateOcsUrl('/apps/sheetmusic/api/libraries/progress/' + encodeURIComponent(progressId))
+			const res = await axios.get(url)
+			const data = res?.data?.ocs?.data
+			if (data && typeof data === 'object') {
+				auditProgress.value = {
+					status: data.status,
+					stage: data.stage,
+					current: Number(data.current ?? 0),
+					total: Number(data.total ?? 0),
+					percent: Number(data.percent ?? 0),
+					message: String(data.message ?? ''),
+				}
+				if (data.status === 'completed' || data.status === 'error') {
+					stopAuditProgressPolling()
+				}
+			}
+		} catch {
+			// Ignore transient polling errors
+		}
+	}, 300)
+}
+
+function stopAuditProgressPolling() {
+	if (auditPollingTimer !== null) {
+		clearInterval(auditPollingTimer)
+		auditPollingTimer = null
+	}
+	if (auditTimer !== null) {
+		clearInterval(auditTimer)
+		auditTimer = null
+	}
+}
 
 function startProgressPolling(progressId: string) {
 	stopProgressPolling()
@@ -84,6 +151,11 @@ function stopProgressPolling() {
 		progressPollingTimer = null
 	}
 }
+
+onBeforeUnmount(() => {
+	stopProgressPolling()
+	stopAuditProgressPolling()
+})
 
 const fixingKey = ref<string | null>(null)
 const integrityError = ref('')
@@ -174,23 +246,29 @@ async function auditIntegrity(keepCurrentIssues = false) {
 		integrityIssues.value = []
 	}
 
+	const progressId = 'audit-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9)
+	startAuditProgressPolling(progressId)
+
 	try {
-		const queryParams: Record<string, string> = {}
+		const queryParams: Record<string, string> = {
+			progressId,
+		}
 		if (!autoMatchOrphans.value) {
 			queryParams.autoMatchOrphans = '0'
 		}
-		const options = Object.keys(queryParams).length > 0 ? { queryParams } : undefined
-		const response = options !== undefined
-			? await apiGet(`/api/libraries/${props.selectedLibrary}/integrity` as any, options)
-			: await apiGet(`/api/libraries/${props.selectedLibrary}/integrity` as any)
+		const response = await apiGet(`/api/libraries/${props.selectedLibrary}/integrity` as any, { queryParams })
+		stopAuditProgressPolling()
 		integrityIssues.value = response.data?.ocs?.data?.issues ?? []
 	} catch (error) {
+		stopAuditProgressPolling()
 		console.error('Failed to audit library integrity:', error)
 		const serverMessage = describeRequestFailure(error, t('sheetmusic', 'Failed to audit library integrity. Please try again.'))
 		integrityError.value = serverMessage
 		showError(serverMessage)
 	} finally {
 		isCheckingIntegrity.value = false
+		stopAuditProgressPolling()
+		auditProgress.value = null
 	}
 }
 
@@ -440,15 +518,38 @@ function openSong(songId: number) {
 			</ViewHeader>
 
 			<div :class="$style.content">
-				<div v-if="isCheckingIntegrity && integrityIssues.length === 0" :class="$style.loading">
-					<NcLoadingIcon :size="36" />
-					<span>{{ t('sheetmusic', 'Auditing library files and database integrity…') }}</span>
+				<div v-if="isCheckingIntegrity && integrityIssues.length === 0" :class="$style.auditProgressContainer" data-test="audit-progress-container">
+					<div :class="$style.progressHeader">
+						<span :class="$style.auditMessage" data-test="audit-progress-message">
+							{{ auditProgress?.message || t('sheetmusic', 'Auditing library files and database integrity…') }}
+						</span>
+						<span v-if="auditElapsedTime > 0" :class="$style.elapsedBadge" data-test="audit-elapsed-time">
+							{{ formatDuration(auditElapsedTime) }}
+						</span>
+					</div>
+					<NcProgressBar
+						:value="auditProgress ? auditProgress.percent : 0"
+						size="medium"
+						:show-value="true"
+						:error="auditProgress?.status === 'error'" />
 				</div>
 
 				<template v-else>
-					<div v-if="isCheckingIntegrity && integrityIssues.length > 0" :class="$style.reloadingNotice">
-						<NcLoadingIcon :size="20" />
-						<span>{{ t('sheetmusic', 'Auditing library files and database integrity…') }}</span>
+					<div v-if="isCheckingIntegrity && integrityIssues.length > 0" :class="$style.reloadingNotice" data-test="audit-reloading-notice">
+						<div :class="$style.reloadingHeader">
+							<NcLoadingIcon :size="18" />
+							<span :class="$style.auditMessage">
+								{{ auditProgress?.message || t('sheetmusic', 'Auditing library files and database integrity…') }}
+							</span>
+							<span v-if="auditElapsedTime > 0" :class="$style.elapsedBadge">
+								{{ formatDuration(auditElapsedTime) }}
+							</span>
+						</div>
+						<NcProgressBar
+							:value="auditProgress ? auditProgress.percent : 0"
+							size="small"
+							:show-value="true"
+							:error="auditProgress?.status === 'error'" />
 					</div>
 
 					<div v-if="integrityIssues.length === 0" :class="$style.cleanNotice">
@@ -575,16 +676,63 @@ function openSong(songId: number) {
 	text-align: center;
 }
 
-.reloadingNotice {
+.auditProgressContainer {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 16px;
+	padding: 48px 24px;
+	width: 100%;
+	max-width: 560px;
+	margin: 0 auto;
+	box-sizing: border-box;
+}
+
+.progressHeader {
 	display: flex;
 	align-items: center;
+	justify-content: space-between;
+	width: 100%;
+	gap: 12px;
+}
+
+.auditMessage {
+	font-size: 0.95rem;
+	color: var(--color-text-maxcontrast);
+	font-weight: 500;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.elapsedBadge {
+	font-size: 0.85rem;
+	color: var(--color-text-maxcontrast);
+	background-color: var(--color-background-hover);
+	padding: 2px 8px;
+	border-radius: var(--border-radius-pill, 12px);
+	white-space: nowrap;
+	font-variant-numeric: tabular-nums;
+}
+
+.reloadingNotice {
+	display: flex;
+	flex-direction: column;
 	gap: 8px;
-	padding: 10px 16px;
+	padding: 12px 16px;
 	background-color: var(--color-background-hover);
 	border: 1px solid var(--color-border);
 	border-radius: var(--border-radius-large, 8px);
 	color: var(--color-text-maxcontrast);
 	font-size: 0.95rem;
+}
+
+.reloadingHeader {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
 }
 
 .container {

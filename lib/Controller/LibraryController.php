@@ -137,19 +137,37 @@ class LibraryController extends OCSController {
 
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'GET', url: '/api/libraries/{id}/integrity')]
-	public function getIntegrity(int $id, bool|string $autoMatchOrphans = true): DataResponse {
+	public function getIntegrity(int $id, bool|string $autoMatchOrphans = true, ?string $progressId = null): DataResponse {
 		$user = $this->userSession->getUser();
 		if ($user === null) {
 			return new DataResponse(['message' => 'User not logged in'], Http::STATUS_UNAUTHORIZED);
 		}
 
+		$progId = $this->resolveProgressId($progressId);
+		if ($progId !== null) {
+			$this->libraryService->startProgress($progId, 'Starting integrity audit...');
+		}
+
+		$onProgress = null;
+		if ($progId !== null) {
+			$onProgress = function (string $stage, int $current, int $total, ?string $detail = null) use ($progId): void {
+				$this->libraryService->updateProgress($progId, $stage, $current, $total, $detail ?? '');
+			};
+		}
+
 		$matchOrphans = filter_var($autoMatchOrphans, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? true;
 
 		try {
-			$issues = $this->integrityService->checkIntegrity($id, $user->getUID(), $matchOrphans);
+			$issues = $this->integrityService->checkIntegrity($id, $user->getUID(), $matchOrphans, $onProgress);
+			if ($progId !== null) {
+				$this->libraryService->completeProgress($progId, 'Audit complete');
+			}
 
 			return new DataResponse(['issues' => array_map(static fn ($issue) => $issue->jsonSerialize(), $issues)], Http::STATUS_OK);
 		} catch (\Throwable $e) {
+			if ($progId !== null) {
+				$this->libraryService->failProgress($progId, $e->getMessage());
+			}
 			return new DataResponse(
 				['message' => 'Error auditing library integrity: ' . $e->getMessage()],
 				Http::STATUS_INTERNAL_SERVER_ERROR

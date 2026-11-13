@@ -181,8 +181,8 @@ class ApiController extends OCSController {
 
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'GET', url: '/api/libraries/{id}/integrity')]
-	public function getIntegrity(int $id, bool|string $autoMatchOrphans = true): DataResponse {
-		return $this->libraryController->getIntegrity($id, $autoMatchOrphans);
+	public function getIntegrity(int $id, bool|string $autoMatchOrphans = true, ?string $progressId = null): DataResponse {
+		return $this->libraryController->getIntegrity($id, $autoMatchOrphans, $progressId);
 	}
 
 	#[NoAdminRequired]

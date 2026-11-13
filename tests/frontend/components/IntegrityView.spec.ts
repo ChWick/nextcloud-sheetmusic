@@ -33,14 +33,18 @@ vi.mock('@nextcloud/l10n', () => ({
 	isRTL: () => false,
 }))
 
-vi.mock('vue-router', () => ({
-	useRouter: () => ({
-		push: vi.fn(),
-	}),
-	useRoute: () => ({
-		query: {},
-	}),
-}))
+vi.mock('vue-router', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('vue-router')>()
+	return {
+		...actual,
+		useRouter: () => ({
+			push: vi.fn(),
+		}),
+		useRoute: () => ({
+			query: {},
+		}),
+	}
+})
 
 vi.mock('../../../src/api/client', () => ({
 	apiGet: vi.fn(),
@@ -81,7 +85,11 @@ describe('IntegrityView.vue', () => {
 		})
 		await flushPromises()
 
-		expect(apiGet).toHaveBeenCalledWith('/api/libraries/1/integrity')
+		expect(apiGet).toHaveBeenCalledWith('/api/libraries/1/integrity', expect.objectContaining({
+			queryParams: expect.objectContaining({
+				progressId: expect.stringMatching(/^audit-/),
+			}),
+		}))
 		expect(wrapper.text()).toContain('Invalid Naming Rules')
 		expect(wrapper.text()).toContain('Prelude in C')
 		expect(wrapper.text()).toContain('Auto-Fix Issue')
@@ -407,7 +415,11 @@ describe('IntegrityView.vue', () => {
 		})
 		await flushPromises()
 
-		expect(apiGet).toHaveBeenCalledWith('/api/libraries/1/integrity')
+		expect(apiGet).toHaveBeenCalledWith('/api/libraries/1/integrity', expect.objectContaining({
+			queryParams: expect.objectContaining({
+				progressId: expect.stringMatching(/^audit-/),
+			}),
+		}))
 
 		// Find the switch component or input and toggle it off
 		const toggle = wrapper.findComponent({ name: 'NcCheckboxRadioSwitch' })
@@ -415,11 +427,11 @@ describe('IntegrityView.vue', () => {
 		await toggle.vm.$emit('update:modelValue', false)
 		await flushPromises()
 
-		expect(apiGet).toHaveBeenCalledWith('/api/libraries/1/integrity', {
-			queryParams: {
+		expect(apiGet).toHaveBeenCalledWith('/api/libraries/1/integrity', expect.objectContaining({
+			queryParams: expect.objectContaining({
 				autoMatchOrphans: '0',
-			},
-		})
+			}),
+		}))
 	})
 
 	it('opens Duplicate Songs Resolution dialog from an integrity issue, copies fields via arrow buttons, and submits merge', async () => {
@@ -535,6 +547,61 @@ describe('IntegrityView.vue', () => {
 			}),
 		)
 		expect(showSuccess).toHaveBeenCalledWith('Songs merged successfully into "Nachspiel in G".')
+		expect(wrapper.text()).toContain('All System Checks Passed!')
+	})
+
+	it('displays progress bar during integrity audit when polling updates progress', async () => {
+		let resolveAuditPromise: any
+		const auditPromise = new Promise((resolve) => {
+			resolveAuditPromise = resolve
+		})
+		vi.mocked(apiGet).mockReturnValueOnce(auditPromise as any)
+
+		vi.mocked(axios.get).mockResolvedValue({
+			data: {
+				ocs: {
+					data: {
+						status: 'running',
+						stage: 'audit',
+						current: 45,
+						total: 100,
+						percent: 45,
+						message: 'Auditing song 45 of 100: Moonlight Sonata',
+					},
+				},
+			},
+		} as any)
+
+		const wrapper = mount(IntegrityView, {
+			props: { selectedLibrary: 1 },
+		})
+		await flushPromises()
+
+		// Initial audit progress state is displayed
+		expect(wrapper.find('[data-test="audit-progress-container"]').exists()).toBe(true)
+
+		// Wait for polling cycle
+		await new Promise((r) => setTimeout(r, 350))
+		await flushPromises()
+
+		expect(wrapper.text()).toContain('Auditing song 45 of 100: Moonlight Sonata')
+		const progressBar = wrapper.findComponent({ name: 'NcProgressBar' })
+		expect(progressBar.exists()).toBe(true)
+		expect(progressBar.props('value')).toBe(45)
+
+		// Finish audit
+		resolveAuditPromise({
+			data: {
+				ocs: {
+					data: {
+						issues: [],
+					},
+				},
+			},
+		})
+		await flushPromises()
+
+		expect(wrapper.find('[data-test="audit-progress-container"]').exists()).toBe(false)
 		expect(wrapper.text()).toContain('All System Checks Passed!')
 	})
 })
