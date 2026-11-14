@@ -9,6 +9,7 @@ import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import DeleteSweepOutline from 'vue-material-design-icons/DeleteSweepOutline.vue'
 import BackupRestore from 'vue-material-design-icons/BackupRestore.vue'
 import ViewHeader from './ViewHeader.vue'
+import { formatLocaleDateTime as formatDate } from '../utils/song-formatter'
 import type { LibraryData } from '../types/song'
 
 interface DeletedSong {
@@ -56,11 +57,6 @@ watch(
 	},
 	{ immediate: true },
 )
-
-function formatDate(sec: number): string {
-	if (!sec) return ''
-	return new Date(sec * 1000).toLocaleString()
-}
 
 async function restoreSong(song: DeletedSong) {
 	restoringId.value = song.id

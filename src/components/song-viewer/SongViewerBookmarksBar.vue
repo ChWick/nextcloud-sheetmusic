@@ -22,6 +22,7 @@
 <script setup lang="ts">
 import { translate as t } from '@nextcloud/l10n'
 import type { Bookmark } from '../../types/song'
+import { formatBookmarkLabel } from '../../utils/song-formatter'
 
 defineProps<{
   bookmarks: Bookmark[]
@@ -31,13 +32,6 @@ defineProps<{
 const emit = defineEmits<{
   'jump': [pageNum: number]
 }>()
-
-function formatBookmarkLabel(bm: Bookmark): string {
-  if (bm.endPage && bm.endPage > bm.pageNum) {
-    return `${bm.name} (pp. ${bm.pageNum}–${bm.endPage})`
-  }
-  return `${bm.name} (p. ${bm.pageNum})`
-}
 </script>
 
 <style module>

@@ -33,6 +33,7 @@ import { computed } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import type { AudioFile, Bookmark, Song, SongEntityLists } from '../../types/song'
 import { ENTITY_COLUMNS, SONG_SCALAR_FIELDS } from '../songs/song-view-columns'
+import { formatBookmarkLabel } from '../../utils/song-formatter'
 
 const props = defineProps<SongEntityLists & {
   song: Song
@@ -43,13 +44,6 @@ const props = defineProps<SongEntityLists & {
 const emit = defineEmits<{
   'jump-to-bookmark': [pageNum: number]
 }>()
-
-function formatBookmarkLabel(bm: Bookmark): string {
-  if (bm.endPage && bm.endPage > bm.pageNum) {
-    return `${bm.name} (pp. ${bm.pageNum}–${bm.endPage})`
-  }
-  return `${bm.name} (p. ${bm.pageNum})`
-}
 
 const entityItems = computed(() =>
   ENTITY_COLUMNS.flatMap((col) => {

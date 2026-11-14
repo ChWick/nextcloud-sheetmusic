@@ -1,4 +1,4 @@
-import type { Song } from '../types/song'
+import type { Bookmark, Song } from '../types/song'
 
 function formatNamedEntities<T>(
 	items?: T[] | null,
@@ -105,6 +105,18 @@ export function formatDateTimestamp(timestamp?: number | null, fallback = '—')
 	} catch {
 		return fallback
 	}
+}
+
+export function formatLocaleDateTime(seconds?: number | null, fallback = ''): string {
+	if (!seconds) return fallback
+	return new Date(seconds * 1000).toLocaleString()
+}
+
+export function formatBookmarkLabel(bm: Pick<Bookmark, 'name' | 'pageNum' | 'endPage'>): string {
+	if (bm.endPage && bm.endPage > bm.pageNum) {
+		return `${bm.name} (pp. ${bm.pageNum}–${bm.endPage})`
+	}
+	return `${bm.name} (p. ${bm.pageNum})`
 }
 
 export type SortKey = 'title' | 'composer' | 'book' | 'collection' | 'artist' | 'genre' | 'key' | 'customGroup' | 'year' | 'signature' | 'sourceType' | 'instrument' | 'arranger' | 'opus' | 'catalogNumber' | 'songNumber' | 'stars' | 'difficulty' | 'duration' | 'keywords' | 'custom' | 'custom2' | 'lastModified' | 'dateCreated'

@@ -15,6 +15,7 @@ import Sync from 'vue-material-design-icons/Sync.vue'
 import Pencil from 'vue-material-design-icons/Pencil.vue'
 import Plus from 'vue-material-design-icons/Plus.vue'
 import type { LibraryData } from '../types/song'
+import { formatLocaleDateTime as formatDate } from '../utils/song-formatter'
 
 interface HistoryEntry {
 	id: number
@@ -80,12 +81,6 @@ watch(
 
 function toggleExpand(id: number) {
 	expandedId.value = expandedId.value === id ? null : id
-}
-
-function formatDate(sec: number): string {
-	if (!sec) return ''
-	const d = new Date(sec * 1000)
-	return d.toLocaleString()
 }
 
 function getActionLabel(action: string): string {

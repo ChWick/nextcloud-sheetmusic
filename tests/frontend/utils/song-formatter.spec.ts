@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Song } from '../../../src/types/song'
-import { formatArrangers, formatArtists, formatBooks, formatCollections, formatComposers, formatCustomGroups, formatDateTimestamp, formatGenres, formatInstruments, formatKeys, formatSignatures, formatSourceTypes, formatYears, sortSongs } from '../../../src/utils/song-formatter'
+import { formatArrangers, formatArtists, formatBookmarkLabel, formatBooks, formatCollections, formatComposers, formatCustomGroups, formatDateTimestamp, formatGenres, formatInstruments, formatKeys, formatLocaleDateTime, formatSignatures, formatSourceTypes, formatYears, sortSongs } from '../../../src/utils/song-formatter'
 
 describe('song-formatter utilities', () => {
 	const sampleSong: Song = {
@@ -156,5 +156,17 @@ describe('song-formatter utilities', () => {
 		expect(formattedSeconds).toBe(formattedMs)
 		expect(formatDateTimestamp(null)).toBe('—')
 		expect(formatDateTimestamp(0)).toBe('—')
+	})
+
+	it('formats bookmark labels for single pages and page ranges', () => {
+		expect(formatBookmarkLabel({ name: 'Intro', pageNum: 1 })).toBe('Intro (p. 1)')
+		expect(formatBookmarkLabel({ name: 'Chorus', pageNum: 2, endPage: 2 })).toBe('Chorus (p. 2)')
+		expect(formatBookmarkLabel({ name: 'Bridge', pageNum: 3, endPage: 5 })).toBe('Bridge (pp. 3–5)')
+	})
+
+	it('formats locale date strings from unix seconds with empty fallback', () => {
+		expect(formatLocaleDateTime(0)).toBe('')
+		expect(formatLocaleDateTime(null)).toBe('')
+		expect(formatLocaleDateTime(1761687800)).toContain('2025')
 	})
 })
