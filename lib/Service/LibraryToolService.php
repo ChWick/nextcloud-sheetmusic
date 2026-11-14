@@ -197,6 +197,7 @@ class LibraryToolService {
 
 				if ($mode === 'stuck') {
 					$effective = $pageCount;
+					$resolvedFromPdf = null;
 					if ($effective <= 1) {
 						$effective = $this->resolveActualPdfPageCount(
 							(int)($file->fileId ?? 0),
@@ -206,9 +207,10 @@ class LibraryToolService {
 							$targetFolder,
 							$targetFolderPath,
 						);
+						$resolvedFromPdf = $effective;
 					}
 					if (($pageOrder === '1-1' || $pageOrder === '1') && $effective > 1) {
-						$filesToReset[] = ['song' => $song, 'file' => $file];
+						$filesToReset[] = ['song' => $song, 'file' => $file, 'actualPageCount' => $resolvedFromPdf];
 					}
 				} elseif ($mode === 'all-1-1') {
 					if ($pageOrder === '1-1' || $pageOrder === '1') {
@@ -245,16 +247,18 @@ class LibraryToolService {
 				$onProgress('resetting', $index + 1, $total, sprintf('Resetting page order for "%s"…', $song->title));
 			}
 
-			// Determine page count
+			// Determine page count (reuse pre-resolved count from filter pass when available)
 			$storedCount = max(1, $fileRecord->pageCount);
-			$actualPageCount = $this->resolveActualPdfPageCount(
-				(int)$fileRecord->fileId,
-				$file->path,
-				$storedCount,
-				$user,
-				$targetFolder,
-				$targetFolderPath,
-			);
+			$actualPageCount = isset($item['actualPageCount']) && is_int($item['actualPageCount']) && $item['actualPageCount'] > 0
+				? $item['actualPageCount']
+				: $this->resolveActualPdfPageCount(
+					(int)$fileRecord->fileId,
+					$file->path,
+					$storedCount,
+					$user,
+					$targetFolder,
+					$targetFolderPath,
+				);
 
 			$newOrder = MobileSheetsPdf::pageOrder($actualPageCount);
 			$fileRecord->pageCount = $actualPageCount;
@@ -310,9 +314,27 @@ class LibraryToolService {
 
 		try {
 			$node = null;
+			$pathObj = $this->pathResolver->fromStored($path, $user);
 
-			// 1. Direct Nextcloud fileId lookup in user folder or root folder
-			if ($fileId > 0) {
+			// 1. Fast path: resolve relative to the already-loaded library folder
+			if ($pathObj !== null && $targetFolder !== null) {
+				$relativeToTarget = $this->pathResolver->relativeToFolder($pathObj->internal, $targetFolderPath);
+				if ($relativeToTarget !== null) {
+					$cleanRelative = ltrim($relativeToTarget, '/');
+					if ($cleanRelative !== '') {
+						try {
+							$candidate = $targetFolder->get($cleanRelative);
+							if ($candidate instanceof File) {
+								$node = $candidate;
+							}
+						} catch (\Throwable) {
+						}
+					}
+				}
+			}
+
+			// 2. Fallback: direct Nextcloud fileId lookup in user folder or root folder
+			if ($node === null && $fileId > 0) {
 				try {
 					$userFolder = $this->rootFolder->getUserFolder($user->getUID());
 					$nodes = $userFolder->getById($fileId);
@@ -325,39 +347,22 @@ class LibraryToolService {
 						}
 					}
 				} catch (\Throwable) {
-					// Fall through to path resolution
+					// Fall through to rootFolder path resolution
 				}
 			}
 
-			// 2. Path-based resolution via target folder and pathResolver
-			if ($node === null) {
+			// 3. Fallback: rootFolder internal path lookup
+			if ($node === null && $pathObj !== null) {
 				try {
-					$pathObj = $this->pathResolver->fromStored($path, $user);
-					if ($pathObj !== null) {
-						if ($targetFolder !== null) {
-							$relativeToTarget = $this->pathResolver->relativeToFolder($pathObj->internal, $targetFolderPath);
-							if ($relativeToTarget !== null) {
-								$cleanRelative = ltrim($relativeToTarget, '/');
-								if ($cleanRelative !== '' && $targetFolder->nodeExists($cleanRelative)) {
-									$candidate = $targetFolder->get($cleanRelative);
-									if ($candidate instanceof File) {
-										$node = $candidate;
-									}
-								}
-							}
-						}
-						if ($node === null && $this->rootFolder->nodeExists($pathObj->internal)) {
-							$candidate = $this->rootFolder->get($pathObj->internal);
-							if ($candidate instanceof File) {
-								$node = $candidate;
-							}
-						}
+					$candidate = $this->rootFolder->get($pathObj->internal);
+					if ($candidate instanceof File) {
+						$node = $candidate;
 					}
 				} catch (\Throwable) {
 				}
 			}
 
-			// 3. Extract actual page count from physical PDF content
+			// 4. Extract actual page count from physical PDF content
 			if ($node instanceof File) {
 				$content = MobileSheetsFileFacts::readFileContent($node);
 				if ($content !== '') {

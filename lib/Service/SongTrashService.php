@@ -51,24 +51,60 @@ class SongTrashService {
 			->setMaxResults(100);
 
 		$result = $qb->executeQuery();
-		$deletedSongs = [];
+		$songs = [];
+		$songIds = [];
 		while ($row = $result->fetchAssociative()) {
 			$song = InternalSong::fromRow($row);
+			$songs[] = $song;
+			if ($song->id !== null) {
+				$songIds[] = (int)$song->id;
+			}
+		}
+		$result->closeCursor();
+
+		if ($songs === []) {
+			return [];
+		}
+
+		// Batch-load composer names for all deleted songs in a single query
+		$composersBySong = [];
+		$qbComp = $this->db->getQueryBuilder();
+		$qbComp->select('se.song_id', 'e.name')
+			->from(InternalEntityMapper::JUNCTION_TABLE_NAME, 'se')
+			->innerJoin('se', InternalEntityMapper::TABLE_NAME, 'e', $qbComp->expr()->eq('se.entity_id', 'e.id'))
+			->where($qbComp->expr()->in('se.song_id', $qbComp->createNamedParameter($songIds, IQueryBuilder::PARAM_INT_ARRAY)))
+			->andWhere($qbComp->expr()->eq('e.type', $qbComp->createNamedParameter('composer', IQueryBuilder::PARAM_STR)))
+			->andWhere($qbComp->expr()->isNull('se.deleted_at'))
+			->andWhere($qbComp->expr()->isNull('e.deleted_at'))
+			->orderBy('e.name', 'ASC');
+		$compResult = $qbComp->executeQuery();
+		while ($compRow = $compResult->fetchAssociative()) {
+			$composersBySong[(int)$compRow['song_id']][] = (string)$compRow['name'];
+		}
+		$compResult->closeCursor();
+
+		// Batch-load file counts (including soft-deleted files) for all deleted songs in a single query
+		$fileCountBySong = [];
+		$qbFiles = $this->db->getQueryBuilder();
+		$qbFiles->select('song_id', $qbFiles->func()->count('*', 'cnt'))
+			->from(InternalSongFileMapper::TABLE_NAME)
+			->where($qbFiles->expr()->in('song_id', $qbFiles->createNamedParameter($songIds, IQueryBuilder::PARAM_INT_ARRAY)))
+			->groupBy('song_id');
+		$fileResult = $qbFiles->executeQuery();
+		while ($fileRow = $fileResult->fetchAssociative()) {
+			$fileCountBySong[(int)$fileRow['song_id']] = (int)$fileRow['cnt'];
+		}
+		$fileResult->closeCursor();
+
+		$deletedSongs = [];
+		foreach ($songs as $song) {
 			$songId = (int)$song->id;
-
-			// Fetch composer names
-			$composers = $this->entityMapper->findEntitiesForSong($songId, 'composer');
-			$composerNames = array_map(static fn ($c) => $c->name, $composers);
-
-			// Count attached files
-			$files = $this->songFileMapper->findAllForSong($songId, includeDeleted: true);
-
 			$deletedSongs[] = [
 				'id' => $song->id,
 				'uuid' => $song->uuid,
 				'title' => $song->title,
-				'composers' => $composerNames,
-				'fileCount' => count($files),
+				'composers' => $composersBySong[$songId] ?? [],
+				'fileCount' => $fileCountBySong[$songId] ?? 0,
 				'deletedAt' => $song->deletedAt,
 				'rating' => $song->rating,
 			];
