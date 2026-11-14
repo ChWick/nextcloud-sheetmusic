@@ -154,20 +154,20 @@ class SongService {
 			$createdSong = $this->internalSongMapper->insert($song);
 			$songId = (int)$createdSong->id;
 
-			$this->setSongEntities($songId, [
-				'composer' => $composerIds,
-				'book' => $bookIds,
-				'collection' => $collectionIds,
-				'artist' => $artistIds,
-				'genre' => $genreIds,
-				'key' => $keyIds,
-				'customgroup' => $customGroupIds,
-				'year' => $yearIds,
-				'signature' => $signatureIds,
-				'sourcetype' => $sourceTypeIds,
-				'instrument' => $instrumentIds,
-				'arranger' => $arrangerIds,
-			]);
+			$this->setSongEntities($songId, $this->buildEntityMap(
+				$composerIds,
+				$bookIds,
+				$collectionIds,
+				$artistIds,
+				$genreIds,
+				$keyIds,
+				$customGroupIds,
+				$yearIds,
+				$signatureIds,
+				$sourceTypeIds,
+				$instrumentIds,
+				$arrangerIds,
+			));
 
 			if ($sublibrary !== null && $this->sublibraryService !== null) {
 				$this->sublibraryService->ensureSongMatchesSublibrary($sublibrary, $songId);
@@ -238,33 +238,26 @@ class SongService {
 		try {
 			$song = $this->internalSongMapper->findById($songId);
 			if ($song !== null && $song->libraryId === $targetLibraryId) {
-				if ($this->songHistoryService !== null && !$this->songHistoryService->hasHistory($songId)) {
-					$this->songHistoryService->recordSnapshot(
-						$song,
-						InternalSongHistory::ACTION_CREATED,
-						$user->getUID(),
-						summary: 'Initial revision before edits'
-					);
-				}
+				$this->recordInitialHistoryIfMissing($song, $user->getUID());
 
 				$this->applySongMetadata($song, $title, $sortTitle, $stars, $difficulty, $duration, $keywords, $custom, $opus, $catalogNumber, $songNumber);
 				$song->updatedAt = time();
 				$this->internalSongMapper->update($song);
 
-				$this->setSongEntities($songId, [
-					'composer' => $composerIds,
-					'book' => $bookIds,
-					'collection' => $collectionIds,
-					'artist' => $artistIds,
-					'genre' => $genreIds,
-					'key' => $keyIds,
-					'customgroup' => $customGroupIds,
-					'year' => $yearIds,
-					'signature' => $signatureIds,
-					'sourcetype' => $sourceTypeIds,
-					'instrument' => $instrumentIds,
-					'arranger' => $arrangerIds,
-				]);
+				$this->setSongEntities($songId, $this->buildEntityMap(
+					$composerIds,
+					$bookIds,
+					$collectionIds,
+					$artistIds,
+					$genreIds,
+					$keyIds,
+					$customGroupIds,
+					$yearIds,
+					$signatureIds,
+					$sourceTypeIds,
+					$instrumentIds,
+					$arrangerIds,
+				));
 
 				if ($this->internalSongBookmarkMapper !== null) {
 					$this->internalSongBookmarkMapper->setBookmarksForSong($songId, $bookmarks);
@@ -337,28 +330,21 @@ class SongService {
 						: "Updating song $current of $total";
 					$this->libraryService->updateProgress($progressId, 'batch-update', $current, $total, $detail);
 				}
-				if ($this->songHistoryService !== null && !$this->songHistoryService->hasHistory($sid)) {
-					$this->songHistoryService->recordSnapshot(
-						$song,
-						InternalSongHistory::ACTION_CREATED,
-						$user->getUID(),
-						summary: 'Initial revision before edits'
-					);
-				}
-				$this->setSongEntities($sid, [
-					'composer' => $composers,
-					'book' => $books,
-					'collection' => $collections,
-					'artist' => $artists,
-					'genre' => $genres,
-					'key' => $keys,
-					'customgroup' => $customGroups,
-					'year' => $years,
-					'signature' => $signatures,
-					'sourcetype' => $sourceTypes,
-					'instrument' => $instruments,
-					'arranger' => $arrangers,
-				]);
+				$this->recordInitialHistoryIfMissing($song, $user->getUID());
+				$this->setSongEntities($sid, $this->buildEntityMap(
+					$composers,
+					$books,
+					$collections,
+					$artists,
+					$genres,
+					$keys,
+					$customGroups,
+					$years,
+					$signatures,
+					$sourceTypes,
+					$instruments,
+					$arrangers,
+				));
 				$song = $this->internalSongMapper->findById($sid);
 				if ($song !== null) {
 					if (!empty($scalars)) {
@@ -392,6 +378,55 @@ class SongService {
 			]);
 			throw $e;
 		}
+	}
+
+	/**
+	 * Ensure an initial history baseline snapshot exists before applying edits.
+	 */
+	private function recordInitialHistoryIfMissing(InternalSong $song, string $userId): void {
+		if ($song->id !== null && $this->songHistoryService !== null && !$this->songHistoryService->hasHistory($song->id)) {
+			$this->songHistoryService->recordSnapshot(
+				$song,
+				InternalSongHistory::ACTION_CREATED,
+				$userId,
+				summary: 'Initial revision before edits'
+			);
+		}
+	}
+
+	/**
+	 * Build the entity-type => IDs map expected by {@see setSongEntities()}.
+	 *
+	 * @return array<string, list<int>|null>
+	 */
+	private function buildEntityMap(
+		?array $composers,
+		?array $books,
+		?array $collections,
+		?array $artists,
+		?array $genres,
+		?array $keys,
+		?array $customGroups,
+		?array $years,
+		?array $signatures,
+		?array $sourceTypes,
+		?array $instruments,
+		?array $arrangers,
+	): array {
+		return [
+			'composer' => $composers,
+			'book' => $books,
+			'collection' => $collections,
+			'artist' => $artists,
+			'genre' => $genres,
+			'key' => $keys,
+			'customgroup' => $customGroups,
+			'year' => $years,
+			'signature' => $signatures,
+			'sourcetype' => $sourceTypes,
+			'instrument' => $instruments,
+			'arranger' => $arrangers,
+		];
 	}
 
 	/**
@@ -557,6 +592,8 @@ class SongService {
 			$this->internalSongMapper->mergeSongs($targetLibraryId, $keepId, $droppedId);
 			if (!empty($merged['title'])) {
 				$this->updateSongFromData($user, $libraryId, ['id' => $keepId] + $merged);
+			} else {
+				$this->syncSongFilesAfterUpdate($user, $keepId, $targetLibraryId);
 			}
 			$this->libraryMapper->touch($targetLibraryId);
 
