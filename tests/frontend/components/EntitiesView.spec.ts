@@ -474,4 +474,99 @@ describe('EntitiesView.vue', () => {
 		expect(showSuccess).toHaveBeenCalledWith('Updated "Ludwig van Beethoven".')
 		expect(wrapper.text()).toContain('Ludwig van Beethoven')
 	})
+
+	it('edits a collection label and sends flat body with resolved id', async () => {
+		vi.mocked(axios.get).mockResolvedValueOnce({
+			data: {
+				ocs: {
+					data: {
+						songs: [],
+						collections: [{ id: 7, name: 'Baroque' }],
+					},
+				},
+			},
+		})
+		vi.mocked(axios.post).mockResolvedValueOnce({
+			data: {
+				ocs: {
+					data: {
+						songs: [],
+						collections: [{ id: 7, name: 'Early Baroque' }],
+					},
+				},
+			},
+		})
+
+		const wrapper = mount(EntitiesView, {
+			props: { selectedLibrary: 3, entityType: 'collections', canWrite: true },
+		})
+		await new Promise((r) => setTimeout(r, 10))
+
+		await wrapper.find('button[aria-label="Edit collection"]').trigger('click')
+		await wrapper.vm.$nextTick()
+		await wrapper.find('input[aria-label="Edit collection"]').setValue('Early Baroque')
+		await wrapper.find('button[aria-label="Save collection"]').trigger('click')
+		await new Promise((r) => setTimeout(r, 10))
+
+		expect(axios.post).toHaveBeenCalledWith(
+			'/ocs/v2.php/apps/sheetmusic/api/entities/7',
+			{
+				libraryId: 3,
+				entityType: 'collections',
+				name: 'Early Baroque',
+			},
+		)
+		expect(showSuccess).toHaveBeenCalledWith('Updated "Early Baroque".')
+		expect(wrapper.text()).toContain('Early Baroque')
+	})
+
+	it('edits a book using title key and shows server error on 409 conflict', async () => {
+		vi.mocked(axios.get).mockResolvedValueOnce({
+			data: {
+				ocs: {
+					data: {
+						songs: [],
+						books: [
+							{ id: 4, title: 'Real Book 1' },
+							{ id: 5, title: 'Real Book 2' },
+						],
+					},
+				},
+			},
+		})
+		vi.mocked(axios.post).mockRejectedValueOnce({
+			response: {
+				status: 409,
+				data: {
+					ocs: {
+						data: {
+							error: 'An entry with this name already exists. Use Merge to combine them.',
+						},
+					},
+				},
+			},
+		})
+
+		const wrapper = mount(EntitiesView, {
+			props: { selectedLibrary: 1, entityType: 'books', canWrite: true },
+		})
+		await new Promise((r) => setTimeout(r, 10))
+
+		await wrapper.findAll('button[aria-label="Edit book"]')[0].trigger('click')
+		await wrapper.vm.$nextTick()
+		await wrapper.find('input[aria-label="Edit book"]').setValue('Real Book 2')
+		await wrapper.find('button[aria-label="Save book"]').trigger('click')
+		await new Promise((r) => setTimeout(r, 10))
+
+		expect(axios.post).toHaveBeenCalledWith(
+			'/ocs/v2.php/apps/sheetmusic/api/entities/4',
+			{
+				libraryId: 1,
+				entityType: 'books',
+				title: 'Real Book 2',
+			},
+		)
+		expect(showError).toHaveBeenCalledWith('An entry with this name already exists. Use Merge to combine them.')
+		expect(wrapper.find('input[aria-label="Edit book"]').exists()).toBe(true)
+	})
 })

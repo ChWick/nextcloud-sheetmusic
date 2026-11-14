@@ -46,5 +46,23 @@ describe('api utils', () => {
 			const result = describeRequestFailure(error, 'Fallback message')
 			expect(result).toContain('HTTP {status}')
 		})
+
+		it('returns the server error field from an OCS error response', () => {
+			const error = {
+				response: {
+					status: 409,
+					data: {
+						ocs: {
+							data: {
+								error: 'An entry with this name already exists.',
+							},
+						},
+					},
+				},
+			}
+			expect(describeRequestFailure(error, 'Fallback message')).toBe(
+				'An entry with this name already exists.',
+			)
+		})
 	})
 })

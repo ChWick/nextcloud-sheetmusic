@@ -141,4 +141,48 @@ final class EntityControllerTest extends TestCase {
 		$this->assertCount(1, $composers);
 		$this->assertSame('Mozart', $composers[0]->name);
 	}
+
+	public function testUpdateEntityValidatesParamsHandlesNotFoundConflictAndRenames(): void {
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $this->controller->updateEntity(0, $this->libraryId, 'collections', 'Jazz')->getStatus());
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $this->controller->updateEntity(1, null, 'collections', 'Jazz')->getStatus());
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $this->controller->updateEntity(1, $this->libraryId, '', 'Jazz')->getStatus());
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $this->controller->updateEntity(1, $this->libraryId, 'collections', '  ')->getStatus());
+
+		$this->assertSame(Http::STATUS_NOT_FOUND, $this->controller->updateEntity(999999, $this->libraryId, 'collections', 'Jazz')->getStatus());
+
+		$col1 = $this->entityMapper->insert(new InternalEntity(
+			uuid: 'upd-col-1',
+			libraryId: $this->libraryId,
+			type: 'collection',
+			name: 'Baroque',
+		));
+		$col2 = $this->entityMapper->insert(new InternalEntity(
+			uuid: 'upd-col-2',
+			libraryId: $this->libraryId,
+			type: 'collection',
+			name: 'Classical',
+		));
+
+		// Duplicate name -> 409 Conflict
+		$conflictRes = $this->controller->updateEntity($col1->id, $this->libraryId, 'collections', 'Classical');
+		$this->assertSame(Http::STATUS_CONFLICT, $conflictRes->getStatus());
+		$this->assertArrayHasKey('error', $conflictRes->getData());
+
+		// Rename collection -> 200 OK
+		$okRes = $this->controller->updateEntity($col1->id, $this->libraryId, 'collections', 'Early Baroque');
+		$this->assertSame(Http::STATUS_OK, $okRes->getStatus());
+		$reloaded = $this->entityMapper->findById($col1->id);
+		$this->assertSame('Early Baroque', $reloaded?->name);
+
+		// Rename book via $title param -> 200 OK
+		$book = $this->entityMapper->insert(new InternalEntity(
+			uuid: 'upd-book-1',
+			libraryId: $this->libraryId,
+			type: 'book',
+			name: 'Old Real Book',
+		));
+		$bookRes = $this->controller->updateEntity($book->id, $this->libraryId, 'books', null, 'New Real Book');
+		$this->assertSame(Http::STATUS_OK, $bookRes->getStatus());
+		$this->assertSame('New Real Book', $this->entityMapper->findById($book->id)?->name);
+	}
 }
