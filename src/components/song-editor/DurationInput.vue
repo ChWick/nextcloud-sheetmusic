@@ -11,9 +11,11 @@ const props = withDefaults(defineProps<{
 	modelValue: number | null
 	id?: string
 	label?: string
+	compact?: boolean
 }>(), {
 	id: 'song-duration-input',
 	label: '',
+	compact: false,
 })
 
 const emit = defineEmits<{
@@ -150,6 +152,8 @@ function onSegmentKeydown(segment: Segment, event: KeyboardEvent) {
 	}
 
 	if (event.key === 'Escape' && isPickerOpen.value) {
+		event.preventDefault()
+		event.stopPropagation()
 		isPickerOpen.value = false
 	}
 }
@@ -188,6 +192,10 @@ onMounted(() => {
 onBeforeUnmount(() => {
 	document.removeEventListener('mousedown', handleDocumentClick)
 })
+
+defineExpose({
+	focus: () => focusSegment('hours'),
+})
 </script>
 
 <template>
@@ -195,7 +203,7 @@ onBeforeUnmount(() => {
 		<label v-if="label" :for="id" :class="$style.label">
 			{{ label }}
 		</label>
-		<div :class="$style.control">
+		<div :class="[$style.control, compact && $style.controlCompact]">
 			<ClockOutlineIcon :size="18" :class="$style.icon" />
 			<div :class="$style.segments">
 				<input
@@ -344,6 +352,12 @@ onBeforeUnmount(() => {
 .control:hover,
 .control:focus-within {
 	border-color: var(--color-primary-element);
+}
+
+.controlCompact {
+	height: 32px;
+	border-width: 1px;
+	border-radius: var(--border-radius, 4px);
 }
 
 .icon {

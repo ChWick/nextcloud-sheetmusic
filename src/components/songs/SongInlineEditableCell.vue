@@ -5,6 +5,7 @@ import CheckIcon from 'vue-material-design-icons/Check.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import { nextTick, ref, useId } from 'vue'
+import DurationInput from '../song-editor/DurationInput.vue'
 import type { InlineEditableField } from './song-view-columns'
 
 const props = withDefaults(
@@ -16,7 +17,7 @@ const props = withDefaults(
 		ariaLabel: string
 		editTitle: string
 		placeholder?: string
-		mode?: 'text' | 'select' | 'entity'
+		mode?: 'text' | 'select' | 'entity' | 'duration'
 		options?: Array<{ value: number, label: string }>
 		suggestions?: string[]
 		entityOptions?: any[]
@@ -54,11 +55,13 @@ const datalistId = `inline-datalist-${props.field}-${useId()}`
 const isEditing = ref(false)
 const draftText = ref('')
 const draftNumber = ref(0)
+const draftDuration = ref<number | null>(null)
 const draftEntities = ref<any[]>([])
 const initialEntitiesSnapshot = ref<any[]>([])
 const inputRef = ref<HTMLInputElement | null>(null)
 const selectRef = ref<HTMLSelectElement | null>(null)
 const entitySelectRef = ref<any>(null)
+const durationInputRef = ref<InstanceType<typeof DurationInput> | null>(null)
 
 function defaultCreateEntityTag(name: string): any {
 	const trimmed = name.trim()
@@ -99,6 +102,9 @@ async function startEdit() {
 	isEditing.value = true
 	if (props.mode === 'select') {
 		draftNumber.value = Number(props.value ?? 0)
+	} else if (props.mode === 'duration') {
+		const num = Number(props.value ?? 0)
+		draftDuration.value = num > 0 ? num : null
 	} else if (props.mode === 'entity') {
 		const initial = props.initialEntities ?? []
 		const options = props.entityOptions ?? []
@@ -125,11 +131,15 @@ async function startEdit() {
 		const searchInput = (entitySelectRef.value as any).$el?.querySelector?.('input')
 		searchInput?.focus?.()
 	}
+	if (durationInputRef.value) {
+		durationInputRef.value.focus()
+	}
 }
 
 function cancelEdit() {
 	isEditing.value = false
 	draftText.value = ''
+	draftDuration.value = null
 	draftEntities.value = []
 	initialEntitiesSnapshot.value = []
 }
@@ -143,6 +153,16 @@ function commitEdit() {
 		cancelEdit()
 		if (nextNum !== prevNum) {
 			emit('save', nextNum)
+		}
+		return
+	}
+
+	if (props.mode === 'duration') {
+		const nextSeconds = draftDuration.value && draftDuration.value > 0 ? draftDuration.value : 0
+		const prevSeconds = Number(props.value ?? 0) > 0 ? Number(props.value) : 0
+		cancelEdit()
+		if (nextSeconds !== prevSeconds) {
+			emit('save', nextSeconds)
 		}
 		return
 	}
@@ -223,6 +243,13 @@ defineExpose({
 					:append-to-body="true"
 					data-test="inline-edit-entity-select" />
 			</div>
+			<DurationInput
+				v-else-if="mode === 'duration'"
+				ref="durationInputRef"
+				v-model="draftDuration"
+				:compact="true"
+				@keydown.enter.prevent="commitEdit"
+				@keydown.esc.prevent="cancelEdit" />
 			<template v-else>
 				<input
 					ref="inputRef"
@@ -240,7 +267,7 @@ defineExpose({
 				</datalist>
 			</template>
 			<button
-				v-if="mode === 'text' || mode === 'entity'"
+				v-if="mode === 'text' || mode === 'entity' || mode === 'duration'"
 				type="button"
 				:class="[$style.inlineActionBtn, $style.inlineSaveBtn]"
 				data-test="inline-edit-save"
