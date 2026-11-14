@@ -18,6 +18,7 @@ use OCA\SheetMusic\Db\InternalSongFile;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsFileFacts;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdf;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdfMetadata;
 use OCP\Files\File;
@@ -107,6 +108,17 @@ class LibraryReconciler {
 		$totalPhysical = count($physicalFiles);
 		$currentIndex = 0;
 		$entityCache = [];
+		if ($importPdfMetadata && $this->entityMapper !== null) {
+			foreach ($this->entityMapper->findAllForLibrary($lib->id) as $existingEntity) {
+				if ($existingEntity->id !== null) {
+					$normType = InternalEntityMapper::normalizeType($existingEntity->type);
+					$lookupKey = mb_strtolower(trim($existingEntity->name), 'UTF-8');
+					if ($lookupKey !== '') {
+						$entityCache[$normType][$lookupKey] ??= $existingEntity->id;
+					}
+				}
+			}
+		}
 
 		// 3. Index unindexed physical files and update changed facts
 		foreach ($physicalFiles as $fileId => $fileNode) {
@@ -205,8 +217,8 @@ class LibraryReconciler {
 		$ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
 		if ($ext === 'pdf') {
 			try {
-				$content = $fileNode->getContent();
-				if ($content !== false && $content !== '') {
+				$content = MobileSheetsFileFacts::readFileContent($fileNode);
+				if ($content !== '') {
 					$hash = MobileSheetsPdf::contentHash($content);
 					$pageCount = MobileSheetsPdf::pageCount($content);
 					$pageOrder = MobileSheetsPdf::pageOrder($pageCount);
@@ -376,8 +388,8 @@ class LibraryReconciler {
 	 */
 	private function extractPdfFacts(File $fileNode): array {
 		try {
-			$content = $fileNode->getContent();
-			if ($content !== false && $content !== '') {
+			$content = MobileSheetsFileFacts::readFileContent($fileNode);
+			if ($content !== '') {
 				$hash = MobileSheetsPdf::contentHash($content);
 				$pageCount = MobileSheetsPdf::pageCount($content);
 				$pageOrder = MobileSheetsPdf::pageOrder($pageCount);

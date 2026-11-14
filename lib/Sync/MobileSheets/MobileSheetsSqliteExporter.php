@@ -852,8 +852,8 @@ class MobileSheetsSqliteExporter {
 			$ext = strtolower(pathinfo($node->getName(), PATHINFO_EXTENSION));
 			$pageOrderChanged = false;
 			if ($ext === 'pdf') {
-				$content = $node->getContent();
-				if ($content !== false && $content !== '') {
+				$content = MobileSheetsFileFacts::readFileContent($node);
+				if ($content !== '') {
 					if ($file->fileHash === null) {
 						$file->fileHash = MobileSheetsPdf::contentHash($content);
 						$changed = true;
