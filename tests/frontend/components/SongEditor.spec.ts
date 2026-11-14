@@ -657,6 +657,16 @@ describe('SongEditor.vue', () => {
 		expect((starsInput.element as HTMLInputElement).value).toBe('4')
 		await starsInput.setValue('5')
 
+		const hoursSelect = wrapper.find('[data-test="duration-hours"]')
+		const minutesSelect = wrapper.find('[data-test="duration-minutes"]')
+		const secondsSelect = wrapper.find('[data-test="duration-seconds"]')
+		expect((hoursSelect.element as HTMLSelectElement).value).toBe('0')
+		expect((minutesSelect.element as HTMLSelectElement).value).toBe('4')
+		expect((secondsSelect.element as HTMLSelectElement).value).toBe('0')
+		await hoursSelect.setValue('1')
+		await minutesSelect.setValue('2')
+		await secondsSelect.setValue('3')
+
 		const keywordsInput = wrapper.find('input#song-keywords-input')
 		expect((keywordsInput.element as HTMLInputElement).value).toBe('allegro')
 		await keywordsInput.setValue('allegro, vivace')
@@ -685,7 +695,7 @@ describe('SongEditor.vue', () => {
 				songNumber: '',
 				stars: 5,
 				difficulty: 3,
-				duration: 240,
+				duration: 3723,
 				keywords: 'allegro, vivace',
 				custom: 'Opus 5',
 				custom2: 'No. 2',

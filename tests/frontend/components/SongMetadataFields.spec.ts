@@ -17,7 +17,7 @@ vi.mock('@nextcloud/vue/components/NcSelect', () => ({
 
 vi.mock('@nextcloud/vue/components/NcTextField', () => ({
 	default: {
-		template: '<input :id="id" :aria-label="label" :value="modelValue" />',
+		template: '<input :id="id" :aria-label="label" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
 		props: ['id', 'label', 'modelValue', 'placeholder', 'type'],
 	},
 }))
@@ -99,7 +99,7 @@ describe('SongMetadataFields.vue', () => {
 
 		expect((wrapper.find('#song-rating-input').element as HTMLInputElement).value).toBe('')
 		expect((wrapper.find('#song-difficulty-input').element as HTMLInputElement).value).toBe('')
-		expect((wrapper.find('#song-duration-input').element as HTMLInputElement).value).toBe('')
+		expect((wrapper.find('#song-duration-input').element as HTMLSelectElement).value).toBe('0')
 	})
 
 	it('emits newly tagged entity selections back to the editor model', async () => {
@@ -111,5 +111,32 @@ describe('SongMetadataFields.vue', () => {
 
 		expect(props.createComposerTag).toHaveBeenCalledWith('New tag')
 		expect(wrapper.emitted('update:selectedComposers')).toEqual([[[{ name: 'New tag' }]]])
+	})
+
+	it('displays and edits duration in hh:mm:ss selector while keeping model value in seconds', async () => {
+		const wrapper = mount(SongMetadataFields, {
+			props: {
+				...props,
+				duration: 240,
+			},
+		})
+
+		const hoursSelect = wrapper.find('[data-test="duration-hours"]')
+		const minutesSelect = wrapper.find('[data-test="duration-minutes"]')
+		const secondsSelect = wrapper.find('[data-test="duration-seconds"]')
+		expect((hoursSelect.element as HTMLSelectElement).value).toBe('0')
+		expect((minutesSelect.element as HTMLSelectElement).value).toBe('4')
+		expect((secondsSelect.element as HTMLSelectElement).value).toBe('0')
+
+		await hoursSelect.setValue('1')
+		await wrapper.setProps({ duration: 3840 })
+		await minutesSelect.setValue('2')
+		await wrapper.setProps({ duration: 3720 })
+		await secondsSelect.setValue('3')
+		expect(wrapper.emitted('update:duration')?.at(-1)).toEqual([3723])
+
+		await wrapper.setProps({ duration: 3723 })
+		await wrapper.find('[data-test="duration-clear"]').trigger('click')
+		expect(wrapper.emitted('update:duration')?.at(-1)).toEqual([null])
 	})
 })
