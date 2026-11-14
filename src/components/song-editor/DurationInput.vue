@@ -242,9 +242,11 @@ onBeforeUnmount(() => {
 					@keydown="onSegmentKeydown('seconds', $event)">
 			</div>
 			<button
-				v-if="totalSeconds > 0"
 				type="button"
-				:class="$style.iconButton"
+				:class="[$style.iconButton, totalSeconds === 0 && $style.iconButtonHidden]"
+				:disabled="totalSeconds === 0"
+				:tabindex="totalSeconds === 0 ? -1 : 0"
+				:aria-hidden="totalSeconds === 0"
 				:title="t('sheetmusic', 'Clear duration')"
 				:aria-label="t('sheetmusic', 'Clear duration')"
 				data-test="duration-clear"
@@ -402,6 +404,11 @@ onBeforeUnmount(() => {
 .iconButton:hover {
 	background: var(--color-background-hover);
 	color: var(--color-main-text);
+}
+
+.iconButtonHidden {
+	visibility: hidden;
+	pointer-events: none;
 }
 
 .popover {
