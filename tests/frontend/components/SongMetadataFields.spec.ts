@@ -142,8 +142,9 @@ describe('SongMetadataFields.vue', () => {
 
 		await wrapper.setProps({ duration: 3724 })
 		await wrapper.find('[data-test="duration-picker-toggle"]').trigger('click')
-		expect(wrapper.find('[data-test="duration-picker-popover"]').exists()).toBe(true)
-		await wrapper.find('[data-test="duration-pick-minutes-15"]').trigger('click')
+		expect(document.body.querySelector('[data-test="duration-picker-popover"]')).toBeTruthy()
+		;(document.body.querySelector('[data-test="duration-pick-minutes-15"]') as HTMLButtonElement).click()
+		await wrapper.vm.$nextTick()
 		expect(wrapper.emitted('update:duration')?.at(-1)).toEqual([4504])
 
 		await wrapper.setProps({ duration: 3723 })

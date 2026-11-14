@@ -3,7 +3,7 @@ import { translate as t } from '@nextcloud/l10n'
 import ChevronDownIcon from 'vue-material-design-icons/ChevronDown.vue'
 import ClockOutlineIcon from 'vue-material-design-icons/ClockOutline.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 type Segment = 'hours' | 'minutes' | 'seconds'
 
@@ -23,6 +23,8 @@ const emit = defineEmits<{
 }>()
 
 const rootRef = ref<HTMLElement | null>(null)
+const controlRef = ref<HTMLElement | null>(null)
+const popoverRef = ref<HTMLElement | null>(null)
 const hoursRef = ref<HTMLInputElement | null>(null)
 const minutesRef = ref<HTMLInputElement | null>(null)
 const secondsRef = ref<HTMLInputElement | null>(null)
@@ -41,6 +43,28 @@ const hoursText = ref(pad2(hours.value))
 const minutesText = ref(pad2(minutes.value))
 const secondsText = ref(pad2(seconds.value))
 const isPickerOpen = ref(false)
+const popoverStyle = ref<{ top: string, left: string }>({ top: '0px', left: '0px' })
+
+function updatePopoverPosition() {
+	const rect = controlRef.value?.getBoundingClientRect()
+	if (!rect) return
+	const popoverWidth = 210
+	const maxLeft = Math.max(8, window.innerWidth - popoverWidth - 8)
+	const left = Math.min(rect.left, maxLeft)
+	const top = rect.bottom + 4
+	popoverStyle.value = {
+		top: `${top}px`,
+		left: `${left}px`,
+	}
+}
+
+async function togglePicker() {
+	isPickerOpen.value = !isPickerOpen.value
+	if (isPickerOpen.value) {
+		await nextTick()
+		updatePopoverPosition()
+	}
+}
 
 const hourOptions = computed(() => Array.from({ length: Math.max(24, hours.value + 1) }, (_, i) => i))
 const sixtyOptions = Array.from({ length: 60 }, (_, i) => i)
@@ -180,17 +204,30 @@ function clearDuration() {
 
 function handleDocumentClick(event: MouseEvent) {
 	if (!isPickerOpen.value) return
-	if (rootRef.value && !rootRef.value.contains(event.target as Node)) {
+	const target = event.target as Node
+	const inRoot = rootRef.value?.contains(target) ?? false
+	const inPopover = popoverRef.value?.contains(target) ?? false
+	if (!inRoot && !inPopover) {
 		isPickerOpen.value = false
+	}
+}
+
+function handleViewportChange() {
+	if (isPickerOpen.value) {
+		updatePopoverPosition()
 	}
 }
 
 onMounted(() => {
 	document.addEventListener('mousedown', handleDocumentClick)
+	window.addEventListener('resize', handleViewportChange)
+	window.addEventListener('scroll', handleViewportChange, true)
 })
 
 onBeforeUnmount(() => {
 	document.removeEventListener('mousedown', handleDocumentClick)
+	window.removeEventListener('resize', handleViewportChange)
+	window.removeEventListener('scroll', handleViewportChange, true)
 })
 
 defineExpose({
@@ -203,7 +240,7 @@ defineExpose({
 		<label v-if="label" :for="id" :class="$style.label">
 			{{ label }}
 		</label>
-		<div :class="[$style.control, compact && $style.controlCompact]">
+		<div ref="controlRef" :class="[$style.control, compact && $style.controlCompact]">
 			<ClockOutlineIcon :size="18" :class="$style.icon" />
 			<div :class="$style.segments">
 				<input
@@ -268,12 +305,19 @@ defineExpose({
 				:aria-label="t('sheetmusic', 'Select duration')"
 				:aria-expanded="isPickerOpen"
 				data-test="duration-picker-toggle"
-				@click="isPickerOpen = !isPickerOpen">
+				@click="togglePicker">
 				<ChevronDownIcon :size="18" />
 			</button>
 		</div>
 
-		<div v-if="isPickerOpen" :class="$style.popover" data-test="duration-picker-popover">
+		<Teleport to="body">
+			<div
+				v-if="isPickerOpen"
+				ref="popoverRef"
+				:class="$style.popover"
+				:style="popoverStyle"
+				data-test="duration-picker-popover"
+				@click.stop>
 			<div :class="$style.column">
 				<div :class="$style.columnHeader">{{ t('sheetmusic', 'HH') }}</div>
 				<div :class="$style.columnList">
@@ -316,7 +360,8 @@ defineExpose({
 					</button>
 				</div>
 			</div>
-		</div>
+			</div>
+		</Teleport>
 	</div>
 </template>
 
@@ -426,10 +471,8 @@ defineExpose({
 }
 
 .popover {
-	position: absolute;
-	top: calc(100% + 4px);
-	left: 0;
-	z-index: 100;
+	position: fixed;
+	z-index: 10000;
 	display: grid;
 	grid-template-columns: repeat(3, 1fr);
 	gap: 4px;
