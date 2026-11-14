@@ -508,14 +508,17 @@ async function saveEditEntity(entity: FilterEntity) {
 
   isUpdatingEntity.value = true
   try {
-    const response = await apiPost('/api/entities/{id}' as any, {
-      pathParams: { id: entity.id },
-      body: {
+    const response = await apiPost(
+      '/api/entities/{id}' as any,
+      {
         libraryId: props.selectedLibrary,
         entityType: props.entityType,
         [config.value.nameKey]: nextName,
-      },
-    } as any)
+      } as any,
+      {
+        pathParams: { id: entity.id },
+      } as any,
+    )
     handleLibraryDataUpdate((response.data?.ocs?.data ?? null) as LibraryData | null)
     showSuccess(t('sheetmusic', 'Updated "{name}".', { name: nextName }, { escape: false }))
     cancelEditEntity()

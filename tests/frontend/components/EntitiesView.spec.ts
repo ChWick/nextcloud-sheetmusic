@@ -464,14 +464,11 @@ describe('EntitiesView.vue', () => {
 		await new Promise((r) => setTimeout(r, 10))
 
 		expect(axios.post).toHaveBeenCalledWith(
-			'/ocs/v2.php/apps/sheetmusic/api/entities/{id}',
+			'/ocs/v2.php/apps/sheetmusic/api/entities/1',
 			{
-				pathParams: { id: 1 },
-				body: {
-					libraryId: 1,
-					entityType: 'composers',
-					name: 'Ludwig van Beethoven',
-				},
+				libraryId: 1,
+				entityType: 'composers',
+				name: 'Ludwig van Beethoven',
 			},
 		)
 		expect(showSuccess).toHaveBeenCalledWith('Updated "Ludwig van Beethoven".')
