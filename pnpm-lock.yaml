@@ -15,8 +15,8 @@ importers:
         specifier: ^2.6.0
         version: 2.6.0(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2)
       '@nextcloud/dialogs':
-        specifier: ^7.5.0
-        version: 7.5.0(@vue/compiler-sfc@3.5.43)(axios@1.20.0(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2))(debug@4.4.3(supports-color@10.2.2))(esbuild@0.28.2)(rollup@4.63.4)(supports-color@10.2.2)(typescript@5.9.3)(vite@7.3.6(@types/node@26.6.5)(sass@1.104.1))
+        specifier: ^8.0.0
+        version: 8.0.0(@vue/compiler-sfc@3.5.43)(axios@1.20.0(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2))(debug@4.4.3(supports-color@10.2.2))(esbuild@0.28.2)(rollup@4.63.4)(supports-color@10.2.2)(typescript@5.9.3)(vite@7.3.6(@types/node@26.6.5)(sass@1.104.1))
       '@nextcloud/files':
         specifier: ^4.1.1
         version: 4.1.1(axios@1.20.0(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2))(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2)
@@ -25,7 +25,7 @@ importers:
         version: 3.2.0
       '@nextcloud/vue':
         specifier: ^9.14.0
-        version: 9.14.1(@nextcloud/dialogs@7.5.0(@vue/compiler-sfc@3.5.43)(axios@1.20.0(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2))(debug@4.4.3(supports-color@10.2.2))(esbuild@0.28.2)(rollup@4.63.4)(supports-color@10.2.2)(typescript@5.9.3)(vite@7.3.6(@types/node@26.6.5)(sass@1.104.1)))(@nextcloud/files@4.1.1(axios@1.20.0(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2))(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2))(@vue/compiler-sfc@3.5.43)(debug@4.4.3(supports-color@10.2.2))(esbuild@0.28.2)(rollup@4.63.4)(supports-color@10.2.2)(typescript@5.9.3)(vite@7.3.6(@types/node@26.6.5)(sass@1.104.1))
+        version: 9.14.1(@nextcloud/dialogs@8.0.0(@vue/compiler-sfc@3.5.43)(axios@1.20.0(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2))(debug@4.4.3(supports-color@10.2.2))(esbuild@0.28.2)(rollup@4.63.4)(supports-color@10.2.2)(typescript@5.9.3)(vite@7.3.6(@types/node@26.6.5)(sass@1.104.1)))(@nextcloud/files@4.1.1(axios@1.20.0(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2))(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2))(@vue/compiler-sfc@3.5.43)(debug@4.4.3(supports-color@10.2.2))(esbuild@0.28.2)(rollup@4.63.4)(supports-color@10.2.2)(typescript@5.9.3)(vite@7.3.6(@types/node@26.6.5)(sass@1.104.1))
       pdf-lib:
         specifier: ^1.17.1
         version: 1.17.1
@@ -766,10 +766,9 @@ packages:
     resolution: {integrity: sha512-snZ0/910zzwN6PDsIlx2Uvktr1S5x0ClhDUnfPlCj7ntNvECzuVHNY5wzby22LIkc+9ZjaDKtCwuCt2ye+9p/Q==}
     engines: {node: ^20.0.0 || ^22.0.0 || ^24.0.0}
 
-  '@nextcloud/dialogs@7.5.0':
-    resolution: {integrity: sha512-2gmv0V3ObphxRd7ZvXwTsPvn/XSf2vummdXb2LRFpkoSamWbk+41SWv7cnDQPC+Ve9p46WebDuqyG+wbefkhEw==}
-    engines: {node: ^20 || ^22 || ^24}
-    deprecated: This version contained breaking changes, please update to v7.6.0 instead or bump to v8.0.0.
+  '@nextcloud/dialogs@8.0.0':
+    resolution: {integrity: sha512-8uN59XKOMk7MVCh0Nxdd8hvZmZQxlVIRv8s1GrhC5+Ub0hD6yJ/8XyruF54lrkmGmBqh048/i/ZER93vwfRpDg==}
+    engines: {node: ^22.18 || ^24 || >=26}
 
   '@nextcloud/eslint-config@9.0.1':
     resolution: {integrity: sha512-TzJrZdrIJgnoW9V0U31sLuhot/i1kWB3A9VMFUiuMXEKYQUTwgL4LTA5DbJ6Dnlsx+6XuR3Bi6d4RWfaeLzlJw==}
@@ -1453,28 +1452,15 @@ packages:
     peerDependencies:
       vue: ^3.5.0
 
-  '@vueuse/core@14.4.0':
-    resolution: {integrity: sha512-X4WHz1HlCzCBoYXesUkifzzWBAcZgXG8Fi5iNPQg/epdzOB3gu8Fawj3hvuwYR1nGcXGnvxwYYcUC/71++svtQ==}
-    peerDependencies:
-      vue: ^3.5.0
-
   '@vueuse/core@15.0.0':
     resolution: {integrity: sha512-Zv67h5mrk7YHDJsRObx+DXaCBz6RKBUpxqLesJ+3xZNPG6yuQs7ja7kg3veFrrouYLWAqydQ7CwGEbLVxB43Ng==}
     engines: {node: '>=22'}
     peerDependencies:
       vue: ^3.5.0
 
-  '@vueuse/metadata@14.4.0':
-    resolution: {integrity: sha512-swx/255R6JyHZFJhx845iz5CRWDZdCfvkZOpACWc5+c5WHcG24mv8gUT1WIdFQaHt6dq79rvILd9QnCWiyVm9g==}
-
   '@vueuse/metadata@15.0.0':
     resolution: {integrity: sha512-sfWE5LADAKJ0KnjtGliMdSN8Ij/L7uP6rXIZlgPloAI4zvvefbw6H5Lt7KJA6RqQOYgVqWF5Guj50HHMIzygBg==}
     engines: {node: '>=22'}
-
-  '@vueuse/shared@14.4.0':
-    resolution: {integrity: sha512-JRgY90Sz8DDtPMsaDflvPMp9xYk69JZAmbuDvAquUVXKr2gEjqtzGNTTthLfckH0BzBqvnu31gb4a8TGLRe79g==}
-    peerDependencies:
-      vue: ^3.5.0
 
   '@vueuse/shared@15.0.0':
     resolution: {integrity: sha512-vbNXhGrbV53xPOMSyOzMHQRvhMgZf7oNDw2RChUetVxwTIEkInQ1joZ9JbT0G3z2n2AJNjvmCWeM9ySYrnvogA==}
@@ -4440,7 +4426,7 @@ snapshots:
     dependencies:
       '@nextcloud/initial-state': 3.0.0
 
-  '@nextcloud/dialogs@7.5.0(@vue/compiler-sfc@3.5.43)(axios@1.20.0(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2))(debug@4.4.3(supports-color@10.2.2))(esbuild@0.28.2)(rollup@4.63.4)(supports-color@10.2.2)(typescript@5.9.3)(vite@7.3.6(@types/node@26.6.5)(sass@1.104.1))':
+  '@nextcloud/dialogs@8.0.0(@vue/compiler-sfc@3.5.43)(axios@1.20.0(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2))(debug@4.4.3(supports-color@10.2.2))(esbuild@0.28.2)(rollup@4.63.4)(supports-color@10.2.2)(typescript@5.9.3)(vite@7.3.6(@types/node@26.6.5)(sass@1.104.1))':
     dependencies:
       '@mdi/js': 7.4.47
       '@nextcloud/auth': 2.6.0
@@ -4454,9 +4440,9 @@ snapshots:
       '@nextcloud/paths': 3.1.0
       '@nextcloud/router': 3.2.0
       '@nextcloud/sharing': 0.4.0
-      '@nextcloud/vue': 9.14.1(@nextcloud/dialogs@7.5.0(@vue/compiler-sfc@3.5.43)(axios@1.20.0(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2))(debug@4.4.3(supports-color@10.2.2))(esbuild@0.28.2)(rollup@4.63.4)(supports-color@10.2.2)(typescript@5.9.3)(vite@7.3.6(@types/node@26.6.5)(sass@1.104.1)))(@nextcloud/files@4.1.1(axios@1.20.0(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2))(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2))(@vue/compiler-sfc@3.5.43)(debug@4.4.3(supports-color@10.2.2))(esbuild@0.28.2)(rollup@4.63.4)(supports-color@10.2.2)(typescript@5.9.3)(vite@7.3.6(@types/node@26.6.5)(sass@1.104.1))
-      '@vueuse/core': 14.4.0(vue@3.5.45(typescript@5.9.3))
-      p-queue: 9.3.3
+      '@nextcloud/vue': 9.14.1(@nextcloud/dialogs@8.0.0(@vue/compiler-sfc@3.5.43)(axios@1.20.0(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2))(debug@4.4.3(supports-color@10.2.2))(esbuild@0.28.2)(rollup@4.63.4)(supports-color@10.2.2)(typescript@5.9.3)(vite@7.3.6(@types/node@26.6.5)(sass@1.104.1)))(@nextcloud/files@4.1.1(axios@1.20.0(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2))(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2))(@vue/compiler-sfc@3.5.43)(debug@4.4.3(supports-color@10.2.2))(esbuild@0.28.2)(rollup@4.63.4)(supports-color@10.2.2)(typescript@5.9.3)(vite@7.3.6(@types/node@26.6.5)(sass@1.104.1))
+      '@vueuse/core': 15.0.0(vue@3.5.45(typescript@5.9.3))
+      p-queue: 10.0.0
       vue: 3.5.45(typescript@5.9.3)
       webdav: 5.11.0
     transitivePeerDependencies:
@@ -4593,7 +4579,7 @@ snapshots:
     dependencies:
       vue: 3.5.45(typescript@5.9.3)
 
-  '@nextcloud/vue@9.14.1(@nextcloud/dialogs@7.5.0(@vue/compiler-sfc@3.5.43)(axios@1.20.0(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2))(debug@4.4.3(supports-color@10.2.2))(esbuild@0.28.2)(rollup@4.63.4)(supports-color@10.2.2)(typescript@5.9.3)(vite@7.3.6(@types/node@26.6.5)(sass@1.104.1)))(@nextcloud/files@4.1.1(axios@1.20.0(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2))(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2))(@vue/compiler-sfc@3.5.43)(debug@4.4.3(supports-color@10.2.2))(esbuild@0.28.2)(rollup@4.63.4)(supports-color@10.2.2)(typescript@5.9.3)(vite@7.3.6(@types/node@26.6.5)(sass@1.104.1))':
+  '@nextcloud/vue@9.14.1(@nextcloud/dialogs@8.0.0(@vue/compiler-sfc@3.5.43)(axios@1.20.0(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2))(debug@4.4.3(supports-color@10.2.2))(esbuild@0.28.2)(rollup@4.63.4)(supports-color@10.2.2)(typescript@5.9.3)(vite@7.3.6(@types/node@26.6.5)(sass@1.104.1)))(@nextcloud/files@4.1.1(axios@1.20.0(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2))(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2))(@vue/compiler-sfc@3.5.43)(debug@4.4.3(supports-color@10.2.2))(esbuild@0.28.2)(rollup@4.63.4)(supports-color@10.2.2)(typescript@5.9.3)(vite@7.3.6(@types/node@26.6.5)(sass@1.104.1))':
     dependencies:
       '@ckpack/vue-color': 1.6.0(vue@3.5.45(typescript@5.9.3))
       '@floating-ui/dom': 1.8.0
@@ -4640,7 +4626,7 @@ snapshots:
       vue: 3.5.45(typescript@5.9.3)
       vue-router: 5.4.0(@vue/compiler-sfc@3.5.43)(esbuild@0.28.2)(rollup@4.63.4)(vite@7.3.6(@types/node@26.6.5)(sass@1.104.1))(vue@3.5.45(typescript@5.9.3))
     optionalDependencies:
-      '@nextcloud/dialogs': 7.5.0(@vue/compiler-sfc@3.5.43)(axios@1.20.0(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2))(debug@4.4.3(supports-color@10.2.2))(esbuild@0.28.2)(rollup@4.63.4)(supports-color@10.2.2)(typescript@5.9.3)(vite@7.3.6(@types/node@26.6.5)(sass@1.104.1))
+      '@nextcloud/dialogs': 8.0.0(@vue/compiler-sfc@3.5.43)(axios@1.20.0(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2))(debug@4.4.3(supports-color@10.2.2))(esbuild@0.28.2)(rollup@4.63.4)(supports-color@10.2.2)(typescript@5.9.3)(vite@7.3.6(@types/node@26.6.5)(sass@1.104.1))
       '@nextcloud/files': 4.1.1(axios@1.20.0(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2))(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2)
     transitivePeerDependencies:
       - '@farmfe/core'
@@ -4873,7 +4859,7 @@ snapshots:
     dependencies:
       ajv: 8.20.0
       ajv-draft-04: 1.0.0(ajv@8.20.0)
-      ajv-formats: 3.0.1
+      ajv-formats: 3.0.1(ajv@8.20.0)
       fs-extra: 11.3.6
       import-lazy: 4.0.0
       jju: 1.4.0
@@ -5122,11 +5108,11 @@ snapshots:
 
   '@vue/compiler-core@3.5.43':
     dependencies:
-      '@babel/parser': 7.29.9
+      '@babel/parser': 7.29.13
       '@vue/shared': 3.5.43
       entities: 7.0.1
       estree-walker: 2.0.2
-      source-map-js: 1.2.1
+      source-map-js: 1.2.2
 
   '@vue/compiler-core@3.5.45':
     dependencies:
@@ -5148,15 +5134,15 @@ snapshots:
 
   '@vue/compiler-sfc@3.5.43':
     dependencies:
-      '@babel/parser': 7.29.9
+      '@babel/parser': 7.29.13
       '@vue/compiler-core': 3.5.43
       '@vue/compiler-dom': 3.5.43
       '@vue/compiler-ssr': 3.5.43
       '@vue/shared': 3.5.43
       estree-walker: 2.0.2
       magic-string: 0.30.21
-      postcss: 8.5.28
-      source-map-js: 1.2.1
+      postcss: 8.5.32
+      source-map-js: 1.2.2
 
   '@vue/compiler-sfc@3.5.45':
     dependencies:
@@ -5262,13 +5248,6 @@ snapshots:
       '@vueuse/shared': 15.0.0(vue@3.5.45(typescript@5.9.3))
       vue: 3.5.45(typescript@5.9.3)
 
-  '@vueuse/core@14.4.0(vue@3.5.45(typescript@5.9.3))':
-    dependencies:
-      '@types/web-bluetooth': 0.0.21
-      '@vueuse/metadata': 14.4.0
-      '@vueuse/shared': 14.4.0(vue@3.5.45(typescript@5.9.3))
-      vue: 3.5.45(typescript@5.9.3)
-
   '@vueuse/core@15.0.0(vue@3.5.45(typescript@5.9.3))':
     dependencies:
       '@types/web-bluetooth': 0.0.21
@@ -5276,13 +5255,7 @@ snapshots:
       '@vueuse/shared': 15.0.0(vue@3.5.45(typescript@5.9.3))
       vue: 3.5.45(typescript@5.9.3)
 
-  '@vueuse/metadata@14.4.0': {}
-
   '@vueuse/metadata@15.0.0': {}
-
-  '@vueuse/shared@14.4.0(vue@3.5.45(typescript@5.9.3))':
-    dependencies:
-      vue: 3.5.45(typescript@5.9.3)
 
   '@vueuse/shared@15.0.0(vue@3.5.45(typescript@5.9.3))':
     dependencies:
@@ -5308,8 +5281,8 @@ snapshots:
     optionalDependencies:
       ajv: 8.20.0
 
-  ajv-formats@3.0.1:
-    dependencies:
+  ajv-formats@3.0.1(ajv@8.20.0):
+    optionalDependencies:
       ajv: 8.20.0
 
   ajv@6.15.0:
@@ -5688,7 +5661,7 @@ snapshots:
   css-tree@3.2.1:
     dependencies:
       mdn-data: 2.27.1
-      source-map-js: 1.2.1
+      source-map-js: 1.2.2
 
   cssesc@3.0.0: {}
 
@@ -7118,9 +7091,9 @@ snapshots:
 
   postcss-resolve-nested-selector@0.1.6: {}
 
-  postcss-safe-parser@7.1.0(postcss@8.5.28):
+  postcss-safe-parser@7.1.0(postcss@8.5.32):
     dependencies:
-      postcss: 8.5.28
+      postcss: 8.5.32
 
   postcss-scss@4.0.9(postcss@8.5.32):
     dependencies:
@@ -7373,7 +7346,7 @@ snapshots:
     dependencies:
       chokidar: 5.0.0
       immutable: 5.1.9
-      source-map-js: 1.2.1
+      source-map-js: 1.2.2
     optionalDependencies:
       '@parcel/watcher': 2.6.0
 
@@ -7646,8 +7619,8 @@ snapshots:
       micromatch: 4.0.8
       normalize-path: 3.0.0
       picocolors: 1.1.1
-      postcss: 8.5.28
-      postcss-safe-parser: 7.1.0(postcss@8.5.28)
+      postcss: 8.5.32
+      postcss-safe-parser: 7.1.0(postcss@8.5.32)
       postcss-selector-parser: 7.1.6
       postcss-value-parser: 4.2.0
       string-width: 8.2.2
