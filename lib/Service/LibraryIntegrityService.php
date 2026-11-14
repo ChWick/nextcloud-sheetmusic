@@ -18,12 +18,15 @@ use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
 use OCA\SheetMusic\Db\OrphanSongEntityAssignment;
 use OCA\SheetMusic\Db\OrphanSongFile;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsFileFacts;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPathResolver;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdf;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdfMetadata;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSong;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
+use OCP\Files\Node;
 use OCP\IUser;
 use Psr\Log\LoggerInterface;
 
@@ -111,6 +114,8 @@ class LibraryIntegrityService {
 		$preset = $this->libraryService->getNamingRulePreset($userId, $libraryId);
 		$namingRuleIssuesBySong = [];
 		$reportedMissingPaths = [];
+		/** @var array<string, array{pageCount: int|null, content: string|null, error: \Throwable|null}> */
+		$pdfInspectionCache = [];
 
 		$totalSongs = count($songs);
 		$songIndex = 0;
@@ -140,7 +145,7 @@ class LibraryIntegrityService {
 				// Compute path relative to the library target folder
 				$relativeToTarget = $this->pathResolver->relativeToFolder($pathObj->internal, $targetFolderPath);
 
-				$sourceExists = $this->fileNodeExists($targetFolder, $relativeToTarget);
+				$resolvedNode = $this->orphanScanner->resolveFileNode($targetFolder, $relativeToTarget, $sourceExists);
 				$existingPdfPath = $sourceExists ? $relativeToTarget : null;
 
 				// Calculate valid target paths (naming rules)
@@ -169,39 +174,62 @@ class LibraryIntegrityService {
 						'fileId' => $file->id,
 					];
 
-					if ($autoPdfMetadata && $existingPdfPath !== null && str_ends_with(strtolower($file->path), '.pdf')) {
-						$pdfIssue = $this->checkPdfMetadata($targetFolder, $existingPdfPath, $song, $file->id);
-						if ($pdfIssue !== null) {
-							$issues[] = $pdfIssue;
+					$isPdf = $existingPdfPath !== null && str_ends_with(strtolower($file->path), '.pdf');
+					$physicalPageCount = null;
+
+					if ($isPdf) {
+						if (!array_key_exists($cleanRel, $pdfInspectionCache)) {
+							$pdfContent = null;
+							$pdfPageCount = null;
+							$pdfError = null;
+							try {
+								$pdfNode = $resolvedNode ?? $targetFolder->get($existingPdfPath);
+								if (!$pdfNode instanceof File) {
+									throw new \RuntimeException('The attached PDF path does not point to a file.');
+								}
+								$pdfContent = MobileSheetsFileFacts::readFileContent($pdfNode);
+								if ($pdfContent === '') {
+									throw new \RuntimeException('The attached PDF is empty or unreadable.');
+								}
+								$detected = MobileSheetsPdf::pageCount($pdfContent);
+								if ($detected > 0) {
+									$pdfPageCount = $detected;
+								}
+							} catch (\Throwable $e) {
+								$pdfError = $e;
+							}
+							$pdfInspectionCache[$cleanRel] = [
+								'pageCount' => $pdfPageCount,
+								'content' => $pdfContent,
+								'error' => $pdfError,
+							];
+						}
+
+						$cachedPdf = $pdfInspectionCache[$cleanRel];
+						$physicalPageCount = $cachedPdf['pageCount'];
+
+						if ($autoPdfMetadata) {
+							$pdfIssue = $this->checkPdfMetadata(
+								$targetFolder,
+								$existingPdfPath,
+								$song,
+								$file->id,
+								$cachedPdf['content'],
+								$cachedPdf['error'],
+							);
+							if ($pdfIssue !== null) {
+								$issues[] = $pdfIssue;
+							}
 						}
 					}
 
-					$trimmedOrder = trim((string)($file->pageOrder ?? ''));
-					$physicalPageCount = null;
-					if ($existingPdfPath !== null && str_ends_with(strtolower($file->path), '.pdf')) {
-						try {
-							if ($targetFolder->nodeExists($existingPdfPath)) {
-								$pdfNode = $targetFolder->get($existingPdfPath);
-								if ($pdfNode instanceof File) {
-									$pdfContent = $pdfNode->getContent();
-									if (is_string($pdfContent) && $pdfContent !== '') {
-										$detected = \OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdf::pageCount($pdfContent);
-										if ($detected > 0) {
-											$physicalPageCount = $detected;
-										}
-									}
-								}
-							}
-						} catch (\Throwable) {
-						}
-					}
 					if ($physicalPageCount === null && $file->fileId > 0 && str_ends_with(strtolower($file->path), '.pdf')) {
 						try {
 							$nodes = $userFolder->getById($file->fileId);
 							if (!empty($nodes) && $nodes[0] instanceof File) {
-								$pdfContent = $nodes[0]->getContent();
-								if (is_string($pdfContent) && $pdfContent !== '') {
-									$detected = \OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdf::pageCount($pdfContent);
+								$pdfContent = MobileSheetsFileFacts::readFileContent($nodes[0]);
+								if ($pdfContent !== '') {
+									$detected = MobileSheetsPdf::pageCount($pdfContent);
 									if ($detected > 0) {
 										$physicalPageCount = $detected;
 									}
@@ -662,14 +690,23 @@ class LibraryIntegrityService {
 		string $relativePath,
 		MobileSheetsSong $song,
 		int $fileId,
+		?string $preloadedContent = null,
+		?\Throwable $preloadedError = null,
 	): ?IntegrityIssue {
 		try {
-			$node = $targetFolder->get($relativePath);
-			if (!$node instanceof File) {
-				throw new \RuntimeException('The attached PDF path does not point to a file.');
+			if ($preloadedError !== null) {
+				throw $preloadedError;
 			}
+			if ($preloadedContent !== null) {
+				$content = $preloadedContent;
+			} else {
+				$node = $targetFolder->get($relativePath);
+				if (!$node instanceof File) {
+					throw new \RuntimeException('The attached PDF path does not point to a file.');
+				}
 
-			$content = $node->getContent();
+				$content = MobileSheetsFileFacts::readFileContent($node);
+			}
 			if (!is_string($content) || $content === '') {
 				throw new \RuntimeException('The attached PDF is empty or unreadable.');
 			}

@@ -319,6 +319,7 @@ class LibraryIntegrityFixer {
 		}));
 		$totalFixable = count($fixableIssues);
 		$currentIndex = 0;
+		$songsByIdCache = null;
 
 		foreach ($fixableIssues as $issue) {
 			$currentIndex++;
@@ -423,7 +424,13 @@ class LibraryIntegrityFixer {
 				}
 			} elseif ($issue->type === IntegrityIssue::TYPE_PDF_METADATA_MISMATCH && $issue->songId !== null && $issue->fileId !== null) {
 				try {
-					$this->fixPdfMetadataMismatch($issue, $libraryId, $databasePath, $user, $hashCodes);
+					if ($songsByIdCache === null) {
+						$songsByIdCache = [];
+						foreach ($this->internalSongMapper->findLibraryData($libraryId, $user)->songs as $s) {
+							$songsByIdCache[$s->id] = $s;
+						}
+					}
+					$this->fixPdfMetadataMismatch($issue, $libraryId, $databasePath, $user, $hashCodes, $songsByIdCache[$issue->songId] ?? null);
 					$fixedCount++;
 				} catch (\Throwable $e) {
 					$this->logger->warning(sprintf(
@@ -623,8 +630,8 @@ class LibraryIntegrityFixer {
 				$userFolder = $this->rootFolder->getUserFolder($user->getUID());
 				$nodes = $userFolder->getById($fileRecord->fileId);
 				if (!empty($nodes) && $nodes[0] instanceof File) {
-					$content = $nodes[0]->getContent();
-					if (is_string($content) && $content !== '') {
+					$content = MobileSheetsFileFacts::readFileContent($nodes[0]);
+					if ($content !== '') {
 						$detected = \OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdf::pageCount($content);
 					}
 				}
@@ -642,8 +649,8 @@ class LibraryIntegrityFixer {
 						if ($rel !== null && $targetFolder->nodeExists(ltrim($rel, '/'))) {
 							$node = $targetFolder->get(ltrim($rel, '/'));
 							if ($node instanceof File) {
-								$content = $node->getContent();
-								if (is_string($content) && $content !== '') {
+								$content = MobileSheetsFileFacts::readFileContent($node);
+								if ($content !== '') {
 									$detected = \OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdf::pageCount($content);
 								}
 							}
@@ -652,8 +659,8 @@ class LibraryIntegrityFixer {
 					if ($detected <= 0 && $this->rootFolder->nodeExists($pathObj->internal)) {
 						$node = $this->rootFolder->get($pathObj->internal);
 						if ($node instanceof File) {
-							$content = $node->getContent();
-							if (is_string($content) && $content !== '') {
+							$content = MobileSheetsFileFacts::readFileContent($node);
+							if ($content !== '') {
 								$detected = \OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdf::pageCount($content);
 							}
 						}
@@ -684,17 +691,20 @@ class LibraryIntegrityFixer {
 		string $databasePath,
 		\OCP\IUser $user,
 		?MobileSheetsHashCodesFile $hashCodes,
+		?\OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSong $preloadedSong = null,
 	): void {
 		if ($issue->songId === null || $issue->fileId === null) {
 			throw new \RuntimeException('The PDF metadata issue does not identify a song and file.');
 		}
 
-		$song = null;
-		$data = $this->internalSongMapper->findLibraryData($libraryId, $user);
-		foreach ($data->songs as $s) {
-			if ($s->id === $issue->songId) {
-				$song = $s;
-				break;
+		$song = $preloadedSong;
+		if ($song === null) {
+			$data = $this->internalSongMapper->findLibraryData($libraryId, $user);
+			foreach ($data->songs as $s) {
+				if ($s->id === $issue->songId) {
+					$song = $s;
+					break;
+				}
 			}
 		}
 		if ($song === null) {
