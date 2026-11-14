@@ -268,12 +268,17 @@ watch(
 	font-size: 12px;
 }
 
-.pageInput {
-	width: 52px;
-	padding: 3px 6px;
+.rangeGroup .pageInput {
+	width: 72px;
+	min-width: 72px;
+	box-sizing: border-box;
+	margin: 0;
+	padding: 4px 6px;
 	border: 1px solid var(--color-border);
 	border-radius: 4px;
 	font-size: 13px;
+	font-variant-numeric: tabular-nums;
+	text-align: center;
 	background-color: var(--color-main-background);
 	color: var(--color-main-text);
 }
