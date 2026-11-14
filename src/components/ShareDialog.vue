@@ -14,6 +14,7 @@ import ContentCopy from 'vue-material-design-icons/ContentCopy.vue'
 import Check from 'vue-material-design-icons/Check.vue'
 import DeleteOutline from 'vue-material-design-icons/DeleteOutline.vue'
 import { describeRequestFailure } from '../utils/api'
+import { useCopyToClipboard } from '../composables/useCopyToClipboard'
 import type { Sublibrary, LibraryShare } from '../types/library'
 
 const props = withDefaults(
@@ -72,7 +73,7 @@ const isLoadingShares = ref(false)
 const shareError = ref('')
 const newSharePermission = ref<'read' | 'write'>('read')
 const isCreatingShare = ref(false)
-const copiedToken = ref<string | null>(null)
+const { copiedKey: copiedToken, copy: copyToClipboard } = useCopyToClipboard(2000)
 
 const shareeOptions = ref<ShareeOption[]>([])
 const selectedSharee = ref<ShareeOption | null>(null)
@@ -291,20 +292,6 @@ async function deleteShare(share: LibraryShare) {
 	} catch (error) {
 		console.error('Failed to delete share:', error)
 		shareError.value = describeRequestFailure(error, t('sheetmusic', 'Could not revoke share.'))
-	}
-}
-
-async function copyToClipboard(text: string, token: string) {
-	try {
-		await navigator.clipboard.writeText(text)
-		copiedToken.value = token
-		setTimeout(() => {
-			if (copiedToken.value === token) {
-				copiedToken.value = null
-			}
-		}, 2000)
-	} catch {
-		// Fallback
 	}
 }
 

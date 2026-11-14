@@ -19,6 +19,7 @@ import DeleteSublibraryDialog from './sublibraries/DeleteSublibraryDialog.vue'
 import ShareDialog from './ShareDialog.vue'
 
 import { useLibraryData } from '../composables/useLibraryData'
+import { useCopyToClipboard } from '../composables/useCopyToClipboard'
 import type { Library, Sublibrary } from '../types/library'
 
 const props = defineProps<{
@@ -71,7 +72,7 @@ const bookList = computed(() => {
 const sublibraries = ref<Sublibrary[]>([])
 const isLoading = ref(false)
 const error = ref('')
-const copiedSlug = ref<string | null>(null)
+const { copiedKey: copiedSlug, copy: copyText } = useCopyToClipboard(2500)
 
 // Modal state
 const isModalOpen = ref(false)
@@ -122,19 +123,10 @@ async function fetchSublibraries() {
 
 async function copySublibraryPath(slug: string) {
 	const path = `${libraryFolderPath.value}/_SubLibraries_/${slug}`
-	try {
-		await navigator.clipboard.writeText(path)
-		copiedSlug.value = slug
-		showSuccess(t('sheetmusic', 'Copied WebDAV path to clipboard: {path}', { path }, { escape: false }))
-		setTimeout(() => {
-			if (copiedSlug.value === slug) {
-				copiedSlug.value = null
-			}
-		}, 2500)
-	} catch (e) {
-		console.error('Failed to copy WebDAV path:', e)
-		showError(t('sheetmusic', 'Could not copy path to clipboard.'))
-	}
+	await copyText(path, slug, {
+		successMessage: t('sheetmusic', 'Copied WebDAV path to clipboard: {path}', { path }, { escape: false }),
+		errorMessage: t('sheetmusic', 'Could not copy path to clipboard.'),
+	})
 }
 
 const router = useRouter()

@@ -22,6 +22,7 @@ import Plus from 'vue-material-design-icons/Plus.vue'
 import ViewHeader from './ViewHeader.vue'
 import ShareDialog from './ShareDialog.vue'
 import { describeRequestFailure } from '../utils/api'
+import { useCopyToClipboard } from '../composables/useCopyToClipboard'
 import type { Library, LibraryShare, SharesOverview, Sublibrary } from '../types/library'
 
 const props = defineProps<{
@@ -36,7 +37,7 @@ const emit = defineEmits<{
 const isLoading = ref(false)
 const error = ref('')
 const overview = ref<SharesOverview | null>(null)
-const copiedToken = ref<string | null>(null)
+const { copiedKey: copiedToken, copy: copyText } = useCopyToClipboard(2500)
 const deletingShareId = ref<string | number | null>(null)
 
 // Dialog state
@@ -104,18 +105,10 @@ function onShareDialogClose() {
 }
 
 async function copyToClipboard(text: string, token: string) {
-	try {
-		await navigator.clipboard.writeText(text)
-		copiedToken.value = token
-		showSuccess(t('sheetmusic', 'Link copied to clipboard.'))
-		setTimeout(() => {
-			if (copiedToken.value === token) {
-				copiedToken.value = null
-			}
-		}, 2500)
-	} catch {
-		showError(t('sheetmusic', 'Failed to copy to clipboard.'))
-	}
+	await copyText(text, token, {
+		successMessage: t('sheetmusic', 'Link copied to clipboard.'),
+		errorMessage: t('sheetmusic', 'Failed to copy to clipboard.'),
+	})
 }
 
 async function deleteShare(share: LibraryShare, sublibraryId?: number) {
