@@ -5,7 +5,7 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import EyeIcon from 'vue-material-design-icons/Eye.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import { computed } from 'vue'
-import { formatDateTimestamp, formatDifficulty, formatDuration, formatStars } from '../../utils/song-formatter'
+import { formatDateTimestamp, formatDifficulty, formatDurationHms, formatStars } from '../../utils/song-formatter'
 import { useSongRowInteraction } from '../../composables/useSongRowInteraction'
 import SongEntityChips from './SongEntityChips.vue'
 import SongInlineEditableCell from './SongInlineEditableCell.vue'
@@ -119,7 +119,7 @@ const {
 				</div>
 				<div v-if="isColVisible('duration') && song.duration" :class="$style.metaRow">
 					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Duration:') }}</span>
-					<span>{{ formatDuration(song.duration) }}</span>
+					<span>{{ formatDurationHms(song.duration) }}</span>
 				</div>
 				<div v-if="isColVisible('keywords') && song.keywords" :class="$style.metaRow">
 					<span :class="$style.metaLabel">{{ t('sheetmusic', 'Keywords:') }}</span>

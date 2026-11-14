@@ -5,7 +5,7 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import EyeIcon from 'vue-material-design-icons/Eye.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import { computed, ref, watch } from 'vue'
-import { formatDateTimestamp, formatDifficulty, formatDuration, formatStars, sortSongs, type SortKey, type SortOrder } from '../../utils/song-formatter'
+import { formatDateTimestamp, formatDifficulty, formatDurationHms, formatStars, sortSongs, type SortKey, type SortOrder } from '../../utils/song-formatter'
 import { useSongRowInteraction } from '../../composables/useSongRowInteraction'
 import { createEntityTag } from '../song-editor/entity-utils'
 import SongEntityChips from './SongEntityChips.vue'
@@ -296,9 +296,9 @@ const {
 						tag="td"
 						:class="$style.metaCell"
 						field="duration"
-						:value="song.duration ? formatDuration(song.duration, '') : ''"
-						:display-text="formatDuration(song.duration)"
-						:placeholder="t('sheetmusic', 'mm:ss or seconds')"
+						:value="song.duration ? formatDurationHms(song.duration, '') : ''"
+						:display-text="formatDurationHms(song.duration)"
+						:placeholder="t('sheetmusic', 'hh:mm:ss')"
 						:aria-label="t('sheetmusic', 'Duration')"
 						:edit-title="t('sheetmusic', 'Edit duration inline')"
 						:can-write="canWrite"

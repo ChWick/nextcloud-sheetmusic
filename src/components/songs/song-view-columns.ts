@@ -1,7 +1,7 @@
 import { translate as t } from '@nextcloud/l10n'
 import type { EntityType, FilterEntity, Song, SongColumn } from '../../types/song'
 import type { EntityLabelField, SongEntityIdField } from '../song-editor/entity-utils'
-import { formatDifficulty, formatDuration, formatStars, type SortKey } from '../../utils/song-formatter'
+import { formatDifficulty, formatDurationHms, formatStars, type SortKey } from '../../utils/song-formatter'
 
 export type InlineEditableField =
 	| 'title'
@@ -468,8 +468,8 @@ export const SONG_SCALAR_FIELDS: SongScalarFieldDef[] = [
 		cardLabel: () => t('sheetmusic', 'Duration:'),
 		inputLabel: () => t('sheetmusic', 'Duration (seconds)'),
 		placeholder: () => t('sheetmusic', 'Seconds (e.g. 180)'),
-		formatDisplay: (song?: Song) => (song?.duration && song.duration > 0) ? `${formatDuration(song.duration, '-')} (${song.duration}s)` : '-',
-		formatViewerValue: (song: Song) => (song.duration && song.duration > 0) ? formatDuration(song.duration) : '',
+		formatDisplay: (song?: Song) => (song?.duration && song.duration > 0) ? `${formatDurationHms(song.duration, '-')} (${song.duration}s)` : '-',
+		formatViewerValue: (song: Song) => (song.duration && song.duration > 0) ? formatDurationHms(song.duration) : '',
 	},
 	{
 		key: 'keywords',
