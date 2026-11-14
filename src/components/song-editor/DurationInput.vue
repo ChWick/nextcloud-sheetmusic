@@ -330,11 +330,10 @@ onBeforeUnmount(() => {
 .control {
 	display: flex;
 	align-items: center;
-	gap: 6px;
+	gap: 4px;
 	width: 100%;
-	min-width: max-content;
 	height: 44px;
-	padding: 0 8px 0 10px;
+	padding: 0 6px 0 8px;
 	background: var(--color-main-background);
 	border: 2px solid var(--color-border-dark);
 	border-radius: var(--border-radius-large, 8px);
@@ -355,16 +354,17 @@ onBeforeUnmount(() => {
 .segments {
 	display: flex;
 	align-items: center;
-	gap: 2px;
-	flex: 1 0 auto;
+	gap: 1px;
+	flex: 1;
+	min-width: 0;
 }
 
 .segments .segmentInput {
-	width: 3.2em;
-	min-width: 3.2em;
+	width: 2.6em;
+	min-width: 2.6em;
 	box-sizing: border-box;
 	margin: 0;
-	padding: 4px 2px;
+	padding: 2px;
 	border: 1px solid transparent;
 	border-radius: var(--border-radius, 4px);
 	background: transparent;
@@ -392,7 +392,7 @@ onBeforeUnmount(() => {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	padding: 4px;
+	padding: 2px;
 	background: transparent;
 	border: none;
 	border-radius: var(--border-radius-rounded, 50%);
