@@ -16,8 +16,10 @@ use OCA\SheetMusic\Service\LibraryService;
 use OCA\SheetMusic\Service\LibraryShareService;
 use OCA\SheetMusic\Service\SongFileService;
 use OCA\SheetMusic\Service\SongHistoryService;
+use OCA\SheetMusic\Service\SongPathNamingRule;
 use OCA\SheetMusic\Service\SongService;
 use OCA\SheetMusic\Service\SublibraryService;
+use OCP\Files\Folder;
 use OCP\IUser;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
@@ -534,5 +536,87 @@ final class SongServiceTest extends TestCase {
 
 		$deletedSong = $this->songMapper->findById((int)$song->id);
 		self::assertNotNull($deletedSong->deletedAt);
+	}
+
+	public function testUpdateSongRegeneratesFilePathsAndSyncsPdfMetadataWhenEnabled(): void {
+		$song = $this->songMapper->insert(new InternalSong(
+			id: null,
+			uuid: 'sync-files-update-uuid',
+			libraryId: $this->libraryId,
+			title: 'Original Title',
+		));
+
+		$libraryService = $this->createMock(LibraryService::class);
+		$libraryService->method('canWriteLibrary')->willReturn(true);
+		$libraryService->method('getTargetLibraryId')->with($this->libraryId)->willReturn($this->libraryId);
+		$libraryService->method('isAutoPathsEnabled')->with($this->user->getUID(), $this->libraryId)->willReturn(true);
+		$libraryService->method('getNamingRulePreset')->with($this->user->getUID(), $this->libraryId)->willReturn(SongPathNamingRule::PRESET_AUTO);
+
+		$targetFolder = $this->createMock(Folder::class);
+		$fileManager = $this->createMock(FileManager::class);
+		$fileManager->expects(self::once())
+			->method('libraryFolder')
+			->with($this->libraryId, $this->user)
+			->willReturn($targetFolder);
+		$fileManager->expects(self::once())
+			->method('regenerateSongFilePaths')
+			->with((int)$song->id, $this->user, $targetFolder, '', null, SongPathNamingRule::PRESET_AUTO);
+
+		$songFileService = $this->createMock(SongFileService::class);
+		$songFileService->expects(self::once())
+			->method('syncSongFileMetadata')
+			->with($this->user, '', (int)$song->id, $this->libraryId);
+
+		$service = new SongService(
+			$libraryService,
+			$songFileService,
+			$fileManager,
+			new NullLogger(),
+			$this->songMapper,
+			$this->entityMapper,
+			$this->songFileMapper,
+			$this->libraryMapper,
+			$this->rootFolder,
+		);
+
+		$result = $service->updateSong($this->user, (int)$song->id, $this->libraryId, 'Renamed Title');
+		self::assertNotNull($result);
+	}
+
+	public function testBatchUpdateSongsSkipsPathRegenerationWhenAutoPathsDisabled(): void {
+		$song = $this->songMapper->insert(new InternalSong(
+			id: null,
+			uuid: 'sync-files-batch-uuid',
+			libraryId: $this->libraryId,
+			title: 'Batch Song',
+		));
+
+		$libraryService = $this->createMock(LibraryService::class);
+		$libraryService->method('canWriteLibrary')->willReturn(true);
+		$libraryService->method('getTargetLibraryId')->with($this->libraryId)->willReturn($this->libraryId);
+		$libraryService->method('isAutoPathsEnabled')->with($this->user->getUID(), $this->libraryId)->willReturn(false);
+
+		$fileManager = $this->createMock(FileManager::class);
+		$fileManager->expects(self::never())->method('regenerateSongFilePaths');
+
+		$songFileService = $this->createMock(SongFileService::class);
+		$songFileService->expects(self::once())
+			->method('syncSongFileMetadata')
+			->with($this->user, '', (int)$song->id, $this->libraryId);
+
+		$service = new SongService(
+			$libraryService,
+			$songFileService,
+			$fileManager,
+			new NullLogger(),
+			$this->songMapper,
+			$this->entityMapper,
+			$this->songFileMapper,
+			$this->libraryMapper,
+			$this->rootFolder,
+		);
+
+		$result = $service->batchUpdateSongs($this->user, $this->libraryId, [(int)$song->id], scalars: ['stars' => 5]);
+		self::assertNotNull($result);
 	}
 }

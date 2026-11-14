@@ -272,7 +272,7 @@ class SongService {
 
 				$this->libraryMapper->touch($targetLibraryId);
 
-				$this->songFileService->syncSongFileMetadata($user, '', $songId, $targetLibraryId);
+				$this->syncSongFilesAfterUpdate($user, $songId, $targetLibraryId);
 
 				$this->songHistoryService?->recordSnapshot($song, InternalSongHistory::ACTION_UPDATED, $user->getUID());
 
@@ -368,7 +368,7 @@ class SongService {
 					$this->internalSongMapper->update($song);
 					$this->songHistoryService?->recordSnapshot($song, InternalSongHistory::ACTION_UPDATED, $user->getUID());
 				}
-				$this->songFileService->syncSongFileMetadata($user, '', $sid, $targetLibraryId);
+				$this->syncSongFilesAfterUpdate($user, $sid, $targetLibraryId);
 			}
 			$this->libraryMapper->touch($targetLibraryId);
 			if ($progressId !== null) {
@@ -392,6 +392,30 @@ class SongService {
 			]);
 			throw $e;
 		}
+	}
+
+	/**
+	 * Regenerate file paths (when autoPaths is enabled and a naming rule is active)
+	 * and sync PDF metadata (when autoPdfMetadata is enabled) for a song.
+	 */
+	public function syncSongFilesAfterUpdate(IUser $user, int $songId, int $targetLibraryId): void {
+		if ($this->libraryService->isAutoPathsEnabled($user->getUID(), $targetLibraryId)) {
+			$preset = $this->libraryService->getNamingRulePreset($user->getUID(), $targetLibraryId);
+			if ($preset !== SongPathNamingRule::PRESET_DISABLED && $preset !== 'none') {
+				try {
+					$targetFolder = $this->fileManager->libraryFolder($targetLibraryId, $user);
+					$this->fileManager->regenerateSongFilePaths($songId, $user, $targetFolder, '', null, $preset);
+				} catch (\Throwable $e) {
+					$this->logger->debug('Could not regenerate file paths after updating song', [
+						'exception' => $e,
+						'libraryId' => $targetLibraryId,
+						'songId' => $songId,
+					]);
+				}
+			}
+		}
+
+		$this->songFileService->syncSongFileMetadata($user, '', $songId, $targetLibraryId);
 	}
 
 	/**

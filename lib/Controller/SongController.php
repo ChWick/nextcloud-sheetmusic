@@ -398,6 +398,7 @@ class SongController extends OCSController {
 
 		try {
 			$revertedSong = $this->songHistoryService->revertSongToHistory($id, $historyId, $user->getUID());
+			$this->songService->syncSongFilesAfterUpdate($user, $id, $revertedSong->libraryId);
 			$libraryData = $this->songService->getSongs($user, $revertedSong->libraryId);
 			return new DataResponse($libraryData);
 		} catch (\InvalidArgumentException $e) {
