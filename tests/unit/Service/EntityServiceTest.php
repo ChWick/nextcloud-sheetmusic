@@ -156,4 +156,23 @@ final class EntityServiceTest extends TestCase {
 		self::assertNotNull($deletedDuplicate);
 		self::assertNotNull($deletedDuplicate->deletedAt);
 	}
+
+	public function testUpdateEntityRenamesAndRejectsDuplicateName(): void {
+		$first = $this->service->createEntity($this->user, $this->libraryId, 'composers', 'J.S. Bach');
+		$second = $this->service->createEntity($this->user, $this->libraryId, 'composers', 'Mozart');
+		self::assertNotNull($first);
+		self::assertNotNull($second);
+
+		// Renaming to an existing entity name returns an error
+		$conflict = $this->service->updateEntity($this->user, $this->libraryId, 'composers', (int)$first['id'], 'Mozart');
+		self::assertIsArray($conflict);
+		self::assertArrayHasKey('error', $conflict);
+
+		// Renaming to a unique name updates the entity and returns LibraryData
+		$updated = $this->service->updateEntity($this->user, $this->libraryId, 'composers', (int)$first['id'], 'Johann Sebastian Bach');
+		self::assertInstanceOf(LibraryData::class, $updated);
+		$reloaded = $this->entityMapper->findById((int)$first['id']);
+		self::assertNotNull($reloaded);
+		self::assertSame('Johann Sebastian Bach', $reloaded->name);
+	}
 }

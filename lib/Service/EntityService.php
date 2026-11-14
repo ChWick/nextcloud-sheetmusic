@@ -20,6 +20,7 @@ class EntityService {
 		private InternalSongMapper $internalSongMapper,
 		private LibraryMapper $libraryMapper,
 		private ?SublibraryService $sublibraryService = null,
+		private ?SongService $songService = null,
 	) {
 	}
 
@@ -61,6 +62,60 @@ class EntityService {
 				'exception' => $e,
 				'entityType' => $entityType,
 				'nameOrTitle' => $nameOrTitle,
+				'libraryId' => $libraryId,
+			]);
+			throw $e;
+		}
+	}
+
+	/**
+	 * Rename an entity and sync any affected songs' file paths and PDF metadata.
+	 *
+	 * @return LibraryData|array{error: string}|null
+	 */
+	public function updateEntity(IUser $user, int $libraryId, string $entityType, int $id, string $nameOrTitle): LibraryData|array|null {
+		$trimmed = trim($nameOrTitle);
+		if ($id <= 0 || $trimmed === '') {
+			return null;
+		}
+
+		if (!$this->libraryService->canWriteLibrary($user->getUID(), $libraryId)) {
+			return null;
+		}
+
+		$targetLibraryId = $this->libraryService->getTargetLibraryId($libraryId);
+
+		try {
+			$normType = InternalEntityMapper::normalizeType($entityType);
+			$entity = $this->internalEntityMapper->findById($id);
+			if ($entity === null || $entity->libraryId !== $targetLibraryId || $entity->type !== $normType) {
+				return null;
+			}
+
+			$existing = $this->internalEntityMapper->findByName($targetLibraryId, $normType, $trimmed);
+			if ($existing !== null && (int)$existing->id !== $id) {
+				return ['error' => 'An entry with this name already exists. Use Merge to combine them.'];
+			}
+
+			if ($entity->name !== $trimmed) {
+				$entity->name = $trimmed;
+				$entity->updatedAt = time();
+				$this->internalEntityMapper->update($entity);
+				$this->libraryMapper->touch($targetLibraryId);
+
+				if ($this->songService !== null) {
+					foreach ($this->internalEntityMapper->findSongIdsForEntity($id) as $songId) {
+						$this->songService->syncSongFilesAfterUpdate($user, $songId, $targetLibraryId);
+					}
+				}
+			}
+
+			return $this->getLibraryDataForResponse($user, $libraryId, $targetLibraryId);
+		} catch (\Throwable $e) {
+			$this->logger->error('Could not update entity in SheetMusic library', [
+				'exception' => $e,
+				'entityType' => $entityType,
+				'entityId' => $id,
 				'libraryId' => $libraryId,
 			]);
 			throw $e;

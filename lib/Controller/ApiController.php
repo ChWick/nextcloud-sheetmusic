@@ -563,6 +563,18 @@ class ApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/entities/{id}', requirements: ['id' => '\d+'])]
+	public function updateEntity(
+		int $id,
+		?int $libraryId = null,
+		?string $entityType = null,
+		?string $name = null,
+		?string $title = null,
+	): DataResponse {
+		return $this->entityController->updateEntity($id, $libraryId, $entityType, $name, $title);
+	}
+
+	#[NoAdminRequired]
 	#[ApiRoute(verb: 'POST', url: '/api/entities/merge')]
 	public function mergeEntities(
 		?int $libraryId = null,

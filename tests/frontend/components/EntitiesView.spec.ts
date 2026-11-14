@@ -51,10 +51,14 @@ vi.mock('@nextcloud/l10n', async (importOriginal) => {
 const mockRoute = { query: {} }
 const mockRouter = { push: vi.fn() }
 
-vi.mock('vue-router', () => ({
-	useRoute: () => mockRoute,
-	useRouter: () => mockRouter,
-}))
+vi.mock('vue-router', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('vue-router')>()
+	return {
+		...actual,
+		useRoute: () => mockRoute,
+		useRouter: () => mockRouter,
+	}
+})
 
 describe('EntitiesView.vue', () => {
 	beforeEach(() => {
@@ -410,5 +414,67 @@ describe('EntitiesView.vue', () => {
 		expect(mergeDialog.exists()).toBe(true)
 		expect(mergeDialog.props('open')).toBe(true)
 		expect(mergeDialog.props('initialEntity')).toBeNull()
+	})
+
+	it('edits an entity label inline via the pen button and saves via API', async () => {
+		vi.mocked(axios.get).mockResolvedValueOnce({
+			data: {
+				ocs: {
+					data: {
+						songs: [],
+						composers: [{ id: 1, name: 'Beethoven' }],
+						books: [],
+						collections: [],
+						artists: [],
+					},
+				},
+			},
+		})
+		vi.mocked(axios.post).mockResolvedValueOnce({
+			data: {
+				ocs: {
+					data: {
+						songs: [],
+						composers: [{ id: 1, name: 'Ludwig van Beethoven' }],
+						books: [],
+						collections: [],
+						artists: [],
+					},
+				},
+			},
+		})
+
+		const wrapper = mount(EntitiesView, {
+			props: { selectedLibrary: 1, entityType: 'composers' },
+		})
+		await new Promise((r) => setTimeout(r, 10))
+
+		const editBtn = wrapper.find('button[aria-label="Edit composer"]')
+		expect(editBtn.exists()).toBe(true)
+		await editBtn.trigger('click')
+		await wrapper.vm.$nextTick()
+
+		const input = wrapper.find('input[aria-label="Edit composer"]')
+		expect(input.exists()).toBe(true)
+		await input.setValue('Ludwig van Beethoven')
+
+		const saveBtn = wrapper.find('button[aria-label="Save composer"]')
+		expect(saveBtn.exists()).toBe(true)
+		await saveBtn.trigger('click')
+		await new Promise((r) => setTimeout(r, 10))
+
+		expect(axios.post).toHaveBeenCalledWith(
+			'/ocs/v2.php/apps/sheetmusic/api/entities/{id}',
+			{
+				pathParams: { id: 1 },
+				body: {
+					libraryId: 1,
+					entityType: 'composers',
+					name: 'Ludwig van Beethoven',
+				},
+			},
+		)
+		expect(showSuccess).toHaveBeenCalledWith('Updated "Ludwig van Beethoven".')
+		expect(wrapper.text()).toContain('Ludwig van Beethoven')
 	})
 })

@@ -168,6 +168,43 @@ class EntityController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/entities/{id}', requirements: ['id' => '\d+'])]
+	public function updateEntity(
+		int $id,
+		?int $libraryId = null,
+		?string $entityType = null,
+		?string $name = null,
+		?string $title = null,
+	): DataResponse {
+		$libraryId = $libraryId ?? (int)$this->request->getParam('libraryId', 0);
+		$entityType = $this->resolveParam($entityType, 'entityType');
+		$value = $this->resolveParam($name ?? $title, 'name', 'title');
+
+		if ($id <= 0 || $libraryId <= 0 || trim($entityType) === '' || trim($value) === '') {
+			return new DataResponse(['error' => 'Missing or invalid parameters.'], Http::STATUS_BAD_REQUEST);
+		}
+
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		try {
+			$result = $this->entityService->updateEntity($user, $libraryId, $entityType, $id, $value);
+			if (is_array($result) && isset($result['error'])) {
+				return new DataResponse(['error' => $result['error']], Http::STATUS_CONFLICT);
+			}
+			if ($result === null) {
+				return new DataResponse(['error' => 'Entity not found.'], Http::STATUS_NOT_FOUND);
+			}
+
+			return new DataResponse($result, Http::STATUS_OK);
+		} catch (\Throwable $e) {
+			return new DataResponse(['error' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	#[NoAdminRequired]
 	#[ApiRoute(verb: 'POST', url: '/api/entities/merge')]
 	public function mergeEntities(
 		?int $libraryId = null,

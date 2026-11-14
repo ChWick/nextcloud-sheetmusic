@@ -252,6 +252,11 @@ return [
 			'verb' => 'DELETE',
 		],
 		[
+			'name' => 'Api#updateEntity',
+			'url' => '/api/entities/{id}',
+			'verb' => 'POST',
+		],
+		[
 			'name' => 'Api#mergeEntities',
 			'url' => '/api/entities/merge',
 			'verb' => 'POST',

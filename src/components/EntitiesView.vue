@@ -30,7 +30,19 @@
             @touchstart="effectiveCanWrite && handleRowTouchStart($event)"
             @touchend="effectiveCanWrite && handleRowTouchEnd(entity, $event)"
             @touchcancel="handleRowTouchCancel">
-          <button type="button"
+          <div v-if="editingEntityId === entity.id" :class="$style.editFieldWrapper">
+            <input
+              ref="editInputRef"
+              v-model="editingEntityName"
+              type="text"
+              :class="$style.inlineEditInput"
+              :aria-label="t('sheetmusic', 'Edit {entity}', { entity: config.singular }, { escape: false })"
+              :disabled="isUpdatingEntity"
+              @keyup.enter="saveEditEntity(entity)"
+              @keyup.escape="cancelEditEntity" />
+          </div>
+          <button v-else
+                  type="button"
                   :class="$style.entityButton"
                   :title="t('sheetmusic', 'Show the songs with this {entity}', { entity: config.singular }, { escape: false })"
                   @click="showSongsOf(entity)">
@@ -38,26 +50,63 @@
           </button>
           <span :class="$style.entitySongCount">{{ songCountLabel(entity) }}</span>
           <div v-if="effectiveCanWrite" :class="$style.rowActions">
-            <NcButton
-              size="small"
-              :class="$style.mergeButton"
-              :aria-label="t('sheetmusic', 'Merge {entity}', { entity: config.singular }, { escape: false })"
-              :title="t('sheetmusic', 'Merge {entity}', { entity: config.singular }, { escape: false })"
-              @click="openMergeDialog(entity)">
-              <template #icon>
-                <MergeIcon :size="18" />
-              </template>
-            </NcButton>
-            <NcButton variant="error"
-                      size="small"
-                      :class="$style.deleteButton"
-                      :aria-label="t('sheetmusic', 'Delete {entity}', { entity: config.singular }, { escape: false })"
-                      :title="t('sheetmusic', 'Delete {entity}', { entity: config.singular }, { escape: false })"
-                      @click="openDeleteDialog(entity)">
-              <template #icon>
-                <DeleteIcon :size="18" />
-              </template>
-            </NcButton>
+            <template v-if="editingEntityId === entity.id">
+              <NcButton
+                variant="primary"
+                size="small"
+                :class="$style.actionButton"
+                :disabled="isUpdatingEntity || !editingEntityName.trim()"
+                :aria-label="t('sheetmusic', 'Save {entity}', { entity: config.singular }, { escape: false })"
+                :title="t('sheetmusic', 'Save {entity}', { entity: config.singular }, { escape: false })"
+                @click="saveEditEntity(entity)">
+                <template #icon>
+                  <CheckIcon :size="18" />
+                </template>
+              </NcButton>
+              <NcButton
+                size="small"
+                :class="$style.actionButton"
+                :disabled="isUpdatingEntity"
+                :aria-label="t('sheetmusic', 'Cancel')"
+                :title="t('sheetmusic', 'Cancel')"
+                @click="cancelEditEntity">
+                <template #icon>
+                  <CloseIcon :size="18" />
+                </template>
+              </NcButton>
+            </template>
+            <template v-else>
+              <NcButton
+                size="small"
+                :class="$style.actionButton"
+                :aria-label="t('sheetmusic', 'Edit {entity}', { entity: config.singular }, { escape: false })"
+                :title="t('sheetmusic', 'Edit {entity}', { entity: config.singular }, { escape: false })"
+                @click="startEditEntity(entity)">
+                <template #icon>
+                  <PencilIcon :size="18" />
+                </template>
+              </NcButton>
+              <NcButton
+                size="small"
+                :class="$style.mergeButton"
+                :aria-label="t('sheetmusic', 'Merge {entity}', { entity: config.singular }, { escape: false })"
+                :title="t('sheetmusic', 'Merge {entity}', { entity: config.singular }, { escape: false })"
+                @click="openMergeDialog(entity)">
+                <template #icon>
+                  <MergeIcon :size="18" />
+                </template>
+              </NcButton>
+              <NcButton variant="error"
+                        size="small"
+                        :class="$style.deleteButton"
+                        :aria-label="t('sheetmusic', 'Delete {entity}', { entity: config.singular }, { escape: false })"
+                        :title="t('sheetmusic', 'Delete {entity}', { entity: config.singular }, { escape: false })"
+                        @click="openDeleteDialog(entity)">
+                <template #icon>
+                  <DeleteIcon :size="18" />
+                </template>
+              </NcButton>
+            </template>
           </div>
         </li>
         <li v-if="!isLoading && !fileError && visibleEntities.length === 0">
@@ -122,14 +171,17 @@
 import type { EntityType, FilterEntity, LibraryData, Song } from '../types/song'
 
 import { translate as t } from '@nextcloud/l10n'
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { loadState } from '@nextcloud/initial-state'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
+import CheckIcon from 'vue-material-design-icons/Check.vue'
+import CloseIcon from 'vue-material-design-icons/Close.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import MergeIcon from 'vue-material-design-icons/Merge.vue'
+import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import ViewHeader from './ViewHeader.vue'
 import EntityMergeDialog from './EntityMergeDialog.vue'
 import { ENTITY_COLUMNS, type SongEntityProp } from './songs/song-view-columns'
@@ -227,6 +279,10 @@ const isMergeDialogOpen = ref(false)
 const entityToMerge = ref<FilterEntity | null>(null)
 const isCreating = ref(false)
 const isDeleting = ref(false)
+const editingEntityId = ref<number | null>(null)
+const editingEntityName = ref('')
+const isUpdatingEntity = ref(false)
+const editInputRef = ref<HTMLInputElement | HTMLInputElement[] | null>(null)
 const revealedDeleteEntityId = ref<number | null>(null)
 const searchQuery = ref('')
 const newEntityName = ref('')
@@ -323,6 +379,7 @@ watch(
     // An open delete or merge dialog belongs to the previous library or entity kind.
     closeDeleteDialog()
     closeMergeDialog()
+    cancelEditEntity()
     if (library) loadLibraryData(library)
   },
   { immediate: true },
@@ -424,6 +481,53 @@ function openMergeDialog(entity?: FilterEntity) {
   isMergeDialogOpen.value = true
 }
 
+function startEditEntity(entity: FilterEntity) {
+  editingEntityId.value = entity.id
+  editingEntityName.value = entityLabel(entity)
+  nextTick(() => {
+    const raw = editInputRef.value
+    const input = Array.isArray(raw) ? raw[0] : raw
+    input?.focus()
+    input?.select()
+  })
+}
+
+function cancelEditEntity() {
+  editingEntityId.value = null
+  editingEntityName.value = ''
+}
+
+async function saveEditEntity(entity: FilterEntity) {
+  const nextName = editingEntityName.value.trim()
+  if (!nextName || isUpdatingEntity.value) {
+    return
+  }
+  if (nextName === entityLabel(entity)) {
+    cancelEditEntity()
+    return
+  }
+
+  isUpdatingEntity.value = true
+  try {
+    const response = await apiPost('/api/entities/{id}' as any, {
+      pathParams: { id: entity.id },
+      body: {
+        libraryId: props.selectedLibrary,
+        entityType: props.entityType,
+        [config.value.nameKey]: nextName,
+      },
+    } as any)
+    handleLibraryDataUpdate((response.data?.ocs?.data ?? null) as LibraryData | null)
+    showSuccess(t('sheetmusic', 'Updated "{name}".', { name: nextName }, { escape: false }))
+    cancelEditEntity()
+  } catch (e: any) {
+    const msg = e?.response?.data?.ocs?.data?.error || t('sheetmusic', 'Could not update {entity}.', { entity: config.value.singular }, { escape: false })
+    showError(msg)
+  } finally {
+    isUpdatingEntity.value = false
+  }
+}
+
 function closeMergeDialog() {
   isMergeDialogOpen.value = false
   entityToMerge.value = null
@@ -507,8 +611,25 @@ function handleEntityMerged(newLibraryData?: LibraryData) {
   gap: 4px;
 }
 .mergeButton,
-.deleteButton {
+.deleteButton,
+.actionButton {
   flex-shrink: 0;
+}
+.editFieldWrapper {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+.inlineEditInput {
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px;
+  font: inherit;
+  color: inherit;
+  background: var(--color-main-background);
+  border: 1px solid var(--color-primary-element);
+  border-radius: var(--border-radius);
 }
 @media (max-width: 768px) {
   .deleteButton {
