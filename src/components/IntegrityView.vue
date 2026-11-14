@@ -411,14 +411,6 @@ function openSong(songId: number) {
 					</template>
 					{{ t('sheetmusic', 'Re-audit Library') }}
 				</NcButton>
-				<NcButton
-					variant="secondary"
-					@click="router.push({ name: 'LibraryView', params: { library: selectedLibrary, view: 'tools' }, query: { tool: 'page-order-reset' } })">
-					<template #icon>
-						<WrenchIcon :size="20" />
-					</template>
-					{{ t('sheetmusic', 'Page Order Tool') }}
-				</NcButton>
 			</ViewHeader>
 
 			<div :class="$style.content">
