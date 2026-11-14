@@ -69,6 +69,7 @@ const emit = defineEmits<{
 	min-height: 0;
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
+	grid-auto-rows: minmax(256px, auto);
 	align-content: start;
 	gap: 16px;
 	padding: 16px;

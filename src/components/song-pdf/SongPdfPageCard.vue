@@ -168,6 +168,7 @@ const formattedRotation = computed(() => `${Math.round(props.rotationDeg * 10) /
 .pageCard {
 	display: flex;
 	flex-direction: column;
+	min-height: 256px;
 	border: 1px solid var(--color-border);
 	border-radius: 8px;
 	background-color: var(--color-main-background);
@@ -234,13 +235,12 @@ const formattedRotation = computed(() => `${Math.round(props.rotationDeg * 10) /
 .canvasWrapper {
 	position: relative;
 	width: 100%;
-	flex: 1 1 auto;
+	flex: 1 0 214px;
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	padding: 12px;
 	background-color: var(--color-background-hover);
-	height: 214px;
 	min-height: 214px;
 	box-sizing: border-box;
 	overflow: hidden;
