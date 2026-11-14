@@ -21,6 +21,9 @@ class ImportProgressService {
 	/** @var array<string, array<string, mixed>> In-memory fallback if cache is unavailable */
 	private static array $memoryStore = [];
 
+	/** @var array<string, array{stage: string, time: float}> Last distributed cache write metadata per progressId */
+	private array $lastCacheWrite = [];
+
 	public function __construct(?ICacheFactory $cacheFactory = null) {
 		if ($cacheFactory !== null) {
 			try {
@@ -107,7 +110,14 @@ class ImportProgressService {
 			'message' => $message,
 			'error' => null,
 		];
-		$this->save($progressId, $data);
+		$now = microtime(true);
+		$last = $this->lastCacheWrite[$progressId] ?? null;
+		$forceWrite = $last === null
+			|| $last['stage'] !== $stage
+			|| $current <= 1
+			|| ($total > 0 && $current >= $total)
+			|| ($now - $last['time']) >= 0.05;
+		$this->save($progressId, $data, $forceWrite);
 	}
 
 	public function complete(string $progressId, string $message = 'Import completed'): void {
@@ -157,11 +167,15 @@ class ImportProgressService {
 	/**
 	 * @param array<string, mixed> $data
 	 */
-	private function save(string $progressId, array $data): void {
+	private function save(string $progressId, array $data, bool $writeCache = true): void {
 		self::$memoryStore[$progressId] = $data;
-		if ($this->cache !== null) {
+		if ($writeCache && $this->cache !== null) {
 			try {
 				$this->cache->set($progressId, $data, 300);
+				$this->lastCacheWrite[$progressId] = [
+					'stage' => (string)($data['stage'] ?? ''),
+					'time' => microtime(true),
+				];
 			} catch (\Throwable) {
 			}
 		}
