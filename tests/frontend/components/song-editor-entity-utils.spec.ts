@@ -64,4 +64,44 @@ describe('SongEditor entity utilities', () => {
 		expect(ids.composerIds).toEqual([])
 		expect(createEntity).toHaveBeenCalledOnce()
 	})
+
+	it('creates multiple missing entities in parallel and deduplicates identical new labels', async () => {
+		let inFlight = 0
+		let maxInFlight = 0
+		let nextId = 100
+		const createEntity = vi.fn(async () => {
+			inFlight++
+			maxInFlight = Math.max(maxInFlight, inFlight)
+			await new Promise((resolve) => setTimeout(resolve, 10))
+			inFlight--
+			return nextId++
+		})
+
+		const ids = await resolveSongEntityIds([
+			{
+				idField: 'composerIds',
+				endpoint: '/api/composers',
+				labelField: 'name',
+				options: [],
+				selected: [
+					{ name: 'Debussy' },
+					{ name: ' debussy ' },
+					{ name: 'Ravel' },
+				],
+			},
+			{
+				idField: 'genreIds',
+				endpoint: '/api/genres',
+				labelField: 'name',
+				options: [],
+				selected: [{ name: 'Impressionism' }],
+			},
+		], createEntity)
+
+		expect(createEntity).toHaveBeenCalledTimes(3)
+		expect(maxInFlight).toBe(3)
+		expect(ids.composerIds[0]).toBe(ids.composerIds[1])
+		expect(ids.composerIds[2]).not.toBe(ids.composerIds[0])
+		expect(ids.genreIds).toHaveLength(1)
+	})
 })

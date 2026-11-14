@@ -94,6 +94,10 @@ export async function resolveSongEntityIds(
 		arrangerIds: [],
 	}
 
+	const pendingByKey = new Map<string, Promise<number>>()
+	const pendingPromises: Promise<number>[] = []
+	const pendingAssigners: Array<(id: number) => void> = []
+
 	for (const selection of selections) {
 		const optionsByLabel = new Map<string, number>()
 		for (const option of selection.options) {
@@ -102,21 +106,48 @@ export async function resolveSongEntityIds(
 				optionsByLabel.set(label, option.id)
 			}
 		}
-		const ids: number[] = []
+		const ids: number[] = new Array(selection.selected.length)
+		idsByField[selection.idField] = ids
 
-		for (const selected of selection.selected) {
+		for (let i = 0; i < selection.selected.length; i++) {
+			const selected = selection.selected[i]
 			if (typeof selected.id === 'number') {
-				ids.push(selected.id)
+				ids[i] = selected.id
 				continue
 			}
 
 			const label = selected[selection.labelField] ?? ''
 			const normalizedLabel = label.trim().toLocaleLowerCase()
 			const existingId = normalizedLabel === '' ? undefined : optionsByLabel.get(normalizedLabel)
-			ids.push(existingId ?? await createEntity(selection.endpoint, selection.labelField, label))
-		}
+			if (existingId !== undefined) {
+				ids[i] = existingId
+				continue
+			}
 
-		idsByField[selection.idField] = ids
+			const dedupKey = normalizedLabel === '' ? '' : `${selection.endpoint}:${normalizedLabel}`
+			let createPromise = dedupKey === '' ? undefined : pendingByKey.get(dedupKey)
+			if (createPromise === undefined) {
+				createPromise = createEntity(selection.endpoint, selection.labelField, label)
+				if (dedupKey !== '') {
+					pendingByKey.set(dedupKey, createPromise)
+				}
+			}
+
+			const index = i
+			pendingPromises.push(createPromise)
+			pendingAssigners.push((createdId) => {
+				ids[index] = createdId
+			})
+		}
+	}
+
+	if (pendingPromises.length === 1) {
+		pendingAssigners[0](await pendingPromises[0])
+	} else if (pendingPromises.length > 1) {
+		const resolvedIds = await Promise.all(pendingPromises)
+		for (let i = 0; i < resolvedIds.length; i++) {
+			pendingAssigners[i](resolvedIds[i])
+		}
 	}
 
 	return idsByField

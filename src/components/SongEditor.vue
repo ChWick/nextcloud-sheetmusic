@@ -281,8 +281,11 @@ async function saveSong(closeAfter: boolean) {
 	const detachedFileCount = existingSong ? pendingDetachFiles.value.length : 0
 
 	try {
-		for (const runRemoval of getPendingRemovalRequests(existingSong)) {
-			await runRemoval()
+		const pendingRemovals = getPendingRemovalRequests(existingSong)
+		if (pendingRemovals.length === 1) {
+			await pendingRemovals[0]()
+		} else if (pendingRemovals.length > 1) {
+			await Promise.all(pendingRemovals.map((runRemoval) => runRemoval()))
 		}
 
 		const entityIds = await resolveSongEntityIds(
