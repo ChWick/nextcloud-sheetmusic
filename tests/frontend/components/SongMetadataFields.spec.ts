@@ -68,7 +68,7 @@ describe('SongMetadataFields.vue', () => {
 			props,
 		})
 
-		expect(wrapper.findAll('button').map(button => button.text())).toEqual([
+		expect(wrapper.findAll('button[data-label]').map(button => button.text())).toEqual([
 			'Composers',
 			'Books / Albums',
 			'Collections',
@@ -99,7 +99,7 @@ describe('SongMetadataFields.vue', () => {
 
 		expect((wrapper.find('#song-rating-input').element as HTMLInputElement).value).toBe('')
 		expect((wrapper.find('#song-difficulty-input').element as HTMLInputElement).value).toBe('')
-		expect((wrapper.find('#song-duration-input').element as HTMLSelectElement).value).toBe('0')
+		expect((wrapper.find('#song-duration-input').element as HTMLInputElement).value).toBe('00')
 	})
 
 	it('emits newly tagged entity selections back to the editor model', async () => {
@@ -121,19 +121,30 @@ describe('SongMetadataFields.vue', () => {
 			},
 		})
 
-		const hoursSelect = wrapper.find('[data-test="duration-hours"]')
-		const minutesSelect = wrapper.find('[data-test="duration-minutes"]')
-		const secondsSelect = wrapper.find('[data-test="duration-seconds"]')
-		expect((hoursSelect.element as HTMLSelectElement).value).toBe('0')
-		expect((minutesSelect.element as HTMLSelectElement).value).toBe('4')
-		expect((secondsSelect.element as HTMLSelectElement).value).toBe('0')
+		const hoursInput = wrapper.find('[data-test="duration-hours"]')
+		const minutesInput = wrapper.find('[data-test="duration-minutes"]')
+		const secondsInput = wrapper.find('[data-test="duration-seconds"]')
+		expect((hoursInput.element as HTMLInputElement).value).toBe('00')
+		expect((minutesInput.element as HTMLInputElement).value).toBe('04')
+		expect((secondsInput.element as HTMLInputElement).value).toBe('00')
 
-		await hoursSelect.setValue('1')
+		await hoursInput.setValue('1')
 		await wrapper.setProps({ duration: 3840 })
-		await minutesSelect.setValue('2')
+		await minutesInput.setValue('2')
 		await wrapper.setProps({ duration: 3720 })
-		await secondsSelect.setValue('3')
+		await secondsInput.setValue('3')
 		expect(wrapper.emitted('update:duration')?.at(-1)).toEqual([3723])
+
+		// Also test picker popover selection and ArrowUp stepping
+		await wrapper.setProps({ duration: 3723 })
+		await secondsInput.trigger('keydown', { key: 'ArrowUp' })
+		expect(wrapper.emitted('update:duration')?.at(-1)).toEqual([3724])
+
+		await wrapper.setProps({ duration: 3724 })
+		await wrapper.find('[data-test="duration-picker-toggle"]').trigger('click')
+		expect(wrapper.find('[data-test="duration-picker-popover"]').exists()).toBe(true)
+		await wrapper.find('[data-test="duration-pick-minutes-15"]').trigger('click')
+		expect(wrapper.emitted('update:duration')?.at(-1)).toEqual([4504])
 
 		await wrapper.setProps({ duration: 3723 })
 		await wrapper.find('[data-test="duration-clear"]').trigger('click')
