@@ -62,6 +62,7 @@ class SheetMusicDavPlugin extends ServerPlugin {
 
 	private ?Server $server = null;
 	private SyncClientRegistry $registry;
+	private SheetMusicPropfindBuilder $propfindBuilder;
 
 	/** Raw body of a PROPFIND request on a library folder, kept for afterPropfind. */
 	private ?string $propfindBody = null;
@@ -88,6 +89,12 @@ class SheetMusicDavPlugin extends ServerPlugin {
 				$this->logger,
 			));
 		}
+		$this->propfindBuilder = new SheetMusicPropfindBuilder(
+			$this->registry,
+			$this->logger,
+			$this->sublibraryService,
+			self::SUBLIBRARIES_DIR,
+		);
 	}
 
 	#[\Override]
@@ -98,6 +105,7 @@ class SheetMusicDavPlugin extends ServerPlugin {
 	#[\Override]
 	public function initialize(Server $server): void {
 		$this->server = $server;
+		$this->propfindBuilder->setServer($server);
 		$server->on('beforeMethod:*', [$this, 'beforeMethod'], self::BEFORE_METHOD_PRIORITY);
 		$server->on('afterMethod:PROPFIND', [$this, 'afterPropfind'], 10);
 	}
@@ -249,100 +257,17 @@ class SheetMusicDavPlugin extends ServerPlugin {
 				} finally {
 					$xml = (string)ob_get_clean();
 				}
-				echo $this->injectVirtualEntries($xml, $library, $path, $requestBody, $targetUserId, $publicToken, $canWrite, !$isSyncClient);
+				echo $this->propfindBuilder->injectVirtualEntries($xml, $library, $path, $requestBody, $targetUserId, $publicToken, $canWrite, !$isSyncClient);
 			});
 			$response->removeHeader('Content-Length');
 			return;
 		}
 
 		$xml = $response->getBodyAsString();
-		$newBody = $this->injectVirtualEntries($xml, $library, $path, $requestBody, $targetUserId, $publicToken, $canWrite, !$isSyncClient);
+		$newBody = $this->propfindBuilder->injectVirtualEntries($xml, $library, $path, $requestBody, $targetUserId, $publicToken, $canWrite, !$isSyncClient);
 		if ($newBody !== $xml) {
 			$response->setBody($newBody);
 			$response->setHeader('Content-Length', (string)strlen($newBody));
-		}
-	}
-
-	/**
-	 * Add multistatus entries for the virtual files to a folder listing.
-	 *
-	 * @return string the listing with the entries, or unchanged on failure
-	 */
-	private function injectVirtualEntries(
-		string $xml,
-		InternalLibrary $library,
-		string $path,
-		?string $requestBody,
-		?string $userId = null,
-		?string $publicToken = null,
-		bool $canWrite = true,
-		bool $includeSublibraries = true,
-	): string {
-		if ($xml === '') {
-			return $xml;
-		}
-
-		try {
-			$document = new \DOMDocument('1.0', 'UTF-8');
-			if (!@$document->loadXML($xml) || $document->documentElement === null) {
-				return $xml;
-			}
-			$document->encoding = 'UTF-8';
-
-			$existing = $this->listedFilenames($document);
-			$sublibrary = null;
-			if ($library->sublibraryId !== null && $this->sublibraryService !== null) {
-				$sublibrary = $this->sublibraryService->getSublibrary($library->sublibraryId);
-			}
-
-			$entries = [];
-			foreach ($this->registry->getAllVirtualFileNames() as $filename) {
-				// A real file of that name takes precedence over the virtual one.
-				if (in_array($filename, $existing, true)) {
-					continue;
-				}
-				$client = $this->registry->getClientForVirtualFile($filename);
-				$entry = $this->buildPropfindEntry($library, $path . '/' . $filename, $filename, $requestBody, $client, $sublibrary, $userId, $publicToken, $canWrite);
-				if ($entry !== null) {
-					$entries[] = $entry;
-				}
-			}
-
-			if ($includeSublibraries && $this->sublibraryService !== null && $library->id !== null && $library->sublibraryId === null) {
-				$sublibs = $this->sublibraryService->getSublibraries((int)$library->id);
-				if (!empty($sublibs) && !in_array(self::SUBLIBRARIES_DIR, $existing, true)) {
-					$entries[] = $this->buildDirectoryPropfindEntry(
-						$path . '/' . self::SUBLIBRARIES_DIR,
-						self::SUBLIBRARIES_DIR,
-						$requestBody,
-						$library->updatedAt,
-					);
-				}
-			}
-
-			if ($entries === []) {
-				return $xml;
-			}
-
-			$virtual = new \DOMDocument('1.0', 'UTF-8');
-			if (!$virtual->loadXML($this->generateMultiStatus($entries)) || $virtual->documentElement === null) {
-				return $xml;
-			}
-			$virtual->encoding = 'UTF-8';
-
-			foreach ($virtual->documentElement->childNodes as $node) {
-				if ($node instanceof \DOMElement && $node->localName === 'response') {
-					$document->documentElement->appendChild($document->importNode($node, true));
-				}
-			}
-
-			return (string)$document->saveXML();
-		} catch (\Throwable $e) {
-			$this->logger->error('Failed to add virtual MobileSheets files to PROPFIND response: ' . $e->getMessage(), [
-				'exception' => $e,
-				'path' => $path,
-			]);
-			return $xml;
 		}
 	}
 
@@ -358,13 +283,13 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		?string $publicToken = null,
 		bool $canWrite = true,
 	): bool {
-		$entry = $this->buildPropfindEntry($library, $path, $filename, $request->getBodyAsString(), $client, $sublibrary, $userId, $publicToken, $canWrite);
+		$entry = $this->propfindBuilder->buildPropfindEntry($library, $path, $filename, $request->getBodyAsString(), $client, $sublibrary, $userId, $publicToken, $canWrite);
 		if ($entry === null) {
 			$response->setStatus(404);
 			return false;
 		}
 
-		$xml = $this->generateMultiStatus([$entry]);
+		$xml = $this->propfindBuilder->generateMultiStatus([$entry]);
 		$response->setStatus(207);
 		$response->setHeader('Content-Type', 'application/xml; charset=utf-8');
 		$response->setHeader('Vary', 'Brief,Prefer');
@@ -376,131 +301,6 @@ class SheetMusicDavPlugin extends ServerPlugin {
 	private function acknowledge(ResponseInterface $response): bool {
 		$response->setStatus(204);
 		return false;
-	}
-
-	/**
-	 * Build a multistatus entry for a virtual file, honouring the properties
-	 * requested in the PROPFIND body.
-	 *
-	 * @return array<int|string, mixed>|null
-	 */
-	private function buildPropfindEntry(
-		InternalLibrary $library,
-		string $path,
-		string $filename,
-		?string $requestBody,
-		?SyncClientInterface $client = null,
-		?InternalSublibrary $sublibrary = null,
-		?string $userId = null,
-		?string $publicToken = null,
-		bool $canWrite = true,
-	): ?array {
-		$client ??= $this->registry->getClientForVirtualFile($filename);
-		$targetUserId = $userId ?? $library->userId ?? '';
-		$props = $client?->getVirtualFileProperties($library, $filename, $targetUserId, $sublibrary, $publicToken);
-		if ($props === null) {
-			return null;
-		}
-
-		$requestType = PropFind::ALLPROPS;
-		$requested = [];
-		if ($requestBody !== null && trim($requestBody) !== '' && $this->server !== null) {
-			$propFindXml = $this->server->xml->expect('{DAV:}propfind', $requestBody);
-			if ($propFindXml instanceof PropFindRequest && !$propFindXml->allProp) {
-				$requestType = PropFind::NORMAL;
-				$requested = $propFindXml->properties;
-			}
-		}
-
-		$size = $props['size'] ?? 0;
-		$contentType = $props['contentType'] ?? 'application/octet-stream';
-		$lastModified = $props['lastModified'] ?? max($library->updatedAt ?: time(), $sublibrary?->updatedAt ?? 0);
-		$etag = $props['etag'] ?? ($sublibrary !== null
-			? sprintf('"sm-%d-%d-%d"', $library->id, $sublibrary->id, $lastModified)
-			: sprintf('"sm-%d-%d"', $library->id, $library->updatedAt));
-
-		$propFind = new PropFind($path, $requested, 0, $requestType);
-		$propFind->set('{DAV:}displayname', $filename);
-		$propFind->set('{DAV:}getlastmodified', new GetLastModified($lastModified));
-		$propFind->set('{DAV:}getcontentlength', $size);
-		$propFind->set('{DAV:}getcontenttype', $contentType);
-		$propFind->set('{DAV:}getetag', $etag);
-		$propFind->set('{DAV:}resourcetype', new ResourceType());
-		$propFind->set('{' . self::OC_NS . '}size', $size);
-		$propFind->set('{' . self::OC_NS . '}permissions', $canWrite ? 'RGDNVW' : 'RG');
-
-		$entry = $propFind->getResultForMultiStatus();
-		$entry['href'] = $path;
-		return $entry;
-	}
-
-	/**
-	 * Build a multistatus entry for a virtual directory/collection.
-	 *
-	 * @return array<int|string, mixed>
-	 */
-	private function buildDirectoryPropfindEntry(
-		string $path,
-		string $displayname,
-		?string $requestBody,
-		int $lastModified = 0,
-	): array {
-		$requestType = PropFind::ALLPROPS;
-		$requested = [];
-		if ($requestBody !== null && trim($requestBody) !== '' && $this->server !== null) {
-			try {
-				$propFindXml = $this->server->xml->expect('{DAV:}propfind', $requestBody);
-				if ($propFindXml instanceof PropFindRequest && !$propFindXml->allProp) {
-					$requestType = PropFind::NORMAL;
-					$requested = $propFindXml->properties;
-				}
-			} catch (\Throwable) {
-				// Fall back to ALLPROPS
-			}
-		}
-
-		$propFind = new PropFind($path, $requested, 0, $requestType);
-		$propFind->set('{DAV:}displayname', $displayname);
-		$propFind->set('{DAV:}getlastmodified', new GetLastModified($lastModified ?: time()));
-		$propFind->set('{DAV:}resourcetype', new ResourceType(['{DAV:}collection']));
-		$propFind->set('{' . self::OC_NS . '}permissions', 'RGDNVW');
-
-		$entry = $propFind->getResultForMultiStatus();
-		$entry['href'] = $path;
-		return $entry;
-	}
-
-	/**
-	 * @param list<array<int|string, mixed>> $entries
-	 */
-	private function generateMultiStatus(array $entries): string {
-		if ($this->server === null) {
-			throw new \RuntimeException('Plugin is not attached to a server');
-		}
-
-		$prefer = $this->server->getHTTPPrefer();
-		// Nextcloud streams multistatus responses on some endpoints; the
-		// entries built here are always needed as a string.
-		$streaming = Server::$streamMultiStatus;
-		Server::$streamMultiStatus = false;
-		try {
-			return (string)$this->server->generateMultiStatus($entries, $prefer['return'] === 'minimal');
-		} finally {
-			Server::$streamMultiStatus = $streaming;
-		}
-	}
-
-	/**
-	 * Names of the entries of a multistatus listing.
-	 *
-	 * @return list<string>
-	 */
-	private function listedFilenames(\DOMDocument $document): array {
-		$names = [];
-		foreach ($document->getElementsByTagNameNS('DAV:', 'href') as $href) {
-			$names[] = rawurldecode(basename(rtrim(trim($href->textContent), '/')));
-		}
-		return $names;
 	}
 
 	/**
@@ -628,11 +428,11 @@ class SheetMusicDavPlugin extends ServerPlugin {
 
 			$depth = $request->getHeader('Depth') ?? '1';
 			$entries = [];
-			$entries[] = $this->buildDirectoryPropfindEntry($path, basename($path), $request->getBodyAsString(), $library->updatedAt);
+			$entries[] = $this->propfindBuilder->buildDirectoryPropfindEntry($path, basename($path), $request->getBodyAsString(), $library->updatedAt);
 
 			if ($depth !== '0') {
 				foreach ($this->sublibraryService->getSublibraries((int)$library->id) as $sublib) {
-					$entries[] = $this->buildDirectoryPropfindEntry(
+					$entries[] = $this->propfindBuilder->buildDirectoryPropfindEntry(
 						$path . '/' . $sublib->slug,
 						$sublib->slug,
 						$request->getBodyAsString(),
@@ -644,7 +444,7 @@ class SheetMusicDavPlugin extends ServerPlugin {
 			$response->setStatus(207);
 			$response->setHeader('Content-Type', 'application/xml; charset=utf-8');
 			$response->setHeader('Vary', 'Brief,Prefer');
-			$response->setBody($this->generateMultiStatus($entries));
+			$response->setBody($this->propfindBuilder->generateMultiStatus($entries));
 			return true;
 		}
 
@@ -655,12 +455,12 @@ class SheetMusicDavPlugin extends ServerPlugin {
 
 			$depth = $request->getHeader('Depth') ?? '1';
 			$entries = [];
-			$entries[] = $this->buildDirectoryPropfindEntry($path, $sublibrary->slug, $request->getBodyAsString(), $sublibrary->updatedAt);
+			$entries[] = $this->propfindBuilder->buildDirectoryPropfindEntry($path, $sublibrary->slug, $request->getBodyAsString(), $sublibrary->updatedAt);
 
 			if ($depth !== '0') {
 				foreach ($this->registry->getAllVirtualFileNames() as $filename) {
 					$client = $this->registry->getClientForVirtualFile($filename);
-					$entry = $this->buildPropfindEntry($library, $path . '/' . $filename, $filename, $request->getBodyAsString(), $client, $sublibrary);
+					$entry = $this->propfindBuilder->buildPropfindEntry($library, $path . '/' . $filename, $filename, $request->getBodyAsString(), $client, $sublibrary);
 					if ($entry !== null) {
 						$entries[] = $entry;
 					}
@@ -670,7 +470,7 @@ class SheetMusicDavPlugin extends ServerPlugin {
 			$response->setStatus(207);
 			$response->setHeader('Content-Type', 'application/xml; charset=utf-8');
 			$response->setHeader('Vary', 'Brief,Prefer');
-			$response->setBody($this->generateMultiStatus($entries));
+			$response->setBody($this->propfindBuilder->generateMultiStatus($entries));
 			return true;
 		}
 
@@ -972,7 +772,7 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		$response->setStatus(207);
 		$response->setHeader('Content-Type', 'application/xml; charset=utf-8');
 		$response->setHeader('Vary', 'Brief,Prefer');
-		$response->setBody($this->generateMultiStatus([$entry]));
+		$response->setBody($this->propfindBuilder->generateMultiStatus([$entry]));
 		return true;
 	}
 

@@ -29,6 +29,8 @@ use OCP\IUser;
 use Psr\Log\LoggerInterface;
 
 class LibraryIntegrityFixer {
+	private ?OrphanFileLinker $orphanFileLinker = null;
+
 	public function __construct(
 		private LibraryService $libraryService,
 		private FileManager $fileManager,
@@ -720,195 +722,17 @@ class LibraryIntegrityFixer {
 	 */
 	public function fixOrphanFileIssue(int $libraryId, string $userId, string $path, ?int $songId = null): array {
 		['user' => $user, 'databasePath' => $databasePath, 'targetFolder' => $targetFolder] = $this->getUserLibraryContext($libraryId, $userId);
-
-		$cleanPath = ltrim(str_replace('\\', '/', $path), '/');
-		try {
-			$orphanNode = $targetFolder->get($cleanPath);
-		} catch (\Throwable) {
-			return [
-				'success' => false,
-				'fixedCount' => 0,
-				'message' => sprintf('Orphan file "%s" was not found in library storage.', basename($path)),
-			];
-		}
-
-		if (!($orphanNode instanceof Node)) {
-			return [
-				'success' => false,
-				'fixedCount' => 0,
-				'message' => sprintf('Orphan file "%s" is not a valid file.', basename($path)),
-			];
-		}
-
-		$targetFolderPath = (string)$targetFolder->getPath();
-		$songs = $this->internalSongMapper->findLibraryData($libraryId, $user)->songs;
-		$missingSongIds = $this->orphanScanner->findMissingSongIds($songs, $targetFolder, $targetFolderPath, $user);
-		$candidateSong = $this->orphanScanner->findOrphanFileCandidateSong($cleanPath, $songs, $missingSongIds);
-
-		if ($candidateSong === null) {
-			return [
-				'success' => false,
-				'fixedCount' => 0,
-				'message' => sprintf('Could not uniquely identify a candidate song without files for "%s".', basename($path)),
-			];
-		}
-
-		if ($songId !== null && $candidateSong->id !== $songId) {
-			return [
-				'success' => false,
-				'fixedCount' => 0,
-				'message' => sprintf('Candidate song ID %d does not match requested song ID %d.', $candidateSong->id, $songId),
-			];
-		}
-
-		$missingFiles = [];
-		foreach ($candidateSong->files as $f) {
-			$pathObj = $this->pathResolver->fromStored($f->path, $user);
-			if ($pathObj === null) {
-				$missingFiles[] = $f;
-				continue;
-			}
-			$rel = $this->pathResolver->relativeToFolder($pathObj->internal, $targetFolderPath);
-			if ($rel === null || !$targetFolder->nodeExists($rel)) {
-				$missingFiles[] = $f;
-			}
-		}
-
-		$fileId = (int)$orphanNode->getId();
-		$existingFiles = $this->internalSongFileMapper->findAllForSong($candidateSong->id);
-		$alreadyLinked = false;
-		foreach ($existingFiles as $ef) {
-			if ($ef->fileId === $fileId) {
-				$alreadyLinked = true;
-				break;
-			}
-		}
-
-		if (!$alreadyLinked) {
-			if (!empty($missingFiles)) {
-				foreach ($missingFiles as $mf) {
-					$rec = $this->internalSongFileMapper->findById($mf->id);
-					if ($rec !== null && $rec->songId === $candidateSong->id) {
-						$this->internalSongFileMapper->delete($rec->id);
-					}
-				}
-			}
-
-			$fileSize = 0;
-			try {
-				$fileSize = $orphanNode->getSize();
-			} catch (\Throwable) {
-			}
-
-			$internalSongFile = new InternalSongFile(
-				id: null,
-				uuid: InternalEntity::generateUuid(),
-				songId: $candidateSong->id,
-				fileId: $fileId,
-				fileSize: $fileSize,
-				type: InternalSongFile::determineFileType($orphanNode->getName()),
-				createdAt: time(),
-				updatedAt: time(),
-			);
-			$this->internalSongFileMapper->insert($internalSongFile);
-			$this->libraryMapper->touch($libraryId);
-		}
-
-		// If physical/cached SQLite database exists, keep it consistent with the linked file
-		if ($databasePath !== '' && file_exists($databasePath)) {
-			try {
-				$db = new \PDO('sqlite:' . $databasePath);
-				$db->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
-				$tables = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name='Files'")->fetchAll();
-				if (!empty($tables)) {
-					$internalSong = $this->internalSongMapper->findById($candidateSong->id);
-					$sqliteSongId = $internalSong?->clientId;
-					if ($sqliteSongId === null && MobileSheetsTableHelper::tableExists($db, 'Songs')) {
-						$check = $db->prepare('SELECT Id FROM Songs WHERE Id = :id');
-						$check->execute([':id' => $candidateSong->id]);
-						if ($check->fetch() !== false) {
-							$sqliteSongId = $candidateSong->id;
-						}
-					}
-
-					if ($sqliteSongId !== null) {
-						$facts = MobileSheetsFileFacts::fromNode($orphanNode);
-						$fileType = InternalSongFile::determineFileType($cleanPath);
-						$updatedExisting = false;
-
-						if (!empty($missingFiles)) {
-							foreach ($missingFiles as $mf) {
-								$mfPathObj = $this->pathResolver->fromStored($mf->path, $user);
-								$mfInternal = $mfPathObj?->internal ?? '';
-								$mfRel = ($mfPathObj !== null ? $this->pathResolver->relativeToFolder($mfPathObj->internal, $targetFolderPath) : null)
-									?? basename($mf->path);
-
-								$stmtFind = $db->prepare('SELECT Id FROM Files WHERE SongId = :songId AND (Path = :p1 OR Path = :p2 OR Id = :fid)');
-								$stmtFind->execute([
-									':songId' => $sqliteSongId,
-									':p1' => $mfRel,
-									':p2' => $mf->path,
-									':fid' => $mf->id,
-								]);
-								$row = $stmtFind->fetch();
-								if ($row !== false) {
-									$stmtUpdate = $db->prepare('UPDATE Files SET Path = :path, PageOrder = :pageOrder, FileSize = :fileSize, LastModified = :lastModified, Type = :type, SourceFilePageCount = :pageCount, FileHash = :fileHash WHERE Id = :id');
-									$stmtUpdate->execute([
-										':id' => $row['Id'],
-										':path' => $cleanPath,
-										':pageOrder' => $facts->pageOrder,
-										':fileSize' => $facts->fileSize,
-										':lastModified' => $facts->lastModified,
-										':type' => $fileType,
-										':pageCount' => $facts->sourceFilePageCount,
-										':fileHash' => $facts->fileHash,
-									]);
-									$updatedExisting = true;
-									break;
-								}
-							}
-						}
-
-						if (!$updatedExisting) {
-							$existing = $db->prepare('SELECT Id FROM Files WHERE SongId = :songId AND Path = :path');
-							$existing->execute([':songId' => $sqliteSongId, ':path' => $cleanPath]);
-							if ($existing->fetch() === false) {
-								$stmt = $db->prepare('INSERT INTO Files (SongId, Path, PageOrder, FileSize, LastModified, Source, Type, Password, SourceFilePageCount, FileHash, Width, Height) VALUES (:songId, :path, :pageOrder, :fileSize, :lastModified, 0, :type, \'\', :pageCount, :fileHash, 0, 0)');
-								$stmt->execute([
-									':songId' => $sqliteSongId,
-									':path' => $cleanPath,
-									':pageOrder' => $facts->pageOrder,
-									':fileSize' => $facts->fileSize,
-									':lastModified' => $facts->lastModified,
-									':type' => $fileType,
-									':pageCount' => $facts->sourceFilePageCount,
-									':fileHash' => $facts->fileHash,
-								]);
-							}
-						}
-					}
-				}
-			} catch (\Throwable $e) {
-				$this->logger->warning('Could not record orphan file in SQLite database: ' . $e->getMessage());
-			}
-		}
-
-		$autoPaths = $this->libraryService->isAutoPathsEnabled($userId, $libraryId);
-		if ($autoPaths) {
-			$hashCodes = MobileSheetsHashCodesFile::forDatabase($databasePath, $this->logger);
-			try {
-				$this->fileManager->regenerateSongFilePaths($candidateSong->id, $user, $targetFolder, $databasePath, $hashCodes);
-				$hashCodes?->save();
-			} catch (\Throwable $e) {
-				$this->logger->debug('Naming rule not applied after linking orphan file: ' . $e->getMessage());
-			}
-		}
-
-		return [
-			'success' => true,
-			'fixedCount' => 1,
-			'message' => sprintf('Linked orphan file "%s" to song "%s".', $orphanNode->getName(), $candidateSong->title),
-		];
+		$this->orphanFileLinker ??= new OrphanFileLinker(
+			$this->libraryService,
+			$this->fileManager,
+			$this->pathResolver,
+			$this->logger,
+			$this->internalSongMapper,
+			$this->internalSongFileMapper,
+			$this->libraryMapper,
+			$this->orphanScanner,
+		);
+		return $this->orphanFileLinker->linkOrphanFile($libraryId, $userId, $user, $databasePath, $targetFolder, $path, $songId);
 	}
 
 	public function isRelationalIssueType(string $type): bool {
