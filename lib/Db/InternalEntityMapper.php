@@ -252,6 +252,32 @@ class InternalEntityMapper {
 	}
 
 	/**
+	 * Fetch all active entities assigned to a song in link assignment order (matching findLibraryData).
+	 *
+	 * @return list<InternalEntity>
+	 */
+	public function findEntitiesForSongOrderedByLink(int $songId): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('e.*')
+			->from(self::JUNCTION_TABLE_NAME, 'se')
+			->innerJoin('se', self::TABLE_NAME, 'e', $qb->expr()->eq('se.entity_id', 'e.id'))
+			->where($qb->expr()->eq('se.song_id', $qb->createNamedParameter($songId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->isNull('se.deleted_at'))
+			->andWhere($qb->expr()->isNull('e.deleted_at'))
+			->orderBy('se.entity_id', 'ASC')
+			->addOrderBy('se.id', 'ASC');
+
+		$result = $qb->executeQuery();
+		$entities = [];
+		while ($row = $result->fetchAssociative()) {
+			$entities[] = InternalEntity::fromRow($row);
+		}
+		$result->closeCursor();
+
+		return $entities;
+	}
+
+	/**
 	 * @return list<int>
 	 */
 	public function findEntityIdsForSong(int $songId, ?string $type = null): array {

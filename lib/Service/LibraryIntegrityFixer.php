@@ -697,16 +697,7 @@ class LibraryIntegrityFixer {
 			throw new \RuntimeException('The PDF metadata issue does not identify a song and file.');
 		}
 
-		$song = $preloadedSong;
-		if ($song === null) {
-			$data = $this->internalSongMapper->findLibraryData($libraryId, $user);
-			foreach ($data->songs as $s) {
-				if ($s->id === $issue->songId) {
-					$song = $s;
-					break;
-				}
-			}
-		}
+		$song = $preloadedSong ?? $this->internalSongMapper->findSong($issue->songId, $user);
 		if ($song === null) {
 			throw new \RuntimeException(sprintf('Song %d was not found while fixing PDF metadata.', $issue->songId));
 		}
