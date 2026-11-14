@@ -149,11 +149,21 @@ class MobileSheetsPdfMetadata {
 		// The object may have been redefined by an earlier incremental update,
 		// in which case the last definition is the one in force.
 		$pattern = '#(?<![0-9])' . $trailer['infoNumber'] . '\s+' . $trailer['infoGeneration'] . '\s+obj\b#';
-		if (preg_match_all($pattern, $content, $matches, PREG_OFFSET_CAPTURE) === false || $matches[0] === []) {
-			return null;
+		$fastNeedle = $trailer['infoNumber'] . ' ' . $trailer['infoGeneration'] . ' obj';
+		$lastFastPos = strrpos($content, $fastNeedle);
+		if ($lastFastPos !== false
+			&& ($lastFastPos === 0 || !ctype_digit($content[$lastFastPos - 1]))
+			&& !ctype_alnum($content[$lastFastPos + strlen($fastNeedle)] ?? '')
+			&& preg_match($pattern, $content, $unused, 0, $lastFastPos + 1) !== 1
+		) {
+			$offset = $lastFastPos;
+		} else {
+			if (preg_match_all($pattern, $content, $matches, PREG_OFFSET_CAPTURE) === false || $matches[0] === []) {
+				return null;
+			}
+			$offset = (int)end($matches[0])[1];
 		}
 
-		$offset = (int)end($matches[0])[1];
 		if (preg_match('#\d+\s+\d+\s+obj\s*<<(.*?)>>#s', substr($content, $offset), $dict) !== 1) {
 			return null;
 		}
@@ -217,11 +227,15 @@ class MobileSheetsPdfMetadata {
 	 *                           read and written
 	 */
 	private static function trailer(string $content): array {
-		if (preg_match_all('#startxref\s+(\d+)#', $content, $matches) === false || $matches[1] === []) {
+		$lastStartxref = strrpos($content, 'startxref');
+		if ($lastStartxref !== false && preg_match('#^startxref\s+(\d+)#', substr($content, $lastStartxref), $lastMatch) === 1) {
+			$xrefOffset = (int)$lastMatch[1];
+		} elseif (preg_match_all('#startxref\s+(\d+)#', $content, $matches) !== false && $matches[1] !== []) {
+			// The last startxref points at the cross-reference section in force.
+			$xrefOffset = (int)end($matches[1]);
+		} else {
 			throw new \RuntimeException('Not a PDF: no startxref');
 		}
-		// The last startxref points at the cross-reference section in force.
-		$xrefOffset = (int)end($matches[1]);
 		$region = substr($content, $xrefOffset);
 
 		if (preg_match('#/Size\s+(\d+)#', $region, $size) !== 1) {

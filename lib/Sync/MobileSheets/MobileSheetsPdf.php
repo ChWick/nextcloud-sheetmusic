@@ -103,6 +103,11 @@ class MobileSheetsPdf {
 			return '';
 		}
 
+		// Indirect /Type /Page objects can only be compressed inside PDF 1.5+ object streams (/Type /ObjStm).
+		if (!str_contains($content, '/ObjStm')) {
+			return '';
+		}
+
 		$extra = '';
 		$offset = 0;
 		$length = strlen($content);
@@ -124,6 +129,15 @@ class MobileSheetsPdf {
 			if ($end === false) {
 				break;
 			}
+
+			// Only unpack object streams (/Type /ObjStm); skip image, font, and page content streams.
+			$headerStart = max($offset, $pos - 1024);
+			$header = substr($content, $headerStart, $pos - $headerStart);
+			if (!str_contains($header, '/ObjStm')) {
+				$offset = $end + 9;
+				continue;
+			}
+
 			$body = substr($content, $start, $end - $start);
 			if (str_ends_with($body, "\r\n")) {
 				$body = substr($body, 0, -2);
