@@ -101,13 +101,13 @@ const selectedRangeText = computed(() => {
 			<NcButton
 				v-if="selectedRangeText"
 				variant="primary"
-				:title="t('sheetmusic', 'Add new bookmark from selected pages ({range})', { range: selectedRangeText })"
-				:aria-label="t('sheetmusic', 'Add from Selection ({range})', { range: selectedRangeText })"
+				:title="t('sheetmusic', 'Add new bookmark from selected pages ({range})', { range: selectedRangeText }, { escape: false })"
+				:aria-label="t('sheetmusic', 'Add from Selection ({range})', { range: selectedRangeText }, { escape: false })"
 				@click="onAddBookmarkFromSelection">
 				<template #icon>
 					<PlusIcon :size="18" />
 				</template>
-				{{ t('sheetmusic', 'Add from Selection ({range})', { range: selectedRangeText }) }}
+				{{ t('sheetmusic', 'Add from Selection ({range})', { range: selectedRangeText }, { escape: false }) }}
 			</NcButton>
 			<NcButton
 				variant="secondary"
@@ -183,13 +183,13 @@ const selectedRangeText = computed(() => {
 						v-if="selectedRangeText"
 						size="small"
 						variant="secondary"
-						:title="t('sheetmusic', 'Assign selected pages ({range}) to this bookmark', { range: selectedRangeText })"
-						:aria-label="t('sheetmusic', 'Pages {range}', { range: selectedRangeText })"
+						:title="t('sheetmusic', 'Assign selected pages ({range}) to this bookmark', { range: selectedRangeText }, { escape: false })"
+						:aria-label="t('sheetmusic', 'Pages {range}', { range: selectedRangeText }, { escape: false })"
 						@click="emit('assign-selected', bm.id)">
 						<template #icon>
 							<ArrowRight :size="14" />
 						</template>
-						{{ t('sheetmusic', 'Pages {range}', { range: selectedRangeText }) }}
+						{{ t('sheetmusic', 'Pages {range}', { range: selectedRangeText }, { escape: false }) }}
 					</NcButton>
 				</div>
 			</div>

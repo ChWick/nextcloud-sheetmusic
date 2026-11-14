@@ -24,7 +24,7 @@ const emit = defineEmits<{
 		<div v-if="pendingDeleteFiles.length > 0" :class="$style.deletionWarning">
 			<div :class="$style.warningText">
 				<strong>{{ t('sheetmusic', 'Notice:') }}</strong>
-				{{ t('sheetmusic', '{count} file(s) marked for removal will be permanently deleted from storage when you click "{action}".', { count: pendingDeleteFiles.length, action: saveActionLabel }) }}
+				{{ t('sheetmusic', '{count} file(s) marked for removal will be permanently deleted from storage when you click "{action}".', { count: pendingDeleteFiles.length, action: saveActionLabel }, { escape: false }) }}
 			</div>
 			<ul :class="$style.pendingList">
 				<li v-for="file in pendingDeleteFiles" :key="file.id" :class="$style.pendingItem">
@@ -44,7 +44,7 @@ const emit = defineEmits<{
 		<div v-if="pendingDetachFiles && pendingDetachFiles.length > 0" :class="$style.detachNotice">
 			<div :class="$style.warningText">
 				<strong>{{ t('sheetmusic', 'Notice:') }}</strong>
-				{{ t('sheetmusic', '{count} file(s) will be detached from the song (kept in storage) when you click "{action}".', { count: pendingDetachFiles.length, action: saveActionLabel }) }}
+				{{ t('sheetmusic', '{count} file(s) will be detached from the song (kept in storage) when you click "{action}".', { count: pendingDetachFiles.length, action: saveActionLabel }, { escape: false }) }}
 			</div>
 			<ul :class="$style.pendingList">
 				<li v-for="file in pendingDetachFiles" :key="file.id" :class="$style.pendingItem">
@@ -64,7 +64,7 @@ const emit = defineEmits<{
 		<div v-if="pendingAdditions.length > 0" :class="$style.additionNotice">
 			<div :class="$style.warningText">
 				<strong>{{ t('sheetmusic', 'Notice:') }}</strong>
-				{{ t('sheetmusic', '{count} file(s) will be added to the song when you click "{action}".', { count: pendingAdditions.length, action: saveActionLabel }) }}
+				{{ t('sheetmusic', '{count} file(s) will be added to the song when you click "{action}".', { count: pendingAdditions.length, action: saveActionLabel }, { escape: false }) }}
 			</div>
 			<ul :class="$style.pendingList">
 				<li v-for="addition in pendingAdditions" :key="addition.key" :class="$style.pendingAdditionItem">

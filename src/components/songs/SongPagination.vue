@@ -92,10 +92,10 @@ function handlePageSizeChange(e: Event) {
 		<!-- Summary Info -->
 		<div :class="$style.summary" data-test="pagination-summary">
 			<template v-if="pageSize === 'all' || totalItems <= (typeof pageSize === 'number' ? pageSize : totalItems)">
-				{{ t('sheetmusic', 'Showing all {count} songs', { count: totalItems }) }}
+				{{ t('sheetmusic', 'Showing all {count} songs', { count: totalItems }, { escape: false }) }}
 			</template>
 			<template v-else>
-				{{ t('sheetmusic', 'Showing {from}–{to} of {total} songs', { from: fromItem, to: toItem, total: totalItems }) }}
+				{{ t('sheetmusic', 'Showing {from}–{to} of {total} songs', { from: fromItem, to: toItem, total: totalItems }, { escape: false }) }}
 			</template>
 		</div>
 
@@ -143,7 +143,7 @@ function handlePageSizeChange(e: Event) {
 						type="button"
 						:class="[$style.pageBtn, p === currentPage && $style.pageBtnActive]"
 						:aria-current="p === currentPage ? 'page' : undefined"
-						:title="t('sheetmusic', 'Page {page}', { page: p })"
+						:title="t('sheetmusic', 'Page {page}', { page: p }, { escape: false })"
 						@click="goToPage(p)">
 						{{ p }}
 					</button>
@@ -152,7 +152,7 @@ function handlePageSizeChange(e: Event) {
 
 			<!-- Mobile Page Indicator -->
 			<span :class="$style.mobileIndicator">
-				{{ t('sheetmusic', '{current} / {total}', { current: currentPage, total: totalPages }) }}
+				{{ t('sheetmusic', '{current} / {total}', { current: currentPage, total: totalPages }, { escape: false }) }}
 			</span>
 
 			<!-- Next Page -->

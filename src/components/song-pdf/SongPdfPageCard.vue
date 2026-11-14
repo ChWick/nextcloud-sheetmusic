@@ -130,7 +130,7 @@ const formattedRotation = computed(() => `${Math.round(props.rotationDeg * 10) /
 
 		<div :class="$style.cardFooter">
 			<span :class="[$style.pageNumLabel, isDeleted && $style.pageNumLabelDeleted]">
-				{{ t('sheetmusic', 'p. {page}', { page: pageNum }) }}
+				{{ t('sheetmusic', 'p. {page}', { page: pageNum }, { escape: false }) }}
 				<span v-if="hasRotation" :class="$style.rotationBadge">
 					{{ formattedRotation }}
 				</span>

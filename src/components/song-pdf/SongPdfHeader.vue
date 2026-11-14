@@ -192,7 +192,7 @@ const saveButtonText = computed(() => {
 								v-for="pr in pageResolutions"
 								:key="pr.pageNum"
 								:class="$style.perPageRow">
-								<span>{{ t('sheetmusic', 'Page {n}', { n: pr.pageNum }) }}</span>
+								<span>{{ t('sheetmusic', 'Page {n}', { n: pr.pageNum }, { escape: false }) }}</span>
 								<span>{{ pr.pixelWidth }}×{{ pr.pixelHeight }} px · {{ pr.dpi }} DPI · {{ pr.widthMm }}×{{ pr.heightMm }} mm</span>
 							</div>
 						</div>

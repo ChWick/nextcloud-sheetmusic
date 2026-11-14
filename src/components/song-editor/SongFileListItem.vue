@@ -149,7 +149,7 @@ watch(() => props.file.path, () => {
 			<div v-if="isPdf" :class="$style.pageOrderBadge" :title="t('sheetmusic', 'MobileSheets Page Order')">
 				<FormatListNumbered :size="14" aria-hidden="true" />
 				<span :class="$style.pageOrderText">
-					{{ file.pageOrder ? t('sheetmusic', 'Pages: {order}', { order: file.pageOrder }) : (file.pageCount && file.pageCount > 1 ? t('sheetmusic', 'Pages: 1-{count}', { count: file.pageCount }) : t('sheetmusic', '1 page')) }}
+					{{ file.pageOrder ? t('sheetmusic', 'Pages: {order}', { order: file.pageOrder }, { escape: false }) : (file.pageCount && file.pageCount > 1 ? t('sheetmusic', 'Pages: 1-{count}', { count: file.pageCount }, { escape: false }) : t('sheetmusic', '1 page')) }}
 				</span>
 			</div>
 		</div>
@@ -157,7 +157,7 @@ watch(() => props.file.path, () => {
 			<NcButton
 				type="button"
 				variant="secondary"
-				:aria-label="t('sheetmusic', 'Open {file} in external viewer', { file: getFileName(file.path) })"
+				:aria-label="t('sheetmusic', 'Open {file} in external viewer', { file: getFileName(file.path) }, { escape: false })"
 				:title="t('sheetmusic', 'Open in external viewer')"
 				@click="emit('openExternal', file)">
 				<template #icon>
@@ -168,7 +168,7 @@ watch(() => props.file.path, () => {
 				type="button"
 				variant="tertiary"
 				:disabled="disabled"
-				:aria-label="t('sheetmusic', 'Detach file {file} from song', { file: getFileName(file.path) })"
+				:aria-label="t('sheetmusic', 'Detach file {file} from song', { file: getFileName(file.path) }, { escape: false })"
 				:title="t('sheetmusic', 'Detach file from song (keep file in storage)')"
 				@click="emit('detach', file)">
 				<template #icon>
@@ -179,7 +179,7 @@ watch(() => props.file.path, () => {
 				type="button"
 				variant="error"
 				:disabled="disabled"
-				:aria-label="t('sheetmusic', 'Delete file {file}', { file: getFileName(file.path) })"
+				:aria-label="t('sheetmusic', 'Delete file {file}', { file: getFileName(file.path) }, { escape: false })"
 				:title="t('sheetmusic', 'Delete file from storage')"
 				@click="emit('delete', file)">
 				<template #icon>
@@ -191,7 +191,7 @@ watch(() => props.file.path, () => {
 				type="button"
 				variant="secondary"
 				:disabled="disabled"
-				:aria-label="t('sheetmusic', 'Edit page order for {file}', { file: getFileName(file.path) })"
+				:aria-label="t('sheetmusic', 'Edit page order for {file}', { file: getFileName(file.path) }, { escape: false })"
 				:title="t('sheetmusic', 'Edit page order')"
 				@click="emit('editPageOrder', file)">
 				<template #icon>

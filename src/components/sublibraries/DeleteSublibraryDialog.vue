@@ -26,7 +26,7 @@ const emit = defineEmits<{
 		@close="!isDeleting && emit('close')">
 		<div :class="$style.dialogBody">
 			<p>
-				{{ t('sheetmusic', 'Are you sure you want to delete the sub-library "{name}"?', { name: sub.name }) }}
+				{{ t('sheetmusic', 'Are you sure you want to delete the sub-library "{name}"?', { name: sub.name }, { escape: false }) }}
 			</p>
 			<p :class="$style.dangerNote">
 				{{ t('sheetmusic', 'This only removes the virtual WebDAV folder definition. All score files in Nextcloud and master database songs remain untouched.') }}

@@ -3,7 +3,7 @@
     <div :class="$style.detailTitleArea">
       <h2 :class="$style.detailTitle">{{ name }}</h2>
       <span :class="$style.detailSubtitle">
-        {{ t('sheetmusic', '{count} items', { count: itemCount }) }}
+        {{ t('sheetmusic', '{count} items', { count: itemCount }, { escape: false }) }}
         <span v-if="totalDurationFormatted"> • {{ totalDurationFormatted }}</span>
       </span>
     </div>

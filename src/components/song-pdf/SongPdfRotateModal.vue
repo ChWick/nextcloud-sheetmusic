@@ -143,7 +143,7 @@ onMounted(() => {
 		:open="open"
 		size="large"
 		:can-close="true"
-		:name="t('sheetmusic', 'Rotate Page {page} of {total}', { page: pageNum, total: totalPages })"
+		:name="t('sheetmusic', 'Rotate Page {page} of {total}', { page: pageNum, total: totalPages }, { escape: false })"
 		@update:open="emit('update:open', $event)">
 		<div :class="$style.dialogBody">
 			<!-- Header Toolbar -->
@@ -160,7 +160,7 @@ onMounted(() => {
 						</template>
 					</NcButton>
 					<span :class="$style.pageIndicator">
-						{{ t('sheetmusic', 'Page {page} of {total}', { page: pageNum, total: totalPages }) }}
+						{{ t('sheetmusic', 'Page {page} of {total}', { page: pageNum, total: totalPages }, { escape: false }) }}
 					</span>
 					<NcButton
 						size="small"
@@ -259,7 +259,7 @@ onMounted(() => {
 							type="radio"
 							value="current"
 							name="rotateScope">
-						<span>{{ t('sheetmusic', 'Page {page} only', { page: pageNum }) }}</span>
+						<span>{{ t('sheetmusic', 'Page {page} only', { page: pageNum }, { escape: false }) }}</span>
 					</label>
 					<label :class="$style.radioOption">
 						<input
@@ -267,7 +267,7 @@ onMounted(() => {
 							type="radio"
 							value="all"
 							name="rotateScope">
-						<span>{{ t('sheetmusic', 'All pages ({count})', { count: allPagesCount }) }}</span>
+						<span>{{ t('sheetmusic', 'All pages ({count})', { count: allPagesCount }, { escape: false }) }}</span>
 					</label>
 				</div>
 

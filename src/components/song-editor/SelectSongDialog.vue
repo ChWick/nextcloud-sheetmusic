@@ -121,7 +121,7 @@ function getSongSubtext(song: Song): string {
 		parts.push(song.composers.map((c) => c.name).join(', '))
 	}
 	if (song.keys?.length) {
-		parts.push(t('sheetmusic', 'Key: {key}', { key: song.keys.map((k) => k.name).join(', ') }))
+		parts.push(t('sheetmusic', 'Key: {key}', { key: song.keys.map((k) => k.name).join(', ') }, { escape: false }))
 	}
 	if (song.books?.length) {
 		parts.push(song.books.map((b) => b.title).join(', '))
@@ -138,7 +138,7 @@ function getSongSubtext(song: Song): string {
 		@close="emit('update:open', false)">
 		<div :class="$style.dialogContent">
 			<p :class="$style.introText">
-				{{ t('sheetmusic', 'Search and select an existing song to link with "{filename}".', { filename }) }}
+				{{ t('sheetmusic', 'Search and select an existing song to link with "{filename}".', { filename }, { escape: false }) }}
 			</p>
 
 			<NcButton
@@ -188,7 +188,7 @@ function getSongSubtext(song: Song): string {
 			</div>
 
 			<div :class="$style.resultsCount">
-				{{ t('sheetmusic', '{count} song(s) found', { count: filteredSongs.length }) }}
+				{{ t('sheetmusic', '{count} song(s) found', { count: filteredSongs.length }, { escape: false }) }}
 			</div>
 
 			<div :class="$style.songListContainer">
@@ -204,7 +204,7 @@ function getSongSubtext(song: Song): string {
 							<span v-if="getSongSubtext(song)" :class="$style.songSubtext">{{ getSongSubtext(song) }}</span>
 							<span :class="$style.fileBadge">
 								<PaperclipIcon :size="14" />
-								{{ t('sheetmusic', '{count} file(s)', { count: song.files?.length ?? 0 }) }}
+								{{ t('sheetmusic', '{count} file(s)', { count: song.files?.length ?? 0 }, { escape: false }) }}
 							</span>
 						</div>
 

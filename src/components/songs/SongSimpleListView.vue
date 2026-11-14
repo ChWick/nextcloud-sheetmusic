@@ -98,19 +98,19 @@ const {
 								@filter-entity="(type, ent) => emit('filter-entity', type, ent)" />
 						</template>
 						<template v-if="isColVisible('opus') && song.opus">
-							<span> • {{ t('sheetmusic', 'Opus: {val}', { val: song.opus }) }}</span>
+							<span> • {{ t('sheetmusic', 'Opus: {val}', { val: song.opus }, { escape: false }) }}</span>
 						</template>
 						<template v-if="isColVisible('catalogNumber') && song.catalogNumber">
 							<span> • {{ song.catalogNumber }}</span>
 						</template>
 						<template v-if="isColVisible('songNumber') && song.songNumber">
-							<span> • {{ t('sheetmusic', 'No. {val}', { val: song.songNumber }) }}</span>
+							<span> • {{ t('sheetmusic', 'No. {val}', { val: song.songNumber }, { escape: false }) }}</span>
 						</template>
 						<template v-if="isColVisible('stars') && song.stars">
 							<span> • {{ formatStars(song.stars) }}</span>
 						</template>
 						<template v-if="isColVisible('difficulty') && song.difficulty">
-							<span> • {{ t('sheetmusic', 'Diff: {val}', { val: formatDifficulty(song.difficulty) }) }}</span>
+							<span> • {{ t('sheetmusic', 'Diff: {val}', { val: formatDifficulty(song.difficulty) }, { escape: false }) }}</span>
 						</template>
 						<template v-if="isColVisible('duration') && song.duration">
 							<span> • {{ formatDurationHms(song.duration) }}</span>
@@ -125,10 +125,10 @@ const {
 							<span> • {{ song.custom2 }}</span>
 						</template>
 						<template v-if="isColVisible('lastModified') && song.lastModified">
-							<span> • {{ t('sheetmusic', 'Modified: {date}', { date: formatDateTimestamp(song.lastModified) }) }}</span>
+							<span> • {{ t('sheetmusic', 'Modified: {date}', { date: formatDateTimestamp(song.lastModified) }, { escape: false }) }}</span>
 						</template>
 						<template v-if="isColVisible('dateCreated') && song.dateCreated">
-							<span> • {{ t('sheetmusic', 'Created: {date}', { date: formatDateTimestamp(song.dateCreated) }) }}</span>
+							<span> • {{ t('sheetmusic', 'Created: {date}', { date: formatDateTimestamp(song.dateCreated) }, { escape: false }) }}</span>
 						</template>
 					</span>
 				</div>

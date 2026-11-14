@@ -32,10 +32,10 @@ const emit = defineEmits<{
 				type="button"
 				:class="$style.paletteChip"
 				:disabled="disabled"
-				:title="t('sheetmusic', 'Append Page {page} to order', { page: p })"
-				:aria-label="t('sheetmusic', 'Append Page {page} to order', { page: p })"
+				:title="t('sheetmusic', 'Append Page {page} to order', { page: p }, { escape: false })"
+				:aria-label="t('sheetmusic', 'Append Page {page} to order', { page: p }, { escape: false })"
 				@click="emit('append', p)">
-				+ {{ t('sheetmusic', 'Page {p}', { p }) }}
+				+ {{ t('sheetmusic', 'Page {p}', { p }, { escape: false }) }}
 			</button>
 		</div>
 	</div>

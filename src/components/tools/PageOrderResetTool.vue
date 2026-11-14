@@ -285,7 +285,7 @@ async function resetSingleItem(item: PageOrderAuditItem) {
 		showSuccess(t('sheetmusic', 'Page ordering for "{title}" reset to {order}.', {
 			title: item.songTitle,
 			order: item.suggestedPageOrder,
-		}))
+		}, { escape: false }))
 		removeFixedItems([item.id])
 	} catch (error) {
 		console.error('Failed to reset item page order:', error)
@@ -317,7 +317,7 @@ async function resetBatch(fileIds: number[] | null, mode: PageOrderFilterMode = 
 
 		const result = res.data?.ocs?.data
 		const count = result?.resetCount ?? targetIds.length
-		showSuccess(t('sheetmusic', 'Successfully reset page ordering for {count} file(s).', { count }))
+		showSuccess(t('sheetmusic', 'Successfully reset page ordering for {count} file(s).', { count }, { escape: false }))
 		removeFixedItems(targetIds)
 	} catch (error) {
 		stopProgressPolling()
@@ -380,7 +380,7 @@ watch(() => props.selectedLibrary, (newLib) => {
 					<template #icon>
 						<CheckAll :size="18" />
 					</template>
-					{{ t('sheetmusic', 'Reset Selected ({count})', { count: selectedIds.size }) }}
+					{{ t('sheetmusic', 'Reset Selected ({count})', { count: selectedIds.size }, { escape: false }) }}
 				</NcButton>
 
 				<NcButton
@@ -391,7 +391,7 @@ watch(() => props.selectedLibrary, (newLib) => {
 					<template #icon>
 						<RotateLeft :size="18" />
 					</template>
-					{{ t('sheetmusic', 'Reset All Filtered ({count})', { count: filteredItems.length }) }}
+					{{ t('sheetmusic', 'Reset All Filtered ({count})', { count: filteredItems.length }, { escape: false }) }}
 				</NcButton>
 			</div>
 		</div>

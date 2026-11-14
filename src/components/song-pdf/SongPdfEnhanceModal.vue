@@ -500,7 +500,7 @@ watch(
 		size="large"
 		:can-close="true"
 		:class="$style.enhanceModal"
-		:name="t('sheetmusic', 'Enhance Scan Quality — Page {page} of {total}', { page: pageNum, total: totalPages })"
+		:name="t('sheetmusic', 'Enhance Scan Quality — Page {page} of {total}', { page: pageNum, total: totalPages }, { escape: false })"
 		@update:open="emit('update:open', $event)">
 		<div :class="$style.dialogBody">
 			<!-- Header Toolbar -->
@@ -517,7 +517,7 @@ watch(
 						</template>
 					</NcButton>
 					<span :class="$style.pageIndicator">
-						{{ t('sheetmusic', 'Page {page} of {total}', { page: pageNum, total: totalPages }) }}
+						{{ t('sheetmusic', 'Page {page} of {total}', { page: pageNum, total: totalPages }, { escape: false }) }}
 					</span>
 					<NcButton
 						size="small"
@@ -669,11 +669,11 @@ watch(
 					<span :class="$style.scopeLabel">{{ t('sheetmusic', 'Apply to:') }}</span>
 					<label :class="$style.radioLabel">
 						<input v-model="applyScope" type="radio" value="all" />
-						{{ t('sheetmusic', 'All Pages ({total})', { total: totalPages }) }}
+						{{ t('sheetmusic', 'All Pages ({total})', { total: totalPages }, { escape: false }) }}
 					</label>
 					<label :class="$style.radioLabel">
 						<input v-model="applyScope" type="radio" value="current" />
-						{{ t('sheetmusic', 'Current Page Only (Page {page})', { page: pageNum }) }}
+						{{ t('sheetmusic', 'Current Page Only (Page {page})', { page: pageNum }, { escape: false }) }}
 					</label>
 				</div>
 

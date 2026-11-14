@@ -92,8 +92,8 @@ const cardStyle = computed(() => ({
 				<span v-if="isSequenceMode" :class="$style.sequenceBadge" data-test="sequence-badge">
 					#{{ (sequenceIndex ?? 0) + 1 }}
 				</span>
-				<span :class="$style.pageNumber" :title="t('sheetmusic', 'Page {p}', { p: pageNum })">
-					{{ t('sheetmusic', 'Page {p}', { p: pageNum }) }}
+				<span :class="$style.pageNumber" :title="t('sheetmusic', 'Page {p}', { p: pageNum }, { escape: false })">
+					{{ t('sheetmusic', 'Page {p}', { p: pageNum }, { escape: false }) }}
 				</span>
 			</div>
 
@@ -103,7 +103,7 @@ const cardStyle = computed(() => ({
 					isInOrder ? $style.badgeActive : $style.badgeMuted,
 				]"
 				:title="isInOrder
-					? t('sheetmusic', 'Included {count} time in page order | Included {count} times in page order', { count: occurrenceCount }, occurrenceCount)
+					? t('sheetmusic', 'Included {count} time in page order | Included {count} times in page order', { count: occurrenceCount }, occurrenceCount, { escape: false })
 					: t('sheetmusic', 'Not included in page order')">
 				{{ isInOrder ? `${occurrenceCount}×` : t('sheetmusic', 'Unused') }}
 			</span>
@@ -114,20 +114,20 @@ const cardStyle = computed(() => ({
 			<img
 				v-if="thumbnailUrl"
 				:src="thumbnailUrl"
-				:alt="t('sheetmusic', 'Page {p} preview', { p: pageNum })"
+				:alt="t('sheetmusic', 'Page {p} preview', { p: pageNum }, { escape: false })"
 				:class="$style.previewImage"
 				loading="lazy"
 				data-test="page-thumbnail-img" />
 			<div v-else :class="$style.placeholder">
-				<span :class="$style.placeholderText">{{ t('sheetmusic', 'Page {p}', { p: pageNum }) }}</span>
+				<span :class="$style.placeholderText">{{ t('sheetmusic', 'Page {p}', { p: pageNum }, { escape: false }) }}</span>
 			</div>
 
 			<!-- Zoom overlay button -->
 			<button
 				type="button"
 				:class="$style.zoomBtn"
-				:title="t('sheetmusic', 'Zoom in on page {p}', { p: pageNum })"
-				:aria-label="t('sheetmusic', 'Zoom in on page {p}', { p: pageNum })"
+				:title="t('sheetmusic', 'Zoom in on page {p}', { p: pageNum }, { escape: false })"
+				:aria-label="t('sheetmusic', 'Zoom in on page {p}', { p: pageNum }, { escape: false })"
 				data-test="card-zoom-btn"
 				@click.stop="emit('zoom', pageNum)">
 				<MagnifyPlus :size="15" />
@@ -141,8 +141,8 @@ const cardStyle = computed(() => ({
 					type="button"
 					:class="[$style.actionBtn, $style.removeBtn]"
 					:disabled="disabled"
-					:title="t('sheetmusic', 'Remove position #{pos} from page order', { pos: (sequenceIndex ?? 0) + 1 })"
-					:aria-label="t('sheetmusic', 'Remove position #{pos} from page order', { pos: (sequenceIndex ?? 0) + 1 })"
+					:title="t('sheetmusic', 'Remove position #{pos} from page order', { pos: (sequenceIndex ?? 0) + 1 }, { escape: false })"
+					:aria-label="t('sheetmusic', 'Remove position #{pos} from page order', { pos: (sequenceIndex ?? 0) + 1 }, { escape: false })"
 					data-test="card-remove-btn"
 					@click="emit('remove', sequenceIndex ?? 0)">
 					<DeleteOutline :size="16" />
@@ -151,8 +151,8 @@ const cardStyle = computed(() => ({
 					type="button"
 					:class="[$style.actionBtn, $style.copyBtn]"
 					:disabled="disabled"
-					:title="t('sheetmusic', 'Duplicate page {p}', { p: pageNum })"
-					:aria-label="t('sheetmusic', 'Duplicate page {p}', { p: pageNum })"
+					:title="t('sheetmusic', 'Duplicate page {p}', { p: pageNum }, { escape: false })"
+					:aria-label="t('sheetmusic', 'Duplicate page {p}', { p: pageNum }, { escape: false })"
 					data-test="card-add-btn"
 					@click="emit('append', pageNum)">
 					<ContentCopy :size="15" />
@@ -164,8 +164,8 @@ const cardStyle = computed(() => ({
 					type="button"
 					:class="[$style.actionBtn, $style.addBtn]"
 					:disabled="disabled"
-					:title="t('sheetmusic', 'Add page {p} to order', { p: pageNum })"
-					:aria-label="t('sheetmusic', 'Add page {p} to order', { p: pageNum })"
+					:title="t('sheetmusic', 'Add page {p} to order', { p: pageNum }, { escape: false })"
+					:aria-label="t('sheetmusic', 'Add page {p} to order', { p: pageNum }, { escape: false })"
 					data-test="card-add-btn"
 					@click="emit('append', pageNum)">
 					<Plus :size="14" />

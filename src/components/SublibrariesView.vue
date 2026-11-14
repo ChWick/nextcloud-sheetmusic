@@ -125,7 +125,7 @@ async function copySublibraryPath(slug: string) {
 	try {
 		await navigator.clipboard.writeText(path)
 		copiedSlug.value = slug
-		showSuccess(t('sheetmusic', 'Copied WebDAV path to clipboard: {path}', { path }))
+		showSuccess(t('sheetmusic', 'Copied WebDAV path to clipboard: {path}', { path }, { escape: false }))
 		setTimeout(() => {
 			if (copiedSlug.value === slug) {
 				copiedSlug.value = null
@@ -170,13 +170,13 @@ async function handleSaveSublibrary(payload: { name: string; slug: string; filte
 			await axios.put(url, payload, {
 				headers: { 'OCS-APIREQUEST': 'true', Accept: 'application/json' },
 			})
-			showSuccess(t('sheetmusic', 'Sub-library "{name}" updated.', { name: payload.name }))
+			showSuccess(t('sheetmusic', 'Sub-library "{name}" updated.', { name: payload.name }, { escape: false }))
 		} else {
 			const url = generateOcsUrl(`/apps/sheetmusic/api/libraries/${props.selectedLibrary}/sublibraries`)
 			await axios.post(url, payload, {
 				headers: { 'OCS-APIREQUEST': 'true', Accept: 'application/json' },
 			})
-			showSuccess(t('sheetmusic', 'Sub-library "{name}" created.', { name: payload.name }))
+			showSuccess(t('sheetmusic', 'Sub-library "{name}" created.', { name: payload.name }, { escape: false }))
 		}
 
 		isModalOpen.value = false
@@ -202,7 +202,7 @@ async function confirmDelete() {
 		await axios.delete(url, {
 			headers: { 'OCS-APIREQUEST': 'true', Accept: 'application/json' },
 		})
-		showSuccess(t('sheetmusic', 'Sub-library "{name}" deleted.', { name: deletingSub.value.name }))
+		showSuccess(t('sheetmusic', 'Sub-library "{name}" deleted.', { name: deletingSub.value.name }, { escape: false }))
 		isDeleteConfirmOpen.value = false
 		deletingSub.value = null
 		await fetchSublibraries()

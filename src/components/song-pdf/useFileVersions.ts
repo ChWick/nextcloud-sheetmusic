@@ -93,7 +93,7 @@ export function useFileVersions(options: UseFileVersionsOptions) {
 			console.error('Failed to revert file version:', err)
 			showError(t('sheetmusic', 'Failed to revert version: {error}', {
 				error: err?.message ?? String(err),
-			}))
+			}, { escape: false }))
 		} finally {
 			isRevertingVersion.value = false
 		}

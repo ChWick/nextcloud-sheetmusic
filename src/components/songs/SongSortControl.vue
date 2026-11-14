@@ -46,8 +46,8 @@ function toggleOrder() {
 <template>
 	<div :class="$style.sortControlWrapper">
 		<NcActions
-			:aria-label="t('sheetmusic', 'Sort by: {label}', { label: currentOptionLabel })"
-			:title="t('sheetmusic', 'Sort by: {label}', { label: currentOptionLabel })">
+			:aria-label="t('sheetmusic', 'Sort by: {label}', { label: currentOptionLabel }, { escape: false })"
+			:title="t('sheetmusic', 'Sort by: {label}', { label: currentOptionLabel }, { escape: false })">
 			<template #icon>
 				<component :is="sortOrder === 'asc' ? SortAscendingIcon : SortDescendingIcon" :size="20" />
 			</template>

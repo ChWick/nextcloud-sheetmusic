@@ -164,7 +164,7 @@ onMounted(() => {
 
 <template>
 	<div :class="$style.container">
-		<ViewHeader :title="isCreatingSong ? t('sheetmusic', 'Create Song for Orphan File') : t('sheetmusic', 'Fix Orphan File: {filename}', { filename })">
+		<ViewHeader :title="isCreatingSong ? t('sheetmusic', 'Create Song for Orphan File') : t('sheetmusic', 'Fix Orphan File: {filename}', { filename }, { escape: false })">
 			<template v-if="isCreatingSong">
 				<NcButton
 					variant="secondary"
@@ -279,7 +279,7 @@ onMounted(() => {
 			:name="t('sheetmusic', 'Delete Orphan File')"
 			size="normal"
 			@close="isConfirmDeleteDialogOpen = false">
-			<p>{{ t('sheetmusic', 'Are you sure you want to permanently delete "{filename}" from library storage?', { filename }) }}</p>
+			<p>{{ t('sheetmusic', 'Are you sure you want to permanently delete "{filename}" from library storage?', { filename }, { escape: false }) }}</p>
 			<p>{{ t('sheetmusic', 'This file is not linked to any song. Once deleted, it cannot be recovered.') }}</p>
 			<template #actions>
 				<NcButton @click="isConfirmDeleteDialogOpen = false">

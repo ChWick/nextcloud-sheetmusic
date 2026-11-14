@@ -21,7 +21,7 @@
           <div :class="$style.songChoiceInfo">
             <span :class="$style.songChoiceTitle">{{ song.title }}</span>
             <span v-if="song.bookmarks && song.bookmarks.length > 0" :class="$style.songChoiceBookmarkCount">
-              {{ t('sheetmusic', '{count} bookmarks', { count: song.bookmarks.length }) }}
+              {{ t('sheetmusic', '{count} bookmarks', { count: song.bookmarks.length }, { escape: false }) }}
             </span>
           </div>
         </div>

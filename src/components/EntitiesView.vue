@@ -1,7 +1,7 @@
 <template>
   <ViewHeader
     :title="config.plural"
-    :create-label="effectiveCanWrite ? t('sheetmusic', 'New {entity}', { entity: config.singular }) : undefined"
+    :create-label="effectiveCanWrite ? t('sheetmusic', 'New {entity}', { entity: config.singular }, { escape: false }) : undefined"
     @create="openCreateDialog">
     <NcButton
       v-if="effectiveCanWrite"
@@ -18,8 +18,8 @@
     <div :class="$style.searchWrapper">
       <NcTextField
         v-model="searchQuery"
-        :placeholder="t('sheetmusic', 'Search {entities}…', { entities: config.plural.toLowerCase() })"
-        :label="t('sheetmusic', 'Search {entities}', { entities: config.plural.toLowerCase() })"
+        :placeholder="t('sheetmusic', 'Search {entities}…', { entities: config.plural.toLowerCase() }, { escape: false })"
+        :label="t('sheetmusic', 'Search {entities}', { entities: config.plural.toLowerCase() }, { escape: false })"
         :class="$style.searchInput" />
     </div>
     <div :class="$style.listColumn">
@@ -32,7 +32,7 @@
             @touchcancel="handleRowTouchCancel">
           <button type="button"
                   :class="$style.entityButton"
-                  :title="t('sheetmusic', 'Show the songs with this {entity}', { entity: config.singular })"
+                  :title="t('sheetmusic', 'Show the songs with this {entity}', { entity: config.singular }, { escape: false })"
                   @click="showSongsOf(entity)">
             {{ entityLabel(entity) }}
           </button>
@@ -41,8 +41,8 @@
             <NcButton
               size="small"
               :class="$style.mergeButton"
-              :aria-label="t('sheetmusic', 'Merge {entity}', { entity: config.singular })"
-              :title="t('sheetmusic', 'Merge {entity}', { entity: config.singular })"
+              :aria-label="t('sheetmusic', 'Merge {entity}', { entity: config.singular }, { escape: false })"
+              :title="t('sheetmusic', 'Merge {entity}', { entity: config.singular }, { escape: false })"
               @click="openMergeDialog(entity)">
               <template #icon>
                 <MergeIcon :size="18" />
@@ -51,8 +51,8 @@
             <NcButton variant="error"
                       size="small"
                       :class="$style.deleteButton"
-                      :aria-label="t('sheetmusic', 'Delete {entity}', { entity: config.singular })"
-                      :title="t('sheetmusic', 'Delete {entity}', { entity: config.singular })"
+                      :aria-label="t('sheetmusic', 'Delete {entity}', { entity: config.singular }, { escape: false })"
+                      :title="t('sheetmusic', 'Delete {entity}', { entity: config.singular }, { escape: false })"
                       @click="openDeleteDialog(entity)">
               <template #icon>
                 <DeleteIcon :size="18" />
@@ -62,18 +62,18 @@
         </li>
         <li v-if="!isLoading && !fileError && visibleEntities.length === 0">
           {{ searchQuery.trim() && entities.length > 0
-            ? t('sheetmusic', 'No {entities} match the search query.', { entities: config.plural.toLowerCase() })
-            : t('sheetmusic', 'No {entities} in this library yet.', { entities: config.plural.toLowerCase() }) }}
+            ? t('sheetmusic', 'No {entities} match the search query.', { entities: config.plural.toLowerCase() }, { escape: false })
+            : t('sheetmusic', 'No {entities} in this library yet.', { entities: config.plural.toLowerCase() }, { escape: false }) }}
         </li>
       </ul>
       <p v-if="fileError" :class="$style.error" role="alert">{{ fileError }}</p>
     </div>
 
     <NcDialog v-if="isCreateDialogOpen"
-              :name="t('sheetmusic', 'New {entity}', { entity: config.singular })"
+              :name="t('sheetmusic', 'New {entity}', { entity: config.singular }, { escape: false })"
               size="normal"
               @close="closeCreateDialog">
-      <p>{{ t('sheetmusic', 'The new {entity} can be assigned to songs right afterwards.', { entity: config.singular }) }}</p>
+      <p>{{ t('sheetmusic', 'The new {entity} can be assigned to songs right afterwards.', { entity: config.singular }, { escape: false }) }}</p>
       <NcTextField
         v-model="newEntityName"
         :placeholder="namePlaceholder"
@@ -84,7 +84,7 @@
         <NcButton variant="primary"
                   :disabled="isCreating || !newEntityName.trim()"
                   @click="createEntity">
-          {{ t('sheetmusic', 'Create {entity}', { entity: config.singular }) }}
+          {{ t('sheetmusic', 'Create {entity}', { entity: config.singular }, { escape: false }) }}
         </NcButton>
       </template>
     </NcDialog>

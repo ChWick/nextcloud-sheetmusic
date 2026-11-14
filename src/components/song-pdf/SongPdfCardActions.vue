@@ -72,8 +72,8 @@ const emit = defineEmits<{
 			size="small"
 			variant="tertiary"
 			:disabled="isDeleted"
-			:title="t('sheetmusic', 'Rotate page {page} by custom angle', { page: pageNum })"
-			:aria-label="t('sheetmusic', 'Rotate page {page} by custom angle', { page: pageNum })"
+			:title="t('sheetmusic', 'Rotate page {page} by custom angle', { page: pageNum }, { escape: false })"
+			:aria-label="t('sheetmusic', 'Rotate page {page} by custom angle', { page: pageNum }, { escape: false })"
 			@click.stop="emit('open-rotate-modal')">
 			<template #icon>
 				<Rotate360 :size="16" />
@@ -83,8 +83,8 @@ const emit = defineEmits<{
 			v-if="pageNum < totalPages && !isDeleted"
 			size="small"
 			variant="tertiary"
-			:title="t('sheetmusic', 'Join with page {p}', { p: pageNum + 1 })"
-			:aria-label="t('sheetmusic', 'Join with page {p}', { p: pageNum + 1 })"
+			:title="t('sheetmusic', 'Join with page {p}', { p: pageNum + 1 }, { escape: false })"
+			:aria-label="t('sheetmusic', 'Join with page {p}', { p: pageNum + 1 }, { escape: false })"
 			@click.stop="emit('open-join-modal', pageNum + 1)">
 			<template #icon>
 				<TableMergeCells :size="16" />
@@ -93,8 +93,8 @@ const emit = defineEmits<{
 		<NcButton
 			size="small"
 			:variant="isDeleted ? 'primary' : 'tertiary'"
-			:title="isDeleted ? t('sheetmusic', 'Restore page {page}', { page: pageNum }) : t('sheetmusic', 'Delete page {page}', { page: pageNum })"
-			:aria-label="isDeleted ? t('sheetmusic', 'Restore page {page}', { page: pageNum }) : t('sheetmusic', 'Delete page {page}', { page: pageNum })"
+			:title="isDeleted ? t('sheetmusic', 'Restore page {page}', { page: pageNum }, { escape: false }) : t('sheetmusic', 'Delete page {page}', { page: pageNum }, { escape: false })"
+			:aria-label="isDeleted ? t('sheetmusic', 'Restore page {page}', { page: pageNum }, { escape: false }) : t('sheetmusic', 'Delete page {page}', { page: pageNum }, { escape: false })"
 			:disabled="!isDeleted && !canDelete"
 			@click.stop="emit('toggle-delete-page')">
 			<template #icon>
@@ -110,7 +110,7 @@ const emit = defineEmits<{
 			v-if="!isDeleted"
 			size="small"
 			:variant="isCropped ? 'primary' : 'tertiary'"
-			:title="t('sheetmusic', 'Crop page {page}', { page: pageNum })"
+			:title="t('sheetmusic', 'Crop page {page}', { page: pageNum }, { escape: false })"
 			@click.stop="emit('open-crop-modal')">
 			<template #icon>
 				<CropIcon :size="16" />
@@ -121,8 +121,8 @@ const emit = defineEmits<{
 			v-if="pageNum < totalPages && !isDeleted"
 			size="small"
 			variant="tertiary"
-			:title="t('sheetmusic', 'Join with page {p}', { p: pageNum + 1 })"
-			:aria-label="t('sheetmusic', 'Join with page {p}', { p: pageNum + 1 })"
+			:title="t('sheetmusic', 'Join with page {p}', { p: pageNum + 1 }, { escape: false })"
+			:aria-label="t('sheetmusic', 'Join with page {p}', { p: pageNum + 1 }, { escape: false })"
 			@click.stop="emit('open-join-modal', pageNum + 1)">
 			<template #icon>
 				<TableMergeCells :size="16" />
@@ -131,8 +131,8 @@ const emit = defineEmits<{
 		<NcButton
 			size="small"
 			:variant="isDeleted ? 'primary' : 'tertiary'"
-			:title="isDeleted ? t('sheetmusic', 'Restore page {page}', { page: pageNum }) : t('sheetmusic', 'Delete page {page}', { page: pageNum })"
-			:aria-label="isDeleted ? t('sheetmusic', 'Restore page {page}', { page: pageNum }) : t('sheetmusic', 'Delete page {page}', { page: pageNum })"
+			:title="isDeleted ? t('sheetmusic', 'Restore page {page}', { page: pageNum }, { escape: false }) : t('sheetmusic', 'Delete page {page}', { page: pageNum }, { escape: false })"
+			:aria-label="isDeleted ? t('sheetmusic', 'Restore page {page}', { page: pageNum }, { escape: false }) : t('sheetmusic', 'Delete page {page}', { page: pageNum }, { escape: false })"
 			:disabled="!isDeleted && !canDelete"
 			@click.stop="emit('toggle-delete-page')">
 			<template #icon>
@@ -148,7 +148,7 @@ const emit = defineEmits<{
 			v-if="!isDeleted"
 			size="small"
 			:variant="isEnhanced ? 'primary' : 'tertiary'"
-			:title="t('sheetmusic', 'Enhance page {page}', { page: pageNum })"
+			:title="t('sheetmusic', 'Enhance page {page}', { page: pageNum }, { escape: false })"
 			@click.stop="emit('open-enhance-modal')">
 			<template #icon>
 				<Tune :size="16" />
@@ -158,8 +158,8 @@ const emit = defineEmits<{
 		<NcButton
 			size="small"
 			:variant="isDeleted ? 'primary' : 'tertiary'"
-			:title="isDeleted ? t('sheetmusic', 'Restore page {page}', { page: pageNum }) : t('sheetmusic', 'Delete page {page}', { page: pageNum })"
-			:aria-label="isDeleted ? t('sheetmusic', 'Restore page {page}', { page: pageNum }) : t('sheetmusic', 'Delete page {page}', { page: pageNum })"
+			:title="isDeleted ? t('sheetmusic', 'Restore page {page}', { page: pageNum }, { escape: false }) : t('sheetmusic', 'Delete page {page}', { page: pageNum }, { escape: false })"
+			:aria-label="isDeleted ? t('sheetmusic', 'Restore page {page}', { page: pageNum }, { escape: false }) : t('sheetmusic', 'Delete page {page}', { page: pageNum }, { escape: false })"
 			:disabled="!isDeleted && !canDelete"
 			@click.stop="emit('toggle-delete-page')">
 			<template #icon>

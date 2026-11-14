@@ -12,7 +12,7 @@ export function describeRequestFailure(error: unknown, fallback: string): string
 		return t(
 			'sheetmusic',
 			'The server does not know this endpoint (HTTP {status}). If the app code was just changed, restart Nextcloud so it loads the new PHP files.',
-			{ status: String(status) },
+			{ status: String(status) }, { escape: false },
 		)
 	}
 

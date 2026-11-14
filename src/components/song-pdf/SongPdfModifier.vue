@@ -353,7 +353,7 @@ async function loadPdf() {
 		console.error('Failed to load PDF:', err)
 		errorMessage.value = t('sheetmusic', 'Failed to load PDF document: {error}', {
 			error: err?.message ?? String(err),
-		})
+		}, { escape: false })
 		showError(errorMessage.value)
 	} finally {
 		isLoading.value = false
@@ -379,7 +379,7 @@ function resetRotations() {
 		pageRotations.value[i] = 0
 	}
 	pageRotateCropToOriginal.value = {}
-	showInfo(t('sheetmusic', 'Reset all page rotations for "{title}".', { title: props.song.title }))
+	showInfo(t('sheetmusic', 'Reset all page rotations for "{title}".', { title: props.song.title }, { escape: false }))
 }
 
 function openRotateModal(pageNum: number) {
@@ -430,7 +430,7 @@ function handleApplyCrop(crop: PageCrop, scope: 'current' | 'all') {
 
 function resetAllCrops() {
 	pageCrops.value = {}
-	showInfo(t('sheetmusic', 'Reset all page crops for "{title}".', { title: props.song.title }))
+	showInfo(t('sheetmusic', 'Reset all page crops for "{title}".', { title: props.song.title }, { escape: false }))
 }
 
 const hasAnyCrop = computed(() => {
@@ -528,7 +528,7 @@ function resetAllEnhancements() {
 	for (let p = 1; p <= totalPages.value; p++) {
 		updateThumbnailForPage(p)
 	}
-	showInfo(t('sheetmusic', 'Reset all scan enhancements for "{title}".', { title: props.song.title }))
+	showInfo(t('sheetmusic', 'Reset all scan enhancements for "{title}".', { title: props.song.title }, { escape: false }))
 }
 
 const hasAnyEnhance = computed(() => {
@@ -706,13 +706,13 @@ async function handleExecuteJoin(options: {
 			pageA: options.pageA,
 			pageB: options.pageB,
 			title: props.song.title,
-		}))
+		}, { escape: false }))
 	} catch (err: any) {
 		console.error('Failed to join pages:', err)
 		const detail = describeRequestFailure(err, err?.message ?? String(err))
 		errorMessage.value = t('sheetmusic', 'Failed to join pages: {error}', {
 			error: detail,
-		})
+		}, { escape: false })
 		showError(errorMessage.value)
 	} finally {
 		isLoading.value = false
@@ -750,8 +750,8 @@ async function saveRotationsAndCrops() {
 			await updateSaveProgress(
 				startPct,
 				pageIsEnhanced
-					? t('sheetmusic', 'Enhancing page {current} of {total}…', { current: processedCount, total: activeTotal })
-					: t('sheetmusic', 'Processing page {current} of {total}…', { current: processedCount, total: activeTotal }),
+					? t('sheetmusic', 'Enhancing page {current} of {total}…', { current: processedCount, total: activeTotal }, { escape: false })
+					: t('sheetmusic', 'Processing page {current} of {total}…', { current: processedCount, total: activeTotal }, { escape: false }),
 				processedCount,
 				activeTotal,
 				pageIsEnhanced,
@@ -854,8 +854,8 @@ async function saveRotationsAndCrops() {
 			await updateSaveProgress(
 				endPct,
 				pageIsEnhanced
-					? t('sheetmusic', 'Enhanced page {current} of {total}', { current: processedCount, total: activeTotal })
-					: t('sheetmusic', 'Processed page {current} of {total}', { current: processedCount, total: activeTotal }),
+					? t('sheetmusic', 'Enhanced page {current} of {total}', { current: processedCount, total: activeTotal }, { escape: false })
+					: t('sheetmusic', 'Processed page {current} of {total}', { current: processedCount, total: activeTotal }, { escape: false }),
 				processedCount,
 				activeTotal,
 				false,
@@ -906,14 +906,14 @@ async function saveRotationsAndCrops() {
 		const songTitle = props.song.title || t('sheetmusic', 'Song')
 		const hasMultipleTypes = [modifiedRotations, modifiedCrops, modifiedDeletions, modifiedEnhancements, hasAnyJoin.value].filter(Boolean).length > 1
 		const successMsg = hasMultipleTypes || hasAnyJoin.value
-			? t('sheetmusic', 'PDF changes saved successfully for "{title}".', { title: songTitle })
+			? t('sheetmusic', 'PDF changes saved successfully for "{title}".', { title: songTitle }, { escape: false })
 			: modifiedEnhancements
-				? t('sheetmusic', 'Enhanced scan PDF saved successfully for "{title}".', { title: songTitle })
+				? t('sheetmusic', 'Enhanced scan PDF saved successfully for "{title}".', { title: songTitle }, { escape: false })
 				: modifiedDeletions
-					? t('sheetmusic', 'Pages deleted and PDF saved successfully for "{title}".', { title: songTitle })
+					? t('sheetmusic', 'Pages deleted and PDF saved successfully for "{title}".', { title: songTitle }, { escape: false })
 					: modifiedRotations
-						? t('sheetmusic', 'Rotated PDF saved successfully for "{title}".', { title: songTitle })
-						: t('sheetmusic', 'Cropped PDF saved successfully for "{title}".', { title: songTitle })
+						? t('sheetmusic', 'Rotated PDF saved successfully for "{title}".', { title: songTitle }, { escape: false })
+						: t('sheetmusic', 'Cropped PDF saved successfully for "{title}".', { title: songTitle }, { escape: false })
 		showSuccess(successMsg)
 		emit('saved', data, props.song.id)
 	} catch (err: any) {
@@ -921,7 +921,7 @@ async function saveRotationsAndCrops() {
 		const detail = describeRequestFailure(err, err?.message ?? String(err))
 		errorMessage.value = t('sheetmusic', 'Failed to save PDF: {error}', {
 			error: detail,
-		})
+		}, { escape: false })
 		showError(errorMessage.value)
 	} finally {
 		isSaving.value = false

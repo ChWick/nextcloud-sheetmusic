@@ -27,7 +27,7 @@ const emit = defineEmits<{
 		<div :class="$style.previewHeader">
 			<span :class="$style.sectionLabel">{{ t('sheetmusic', 'Resulting Page Order:') }}</span>
 			<span :class="$style.previewCountBadge">
-				{{ t('sheetmusic', '{count} page in sequence | {count} pages in sequence', { count: pages.length }, pages.length) }}
+				{{ t('sheetmusic', '{count} page in sequence | {count} pages in sequence', { count: pages.length }, pages.length, { escape: false }) }}
 			</span>
 		</div>
 		<div :class="$style.pageChipsList">
@@ -36,13 +36,13 @@ const emit = defineEmits<{
 				:key="`seq-${idx}-${page}`"
 				:class="$style.pageChip">
 				<span :class="$style.chipIndex">{{ idx + 1 }}</span>
-				<span :class="$style.chipLabel">{{ t('sheetmusic', 'Page {p}', { p: page }) }}</span>
+				<span :class="$style.chipLabel">{{ t('sheetmusic', 'Page {p}', { p: page }, { escape: false }) }}</span>
 				<button
 					type="button"
 					:class="$style.chipRemoveBtn"
 					:disabled="pages.length <= 1 || disabled"
 					:title="t('sheetmusic', 'Remove from sequence')"
-					:aria-label="t('sheetmusic', 'Remove position {pos}', { pos: idx + 1 })"
+					:aria-label="t('sheetmusic', 'Remove position {pos}', { pos: idx + 1 }, { escape: false })"
 					@click="emit('remove', idx)">
 					&times;
 				</button>

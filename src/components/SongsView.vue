@@ -78,7 +78,7 @@
   </div>
   <div v-else :class="[$style.songArea, standaloneCreate && $style.createSongArea]">
     <div v-if="!standaloneCreate && selectedCount > 0" :class="$style.selectionBanner">
-      <span :class="$style.selectionCount">{{ t('sheetmusic', '{count} songs selected', { count: selectedCount }) }}</span>
+      <span :class="$style.selectionCount">{{ t('sheetmusic', '{count} songs selected', { count: selectedCount }, { escape: false }) }}</span>
       <NcButton
         v-if="canWrite && selectedCount === 2"
         size="small"
@@ -95,8 +95,8 @@
         v-if="canWrite"
         size="small"
         variant="primary"
-        :title="t('sheetmusic', 'Edit selected ({count})', { count: selectedCount })"
-        :aria-label="t('sheetmusic', 'Edit selected ({count})', { count: selectedCount })"
+        :title="t('sheetmusic', 'Edit selected ({count})', { count: selectedCount }, { escape: false })"
+        :aria-label="t('sheetmusic', 'Edit selected ({count})', { count: selectedCount }, { escape: false })"
         @click="isBatchEditorOpen = true">
         <template #icon>
           <PencilIcon :size="18" />
@@ -106,8 +106,8 @@
         v-if="canWrite"
         size="small"
         variant="error"
-        :title="t('sheetmusic', 'Delete selected ({count})', { count: selectedCount })"
-        :aria-label="t('sheetmusic', 'Delete selected ({count})', { count: selectedCount })"
+        :title="t('sheetmusic', 'Delete selected ({count})', { count: selectedCount }, { escape: false })"
+        :aria-label="t('sheetmusic', 'Delete selected ({count})', { count: selectedCount }, { escape: false })"
         @click="isBatchDeleteDialogOpen = true">
         <template #icon>
           <DeleteIcon :size="18" />
@@ -409,18 +409,18 @@ const isModifyPdfInUrl = computed(() => route.query.modifyPdf !== undefined && r
 const headerTitle = computed(() => {
   if (props.standaloneCreate) {
     return duplicateSourceSong.value
-      ? t('sheetmusic', 'Duplicate: {title}', { title: duplicateSourceSong.value.title })
+      ? t('sheetmusic', 'Duplicate: {title}', { title: duplicateSourceSong.value.title }, { escape: false })
       : t('sheetmusic', 'Create Song');
   }
   if (songIdInUrl.value !== null) {
     if (isModifyPdfInUrl.value) {
       return openSong.value?.title
-        ? t('sheetmusic', 'Modify PDF: {title}', { title: openSong.value.title })
+        ? t('sheetmusic', 'Modify PDF: {title}', { title: openSong.value.title }, { escape: false })
         : t('sheetmusic', 'Modify PDF');
     }
     if (isEditInUrl.value) {
       return openSong.value?.title
-        ? t('sheetmusic', 'Edit: {title}', { title: openSong.value.title })
+        ? t('sheetmusic', 'Edit: {title}', { title: openSong.value.title }, { escape: false })
         : t('sheetmusic', 'Edit song');
     }
     return openSong.value?.title ?? t('sheetmusic', 'Songs');
@@ -466,7 +466,7 @@ function stopBatchProgressPolling() {
 function startBatchProgressPolling(progressId: string, count: number) {
   stopBatchProgressPolling();
   batchUpdateProgressPercent.value = 0;
-  batchUpdateProgressMessage.value = t('sheetmusic', 'Updating {count} songs…', { count });
+  batchUpdateProgressMessage.value = t('sheetmusic', 'Updating {count} songs…', { count }, { escape: false });
   batchProgressTimer = setInterval(async () => {
     try {
       const res = await apiGet('/api/libraries/progress/{progressId}', {
@@ -543,7 +543,7 @@ async function handleApplyBatchUpdate(payload: BatchUpdatePayload) {
     if (response.data?.ocs?.data) {
       handleLibraryDataUpdate(response.data.ocs.data);
     }
-    showSuccess(t('sheetmusic', 'Successfully updated {count} songs.', { count }));
+    showSuccess(t('sheetmusic', 'Successfully updated {count} songs.', { count }, { escape: false }));
   } catch (error) {
     console.error('Failed to batch update songs:', error);
     showError(describeRequestFailure(error, t('sheetmusic', 'Failed to update selected songs.')));
@@ -564,7 +564,7 @@ function handleBatchDeleted(data: LibraryData | undefined, payload: number[] | n
   } else {
     loadLibraryData(props.selectedLibrary);
   }
-  showSuccess(t('sheetmusic', 'Successfully deleted {count} songs.', { count }));
+  showSuccess(t('sheetmusic', 'Successfully deleted {count} songs.', { count }, { escape: false }));
   if (shouldGoBack) {
     goBackToSongs();
   }
@@ -837,7 +837,7 @@ async function handleDeleted(data: LibraryData | undefined, songId: number) {
     await loadLibraryData(props.selectedLibrary);
   }
   if (songTitle) {
-    showSuccess(t('sheetmusic', 'Song "{title}" deleted successfully.', { title: songTitle }));
+    showSuccess(t('sheetmusic', 'Song "{title}" deleted successfully.', { title: songTitle }, { escape: false }));
   } else {
     showSuccess(t('sheetmusic', 'Song deleted successfully.'));
   }

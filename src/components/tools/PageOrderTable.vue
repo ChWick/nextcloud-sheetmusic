@@ -134,7 +134,7 @@ function nextPage() {
 							<NcCheckboxRadioSwitch
 								type="checkbox"
 								:model-value="selectedIds.has(item.id)"
-								:aria-label="t('sheetmusic', 'Select {title}', { title: item.songTitle })"
+								:aria-label="t('sheetmusic', 'Select {title}', { title: item.songTitle }, { escape: false })"
 								:data-test="`row-checkbox-${item.id}`"
 								@update:model-value="emit('toggle-select', item.id)" />
 						</div>
@@ -210,7 +210,7 @@ function nextPage() {
 		<!-- Table Pagination Toolbar -->
 		<div v-if="items.length > 0" :class="$style.paginationBar" data-test="table-pagination">
 			<div :class="$style.paginationInfo">
-				<span>{{ t('sheetmusic', 'Showing {start}–{end} of {total}', { start: startIndex, end: endIndex, total: items.length }) }}</span>
+				<span>{{ t('sheetmusic', 'Showing {start}–{end} of {total}', { start: startIndex, end: endIndex, total: items.length }, { escape: false }) }}</span>
 			</div>
 
 			<div :class="$style.paginationControls">
@@ -243,7 +243,7 @@ function nextPage() {
 					</NcButton>
 
 					<span :class="$style.pageIndicator" data-test="page-indicator">
-						{{ t('sheetmusic', 'Page {current} of {total}', { current: currentPage, total: totalPages }) }}
+						{{ t('sheetmusic', 'Page {current} of {total}', { current: currentPage, total: totalPages }, { escape: false }) }}
 					</span>
 
 					<NcButton

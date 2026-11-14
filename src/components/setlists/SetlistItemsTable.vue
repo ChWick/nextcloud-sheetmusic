@@ -79,7 +79,7 @@
                   :value="item.bookmarkId ?? ''"
                   :class="$style.inlineBookmarkSelect"
                   :title="t('sheetmusic', 'Change bookmark')"
-                  :aria-label="t('sheetmusic', 'Change bookmark for {song}', { song: item.songTitle || '' })"
+                  :aria-label="t('sheetmusic', 'Change bookmark for {song}', { song: item.songTitle || '' }, { escape: false })"
                   @change="onBookmarkSelect(item, $event)">
                   <option value="">{{ t('sheetmusic', 'Entire song') }}</option>
                   <option
@@ -95,7 +95,7 @@
               <span
                 v-else-if="item.bookmarkName"
                 :class="$style.bookmarkBadge"
-                :title="t('sheetmusic', 'Bookmark page {page}', { page: item.pageNum ?? 1 })">
+                :title="t('sheetmusic', 'Bookmark page {page}', { page: item.pageNum ?? 1 }, { escape: false })">
                 <BookmarkMusicOutline :size="14" :class="$style.bookmarkIcon" />
                 {{ item.bookmarkName }}
                 <span v-if="item.pageNum" :class="$style.bookmarkPage"> (p. {{ item.pageNum }})</span>

@@ -188,7 +188,7 @@ export function usePdfBookmarks(options: {
 			bookmarkCounter = newBookmarks.length
 			bookmarks.value = newBookmarks
 
-			showSuccess(t('sheetmusic', 'Successfully imported {count} bookmarks from PDF outline.', { count: newBookmarks.length }))
+			showSuccess(t('sheetmusic', 'Successfully imported {count} bookmarks from PDF outline.', { count: newBookmarks.length }, { escape: false }))
 			return newBookmarks.length
 		} catch (e) {
 			showError(describeRequestFailure(e, t('sheetmusic', 'Failed to extract PDF outline.')))
@@ -265,7 +265,7 @@ export function usePdfBookmarks(options: {
 			}
 
 			onProgress?.(100, t('sheetmusic', 'Done!'))
-			showSuccess(t('sheetmusic', 'Saved bookmarks for "{title}".', { title: currentSong.title }))
+			showSuccess(t('sheetmusic', 'Saved bookmarks for "{title}".', { title: currentSong.title }, { escape: false }))
 			onSaved(data, currentSong.id)
 		} catch (e) {
 			showError(describeRequestFailure(e, t('sheetmusic', 'Could not save bookmarks.')))

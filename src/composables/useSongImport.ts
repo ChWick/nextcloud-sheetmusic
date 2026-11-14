@@ -30,7 +30,7 @@ export function useSongImport(options: UseSongImportOptions = {}) {
 			.setCanPick((node) => node.type === 'file')
 			.setButtonFactory(([node]) => [{
 				label: node
-					? t('sheetmusic', 'Import {file}', { file: node.basename })
+					? t('sheetmusic', 'Import {file}', { file: node.basename }, { escape: false })
 					: t('sheetmusic', 'Import a file'),
 				callback: () => {},
 				disabled: !node || node.type !== 'file',

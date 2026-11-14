@@ -149,7 +149,7 @@ function formatLibraryOption(library: Library): string {
   if (library.isShared) {
     const owner = library.ownerDisplayName || library.ownerId || t('sheetmusic', 'unknown')
     const ro = library.canWrite === false ? ` [${t('sheetmusic', 'Read-only')}]` : ''
-    return `${library.path} (${t('sheetmusic', 'shared by {owner}', { owner })})${ro}`
+    return `${library.path} (${t('sheetmusic', 'shared by {owner}', { owner }, { escape: false })})${ro}`
   }
   return library.path
 }
@@ -251,7 +251,7 @@ async function openFolderPicker() {
     .setFilter(node => node.type === 'folder')
     .setCanPick(node => node.type === 'folder')
     .setButtonFactory(([node]) => [{
-      label: node ? t('sheetmusic', 'Select folder {name}', { name: node.basename }) : t('sheetmusic', 'Select folder'),
+      label: node ? t('sheetmusic', 'Select folder {name}', { name: node.basename }, { escape: false }) : t('sheetmusic', 'Select folder'),
       callback: () => {},
       disabled: !node || node.type !== 'folder',
       variant: 'primary',
@@ -274,7 +274,7 @@ async function openDbPicker() {
     .setFilter(node => node.type === 'folder' || node.basename.toLowerCase().endsWith('.db'))
     .setCanPick(node => node.type === 'file' && node.basename.toLowerCase().endsWith('.db'))
     .setButtonFactory(([node]) => [{
-      label: node ? t('sheetmusic', 'Select {name}', { name: node.basename }) : t('sheetmusic', 'Select .db file'),
+      label: node ? t('sheetmusic', 'Select {name}', { name: node.basename }, { escape: false }) : t('sheetmusic', 'Select .db file'),
       callback: () => {},
       disabled: !node || node.type !== 'file' || !node.basename.toLowerCase().endsWith('.db'),
       variant: 'primary',
@@ -700,7 +700,7 @@ async function deleteLibrary() {
               :name="t('sheetmusic', 'Delete library')"
               size="normal"
               @close="closeDeleteDialog">
-      <p>{{ t('sheetmusic', 'Remove "{path}" from your libraries?', { path: selectedLibraryPath }) }}</p>
+      <p>{{ t('sheetmusic', 'Remove "{path}" from your libraries?', { path: selectedLibraryPath }, { escape: false }) }}</p>
       <p>{{ t('sheetmusic', 'Only the library entry is removed. The MobileSheets database and all files it references stay in your Nextcloud files, so you can add the library again whenever you want.') }}</p>
       <p v-if="deleteError" :class="$style.error" role="alert">{{ deleteError }}</p>
       <template #actions>

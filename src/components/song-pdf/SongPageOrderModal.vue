@@ -255,7 +255,7 @@ async function handleSave() {
 					<div :class="$style.headerMeta">
 						<span :class="$style.fileName">{{ fileName }}</span>
 						<span :class="$style.fileDetails">
-							{{ t('sheetmusic', 'Document has {count} page | Document has {count} pages', { count: totalPages }, totalPages) }}
+							{{ t('sheetmusic', 'Document has {count} page | Document has {count} pages', { count: totalPages }, totalPages, { escape: false }) }}
 						</span>
 					</div>
 				</div>

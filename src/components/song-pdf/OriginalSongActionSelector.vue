@@ -172,7 +172,7 @@ function select(val: OriginalSongAction) {
 					<div :class="$style.infoPopoverContent">
 						{{ hasExactlyOneFile
 							? t('sheetmusic', 'The original song and its file will be completely deleted.')
-							: t('sheetmusic', 'Only possible if the song has exactly one attached file ({count} files currently).', { count: attachedFilesCount })
+							: t('sheetmusic', 'Only possible if the song has exactly one attached file ({count} files currently).', { count: attachedFilesCount }, { escape: false })
 						}}
 					</div>
 				</NcPopover>

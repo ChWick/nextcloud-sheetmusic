@@ -150,7 +150,7 @@ export function useSongEditorFiles(options: UseSongEditorFilesOptions) {
 	function notifyFileStaged() {
 		const songTitle = options.getTitle()?.trim()
 		const infoMsg = songTitle
-			? t('sheetmusic', 'The file will be added to "{title}" when you save.', { title: songTitle })
+			? t('sheetmusic', 'The file will be added to "{title}" when you save.', { title: songTitle }, { escape: false })
 			: t('sheetmusic', 'The file is added to the song when you save.')
 		options.onSuccess(infoMsg)
 		showInfo(infoMsg)
@@ -169,7 +169,7 @@ export function useSongEditorFiles(options: UseSongEditorFilesOptions) {
 			.setCanPick((node) => node.type === 'file')
 			.setButtonFactory(([node]) => [{
 				label: node
-					? t('sheetmusic', 'Select {file}', { file: node.basename })
+					? t('sheetmusic', 'Select {file}', { file: node.basename }, { escape: false })
 					: t('sheetmusic', 'Select a file'),
 				callback: () => {},
 				disabled: !node || node.type !== 'file',

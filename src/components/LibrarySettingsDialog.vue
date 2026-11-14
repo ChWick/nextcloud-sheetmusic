@@ -138,7 +138,7 @@ function handleDelete() {
 					<strong>{{ t('sheetmusic', 'Shared Library') }}</strong>
 				</div>
 				<p :class="$style.sharedText">
-					{{ t('sheetmusic', 'This library is shared with you by {owner}.', { owner: currentLibrary?.ownerDisplayName || currentLibrary?.ownerId || 'Nextcloud' }) }}
+					{{ t('sheetmusic', 'This library is shared with you by {owner}.', { owner: currentLibrary?.ownerDisplayName || currentLibrary?.ownerId || 'Nextcloud' }, { escape: false }) }}
 				</p>
 				<div :class="$style.sharedMeta">
 					<span :class="[$style.badge, currentLibrary?.canWrite ? $style.badgeWrite : $style.badgeRead]">

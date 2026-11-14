@@ -49,7 +49,7 @@ function onOpen() {
 			<NcButton
 				variant="primary"
 				size="small"
-				:aria-label="t('sheetmusic', 'Open {name}', { name: tool.name })"
+				:aria-label="t('sheetmusic', 'Open {name}', { name: tool.name }, { escape: false })"
 				@click.stop="onOpen">
 				<template #icon>
 					<ArrowRight :size="16" />

@@ -41,7 +41,7 @@ const emit = defineEmits<{
 	<NcDialog
 		v-if="open"
 		:open="open"
-		:name="t('sheetmusic', 'Page {p} of {total}', { p: pageNum, total: totalPages })"
+		:name="t('sheetmusic', 'Page {p} of {total}', { p: pageNum, total: totalPages }, { escape: false })"
 		size="large"
 		@update:open="emit('update:open', $event)">
 		<template #actions>
@@ -72,8 +72,8 @@ const emit = defineEmits<{
 			<NcButton
 				type="button"
 				variant="primary"
-				:title="t('sheetmusic', 'Add page {p} to order', { p: pageNum })"
-				:aria-label="t('sheetmusic', 'Add page {p} to order', { p: pageNum })"
+				:title="t('sheetmusic', 'Add page {p} to order', { p: pageNum }, { escape: false })"
+				:aria-label="t('sheetmusic', 'Add page {p} to order', { p: pageNum }, { escape: false })"
 				@click="emit('append', pageNum)">
 				<template #icon>
 					<Plus :size="20" />
@@ -103,11 +103,11 @@ const emit = defineEmits<{
 				<img
 					v-if="highResUrl || thumbnailUrl"
 					:src="highResUrl || thumbnailUrl"
-					:alt="t('sheetmusic', 'Page {p} zoomed preview', { p: pageNum })"
+					:alt="t('sheetmusic', 'Page {p} zoomed preview', { p: pageNum }, { escape: false })"
 					:class="$style.zoomedImage"
 					data-test="zoom-image" />
 				<div v-else :class="$style.placeholder">
-					<span>{{ t('sheetmusic', 'Page {p}', { p: pageNum }) }}</span>
+					<span>{{ t('sheetmusic', 'Page {p}', { p: pageNum }, { escape: false }) }}</span>
 				</div>
 			</div>
 		</div>

@@ -130,12 +130,12 @@ const emit = defineEmits<{
 					size="small"
 					variant="tertiary"
 					:title="t('sheetmusic', 'Restore all deleted pages')"
-					:aria-label="t('sheetmusic', 'Restore Deleted ({count})', { count: deletedPagesCount })"
+					:aria-label="t('sheetmusic', 'Restore Deleted ({count})', { count: deletedPagesCount }, { escape: false })"
 					@click="emit('restore-all-pages')">
 					<template #icon>
 						<DeleteRestore :size="16" />
 					</template>
-					<span :class="$style.btnText">{{ t('sheetmusic', 'Restore Deleted ({count})', { count: deletedPagesCount }) }}</span>
+					<span :class="$style.btnText">{{ t('sheetmusic', 'Restore Deleted ({count})', { count: deletedPagesCount }, { escape: false }) }}</span>
 				</NcButton>
 			</div>
 		</template>
@@ -205,12 +205,12 @@ const emit = defineEmits<{
 					size="small"
 					variant="tertiary"
 					:title="t('sheetmusic', 'Restore all deleted pages')"
-					:aria-label="t('sheetmusic', 'Restore Deleted ({count})', { count: deletedPagesCount })"
+					:aria-label="t('sheetmusic', 'Restore Deleted ({count})', { count: deletedPagesCount }, { escape: false })"
 					@click="emit('restore-all-pages')">
 					<template #icon>
 						<DeleteRestore :size="16" />
 					</template>
-					<span :class="$style.btnText">{{ t('sheetmusic', 'Restore Deleted ({count})', { count: deletedPagesCount }) }}</span>
+					<span :class="$style.btnText">{{ t('sheetmusic', 'Restore Deleted ({count})', { count: deletedPagesCount }, { escape: false }) }}</span>
 				</NcButton>
 			</div>
 		</template>
@@ -268,12 +268,12 @@ const emit = defineEmits<{
 					size="small"
 					variant="tertiary"
 					:title="t('sheetmusic', 'Restore all deleted pages')"
-					:aria-label="t('sheetmusic', 'Restore Deleted ({count})', { count: deletedPagesCount })"
+					:aria-label="t('sheetmusic', 'Restore Deleted ({count})', { count: deletedPagesCount }, { escape: false })"
 					@click="emit('restore-all-pages')">
 					<template #icon>
 						<DeleteRestore :size="16" />
 					</template>
-					<span :class="$style.btnText">{{ t('sheetmusic', 'Restore Deleted ({count})', { count: deletedPagesCount }) }}</span>
+					<span :class="$style.btnText">{{ t('sheetmusic', 'Restore Deleted ({count})', { count: deletedPagesCount }, { escape: false }) }}</span>
 				</NcButton>
 			</div>
 		</template>
@@ -285,7 +285,7 @@ const emit = defineEmits<{
 					{{ t('sheetmusic', 'Select pages in grid to assign to segments:') }}
 				</span>
 				<span v-if="selectedPagesCount > 0" :class="$style.selectionBadge">
-					{{ t('sheetmusic', '{count} pages selected', { count: selectedPagesCount }) }}
+					{{ t('sheetmusic', '{count} pages selected', { count: selectedPagesCount }, { escape: false }) }}
 				</span>
 				<NcButton
 					v-if="selectedPagesCount > 0"
@@ -309,19 +309,19 @@ const emit = defineEmits<{
 					{{ t('sheetmusic', 'Select pages in grid to assign to bookmarks:') }}
 				</span>
 				<span v-if="selectedPagesCount > 0" :class="$style.selectionBadge">
-					{{ t('sheetmusic', '{count} pages selected', { count: selectedPagesCount }) }}
+					{{ t('sheetmusic', '{count} pages selected', { count: selectedPagesCount }, { escape: false }) }}
 				</span>
 				<NcButton
 					v-if="selectedPagesCount > 0"
 					size="small"
 					variant="tertiary"
-					:title="t('sheetmusic', 'Clear Selection ({count})', { count: selectedPagesCount })"
-					:aria-label="t('sheetmusic', 'Clear Selection ({count})', { count: selectedPagesCount })"
+					:title="t('sheetmusic', 'Clear Selection ({count})', { count: selectedPagesCount }, { escape: false })"
+					:aria-label="t('sheetmusic', 'Clear Selection ({count})', { count: selectedPagesCount }, { escape: false })"
 					@click="emit('clear-selection')">
 					<template #icon>
 						<CloseIcon :size="16" />
 					</template>
-					<span :class="$style.btnText">{{ t('sheetmusic', 'Clear Selection ({count})', { count: selectedPagesCount }) }}</span>
+					<span :class="$style.btnText">{{ t('sheetmusic', 'Clear Selection ({count})', { count: selectedPagesCount }, { escape: false }) }}</span>
 				</NcButton>
 			</div>
 		</template>

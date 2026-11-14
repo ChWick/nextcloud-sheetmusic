@@ -28,7 +28,7 @@ function onActionChange(event: Event) {
 		:name="t('sheetmusic', 'Attach Nextcloud PDF')"
 		@close="emit('update:open', false); emit('cancel')">
 		<p>
-			{{ t('sheetmusic', 'Attach {file} to this song?', { file: filename }) }}
+			{{ t('sheetmusic', 'Attach {file} to this song?', { file: filename }, { escape: false }) }}
 		</p>
 		<div :class="$style.radioGroup">
 			<label :class="$style.radioLabel">

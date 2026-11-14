@@ -60,16 +60,16 @@ function handleClose() {
 		:name="t('sheetmusic', 'Delete song')"
 		size="normal"
 		@close="handleClose">
-		<p>{{ t('sheetmusic', 'Delete "{title}" from this library?', { title: song?.title ?? '' }) }}</p>
+		<p>{{ t('sheetmusic', 'Delete "{title}" from this library?', { title: song?.title ?? '' }, { escape: false }) }}</p>
 		<p>{{ t('sheetmusic', 'The song and everything pointing at it is removed from the MobileSheets database.') }}</p>
 		<NcCheckboxRadioSwitch v-model="deleteFiles" type="checkbox">
 			{{ t('sheetmusic', 'Delete all attached files') }}
 		</NcCheckboxRadioSwitch>
 		<p v-if="deleteFiles">
-			{{ t('sheetmusic', 'The {count} attached file(s) are moved to the Nextcloud trash bin, so they can be restored from there.', { count: fileCount ?? song?.files?.length ?? 0 }) }}
+			{{ t('sheetmusic', 'The {count} attached file(s) are moved to the Nextcloud trash bin, so they can be restored from there.', { count: fileCount ?? song?.files?.length ?? 0 }, { escape: false }) }}
 		</p>
 		<p v-else>
-			{{ t('sheetmusic', 'The {count} attached file(s) are kept in your Nextcloud files.', { count: fileCount ?? song?.files?.length ?? 0 }) }}
+			{{ t('sheetmusic', 'The {count} attached file(s) are kept in your Nextcloud files.', { count: fileCount ?? song?.files?.length ?? 0 }, { escape: false }) }}
 		</p>
 		<p v-if="deleteError" :class="$style.error" role="alert">{{ deleteError }}</p>
 		<template #actions>

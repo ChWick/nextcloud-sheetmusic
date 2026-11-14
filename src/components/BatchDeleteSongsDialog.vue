@@ -69,7 +69,7 @@ function handleClose() {
 		:name="t('sheetmusic', 'Delete selected songs')"
 		size="normal"
 		@close="handleClose">
-		<p>{{ t('sheetmusic', 'Delete {count} selected songs from this library?', { count: songIds.length }) }}</p>
+		<p>{{ t('sheetmusic', 'Delete {count} selected songs from this library?', { count: songIds.length }, { escape: false }) }}</p>
 		<p>{{ t('sheetmusic', 'The songs and everything pointing at them are removed from the MobileSheets database.') }}</p>
 		<NcCheckboxRadioSwitch
 			v-model="deleteFiles"
@@ -95,7 +95,7 @@ function handleClose() {
 				<template v-if="isDeleting">
 					<NcLoadingIcon :size="16" />
 				</template>
-				{{ t('sheetmusic', 'Delete {count} songs', { count: songIds.length }) }}
+				{{ t('sheetmusic', 'Delete {count} songs', { count: songIds.length }, { escape: false }) }}
 			</NcButton>
 		</template>
 	</NcDialog>

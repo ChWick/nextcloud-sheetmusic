@@ -73,7 +73,7 @@ export function useSongMerge(options: UseSongMergeOptions) {
 			}
 			const targetTitle = targetSong?.title ?? ''
 			if (targetTitle) {
-				showSuccess(t('sheetmusic', 'Songs merged successfully into "{title}".', { title: targetTitle }))
+				showSuccess(t('sheetmusic', 'Songs merged successfully into "{title}".', { title: targetTitle }, { escape: false }))
 			} else {
 				showSuccess(t('sheetmusic', 'Songs merged successfully.'))
 			}

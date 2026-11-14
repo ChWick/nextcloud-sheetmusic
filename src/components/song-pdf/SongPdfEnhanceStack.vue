@@ -27,7 +27,7 @@ const emit = defineEmits<{
 		<div :class="$style.stackHeader">
 			<span :class="$style.stackTitle">
 				<Tune :size="18" />
-				{{ t('sheetmusic', 'Operation Stack ({count})', { count: operations.length }) }}
+				{{ t('sheetmusic', 'Operation Stack ({count})', { count: operations.length }, { escape: false }) }}
 			</span>
 			<!-- Presets -->
 			<div :class="$style.presetBar">

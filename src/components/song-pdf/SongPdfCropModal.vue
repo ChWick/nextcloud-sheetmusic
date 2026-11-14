@@ -212,7 +212,7 @@ watch(
 		size="large"
 		:can-close="true"
 		:class="$style.cropModal"
-		:name="t('sheetmusic', 'Crop Page {page} of {total}', { page: pageNum, total: totalPages })"
+		:name="t('sheetmusic', 'Crop Page {page} of {total}', { page: pageNum, total: totalPages }, { escape: false })"
 		@update:open="emit('update:open', $event)">
 		<div :class="$style.dialogBody">
 			<!-- Header Toolbar (Page Nav, Zoom, Presets) -->

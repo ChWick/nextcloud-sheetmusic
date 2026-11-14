@@ -130,12 +130,12 @@ function onScalarInput(target: 'A' | 'B', field: SongScalarFieldDef, raw: string
 		<!-- Rows: All Entity Types (from ENTITY_COLUMNS single source of truth) -->
 		<template v-for="col in ENTITY_COLUMNS" :key="col.songProp">
 			<div :class="$style.cellEditable" :data-test="`field-a-${col.songProp}`">
-				<label :class="$style.fieldLabel">{{ t('sheetmusic', 'Song A {field}', { field: col.pluralLabel() }) }}</label>
+				<label :class="$style.fieldLabel">{{ t('sheetmusic', 'Song A {field}', { field: col.pluralLabel() }, { escape: false }) }}</label>
 				<NcSelect
 					:model-value="draftA.entities[col.songProp]"
 					:options="optionsMap[col.songProp] ?? []"
 					:multiple="true"
-					:input-label="t('sheetmusic', 'Song A {field}', { field: col.pluralLabel() })"
+					:input-label="t('sheetmusic', 'Song A {field}', { field: col.pluralLabel() }, { escape: false })"
 					label="label"
 					track-by="id"
 					@update:model-value="emit('update:entity', 'A', col.songProp, ($event ?? []) as SelectOption[])" />
@@ -144,8 +144,8 @@ function onScalarInput(target: 'A' | 'B', field: SongScalarFieldDef, raw: string
 				<NcButton
 					variant="tertiary"
 					type="button"
-					:title="t('sheetmusic', 'Copy Song A {field} to Song B', { field: col.pluralLabel() })"
-					:aria-label="t('sheetmusic', 'Copy Song A {field} to Song B', { field: col.pluralLabel() })"
+					:title="t('sheetmusic', 'Copy Song A {field} to Song B', { field: col.pluralLabel() }, { escape: false })"
+					:aria-label="t('sheetmusic', 'Copy Song A {field} to Song B', { field: col.pluralLabel() }, { escape: false })"
 					:data-test="`copy-a-to-b-${col.songProp}`"
 					@click="emit('copySingleFieldBetweenSongs', col.songProp, 'A')">
 					<template #icon><ArrowRightIcon :size="16" /></template>
@@ -153,20 +153,20 @@ function onScalarInput(target: 'A' | 'B', field: SongScalarFieldDef, raw: string
 				<NcButton
 					variant="tertiary"
 					type="button"
-					:title="t('sheetmusic', 'Copy Song B {field} to Song A', { field: col.pluralLabel() })"
-					:aria-label="t('sheetmusic', 'Copy Song B {field} to Song A', { field: col.pluralLabel() })"
+					:title="t('sheetmusic', 'Copy Song B {field} to Song A', { field: col.pluralLabel() }, { escape: false })"
+					:aria-label="t('sheetmusic', 'Copy Song B {field} to Song A', { field: col.pluralLabel() }, { escape: false })"
 					:data-test="`copy-b-to-a-${col.songProp}`"
 					@click="emit('copySingleFieldBetweenSongs', col.songProp, 'B')">
 					<template #icon><ArrowLeftIcon :size="16" /></template>
 				</NcButton>
 			</div>
 			<div :class="$style.cellEditable" :data-test="`field-b-${col.songProp}`">
-				<label :class="$style.fieldLabel">{{ t('sheetmusic', 'Song B {field}', { field: col.pluralLabel() }) }}</label>
+				<label :class="$style.fieldLabel">{{ t('sheetmusic', 'Song B {field}', { field: col.pluralLabel() }, { escape: false }) }}</label>
 				<NcSelect
 					:model-value="draftB.entities[col.songProp]"
 					:options="optionsMap[col.songProp] ?? []"
 					:multiple="true"
-					:input-label="t('sheetmusic', 'Song B {field}', { field: col.pluralLabel() })"
+					:input-label="t('sheetmusic', 'Song B {field}', { field: col.pluralLabel() }, { escape: false })"
 					label="label"
 					track-by="id"
 					@update:model-value="emit('update:entity', 'B', col.songProp, ($event ?? []) as SelectOption[])" />
@@ -181,7 +181,7 @@ function onScalarInput(target: 'A' | 'B', field: SongScalarFieldDef, raw: string
 					:type="field.type"
 					:min="field.min"
 					:max="field.max"
-					:label="t('sheetmusic', 'Song A {field}', { field: field.inputLabel() })"
+					:label="t('sheetmusic', 'Song A {field}', { field: field.inputLabel() }, { escape: false })"
 					:placeholder="field.placeholder()"
 					:model-value="getScalarModelValue(draftA, field)"
 					@update:model-value="onScalarInput('A', field, $event)" />
@@ -190,8 +190,8 @@ function onScalarInput(target: 'A' | 'B', field: SongScalarFieldDef, raw: string
 				<NcButton
 					variant="tertiary"
 					type="button"
-					:title="t('sheetmusic', 'Copy Song A {field} to Song B', { field: field.label() })"
-					:aria-label="t('sheetmusic', 'Copy Song A {field} to Song B', { field: field.label() })"
+					:title="t('sheetmusic', 'Copy Song A {field} to Song B', { field: field.label() }, { escape: false })"
+					:aria-label="t('sheetmusic', 'Copy Song A {field} to Song B', { field: field.label() }, { escape: false })"
 					:data-test="`copy-a-to-b-${field.key}`"
 					@click="emit('copySingleFieldBetweenSongs', field.key, 'A')">
 					<template #icon><ArrowRightIcon :size="16" /></template>
@@ -199,8 +199,8 @@ function onScalarInput(target: 'A' | 'B', field: SongScalarFieldDef, raw: string
 				<NcButton
 					variant="tertiary"
 					type="button"
-					:title="t('sheetmusic', 'Copy Song B {field} to Song A', { field: field.label() })"
-					:aria-label="t('sheetmusic', 'Copy Song B {field} to Song A', { field: field.label() })"
+					:title="t('sheetmusic', 'Copy Song B {field} to Song A', { field: field.label() }, { escape: false })"
+					:aria-label="t('sheetmusic', 'Copy Song B {field} to Song A', { field: field.label() }, { escape: false })"
 					:data-test="`copy-b-to-a-${field.key}`"
 					@click="emit('copySingleFieldBetweenSongs', field.key, 'B')">
 					<template #icon><ArrowLeftIcon :size="16" /></template>
@@ -212,7 +212,7 @@ function onScalarInput(target: 'A' | 'B', field: SongScalarFieldDef, raw: string
 					:type="field.type"
 					:min="field.min"
 					:max="field.max"
-					:label="t('sheetmusic', 'Song B {field}', { field: field.inputLabel() })"
+					:label="t('sheetmusic', 'Song B {field}', { field: field.inputLabel() }, { escape: false })"
 					:placeholder="field.placeholder()"
 					:model-value="getScalarModelValue(draftB, field)"
 					@update:model-value="onScalarInput('B', field, $event)" />

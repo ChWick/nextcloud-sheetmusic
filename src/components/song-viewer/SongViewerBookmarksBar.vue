@@ -11,7 +11,7 @@
         :key="bm.id ?? `bm-${idx}`"
         type="button"
         :class="[$style.bookmarkChip, activeBookmarkPage === bm.pageNum && $style.bookmarkChipActive]"
-        :title="t('sheetmusic', 'Jump to {name}', { name: bm.name })"
+        :title="t('sheetmusic', 'Jump to {name}', { name: bm.name }, { escape: false })"
         @click="emit('jump', bm.pageNum)">
         {{ formatBookmarkLabel(bm) }}
       </button>

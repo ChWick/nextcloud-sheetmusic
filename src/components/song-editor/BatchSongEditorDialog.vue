@@ -166,12 +166,12 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 <template>
 	<NcDialog
 		v-if="open"
-		:name="t('sheetmusic', 'Batch edit {count} songs', { count: selectedCount })"
+		:name="t('sheetmusic', 'Batch edit {count} songs', { count: selectedCount }, { escape: false })"
 		size="normal"
 		@close="handleClose">
 		<div :class="$style.dialogContent">
 			<p :class="$style.intro">
-				{{ t('sheetmusic', 'Select which metadata fields to update across all {count} selected songs.', { count: selectedCount }) }}
+				{{ t('sheetmusic', 'Select which metadata fields to update across all {count} selected songs.', { count: selectedCount }, { escape: false }) }}
 			</p>
 
 			<div v-for="cat in categories" :key="cat.key" :class="$style.fieldGroup">
@@ -240,7 +240,7 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 					size="medium"
 					:show-value="true" />
 				<p :class="$style.progressMessage">
-					{{ progressMessage || t('sheetmusic', 'Updating {count} songs…', { count: selectedCount }) }}
+					{{ progressMessage || t('sheetmusic', 'Updating {count} songs…', { count: selectedCount }, { escape: false }) }}
 				</p>
 			</div>
 
@@ -255,7 +255,7 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 					<template v-if="isApplying" #icon>
 						<NcLoadingIcon :size="16" />
 					</template>
-					{{ isApplying ? t('sheetmusic', 'Applying…') : t('sheetmusic', 'Apply to {count} songs', { count: selectedCount }) }}
+					{{ isApplying ? t('sheetmusic', 'Applying…') : t('sheetmusic', 'Apply to {count} songs', { count: selectedCount }, { escape: false }) }}
 				</NcButton>
 			</div>
 		</div>

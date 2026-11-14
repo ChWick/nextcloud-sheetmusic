@@ -33,7 +33,7 @@ const emit = defineEmits<{
 					name="cropScope"
 					:checked="applyScope === 'current'"
 					@change="emit('update:applyScope', 'current')">
-				<span>{{ t('sheetmusic', 'Page {page} only', { page: pageNum }) }}</span>
+				<span>{{ t('sheetmusic', 'Page {page} only', { page: pageNum }, { escape: false }) }}</span>
 			</label>
 			<label :class="$style.radioOption">
 				<input
@@ -42,7 +42,7 @@ const emit = defineEmits<{
 					name="cropScope"
 					:checked="applyScope === 'all'"
 					@change="emit('update:applyScope', 'all')">
-				<span>{{ t('sheetmusic', 'All pages ({count})', { count: allPagesCount }) }}</span>
+				<span>{{ t('sheetmusic', 'All pages ({count})', { count: allPagesCount }, { escape: false }) }}</span>
 			</label>
 		</div>
 

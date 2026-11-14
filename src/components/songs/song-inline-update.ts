@@ -83,7 +83,7 @@ export async function executeInlineSongUpdate(
 		if (response.data?.ocs?.data) {
 			onUpdated(response.data.ocs.data)
 		}
-		showSuccess(t('sheetmusic', 'Song "{title}" updated successfully.', { title: nextTitle }))
+		showSuccess(t('sheetmusic', 'Song "{title}" updated successfully.', { title: nextTitle }, { escape: false }))
 	} catch (error) {
 		console.error('Failed to update song inline:', error)
 		showError(describeRequestFailure(error, t('sheetmusic', 'Failed to save song changes.')))

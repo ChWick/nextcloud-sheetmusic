@@ -108,7 +108,7 @@ function onDropEndZone(event: DragEvent) {
 					data-test="mode-sequence-btn"
 					@click="viewMode = 'sequence'">
 					<FormatListNumbered :size="16" />
-					<span>{{ t('sheetmusic', 'Resulting Order ({count})', { count: pageSequence.length }) }}</span>
+					<span>{{ t('sheetmusic', 'Resulting Order ({count})', { count: pageSequence.length }, { escape: false }) }}</span>
 				</button>
 				<button
 					type="button"
@@ -118,7 +118,7 @@ function onDropEndZone(event: DragEvent) {
 					data-test="mode-source-btn"
 					@click="viewMode = 'all-pages'">
 					<FileDocumentMultipleOutline :size="16" />
-					<span>{{ t('sheetmusic', 'All Source Pages ({count})', { count: totalPages }) }}</span>
+					<span>{{ t('sheetmusic', 'All Source Pages ({count})', { count: totalPages }, { escape: false }) }}</span>
 				</button>
 			</div>
 
@@ -147,7 +147,7 @@ function onDropEndZone(event: DragEvent) {
 					<div :class="$style.sectionTitle">
 						<FileDocumentMultipleOutline :size="16" :class="$style.sectionIcon" />
 						<span :class="$style.titleText">
-							{{ t('sheetmusic', 'Original PDF Pages ({count})', { count: totalPages }) }}
+							{{ t('sheetmusic', 'Original PDF Pages ({count})', { count: totalPages }, { escape: false }) }}
 						</span>
 					</div>
 					<span :class="$style.sectionDescription">
@@ -200,7 +200,7 @@ function onDropEndZone(event: DragEvent) {
 					<div :class="$style.sectionTitle">
 						<FormatListNumbered :size="16" :class="$style.sectionIcon" />
 						<span :class="$style.titleText">
-							{{ t('sheetmusic', 'Resulting Order ({count})', { count: pageSequence.length }) }}
+							{{ t('sheetmusic', 'Resulting Order ({count})', { count: pageSequence.length }, { escape: false }) }}
 						</span>
 					</div>
 					<span :class="$style.sectionDescription">

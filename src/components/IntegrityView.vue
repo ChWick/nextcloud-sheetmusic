@@ -321,7 +321,7 @@ async function fixAllIssues(issueType?: string) {
 			if (result?.message && result.message.includes('failed:')) {
 				showWarning(result.message)
 			} else {
-				showSuccess(t('sheetmusic', 'Fixed {count} integrity issue(s).', { count: fixedCount }))
+				showSuccess(t('sheetmusic', 'Fixed {count} integrity issue(s).', { count: fixedCount }, { escape: false }))
 			}
 		}
 	} catch (error) {
@@ -361,13 +361,13 @@ async function fixIntegrityIssue(issue: IntegrityIssue) {
 			integrityIssues.value = integrityIssues.value.filter(i => keyForIssue(i) !== key)
 			const songTitle = issue.songTitle
 			if (issue.type === 'invalid_naming_rule' && songTitle) {
-				showSuccess(t('sheetmusic', 'Naming rule applied for "{title}".', { title: songTitle }))
+				showSuccess(t('sheetmusic', 'Naming rule applied for "{title}".', { title: songTitle }, { escape: false }))
 			} else if (issue.type === 'orphan_file' && songTitle) {
-				showSuccess(t('sheetmusic', 'Linked orphan file to "{title}".', { title: songTitle }))
+				showSuccess(t('sheetmusic', 'Linked orphan file to "{title}".', { title: songTitle }, { escape: false }))
 			} else if (issue.type === 'missing_file' && songTitle) {
-				showSuccess(t('sheetmusic', 'Deleted missing file from "{title}".', { title: songTitle }))
+				showSuccess(t('sheetmusic', 'Deleted missing file from "{title}".', { title: songTitle }, { escape: false }))
 			} else if (songTitle) {
-				showSuccess(t('sheetmusic', 'Fixed integrity issue for "{title}".', { title: songTitle }))
+				showSuccess(t('sheetmusic', 'Fixed integrity issue for "{title}".', { title: songTitle }, { escape: false }))
 			} else {
 				showSuccess(result?.message ?? t('sheetmusic', 'Integrity issue fixed successfully.'))
 			}
@@ -420,7 +420,7 @@ async function executeMerge(payload: {
 		}
 		mergeIssue.value = null
 		if (keepTitle) {
-			showSuccess(t('sheetmusic', 'Songs merged successfully into "{title}".', { title: keepTitle }))
+			showSuccess(t('sheetmusic', 'Songs merged successfully into "{title}".', { title: keepTitle }, { escape: false }))
 		} else {
 			showSuccess(t('sheetmusic', 'Songs merged successfully.'))
 		}
@@ -560,7 +560,7 @@ function openSong(songId: number) {
 					<div v-else-if="integrityIssues.length > 0" :class="$style.issueContainer">
 						<div :class="$style.summaryHeader">
 							<span :class="$style.issueCount">
-								{{ t('sheetmusic', '{count} issue(s) detected requiring attention', { count: integrityIssues.length }) }}
+								{{ t('sheetmusic', '{count} issue(s) detected requiring attention', { count: integrityIssues.length }, { escape: false }) }}
 							</span>
 							<NcButton
 								v-if="fixableCount > 0"
@@ -570,7 +570,7 @@ function openSong(songId: number) {
 								<template #icon>
 									<WrenchIcon :size="18" />
 								</template>
-								{{ isBatchFixing ? t('sheetmusic', 'Fixing All…') : t('sheetmusic', 'Fix All Fixable Issues ({count})', { count: fixableCount }) }}
+								{{ isBatchFixing ? t('sheetmusic', 'Fixing All…') : t('sheetmusic', 'Fix All Fixable Issues ({count})', { count: fixableCount }, { escape: false }) }}
 							</NcButton>
 						</div>
 
@@ -598,7 +598,7 @@ function openSong(songId: number) {
 									<template #icon>
 										<WrenchIcon :size="16" />
 									</template>
-									{{ t('sheetmusic', 'Fix All in Group ({count})', { count: group.fixableCount }) }}
+									{{ t('sheetmusic', 'Fix All in Group ({count})', { count: group.fixableCount }, { escape: false }) }}
 								</NcButton>
 							</div>
 

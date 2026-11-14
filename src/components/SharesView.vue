@@ -204,7 +204,7 @@ watch(
 				<template #icon>
 					<FolderSyncOutline :size="20" />
 				</template>
-				{{ t('sheetmusic', 'Share {name}', { name: overview.sublibraries[0].name }) }}
+				{{ t('sheetmusic', 'Share {name}', { name: overview.sublibraries[0].name }, { escape: false }) }}
 			</NcButton>
 		</ViewHeader>
 
@@ -257,7 +257,7 @@ watch(
 							<FolderMusicOutline :size="24" :class="$style.cardIcon" />
 							<div>
 								<h3 :class="$style.cardTitle">
-									{{ t('sheetmusic', 'Main library: {name}', { name: libraryDisplayName }) }}
+									{{ t('sheetmusic', 'Main library: {name}', { name: libraryDisplayName }, { escape: false }) }}
 								</h3>
 								<span :class="$style.cardSubtitle">
 									{{ overview.library.path }}

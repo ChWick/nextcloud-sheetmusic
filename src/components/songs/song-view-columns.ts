@@ -192,7 +192,7 @@ export const ENTITY_COLUMNS: EntityColumnDef[] = [
 		selectPlaceholder: () => t('sheetmusic', 'Select composers…'),
 		filterPlaceholder: () => t('sheetmusic', 'Filter by composer…'),
 		editTitle: () => t('sheetmusic', 'Edit composer inline'),
-		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for composer {name}', { name }),
+		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for composer {name}', { name }, { escape: false }),
 	}),
 	makeEntityCol({
 		col: 'book',
@@ -211,7 +211,7 @@ export const ENTITY_COLUMNS: EntityColumnDef[] = [
 		selectPlaceholder: () => t('sheetmusic', 'Select books…'),
 		filterPlaceholder: () => t('sheetmusic', 'Filter by book…'),
 		editTitle: () => t('sheetmusic', 'Edit book inline'),
-		getFilterTitle: (title) => t('sheetmusic', 'Toggle filter for book {title}', { title }),
+		getFilterTitle: (title) => t('sheetmusic', 'Toggle filter for book {title}', { title }, { escape: false }),
 	}),
 	makeEntityCol({
 		col: 'collection',
@@ -229,7 +229,7 @@ export const ENTITY_COLUMNS: EntityColumnDef[] = [
 		selectPlaceholder: () => t('sheetmusic', 'Select collections…'),
 		filterPlaceholder: () => t('sheetmusic', 'Filter by collection…'),
 		editTitle: () => t('sheetmusic', 'Edit collection inline'),
-		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for collection {name}', { name }),
+		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for collection {name}', { name }, { escape: false }),
 	}),
 	makeEntityCol({
 		col: 'artist',
@@ -247,7 +247,7 @@ export const ENTITY_COLUMNS: EntityColumnDef[] = [
 		selectPlaceholder: () => t('sheetmusic', 'Select artists…'),
 		filterPlaceholder: () => t('sheetmusic', 'Filter by artist…'),
 		editTitle: () => t('sheetmusic', 'Edit artist inline'),
-		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for artist {name}', { name }),
+		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for artist {name}', { name }, { escape: false }),
 	}),
 	makeEntityCol({
 		col: 'genre',
@@ -265,7 +265,7 @@ export const ENTITY_COLUMNS: EntityColumnDef[] = [
 		selectPlaceholder: () => t('sheetmusic', 'Select genres…'),
 		filterPlaceholder: () => t('sheetmusic', 'Filter by genre…'),
 		editTitle: () => t('sheetmusic', 'Edit genre inline'),
-		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for genre {name}', { name }),
+		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for genre {name}', { name }, { escape: false }),
 	}),
 	makeEntityCol({
 		col: 'key',
@@ -283,7 +283,7 @@ export const ENTITY_COLUMNS: EntityColumnDef[] = [
 		selectPlaceholder: () => t('sheetmusic', 'Select keys…'),
 		filterPlaceholder: () => t('sheetmusic', 'Filter by key…'),
 		editTitle: () => t('sheetmusic', 'Edit key inline'),
-		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for key {name}', { name }),
+		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for key {name}', { name }, { escape: false }),
 	}),
 	makeEntityCol({
 		col: 'customGroup',
@@ -301,7 +301,7 @@ export const ENTITY_COLUMNS: EntityColumnDef[] = [
 		selectPlaceholder: () => t('sheetmusic', 'Select custom groups…'),
 		filterPlaceholder: () => t('sheetmusic', 'Filter by custom group…'),
 		editTitle: () => t('sheetmusic', 'Edit custom group inline'),
-		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for custom group {name}', { name }),
+		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for custom group {name}', { name }, { escape: false }),
 	}),
 	makeEntityCol({
 		col: 'year',
@@ -319,7 +319,7 @@ export const ENTITY_COLUMNS: EntityColumnDef[] = [
 		selectPlaceholder: () => t('sheetmusic', 'Select years…'),
 		filterPlaceholder: () => t('sheetmusic', 'Filter by year…'),
 		editTitle: () => t('sheetmusic', 'Edit year inline'),
-		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for year {name}', { name }),
+		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for year {name}', { name }, { escape: false }),
 	}),
 	makeEntityCol({
 		col: 'signature',
@@ -337,7 +337,7 @@ export const ENTITY_COLUMNS: EntityColumnDef[] = [
 		selectPlaceholder: () => t('sheetmusic', 'Select time signatures…'),
 		filterPlaceholder: () => t('sheetmusic', 'Filter by time signature…'),
 		editTitle: () => t('sheetmusic', 'Edit time signature inline'),
-		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for signature {name}', { name }),
+		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for signature {name}', { name }, { escape: false }),
 	}),
 	makeEntityCol({
 		col: 'sourceType',
@@ -355,7 +355,7 @@ export const ENTITY_COLUMNS: EntityColumnDef[] = [
 		selectPlaceholder: () => t('sheetmusic', 'Select source types…'),
 		filterPlaceholder: () => t('sheetmusic', 'Filter by source type…'),
 		editTitle: () => t('sheetmusic', 'Edit source type inline'),
-		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for source type {name}', { name }),
+		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for source type {name}', { name }, { escape: false }),
 	}),
 	makeEntityCol({
 		col: 'instrument',
@@ -373,7 +373,7 @@ export const ENTITY_COLUMNS: EntityColumnDef[] = [
 		selectPlaceholder: () => t('sheetmusic', 'Select instruments…'),
 		filterPlaceholder: () => t('sheetmusic', 'Filter by instrument…'),
 		editTitle: () => t('sheetmusic', 'Edit instrument inline'),
-		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for instrument {name}', { name }),
+		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for instrument {name}', { name }, { escape: false }),
 	}),
 	makeEntityCol({
 		col: 'arranger',
@@ -391,7 +391,7 @@ export const ENTITY_COLUMNS: EntityColumnDef[] = [
 		selectPlaceholder: () => t('sheetmusic', 'Select arrangers…'),
 		filterPlaceholder: () => t('sheetmusic', 'Filter by arranger…'),
 		editTitle: () => t('sheetmusic', 'Edit arranger inline'),
-		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for arranger {name}', { name }),
+		getFilterTitle: (name) => t('sheetmusic', 'Toggle filter for arranger {name}', { name }, { escape: false }),
 	}),
 ]
 

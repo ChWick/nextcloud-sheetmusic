@@ -50,7 +50,7 @@ const dialogTitle = computed(() => {
 		return t('sheetmusic', 'Song History & Revisions')
 	}
 	const title = props.songTitle.length > 40 ? props.songTitle.slice(0, 37) + '…' : props.songTitle
-	return t('sheetmusic', 'Song History & Revisions: {title}', { title })
+	return t('sheetmusic', 'Song History & Revisions: {title}', { title }, { escape: false })
 })
 
 async function fetchHistory() {
@@ -172,7 +172,7 @@ async function executeRevert() {
 		const url = generateOcsUrl('/apps/sheetmusic/api/songs/' + props.songId + '/revert/' + entry.id)
 		const response = await axios.post(url)
 		const data = response.data?.ocs?.data as LibraryData
-		showSuccess(t('sheetmusic', 'Song reverted to revision from {date}', { date: formatDate(entry.createdAt) }))
+		showSuccess(t('sheetmusic', 'Song reverted to revision from {date}', { date: formatDate(entry.createdAt) }, { escape: false }))
 		emit('reverted', data)
 		pendingRevertEntry.value = null
 		emit('update:open', false)
@@ -237,7 +237,7 @@ async function executeRevert() {
 						<div :class="$style.meta">
 							<span :class="$style.date">{{ formatDate(entry.createdAt) }}</span>
 							<span v-if="entry.userId" :class="$style.user">
-								{{ t('sheetmusic', 'by {user}', { user: entry.userId }) }}
+								{{ t('sheetmusic', 'by {user}', { user: entry.userId }, { escape: false }) }}
 							</span>
 						</div>
 
@@ -329,7 +329,7 @@ async function executeRevert() {
 							<strong>{{ t('sheetmusic', 'Attached Files') }} ({{ entry.snapshot.files.length }}):</strong>
 							<ul>
 								<li v-for="f in entry.snapshot.files" :key="f.id || f.fileId">
-									{{ t('sheetmusic', 'File ID {id}, Page Order: {order}', { id: f.fileId, order: f.pageOrder || '1' }) }}
+									{{ t('sheetmusic', 'File ID {id}, Page Order: {order}', { id: f.fileId, order: f.pageOrder || '1' }, { escape: false }) }}
 								</li>
 							</ul>
 						</div>
@@ -364,7 +364,7 @@ async function executeRevert() {
 			{{ t('sheetmusic', 'Are you sure you want to revert "{title}" to the revision from {date}?', {
 				title: songTitle || props.songTitle,
 				date: formatDate(pendingRevertEntry.createdAt),
-			}) }}
+			}, { escape: false }) }}
 		</p>
 		<p :class="$style.revertNotice">
 			{{ t('sheetmusic', 'This will restore the song details, entity links, and attached files from this revision. A new revision snapshot will be created before applying the revert.') }}

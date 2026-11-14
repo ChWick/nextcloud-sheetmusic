@@ -120,7 +120,7 @@ const matchingCount = computed(() => {
 			<div :class="$style.matchCount">
 				<MusicNote :size="16" />
 				<span v-if="matchingCount !== null">
-					{{ t('sheetmusic', '{count} matching score(s)', { count: matchingCount }) }}
+					{{ t('sheetmusic', '{count} matching score(s)', { count: matchingCount }, { escape: false }) }}
 				</span>
 				<span v-else>
 					{{ t('sheetmusic', 'Synchronized sub-library') }}

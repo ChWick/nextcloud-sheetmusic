@@ -5,7 +5,7 @@
     size="normal"
     @close="emit('close')">
     <p>
-      {{ t('sheetmusic', 'Are you sure you want to delete "{name}"?', { name: setlistName }) }}
+      {{ t('sheetmusic', 'Are you sure you want to delete "{name}"?', { name: setlistName }, { escape: false }) }}
     </p>
     <p>{{ t('sheetmusic', 'Songs and bookmarks in your library will not be deleted.') }}</p>
     <p v-if="error" :class="$style.error" role="alert">{{ error }}</p>

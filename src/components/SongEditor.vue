@@ -334,16 +334,16 @@ async function saveSong(closeAfter: boolean) {
 		const songTitle = title.value?.trim()
 		if (detachedFileCount > 0) {
 			successMessage.value = songTitle
-				? t('sheetmusic', 'Song "{title}" updated successfully. {count} file(s) detached and kept in storage.', { title: songTitle, count: detachedFileCount })
-				: t('sheetmusic', 'Song updated successfully. {count} file(s) detached and kept in storage.', { count: detachedFileCount })
+				? t('sheetmusic', 'Song "{title}" updated successfully. {count} file(s) detached and kept in storage.', { title: songTitle, count: detachedFileCount }, { escape: false })
+				: t('sheetmusic', 'Song updated successfully. {count} file(s) detached and kept in storage.', { count: detachedFileCount }, { escape: false })
 			showSuccess(successMessage.value)
 		} else {
 			successMessage.value = isNewSong.value
 				? songTitle
-					? t('sheetmusic', 'Song "{title}" created successfully.', { title: songTitle })
+					? t('sheetmusic', 'Song "{title}" created successfully.', { title: songTitle }, { escape: false })
 					: t('sheetmusic', 'Song created successfully.')
 				: songTitle
-					? t('sheetmusic', 'Song "{title}" updated successfully.', { title: songTitle })
+					? t('sheetmusic', 'Song "{title}" updated successfully.', { title: songTitle }, { escape: false })
 					: t('sheetmusic', 'Song updated successfully.')
 			showSuccess(successMessage.value)
 		}

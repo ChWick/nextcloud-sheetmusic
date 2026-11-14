@@ -154,7 +154,7 @@ watch(
 						</template>
 						{{ t('sheetmusic', 'Assign selected ({range})', {
 							range: selectedRangeText
-						}) }}
+						}, { escape: false }) }}
 					</NcButton>
 				</div>
 			</div>

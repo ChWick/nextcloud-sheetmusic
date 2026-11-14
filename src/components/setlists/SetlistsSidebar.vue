@@ -18,7 +18,7 @@
           <button
             type="button"
             :class="$style.setlistButton"
-            :title="t('sheetmusic', 'Open setlist {name}', { name: setlist.name })"
+            :title="t('sheetmusic', 'Open setlist {name}', { name: setlist.name }, { escape: false })"
             @click="emit('select', setlist)">
             <PlaylistMusic :size="20" :class="$style.setlistIcon" />
             <span :class="$style.setlistName">{{ setlist.name }}</span>

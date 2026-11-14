@@ -36,14 +36,14 @@ const emit = defineEmits<{
 				<template #icon>
 					<Restore :size="16" />
 				</template>
-				{{ t('sheetmusic', 'All Pages (1-{count})', { count: totalPages }) }}
+				{{ t('sheetmusic', 'All Pages (1-{count})', { count: totalPages }, { escape: false }) }}
 			</NcButton>
 			<NcButton
 				size="small"
 				variant="tertiary"
 				:disabled="disabled"
 				@click="emit('select', 'repeat')">
-				{{ t('sheetmusic', 'Repeat All (1-{count}, 1-{count})', { count: totalPages }) }}
+				{{ t('sheetmusic', 'Repeat All (1-{count}, 1-{count})', { count: totalPages }, { escape: false }) }}
 			</NcButton>
 			<NcButton
 				v-if="totalPages > 1"

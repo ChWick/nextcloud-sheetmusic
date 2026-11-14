@@ -51,7 +51,7 @@ const emit = defineEmits<{
 						:class="$style.select"
 						@change="emit('update:pageA', Number(($event.target as HTMLSelectElement).value))">
 						<option v-for="p in totalPages" :key="p" :value="p" :disabled="p === pageB">
-							{{ t('sheetmusic', 'Page {p}', { p }) }}
+							{{ t('sheetmusic', 'Page {p}', { p }, { escape: false }) }}
 							{{ pageCrops[p] ? `(${t('sheetmusic', 'Cropped')})` : '' }}
 						</option>
 					</select>
@@ -64,7 +64,7 @@ const emit = defineEmits<{
 						:class="$style.select"
 						@change="emit('update:pageB', Number(($event.target as HTMLSelectElement).value))">
 						<option v-for="p in totalPages" :key="p" :value="p" :disabled="p === pageA">
-							{{ t('sheetmusic', 'Page {p}', { p }) }}
+							{{ t('sheetmusic', 'Page {p}', { p }, { escape: false }) }}
 							{{ pageCrops[p] ? `(${t('sheetmusic', 'Cropped')})` : '' }}
 						</option>
 					</select>
@@ -103,7 +103,7 @@ const emit = defineEmits<{
 						{{ t('sheetmusic', 'Combined {dir}: {pct}% of standard page size.', {
 							dir: layout === 'vertical' ? t('sheetmusic', 'height') : t('sheetmusic', 'width'),
 							pct: layout === 'vertical' ? fitInfo.heightPercentage : fitInfo.widthPercentage,
-						}) }}
+						}, { escape: false }) }}
 					</div>
 				</div>
 			</div>
@@ -112,7 +112,7 @@ const emit = defineEmits<{
 				<div>
 					<strong>{{ t('sheetmusic', 'Content exceeds standard page size ({pct}%).', {
 						pct: layout === 'vertical' ? fitInfo.heightPercentage : fitInfo.widthPercentage,
-					}) }}</strong>
+					}, { escape: false }) }}</strong>
 					<div :class="$style.fitBannerSub">
 						{{ scaleToFit ? t('sheetmusic', 'Content will be scaled to fit within a single standard page.') : t('sheetmusic', 'Page canvas will expand to accommodate both pages.') }}
 					</div>
@@ -149,19 +149,19 @@ const emit = defineEmits<{
 			<div :class="$style.alignmentStatusRow">
 				<span v-if="isSizeAligned" :class="$style.statusPillSuccess" data-test="aligned-status">
 					<CheckCircle :size="14" />
-					{{ layout === 'vertical' ? t('sheetmusic', 'Widths aligned ({w} pt)', { w: scaledDimA.width }) : t('sheetmusic', 'Heights aligned ({h} pt)', { h: scaledDimA.height }) }}
+					{{ layout === 'vertical' ? t('sheetmusic', 'Widths aligned ({w} pt)', { w: scaledDimA.width }, { escape: false }) : t('sheetmusic', 'Heights aligned ({h} pt)', { h: scaledDimA.height }, { escape: false }) }}
 				</span>
 				<span v-else :class="$style.statusPillDiff" data-test="diff-status">
 					{{ layout === 'vertical'
-						? t('sheetmusic', 'Width diff: Page {pA} is {wA} pt vs Page {pB} is {wB} pt', { pA: pageA, wA: scaledDimA.width, pB: pageB, wB: scaledDimB.width })
-						: t('sheetmusic', 'Height diff: Page {pA} is {hA} pt vs Page {pB} is {hB} pt', { pA: pageA, hA: scaledDimA.height, pB: pageB, hB: scaledDimB.height }) }}
+						? t('sheetmusic', 'Width diff: Page {pA} is {wA} pt vs Page {pB} is {wB} pt', { pA: pageA, wA: scaledDimA.width, pB: pageB, wB: scaledDimB.width }, { escape: false })
+						: t('sheetmusic', 'Height diff: Page {pA} is {hA} pt vs Page {pB} is {hB} pt', { pA: pageA, hA: scaledDimA.height, pB: pageB, hB: scaledDimB.height }, { escape: false }) }}
 				</span>
 			</div>
 
 			<!-- Page A Scale Control -->
 			<div :class="$style.scaleControlRow">
 				<div :class="$style.scaleControlHeader">
-					<span :class="$style.scalePageName">{{ t('sheetmusic', 'Page {p} Size:', { p: pageA }) }}</span>
+					<span :class="$style.scalePageName">{{ t('sheetmusic', 'Page {p} Size:', { p: pageA }, { escape: false }) }}</span>
 					<span :class="$style.scaleDimInfo">{{ scaledDimA.width }} × {{ scaledDimA.height }} pt ({{ Math.round(scaleA * 100) }}%)</span>
 				</div>
 				<div :class="$style.sliderRow">
@@ -188,10 +188,10 @@ const emit = defineEmits<{
 					<button
 						type="button"
 						:class="$style.matchOtherBtn"
-						:title="t('sheetmusic', 'Scale Page {pA} to match Page {pB}', { pA: pageA, pB: pageB })"
+						:title="t('sheetmusic', 'Scale Page {pA} to match Page {pB}', { pA: pageA, pB: pageB }, { escape: false })"
 						data-test="match-b-btn"
 						@click="emit('matchPageB')">
-						{{ t('sheetmusic', 'Match p. {p}', { p: pageB }) }}
+						{{ t('sheetmusic', 'Match p. {p}', { p: pageB }, { escape: false }) }}
 					</button>
 				</div>
 			</div>
@@ -199,7 +199,7 @@ const emit = defineEmits<{
 			<!-- Page B Scale Control -->
 			<div :class="$style.scaleControlRow">
 				<div :class="$style.scaleControlHeader">
-					<span :class="$style.scalePageName">{{ t('sheetmusic', 'Page {p} Size:', { p: pageB }) }}</span>
+					<span :class="$style.scalePageName">{{ t('sheetmusic', 'Page {p} Size:', { p: pageB }, { escape: false }) }}</span>
 					<span :class="$style.scaleDimInfo">{{ scaledDimB.width }} × {{ scaledDimB.height }} pt ({{ Math.round(scaleB * 100) }}%)</span>
 				</div>
 				<div :class="$style.sliderRow">
@@ -226,10 +226,10 @@ const emit = defineEmits<{
 					<button
 						type="button"
 						:class="$style.matchOtherBtn"
-						:title="t('sheetmusic', 'Scale Page {pB} to match Page {pA}', { pA: pageA, pB: pageB })"
+						:title="t('sheetmusic', 'Scale Page {pB} to match Page {pA}', { pA: pageA, pB: pageB }, { escape: false })"
 						data-test="match-a-btn"
 						@click="emit('matchPageA')">
-						{{ t('sheetmusic', 'Match p. {p}', { p: pageA }) }}
+						{{ t('sheetmusic', 'Match p. {p}', { p: pageA }, { escape: false }) }}
 					</button>
 				</div>
 			</div>

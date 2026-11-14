@@ -45,17 +45,17 @@ const isSublibrary = computed(() => Boolean(props.sublibrary && props.sublibrary
 
 const dialogTitle = computed(() => {
 	if (isSublibrary.value && props.sublibrary) {
-		return t('sheetmusic', 'Share sub-library: {name}', { name: props.sublibrary.name })
+		return t('sheetmusic', 'Share sub-library: {name}', { name: props.sublibrary.name }, { escape: false })
 	}
 	const displayName = props.libraryName ? (props.libraryName.endsWith('.db') ? props.libraryName.substring(0, props.libraryName.lastIndexOf('/')) : props.libraryName) : ''
 	return displayName
-		? t('sheetmusic', 'Share library: {name}', { name: displayName })
+		? t('sheetmusic', 'Share library: {name}', { name: displayName }, { escape: false })
 		: t('sheetmusic', 'Share library')
 })
 
 const infoText = computed(() => {
 	if (isSublibrary.value && props.sublibrary) {
-		return t('sheetmusic', 'Shares created here grant access only to songs matching the criteria of "{name}".', { name: props.sublibrary.name })
+		return t('sheetmusic', 'Shares created here grant access only to songs matching the criteria of "{name}".', { name: props.sublibrary.name }, { escape: false })
 	}
 	return t('sheetmusic', 'Share this library with other Nextcloud users or create an external public link for MobileSheets sync.')
 })

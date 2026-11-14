@@ -338,7 +338,7 @@ function handleClose() {
 								:style="layout === 'vertical'
 									? { width: `${Math.min(100, Math.max(20, (scaledDimA.width / Math.max(scaledDimA.width, scaledDimB.width)) * 100))}%` }
 									: { height: `${Math.min(100, Math.max(20, (scaledDimA.height / Math.max(scaledDimA.height, scaledDimB.height)) * 100))}%` }">
-								<span :class="$style.slotTag">{{ t('sheetmusic', 'p. {p}', { p: pageA }) }}</span>
+								<span :class="$style.slotTag">{{ t('sheetmusic', 'p. {p}', { p: pageA }, { escape: false }) }}</span>
 								<canvas ref="canvasARef" :class="$style.previewCanvas" />
 							</div>
 
@@ -351,7 +351,7 @@ function handleClose() {
 								:style="layout === 'vertical'
 									? { width: `${Math.min(100, Math.max(20, (scaledDimB.width / Math.max(scaledDimA.width, scaledDimB.width)) * 100))}%` }
 									: { height: `${Math.min(100, Math.max(20, (scaledDimB.height / Math.max(scaledDimA.height, scaledDimB.height)) * 100))}%` }">
-								<span :class="$style.slotTag">{{ t('sheetmusic', 'p. {p}', { p: pageB }) }}</span>
+								<span :class="$style.slotTag">{{ t('sheetmusic', 'p. {p}', { p: pageB }, { escape: false }) }}</span>
 								<canvas ref="canvasBRef" :class="$style.previewCanvas" />
 							</div>
 						</div>
@@ -370,7 +370,7 @@ function handleClose() {
 
 				<NcButton
 					variant="primary"
-					:title="t('sheetmusic', 'Join pages {a} and {b} into one page', { a: pageA, b: pageB })"
+					:title="t('sheetmusic', 'Join pages {a} and {b} into one page', { a: pageA, b: pageB }, { escape: false })"
 					@click="handleJoin">
 					<template #icon>
 						<TableMergeCells :size="18" />

@@ -166,8 +166,8 @@ function onScalarInput(field: SongScalarFieldDef, raw: string | number) {
 				<NcButton
 					variant="tertiary"
 					type="button"
-					:title="t('sheetmusic', 'Use Song A {field}', { field: col.pluralLabel() })"
-					:aria-label="t('sheetmusic', 'Use Song A {field}', { field: col.pluralLabel() })"
+					:title="t('sheetmusic', 'Use Song A {field}', { field: col.pluralLabel() }, { escape: false })"
+					:aria-label="t('sheetmusic', 'Use Song A {field}', { field: col.pluralLabel() }, { escape: false })"
 					:data-test="`copy-from-a-${col.songProp}`"
 					@click="emit('copyField', col.songProp, 'A')">
 					<template #icon><ArrowRightIcon :size="16" /></template>
@@ -188,8 +188,8 @@ function onScalarInput(field: SongScalarFieldDef, raw: string | number) {
 				<NcButton
 					variant="tertiary"
 					type="button"
-					:title="t('sheetmusic', 'Use Song B {field}', { field: col.pluralLabel() })"
-					:aria-label="t('sheetmusic', 'Use Song B {field}', { field: col.pluralLabel() })"
+					:title="t('sheetmusic', 'Use Song B {field}', { field: col.pluralLabel() }, { escape: false })"
+					:aria-label="t('sheetmusic', 'Use Song B {field}', { field: col.pluralLabel() }, { escape: false })"
 					:data-test="`copy-from-b-${col.songProp}`"
 					@click="emit('copyField', col.songProp, 'B')">
 					<template #icon><ArrowLeftIcon :size="16" /></template>
@@ -211,8 +211,8 @@ function onScalarInput(field: SongScalarFieldDef, raw: string | number) {
 				<NcButton
 					variant="tertiary"
 					type="button"
-					:title="t('sheetmusic', 'Use Song A {field}', { field: field.label() })"
-					:aria-label="t('sheetmusic', 'Use Song A {field}', { field: field.label() })"
+					:title="t('sheetmusic', 'Use Song A {field}', { field: field.label() }, { escape: false })"
+					:aria-label="t('sheetmusic', 'Use Song A {field}', { field: field.label() }, { escape: false })"
 					:data-test="`copy-from-a-${field.key}`"
 					@click="emit('copyField', field.key, 'A')">
 					<template #icon><ArrowRightIcon :size="16" /></template>
@@ -233,8 +233,8 @@ function onScalarInput(field: SongScalarFieldDef, raw: string | number) {
 				<NcButton
 					variant="tertiary"
 					type="button"
-					:title="t('sheetmusic', 'Use Song B {field}', { field: field.label() })"
-					:aria-label="t('sheetmusic', 'Use Song B {field}', { field: field.label() })"
+					:title="t('sheetmusic', 'Use Song B {field}', { field: field.label() }, { escape: false })"
+					:aria-label="t('sheetmusic', 'Use Song B {field}', { field: field.label() }, { escape: false })"
 					:data-test="`copy-from-b-${field.key}`"
 					@click="emit('copyField', field.key, 'B')">
 					<template #icon><ArrowLeftIcon :size="16" /></template>
@@ -265,7 +265,7 @@ function onScalarInput(field: SongScalarFieldDef, raw: string | number) {
 		<div :class="$style.cellMerged">
 			<div :class="$style.filesNotice">
 				<strong>{{ t('sheetmusic', 'Attached Files Policy') }}</strong>
-				<p>{{ t('sheetmusic', 'All files from both songs will be attached to Song ID {id}. Duplicate files are merged automatically.', { id: String(keepId) }) }}</p>
+				<p>{{ t('sheetmusic', 'All files from both songs will be attached to Song ID {id}. Duplicate files are merged automatically.', { id: String(keepId) }, { escape: false }) }}</p>
 			</div>
 		</div>
 		<div :class="$style.cellB">

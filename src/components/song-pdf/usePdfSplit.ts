@@ -131,7 +131,7 @@ export function usePdfSplit(options: {
 					start: seg.startPage,
 					end: seg.endPage,
 					title: seg.title,
-				})
+				}, { escape: false })
 				setErrorMessage(msg)
 				showError(msg)
 				return
@@ -171,7 +171,7 @@ export function usePdfSplit(options: {
 						current: currentSegNum,
 						total: totalSegments,
 						title: seg.title.trim(),
-					}),
+					}, { escape: false }),
 					currentSegNum,
 					totalSegments,
 				)
@@ -209,7 +209,7 @@ export function usePdfSplit(options: {
 				const newSongId = createdData.createdSongId ?? createdData.id
 
 				if (!newSongId) {
-					throw new Error(t('sheetmusic', 'Failed to retrieve ID for created split song: {title}', { title: seg.title }))
+					throw new Error(t('sheetmusic', 'Failed to retrieve ID for created split song: {title}', { title: seg.title }, { escape: false }))
 				}
 
 				if (firstCreatedSongId === undefined) {
@@ -223,7 +223,7 @@ export function usePdfSplit(options: {
 						current: currentSegNum,
 						total: totalSegments,
 						title: seg.title.trim(),
-					}),
+					}, { escape: false }),
 					currentSegNum,
 					totalSegments,
 				)
@@ -254,7 +254,7 @@ export function usePdfSplit(options: {
 				showSuccess(t('sheetmusic', 'Successfully split "{title}" into {count} songs and deleted original song.', {
 					title: currentSong.title,
 					count: splitSegments.value.length,
-				}))
+				}, { escape: false }))
 				if (lastLibraryData) {
 					onSaved(lastLibraryData, targetOpenSongId)
 				} else {
@@ -273,7 +273,7 @@ export function usePdfSplit(options: {
 			showSuccess(t('sheetmusic', 'Successfully split "{title}" into {count} songs.', {
 				title: currentSong.title,
 				count: splitSegments.value.length,
-			}))
+			}, { escape: false }))
 			if (lastLibraryData) {
 				onSaved(lastLibraryData, targetOpenSongId)
 			} else {
@@ -282,7 +282,7 @@ export function usePdfSplit(options: {
 		} catch (err: any) {
 			console.error('Failed to split PDF:', err)
 			const detail = describeRequestFailure(err, err?.message ?? String(err))
-			const msg = t('sheetmusic', 'Failed to split PDF: {error}', { error: detail })
+			const msg = t('sheetmusic', 'Failed to split PDF: {error}', { error: detail }, { escape: false })
 			setErrorMessage(msg)
 			showError(msg)
 		} finally {

@@ -69,7 +69,7 @@ async function restoreSong(song: DeletedSong) {
 		const response = await axios.post(url)
 		const data = response.data?.ocs?.data as LibraryData
 		deletedSongs.value = deletedSongs.value.filter((s) => s.id !== song.id)
-		showSuccess(t('sheetmusic', 'Song "{title}" restored successfully', { title: song.title }))
+		showSuccess(t('sheetmusic', 'Song "{title}" restored successfully', { title: song.title }, { escape: false }))
 		emit('restored', data)
 	} catch (e: any) {
 		showError(e?.response?.data?.ocs?.data?.error || t('sheetmusic', 'Failed to restore song'))

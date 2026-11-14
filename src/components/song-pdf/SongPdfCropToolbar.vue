@@ -51,7 +51,7 @@ const emit = defineEmits<{
 				</template>
 			</NcButton>
 			<span :class="$style.pageIndicator">
-				{{ t('sheetmusic', 'Page {page} of {total}', { page: pageNum, total: totalPages }) }}
+				{{ t('sheetmusic', 'Page {page} of {total}', { page: pageNum, total: totalPages }, { escape: false }) }}
 			</span>
 			<NcButton
 				size="small"
