@@ -357,11 +357,12 @@ onBeforeUnmount(() => {
 	flex: 1 0 auto;
 }
 
-.segmentInput {
-	width: 2.8em;
-	min-width: 2.8em;
+.segments .segmentInput {
+	width: 3.2em;
+	min-width: 3.2em;
 	box-sizing: border-box;
-	padding: 4px;
+	margin: 0;
+	padding: 4px 2px;
 	border: 1px solid transparent;
 	border-radius: var(--border-radius, 4px);
 	background: transparent;
@@ -370,10 +371,11 @@ onBeforeUnmount(() => {
 	font-size: 0.95rem;
 	font-variant-numeric: tabular-nums;
 	text-align: center;
+	text-overflow: clip;
 }
 
-.segmentInput:hover,
-.segmentInput:focus {
+.segments .segmentInput:hover,
+.segments .segmentInput:focus {
 	background: var(--color-background-hover);
 	outline: none;
 }
