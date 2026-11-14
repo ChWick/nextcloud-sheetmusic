@@ -83,7 +83,7 @@ class FileMetadataSyncer {
 		}
 
 		try {
-			$content = $node->getContent();
+			$content = MobileSheetsFileFacts::readFileContent($node);
 		} catch (\Throwable $exception) {
 			throw new SyncException(
 				MobileSheetsFileLogEntry::CODE_METADATA_UNREADABLE,

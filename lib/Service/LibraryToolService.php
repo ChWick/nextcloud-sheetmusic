@@ -14,6 +14,7 @@ use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongHistory;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsFileFacts;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPathResolver;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdf;
 use OCP\Files\File;
@@ -319,7 +320,7 @@ class LibraryToolService {
 						$node = $nodes[0];
 					} else {
 						$rootNodes = $this->rootFolder->getById($fileId);
-						if (!empty($rootNodes) && $rootNodes[0] instanceof File) {
+						if (!empty($rootNodes) && $rootNodes[0] instanceof File && !str_starts_with($rootNodes[0]->getInternalPath(), 'files_trashbin/')) {
 							$node = $rootNodes[0];
 						}
 					}
@@ -358,8 +359,8 @@ class LibraryToolService {
 
 			// 3. Extract actual page count from physical PDF content
 			if ($node instanceof File) {
-				$content = $node->getContent();
-				if (is_string($content) && $content !== '') {
+				$content = MobileSheetsFileFacts::readFileContent($node);
+				if ($content !== '') {
 					$detected = MobileSheetsPdf::pageCount($content);
 					if ($detected > 0) {
 						$actual = $detected;

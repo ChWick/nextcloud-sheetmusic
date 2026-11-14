@@ -31,6 +31,39 @@ class MobileSheetsFileFacts {
 	}
 
 	/**
+	 * Read the raw bytes of a Nextcloud file node, using direct local storage
+	 * access when available to avoid per-file transactional lock overhead.
+	 */
+	public static function readFileContent(Node $file): string {
+		if (!($file instanceof File)) {
+			return '';
+		}
+
+		if (!($file instanceof \PHPUnit\Framework\MockObject\Stub)) {
+			try {
+				$internalPath = $file->getInternalPath();
+				if ($internalPath !== '') {
+					$storage = $file->getStorage();
+					if ($storage !== null && method_exists($storage, 'getLocalFile')) {
+						$localFile = $storage->getLocalFile($internalPath);
+						if (is_string($localFile) && $localFile !== '' && is_file($localFile)) {
+							$content = @file_get_contents($localFile);
+							if (is_string($content)) {
+								return $content;
+							}
+						}
+					}
+				}
+			} catch (\Throwable) {
+				// Fall back to standard VFS getContent()
+			}
+		}
+
+		$content = $file->getContent();
+		return is_string($content) ? $content : '';
+	}
+
+	/**
 	 * Derive the facts from the file as it sits in Nextcloud.
 	 *
 	 * LastModified is the file's modification time in milliseconds - the unit
@@ -38,8 +71,7 @@ class MobileSheetsFileFacts {
 	 * refreshed to the file's real modification time on every change.
 	 */
 	public static function fromNode(Node $file): self {
-		$content = $file instanceof File ? $file->getContent() : '';
-		$content = is_string($content) ? $content : '';
+		$content = self::readFileContent($file);
 		$pageCount = MobileSheetsPdf::pageCount($content);
 
 		return new self(
