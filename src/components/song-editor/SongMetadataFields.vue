@@ -4,6 +4,7 @@ import { translate as t } from '@nextcloud/l10n'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import { computed, type Ref } from 'vue'
+import DurationInput from './DurationInput.vue'
 import {
 	ENTITY_COLUMNS,
 	SONG_SCALAR_FIELDS,
@@ -168,7 +169,13 @@ function onScalarInput(field: SongScalarFieldDef, raw: string | number) {
 
 		<div :class="$style.attributesGrid">
 			<div v-for="field in SONG_SCALAR_FIELDS" :key="field.key" :class="$style.formGroup">
+				<DurationInput
+					v-if="field.key === 'duration'"
+					:id="field.editorInputId"
+					v-model="duration"
+					:label="t('sheetmusic', 'Duration (hh:mm:ss)')" />
 				<NcTextField
+					v-else
 					:id="field.editorInputId"
 					:value="getScalarModelValue(field)"
 					:model-value="getScalarModelValue(field)"
