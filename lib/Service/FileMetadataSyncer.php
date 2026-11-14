@@ -11,6 +11,7 @@ namespace OCA\SheetMusic\Service;
 
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
+use OCA\SheetMusic\Listener\SheetMusicFileEventListener;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsFile;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsFileFacts;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsFileLogEntry;
@@ -110,9 +111,10 @@ class FileMetadataSyncer {
 		}
 
 		try {
-			$node->putContent(
-				MobileSheetsPdfMetadata::withInfo($content, MobileSheetsPdfMetadata::fieldsFor($song)),
-			);
+			$updatedContent = MobileSheetsPdfMetadata::withInfo($content, MobileSheetsPdfMetadata::fieldsFor($song));
+			SheetMusicFileEventListener::runWithoutListener(static function () use ($node, $updatedContent): void {
+				$node->putContent($updatedContent);
+			});
 		} catch (\Throwable $exception) {
 			throw new SyncException(
 				MobileSheetsFileLogEntry::CODE_METADATA_WRITE_FAILED,
@@ -124,7 +126,11 @@ class FileMetadataSyncer {
 		try {
 			// The bytes changed, so the hash, size and timestamp stored for
 			// the file have to follow them - everywhere they are kept.
-			$facts = MobileSheetsFileFacts::fromNode($node);
+			$facts = MobileSheetsFileFacts::fromContent(
+				$updatedContent,
+				(int)$node->getMTime() * 1000,
+				$file->pageCount > 0 ? $file->pageCount : null,
+			);
 			$sqliteFileId = $file->id;
 			$internalSongFile = null;
 			if ($this->internalSongFileMapper !== null) {

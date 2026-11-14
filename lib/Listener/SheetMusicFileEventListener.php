@@ -32,6 +32,25 @@ use Psr\Log\LoggerInterface;
  * @template-implements IEventListener<NodeCreatedEvent|NodeRenamedEvent|NodeDeletedEvent|NodeWrittenEvent>
  */
 class SheetMusicFileEventListener implements IEventListener {
+	private static int $suppressionDepth = 0;
+
+	/**
+	 * Execute a callback while suppressing SheetMusicFileEventListener handling,
+	 * used when SheetMusic services perform internal file writes and update DB records directly.
+	 *
+	 * @template T
+	 * @param callable(): T $callback
+	 * @return T
+	 */
+	public static function runWithoutListener(callable $callback): mixed {
+		self::$suppressionDepth++;
+		try {
+			return $callback();
+		} finally {
+			self::$suppressionDepth = max(0, self::$suppressionDepth - 1);
+		}
+	}
+
 	public function __construct(
 		private LibraryMapper $libraryMapper,
 		private InternalSongMapper $songMapper,
@@ -43,6 +62,9 @@ class SheetMusicFileEventListener implements IEventListener {
 	}
 
 	public function handle(Event $event): void {
+		if (self::$suppressionDepth > 0) {
+			return;
+		}
 		match (true) {
 			$event instanceof NodeCreatedEvent => $this->onNodeCreated($event->getNode()),
 			$event instanceof NodeRenamedEvent => $this->onNodeRenamed($event->getSource(), $event->getTarget()),

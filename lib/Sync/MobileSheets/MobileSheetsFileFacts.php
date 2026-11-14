@@ -64,6 +64,23 @@ class MobileSheetsFileFacts {
 	}
 
 	/**
+	 * Derive the facts from in-memory file bytes and a modification timestamp in milliseconds.
+	 */
+	public static function fromContent(string $content, int $lastModified, ?int $knownPageCount = null): self {
+		$pageCount = $knownPageCount !== null && $knownPageCount > 0
+			? $knownPageCount
+			: MobileSheetsPdf::pageCount($content);
+
+		return new self(
+			fileHash: MobileSheetsPdf::contentHash($content),
+			fileSize: strlen($content),
+			lastModified: $lastModified,
+			sourceFilePageCount: $pageCount,
+			pageOrder: MobileSheetsPdf::pageOrder($pageCount),
+		);
+	}
+
+	/**
 	 * Derive the facts from the file as it sits in Nextcloud.
 	 *
 	 * LastModified is the file's modification time in milliseconds - the unit
@@ -72,14 +89,6 @@ class MobileSheetsFileFacts {
 	 */
 	public static function fromNode(Node $file): self {
 		$content = self::readFileContent($file);
-		$pageCount = MobileSheetsPdf::pageCount($content);
-
-		return new self(
-			fileHash: MobileSheetsPdf::contentHash($content),
-			fileSize: strlen($content),
-			lastModified: (int)$file->getMTime() * 1000,
-			sourceFilePageCount: $pageCount,
-			pageOrder: MobileSheetsPdf::pageOrder($pageCount),
-		);
+		return self::fromContent($content, (int)$file->getMTime() * 1000);
 	}
 }
