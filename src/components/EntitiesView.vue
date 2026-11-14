@@ -88,7 +88,7 @@
               </NcButton>
               <NcButton
                 size="small"
-                :class="$style.mergeButton"
+                :class="$style.actionButton"
                 :aria-label="t('sheetmusic', 'Merge {entity}', { entity: config.singular }, { escape: false })"
                 :title="t('sheetmusic', 'Merge {entity}', { entity: config.singular }, { escape: false })"
                 @click="openMergeDialog(entity)">
@@ -187,6 +187,7 @@ import EntityMergeDialog from './EntityMergeDialog.vue'
 import { ENTITY_COLUMNS, type SongEntityProp } from './songs/song-view-columns'
 import { useLibraryData } from '../composables/useLibraryData'
 import { apiDelete, apiPost } from '../api/client'
+import { describeRequestFailure } from '../utils/api'
 import { showError, showSuccess } from '@nextcloud/dialogs'
 import { normalizeSearchString } from '../utils/string'
 
@@ -415,9 +416,7 @@ async function createEntity() {
   createError.value = ''
   try {
     const postEndpoint = config.value.createEndpoint
-    const body = config.value.nameKey === 'title'
-      ? { libraryId: props.selectedLibrary, title: name }
-      : { libraryId: props.selectedLibrary, name }
+    const body = { libraryId: props.selectedLibrary, [config.value.nameKey]: name }
 
     await apiPost(postEndpoint as any, body as any)
     closeCreateDialog()
@@ -454,7 +453,7 @@ async function deleteEntity() {
   isDeleting.value = true
   deleteError.value = ''
   try {
-    const entityName = (entity as any).name ?? (entity as any).title ?? ''
+    const entityName = entityLabel(entity)
     const deleteEndpoint = config.value.deleteEndpoint
     const response = await apiDelete(deleteEndpoint as any, {
       pathParams: { id: entity.id },
@@ -520,9 +519,8 @@ async function saveEditEntity(entity: FilterEntity) {
     handleLibraryDataUpdate((response.data?.ocs?.data ?? null) as LibraryData | null)
     showSuccess(t('sheetmusic', 'Updated "{name}".', { name: nextName }, { escape: false }))
     cancelEditEntity()
-  } catch (e: any) {
-    const msg = e?.response?.data?.ocs?.data?.error || t('sheetmusic', 'Could not update {entity}.', { entity: config.value.singular }, { escape: false })
-    showError(msg)
+  } catch (e: unknown) {
+    showError(describeRequestFailure(e, t('sheetmusic', 'Could not update {entity}.', { entity: config.value.singular }, { escape: false })))
   } finally {
     isUpdatingEntity.value = false
   }
@@ -575,9 +573,6 @@ function handleEntityMerged(newLibraryData?: LibraryData) {
 .entityList > li:not(.entityRow) {
   grid-column: 1 / -1;
 }
-.entityList > li:not(.entityRow) {
-  grid-column: 1 / -1;
-}
 .entityButton {
   flex: 1;
   padding: 10px 0;
@@ -610,7 +605,6 @@ function handleEntityMerged(newLibraryData?: LibraryData) {
   align-items: center;
   gap: 4px;
 }
-.mergeButton,
 .deleteButton,
 .actionButton {
   flex-shrink: 0;

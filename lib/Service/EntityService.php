@@ -30,11 +30,10 @@ class EntityService {
 			return null;
 		}
 
-		if (!$this->libraryService->canWriteLibrary($user->getUID(), $libraryId)) {
+		$targetLibraryId = $this->resolveWritableLibraryId($user, $libraryId);
+		if ($targetLibraryId === null) {
 			return null;
 		}
-
-		$targetLibraryId = $this->libraryService->getTargetLibraryId($libraryId);
 
 		try {
 			$normType = InternalEntityMapper::normalizeType($entityType);
@@ -79,11 +78,10 @@ class EntityService {
 			return null;
 		}
 
-		if (!$this->libraryService->canWriteLibrary($user->getUID(), $libraryId)) {
+		$targetLibraryId = $this->resolveWritableLibraryId($user, $libraryId);
+		if ($targetLibraryId === null) {
 			return null;
 		}
-
-		$targetLibraryId = $this->libraryService->getTargetLibraryId($libraryId);
 
 		try {
 			$normType = InternalEntityMapper::normalizeType($entityType);
@@ -126,11 +124,10 @@ class EntityService {
 	 * @param 'composers'|'books'|'collections'|'artists'|'genres'|'keys'|'customgroups'|'years'|'signatures'|'sourcetypes'|'instruments'|'arrangers' $entityType
 	 */
 	public function deleteEntity(IUser $user, int $libraryId, string $entityType, int $id): ?LibraryData {
-		if (!$this->libraryService->canWriteLibrary($user->getUID(), $libraryId)) {
+		$targetLibraryId = $this->resolveWritableLibraryId($user, $libraryId);
+		if ($targetLibraryId === null) {
 			return null;
 		}
-
-		$targetLibraryId = $this->libraryService->getTargetLibraryId($libraryId);
 
 		try {
 			if (!$this->internalEntityMapper->delete($id)) {
@@ -162,11 +159,10 @@ class EntityService {
 			return null;
 		}
 
-		if (!$this->libraryService->canWriteLibrary($user->getUID(), $libraryId)) {
+		$targetLibraryId = $this->resolveWritableLibraryId($user, $libraryId);
+		if ($targetLibraryId === null) {
 			return null;
 		}
-
-		$targetLibraryId = $this->libraryService->getTargetLibraryId($libraryId);
 
 		try {
 			$normType = InternalEntityMapper::normalizeType($entityType);
@@ -191,6 +187,13 @@ class EntityService {
 			]);
 			throw $e;
 		}
+	}
+
+	private function resolveWritableLibraryId(IUser $user, int $libraryId): ?int {
+		if (!$this->libraryService->canWriteLibrary($user->getUID(), $libraryId)) {
+			return null;
+		}
+		return $this->libraryService->getTargetLibraryId($libraryId);
 	}
 
 	private function getLibraryDataForResponse(IUser $user, int $libraryId, int $targetLibraryId): ?LibraryData {

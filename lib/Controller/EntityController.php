@@ -184,12 +184,7 @@ class EntityController extends OCSController {
 			return new DataResponse(['error' => 'Missing or invalid parameters.'], Http::STATUS_BAD_REQUEST);
 		}
 
-		$user = $this->userSession->getUser();
-		if ($user === null) {
-			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
-		}
-
-		try {
+		return $this->runWithUser(function ($user) use ($libraryId, $entityType, $id, $value): DataResponse {
 			$result = $this->entityService->updateEntity($user, $libraryId, $entityType, $id, $value);
 			if (is_array($result) && isset($result['error'])) {
 				return new DataResponse(['error' => $result['error']], Http::STATUS_CONFLICT);
@@ -199,9 +194,7 @@ class EntityController extends OCSController {
 			}
 
 			return new DataResponse($result, Http::STATUS_OK);
-		} catch (\Throwable $e) {
-			return new DataResponse(['error' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
-		}
+		});
 	}
 
 	#[NoAdminRequired]
@@ -213,7 +206,7 @@ class EntityController extends OCSController {
 		mixed $duplicateIds = null,
 	): DataResponse {
 		$libraryId = $libraryId ?? (int)$this->request->getParam('libraryId', 0);
-		$entityType = $entityType ?? (string)$this->request->getParam('entityType', '');
+		$entityType = $this->resolveParam($entityType, 'entityType');
 		$keepId = $keepId ?? (int)$this->request->getParam('keepId', 0);
 		$rawDuplicates = $duplicateIds ?? $this->request->getParam('duplicateIds', []);
 
@@ -229,18 +222,27 @@ class EntityController extends OCSController {
 			return new DataResponse(['error' => 'Missing or invalid parameters.'], Http::STATUS_BAD_REQUEST);
 		}
 
-		$user = $this->userSession->getUser();
-		if ($user === null) {
-			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
-		}
-
-		try {
+		return $this->runWithUser(function ($user) use ($libraryId, $entityType, $keepId, $duplicateIdsList): DataResponse {
 			$result = $this->entityService->mergeEntities($user, $libraryId, $entityType, $keepId, $duplicateIdsList);
 			if ($result === null) {
 				return new DataResponse(['error' => 'Entity not found or could not be merged.'], Http::STATUS_NOT_FOUND);
 			}
 
 			return new DataResponse($result, Http::STATUS_OK);
+		});
+	}
+
+	/**
+	 * @param callable(\OCP\IUser): DataResponse $action
+	 */
+	private function runWithUser(callable $action): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		try {
+			return $action($user);
 		} catch (\Throwable $e) {
 			return new DataResponse(['error' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
