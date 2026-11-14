@@ -329,6 +329,8 @@ onBeforeUnmount(() => {
 	display: flex;
 	align-items: center;
 	gap: 6px;
+	width: 100%;
+	min-width: max-content;
 	height: 44px;
 	padding: 0 8px 0 10px;
 	background: var(--color-main-background);
@@ -352,13 +354,12 @@ onBeforeUnmount(() => {
 	display: flex;
 	align-items: center;
 	gap: 2px;
-	flex: 1;
-	min-width: 0;
+	flex: 1 0 auto;
 }
 
 .segmentInput {
-	width: 3.2em;
-	min-width: 3.2em;
+	width: 2.8em;
+	min-width: 2.8em;
 	box-sizing: border-box;
 	padding: 4px;
 	border: 1px solid transparent;
