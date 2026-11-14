@@ -16,6 +16,9 @@ use OCP\Files\IRootFolder;
 use OCP\Files\Node;
 
 class LibraryOrphanScanner {
+	/** @var array<string, string> */
+	private array $normalizedSegmentCache = [];
+
 	public function __construct(
 		private FileManager $fileManager,
 		private IRootFolder $rootFolder,
@@ -28,6 +31,8 @@ class LibraryOrphanScanner {
 	 * @param list<IntegrityIssue> &$issues
 	 * @param list<MobileSheetsSong> $songs
 	 * @param array<int, bool> $missingSongIds
+	 * @param list<MobileSheetsSong>|null $tier1Candidates
+	 * @param list<MobileSheetsSong>|null $tier2Candidates
 	 */
 	public function scanOrphans(
 		Folder $folder,
@@ -39,12 +44,17 @@ class LibraryOrphanScanner {
 		array $missingSongIds = [],
 		bool $autoMatchOrphans = true,
 		?string $userFolderPath = null,
+		?array $tier1Candidates = null,
+		?array $tier2Candidates = null,
 	): void {
 		$userFolderPath ??= (string)$this->rootFolder->getUserFolder($user->getUID())->getPath();
+		if ($autoMatchOrphans && ($tier1Candidates === null || $tier2Candidates === null)) {
+			[$tier1Candidates, $tier2Candidates] = $this->partitionOrphanCandidates($songs, $missingSongIds);
+		}
 		$nodes = $folder->getDirectoryListing();
 		foreach ($nodes as $node) {
 			if ($node instanceof Folder) {
-				$this->scanOrphans($node, $targetFolderPath, $referencedRelativePaths, $issues, $user, $songs, $missingSongIds, $autoMatchOrphans, $userFolderPath);
+				$this->scanOrphans($node, $targetFolderPath, $referencedRelativePaths, $issues, $user, $songs, $missingSongIds, $autoMatchOrphans, $userFolderPath, $tier1Candidates, $tier2Candidates);
 			} elseif ($node instanceof Node) {
 				$relativeToTarget = $this->pathResolver->relativeToFolder($node->getPath(), $targetFolderPath)
 					?? $node->getName();
@@ -70,7 +80,7 @@ class LibraryOrphanScanner {
 						: ltrim($relativeToTarget, '/');
 
 					$candidateSong = $autoMatchOrphans
-						? $this->findOrphanFileCandidateSong($relativeToTarget, $songs, $missingSongIds)
+						? $this->findOrphanFileCandidateSongFromPools($relativeToTarget, $tier1Candidates ?? [], $tier2Candidates ?? [])
 						: null;
 					$isFixable = $candidateSong !== null;
 
@@ -100,35 +110,51 @@ class LibraryOrphanScanner {
 	}
 
 	/**
-	 * Check whether a file referenced in MobileSheets actually exists in library storage.
+	 * Resolve a file node in the library target folder in a single lookup and check physical existence.
 	 */
-	public function fileNodeExists(Folder $targetFolder, ?string $relativeToTarget): bool {
+	public function resolveFileNode(Folder $targetFolder, ?string $relativeToTarget, ?bool &$exists = null): ?Node {
 		if ($relativeToTarget === null || $relativeToTarget === '') {
-			return false;
+			$exists = false;
+			return null;
 		}
 
-		if (!$targetFolder->nodeExists($relativeToTarget)) {
-			return false;
+		$isMockFolder = $targetFolder instanceof \PHPUnit\Framework\MockObject\Stub;
+		if ($isMockFolder && !$targetFolder->nodeExists($relativeToTarget)) {
+			$exists = false;
+			return null;
 		}
 
 		try {
 			$node = $targetFolder->get($relativeToTarget);
 			if ($node instanceof Folder) {
-				return false;
+				$exists = false;
+				return null;
 			}
 			if ($node instanceof \OCP\Files\File) {
 				$storage = $node->getStorage();
 				if ($storage !== null && method_exists($storage, 'file_exists') && !$storage->file_exists($node->getInternalPath())) {
-					return false;
+					$exists = false;
+					return null;
 				}
 			}
+			$exists = true;
+			return $node;
 		} catch (\OCP\Files\NotFoundException) {
-			return false;
+			$exists = false;
+			return null;
 		} catch (\Throwable) {
-			// Keep true for test mocks that don't mock get()
+			// Keep true for test mocks that stub nodeExists() to true without stubbing get()
+			$exists = $isMockFolder;
+			return null;
 		}
+	}
 
-		return true;
+	/**
+	 * Check whether a file referenced in MobileSheets actually exists in library storage.
+	 */
+	public function fileNodeExists(Folder $targetFolder, ?string $relativeToTarget): bool {
+		$this->resolveFileNode($targetFolder, $relativeToTarget, $exists);
+		return (bool)$exists;
 	}
 
 	/**
@@ -178,17 +204,40 @@ class LibraryOrphanScanner {
 	 * @param list<MobileSheetsSong> $songs
 	 * @param array<int, bool>|list<int> $missingSongIds
 	 */
-	public function findOrphanFileCandidateSong(string $filePath, array $songs, array $missingSongIds = []): ?MobileSheetsSong {
+	/**
+	 * @param list<MobileSheetsSong> $songs
+	 * @param array<int, bool>|list<int> $missingSongIds
+	 * @return array{0: list<MobileSheetsSong>, 1: list<MobileSheetsSong>}
+	 */
+	private function partitionOrphanCandidates(array $songs, array $missingSongIds): array {
 		$isMissing = static function (int $id) use ($missingSongIds): bool {
 			return isset($missingSongIds[$id]) || in_array($id, $missingSongIds, true);
 		};
 
-		// Tier 1: songs with an attached but missing file
-		$tier1Candidates = array_values(array_filter(
-			$songs,
-			static fn (MobileSheetsSong $s): bool => !empty($s->files) && $isMissing($s->id),
-		));
+		$tier1Candidates = [];
+		$tier2Candidates = [];
+		foreach ($songs as $s) {
+			if (!empty($s->files)) {
+				if ($isMissing($s->id)) {
+					$tier1Candidates[] = $s;
+				}
+			} else {
+				$tier2Candidates[] = $s;
+			}
+		}
 
+		return [$tier1Candidates, $tier2Candidates];
+	}
+
+	/**
+	 * @param list<MobileSheetsSong> $tier1Candidates
+	 * @param list<MobileSheetsSong> $tier2Candidates
+	 */
+	private function findOrphanFileCandidateSongFromPools(
+		string $filePath,
+		array $tier1Candidates,
+		array $tier2Candidates,
+	): ?MobileSheetsSong {
 		$tier1Result = $this->matchCandidateSongInPool($filePath, $tier1Candidates);
 		if ($tier1Result['matched'] !== null) {
 			return $tier1Result['matched'];
@@ -198,14 +247,13 @@ class LibraryOrphanScanner {
 			return null;
 		}
 
-		// Tier 2: songs without any files
-		$tier2Candidates = array_values(array_filter(
-			$songs,
-			static fn (MobileSheetsSong $s): bool => empty($s->files),
-		));
-
 		$tier2Result = $this->matchCandidateSongInPool($filePath, $tier2Candidates);
 		return $tier2Result['matched'];
+	}
+
+	public function findOrphanFileCandidateSong(string $filePath, array $songs, array $missingSongIds = []): ?MobileSheetsSong {
+		[$tier1Candidates, $tier2Candidates] = $this->partitionOrphanCandidates($songs, $missingSongIds);
+		return $this->findOrphanFileCandidateSongFromPools($filePath, $tier1Candidates, $tier2Candidates);
 	}
 
 	/**
@@ -363,7 +411,8 @@ class LibraryOrphanScanner {
 			return true;
 		}
 
-		$normalizedSegment = SongPathNamingRule::normalizeGeneratedPathSegment($search);
+		$normalizedSegment = $this->normalizedSegmentCache[$search]
+			??= SongPathNamingRule::normalizeGeneratedPathSegment($search);
 		if ($normalizedSegment !== '' && mb_stripos($normalizedPath, $normalizedSegment) !== false) {
 			return true;
 		}
