@@ -357,8 +357,10 @@ onBeforeUnmount(() => {
 }
 
 .segmentInput {
-	width: 2.2em;
-	padding: 4px 2px;
+	width: 3.2em;
+	min-width: 3.2em;
+	box-sizing: border-box;
+	padding: 4px;
 	border: 1px solid transparent;
 	border-radius: var(--border-radius, 4px);
 	background: transparent;
