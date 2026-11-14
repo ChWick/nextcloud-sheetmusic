@@ -3,9 +3,42 @@ import { translate as t } from '@nextcloud/l10n'
 import ChevronDownIcon from 'vue-material-design-icons/ChevronDown.vue'
 import ClockOutlineIcon from 'vue-material-design-icons/ClockOutline.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { splitDurationHms } from '../../utils/song-formatter'
 
 type Segment = 'hours' | 'minutes' | 'seconds'
+
+const SEGMENTS: Segment[] = ['hours', 'minutes', 'seconds']
+
+const SEGMENT_CONFIG: Record<Segment, {
+	max: number
+	label: () => string
+	header: () => string
+	dataTest: string
+	pickPrefix: string
+}> = {
+	hours: {
+		max: 99,
+		label: () => t('sheetmusic', 'Hours'),
+		header: () => t('sheetmusic', 'HH'),
+		dataTest: 'duration-hours',
+		pickPrefix: 'duration-pick-hours',
+	},
+	minutes: {
+		max: 59,
+		label: () => t('sheetmusic', 'Minutes'),
+		header: () => t('sheetmusic', 'MM'),
+		dataTest: 'duration-minutes',
+		pickPrefix: 'duration-pick-minutes',
+	},
+	seconds: {
+		max: 59,
+		label: () => t('sheetmusic', 'Seconds'),
+		header: () => t('sheetmusic', 'SS'),
+		dataTest: 'duration-seconds',
+		pickPrefix: 'duration-pick-seconds',
+	},
+}
 
 const props = withDefaults(defineProps<{
 	modelValue: number | null
@@ -25,36 +58,56 @@ const emit = defineEmits<{
 const rootRef = ref<HTMLElement | null>(null)
 const controlRef = ref<HTMLElement | null>(null)
 const popoverRef = ref<HTMLElement | null>(null)
-const hoursRef = ref<HTMLInputElement | null>(null)
-const minutesRef = ref<HTMLInputElement | null>(null)
-const secondsRef = ref<HTMLInputElement | null>(null)
+const segmentRefs = reactive<Record<Segment, HTMLInputElement | null>>({
+	hours: null,
+	minutes: null,
+	seconds: null,
+})
 
 const totalSeconds = computed(() => (props.modelValue && props.modelValue > 0 ? Math.round(props.modelValue) : 0))
-const hours = computed(() => Math.floor(totalSeconds.value / 3600))
-const minutes = computed(() => Math.floor((totalSeconds.value % 3600) / 60))
-const seconds = computed(() => totalSeconds.value % 60)
+const parts = computed(() => splitDurationHms(totalSeconds.value))
 
 function pad2(val: number): string {
 	return val.toString().padStart(2, '0')
 }
 
 const focusedSegment = ref<Segment | null>(null)
-const hoursText = ref(pad2(hours.value))
-const minutesText = ref(pad2(minutes.value))
-const secondsText = ref(pad2(seconds.value))
+const segmentTexts = reactive<Record<Segment, string>>({
+	hours: pad2(parts.value.hours),
+	minutes: pad2(parts.value.minutes),
+	seconds: pad2(parts.value.seconds),
+})
+
 const isPickerOpen = ref(false)
 const popoverStyle = ref<{ top: string, left: string }>({ top: '0px', left: '0px' })
+
+const sixtyOptions = Array.from({ length: 60 }, (_, i) => i)
+const segmentOptions = computed<Record<Segment, number[]>>(() => ({
+	hours: Array.from({ length: Math.max(24, parts.value.hours + 1) }, (_, i) => i),
+	minutes: sixtyOptions,
+	seconds: sixtyOptions,
+}))
+
+watch(parts, (nextParts) => {
+	for (const seg of SEGMENTS) {
+		if (focusedSegment.value !== seg) {
+			segmentTexts[seg] = pad2(nextParts[seg])
+		}
+	}
+})
+
+function setSegmentRef(seg: Segment, el: unknown) {
+	segmentRefs[seg] = (el as HTMLInputElement) || null
+}
 
 function updatePopoverPosition() {
 	const rect = controlRef.value?.getBoundingClientRect()
 	if (!rect) return
 	const popoverWidth = 210
 	const maxLeft = Math.max(8, window.innerWidth - popoverWidth - 8)
-	const left = Math.min(rect.left, maxLeft)
-	const top = rect.bottom + 4
 	popoverStyle.value = {
-		top: `${top}px`,
-		left: `${left}px`,
+		top: `${rect.bottom + 4}px`,
+		left: `${Math.min(rect.left, maxLeft)}px`,
 	}
 }
 
@@ -66,113 +119,76 @@ async function togglePicker() {
 	}
 }
 
-const hourOptions = computed(() => Array.from({ length: Math.max(24, hours.value + 1) }, (_, i) => i))
-const sixtyOptions = Array.from({ length: 60 }, (_, i) => i)
-
-watch(totalSeconds, () => {
-	if (focusedSegment.value !== 'hours') {
-		hoursText.value = pad2(hours.value)
+function updateSegment(seg: Segment, nextVal: number) {
+	const next = {
+		hours: parts.value.hours,
+		minutes: parts.value.minutes,
+		seconds: parts.value.seconds,
+		[seg]: Math.max(0, Math.min(SEGMENT_CONFIG[seg].max, nextVal)),
 	}
-	if (focusedSegment.value !== 'minutes') {
-		minutesText.value = pad2(minutes.value)
-	}
-	if (focusedSegment.value !== 'seconds') {
-		secondsText.value = pad2(seconds.value)
-	}
-})
-
-function updatePart(nextHours: number, nextMinutes: number, nextSeconds: number) {
-	const clampedHours = Math.max(0, Math.min(99, nextHours))
-	const clampedMinutes = Math.max(0, Math.min(59, nextMinutes))
-	const clampedSeconds = Math.max(0, Math.min(59, nextSeconds))
-	const nextTotal = clampedHours * 3600 + clampedMinutes * 60 + clampedSeconds
+	const nextTotal = next.hours * 3600 + next.minutes * 60 + next.seconds
 	emit('update:modelValue', nextTotal > 0 ? nextTotal : null)
 }
 
-function focusSegment(segment: Segment) {
-	const target = segment === 'hours' ? hoursRef.value : segment === 'minutes' ? minutesRef.value : secondsRef.value
+function focusSegment(seg: Segment) {
+	const target = segmentRefs[seg]
 	target?.focus()
 	target?.select()
 }
 
-function onSegmentFocus(segment: Segment, event: FocusEvent) {
-	focusedSegment.value = segment
+function onSegmentFocus(seg: Segment, event: FocusEvent) {
+	focusedSegment.value = seg
 	;(event.target as HTMLInputElement).select?.()
 }
 
-function onSegmentBlur(segment: Segment) {
-	if (focusedSegment.value === segment) {
+function onSegmentBlur(seg: Segment) {
+	if (focusedSegment.value === seg) {
 		focusedSegment.value = null
 	}
-	if (segment === 'hours') {
-		hoursText.value = pad2(hours.value)
-	} else if (segment === 'minutes') {
-		minutesText.value = pad2(minutes.value)
-	} else {
-		secondsText.value = pad2(seconds.value)
-	}
+	segmentTexts[seg] = pad2(parts.value[seg])
 }
 
-function onSegmentInput(segment: Segment, event: Event) {
+function onSegmentInput(seg: Segment, event: Event) {
 	const input = event.target as HTMLInputElement
 	const digits = input.value.replace(/\D/g, '').slice(0, 2)
 	input.value = digits
 
 	const num = digits === '' ? 0 : Number(digits)
-	if (segment === 'hours') {
-		hoursText.value = digits
-		updatePart(num, minutes.value, seconds.value)
-		if (digits.length === 2) {
-			focusSegment('minutes')
+	const clamped = Math.min(SEGMENT_CONFIG[seg].max, num)
+	segmentTexts[seg] = digits.length === 2 ? pad2(clamped) : digits
+	updateSegment(seg, clamped)
+
+	if (digits.length === 2) {
+		const idx = SEGMENTS.indexOf(seg)
+		if (idx < SEGMENTS.length - 1) {
+			focusSegment(SEGMENTS[idx + 1])
 		}
-	} else if (segment === 'minutes') {
-		const clamped = Math.min(59, num)
-		minutesText.value = digits.length === 2 ? pad2(clamped) : digits
-		updatePart(hours.value, clamped, seconds.value)
-		if (digits.length === 2) {
-			focusSegment('seconds')
-		}
-	} else {
-		const clamped = Math.min(59, num)
-		secondsText.value = digits.length === 2 ? pad2(clamped) : digits
-		updatePart(hours.value, minutes.value, clamped)
 	}
 }
 
-function onSegmentKeydown(segment: Segment, event: KeyboardEvent) {
-	if (event.key === ':') {
+function onSegmentKeydown(seg: Segment, event: KeyboardEvent) {
+	const idx = SEGMENTS.indexOf(seg)
+
+	if (event.key === ':' && idx < SEGMENTS.length - 1) {
 		event.preventDefault()
-		if (segment === 'hours') focusSegment('minutes')
-		else if (segment === 'minutes') focusSegment('seconds')
+		focusSegment(SEGMENTS[idx + 1])
 		return
 	}
 
 	if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
 		event.preventDefault()
 		const delta = event.key === 'ArrowUp' ? 1 : -1
-		if (segment === 'hours') {
-			const next = (hours.value + delta + 100) % 100
-			hoursText.value = pad2(next)
-			updatePart(next, minutes.value, seconds.value)
-		} else if (segment === 'minutes') {
-			const next = (minutes.value + delta + 60) % 60
-			minutesText.value = pad2(next)
-			updatePart(hours.value, next, seconds.value)
-		} else {
-			const next = (seconds.value + delta + 60) % 60
-			secondsText.value = pad2(next)
-			updatePart(hours.value, minutes.value, next)
-		}
+		const mod = SEGMENT_CONFIG[seg].max + 1
+		const next = (parts.value[seg] + delta + mod) % mod
+		segmentTexts[seg] = pad2(next)
+		updateSegment(seg, next)
 		return
 	}
 
-	if (event.key === 'Backspace') {
-		const input = event.target as HTMLInputElement
-		if (input.value === '') {
-			event.preventDefault()
-			if (segment === 'seconds') focusSegment('minutes')
-			else if (segment === 'minutes') focusSegment('hours')
-		}
+	if (event.key === 'Backspace' && (event.target as HTMLInputElement).value === '' && idx > 0) {
+		event.preventDefault()
+		focusSegment(SEGMENTS[idx - 1])
+		return
 	}
 
 	if (event.key === 'Escape' && isPickerOpen.value) {
@@ -182,32 +198,22 @@ function onSegmentKeydown(segment: Segment, event: KeyboardEvent) {
 	}
 }
 
-function selectFromPicker(segment: Segment, val: number) {
-	if (segment === 'hours') {
-		hoursText.value = pad2(val)
-		updatePart(val, minutes.value, seconds.value)
-	} else if (segment === 'minutes') {
-		minutesText.value = pad2(val)
-		updatePart(hours.value, val, seconds.value)
-	} else {
-		secondsText.value = pad2(val)
-		updatePart(hours.value, minutes.value, val)
-	}
+function selectFromPicker(seg: Segment, val: number) {
+	segmentTexts[seg] = pad2(val)
+	updateSegment(seg, val)
 }
 
 function clearDuration() {
-	hoursText.value = '00'
-	minutesText.value = '00'
-	secondsText.value = '00'
+	for (const seg of SEGMENTS) {
+		segmentTexts[seg] = '00'
+	}
 	emit('update:modelValue', null)
 }
 
 function handleDocumentClick(event: MouseEvent) {
 	if (!isPickerOpen.value) return
 	const target = event.target as Node
-	const inRoot = rootRef.value?.contains(target) ?? false
-	const inPopover = popoverRef.value?.contains(target) ?? false
-	if (!inRoot && !inPopover) {
+	if (!rootRef.value?.contains(target) && !popoverRef.value?.contains(target)) {
 		isPickerOpen.value = false
 	}
 }
@@ -243,48 +249,23 @@ defineExpose({
 		<div ref="controlRef" :class="[$style.control, compact && $style.controlCompact]">
 			<ClockOutlineIcon :size="18" :class="$style.icon" />
 			<div :class="$style.segments">
-				<input
-					:id="id"
-					ref="hoursRef"
-					type="text"
-					inputmode="numeric"
-					maxlength="2"
-					:value="hoursText"
-					:class="$style.segmentInput"
-					:aria-label="t('sheetmusic', 'Hours')"
-					data-test="duration-hours"
-					@focus="onSegmentFocus('hours', $event)"
-					@blur="onSegmentBlur('hours')"
-					@input="onSegmentInput('hours', $event)"
-					@keydown="onSegmentKeydown('hours', $event)">
-				<span :class="$style.separator" aria-hidden="true">:</span>
-				<input
-					ref="minutesRef"
-					type="text"
-					inputmode="numeric"
-					maxlength="2"
-					:value="minutesText"
-					:class="$style.segmentInput"
-					:aria-label="t('sheetmusic', 'Minutes')"
-					data-test="duration-minutes"
-					@focus="onSegmentFocus('minutes', $event)"
-					@blur="onSegmentBlur('minutes')"
-					@input="onSegmentInput('minutes', $event)"
-					@keydown="onSegmentKeydown('minutes', $event)">
-				<span :class="$style.separator" aria-hidden="true">:</span>
-				<input
-					ref="secondsRef"
-					type="text"
-					inputmode="numeric"
-					maxlength="2"
-					:value="secondsText"
-					:class="$style.segmentInput"
-					:aria-label="t('sheetmusic', 'Seconds')"
-					data-test="duration-seconds"
-					@focus="onSegmentFocus('seconds', $event)"
-					@blur="onSegmentBlur('seconds')"
-					@input="onSegmentInput('seconds', $event)"
-					@keydown="onSegmentKeydown('seconds', $event)">
+				<template v-for="(seg, idx) in SEGMENTS" :key="seg">
+					<span v-if="idx > 0" :class="$style.separator" aria-hidden="true">:</span>
+					<input
+						:id="idx === 0 ? id : undefined"
+						:ref="(el) => setSegmentRef(seg, el)"
+						type="text"
+						inputmode="numeric"
+						maxlength="2"
+						:value="segmentTexts[seg]"
+						:class="$style.segmentInput"
+						:aria-label="SEGMENT_CONFIG[seg].label()"
+						:data-test="SEGMENT_CONFIG[seg].dataTest"
+						@focus="onSegmentFocus(seg, $event)"
+						@blur="onSegmentBlur(seg)"
+						@input="onSegmentInput(seg, $event)"
+						@keydown="onSegmentKeydown(seg, $event)">
+				</template>
 			</div>
 			<button
 				type="button"
@@ -318,48 +299,20 @@ defineExpose({
 				:style="popoverStyle"
 				data-test="duration-picker-popover"
 				@click.stop>
-			<div :class="$style.column">
-				<div :class="$style.columnHeader">{{ t('sheetmusic', 'HH') }}</div>
-				<div :class="$style.columnList">
-					<button
-						v-for="h in hourOptions"
-						:key="h"
-						type="button"
-						:class="[$style.optionButton, h === hours && $style.optionActive]"
-						:data-test="`duration-pick-hours-${h}`"
-						@click="selectFromPicker('hours', h)">
-						{{ pad2(h) }}
-					</button>
+				<div v-for="seg in SEGMENTS" :key="seg" :class="$style.column">
+					<div :class="$style.columnHeader">{{ SEGMENT_CONFIG[seg].header() }}</div>
+					<div :class="$style.columnList">
+						<button
+							v-for="val in segmentOptions[seg]"
+							:key="val"
+							type="button"
+							:class="[$style.optionButton, val === parts[seg] && $style.optionActive]"
+							:data-test="`${SEGMENT_CONFIG[seg].pickPrefix}-${val}`"
+							@click="selectFromPicker(seg, val)">
+							{{ pad2(val) }}
+						</button>
+					</div>
 				</div>
-			</div>
-			<div :class="$style.column">
-				<div :class="$style.columnHeader">{{ t('sheetmusic', 'MM') }}</div>
-				<div :class="$style.columnList">
-					<button
-						v-for="m in sixtyOptions"
-						:key="m"
-						type="button"
-						:class="[$style.optionButton, m === minutes && $style.optionActive]"
-						:data-test="`duration-pick-minutes-${m}`"
-						@click="selectFromPicker('minutes', m)">
-						{{ pad2(m) }}
-					</button>
-				</div>
-			</div>
-			<div :class="$style.column">
-				<div :class="$style.columnHeader">{{ t('sheetmusic', 'SS') }}</div>
-				<div :class="$style.columnList">
-					<button
-						v-for="s in sixtyOptions"
-						:key="s"
-						type="button"
-						:class="[$style.optionButton, s === seconds && $style.optionActive]"
-						:data-test="`duration-pick-seconds-${s}`"
-						@click="selectFromPicker('seconds', s)">
-						{{ pad2(s) }}
-					</button>
-				</div>
-			</div>
 			</div>
 		</Teleport>
 	</div>

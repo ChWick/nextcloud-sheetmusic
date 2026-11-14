@@ -65,13 +65,20 @@ export function formatDuration(seconds?: number | null, fallback = '—'): strin
 	return `${mins}:${secs.toString().padStart(2, '0')}`
 }
 
+export function splitDurationHms(seconds?: number | null): { hours: number, minutes: number, seconds: number } {
+	if (!seconds || seconds <= 0) return { hours: 0, minutes: 0, seconds: 0 }
+	const total = Math.round(seconds)
+	return {
+		hours: Math.floor(total / 3600),
+		minutes: Math.floor((total % 3600) / 60),
+		seconds: total % 60,
+	}
+}
+
 export function formatDurationHms(seconds?: number | null, fallback = '—'): string {
 	if (!seconds || seconds <= 0) return fallback
-	const total = Math.round(seconds)
-	const hours = Math.floor(total / 3600)
-	const mins = Math.floor((total % 3600) / 60)
-	const secs = total % 60
-	return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+	const { hours, minutes, seconds: secs } = splitDurationHms(seconds)
+	return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
 }
 
 export function formatStars(stars?: number | null, fallback = '—'): string {
