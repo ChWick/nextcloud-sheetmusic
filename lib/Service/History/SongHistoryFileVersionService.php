@@ -11,6 +11,7 @@ namespace OCA\SheetMusic\Service\History;
 
 use OCA\SheetMusic\Db\InternalSongFile;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsFileFacts;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdf;
 use OCP\Files\IRootFolder;
 use Psr\Log\LoggerInterface;
@@ -156,8 +157,8 @@ class SongHistoryFileVersionService {
 				// Re-extract facts and update fileRecord
 				$freshNodes = $userFolder->getById($ocFileId);
 				if (!empty($freshNodes) && $freshNodes[0] instanceof \OCP\Files\File) {
-					$content = $freshNodes[0]->getContent();
-					if (is_string($content)) {
+					$content = MobileSheetsFileFacts::readFileContent($freshNodes[0]);
+					if ($content !== '') {
 						$fileRecord->fileSize = strlen($content);
 						$ext = strtolower(pathinfo($freshNodes[0]->getName(), PATHINFO_EXTENSION));
 						if ($ext === 'pdf') {

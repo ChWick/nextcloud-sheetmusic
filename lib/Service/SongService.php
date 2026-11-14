@@ -14,6 +14,7 @@ use OCA\SheetMusic\Db\InternalSongHistory;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryData;
 use OCA\SheetMusic\Db\LibraryMapper;
+use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\IUser;
 use Psr\Log\LoggerInterface;
@@ -317,6 +318,20 @@ class SongService {
 		}
 
 		try {
+			$autoPaths = $this->libraryService->isAutoPathsEnabled($user->getUID(), $targetLibraryId);
+			$preset = null;
+			$targetFolder = null;
+			if ($autoPaths) {
+				$preset = $this->libraryService->getNamingRulePreset($user->getUID(), $targetLibraryId);
+				if ($preset !== SongPathNamingRule::PRESET_DISABLED && $preset !== 'none') {
+					try {
+						$targetFolder = $this->fileManager->libraryFolder($targetLibraryId, $user);
+					} catch (\Throwable) {
+						$targetFolder = null;
+					}
+				}
+			}
+
 			foreach (array_values($songIds) as $index => $songId) {
 				$current = $index + 1;
 				$sid = (int)$songId;
@@ -354,7 +369,7 @@ class SongService {
 					$this->internalSongMapper->update($song);
 					$this->songHistoryService?->recordSnapshot($song, InternalSongHistory::ACTION_UPDATED, $user->getUID());
 				}
-				$this->syncSongFilesAfterUpdate($user, $sid, $targetLibraryId);
+				$this->syncSongFilesAfterUpdate($user, $sid, $targetLibraryId, $autoPaths, $preset, $targetFolder);
 			}
 			$this->libraryMapper->touch($targetLibraryId);
 			if ($progressId !== null) {
@@ -433,12 +448,20 @@ class SongService {
 	 * Regenerate file paths (when autoPaths is enabled and a naming rule is active)
 	 * and sync PDF metadata (when autoPdfMetadata is enabled) for a song.
 	 */
-	public function syncSongFilesAfterUpdate(IUser $user, int $songId, int $targetLibraryId): void {
-		if ($this->libraryService->isAutoPathsEnabled($user->getUID(), $targetLibraryId)) {
-			$preset = $this->libraryService->getNamingRulePreset($user->getUID(), $targetLibraryId);
+	public function syncSongFilesAfterUpdate(
+		IUser $user,
+		int $songId,
+		int $targetLibraryId,
+		?bool $autoPaths = null,
+		?string $preset = null,
+		?Folder $targetFolder = null,
+	): void {
+		$autoPaths ??= $this->libraryService->isAutoPathsEnabled($user->getUID(), $targetLibraryId);
+		if ($autoPaths) {
+			$preset ??= $this->libraryService->getNamingRulePreset($user->getUID(), $targetLibraryId);
 			if ($preset !== SongPathNamingRule::PRESET_DISABLED && $preset !== 'none') {
 				try {
-					$targetFolder = $this->fileManager->libraryFolder($targetLibraryId, $user);
+					$targetFolder ??= $this->fileManager->libraryFolder($targetLibraryId, $user);
 					$this->fileManager->regenerateSongFilePaths($songId, $user, $targetFolder, '', null, $preset);
 				} catch (\Throwable $e) {
 					$this->logger->debug('Could not regenerate file paths after updating song', [

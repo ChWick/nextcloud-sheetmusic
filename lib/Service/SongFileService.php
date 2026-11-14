@@ -11,6 +11,8 @@ use OCA\SheetMusic\Db\InternalSongHistory;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryData;
 use OCA\SheetMusic\Db\LibraryMapper;
+use OCA\SheetMusic\Listener\SheetMusicFileEventListener;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsFileFacts;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPathResolver;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdf;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdfMetadata;
@@ -82,7 +84,7 @@ class SongFileService {
 				}
 				$node = $userFolder->get(rawurldecode($relativePath));
 				if ($node instanceof \OCP\Files\File) {
-					$content = $node->getContent();
+					$content = MobileSheetsFileFacts::readFileContent($node);
 				}
 			} catch (\Throwable $e) {
 				$this->logger->info('Could not resolve Nextcloud file for metadata import', [
@@ -162,7 +164,9 @@ class SongFileService {
 
 		// Overwrite content in place on existing File node:
 		// Preserves fileId, path, and triggers Nextcloud files_versions app to capture history
-		$targetNode->putContent($content);
+		SheetMusicFileEventListener::runWithoutListener(static function () use ($targetNode, $content): void {
+			$targetNode->putContent($content);
+		});
 
 		$fileRecord->fileSize = strlen($content);
 		$ext = strtolower(pathinfo($targetNode->getName(), PATHINFO_EXTENSION));
@@ -348,8 +352,8 @@ class SongFileService {
 
 		// Re-extract PDF facts to synchronize sheetmusic_song_files with reverted file content
 		if ($targetNode instanceof \OCP\Files\File) {
-			$revertedContent = $targetNode->getContent();
-			if (is_string($revertedContent)) {
+			$revertedContent = MobileSheetsFileFacts::readFileContent($targetNode);
+			if ($revertedContent !== '') {
 				$fileRecord->fileSize = strlen($revertedContent);
 				$ext = strtolower(pathinfo($targetNode->getName(), PATHINFO_EXTENSION));
 				if ($ext === 'pdf') {
@@ -585,14 +589,7 @@ class SongFileService {
 		}
 
 		$targetLibraryId = $this->libraryService->getTargetLibraryId($libraryId);
-		$song = null;
-		$data = $this->internalSongMapper->findLibraryData($targetLibraryId, $user);
-		foreach ($data->songs as $s) {
-			if ($s->id === $songId) {
-				$song = $s;
-				break;
-			}
-		}
+		$song = $this->internalSongMapper->findSong($songId, $user);
 
 		if ($song === null) {
 			$this->logger->warning('Could not find the song to sync its metadata into attached files', [
@@ -730,8 +727,8 @@ class SongFileService {
 		if ($ext === 'pdf') {
 			$content = $uploadedContent;
 			if ($content === null && $file instanceof File) {
-				$raw = $file->getContent();
-				if (is_string($raw)) {
+				$raw = MobileSheetsFileFacts::readFileContent($file);
+				if ($raw !== '') {
 					$content = $raw;
 				}
 			}
