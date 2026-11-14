@@ -1,8 +1,6 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from '@nextcloud/axios'
-import { generateOcsUrl } from '@nextcloud/router'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
@@ -22,6 +20,7 @@ import FilesIntegrityIssueItem from './files/FilesIntegrityIssueItem.vue'
 import SongMergeDialog, { type ResolveBothSongData } from './song-editor/SongMergeDialog.vue'
 import OrphanFileFixer from './OrphanFileFixer.vue'
 import { keyForIssue } from '../utils/integrity'
+import { useProgressPolling } from '../composables/useProgressPolling'
 
 const props = defineProps<{
 	selectedLibrary: number
@@ -29,25 +28,21 @@ const props = defineProps<{
 
 const router = useRouter()
 
-interface ProgressInfo {
-	status: 'running' | 'completed' | 'error'
-	stage: string
-	current: number
-	total: number
-	percent: number
-	message: string
-}
-
 // Integrity Audit state
 const isCheckingIntegrity = ref(false)
-const auditProgress = ref<ProgressInfo | null>(null)
-const auditElapsedTime = ref(0)
-let auditTimer: ReturnType<typeof setInterval> | null = null
-let auditPollingTimer: ReturnType<typeof setInterval> | null = null
+const {
+	progress: auditProgress,
+	elapsedSeconds: auditElapsedTime,
+	start: startAuditPolling,
+	stop: stopAuditProgressPolling,
+} = useProgressPolling({ trackElapsed: true })
 
 const isBatchFixing = ref(false)
-const fixProgress = ref<ProgressInfo | null>(null)
-let progressPollingTimer: ReturnType<typeof setInterval> | null = null
+const {
+	progress: fixProgress,
+	start: startFixPolling,
+	stop: stopProgressPolling,
+} = useProgressPolling()
 
 function formatDuration(seconds: number): string {
 	const mins = Math.floor(seconds / 60)
@@ -59,103 +54,12 @@ function formatDuration(seconds: number): string {
 }
 
 function startAuditProgressPolling(progressId: string) {
-	stopAuditProgressPolling()
-	auditElapsedTime.value = 0
-	const startTime = Date.now()
-
-	auditTimer = setInterval(() => {
-		auditElapsedTime.value = Math.floor((Date.now() - startTime) / 1000)
-	}, 1000)
-
-	auditProgress.value = {
-		status: 'running',
-		stage: 'starting',
-		current: 0,
-		total: 0,
-		percent: 0,
-		message: t('sheetmusic', 'Auditing library files and database integrity…'),
-	}
-
-	auditPollingTimer = setInterval(async () => {
-		try {
-			const url = generateOcsUrl('/apps/sheetmusic/api/libraries/progress/' + encodeURIComponent(progressId))
-			const res = await axios.get(url)
-			const data = res?.data?.ocs?.data
-			if (data && typeof data === 'object') {
-				auditProgress.value = {
-					status: data.status,
-					stage: data.stage,
-					current: Number(data.current ?? 0),
-					total: Number(data.total ?? 0),
-					percent: Number(data.percent ?? 0),
-					message: String(data.message ?? ''),
-				}
-				if (data.status === 'completed' || data.status === 'error') {
-					stopAuditProgressPolling()
-				}
-			}
-		} catch {
-			// Ignore transient polling errors
-		}
-	}, 300)
-}
-
-function stopAuditProgressPolling() {
-	if (auditPollingTimer !== null) {
-		clearInterval(auditPollingTimer)
-		auditPollingTimer = null
-	}
-	if (auditTimer !== null) {
-		clearInterval(auditTimer)
-		auditTimer = null
-	}
+	startAuditPolling(progressId, t('sheetmusic', 'Auditing library files and database integrity…'))
 }
 
 function startProgressPolling(progressId: string) {
-	stopProgressPolling()
-	fixProgress.value = {
-		status: 'running',
-		stage: 'starting',
-		current: 0,
-		total: 0,
-		percent: 0,
-		message: t('sheetmusic', 'Starting integrity fixes…'),
-	}
-	progressPollingTimer = setInterval(async () => {
-		try {
-			const url = generateOcsUrl('/apps/sheetmusic/api/libraries/progress/' + encodeURIComponent(progressId))
-			const res = await axios.get(url)
-			const data = res?.data?.ocs?.data
-			if (data && typeof data === 'object') {
-				fixProgress.value = {
-					status: data.status,
-					stage: data.stage,
-					current: Number(data.current ?? 0),
-					total: Number(data.total ?? 0),
-					percent: Number(data.percent ?? 0),
-					message: String(data.message ?? ''),
-				}
-				if (data.status === 'completed' || data.status === 'error') {
-					stopProgressPolling()
-				}
-			}
-		} catch {
-			// Ignore transient polling errors
-		}
-	}, 300)
+	startFixPolling(progressId, t('sheetmusic', 'Starting integrity fixes…'))
 }
-
-function stopProgressPolling() {
-	if (progressPollingTimer !== null) {
-		clearInterval(progressPollingTimer)
-		progressPollingTimer = null
-	}
-}
-
-onBeforeUnmount(() => {
-	stopProgressPolling()
-	stopAuditProgressPolling()
-})
 
 const fixingKey = ref<string | null>(null)
 const integrityError = ref('')

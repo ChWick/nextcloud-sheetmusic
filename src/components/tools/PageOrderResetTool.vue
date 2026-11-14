@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from '@nextcloud/axios'
-import { generateOcsUrl } from '@nextcloud/router'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
@@ -10,6 +8,7 @@ import { showError, showSuccess } from '@nextcloud/dialogs'
 import RotateLeft from 'vue-material-design-icons/RotateLeft.vue'
 import CheckAll from 'vue-material-design-icons/CheckAll.vue'
 import { apiGet, apiPost } from '../../api/client'
+import { useProgressPolling } from '../../composables/useProgressPolling'
 import { describeRequestFailure } from '../../utils/api'
 import type { PageOrderAuditItem, PageOrderAuditResult, PageOrderFilterMode } from '../../types/tools'
 import type { SongFile } from '../../types/song'
@@ -141,44 +140,14 @@ function onEditSaved(_libraryData?: unknown, updatedFile?: SongFile) {
 	}
 }
 
-interface ProgressState {
-	percent: number
-	message: string
-}
-const batchProgress = ref<ProgressState | null>(null)
-let progressPollingTimer: ReturnType<typeof setInterval> | null = null
+const {
+	progress: batchProgress,
+	start: startBatchPolling,
+	stop: stopProgressPolling,
+} = useProgressPolling()
 
 function startProgressPolling(progressId: string) {
-	stopProgressPolling()
-	batchProgress.value = {
-		percent: 0,
-		message: t('sheetmusic', 'Starting page order reset…'),
-	}
-	progressPollingTimer = setInterval(async () => {
-		try {
-			const url = generateOcsUrl('/apps/sheetmusic/api/libraries/progress/' + encodeURIComponent(progressId))
-			const res = await axios.get(url)
-			const data = res?.data?.ocs?.data
-			if (data && typeof data === 'object') {
-				batchProgress.value = {
-					percent: Number(data.percent ?? 0),
-					message: String(data.message ?? ''),
-				}
-				if (data.status === 'completed' || data.status === 'error') {
-					stopProgressPolling()
-				}
-			}
-		} catch {
-			// ignore transient polling errors
-		}
-	}, 300)
-}
-
-function stopProgressPolling() {
-	if (progressPollingTimer !== null) {
-		clearInterval(progressPollingTimer)
-		progressPollingTimer = null
-	}
+	startBatchPolling(progressId, t('sheetmusic', 'Starting page order reset…'))
 }
 
 async function loadAudit() {

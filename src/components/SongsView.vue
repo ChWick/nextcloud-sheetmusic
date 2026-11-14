@@ -274,6 +274,7 @@ import { useSongSelection } from '../composables/useSongSelection';
 import { useLibraryData } from '../composables/useLibraryData';
 import { useSongImport } from '../composables/useSongImport';
 import { useSongMerge } from '../composables/useSongMerge';
+import { useProgressPolling } from '../composables/useProgressPolling';
 import { apiGet, apiPost } from '../api/client';
 import SongColumnToggle from './songs/SongColumnToggle.vue';
 import SongSortControl from './songs/SongSortControl.vue';
@@ -452,40 +453,25 @@ const { searchTitle, withoutFiles, selectedComposers, selectedBooks, selectedCol
 const { selectedSongIds, selectedCount, isSelected, toggleSelect, selectAll, isAllSelected, clearSelection } = useSongSelection();
 const isBatchEditorOpen = ref(false);
 const isApplyingBatchUpdate = ref(false);
-const batchUpdateProgressPercent = ref(0);
-const batchUpdateProgressMessage = ref('');
-let batchProgressTimer: ReturnType<typeof setInterval> | null = null;
+const {
+  progress: batchProgress,
+  start: startBatchPolling,
+  stop: stopBatchProgressPolling,
+} = useProgressPolling({
+  preserveEmptyMessage: true,
+  fetchProgress: async (progressId) => {
+    const res = await apiGet('/api/libraries/progress/{progressId}', {
+      pathParams: { progressId },
+    });
+    return res?.data?.ocs?.data as Record<string, unknown> | undefined;
+  },
+});
 
-function stopBatchProgressPolling() {
-  if (batchProgressTimer !== null) {
-    clearInterval(batchProgressTimer);
-    batchProgressTimer = null;
-  }
-}
+const batchUpdateProgressPercent = computed(() => batchProgress.value?.percent ?? 0);
+const batchUpdateProgressMessage = computed(() => batchProgress.value?.message ?? '');
 
 function startBatchProgressPolling(progressId: string, count: number) {
-  stopBatchProgressPolling();
-  batchUpdateProgressPercent.value = 0;
-  batchUpdateProgressMessage.value = t('sheetmusic', 'Updating {count} songs…', { count }, { escape: false });
-  batchProgressTimer = setInterval(async () => {
-    try {
-      const res = await apiGet('/api/libraries/progress/{progressId}', {
-        pathParams: { progressId },
-      });
-      const data = res?.data?.ocs?.data as Record<string, unknown> | undefined;
-      if (data && typeof data === 'object') {
-        batchUpdateProgressPercent.value = Number(data.percent ?? 0);
-        if (data.message) {
-          batchUpdateProgressMessage.value = String(data.message);
-        }
-        if (data.status === 'completed' || data.status === 'error') {
-          stopBatchProgressPolling();
-        }
-      }
-    } catch {
-      // Ignore transient polling errors
-    }
-  }, 300);
+  startBatchPolling(progressId, t('sheetmusic', 'Updating {count} songs…', { count }, { escape: false }));
 }
 
 const isBatchDeleteDialogOpen = ref(false);

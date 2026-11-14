@@ -54,19 +54,11 @@ import EntitiesView from './components/EntitiesView.vue'
 import TrashView from './components/TrashView.vue'
 import LibrarySettingsDialog from './components/LibrarySettingsDialog.vue'
 import ShareDialog from './components/ShareDialog.vue'
+import { useProgressPolling } from './composables/useProgressPolling'
 
 /** Views of a library: the song view, one view per song filter, integrity audit, and tools. */
 type ViewName = 'songs' | 'new-song' | 'setlists' | 'sublibraries' | 'shares' | 'integrity' | 'tools' | 'trash' | EntityType
 const VIEW_NAMES: ViewName[] = ['songs', 'new-song', 'setlists', 'composers', 'artists', 'books', 'collections', 'genres', 'keys', 'customgroups', 'years', 'signatures', 'sourcetypes', 'instruments', 'arrangers', 'sublibraries', 'shares', 'integrity', 'tools', 'trash']
-
-interface ImportProgress {
-  status: 'running' | 'completed' | 'error'
-  stage: string
-  current: number
-  total: number
-  percent: number
-  message: string
-}
 
 /*** State ***/
 const isAddDialogOpen = ref(false)
@@ -80,48 +72,14 @@ const addError = ref('')
 const importError = ref('')
 const isAddingLibrary = ref(false)
 const isImportingLibrary = ref(false)
-const importProgress = ref<ImportProgress | null>(null)
-let progressPollingTimer: ReturnType<typeof setInterval> | null = null
+const {
+  progress: importProgress,
+  start: startImportPolling,
+  stop: stopProgressPolling,
+} = useProgressPolling({ intervalMs: 400 })
 
 function startProgressPolling(progressId: string) {
-  stopProgressPolling()
-  importProgress.value = {
-    status: 'running',
-    stage: 'starting',
-    current: 0,
-    total: 0,
-    percent: 0,
-    message: t('sheetmusic', 'Starting import...'),
-  }
-  progressPollingTimer = setInterval(async () => {
-    try {
-      const url = generateOcsUrl('/apps/sheetmusic/api/libraries/progress/' + encodeURIComponent(progressId))
-      const res = await axios.get(url)
-      const data = res?.data?.ocs?.data
-      if (data && typeof data === 'object') {
-        importProgress.value = {
-          status: data.status,
-          stage: data.stage,
-          current: Number(data.current ?? 0),
-          total: Number(data.total ?? 0),
-          percent: Number(data.percent ?? 0),
-          message: String(data.message ?? ''),
-        }
-        if (data.status === 'completed' || data.status === 'error') {
-          stopProgressPolling()
-        }
-      }
-    } catch {
-      // Ignore transient polling errors
-    }
-  }, 400)
-}
-
-function stopProgressPolling() {
-  if (progressPollingTimer !== null) {
-    clearInterval(progressPollingTimer)
-    progressPollingTimer = null
-  }
+  startImportPolling(progressId, t('sheetmusic', 'Starting import...'))
 }
 const isPublicShare = Boolean(loadState('sheetmusic', 'isPublicShare', false))
 const publicSharingToken = loadState('sheetmusic', 'publicSharingToken', '')
