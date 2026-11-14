@@ -286,12 +286,14 @@ describe('SongTableView.vue', () => {
 			{ books: [{ title: 'Baroque Favorites' }] },
 		])
 
-		// Edit duration inline (hh:mm:ss -> seconds)
+		// Edit duration inline using DurationInput (hh:mm:ss -> seconds)
 		const durationBtn = firstRow.find('[data-test="inline-edit-duration-btn"]')
 		await durationBtn.trigger('click')
-		const durationInput = firstRow.find('[data-test="inline-edit-input"]')
-		await durationInput.setValue('01:03:15')
-		await durationInput.trigger('keydown.enter')
+		await firstRow.find('[data-test="duration-hours"]').setValue('01')
+		await firstRow.find('[data-test="duration-minutes"]').setValue('03')
+		const secondsInput = firstRow.find('[data-test="duration-seconds"]')
+		await secondsInput.setValue('15')
+		await secondsInput.trigger('keydown.enter')
 
 		expect(wrapper.emitted('inline-update-song')?.[3]).toEqual([
 			songs[1],
