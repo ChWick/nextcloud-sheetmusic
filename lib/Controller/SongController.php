@@ -268,6 +268,9 @@ class SongController extends OCSController {
 
 		$rawProgressId = $progressId ?? $this->request->getParam('progressId');
 		$resolvedProgressId = is_string($rawProgressId) && trim($rawProgressId) !== '' ? trim($rawProgressId) : null;
+		if ($resolvedProgressId !== null && session_status() === PHP_SESSION_ACTIVE) {
+			session_write_close();
+		}
 
 		try {
 			$result = $this->songService->batchUpdateSongs(

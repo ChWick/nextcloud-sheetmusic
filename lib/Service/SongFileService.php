@@ -16,6 +16,7 @@ use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsFileFacts;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPathResolver;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdf;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdfMetadata;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSong;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
@@ -129,10 +130,11 @@ class SongFileService {
 		$autoPaths = $this->libraryService->isAutoPathsEnabled($user->getUID(), $libraryId);
 		$targetRelative = $this->resolveDestinationPath($userFolder, $libraryDir, $fileName, $autoPaths);
 		$this->ensureParentFolder($userFolder, $targetRelative);
-		// Create the file with its content in one step: an empty newFile()
-		// followed by putContent() lets file listeners index a 0-byte PDF and
-		// record a stale page count / page order of '1-1'.
-		$targetFile = $userFolder->newFile($targetRelative, $content);
+		// Create the file with its content in one step, suppressing the file event
+		// listener so it does not parse the PDF and create a redundant stub song.
+		$targetFile = SheetMusicFileEventListener::runWithoutListener(
+			static fn () => $userFolder->newFile($targetRelative, $content)
+		);
 
 		$targetLibraryId = $this->libraryService->getTargetLibraryId($libraryId);
 		$this->cleanupAutoIndexedStubForNewUpload($songId, (int)$targetFile->getId());
@@ -424,11 +426,13 @@ class SongFileService {
 			$targetName = basename($targetRelative);
 			$targetInternalPath = $targetFolder->getPath() . '/' . $targetName;
 
-			if ($action === 'move') {
-				$sourceNode->move($targetInternalPath);
-			} else {
-				$sourceNode->copy($targetInternalPath);
-			}
+			SheetMusicFileEventListener::runWithoutListener(static function () use ($action, $sourceNode, $targetInternalPath): void {
+				if ($action === 'move') {
+					$sourceNode->move($targetInternalPath);
+				} else {
+					$sourceNode->copy($targetInternalPath);
+				}
+			});
 		}
 
 		$attachedFile = $targetFolder->get($targetName);
@@ -579,7 +583,13 @@ class SongFileService {
 		}
 	}
 
-	public function syncSongFileMetadata(IUser $user, string $databasePath = '', int $songId = 0, ?int $libraryId = null): void {
+	public function syncSongFileMetadata(
+		IUser $user,
+		string $databasePath = '',
+		int $songId = 0,
+		?int $libraryId = null,
+		?MobileSheetsSong $resolvedSong = null,
+	): void {
 		if ($libraryId !== null && !$this->libraryService->isAutoPdfMetadataEnabled($user->getUID(), $libraryId)) {
 			return;
 		}
@@ -588,8 +598,7 @@ class SongFileService {
 			return;
 		}
 
-		$targetLibraryId = $this->libraryService->getTargetLibraryId($libraryId);
-		$song = $this->internalSongMapper->findSong($songId, $user);
+		$song = $resolvedSong ?? $this->internalSongMapper->findSong($songId, $user);
 
 		if ($song === null) {
 			$this->logger->warning('Could not find the song to sync its metadata into attached files', [

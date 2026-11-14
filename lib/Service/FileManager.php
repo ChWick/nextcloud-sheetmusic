@@ -99,6 +99,7 @@ class FileManager {
 	public const MAX_UNIQUE_NAME_ATTEMPTS = FilePathRegenerator::MAX_UNIQUE_NAME_ATTEMPTS;
 
 	private FilePathRegenerator $pathRegenerator;
+	private ?FileMetadataSyncer $metadataSyncer = null;
 
 	public function __construct(
 		private LibraryMapper $libraryMapper,
@@ -323,7 +324,7 @@ class FileManager {
 		string $databasePath = '',
 		?MobileSheetsHashCodesFile $hashCodes = null,
 		?string $preset = null,
-	): void {
+	): ?MobileSheetsSong {
 		$song = $this->internalSongMapper?->findSong($songId, $user)
 			?? ($this->songMapper !== null && $databasePath !== '' ? $this->songMapper->findSong($databasePath, $songId) : null);
 		if ($song === null) {
@@ -339,7 +340,8 @@ class FileManager {
 		}
 		$preset ??= SongPathNamingRule::PRESET_AUTO;
 
-		$this->regenerateSongFiles($song, $user, $targetFolder, $databasePath, $hashCodes, $preset);
+		$anyMoved = $this->regenerateSongFiles($song, $user, $targetFolder, $databasePath, $hashCodes, $preset);
+		return $anyMoved ? null : $song;
 	}
 
 	/**
@@ -363,10 +365,14 @@ class FileManager {
 		?MobileSheetsHashCodesFile $hashCodes,
 		string $preset = SongPathNamingRule::PRESET_AUTO,
 		?array &$log = null,
-	): void {
+	): bool {
+		$anyMoved = false;
 		foreach ($song->files as $file) {
 			try {
 				$entry = $this->regenerateFilePath($song, $file, $user, $targetFolder, $databasePath, $hashCodes, $preset);
+				if ($entry->code === MobileSheetsFileLogEntry::CODE_PATH_MOVED) {
+					$anyMoved = true;
+				}
 				if ($log !== null) {
 					$log[] = $entry;
 				}
@@ -394,6 +400,8 @@ class FileManager {
 				);
 			}
 		}
+
+		return $anyMoved;
 	}
 
 	/**
@@ -497,7 +505,7 @@ class FileManager {
 		string $databasePath,
 		?MobileSheetsHashCodesFile $hashCodes = null,
 	): string {
-		$syncer = new FileMetadataSyncer(
+		$this->metadataSyncer ??= new FileMetadataSyncer(
 			rootFolder: $this->rootFolder,
 			pathResolver: $this->pathResolver,
 			logger: $this->logger,
@@ -506,7 +514,7 @@ class FileManager {
 			internalSongMapper: $this->internalSongMapper,
 		);
 
-		return $syncer->syncMetadataIntoFile($song, $file, $user, $databasePath, $hashCodes);
+		return $this->metadataSyncer->syncMetadataIntoFile($song, $file, $user, $databasePath, $hashCodes);
 	}
 
 	/**

@@ -9,14 +9,17 @@ declare(strict_types=1);
 
 namespace OCA\SheetMusic\Service;
 
+use OCA\SheetMusic\Db\InternalSongFile;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
+use OCA\SheetMusic\Listener\SheetMusicFileEventListener;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsFile;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsFileFacts;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsFileLogEntry;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsHashCodesFile;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPath;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPathResolver;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdf;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSong;
 use OCA\SheetMusic\Sync\MobileSheets\SongMapper;
 use OCP\Files\File;
@@ -219,15 +222,17 @@ class FilePathRegenerator {
 						continue;
 					}
 
-					$targetNode = $userFolder->get($candRel);
-					$facts = MobileSheetsFileFacts::fromNode($targetNode);
+					$targetNode = $existingNode;
+					$facts = $this->resolveFileFacts($file->id, $targetNode, $internalSongFile);
+					$targetNodeId = (int)$targetNode->getId();
 					$this->updateFileRecord(
 						$file->id,
 						$facts,
-						newNodeId: (int)$targetNode->getId(),
+						newNodeId: $targetNodeId,
 						databasePath: $databasePath,
 						webdavPath: $candTarget->webdav,
 						oldWebdavPath: $source->webdav,
+						internalSongFile: $internalSongFile,
 					);
 					$hashCodes?->updatePath($source->webdav, $candTarget->webdav);
 
@@ -237,7 +242,7 @@ class FilePathRegenerator {
 						sprintf('Linked to existing target file at "%s"', $candRel),
 						MobileSheetsFileLogEntry::LEVEL_INFO,
 						MobileSheetsFileLogEntry::CODE_PATH_MOVED,
-						$this->nodeIdOfStoredFile($candTarget->webdav, $user),
+						$targetNodeId > 0 ? $targetNodeId : $this->nodeIdOfStoredFile($candTarget->webdav, $user),
 					);
 				}
 			}
@@ -249,27 +254,30 @@ class FilePathRegenerator {
 			));
 		}
 
-		$targetRelative = $this->uniqueRelativePath(
-			$userFolder,
-			$targetPrefix . $relativeTarget,
-			$sourceRelative,
-		);
-		$target = $this->pathResolver->forTarget($targetRelative, $user, $userFolder->getPath());
+		$isAlreadyInPlace = false;
+		foreach ($validTargetPaths as $validRel) {
+			$validInternal = $this->pathResolver->forTarget(
+				$targetPrefix . $validRel,
+				$user,
+				$userFolder->getPath(),
+			)->internal;
 
-		$isAlreadyInPlace = ($source->internal === $target->internal);
-		if (!$isAlreadyInPlace) {
-			foreach ($validTargetPaths as $validRel) {
-				$validInternal = $this->pathResolver->forTarget(
-					$targetPrefix . $validRel,
-					$user,
-					$userFolder->getPath()
-				)->internal;
-
-				if ($source->internal === $validInternal) {
-					$isAlreadyInPlace = true;
-					break;
-				}
+			if ($source->internal === $validInternal) {
+				$isAlreadyInPlace = true;
+				break;
 			}
+		}
+
+		$targetRelative = '';
+		$target = null;
+		if (!$isAlreadyInPlace) {
+			$targetRelative = $this->uniqueRelativePath(
+				$userFolder,
+				$targetPrefix . $relativeTarget,
+				$sourceRelative,
+			);
+			$target = $this->pathResolver->forTarget($targetRelative, $user, $userFolder->getPath());
+			$isAlreadyInPlace = ($source->internal === $target->internal);
 		}
 
 		if ($isAlreadyInPlace) {
@@ -295,26 +303,30 @@ class FilePathRegenerator {
 				'path' => $source->internal,
 			]);
 
+			$existingNodeId = (int)$existingNode->getId();
 			return $this->logEntry(
 				$song,
 				$file,
 				'Already at its regenerated path',
 				MobileSheetsFileLogEntry::LEVEL_INFO,
 				MobileSheetsFileLogEntry::CODE_PATH_CURRENT,
-				$this->nodeIdOfStoredFile($file->path, $user),
+				$existingNodeId > 0 ? $existingNodeId : $this->nodeIdOfStoredFile($file->path, $user),
 			);
 		}
 
 		$createdFolders = $this->ensureParentFolder($userFolder, $targetRelative);
 
 		$sourceNode = $userFolder->get($sourceRelative);
-		$facts = MobileSheetsFileFacts::fromNode($sourceNode);
-		$sourceNode->move($target->internal);
+		$facts = $this->resolveFileFacts($file->id, $sourceNode, $internalSongFile);
+		SheetMusicFileEventListener::runWithoutListener(static function () use ($sourceNode, $target): void {
+			$sourceNode->move($target->internal);
+		});
 
 		$newNodeId = null;
-		if ($userFolder->nodeExists($targetRelative)) {
+		try {
 			$targetNode = $userFolder->get($targetRelative);
 			$newNodeId = (int)$targetNode->getId();
+		} catch (\Throwable) {
 		}
 
 		try {
@@ -325,6 +337,7 @@ class FilePathRegenerator {
 				databasePath: $databasePath,
 				webdavPath: $target->webdav,
 				oldWebdavPath: $source->webdav,
+				internalSongFile: $internalSongFile,
 			);
 		} catch (\Throwable $exception) {
 			$this->revertMove(
@@ -367,7 +380,7 @@ class FilePathRegenerator {
 			sprintf('Moved to "%s"', $targetRelative),
 			MobileSheetsFileLogEntry::LEVEL_INFO,
 			MobileSheetsFileLogEntry::CODE_PATH_MOVED,
-			$this->nodeIdOfStoredFile($target->webdav, $user),
+			$newNodeId !== null && $newNodeId > 0 ? $newNodeId : $this->nodeIdOfStoredFile($target->webdav, $user),
 		);
 	}
 
@@ -510,6 +523,32 @@ class FilePathRegenerator {
 		return false;
 	}
 
+	/**
+	 * Build file facts from the existing DB record when size, hash, and page count
+	 * are already known, avoiding a full PDF read/decompression/CRC-32 on a simple move.
+	 */
+	private function resolveFileFacts(
+		int $fileId,
+		Node $node,
+		?InternalSongFile &$internalSongFile = null,
+	): MobileSheetsFileFacts {
+		$internalSongFile = $this->internalSongFileMapper?->findById($fileId);
+		if ($internalSongFile !== null
+			&& $internalSongFile->fileSize > 0
+			&& $internalSongFile->fileHash !== null
+			&& $internalSongFile->pageCount > 0) {
+			return new MobileSheetsFileFacts(
+				fileHash: $internalSongFile->fileHash,
+				fileSize: $internalSongFile->fileSize,
+				lastModified: (int)$node->getMTime() * 1000,
+				sourceFilePageCount: $internalSongFile->pageCount,
+				pageOrder: $internalSongFile->pageOrder ?? MobileSheetsPdf::pageOrder($internalSongFile->pageCount),
+			);
+		}
+
+		return MobileSheetsFileFacts::fromNode($node);
+	}
+
 	private function updateFileRecord(
 		int $fileId,
 		MobileSheetsFileFacts $facts,
@@ -517,11 +556,11 @@ class FilePathRegenerator {
 		string $databasePath = '',
 		?string $webdavPath = null,
 		?string $oldWebdavPath = null,
+		?InternalSongFile $internalSongFile = null,
 	): void {
-		$internalSongFile = null;
 		$sqliteFileId = $fileId;
 		if ($this->internalSongFileMapper !== null) {
-			$internalSongFile = $this->internalSongFileMapper->findById($fileId);
+			$internalSongFile ??= $this->internalSongFileMapper->findById($fileId);
 			if ($internalSongFile !== null) {
 				if ($newNodeId !== null) {
 					$internalSongFile->fileId = $newNodeId;
@@ -555,17 +594,21 @@ class FilePathRegenerator {
 	): MobileSheetsFileLogEntry {
 		$targetRelative = $this->uniqueRelativePath($userFolder, $baseRelative, '');
 		$this->ensureParentFolder($userFolder, $targetRelative);
-		$copiedNode = $existingNode->copy($targetRelative);
+		$copiedNode = SheetMusicFileEventListener::runWithoutListener(
+			static fn (): Node => $existingNode->copy($targetRelative)
+		);
 		$copiedTarget = $this->pathResolver->forTarget($targetRelative, $user, $userFolder->getPath());
-		$facts = MobileSheetsFileFacts::fromNode($copiedNode);
+		$facts = $this->resolveFileFacts($file->id, $copiedNode, $internalSongFile);
+		$copiedNodeId = (int)$copiedNode->getId();
 
 		$this->updateFileRecord(
 			$file->id,
 			$facts,
-			newNodeId: (int)$copiedNode->getId(),
+			newNodeId: $copiedNodeId,
 			databasePath: $databasePath,
 			webdavPath: $copiedTarget->webdav,
 			oldWebdavPath: $sourceWebdav,
+			internalSongFile: $internalSongFile,
 		);
 		$hashCodes?->updatePath($sourceWebdav, $copiedTarget->webdav);
 
@@ -575,7 +618,7 @@ class FilePathRegenerator {
 			sprintf('Copied file for separate song to "%s"', $targetRelative),
 			MobileSheetsFileLogEntry::LEVEL_INFO,
 			MobileSheetsFileLogEntry::CODE_PATH_MOVED,
-			$this->nodeIdOfStoredFile($copiedTarget->webdav, $user),
+			$copiedNodeId > 0 ? $copiedNodeId : $this->nodeIdOfStoredFile($copiedTarget->webdav, $user),
 		);
 	}
 
