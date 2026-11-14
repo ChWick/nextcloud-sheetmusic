@@ -58,7 +58,7 @@ class InternalSongMapper {
 	 * @param list<int> $fileIds
 	 * @return array<int, string>
 	 */
-	private function resolveFileNodePaths(array $fileIds, ?IUser $user): array {
+	public function resolveFileNodePaths(array $fileIds, ?IUser $user): array {
 		if ($fileIds === []) {
 			return [];
 		}

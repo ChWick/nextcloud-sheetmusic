@@ -21,6 +21,32 @@ class InternalSongAnnotationMapper {
 	}
 
 	/**
+	 * Return a map of song IDs (`songId => true`) that have at least one annotation in the library.
+	 *
+	 * @return array<int, true>
+	 */
+	public function findSongIdsWithAnnotations(int $libraryId, bool $includeDeleted = false): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->selectDistinct('a.song_id')
+			->from(self::TABLE_NAME, 'a')
+			->innerJoin('a', InternalSongMapper::TABLE_NAME, 's', $qb->expr()->eq('a.song_id', 's.id'))
+			->where($qb->expr()->eq('s.library_id', $qb->createNamedParameter($libraryId, IQueryBuilder::PARAM_INT)));
+
+		if (!$includeDeleted) {
+			$qb->andWhere($qb->expr()->isNull('a.deleted_at'));
+		}
+
+		$result = $qb->executeQuery();
+		$songIds = [];
+		while ($row = $result->fetchAssociative()) {
+			$songIds[(int)$row['song_id']] = true;
+		}
+		$result->closeCursor();
+
+		return $songIds;
+	}
+
+	/**
 	 * @return list<InternalSongAnnotation>
 	 */
 	public function findForSong(int $songId, bool $includeDeleted = false): array {

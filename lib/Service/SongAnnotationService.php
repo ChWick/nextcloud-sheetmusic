@@ -30,6 +30,13 @@ class SongAnnotationService {
 	}
 
 	/**
+	 * @return array<int, true>
+	 */
+	public function findSongIdsWithAnnotations(int $libraryId, bool $includeDeleted = false): array {
+		return $this->annotationMapper->findSongIdsWithAnnotations($libraryId, $includeDeleted);
+	}
+
+	/**
 	 * @return list<InternalSongAnnotation>
 	 */
 	public function getAnnotationsForSong(int $songId, ?int $fileId = null, bool $includeDeleted = false): array {

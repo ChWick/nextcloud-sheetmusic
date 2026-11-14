@@ -109,7 +109,9 @@ class MobileSheetsSqliteExporter {
 				$userObj = is_string($user) ? $this->userManager->get($user) : ($user instanceof IUser ? $user : $this->userManager->get($lib->userId));
 
 				$this->exportMiscData($db, $lib->id, $userObj);
-				$validSongIds = $this->getSongIdsWithValidFiles($db, $lib, $userObj, $publicToken);
+				$files = $this->songFileMapper->findAllForLibrary($lib->id, includeDeleted: false);
+				$resolvedPathsByFileId = $this->batchResolveWebdavPaths($files, $lib, $userObj, $publicToken);
+				$validSongIds = $this->getSongIdsWithValidFiles($db, $lib, $userObj, $publicToken, $files, $resolvedPathsByFileId);
 				if ($sublibrary !== null && $this->sublibraryService !== null) {
 					$matchingSongIds = $this->sublibraryService->getMatchingSongIds($sublibrary);
 					$validSongIds = array_intersect_key($validSongIds, $matchingSongIds);
@@ -117,11 +119,12 @@ class MobileSheetsSqliteExporter {
 				} else {
 					$this->entityExporter->exportEntities($db, $lib->id);
 				}
-				$this->exportSongs($db, $lib->id, $validSongIds);
+				$songs = $this->songMapper->findAllForLibrary($lib->id, includeDeleted: false);
+				$this->exportSongs($db, $lib->id, $validSongIds, $songs);
 				$this->entityExporter->exportSongEntityLinks($db, $lib->id, $validSongIds);
-				$this->exportFiles($db, $lib, $userObj, $publicToken);
-				$this->exportBookmarks($db, $lib, $userObj);
-				$this->exportAnnotations($db, $lib, $validSongIds);
+				$this->exportFiles($db, $lib, $userObj, $publicToken, $files, $songs, $resolvedPathsByFileId);
+				$this->exportBookmarks($db, $lib, $userObj, $songs);
+				$this->exportAnnotations($db, $lib, $validSongIds, $songs);
 				$this->ensureSongAndPageDefaults($db);
 				$this->cleanOrphanSongReferences($db);
 
@@ -187,6 +190,7 @@ class MobileSheetsSqliteExporter {
 
 		$userObj = is_string($user) ? $this->userManager->get($user) : ($user instanceof IUser ? $user : $this->userManager->get($lib->userId));
 		$files = $this->songFileMapper->findAllForLibrary($lib->id, includeDeleted: false);
+		$resolvedPathsByFileId = $this->batchResolveWebdavPaths($files, $lib, $userObj, $publicToken);
 
 		$lines = [];
 		$handledPaths = [];
@@ -196,7 +200,9 @@ class MobileSheetsSqliteExporter {
 				continue;
 			}
 			$this->ensureAccurateFileFacts($file, $userObj);
-			$webdavPath = $this->resolveWebdavPathForFile($file, $lib, $userObj, $publicToken);
+			$webdavPath = array_key_exists($file->fileId, $resolvedPathsByFileId)
+				? $resolvedPathsByFileId[$file->fileId]
+				: $this->resolveWebdavPathForFile($file, $lib, $userObj, $publicToken);
 			if ($webdavPath === null || $webdavPath === '' || isset($handledPaths[$webdavPath])) {
 				continue;
 			}
@@ -272,14 +278,26 @@ class MobileSheetsSqliteExporter {
 	}
 
 	/**
+	 * @param list<InternalSongFile>|null $files
+	 * @param array<int, ?string> $resolvedPathsByFileId
 	 * @return array<int, bool> Set of internal song IDs (and/or client IDs) that have at least one valid file.
 	 */
-	private function getSongIdsWithValidFiles(PDO $db, InternalLibrary $library, ?IUser $user, ?string $publicToken = null): array {
+	private function getSongIdsWithValidFiles(
+		PDO $db,
+		InternalLibrary $library,
+		?IUser $user,
+		?string $publicToken = null,
+		?array $files = null,
+		array &$resolvedPathsByFileId = [],
+	): array {
 		$validSongIds = [];
-		$files = $this->songFileMapper->findAllForLibrary($library->id, includeDeleted: false);
+		$files ??= $this->songFileMapper->findAllForLibrary($library->id, includeDeleted: false);
 
 		foreach ($files as $file) {
-			$webdavPath = $this->resolveWebdavPathForFile($file, $library, $user, $publicToken);
+			if (!array_key_exists($file->fileId, $resolvedPathsByFileId)) {
+				$resolvedPathsByFileId[$file->fileId] = $this->resolveWebdavPathForFile($file, $library, $user, $publicToken);
+			}
+			$webdavPath = $resolvedPathsByFileId[$file->fileId];
 			if ($webdavPath !== null && $webdavPath !== '') {
 				$validSongIds[$file->songId] = true;
 			}
@@ -290,8 +308,9 @@ class MobileSheetsSqliteExporter {
 
 	/**
 	 * @param array<int, bool> $validSongIds
+	 * @param list<\OCA\SheetMusic\Db\InternalSong>|null $songs
 	 */
-	private function exportSongs(PDO $db, int $libraryId, array $validSongIds): void {
+	private function exportSongs(PDO $db, int $libraryId, array $validSongIds, ?array $songs = null): void {
 		if (!MobileSheetsTableHelper::tableExists($db, 'Songs')) {
 			return;
 		}
@@ -299,7 +318,7 @@ class MobileSheetsSqliteExporter {
 		$hasNotesTable = MobileSheetsTableHelper::tableExists($db, 'SongNotes');
 		$hasSyncMeta = MobileSheetsTableHelper::tableExists($db, '_nc_sync_metadata');
 
-		$songs = $this->songMapper->findAllForLibrary($libraryId, includeDeleted: false);
+		$songs ??= $this->songMapper->findAllForLibrary($libraryId, includeDeleted: false);
 		$attributesBySong = $this->attributeMapper->findAllForLibrary($libraryId);
 		$libraryBookmarks = $this->bookmarkMapper !== null
 			? $this->bookmarkMapper->findAllForLibrary($libraryId)
@@ -450,17 +469,30 @@ class MobileSheetsSqliteExporter {
 		}
 	}
 
-	private function exportFiles(PDO $db, InternalLibrary $library, ?IUser $user, ?string $publicToken = null): void {
+	/**
+	 * @param list<InternalSongFile>|null $files
+	 * @param list<\OCA\SheetMusic\Db\InternalSong>|null $songs
+	 * @param array<int, ?string> $resolvedPathsByFileId
+	 */
+	private function exportFiles(
+		PDO $db,
+		InternalLibrary $library,
+		?IUser $user,
+		?string $publicToken = null,
+		?array $files = null,
+		?array $songs = null,
+		array &$resolvedPathsByFileId = [],
+	): void {
 		if (!MobileSheetsTableHelper::tableExists($db, 'Files')) {
 			return;
 		}
 
 		$hasSyncMeta = MobileSheetsTableHelper::tableExists($db, '_nc_sync_metadata');
 
-		$files = $this->songFileMapper->findAllForLibrary($library->id, includeDeleted: false);
+		$files ??= $this->songFileMapper->findAllForLibrary($library->id, includeDeleted: false);
 		[$usedIds, $nextId] = MobileSheetsTableHelper::initClientIdTracking($files);
 
-		$songs = $this->songMapper->findAllForLibrary($library->id, includeDeleted: false);
+		$songs ??= $this->songMapper->findAllForLibrary($library->id, includeDeleted: false);
 		$songClientMap = [];
 		foreach ($songs as $s) {
 			if ($s->clientId !== null) {
@@ -485,7 +517,10 @@ class MobileSheetsSqliteExporter {
 				$this->songFileMapper->update($file);
 			}
 
-			$webdavPath = $this->resolveWebdavPathForFile($file, $library, $user, $publicToken);
+			if (!array_key_exists($file->fileId, $resolvedPathsByFileId)) {
+				$resolvedPathsByFileId[$file->fileId] = $this->resolveWebdavPathForFile($file, $library, $user, $publicToken);
+			}
+			$webdavPath = $resolvedPathsByFileId[$file->fileId];
 			if ($webdavPath === null || $webdavPath === '') {
 				continue;
 			}
@@ -602,18 +637,35 @@ class MobileSheetsSqliteExporter {
 		}
 	}
 
+	/**
+	 * @param list<\OCA\SheetMusic\Db\InternalSong>|null $songs
+	 */
 	private function exportBookmarks(
 		PDO $db,
 		InternalLibrary $library,
 		?IUser $user,
+		?array $songs = null,
 	): void {
 		if ($this->bookmarkMapper === null || !MobileSheetsTableHelper::tableExists($db, 'Bookmarks')) {
 			return;
 		}
 
 		$libraryBookmarks = $this->bookmarkMapper->findAllForLibrary($library->id);
+		$sqliteBmSongIds = [];
+		$bmStmt = $db->query('SELECT DISTINCT SongId FROM Bookmarks');
+		if ($bmStmt !== false) {
+			while ($cid = $bmStmt->fetchColumn()) {
+				if (is_numeric($cid)) {
+					$sqliteBmSongIds[(int)$cid] = true;
+				}
+			}
+		}
 
-		$songs = $this->songMapper->findAllForLibrary($library->id, includeDeleted: false);
+		if ($libraryBookmarks === [] && $sqliteBmSongIds === []) {
+			return;
+		}
+
+		$songs ??= $this->songMapper->findAllForLibrary($library->id, includeDeleted: false);
 		$existingBmCols = MobileSheetsTableHelper::getTableColumns($db, 'Bookmarks');
 
 		foreach ($songs as $song) {
@@ -622,6 +674,9 @@ class MobileSheetsSqliteExporter {
 			}
 
 			$bookmarks = $libraryBookmarks[$song->id] ?? [];
+			if ($bookmarks === [] && !isset($sqliteBmSongIds[$song->clientId])) {
+				continue;
+			}
 			$this->exportMasterBookmarks($db, $song->clientId, $bookmarks, $existingBmCols);
 		}
 	}
@@ -755,6 +810,45 @@ class MobileSheetsSqliteExporter {
 
 		MobileSheetsTableHelper::insertIfEmpty($db, 'android_metadata', ['locale' => 'en_US']);
 		MobileSheetsTableHelper::insertIfEmpty($db, 'Defaults', ['Id' => 1, 'Initialized' => 1]);
+	}
+
+	/**
+	 * Batch-resolve WebDAV paths for a list of song files via filecache when exporting for a user,
+	 * falling back to per-file VFS lookup for any files on external/shared mounts or public tokens.
+	 *
+	 * @param list<InternalSongFile> $files
+	 * @return array<int, ?string>
+	 */
+	private function batchResolveWebdavPaths(
+		array $files,
+		InternalLibrary $library,
+		?IUser $user,
+		?string $publicToken = null,
+	): array {
+		if ($files === []) {
+			return [];
+		}
+
+		$resolved = [];
+		if ($user !== null && ($publicToken === null || $publicToken === '')) {
+			$fileIds = array_values(array_unique(array_filter(
+				array_map(static fn (InternalSongFile $f): int => $f->fileId, $files),
+				static fn (int $id): bool => $id > 0,
+			)));
+			if ($fileIds !== []) {
+				foreach ($this->songMapper->resolveFileNodePaths($fileIds, $user) as $fId => $path) {
+					$resolved[$fId] = $path;
+				}
+			}
+		}
+
+		foreach ($files as $file) {
+			if (!array_key_exists($file->fileId, $resolved)) {
+				$resolved[$file->fileId] = $this->resolveWebdavPathForFile($file, $library, $user, $publicToken);
+			}
+		}
+
+		return $resolved;
 	}
 
 	private function resolveWebdavPathForFile(
@@ -950,15 +1044,36 @@ class MobileSheetsSqliteExporter {
 
 	/**
 	 * @param array<int, bool>|list<int> $validSongIds
+	 * @param list<\OCA\SheetMusic\Db\InternalSong>|null $songs
 	 */
-	private function exportAnnotations(PDO $db, InternalLibrary $library, array $validSongIds): void {
+	private function exportAnnotations(PDO $db, InternalLibrary $library, array $validSongIds, ?array $songs = null): void {
 		if ($this->annotationService === null) {
 			return;
 		}
 
-		$songs = $this->songMapper->findAllForLibrary($library->id, includeDeleted: false);
+		$annotatedSongIds = $this->annotationService->findSongIdsWithAnnotations($library->id, includeDeleted: false);
+		$sqliteAnnotatedClientIds = [];
+		if (MobileSheetsTableHelper::tableExists($db, 'AnnotationsBase')) {
+			$stmt = $db->query('SELECT DISTINCT SongId FROM AnnotationsBase');
+			if ($stmt !== false) {
+				while ($cid = $stmt->fetchColumn()) {
+					if (is_numeric($cid)) {
+						$sqliteAnnotatedClientIds[(int)$cid] = true;
+					}
+				}
+			}
+		}
+
+		if ($annotatedSongIds === [] && $sqliteAnnotatedClientIds === []) {
+			return;
+		}
+
+		$songs ??= $this->songMapper->findAllForLibrary($library->id, includeDeleted: false);
 		foreach ($songs as $song) {
 			if ($song->clientId === null || $song->id === null) {
+				continue;
+			}
+			if (!isset($annotatedSongIds[$song->id]) && !isset($sqliteAnnotatedClientIds[$song->clientId])) {
 				continue;
 			}
 			$isValid = isset($validSongIds[$song->id])

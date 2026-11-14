@@ -428,6 +428,10 @@ class MobileSheetsAnnotationAdapter {
 			}
 		}
 
+		if ($annotations === []) {
+			return [];
+		}
+
 		$usedIds = [];
 		$allBaseIds = $db->query('SELECT Id FROM AnnotationsBase')->fetchAll(PDO::FETCH_COLUMN);
 		foreach ($allBaseIds as $bid) {

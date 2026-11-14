@@ -870,6 +870,11 @@ class MobileSheetsSqliteImporter {
 			}
 		}
 
+		$existingAnnotatedSongIds = $this->annotationService->findSongIdsWithAnnotations($lib->id, includeDeleted: false);
+		if ($clientSongIdsWithAnnotations === [] && $existingAnnotatedSongIds === []) {
+			return;
+		}
+
 		$songs = $this->songMapper->findAllForLibrary($lib->id, includeDeleted: true);
 		foreach ($songs as $song) {
 			if ($song->clientId === null || $song->id === null) {
@@ -877,10 +882,9 @@ class MobileSheetsSqliteImporter {
 			}
 
 			$hasIncoming = isset($clientSongIdsWithAnnotations[$song->clientId]);
-			$hasExisting = $this->annotationService->getAnnotationsForSong($song->id, includeDeleted: false) !== [];
-			$isUpdated = isset($updatedSongClientIds[$song->clientId]);
+			$hasExisting = isset($existingAnnotatedSongIds[$song->id]);
 
-			if (!$hasIncoming && !$hasExisting && !$isUpdated) {
+			if (!$hasIncoming && !$hasExisting) {
 				continue;
 			}
 
@@ -1005,14 +1009,21 @@ class MobileSheetsSqliteImporter {
 			return null;
 		}
 
+		$userFolder = null;
+		try {
+			$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+		} catch (\Throwable) {
+			return null;
+		}
+
 		try {
 			$msPath = $this->pathResolver->fromStored($filePath, $user);
 			if ($msPath !== null) {
-				$userFolder = $this->rootFolder->getUserFolder($user->getUID());
 				$rel = $this->pathResolver->relativeToUserFolder($msPath->internal, $user);
 				if ($rel !== null) {
-					if ($userFolder->nodeExists($rel)) {
+					try {
 						return $userFolder->get($rel)->getId();
+					} catch (\Throwable) {
 					}
 					if ($allowPlaceholder) {
 						$placeholderId = $this->createPlaceholderFile($userFolder, $rel, $library);
@@ -1029,9 +1040,9 @@ class MobileSheetsSqliteImporter {
 		try {
 			$clean = ltrim($filePath, '/');
 			$clean = $this->pathResolver->stripSublibrarySegment($clean);
-			$userFolder = $this->rootFolder->getUserFolder($user->getUID());
-			if ($userFolder->nodeExists($clean)) {
+			try {
 				return $userFolder->get($clean)->getId();
+			} catch (\Throwable) {
 			}
 
 			$libPath = trim($library->path, '/');
@@ -1043,8 +1054,9 @@ class MobileSheetsSqliteImporter {
 			}
 
 			$libRel = $cleanLibFolder !== '' ? $cleanLibFolder . '/' . $clean : $clean;
-			if ($userFolder->nodeExists($libRel)) {
+			try {
 				return $userFolder->get($libRel)->getId();
+			} catch (\Throwable) {
 			}
 
 			if ($allowPlaceholder && !str_contains($filePath, ':') && !str_starts_with($filePath, '/storage/')) {
