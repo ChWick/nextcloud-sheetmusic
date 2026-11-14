@@ -566,6 +566,21 @@ export const DIFFICULTY_SELECT_OPTIONS = [
 	...Array.from({ length: 5 }, (_, i) => ({ value: i + 1, label: formatDifficulty(i + 1) })),
 ]
 
+export function formatScalarInputValue(field: SongScalarFieldDef, val: unknown): string {
+	if (field.type === 'number') {
+		return val !== null && val !== undefined && Number(val) > 0 ? String(val) : ''
+	}
+	return String(val ?? '')
+}
+
+export function parseScalarInputValue(field: SongScalarFieldDef, raw: string | number): string | number | null {
+	if (field.type === 'number') {
+		const num = Number(raw)
+		return Number.isFinite(num) && num > 0 ? num : null
+	}
+	return String(raw ?? '')
+}
+
 export function parseDurationInput(raw: string | number): number {
 	if (typeof raw === 'number') {
 		return Math.max(0, Math.round(raw))

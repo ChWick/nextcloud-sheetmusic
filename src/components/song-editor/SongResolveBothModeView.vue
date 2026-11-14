@@ -10,6 +10,7 @@ import FileDocumentIcon from 'vue-material-design-icons/FileDocument.vue'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import TrashCanOutlineIcon from 'vue-material-design-icons/TrashCanOutline.vue'
 import { getFileName, openFileExternally } from '../../utils/file'
+import { formatScalarInputValue, parseScalarInputValue } from '../songs/song-view-columns'
 import {
 	ENTITY_COLUMNS,
 	SONG_SCALAR_FIELDS,
@@ -41,20 +42,11 @@ const emit = defineEmits<{
 }>()
 
 function getScalarModelValue(draft: SongEditableDraft, field: SongScalarFieldDef): string {
-	const val = draft.scalars[field.key]
-	if (field.type === 'number') {
-		return val !== null && val !== undefined && Number(val) > 0 ? String(val) : ''
-	}
-	return String(val ?? '')
+	return formatScalarInputValue(field, draft.scalars[field.key])
 }
 
 function onScalarInput(target: 'A' | 'B', field: SongScalarFieldDef, raw: string | number) {
-	if (field.type === 'number') {
-		const num = Number(raw)
-		emit('update:scalar', target, field.key, Number.isFinite(num) && num > 0 ? num : null)
-	} else {
-		emit('update:scalar', target, field.key, String(raw ?? ''))
-	}
+	emit('update:scalar', target, field.key, parseScalarInputValue(field, raw))
 }
 </script>
 

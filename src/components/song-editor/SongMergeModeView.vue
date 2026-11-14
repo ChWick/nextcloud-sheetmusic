@@ -11,6 +11,7 @@ import FileDocumentIcon from 'vue-material-design-icons/FileDocument.vue'
 import MergeIcon from 'vue-material-design-icons/Merge.vue'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import { getFileName, openFileExternally } from '../../utils/file'
+import { formatScalarInputValue, parseScalarInputValue } from '../songs/song-view-columns'
 import {
 	ENTITY_COLUMNS,
 	SONG_SCALAR_FIELDS,
@@ -45,20 +46,11 @@ function getSongEntities(song: Song | undefined, prop: SongEntityProp): { id?: n
 }
 
 function getScalarModelValue(field: SongScalarFieldDef): string {
-	const val = props.draft.scalars[field.key]
-	if (field.type === 'number') {
-		return val !== null && val !== undefined && Number(val) > 0 ? String(val) : ''
-	}
-	return String(val ?? '')
+	return formatScalarInputValue(field, props.draft.scalars[field.key])
 }
 
 function onScalarInput(field: SongScalarFieldDef, raw: string | number) {
-	if (field.type === 'number') {
-		const num = Number(raw)
-		emit('update:scalar', field.key, Number.isFinite(num) && num > 0 ? num : null)
-	} else {
-		emit('update:scalar', field.key, String(raw ?? ''))
-	}
+	emit('update:scalar', field.key, parseScalarInputValue(field, raw))
 }
 </script>
 

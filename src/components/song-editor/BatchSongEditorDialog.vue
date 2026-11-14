@@ -12,6 +12,8 @@ import { computed, reactive, watch } from 'vue'
 import {
 	ENTITY_COLUMNS,
 	SONG_SCALAR_FIELDS,
+	formatScalarInputValue,
+	parseScalarInputValue,
 	type SongEntityProp,
 	type SongScalarFieldDef,
 	type SongScalarProp,
@@ -107,20 +109,11 @@ const isAnythingEnabled = computed(() =>
 )
 
 function getScalarModelValue(field: SongScalarFieldDef): string {
-	const val = scalarState[field.key].value
-	if (field.type === 'number') {
-		return val !== null && val !== undefined && Number(val) > 0 ? String(val) : ''
-	}
-	return String(val ?? '')
+	return formatScalarInputValue(field, scalarState[field.key].value)
 }
 
 function onScalarInput(field: SongScalarFieldDef, raw: string | number) {
-	if (field.type === 'number') {
-		const num = Number(raw)
-		scalarState[field.key].value = Number.isFinite(num) && num > 0 ? num : null
-	} else {
-		scalarState[field.key].value = String(raw ?? '')
-	}
+	scalarState[field.key].value = parseScalarInputValue(field, raw)
 }
 
 function handleApply() {
