@@ -46,6 +46,10 @@ const props = withDefaults(
 		initialZoomMode?: 'fit-width' | 'fit-page' | 'custom'
 		startAtEnd?: boolean
 		noPadding?: boolean
+		nextFilePath?: string
+		nextTargetPage?: number
+		nextPageOrder?: string | null
+		interleaveSongs?: boolean
 	}>(),
 	{
 		fileName: undefined,
@@ -65,6 +69,10 @@ const props = withDefaults(
 		initialZoomMode: 'fit-width',
 		startAtEnd: false,
 		noPadding: false,
+		nextFilePath: undefined,
+		nextTargetPage: undefined,
+		nextPageOrder: undefined,
+		interleaveSongs: false,
 	},
 )
 
@@ -89,6 +97,8 @@ let currentLoadId = 0
 let currentRenderId = 0
 
 const loadedPdf = shallowRef<any>(null)
+const loadedNextPdf = shallowRef<any>(null)
+let loadedNextPdfPath = ''
 const totalPages = ref(1)
 const currentPage = ref(1)
 const fileSizeBytes = ref<number | null>(null)
@@ -252,8 +262,31 @@ const isUnsupportedFile = computed(() => {
 	return !isPdfFile.value && !isImageFile.value && !isDocxFile.value && !isXlsxFile.value
 })
 
+const canInterleaveWithNext = computed(() => {
+	return Boolean(props.interleaveSongs && props.nextFilePath && props.nextFilePath.split('?')[0].toLowerCase().endsWith('.pdf'))
+})
+
+const effectiveDoubleTotalPages = computed(() => {
+	if (!canInterleaveWithNext.value) {
+		return totalPages.value
+	}
+	if (doublePageTurnMode.value === 'step') {
+		return totalPages.value + 1
+	}
+	return totalPages.value % 2 === 1 ? totalPages.value + 1 : totalPages.value
+})
+
+const isShowingNextSongFirstPage = computed(() => {
+	return pageLayout.value === 'double'
+		&& canInterleaveWithNext.value
+		&& doubleSpread.value[1] === totalPages.value + 1
+})
+
 const currentPageDisplay = computed(() => {
 	if (pageLayout.value === 'double') {
+		if (isShowingNextSongFirstPage.value) {
+			return `${doubleSpread.value[0]} / →1`
+		}
 		return formatDoubleSpreadDisplay(doubleSpread.value)
 	}
 	if (pageLayout.value === 'continuous') {
@@ -265,7 +298,7 @@ const currentPageDisplay = computed(() => {
 const canGoPrev = computed(() => {
 	if (pageLayout.value === 'continuous') return false
 	if (pageLayout.value === 'double') {
-		return prevDoubleSpread(doubleSpread.value, totalPages.value, doublePageTurnMode.value) !== null
+		return prevDoubleSpread(doubleSpread.value, effectiveDoubleTotalPages.value, doublePageTurnMode.value) !== null
 	}
 	return currentPage.value > 1
 })
@@ -273,7 +306,7 @@ const canGoPrev = computed(() => {
 const canGoNext = computed(() => {
 	if (pageLayout.value === 'continuous') return false
 	if (pageLayout.value === 'double') {
-		return nextDoubleSpread(doubleSpread.value, totalPages.value, doublePageTurnMode.value) !== null
+		return nextDoubleSpread(doubleSpread.value, effectiveDoubleTotalPages.value, doublePageTurnMode.value) !== null
 	}
 	return currentPage.value < totalPages.value
 })
@@ -303,7 +336,7 @@ function openInExternalViewer() {
 
 function prevPage(): boolean {
 	if (pageLayout.value === 'double') {
-		const prev = prevDoubleSpread(doubleSpread.value, totalPages.value, doublePageTurnMode.value)
+		const prev = prevDoubleSpread(doubleSpread.value, effectiveDoubleTotalPages.value, doublePageTurnMode.value)
 		if (!prev) return false
 		doubleSpread.value = prev
 		currentPage.value = prev[0]
@@ -321,7 +354,7 @@ function prevPage(): boolean {
 
 function nextPage(): boolean {
 	if (pageLayout.value === 'double') {
-		const next = nextDoubleSpread(doubleSpread.value, totalPages.value, doublePageTurnMode.value)
+		const next = nextDoubleSpread(doubleSpread.value, effectiveDoubleTotalPages.value, doublePageTurnMode.value)
 		if (!next) return false
 		doubleSpread.value = next
 		currentPage.value = next[0]
@@ -479,7 +512,7 @@ async function renderCurrentView() {
 		}
 	}
 
-	let pagesToRender: Array<{ pageNum: number; index: number }> = []
+	let pagesToRender: Array<{ pageNum: number; index: number; isNextFile?: boolean }> = []
 	if (pageLayout.value === 'single') {
 		const idx = Math.min(Math.max(1, currentPage.value), total) - 1
 		pagesToRender = [{ pageNum: ordered[idx] || 1, index: idx + 1 }]
@@ -487,9 +520,17 @@ async function renderCurrentView() {
 		const [leftLogical, rightLogical] = doubleSpread.value
 		const leftIdx = Math.min(Math.max(1, leftLogical), total) - 1
 		pagesToRender = [{ pageNum: ordered[leftIdx] || 1, index: leftIdx + 1 }]
-		if (rightLogical !== null && rightLogical >= 1 && rightLogical <= total) {
-			const rightIdx = rightLogical - 1
-			pagesToRender.push({ pageNum: ordered[rightIdx] || 1, index: rightIdx + 1 })
+		if (rightLogical !== null && rightLogical >= 1) {
+			if (rightLogical <= total) {
+				const rightIdx = rightLogical - 1
+				pagesToRender.push({ pageNum: ordered[rightIdx] || 1, index: rightIdx + 1 })
+			} else if (rightLogical === total + 1 && canInterleaveWithNext.value) {
+				pagesToRender.push({
+					pageNum: props.nextTargetPage && props.nextTargetPage >= 1 ? props.nextTargetPage : 1,
+					index: total + 1,
+					isNextFile: true,
+				})
+			}
 		}
 	} else {
 		pagesToRender = ordered.map((p, idx) => ({ pageNum: p, index: idx + 1 }))
@@ -529,13 +570,45 @@ async function renderCurrentView() {
 
 	const renderedPlaceholders = new Set<HTMLElement>()
 
+	async function getNextPdfDocument(): Promise<any | null> {
+		if (!props.nextFilePath) return null
+		if (loadedNextPdf.value && loadedNextPdfPath === props.nextFilePath) {
+			return loadedNextPdf.value
+		}
+		const binaryData = await fetchBinaryData(props.nextFilePath, currentLoadId)
+		if (!binaryData) return null
+		const wasmUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/wasm/') : new URL('pdfjs-dist/wasm/', import.meta.url).href
+		const cMapUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/cmaps/') : new URL('pdfjs-dist/cmaps/', import.meta.url).href
+		const standardFontDataUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/standard_fonts/') : new URL('pdfjs-dist/standard_fonts/', import.meta.url).href
+		const nextPdf = await getDocument({
+			data: binaryData.slice(),
+			cMapUrl,
+			cMapPacked: true,
+			standardFontDataUrl,
+			wasmUrl,
+		}).promise
+		loadedNextPdf.value = nextPdf
+		loadedNextPdfPath = props.nextFilePath
+		return nextPdf
+	}
+
 	// Helper to render a specific page into its placeholder
-	const renderPage = async (pageNumber: number, placeholder: HTMLElement) => {
+	const renderPage = async (pageNumber: number, placeholder: HTMLElement, isNextFile = false) => {
 		if (renderId !== currentRenderId || renderedPlaceholders.has(placeholder)) return
 		renderedPlaceholders.add(placeholder)
 
 		try {
-			const page = await pdf.getPage(pageNumber)
+			let targetPdf = pdf
+			let resolvedPageNum = pageNumber
+			if (isNextFile) {
+				const nextPdf = await getNextPdfDocument()
+				if (!nextPdf || renderId !== currentRenderId) return
+				targetPdf = nextPdf
+				const nextOrdered = parsePageOrder(props.nextPageOrder, nextPdf.numPages)
+				const idx = Math.min(Math.max(1, pageNumber), nextOrdered.length) - 1
+				resolvedPageNum = nextOrdered[idx] || 1
+			}
+			const page = await targetPdf.getPage(resolvedPageNum)
 			if (renderId !== currentRenderId) return
 
 			const pageRotation = (((page.rotate ?? 0) + rotation.value) % 360 + 360) % 360
@@ -566,7 +639,9 @@ async function renderCurrentView() {
 				placeholder.style.minWidth = ''
 				placeholder.dataset.pageWidth = String(viewport.width)
 				placeholder.dataset.pageHeight = String(viewport.height)
-				mountAnnotationOverlay(placeholder, pageNumber, viewport.width, viewport.height)
+				if (!isNextFile) {
+					mountAnnotationOverlay(placeholder, resolvedPageNum, viewport.width, viewport.height)
+				}
 			}
 		} catch (err) {
 			console.warn(`Could not render page ${pageNumber}:`, err)
@@ -639,7 +714,7 @@ async function renderCurrentView() {
 			return placeholder
 		})
 		await Promise.all(
-			pagesToRender.map((item, idx) => renderPage(item.pageNum, newPlaceholders[idx])),
+			pagesToRender.map((item, idx) => renderPage(item.pageNum, newPlaceholders[idx], Boolean(item.isNextFile))),
 		)
 		if (renderId !== currentRenderId || !pdfContainer.value) {
 			return
@@ -809,9 +884,9 @@ async function loadAndRenderFile() {
 			pageLayout.value = await resolveAutoLayoutForPage(currentPage.value)
 		}
 
-		doubleSpread.value = totalPages.value > 1
-			? getDoubleSpreadForPage(currentPage.value, totalPages.value, doublePageTurnMode.value)
-			: getInitialDoubleSpread(totalPages.value)
+		doubleSpread.value = effectiveDoubleTotalPages.value > 1
+			? getDoubleSpreadForPage(currentPage.value, effectiveDoubleTotalPages.value, doublePageTurnMode.value)
+			: getInitialDoubleSpread(effectiveDoubleTotalPages.value)
 
 		await renderCurrentView()
 	} catch (error: any) {
@@ -932,6 +1007,7 @@ defineExpose({
 	zoomMode,
 	canGoPrev,
 	canGoNext,
+	isShowingNextSongFirstPage,
 	fileSizeBytes,
 	pageResolutions,
 	showAnnotationsState,

@@ -52,12 +52,14 @@ const initialSettings = loadEffectivePerformanceSettings(props.libraryId, props.
 
 const currentIndex = ref(Math.min(Math.max(0, props.initialIndex), Math.max(0, props.items.length - 1)))
 const startAtEnd = ref(false)
+const skipFirstPageOnNextSong = ref(false)
 const isDrawerOpen = ref(false)
 const isSettingsOpen = ref(false)
 const isSupplementalDrawerOpen = ref(false)
 const isFullscreen = ref(false)
 const isSetlistOverride = ref(initialSettings.overrideEnabled)
 const showAnnotations = ref(initialSettings.settings.showAnnotations)
+const interleaveSongs = ref(initialSettings.settings.interleaveSongs)
 
 const layoutChoice = ref<PerformanceLayoutChoice>(initialSettings.settings.layoutChoice)
 const doublePageTurnMode = ref<DoublePageTurnMode>(initialSettings.settings.doublePageTurnMode)
@@ -80,6 +82,7 @@ function currentViewerSettings(): PerformanceViewerSettings {
 		doublePageTurnMode: doublePageTurnMode.value,
 		zoomChoice: zoomChoice.value,
 		showAnnotations: showAnnotations.value,
+		interleaveSongs: interleaveSongs.value,
 	}
 }
 
@@ -199,7 +202,20 @@ const currentFilePath = computed(() => buildVersionedPath(currentFile.value))
 const currentPageOrder = computed(() => currentFile.value?.pageOrder ?? null)
 const currentTargetPage = computed(() => {
 	if (startAtEnd.value) return undefined
-	return currentItem.value?.pageNum && currentItem.value.pageNum >= 1 ? currentItem.value.pageNum : 1
+	const base = currentItem.value?.pageNum && currentItem.value.pageNum >= 1 ? currentItem.value.pageNum : 1
+	return skipFirstPageOnNextSong.value ? base + 1 : base
+})
+
+const nextItem = computed<SetlistItem | null>(() => props.items[currentIndex.value + 1] ?? null)
+const nextSong = computed<Song | null>(() => {
+	if (!nextItem.value) return null
+	return songsById.value.get(nextItem.value.songId) ?? null
+})
+const nextFile = computed(() => pickPrimaryFile(nextSong.value))
+const nextFilePath = computed(() => buildVersionedPath(nextFile.value))
+const nextPageOrder = computed(() => nextFile.value?.pageOrder ?? null)
+const nextTargetPage = computed(() => {
+	return nextItem.value?.pageNum && nextItem.value.pageNum >= 1 ? nextItem.value.pageNum : 1
 })
 
 const effectiveLayout = computed(() => {
@@ -257,18 +273,22 @@ watch(currentIndex, () => {
 	preloadNextSong()
 }, { immediate: true })
 
-function goToSong(index: number, openAtEnd = false) {
+function goToSong(index: number, openAtEnd = false, skipFirstPage = false) {
 	if (index < 0 || index >= props.items.length) return
 	startAtEnd.value = openAtEnd
+	skipFirstPageOnNextSong.value = skipFirstPage
 	currentIndex.value = index
 	isDrawerOpen.value = false
 	scheduleHudAutoHide()
 }
 
 function handleNextPage() {
+	const wasInterleaved = Boolean(previewerRef.value?.isShowingNextSongFirstPage)
 	const turned = previewerRef.value?.nextPage()
 	if (!turned && hasNextSong.value) {
-		goToSong(currentIndex.value + 1, false)
+		const shouldSkipFirst = wasInterleaved
+			&& (doublePageTurnMode.value === 'half' || doublePageTurnMode.value === 'spread')
+		goToSong(currentIndex.value + 1, false, shouldSkipFirst)
 	}
 }
 
@@ -292,6 +312,11 @@ function onLayoutChange(choice: PerformanceLayoutChoice) {
 function onDoublePageTurnModeChange(mode: DoublePageTurnMode) {
 	doublePageTurnMode.value = mode
 	previewerRef.value?.setDoublePageTurnMode(mode)
+	persistCurrentSettings()
+}
+
+function onToggleInterleave() {
+	interleaveSongs.value = !interleaveSongs.value
 	persistCurrentSettings()
 }
 
@@ -398,7 +423,11 @@ onUnmounted(() => {
 					:no-padding="true"
 					:initial-page-layout="layoutChoice"
 					:initial-double-page-turn-mode="doublePageTurnMode"
-					:initial-zoom-mode="zoomChoice" />
+					:initial-zoom-mode="zoomChoice"
+					:next-file-path="nextFilePath"
+					:next-target-page="nextTargetPage"
+					:next-page-order="nextPageOrder"
+					:interleave-songs="interleaveSongs" />
 				<div v-else :class="$style.emptyFile">
 					{{ t('sheetmusic', 'No score file attached to this song.') }}
 				</div>
@@ -428,6 +457,7 @@ onUnmounted(() => {
 				:effective-layout="effectiveLayout"
 				:double-page-turn-mode="doublePageTurnMode"
 				:zoom-choice="zoomChoice"
+				:interleave-songs="interleaveSongs"
 				@prev-song="goToSong(currentIndex - 1, false)"
 				@prev-page="handlePrevPage"
 				@next-page="handleNextPage"
@@ -435,6 +465,7 @@ onUnmounted(() => {
 				@change-layout="onLayoutChange"
 				@change-double-page-turn-mode="onDoublePageTurnModeChange"
 				@toggle-zoom="onZoomToggle"
+				@toggle-interleave="onToggleInterleave"
 				@pause-auto-hide="pauseHudAutoHide"
 				@resume-auto-hide="resumeHudAutoHide" />
 

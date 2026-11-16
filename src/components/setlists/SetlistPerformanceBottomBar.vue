@@ -9,7 +9,7 @@ import DoublePageTurnModeSelector from '../file-preview/DoublePageTurnModeSelect
 import type { DoublePageTurnMode } from '../../utils/page-turn'
 import type { PerformanceLayoutChoice, PerformanceZoomChoice } from '../../utils/performance-settings'
 
-defineProps<{
+withDefaults(defineProps<{
 	visible: boolean
 	hasPrevSong: boolean
 	hasNextSong: boolean
@@ -21,7 +21,10 @@ defineProps<{
 	effectiveLayout: 'continuous' | 'single' | 'double'
 	doublePageTurnMode: DoublePageTurnMode
 	zoomChoice: PerformanceZoomChoice
-}>()
+	interleaveSongs?: boolean
+}>(), {
+	interleaveSongs: false,
+})
 
 const emit = defineEmits<{
 	prevSong: []
@@ -31,6 +34,7 @@ const emit = defineEmits<{
 	changeLayout: [choice: PerformanceLayoutChoice]
 	changeDoublePageTurnMode: [mode: DoublePageTurnMode]
 	toggleZoom: []
+	toggleInterleave: []
 	pauseAutoHide: []
 	resumeAutoHide: []
 }>()
@@ -110,6 +114,16 @@ const emit = defineEmits<{
 				v-if="layoutChoice === 'auto' || effectiveLayout === 'double'"
 				:model-value="doublePageTurnMode"
 				@update:model-value="emit('changeDoublePageTurnMode', $event)" />
+
+			<NcButton
+				v-if="layoutChoice === 'auto' || effectiveLayout === 'double'"
+				:variant="interleaveSongs ? 'primary' : 'secondary'"
+				size="small"
+				:aria-pressed="interleaveSongs"
+				:title="t('sheetmusic', 'Interleave last page of current song with first page of next song')"
+				@click="emit('toggleInterleave')">
+				{{ t('sheetmusic', 'Interleave') }}
+			</NcButton>
 
 			<NcButton
 				variant="secondary"

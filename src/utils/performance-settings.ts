@@ -9,6 +9,7 @@ export interface PerformanceViewerSettings {
 	doublePageTurnMode: DoublePageTurnMode
 	zoomChoice: PerformanceZoomChoice
 	showAnnotations: boolean
+	interleaveSongs: boolean
 }
 
 export interface SetlistPerformanceOverride extends PerformanceViewerSettings {
@@ -20,6 +21,7 @@ export const DEFAULT_PERFORMANCE_SETTINGS: PerformanceViewerSettings = {
 	doublePageTurnMode: 'half',
 	zoomChoice: 'fit-page',
 	showAnnotations: true,
+	interleaveSongs: false,
 }
 
 const VALID_LAYOUTS = new Set<PerformanceLayoutChoice>(['auto', 'single', 'double', 'continuous'])
@@ -41,6 +43,9 @@ export function validatePerformanceSettings(raw: unknown): PerformanceViewerSett
 		showAnnotations: typeof obj.showAnnotations === 'boolean'
 			? obj.showAnnotations
 			: DEFAULT_PERFORMANCE_SETTINGS.showAnnotations,
+		interleaveSongs: typeof obj.interleaveSongs === 'boolean'
+			? obj.interleaveSongs
+			: DEFAULT_PERFORMANCE_SETTINGS.interleaveSongs,
 	}
 }
 
@@ -92,6 +97,7 @@ export function loadEffectivePerformanceSettings(
 					doublePageTurnMode: setlistOverride.doublePageTurnMode,
 					zoomChoice: setlistOverride.zoomChoice,
 					showAnnotations: setlistOverride.showAnnotations,
+					interleaveSongs: setlistOverride.interleaveSongs,
 				},
 				overrideEnabled: true,
 			}

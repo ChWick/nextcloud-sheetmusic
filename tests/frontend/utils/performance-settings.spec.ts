@@ -25,6 +25,7 @@ describe('performance-settings', () => {
 			doublePageTurnMode: 'spread',
 			zoomChoice: 'fit-width',
 			showAnnotations: true,
+			interleaveSongs: true,
 		})
 
 		const setlistStore = createSetlistPerformanceStore(10, 5, storage)
@@ -33,6 +34,7 @@ describe('performance-settings', () => {
 			doublePageTurnMode: 'step',
 			zoomChoice: 'fit-page',
 			showAnnotations: false,
+			interleaveSongs: false,
 			overrideEnabled: false,
 		})
 
@@ -43,6 +45,7 @@ describe('performance-settings', () => {
 				doublePageTurnMode: 'spread',
 				zoomChoice: 'fit-width',
 				showAnnotations: true,
+				interleaveSongs: true,
 			},
 			overrideEnabled: false,
 		})
@@ -53,6 +56,7 @@ describe('performance-settings', () => {
 			doublePageTurnMode: 'step',
 			zoomChoice: 'fit-page',
 			showAnnotations: false,
+			interleaveSongs: false,
 			overrideEnabled: true,
 		})
 
@@ -62,6 +66,7 @@ describe('performance-settings', () => {
 				doublePageTurnMode: 'step',
 				zoomChoice: 'fit-page',
 				showAnnotations: false,
+				interleaveSongs: false,
 			},
 			overrideEnabled: true,
 		})
@@ -73,6 +78,7 @@ describe('performance-settings', () => {
 				doublePageTurnMode: 'spread',
 				zoomChoice: 'fit-width',
 				showAnnotations: true,
+				interleaveSongs: true,
 			},
 			overrideEnabled: false,
 		})
