@@ -51,7 +51,8 @@ Managing digital sheet music across multiple devices, band members, or ensembles
 - **Multi-File Song Support**: Attach multiple scores, parts, lead sheets, or audio tracks to a single song with staged change staging.
 
 ### 📄 Full-Screen Score Viewer
-- **Embedded PDF Score Viewer**: High-performance canvas-rendered viewer optimized for fast page flipping.
+- **Embedded PDF Score Viewer**: High-performance canvas-rendered viewer optimized for fast page flipping, supporting continuous scroll, single-page, and two-page side-by-side layouts.
+- **Musician Page-Turning Modes**: Choose between **Half-page** (`1/2 → 3/2 → 3/4`), **1-page step** (`1/2 → 2/3 → 3/4`), and **2-page jump** (`1/2 → 3/4`) in two-page view.
 - **PDF Bookmarks & Movements Bar**: Quickly jump between score bookmarks and song movements.
 - **External Viewer Option**: One-click opening into your browser's native viewer or desktop PDF application.
 
@@ -66,10 +67,11 @@ No need to install desktop PDF editors—Sheet Music includes built-in tools tai
 - **File Version History**: Revert back to previous score revisions using Nextcloud's built-in versioning system.
 - **Trash Bin Protection**: Deleted songs and associated files move to the Nextcloud Trash Bin where they can be restored safely.
 
-### 📋 Setlist Management
+### 📋 Setlist Management & Performance Mode
 - Create, rename, and manage setlists for rehearsals, gigs, and concerts.
 - Add whole songs or specific bookmarked sections to setlists.
 - Drag-and-drop reordering with persistent sorting modes.
+- **Setlist Performance Viewer**: Launch fullscreen gig mode directly from any setlist with responsive tablet/orientation layout (`Auto` single-page portrait / two-page landscape), touch tap-zones & swipe, keyboard/Bluetooth pedal page turning, automatic bookmark jumping, next-song preloading, and screen wake lock.
 
 ### 🩺 Library Health & Maintenance Automation
 - **Sync File Paths & Metadata**: Automatically organize physical files on disk according to customizable naming rules (`Composer/Title.pdf`), embed song metadata into standard PDF document properties (Title, Author, Subject, Keywords), and update MobileSheets hash codes.
@@ -222,6 +224,9 @@ composer psalm
 
 # PHP Unit Tests
 composer test:unit
+
+# Seed a test library with sample multi-page PDFs, a bookmark, and a setlist (idempotent)
+php occ sheetmusic:seed-test-library --user=admin --path=/SheetMusicTest
 ```
 
 ---
