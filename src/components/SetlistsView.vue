@@ -24,7 +24,8 @@
           :item-count="selectedSetlistItems.length"
           :total-duration-formatted="totalDurationFormatted"
           :can-write="canWrite"
-          @add-item="openAddItemDialog" />
+          @add-item="openAddItemDialog"
+          @play="openPerformanceMode(0)" />
 
         <SetlistItemsTable
           :items="selectedSetlistItems"
@@ -76,6 +77,15 @@
     :error="addItemError"
     @close="closeAddItemDialog"
     @add="handleAddItem" />
+
+  <SetlistPerformanceViewer
+    v-if="isPerformanceMode && selectedSetlist && selectedSetlistItems.length > 0"
+    :setlist-name="selectedSetlist.name"
+    :items="selectedSetlistItems"
+    :songs="songs"
+    :library-id="selectedLibrary"
+    :initial-index="performanceStartIndex"
+    @close="isPerformanceMode = false" />
 </template>
 
 <script setup lang="ts">
@@ -91,6 +101,7 @@ import CreateSetlistDialog from './setlists/CreateSetlistDialog.vue'
 import RenameSetlistDialog from './setlists/RenameSetlistDialog.vue'
 import DeleteSetlistDialog from './setlists/DeleteSetlistDialog.vue'
 import AddSetlistItemDialog from './setlists/AddSetlistItemDialog.vue'
+import SetlistPerformanceViewer from './setlists/SetlistPerformanceViewer.vue'
 import type { Setlist, SetlistItem } from '../types/song'
 import { useLibraryData } from '../composables/useLibraryData'
 import { useSetlists } from '../composables/useSetlists'
@@ -133,6 +144,15 @@ function handleUpdateItemBookmark(item: SetlistItem, bookmarkId: number | null) 
   if (item.id) {
     updateItemBookmark(item.id, bookmarkId)
   }
+}
+
+const isPerformanceMode = ref(false)
+const performanceStartIndex = ref(0)
+
+function openPerformanceMode(startIndex = 0) {
+  if (selectedSetlistItems.value.length === 0) return
+  performanceStartIndex.value = startIndex
+  isPerformanceMode.value = true
 }
 
 // Create Dialog
