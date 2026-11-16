@@ -54,7 +54,7 @@ vi.mock('../../../src/components/FilePreviewer.vue', () => ({
 			})
 			return {}
 		},
-		template: '<div class="mock-file-previewer" :data-file-path="filePath" :data-target-page="targetPage" />',
+		template: '<div class="mock-file-previewer" :data-file-path="filePath" :data-target-page="targetPage" :data-initial-layout="initialPageLayout" />',
 	},
 }))
 
@@ -151,5 +151,33 @@ describe('SetlistPerformanceViewer', () => {
 
 		wrapper.unmount()
 		vi.useRealTimers()
+	})
+
+	it('preserves chosen double layout when jumping to a bookmark song', async () => {
+		const wrapper = mount(SetlistPerformanceViewer, {
+			props: {
+				setlistName: 'Friday Gig',
+				items: sampleItems,
+				songs: sampleSongs,
+				libraryId: 1,
+			},
+			attachTo: document.body,
+		})
+
+		const layoutSelect = document.body.querySelector('select[aria-label="Page layout"]') as HTMLSelectElement | null
+		expect(layoutSelect).not.toBeNull()
+		layoutSelect!.value = 'double'
+		layoutSelect!.dispatchEvent(new Event('change'))
+		await wrapper.vm.$nextTick()
+
+		// Advance to Song Two (which has a bookmark at page 3)
+		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }))
+		await wrapper.vm.$nextTick()
+
+		const previewerEl = document.body.querySelector('.mock-file-previewer')
+		expect(previewerEl?.getAttribute('data-target-page')).toBe('3')
+		expect(previewerEl?.getAttribute('data-initial-layout')).toBe('double')
+
+		wrapper.unmount()
 	})
 })

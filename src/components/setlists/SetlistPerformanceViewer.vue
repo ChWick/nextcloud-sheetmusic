@@ -131,7 +131,10 @@ const currentTargetPage = computed(() => {
 	return currentItem.value?.pageNum && currentItem.value.pageNum >= 1 ? currentItem.value.pageNum : 1
 })
 
-const effectiveLayout = computed(() => previewerRef.value?.pageLayout ?? 'single')
+const effectiveLayout = computed(() => {
+	if (layoutChoice.value !== 'auto') return layoutChoice.value
+	return previewerRef.value?.pageLayout ?? 'single'
+})
 const currentPageDisplay = computed(() => previewerRef.value?.currentPageDisplay ?? '1')
 const totalPages = computed(() => previewerRef.value?.totalPages ?? 1)
 const hasPrevSong = computed(() => currentIndex.value > 0)
@@ -446,7 +449,7 @@ onUnmounted(() => {
 				:show-annotations="showAnnotations"
 				:hide-toolbar="true"
 				:show-external-button="false"
-				initial-page-layout="auto"
+				:initial-page-layout="layoutChoice"
 				:initial-double-page-turn-mode="doublePageTurnMode"
 				:initial-zoom-mode="zoomChoice" />
 			<div v-else :class="$style.emptyFile">
