@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\SheetMusic\AppInfo;
 
 use OCA\DAV\Events\SabrePluginAddEvent;
+use OCA\SheetMusic\Command\SeedTestLibraryCommand;
 use OCA\SheetMusic\Listener\SabrePluginListener;
 use OCA\SheetMusic\Listener\SheetMusicFileEventListener;
 use OCA\SheetMusic\Share\SheetMusicPublicShareTemplateProvider;
@@ -38,6 +39,7 @@ class Application extends App implements IBootstrap {
 		$context->registerEventListener(NodeDeletedEvent::class, SheetMusicFileEventListener::class);
 		$context->registerEventListener(NodeWrittenEvent::class, SheetMusicFileEventListener::class);
 		$context->registerPublicShareTemplateProvider(SheetMusicPublicShareTemplateProvider::class);
+		$context->registerCommand(SeedTestLibraryCommand::class);
 
 		$context->registerService(SyncClientRegistry::class, function (ContainerInterface $c): SyncClientRegistry {
 			return new SyncClientRegistry([

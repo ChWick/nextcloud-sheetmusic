@@ -16,6 +16,9 @@
 	<dependencies>
 		<nextcloud min-version="31" max-version="36"/>
 	</dependencies>
+	<commands>
+		<command>OCA\SheetMusic\Command\SeedTestLibraryCommand</command>
+	</commands>
 	<navigations>
 		<navigation>
 			<id>sheetmusic</id>
