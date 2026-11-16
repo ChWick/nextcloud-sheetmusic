@@ -118,7 +118,7 @@ class Version1006Date20261106120000 extends SimpleMigrationStep {
 				'notnull' => true,
 			]);
 
-			$table->setPrimaryKey(['id']);
+			$table->setPrimaryKey(['id'], 'sm_ann_sync_pk');
 			$table->addUniqueIndex(['client_type', 'client_record_id'], 'sm_ann_sync_client_idx');
 			$table->addIndex(['annotation_id'], 'sm_ann_sync_ann_idx');
 		}

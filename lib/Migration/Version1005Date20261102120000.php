@@ -58,7 +58,7 @@ class Version1005Date20261102120000 extends SimpleMigrationStep {
 				'unsigned' => true,
 			]);
 
-			$table->setPrimaryKey(['id']);
+			$table->setPrimaryKey(['id'], 'sm_si_pk');
 			$table->addIndex(['setlist_id', 'position'], 'sheetmusic_si_setlist_pos_idx');
 			$table->addIndex(['setlist_id'], 'sheetmusic_si_setlist_idx');
 			$table->addIndex(['song_id'], 'sheetmusic_si_song_idx');

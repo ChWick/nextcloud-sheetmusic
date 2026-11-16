@@ -58,7 +58,7 @@ class Version1007Date20261109120000 extends SimpleMigrationStep {
 				'unsigned' => true,
 			]);
 
-			$table->setPrimaryKey(['id']);
+			$table->setPrimaryKey(['id'], 'sm_sublib_pk');
 			$table->addUniqueIndex(['library_id', 'slug'], 'sm_sublib_slug_idx');
 			$table->addIndex(['library_id'], 'sm_sublib_lib_idx');
 		}

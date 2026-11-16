@@ -170,7 +170,7 @@ class Version1002Date20261009120000 extends SimpleMigrationStep {
 				'notnull' => true,
 				'unsigned' => true,
 			]);
-			$table->setPrimaryKey(['id']);
+			$table->setPrimaryKey(['id'], 'sm_attr_pk');
 			$table->addIndex(['song_id'], 'sheetmusic_attr_song_idx');
 			$table->addIndex(['song_id', 'name'], 'sheetmusic_attr_name_idx');
 		}
@@ -252,7 +252,7 @@ class Version1002Date20261009120000 extends SimpleMigrationStep {
 				'notnull' => false,
 				'unsigned' => true,
 			]);
-			$table->setPrimaryKey(['id']);
+			$table->setPrimaryKey(['id'], 'sm_se_pk');
 			$table->addIndex(['song_id'], 'sheetmusic_se_song_idx');
 			$table->addIndex(['entity_id'], 'sheetmusic_se_entity_idx');
 			$table->addIndex(['song_id', 'entity_id', 'deleted_at'], 'sheetmusic_se_pair_idx');
@@ -342,7 +342,7 @@ class Version1002Date20261009120000 extends SimpleMigrationStep {
 			$table->addColumn('create_sql', Types::TEXT, [
 				'notnull' => true,
 			]);
-			$table->setPrimaryKey(['id']);
+			$table->setPrimaryKey(['id'], 'sm_ms_pk');
 			$table->addIndex(['library_id', 'client_type'], 'sheetmusic_ms_lib_client_idx');
 			$table->addIndex(['library_id', 'table_name'], 'sheetmusic_ms_lib_table_idx');
 		}
