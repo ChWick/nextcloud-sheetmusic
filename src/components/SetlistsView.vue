@@ -80,6 +80,7 @@
 
   <SetlistPerformanceViewer
     v-if="isPerformanceMode && selectedSetlist && selectedSetlistItems.length > 0"
+    :setlist-id="selectedSetlist.id"
     :setlist-name="selectedSetlist.name"
     :items="selectedSetlistItems"
     :songs="songs"

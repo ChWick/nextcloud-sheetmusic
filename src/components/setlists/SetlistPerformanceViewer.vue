@@ -21,14 +21,24 @@ import type { SetlistItem, Song, SongFile } from '../../types/song'
 import { defaultFileBinaryCache } from '../../utils/file-cache'
 import { getFileVersionToken, getVersionedFileUrl } from '../../utils/file-version'
 import type { DoublePageTurnMode } from '../../utils/page-turn'
+import {
+	createLibraryPerformanceStore,
+	createSetlistPerformanceStore,
+	loadEffectivePerformanceSettings,
+	type PerformanceLayoutChoice,
+	type PerformanceViewerSettings,
+	type PerformanceZoomChoice,
+} from '../../utils/performance-settings'
 
 const props = withDefaults(defineProps<{
+	setlistId?: number
 	setlistName: string
 	items: SetlistItem[]
 	songs: Song[]
 	libraryId: number
 	initialIndex?: number
 }>(), {
+	setlistId: undefined,
 	initialIndex: 0,
 })
 
@@ -39,12 +49,15 @@ const emit = defineEmits<{
 const rootRef = ref<HTMLElement | null>(null)
 const previewerRef = ref<InstanceType<typeof FilePreviewer> | null>(null)
 
+const initialSettings = loadEffectivePerformanceSettings(props.libraryId, props.setlistId)
+
 const currentIndex = ref(Math.min(Math.max(0, props.initialIndex), Math.max(0, props.items.length - 1)))
 const startAtEnd = ref(false)
 const isHudVisible = ref(true)
 const isDrawerOpen = ref(false)
 const isFullscreen = ref(false)
-const showAnnotations = ref(false)
+const isSetlistOverride = ref(initialSettings.overrideEnabled)
+const showAnnotations = ref(initialSettings.settings.showAnnotations)
 
 const HUD_AUTO_HIDE_MS = 3000
 let hudHideTimer: ReturnType<typeof setTimeout> | null = null
@@ -84,10 +97,67 @@ function resumeHudAutoHide() {
 	}
 }
 
-type PerformanceLayoutChoice = 'auto' | 'single' | 'double' | 'continuous'
-const layoutChoice = ref<PerformanceLayoutChoice>('auto')
-const doublePageTurnMode = ref<DoublePageTurnMode>('half')
-const zoomChoice = ref<'fit-page' | 'fit-width'>('fit-page')
+const layoutChoice = ref<PerformanceLayoutChoice>(initialSettings.settings.layoutChoice)
+const doublePageTurnMode = ref<DoublePageTurnMode>(initialSettings.settings.doublePageTurnMode)
+const zoomChoice = ref<PerformanceZoomChoice>(initialSettings.settings.zoomChoice)
+
+function currentViewerSettings(): PerformanceViewerSettings {
+	return {
+		layoutChoice: layoutChoice.value,
+		doublePageTurnMode: doublePageTurnMode.value,
+		zoomChoice: zoomChoice.value,
+		showAnnotations: showAnnotations.value,
+	}
+}
+
+function persistCurrentSettings() {
+	if (props.libraryId <= 0) return
+	const settings = currentViewerSettings()
+	if (isSetlistOverride.value && props.setlistId && props.setlistId > 0) {
+		createSetlistPerformanceStore(props.libraryId, props.setlistId).save({
+			...settings,
+			overrideEnabled: true,
+		})
+	} else {
+		createLibraryPerformanceStore(props.libraryId).save(settings)
+	}
+}
+
+function applySettingsToPreviewer(settings: PerformanceViewerSettings) {
+	layoutChoice.value = settings.layoutChoice
+	if (settings.layoutChoice === 'auto') {
+		previewerRef.value?.setAutoLayout(true)
+	} else {
+		previewerRef.value?.setPageLayout(settings.layoutChoice)
+	}
+	doublePageTurnMode.value = settings.doublePageTurnMode
+	previewerRef.value?.setDoublePageTurnMode(settings.doublePageTurnMode)
+	zoomChoice.value = settings.zoomChoice
+	previewerRef.value?.setZoomMode(settings.zoomChoice)
+	if (showAnnotations.value !== settings.showAnnotations) {
+		showAnnotations.value = settings.showAnnotations
+		previewerRef.value?.toggleAnnotations()
+	}
+}
+
+function toggleSetlistOverride(enabled: boolean) {
+	if (!props.setlistId || props.setlistId <= 0 || props.libraryId <= 0) return
+	isSetlistOverride.value = enabled
+	const setlistStore = createSetlistPerformanceStore(props.libraryId, props.setlistId)
+	if (enabled) {
+		setlistStore.save({
+			...currentViewerSettings(),
+			overrideEnabled: true,
+		})
+	} else {
+		const libraryDefaults = createLibraryPerformanceStore(props.libraryId).get()
+		setlistStore.save({
+			...libraryDefaults,
+			overrideEnabled: false,
+		})
+		applySettingsToPreviewer(libraryDefaults)
+	}
+}
 
 const annotations = ref<SheetAnnotation[]>([])
 let annotationRequestId = 0
@@ -214,22 +284,26 @@ function onLayoutChange(choice: PerformanceLayoutChoice) {
 	} else {
 		previewerRef.value?.setPageLayout(choice)
 	}
+	persistCurrentSettings()
 }
 
 function onDoublePageTurnModeChange(mode: DoublePageTurnMode) {
 	doublePageTurnMode.value = mode
 	previewerRef.value?.setDoublePageTurnMode(mode)
+	persistCurrentSettings()
 }
 
 function onZoomToggle() {
 	const next = zoomChoice.value === 'fit-page' ? 'fit-width' : 'fit-page'
 	zoomChoice.value = next
 	previewerRef.value?.setZoomMode(next)
+	persistCurrentSettings()
 }
 
 function onToggleAnnotations() {
 	showAnnotations.value = !showAnnotations.value
 	previewerRef.value?.toggleAnnotations()
+	persistCurrentSettings()
 }
 
 async function toggleFullscreen() {
@@ -549,6 +623,17 @@ onUnmounted(() => {
 					@click="onZoomToggle">
 					{{ zoomChoice === 'fit-page' ? t('sheetmusic', 'Fit Page') : t('sheetmusic', 'Fit Width') }}
 				</NcButton>
+
+				<label
+					v-if="setlistId && setlistId > 0"
+					:class="$style.overrideToggle"
+					:title="t('sheetmusic', 'Override global library defaults for this setlist')">
+					<input
+						type="checkbox"
+						:checked="isSetlistOverride"
+						@change="toggleSetlistOverride(($event.target as HTMLInputElement).checked)">
+					<span>{{ t('sheetmusic', 'Setlist override') }}</span>
+				</label>
 			</div>
 		</footer>
 
@@ -723,6 +808,20 @@ onUnmounted(() => {
 	background-color: var(--color-main-background);
 	color: var(--color-main-text);
 	font-size: 0.85rem;
+}
+
+.overrideToggle {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	height: 32px;
+	padding: 0 10px;
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius);
+	font-size: 0.85rem;
+	cursor: pointer;
+	user-select: none;
+	white-space: nowrap;
 }
 
 .drawer {

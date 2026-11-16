@@ -211,4 +211,44 @@ describe('SetlistPerformanceViewer', () => {
 
 		wrapper.unmount()
 	})
+
+	it('supports setlist-specific override without overwriting library defaults', async () => {
+		window.localStorage.clear()
+		const wrapper = mount(SetlistPerformanceViewer, {
+			props: {
+				setlistId: 5,
+				setlistName: 'Friday Gig',
+				items: sampleItems,
+				songs: sampleSongs,
+				libraryId: 1,
+			},
+			attachTo: document.body,
+		})
+
+		// Change layout while override is off -> updates library default
+		const layoutSelect = document.body.querySelector('select[aria-label="Page layout"]') as HTMLSelectElement
+		layoutSelect.value = 'double'
+		layoutSelect.dispatchEvent(new Event('change'))
+		await wrapper.vm.$nextTick()
+
+		// Enable setlist override and switch to single page
+		const overrideCheckbox = document.body.querySelector('input[type="checkbox"]') as HTMLInputElement
+		expect(overrideCheckbox).not.toBeNull()
+		overrideCheckbox.checked = true
+		overrideCheckbox.dispatchEvent(new Event('change'))
+		await wrapper.vm.$nextTick()
+
+		layoutSelect.value = 'single'
+		layoutSelect.dispatchEvent(new Event('change'))
+		await wrapper.vm.$nextTick()
+		expect(layoutSelect.value).toBe('single')
+
+		// Uncheck setlist override -> restores library default ('double')
+		overrideCheckbox.checked = false
+		overrideCheckbox.dispatchEvent(new Event('change'))
+		await wrapper.vm.$nextTick()
+		expect(layoutSelect.value).toBe('double')
+
+		wrapper.unmount()
+	})
 })
