@@ -12,6 +12,7 @@ import FileDocumentOutline from 'vue-material-design-icons/FileDocumentOutline.v
 import History from 'vue-material-design-icons/History.vue'
 import InformationOutline from 'vue-material-design-icons/InformationOutline.vue'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
+import PencilOutline from 'vue-material-design-icons/PencilOutline.vue'
 import { getFileName } from '../../utils/file'
 import { formatByteSize } from '../song-pdf/pdf-enhance-engine'
 
@@ -24,6 +25,7 @@ const props = withDefaults(
 		fileSizeBytes?: number | null
 		pageResolutions?: PdfPageResolutionSummary[]
 		showAnnotations?: boolean
+		isEditingAnnotations?: boolean
 		canWrite?: boolean
 	}>(),
 	{
@@ -31,7 +33,8 @@ const props = withDefaults(
 		totalPages: 1,
 		fileSizeBytes: null,
 		pageResolutions: () => [],
-		showAnnotations: false,
+		showAnnotations: true,
+		isEditingAnnotations: false,
 		canWrite: true,
 	},
 )
@@ -41,6 +44,7 @@ const emit = defineEmits<{
 	'modify-pdf': []
 	'open-versions': []
 	'toggle-annotations': []
+	'toggle-edit-annotations': []
 }>()
 
 const showInfoDropdown = ref(false)
@@ -154,6 +158,18 @@ const activePageResolution = computed<PdfPageResolutionSummary | null>(() => {
 				<template #icon>
 					<EyeOutline v-if="showAnnotations" :size="18" />
 					<EyeOffOutline v-else :size="18" />
+				</template>
+			</NcButton>
+			<NcButton
+				v-if="isPdf && canWrite !== false"
+				size="small"
+				:variant="isEditingAnnotations ? 'primary' : 'secondary'"
+				:title="isEditingAnnotations ? t('sheetmusic', 'Exit annotation editor') : t('sheetmusic', 'Edit annotations')"
+				:aria-label="isEditingAnnotations ? t('sheetmusic', 'Exit annotation editor') : t('sheetmusic', 'Edit annotations')"
+				data-test="edit-annotations-button"
+				@click="emit('toggle-edit-annotations')">
+				<template #icon>
+					<PencilOutline :size="18" />
 				</template>
 			</NcButton>
 			<NcButton

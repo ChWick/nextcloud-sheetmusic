@@ -37,7 +37,7 @@ withDefaults(defineProps<{
 	canGoPrev: undefined,
 	canGoNext: undefined,
 	showExternalButton: true,
-	showAnnotations: false,
+	showAnnotations: true,
 })
 
 const emit = defineEmits<{

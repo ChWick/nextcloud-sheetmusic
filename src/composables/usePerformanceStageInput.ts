@@ -41,6 +41,9 @@ export function usePerformanceStageInput(options: PerformanceStageInputOptions) 
 	}
 
 	function onStageClick(event: MouseEvent) {
+		if ((event.target as HTMLElement | null)?.closest?.('.sheetmusic-annotation-link-group')) {
+			return
+		}
 		if (options.isScrollMode()) {
 			options.onToggleHud()
 			return

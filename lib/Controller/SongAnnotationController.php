@@ -54,6 +54,8 @@ class SongAnnotationController extends OCSController {
 		return new DataResponse($annotations);
 	}
 
+	private const ALLOWED_TYPES = ['drawing', 'highlight', 'text', 'shape', 'stamp', 'link'];
+
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'POST', url: '/api/songs/{songId}/annotations')]
 	public function saveAnnotation(int $songId): DataResponse {
@@ -63,11 +65,57 @@ class SongAnnotationController extends OCSController {
 		}
 
 		$params = $this->request->getParams();
+		$annotation = $this->buildAnnotationFromParams($songId, $params);
+		$saved = $this->annotationService->saveAnnotation($annotation);
+		return new DataResponse($saved);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/songs/{songId}/annotations/batch')]
+	public function batchAnnotations(int $songId): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		$params = $this->request->getParams();
+		$upsert = is_array($params['upsert'] ?? null) ? $params['upsert'] : [];
+		$deleteIds = is_array($params['deleteIds'] ?? null) ? $params['deleteIds'] : [];
+
+		$saved = [];
+		foreach ($upsert as $item) {
+			if (!is_array($item)) {
+				continue;
+			}
+			$annotation = $this->buildAnnotationFromParams($songId, $item);
+			$saved[] = $this->annotationService->saveAnnotation($annotation);
+		}
+
+		$deleted = [];
+		foreach ($deleteIds as $id) {
+			if (is_numeric($id)) {
+				$intId = (int)$id;
+				$this->annotationService->deleteAnnotation($intId);
+				$deleted[] = $intId;
+			}
+		}
+
+		return new DataResponse([
+			'saved' => $saved,
+			'deletedIds' => $deleted,
+		]);
+	}
+
+	/**
+	 * @param array<string, mixed> $params
+	 */
+	private function buildAnnotationFromParams(int $songId, array $params): InternalSongAnnotation {
 		$uuid = (string)($params['uuid'] ?? bin2hex(random_bytes(16)));
 		$fileId = (int)($params['fileId'] ?? 0);
-		$pageNumber = (int)($params['pageNumber'] ?? 0);
+		$pageNumber = max(0, (int)($params['pageNumber'] ?? 0));
 		$layerIndex = (int)($params['layerIndex'] ?? 0);
-		$type = (string)($params['type'] ?? 'drawing');
+		$rawType = (string)($params['type'] ?? 'drawing');
+		$type = in_array($rawType, self::ALLOWED_TYPES, true) ? $rawType : 'drawing';
 		$x = (float)($params['x'] ?? 0.0);
 		$y = (float)($params['y'] ?? 0.0);
 		$width = (float)($params['width'] ?? 0.0);
@@ -75,7 +123,7 @@ class SongAnnotationController extends OCSController {
 		$style = is_array($params['style'] ?? null) ? $params['style'] : [];
 		$data = is_array($params['data'] ?? null) ? $params['data'] : [];
 
-		$annotation = new InternalSongAnnotation(
+		return new InternalSongAnnotation(
 			id: isset($params['id']) && is_numeric($params['id']) ? (int)$params['id'] : null,
 			uuid: $uuid,
 			songId: $songId,
@@ -90,9 +138,6 @@ class SongAnnotationController extends OCSController {
 			style: $style,
 			data: $data,
 		);
-
-		$saved = $this->annotationService->saveAnnotation($annotation);
-		return new DataResponse($saved);
 	}
 
 	#[NoAdminRequired]

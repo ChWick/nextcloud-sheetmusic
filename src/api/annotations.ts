@@ -19,6 +19,15 @@ export async function saveSongAnnotation(songId: number, annotation: Partial<She
 	return response.data?.ocs?.data
 }
 
+export async function batchSongAnnotations(
+	songId: number,
+	payload: { upsert?: Array<Partial<SheetAnnotation>>; deleteIds?: number[] },
+): Promise<{ saved: SheetAnnotation[]; deletedIds: number[] }> {
+	const url = generateOcsUrl('/apps/sheetmusic/api/songs/' + songId + '/annotations/batch')
+	const response = await axios.post(url, payload)
+	return response.data?.ocs?.data ?? { saved: [], deletedIds: [] }
+}
+
 export async function deleteSongAnnotation(annotationId: number): Promise<void> {
 	const url = generateOcsUrl('/apps/sheetmusic/api/annotations/' + annotationId)
 	await axios.delete(url)

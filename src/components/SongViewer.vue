@@ -22,8 +22,10 @@ import { useFileVersions } from './song-pdf/useFileVersions'
 import SongViewerMetadata from './song-viewer/SongViewerMetadata.vue'
 import SongViewerBookmarksBar from './song-viewer/SongViewerBookmarksBar.vue'
 import SongViewerFileToolbar from './song-viewer/SongViewerFileToolbar.vue'
+import SongAnnotationToolbar from './song-viewer/SongAnnotationToolbar.vue'
 import { extractEntityLists } from './songs/song-view-columns'
 import { fetchSongAnnotations } from '../api/annotations'
+import { useAnnotationEditor } from '../composables/useAnnotationEditor'
 import type { SheetAnnotation } from '../types/annotation'
 
 const props = withDefaults(
@@ -201,6 +203,68 @@ const {
 
 const annotations = ref<SheetAnnotation[]>([])
 
+const {
+	isEditing: isEditingAnnotations,
+	activeTool: activeAnnotationTool,
+	selectedUuid: selectedAnnotationUuid,
+	selectedAnnotation,
+	toolStyle: annotationToolStyle,
+	isSaving: isSavingAnnotations,
+	canUndo: canUndoAnnotations,
+	canRedo: canRedoAnnotations,
+	enterEditMode: enterAnnotationEditMode,
+	exitEditMode: exitAnnotationEditMode,
+	setTool: setAnnotationTool,
+	selectAnnotation,
+	createAnnotation,
+	updateAnnotation,
+	deleteAnnotation,
+	deleteSelected: deleteSelectedAnnotation,
+	clearPage: clearAnnotationPage,
+	undo: undoAnnotation,
+	redo: redoAnnotation,
+} = useAnnotationEditor(annotations, () => ({
+	songId: props.song?.id ?? 0,
+	fileId: Number(selectedFile.value?.fileId ?? selectedFile.value?.id ?? 0),
+}))
+
+function toggleAnnotationEditMode() {
+	if (isEditingAnnotations.value) {
+		exitAnnotationEditMode()
+	} else {
+		enterAnnotationEditMode()
+		if (filePreviewerRef.value && !filePreviewerRef.value.showAnnotationsState) {
+			filePreviewerRef.value.toggleAnnotations()
+		}
+	}
+}
+
+function updateSelectedAnnotationStyle(patch: Partial<SheetAnnotation['style']>) {
+	const current = selectedAnnotation.value
+	if (!current) return
+	const updated: SheetAnnotation = {
+		...current,
+		style: {
+			...current.style,
+			...patch,
+		},
+	}
+	updateAnnotation(current, updated)
+}
+
+function updateSelectedAnnotationData(patch: Partial<SheetAnnotation['data']>) {
+	const current = selectedAnnotation.value
+	if (!current) return
+	const updated: SheetAnnotation = {
+		...current,
+		data: {
+			...current.data,
+			...patch,
+		},
+	}
+	updateAnnotation(current, updated)
+}
+
 async function loadAnnotations() {
 	if (!props.song?.id) {
 		annotations.value = []
@@ -317,12 +381,33 @@ defineExpose({
 				:total-pages="filePreviewerRef?.totalPages ?? 1"
 				:file-size-bytes="filePreviewerRef?.fileSizeBytes ?? null"
 				:page-resolutions="filePreviewerRef?.pageResolutions ?? []"
-				:show-annotations="filePreviewerRef?.showAnnotationsState ?? false"
+				:show-annotations="filePreviewerRef?.showAnnotationsState ?? true"
+				:is-editing-annotations="isEditingAnnotations"
 				:can-write="canWrite"
 				@open-external="openInExternalViewer"
 				@modify-pdf="song && emit('modify-pdf', song, selectedFile.id)"
 				@open-versions="openVersionsModal"
-				@toggle-annotations="filePreviewerRef?.toggleAnnotations()" />
+				@toggle-annotations="filePreviewerRef?.toggleAnnotations()"
+				@toggle-edit-annotations="toggleAnnotationEditMode" />
+
+			<SongAnnotationToolbar
+				v-if="isSelectedFilePdf && isEditingAnnotations"
+				:active-tool="activeAnnotationTool"
+				:tool-style="annotationToolStyle"
+				:selected-annotation="selectedAnnotation"
+				:can-undo="canUndoAnnotations"
+				:can-redo="canRedoAnnotations"
+				:is-saving="isSavingAnnotations"
+				:current-page="filePreviewerRef?.currentPage ?? 1"
+				@update:active-tool="setAnnotationTool"
+				@update:tool-style="annotationToolStyle = $event"
+				@update-selected-style="updateSelectedAnnotationStyle"
+				@update-selected-data="updateSelectedAnnotationData"
+				@undo="undoAnnotation"
+				@redo="redoAnnotation"
+				@delete-selected="deleteSelectedAnnotation"
+				@clear-page="clearAnnotationPage((filePreviewerRef?.currentPage ?? 1) - 1)"
+				@done="exitAnnotationEditMode" />
 
 			<SongViewerBookmarksBar
 				:bookmarks="songBookmarks"
@@ -337,7 +422,15 @@ defineExpose({
 				:page-order="selectedFile?.pageOrder"
 				:target-page="activeBookmarkPage"
 				:show-external-button="false"
-				:annotations="annotations" />
+				:annotations="annotations"
+				:editable-annotations="isEditingAnnotations"
+				:active-annotation-tool="activeAnnotationTool"
+				:annotation-tool-style="annotationToolStyle"
+				:selected-annotation-uuid="selectedAnnotationUuid"
+				@select-annotation="selectAnnotation"
+				@create-annotation="createAnnotation"
+				@update-annotation="updateAnnotation"
+				@delete-annotation="deleteAnnotation" />
 			<div v-else :class="$style.error">
 				{{ songFiles.length === 0 ? t('sheetmusic', 'No files attached to this song.') : t('sheetmusic', 'Missing file: The file does not exist on the file system.') }}
 			</div>
@@ -364,7 +457,9 @@ defineExpose({
 	display: flex;
 	flex-direction: column;
 	width: 100%;
+	height: 100%;
 	min-width: 0;
+	min-height: 0;
 }
 
 .header {

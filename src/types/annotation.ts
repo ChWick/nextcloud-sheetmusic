@@ -5,34 +5,88 @@
 
 export type AnnotationType = 'drawing' | 'highlight' | 'text' | 'shape' | 'stamp' | 'link'
 
+export type ShapeType =
+	| 'line'
+	| 'arrow'
+	| 'crescendo'
+	| 'decrescendo'
+	| 'rect'
+	| 'ellipse'
+	| 'slur'
+	| 'bracket'
+
+export type LineStyle = 'solid' | 'dashed' | 'dotted'
+export type TextAlign = 'left' | 'center' | 'right'
+export type StampCategory =
+	| 'dynamic'
+	| 'accidental'
+	| 'articulation'
+	| 'ornament'
+	| 'navigation'
+	| 'rhythm'
+	| 'fingering'
+export type StampFontKind = 'music' | 'fingering' | 'text'
+
+export interface NormalizedPoint {
+	x: number
+	y: number
+}
+
+/**
+ * Visual styling for a canonical annotation.
+ * Sizes (strokeWidth, fontSize) are expressed in SVG per-mille of page width
+ * (where 1000 = full page width), ensuring isotropic, zoom-independent rendering.
+ */
 export interface AnnotationStyle {
 	stroke?: string
 	strokeWidth?: number
 	opacity?: number
-	blendMode?: 'normal' | 'multiply' | string
+	blendMode?: 'normal' | 'multiply'
 	color?: string
 	fill?: string
-	lineStyle?: 'solid' | 'dashed' | 'dotted' | string
-	strokeDashArray?: string
-	fontSize?: number
-}
-
-export interface AnnotationData {
-	path?: string
-	points?: Array<{ x: number; y: number }>
-	text?: string
+	backgroundColor?: string
+	borderColor?: string
+	lineStyle?: LineStyle
 	fontSize?: number
 	fontFamily?: string
+	fontWeight?: 'normal' | 'bold'
+	fontStyle?: 'normal' | 'italic'
+	textAlign?: TextAlign
+}
+
+/**
+ * Type-specific payload for a canonical annotation.
+ * All point coordinates are normalized [0..1] relative to page width and height.
+ */
+export interface AnnotationData {
+	/** Normalized [0..1] points for drawing, highlight, or 2-point shapes */
+	points?: NormalizedPoint[]
+	/** Optional multi-stroke normalized [0..1] points */
+	strokes?: NormalizedPoint[][]
+	/** Quadratic Bezier midpoint smoothing for freehand strokes (default true) */
+	smooth?: boolean
+	/** Shape variant when type === 'shape' */
+	shapeType?: ShapeType
+	/** Hairpin opening half-height in SVG per-mille units */
+	aperture?: number
+	/** Slur signed perpendicular curvature in SVG per-mille units */
+	curvature?: number
+	/** Rectangular highlight flag */
+	rect?: boolean
+	/** Text content when type === 'text' */
+	text?: string
+	/** Canonical Unicode symbol when type === 'stamp' */
 	symbol?: string
-	displaySymbol?: string
+	/** Semantic stamp category */
+	category?: StampCategory
+	/** Font family kind for stamps */
+	fontKind?: StampFontKind
+	/** 0-indexed target page when type === 'link' */
 	targetPage?: number
-	targetX?: number
-	targetY?: number
-	penMode?: number
-	drawMode?: number
-	smoothMode?: number
-	lineWidth?: number
-	[key: string]: unknown
+	/** Optional display label for links */
+	label?: string
+	/** Optional pre-computed SVG path fallback */
+	path?: string
 }
 
 export interface SheetAnnotation {
@@ -40,9 +94,11 @@ export interface SheetAnnotation {
 	uuid: string
 	songId: number
 	fileId: number
-	pageNumber: number // 0-indexed page number
+	/** 0-indexed page number */
+	pageNumber: number
 	layerIndex?: number
 	type: AnnotationType
+	/** Normalized [0..1] bounding box */
 	x: number
 	y: number
 	width: number

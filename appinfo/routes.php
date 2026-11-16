@@ -317,6 +317,11 @@ return [
 			'verb' => 'POST',
 		],
 		[
+			'name' => 'Api#batchSongAnnotations',
+			'url' => '/api/songs/{songId}/annotations/batch',
+			'verb' => 'POST',
+		],
+		[
 			'name' => 'Api#deleteSongAnnotation',
 			'url' => '/api/annotations/{id}',
 			'verb' => 'DELETE',

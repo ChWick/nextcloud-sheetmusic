@@ -4,7 +4,7 @@
  */
 
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import SongAnnotationOverlay from '../../../src/components/song-viewer/SongAnnotationOverlay.vue'
 import type { SheetAnnotation } from '../../../src/types/annotation'
 
@@ -15,7 +15,7 @@ describe('SongAnnotationOverlay.vue', () => {
 			uuid: 'ann-drawing-1',
 			songId: 10,
 			fileId: 20,
-			pageNumber: 1,
+			pageNumber: 0,
 			layerIndex: 0,
 			type: 'drawing',
 			x: 0.1,
@@ -29,7 +29,6 @@ describe('SongAnnotationOverlay.vue', () => {
 				blendMode: 'normal',
 			},
 			data: {
-				path: 'M 100 100 L 200 200 L 300 250',
 				points: [
 					{ x: 0.1, y: 0.1 },
 					{ x: 0.2, y: 0.2 },
@@ -42,7 +41,7 @@ describe('SongAnnotationOverlay.vue', () => {
 			uuid: 'ann-highlight-1',
 			songId: 10,
 			fileId: 20,
-			pageNumber: 1,
+			pageNumber: 0,
 			layerIndex: 0,
 			type: 'highlight',
 			x: 0.1,
@@ -56,7 +55,10 @@ describe('SongAnnotationOverlay.vue', () => {
 				blendMode: 'multiply',
 			},
 			data: {
-				path: 'M 100 500 L 900 500',
+				points: [
+					{ x: 0.1, y: 0.5 },
+					{ x: 0.9, y: 0.5 },
+				],
 			},
 		},
 		{
@@ -64,7 +66,7 @@ describe('SongAnnotationOverlay.vue', () => {
 			uuid: 'ann-text-1',
 			songId: 10,
 			fileId: 20,
-			pageNumber: 1,
+			pageNumber: 0,
 			layerIndex: 0,
 			type: 'text',
 			x: 0.15,
@@ -73,11 +75,11 @@ describe('SongAnnotationOverlay.vue', () => {
 			height: 0.05,
 			style: {
 				color: '#0000ff',
+				fontSize: 18,
+				fontFamily: 'serif',
 			},
 			data: {
 				text: 'Allegro vivace',
-				fontSize: 18,
-				fontFamily: 'serif',
 			},
 		},
 		{
@@ -85,7 +87,7 @@ describe('SongAnnotationOverlay.vue', () => {
 			uuid: 'ann-link-1',
 			songId: 10,
 			fileId: 20,
-			pageNumber: 1,
+			pageNumber: 0,
 			layerIndex: 0,
 			type: 'link',
 			x: 0.8,
@@ -95,6 +97,7 @@ describe('SongAnnotationOverlay.vue', () => {
 			style: {},
 			data: {
 				targetPage: 3,
+				label: 'To Coda',
 			},
 		},
 		{
@@ -102,7 +105,7 @@ describe('SongAnnotationOverlay.vue', () => {
 			uuid: 'ann-page2-1',
 			songId: 10,
 			fileId: 20,
-			pageNumber: 2,
+			pageNumber: 1,
 			layerIndex: 0,
 			type: 'drawing',
 			x: 0.2,
@@ -110,132 +113,101 @@ describe('SongAnnotationOverlay.vue', () => {
 			width: 0.1,
 			height: 0.1,
 			style: { stroke: '#00ff00' },
-			data: { path: 'M 200 200 L 250 250' },
+			data: {
+				points: [
+					{ x: 0.2, y: 0.2 },
+					{ x: 0.25, y: 0.25 },
+				],
+			},
 		},
 		{
 			id: 6,
 			uuid: 'ann-stamp-1',
 			songId: 10,
 			fileId: 20,
-			pageNumber: 1,
+			pageNumber: 0,
 			layerIndex: 0,
 			type: 'stamp',
-			x: 0.3,
-			y: 0.4,
+			x: 0.5,
+			y: 0.3,
 			width: 0.05,
 			height: 0.05,
-			style: {
-				color: '#000000',
-				fontSize: 36,
-			},
-			data: {
-				symbol: 'q',
-				displaySymbol: '♩',
-				size: 40,
-			},
+			style: { color: '#d32f2f', fontSize: 36 },
+			data: { symbol: '𝆑𝆑', category: 'dynamic', fontKind: 'music' },
+		},
+		{
+			id: 7,
+			uuid: 'ann-shape-ellipse',
+			songId: 10,
+			fileId: 20,
+			pageNumber: 0,
+			layerIndex: 0,
+			type: 'shape',
+			x: 0.3,
+			y: 0.4,
+			width: 0.1,
+			height: 0.1,
+			style: { stroke: '#1e88e5', strokeWidth: 2.5 },
+			data: { shapeType: 'ellipse' },
 		},
 	]
 
-	it('renders annotations matching the specified page number', () => {
+	it('renders isotropic SVG viewBox and all annotation types for the specified page', () => {
 		const wrapper = mount(SongAnnotationOverlay, {
 			props: {
 				annotations: sampleAnnotations,
-				pageNumber: 1,
+				pageNumber: 1, // 1-indexed PDF page -> matches pageNumber: 0
+				pageWidth: 595,
+				pageHeight: 842,
 				visible: true,
 			},
 		})
 
-		expect(wrapper.find('[data-test="annotation-overlay"]').exists()).toBe(true)
+		const svg = wrapper.find('[data-test="annotation-overlay"]')
+		expect(svg.exists()).toBe(true)
+		expect(svg.attributes('viewBox')).toBe('0 0 1000 1415.13')
+		expect(svg.attributes('preserveAspectRatio')).toBe('xMidYMid meet')
 
+		// Drawing + Highlight
 		const drawings = wrapper.findAll('[data-test="annotation-drawing"]')
-		expect(drawings).toHaveLength(2) // 1 drawing + 1 highlight
-
-		// Verify drawing attributes (Quadratic Bezier midpoint smoothed)
-		expect(drawings[0].attributes('d')).toBe('M 100.0 100.0 Q 200.0 200.0, 250.0 225.0 L 300.0 250.0')
+		expect(drawings.length).toBe(2)
 		expect(drawings[0].attributes('stroke')).toBe('#ff0000')
-
-		// Verify highlight attributes
-		expect(drawings[1].attributes('d')).toBe('M 100 500 L 900 500')
 		expect(drawings[1].attributes('stroke')).toBe('#ffff00')
 
-		// Verify text element
+		// Ellipse shape
+		const ellipse = wrapper.find('ellipse[data-test="annotation-shape"]')
+		expect(ellipse.exists()).toBe(true)
+
+		// Text
 		const textEl = wrapper.find('[data-test="annotation-text"]')
 		expect(textEl.exists()).toBe(true)
-		expect(textEl.text()).toBe('Allegro vivace')
-		expect(textEl.attributes('fill')).toBe('#0000ff')
+		expect(textEl.text()).toContain('Allegro vivace')
 
-		// Verify navigation link element
-		const linkEl = wrapper.find('[data-test="annotation-link"]')
-		expect(linkEl.exists()).toBe(true)
-		expect(linkEl.attributes('x')).toBe('800') // 0.8 * 1000
-		expect(linkEl.attributes('y')).toBe('850') // 0.85 * 1000
+		// Unicode music stamp rendered with Noto Music
+		const stamp = wrapper.find('[data-test="annotation-stamp"]')
+		expect(stamp.exists()).toBe(true)
+		expect(stamp.text()).toBe('𝆑𝆑')
+		expect(stamp.attributes('font-family')).toContain('Noto Music')
 
-		// Verify stamp element renders as self-contained vector SVG centered within viewport
-		const stampEl = wrapper.find('[data-test="annotation-stamp"]')
-		expect(stampEl.exists()).toBe(true)
-		expect(stampEl.element.tagName.toLowerCase()).toBe('svg')
-		expect(stampEl.attributes('x')).toBe('300') // 0.3 * 1000
-		expect(stampEl.attributes('y')).toBe('400') // 0.4 * 1000
-		expect(stampEl.attributes('width')).toBe('50')
-		expect(stampEl.attributes('height')).toBe('50')
-		expect(stampEl.attributes('viewBox')).toBe('0 0 180 549')
-		expect(stampEl.attributes('preserveAspectRatio')).toBe('xMidYMid meet')
-		const pathEl = stampEl.find('path')
-		expect(pathEl.exists()).toBe(true)
-		expect(pathEl.attributes('fill')).toBe('#000000')
+		// Link
+		const link = wrapper.find('[data-test="annotation-link"]')
+		expect(link.exists()).toBe(true)
 	})
 
-	it('renders fallback text element for unmapped custom stamp symbols', () => {
-		const unmappedStamp: SheetAnnotation[] = [
-			{
-				id: 99,
-				uuid: 'ann-custom-stamp-1',
-				songId: 10,
-				fileId: 20,
-				pageNumber: 1,
-				layerIndex: 0,
-				type: 'stamp',
-				x: 0.5,
-				y: 0.6,
-				width: 0.05,
-				height: 0.05,
-				style: { color: '#ff0000', fontSize: 32 },
-				data: { symbol: 'custom-mark' },
-			},
-		]
-
-		const wrapper = mount(SongAnnotationOverlay, {
-			props: {
-				annotations: unmappedStamp,
-				pageNumber: 1,
-				visible: true,
-			},
-		})
-
-		const stampText = wrapper.find('[data-test="annotation-stamp"]')
-		expect(stampText.exists()).toBe(true)
-		expect(stampText.element.tagName.toLowerCase()).toBe('text')
-		expect(stampText.text()).toBe('custom-mark')
-		expect(stampText.attributes('x')).toBe('525') // (0.5 + 0.05/2) * 1000
-		expect(stampText.attributes('y')).toBe('625') // (0.6 + 0.05/2) * 1000
-		expect(stampText.attributes('text-anchor')).toBe('middle')
-		expect(stampText.attributes('dominant-baseline')).toBe('central')
-	})
-
-	it('emits jump-to-page event when a navigation link is clicked', async () => {
+	it('emits jump-to-page event when a navigation link is clicked in view mode', async () => {
 		const wrapper = mount(SongAnnotationOverlay, {
 			props: {
 				annotations: sampleAnnotations,
 				pageNumber: 1,
 				visible: true,
+				editable: false,
 			},
 		})
 
-		const linkEl = wrapper.find('[data-test="annotation-link"]')
-		await linkEl.trigger('click')
+		const linkGroup = wrapper.find('.sheetmusic-annotation-link-group')
+		await linkGroup.trigger('click')
 
-		expect(wrapper.emitted('jump-to-page')).toBeTruthy()
-		expect(wrapper.emitted('jump-to-page')?.[0]).toEqual([3])
+		expect(wrapper.emitted('jump-to-page')).toEqual([[3]])
 	})
 
 	it('hides all markings when visible prop is false', () => {
@@ -250,60 +222,243 @@ describe('SongAnnotationOverlay.vue', () => {
 		expect(wrapper.find('[data-test="annotation-overlay"]').exists()).toBe(false)
 	})
 
-	it('filters out annotations for other pages', () => {
+	it('filters out annotations for other pages and soft-deleted annotations', () => {
+		const withDeleted: SheetAnnotation[] = [
+			...sampleAnnotations,
+			{
+				...sampleAnnotations[0],
+				uuid: 'deleted-ann',
+				deletedAt: 1700000000,
+			},
+		]
+		const wrapper = mount(SongAnnotationOverlay, {
+			props: {
+				annotations: withDeleted,
+				pageNumber: 2, // matches pageNumber: 1
+				visible: true,
+			},
+		})
+
+		const drawings = wrapper.findAll('[data-test="annotation-drawing"]')
+		expect(drawings.length).toBe(1)
+		expect(drawings[0].attributes('stroke')).toBe('#00ff00')
+	})
+
+	it('renders dashed lines and non-smooth linear strokes', () => {
+		const dashedAnn: SheetAnnotation = {
+			id: 10,
+			uuid: 'ann-dashed',
+			songId: 10,
+			fileId: 20,
+			pageNumber: 0,
+			type: 'drawing',
+			x: 0.1,
+			y: 0.1,
+			width: 0.4,
+			height: 0.4,
+			style: {
+				stroke: '#0000ff',
+				strokeWidth: 4,
+				lineStyle: 'dashed',
+			},
+			data: {
+				smooth: false,
+				points: [
+					{ x: 0.1, y: 0.1 },
+					{ x: 0.2, y: 0.3 },
+					{ x: 0.4, y: 0.2 },
+				],
+			},
+		}
+
+		const wrapper = mount(SongAnnotationOverlay, {
+			props: {
+				annotations: [dashedAnn],
+				pageNumber: 1,
+				pageWidth: 1000,
+				pageHeight: 1000,
+				visible: true,
+			},
+		})
+
+		const path = wrapper.find('[data-test="annotation-drawing"]')
+		expect(path.attributes('stroke-dasharray')).toBe('10, 6')
+		expect(path.attributes('d')).toBe('M 100.0 100.0 L 200.0 300.0 L 400.0 200.0')
+	})
+
+	it('renders centered selection ring without corner handles for stamps and corner handles for boxes', () => {
+		const stampWrapper = mount(SongAnnotationOverlay, {
+			props: {
+				annotations: sampleAnnotations,
+				pageNumber: 1,
+				visible: true,
+				editable: true,
+				activeTool: 'select',
+				selectedUuid: 'ann-stamp-1',
+			},
+		})
+
+		expect(stampWrapper.find('.sheetmusic-selection-box circle').exists()).toBe(true)
+		expect(stampWrapper.findAll('[data-resize-handle]').length).toBe(0)
+
+		const rectWrapper = mount(SongAnnotationOverlay, {
+			props: {
+				annotations: sampleAnnotations,
+				pageNumber: 1,
+				visible: true,
+				editable: true,
+				activeTool: 'select',
+				selectedUuid: 'ann-shape-ellipse',
+			},
+		})
+
+		expect(rectWrapper.find('.sheetmusic-selection-box rect').exists()).toBe(true)
+		expect(rectWrapper.findAll('[data-resize-handle]').length).toBe(4)
+	})
+
+	it('creates a stamp annotation on mouse pointerdown/pointerup when editable', async () => {
+		const wrapper = mount(SongAnnotationOverlay, {
+			props: {
+				annotations: [],
+				pageNumber: 1,
+				pageWidth: 595,
+				pageHeight: 842,
+				visible: true,
+				editable: true,
+				activeTool: 'stamp',
+			},
+		})
+
+		const svg = wrapper.find('[data-test="annotation-overlay"]')
+		vi.spyOn(svg.element, 'getBoundingClientRect').mockReturnValue({
+			left: 0,
+			top: 0,
+			width: 595,
+			height: 842,
+			right: 595,
+			bottom: 842,
+			x: 0,
+			y: 0,
+			toJSON: () => ({}),
+		})
+
+		await svg.trigger('pointerdown', { button: 0, clientX: 297.5, clientY: 421, pointerId: 1 })
+		await svg.trigger('pointerup', { button: 0, clientX: 297.5, clientY: 421, pointerId: 1 })
+
+		const emitted = wrapper.emitted('create-annotation')
+		expect(emitted).toBeTruthy()
+		expect(emitted?.[0]?.[0]).toMatchObject({
+			pageNumber: 0,
+			type: 'stamp',
+			data: {
+				symbol: '𝆑𝆑',
+				category: 'dynamic',
+				fontKind: 'music',
+			},
+		})
+	})
+
+	it('deletes an annotation when clicked with the eraser tool', async () => {
 		const wrapper = mount(SongAnnotationOverlay, {
 			props: {
 				annotations: sampleAnnotations,
-				pageNumber: 5, // page with no annotations
+				pageNumber: 1,
 				visible: true,
+				editable: true,
+				activeTool: 'eraser',
 			},
 		})
 
-		expect(wrapper.find('[data-test="annotation-overlay"]').exists()).toBe(false)
+		const stampEl = wrapper.find('[data-test="annotation-stamp"]')
+		await stampEl.trigger('pointerdown', { button: 0, pointerId: 1 })
+
+		const emitted = wrapper.emitted('delete-annotation')
+		expect(emitted).toBeTruthy()
+		expect(emitted?.[0]?.[0]).toMatchObject({ uuid: 'ann-stamp-1' })
 	})
 
-	it('renders dashed lines and handles linear non-smooth drawing mode', () => {
-		const dashedAnnotations: SheetAnnotation[] = [
-			{
-				id: 10,
-				uuid: 'ann-dashed-1',
-				songId: 10,
-				fileId: 20,
+	it('renders scale-independent hit targets and highlights shapes on hover in eraser/select mode', async () => {
+		const wrapper = mount(SongAnnotationOverlay, {
+			props: {
+				annotations: sampleAnnotations,
 				pageNumber: 1,
-				layerIndex: 0,
-				type: 'drawing',
-				x: 0.1,
-				y: 0.1,
-				width: 0.5,
-				height: 0.5,
-				style: {
-					stroke: '#00ff00',
-					strokeWidth: 4,
-					lineStyle: 'dashed',
-					strokeDashArray: '16, 12',
-				},
-				data: {
-					smoothMode: false,
-					points: [
-						{ x: 0.1, y: 0.1 },
-						{ x: 0.3, y: 0.3 },
-						{ x: 0.5, y: 0.5 },
-					],
-				},
+				visible: true,
+				editable: true,
+				activeTool: 'eraser',
 			},
-		]
+		})
+
+		const hitTargets = wrapper.findAll('[data-test="annotation-hit-target"]')
+		expect(hitTargets.length).toBeGreaterThan(0)
+		expect(hitTargets[0].attributes('vector-effect')).toBe('non-scaling-stroke')
+		expect(hitTargets[0].attributes('stroke-width')).toBe('14')
+
+		const ellipseHitTarget = wrapper.find('ellipse[data-test="annotation-hit-target"]')
+		expect(ellipseHitTarget.exists()).toBe(true)
+		await ellipseHitTarget.trigger('pointermove', { clientX: 100, clientY: 100 })
+
+		const hoveredGroup = wrapper.find('g[data-ann-uuid="ann-shape-ellipse"]')
+		expect(hoveredGroup.classes()).toContain('is-hovered-eraser')
+
+		await ellipseHitTarget.trigger('pointerdown', { button: 0, pointerId: 1 })
+		expect(wrapper.emitted('delete-annotation')?.[0]?.[0]).toMatchObject({ uuid: 'ann-shape-ellipse' })
+	})
+
+	it('renders height handle for selected hairpin and updates aperture on drag', async () => {
+		const crescAnn: SheetAnnotation = {
+			id: 8,
+			uuid: 'ann-cresc-1',
+			songId: 10,
+			fileId: 20,
+			pageNumber: 0,
+			type: 'shape',
+			x: 0.1,
+			y: 0.48,
+			width: 0.4,
+			height: 0.04,
+			style: { stroke: '#e53935', strokeWidth: 2.5 },
+			data: {
+				shapeType: 'crescendo',
+				points: [{ x: 0.1, y: 0.5 }, { x: 0.5, y: 0.5 }],
+				aperture: 18,
+			},
+		}
 
 		const wrapper = mount(SongAnnotationOverlay, {
 			props: {
-				annotations: dashedAnnotations,
+				annotations: [crescAnn],
 				pageNumber: 1,
+				pageWidth: 1000,
+				pageHeight: 1000,
 				visible: true,
+				editable: true,
+				activeTool: 'select',
+				selectedUuid: 'ann-cresc-1',
 			},
 		})
 
-		const drawing = wrapper.find('[data-test="annotation-drawing"]')
-		expect(drawing.exists()).toBe(true)
-		expect(drawing.attributes('stroke-dasharray')).toBe('9, 5')
-		expect(drawing.attributes('d')).toBe('M 100.0 100.0 L 300.0 300.0 L 500.0 500.0')
+		const svg = wrapper.find('[data-test="annotation-overlay"]')
+		vi.spyOn(svg.element, 'getBoundingClientRect').mockReturnValue({
+			left: 0,
+			top: 0,
+			width: 1000,
+			height: 1000,
+			right: 1000,
+			bottom: 1000,
+			x: 0,
+			y: 0,
+			toJSON: () => ({}),
+		})
+
+		const heightHandle = wrapper.find('[data-resize-handle="height"]')
+		expect(heightHandle.exists()).toBe(true)
+
+		await heightHandle.trigger('pointerdown', { button: 0, clientX: 500, clientY: 518, pointerId: 1 })
+		await svg.trigger('pointermove', { button: 0, clientX: 500, clientY: 545, pointerId: 1 })
+		await svg.trigger('pointerup', { button: 0, clientX: 500, clientY: 545, pointerId: 1 })
+
+		const updated = wrapper.emitted('update-annotation')
+		expect(updated).toBeTruthy()
+		expect((updated?.[0]?.[1] as SheetAnnotation).data.aperture).toBe(45)
 	})
 })

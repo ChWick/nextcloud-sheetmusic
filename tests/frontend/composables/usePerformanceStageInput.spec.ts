@@ -74,4 +74,22 @@ describe('usePerformanceStageInput', () => {
 
 		wrapper.unmount()
 	})
+
+	it('ignores stage clicks on annotation jump links', () => {
+		const { wrapper, api, onNextPage, onPrevPage, onToggleHud } = setupHarness(() => false)
+		const mockEl = {
+			getBoundingClientRect: () => ({ left: 0, width: 400 }),
+		} as unknown as HTMLElement
+		const linkGroup = document.createElement('div')
+		linkGroup.className = 'sheetmusic-annotation-link-group'
+		const child = document.createElement('span')
+		linkGroup.appendChild(child)
+
+		api.onStageClick({ currentTarget: mockEl, target: child, clientX: 350 } as unknown as MouseEvent)
+		expect(onNextPage).not.toHaveBeenCalled()
+		expect(onPrevPage).not.toHaveBeenCalled()
+		expect(onToggleHud).not.toHaveBeenCalled()
+
+		wrapper.unmount()
+	})
 })

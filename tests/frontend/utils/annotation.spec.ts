@@ -3,26 +3,64 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
+import type { SheetAnnotation } from '../../../src/types/annotation'
 import { describe, expect, it } from 'vitest'
 import {
+	computeBoundingBoxFromPoints,
+	DEFAULT_VIEWBOX_HEIGHT,
 	generateArrowPath,
+	generateBracketPath,
 	generateHairpinPath,
+	generateSlurPath,
 	generateSmoothSvgPath,
 	getAnnotationDashArray,
 	getAnnotationDisplaySymbol,
 	getAnnotationFontFamily,
 	getAnnotationPath,
-	getAnnotationTextPosition,
+	getAnnotationTextLayout,
+	getShapeHeightHandle,
 	getStampFontFamily,
-	getStampVector,
-	isNumericStamp,
+	getStampRenderPosition,
+	getViewBoxHeight,
+	isPathShape,
 	isStampBold,
-	isStampDynamicOrOrnament,
 	isStampItalic,
+	translateAnnotation,
+	VIEWBOX_WIDTH,
 } from '../../../src/utils/annotation'
-import type { SheetAnnotation } from '../../../src/types/annotation'
+import { normalizeMusicSymbol } from '../../../src/utils/musicSymbols'
+
+function makeAnn(overrides: Partial<SheetAnnotation> = {}): SheetAnnotation {
+	return {
+		uuid: 'test-uuid',
+		songId: 1,
+		fileId: 1,
+		pageNumber: 0,
+		type: 'drawing',
+		x: 0.1,
+		y: 0.1,
+		width: 0.2,
+		height: 0.2,
+		style: {},
+		data: {},
+		...overrides,
+	}
+}
 
 describe('annotation utils', () => {
+	describe('getViewBoxHeight', () => {
+		it('computes isotropic viewBox height from page dimensions', () => {
+			expect(getViewBoxHeight(595, 842)).toBeCloseTo(1415.13, 1)
+			expect(getViewBoxHeight(842, 595)).toBeCloseTo(706.65, 1)
+			expect(getViewBoxHeight(1000, 1000)).toBe(1000)
+		})
+
+		it('falls back to A4 default when dimensions are missing', () => {
+			expect(getViewBoxHeight()).toBe(DEFAULT_VIEWBOX_HEIGHT)
+			expect(getViewBoxHeight(0, 0)).toBe(DEFAULT_VIEWBOX_HEIGHT)
+		})
+	})
+
 	describe('generateSmoothSvgPath', () => {
 		it('returns empty string for empty points array', () => {
 			expect(generateSmoothSvgPath([])).toBe('')
@@ -32,460 +70,203 @@ describe('annotation utils', () => {
 			expect(generateSmoothSvgPath([{ x: 0.1, y: 0.2 }])).toBe('M 100.0 200.0')
 		})
 
+		it('scales Y by vbHeight for isotropic coordinates', () => {
+			expect(generateSmoothSvgPath([{ x: 0.1, y: 0.5 }], true, 1400)).toBe('M 100.0 700.0')
+		})
+
 		it('returns line command for 2 points', () => {
-			expect(generateSmoothSvgPath([
-				{ x: 0.1, y: 0.2 },
-				{ x: 0.3, y: 0.4 },
-			])).toBe('M 100.0 200.0 L 300.0 400.0')
+			expect(generateSmoothSvgPath([{ x: 0.1, y: 0.2 }, { x: 0.3, y: 0.4 }])).toBe('M 100.0 200.0 L 300.0 400.0')
 		})
 
 		it('applies quadratic Bezier curve smoothing for 3+ points when smooth is true', () => {
-			const points = [
-				{ x: 0.1, y: 0.1 },
-				{ x: 0.2, y: 0.2 },
-				{ x: 0.3, y: 0.25 },
-			]
-			const path = generateSmoothSvgPath(points, true)
-			expect(path).toContain(' Q ')
-			expect(path).toBe('M 100.0 100.0 Q 200.0 200.0, 250.0 225.0 L 300.0 250.0')
+			const pts = [{ x: 0.1, y: 0.1 }, { x: 0.2, y: 0.3 }, { x: 0.4, y: 0.2 }]
+			expect(generateSmoothSvgPath(pts, true)).toBe('M 100.0 100.0 Q 200.0 300.0, 300.0 250.0 L 400.0 200.0')
 		})
 
-		it('uses linear segments for 3+ points when smooth is false', () => {
-			const points = [
-				{ x: 0.1, y: 0.1 },
-				{ x: 0.2, y: 0.2 },
-				{ x: 0.3, y: 0.25 },
-			]
-			const path = generateSmoothSvgPath(points, false)
-			expect(path).not.toContain(' Q ')
-			expect(path).toBe('M 100.0 100.0 L 200.0 200.0 L 300.0 250.0')
+		it('uses linear segments when smooth is false', () => {
+			const pts = [{ x: 0.1, y: 0.1 }, { x: 0.2, y: 0.3 }, { x: 0.4, y: 0.2 }]
+			expect(generateSmoothSvgPath(pts, false)).toBe('M 100.0 100.0 L 200.0 300.0 L 400.0 200.0')
 		})
 
 		it('filters out consecutive duplicate points', () => {
-			const points = [
-				{ x: 0.1, y: 0.1 },
-				{ x: 0.1, y: 0.1 },
-				{ x: 0.5, y: 0.5 },
-			]
-			expect(generateSmoothSvgPath(points, false)).toBe('M 100.0 100.0 L 500.0 500.0')
+			const pts = [{ x: 0.1, y: 0.2 }, { x: 0.1, y: 0.2 }, { x: 0.5, y: 0.5 }]
+			expect(generateSmoothSvgPath(pts, true)).toBe('M 100.0 200.0 L 500.0 500.0')
 		})
 	})
 
 	describe('getAnnotationDashArray', () => {
-		const baseAnnotation: SheetAnnotation = {
-			id: 1,
-			pageNumber: 1,
-			layerIndex: 0,
-			type: 'drawing',
-			x: 0,
-			y: 0,
-			width: 1,
-			height: 1,
-		}
-
-		it('prefers explicit strokeDashArray', () => {
-			const ann: SheetAnnotation = {
-				...baseAnnotation,
-				style: { strokeDashArray: '10, 5, 2, 5' },
-			}
-			expect(getAnnotationDashArray(ann)).toBe('10, 5, 2, 5')
-		})
-
 		it('returns dashed pattern for lineStyle dashed', () => {
-			const ann: SheetAnnotation = {
-				...baseAnnotation,
-				style: { lineStyle: 'dashed' },
-			}
-			expect(getAnnotationDashArray(ann)).toBe('6, 4')
+			const ann = makeAnn({ style: { lineStyle: 'dashed', strokeWidth: 4 } })
+			expect(getAnnotationDashArray(ann)).toBe('10, 6')
 		})
 
 		it('returns dotted pattern for lineStyle dotted', () => {
-			const ann: SheetAnnotation = {
-				...baseAnnotation,
-				style: { lineStyle: 'dotted' },
-			}
-			expect(getAnnotationDashArray(ann)).toBe('1, 12')
+			const ann = makeAnn({ style: { lineStyle: 'dotted', strokeWidth: 5 } })
+			expect(getAnnotationDashArray(ann)).toBe('1, 11')
 		})
 
-		it('returns dashed pattern for penMode 3', () => {
-			const ann: SheetAnnotation = {
-				...baseAnnotation,
-				data: { penMode: 3 },
-			}
-			expect(getAnnotationDashArray(ann)).toBe('6, 4')
+		it('scales dashes dynamically based on stroke width', () => {
+			const thin = makeAnn({ style: { lineStyle: 'dashed', strokeWidth: 4 } })
+			const thick = makeAnn({ style: { lineStyle: 'dashed', strokeWidth: 16 } })
+			expect(getAnnotationDashArray(thin)).toBe('10, 6')
+			expect(getAnnotationDashArray(thick)).toBe('40, 24')
 		})
 
-		it('returns dotted pattern for penMode 2', () => {
-			const ann: SheetAnnotation = {
-				...baseAnnotation,
-				data: { penMode: 2 },
-			}
-			expect(getAnnotationDashArray(ann)).toBe('1, 12')
-		})
-
-		it('scales dashes and gaps dynamically based on stroke width', () => {
-			const ann8: SheetAnnotation = {
-				...baseAnnotation,
-				style: { lineStyle: 'dashed', strokeWidth: 8 },
-			}
-			expect(getAnnotationDashArray(ann8)).toBe('18, 10')
-
-			const ann16: SheetAnnotation = {
-				...baseAnnotation,
-				style: { lineStyle: 'dashed', strokeWidth: 16 },
-			}
-			expect(getAnnotationDashArray(ann16)).toBe('36, 20')
-		})
-
-		it('returns undefined for solid lines (penMode 1 or default)', () => {
-			const ann: SheetAnnotation = {
-				...baseAnnotation,
-				data: { penMode: 1 },
-			}
-			expect(getAnnotationDashArray(ann)).toBeUndefined()
+		it('returns undefined for solid lines', () => {
+			expect(getAnnotationDashArray(makeAnn({ style: { lineStyle: 'solid' } }))).toBeUndefined()
+			expect(getAnnotationDashArray(makeAnn())).toBeUndefined()
 		})
 	})
 
-	describe('generateHairpinPath', () => {
-		it('generates crescendo hairpin (<) from p1 to p2', () => {
-			const p1 = { x: 0.1, y: 0.5 }
-			const p2 = { x: 0.3, y: 0.5 }
-			const path = generateHairpinPath(p1, p2, false)
-			expect(path).toMatch(/^M 300\.0 \d+\.\d+ L 100\.0 500\.0 L 300\.0 \d+\.\d+$/)
-		})
-
-		it('generates decrescendo hairpin (>) when isDecrescendo is true', () => {
-			const p1 = { x: 0.1, y: 0.5 }
-			const p2 = { x: 0.3, y: 0.5 }
-			const path = generateHairpinPath(p1, p2, true)
-			expect(path).toMatch(/^M 100\.0 \d+\.\d+ L 300\.0 500\.0 L 100\.0 \d+\.\d+$/)
-		})
-	})
-
-	describe('generateArrowPath', () => {
-		it('generates arrow path pointing towards p2', () => {
+	describe('shape path generators', () => {
+		it('generates crescendo (<) and decrescendo (>) hairpins', () => {
 			const p1 = { x: 0.1, y: 0.5 }
 			const p2 = { x: 0.5, y: 0.5 }
-			const path = generateArrowPath(p1, p2, 2.0)
-			expect(path).toMatch(/^M 100\.0 500\.0 L 500\.0 500\.0 M \d+\.\d+ \d+\.\d+ L 500\.0 500\.0 L \d+\.\d+ \d+\.\d+$/)
-		})
-	})
-
-	describe('getAnnotationFontFamily', () => {
-		it('maps numeric or 0 to sans-serif', () => {
-			expect(getAnnotationFontFamily('0')).toBe('sans-serif')
-			expect(getAnnotationFontFamily(0)).toBe('sans-serif')
-			expect(getAnnotationFontFamily(null)).toBe('sans-serif')
-			expect(getAnnotationFontFamily(undefined)).toBe('sans-serif')
+			expect(generateHairpinPath(p1, p2, false, 10, 1000)).toBe('M 500.0 510.0 L 100.0 500.0 L 500.0 490.0')
+			expect(generateHairpinPath(p1, p2, true, 10, 1000)).toBe('M 100.0 510.0 L 500.0 500.0 L 100.0 490.0')
 		})
 
-		it('maps 1 to serif and 2 to monospace', () => {
-			expect(getAnnotationFontFamily('1')).toBe('serif')
-			expect(getAnnotationFontFamily(1)).toBe('serif')
-			expect(getAnnotationFontFamily('2')).toBe('monospace')
-			expect(getAnnotationFontFamily(2)).toBe('monospace')
+		it('generates arrow path with arrowhead at p2', () => {
+			const path = generateArrowPath({ x: 0.1, y: 0.1 }, { x: 0.5, y: 0.1 }, 2, 1000)
+			expect(path).toContain('M 100.0 100.0 L 500.0 100.0')
+			expect(path).toContain('L 500.0 100.0 L')
 		})
 
-		it('preserves named font families', () => {
-			expect(getAnnotationFontFamily('Arial')).toBe('Arial')
-			expect(getAnnotationFontFamily('Times New Roman')).toBe('Times New Roman')
-		})
-	})
-
-	describe('getAnnotationDisplaySymbol', () => {
-		it('returns mapped displaySymbol if known', () => {
-			const ann: SheetAnnotation = {
-				id: 1,
-				pageNumber: 0,
-				layerIndex: 0,
-				type: 'stamp',
-				x: 0,
-				y: 0,
-				width: 0.1,
-				height: 0.1,
-				data: { displaySymbol: '𝄋', symbol: '∫' },
-			}
-			expect(getAnnotationDisplaySymbol(ann)).toBe('𝄫')
+		it('generates quadratic slur path', () => {
+			const path = generateSlurPath({ x: 0.1, y: 0.5 }, { x: 0.5, y: 0.5 }, -30, 1000)
+			expect(path).toBe('M 100.0 500.0 Q 300.0 470.0, 500.0 500.0')
 		})
 
-		it('maps known symbols when displaySymbol is missing', () => {
-			const ann: SheetAnnotation = {
-				id: 1,
-				pageNumber: 0,
-				layerIndex: 0,
-				type: 'stamp',
-				x: 0,
-				y: 0,
-				width: 0.1,
-				height: 0.1,
-				data: { symbol: 'q' },
-			}
-			expect(getAnnotationDisplaySymbol(ann)).toBe('♩')
-
-			// Double flat and double sharp
-			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: 'bb' } })).toBe('𝄫')
-			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: 'BB' } })).toBe('𝄫')
-			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: '∫' } })).toBe('𝄫')
-			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: '𝄫' } })).toBe('𝄫')
-			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: '♭♭' } })).toBe('𝄫')
-			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: '##' } })).toBe('𝄪')
-			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: 'x' } })).toBe('𝄪')
-			expect(getAnnotationDisplaySymbol({ ...ann, data: { displaySymbol: 'bb' } })).toBe('𝄫')
-			expect(getAnnotationDisplaySymbol({ ...ann, data: { displaySymbol: '♭♭' } })).toBe('𝄫')
-
-			// Trills and dynamics
-			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: 'm' } })).toBe('𝆖')
-			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: 'tr' } })).toBe('𝆖')
-			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: 'π' } })).toBe('𝆏𝆏')
-			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: '\\pi' } })).toBe('𝆏𝆏')
-			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: 'p' } })).toBe('𝆏')
-			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: 'f' } })).toBe('𝆑')
-			expect(getAnnotationDisplaySymbol({ ...ann, data: { symbol: 'sfz' } })).toBe('𝆍𝆑𝆎')
-		})
-	})
-
-	describe('isStampDynamicOrOrnament', () => {
-		it('identifies dynamics and ornament symbols', () => {
-			const base: SheetAnnotation = {
-				id: 1,
-				pageNumber: 0,
-				layerIndex: 0,
-				type: 'stamp',
-				x: 0,
-				y: 0,
-				width: 0.1,
-				height: 0.1,
-			}
-			expect(isStampDynamicOrOrnament({ ...base, data: { symbol: 'm' } })).toBe(true)
-			expect(isStampDynamicOrOrnament({ ...base, data: { symbol: 'π' } })).toBe(true)
-			expect(isStampDynamicOrOrnament({ ...base, data: { symbol: 'pp' } })).toBe(true)
-			expect(isStampDynamicOrOrnament({ ...base, data: { symbol: 'f' } })).toBe(true)
-			expect(isStampDynamicOrOrnament({ ...base, data: { symbol: 'q' } })).toBe(false)
-			expect(isStampDynamicOrOrnament({ ...base, data: { symbol: 'b' } })).toBe(false)
-		})
-	})
-
-	describe('isNumericStamp and getStampFontFamily', () => {
-		const base: SheetAnnotation = {
-			id: 1,
-			pageNumber: 0,
-			layerIndex: 0,
-			type: 'stamp',
-			x: 0,
-			y: 0,
-			width: 0.1,
-			height: 0.1,
-		}
-
-		it('identifies numeric stamps and returns Century Schoolbook font stack', () => {
-			expect(isNumericStamp({ ...base, data: { symbol: '6' } })).toBe(true)
-			expect(isNumericStamp({ ...base, data: { symbol: '3' } })).toBe(true)
-			expect(isNumericStamp({ ...base, data: { symbol: '12' } })).toBe(true)
-			expect(isNumericStamp({ ...base, data: { symbol: 'q' } })).toBe(false)
-			expect(isNumericStamp({ ...base, data: { symbol: 'm' } })).toBe(false)
-
-			expect(getStampFontFamily({ ...base, data: { symbol: '6' } })).toContain('Century Schoolbook')
-			expect(getStampFontFamily({ ...base, data: { symbol: '6' } })).toContain('TeX Gyre Schola')
-			expect(getStampFontFamily({ ...base, data: { symbol: 'q' } })).toContain('Noto Music')
-
-			expect(isStampItalic({ ...base, data: { symbol: '6' } })).toBe(true)
-			expect(isStampBold({ ...base, data: { symbol: '6' } })).toBe(true)
-			expect(isStampItalic({ ...base, data: { symbol: 'q' } })).toBe(false)
-			expect(isStampBold({ ...base, data: { symbol: 'q' } })).toBe(false)
-		})
-	})
-
-	describe('getStampVector', () => {
-		const base: SheetAnnotation = {
-			id: 1,
-			pageNumber: 0,
-			layerIndex: 0,
-			type: 'stamp',
-			x: 0.3,
-			y: 0.4,
-			width: 0.05,
-			height: 0.05,
-		}
-
-		it('returns vector paths with viewBox for standard music notes and accidentals', () => {
-			const noteVector = getStampVector({ ...base, data: { symbol: 'q' } })
-			expect(noteVector).not.toBeNull()
-			expect(noteVector?.viewBox).toBe('0 0 180 549')
-			expect(noteVector?.d).toContain('M143 415')
-
-			const flatVector = getStampVector({ ...base, data: { symbol: 'b' } })
-			expect(flatVector).not.toBeNull()
-			expect(flatVector?.viewBox).toBe('0 0 199 670')
-
-			const dblFlatVector = getStampVector({ ...base, data: { symbol: '∫' } })
-			expect(dblFlatVector).not.toBeNull()
-			expect(dblFlatVector?.viewBox).toBe('0 0 367 670')
+		it('generates bracket path with optional hookHeight', () => {
+			const path = generateBracketPath({ x: 0.1, y: 0.5 }, { x: 0.5, y: 0.5 }, 1000, 35)
+			expect(path).toBe('M 100.0 535.0 L 100.0 500.0 L 500.0 500.0 L 500.0 535.0')
 		})
 
-		it('returns vector paths for dynamics and ornaments', () => {
-			const ppVector = getStampVector({ ...base, data: { symbol: 'π' } })
-			expect(ppVector).not.toBeNull()
-			expect(ppVector?.viewBox).toBe('0 0 807 440')
-
-			const mordentVector = getStampVector({ ...base, data: { symbol: 'm' } })
-			expect(mordentVector).not.toBeNull()
-			expect(mordentVector?.viewBox).toBe('0 0 450 403')
-
-			const fVector = getStampVector({ ...base, data: { symbol: 'f' } })
-			expect(fVector).not.toBeNull()
-			expect(fVector?.viewBox).toBe('0 0 516 584')
-		})
-
-		it('returns musical serif vector paths for single digits', () => {
-			const digit6Vector = getStampVector({ ...base, data: { symbol: '6' } })
-			expect(digit6Vector).not.toBeNull()
-			expect(digit6Vector?.viewBox).toBe('0 0 543 720')
-
-			const digit0Vector = getStampVector({ ...base, data: { symbol: '0' } })
-			expect(digit0Vector).not.toBeNull()
-			expect(digit0Vector?.viewBox).toBe('0 0 532 720')
-		})
-
-		it('returns null for unknown / custom text stamps to allow fallback to <text>', () => {
-			expect(getStampVector({ ...base, data: { symbol: 'custom-text' } })).toBeNull()
-			expect(getStampVector(null)).toBeNull()
-			expect(getStampVector(undefined)).toBeNull()
-		})
-	})
-
-	describe('getAnnotationPath', () => {
-		it('generates hairpin path for drawMode 4 shape', () => {
-			const ann: SheetAnnotation = {
-				id: 1,
-				pageNumber: 0,
-				layerIndex: 0,
+		it('computes shape height handle for hairpins, slurs, and brackets', () => {
+			const cresc = makeAnn({
 				type: 'shape',
-				x: 0.1,
-				y: 0.5,
-				width: 0.2,
-				height: 0.03,
-				data: {
-					drawMode: 4,
-					points: [{ x: 0.1, y: 0.5 }, { x: 0.3, y: 0.5 }],
-				},
-			}
-			const path = getAnnotationPath(ann)
-			expect(path).toContain('L 100.0 500.0')
-		})
+				data: { shapeType: 'crescendo', points: [{ x: 0.1, y: 0.5 }, { x: 0.5, y: 0.5 }], aperture: 25 },
+			})
+			expect(getShapeHeightHandle(cresc, 1000)).toEqual({ x: 500, y: 525 })
 
-		it('generates arrow path for shape with isArrow or drawMode 3', () => {
-			const ann: SheetAnnotation = {
-				id: 2,
-				pageNumber: 0,
-				layerIndex: 0,
+			const slur = makeAnn({
 				type: 'shape',
-				x: 0.1,
-				y: 0.5,
-				width: 0.4,
-				height: 0.05,
-				data: {
-					drawMode: 3,
-					isArrow: true,
-					points: [{ x: 0.1, y: 0.5 }, { x: 0.5, y: 0.5 }],
-				},
-			}
-			const path = getAnnotationPath(ann)
-			expect(path).toMatch(/^M 100\.0 500\.0 L 500\.0 500\.0 M \d+\.\d+ \d+\.\d+ L 500\.0 500\.0 L \d+\.\d+ \d+\.\d+$/)
-		})
-
-		it('applies curve smoothing for drawing annotations with drawMode 0', () => {
-			const ann: SheetAnnotation = {
-				id: 3,
-				pageNumber: 0,
-				layerIndex: 0,
-				type: 'drawing',
-				x: 0.1,
-				y: 0.1,
-				width: 0.2,
-				height: 0.2,
-				data: {
-					drawMode: 0,
-					points: [
-						{ x: 0.1, y: 0.1 },
-						{ x: 0.2, y: 0.2 },
-						{ x: 0.3, y: 0.25 },
-					],
-				},
-			}
-			const path = getAnnotationPath(ann)
-			expect(path).toContain(' Q ')
-		})
-
-		it('renders multiple independent strokes separated by M commands when strokes array is present', () => {
-			const ann: SheetAnnotation = {
-				id: 4,
-				pageNumber: 0,
-				layerIndex: 0,
-				type: 'drawing',
-				x: 0.1,
-				y: 0.1,
-				width: 0.5,
-				height: 0.5,
-				data: {
-					drawMode: 0,
-					strokes: [
-						[{ x: 0.1, y: 0.1 }, { x: 0.2, y: 0.2 }],
-						[{ x: 0.4, y: 0.4 }, { x: 0.5, y: 0.5 }],
-					],
-				},
-			}
-			const path = getAnnotationPath(ann)
-			// Should contain two distinct M subpaths
-			const mMatches = path.match(/M /g)
-			expect(mMatches).toHaveLength(2)
-			expect(path).toContain('M 100.0 100.0 L 200.0 200.0')
-			expect(path).toContain('M 400.0 400.0 L 500.0 500.0')
+				data: { shapeType: 'slur', points: [{ x: 0.1, y: 0.5 }, { x: 0.5, y: 0.5 }], curvature: -40 },
+			})
+			expect(getShapeHeightHandle(slur, 1000)).toEqual({ x: 300, y: 480 })
 		})
 	})
 
-	describe('getAnnotationTextPosition', () => {
-		it('uses 3rd point as baseline origin when available', () => {
-			const ann: SheetAnnotation = {
-				id: 1,
-				pageNumber: 0,
-				layerIndex: 0,
-				type: 'text',
-				x: 0.5667,
-				y: 0.6683,
-				width: 0.1141,
-				height: 0.0734,
-				data: {
-					points: [
-						{ x: 0.5667, y: 0.6683 },
-						{ x: 0.6808, y: 0.7417 },
-						{ x: 0.5751, y: 0.7295 },
-					],
-				},
-			}
-			const pos = getAnnotationTextPosition(ann)
-			expect(pos.x).toBe(575.1)
-			expect(pos.y).toBe(729.5)
-			expect(pos.dominantBaseline).toBe('alphabetic')
-			expect(pos.textAnchor).toBe('start')
+	describe('getAnnotationPath & isPathShape', () => {
+		it('identifies path shapes vs box shapes', () => {
+			expect(isPathShape(makeAnn({ type: 'shape', data: { shapeType: 'arrow' } }))).toBe(true)
+			expect(isPathShape(makeAnn({ type: 'shape', data: { shapeType: 'crescendo' } }))).toBe(true)
+			expect(isPathShape(makeAnn({ type: 'shape', data: { shapeType: 'slur' } }))).toBe(true)
+			expect(isPathShape(makeAnn({ type: 'shape', data: { shapeType: 'rect' } }))).toBe(false)
+			expect(isPathShape(makeAnn({ type: 'shape', data: { shapeType: 'ellipse' } }))).toBe(false)
 		})
 
-		it('calculates proper offset into textbox when points are absent', () => {
-			const ann: SheetAnnotation = {
-				id: 2,
-				pageNumber: 0,
-				layerIndex: 0,
-				type: 'text',
+		it('computes hairpin path for crescendo shape', () => {
+			const ann = makeAnn({
+				type: 'shape',
+				data: { shapeType: 'crescendo', points: [{ x: 0.2, y: 0.5 }, { x: 0.6, y: 0.5 }], aperture: 12 },
+			})
+			expect(getAnnotationPath(ann, 1000)).toBe('M 600.0 512.0 L 200.0 500.0 L 600.0 488.0')
+		})
+	})
+
+	describe('Unicode music symbols & fonts', () => {
+		it('normalizes legacy ASCII aliases to canonical Unicode', () => {
+			expect(normalizeMusicSymbol('ff')).toBe('𝆑𝆑')
+			expect(normalizeMusicSymbol('pp')).toBe('𝆏𝆏')
+			expect(normalizeMusicSymbol('mf')).toBe('𝆐𝆑')
+			expect(normalizeMusicSymbol('#')).toBe('♯')
+			expect(normalizeMusicSymbol('b')).toBe('♭')
+			expect(normalizeMusicSymbol('fermata')).toBe('𝄐')
+			expect(normalizeMusicSymbol('tr')).toBe('𝆖')
+		})
+
+		it('uses Noto Music for music stamps and Century Schoolbook for fingerings', () => {
+			const dyn = makeAnn({ type: 'stamp', data: { symbol: '𝆑𝆑' } })
+			expect(getAnnotationDisplaySymbol(dyn)).toBe('𝆑𝆑')
+			expect(getStampFontFamily(dyn)).toContain('Noto Music')
+			expect(isStampItalic(dyn)).toBe(false)
+
+			const fingering = makeAnn({ type: 'stamp', data: { symbol: '3', category: 'fingering', fontKind: 'fingering' } })
+			expect(getStampFontFamily(fingering)).toContain('Century Schoolbook')
+			expect(isStampItalic(fingering)).toBe(true)
+			expect(isStampBold(fingering)).toBe(true)
+		})
+
+		it('computes ink-centered render position for combining articulations and fermatas', () => {
+			const accent = makeAnn({
+				type: 'stamp',
 				x: 0.5,
-				y: 0.6,
-				width: 0.1,
-				height: 0.05,
-				data: {},
-			}
-			const pos = getAnnotationTextPosition(ann)
-			expect(pos.x).toBe(508)
-			expect(pos.y).toBe(641.5)
+				y: 0.5,
+				width: 0,
+				height: 0,
+				style: { fontSize: 40 },
+				data: { symbol: '𝅻' },
+			})
+			const pos = getStampRenderPosition(accent, 1000)
 			expect(pos.dominantBaseline).toBe('alphabetic')
-			expect(pos.textAnchor).toBe('start')
+			expect(pos.x).toBeCloseTo(500 - 0.258 * 40, 1)
+			expect(pos.y).toBeCloseTo(500 - 0.146 * 40, 1)
+
+			const fingering = makeAnn({
+				type: 'stamp',
+				x: 0.5,
+				y: 0.5,
+				width: 0,
+				height: 0,
+				style: { fontSize: 40 },
+				data: { symbol: '2' },
+			})
+			expect(getStampRenderPosition(fingering, 1000)).toEqual({
+				x: 500,
+				y: 500,
+				dominantBaseline: 'central',
+			})
+		})
+	})
+
+	describe('text layout & geometry helpers', () => {
+		it('computes isotropic text layout with alignment and multi-line support', () => {
+			const ann = makeAnn({
+				type: 'text',
+				x: 0.1,
+				y: 0.2,
+				width: 0.4,
+				height: 0.1,
+				style: { fontSize: 20, textAlign: 'center', fontFamily: 'serif' },
+				data: { text: 'Allegro\nvivace' },
+			})
+			const layout = getAnnotationTextLayout(ann, 1000)
+			expect(layout.x).toBe(300) // (0.1 + 0.4/2) * 1000
+			expect(layout.textAnchor).toBe('middle')
+			expect(layout.fontFamily).toBe('serif')
+			expect(layout.lines).toEqual(['Allegro', 'vivace'])
+		})
+
+		it('maps Century Schoolbook font stack cleanly', () => {
+			expect(getAnnotationFontFamily('Century Schoolbook')).toContain('Century Schoolbook')
+			expect(getAnnotationFontFamily(null)).toBe('sans-serif')
+		})
+
+		it('computes bounding box from points and translates annotations', () => {
+			const box = computeBoundingBoxFromPoints([{ x: 0.2, y: 0.3 }, { x: 0.5, y: 0.7 }], 0)
+			expect(box).toEqual({ x: 0.2, y: 0.3, width: 0.3, height: 0.4 })
+
+			const ann = makeAnn({
+				x: 0.2,
+				y: 0.3,
+				data: { points: [{ x: 0.2, y: 0.3 }, { x: 0.5, y: 0.7 }] },
+			})
+			const moved = translateAnnotation(ann, 0.1, -0.1)
+			expect(moved.x).toBe(0.3)
+			expect(moved.y).toBe(0.2)
+			expect(moved.data.points).toEqual([{ x: 0.3, y: 0.2 }, { x: 0.6, y: 0.6 }])
+			expect(VIEWBOX_WIDTH).toBe(1000)
 		})
 	})
 })

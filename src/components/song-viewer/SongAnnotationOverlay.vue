@@ -1,137 +1,191 @@
 <script setup lang="ts">
 import type { SheetAnnotation } from '../../types/annotation'
-import { computed } from 'vue'
-import {
-	getAnnotationDashArray,
-	getAnnotationDisplaySymbol,
-	getAnnotationFontFamily,
-	getAnnotationPath,
-	getAnnotationTextPosition,
-	getStampFontFamily,
-	getStampVector,
-	isStampItalic,
-	isStampBold,
-} from '../../utils/annotation'
+import type { EditorTool, EditorToolStyle } from '../../composables/useAnnotationEditor'
+import { computed, ref } from 'vue'
+import { getViewBoxHeight, VIEWBOX_WIDTH } from '../../utils/annotation'
+import { useAnnotationPointerInteraction } from '../../composables/useAnnotationPointerInteraction'
+import SongAnnotationItem from './SongAnnotationItem.vue'
+import SongAnnotationSelectionBox from './SongAnnotationSelectionBox.vue'
+import SongAnnotationInlinePopovers from './SongAnnotationInlinePopovers.vue'
 
 const props = withDefaults(
 	defineProps<{
 		annotations?: SheetAnnotation[]
-		pageNumber: number // 1-indexed page from PDF.js or 0-indexed
+		/** 1-indexed page number from PDF.js */
+		pageNumber: number
 		visible?: boolean
+		pageWidth?: number
+		pageHeight?: number
+		totalPages?: number
+		editable?: boolean
+		activeTool?: EditorTool
+		toolStyle?: EditorToolStyle
+		selectedUuid?: string | null
 	}>(),
 	{
 		annotations: () => [],
 		visible: false,
+		pageWidth: 595,
+		pageHeight: 842,
+		totalPages: 1,
+		editable: false,
+		activeTool: 'select',
+		toolStyle: () => ({
+			color: '#e53935',
+			highlightColor: '#ffeb3b',
+			strokeWidth: 2.5,
+			highlightWidth: 18,
+			opacity: 1.0,
+			highlightOpacity: 0.4,
+			lineStyle: 'solid',
+			fontSize: 22,
+			fontFamily: 'sans-serif',
+			textAlign: 'left',
+			fill: 'transparent',
+			shapeHeight: 18,
+			stampSymbol: '𝆑𝆑',
+			stampSize: 40,
+		}),
+		selectedUuid: null,
 	},
 )
 
 const emit = defineEmits<{
 	'jump-to-page': [pageNumber: number]
+	select: [uuid: string | null]
+	'create-annotation': [draft: Omit<SheetAnnotation, 'songId' | 'fileId' | 'uuid'>]
+	'update-annotation': [before: SheetAnnotation, after: SheetAnnotation]
+	'delete-annotation': [annotation: SheetAnnotation]
 }>()
 
+const svgRef = ref<SVGSVGElement | null>(null)
+
+const vbHeight = computed(() => getViewBoxHeight(props.pageWidth, props.pageHeight))
+const pageIndex = computed(() => Math.max(0, props.pageNumber - 1))
+
 const activeAnnotations = computed(() => {
-	if (!props.annotations || props.annotations.length === 0) {
-		return []
+	if (!props.annotations || props.annotations.length === 0) return []
+	return props.annotations.filter((a) => !a.deletedAt && a.pageNumber === pageIndex.value)
+})
+
+const selectedItem = computed(() => {
+	if (!props.editable || !props.selectedUuid) return null
+	return displayedAnnotations.value.find((a) => a.uuid === props.selectedUuid) ?? null
+})
+
+const {
+	previewAnnotation,
+	hoveredUuid,
+	pendingText,
+	pendingLink,
+	onPointerDown,
+	onPointerMove,
+	onPointerUp,
+	onAnnotationDblClick,
+	commitPendingText,
+	cancelPendingText,
+	commitPendingLink,
+	cancelPendingLink,
+} = useAnnotationPointerInteraction({
+	svgRef,
+	vbHeight,
+	pageIndex,
+	pageNumber: computed(() => props.pageNumber),
+	totalPages: computed(() => props.totalPages),
+	editable: computed(() => props.editable),
+	activeTool: computed(() => props.activeTool),
+	toolStyle: computed(() => props.toolStyle),
+	activeAnnotations,
+	selectedItem,
+	onSelect: (uuid) => emit('select', uuid),
+	onCreate: (draft) => emit('create-annotation', draft),
+	onUpdate: (before, after) => emit('update-annotation', before, after),
+	onDelete: (ann) => emit('delete-annotation', ann),
+})
+
+const displayedAnnotations = computed(() => {
+	const list = activeAnnotations.value.map((ann) =>
+		previewAnnotation.value && previewAnnotation.value.uuid === ann.uuid
+			? previewAnnotation.value
+			: ann,
+	)
+	if (previewAnnotation.value && previewAnnotation.value.uuid === '__draft__') {
+		list.push(previewAnnotation.value)
 	}
-	return props.annotations.filter((a) => {
-		if (a.deletedAt) return false
-		// Match either 1-indexed or 0-indexed page number
-		return a.pageNumber === props.pageNumber || a.pageNumber === props.pageNumber - 1
-	})
+	return list
+})
+
+const cursorClass = computed(() => {
+	if (!props.editable) return ''
+	switch (props.activeTool) {
+		case 'select':
+			return 'cursor-select'
+		case 'text':
+			return 'cursor-text'
+		case 'eraser':
+			return 'cursor-eraser'
+		default:
+			return 'cursor-crosshair'
+	}
 })
 </script>
 
 <template>
-	<svg
-		v-if="visible && activeAnnotations.length > 0"
-		class="sheetmusic-annotation-overlay"
-		data-test="annotation-overlay"
-		viewBox="0 0 1000 1000"
-		preserveAspectRatio="none">
-		<template v-for="item in activeAnnotations" :key="item.uuid || item.id">
-			<!-- Freehand drawing, highlight, or path-based shape/line/hairpin -->
-			<path
-				v-if="(item.type === 'drawing' || item.type === 'highlight' || (item.type === 'shape' && (item.data?.path || (item.data?.points && item.data.points.length > 0) || item.data?.drawMode === 0 || item.data?.drawMode === 1 || item.data?.drawMode === 3 || item.data?.drawMode === 4 || item.data?.drawMode === 5 || item.data?.isHairpin || item.data?.isArrow || item.data?.shapeType === 'arrow' || item.data?.shapeType === 'line')))"
-				:d="getAnnotationPath(item)"
-				:stroke="item.style?.stroke || '#ff0000'"
-				:stroke-width="item.style?.strokeWidth || 2.0"
-				:stroke-dasharray="getAnnotationDashArray(item)"
-				:opacity="item.style?.opacity ?? 1.0"
-				:style="{ mixBlendMode: item.style?.blendMode || (item.type === 'highlight' ? 'multiply' : 'normal') }"
-				fill="none"
-				stroke-linecap="round"
-				stroke-linejoin="round"
-				:data-test="item.type === 'shape' ? 'annotation-shape' : 'annotation-drawing'" />
+	<div
+		v-if="visible && (displayedAnnotations.length > 0 || editable)"
+		class="sheetmusic-annotation-layer">
+		<svg
+			ref="svgRef"
+			class="sheetmusic-annotation-overlay"
+			:class="[{ 'is-editable': editable }, cursorClass]"
+			data-test="annotation-overlay"
+			:viewBox="`0 0 ${VIEWBOX_WIDTH} ${vbHeight}`"
+			preserveAspectRatio="xMidYMid meet"
+			@pointerdown="onPointerDown"
+			@pointermove="onPointerMove"
+			@pointerup="onPointerUp"
+			@pointerleave="hoveredUuid = null">
+			<SongAnnotationItem
+				v-for="item in displayedAnnotations"
+				:key="item.uuid || item.id"
+				:item="item"
+				:vb-height="vbHeight"
+				:editable="editable"
+				:hovered-select="editable && activeTool === 'select' && hoveredUuid === item.uuid"
+				:hovered-eraser="editable && activeTool === 'eraser' && hoveredUuid === item.uuid"
+				@dblclick-text="onAnnotationDblClick"
+				@jump-to-page="emit('jump-to-page', $event)" />
 
-			<!-- Shape (Rectangle) -->
-			<rect
-				v-else-if="item.type === 'shape'"
-				:x="item.x * 1000"
-				:y="item.y * 1000"
-				:width="item.width * 1000"
-				:height="item.height * 1000"
-				:stroke="item.style?.stroke || '#ff0000'"
-				:stroke-width="item.style?.strokeWidth || 2.0"
-				:stroke-dasharray="getAnnotationDashArray(item)"
-				:fill="item.style?.fill || 'transparent'"
-				data-test="annotation-shape" />
+			<SongAnnotationSelectionBox
+				v-if="selectedItem && activeTool === 'select'"
+				:item="selectedItem"
+				:vb-height="vbHeight" />
+		</svg>
 
-			<!-- Stamp Annotation: Exact vector path centered in viewport, with fallback to font text -->
-			<svg
-				v-if="item.type === 'stamp' && getStampVector(item)"
-				:x="Math.round(item.x * 10000) / 10"
-				:y="Math.round(item.y * 10000) / 10"
-				:width="Math.round((item.width || 0.04) * 10000) / 10"
-				:height="Math.round((item.height || 0.04) * 10000) / 10"
-				:viewBox="getStampVector(item)!.viewBox"
-				preserveAspectRatio="xMidYMid meet"
-				data-test="annotation-stamp">
-				<path :d="getStampVector(item)!.d" :fill="item.style?.color || '#000000'" />
-			</svg>
-			<text
-				v-else-if="item.type === 'stamp'"
-				:x="Math.round((item.x + (item.width || 0.04) / 2) * 10000) / 10"
-				:y="Math.round((item.y + (item.height || 0.04) / 2) * 10000) / 10"
-				:fill="item.style?.color || '#000000'"
-				:font-size="item.style?.fontSize || 40"
-				:font-style="isStampItalic(item) ? 'italic' : undefined"
-				:font-weight="isStampBold(item) ? 'bold' : undefined"
-				text-anchor="middle"
-				dominant-baseline="central"
-				:font-family="getStampFontFamily(item)"
-				data-test="annotation-stamp">
-				{{ getAnnotationDisplaySymbol(item) }}
-			</text>
-
-			<!-- Text Annotation -->
-			<text
-				v-else-if="item.type === 'text' && item.data?.text"
-				:x="getAnnotationTextPosition(item).x"
-				:y="getAnnotationTextPosition(item).y"
-				:fill="item.style?.color || '#000000'"
-				:font-size="item.style?.fontSize || item.data?.scaledFontSize || (item.data?.fontSize ? (item.data.fontSize < 100 ? Math.round(item.data.fontSize / (item.data?.sourceWidth || 596) * 1000) : item.data.fontSize) : 24)"
-				:font-family="getAnnotationFontFamily(item.style?.fontFamily || item.data?.fontFamily)"
-				:dominant-baseline="getAnnotationTextPosition(item).dominantBaseline"
-				:text-anchor="getAnnotationTextPosition(item).textAnchor"
-				data-test="annotation-text">
-				{{ item.data.text }}
-			</text>
-
-			<!-- Navigation jump link -->
-			<rect
-				v-else-if="item.type === 'link'"
-				:x="item.x * 1000"
-				:y="item.y * 1000"
-				:width="item.width * 1000"
-				:height="item.height * 1000"
-				class="sheetmusic-annotation-link"
-				data-test="annotation-link"
-				@click="emit('jump-to-page', item.data?.targetPage ?? 0)" />
-		</template>
-	</svg>
+		<SongAnnotationInlinePopovers
+			:pending-text="pendingText"
+			:pending-link="pendingLink"
+			:total-pages="totalPages"
+			@update:pending-text-text="pendingText && (pendingText.text = $event)"
+			@update:pending-link-page="pendingLink && (pendingLink.targetPageOneIndexed = $event)"
+			@update:pending-link-label="pendingLink && (pendingLink.label = $event)"
+			@commit-text="commitPendingText"
+			@cancel-text="cancelPendingText"
+			@commit-link="commitPendingLink"
+			@cancel-link="cancelPendingLink" />
+	</div>
 </template>
 
 <style scoped>
+.sheetmusic-annotation-layer {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	pointer-events: none;
+	z-index: 2;
+}
+
 .sheetmusic-annotation-overlay {
 	position: absolute;
 	top: 0;
@@ -139,19 +193,67 @@ const activeAnnotations = computed(() => {
 	width: 100%;
 	height: 100%;
 	pointer-events: none;
-	z-index: 2;
+	user-select: none;
 }
 
-.sheetmusic-annotation-link {
+.sheetmusic-annotation-overlay.is-editable {
+	pointer-events: auto;
+	touch-action: none;
+}
+
+.cursor-crosshair {
+	cursor: crosshair;
+}
+
+.cursor-select {
+	cursor: default;
+}
+
+.cursor-text {
+	cursor: text;
+}
+
+.cursor-eraser {
+	cursor: not-allowed;
+}
+
+:deep(.is-hovered-select) {
+	filter: drop-shadow(0 0 3px rgba(0, 130, 201, 0.85));
+	cursor: grab;
+}
+
+:deep(.is-hovered-eraser) {
+	filter: drop-shadow(0 0 4px rgba(229, 57, 53, 0.9));
+	opacity: 0.72;
+	cursor: pointer;
+}
+
+:deep(.sheetmusic-annotation-link) {
 	pointer-events: auto;
 	cursor: pointer;
-	fill: rgba(0, 120, 255, 0.2);
-	stroke: rgba(0, 120, 255, 0.6);
+	fill: rgba(0, 120, 255, 0.18);
+	stroke: rgba(0, 120, 255, 0.65);
 	stroke-width: 1.5;
 	transition: fill 0.15s ease-in-out;
 }
 
-.sheetmusic-annotation-link:hover {
-	fill: rgba(0, 120, 255, 0.35);
+:deep(.sheetmusic-annotation-link:hover) {
+	fill: rgba(0, 120, 255, 0.32);
+}
+
+:deep(.sheetmusic-resize-handle) {
+	fill: #ffffff;
+	stroke: #0082c9;
+	stroke-width: 2;
+	cursor: pointer;
+	pointer-events: auto;
+}
+
+:deep(.sheetmusic-height-handle) {
+	fill: #ffeb3b;
+	stroke: #0082c9;
+	stroke-width: 2;
+	cursor: ns-resize;
+	pointer-events: auto;
 }
 </style>

@@ -744,6 +744,13 @@ class ApiController extends OCSController {
 
 	#[NoAdminRequired]
 	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
+	#[ApiRoute(verb: 'POST', url: '/api/songs/{songId}/annotations/batch')]
+	public function batchSongAnnotations(int $songId): DataResponse {
+		return $this->songAnnotationController->batchAnnotations($songId);
+	}
+
+	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'DELETE', url: '/api/annotations/{id}')]
 	public function deleteSongAnnotation(int $id): DataResponse {
 		return $this->songAnnotationController->deleteAnnotation($id);

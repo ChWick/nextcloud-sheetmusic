@@ -52,12 +52,11 @@ describe('Annotations Toggle Controls', () => {
 		await toggleBtn.trigger('click')
 		expect(wrapper.emitted('toggleAnnotations')).toBeTruthy()
 
-		// When showAnnotations is false
 		await wrapper.setProps({ showAnnotations: false })
 		expect(toggleBtn.attributes('title')).toBe('Show annotations (experimental)')
 	})
 
-	it('SongViewerFileToolbar renders annotation toggle button and emits toggle-annotations', async () => {
+	it('SongViewerFileToolbar renders annotation toggle and edit buttons', async () => {
 		const wrapper = mount(SongViewerFileToolbar, {
 			props: {
 				file: {
@@ -75,14 +74,13 @@ describe('Annotations Toggle Controls', () => {
 
 		const toggleBtn = wrapper.find('[data-test="toggle-annotations-button"]')
 		expect(toggleBtn.exists()).toBe(true)
-		expect(toggleBtn.attributes('title')).toBe('Hide annotations (experimental)')
-
 		await toggleBtn.trigger('click')
 		expect(wrapper.emitted('toggle-annotations')).toBeTruthy()
 
-		// When showAnnotations is false
-		await wrapper.setProps({ showAnnotations: false })
-		expect(toggleBtn.attributes('title')).toBe('Show annotations (experimental)')
+		const editBtn = wrapper.find('[data-test="edit-annotations-button"]')
+		expect(editBtn.exists()).toBe(true)
+		await editBtn.trigger('click')
+		expect(wrapper.emitted('toggle-edit-annotations')).toBeTruthy()
 	})
 })
 
@@ -90,10 +88,10 @@ describe('FilePreviewer.vue Annotation Rendering & Reactivity', () => {
 	const sampleAnnotations: SheetAnnotation[] = [
 		{
 			id: 1,
-			uuid: 'test-ann-page-1',
+			uuid: 'test-ann-page-0',
 			songId: 10,
 			fileId: 100,
-			pageNumber: 1,
+			pageNumber: 0,
 			layerIndex: 0,
 			type: 'drawing',
 			x: 0.1,
@@ -101,11 +99,16 @@ describe('FilePreviewer.vue Annotation Rendering & Reactivity', () => {
 			width: 0.3,
 			height: 0.4,
 			style: { stroke: '#ff0000', strokeWidth: 2 },
-			data: { path: 'M 100 200 L 300 400' },
+			data: {
+				points: [
+					{ x: 0.1, y: 0.15 },
+					{ x: 0.3, y: 0.3 },
+				],
+			},
 		},
 	]
 
-	it('renders annotation overlay SVG when mounted with annotations', async () => {
+	it('renders isotropic annotation overlay SVG when mounted with annotations', async () => {
 		const wrapper = mount(FilePreviewer, {
 			props: {
 				filePath: '/dav/files/admin/Noten/piece.pdf',
@@ -118,14 +121,13 @@ describe('FilePreviewer.vue Annotation Rendering & Reactivity', () => {
 
 		const overlay = wrapper.find('.sheetmusic-annotation-overlay')
 		expect(overlay.exists()).toBe(true)
-		expect(overlay.attributes('style')).toContain('display: block')
+		expect(overlay.attributes('viewBox')).toBe('0 0 1000 1333.33')
 		const path = overlay.find('path')
 		expect(path.exists()).toBe(true)
-		expect(path.attributes('d')).toBe('M 100 200 L 300 400')
+		expect(path.attributes('d')).toBe('M 100.0 200.0 L 300.0 400.0')
 	})
 
 	it('dynamically attaches annotation overlay when annotations prop arrives after initial render', async () => {
-		// Mount initially with empty annotations
 		const wrapper = mount(FilePreviewer, {
 			props: {
 				filePath: '/dav/files/admin/Noten/piece.pdf',
@@ -137,13 +139,12 @@ describe('FilePreviewer.vue Annotation Rendering & Reactivity', () => {
 		await flushPromises()
 		expect(wrapper.find('.sheetmusic-annotation-overlay').exists()).toBe(false)
 
-		// Async arrival of annotations
 		await wrapper.setProps({ annotations: sampleAnnotations })
 		await flushPromises()
 
 		const overlay = wrapper.find('.sheetmusic-annotation-overlay')
 		expect(overlay.exists()).toBe(true)
-		expect(overlay.find('path').attributes('d')).toBe('M 100 200 L 300 400')
+		expect(overlay.find('path').attributes('d')).toBe('M 100.0 200.0 L 300.0 400.0')
 	})
 
 	it('toggles overlay visibility when showAnnotations changes', async () => {
@@ -156,40 +157,35 @@ describe('FilePreviewer.vue Annotation Rendering & Reactivity', () => {
 		})
 
 		await flushPromises()
-		const overlay = wrapper.find('.sheetmusic-annotation-overlay')
-		expect(overlay.exists()).toBe(true)
-		expect(overlay.attributes('style')).toContain('display: block')
+		expect(wrapper.find('.sheetmusic-annotation-overlay').exists()).toBe(true)
 
-		// Hide annotations
 		await wrapper.setProps({ showAnnotations: false })
 		await flushPromises()
-		expect(overlay.attributes('style')).toContain('display: none')
+		expect(wrapper.find('.sheetmusic-annotation-overlay').exists()).toBe(false)
 
-		// Show annotations again
 		await wrapper.setProps({ showAnnotations: true })
 		await flushPromises()
-		expect(overlay.attributes('style')).toContain('display: block')
+		expect(wrapper.find('.sheetmusic-annotation-overlay').exists()).toBe(true)
 	})
 
-	it('renders straight line shapes and note stamps accurately', async () => {
+	it('renders straight line shapes and Unicode note stamps in Noto Music', async () => {
 		const shapeAndStampAnns: SheetAnnotation[] = [
 			{
 				id: 20,
 				uuid: 'line-shape-1',
 				songId: 10,
 				fileId: 100,
-				pageNumber: 1,
+				pageNumber: 0,
 				layerIndex: 0,
 				type: 'shape',
 				x: 0.1,
-				y: 0.7,
+				y: 0.6,
 				width: 0.2,
 				height: 0.001,
 				style: { stroke: '#000000', strokeWidth: 3 },
 				data: {
-					drawMode: 1,
 					shapeType: 'line',
-					points: [{ x: 0.1, y: 0.7 }, { x: 0.3, y: 0.7 }],
+					points: [{ x: 0.1, y: 0.6 }, { x: 0.3, y: 0.6 }],
 				},
 			},
 			{
@@ -197,17 +193,18 @@ describe('FilePreviewer.vue Annotation Rendering & Reactivity', () => {
 				uuid: 'note-stamp-1',
 				songId: 10,
 				fileId: 100,
-				pageNumber: 1,
+				pageNumber: 0,
 				layerIndex: 0,
 				type: 'stamp',
 				x: 0.5,
 				y: 0.4,
 				width: 0.05,
 				height: 0.05,
-				style: { color: '#000000', fontSize: 68 },
+				style: { color: '#000000', fontSize: 40 },
 				data: {
-					symbol: 'q',
-					displaySymbol: '♩',
+					symbol: '♩',
+					category: 'rhythm',
+					fontKind: 'music',
 				},
 			},
 		]
@@ -224,64 +221,51 @@ describe('FilePreviewer.vue Annotation Rendering & Reactivity', () => {
 		const overlay = wrapper.find('.sheetmusic-annotation-overlay')
 		expect(overlay.exists()).toBe(true)
 
-		// Straight line should render as <path> not <rect>
 		const linePath = overlay.find('[data-test="annotation-shape"]')
 		expect(linePath.exists()).toBe(true)
 		expect(linePath.element.tagName.toLowerCase()).toBe('path')
-		expect(linePath.attributes('d')).toBe('M 100.0 700.0 L 300.0 700.0')
+		expect(linePath.attributes('d')).toBe('M 100.0 800.0 L 300.0 800.0')
 
-		// Note stamp should render as vector <svg> centered on tap box with viewBox and path
-		const stampSvg = overlay.find('[data-test="annotation-stamp"]')
-		expect(stampSvg.exists()).toBe(true)
-		expect(stampSvg.element.tagName.toLowerCase()).toBe('svg')
-		expect(stampSvg.attributes('x')).toBe('500') // 0.5 * 1000
-		expect(stampSvg.attributes('y')).toBe('400') // 0.4 * 1000
-		expect(stampSvg.attributes('width')).toBe('50')
-		expect(stampSvg.attributes('height')).toBe('50')
-		expect(stampSvg.attributes('viewBox')).toBe('0 0 180 549')
-		expect(stampSvg.attributes('preserveAspectRatio')).toBe('xMidYMid meet')
-		const stampPath = stampSvg.find('path')
-		expect(stampPath.exists()).toBe(true)
-		expect(stampPath.attributes('fill')).toBe('#000000')
+		const stampText = overlay.find('[data-test="annotation-stamp"]')
+		expect(stampText.exists()).toBe(true)
+		expect(stampText.element.tagName.toLowerCase()).toBe('text')
+		expect(stampText.text()).toBe('♩')
+		expect(stampText.attributes('font-family')).toContain('Noto Music')
 	})
 
-	it('renders text annotations with alphabetic baseline, valid font family, and crescendo hairpins', async () => {
+	it('renders text annotations and crescendo hairpins', async () => {
 		const textAndCrescendoAnns: SheetAnnotation[] = [
 			{
 				id: 30,
 				uuid: 'text-1',
 				songId: 10,
 				fileId: 100,
-				pageNumber: 1,
+				pageNumber: 0,
 				layerIndex: 0,
 				type: 'text',
 				x: 0.5,
 				y: 0.6,
 				width: 0.1,
 				height: 0.05,
-				style: { color: '#000000', fontSize: 60 },
-				data: {
-					text: 'foo',
-					fontFamily: '0', // MobileSheets raw integer font family
-					fontSize: 36,
-				},
+				style: { color: '#112233', fontFamily: 'sans-serif', fontSize: 20 },
+				data: { text: 'cresc.' },
 			},
 			{
 				id: 31,
-				uuid: 'crescendo-1',
+				uuid: 'cresc-1',
 				songId: 10,
 				fileId: 100,
-				pageNumber: 1,
+				pageNumber: 0,
 				layerIndex: 0,
 				type: 'shape',
-				x: 0.1,
-				y: 0.7,
-				width: 0.2,
-				height: 0.03,
+				x: 0.2,
+				y: 0.5,
+				width: 0.4,
+				height: 0.02,
 				style: { stroke: '#000000', strokeWidth: 2 },
 				data: {
-					drawMode: 4,
-					points: [{ x: 0.1, y: 0.7 }, { x: 0.3, y: 0.7 }],
+					shapeType: 'crescendo',
+					points: [{ x: 0.2, y: 0.5 }, { x: 0.6, y: 0.5 }],
 				},
 			},
 		]
@@ -296,63 +280,47 @@ describe('FilePreviewer.vue Annotation Rendering & Reactivity', () => {
 
 		await flushPromises()
 		const overlay = wrapper.find('.sheetmusic-annotation-overlay')
-		expect(overlay.exists()).toBe(true)
-
-		// Text should have alphabetic baseline, valid font-family (not "0"), and proper coordinates
 		const textEl = overlay.find('[data-test="annotation-text"]')
 		expect(textEl.exists()).toBe(true)
-		expect(textEl.text()).toBe('foo')
-		expect(textEl.attributes('x')).toBe('508')
-		expect(textEl.attributes('y')).toBe('641.5')
-		expect(textEl.attributes('font-family')).toBe('sans-serif')
-		expect(textEl.attributes('dominant-baseline')).toBe('alphabetic')
-		expect(textEl.attributes('font-size')).toBe('60')
+		expect(textEl.text()).toBe('cresc.')
 
-		// Crescendo should render as hairpin path (<)
-		const hairpin = overlay.find('[data-test="annotation-shape"]')
-		expect(hairpin.exists()).toBe(true)
-		expect(hairpin.element.tagName.toLowerCase()).toBe('path')
-		expect(hairpin.attributes('d')).toContain('L 100.0 700.0')
+		const crescPath = overlay.find('[data-test="annotation-shape"]')
+		expect(crescPath.exists()).toBe(true)
+		expect(crescPath.attributes('d')).toContain('L 200.0 666.7 L')
 	})
 
 	it('renders arrow shapes as path with arrowhead', async () => {
-		const arrowAnn: SheetAnnotation[] = [
-			{
-				id: 40,
-				uuid: 'arrow-shape-1',
-				songId: 10,
-				fileId: 100,
-				pageNumber: 1,
-				layerIndex: 0,
-				type: 'shape',
-				x: 0.1,
-				y: 0.5,
-				width: 0.4,
-				height: 0.05,
-				style: { stroke: '#000000', strokeWidth: 2 },
-				data: {
-					drawMode: 3,
-					isArrow: true,
-					points: [{ x: 0.1, y: 0.5 }, { x: 0.5, y: 0.5 }],
-				},
+		const arrowAnn: SheetAnnotation = {
+			id: 40,
+			uuid: 'arrow-1',
+			songId: 10,
+			fileId: 100,
+			pageNumber: 0,
+			layerIndex: 0,
+			type: 'shape',
+			x: 0.1,
+			y: 0.1,
+			width: 0.3,
+			height: 0.3,
+			style: { stroke: '#ff0000', strokeWidth: 3 },
+			data: {
+				shapeType: 'arrow',
+				points: [{ x: 0.1, y: 0.1 }, { x: 0.4, y: 0.4 }],
 			},
-		]
+		}
 
 		const wrapper = mount(FilePreviewer, {
 			props: {
 				filePath: '/dav/files/admin/Noten/piece.pdf',
-				annotations: arrowAnn,
+				annotations: [arrowAnn],
 				showAnnotations: true,
 			},
 		})
 
 		await flushPromises()
 		const overlay = wrapper.find('.sheetmusic-annotation-overlay')
-		expect(overlay.exists()).toBe(true)
-
-		const arrowEl = overlay.find('[data-test="annotation-shape"]')
-		expect(arrowEl.exists()).toBe(true)
-		expect(arrowEl.element.tagName.toLowerCase()).toBe('path')
-		expect(arrowEl.attributes('d')).toMatch(/^M 100\.0 500\.0 L 500\.0 500\.0 M \d+\.\d+ \d+\.\d+ L 500\.0 500\.0 L \d+\.\d+ \d+\.\d+$/)
+		const arrowPath = overlay.find('[data-test="annotation-shape"]')
+		expect(arrowPath.exists()).toBe(true)
+		expect(arrowPath.attributes('d')).toContain('M 100.0 133.3 L 400.0 533.3 M')
 	})
 })

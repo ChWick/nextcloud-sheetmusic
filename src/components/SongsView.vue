@@ -1,4 +1,5 @@
 <template>
+  <div :class="isViewingSong && $style.viewerShell">
   <ViewHeader
     :title="headerTitle"
     :show-back="songIdInUrl !== null || standaloneCreate"
@@ -42,7 +43,7 @@
     @change="handleImportFile">
   <!-- The URL opens one song full screen ("?song=12"), for viewing it or - with the
        edit flag - for editing it; without a song the list is shown. -->
-  <div v-if="songIdInUrl !== null" :class="$style.fullscreenArea">
+  <div v-if="songIdInUrl !== null" :class="[$style.fullscreenArea, isViewingSong && $style.fullscreenAreaViewer]">
     <SongEditor v-if="isEditInUrl"
                 ref="songEditorRef"
                 :song="openSong"
@@ -209,6 +210,7 @@
         v-model:page-size="pageSize"
         :total-items="filteredSongs.length" />
     </template>
+  </div>
   </div>
 
   <BatchSongEditorDialog
@@ -708,6 +710,10 @@ function handlePdfModifierSaved(data: LibraryData, songId?: number) {
   }
 }
 
+const isViewingSong = computed(() =>
+  songIdInUrl.value !== null && !isEditInUrl.value && !isModifyPdfInUrl.value,
+)
+
 /** The query without the open song and its edit flag; the filters stay. */
 function queryWithoutOpenSong() {
   const query = { ...route.query };
@@ -874,6 +880,18 @@ async function handleDeleted(data: LibraryData | undefined, songId: number) {
   margin-bottom: 12px;
 }
 
+.viewerShell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.viewerShell > :first-child {
+  flex-shrink: 0;
+}
+
 .fullscreenArea {
   margin: 0;
   padding: 8px 16px 16px;
@@ -881,6 +899,13 @@ async function handleDeleted(data: LibraryData | undefined, songId: number) {
   flex-direction: column;
   gap: 12px;
   min-width: 0;
+}
+
+.fullscreenAreaViewer {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding-bottom: 0;
 }
 
 .fullscreenHeader {

@@ -19,7 +19,7 @@ export const DEFAULT_PERFORMANCE_SETTINGS: PerformanceViewerSettings = {
 	layoutChoice: 'auto',
 	doublePageTurnMode: 'half',
 	zoomChoice: 'fit-page',
-	showAnnotations: false,
+	showAnnotations: true,
 }
 
 const VALID_LAYOUTS = new Set<PerformanceLayoutChoice>(['auto', 'single', 'double', 'continuous'])
