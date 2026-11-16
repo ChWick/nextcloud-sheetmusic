@@ -65,7 +65,7 @@ final class SongPathNamingRuleTest extends TestCase {
 		);
 
 		$path = SongPathNamingRule::createTargetPath($song, '.pdf');
-		self::assertSame('Joseph Kosma/Joseph Kosma - Real Book/Joseph Kosma - Real Book - Autumn Leaves in G.pdf', $path);
+		self::assertSame('Songs/Joseph Kosma/Joseph Kosma - Real Book/Joseph Kosma - Real Book - Autumn Leaves in G.pdf', $path);
 	}
 
 	public function testCreateTargetPathWithArtistOnlyInAuto(): void {
@@ -76,14 +76,14 @@ final class SongPathNamingRuleTest extends TestCase {
 		);
 
 		$pathAuto = SongPathNamingRule::createTargetPath($song, '.pdf', preset: SongPathNamingRule::PRESET_AUTO);
-		self::assertSame('Oasis/Oasis - Wonderwall.pdf', $pathAuto);
+		self::assertSame('Songs/Oasis/Oasis - Wonderwall.pdf', $pathAuto);
 
 		$pathArtist = SongPathNamingRule::createTargetPath($song, '.pdf', preset: SongPathNamingRule::PRESET_ARTIST);
-		self::assertSame('Oasis/Oasis - Wonderwall.pdf', $pathArtist);
+		self::assertSame('Songs/Oasis/Oasis - Wonderwall.pdf', $pathArtist);
 
 		// In composer preset, falls back to artist
 		$pathComposer = SongPathNamingRule::createTargetPath($song, '.pdf', preset: SongPathNamingRule::PRESET_COMPOSER);
-		self::assertSame('Oasis/Oasis - Wonderwall.pdf', $pathComposer);
+		self::assertSame('Songs/Oasis/Oasis - Wonderwall.pdf', $pathComposer);
 	}
 
 	public function testCreateTargetPathWithBothModernSongDefaultsToArtistInAuto(): void {
@@ -100,16 +100,16 @@ final class SongPathNamingRuleTest extends TestCase {
 
 		// In Auto mode: modern song (no classical indicators) -> Artist leads!
 		$pathAuto = SongPathNamingRule::createTargetPath($song, '.pdf', preset: SongPathNamingRule::PRESET_AUTO);
-		self::assertSame('The Beatles/The Beatles - Abbey Road/The Beatles - Abbey Road - Come Together.pdf', $pathAuto);
+		self::assertSame('Songs/The Beatles/The Beatles - Abbey Road/The Beatles - Abbey Road - Come Together.pdf', $pathAuto);
 
 		// Multiple valid paths returned: both artist and composer are valid for integrity checking
 		$allPaths = SongPathNamingRule::createTargetPaths($song, '.pdf', preset: SongPathNamingRule::PRESET_AUTO);
-		self::assertContains('The Beatles/The Beatles - Abbey Road/The Beatles - Abbey Road - Come Together.pdf', $allPaths);
-		self::assertContains('John Lennon, Paul McCartney/John Lennon, Paul McCartney - Abbey Road/John Lennon, Paul McCartney - Abbey Road - Come Together.pdf', $allPaths);
+		self::assertContains('Songs/The Beatles/The Beatles - Abbey Road/The Beatles - Abbey Road - Come Together.pdf', $allPaths);
+		self::assertContains('Songs/John Lennon, Paul McCartney/John Lennon, Paul McCartney - Abbey Road/John Lennon, Paul McCartney - Abbey Road - Come Together.pdf', $allPaths);
 
 		// Strict composer preset forces composer
 		$pathComposer = SongPathNamingRule::createTargetPath($song, '.pdf', preset: SongPathNamingRule::PRESET_COMPOSER);
-		self::assertSame('John Lennon, Paul McCartney/John Lennon, Paul McCartney - Abbey Road/John Lennon, Paul McCartney - Abbey Road - Come Together.pdf', $pathComposer);
+		self::assertSame('Songs/John Lennon, Paul McCartney/John Lennon, Paul McCartney - Abbey Road/John Lennon, Paul McCartney - Abbey Road - Come Together.pdf', $pathComposer);
 	}
 
 	public function testCreateTargetPathWithBothClassicalSongDefaultsToComposerInAuto(): void {
@@ -123,11 +123,11 @@ final class SongPathNamingRuleTest extends TestCase {
 
 		// In Auto mode: has Opus and orchestra in artist -> Composer leads, and Opus is included in filename
 		$pathAuto = SongPathNamingRule::createTargetPath($song, '.pdf', preset: SongPathNamingRule::PRESET_AUTO);
-		self::assertSame('Ludwig van Beethoven/Ludwig van Beethoven - Symphony No. 5, Op. 67.pdf', $pathAuto);
+		self::assertSame('Songs/Ludwig van Beethoven/Ludwig van Beethoven - Symphony No. 5, Op. 67.pdf', $pathAuto);
 
 		// Strict artist preset forces artist
 		$pathArtist = SongPathNamingRule::createTargetPath($song, '.pdf', preset: SongPathNamingRule::PRESET_ARTIST);
-		self::assertSame('Berliner Philharmoniker/Berliner Philharmoniker - Symphony No. 5, Op. 67.pdf', $pathArtist);
+		self::assertSame('Songs/Berliner Philharmoniker/Berliner Philharmoniker - Symphony No. 5, Op. 67.pdf', $pathArtist);
 	}
 
 	public function testCreateTargetPathWithBookOnlyInAuto(): void {
@@ -139,7 +139,7 @@ final class SongPathNamingRuleTest extends TestCase {
 
 		// In Auto mode: no composer/artist, but book exists -> files under Book!
 		$path = SongPathNamingRule::createTargetPath($song, '.pdf', preset: SongPathNamingRule::PRESET_AUTO);
-		self::assertSame('The Real Book/The Real Book - All of Me.pdf', $path);
+		self::assertSame('Songs/The Real Book/The Real Book - All of Me.pdf', $path);
 	}
 
 	public function testCreateTargetPathWithCollectionPreset(): void {
@@ -151,7 +151,7 @@ final class SongPathNamingRuleTest extends TestCase {
 		);
 
 		$path = SongPathNamingRule::createTargetPath($song, '.pdf', preset: SongPathNamingRule::PRESET_COLLECTION);
-		self::assertSame('Jazz Standards/Jazz Standards - Miles Davis/Jazz Standards - Miles Davis - Tune.pdf', $path);
+		self::assertSame('Songs/Jazz Standards/Jazz Standards - Miles Davis/Jazz Standards - Miles Davis - Tune.pdf', $path);
 	}
 
 	public function testCreateTargetPathsThrowsWhenPresetIsDisabled(): void {
@@ -188,8 +188,8 @@ final class SongPathNamingRuleTest extends TestCase {
 		$pathD = SongPathNamingRule::createTargetPath($sonataD, '.pdf');
 		$pathF = SongPathNamingRule::createTargetPath($sonataF, '.pdf');
 
-		self::assertSame('Beethoven/Beethoven - Sonata in D.pdf', $pathD);
-		self::assertSame('Beethoven/Beethoven - Sonata in F.pdf', $pathF);
+		self::assertSame('Songs/Beethoven/Beethoven - Sonata in D.pdf', $pathD);
+		self::assertSame('Songs/Beethoven/Beethoven - Sonata in F.pdf', $pathF);
 		self::assertNotSame($pathD, $pathF);
 	}
 
@@ -212,8 +212,8 @@ final class SongPathNamingRuleTest extends TestCase {
 		$pathMozart = SongPathNamingRule::createTargetPath($mozart, '.pdf');
 		$pathBeethoven = SongPathNamingRule::createTargetPath($beethoven, '.pdf');
 
-		self::assertSame('Mozart/Mozart - Sonata in C, KV 545.pdf', $pathMozart);
-		self::assertSame('Beethoven/Beethoven - Sonata in D, Op. 10 No. 3.pdf', $pathBeethoven);
+		self::assertSame('Songs/Mozart/Mozart - Sonata in C, KV 545.pdf', $pathMozart);
+		self::assertSame('Songs/Beethoven/Beethoven - Sonata in D, Op. 10 No. 3.pdf', $pathBeethoven);
 	}
 
 	public function testConflictResolutionViaYearAndSongNumber(): void {
@@ -233,8 +233,8 @@ final class SongPathNamingRuleTest extends TestCase {
 		$pathHymn = SongPathNamingRule::createTargetPath($hymn, '.pdf');
 		$pathYear = SongPathNamingRule::createTargetPath($songWithYear, '.pdf');
 
-		self::assertSame('John Newton/John Newton - Amazing Grace (No. 142).pdf', $pathHymn);
-		self::assertSame('Joseph Kosma/Joseph Kosma - Autumn Leaves (1945).pdf', $pathYear);
+		self::assertSame('Songs/John Newton/John Newton - Amazing Grace (No. 142).pdf', $pathHymn);
+		self::assertSame('Songs/Joseph Kosma/Joseph Kosma - Autumn Leaves (1945).pdf', $pathYear);
 	}
 
 	public function testSmartDeduplicationPreventsRedundancy(): void {
@@ -249,7 +249,7 @@ final class SongPathNamingRuleTest extends TestCase {
 		);
 
 		$path = SongPathNamingRule::createTargetPath($song, '.pdf');
-		self::assertSame('Mozart/Mozart - Sonata in D, KV 545 (1958).pdf', $path);
+		self::assertSame('Songs/Mozart/Mozart - Sonata in D, KV 545 (1958).pdf', $path);
 	}
 
 	public function testTitleContainsKeyRecognizesMusicalKeys(): void {
@@ -315,9 +315,9 @@ final class SongPathNamingRuleTest extends TestCase {
 			keys: [new MobileSheetsKey(4, 'A')],
 		);
 
-		self::assertSame('Cole Porter/Cole Porter - Night and Day in D.pdf', SongPathNamingRule::createTargetPath($songDay, '.pdf'));
-		self::assertSame('Leon Russell/Leon Russell - Song For You in F.pdf', SongPathNamingRule::createTargetPath($songForYou, '.pdf'));
-		self::assertSame('Taylor/Taylor - Dancing in December in D.pdf', SongPathNamingRule::createTargetPath($songDecember, '.pdf'));
-		self::assertSame('Talking Heads/Talking Heads - Once in a Lifetime in A.pdf', SongPathNamingRule::createTargetPath($songLifetime, '.pdf'));
+		self::assertSame('Songs/Cole Porter/Cole Porter - Night and Day in D.pdf', SongPathNamingRule::createTargetPath($songDay, '.pdf'));
+		self::assertSame('Songs/Leon Russell/Leon Russell - Song For You in F.pdf', SongPathNamingRule::createTargetPath($songForYou, '.pdf'));
+		self::assertSame('Songs/Taylor/Taylor - Dancing in December in D.pdf', SongPathNamingRule::createTargetPath($songDecember, '.pdf'));
+		self::assertSame('Songs/Talking Heads/Talking Heads - Once in a Lifetime in A.pdf', SongPathNamingRule::createTargetPath($songLifetime, '.pdf'));
 	}
 }

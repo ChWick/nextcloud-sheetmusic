@@ -122,7 +122,7 @@ async function fetchSublibraries() {
 }
 
 async function copySublibraryPath(slug: string) {
-	const path = `${libraryFolderPath.value}/_SubLibraries_/${slug}`
+	const path = `${libraryFolderPath.value}/SubLibraries/${slug}`
 	await copyText(path, slug, {
 		successMessage: t('sheetmusic', 'Copied WebDAV path to clipboard: {path}', { path }, { escape: false }),
 		errorMessage: t('sheetmusic', 'Could not copy path to clipboard.'),
@@ -326,7 +326,7 @@ watch(
 			v-if="isShareOpen && sharingSub"
 			:library-id="selectedLibrary"
 			:sublibrary="sharingSub"
-			:sublibrary-path="`${libraryFolderPath}/_SubLibraries_/${sharingSub.slug}`"
+			:sublibrary-path="`${libraryFolderPath}/SubLibraries/${sharingSub.slug}`"
 			@close="isShareOpen = false" />
 	</div>
 </template>

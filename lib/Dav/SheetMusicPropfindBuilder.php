@@ -34,7 +34,7 @@ final class SheetMusicPropfindBuilder {
 		private SyncClientRegistry $registry,
 		private LoggerInterface $logger,
 		private ?SublibraryService $sublibraryService = null,
-		private string $sublibrariesDir = '_SubLibraries_',
+		private string $sublibrariesDir = 'SubLibraries',
 	) {
 	}
 
@@ -55,6 +55,7 @@ final class SheetMusicPropfindBuilder {
 		?string $publicToken = null,
 		bool $canWrite = true,
 		bool $includeSublibraries = true,
+		bool $includeVirtualFiles = true,
 	): string {
 		if ($xml === '') {
 			return $xml;
@@ -74,15 +75,17 @@ final class SheetMusicPropfindBuilder {
 			}
 
 			$entries = [];
-			foreach ($this->registry->getAllVirtualFileNames() as $filename) {
-				// A real file of that name takes precedence over the virtual one.
-				if (in_array($filename, $existing, true)) {
-					continue;
-				}
-				$client = $this->registry->getClientForVirtualFile($filename);
-				$entry = $this->buildPropfindEntry($library, $path . '/' . $filename, $filename, $requestBody, $client, $sublibrary, $userId, $publicToken, $canWrite);
-				if ($entry !== null) {
-					$entries[] = $entry;
+			if ($includeVirtualFiles) {
+				foreach ($this->registry->getAllVirtualFileNames() as $filename) {
+					// A real file of that name takes precedence over the virtual one.
+					if (in_array($filename, $existing, true)) {
+						continue;
+					}
+					$client = $this->registry->getClientForVirtualFile($filename);
+					$entry = $this->buildPropfindEntry($library, $path . '/' . $filename, $filename, $requestBody, $client, $sublibrary, $userId, $publicToken, $canWrite);
+					if ($entry !== null) {
+						$entries[] = $entry;
+					}
 				}
 			}
 

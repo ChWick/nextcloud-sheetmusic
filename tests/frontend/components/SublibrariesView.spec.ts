@@ -237,12 +237,12 @@ describe('SublibrariesView.vue', () => {
 
 		expect(wrapper.text()).toContain('Organ Works')
 		expect(wrapper.text()).toContain('organ')
-		expect(wrapper.text()).toContain('/Noten/_SubLibraries_/organ')
+		expect(wrapper.text()).toContain('/Noten/SubLibraries/organ')
 		expect(wrapper.text()).toContain('instrument: Orgel')
 
 		expect(wrapper.text()).toContain('Bach Scores')
 		expect(wrapper.text()).toContain('bach')
-		expect(wrapper.text()).toContain('/Noten/_SubLibraries_/bach')
+		expect(wrapper.text()).toContain('/Noten/SubLibraries/bach')
 		expect(wrapper.text()).toContain('composer: J.S. Bach')
 	})
 
@@ -270,7 +270,7 @@ describe('SublibrariesView.vue', () => {
 		expect(copyBtn.exists()).toBe(true)
 		await copyBtn.trigger('click')
 
-		expect(navigator.clipboard.writeText).toHaveBeenCalledWith('/Noten/_SubLibraries_/organ')
+		expect(navigator.clipboard.writeText).toHaveBeenCalledWith('/Noten/SubLibraries/organ')
 	})
 
 	it('navigates to songs view filtered by sub-library when View songs is clicked', async () => {
@@ -361,7 +361,7 @@ describe('SublibrariesView.vue', () => {
 
 		// Verify resulting path preview updates dynamically
 		expect(wrapper.text()).toContain('Resulting WebDAV folder path for MobileSheets:')
-		expect(wrapper.text()).toContain('/Noten/_SubLibraries_/piano-music')
+		expect(wrapper.text()).toContain('/Noten/SubLibraries/piano-music')
 
 		// Select values from multi-select dropdown
 		const selects = wrapper.findAll('select')

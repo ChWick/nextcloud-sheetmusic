@@ -47,9 +47,10 @@ use Sabre\HTTP\ResponseInterface;
 class SheetMusicDavPlugin extends ServerPlugin {
 	public const VIRTUAL_DB_NAME = 'mobilesheets.db';
 	public const VIRTUAL_HASH_NAME = 'mobilesheets_hashcodes.txt';
-	public const SUBLIBRARIES_DIR = '_SubLibraries_';
+	public const SONGS_DIR = 'Songs';
+	public const SUBLIBRARIES_DIR = 'SubLibraries';
 	public const SUBLIBRARIES_DIR_LEGACY = '.sublibraries';
-	public const SUBLIBRARIES_DIR_PATTERN = '(?:\.sublibraries|_SubLibraries_)';
+	public const SUBLIBRARIES_DIR_PATTERN = '(?:\.sublibraries|_SubLibraries_|SubLibraries)';
 
 	private const OC_NS = 'http://owncloud.org/ns';
 
@@ -216,8 +217,14 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		$path = trim($request->getPath(), '/');
 		$context = $this->resolveDavContext($path);
 
+		$isSongsFolder = false;
 		try {
-			$library = $this->findLibraryByFolderPath($path);
+			$library = $this->findLibraryBySongsFolderPath($path);
+			if ($library !== null) {
+				$isSongsFolder = true;
+			} else {
+				$library = $this->findLibraryByFolderPath($path);
+			}
 		} catch (\Throwable $e) {
 			$this->logger->error('Failed to resolve library for PROPFIND: ' . $e->getMessage(), [
 				'exception' => $e,
@@ -237,33 +244,40 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		}
 
 		$isSyncClient = $this->isSyncClient($request);
+		$includeSublibraries = !$isSongsFolder && !$isSyncClient;
+		$includeVirtualFiles = $isSongsFolder;
+
+		if (!$isSongsFolder && $canWrite && $library->sublibraryId === null && $this->rootFolder !== null) {
+			$this->ensureSongsFolder($library);
+		}
 
 		$this->logger->info(sprintf(
-			'SheetMusicDavPlugin: afterPropfind injected into path=%s for library=%d isSyncClient=%s',
+			'SheetMusicDavPlugin: afterPropfind injected into path=%s for library=%d isSyncClient=%s songsFolder=%s',
 			$path,
 			$library->id,
-			$isSyncClient ? 'yes' : 'no'
+			$isSyncClient ? 'yes' : 'no',
+			$isSongsFolder ? 'yes' : 'no'
 		));
 
 		$body = $response->getBody();
 		if (is_callable($body)) {
 			// Streamed multistatus (legacy endpoint): the listing is produced
 			// lazily while the response is sent, so it can only be consumed once.
-			$response->setBody(function () use ($body, $library, $path, $requestBody, $targetUserId, $publicToken, $canWrite, $isSyncClient): void {
+			$response->setBody(function () use ($body, $library, $path, $requestBody, $targetUserId, $publicToken, $canWrite, $includeSublibraries, $includeVirtualFiles): void {
 				ob_start();
 				try {
 					$body();
 				} finally {
 					$xml = (string)ob_get_clean();
 				}
-				echo $this->propfindBuilder->injectVirtualEntries($xml, $library, $path, $requestBody, $targetUserId, $publicToken, $canWrite, !$isSyncClient);
+				echo $this->propfindBuilder->injectVirtualEntries($xml, $library, $path, $requestBody, $targetUserId, $publicToken, $canWrite, $includeSublibraries, $includeVirtualFiles);
 			});
 			$response->removeHeader('Content-Length');
 			return;
 		}
 
 		$xml = $response->getBodyAsString();
-		$newBody = $this->propfindBuilder->injectVirtualEntries($xml, $library, $path, $requestBody, $targetUserId, $publicToken, $canWrite, !$isSyncClient);
+		$newBody = $this->propfindBuilder->injectVirtualEntries($xml, $library, $path, $requestBody, $targetUserId, $publicToken, $canWrite, $includeSublibraries, $includeVirtualFiles);
 		if ($newBody !== $xml) {
 			$response->setBody($newBody);
 			$response->setHeader('Content-Length', (string)strlen($newBody));
@@ -308,7 +322,10 @@ class SheetMusicDavPlugin extends ServerPlugin {
 	 */
 	private function rememberPropfindBody(RequestInterface $request, string $path): void {
 		$this->propfindBody = null;
-		if ($request->getHeader('Depth') === '0' || $this->findLibraryByFolderPath($path) === null) {
+		if (
+			$request->getHeader('Depth') === '0'
+			|| ($this->findLibraryBySongsFolderPath($path) === null && $this->findLibraryByFolderPath($path) === null)
+		) {
 			return;
 		}
 
@@ -348,7 +365,7 @@ class SheetMusicDavPlugin extends ServerPlugin {
 			];
 		}
 
-		$library = $this->findLibraryByFolderPath($folder);
+		$library = $this->findLibraryBySongsFolderPath($folder);
 		if ($library === null) {
 			return null;
 		}
@@ -844,6 +861,64 @@ class SheetMusicDavPlugin extends ServerPlugin {
 			return $libFolder === '.' ? '' : $libFolder;
 		}
 		return $libPath;
+	}
+
+	private function ensureSongsFolder(InternalLibrary $library): void {
+		if ($this->rootFolder === null) {
+			return;
+		}
+		try {
+			$userFolder = $this->rootFolder->getUserFolder($library->userId);
+			$cleanRel = $this->cleanLibraryFolder($library);
+			$libFolder = $cleanRel === '' ? $userFolder : ($userFolder->nodeExists($cleanRel) ? $userFolder->get($cleanRel) : null);
+			if ($libFolder instanceof Folder && !$libFolder->nodeExists(self::SONGS_DIR)) {
+				$libFolder->newFolder(self::SONGS_DIR);
+			}
+		} catch (\Throwable) {
+			// Best effort
+		}
+	}
+
+	public function findLibraryBySongsFolderPath(string $path): ?InternalLibrary {
+		$context = $this->resolveDavContext($path);
+		if ($context === null) {
+			return null;
+		}
+
+		$folderPath = $context['relPath'];
+		$songsSuffix = '/' . self::SONGS_DIR;
+		if ($folderPath === self::SONGS_DIR) {
+			$parentRelPath = '';
+		} elseif (str_ends_with($folderPath, $songsSuffix)) {
+			$parentRelPath = substr($folderPath, 0, -strlen($songsSuffix));
+		} else {
+			return null;
+		}
+
+		if ($context['publicToken'] !== null) {
+			$info = $this->libraryShareService?->findLibraryByPublicToken($context['publicToken']);
+			return $info['library'] ?? null;
+		}
+
+		$userId = $context['userId'];
+		if ($userId === null) {
+			return null;
+		}
+
+		foreach ($this->libraryMapper->findAllForUser($userId) as $lib) {
+			if ($this->cleanLibraryFolder($lib) === $parentRelPath) {
+				return $lib;
+			}
+		}
+
+		if ($this->libraryShareService !== null) {
+			$shared = $this->libraryShareService->findSharedLibraryByFolderPath($userId, $parentRelPath);
+			if ($shared !== null) {
+				return $shared;
+			}
+		}
+
+		return null;
 	}
 
 	public function findLibraryByFolderPath(string $path): ?InternalLibrary {

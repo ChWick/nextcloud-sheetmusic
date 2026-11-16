@@ -1801,9 +1801,9 @@ class MobileSheetsEndToEndSyncTest extends TestCase {
 		);
 		self::assertTrue($fixResult['success'], 'Fixing invalid naming rule must succeed');
 
-		// 6. Verify filesystem rename: raw_scan_001.pdf is gone, Erik Satie/Erik Satie - Gymnopedie No 1.pdf exists
+		// 6. Verify filesystem rename: raw_scan_001.pdf is gone, Songs/Erik Satie/Erik Satie - Gymnopedie No 1.pdf exists
 		self::assertFalse($libFolder->nodeExists('raw_scan_001.pdf'), 'Old file must be moved away');
-		self::assertTrue($libFolder->nodeExists('Erik Satie/Erik Satie - Gymnopedie No 1.pdf'), 'Renamed file must exist in composer subfolder on filesystem');
+		self::assertTrue($libFolder->nodeExists('Songs/Erik Satie/Erik Satie - Gymnopedie No 1.pdf'), 'Renamed file must exist in Songs/composer subfolder on filesystem');
 
 		// 7. Verify sync data: Files table is not stored in misc_data, but managed cleanly in Nextcloud
 		$miscFilesAfter = $this->harness->miscMapper->getMiscDataForTable($this->harness->libraryId, 'mobilesheets', 'Files');
@@ -1826,7 +1826,7 @@ class MobileSheetsEndToEndSyncTest extends TestCase {
 		$this->harness->sync();
 
 		self::assertFileDoesNotExist($this->harness->clientFilesDir . '/raw_scan_001.pdf');
-		self::assertFileExists($this->harness->clientFilesDir . '/Erik Satie/Erik Satie - Gymnopedie No 1.pdf');
+		self::assertFileExists($this->harness->clientFilesDir . '/Songs/Erik Satie/Erik Satie - Gymnopedie No 1.pdf');
 
 		$clientFiles = $this->harness->getClientTableRows('Files');
 		self::assertCount(1, $clientFiles);

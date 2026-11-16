@@ -148,37 +148,38 @@ final class SheetMusicDavPluginTest extends TestCase {
 	}
 
 	public function testMatchVirtualPathReturnsLibraryAndFilename(): void {
-		$match = $this->plugin->matchVirtualPath('files/admin/My Noten/mobilesheets.db');
+		$match = $this->plugin->matchVirtualPath('files/admin/My Noten/Songs/mobilesheets.db');
 		self::assertNotNull($match);
 		self::assertSame($this->library->id, $match['library']->id);
 		self::assertSame('mobilesheets.db', $match['filename']);
 
-		$hashMatch = $this->plugin->matchVirtualPath('files/admin/My Noten/mobilesheets_hashcodes.txt');
+		$hashMatch = $this->plugin->matchVirtualPath('files/admin/My Noten/Songs/mobilesheets_hashcodes.txt');
 		self::assertNotNull($hashMatch);
 		self::assertSame('mobilesheets_hashcodes.txt', $hashMatch['filename']);
 
+		self::assertNull($this->plugin->matchVirtualPath('files/admin/My Noten/mobilesheets.db'));
 		self::assertNull($this->plugin->matchVirtualPath('files/admin/My Noten/song.pdf'));
-		self::assertNull($this->plugin->matchVirtualPath('files/admin/Other/mobilesheets.db'));
-		self::assertNull($this->plugin->matchVirtualPath('files/admin/My Noten/sub/mobilesheets.db'));
+		self::assertNull($this->plugin->matchVirtualPath('files/admin/Other/Songs/mobilesheets.db'));
+		self::assertNull($this->plugin->matchVirtualPath('files/admin/My Noten/Songs/sub/mobilesheets.db'));
 	}
 
 	public function testMatchVirtualPathRejectsOtherUsersLibraries(): void {
 		// Logged in as "admin", but asking for the files of "other".
-		self::assertNull($this->plugin->matchVirtualPath('files/other/My Noten/mobilesheets.db'));
+		self::assertNull($this->plugin->matchVirtualPath('files/other/My Noten/Songs/mobilesheets.db'));
 	}
 
 	public function testLegacyWebdavPathsResolveToSessionUser(): void {
 		$this->attachServer('/remote.php/webdav/');
 
-		$match = $this->plugin->matchVirtualPath('My Noten/mobilesheets.db');
+		$match = $this->plugin->matchVirtualPath('My Noten/Songs/mobilesheets.db');
 		self::assertNotNull($match);
 		self::assertSame($this->library->id, $match['library']->id);
-		self::assertNull($this->plugin->matchVirtualPath('files/admin/My Noten/mobilesheets.db'));
+		self::assertNull($this->plugin->matchVirtualPath('files/admin/My Noten/Songs/mobilesheets.db'));
 	}
 
 	public function testHandleGetDatabaseReturns304WhenEtagMatches(): void {
 		$etag = '"sm-db-' . $this->library->id . '-2000"';
-		$request = new Request('GET', '/files/admin/My%20Noten/mobilesheets.db', ['If-None-Match' => $etag]);
+		$request = new Request('GET', '/files/admin/My%20Noten/Songs/mobilesheets.db', ['If-None-Match' => $etag]);
 		$response = new Response();
 
 		self::assertFalse($this->plugin->beforeMethod($request, $response));
@@ -186,7 +187,7 @@ final class SheetMusicDavPluginTest extends TestCase {
 	}
 
 	public function testHandleGetDatabaseStreamsExport(): void {
-		$request = new Request('GET', '/files/admin/My%20Noten/mobilesheets.db');
+		$request = new Request('GET', '/files/admin/My%20Noten/Songs/mobilesheets.db');
 		$response = new Response();
 
 		self::assertFalse($this->plugin->beforeMethod($request, $response));
@@ -198,7 +199,7 @@ final class SheetMusicDavPluginTest extends TestCase {
 	}
 
 	public function testHandleGetHashcodesReturnsTextContent(): void {
-		$request = new Request('GET', '/files/admin/My%20Noten/mobilesheets_hashcodes.txt');
+		$request = new Request('GET', '/files/admin/My%20Noten/Songs/mobilesheets_hashcodes.txt');
 		$response = new Response();
 
 		self::assertFalse($this->plugin->beforeMethod($request, $response));
@@ -212,7 +213,7 @@ final class SheetMusicDavPluginTest extends TestCase {
 		$this->exporter->exportToFile($this->library, $tempDb);
 		$dbBytes = (string)file_get_contents($tempDb);
 
-		$request = new Request('PUT', '/files/admin/My%20Noten/mobilesheets.db', [], $dbBytes);
+		$request = new Request('PUT', '/files/admin/My%20Noten/Songs/mobilesheets.db', [], $dbBytes);
 		$response = new Response();
 
 		self::assertFalse($this->plugin->beforeMethod($request, $response));
@@ -227,7 +228,7 @@ final class SheetMusicDavPluginTest extends TestCase {
 
 	public function testPropfindOnVirtualFileReturnsRealSize(): void {
 		$this->attachServer();
-		$request = new Request('PROPFIND', '/remote.php/dav/files/admin/My%20Noten/mobilesheets.db', ['Depth' => '0']);
+		$request = new Request('PROPFIND', '/remote.php/dav/files/admin/My%20Noten/Songs/mobilesheets.db', ['Depth' => '0']);
 		$request->setBaseUrl('/remote.php/dav/');
 		$response = new Response();
 
@@ -236,7 +237,7 @@ final class SheetMusicDavPluginTest extends TestCase {
 		// Sabre does not send responses of requests stopped in beforeMethod.
 		self::assertSame([$response], RecordingSapi::$sent);
 		$body = $response->getBodyAsString();
-		self::assertStringContainsString('/remote.php/dav/files/admin/My%20Noten/mobilesheets.db', $body);
+		self::assertStringContainsString('/remote.php/dav/files/admin/My%20Noten/Songs/mobilesheets.db', $body);
 		self::assertMatchesRegularExpression('|<d:getcontentlength>[1-9][0-9]*</d:getcontentlength>|', $body);
 		self::assertStringContainsString('application/x-sqlite3', $body);
 	}
@@ -244,7 +245,7 @@ final class SheetMusicDavPluginTest extends TestCase {
 	public function testAfterPropfindInjectsVirtualFilesIntoMultiStatusResponse(): void {
 		$this->attachServer();
 		$propfindBody = '<?xml version="1.0"?><d:propfind xmlns:d="DAV:"><d:prop><d:getcontentlength/><d:getetag/><d:quota-used-bytes/></d:prop></d:propfind>';
-		$request = new Request('PROPFIND', '/remote.php/dav/files/admin/My%20Noten/', ['Depth' => '1'], $propfindBody);
+		$request = new Request('PROPFIND', '/remote.php/dav/files/admin/My%20Noten/Songs/', ['Depth' => '1'], $propfindBody);
 		$request->setBaseUrl('/remote.php/dav/');
 
 		// The body is captured before Sabre consumes it.
@@ -253,7 +254,7 @@ final class SheetMusicDavPluginTest extends TestCase {
 
 		$response = new Response();
 		$response->setStatus(207);
-		$response->setBody('<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:"><d:response><d:href>/remote.php/dav/files/admin/My%20Noten/</d:href></d:response></d:multistatus>');
+		$response->setBody('<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:"><d:response><d:href>/remote.php/dav/files/admin/My%20Noten/Songs/</d:href></d:response></d:multistatus>');
 
 		$this->plugin->afterPropfind($request, $response);
 
@@ -264,9 +265,9 @@ final class SheetMusicDavPluginTest extends TestCase {
 			iterator_to_array($document->getElementsByTagNameNS('DAV:', 'href')),
 		);
 		self::assertSame([
-			'/remote.php/dav/files/admin/My%20Noten/',
-			'/remote.php/dav/files/admin/My%20Noten/mobilesheets.db',
-			'/remote.php/dav/files/admin/My%20Noten/mobilesheets_hashcodes.txt',
+			'/remote.php/dav/files/admin/My%20Noten/Songs/',
+			'/remote.php/dav/files/admin/My%20Noten/Songs/mobilesheets.db',
+			'/remote.php/dav/files/admin/My%20Noten/Songs/mobilesheets_hashcodes.txt',
 		], $hrefs);
 
 		$lengths = array_map(
@@ -283,14 +284,14 @@ final class SheetMusicDavPluginTest extends TestCase {
 
 	public function testAfterPropfindKeepsRealFiles(): void {
 		$this->attachServer();
-		$request = new Request('PROPFIND', '/remote.php/dav/files/admin/My%20Noten', ['Depth' => '1']);
+		$request = new Request('PROPFIND', '/remote.php/dav/files/admin/My%20Noten/Songs', ['Depth' => '1']);
 		$request->setBaseUrl('/remote.php/dav/');
 
 		$response = new Response();
 		$response->setStatus(207);
 		$response->setBody('<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:">'
-			. '<d:response><d:href>/remote.php/dav/files/admin/My%20Noten/</d:href></d:response>'
-			. '<d:response><d:href>/remote.php/dav/files/admin/My%20Noten/mobilesheets.db</d:href></d:response>'
+			. '<d:response><d:href>/remote.php/dav/files/admin/My%20Noten/Songs/</d:href></d:response>'
+			. '<d:response><d:href>/remote.php/dav/files/admin/My%20Noten/Songs/mobilesheets.db</d:href></d:response>'
 			. '</d:multistatus>');
 
 		$this->plugin->afterPropfind($request, $response);
@@ -341,7 +342,7 @@ final class SheetMusicDavPluginTest extends TestCase {
 
 	public function testAfterPropfindInjectsIntoStreamedResponse(): void {
 		$this->attachServer('/remote.php/webdav/');
-		$request = new Request('PROPFIND', '/remote.php/webdav/My%20Noten', ['Depth' => '1']);
+		$request = new Request('PROPFIND', '/remote.php/webdav/My%20Noten/Songs', ['Depth' => '1']);
 		$request->setBaseUrl('/remote.php/webdav/');
 
 		$calls = 0;
@@ -349,7 +350,7 @@ final class SheetMusicDavPluginTest extends TestCase {
 		$response->setStatus(207);
 		$response->setBody(function () use (&$calls): void {
 			$calls++;
-			echo '<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:"><d:response><d:href>/remote.php/webdav/My%20Noten/</d:href></d:response></d:multistatus>';
+			echo '<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:"><d:response><d:href>/remote.php/webdav/My%20Noten/Songs/</d:href></d:response></d:multistatus>';
 		});
 
 		$this->plugin->afterPropfind($request, $response);
@@ -357,8 +358,8 @@ final class SheetMusicDavPluginTest extends TestCase {
 		self::assertIsCallable($response->getBody());
 		$body = $response->getBodyAsString();
 		self::assertSame(1, $calls);
-		self::assertStringContainsString('<d:href>/remote.php/webdav/My%20Noten/mobilesheets.db</d:href>', $body);
-		self::assertStringContainsString('<d:href>/remote.php/webdav/My%20Noten/mobilesheets_hashcodes.txt</d:href>', $body);
+		self::assertStringContainsString('<d:href>/remote.php/webdav/My%20Noten/Songs/mobilesheets.db</d:href>', $body);
+		self::assertStringContainsString('<d:href>/remote.php/webdav/My%20Noten/Songs/mobilesheets_hashcodes.txt</d:href>', $body);
 	}
 
 	public function testLibraryPathWithDbFilenameMatchesParentFolder(): void {
@@ -373,7 +374,7 @@ final class SheetMusicDavPluginTest extends TestCase {
 			$this->userSession,
 		);
 
-		$match = $plugin->matchVirtualPath('files/admin/tmp/SheetMusic/mobilesheets.db');
+		$match = $plugin->matchVirtualPath('files/admin/tmp/SheetMusic/Songs/mobilesheets.db');
 		self::assertNotNull($match);
 		self::assertSame($dbLibId, $match['library']->id);
 		self::assertSame('mobilesheets.db', $match['filename']);
@@ -396,12 +397,12 @@ final class SheetMusicDavPluginTest extends TestCase {
 			$emptyRegistry,
 		);
 
-		$match = $plugin->matchVirtualPath('files/admin/My Noten/mobilesheets.db');
+		$match = $plugin->matchVirtualPath('files/admin/My Noten/Songs/mobilesheets.db');
 		self::assertNotNull($match);
 		self::assertSame((int)$this->library->id, $match['library']->id);
 		self::assertSame('mobilesheets.db', $match['filename']);
 
-		$hashMatch = $plugin->matchVirtualPath('files/admin/My Noten/mobilesheets_hashcodes.txt');
+		$hashMatch = $plugin->matchVirtualPath('files/admin/My Noten/Songs/mobilesheets_hashcodes.txt');
 		self::assertNotNull($hashMatch);
 		self::assertSame('mobilesheets_hashcodes.txt', $hashMatch['filename']);
 	}
@@ -413,7 +414,7 @@ final class SheetMusicDavPluginTest extends TestCase {
 		$userSession = \OC::$server->get(\OCP\IUserSession::class);
 		$userSession->setUser($this->userManager->get('admin'));
 
-		$match = $plugin->matchVirtualPath('files/admin/My Noten/mobilesheets.db');
+		$match = $plugin->matchVirtualPath('files/admin/My Noten/Songs/mobilesheets.db');
 		self::assertNotNull($match);
 		self::assertSame((int)$this->library->id, $match['library']->id);
 	}
@@ -514,7 +515,7 @@ final class SheetMusicDavPluginTest extends TestCase {
 		$plugin->initialize($server);
 
 		// 4. Test WebDAV PROPFIND on mobilesheets.db
-		$propfindReq = new Request('PROPFIND', '/remote.php/dav/files/admin/My%20Noten/mobilesheets.db', ['Depth' => '0']);
+		$propfindReq = new Request('PROPFIND', '/remote.php/dav/files/admin/My%20Noten/Songs/mobilesheets.db', ['Depth' => '0']);
 		$propfindReq->setBaseUrl('/remote.php/dav/');
 		$propfindResp = new Response();
 
@@ -531,7 +532,7 @@ final class SheetMusicDavPluginTest extends TestCase {
 		self::assertGreaterThan(0, $lengthValue, 'mobilesheets.db size in PROPFIND must be > 0 bytes');
 
 		// 5. Test WebDAV GET on mobilesheets.db
-		$getReq = new Request('GET', '/remote.php/dav/files/admin/My%20Noten/mobilesheets.db');
+		$getReq = new Request('GET', '/remote.php/dav/files/admin/My%20Noten/Songs/mobilesheets.db');
 		$getReq->setBaseUrl('/remote.php/dav/');
 		$getResp = new Response();
 
@@ -823,28 +824,28 @@ final class SheetMusicDavPluginTest extends TestCase {
 		$this->shareManager->method('getShareByToken')->with('pubLinkToken123')->willReturn($mockShare);
 
 		// Match virtual path via legacy public-files
-		$match = $this->plugin->matchVirtualPath('public-files/pubLinkToken123/mobilesheets.db');
+		$match = $this->plugin->matchVirtualPath('public-files/pubLinkToken123/Songs/mobilesheets.db');
 		self::assertNotNull($match);
 		self::assertSame((int)$this->library->id, (int)$match['library']->id);
 		self::assertFalse($match['canWrite']);
 		self::assertSame('pubLinkToken123', $match['publicToken']);
 
 		// GET mobilesheets.db via legacy public link returns 200
-		$getReq = new Request('GET', '/public-files/pubLinkToken123/mobilesheets.db');
+		$getReq = new Request('GET', '/public-files/pubLinkToken123/Songs/mobilesheets.db');
 		$getRes = new Response();
 		self::assertFalse($this->plugin->beforeMethod($getReq, $getRes));
 		self::assertSame(200, $getRes->getStatus());
 		self::assertSame('application/x-sqlite3', $getRes->getHeader('Content-Type'));
 
 		// PUT mobilesheets.db via public link returns 403 Forbidden
-		$putReq = new Request('PUT', '/public-files/pubLinkToken123/mobilesheets.db');
+		$putReq = new Request('PUT', '/public-files/pubLinkToken123/Songs/mobilesheets.db');
 		$putRes = new Response();
 		self::assertFalse($this->plugin->beforeMethod($putReq, $putRes));
 		self::assertSame(403, $putRes->getStatus());
 
 		// Test public DAV endpoint under /public.php/dav/
 		$this->attachServer('/public.php/dav/');
-		$pubDavReq = new Request('GET', '/public.php/dav/files/pubLinkToken123/mobilesheets.db');
+		$pubDavReq = new Request('GET', '/public.php/dav/files/pubLinkToken123/Songs/mobilesheets.db');
 		$pubDavReq->setBaseUrl('/public.php/dav/');
 		$pubDavRes = new Response();
 		self::assertFalse($this->plugin->beforeMethod($pubDavReq, $pubDavRes));
@@ -852,7 +853,7 @@ final class SheetMusicDavPluginTest extends TestCase {
 		self::assertSame('application/x-sqlite3', $pubDavRes->getHeader('Content-Type'));
 
 		// PUT under public DAV endpoint returns 403 Forbidden
-		$pubDavPutReq = new Request('PUT', '/public.php/dav/files/pubLinkToken123/mobilesheets.db');
+		$pubDavPutReq = new Request('PUT', '/public.php/dav/files/pubLinkToken123/Songs/mobilesheets.db');
 		$pubDavPutReq->setBaseUrl('/public.php/dav/');
 		$pubDavPutRes = new Response();
 		self::assertFalse($this->plugin->beforeMethod($pubDavPutReq, $pubDavPutRes));
@@ -919,11 +920,10 @@ final class SheetMusicDavPluginTest extends TestCase {
 		$this->plugin->afterPropfind($reqSync, $resSync);
 
 		$bodySync = $resSync->getBodyAsString();
-		// Virtual database files are still present
-		self::assertStringContainsString('mobilesheets.db', $bodySync);
-		self::assertStringContainsString('mobilesheets_hashcodes.txt', $bodySync);
-		// But _SubLibraries_ is NOT injected for the sync client
-		self::assertStringNotContainsString('_SubLibraries_', $bodySync);
+		// Virtual database files are in Songs/, not in library root
+		self::assertStringNotContainsString('mobilesheets.db', $bodySync);
+		// And SubLibraries is NOT injected for the sync client
+		self::assertStringNotContainsString('SubLibraries', $bodySync);
 
 		// 2. Non-sync client (e.g. MobileSheets) PROPFIND on library folder
 		$reqMs = new Request('PROPFIND', '/remote.php/dav/files/admin/My%20Noten', [
@@ -939,10 +939,9 @@ final class SheetMusicDavPluginTest extends TestCase {
 		$this->plugin->afterPropfind($reqMs, $resMs);
 
 		$bodyMs = $resMs->getBodyAsString();
-		self::assertStringContainsString('mobilesheets.db', $bodyMs);
-		self::assertStringContainsString('mobilesheets_hashcodes.txt', $bodyMs);
-		// _SubLibraries_ IS injected for non-sync clients
-		self::assertStringContainsString('_SubLibraries_', $bodyMs);
+		self::assertStringNotContainsString('mobilesheets.db', $bodyMs);
+		// SubLibraries IS injected for non-sync clients
+		self::assertStringContainsString('SubLibraries', $bodyMs);
 
 		// 3. Direct PROPFIND on _SubLibraries_ by sync client is bypassed (returns true so SabreDAV returns 404)
 		$directSyncReq = new Request('PROPFIND', '/files/admin/My%20Noten/_SubLibraries_', [

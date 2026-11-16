@@ -292,7 +292,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$libraryService = $this->createLibraryService();
 		$fixture = \TestSupport\MobileSheetsTestDatabase::create();
 		$fixture['connection']->exec("INSERT INTO Songs (Id, Title) VALUES (1, 'Joshua')");
-		$fixture['connection']->exec("INSERT INTO Files (Id, SongId, Path) VALUES (10, 1, '/remote.php/dav/files/user1/Noten/Georg Friedrich Händel - Joshua.pdf')");
+		$fixture['connection']->exec("INSERT INTO Files (Id, SongId, Path) VALUES (10, 1, '/remote.php/dav/files/user1/Noten/Songs/Georg Friedrich Händel - Joshua.pdf')");
 		$fixture['connection']->exec("INSERT INTO Composer (Id, Name) VALUES (1, 'Georg Friedrich Händel')");
 		$fixture['connection']->exec('INSERT INTO ComposerSongs (ComposerId, SongId) VALUES (1, 1)');
 		$songMapper = $this->createSongMapper();
@@ -307,7 +307,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 			self::minimalPdf(),
 			MobileSheetsPdfMetadata::fieldsFor($song),
 		));
-		$targetFolder->method('get')->with('Georg Friedrich Händel - Joshua.pdf')->willReturn($pdf);
+		$targetFolder->method('get')->with('Songs/Georg Friedrich Händel - Joshua.pdf')->willReturn($pdf);
 		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager($fixture['path'], $targetFolder);
 
 		$service = $this->createIntegrityService($libraryService, $fileManager, $rootFolder, $pathResolver, databasePath: $fixture['path']);
@@ -573,7 +573,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$sourceFile = $this->createMock(File::class);
 		$sourceFile->method('getContent')->willReturn('PDF');
 		$sourceFile->method('getMTime')->willReturn(1);
-		$sourceFile->expects($this->once())->method('move')->with('/user1/files/Noten/Bach/Bach - Song 1.pdf')->willReturn($sourceFile);
+		$sourceFile->expects($this->once())->method('move')->with('/user1/files/Noten/Songs/Bach/Bach - Song 1.pdf')->willReturn($sourceFile);
 		[$fileManager, $rootFolder, $pathResolver, $internalSongMapper] = $this->createIntegrityFileManager(
 			$databasePath,
 			$targetFolder,
@@ -625,7 +625,7 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$sourceFile = $this->createMock(File::class);
 		$sourceFile->method('getContent')->willReturn('PDF');
 		$sourceFile->method('getMTime')->willReturn(1);
-		$sourceFile->expects($this->once())->method('move')->with('/user1/files/Noten/Bach/Bach - Song 1.pdf')->willReturn($sourceFile);
+		$sourceFile->expects($this->once())->method('move')->with('/user1/files/Noten/Songs/Bach/Bach - Song 1.pdf')->willReturn($sourceFile);
 		[$fileManager, $rootFolder, $pathResolver, $internalSongMapper] = $this->createIntegrityFileManager(
 			$databasePath,
 			$targetFolder,
@@ -812,22 +812,22 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		$database = $fixture['connection'];
 		// Song with no composer, artist, or collection
 		$database->exec("INSERT INTO Songs (Id, Title) VALUES (5, 'Song Without Rule')");
-		$database->exec("INSERT INTO Files (Id, SongId, Path) VALUES (50, 5, '/remote.php/dav/files/user1/Noten/Song Without Rule.pdf')");
+		$database->exec("INSERT INTO Files (Id, SongId, Path) VALUES (50, 5, '/remote.php/dav/files/user1/Noten/Songs/Song Without Rule.pdf')");
 
 		$targetFolder = $this->createMock(Folder::class);
 		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
-		$targetFolder->method('nodeExists')->willReturnCallback(static fn (string $path): bool => $path === 'Song Without Rule.pdf');
+		$targetFolder->method('nodeExists')->willReturnCallback(static fn (string $path): bool => $path === 'Songs/Song Without Rule.pdf');
 		$targetFolder->method('getDirectoryListing')->willReturn([]);
 
 		$pdf = $this->createMock(\OCP\Files\File::class);
 		$pdf->method('getContent')->willReturn(self::minimalPdf());
 		$pdf->method('getMTime')->willReturn(1);
-		$targetFolder->method('get')->with('Song Without Rule.pdf')->willReturn($pdf);
+		$targetFolder->method('get')->with('Songs/Song Without Rule.pdf')->willReturn($pdf);
 
 		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager(
 			$databasePath,
 			$targetFolder,
-			['Noten/Song Without Rule.pdf' => $pdf],
+			['Noten/Songs/Song Without Rule.pdf' => $pdf],
 		);
 
 		$libraryService = $this->createLibraryService();

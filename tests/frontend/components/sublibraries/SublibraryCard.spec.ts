@@ -51,7 +51,7 @@ describe('SublibraryCard.vue', () => {
 
 		expect(wrapper.text()).toContain('Organ Repertoire')
 		expect(wrapper.text()).toContain('organ')
-		expect(wrapper.text()).toContain('/SheetMusic/_SubLibraries_/organ')
+		expect(wrapper.text()).toContain('/SheetMusic/SubLibraries/organ')
 		expect(wrapper.text()).toContain('instrument: Orgel')
 		expect(wrapper.text()).toContain('1 matching score(s)')
 	})

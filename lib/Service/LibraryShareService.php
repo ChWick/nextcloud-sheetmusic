@@ -61,10 +61,10 @@ class LibraryShareService {
 				return null;
 			}
 
-			if (!$libFolder->nodeExists('_SubLibraries_')) {
-				$libFolder->newFolder('_SubLibraries_');
+			if (!$libFolder->nodeExists('SubLibraries')) {
+				$libFolder->newFolder('SubLibraries');
 			}
-			$subDirNode = $libFolder->get('_SubLibraries_');
+			$subDirNode = $libFolder->get('SubLibraries');
 			if (!($subDirNode instanceof Folder)) {
 				return null;
 			}

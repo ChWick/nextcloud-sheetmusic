@@ -13,6 +13,7 @@ use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsFile;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSong;
 
 class SongPathNamingRule {
+	public const SONGS_DIR = 'Songs';
 	public const PRESET_AUTO = 'auto';
 	public const PRESET_COMPOSER = 'composer';
 	public const PRESET_ARTIST = 'artist';
@@ -484,6 +485,23 @@ class SongPathNamingRule {
 	 * @return list<string> all valid target paths for a song given its composers, artists, books, and collections
 	 */
 	public static function createTargetPaths(
+		MobileSheetsSong $song,
+		string $ext,
+		?int $fileIndex = null,
+		int $fileCount = 1,
+		string $preset = self::PRESET_AUTO,
+	): array {
+		$paths = self::computeRawTargetPaths($song, $ext, $fileIndex, $fileCount, $preset);
+		return array_values(array_map(
+			static fn (string $path): string => self::SONGS_DIR . '/' . ltrim($path, '/'),
+			$paths,
+		));
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	private static function computeRawTargetPaths(
 		MobileSheetsSong $song,
 		string $ext,
 		?int $fileIndex = null,

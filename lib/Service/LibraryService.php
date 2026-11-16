@@ -259,6 +259,7 @@ class LibraryService {
 
 			if ($added !== null) {
 				$libraryId = (int)$added->id;
+				$this->ensureSongsFolder($userId, $libraryPath);
 				if ($importExistingDb) {
 					$this->importExistingPhysicalDatabase($libraryId, $libraryPath, $path, $targetDbRel, $userId, $progressCallback);
 				}
@@ -359,6 +360,19 @@ class LibraryService {
 				'path' => $path,
 				'userId' => $userId,
 			]);
+		}
+	}
+
+	private function ensureSongsFolder(string $userId, string $libraryPath): void {
+		try {
+			$userFolder = $this->rootFolder->getUserFolder($userId);
+			$cleanRel = ltrim($libraryPath, '/');
+			$libFolder = $cleanRel === '' ? $userFolder : ($userFolder->nodeExists($cleanRel) ? $userFolder->get($cleanRel) : null);
+			if ($libFolder instanceof \OCP\Files\Folder && !$libFolder->nodeExists(SongPathNamingRule::SONGS_DIR)) {
+				$libFolder->newFolder(SongPathNamingRule::SONGS_DIR);
+			}
+		} catch (\Throwable) {
+			// Best effort
 		}
 	}
 

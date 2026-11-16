@@ -367,7 +367,7 @@ watch(
 									<div>
 										<h4 :class="$style.cardTitle">{{ sub.name }}</h4>
 										<span :class="$style.cardSubtitle">
-											/_SubLibraries_/{{ sub.slug }}
+											/SubLibraries/{{ sub.slug }}
 										</span>
 									</div>
 								</div>
@@ -462,7 +462,7 @@ watch(
 			:library-id="selectedLibrary"
 			:library-name="libraryDisplayName"
 			:sublibrary="activeSublibrary"
-			:sublibrary-path="activeSublibrary ? `${overview?.library.path}/_SubLibraries_/${activeSublibrary.slug}` : ''"
+			:sublibrary-path="activeSublibrary ? `${overview?.library.path}/SubLibraries/${activeSublibrary.slug}` : ''"
 			@close="onShareDialogClose" />
 	</div>
 </template>

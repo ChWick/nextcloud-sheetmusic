@@ -96,7 +96,7 @@ const previewSlug = computed(() => {
 })
 
 const resultingSublibraryPath = computed(() => {
-	return `${props.libraryFolderPath}/_SubLibraries_/${previewSlug.value}`
+	return `${props.libraryFolderPath}/SubLibraries/${previewSlug.value}`
 })
 
 function getEntityList(type: string): { id?: number; name?: string; title?: string }[] {

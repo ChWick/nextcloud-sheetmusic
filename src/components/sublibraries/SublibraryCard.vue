@@ -36,7 +36,7 @@ const emit = defineEmits<{
 }>()
 
 const relativePath = computed(() => {
-	return `${props.libraryFolderPath}/_SubLibraries_/${props.sub.slug}`
+	return `${props.libraryFolderPath}/SubLibraries/${props.sub.slug}`
 })
 
 const matchingCount = computed(() => {

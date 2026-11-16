@@ -70,7 +70,7 @@ class MobileSheetsPathResolver {
 	 * or "_SubLibraries_/organ/file.pdf" -> "file.pdf"
 	 */
 	public function stripSublibrarySegment(string $path): string {
-		$stripped = preg_replace('#(?<=^|/)(?:\.sublibraries|_SubLibraries_)/[^/]+/#', '', $path);
+		$stripped = preg_replace('#(?<=^|/)(?:\.sublibraries|_SubLibraries_|SubLibraries)/[^/]+/#', '', $path);
 		return $stripped ?? $path;
 	}
 

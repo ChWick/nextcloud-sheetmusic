@@ -63,7 +63,7 @@ describe('SublibraryModal.vue', () => {
 		expect(inputs.length).toBeGreaterThanOrEqual(2)
 
 		await inputs[0].setValue('Organ Works')
-		expect(wrapper.text()).toContain('/SheetMusic/_SubLibraries_/organ-works')
+		expect(wrapper.text()).toContain('/SheetMusic/SubLibraries/organ-works')
 	})
 
 	it('validates required name and filter values on save', async () => {

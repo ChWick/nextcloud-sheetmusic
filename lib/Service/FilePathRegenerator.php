@@ -164,13 +164,20 @@ class FilePathRegenerator {
 		string $preset = SongPathNamingRule::PRESET_AUTO,
 	): MobileSheetsFileLogEntry {
 		// Target paths produced by naming rules
-		$validTargetPaths = SongPathNamingRule::createTargetPaths(
-			$song,
-			SongPathNamingRule::getFileExtension($file->path),
-			SongPathNamingRule::fileIndexOf($song, $file),
-			SongPathNamingRule::fileCountForExtension($song, $file),
-			$preset,
-		);
+		try {
+			$validTargetPaths = SongPathNamingRule::createTargetPaths(
+				$song,
+				SongPathNamingRule::getFileExtension($file->path),
+				SongPathNamingRule::fileIndexOf($song, $file),
+				SongPathNamingRule::fileCountForExtension($song, $file),
+				$preset,
+			);
+		} catch (NoNamingRuleException $e) {
+			if ($preset === SongPathNamingRule::PRESET_DISABLED || $preset === 'none') {
+				throw $e;
+			}
+			$validTargetPaths = [SongPathNamingRule::SONGS_DIR . '/' . SongPathNamingRule::normalizeGeneratedPathSegment(basename($file->path))];
+		}
 		$relativeTarget = $validTargetPaths[0];
 
 		$source = $this->pathResolver->fromStored($file->path, $user);
