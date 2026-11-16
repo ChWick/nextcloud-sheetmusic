@@ -565,6 +565,7 @@ onUnmounted(() => {
 				:show-annotations="showAnnotations"
 				:hide-toolbar="true"
 				:show-external-button="false"
+				:no-padding="true"
 				:initial-page-layout="layoutChoice"
 				:initial-double-page-turn-mode="doublePageTurnMode"
 				:initial-zoom-mode="zoomChoice" />

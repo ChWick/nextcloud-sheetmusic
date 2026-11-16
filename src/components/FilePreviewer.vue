@@ -49,6 +49,7 @@ const props = withDefaults(
 		initialDoublePageTurnMode?: DoublePageTurnMode
 		initialZoomMode?: 'fit-width' | 'fit-page' | 'custom'
 		startAtEnd?: boolean
+		noPadding?: boolean
 	}>(),
 	{
 		showExternalButton: true,
@@ -62,6 +63,7 @@ const props = withDefaults(
 		initialDoublePageTurnMode: 'half',
 		initialZoomMode: 'fit-width',
 		startAtEnd: false,
+		noPadding: false,
 	},
 )
 
@@ -591,14 +593,16 @@ async function renderCurrentView() {
 		const pageRotation = (((firstPage.rotate ?? 0) + rotation.value) % 360 + 360) % 360
 		const unscaledViewport = firstPage.getViewport({ scale: 1.0, rotation: pageRotation })
 
+		const pad = props.noPadding ? 0 : 48
+		const doubleGap = props.noPadding ? 4 : 24
 		const containerW = (pdfContainer.value?.clientWidth && pdfContainer.value.clientWidth > 100)
-			? pdfContainer.value.clientWidth - 48
+			? pdfContainer.value.clientWidth - pad
 			: 800
 		const containerH = (pdfContainer.value?.clientHeight && pdfContainer.value.clientHeight > 100)
-			? pdfContainer.value.clientHeight - 48
+			? pdfContainer.value.clientHeight - pad
 			: 700
 		const targetW = pageLayout.value === 'double' && pagesToRender.length > 1
-			? (containerW - 24) / 2
+			? (containerW - doubleGap) / 2
 			: containerW
 
 		if (zoomMode.value === 'fit-width') {
@@ -985,7 +989,7 @@ defineExpose({
 		<div
 			v-show="!isLoading && !errorMessage && isPdfFile"
 			ref="pdfContainer"
-			:class="[$style.pdfContainer, $style[`layout-${pageLayout}`]]" />
+			:class="[$style.pdfContainer, $style[`layout-${pageLayout}`], noPadding && $style.noPadding]" />
 
 		<div v-if="!isLoading && !errorMessage && isUnsupportedFile" :class="$style.unsupported">
 			<p>{{ t('sheetmusic', 'Preview is not available for this file type.') }}</p>
@@ -1054,6 +1058,15 @@ defineExpose({
 	flex-direction: row;
 	flex-wrap: nowrap;
 	align-items: center;
+	justify-content: center;
+}
+
+.pdfContainer.noPadding {
+	padding: 0;
+	gap: 4px;
+}
+
+.pdfContainer.noPadding.layout-single {
 	justify-content: center;
 }
 
