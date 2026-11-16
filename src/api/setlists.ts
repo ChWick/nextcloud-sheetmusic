@@ -1,6 +1,6 @@
 import axios from '@nextcloud/axios'
 import { generateOcsUrl } from '@nextcloud/router'
-import type { Setlist, SetlistItem } from '../types/song'
+import type { Setlist, SetlistFile, SetlistItem } from '../types/song'
 
 export async function fetchSetlists(libraryId: number): Promise<Setlist[]> {
 	const url = generateOcsUrl('/apps/sheetmusic/api/libraries/' + libraryId + '/setlists')
@@ -85,4 +85,56 @@ export async function reorderSetlistItems(
 		libraryId,
 		itemIds,
 	})
+}
+
+export async function fetchSetlistFiles(libraryId: number, setlistId: number): Promise<SetlistFile[]> {
+	const url = generateOcsUrl('/apps/sheetmusic/api/libraries/' + libraryId + '/setlists/' + setlistId + '/files')
+	const response = await axios.get(url)
+	return response.data?.ocs?.data ?? []
+}
+
+export async function uploadSetlistFile(
+	libraryId: number,
+	setlistId: number,
+	file: File,
+): Promise<SetlistFile> {
+	const url = generateOcsUrl('/apps/sheetmusic/api/libraries/' + libraryId + '/setlists/' + setlistId + '/files')
+	const formData = new FormData()
+	formData.append('file', file)
+	const response = await axios.post(url, formData, {
+		headers: {
+			'Content-Type': 'multipart/form-data',
+		},
+	})
+	return response.data?.ocs?.data
+}
+
+export async function attachNextcloudSetlistFile(
+	libraryId: number,
+	setlistId: number,
+	sourcePath: string,
+	action: 'copy' | 'move' = 'copy',
+): Promise<SetlistFile> {
+	const url = generateOcsUrl('/apps/sheetmusic/api/libraries/' + libraryId + '/setlists/' + setlistId + '/files/attach')
+	const response = await axios.post(url, { sourcePath, action })
+	return response.data?.ocs?.data
+}
+
+export async function deleteSetlistFile(
+	libraryId: number,
+	setlistId: number,
+	fileId: number,
+): Promise<void> {
+	const url = generateOcsUrl('/apps/sheetmusic/api/libraries/' + libraryId + '/setlists/' + setlistId + '/files/' + fileId)
+	await axios.delete(url)
+}
+
+export function getSetlistFileContentUrl(
+	libraryId: number,
+	setlistId: number,
+	fileId: number,
+	version?: number,
+): string {
+	const base = generateOcsUrl('/apps/sheetmusic/api/libraries/' + libraryId + '/setlists/' + setlistId + '/files/' + fileId + '/content')
+	return version !== undefined ? `${base}?v=${version}` : base
 }

@@ -27,6 +27,17 @@
           @add-item="openAddItemDialog"
           @play="openPerformanceMode(0)" />
 
+        <SetlistFilesSection
+          v-if="canWrite || selectedSetlistFiles.length > 0"
+          :files="selectedSetlistFiles"
+          :can-write="canWrite"
+          :is-uploading="isUploadingFile"
+          :upload-error="fileUploadError"
+          @upload="handleUploadSetlistFiles"
+          @attach="handleAttachNextcloudFile"
+          @preview="openFilePreview"
+          @remove="handleRemoveSetlistFile" />
+
         <SetlistItemsTable
           :items="selectedSetlistItems"
           :available-songs="songs"
@@ -83,27 +94,46 @@
     :setlist-id="selectedSetlist.id"
     :setlist-name="selectedSetlist.name"
     :items="selectedSetlistItems"
+    :files="selectedSetlistFiles"
     :songs="songs"
     :library-id="selectedLibrary"
     :initial-index="performanceStartIndex"
     @close="isPerformanceMode = false" />
+
+  <NcDialog
+    v-if="previewingFile && selectedSetlist"
+    :open="true"
+    :name="previewingFile.filename"
+    size="large"
+    @closing="previewingFile = null">
+    <div :class="$style.filePreviewDialogBody">
+      <FilePreviewer
+        :file-path="getSetlistFileContentUrl(selectedLibrary, selectedSetlist.id, previewingFile.id, previewingFile.updatedAt)"
+        :file-name="previewingFile.filename"
+        :show-external-button="false" />
+    </div>
+  </NcDialog>
 </template>
 
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
+import NcDialog from '@nextcloud/vue/components/NcDialog'
 import PlaylistMusic from 'vue-material-design-icons/PlaylistMusic.vue'
+import FilePreviewer from './FilePreviewer.vue'
 import ViewHeader from './ViewHeader.vue'
 import SetlistsSidebar from './setlists/SetlistsSidebar.vue'
 import SetlistDetailHeader from './setlists/SetlistDetailHeader.vue'
+import SetlistFilesSection from './setlists/SetlistFilesSection.vue'
 import SetlistItemsTable from './setlists/SetlistItemsTable.vue'
 import CreateSetlistDialog from './setlists/CreateSetlistDialog.vue'
 import RenameSetlistDialog from './setlists/RenameSetlistDialog.vue'
 import DeleteSetlistDialog from './setlists/DeleteSetlistDialog.vue'
 import AddSetlistItemDialog from './setlists/AddSetlistItemDialog.vue'
 import SetlistPerformanceViewer from './setlists/SetlistPerformanceViewer.vue'
-import type { Setlist, SetlistItem } from '../types/song'
+import { getSetlistFileContentUrl } from '../api/setlists'
+import type { Setlist, SetlistFile, SetlistItem } from '../types/song'
 import { useLibraryData } from '../composables/useLibraryData'
 import { useSetlists } from '../composables/useSetlists'
 
@@ -124,6 +154,7 @@ const {
   setlists,
   selectedSetlist,
   selectedSetlistItems,
+  selectedSetlistFiles,
   isLoading,
   isLoadingItems,
   errorMessage,
@@ -139,7 +170,56 @@ const {
   updateItemBookmark,
   removeItem,
   moveItem,
+  uploadFile,
+  attachFile,
+  removeFile,
 } = useSetlists(() => props.selectedLibrary)
+
+const isUploadingFile = ref(false)
+const fileUploadError = ref('')
+const previewingFile = ref<SetlistFile | null>(null)
+
+async function handleUploadSetlistFiles(files: File[]) {
+  isUploadingFile.value = true
+  fileUploadError.value = ''
+  try {
+    for (const file of files) {
+      await uploadFile(file)
+    }
+  } catch (err: unknown) {
+    fileUploadError.value = err instanceof Error ? err.message : t('sheetmusic', 'Could not upload file')
+  } finally {
+    isUploadingFile.value = false
+  }
+}
+
+async function handleAttachNextcloudFile(payload: { sourcePath: string; action: 'copy' | 'move' }) {
+  isUploadingFile.value = true
+  fileUploadError.value = ''
+  try {
+    await attachFile(payload.sourcePath, payload.action)
+  } catch (err: unknown) {
+    fileUploadError.value = err instanceof Error ? err.message : t('sheetmusic', 'Could not attach file from Nextcloud')
+  } finally {
+    isUploadingFile.value = false
+  }
+}
+
+function openFilePreview(file: SetlistFile) {
+  previewingFile.value = file
+}
+
+async function handleRemoveSetlistFile(fileId: number) {
+  fileUploadError.value = ''
+  try {
+    await removeFile(fileId)
+    if (previewingFile.value?.id === fileId) {
+      previewingFile.value = null
+    }
+  } catch (err: unknown) {
+    fileUploadError.value = err instanceof Error ? err.message : t('sheetmusic', 'Could not remove file')
+  }
+}
 
 function handleUpdateItemBookmark(item: SetlistItem, bookmarkId: number | null) {
   if (item.id) {
@@ -348,5 +428,12 @@ watch(() => props.selectedLibrary, (newLib) => {
 .noSelectionIcon {
   margin-bottom: 16px;
   opacity: 0.5;
+}
+
+.filePreviewDialogBody {
+  height: 75vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 </style>

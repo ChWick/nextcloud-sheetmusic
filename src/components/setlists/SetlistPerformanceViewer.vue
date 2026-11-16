@@ -2,17 +2,19 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
+import ChevronLeftIcon from 'vue-material-design-icons/ChevronLeft.vue'
 import FilePreviewer from '../FilePreviewer.vue'
 import SetlistPerformanceBottomBar from './SetlistPerformanceBottomBar.vue'
 import SetlistPerformanceDrawer from './SetlistPerformanceDrawer.vue'
 import SetlistPerformanceSettingsPanel from './SetlistPerformanceSettingsPanel.vue'
+import SetlistPerformanceSupplementalDrawer from './SetlistPerformanceSupplementalDrawer.vue'
 import SetlistPerformanceTopBar from './SetlistPerformanceTopBar.vue'
 import { fetchSongAnnotations } from '../../api/annotations'
 import { useHudAutoHide } from '../../composables/useHudAutoHide'
 import { usePerformanceStageInput } from '../../composables/usePerformanceStageInput'
 import { useWakeLock } from '../../composables/useWakeLock'
 import type { SheetAnnotation } from '../../types/annotation'
-import type { SetlistItem, Song, SongFile } from '../../types/song'
+import type { SetlistFile, SetlistItem, Song, SongFile } from '../../types/song'
 import { defaultFileBinaryCache } from '../../utils/file-cache'
 import { getFileVersionToken, getVersionedFileUrl } from '../../utils/file-version'
 import type { DoublePageTurnMode } from '../../utils/page-turn'
@@ -29,11 +31,13 @@ const props = withDefaults(defineProps<{
 	setlistId?: number
 	setlistName: string
 	items: SetlistItem[]
+	files?: SetlistFile[]
 	songs: Song[]
 	libraryId: number
 	initialIndex?: number
 }>(), {
 	setlistId: undefined,
+	files: () => [],
 	initialIndex: 0,
 })
 
@@ -50,6 +54,7 @@ const currentIndex = ref(Math.min(Math.max(0, props.initialIndex), Math.max(0, p
 const startAtEnd = ref(false)
 const isDrawerOpen = ref(false)
 const isSettingsOpen = ref(false)
+const isSupplementalDrawerOpen = ref(false)
 const isFullscreen = ref(false)
 const isSetlistOverride = ref(initialSettings.overrideEnabled)
 const showAnnotations = ref(initialSettings.settings.showAnnotations)
@@ -65,7 +70,7 @@ const {
 	toggleHud,
 	pauseHudAutoHide,
 	resumeHudAutoHide,
-} = useHudAutoHide(3000, () => isDrawerOpen.value || isSettingsOpen.value)
+} = useHudAutoHide(3000, () => isDrawerOpen.value || isSettingsOpen.value || isSupplementalDrawerOpen.value)
 
 useWakeLock()
 
@@ -236,7 +241,8 @@ watch(currentSong, async (song) => {
 		return
 	}
 	try {
-		const list = await fetchSongAnnotations(props.libraryId, song.id)
+		const targetFileId = song.files?.[0]?.fileId ?? song.files?.[0]?.id
+		const list = await fetchSongAnnotations(song.id, targetFileId)
 		if (reqId === annotationRequestId) {
 			annotations.value = list
 		}
@@ -396,6 +402,18 @@ onUnmounted(() => {
 				<div v-else :class="$style.emptyFile">
 					{{ t('sheetmusic', 'No score file attached to this song.') }}
 				</div>
+
+				<button
+					v-if="files.length > 0 && isHudVisible && !isSupplementalDrawerOpen"
+					type="button"
+					:class="$style.supplementalEdgeButton"
+					:aria-label="t('sheetmusic', 'Open setlist notes')"
+					:title="t('sheetmusic', 'Setlist Notes')"
+					@click.stop="isSupplementalDrawerOpen = true"
+					@mouseenter="pauseHudAutoHide"
+					@mouseleave="resumeHudAutoHide">
+					<ChevronLeftIcon :size="24" />
+				</button>
 			</div>
 
 			<SetlistPerformanceBottomBar
@@ -435,6 +453,13 @@ onUnmounted(() => {
 				@close="toggleSettingsPanel"
 				@update:is-setlist-override="toggleSetlistOverride"
 				@save-as-library-default="saveCurrentAsLibraryDefault" />
+
+			<SetlistPerformanceSupplementalDrawer
+				:open="isSupplementalDrawerOpen"
+				:library-id="libraryId"
+				:setlist-id="setlistId ?? 0"
+				:files="files"
+				@close="isSupplementalDrawerOpen = false" />
 		</div>
 	</Teleport>
 </template>
@@ -466,5 +491,32 @@ onUnmounted(() => {
 	margin: auto;
 	padding: 24px;
 	color: var(--color-text-maxcontrast);
+}
+
+.supplementalEdgeButton {
+	position: absolute;
+	right: 0;
+	top: 50%;
+	transform: translateY(-50%);
+	z-index: 20;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 38px;
+	height: 72px;
+	border: 1px solid var(--color-border);
+	border-right: none;
+	border-radius: 12px 0 0 12px;
+	background-color: var(--color-main-background);
+	color: var(--color-main-text);
+	box-shadow: -2px 2px 10px rgba(0, 0, 0, 0.2);
+	cursor: pointer;
+	opacity: 0.92;
+	transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+
+.supplementalEdgeButton:hover {
+	opacity: 1;
+	background-color: var(--color-background-hover);
 }
 </style>

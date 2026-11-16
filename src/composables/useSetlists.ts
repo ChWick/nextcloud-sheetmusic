@@ -1,6 +1,6 @@
 import { computed, ref } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
-import type { Setlist, SetlistItem } from '../types/song'
+import type { Setlist, SetlistFile, SetlistItem } from '../types/song'
 import {
   fetchSetlists,
   fetchSetlist,
@@ -11,6 +11,9 @@ import {
   updateSetlistItem as apiUpdateSetlistItem,
   removeSetlistItem as apiRemoveSetlistItem,
   reorderSetlistItems as apiReorderSetlistItems,
+  uploadSetlistFile as apiUploadSetlistFile,
+  attachNextcloudSetlistFile as apiAttachNextcloudSetlistFile,
+  deleteSetlistFile as apiDeleteSetlistFile,
 } from '../api/setlists'
 import { formatDuration } from '../utils/song-formatter'
 
@@ -18,6 +21,7 @@ export function useSetlists(getLibraryId: () => number) {
   const setlists = ref<Setlist[]>([])
   const selectedSetlist = ref<Setlist | null>(null)
   const selectedSetlistItems = ref<SetlistItem[]>([])
+  const selectedSetlistFiles = ref<SetlistFile[]>([])
 
   const isLoading = ref(false)
   const isLoadingItems = ref(false)
@@ -43,11 +47,13 @@ export function useSetlists(getLibraryId: () => number) {
     try {
       const full = await fetchSetlist(libraryId, selectedSetlist.value.id)
       selectedSetlistItems.value = full.items ?? []
+      selectedSetlistFiles.value = full.files ?? []
       if (full.itemCount !== undefined) {
         selectedSetlist.value.itemCount = full.itemCount
       } else {
         selectedSetlist.value.itemCount = selectedSetlistItems.value.length
       }
+      selectedSetlist.value.fileCount = selectedSetlistFiles.value.length
     } catch (err: unknown) {
       errorMessage.value = err instanceof Error ? err.message : t('sheetmusic', 'Failed to load setlist items')
     } finally {
@@ -77,6 +83,7 @@ export function useSetlists(getLibraryId: () => number) {
         await loadCurrentSetlistItems()
       } else {
         selectedSetlistItems.value = []
+        selectedSetlistFiles.value = []
       }
     } catch (err: unknown) {
       errorMessage.value = err instanceof Error ? err.message : t('sheetmusic', 'Failed to load setlists')
@@ -178,10 +185,37 @@ export function useSetlists(getLibraryId: () => number) {
     }
   }
 
+  async function uploadFile(file: File): Promise<SetlistFile | null> {
+    const libraryId = getLibraryId()
+    if (!selectedSetlist.value || libraryId <= 0) return null
+    const uploaded = await apiUploadSetlistFile(libraryId, selectedSetlist.value.id, file)
+    selectedSetlistFiles.value = [...selectedSetlistFiles.value, uploaded]
+    selectedSetlist.value.fileCount = selectedSetlistFiles.value.length
+    return uploaded
+  }
+
+  async function attachFile(sourcePath: string, action: 'copy' | 'move' = 'copy'): Promise<SetlistFile | null> {
+    const libraryId = getLibraryId()
+    if (!selectedSetlist.value || libraryId <= 0) return null
+    const attached = await apiAttachNextcloudSetlistFile(libraryId, selectedSetlist.value.id, sourcePath, action)
+    selectedSetlistFiles.value = [...selectedSetlistFiles.value, attached]
+    selectedSetlist.value.fileCount = selectedSetlistFiles.value.length
+    return attached
+  }
+
+  async function removeFile(fileId: number): Promise<void> {
+    const libraryId = getLibraryId()
+    if (!selectedSetlist.value || libraryId <= 0) return
+    await apiDeleteSetlistFile(libraryId, selectedSetlist.value.id, fileId)
+    selectedSetlistFiles.value = selectedSetlistFiles.value.filter(f => f.id !== fileId)
+    selectedSetlist.value.fileCount = selectedSetlistFiles.value.length
+  }
+
   return {
     setlists,
     selectedSetlist,
     selectedSetlistItems,
+    selectedSetlistFiles,
     isLoading,
     isLoadingItems,
     errorMessage,
@@ -198,5 +232,8 @@ export function useSetlists(getLibraryId: () => number) {
     updateItemBookmark,
     removeItem,
     moveItem,
+    uploadFile,
+    attachFile,
+    removeFile,
   }
 }

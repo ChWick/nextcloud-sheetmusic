@@ -140,6 +140,20 @@ export interface SetlistItem {
 	artist?: string | null
 }
 
+export interface SetlistFile {
+	id: number
+	setlistId: number
+	libraryId: number
+	ocFileId: number
+	path: string
+	filename: string
+	mimeType: string
+	fileSize: number
+	sortOrder: number
+	createdAt: number
+	updatedAt: number
+}
+
 export interface Setlist {
 	id: number
 	uuid?: string
@@ -147,7 +161,9 @@ export interface Setlist {
 	sortBy?: number
 	ascending?: number
 	itemCount?: number
+	fileCount?: number
 	items?: SetlistItem[]
+	files?: SetlistFile[]
 	createdAt?: number
 	updatedAt?: number
 }
