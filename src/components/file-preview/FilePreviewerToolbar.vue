@@ -13,7 +13,7 @@ import RotateRight from 'vue-material-design-icons/RotateRight.vue'
 import ViewColumn from 'vue-material-design-icons/ViewColumn.vue'
 import ViewDay from 'vue-material-design-icons/ViewDay.vue'
 import ViewStream from 'vue-material-design-icons/ViewStream.vue'
-
+import DoublePageTurnModeSelector from './DoublePageTurnModeSelector.vue'
 import type { DoublePageTurnMode } from '../../utils/page-turn'
 
 type PageLayoutMode = 'continuous' | 'single' | 'double'
@@ -111,23 +111,10 @@ const emit = defineEmits<{
 				</NcButton>
 			</div>
 
-			<select
+			<DoublePageTurnModeSelector
 				v-if="pageLayout === 'double'"
-				:value="doublePageTurnMode"
-				:aria-label="t('sheetmusic', 'Page turning mode')"
-				:title="t('sheetmusic', 'Page turning mode')"
-				:class="$style.zoomDropdown"
-				@change="emit('doublePageTurnMode', ($event.target as HTMLSelectElement).value as DoublePageTurnMode)">
-				<option value="half">
-					{{ t('sheetmusic', 'Half-page (1/2 → 3/2 → 3/4)') }}
-				</option>
-				<option value="step">
-					{{ t('sheetmusic', '1-page step (1/2 → 2/3 → 3/4)') }}
-				</option>
-				<option value="spread">
-					{{ t('sheetmusic', '2-page jump (1/2 → 3/4)') }}
-				</option>
-			</select>
+				:model-value="doublePageTurnMode"
+				@update:model-value="emit('doublePageTurnMode', $event)" />
 		</div>
 
 		<div :class="$style.toolbarGroup">

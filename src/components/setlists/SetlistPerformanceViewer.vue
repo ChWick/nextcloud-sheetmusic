@@ -15,6 +15,7 @@ import FullscreenExitIcon from 'vue-material-design-icons/FullscreenExit.vue'
 import SkipNextIcon from 'vue-material-design-icons/SkipNext.vue'
 import SkipPreviousIcon from 'vue-material-design-icons/SkipPrevious.vue'
 import FilePreviewer from '../FilePreviewer.vue'
+import DoublePageTurnModeSelector from '../file-preview/DoublePageTurnModeSelector.vue'
 import { fetchSongAnnotations } from '../../api/annotations'
 import type { SheetAnnotation } from '../../types/annotation'
 import type { SetlistItem, Song, SongFile } from '../../types/song'
@@ -523,22 +524,10 @@ onUnmounted(() => {
 					</option>
 				</select>
 
-				<select
+				<DoublePageTurnModeSelector
 					v-if="effectiveLayout === 'double'"
-					:value="doublePageTurnMode"
-					:aria-label="t('sheetmusic', 'Page turning mode')"
-					:class="$style.selectControl"
-					@change="onDoublePageTurnModeChange(($event.target as HTMLSelectElement).value as DoublePageTurnMode)">
-					<option value="half">
-						{{ t('sheetmusic', '1/2 → 3/2 → 3/4') }}
-					</option>
-					<option value="step">
-						{{ t('sheetmusic', '1/2 → 2/3 → 3/4') }}
-					</option>
-					<option value="spread">
-						{{ t('sheetmusic', '1/2 → 3/4') }}
-					</option>
-				</select>
+					:model-value="doublePageTurnMode"
+					@update:model-value="onDoublePageTurnModeChange" />
 
 				<NcButton
 					variant="secondary"

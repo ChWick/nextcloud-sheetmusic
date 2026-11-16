@@ -117,10 +117,9 @@ describe('SetlistPerformanceViewer', () => {
 		})
 		await wrapper.vm.$nextTick()
 
-		const turnModeSelect = document.body.querySelector('select[aria-label="Page turning mode"]') as HTMLSelectElement | null
-		expect(turnModeSelect).not.toBeNull()
-		turnModeSelect!.value = 'step'
-		turnModeSelect!.dispatchEvent(new Event('change'))
+		const stepButton = document.body.querySelector('button[data-turn-mode="step"]') as HTMLButtonElement | null
+		expect(stepButton).not.toBeNull()
+		stepButton!.click()
 		expect(mockSetDoublePageTurnMode).toHaveBeenCalledWith('step')
 
 		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
