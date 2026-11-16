@@ -1047,7 +1047,9 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		await flushPromises()
 
 		// Verify uploaded PDF
-		expect(uploadedFiles).toHaveLength(1)
+		await vi.waitFor(() => {
+			expect(uploadedFiles).toHaveLength(1)
+		}, { timeout: 5000 })
 		const arrayBuffer = await uploadedFiles[0].file.arrayBuffer()
 		const savedPdf = await PDFDocument.load(arrayBuffer)
 		expect(savedPdf.getPageCount()).toBe(8)

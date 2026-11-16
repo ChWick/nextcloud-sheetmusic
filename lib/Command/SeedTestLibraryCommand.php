@@ -258,8 +258,8 @@ class SeedTestLibraryCommand extends Command {
 		$pageIds = [];
 
 		// 1: Catalog, 2: Pages, 3: Font (Helvetica)
-		$objects[1] = "<< /Type /Catalog /Pages 2 0 R >>";
-		$objects[3] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>";
+		$objects[1] = '<< /Type /Catalog /Pages 2 0 R >>';
+		$objects[3] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>';
 
 		$nextId = 4;
 		$escapedTitle = str_replace(['\\', '(', ')'], ['\\\\', '\\(', '\\)'], $title);
