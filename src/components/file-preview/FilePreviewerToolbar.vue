@@ -14,6 +14,8 @@ import ViewColumn from 'vue-material-design-icons/ViewColumn.vue'
 import ViewDay from 'vue-material-design-icons/ViewDay.vue'
 import ViewStream from 'vue-material-design-icons/ViewStream.vue'
 
+import type { DoublePageTurnMode } from '../../utils/page-turn'
+
 type PageLayoutMode = 'continuous' | 'single' | 'double'
 
 withDefaults(defineProps<{
@@ -22,12 +24,18 @@ withDefaults(defineProps<{
 	totalPages: number
 	currentPageDisplay: string
 	pageLayout: PageLayoutMode
+	doublePageTurnMode?: DoublePageTurnMode
+	canGoPrev?: boolean
+	canGoNext?: boolean
 	zoomSelectValue: string
 	isCustomZoom: boolean
 	displayScale: number
 	showExternalButton?: boolean
 	showAnnotations?: boolean
 }>(), {
+	doublePageTurnMode: 'half',
+	canGoPrev: undefined,
+	canGoNext: undefined,
 	showExternalButton: true,
 	showAnnotations: false,
 })
@@ -36,6 +44,7 @@ const emit = defineEmits<{
 	previousPage: []
 	nextPage: []
 	pageLayout: [mode: PageLayoutMode]
+	doublePageTurnMode: [mode: DoublePageTurnMode]
 	zoomSelect: [event: Event]
 	zoomIn: []
 	zoomOut: []
@@ -53,7 +62,7 @@ const emit = defineEmits<{
 				<NcButton
 					variant="secondary"
 					size="small"
-					:disabled="currentPage <= 1 || pageLayout === 'continuous'"
+					:disabled="pageLayout === 'continuous' || (canGoPrev !== undefined ? !canGoPrev : currentPage <= 1)"
 					:title="t('sheetmusic', 'Previous page')"
 					:aria-label="t('sheetmusic', 'Previous page')"
 					@click="emit('previousPage')">
@@ -65,7 +74,7 @@ const emit = defineEmits<{
 				<NcButton
 					variant="secondary"
 					size="small"
-					:disabled="currentPage >= totalPages || pageLayout === 'continuous'"
+					:disabled="pageLayout === 'continuous' || (canGoNext !== undefined ? !canGoNext : currentPage >= totalPages)"
 					:title="t('sheetmusic', 'Next page')"
 					:aria-label="t('sheetmusic', 'Next page')"
 					@click="emit('nextPage')">
@@ -101,6 +110,24 @@ const emit = defineEmits<{
 					<template #icon><ViewColumn :size="18" /></template>
 				</NcButton>
 			</div>
+
+			<select
+				v-if="pageLayout === 'double'"
+				:value="doublePageTurnMode"
+				:aria-label="t('sheetmusic', 'Page turning mode')"
+				:title="t('sheetmusic', 'Page turning mode')"
+				:class="$style.zoomDropdown"
+				@change="emit('doublePageTurnMode', ($event.target as HTMLSelectElement).value as DoublePageTurnMode)">
+				<option value="half">
+					{{ t('sheetmusic', 'Half-page (1/2 → 3/2 → 3/4)') }}
+				</option>
+				<option value="step">
+					{{ t('sheetmusic', '1-page step (1/2 → 2/3 → 3/4)') }}
+				</option>
+				<option value="spread">
+					{{ t('sheetmusic', '2-page jump (1/2 → 3/4)') }}
+				</option>
+			</select>
 		</div>
 
 		<div :class="$style.toolbarGroup">

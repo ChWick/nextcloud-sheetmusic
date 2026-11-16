@@ -25,6 +25,15 @@ import {
 	isStampBold,
 } from '../utils/annotation'
 import { defaultFileBinaryCache, type FileBinaryCache } from '../utils/file-cache'
+import {
+	type DoublePageTurnMode,
+	type DoubleSpread,
+	formatDoubleSpreadDisplay,
+	getDoubleSpreadForPage,
+	getInitialDoubleSpread,
+	nextDoubleSpread,
+	prevDoubleSpread,
+} from '../utils/page-turn'
 
 const props = withDefaults(
 	defineProps<{
@@ -36,6 +45,10 @@ const props = withDefaults(
 		annotations?: SheetAnnotation[]
 		showAnnotations?: boolean
 		binaryCache?: FileBinaryCache
+		initialPageLayout?: 'continuous' | 'single' | 'double' | 'auto'
+		initialDoublePageTurnMode?: DoublePageTurnMode
+		initialZoomMode?: 'fit-width' | 'fit-page' | 'custom'
+		startAtEnd?: boolean
 	}>(),
 	{
 		showExternalButton: true,
@@ -45,6 +58,10 @@ const props = withDefaults(
 		annotations: () => [],
 		showAnnotations: false,
 		binaryCache: () => defaultFileBinaryCache,
+		initialPageLayout: 'continuous',
+		initialDoublePageTurnMode: 'half',
+		initialZoomMode: 'fit-width',
+		startAtEnd: false,
 	},
 )
 
@@ -65,8 +82,20 @@ const pageResolutions = ref<PdfPageResolutionSummary[]>([])
 type PageLayoutMode = 'continuous' | 'single' | 'double'
 type ZoomMode = 'fit-width' | 'fit-page' | 'custom'
 
-const pageLayout = ref<PageLayoutMode>('continuous')
-const zoomMode = ref<ZoomMode>('fit-width')
+function detectResponsiveLayout(): PageLayoutMode {
+	if (typeof window === 'undefined') return 'single'
+	const containerW = pdfContainer.value?.clientWidth || window.innerWidth
+	const containerH = pdfContainer.value?.clientHeight || window.innerHeight
+	return containerW >= containerH && containerW >= 700 ? 'double' : 'single'
+}
+
+const autoLayout = ref(props.initialPageLayout === 'auto')
+const pageLayout = ref<PageLayoutMode>(
+	props.initialPageLayout === 'auto' ? detectResponsiveLayout() : props.initialPageLayout,
+)
+const doublePageTurnMode = ref<DoublePageTurnMode>(props.initialDoublePageTurnMode)
+const doubleSpread = ref<DoubleSpread>([1, null])
+const zoomMode = ref<ZoomMode>(props.initialZoomMode)
 const customScale = ref(1.0)
 const effectiveScale = ref(1.0)
 const rotation = ref(0)
@@ -286,13 +315,28 @@ const isUnsupportedFile = computed(() => {
 
 const currentPageDisplay = computed(() => {
 	if (pageLayout.value === 'double') {
-		const next = Math.min(currentPage.value + 1, totalPages.value)
-		return currentPage.value === next ? `${currentPage.value}` : `${currentPage.value}–${next}`
+		return formatDoubleSpreadDisplay(doubleSpread.value)
 	}
 	if (pageLayout.value === 'continuous') {
 		return `1–${totalPages.value || 1}`
 	}
 	return `${currentPage.value}`
+})
+
+const canGoPrev = computed(() => {
+	if (pageLayout.value === 'continuous') return false
+	if (pageLayout.value === 'double') {
+		return prevDoubleSpread(doubleSpread.value, totalPages.value, doublePageTurnMode.value) !== null
+	}
+	return currentPage.value > 1
+})
+
+const canGoNext = computed(() => {
+	if (pageLayout.value === 'continuous') return false
+	if (pageLayout.value === 'double') {
+		return nextDoubleSpread(doubleSpread.value, totalPages.value, doublePageTurnMode.value) !== null
+	}
+	return currentPage.value < totalPages.value
 })
 
 const zoomSelectValue = computed(() => {
@@ -318,26 +362,40 @@ function openInExternalViewer() {
 	openFileExternally(props.filePath)
 }
 
-function prevPage() {
+function prevPage(): boolean {
 	if (pageLayout.value === 'double') {
-		currentPage.value = Math.max(1, currentPage.value - 2)
-	} else {
-		currentPage.value = Math.max(1, currentPage.value - 1)
+		const prev = prevDoubleSpread(doubleSpread.value, totalPages.value, doublePageTurnMode.value)
+		if (!prev) return false
+		doubleSpread.value = prev
+		currentPage.value = prev[0]
+		renderCurrentView()
+		return true
 	}
-	renderCurrentView()
+	if (pageLayout.value === 'single') {
+		if (currentPage.value <= 1) return false
+		currentPage.value -= 1
+		renderCurrentView()
+		return true
+	}
+	return false
 }
 
-function nextPage() {
+function nextPage(): boolean {
 	if (pageLayout.value === 'double') {
-		if (currentPage.value + 2 <= totalPages.value) {
-			currentPage.value += 2
-		} else if (currentPage.value + 1 <= totalPages.value) {
-			currentPage.value += 1
-		}
-	} else {
-		currentPage.value = Math.min(totalPages.value, currentPage.value + 1)
+		const next = nextDoubleSpread(doubleSpread.value, totalPages.value, doublePageTurnMode.value)
+		if (!next) return false
+		doubleSpread.value = next
+		currentPage.value = next[0]
+		renderCurrentView()
+		return true
 	}
-	renderCurrentView()
+	if (pageLayout.value === 'single') {
+		if (currentPage.value >= totalPages.value) return false
+		currentPage.value += 1
+		renderCurrentView()
+		return true
+	}
+	return false
 }
 
 function goToPage(targetPage: number) {
@@ -346,6 +404,7 @@ function goToPage(targetPage: number) {
 		targetPage = totalPages.value
 	}
 	currentPage.value = targetPage
+	doubleSpread.value = getDoubleSpreadForPage(targetPage, totalPages.value, doublePageTurnMode.value)
 	if (pageLayout.value === 'continuous') {
 		const placeholder = (pdfContainer.value?.querySelector(`[data-page-index="${targetPage}"]`) as HTMLElement | null)
 			?? (pdfContainer.value?.querySelector(`[data-page-num="${targetPage}"]`) as HTMLElement | null)
@@ -358,9 +417,36 @@ function goToPage(targetPage: number) {
 }
 
 function setPageLayout(mode: PageLayoutMode) {
+	autoLayout.value = false
 	if (pageLayout.value === mode) return
 	pageLayout.value = mode
+	if (mode === 'double') {
+		doubleSpread.value = getDoubleSpreadForPage(currentPage.value, totalPages.value, doublePageTurnMode.value)
+	}
 	renderCurrentView()
+}
+
+function setAutoLayout(enabled: boolean) {
+	autoLayout.value = enabled
+	if (enabled) {
+		const detected = detectResponsiveLayout()
+		if (pageLayout.value !== detected) {
+			pageLayout.value = detected
+			if (detected === 'double') {
+				doubleSpread.value = getDoubleSpreadForPage(currentPage.value, totalPages.value, doublePageTurnMode.value)
+			}
+			renderCurrentView()
+		}
+	}
+}
+
+function setDoublePageTurnMode(mode: DoublePageTurnMode) {
+	if (doublePageTurnMode.value === mode) return
+	doublePageTurnMode.value = mode
+	doubleSpread.value = getDoubleSpreadForPage(currentPage.value, totalPages.value, mode)
+	if (pageLayout.value === 'double') {
+		renderCurrentView()
+	}
 }
 
 function setZoomMode(mode: ZoomMode) {
@@ -451,10 +537,12 @@ async function renderCurrentView() {
 		const idx = Math.min(Math.max(1, currentPage.value), total) - 1
 		pagesToRender = [{ pageNum: ordered[idx] || 1, index: idx + 1 }]
 	} else if (pageLayout.value === 'double') {
-		const idx = Math.min(Math.max(1, currentPage.value), total) - 1
-		pagesToRender = [{ pageNum: ordered[idx] || 1, index: idx + 1 }]
-		if (idx + 1 < total) {
-			pagesToRender.push({ pageNum: ordered[idx + 1], index: idx + 2 })
+		const [leftLogical, rightLogical] = doubleSpread.value
+		const leftIdx = Math.min(Math.max(1, leftLogical), total) - 1
+		pagesToRender = [{ pageNum: ordered[leftIdx] || 1, index: leftIdx + 1 }]
+		if (rightLogical !== null && rightLogical >= 1 && rightLogical <= total) {
+			const rightIdx = rightLogical - 1
+			pagesToRender.push({ pageNum: ordered[rightIdx] || 1, index: rightIdx + 1 })
 		}
 	} else {
 		pagesToRender = ordered.map((p, idx) => ({ pageNum: p, index: idx + 1 }))
@@ -467,17 +555,20 @@ async function renderCurrentView() {
 		const pageRotation = (((firstPage.rotate ?? 0) + rotation.value) % 360 + 360) % 360
 		const unscaledViewport = firstPage.getViewport({ scale: 1.0, rotation: pageRotation })
 
+		const containerW = (pdfContainer.value?.clientWidth && pdfContainer.value.clientWidth > 100)
+			? pdfContainer.value.clientWidth - 48
+			: 800
+		const containerH = (pdfContainer.value?.clientHeight && pdfContainer.value.clientHeight > 100)
+			? pdfContainer.value.clientHeight - 48
+			: 700
+		const targetW = pageLayout.value === 'double' && pagesToRender.length > 1
+			? (containerW - 24) / 2
+			: containerW
+
 		if (zoomMode.value === 'fit-width') {
-			const containerW = (pdfContainer.value?.clientWidth && pdfContainer.value.clientWidth > 100)
-				? pdfContainer.value.clientWidth - 48
-				: 800
-			const targetW = pageLayout.value === 'double' ? (containerW - 24) / 2 : containerW
 			scale = targetW / unscaledViewport.width
 		} else if (zoomMode.value === 'fit-page') {
-			const containerH = (pdfContainer.value?.clientHeight && pdfContainer.value.clientHeight > 100)
-				? pdfContainer.value.clientHeight - 48
-				: 700
-			scale = containerH / unscaledViewport.height
+			scale = Math.min(targetW / unscaledViewport.width, containerH / unscaledViewport.height)
 		} else {
 			scale = customScale.value
 		}
@@ -674,7 +765,14 @@ async function loadAndRenderFile() {
 		loadedPdf.value = pdf
 		const ordered = parsePageOrder(props.pageOrder, pdf.numPages)
 		totalPages.value = ordered.length
-		currentPage.value = props.targetPage && props.targetPage >= 1 ? Math.min(props.targetPage, totalPages.value) : 1
+
+		if (props.startAtEnd && totalPages.value > 0) {
+			currentPage.value = totalPages.value
+		} else {
+			currentPage.value = props.targetPage && props.targetPage >= 1
+				? Math.min(props.targetPage, totalPages.value)
+				: 1
+		}
 
 		// Collect page resolution summaries (up to first 25 pages for responsiveness)
 		try {
@@ -691,10 +789,16 @@ async function loadAndRenderFile() {
 			// Ignore resolution inspection errors on mock or malformed PDFs
 		}
 
-		// If the document is large (>30 pages), default to single page layout for optimal performance
-		if (pdf.numPages > 30) {
+		// If the document is large (>30 pages) and caller didn't specify a paged/auto layout, default to single page
+		if (pdf.numPages > 30 && props.initialPageLayout === 'continuous') {
 			pageLayout.value = 'single'
+		} else if (autoLayout.value) {
+			pageLayout.value = detectResponsiveLayout()
 		}
+
+		doubleSpread.value = totalPages.value > 1
+			? getDoubleSpreadForPage(currentPage.value, totalPages.value, doublePageTurnMode.value)
+			: getInitialDoubleSpread(totalPages.value)
 
 		await renderCurrentView()
 	} catch (error: any) {
@@ -718,19 +822,42 @@ function handleImageError() {
 	errorMessage.value = t('sheetmusic', 'Missing file: The file does not exist on the file system.')
 }
 
+let resizeObserver: ResizeObserver | null = null
+
 function handleResize() {
-	if (zoomMode.value === 'fit-width' || zoomMode.value === 'fit-page') {
+	let layoutChanged = false
+	if (autoLayout.value) {
+		const detected = detectResponsiveLayout()
+		if (pageLayout.value !== detected) {
+			pageLayout.value = detected
+			if (detected === 'double') {
+				doubleSpread.value = getDoubleSpreadForPage(currentPage.value, totalPages.value, doublePageTurnMode.value)
+			}
+			layoutChanged = true
+		}
+	}
+	if (layoutChanged || zoomMode.value === 'fit-width' || zoomMode.value === 'fit-page') {
 		renderCurrentView()
 	}
 }
 
 onMounted(() => {
 	window.addEventListener('resize', handleResize)
+	if (typeof ResizeObserver !== 'undefined' && pdfContainer.value) {
+		resizeObserver = new ResizeObserver(() => {
+			handleResize()
+		})
+		resizeObserver.observe(pdfContainer.value)
+	}
 })
 
 onUnmounted(() => {
 	cleanupObserver()
 	window.removeEventListener('resize', handleResize)
+	if (resizeObserver) {
+		resizeObserver.disconnect()
+		resizeObserver = null
+	}
 })
 
 watch(() => props.filePath, loadAndRenderFile, { immediate: true })
@@ -742,6 +869,7 @@ watch(
 			const ordered = parsePageOrder(props.pageOrder, loadedPdf.value.numPages)
 			totalPages.value = ordered.length
 			currentPage.value = 1
+			doubleSpread.value = getInitialDoubleSpread(totalPages.value)
 			renderCurrentView()
 		}
 	},
@@ -759,8 +887,22 @@ watch(
 defineExpose({
 	openInExternalViewer,
 	goToPage,
+	prevPage,
+	nextPage,
+	setPageLayout,
+	setAutoLayout,
+	setDoublePageTurnMode,
+	setZoomMode,
 	currentPage,
 	totalPages,
+	currentPageDisplay,
+	pageLayout,
+	autoLayout,
+	doublePageTurnMode,
+	doubleSpread,
+	zoomMode,
+	canGoPrev,
+	canGoNext,
 	fileSizeBytes,
 	pageResolutions,
 	showAnnotationsState,
@@ -778,6 +920,9 @@ defineExpose({
 			:total-pages="totalPages"
 			:current-page-display="currentPageDisplay"
 			:page-layout="pageLayout"
+			:double-page-turn-mode="doublePageTurnMode"
+			:can-go-prev="canGoPrev"
+			:can-go-next="canGoNext"
 			:zoom-select-value="zoomSelectValue"
 			:is-custom-zoom="isCustomZoom"
 			:display-scale="isImageFile ? imageScale : effectiveScale"
@@ -786,6 +931,7 @@ defineExpose({
 			@previous-page="prevPage"
 			@next-page="nextPage"
 			@page-layout="setPageLayout"
+			@double-page-turn-mode="setDoublePageTurnMode"
 			@zoom-select="onZoomSelect"
 			@zoom-in="zoomIn"
 			@zoom-out="zoomOut"
@@ -881,7 +1027,8 @@ defineExpose({
 
 .pdfContainer.layout-double {
 	flex-direction: row;
-	flex-wrap: wrap;
+	flex-wrap: nowrap;
+	align-items: center;
 	justify-content: center;
 }
 
