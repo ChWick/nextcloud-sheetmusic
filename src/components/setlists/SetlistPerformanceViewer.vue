@@ -539,7 +539,7 @@ onUnmounted(() => {
 				</select>
 
 				<DoublePageTurnModeSelector
-					v-if="effectiveLayout === 'double'"
+					v-if="layoutChoice === 'auto' || effectiveLayout === 'double'"
 					:model-value="doublePageTurnMode"
 					@update:model-value="onDoublePageTurnModeChange" />
 
