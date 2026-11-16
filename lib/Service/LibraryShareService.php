@@ -17,7 +17,6 @@ use OCA\SheetMusic\Exception\SecurityException;
 use OCP\Constants;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
-use OCP\Files\Node;
 use OCP\IURLGenerator;
 use OCP\IUserManager;
 use OCP\Share\IManager as IShareManager;

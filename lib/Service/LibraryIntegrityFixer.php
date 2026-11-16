@@ -9,7 +9,6 @@ declare(strict_types=1);
 
 namespace OCA\SheetMusic\Service;
 
-use OCA\SheetMusic\Db\InternalEntity;
 use OCA\SheetMusic\Db\InternalEntityMapper;
 use OCA\SheetMusic\Db\InternalMiscMapper;
 use OCA\SheetMusic\Db\InternalSongAttributeMapper;
@@ -24,7 +23,6 @@ use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsTableHelper;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
-use OCP\Files\Node;
 use OCP\IUser;
 use Psr\Log\LoggerInterface;
 

@@ -363,7 +363,7 @@ function onScalarInput(field: SongScalarFieldDef, raw: string | number) {
 .val {
 	font-size: 0.9rem;
 	color: var(--color-main-text);
-	word-break: break-word;
+	overflow-wrap: break-word;
 }
 
 .fieldLabel {

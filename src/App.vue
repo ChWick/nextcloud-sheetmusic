@@ -713,7 +713,7 @@ async function deleteLibrary() {
   flex-shrink: 0;
 }
 .libraryList { margin: 0; padding: 0; }
-.libraryItem { word-break: break-word; }
+.libraryItem { overflow-wrap: break-word; }
 .libraryButton { width: 100%; padding: 8px 16px; border: 0; background: transparent; color: inherit; font: inherit; text-align: start; cursor: pointer; }
 .libraryButton[aria-pressed='true'] { background: var(--color-background-hover); }
 .librarySelect { width: 100%; padding: 8px; margin: 8px 0; }

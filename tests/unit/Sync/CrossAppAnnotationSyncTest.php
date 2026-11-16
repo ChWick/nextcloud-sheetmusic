@@ -9,7 +9,6 @@ declare(strict_types=1);
 
 namespace Sync;
 
-use OCA\SheetMusic\Db\InternalSongAnnotation;
 use OCA\SheetMusic\Sync\ForScore\ForScoreAnnotationAdapter;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsAnnotationAdapter;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsBaselineSchema;

@@ -20,7 +20,6 @@ use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSyncBackend;
 use OCA\SheetMusic\Sync\SyncClientInterface;
 use OCA\SheetMusic\Sync\SyncClientRegistry;
 use OCP\Files\IRootFolder;
-use OCP\IRequest;
 use OCP\IUserSession;
 use Psr\Log\LoggerInterface;
 use Sabre\DAV\PropFind;

@@ -8,11 +8,13 @@ use OCA\SheetMusic\Service\EntityService;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\ApiRoute;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
+use OCP\AppFramework\Http\Attribute\OpenAPI;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\OCSController;
 use OCP\IRequest;
 use OCP\IUserSession;
 
+#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 class EntityController extends OCSController {
 	public function __construct(
 		string $appName,

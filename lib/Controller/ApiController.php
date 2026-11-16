@@ -13,9 +13,11 @@ use OCA\SheetMusic\Service\SongAnnotationService;
 use OCA\SheetMusic\Service\SongFileService;
 use OCA\SheetMusic\Service\SongHistoryService;
 use OCA\SheetMusic\Service\SongService;
+use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\ApiRoute;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
+use OCP\AppFramework\Http\Attribute\OpenAPI;
 use OCP\AppFramework\Http\Attribute\PublicPage;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\OCSController;
@@ -81,6 +83,13 @@ class ApiController extends OCSController {
 		);
 	}
 
+	/**
+	 * An example API endpoint
+	 *
+	 * @return DataResponse<Http::STATUS_OK, array{message: string}, array{}>
+	 *
+	 * 200: Data returned
+	 */
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'GET', url: '/api')]
 	public function index(): DataResponse {
@@ -90,12 +99,14 @@ class ApiController extends OCSController {
 	#[PublicPage]
 	#[NoCSRFRequired]
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'GET', url: '/api/libraries')]
 	public function getLibraries(): DataResponse {
 		return $this->libraryController->getLibraries();
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'POST', url: '/api/libraries')]
 	public function addLibrary(
 		string $path,
@@ -107,24 +118,28 @@ class ApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'GET', url: '/api/libraries/progress/{progressId}')]
 	public function getProgress(string $progressId): DataResponse {
 		return $this->libraryController->getProgress($progressId);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'DELETE', url: '/api/libraries/{id}')]
 	public function deleteLibrary(int $id): DataResponse {
 		return $this->libraryController->deleteLibrary($id);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'GET', url: '/api/libraries/{id}/shares')]
 	public function getShares(int $id): DataResponse {
 		return $this->libraryController->getShares($id);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'POST', url: '/api/libraries/{id}/shares')]
 	public function createShare(
 		int $id,
@@ -137,24 +152,28 @@ class ApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'PUT', url: '/api/libraries/{id}/shares/{shareId}')]
 	public function updateShare(int $id, string $shareId, string $permission = 'read'): DataResponse {
 		return $this->libraryController->updateShare($id, $shareId, $permission);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'DELETE', url: '/api/libraries/{id}/shares/{shareId}')]
 	public function deleteShare(int $id, string $shareId): DataResponse {
 		return $this->libraryController->deleteShare($id, $shareId);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'GET', url: '/api/libraries/{id}/sublibraries/{subId}/shares')]
 	public function getSublibraryShares(int $id, int $subId): DataResponse {
 		return $this->libraryController->getSublibraryShares($id, $subId);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'POST', url: '/api/libraries/{id}/sublibraries/{subId}/shares')]
 	public function createSublibraryShare(
 		int $id,
@@ -168,24 +187,28 @@ class ApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'PUT', url: '/api/libraries/{id}/sublibraries/{subId}/shares/{shareId}')]
 	public function updateSublibraryShare(int $id, int $subId, string $shareId, string $permission = 'read'): DataResponse {
 		return $this->libraryController->updateSublibraryShare($id, $subId, $shareId, $permission);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'DELETE', url: '/api/libraries/{id}/sublibraries/{subId}/shares/{shareId}')]
 	public function deleteSublibraryShare(int $id, int $subId, string $shareId): DataResponse {
 		return $this->libraryController->deleteSublibraryShare($id, $subId, $shareId);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'GET', url: '/api/libraries/{id}/integrity')]
 	public function getIntegrity(int $id, bool|string $autoMatchOrphans = true, ?string $progressId = null): DataResponse {
 		return $this->libraryController->getIntegrity($id, $autoMatchOrphans, $progressId);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'POST', url: '/api/libraries/{id}/integrity/fix')]
 	public function fixIntegrityIssue(
 		int $id,
@@ -200,18 +223,21 @@ class ApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'POST', url: '/api/libraries/{id}/integrity/fix-all')]
 	public function fixAllIntegrityIssues(int $id, ?string $issueType = null, ?string $progressId = null): DataResponse {
 		return $this->libraryController->fixAllIntegrityIssues($id, $issueType, $progressId);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'GET', url: '/api/libraries/{id}/tools/page-order-audit')]
 	public function auditPageOrders(int $id): DataResponse {
 		return $this->libraryController->auditPageOrders($id);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'POST', url: '/api/libraries/{id}/tools/reset-page-orders')]
 	public function resetPageOrders(
 		int $id,
@@ -225,12 +251,14 @@ class ApiController extends OCSController {
 	#[PublicPage]
 	#[NoCSRFRequired]
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'GET', url: '/api/songs')]
 	public function getSongs(?string $id = null): DataResponse {
 		return $this->songController->getSongs($id);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'POST', url: '/api/songs')]
 	public function createSong(
 		?int $libraryId = null,
@@ -250,6 +278,7 @@ class ApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'POST', url: '/api/songs/merge')]
 	public function mergeSong(
 		?int $libraryId = null,
@@ -261,6 +290,7 @@ class ApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'POST', url: '/api/songs/resolve-both')]
 	public function resolveBothSongs(
 		?int $libraryId = null,
@@ -271,6 +301,7 @@ class ApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'POST', url: '/api/songs/{id}', requirements: ['id' => '\d+'])]
 	public function updateSong(
 		int $id,
@@ -291,6 +322,7 @@ class ApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'POST', url: '/api/songs-batch-update')]
 	public function batchUpdateSongs(
 		?int $libraryId = null,
@@ -314,6 +346,7 @@ class ApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'POST', url: '/api/songs-batch-delete')]
 	public function batchDeleteSongs(
 		?int $libraryId = null,
@@ -324,48 +357,56 @@ class ApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'DELETE', url: '/api/songs/{id}', requirements: ['id' => '\d+'])]
 	public function deleteSong(int $id, ?int $libraryId = null, bool $deleteFiles = true): DataResponse {
 		return $this->songController->deleteSong($id, $libraryId, $deleteFiles);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'POST', url: '/api/songs/{id}/delete')]
 	public function deleteSongPost(int $id, ?int $libraryId = null, bool $deleteFiles = true): DataResponse {
 		return $this->songController->deleteSong($id, $libraryId, $deleteFiles);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'POST', url: '/api/import-metadata')]
 	public function importSongMetadata(): DataResponse {
 		return $this->songFileController->importSongMetadata();
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'POST', url: '/api/libraries/{libraryId}/songs/{id}/file/upload')]
 	public function uploadSongFile(int $id, int $libraryId): DataResponse {
 		return $this->songFileController->uploadSongFile($id, $libraryId);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'POST', url: '/api/libraries/{libraryId}/songs/{id}/file/{fileId}/update')]
 	public function updateSongFile(int $id, int $fileId, int $libraryId): DataResponse {
 		return $this->songFileController->updateSongFile($id, $fileId, $libraryId);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'GET', url: '/api/libraries/{libraryId}/songs/{id}/file/{fileId}/versions')]
 	public function getSongFileVersions(int $id, int $fileId, int $libraryId): DataResponse {
 		return $this->songFileController->getSongFileVersions($id, $fileId, $libraryId);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'POST', url: '/api/libraries/{libraryId}/songs/{id}/file/{fileId}/versions/{revision}/revert')]
 	public function revertSongFileVersion(int $id, int $fileId, int $libraryId, string $revision): DataResponse {
 		return $this->songFileController->revertSongFileVersion($id, $fileId, $libraryId, $revision);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'POST', url: '/api/songs/{id}/file/attach')]
 	public function attachNextcloudFile(
 		int $id,
@@ -377,192 +418,224 @@ class ApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'POST', url: '/api/songs/{id}/file/{fileId}/delete')]
 	public function deleteSongFile(int $id, int $fileId, ?int $libraryId = null): DataResponse {
 		return $this->songFileController->deleteSongFile($id, $fileId, $libraryId);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'GET', url: '/api/songs/{id}/history')]
 	public function getSongHistory(int $id): DataResponse {
 		return $this->songController->getSongHistory($id);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'POST', url: '/api/songs/{id}/revert/{historyId}')]
 	public function revertSongHistory(int $id, int $historyId): DataResponse {
 		return $this->songController->revertSongHistory($id, $historyId);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'GET', url: '/api/libraries/{libraryId}/deleted-songs')]
 	public function getDeletedSongs(int $libraryId): DataResponse {
 		return $this->songController->getDeletedSongs($libraryId);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'POST', url: '/api/songs/{id}/restore')]
 	public function restoreDeletedSong(int $id): DataResponse {
 		return $this->songController->restoreDeletedSong($id);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'POST', url: '/api/songs/{id}/file/{fileId}/detach')]
 	public function detachSongFile(int $id, int $fileId, ?int $libraryId = null): DataResponse {
 		return $this->songFileController->detachSongFile($id, $fileId, $libraryId);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'POST', url: '/api/songs/{id}/file/{fileId}/page-order')]
 	public function updateSongFilePageOrder(int $id, int $fileId, ?int $libraryId = null, ?string $pageOrder = null): DataResponse {
 		return $this->songFileController->updateSongFilePageOrder($id, $fileId, $libraryId, $pageOrder);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'POST', url: '/api/composers')]
 	public function createComposer(?int $libraryId = null, ?string $name = null): DataResponse {
 		return $this->entityController->createComposer($libraryId, $name);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'POST', url: '/api/books')]
 	public function createBook(?int $libraryId = null, ?string $title = null): DataResponse {
 		return $this->entityController->createBook($libraryId, $title);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'POST', url: '/api/collections')]
 	public function createCollection(?int $libraryId = null, ?string $name = null): DataResponse {
 		return $this->entityController->createCollection($libraryId, $name);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'POST', url: '/api/artists')]
 	public function createArtist(?int $libraryId = null, ?string $name = null): DataResponse {
 		return $this->entityController->createArtist($libraryId, $name);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'POST', url: '/api/genres')]
 	public function createGenre(?int $libraryId = null, ?string $name = null): DataResponse {
 		return $this->entityController->createGenre($libraryId, $name);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'POST', url: '/api/keys')]
 	public function createKey(?int $libraryId = null, ?string $name = null): DataResponse {
 		return $this->entityController->createKey($libraryId, $name);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'POST', url: '/api/customgroups')]
 	public function createCustomGroup(?int $libraryId = null, ?string $name = null): DataResponse {
 		return $this->entityController->createCustomGroup($libraryId, $name);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'POST', url: '/api/years')]
 	public function createYear(?int $libraryId = null, ?string $name = null, ?string $year = null): DataResponse {
 		return $this->entityController->createYear($libraryId, $name, $year);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'POST', url: '/api/signatures')]
 	public function createSignature(?int $libraryId = null, ?string $name = null): DataResponse {
 		return $this->entityController->createSignature($libraryId, $name);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'POST', url: '/api/sourcetypes')]
 	public function createSourceType(?int $libraryId = null, ?string $name = null): DataResponse {
 		return $this->entityController->createSourceType($libraryId, $name);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'POST', url: '/api/instruments')]
 	public function createInstrument(?int $libraryId = null, ?string $name = null): DataResponse {
 		return $this->entityController->createInstrument($libraryId, $name);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'POST', url: '/api/arrangers')]
 	public function createArranger(?int $libraryId = null, ?string $name = null): DataResponse {
 		return $this->entityController->createArranger($libraryId, $name);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'DELETE', url: '/api/composers/{id}')]
 	public function deleteComposer(int $id, ?int $libraryId = null): DataResponse {
 		return $this->entityController->deleteComposer($id, $libraryId);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'DELETE', url: '/api/books/{id}')]
 	public function deleteBook(int $id, ?int $libraryId = null): DataResponse {
 		return $this->entityController->deleteBook($id, $libraryId);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'DELETE', url: '/api/collections/{id}')]
 	public function deleteCollection(int $id, ?int $libraryId = null): DataResponse {
 		return $this->entityController->deleteCollection($id, $libraryId);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'DELETE', url: '/api/artists/{id}')]
 	public function deleteArtist(int $id, ?int $libraryId = null): DataResponse {
 		return $this->entityController->deleteArtist($id, $libraryId);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'DELETE', url: '/api/genres/{id}')]
 	public function deleteGenre(int $id, ?int $libraryId = null): DataResponse {
 		return $this->entityController->deleteGenre($id, $libraryId);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'DELETE', url: '/api/keys/{id}')]
 	public function deleteKey(int $id, ?int $libraryId = null): DataResponse {
 		return $this->entityController->deleteKey($id, $libraryId);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'DELETE', url: '/api/customgroups/{id}')]
 	public function deleteCustomGroup(int $id, ?int $libraryId = null): DataResponse {
 		return $this->entityController->deleteCustomGroup($id, $libraryId);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'DELETE', url: '/api/years/{id}')]
 	public function deleteYear(int $id, ?int $libraryId = null): DataResponse {
 		return $this->entityController->deleteYear($id, $libraryId);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'DELETE', url: '/api/signatures/{id}')]
 	public function deleteSignature(int $id, ?int $libraryId = null): DataResponse {
 		return $this->entityController->deleteSignature($id, $libraryId);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'DELETE', url: '/api/sourcetypes/{id}')]
 	public function deleteSourceType(int $id, ?int $libraryId = null): DataResponse {
 		return $this->entityController->deleteSourceType($id, $libraryId);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'DELETE', url: '/api/instruments/{id}')]
 	public function deleteInstrument(int $id, ?int $libraryId = null): DataResponse {
 		return $this->entityController->deleteInstrument($id, $libraryId);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'DELETE', url: '/api/arrangers/{id}')]
 	public function deleteArranger(int $id, ?int $libraryId = null): DataResponse {
 		return $this->entityController->deleteArranger($id, $libraryId);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'POST', url: '/api/entities/{id}', requirements: ['id' => '\d+'])]
 	public function updateEntity(
 		int $id,
@@ -575,6 +648,7 @@ class ApiController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'POST', url: '/api/entities/merge')]
 	public function mergeEntities(
 		?int $libraryId = null,
@@ -588,6 +662,7 @@ class ApiController extends OCSController {
 	#[PublicPage]
 	#[NoCSRFRequired]
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'GET', url: '/api/libraries/{libraryId}/setlists')]
 	public function getSetlists(int $libraryId): DataResponse {
 		return $this->setlistController->getSetlists($libraryId);
@@ -596,48 +671,56 @@ class ApiController extends OCSController {
 	#[PublicPage]
 	#[NoCSRFRequired]
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'GET', url: '/api/libraries/{libraryId}/setlists/{id}')]
 	public function getSetlist(int $libraryId, int $id): DataResponse {
 		return $this->setlistController->getSetlist($libraryId, $id);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'POST', url: '/api/setlists')]
 	public function createSetlist(?int $libraryId = null, ?string $name = null): DataResponse {
 		return $this->setlistController->createSetlist($libraryId, $name);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'POST', url: '/api/setlists/{id}')]
 	public function updateSetlist(int $id, ?int $libraryId = null, ?string $name = null, ?int $sortBy = null, ?int $ascending = null): DataResponse {
 		return $this->setlistController->updateSetlist($id, $libraryId, $name, $sortBy, $ascending);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'DELETE', url: '/api/setlists/{id}')]
 	public function deleteSetlist(int $id, ?int $libraryId = null): DataResponse {
 		return $this->setlistController->deleteSetlist($id, $libraryId);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'POST', url: '/api/setlists/{id}/items')]
 	public function addSetlistItem(int $id, ?int $libraryId = null, ?int $songId = null, ?int $bookmarkId = null, ?int $position = null): DataResponse {
 		return $this->setlistController->addItem($id, $libraryId, $songId, $bookmarkId, $position);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'POST', url: '/api/setlists/{id}/items/{itemId}')]
 	public function updateSetlistItem(int $id, int $itemId, ?int $libraryId = null, ?int $bookmarkId = null): DataResponse {
 		return $this->setlistController->updateItem($id, $itemId, $libraryId, $bookmarkId);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'DELETE', url: '/api/setlists/{id}/items/{itemId}')]
 	public function removeSetlistItem(int $id, int $itemId, ?int $libraryId = null): DataResponse {
 		return $this->setlistController->removeItem($id, $itemId, $libraryId);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'POST', url: '/api/setlists/{id}/reorder')]
 	public function reorderSetlistItems(int $id, ?int $libraryId = null, ?array $itemIds = null): DataResponse {
 		return $this->setlistController->reorderItems($id, $libraryId, $itemIds);
@@ -646,18 +729,21 @@ class ApiController extends OCSController {
 	#[PublicPage]
 	#[NoCSRFRequired]
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'GET', url: '/api/songs/{songId}/annotations')]
 	public function getSongAnnotations(int $songId, ?int $fileId = null): DataResponse {
 		return $this->songAnnotationController->getAnnotations($songId, $fileId);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'POST', url: '/api/songs/{songId}/annotations')]
 	public function saveSongAnnotation(int $songId): DataResponse {
 		return $this->songAnnotationController->saveAnnotation($songId);
 	}
 
 	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'DELETE', url: '/api/annotations/{id}')]
 	public function deleteSongAnnotation(int $id): DataResponse {
 		return $this->songAnnotationController->deleteAnnotation($id);

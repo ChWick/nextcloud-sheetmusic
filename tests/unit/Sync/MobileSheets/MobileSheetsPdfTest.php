@@ -108,8 +108,8 @@ final class MobileSheetsPdfTest extends TestCase {
 		$stream = gzcompress($pagesData, 9);
 		self::assertNotFalse($stream);
 
-		$pdf = "1 0 obj << /Length " . strlen($largeData) . " >>\nstream\n" . $largeData . "\nendstream\nendobj\n"
-			. "2 0 obj << /Type /ObjStm /N 3 /Filter /FlateDecode /Length " . strlen($stream) . " >>\nstream\n" . $stream . "\nendstream\nendobj\n"
+		$pdf = '1 0 obj << /Length ' . strlen($largeData) . " >>\nstream\n" . $largeData . "\nendstream\nendobj\n"
+			. '2 0 obj << /Type /ObjStm /N 3 /Filter /FlateDecode /Length ' . strlen($stream) . " >>\nstream\n" . $stream . "\nendstream\nendobj\n"
 			. "3 0 obj << /Type /Pages /Count 3 /Kids [] >> endobj\n";
 
 		self::assertSame(3, MobileSheetsPdf::pageCount($pdf));

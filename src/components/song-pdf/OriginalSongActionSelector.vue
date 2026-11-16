@@ -265,7 +265,7 @@ function select(val: OriginalSongAction) {
 	line-height: 1.3;
 	color: var(--color-main-text);
 	white-space: normal;
-	word-break: break-word;
+	overflow-wrap: break-word;
 }
 
 .infoPopover {

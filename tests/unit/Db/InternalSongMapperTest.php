@@ -15,7 +15,6 @@ use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\InternalSublibrary;
 use OCA\SheetMusic\Db\SublibraryMapper;
 use OCA\SheetMusic\Service\LibraryShareService;
-use OCA\SheetMusic\Service\SublibraryService;
 use PHPUnit\Framework\TestCase;
 use TestSupport\RealMobileSheetsTestTrait;
 

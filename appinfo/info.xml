@@ -7,7 +7,7 @@
 	<description>Sheet Music app for Nextcloud. Manage, organize, and synchronize sheet music across devices.</description>
 	<version>1.0.0</version>
 	<licence>AGPL-3.0-or-later</licence>
-	<author mail="wick.chr.info@gmail.com" homepage="">Christoph Wick</author>
+	<author mail="wick.chr.info@gmail.com">Christoph Wick</author>
 	<namespace>SheetMusic</namespace>
 	<category>organization</category>
 	<website>https://github.com/ChWick/nextcloud-sheetmusic</website>

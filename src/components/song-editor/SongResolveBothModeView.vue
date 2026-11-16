@@ -325,7 +325,7 @@ function onScalarInput(target: 'A' | 'B', field: SongScalarFieldDef, raw: string
 .val {
 	font-size: 0.9rem;
 	color: var(--color-main-text);
-	word-break: break-word;
+	overflow-wrap: break-word;
 }
 
 .fileList {

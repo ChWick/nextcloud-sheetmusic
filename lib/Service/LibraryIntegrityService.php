@@ -26,7 +26,6 @@ use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSong;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
-use OCP\Files\Node;
 use OCP\IUser;
 use Psr\Log\LoggerInterface;
 

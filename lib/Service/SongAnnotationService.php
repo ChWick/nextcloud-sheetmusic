@@ -74,7 +74,7 @@ class SongAnnotationService {
 			// belong to a single old/unmigrated file_id, return them and heal their fileId.
 			$allSongAnns = $this->annotationMapper->findForSong($songId, $includeDeleted);
 			if (!empty($allSongAnns)) {
-				$distinctOldFileIds = array_values(array_unique(array_map(fn($a) => (int)$a->fileId, $allSongAnns)));
+				$distinctOldFileIds = array_values(array_unique(array_map(fn ($a) => (int)$a->fileId, $allSongAnns)));
 				$activeFiles = $this->songFileMapper?->findAllForSong($songId) ?? [];
 				if (count($activeFiles) <= 1 || count($distinctOldFileIds) === 1) {
 					foreach ($allSongAnns as $ann) {

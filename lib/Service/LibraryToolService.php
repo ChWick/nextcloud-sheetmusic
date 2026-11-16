@@ -9,7 +9,6 @@ declare(strict_types=1);
 
 namespace OCA\SheetMusic\Service;
 
-use OCA\SheetMusic\Db\InternalSongFile;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongHistory;
 use OCA\SheetMusic\Db\InternalSongMapper;

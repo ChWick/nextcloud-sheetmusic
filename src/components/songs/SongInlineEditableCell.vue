@@ -330,7 +330,7 @@ defineExpose({
 	color: var(--color-main-text);
 	text-align: left;
 	min-width: 0;
-	word-break: break-word;
+	overflow-wrap: break-word;
 	font-weight: 600;
 }
 

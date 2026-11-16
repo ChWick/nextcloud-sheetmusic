@@ -3,7 +3,7 @@
     "info": {
         "title": "sheetmusic",
         "version": "0.0.1",
-        "description": "Foo",
+        "description": "Manage and synchronize sheet music, scores, and chord charts",
         "license": {
             "name": "AGPL-3.0-or-later"
         }
@@ -145,5 +145,10 @@
             }
         }
     },
-    "tags": []
+    "tags": [
+        {
+            "name": "api",
+            "description": "Main API controller facade delegating to specialized domain controllers and services."
+        }
+    ]
 }

@@ -14,6 +14,7 @@ use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\ApiRoute;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
+use OCP\AppFramework\Http\Attribute\OpenAPI;
 use OCP\AppFramework\Http\Attribute\PublicPage;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\OCSController;
@@ -21,6 +22,7 @@ use OCP\IRequest;
 use OCP\IUserSession;
 use OCP\Share\IShare;
 
+#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 class LibraryController extends OCSController {
 	public function __construct(
 		string $appName,

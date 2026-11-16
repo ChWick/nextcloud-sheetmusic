@@ -16,7 +16,6 @@ use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsBook;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsCollection;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsComposer;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsFile;
-use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsGenre;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsKey;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSong;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsYear;

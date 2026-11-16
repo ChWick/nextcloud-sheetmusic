@@ -12,7 +12,6 @@ namespace Sync\MobileSheets;
 use OCA\SheetMusic\Db\InternalSongAnnotation;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsAnnotationAdapter;
 use OCA\SheetMusic\Tests\TestSupport\MobileSheetsEndToEndSyncHarness;
-use PDO;
 use PHPUnit\Framework\TestCase;
 
 final class MobileSheetsAnnotationSyncTest extends TestCase {

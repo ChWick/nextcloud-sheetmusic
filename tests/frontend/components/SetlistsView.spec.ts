@@ -23,15 +23,19 @@ vi.mock('@nextcloud/l10n', () => ({
 	getLanguage: () => 'en',
 	isRTL: () => false,
 }))
-vi.mock('vue-router', () => ({
-	useRouter: () => ({
-		push: vi.fn(),
-	}),
-	useRoute: () => ({
-		query: {},
-		params: {},
-	}),
-}))
+vi.mock('vue-router', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('vue-router')>()
+	return {
+		...actual,
+		useRouter: () => ({
+			push: vi.fn(),
+		}),
+		useRoute: () => ({
+			query: {},
+			params: {},
+		}),
+	}
+})
 
 describe('SetlistsView.vue', () => {
 	beforeEach(() => {
