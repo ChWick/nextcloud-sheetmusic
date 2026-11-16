@@ -46,6 +46,44 @@ const isDrawerOpen = ref(false)
 const isFullscreen = ref(false)
 const showAnnotations = ref(false)
 
+const HUD_AUTO_HIDE_MS = 3000
+let hudHideTimer: ReturnType<typeof setTimeout> | null = null
+let isHudPinned = false
+
+function clearHudTimer() {
+	if (hudHideTimer !== null) {
+		clearTimeout(hudHideTimer)
+		hudHideTimer = null
+	}
+}
+
+function scheduleHudAutoHide() {
+	clearHudTimer()
+	if (isHudPinned || isDrawerOpen.value) return
+	hudHideTimer = setTimeout(() => {
+		if (!isHudPinned && !isDrawerOpen.value) {
+			isHudVisible.value = false
+		}
+	}, HUD_AUTO_HIDE_MS)
+}
+
+function showHudTemporarily() {
+	isHudVisible.value = true
+	scheduleHudAutoHide()
+}
+
+function pauseHudAutoHide() {
+	isHudPinned = true
+	clearHudTimer()
+}
+
+function resumeHudAutoHide() {
+	isHudPinned = false
+	if (isHudVisible.value) {
+		scheduleHudAutoHide()
+	}
+}
+
 type PerformanceLayoutChoice = 'auto' | 'single' | 'double' | 'continuous'
 const layoutChoice = ref<PerformanceLayoutChoice>('auto')
 const doublePageTurnMode = ref<DoublePageTurnMode>('half')
@@ -242,8 +280,11 @@ function onStageClick(event: MouseEvent) {
 		handlePrevPage()
 	} else if (relX > 0.75) {
 		handleNextPage()
+	} else if (isHudVisible.value) {
+		clearHudTimer()
+		isHudVisible.value = false
 	} else {
-		isHudVisible.value = !isHudVisible.value
+		showHudTemporarily()
 	}
 }
 
@@ -302,9 +343,11 @@ onMounted(() => {
 	document.addEventListener('fullscreenchange', handleFullscreenChange)
 	document.addEventListener('visibilitychange', handleVisibilityChange)
 	requestWakeLock()
+	scheduleHudAutoHide()
 })
 
 onUnmounted(() => {
+	clearHudTimer()
 	window.removeEventListener('keydown', handleKeyDown)
 	document.removeEventListener('fullscreenchange', handleFullscreenChange)
 	document.removeEventListener('visibilitychange', handleVisibilityChange)
@@ -319,9 +362,16 @@ onUnmounted(() => {
 </script>
 
 <template>
-	<div ref="rootRef" :class="$style.overlay" role="dialog" aria-modal="true" :aria-label="setlistName">
-		<!-- Top HUD -->
-		<header v-show="isHudVisible" :class="$style.topBar">
+	<Teleport to="body">
+		<div ref="rootRef" :class="$style.overlay" role="dialog" aria-modal="true" :aria-label="setlistName">
+			<!-- Top HUD -->
+			<header
+				v-show="isHudVisible"
+				:class="$style.topBar"
+				@mouseenter="pauseHudAutoHide"
+				@mouseleave="resumeHudAutoHide"
+				@focusin="pauseHudAutoHide"
+				@focusout="resumeHudAutoHide">
 			<div :class="$style.topLeft">
 				<NcButton
 					variant="tertiary"
@@ -404,7 +454,13 @@ onUnmounted(() => {
 		</div>
 
 		<!-- Bottom HUD -->
-		<footer v-show="isHudVisible" :class="$style.bottomBar">
+		<footer
+			v-show="isHudVisible"
+			:class="$style.bottomBar"
+			@mouseenter="pauseHudAutoHide"
+			@mouseleave="resumeHudAutoHide"
+			@focusin="pauseHudAutoHide"
+			@focusout="resumeHudAutoHide">
 			<div :class="$style.navGroup">
 				<NcButton
 					variant="secondary"
@@ -515,14 +571,17 @@ onUnmounted(() => {
 				</li>
 			</ul>
 		</aside>
-	</div>
+		</div>
+	</Teleport>
 </template>
 
 <style module>
 .overlay {
 	position: fixed;
 	inset: 0;
-	z-index: 10000;
+	width: 100vw;
+	height: 100vh;
+	z-index: 100000;
 	display: flex;
 	flex-direction: column;
 	background-color: var(--color-main-background);
@@ -530,6 +589,11 @@ onUnmounted(() => {
 }
 
 .topBar {
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	z-index: 2;
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
@@ -537,6 +601,7 @@ onUnmounted(() => {
 	padding: 8px 16px;
 	border-bottom: 1px solid var(--color-border);
 	background-color: var(--color-main-background);
+	box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
 }
 
 .topLeft {
@@ -611,6 +676,11 @@ onUnmounted(() => {
 }
 
 .bottomBar {
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	z-index: 2;
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
@@ -619,6 +689,7 @@ onUnmounted(() => {
 	padding: 8px 16px;
 	border-top: 1px solid var(--color-border);
 	background-color: var(--color-main-background);
+	box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.12);
 }
 
 .navGroup {
@@ -657,7 +728,7 @@ onUnmounted(() => {
 	right: 0;
 	bottom: 0;
 	width: min(340px, 85vw);
-	z-index: 10001;
+	z-index: 100001;
 	display: flex;
 	flex-direction: column;
 	background-color: var(--color-main-background);

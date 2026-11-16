@@ -86,20 +86,21 @@ describe('SetlistPerformanceViewer', () => {
 				songs: sampleSongs,
 				libraryId: 1,
 			},
+			attachTo: document.body,
 		})
 
-		expect(wrapper.text()).toContain('Song One')
-		expect(wrapper.text()).toContain('1 / 2')
-		expect(wrapper.find('.mock-file-previewer').attributes('data-file-path')).toContain('one.pdf')
+		expect(document.body.textContent).toContain('Song One')
+		expect(document.body.textContent).toContain('1 / 2')
+		const previewerEl = document.body.querySelector('.mock-file-previewer')
+		expect(previewerEl?.getAttribute('data-file-path')).toContain('one.pdf')
 
-		// Press ArrowRight -> mockNextPage returns false -> advances to Song Two
 		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }))
 		await wrapper.vm.$nextTick()
 
-		expect(wrapper.text()).toContain('Song Two')
-		expect(wrapper.text()).toContain('2 / 2')
-		expect(wrapper.text()).toContain('Coda')
-		expect(wrapper.find('.mock-file-previewer').attributes('data-target-page')).toBe('3')
+		expect(document.body.textContent).toContain('Song Two')
+		expect(document.body.textContent).toContain('2 / 2')
+		expect(document.body.textContent).toContain('Coda')
+		expect(document.body.querySelector('.mock-file-previewer')?.getAttribute('data-target-page')).toBe('3')
 
 		wrapper.unmount()
 	})
@@ -112,17 +113,44 @@ describe('SetlistPerformanceViewer', () => {
 				songs: sampleSongs,
 				libraryId: 1,
 			},
+			attachTo: document.body,
 		})
 		await wrapper.vm.$nextTick()
 
-		const turnModeSelect = wrapper.find('select[aria-label="Page turning mode"]')
-		expect(turnModeSelect.exists()).toBe(true)
-		await turnModeSelect.setValue('step')
+		const turnModeSelect = document.body.querySelector('select[aria-label="Page turning mode"]') as HTMLSelectElement | null
+		expect(turnModeSelect).not.toBeNull()
+		turnModeSelect!.value = 'step'
+		turnModeSelect!.dispatchEvent(new Event('change'))
 		expect(mockSetDoublePageTurnMode).toHaveBeenCalledWith('step')
 
 		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
 		expect(wrapper.emitted('close')).toBeTruthy()
 
 		wrapper.unmount()
+	})
+
+	it('auto-hides the HUD bars after inactivity', async () => {
+		vi.useFakeTimers()
+		const wrapper = mount(SetlistPerformanceViewer, {
+			props: {
+				setlistName: 'Friday Gig',
+				items: sampleItems,
+				songs: sampleSongs,
+				libraryId: 1,
+			},
+			attachTo: document.body,
+		})
+
+		const footer = document.body.querySelector('footer') as HTMLElement | null
+		expect(footer).not.toBeNull()
+		expect(footer!.style.display).not.toBe('none')
+
+		vi.advanceTimersByTime(3100)
+		await wrapper.vm.$nextTick()
+
+		expect(footer!.style.display).toBe('none')
+
+		wrapper.unmount()
+		vi.useRealTimers()
 	})
 })
