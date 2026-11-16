@@ -180,4 +180,35 @@ describe('SetlistPerformanceViewer', () => {
 
 		wrapper.unmount()
 	})
+
+	it('toggles HUD bars on click in continuous scroll mode', async () => {
+		const wrapper = mount(SetlistPerformanceViewer, {
+			props: {
+				setlistName: 'Friday Gig',
+				items: sampleItems,
+				songs: sampleSongs,
+				libraryId: 1,
+			},
+			attachTo: document.body,
+		})
+
+		const layoutSelect = document.body.querySelector('select[aria-label="Page layout"]') as HTMLSelectElement | null
+		layoutSelect!.value = 'continuous'
+		layoutSelect!.dispatchEvent(new Event('change'))
+		await wrapper.vm.$nextTick()
+
+		const footer = document.body.querySelector('footer') as HTMLElement
+		const stage = document.body.querySelector('.mock-file-previewer')?.parentElement as HTMLElement
+		expect(footer.style.display).not.toBe('none')
+
+		stage.click()
+		await wrapper.vm.$nextTick()
+		expect(footer.style.display).toBe('none')
+
+		stage.click()
+		await wrapper.vm.$nextTick()
+		expect(footer.style.display).not.toBe('none')
+
+		wrapper.unmount()
+	})
 })

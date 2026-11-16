@@ -276,8 +276,20 @@ function onStageTouchEnd(event: TouchEvent) {
 	}
 }
 
+function toggleHud() {
+	if (isHudVisible.value) {
+		clearHudTimer()
+		isHudVisible.value = false
+	} else {
+		showHudTemporarily()
+	}
+}
+
 function onStageClick(event: MouseEvent) {
-	if (effectiveLayout.value === 'continuous') return
+	if (effectiveLayout.value === 'continuous') {
+		toggleHud()
+		return
+	}
 	const target = event.currentTarget as HTMLElement | null
 	if (!target) return
 	const rect = target.getBoundingClientRect()
@@ -286,11 +298,8 @@ function onStageClick(event: MouseEvent) {
 		handlePrevPage()
 	} else if (relX > 0.75) {
 		handleNextPage()
-	} else if (isHudVisible.value) {
-		clearHudTimer()
-		isHudVisible.value = false
 	} else {
-		showHudTemporarily()
+		toggleHud()
 	}
 }
 
