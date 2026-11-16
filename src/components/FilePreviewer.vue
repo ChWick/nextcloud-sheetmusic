@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
+import { computed, getCurrentInstance, h, nextTick, onMounted, onUnmounted, ref, render, shallowRef, watch } from 'vue'
 import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
 import { generateFilePath } from '@nextcloud/router'
@@ -10,20 +10,11 @@ import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { openFileExternally } from '../utils/file'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import FilePreviewerToolbar from './file-preview/FilePreviewerToolbar.vue'
+import SongAnnotationOverlay from './song-viewer/SongAnnotationOverlay.vue'
 import { inspectPdfPageResolution, type PdfPageResolutionSummary } from './song-pdf/pdf-enhance-engine'
 import { parsePageOrder } from '../utils/page-order'
 import type { SheetAnnotation } from '../types/annotation'
-import {
-	getAnnotationDashArray,
-	getAnnotationDisplaySymbol,
-	getAnnotationFontFamily,
-	getAnnotationPath,
-	getAnnotationTextPosition,
-	getStampFontFamily,
-	getStampVector,
-	isStampItalic,
-	isStampBold,
-} from '../utils/annotation'
+import type { EditorTool, EditorToolStyle } from '../composables/useAnnotationEditor'
 import { defaultFileBinaryCache, type FileBinaryCache } from '../utils/file-cache'
 import {
 	type DoublePageTurnMode,
@@ -38,12 +29,17 @@ import {
 const props = withDefaults(
 	defineProps<{
 		filePath: string
+		fileName?: string
 		showExternalButton?: boolean
 		hideToolbar?: boolean
 		targetPage?: number
 		pageOrder?: string | null
 		annotations?: SheetAnnotation[]
 		showAnnotations?: boolean
+		editableAnnotations?: boolean
+		activeAnnotationTool?: EditorTool
+		annotationToolStyle?: EditorToolStyle
+		selectedAnnotationUuid?: string | null
 		binaryCache?: FileBinaryCache
 		initialPageLayout?: 'continuous' | 'single' | 'double' | 'auto'
 		initialDoublePageTurnMode?: DoublePageTurnMode
@@ -52,12 +48,17 @@ const props = withDefaults(
 		noPadding?: boolean
 	}>(),
 	{
+		fileName: undefined,
 		showExternalButton: true,
 		hideToolbar: false,
 		targetPage: undefined,
 		pageOrder: undefined,
 		annotations: () => [],
-		showAnnotations: false,
+		showAnnotations: true,
+		editableAnnotations: false,
+		activeAnnotationTool: 'select',
+		annotationToolStyle: undefined,
+		selectedAnnotationUuid: null,
 		binaryCache: () => defaultFileBinaryCache,
 		initialPageLayout: 'continuous',
 		initialDoublePageTurnMode: 'half',
@@ -67,9 +68,21 @@ const props = withDefaults(
 	},
 )
 
+const emit = defineEmits<{
+	'select-annotation': [uuid: string | null]
+	'create-annotation': [draft: Omit<SheetAnnotation, 'songId' | 'fileId' | 'uuid'>]
+	'update-annotation': [before: SheetAnnotation, after: SheetAnnotation]
+	'delete-annotation': [annotation: SheetAnnotation]
+}>()
+
+const appContext = getCurrentInstance()?.appContext ?? null
+
 GlobalWorkerOptions.workerSrc = pdfWorker
 
 const pdfContainer = ref<HTMLElement>()
+const docxContainer = ref<HTMLElement>()
+const xlsxSheets = ref<Array<{ name: string; html: string }>>([])
+const activeXlsxSheetIndex = ref(0)
 const isLoading = ref(false)
 const errorMessage = ref('')
 let currentLoadId = 0
@@ -127,40 +140,78 @@ const customScale = ref(1.0)
 const effectiveScale = ref(1.0)
 const rotation = ref(0)
 const imageScale = ref(1.0)
-const showAnnotationsState = ref(props.showAnnotations ?? false)
+const showAnnotationsState = ref(props.showAnnotations ?? true)
 
 function toggleAnnotations() {
 	showAnnotationsState.value = !showAnnotationsState.value
-	updateAnnotationOverlaysVisibility()
+	refreshAnnotationOverlays()
 }
 
-function updateAnnotationOverlaysVisibility() {
+function unmountAnnotationOverlays() {
 	if (!pdfContainer.value) return
-	const overlays = pdfContainer.value.querySelectorAll<SVGElement>('.sheetmusic-annotation-overlay')
-	overlays.forEach((el) => {
-		el.style.display = showAnnotationsState.value ? 'block' : 'none'
+	const mounts = pdfContainer.value.querySelectorAll<HTMLElement>('.sheetmusic-annotation-mount')
+	mounts.forEach((el) => {
+		render(null, el)
 	})
+}
+
+function mountAnnotationOverlay(placeholder: HTMLElement, pageNum: number, pageWidth: number, pageHeight: number) {
+	let mountEl = placeholder.querySelector<HTMLElement>('.sheetmusic-annotation-mount')
+	if (!mountEl) {
+		mountEl = document.createElement('div')
+		mountEl.className = 'sheetmusic-annotation-mount'
+		mountEl.style.position = 'absolute'
+		mountEl.style.inset = '0'
+		mountEl.style.pointerEvents = 'none'
+		placeholder.appendChild(mountEl)
+	}
+
+	const vnode = h(SongAnnotationOverlay, {
+		annotations: props.annotations,
+		pageNumber: pageNum,
+		visible: showAnnotationsState.value || props.editableAnnotations,
+		pageWidth,
+		pageHeight,
+		totalPages: totalPages.value,
+		editable: props.editableAnnotations,
+		activeTool: props.activeAnnotationTool,
+		toolStyle: props.annotationToolStyle,
+		selectedUuid: props.selectedAnnotationUuid,
+		onJumpToPage: (targetZeroIdx: number) => goToPage(targetZeroIdx + 1),
+		onSelect: (uuid: string | null) => emit('select-annotation', uuid),
+		onCreateAnnotation: (draft: Omit<SheetAnnotation, 'songId' | 'fileId' | 'uuid'>) => emit('create-annotation', draft),
+		onUpdateAnnotation: (before: SheetAnnotation, after: SheetAnnotation) => emit('update-annotation', before, after),
+		onDeleteAnnotation: (ann: SheetAnnotation) => emit('delete-annotation', ann),
+	})
+	if (appContext) {
+		vnode.appContext = appContext
+	}
+	render(vnode, mountEl)
 }
 
 function refreshAnnotationOverlays() {
 	if (!pdfContainer.value) return
 	const placeholders = pdfContainer.value.querySelectorAll<HTMLElement>('[data-page-num]')
 	placeholders.forEach((el) => {
-		const existing = el.querySelectorAll('.sheetmusic-annotation-overlay')
-		existing.forEach((node) => node.remove())
-
 		const pageNum = Number(el.dataset.pageNum)
-		if (pageNum && el.querySelector('canvas')) {
-			const overlay = createAnnotationSvg(pageNum)
-			if (overlay) {
-				el.appendChild(overlay)
-			}
+		const canvas = el.querySelector('canvas')
+		if (pageNum && canvas) {
+			const pw = Number(el.dataset.pageWidth) || canvas.width || 595
+			const ph = Number(el.dataset.pageHeight) || canvas.height || 842
+			mountAnnotationOverlay(el, pageNum, pw, ph)
 		}
 	})
 }
 
 watch(
-	() => props.annotations,
+	() => [
+		props.annotations,
+		showAnnotationsState.value,
+		props.editableAnnotations,
+		props.activeAnnotationTool,
+		props.annotationToolStyle,
+		props.selectedAnnotationUuid,
+	],
 	() => {
 		refreshAnnotationOverlays()
 	},
@@ -170,174 +221,35 @@ watch(
 watch(
 	() => props.showAnnotations,
 	(val) => {
-		showAnnotationsState.value = val ?? false
-		updateAnnotationOverlaysVisibility()
+		showAnnotationsState.value = val ?? true
+		refreshAnnotationOverlays()
 	},
 )
 
-function createAnnotationSvg(pageNum: number): SVGElement | null {
-	const pageAnns = (props.annotations || []).filter(
-		(a) => !a.deletedAt && (a.pageNumber === pageNum || a.pageNumber === pageNum - 1),
-	)
-	if (pageAnns.length === 0) return null
-
-	const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
-	svg.setAttribute('viewBox', '0 0 1000 1000')
-	svg.setAttribute('preserveAspectRatio', 'none')
-	svg.setAttribute('class', 'sheetmusic-annotation-overlay')
-	svg.setAttribute('data-test', 'annotation-overlay')
-	svg.style.position = 'absolute'
-	svg.style.top = '0'
-	svg.style.left = '0'
-	svg.style.width = '100%'
-	svg.style.height = '100%'
-	svg.style.pointerEvents = 'none'
-	svg.style.display = showAnnotationsState.value ? 'block' : 'none'
-
-	for (const ann of pageAnns) {
-		const dashArray = getAnnotationDashArray(ann)
-		const isLineShape = ann.type === 'shape' && (
-			Boolean(ann.data?.path) ||
-			(Array.isArray(ann.data?.points) && ann.data.points.length > 0) ||
-			ann.data?.drawMode === 0 ||
-			ann.data?.drawMode === 1 ||
-			ann.data?.drawMode === 3 ||
-			ann.data?.drawMode === 4 ||
-			ann.data?.drawMode === 5 ||
-			ann.data?.isHairpin ||
-			ann.data?.isArrow ||
-			ann.data?.shapeType === 'arrow' ||
-			ann.data?.shapeType === 'line'
-		)
-
-		if ((ann.type === 'drawing' || ann.type === 'highlight' || isLineShape)) {
-			const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
-			path.setAttribute('d', getAnnotationPath(ann))
-			path.setAttribute('stroke', ann.style?.stroke || '#ff0000')
-			path.setAttribute('stroke-width', String(ann.style?.strokeWidth || 2.0))
-			if (dashArray) {
-				path.setAttribute('stroke-dasharray', dashArray)
-			}
-			path.setAttribute('opacity', String(ann.style?.opacity ?? 1.0))
-			path.setAttribute('fill', 'none')
-			path.setAttribute('stroke-linecap', 'round')
-			path.setAttribute('stroke-linejoin', 'round')
-			if (ann.type === 'highlight') {
-				path.style.mixBlendMode = 'multiply'
-			}
-			path.setAttribute('data-test', ann.type === 'shape' ? 'annotation-shape' : 'annotation-drawing')
-			svg.appendChild(path)
-		} else if (ann.type === 'shape') {
-			const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect')
-			rect.setAttribute('x', String(ann.x * 1000))
-			rect.setAttribute('y', String(ann.y * 1000))
-			rect.setAttribute('width', String(ann.width * 1000))
-			rect.setAttribute('height', String(ann.height * 1000))
-			rect.setAttribute('stroke', ann.style?.stroke || '#ff0000')
-			rect.setAttribute('stroke-width', String(ann.style?.strokeWidth || 2.0))
-			if (dashArray) {
-				rect.setAttribute('stroke-dasharray', dashArray)
-			}
-			rect.setAttribute('fill', ann.style?.fill || 'transparent')
-			rect.setAttribute('data-test', 'annotation-shape')
-			svg.appendChild(rect)
-		} else if (ann.type === 'stamp') {
-			const vector = getStampVector(ann)
-			if (vector) {
-				const svgStamp = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
-				const w = Math.round((ann.width || 0.04) * 10000) / 10
-				const h = Math.round((ann.height || 0.04) * 10000) / 10
-				const x = Math.round(ann.x * 10000) / 10
-				const y = Math.round(ann.y * 10000) / 10
-				svgStamp.setAttribute('x', String(x))
-				svgStamp.setAttribute('y', String(y))
-				svgStamp.setAttribute('width', String(w))
-				svgStamp.setAttribute('height', String(h))
-				svgStamp.setAttribute('viewBox', vector.viewBox)
-				svgStamp.setAttribute('preserveAspectRatio', 'xMidYMid meet')
-				svgStamp.setAttribute('data-test', 'annotation-stamp')
-
-				const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
-				path.setAttribute('d', vector.d)
-				path.setAttribute('fill', ann.style?.color || '#000000')
-				svgStamp.appendChild(path)
-				svg.appendChild(svgStamp)
-			} else {
-				const text = document.createElementNS('http://www.w3.org/2000/svg', 'text')
-				const fontSize = ann.style?.fontSize || 40
-				const cx = Math.round((ann.x + (ann.width || 0.04) / 2) * 10000) / 10
-				const cy = Math.round((ann.y + (ann.height || 0.04) / 2) * 10000) / 10
-				text.setAttribute('x', String(cx))
-				text.setAttribute('y', String(cy))
-				text.setAttribute('text-anchor', 'middle')
-				text.setAttribute('dominant-baseline', 'central')
-				text.setAttribute('fill', ann.style?.color || '#000000')
-				text.setAttribute('font-size', String(fontSize))
-				if (isStampItalic(ann)) {
-					text.setAttribute('font-style', 'italic')
-				}
-				if (isStampBold(ann)) {
-					text.setAttribute('font-weight', 'bold')
-				}
-				text.setAttribute('font-family', getStampFontFamily(ann))
-				text.setAttribute('data-test', 'annotation-stamp')
-				text.textContent = getAnnotationDisplaySymbol(ann)
-				svg.appendChild(text)
-			}
-		} else if (ann.type === 'text' && ann.data?.text) {
-			const text = document.createElementNS('http://www.w3.org/2000/svg', 'text')
-			const fontSize = ann.style?.fontSize || ann.data?.scaledFontSize || (ann.data?.fontSize ? (ann.data.fontSize < 100 ? Math.round(ann.data.fontSize / (ann.data?.sourceWidth || 596) * 1000) : ann.data.fontSize) : 24)
-			const fontFamily = getAnnotationFontFamily(ann.style?.fontFamily || ann.data?.fontFamily)
-			const textPos = getAnnotationTextPosition(ann)
-			text.setAttribute('x', String(textPos.x))
-			text.setAttribute('y', String(textPos.y))
-			text.setAttribute('fill', ann.style?.color || '#000000')
-			text.setAttribute('font-size', String(fontSize))
-			text.setAttribute('font-family', fontFamily)
-			text.setAttribute('dominant-baseline', textPos.dominantBaseline)
-			if (textPos.textAnchor) {
-				text.setAttribute('text-anchor', textPos.textAnchor)
-			}
-			text.setAttribute('data-test', 'annotation-text')
-			text.textContent = ann.data.text
-			svg.appendChild(text)
-		} else if (ann.type === 'link') {
-			const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect')
-			rect.setAttribute('x', String(ann.x * 1000))
-			rect.setAttribute('y', String(ann.y * 1000))
-			rect.setAttribute('width', String(ann.width * 1000))
-			rect.setAttribute('height', String(ann.height * 1000))
-			rect.style.pointerEvents = 'auto'
-			rect.style.cursor = 'pointer'
-			rect.style.fill = 'rgba(0, 120, 255, 0.2)'
-			rect.style.stroke = 'rgba(0, 120, 255, 0.6)'
-			rect.style.strokeWidth = '1.5'
-			rect.onclick = () => {
-				if (typeof ann.data?.targetPage === 'number') {
-					goToPage(ann.data.targetPage + 1)
-				}
-			}
-			svg.appendChild(rect)
-		}
-	}
-
-	return svg
-}
-
 const zoomSteps = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 4.0]
 
+const fileExtTarget = computed(() => (props.fileName || props.filePath).split('?')[0].toLowerCase())
+
 const isPdfFile = computed(() => {
-	const path = props.filePath.split('?')[0].toLowerCase()
-	return path.endsWith('.pdf')
+	return fileExtTarget.value.endsWith('.pdf')
 })
 
 const isImageFile = computed(() => {
-	const path = props.filePath.split('?')[0].toLowerCase()
+	const path = fileExtTarget.value
 	return path.endsWith('.png') || path.endsWith('.jpg') || path.endsWith('.jpeg') || path.endsWith('.webp') || path.endsWith('.gif') || path.endsWith('.svg') || path.endsWith('.bmp')
 })
 
+const isDocxFile = computed(() => {
+	return fileExtTarget.value.endsWith('.docx')
+})
+
+const isXlsxFile = computed(() => {
+	const path = fileExtTarget.value
+	return path.endsWith('.xlsx') || path.endsWith('.xls')
+})
+
 const isUnsupportedFile = computed(() => {
-	return !isPdfFile.value && !isImageFile.value
+	return !isPdfFile.value && !isImageFile.value && !isDocxFile.value && !isXlsxFile.value
 })
 
 const currentPageDisplay = computed(() => {
@@ -655,10 +567,9 @@ async function renderCurrentView() {
 				placeholder.style.position = 'relative'
 				placeholder.style.minHeight = ''
 				placeholder.style.minWidth = ''
-				const overlay = createAnnotationSvg(pageNumber)
-				if (overlay) {
-					placeholder.appendChild(overlay)
-				}
+				placeholder.dataset.pageWidth = String(viewport.width)
+				placeholder.dataset.pageHeight = String(viewport.height)
+				mountAnnotationOverlay(placeholder, pageNumber, viewport.width, viewport.height)
 			}
 		} catch (err) {
 			console.warn(`Could not render page ${pageNumber}:`, err)
@@ -730,6 +641,32 @@ async function renderCurrentView() {
 	}
 }
 
+async function fetchBinaryData(cacheKey: string, loadId: number): Promise<Uint8Array | null> {
+	const cache = props.binaryCache ?? defaultFileBinaryCache
+	let data: Uint8Array | null = cache.get(cacheKey)
+	if (!data) {
+		const hasVersionParam = cacheKey.includes('v=') || cacheKey.includes('t=')
+		const response = await axios.get(cacheKey, {
+			responseType: 'arraybuffer',
+			...(hasVersionParam ? {} : {
+				headers: {
+					'Cache-Control': 'no-cache',
+					'Pragma': 'no-cache',
+				},
+			}),
+		})
+
+		if (loadId !== currentLoadId) return null
+
+		const raw = response.data instanceof ArrayBuffer ? new Uint8Array(response.data) : response.data
+		data = raw
+		if (data) {
+			cache.set(cacheKey, data)
+		}
+	}
+	return data
+}
+
 async function loadAndRenderFile() {
 	const loadId = ++currentLoadId
 	errorMessage.value = ''
@@ -739,11 +676,16 @@ async function loadAndRenderFile() {
 	rotation.value = 0
 	fileSizeBytes.value = null
 	pageResolutions.value = []
+	xlsxSheets.value = []
+	activeXlsxSheetIndex.value = 0
 
 	await nextTick()
 	cleanupObserver()
 	if (pdfContainer.value) {
 		pdfContainer.value.replaceChildren()
+	}
+	if (docxContainer.value) {
+		docxContainer.value.replaceChildren()
 	}
 
 	if (!props.filePath) {
@@ -752,7 +694,7 @@ async function loadAndRenderFile() {
 		return
 	}
 
-	if (!isPdfFile.value) {
+	if (!isPdfFile.value && !isDocxFile.value && !isXlsxFile.value) {
 		isLoading.value = false
 		return
 	}
@@ -760,34 +702,46 @@ async function loadAndRenderFile() {
 	isLoading.value = true
 
 	try {
-		const cache = props.binaryCache ?? defaultFileBinaryCache
-		const cacheKey = props.filePath
-		let pdfData: Uint8Array | null = cache.get(cacheKey)
-
-		if (!pdfData) {
-			const hasVersionParam = props.filePath.includes('v=') || props.filePath.includes('t=')
-			const response = await axios.get(props.filePath, {
-				responseType: 'arraybuffer',
-				...(hasVersionParam ? {} : {
-					headers: {
-						'Cache-Control': 'no-cache',
-						'Pragma': 'no-cache',
-					},
-				}),
-			})
-
-			if (loadId !== currentLoadId) return
-
-			const raw = response.data instanceof ArrayBuffer ? new Uint8Array(response.data) : response.data
-			pdfData = raw
-			if (pdfData) {
-				cache.set(cacheKey, pdfData)
-			}
-		}
-
+		const binaryData = await fetchBinaryData(props.filePath, loadId)
 		if (loadId !== currentLoadId) return
 
-		fileSizeBytes.value = typeof pdfData?.byteLength === 'number' ? pdfData.byteLength : null
+		fileSizeBytes.value = typeof binaryData?.byteLength === 'number' ? binaryData.byteLength : null
+
+		if (isDocxFile.value) {
+			if (!binaryData) {
+				errorMessage.value = t('sheetmusic', 'Failed to load document.')
+				return
+			}
+			const { renderAsync } = await import('docx-preview')
+			if (loadId !== currentLoadId) return
+			isLoading.value = false
+			await nextTick()
+			if (loadId !== currentLoadId || !docxContainer.value) return
+			await renderAsync(binaryData.slice().buffer, docxContainer.value, undefined, {
+				inWrapper: true,
+				ignoreWidth: false,
+				ignoreHeight: false,
+			})
+			return
+		}
+
+		if (isXlsxFile.value) {
+			if (!binaryData) {
+				errorMessage.value = t('sheetmusic', 'Failed to load spreadsheet.')
+				return
+			}
+			const XLSX = await import('xlsx')
+			if (loadId !== currentLoadId) return
+			const workbook = XLSX.read(binaryData, { type: 'array' })
+			xlsxSheets.value = workbook.SheetNames.map((name) => ({
+				name,
+				html: XLSX.utils.sheet_to_html(workbook.Sheets[name], { editable: false }),
+			}))
+			activeXlsxSheetIndex.value = 0
+			return
+		}
+
+		const pdfData = binaryData
 		const wasmUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/wasm/') : new URL('pdfjs-dist/wasm/', import.meta.url).href
 		const cMapUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/cmaps/') : new URL('pdfjs-dist/cmaps/', import.meta.url).href
 		const standardFontDataUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/standard_fonts/') : new URL('pdfjs-dist/standard_fonts/', import.meta.url).href
@@ -829,6 +783,16 @@ async function loadAndRenderFile() {
 			// Ignore resolution inspection errors on mock or malformed PDFs
 		}
 
+		if (loadId !== currentLoadId) return
+		isLoading.value = false
+		await nextTick()
+		if (loadId !== currentLoadId) return
+
+		if (pdfContainer.value) {
+			lastObservedWidth = pdfContainer.value.clientWidth
+			lastObservedHeight = pdfContainer.value.clientHeight
+		}
+
 		// If the document is large (>30 pages) and caller didn't specify a paged/auto layout, default to single page
 		if (pdf.numPages > 30 && props.initialPageLayout === 'continuous') {
 			pageLayout.value = 'single'
@@ -863,16 +827,38 @@ function handleImageError() {
 }
 
 let resizeObserver: ResizeObserver | null = null
+let resizeDebounceTimer: ReturnType<typeof setTimeout> | null = null
+let lastObservedWidth = 0
+let lastObservedHeight = 0
 
 function handleResize() {
-	if (autoLayout.value || zoomMode.value === 'fit-width' || zoomMode.value === 'fit-page') {
-		renderCurrentView()
+	if (!(autoLayout.value || zoomMode.value === 'fit-width' || zoomMode.value === 'fit-page')) {
+		return
 	}
+	if (resizeDebounceTimer !== null) {
+		clearTimeout(resizeDebounceTimer)
+	}
+	resizeDebounceTimer = setTimeout(() => {
+		resizeDebounceTimer = null
+		const el = pdfContainer.value
+		if (el) {
+			const w = el.clientWidth
+			const h = el.clientHeight
+			if (w === lastObservedWidth && h === lastObservedHeight) {
+				return
+			}
+			lastObservedWidth = w
+			lastObservedHeight = h
+		}
+		renderCurrentView()
+	}, 150)
 }
 
 onMounted(() => {
 	window.addEventListener('resize', handleResize)
 	if (typeof ResizeObserver !== 'undefined' && pdfContainer.value) {
+		lastObservedWidth = pdfContainer.value.clientWidth
+		lastObservedHeight = pdfContainer.value.clientHeight
 		resizeObserver = new ResizeObserver(() => {
 			handleResize()
 		})
@@ -881,8 +867,13 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+	unmountAnnotationOverlays()
 	cleanupObserver()
 	window.removeEventListener('resize', handleResize)
+	if (resizeDebounceTimer !== null) {
+		clearTimeout(resizeDebounceTimer)
+		resizeDebounceTimer = null
+	}
 	if (resizeObserver) {
 		resizeObserver.disconnect()
 		resizeObserver = null
@@ -991,6 +982,33 @@ defineExpose({
 			ref="pdfContainer"
 			:class="[$style.pdfContainer, $style[`layout-${pageLayout}`], noPadding && $style.noPadding]" />
 
+		<div
+			v-show="!isLoading && !errorMessage && isDocxFile"
+			ref="docxContainer"
+			:class="$style.docxContainer" />
+
+		<div
+			v-if="!isLoading && !errorMessage && isXlsxFile"
+			:class="$style.xlsxContainer">
+			<div v-if="xlsxSheets.length > 1" :class="$style.xlsxTabs" role="tablist">
+				<button
+					v-for="(sheet, idx) in xlsxSheets"
+					:key="sheet.name"
+					type="button"
+					role="tab"
+					:aria-selected="activeXlsxSheetIndex === idx"
+					:class="[$style.xlsxTab, activeXlsxSheetIndex === idx && $style.xlsxTabActive]"
+					@click="activeXlsxSheetIndex = idx">
+					{{ sheet.name }}
+				</button>
+			</div>
+			<!-- eslint-disable-next-line vue/no-v-html -->
+			<div
+				v-if="xlsxSheets[activeXlsxSheetIndex]"
+				:class="$style.xlsxSheetContent"
+				v-html="xlsxSheets[activeXlsxSheetIndex].html" />
+		</div>
+
 		<div v-if="!isLoading && !errorMessage && isUnsupportedFile" :class="$style.unsupported">
 			<p>{{ t('sheetmusic', 'Preview is not available for this file type.') }}</p>
 			<NcButton
@@ -1035,6 +1053,7 @@ defineExpose({
 	padding: 24px;
 	overflow: auto;
 	flex: 1;
+	min-height: 0;
 }
 
 .previewImage {
@@ -1051,6 +1070,9 @@ defineExpose({
 	padding: 24px;
 	overflow: auto;
 	flex: 1;
+	min-height: 0;
+	width: 100%;
+	box-sizing: border-box;
 	background-color: var(--color-background-dark, #f5f5f5);
 }
 
@@ -1068,6 +1090,86 @@ defineExpose({
 
 .pdfContainer.noPadding.layout-single {
 	justify-content: center;
+}
+
+.docxContainer {
+	flex: 1;
+	min-height: 0;
+	overflow: auto;
+	padding: 16px;
+	background-color: var(--color-background-dark, #f5f5f5);
+}
+
+.docxContainer :global(.docx-wrapper) {
+	background: transparent;
+	padding: 8px;
+}
+
+.docxContainer :global(.docx-wrapper > section.docx) {
+	margin-bottom: 16px;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.xlsxContainer {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-height: 0;
+	overflow: hidden;
+	background-color: var(--color-main-background);
+}
+
+.xlsxTabs {
+	display: flex;
+	gap: 4px;
+	padding: 8px 12px;
+	border-bottom: 1px solid var(--color-border);
+	background-color: var(--color-background-hover);
+	overflow-x: auto;
+	flex-shrink: 0;
+}
+
+.xlsxTab {
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius);
+	background: var(--color-main-background);
+	color: var(--color-main-text);
+	padding: 4px 12px;
+	font-size: 0.85rem;
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.xlsxTabActive {
+	background-color: var(--color-primary-element);
+	color: var(--color-primary-element-text);
+	border-color: var(--color-primary-element);
+	font-weight: 600;
+}
+
+.xlsxSheetContent {
+	flex: 1;
+	min-height: 0;
+	overflow: auto;
+	padding: 16px;
+}
+
+.xlsxSheetContent :global(table) {
+	border-collapse: collapse;
+	width: 100%;
+	font-size: 0.9rem;
+}
+
+.xlsxSheetContent :global(td),
+.xlsxSheetContent :global(th) {
+	border: 1px solid var(--color-border);
+	padding: 6px 10px;
+	text-align: left;
+	vertical-align: top;
+}
+
+.xlsxSheetContent :global(tr:nth-child(even)) {
+	background-color: var(--color-background-hover);
 }
 
 .unsupported {
