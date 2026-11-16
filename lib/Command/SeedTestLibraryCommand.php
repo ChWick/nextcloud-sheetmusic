@@ -119,6 +119,15 @@ class SeedTestLibraryCommand extends Command {
 				'pages' => 6,
 				'duration' => 324,
 				'bookmark' => null,
+				'landscape' => false,
+			],
+			[
+				'title' => 'All Blues (Landscape)',
+				'filename' => 'all-blues-landscape.pdf',
+				'pages' => 3,
+				'duration' => 245,
+				'bookmark' => null,
+				'landscape' => true,
 			],
 		];
 
@@ -127,7 +136,8 @@ class SeedTestLibraryCommand extends Command {
 
 		foreach ($seedSongs as $spec) {
 			$filename = $spec['filename'];
-			$pdfBytes = $this->buildMultiPagePdf($spec['title'], $spec['pages']);
+			$isLandscape = (bool)($spec['landscape'] ?? false);
+			$pdfBytes = $this->buildMultiPagePdf($spec['title'], $spec['pages'], $isLandscape);
 
 			if ($libraryFolder->nodeExists($filename)) {
 				$fileNode = $libraryFolder->get($filename);
@@ -221,8 +231,9 @@ class SeedTestLibraryCommand extends Command {
 
 		$fullSetlist = $this->setlistService->getSetlist($user, $libraryId, $setlistId);
 		$existingItems = $fullSetlist['items'] ?? [];
-		if (count($existingItems) === 0) {
-			foreach ($songIds as $songId) {
+		$existingSongIds = array_map(static fn (mixed $item): int => (int)(is_array($item) ? $item['songId'] : $item->songId), $existingItems);
+		foreach ($songIds as $songId) {
+			if (!in_array($songId, $existingSongIds, true)) {
 				$bookmarkId = $bookmarkIdsBySong[$songId] ?? null;
 				$this->setlistService->addItem($user, $libraryId, $setlistId, $songId, $bookmarkId);
 			}
@@ -242,7 +253,7 @@ class SeedTestLibraryCommand extends Command {
 	/**
 	 * Build a minimal, valid multi-page PDF 1.4 document with visible page labels.
 	 */
-	private function buildMultiPagePdf(string $title, int $pageCount): string {
+	private function buildMultiPagePdf(string $title, int $pageCount, bool $landscape = false): string {
 		$objects = [];
 		$pageIds = [];
 
@@ -252,16 +263,18 @@ class SeedTestLibraryCommand extends Command {
 
 		$nextId = 4;
 		$escapedTitle = str_replace(['\\', '(', ')'], ['\\\\', '\\(', '\\)'], $title);
+		$mediaBox = $landscape ? '[0 0 792 612]' : '[0 0 612 792]';
+		$startY = $landscape ? 540 : 720;
 
 		for ($p = 1; $p <= $pageCount; $p++) {
 			$pageObjId = $nextId++;
 			$contentObjId = $nextId++;
 			$pageIds[] = "{$pageObjId} 0 R";
 
-			$stream = "BT\n/F1 28 Tf\n72 720 Td\n({$escapedTitle}) Tj\n0 -42 Td\n/F1 20 Tf\n(Page {$p} of {$pageCount}) Tj\nET";
+			$stream = "BT\n/F1 28 Tf\n72 {$startY} Td\n({$escapedTitle}) Tj\n0 -42 Td\n/F1 20 Tf\n(Page {$p} of {$pageCount}) Tj\nET";
 			$len = strlen($stream);
 
-			$objects[$pageObjId] = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents {$contentObjId} 0 R >>";
+			$objects[$pageObjId] = "<< /Type /Page /Parent 2 0 R /MediaBox {$mediaBox} /Resources << /Font << /F1 3 0 R >> >> /Contents {$contentObjId} 0 R >>";
 			$objects[$contentObjId] = "<< /Length {$len} >>\nstream\n{$stream}\nendstream";
 		}
 
