@@ -140,6 +140,20 @@ class SeedTestLibraryCommand extends Command {
 
 			$song = $this->songMapper->findByTitle($libraryId, $spec['title']);
 			if ($song === null) {
+				// SheetMusicFileEventListener may have auto-imported the file under its filename stem
+				$autoLinked = $this->songFileMapper->findByFileId($fileNode->getId());
+				if (count($autoLinked) > 0) {
+					$song = $this->songMapper->findById($autoLinked[0]->songId);
+					if ($song !== null) {
+						$song->title = $spec['title'];
+						$song->sortTitle = $spec['title'];
+						$song->duration = $spec['duration'];
+						$song->updatedAt = $now;
+						$song = $this->songMapper->update($song);
+					}
+				}
+			}
+			if ($song === null) {
 				$song = $this->songMapper->insert(new InternalSong(
 					uuid: $this->generateUuid(),
 					libraryId: $libraryId,
