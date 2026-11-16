@@ -152,6 +152,9 @@ final class ApiTest extends TestCase {
 		$library = $this->createTestLibrary('Noten/mobilesheets.db');
 		$song = $this->insertTestSong($library->id, 'Test Song');
 		$userFolder = $this->rootFolder->getUserFolder('admin');
+		if (!$userFolder->nodeExists('Noten')) {
+			$userFolder->newFolder('Noten');
+		}
 		if (!$userFolder->nodeExists('Music')) {
 			$userFolder->newFolder('Music');
 		}
@@ -529,6 +532,9 @@ final class ApiTest extends TestCase {
 
 	public function testImportSongMetadataFromNextcloudPath(): void {
 		$userFolder = $this->rootFolder->getUserFolder('admin');
+		if (!$userFolder->nodeExists('Noten')) {
+			$userFolder->newFolder('Noten');
+		}
 		if (!$userFolder->nodeExists('Music')) {
 			$userFolder->newFolder('Music');
 		}
@@ -554,6 +560,9 @@ final class ApiTest extends TestCase {
 
 	public function testImportSongMetadataFromNextcloudPathWithDavPrefix(): void {
 		$userFolder = $this->rootFolder->getUserFolder('admin');
+		if (!$userFolder->nodeExists('Noten')) {
+			$userFolder->newFolder('Noten');
+		}
 		if (!$userFolder->nodeExists('Music')) {
 			$userFolder->newFolder('Music');
 		}

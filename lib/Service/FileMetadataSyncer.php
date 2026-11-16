@@ -144,7 +144,7 @@ class FileMetadataSyncer {
 				foreach ($matchedFiles as $internalSongFile) {
 					$internalSongFile->fileSize = $facts->fileSize;
 					$internalSongFile->fileHash = $facts->fileHash;
-					$internalSongFile->updatedAt = (int)floor($facts->lastModified / 1000);
+					$internalSongFile->updatedAt = max($internalSongFile->updatedAt + 1, (int)floor($facts->lastModified / 1000));
 					$this->internalSongFileMapper->update($internalSongFile);
 
 					if ($internalSongFile->clientId !== null && $internalSongFile->clientId > 0) {
