@@ -8,6 +8,9 @@ import SetlistPerformanceDrawer from './SetlistPerformanceDrawer.vue'
 import SetlistPerformanceSettingsPanel from './SetlistPerformanceSettingsPanel.vue'
 import SetlistPerformanceTopBar from './SetlistPerformanceTopBar.vue'
 import { fetchSongAnnotations } from '../../api/annotations'
+import { useHudAutoHide } from '../../composables/useHudAutoHide'
+import { usePerformanceStageInput } from '../../composables/usePerformanceStageInput'
+import { useWakeLock } from '../../composables/useWakeLock'
 import type { SheetAnnotation } from '../../types/annotation'
 import type { SetlistItem, Song, SongFile } from '../../types/song'
 import { defaultFileBinaryCache } from '../../utils/file-cache'
@@ -45,54 +48,26 @@ const initialSettings = loadEffectivePerformanceSettings(props.libraryId, props.
 
 const currentIndex = ref(Math.min(Math.max(0, props.initialIndex), Math.max(0, props.items.length - 1)))
 const startAtEnd = ref(false)
-const isHudVisible = ref(true)
 const isDrawerOpen = ref(false)
 const isSettingsOpen = ref(false)
 const isFullscreen = ref(false)
 const isSetlistOverride = ref(initialSettings.overrideEnabled)
 const showAnnotations = ref(initialSettings.settings.showAnnotations)
 
-const HUD_AUTO_HIDE_MS = 3000
-let hudHideTimer: ReturnType<typeof setTimeout> | null = null
-let isHudPinned = false
-
-function clearHudTimer() {
-	if (hudHideTimer !== null) {
-		clearTimeout(hudHideTimer)
-		hudHideTimer = null
-	}
-}
-
-function scheduleHudAutoHide() {
-	clearHudTimer()
-	if (isHudPinned || isDrawerOpen.value || isSettingsOpen.value) return
-	hudHideTimer = setTimeout(() => {
-		if (!isHudPinned && !isDrawerOpen.value && !isSettingsOpen.value) {
-			isHudVisible.value = false
-		}
-	}, HUD_AUTO_HIDE_MS)
-}
-
-function showHudTemporarily() {
-	isHudVisible.value = true
-	scheduleHudAutoHide()
-}
-
-function pauseHudAutoHide() {
-	isHudPinned = true
-	clearHudTimer()
-}
-
-function resumeHudAutoHide() {
-	isHudPinned = false
-	if (isHudVisible.value) {
-		scheduleHudAutoHide()
-	}
-}
-
 const layoutChoice = ref<PerformanceLayoutChoice>(initialSettings.settings.layoutChoice)
 const doublePageTurnMode = ref<DoublePageTurnMode>(initialSettings.settings.doublePageTurnMode)
 const zoomChoice = ref<PerformanceZoomChoice>(initialSettings.settings.zoomChoice)
+
+const {
+	isHudVisible,
+	clearHudTimer,
+	scheduleHudAutoHide,
+	toggleHud,
+	pauseHudAutoHide,
+	resumeHudAutoHide,
+} = useHudAutoHide(3000, () => isDrawerOpen.value || isSettingsOpen.value)
+
+useWakeLock()
 
 function currentViewerSettings(): PerformanceViewerSettings {
 	return {
@@ -343,80 +318,12 @@ function handleFullscreenChange() {
 	isFullscreen.value = Boolean(document.fullscreenElement)
 }
 
-let touchStartX = 0
-let touchStartY = 0
-let touchStartTime = 0
-
-function onStageTouchStart(event: TouchEvent) {
-	if (event.touches.length !== 1) return
-	touchStartX = event.touches[0].clientX
-	touchStartY = event.touches[0].clientY
-	touchStartTime = Date.now()
-}
-
-function onStageTouchEnd(event: TouchEvent) {
-	if (effectiveLayout.value === 'continuous') return
-	if (event.changedTouches.length !== 1) return
-	const dx = event.changedTouches[0].clientX - touchStartX
-	const dy = event.changedTouches[0].clientY - touchStartY
-	const elapsed = Date.now() - touchStartTime
-
-	if (elapsed < 500 && Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.2) {
-		if (dx < 0) {
-			handleNextPage()
-		} else {
-			handlePrevPage()
-		}
-	}
-}
-
-function toggleHud() {
-	if (isHudVisible.value) {
-		clearHudTimer()
-		isHudVisible.value = false
-	} else {
-		showHudTemporarily()
-	}
-}
-
-function onStageClick(event: MouseEvent) {
-	if (effectiveLayout.value === 'continuous') {
-		toggleHud()
-		return
-	}
-	const target = event.currentTarget as HTMLElement | null
-	if (!target) return
-	const rect = target.getBoundingClientRect()
-	const relX = (event.clientX - rect.left) / Math.max(1, rect.width)
-	if (relX < 0.25) {
-		handlePrevPage()
-	} else if (relX > 0.75) {
-		handleNextPage()
-	} else {
-		toggleHud()
-	}
-}
-
-function handleKeyDown(event: KeyboardEvent) {
-	const tag = (event.target as HTMLElement | null)?.tagName
-	if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
-
-	switch (event.key) {
-	case 'ArrowRight':
-	case 'PageDown':
-	case ' ':
-	case 'Enter':
-		event.preventDefault()
-		handleNextPage()
-		break
-	case 'ArrowLeft':
-	case 'PageUp':
-	case 'Backspace':
-		event.preventDefault()
-		handlePrevPage()
-		break
-	case 'Escape':
-		event.preventDefault()
+const { onStageTouchStart, onStageTouchEnd, onStageClick } = usePerformanceStageInput({
+	isScrollMode: () => effectiveLayout.value === 'continuous',
+	onNextPage: handleNextPage,
+	onPrevPage: handlePrevPage,
+	onToggleHud: toggleHud,
+	onEscape: () => {
 		if (isSettingsOpen.value) {
 			isSettingsOpen.value = false
 			scheduleHudAutoHide()
@@ -426,46 +333,16 @@ function handleKeyDown(event: KeyboardEvent) {
 		} else {
 			emit('close')
 		}
-		break
-	}
-}
-
-let wakeLockSentinel: { release: () => Promise<void> } | null = null
-
-async function requestWakeLock() {
-	try {
-		const nav = navigator as Navigator & { wakeLock?: { request: (type: 'screen') => Promise<{ release: () => Promise<void> }> } }
-		if (nav.wakeLock) {
-			wakeLockSentinel = await nav.wakeLock.request('screen')
-		}
-	} catch {
-		// Wake lock not supported or denied
-	}
-}
-
-function handleVisibilityChange() {
-	if (document.visibilityState === 'visible') {
-		requestWakeLock()
-	}
-}
+	},
+})
 
 onMounted(() => {
-	window.addEventListener('keydown', handleKeyDown)
 	document.addEventListener('fullscreenchange', handleFullscreenChange)
-	document.addEventListener('visibilitychange', handleVisibilityChange)
-	requestWakeLock()
 	scheduleHudAutoHide()
 })
 
 onUnmounted(() => {
-	clearHudTimer()
-	window.removeEventListener('keydown', handleKeyDown)
 	document.removeEventListener('fullscreenchange', handleFullscreenChange)
-	document.removeEventListener('visibilitychange', handleVisibilityChange)
-	if (wakeLockSentinel) {
-		wakeLockSentinel.release().catch(() => {})
-		wakeLockSentinel = null
-	}
 	if (document.fullscreenElement && document.exitFullscreen) {
 		document.exitFullscreen().catch(() => {})
 	}
