@@ -231,11 +231,15 @@ describe('SetlistPerformanceViewer', () => {
 		layoutSelect.dispatchEvent(new Event('change'))
 		await wrapper.vm.$nextTick()
 
-		// Enable setlist override and switch to single page
-		const overrideCheckbox = document.body.querySelector('input[type="checkbox"]') as HTMLInputElement
-		expect(overrideCheckbox).not.toBeNull()
-		overrideCheckbox.checked = true
-		overrideCheckbox.dispatchEvent(new Event('change'))
+		// Open Viewer Settings and enable custom settings for this setlist
+		const settingsButton = document.body.querySelector('button[aria-label="Viewer settings & defaults"]') as HTMLButtonElement | null
+		expect(settingsButton).not.toBeNull()
+		settingsButton!.click()
+		await wrapper.vm.$nextTick()
+
+		const setlistScopeBtn = document.body.querySelector('button[data-settings-scope="setlist"]') as HTMLButtonElement | null
+		expect(setlistScopeBtn).not.toBeNull()
+		setlistScopeBtn!.click()
 		await wrapper.vm.$nextTick()
 
 		layoutSelect.value = 'single'
@@ -243,9 +247,10 @@ describe('SetlistPerformanceViewer', () => {
 		await wrapper.vm.$nextTick()
 		expect(layoutSelect.value).toBe('single')
 
-		// Uncheck setlist override -> restores library default ('double')
-		overrideCheckbox.checked = false
-		overrideCheckbox.dispatchEvent(new Event('change'))
+		// Switch back to library defaults -> restores library default ('double')
+		const libraryScopeBtn = document.body.querySelector('button[data-settings-scope="library"]') as HTMLButtonElement | null
+		expect(libraryScopeBtn).not.toBeNull()
+		libraryScopeBtn!.click()
 		await wrapper.vm.$nextTick()
 		expect(layoutSelect.value).toBe('double')
 

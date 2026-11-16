@@ -6,6 +6,7 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import ArrowLeftIcon from 'vue-material-design-icons/ArrowLeft.vue'
 import ChevronLeftIcon from 'vue-material-design-icons/ChevronLeft.vue'
 import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
+import CogOutlineIcon from 'vue-material-design-icons/CogOutline.vue'
 import EyeOffOutlineIcon from 'vue-material-design-icons/EyeOffOutline.vue'
 import EyeOutlineIcon from 'vue-material-design-icons/EyeOutline.vue'
 import FormatListBulletedIcon from 'vue-material-design-icons/FormatListBulleted.vue'
@@ -55,6 +56,7 @@ const currentIndex = ref(Math.min(Math.max(0, props.initialIndex), Math.max(0, p
 const startAtEnd = ref(false)
 const isHudVisible = ref(true)
 const isDrawerOpen = ref(false)
+const isSettingsOpen = ref(false)
 const isFullscreen = ref(false)
 const isSetlistOverride = ref(initialSettings.overrideEnabled)
 const showAnnotations = ref(initialSettings.settings.showAnnotations)
@@ -72,9 +74,9 @@ function clearHudTimer() {
 
 function scheduleHudAutoHide() {
 	clearHudTimer()
-	if (isHudPinned || isDrawerOpen.value) return
+	if (isHudPinned || isDrawerOpen.value || isSettingsOpen.value) return
 	hudHideTimer = setTimeout(() => {
-		if (!isHudPinned && !isDrawerOpen.value) {
+		if (!isHudPinned && !isDrawerOpen.value && !isSettingsOpen.value) {
 			isHudVisible.value = false
 		}
 	}, HUD_AUTO_HIDE_MS)
@@ -156,6 +158,21 @@ function toggleSetlistOverride(enabled: boolean) {
 			overrideEnabled: false,
 		})
 		applySettingsToPreviewer(libraryDefaults)
+	}
+}
+
+function saveCurrentAsLibraryDefault() {
+	if (props.libraryId <= 0) return
+	createLibraryPerformanceStore(props.libraryId).save(currentViewerSettings())
+}
+
+function toggleSettingsPanel() {
+	isSettingsOpen.value = !isSettingsOpen.value
+	if (isSettingsOpen.value) {
+		isDrawerOpen.value = false
+		clearHudTimer()
+	} else {
+		scheduleHudAutoHide()
 	}
 }
 
@@ -398,7 +415,10 @@ function handleKeyDown(event: KeyboardEvent) {
 		break
 	case 'Escape':
 		event.preventDefault()
-		if (isDrawerOpen.value) {
+		if (isSettingsOpen.value) {
+			isSettingsOpen.value = false
+			scheduleHudAutoHide()
+		} else if (isDrawerOpen.value) {
 			isDrawerOpen.value = false
 		} else {
 			emit('close')
@@ -501,6 +521,17 @@ onUnmounted(() => {
 					<template #icon>
 						<EyeOutlineIcon v-if="showAnnotations" :size="20" />
 						<EyeOffOutlineIcon v-else :size="20" />
+					</template>
+				</NcButton>
+				<NcButton
+					v-if="setlistId && setlistId > 0"
+					:variant="isSettingsOpen || isSetlistOverride ? 'primary' : 'tertiary'"
+					:title="t('sheetmusic', 'Viewer settings & defaults')"
+					:aria-label="t('sheetmusic', 'Viewer settings & defaults')"
+					@click="toggleSettingsPanel">
+					<template #icon><CogOutlineIcon :size="20" /></template>
+					<template v-if="isSetlistOverride">
+						{{ t('sheetmusic', 'Custom') }}
 					</template>
 				</NcButton>
 				<NcButton
@@ -623,19 +654,55 @@ onUnmounted(() => {
 					@click="onZoomToggle">
 					{{ zoomChoice === 'fit-page' ? t('sheetmusic', 'Fit Page') : t('sheetmusic', 'Fit Width') }}
 				</NcButton>
-
-				<label
-					v-if="setlistId && setlistId > 0"
-					:class="$style.overrideToggle"
-					:title="t('sheetmusic', 'Override global library defaults for this setlist')">
-					<input
-						type="checkbox"
-						:checked="isSetlistOverride"
-						@change="toggleSetlistOverride(($event.target as HTMLInputElement).checked)">
-					<span>{{ t('sheetmusic', 'Setlist override') }}</span>
-				</label>
 			</div>
 		</footer>
+
+		<!-- Viewer Settings Panel -->
+		<aside
+			v-if="isSettingsOpen"
+			:class="$style.settingsPanel"
+			role="region"
+			:aria-label="t('sheetmusic', 'Viewer settings')">
+			<div :class="$style.drawerHeader">
+				<strong>{{ t('sheetmusic', 'Viewer Settings') }}</strong>
+				<NcButton variant="tertiary" size="small" @click="toggleSettingsPanel">
+					{{ t('sheetmusic', 'Close') }}
+				</NcButton>
+			</div>
+			<div :class="$style.settingsBody">
+				<p :class="$style.settingsHint">
+					{{ t('sheetmusic', 'Choose whether layout, page-turning, and zoom changes apply to all setlists in this library or only this setlist.') }}
+				</p>
+
+				<button
+					type="button"
+					:class="[$style.scopeOption, !isSetlistOverride && $style.scopeOptionActive]"
+					:aria-pressed="!isSetlistOverride"
+					data-settings-scope="library"
+					@click="toggleSetlistOverride(false)">
+					<strong>{{ t('sheetmusic', 'Use library defaults') }}</strong>
+					<span>{{ t('sheetmusic', 'Changes are saved as the default for all setlists in this library.') }}</span>
+				</button>
+
+				<button
+					type="button"
+					:class="[$style.scopeOption, isSetlistOverride && $style.scopeOptionActive]"
+					:aria-pressed="isSetlistOverride"
+					data-settings-scope="setlist"
+					@click="toggleSetlistOverride(true)">
+					<strong>{{ t('sheetmusic', 'Custom settings for this setlist') }}</strong>
+					<span>{{ t('sheetmusic', 'Changes apply only to "{name}" and override library defaults.', { name: setlistName }, { escape: false }) }}</span>
+				</button>
+
+				<NcButton
+					v-if="isSetlistOverride"
+					variant="secondary"
+					size="small"
+					@click="saveCurrentAsLibraryDefault">
+					{{ t('sheetmusic', 'Save current settings as library default') }}
+				</NcButton>
+			</div>
+		</aside>
 
 		<!-- Slide-out Setlist Drawer -->
 		<aside v-if="isDrawerOpen" :class="$style.drawer" :aria-label="t('sheetmusic', 'Setlist items')">
@@ -810,18 +877,63 @@ onUnmounted(() => {
 	font-size: 0.85rem;
 }
 
-.overrideToggle {
-	display: inline-flex;
-	align-items: center;
-	gap: 6px;
-	height: 32px;
-	padding: 0 10px;
-	border: 1px solid var(--color-border);
-	border-radius: var(--border-radius);
+.settingsPanel {
+	position: fixed;
+	top: 0;
+	right: 0;
+	bottom: 0;
+	width: min(360px, 90vw);
+	z-index: 100001;
+	display: flex;
+	flex-direction: column;
+	background-color: var(--color-main-background);
+	border-left: 1px solid var(--color-border);
+	box-shadow: -4px 0 16px rgba(0, 0, 0, 0.2);
+}
+
+.settingsBody {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	padding: 16px;
+	overflow-y: auto;
+}
+
+.settingsHint {
+	margin: 0;
 	font-size: 0.85rem;
+	color: var(--color-text-maxcontrast);
+	line-height: 1.4;
+}
+
+.scopeOption {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 4px;
+	padding: 12px;
+	text-align: left;
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius-large);
+	background-color: var(--color-main-background);
+	color: var(--color-main-text);
 	cursor: pointer;
-	user-select: none;
-	white-space: nowrap;
+	font-size: 0.9rem;
+}
+
+.scopeOption span {
+	font-size: 0.8rem;
+	color: var(--color-text-maxcontrast);
+	line-height: 1.35;
+}
+
+.scopeOption:hover {
+	background-color: var(--color-background-hover);
+}
+
+.scopeOptionActive {
+	border-color: var(--color-primary-element);
+	background-color: var(--color-primary-light);
 }
 
 .drawer {
