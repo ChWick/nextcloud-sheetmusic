@@ -479,9 +479,6 @@ async function renderCurrentView() {
 		}
 	}
 
-	cleanupObserver()
-	pdfContainer.value.replaceChildren()
-
 	let pagesToRender: Array<{ pageNum: number; index: number }> = []
 	if (pageLayout.value === 'single') {
 		const idx = Math.min(Math.max(1, currentPage.value), total) - 1
@@ -577,6 +574,10 @@ async function renderCurrentView() {
 	}
 
 	if (pageLayout.value === 'continuous') {
+		cleanupObserver()
+		unmountAnnotationOverlays()
+		pdfContainer.value.replaceChildren()
+
 		if (typeof IntersectionObserver === 'undefined') {
 			for (const item of pagesToRender) {
 				const placeholder = document.createElement('div')
@@ -630,14 +631,22 @@ async function renderCurrentView() {
 			}
 		}
 	} else {
-		// Single or double page mode: render immediately
-		for (const item of pagesToRender) {
+		// Single or double page mode: render off-DOM first, then swap atomically to avoid flicker
+		const newPlaceholders = pagesToRender.map((item) => {
 			const placeholder = document.createElement('div')
 			placeholder.dataset.pageNum = String(item.pageNum)
 			placeholder.dataset.pageIndex = String(item.index)
-			pdfContainer.value.append(placeholder)
-			await renderPage(item.pageNum, placeholder)
+			return placeholder
+		})
+		await Promise.all(
+			pagesToRender.map((item, idx) => renderPage(item.pageNum, newPlaceholders[idx])),
+		)
+		if (renderId !== currentRenderId || !pdfContainer.value) {
+			return
 		}
+		cleanupObserver()
+		unmountAnnotationOverlays()
+		pdfContainer.value.replaceChildren(...newPlaceholders)
 	}
 }
 
