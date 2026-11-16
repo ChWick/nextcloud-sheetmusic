@@ -1,0 +1,88 @@
+name: PHPUnit
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phpunit-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  phpunit:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        testsuite:
+          - core
+          - mobilesheets
+
+    name: phpunit (${{ matrix.testsuite }})
+
+    steps:
+      - name: Checkout Nextcloud server
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: nextcloud/server
+          ref: stable31
+          submodules: true
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Checkout app
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          path: apps-extra/sheetmusic
+          persist-credentials: false
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@44454db4f0199b8b9685a5d763dc37cbf79108e1 # v2.36.0
+        with:
+          php-version: '8.3'
+          extensions: bz2, ctype, curl, dom, fileinfo, gd, iconv, intl, json, libxml, mbstring, openssl, pcntl, posix, session, simplexml, xmlreader, xmlwriter, zip, zlib, sqlite, pdo_sqlite
+          coverage: none
+          ini-file: development
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure and install Nextcloud
+        run: |
+          mkdir -p data
+          php occ maintenance:install \
+            --database=sqlite \
+            --database-name=nextcloud \
+            --admin-user=admin \
+            --admin-pass=admin-password-123
+          php occ config:system:set appstoreenabled --value=false --type=boolean
+          php -r '
+            $file = "config/config.php";
+            include $file;
+            $CONFIG["apps_paths"] = [
+              [
+                "path" => __DIR__ . "/apps",
+                "url" => "/apps",
+                "writable" => false,
+              ],
+              [
+                "path" => __DIR__ . "/apps-extra",
+                "url" => "/apps-extra",
+                "writable" => true,
+              ],
+            ];
+            file_put_contents($file, "<?php\n\$CONFIG = " . var_export($CONFIG, true) . ";\n");
+          '
+          php occ app:enable sheetmusic
+
+      - name: Install PHPUnit
+        working-directory: apps-extra/sheetmusic
+        run: composer install --working-dir=vendor-bin/phpunit --no-interaction
+
+      - name: Run PHPUnit (${{ matrix.testsuite }})
+        working-directory: apps-extra/sheetmusic
+        run: ./vendor-bin/phpunit/vendor/bin/phpunit -c tests/phpunit.xml --testsuite ${{ matrix.testsuite }} --colors=always

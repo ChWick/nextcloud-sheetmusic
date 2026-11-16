@@ -8,7 +8,11 @@
 
 name: Node
 
-on: pull_request
+on:
+  pull_request:
+  push:
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -36,10 +40,13 @@ jobs:
             src:
               - '.github/workflows/**'
               - 'src/**'
+              - 'tests/frontend/**'
               - 'appinfo/info.xml'
+              - 'openapi.yaml'
               - 'package.json'
               - 'package-lock.json'
               - 'tsconfig.json'
+              - 'vitest.config.ts'
               - '**.js'
               - '**.ts'
               - '**.vue'
@@ -50,7 +57,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.src != 'false'
 
-    name: NPM build
+    name: NPM build & frontend tests
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -84,11 +91,12 @@ jobs:
           PUPPETEER_SKIP_DOWNLOAD: true
         run: |
           npm ci
+          npx openapi-typescript openapi.yaml -o src/types/api.generated.ts
           npm run build --if-present
 
-      - name: Check build changes
+      - name: Check build & generated OpenAPI TypeScript changes
         run: |
-          bash -c "[[ ! \"`git status --porcelain `\" ]] || (echo 'Please recompile and commit the assets, see the section \"Show changes on failure\" for details' && exit 1)"
+          bash -c "[[ ! \"`git status --porcelain `\" ]] || (echo 'Please recompile/regenerate and commit the assets or src/types/api.generated.ts, see the section \"Show changes on failure\" for details' && exit 1)"
 
       - name: Show changes on failure
         if: failure()
@@ -96,6 +104,9 @@ jobs:
           git status
           git --no-pager diff
           exit 1 # make it red to grab attention
+
+      - name: Run frontend unit tests (Vitest)
+        run: npm run test:frontend
 
   summary:
     permissions:

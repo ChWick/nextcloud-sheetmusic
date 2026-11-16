@@ -25,6 +25,18 @@ require_once __DIR__ . '/TestSupport/RecordingSapi.php';
 \OC_App::loadApp(OCA\SheetMusic\AppInfo\Application::APP_ID);
 OC_Hook::clear();
 
+// Ensure standard test users exist in fresh test environments
+try {
+	$userManager = \OC::$server->get(\OCP\IUserManager::class);
+	foreach (['admin', 'bob', 'foo', 'alice', 'user1'] as $testUid) {
+		if (!$userManager->userExists($testUid)) {
+			$userManager->createUser($testUid, $testUid);
+		}
+	}
+} catch (\Throwable) {
+	// Fall through
+}
+
 // Disable Nextcloud profiler DB query backtrace accumulation during test runs to prevent multi-GB memory leaks
 try {
 	if (\OC::$server->has(\OCP\IDBConnection::class)) {

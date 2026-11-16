@@ -217,7 +217,32 @@ export interface paths {
                 };
             };
         };
-        delete?: never;
+        /** Delete a song from a library */
+        delete: {
+            parameters: {
+                query: {
+                    libraryId: number;
+                    deleteFiles?: boolean;
+                };
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Refreshed library data after deletion */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["OcsEnvelopeLibraryData"];
+                    };
+                };
+            };
+        };
         options?: never;
         head?: never;
         patch?: never;
@@ -264,32 +289,7 @@ export interface paths {
                 };
             };
         };
-        /** Delete a song from a library */
-        delete: {
-            parameters: {
-                query: {
-                    libraryId: number;
-                    deleteFiles?: boolean;
-                };
-                header?: never;
-                path: {
-                    id: number;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Refreshed library data after deletion */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["OcsEnvelopeLibraryData"];
-                    };
-                };
-            };
-        };
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -299,10 +299,7 @@ export interface paths {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                libraryId: number;
-                id: number;
-            };
+            path?: never;
             cookie?: never;
         };
         get?: never;

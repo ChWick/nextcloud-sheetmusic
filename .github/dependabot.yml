@@ -10,6 +10,10 @@ updates:
       time: "03:00"
       timezone: Europe/Paris
     open-pull-requests-limit: 10
+    groups:
+      composer-dependencies:
+        patterns:
+          - "*"
   - package-ecosystem: npm
     directory: "/"
     schedule:
@@ -18,3 +22,7 @@ updates:
       time: "03:00"
       timezone: Europe/Paris
     open-pull-requests-limit: 10
+    groups:
+      npm-dependencies:
+        patterns:
+          - "*"

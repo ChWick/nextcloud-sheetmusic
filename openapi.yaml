@@ -182,6 +182,41 @@ paths:
               schema:
                 $ref: '#/components/schemas/OcsEnvelopeLibraryData'
 
+  /api/songs-batch-update:
+    post:
+      summary: Batch update multiple songs in a library
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - libraryId
+                - songIds
+              properties:
+                libraryId:
+                  type: integer
+                songIds:
+                  type: array
+                  items:
+                    type: integer
+                composers:
+                  type: object
+                books:
+                  type: object
+                collections:
+                  type: object
+                artists:
+                  type: object
+      responses:
+        '200':
+          description: Updated library data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OcsEnvelopeLibraryData'
+
   /api/libraries/{libraryId}/songs/{id}/file/upload:
     post:
       summary: Upload a PDF file to attach to a song
@@ -575,6 +610,10 @@ components:
           type: integer
         path:
           type: string
+        autoPaths:
+          type: boolean
+        autoPdfMetadata:
+          type: boolean
 
     Composer:
       type: object
