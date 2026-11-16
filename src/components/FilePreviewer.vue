@@ -82,11 +82,36 @@ const pageResolutions = ref<PdfPageResolutionSummary[]>([])
 type PageLayoutMode = 'continuous' | 'single' | 'double'
 type ZoomMode = 'fit-width' | 'fit-page' | 'custom'
 
-function detectResponsiveLayout(): PageLayoutMode {
-	if (typeof window === 'undefined') return 'single'
+function isContainerLandscape(): boolean {
+	if (typeof window === 'undefined') return false
 	const containerW = pdfContainer.value?.clientWidth || window.innerWidth
 	const containerH = pdfContainer.value?.clientHeight || window.innerHeight
-	return containerW >= containerH && containerW >= 700 ? 'double' : 'single'
+	return containerW >= containerH && containerW >= 700
+}
+
+function detectResponsiveLayout(): PageLayoutMode {
+	return isContainerLandscape() ? 'double' : 'single'
+}
+
+async function isLogicalPageLandscape(logicalPage: number): Promise<boolean> {
+	if (!loadedPdf.value) return false
+	try {
+		const ordered = parsePageOrder(props.pageOrder, loadedPdf.value.numPages)
+		const idx = Math.min(Math.max(1, logicalPage), ordered.length) - 1
+		const pageNum = ordered[idx] || 1
+		const page = await loadedPdf.value.getPage(pageNum)
+		const pageRotation = (((page.rotate ?? 0) + rotation.value) % 360 + 360) % 360
+		const viewport = page.getViewport({ scale: 1.0, rotation: pageRotation })
+		return viewport.width > viewport.height
+	} catch {
+		return false
+	}
+}
+
+async function resolveAutoLayoutForPage(logicalPage: number): Promise<PageLayoutMode> {
+	if (!isContainerLandscape()) return 'single'
+	if (await isLogicalPageLandscape(logicalPage)) return 'single'
+	return 'double'
 }
 
 const autoLayout = ref(props.initialPageLayout === 'auto')
@@ -426,10 +451,10 @@ function setPageLayout(mode: PageLayoutMode) {
 	renderCurrentView()
 }
 
-function setAutoLayout(enabled: boolean) {
+async function setAutoLayout(enabled: boolean) {
 	autoLayout.value = enabled
 	if (enabled) {
-		const detected = detectResponsiveLayout()
+		const detected = await resolveAutoLayoutForPage(currentPage.value)
 		if (pageLayout.value !== detected) {
 			pageLayout.value = detected
 			if (detected === 'double') {
@@ -528,6 +553,17 @@ async function renderCurrentView() {
 
 	await nextTick()
 	if (!pdfContainer.value || renderId !== currentRenderId) return
+
+	if (autoLayout.value) {
+		const resolved = await resolveAutoLayoutForPage(currentPage.value)
+		if (renderId !== currentRenderId) return
+		if (pageLayout.value !== resolved) {
+			pageLayout.value = resolved
+			if (resolved === 'double') {
+				doubleSpread.value = getDoubleSpreadForPage(currentPage.value, totalPages.value, doublePageTurnMode.value)
+			}
+		}
+	}
 
 	cleanupObserver()
 	pdfContainer.value.replaceChildren()
@@ -793,7 +829,7 @@ async function loadAndRenderFile() {
 		if (pdf.numPages > 30 && props.initialPageLayout === 'continuous') {
 			pageLayout.value = 'single'
 		} else if (autoLayout.value) {
-			pageLayout.value = detectResponsiveLayout()
+			pageLayout.value = await resolveAutoLayoutForPage(currentPage.value)
 		}
 
 		doubleSpread.value = totalPages.value > 1
@@ -825,18 +861,7 @@ function handleImageError() {
 let resizeObserver: ResizeObserver | null = null
 
 function handleResize() {
-	let layoutChanged = false
-	if (autoLayout.value) {
-		const detected = detectResponsiveLayout()
-		if (pageLayout.value !== detected) {
-			pageLayout.value = detected
-			if (detected === 'double') {
-				doubleSpread.value = getDoubleSpreadForPage(currentPage.value, totalPages.value, doublePageTurnMode.value)
-			}
-			layoutChanged = true
-		}
-	}
-	if (layoutChanged || zoomMode.value === 'fit-width' || zoomMode.value === 'fit-page') {
+	if (autoLayout.value || zoomMode.value === 'fit-width' || zoomMode.value === 'fit-page') {
 		renderCurrentView()
 	}
 }
