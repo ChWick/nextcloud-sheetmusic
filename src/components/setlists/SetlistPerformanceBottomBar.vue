@@ -3,6 +3,7 @@ import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import ChevronLeftIcon from 'vue-material-design-icons/ChevronLeft.vue'
 import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
+import CompareHorizontalIcon from 'vue-material-design-icons/CompareHorizontal.vue'
 import SkipNextIcon from 'vue-material-design-icons/SkipNext.vue'
 import SkipPreviousIcon from 'vue-material-design-icons/SkipPrevious.vue'
 import DoublePageTurnModeSelector from '../file-preview/DoublePageTurnModeSelector.vue'
@@ -122,6 +123,7 @@ const emit = defineEmits<{
 				:aria-pressed="interleaveSongs"
 				:title="t('sheetmusic', 'Interleave last page of current song with first page of next song')"
 				@click="emit('toggleInterleave')">
+				<template #icon><CompareHorizontalIcon :size="18" /></template>
 				{{ t('sheetmusic', 'Interleave') }}
 			</NcButton>
 
