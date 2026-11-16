@@ -11,16 +11,27 @@ namespace OCA\SheetMusic\Service;
 
 use OCA\SheetMusic\Db\InternalEntity;
 use OCA\SheetMusic\Db\InternalEntityMapper;
+use OCA\SheetMusic\Db\InternalLibrary;
+use OCA\SheetMusic\Db\InternalSetlistFile;
+use OCA\SheetMusic\Db\InternalSetlistFileMapper;
 use OCA\SheetMusic\Db\InternalSetlistItem;
 use OCA\SheetMusic\Db\InternalSetlistItemMapper;
 use OCA\SheetMusic\Db\InternalSongBookmarkMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
+use OCA\SheetMusic\Listener\SheetMusicFileEventListener;
 use OCA\SheetMusic\Util\SongSortingUtil;
+use OCP\Files\File;
+use OCP\Files\Folder;
+use OCP\Files\IRootFolder;
 use OCP\IUser;
 use Psr\Log\LoggerInterface;
 
 class SetlistService {
+	public const SETLISTS_DIR = 'SetLists';
+	/** @var list<string> */
+	public const ALLOWED_FILE_EXTENSIONS = ['pdf', 'docx', 'xlsx'];
+
 	public function __construct(
 		private LibraryMapper $libraryMapper,
 		private InternalEntityMapper $internalEntityMapper,
@@ -29,6 +40,8 @@ class SetlistService {
 		private InternalSongBookmarkMapper $internalSongBookmarkMapper,
 		private LoggerInterface $logger,
 		private ?LibraryService $libraryService = null,
+		private ?InternalSetlistFileMapper $internalSetlistFileMapper = null,
+		private ?IRootFolder $rootFolder = null,
 	) {
 	}
 
@@ -48,6 +61,7 @@ class SetlistService {
 
 		$setlistIds = array_map(fn ($s) => (int)$s->id, $setlists);
 		$counts = $this->internalSetlistItemMapper->getItemCountForSetlists($setlistIds);
+		$fileCounts = $this->internalSetlistFileMapper?->getFileCountForSetlists($setlistIds) ?? [];
 
 		$result = [];
 		foreach ($setlists as $s) {
@@ -59,6 +73,7 @@ class SetlistService {
 				'sortBy' => $s->sortBy,
 				'ascending' => $s->ascending,
 				'itemCount' => $counts[$id] ?? 0,
+				'fileCount' => $fileCounts[$id] ?? 0,
 				'createdAt' => $s->createdAt,
 				'updatedAt' => $s->updatedAt,
 			];
@@ -79,6 +94,7 @@ class SetlistService {
 
 		$setlistIds = array_map(fn ($s) => (int)$s->id, $setlists);
 		$counts = $this->internalSetlistItemMapper->getItemCountForSetlists($setlistIds);
+		$fileCounts = $this->internalSetlistFileMapper?->getFileCountForSetlists($setlistIds) ?? [];
 
 		$result = [];
 		foreach ($setlists as $s) {
@@ -90,6 +106,7 @@ class SetlistService {
 				'sortBy' => $s->sortBy,
 				'ascending' => $s->ascending,
 				'itemCount' => $counts[$id] ?? 0,
+				'fileCount' => $fileCounts[$id] ?? 0,
 				'createdAt' => $s->createdAt,
 				'updatedAt' => $s->updatedAt,
 			];
@@ -108,6 +125,7 @@ class SetlistService {
 		}
 
 		$items = $this->internalSetlistItemMapper->findForSetlist($id);
+		$files = $this->internalSetlistFileMapper?->findForSetlist($id) ?? [];
 
 		return [
 			'id' => $setlist->id,
@@ -116,6 +134,7 @@ class SetlistService {
 			'sortBy' => $setlist->sortBy,
 			'ascending' => $setlist->ascending,
 			'items' => $items,
+			'files' => $files,
 			'createdAt' => $setlist->createdAt,
 			'updatedAt' => $setlist->updatedAt,
 		];
@@ -135,6 +154,7 @@ class SetlistService {
 		}
 
 		$items = $this->internalSetlistItemMapper->findForSetlist($id);
+		$files = $this->internalSetlistFileMapper?->findForSetlist($id) ?? [];
 
 		return [
 			'id' => $setlist->id,
@@ -143,6 +163,7 @@ class SetlistService {
 			'sortBy' => $setlist->sortBy,
 			'ascending' => $setlist->ascending,
 			'items' => $items,
+			'files' => $files,
 			'createdAt' => $setlist->createdAt,
 			'updatedAt' => $setlist->updatedAt,
 		];
@@ -232,6 +253,8 @@ class SetlistService {
 		}
 
 		$this->internalSetlistItemMapper->deleteForSetlist($id);
+		$this->internalSetlistFileMapper?->deleteForSetlist($id);
+		$this->deleteSetlistStorageFolder($targetLibraryId, $id);
 		$this->internalEntityMapper->delete($id);
 		$this->libraryMapper->touch($targetLibraryId);
 
@@ -423,5 +446,438 @@ class SetlistService {
 			return null;
 		}
 		return $setlist;
+	}
+
+	/**
+	 * @return list<InternalSetlistFile>|null
+	 */
+	public function getSetlistFiles(IUser $user, int $libraryId, int $setlistId): ?array {
+		if ($this->findUserLibrary($user, $libraryId) === null) {
+			return null;
+		}
+		if ($this->findActiveSetlist($libraryId, $setlistId) === null) {
+			return null;
+		}
+
+		return $this->internalSetlistFileMapper?->findForSetlist($setlistId) ?? [];
+	}
+
+	/**
+	 * @return list<InternalSetlistFile>|null
+	 */
+	public function getSetlistFilesForPublicToken(int $libraryId, int $setlistId): ?array {
+		if ($this->findActiveSetlist($libraryId, $setlistId) === null) {
+			return null;
+		}
+
+		return $this->internalSetlistFileMapper?->findForSetlist($setlistId) ?? [];
+	}
+
+	/**
+	 * @param array<string, mixed>|null $fileInfo
+	 */
+	public function addSetlistFile(IUser $user, int $libraryId, int $setlistId, ?array $fileInfo): ?InternalSetlistFile {
+		if ($this->internalSetlistFileMapper === null || $this->rootFolder === null) {
+			throw new \RuntimeException('Setlist file storage is not configured');
+		}
+		if ($this->findUserWritableLibrary($user, $libraryId) === null) {
+			return null;
+		}
+		$setlist = $this->findActiveSetlist($libraryId, $setlistId);
+		if ($setlist === null) {
+			return null;
+		}
+
+		if ($fileInfo === null || !isset($fileInfo['tmp_name']) || !is_string($fileInfo['tmp_name']) || $fileInfo['tmp_name'] === '') {
+			throw new \InvalidArgumentException('No file uploaded');
+		}
+		if (isset($fileInfo['error']) && (int)$fileInfo['error'] !== UPLOAD_ERR_OK) {
+			throw new \InvalidArgumentException('File upload failed');
+		}
+
+		$tmpName = $fileInfo['tmp_name'];
+		if (!is_file($tmpName)) {
+			throw new \InvalidArgumentException('Uploaded file is missing');
+		}
+		$content = file_get_contents($tmpName);
+		if ($content === false) {
+			throw new \RuntimeException('Failed to read uploaded file');
+		}
+
+		$rawName = isset($fileInfo['name']) && is_string($fileInfo['name']) ? basename($fileInfo['name']) : 'document.pdf';
+		$ext = strtolower(pathinfo($rawName, PATHINFO_EXTENSION));
+		if (!in_array($ext, self::ALLOWED_FILE_EXTENSIONS, true)) {
+			throw new \InvalidArgumentException('Unsupported file type. Allowed types: ' . implode(', ', self::ALLOWED_FILE_EXTENSIONS));
+		}
+
+		$safeFilename = SongPathNamingRule::normalizeGeneratedPathSegment($rawName);
+		if (!str_ends_with(strtolower($safeFilename), '.' . $ext)) {
+			$safeFilename .= '.' . $ext;
+		}
+
+		$targetLibraryId = $this->resolveTargetLibraryId($libraryId);
+		$targetLibrary = $this->libraryMapper->findById($targetLibraryId);
+		if ($targetLibrary === null) {
+			return null;
+		}
+
+		$libFolder = $this->getLibraryFolderNode($targetLibrary);
+		if ($libFolder === null) {
+			throw new \RuntimeException('Library folder not found');
+		}
+
+		$setlistFolder = $this->ensureSetlistStorageFolder($libFolder, $setlistId, $setlist->name);
+		$uniqueFilename = $this->resolveUniqueFilename($setlistFolder, $safeFilename);
+		$relativePath = self::SETLISTS_DIR . '/' . $setlistFolder->getName() . '/' . $uniqueFilename;
+
+		/** @var File $createdNode */
+		$createdNode = SheetMusicFileEventListener::runWithoutListener(static fn () => $setlistFolder->newFile($uniqueFilename, $content));
+
+		$mimeType = $this->resolveMimeType($ext, isset($fileInfo['type']) && is_string($fileInfo['type']) ? $fileInfo['type'] : '');
+		$now = time();
+		$record = new InternalSetlistFile(
+			id: null,
+			setlistId: $setlistId,
+			libraryId: $targetLibraryId,
+			ocFileId: (int)$createdNode->getId(),
+			path: $relativePath,
+			filename: $uniqueFilename,
+			mimeType: $mimeType,
+			fileSize: strlen($content),
+			sortOrder: $this->internalSetlistFileMapper->getNextSortOrder($setlistId),
+			createdAt: $now,
+			updatedAt: $now,
+		);
+
+		$inserted = $this->internalSetlistFileMapper->insert($record);
+		$setlist->updatedAt = $now;
+		$this->internalEntityMapper->update($setlist);
+		$this->libraryMapper->touch($targetLibraryId);
+
+		return $inserted;
+	}
+
+	public function attachNextcloudSetlistFile(
+		IUser $user,
+		int $libraryId,
+		int $setlistId,
+		string $sourcePath,
+		string $action = 'copy',
+	): ?InternalSetlistFile {
+		if ($this->internalSetlistFileMapper === null || $this->rootFolder === null) {
+			throw new \RuntimeException('Setlist file storage is not configured');
+		}
+		if ($sourcePath === '') {
+			throw new \InvalidArgumentException('Source path cannot be empty');
+		}
+		if (!in_array($action, ['copy', 'move'], true)) {
+			throw new \InvalidArgumentException('Invalid action. Allowed actions: copy, move');
+		}
+		if ($this->findUserWritableLibrary($user, $libraryId) === null) {
+			return null;
+		}
+		$setlist = $this->findActiveSetlist($libraryId, $setlistId);
+		if ($setlist === null) {
+			return null;
+		}
+
+		$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+		$relSource = ltrim($sourcePath, '/');
+		if (!$userFolder->nodeExists($relSource)) {
+			throw new \InvalidArgumentException('Selected file does not exist');
+		}
+		$sourceNode = $userFolder->get($relSource);
+		if (!($sourceNode instanceof File)) {
+			throw new \InvalidArgumentException('Selected item is not a file');
+		}
+
+		$rawName = $sourceNode->getName();
+		$ext = strtolower(pathinfo($rawName, PATHINFO_EXTENSION));
+		if (!in_array($ext, self::ALLOWED_FILE_EXTENSIONS, true)) {
+			throw new \InvalidArgumentException('Unsupported file type. Allowed types: ' . implode(', ', self::ALLOWED_FILE_EXTENSIONS));
+		}
+
+		$safeFilename = SongPathNamingRule::normalizeGeneratedPathSegment($rawName);
+		if (!str_ends_with(strtolower($safeFilename), '.' . $ext)) {
+			$safeFilename .= '.' . $ext;
+		}
+
+		$targetLibraryId = $this->resolveTargetLibraryId($libraryId);
+		$targetLibrary = $this->libraryMapper->findById($targetLibraryId);
+		if ($targetLibrary === null) {
+			return null;
+		}
+
+		$libFolder = $this->getLibraryFolderNode($targetLibrary);
+		if ($libFolder === null) {
+			throw new \RuntimeException('Library folder not found');
+		}
+
+		$setlistFolder = $this->ensureSetlistStorageFolder($libFolder, $setlistId, $setlist->name);
+		$uniqueFilename = $this->resolveUniqueFilename($setlistFolder, $safeFilename);
+		$targetInternalPath = $setlistFolder->getPath() . '/' . $uniqueFilename;
+		$relativePath = self::SETLISTS_DIR . '/' . $setlistFolder->getName() . '/' . $uniqueFilename;
+
+		SheetMusicFileEventListener::runWithoutListener(static function () use ($action, $sourceNode, $targetInternalPath): void {
+			if ($action === 'move') {
+				$sourceNode->move($targetInternalPath);
+			} else {
+				$sourceNode->copy($targetInternalPath);
+			}
+		});
+
+		$attachedNode = $setlistFolder->get($uniqueFilename);
+		if (!($attachedNode instanceof File)) {
+			throw new \RuntimeException('Failed to locate attached file');
+		}
+
+		$mimeType = $this->resolveMimeType($ext, $attachedNode->getMimeType());
+		$now = time();
+		$record = new InternalSetlistFile(
+			id: null,
+			setlistId: $setlistId,
+			libraryId: $targetLibraryId,
+			ocFileId: (int)$attachedNode->getId(),
+			path: $relativePath,
+			filename: $uniqueFilename,
+			mimeType: $mimeType,
+			fileSize: (int)$attachedNode->getSize(),
+			sortOrder: $this->internalSetlistFileMapper->getNextSortOrder($setlistId),
+			createdAt: $now,
+			updatedAt: $now,
+		);
+
+		$inserted = $this->internalSetlistFileMapper->insert($record);
+		$setlist->updatedAt = $now;
+		$this->internalEntityMapper->update($setlist);
+		$this->libraryMapper->touch($targetLibraryId);
+
+		return $inserted;
+	}
+
+	/**
+	 * @return array{file: InternalSetlistFile, content: string}|null
+	 */
+	public function getSetlistFileContent(IUser $user, int $libraryId, int $setlistId, int $fileId): ?array {
+		if ($this->findUserLibrary($user, $libraryId) === null) {
+			return null;
+		}
+		return $this->loadSetlistFileContent($libraryId, $setlistId, $fileId);
+	}
+
+	/**
+	 * @return array{file: InternalSetlistFile, content: string}|null
+	 */
+	public function getSetlistFileContentForPublicToken(int $libraryId, int $setlistId, int $fileId): ?array {
+		return $this->loadSetlistFileContent($libraryId, $setlistId, $fileId);
+	}
+
+	public function deleteSetlistFile(IUser $user, int $libraryId, int $setlistId, int $fileId): bool {
+		if ($this->internalSetlistFileMapper === null) {
+			return false;
+		}
+		if ($this->findUserWritableLibrary($user, $libraryId) === null) {
+			return false;
+		}
+		$setlist = $this->findActiveSetlist($libraryId, $setlistId);
+		if ($setlist === null) {
+			return false;
+		}
+
+		$fileRecord = $this->internalSetlistFileMapper->findById($fileId);
+		if ($fileRecord === null || $fileRecord->setlistId !== $setlistId) {
+			return false;
+		}
+
+		$targetLibraryId = $this->resolveTargetLibraryId($libraryId);
+		$targetLibrary = $this->libraryMapper->findById($targetLibraryId);
+		if ($targetLibrary !== null) {
+			$node = $this->resolveSetlistFileNode($targetLibrary, $fileRecord);
+			if ($node !== null) {
+				try {
+					SheetMusicFileEventListener::runWithoutListener(static fn () => $node->delete());
+				} catch (\Throwable $e) {
+					$this->logger->warning('Failed to delete physical setlist file: ' . $e->getMessage(), [
+						'fileId' => $fileId,
+						'path' => $fileRecord->path,
+					]);
+				}
+			}
+		}
+
+		$this->internalSetlistFileMapper->delete($fileId);
+		$now = time();
+		$setlist->updatedAt = $now;
+		$this->internalEntityMapper->update($setlist);
+		$this->libraryMapper->touch($targetLibraryId);
+
+		return true;
+	}
+
+	/**
+	 * @return array{file: InternalSetlistFile, content: string}|null
+	 */
+	private function loadSetlistFileContent(int $libraryId, int $setlistId, int $fileId): ?array {
+		if ($this->internalSetlistFileMapper === null) {
+			return null;
+		}
+		if ($this->findActiveSetlist($libraryId, $setlistId) === null) {
+			return null;
+		}
+
+		$fileRecord = $this->internalSetlistFileMapper->findById($fileId);
+		if ($fileRecord === null || $fileRecord->setlistId !== $setlistId) {
+			return null;
+		}
+
+		$targetLibraryId = $this->resolveTargetLibraryId($libraryId);
+		$targetLibrary = $this->libraryMapper->findById($targetLibraryId);
+		if ($targetLibrary === null) {
+			return null;
+		}
+
+		$node = $this->resolveSetlistFileNode($targetLibrary, $fileRecord);
+		if ($node === null) {
+			return null;
+		}
+
+		return [
+			'file' => $fileRecord,
+			'content' => $node->getContent(),
+		];
+	}
+
+	private function getLibraryFolderNode(InternalLibrary $library): ?Folder {
+		if ($this->rootFolder === null) {
+			return null;
+		}
+		try {
+			$userFolder = $this->rootFolder->getUserFolder($library->userId);
+			if ($library->folderId !== null && $library->folderId > 0) {
+				$nodes = $userFolder->getById($library->folderId);
+				if (!empty($nodes) && $nodes[0] instanceof Folder) {
+					return $nodes[0];
+				}
+			}
+			$relPath = ltrim($library->path, '/');
+			if ($relPath === '') {
+				return $userFolder;
+			}
+			if ($userFolder->nodeExists($relPath)) {
+				$node = $userFolder->get($relPath);
+				if ($node instanceof Folder) {
+					return $node;
+				}
+			}
+		} catch (\Throwable) {
+			// Ignore
+		}
+		return null;
+	}
+
+	private function ensureSetlistStorageFolder(Folder $libFolder, int $setlistId, string $setlistName): Folder {
+		if (!$libFolder->nodeExists(self::SETLISTS_DIR)) {
+			$libFolder->newFolder(self::SETLISTS_DIR);
+		}
+		$setlistsRoot = $libFolder->get(self::SETLISTS_DIR);
+		if (!($setlistsRoot instanceof Folder)) {
+			throw new \RuntimeException('Failed to access setlists storage directory');
+		}
+
+		$prefix = $setlistId . '-';
+		foreach ($setlistsRoot->getDirectoryListing() as $child) {
+			if ($child instanceof Folder && str_starts_with($child->getName(), $prefix)) {
+				return $child;
+			}
+		}
+
+		$slug = SongPathNamingRule::normalizeGeneratedPathSegment($setlistName);
+		$folderName = $prefix . ($slug !== '' ? $slug : 'setlist');
+		if (!$setlistsRoot->nodeExists($folderName)) {
+			$setlistsRoot->newFolder($folderName);
+		}
+		$target = $setlistsRoot->get($folderName);
+		if (!($target instanceof Folder)) {
+			throw new \RuntimeException('Failed to create setlist storage folder');
+		}
+		return $target;
+	}
+
+	private function deleteSetlistStorageFolder(int $targetLibraryId, int $setlistId): void {
+		if ($this->rootFolder === null) {
+			return;
+		}
+		$targetLibrary = $this->libraryMapper->findById($targetLibraryId);
+		if ($targetLibrary === null) {
+			return;
+		}
+		$libFolder = $this->getLibraryFolderNode($targetLibrary);
+		if ($libFolder === null || !$libFolder->nodeExists(self::SETLISTS_DIR)) {
+			return;
+		}
+		try {
+			$setlistsRoot = $libFolder->get(self::SETLISTS_DIR);
+			if (!($setlistsRoot instanceof Folder)) {
+				return;
+			}
+			$prefix = $setlistId . '-';
+			foreach ($setlistsRoot->getDirectoryListing() as $child) {
+				if ($child instanceof Folder && str_starts_with($child->getName(), $prefix)) {
+					SheetMusicFileEventListener::runWithoutListener(static fn () => $child->delete());
+				}
+			}
+		} catch (\Throwable $e) {
+			$this->logger->warning('Failed to delete setlist folder: ' . $e->getMessage(), [
+				'setlistId' => $setlistId,
+			]);
+		}
+	}
+
+	private function resolveSetlistFileNode(InternalLibrary $library, InternalSetlistFile $fileRecord): ?File {
+		if ($this->rootFolder === null) {
+			return null;
+		}
+		try {
+			$userFolder = $this->rootFolder->getUserFolder($library->userId);
+			if ($fileRecord->ocFileId > 0) {
+				$nodes = $userFolder->getById($fileRecord->ocFileId);
+				if (!empty($nodes) && $nodes[0] instanceof File) {
+					return $nodes[0];
+				}
+			}
+			$libFolder = $this->getLibraryFolderNode($library);
+			if ($libFolder !== null && $fileRecord->path !== '' && $libFolder->nodeExists($fileRecord->path)) {
+				$node = $libFolder->get($fileRecord->path);
+				if ($node instanceof File) {
+					return $node;
+				}
+			}
+		} catch (\Throwable) {
+			// Ignore
+		}
+		return null;
+	}
+
+	private function resolveUniqueFilename(Folder $folder, string $filename): string {
+		if (!$folder->nodeExists($filename)) {
+			return $filename;
+		}
+		$dotPos = strrpos($filename, '.');
+		$base = $dotPos !== false ? substr($filename, 0, $dotPos) : $filename;
+		$ext = $dotPos !== false ? substr($filename, $dotPos) : '';
+		$counter = 2;
+		while ($folder->nodeExists("{$base} ({$counter}){$ext}")) {
+			$counter++;
+		}
+		return "{$base} ({$counter}){$ext}";
+	}
+
+	private function resolveMimeType(string $ext, string $fallback): string {
+		return match ($ext) {
+			'pdf' => 'application/pdf',
+			'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+			'xlsx' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+			default => $fallback !== '' ? $fallback : 'application/octet-stream',
+		};
 	}
 }

@@ -17,7 +17,9 @@ use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\Attribute\OpenAPI;
 use OCP\AppFramework\Http\Attribute\PublicPage;
+use OCP\AppFramework\Http\DataDownloadResponse;
 use OCP\AppFramework\Http\DataResponse;
+use OCP\AppFramework\Http\Response;
 use OCP\AppFramework\OCSController;
 use OCP\IRequest;
 use OCP\IUserSession;
@@ -290,6 +292,134 @@ class SetlistController extends OCSController {
 
 		$intItemIds = array_map('intval', $itemIds);
 		$success = $this->setlistService->reorderItems($user, $libraryId, $id, $intItemIds);
+		if (!$success) {
+			return new DataResponse([], Http::STATUS_NOT_FOUND);
+		}
+
+		return new DataResponse(['success' => true]);
+	}
+
+	#[PublicPage]
+	#[NoCSRFRequired]
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'GET', url: '/api/libraries/{libraryId}/setlists/{id}/files')]
+	public function getSetlistFiles(int $libraryId, int $id): DataResponse {
+		$user = $this->userSession->getUser();
+		$publicToken = $this->request->getHeader('X-Public-Share-Token') ?? $this->request->getParam('token');
+
+		if ($publicToken !== null && $publicToken !== '') {
+			$info = $this->shareService?->findLibraryByPublicToken($publicToken);
+			if ($info === null || (int)$info['library']->id !== $libraryId) {
+				return new DataResponse([], Http::STATUS_FORBIDDEN);
+			}
+			$files = $this->setlistService->getSetlistFilesForPublicToken($libraryId, $id);
+			if ($files === null) {
+				return new DataResponse([], Http::STATUS_NOT_FOUND);
+			}
+			return new DataResponse($files);
+		}
+
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		$files = $this->setlistService->getSetlistFiles($user, $libraryId, $id);
+		if ($files === null) {
+			return new DataResponse([], Http::STATUS_NOT_FOUND);
+		}
+
+		return new DataResponse($files);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/libraries/{libraryId}/setlists/{id}/files')]
+	public function addSetlistFile(int $libraryId, int $id): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		$fileInfo = $this->request->getUploadedFile('file');
+		try {
+			$created = $this->setlistService->addSetlistFile($user, $libraryId, $id, $fileInfo);
+		} catch (\InvalidArgumentException $e) {
+			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_BAD_REQUEST);
+		}
+
+		if ($created === null) {
+			return new DataResponse([], Http::STATUS_NOT_FOUND);
+		}
+
+		return new DataResponse($created, Http::STATUS_CREATED);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/libraries/{libraryId}/setlists/{id}/files/attach')]
+	public function attachNextcloudSetlistFile(
+		int $libraryId,
+		int $id,
+		?string $sourcePath = null,
+		string $action = 'copy',
+	): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		$sourcePath = $sourcePath ?? (string)$this->request->getParam('sourcePath', '');
+		$action = (string)$this->request->getParam('action', $action);
+
+		try {
+			$created = $this->setlistService->attachNextcloudSetlistFile($user, $libraryId, $id, $sourcePath, $action);
+		} catch (\InvalidArgumentException $e) {
+			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_BAD_REQUEST);
+		}
+
+		if ($created === null) {
+			return new DataResponse([], Http::STATUS_NOT_FOUND);
+		}
+
+		return new DataResponse($created, Http::STATUS_CREATED);
+	}
+
+	#[PublicPage]
+	#[NoCSRFRequired]
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'GET', url: '/api/libraries/{libraryId}/setlists/{id}/files/{fileId}/content')]
+	public function getSetlistFileContent(int $libraryId, int $id, int $fileId): Response {
+		$user = $this->userSession->getUser();
+		$publicToken = $this->request->getHeader('X-Public-Share-Token') ?? $this->request->getParam('token');
+
+		if ($publicToken !== null && $publicToken !== '') {
+			$info = $this->shareService?->findLibraryByPublicToken($publicToken);
+			if ($info === null || (int)$info['library']->id !== $libraryId) {
+				return new DataResponse([], Http::STATUS_FORBIDDEN);
+			}
+			$result = $this->setlistService->getSetlistFileContentForPublicToken($libraryId, $id, $fileId);
+		} elseif ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		} else {
+			$result = $this->setlistService->getSetlistFileContent($user, $libraryId, $id, $fileId);
+		}
+
+		if ($result === null) {
+			return new DataResponse([], Http::STATUS_NOT_FOUND);
+		}
+
+		$file = $result['file'];
+		$mimeType = $file->mimeType !== '' ? $file->mimeType : 'application/octet-stream';
+		return new DataDownloadResponse($result['content'], $file->filename, $mimeType);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'DELETE', url: '/api/libraries/{libraryId}/setlists/{id}/files/{fileId}')]
+	public function deleteSetlistFile(int $libraryId, int $id, int $fileId): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		$success = $this->setlistService->deleteSetlistFile($user, $libraryId, $id, $fileId);
 		if (!$success) {
 			return new DataResponse([], Http::STATUS_NOT_FOUND);
 		}
