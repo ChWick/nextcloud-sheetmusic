@@ -2,7 +2,6 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
-import { generateFilePath } from '@nextcloud/router'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import ArrowLeftIcon from 'vue-material-design-icons/ArrowLeft.vue'
 import ChevronLeftIcon from 'vue-material-design-icons/ChevronLeft.vue'
@@ -150,11 +149,14 @@ function preloadNextSong() {
 	if (!nextPath || !nextPath.toLowerCase().split('?')[0].endsWith('.pdf')) return
 	if (defaultFileBinaryCache.has(nextPath)) return
 
-	const url = generateFilePath('files', 'ajax', 'download.php') + `?files=${encodeURIComponent(nextPath)}`
-	axios.get(url, { responseType: 'arraybuffer' })
+	axios.get(nextPath, { responseType: 'arraybuffer' })
 		.then((resp) => {
 			if (resp.data) {
-				defaultFileBinaryCache.set(nextPath, new Uint8Array(resp.data))
+				const bytes = new Uint8Array(resp.data)
+				// Only cache valid PDF payloads (%PDF-)
+				if (bytes.length >= 4 && bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46) {
+					defaultFileBinaryCache.set(nextPath, bytes)
+				}
 			}
 		})
 		.catch(() => {
