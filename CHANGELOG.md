@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.3-rc4] - 2026-11-17
+
+### Added
+
+- **PWA App Manifest & Fullscreen Standalone Mode**: Added Sheet Music `manifest.json`, PWA icons (`pwa-icon.svg`, `pwa-icon-192.png`, `pwa-icon-512.png`, `favicon-touch.png`, `favicon-mask.svg`), and standalone layout styling that hides Nextcloud's global `#header` toolbar and expands the app to fill `100dvh`.
+- **Web Share Target for PDF & DOCX**: Added `share_target` manifest support, a dedicated `/sw.js` Service Worker endpoint (`resources/pwa-sw.js`) with a server-side `POST` fallback in `PageController`, and a 3-step `ShareTargetDialog` wizard to import shared `.pdf` / `.docx` files as a **New song**, **Add to existing song**, **Annotation of setlist**, or **New setlist**.
+
 ## [0.0.3-rc3] - 2026-11-17
 
 ### Added
