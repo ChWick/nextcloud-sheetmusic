@@ -386,7 +386,7 @@ watch(() => props.selectedLibrary, (newLib) => {
   display: grid;
   grid-template-columns: 320px 1fr;
   gap: 16px;
-  height: calc(100vh - 120px);
+  height: calc(var(--body-height, calc(100vh - var(--header-height, 50px))) - 70px);
   min-height: 400px;
   padding: 16px;
   box-sizing: border-box;
