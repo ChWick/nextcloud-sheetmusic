@@ -4,6 +4,7 @@ import ShareTargetDialog from '../../../src/components/ShareTargetDialog.vue'
 
 const mockApiGet = vi.fn()
 const mockApiPost = vi.fn()
+const mockCreateSetlist = vi.fn()
 const mockFetchSetlists = vi.fn()
 const mockUploadSetlistFile = vi.fn()
 const mockShowSuccess = vi.fn()
@@ -22,6 +23,7 @@ vi.mock('../../../src/api/client', () => ({
 }))
 
 vi.mock('../../../src/api/setlists', () => ({
+	createSetlist: (...args: unknown[]) => mockCreateSetlist(...args),
 	fetchSetlists: (...args: unknown[]) => mockFetchSetlists(...args),
 	uploadSetlistFile: (...args: unknown[]) => mockUploadSetlistFile(...args),
 }))
@@ -84,6 +86,7 @@ describe('ShareTargetDialog.vue', () => {
 			{ id: 7, name: 'Sunday Service' },
 			{ id: 8, name: 'Christmas Concert' },
 		])
+		mockCreateSetlist.mockResolvedValue({ id: 55, name: 'Order of Service' })
 		mockApiPost.mockImplementation((path: string) => {
 			if (path === '/api/songs') {
 				return Promise.resolve({ data: { ocs: { data: { createdSongId: 99 } } } })
@@ -203,6 +206,37 @@ describe('ShareTargetDialog.vue', () => {
 		expect(mockUploadSetlistFile).toHaveBeenCalledWith(1, 8, docxFile)
 		expect(wrapper.emitted('imported')?.[0]).toEqual([
 			{ targetType: 'setlist-file', libraryId: 1, setlistId: 8 },
+		])
+	})
+
+	it('creates a new setlist and attaches the shared file', async () => {
+		const docxFile = new File(['docx-bytes'], 'Order of Service.docx', {
+			type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+		})
+		const wrapper = mount(ShareTargetDialog, {
+			props: {
+				open: true,
+				files: [docxFile],
+				libraries: singleLibrary,
+				selectedLibraryId: 1,
+			},
+		})
+		await flushPromises()
+
+		await findButton(wrapper, 'Next').trigger('click')
+		await wrapper.find('input[value="new-setlist"]').setValue(true)
+		await findButton(wrapper, 'Next').trigger('click')
+
+		const nameInput = wrapper.find('input[aria-label="Setlist name"]')
+		expect((nameInput.element as HTMLInputElement).value).toBe('Order of Service')
+
+		await findButton(wrapper, 'Import').trigger('click')
+		await flushPromises()
+
+		expect(mockCreateSetlist).toHaveBeenCalledWith(1, 'Order of Service')
+		expect(mockUploadSetlistFile).toHaveBeenCalledWith(1, 55, docxFile)
+		expect(wrapper.emitted('imported')?.[0]).toEqual([
+			{ targetType: 'new-setlist', libraryId: 1, setlistId: 55 },
 		])
 	})
 })

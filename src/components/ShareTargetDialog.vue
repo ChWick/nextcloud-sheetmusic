@@ -54,6 +54,12 @@
 				             :disabled="isSubmitting"
 				             required />
 
+				<NcTextField v-else-if="mode === 'new-setlist'"
+				             v-model="newSetlistName"
+				             :label="t('sheetmusic', 'Setlist name')"
+				             :disabled="isSubmitting"
+				             required />
+
 				<FilterableOptionList v-else-if="mode === 'existing-song'"
 				                      v-model="selectedSongId"
 				                      :items="songOptions"
@@ -152,6 +158,7 @@ const step = ref<1 | 2 | 3>(1)
 const mode = ref<ShareTargetMode>('new-song')
 const targetLibraryId = ref(-1)
 const newSongTitle = ref('')
+const newSetlistName = ref('')
 const selectedSongId = ref(-1)
 const selectedSetlistId = ref(-1)
 
@@ -159,6 +166,7 @@ const destinationOptions = computed<Array<{ value: ShareTargetMode; label: strin
 	{ value: 'new-song', label: t('sheetmusic', 'New song') },
 	{ value: 'existing-song', label: t('sheetmusic', 'Add to existing song') },
 	{ value: 'setlist-file', label: t('sheetmusic', 'Annotation of setlist') },
+	{ value: 'new-setlist', label: t('sheetmusic', 'New setlist') },
 ])
 
 const writableLibraries = computed(() =>
@@ -184,6 +192,7 @@ const canSubmit = computed(() => {
 		return false
 	}
 	if (mode.value === 'new-song') return newSongTitle.value.trim().length > 0
+	if (mode.value === 'new-setlist') return newSetlistName.value.trim().length > 0
 	if (mode.value === 'existing-song') return selectedSongId.value > 0
 	return selectedSetlistId.value > 0
 })
@@ -201,7 +210,9 @@ watch(() => props.open, (isOpen) => {
 	resetTargets()
 	selectedSongId.value = -1
 	selectedSetlistId.value = -1
-	newSongTitle.value = props.initialTitle?.trim() || (props.files[0] ? defaultTitleFromFilename(props.files[0].name) : '')
+	const defaultName = props.initialTitle?.trim() || (props.files[0] ? defaultTitleFromFilename(props.files[0].name) : '')
+	newSongTitle.value = defaultName
+	newSetlistName.value = defaultName
 
 	if (writableLibraries.value.length === 1) {
 		targetLibraryId.value = writableLibraries.value[0].id
@@ -223,7 +234,7 @@ async function goNext() {
 		step.value = 2
 	} else if (step.value === 2) {
 		step.value = 3
-		if (mode.value !== 'new-song') {
+		if (mode.value === 'existing-song' || mode.value === 'setlist-file') {
 			const defaults = await loadTargets(targetLibraryId.value)
 			if (defaults) {
 				selectedSongId.value = defaults.firstSongId
@@ -240,6 +251,7 @@ async function submitImport() {
 		libraryId: targetLibraryId.value,
 		files: props.files,
 		newSongTitle: newSongTitle.value,
+		newSetlistName: newSetlistName.value,
 		songId: selectedSongId.value,
 		setlistId: selectedSetlistId.value,
 	})

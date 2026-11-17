@@ -2,10 +2,10 @@ import { ref } from 'vue'
 import { showSuccess } from '@nextcloud/dialogs'
 import { translate as t } from '@nextcloud/l10n'
 import { apiGet, apiPost } from '../api/client'
-import { fetchSetlists, uploadSetlistFile } from '../api/setlists'
+import { createSetlist, fetchSetlists, uploadSetlistFile } from '../api/setlists'
 import type { Setlist, Song } from '../types/song'
 
-export type ShareTargetMode = 'new-song' | 'existing-song' | 'setlist-file'
+export type ShareTargetMode = 'new-song' | 'existing-song' | 'setlist-file' | 'new-setlist'
 
 export interface ShareImportResult {
 	targetType: ShareTargetMode
@@ -74,13 +74,14 @@ export function useShareTargetImport() {
 		libraryId: number
 		files: File[]
 		newSongTitle: string
+		newSetlistName: string
 		songId: number
 		setlistId: number
 	}): Promise<ShareImportResult | null> {
 		isSubmitting.value = true
 		errorMessage.value = ''
 		try {
-			const { mode, libraryId, files, newSongTitle, songId, setlistId } = params
+			const { mode, libraryId, files, newSongTitle, newSetlistName, songId, setlistId } = params
 			if (mode === 'new-song') {
 				const createRes = await apiPost('/api/songs', {
 					libraryId,
@@ -100,6 +101,18 @@ export function useShareTargetImport() {
 				await uploadFilesToSong(libraryId, songId, files)
 				showSuccess(t('sheetmusic', 'Added shared file to song.'))
 				return { targetType: 'existing-song', libraryId, songId }
+			}
+
+			if (mode === 'new-setlist') {
+				const createdSetlist = await createSetlist(libraryId, newSetlistName.trim())
+				if (!createdSetlist?.id) {
+					throw new Error(t('sheetmusic', 'Failed to create setlist.'))
+				}
+				for (const file of files) {
+					await uploadSetlistFile(libraryId, createdSetlist.id, file)
+				}
+				showSuccess(t('sheetmusic', 'Created setlist and attached shared file.'))
+				return { targetType: 'new-setlist', libraryId, setlistId: createdSetlist.id }
 			}
 
 			for (const file of files) {

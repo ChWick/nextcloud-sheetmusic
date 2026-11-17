@@ -205,7 +205,7 @@ function closeShareTargetDialog() {
 
 function handleShareTargetImported(result: ShareImportResult) {
   closeShareTargetDialog()
-  if (result.targetType === 'setlist-file') {
+  if (result.targetType === 'setlist-file' || result.targetType === 'new-setlist') {
     router.push({
       name: 'LibraryView',
       params: { library: result.libraryId, view: 'setlists' },
