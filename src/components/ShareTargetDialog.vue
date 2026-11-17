@@ -5,7 +5,12 @@
 	          @close="!isSubmitting && emit('close')">
 		<div :class="$style.container">
 			<div :class="$style.fileSummary">
-				<p :class="$style.sectionLabel">{{ t('sheetmusic', 'Shared files') }}</p>
+				<div :class="$style.summaryHeader">
+					<span :class="$style.sectionLabel">{{ t('sheetmusic', 'Shared files') }}</span>
+					<span v-if="writableLibraries.length > 0" :class="$style.stepBadge">
+						{{ t('sheetmusic', 'Step {step} of 3', { step }, { escape: false }) }}
+					</span>
+				</div>
 				<ul :class="$style.fileList">
 					<li v-for="(file, idx) in files" :key="`${file.name}-${idx}`" :class="$style.fileItem">
 						<span :class="$style.fileName">{{ file.name }}</span>
@@ -18,97 +23,93 @@
 				{{ t('sheetmusic', 'No writable library is available to import shared files.') }}
 			</div>
 
-			<template v-else>
-				<div :class="$style.fieldGroup">
-					<label :for="librarySelectId" :class="$style.sectionLabel">
-						{{ t('sheetmusic', 'Library') }}
+			<!-- Step 1: Select library -->
+			<div v-else-if="step === 1" :class="$style.fieldGroup">
+				<span :class="$style.sectionLabel">{{ t('sheetmusic', 'Select library') }}</span>
+				<div :class="$style.optionCards" role="radiogroup" :aria-label="t('sheetmusic', 'Select library')">
+					<label v-for="lib in writableLibraries"
+					       :key="lib.id"
+					       :class="[$style.optionCard, targetLibraryId === lib.id && $style.optionCardActive]">
+						<input v-model.number="targetLibraryId" type="radio" :value="lib.id">
+						<span :class="$style.optionText">{{ lib.path }}</span>
 					</label>
-					<select :id="librarySelectId"
-					        v-model.number="targetLibraryId"
-					        :disabled="isSubmitting"
-					        :class="$style.select">
-						<option v-for="lib in writableLibraries" :key="lib.id" :value="lib.id">
-							{{ lib.name }}
-						</option>
-					</select>
 				</div>
+			</div>
 
-				<div :class="$style.fieldGroup">
-					<span :class="$style.sectionLabel">{{ t('sheetmusic', 'Destination') }}</span>
-					<div :class="$style.modeOptions" role="radiogroup" :aria-label="t('sheetmusic', 'Destination')">
-						<label :class="[$style.modeOption, mode === 'new-song' && $style.modeOptionActive]">
-							<input v-model="mode" type="radio" value="new-song" :disabled="isSubmitting">
-							<span>{{ t('sheetmusic', 'New song') }}</span>
-						</label>
-						<label :class="[$style.modeOption, mode === 'existing-song' && $style.modeOptionActive]">
-							<input v-model="mode" type="radio" value="existing-song" :disabled="isSubmitting">
-							<span>{{ t('sheetmusic', 'Add to existing song') }}</span>
-						</label>
-						<label :class="[$style.modeOption, mode === 'setlist-file' && $style.modeOptionActive]">
-							<input v-model="mode" type="radio" value="setlist-file" :disabled="isSubmitting">
-							<span>{{ t('sheetmusic', 'Annotation of setlist') }}</span>
-						</label>
-					</div>
-				</div>
-
-				<div v-if="mode === 'new-song'" :class="$style.fieldGroup">
-					<NcTextField v-model="newSongTitle"
-					             :label="t('sheetmusic', 'Song title')"
-					             :disabled="isSubmitting"
-					             required />
-				</div>
-
-				<div v-else-if="mode === 'existing-song'" :class="$style.fieldGroup">
-					<NcTextField v-model="songSearchQuery"
-					             :label="t('sheetmusic', 'Filter songs')"
-					             :disabled="isSubmitting || isLoadingTargets" />
-					<label :for="songSelectId" :class="$style.subLabel">
-						{{ t('sheetmusic', 'Select song') }}
+			<!-- Step 2: Choose destination -->
+			<div v-else-if="step === 2" :class="$style.fieldGroup">
+				<span :class="$style.sectionLabel">{{ t('sheetmusic', 'Where do you want to add this file?') }}</span>
+				<div :class="$style.optionCards" role="radiogroup" :aria-label="t('sheetmusic', 'Destination')">
+					<label :class="[$style.optionCard, mode === 'new-song' && $style.optionCardActive]">
+						<input v-model="mode" type="radio" value="new-song">
+						<span :class="$style.optionText">{{ t('sheetmusic', 'New song') }}</span>
 					</label>
-					<div v-if="isLoadingTargets" :class="$style.loadingRow">
-						<NcLoadingIcon :size="20" />
-						<span>{{ t('sheetmusic', 'Loading songs…') }}</span>
-					</div>
-					<select v-else
-					        :id="songSelectId"
-					        v-model.number="selectedSongId"
-					        :disabled="isSubmitting || filteredSongs.length === 0"
-					        :class="$style.select">
-						<option :value="-1" disabled>{{ t('sheetmusic', 'Choose a song…') }}</option>
-						<option v-for="song in filteredSongs" :key="song.id" :value="song.id">
-							{{ song.title }}
-						</option>
-					</select>
-				</div>
-
-				<div v-else-if="mode === 'setlist-file'" :class="$style.fieldGroup">
-					<label :for="setlistSelectId" :class="$style.sectionLabel">
-						{{ t('sheetmusic', 'Select setlist') }}
+					<label :class="[$style.optionCard, mode === 'existing-song' && $style.optionCardActive]">
+						<input v-model="mode" type="radio" value="existing-song">
+						<span :class="$style.optionText">{{ t('sheetmusic', 'Add to existing song') }}</span>
 					</label>
-					<div v-if="isLoadingTargets" :class="$style.loadingRow">
-						<NcLoadingIcon :size="20" />
-						<span>{{ t('sheetmusic', 'Loading setlists…') }}</span>
-					</div>
-					<select v-else
-					        :id="setlistSelectId"
-					        v-model.number="selectedSetlistId"
-					        :disabled="isSubmitting || setlists.length === 0"
-					        :class="$style.select">
-						<option :value="-1" disabled>{{ t('sheetmusic', 'Choose a setlist…') }}</option>
-						<option v-for="setlist in setlists" :key="setlist.id" :value="setlist.id">
-							{{ setlist.name }}
-						</option>
-					</select>
+					<label :class="[$style.optionCard, mode === 'setlist-file' && $style.optionCardActive]">
+						<input v-model="mode" type="radio" value="setlist-file">
+						<span :class="$style.optionText">{{ t('sheetmusic', 'Annotation of setlist') }}</span>
+					</label>
 				</div>
-			</template>
+			</div>
+
+			<!-- Step 3: Sub-options -->
+			<div v-else-if="step === 3" :class="$style.fieldGroup">
+				<NcTextField v-if="mode === 'new-song'"
+				             v-model="newSongTitle"
+				             :label="t('sheetmusic', 'Song title')"
+				             :disabled="isSubmitting"
+				             required />
+
+				<FilterableOptionList v-else-if="mode === 'existing-song'"
+				                      v-model="selectedSongId"
+				                      :items="songOptions"
+				                      :filter-label="t('sheetmusic', 'Filter songs')"
+				                      :filter-placeholder="t('sheetmusic', 'Search by title or composer…')"
+				                      :list-label="t('sheetmusic', 'Select song')"
+				                      :empty-text="t('sheetmusic', 'No matching songs found.')"
+				                      :loading-text="t('sheetmusic', 'Loading songs…')"
+				                      :loading="isLoadingTargets"
+				                      :disabled="isSubmitting" />
+
+				<FilterableOptionList v-else
+				                      v-model="selectedSetlistId"
+				                      :items="setlistOptions"
+				                      :filter-label="t('sheetmusic', 'Filter setlists')"
+				                      :filter-placeholder="t('sheetmusic', 'Search setlists…')"
+				                      :list-label="t('sheetmusic', 'Select setlist')"
+				                      :empty-text="t('sheetmusic', 'No matching setlists found.')"
+				                      :loading-text="t('sheetmusic', 'Loading setlists…')"
+				                      :loading="isLoadingTargets"
+				                      :disabled="isSubmitting" />
+			</div>
 
 			<p v-if="errorMessage" :class="$style.error" role="alert">{{ errorMessage }}</p>
 
 			<div :class="$style.actions">
-				<NcButton :disabled="isSubmitting" @click="emit('close')">
+				<NcButton v-if="step === 1 || writableLibraries.length === 0"
+				          :disabled="isSubmitting"
+				          @click="emit('close')">
 					{{ t('sheetmusic', 'Cancel') }}
 				</NcButton>
-				<NcButton variant="primary" :disabled="!canSubmit" @click="submitImport">
+				<NcButton v-else
+				          :disabled="isSubmitting"
+				          @click="goBack">
+					{{ t('sheetmusic', 'Back') }}
+				</NcButton>
+
+				<NcButton v-if="writableLibraries.length > 0 && step < 3"
+				          variant="primary"
+				          :disabled="!canAdvance"
+				          @click="goNext">
+					{{ t('sheetmusic', 'Next') }}
+				</NcButton>
+				<NcButton v-else-if="writableLibraries.length > 0"
+				          variant="primary"
+				          :disabled="!canSubmit"
+				          @click="submitImport">
 					<template v-if="isSubmitting" #icon>
 						<NcLoadingIcon :size="18" />
 					</template>
@@ -128,6 +129,7 @@ import { apiGet, apiPost } from '../api/client'
 import { fetchSetlists, uploadSetlistFile } from '../api/setlists'
 import type { Library, Setlist, Song } from '../types/song'
 import { defaultTitleFromFilename } from '../utils/shareTarget'
+import FilterableOptionList, { type FilterableOptionItem } from './share-target/FilterableOptionList.vue'
 
 export type ShareTargetMode = 'new-song' | 'existing-song' | 'setlist-file'
 
@@ -151,18 +153,15 @@ const emit = defineEmits<{
 	imported: [result: ShareImportResult]
 }>()
 
-const librarySelectId = 'sheetmusic-share-library'
-const songSelectId = 'sheetmusic-share-song'
-const setlistSelectId = 'sheetmusic-share-setlist'
-
+const step = ref<1 | 2 | 3>(1)
 const mode = ref<ShareTargetMode>('new-song')
 const targetLibraryId = ref<number>(-1)
 const newSongTitle = ref<string>('')
-const songSearchQuery = ref<string>('')
 const selectedSongId = ref<number>(-1)
 const selectedSetlistId = ref<number>(-1)
 const songs = ref<Song[]>([])
 const setlists = ref<Setlist[]>([])
+const loadedLibraryId = ref<number>(-1)
 const isLoadingTargets = ref<boolean>(false)
 const isSubmitting = ref<boolean>(false)
 const errorMessage = ref<string>('')
@@ -171,12 +170,26 @@ const writableLibraries = computed(() =>
 	props.libraries.filter(lib => lib.canWrite !== false && !lib.isShared),
 )
 
-const filteredSongs = computed(() => {
-	const q = songSearchQuery.value.trim().toLowerCase()
-	if (!q) {
-		return songs.value
+const songOptions = computed<FilterableOptionItem[]>(() =>
+	songs.value.map(song => ({
+		id: song.id,
+		label: song.title,
+		subtitle: song.composers?.map(c => c.name).filter(Boolean).join(', ') || undefined,
+	})),
+)
+
+const setlistOptions = computed<FilterableOptionItem[]>(() =>
+	setlists.value.map(setlist => ({
+		id: setlist.id,
+		label: setlist.name,
+	})),
+)
+
+const canAdvance = computed(() => {
+	if (step.value === 1) {
+		return targetLibraryId.value >= 0
 	}
-	return songs.value.filter(song => song.title.toLowerCase().includes(q))
+	return true
 })
 
 const canSubmit = computed(() => {
@@ -199,9 +212,7 @@ function formatFileSize(bytes: number): string {
 }
 
 async function loadTargetsForLibrary(libraryId: number) {
-	if (libraryId < 0) {
-		songs.value = []
-		setlists.value = []
+	if (libraryId < 0 || loadedLibraryId.value === libraryId) {
 		return
 	}
 	isLoadingTargets.value = true
@@ -213,6 +224,7 @@ async function loadTargetsForLibrary(libraryId: number) {
 		])
 		songs.value = (songsRes.data.ocs.data.songs ?? []) as Song[]
 		setlists.value = setlistList
+		loadedLibraryId.value = libraryId
 		selectedSongId.value = songs.value[0]?.id ?? -1
 		selectedSetlistId.value = setlists.value[0]?.id ?? -1
 	} catch {
@@ -224,22 +236,44 @@ async function loadTargetsForLibrary(libraryId: number) {
 
 watch(() => props.open, (isOpen) => {
 	if (!isOpen) return
+	step.value = 1
+	mode.value = 'new-song'
 	errorMessage.value = ''
-	songSearchQuery.value = ''
-	const defaultTitle = props.initialTitle?.trim() || (props.files[0] ? defaultTitleFromFilename(props.files[0].name) : '')
-	newSongTitle.value = defaultTitle
-	const preferredLib = writableLibraries.value.find(lib => lib.id === props.selectedLibraryId) ?? writableLibraries.value[0]
-	targetLibraryId.value = preferredLib?.id ?? -1
-	if (targetLibraryId.value >= 0) {
-		void loadTargetsForLibrary(targetLibraryId.value)
+	loadedLibraryId.value = -1
+	songs.value = []
+	setlists.value = []
+	selectedSongId.value = -1
+	selectedSetlistId.value = -1
+	newSongTitle.value = props.initialTitle?.trim() || (props.files[0] ? defaultTitleFromFilename(props.files[0].name) : '')
+
+	if (writableLibraries.value.length === 1) {
+		targetLibraryId.value = writableLibraries.value[0].id
+	} else {
+		const preferredLib = writableLibraries.value.find(lib => lib.id === props.selectedLibraryId)
+		targetLibraryId.value = preferredLib?.id ?? -1
 	}
 }, { immediate: true })
 
-watch(targetLibraryId, (libraryId, prevId) => {
-	if (props.open && libraryId >= 0 && libraryId !== prevId) {
-		void loadTargetsForLibrary(libraryId)
+function goBack() {
+	errorMessage.value = ''
+	if (step.value === 3) {
+		step.value = 2
+	} else if (step.value === 2) {
+		step.value = 1
 	}
-})
+}
+
+function goNext() {
+	errorMessage.value = ''
+	if (step.value === 1 && targetLibraryId.value >= 0) {
+		step.value = 2
+	} else if (step.value === 2) {
+		step.value = 3
+		if (mode.value !== 'new-song') {
+			void loadTargetsForLibrary(targetLibraryId.value)
+		}
+	}
+}
 
 async function uploadFilesToSong(libraryId: number, songId: number) {
 	for (const file of props.files) {
@@ -307,17 +341,27 @@ async function submitImport() {
 	padding: 10px 12px;
 }
 
+.summaryHeader {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	margin-bottom: 6px;
+}
+
 .sectionLabel {
 	display: block;
 	font-weight: 600;
 	margin-bottom: 6px;
 }
 
-.subLabel {
-	display: block;
-	font-size: 0.9em;
+.summaryHeader .sectionLabel {
+	margin-bottom: 0;
+}
+
+.stepBadge {
+	font-size: 0.85em;
 	color: var(--color-text-maxcontrast);
-	margin: 8px 0 4px;
 }
 
 .fileList {
@@ -352,43 +396,31 @@ async function submitImport() {
 	flex-direction: column;
 }
 
-.select {
-	width: 100%;
-	padding: 8px;
-	border: 1px solid var(--color-border);
-	border-radius: var(--border-radius);
-	background: var(--color-main-background);
-	color: var(--color-main-text);
-	font: inherit;
-}
-
-.modeOptions {
+.optionCards {
 	display: flex;
 	flex-direction: column;
 	gap: 6px;
 }
 
-.modeOption {
+.optionCard {
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	padding: 8px 10px;
+	padding: 10px 12px;
 	border: 1px solid var(--color-border);
 	border-radius: var(--border-radius);
 	cursor: pointer;
 }
 
-.modeOptionActive {
+.optionCardActive {
 	border-color: var(--color-primary-element);
 	background: var(--color-background-hover);
 }
 
-.loadingRow {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	padding: 8px 0;
-	color: var(--color-text-maxcontrast);
+.optionText {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .error {
