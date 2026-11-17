@@ -1,4 +1,5 @@
 import { generateOcsUrl } from '@nextcloud/router'
+import { apiGet } from '../api/client'
 import { fetchSetlist, fetchSetlistFiles, getSetlistFileContentUrl } from '../api/setlists'
 import type { Song } from '../types/song'
 import { getFileVersionToken, getVersionedFileUrl } from './file-version'
@@ -56,7 +57,20 @@ export function isSetlistAvailableOffline(libraryId: number, setlistId: number):
 	return Boolean(map[makeKey(libraryId, setlistId)])
 }
 
+function isVersionedBinaryUrl(url: string): boolean {
+	return (url.includes('/remote.php/dav/') || (url.includes('/files/') && url.endsWith('/content') || url.includes('/content?v=')))
+		&& url.includes('v=')
+}
+
 async function cacheUrl(cache: Cache, url: string): Promise<void> {
+	// Skip re-downloading immutable versioned PDFs/files that are already cached
+	if (isVersionedBinaryUrl(url)) {
+		const existing = await cache.match(url)
+		if (existing) {
+			return
+		}
+	}
+
 	const isOcs = url.includes('/ocs/v2.php/')
 	const response = await fetch(url, {
 		credentials: 'include',
@@ -149,10 +163,30 @@ export async function syncSetlistOffline(params: {
 	}
 
 	const map = getOfflineSetlistMap()
+	const previous = map[makeKey(libraryId, setlistId)]
 	map[makeKey(libraryId, setlistId)] = record
 	saveOfflineSetlistMap(map)
 
+	if (previous) {
+		const retainedUrls = collectRetainedUrls(map)
+		for (const oldUrl of previous.urls) {
+			if (!retainedUrls.has(oldUrl)) {
+				await cache.delete(oldUrl)
+			}
+		}
+	}
+
 	return record
+}
+
+function collectRetainedUrls(map: Record<string, OfflineSetlistRecord>): Set<string> {
+	const retainedUrls = new Set<string>()
+	for (const record of Object.values(map)) {
+		for (const url of record.urls) {
+			retainedUrls.add(url)
+		}
+	}
+	return retainedUrls
 }
 
 export async function removeSetlistOffline(libraryId: number, setlistId: number): Promise<void> {
@@ -170,17 +204,104 @@ export async function removeSetlistOffline(libraryId: number, setlistId: number)
 		return
 	}
 
-	const retainedUrls = new Set<string>()
-	for (const record of Object.values(map)) {
-		for (const url of record.urls) {
-			retainedUrls.add(url)
-		}
-	}
+	const retainedUrls = collectRetainedUrls(map)
 
 	const cache = await caches.open(OFFLINE_SETLIST_CACHE)
 	for (const url of target.urls) {
 		if (!retainedUrls.has(url)) {
 			await cache.delete(url)
 		}
+	}
+}
+
+let activeBackgroundSync: Promise<void> | null = null
+
+/**
+ * Refreshes all offline-pinned setlists in the background (skipping unchanged
+ * versioned PDFs) when online. Safe to call repeatedly; concurrent calls share
+ * the same in-flight run.
+ */
+export async function syncAllOfflineSetlists(): Promise<void> {
+	if (!isOfflineSetlistsSupported()) {
+		return
+	}
+	if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+		return
+	}
+	if (activeBackgroundSync) {
+		return activeBackgroundSync
+	}
+
+	activeBackgroundSync = (async () => {
+		const entries = Object.values(getOfflineSetlistMap())
+		if (entries.length === 0) {
+			return
+		}
+
+		const byLibrary = new Map<number, OfflineSetlistRecord[]>()
+		for (const entry of entries) {
+			const list = byLibrary.get(entry.libraryId) ?? []
+			list.push(entry)
+			byLibrary.set(entry.libraryId, list)
+		}
+
+		for (const [libraryId, records] of byLibrary.entries()) {
+			try {
+				const res = await apiGet('/api/songs', { queryParams: { id: libraryId } })
+				const songs = (res.data.ocs.data.songs ?? []) as Song[]
+				for (const record of records) {
+					try {
+						await syncSetlistOffline({
+							libraryId,
+							setlistId: record.setlistId,
+							songs,
+						})
+					} catch {
+						// Ignore individual setlist failures during background sync
+					}
+				}
+			} catch {
+				// Ignore library fetch failures when offline/unreachable
+			}
+		}
+	})().finally(() => {
+		activeBackgroundSync = null
+	})
+
+	return activeBackgroundSync
+}
+
+const AUTO_SYNC_INTERVAL_MS = 5 * 60 * 1000
+
+/**
+ * Runs an initial background sync of offline setlists and keeps them fresh when
+ * the app regains connectivity or returns to the foreground.
+ */
+export function initOfflineSetlistsAutoSync(): () => void {
+	if (!isOfflineSetlistsSupported() || typeof window === 'undefined') {
+		return () => {}
+	}
+
+	let lastSyncAt = Date.now()
+	void syncAllOfflineSetlists()
+
+	const onOnline = () => {
+		lastSyncAt = Date.now()
+		void syncAllOfflineSetlists()
+	}
+
+	const onVisibilityChange = () => {
+		if (document.visibilityState === 'visible' && Date.now() - lastSyncAt >= AUTO_SYNC_INTERVAL_MS) {
+			lastSyncAt = Date.now()
+			void syncAllOfflineSetlists()
+		}
+	}
+
+	window.addEventListener('online', onOnline)
+	document.addEventListener('visibilitychange', onVisibilityChange)
+
+	return () => {
+		window.removeEventListener('online', onOnline)
+		document.removeEventListener('visibilitychange', onVisibilityChange)
 	}
 }

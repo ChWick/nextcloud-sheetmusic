@@ -6,12 +6,18 @@ import {
 	OFFLINE_SETLIST_CACHE,
 	OFFLINE_STORAGE_KEY,
 	removeSetlistOffline,
+	syncAllOfflineSetlists,
 	syncSetlistOffline,
 } from '../../../src/utils/offlineSetlists'
 
 const mockIsStandalone = vi.fn()
 const mockFetchSetlist = vi.fn()
 const mockFetchSetlistFiles = vi.fn()
+const mockApiGet = vi.fn()
+
+vi.mock('../../../src/api/client', () => ({
+	apiGet: (...args: unknown[]) => mockApiGet(...args),
+}))
 
 vi.mock('../../../src/utils/pwa', () => ({
 	isStandaloneDisplayMode: () => mockIsStandalone(),
@@ -31,6 +37,7 @@ vi.mock('../../../src/api/setlists', () => ({
 describe('offlineSetlists', () => {
 	const cacheStore = new Map<string, Response>()
 	const fakeCache = {
+		match: vi.fn(async (url: string) => cacheStore.get(url)),
 		put: vi.fn(async (url: string, res: Response) => {
 			cacheStore.set(url, res)
 		}),
@@ -139,5 +146,36 @@ describe('offlineSetlists', () => {
 		await removeSetlistOffline(1, 8)
 		expect(getOfflineSetlistMap()).toEqual({})
 		expect(cacheStore.has('/remote.php/dav/files/admin/Shared.pdf?v=100%401')).toBe(false)
+	})
+
+	it('syncAllOfflineSetlists skips already-cached versioned PDFs and refreshes metadata', async () => {
+		const songs = [
+			{
+				id: 42,
+				title: 'Sonata',
+				files: [{ id: 100, path: '/remote.php/dav/files/admin/Sonata.pdf', updatedAt: 456 }],
+			},
+		] as any[]
+
+		mockFetchSetlist.mockResolvedValue({
+			id: 7,
+			name: 'Sunday Service',
+			items: [{ id: 1, songId: 42, position: 0 }],
+		})
+		mockFetchSetlistFiles.mockResolvedValue([])
+		await syncSetlistOffline({ libraryId: 1, setlistId: 7, songs })
+
+		const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>
+		fetchMock.mockClear()
+
+		mockApiGet.mockResolvedValue({
+			data: { ocs: { data: { songs } } },
+		})
+
+		await syncAllOfflineSetlists()
+
+		const fetchedUrls = fetchMock.mock.calls.map(c => c[0] as string)
+		expect(fetchedUrls).not.toContain('/remote.php/dav/files/admin/Sonata.pdf?v=100%40456')
+		expect(fetchedUrls).toContain('/ocs/v2.php/apps/sheetmusic/api/songs/42/annotations?fileId=100')
 	})
 })

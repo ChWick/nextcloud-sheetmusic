@@ -57,6 +57,7 @@ import ShareDialog from './components/ShareDialog.vue'
 import ShareTargetDialog, { type ShareImportResult } from './components/ShareTargetDialog.vue'
 import { useProgressPolling } from './composables/useProgressPolling'
 import { clearShareTargetParam, consumePendingShare, getShareTokenParam, hasShareTargetParam } from './utils/shareTarget'
+import { initOfflineSetlistsAutoSync } from './utils/offlineSetlists'
 
 /** Views of a library: the song view, one view per song filter, integrity audit, and tools. */
 type ViewName = 'songs' | 'new-song' | 'setlists' | 'sublibraries' | 'shares' | 'integrity' | 'tools' | 'trash' | EntityType
@@ -170,6 +171,8 @@ async function loadLibraries() {
   }
 }
 
+let stopOfflineAutoSync: (() => void) | null = null
+
 /*** Initial load of libraries list ***/
 onMounted(async () => {
   await loadLibraries()
@@ -183,6 +186,10 @@ onMounted(async () => {
   } else if (libraries.value.length > 0 && !activeRouteLibrary) {
     // Only set a default if the user landed on the root page matching no library
     navigateToLibrary(libraries.value[0].id)
+  }
+
+  if (!isPublicShare) {
+    stopOfflineAutoSync = initOfflineSetlistsAutoSync()
   }
 
   if (!isPublicShare && hasShareTargetParam()) {
