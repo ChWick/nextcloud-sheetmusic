@@ -20,6 +20,21 @@
         {{ t('sheetmusic', 'Play Setlist') }}
       </NcButton>
       <NcButton
+        v-if="offlineSupported"
+        :variant="isOffline ? 'secondary' : 'tertiary'"
+        :disabled="isSyncingOffline"
+        :aria-pressed="isOffline"
+        :aria-label="offlineButtonLabel"
+        :title="offlineButtonLabel"
+        @click="emit('toggle-offline')">
+        <template #icon>
+          <NcLoadingIcon v-if="isSyncingOffline" :size="18" />
+          <CloudCheckOutline v-else-if="isOffline" :size="20" />
+          <CloudDownloadOutline v-else :size="20" />
+        </template>
+        {{ offlineButtonLabel }}
+      </NcButton>
+      <NcButton
         v-if="canWrite !== false"
         :variant="itemCount > 0 ? 'secondary' : 'primary'"
         :aria-label="t('sheetmusic', 'Add Song / Bookmark')"
@@ -35,27 +50,49 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
+import CloudCheckOutline from 'vue-material-design-icons/CloudCheckOutline.vue'
+import CloudDownloadOutline from 'vue-material-design-icons/CloudDownloadOutline.vue'
 import PlayIcon from 'vue-material-design-icons/Play.vue'
 import PlusIcon from 'vue-material-design-icons/Plus.vue'
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     name: string
     itemCount: number
     totalDurationFormatted?: string | null
     canWrite?: boolean
+    offlineSupported?: boolean
+    isOffline?: boolean
+    isSyncingOffline?: boolean
+    offlineProgressText?: string
   }>(),
   {
     canWrite: true,
+    offlineSupported: false,
+    isOffline: false,
+    isSyncingOffline: false,
+    offlineProgressText: '',
   },
 )
 
 const emit = defineEmits<{
   'add-item': []
   play: []
+  'toggle-offline': []
 }>()
+
+const offlineButtonLabel = computed(() => {
+  if (props.isSyncingOffline) {
+    return props.offlineProgressText || t('sheetmusic', 'Saving offline…')
+  }
+  return props.isOffline
+    ? t('sheetmusic', 'Available offline')
+    : t('sheetmusic', 'Save offline')
+})
 </script>
 
 <style module>

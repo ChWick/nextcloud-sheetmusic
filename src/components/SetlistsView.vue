@@ -13,6 +13,7 @@
       :is-loading="isLoading"
       :error-message="errorMessage"
       :can-write="canWrite"
+      :offline-setlist-ids="offlineSetlistIds"
       @select="selectSetlist"
       @rename="openRenameDialog"
       @delete="openDeleteDialog" />
@@ -24,8 +25,13 @@
           :item-count="selectedSetlistItems.length"
           :total-duration-formatted="totalDurationFormatted"
           :can-write="canWrite"
+          :offline-supported="offlineSupported"
+          :is-offline="isSelectedSetlistOffline"
+          :is-syncing-offline="isSyncingOffline"
+          :offline-progress-text="offlineProgressText"
           @add-item="openAddItemDialog"
-          @play="openPerformanceMode(0)" />
+          @play="openPerformanceMode(0)"
+          @toggle-offline="toggleSelectedSetlistOffline" />
 
         <SetlistFilesSection
           v-if="canWrite || selectedSetlistFiles.length > 0"
@@ -110,9 +116,16 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { showError, showSuccess } from '@nextcloud/dialogs'
 import { translate as t } from '@nextcloud/l10n'
+import {
+  getOfflineSetlistMap,
+  isOfflineSetlistsSupported,
+  removeSetlistOffline,
+  syncSetlistOffline,
+} from '../utils/offlineSetlists'
 import PlaylistMusic from 'vue-material-design-icons/PlaylistMusic.vue'
 import ViewHeader from './ViewHeader.vue'
 import SetlistsSidebar from './setlists/SetlistsSidebar.vue'
@@ -319,12 +332,67 @@ async function handleDeleteSetlist() {
   isDeleting.value = true
   deleteError.value = ''
   try {
-    await deleteSetlist(setlistToDelete.value.id)
+    const deletedId = setlistToDelete.value.id
+    await deleteSetlist(deletedId)
+    await removeSetlistOffline(props.selectedLibrary, deletedId)
+    refreshOfflineMap()
     closeDeleteDialog()
   } catch (err: unknown) {
     deleteError.value = err instanceof Error ? err.message : t('sheetmusic', 'Could not delete setlist')
   } finally {
     isDeleting.value = false
+  }
+}
+
+// Offline setlist availability (installed PWA only)
+const offlineSupported = isOfflineSetlistsSupported()
+const offlineMap = ref(getOfflineSetlistMap())
+const isSyncingOffline = ref(false)
+const offlineProgressText = ref('')
+
+function refreshOfflineMap() {
+  offlineMap.value = getOfflineSetlistMap()
+}
+
+const offlineSetlistIds = computed(() =>
+  Object.values(offlineMap.value)
+    .filter((entry) => entry.libraryId === props.selectedLibrary)
+    .map((entry) => entry.setlistId),
+)
+
+const isSelectedSetlistOffline = computed(() =>
+  Boolean(selectedSetlist.value && offlineSetlistIds.value.includes(selectedSetlist.value.id)),
+)
+
+async function toggleSelectedSetlistOffline() {
+  if (!selectedSetlist.value || isSyncingOffline.value) return
+  const setlistId = selectedSetlist.value.id
+
+  if (isSelectedSetlistOffline.value) {
+    await removeSetlistOffline(props.selectedLibrary, setlistId)
+    refreshOfflineMap()
+    showSuccess(t('sheetmusic', 'Removed setlist from offline storage.'))
+    return
+  }
+
+  isSyncingOffline.value = true
+  offlineProgressText.value = t('sheetmusic', 'Saving offline…')
+  try {
+    await syncSetlistOffline({
+      libraryId: props.selectedLibrary,
+      setlistId,
+      songs: songs.value,
+      onProgress: (done, total) => {
+        offlineProgressText.value = `${done}/${total}`
+      },
+    })
+    refreshOfflineMap()
+    showSuccess(t('sheetmusic', 'Setlist is now available offline.'))
+  } catch {
+    showError(t('sheetmusic', 'Could not cache all setlist files for offline use.'))
+  } finally {
+    isSyncingOffline.value = false
+    offlineProgressText.value = ''
   }
 }
 

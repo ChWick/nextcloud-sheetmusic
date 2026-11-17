@@ -23,6 +23,11 @@
             <PlaylistMusic :size="20" :class="$style.setlistIcon" />
             <span :class="$style.setlistName">{{ setlist.name }}</span>
           </button>
+          <CloudCheckOutline
+            v-if="offlineSetlistIds.includes(setlist.id)"
+            :size="16"
+            :class="$style.offlineBadgeIcon"
+            :title="t('sheetmusic', 'Available offline')" />
           <span :class="$style.itemCountBadge">{{ setlist.itemCount ?? 0 }}</span>
           <div v-if="canWrite !== false" :class="$style.rowActions">
             <NcButton
@@ -61,6 +66,7 @@
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
+import CloudCheckOutline from 'vue-material-design-icons/CloudCheckOutline.vue'
 import PlaylistMusic from 'vue-material-design-icons/PlaylistMusic.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
@@ -75,9 +81,11 @@ withDefaults(
     isLoading: boolean
     errorMessage: string
     canWrite?: boolean
+    offlineSetlistIds?: number[]
   }>(),
   {
     canWrite: true,
+    offlineSetlistIds: () => [],
   },
 )
 
@@ -164,6 +172,11 @@ const emit = defineEmits<{
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.offlineBadgeIcon {
+  color: var(--color-primary-element);
+  flex-shrink: 0;
 }
 
 .itemCountBadge {
