@@ -25,6 +25,7 @@ vi.mock('../../../src/utils/pwa', () => ({
 
 vi.mock('@nextcloud/router', () => ({
 	generateOcsUrl: (path: string) => `/ocs/v2.php${path}`,
+	generateUrl: (path: string) => `/index.php${path}`,
 }))
 
 vi.mock('../../../src/api/setlists', () => ({

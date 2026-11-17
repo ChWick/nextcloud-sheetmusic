@@ -1,4 +1,4 @@
-import { generateOcsUrl } from '@nextcloud/router'
+import { generateOcsUrl, generateUrl } from '@nextcloud/router'
 import { apiGet } from '../api/client'
 import { fetchSetlist, fetchSetlistFiles, getSetlistFileContentUrl } from '../api/setlists'
 import type { Song } from '../types/song'
@@ -102,6 +102,7 @@ export async function syncSetlistOffline(params: {
 	if (typeof window !== 'undefined' && window.location?.pathname) {
 		urls.add(window.location.pathname)
 	}
+	urls.add(generateUrl('/apps/sheetmusic/'))
 	urls.add(generateOcsUrl('/apps/sheetmusic/api/libraries'))
 	urls.add(`${generateOcsUrl('/apps/sheetmusic/api/songs')}?id=${libraryId}`)
 	urls.add(generateOcsUrl(`/apps/sheetmusic/api/libraries/${libraryId}/setlists`))

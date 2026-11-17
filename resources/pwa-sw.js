@@ -53,14 +53,32 @@ function isCacheableAppShellRequest(request, url) {
 		|| url.pathname.includes('/apps-extra/sheetmusic/')
 		|| url.pathname.includes('/custom_apps/sheetmusic/')
 		|| url.pathname.startsWith('/ocs/v2.php/apps/sheetmusic/')
+		|| url.pathname.includes('/apps/theming/')
 		|| url.pathname.includes('/core/')
 		|| url.pathname.includes('/dist/')
 	)
 }
 
 function isVersionedBinaryUrl(url) {
-	return (url.pathname.includes('/remote.php/dav/') || url.pathname.includes('/files/') && url.pathname.endsWith('/content'))
+	return (url.pathname.includes('/remote.php/dav/') || (url.pathname.includes('/files/') && url.pathname.endsWith('/content')))
 		&& url.searchParams.has('v')
+}
+
+async function findCachedNavigationFallback(cache) {
+	const keys = await cache.keys()
+	for (const req of keys) {
+		const reqUrl = new URL(req.url)
+		if (
+			reqUrl.pathname.endsWith('/apps/sheetmusic')
+			|| reqUrl.pathname.endsWith('/apps/sheetmusic/')
+		) {
+			const match = await cache.match(req, { ignoreVary: true })
+			if (match) {
+				return match
+			}
+		}
+	}
+	return null
 }
 
 async function handleOfflineAwareGet(request, url) {
@@ -83,27 +101,49 @@ async function handleOfflineAwareGet(request, url) {
 		}
 		return networkResponse
 	} catch {
+		const matchOpts = {
+			ignoreVary: true,
+			ignoreSearch: request.mode === 'navigate',
+		}
+
 		const offlineCache = await caches.open(OFFLINE_SETLIST_CACHE)
-		const offlineMatch = await offlineCache.match(request, { ignoreVary: true })
+		const offlineMatch = await offlineCache.match(request, matchOpts)
 		if (offlineMatch) {
 			return offlineMatch
 		}
 
 		const shellCache = await caches.open(APP_SHELL_CACHE)
-		const shellMatch = await shellCache.match(request, {
-			ignoreVary: true,
-			ignoreSearch: request.mode === 'navigate',
-		})
+		const shellMatch = await shellCache.match(request, matchOpts)
 		if (shellMatch) {
 			return shellMatch
+		}
+
+		if (request.mode === 'navigate') {
+			const fallback = (await findCachedNavigationFallback(shellCache))
+				|| (await findCachedNavigationFallback(offlineCache))
+			if (fallback) {
+				return fallback
+			}
 		}
 
 		return new Response('Offline', { status: 503, statusText: 'Service Unavailable' })
 	}
 }
 
-self.addEventListener('install', () => {
-	self.skipWaiting()
+self.addEventListener('install', (event) => {
+	event.waitUntil((async () => {
+		try {
+			const shellUrl = new URL('./', self.location.href).toString()
+			const res = await fetch(shellUrl, { credentials: 'include' })
+			if (res && res.ok) {
+				const cache = await caches.open(APP_SHELL_CACHE)
+				await cache.put(shellUrl, res)
+			}
+		} catch {
+			// Best-effort pre-cache on install
+		}
+		await self.skipWaiting()
+	})())
 })
 
 self.addEventListener('activate', (event) => {
