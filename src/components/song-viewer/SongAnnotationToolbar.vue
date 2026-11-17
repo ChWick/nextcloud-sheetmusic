@@ -206,6 +206,15 @@ function pickStamp(symbol: string) {
 				</button>
 			</div>
 
+			<SongAnnotationStyleBar
+				:active-tool="activeTool"
+				:tool-style="toolStyle"
+				:selected-annotation="selectedAnnotation"
+				:is-shape-active="isShapeActive"
+				@update:tool-style="emit('update:toolStyle', $event)"
+				@update-selected-style="emit('update-selected-style', $event)"
+				@update-selected-data="emit('update-selected-data', $event)" />
+
 			<div :class="$style.actionGroup">
 				<span v-if="isSaving" :class="$style.savingBadge">{{ t('sheetmusic', 'Saving...') }}</span>
 
@@ -276,16 +285,6 @@ function pickStamp(symbol: string) {
 				</NcButton>
 			</div>
 		</div>
-
-		<!-- Row 2: Contextual Style Properties -->
-		<SongAnnotationStyleBar
-			:active-tool="activeTool"
-			:tool-style="toolStyle"
-			:selected-annotation="selectedAnnotation"
-			:is-shape-active="isShapeActive"
-			@update:tool-style="emit('update:toolStyle', $event)"
-			@update-selected-style="emit('update-selected-style', $event)"
-			@update-selected-data="emit('update-selected-data', $event)" />
 	</div>
 </template>
 
