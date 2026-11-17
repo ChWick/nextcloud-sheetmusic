@@ -476,10 +476,8 @@ function updateShapeHeight(height: number) {
 .styleRow {
 	display: flex;
 	align-items: center;
-	gap: 16px;
+	gap: 12px;
 	flex-wrap: wrap;
-	padding-top: 4px;
-	border-top: 1px solid var(--color-border);
 	position: relative;
 	z-index: 10;
 }
