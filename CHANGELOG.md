@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.3-rc3] - 2026-11-17
+
+### Added
+
+- **Setlist Performance Mini-Page-Preview**: Added a thumbnail strip in the setlist play bottom bar displaying all setlist songs and pages with mouse-wheel and drag-to-scroll support.
+- **Setlist & File Annotations**: Added database migration (`Version1011Date20261117120000`), backend mapper/service/controller support, and a setlist file preview dialog (`SetlistFilePreviewDialog`) powered by a shared `AnnotatableFilePreview` component and `SongAnnotationLogSelect`.
+
+### Changed
+
+- **Setlist & Viewer UI**: Refined `SetlistPerformanceBottomBar` with icon-only buttons and tooltips, moved the setlist items/bookmarks drawer button to the bottom bar, and enabled auto-wrapping for `SetlistDetailHeader` actions.
+- **App Store & CI**: Prioritized core Nextcloud features in `appinfo/info.xml` `<description>` and updated `shivammathur/setup-php` to `v2.40.0` (Node.js 24) in `release.yml`.
+
 ## [0.0.3-rc2] - 2026-11-17
 
 ### Added

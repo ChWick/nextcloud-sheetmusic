@@ -1,6 +1,6 @@
 {
   "name": "sheetmusic",
-  "version": "0.0.3-rc2",
+  "version": "0.0.3-rc3",
   "license": "AGPL-3.0-or-later",
   "type": "module",
   "scripts": {
