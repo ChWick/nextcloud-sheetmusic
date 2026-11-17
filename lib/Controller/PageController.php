@@ -60,10 +60,10 @@ class PageController extends Controller {
 		$uploadedFiles = $this->extractUploadedFiles();
 		$stagedFiles = [];
 		foreach ($uploadedFiles as $entry) {
-			$name = (string) ($entry['name'] ?? '');
-			$tmpName = (string) ($entry['tmp_name'] ?? '');
-			$type = (string) ($entry['type'] ?? '');
-			$error = (int) ($entry['error'] ?? UPLOAD_ERR_NO_FILE);
+			$name = (string)($entry['name'] ?? '');
+			$tmpName = (string)($entry['tmp_name'] ?? '');
+			$type = (string)($entry['type'] ?? '');
+			$error = (int)($entry['error'] ?? UPLOAD_ERR_NO_FILE);
 			if ($error !== UPLOAD_ERR_OK || $tmpName === '' || !is_uploaded_file($tmpName)) {
 				continue;
 			}
@@ -90,12 +90,12 @@ class PageController extends Controller {
 		$this->cleanupExpiredShares($dir);
 
 		$payload = [
-			'title' => (string) $this->request->getParam('title', ''),
-			'text' => (string) $this->request->getParam('text', ''),
-			'url' => (string) $this->request->getParam('url', ''),
+			'title' => (string)$this->request->getParam('title', ''),
+			'text' => (string)$this->request->getParam('text', ''),
+			'url' => (string)$this->request->getParam('url', ''),
 			'files' => $stagedFiles,
 		];
-		file_put_contents($this->getShareFilePath($dir, $user->getUID(), $token), (string) json_encode($payload));
+		file_put_contents($this->getShareFilePath($dir, $user->getUID(), $token), (string)json_encode($payload));
 
 		return new RedirectResponse($indexUrl . '?share-target=1&share-token=' . $token);
 	}
@@ -136,7 +136,7 @@ class PageController extends Controller {
 	#[FrontpageRoute(verb: 'GET', url: '/sw.js')]
 	public function serviceWorker(): DataDisplayResponse {
 		$swPath = dirname(__DIR__, 2) . '/resources/pwa-sw.js';
-		$content = is_file($swPath) ? (string) file_get_contents($swPath) : '';
+		$content = is_file($swPath) ? (string)file_get_contents($swPath) : '';
 
 		return new DataDisplayResponse(
 			$content,
