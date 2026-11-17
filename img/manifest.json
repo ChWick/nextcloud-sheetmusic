@@ -1,0 +1,31 @@
+{
+	"name": "Sheet Music",
+	"short_name": "Sheet Music",
+	"description": "Manage and synchronize sheet music, scores, and chord charts",
+	"start_url": "../../../index.php/apps/sheetmusic/",
+	"scope": "../../../",
+	"display": "standalone",
+	"display_override": ["standalone", "minimal-ui"],
+	"theme_color": "#0082c9",
+	"background_color": "#ffffff",
+	"icons": [
+		{
+			"src": "pwa-icon.svg",
+			"type": "image/svg+xml",
+			"sizes": "any",
+			"purpose": "any"
+		},
+		{
+			"src": "pwa-icon-192.png",
+			"type": "image/png",
+			"sizes": "192x192",
+			"purpose": "any"
+		},
+		{
+			"src": "pwa-icon-512.png",
+			"type": "image/png",
+			"sizes": "512x512",
+			"purpose": "any"
+		}
+	]
+}
