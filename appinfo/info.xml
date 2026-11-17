@@ -13,7 +13,7 @@
 - **In-Browser PDF Tools**: Reorder pages for repeats/Codas, rotate, crop margins for tablet/e-ink screens, split or join PDFs, enhance scans (contrast, grayscale, binarization, deskew), and edit bookmarks without leaving Nextcloud.
 - **Library Health &amp; Nextcloud Integration**: Automated file path organization, PDF metadata embedding, integrity &amp; orphan checker, plus Nextcloud file version history and Trash Bin protection.
 - **Sublibraries for Ensembles**: Create filtered sublibraries by instrument, ensemble, or composer (also exposed via virtual `SubLibraries/&lt;name&gt;` folders) so musicians only see and sync the scores they need.
-- **Optional MobileSheets WebDAV Sync**: Bidirectional real-time synchronization with MobileSheets (Android, iOS/iPadOS, Windows) via virtual `mobilesheets.db` and `mobilesheets_hashcodes.txt` endpoints served dynamically over Nextcloud WebDAV.
+- **MobileSheets WebDAV Sync**: Built-in bidirectional synchronization for MobileSheets users (Android, iOS/iPadOS, Windows) via virtual `mobilesheets.db` and `mobilesheets_hashcodes.txt` endpoints served dynamically over Nextcloud WebDAV.
 
 ### Disclaimer
 
