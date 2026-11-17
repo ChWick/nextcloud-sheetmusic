@@ -55,6 +55,8 @@ import TrashView from './components/TrashView.vue'
 import LibrarySettingsDialog from './components/LibrarySettingsDialog.vue'
 import ShareDialog from './components/ShareDialog.vue'
 import ShareTargetDialog, { type ShareImportResult } from './components/ShareTargetDialog.vue'
+import OfflineSetlistsView from './components/setlists/OfflineSetlistsView.vue'
+import { useOnlineStatus } from './composables/useOnlineStatus'
 import { useProgressPolling } from './composables/useProgressPolling'
 import { clearShareTargetParam, consumePendingShare, getShareTokenParam, hasShareTargetParam } from './utils/shareTarget'
 import { initOfflineSetlistsAutoSync } from './utils/offlineSetlists'
@@ -64,6 +66,7 @@ type ViewName = 'songs' | 'new-song' | 'setlists' | 'sublibraries' | 'shares' | 
 const VIEW_NAMES: ViewName[] = ['songs', 'new-song', 'setlists', 'composers', 'artists', 'books', 'collections', 'genres', 'keys', 'customgroups', 'years', 'signatures', 'sourcetypes', 'instruments', 'arrangers', 'sublibraries', 'shares', 'integrity', 'tools', 'trash']
 
 /*** State ***/
+const { isOnline } = useOnlineStatus()
 const isAddDialogOpen = ref(false)
 const isImportDialogOpen = ref(false)
 const isShareTargetDialogOpen = ref(false)
@@ -442,7 +445,7 @@ async function deleteLibrary() {
   <div id="sheetmusic">
     <NcContent app-name="sheetmusic">
       <!-- Sidebar (navigation) -->
-      <NcAppNavigation :aria-label="t('sheetmusic', 'Sheet Music libraries')">
+      <NcAppNavigation v-if="isOnline" :aria-label="t('sheetmusic', 'Sheet Music libraries')">
         <NcAppNavigationItem :name="t('sheetmusic', 'Library')">
           <template #icon>
             <FolderMusicOutline :size="20" />
@@ -615,7 +618,8 @@ async function deleteLibrary() {
 
       <!-- Main content -->
       <NcAppContent>
-        <template v-if="selectedLibrary >= 0">
+        <OfflineSetlistsView v-if="!isOnline && !isPublicShare" :libraries="libraries" />
+        <template v-else-if="selectedLibrary >= 0">
           <SongsView v-if="selectedView === 'songs' || selectedView === 'new-song'"
                      :selectedLibrary="selectedLibrary"
                      :libraries="libraries"
