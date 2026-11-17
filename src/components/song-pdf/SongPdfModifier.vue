@@ -771,9 +771,18 @@ const saveEnhancements = saveRotationsAndCrops
 
 const isFullscreen = ref(false)
 
+const FULLSCREEN_BODY_CLASS = 'sheetmusic-pdf-editor-fullscreen'
+
+function syncFullscreenBodyClass(active: boolean) {
+	if (typeof document !== 'undefined') {
+		document.body.classList.toggle(FULLSCREEN_BODY_CLASS, active)
+	}
+}
+
 async function toggleFullscreen() {
 	const next = !isFullscreen.value
 	isFullscreen.value = next
+	syncFullscreenBodyClass(next)
 	try {
 		if (next && !document.fullscreenElement && document.documentElement.requestFullscreen) {
 			await document.documentElement.requestFullscreen()
@@ -786,7 +795,9 @@ async function toggleFullscreen() {
 }
 
 function handleFullscreenChange() {
-	isFullscreen.value = Boolean(document.fullscreenElement)
+	const active = Boolean(document.fullscreenElement)
+	isFullscreen.value = active
+	syncFullscreenBodyClass(active)
 }
 
 onMounted(() => {
@@ -796,6 +807,7 @@ onMounted(() => {
 
 onUnmounted(() => {
 	document.removeEventListener('fullscreenchange', handleFullscreenChange)
+	syncFullscreenBodyClass(false)
 	if (document.fullscreenElement && document.exitFullscreen) {
 		document.exitFullscreen().catch(() => {})
 	}
@@ -1022,7 +1034,26 @@ watch(() => targetFile.value?.path, () => {
 	width: 100vw;
 	height: 100vh;
 	max-height: 100vh;
-	z-index: 9999;
+	z-index: 100000;
+}
+
+:global(body.sheetmusic-pdf-editor-fullscreen #header),
+:global(body.sheetmusic-pdf-editor-fullscreen #app-navigation),
+:global(body.sheetmusic-pdf-editor-fullscreen .app-navigation) {
+	display: none !important;
+}
+
+:global(body.sheetmusic-pdf-editor-fullscreen #content),
+:global(body.sheetmusic-pdf-editor-fullscreen #app-content),
+:global(body.sheetmusic-pdf-editor-fullscreen #app-content-vue) {
+	margin: 0 !important;
+	padding: 0 !important;
+	top: 0 !important;
+	left: 0 !important;
+	width: 100vw !important;
+	height: 100vh !important;
+	max-height: 100vh !important;
+	z-index: 100000 !important;
 }
 
 .errorBanner {
