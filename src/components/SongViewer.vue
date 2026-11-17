@@ -12,7 +12,7 @@ import { getFileVersionToken, getVersionedFileUrl } from '../utils/file-version'
 import ArrowLeftIcon from 'vue-material-design-icons/ArrowLeft.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import SongEditor from './SongEditor.vue'
 import DeleteSongDialog from './DeleteSongDialog.vue'
@@ -228,14 +228,66 @@ const {
 	fileId: Number(selectedFile.value?.fileId ?? selectedFile.value?.id ?? 0),
 }))
 
+const FULLSCREEN_BODY_CLASS = 'sheetmusic-annotation-editor-fullscreen'
+const isAnnotationFullscreen = ref(false)
+
+function syncFullscreenBodyClass(active: boolean) {
+	if (typeof document !== 'undefined') {
+		document.body.classList.toggle(FULLSCREEN_BODY_CLASS, active)
+	}
+}
+
+async function toggleAnnotationFullscreen() {
+	const next = !isAnnotationFullscreen.value
+	isAnnotationFullscreen.value = next
+	syncFullscreenBodyClass(next)
+	try {
+		if (next && !document.fullscreenElement && document.documentElement.requestFullscreen) {
+			await document.documentElement.requestFullscreen()
+		} else if (!next && document.fullscreenElement && document.exitFullscreen) {
+			await document.exitFullscreen()
+		}
+	} catch {
+		// Fullscreen API may be blocked by browser policy; CSS fullscreen still applies
+	}
+}
+
+function handleFullscreenChange() {
+	const active = Boolean(document.fullscreenElement)
+	isAnnotationFullscreen.value = active
+	syncFullscreenBodyClass(active)
+}
+
+onMounted(() => {
+	document.addEventListener('fullscreenchange', handleFullscreenChange)
+})
+
+onUnmounted(() => {
+	document.removeEventListener('fullscreenchange', handleFullscreenChange)
+	syncFullscreenBodyClass(false)
+	if (document.fullscreenElement && document.exitFullscreen) {
+		document.exitFullscreen().catch(() => {})
+	}
+})
+
 function toggleAnnotationEditMode() {
 	if (isEditingAnnotations.value) {
 		exitAnnotationEditMode()
+		if (isAnnotationFullscreen.value) {
+			toggleAnnotationFullscreen()
+		}
 	} else {
 		enterAnnotationEditMode()
 		if (filePreviewerRef.value && !filePreviewerRef.value.showAnnotationsState) {
 			filePreviewerRef.value.toggleAnnotations()
 		}
+	}
+}
+
+function handleExitAnnotationEditMode() {
+	exitAnnotationEditMode()
+	if (isAnnotationFullscreen.value) {
+		toggleAnnotationFullscreen()
 	}
 }
 
@@ -300,7 +352,7 @@ defineExpose({
 </script>
 
 <template>
-	<div :class="$style.container">
+	<div :class="[$style.container, isAnnotationFullscreen && $style.fullscreenContainer]">
 		<header v-if="song && !hideHeader" :class="$style.header">
 			<div :class="$style.headerTop">
 				<NcButton
@@ -399,6 +451,7 @@ defineExpose({
 				:can-redo="canRedoAnnotations"
 				:is-saving="isSavingAnnotations"
 				:current-page="filePreviewerRef?.currentPage ?? 1"
+				:is-fullscreen="isAnnotationFullscreen"
 				@update:active-tool="setAnnotationTool"
 				@update:tool-style="annotationToolStyle = $event"
 				@update-selected-style="updateSelectedAnnotationStyle"
@@ -407,7 +460,8 @@ defineExpose({
 				@redo="redoAnnotation"
 				@delete-selected="deleteSelectedAnnotation"
 				@clear-page="clearAnnotationPage((filePreviewerRef?.currentPage ?? 1) - 1)"
-				@done="exitAnnotationEditMode" />
+				@toggle-fullscreen="toggleAnnotationFullscreen"
+				@done="handleExitAnnotationEditMode" />
 
 			<SongViewerBookmarksBar
 				:bookmarks="songBookmarks"
@@ -460,6 +514,35 @@ defineExpose({
 	height: 100%;
 	min-width: 0;
 	min-height: 0;
+}
+
+.fullscreenContainer {
+	position: fixed;
+	inset: 0;
+	width: 100vw;
+	height: 100vh;
+	max-height: 100vh;
+	background-color: var(--color-main-background);
+	z-index: 100000;
+}
+
+:global(body.sheetmusic-annotation-editor-fullscreen #header),
+:global(body.sheetmusic-annotation-editor-fullscreen #app-navigation),
+:global(body.sheetmusic-annotation-editor-fullscreen .app-navigation) {
+	display: none !important;
+}
+
+:global(body.sheetmusic-annotation-editor-fullscreen #content),
+:global(body.sheetmusic-annotation-editor-fullscreen #app-content),
+:global(body.sheetmusic-annotation-editor-fullscreen #app-content-vue) {
+	margin: 0 !important;
+	padding: 0 !important;
+	top: 0 !important;
+	left: 0 !important;
+	width: 100vw !important;
+	height: 100vh !important;
+	max-height: 100vh !important;
+	z-index: 100000 !important;
 }
 
 .header {

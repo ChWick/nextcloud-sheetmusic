@@ -10,6 +10,8 @@ import DeleteOutline from 'vue-material-design-icons/DeleteOutline.vue'
 import DeleteSweepOutline from 'vue-material-design-icons/DeleteSweepOutline.vue'
 import Eraser from 'vue-material-design-icons/Eraser.vue'
 import FormatText from 'vue-material-design-icons/FormatText.vue'
+import FullscreenIcon from 'vue-material-design-icons/Fullscreen.vue'
+import FullscreenExitIcon from 'vue-material-design-icons/FullscreenExit.vue'
 import LinkVariant from 'vue-material-design-icons/LinkVariant.vue'
 import Marker from 'vue-material-design-icons/Marker.vue'
 import Pencil from 'vue-material-design-icons/Pencil.vue'
@@ -28,6 +30,7 @@ const props = withDefaults(
 		canRedo?: boolean
 		isSaving?: boolean
 		currentPage?: number
+		isFullscreen?: boolean
 	}>(),
 	{
 		selectedAnnotation: null,
@@ -35,6 +38,7 @@ const props = withDefaults(
 		canRedo: false,
 		isSaving: false,
 		currentPage: 1,
+		isFullscreen: false,
 	},
 )
 
@@ -47,6 +51,7 @@ const emit = defineEmits<{
 	redo: []
 	'delete-selected': []
 	'clear-page': []
+	'toggle-fullscreen': []
 	done: []
 }>()
 
@@ -245,6 +250,19 @@ function pickStamp(symbol: string) {
 					data-test="annotation-clear-page"
 					@click="emit('clear-page')">
 					<template #icon><DeleteSweepOutline :size="18" /></template>
+				</NcButton>
+
+				<NcButton
+					size="small"
+					variant="tertiary"
+					:title="isFullscreen ? t('sheetmusic', 'Exit fullscreen') : t('sheetmusic', 'Fullscreen')"
+					:aria-label="isFullscreen ? t('sheetmusic', 'Exit fullscreen') : t('sheetmusic', 'Fullscreen')"
+					data-test="annotation-fullscreen"
+					@click="emit('toggle-fullscreen')">
+					<template #icon>
+						<FullscreenExitIcon v-if="isFullscreen" :size="18" />
+						<FullscreenIcon v-else :size="18" />
+					</template>
 				</NcButton>
 
 				<NcButton
