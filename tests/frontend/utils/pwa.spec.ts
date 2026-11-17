@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+	initPwaManifestLink,
 	initPwaStandaloneMode,
 	isStandaloneDisplayMode,
 	PWA_STANDALONE_CLASS,
@@ -108,5 +109,12 @@ describe('pwa utils', () => {
 			scope: '/',
 		})
 		expect(result).toBe(fakeReg)
+	})
+
+	it('updates existing manifest link to controller endpoint', () => {
+		document.head.innerHTML = '<link rel="manifest" href="/custom_apps/sheetmusic/img/manifest.json">'
+		initPwaManifestLink()
+		const link = document.head.querySelector<HTMLLinkElement>('link[rel="manifest"]')
+		expect(link?.getAttribute('href')).toBe('/index.php/apps/sheetmusic/pwa-manifest')
 	})
 })

@@ -1,4 +1,5 @@
-import { initPwaStandaloneMode, registerPwaServiceWorker } from './utils/pwa'
+import { initPwaManifestLink, initPwaStandaloneMode, registerPwaServiceWorker } from './utils/pwa'
 
 initPwaStandaloneMode()
+initPwaManifestLink()
 void registerPwaServiceWorker()

@@ -149,6 +149,71 @@ class PageController extends Controller {
 		);
 	}
 
+	#[PublicPage]
+	#[NoCSRFRequired]
+	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
+	#[FrontpageRoute(verb: 'GET', url: '/pwa-manifest')]
+	public function manifest(): DataDisplayResponse {
+		$indexUrl = $this->urlGenerator->linkToRoute('sheetmusic.page.index');
+		$scope = rtrim($this->urlGenerator->getWebroot(), '/') . '/';
+		$manifest = [
+			'id' => $indexUrl,
+			'name' => 'Sheet Music',
+			'short_name' => 'Sheet Music',
+			'description' => 'Manage and synchronize sheet music, scores, and chord charts',
+			'start_url' => $indexUrl,
+			'scope' => $scope,
+			'display' => 'standalone',
+			'theme_color' => '#0082c9',
+			'background_color' => '#ffffff',
+			'share_target' => [
+				'action' => $indexUrl . '?share-target=1',
+				'method' => 'POST',
+				'enctype' => 'multipart/form-data',
+				'params' => [
+					'title' => 'title',
+					'text' => 'text',
+					'url' => 'url',
+					'files' => [
+						[
+							'name' => 'files',
+							'accept' => [
+								'application/pdf',
+								'.pdf',
+								'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+								'.docx',
+							],
+						],
+					],
+				],
+			],
+			'icons' => [
+				[
+					'src' => $this->urlGenerator->imagePath(Application::APP_ID, 'pwa-icon-192.png'),
+					'type' => 'image/png',
+					'sizes' => '192x192',
+					'purpose' => 'any',
+				],
+				[
+					'src' => $this->urlGenerator->imagePath(Application::APP_ID, 'pwa-icon-512.png'),
+					'type' => 'image/png',
+					'sizes' => '512x512',
+					'purpose' => 'any',
+				],
+			],
+		];
+
+		return new DataDisplayResponse(
+			(string)json_encode($manifest, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT),
+			Http::STATUS_OK,
+			[
+				'Content-Type' => 'application/manifest+json; charset=utf-8',
+				'Cache-Control' => 'no-cache',
+			],
+		);
+	}
+
 	/**
 	 * @return array<int, array<string, mixed>>
 	 */

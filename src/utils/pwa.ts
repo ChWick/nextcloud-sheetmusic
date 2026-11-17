@@ -78,3 +78,24 @@ export async function registerPwaServiceWorker(): Promise<ServiceWorkerRegistrat
 		return null
 	}
 }
+
+/**
+ * Points the document's manifest link to Sheet Music's controller-served
+ * manifest endpoint so it works even when static .json files in custom_apps/
+ * are blocked by web-server rules.
+ */
+export function initPwaManifestLink(): void {
+	if (typeof document === 'undefined' || !document.head) {
+		return
+	}
+
+	const manifestUrl = generateUrl('/apps/sheetmusic/pwa-manifest')
+	let link = document.querySelector<HTMLLinkElement>('link[rel="manifest"]')
+	if (!link) {
+		link = document.createElement('link')
+		link.rel = 'manifest'
+		link.crossOrigin = 'use-credentials'
+		document.head.appendChild(link)
+	}
+	link.href = manifestUrl
+}
