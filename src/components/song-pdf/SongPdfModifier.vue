@@ -769,8 +769,36 @@ const saveRotations = saveRotationsAndCrops
 const saveCrops = saveRotationsAndCrops
 const saveEnhancements = saveRotationsAndCrops
 
+const isFullscreen = ref(false)
+
+async function toggleFullscreen() {
+	const next = !isFullscreen.value
+	isFullscreen.value = next
+	try {
+		if (next && !document.fullscreenElement && document.documentElement.requestFullscreen) {
+			await document.documentElement.requestFullscreen()
+		} else if (!next && document.fullscreenElement && document.exitFullscreen) {
+			await document.exitFullscreen()
+		}
+	} catch {
+		// Fullscreen API may be blocked by browser policy; CSS fullscreen still applies
+	}
+}
+
+function handleFullscreenChange() {
+	isFullscreen.value = Boolean(document.fullscreenElement)
+}
+
 onMounted(() => {
 	loadPdf()
+	document.addEventListener('fullscreenchange', handleFullscreenChange)
+})
+
+onUnmounted(() => {
+	document.removeEventListener('fullscreenchange', handleFullscreenChange)
+	if (document.fullscreenElement && document.exitFullscreen) {
+		document.exitFullscreen().catch(() => {})
+	}
 })
 
 watch(() => targetFile.value?.path, () => {
@@ -779,7 +807,7 @@ watch(() => targetFile.value?.path, () => {
 </script>
 
 <template>
-	<div :class="$style.container">
+	<div :class="[$style.container, isFullscreen && $style.fullscreenContainer]">
 		<!-- Top Bar / Sub-header -->
 		<SongPdfHeader
 			:song="song"
@@ -800,10 +828,12 @@ watch(() => targetFile.value?.path, () => {
 			:save-progress="saveProgressPercent"
 			:file-size-bytes="originalPdfBytes?.byteLength ?? targetFile?.fileSize ?? null"
 			:page-resolutions="pageResolutions"
+			:is-fullscreen="isFullscreen"
 			@update:active-mode="activeMode = $event"
 			@update:activeMode="activeMode = $event"
 			@cancel="emit('cancel')"
 			@open-page-order-modal="isPageOrderModalOpen = true"
+			@toggle-fullscreen="toggleFullscreen"
 			@save="handleHeaderSave" />
 
 		<!-- Saving Progress Bar Banner -->
@@ -984,6 +1014,15 @@ watch(() => targetFile.value?.path, () => {
 	min-height: 420px;
 	background-color: var(--color-main-background);
 	overflow: hidden;
+}
+
+.fullscreenContainer {
+	position: fixed;
+	inset: 0;
+	width: 100vw;
+	height: 100vh;
+	max-height: 100vh;
+	z-index: 9999;
 }
 
 .errorBanner {

@@ -16,6 +16,8 @@ import BookmarkMusicOutline from 'vue-material-design-icons/BookmarkMusicOutline
 import ContentSaveOutlineIcon from 'vue-material-design-icons/ContentSaveOutline.vue'
 import InformationOutline from 'vue-material-design-icons/InformationOutline.vue'
 import FormatListNumbered from 'vue-material-design-icons/FormatListNumbered.vue'
+import FullscreenIcon from 'vue-material-design-icons/Fullscreen.vue'
+import FullscreenExitIcon from 'vue-material-design-icons/FullscreenExit.vue'
 
 export type Mode = 'rotate' | 'crop' | 'enhance' | 'split' | 'bookmarks'
 
@@ -38,6 +40,7 @@ const props = defineProps<{
 	saveProgress?: number
 	fileSizeBytes?: number | null
 	pageResolutions?: PdfPageResolutionSummary[]
+	isFullscreen?: boolean
 }>()
 
 const showInfoDropdown = ref(false)
@@ -56,6 +59,7 @@ const emit = defineEmits<{
 	'update:activeMode': [mode: Mode]
 	'save': []
 	'open-page-order-modal': []
+	'toggle-fullscreen': []
 }>()
 
 const saveButtonDisabled = computed(() => {
@@ -268,6 +272,16 @@ const saveButtonText = computed(() => {
 					<ContentSaveOutlineIcon v-else :size="20" />
 				</template>
 				{{ saveButtonText }}
+			</NcButton>
+			<NcButton
+				variant="tertiary"
+				:title="isFullscreen ? t('sheetmusic', 'Exit fullscreen') : t('sheetmusic', 'Fullscreen')"
+				:aria-label="isFullscreen ? t('sheetmusic', 'Exit fullscreen') : t('sheetmusic', 'Fullscreen')"
+				@click="emit('toggle-fullscreen')">
+				<template #icon>
+					<FullscreenExitIcon v-if="isFullscreen" :size="20" />
+					<FullscreenIcon v-else :size="20" />
+				</template>
 			</NcButton>
 		</div>
 	</header>
