@@ -37,8 +37,11 @@ jobs:
       - name: Validate app ID and version against release tag
         run: |
           TAG_VERSION="${GITHUB_REF_NAME#v}"
-          XML_ID=$(xmllint --xpath 'string(/info/id)' "source/appinfo/info.xml")
-          XML_VERSION=$(xmllint --xpath 'string(/info/version)' "source/appinfo/info.xml")
+          read -r XML_ID XML_VERSION < <(python3 -c "
+          import xml.etree.ElementTree as ET
+          root = ET.parse('source/appinfo/info.xml').getroot()
+          print(root.findtext('id', '').strip(), root.findtext('version', '').strip())
+          ")
 
           if [ "$XML_ID" != "${{ env.APP_NAME }}" ]; then
             echo "::error::appinfo/info.xml <id> ('$XML_ID') does not match APP_NAME ('${{ env.APP_NAME }}')."
