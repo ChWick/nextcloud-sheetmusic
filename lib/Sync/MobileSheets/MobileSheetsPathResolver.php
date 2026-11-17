@@ -66,11 +66,11 @@ class MobileSheetsPathResolver {
 
 	/**
 	 * Strip virtual sublibrary directory segments if present.
-	 * E.g. "test2/_SubLibraries_/organ/file.pdf" -> "test2/file.pdf"
-	 * or "_SubLibraries_/organ/file.pdf" -> "file.pdf"
+	 * E.g. "test2/SubLibraries/organ/file.pdf" -> "test2/file.pdf"
+	 * or "SubLibraries/organ/file.pdf" -> "file.pdf"
 	 */
 	public function stripSublibrarySegment(string $path): string {
-		$stripped = preg_replace('#(?<=^|/)(?:\.sublibraries|_SubLibraries_|SubLibraries)/[^/]+/#', '', $path);
+		$stripped = preg_replace('#(?<=^|/)(?:\.sublibraries|SubLibraries)/[^/]+/#', '', $path);
 		return $stripped ?? $path;
 	}
 

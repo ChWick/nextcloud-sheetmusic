@@ -15,35 +15,141 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Validate required secrets
+        env:
+          APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
+          APP_PUBLIC_CRT: ${{ secrets.APP_PUBLIC_CRT }}
+          APPSTORE_TOKEN: ${{ secrets.APPSTORE_TOKEN }}
+        run: |
+          for var in APP_PRIVATE_KEY APP_PUBLIC_CRT APPSTORE_TOKEN; do
+            if [ -z "${!var}" ]; then
+              echo "::error::Required secret $var is not set."
+              exit 1
+            fi
+          done
+
+      - name: Checkout app
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          path: ${{ env.APP_NAME }}
+          path: source
+          persist-credentials: false
+
+      - name: Validate app ID and version against release tag
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          XML_ID=$(xmllint --xpath 'string(/info/id)' "source/appinfo/info.xml")
+          XML_VERSION=$(xmllint --xpath 'string(/info/version)' "source/appinfo/info.xml")
+
+          if [ "$XML_ID" != "${{ env.APP_NAME }}" ]; then
+            echo "::error::appinfo/info.xml <id> ('$XML_ID') does not match APP_NAME ('${{ env.APP_NAME }}')."
+            exit 1
+          fi
+
+          if [ "$XML_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::appinfo/info.xml <version> ('$XML_VERSION') does not match release tag ('$TAG_VERSION')."
+            exit 1
+          fi
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
         with:
-          node-version: 24
+          node-version: '24'
           cache: npm
-          cache-dependency-path: ${{ env.APP_NAME }}/package-lock.json
+          cache-dependency-path: source/package-lock.json
 
       - name: Build frontend
         run: |
-          cd ${{ env.APP_NAME }}
+          cd source
           npm ci
           npm run build
 
+      - name: Stage runtime files only
+        run: |
+          STAGE_DIR="staging/${{ env.APP_NAME }}"
+          mkdir -p "$STAGE_DIR"
+
+          for dir in appinfo css dist img js lib templates l10n; do
+            if [ -d "source/$dir" ]; then
+              cp -a "source/$dir" "$STAGE_DIR/"
+            fi
+          done
+
+          for file in LICENSE README.md CHANGELOG.md; do
+            if [ -f "source/$file" ]; then
+              cp -a "source/$file" "$STAGE_DIR/"
+            fi
+          done
+
+      - name: Checkout Nextcloud server for app signing
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: nextcloud/server
+          ref: stable31
+          submodules: true
+          fetch-depth: 1
+          path: nextcloud
+          persist-credentials: false
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@44454db4f0199b8b9685a5d763dc37cbf79108e1 # v2.36.0
+        with:
+          php-version: '8.4'
+          extensions: bz2, ctype, curl, dom, fileinfo, gd, iconv, intl, json, libxml, mbstring, openssl, pcntl, posix, session, simplexml, xmlreader, xmlwriter, zip, zlib, sqlite, pdo_sqlite
+          coverage: none
+          ini-values: disable_functions=
+
+      - name: Sign app (generate appinfo/signature.json)
+        env:
+          APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
+          APP_PUBLIC_CRT: ${{ secrets.APP_PUBLIC_CRT }}
+        run: |
+          mkdir -p nextcloud/data
+          php nextcloud/occ maintenance:install \
+            --database=sqlite \
+            --database-name=nextcloud \
+            --admin-user=admin \
+            --admin-pass=admin \
+            --no-interaction
+
+          KEY_FILE="$(mktemp)"
+          CRT_FILE="$(mktemp)"
+          trap 'rm -f "$KEY_FILE" "$CRT_FILE"' EXIT
+
+          chmod 600 "$KEY_FILE" "$CRT_FILE"
+          printf '%s\n' "$APP_PRIVATE_KEY" > "$KEY_FILE"
+          printf '%s\n' "$APP_PUBLIC_CRT" > "$CRT_FILE"
+
+          php nextcloud/occ integrity:sign-app \
+            --privateKey="$KEY_FILE" \
+            --certificate="$CRT_FILE" \
+            --path="$PWD/staging/${{ env.APP_NAME }}"
+
+          SIG_FILE="staging/${{ env.APP_NAME }}/appinfo/signature.json"
+          if [ ! -s "$SIG_FILE" ]; then
+            echo "::error::appinfo/signature.json was not generated."
+            exit 1
+          fi
+          php -r 'json_decode(file_get_contents($argv[1]), false, 512, JSON_THROW_ON_ERROR);' "$SIG_FILE"
+
       - name: Package app
         run: |
-          tar --exclude='${{ env.APP_NAME }}/.git*' \
-              --exclude='${{ env.APP_NAME }}/.github' \
-              --exclude='${{ env.APP_NAME }}/.devcontainer' \
-              --exclude='${{ env.APP_NAME }}/node_modules' \
-              --exclude='${{ env.APP_NAME }}/tests' \
-              --exclude='${{ env.APP_NAME }}/playwright-report' \
-              --exclude='${{ env.APP_NAME }}/test-results' \
-              --exclude='${{ env.APP_NAME }}/vendor-bin' \
-              -czvf ${{ env.APP_NAME }}.tar.gz ${{ env.APP_NAME }}
+          ARCHIVE="${{ env.APP_NAME }}.tar.gz"
+          tar -C staging -czf "$ARCHIVE" "${{ env.APP_NAME }}"
+
+          for required in \
+            "${{ env.APP_NAME }}/appinfo/info.xml" \
+            "${{ env.APP_NAME }}/appinfo/signature.json" \
+            "${{ env.APP_NAME }}/js/sheetmusic-main.mjs"; do
+            if ! tar -tzf "$ARCHIVE" | grep -qx "$required"; then
+              echo "::error::Expected file missing from archive: $required"
+              exit 1
+            fi
+          done
+
+          if tar -tzf "$ARCHIVE" | grep -qE '(^|/)(\.git|\.github|\.devcontainer|node_modules|src|tests|vendor-bin|\.key|\.crt)($|/)'; then
+            echo "::error::Unexpected non-runtime files found in archive."
+            exit 1
+          fi
 
       - name: Attach tarball to GitHub release
         uses: svenstaro/upload-release-action@v2

@@ -4,8 +4,21 @@
 	<id>sheetmusic</id>
 	<name>Sheet Music</name>
 	<summary>Manage and synchronize sheet music, scores, and chord charts</summary>
-	<description>Sheet Music app for Nextcloud. Manage, organize, and synchronize sheet music across devices.</description>
-	<version>1.0.0</version>
+	<description>Sheet Music turns your Nextcloud instance into a centralized sheet music library, browser studio, and synchronization backend for solo musicians, choirs, bands, and orchestras.
+
+### Key Features
+
+- **MobileSheets WebDAV Sync**: Bidirectional real-time synchronization with MobileSheets (Android, iOS/iPadOS, Windows) via virtual `mobilesheets.db` and `mobilesheets_hashcodes.txt` endpoints served dynamically over Nextcloud WebDAV—avoiding database file conflicts.
+- **Sublibraries for Ensembles**: Expose filtered virtual WebDAV folders (e.g. `SubLibraries/Trumpet`) by instrument, ensemble, or composer so musicians only sync the scores they need.
+- **Comprehensive Score Catalog**: Browse in Card, Table, or Simple List view with inline editing, batch operations, duplicate merging, deep-linkable filters, and rich musical metadata (composers, lyricists, artists, arrangers, books, collections, genres, keys, tempo, time signature, difficulty, and ratings).
+- **Fullscreen Score Viewer &amp; Setlist Performance Mode**: High-performance PDF viewer with single-page, two-page (half-page, 1-page step, 2-page jump), and continuous layouts, bookmarks, drag-and-drop setlists, touch/keyboard/Bluetooth pedal page turning, next-song preloading, and screen wake lock.
+- **In-Browser PDF Tools**: Reorder pages for repeats/Codas, rotate, crop margins for tablet/e-ink screens, split or join PDFs, enhance scans (contrast, grayscale, binarization, deskew), and edit bookmarks without leaving Nextcloud.
+- **Library Health &amp; Nextcloud Integration**: Automated file path organization, PDF metadata embedding, integrity &amp; orphan checker, plus Nextcloud file version history and Trash Bin protection.
+
+### Disclaimer
+
+This app is primarily AI-generated and provided as-is without any warranty. There is no guarantee regarding data safety, stability, or freedom from breaking changes. Please back up your sheet music files and Nextcloud database regularly before installing or updating.</description>
+	<version>0.0.1</version>
 	<licence>AGPL-3.0-or-later</licence>
 	<author mail="wick.chr.info@gmail.com">Christoph Wick</author>
 	<namespace>SheetMusic</namespace>

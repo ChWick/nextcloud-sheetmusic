@@ -132,7 +132,7 @@ describe('SublibraryShareDialog.vue', () => {
 			props: {
 				libraryId: 1,
 				sublibrary: mockSublibrary,
-				sublibraryPath: '/Noten/_SubLibraries_/chamber',
+				sublibraryPath: '/Noten/SubLibraries/chamber',
 			},
 		})
 
@@ -157,7 +157,7 @@ describe('SublibraryShareDialog.vue', () => {
 			props: {
 				libraryId: 1,
 				sublibrary: mockSublibrary,
-				sublibraryPath: '/Noten/_SubLibraries_/chamber',
+				sublibraryPath: '/Noten/SubLibraries/chamber',
 			},
 		})
 

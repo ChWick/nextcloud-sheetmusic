@@ -24,12 +24,12 @@ final class SheetMusicPropfindBuilderTest extends TestCase {
 <d:multistatus xmlns:d="DAV:">
   <d:response><d:href>/remote.php/dav/files/admin/Library/</d:href></d:response>
   <d:response><d:href>/remote.php/dav/files/admin/Library/My%20Song.pdf</d:href></d:response>
-  <d:response><d:href>/remote.php/dav/files/admin/Library/_SubLibraries_/</d:href></d:response>
+  <d:response><d:href>/remote.php/dav/files/admin/Library/SubLibraries/</d:href></d:response>
 </d:multistatus>
 XML);
 
 		$builder = new SheetMusicPropfindBuilder(new SyncClientRegistry(), new NullLogger());
-		self::assertSame(['Library', 'My Song.pdf', '_SubLibraries_'], $builder->listedFilenames($doc));
+		self::assertSame(['Library', 'My Song.pdf', 'SubLibraries'], $builder->listedFilenames($doc));
 	}
 
 	public function testBuildPropfindEntryAndDirectoryEntry(): void {
@@ -54,8 +54,8 @@ XML);
 		self::assertSame('mobilesheets.db', $entry[200]['{DAV:}displayname']);
 		self::assertSame(1234, $entry[200]['{DAV:}getcontentlength']);
 
-		$dirEntry = $builder->buildDirectoryPropfindEntry('/remote.php/dav/files/admin/Library/_SubLibraries_', '_SubLibraries_', null, 1700000000);
-		self::assertSame('/remote.php/dav/files/admin/Library/_SubLibraries_', $dirEntry['href']);
-		self::assertSame('_SubLibraries_', $dirEntry[200]['{DAV:}displayname']);
+		$dirEntry = $builder->buildDirectoryPropfindEntry('/remote.php/dav/files/admin/Library/SubLibraries', 'SubLibraries', null, 1700000000);
+		self::assertSame('/remote.php/dav/files/admin/Library/SubLibraries', $dirEntry['href']);
+		self::assertSame('SubLibraries', $dirEntry[200]['{DAV:}displayname']);
 	}
 }

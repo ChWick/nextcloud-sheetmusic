@@ -22,7 +22,7 @@ Managing digital sheet music across multiple devices, band members, or ensembles
 **Sheet Music solves these problems at the architectural level:**
 1. **Nextcloud as the Single Source of Truth**: Your songs, files, taxonomies, and setlists reside safely in Nextcloud's relational database and managed file storage.
 2. **Virtual WebDAV Synchronization for MobileSheets**: Through custom Nextcloud SabreDAV integration, Sheet Music dynamically generates and serves virtual `mobilesheets.db` and `mobilesheets_hashcodes.txt` files on the fly. When MobileSheets syncs with your Nextcloud folder, Sheet Music imports and exports the SQLite database in real time—eliminating database file corruption and manual export/import steps.
-3. **Sublibraries for Targeted Synchronization**: Define custom sublibraries (filtered by instrument, ensemble, or composer) that expose virtual WebDAV endpoints (e.g. `_SubLibraries_/Trumpet`). Musicians sync only the charts relevant to their part.
+3. **Sublibraries for Targeted Synchronization**: Define custom sublibraries (filtered by instrument, ensemble, or composer) that expose virtual WebDAV endpoints (e.g. `SubLibraries/Trumpet`). Musicians sync only the charts relevant to their part.
 4. **All-in-One In-Browser Sheet Music Studio**: Edit metadata, assemble setlists, reorder pages, rotate or crop margins, and clean up scans directly in your browser without leaving Nextcloud.
 
 ---
@@ -32,7 +32,7 @@ Managing digital sheet music across multiple devices, band members, or ensembles
 ### 📱 Transparent MobileSheets Sync & WebDAV Integration
 - **Virtual SQLite Sync**: Serves dynamic `mobilesheets.db` and hash codes directly over WebDAV (`remote.php/dav/files/...`).
 - **Live Bidirectional Updates**: Changes made in MobileSheets sync back to Nextcloud, and web edits are immediately available on tablets.
-- **Sublibrary WebDAV Folders**: Expose filtered virtual directories (`.../<library>/_SubLibraries_/<name>`) for individual instruments or ensembles.
+- **Sublibrary WebDAV Folders**: Expose filtered virtual directories (`.../<library>/SubLibraries/<name>`) for individual instruments or ensembles.
 
 ### 🎼 Comprehensive Score & Library Catalog
 - **Multiple Layout Views**: Switch seamlessly between **Card View**, **Table View**, and **Simple List View**.
@@ -171,7 +171,7 @@ To connect MobileSheets on your tablet or desktop to Nextcloud:
 If you created a Sublibrary in Sheet Music (e.g., named `Saxophone`):
 - Set the WebDAV path in MobileSheets to:
   ```
-  https://<your-nextcloud-domain>/remote.php/dav/files/<username>/<path-to-library-folder>/_SubLibraries_/Saxophone
+  https://<your-nextcloud-domain>/remote.php/dav/files/<username>/<path-to-library-folder>/SubLibraries/Saxophone
   ```
 Only the songs assigned to that sublibrary will be synchronized to the device.
 

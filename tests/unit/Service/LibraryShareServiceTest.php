@@ -261,7 +261,7 @@ final class LibraryShareServiceTest extends TestCase {
 		$mockFolder->method('getId')->willReturn($folderId);
 
 		$mockShare->method('getNode')->willReturn($mockFolder);
-		$mockShare->method('getTarget')->willReturn('/Noten/_SubLibraries_/flute');
+		$mockShare->method('getTarget')->willReturn('/Noten/SubLibraries/flute');
 		$mockShare->method('getSharedBy')->willReturn('admin');
 		$mockShare->method('getToken')->willReturn('subSecretToken');
 		$shareManager->method('getShareByToken')->with('subSecretToken')->willReturn($mockShare);

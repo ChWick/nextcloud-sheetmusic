@@ -578,8 +578,8 @@ final class SheetMusicDavPluginTest extends TestCase {
 			'instrument' => ['Orgel'],
 		]);
 
-		// 1. matchVirtualPath with sublibrary (_SubLibraries_ and legacy .sublibraries)
-		$match = $this->plugin->matchVirtualPath('files/admin/My Noten/_SubLibraries_/orgel/mobilesheets.db');
+		// 1. matchVirtualPath with sublibrary (SubLibraries and legacy .sublibraries)
+		$match = $this->plugin->matchVirtualPath('files/admin/My Noten/SubLibraries/orgel/mobilesheets.db');
 		self::assertNotNull($match);
 		self::assertSame($this->library->id, $match['library']->id);
 		self::assertSame('mobilesheets.db', $match['filename']);
@@ -590,17 +590,17 @@ final class SheetMusicDavPluginTest extends TestCase {
 		self::assertNotNull($legacyMatch);
 		self::assertSame('orgel', $legacyMatch['sublibrary']->slug);
 
-		// 2. PROPFIND on _SubLibraries_ collection
-		$req = new Request('PROPFIND', '/files/admin/My%20Noten/_SubLibraries_', ['Depth' => '1']);
+		// 2. PROPFIND on SubLibraries collection
+		$req = new Request('PROPFIND', '/files/admin/My%20Noten/SubLibraries', ['Depth' => '1']);
 		$res = new Response();
 		self::assertFalse($this->plugin->beforeMethod($req, $res));
 		self::assertSame(207, $res->getStatus());
 		$body = (string)$res->getBody();
-		self::assertStringContainsString('_SubLibraries_', $body);
+		self::assertStringContainsString('SubLibraries', $body);
 		self::assertStringContainsString('orgel', $body);
 
-		// 3. PROPFIND on _SubLibraries_/orgel collection
-		$reqSub = new Request('PROPFIND', '/files/admin/My%20Noten/_SubLibraries_/orgel', ['Depth' => '1']);
+		// 3. PROPFIND on SubLibraries/orgel collection
+		$reqSub = new Request('PROPFIND', '/files/admin/My%20Noten/SubLibraries/orgel', ['Depth' => '1']);
 		$resSub = new Response();
 		self::assertFalse($this->plugin->beforeMethod($reqSub, $resSub));
 		self::assertSame(207, $resSub->getStatus());
@@ -616,7 +616,7 @@ final class SheetMusicDavPluginTest extends TestCase {
 		]);
 
 		$fileContent = '%PDF-1.4 test score';
-		$req = new Request('PUT', '/files/admin/My%20Noten/_SubLibraries_/orgel/UploadScore.pdf');
+		$req = new Request('PUT', '/files/admin/My%20Noten/SubLibraries/orgel/UploadScore.pdf');
 		$req->setBody($fileContent);
 		$res = new Response();
 
@@ -630,21 +630,21 @@ final class SheetMusicDavPluginTest extends TestCase {
 		self::assertSame($fileContent, $savedNode->getContent());
 
 		// Verify GET on virtual sublibrary file downloads the physical file
-		$getReq = new Request('GET', '/files/admin/My%20Noten/_SubLibraries_/orgel/UploadScore.pdf');
+		$getReq = new Request('GET', '/files/admin/My%20Noten/SubLibraries/orgel/UploadScore.pdf');
 		$getRes = new Response();
 		self::assertFalse($this->plugin->beforeMethod($getReq, $getRes));
 		self::assertSame(200, $getRes->getStatus());
 		self::assertSame($fileContent, stream_get_contents($getRes->getBody()));
 
 		// Verify HEAD on virtual sublibrary file
-		$headReq = new Request('HEAD', '/files/admin/My%20Noten/_SubLibraries_/orgel/UploadScore.pdf');
+		$headReq = new Request('HEAD', '/files/admin/My%20Noten/SubLibraries/orgel/UploadScore.pdf');
 		$headRes = new Response();
 		self::assertFalse($this->plugin->beforeMethod($headReq, $headRes));
 		self::assertSame(200, $headRes->getStatus());
 		self::assertSame((string)strlen($fileContent), $headRes->getHeader('Content-Length'));
 
 		// Verify PROPFIND on virtual sublibrary file
-		$propReq = new Request('PROPFIND', '/files/admin/My%20Noten/_SubLibraries_/orgel/UploadScore.pdf');
+		$propReq = new Request('PROPFIND', '/files/admin/My%20Noten/SubLibraries/orgel/UploadScore.pdf');
 		$propRes = new Response();
 		self::assertFalse($this->plugin->beforeMethod($propReq, $propRes));
 		self::assertSame(207, $propRes->getStatus());
@@ -668,7 +668,7 @@ final class SheetMusicDavPluginTest extends TestCase {
 		$mockFolder = $this->createMock(\OCP\Files\Folder::class);
 		$mockFolder->method('getId')->willReturn($folderId);
 		$mockShare->method('getNode')->willReturn($mockFolder);
-		$mockShare->method('getTarget')->willReturn('/My Noten/_SubLibraries_/orgel');
+		$mockShare->method('getTarget')->willReturn('/My Noten/SubLibraries/orgel');
 		$mockShare->method('getSharedBy')->willReturn('admin');
 		$mockShare->method('getToken')->willReturn('pubSubToken');
 		$this->shareManager->method('getShareByToken')->with('pubSubToken')->willReturn($mockShare);
@@ -723,7 +723,7 @@ final class SheetMusicDavPluginTest extends TestCase {
 
 		// Step 1: MobileSheets uploads new score PDF via WebDAV PUT to virtual sublibrary path
 		$fileContent = "%PDF-1.4 E2E Test Score\n";
-		$putFileReq = new Request('PUT', '/files/admin/My%20Noten/_SubLibraries_/orgel/OrganChorale.pdf');
+		$putFileReq = new Request('PUT', '/files/admin/My%20Noten/SubLibraries/orgel/OrganChorale.pdf');
 		$putFileReq->setBody($fileContent);
 		$putFileRes = new Response();
 		self::assertFalse($this->plugin->beforeMethod($putFileReq, $putFileRes));
@@ -757,11 +757,11 @@ final class SheetMusicDavPluginTest extends TestCase {
 		$db->exec("INSERT INTO Songs (Title) VALUES ('Song2')");
 		$song2ClientId = (int)$db->lastInsertId();
 
-		$storedPath = '/remote.php/dav/files/admin/My Noten/_SubLibraries_/orgel/OrganChorale.pdf';
+		$storedPath = '/remote.php/dav/files/admin/My Noten/SubLibraries/orgel/OrganChorale.pdf';
 		$stmt = $db->prepare("INSERT INTO Files (SongId, Path, PageOrder, SourceFilePageCount, FileSize) VALUES (?, ?, '1-1', 1, 1024)");
 		$stmt->execute([$song2ClientId, $storedPath]);
 
-		$putDbReq = new Request('PUT', '/files/admin/My%20Noten/_SubLibraries_/orgel/mobilesheets.db');
+		$putDbReq = new Request('PUT', '/files/admin/My%20Noten/SubLibraries/orgel/mobilesheets.db');
 		$putDbReq->setBody(fopen($tempDb, 'rb'));
 		$putDbRes = new Response();
 		self::assertFalse($this->plugin->beforeMethod($putDbReq, $putDbRes));
@@ -786,20 +786,20 @@ final class SheetMusicDavPluginTest extends TestCase {
 		self::assertSame('Orgel', $instruments[0]->name);
 
 		// Step 5: MobileSheets downloads the score file via WebDAV GET
-		$getScoreReq = new Request('GET', '/files/admin/My%20Noten/_SubLibraries_/orgel/OrganChorale.pdf');
+		$getScoreReq = new Request('GET', '/files/admin/My%20Noten/SubLibraries/orgel/OrganChorale.pdf');
 		$getScoreRes = new Response();
 		self::assertFalse($this->plugin->beforeMethod($getScoreReq, $getScoreRes));
 		self::assertSame(200, $getScoreRes->getStatus());
 		self::assertSame($fileContent, stream_get_contents($getScoreRes->getBody()));
 
 		// Step 6: MobileSheets downloads database via WebDAV GET
-		$getDbReq = new Request('GET', '/files/admin/My%20Noten/_SubLibraries_/orgel/mobilesheets.db');
+		$getDbReq = new Request('GET', '/files/admin/My%20Noten/SubLibraries/orgel/mobilesheets.db');
 		$getDbRes = new Response();
 		self::assertFalse($this->plugin->beforeMethod($getDbReq, $getDbRes));
 		self::assertSame(200, $getDbRes->getStatus());
 
 		// Step 7: MobileSheets downloads hashcodes via WebDAV GET
-		$getHashReq = new Request('GET', '/files/admin/My%20Noten/_SubLibraries_/orgel/mobilesheets_hashcodes.txt');
+		$getHashReq = new Request('GET', '/files/admin/My%20Noten/SubLibraries/orgel/mobilesheets_hashcodes.txt');
 		$getHashRes = new Response();
 		self::assertFalse($this->plugin->beforeMethod($getHashReq, $getHashRes));
 		self::assertSame(200, $getHashRes->getStatus());
@@ -887,9 +887,9 @@ final class SheetMusicDavPluginTest extends TestCase {
 	}
 
 	public function testIsSublibraryContainerPath(): void {
-		self::assertTrue($this->plugin->isSublibraryContainerPath('files/admin/My Noten/_SubLibraries_'));
-		self::assertTrue($this->plugin->isSublibraryContainerPath('files/admin/My Noten/_SubLibraries_/orgel'));
-		self::assertTrue($this->plugin->isSublibraryContainerPath('files/admin/My Noten/_SubLibraries_/orgel/mobilesheets.db'));
+		self::assertTrue($this->plugin->isSublibraryContainerPath('files/admin/My Noten/SubLibraries'));
+		self::assertTrue($this->plugin->isSublibraryContainerPath('files/admin/My Noten/SubLibraries/orgel'));
+		self::assertTrue($this->plugin->isSublibraryContainerPath('files/admin/My Noten/SubLibraries/orgel/mobilesheets.db'));
 		self::assertTrue($this->plugin->isSublibraryContainerPath('files/admin/My Noten/.sublibraries/orgel'));
 
 		self::assertFalse($this->plugin->isSublibraryContainerPath('files/admin/My Noten'));
@@ -943,16 +943,16 @@ final class SheetMusicDavPluginTest extends TestCase {
 		// SubLibraries IS injected for non-sync clients
 		self::assertStringContainsString('SubLibraries', $bodyMs);
 
-		// 3. Direct PROPFIND on _SubLibraries_ by sync client is bypassed (returns true so SabreDAV returns 404)
-		$directSyncReq = new Request('PROPFIND', '/files/admin/My%20Noten/_SubLibraries_', [
+		// 3. Direct PROPFIND on SubLibraries by sync client is bypassed (returns true so SabreDAV returns 404)
+		$directSyncReq = new Request('PROPFIND', '/files/admin/My%20Noten/SubLibraries', [
 			'Depth' => '1',
 			'User-Agent' => $syncClientUa,
 		]);
 		$directSyncRes = new Response();
 		self::assertTrue($this->plugin->beforeMethod($directSyncReq, $directSyncRes));
 
-		// 4. Direct PROPFIND on _SubLibraries_ by non-sync client is handled
-		$directMsReq = new Request('PROPFIND', '/files/admin/My%20Noten/_SubLibraries_', [
+		// 4. Direct PROPFIND on SubLibraries by non-sync client is handled
+		$directMsReq = new Request('PROPFIND', '/files/admin/My%20Noten/SubLibraries', [
 			'Depth' => '1',
 			'User-Agent' => 'MobileSheets/3.8.4',
 		]);

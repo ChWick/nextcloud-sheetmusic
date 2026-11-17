@@ -55,7 +55,7 @@ class LibraryOrphanScanner {
 		foreach ($nodes as $node) {
 			if ($node instanceof Folder) {
 				$folderName = $node->getName();
-				if (in_array($folderName, ['SubLibraries', 'SetLists', '_SubLibraries_', '_SetLists_', '.sublibraries'], true)) {
+				if (in_array($folderName, ['SubLibraries', 'SetLists', '_SetLists_', '.sublibraries'], true)) {
 					continue;
 				}
 				$this->scanOrphans($node, $targetFolderPath, $referencedRelativePaths, $issues, $user, $songs, $missingSongIds, $autoMatchOrphans, $userFolderPath, $tier1Candidates, $tier2Candidates);

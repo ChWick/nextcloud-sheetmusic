@@ -84,7 +84,7 @@ final class MobileSheetsPathResolverTest extends TestCase {
 
 	public function testFromStoredNormalizesVirtualSublibraryPath(): void {
 		$path = $this->resolver()->fromStored(
-			self::WEBDAV_ROOT . '/Noten/_SubLibraries_/organ/piece.pdf',
+			self::WEBDAV_ROOT . '/Noten/SubLibraries/organ/piece.pdf',
 			$this->user(),
 		);
 
@@ -105,8 +105,8 @@ final class MobileSheetsPathResolverTest extends TestCase {
 	}
 
 	public function testStripSublibrarySegment(): void {
-		self::assertSame('Noten/piece.pdf', $this->resolver()->stripSublibrarySegment('Noten/_SubLibraries_/organ/piece.pdf'));
-		self::assertSame('piece.pdf', $this->resolver()->stripSublibrarySegment('_SubLibraries_/organ/piece.pdf'));
+		self::assertSame('Noten/piece.pdf', $this->resolver()->stripSublibrarySegment('Noten/SubLibraries/organ/piece.pdf'));
+		self::assertSame('piece.pdf', $this->resolver()->stripSublibrarySegment('SubLibraries/organ/piece.pdf'));
 		self::assertSame('Noten/piece.pdf', $this->resolver()->stripSublibrarySegment('Noten/.sublibraries/organ/piece.pdf'));
 		self::assertSame('Noten/normal/piece.pdf', $this->resolver()->stripSublibrarySegment('Noten/normal/piece.pdf'));
 	}

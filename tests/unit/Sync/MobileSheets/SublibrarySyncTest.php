@@ -242,7 +242,7 @@ final class SublibrarySyncTest extends TestCase {
 		$db->exec("INSERT INTO Songs (Title) VALUES ('Song2')");
 		$newSongClientId = (int)$db->lastInsertId();
 
-		$storedPath = '/remote.php/dav/files/admin/SublibSyncTest/_SubLibraries_/orgel/20261109_143351.pdf';
+		$storedPath = '/remote.php/dav/files/admin/SublibSyncTest/SubLibraries/orgel/20261109_143351.pdf';
 		$stmt = $db->prepare("INSERT INTO Files (SongId, Path, PageOrder, SourceFilePageCount, FileSize) VALUES (?, ?, '1-1', 1, 1024)");
 		$stmt->execute([$newSongClientId, $storedPath]);
 

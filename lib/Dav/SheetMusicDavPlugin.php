@@ -50,7 +50,7 @@ class SheetMusicDavPlugin extends ServerPlugin {
 	public const SONGS_DIR = 'Songs';
 	public const SUBLIBRARIES_DIR = 'SubLibraries';
 	public const SUBLIBRARIES_DIR_LEGACY = '.sublibraries';
-	public const SUBLIBRARIES_DIR_PATTERN = '(?:\.sublibraries|_SubLibraries_|SubLibraries)';
+	public const SUBLIBRARIES_DIR_PATTERN = '(?:\.sublibraries|SubLibraries)';
 
 	private const OC_NS = 'http://owncloud.org/ns';
 
@@ -434,7 +434,7 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		}
 		[$userId, $relPath] = $resolved;
 
-		// Case 1: {LibraryFolder}/_SubLibraries_ or {LibraryFolder}/.sublibraries
+		// Case 1: {LibraryFolder}/SubLibraries or {LibraryFolder}/.sublibraries
 		if (preg_match('#^(.+?)/' . self::SUBLIBRARIES_DIR_PATTERN . '$#', $relPath, $m)) {
 			$parentFolder = $m[1];
 			$library = $this->findLibraryForRelativePath($userId, $parentFolder);
@@ -464,7 +464,7 @@ class SheetMusicDavPlugin extends ServerPlugin {
 			return true;
 		}
 
-		// Case 2: {LibraryFolder}/_SubLibraries_/{slug} or {LibraryFolder}/.sublibraries/{slug}
+		// Case 2: {LibraryFolder}/SubLibraries/{slug} or {LibraryFolder}/.sublibraries/{slug}
 		$resolvedSub = $this->resolveSublibraryFromPath($path);
 		if ($resolvedSub !== null) {
 			[$library, $sublibrary] = $resolvedSub;
@@ -531,7 +531,7 @@ class SheetMusicDavPlugin extends ServerPlugin {
 
 	/**
 	 * Resolves routing info for a sub-library file accessed via:
-	 * 1. Owner's virtual folder (_SubLibraries_/<slug>/...)
+	 * 1. Owner's virtual folder (SubLibraries/<slug>/...)
 	 * 2. Public share token (/public.php/dav/files/<token>/...)
 	 * 3. Logged-in user's shared folder (/remote.php/dav/files/<user>/<sharedFolder>/...)
 	 *
