@@ -401,7 +401,7 @@ defineExpose({
 				@update:annotations="annotations = $event"
 				@update:is-editing="onEditingAnnotationsChange"
 				@toggle-fullscreen="toggleAnnotationFullscreen">
-				<template #between-toolbar-and-preview>
+				<template #betweenToolbarAndPreview>
 					<SongViewerBookmarksBar
 						:bookmarks="songBookmarks"
 						:active-bookmark-page="activeBookmarkPage"

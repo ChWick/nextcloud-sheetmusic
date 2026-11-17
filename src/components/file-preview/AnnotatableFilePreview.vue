@@ -160,7 +160,7 @@ defineExpose({
 			@toggle-fullscreen="emit('toggle-fullscreen')"
 			@done="exitEditMode" />
 
-		<slot name="between-toolbar-and-preview" :current-page="currentPage" />
+		<slot name="betweenToolbarAndPreview" :current-page="currentPage" />
 
 		<FilePreviewer
 			ref="filePreviewerRef"
