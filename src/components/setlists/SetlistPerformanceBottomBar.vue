@@ -78,7 +78,7 @@ const emit = defineEmits<{
 				{{ t('sheetmusic', 'Page {current} of {total}', { current: currentPageDisplay, total: totalPages || 1 }, { escape: false }) }}
 			</span>
 			<NcButton
-				v-if="totalPages > 1"
+				v-if="totalPages > 1 || hasPrevSong || hasNextSong"
 				:variant="isPagePickerOpen ? 'primary' : 'secondary'"
 				size="small"
 				:aria-pressed="isPagePickerOpen"

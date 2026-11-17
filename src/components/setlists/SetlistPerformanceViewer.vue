@@ -6,7 +6,7 @@ import ChevronLeftIcon from 'vue-material-design-icons/ChevronLeft.vue'
 import FilePreviewer from '../FilePreviewer.vue'
 import SetlistPerformanceBottomBar from './SetlistPerformanceBottomBar.vue'
 import SetlistPerformanceDrawer from './SetlistPerformanceDrawer.vue'
-import SetlistPerformancePageStrip from './SetlistPerformancePageStrip.vue'
+import SetlistPerformancePageStrip, { type SetlistStripSong } from './SetlistPerformancePageStrip.vue'
 import SetlistPerformanceSettingsPanel from './SetlistPerformanceSettingsPanel.vue'
 import SetlistPerformanceSupplementalDrawer from './SetlistPerformanceSupplementalDrawer.vue'
 import SetlistPerformanceTopBar from './SetlistPerformanceTopBar.vue'
@@ -54,6 +54,7 @@ const initialSettings = loadEffectivePerformanceSettings(props.libraryId, props.
 const currentIndex = ref(Math.min(Math.max(0, props.initialIndex), Math.max(0, props.items.length - 1)))
 const startAtEnd = ref(false)
 const skipFirstPageOnNextSong = ref(false)
+const jumpTargetPage = ref<number | null>(null)
 const isDrawerOpen = ref(false)
 const isSettingsOpen = ref(false)
 const isSupplementalDrawerOpen = ref(false)
@@ -204,8 +205,29 @@ const currentFilePath = computed(() => buildVersionedPath(currentFile.value))
 const currentPageOrder = computed(() => currentFile.value?.pageOrder ?? null)
 const currentTargetPage = computed(() => {
 	if (startAtEnd.value) return undefined
+	if (jumpTargetPage.value !== null && jumpTargetPage.value >= 1) {
+		return jumpTargetPage.value
+	}
 	const base = currentItem.value?.pageNum && currentItem.value.pageNum >= 1 ? currentItem.value.pageNum : 1
 	return skipFirstPageOnNextSong.value ? base + 1 : base
+})
+
+const setlistStripSongs = computed<SetlistStripSong[]>(() => {
+	return props.items.map((item, idx) => {
+		const song = songsById.value.get(item.songId) ?? null
+		const file = pickPrimaryFile(song)
+		const filePath = buildVersionedPath(file)
+		const title = song?.title || item.songTitle || t('sheetmusic', 'Unknown Song')
+		const pageCount = file?.pageCount && file.pageCount > 0 ? file.pageCount : 1
+		return {
+			itemIndex: idx,
+			title,
+			bookmarkName: item.bookmarkName,
+			filePath,
+			pageOrder: file?.pageOrder ?? null,
+			pageCount,
+		}
+	})
 })
 
 const nextItem = computed<SetlistItem | null>(() => props.items[currentIndex.value + 1] ?? null)
@@ -275,24 +297,25 @@ watch(currentIndex, () => {
 	preloadNextSong()
 }, { immediate: true })
 
-function goToSong(index: number, openAtEnd = false, skipFirstPage = false) {
+function goToSong(index: number, openAtEnd = false, skipFirstPage = false, explicitTargetPage: number | null = null) {
 	if (index < 0 || index >= props.items.length) return
 	startAtEnd.value = openAtEnd
 	skipFirstPageOnNextSong.value = skipFirstPage
+	jumpTargetPage.value = explicitTargetPage
 	currentIndex.value = index
 	isDrawerOpen.value = false
 	isPagePickerOpen.value = false
 	scheduleHudAutoHide()
 }
 
-function onJumpToPage(page: number) {
-	previewerRef.value?.goToPage(page)
-	isPagePickerOpen.value = false
-	scheduleHudAutoHide()
-}
-
-async function renderPageThumbnail(page: number, canvas: HTMLCanvasElement): Promise<void> {
-	await previewerRef.value?.renderPageThumbnail(page, canvas, 110)
+function onJumpToPage(payload: { itemIndex: number; page: number }) {
+	if (payload.itemIndex === currentIndex.value) {
+		previewerRef.value?.goToPage(payload.page)
+		isPagePickerOpen.value = false
+		scheduleHudAutoHide()
+		return
+	}
+	goToSong(payload.itemIndex, false, false, payload.page)
 }
 
 function handleNextPage() {
@@ -460,9 +483,9 @@ onUnmounted(() => {
 
 			<SetlistPerformancePageStrip
 				:open="isPagePickerOpen"
-				:total-pages="totalPages"
+				:songs="setlistStripSongs"
+				:current-item-index="currentIndex"
 				:current-page="previewerRef?.currentPage ?? 1"
-				:render-thumbnail="renderPageThumbnail"
 				@select="onJumpToPage"
 				@close="isPagePickerOpen = false"
 				@pause-auto-hide="pauseHudAutoHide"
