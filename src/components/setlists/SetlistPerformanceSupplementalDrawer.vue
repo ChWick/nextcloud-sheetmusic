@@ -37,12 +37,14 @@
 				</button>
 			</div>
 
-			<div :class="$style.viewerBody">
+			<div :class="$style.viewerBody" @click="onViewerBodyClick">
 				<FilePreviewer
 					v-if="activeFile && activeFileUrl"
 					:key="activeFile.id"
 					:file-path="activeFileUrl"
 					:file-name="activeFile.filename"
+					:annotations="activeFileAnnotations"
+					:hide-toolbar="!showPdfToolbar"
 					:show-external-button="false"
 					:no-padding="true" />
 			</div>
@@ -55,7 +57,7 @@ import { computed, onUnmounted, ref, watch } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 import FilePreviewer from '../FilePreviewer.vue'
-import { getSetlistFileContentUrl } from '../../api/setlists'
+import { useSetlistFileAnnotations } from '../../composables/useSetlistFileAnnotations'
 import type { SetlistFile } from '../../types/song'
 
 const props = defineProps<{
@@ -72,6 +74,13 @@ const emit = defineEmits<{
 const activeIndex = ref(0)
 const customWidthPx = ref<number | null>(null)
 const isResizing = ref(false)
+const showPdfToolbar = ref(false)
+
+watch(() => props.open, (isOpen) => {
+	if (isOpen) {
+		showPdfToolbar.value = false
+	}
+})
 
 watch(() => props.files, (nextFiles) => {
 	if (activeIndex.value >= nextFiles.length) {
@@ -79,19 +88,25 @@ watch(() => props.files, (nextFiles) => {
 	}
 })
 
+function onViewerBodyClick(event: MouseEvent) {
+	const target = event.target
+	if (target instanceof Element && target.closest('button, a, input, select, textarea, [role="button"], [role="tab"]')) {
+		return
+	}
+	if (window.getSelection()?.toString()) {
+		return
+	}
+	showPdfToolbar.value = !showPdfToolbar.value
+}
+
 const activeFile = computed(() => props.files[activeIndex.value] ?? null)
 
-const activeFileUrl = computed(() => {
-	if (!activeFile.value || props.libraryId <= 0 || props.setlistId <= 0) {
-		return ''
-	}
-	return getSetlistFileContentUrl(
-		props.libraryId,
-		props.setlistId,
-		activeFile.value.id,
-		activeFile.value.updatedAt,
-	)
-})
+const { annotations: activeFileAnnotations, fileUrl: activeFileUrl } = useSetlistFileAnnotations(() => ({
+	libraryId: props.libraryId,
+	setlistId: props.setlistId,
+	file: activeFile.value,
+	enabled: props.open,
+}))
 
 const drawerStyle = computed(() => {
 	if (customWidthPx.value !== null) {
@@ -153,6 +168,14 @@ onUnmounted(() => {
 @media (max-width: 640px) {
 	.drawer {
 		width: 100vw;
+	}
+
+	.resizeHandle {
+		display: none;
+	}
+
+	.drawerHeader {
+		padding: 8px 10px 8px 14px;
 	}
 }
 

@@ -100,39 +100,31 @@
     :initial-index="performanceStartIndex"
     @close="isPerformanceMode = false" />
 
-  <NcDialog
+  <SetlistFilePreviewDialog
     v-if="previewingFile && selectedSetlist"
-    :open="true"
-    :name="previewingFile.filename"
-    size="large"
-    @closing="previewingFile = null">
-    <div :class="$style.filePreviewDialogBody">
-      <FilePreviewer
-        :file-path="getSetlistFileContentUrl(selectedLibrary, selectedSetlist.id, previewingFile.id, previewingFile.updatedAt)"
-        :file-name="previewingFile.filename"
-        :show-external-button="false" />
-    </div>
-  </NcDialog>
+    :library-id="selectedLibrary"
+    :setlist-id="selectedSetlist.id"
+    :file="previewingFile"
+    :can-write="canWrite"
+    @close="previewingFile = null" />
 </template>
 
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
-import NcDialog from '@nextcloud/vue/components/NcDialog'
 import PlaylistMusic from 'vue-material-design-icons/PlaylistMusic.vue'
-import FilePreviewer from './FilePreviewer.vue'
 import ViewHeader from './ViewHeader.vue'
 import SetlistsSidebar from './setlists/SetlistsSidebar.vue'
 import SetlistDetailHeader from './setlists/SetlistDetailHeader.vue'
 import SetlistFilesSection from './setlists/SetlistFilesSection.vue'
+import SetlistFilePreviewDialog from './setlists/SetlistFilePreviewDialog.vue'
 import SetlistItemsTable from './setlists/SetlistItemsTable.vue'
 import CreateSetlistDialog from './setlists/CreateSetlistDialog.vue'
 import RenameSetlistDialog from './setlists/RenameSetlistDialog.vue'
 import DeleteSetlistDialog from './setlists/DeleteSetlistDialog.vue'
 import AddSetlistItemDialog from './setlists/AddSetlistItemDialog.vue'
 import SetlistPerformanceViewer from './setlists/SetlistPerformanceViewer.vue'
-import { getSetlistFileContentUrl } from '../api/setlists'
 import type { Setlist, SetlistFile, SetlistItem } from '../types/song'
 import { useLibraryData } from '../composables/useLibraryData'
 import { useSetlists } from '../composables/useSetlists'
@@ -428,12 +420,5 @@ watch(() => props.selectedLibrary, (newLib) => {
 .noSelectionIcon {
   margin-bottom: 16px;
   opacity: 0.5;
-}
-
-.filePreviewDialogBody {
-  height: 75vh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
 }
 </style>

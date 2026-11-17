@@ -11,6 +11,8 @@
       <NcButton
         v-if="itemCount > 0"
         variant="primary"
+        :aria-label="t('sheetmusic', 'Play Setlist')"
+        :title="t('sheetmusic', 'Play Setlist')"
         @click="emit('play')">
         <template #icon>
           <PlayIcon :size="20" />
@@ -20,6 +22,8 @@
       <NcButton
         v-if="canWrite !== false"
         :variant="itemCount > 0 ? 'secondary' : 'primary'"
+        :aria-label="t('sheetmusic', 'Add Song / Bookmark')"
+        :title="t('sheetmusic', 'Add Song / Bookmark')"
         @click="emit('add-item')">
         <template #icon>
           <PlusIcon :size="20" />
@@ -56,6 +60,7 @@ const emit = defineEmits<{
 
 <style module>
 .detailHeader {
+  container-type: inline-size;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -72,6 +77,18 @@ const emit = defineEmits<{
   gap: 8px;
   flex-shrink: 0;
   margin-left: auto;
+}
+
+@container (max-width: 560px) {
+  .actions :global(.button-vue__text) {
+    display: none;
+  }
+
+  .actions :global(.button-vue) {
+    --button-padding: var(--button-radius);
+    line-height: 1;
+    width: var(--button-size, var(--default-clickable-area, 44px)) !important;
+  }
 }
 
 .detailTitleArea {

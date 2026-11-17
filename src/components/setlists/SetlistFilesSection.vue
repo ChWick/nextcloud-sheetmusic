@@ -17,6 +17,8 @@
 				<NcButton
 					variant="tertiary"
 					:disabled="isUploading"
+					:aria-label="isUploading ? t('sheetmusic', 'Uploading…') : t('sheetmusic', 'Upload File')"
+					:title="isUploading ? t('sheetmusic', 'Uploading…') : t('sheetmusic', 'Upload File')"
 					@click="triggerFilePicker">
 					<template #icon>
 						<UploadIcon :size="18" />
@@ -26,6 +28,8 @@
 				<NcButton
 					variant="tertiary"
 					:disabled="isUploading"
+					:aria-label="t('sheetmusic', 'Choose from Nextcloud')"
+					:title="t('sheetmusic', 'Choose from Nextcloud')"
 					@click="openNextcloudPicker">
 					<template #icon>
 						<FolderOutlineIcon :size="18" />
@@ -217,6 +221,7 @@ function formatFileSize(bytes: number): string {
 
 <style module>
 .section {
+	container-type: inline-size;
 	display: flex;
 	flex-direction: column;
 	gap: 8px;
@@ -237,16 +242,26 @@ function formatFileSize(bytes: number): string {
 	display: flex;
 	align-items: center;
 	gap: 6px;
+	min-width: 0;
+	flex: 1 1 auto;
 	font-size: 0.9rem;
 	font-weight: 600;
 	color: var(--color-main-text);
 }
 
 .headerIcon {
+	flex-shrink: 0;
 	color: var(--color-text-maxcontrast);
 }
 
+.title {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
 .count {
+	flex-shrink: 0;
 	color: var(--color-text-maxcontrast);
 	font-weight: 400;
 }
@@ -254,7 +269,20 @@ function formatFileSize(bytes: number): string {
 .uploadActions {
 	display: flex;
 	align-items: center;
+	flex-shrink: 0;
 	gap: 8px;
+}
+
+@container (max-width: 560px) {
+	.uploadActions :global(.button-vue__text) {
+		display: none;
+	}
+
+	.uploadActions :global(.button-vue) {
+		--button-padding: var(--button-radius);
+		line-height: 1;
+		width: var(--button-size, var(--default-clickable-area, 44px)) !important;
+	}
 }
 
 .attachDialogBody {
