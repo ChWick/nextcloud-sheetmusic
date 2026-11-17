@@ -58,7 +58,7 @@ export function isSetlistAvailableOffline(libraryId: number, setlistId: number):
 }
 
 function isVersionedBinaryUrl(url: string): boolean {
-	return (url.includes('/remote.php/dav/') || (url.includes('/files/') && url.endsWith('/content') || url.includes('/content?v=')))
+	return (url.includes('/remote.php/dav/') || (url.includes('/files/') && url.endsWith('/content')) || url.includes('/content?v='))
 		&& url.includes('v=')
 }
 

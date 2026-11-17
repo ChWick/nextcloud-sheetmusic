@@ -64,6 +64,17 @@ function isVersionedBinaryUrl(url) {
 		&& url.searchParams.has('v')
 }
 
+function toCleanNavigationResponse(response) {
+	if (!response || !response.redirected) {
+		return response
+	}
+	return new Response(response.body, {
+		status: response.status,
+		statusText: response.statusText,
+		headers: response.headers,
+	})
+}
+
 async function findCachedNavigationFallback(cache) {
 	const keys = await cache.keys()
 	for (const req of keys) {
@@ -93,10 +104,13 @@ async function handleOfflineAwareGet(request, url) {
 
 	try {
 		const networkResponse = await fetch(request)
-		if (networkResponse && networkResponse.ok) {
+		if (networkResponse && networkResponse.ok && !networkResponse.url.includes('/login')) {
 			if (isCacheableAppShellRequest(request, url)) {
 				const shellCache = await caches.open(APP_SHELL_CACHE)
-				shellCache.put(request, networkResponse.clone()).catch(() => {})
+				const toCache = request.mode === 'navigate'
+					? toCleanNavigationResponse(networkResponse.clone())
+					: networkResponse.clone()
+				shellCache.put(request, toCache).catch(() => {})
 			}
 		}
 		return networkResponse
@@ -109,20 +123,20 @@ async function handleOfflineAwareGet(request, url) {
 		const offlineCache = await caches.open(OFFLINE_SETLIST_CACHE)
 		const offlineMatch = await offlineCache.match(request, matchOpts)
 		if (offlineMatch) {
-			return offlineMatch
+			return request.mode === 'navigate' ? toCleanNavigationResponse(offlineMatch) : offlineMatch
 		}
 
 		const shellCache = await caches.open(APP_SHELL_CACHE)
 		const shellMatch = await shellCache.match(request, matchOpts)
 		if (shellMatch) {
-			return shellMatch
+			return request.mode === 'navigate' ? toCleanNavigationResponse(shellMatch) : shellMatch
 		}
 
 		if (request.mode === 'navigate') {
 			const fallback = (await findCachedNavigationFallback(shellCache))
 				|| (await findCachedNavigationFallback(offlineCache))
 			if (fallback) {
-				return fallback
+				return toCleanNavigationResponse(fallback)
 			}
 		}
 
@@ -135,9 +149,9 @@ self.addEventListener('install', (event) => {
 		try {
 			const shellUrl = new URL('./', self.location.href).toString()
 			const res = await fetch(shellUrl, { credentials: 'include' })
-			if (res && res.ok) {
+			if (res && res.ok && !res.url.includes('/login')) {
 				const cache = await caches.open(APP_SHELL_CACHE)
-				await cache.put(shellUrl, res)
+				await cache.put(shellUrl, toCleanNavigationResponse(res))
 			}
 		} catch {
 			// Best-effort pre-cache on install
