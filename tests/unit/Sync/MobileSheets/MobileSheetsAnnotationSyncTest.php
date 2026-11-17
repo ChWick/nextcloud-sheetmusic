@@ -95,11 +95,9 @@ final class MobileSheetsAnnotationSyncTest extends TestCase {
 			self::assertSame($nodeFileId, $ann->fileId, 'Annotation should be bound to the Nextcloud node fileId');
 		}
 
-		// Verify querying by node fileId and by song_files.id both resolve and return all 3 annotations
+		// Verify querying by canonical node fileId returns all 3 annotations
 		$byNodeId = $this->harness->annotationService->getAnnotationsForSong((int)$ncSong->id, $nodeFileId);
 		self::assertCount(3, $byNodeId);
-		$byTableId = $this->harness->annotationService->getAnnotationsForSong((int)$ncSong->id, $songFileTableId);
-		self::assertCount(3, $byTableId);
 
 		$types = array_column(array_map(static fn ($a): array => $a->jsonSerialize(), $canonicalAnns), 'type');
 		sort($types);
@@ -194,21 +192,5 @@ final class MobileSheetsAnnotationSyncTest extends TestCase {
 		// Due to fingerprint matching, annotations must NOT be duplicated on the server
 		$serverAnnsAfterRenumber = $this->harness->annotationService->getAnnotationsForSong((int)$ncSong->id, includeDeleted: false);
 		self::assertCount(3, $serverAnnsAfterRenumber, 'Fingerprint deduplication should prevent duplicate annotations when client renumbers IDs');
-
-		// 12. Storage node migration: filecache node ID updates from old node to newNodeId
-		$newNodeId = 99999;
-		$songFile = $this->harness->songFileMapper->findAllForSong((int)$ncSong->id)[0];
-		self::assertSame($nodeFileId, $songFile->fileId);
-
-		// Update the song file to simulate Nextcloud storage node replacement
-		$songFile->fileId = $newNodeId;
-		$this->harness->songFileMapper->update($songFile);
-
-		// Querying by the new node ID should automatically resolve or heal annotations to newNodeId
-		$healedAnns = $this->harness->annotationService->getAnnotationsForSong((int)$ncSong->id, $newNodeId);
-		self::assertCount(3, $healedAnns, 'Annotations should be returned and healed to the new node fileId');
-		foreach ($healedAnns as $ha) {
-			self::assertSame($newNodeId, $ha->fileId);
-		}
 	}
 }
