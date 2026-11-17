@@ -23,7 +23,6 @@
 				{{ t('sheetmusic', 'No writable library is available to import shared files.') }}
 			</div>
 
-			<!-- Step 1: Select library -->
 			<div v-else-if="step === 1" :class="$style.fieldGroup">
 				<span :class="$style.sectionLabel">{{ t('sheetmusic', 'Select library') }}</span>
 				<div :class="$style.optionCards" role="radiogroup" :aria-label="t('sheetmusic', 'Select library')">
@@ -36,26 +35,18 @@
 				</div>
 			</div>
 
-			<!-- Step 2: Choose destination -->
 			<div v-else-if="step === 2" :class="$style.fieldGroup">
 				<span :class="$style.sectionLabel">{{ t('sheetmusic', 'Where do you want to add this file?') }}</span>
 				<div :class="$style.optionCards" role="radiogroup" :aria-label="t('sheetmusic', 'Destination')">
-					<label :class="[$style.optionCard, mode === 'new-song' && $style.optionCardActive]">
-						<input v-model="mode" type="radio" value="new-song">
-						<span :class="$style.optionText">{{ t('sheetmusic', 'New song') }}</span>
-					</label>
-					<label :class="[$style.optionCard, mode === 'existing-song' && $style.optionCardActive]">
-						<input v-model="mode" type="radio" value="existing-song">
-						<span :class="$style.optionText">{{ t('sheetmusic', 'Add to existing song') }}</span>
-					</label>
-					<label :class="[$style.optionCard, mode === 'setlist-file' && $style.optionCardActive]">
-						<input v-model="mode" type="radio" value="setlist-file">
-						<span :class="$style.optionText">{{ t('sheetmusic', 'Annotation of setlist') }}</span>
+					<label v-for="opt in destinationOptions"
+					       :key="opt.value"
+					       :class="[$style.optionCard, mode === opt.value && $style.optionCardActive]">
+						<input v-model="mode" type="radio" :value="opt.value">
+						<span :class="$style.optionText">{{ opt.label }}</span>
 					</label>
 				</div>
 			</div>
 
-			<!-- Step 3: Sub-options -->
 			<div v-else-if="step === 3" :class="$style.fieldGroup">
 				<NcTextField v-if="mode === 'new-song'"
 				             v-model="newSongTitle"
@@ -94,9 +85,7 @@
 				          @click="emit('close')">
 					{{ t('sheetmusic', 'Cancel') }}
 				</NcButton>
-				<NcButton v-else
-				          :disabled="isSubmitting"
-				          @click="goBack">
+				<NcButton v-else :disabled="isSubmitting" @click="goBack">
 					{{ t('sheetmusic', 'Back') }}
 				</NcButton>
 
@@ -123,22 +112,17 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { NcButton, NcDialog, NcLoadingIcon, NcTextField } from '@nextcloud/vue'
-import { showSuccess } from '@nextcloud/dialogs'
 import { translate as t } from '@nextcloud/l10n'
-import { apiGet, apiPost } from '../api/client'
-import { fetchSetlists, uploadSetlistFile } from '../api/setlists'
-import type { Library, Setlist, Song } from '../types/song'
+import {
+	useShareTargetImport,
+	type ShareImportResult,
+	type ShareTargetMode,
+} from '../composables/useShareTargetImport'
+import type { Library } from '../types/song'
 import { defaultTitleFromFilename } from '../utils/shareTarget'
 import FilterableOptionList, { type FilterableOptionItem } from './share-target/FilterableOptionList.vue'
 
-export type ShareTargetMode = 'new-song' | 'existing-song' | 'setlist-file'
-
-export interface ShareImportResult {
-	targetType: ShareTargetMode
-	libraryId: number
-	songId?: number
-	setlistId?: number
-}
+export type { ShareImportResult, ShareTargetMode }
 
 const props = defineProps<{
 	open: boolean
@@ -153,18 +137,29 @@ const emit = defineEmits<{
 	imported: [result: ShareImportResult]
 }>()
 
+const {
+	songs,
+	setlists,
+	isLoadingTargets,
+	isSubmitting,
+	errorMessage,
+	resetTargets,
+	loadTargets,
+	executeImport,
+} = useShareTargetImport()
+
 const step = ref<1 | 2 | 3>(1)
 const mode = ref<ShareTargetMode>('new-song')
-const targetLibraryId = ref<number>(-1)
-const newSongTitle = ref<string>('')
-const selectedSongId = ref<number>(-1)
-const selectedSetlistId = ref<number>(-1)
-const songs = ref<Song[]>([])
-const setlists = ref<Setlist[]>([])
-const loadedLibraryId = ref<number>(-1)
-const isLoadingTargets = ref<boolean>(false)
-const isSubmitting = ref<boolean>(false)
-const errorMessage = ref<string>('')
+const targetLibraryId = ref(-1)
+const newSongTitle = ref('')
+const selectedSongId = ref(-1)
+const selectedSetlistId = ref(-1)
+
+const destinationOptions = computed<Array<{ value: ShareTargetMode; label: string }>>(() => [
+	{ value: 'new-song', label: t('sheetmusic', 'New song') },
+	{ value: 'existing-song', label: t('sheetmusic', 'Add to existing song') },
+	{ value: 'setlist-file', label: t('sheetmusic', 'Annotation of setlist') },
+])
 
 const writableLibraries = computed(() =>
 	props.libraries.filter(lib => lib.canWrite !== false && !lib.isShared),
@@ -179,29 +174,17 @@ const songOptions = computed<FilterableOptionItem[]>(() =>
 )
 
 const setlistOptions = computed<FilterableOptionItem[]>(() =>
-	setlists.value.map(setlist => ({
-		id: setlist.id,
-		label: setlist.name,
-	})),
+	setlists.value.map(setlist => ({ id: setlist.id, label: setlist.name })),
 )
 
-const canAdvance = computed(() => {
-	if (step.value === 1) {
-		return targetLibraryId.value >= 0
-	}
-	return true
-})
+const canAdvance = computed(() => step.value !== 1 || targetLibraryId.value >= 0)
 
 const canSubmit = computed(() => {
 	if (isSubmitting.value || props.files.length === 0 || targetLibraryId.value < 0) {
 		return false
 	}
-	if (mode.value === 'new-song') {
-		return newSongTitle.value.trim().length > 0
-	}
-	if (mode.value === 'existing-song') {
-		return selectedSongId.value > 0
-	}
+	if (mode.value === 'new-song') return newSongTitle.value.trim().length > 0
+	if (mode.value === 'existing-song') return selectedSongId.value > 0
 	return selectedSetlistId.value > 0
 })
 
@@ -211,37 +194,11 @@ function formatFileSize(bytes: number): string {
 	return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-async function loadTargetsForLibrary(libraryId: number) {
-	if (libraryId < 0 || loadedLibraryId.value === libraryId) {
-		return
-	}
-	isLoadingTargets.value = true
-	errorMessage.value = ''
-	try {
-		const [songsRes, setlistList] = await Promise.all([
-			apiGet('/api/songs', { queryParams: { id: libraryId } }),
-			fetchSetlists(libraryId),
-		])
-		songs.value = (songsRes.data.ocs.data.songs ?? []) as Song[]
-		setlists.value = setlistList
-		loadedLibraryId.value = libraryId
-		selectedSongId.value = songs.value[0]?.id ?? -1
-		selectedSetlistId.value = setlists.value[0]?.id ?? -1
-	} catch {
-		errorMessage.value = t('sheetmusic', 'Could not load songs and setlists for the selected library.')
-	} finally {
-		isLoadingTargets.value = false
-	}
-}
-
 watch(() => props.open, (isOpen) => {
 	if (!isOpen) return
 	step.value = 1
 	mode.value = 'new-song'
-	errorMessage.value = ''
-	loadedLibraryId.value = -1
-	songs.value = []
-	setlists.value = []
+	resetTargets()
 	selectedSongId.value = -1
 	selectedSetlistId.value = -1
 	newSongTitle.value = props.initialTitle?.trim() || (props.files[0] ? defaultTitleFromFilename(props.files[0].name) : '')
@@ -256,74 +213,38 @@ watch(() => props.open, (isOpen) => {
 
 function goBack() {
 	errorMessage.value = ''
-	if (step.value === 3) {
-		step.value = 2
-	} else if (step.value === 2) {
-		step.value = 1
-	}
+	if (step.value === 3) step.value = 2
+	else if (step.value === 2) step.value = 1
 }
 
-function goNext() {
+async function goNext() {
 	errorMessage.value = ''
 	if (step.value === 1 && targetLibraryId.value >= 0) {
 		step.value = 2
 	} else if (step.value === 2) {
 		step.value = 3
 		if (mode.value !== 'new-song') {
-			void loadTargetsForLibrary(targetLibraryId.value)
+			const defaults = await loadTargets(targetLibraryId.value)
+			if (defaults) {
+				selectedSongId.value = defaults.firstSongId
+				selectedSetlistId.value = defaults.firstSetlistId
+			}
 		}
-	}
-}
-
-async function uploadFilesToSong(libraryId: number, songId: number) {
-	for (const file of props.files) {
-		const formData = new FormData()
-		formData.append('file', file)
-		await apiPost('/api/libraries/{libraryId}/songs/{id}/file/upload', formData as any, {
-			pathParams: { libraryId, id: songId },
-		})
 	}
 }
 
 async function submitImport() {
 	if (!canSubmit.value) return
-	isSubmitting.value = true
-	errorMessage.value = ''
-
-	try {
-		const libraryId = targetLibraryId.value
-		if (mode.value === 'new-song') {
-			const createRes = await apiPost('/api/songs', {
-				libraryId,
-				title: newSongTitle.value.trim(),
-			} as any)
-			const createdData = createRes.data.ocs.data as any
-			const newSongId = Number(createdData.createdSongId ?? createdData.id)
-			if (!newSongId) {
-				throw new Error(t('sheetmusic', 'Failed to create song.'))
-			}
-			await uploadFilesToSong(libraryId, newSongId)
-			showSuccess(t('sheetmusic', 'Imported shared file into new song.'))
-			emit('imported', { targetType: 'new-song', libraryId, songId: newSongId })
-		} else if (mode.value === 'existing-song') {
-			const songId = selectedSongId.value
-			await uploadFilesToSong(libraryId, songId)
-			showSuccess(t('sheetmusic', 'Added shared file to song.'))
-			emit('imported', { targetType: 'existing-song', libraryId, songId })
-		} else {
-			const setlistId = selectedSetlistId.value
-			for (const file of props.files) {
-				await uploadSetlistFile(libraryId, setlistId, file)
-			}
-			showSuccess(t('sheetmusic', 'Attached shared file to setlist.'))
-			emit('imported', { targetType: 'setlist-file', libraryId, setlistId })
-		}
-	} catch (error: any) {
-		errorMessage.value = error?.response?.data?.ocs?.meta?.message
-			|| error?.message
-			|| t('sheetmusic', 'Failed to import shared file.')
-	} finally {
-		isSubmitting.value = false
+	const result = await executeImport({
+		mode: mode.value,
+		libraryId: targetLibraryId.value,
+		files: props.files,
+		newSongTitle: newSongTitle.value,
+		songId: selectedSongId.value,
+		setlistId: selectedSetlistId.value,
+	})
+	if (result) {
+		emit('imported', result)
 	}
 }
 </script>
