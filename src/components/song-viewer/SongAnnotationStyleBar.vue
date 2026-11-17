@@ -8,6 +8,7 @@ import FormatAlignCenter from 'vue-material-design-icons/FormatAlignCenter.vue'
 import FormatAlignLeft from 'vue-material-design-icons/FormatAlignLeft.vue'
 import FormatAlignRight from 'vue-material-design-icons/FormatAlignRight.vue'
 import SongAnnotationColorPicker, { type ColorSwatch } from './SongAnnotationColorPicker.vue'
+import SongAnnotationLogSelect from './SongAnnotationLogSelect.vue'
 import { clampNcSelectDropdown } from '../../composables/useViewportPopoverClamp'
 
 const props = withDefaults(
@@ -28,11 +29,7 @@ const emit = defineEmits<{
 	'update-selected-data': [patch: Partial<SheetAnnotation['data']>]
 }>()
 
-const isWidthSliderDragging = ref(false)
-const widthSelectRef = ref<InstanceType<typeof NcSelect> | null>(null)
 const lineStyleSelectRef = ref<InstanceType<typeof NcSelect> | null>(null)
-const heightSelectRef = ref<InstanceType<typeof NcSelect> | null>(null)
-const sizeSelectRef = ref<InstanceType<typeof NcSelect> | null>(null)
 
 const COLOR_SWATCHES: ColorSwatch[] = [
 	{ color: '#000000', label: 'Black' },
@@ -76,21 +73,14 @@ const currentSwatches = computed(() =>
 		: COLOR_SWATCHES,
 )
 
-const strokeWidthOptions = computed(() => {
+const strokeWidthPresets = computed(() => {
 	const isHighlight = props.activeTool === 'highlight' || props.selectedAnnotation?.type === 'highlight'
-	const presets = isHighlight ? [10, 18, 28, 38] : [1.5, 2.5, 4, 6.5]
-	return presets.map((w) => ({ value: w, label: String(w) }))
+	return isHighlight ? [10, 18, 28, 38] : [1.5, 2.5, 4, 6.5]
 })
 
-const currentStrokeWidthOption = computed(() => {
+const currentStrokeWidth = computed(() => {
 	const isHighlight = props.activeTool === 'highlight' || props.selectedAnnotation?.type === 'highlight'
-	const val = props.selectedAnnotation?.style?.strokeWidth ?? (isHighlight ? props.toolStyle.highlightWidth : props.toolStyle.strokeWidth)
-	return strokeWidthOptions.value.find((o) => o.value === val) ?? { value: val, label: String(val) }
-})
-
-const currentWidthSliderPos = computed(() => {
-	const w = Math.max(1, Math.min(64, Number(currentStrokeWidthOption.value.value) || 1))
-	return Math.log2(w)
+	return props.selectedAnnotation?.style?.strokeWidth ?? (isHighlight ? props.toolStyle.highlightWidth : props.toolStyle.strokeWidth)
 })
 
 const lineStyleOptions = computed(() => [
@@ -104,20 +94,14 @@ const currentLineStyleOption = computed(() => {
 	return lineStyleOptions.value.find((o) => o.value === val) ?? lineStyleOptions.value[0]
 })
 
-const fontSizeOptions = computed(() => {
+const fontSizePresets = computed(() => {
 	const isStamp = props.activeTool === 'stamp' || props.selectedAnnotation?.type === 'stamp'
-	const presets = isStamp ? [26, 36, 48, 64] : [16, 22, 30, 42]
-	const current = props.selectedAnnotation?.style?.fontSize ?? (isStamp ? props.toolStyle.stampSize : props.toolStyle.fontSize)
-	const list = current && !presets.includes(current)
-		? [...presets, current].sort((a, b) => a - b)
-		: presets
-	return list.map((sz) => ({ value: sz, label: String(sz) }))
+	return isStamp ? [26, 36, 48, 64] : [16, 22, 30, 42]
 })
 
-const currentFontSizeOption = computed(() => {
+const currentFontSize = computed(() => {
 	const isStamp = props.activeTool === 'stamp' || props.selectedAnnotation?.type === 'stamp'
-	const val = props.selectedAnnotation?.style?.fontSize ?? (isStamp ? props.toolStyle.stampSize : props.toolStyle.fontSize)
-	return fontSizeOptions.value.find((o) => o.value === val) ?? { value: val, label: String(val) }
+	return props.selectedAnnotation?.style?.fontSize ?? (isStamp ? props.toolStyle.stampSize : props.toolStyle.fontSize)
 })
 
 const isHeightAdjustableShape = computed(() => {
@@ -137,42 +121,7 @@ const currentShapeHeight = computed(() => {
 	return props.toolStyle.shapeHeight ?? 18
 })
 
-const shapeHeightOptions = computed(() => {
-	const presets = [10, 18, 28, 45, 65]
-	const current = Math.round(currentShapeHeight.value)
-	const list = current && !presets.includes(current)
-		? [...presets, current].sort((a, b) => a - b)
-		: presets
-	return list.map((h) => ({ value: h, label: String(h) }))
-})
-
-const currentShapeHeightOption = computed(() => {
-	const val = Math.round(currentShapeHeight.value)
-	return shapeHeightOptions.value.find((o) => o.value === val) ?? { value: val, label: String(val) }
-})
-
-function widthDropdownShouldOpen({ noDrop, open }: { noDrop: boolean; open: boolean }): boolean {
-	return (open || isWidthSliderDragging.value) && !noDrop
-}
-
-function onWidthSliderStart() {
-	isWidthSliderDragging.value = true
-	const finish = () => {
-		window.removeEventListener('pointerup', finish)
-		window.removeEventListener('mouseup', finish)
-		isWidthSliderDragging.value = false
-		const input = widthSelectRef.value?.$el?.querySelector?.('input') as HTMLInputElement | null
-		input?.focus()
-	}
-	window.addEventListener('pointerup', finish, { once: true })
-	window.addEventListener('mouseup', finish, { once: true })
-}
-
-function onWidthSliderInput(pos: number) {
-	const raw = Math.pow(2, Math.max(0, Math.min(6, pos)))
-	const rounded = raw < 4 ? Math.round(raw * 2) / 2 : Math.round(raw)
-	updateStrokeWidth(Math.max(1, Math.min(64, rounded)))
-}
+const shapeHeightPresets = [10, 18, 28, 45, 65]
 
 function pickColor(color: string) {
 	if (props.selectedAnnotation) {
@@ -296,41 +245,17 @@ function updateShapeHeight(height: number) {
 		<div
 			v-if="activeTool === 'drawing' || activeTool === 'highlight' || isShapeActive || (selectedAnnotation && (selectedAnnotation.type === 'drawing' || selectedAnnotation.type === 'highlight' || selectedAnnotation.type === 'shape'))"
 			:class="$style.styleGroup">
-			<NcSelect
-				ref="widthSelectRef"
-				:model-value="currentStrokeWidthOption"
-				:options="strokeWidthOptions"
-				:clearable="false"
-				:searchable="false"
-				:append-to-body="false"
-				:dropdown-should-open="widthDropdownShouldOpen"
+			<SongAnnotationLogSelect
+				:model-value="currentStrokeWidth"
+				:presets="strokeWidthPresets"
+				:min-value="1"
+				:max-value="64"
+				:allow-half-step="true"
 				:input-label="t('sheetmusic', 'Width')"
-				label="label"
-				track-by="value"
-				:class="$style.ncSelectSmall"
-				data-test="annotation-width-select"
-				@open="clampNcSelectDropdown(widthSelectRef)"
-				@update:model-value="$event && updateStrokeWidth($event.value)">
-				<template #list-footer>
-					<div
-						:class="$style.sliderFooter"
-						@mousedown.stop="onWidthSliderStart"
-						@pointerdown.stop="onWidthSliderStart"
-						@click.stop>
-						<input
-							type="range"
-							min="0"
-							max="6"
-							step="0.05"
-							:value="currentWidthSliderPos"
-							:title="t('sheetmusic', 'Custom width')"
-							:aria-label="t('sheetmusic', 'Custom width')"
-							:class="$style.widthSlider"
-							data-test="annotation-width-slider"
-							@input="onWidthSliderInput(Number(($event.target as HTMLInputElement).value))" />
-					</div>
-				</template>
-			</NcSelect>
+				:slider-label="t('sheetmusic', 'Custom width')"
+				select-test-id="annotation-width-select"
+				slider-test-id="annotation-width-slider"
+				@update:model-value="updateStrokeWidth" />
 		</div>
 
 		<!-- Line Style (for Pen & Shapes) -->
@@ -391,40 +316,32 @@ function updateShapeHeight(height: number) {
 			v-if="isHeightAdjustableShape"
 			:class="$style.styleGroup"
 			data-test="shape-height-control">
-			<NcSelect
-				ref="heightSelectRef"
-				:model-value="currentShapeHeightOption"
-				:options="shapeHeightOptions"
-				:clearable="false"
-				:searchable="false"
-				:append-to-body="false"
+			<SongAnnotationLogSelect
+				:model-value="Math.round(currentShapeHeight)"
+				:presets="shapeHeightPresets"
+				:min-value="4"
+				:max-value="128"
 				:input-label="t('sheetmusic', 'Height')"
-				label="label"
-				track-by="value"
-				:class="$style.ncSelectCompact"
-				data-test="shape-height-select"
-				@open="clampNcSelectDropdown(heightSelectRef)"
-				@update:model-value="$event && updateShapeHeight($event.value)" />
+				:slider-label="t('sheetmusic', 'Custom height')"
+				select-test-id="shape-height-select"
+				slider-test-id="shape-height-slider"
+				@update:model-value="updateShapeHeight" />
 		</div>
 
 		<!-- Font / Stamp / Link Size -->
 		<div
 			v-if="activeTool === 'text' || activeTool === 'stamp' || activeTool === 'link' || selectedAnnotation?.type === 'text' || selectedAnnotation?.type === 'stamp' || selectedAnnotation?.type === 'link'"
 			:class="$style.styleGroup">
-			<NcSelect
-				ref="sizeSelectRef"
-				:model-value="currentFontSizeOption"
-				:options="fontSizeOptions"
-				:clearable="false"
-				:searchable="false"
-				:append-to-body="false"
+			<SongAnnotationLogSelect
+				:model-value="currentFontSize"
+				:presets="fontSizePresets"
+				:min-value="8"
+				:max-value="128"
 				:input-label="t('sheetmusic', 'Size')"
-				label="label"
-				track-by="value"
-				:class="$style.ncSelectCompact"
-				data-test="annotation-size-select"
-				@open="clampNcSelectDropdown(sizeSelectRef)"
-				@update:model-value="$event && updateFontSize($event.value)" />
+				:slider-label="t('sheetmusic', 'Custom size')"
+				select-test-id="annotation-size-select"
+				slider-test-id="annotation-size-slider"
+				@update:model-value="updateFontSize" />
 		</div>
 
 		<!-- Text Align -->
@@ -518,65 +435,28 @@ function updateShapeHeight(height: number) {
 	font-weight: 600;
 }
 
-.styleGroup .ncSelectSmall:global(.nc-select.v-select.select),
-.styleGroup .ncSelectCompact:global(.nc-select.v-select.select) {
-	width: 84px;
-	min-width: 84px;
-	max-width: 84px;
-}
-
 .styleGroup .ncSelectWide:global(.nc-select.v-select.select) {
 	width: 116px;
 	min-width: 116px;
 	max-width: 116px;
 }
 
-.styleGroup .ncSelectSmall:global(.nc-select.v-select.select) :global(.vs__search),
-.styleGroup .ncSelectCompact:global(.nc-select.v-select.select) :global(.vs__search),
 .styleGroup .ncSelectWide:global(.nc-select.v-select.select) :global(.vs__search) {
 	--input-padding-end: 26px;
 	--input-padding-start: 10px;
 }
 
-.styleGroup .ncSelectSmall:global(.nc-select.v-select.select.vs--single) :global(.vs__selected),
-.styleGroup .ncSelectCompact:global(.nc-select.v-select.select.vs--single) :global(.vs__selected),
 .styleGroup .ncSelectWide:global(.nc-select.v-select.select.vs--single) :global(.vs__selected) {
 	padding-inline: 10px 26px;
 }
 
-.styleGroup .ncSelectSmall:global(.nc-select.v-select.select) :global(.vs__actions),
-.styleGroup .ncSelectCompact:global(.nc-select.v-select.select) :global(.vs__actions),
 .styleGroup .ncSelectWide:global(.nc-select.v-select.select) :global(.vs__actions) {
 	--vs-actions-padding: 0 4px 0 0;
-}
-
-.ncSelectSmall :global(.vs__dropdown-menu) {
-	width: max-content;
-	min-width: 0;
-}
-
-.ncSelectCompact :global(.vs__dropdown-menu) {
-	width: max-content;
-	min-width: 72px;
 }
 
 .ncSelectWide :global(.vs__dropdown-menu) {
 	width: max-content;
 	min-width: 124px;
-}
-
-.sliderFooter {
-	display: flex;
-	align-items: center;
-	padding: 6px 10px;
-	border-top: 1px solid var(--color-border);
-}
-
-.widthSlider {
-	width: 132px;
-	min-width: 132px;
-	accent-color: var(--color-primary-element, #0082c9);
-	cursor: pointer;
 }
 
 .lineOption {

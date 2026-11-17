@@ -23,3 +23,7 @@ export function getCacheBustedFileUrl(filePath: string, version?: number | strin
 	const separator = filePath.includes('?') ? '&' : '?'
 	return `${filePath}${separator}t=${v}`
 }
+
+export function isPdfFile(filename?: string | null, mimeType?: string | null): boolean {
+	return Boolean(filename?.toLowerCase().endsWith('.pdf') || mimeType === 'application/pdf')
+}

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { SheetAnnotation } from '../../types/annotation'
 import type { EditorTool, EditorToolStyle } from '../../composables/useAnnotationEditor'
-import { computed, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { getViewBoxHeight, VIEWBOX_WIDTH } from '../../utils/annotation'
 import { useAnnotationPointerInteraction } from '../../composables/useAnnotationPointerInteraction'
 import SongAnnotationItem from './SongAnnotationItem.vue'
@@ -66,6 +66,37 @@ const pageIndex = computed(() => Math.max(0, props.pageNumber - 1))
 const activeAnnotations = computed(() => {
 	if (!props.annotations || props.annotations.length === 0) return []
 	return props.annotations.filter((a) => !a.deletedAt && a.pageNumber === pageIndex.value)
+})
+
+const svgWidthPx = ref<number>(0)
+let resizeObserver: ResizeObserver | null = null
+
+function updateSvgWidth() {
+	const rect = svgRef.value?.getBoundingClientRect()
+	if (rect && rect.width > 0) {
+		svgWidthPx.value = rect.width
+	}
+}
+
+watch(svgRef, (el) => {
+	resizeObserver?.disconnect()
+	resizeObserver = null
+	if (el && typeof ResizeObserver !== 'undefined') {
+		updateSvgWidth()
+		resizeObserver = new ResizeObserver(() => updateSvgWidth())
+		resizeObserver.observe(el)
+	}
+})
+
+onMounted(() => updateSvgWidth())
+onUnmounted(() => {
+	resizeObserver?.disconnect()
+	resizeObserver = null
+})
+
+const uiScale = computed(() => {
+	const renderedWidth = svgWidthPx.value > 0 ? svgWidthPx.value : (props.pageWidth || VIEWBOX_WIDTH)
+	return VIEWBOX_WIDTH / Math.max(1, renderedWidth)
 })
 
 const selectedItem = computed(() => {
@@ -159,7 +190,8 @@ const cursorClass = computed(() => {
 			<SongAnnotationSelectionBox
 				v-if="selectedItem && activeTool === 'select'"
 				:item="selectedItem"
-				:vb-height="vbHeight" />
+				:vb-height="vbHeight"
+				:ui-scale="uiScale" />
 		</svg>
 
 		<SongAnnotationInlinePopovers
@@ -244,7 +276,6 @@ const cursorClass = computed(() => {
 :deep(.sheetmusic-resize-handle) {
 	fill: #ffffff;
 	stroke: #0082c9;
-	stroke-width: 2;
 	cursor: pointer;
 	pointer-events: auto;
 }
@@ -252,7 +283,6 @@ const cursorClass = computed(() => {
 :deep(.sheetmusic-height-handle) {
 	fill: #ffeb3b;
 	stroke: #0082c9;
-	stroke-width: 2;
 	cursor: ns-resize;
 	pointer-events: auto;
 }

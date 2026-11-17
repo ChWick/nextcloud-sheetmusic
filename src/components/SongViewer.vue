@@ -16,16 +16,14 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import SongEditor from './SongEditor.vue'
 import DeleteSongDialog from './DeleteSongDialog.vue'
-import FilePreviewer from './FilePreviewer.vue'
+import AnnotatableFilePreview from './file-preview/AnnotatableFilePreview.vue'
 import SongPdfVersionsModal from './song-pdf/SongPdfVersionsModal.vue'
 import { useFileVersions } from './song-pdf/useFileVersions'
 import SongViewerMetadata from './song-viewer/SongViewerMetadata.vue'
 import SongViewerBookmarksBar from './song-viewer/SongViewerBookmarksBar.vue'
 import SongViewerFileToolbar from './song-viewer/SongViewerFileToolbar.vue'
-import SongAnnotationToolbar from './song-viewer/SongAnnotationToolbar.vue'
 import { extractEntityLists } from './songs/song-view-columns'
 import { fetchSongAnnotations } from '../api/annotations'
-import { useAnnotationEditor } from '../composables/useAnnotationEditor'
 import type { SheetAnnotation } from '../types/annotation'
 
 const props = withDefaults(
@@ -81,7 +79,7 @@ GlobalWorkerOptions.workerSrc = pdfWorker
 const isEditing = ref(false)
 const isDeleteDialogOpen = ref(false)
 const selectedFileId = ref('')
-const filePreviewerRef = ref<InstanceType<typeof FilePreviewer> | null>(null)
+const filePreviewerRef = ref<InstanceType<typeof AnnotatableFilePreview> | null>(null)
 
 const isSelectedFilePdf = computed(() => {
 	const path = selectedFile.value?.path?.toLowerCase() ?? ''
@@ -203,27 +201,9 @@ const {
 
 const annotations = ref<SheetAnnotation[]>([])
 
-const {
-	isEditing: isEditingAnnotations,
-	activeTool: activeAnnotationTool,
-	selectedUuid: selectedAnnotationUuid,
-	selectedAnnotation,
-	toolStyle: annotationToolStyle,
-	isSaving: isSavingAnnotations,
-	canUndo: canUndoAnnotations,
-	canRedo: canRedoAnnotations,
-	enterEditMode: enterAnnotationEditMode,
-	exitEditMode: exitAnnotationEditMode,
-	setTool: setAnnotationTool,
-	selectAnnotation,
-	createAnnotation,
-	updateAnnotation,
-	deleteAnnotation,
-	deleteSelected: deleteSelectedAnnotation,
-	clearPage: clearAnnotationPage,
-	undo: undoAnnotation,
-	redo: redoAnnotation,
-} = useAnnotationEditor(annotations, () => ({
+const isEditingAnnotations = ref(false)
+
+const annotationContext = computed(() => ({
 	songId: props.song?.id ?? 0,
 	fileId: Number(selectedFile.value?.fileId ?? selectedFile.value?.id ?? 0),
 }))
@@ -271,50 +251,14 @@ onUnmounted(() => {
 })
 
 function toggleAnnotationEditMode() {
-	if (isEditingAnnotations.value) {
-		exitAnnotationEditMode()
-		if (isAnnotationFullscreen.value) {
-			toggleAnnotationFullscreen()
-		}
-	} else {
-		enterAnnotationEditMode()
-		if (filePreviewerRef.value && !filePreviewerRef.value.showAnnotationsState) {
-			filePreviewerRef.value.toggleAnnotations()
-		}
-	}
+	filePreviewerRef.value?.toggleEditMode()
 }
 
-function handleExitAnnotationEditMode() {
-	exitAnnotationEditMode()
-	if (isAnnotationFullscreen.value) {
+function onEditingAnnotationsChange(editing: boolean) {
+	isEditingAnnotations.value = editing
+	if (!editing && isAnnotationFullscreen.value) {
 		toggleAnnotationFullscreen()
 	}
-}
-
-function updateSelectedAnnotationStyle(patch: Partial<SheetAnnotation['style']>) {
-	const current = selectedAnnotation.value
-	if (!current) return
-	const updated: SheetAnnotation = {
-		...current,
-		style: {
-			...current.style,
-			...patch,
-		},
-	}
-	updateAnnotation(current, updated)
-}
-
-function updateSelectedAnnotationData(patch: Partial<SheetAnnotation['data']>) {
-	const current = selectedAnnotation.value
-	if (!current) return
-	const updated: SheetAnnotation = {
-		...current,
-		data: {
-			...current.data,
-			...patch,
-		},
-	}
-	updateAnnotation(current, updated)
 }
 
 async function loadAnnotations() {
@@ -442,49 +386,28 @@ defineExpose({
 				@toggle-annotations="filePreviewerRef?.toggleAnnotations()"
 				@toggle-edit-annotations="toggleAnnotationEditMode" />
 
-			<SongAnnotationToolbar
-				v-if="isSelectedFilePdf && isEditingAnnotations"
-				:active-tool="activeAnnotationTool"
-				:tool-style="annotationToolStyle"
-				:selected-annotation="selectedAnnotation"
-				:can-undo="canUndoAnnotations"
-				:can-redo="canRedoAnnotations"
-				:is-saving="isSavingAnnotations"
-				:current-page="filePreviewerRef?.currentPage ?? 1"
-				:is-fullscreen="isAnnotationFullscreen"
-				@update:active-tool="setAnnotationTool"
-				@update:tool-style="annotationToolStyle = $event"
-				@update-selected-style="updateSelectedAnnotationStyle"
-				@update-selected-data="updateSelectedAnnotationData"
-				@undo="undoAnnotation"
-				@redo="redoAnnotation"
-				@delete-selected="deleteSelectedAnnotation"
-				@clear-page="clearAnnotationPage((filePreviewerRef?.currentPage ?? 1) - 1)"
-				@toggle-fullscreen="toggleAnnotationFullscreen"
-				@done="handleExitAnnotationEditMode" />
-
-			<SongViewerBookmarksBar
-				:bookmarks="songBookmarks"
-				:active-bookmark-page="activeBookmarkPage"
-				@jump="jumpToBookmark" />
-
-			<FilePreviewer
+			<AnnotatableFilePreview
 				v-if="selectedFile?.path"
 				ref="filePreviewerRef"
-				:key="`${selectedFile.id}-${fileVersionToken}`"
+				:preview-key="`${selectedFile.id}-${fileVersionToken}`"
 				:file-path="previewFilePath"
 				:page-order="selectedFile?.pageOrder"
 				:target-page="activeBookmarkPage"
 				:show-external-button="false"
 				:annotations="annotations"
-				:editable-annotations="isEditingAnnotations"
-				:active-annotation-tool="activeAnnotationTool"
-				:annotation-tool-style="annotationToolStyle"
-				:selected-annotation-uuid="selectedAnnotationUuid"
-				@select-annotation="selectAnnotation"
-				@create-annotation="createAnnotation"
-				@update-annotation="updateAnnotation"
-				@delete-annotation="deleteAnnotation" />
+				:annotation-context="annotationContext"
+				:can-annotate="isSelectedFilePdf && canWrite !== false"
+				:is-fullscreen="isAnnotationFullscreen"
+				@update:annotations="annotations = $event"
+				@update:is-editing="onEditingAnnotationsChange"
+				@toggle-fullscreen="toggleAnnotationFullscreen">
+				<template #between-toolbar-and-preview>
+					<SongViewerBookmarksBar
+						:bookmarks="songBookmarks"
+						:active-bookmark-page="activeBookmarkPage"
+						@jump="jumpToBookmark" />
+				</template>
+			</AnnotatableFilePreview>
 			<div v-else :class="$style.error">
 				{{ songFiles.length === 0 ? t('sheetmusic', 'No files attached to this song.') : t('sheetmusic', 'Missing file: The file does not exist on the file system.') }}
 			</div>

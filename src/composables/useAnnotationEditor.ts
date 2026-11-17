@@ -5,8 +5,10 @@
 
 import { computed, getCurrentScope, onUnmounted, ref, watch, type Ref } from 'vue'
 import {
+	batchSetlistFileAnnotations,
 	batchSongAnnotations,
 	deleteSongAnnotation,
+	saveSetlistFileAnnotation,
 	saveSongAnnotation,
 } from '../api/annotations'
 import type {
@@ -78,9 +80,39 @@ export function isShapeTool(tool: EditorTool): tool is ShapeType {
 	)
 }
 
+export type AnnotationEditorContext =
+	| { songId: number; fileId: number }
+	| { libraryId: number; setlistId: number; setlistFileId: number; fileId: number }
+
+function isSetlistContext(
+	ctx: AnnotationEditorContext,
+): ctx is { libraryId: number; setlistId: number; setlistFileId: number; fileId: number } {
+	return 'setlistId' in ctx
+}
+
+function saveContextAnnotation(
+	ctx: AnnotationEditorContext,
+	annotation: Partial<SheetAnnotation>,
+): Promise<SheetAnnotation> {
+	if (isSetlistContext(ctx)) {
+		return saveSetlistFileAnnotation(ctx.libraryId, ctx.setlistId, ctx.setlistFileId, annotation)
+	}
+	return saveSongAnnotation(ctx.songId, annotation)
+}
+
+function batchContextAnnotations(
+	ctx: AnnotationEditorContext,
+	payload: { upsert?: Array<Partial<SheetAnnotation>>; deleteIds?: number[] },
+): Promise<{ saved: SheetAnnotation[]; deletedIds: number[] }> {
+	if (isSetlistContext(ctx)) {
+		return batchSetlistFileAnnotations(ctx.libraryId, ctx.setlistId, ctx.setlistFileId, payload)
+	}
+	return batchSongAnnotations(ctx.songId, payload)
+}
+
 export function useAnnotationEditor(
 	annotations: Ref<SheetAnnotation[]>,
-	getContext: () => { songId: number; fileId: number },
+	getContext: () => AnnotationEditorContext,
 ) {
 	const isEditing = ref(false)
 	const activeTool = ref<EditorTool>('drawing')
@@ -204,12 +236,13 @@ export function useAnnotationEditor(
 
 	async function persistSave(ann: SheetAnnotation): Promise<SheetAnnotation> {
 		const ctx = getContext()
+		const songId = isSetlistContext(ctx) ? 0 : ctx.songId
 		isSaving.value = true
 		saveError.value = null
 		try {
-			const saved = await saveSongAnnotation(ctx.songId, {
+			const saved = await saveContextAnnotation(ctx, {
 				...ann,
-				songId: ctx.songId,
+				songId,
 				fileId: ann.fileId || ctx.fileId,
 			})
 			upsertLocal(saved)
@@ -242,7 +275,7 @@ export function useAnnotationEditor(
 		const ann: SheetAnnotation = {
 			...draft,
 			uuid: draft.uuid || createUuid(),
-			songId: ctx.songId,
+			songId: isSetlistContext(ctx) ? 0 : ctx.songId,
 			fileId: ctx.fileId,
 		}
 		upsertLocal(ann)
@@ -303,7 +336,7 @@ export function useAnnotationEditor(
 			isSaving.value = true
 			saveError.value = null
 			try {
-				await batchSongAnnotations(ctx.songId, { deleteIds: idsToDelete })
+				await batchContextAnnotations(ctx, { deleteIds: idsToDelete })
 			} catch (err) {
 				saveError.value = err instanceof Error ? err.message : 'Failed to clear page annotations'
 			} finally {
@@ -344,7 +377,7 @@ export function useAnnotationEditor(
 			}))
 			isSaving.value = true
 			try {
-				const res = await batchSongAnnotations(ctx.songId, { upsert: upsertPayload })
+				const res = await batchContextAnnotations(ctx, { upsert: upsertPayload })
 				for (const s of res.saved) {
 					upsertLocal(s)
 					restoredList.push(s)
@@ -388,7 +421,7 @@ export function useAnnotationEditor(
 			if (idsToDelete.length > 0) {
 				isSaving.value = true
 				try {
-					await batchSongAnnotations(ctx.songId, { deleteIds: idsToDelete })
+					await batchContextAnnotations(ctx, { deleteIds: idsToDelete })
 				} finally {
 					isSaving.value = false
 				}
@@ -607,6 +640,32 @@ export function useAnnotationEditor(
 		}
 	}
 
+	function updateSelectedStyle(patch: Partial<SheetAnnotation['style']>) {
+		const current = selectedAnnotation.value
+		if (!current) return
+		const updated: SheetAnnotation = {
+			...current,
+			style: {
+				...current.style,
+				...patch,
+			},
+		}
+		updateAnnotation(current, updated)
+	}
+
+	function updateSelectedData(patch: Partial<SheetAnnotation['data']>) {
+		const current = selectedAnnotation.value
+		if (!current) return
+		const updated: SheetAnnotation = {
+			...current,
+			data: {
+				...current.data,
+				...patch,
+			},
+		}
+		updateAnnotation(current, updated)
+	}
+
 	return {
 		isEditing,
 		activeTool,
@@ -625,6 +684,8 @@ export function useAnnotationEditor(
 		handleKeydown,
 		createAnnotation,
 		updateAnnotation,
+		updateSelectedStyle,
+		updateSelectedData,
 		deleteAnnotation,
 		deleteSelected,
 		clearPage,
