@@ -82,6 +82,24 @@ const emit = defineEmits<{
 				{{ t('sheetmusic', 'Page {current} of {total}', { current: currentPageDisplay, total: totalPages || 1 }, { escape: false }) }}
 			</span>
 			<NcButton
+				variant="secondary"
+				size="small"
+				:disabled="!hasNextSong && !canGoNextPage"
+				:title="t('sheetmusic', 'Next page')"
+				:aria-label="t('sheetmusic', 'Next page')"
+				@click="emit('nextPage')">
+				<template #icon><ChevronRightIcon :size="20" /></template>
+			</NcButton>
+			<NcButton
+				variant="secondary"
+				size="small"
+				:disabled="!hasNextSong"
+				:title="t('sheetmusic', 'Next song')"
+				:aria-label="t('sheetmusic', 'Next song')"
+				@click="emit('nextSong')">
+				<template #icon><SkipNextIcon :size="20" /></template>
+			</NcButton>
+			<NcButton
 				v-if="totalPages > 1 || hasPrevSong || hasNextSong"
 				:variant="isPagePickerOpen ? 'primary' : 'secondary'"
 				size="small"
@@ -99,24 +117,6 @@ const emit = defineEmits<{
 				:title="t('sheetmusic', 'Setlist items')"
 				@click="emit('toggleDrawer')">
 				<template #icon><FormatListBulletedIcon :size="18" /></template>
-			</NcButton>
-			<NcButton
-				variant="secondary"
-				size="small"
-				:disabled="!hasNextSong && !canGoNextPage"
-				:title="t('sheetmusic', 'Next page')"
-				:aria-label="t('sheetmusic', 'Next page')"
-				@click="emit('nextPage')">
-				<template #icon><ChevronRightIcon :size="20" /></template>
-			</NcButton>
-			<NcButton
-				variant="secondary"
-				size="small"
-				:disabled="!hasNextSong"
-				:title="t('sheetmusic', 'Next song')"
-				:aria-label="t('sheetmusic', 'Next song')"
-				@click="emit('nextSong')">
-				<template #icon><SkipNextIcon :size="20" /></template>
 			</NcButton>
 		</div>
 
