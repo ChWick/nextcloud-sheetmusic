@@ -54,7 +54,9 @@ import EntitiesView from './components/EntitiesView.vue'
 import TrashView from './components/TrashView.vue'
 import LibrarySettingsDialog from './components/LibrarySettingsDialog.vue'
 import ShareDialog from './components/ShareDialog.vue'
+import ShareTargetDialog, { type ShareImportResult } from './components/ShareTargetDialog.vue'
 import { useProgressPolling } from './composables/useProgressPolling'
+import { clearShareTargetParam, consumePendingShare, hasShareTargetParam } from './utils/shareTarget'
 
 /** Views of a library: the song view, one view per song filter, integrity audit, and tools. */
 type ViewName = 'songs' | 'new-song' | 'setlists' | 'sublibraries' | 'shares' | 'integrity' | 'tools' | 'trash' | EntityType
@@ -63,6 +65,9 @@ const VIEW_NAMES: ViewName[] = ['songs', 'new-song', 'setlists', 'composers', 'a
 /*** State ***/
 const isAddDialogOpen = ref(false)
 const isImportDialogOpen = ref(false)
+const isShareTargetDialogOpen = ref(false)
+const pendingShareFiles = ref<File[]>([])
+const pendingShareTitle = ref('')
 const isSettingsDialogOpen = ref(false)
 const isShareDialogOpen = ref(false)
 const importPdfMetadata = ref(true)
@@ -179,7 +184,40 @@ onMounted(async () => {
     // Only set a default if the user landed on the root page matching no library
     navigateToLibrary(libraries.value[0].id)
   }
+
+  if (!isPublicShare && hasShareTargetParam()) {
+    clearShareTargetParam()
+    const pending = await consumePendingShare()
+    if (pending && pending.files.length > 0) {
+      pendingShareFiles.value = pending.files
+      pendingShareTitle.value = pending.title
+      isShareTargetDialogOpen.value = true
+    }
+  }
 })
+
+function closeShareTargetDialog() {
+  isShareTargetDialogOpen.value = false
+  pendingShareFiles.value = []
+  pendingShareTitle.value = ''
+}
+
+function handleShareTargetImported(result: ShareImportResult) {
+  closeShareTargetDialog()
+  if (result.targetType === 'setlist-file') {
+    router.push({
+      name: 'LibraryView',
+      params: { library: result.libraryId, view: 'setlists' },
+      query: result.setlistId ? { setlist: String(result.setlistId) } : {},
+    })
+  } else {
+    router.push({
+      name: 'LibraryView',
+      params: { library: result.libraryId, view: 'songs' },
+      query: result.songId ? { song: String(result.songId) } : {},
+    })
+  }
+}
 
 /*** Dialog helpers ***/
 function openAddDialog(event?: Event) {
@@ -684,6 +722,15 @@ async function deleteLibrary() {
       :library-name="selectedLibraryPath"
       :owner-id="currentLibrary.ownerId"
       @close="isShareDialogOpen = false" />
+
+    <ShareTargetDialog
+      :open="isShareTargetDialogOpen"
+      :files="pendingShareFiles"
+      :initial-title="pendingShareTitle"
+      :libraries="libraries"
+      :selected-library-id="selectedLibrary"
+      @close="closeShareTargetDialog"
+      @imported="handleShareTargetImported" />
   </div>
 </template>
 
