@@ -18,7 +18,7 @@
 ### Disclaimer
 
 This app is primarily AI-generated and provided as-is without any warranty. There is no guarantee regarding data safety, stability, or freedom from breaking changes. Please back up your sheet music files and Nextcloud database regularly before installing or updating.</description>
-	<version>0.0.2</version>
+	<version>0.0.3-rc1</version>
 	<licence>AGPL-3.0-or-later</licence>
 	<author mail="wick.chr.info@gmail.com">Christoph Wick</author>
 	<namespace>SheetMusic</namespace>
