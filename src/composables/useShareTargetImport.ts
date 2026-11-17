@@ -59,14 +59,22 @@ export function useShareTargetImport() {
 		}
 	}
 
-	async function uploadFilesToSong(libraryId: number, songId: number, files: File[]) {
-		for (const file of files) {
-			const formData = new FormData()
-			formData.append('file', file)
-			await apiPost('/api/libraries/{libraryId}/songs/{id}/file/upload', formData as any, {
-				pathParams: { libraryId, id: songId },
-			})
+	async function createTargetSong(libraryId: number, title: string): Promise<number> {
+		const createRes = await apiPost('/api/songs', { libraryId, title: title.trim() } as any)
+		const createdData = createRes.data.ocs.data as any
+		const newSongId = Number(createdData.createdSongId ?? createdData.id)
+		if (!newSongId) {
+			throw new Error(t('sheetmusic', 'Failed to create song.'))
 		}
+		return newSongId
+	}
+
+	async function createTargetSetlist(libraryId: number, name: string): Promise<number> {
+		const createdSetlist = await createSetlist(libraryId, name.trim())
+		if (!createdSetlist?.id) {
+			throw new Error(t('sheetmusic', 'Failed to create setlist.'))
+		}
+		return createdSetlist.id
 	}
 
 	async function executeImport(params: {
@@ -82,44 +90,34 @@ export function useShareTargetImport() {
 		errorMessage.value = ''
 		try {
 			const { mode, libraryId, files, newSongTitle, newSetlistName, songId, setlistId } = params
-			if (mode === 'new-song') {
-				const createRes = await apiPost('/api/songs', {
-					libraryId,
-					title: newSongTitle.trim(),
-				} as any)
-				const createdData = createRes.data.ocs.data as any
-				const newSongId = Number(createdData.createdSongId ?? createdData.id)
-				if (!newSongId) {
-					throw new Error(t('sheetmusic', 'Failed to create song.'))
-				}
-				await uploadFilesToSong(libraryId, newSongId, files)
-				showSuccess(t('sheetmusic', 'Imported shared file into new song.'))
-				return { targetType: 'new-song', libraryId, songId: newSongId }
-			}
 
-			if (mode === 'existing-song') {
-				await uploadFilesToSong(libraryId, songId, files)
-				showSuccess(t('sheetmusic', 'Added shared file to song.'))
-				return { targetType: 'existing-song', libraryId, songId }
-			}
-
-			if (mode === 'new-setlist') {
-				const createdSetlist = await createSetlist(libraryId, newSetlistName.trim())
-				if (!createdSetlist?.id) {
-					throw new Error(t('sheetmusic', 'Failed to create setlist.'))
-				}
+			if (mode === 'new-song' || mode === 'existing-song') {
+				const targetSongId = mode === 'new-song'
+					? await createTargetSong(libraryId, newSongTitle)
+					: songId
 				for (const file of files) {
-					await uploadSetlistFile(libraryId, createdSetlist.id, file)
+					const formData = new FormData()
+					formData.append('file', file)
+					await apiPost('/api/libraries/{libraryId}/songs/{id}/file/upload', formData as any, {
+						pathParams: { libraryId, id: targetSongId },
+					})
 				}
-				showSuccess(t('sheetmusic', 'Created setlist and attached shared file.'))
-				return { targetType: 'new-setlist', libraryId, setlistId: createdSetlist.id }
+				showSuccess(mode === 'new-song'
+					? t('sheetmusic', 'Imported shared file into new song.')
+					: t('sheetmusic', 'Added shared file to song.'))
+				return { targetType: mode, libraryId, songId: targetSongId }
 			}
 
+			const targetSetlistId = mode === 'new-setlist'
+				? await createTargetSetlist(libraryId, newSetlistName)
+				: setlistId
 			for (const file of files) {
-				await uploadSetlistFile(libraryId, setlistId, file)
+				await uploadSetlistFile(libraryId, targetSetlistId, file)
 			}
-			showSuccess(t('sheetmusic', 'Attached shared file to setlist.'))
-			return { targetType: 'setlist-file', libraryId, setlistId }
+			showSuccess(mode === 'new-setlist'
+				? t('sheetmusic', 'Created setlist and attached shared file.')
+				: t('sheetmusic', 'Attached shared file to setlist.'))
+			return { targetType: mode, libraryId, setlistId: targetSetlistId }
 		} catch (error: any) {
 			errorMessage.value = error?.response?.data?.ocs?.meta?.message
 				|| error?.message
