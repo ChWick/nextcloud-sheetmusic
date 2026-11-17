@@ -169,11 +169,12 @@ jobs:
           fi
 
           gh release create "$GITHUB_REF_NAME" "${{ env.APP_NAME }}.tar.gz" \
+            --repo "${{ github.repository }}" \
             --title "$GITHUB_REF_NAME" \
             --generate-notes \
             $PRERELEASE_FLAG
 
-          DOWNLOAD_URL=$(gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[0].url')
+          DOWNLOAD_URL=$(gh release view "$GITHUB_REF_NAME" --repo "${{ github.repository }}" --json assets --jq '.assets[0].url')
           echo "browser_download_url=$DOWNLOAD_URL" >> "$GITHUB_OUTPUT"
           echo "is_prerelease=$IS_PRERELEASE" >> "$GITHUB_OUTPUT"
 
