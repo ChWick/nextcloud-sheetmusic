@@ -1,5 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { initPwaStandaloneMode, isStandaloneDisplayMode, PWA_STANDALONE_CLASS } from '../../../src/utils/pwa'
+import {
+	initPwaStandaloneMode,
+	isStandaloneDisplayMode,
+	PWA_STANDALONE_CLASS,
+	registerPwaServiceWorker,
+} from '../../../src/utils/pwa'
+
+vi.mock('@nextcloud/router', () => ({
+	generateUrl: (path: string) => `/index.php${path}`,
+}))
 
 describe('pwa utils', () => {
 	const originalMatchMedia = window.matchMedia
@@ -84,5 +93,20 @@ describe('pwa utils', () => {
 
 		cleanup()
 		expect(removeEventListener).toHaveBeenCalledTimes(1)
+	})
+
+	it('registers service worker with generated app scope', async () => {
+		const fakeReg = { scope: '/index.php/apps/sheetmusic/' }
+		const register = vi.fn().mockResolvedValue(fakeReg)
+		Object.defineProperty(window.navigator, 'serviceWorker', {
+			configurable: true,
+			value: { register },
+		})
+
+		const result = await registerPwaServiceWorker()
+		expect(register).toHaveBeenCalledWith('/index.php/apps/sheetmusic/sw.js', {
+			scope: '/index.php/apps/sheetmusic/',
+		})
+		expect(result).toBe(fakeReg)
 	})
 })

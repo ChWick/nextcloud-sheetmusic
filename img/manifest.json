@@ -8,6 +8,27 @@
 	"display_override": ["standalone", "minimal-ui"],
 	"theme_color": "#0082c9",
 	"background_color": "#ffffff",
+	"share_target": {
+		"action": "../../../index.php/apps/sheetmusic/?share-target=1",
+		"method": "POST",
+		"enctype": "multipart/form-data",
+		"params": {
+			"title": "title",
+			"text": "text",
+			"url": "url",
+			"files": [
+				{
+					"name": "files",
+					"accept": [
+						"application/pdf",
+						".pdf",
+						"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+						".docx"
+					]
+				}
+			]
+		}
+	},
 	"icons": [
 		{
 			"src": "pwa-icon.svg",

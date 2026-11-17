@@ -1,3 +1,5 @@
+import { generateUrl } from '@nextcloud/router'
+
 export const STANDALONE_MEDIA_QUERY =
 	'(display-mode: standalone), (display-mode: fullscreen), (display-mode: minimal-ui), (display-mode: window-controls-overlay)'
 
@@ -57,4 +59,23 @@ export function initPwaStandaloneMode(): () => void {
 	}
 
 	return () => {}
+}
+
+/**
+ * Registers the Sheet Music PWA service worker so Web Share Target POST
+ * requests can be intercepted and handed off to the app.
+ */
+export async function registerPwaServiceWorker(): Promise<ServiceWorkerRegistration | null> {
+	if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
+		return null
+	}
+
+	try {
+		const swUrl = generateUrl('/apps/sheetmusic/sw.js')
+		const scope = generateUrl('/apps/sheetmusic/')
+		return await navigator.serviceWorker.register(swUrl, { scope })
+	} catch (error) {
+		console.warn('Sheet Music: failed to register PWA service worker', error)
+		return null
+	}
 }
