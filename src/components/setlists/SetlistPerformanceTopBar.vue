@@ -5,7 +5,6 @@ import ArrowLeftIcon from 'vue-material-design-icons/ArrowLeft.vue'
 import CogOutlineIcon from 'vue-material-design-icons/CogOutline.vue'
 import EyeOffOutlineIcon from 'vue-material-design-icons/EyeOffOutline.vue'
 import EyeOutlineIcon from 'vue-material-design-icons/EyeOutline.vue'
-import FormatListBulletedIcon from 'vue-material-design-icons/FormatListBulleted.vue'
 import FullscreenIcon from 'vue-material-design-icons/Fullscreen.vue'
 import FullscreenExitIcon from 'vue-material-design-icons/FullscreenExit.vue'
 
@@ -25,7 +24,6 @@ defineProps<{
 
 const emit = defineEmits<{
 	exit: []
-	toggleDrawer: []
 	toggleAnnotations: []
 	toggleSettings: []
 	toggleFullscreen: []
@@ -65,13 +63,6 @@ const emit = defineEmits<{
 		</div>
 
 		<div :class="$style.topRight">
-			<NcButton
-				variant="tertiary"
-				:title="t('sheetmusic', 'Setlist items')"
-				:aria-label="t('sheetmusic', 'Setlist items')"
-				@click="emit('toggleDrawer')">
-				<template #icon><FormatListBulletedIcon :size="20" /></template>
-			</NcButton>
 			<NcButton
 				:variant="showAnnotations ? 'primary' : 'tertiary'"
 				:title="t('sheetmusic', 'Toggle annotations')"

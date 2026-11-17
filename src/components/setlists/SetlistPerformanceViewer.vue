@@ -432,7 +432,6 @@ onUnmounted(() => {
 				:is-settings-open="isSettingsOpen"
 				:is-setlist-override="isSetlistOverride"
 				@exit="emit('close')"
-				@toggle-drawer="toggleDrawer"
 				@toggle-annotations="onToggleAnnotations"
 				@toggle-settings="toggleSettingsPanel"
 				@toggle-fullscreen="toggleFullscreen"
@@ -505,6 +504,7 @@ onUnmounted(() => {
 				:zoom-choice="zoomChoice"
 				:interleave-songs="interleaveSongs"
 				:is-page-picker-open="isPagePickerOpen"
+				:is-drawer-open="isDrawerOpen"
 				@prev-song="goToSong(currentIndex - 1, false)"
 				@prev-page="handlePrevPage"
 				@next-page="handleNextPage"
@@ -514,6 +514,7 @@ onUnmounted(() => {
 				@toggle-zoom="onZoomToggle"
 				@toggle-interleave="onToggleInterleave"
 				@toggle-page-picker="isPagePickerOpen = !isPagePickerOpen"
+				@toggle-drawer="toggleDrawer"
 				@pause-auto-hide="pauseHudAutoHide"
 				@resume-auto-hide="resumeHudAutoHide" />
 

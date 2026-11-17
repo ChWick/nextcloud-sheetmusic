@@ -27,7 +27,7 @@ describe('SetlistPerformanceTopBar', () => {
 		expect(wrapper.text()).toContain('Custom')
 	})
 
-	it('emits exit, toggleDrawer, toggleAnnotations, toggleSettings, and toggleFullscreen', async () => {
+	it('emits exit, toggleAnnotations, toggleSettings, and toggleFullscreen', async () => {
 		const wrapper = mount(SetlistPerformanceTopBar, {
 			props: {
 				visible: true,
@@ -44,13 +44,11 @@ describe('SetlistPerformanceTopBar', () => {
 		})
 
 		await wrapper.find('button[aria-label="Exit performance mode"]').trigger('click')
-		await wrapper.find('button[aria-label="Setlist items"]').trigger('click')
 		await wrapper.find('button[aria-label="Toggle annotations"]').trigger('click')
 		await wrapper.find('button[aria-label="Viewer settings & defaults"]').trigger('click')
 		await wrapper.find('button[aria-label="Fullscreen"]').trigger('click')
 
 		expect(wrapper.emitted('exit')).toHaveLength(1)
-		expect(wrapper.emitted('toggleDrawer')).toHaveLength(1)
 		expect(wrapper.emitted('toggleAnnotations')).toHaveLength(1)
 		expect(wrapper.emitted('toggleSettings')).toHaveLength(1)
 		expect(wrapper.emitted('toggleFullscreen')).toHaveLength(1)

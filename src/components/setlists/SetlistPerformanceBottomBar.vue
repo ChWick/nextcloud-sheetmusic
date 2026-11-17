@@ -6,6 +6,7 @@ import ChevronLeftIcon from 'vue-material-design-icons/ChevronLeft.vue'
 import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
 import CompareHorizontalIcon from 'vue-material-design-icons/CompareHorizontal.vue'
 import FitToPageOutlineIcon from 'vue-material-design-icons/FitToPageOutline.vue'
+import FormatListBulletedIcon from 'vue-material-design-icons/FormatListBulleted.vue'
 import SkipNextIcon from 'vue-material-design-icons/SkipNext.vue'
 import SkipPreviousIcon from 'vue-material-design-icons/SkipPrevious.vue'
 import ViewGridOutlineIcon from 'vue-material-design-icons/ViewGridOutline.vue'
@@ -27,9 +28,11 @@ withDefaults(defineProps<{
 	zoomChoice: PerformanceZoomChoice
 	interleaveSongs?: boolean
 	isPagePickerOpen?: boolean
+	isDrawerOpen?: boolean
 }>(), {
 	interleaveSongs: false,
 	isPagePickerOpen: false,
+	isDrawerOpen: false,
 })
 
 const emit = defineEmits<{
@@ -42,6 +45,7 @@ const emit = defineEmits<{
 	toggleZoom: []
 	toggleInterleave: []
 	togglePagePicker: []
+	toggleDrawer: []
 	pauseAutoHide: []
 	resumeAutoHide: []
 }>()
@@ -86,6 +90,15 @@ const emit = defineEmits<{
 				:title="t('sheetmusic', 'Jump to page')"
 				@click="emit('togglePagePicker')">
 				<template #icon><ViewGridOutlineIcon :size="18" /></template>
+			</NcButton>
+			<NcButton
+				:variant="isDrawerOpen ? 'primary' : 'secondary'"
+				size="small"
+				:aria-pressed="isDrawerOpen"
+				:aria-label="t('sheetmusic', 'Setlist items')"
+				:title="t('sheetmusic', 'Setlist items')"
+				@click="emit('toggleDrawer')">
+				<template #icon><FormatListBulletedIcon :size="18" /></template>
 			</NcButton>
 			<NcButton
 				variant="secondary"
