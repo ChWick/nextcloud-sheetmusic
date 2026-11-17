@@ -603,7 +603,7 @@ defineExpose({
 }
 
 .success {
-	color: var(--color-success);
+	color: var(--color-text-success);
 	margin: 8px 0;
 }
 

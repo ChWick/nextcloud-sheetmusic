@@ -677,7 +677,7 @@ function openSong(songId: number) {
 
 	h2 {
 		margin: 0 0 12px;
-		color: var(--color-success);
+		color: var(--color-text-success);
 	}
 
 	p {

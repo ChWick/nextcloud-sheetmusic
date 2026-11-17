@@ -130,7 +130,7 @@ defineExpose({ clearMergingState })
 
 .cleanNotice h3 {
 	margin: 0 0 8px;
-	color: var(--color-success);
+	color: var(--color-text-success);
 }
 
 .cleanNotice p {
