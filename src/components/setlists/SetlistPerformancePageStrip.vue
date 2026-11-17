@@ -40,6 +40,62 @@ const pdfCache = new Map<string, Promise<any | null>>()
 const renderedKeys = new Set<string>()
 let observer: IntersectionObserver | null = null
 
+let isPointerDragging = false
+let pointerStartX = 0
+let pointerStartScrollLeft = 0
+let didDragScroll = false
+
+function onStripWheel(event: WheelEvent) {
+	const el = stripRef.value
+	if (!el) return
+	const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY
+	if (delta !== 0) {
+		event.preventDefault()
+		el.scrollLeft += delta
+	}
+}
+
+function onStripPointerDown(event: PointerEvent) {
+	if (event.pointerType === 'touch') return
+	const el = stripRef.value
+	if (!el) return
+	isPointerDragging = true
+	didDragScroll = false
+	pointerStartX = event.clientX
+	pointerStartScrollLeft = el.scrollLeft
+	window.addEventListener('pointermove', onStripPointerMove)
+	window.addEventListener('pointerup', onStripPointerUp, { once: true })
+	window.addEventListener('pointercancel', onStripPointerUp, { once: true })
+}
+
+function onStripPointerMove(event: PointerEvent) {
+	if (!isPointerDragging || !stripRef.value) return
+	const dx = event.clientX - pointerStartX
+	if (Math.abs(dx) > 5) {
+		didDragScroll = true
+	}
+	if (didDragScroll) {
+		stripRef.value.scrollLeft = pointerStartScrollLeft - dx
+	}
+}
+
+function onStripPointerUp() {
+	isPointerDragging = false
+	window.removeEventListener('pointermove', onStripPointerMove)
+	window.removeEventListener('pointerup', onStripPointerUp)
+	window.removeEventListener('pointercancel', onStripPointerUp)
+	if (didDragScroll) {
+		setTimeout(() => {
+			didDragScroll = false
+		}, 0)
+	}
+}
+
+function onSelectThumb(itemIndex: number, page: number) {
+	if (didDragScroll) return
+	emit('select', { itemIndex, page })
+}
+
 const totalSetlistPages = computed(() => {
 	return props.songs.reduce((sum, s) => sum + getSongPageCount(s), 0)
 })
@@ -194,6 +250,7 @@ watch(
 
 onUnmounted(() => {
 	cleanupObserver()
+	onStripPointerUp()
 })
 </script>
 
@@ -204,6 +261,7 @@ onUnmounted(() => {
 		role="dialog"
 		:aria-label="t('sheetmusic', 'Jump to page')"
 		@click.stop
+		@wheel="onStripWheel"
 		@mouseenter="emit('pauseAutoHide')"
 		@mouseleave="emit('resumeAutoHide')">
 		<div :class="$style.stripHeader">
@@ -218,7 +276,10 @@ onUnmounted(() => {
 				<CloseIcon :size="16" />
 			</button>
 		</div>
-		<div ref="stripRef" :class="$style.stripScroll">
+		<div
+			ref="stripRef"
+			:class="$style.stripScroll"
+			@pointerdown="onStripPointerDown">
 			<div
 				v-for="song in songs"
 				:key="song.itemIndex"
@@ -238,7 +299,7 @@ onUnmounted(() => {
 							song.itemIndex === currentItemIndex && page === currentPage && $style.thumbCardActive,
 						]"
 						:aria-label="t('sheetmusic', '{song} - Page {page}', { song: song.title, page })"
-						@click="emit('select', { itemIndex: song.itemIndex, page })">
+						@click="onSelectThumb(song.itemIndex, page)">
 						<canvas
 							:data-item-index="song.itemIndex"
 							:data-page="page"
@@ -304,6 +365,12 @@ onUnmounted(() => {
 	gap: 14px;
 	overflow-x: auto;
 	padding: 4px 2px;
+	cursor: grab;
+	user-select: none;
+}
+
+.stripScroll:active {
+	cursor: grabbing;
 }
 
 .songGroup {
