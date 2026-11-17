@@ -72,7 +72,7 @@ jobs:
           STAGE_DIR="staging/${{ env.APP_NAME }}"
           mkdir -p "$STAGE_DIR"
 
-          for dir in appinfo css dist img js lib templates l10n; do
+          for dir in appinfo css dist img js lib resources templates l10n; do
             if [ -d "source/$dir" ]; then
               cp -a "source/$dir" "$STAGE_DIR/"
             fi
