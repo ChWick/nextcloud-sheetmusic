@@ -135,8 +135,9 @@ export async function syncSetlistOffline(params: {
 				urls.add(getVersionedFileUrl(file.path, getFileVersionToken(file, song)))
 				fileCount++
 			}
+			const targetFileId = file.fileId ?? file.id
 			const annBase = generateOcsUrl(`/apps/sheetmusic/api/songs/${song.id}/annotations`)
-			urls.add(file.id ? `${annBase}?fileId=${file.id}` : annBase)
+			urls.add(targetFileId ? `${annBase}?fileId=${targetFileId}` : annBase)
 		}
 	}
 

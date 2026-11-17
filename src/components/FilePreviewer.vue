@@ -759,6 +759,10 @@ async function renderCurrentView() {
 async function fetchBinaryData(cacheKey: string, loadId: number): Promise<Uint8Array | null> {
 	const cache = props.binaryCache ?? defaultFileBinaryCache
 	let data: Uint8Array | null = cache.get(cacheKey)
+	if (!data && typeof navigator !== 'undefined' && navigator.onLine === false) {
+		data = await readOfflineCachedBinary(cacheKey)
+		if (loadId !== currentLoadId) return null
+	}
 	if (!data) {
 		const hasVersionParam = cacheKey.includes('v=') || cacheKey.includes('t=')
 		try {

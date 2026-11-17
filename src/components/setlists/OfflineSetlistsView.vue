@@ -133,15 +133,15 @@ const performanceStartIndex = ref(0)
 const selectedSongs = computed(() => songsByLibrary.value[selectedLibraryId.value] ?? [])
 
 async function loadLibrarySetlistsWithFallback(libraryId: number, records: OfflineSetlistRecord[]): Promise<Setlist[]> {
+	const cached = await readOfflineCachedJson<{ ocs?: { data?: Setlist[] } }>(
+		generateOcsUrl(`/apps/sheetmusic/api/libraries/${libraryId}/setlists`),
+	)
+	if (cached?.ocs?.data) {
+		return cached.ocs.data
+	}
 	try {
 		return await fetchSetlists(libraryId)
 	} catch {
-		const cached = await readOfflineCachedJson<{ ocs?: { data?: Setlist[] } }>(
-			generateOcsUrl(`/apps/sheetmusic/api/libraries/${libraryId}/setlists`),
-		)
-		if (cached?.ocs?.data) {
-			return cached.ocs.data
-		}
 		return records.map(r => ({
 			id: r.setlistId,
 			libraryId: r.libraryId,
@@ -152,14 +152,17 @@ async function loadLibrarySetlistsWithFallback(libraryId: number, records: Offli
 }
 
 async function loadLibrarySongsWithFallback(libraryId: number): Promise<Song[]> {
+	const cached = await readOfflineCachedJson<{ ocs?: { data?: { songs?: Song[] } } }>(
+		`${generateOcsUrl('/apps/sheetmusic/api/songs')}?id=${libraryId}`,
+	)
+	if (cached?.ocs?.data?.songs) {
+		return cached.ocs.data.songs
+	}
 	try {
 		const res = await apiGet('/api/songs', { queryParams: { id: libraryId } })
 		return (res.data.ocs.data.songs ?? []) as Song[]
 	} catch {
-		const cached = await readOfflineCachedJson<{ ocs?: { data?: { songs?: Song[] } } }>(
-			`${generateOcsUrl('/apps/sheetmusic/api/songs')}?id=${libraryId}`,
-		)
-		return cached?.ocs?.data?.songs ?? []
+		return []
 	}
 }
 
@@ -212,20 +215,18 @@ async function selectOfflineSetlist(libraryId: number, setlist: Setlist) {
 	selectedSetlist.value = setlist
 	isLoadingDetail.value = true
 	try {
-		const [detail, files] = await Promise.all([
-			fetchSetlist(libraryId, setlist.id).catch(async () => {
-				const cached = await readOfflineCachedJson<{ ocs?: { data?: Setlist } }>(
-					generateOcsUrl(`/apps/sheetmusic/api/libraries/${libraryId}/setlists/${setlist.id}`),
-				)
-				return cached?.ocs?.data ?? { ...setlist, items: [] }
-			}),
-			fetchSetlistFiles(libraryId, setlist.id).catch(async () => {
-				const cached = await readOfflineCachedJson<{ ocs?: { data?: SetlistFile[] } }>(
-					generateOcsUrl(`/apps/sheetmusic/api/libraries/${libraryId}/setlists/${setlist.id}/files`),
-				)
-				return cached?.ocs?.data ?? []
-			}),
+		const [cachedDetail, cachedFiles] = await Promise.all([
+			readOfflineCachedJson<{ ocs?: { data?: Setlist } }>(
+				generateOcsUrl(`/apps/sheetmusic/api/libraries/${libraryId}/setlists/${setlist.id}`),
+			),
+			readOfflineCachedJson<{ ocs?: { data?: SetlistFile[] } }>(
+				generateOcsUrl(`/apps/sheetmusic/api/libraries/${libraryId}/setlists/${setlist.id}/files`),
+			),
 		])
+		const detail = cachedDetail?.ocs?.data
+			?? await fetchSetlist(libraryId, setlist.id).catch(() => ({ ...setlist, items: [] }))
+		const files = cachedFiles?.ocs?.data
+			?? await fetchSetlistFiles(libraryId, setlist.id).catch(() => [])
 		selectedItems.value = detail.items ?? []
 		selectedFiles.value = files
 	} catch {
