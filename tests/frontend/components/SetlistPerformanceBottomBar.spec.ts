@@ -21,7 +21,7 @@ describe('SetlistPerformanceBottomBar', () => {
 		})
 
 		expect(wrapper.text()).toContain('3 / 2')
-		expect(wrapper.text()).toContain('Fit Page')
+		expect(wrapper.find('button[aria-label="Fit Page"]').exists()).toBe(true)
 		expect(wrapper.find('button[data-turn-mode="step"]').exists()).toBe(true)
 
 		await wrapper.find('button[aria-label="Previous song"]').trigger('click')
@@ -59,6 +59,6 @@ describe('SetlistPerformanceBottomBar', () => {
 		})
 
 		expect(wrapper.find('button[data-turn-mode="half"]').exists()).toBe(false)
-		expect(wrapper.text()).toContain('Fit Width')
+		expect(wrapper.find('button[aria-label="Fit Width"]').exists()).toBe(true)
 	})
 })

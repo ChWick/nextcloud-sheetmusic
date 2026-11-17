@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import ArrowExpandHorizontalIcon from 'vue-material-design-icons/ArrowExpandHorizontal.vue'
 import ChevronLeftIcon from 'vue-material-design-icons/ChevronLeft.vue'
 import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
 import CompareHorizontalIcon from 'vue-material-design-icons/CompareHorizontal.vue'
+import FitToPageOutlineIcon from 'vue-material-design-icons/FitToPageOutline.vue'
 import SkipNextIcon from 'vue-material-design-icons/SkipNext.vue'
 import SkipPreviousIcon from 'vue-material-design-icons/SkipPrevious.vue'
 import DoublePageTurnModeSelector from '../file-preview/DoublePageTurnModeSelector.vue'
@@ -121,17 +123,22 @@ const emit = defineEmits<{
 				:variant="interleaveSongs ? 'primary' : 'secondary'"
 				size="small"
 				:aria-pressed="interleaveSongs"
+				:aria-label="t('sheetmusic', 'Interleave last page of current song with first page of next song')"
 				:title="t('sheetmusic', 'Interleave last page of current song with first page of next song')"
 				@click="emit('toggleInterleave')">
 				<template #icon><CompareHorizontalIcon :size="18" /></template>
-				{{ t('sheetmusic', 'Interleave') }}
 			</NcButton>
 
 			<NcButton
 				variant="secondary"
 				size="small"
+				:aria-label="zoomChoice === 'fit-page' ? t('sheetmusic', 'Fit Page') : t('sheetmusic', 'Fit Width')"
+				:title="zoomChoice === 'fit-page' ? t('sheetmusic', 'Fit Page (click for Fit Width)') : t('sheetmusic', 'Fit Width (click for Fit Page)')"
 				@click="emit('toggleZoom')">
-				{{ zoomChoice === 'fit-page' ? t('sheetmusic', 'Fit Page') : t('sheetmusic', 'Fit Width') }}
+				<template #icon>
+					<FitToPageOutlineIcon v-if="zoomChoice === 'fit-page'" :size="18" />
+					<ArrowExpandHorizontalIcon v-else :size="18" />
+				</template>
 			</NcButton>
 		</div>
 	</footer>
