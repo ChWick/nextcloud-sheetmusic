@@ -1,8 +1,9 @@
 name: Build and publish app release
 
 on:
-  release:
-    types: [published, edited]
+  push:
+    tags:
+      - 'v*'
 
 permissions:
   contents: write
@@ -154,15 +155,27 @@ jobs:
             exit 1
           fi
 
-      - name: Attach tarball to GitHub release
-        uses: svenstaro/upload-release-action@v2
+      - name: Create GitHub release with tarball
         id: attach_to_release
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ${{ env.APP_NAME }}.tar.gz
-          asset_name: ${{ env.APP_NAME }}.tar.gz
-          tag: ${{ github.ref }}
-          overwrite: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
+            IS_PRERELEASE=true
+            PRERELEASE_FLAG="--prerelease"
+          else
+            IS_PRERELEASE=false
+            PRERELEASE_FLAG=""
+          fi
+
+          gh release create "$GITHUB_REF_NAME" "${{ env.APP_NAME }}.tar.gz" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            $PRERELEASE_FLAG
+
+          DOWNLOAD_URL=$(gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[0].url')
+          echo "browser_download_url=$DOWNLOAD_URL" >> "$GITHUB_OUTPUT"
+          echo "is_prerelease=$IS_PRERELEASE" >> "$GITHUB_OUTPUT"
 
       - name: Upload app to Nextcloud App Store
         uses: nextcloud-releases/nextcloud-appstore-push-action@v1
@@ -171,4 +184,4 @@ jobs:
           appstore_token: ${{ secrets.APPSTORE_TOKEN }}
           download_url: ${{ steps.attach_to_release.outputs.browser_download_url }}
           app_private_key: ${{ secrets.APP_PRIVATE_KEY }}
-          nightly: ${{ github.event.release.prerelease }}
+          nightly: ${{ steps.attach_to_release.outputs.is_prerelease == 'true' }}
