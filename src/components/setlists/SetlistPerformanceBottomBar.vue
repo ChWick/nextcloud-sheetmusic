@@ -8,6 +8,7 @@ import CompareHorizontalIcon from 'vue-material-design-icons/CompareHorizontal.v
 import FitToPageOutlineIcon from 'vue-material-design-icons/FitToPageOutline.vue'
 import SkipNextIcon from 'vue-material-design-icons/SkipNext.vue'
 import SkipPreviousIcon from 'vue-material-design-icons/SkipPrevious.vue'
+import ViewGridOutlineIcon from 'vue-material-design-icons/ViewGridOutline.vue'
 import DoublePageTurnModeSelector from '../file-preview/DoublePageTurnModeSelector.vue'
 import type { DoublePageTurnMode } from '../../utils/page-turn'
 import type { PerformanceLayoutChoice, PerformanceZoomChoice } from '../../utils/performance-settings'
@@ -25,8 +26,10 @@ withDefaults(defineProps<{
 	doublePageTurnMode: DoublePageTurnMode
 	zoomChoice: PerformanceZoomChoice
 	interleaveSongs?: boolean
+	isPagePickerOpen?: boolean
 }>(), {
 	interleaveSongs: false,
+	isPagePickerOpen: false,
 })
 
 const emit = defineEmits<{
@@ -38,6 +41,7 @@ const emit = defineEmits<{
 	changeDoublePageTurnMode: [mode: DoublePageTurnMode]
 	toggleZoom: []
 	toggleInterleave: []
+	togglePagePicker: []
 	pauseAutoHide: []
 	resumeAutoHide: []
 }>()
@@ -73,6 +77,16 @@ const emit = defineEmits<{
 			<span :class="$style.pageStatus">
 				{{ t('sheetmusic', 'Page {current} of {total}', { current: currentPageDisplay, total: totalPages || 1 }, { escape: false }) }}
 			</span>
+			<NcButton
+				v-if="totalPages > 1"
+				:variant="isPagePickerOpen ? 'primary' : 'secondary'"
+				size="small"
+				:aria-pressed="isPagePickerOpen"
+				:aria-label="t('sheetmusic', 'Jump to page')"
+				:title="t('sheetmusic', 'Jump to page')"
+				@click="emit('togglePagePicker')">
+				<template #icon><ViewGridOutlineIcon :size="18" /></template>
+			</NcButton>
 			<NcButton
 				variant="secondary"
 				size="small"

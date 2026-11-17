@@ -6,6 +6,7 @@ import ChevronLeftIcon from 'vue-material-design-icons/ChevronLeft.vue'
 import FilePreviewer from '../FilePreviewer.vue'
 import SetlistPerformanceBottomBar from './SetlistPerformanceBottomBar.vue'
 import SetlistPerformanceDrawer from './SetlistPerformanceDrawer.vue'
+import SetlistPerformancePageStrip from './SetlistPerformancePageStrip.vue'
 import SetlistPerformanceSettingsPanel from './SetlistPerformanceSettingsPanel.vue'
 import SetlistPerformanceSupplementalDrawer from './SetlistPerformanceSupplementalDrawer.vue'
 import SetlistPerformanceTopBar from './SetlistPerformanceTopBar.vue'
@@ -56,6 +57,7 @@ const skipFirstPageOnNextSong = ref(false)
 const isDrawerOpen = ref(false)
 const isSettingsOpen = ref(false)
 const isSupplementalDrawerOpen = ref(false)
+const isPagePickerOpen = ref(false)
 const isFullscreen = ref(false)
 const isSetlistOverride = ref(initialSettings.overrideEnabled)
 const showAnnotations = ref(initialSettings.settings.showAnnotations)
@@ -72,7 +74,7 @@ const {
 	toggleHud,
 	pauseHudAutoHide,
 	resumeHudAutoHide,
-} = useHudAutoHide(3000, () => isDrawerOpen.value || isSettingsOpen.value || isSupplementalDrawerOpen.value)
+} = useHudAutoHide(3000, () => isDrawerOpen.value || isSettingsOpen.value || isSupplementalDrawerOpen.value || isPagePickerOpen.value)
 
 useWakeLock()
 
@@ -279,7 +281,18 @@ function goToSong(index: number, openAtEnd = false, skipFirstPage = false) {
 	skipFirstPageOnNextSong.value = skipFirstPage
 	currentIndex.value = index
 	isDrawerOpen.value = false
+	isPagePickerOpen.value = false
 	scheduleHudAutoHide()
+}
+
+function onJumpToPage(page: number) {
+	previewerRef.value?.goToPage(page)
+	isPagePickerOpen.value = false
+	scheduleHudAutoHide()
+}
+
+async function renderPageThumbnail(page: number, canvas: HTMLCanvasElement): Promise<void> {
+	await previewerRef.value?.renderPageThumbnail(page, canvas, 110)
 }
 
 function handleNextPage() {
@@ -445,6 +458,16 @@ onUnmounted(() => {
 				</button>
 			</div>
 
+			<SetlistPerformancePageStrip
+				:open="isPagePickerOpen"
+				:total-pages="totalPages"
+				:current-page="previewerRef?.currentPage ?? 1"
+				:render-thumbnail="renderPageThumbnail"
+				@select="onJumpToPage"
+				@close="isPagePickerOpen = false"
+				@pause-auto-hide="pauseHudAutoHide"
+				@resume-auto-hide="resumeHudAutoHide" />
+
 			<SetlistPerformanceBottomBar
 				:visible="isHudVisible"
 				:has-prev-song="hasPrevSong"
@@ -458,6 +481,7 @@ onUnmounted(() => {
 				:double-page-turn-mode="doublePageTurnMode"
 				:zoom-choice="zoomChoice"
 				:interleave-songs="interleaveSongs"
+				:is-page-picker-open="isPagePickerOpen"
 				@prev-song="goToSong(currentIndex - 1, false)"
 				@prev-page="handlePrevPage"
 				@next-page="handleNextPage"
@@ -466,6 +490,7 @@ onUnmounted(() => {
 				@change-double-page-turn-mode="onDoublePageTurnModeChange"
 				@toggle-zoom="onZoomToggle"
 				@toggle-interleave="onToggleInterleave"
+				@toggle-page-picker="isPagePickerOpen = !isPagePickerOpen"
 				@pause-auto-hide="pauseHudAutoHide"
 				@resume-auto-hide="resumeHudAutoHide" />
 

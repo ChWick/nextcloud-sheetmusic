@@ -388,6 +388,34 @@ function goToPage(targetPage: number) {
 	}
 }
 
+async function renderPageThumbnail(logicalPage: number, canvas: HTMLCanvasElement, targetWidth = 110): Promise<void> {
+	const pdf = loadedPdf.value
+	if (!pdf) return
+	try {
+		const ordered = parsePageOrder(props.pageOrder, pdf.numPages)
+		const idx = Math.min(Math.max(1, logicalPage), ordered.length) - 1
+		const physicalPage = ordered[idx] || 1
+		const page = await pdf.getPage(physicalPage)
+		const pageRotation = (((page.rotate ?? 0) + rotation.value) % 360 + 360) % 360
+		const baseViewport = page.getViewport({ scale: 1.0, rotation: pageRotation })
+		const scale = targetWidth / Math.max(1, baseViewport.width)
+		const viewport = page.getViewport({ scale, rotation: pageRotation })
+		canvas.width = Math.floor(viewport.width)
+		canvas.height = Math.floor(viewport.height)
+		const ctx = canvas.getContext('2d')
+		if (!ctx) return
+		ctx.fillStyle = '#ffffff'
+		ctx.fillRect(0, 0, canvas.width, canvas.height)
+		await page.render({
+			canvasContext: ctx,
+			viewport,
+			background: 'rgb(255, 255, 255)',
+		}).promise
+	} catch {
+		// Ignore thumbnail render errors
+	}
+}
+
 function setPageLayout(mode: PageLayoutMode) {
 	autoLayout.value = false
 	if (pageLayout.value === mode) return
@@ -991,6 +1019,7 @@ watch(
 defineExpose({
 	openInExternalViewer,
 	goToPage,
+	renderPageThumbnail,
 	prevPage,
 	nextPage,
 	setPageLayout,
