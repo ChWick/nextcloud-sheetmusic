@@ -95,8 +95,8 @@ describe('pwa utils', () => {
 		expect(removeEventListener).toHaveBeenCalledTimes(1)
 	})
 
-	it('registers service worker with generated app scope', async () => {
-		const fakeReg = { scope: '/index.php/apps/sheetmusic/' }
+	it('registers service worker with root scope', async () => {
+		const fakeReg = { scope: '/' }
 		const register = vi.fn().mockResolvedValue(fakeReg)
 		Object.defineProperty(window.navigator, 'serviceWorker', {
 			configurable: true,
@@ -105,7 +105,7 @@ describe('pwa utils', () => {
 
 		const result = await registerPwaServiceWorker()
 		expect(register).toHaveBeenCalledWith('/index.php/apps/sheetmusic/sw.js', {
-			scope: '/index.php/apps/sheetmusic/',
+			scope: '/',
 		})
 		expect(result).toBe(fakeReg)
 	})

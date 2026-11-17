@@ -72,8 +72,7 @@ export async function registerPwaServiceWorker(): Promise<ServiceWorkerRegistrat
 
 	try {
 		const swUrl = generateUrl('/apps/sheetmusic/sw.js')
-		const scope = generateUrl('/apps/sheetmusic/')
-		return await navigator.serviceWorker.register(swUrl, { scope })
+		return await navigator.serviceWorker.register(swUrl, { scope: '/' })
 	} catch (error) {
 		console.warn('Sheet Music: failed to register PWA service worker', error)
 		return null

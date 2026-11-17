@@ -5,6 +5,7 @@ import { cpSync } from 'fs'
 export default createAppConfig(
 	{
 		main: resolve(join('src', 'main.js')),
+		pwa: resolve(join('src', 'pwa-init.ts')),
 	},
 	{
 		minify: false,
