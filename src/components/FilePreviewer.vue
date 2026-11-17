@@ -12,6 +12,7 @@ import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import FilePreviewerToolbar from './file-preview/FilePreviewerToolbar.vue'
 import SongAnnotationOverlay from './song-viewer/SongAnnotationOverlay.vue'
 import { usePdfTouchZoom } from '../composables/usePdfTouchZoom'
+import { readOfflineCachedBinary } from '../utils/offlineSetlists'
 import { inspectPdfPageResolution, type PdfPageResolutionSummary } from './song-pdf/pdf-enhance-engine'
 import { parsePageOrder } from '../utils/page-order'
 import type { SheetAnnotation } from '../types/annotation'
@@ -760,20 +761,29 @@ async function fetchBinaryData(cacheKey: string, loadId: number): Promise<Uint8A
 	let data: Uint8Array | null = cache.get(cacheKey)
 	if (!data) {
 		const hasVersionParam = cacheKey.includes('v=') || cacheKey.includes('t=')
-		const response = await axios.get(cacheKey, {
-			responseType: 'arraybuffer',
-			...(hasVersionParam ? {} : {
-				headers: {
-					'Cache-Control': 'no-cache',
-					'Pragma': 'no-cache',
-				},
-			}),
-		})
+		try {
+			const response = await axios.get(cacheKey, {
+				responseType: 'arraybuffer',
+				...(hasVersionParam ? {} : {
+					headers: {
+						'Cache-Control': 'no-cache',
+						'Pragma': 'no-cache',
+					},
+				}),
+			})
 
-		if (loadId !== currentLoadId) return null
+			if (loadId !== currentLoadId) return null
 
-		const raw = response.data instanceof ArrayBuffer ? new Uint8Array(response.data) : response.data
-		data = raw
+			const raw = response.data instanceof ArrayBuffer ? new Uint8Array(response.data) : response.data
+			data = raw
+		} catch (err) {
+			const offlineData = await readOfflineCachedBinary(cacheKey)
+			if (!offlineData) {
+				throw err
+			}
+			if (loadId !== currentLoadId) return null
+			data = offlineData
+		}
 		if (data) {
 			cache.set(cacheKey, data)
 		}

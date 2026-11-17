@@ -12,8 +12,13 @@ vi.mock('@nextcloud/l10n', () => ({
 	translate: (_app: string, text: string) => text,
 }))
 
+vi.mock('@nextcloud/router', () => ({
+	generateOcsUrl: (path: string) => `/ocs/v2.php${path}`,
+}))
+
 vi.mock('../../../src/utils/offlineSetlists', () => ({
 	getOfflineSetlistMap: () => mockGetOfflineSetlistMap(),
+	readOfflineCachedJson: vi.fn().mockResolvedValue(null),
 }))
 
 vi.mock('../../../src/api/setlists', () => ({

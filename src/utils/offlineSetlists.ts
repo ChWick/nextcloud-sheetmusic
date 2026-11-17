@@ -11,6 +11,8 @@ export const OFFLINE_STORAGE_KEY = 'sheetmusic_offline_setlists_v1'
 export interface OfflineSetlistRecord {
 	libraryId: number
 	setlistId: number
+	setlistName?: string
+	itemCount?: number
 	syncedAt: number
 	urls: string[]
 	fileCount: number
@@ -158,6 +160,8 @@ export async function syncSetlistOffline(params: {
 	const record: OfflineSetlistRecord = {
 		libraryId,
 		setlistId,
+		setlistName: setlistDetail.name,
+		itemCount: setlistDetail.items?.length ?? 0,
 		syncedAt: Date.now(),
 		urls: urlList,
 		fileCount,
@@ -304,5 +308,44 @@ export function initOfflineSetlistsAutoSync(): () => void {
 	return () => {
 		window.removeEventListener('online', onOnline)
 		document.removeEventListener('visibilitychange', onVisibilityChange)
+	}
+}
+
+/**
+ * Reads a cached JSON response directly from the offline setlist Cache Storage.
+ */
+export async function readOfflineCachedJson<T>(url: string): Promise<T | null> {
+	if (typeof caches === 'undefined') {
+		return null
+	}
+	try {
+		const cache = await caches.open(OFFLINE_SETLIST_CACHE)
+		const match = await cache.match(url, { ignoreVary: true })
+		if (!match) {
+			return null
+		}
+		return await match.json() as T
+	} catch {
+		return null
+	}
+}
+
+/**
+ * Reads a cached binary file (e.g. PDF) directly from the offline setlist Cache Storage.
+ */
+export async function readOfflineCachedBinary(url: string): Promise<Uint8Array | null> {
+	if (typeof caches === 'undefined') {
+		return null
+	}
+	try {
+		const cache = await caches.open(OFFLINE_SETLIST_CACHE)
+		const match = await cache.match(url, { ignoreVary: true })
+		if (!match) {
+			return null
+		}
+		const buffer = await match.arrayBuffer()
+		return new Uint8Array(buffer)
+	} catch {
+		return null
 	}
 }
