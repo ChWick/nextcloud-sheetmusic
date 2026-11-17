@@ -59,6 +59,7 @@ const emit = defineEmits<{
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 12px;
   border-bottom: 1px solid var(--color-border);
   padding-bottom: 12px;
@@ -67,14 +68,18 @@ const emit = defineEmits<{
 .actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   flex-shrink: 0;
+  margin-left: auto;
 }
 
 .detailTitleArea {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  flex: 1 1 260px;
+  min-width: 0;
 }
 
 .detailTitle {
