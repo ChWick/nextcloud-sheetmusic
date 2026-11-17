@@ -56,7 +56,7 @@ import LibrarySettingsDialog from './components/LibrarySettingsDialog.vue'
 import ShareDialog from './components/ShareDialog.vue'
 import ShareTargetDialog, { type ShareImportResult } from './components/ShareTargetDialog.vue'
 import { useProgressPolling } from './composables/useProgressPolling'
-import { clearShareTargetParam, consumePendingShare, hasShareTargetParam } from './utils/shareTarget'
+import { clearShareTargetParam, consumePendingShare, getShareTokenParam, hasShareTargetParam } from './utils/shareTarget'
 
 /** Views of a library: the song view, one view per song filter, integrity audit, and tools. */
 type ViewName = 'songs' | 'new-song' | 'setlists' | 'sublibraries' | 'shares' | 'integrity' | 'tools' | 'trash' | EntityType
@@ -186,8 +186,9 @@ onMounted(async () => {
   }
 
   if (!isPublicShare && hasShareTargetParam()) {
+    const shareToken = getShareTokenParam()
     clearShareTargetParam()
-    const pending = await consumePendingShare()
+    const pending = await consumePendingShare(shareToken)
     if (pending && pending.files.length > 0) {
       pendingShareFiles.value = pending.files
       pendingShareTitle.value = pending.title
