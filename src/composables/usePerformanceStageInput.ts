@@ -2,6 +2,7 @@ import { onMounted, onUnmounted } from 'vue'
 
 export interface PerformanceStageInputOptions {
 	isScrollMode: () => boolean
+	isPanningOrPinching?: () => boolean
 	onNextPage: () => void
 	onPrevPage: () => void
 	onToggleHud: () => void
@@ -16,16 +17,27 @@ export function usePerformanceStageInput(options: PerformanceStageInputOptions) 
 	let touchStartX = 0
 	let touchStartY = 0
 	let touchStartTime = 0
+	let multiTouchActive = false
 
 	function onStageTouchStart(event: TouchEvent) {
-		if (event.touches.length !== 1) return
+		if (event.touches.length !== 1) {
+			multiTouchActive = true
+			return
+		}
+		multiTouchActive = false
 		touchStartX = event.touches[0].clientX
 		touchStartY = event.touches[0].clientY
 		touchStartTime = Date.now()
 	}
 
 	function onStageTouchEnd(event: TouchEvent) {
-		if (options.isScrollMode()) return
+		if (multiTouchActive) {
+			if (event.touches.length === 0) {
+				multiTouchActive = false
+			}
+			return
+		}
+		if (options.isScrollMode() || options.isPanningOrPinching?.()) return
 		if (event.changedTouches.length !== 1) return
 		const dx = event.changedTouches[0].clientX - touchStartX
 		const dy = event.changedTouches[0].clientY - touchStartY
@@ -41,6 +53,9 @@ export function usePerformanceStageInput(options: PerformanceStageInputOptions) 
 	}
 
 	function onStageClick(event: MouseEvent) {
+		if (options.isPanningOrPinching?.()) {
+			return
+		}
 		if ((event.target as HTMLElement | null)?.closest?.('.sheetmusic-annotation-link-group')) {
 			return
 		}

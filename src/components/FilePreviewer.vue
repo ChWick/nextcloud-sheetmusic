@@ -11,6 +11,7 @@ import { openFileExternally } from '../utils/file'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import FilePreviewerToolbar from './file-preview/FilePreviewerToolbar.vue'
 import SongAnnotationOverlay from './song-viewer/SongAnnotationOverlay.vue'
+import { usePdfTouchZoom } from '../composables/usePdfTouchZoom'
 import { inspectPdfPageResolution, type PdfPageResolutionSummary } from './song-pdf/pdf-enhance-engine'
 import { parsePageOrder } from '../utils/page-order'
 import type { SheetAnnotation } from '../types/annotation'
@@ -88,6 +89,7 @@ const appContext = getCurrentInstance()?.appContext ?? null
 GlobalWorkerOptions.workerSrc = pdfWorker
 
 const pdfContainer = ref<HTMLElement>()
+const pdfStage = ref<HTMLElement>()
 const docxContainer = ref<HTMLElement>()
 const xlsxSheets = ref<Array<{ name: string; html: string }>>([])
 const activeXlsxSheetIndex = ref(0)
@@ -519,7 +521,7 @@ function cleanupObserver() {
 }
 
 async function renderCurrentView() {
-	if (!loadedPdf.value || !pdfContainer.value) return
+	if (!loadedPdf.value || !pdfContainer.value || !pdfStage.value) return
 
 	const renderId = ++currentRenderId
 	const pdf = loadedPdf.value
@@ -527,7 +529,7 @@ async function renderCurrentView() {
 	const total = ordered.length
 
 	await nextTick()
-	if (!pdfContainer.value || renderId !== currentRenderId) return
+	if (!pdfContainer.value || !pdfStage.value || renderId !== currentRenderId) return
 
 	if (autoLayout.value) {
 		const resolved = await resolveAutoLayoutForPage(currentPage.value)
@@ -679,7 +681,7 @@ async function renderCurrentView() {
 	if (pageLayout.value === 'continuous') {
 		cleanupObserver()
 		unmountAnnotationOverlays()
-		pdfContainer.value.replaceChildren()
+		pdfStage.value.replaceChildren()
 
 		if (typeof IntersectionObserver === 'undefined') {
 			for (const item of pagesToRender) {
@@ -687,7 +689,7 @@ async function renderCurrentView() {
 				placeholder.className = 'sheetmusic-page-placeholder'
 				placeholder.dataset.pageNum = String(item.pageNum)
 				placeholder.dataset.pageIndex = String(item.index)
-				pdfContainer.value.append(placeholder)
+				pdfStage.value.append(placeholder)
 				await renderPage(item.pageNum, placeholder)
 			}
 			return
@@ -725,7 +727,7 @@ async function renderCurrentView() {
 			placeholder.style.backgroundColor = '#ffffff'
 			placeholder.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.15)'
 
-			pdfContainer.value.append(placeholder)
+			pdfStage.value.append(placeholder)
 			intersectionObserver.observe(placeholder)
 
 			// Render the first page immediately so the user always sees content right away
@@ -744,12 +746,12 @@ async function renderCurrentView() {
 		await Promise.all(
 			pagesToRender.map((item, idx) => renderPage(item.pageNum, newPlaceholders[idx], Boolean(item.isNextFile))),
 		)
-		if (renderId !== currentRenderId || !pdfContainer.value) {
+		if (renderId !== currentRenderId || !pdfContainer.value || !pdfStage.value) {
 			return
 		}
 		cleanupObserver()
 		unmountAnnotationOverlays()
-		pdfContainer.value.replaceChildren(...newPlaceholders)
+		pdfStage.value.replaceChildren(...newPlaceholders)
 	}
 }
 
@@ -793,7 +795,9 @@ async function loadAndRenderFile() {
 
 	await nextTick()
 	cleanupObserver()
-	if (pdfContainer.value) {
+	if (pdfStage.value) {
+		pdfStage.value.replaceChildren()
+	} else if (pdfContainer.value) {
 		pdfContainer.value.replaceChildren()
 	}
 	if (docxContainer.value) {
@@ -1016,6 +1020,23 @@ watch(
 	},
 )
 
+const { wasRecentlyPinching } = usePdfTouchZoom({
+	containerRef: pdfContainer,
+	stageRef: pdfStage,
+	getCurrentScale: () => effectiveScale.value,
+	isEnabled: () => isPdfFile.value && !isLoading.value && !errorMessage.value && !props.isAnnotating,
+	onCommitZoom: async (scale) => {
+		zoomMode.value = 'custom'
+		customScale.value = scale
+		await renderCurrentView()
+	},
+})
+
+function canPanHorizontally(): boolean {
+	const el = pdfContainer.value
+	return Boolean(el && el.scrollWidth > el.clientWidth + 2)
+}
+
 defineExpose({
 	openInExternalViewer,
 	goToPage,
@@ -1026,6 +1047,8 @@ defineExpose({
 	setAutoLayout,
 	setDoublePageTurnMode,
 	setZoomMode,
+	wasRecentlyPinching,
+	canPanHorizontally,
 	currentPage,
 	totalPages,
 	currentPageDisplay,
@@ -1094,7 +1117,11 @@ defineExpose({
 		<div
 			v-show="!isLoading && !errorMessage && isPdfFile"
 			ref="pdfContainer"
-			:class="[$style.pdfContainer, $style[`layout-${pageLayout}`], noPadding && $style.noPadding]" />
+			:class="$style.pdfContainer">
+			<div
+				ref="pdfStage"
+				:class="[$style.pdfStage, $style[`layout-${pageLayout}`], noPadding && $style.noPadding]" />
+		</div>
 
 		<div
 			v-show="!isLoading && !errorMessage && isDocxFile"
@@ -1178,31 +1205,41 @@ defineExpose({
 
 .pdfContainer {
 	display: flex;
-	flex-direction: column;
-	align-items: center;
-	gap: 16px;
-	padding: 24px;
 	overflow: auto;
 	flex: 1;
 	min-height: 0;
 	width: 100%;
 	box-sizing: border-box;
 	background-color: var(--color-background-dark, #f5f5f5);
+	touch-action: pan-x pan-y;
+	-webkit-overflow-scrolling: touch;
 }
 
-.pdfContainer.layout-double {
+.pdfStage {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 16px;
+	padding: 24px;
+	min-width: 100%;
+	width: max-content;
+	margin: auto;
+	box-sizing: border-box;
+}
+
+.pdfStage.layout-double {
 	flex-direction: row;
 	flex-wrap: nowrap;
 	align-items: center;
 	justify-content: center;
 }
 
-.pdfContainer.noPadding {
+.pdfStage.noPadding {
 	padding: 0;
 	gap: 4px;
 }
 
-.pdfContainer.noPadding.layout-single {
+.pdfStage.noPadding.layout-single {
 	justify-content: center;
 }
 

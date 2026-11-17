@@ -1,0 +1,97 @@
+import { describe, expect, it, vi } from 'vitest'
+import { defineComponent, ref } from 'vue'
+import { mount } from '@vue/test-utils'
+import { usePdfTouchZoom } from '../../../src/composables/usePdfTouchZoom'
+
+function makeTouch(clientX: number, clientY: number): Touch {
+	return { clientX, clientY } as Touch
+}
+
+function makeTouchEvent(type: string, touches: Touch[]): TouchEvent {
+	const evt = new Event(type, { cancelable: true }) as TouchEvent
+	Object.defineProperty(evt, 'touches', { value: touches })
+	return evt
+}
+
+describe('usePdfTouchZoom', () => {
+	it('applies live CSS scale during two-finger pinch and commits zoom on release', async () => {
+		const container = document.createElement('div')
+		const stage = document.createElement('div')
+		container.appendChild(stage)
+		container.getBoundingClientRect = () => ({ left: 0, top: 0, width: 400, height: 600 } as DOMRect)
+
+		const onCommitZoom = vi.fn().mockResolvedValue(undefined)
+		let api!: ReturnType<typeof usePdfTouchZoom>
+
+		const Comp = defineComponent({
+			setup() {
+				const containerRef = ref<HTMLElement | undefined>(container)
+				const stageRef = ref<HTMLElement | undefined>(stage)
+				api = usePdfTouchZoom({
+					containerRef,
+					stageRef,
+					getCurrentScale: () => 1.0,
+					isEnabled: () => true,
+					onCommitZoom,
+				})
+				return {}
+			},
+			template: '<div />',
+		})
+
+		mount(Comp)
+
+		container.dispatchEvent(makeTouchEvent('touchstart', [makeTouch(100, 100), makeTouch(200, 100)]))
+		const moveEvt = makeTouchEvent('touchmove', [makeTouch(50, 100), makeTouch(250, 100)])
+		container.dispatchEvent(moveEvt)
+
+		expect(moveEvt.defaultPrevented).toBe(true)
+		expect(stage.style.transform).toBe('scale(2)')
+		expect(api.wasRecentlyPinching()).toBe(true)
+
+		container.dispatchEvent(makeTouchEvent('touchend', [makeTouch(50, 100)]))
+		await Promise.resolve()
+
+		expect(stage.style.transform).toBe('')
+		expect(onCommitZoom).toHaveBeenCalledWith(2)
+	})
+
+	it('clamps zoom scale within [minScale, maxScale] and ignores when disabled', async () => {
+		const container = document.createElement('div')
+		const stage = document.createElement('div')
+		container.getBoundingClientRect = () => ({ left: 0, top: 0, width: 400, height: 600 } as DOMRect)
+
+		const onCommitZoom = vi.fn()
+		let enabled = false
+
+		const Comp = defineComponent({
+			setup() {
+				usePdfTouchZoom({
+					containerRef: ref<HTMLElement | undefined>(container),
+					stageRef: ref<HTMLElement | undefined>(stage),
+					getCurrentScale: () => 1.0,
+					isEnabled: () => enabled,
+					onCommitZoom,
+					minScale: 0.5,
+					maxScale: 3.0,
+				})
+				return {}
+			},
+			template: '<div />',
+		})
+
+		mount(Comp)
+
+		container.dispatchEvent(makeTouchEvent('touchstart', [makeTouch(100, 100), makeTouch(200, 100)]))
+		container.dispatchEvent(makeTouchEvent('touchmove', [makeTouch(0, 100), makeTouch(500, 100)]))
+		container.dispatchEvent(makeTouchEvent('touchend', []))
+		expect(onCommitZoom).not.toHaveBeenCalled()
+
+		enabled = true
+		container.dispatchEvent(makeTouchEvent('touchstart', [makeTouch(100, 100), makeTouch(200, 100)]))
+		container.dispatchEvent(makeTouchEvent('touchmove', [makeTouch(0, 100), makeTouch(500, 100)]))
+		container.dispatchEvent(makeTouchEvent('touchend', []))
+		await Promise.resolve()
+		expect(onCommitZoom).toHaveBeenCalledWith(3.0)
+	})
+})
