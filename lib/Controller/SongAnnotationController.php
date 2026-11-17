@@ -10,6 +10,8 @@ declare(strict_types=1);
 namespace OCA\SheetMusic\Controller;
 
 use OCA\SheetMusic\Db\InternalSongAnnotation;
+use OCA\SheetMusic\Service\SetlistService;
+use OCA\SheetMusic\Service\ShareService;
 use OCA\SheetMusic\Service\SongAnnotationService;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\ApiRoute;
@@ -29,6 +31,8 @@ class SongAnnotationController extends OCSController {
 		IRequest $request,
 		private SongAnnotationService $annotationService,
 		private IUserSession $userSession,
+		private ?SetlistService $setlistService = null,
+		private ?ShareService $shareService = null,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -78,7 +82,14 @@ class SongAnnotationController extends OCSController {
 			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
 		}
 
-		$params = $this->request->getParams();
+		return new DataResponse($this->processAnnotationBatch($songId, null, $this->request->getParams()));
+	}
+
+	/**
+	 * @param array<string, mixed> $params
+	 * @return array{saved: list<InternalSongAnnotation>, deletedIds: list<int>}
+	 */
+	private function processAnnotationBatch(int $songId, ?int $forcedFileId, array $params): array {
 		$upsert = is_array($params['upsert'] ?? null) ? $params['upsert'] : [];
 		$deleteIds = is_array($params['deleteIds'] ?? null) ? $params['deleteIds'] : [];
 
@@ -87,23 +98,33 @@ class SongAnnotationController extends OCSController {
 			if (!is_array($item)) {
 				continue;
 			}
+			if ($forcedFileId !== null) {
+				$item['fileId'] = $forcedFileId;
+			}
 			$annotation = $this->buildAnnotationFromParams($songId, $item);
 			$saved[] = $this->annotationService->saveAnnotation($annotation);
 		}
 
 		$deleted = [];
 		foreach ($deleteIds as $id) {
-			if (is_numeric($id)) {
-				$intId = (int)$id;
-				$this->annotationService->deleteAnnotation($intId);
-				$deleted[] = $intId;
+			if (!is_numeric($id)) {
+				continue;
 			}
+			$intId = (int)$id;
+			if ($forcedFileId !== null) {
+				$existing = $this->annotationService->findAnnotationById($intId);
+				if ($existing === null || $existing->fileId !== $forcedFileId) {
+					continue;
+				}
+			}
+			$this->annotationService->deleteAnnotation($intId);
+			$deleted[] = $intId;
 		}
 
-		return new DataResponse([
+		return [
 			'saved' => $saved,
 			'deletedIds' => $deleted,
-		]);
+		];
 	}
 
 	/**
@@ -138,6 +159,79 @@ class SongAnnotationController extends OCSController {
 			style: $style,
 			data: $data,
 		);
+	}
+
+	#[PublicPage]
+	#[NoCSRFRequired]
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'GET', url: '/api/libraries/{libraryId}/setlists/{setlistId}/files/{fileId}/annotations')]
+	public function getSetlistFileAnnotations(int $libraryId, int $setlistId, int $fileId): DataResponse {
+		if ($this->setlistService === null) {
+			return new DataResponse([], Http::STATUS_NOT_FOUND);
+		}
+
+		$user = $this->userSession->getUser();
+		$publicToken = $this->request->getHeader('X-Public-Share-Token') ?? $this->request->getParam('token');
+
+		if ($publicToken !== null && $publicToken !== '') {
+			$info = $this->shareService?->findLibraryByPublicToken($publicToken);
+			if ($info === null || (int)$info['library']->id !== $libraryId) {
+				return new DataResponse([], Http::STATUS_FORBIDDEN);
+			}
+			$ocFileId = $this->setlistService->resolveSetlistFileOcIdForPublicToken($libraryId, $setlistId, $fileId);
+		} elseif ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		} else {
+			$ocFileId = $this->setlistService->resolveSetlistFileOcId($user, $libraryId, $setlistId, $fileId, false);
+		}
+
+		if ($ocFileId === null) {
+			return new DataResponse([], Http::STATUS_NOT_FOUND);
+		}
+
+		return new DataResponse($this->annotationService->getAnnotationsForFile($ocFileId));
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/libraries/{libraryId}/setlists/{setlistId}/files/{fileId}/annotations')]
+	public function saveSetlistFileAnnotation(int $libraryId, int $setlistId, int $fileId): DataResponse {
+		if ($this->setlistService === null) {
+			return new DataResponse([], Http::STATUS_NOT_FOUND);
+		}
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		$ocFileId = $this->setlistService->resolveSetlistFileOcId($user, $libraryId, $setlistId, $fileId, true);
+		if ($ocFileId === null) {
+			return new DataResponse([], Http::STATUS_NOT_FOUND);
+		}
+
+		$params = $this->request->getParams();
+		$params['fileId'] = $ocFileId;
+		$annotation = $this->buildAnnotationFromParams(0, $params);
+		$saved = $this->annotationService->saveAnnotation($annotation);
+		return new DataResponse($saved);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/libraries/{libraryId}/setlists/{setlistId}/files/{fileId}/annotations/batch')]
+	public function batchSetlistFileAnnotations(int $libraryId, int $setlistId, int $fileId): DataResponse {
+		if ($this->setlistService === null) {
+			return new DataResponse([], Http::STATUS_NOT_FOUND);
+		}
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		$ocFileId = $this->setlistService->resolveSetlistFileOcId($user, $libraryId, $setlistId, $fileId, true);
+		if ($ocFileId === null) {
+			return new DataResponse([], Http::STATUS_NOT_FOUND);
+		}
+
+		return new DataResponse($this->processAnnotationBatch(0, $ocFileId, $this->request->getParams()));
 	}
 
 	#[NoAdminRequired]

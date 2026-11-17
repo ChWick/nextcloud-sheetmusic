@@ -76,6 +76,33 @@ class InternalSongAnnotationMapper {
 	/**
 	 * @return list<InternalSongAnnotation>
 	 */
+	public function findForFile(int $fileId, bool $includeDeleted = false): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from(self::TABLE_NAME)
+			->where($qb->expr()->eq('file_id', $qb->createNamedParameter($fileId, IQueryBuilder::PARAM_INT)));
+
+		if (!$includeDeleted) {
+			$qb->andWhere($qb->expr()->isNull('deleted_at'));
+		}
+
+		$qb->orderBy('page_number', 'ASC')
+			->addOrderBy('layer_index', 'ASC')
+			->addOrderBy('id', 'ASC');
+
+		$result = $qb->executeQuery();
+		$annotations = [];
+		while ($row = $result->fetchAssociative()) {
+			$annotations[] = InternalSongAnnotation::fromRow($row);
+		}
+		$result->closeCursor();
+
+		return $annotations;
+	}
+
+	/**
+	 * @return list<InternalSongAnnotation>
+	 */
 	public function findForSongFile(int $songId, int $fileId, bool $includeDeleted = false): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('*')

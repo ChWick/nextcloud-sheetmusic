@@ -156,76 +156,46 @@ final class SongAnnotationServiceTest extends TestCase {
 		$fileAId = (int)$fileA->id;
 		$fileBId = (int)$fileB->id;
 
-		// 2. Save annotation for File A using its song_files.id; verify it normalizes to node fileId (1701)
+		// 2. Save annotation for File A using its canonical fileId (1701)
 		$savedA = $this->service->saveAnnotation(new InternalSongAnnotation(
 			id: null,
 			uuid: 'ann-for-file-a',
 			songId: $songId,
-			fileId: $fileAId, // Passing song_files.id
+			fileId: 1701,
 			pageNumber: 0,
 			layerIndex: 0,
 			type: 'drawing',
 		));
-		self::assertSame(1701, $savedA->fileId, 'Saving with song_files.id should normalize to node fileId');
+		self::assertSame(1701, $savedA->fileId);
 
-		// 3. Save annotation for File B using its node fileId (1702)
+		// 3. Save annotation for File B using its canonical fileId (1702)
 		$savedB = $this->service->saveAnnotation(new InternalSongAnnotation(
 			id: null,
 			uuid: 'ann-for-file-b',
 			songId: $songId,
-			fileId: 1702, // Passing node fileId
+			fileId: 1702,
 			pageNumber: 1,
 			layerIndex: 0,
 			type: 'highlight',
 		));
 		self::assertSame(1702, $savedB->fileId);
 
-		// 4. Query File A using node fileId (1701) -> returns ONLY Annotation A
+		// 4. Query File A using fileId (1701) -> returns ONLY Annotation A
 		$resNodeA = $this->service->getAnnotationsForSong($songId, 1701);
 		self::assertCount(1, $resNodeA);
 		self::assertSame('ann-for-file-a', $resNodeA[0]->uuid);
 
-		// 5. Query File A using song_files.id ($fileAId) -> resolves to 1701 and returns ONLY Annotation A
-		$resSongFileA = $this->service->getAnnotationsForSong($songId, $fileAId);
-		self::assertCount(1, $resSongFileA);
-		self::assertSame('ann-for-file-a', $resSongFileA[0]->uuid);
-
-		// 6. Query File B using node fileId (1702) -> returns ONLY Annotation B
+		// 5. Query File B using fileId (1702) -> returns ONLY Annotation B
 		$resNodeB = $this->service->getAnnotationsForSong($songId, 1702);
 		self::assertCount(1, $resNodeB);
 		self::assertSame('ann-for-file-b', $resNodeB[0]->uuid);
 
-		// 7. Query File B using song_files.id ($fileBId) -> resolves to 1702 and returns ONLY Annotation B
-		$resSongFileB = $this->service->getAnnotationsForSong($songId, $fileBId);
-		self::assertCount(1, $resSongFileB);
-		self::assertSame('ann-for-file-b', $resSongFileB[0]->uuid);
-
-		// 8. Query without fileId (song-level) -> returns BOTH annotations
+		// 6. Query without fileId (song-level) -> returns BOTH annotations
 		$resAll = $this->service->getAnnotationsForSong($songId);
 		self::assertCount(2, $resAll);
 
-		// 9. Query with unknown fileId -> returns empty (maintains strict file isolation)
+		// 7. Query with unknown fileId -> returns empty (maintains strict file isolation)
 		$resUnknown = $this->service->getAnnotationsForSong($songId, 99999);
 		self::assertEmpty($resUnknown);
-	}
-
-	public function testUnassociatedSongAnnotationsFallback(): void {
-		$songId = (int)$this->song->id;
-
-		// Save a song-level unassociated annotation (file_id = 0)
-		$this->annotationMapper->save(new InternalSongAnnotation(
-			id: null,
-			uuid: 'ann-global-song',
-			songId: $songId,
-			fileId: 0,
-			pageNumber: 0,
-			layerIndex: 0,
-			type: 'text',
-		));
-
-		// When querying with a fileId that has no file-specific annotations, returns the global annotation
-		$byFile = $this->service->getAnnotationsForSong($songId, 12345);
-		self::assertCount(1, $byFile);
-		self::assertSame('ann-global-song', $byFile[0]->uuid);
 	}
 }

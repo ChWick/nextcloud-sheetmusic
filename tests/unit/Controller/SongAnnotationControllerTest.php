@@ -14,6 +14,7 @@ use OCA\SheetMusic\Db\InternalAnnotationSyncMapper;
 use OCA\SheetMusic\Db\InternalSong;
 use OCA\SheetMusic\Db\InternalSongAnnotation;
 use OCA\SheetMusic\Db\InternalSongFile;
+use OCA\SheetMusic\Service\SetlistService;
 use OCA\SheetMusic\Service\SongAnnotationService;
 use OCP\AppFramework\Http;
 use OCP\IUser;
@@ -104,9 +105,9 @@ final class SongAnnotationControllerTest extends TestCase {
 		self::assertSame(Http::STATUS_OK, $resEmpty->getStatus());
 		self::assertEmpty($resEmpty->getData());
 
-		// 2. Save annotation passing song_files.id ($songFileId)
+		// 2. Save annotation passing canonical fileId ($nodeFileId)
 		$this->request->setParam('uuid', 'web-ann-uuid-1');
-		$this->request->setParam('fileId', $songFileId);
+		$this->request->setParam('fileId', $nodeFileId);
 		$this->request->setParam('pageNumber', 1);
 		$this->request->setParam('layerIndex', 0);
 		$this->request->setParam('type', 'drawing');
@@ -133,13 +134,7 @@ final class SongAnnotationControllerTest extends TestCase {
 		self::assertCount(1, $resByNode->getData());
 		self::assertSame('web-ann-uuid-1', $resByNode->getData()[0]->uuid);
 
-		// 4. Query via song_files.id
-		$resBySongFile = $this->controller->getAnnotations($songId, $songFileId);
-		self::assertSame(Http::STATUS_OK, $resBySongFile->getStatus());
-		self::assertCount(1, $resBySongFile->getData());
-		self::assertSame('web-ann-uuid-1', $resBySongFile->getData()[0]->uuid);
-
-		// 5. Query without fileId
+		// 4. Query without fileId
 		$resAll = $this->controller->getAnnotations($songId);
 		self::assertSame(Http::STATUS_OK, $resAll->getStatus());
 		self::assertCount(1, $resAll->getData());
@@ -152,5 +147,61 @@ final class SongAnnotationControllerTest extends TestCase {
 		// 7. Verify deletion
 		$resAfterDel = $this->controller->getAnnotations($songId, $nodeFileId);
 		self::assertEmpty($resAfterDel->getData());
+	}
+
+	public function testSetlistFileAnnotationLifecycle(): void {
+		$ocFileId = 98765;
+		$setlistService = $this->createMock(SetlistService::class);
+		$setlistService->method('resolveSetlistFileOcId')
+			->willReturnCallback(static fn (IUser $user, int $libId, int $setlistId, int $fileId, bool $requireWrite) => ($libId === 1 && $setlistId === 10 && $fileId === 5) ? $ocFileId : null);
+
+		$annotationService = new SongAnnotationService(
+			$this->annotationMapper,
+			new InternalAnnotationSyncMapper($this->dbConn),
+			songFileMapper: $this->songFileMapper,
+		);
+		$controller = new SongAnnotationController(
+			'sheetmusic',
+			$this->request,
+			$annotationService,
+			$this->userSession,
+			$setlistService,
+		);
+
+		$resEmpty = $controller->getSetlistFileAnnotations(1, 10, 5);
+		self::assertSame(Http::STATUS_OK, $resEmpty->getStatus());
+		self::assertEmpty($resEmpty->getData());
+
+		$this->request->setParam('uuid', 'setlist-ann-1');
+		$this->request->setParam('pageNumber', 0);
+		$this->request->setParam('layerIndex', 0);
+		$this->request->setParam('type', 'drawing');
+		$this->request->setParam('x', 0.1);
+		$this->request->setParam('y', 0.2);
+		$this->request->setParam('width', 0.3);
+		$this->request->setParam('height', 0.4);
+		$this->request->setParam('style', ['color' => '#e53935']);
+		$this->request->setParam('data', ['points' => [[0.1, 0.2], [0.4, 0.6]]]);
+
+		$resSave = $controller->saveSetlistFileAnnotation(1, 10, 5);
+		self::assertSame(Http::STATUS_OK, $resSave->getStatus());
+		/** @var InternalSongAnnotation $saved */
+		$saved = $resSave->getData();
+		self::assertSame(0, $saved->songId);
+		self::assertSame($ocFileId, $saved->fileId);
+
+		$resList = $controller->getSetlistFileAnnotations(1, 10, 5);
+		self::assertSame(Http::STATUS_OK, $resList->getStatus());
+		self::assertCount(1, $resList->getData());
+		self::assertSame('setlist-ann-1', $resList->getData()[0]->uuid);
+
+		$this->request->setParam('upsert', []);
+		$this->request->setParam('deleteIds', [$saved->id]);
+		$resBatch = $controller->batchSetlistFileAnnotations(1, 10, 5);
+		self::assertSame(Http::STATUS_OK, $resBatch->getStatus());
+		self::assertSame([$saved->id], $resBatch->getData()['deletedIds']);
+
+		$resAfter = $controller->getSetlistFileAnnotations(1, 10, 5);
+		self::assertEmpty($resAfter->getData());
 	}
 }

@@ -102,4 +102,32 @@ final class InternalSongAnnotationMapperTest extends TestCase {
 		self::assertCount(1, $deletedList);
 		self::assertNotNull($deletedList[0]->deletedAt);
 	}
+
+	public function testFindForFileWithoutSongId(): void {
+		$ann = new InternalSongAnnotation(
+			id: null,
+			uuid: 'setlist-file-ann-1',
+			songId: 0,
+			fileId: 7788,
+			pageNumber: 0,
+			layerIndex: 0,
+			type: 'drawing',
+			x: 0.1,
+			y: 0.2,
+			width: 0.3,
+			height: 0.4,
+			style: ['color' => '#e53935'],
+			data: ['points' => [[0.1, 0.2], [0.4, 0.6]]],
+		);
+		$saved = $this->annotationMapper->save($ann);
+
+		$found = $this->annotationMapper->findForFile(7788);
+		self::assertCount(1, $found);
+		self::assertSame('setlist-file-ann-1', $found[0]->uuid);
+		self::assertSame(0, $found[0]->songId);
+
+		$this->annotationMapper->delete((int)$saved->id, soft: true);
+		self::assertEmpty($this->annotationMapper->findForFile(7788, includeDeleted: false));
+		self::assertCount(1, $this->annotationMapper->findForFile(7788, includeDeleted: true));
+	}
 }

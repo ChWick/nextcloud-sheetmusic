@@ -41,64 +41,26 @@ class SongAnnotationService {
 	 */
 	public function getAnnotationsForSong(int $songId, ?int $fileId = null, bool $includeDeleted = false): array {
 		if ($fileId !== null && $fileId > 0) {
-			$annotations = $this->annotationMapper->findForSongFile($songId, $fileId, $includeDeleted);
-			if (!empty($annotations)) {
-				return $annotations;
-			}
-			if ($this->songFileMapper !== null) {
-				$sf = $this->songFileMapper->findById($fileId);
-				if ($sf !== null && $sf->fileId > 0 && (int)$sf->fileId !== $fileId) {
-					$resolved = $this->annotationMapper->findForSongFile($songId, (int)$sf->fileId, $includeDeleted);
-					if (!empty($resolved)) {
-						return $resolved;
-					}
-				}
-
-				$songFiles = $this->songFileMapper->findAllForSong($songId);
-				foreach ($songFiles as $file) {
-					if ((int)$file->fileId === $fileId && $file->id !== null && (int)$file->id !== $fileId) {
-						$resolved = $this->annotationMapper->findForSongFile($songId, (int)$file->id, $includeDeleted);
-						if (!empty($resolved)) {
-							return $resolved;
-						}
-					}
-				}
-			}
-
-			$zeroAnns = $this->annotationMapper->findForSongFile($songId, 0, $includeDeleted);
-			if (!empty($zeroAnns)) {
-				return $zeroAnns;
-			}
-
-			// Resilient fallback: if the song only has one active file, or all existing annotations
-			// belong to a single old/unmigrated file_id, return them and heal their fileId.
-			$allSongAnns = $this->annotationMapper->findForSong($songId, $includeDeleted);
-			if (!empty($allSongAnns)) {
-				$distinctOldFileIds = array_values(array_unique(array_map(fn ($a) => (int)$a->fileId, $allSongAnns)));
-				$activeFiles = $this->songFileMapper?->findAllForSong($songId) ?? [];
-				if (count($activeFiles) <= 1 || count($distinctOldFileIds) === 1) {
-					foreach ($allSongAnns as $ann) {
-						if ($ann->fileId !== $fileId) {
-							$ann->fileId = $fileId;
-							$this->annotationMapper->save($ann);
-						}
-					}
-					return $allSongAnns;
-				}
-			}
-
-			return [];
+			return $this->annotationMapper->findForSongFile($songId, $fileId, $includeDeleted);
 		}
 		return $this->annotationMapper->findForSong($songId, $includeDeleted);
 	}
 
-	public function saveAnnotation(InternalSongAnnotation $annotation): InternalSongAnnotation {
-		if ($annotation->fileId > 0 && $this->songFileMapper !== null) {
-			$sf = $this->songFileMapper->findById($annotation->fileId);
-			if ($sf !== null && $sf->fileId > 0) {
-				$annotation->fileId = (int)$sf->fileId;
-			}
+	/**
+	 * @return list<InternalSongAnnotation>
+	 */
+	public function getAnnotationsForFile(int $fileId, bool $includeDeleted = false): array {
+		if ($fileId <= 0) {
+			return [];
 		}
+		return $this->annotationMapper->findForFile($fileId, $includeDeleted);
+	}
+
+	public function findAnnotationById(int $id): ?InternalSongAnnotation {
+		return $this->annotationMapper->findById($id);
+	}
+
+	public function saveAnnotation(InternalSongAnnotation $annotation): InternalSongAnnotation {
 		return $this->annotationMapper->save($annotation);
 	}
 

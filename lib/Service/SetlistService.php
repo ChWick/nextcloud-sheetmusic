@@ -672,6 +672,58 @@ class SetlistService {
 		return $this->loadSetlistFileContent($libraryId, $setlistId, $fileId);
 	}
 
+	public function resolveSetlistFileOcId(
+		IUser $user,
+		int $libraryId,
+		int $setlistId,
+		int $fileId,
+		bool $requireWrite = false,
+	): ?int {
+		$library = $requireWrite
+			? $this->findUserWritableLibrary($user, $libraryId)
+			: $this->findUserLibrary($user, $libraryId);
+		if ($library === null) {
+			return null;
+		}
+		return $this->resolveSetlistFileOcIdInternal($libraryId, $setlistId, $fileId);
+	}
+
+	public function resolveSetlistFileOcIdForPublicToken(int $libraryId, int $setlistId, int $fileId): ?int {
+		return $this->resolveSetlistFileOcIdInternal($libraryId, $setlistId, $fileId);
+	}
+
+	private function resolveSetlistFileOcIdInternal(int $libraryId, int $setlistId, int $fileId): ?int {
+		if ($this->internalSetlistFileMapper === null) {
+			return null;
+		}
+		if ($this->findActiveSetlist($libraryId, $setlistId) === null) {
+			return null;
+		}
+
+		$fileRecord = $this->internalSetlistFileMapper->findById($fileId);
+		if ($fileRecord === null || $fileRecord->setlistId !== $setlistId) {
+			return null;
+		}
+
+		if ($fileRecord->ocFileId > 0) {
+			return $fileRecord->ocFileId;
+		}
+
+		$targetLibraryId = $this->resolveTargetLibraryId($libraryId);
+		$targetLibrary = $this->libraryMapper->findById($targetLibraryId);
+		if ($targetLibrary === null) {
+			return null;
+		}
+
+		$node = $this->resolveSetlistFileNode($targetLibrary, $fileRecord);
+		if ($node === null) {
+			return null;
+		}
+
+		$ocFileId = (int)$node->getId();
+		return $ocFileId > 0 ? $ocFileId : null;
+	}
+
 	public function deleteSetlistFile(IUser $user, int $libraryId, int $setlistId, int $fileId): bool {
 		if ($this->internalSetlistFileMapper === null) {
 			return false;
