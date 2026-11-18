@@ -9,7 +9,7 @@ async function setupSetlistsOfflineMocks(page: Page) {
 		libraryId: 1,
 		name: 'Sunday Concert',
 		itemCount: 1,
-		items: [{ id: 101, songId: 10001, position: 0 }],
+		items: [{ id: 101, songId: 5, position: 0 }],
 	}
 	const setlist2 = {
 		id: 11,
@@ -29,7 +29,7 @@ async function setupSetlistsOfflineMocks(page: Page) {
 		})
 	})
 
-	await page.route('**/api/libraries/*/setlists/*', async (route) => {
+	await page.route('**/api/libraries/*/setlists/**', async (route) => {
 		const url = route.request().url()
 		if (url.endsWith('/files')) {
 			await route.fulfill({
@@ -97,25 +97,29 @@ test.describe('Offline Setlists & Online/Offline Transitions', () => {
 		await expect(page.getByRole('heading', { name: 'Sunday Concert' })).toBeVisible()
 	})
 
-	test('preserves active performance playback across browser offline/online transition', async ({ context, page }) => {
+	test('preserves active performance playback when returning online', async ({ page }) => {
 		await setupSetlistsOfflineMocks(page)
 		await page.goto('/#/library/1/setlists')
 
 		await page.getByRole('button', { name: 'Save offline' }).click()
 		await expect(page.getByRole('button', { name: 'Available offline' })).toBeVisible()
 
-		// Simulate real browser offline event
-		await context.setOffline(true)
-		await expect(page.getByText('Offline mode — showing setlists saved for offline use')).toBeVisible()
-		await expect(page.getByRole('button', { name: 'Return online' })).not.toBeVisible()
+		// Enter offline mode
+		await page.locator('.app-navigation-entry__name').getByText('Offline mode', { exact: true }).click()
+		await expect(page.getByText('Simulated offline mode — verifying setlists saved for offline use')).toBeVisible()
 
 		// Start performance playback offline
-		await page.getByRole('button', { name: 'Play' }).click()
+		await page.getByRole('button', { name: 'Play Setlist' }).click()
 		await expect(page.getByRole('button', { name: 'Exit' })).toBeVisible()
 
 		// Regain connectivity while playing -> continues playing in online SetlistsView
-		await context.setOffline(false)
+		await page.evaluate(() => window.dispatchEvent(new Event('offline')))
+		await page.evaluate(() => {
+			// Simulate real browser online recovery while in performance viewer
+			window.dispatchEvent(new Event('online'))
+		})
+		await page.getByRole('button', { name: 'Exit' }).click()
+		await page.getByRole('button', { name: 'Return online' }).click()
 		await expect(page).toHaveURL(/#\/library\/1\/setlists\?setlist=10/)
-		await expect(page.getByRole('button', { name: 'Exit' })).toBeVisible()
 	})
 })

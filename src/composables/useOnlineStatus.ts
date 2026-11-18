@@ -1,4 +1,4 @@
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 
 export interface OfflineReturnState {
 	libraryId: number
@@ -10,14 +10,14 @@ export interface OfflineReturnState {
 const isBrowserOnline = ref(typeof navigator !== 'undefined' ? navigator.onLine : true)
 const isSimulatedOffline = ref(false)
 const offlineReturnState = ref<OfflineReturnState | null>(null)
-let listenerCount = 0
 
-function handleOnline() {
-	isBrowserOnline.value = true
-}
-
-function handleOffline() {
-	isBrowserOnline.value = false
+if (typeof window !== 'undefined') {
+	window.addEventListener('online', () => {
+		isBrowserOnline.value = true
+	})
+	window.addEventListener('offline', () => {
+		isBrowserOnline.value = false
+	})
 }
 
 /**
@@ -58,24 +58,6 @@ export function consumeOfflineReturnState(): OfflineReturnState | null {
  */
 export function useOnlineStatus() {
 	const isOnline = computed(() => isBrowserOnline.value && !isSimulatedOffline.value)
-
-	onMounted(() => {
-		if (typeof window === 'undefined') return
-		if (listenerCount === 0) {
-			window.addEventListener('online', handleOnline)
-			window.addEventListener('offline', handleOffline)
-		}
-		listenerCount += 1
-	})
-
-	onUnmounted(() => {
-		if (typeof window === 'undefined') return
-		listenerCount = Math.max(0, listenerCount - 1)
-		if (listenerCount === 0) {
-			window.removeEventListener('online', handleOnline)
-			window.removeEventListener('offline', handleOffline)
-		}
-	})
 
 	return {
 		isOnline,
