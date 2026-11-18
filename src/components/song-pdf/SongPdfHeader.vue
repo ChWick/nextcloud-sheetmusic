@@ -488,11 +488,13 @@ button.tabButton {
 	justify-content: center;
 	gap: 6px;
 	padding: 8px 12px;
+	box-sizing: border-box;
 	border: 1px solid transparent;
 	border-bottom: none;
 	background-color: transparent;
 	border-radius: var(--border-radius-large, 8px) var(--border-radius-large, 8px) 0 0;
-	margin-bottom: -1px;
+	/* stylelint-disable-next-line declaration-no-important -- override Nextcloud global button margin */
+	margin: 0 0 -1px !important;
 	cursor: pointer;
 	font-size: 13px;
 	font-weight: 500;
@@ -514,7 +516,7 @@ button.tabButtonActive:hover:not(:disabled) {
 	border-color: var(--color-border);
 	border-bottom: 1px solid var(--color-main-background);
 	box-shadow: none;
-	z-index: 1;
+	z-index: 2;
 }
 
 .tabLabel {
