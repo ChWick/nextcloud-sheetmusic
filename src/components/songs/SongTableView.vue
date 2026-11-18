@@ -14,6 +14,7 @@ import {
 	ENTITY_COLUMNS,
 	EXTRA_TEXT_COLUMNS,
 	IDENTIFIER_TEXT_COLUMNS,
+	isColumnVisible,
 	parseDurationInput,
 	STAR_SELECT_OPTIONS,
 	TABLE_COLUMNS,
@@ -76,8 +77,7 @@ const emit = defineEmits<{
 }>()
 
 function isColVisible(col: SongColumn): boolean {
-	if (!props.visibleColumns) return true
-	return props.visibleColumns.includes(col)
+	return isColumnVisible(props.visibleColumns, col)
 }
 
 const localSortKey = ref<SortKey>(props.sortKey)

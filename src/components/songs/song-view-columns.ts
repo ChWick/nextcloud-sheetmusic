@@ -665,3 +665,8 @@ export function toggleVisibleColumn(
 	}
 	return columnOptions.map((c) => c.key).filter((k) => current.has(k))
 }
+
+/** Whether a song column should be shown given the current visible-columns filter. */
+export function isColumnVisible(visibleColumns: SongColumn[] | undefined, col: SongColumn): boolean {
+	return !visibleColumns || visibleColumns.includes(col)
+}
