@@ -721,10 +721,19 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 			return placeholder
 		})
 
-		// Render the first page off-DOM so the stage has real dimensions and no flicker on swap
-		if (pagesToRender.length > 0 && placeholders[0]) {
-			await renderPage(pagesToRender[0].pageNum, placeholders[0])
-		}
+		// Render the first page and pages around currentPage off-DOM so visible pages have
+		// real dimensions before the atomic DOM swap (avoiding placeholder->canvas flicker).
+		const preRenderIndices = new Set<number>([0])
+		pagesToRender.forEach((item, idx) => {
+			if (Math.abs(item.index - currentPage.value) <= 1) {
+				preRenderIndices.add(idx)
+			}
+		})
+		await Promise.all(
+			Array.from(preRenderIndices)
+				.filter((idx) => placeholders[idx] && pagesToRender[idx])
+				.map((idx) => renderPage(pagesToRender[idx].pageNum, placeholders[idx])),
+		)
 		if (renderId !== currentRenderId || !pdfContainer.value || !pdfStage.value) {
 			return
 		}
