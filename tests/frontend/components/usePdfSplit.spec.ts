@@ -105,4 +105,13 @@ describe('usePdfSplit.ts', () => {
 		const summariesP3 = split.getPageSegmentsSummary(3)
 		expect(summariesP3).toHaveLength(0)
 	})
+
+	it('selects a contiguous range when shiftKey is true', () => {
+		const { split } = setupTest(8)
+		split.initSplitSegments(8, 'Sonata in C')
+
+		split.togglePageSelection(2)
+		split.togglePageSelection(5, true)
+		expect(split.selectedPages.value).toEqual([2, 3, 4, 5])
+	})
 })

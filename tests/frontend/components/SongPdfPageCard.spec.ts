@@ -177,5 +177,29 @@ describe('SongPdfPageCard.vue', () => {
 		expect(wrapper.text()).toContain('270°')
 		expect(getActionLabels()).toEqual(initialLabels)
 	})
+
+	it('emits card-range-select on shift+click, zoom-page on zoom button, and renders crop preview frame', async () => {
+		const wrapper = mount(SongPdfPageCard, {
+			props: {
+				...defaultProps,
+				activeMode: 'split',
+				isCropped: true,
+				pageCrop: { x: 0.1, y: 0.1, width: 0.8, height: 0.8 },
+			},
+		})
+
+		await wrapper.trigger('click', { shiftKey: true })
+		expect(wrapper.emitted('card-range-select')?.[0]).toEqual([1])
+		expect(wrapper.emitted('card-click')).toBeFalsy()
+
+		const zoomBtn = wrapper.find('[data-test="card-zoom-btn"]')
+		expect(zoomBtn.exists()).toBe(true)
+		await zoomBtn.trigger('click')
+		expect(wrapper.emitted('zoom-page')?.[0]).toEqual([1])
+
+		const cropFrame = wrapper.find('[aria-hidden="true"]')
+		expect(cropFrame.exists()).toBe(true)
+		expect(cropFrame.attributes('style')).toContain('width: 80%')
+	})
 })
 

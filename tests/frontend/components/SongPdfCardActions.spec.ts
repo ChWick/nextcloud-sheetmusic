@@ -93,4 +93,15 @@ describe('SongPdfCardActions.vue', () => {
 		await wrapper.setProps({ isSelected: false })
 		expect(wrapper.find('span').exists()).toBe(true)
 	})
+
+	it('emits rotate-page with 180 when Flip page 180° is clicked', async () => {
+		const wrapper = mount(SongPdfCardActions, {
+			props: defaultProps,
+		})
+
+		const flipBtn = wrapper.findAll('button').find((b) => b.attributes('aria-label') === 'Flip page 180°')
+		expect(flipBtn).toBeDefined()
+		await flipBtn?.trigger('click')
+		expect(wrapper.emitted('rotate-page')?.[0]).toEqual([180])
+	})
 })
