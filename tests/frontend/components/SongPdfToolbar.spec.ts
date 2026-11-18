@@ -169,5 +169,48 @@ describe('SongPdfToolbar.vue', () => {
 			expect(btn.find('svg').exists()).toBe(true)
 		}
 	})
+
+	it('emits rotate-all with 180 when Flip All 180° is clicked', async () => {
+		const wrapper = mount(SongPdfToolbar, {
+			props: defaultProps,
+		})
+
+		const flipBtn = wrapper.findAll('button').find((b) => b.text().includes('Flip All 180°'))
+		expect(flipBtn).toBeDefined()
+		await flipBtn?.trigger('click')
+		expect(wrapper.emitted('rotate-all')?.[0]).toEqual([180])
+	})
+
+	it('emits select-all-pages, discard-all-edits, and update:thumbnailSize', async () => {
+		const splitWrapper = mount(SongPdfToolbar, {
+			props: {
+				...defaultProps,
+				activeMode: 'split',
+				selectedPagesCount: 1,
+			},
+		})
+		const selectAllBtn = splitWrapper.findAll('button').find((b) => b.text().includes('Select All'))
+		await selectAllBtn?.trigger('click')
+		expect(splitWrapper.emitted('select-all-pages')).toBeTruthy()
+
+		const editWrapper = mount(SongPdfToolbar, {
+			props: {
+				...defaultProps,
+				hasAnyChange: true,
+				thumbnailSize: 'medium',
+			},
+		})
+		const discardBtn = editWrapper.findAll('button').find((b) => b.text().includes('Discard All'))
+		await discardBtn?.trigger('click')
+		expect(editWrapper.emitted('discard-all-edits')).toBeTruthy()
+
+		const smallerBtn = editWrapper.findAll('button').find((b) => b.attributes('aria-label') === 'Smaller thumbnails')
+		await smallerBtn?.trigger('click')
+		expect(editWrapper.emitted('update:thumbnailSize')?.[0]).toEqual(['small'])
+
+		const largerBtn = editWrapper.findAll('button').find((b) => b.attributes('aria-label') === 'Larger thumbnails')
+		await largerBtn?.trigger('click')
+		expect(editWrapper.emitted('update:thumbnailSize')?.[1]).toEqual(['large'])
+	})
 })
 

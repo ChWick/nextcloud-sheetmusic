@@ -233,5 +233,21 @@ describe('SongPdfHeader.vue', () => {
 
 		expect(wrapper.emitted('open-join-modal')).toBeTruthy()
 	})
+
+	it('renders pending-change dirty dot and segment/bookmark count badges on tabs', () => {
+		const wrapper = mount(SongPdfHeader, {
+			props: {
+				...defaultProps,
+				hasAnyRotation: true,
+				splitSegmentsCount: 3,
+				bookmarksCount: 2,
+			},
+		})
+
+		expect(wrapper.findAll('[aria-label="Has unsaved changes"]').length).toBe(1)
+		const navText = wrapper.find('nav').text()
+		expect(navText).toContain('3')
+		expect(navText).toContain('2')
+	})
 })
 
