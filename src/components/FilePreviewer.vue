@@ -688,12 +688,18 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 		}
 	}
 
+	function swapStageContent(children: HTMLElement[]) {
+		if (!pdfStage.value) return
+		cleanupObserver()
+		unmountAnnotationOverlays()
+		onBeforeSwap?.()
+		pdfStage.value.style.gap = nextStageGap
+		pdfStage.value.replaceChildren(...children)
+	}
+
 	if (pageLayout.value === 'continuous') {
 		if (typeof IntersectionObserver === 'undefined') {
-			cleanupObserver()
-			unmountAnnotationOverlays()
-			onBeforeSwap?.()
-			pdfStage.value.replaceChildren()
+			swapStageContent([])
 			for (const item of pagesToRender) {
 				const placeholder = document.createElement('div')
 				placeholder.className = 'sheetmusic-page-placeholder'
@@ -738,11 +744,7 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 			return
 		}
 
-		cleanupObserver()
-		unmountAnnotationOverlays()
-		onBeforeSwap?.()
-		pdfStage.value.style.gap = nextStageGap
-		pdfStage.value.replaceChildren(...placeholders)
+		swapStageContent(placeholders)
 
 		intersectionObserver = new IntersectionObserver(
 			(entries) => {
@@ -779,11 +781,7 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 		if (renderId !== currentRenderId || !pdfContainer.value || !pdfStage.value) {
 			return
 		}
-		cleanupObserver()
-		unmountAnnotationOverlays()
-		onBeforeSwap?.()
-		pdfStage.value.style.gap = nextStageGap
-		pdfStage.value.replaceChildren(...newPlaceholders)
+		swapStageContent(newPlaceholders)
 	}
 }
 
