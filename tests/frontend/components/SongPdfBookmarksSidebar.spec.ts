@@ -103,4 +103,20 @@ describe('SongPdfBookmarksSidebar.vue', () => {
 
 		expect(wrapper.text()).toContain('Table of Contents will also be stored in the PDF')
 	})
+
+	it('toggles aria-expanded on the mobile collapse button', async () => {
+		const wrapper = mount(SongPdfBookmarksSidebar, {
+			props: {
+				bookmarks: [],
+				totalPages: 4,
+			},
+		})
+
+		const toggleBtn = wrapper.find('button[aria-expanded]')
+		expect(toggleBtn.exists()).toBe(true)
+		expect(toggleBtn.attributes('aria-expanded')).toBe('true')
+
+		await toggleBtn.trigger('click')
+		expect(toggleBtn.attributes('aria-expanded')).toBe('false')
+	})
 })

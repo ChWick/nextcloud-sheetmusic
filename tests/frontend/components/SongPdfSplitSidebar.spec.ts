@@ -110,5 +110,18 @@ describe('SongPdfSplitSidebar.vue', () => {
 
 		expect(listEl.element.scrollTop).toBe(1800)
 	})
+
+	it('toggles aria-expanded on the mobile collapse button', async () => {
+		const wrapper = mount(SongPdfSplitSidebar, {
+			props: defaultProps,
+		})
+
+		const toggleBtn = wrapper.find('button[aria-expanded]')
+		expect(toggleBtn.exists()).toBe(true)
+		expect(toggleBtn.attributes('aria-expanded')).toBe('true')
+
+		await toggleBtn.trigger('click')
+		expect(toggleBtn.attributes('aria-expanded')).toBe('false')
+	})
 })
 
