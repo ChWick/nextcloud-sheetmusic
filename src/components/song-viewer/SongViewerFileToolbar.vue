@@ -2,7 +2,7 @@
 import type { SongFile } from '../../types/song'
 import type { PdfPageResolutionSummary } from '../song-pdf/pdf-enhance-engine'
 
-import { computed, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
@@ -58,6 +58,22 @@ const emit = defineEmits<{
 }>()
 
 const showInfoDropdown = ref(false)
+const infoPopoverRef = ref<HTMLElement | null>(null)
+
+function handleDocumentClick(event: MouseEvent) {
+	if (!showInfoDropdown.value || !infoPopoverRef.value) return
+	if (!infoPopoverRef.value.contains(event.target as Node)) {
+		showInfoDropdown.value = false
+	}
+}
+
+onMounted(() => {
+	document.addEventListener('click', handleDocumentClick)
+})
+
+onUnmounted(() => {
+	document.removeEventListener('click', handleDocumentClick)
+})
 
 const effectiveSizeBytes = computed(() => props.fileSizeBytes ?? props.file?.fileSize ?? null)
 const formattedFileSize = computed(() => formatByteSize(effectiveSizeBytes.value))
@@ -108,6 +124,7 @@ const activePageResolution = computed<PdfPageResolutionSummary | null>(() => {
 
 			<div
 				v-if="isPdf && (formattedFileSize !== '—' || activePageResolution)"
+				ref="infoPopoverRef"
 				:class="$style.infoPopoverWrap">
 				<button
 					type="button"
