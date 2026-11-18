@@ -1350,5 +1350,79 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 
 		expect(wrapper.text()).toContain('Edit Page Order')
 	})
+
+	it('opens Page Zoom lightbox modal when card zoom button is clicked', async () => {
+		const wrapper = mount(SongPdfModifier, {
+			props: {
+				song: mockSong,
+				libraryId: 1,
+			},
+		})
+
+		await flushPromises()
+
+		const zoomBtn = wrapper.find('[data-test="card-zoom-btn"]')
+		expect(zoomBtn.exists()).toBe(true)
+		await zoomBtn.trigger('click')
+		await flushPromises()
+
+		expect(wrapper.find('[data-test="zoom-modal-content"]').exists()).toBe(true)
+	})
+
+	it('supports keyboard shortcuts for mode switching and Escape to clear selection', async () => {
+		const wrapper = mount(SongPdfModifier, {
+			props: {
+				song: mockSong,
+				libraryId: 1,
+			},
+		})
+
+		await flushPromises()
+
+		window.dispatchEvent(new KeyboardEvent('keydown', { key: '4' }))
+		await flushPromises()
+		expect(wrapper.find('[data-test="split-sidebar"]').exists()).toBe(true)
+
+		// Select page 1 in split mode, then press Escape to clear selection
+		const firstCard = wrapper.findAll('[data-page-num="1"]')[0]
+		expect(firstCard.exists()).toBe(true)
+		await firstCard.trigger('click')
+		expect(wrapper.text()).toContain('1 pages selected')
+
+		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+		await flushPromises()
+		expect(wrapper.text()).not.toContain('1 pages selected')
+
+		wrapper.unmount()
+	})
+
+	it('confirms before discarding unsaved edits on Cancel', async () => {
+		const confirmMock = vi.fn().mockReturnValue(false)
+		vi.stubGlobal('confirm', confirmMock)
+		try {
+			const wrapper = mount(SongPdfModifier, {
+				props: {
+					song: mockSong,
+					libraryId: 1,
+				},
+			})
+
+			await flushPromises()
+
+			const rotateAllCw = wrapper.findAll('button').find((b) => b.text().includes('Rotate All 90° CW'))
+			await rotateAllCw?.trigger('click')
+
+			const cancelBtn = wrapper.findAll('button').find((b) => b.text().includes('Cancel'))
+			await cancelBtn?.trigger('click')
+			expect(confirmMock).toHaveBeenCalledTimes(1)
+			expect(wrapper.emitted('cancel')).toBeFalsy()
+
+			confirmMock.mockReturnValue(true)
+			await cancelBtn?.trigger('click')
+			expect(wrapper.emitted('cancel')).toBeTruthy()
+		} finally {
+			vi.unstubAllGlobals()
+		}
+	})
 })
 
