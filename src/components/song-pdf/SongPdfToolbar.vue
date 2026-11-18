@@ -112,11 +112,6 @@ function stepThumbnailSize(direction: -1 | 1) {
 					</template>
 					<span :class="$style.btnText">{{ t('sheetmusic', 'Rotate by Angle…') }}</span>
 				</NcButton>
-			</div>
-
-			<div :class="$style.toolbarDivider" />
-
-			<div :class="[$style.toolbarGroup, $style.toolbarGroupEnd]">
 				<NcButton
 					size="small"
 					variant="tertiary"
@@ -128,18 +123,6 @@ function stepThumbnailSize(direction: -1 | 1) {
 						<RestoreIcon :size="16" />
 					</template>
 					<span :class="$style.btnText">{{ t('sheetmusic', 'Reset All') }}</span>
-				</NcButton>
-				<NcButton
-					v-if="hasAnyDeletion"
-					size="small"
-					variant="tertiary"
-					:title="t('sheetmusic', 'Restore all deleted pages')"
-					:aria-label="t('sheetmusic', 'Restore Deleted ({count})', { count: deletedPagesCount }, { escape: false })"
-					@click="emit('restore-all-pages')">
-					<template #icon>
-						<DeleteRestore :size="16" />
-					</template>
-					<span :class="$style.btnText">{{ t('sheetmusic', 'Restore Deleted ({count})', { count: deletedPagesCount }, { escape: false }) }}</span>
 				</NcButton>
 			</div>
 		</template>
@@ -161,11 +144,6 @@ function stepThumbnailSize(direction: -1 | 1) {
 					</template>
 					<span :class="$style.btnText">{{ t('sheetmusic', 'Crop All Pages…') }}</span>
 				</NcButton>
-			</div>
-
-			<div :class="$style.toolbarDivider" />
-
-			<div :class="[$style.toolbarGroup, $style.toolbarGroupEnd]">
 				<NcButton
 					size="small"
 					variant="tertiary"
@@ -177,18 +155,6 @@ function stepThumbnailSize(direction: -1 | 1) {
 						<RestoreIcon :size="16" />
 					</template>
 					<span :class="$style.btnText">{{ t('sheetmusic', 'Reset All Crops') }}</span>
-				</NcButton>
-				<NcButton
-					v-if="hasAnyDeletion"
-					size="small"
-					variant="tertiary"
-					:title="t('sheetmusic', 'Restore all deleted pages')"
-					:aria-label="t('sheetmusic', 'Restore Deleted ({count})', { count: deletedPagesCount }, { escape: false })"
-					@click="emit('restore-all-pages')">
-					<template #icon>
-						<DeleteRestore :size="16" />
-					</template>
-					<span :class="$style.btnText">{{ t('sheetmusic', 'Restore Deleted ({count})', { count: deletedPagesCount }, { escape: false }) }}</span>
 				</NcButton>
 			</div>
 		</template>
@@ -210,11 +176,6 @@ function stepThumbnailSize(direction: -1 | 1) {
 					</template>
 					<span :class="$style.btnText">{{ t('sheetmusic', 'Enhance All Pages…') }}</span>
 				</NcButton>
-			</div>
-
-			<div :class="$style.toolbarDivider" />
-
-			<div :class="[$style.toolbarGroup, $style.toolbarGroupEnd]">
 				<NcButton
 					size="small"
 					variant="tertiary"
@@ -227,23 +188,11 @@ function stepThumbnailSize(direction: -1 | 1) {
 					</template>
 					<span :class="$style.btnText">{{ t('sheetmusic', 'Reset All Enhancements') }}</span>
 				</NcButton>
-				<NcButton
-					v-if="hasAnyDeletion"
-					size="small"
-					variant="tertiary"
-					:title="t('sheetmusic', 'Restore all deleted pages')"
-					:aria-label="t('sheetmusic', 'Restore Deleted ({count})', { count: deletedPagesCount }, { escape: false })"
-					@click="emit('restore-all-pages')">
-					<template #icon>
-						<DeleteRestore :size="16" />
-					</template>
-					<span :class="$style.btnText">{{ t('sheetmusic', 'Restore Deleted ({count})', { count: deletedPagesCount }, { escape: false }) }}</span>
-				</NcButton>
 			</div>
 		</template>
 
-		<!-- Split Toolbar -->
-		<template v-else-if="activeMode === 'split'">
+		<!-- Split & Bookmarks Selection Toolbar -->
+		<template v-else-if="activeMode === 'split' || activeMode === 'bookmarks' || activeMode === 'movements'">
 			<div :class="$style.toolbarGroup">
 				<span :class="$style.toolbarTitle">
 					{{ t('sheetmusic', 'Click pages to select (Shift+Click for range):') }}
@@ -267,55 +216,33 @@ function stepThumbnailSize(direction: -1 | 1) {
 					v-if="selectedPagesCount > 0"
 					size="small"
 					variant="tertiary"
-					:title="t('sheetmusic', 'Clear selection')"
-					:aria-label="t('sheetmusic', 'Clear selection')"
+					:title="activeMode === 'split' ? t('sheetmusic', 'Clear selection') : t('sheetmusic', 'Clear Selection ({count})', { count: selectedPagesCount }, { escape: false })"
+					:aria-label="activeMode === 'split' ? t('sheetmusic', 'Clear selection') : t('sheetmusic', 'Clear Selection ({count})', { count: selectedPagesCount }, { escape: false })"
 					@click="emit('clear-selection')">
 					<template #icon>
 						<CloseIcon :size="16" />
 					</template>
-					<span :class="$style.btnText">{{ t('sheetmusic', 'Clear Selection') }}</span>
+					<span :class="$style.btnText">
+						{{ activeMode === 'split' ? t('sheetmusic', 'Clear Selection') : t('sheetmusic', 'Clear Selection ({count})', { count: selectedPagesCount }, { escape: false }) }}
+					</span>
 				</NcButton>
 			</div>
 		</template>
 
-		<!-- Bookmarks Toolbar -->
-		<template v-if="activeMode === 'bookmarks' || activeMode === 'movements'">
-			<div :class="$style.toolbarGroup">
-				<span :class="$style.toolbarTitle">
-					{{ t('sheetmusic', 'Click pages to select (Shift+Click for range):') }}
-				</span>
-				<span v-if="selectedPagesCount > 0" :class="$style.selectionBadge">
-					{{ t('sheetmusic', '{count} pages selected', { count: selectedPagesCount }, { escape: false }) }}
-				</span>
-				<NcButton
-					v-if="totalPages > 0 && selectedPagesCount < totalPages"
-					size="small"
-					variant="secondary"
-					:title="t('sheetmusic', 'Select all pages')"
-					:aria-label="t('sheetmusic', 'Select all pages')"
-					@click="emit('select-all-pages')">
-					<template #icon>
-						<CheckboxMultipleMarkedOutline :size="16" />
-					</template>
-					<span :class="$style.btnText">{{ t('sheetmusic', 'Select All') }}</span>
-				</NcButton>
-				<NcButton
-					v-if="selectedPagesCount > 0"
-					size="small"
-					variant="tertiary"
-					:title="t('sheetmusic', 'Clear Selection ({count})', { count: selectedPagesCount }, { escape: false })"
-					:aria-label="t('sheetmusic', 'Clear Selection ({count})', { count: selectedPagesCount }, { escape: false })"
-					@click="emit('clear-selection')">
-					<template #icon>
-						<CloseIcon :size="16" />
-					</template>
-					<span :class="$style.btnText">{{ t('sheetmusic', 'Clear Selection ({count})', { count: selectedPagesCount }, { escape: false }) }}</span>
-				</NcButton>
-			</div>
-		</template>
-
-		<!-- Right-aligned Global Controls: Discard All & Thumbnail Zoom -->
+		<!-- Right-aligned Global Controls: Restore Deleted, Discard All & Thumbnail Zoom -->
 		<div :class="$style.toolbarRightControls">
+			<NcButton
+				v-if="hasAnyDeletion && (activeMode === 'rotate' || activeMode === 'crop' || activeMode === 'enhance')"
+				size="small"
+				variant="tertiary"
+				:title="t('sheetmusic', 'Restore all deleted pages')"
+				:aria-label="t('sheetmusic', 'Restore Deleted ({count})', { count: deletedPagesCount }, { escape: false })"
+				@click="emit('restore-all-pages')">
+				<template #icon>
+					<DeleteRestore :size="16" />
+				</template>
+				<span :class="$style.btnText">{{ t('sheetmusic', 'Restore Deleted ({count})', { count: deletedPagesCount }, { escape: false }) }}</span>
+			</NcButton>
 			<NcButton
 				v-if="hasAnyChange && (activeMode === 'rotate' || activeMode === 'crop' || activeMode === 'enhance')"
 				size="small"
@@ -381,18 +308,6 @@ function stepThumbnailSize(direction: -1 | 1) {
 	flex-wrap: wrap;
 }
 
-.toolbarGroupEnd {
-	margin-left: auto;
-}
-
-.toolbarDivider {
-	width: 1px;
-	height: 20px;
-	background-color: var(--color-border);
-	margin: 0 4px;
-	flex-shrink: 0;
-}
-
 .toolbarTitle {
 	font-size: 13px;
 	font-weight: 500;
@@ -433,48 +348,11 @@ function stepThumbnailSize(direction: -1 | 1) {
 	gap: 2px;
 }
 
-.zoomBtn {
-	border: none;
-	background: transparent;
-	color: var(--color-text-maxcontrast);
-	font-size: 11px;
-	font-weight: 600;
-	padding: 3px 7px;
-	min-width: 24px;
-	min-height: 24px;
-	border-radius: 4px;
-	cursor: pointer;
-	transition: all 0.15s ease;
-}
-
-.zoomBtn:hover {
-	color: var(--color-main-text);
-	background-color: var(--color-background-hover);
-}
-
-.zoomBtnActive {
-	background-color: var(--color-primary-element);
-	color: var(--color-primary-element-text, #fff);
-}
-
-.zoomBtnActive:hover {
-	background-color: var(--color-primary-element);
-	color: var(--color-primary-element-text, #fff);
-}
-
 /* Tablet & Mobile responsive styles */
 @media (max-width: 900px) {
 	.toolbar {
 		padding: 6px 12px;
 		gap: 8px;
-	}
-
-	.toolbarDivider {
-		display: none;
-	}
-
-	.toolbarGroupEnd {
-		margin-left: 0;
 	}
 }
 
@@ -493,10 +371,6 @@ function stepThumbnailSize(direction: -1 | 1) {
 	/* Flattens the group wrappers so buttons flow continuously horizontally */
 	.toolbarGroup {
 		display: contents;
-	}
-
-	.toolbarGroupEnd {
-		margin-left: 0;
 	}
 
 	/* On mobile screens, hide button text so buttons flow horizontally as compact icon buttons until space runs out */
