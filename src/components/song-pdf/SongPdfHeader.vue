@@ -318,7 +318,7 @@ const modeTabItems = computed(() => [
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	padding: 8px 16px;
+	padding: 8px 16px 0;
 	border-bottom: 1px solid var(--color-border);
 	background-color: var(--color-main-background);
 	gap: 16px;
@@ -333,6 +333,7 @@ const modeTabItems = computed(() => [
 	min-width: 0;
 	flex: 1 1 0;
 	overflow: hidden;
+	padding-bottom: 8px;
 }
 
 .cancelBtnText {
@@ -471,42 +472,49 @@ const modeTabItems = computed(() => [
 
 .modeTabs {
 	display: flex;
-	align-items: center;
+	align-items: flex-end;
+	align-self: flex-end;
 	justify-content: center;
-	background-color: var(--color-background-hover);
-	padding: 3px;
-	border-radius: var(--border-radius-large, 8px);
-	gap: 2px;
+	padding: 0;
+	gap: 4px;
 	flex-shrink: 0;
 	margin: 0 auto;
 }
 
 .tabButton {
+	position: relative;
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	gap: 6px;
-	padding: 6px 12px;
-	border: none;
+	padding: 8px 12px;
+	border: 1px solid transparent;
+	border-bottom: none;
 	background: transparent;
-	border-radius: var(--border-radius, 6px);
+	border-radius: var(--border-radius-large, 8px) var(--border-radius-large, 8px) 0 0;
+	margin-bottom: -1px;
 	cursor: pointer;
 	font-size: 13px;
 	font-weight: 500;
 	color: var(--color-text-maxcontrast);
-	transition: all 0.15s ease-in-out;
+	transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out;
 	white-space: nowrap;
 }
 
-.tabButton:hover {
+.tabButton:hover:not(:disabled) {
 	color: var(--color-main-text);
+	background-color: rgba(128, 128, 128, 0.06);
 }
 
-.tabButtonActive {
-	background-color: var(--color-main-background);
+.tabButtonActive,
+.tabButtonActive:hover:not(:disabled) {
+	background-color: var(--color-background-hover);
 	color: var(--color-main-text);
 	font-weight: 600;
-	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+	border-color: var(--color-border);
+	border-bottom: 1px solid var(--color-background-hover);
+	box-shadow: inset 0 2px 0 var(--color-primary-element);
+	z-index: 1;
 }
 
 .tabLabel {
@@ -514,10 +522,11 @@ const modeTabItems = computed(() => [
 }
 
 .tabDivider {
+	align-self: center;
 	width: 1px;
 	height: 20px;
 	background-color: var(--color-border);
-	margin: 0 2px;
+	margin: 0 2px 4px;
 	flex-shrink: 0;
 }
 
@@ -562,6 +571,7 @@ const modeTabItems = computed(() => [
 	flex: 1 1 0;
 	flex-shrink: 0;
 	margin-left: auto;
+	padding-bottom: 8px;
 }
 
 /* Tablet & Mobile responsive layout: 2-tier CSS Grid */
@@ -573,14 +583,15 @@ const modeTabItems = computed(() => [
 			"left right"
 			"tabs tabs";
 		align-items: center;
-		gap: 10px 12px;
-		padding: 8px 12px;
+		gap: 8px 12px;
+		padding: 8px 12px 0;
 	}
 
 	.headerLeft {
 		grid-area: left;
 		min-width: 0;
 		overflow: hidden;
+		padding-bottom: 0;
 	}
 
 	.headerRight {
@@ -588,6 +599,7 @@ const modeTabItems = computed(() => [
 		justify-self: end;
 		margin-left: 0;
 		flex: none;
+		padding-bottom: 0;
 	}
 
 	.modeTabs {
@@ -652,8 +664,8 @@ const modeTabItems = computed(() => [
 
 @media (max-width: 600px) {
 	.header {
-		padding: 6px 10px;
-		gap: 8px;
+		padding: 6px 10px 0;
+		gap: 6px 8px;
 	}
 
 	.headerLeft {
