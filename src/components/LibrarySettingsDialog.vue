@@ -172,10 +172,10 @@ function handleDelete() {
 					:key="setting.key"
 					:class="$style.settingRow">
 					<NcCheckboxRadioSwitch
-						:checked="setting.value"
+						:model-value="setting.value"
 						type="checkbox"
 						:disabled="isSaving"
-						@update:checked="updateSetting({ [setting.key]: $event })">
+						@update:model-value="updateSetting({ [setting.key]: $event })">
 						{{ setting.label }}
 					</NcCheckboxRadioSwitch>
 					<p :class="$style.settingDescription">

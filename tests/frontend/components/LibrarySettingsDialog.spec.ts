@@ -113,9 +113,10 @@ describe('LibrarySettingsDialog.vue', () => {
 		})
 
 		const checkboxes = wrapper.findAll('input[type="checkbox"]')
-		expect(checkboxes).toHaveLength(2)
+		expect(checkboxes).toHaveLength(3)
 		expect((checkboxes[0].element as HTMLInputElement).checked).toBe(true)
 		expect((checkboxes[1].element as HTMLInputElement).checked).toBe(true)
+		expect((checkboxes[2].element as HTMLInputElement).checked).toBe(false)
 	})
 
 	it('renders dialog with settings disabled for library 2', () => {
@@ -127,9 +128,38 @@ describe('LibrarySettingsDialog.vue', () => {
 		})
 
 		const checkboxes = wrapper.findAll('input[type="checkbox"]')
-		expect(checkboxes).toHaveLength(2)
+		expect(checkboxes).toHaveLength(3)
 		expect((checkboxes[0].element as HTMLInputElement).checked).toBe(false)
 		expect((checkboxes[1].element as HTMLInputElement).checked).toBe(false)
+		expect((checkboxes[2].element as HTMLInputElement).checked).toBe(false)
+	})
+
+	it('toggles mobilesheetsSyncEnabled and calls PUT endpoint', async () => {
+		vi.mocked(axios.put).mockResolvedValueOnce({
+			data: {
+				ocs: {
+					data: {
+						library: { id: 1, path: '/Noten/library.db', autoPaths: true, autoPdfMetadata: true, mobilesheetsSyncEnabled: true },
+					},
+				},
+			},
+		})
+
+		const wrapper = mount(LibrarySettingsDialog, {
+			props: {
+				selectedLibrary: 1,
+				libraries: mockLibraries,
+			},
+		})
+
+		const checkboxes = wrapper.findAll('input[type="checkbox"]')
+		await checkboxes[2].setValue(true)
+
+		expect(axios.put).toHaveBeenCalledWith(
+			'/ocs/v2.php/apps/sheetmusic/api/libraries/1/settings',
+			{ mobilesheetsSyncEnabled: true },
+			expect.any(Object),
+		)
 	})
 
 	it('toggles autoPaths and calls PUT endpoint, emitting updated libraries', async () => {

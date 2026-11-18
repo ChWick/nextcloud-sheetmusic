@@ -82,4 +82,44 @@ test.describe('Navigation & Library Management', () => {
 		// Should immediately navigate and open library 2
 		await expect(page).toHaveURL(/#\/library\/2\/songs/)
 	})
+
+	test('toggles MobileSheets WebDAV sync in Library Settings dialog', async ({ page }) => {
+		let capturedBody: Record<string, unknown> | null = null
+		await page.route('**/ocs/v2.php/apps/sheetmusic/api/libraries/1/settings', async (route) => {
+			if (route.request().method() === 'PUT') {
+				capturedBody = route.request().postDataJSON() as Record<string, unknown>
+				await route.fulfill({
+					status: 200,
+					contentType: 'application/json',
+					body: JSON.stringify({
+						ocs: {
+							meta: { status: 'ok', statuscode: 200, message: 'OK' },
+							data: {
+								library: {
+									id: 1,
+									path: '/Noten/library.db',
+									autoPaths: true,
+									autoPdfMetadata: true,
+									mobilesheetsSyncEnabled: true,
+								},
+							},
+						},
+					}),
+				})
+				return
+			}
+			await route.fallback()
+		})
+
+		await page.getByRole('button', { name: 'Library settings' }).click()
+		const dialog = page.getByRole('dialog', { name: 'Library Settings' })
+		await expect(dialog).toBeVisible()
+
+		const syncCheckbox = dialog.getByRole('checkbox', { name: /Enable MobileSheets WebDAV sync/i })
+		await expect(syncCheckbox).not.toBeChecked()
+		await dialog.getByText('Enable MobileSheets WebDAV sync').click()
+
+		await expect.poll(() => capturedBody).toEqual({ mobilesheetsSyncEnabled: true })
+		await expect(syncCheckbox).toBeChecked()
+	})
 })
