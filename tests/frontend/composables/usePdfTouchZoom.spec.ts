@@ -128,4 +128,55 @@ describe('usePdfTouchZoom', () => {
 		api.resetPan()
 		expect(stage.style.transform).toBe('')
 	})
+
+	it('zooms on Ctrl+wheel and pans on Ctrl+drag', async () => {
+		vi.useFakeTimers()
+		const container = document.createElement('div')
+		const stage = document.createElement('div')
+		container.getBoundingClientRect = () => ({ left: 0, top: 0, width: 400, height: 600 } as DOMRect)
+
+		const onCommitZoom = vi.fn()
+		let api!: ReturnType<typeof usePdfTouchZoom>
+		const Comp = defineComponent({
+			setup() {
+				api = usePdfTouchZoom({
+					containerRef: ref<HTMLElement | undefined>(container),
+					stageRef: ref<HTMLElement | undefined>(stage),
+					getCurrentScale: () => 1.0,
+					isEnabled: () => true,
+					isAnnotating: () => true,
+					onCommitZoom,
+				})
+				return {}
+			},
+			template: '<div />',
+		})
+
+		mount(Comp)
+
+		const wheelEvt = Object.assign(new Event('wheel', { bubbles: true, cancelable: true }), {
+			deltaY: -100,
+			ctrlKey: true,
+			clientX: 200,
+			clientY: 300,
+		})
+		container.dispatchEvent(wheelEvt)
+		expect(wheelEvt.defaultPrevented).toBe(true)
+
+		vi.advanceTimersByTime(150)
+		await Promise.resolve()
+		expect(onCommitZoom).toHaveBeenCalledTimes(1)
+		expect(onCommitZoom.mock.calls[0][0]).toBeGreaterThan(1.0)
+
+		// Ctrl+drag should pan even when isAnnotating() is true
+		container.dispatchEvent(new MouseEvent('mousedown', { button: 0, ctrlKey: true, clientX: 100, clientY: 100, cancelable: true }))
+		window.dispatchEvent(new MouseEvent('mousemove', { clientX: 150, clientY: 130 }))
+		expect(stage.style.transform).toBe('translate(50px, 30px)')
+		window.dispatchEvent(new MouseEvent('mouseup'))
+		expect(stage.style.transform).toBe('translate(50px, 30px)')
+
+		api.resetPan()
+		expect(stage.style.transform).toBe('')
+		vi.useRealTimers()
+	})
 })
