@@ -131,6 +131,9 @@ class SheetMusicDavPlugin extends ServerPlugin {
 			}
 
 			$match = $this->matchVirtualPath($path);
+			if ($match !== null && $this->isSyncClient($request)) {
+				return true;
+			}
 			if ($match === null) {
 				if ($method === 'PROPFIND') {
 					if ($this->handleSublibraryFolderPropfind($request, $response, $path)) {
@@ -245,7 +248,7 @@ class SheetMusicDavPlugin extends ServerPlugin {
 
 		$isSyncClient = $this->isSyncClient($request);
 		$includeSublibraries = !$isSongsFolder && !$isSyncClient;
-		$includeVirtualFiles = $isSongsFolder;
+		$includeVirtualFiles = $isSongsFolder && !$isSyncClient;
 
 		if (!$isSongsFolder && $canWrite && $library->sublibraryId === null && $this->rootFolder !== null) {
 			$this->ensureSongsFolder($library);

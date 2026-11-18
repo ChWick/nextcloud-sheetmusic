@@ -961,6 +961,64 @@ final class SheetMusicDavPluginTest extends TestCase {
 		self::assertSame(207, $directMsRes->getStatus());
 		self::assertStringContainsString('orgel', (string)$directMsRes->getBody());
 	}
+
+	public function testVirtualFilesNotVisibleToSyncClientsDuringPropfindOrDirectAccess(): void {
+		$this->attachServer();
+		$syncClientUa = 'Mozilla/5.0 (Windows) mirall/3.14.0 (Nextcloud, windows-10.0.19045)';
+
+		// 1. Nextcloud sync client PROPFIND on Songs/ folder does NOT include virtual files
+		$reqSync = new Request('PROPFIND', '/remote.php/dav/files/admin/My%20Noten/Songs', [
+			'Depth' => '1',
+			'User-Agent' => $syncClientUa,
+		]);
+		$reqSync->setBaseUrl('/remote.php/dav/');
+
+		$resSync = new Response();
+		$resSync->setStatus(207);
+		$resSync->setBody('<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:"><d:response><d:href>/remote.php/dav/files/admin/My%20Noten/Songs/</d:href></d:response></d:multistatus>');
+
+		$this->plugin->afterPropfind($reqSync, $resSync);
+
+		$bodySync = $resSync->getBodyAsString();
+		self::assertStringNotContainsString('mobilesheets.db', $bodySync);
+		self::assertStringNotContainsString('mobilesheets_hashcodes.txt', $bodySync);
+
+		// 2. Non-sync client (e.g. MobileSheets) PROPFIND on Songs/ folder DOES include virtual files
+		$reqMs = new Request('PROPFIND', '/remote.php/dav/files/admin/My%20Noten/Songs', [
+			'Depth' => '1',
+			'User-Agent' => 'MobileSheets/3.8.4',
+		]);
+		$reqMs->setBaseUrl('/remote.php/dav/');
+
+		$resMs = new Response();
+		$resMs->setStatus(207);
+		$resMs->setBody('<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:"><d:response><d:href>/remote.php/dav/files/admin/My%20Noten/Songs/</d:href></d:response></d:multistatus>');
+
+		$this->plugin->afterPropfind($reqMs, $resMs);
+
+		$bodyMs = $resMs->getBodyAsString();
+		self::assertStringContainsString('mobilesheets.db', $bodyMs);
+		self::assertStringContainsString('mobilesheets_hashcodes.txt', $bodyMs);
+
+		// 3. Direct GET / PROPFIND on virtual files by sync client is bypassed (returns true so SabreDAV returns 404)
+		foreach (['GET', 'PROPFIND'] as $method) {
+			foreach (['mobilesheets.db', 'mobilesheets_hashcodes.txt'] as $filename) {
+				$directSyncReq = new Request($method, '/files/admin/My%20Noten/Songs/' . $filename, [
+					'User-Agent' => $syncClientUa,
+				]);
+				$directSyncRes = new Response();
+				self::assertTrue($this->plugin->beforeMethod($directSyncReq, $directSyncRes));
+			}
+		}
+
+		// 4. Direct GET on virtual file by non-sync client is handled
+		$directMsReq = new Request('GET', '/files/admin/My%20Noten/Songs/mobilesheets.db', [
+			'User-Agent' => 'MobileSheets/3.8.4',
+		]);
+		$directMsRes = new Response();
+		self::assertFalse($this->plugin->beforeMethod($directMsReq, $directMsRes));
+		self::assertSame(200, $directMsRes->getStatus());
+	}
 }
 
 /**
