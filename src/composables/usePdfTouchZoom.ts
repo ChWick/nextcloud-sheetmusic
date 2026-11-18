@@ -184,6 +184,45 @@ export function usePdfTouchZoom(options: PdfTouchZoomOptions) {
 		}
 	}
 
+	async function commitZoomAtCurrentVisualPosition(targetScale: number, container: HTMLElement | undefined) {
+		const stage = options.stageRef.value
+		const beforeStageRect = stage?.getBoundingClientRect()
+		const beforeContainerRect = container?.getBoundingClientRect()
+		const targetLeft = beforeStageRect && beforeContainerRect
+			? beforeStageRect.left - beforeContainerRect.left
+			: null
+		const targetTop = beforeStageRect && beforeContainerRect
+			? beforeStageRect.top - beforeContainerRect.top
+			: null
+
+		await options.onCommitZoom(targetScale)
+		resetStageTransform()
+
+		if (!container || !stage || targetLeft === null || targetTop === null) {
+			return
+		}
+
+		const afterStageRect = stage.getBoundingClientRect()
+		const afterContainerRect = container.getBoundingClientRect()
+		const diffX = (afterStageRect.left - afterContainerRect.left) - targetLeft
+		const diffY = (afterStageRect.top - afterContainerRect.top) - targetTop
+
+		const maxScrollLeft = Math.max(0, container.scrollWidth - container.clientWidth)
+		const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight)
+
+		const desiredScrollLeft = container.scrollLeft + diffX
+		const clampedScrollLeft = clamp(desiredScrollLeft, 0, maxScrollLeft)
+		container.scrollLeft = Math.round(clampedScrollLeft)
+		committedPanX += clampedScrollLeft - desiredScrollLeft
+
+		const desiredScrollTop = container.scrollTop + diffY
+		const clampedScrollTop = clamp(desiredScrollTop, 0, maxScrollTop)
+		container.scrollTop = Math.round(clampedScrollTop)
+		committedPanY += clampedScrollTop - desiredScrollTop
+
+		resetStageTransform()
+	}
+
 	async function handleTouchEnd(event: TouchEvent) {
 		if (!isPinching || event.touches.length >= 2) {
 			return
@@ -203,16 +242,7 @@ export function usePdfTouchZoom(options: PdfTouchZoomOptions) {
 			return
 		}
 
-		const scaleRatio = targetScale / startScale
-		await options.onCommitZoom(targetScale)
-		resetStageTransform()
-
-		if (container) {
-			const maxScrollLeft = Math.max(0, container.scrollWidth - container.clientWidth)
-			const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight)
-			container.scrollLeft = clamp(focalContentX * scaleRatio - focalViewportX, 0, maxScrollLeft)
-			container.scrollTop = clamp(focalContentY * scaleRatio - focalViewportY, 0, maxScrollTop)
-		}
+		await commitZoomAtCurrentVisualPosition(targetScale, container)
 	}
 
 	function handleTouchCancel() {
@@ -259,21 +289,13 @@ export function usePdfTouchZoom(options: PdfTouchZoomOptions) {
 		wheelCommitTimer = setTimeout(async () => {
 			wheelCommitTimer = null
 			const targetScale = wheelTargetScale
-			const scaleRatio = targetScale / wheelStartScale
 
 			if (Math.abs(targetScale - wheelStartScale) <= 0.005) {
 				resetStageTransform()
 				return
 			}
 
-			await options.onCommitZoom(targetScale)
-			resetStageTransform()
-			if (container) {
-				const maxScrollLeft = Math.max(0, container.scrollWidth - container.clientWidth)
-				const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight)
-				container.scrollLeft = clamp(wheelFocalContentX * scaleRatio - wheelFocalViewportX, 0, maxScrollLeft)
-				container.scrollTop = clamp(wheelFocalContentY * scaleRatio - wheelFocalViewportY, 0, maxScrollTop)
-			}
+			await commitZoomAtCurrentVisualPosition(targetScale, container)
 		}, 120)
 	}
 
