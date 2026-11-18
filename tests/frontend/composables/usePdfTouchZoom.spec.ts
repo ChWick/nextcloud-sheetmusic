@@ -94,4 +94,38 @@ describe('usePdfTouchZoom', () => {
 		await Promise.resolve()
 		expect(onCommitZoom).toHaveBeenCalledWith(3.0)
 	})
+
+	it('persists two-finger pan offset on release and clears it via resetPan', async () => {
+		const container = document.createElement('div')
+		const stage = document.createElement('div')
+		container.getBoundingClientRect = () => ({ left: 0, top: 0, width: 400, height: 600 } as DOMRect)
+
+		let api!: ReturnType<typeof usePdfTouchZoom>
+		const Comp = defineComponent({
+			setup() {
+				api = usePdfTouchZoom({
+					containerRef: ref<HTMLElement | undefined>(container),
+					stageRef: ref<HTMLElement | undefined>(stage),
+					getCurrentScale: () => 1.0,
+					isEnabled: () => true,
+					onCommitZoom: vi.fn(),
+				})
+				return {}
+			},
+			template: '<div />',
+		})
+
+		mount(Comp)
+
+		container.dispatchEvent(makeTouchEvent('touchstart', [makeTouch(100, 100), makeTouch(200, 100)]))
+		container.dispatchEvent(makeTouchEvent('touchmove', [makeTouch(140, 120), makeTouch(240, 120)]))
+		expect(stage.style.transform).toBe('translate(40px, 20px)')
+
+		container.dispatchEvent(makeTouchEvent('touchend', [makeTouch(140, 120)]))
+		await Promise.resolve()
+		expect(stage.style.transform).toBe('translate(40px, 20px)')
+
+		api.resetPan()
+		expect(stage.style.transform).toBe('')
+	})
 })
