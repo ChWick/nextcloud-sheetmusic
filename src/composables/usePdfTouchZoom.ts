@@ -228,18 +228,9 @@ export function usePdfTouchZoom(options: PdfTouchZoomOptions) {
 		const diffX = (afterRect.left - afterContainerRect.left) - targetLeft
 		const diffY = (afterRect.top - afterContainerRect.top) - targetTop
 
-		const maxScrollLeft = Math.max(0, container.scrollWidth - container.clientWidth)
-		const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight)
-
-		const desiredScrollLeft = container.scrollLeft + diffX
-		const clampedScrollLeft = clamp(desiredScrollLeft, 0, maxScrollLeft)
-		container.scrollLeft = Math.round(clampedScrollLeft)
-		committedPanX += clampedScrollLeft - desiredScrollLeft
-
-		const desiredScrollTop = container.scrollTop + diffY
-		const clampedScrollTop = clamp(desiredScrollTop, 0, maxScrollTop)
-		container.scrollTop = Math.round(clampedScrollTop)
-		committedPanY += clampedScrollTop - desiredScrollTop
+		applyContainerPan(container, container.scrollLeft, container.scrollTop, -diffX, -diffY)
+		committedPanX = livePanX
+		committedPanY = livePanY
 
 		resetStageTransform()
 	}
