@@ -107,6 +107,7 @@ export function usePdfTouchZoom(options: PdfTouchZoomOptions) {
 		}
 
 		const rect = container.getBoundingClientRect()
+		const stageRect = options.stageRef.value?.getBoundingClientRect()
 		const mid = getTouchMidpoint(t0, t1)
 		startMidClientX = mid.x
 		startMidClientY = mid.y
@@ -116,8 +117,8 @@ export function usePdfTouchZoom(options: PdfTouchZoomOptions) {
 		livePanY = committedPanY
 		focalViewportX = mid.x - rect.left
 		focalViewportY = mid.y - rect.top
-		focalContentX = focalViewportX + container.scrollLeft
-		focalContentY = focalViewportY + container.scrollTop
+		focalContentX = stageRect ? (mid.x - stageRect.left) : (focalViewportX + container.scrollLeft)
+		focalContentY = stageRect ? (mid.y - stageRect.top) : (focalViewportY + container.scrollTop)
 
 		isPinching = true
 		startDist = dist
@@ -193,12 +194,12 @@ export function usePdfTouchZoom(options: PdfTouchZoomOptions) {
 		const targetScale = liveScale
 		committedPanX = livePanX
 		committedPanY = livePanY
-		resetStageTransform()
 
 		const container = options.containerRef.value
 		const scaleChanged = Math.abs(targetScale - startScale) > 0.01
 
 		if (!scaleChanged) {
+			resetStageTransform()
 			return
 		}
 
@@ -236,10 +237,11 @@ export function usePdfTouchZoom(options: PdfTouchZoomOptions) {
 			wheelStartScale = Math.max(minScale, options.getCurrentScale())
 			wheelTargetScale = wheelStartScale
 			const rect = container.getBoundingClientRect()
+			const stageRect = options.stageRef.value?.getBoundingClientRect()
 			wheelFocalViewportX = event.clientX - rect.left
 			wheelFocalViewportY = event.clientY - rect.top
-			wheelFocalContentX = wheelFocalViewportX + container.scrollLeft
-			wheelFocalContentY = wheelFocalViewportY + container.scrollTop
+			wheelFocalContentX = stageRect ? (event.clientX - stageRect.left) : (wheelFocalViewportX + container.scrollLeft)
+			wheelFocalContentY = stageRect ? (event.clientY - stageRect.top) : (wheelFocalViewportY + container.scrollTop)
 		} else {
 			clearTimeout(wheelCommitTimer)
 		}
@@ -258,9 +260,9 @@ export function usePdfTouchZoom(options: PdfTouchZoomOptions) {
 			wheelCommitTimer = null
 			const targetScale = wheelTargetScale
 			const scaleRatio = targetScale / wheelStartScale
-			resetStageTransform()
 
 			if (Math.abs(targetScale - wheelStartScale) <= 0.005) {
+				resetStageTransform()
 				return
 			}
 
