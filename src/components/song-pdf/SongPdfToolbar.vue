@@ -69,58 +69,53 @@ function stepThumbnailSize(direction: -1 | 1) {
 			<div :class="$style.toolbarGroup">
 				<span :class="$style.toolbarTitle">{{ t('sheetmusic', 'Quick Actions:') }}</span>
 				<NcButton
-					size="small"
 					variant="secondary"
 					:title="t('sheetmusic', 'Rotate All 90° CW')"
 					:aria-label="t('sheetmusic', 'Rotate All 90° CW')"
 					@click="emit('rotate-all', 90)">
 					<template #icon>
-						<RotateRight :size="16" />
+						<RotateRight :size="20" />
 					</template>
 					<span :class="$style.btnText">{{ t('sheetmusic', 'Rotate All 90° CW') }}</span>
 				</NcButton>
 				<NcButton
-					size="small"
 					variant="secondary"
 					:title="t('sheetmusic', 'Rotate All 90° CCW')"
 					:aria-label="t('sheetmusic', 'Rotate All 90° CCW')"
 					@click="emit('rotate-all', -90)">
 					<template #icon>
-						<RotateLeft :size="16" />
+						<RotateLeft :size="20" />
 					</template>
 					<span :class="$style.btnText">{{ t('sheetmusic', 'Rotate All 90° CCW') }}</span>
 				</NcButton>
 				<NcButton
-					size="small"
 					variant="secondary"
 					:title="t('sheetmusic', 'Flip All 180°')"
 					:aria-label="t('sheetmusic', 'Flip All 180°')"
 					@click="emit('rotate-all', 180)">
 					<template #icon>
-						<Autorenew :size="16" />
+						<Autorenew :size="20" />
 					</template>
 					<span :class="$style.btnText">{{ t('sheetmusic', 'Flip All 180°') }}</span>
 				</NcButton>
 				<NcButton
-					size="small"
 					variant="secondary"
 					:title="t('sheetmusic', 'Rotate by custom angle / fine deskew')"
 					:aria-label="t('sheetmusic', 'Rotate by Angle…')"
 					@click="emit('open-rotate-modal')">
 					<template #icon>
-						<Rotate360 :size="16" />
+						<Rotate360 :size="20" />
 					</template>
 					<span :class="$style.btnText">{{ t('sheetmusic', 'Rotate by Angle…') }}</span>
 				</NcButton>
 				<NcButton
-					size="small"
 					variant="tertiary"
 					:disabled="!hasAnyRotation"
 					:title="t('sheetmusic', 'Reset all page rotations')"
 					:aria-label="t('sheetmusic', 'Reset all page rotations')"
 					@click="emit('reset-rotations')">
 					<template #icon>
-						<RestoreIcon :size="16" />
+						<RestoreIcon :size="20" />
 					</template>
 					<span :class="$style.btnText">{{ t('sheetmusic', 'Reset All') }}</span>
 				</NcButton>
@@ -134,25 +129,23 @@ function stepThumbnailSize(direction: -1 | 1) {
 					{{ t('sheetmusic', 'Click on any page or "Crop" button to adjust crop margins:') }}
 				</span>
 				<NcButton
-					size="small"
 					variant="secondary"
 					:title="t('sheetmusic', 'Crop first page and apply to all')"
 					:aria-label="t('sheetmusic', 'Crop All Pages…')"
 					@click="emit('open-crop-modal')">
 					<template #icon>
-						<CropIcon :size="16" />
+						<CropIcon :size="20" />
 					</template>
 					<span :class="$style.btnText">{{ t('sheetmusic', 'Crop All Pages…') }}</span>
 				</NcButton>
 				<NcButton
-					size="small"
 					variant="tertiary"
 					:disabled="!hasAnyCrop"
 					:title="t('sheetmusic', 'Reset all page crops to full page')"
 					:aria-label="t('sheetmusic', 'Reset All Crops')"
 					@click="emit('reset-all-crops')">
 					<template #icon>
-						<RestoreIcon :size="16" />
+						<RestoreIcon :size="20" />
 					</template>
 					<span :class="$style.btnText">{{ t('sheetmusic', 'Reset All Crops') }}</span>
 				</NcButton>
@@ -166,25 +159,23 @@ function stepThumbnailSize(direction: -1 | 1) {
 					{{ t('sheetmusic', 'Enhance scan quality (Gaussian filter, thresholding, gray level mapping):') }}
 				</span>
 				<NcButton
-					size="small"
 					variant="secondary"
 					:title="t('sheetmusic', 'Configure scan enhancement and apply to all pages')"
 					:aria-label="t('sheetmusic', 'Enhance All Pages…')"
 					@click="emit('open-enhance-modal')">
 					<template #icon>
-						<Tune :size="16" />
+						<Tune :size="20" />
 					</template>
 					<span :class="$style.btnText">{{ t('sheetmusic', 'Enhance All Pages…') }}</span>
 				</NcButton>
 				<NcButton
-					size="small"
 					variant="tertiary"
 					:disabled="!hasAnyEnhance"
 					:title="t('sheetmusic', 'Reset all page enhancements')"
 					:aria-label="t('sheetmusic', 'Reset All Enhancements')"
 					@click="emit('reset-all-enhancements')">
 					<template #icon>
-						<RestoreIcon :size="16" />
+						<RestoreIcon :size="20" />
 					</template>
 					<span :class="$style.btnText">{{ t('sheetmusic', 'Reset All Enhancements') }}</span>
 				</NcButton>
@@ -202,25 +193,23 @@ function stepThumbnailSize(direction: -1 | 1) {
 				</span>
 				<NcButton
 					v-if="totalPages > 0 && selectedPagesCount < totalPages"
-					size="small"
 					variant="secondary"
 					:title="t('sheetmusic', 'Select all pages')"
 					:aria-label="t('sheetmusic', 'Select all pages')"
 					@click="emit('select-all-pages')">
 					<template #icon>
-						<CheckboxMultipleMarkedOutline :size="16" />
+						<CheckboxMultipleMarkedOutline :size="20" />
 					</template>
 					<span :class="$style.btnText">{{ t('sheetmusic', 'Select All') }}</span>
 				</NcButton>
 				<NcButton
 					v-if="selectedPagesCount > 0"
-					size="small"
 					variant="tertiary"
 					:title="activeMode === 'split' ? t('sheetmusic', 'Clear selection') : t('sheetmusic', 'Clear Selection ({count})', { count: selectedPagesCount }, { escape: false })"
 					:aria-label="activeMode === 'split' ? t('sheetmusic', 'Clear selection') : t('sheetmusic', 'Clear Selection ({count})', { count: selectedPagesCount }, { escape: false })"
 					@click="emit('clear-selection')">
 					<template #icon>
-						<CloseIcon :size="16" />
+						<CloseIcon :size="20" />
 					</template>
 					<span :class="$style.btnText">
 						{{ activeMode === 'split' ? t('sheetmusic', 'Clear Selection') : t('sheetmusic', 'Clear Selection ({count})', { count: selectedPagesCount }, { escape: false }) }}
@@ -233,25 +222,23 @@ function stepThumbnailSize(direction: -1 | 1) {
 		<div :class="$style.toolbarRightControls">
 			<NcButton
 				v-if="hasAnyDeletion && (activeMode === 'rotate' || activeMode === 'crop' || activeMode === 'enhance')"
-				size="small"
 				variant="tertiary"
 				:title="t('sheetmusic', 'Restore all deleted pages')"
 				:aria-label="t('sheetmusic', 'Restore Deleted ({count})', { count: deletedPagesCount }, { escape: false })"
 				@click="emit('restore-all-pages')">
 				<template #icon>
-					<DeleteRestore :size="16" />
+					<DeleteRestore :size="20" />
 				</template>
 				<span :class="$style.btnText">{{ t('sheetmusic', 'Restore Deleted ({count})', { count: deletedPagesCount }, { escape: false }) }}</span>
 			</NcButton>
 			<NcButton
 				v-if="hasAnyChange && (activeMode === 'rotate' || activeMode === 'crop' || activeMode === 'enhance')"
-				size="small"
 				variant="tertiary"
 				:title="t('sheetmusic', 'Discard all unsaved edits')"
 				:aria-label="t('sheetmusic', 'Discard All')"
 				@click="emit('discard-all-edits')">
 				<template #icon>
-					<DeleteSweepOutline :size="16" />
+					<DeleteSweepOutline :size="20" />
 				</template>
 				<span :class="$style.btnText">{{ t('sheetmusic', 'Discard All') }}</span>
 			</NcButton>
@@ -261,25 +248,23 @@ function stepThumbnailSize(direction: -1 | 1) {
 				role="group"
 				:aria-label="t('sheetmusic', 'Thumbnail size')">
 				<NcButton
-					size="small"
 					variant="tertiary"
 					:disabled="thumbnailSize === 'small'"
 					:title="t('sheetmusic', 'Smaller thumbnails')"
 					:aria-label="t('sheetmusic', 'Smaller thumbnails')"
 					@click="stepThumbnailSize(-1)">
 					<template #icon>
-						<MagnifyMinusOutline :size="16" />
+						<MagnifyMinusOutline :size="20" />
 					</template>
 				</NcButton>
 				<NcButton
-					size="small"
 					variant="tertiary"
 					:disabled="thumbnailSize === 'large'"
 					:title="t('sheetmusic', 'Larger thumbnails')"
 					:aria-label="t('sheetmusic', 'Larger thumbnails')"
 					@click="stepThumbnailSize(1)">
 					<template #icon>
-						<MagnifyPlusOutline :size="16" />
+						<MagnifyPlusOutline :size="20" />
 					</template>
 				</NcButton>
 			</div>
