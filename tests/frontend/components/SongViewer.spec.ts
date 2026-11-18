@@ -502,6 +502,29 @@ describe('SongViewer.vue', () => {
 		expect(versionBtn).toBeUndefined()
 	})
 
+	it('renders file selector in toolbar when song has multiple files and switches file on change', async () => {
+		const multiFileSong: Song = {
+			...mockSong,
+			files: [
+				{ id: 101, path: '/dav/files/admin/Noten/Part1.pdf' },
+				{ id: 102, path: '/dav/files/admin/Noten/Part2.pdf' },
+			],
+		}
+		const wrapper = mount(SongViewer, {
+			props: { song: multiFileSong, libraryId: 1, hideHeader: true },
+			...globalStubs,
+		})
+
+		await settle()
+
+		const selector = wrapper.find('[data-test="song-file-selector"]')
+		expect(selector.exists()).toBe(true)
+		await selector.setValue('102')
+		await settle()
+
+		expect((wrapper.vm as any).selectedFile?.id).toBe(102)
+	})
+
 	it('opens version history dialog when openVersionsModal is invoked', async () => {
 		vi.mocked(axios.get).mockImplementation((url: string) => {
 			if (url.includes('/versions')) {
