@@ -473,14 +473,6 @@ defineExpose({
 	white-space: nowrap;
 }
 
-.fileTabs {
-	display: flex;
-	align-items: center;
-	margin-bottom: 8px;
-	padding: 2px;
-	overflow-x: auto;
-}
-
 .error {
 	color: var(--color-error);
 	margin: 16px 0;
