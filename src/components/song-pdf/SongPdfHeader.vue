@@ -112,6 +112,43 @@ const saveButtonText = computed(() => {
 	if (props.activeMode === 'crop') return t('sheetmusic', 'Save Crops')
 	return t('sheetmusic', 'Save Enhanced PDF')
 })
+const modeTabItems = computed(() => [
+	{
+		id: 'rotate' as Mode,
+		label: t('sheetmusic', 'Rotate Pages'),
+		icon: RotateRight,
+		dirty: Boolean(props.hasAnyRotation || props.hasAnyDeletion),
+		count: 0,
+	},
+	{
+		id: 'crop' as Mode,
+		label: t('sheetmusic', 'Crop Pages'),
+		icon: CropIcon,
+		dirty: Boolean(props.hasAnyCrop),
+		count: 0,
+	},
+	{
+		id: 'enhance' as Mode,
+		label: t('sheetmusic', 'Enhance Scans'),
+		icon: Tune,
+		dirty: Boolean(props.hasAnyEnhance),
+		count: 0,
+	},
+	{
+		id: 'split' as Mode,
+		label: t('sheetmusic', 'Split PDF'),
+		icon: CallSplit,
+		dirty: false,
+		count: props.splitSegmentsCount,
+	},
+	{
+		id: 'bookmarks' as Mode,
+		label: t('sheetmusic', 'Bookmarks'),
+		icon: BookmarkMusicOutline,
+		dirty: false,
+		count: props.bookmarksCount ?? 0,
+	},
+])
 </script>
 
 <template>
@@ -203,54 +240,17 @@ const saveButtonText = computed(() => {
 		<!-- Center: Mode Switcher & PDF Tools -->
 		<nav :class="$style.modeTabs" :aria-label="t('sheetmusic', 'PDF edit modes')">
 			<button
+				v-for="tab in modeTabItems"
+				:key="tab.id"
 				type="button"
-				:class="[$style.tabButton, activeMode === 'rotate' && $style.tabButtonActive]"
-				:title="t('sheetmusic', 'Rotate Pages')"
-				:aria-label="t('sheetmusic', 'Rotate Pages')"
-				@click="emit('update:activeMode', 'rotate')">
-				<RotateRight :size="18" />
-				<span :class="$style.tabLabel">{{ t('sheetmusic', 'Rotate Pages') }}</span>
-				<span v-if="hasAnyRotation || hasAnyDeletion" :class="$style.tabDirtyDot" :aria-label="t('sheetmusic', 'Has unsaved changes')" />
-			</button>
-			<button
-				type="button"
-				:class="[$style.tabButton, activeMode === 'crop' && $style.tabButtonActive]"
-				:title="t('sheetmusic', 'Crop Pages')"
-				:aria-label="t('sheetmusic', 'Crop Pages')"
-				@click="emit('update:activeMode', 'crop')">
-				<CropIcon :size="18" />
-				<span :class="$style.tabLabel">{{ t('sheetmusic', 'Crop Pages') }}</span>
-				<span v-if="hasAnyCrop" :class="$style.tabDirtyDot" :aria-label="t('sheetmusic', 'Has unsaved changes')" />
-			</button>
-			<button
-				type="button"
-				:class="[$style.tabButton, activeMode === 'enhance' && $style.tabButtonActive]"
-				:title="t('sheetmusic', 'Enhance Scans')"
-				:aria-label="t('sheetmusic', 'Enhance Scans')"
-				@click="emit('update:activeMode', 'enhance')">
-				<Tune :size="18" />
-				<span :class="$style.tabLabel">{{ t('sheetmusic', 'Enhance Scans') }}</span>
-				<span v-if="hasAnyEnhance" :class="$style.tabDirtyDot" :aria-label="t('sheetmusic', 'Has unsaved changes')" />
-			</button>
-			<button
-				type="button"
-				:class="[$style.tabButton, activeMode === 'split' && $style.tabButtonActive]"
-				:title="t('sheetmusic', 'Split PDF')"
-				:aria-label="t('sheetmusic', 'Split PDF')"
-				@click="emit('update:activeMode', 'split')">
-				<CallSplit :size="18" />
-				<span :class="$style.tabLabel">{{ t('sheetmusic', 'Split PDF') }}</span>
-				<span v-if="splitSegmentsCount > 0" :class="$style.tabCountBadge">{{ splitSegmentsCount }}</span>
-			</button>
-			<button
-				type="button"
-				:class="[$style.tabButton, activeMode === 'bookmarks' && $style.tabButtonActive]"
-				:title="t('sheetmusic', 'Bookmarks')"
-				:aria-label="t('sheetmusic', 'Bookmarks')"
-				@click="emit('update:activeMode', 'bookmarks')">
-				<BookmarkMusicOutline :size="18" />
-				<span :class="$style.tabLabel">{{ t('sheetmusic', 'Bookmarks') }}</span>
-				<span v-if="(bookmarksCount ?? 0) > 0" :class="$style.tabCountBadge">{{ bookmarksCount }}</span>
+				:class="[$style.tabButton, activeMode === tab.id && $style.tabButtonActive]"
+				:title="tab.label"
+				:aria-label="tab.label"
+				@click="emit('update:activeMode', tab.id)">
+				<component :is="tab.icon" :size="18" />
+				<span :class="$style.tabLabel">{{ tab.label }}</span>
+				<span v-if="tab.dirty" :class="$style.tabDirtyDot" :aria-label="t('sheetmusic', 'Has unsaved changes')" />
+				<span v-if="tab.count > 0" :class="$style.tabCountBadge">{{ tab.count }}</span>
 			</button>
 			<span :class="$style.tabDivider" aria-hidden="true" />
 			<button
