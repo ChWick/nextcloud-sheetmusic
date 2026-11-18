@@ -492,6 +492,15 @@ watch(() => props.selectedLibrary, async (newLib) => {
     await restoreSetlistFromRouteQuery()
   }
 })
+
+watch(
+  () => [route.query?.setlist, route.query?.play, route.query?.item],
+  () => {
+    if (setlists.value.length > 0) {
+      void restoreSetlistFromRouteQuery()
+    }
+  },
+)
 </script>
 
 <style module>
