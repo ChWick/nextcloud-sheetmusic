@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import SongPdfPageCard, { type BookmarkPageSummary, type SplitSegmentSummary } from './SongPdfPageCard.vue'
+import type { PageCrop } from './crop-types'
 
 withDefaults(
 	defineProps<{
@@ -10,6 +11,8 @@ withDefaults(
 		isPageEnhanced: (pageNum: number) => boolean
 		isPageDeleted: (pageNum: number) => boolean
 		pageRotations?: number[]
+		pageCrops?: Record<number, PageCrop>
+		thumbnailSize?: 'small' | 'medium' | 'large'
 		getCropIndicatorText: (pageNum: number) => string
 		getEnhanceIndicatorText: (pageNum: number) => string
 		getPageSegmentsSummary: (pageNum: number) => SplitSegmentSummary[]
@@ -19,11 +22,15 @@ withDefaults(
 	{
 		selectedPages: () => [],
 		pageRotations: () => [],
+		pageCrops: () => ({}),
+		thumbnailSize: 'medium',
 	},
 )
 
 const emit = defineEmits<{
 	'card-click': [pageNum: number]
+	'card-range-select': [pageNum: number]
+	'zoom-page': [pageNum: number]
 	'open-crop-modal': [pageNum: number]
 	'open-enhance-modal': [pageNum: number]
 	'rotate-page': [pageIndex: number, deltaDeg: number]
@@ -35,7 +42,13 @@ const emit = defineEmits<{
 </script>
 
 <template>
-	<div :class="$style.grid" data-test="pdf-page-grid">
+	<div
+		:class="[
+			$style.grid,
+			thumbnailSize === 'small' && $style.gridSmall,
+			thumbnailSize === 'large' && $style.gridLarge,
+		]"
+		data-test="pdf-page-grid">
 		<SongPdfPageCard
 			v-for="pageNum in totalPages"
 			:key="pageNum"
@@ -46,6 +59,8 @@ const emit = defineEmits<{
 			:is-enhanced="isPageEnhanced(pageNum)"
 			:is-deleted="isPageDeleted(pageNum)"
 			:rotation-deg="pageRotations[pageNum - 1] || 0"
+			:page-crop="pageCrops[pageNum]"
+			:thumbnail-size="thumbnailSize"
 			:crop-indicator-text="getCropIndicatorText(pageNum)"
 			:enhance-indicator-text="getEnhanceIndicatorText(pageNum)"
 			:page-segments="getPageSegmentsSummary(pageNum)"
@@ -53,6 +68,8 @@ const emit = defineEmits<{
 			:total-pages="totalPages"
 			:can-delete="remainingPagesCount > 1"
 			@card-click="emit('card-click', pageNum)"
+			@card-range-select="emit('card-range-select', pageNum)"
+			@zoom-page="emit('zoom-page', pageNum)"
 			@open-crop-modal="emit('open-crop-modal', pageNum)"
 			@open-enhance-modal="emit('open-enhance-modal', pageNum)"
 			@rotate-page="emit('rotate-page', pageNum - 1, $event)"
@@ -76,11 +93,32 @@ const emit = defineEmits<{
 	overflow-y: auto;
 }
 
+.gridSmall {
+	grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+	grid-auto-rows: minmax(195px, auto);
+	gap: 10px;
+}
+
+.gridLarge {
+	grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+	grid-auto-rows: minmax(330px, auto);
+	gap: 20px;
+}
+
 @media (max-width: 768px) {
 	.grid {
 		grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
 		gap: 12px;
 		padding: 12px;
+	}
+
+	.gridSmall {
+		grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+		gap: 8px;
+	}
+
+	.gridLarge {
+		grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
 	}
 }
 
@@ -89,6 +127,15 @@ const emit = defineEmits<{
 		grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
 		gap: 8px;
 		padding: 8px;
+	}
+
+	.gridSmall {
+		grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+		gap: 6px;
+	}
+
+	.gridLarge {
+		grid-template-columns: 1fr;
 	}
 }
 </style>

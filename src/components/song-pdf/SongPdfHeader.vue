@@ -16,6 +16,8 @@ import BookmarkMusicOutline from 'vue-material-design-icons/BookmarkMusicOutline
 import ContentSaveOutlineIcon from 'vue-material-design-icons/ContentSaveOutline.vue'
 import InformationOutline from 'vue-material-design-icons/InformationOutline.vue'
 import FormatListNumbered from 'vue-material-design-icons/FormatListNumbered.vue'
+import TableMergeCells from 'vue-material-design-icons/TableMergeCells.vue'
+import History from 'vue-material-design-icons/History.vue'
 import FullscreenIcon from 'vue-material-design-icons/Fullscreen.vue'
 import FullscreenExitIcon from 'vue-material-design-icons/FullscreenExit.vue'
 
@@ -59,6 +61,8 @@ const emit = defineEmits<{
 	'update:activeMode': [mode: Mode]
 	'save': []
 	'open-page-order-modal': []
+	'open-join-modal': []
+	'open-versions-modal': []
 	'toggle-fullscreen': []
 }>()
 
@@ -77,6 +81,9 @@ const saveButtonTitle = computed(() => {
 	if (props.activeMode === 'bookmarks') {
 		return t('sheetmusic', 'Save bookmarks')
 	}
+	if (props.activeMode === 'split') {
+		return t('sheetmusic', 'Split and create songs')
+	}
 	if (props.activeMode === 'rotate') {
 		return (props.hasAnyDeletion || props.hasAnyCrop || props.hasAnyEnhance || props.hasAnyJoin)
 			? t('sheetmusic', 'Save changes')
@@ -87,10 +94,9 @@ const saveButtonTitle = computed(() => {
 			? t('sheetmusic', 'Save changes')
 			: t('sheetmusic', 'Save cropped PDF')
 	}
-	if (props.activeMode === 'enhance') {
-		return t('sheetmusic', 'Save enhanced PDF')
-	}
-	return t('sheetmusic', 'Split and create songs')
+	return (props.hasAnyDeletion || props.hasAnyRotation || props.hasAnyCrop || props.hasAnyJoin)
+		? t('sheetmusic', 'Save changes')
+		: t('sheetmusic', 'Save enhanced PDF')
 })
 
 const saveButtonText = computed(() => {
@@ -104,6 +110,9 @@ const saveButtonText = computed(() => {
 	if (props.activeMode === 'bookmarks') {
 		return t('sheetmusic', 'Save Bookmarks')
 	}
+	if (props.activeMode === 'split') {
+		return t('sheetmusic', 'Split & Create Songs')
+	}
 	if (props.activeMode === 'rotate') {
 		return (props.hasAnyDeletion || props.hasAnyCrop || props.hasAnyEnhance || props.hasAnyJoin)
 			? t('sheetmusic', 'Save Changes')
@@ -114,10 +123,9 @@ const saveButtonText = computed(() => {
 			? t('sheetmusic', 'Save Changes')
 			: t('sheetmusic', 'Save Crops')
 	}
-	if (props.activeMode === 'enhance') {
-		return t('sheetmusic', 'Save Enhanced PDF')
-	}
-	return t('sheetmusic', 'Split & Create Songs')
+	return (props.hasAnyDeletion || props.hasAnyRotation || props.hasAnyCrop || props.hasAnyJoin)
+		? t('sheetmusic', 'Save Changes')
+		: t('sheetmusic', 'Save Enhanced PDF')
 })
 </script>
 
@@ -136,9 +144,9 @@ const saveButtonText = computed(() => {
 				<span :class="$style.cancelBtnText">{{ t('sheetmusic', 'Cancel') }}</span>
 			</NcButton>
 			<div :class="$style.fileMeta">
-				<span :class="$style.songTitle" :title="song.title">{{ song.title }}</span>
+				<span v-if="isFullscreen" :class="$style.songTitle" :title="song.title">{{ song.title }}</span>
 				<span v-if="targetFile" :class="$style.fileName">
-					({{ getFileName(targetFile.path) }} — {{ hasAnyDeletion ? `${remainingPagesCount} / ${totalPages}` : totalPages }} {{ totalPages === 1 ? t('sheetmusic', 'page') : t('sheetmusic', 'pages') }})
+					{{ getFileName(targetFile.path) }} — {{ hasAnyDeletion ? `${remainingPagesCount} / ${totalPages}` : totalPages }} {{ totalPages === 1 ? t('sheetmusic', 'page') : t('sheetmusic', 'pages') }}
 				</span>
 				<div
 					v-if="formattedFileSize !== '—' || primaryResolution"
@@ -150,10 +158,12 @@ const saveButtonText = computed(() => {
 						:title="t('sheetmusic', 'Show PDF file size and resolution details')"
 						@click="showInfoDropdown = !showInfoDropdown">
 						<InformationOutline :size="15" />
-						<span v-if="formattedFileSize !== '—'">{{ formattedFileSize }}</span>
-						<span v-if="formattedFileSize !== '—' && primaryResolution">·</span>
-						<span v-if="primaryResolution">
-							{{ primaryResolution.dpi }} DPI ({{ primaryResolution.pixelWidth }}×{{ primaryResolution.pixelHeight }} px)
+						<span :class="$style.infoBadgeText">
+							<span v-if="formattedFileSize !== '—'">{{ formattedFileSize }}</span>
+							<span v-if="formattedFileSize !== '—' && primaryResolution"> · </span>
+							<span v-if="primaryResolution">
+								{{ primaryResolution.dpi }} DPI ({{ primaryResolution.pixelWidth }}×{{ primaryResolution.pixelHeight }} px)
+							</span>
 						</span>
 					</button>
 					<div
@@ -205,73 +215,104 @@ const saveButtonText = computed(() => {
 			</div>
 		</div>
 
-		<!-- Center: Mode Switcher Tabs -->
+		<!-- Center: Mode Switcher & PDF Tools -->
 		<nav :class="$style.modeTabs" :aria-label="t('sheetmusic', 'PDF edit modes')">
 			<button
 				type="button"
 				:class="[$style.tabButton, activeMode === 'rotate' && $style.tabButtonActive]"
 				:title="t('sheetmusic', 'Rotate Pages')"
+				:aria-label="t('sheetmusic', 'Rotate Pages')"
 				@click="emit('update:activeMode', 'rotate')">
 				<RotateRight :size="18" />
 				<span :class="$style.tabLabel">{{ t('sheetmusic', 'Rotate Pages') }}</span>
+				<span v-if="hasAnyRotation || hasAnyDeletion" :class="$style.tabDirtyDot" :aria-label="t('sheetmusic', 'Has unsaved changes')" />
 			</button>
 			<button
 				type="button"
 				:class="[$style.tabButton, activeMode === 'crop' && $style.tabButtonActive]"
 				:title="t('sheetmusic', 'Crop Pages')"
+				:aria-label="t('sheetmusic', 'Crop Pages')"
 				@click="emit('update:activeMode', 'crop')">
 				<CropIcon :size="18" />
 				<span :class="$style.tabLabel">{{ t('sheetmusic', 'Crop Pages') }}</span>
+				<span v-if="hasAnyCrop" :class="$style.tabDirtyDot" :aria-label="t('sheetmusic', 'Has unsaved changes')" />
 			</button>
 			<button
 				type="button"
 				:class="[$style.tabButton, activeMode === 'enhance' && $style.tabButtonActive]"
 				:title="t('sheetmusic', 'Enhance Scans')"
+				:aria-label="t('sheetmusic', 'Enhance Scans')"
 				@click="emit('update:activeMode', 'enhance')">
 				<Tune :size="18" />
 				<span :class="$style.tabLabel">{{ t('sheetmusic', 'Enhance Scans') }}</span>
+				<span v-if="hasAnyEnhance" :class="$style.tabDirtyDot" :aria-label="t('sheetmusic', 'Has unsaved changes')" />
 			</button>
 			<button
 				type="button"
 				:class="[$style.tabButton, activeMode === 'split' && $style.tabButtonActive]"
 				:title="t('sheetmusic', 'Split PDF')"
+				:aria-label="t('sheetmusic', 'Split PDF')"
 				@click="emit('update:activeMode', 'split')">
 				<CallSplit :size="18" />
 				<span :class="$style.tabLabel">{{ t('sheetmusic', 'Split PDF') }}</span>
+				<span v-if="splitSegmentsCount > 0" :class="$style.tabCountBadge">{{ splitSegmentsCount }}</span>
 			</button>
 			<button
 				type="button"
 				:class="[$style.tabButton, activeMode === 'bookmarks' && $style.tabButtonActive]"
 				:title="t('sheetmusic', 'Bookmarks')"
+				:aria-label="t('sheetmusic', 'Bookmarks')"
 				@click="emit('update:activeMode', 'bookmarks')">
 				<BookmarkMusicOutline :size="18" />
 				<span :class="$style.tabLabel">{{ t('sheetmusic', 'Bookmarks') }}</span>
+				<span v-if="(bookmarksCount ?? 0) > 0" :class="$style.tabCountBadge">{{ bookmarksCount }}</span>
 			</button>
-		</nav>
-
-		<!-- Right: Page Order & Save / Split Button -->
-		<div :class="$style.headerRight">
-			<NcButton
-				variant="secondary"
+			<span :class="$style.tabDivider" aria-hidden="true" />
+			<button
+				type="button"
+				:class="$style.tabButton"
 				:disabled="isSaving || isLoading"
 				:title="t('sheetmusic', 'Edit page order')"
 				:aria-label="t('sheetmusic', 'Page Order…')"
 				@click="emit('open-page-order-modal')">
-				<template #icon>
-					<FormatListNumbered :size="20" />
-				</template>
-				{{ t('sheetmusic', 'Page Order…') }}
-			</NcButton>
+				<FormatListNumbered :size="18" />
+				<span :class="$style.tabLabel">{{ t('sheetmusic', 'Page Order…') }}</span>
+			</button>
+			<button
+				type="button"
+				:class="$style.tabButton"
+				:disabled="isSaving || isLoading || totalPages < 2"
+				:title="t('sheetmusic', 'Join two pages into a single page')"
+				:aria-label="t('sheetmusic', 'Join Pages…')"
+				@click="emit('open-join-modal')">
+				<TableMergeCells :size="18" />
+				<span :class="$style.tabLabel">{{ t('sheetmusic', 'Join Pages…') }}</span>
+			</button>
+		</nav>
+
+		<!-- Right: Save / Split & Fullscreen Buttons -->
+		<div :class="$style.headerRight">
 			<NcButton
 				variant="primary"
 				:disabled="saveButtonDisabled"
 				:title="saveButtonTitle"
+				:aria-label="saveButtonText"
 				@click="emit('save')">
 				<template #icon>
 					<CallSplit v-if="activeMode === 'split'" :size="20" />
 					<ContentSaveOutlineIcon v-else :size="20" />
 				</template>
-				{{ saveButtonText }}
+				<span :class="$style.saveBtnText">{{ saveButtonText }}</span>
+			</NcButton>
+			<NcButton
+				variant="tertiary"
+				:disabled="isSaving || isLoading"
+				:title="t('sheetmusic', 'View file version history and revert changes')"
+				:aria-label="t('sheetmusic', 'Version History…')"
+				@click="emit('open-versions-modal')">
+				<template #icon>
+					<History :size="20" />
+				</template>
 			</NcButton>
 			<NcButton
 				variant="tertiary"
@@ -487,6 +528,47 @@ const saveButtonText = computed(() => {
 	display: inline;
 }
 
+.tabDivider {
+	width: 1px;
+	height: 20px;
+	background-color: var(--color-border);
+	margin: 0 2px;
+	flex-shrink: 0;
+}
+
+.tabButton:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+.saveBtnText {
+	display: inline;
+}
+
+.tabDirtyDot {
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background-color: var(--color-primary-element);
+	flex-shrink: 0;
+}
+
+.tabCountBadge {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 17px;
+	height: 17px;
+	padding: 0 5px;
+	border-radius: 9px;
+	background-color: var(--color-primary-element-light, rgba(0, 130, 201, 0.15));
+	color: var(--color-primary-element);
+	font-size: 11px;
+	font-weight: 600;
+	line-height: 1;
+	flex-shrink: 0;
+}
+
 .headerRight {
 	display: flex;
 	align-items: center;
@@ -547,8 +629,13 @@ const saveButtonText = computed(() => {
 		font-size: 12px;
 	}
 
-	.infoPopoverWrap {
+	.infoBadgeText {
 		display: none;
+	}
+
+	.infoBadgeBtn {
+		padding: 4px 6px;
+		border-radius: 50%;
 	}
 
 	.songTitle {
@@ -560,8 +647,44 @@ const saveButtonText = computed(() => {
 	}
 }
 
+@media (max-width: 900px) {
+	.tabLabel {
+		display: none;
+	}
+
+	.tabButton {
+		flex: 1 1 0;
+		min-width: 0;
+		padding: 6px 8px;
+		gap: 4px;
+	}
+
+	.modeTabs {
+		overflow-x: visible;
+		justify-content: space-between;
+	}
+}
+
 @media (max-width: 600px) {
+	.header {
+		padding: 6px 10px;
+		gap: 8px;
+	}
+
+	.headerLeft {
+		gap: 8px;
+	}
+
+	.headerRight {
+		gap: 4px;
+	}
+
 	.fileName {
+		display: none;
+	}
+
+	.cancelBtnText,
+	.headerLeft :global(.button-vue__text) {
 		display: none;
 	}
 
@@ -569,33 +692,21 @@ const saveButtonText = computed(() => {
 		max-width: 150px;
 		font-size: 14px;
 	}
-
-	.modeTabs {
-		flex-wrap: wrap;
-		gap: 4px;
-		overflow-x: visible;
-	}
-
-	.tabButton {
-		flex: 1 1 calc(50% - 4px);
-		min-width: 120px;
-		padding: 6px 6px;
-	}
 }
 
 @media (max-width: 480px) {
-	.cancelBtnText {
+	.saveBtnText,
+	.headerRight :global(.button-vue__text) {
 		display: none;
 	}
 
 	.songTitle {
-		max-width: 130px;
+		max-width: 140px;
 	}
 
 	.tabButton {
 		padding: 6px 4px;
-		gap: 4px;
-		font-size: 11.5px;
+		gap: 3px;
 	}
 }
 </style>

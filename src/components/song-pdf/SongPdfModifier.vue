@@ -29,6 +29,8 @@ import SongPdfVersionsModal from './SongPdfVersionsModal.vue'
 import { useFileVersions } from './useFileVersions'
 import SongPdfCropModal from './SongPdfCropModal.vue'
 import SongPageOrderModal from './SongPageOrderModal.vue'
+import SongPageOrderZoomModal from './SongPageOrderZoomModal.vue'
+import { renderPageImage } from './usePageOrderThumbnails'
 import SongPdfJoinModal from './SongPdfJoinModal.vue'
 import SongPdfRotateModal from './SongPdfRotateModal.vue'
 import SongPdfEnhanceModal from './SongPdfEnhanceModal.vue'
@@ -101,6 +103,7 @@ const targetFile = computed<SongFile | undefined>(() => {
 // State
 type Mode = 'rotate' | 'split' | 'crop' | 'enhance' | 'bookmarks'
 const activeMode = ref<Mode>('rotate')
+const thumbnailSize = ref<'small' | 'medium' | 'large'>('medium')
 
 const isLoading = ref(false)
 const isSaving = ref(false)
@@ -800,13 +803,144 @@ function handleFullscreenChange() {
 	syncFullscreenBodyClass(active)
 }
 
+function selectAllPages() {
+	selectedPages.value = Array.from({ length: totalPages.value }, (_, i) => i + 1)
+}
+
+function handleCancel() {
+	if (hasAnyChange.value && typeof window !== 'undefined' && typeof window.confirm === 'function') {
+		if (!window.confirm(t('sheetmusic', 'You have unsaved PDF changes. Discard all changes and leave?'))) {
+			return
+		}
+	}
+	emit('cancel')
+}
+
+function handleDiscardAllEdits() {
+	if (!hasAnyChange.value) return
+	if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
+		if (!window.confirm(t('sheetmusic', 'Discard all unsaved rotations, crops, enhancements, and deletions?'))) {
+			return
+		}
+	}
+	resetAllCurrentEdits()
+}
+
+const isAnyModalOpen = computed(() =>
+	isCropModalOpen.value
+	|| isRotateModalOpen.value
+	|| isEnhanceModalOpen.value
+	|| isJoinModalOpen.value
+	|| isVersionsModalOpen.value
+	|| isPageOrderModalOpen.value
+	|| isZoomModalOpen.value,
+)
+
+// Page Zoom Lightbox Modal state (reuses SongPageOrderZoomModal)
+const isZoomModalOpen = ref(false)
+const zoomPageNum = ref(1)
+const zoomHighResCache = ref<Record<number, string>>({})
+const isLoadingZoomHighRes = ref(false)
+
+watch(activePdfDoc, () => {
+	zoomHighResCache.value = {}
+})
+
+const zoomThumbnailUrl = computed(() => {
+	const canvas = thumbnailCanvases.value?.[zoomPageNum.value]
+	if (!canvas || typeof canvas.toDataURL !== 'function') return ''
+	try {
+		return canvas.toDataURL('image/jpeg', 0.85)
+	} catch {
+		return ''
+	}
+})
+
+async function loadZoomHighResPage(pageNum: number) {
+	if (zoomHighResCache.value[pageNum] || !activePdfDoc.value) return
+	isLoadingZoomHighRes.value = true
+	try {
+		const url = await renderPageImage(activePdfDoc.value, pageNum, 1600)
+		if (url) {
+			zoomHighResCache.value = {
+				...zoomHighResCache.value,
+				[pageNum]: url,
+			}
+		}
+	} finally {
+		isLoadingZoomHighRes.value = false
+	}
+}
+
+function openPageZoom(pageNum: number) {
+	zoomPageNum.value = pageNum
+	isZoomModalOpen.value = true
+	loadZoomHighResPage(pageNum)
+}
+
+function prevZoomPage() {
+	if (zoomPageNum.value > 1) {
+		zoomPageNum.value--
+		loadZoomHighResPage(zoomPageNum.value)
+	}
+}
+
+function nextZoomPage() {
+	if (zoomPageNum.value < totalPages.value) {
+		zoomPageNum.value++
+		loadZoomHighResPage(zoomPageNum.value)
+	}
+}
+
+function handleKeyDown(event: KeyboardEvent) {
+	if (isAnyModalOpen.value || isSaving.value || isLoading.value) return
+
+	const target = event.target as HTMLElement | null
+	if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)) {
+		return
+	}
+
+	if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+		event.preventDefault()
+		const canSave = activeMode.value === 'split'
+			? splitSegments.value.length > 0
+			: activeMode.value === 'bookmarks'
+				? bookmarks.value.length > 0
+				: (hasAnyChange.value && remainingPagesCount.value > 0)
+		if (canSave) {
+			handleHeaderSave()
+		}
+		return
+	}
+
+	if (event.key === 'Escape' && selectedPages.value.length > 0) {
+		selectedPages.value = []
+		return
+	}
+
+	if (!event.ctrlKey && !event.metaKey && !event.altKey) {
+		const modeMap: Record<string, Mode> = {
+			1: 'rotate',
+			2: 'crop',
+			3: 'enhance',
+			4: 'split',
+			5: 'bookmarks',
+		}
+		if (modeMap[event.key]) {
+			activeMode.value = modeMap[event.key]
+		}
+	}
+}
+
 onMounted(() => {
 	loadPdf()
 	document.addEventListener('fullscreenchange', handleFullscreenChange)
+	window.addEventListener('keydown', handleKeyDown)
 })
 
 onUnmounted(() => {
 	document.removeEventListener('fullscreenchange', handleFullscreenChange)
+	window.removeEventListener('keydown', handleKeyDown)
 	syncFullscreenBodyClass(false)
 	if (document.fullscreenElement && document.exitFullscreen) {
 		document.exitFullscreen().catch(() => {})
@@ -843,8 +977,10 @@ watch(() => targetFile.value?.path, () => {
 			:is-fullscreen="isFullscreen"
 			@update:active-mode="activeMode = $event"
 			@update:activeMode="activeMode = $event"
-			@cancel="emit('cancel')"
+			@cancel="handleCancel"
 			@open-page-order-modal="isPageOrderModalOpen = true"
+			@open-join-modal="openJoinModal(1, 2)"
+			@open-versions-modal="openVersionsModal"
 			@toggle-fullscreen="toggleFullscreen"
 			@save="handleHeaderSave" />
 
@@ -873,19 +1009,22 @@ watch(() => targetFile.value?.path, () => {
 					:has-any-crop="hasAnyCrop"
 					:has-any-enhance="hasAnyEnhance"
 					:has-any-deletion="hasAnyDeletion"
+					:has-any-change="hasAnyChange"
 					:deleted-pages-count="deletedPages.size"
 					:selected-pages-count="selectedPages.length"
+					:thumbnail-size="thumbnailSize"
 					@rotate-all="rotateAll($event)"
 					@open-rotate-modal="openRotateModal(1)"
 					@reset-rotations="resetRotations"
-					@open-join-modal="openJoinModal(1, 2)"
 					@restore-all-pages="restoreAllPages"
 					@open-crop-modal="openCropModal(1)"
 					@reset-all-crops="resetAllCrops"
 					@open-enhance-modal="openEnhanceModal(1)"
 					@reset-all-enhancements="resetAllEnhancements"
-					@open-versions-modal="openVersionsModal"
-					@clear-selection="selectedPages = []" />
+					@clear-selection="selectedPages = []"
+					@select-all-pages="selectAllPages"
+					@discard-all-edits="handleDiscardAllEdits"
+					@update:thumbnail-size="thumbnailSize = $event" />
 
 				<!-- Thumbnail Grid -->
 				<SongPdfPageGrid
@@ -896,12 +1035,16 @@ watch(() => targetFile.value?.path, () => {
 					:is-page-enhanced="isPageEnhanced"
 					:is-page-deleted="isPageDeleted"
 					:page-rotations="pageRotations"
+					:page-crops="pageCrops"
+					:thumbnail-size="thumbnailSize"
 					:get-crop-indicator-text="getCropIndicatorText"
 					:get-enhance-indicator-text="getEnhanceIndicatorText"
 					:get-page-segments-summary="getPageSegmentsSummary"
 					:get-page-bookmarks-summary="getPageBookmarksSummary"
 					:remaining-pages-count="remainingPagesCount"
-					@card-click="(activeMode === 'split' || activeMode === 'bookmarks') ? togglePageSelection($event) : undefined"
+					@card-click="(activeMode === 'split' || activeMode === 'bookmarks') ? togglePageSelection($event, false) : undefined"
+					@card-range-select="(activeMode === 'split' || activeMode === 'bookmarks') ? togglePageSelection($event, true) : undefined"
+					@zoom-page="openPageZoom"
 					@open-crop-modal="openCropModal"
 					@open-enhance-modal="openEnhanceModal"
 					@rotate-page="rotatePage"
@@ -1013,6 +1156,19 @@ watch(() => targetFile.value?.path, () => {
 			:library-id="libraryId"
 			:pdf="activePdfDoc"
 			@saved="handlePageOrderSaved" />
+
+		<!-- Page Zoom Lightbox Modal -->
+		<SongPageOrderZoomModal
+			v-model:open="isZoomModalOpen"
+			:page-num="zoomPageNum"
+			:total-pages="totalPages"
+			:high-res-url="zoomHighResCache[zoomPageNum]"
+			:thumbnail-url="zoomThumbnailUrl"
+			:is-loading-high-res="isLoadingZoomHighRes"
+			:show-append-action="false"
+			:rotation-deg="pageRotations[zoomPageNum - 1] || 0"
+			@prev="prevZoomPage"
+			@next="nextZoomPage" />
 	</div>
 </template>
 
@@ -1022,7 +1178,9 @@ watch(() => targetFile.value?.path, () => {
 	flex-direction: column;
 	width: 100%;
 	height: calc(100vh - var(--header-height, 50px) - 80px);
+	height: calc(100dvh - var(--header-height, 50px) - 80px);
 	max-height: calc(100vh - var(--header-height, 50px) - 80px);
+	max-height: calc(100dvh - var(--header-height, 50px) - 80px);
 	min-height: 420px;
 	background-color: var(--color-main-background);
 	overflow: hidden;
@@ -1033,7 +1191,9 @@ watch(() => targetFile.value?.path, () => {
 	inset: 0;
 	width: 100vw;
 	height: 100vh;
+	height: 100dvh;
 	max-height: 100vh;
+	max-height: 100dvh;
 	z-index: 100000;
 }
 
@@ -1083,12 +1243,19 @@ watch(() => targetFile.value?.path, () => {
 @media (max-width: 840px) {
 	.container {
 		height: calc(100vh - var(--header-height, 50px));
+		height: calc(100dvh - var(--header-height, 50px));
 		max-height: 100vh;
+		max-height: 100dvh;
 		min-height: 360px;
 	}
 
 	.contentLayout {
 		flex-direction: column;
+	}
+
+	.previewSection {
+		flex: 1 1 0;
+		min-height: 220px;
 	}
 }
 </style>

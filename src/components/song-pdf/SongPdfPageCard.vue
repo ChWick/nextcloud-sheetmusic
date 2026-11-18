@@ -2,7 +2,9 @@
 import { computed } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import DeleteOutline from 'vue-material-design-icons/DeleteOutline.vue'
+import MagnifyPlus from 'vue-material-design-icons/MagnifyPlus.vue'
 import SongPdfCardActions from './SongPdfCardActions.vue'
+import type { PageCrop } from './crop-types'
 
 export interface SplitSegmentSummary {
 	id: string
@@ -27,6 +29,8 @@ const props = withDefaults(
 		isEnhanced?: boolean
 		isDeleted?: boolean
 		rotationDeg?: number
+		pageCrop?: PageCrop
+		thumbnailSize?: 'small' | 'medium' | 'large'
 		cropIndicatorText?: string
 		enhanceIndicatorText?: string
 		pageSegments?: SplitSegmentSummary[]
@@ -57,6 +61,8 @@ const activeBookmarkSummaries = computed<BookmarkPageSummary[]>(() => {
 
 const emit = defineEmits<{
 	'card-click': [pageNum: number]
+	'card-range-select': [pageNum: number]
+	'zoom-page': [pageNum: number]
 	'set-container-ref': [pageNum: number, el: HTMLElement | null]
 	'rotate-page': [deltaDeg: number]
 	'open-rotate-modal': []
@@ -66,15 +72,30 @@ const emit = defineEmits<{
 	'open-enhance-modal': []
 }>()
 
-function handleCardClick() {
+function handleCardClick(event: MouseEvent) {
 	if (props.activeMode === 'split' || props.activeMode === 'bookmarks' || props.activeMode === 'movements') {
-		emit('card-click', props.pageNum)
+		if (event.shiftKey) {
+			emit('card-range-select', props.pageNum)
+		} else {
+			emit('card-click', props.pageNum)
+		}
 	} else if (props.activeMode === 'crop' && !props.isDeleted) {
 		emit('open-crop-modal')
 	} else if (props.activeMode === 'enhance' && !props.isDeleted) {
 		emit('open-enhance-modal')
 	}
 }
+
+const cropOverlayStyle = computed(() => {
+	if (!props.isCropped || !props.pageCrop || props.isDeleted) return null
+	const { x, y, width, height } = props.pageCrop
+	return {
+		left: `${Math.max(0, Math.min(1, x)) * 100}%`,
+		top: `${Math.max(0, Math.min(1, y)) * 100}%`,
+		width: `${Math.max(0, Math.min(1, width)) * 100}%`,
+		height: `${Math.max(0, Math.min(1, height)) * 100}%`,
+	}
+})
 
 const hasRotation = computed(() => Math.abs(props.rotationDeg) > 0.001)
 const formattedRotation = computed(() => `${Math.round(props.rotationDeg * 10) / 10}°`)
@@ -84,12 +105,14 @@ const formattedRotation = computed(() => `${Math.round(props.rotationDeg * 10) /
 	<div
 		:class="[
 			$style.pageCard,
+			thumbnailSize === 'small' && $style.pageCardSmall,
+			thumbnailSize === 'large' && $style.pageCardLarge,
 			isSelected && $style.pageCardSelected,
 			activeMode === 'crop' && isCropped && $style.pageCardCropped,
 			activeMode === 'enhance' && isEnhanced && $style.pageCardEnhanced,
 			isDeleted && $style.pageCardDeleted,
 		]"
-		@click="handleCardClick">
+		@click="handleCardClick($event)">
 		<!-- Segment color indicators bar in split mode -->
 		<div v-if="activeMode === 'split'" :class="$style.segmentPills">
 			<span
@@ -114,18 +137,35 @@ const formattedRotation = computed(() => `${Math.round(props.rotationDeg * 10) /
 		</div>
 
 		<div :class="$style.canvasWrapper">
-			<div
-				:ref="(el) => emit('set-container-ref', pageNum, el as HTMLElement | null)"
-				:class="$style.thumbnailSlot"
-				:data-page-num="pageNum"
+			<div :class="$style.thumbnailStage"
 				:style="{
 					transform: `rotate(${rotationDeg || 0}deg)`,
 					transition: 'transform 0.15s ease-out'
-				}"></div>
+				}">
+				<div
+					:ref="(el) => emit('set-container-ref', pageNum, el as HTMLElement | null)"
+					:class="$style.thumbnailSlot"
+					:data-page-num="pageNum"></div>
+				<div
+					v-if="cropOverlayStyle"
+					:class="$style.cropPreviewFrame"
+					:style="cropOverlayStyle"
+					aria-hidden="true" />
+			</div>
 			<div v-if="isDeleted" :class="$style.deletedOverlay">
 				<DeleteOutline :size="28" />
 				<span>{{ t('sheetmusic', 'Deleted') }}</span>
 			</div>
+			<button
+				v-else
+				type="button"
+				:class="$style.zoomBtn"
+				:title="t('sheetmusic', 'Zoom in on page {p}', { p: pageNum }, { escape: false })"
+				:aria-label="t('sheetmusic', 'Zoom in on page {p}', { p: pageNum }, { escape: false })"
+				data-test="card-zoom-btn"
+				@click.stop="emit('zoom-page', pageNum)">
+				<MagnifyPlus :size="15" />
+			</button>
 		</div>
 
 		<div :class="$style.cardFooter">
@@ -246,11 +286,57 @@ const formattedRotation = computed(() => `${Math.round(props.rotationDeg * 10) /
 	overflow: hidden;
 }
 
+.thumbnailStage {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	overflow: hidden;
+	box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+
 .thumbnailSlot {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+
+.cropPreviewFrame {
+	position: absolute;
+	box-sizing: border-box;
+	border: 1.5px dashed var(--color-primary-element);
+	box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.35);
+	pointer-events: none;
+}
+
+.pageCardSmall {
+	min-height: 195px;
+}
+
+.pageCardSmall .canvasWrapper {
+	flex: 1 0 150px;
+	min-height: 150px;
+	padding: 8px;
+}
+
+.pageCardSmall .thumbnailSlot :global(canvas) {
+	max-width: 100%;
+	max-height: 136px;
+}
+
+.pageCardLarge {
+	min-height: 330px;
+}
+
+.pageCardLarge .canvasWrapper {
+	flex: 1 0 280px;
+	min-height: 280px;
+	padding: 16px;
+}
+
+.pageCardLarge .thumbnailSlot :global(canvas) {
+	max-width: 220px;
+	max-height: 260px;
 }
 
 .thumbnailSlot :global(canvas) {
@@ -276,6 +362,36 @@ const formattedRotation = computed(() => `${Math.round(props.rotationDeg * 10) /
 	color: var(--color-text-maxcontrast);
 	font-weight: bold;
 	font-size: 14px;
+}
+
+.zoomBtn {
+	position: absolute;
+	top: 6px;
+	right: 6px;
+	z-index: 3;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 26px;
+	height: 26px;
+	border-radius: 50%;
+	border: 1px solid var(--color-border);
+	background-color: rgba(255, 255, 255, 0.9);
+	color: var(--color-main-text);
+	cursor: pointer;
+	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+	transition: background-color 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
+	opacity: 0.85;
+}
+
+.pageCard:hover .zoomBtn {
+	opacity: 1;
+}
+
+.zoomBtn:hover {
+	background-color: #fff;
+	transform: scale(1.1);
+	color: var(--color-primary-element);
 }
 
 .cardFooter {
@@ -362,10 +478,27 @@ const formattedRotation = computed(() => `${Math.round(props.rotationDeg * 10) /
 }
 
 @media (max-width: 480px) {
+	.pageCard {
+		min-height: 185px;
+	}
+
+	.canvasWrapper {
+		flex: 1 0 140px;
+		min-height: 140px;
+		padding: 8px;
+	}
+
+	.thumbnailSlot :global(canvas) {
+		max-width: 100%;
+		max-height: 136px;
+	}
+
 	.cardFooter {
-		padding: 4px 6px;
-		gap: 2px;
-		min-height: 34px;
+		flex-direction: column;
+		align-items: stretch;
+		padding: 6px;
+		gap: 4px;
+		min-height: 0;
 	}
 
 	.pageNumLabel {

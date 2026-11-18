@@ -6,38 +6,57 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import RotateRight from 'vue-material-design-icons/RotateRight.vue'
 import RotateLeft from 'vue-material-design-icons/RotateLeft.vue'
 import Rotate360 from 'vue-material-design-icons/Rotate360.vue'
-import TableMergeCells from 'vue-material-design-icons/TableMergeCells.vue'
+import Autorenew from 'vue-material-design-icons/Autorenew.vue'
 import DeleteRestore from 'vue-material-design-icons/DeleteRestore.vue'
 import CropIcon from 'vue-material-design-icons/Crop.vue'
 import Tune from 'vue-material-design-icons/Tune.vue'
-import History from 'vue-material-design-icons/History.vue'
 import RestoreIcon from 'vue-material-design-icons/Restore.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
+import CheckboxMultipleMarkedOutline from 'vue-material-design-icons/CheckboxMultipleMarkedOutline.vue'
+import DeleteSweepOutline from 'vue-material-design-icons/DeleteSweepOutline.vue'
+import MagnifyMinusOutline from 'vue-material-design-icons/MagnifyMinusOutline.vue'
+import MagnifyPlusOutline from 'vue-material-design-icons/MagnifyPlusOutline.vue'
 
-defineProps<{
-	activeMode: 'rotate' | 'crop' | 'enhance' | 'split' | 'bookmarks' | 'movements'
-	totalPages: number
-	hasAnyRotation: boolean
-	hasAnyCrop: boolean
-	hasAnyEnhance: boolean
-	hasAnyDeletion: boolean
-	deletedPagesCount: number
-	selectedPagesCount: number
-}>()
+const props = withDefaults(
+	defineProps<{
+		activeMode: 'rotate' | 'crop' | 'enhance' | 'split' | 'bookmarks' | 'movements'
+		totalPages: number
+		hasAnyRotation: boolean
+		hasAnyCrop: boolean
+		hasAnyEnhance: boolean
+		hasAnyDeletion: boolean
+		hasAnyChange?: boolean
+		deletedPagesCount: number
+		selectedPagesCount: number
+		thumbnailSize?: 'small' | 'medium' | 'large'
+	}>(),
+	{
+		hasAnyChange: false,
+		thumbnailSize: 'medium',
+	},
+)
 
 const emit = defineEmits<{
 	'rotate-all': [deltaDeg: number]
 	'open-rotate-modal': []
 	'reset-rotations': []
-	'open-join-modal': []
 	'restore-all-pages': []
 	'open-crop-modal': []
 	'reset-all-crops': []
 	'open-enhance-modal': []
 	'reset-all-enhancements': []
-	'open-versions-modal': []
 	'clear-selection': []
+	'select-all-pages': []
+	'discard-all-edits': []
+	'update:thumbnailSize': [size: 'small' | 'medium' | 'large']
 }>()
+
+function stepThumbnailSize(direction: -1 | 1) {
+	const order: Array<'small' | 'medium' | 'large'> = ['small', 'medium', 'large']
+	const idx = order.indexOf(props.thumbnailSize ?? 'medium')
+	const next = order[Math.max(0, Math.min(order.length - 1, idx + direction))]
+	emit('update:thumbnailSize', next)
+}
 </script>
 
 <template>
@@ -74,6 +93,17 @@ const emit = defineEmits<{
 				<NcButton
 					size="small"
 					variant="secondary"
+					:title="t('sheetmusic', 'Flip All 180°')"
+					:aria-label="t('sheetmusic', 'Flip All 180°')"
+					@click="emit('rotate-all', 180)">
+					<template #icon>
+						<Autorenew :size="16" />
+					</template>
+					<span :class="$style.btnText">{{ t('sheetmusic', 'Flip All 180°') }}</span>
+				</NcButton>
+				<NcButton
+					size="small"
+					variant="secondary"
 					:title="t('sheetmusic', 'Rotate by custom angle / fine deskew')"
 					:aria-label="t('sheetmusic', 'Rotate by Angle…')"
 					@click="emit('open-rotate-modal')">
@@ -85,32 +115,6 @@ const emit = defineEmits<{
 			</div>
 
 			<div :class="$style.toolbarDivider" />
-
-			<div :class="$style.toolbarGroup">
-				<NcButton
-					v-if="totalPages >= 2"
-					size="small"
-					variant="secondary"
-					:title="t('sheetmusic', 'Join two pages into a single page')"
-					:aria-label="t('sheetmusic', 'Join Pages…')"
-					@click="emit('open-join-modal')">
-					<template #icon>
-						<TableMergeCells :size="16" />
-					</template>
-					<span :class="$style.btnText">{{ t('sheetmusic', 'Join Pages…') }}</span>
-				</NcButton>
-				<NcButton
-					size="small"
-					variant="secondary"
-					:title="t('sheetmusic', 'View file version history and revert changes')"
-					:aria-label="t('sheetmusic', 'Version History…')"
-					@click="emit('open-versions-modal')">
-					<template #icon>
-						<History :size="16" />
-					</template>
-					<span :class="$style.btnText">{{ t('sheetmusic', 'Version History…') }}</span>
-				</NcButton>
-			</div>
 
 			<div :class="[$style.toolbarGroup, $style.toolbarGroupEnd]">
 				<NcButton
@@ -161,32 +165,6 @@ const emit = defineEmits<{
 
 			<div :class="$style.toolbarDivider" />
 
-			<div :class="$style.toolbarGroup">
-				<NcButton
-					v-if="totalPages >= 2"
-					size="small"
-					variant="secondary"
-					:title="t('sheetmusic', 'Join two pages into a single page')"
-					:aria-label="t('sheetmusic', 'Join Pages…')"
-					@click="emit('open-join-modal')">
-					<template #icon>
-						<TableMergeCells :size="16" />
-					</template>
-					<span :class="$style.btnText">{{ t('sheetmusic', 'Join Pages…') }}</span>
-				</NcButton>
-				<NcButton
-					size="small"
-					variant="secondary"
-					:title="t('sheetmusic', 'View file version history and revert changes')"
-					:aria-label="t('sheetmusic', 'Version History…')"
-					@click="emit('open-versions-modal')">
-					<template #icon>
-						<History :size="16" />
-					</template>
-					<span :class="$style.btnText">{{ t('sheetmusic', 'Version History…') }}</span>
-				</NcButton>
-			</div>
-
 			<div :class="[$style.toolbarGroup, $style.toolbarGroupEnd]">
 				<NcButton
 					size="small"
@@ -236,20 +214,6 @@ const emit = defineEmits<{
 
 			<div :class="$style.toolbarDivider" />
 
-			<div :class="$style.toolbarGroup">
-				<NcButton
-					size="small"
-					variant="secondary"
-					:title="t('sheetmusic', 'View file version history and revert changes')"
-					:aria-label="t('sheetmusic', 'Version History…')"
-					@click="emit('open-versions-modal')">
-					<template #icon>
-						<History :size="16" />
-					</template>
-					<span :class="$style.btnText">{{ t('sheetmusic', 'Version History…') }}</span>
-				</NcButton>
-			</div>
-
 			<div :class="[$style.toolbarGroup, $style.toolbarGroupEnd]">
 				<NcButton
 					size="small"
@@ -282,11 +246,23 @@ const emit = defineEmits<{
 		<template v-else-if="activeMode === 'split'">
 			<div :class="$style.toolbarGroup">
 				<span :class="$style.toolbarTitle">
-					{{ t('sheetmusic', 'Select pages in grid to assign to segments:') }}
+					{{ t('sheetmusic', 'Click pages to select (Shift+Click for range):') }}
 				</span>
 				<span v-if="selectedPagesCount > 0" :class="$style.selectionBadge">
 					{{ t('sheetmusic', '{count} pages selected', { count: selectedPagesCount }, { escape: false }) }}
 				</span>
+				<NcButton
+					v-if="totalPages > 0 && selectedPagesCount < totalPages"
+					size="small"
+					variant="secondary"
+					:title="t('sheetmusic', 'Select all pages')"
+					:aria-label="t('sheetmusic', 'Select all pages')"
+					@click="emit('select-all-pages')">
+					<template #icon>
+						<CheckboxMultipleMarkedOutline :size="16" />
+					</template>
+					<span :class="$style.btnText">{{ t('sheetmusic', 'Select All') }}</span>
+				</NcButton>
 				<NcButton
 					v-if="selectedPagesCount > 0"
 					size="small"
@@ -306,11 +282,23 @@ const emit = defineEmits<{
 		<template v-if="activeMode === 'bookmarks' || activeMode === 'movements'">
 			<div :class="$style.toolbarGroup">
 				<span :class="$style.toolbarTitle">
-					{{ t('sheetmusic', 'Select pages in grid to assign to bookmarks:') }}
+					{{ t('sheetmusic', 'Click pages to select (Shift+Click for range):') }}
 				</span>
 				<span v-if="selectedPagesCount > 0" :class="$style.selectionBadge">
 					{{ t('sheetmusic', '{count} pages selected', { count: selectedPagesCount }, { escape: false }) }}
 				</span>
+				<NcButton
+					v-if="totalPages > 0 && selectedPagesCount < totalPages"
+					size="small"
+					variant="secondary"
+					:title="t('sheetmusic', 'Select all pages')"
+					:aria-label="t('sheetmusic', 'Select all pages')"
+					@click="emit('select-all-pages')">
+					<template #icon>
+						<CheckboxMultipleMarkedOutline :size="16" />
+					</template>
+					<span :class="$style.btnText">{{ t('sheetmusic', 'Select All') }}</span>
+				</NcButton>
 				<NcButton
 					v-if="selectedPagesCount > 0"
 					size="small"
@@ -325,6 +313,50 @@ const emit = defineEmits<{
 				</NcButton>
 			</div>
 		</template>
+
+		<!-- Right-aligned Global Controls: Discard All & Thumbnail Zoom -->
+		<div :class="$style.toolbarRightControls">
+			<NcButton
+				v-if="hasAnyChange && (activeMode === 'rotate' || activeMode === 'crop' || activeMode === 'enhance')"
+				size="small"
+				variant="tertiary"
+				:title="t('sheetmusic', 'Discard all unsaved edits')"
+				:aria-label="t('sheetmusic', 'Discard All')"
+				@click="emit('discard-all-edits')">
+				<template #icon>
+					<DeleteSweepOutline :size="16" />
+				</template>
+				<span :class="$style.btnText">{{ t('sheetmusic', 'Discard All') }}</span>
+			</NcButton>
+
+			<div
+				:class="$style.zoomSwitcher"
+				role="group"
+				:aria-label="t('sheetmusic', 'Thumbnail size')">
+				<NcButton
+					size="small"
+					variant="tertiary"
+					:disabled="thumbnailSize === 'small'"
+					:title="t('sheetmusic', 'Smaller thumbnails')"
+					:aria-label="t('sheetmusic', 'Smaller thumbnails')"
+					@click="stepThumbnailSize(-1)">
+					<template #icon>
+						<MagnifyMinusOutline :size="16" />
+					</template>
+				</NcButton>
+				<NcButton
+					size="small"
+					variant="tertiary"
+					:disabled="thumbnailSize === 'large'"
+					:title="t('sheetmusic', 'Larger thumbnails')"
+					:aria-label="t('sheetmusic', 'Larger thumbnails')"
+					@click="stepThumbnailSize(1)">
+					<template #icon>
+						<MagnifyPlusOutline :size="16" />
+					</template>
+				</NcButton>
+			</div>
+		</div>
 	</div>
 </template>
 
@@ -383,6 +415,53 @@ const emit = defineEmits<{
 	font-weight: 600;
 }
 
+.toolbarRightControls {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-left: auto;
+	flex-shrink: 0;
+}
+
+.zoomSwitcher {
+	display: inline-flex;
+	align-items: center;
+	background-color: var(--color-main-background);
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius, 6px);
+	padding: 2px;
+	gap: 2px;
+}
+
+.zoomBtn {
+	border: none;
+	background: transparent;
+	color: var(--color-text-maxcontrast);
+	font-size: 11px;
+	font-weight: 600;
+	padding: 3px 7px;
+	min-width: 24px;
+	min-height: 24px;
+	border-radius: 4px;
+	cursor: pointer;
+	transition: all 0.15s ease;
+}
+
+.zoomBtn:hover {
+	color: var(--color-main-text);
+	background-color: var(--color-background-hover);
+}
+
+.zoomBtnActive {
+	background-color: var(--color-primary-element);
+	color: var(--color-primary-element-text, #fff);
+}
+
+.zoomBtnActive:hover {
+	background-color: var(--color-primary-element);
+	color: var(--color-primary-element-text, #fff);
+}
+
 /* Tablet & Mobile responsive styles */
 @media (max-width: 900px) {
 	.toolbar {
@@ -432,8 +511,9 @@ const emit = defineEmits<{
 	.toolbar :global(.button-vue) {
 		--button-padding: var(--button-radius, 8px);
 		line-height: 1;
-		width: var(--button-size, 34px);
-		min-width: var(--button-size, 34px);
+		width: var(--button-size, 36px);
+		min-width: var(--button-size, 36px);
+		min-height: var(--button-size, 36px);
 		padding: 0;
 		justify-content: center;
 	}

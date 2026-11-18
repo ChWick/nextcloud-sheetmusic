@@ -1293,7 +1293,7 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		await enhanceTab?.trigger('click')
 
 		// Click Version History...
-		const historyBtn = wrapper.findAll('button').find((b) => b.text().includes('Version History…'))
+		const historyBtn = wrapper.findAll('button').find((b) => b.attributes('aria-label')?.includes('Version History') || b.text().includes('Version History…'))
 		expect(historyBtn).toBeDefined()
 		await historyBtn?.trigger('click')
 		await flushPromises()

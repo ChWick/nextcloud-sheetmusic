@@ -27,14 +27,22 @@ describe('SongPdfHeader.vue', () => {
 		splitSegmentsCount: 1,
 	}
 
-	it('renders title, file name, and total pages', () => {
+	it('renders file name and total pages, and renders title in fullscreen', () => {
 		const wrapper = mount(SongPdfHeader, {
 			props: defaultProps,
 		})
 
-		expect(wrapper.text()).toContain('Autumn Leaves')
+		expect(wrapper.text()).not.toContain('Autumn Leaves')
 		expect(wrapper.text()).toContain('autumn-leaves.pdf')
 		expect(wrapper.text()).toContain('4 pages')
+
+		const fullscreenWrapper = mount(SongPdfHeader, {
+			props: {
+				...defaultProps,
+				isFullscreen: true,
+			},
+		})
+		expect(fullscreenWrapper.text()).toContain('Autumn Leaves')
 	})
 
 	it('emits cancel when Cancel button is clicked', async () => {
@@ -98,6 +106,22 @@ describe('SongPdfHeader.vue', () => {
 		expect(saveBtn?.attributes('disabled')).toBeDefined()
 	})
 
+	it('shows Save Changes when stacked edits exist in enhance mode', () => {
+		const wrapper = mount(SongPdfHeader, {
+			props: {
+				...defaultProps,
+				activeMode: 'enhance',
+				hasAnyChange: true,
+				hasAnyEnhance: true,
+				hasAnyRotation: true,
+			},
+		})
+
+		const saveBtn = wrapper.findAll('button').find((b) => b.text().includes('Save Changes'))
+		expect(saveBtn).toBeDefined()
+		expect(saveBtn?.attributes('disabled')).toBeUndefined()
+	})
+
 	it('shows Split & Create Songs in split mode and disables when 0 segments', () => {
 		const wrapper = mount(SongPdfHeader, {
 			props: {
@@ -112,7 +136,7 @@ describe('SongPdfHeader.vue', () => {
 		expect(saveBtn?.attributes('disabled')).toBeDefined()
 	})
 
-	it('renders accessible navigation tabs and title tooltip for responsive layouts', () => {
+	it('renders accessible navigation tabs and shows title only in fullscreen to avoid duplicating top bar title', () => {
 		const wrapper = mount(SongPdfHeader, {
 			props: defaultProps,
 		})
@@ -120,9 +144,15 @@ describe('SongPdfHeader.vue', () => {
 		const nav = wrapper.find('nav')
 		expect(nav.exists()).toBe(true)
 		expect(nav.attributes('aria-label')).toBe('PDF edit modes')
+		expect(wrapper.find('span[title="Autumn Leaves"]').exists()).toBe(false)
 
-		const titleSpan = wrapper.find('span[title="Autumn Leaves"]')
-		expect(titleSpan.exists()).toBe(true)
+		const fullscreenWrapper = mount(SongPdfHeader, {
+			props: {
+				...defaultProps,
+				isFullscreen: true,
+			},
+		})
+		expect(fullscreenWrapper.find('span[title="Autumn Leaves"]').exists()).toBe(true)
 	})
 
 	it('separates cancel and save buttons in dedicated containers to prevent layout overlay', () => {
@@ -143,26 +173,26 @@ describe('SongPdfHeader.vue', () => {
 		const leftEl = children[0] as HTMLElement
 		expect(leftEl.querySelector('button')?.textContent).toContain('Cancel')
 
-		// Mode tabs are in child 1 (nav)
+		// Mode tabs and Page Order tool are in child 1 (nav)
 		const centerNav = children[1] as HTMLElement
 		expect(centerNav.tagName.toLowerCase()).toBe('nav')
+		expect(centerNav.textContent).toContain('Page Order')
 
-		// Action buttons (Page Order, Save) are inside child 2 (headerRight)
+		// Action buttons (Save, Fullscreen) are inside child 2 (headerRight)
 		const rightEl = children[2] as HTMLElement
 		expect(rightEl.textContent).toContain('Save')
-		expect(rightEl.textContent).toContain('Page Order')
 	})
 
-	it('renders all 5 mode tabs with accessible titles and labels for responsive flow', () => {
+	it('renders all 5 mode tabs plus Page Order and Join Pages tools with accessible titles and labels for responsive flow', () => {
 		const wrapper = mount(SongPdfHeader, {
 			props: defaultProps,
 		})
 
 		const tabs = wrapper.findAll('nav button')
-		expect(tabs.length).toBe(5)
-		const expectedTitles = ['Rotate Pages', 'Crop Pages', 'Enhance Scans', 'Split PDF', 'Bookmarks']
+		expect(tabs.length).toBe(7)
+		const expectedTitles = ['Rotate Pages', 'Crop Pages', 'Enhance Scans', 'Split PDF', 'Bookmarks', 'Page Order…', 'Join Pages…']
 		for (const title of expectedTitles) {
-			const found = tabs.find((t) => t.attributes('title') === title || t.text().includes(title))
+			const found = tabs.find((t) => t.attributes('title') === title || t.attributes('aria-label') === title || t.text().includes(title))
 			expect(found).toBeDefined()
 			expect(found?.find('svg').exists()).toBe(true)
 		}
@@ -178,6 +208,30 @@ describe('SongPdfHeader.vue', () => {
 		await pageOrderBtn?.trigger('click')
 
 		expect(wrapper.emitted('open-page-order-modal')).toBeTruthy()
+	})
+
+	it('emits open-versions-modal when Version History button is clicked', async () => {
+		const wrapper = mount(SongPdfHeader, {
+			props: defaultProps,
+		})
+
+		const versionsBtn = wrapper.findAll('button').find((b) => b.attributes('aria-label')?.includes('Version History'))
+		expect(versionsBtn).toBeDefined()
+		await versionsBtn?.trigger('click')
+
+		expect(wrapper.emitted('open-versions-modal')).toBeTruthy()
+	})
+
+	it('emits open-join-modal when Join Pages button is clicked', async () => {
+		const wrapper = mount(SongPdfHeader, {
+			props: defaultProps,
+		})
+
+		const joinBtn = wrapper.findAll('button').find((b) => b.text().includes('Join Pages'))
+		expect(joinBtn).toBeDefined()
+		await joinBtn?.trigger('click')
+
+		expect(wrapper.emitted('open-join-modal')).toBeTruthy()
 	})
 })
 

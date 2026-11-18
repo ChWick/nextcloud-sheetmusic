@@ -46,7 +46,7 @@ describe('SongPdfToolbar.vue', () => {
 		expect(wrapper.emitted('reset-rotations')).toBeTruthy()
 	})
 
-	it('emits open-rotate-modal and open-join-modal', async () => {
+	it('emits open-rotate-modal', async () => {
 		const wrapper = mount(SongPdfToolbar, {
 			props: defaultProps,
 		})
@@ -54,10 +54,6 @@ describe('SongPdfToolbar.vue', () => {
 		const angleBtn = wrapper.findAll('button').find((b) => b.text().includes('Rotate by Angle…'))
 		await angleBtn?.trigger('click')
 		expect(wrapper.emitted('open-rotate-modal')).toBeTruthy()
-
-		const joinBtn = wrapper.findAll('button').find((b) => b.text().includes('Join Pages…'))
-		await joinBtn?.trigger('click')
-		expect(wrapper.emitted('open-join-modal')).toBeTruthy()
 	})
 
 	it('renders crop actions and handles crop emits in crop mode', async () => {
@@ -94,17 +90,6 @@ describe('SongPdfToolbar.vue', () => {
 		const resetEnhanceBtn = wrapper.findAll('button').find((b) => b.text().includes('Reset All Enhancements'))
 		await resetEnhanceBtn?.trigger('click')
 		expect(wrapper.emitted('reset-all-enhancements')).toBeTruthy()
-	})
-
-	it('emits open-versions-modal when Version History button is clicked', async () => {
-		const wrapper = mount(SongPdfToolbar, {
-			props: defaultProps,
-		})
-
-		const versionsBtn = wrapper.findAll('button').find((b) => b.text().includes('Version History…'))
-		expect(versionsBtn).toBeDefined()
-		await versionsBtn?.trigger('click')
-		expect(wrapper.emitted('open-versions-modal')).toBeTruthy()
 	})
 
 	it('shows Restore Deleted button when pages are deleted and emits restore-all-pages', async () => {

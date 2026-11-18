@@ -80,13 +80,27 @@ export function usePdfSplit(options: {
 		selectedPages.value = []
 	}
 
-	function togglePageSelection(pageNum: number) {
+	const lastSelectedPage = ref<number | null>(null)
+
+	function togglePageSelection(pageNum: number, shiftKey = false) {
+		if (shiftKey && lastSelectedPage.value !== null) {
+			const start = Math.min(lastSelectedPage.value, pageNum)
+			const end = Math.max(lastSelectedPage.value, pageNum)
+			for (let p = start; p <= end; p++) {
+				if (!selectedPages.value.includes(p)) {
+					selectedPages.value.push(p)
+				}
+			}
+			lastSelectedPage.value = pageNum
+			return
+		}
 		const idx = selectedPages.value.indexOf(pageNum)
 		if (idx >= 0) {
 			selectedPages.value.splice(idx, 1)
 		} else {
 			selectedPages.value.push(pageNum)
 		}
+		lastSelectedPage.value = pageNum
 	}
 
 	function getSegmentsForPage(pageNum: number): SplitSegment[] {
