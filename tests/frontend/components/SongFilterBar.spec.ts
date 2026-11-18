@@ -69,4 +69,24 @@ describe('SongFilterBar.vue', () => {
 		const subSelect = selects.find(s => s.props('inputLabel') === 'Sub-Libraries')
 		expect(subSelect).toBeUndefined()
 	})
+
+	it('hides secondary filters by default and toggles them with More filters button', async () => {
+		const wrapper = mount(SongFilterBar, {
+			props: {
+				composers: [{ id: 1, name: 'Bach' }],
+				arrangers: [{ id: 2, name: 'Busoni' }],
+			},
+		})
+
+		const initialSelects = wrapper.findAllComponents({ name: 'NcSelect' })
+		expect(initialSelects.some(s => s.props('inputLabel') === 'Composers')).toBe(true)
+		expect(initialSelects.some(s => s.props('inputLabel') === 'Arrangers')).toBe(false)
+
+		const toggleBtn = wrapper.find('[data-test="toggle-more-filters"]')
+		expect(toggleBtn.exists()).toBe(true)
+		await toggleBtn.trigger('click')
+
+		const expandedSelects = wrapper.findAllComponents({ name: 'NcSelect' })
+		expect(expandedSelects.some(s => s.props('inputLabel') === 'Arrangers')).toBe(true)
+	})
 })
