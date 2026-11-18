@@ -81,7 +81,7 @@ class LibraryMapper {
 		$qb->executeStatement();
 	}
 
-	public function addForUser(string $userId, string $path, ?int $folderId = null): void {
+	public function addForUser(string $userId, string $path, ?int $folderId = null, bool $mobilesheetsSyncEnabled = false): void {
 		$check = $this->db->getQueryBuilder();
 		$check->select('path')
 			->from(self::TABLE_NAME)
@@ -102,6 +102,7 @@ class LibraryMapper {
 			->setValue('auto_paths', $qb->createNamedParameter(true, IQueryBuilder::PARAM_BOOL))
 			->setValue('auto_pdf_metadata', $qb->createNamedParameter(true, IQueryBuilder::PARAM_BOOL))
 			->setValue('naming_rule_preset', $qb->createNamedParameter('auto', IQueryBuilder::PARAM_STR))
+			->setValue('mobilesheets_sync_enabled', $qb->createNamedParameter($mobilesheetsSyncEnabled, IQueryBuilder::PARAM_BOOL))
 			->setValue('created_at', $qb->createNamedParameter($now, IQueryBuilder::PARAM_INT))
 			->setValue('updated_at', $qb->createNamedParameter($now, IQueryBuilder::PARAM_INT));
 		$qb->executeStatement();
@@ -202,7 +203,14 @@ class LibraryMapper {
 		return InternalLibrary::fromRow($row);
 	}
 
-	public function setSettingsForUser(string $userId, int $id, ?bool $autoPaths = null, ?bool $autoPdfMetadata = null, ?string $namingRulePreset = null): void {
+	public function setSettingsForUser(
+		string $userId,
+		int $id,
+		?bool $autoPaths = null,
+		?bool $autoPdfMetadata = null,
+		?string $namingRulePreset = null,
+		?bool $mobilesheetsSyncEnabled = null,
+	): void {
 		$qb = $this->db->getQueryBuilder();
 		$qb->update(self::TABLE_NAME)
 			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId, IQueryBuilder::PARAM_STR)))
@@ -219,6 +227,10 @@ class LibraryMapper {
 		}
 		if ($namingRulePreset !== null) {
 			$qb->set('naming_rule_preset', $qb->createNamedParameter($namingRulePreset, IQueryBuilder::PARAM_STR));
+			$hasChanges = true;
+		}
+		if ($mobilesheetsSyncEnabled !== null) {
+			$qb->set('mobilesheets_sync_enabled', $qb->createNamedParameter($mobilesheetsSyncEnabled, IQueryBuilder::PARAM_BOOL));
 			$hasChanges = true;
 		}
 

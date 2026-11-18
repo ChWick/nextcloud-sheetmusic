@@ -54,6 +54,13 @@ const namingRulePresetModel = computed({
 	},
 })
 
+const mobilesheetsSyncEnabledModel = computed({
+	get: () => currentLibrary.value?.mobilesheetsSyncEnabled ?? false,
+	set: (val: boolean) => {
+		updateSetting({ mobilesheetsSyncEnabled: val })
+	},
+})
+
 const namingPresetOptions = computed(() => [
 	{
 		id: 'auto',
@@ -91,7 +98,7 @@ const selectedNamingOption = computed({
 	},
 })
 
-async function updateSetting(settings: { autoPaths?: boolean; autoPdfMetadata?: boolean; namingRulePreset?: string }) {
+async function updateSetting(settings: { autoPaths?: boolean; autoPdfMetadata?: boolean; namingRulePreset?: string; mobilesheetsSyncEnabled?: boolean }) {
 	isSaving.value = true
 	saveError.value = ''
 	try {
@@ -174,6 +181,18 @@ function handleDelete() {
 					</NcCheckboxRadioSwitch>
 					<p :class="$style.settingDescription">
 						{{ t('sheetmusic', 'When importing new songs, attempt to extract titles, composers, and page counts from PDF metadata.') }}
+					</p>
+				</div>
+
+				<div :class="$style.settingRow">
+					<NcCheckboxRadioSwitch
+						v-model="mobilesheetsSyncEnabledModel"
+						type="checkbox"
+						:disabled="isSaving">
+						{{ t('sheetmusic', 'Enable MobileSheets WebDAV sync') }}
+					</NcCheckboxRadioSwitch>
+					<p :class="$style.settingDescription">
+						{{ t('sheetmusic', 'Expose virtual mobilesheets.db and mobilesheets_hashcodes.txt files over WebDAV for MobileSheets synchronization.') }}
 					</p>
 				</div>
 

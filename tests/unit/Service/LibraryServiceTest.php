@@ -224,12 +224,38 @@ final class LibraryServiceTest extends TestCase {
 	public function testUpdateSettingsUpdatesAndReturnsLibrary(): void {
 		$lib = $this->createTestLibrary('/Noten/update_settings.db', 'admin');
 
-		$result = $this->service->updateSettings('admin', (int)$lib->id, false, true, 'artist');
+		self::assertFalse($lib->mobilesheetsSyncEnabled);
+
+		$result = $this->service->updateSettings('admin', (int)$lib->id, false, true, 'artist', true);
 		self::assertNotNull($result);
 		self::assertFalse($result->autoPaths);
 		self::assertTrue($result->autoPdfMetadata);
 		self::assertSame('artist', $result->namingRulePreset);
+		self::assertTrue($result->mobilesheetsSyncEnabled);
 		self::assertSame('artist', $this->service->getNamingRulePreset('admin', (int)$lib->id));
+	}
+
+	public function testAddLibrarySetsMobilesheetsSyncEnabledOnlyForMobilesheetsImport(): void {
+		$plainPath = '/PlainLib_' . bin2hex(random_bytes(4));
+		$this->service->addLibrary('admin', $plainPath, false);
+
+		$dbDir = '/MsImportLib_' . bin2hex(random_bytes(4));
+		$this->service->addLibrary('admin', $dbDir . '/mobilesheets.db', false);
+
+		$libs = $this->libraryMapper->findAllForUser('admin');
+		$byPath = [];
+		foreach ($libs as $lib) {
+			if ($lib->path === $plainPath || $lib->path === $dbDir) {
+				$this->createdLibraryIds[] = (int)$lib->id;
+				$byPath[$lib->path] = $lib;
+			}
+		}
+
+		self::assertArrayHasKey($plainPath, $byPath);
+		self::assertFalse($byPath[$plainPath]->mobilesheetsSyncEnabled);
+
+		self::assertArrayHasKey($dbDir, $byPath);
+		self::assertTrue($byPath[$dbDir]->mobilesheetsSyncEnabled);
 	}
 
 	public function testUpdateSettingsReturnsNullWhenLibraryNotFound(): void {

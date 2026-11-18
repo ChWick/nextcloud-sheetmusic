@@ -12,6 +12,7 @@ export type Library = components['schemas']['Library'] & {
 	autoPaths?: boolean
 	autoPdfMetadata?: boolean
 	namingRulePreset?: NamingRulePreset
+	mobilesheetsSyncEnabled?: boolean
 }
 
 export interface LibraryShare {

@@ -44,7 +44,7 @@ final class SheetMusicDavPluginTest extends TestCase {
 		$this->userSession = new FakeUserSession($user);
 
 		$this->library = $this->createTestLibrary('/My Noten', 'admin');
-		$this->dbConn->executeStatement('UPDATE *PREFIX*sheetmusic_libraries SET updated_at = 2000 WHERE id = ?', [$this->library->id]);
+		$this->dbConn->executeStatement('UPDATE *PREFIX*sheetmusic_libraries SET updated_at = 2000, mobilesheets_sync_enabled = 1 WHERE id = ?', [$this->library->id]);
 		$lib = $this->libraryMapper->findModelById((int)$this->library->id);
 		self::assertNotNull($lib);
 		$this->library = $lib;
@@ -1018,6 +1018,39 @@ final class SheetMusicDavPluginTest extends TestCase {
 		$directMsRes = new Response();
 		self::assertFalse($this->plugin->beforeMethod($directMsReq, $directMsRes));
 		self::assertSame(200, $directMsRes->getStatus());
+	}
+
+	public function testVirtualFilesNotExposedWhenMobilesheetsSyncDisabled(): void {
+		$this->attachServer();
+		$this->dbConn->executeStatement('UPDATE *PREFIX*sheetmusic_libraries SET mobilesheets_sync_enabled = 0 WHERE id = ?', [$this->library->id]);
+
+		// Even MobileSheets client does NOT see virtual files in PROPFIND when flag is disabled
+		$reqMs = new Request('PROPFIND', '/remote.php/dav/files/admin/My%20Noten/Songs', [
+			'Depth' => '1',
+			'User-Agent' => 'MobileSheets/3.8.4',
+		]);
+		$reqMs->setBaseUrl('/remote.php/dav/');
+
+		$resMs = new Response();
+		$resMs->setStatus(207);
+		$resMs->setBody('<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:"><d:response><d:href>/remote.php/dav/files/admin/My%20Noten/Songs/</d:href></d:response></d:multistatus>');
+
+		$this->plugin->afterPropfind($reqMs, $resMs);
+
+		$bodyMs = $resMs->getBodyAsString();
+		self::assertStringNotContainsString('mobilesheets.db', $bodyMs);
+		self::assertStringNotContainsString('mobilesheets_hashcodes.txt', $bodyMs);
+
+		// Direct GET / PROPFIND on virtual files is bypassed (returns true so SabreDAV returns 404)
+		foreach (['GET', 'PROPFIND'] as $method) {
+			foreach (['mobilesheets.db', 'mobilesheets_hashcodes.txt'] as $filename) {
+				$req = new Request($method, '/files/admin/My%20Noten/Songs/' . $filename, [
+					'User-Agent' => 'MobileSheets/3.8.4',
+				]);
+				$res = new Response();
+				self::assertTrue($this->plugin->beforeMethod($req, $res));
+			}
+		}
 	}
 }
 

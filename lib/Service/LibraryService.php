@@ -247,7 +247,7 @@ class LibraryService {
 		};
 
 		try {
-			$this->libraryMapper->addForUser($userId, $libraryPath, $folderId);
+			$this->libraryMapper->addForUser($userId, $libraryPath, $folderId, $isMobileSheets);
 			$libraries = $this->libraryMapper->findAllForUser($userId);
 			$added = null;
 			foreach ($libraries as $lib) {
@@ -261,7 +261,10 @@ class LibraryService {
 				$libraryId = (int)$added->id;
 				$this->ensureSongsFolder($userId, $libraryPath);
 				if ($importExistingDb) {
-					$this->importExistingPhysicalDatabase($libraryId, $libraryPath, $path, $targetDbRel, $userId, $progressCallback);
+					$importedMobileSheets = $this->importExistingPhysicalDatabase($libraryId, $libraryPath, $path, $targetDbRel, $userId, $progressCallback);
+					if ($importedMobileSheets && !$isMobileSheets) {
+						$this->libraryMapper->setSettingsForUser($userId, $libraryId, mobilesheetsSyncEnabled: true);
+					}
 				}
 				$this->reconcileNewLibrary($libraryId, $userId, $progressCallback, $importPdfMetadata);
 			}
@@ -338,9 +341,9 @@ class LibraryService {
 		?string $targetDbRel,
 		string $userId,
 		callable $progressCallback,
-	): void {
+	): bool {
 		if ($this->importer === null) {
-			return;
+			return false;
 		}
 
 		try {
@@ -352,6 +355,7 @@ class LibraryService {
 				$localFile = $node->getStorage()->getLocalFile($node->getInternalPath());
 				if ($localFile !== false && file_exists($localFile)) {
 					$this->importer->importFromFile($libraryId, $localFile, $userId, $progressCallback);
+					return true;
 				}
 			}
 		} catch (\Throwable $e) {
@@ -361,6 +365,8 @@ class LibraryService {
 				'userId' => $userId,
 			]);
 		}
+
+		return false;
 	}
 
 	private function ensureSongsFolder(string $userId, string $libraryPath): void {
@@ -419,6 +425,7 @@ class LibraryService {
 		?bool $autoPaths = null,
 		?bool $autoPdfMetadata = null,
 		?string $namingRulePreset = null,
+		?bool $mobilesheetsSyncEnabled = null,
 	): ?InternalLibrary {
 		$lib = $this->libraryMapper->findById($libraryId);
 		if ($lib === null) {
@@ -430,7 +437,7 @@ class LibraryService {
 		if ($namingRulePreset !== null && !in_array($namingRulePreset, SongPathNamingRule::PRESETS, true)) {
 			throw new \InvalidArgumentException('Invalid naming rule preset: ' . $namingRulePreset);
 		}
-		$this->libraryMapper->setSettingsForUser($userId, $libraryId, $autoPaths, $autoPdfMetadata, $namingRulePreset);
+		$this->libraryMapper->setSettingsForUser($userId, $libraryId, $autoPaths, $autoPdfMetadata, $namingRulePreset, $mobilesheetsSyncEnabled);
 		return $this->libraryMapper->findForUser($userId, $libraryId);
 	}
 }

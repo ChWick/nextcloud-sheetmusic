@@ -27,6 +27,7 @@ class InternalLibrary implements \JsonSerializable {
 		public ?int $sublibraryId = null,
 		public ?string $sublibraryName = null,
 		public string $namingRulePreset = 'auto',
+		public bool $mobilesheetsSyncEnabled = false,
 	) {
 	}
 
@@ -51,6 +52,7 @@ class InternalLibrary implements \JsonSerializable {
 			sublibraryId: isset($row['sublibrary_id']) && $row['sublibrary_id'] !== null ? (int)$row['sublibrary_id'] : (isset($row['sublibraryId']) && $row['sublibraryId'] !== null ? (int)$row['sublibraryId'] : null),
 			sublibraryName: isset($row['sublibrary_name']) ? (string)$row['sublibrary_name'] : (isset($row['sublibraryName']) ? (string)$row['sublibraryName'] : null),
 			namingRulePreset: (string)($row['naming_rule_preset'] ?? $row['namingRulePreset'] ?? 'auto'),
+			mobilesheetsSyncEnabled: isset($row['mobilesheets_sync_enabled']) ? (bool)$row['mobilesheets_sync_enabled'] : (isset($row['mobilesheetsSyncEnabled']) ? (bool)$row['mobilesheetsSyncEnabled'] : false),
 		);
 	}
 
@@ -75,11 +77,12 @@ class InternalLibrary implements \JsonSerializable {
 			'sublibraryId' => $this->sublibraryId,
 			'sublibraryName' => $this->sublibraryName,
 			'namingRulePreset' => $this->namingRulePreset,
+			'mobilesheetsSyncEnabled' => $this->mobilesheetsSyncEnabled,
 		];
 	}
 
 	/**
-	 * @return array{id: int|null, path: string, folderId: int|null, autoPaths: bool, autoPdfMetadata: bool, isShared: bool, ownerId: string, ownerDisplayName: string, permission: string, canWrite: bool, sublibraryId?: int|null, sublibraryName?: string|null, namingRulePreset: string}
+	 * @return array{id: int|null, path: string, folderId: int|null, autoPaths: bool, autoPdfMetadata: bool, isShared: bool, ownerId: string, ownerDisplayName: string, permission: string, canWrite: bool, sublibraryId?: int|null, sublibraryName?: string|null, namingRulePreset: string, mobilesheetsSyncEnabled: bool}
 	 */
 	public function jsonSerialize(): array {
 		return [
@@ -96,6 +99,7 @@ class InternalLibrary implements \JsonSerializable {
 			'sublibraryId' => $this->sublibraryId,
 			'sublibraryName' => $this->sublibraryName,
 			'namingRulePreset' => $this->namingRulePreset,
+			'mobilesheetsSyncEnabled' => $this->mobilesheetsSyncEnabled,
 		];
 	}
 }
