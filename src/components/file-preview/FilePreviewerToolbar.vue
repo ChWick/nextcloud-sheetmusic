@@ -61,7 +61,6 @@ const emit = defineEmits<{
 			<template v-if="isPdf">
 				<NcButton
 					variant="secondary"
-					size="small"
 					:disabled="pageLayout === 'continuous' || (canGoPrev !== undefined ? !canGoPrev : currentPage <= 1)"
 					:title="t('sheetmusic', 'Previous page')"
 					:aria-label="t('sheetmusic', 'Previous page')"
@@ -73,7 +72,6 @@ const emit = defineEmits<{
 				</span>
 				<NcButton
 					variant="secondary"
-					size="small"
 					:disabled="pageLayout === 'continuous' || (canGoNext !== undefined ? !canGoNext : currentPage >= totalPages)"
 					:title="t('sheetmusic', 'Next page')"
 					:aria-label="t('sheetmusic', 'Next page')"
@@ -86,28 +84,25 @@ const emit = defineEmits<{
 		<div v-if="isPdf" :class="$style.toolbarGroup">
 			<div :class="$style.segmentedGroup">
 				<NcButton
-					size="small"
 					:variant="pageLayout === 'continuous' ? 'primary' : 'secondary'"
 					:title="t('sheetmusic', 'Continuous scroll (All pages)')"
 					:aria-label="t('sheetmusic', 'Continuous scroll (All pages)')"
 					@click="emit('pageLayout', 'continuous')">
-					<template #icon><ViewStream :size="18" /></template>
+					<template #icon><ViewStream :size="20" /></template>
 				</NcButton>
 				<NcButton
-					size="small"
 					:variant="pageLayout === 'single' ? 'primary' : 'secondary'"
 					:title="t('sheetmusic', 'Single page')"
 					:aria-label="t('sheetmusic', 'Single page')"
 					@click="emit('pageLayout', 'single')">
-					<template #icon><ViewDay :size="18" /></template>
+					<template #icon><ViewDay :size="20" /></template>
 				</NcButton>
 				<NcButton
-					size="small"
 					:variant="pageLayout === 'double' ? 'primary' : 'secondary'"
 					:title="t('sheetmusic', 'Two pages side-by-side')"
 					:aria-label="t('sheetmusic', 'Two pages side-by-side')"
 					@click="emit('pageLayout', 'double')">
-					<template #icon><ViewColumn :size="18" /></template>
+					<template #icon><ViewColumn :size="20" /></template>
 				</NcButton>
 			</div>
 
@@ -120,11 +115,10 @@ const emit = defineEmits<{
 		<div :class="$style.toolbarGroup">
 			<NcButton
 				variant="secondary"
-				size="small"
 				:title="t('sheetmusic', 'Zoom out')"
 				:aria-label="t('sheetmusic', 'Zoom out')"
 				@click="emit('zoomOut')">
-				<template #icon><MagnifyMinus :size="18" /></template>
+				<template #icon><MagnifyMinus :size="20" /></template>
 			</NcButton>
 
 			<div :class="$style.zoomSelector">
@@ -149,53 +143,48 @@ const emit = defineEmits<{
 
 			<NcButton
 				variant="secondary"
-				size="small"
 				:title="t('sheetmusic', 'Zoom in')"
 				:aria-label="t('sheetmusic', 'Zoom in')"
 				@click="emit('zoomIn')">
-				<template #icon><MagnifyPlus :size="18" /></template>
+				<template #icon><MagnifyPlus :size="20" /></template>
 			</NcButton>
 
 			<NcButton
 				variant="secondary"
-				size="small"
 				:title="t('sheetmusic', 'Fit to width')"
 				:aria-label="t('sheetmusic', 'Fit to width')"
 				@click="emit('fitWidth')">
-				<template #icon><FitToScreenOutline :size="18" /></template>
+				<template #icon><FitToScreenOutline :size="20" /></template>
 			</NcButton>
 
 			<NcButton
 				variant="secondary"
-				size="small"
 				:title="t('sheetmusic', 'Rotate clockwise')"
 				:aria-label="t('sheetmusic', 'Rotate clockwise')"
 				@click="emit('rotate')">
-				<template #icon><RotateRight :size="18" /></template>
+				<template #icon><RotateRight :size="20" /></template>
 			</NcButton>
 
 			<NcButton
 				v-if="isPdf"
 				variant="secondary"
-				size="small"
 				:title="showAnnotations ? t('sheetmusic', 'Hide annotations') : t('sheetmusic', 'Show annotations')"
 				:aria-label="showAnnotations ? t('sheetmusic', 'Hide annotations') : t('sheetmusic', 'Show annotations')"
 				data-test="toggle-annotations-button"
 				@click="emit('toggleAnnotations')">
 				<template #icon>
-					<EyeOutline v-if="showAnnotations" :size="18" />
-					<EyeOffOutline v-else :size="18" />
+					<EyeOutline v-if="showAnnotations" :size="20" />
+					<EyeOffOutline v-else :size="20" />
 				</template>
 			</NcButton>
 
 			<NcButton
 				v-if="showExternalButton"
 				variant="secondary"
-				size="small"
 				:title="t('sheetmusic', 'Open in external viewer')"
 				:aria-label="t('sheetmusic', 'Open in external viewer')"
 				@click="emit('openExternal')">
-				<template #icon><OpenInNewIcon :size="18" /></template>
+				<template #icon><OpenInNewIcon :size="20" /></template>
 			</NcButton>
 		</div>
 	</div>
@@ -239,8 +228,8 @@ const emit = defineEmits<{
 }
 
 .zoomDropdown {
-	height: 34px;
-	padding: 0 8px;
+	height: var(--default-clickable-area, 44px);
+	padding: 0 10px;
 	border: 1px solid var(--color-border);
 	border-radius: var(--border-radius, 4px);
 	background-color: var(--color-main-background);

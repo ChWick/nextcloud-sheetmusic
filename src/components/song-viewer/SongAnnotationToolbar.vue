@@ -214,56 +214,51 @@ function pickStamp(symbol: string) {
 				<span v-if="isSaving" :class="$style.savingBadge">{{ t('sheetmusic', 'Saving...') }}</span>
 
 				<NcButton
-					size="small"
 					variant="secondary"
 					:disabled="!canUndo"
 					:title="t('sheetmusic', 'Undo (Ctrl+Z)')"
 					:aria-label="t('sheetmusic', 'Undo (Ctrl+Z)')"
 					data-test="annotation-undo"
 					@click="emit('undo')">
-					<template #icon><Undo :size="18" /></template>
+					<template #icon><Undo :size="20" /></template>
 				</NcButton>
 
 				<NcButton
-					size="small"
 					variant="secondary"
 					:disabled="!canRedo"
 					:title="t('sheetmusic', 'Redo (Ctrl+Y)')"
 					:aria-label="t('sheetmusic', 'Redo (Ctrl+Y)')"
 					data-test="annotation-redo"
 					@click="emit('redo')">
-					<template #icon><Redo :size="18" /></template>
+					<template #icon><Redo :size="20" /></template>
 				</NcButton>
 
 				<NcButton
 					v-if="selectedAnnotation"
-					size="small"
 					variant="secondary"
 					:title="t('sheetmusic', 'Delete selected annotation (Del)')"
 					:aria-label="t('sheetmusic', 'Delete selected annotation (Del)')"
 					data-test="annotation-delete-selected"
 					@click="emit('delete-selected')">
-					<template #icon><DeleteOutline :size="18" /></template>
+					<template #icon><DeleteOutline :size="20" /></template>
 				</NcButton>
 
 				<NcButton
-					size="small"
 					variant="secondary"
 					:title="t('sheetmusic', 'Clear annotations on page {page}', { page: currentPage })"
 					:aria-label="t('sheetmusic', 'Clear annotations on page {page}', { page: currentPage })"
 					data-test="annotation-clear-page"
 					@click="emit('clear-page')">
-					<template #icon><DeleteSweepOutline :size="18" /></template>
+					<template #icon><DeleteSweepOutline :size="20" /></template>
 				</NcButton>
 
 				<NcButton
-					size="small"
 					variant="primary"
 					:title="t('sheetmusic', 'Done')"
 					:aria-label="t('sheetmusic', 'Done')"
 					data-test="annotation-done"
 					@click="emit('done')">
-					<template #icon><Check :size="18" /></template>
+					<template #icon><Check :size="20" /></template>
 				</NcButton>
 			</div>
 		</div>
@@ -303,8 +298,11 @@ function pickStamp(symbol: string) {
 .toolBtn {
 	display: inline-flex;
 	align-items: center;
+	justify-content: center;
 	gap: 5px;
-	padding: 5px 10px;
+	min-width: var(--default-clickable-area, 44px);
+	min-height: var(--default-clickable-area, 44px);
+	padding: 6px 10px;
 	border: 1px solid var(--color-border);
 	border-radius: var(--border-radius, 4px);
 	background: var(--color-main-background);
