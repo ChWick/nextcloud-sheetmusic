@@ -23,6 +23,7 @@ import { formatByteSize } from '../song-pdf/pdf-enhance-engine'
 const props = withDefaults(
 	defineProps<{
 		file: SongFile
+		files?: SongFile[]
 		isPdf: boolean
 		currentPage?: number
 		totalPages?: number
@@ -34,6 +35,7 @@ const props = withDefaults(
 		canWrite?: boolean
 	}>(),
 	{
+		files: () => [],
 		currentPage: 1,
 		totalPages: 1,
 		fileSizeBytes: null,
@@ -46,6 +48,7 @@ const props = withDefaults(
 )
 
 const emit = defineEmits<{
+	'select-file': [fileId: string]
 	'open-external': []
 	'modify-pdf': []
 	'open-versions': []
@@ -82,7 +85,23 @@ const activePageResolution = computed<PdfPageResolutionSummary | null>(() => {
 <template>
 	<div :class="$style.fileToolbar" data-test="song-file-toolbar">
 		<div :class="$style.fileInfoSection">
-			<span :class="$style.fileName" :title="file.path">
+			<div v-if="files.length > 1" :class="$style.fileSelectWrap">
+				<FileDocumentOutline :size="18" :class="$style.fileIcon" />
+				<select
+					:value="String(file.id)"
+					:class="$style.fileSelect"
+					:aria-label="t('sheetmusic', 'Files of this song')"
+					data-test="song-file-selector"
+					@change="emit('select-file', ($event.target as HTMLSelectElement).value)">
+					<option
+						v-for="(item, index) in files"
+						:key="item.id"
+						:value="String(item.id)">
+						{{ index + 1 }}. {{ getFileName(item.path) }}
+					</option>
+				</select>
+			</div>
+			<span v-else :class="$style.fileName" :title="file.path">
 				<FileDocumentOutline :size="18" :class="$style.fileIcon" />
 				<span :class="$style.fileNameText">{{ fileName }}</span>
 			</span>
@@ -257,6 +276,26 @@ const activePageResolution = computed<PdfPageResolutionSummary | null>(() => {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.fileSelectWrap {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+}
+
+.fileSelect {
+	height: 32px;
+	max-width: 260px;
+	padding: 0 8px;
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius, 4px);
+	background-color: var(--color-main-background);
+	color: var(--color-main-text);
+	font-size: 0.875rem;
+	font-weight: 500;
+	cursor: pointer;
 }
 
 .fileActions {

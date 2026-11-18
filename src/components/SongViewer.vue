@@ -3,11 +3,9 @@ import type { Arranger, Artist, Book, Collection, Composer, CustomGroup, Genre, 
 
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
-import NcRadioGroup from '@nextcloud/vue/components/NcRadioGroup'
-import NcRadioGroupButton from '@nextcloud/vue/components/NcRadioGroupButton'
 import { GlobalWorkerOptions } from 'pdfjs-dist'
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
-import { getFileName, openFileExternally } from '../utils/file'
+import { openFileExternally } from '../utils/file'
 import { getFileVersionToken, getVersionedFileUrl } from '../utils/file-version'
 import ArrowLeftIcon from 'vue-material-design-icons/ArrowLeft.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
@@ -95,13 +93,6 @@ const selectedFile = computed<SongFile | null>(() => {
 	const files = songFiles.value
 	return files.find((file) => String(file.id) === selectedFileId.value) ?? files[0] ?? null
 })
-
-/** Tab labels are kept short so that many files stay readable. */
-function getFileLabel(file: SongFile, index: number): string {
-	const name = getFileName(file.path)
-	const truncated = name.length > 30 ? `${name.slice(0, 29)}…` : name
-	return `${index + 1}. ${truncated}`
-}
 
 const route = useRoute()
 const pageParam = route?.query?.page
@@ -351,24 +342,10 @@ defineExpose({
 
 		<!-- PDF / File Viewer View -->
 		<template v-else>
-			<div v-if="songFiles.length > 1" :class="$style.fileTabs">
-				<NcRadioGroup
-					:model-value="selectedFileId"
-					:label="t('sheetmusic', 'Files of this song')"
-					hide-label
-					@update:model-value="selectFile">
-					<NcRadioGroupButton
-						v-for="(file, index) in songFiles"
-						:key="file.id"
-						:value="String(file.id)"
-						:label="getFileLabel(file, index)"
-						:title="file.path" />
-				</NcRadioGroup>
-			</div>
-
 			<SongViewerFileToolbar
 				v-if="selectedFile"
 				:file="selectedFile"
+				:files="songFiles"
 				:is-pdf="isSelectedFilePdf"
 				:current-page="filePreviewerRef?.currentPage ?? 1"
 				:total-pages="filePreviewerRef?.totalPages ?? 1"
@@ -378,6 +355,7 @@ defineExpose({
 				:is-editing-annotations="isEditingAnnotations"
 				:is-fullscreen="isAnnotationFullscreen"
 				:can-write="canWrite"
+				@select-file="selectFile"
 				@open-external="openInExternalViewer"
 				@modify-pdf="song && emit('modify-pdf', song, selectedFile.id)"
 				@open-versions="openVersionsModal"
