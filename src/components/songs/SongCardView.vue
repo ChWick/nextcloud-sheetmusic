@@ -8,7 +8,7 @@ import { formatDateTimestamp, formatDifficulty, formatDurationHms, formatStars }
 import { useSongRowInteraction } from '../../composables/useSongRowInteraction'
 import SongEntityChips from './SongEntityChips.vue'
 import SongInlineEditableCell from './SongInlineEditableCell.vue'
-import { ENTITY_COLUMNS } from './song-view-columns'
+import { ENTITY_COLUMNS, isColumnVisible } from './song-view-columns'
 
 const props = withDefaults(
 	defineProps<{
@@ -32,8 +32,7 @@ const emit = defineEmits<{
 }>()
 
 function isColVisible(col: SongColumn): boolean {
-	if (!props.visibleColumns) return true
-	return props.visibleColumns.includes(col)
+	return isColumnVisible(props.visibleColumns, col)
 }
 
 const visibleEntityColumns = computed(() => ENTITY_COLUMNS.filter((c) => isColVisible(c.col)))
