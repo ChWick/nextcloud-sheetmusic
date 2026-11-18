@@ -10,7 +10,6 @@ import {
 	syncSetlistOffline,
 } from '../../../src/utils/offlineSetlists'
 
-const mockIsStandalone = vi.fn()
 const mockFetchSetlist = vi.fn()
 const mockFetchSetlistFiles = vi.fn()
 const mockApiGet = vi.fn()
@@ -19,14 +18,8 @@ vi.mock('../../../src/api/client', () => ({
 	apiGet: (...args: unknown[]) => mockApiGet(...args),
 }))
 
-vi.mock('../../../src/utils/pwa', () => ({
-	isStandaloneDisplayMode: () => mockIsStandalone(),
-	cacheIntoAppShell: vi.fn(),
-}))
-
 vi.mock('@nextcloud/router', () => ({
 	generateOcsUrl: (path: string) => `/ocs/v2.php${path}`,
-	generateUrl: (path: string) => `/index.php${path}`,
 }))
 
 vi.mock('../../../src/api/setlists', () => ({
@@ -50,15 +43,11 @@ describe('offlineSetlists', () => {
 		vi.clearAllMocks()
 		cacheStore.clear()
 		localStorage.removeItem(OFFLINE_STORAGE_KEY)
-		mockIsStandalone.mockReturnValue(true)
 
 		Object.defineProperty(globalThis, 'caches', {
 			configurable: true,
 			value: {
-				open: vi.fn(async (name: string) => {
-					expect(name).toBe(OFFLINE_SETLIST_CACHE)
-					return fakeCache
-				}),
+				open: vi.fn(async () => fakeCache),
 			},
 		})
 		Object.defineProperty(window.navigator, 'serviceWorker', {
@@ -72,12 +61,14 @@ describe('offlineSetlists', () => {
 		localStorage.removeItem(OFFLINE_STORAGE_KEY)
 	})
 
-	it('is supported in both regular browser tabs and installed PWA standalone mode', () => {
-		mockIsStandalone.mockReturnValue(false)
+	it('requires Cache Storage and Service Worker support regardless of display mode', () => {
 		expect(isOfflineSetlistsSupported()).toBe(true)
 
-		mockIsStandalone.mockReturnValue(true)
-		expect(isOfflineSetlistsSupported()).toBe(true)
+		Object.defineProperty(globalThis, 'caches', {
+			configurable: true,
+			value: undefined,
+		})
+		expect(isOfflineSetlistsSupported()).toBe(false)
 	})
 
 	it('caches all song PDFs, song annotations, setlist files, and setlist file annotations', async () => {
