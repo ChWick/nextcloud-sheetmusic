@@ -293,7 +293,7 @@ function stepThumbnailSize(direction: -1 | 1) {
 	align-items: center;
 	gap: 12px;
 	padding: 8px 16px;
-	background-color: var(--sheetmusic-pdf-active-surface, color-mix(in srgb, var(--color-primary-element, #0082c9) 14%, var(--color-main-background, #ffffff)));
+	background-color: var(--color-main-background);
 	border-bottom: 1px solid var(--color-border);
 	flex-wrap: wrap;
 	flex-shrink: 0;

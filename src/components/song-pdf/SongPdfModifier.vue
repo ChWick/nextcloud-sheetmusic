@@ -1167,7 +1167,6 @@ watch(() => targetFile.value?.path, () => {
 
 <style module>
 .container {
-	--sheetmusic-pdf-active-surface: color-mix(in srgb, var(--color-primary-element, #0082c9) 14%, var(--color-main-background, #ffffff));
 	display: flex;
 	flex-direction: column;
 	width: 100%;

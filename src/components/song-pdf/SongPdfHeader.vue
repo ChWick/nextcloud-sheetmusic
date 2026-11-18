@@ -320,7 +320,7 @@ const modeTabItems = computed(() => [
 	justify-content: space-between;
 	padding: 8px 16px 0;
 	border-bottom: 1px solid var(--color-border);
-	background-color: var(--color-main-background);
+	background-color: var(--color-background-hover);
 	gap: 16px;
 	flex-shrink: 0;
 	min-width: 0;
@@ -481,7 +481,7 @@ const modeTabItems = computed(() => [
 	margin: 0 auto;
 }
 
-.tabButton {
+button.tabButton {
 	position: relative;
 	display: flex;
 	align-items: center;
@@ -490,7 +490,7 @@ const modeTabItems = computed(() => [
 	padding: 8px 12px;
 	border: 1px solid transparent;
 	border-bottom: none;
-	background: transparent;
+	background-color: transparent;
 	border-radius: var(--border-radius-large, 8px) var(--border-radius-large, 8px) 0 0;
 	margin-bottom: -1px;
 	cursor: pointer;
@@ -501,19 +501,19 @@ const modeTabItems = computed(() => [
 	white-space: nowrap;
 }
 
-.tabButton:hover:not(:disabled) {
+button.tabButton:hover:not(:disabled) {
 	color: var(--color-main-text);
-	background-color: rgba(128, 128, 128, 0.06);
+	background-color: rgba(128, 128, 128, 0.08);
 }
 
-.tabButtonActive,
-.tabButtonActive:hover:not(:disabled) {
-	background-color: var(--sheetmusic-pdf-active-surface, color-mix(in srgb, var(--color-primary-element, #0082c9) 14%, var(--color-main-background, #ffffff)));
+button.tabButtonActive,
+button.tabButtonActive:hover:not(:disabled) {
+	background-color: var(--color-main-background);
 	color: var(--color-main-text);
 	font-weight: 600;
-	border-color: var(--color-border-dark, var(--color-border));
-	border-bottom: 1px solid var(--sheetmusic-pdf-active-surface, color-mix(in srgb, var(--color-primary-element, #0082c9) 14%, var(--color-main-background, #ffffff)));
-	box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.08);
+	border-color: var(--color-border);
+	border-bottom: 1px solid var(--color-main-background);
+	box-shadow: none;
 	z-index: 1;
 }
 
