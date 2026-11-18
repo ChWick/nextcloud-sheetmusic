@@ -98,21 +98,19 @@ async function serveCachedOfflineResponse(request) {
 		ignoreSearch: request.mode === 'navigate',
 	}
 
-	const offlineCache = await caches.open(OFFLINE_SETLIST_CACHE)
-	const offlineMatch = await offlineCache.match(request, matchOpts)
-	if (offlineMatch) {
-		return request.mode === 'navigate' ? toCleanNavigationResponse(offlineMatch) : offlineMatch
-	}
-
-	const shellCache = await caches.open(APP_SHELL_CACHE)
-	const shellMatch = await shellCache.match(request, matchOpts)
-	if (shellMatch) {
-		return request.mode === 'navigate' ? toCleanNavigationResponse(shellMatch) : shellMatch
+	const [offlineCache, shellCache] = await Promise.all([
+		caches.open(OFFLINE_SETLIST_CACHE),
+		caches.open(APP_SHELL_CACHE),
+	])
+	for (const cache of [offlineCache, shellCache]) {
+		const match = await cache.match(request, matchOpts)
+		if (match) {
+			return request.mode === 'navigate' ? toCleanNavigationResponse(match) : match
+		}
 	}
 
 	if (request.mode === 'navigate') {
-		const fallback = (await findCachedNavigationFallback(shellCache))
-			|| (await findCachedNavigationFallback(offlineCache))
+		const fallback = await findCachedNavigationFallback(shellCache)
 		if (fallback) {
 			return toCleanNavigationResponse(fallback)
 		}
