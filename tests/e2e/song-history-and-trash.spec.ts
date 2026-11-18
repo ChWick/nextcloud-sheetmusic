@@ -12,7 +12,8 @@ test.describe('Song History Timeline & Trash Restoration', () => {
 		// Wait for song viewer to load Symphony No. 5
 		await expect(page.getByRole('heading', { name: 'Symphony No. 5' })).toBeVisible()
 
-		// Click the "Song history & revisions" button in the viewer header
+		// Open the "More song actions" menu and click "Song history & revisions"
+		await page.getByRole('button', { name: 'More song actions' }).click()
 		const historyBtn = page.getByRole('button', { name: 'Song history & revisions' }).first()
 		await expect(historyBtn).toBeVisible()
 		await historyBtn.click()
@@ -60,7 +61,8 @@ test.describe('Song History Timeline & Trash Restoration', () => {
 		await page.getByRole('button', { name: 'Edit song' }).click()
 		await expect(page.locator('#song-title-input')).toBeVisible()
 
-		// Click "Song history & revisions" button in editor header
+		// Open the "More song actions" menu and click "Song history & revisions"
+		await page.getByRole('button', { name: 'More song actions' }).click()
 		const historyBtn = page.getByRole('button', { name: 'Song history & revisions' }).first()
 		await expect(historyBtn).toBeVisible()
 		await historyBtn.click()
