@@ -2,7 +2,6 @@
 import type { Arranger, Artist, Book, Collection, Composer, CustomGroup, EntityType, FilterEntity, Genre, Instrument, Key, Signature, Song, SongColumn, SourceType, Year } from '../../types/song'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
-import EyeIcon from 'vue-material-design-icons/Eye.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import { computed, ref, watch } from 'vue'
 import { formatDateTimestamp, formatDifficulty, formatDurationHms, formatStars, sortSongs, type SortKey, type SortOrder } from '../../utils/song-formatter'
@@ -188,7 +187,7 @@ const {
 						@click="toggleSort(colDef.sortKey)">
 						{{ colDef.label() }}{{ sortIndicator(colDef.sortKey) }}
 					</th>
-					<th :class="$style.actionsHeader">
+					<th v-if="canWrite !== false" :class="$style.actionsHeader">
 						{{ t('sheetmusic', 'Actions') }}
 					</th>
 				</tr>
@@ -322,25 +321,15 @@ const {
 					<td v-if="isColVisible('dateCreated')" :class="$style.dateCell">
 						{{ formatDateTimestamp(song.dateCreated) }}
 					</td>
-					<td :class="$style.actionsCell" @click.stop>
+					<td v-if="canWrite !== false" :class="$style.actionsCell" @click.stop>
 						<div :class="$style.actionsGroup">
 							<NcButton
-								v-if="canWrite !== false"
 								size="small"
 								:title="t('sheetmusic', 'Edit song')"
 								:aria-label="t('sheetmusic', 'Edit song')"
 								@click="emit('edit-song', song)">
 								<template #icon>
 									<PencilIcon :size="18" />
-								</template>
-							</NcButton>
-							<NcButton
-								size="small"
-								:title="t('sheetmusic', 'View song')"
-								:aria-label="t('sheetmusic', 'View song')"
-								@click="emit('view-song', song)">
-								<template #icon>
-									<EyeIcon :size="18" />
 								</template>
 							</NcButton>
 						</div>
