@@ -807,24 +807,33 @@ function selectAllPages() {
 	selectedPages.value = Array.from({ length: totalPages.value }, (_, i) => i + 1)
 }
 
+function confirmDiscard(message: string): boolean {
+	if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
+		return window.confirm(message)
+	}
+	return true
+}
+
 function handleCancel() {
-	if (hasAnyChange.value && typeof window !== 'undefined' && typeof window.confirm === 'function') {
-		if (!window.confirm(t('sheetmusic', 'You have unsaved PDF changes. Discard all changes and leave?'))) {
-			return
-		}
+	if (hasAnyChange.value && !confirmDiscard(t('sheetmusic', 'You have unsaved PDF changes. Discard all changes and leave?'))) {
+		return
 	}
 	emit('cancel')
 }
 
 function handleDiscardAllEdits() {
 	if (!hasAnyChange.value) return
-	if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
-		if (!window.confirm(t('sheetmusic', 'Discard all unsaved rotations, crops, enhancements, and deletions?'))) {
-			return
-		}
+	if (!confirmDiscard(t('sheetmusic', 'Discard all unsaved rotations, crops, enhancements, and deletions?'))) {
+		return
 	}
 	resetAllCurrentEdits()
 }
+
+// Page Zoom Lightbox Modal state (reuses SongPageOrderZoomModal)
+const isZoomModalOpen = ref(false)
+const zoomPageNum = ref(1)
+const zoomHighResCache = ref<Record<number, string>>({})
+const isLoadingZoomHighRes = ref(false)
 
 const isAnyModalOpen = computed(() =>
 	isCropModalOpen.value
@@ -835,12 +844,6 @@ const isAnyModalOpen = computed(() =>
 	|| isPageOrderModalOpen.value
 	|| isZoomModalOpen.value,
 )
-
-// Page Zoom Lightbox Modal state (reuses SongPageOrderZoomModal)
-const isZoomModalOpen = ref(false)
-const zoomPageNum = ref(1)
-const zoomHighResCache = ref<Record<number, string>>({})
-const isLoadingZoomHighRes = ref(false)
 
 watch(activePdfDoc, () => {
 	zoomHighResCache.value = {}
@@ -872,24 +875,15 @@ async function loadZoomHighResPage(pageNum: number) {
 	}
 }
 
-function openPageZoom(pageNum: number) {
+function goToZoomPage(pageNum: number) {
+	if (pageNum < 1 || pageNum > totalPages.value) return
 	zoomPageNum.value = pageNum
-	isZoomModalOpen.value = true
 	loadZoomHighResPage(pageNum)
 }
 
-function prevZoomPage() {
-	if (zoomPageNum.value > 1) {
-		zoomPageNum.value--
-		loadZoomHighResPage(zoomPageNum.value)
-	}
-}
-
-function nextZoomPage() {
-	if (zoomPageNum.value < totalPages.value) {
-		zoomPageNum.value++
-		loadZoomHighResPage(zoomPageNum.value)
-	}
+function openPageZoom(pageNum: number) {
+	isZoomModalOpen.value = true
+	goToZoomPage(pageNum)
 }
 
 function handleKeyDown(event: KeyboardEvent) {
@@ -976,7 +970,6 @@ watch(() => targetFile.value?.path, () => {
 			:page-resolutions="pageResolutions"
 			:is-fullscreen="isFullscreen"
 			@update:active-mode="activeMode = $event"
-			@update:activeMode="activeMode = $event"
 			@cancel="handleCancel"
 			@open-page-order-modal="isPageOrderModalOpen = true"
 			@open-join-modal="openJoinModal(1, 2)"
@@ -1167,8 +1160,8 @@ watch(() => targetFile.value?.path, () => {
 			:is-loading-high-res="isLoadingZoomHighRes"
 			:show-append-action="false"
 			:rotation-deg="pageRotations[zoomPageNum - 1] || 0"
-			@prev="prevZoomPage"
-			@next="nextZoomPage" />
+			@prev="goToZoomPage(zoomPageNum - 1)"
+			@next="goToZoomPage(zoomPageNum + 1)" />
 	</div>
 </template>
 
