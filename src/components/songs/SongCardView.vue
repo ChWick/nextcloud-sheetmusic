@@ -2,7 +2,6 @@
 import type { EntityType, FilterEntity, Song, SongColumn } from '../../types/song'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
-import EyeIcon from 'vue-material-design-icons/Eye.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import { computed } from 'vue'
 import { formatDateTimestamp, formatDifficulty, formatDurationHms, formatStars } from '../../utils/song-formatter'
@@ -143,24 +142,14 @@ const {
 				</div>
 			</div>
 
-			<div :class="$style.cardActions" @click.stop>
+			<div v-if="canWrite !== false" :class="$style.cardActions" @click.stop>
 				<NcButton
-					v-if="canWrite !== false"
 					size="small"
 					:title="t('sheetmusic', 'Edit song')"
 					:aria-label="t('sheetmusic', 'Edit song')"
 					@click="emit('edit-song', song)">
 					<template #icon>
 						<PencilIcon :size="18" />
-					</template>
-				</NcButton>
-				<NcButton
-					size="small"
-					:title="t('sheetmusic', 'View song')"
-					:aria-label="t('sheetmusic', 'View song')"
-					@click="emit('view-song', song)">
-					<template #icon>
-						<EyeIcon :size="18" />
 					</template>
 				</NcButton>
 			</div>
