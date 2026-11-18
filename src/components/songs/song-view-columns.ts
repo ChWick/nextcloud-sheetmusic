@@ -600,3 +600,51 @@ export function parseDurationInput(raw: string | number): number {
 	const num = Number(trimmed)
 	return Number.isFinite(num) && num > 0 ? Math.round(num) : 0
 }
+
+/** Sort key options shared across song list display controls. */
+export function getSongSortOptions(): { value: SortKey; label: string }[] {
+	return [
+		{ value: 'title', label: t('sheetmusic', 'Title') },
+		{ value: 'composer', label: t('sheetmusic', 'Composer') },
+		{ value: 'book', label: t('sheetmusic', 'Book') },
+		{ value: 'collection', label: t('sheetmusic', 'Collection') },
+		{ value: 'artist', label: t('sheetmusic', 'Artist') },
+		{ value: 'instrument', label: t('sheetmusic', 'Instrument') },
+		{ value: 'arranger', label: t('sheetmusic', 'Arranger') },
+		{ value: 'opus', label: t('sheetmusic', 'Opus') },
+		{ value: 'catalogNumber', label: t('sheetmusic', 'Catalog Number') },
+		{ value: 'songNumber', label: t('sheetmusic', 'Song Number') },
+		{ value: 'lastModified', label: t('sheetmusic', 'Last modified') },
+		{ value: 'dateCreated', label: t('sheetmusic', 'Date created') },
+	]
+}
+
+/** Column visibility options shared across song list display controls. */
+export function getSongColumnOptions(): { key: SongColumn; label: string }[] {
+	return [
+		{ key: 'title', label: t('sheetmusic', 'Title') },
+		{ key: 'composer', label: t('sheetmusic', 'Composer') },
+		{ key: 'book', label: t('sheetmusic', 'Book') },
+		{ key: 'collection', label: t('sheetmusic', 'Collection') },
+		{ key: 'artist', label: t('sheetmusic', 'Artist') },
+		{ key: 'genre', label: t('sheetmusic', 'Genre') },
+		{ key: 'key', label: t('sheetmusic', 'Key') },
+		{ key: 'customGroup', label: t('sheetmusic', 'Custom Group') },
+		{ key: 'year', label: t('sheetmusic', 'Year') },
+		{ key: 'signature', label: t('sheetmusic', 'Time Signature') },
+		{ key: 'sourceType', label: t('sheetmusic', 'Source Type') },
+		{ key: 'stars', label: t('sheetmusic', 'Rating') },
+		{ key: 'difficulty', label: t('sheetmusic', 'Difficulty') },
+		{ key: 'duration', label: t('sheetmusic', 'Duration') },
+		{ key: 'keywords', label: t('sheetmusic', 'Keywords') },
+		{ key: 'custom', label: t('sheetmusic', 'Custom') },
+		{ key: 'custom2', label: t('sheetmusic', 'Custom 2') },
+		{ key: 'instrument', label: t('sheetmusic', 'Instrument') },
+		{ key: 'arranger', label: t('sheetmusic', 'Arranger') },
+		{ key: 'opus', label: t('sheetmusic', 'Opus') },
+		{ key: 'catalogNumber', label: t('sheetmusic', 'Catalog Number (BWV, etc.)') },
+		{ key: 'songNumber', label: t('sheetmusic', 'Song Number') },
+		{ key: 'lastModified', label: t('sheetmusic', 'Last modified') },
+		{ key: 'dateCreated', label: t('sheetmusic', 'Date created') },
+	]
+}

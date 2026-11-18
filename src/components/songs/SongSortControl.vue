@@ -7,6 +7,7 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import SortAscendingIcon from 'vue-material-design-icons/SortAscending.vue'
 import SortDescendingIcon from 'vue-material-design-icons/SortDescending.vue'
 import type { SortKey, SortOrder } from '../../utils/song-formatter'
+import { getSongSortOptions } from './song-view-columns'
 
 const props = defineProps<{
 	sortKey: SortKey
@@ -18,20 +19,7 @@ const emit = defineEmits<{
 	'update:sortOrder': [order: SortOrder]
 }>()
 
-const sortOptions: { value: SortKey; label: string }[] = [
-	{ value: 'title', label: t('sheetmusic', 'Title') },
-	{ value: 'composer', label: t('sheetmusic', 'Composer') },
-	{ value: 'book', label: t('sheetmusic', 'Book') },
-	{ value: 'collection', label: t('sheetmusic', 'Collection') },
-	{ value: 'artist', label: t('sheetmusic', 'Artist') },
-	{ value: 'instrument', label: t('sheetmusic', 'Instrument') },
-	{ value: 'arranger', label: t('sheetmusic', 'Arranger') },
-	{ value: 'opus', label: t('sheetmusic', 'Opus') },
-	{ value: 'catalogNumber', label: t('sheetmusic', 'Catalog Number') },
-	{ value: 'songNumber', label: t('sheetmusic', 'Song Number') },
-	{ value: 'lastModified', label: t('sheetmusic', 'Last modified') },
-	{ value: 'dateCreated', label: t('sheetmusic', 'Date created') },
-]
+const sortOptions = getSongSortOptions()
 
 const currentOptionLabel = computed(() => {
 	const opt = sortOptions.find(o => o.value === props.sortKey)
