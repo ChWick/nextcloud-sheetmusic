@@ -8,7 +8,7 @@ import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwit
 import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import FilterOffIcon from 'vue-material-design-icons/FilterOff.vue'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { ENTITY_COLUMNS, type SongEntityProp } from './songs/song-view-columns'
 import { noneEntryOf } from '../composables/useSongFilters'
 import { useCtrlKey } from '../composables/useCtrlKey'
@@ -132,6 +132,20 @@ const filterFields = computed(() =>
 	}),
 )
 
+const PRIMARY_FILTER_KEYS = new Set(['composers', 'instruments', 'genres', 'books'])
+const showMoreFilters = ref(false)
+
+const visibleFilterFields = computed(() => {
+	if (showMoreFilters.value) return filterFields.value
+	return filterFields.value.filter(
+		(f) => PRIMARY_FILTER_KEYS.has(f.key) || f.selected.length > 0,
+	)
+})
+
+const hiddenFilterCount = computed(() => {
+	return filterFields.value.length - visibleFilterFields.value.length + (showMoreFilters.value || props.withoutFiles ? 0 : 1)
+})
+
 const hasActiveFilters = computed(() => {
 	return (
 		Boolean(props.searchTitle?.trim())
@@ -159,7 +173,7 @@ function clearAllFilters() {
 				@update:model-value="emit('update:searchTitle', $event)" />
 		</div>
 
-		<div :class="[$style.filterGroup, $style.checkboxGroup]">
+		<div v-if="showMoreFilters || withoutFiles" :class="[$style.filterGroup, $style.checkboxGroup]">
 			<NcCheckboxRadioSwitch
 				v-model="withoutFilesModel"
 				type="checkbox">
@@ -181,7 +195,7 @@ function clearAllFilters() {
 				@update:model-value="emit('update:selectedSublibraries', $event)" />
 		</div>
 
-		<div v-for="field in filterFields" :key="field.key" :class="$style.filterGroup">
+		<div v-for="field in visibleFilterFields" :key="field.key" :class="$style.filterGroup">
 			<NcSelect
 				:model-value="field.selected"
 				:options="field.options"
@@ -195,8 +209,17 @@ function clearAllFilters() {
 				@update:model-value="field.onUpdate($event)" />
 		</div>
 
-		<div v-if="hasActiveFilters" :class="$style.actions">
+		<div :class="$style.actions">
 			<NcButton
+				type="secondary"
+				data-test="toggle-more-filters"
+				@click="showMoreFilters = !showMoreFilters">
+				{{ showMoreFilters
+					? t('sheetmusic', 'Fewer filters')
+					: t('sheetmusic', 'More filters ({count})', { count: hiddenFilterCount }, { escape: false }) }}
+			</NcButton>
+			<NcButton
+				v-if="hasActiveFilters"
 				type="tertiary"
 				:title="t('sheetmusic', 'Clear filters')"
 				:aria-label="t('sheetmusic', 'Clear filters')"
