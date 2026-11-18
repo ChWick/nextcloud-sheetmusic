@@ -370,10 +370,11 @@ function stepThumbnailSize(direction: -1 | 1) {
 	.toolbar :global(.button-vue) {
 		--button-padding: var(--button-radius, 8px);
 		line-height: 1;
-		width: var(--button-size, 36px);
-		min-width: var(--button-size, 36px);
-		min-height: var(--button-size, 36px);
+		width: var(--button-size, var(--default-clickable-area, 44px)) !important;
+		min-width: var(--button-size, var(--default-clickable-area, 44px));
+		min-height: var(--button-size, var(--default-clickable-area, 44px));
 		padding: 0;
+		padding-inline: 0;
 		justify-content: center;
 	}
 }

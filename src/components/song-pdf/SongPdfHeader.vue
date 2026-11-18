@@ -720,6 +720,14 @@ button.tabButton:disabled {
 		display: none;
 	}
 
+	.headerLeft :global(.button-vue) {
+		--button-padding: var(--button-radius);
+		padding-inline: var(--button-padding);
+		line-height: 1;
+		width: var(--button-size, var(--default-clickable-area, 44px)) !important;
+		justify-content: center;
+	}
+
 	.songTitle {
 		max-width: 150px;
 		font-size: 14px;
@@ -730,6 +738,14 @@ button.tabButton:disabled {
 	.saveBtnText,
 	.headerRight :global(.button-vue__text) {
 		display: none;
+	}
+
+	.headerRight :global(.button-vue) {
+		--button-padding: var(--button-radius);
+		padding-inline: var(--button-padding);
+		line-height: 1;
+		width: var(--button-size, var(--default-clickable-area, 44px)) !important;
+		justify-content: center;
 	}
 
 	.songTitle {
