@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
-import PencilOutlineIcon from 'vue-material-design-icons/PencilOutline.vue'
+import DrawIcon from 'vue-material-design-icons/Draw.vue'
 import FilePreviewer from '../FilePreviewer.vue'
 import SongAnnotationToolbar from '../song-viewer/SongAnnotationToolbar.vue'
 import { type AnnotationEditorContext, useAnnotationEditor } from '../../composables/useAnnotationEditor'
@@ -19,7 +19,6 @@ const props = withDefaults(defineProps<{
 	annotationContext: AnnotationEditorContext
 	canAnnotate?: boolean
 	showAnnotateButton?: boolean
-	isFullscreen?: boolean
 }>(), {
 	fileName: undefined,
 	pageOrder: undefined,
@@ -29,13 +28,11 @@ const props = withDefaults(defineProps<{
 	annotations: () => [],
 	canAnnotate: true,
 	showAnnotateButton: false,
-	isFullscreen: false,
 })
 
 const emit = defineEmits<{
 	'update:annotations': [annotations: SheetAnnotation[]]
 	'update:isEditing': [editing: boolean]
-	'toggle-fullscreen': []
 }>()
 
 const filePreviewerRef = ref<InstanceType<typeof FilePreviewer> | null>(null)
@@ -133,7 +130,7 @@ defineExpose({
 				variant="secondary"
 				@click="enterEditMode">
 				<template #icon>
-					<PencilOutlineIcon :size="16" />
+					<DrawIcon :size="16" />
 				</template>
 				{{ t('sheetmusic', 'Annotate') }}
 			</NcButton>
@@ -148,7 +145,6 @@ defineExpose({
 			:can-redo="canRedo"
 			:is-saving="isSaving"
 			:current-page="currentPage"
-			:is-fullscreen="isFullscreen"
 			@update:active-tool="setTool"
 			@update:tool-style="toolStyle = $event"
 			@update-selected-style="updateSelectedStyle"
@@ -157,7 +153,6 @@ defineExpose({
 			@redo="redo"
 			@delete-selected="deleteSelected"
 			@clear-page="clearPage(currentPage - 1)"
-			@toggle-fullscreen="emit('toggle-fullscreen')"
 			@done="exitEditMode" />
 
 		<slot name="betweenToolbarAndPreview" :current-page="currentPage" />

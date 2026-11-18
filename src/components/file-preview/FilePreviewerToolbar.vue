@@ -178,8 +178,8 @@ const emit = defineEmits<{
 				v-if="isPdf"
 				variant="secondary"
 				size="small"
-				:title="showAnnotations ? t('sheetmusic', 'Hide annotations (experimental)') : t('sheetmusic', 'Show annotations (experimental)')"
-				:aria-label="showAnnotations ? t('sheetmusic', 'Hide annotations (experimental)') : t('sheetmusic', 'Show annotations (experimental)')"
+				:title="showAnnotations ? t('sheetmusic', 'Hide annotations') : t('sheetmusic', 'Show annotations')"
+				:aria-label="showAnnotations ? t('sheetmusic', 'Hide annotations') : t('sheetmusic', 'Show annotations')"
 				data-test="toggle-annotations-button"
 				@click="emit('toggleAnnotations')">
 				<template #icon>
@@ -208,7 +208,7 @@ const emit = defineEmits<{
 	justify-content: space-between;
 	padding: 8px 16px;
 	background-color: var(--color-main-background);
-	border-bottom: 1px solid var(--color-border);
+	border-top: 1px solid var(--color-border);
 	gap: 12px;
 	flex-wrap: wrap;
 }

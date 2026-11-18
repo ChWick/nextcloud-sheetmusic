@@ -47,13 +47,13 @@ describe('Annotations Toggle Controls', () => {
 
 		const toggleBtn = wrapper.find('[data-test="toggle-annotations-button"]')
 		expect(toggleBtn.exists()).toBe(true)
-		expect(toggleBtn.attributes('title')).toBe('Hide annotations (experimental)')
+		expect(toggleBtn.attributes('title')).toBe('Hide annotations')
 
 		await toggleBtn.trigger('click')
 		expect(wrapper.emitted('toggleAnnotations')).toBeTruthy()
 
 		await wrapper.setProps({ showAnnotations: false })
-		expect(toggleBtn.attributes('title')).toBe('Show annotations (experimental)')
+		expect(toggleBtn.attributes('title')).toBe('Show annotations')
 	})
 
 	it('SongViewerFileToolbar renders annotation toggle and edit buttons', async () => {
@@ -70,17 +70,35 @@ describe('Annotations Toggle Controls', () => {
 				totalPages: 3,
 				showAnnotations: true,
 			},
+			global: {
+				stubs: {
+					NcActions: {
+						name: 'NcActions',
+						template: '<div class="nc-actions"><slot /></div>',
+					},
+					NcActionButton: {
+						name: 'NcActionButton',
+						emits: ['click'],
+						template: '<button type="button" class="nc-action-button" @click="$emit(\'click\')"><slot /><slot name="icon" /></button>',
+					},
+				},
+			},
 		})
-
-		const toggleBtn = wrapper.find('[data-test="toggle-annotations-button"]')
-		expect(toggleBtn.exists()).toBe(true)
-		await toggleBtn.trigger('click')
-		expect(wrapper.emitted('toggle-annotations')).toBeTruthy()
 
 		const editBtn = wrapper.find('[data-test="edit-annotations-button"]')
 		expect(editBtn.exists()).toBe(true)
 		await editBtn.trigger('click')
 		expect(wrapper.emitted('toggle-edit-annotations')).toBeTruthy()
+
+		const fullscreenBtn = wrapper.find('[data-test="viewer-fullscreen-button"]')
+		expect(fullscreenBtn.exists()).toBe(true)
+		await fullscreenBtn.trigger('click')
+		expect(wrapper.emitted('toggle-fullscreen')).toBeTruthy()
+
+		const toggleBtn = wrapper.find('[data-test="toggle-annotations-button"]')
+		expect(toggleBtn.exists()).toBe(true)
+		await toggleBtn.trigger('click')
+		expect(wrapper.emitted('toggle-annotations')).toBeTruthy()
 	})
 })
 

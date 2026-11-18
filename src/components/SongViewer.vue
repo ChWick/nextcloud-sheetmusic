@@ -256,9 +256,6 @@ function toggleAnnotationEditMode() {
 
 function onEditingAnnotationsChange(editing: boolean) {
 	isEditingAnnotations.value = editing
-	if (!editing && isAnnotationFullscreen.value) {
-		toggleAnnotationFullscreen()
-	}
 }
 
 async function loadAnnotations() {
@@ -297,7 +294,7 @@ defineExpose({
 
 <template>
 	<div :class="[$style.container, isAnnotationFullscreen && $style.fullscreenContainer]">
-		<header v-if="song && !hideHeader" :class="$style.header">
+		<header v-if="song && !hideHeader && !isAnnotationFullscreen" :class="$style.header">
 			<div :class="$style.headerTop">
 				<NcButton
 					:title="t('sheetmusic', 'Back to songs')"
@@ -338,7 +335,7 @@ defineExpose({
 
 		<!-- Metadata bar when header is integrated into top bar -->
 		<SongViewerMetadata
-			v-if="song && hideHeader && !isEditing"
+			v-if="song && hideHeader && !isEditing && !isAnnotationFullscreen"
 			:song="song"
 			@jump-to-bookmark="jumpToBookmark" />
 
@@ -379,12 +376,14 @@ defineExpose({
 				:page-resolutions="filePreviewerRef?.pageResolutions ?? []"
 				:show-annotations="filePreviewerRef?.showAnnotationsState ?? true"
 				:is-editing-annotations="isEditingAnnotations"
+				:is-fullscreen="isAnnotationFullscreen"
 				:can-write="canWrite"
 				@open-external="openInExternalViewer"
 				@modify-pdf="song && emit('modify-pdf', song, selectedFile.id)"
 				@open-versions="openVersionsModal"
 				@toggle-annotations="filePreviewerRef?.toggleAnnotations()"
-				@toggle-edit-annotations="toggleAnnotationEditMode" />
+				@toggle-edit-annotations="toggleAnnotationEditMode"
+				@toggle-fullscreen="toggleAnnotationFullscreen" />
 
 			<AnnotatableFilePreview
 				v-if="selectedFile?.path"
@@ -397,10 +396,8 @@ defineExpose({
 				:annotations="annotations"
 				:annotation-context="annotationContext"
 				:can-annotate="isSelectedFilePdf && canWrite !== false"
-				:is-fullscreen="isAnnotationFullscreen"
 				@update:annotations="annotations = $event"
-				@update:is-editing="onEditingAnnotationsChange"
-				@toggle-fullscreen="toggleAnnotationFullscreen">
+				@update:is-editing="onEditingAnnotationsChange">
 				<template #betweenToolbarAndPreview>
 					<SongViewerBookmarksBar
 						:bookmarks="songBookmarks"
