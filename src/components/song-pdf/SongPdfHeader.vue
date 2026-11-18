@@ -508,11 +508,11 @@ const modeTabItems = computed(() => [
 
 .tabButtonActive,
 .tabButtonActive:hover:not(:disabled) {
-	background-color: var(--color-background-hover);
+	background-color: var(--sheetmusic-pdf-active-surface, color-mix(in srgb, var(--color-primary-element, #0082c9) 12%, var(--color-main-background, #ffffff)));
 	color: var(--color-main-text);
 	font-weight: 600;
 	border-color: var(--color-border);
-	border-bottom: 1px solid var(--color-background-hover);
+	border-bottom: 1px solid var(--sheetmusic-pdf-active-surface, color-mix(in srgb, var(--color-primary-element, #0082c9) 12%, var(--color-main-background, #ffffff)));
 	box-shadow: inset 0 2px 0 var(--color-primary-element);
 	z-index: 1;
 }
@@ -609,20 +609,14 @@ const modeTabItems = computed(() => [
 		display: flex;
 		box-sizing: border-box;
 		margin: 0;
-		overflow-x: auto;
-		-webkit-overflow-scrolling: touch;
-		scrollbar-width: none;
+		overflow: visible;
 		justify-content: flex-start;
-	}
-
-	.modeTabs::-webkit-scrollbar {
-		display: none;
 	}
 
 	.tabButton {
 		flex: 1 0 auto;
 		min-height: 38px;
-		padding: 6px 8px;
+		padding: 8px 8px;
 		font-size: 12px;
 	}
 
