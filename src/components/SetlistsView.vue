@@ -479,17 +479,19 @@ async function restoreSetlistFromRouteQuery() {
   }
 }
 
-onMounted(async () => {
-  loadLibraryData(props.selectedLibrary)
+async function loadLibraryAndSetlists(libraryId: number) {
+  loadLibraryData(libraryId)
   await loadSetlists()
   await restoreSetlistFromRouteQuery()
+}
+
+onMounted(async () => {
+  await loadLibraryAndSetlists(props.selectedLibrary)
 })
 
 watch(() => props.selectedLibrary, async (newLib) => {
   if (newLib > 0) {
-    loadLibraryData(newLib)
-    await loadSetlists()
-    await restoreSetlistFromRouteQuery()
+    await loadLibraryAndSetlists(newLib)
   }
 })
 

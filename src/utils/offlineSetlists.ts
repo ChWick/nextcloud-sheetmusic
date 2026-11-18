@@ -4,7 +4,7 @@ import { apiGet } from '../api/client'
 import { fetchSetlist, fetchSetlistFiles, getSetlistFileContentUrl } from '../api/setlists'
 import type { Song } from '../types/song'
 import { getFileVersionToken, getVersionedFileUrl } from './file-version'
-import { APP_SHELL_CACHE } from './pwa'
+import { cacheIntoAppShell } from './pwa'
 
 export const OFFLINE_SETLIST_CACHE = 'sheetmusic-offline-setlists-v1'
 export const OFFLINE_STORAGE_KEY = 'sheetmusic_offline_setlists_v1'
@@ -179,18 +179,7 @@ export async function syncSetlistOffline(params: {
 
 	// Best-effort pre-cache PDF.js worker so PDFs render offline even if not opened online first
 	if (typeof window !== 'undefined' && typeof pdfWorker === 'string' && pdfWorker.length > 0) {
-		try {
-			const workerUrl = new URL(pdfWorker, window.location.href).toString()
-			const shellCache = await caches.open(APP_SHELL_CACHE)
-			if (!(await shellCache.match(workerUrl))) {
-				const workerRes = await fetch(workerUrl, { credentials: 'include' })
-				if (workerRes.ok) {
-					await shellCache.put(workerUrl, workerRes)
-				}
-			}
-		} catch {
-			// Ignore worker pre-cache errors
-		}
+		await cacheIntoAppShell(new URL(pdfWorker, window.location.href).toString())
 	}
 
 	return record

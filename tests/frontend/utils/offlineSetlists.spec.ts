@@ -21,6 +21,7 @@ vi.mock('../../../src/api/client', () => ({
 
 vi.mock('../../../src/utils/pwa', () => ({
 	isStandaloneDisplayMode: () => mockIsStandalone(),
+	cacheIntoAppShell: vi.fn(),
 }))
 
 vi.mock('@nextcloud/router', () => ({
