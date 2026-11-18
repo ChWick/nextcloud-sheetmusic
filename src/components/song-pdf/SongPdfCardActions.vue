@@ -45,119 +45,95 @@ const emit = defineEmits<{
 </script>
 
 <template>
-	<!-- Rotate Actions -->
-	<div v-if="activeMode === 'rotate'" :class="$style.cardActions">
-		<NcButton
-			size="small"
-			variant="tertiary"
-			:disabled="isDeleted"
-			:title="t('sheetmusic', 'Rotate page 90° CCW')"
-			:aria-label="t('sheetmusic', 'Rotate page 90° CCW')"
-			@click.stop="emit('rotate-page', -90)">
-			<template #icon>
-				<RotateLeft :size="16" />
-			</template>
-		</NcButton>
-		<NcButton
-			size="small"
-			variant="tertiary"
-			:disabled="isDeleted"
-			:title="t('sheetmusic', 'Rotate page 90° CW')"
-			:aria-label="t('sheetmusic', 'Rotate page 90° CW')"
-			@click.stop="emit('rotate-page', 90)">
-			<template #icon>
-				<RotateRight :size="16" />
-			</template>
-		</NcButton>
-		<NcButton
-			size="small"
-			variant="tertiary"
-			:disabled="isDeleted"
-			:title="t('sheetmusic', 'Flip page 180°')"
-			:aria-label="t('sheetmusic', 'Flip page 180°')"
-			@click.stop="emit('rotate-page', 180)">
-			<template #icon>
-				<Autorenew :size="16" />
-			</template>
-		</NcButton>
-		<NcButton
-			size="small"
-			variant="tertiary"
-			:disabled="isDeleted"
-			:title="t('sheetmusic', 'Rotate page {page} by custom angle', { page: pageNum }, { escape: false })"
-			:aria-label="t('sheetmusic', 'Rotate page {page} by custom angle', { page: pageNum }, { escape: false })"
-			@click.stop="emit('open-rotate-modal')">
-			<template #icon>
-				<Rotate360 :size="16" />
-			</template>
-		</NcButton>
-		<NcButton
-			v-if="pageNum < totalPages && !isDeleted"
-			size="small"
-			variant="tertiary"
-			:title="t('sheetmusic', 'Join with page {p}', { p: pageNum + 1 }, { escape: false })"
-			:aria-label="t('sheetmusic', 'Join with page {p}', { p: pageNum + 1 }, { escape: false })"
-			@click.stop="emit('open-join-modal', pageNum + 1)">
-			<template #icon>
-				<TableMergeCells :size="16" />
-			</template>
-		</NcButton>
-		<NcButton
-			size="small"
-			:variant="isDeleted ? 'primary' : 'tertiary'"
-			:title="isDeleted ? t('sheetmusic', 'Restore page {page}', { page: pageNum }, { escape: false }) : t('sheetmusic', 'Delete page {page}', { page: pageNum }, { escape: false })"
-			:aria-label="isDeleted ? t('sheetmusic', 'Restore page {page}', { page: pageNum }, { escape: false }) : t('sheetmusic', 'Delete page {page}', { page: pageNum }, { escape: false })"
-			:disabled="!isDeleted && !canDelete"
-			@click.stop="emit('toggle-delete-page')">
-			<template #icon>
-				<DeleteRestore v-if="isDeleted" :size="16" />
-				<DeleteOutline v-else :size="16" />
-			</template>
-		</NcButton>
-	</div>
+	<!-- Rotate / Crop / Enhance Actions -->
+	<div
+		v-if="activeMode === 'rotate' || activeMode === 'crop' || activeMode === 'enhance'"
+		:class="$style.cardActions">
+		<template v-if="activeMode === 'rotate'">
+			<NcButton
+				size="small"
+				variant="tertiary"
+				:disabled="isDeleted"
+				:title="t('sheetmusic', 'Rotate page 90° CCW')"
+				:aria-label="t('sheetmusic', 'Rotate page 90° CCW')"
+				@click.stop="emit('rotate-page', -90)">
+				<template #icon>
+					<RotateLeft :size="16" />
+				</template>
+			</NcButton>
+			<NcButton
+				size="small"
+				variant="tertiary"
+				:disabled="isDeleted"
+				:title="t('sheetmusic', 'Rotate page 90° CW')"
+				:aria-label="t('sheetmusic', 'Rotate page 90° CW')"
+				@click.stop="emit('rotate-page', 90)">
+				<template #icon>
+					<RotateRight :size="16" />
+				</template>
+			</NcButton>
+			<NcButton
+				size="small"
+				variant="tertiary"
+				:disabled="isDeleted"
+				:title="t('sheetmusic', 'Flip page 180°')"
+				:aria-label="t('sheetmusic', 'Flip page 180°')"
+				@click.stop="emit('rotate-page', 180)">
+				<template #icon>
+					<Autorenew :size="16" />
+				</template>
+			</NcButton>
+			<NcButton
+				size="small"
+				variant="tertiary"
+				:disabled="isDeleted"
+				:title="t('sheetmusic', 'Rotate page {page} by custom angle', { page: pageNum }, { escape: false })"
+				:aria-label="t('sheetmusic', 'Rotate page {page} by custom angle', { page: pageNum }, { escape: false })"
+				@click.stop="emit('open-rotate-modal')">
+				<template #icon>
+					<Rotate360 :size="16" />
+				</template>
+			</NcButton>
+			<NcButton
+				v-if="pageNum < totalPages && !isDeleted"
+				size="small"
+				variant="tertiary"
+				:title="t('sheetmusic', 'Join with page {p}', { p: pageNum + 1 }, { escape: false })"
+				:aria-label="t('sheetmusic', 'Join with page {p}', { p: pageNum + 1 }, { escape: false })"
+				@click.stop="emit('open-join-modal', pageNum + 1)">
+				<template #icon>
+					<TableMergeCells :size="16" />
+				</template>
+			</NcButton>
+		</template>
 
-	<!-- Crop Actions -->
-	<div v-else-if="activeMode === 'crop'" :class="$style.cardActions">
-		<NcButton
-			v-if="!isDeleted"
-			size="small"
-			:variant="isCropped ? 'primary' : 'tertiary'"
-			:title="t('sheetmusic', 'Crop page {page}', { page: pageNum }, { escape: false })"
-			@click.stop="emit('open-crop-modal')">
-			<template #icon>
-				<CropIcon :size="16" />
-			</template>
-			{{ t('sheetmusic', 'Crop') }}
-		</NcButton>
-		<NcButton
-			v-if="pageNum < totalPages && !isDeleted"
-			size="small"
-			variant="tertiary"
-			:title="t('sheetmusic', 'Join with page {p}', { p: pageNum + 1 }, { escape: false })"
-			:aria-label="t('sheetmusic', 'Join with page {p}', { p: pageNum + 1 }, { escape: false })"
-			@click.stop="emit('open-join-modal', pageNum + 1)">
-			<template #icon>
-				<TableMergeCells :size="16" />
-			</template>
-		</NcButton>
-		<NcButton
-			size="small"
-			:variant="isDeleted ? 'primary' : 'tertiary'"
-			:title="isDeleted ? t('sheetmusic', 'Restore page {page}', { page: pageNum }, { escape: false }) : t('sheetmusic', 'Delete page {page}', { page: pageNum }, { escape: false })"
-			:aria-label="isDeleted ? t('sheetmusic', 'Restore page {page}', { page: pageNum }, { escape: false }) : t('sheetmusic', 'Delete page {page}', { page: pageNum }, { escape: false })"
-			:disabled="!isDeleted && !canDelete"
-			@click.stop="emit('toggle-delete-page')">
-			<template #icon>
-				<DeleteRestore v-if="isDeleted" :size="16" />
-				<DeleteOutline v-else :size="16" />
-			</template>
-		</NcButton>
-	</div>
+		<template v-else-if="activeMode === 'crop'">
+			<NcButton
+				v-if="!isDeleted"
+				size="small"
+				:variant="isCropped ? 'primary' : 'tertiary'"
+				:title="t('sheetmusic', 'Crop page {page}', { page: pageNum }, { escape: false })"
+				@click.stop="emit('open-crop-modal')">
+				<template #icon>
+					<CropIcon :size="16" />
+				</template>
+				{{ t('sheetmusic', 'Crop') }}
+			</NcButton>
+			<NcButton
+				v-if="pageNum < totalPages && !isDeleted"
+				size="small"
+				variant="tertiary"
+				:title="t('sheetmusic', 'Join with page {p}', { p: pageNum + 1 }, { escape: false })"
+				:aria-label="t('sheetmusic', 'Join with page {p}', { p: pageNum + 1 }, { escape: false })"
+				@click.stop="emit('open-join-modal', pageNum + 1)">
+				<template #icon>
+					<TableMergeCells :size="16" />
+				</template>
+			</NcButton>
+		</template>
 
-	<!-- Enhance Actions -->
-	<div v-else-if="activeMode === 'enhance'" :class="$style.cardActions">
 		<NcButton
-			v-if="!isDeleted"
+			v-else-if="!isDeleted"
 			size="small"
 			:variant="isEnhanced ? 'primary' : 'tertiary'"
 			:title="t('sheetmusic', 'Enhance page {page}', { page: pageNum }, { escape: false })"
@@ -167,6 +143,7 @@ const emit = defineEmits<{
 			</template>
 			{{ t('sheetmusic', 'Enhance') }}
 		</NcButton>
+
 		<NcButton
 			size="small"
 			:variant="isDeleted ? 'primary' : 'tertiary'"
