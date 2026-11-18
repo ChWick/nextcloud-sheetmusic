@@ -267,7 +267,7 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 	}
 
 	function onPointerDown(e: PointerEvent) {
-		if (!opts.editable.value || e.button !== 0) return
+		if (!opts.editable.value || e.button !== 0 || e.ctrlKey || e.metaKey) return
 		if (e.pointerType === 'touch') {
 			activeTouchPointers.add(e.pointerId)
 			if (activeTouchPointers.size >= 2) {

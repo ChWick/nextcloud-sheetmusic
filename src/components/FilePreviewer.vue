@@ -1050,6 +1050,7 @@ const { wasRecentlyPinching, resetPan } = usePdfTouchZoom({
 	stageRef: pdfStage,
 	getCurrentScale: () => effectiveScale.value,
 	isEnabled: () => isPdfFile.value && !isLoading.value && !errorMessage.value,
+	isAnnotating: () => props.editableAnnotations,
 	onCommitZoom: async (scale) => {
 		zoomMode.value = 'custom'
 		customScale.value = scale

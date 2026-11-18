@@ -5,6 +5,7 @@ export interface PdfTouchZoomOptions {
 	stageRef: Ref<HTMLElement | undefined>
 	getCurrentScale: () => number
 	isEnabled: () => boolean
+	isAnnotating?: () => boolean
 	onCommitZoom: (scale: number) => Promise<void> | void
 	minScale?: number
 	maxScale?: number
@@ -50,6 +51,22 @@ export function usePdfTouchZoom(options: PdfTouchZoomOptions) {
 	let livePanX = 0
 	let livePanY = 0
 	let lastPinchEndTime = 0
+
+	// Mouse pan state
+	let isMousePanning = false
+	let mouseStartX = 0
+	let mouseStartY = 0
+	let mouseStartScrollLeft = 0
+	let mouseStartScrollTop = 0
+
+	// Wheel zoom state
+	let wheelCommitTimer: ReturnType<typeof setTimeout> | null = null
+	let wheelStartScale = 0
+	let wheelTargetScale = 0
+	let wheelFocalViewportX = 0
+	let wheelFocalViewportY = 0
+	let wheelFocalContentX = 0
+	let wheelFocalContentY = 0
 
 	function applyStageTransform(scaleFactor: number, panX: number, panY: number) {
 		const stage = options.stageRef.value
@@ -190,8 +207,10 @@ export function usePdfTouchZoom(options: PdfTouchZoomOptions) {
 		resetStageTransform()
 
 		if (container) {
-			container.scrollLeft = Math.max(0, focalContentX * scaleRatio - focalViewportX)
-			container.scrollTop = Math.max(0, focalContentY * scaleRatio - focalViewportY)
+			const maxScrollLeft = Math.max(0, container.scrollWidth - container.clientWidth)
+			const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight)
+			container.scrollLeft = clamp(focalContentX * scaleRatio - focalViewportX, 0, maxScrollLeft)
+			container.scrollTop = clamp(focalContentY * scaleRatio - focalViewportY, 0, maxScrollTop)
 		}
 	}
 
@@ -204,6 +223,124 @@ export function usePdfTouchZoom(options: PdfTouchZoomOptions) {
 		resetStageTransform()
 	}
 
+	function handleWheel(event: WheelEvent) {
+		if (!options.isEnabled() || !(event.ctrlKey || event.metaKey)) {
+			return
+		}
+		const container = options.containerRef.value
+		if (!container) return
+
+		event.preventDefault()
+
+		if (wheelCommitTimer === null) {
+			wheelStartScale = Math.max(minScale, options.getCurrentScale())
+			wheelTargetScale = wheelStartScale
+			const rect = container.getBoundingClientRect()
+			wheelFocalViewportX = event.clientX - rect.left
+			wheelFocalViewportY = event.clientY - rect.top
+			wheelFocalContentX = wheelFocalViewportX + container.scrollLeft
+			wheelFocalContentY = wheelFocalViewportY + container.scrollTop
+		} else {
+			clearTimeout(wheelCommitTimer)
+		}
+
+		const zoomFactor = clamp(Math.exp(-event.deltaY * 0.002), 0.75, 1.35)
+		wheelTargetScale = clamp(+(wheelTargetScale * zoomFactor).toFixed(3), minScale, maxScale)
+
+		const stage = options.stageRef.value
+		if (stage) {
+			const factor = wheelTargetScale / wheelStartScale
+			stage.style.transformOrigin = `${wheelFocalContentX}px ${wheelFocalContentY}px`
+			applyStageTransform(factor, committedPanX, committedPanY)
+		}
+
+		wheelCommitTimer = setTimeout(async () => {
+			wheelCommitTimer = null
+			const targetScale = wheelTargetScale
+			const scaleRatio = targetScale / wheelStartScale
+			resetStageTransform()
+
+			if (Math.abs(targetScale - wheelStartScale) <= 0.005) {
+				return
+			}
+
+			await options.onCommitZoom(targetScale)
+			resetStageTransform()
+			if (container) {
+				const maxScrollLeft = Math.max(0, container.scrollWidth - container.clientWidth)
+				const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight)
+				container.scrollLeft = clamp(wheelFocalContentX * scaleRatio - wheelFocalViewportX, 0, maxScrollLeft)
+				container.scrollTop = clamp(wheelFocalContentY * scaleRatio - wheelFocalViewportY, 0, maxScrollTop)
+			}
+		}, 120)
+	}
+
+	function handleMouseDown(event: MouseEvent) {
+		if (!options.isEnabled()) return
+		const isMiddle = event.button === 1
+		const isModifierDrag = event.button === 0 && (event.ctrlKey || event.metaKey)
+		const targetEl = event.target as HTMLElement | null
+		const isInteractiveTarget = Boolean(targetEl?.closest?.('a, button, input, select, textarea, .sheetmusic-annotation-link'))
+		const isPlainViewDrag = event.button === 0 && !options.isAnnotating?.() && !isInteractiveTarget
+
+		if (!isMiddle && !isModifierDrag && !isPlainViewDrag) {
+			return
+		}
+		const container = options.containerRef.value
+		if (!container) return
+
+		event.preventDefault()
+		isMousePanning = true
+		mouseStartX = event.clientX
+		mouseStartY = event.clientY
+		mouseStartScrollLeft = container.scrollLeft
+		mouseStartScrollTop = container.scrollTop
+		livePanX = committedPanX
+		livePanY = committedPanY
+		container.style.cursor = 'grabbing'
+	}
+
+	function handleMouseMove(event: MouseEvent) {
+		if (!isMousePanning) return
+		const container = options.containerRef.value
+		if (!container) return
+
+		const panDeltaX = event.clientX - mouseStartX
+		const panDeltaY = event.clientY - mouseStartY
+
+		const xPan = computeAxisPan(
+			mouseStartScrollLeft,
+			Math.max(0, container.scrollWidth - container.clientWidth),
+			panDeltaX,
+			committedPanX,
+		)
+		container.scrollLeft = xPan.scroll
+		livePanX = xPan.livePan
+
+		const yPan = computeAxisPan(
+			mouseStartScrollTop,
+			Math.max(0, container.scrollHeight - container.clientHeight),
+			panDeltaY,
+			committedPanY,
+		)
+		container.scrollTop = yPan.scroll
+		livePanY = yPan.livePan
+
+		applyStageTransform(1, livePanX, livePanY)
+	}
+
+	function stopMousePan() {
+		if (!isMousePanning) return
+		isMousePanning = false
+		committedPanX = livePanX
+		committedPanY = livePanY
+		resetStageTransform()
+		const container = options.containerRef.value
+		if (container) {
+			container.style.cursor = ''
+		}
+	}
+
 	onMounted(() => {
 		const el = options.containerRef.value
 		if (!el) return
@@ -211,15 +348,28 @@ export function usePdfTouchZoom(options: PdfTouchZoomOptions) {
 		el.addEventListener('touchmove', handleTouchMove, { passive: false })
 		el.addEventListener('touchend', handleTouchEnd, { passive: true })
 		el.addEventListener('touchcancel', handleTouchCancel, { passive: true })
+		el.addEventListener('wheel', handleWheel, { passive: false })
+		el.addEventListener('mousedown', handleMouseDown)
+		window.addEventListener('mousemove', handleMouseMove)
+		window.addEventListener('mouseup', stopMousePan)
 	})
 
 	onUnmounted(() => {
+		if (wheelCommitTimer !== null) {
+			clearTimeout(wheelCommitTimer)
+			wheelCommitTimer = null
+		}
 		const el = options.containerRef.value
-		if (!el) return
-		el.removeEventListener('touchstart', handleTouchStart)
-		el.removeEventListener('touchmove', handleTouchMove)
-		el.removeEventListener('touchend', handleTouchEnd)
-		el.removeEventListener('touchcancel', handleTouchCancel)
+		if (el) {
+			el.removeEventListener('touchstart', handleTouchStart)
+			el.removeEventListener('touchmove', handleTouchMove)
+			el.removeEventListener('touchend', handleTouchEnd)
+			el.removeEventListener('touchcancel', handleTouchCancel)
+			el.removeEventListener('wheel', handleWheel)
+			el.removeEventListener('mousedown', handleMouseDown)
+		}
+		window.removeEventListener('mousemove', handleMouseMove)
+		window.removeEventListener('mouseup', stopMousePan)
 	})
 
 	function resetPan() {
