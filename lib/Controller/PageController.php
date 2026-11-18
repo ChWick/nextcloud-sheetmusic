@@ -12,6 +12,7 @@ use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\Attribute\OpenAPI;
 use OCP\AppFramework\Http\Attribute\PublicPage;
+use OCP\AppFramework\Http\ContentSecurityPolicy;
 use OCP\AppFramework\Http\DataDisplayResponse;
 use OCP\AppFramework\Http\EmptyContentSecurityPolicy;
 use OCP\AppFramework\Http\JSONResponse;
@@ -41,10 +42,16 @@ class PageController extends Controller {
 	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[FrontpageRoute(verb: 'GET', url: '/')]
 	public function index(): TemplateResponse {
-		return new TemplateResponse(
+		$response = new TemplateResponse(
 			Application::APP_ID,
 			'index',
 		);
+		$csp = new ContentSecurityPolicy();
+		$csp->addAllowedWorkerSrcDomain('\'self\'');
+		$csp->addAllowedWorkerSrcDomain('blob:');
+		$response->setContentSecurityPolicy($csp);
+
+		return $response;
 	}
 
 	#[NoCSRFRequired]
