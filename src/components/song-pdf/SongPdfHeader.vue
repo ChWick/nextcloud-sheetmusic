@@ -255,7 +255,7 @@ const modeTabItems = computed(() => [
 			<span :class="$style.tabDivider" aria-hidden="true" />
 			<button
 				type="button"
-				:class="$style.tabButton"
+				:class="$style.toolActionBtn"
 				:disabled="isSaving || isLoading"
 				:title="t('sheetmusic', 'Edit page order')"
 				:aria-label="t('sheetmusic', 'Page Order…')"
@@ -265,7 +265,7 @@ const modeTabItems = computed(() => [
 			</button>
 			<button
 				type="button"
-				:class="$style.tabButton"
+				:class="$style.toolActionBtn"
 				:disabled="isSaving || isLoading || totalPages < 2"
 				:title="t('sheetmusic', 'Join two pages into a single page')"
 				:aria-label="t('sheetmusic', 'Join Pages…')"
@@ -528,11 +528,37 @@ button.tabButtonActive:hover:not(:disabled) {
 	width: 1px;
 	height: 20px;
 	background-color: var(--color-border);
-	margin: 0 2px 4px;
+	margin: 0 4px 6px;
 	flex-shrink: 0;
 }
 
-.tabButton:disabled {
+button.toolActionBtn {
+	align-self: center;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	padding: 5px 10px;
+	box-sizing: border-box;
+	border: 1px solid var(--color-border-dark, var(--color-border));
+	background-color: var(--color-main-background);
+	border-radius: var(--border-radius, 6px);
+	/* stylelint-disable-next-line declaration-no-important -- override Nextcloud global button margin */
+	margin: 0 0 6px !important;
+	cursor: pointer;
+	font-size: 13px;
+	font-weight: 500;
+	color: var(--color-main-text);
+	transition: background-color 0.15s ease-in-out;
+	white-space: nowrap;
+}
+
+button.toolActionBtn:hover:not(:disabled) {
+	background-color: var(--color-background-dark, var(--color-background-hover));
+}
+
+button.toolActionBtn:disabled,
+button.tabButton:disabled {
 	opacity: 0.5;
 	cursor: not-allowed;
 }
@@ -622,6 +648,13 @@ button.tabButtonActive:hover:not(:disabled) {
 		font-size: 12px;
 	}
 
+	button.toolActionBtn {
+		flex: 0 0 auto;
+		min-height: 32px;
+		padding: 5px 8px;
+		font-size: 12px;
+	}
+
 	.infoBadgeText {
 		display: none;
 	}
@@ -649,6 +682,12 @@ button.tabButtonActive:hover:not(:disabled) {
 		flex: 1 1 0;
 		min-width: 0;
 		padding: 6px 8px;
+		gap: 4px;
+	}
+
+	button.toolActionBtn {
+		flex: 0 0 auto;
+		padding: 5px 8px;
 		gap: 4px;
 	}
 
