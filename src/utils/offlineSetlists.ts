@@ -1,3 +1,4 @@
+import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { generateOcsUrl, generateUrl } from '@nextcloud/router'
 import { apiGet } from '../api/client'
 import { fetchSetlist, fetchSetlistFiles, getSetlistFileContentUrl } from '../api/setlists'
@@ -179,6 +180,22 @@ export async function syncSetlistOffline(params: {
 			if (!retainedUrls.has(oldUrl)) {
 				await cache.delete(oldUrl)
 			}
+		}
+	}
+
+	// Best-effort pre-cache PDF.js worker so PDFs render offline even if not opened online first
+	if (typeof window !== 'undefined' && typeof pdfWorker === 'string' && pdfWorker.length > 0) {
+		try {
+			const workerUrl = new URL(pdfWorker, window.location.href).toString()
+			const shellCache = await caches.open('sheetmusic-app-shell-v1')
+			if (!(await shellCache.match(workerUrl))) {
+				const workerRes = await fetch(workerUrl, { credentials: 'include' })
+				if (workerRes.ok) {
+					await shellCache.put(workerUrl, workerRes)
+				}
+			}
+		} catch {
+			// Ignore worker pre-cache errors
 		}
 	}
 

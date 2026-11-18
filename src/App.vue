@@ -165,6 +165,9 @@ async function loadLibraries() {
     libraries.value = [publicLibrary]
     return
   }
+  if (!isOnline.value) {
+    return
+  }
   try {
     const response = await apiGet('/api/libraries')
     libraries.value = response.data.ocs.data.libraries
@@ -173,6 +176,16 @@ async function loadLibraries() {
     showError(fileError.value)
   }
 }
+
+watch(isOnline, async (online) => {
+  if (online && !isPublicShare && libraries.value.length === 0) {
+    await loadLibraries()
+    const activeRouteLibrary = route.params.library as string | undefined
+    if (libraries.value.length > 0 && !activeRouteLibrary) {
+      navigateToLibrary(libraries.value[0].id)
+    }
+  }
+})
 
 let stopOfflineAutoSync: (() => void) | null = null
 
