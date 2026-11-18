@@ -71,9 +71,9 @@ describe('offlineSetlists', () => {
 		localStorage.removeItem(OFFLINE_STORAGE_KEY)
 	})
 
-	it('is only supported in installed PWA standalone mode', () => {
+	it('is supported in both regular browser tabs and installed PWA standalone mode', () => {
 		mockIsStandalone.mockReturnValue(false)
-		expect(isOfflineSetlistsSupported()).toBe(false)
+		expect(isOfflineSetlistsSupported()).toBe(true)
 
 		mockIsStandalone.mockReturnValue(true)
 		expect(isOfflineSetlistsSupported()).toBe(true)

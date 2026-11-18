@@ -4,7 +4,6 @@ import { apiGet } from '../api/client'
 import { fetchSetlist, fetchSetlistFiles, getSetlistFileContentUrl } from '../api/setlists'
 import type { Song } from '../types/song'
 import { getFileVersionToken, getVersionedFileUrl } from './file-version'
-import { isStandaloneDisplayMode } from './pwa'
 
 export const OFFLINE_SETLIST_CACHE = 'sheetmusic-offline-setlists-v1'
 export const OFFLINE_STORAGE_KEY = 'sheetmusic_offline_setlists_v1'
@@ -24,12 +23,11 @@ function makeKey(libraryId: number, setlistId: number): string {
 }
 
 /**
- * Offline setlist syncing is only offered when running as an installed PWA
- * with Cache Storage and Service Worker support.
+ * Offline setlist syncing is supported whenever Cache Storage and Service Worker
+ * APIs are available (both regular browser tabs and installed PWAs).
  */
 export function isOfflineSetlistsSupported(): boolean {
-	return isStandaloneDisplayMode()
-		&& typeof caches !== 'undefined'
+	return typeof caches !== 'undefined'
 		&& typeof navigator !== 'undefined'
 		&& 'serviceWorker' in navigator
 }

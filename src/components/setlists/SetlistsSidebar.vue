@@ -23,8 +23,13 @@
             <PlaylistMusic :size="20" :class="$style.setlistIcon" />
             <span :class="$style.setlistName">{{ setlist.name }}</span>
           </button>
+          <NcLoadingIcon
+            v-if="syncingOfflineSetlistIds.includes(setlist.id)"
+            :size="16"
+            :class="$style.offlineBadgeIcon"
+            :title="t('sheetmusic', 'Saving offline…')" />
           <CloudCheckOutline
-            v-if="offlineSetlistIds.includes(setlist.id)"
+            v-else-if="offlineSetlistIds.includes(setlist.id)"
             :size="16"
             :class="$style.offlineBadgeIcon"
             :title="t('sheetmusic', 'Available offline')" />
@@ -65,6 +70,7 @@
 <script setup lang="ts">
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import CloudCheckOutline from 'vue-material-design-icons/CloudCheckOutline.vue'
 import PlaylistMusic from 'vue-material-design-icons/PlaylistMusic.vue'
@@ -82,10 +88,12 @@ withDefaults(
     errorMessage: string
     canWrite?: boolean
     offlineSetlistIds?: number[]
+    syncingOfflineSetlistIds?: number[]
   }>(),
   {
     canWrite: true,
     offlineSetlistIds: () => [],
+    syncingOfflineSetlistIds: () => [],
   },
 )
 

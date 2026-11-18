@@ -14,6 +14,7 @@
       :error-message="errorMessage"
       :can-write="canWrite"
       :offline-setlist-ids="offlineSetlistIds"
+      :syncing-offline-setlist-ids="syncingOfflineSetlistIds"
       @select="selectSetlist"
       @rename="openRenameDialog"
       @delete="openDeleteDialog" />
@@ -27,8 +28,8 @@
           :can-write="canWrite"
           :offline-supported="offlineSupported"
           :is-offline="isSelectedSetlistOffline"
-          :is-syncing-offline="isSyncingOffline"
-          :offline-progress-text="offlineProgressText"
+          :is-syncing-offline="isSelectedSetlistSyncingOffline"
+          :offline-progress-text="selectedSetlistOfflineProgressText"
           @add-item="openAddItemDialog"
           @play="openPerformanceMode(0)"
           @toggle-offline="toggleSelectedSetlistOffline" />
@@ -344,11 +345,10 @@ async function handleDeleteSetlist() {
   }
 }
 
-// Offline setlist availability (installed PWA only)
+// Offline setlist availability
 const offlineSupported = isOfflineSetlistsSupported()
 const offlineMap = ref(getOfflineSetlistMap())
-const isSyncingOffline = ref(false)
-const offlineProgressText = ref('')
+const syncingProgressBySetlistId = ref<Record<number, string>>({})
 
 function refreshOfflineMap() {
   offlineMap.value = getOfflineSetlistMap()
@@ -360,30 +360,48 @@ const offlineSetlistIds = computed(() =>
     .map((entry) => entry.setlistId),
 )
 
+const syncingOfflineSetlistIds = computed(() =>
+  Object.keys(syncingProgressBySetlistId.value).map(Number),
+)
+
 const isSelectedSetlistOffline = computed(() =>
   Boolean(selectedSetlist.value && offlineSetlistIds.value.includes(selectedSetlist.value.id)),
 )
 
-async function toggleSelectedSetlistOffline() {
-  if (!selectedSetlist.value || isSyncingOffline.value) return
-  const setlistId = selectedSetlist.value.id
+const isSelectedSetlistSyncingOffline = computed(() =>
+  Boolean(selectedSetlist.value && selectedSetlist.value.id in syncingProgressBySetlistId.value),
+)
 
-  if (isSelectedSetlistOffline.value) {
+const selectedSetlistOfflineProgressText = computed(() =>
+  selectedSetlist.value ? (syncingProgressBySetlistId.value[selectedSetlist.value.id] ?? '') : '',
+)
+
+async function toggleSelectedSetlistOffline() {
+  if (!selectedSetlist.value) return
+  const setlistId = selectedSetlist.value.id
+  if (setlistId in syncingProgressBySetlistId.value) return
+
+  if (offlineSetlistIds.value.includes(setlistId)) {
     await removeSetlistOffline(props.selectedLibrary, setlistId)
     refreshOfflineMap()
     showSuccess(t('sheetmusic', 'Removed setlist from offline storage.'))
     return
   }
 
-  isSyncingOffline.value = true
-  offlineProgressText.value = t('sheetmusic', 'Saving offline…')
+  syncingProgressBySetlistId.value = {
+    ...syncingProgressBySetlistId.value,
+    [setlistId]: t('sheetmusic', 'Saving offline…'),
+  }
   try {
     await syncSetlistOffline({
       libraryId: props.selectedLibrary,
       setlistId,
       songs: songs.value,
       onProgress: (done, total) => {
-        offlineProgressText.value = `${done}/${total}`
+        syncingProgressBySetlistId.value = {
+          ...syncingProgressBySetlistId.value,
+          [setlistId]: `${done}/${total}`,
+        }
       },
     })
     refreshOfflineMap()
@@ -391,8 +409,9 @@ async function toggleSelectedSetlistOffline() {
   } catch {
     showError(t('sheetmusic', 'Could not cache all setlist files for offline use.'))
   } finally {
-    isSyncingOffline.value = false
-    offlineProgressText.value = ''
+    const next = { ...syncingProgressBySetlistId.value }
+    delete next[setlistId]
+    syncingProgressBySetlistId.value = next
   }
 }
 
