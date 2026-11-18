@@ -118,7 +118,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { showError, showSuccess } from '@nextcloud/dialogs'
 import { translate as t } from '@nextcloud/l10n'
 import {
@@ -153,6 +153,7 @@ const props = withDefaults(
   },
 )
 
+const route = useRoute()
 const router = useRouter()
 const { songs, loadLibraryData } = useLibraryData()
 
@@ -455,15 +456,40 @@ function openItemSong(item: SetlistItem) {
   })
 }
 
-onMounted(() => {
+async function restoreSetlistFromRouteQuery() {
+  const targetId = Number(route.query?.setlist)
+  if (!Number.isFinite(targetId) || targetId <= 0) {
+    return
+  }
+  const match = setlists.value.find(s => s.id === targetId)
+  if (!match) {
+    return
+  }
+  await selectSetlist(match)
+  if (route.query?.play === '1' && selectedSetlistItems.value.length > 0) {
+    const rawIdx = Number(route.query?.item)
+    const itemIndex = Number.isFinite(rawIdx) && rawIdx >= 0 ? rawIdx : 0
+    openPerformanceMode(itemIndex)
+    if (typeof router.replace === 'function') {
+      const nextQuery = { ...route.query }
+      delete nextQuery.play
+      delete nextQuery.item
+      void router.replace({ query: nextQuery })
+    }
+  }
+}
+
+onMounted(async () => {
   loadLibraryData(props.selectedLibrary)
-  loadSetlists()
+  await loadSetlists()
+  await restoreSetlistFromRouteQuery()
 })
 
-watch(() => props.selectedLibrary, (newLib) => {
+watch(() => props.selectedLibrary, async (newLib) => {
   if (newLib > 0) {
     loadLibraryData(newLib)
-    loadSetlists()
+    await loadSetlists()
+    await restoreSetlistFromRouteQuery()
   }
 })
 </script>

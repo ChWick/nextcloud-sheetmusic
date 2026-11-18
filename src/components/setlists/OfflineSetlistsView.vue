@@ -86,6 +86,7 @@
 			:songs="selectedSongs"
 			:library-id="selectedLibraryId"
 			:initial-index="performanceStartIndex"
+			@update:current-index="activePerformanceIndex = $event"
 			@close="isPerformanceMode = false" />
 
 		<SetlistFilePreviewDialog
@@ -99,7 +100,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { generateOcsUrl } from '@nextcloud/router'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import { translate as t } from '@nextcloud/l10n'
@@ -107,7 +108,7 @@ import CloudOffOutline from 'vue-material-design-icons/CloudOffOutline.vue'
 import PlaylistMusic from 'vue-material-design-icons/PlaylistMusic.vue'
 import { apiGet } from '../../api/client'
 import { fetchSetlist, fetchSetlistFiles, fetchSetlists } from '../../api/setlists'
-import { useOnlineStatus } from '../../composables/useOnlineStatus'
+import { setOfflineReturnState, useOnlineStatus } from '../../composables/useOnlineStatus'
 import type { Library } from '../../types/library'
 import type { Setlist, SetlistFile, SetlistItem, Song } from '../../types/song'
 import { getOfflineSetlistMap, type OfflineSetlistRecord, readOfflineCachedJson } from '../../utils/offlineSetlists'
@@ -263,9 +264,12 @@ async function selectOfflineSetlist(libraryId: number, setlist: Setlist) {
 	}
 }
 
+const activePerformanceIndex = ref(0)
+
 function openPerformance(index: number) {
 	if (!selectedSetlist.value || selectedItems.value.length === 0) return
 	performanceStartIndex.value = index
+	activePerformanceIndex.value = index
 	isPerformanceMode.value = true
 }
 
@@ -273,6 +277,23 @@ function openSongInPerformance(item: SetlistItem) {
 	const idx = selectedItems.value.findIndex(i => i.id === item.id)
 	openPerformance(idx >= 0 ? idx : 0)
 }
+
+watch(
+	[selectedLibraryId, selectedSetlist, isPerformanceMode, activePerformanceIndex],
+	([libraryId, setlist, playing, itemIndex]) => {
+		if (libraryId > 0 && setlist) {
+			setOfflineReturnState({
+				libraryId,
+				setlistId: setlist.id,
+				isPlaying: playing,
+				itemIndex,
+			})
+		} else {
+			setOfflineReturnState(null)
+		}
+	},
+	{ immediate: true },
+)
 
 onMounted(() => {
 	void loadOfflineGroups()

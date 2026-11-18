@@ -57,7 +57,7 @@ import LibrarySettingsDialog from './components/LibrarySettingsDialog.vue'
 import ShareDialog from './components/ShareDialog.vue'
 import ShareTargetDialog, { type ShareImportResult } from './components/ShareTargetDialog.vue'
 import OfflineSetlistsView from './components/setlists/OfflineSetlistsView.vue'
-import { useOnlineStatus } from './composables/useOnlineStatus'
+import { consumeOfflineReturnState, useOnlineStatus } from './composables/useOnlineStatus'
 import { useProgressPolling } from './composables/useProgressPolling'
 import { clearShareTargetParam, consumePendingShare, getShareTokenParam, hasShareTargetParam } from './utils/shareTarget'
 import { initOfflineSetlistsAutoSync } from './utils/offlineSetlists'
@@ -178,13 +178,28 @@ async function loadLibraries() {
   }
 }
 
-watch(isOnline, async (online) => {
-  if (online && !isPublicShare && libraries.value.length === 0) {
+watch(isOnline, async (online, wasOnline) => {
+  if (!online || isPublicShare) {
+    return
+  }
+  if (libraries.value.length === 0) {
     await loadLibraries()
-    const activeRouteLibrary = route.params.library as string | undefined
-    if (libraries.value.length > 0 && !activeRouteLibrary) {
-      navigateToLibrary(libraries.value[0].id)
-    }
+  }
+  const returnState = !wasOnline ? consumeOfflineReturnState() : null
+  if (returnState && returnState.libraryId > 0 && returnState.setlistId > 0) {
+    await router.push({
+      name: 'LibraryView',
+      params: { library: returnState.libraryId, view: 'setlists' },
+      query: {
+        setlist: String(returnState.setlistId),
+        ...(returnState.isPlaying ? { play: '1', item: String(returnState.itemIndex) } : {}),
+      },
+    })
+    return
+  }
+  const activeRouteLibrary = route.params.library as string | undefined
+  if (libraries.value.length > 0 && !activeRouteLibrary) {
+    navigateToLibrary(libraries.value[0].id)
   }
 })
 

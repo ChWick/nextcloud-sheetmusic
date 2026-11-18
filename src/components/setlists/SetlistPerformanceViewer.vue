@@ -44,6 +44,7 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{
 	close: []
+	'update:current-index': [index: number]
 }>()
 
 const rootRef = ref<HTMLElement | null>(null)
@@ -293,7 +294,8 @@ watch(currentSong, async (song) => {
 	}
 }, { immediate: true })
 
-watch(currentIndex, () => {
+watch(currentIndex, (index) => {
+	emit('update:current-index', index)
 	preloadNextSong()
 }, { immediate: true })
 

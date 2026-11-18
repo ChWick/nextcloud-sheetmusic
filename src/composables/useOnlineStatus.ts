@@ -1,7 +1,15 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 
+export interface OfflineReturnState {
+	libraryId: number
+	setlistId: number
+	isPlaying: boolean
+	itemIndex: number
+}
+
 const isBrowserOnline = ref(typeof navigator !== 'undefined' ? navigator.onLine : true)
 const isSimulatedOffline = ref(false)
+const offlineReturnState = ref<OfflineReturnState | null>(null)
 let listenerCount = 0
 
 function handleOnline() {
@@ -25,6 +33,23 @@ export function isEffectivelyOffline(): boolean {
  */
 export function setSimulatedOffline(value: boolean): void {
 	isSimulatedOffline.value = value
+}
+
+/**
+ * Stores the current offline setlist/performance state so returning online
+ * can restore the same setlist (and active performance song).
+ */
+export function setOfflineReturnState(state: OfflineReturnState | null): void {
+	offlineReturnState.value = state
+}
+
+/**
+ * Returns and clears the stored offline return state.
+ */
+export function consumeOfflineReturnState(): OfflineReturnState | null {
+	const current = offlineReturnState.value
+	offlineReturnState.value = null
+	return current
 }
 
 /**
