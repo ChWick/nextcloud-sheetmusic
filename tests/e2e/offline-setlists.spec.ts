@@ -1,5 +1,15 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Page, type Route } from '@playwright/test'
 import { setupMockApi } from './helpers/mock-api'
+
+async function fulfillOcs(route: Route, data: unknown) {
+	await route.fulfill({
+		status: 200,
+		contentType: 'application/json',
+		body: JSON.stringify({
+			ocs: { meta: { status: 'ok', statuscode: 200 }, data },
+		}),
+	})
+}
 
 async function setupSetlistsOfflineMocks(page: Page) {
 	await setupMockApi(page)
@@ -19,54 +29,32 @@ async function setupSetlistsOfflineMocks(page: Page) {
 		items: [],
 	}
 
-	await page.route('**/api/libraries/*/setlists', async (route) => {
-		await route.fulfill({
-			status: 200,
-			contentType: 'application/json',
-			body: JSON.stringify({
-				ocs: { meta: { status: 'ok', statuscode: 200 }, data: [setlist1, setlist2] },
-			}),
-		})
-	})
+	await page.route('**/api/libraries/*/setlists', route => fulfillOcs(route, [setlist1, setlist2]))
 
 	await page.route('**/api/libraries/*/setlists/**', async (route) => {
 		const url = route.request().url()
 		if (url.endsWith('/files')) {
-			await route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({ ocs: { meta: { status: 'ok', statuscode: 200 }, data: [] } }),
-			})
-			return
+			return fulfillOcs(route, [])
 		}
-		const target = url.includes('/setlists/11') ? setlist2 : setlist1
-		await route.fulfill({
-			status: 200,
-			contentType: 'application/json',
-			body: JSON.stringify({ ocs: { meta: { status: 'ok', statuscode: 200 }, data: target } }),
-		})
+		return fulfillOcs(route, url.includes('/setlists/11') ? setlist2 : setlist1)
 	})
 
-	await page.route('**/api/songs/*/annotations**', async (route) => {
-		await route.fulfill({
-			status: 200,
-			contentType: 'application/json',
-			body: JSON.stringify({ ocs: { meta: { status: 'ok', statuscode: 200 }, data: [] } }),
-		})
-	})
+	await page.route('**/api/songs/*/annotations**', route => fulfillOcs(route, []))
+}
+
+async function saveFirstSetlistOffline(page: Page) {
+	await page.goto('/#/library/1/setlists')
+	await expect(page.getByRole('button', { name: 'Save offline' })).toBeVisible()
+	await page.getByRole('button', { name: 'Save offline' }).click()
+	await expect(page.getByRole('button', { name: 'Available offline' })).toBeVisible()
 }
 
 test.describe('Offline Setlists & Online/Offline Transitions', () => {
 	test('saves and removes a setlist offline in regular browser mode', async ({ page }) => {
 		await setupSetlistsOfflineMocks(page)
-		await page.goto('/#/library/1/setlists')
+		await saveFirstSetlistOffline(page)
 
-		await expect(page.getByRole('button', { name: 'Save offline' })).toBeVisible()
-		await page.getByRole('button', { name: 'Save offline' }).click()
-
-		await expect(page.getByRole('button', { name: 'Available offline' })).toBeVisible()
 		await expect(page.locator('[title="Available offline"]').first()).toBeVisible()
-
 		const stored = await page.evaluate(() => localStorage.getItem('sheetmusic_offline_setlists_v1'))
 		expect(stored).toContain('"setlistId":10')
 
@@ -79,11 +67,7 @@ test.describe('Offline Setlists & Online/Offline Transitions', () => {
 
 	test('simulated offline mode verifies cached setlist without network requests and returns online to same setlist', async ({ page }) => {
 		await setupSetlistsOfflineMocks(page)
-		await page.goto('/#/library/1/setlists')
-
-		// Save setlist offline first
-		await page.getByRole('button', { name: 'Save offline' }).click()
-		await expect(page.getByRole('button', { name: 'Available offline' })).toBeVisible()
+		await saveFirstSetlistOffline(page)
 
 		const offlineNetworkRequests: string[] = []
 		page.on('request', (req) => {
@@ -120,23 +104,20 @@ test.describe('Offline Setlists & Online/Offline Transitions', () => {
 		})
 		await page.route('**/api/songs/*/annotations**', async (route) => {
 			await annotationsGate
-			await route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({ ocs: { meta: { status: 'ok', statuscode: 200 }, data: [] } }),
-			})
+			await fulfillOcs(route, [])
 		})
 
 		await page.goto('/#/library/1/setlists')
 		await page.getByRole('button', { name: 'Save offline' }).click()
 
 		// Sidebar row for Sunday Concert shows spinning indicator while syncing
-		await expect(page.locator('[title="Saving offline…"]')).toBeVisible()
+		await expect(page.locator('span[title="Saving offline…"]')).toBeVisible()
 
 		// Switch to Evening Rehearsal -> header must show its own "Save offline" state, not spinning
 		await page.getByRole('button', { name: 'Evening Rehearsal' }).click()
 		await expect(page.getByRole('heading', { name: 'Evening Rehearsal' })).toBeVisible()
 		await expect(page.getByRole('button', { name: 'Save offline' })).toBeVisible()
+		await expect(page.locator('span[title="Saving offline…"]')).toBeVisible()
 
 		releaseAnnotations()
 		await expect(page.getByRole('img', { name: 'Available offline' }).first()).toBeVisible()
