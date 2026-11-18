@@ -11,7 +11,7 @@ import ViewListIcon from 'vue-material-design-icons/ViewList.vue'
 import type { SongColumn } from '../../types/song'
 import type { SortKey, SortOrder } from '../../utils/song-formatter'
 import type { ViewMode } from './SongViewToggle.vue'
-import { getSongColumnOptions, getSongSortOptions } from './song-view-columns'
+import { getSongColumnOptions, getSongSortOptions, toggleVisibleColumn } from './song-view-columns'
 
 const props = defineProps<{
 	viewMode: ViewMode
@@ -40,15 +40,7 @@ const sortOptions = getSongSortOptions()
 const columnOptions = getSongColumnOptions()
 
 function toggleColumn(key: SongColumn) {
-	const current = new Set(props.visibleColumns)
-	if (current.has(key)) {
-		if (current.size > 1) {
-			current.delete(key)
-		}
-	} else {
-		current.add(key)
-	}
-	emit('update:visibleColumns', columnOptions.map(c => c.key).filter(k => current.has(k)))
+	emit('update:visibleColumns', toggleVisibleColumn(props.visibleColumns, key, columnOptions))
 }
 
 function handleDocumentClick(event: MouseEvent) {

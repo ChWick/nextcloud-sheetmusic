@@ -648,3 +648,20 @@ export function getSongColumnOptions(): { key: SongColumn; label: string }[] {
 		{ key: 'dateCreated', label: t('sheetmusic', 'Date created') },
 	]
 }
+
+/** Toggle a column in the visible list while always keeping at least one column visible. */
+export function toggleVisibleColumn(
+	visibleColumns: SongColumn[],
+	key: SongColumn,
+	columnOptions: { key: SongColumn }[] = getSongColumnOptions(),
+): SongColumn[] {
+	const current = new Set(visibleColumns)
+	if (current.has(key)) {
+		if (current.size > 1) {
+			current.delete(key)
+		}
+	} else {
+		current.add(key)
+	}
+	return columnOptions.map((c) => c.key).filter((k) => current.has(k))
+}

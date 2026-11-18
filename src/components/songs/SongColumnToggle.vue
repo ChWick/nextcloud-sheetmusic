@@ -6,7 +6,7 @@ import ViewColumnIcon from 'vue-material-design-icons/ViewColumn.vue'
 import CheckboxMarkedIcon from 'vue-material-design-icons/CheckboxMarked.vue'
 import CheckboxBlankOutlineIcon from 'vue-material-design-icons/CheckboxBlankOutline.vue'
 import type { SongColumn } from '../../types/song'
-import { getSongColumnOptions } from './song-view-columns'
+import { getSongColumnOptions, toggleVisibleColumn } from './song-view-columns'
 
 const props = defineProps<{
 	visibleColumns: SongColumn[]
@@ -23,15 +23,7 @@ function isVisible(key: SongColumn): boolean {
 }
 
 function toggleColumn(key: SongColumn) {
-	const current = new Set(props.visibleColumns)
-	if (current.has(key)) {
-		if (current.size > 1) {
-			current.delete(key)
-		}
-	} else {
-		current.add(key)
-	}
-	emit('update:visibleColumns', columnOptions.map(c => c.key).filter(k => current.has(k)))
+	emit('update:visibleColumns', toggleVisibleColumn(props.visibleColumns, key, columnOptions))
 }
 </script>
 
