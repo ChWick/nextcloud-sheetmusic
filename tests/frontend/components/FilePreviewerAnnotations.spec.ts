@@ -9,6 +9,7 @@ import { describe, expect, it, vi } from 'vitest'
 import FilePreviewer from '../../../src/components/FilePreviewer.vue'
 import FilePreviewerToolbar from '../../../src/components/file-preview/FilePreviewerToolbar.vue'
 import SongViewerFileToolbar from '../../../src/components/song-viewer/SongViewerFileToolbar.vue'
+import SongAnnotationOverlay from '../../../src/components/song-viewer/SongAnnotationOverlay.vue'
 
 vi.mock('@nextcloud/axios', () => ({
 	default: {
@@ -340,5 +341,50 @@ describe('FilePreviewer.vue Annotation Rendering & Reactivity', () => {
 		const arrowPath = overlay.find('[data-test="annotation-shape"]')
 		expect(arrowPath.exists()).toBe(true)
 		expect(arrowPath.attributes('d')).toContain('M 100.0 133.3 L 400.0 533.3 M')
+	})
+
+	it('cancels in-progress touch drawing when a second touch pointer starts (pinch/pan gesture)', async () => {
+		const wrapper = mount(SongAnnotationOverlay, {
+			props: {
+				annotations: [],
+				pageNumber: 0,
+				pageWidth: 1000,
+				pageHeight: 1333,
+				visible: true,
+				editable: true,
+				activeTool: 'drawing',
+				toolStyle: { stroke: '#e53935', strokeWidth: 3 },
+			},
+		})
+
+		const overlay = wrapper.find('[data-test="annotation-overlay"]')
+		const el = overlay.element as SVGSVGElement
+		el.getBoundingClientRect = () => ({ left: 0, top: 0, width: 1000, height: 1333, right: 1000, bottom: 1333, x: 0, y: 0, toJSON: () => ({}) })
+
+		const makePointerEvent = (type: string, pointerId: number, clientX: number, clientY: number) => {
+			const evt = new Event(type, { bubbles: true, cancelable: true }) as any
+			evt.pointerId = pointerId
+			evt.pointerType = 'touch'
+			evt.button = 0
+			evt.clientX = clientX
+			evt.clientY = clientY
+			return evt
+		}
+
+		// Two-finger gesture should cancel drawing and not emit create-annotation
+		el.dispatchEvent(makePointerEvent('pointerdown', 1, 100, 100))
+		el.dispatchEvent(makePointerEvent('pointerdown', 2, 200, 100))
+		el.dispatchEvent(makePointerEvent('pointermove', 1, 150, 150))
+		el.dispatchEvent(makePointerEvent('pointerup', 1, 150, 150))
+		el.dispatchEvent(makePointerEvent('pointerup', 2, 250, 150))
+		await flushPromises()
+		expect(wrapper.emitted('create-annotation')).toBeFalsy()
+
+		// Single-finger draw after multi-touch ends should work normally
+		el.dispatchEvent(makePointerEvent('pointerdown', 3, 100, 100))
+		el.dispatchEvent(makePointerEvent('pointermove', 3, 200, 200))
+		el.dispatchEvent(makePointerEvent('pointerup', 3, 200, 200))
+		await flushPromises()
+		expect(wrapper.emitted('create-annotation')).toHaveLength(1)
 	})
 })
