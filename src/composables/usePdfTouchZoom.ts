@@ -27,8 +27,9 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 /**
- * Enables two-finger pinch-to-zoom (with live CSS transform preview and crisp
- * PDF re-render on release) while preserving native one-finger panning.
+ * Enables two-finger pinch-to-zoom/pan, Ctrl/Cmd+wheel zoom, and mouse-drag
+ * panning on a scrollable PDF container with live CSS transform preview and
+ * crisp PDF re-render on release.
  */
 export function usePdfTouchZoom(options: PdfTouchZoomOptions) {
 	const minScale = options.minScale ?? 0.25
@@ -90,6 +91,19 @@ export function usePdfTouchZoom(options: PdfTouchZoomOptions) {
 		applyStageTransform(1, committedPanX, committedPanY)
 	}
 
+	function captureFocalPoint(container: HTMLElement, clientX: number, clientY: number) {
+		const rect = container.getBoundingClientRect()
+		const stageRect = options.stageRef.value?.getBoundingClientRect()
+		const viewportX = clientX - rect.left
+		const viewportY = clientY - rect.top
+		return {
+			viewportX,
+			viewportY,
+			contentX: stageRect ? (clientX - stageRect.left) : (viewportX + container.scrollLeft),
+			contentY: stageRect ? (clientY - stageRect.top) : (viewportY + container.scrollTop),
+		}
+	}
+
 	function handleTouchStart(event: TouchEvent) {
 		if (!options.isEnabled() || event.touches.length !== 2) {
 			return
@@ -106,19 +120,18 @@ export function usePdfTouchZoom(options: PdfTouchZoomOptions) {
 			return
 		}
 
-		const rect = container.getBoundingClientRect()
-		const stageRect = options.stageRef.value?.getBoundingClientRect()
 		const mid = getTouchMidpoint(t0, t1)
+		const focal = captureFocalPoint(container, mid.x, mid.y)
 		startMidClientX = mid.x
 		startMidClientY = mid.y
 		startScrollLeft = container.scrollLeft
 		startScrollTop = container.scrollTop
 		livePanX = committedPanX
 		livePanY = committedPanY
-		focalViewportX = mid.x - rect.left
-		focalViewportY = mid.y - rect.top
-		focalContentX = stageRect ? (mid.x - stageRect.left) : (focalViewportX + container.scrollLeft)
-		focalContentY = stageRect ? (mid.y - stageRect.top) : (focalViewportY + container.scrollTop)
+		focalViewportX = focal.viewportX
+		focalViewportY = focal.viewportY
+		focalContentX = focal.contentX
+		focalContentY = focal.contentY
 
 		isPinching = true
 		startDist = dist
@@ -135,6 +148,32 @@ export function usePdfTouchZoom(options: PdfTouchZoomOptions) {
 		}
 	}
 
+	function applyContainerPan(
+		container: HTMLElement,
+		startLeft: number,
+		startTop: number,
+		panDeltaX: number,
+		panDeltaY: number,
+	) {
+		const xPan = computeAxisPan(
+			startLeft,
+			Math.max(0, container.scrollWidth - container.clientWidth),
+			panDeltaX,
+			committedPanX,
+		)
+		container.scrollLeft = xPan.scroll
+		livePanX = xPan.livePan
+
+		const yPan = computeAxisPan(
+			startTop,
+			Math.max(0, container.scrollHeight - container.clientHeight),
+			panDeltaY,
+			committedPanY,
+		)
+		container.scrollTop = yPan.scroll
+		livePanY = yPan.livePan
+	}
+
 	function handleTouchMove(event: TouchEvent) {
 		if (!isPinching || event.touches.length !== 2) {
 			return
@@ -148,29 +187,9 @@ export function usePdfTouchZoom(options: PdfTouchZoomOptions) {
 		liveScale = clamp(+(startScale * ratio).toFixed(3), minScale, maxScale)
 
 		const mid = getTouchMidpoint(t0, t1)
-		const panDeltaX = mid.x - startMidClientX
-		const panDeltaY = mid.y - startMidClientY
-
 		const container = options.containerRef.value
 		if (container) {
-			const xPan = computeAxisPan(
-				startScrollLeft,
-				Math.max(0, container.scrollWidth - container.clientWidth),
-				panDeltaX,
-				committedPanX,
-			)
-			container.scrollLeft = xPan.scroll
-			livePanX = xPan.livePan
-
-			const yPan = computeAxisPan(
-				startScrollTop,
-				Math.max(0, container.scrollHeight - container.clientHeight),
-				panDeltaY,
-				committedPanY,
-			)
-			container.scrollTop = yPan.scroll
-			livePanY = yPan.livePan
-
+			applyContainerPan(container, startScrollLeft, startScrollTop, mid.x - startMidClientX, mid.y - startMidClientY)
 			const rect = container.getBoundingClientRect()
 			focalViewportX = mid.x - rect.left
 			focalViewportY = mid.y - rect.top
@@ -268,12 +287,11 @@ export function usePdfTouchZoom(options: PdfTouchZoomOptions) {
 		if (wheelCommitTimer === null) {
 			wheelStartScale = Math.max(minScale, options.getCurrentScale())
 			wheelTargetScale = wheelStartScale
-			const rect = container.getBoundingClientRect()
-			const stageRect = options.stageRef.value?.getBoundingClientRect()
-			wheelFocalViewportX = event.clientX - rect.left
-			wheelFocalViewportY = event.clientY - rect.top
-			wheelFocalContentX = stageRect ? (event.clientX - stageRect.left) : (wheelFocalViewportX + container.scrollLeft)
-			wheelFocalContentY = stageRect ? (event.clientY - stageRect.top) : (wheelFocalViewportY + container.scrollTop)
+			const focal = captureFocalPoint(container, event.clientX, event.clientY)
+			wheelFocalViewportX = focal.viewportX
+			wheelFocalViewportY = focal.viewportY
+			wheelFocalContentX = focal.contentX
+			wheelFocalContentY = focal.contentY
 		} else {
 			clearTimeout(wheelCommitTimer)
 		}
@@ -332,27 +350,13 @@ export function usePdfTouchZoom(options: PdfTouchZoomOptions) {
 		const container = options.containerRef.value
 		if (!container) return
 
-		const panDeltaX = event.clientX - mouseStartX
-		const panDeltaY = event.clientY - mouseStartY
-
-		const xPan = computeAxisPan(
+		applyContainerPan(
+			container,
 			mouseStartScrollLeft,
-			Math.max(0, container.scrollWidth - container.clientWidth),
-			panDeltaX,
-			committedPanX,
-		)
-		container.scrollLeft = xPan.scroll
-		livePanX = xPan.livePan
-
-		const yPan = computeAxisPan(
 			mouseStartScrollTop,
-			Math.max(0, container.scrollHeight - container.clientHeight),
-			panDeltaY,
-			committedPanY,
+			event.clientX - mouseStartX,
+			event.clientY - mouseStartY,
 		)
-		container.scrollTop = yPan.scroll
-		livePanY = yPan.livePan
-
 		applyStageTransform(1, livePanX, livePanY)
 	}
 
