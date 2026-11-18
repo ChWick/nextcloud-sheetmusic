@@ -3,7 +3,6 @@ import {
 	getOfflineSetlistMap,
 	isOfflineSetlistsSupported,
 	isSetlistAvailableOffline,
-	OFFLINE_SETLIST_CACHE,
 	OFFLINE_STORAGE_KEY,
 	removeSetlistOffline,
 	syncAllOfflineSetlists,
