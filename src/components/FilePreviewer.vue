@@ -1079,6 +1079,10 @@ const { wasRecentlyPinching, resetPan } = usePdfTouchZoom({
 	},
 })
 
+watch(() => props.filePath, () => {
+	resetPan()
+})
+
 function canPanHorizontally(): boolean {
 	const el = pdfContainer.value
 	return Boolean(el && el.scrollWidth > el.clientWidth + 2)
