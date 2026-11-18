@@ -388,8 +388,9 @@ function handleClose() {
 	flex-direction: column;
 	gap: 16px;
 	padding: 8px 16px 16px;
-	min-width: 680px;
-	max-width: 820px;
+	width: min(820px, 92vw);
+	max-width: 100%;
+	box-sizing: border-box;
 }
 
 .contentLayout {
@@ -403,7 +404,7 @@ function handleClose() {
 	display: flex;
 	flex-direction: column;
 	gap: 16px;
-	min-width: 320px;
+	min-width: 260px;
 }
 
 .previewColumn {
@@ -411,7 +412,25 @@ function handleClose() {
 	display: flex;
 	flex-direction: column;
 	align-items: center;
-	min-width: 280px;
+	min-width: 240px;
+}
+
+@media (max-width: 768px) {
+	.dialogBody {
+		width: 100%;
+		padding: 8px 10px 12px;
+	}
+
+	.contentLayout {
+		flex-direction: column;
+		gap: 16px;
+	}
+
+	.controlsColumn,
+	.previewColumn {
+		min-width: 0;
+		width: 100%;
+	}
 }
 
 .previewTitle {

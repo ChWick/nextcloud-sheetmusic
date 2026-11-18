@@ -30,6 +30,8 @@ import NcTextField from '@nextcloud/vue/components/NcTextField'
 import PlusIcon from 'vue-material-design-icons/Plus.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import ArrowRight from 'vue-material-design-icons/ArrowRight.vue'
+import ChevronUp from 'vue-material-design-icons/ChevronUp.vue'
+import ChevronDown from 'vue-material-design-icons/ChevronDown.vue'
 import OriginalSongActionSelector, { type OriginalSongAction } from './OriginalSongActionSelector.vue'
 
 
@@ -61,6 +63,7 @@ const selectedRangeText = computed(() => {
 })
 
 const segmentListRef = ref<HTMLElement | null>(null)
+const isMobileCollapsed = ref(false)
 
 watch(
 	() => props.segments.length,
@@ -76,9 +79,18 @@ watch(
 </script>
 
 <template>
-	<aside :class="$style.splitSidebar" data-test="split-sidebar">
+	<aside :class="[$style.splitSidebar, isMobileCollapsed && $style.splitSidebarCollapsed]" data-test="split-sidebar">
 		<div :class="$style.sidebarHeader">
-			<h4>{{ t('sheetmusic', 'Split Segments') }}</h4>
+			<button
+				type="button"
+				:class="$style.mobileCollapseBtn"
+				:aria-expanded="!isMobileCollapsed"
+				@click="isMobileCollapsed = !isMobileCollapsed">
+				<h4>{{ t('sheetmusic', 'Split Segments') }} ({{ segments.length }})</h4>
+				<ChevronUp v-if="isMobileCollapsed" :size="18" />
+				<ChevronDown v-else :size="18" />
+			</button>
+			<h4 :class="$style.desktopTitle">{{ t('sheetmusic', 'Split Segments') }}</h4>
 			<NcButton size="small" variant="secondary" @click="emit('add-segment')">
 				<template #icon>
 					<PlusIcon :size="16" />
@@ -197,6 +209,21 @@ watch(
 	font-size: 16px;
 }
 
+.mobileCollapseBtn {
+	display: none;
+	align-items: center;
+	gap: 6px;
+	border: none;
+	background: transparent;
+	color: var(--color-main-text);
+	padding: 2px 0;
+	cursor: pointer;
+}
+
+.desktopTitle {
+	display: block;
+}
+
 .sidebarHelp {
 	font-size: 12px;
 	color: var(--color-text-maxcontrast);
@@ -294,7 +321,26 @@ watch(
 		border-top: 1px solid var(--color-border);
 		max-height: 280px;
 		min-height: 180px;
-		padding: 12px;
+		padding: 10px 12px;
+	}
+
+	.splitSidebarCollapsed {
+		min-height: 0;
+		max-height: 52px;
+	}
+
+	.splitSidebarCollapsed .sidebarHelp,
+	.splitSidebarCollapsed .segmentList,
+	.splitSidebarCollapsed > :last-child:not(.sidebarHeader) {
+		display: none;
+	}
+
+	.mobileCollapseBtn {
+		display: inline-flex;
+	}
+
+	.desktopTitle {
+		display: none;
 	}
 }
 </style>

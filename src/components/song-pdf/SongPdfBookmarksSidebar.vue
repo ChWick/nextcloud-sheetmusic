@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
@@ -7,6 +7,8 @@ import PlusIcon from 'vue-material-design-icons/Plus.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import FormatListBulleted from 'vue-material-design-icons/FormatListBulleted.vue'
 import ArrowRight from 'vue-material-design-icons/ArrowRight.vue'
+import ChevronUp from 'vue-material-design-icons/ChevronUp.vue'
+import ChevronDown from 'vue-material-design-icons/ChevronDown.vue'
 import type { BookmarkSegment } from './usePdfBookmarks'
 
 const props = withDefaults(
@@ -79,13 +81,24 @@ const selectedRangeText = computed(() => {
 	const { start, end } = selectedRange.value
 	return start === end ? `${start}` : `${start}–${end}`
 })
+
+const isMobileCollapsed = ref(false)
 </script>
 
 <template>
 	<aside
-		:class="$style.sidebar"
+		:class="[$style.sidebar, isMobileCollapsed && $style.sidebarCollapsed]"
 		role="region"
 		:aria-label="t('sheetmusic', 'Bookmarks management sidebar')">
+		<button
+			type="button"
+			:class="$style.mobileCollapseBar"
+			:aria-expanded="!isMobileCollapsed"
+			@click="isMobileCollapsed = !isMobileCollapsed">
+			<span>{{ t('sheetmusic', 'Bookmarks') }} ({{ activeBookmarks.length }})</span>
+			<ChevronUp v-if="isMobileCollapsed" :size="18" />
+			<ChevronDown v-else :size="18" />
+		</button>
 		<!-- Actions Header -->
 		<div :class="$style.actionsHeader">
 			<NcButton
@@ -311,5 +324,59 @@ const selectedRangeText = computed(() => {
 	border-top: 1px solid var(--color-border);
 	color: var(--color-text-maxcontrast);
 	font-size: 0.8rem;
+}
+
+.mobileCollapseBar {
+	display: none;
+	align-items: center;
+	justify-content: space-between;
+	width: 100%;
+	padding: 8px 12px;
+	border: none;
+	border-bottom: 1px solid var(--color-border);
+	background: var(--color-background-hover);
+	color: var(--color-main-text);
+	font-size: 14px;
+	font-weight: 600;
+	cursor: pointer;
+	flex-shrink: 0;
+}
+
+@media (max-width: 840px) {
+	.sidebar {
+		width: 100%;
+		height: auto;
+		border-right: none;
+		border-top: 1px solid var(--color-border);
+		max-height: 280px;
+		min-height: 160px;
+	}
+
+	.mobileCollapseBar {
+		display: flex;
+	}
+
+	.sidebarCollapsed {
+		min-height: 0;
+		max-height: 44px;
+	}
+
+	.sidebarCollapsed .actionsHeader,
+	.sidebarCollapsed .bookmarksList,
+	.sidebarCollapsed .footerNote {
+		display: none;
+	}
+
+	.actionsHeader {
+		padding: 10px 12px;
+	}
+
+	.bookmarksList {
+		padding: 10px 12px;
+	}
+
+	.pageRangeRow {
+		flex-wrap: wrap;
+	}
 }
 </style>

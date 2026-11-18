@@ -6,6 +6,7 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import RotateRight from 'vue-material-design-icons/RotateRight.vue'
 import RotateLeft from 'vue-material-design-icons/RotateLeft.vue'
 import Rotate360 from 'vue-material-design-icons/Rotate360.vue'
+import Autorenew from 'vue-material-design-icons/Autorenew.vue'
 import TableMergeCells from 'vue-material-design-icons/TableMergeCells.vue'
 import DeleteOutline from 'vue-material-design-icons/DeleteOutline.vue'
 import DeleteRestore from 'vue-material-design-icons/DeleteRestore.vue'
@@ -66,6 +67,17 @@ const emit = defineEmits<{
 			@click.stop="emit('rotate-page', 90)">
 			<template #icon>
 				<RotateRight :size="16" />
+			</template>
+		</NcButton>
+		<NcButton
+			size="small"
+			variant="tertiary"
+			:disabled="isDeleted"
+			:title="t('sheetmusic', 'Flip page 180°')"
+			:aria-label="t('sheetmusic', 'Flip page 180°')"
+			@click.stop="emit('rotate-page', 180)">
+			<template #icon>
+				<Autorenew :size="16" />
 			</template>
 		</NcButton>
 		<NcButton
@@ -196,6 +208,17 @@ const emit = defineEmits<{
 }
 
 @media (max-width: 480px) {
+	.cardActions {
+		width: 100%;
+		margin-left: 0;
+		justify-content: flex-end;
+		flex-wrap: wrap;
+	}
+
+	.cardActions :global(.button-vue__text) {
+		display: none;
+	}
+
 	.cardActions :global(.button-vue) {
 		--button-size: 26px;
 		min-width: 26px;
