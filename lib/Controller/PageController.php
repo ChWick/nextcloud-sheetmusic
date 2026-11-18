@@ -13,6 +13,7 @@ use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\Attribute\OpenAPI;
 use OCP\AppFramework\Http\Attribute\PublicPage;
 use OCP\AppFramework\Http\DataDisplayResponse;
+use OCP\AppFramework\Http\EmptyContentSecurityPolicy;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\AppFramework\Http\RedirectResponse;
 use OCP\AppFramework\Http\TemplateResponse;
@@ -138,7 +139,7 @@ class PageController extends Controller {
 		$swPath = dirname(__DIR__, 2) . '/resources/pwa-sw.js';
 		$content = is_file($swPath) ? (string)file_get_contents($swPath) : '';
 
-		return new DataDisplayResponse(
+		$response = new DataDisplayResponse(
 			$content,
 			Http::STATUS_OK,
 			[
@@ -147,6 +148,13 @@ class PageController extends Controller {
 				'Cache-Control' => 'no-cache',
 			],
 		);
+		$csp = new EmptyContentSecurityPolicy();
+		$csp->addAllowedScriptDomain('\'self\'');
+		$csp->addAllowedConnectDomain('\'self\'');
+		$csp->addAllowedWorkerSrcDomain('\'self\'');
+		$response->setContentSecurityPolicy($csp);
+
+		return $response;
 	}
 
 	#[PublicPage]

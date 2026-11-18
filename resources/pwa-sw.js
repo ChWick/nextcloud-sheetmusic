@@ -92,6 +92,52 @@ async function findCachedNavigationFallback(cache) {
 	return null
 }
 
+async function serveCachedOfflineResponse(request) {
+	const matchOpts = {
+		ignoreVary: true,
+		ignoreSearch: request.mode === 'navigate',
+	}
+
+	const offlineCache = await caches.open(OFFLINE_SETLIST_CACHE)
+	const offlineMatch = await offlineCache.match(request, matchOpts)
+	if (offlineMatch) {
+		return request.mode === 'navigate' ? toCleanNavigationResponse(offlineMatch) : offlineMatch
+	}
+
+	const shellCache = await caches.open(APP_SHELL_CACHE)
+	const shellMatch = await shellCache.match(request, matchOpts)
+	if (shellMatch) {
+		return request.mode === 'navigate' ? toCleanNavigationResponse(shellMatch) : shellMatch
+	}
+
+	if (request.mode === 'navigate') {
+		const fallback = (await findCachedNavigationFallback(shellCache))
+			|| (await findCachedNavigationFallback(offlineCache))
+		if (fallback) {
+			return toCleanNavigationResponse(fallback)
+		}
+	}
+
+	return null
+}
+
+function extractAppShellAssetUrls(html, baseUrl) {
+	const urls = new Set()
+	const attrRegex = /<(?:script|link)\b[^>]*(?:src|href)=["']([^"']+)["'][^>]*>/gi
+	let match
+	while ((match = attrRegex.exec(html)) !== null) {
+		try {
+			const resolved = new URL(match[1], baseUrl)
+			if (resolved.origin === self.location.origin && isCacheableAppShellRequest({ mode: 'no-cors' }, resolved)) {
+				urls.add(resolved.toString())
+			}
+		} catch {
+			// Ignore malformed URLs
+		}
+	}
+	return Array.from(urls)
+}
+
 async function handleOfflineAwareGet(request, url) {
 	// Versioned PDFs/files pinned in offline setlists can be served cache-first immediately
 	if (isVersionedBinaryUrl(url)) {
@@ -112,32 +158,17 @@ async function handleOfflineAwareGet(request, url) {
 					: networkResponse.clone()
 				shellCache.put(request, toCache).catch(() => {})
 			}
+		} else if (networkResponse && networkResponse.status >= 500 && request.mode === 'navigate') {
+			const cachedFallback = await serveCachedOfflineResponse(request)
+			if (cachedFallback) {
+				return cachedFallback
+			}
 		}
 		return networkResponse
 	} catch {
-		const matchOpts = {
-			ignoreVary: true,
-			ignoreSearch: request.mode === 'navigate',
-		}
-
-		const offlineCache = await caches.open(OFFLINE_SETLIST_CACHE)
-		const offlineMatch = await offlineCache.match(request, matchOpts)
-		if (offlineMatch) {
-			return request.mode === 'navigate' ? toCleanNavigationResponse(offlineMatch) : offlineMatch
-		}
-
-		const shellCache = await caches.open(APP_SHELL_CACHE)
-		const shellMatch = await shellCache.match(request, matchOpts)
-		if (shellMatch) {
-			return request.mode === 'navigate' ? toCleanNavigationResponse(shellMatch) : shellMatch
-		}
-
-		if (request.mode === 'navigate') {
-			const fallback = (await findCachedNavigationFallback(shellCache))
-				|| (await findCachedNavigationFallback(offlineCache))
-			if (fallback) {
-				return toCleanNavigationResponse(fallback)
-			}
+		const cached = await serveCachedOfflineResponse(request)
+		if (cached) {
+			return cached
 		}
 
 		return new Response('Offline', { status: 503, statusText: 'Service Unavailable' })
@@ -151,7 +182,18 @@ self.addEventListener('install', (event) => {
 			const res = await fetch(shellUrl, { credentials: 'include' })
 			if (res && res.ok && !res.url.includes('/login')) {
 				const cache = await caches.open(APP_SHELL_CACHE)
+				const htmlClone = res.clone()
 				await cache.put(shellUrl, toCleanNavigationResponse(res))
+				const html = await htmlClone.text()
+				const assetUrls = extractAppShellAssetUrls(html, shellUrl)
+				await Promise.allSettled(
+					assetUrls.map(async (assetUrl) => {
+						const assetRes = await fetch(assetUrl, { credentials: 'include' })
+						if (assetRes && assetRes.ok) {
+							await cache.put(assetUrl, assetRes)
+						}
+					}),
+				)
 			}
 		} catch {
 			// Best-effort pre-cache on install

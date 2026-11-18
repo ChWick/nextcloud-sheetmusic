@@ -61,6 +61,73 @@ export function initPwaStandaloneMode(): () => void {
 	return () => {}
 }
 
+const APP_SHELL_CACHE = 'sheetmusic-app-shell-v1'
+
+/**
+ * Ensures the app shell entry URL and current page scripts/stylesheets are
+ * stored in Cache Storage so opening the installed PWA offline succeeds even
+ * without a prior reload after service worker activation.
+ */
+export async function precacheAppShell(): Promise<void> {
+	if (typeof window === 'undefined' || typeof caches === 'undefined') {
+		return
+	}
+	if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+		return
+	}
+
+	try {
+		const cache = await caches.open(APP_SHELL_CACHE)
+		const shellPath = generateUrl('/apps/sheetmusic/')
+		const shellUrl = new URL(shellPath, window.location.origin).toString()
+
+		const urls = new Set<string>([shellUrl])
+		if (window.location.pathname.includes('/apps/sheetmusic')) {
+			urls.add(window.location.href)
+		}
+
+		if (typeof document !== 'undefined') {
+			const nodes = document.querySelectorAll<HTMLElement>('script[src], link[rel="stylesheet"][href], link[rel="modulepreload"][href]')
+			for (const node of nodes) {
+				const raw = node.getAttribute('src') || node.getAttribute('href')
+				if (!raw) {
+					continue
+				}
+				try {
+					const resolved = new URL(raw, window.location.href)
+					if (resolved.origin === window.location.origin) {
+						urls.add(resolved.toString())
+					}
+				} catch {
+					// Ignore malformed URLs
+				}
+			}
+		}
+
+		await Promise.allSettled(
+			Array.from(urls).map(async (targetUrl) => {
+				const existing = await cache.match(targetUrl, { ignoreVary: true })
+				if (existing && targetUrl !== shellUrl) {
+					return
+				}
+				const res = await fetch(targetUrl, { credentials: 'include' })
+				if (res.ok && !res.url.includes('/login')) {
+					const clean = res.redirected
+						? new Response(res.body, {
+							status: res.status,
+							statusText: res.statusText,
+							headers: res.headers,
+						})
+						: res
+					await cache.put(targetUrl, clean)
+				}
+			}),
+		)
+	} catch {
+		// Best-effort client-side app shell pre-cache
+	}
+}
+
 /**
  * Registers the Sheet Music PWA service worker so Web Share Target POST
  * requests can be intercepted and handed off to the app.
@@ -76,6 +143,7 @@ export async function registerPwaServiceWorker(): Promise<ServiceWorkerRegistrat
 		if (typeof reg.update === 'function') {
 			void reg.update().catch(() => {})
 		}
+		void precacheAppShell()
 		return reg
 	} catch (error) {
 		console.warn('Sheet Music: failed to register PWA service worker', error)
