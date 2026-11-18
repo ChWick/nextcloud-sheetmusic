@@ -9,9 +9,11 @@ import type { SheetAnnotation } from '../types/annotation'
 import { isEffectivelyOffline } from '../composables/useOnlineStatus'
 import { readOfflineCachedJson } from '../utils/offlineSetlists'
 
-export async function fetchSongAnnotations(songId: number, fileId?: number | null): Promise<SheetAnnotation[]> {
-	const baseUrl = generateOcsUrl('/apps/sheetmusic/api/songs/' + songId + '/annotations')
-	const cacheUrl = fileId ? `${baseUrl}?fileId=${fileId}` : baseUrl
+async function fetchAnnotationsWithOfflineCache(
+	requestUrl: string,
+	cacheUrl: string,
+	params?: Record<string, unknown>,
+): Promise<SheetAnnotation[]> {
 	if (isEffectivelyOffline()) {
 		const cached = await readOfflineCachedJson<{ ocs?: { data?: SheetAnnotation[] } }>(cacheUrl)
 		if (cached?.ocs?.data) {
@@ -20,7 +22,7 @@ export async function fetchSongAnnotations(songId: number, fileId?: number | nul
 		throw new Error('Annotations are not available offline')
 	}
 	try {
-		const response = await axios.get(baseUrl, { params: fileId ? { fileId } : undefined })
+		const response = await axios.get(requestUrl, params ? { params } : undefined)
 		return response.data?.ocs?.data ?? []
 	} catch (error) {
 		const cached = await readOfflineCachedJson<{ ocs?: { data?: SheetAnnotation[] } }>(cacheUrl)
@@ -29,6 +31,12 @@ export async function fetchSongAnnotations(songId: number, fileId?: number | nul
 		}
 		throw error
 	}
+}
+
+export async function fetchSongAnnotations(songId: number, fileId?: number | null): Promise<SheetAnnotation[]> {
+	const baseUrl = generateOcsUrl('/apps/sheetmusic/api/songs/' + songId + '/annotations')
+	const cacheUrl = fileId ? `${baseUrl}?fileId=${fileId}` : baseUrl
+	return fetchAnnotationsWithOfflineCache(baseUrl, cacheUrl, fileId ? { fileId } : undefined)
 }
 
 export async function saveSongAnnotation(songId: number, annotation: Partial<SheetAnnotation>): Promise<SheetAnnotation> {
@@ -59,23 +67,7 @@ export async function fetchSetlistFileAnnotations(
 	const url = generateOcsUrl(
 		`/apps/sheetmusic/api/libraries/${libraryId}/setlists/${setlistId}/files/${fileId}/annotations`,
 	)
-	if (isEffectivelyOffline()) {
-		const cached = await readOfflineCachedJson<{ ocs?: { data?: SheetAnnotation[] } }>(url)
-		if (cached?.ocs?.data) {
-			return cached.ocs.data
-		}
-		throw new Error('Annotations are not available offline')
-	}
-	try {
-		const response = await axios.get(url)
-		return response.data?.ocs?.data ?? []
-	} catch (error) {
-		const cached = await readOfflineCachedJson<{ ocs?: { data?: SheetAnnotation[] } }>(url)
-		if (cached?.ocs?.data) {
-			return cached.ocs.data
-		}
-		throw error
-	}
+	return fetchAnnotationsWithOfflineCache(url, url)
 }
 
 export async function saveSetlistFileAnnotation(
