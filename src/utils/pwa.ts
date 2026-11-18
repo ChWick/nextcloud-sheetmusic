@@ -61,7 +61,7 @@ export function initPwaStandaloneMode(): () => void {
 	return () => {}
 }
 
-const APP_SHELL_CACHE = 'sheetmusic-app-shell-v1'
+export const APP_SHELL_CACHE = 'sheetmusic-app-shell-v1'
 
 /**
  * Ensures the app shell entry URL and current page scripts/stylesheets are

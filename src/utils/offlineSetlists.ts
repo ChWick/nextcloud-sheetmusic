@@ -1,9 +1,10 @@
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
-import { generateOcsUrl, generateUrl } from '@nextcloud/router'
+import { generateOcsUrl } from '@nextcloud/router'
 import { apiGet } from '../api/client'
 import { fetchSetlist, fetchSetlistFiles, getSetlistFileContentUrl } from '../api/setlists'
 import type { Song } from '../types/song'
 import { getFileVersionToken, getVersionedFileUrl } from './file-version'
+import { APP_SHELL_CACHE } from './pwa'
 
 export const OFFLINE_SETLIST_CACHE = 'sheetmusic-offline-setlists-v1'
 export const OFFLINE_STORAGE_KEY = 'sheetmusic_offline_setlists_v1'
@@ -100,11 +101,6 @@ export async function syncSetlistOffline(params: {
 
 	const urls = new Set<string>()
 
-	if (typeof window !== 'undefined' && window.location?.pathname) {
-		urls.add(window.location.pathname)
-	}
-	urls.add(generateUrl('/apps/sheetmusic/'))
-	urls.add(generateOcsUrl('/apps/sheetmusic/api/libraries'))
 	urls.add(`${generateOcsUrl('/apps/sheetmusic/api/songs')}?id=${libraryId}`)
 	urls.add(generateOcsUrl(`/apps/sheetmusic/api/libraries/${libraryId}/setlists`))
 	urls.add(generateOcsUrl(`/apps/sheetmusic/api/libraries/${libraryId}/setlists/${setlistId}`))
@@ -185,7 +181,7 @@ export async function syncSetlistOffline(params: {
 	if (typeof window !== 'undefined' && typeof pdfWorker === 'string' && pdfWorker.length > 0) {
 		try {
 			const workerUrl = new URL(pdfWorker, window.location.href).toString()
-			const shellCache = await caches.open('sheetmusic-app-shell-v1')
+			const shellCache = await caches.open(APP_SHELL_CACHE)
 			if (!(await shellCache.match(workerUrl))) {
 				const workerRes = await fetch(workerUrl, { credentials: 'include' })
 				if (workerRes.ok) {
@@ -327,20 +323,25 @@ export function initOfflineSetlistsAutoSync(): () => void {
 	}
 }
 
-/**
- * Reads a cached JSON response directly from the offline setlist Cache Storage.
- */
-export async function readOfflineCachedJson<T>(url: string): Promise<T | null> {
+async function readOfflineCachedResponse(url: string): Promise<Response | null> {
 	if (typeof caches === 'undefined') {
 		return null
 	}
 	try {
 		const cache = await caches.open(OFFLINE_SETLIST_CACHE)
-		const match = await cache.match(url, { ignoreVary: true })
-		if (!match) {
-			return null
-		}
-		return await match.json() as T
+		return (await cache.match(url, { ignoreVary: true })) ?? null
+	} catch {
+		return null
+	}
+}
+
+/**
+ * Reads a cached JSON response directly from the offline setlist Cache Storage.
+ */
+export async function readOfflineCachedJson<T>(url: string): Promise<T | null> {
+	try {
+		const match = await readOfflineCachedResponse(url)
+		return match ? await match.json() as T : null
 	} catch {
 		return null
 	}
@@ -350,17 +351,9 @@ export async function readOfflineCachedJson<T>(url: string): Promise<T | null> {
  * Reads a cached binary file (e.g. PDF) directly from the offline setlist Cache Storage.
  */
 export async function readOfflineCachedBinary(url: string): Promise<Uint8Array | null> {
-	if (typeof caches === 'undefined') {
-		return null
-	}
 	try {
-		const cache = await caches.open(OFFLINE_SETLIST_CACHE)
-		const match = await cache.match(url, { ignoreVary: true })
-		if (!match) {
-			return null
-		}
-		const buffer = await match.arrayBuffer()
-		return new Uint8Array(buffer)
+		const match = await readOfflineCachedResponse(url)
+		return match ? new Uint8Array(await match.arrayBuffer()) : null
 	} catch {
 		return null
 	}
