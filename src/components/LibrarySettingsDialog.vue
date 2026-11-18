@@ -33,31 +33,38 @@ const isNamingHelpOpen = ref(false)
 const currentLibrary = computed(() => props.libraries.find(lib => lib.id === props.selectedLibrary))
 const isSharedLibrary = computed(() => Boolean(currentLibrary.value?.isShared))
 
-const autoPathsModel = computed({
-	get: () => currentLibrary.value?.autoPaths ?? true,
-	set: (val: boolean) => {
-		updateSetting({ autoPaths: val })
-	},
-})
+type BooleanSettingKey = 'autoPaths' | 'autoPdfMetadata' | 'mobilesheetsSyncEnabled'
 
-const autoPdfMetadataModel = computed({
-	get: () => currentLibrary.value?.autoPdfMetadata ?? true,
-	set: (val: boolean) => {
-		updateSetting({ autoPdfMetadata: val })
+const booleanSettings = computed<Array<{
+	key: BooleanSettingKey
+	label: string
+	description: string
+	value: boolean
+}>>(() => [
+	{
+		key: 'autoPaths',
+		label: t('sheetmusic', 'Auto-sync relative file paths'),
+		description: t('sheetmusic', 'Automatically update song file paths in the MobileSheets database when files are moved within your Nextcloud storage.'),
+		value: currentLibrary.value?.autoPaths ?? true,
 	},
-})
+	{
+		key: 'autoPdfMetadata',
+		label: t('sheetmusic', 'Extract PDF metadata automatically'),
+		description: t('sheetmusic', 'When importing new songs, attempt to extract titles, composers, and page counts from PDF metadata.'),
+		value: currentLibrary.value?.autoPdfMetadata ?? true,
+	},
+	{
+		key: 'mobilesheetsSyncEnabled',
+		label: t('sheetmusic', 'Enable MobileSheets WebDAV sync'),
+		description: t('sheetmusic', 'Expose virtual mobilesheets.db and mobilesheets_hashcodes.txt files over WebDAV for MobileSheets synchronization.'),
+		value: currentLibrary.value?.mobilesheetsSyncEnabled ?? false,
+	},
+])
 
 const namingRulePresetModel = computed({
 	get: () => currentLibrary.value?.namingRulePreset ?? 'auto',
 	set: (val: string) => {
 		updateSetting({ namingRulePreset: val })
-	},
-})
-
-const mobilesheetsSyncEnabledModel = computed({
-	get: () => currentLibrary.value?.mobilesheetsSyncEnabled ?? false,
-	set: (val: boolean) => {
-		updateSetting({ mobilesheetsSyncEnabled: val })
 	},
 })
 
@@ -160,39 +167,19 @@ function handleDelete() {
 					{{ t('sheetmusic', 'Library Settings') }}
 				</h4>
 
-				<div :class="$style.settingRow">
+				<div
+					v-for="setting in booleanSettings"
+					:key="setting.key"
+					:class="$style.settingRow">
 					<NcCheckboxRadioSwitch
-						v-model="autoPathsModel"
+						:checked="setting.value"
 						type="checkbox"
-						:disabled="isSaving">
-						{{ t('sheetmusic', 'Auto-sync relative file paths') }}
+						:disabled="isSaving"
+						@update:checked="updateSetting({ [setting.key]: $event })">
+						{{ setting.label }}
 					</NcCheckboxRadioSwitch>
 					<p :class="$style.settingDescription">
-						{{ t('sheetmusic', 'Automatically update song file paths in the MobileSheets database when files are moved within your Nextcloud storage.') }}
-					</p>
-				</div>
-
-				<div :class="$style.settingRow">
-					<NcCheckboxRadioSwitch
-						v-model="autoPdfMetadataModel"
-						type="checkbox"
-						:disabled="isSaving">
-						{{ t('sheetmusic', 'Extract PDF metadata automatically') }}
-					</NcCheckboxRadioSwitch>
-					<p :class="$style.settingDescription">
-						{{ t('sheetmusic', 'When importing new songs, attempt to extract titles, composers, and page counts from PDF metadata.') }}
-					</p>
-				</div>
-
-				<div :class="$style.settingRow">
-					<NcCheckboxRadioSwitch
-						v-model="mobilesheetsSyncEnabledModel"
-						type="checkbox"
-						:disabled="isSaving">
-						{{ t('sheetmusic', 'Enable MobileSheets WebDAV sync') }}
-					</NcCheckboxRadioSwitch>
-					<p :class="$style.settingDescription">
-						{{ t('sheetmusic', 'Expose virtual mobilesheets.db and mobilesheets_hashcodes.txt files over WebDAV for MobileSheets synchronization.') }}
+						{{ setting.description }}
 					</p>
 				</div>
 

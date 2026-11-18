@@ -211,27 +211,24 @@ class LibraryMapper {
 		?string $namingRulePreset = null,
 		?bool $mobilesheetsSyncEnabled = null,
 	): void {
+		$updates = [
+			'auto_paths' => [$autoPaths, IQueryBuilder::PARAM_BOOL],
+			'auto_pdf_metadata' => [$autoPdfMetadata, IQueryBuilder::PARAM_BOOL],
+			'naming_rule_preset' => [$namingRulePreset, IQueryBuilder::PARAM_STR],
+			'mobilesheets_sync_enabled' => [$mobilesheetsSyncEnabled, IQueryBuilder::PARAM_BOOL],
+		];
+
 		$qb = $this->db->getQueryBuilder();
 		$qb->update(self::TABLE_NAME)
 			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId, IQueryBuilder::PARAM_STR)))
 			->andWhere($qb->expr()->eq('id', $qb->createNamedParameter($id, IQueryBuilder::PARAM_INT)));
 
 		$hasChanges = false;
-		if ($autoPaths !== null) {
-			$qb->set('auto_paths', $qb->createNamedParameter($autoPaths, IQueryBuilder::PARAM_BOOL));
-			$hasChanges = true;
-		}
-		if ($autoPdfMetadata !== null) {
-			$qb->set('auto_pdf_metadata', $qb->createNamedParameter($autoPdfMetadata, IQueryBuilder::PARAM_BOOL));
-			$hasChanges = true;
-		}
-		if ($namingRulePreset !== null) {
-			$qb->set('naming_rule_preset', $qb->createNamedParameter($namingRulePreset, IQueryBuilder::PARAM_STR));
-			$hasChanges = true;
-		}
-		if ($mobilesheetsSyncEnabled !== null) {
-			$qb->set('mobilesheets_sync_enabled', $qb->createNamedParameter($mobilesheetsSyncEnabled, IQueryBuilder::PARAM_BOOL));
-			$hasChanges = true;
+		foreach ($updates as $column => [$value, $type]) {
+			if ($value !== null) {
+				$qb->set($column, $qb->createNamedParameter($value, $type));
+				$hasChanges = true;
+			}
 		}
 
 		if ($hasChanges) {

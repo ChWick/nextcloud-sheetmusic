@@ -126,12 +126,13 @@ class SheetMusicDavPlugin extends ServerPlugin {
 		));
 
 		try {
-			if ($this->isSyncClient($request) && $this->isSublibraryContainerPath($path)) {
+			$isSyncClient = $this->isSyncClient($request);
+			if ($isSyncClient && $this->isSublibraryContainerPath($path)) {
 				return true;
 			}
 
 			$match = $this->matchVirtualPath($path);
-			if ($match !== null && ($this->isSyncClient($request) || !$match['library']->mobilesheetsSyncEnabled)) {
+			if ($match !== null && ($isSyncClient || !$match['library']->mobilesheetsSyncEnabled)) {
 				return true;
 			}
 			if ($match === null) {

@@ -967,49 +967,17 @@ final class SheetMusicDavPluginTest extends TestCase {
 		$syncClientUa = 'Mozilla/5.0 (Windows) mirall/3.14.0 (Nextcloud, windows-10.0.19045)';
 
 		// 1. Nextcloud sync client PROPFIND on Songs/ folder does NOT include virtual files
-		$reqSync = new Request('PROPFIND', '/remote.php/dav/files/admin/My%20Noten/Songs', [
-			'Depth' => '1',
-			'User-Agent' => $syncClientUa,
-		]);
-		$reqSync->setBaseUrl('/remote.php/dav/');
-
-		$resSync = new Response();
-		$resSync->setStatus(207);
-		$resSync->setBody('<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:"><d:response><d:href>/remote.php/dav/files/admin/My%20Noten/Songs/</d:href></d:response></d:multistatus>');
-
-		$this->plugin->afterPropfind($reqSync, $resSync);
-
-		$bodySync = $resSync->getBodyAsString();
+		$bodySync = $this->runSongsPropfind($syncClientUa);
 		self::assertStringNotContainsString('mobilesheets.db', $bodySync);
 		self::assertStringNotContainsString('mobilesheets_hashcodes.txt', $bodySync);
 
 		// 2. Non-sync client (e.g. MobileSheets) PROPFIND on Songs/ folder DOES include virtual files
-		$reqMs = new Request('PROPFIND', '/remote.php/dav/files/admin/My%20Noten/Songs', [
-			'Depth' => '1',
-			'User-Agent' => 'MobileSheets/3.8.4',
-		]);
-		$reqMs->setBaseUrl('/remote.php/dav/');
-
-		$resMs = new Response();
-		$resMs->setStatus(207);
-		$resMs->setBody('<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:"><d:response><d:href>/remote.php/dav/files/admin/My%20Noten/Songs/</d:href></d:response></d:multistatus>');
-
-		$this->plugin->afterPropfind($reqMs, $resMs);
-
-		$bodyMs = $resMs->getBodyAsString();
+		$bodyMs = $this->runSongsPropfind('MobileSheets/3.8.4');
 		self::assertStringContainsString('mobilesheets.db', $bodyMs);
 		self::assertStringContainsString('mobilesheets_hashcodes.txt', $bodyMs);
 
 		// 3. Direct GET / PROPFIND on virtual files by sync client is bypassed (returns true so SabreDAV returns 404)
-		foreach (['GET', 'PROPFIND'] as $method) {
-			foreach (['mobilesheets.db', 'mobilesheets_hashcodes.txt'] as $filename) {
-				$directSyncReq = new Request($method, '/files/admin/My%20Noten/Songs/' . $filename, [
-					'User-Agent' => $syncClientUa,
-				]);
-				$directSyncRes = new Response();
-				self::assertTrue($this->plugin->beforeMethod($directSyncReq, $directSyncRes));
-			}
-		}
+		$this->assertVirtualFilesBypassed($syncClientUa);
 
 		// 4. Direct GET on virtual file by non-sync client is handled
 		$directMsReq = new Request('GET', '/files/admin/My%20Noten/Songs/mobilesheets.db', [
@@ -1025,30 +993,36 @@ final class SheetMusicDavPluginTest extends TestCase {
 		$this->dbConn->executeStatement('UPDATE *PREFIX*sheetmusic_libraries SET mobilesheets_sync_enabled = 0 WHERE id = ?', [$this->library->id]);
 
 		// Even MobileSheets client does NOT see virtual files in PROPFIND when flag is disabled
-		$reqMs = new Request('PROPFIND', '/remote.php/dav/files/admin/My%20Noten/Songs', [
-			'Depth' => '1',
-			'User-Agent' => 'MobileSheets/3.8.4',
-		]);
-		$reqMs->setBaseUrl('/remote.php/dav/');
-
-		$resMs = new Response();
-		$resMs->setStatus(207);
-		$resMs->setBody('<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:"><d:response><d:href>/remote.php/dav/files/admin/My%20Noten/Songs/</d:href></d:response></d:multistatus>');
-
-		$this->plugin->afterPropfind($reqMs, $resMs);
-
-		$bodyMs = $resMs->getBodyAsString();
+		$bodyMs = $this->runSongsPropfind('MobileSheets/3.8.4');
 		self::assertStringNotContainsString('mobilesheets.db', $bodyMs);
 		self::assertStringNotContainsString('mobilesheets_hashcodes.txt', $bodyMs);
 
 		// Direct GET / PROPFIND on virtual files is bypassed (returns true so SabreDAV returns 404)
+		$this->assertVirtualFilesBypassed('MobileSheets/3.8.4');
+	}
+
+	private function runSongsPropfind(string $userAgent): string {
+		$req = new Request('PROPFIND', '/remote.php/dav/files/admin/My%20Noten/Songs', [
+			'Depth' => '1',
+			'User-Agent' => $userAgent,
+		]);
+		$req->setBaseUrl('/remote.php/dav/');
+
+		$res = new Response();
+		$res->setStatus(207);
+		$res->setBody('<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:"><d:response><d:href>/remote.php/dav/files/admin/My%20Noten/Songs/</d:href></d:response></d:multistatus>');
+
+		$this->plugin->afterPropfind($req, $res);
+		return $res->getBodyAsString();
+	}
+
+	private function assertVirtualFilesBypassed(string $userAgent): void {
 		foreach (['GET', 'PROPFIND'] as $method) {
 			foreach (['mobilesheets.db', 'mobilesheets_hashcodes.txt'] as $filename) {
 				$req = new Request($method, '/files/admin/My%20Noten/Songs/' . $filename, [
-					'User-Agent' => 'MobileSheets/3.8.4',
+					'User-Agent' => $userAgent,
 				]);
-				$res = new Response();
-				self::assertTrue($this->plugin->beforeMethod($req, $res));
+				self::assertTrue($this->plugin->beforeMethod($req, new Response()));
 			}
 		}
 	}
