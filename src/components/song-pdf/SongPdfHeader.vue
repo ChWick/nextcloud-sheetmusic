@@ -508,11 +508,12 @@ const modeTabItems = computed(() => [
 
 .tabButtonActive,
 .tabButtonActive:hover:not(:disabled) {
-	background-color: var(--sheetmusic-pdf-active-surface, var(--color-background-dark, #ededed));
+	background-color: var(--sheetmusic-pdf-active-surface, color-mix(in srgb, var(--color-primary-element, #0082c9) 14%, var(--color-main-background, #ffffff)));
 	color: var(--color-main-text);
 	font-weight: 600;
-	border-color: var(--color-border);
-	border-bottom: 1px solid var(--sheetmusic-pdf-active-surface, var(--color-background-dark, #ededed));
+	border-color: var(--color-border-dark, var(--color-border));
+	border-bottom: 1px solid var(--sheetmusic-pdf-active-surface, color-mix(in srgb, var(--color-primary-element, #0082c9) 14%, var(--color-main-background, #ffffff)));
+	box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.08);
 	z-index: 1;
 }
 
