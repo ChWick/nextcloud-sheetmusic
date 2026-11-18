@@ -77,26 +77,24 @@ const saveButtonDisabled = computed(() => {
 	return !props.hasAnyChange || props.remainingPagesCount === 0
 })
 
-const saveButtonTitle = computed(() => {
-	if (props.activeMode === 'bookmarks') {
-		return t('sheetmusic', 'Save bookmarks')
-	}
-	if (props.activeMode === 'split') {
-		return t('sheetmusic', 'Split and create songs')
-	}
+const hasStackedOtherEdits = computed(() => {
+	const hasDelOrJoin = Boolean(props.hasAnyDeletion || props.hasAnyJoin)
 	if (props.activeMode === 'rotate') {
-		return (props.hasAnyDeletion || props.hasAnyCrop || props.hasAnyEnhance || props.hasAnyJoin)
-			? t('sheetmusic', 'Save changes')
-			: t('sheetmusic', 'Save rotated PDF')
+		return hasDelOrJoin || Boolean(props.hasAnyCrop || props.hasAnyEnhance)
 	}
 	if (props.activeMode === 'crop') {
-		return (props.hasAnyDeletion || props.hasAnyRotation || props.hasAnyEnhance || props.hasAnyJoin)
-			? t('sheetmusic', 'Save changes')
-			: t('sheetmusic', 'Save cropped PDF')
+		return hasDelOrJoin || Boolean(props.hasAnyRotation || props.hasAnyEnhance)
 	}
-	return (props.hasAnyDeletion || props.hasAnyRotation || props.hasAnyCrop || props.hasAnyJoin)
-		? t('sheetmusic', 'Save changes')
-		: t('sheetmusic', 'Save enhanced PDF')
+	return hasDelOrJoin || Boolean(props.hasAnyRotation || props.hasAnyCrop)
+})
+
+const saveButtonTitle = computed(() => {
+	if (props.activeMode === 'bookmarks') return t('sheetmusic', 'Save bookmarks')
+	if (props.activeMode === 'split') return t('sheetmusic', 'Split and create songs')
+	if (hasStackedOtherEdits.value) return t('sheetmusic', 'Save changes')
+	if (props.activeMode === 'rotate') return t('sheetmusic', 'Save rotated PDF')
+	if (props.activeMode === 'crop') return t('sheetmusic', 'Save cropped PDF')
+	return t('sheetmusic', 'Save enhanced PDF')
 })
 
 const saveButtonText = computed(() => {
@@ -107,25 +105,12 @@ const saveButtonText = computed(() => {
 		}
 		return baseText
 	}
-	if (props.activeMode === 'bookmarks') {
-		return t('sheetmusic', 'Save Bookmarks')
-	}
-	if (props.activeMode === 'split') {
-		return t('sheetmusic', 'Split & Create Songs')
-	}
-	if (props.activeMode === 'rotate') {
-		return (props.hasAnyDeletion || props.hasAnyCrop || props.hasAnyEnhance || props.hasAnyJoin)
-			? t('sheetmusic', 'Save Changes')
-			: t('sheetmusic', 'Save Rotations')
-	}
-	if (props.activeMode === 'crop') {
-		return (props.hasAnyDeletion || props.hasAnyRotation || props.hasAnyEnhance || props.hasAnyJoin)
-			? t('sheetmusic', 'Save Changes')
-			: t('sheetmusic', 'Save Crops')
-	}
-	return (props.hasAnyDeletion || props.hasAnyRotation || props.hasAnyCrop || props.hasAnyJoin)
-		? t('sheetmusic', 'Save Changes')
-		: t('sheetmusic', 'Save Enhanced PDF')
+	if (props.activeMode === 'bookmarks') return t('sheetmusic', 'Save Bookmarks')
+	if (props.activeMode === 'split') return t('sheetmusic', 'Split & Create Songs')
+	if (hasStackedOtherEdits.value) return t('sheetmusic', 'Save Changes')
+	if (props.activeMode === 'rotate') return t('sheetmusic', 'Save Rotations')
+	if (props.activeMode === 'crop') return t('sheetmusic', 'Save Crops')
+	return t('sheetmusic', 'Save Enhanced PDF')
 })
 </script>
 
