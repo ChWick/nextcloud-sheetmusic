@@ -1115,7 +1115,7 @@ defineExpose({
 		<div
 			v-show="!isLoading && !errorMessage && isPdfFile"
 			ref="pdfContainer"
-			:class="$style.pdfContainer">
+			:class="[$style.pdfContainer, !editableAnnotations && $style.pdfContainerGrabbable]">
 			<div
 				ref="pdfStage"
 				:class="[$style.pdfStage, $style[`layout-${pageLayout}`], noPadding && $style.noPadding]" />
@@ -1239,6 +1239,15 @@ defineExpose({
 	background-color: var(--color-background-dark, #f5f5f5);
 	touch-action: pan-x pan-y;
 	-webkit-overflow-scrolling: touch;
+}
+
+.pdfContainerGrabbable {
+	cursor: grab;
+}
+
+:global(html.sheetmusic-panning),
+:global(html.sheetmusic-panning *) {
+	cursor: grabbing !important;
 }
 
 .pdfStage {

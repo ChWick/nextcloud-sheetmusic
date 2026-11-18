@@ -298,6 +298,7 @@ export function usePdfTouchZoom(options: PdfTouchZoomOptions) {
 		livePanX = committedPanX
 		livePanY = committedPanY
 		container.style.cursor = 'grabbing'
+		document.documentElement.classList.add('sheetmusic-panning')
 	}
 
 	function handleMouseMove(event: MouseEvent) {
@@ -335,6 +336,7 @@ export function usePdfTouchZoom(options: PdfTouchZoomOptions) {
 		committedPanX = livePanX
 		committedPanY = livePanY
 		resetStageTransform()
+		document.documentElement.classList.remove('sheetmusic-panning')
 		const container = options.containerRef.value
 		if (container) {
 			container.style.cursor = ''
@@ -370,6 +372,7 @@ export function usePdfTouchZoom(options: PdfTouchZoomOptions) {
 		}
 		window.removeEventListener('mousemove', handleMouseMove)
 		window.removeEventListener('mouseup', stopMousePan)
+		document.documentElement.classList.remove('sheetmusic-panning')
 	})
 
 	function resetPan() {
