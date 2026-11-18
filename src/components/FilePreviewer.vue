@@ -606,6 +606,10 @@ async function renderCurrentView() {
 	}
 	scale = Math.max(0.2, Math.min(scale, 4.0))
 	effectiveScale.value = scale
+	if (pdfStage.value) {
+		const baseGap = props.noPadding ? 4 : 16
+		pdfStage.value.style.gap = `${Math.round(baseGap * scale)}px`
+	}
 
 	const renderedPlaceholders = new Set<HTMLElement>()
 
