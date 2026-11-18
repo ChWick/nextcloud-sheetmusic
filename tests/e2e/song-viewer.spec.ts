@@ -11,28 +11,30 @@ test.describe('Song Viewer UI & Icon Buttons', () => {
 		// Verify song title is visible
 		await expect(page.getByRole('heading', { name: 'Symphony No. 5' })).toBeVisible()
 
-		// Locate icon-only header buttons by aria-label
+		// Locate directly visible header & file toolbar icon buttons by aria-label
 		const backBtn = page.getByRole('button', { name: 'Back to songs' })
-		const externalBtn = page.getByRole('button', { name: 'Open in external viewer' })
 		const editBtn = page.getByRole('button', { name: 'Edit song' })
-		const deleteBtn = page.getByRole('button', { name: 'Delete song' })
+		const fullscreenBtn = page.getByRole('button', { name: 'Fullscreen' })
+		const moreSongActionsBtn = page.getByRole('button', { name: 'More song actions' })
 
 		await expect(backBtn).toBeVisible()
-		await expect(externalBtn).toBeVisible()
 		await expect(editBtn).toBeVisible()
-		await expect(deleteBtn).toBeVisible()
+		await expect(fullscreenBtn).toBeVisible()
+		await expect(moreSongActionsBtn).toBeVisible()
 
 		// Verify title attributes for hover tooltips
 		await expect(backBtn).toHaveAttribute('title', 'Back to songs')
-		await expect(externalBtn).toHaveAttribute('title', 'Open in external viewer')
 		await expect(editBtn).toHaveAttribute('title', 'Edit song')
-		await expect(deleteBtn).toHaveAttribute('title', 'Delete song')
+		await expect(fullscreenBtn).toHaveAttribute('title', 'Fullscreen')
 
 		// Verify SVG icons exist inside the buttons
 		await expect(backBtn.locator('svg')).toBeVisible()
-		await expect(externalBtn.locator('svg')).toBeVisible()
 		await expect(editBtn.locator('svg')).toBeVisible()
-		await expect(deleteBtn.locator('svg')).toBeVisible()
+		await expect(fullscreenBtn.locator('svg')).toBeVisible()
+
+		// Verify overflow menu contains Delete song
+		await moreSongActionsBtn.click()
+		await expect(page.getByRole('button', { name: 'Delete song' })).toBeVisible()
 	})
 
 	test('renders PDF viewer toolbar with navigation, layout modes, zoom and rotate controls', async ({ page }) => {

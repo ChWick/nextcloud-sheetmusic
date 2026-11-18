@@ -29,19 +29,16 @@ test.describe('Songs View, View Modes & Batch Selection', () => {
 		// Default is table view
 		await expect(page.locator('table')).toBeVisible()
 
-		// Open view mode toggle menu inside header
-		const toggleBtn = page.locator('[aria-label*="view"], [title*="view"]').first()
+		// Open view options popover inside header
+		const toggleBtn = page.locator('[data-test="song-list-display-trigger"]')
 		await toggleBtn.click()
 
 		// Select Card view
-		await page.getByText('Card view').click()
+		await page.getByRole('button', { name: 'Cards' }).click()
 		await expect(page.locator('table')).not.toBeVisible()
 
-		// Open view mode toggle menu again
-		await toggleBtn.click()
-
 		// Select List view
-		await page.getByText('List view').click()
+		await page.getByRole('button', { name: 'List' }).click()
 		await expect(page.locator('table')).not.toBeVisible()
 	})
 
