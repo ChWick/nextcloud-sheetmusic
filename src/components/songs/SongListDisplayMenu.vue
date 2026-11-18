@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { ref } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
+import { useClickOutside } from '../../composables/useClickOutside'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import SortAscendingIcon from 'vue-material-design-icons/SortAscending.vue'
 import SortDescendingIcon from 'vue-material-design-icons/SortDescending.vue'
@@ -42,20 +43,7 @@ function toggleColumn(key: SongColumn) {
 	emit('update:visibleColumns', toggleVisibleColumn(props.visibleColumns, key, columnOptions))
 }
 
-function handleDocumentClick(event: MouseEvent) {
-	if (!isOpen.value || !rootRef.value) return
-	if (!rootRef.value.contains(event.target as Node)) {
-		isOpen.value = false
-	}
-}
-
-onMounted(() => {
-	document.addEventListener('click', handleDocumentClick)
-})
-
-onUnmounted(() => {
-	document.removeEventListener('click', handleDocumentClick)
-})
+useClickOutside(rootRef, isOpen)
 </script>
 
 <template>
