@@ -44,6 +44,7 @@ import Wrench from 'vue-material-design-icons/Wrench.vue'
 import TrashCanOutline from 'vue-material-design-icons/TrashCanOutline.vue'
 import FolderSyncOutline from 'vue-material-design-icons/FolderSyncOutline.vue'
 import ShareVariantOutline from 'vue-material-design-icons/ShareVariantOutline.vue'
+import CloudOffOutline from 'vue-material-design-icons/CloudOffOutline.vue'
 import SongsView from './components/SongsView.vue'
 import SetlistsView from './components/SetlistsView.vue'
 import SublibrariesView from './components/SublibrariesView.vue'
@@ -66,7 +67,7 @@ type ViewName = 'songs' | 'new-song' | 'setlists' | 'sublibraries' | 'shares' | 
 const VIEW_NAMES: ViewName[] = ['songs', 'new-song', 'setlists', 'composers', 'artists', 'books', 'collections', 'genres', 'keys', 'customgroups', 'years', 'signatures', 'sourcetypes', 'instruments', 'arrangers', 'sublibraries', 'shares', 'integrity', 'tools', 'trash']
 
 /*** State ***/
-const { isOnline } = useOnlineStatus()
+const { isOnline, setSimulatedOffline } = useOnlineStatus()
 const isAddDialogOpen = ref(false)
 const isImportDialogOpen = ref(false)
 const isShareTargetDialogOpen = ref(false)
@@ -577,6 +578,15 @@ async function deleteLibrary() {
             </NcAppNavigationItem>
           </template>
 
+        </template>
+
+        <template v-if="!isPublicShare">
+          <li role="separator" :class="$style.navSeparator" aria-hidden="true" />
+          <NcAppNavigationItem :name="t('sheetmusic', 'Offline mode')" @click="setSimulatedOffline(true)">
+            <template #icon>
+              <CloudOffOutline :size="20" />
+            </template>
+          </NcAppNavigationItem>
         </template>
 
         <template v-if="!isPublicShare" #footer>

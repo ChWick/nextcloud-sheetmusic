@@ -2,7 +2,16 @@
 	<div :class="$style.offlineRoot">
 		<div :class="$style.offlineBanner" role="status">
 			<CloudOffOutline :size="18" />
-			<span>{{ t('sheetmusic', 'Offline mode — showing setlists saved for offline use') }}</span>
+			<span :class="$style.offlineBannerText">{{ isSimulatedOffline && isBrowserOnline
+				? t('sheetmusic', 'Simulated offline mode — verifying setlists saved for offline use')
+				: t('sheetmusic', 'Offline mode — showing setlists saved for offline use') }}</span>
+			<button
+				v-if="isSimulatedOffline && isBrowserOnline"
+				type="button"
+				:class="$style.exitOfflineButton"
+				@click="setSimulatedOffline(false)">
+				{{ t('sheetmusic', 'Return online') }}
+			</button>
 		</div>
 
 		<div v-if="isLoading" :class="$style.emptyState">
@@ -98,6 +107,7 @@ import CloudOffOutline from 'vue-material-design-icons/CloudOffOutline.vue'
 import PlaylistMusic from 'vue-material-design-icons/PlaylistMusic.vue'
 import { apiGet } from '../../api/client'
 import { fetchSetlist, fetchSetlistFiles, fetchSetlists } from '../../api/setlists'
+import { useOnlineStatus } from '../../composables/useOnlineStatus'
 import type { Library } from '../../types/library'
 import type { Setlist, SetlistFile, SetlistItem, Song } from '../../types/song'
 import { getOfflineSetlistMap, type OfflineSetlistRecord, readOfflineCachedJson } from '../../utils/offlineSetlists'
@@ -117,6 +127,7 @@ const props = defineProps<{
 	libraries: Library[]
 }>()
 
+const { isBrowserOnline, isSimulatedOffline, setSimulatedOffline } = useOnlineStatus()
 const isLoading = ref(true)
 const isLoadingDetail = ref(false)
 const groups = ref<OfflineLibraryGroup[]>([])
@@ -139,6 +150,14 @@ async function loadLibrarySetlistsWithFallback(libraryId: number, records: Offli
 	if (cached?.ocs?.data) {
 		return cached.ocs.data
 	}
+	if (isSimulatedOffline.value) {
+		return records.map(r => ({
+			id: r.setlistId,
+			libraryId: r.libraryId,
+			name: r.setlistName ?? t('sheetmusic', 'Setlist #{id}', { id: r.setlistId }, { escape: false }),
+			itemCount: r.itemCount ?? 0,
+		} as Setlist))
+	}
 	try {
 		return await fetchSetlists(libraryId)
 	} catch {
@@ -157,6 +176,9 @@ async function loadLibrarySongsWithFallback(libraryId: number): Promise<Song[]> 
 	)
 	if (cached?.ocs?.data?.songs) {
 		return cached.ocs.data.songs
+	}
+	if (isSimulatedOffline.value) {
+		return []
 	}
 	try {
 		const res = await apiGet('/api/songs', { queryParams: { id: libraryId } })
@@ -224,9 +246,13 @@ async function selectOfflineSetlist(libraryId: number, setlist: Setlist) {
 			),
 		])
 		const detail = cachedDetail?.ocs?.data
-			?? await fetchSetlist(libraryId, setlist.id).catch(() => ({ ...setlist, items: [] }))
+			?? (isSimulatedOffline.value
+				? { ...setlist, items: [] }
+				: await fetchSetlist(libraryId, setlist.id).catch(() => ({ ...setlist, items: [] })))
 		const files = cachedFiles?.ocs?.data
-			?? await fetchSetlistFiles(libraryId, setlist.id).catch(() => [])
+			?? (isSimulatedOffline.value
+				? []
+				: await fetchSetlistFiles(libraryId, setlist.id).catch(() => []))
 		selectedItems.value = detail.items ?? []
 		selectedFiles.value = files
 	} catch {
@@ -272,6 +298,28 @@ onMounted(() => {
 	color: var(--color-text-maxcontrast);
 	font-weight: 500;
 	flex-shrink: 0;
+}
+
+.offlineBannerText {
+	flex: 1;
+	min-width: 0;
+}
+
+.exitOfflineButton {
+	padding: 4px 12px;
+	border: 1px solid var(--color-border-dark);
+	border-radius: var(--border-radius);
+	background-color: var(--color-main-background);
+	color: var(--color-main-text);
+	font: inherit;
+	font-size: 13px;
+	font-weight: 500;
+	cursor: pointer;
+	flex-shrink: 0;
+}
+
+.exitOfflineButton:hover {
+	background-color: var(--color-background-hover);
 }
 
 .layout {

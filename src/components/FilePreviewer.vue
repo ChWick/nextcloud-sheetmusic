@@ -12,6 +12,7 @@ import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import FilePreviewerToolbar from './file-preview/FilePreviewerToolbar.vue'
 import SongAnnotationOverlay from './song-viewer/SongAnnotationOverlay.vue'
 import { usePdfTouchZoom } from '../composables/usePdfTouchZoom'
+import { isEffectivelyOffline } from '../composables/useOnlineStatus'
 import { readOfflineCachedBinary } from '../utils/offlineSetlists'
 import { inspectPdfPageResolution, type PdfPageResolutionSummary } from './song-pdf/pdf-enhance-engine'
 import { parsePageOrder } from '../utils/page-order'
@@ -759,8 +760,11 @@ async function renderCurrentView() {
 async function fetchBinaryData(cacheKey: string, loadId: number): Promise<Uint8Array | null> {
 	const cache = props.binaryCache ?? defaultFileBinaryCache
 	let data: Uint8Array | null = cache.get(cacheKey)
-	if (!data && typeof navigator !== 'undefined' && navigator.onLine === false) {
+	if (!data && isEffectivelyOffline()) {
 		data = await readOfflineCachedBinary(cacheKey)
+		if (!data) {
+			throw new Error('File is not available offline')
+		}
 		if (loadId !== currentLoadId) return null
 	}
 	if (!data) {

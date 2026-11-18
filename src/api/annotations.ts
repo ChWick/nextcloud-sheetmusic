@@ -6,16 +6,18 @@
 import axios from '@nextcloud/axios'
 import { generateOcsUrl } from '@nextcloud/router'
 import type { SheetAnnotation } from '../types/annotation'
+import { isEffectivelyOffline } from '../composables/useOnlineStatus'
 import { readOfflineCachedJson } from '../utils/offlineSetlists'
 
 export async function fetchSongAnnotations(songId: number, fileId?: number | null): Promise<SheetAnnotation[]> {
 	const baseUrl = generateOcsUrl('/apps/sheetmusic/api/songs/' + songId + '/annotations')
 	const cacheUrl = fileId ? `${baseUrl}?fileId=${fileId}` : baseUrl
-	if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+	if (isEffectivelyOffline()) {
 		const cached = await readOfflineCachedJson<{ ocs?: { data?: SheetAnnotation[] } }>(cacheUrl)
 		if (cached?.ocs?.data) {
 			return cached.ocs.data
 		}
+		throw new Error('Annotations are not available offline')
 	}
 	try {
 		const response = await axios.get(baseUrl, { params: fileId ? { fileId } : undefined })
@@ -57,11 +59,12 @@ export async function fetchSetlistFileAnnotations(
 	const url = generateOcsUrl(
 		`/apps/sheetmusic/api/libraries/${libraryId}/setlists/${setlistId}/files/${fileId}/annotations`,
 	)
-	if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+	if (isEffectivelyOffline()) {
 		const cached = await readOfflineCachedJson<{ ocs?: { data?: SheetAnnotation[] } }>(url)
 		if (cached?.ocs?.data) {
 			return cached.ocs.data
 		}
+		throw new Error('Annotations are not available offline')
 	}
 	try {
 		const response = await axios.get(url)
