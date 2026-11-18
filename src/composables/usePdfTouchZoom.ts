@@ -186,26 +186,28 @@ export function usePdfTouchZoom(options: PdfTouchZoomOptions) {
 
 	async function commitZoomAtCurrentVisualPosition(targetScale: number, container: HTMLElement | undefined) {
 		const stage = options.stageRef.value
-		const beforeStageRect = stage?.getBoundingClientRect()
+		const anchorBefore = (stage?.firstElementChild as HTMLElement | null) ?? stage
+		const beforeRect = anchorBefore?.getBoundingClientRect()
 		const beforeContainerRect = container?.getBoundingClientRect()
-		const targetLeft = beforeStageRect && beforeContainerRect
-			? beforeStageRect.left - beforeContainerRect.left
+		const targetLeft = beforeRect && beforeContainerRect
+			? beforeRect.left - beforeContainerRect.left
 			: null
-		const targetTop = beforeStageRect && beforeContainerRect
-			? beforeStageRect.top - beforeContainerRect.top
+		const targetTop = beforeRect && beforeContainerRect
+			? beforeRect.top - beforeContainerRect.top
 			: null
 
 		await options.onCommitZoom(targetScale)
 		resetStageTransform()
 
-		if (!container || !stage || targetLeft === null || targetTop === null) {
+		const anchorAfter = (stage?.firstElementChild as HTMLElement | null) ?? stage
+		if (!container || !anchorAfter || targetLeft === null || targetTop === null) {
 			return
 		}
 
-		const afterStageRect = stage.getBoundingClientRect()
+		const afterRect = anchorAfter.getBoundingClientRect()
 		const afterContainerRect = container.getBoundingClientRect()
-		const diffX = (afterStageRect.left - afterContainerRect.left) - targetLeft
-		const diffY = (afterStageRect.top - afterContainerRect.top) - targetTop
+		const diffX = (afterRect.left - afterContainerRect.left) - targetLeft
+		const diffY = (afterRect.top - afterContainerRect.top) - targetTop
 
 		const maxScrollLeft = Math.max(0, container.scrollWidth - container.clientWidth)
 		const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight)

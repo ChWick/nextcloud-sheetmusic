@@ -740,8 +740,9 @@ async function renderCurrentView() {
 			intersectionObserver.observe(placeholder)
 
 			// Render the first page immediately so the user always sees content right away
+			// and the stage has its real dimensions before renderCurrentView() resolves.
 			if (item === pagesToRender[0]) {
-				renderPage(item.pageNum, placeholder)
+				await renderPage(item.pageNum, placeholder)
 			}
 		}
 	} else {
