@@ -343,6 +343,17 @@ export function usePdfTouchZoom(options: PdfTouchZoomOptions) {
 		}
 	}
 
+	function handleModifierKey(event: KeyboardEvent) {
+		const el = options.containerRef.value
+		if (!el) return
+		const active = options.isEnabled() && (event.ctrlKey || event.metaKey)
+		el.classList.toggle('sheetmusic-pan-ready', active)
+	}
+
+	function clearModifierCursor() {
+		options.containerRef.value?.classList.remove('sheetmusic-pan-ready')
+	}
+
 	onMounted(() => {
 		const el = options.containerRef.value
 		if (!el) return
@@ -354,6 +365,9 @@ export function usePdfTouchZoom(options: PdfTouchZoomOptions) {
 		el.addEventListener('mousedown', handleMouseDown)
 		window.addEventListener('mousemove', handleMouseMove)
 		window.addEventListener('mouseup', stopMousePan)
+		window.addEventListener('keydown', handleModifierKey)
+		window.addEventListener('keyup', handleModifierKey)
+		window.addEventListener('blur', clearModifierCursor)
 	})
 
 	onUnmounted(() => {
@@ -369,9 +383,13 @@ export function usePdfTouchZoom(options: PdfTouchZoomOptions) {
 			el.removeEventListener('touchcancel', handleTouchCancel)
 			el.removeEventListener('wheel', handleWheel)
 			el.removeEventListener('mousedown', handleMouseDown)
+			el.classList.remove('sheetmusic-pan-ready')
 		}
 		window.removeEventListener('mousemove', handleMouseMove)
 		window.removeEventListener('mouseup', stopMousePan)
+		window.removeEventListener('keydown', handleModifierKey)
+		window.removeEventListener('keyup', handleModifierKey)
+		window.removeEventListener('blur', clearModifierCursor)
 		document.documentElement.classList.remove('sheetmusic-panning')
 	})
 

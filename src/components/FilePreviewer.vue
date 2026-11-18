@@ -1245,6 +1245,11 @@ defineExpose({
 	cursor: grab;
 }
 
+:global(html:not(.sheetmusic-panning)) .pdfContainer:global(.sheetmusic-pan-ready),
+:global(html:not(.sheetmusic-panning)) .pdfContainer:global(.sheetmusic-pan-ready) * {
+	cursor: grab !important;
+}
+
 :global(html.sheetmusic-panning),
 :global(html.sheetmusic-panning *) {
 	cursor: grabbing !important;
