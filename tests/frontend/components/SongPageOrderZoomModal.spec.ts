@@ -85,4 +85,21 @@ describe('SongPageOrderZoomModal.vue', () => {
 		const nextBtn = wrapper.find('button[aria-label="Next page"]')
 		expect(nextBtn.attributes('disabled')).toBeDefined()
 	})
+
+	it('hides Add to Order when showAppendAction is false and applies rotationDeg style', () => {
+		const wrapper = mount(SongPageOrderZoomModal, {
+			props: {
+				open: true,
+				pageNum: 1,
+				totalPages: 3,
+				thumbnailUrl: 'data:image/jpeg;base64,thumb',
+				showAppendAction: false,
+				rotationDeg: 90,
+			},
+		})
+
+		expect(wrapper.find('button[aria-label="Add page 1 to order"]').exists()).toBe(false)
+		const img = wrapper.find('[data-test="zoom-image"]')
+		expect(img.attributes('style')).toContain('rotate(90deg)')
+	})
 })
