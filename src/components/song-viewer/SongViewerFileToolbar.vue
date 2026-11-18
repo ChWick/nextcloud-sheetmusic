@@ -4,15 +4,19 @@ import type { PdfPageResolutionSummary } from '../song-pdf/pdf-enhance-engine'
 
 import { computed, ref } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
+import NcActionButton from '@nextcloud/vue/components/NcActionButton'
+import NcActions from '@nextcloud/vue/components/NcActions'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import DrawIcon from 'vue-material-design-icons/Draw.vue'
 import EyeOffOutline from 'vue-material-design-icons/EyeOffOutline.vue'
 import EyeOutline from 'vue-material-design-icons/EyeOutline.vue'
 import FileDocumentEditOutline from 'vue-material-design-icons/FileDocumentEditOutline.vue'
 import FileDocumentOutline from 'vue-material-design-icons/FileDocumentOutline.vue'
+import FullscreenIcon from 'vue-material-design-icons/Fullscreen.vue'
+import FullscreenExitIcon from 'vue-material-design-icons/FullscreenExit.vue'
 import History from 'vue-material-design-icons/History.vue'
 import InformationOutline from 'vue-material-design-icons/InformationOutline.vue'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
-import PencilOutline from 'vue-material-design-icons/PencilOutline.vue'
 import { getFileName } from '../../utils/file'
 import { formatByteSize } from '../song-pdf/pdf-enhance-engine'
 
@@ -26,6 +30,7 @@ const props = withDefaults(
 		pageResolutions?: PdfPageResolutionSummary[]
 		showAnnotations?: boolean
 		isEditingAnnotations?: boolean
+		isFullscreen?: boolean
 		canWrite?: boolean
 	}>(),
 	{
@@ -35,6 +40,7 @@ const props = withDefaults(
 		pageResolutions: () => [],
 		showAnnotations: true,
 		isEditingAnnotations: false,
+		isFullscreen: false,
 		canWrite: true,
 	},
 )
@@ -45,6 +51,7 @@ const emit = defineEmits<{
 	'open-versions': []
 	'toggle-annotations': []
 	'toggle-edit-annotations': []
+	'toggle-fullscreen': []
 }>()
 
 const showInfoDropdown = ref(false)
@@ -52,6 +59,15 @@ const showInfoDropdown = ref(false)
 const effectiveSizeBytes = computed(() => props.fileSizeBytes ?? props.file?.fileSize ?? null)
 const formattedFileSize = computed(() => formatByteSize(effectiveSizeBytes.value))
 const fileName = computed(() => getFileName(props.file.path))
+const editAnnotationsLabel = computed(() =>
+	props.isEditingAnnotations ? t('sheetmusic', 'Exit annotation editor') : t('sheetmusic', 'Edit annotations'),
+)
+const fullscreenLabel = computed(() =>
+	props.isFullscreen ? t('sheetmusic', 'Exit fullscreen') : t('sheetmusic', 'Fullscreen'),
+)
+const showAnnotationsLabel = computed(() =>
+	props.showAnnotations ? t('sheetmusic', 'Hide annotations') : t('sheetmusic', 'Show annotations'),
+)
 
 const activePageResolution = computed<PdfPageResolutionSummary | null>(() => {
 	if (!props.pageResolutions || props.pageResolutions.length === 0) return null
@@ -82,11 +98,6 @@ const activePageResolution = computed<PdfPageResolutionSummary | null>(() => {
 					:aria-label="t('sheetmusic', 'Show PDF file size and resolution details')"
 					@click="showInfoDropdown = !showInfoDropdown">
 					<InformationOutline :size="15" />
-					<span v-if="formattedFileSize !== '—'">{{ formattedFileSize }}</span>
-					<span v-if="formattedFileSize !== '—' && activePageResolution">·</span>
-					<span v-if="activePageResolution">
-						{{ activePageResolution.dpi }} DPI ({{ activePageResolution.pixelWidth }}×{{ activePageResolution.pixelHeight }} px)
-					</span>
 				</button>
 				<div
 					v-if="showInfoDropdown"
@@ -138,62 +149,68 @@ const activePageResolution = computed<PdfPageResolutionSummary | null>(() => {
 
 		<div :class="$style.fileActions">
 			<NcButton
-				size="small"
-				variant="secondary"
-				:title="t('sheetmusic', 'Open in external viewer')"
-				:aria-label="t('sheetmusic', 'Open in external viewer')"
-				@click="emit('open-external')">
-				<template #icon>
-					<OpenInNewIcon :size="18" />
-				</template>
-			</NcButton>
-			<NcButton
-				v-if="isPdf"
-				size="small"
-				variant="secondary"
-				:title="showAnnotations ? t('sheetmusic', 'Hide annotations (experimental)') : t('sheetmusic', 'Show annotations (experimental)')"
-				:aria-label="showAnnotations ? t('sheetmusic', 'Hide annotations (experimental)') : t('sheetmusic', 'Show annotations (experimental)')"
-				data-test="toggle-annotations-button"
-				@click="emit('toggle-annotations')">
-				<template #icon>
-					<EyeOutline v-if="showAnnotations" :size="18" />
-					<EyeOffOutline v-else :size="18" />
-				</template>
-			</NcButton>
-			<NcButton
 				v-if="isPdf && canWrite !== false"
-				size="small"
 				:variant="isEditingAnnotations ? 'primary' : 'secondary'"
-				:title="isEditingAnnotations ? t('sheetmusic', 'Exit annotation editor') : t('sheetmusic', 'Edit annotations')"
-				:aria-label="isEditingAnnotations ? t('sheetmusic', 'Exit annotation editor') : t('sheetmusic', 'Edit annotations')"
+				:title="editAnnotationsLabel"
+				:aria-label="editAnnotationsLabel"
 				data-test="edit-annotations-button"
 				@click="emit('toggle-edit-annotations')">
 				<template #icon>
-					<PencilOutline :size="18" />
+					<DrawIcon :size="20" />
 				</template>
 			</NcButton>
 			<NcButton
-				v-if="isPdf && canWrite !== false"
-				size="small"
-				variant="secondary"
-				:title="t('sheetmusic', 'Modify PDF (rotate, crop, enhance, split)')"
-				:aria-label="t('sheetmusic', 'Modify PDF (rotate, crop, enhance, split)')"
-				@click="emit('modify-pdf')">
+				:variant="isFullscreen ? 'primary' : 'secondary'"
+				:title="fullscreenLabel"
+				:aria-label="fullscreenLabel"
+				data-test="viewer-fullscreen-button"
+				@click="emit('toggle-fullscreen')">
 				<template #icon>
-					<FileDocumentEditOutline :size="18" />
+					<FullscreenExitIcon v-if="isFullscreen" :size="20" />
+					<FullscreenIcon v-else :size="20" />
 				</template>
 			</NcButton>
-			<NcButton
-				v-if="isPdf && canWrite !== false"
-				size="small"
-				variant="secondary"
-				:title="t('sheetmusic', 'PDF version history')"
-				:aria-label="t('sheetmusic', 'PDF version history')"
-				@click="emit('open-versions')">
-				<template #icon>
-					<History :size="18" />
-				</template>
-			</NcButton>
+			<NcActions
+				:aria-label="t('sheetmusic', 'More file actions')"
+				data-test="pdf-actions-menu">
+				<NcActionButton
+					v-if="isPdf"
+					:title="showAnnotationsLabel"
+					data-test="toggle-annotations-button"
+					@click="emit('toggle-annotations')">
+					<template #icon>
+						<EyeOutline v-if="showAnnotations" :size="18" />
+						<EyeOffOutline v-else :size="18" />
+					</template>
+					{{ showAnnotationsLabel }}
+				</NcActionButton>
+				<NcActionButton
+					v-if="isPdf && canWrite !== false"
+					:title="t('sheetmusic', 'Modify PDF')"
+					@click="emit('modify-pdf')">
+					<template #icon>
+						<FileDocumentEditOutline :size="18" />
+					</template>
+					{{ t('sheetmusic', 'Modify PDF') }}
+				</NcActionButton>
+				<NcActionButton
+					v-if="isPdf && canWrite !== false"
+					:title="t('sheetmusic', 'PDF version history')"
+					@click="emit('open-versions')">
+					<template #icon>
+						<History :size="18" />
+					</template>
+					{{ t('sheetmusic', 'PDF version history') }}
+				</NcActionButton>
+				<NcActionButton
+					:title="t('sheetmusic', 'Open in external viewer')"
+					@click="emit('open-external')">
+					<template #icon>
+						<OpenInNewIcon :size="18" />
+					</template>
+					{{ t('sheetmusic', 'Open in external viewer') }}
+				</NcActionButton>
+			</NcActions>
 		</div>
 	</div>
 </template>

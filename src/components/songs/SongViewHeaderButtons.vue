@@ -1,24 +1,6 @@
 <template>
   <template v-if="isEditInUrl && openSong">
     <NcButton
-      variant="error"
-      :title="t('sheetmusic', 'Delete song')"
-      :aria-label="t('sheetmusic', 'Delete song')"
-      @click="$emit('deleteEdit')">
-      <template #icon>
-        <DeleteIcon :size="20" />
-      </template>
-    </NcButton>
-    <NcButton
-      variant="secondary"
-      :title="t('sheetmusic', 'Song history & revisions')"
-      :aria-label="t('sheetmusic', 'Song history & revisions')"
-      @click="$emit('openHistory')">
-      <template #icon>
-        <History :size="20" />
-      </template>
-    </NcButton>
-    <NcButton
       variant="secondary"
       :title="t('sheetmusic', 'Save without closing')"
       :aria-label="t('sheetmusic', 'Save without closing')"
@@ -36,6 +18,20 @@
         <CheckIcon :size="20" />
       </template>
     </NcButton>
+    <NcActions :aria-label="t('sheetmusic', 'More song actions')">
+      <NcActionButton @click="$emit('openHistory')">
+        <template #icon>
+          <History :size="20" />
+        </template>
+        {{ t('sheetmusic', 'Song history & revisions') }}
+      </NcActionButton>
+      <NcActionButton @click="$emit('deleteEdit')">
+        <template #icon>
+          <DeleteIcon :size="20" />
+        </template>
+        {{ t('sheetmusic', 'Delete song') }}
+      </NcActionButton>
+    </NcActions>
   </template>
   <template v-else-if="standaloneCreate">
     <NcButton
@@ -59,26 +55,6 @@
   </template>
   <template v-else-if="!standaloneCreate && !isEditInUrl && !isModifyPdfInUrl">
     <NcButton
-      v-if="openSong && canWrite"
-      variant="secondary"
-      :title="t('sheetmusic', 'Song history & revisions')"
-      :aria-label="t('sheetmusic', 'Song history & revisions')"
-      @click="$emit('openHistory')">
-      <template #icon>
-        <History :size="20" />
-      </template>
-    </NcButton>
-    <NcButton
-      v-if="openSong && canWrite"
-      variant="secondary"
-      :title="t('sheetmusic', 'Duplicate song')"
-      :aria-label="t('sheetmusic', 'Duplicate song')"
-      @click="$emit('duplicate')">
-      <template #icon>
-        <ContentCopyIcon :size="20" />
-      </template>
-    </NcButton>
-    <NcButton
       v-if="canWrite"
       variant="secondary"
       :title="t('sheetmusic', 'Edit song')"
@@ -88,21 +64,35 @@
         <PencilIcon :size="20" />
       </template>
     </NcButton>
-    <NcButton
+    <NcActions
       v-if="canWrite"
-      variant="error"
-      :title="t('sheetmusic', 'Delete song')"
-      :aria-label="t('sheetmusic', 'Delete song')"
-      @click="$emit('deleteView')">
-      <template #icon>
-        <DeleteIcon :size="20" />
-      </template>
-    </NcButton>
+      :aria-label="t('sheetmusic', 'More song actions')">
+      <NcActionButton v-if="openSong" @click="$emit('openHistory')">
+        <template #icon>
+          <History :size="20" />
+        </template>
+        {{ t('sheetmusic', 'Song history & revisions') }}
+      </NcActionButton>
+      <NcActionButton v-if="openSong" @click="$emit('duplicate')">
+        <template #icon>
+          <ContentCopyIcon :size="20" />
+        </template>
+        {{ t('sheetmusic', 'Duplicate song') }}
+      </NcActionButton>
+      <NcActionButton @click="$emit('deleteView')">
+        <template #icon>
+          <DeleteIcon :size="20" />
+        </template>
+        {{ t('sheetmusic', 'Delete song') }}
+      </NcActionButton>
+    </NcActions>
   </template>
 </template>
 
 <script setup lang="ts">
 import { t } from '@nextcloud/l10n'
+import NcActionButton from '@nextcloud/vue/components/NcActionButton'
+import NcActions from '@nextcloud/vue/components/NcActions'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import CheckIcon from 'vue-material-design-icons/Check.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'

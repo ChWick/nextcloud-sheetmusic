@@ -1,7 +1,22 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import SongViewHeaderButtons from '../../../src/components/songs/SongViewHeaderButtons.vue'
 import type { Song } from '../../../src/types/song'
+
+vi.mock('@nextcloud/vue/components/NcActions', () => ({
+	default: {
+		name: 'NcActions',
+		template: '<div class="nc-actions"><slot /></div>',
+	},
+}))
+
+vi.mock('@nextcloud/vue/components/NcActionButton', () => ({
+	default: {
+		name: 'NcActionButton',
+		emits: ['click'],
+		template: '<button type="button" class="nc-action-button" @click="$emit(\'click\')"><slot /><slot name="icon" /></button>',
+	},
+}))
 
 const mockSong: Song = {
 	id: 1,
@@ -10,7 +25,7 @@ const mockSong: Song = {
 }
 
 describe('SongViewHeaderButtons.vue', () => {
-	it('renders edit action buttons when isEditInUrl is true and openSong is provided', () => {
+	it('renders edit action buttons when isEditInUrl is true and openSong is provided', async () => {
 		const wrapper = mount(SongViewHeaderButtons, {
 			props: {
 				isEditInUrl: true,
@@ -21,19 +36,25 @@ describe('SongViewHeaderButtons.vue', () => {
 		})
 
 		const buttons = wrapper.findAllComponents({ name: 'NcButton' })
-		expect(buttons.length).toBe(4) // Delete, History, Save without closing, Save and close
+		expect(buttons.length).toBe(2) // Save without closing, Save and close
 
-		buttons[0].trigger('click')
-		expect(wrapper.emitted('deleteEdit')).toBeTruthy()
-
-		buttons[1].trigger('click')
-		expect(wrapper.emitted('openHistory')).toBeTruthy()
-
-		buttons[2].trigger('click')
+		await buttons[0].trigger('click')
 		expect(wrapper.emitted('saveEdit')?.[0]).toEqual([false])
 
-		buttons[3].trigger('click')
+		await buttons[1].trigger('click')
 		expect(wrapper.emitted('saveEdit')?.[1]).toEqual([true])
+
+		const actionsMenu = wrapper.findComponent({ name: 'NcActions' })
+		expect(actionsMenu.exists()).toBe(true)
+
+		const actionButtons = wrapper.findAllComponents({ name: 'NcActionButton' })
+		expect(actionButtons.length).toBe(2) // History, Delete
+
+		await actionButtons[0].trigger('click')
+		expect(wrapper.emitted('openHistory')).toBeTruthy()
+
+		await actionButtons[1].trigger('click')
+		expect(wrapper.emitted('deleteEdit')).toBeTruthy()
 	})
 
 	it('renders create action buttons when standaloneCreate is true', () => {
@@ -56,7 +77,7 @@ describe('SongViewHeaderButtons.vue', () => {
 		expect(wrapper.emitted('saveCreate')).toBeTruthy()
 	})
 
-	it('renders song-level view buttons when viewing a song', () => {
+	it('renders song-level view buttons when viewing a song', async () => {
 		const wrapper = mount(SongViewHeaderButtons, {
 			props: {
 				isEditInUrl: false,
@@ -67,19 +88,26 @@ describe('SongViewHeaderButtons.vue', () => {
 		})
 
 		const buttons = wrapper.findAllComponents({ name: 'NcButton' })
-		// History, Duplicate, Edit, Delete
-		expect(buttons.length).toBe(4)
+		// Edit
+		expect(buttons.length).toBe(1)
 
-		buttons[0].trigger('click')
-		expect(wrapper.emitted('openHistory')).toBeTruthy()
-
-		buttons[1].trigger('click')
-		expect(wrapper.emitted('duplicate')).toBeTruthy()
-
-		buttons[2].trigger('click')
+		await buttons[0].trigger('click')
 		expect(wrapper.emitted('edit')).toBeTruthy()
 
-		buttons[3].trigger('click')
+		const actionsMenu = wrapper.findComponent({ name: 'NcActions' })
+		expect(actionsMenu.exists()).toBe(true)
+
+		const actionButtons = wrapper.findAllComponents({ name: 'NcActionButton' })
+		// History, Duplicate, Delete
+		expect(actionButtons.length).toBe(3)
+
+		await actionButtons[0].trigger('click')
+		expect(wrapper.emitted('openHistory')).toBeTruthy()
+
+		await actionButtons[1].trigger('click')
+		expect(wrapper.emitted('duplicate')).toBeTruthy()
+
+		await actionButtons[2].trigger('click')
 		expect(wrapper.emitted('deleteView')).toBeTruthy()
 	})
 })

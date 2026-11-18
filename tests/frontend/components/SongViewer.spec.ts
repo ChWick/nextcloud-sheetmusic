@@ -93,6 +93,16 @@ const globalStubs = {
 				template: '<button :disabled="disabled" :type="type" :title="title" :aria-label="ariaLabel"><slot /><slot name="icon" /></button>',
 				props: ['disabled', 'type', 'variant', 'title', 'ariaLabel'],
 			},
+			NcActions: {
+				name: 'NcActions',
+				template: '<div class="nc-actions"><slot /></div>',
+			},
+			NcActionButton: {
+				name: 'NcActionButton',
+				props: ['title'],
+				emits: ['click'],
+				template: '<button type="button" class="nc-action-button" :title="title" @click="$emit(\'click\')"><slot /><slot name="icon" /></button>',
+			},
 			NcTextField: {
 				template: '<input :value="modelValue" />',
 				props: ['modelValue', 'placeholder'],
@@ -464,9 +474,13 @@ describe('SongViewer.vue', () => {
 		await infoBtn.trigger('click')
 		expect(fileToolbar.find('[data-test="pdf-file-info-dropdown"]').exists()).toBe(true)
 
-		const versionBtn = fileToolbar.findAll('button').find((b) => b.attributes('title') === 'PDF version history')
-		const modifyBtn = fileToolbar.findAll('button').find((b) => b.attributes('title') === 'Modify PDF (rotate, crop, enhance, split)')
-		const externalBtn = fileToolbar.findAll('button').find((b) => b.attributes('title') === 'Open in external viewer')
+		const actionsMenu = fileToolbar.find('[data-test="pdf-actions-menu"]')
+		expect(actionsMenu.exists()).toBe(true)
+
+		const actionButtons = wrapper.findAllComponents({ name: 'NcActionButton' })
+		const versionBtn = actionButtons.find((b) => b.attributes('title') === 'PDF version history')
+		const modifyBtn = actionButtons.find((b) => b.attributes('title') === 'Modify PDF')
+		const externalBtn = actionButtons.find((b) => b.attributes('title') === 'Open in external viewer')
 		expect(versionBtn).toBeDefined()
 		expect(modifyBtn).toBeDefined()
 		expect(externalBtn).toBeDefined()
