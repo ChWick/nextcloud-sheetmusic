@@ -18,16 +18,22 @@ test.describe('Song PDF Modifier & Cropping E2E Flow', () => {
 	})
 
 	test('navigates from song viewer to PDF modifier via action button', async ({ page }) => {
-		// Locate the Modify PDF button in the viewer header
-		const modifyBtn = page.getByRole('button', { name: /Modify PDF/i })
-		await expect(modifyBtn).toBeVisible()
-		await modifyBtn.click()
+		// Open the viewer file actions menu and click Modify PDF
+		const actionsMenuBtn = page.locator('[data-test="pdf-actions-menu"] button').first()
+		await expect(actionsMenuBtn).toBeVisible()
+		await actionsMenuBtn.click()
+
+		const modifyBtn = page.getByRole('button', { name: /Modify PDF/i }).or(page.getByRole('menuitem', { name: /Modify PDF/i }))
+		await expect(modifyBtn.first()).toBeVisible()
+		await modifyBtn.first().click()
 
 		// Verify PDF Modifier header and tabs are rendered
 		await expect(page.getByRole('heading', { name: /Modify PDF/i })).toBeVisible()
 		await expect(page.getByRole('button', { name: 'Rotate Pages' })).toBeVisible()
 		await expect(page.getByRole('button', { name: 'Crop Pages' })).toBeVisible()
 		await expect(page.getByRole('button', { name: 'Split PDF' })).toBeVisible()
+		await expect(page.getByRole('button', { name: 'Page Order…' })).toBeVisible()
+		await expect(page.getByRole('button', { name: 'Join Pages…' })).toBeVisible()
 	})
 
 	test('switches to Crop mode, interacts with crop modal, applies crop, and saves', async ({ page }) => {
@@ -496,6 +502,47 @@ test.describe('Song PDF Modifier & Cropping E2E Flow', () => {
 
 		// Toast or modal confirms saved
 		await expect(page.getByText(/Saved bookmarks for/).first()).toBeVisible({ timeout: 10000 })
+	})
+
+	test('supports Flip All 180° and opening Page Zoom lightbox modal', async ({ page }) => {
+		await page.goto('/#/library/1/songs?song=5&modifyPdf=1')
+
+		const grid = page.locator('[data-test="pdf-page-grid"]')
+		await expect(grid).toBeVisible()
+
+		const flipAllBtn = page.getByRole('button', { name: 'Flip All 180°' })
+		await expect(flipAllBtn).toBeVisible()
+		await flipAllBtn.click()
+
+		await expect(grid.locator('> div').first()).toContainText('180°')
+
+		// Open Page Zoom lightbox from first card
+		const zoomBtn = grid.locator('[data-test="card-zoom-btn"]').first()
+		await expect(zoomBtn).toBeVisible()
+		await zoomBtn.click()
+
+		await expect(page.locator('[data-test="zoom-modal-content"]')).toBeVisible()
+	})
+
+	test('adapts header tools and collapsible sidebar cleanly on mobile viewport', async ({ page }) => {
+		await page.goto('/#/library/1/songs?song=5&modifyPdf=1')
+		await page.setViewportSize({ width: 375, height: 812 })
+
+		// All 7 tool buttons remain accessible on mobile as icon-only buttons
+		await expect(page.getByRole('button', { name: 'Rotate Pages' })).toBeVisible()
+		await expect(page.getByRole('button', { name: 'Page Order…' })).toBeVisible()
+		await expect(page.getByRole('button', { name: 'Join Pages…' })).toBeVisible()
+
+		// Switch to Split PDF and collapse the mobile sidebar
+		await page.getByRole('button', { name: 'Split PDF' }).dispatchEvent('click')
+		const sidebar = page.locator('[data-test="split-sidebar"]')
+		await expect(sidebar).toBeVisible()
+
+		const collapseBtn = sidebar.locator('button[aria-expanded]')
+		await expect(collapseBtn).toBeVisible()
+		await expect(collapseBtn).toHaveAttribute('aria-expanded', 'true')
+		await collapseBtn.dispatchEvent('click')
+		await expect(collapseBtn).toHaveAttribute('aria-expanded', 'false')
 	})
 })
 
