@@ -281,7 +281,7 @@ import { useSongMerge } from '../composables/useSongMerge';
 import { useProgressPolling } from '../composables/useProgressPolling';
 import { apiGet, apiPost } from '../api/client';
 import SongListDisplayMenu from './songs/SongListDisplayMenu.vue';
-import type { ViewMode } from './songs/SongViewToggle.vue';
+import type { ViewMode } from './songs/song-view-columns';
 import SongTableView from './songs/SongTableView.vue';
 import SongCardView from './songs/SongCardView.vue';
 import SongSimpleListView from './songs/SongSimpleListView.vue';

@@ -3,6 +3,8 @@ import type { EntityType, FilterEntity, Song, SongColumn } from '../../types/son
 import type { EntityLabelField, SongEntityIdField } from '../song-editor/entity-utils'
 import { formatDifficulty, formatDurationHms, formatStars, type SortKey } from '../../utils/song-formatter'
 
+export type ViewMode = 'table' | 'cards' | 'list'
+
 export type InlineEditableField =
 	| 'title'
 	| 'composer'

@@ -10,8 +10,7 @@ import ViewGridIcon from 'vue-material-design-icons/ViewGrid.vue'
 import ViewListIcon from 'vue-material-design-icons/ViewList.vue'
 import type { SongColumn } from '../../types/song'
 import type { SortKey, SortOrder } from '../../utils/song-formatter'
-import type { ViewMode } from './SongViewToggle.vue'
-import { getSongColumnOptions, getSongSortOptions, toggleVisibleColumn } from './song-view-columns'
+import { getSongColumnOptions, getSongSortOptions, toggleVisibleColumn, type ViewMode } from './song-view-columns'
 
 const props = defineProps<{
 	viewMode: ViewMode

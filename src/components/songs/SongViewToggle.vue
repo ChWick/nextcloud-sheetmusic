@@ -8,7 +8,8 @@ import TableIcon from 'vue-material-design-icons/Table.vue'
 import ViewGridIcon from 'vue-material-design-icons/ViewGrid.vue'
 import ViewListIcon from 'vue-material-design-icons/ViewList.vue'
 
-export type ViewMode = 'table' | 'cards' | 'list'
+import type { ViewMode } from './song-view-columns'
+export type { ViewMode }
 
 const props = defineProps<{
 	viewMode: ViewMode
