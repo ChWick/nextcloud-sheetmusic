@@ -455,6 +455,13 @@ function setDoublePageTurnMode(mode: DoublePageTurnMode) {
 
 function setZoomMode(mode: ZoomMode) {
 	zoomMode.value = mode
+	if (mode === 'fit-width' || mode === 'fit-page') {
+		resetPan()
+		if (pdfContainer.value) {
+			pdfContainer.value.scrollLeft = 0
+			pdfContainer.value.scrollTop = 0
+		}
+	}
 	if (isImageFile.value) {
 		imageScale.value = mode === 'fit-width' ? 1.0 : 0.75
 		return
@@ -1038,11 +1045,11 @@ watch(
 	},
 )
 
-const { wasRecentlyPinching } = usePdfTouchZoom({
+const { wasRecentlyPinching, resetPan } = usePdfTouchZoom({
 	containerRef: pdfContainer,
 	stageRef: pdfStage,
 	getCurrentScale: () => effectiveScale.value,
-	isEnabled: () => isPdfFile.value && !isLoading.value && !errorMessage.value && !props.isAnnotating,
+	isEnabled: () => isPdfFile.value && !isLoading.value && !errorMessage.value,
 	onCommitZoom: async (scale) => {
 		zoomMode.value = 'custom'
 		customScale.value = scale
@@ -1087,34 +1094,6 @@ defineExpose({
 
 <template>
 	<div :class="$style.wrapper">
-		<!-- PDF / Image Viewer Toolbar -->
-		<FilePreviewerToolbar
-			v-if="!hideToolbar && !isLoading && !errorMessage && (isPdfFile || isImageFile)"
-			:is-pdf="isPdfFile"
-			:current-page="currentPage"
-			:total-pages="totalPages"
-			:current-page-display="currentPageDisplay"
-			:page-layout="pageLayout"
-			:double-page-turn-mode="doublePageTurnMode"
-			:can-go-prev="canGoPrev"
-			:can-go-next="canGoNext"
-			:zoom-select-value="zoomSelectValue"
-			:is-custom-zoom="isCustomZoom"
-			:display-scale="isImageFile ? imageScale : effectiveScale"
-			:show-external-button="showExternalButton"
-			:show-annotations="showAnnotationsState"
-			@previous-page="prevPage"
-			@next-page="nextPage"
-			@page-layout="setPageLayout"
-			@double-page-turn-mode="setDoublePageTurnMode"
-			@zoom-select="onZoomSelect"
-			@zoom-in="zoomIn"
-			@zoom-out="zoomOut"
-			@fit-width="setZoomMode('fit-width')"
-			@rotate="rotateClockwise"
-			@open-external="openInExternalViewer"
-			@toggle-annotations="toggleAnnotations" />
-
 		<div v-if="isLoading" :class="$style.loading">
 			<NcLoadingIcon :size="32" :name="t('sheetmusic', 'Loading file...')" />
 		</div>
@@ -1180,6 +1159,34 @@ defineExpose({
 				{{ t('sheetmusic', 'Open File Externally') }}
 			</NcButton>
 		</div>
+
+		<!-- PDF / Image Viewer Toolbar -->
+		<FilePreviewerToolbar
+			v-if="!hideToolbar && !isLoading && !errorMessage && (isPdfFile || isImageFile)"
+			:is-pdf="isPdfFile"
+			:current-page="currentPage"
+			:total-pages="totalPages"
+			:current-page-display="currentPageDisplay"
+			:page-layout="pageLayout"
+			:double-page-turn-mode="doublePageTurnMode"
+			:can-go-prev="canGoPrev"
+			:can-go-next="canGoNext"
+			:zoom-select-value="zoomSelectValue"
+			:is-custom-zoom="isCustomZoom"
+			:display-scale="isImageFile ? imageScale : effectiveScale"
+			:show-external-button="showExternalButton"
+			:show-annotations="showAnnotationsState"
+			@previous-page="prevPage"
+			@next-page="nextPage"
+			@page-layout="setPageLayout"
+			@double-page-turn-mode="setDoublePageTurnMode"
+			@zoom-select="onZoomSelect"
+			@zoom-in="zoomIn"
+			@zoom-out="zoomOut"
+			@fit-width="setZoomMode('fit-width')"
+			@rotate="rotateClockwise"
+			@open-external="openInExternalViewer"
+			@toggle-annotations="toggleAnnotations" />
 	</div>
 </template>
 

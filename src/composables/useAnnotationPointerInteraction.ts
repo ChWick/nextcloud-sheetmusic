@@ -126,6 +126,25 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 	const hoveredUuid = ref<string | null>(null)
 	const pendingText = ref<PendingTextEdit | null>(null)
 	const pendingLink = ref<PendingLinkEdit | null>(null)
+	const activeTouchPointers = new Set<number>()
+	let capturedPointerId: number | null = null
+	let isMultiTouchGesture = false
+
+	function releaseCapturedPointer(pointerId?: number) {
+		const idToRelease = pointerId ?? capturedPointerId
+		if (idToRelease !== null && opts.svgRef.value?.hasPointerCapture?.(idToRelease)) {
+			opts.svgRef.value.releasePointerCapture(idToRelease)
+		}
+		if (pointerId === undefined || capturedPointerId === pointerId) {
+			capturedPointerId = null
+		}
+	}
+
+	function cancelInteraction(pointerId?: number) {
+		interaction.value = null
+		previewAnnotation.value = null
+		releaseCapturedPointer(pointerId)
+	}
 
 	function clientToNorm(clientX: number, clientY: number): NormalizedPoint {
 		const el = opts.svgRef.value
@@ -249,6 +268,15 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 
 	function onPointerDown(e: PointerEvent) {
 		if (!opts.editable.value || e.button !== 0) return
+		if (e.pointerType === 'touch') {
+			activeTouchPointers.add(e.pointerId)
+			if (activeTouchPointers.size >= 2) {
+				isMultiTouchGesture = true
+				cancelInteraction()
+				return
+			}
+		}
+		if (isMultiTouchGesture) return
 		if (pendingText.value || pendingLink.value) return
 
 		const pt = clientToNorm(e.clientX, e.clientY)
@@ -307,6 +335,7 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 		}
 
 		opts.svgRef.value?.setPointerCapture?.(e.pointerId)
+		capturedPointerId = e.pointerId
 		interaction.value = {
 			kind: 'draw',
 			startNorm: pt,
@@ -322,6 +351,7 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 	}
 
 	function onPointerMove(e: PointerEvent) {
+		if (isMultiTouchGesture) return
 		const state = interaction.value
 		if (!state) {
 			if (opts.editable.value && (opts.activeTool.value === 'select' || opts.activeTool.value === 'eraser')) {
@@ -380,12 +410,21 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 	}
 
 	function onPointerUp(e: PointerEvent) {
+		if (e.pointerType === 'touch') {
+			activeTouchPointers.delete(e.pointerId)
+			if (isMultiTouchGesture) {
+				cancelInteraction(e.pointerId)
+				if (activeTouchPointers.size === 0) {
+					isMultiTouchGesture = false
+				}
+				return
+			}
+		}
+
 		const state = interaction.value
 		if (!state) return
 		interaction.value = null
-		if (opts.svgRef.value?.hasPointerCapture?.(e.pointerId)) {
-			opts.svgRef.value.releasePointerCapture(e.pointerId)
-		}
+		releaseCapturedPointer(e.pointerId)
 
 		const pt = clientToNorm(e.clientX, e.clientY)
 		const preview = previewAnnotation.value
@@ -428,6 +467,16 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 				opts.onCreate(draft)
 			}
 		}
+	}
+
+	function onPointerCancel(e: PointerEvent) {
+		if (e.pointerType === 'touch') {
+			activeTouchPointers.delete(e.pointerId)
+			if (activeTouchPointers.size === 0) {
+				isMultiTouchGesture = false
+			}
+		}
+		cancelInteraction(e.pointerId)
 	}
 
 	function onAnnotationDblClick(ann: SheetAnnotation) {
@@ -543,6 +592,7 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 		onPointerDown,
 		onPointerMove,
 		onPointerUp,
+		onPointerCancel,
 		onAnnotationDblClick,
 		commitPendingText,
 		cancelPendingText,

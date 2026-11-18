@@ -112,6 +112,7 @@ const {
 	onPointerDown,
 	onPointerMove,
 	onPointerUp,
+	onPointerCancel,
 	onAnnotationDblClick,
 	commitPendingText,
 	cancelPendingText,
@@ -175,6 +176,7 @@ const cursorClass = computed(() => {
 			@pointerdown="onPointerDown"
 			@pointermove="onPointerMove"
 			@pointerup="onPointerUp"
+			@pointercancel="onPointerCancel"
 			@pointerleave="hoveredUuid = null">
 			<SongAnnotationItem
 				v-for="item in displayedAnnotations"
