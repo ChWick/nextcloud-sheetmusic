@@ -53,7 +53,7 @@ describe('usePdfTouchZoom', () => {
 		await Promise.resolve()
 
 		expect(stage.style.transform).toBe('')
-		expect(onCommitZoom).toHaveBeenCalledWith(2)
+		expect(onCommitZoom).toHaveBeenCalledWith(2, expect.any(Function))
 	})
 
 	it('clamps zoom scale within [minScale, maxScale] and ignores when disabled', async () => {
@@ -92,7 +92,7 @@ describe('usePdfTouchZoom', () => {
 		container.dispatchEvent(makeTouchEvent('touchmove', [makeTouch(0, 100), makeTouch(500, 100)]))
 		container.dispatchEvent(makeTouchEvent('touchend', []))
 		await Promise.resolve()
-		expect(onCommitZoom).toHaveBeenCalledWith(3.0)
+		expect(onCommitZoom).toHaveBeenCalledWith(3.0, expect.any(Function))
 	})
 
 	it('persists two-finger pan offset on release and clears it via resetPan', async () => {

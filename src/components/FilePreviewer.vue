@@ -529,7 +529,7 @@ function cleanupObserver() {
 	renderedPages.clear()
 }
 
-async function renderCurrentView() {
+async function renderCurrentView(onBeforeSwap?: () => void) {
 	if (!loadedPdf.value || !pdfContainer.value || !pdfStage.value) return
 
 	const renderId = ++currentRenderId
@@ -692,11 +692,11 @@ async function renderCurrentView() {
 	}
 
 	if (pageLayout.value === 'continuous') {
-		cleanupObserver()
-		unmountAnnotationOverlays()
-		pdfStage.value.replaceChildren()
-
 		if (typeof IntersectionObserver === 'undefined') {
+			cleanupObserver()
+			unmountAnnotationOverlays()
+			onBeforeSwap?.()
+			pdfStage.value.replaceChildren()
 			for (const item of pagesToRender) {
 				const placeholder = document.createElement('div')
 				placeholder.className = 'sheetmusic-page-placeholder'
@@ -707,6 +707,35 @@ async function renderCurrentView() {
 			}
 			return
 		}
+
+		const placeholders = pagesToRender.map((item) => {
+			const placeholder = document.createElement('div')
+			placeholder.className = 'sheetmusic-page-placeholder'
+			placeholder.dataset.pageNum = String(item.pageNum)
+			placeholder.dataset.pageIndex = String(item.index)
+			// Estimated placeholder size to stabilize scroll bar
+			placeholder.style.minWidth = '200px'
+			placeholder.style.minHeight = `${Math.round(800 * (effectiveScale.value / 1.25))}px`
+			placeholder.style.display = 'flex'
+			placeholder.style.justifyContent = 'center'
+			placeholder.style.alignItems = 'center'
+			placeholder.style.backgroundColor = '#ffffff'
+			placeholder.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.15)'
+			return placeholder
+		})
+
+		// Render the first page off-DOM so the stage has real dimensions and no flicker on swap
+		if (pagesToRender.length > 0 && placeholders[0]) {
+			await renderPage(pagesToRender[0].pageNum, placeholders[0])
+		}
+		if (renderId !== currentRenderId || !pdfContainer.value || !pdfStage.value) {
+			return
+		}
+
+		cleanupObserver()
+		unmountAnnotationOverlays()
+		onBeforeSwap?.()
+		pdfStage.value.replaceChildren(...placeholders)
 
 		intersectionObserver = new IntersectionObserver(
 			(entries) => {
@@ -726,28 +755,8 @@ async function renderCurrentView() {
 			},
 		)
 
-		for (const item of pagesToRender) {
-			const placeholder = document.createElement('div')
-			placeholder.className = 'sheetmusic-page-placeholder'
-			placeholder.dataset.pageNum = String(item.pageNum)
-			placeholder.dataset.pageIndex = String(item.index)
-			// Estimated placeholder size to stabilize scroll bar
-			placeholder.style.minWidth = '200px'
-			placeholder.style.minHeight = `${Math.round(800 * (effectiveScale.value / 1.25))}px`
-			placeholder.style.display = 'flex'
-			placeholder.style.justifyContent = 'center'
-			placeholder.style.alignItems = 'center'
-			placeholder.style.backgroundColor = '#ffffff'
-			placeholder.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.15)'
-
-			pdfStage.value.append(placeholder)
+		for (const placeholder of placeholders) {
 			intersectionObserver.observe(placeholder)
-
-			// Render the first page immediately so the user always sees content right away
-			// and the stage has its real dimensions before renderCurrentView() resolves.
-			if (item === pagesToRender[0]) {
-				await renderPage(item.pageNum, placeholder)
-			}
 		}
 	} else {
 		// Single or double page mode: render off-DOM first, then swap atomically to avoid flicker
@@ -765,6 +774,7 @@ async function renderCurrentView() {
 		}
 		cleanupObserver()
 		unmountAnnotationOverlays()
+		onBeforeSwap?.()
 		pdfStage.value.replaceChildren(...newPlaceholders)
 	}
 }
@@ -1056,10 +1066,10 @@ const { wasRecentlyPinching, resetPan } = usePdfTouchZoom({
 	getCurrentScale: () => effectiveScale.value,
 	isEnabled: () => isPdfFile.value && !isLoading.value && !errorMessage.value,
 	isAnnotating: () => props.editableAnnotations,
-	onCommitZoom: async (scale) => {
+	onCommitZoom: async (scale, onBeforeSwap) => {
 		zoomMode.value = 'custom'
 		customScale.value = scale
-		await renderCurrentView()
+		await renderCurrentView(onBeforeSwap)
 	},
 })
 

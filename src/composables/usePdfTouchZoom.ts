@@ -6,7 +6,7 @@ export interface PdfTouchZoomOptions {
 	getCurrentScale: () => number
 	isEnabled: () => boolean
 	isAnnotating?: () => boolean
-	onCommitZoom: (scale: number) => Promise<void> | void
+	onCommitZoom: (scale: number, onBeforeSwap?: () => void) => Promise<void> | void
 	minScale?: number
 	maxScale?: number
 }
@@ -196,7 +196,7 @@ export function usePdfTouchZoom(options: PdfTouchZoomOptions) {
 			? beforeRect.top - beforeContainerRect.top
 			: null
 
-		await options.onCommitZoom(targetScale)
+		await options.onCommitZoom(targetScale, resetStageTransform)
 		resetStageTransform()
 
 		const anchorAfter = (stage?.firstElementChild as HTMLElement | null) ?? stage
