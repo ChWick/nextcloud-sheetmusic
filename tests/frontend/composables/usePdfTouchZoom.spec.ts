@@ -179,4 +179,36 @@ describe('usePdfTouchZoom', () => {
 		expect(stage.style.transform).toBe('')
 		vi.useRealTimers()
 	})
+
+	it('toggles sheetmusic-pan-ready cursor class on Ctrl keydown/keyup and blur', () => {
+		const container = document.createElement('div')
+		const stage = document.createElement('div')
+
+		const Comp = defineComponent({
+			setup() {
+				usePdfTouchZoom({
+					containerRef: ref<HTMLElement | undefined>(container),
+					stageRef: ref<HTMLElement | undefined>(stage),
+					getCurrentScale: () => 1.0,
+					isEnabled: () => true,
+					onCommitZoom: vi.fn(),
+				})
+				return {}
+			},
+			template: '<div />',
+		})
+
+		mount(Comp)
+
+		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Control', ctrlKey: true }))
+		expect(container.classList.contains('sheetmusic-pan-ready')).toBe(true)
+
+		window.dispatchEvent(new KeyboardEvent('keyup', { key: 'Control', ctrlKey: false }))
+		expect(container.classList.contains('sheetmusic-pan-ready')).toBe(false)
+
+		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Control', ctrlKey: true }))
+		expect(container.classList.contains('sheetmusic-pan-ready')).toBe(true)
+		window.dispatchEvent(new Event('blur'))
+		expect(container.classList.contains('sheetmusic-pan-ready')).toBe(false)
+	})
 })
