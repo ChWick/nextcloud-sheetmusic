@@ -8,6 +8,48 @@ import axios from '@nextcloud/axios'
 import { generateFilePath } from '@nextcloud/router'
 import { getDocument } from 'pdfjs-dist'
 
+export async function renderPageImage(pdf: any, pageNum: number, maxDim = 340): Promise<string> {
+	try {
+		const page = await pdf.getPage(pageNum)
+		const unscaledViewport = page.getViewport({ scale: 1.0 })
+		const scale = Math.min(
+			maxDim / Math.max(1, unscaledViewport.width),
+			maxDim / Math.max(1, unscaledViewport.height),
+		)
+		const viewport = page.getViewport({ scale })
+
+		const canvas = document.createElement('canvas')
+		canvas.width = Math.max(1, Math.round(viewport.width))
+		canvas.height = Math.max(1, Math.round(viewport.height))
+
+		const ctx = canvas.getContext('2d')
+		if (ctx) {
+			ctx.fillStyle = '#ffffff'
+			ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+			await page.render({
+				canvasContext: ctx,
+				viewport,
+			}).promise
+		}
+
+		let dataUrl = ''
+		try {
+			dataUrl = canvas.toDataURL ? canvas.toDataURL('image/jpeg', maxDim > 500 ? 0.92 : 0.85) : ''
+		} catch {
+			// Fallback if toDataURL throws
+		}
+		if (!dataUrl || dataUrl === 'data:,') {
+			const label = maxDim > 500 ? `High-Res Page ${pageNum}` : `${pageNum}`
+			dataUrl = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="${viewport.width}" height="${viewport.height}"><rect width="100%" height="100%" fill="%23ffffff"/><text x="50%" y="50%" font-size="${maxDim > 500 ? 32 : 20}" text-anchor="middle" fill="%23666">${label}</text></svg>`
+		}
+
+		return dataUrl
+	} catch {
+		return ''
+	}
+}
+
 export function usePageOrderThumbnails(
 	pdfProp: Ref<any>,
 	filePath: Ref<string>,
@@ -56,48 +98,6 @@ export function usePageOrderThumbnails(
 			return doc
 		} catch {
 			return null
-		}
-	}
-
-	async function renderPageImage(pdf: any, pageNum: number, maxDim = 340): Promise<string> {
-		try {
-			const page = await pdf.getPage(pageNum)
-			const unscaledViewport = page.getViewport({ scale: 1.0 })
-			const scale = Math.min(
-				maxDim / Math.max(1, unscaledViewport.width),
-				maxDim / Math.max(1, unscaledViewport.height),
-			)
-			const viewport = page.getViewport({ scale })
-
-			const canvas = document.createElement('canvas')
-			canvas.width = Math.max(1, Math.round(viewport.width))
-			canvas.height = Math.max(1, Math.round(viewport.height))
-
-			const ctx = canvas.getContext('2d')
-			if (ctx) {
-				ctx.fillStyle = '#ffffff'
-				ctx.fillRect(0, 0, canvas.width, canvas.height)
-
-				await page.render({
-					canvasContext: ctx,
-					viewport,
-				}).promise
-			}
-
-			let dataUrl = ''
-			try {
-				dataUrl = canvas.toDataURL ? canvas.toDataURL('image/jpeg', maxDim > 500 ? 0.92 : 0.85) : ''
-			} catch {
-				// Fallback if toDataURL throws
-			}
-			if (!dataUrl || dataUrl === 'data:,') {
-				const label = maxDim > 500 ? `High-Res Page ${pageNum}` : `${pageNum}`
-				dataUrl = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="${viewport.width}" height="${viewport.height}"><rect width="100%" height="100%" fill="%23ffffff"/><text x="50%" y="50%" font-size="${maxDim > 500 ? 32 : 20}" text-anchor="middle" fill="%23666">${label}</text></svg>`
-			}
-
-			return dataUrl
-		} catch {
-			return ''
 		}
 	}
 

@@ -21,11 +21,15 @@ withDefaults(
 		highResUrl?: string
 		thumbnailUrl?: string
 		isLoadingHighRes?: boolean
+		showAppendAction?: boolean
+		rotationDeg?: number
 	}>(),
 	{
 		highResUrl: '',
 		thumbnailUrl: '',
 		isLoadingHighRes: false,
+		showAppendAction: true,
+		rotationDeg: 0,
 	},
 )
 
@@ -70,6 +74,7 @@ const emit = defineEmits<{
 				{{ t('sheetmusic', 'Next') }}
 			</NcButton>
 			<NcButton
+				v-if="showAppendAction"
 				type="button"
 				variant="primary"
 				:title="t('sheetmusic', 'Add page {p} to order', { p: pageNum }, { escape: false })"
@@ -105,6 +110,7 @@ const emit = defineEmits<{
 					:src="highResUrl || thumbnailUrl"
 					:alt="t('sheetmusic', 'Page {p} zoomed preview', { p: pageNum }, { escape: false })"
 					:class="$style.zoomedImage"
+					:style="rotationDeg ? { transform: `rotate(${rotationDeg}deg)` } : undefined"
 					data-test="zoom-image" />
 				<div v-else :class="$style.placeholder">
 					<span>{{ t('sheetmusic', 'Page {p}', { p: pageNum }, { escape: false }) }}</span>
