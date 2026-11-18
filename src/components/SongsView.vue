@@ -14,9 +14,11 @@
     @import-nextcloud="startImportNextcloud"
     @toggle-filters="toggleFilterBar">
     <div v-if="songIdInUrl === null && !standaloneCreate" :class="$style.headerControls">
-      <SongColumnToggle v-model:visible-columns="visibleColumns" />
-      <SongSortControl v-model:sort-key="sortKey" v-model:sort-order="sortOrder" />
-      <SongViewToggle v-model:view-mode="viewMode" />
+      <SongListDisplayMenu
+        v-model:visible-columns="visibleColumns"
+        v-model:sort-key="sortKey"
+        v-model:sort-order="sortOrder"
+        v-model:view-mode="viewMode" />
     </div>
     <SongViewHeaderButtons
       v-else
@@ -278,9 +280,8 @@ import { useSongImport } from '../composables/useSongImport';
 import { useSongMerge } from '../composables/useSongMerge';
 import { useProgressPolling } from '../composables/useProgressPolling';
 import { apiGet, apiPost } from '../api/client';
-import SongColumnToggle from './songs/SongColumnToggle.vue';
-import SongSortControl from './songs/SongSortControl.vue';
-import SongViewToggle, { type ViewMode } from './songs/SongViewToggle.vue';
+import SongListDisplayMenu from './songs/SongListDisplayMenu.vue';
+import type { ViewMode } from './songs/SongViewToggle.vue';
 import SongTableView from './songs/SongTableView.vue';
 import SongCardView from './songs/SongCardView.vue';
 import SongSimpleListView from './songs/SongSimpleListView.vue';
