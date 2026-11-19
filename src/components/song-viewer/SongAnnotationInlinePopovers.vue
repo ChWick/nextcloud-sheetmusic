@@ -42,6 +42,14 @@ const emit = defineEmits<{
 
 const textInputRef = ref<HTMLTextAreaElement | null>(null)
 
+function clampedPositionStyle(x: number, y: number, minWidthPx = 210) {
+	return {
+		left: `clamp(8px, ${x * 100}%, max(8px, calc(100% - ${minWidthPx + 16}px)))`,
+		top: `clamp(8px, ${y * 100}%, max(8px, calc(100% - 160px)))`,
+		minWidth: `min(${minWidthPx}px, calc(100% - 16px))`,
+	}
+}
+
 watch(
 	() => props.pendingText,
 	(val) => {
@@ -57,11 +65,7 @@ watch(
 	<div
 		v-if="pendingText"
 		class="sheetmusic-inline-popover"
-		:style="{
-			left: `${pendingText.x * 100}%`,
-			top: `${pendingText.y * 100}%`,
-			minWidth: `${Math.max(180, pendingText.width * 100)}px`,
-		}"
+		:style="clampedPositionStyle(pendingText.x, pendingText.y, Math.max(180, pendingText.width * 100))"
 		@pointerdown.stop>
 		<textarea
 			ref="textInputRef"
@@ -88,10 +92,7 @@ watch(
 	<div
 		v-if="pendingLink"
 		class="sheetmusic-inline-popover"
-		:style="{
-			left: `${pendingLink.x * 100}%`,
-			top: `${pendingLink.y * 100}%`,
-		}"
+		:style="clampedPositionStyle(pendingLink.x, pendingLink.y)"
 		@pointerdown.stop>
 		<div class="sheetmusic-inline-title">{{ t('sheetmusic', 'Jump to page') }}</div>
 		<div class="sheetmusic-inline-fields">
@@ -138,7 +139,9 @@ watch(
 	border-radius: 8px;
 	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.22);
 	padding: 8px;
-	min-width: 210px;
+	min-width: min(210px, calc(100% - 16px));
+	max-width: calc(100% - 16px);
+	box-sizing: border-box;
 	pointer-events: auto;
 }
 
