@@ -260,60 +260,14 @@ class InternalSongMapper {
 		foreach ($files as $file) {
 			$path = $fileNodePaths[$file->fileId]
 				?? (MobileSheetsPathResolver::WEBDAV_ROOT . '/' . $uid . '/file_' . $file->fileId . '.pdf');
-			$songFiles[] = new MobileSheetsFile(
-				id: (int)$file->id,
-				path: $path,
-				pageOrder: $file->pageOrder,
-				pageCount: (int)$file->pageCount,
-				fileId: (int)$file->fileId,
-				updatedAt: $file->updatedAt > 0
-					? ($file->updatedAt < 100000000000 ? $file->updatedAt * 1000 : $file->updatedAt)
-					: null,
-			);
+			$songFiles[] = $this->buildMobileSheetsFile($file, $path);
 		}
 
 		$songBookmarks = $this->bookmarkMapper !== null
 			? $this->bookmarkMapper->findForSong($sid)
 			: [];
 
-		return new MobileSheetsSong(
-			id: $sid,
-			title: $internalSong->title,
-			files: $songFiles,
-			composers: $entitiesByType['composer'] ?? [],
-			books: $entitiesByType['book'] ?? [],
-			collections: $entitiesByType['collection'] ?? [],
-			artists: $entitiesByType['artist'] ?? [],
-			genres: $entitiesByType['genre'] ?? [],
-			keys: $entitiesByType['key'] ?? [],
-			customGroups: $entitiesByType['customgroup'] ?? [],
-			years: $entitiesByType['year'] ?? [],
-			signatures: $entitiesByType['signature'] ?? [],
-			sourceTypes: $entitiesByType['sourcetype'] ?? [],
-			bookmarks: array_map(
-				static fn (InternalSongBookmark $bm) => $bm->toMobileSheetsBookmark(),
-				$songBookmarks,
-			),
-			audioFiles: [],
-			lastModified: $internalSong->updatedAt > 0
-				? ($internalSong->updatedAt < 100000000000 ? $internalSong->updatedAt * 1000 : $internalSong->updatedAt)
-				: null,
-			dateCreated: $internalSong->createdAt > 0
-				? ($internalSong->createdAt < 100000000000 ? $internalSong->createdAt * 1000 : $internalSong->createdAt)
-				: null,
-			stars: $internalSong->rating,
-			difficulty: $internalSong->difficulty,
-			duration: $internalSong->duration,
-			keywords: $internalSong->keywords ?? '',
-			custom: $internalSong->notes ?? '',
-			custom2: '',
-			sortTitle: $internalSong->sortTitle ?? '',
-			opus: $internalSong->opus ?? '',
-			catalogNumber: $internalSong->catalogNumber ?? '',
-			songNumber: $internalSong->songNumber ?? '',
-			instruments: $entitiesByType['instrument'] ?? [],
-			arrangers: $entitiesByType['arranger'] ?? [],
-		);
+		return $this->buildMobileSheetsSong($internalSong, $songFiles, $entitiesByType, $songBookmarks);
 	}
 
 	public function findByUuid(string $uuid): ?InternalSong {
@@ -818,70 +772,26 @@ class InternalSongMapper {
 			$path = $fileNodePaths[$file->fileId] ?? ($publicToken !== null
 				? ('/public.php/dav/files/' . $publicToken . '/file_' . $file->fileId . '.pdf')
 				: (MobileSheetsPathResolver::WEBDAV_ROOT . '/' . $uid . '/file_' . $file->fileId . '.pdf'));
-			$songFiles[$file->songId][] = new MobileSheetsFile(
-				id: (int)$file->id,
-				path: $path,
-				pageOrder: $file->pageOrder,
-				pageCount: (int)$file->pageCount,
-				fileId: (int)$file->fileId,
-				updatedAt: $file->updatedAt > 0
-					? ($file->updatedAt < 100000000000 ? $file->updatedAt * 1000 : $file->updatedAt)
-					: null,
-			);
+			$songFiles[$file->songId][] = $this->buildMobileSheetsFile($file, $path);
 		}
 
 		$resultSongs = [];
 		foreach ($songs as $song) {
 			$sid = (int)$song->id;
-
-			$resolve = function (string $type) use ($songEntities, $sid, $entitiesById): array {
-				$ids = $songEntities[$sid][$type] ?? [];
-				$res = [];
+			$resolvedEntities = [];
+			foreach ($songEntities[$sid] ?? [] as $type => $ids) {
 				foreach ($ids as $id) {
 					if (isset($entitiesById[$id])) {
-						$res[] = $entitiesById[$id]->toMobileSheetsEntity($type);
+						$resolvedEntities[$type][] = $entitiesById[$id]->toMobileSheetsEntity($type);
 					}
 				}
-				return $res;
-			};
+			}
 
-			$resultSongs[] = new MobileSheetsSong(
-				id: $sid,
-				title: $song->title,
-				files: $songFiles[$sid] ?? [],
-				composers: $resolve('composer'),
-				books: $resolve('book'),
-				collections: $resolve('collection'),
-				artists: $resolve('artist'),
-				genres: $resolve('genre'),
-				keys: $resolve('key'),
-				customGroups: $resolve('customgroup'),
-				years: $resolve('year'),
-				signatures: $resolve('signature'),
-				sourceTypes: $resolve('sourcetype'),
-				bookmarks: array_map(
-					static fn (InternalSongBookmark $bm) => $bm->toMobileSheetsBookmark(),
-					$songBookmarks[$sid] ?? []
-				),
-				audioFiles: [],
-				lastModified: $song->updatedAt > 0
-					? ($song->updatedAt < 100000000000 ? $song->updatedAt * 1000 : $song->updatedAt)
-					: null,
-				dateCreated: $song->createdAt > 0
-					? ($song->createdAt < 100000000000 ? $song->createdAt * 1000 : $song->createdAt)
-					: null,
-				stars: $song->rating,
-				difficulty: $song->difficulty,
-				duration: $song->duration,
-				keywords: $song->keywords ?? '',
-				custom: $song->notes ?? '',
-				custom2: '',
-				sortTitle: $song->sortTitle ?? '',
-				opus: $song->opus ?? '',
-				catalogNumber: $song->catalogNumber ?? '',
-				songNumber: $song->songNumber ?? '',
-				instruments: $resolve('instrument'),
-				arrangers: $resolve('arranger'),
+			$resultSongs[] = $this->buildMobileSheetsSong(
+				$song,
+				$songFiles[$sid] ?? [],
+				$resolvedEntities,
+				$songBookmarks[$sid] ?? [],
 			);
 		}
 
@@ -899,6 +809,71 @@ class InternalSongMapper {
 			sourceTypes: $groupedEntities['sourcetype'] ?? [],
 			instruments: $groupedEntities['instrument'] ?? [],
 			arrangers: $groupedEntities['arranger'] ?? [],
+		);
+	}
+
+	private static function toMilliseconds(?int $timestamp): ?int {
+		if ($timestamp === null || $timestamp <= 0) {
+			return null;
+		}
+		return $timestamp < 100000000000 ? $timestamp * 1000 : $timestamp;
+	}
+
+	private function buildMobileSheetsFile(InternalSongFile $file, string $path): MobileSheetsFile {
+		return new MobileSheetsFile(
+			id: (int)$file->id,
+			path: $path,
+			pageOrder: $file->pageOrder,
+			pageCount: (int)$file->pageCount,
+			fileId: (int)$file->fileId,
+			updatedAt: self::toMilliseconds($file->updatedAt),
+		);
+	}
+
+	/**
+	 * @param list<MobileSheetsFile> $files
+	 * @param array<string, list<object>> $entitiesByType
+	 * @param list<InternalSongBookmark> $bookmarks
+	 */
+	private function buildMobileSheetsSong(
+		InternalSong $song,
+		array $files,
+		array $entitiesByType,
+		array $bookmarks,
+	): MobileSheetsSong {
+		return new MobileSheetsSong(
+			id: (int)$song->id,
+			title: $song->title,
+			files: $files,
+			composers: $entitiesByType['composer'] ?? [],
+			books: $entitiesByType['book'] ?? [],
+			collections: $entitiesByType['collection'] ?? [],
+			artists: $entitiesByType['artist'] ?? [],
+			genres: $entitiesByType['genre'] ?? [],
+			keys: $entitiesByType['key'] ?? [],
+			customGroups: $entitiesByType['customgroup'] ?? [],
+			years: $entitiesByType['year'] ?? [],
+			signatures: $entitiesByType['signature'] ?? [],
+			sourceTypes: $entitiesByType['sourcetype'] ?? [],
+			bookmarks: array_map(
+				static fn (InternalSongBookmark $bm) => $bm->toMobileSheetsBookmark(),
+				$bookmarks,
+			),
+			audioFiles: [],
+			lastModified: self::toMilliseconds($song->updatedAt),
+			dateCreated: self::toMilliseconds($song->createdAt),
+			stars: $song->rating,
+			difficulty: $song->difficulty,
+			duration: $song->duration,
+			keywords: $song->keywords ?? '',
+			custom: $song->notes ?? '',
+			custom2: '',
+			sortTitle: $song->sortTitle ?? '',
+			opus: $song->opus ?? '',
+			catalogNumber: $song->catalogNumber ?? '',
+			songNumber: $song->songNumber ?? '',
+			instruments: $entitiesByType['instrument'] ?? [],
+			arrangers: $entitiesByType['arranger'] ?? [],
 		);
 	}
 }
