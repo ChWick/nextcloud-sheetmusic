@@ -1,4 +1,5 @@
 import { PDFArray, PDFDict, PDFDocument, PDFName, type PDFPage, PDFRawStream, PDFRef, PDFStream } from 'pdf-lib'
+import { cleanupPdfJsPage } from '../../utils/pdfjs'
 import { encodeImageBufferToJpeg, packGrayscaleBits } from './jpeg-encoder'
 import { encodeImageBufferToPng } from './png-encoder'
 import type { CompressionOp, ImageBuffer, ScanOperation } from './scan-types'
@@ -461,6 +462,28 @@ export async function inspectPdfPageResolution(
 		dpi,
 		scale,
 	}
+}
+
+/**
+ * Inspect resolution summaries for up to `maxPages` pages of a pdf.js document,
+ * cleaning up each page proxy immediately to keep memory bounded.
+ */
+export async function inspectPdfDocumentResolutions(
+	pdf: any,
+	maxPages = 25,
+): Promise<PdfPageResolutionSummary[]> {
+	if (!pdf) return []
+	const maxInspect = Math.min(pdf.numPages ?? 0, maxPages)
+	const summaries: PdfPageResolutionSummary[] = []
+	for (let p = 1; p <= maxInspect; p++) {
+		const pg = await pdf.getPage(p)
+		try {
+			summaries.push(await inspectPdfPageResolution(pg, p))
+		} finally {
+			cleanupPdfJsPage(pg)
+		}
+	}
+	return summaries
 }
 
 /**
