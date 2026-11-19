@@ -373,6 +373,63 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		expect(wrapper.emitted('saved')?.[0]?.[1]).toBe(101)
 	})
 
+	it('splits real PDF and removes extracted pages from original PDF when remove-pages option is selected', async () => {
+		const wrapper = mount(SongPdfModifier, {
+			props: {
+				song: mockSong, // 8-page real PDF
+				libraryId: 1,
+			},
+		})
+
+		await flushPromises()
+
+		// Switch tab to Split PDF
+		const splitTab = wrapper.findAll('button').find((b) => b.text().includes('Split PDF'))
+		await splitTab?.trigger('click')
+
+		// Initially, default segment covers all 8 pages -> remove-pages option must be disabled
+		const removePagesRadio = wrapper.find('input[value="remove-pages"]')
+		expect(removePagesRadio.exists()).toBe(true)
+		expect(removePagesRadio.attributes('disabled')).toBeDefined()
+
+		// Narrow Part 1 to pages 2-4 (leaving pages 1, 5, 6, 7, 8 in the original PDF)
+		const numberInputs = wrapper.findAll('[data-test="split-segment-list"] input[type="number"]')
+		expect(numberInputs).toHaveLength(2)
+		await numberInputs[0].setValue('2')
+		await numberInputs[1].setValue('4')
+
+		// Now remove-pages option should be enabled
+		expect(removePagesRadio.attributes('disabled')).toBeUndefined()
+		await removePagesRadio.setValue(true)
+		await removePagesRadio.trigger('change')
+
+		// Split
+		const splitSubmitBtn = wrapper.findAll('button').find((b) => b.text().includes('Split & Create Songs'))
+		await splitSubmitBtn?.trigger('click')
+		await flushPromises()
+		await vi.waitFor(() => expect(wrapper.emitted('saved')).toBeTruthy(), { timeout: 5000 })
+		await flushPromises()
+
+		// 1 new split song created with 3 extracted pages (pages 2, 3, 4)
+		expect(createdSongs).toHaveLength(1)
+		const extractedUpload = uploadedFiles.find((u) => u.songId === 101)
+		expect(extractedUpload).toBeDefined()
+		const extractedPdf = await PDFDocument.load(new Uint8Array(await extractedUpload!.file.arrayBuffer()))
+		expect(extractedPdf.getPageCount()).toBe(3)
+
+		// Original PDF updated in-place with the remaining 5 pages (1, 5, 6, 7, 8)
+		expect(updatedFiles).toHaveLength(1)
+		expect(updatedFiles[0].songId).toBe(42)
+		expect(updatedFiles[0].fileId).toBe(999)
+		const updatedOriginalPdf = await PDFDocument.load(new Uint8Array(await updatedFiles[0].file.arrayBuffer()))
+		expect(updatedOriginalPdf.getPageCount()).toBe(5)
+
+		// Original song and file were NOT deleted
+		expect(deletedFiles).toHaveLength(0)
+		expect(deletedSongs).toHaveLength(0)
+		expect(wrapper.emitted('saved')?.[0]?.[1]).toBe(101)
+	})
+
 	it('disables delete-song option when song has multiple attached files', async () => {
 		const multiFileSong: Song = {
 			...mockSong,

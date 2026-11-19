@@ -33,7 +33,7 @@ vi.mock('@nextcloud/vue/components/NcPopover', () => ({
 }))
 
 describe('OriginalSongActionSelector.vue', () => {
-	it('renders three options and indicates active option', () => {
+	it('renders four options and indicates active option', () => {
 		const wrapper = mount(OriginalSongActionSelector, {
 			props: {
 				modelValue: 'keep',
@@ -42,12 +42,13 @@ describe('OriginalSongActionSelector.vue', () => {
 		})
 
 		const options = wrapper.findAll('[role="radio"]')
-		expect(options).toHaveLength(3)
+		expect(options).toHaveLength(4)
 
-		// Option c (keep) should be active
+		// Option 0 (keep) should be active
 		expect(options[0].attributes('aria-checked')).toBe('true')
 		expect(options[1].attributes('aria-checked')).toBe('false')
 		expect(options[2].attributes('aria-checked')).toBe('false')
+		expect(options[3].attributes('aria-checked')).toBe('false')
 	})
 
 	it('emits update:modelValue when an option is selected', async () => {
@@ -60,9 +61,33 @@ describe('OriginalSongActionSelector.vue', () => {
 
 		const options = wrapper.findAll('[role="radio"]')
 		await options[1].trigger('click')
+		await options[2].trigger('click')
 
-		expect(wrapper.emitted('update:modelValue')).toBeTruthy()
-		expect(wrapper.emitted('update:modelValue')?.[0]?.[0]).toBe('delete-file')
+		expect(wrapper.emitted('update:modelValue')).toEqual([
+			['remove-pages'],
+			['delete-file'],
+		])
+	})
+
+	it('disables remove-pages option when canRemovePages is false', async () => {
+		const wrapper = mount(OriginalSongActionSelector, {
+			props: {
+				modelValue: 'keep',
+				attachedFilesCount: 1,
+				canRemovePages: false,
+			},
+		})
+
+		const options = wrapper.findAll('[role="radio"]')
+		const removePagesOption = options[1]
+
+		expect(removePagesOption.attributes('aria-disabled')).toBe('true')
+		const radioInput = removePagesOption.find('input[type="radio"]')
+		expect(radioInput.attributes('disabled')).toBeDefined()
+		expect(removePagesOption.text()).toContain('Only possible if at least one page remains in the original PDF.')
+
+		await removePagesOption.trigger('click')
+		expect(wrapper.emitted('update:modelValue')).toBeFalsy()
 	})
 
 	it('disables delete-song option when attachedFilesCount is not 1', async () => {
@@ -74,7 +99,7 @@ describe('OriginalSongActionSelector.vue', () => {
 		})
 
 		const options = wrapper.findAll('[role="radio"]')
-		const deleteSongOption = options[2]
+		const deleteSongOption = options[3]
 
 		expect(deleteSongOption.attributes('aria-disabled')).toBe('true')
 		const radioInput = deleteSongOption.find('input[type="radio"]')
@@ -94,7 +119,7 @@ describe('OriginalSongActionSelector.vue', () => {
 		})
 
 		const options = wrapper.findAll('[role="radio"]')
-		const deleteSongOption = options[2]
+		const deleteSongOption = options[3]
 
 		expect(deleteSongOption.attributes('aria-disabled')).toBe('false')
 		await deleteSongOption.trigger('click')

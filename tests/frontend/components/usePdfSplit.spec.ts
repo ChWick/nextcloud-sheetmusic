@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { computed, ref, shallowRef } from 'vue'
-import { usePdfSplit } from '../../../src/components/song-pdf/usePdfSplit'
+import { getExtractedPageNumbers, getRemainingPageNumbers, usePdfSplit } from '../../../src/components/song-pdf/usePdfSplit'
 import type { Song, SongFile } from '../../../src/types/song'
 
 describe('usePdfSplit.ts', () => {
@@ -113,5 +113,51 @@ describe('usePdfSplit.ts', () => {
 		split.togglePageSelection(2)
 		split.togglePageSelection(5, true)
 		expect(split.selectedPages.value).toEqual([2, 3, 4, 5])
+	})
+
+	it('computes extracted and remaining pages and canRemoveExtractedPages', () => {
+		const segments = [
+			{ id: 'seg-1', title: 'Part 1', startPage: 2, endPage: 3 },
+			{ id: 'seg-2', title: 'Part 2', startPage: 3, endPage: 4 },
+		]
+		expect(Array.from(getExtractedPageNumbers(segments, 6))).toEqual([2, 3, 4])
+		expect(getRemainingPageNumbers(segments, 6)).toEqual([1, 5, 6])
+
+		const { split } = setupTest(5)
+		split.initSplitSegments(5, 'Sonata in C')
+		// Default segment covers 1..5 -> no remaining pages
+		expect(split.canRemoveExtractedPages.value).toBe(false)
+
+		// Narrow segment to 2..3 -> pages 1, 4, 5 remain
+		split.splitSegments.value[0].startPage = 2
+		split.splitSegments.value[0].endPage = 3
+		expect(split.canRemoveExtractedPages.value).toBe(true)
+	})
+
+	it('rejects remove-pages save when all pages are covered by split segments', async () => {
+		const song = computed<Song>(() => ({
+			id: 42,
+			title: 'Sonata in C',
+			files: [{ id: 101, path: 'Sonata.pdf' } as SongFile],
+		} as Song))
+		const split = usePdfSplit({
+			song,
+			libraryId: computed(() => 1),
+			totalPages: ref(4),
+			pageRotations: ref([0, 0, 0, 0]),
+			originalPdfBytes: shallowRef<Uint8Array | null>(new Uint8Array([1, 2, 3])),
+			targetFile: computed(() => song.value.files?.[0]),
+			onSaved: vi.fn(),
+			onCancel: vi.fn(),
+		})
+		split.initSplitSegments(4, 'Sonata in C')
+		split.originalSongAction.value = 'remove-pages'
+
+		const setIsSaving = vi.fn()
+		const setErrorMessage = vi.fn()
+		await split.saveSplits(setIsSaving, setErrorMessage)
+
+		expect(setIsSaving).not.toHaveBeenCalled()
+		expect(setErrorMessage).toHaveBeenCalledWith(expect.stringContaining('Cannot remove all pages'))
 	})
 })

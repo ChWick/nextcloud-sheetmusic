@@ -67,11 +67,15 @@ describe('SongPdfSplitSidebar.vue', () => {
 
 	it('updates originalSongAction through OriginalSongActionSelector', async () => {
 		const wrapper = mount(SongPdfSplitSidebar, {
-			props: defaultProps,
+			props: {
+				...defaultProps,
+				canRemovePages: false,
+			},
 		})
 
 		const selector = wrapper.findComponent({ name: 'OriginalSongActionSelector' })
 		expect(selector.exists()).toBe(true)
+		expect(selector.props('canRemovePages')).toBe(false)
 		selector.vm.$emit('update:modelValue', 'delete-file')
 
 		expect(wrapper.emitted('update:originalSongAction')?.[0]).toEqual(['delete-file'])
