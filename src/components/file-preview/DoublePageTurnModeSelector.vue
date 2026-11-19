@@ -47,7 +47,6 @@ const options: TurnModeOption[] = [
 		<NcButton
 			v-for="opt in options"
 			:key="opt.mode"
-			size="small"
 			:variant="modelValue === opt.mode ? 'primary' : 'secondary'"
 			:title="opt.label"
 			:aria-label="opt.label"

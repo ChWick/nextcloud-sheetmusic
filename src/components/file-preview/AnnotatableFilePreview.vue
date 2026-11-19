@@ -126,11 +126,10 @@ defineExpose({
 			v-if="showAnnotateButton && canAnnotate && !isEditing"
 			:class="$style.actionsBar">
 			<NcButton
-				size="small"
 				variant="secondary"
 				@click="enterEditMode">
 				<template #icon>
-					<DrawIcon :size="16" />
+					<DrawIcon :size="20" />
 				</template>
 				{{ t('sheetmusic', 'Annotate') }}
 			</NcButton>

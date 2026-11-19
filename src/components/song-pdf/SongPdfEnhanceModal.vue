@@ -507,26 +507,26 @@ watch(
 			<div :class="$style.toolBar">
 				<div :class="$style.pageNav">
 					<NcButton
-						size="small"
 						variant="secondary"
 						:disabled="pageNum <= 1"
 						:title="t('sheetmusic', 'Previous page')"
+						:aria-label="t('sheetmusic', 'Previous page')"
 						@click="prevPage">
 						<template #icon>
-							<ArrowLeft :size="16" />
+							<ArrowLeft :size="20" />
 						</template>
 					</NcButton>
 					<span :class="$style.pageIndicator">
 						{{ t('sheetmusic', 'Page {page} of {total}', { page: pageNum, total: totalPages }, { escape: false }) }}
 					</span>
 					<NcButton
-						size="small"
 						variant="secondary"
 						:disabled="pageNum >= totalPages"
 						:title="t('sheetmusic', 'Next page')"
+						:aria-label="t('sheetmusic', 'Next page')"
 						@click="nextPage">
 						<template #icon>
-							<ArrowRight :size="16" />
+							<ArrowRight :size="20" />
 						</template>
 					</NcButton>
 					<span
@@ -540,39 +540,38 @@ watch(
 				<!-- Zoom & Pan Controls -->
 				<div :class="$style.zoomControls">
 					<NcButton
-						size="small"
 						variant="secondary"
 						:disabled="zoomLevel <= MIN_ZOOM"
 						:title="t('sheetmusic', 'Zoom out')"
+						:aria-label="t('sheetmusic', 'Zoom out')"
 						data-test="enhance-zoom-out"
 						@click="zoomOut">
 						<template #icon>
-							<MagnifyMinus :size="16" />
+							<MagnifyMinus :size="20" />
 						</template>
 					</NcButton>
 					<span :class="$style.zoomIndicator" data-test="enhance-zoom-level">
 						{{ Math.round(zoomLevel * 100) }}%
 					</span>
 					<NcButton
-						size="small"
 						variant="secondary"
 						:disabled="zoomLevel >= MAX_ZOOM"
 						:title="t('sheetmusic', 'Zoom in')"
+						:aria-label="t('sheetmusic', 'Zoom in')"
 						data-test="enhance-zoom-in"
 						@click="zoomIn">
 						<template #icon>
-							<MagnifyPlus :size="16" />
+							<MagnifyPlus :size="20" />
 						</template>
 					</NcButton>
 					<NcButton
-						size="small"
 						variant="tertiary"
 						:disabled="zoomLevel === 1 && panX === 0 && panY === 0"
 						:title="t('sheetmusic', 'Reset zoom and pan')"
 						data-test="enhance-zoom-reset"
 						@click="resetZoom">
 						<template #icon>
-							<FitToScreenOutline :size="16" />
+							<FitToScreenOutline :size="20" />
 						</template>
 						{{ t('sheetmusic', 'Fit') }}
 					</NcButton>
@@ -580,46 +579,44 @@ watch(
 
 				<div :class="$style.toolActions">
 					<NcButton
-						size="small"
 						:variant="showOriginal ? 'primary' : 'secondary'"
 						:title="t('sheetmusic', 'Toggle between original and enhanced preview')"
 						@click="toggleShowOriginal">
 						<template #icon>
-							<EyeOffOutline v-if="showOriginal" :size="16" />
-							<EyeOutline v-else :size="16" />
+							<EyeOffOutline v-if="showOriginal" :size="20" />
+							<EyeOutline v-else :size="20" />
 						</template>
 						{{ showOriginal ? t('sheetmusic', 'Viewing Original') : t('sheetmusic', 'Compare Original') }}
 					</NcButton>
 
 					<NcButton
-						size="small"
 						variant="secondary"
 						:disabled="!canUndo"
 						:title="t('sheetmusic', 'Undo (Ctrl+Z)')"
+						:aria-label="t('sheetmusic', 'Undo (Ctrl+Z)')"
 						@click="handleUndo">
 						<template #icon>
-							<Undo :size="16" />
+							<Undo :size="20" />
 						</template>
 					</NcButton>
 
 					<NcButton
-						size="small"
 						variant="secondary"
 						:disabled="!canRedo"
 						:title="t('sheetmusic', 'Redo (Ctrl+Y)')"
+						:aria-label="t('sheetmusic', 'Redo (Ctrl+Y)')"
 						@click="handleRedo">
 						<template #icon>
-							<Redo :size="16" />
+							<Redo :size="20" />
 						</template>
 					</NcButton>
 
 					<NcButton
-						size="small"
 						variant="tertiary"
 						:title="t('sheetmusic', 'Clear all operations')"
 						@click="resetAll">
 						<template #icon>
-							<RestoreIcon :size="16" />
+							<RestoreIcon :size="20" />
 						</template>
 						{{ t('sheetmusic', 'Reset') }}
 					</NcButton>

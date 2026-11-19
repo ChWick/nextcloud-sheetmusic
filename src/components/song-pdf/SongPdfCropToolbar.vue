@@ -40,28 +40,26 @@ const emit = defineEmits<{
 		<!-- Page Navigation -->
 		<div :class="$style.pageNav">
 			<NcButton
-				size="small"
 				variant="secondary"
 				:disabled="pageNum <= 1"
 				:title="t('sheetmusic', 'Previous page')"
 				:aria-label="t('sheetmusic', 'Previous page')"
 				@click="emit('change-page', pageNum - 1)">
 				<template #icon>
-					<ArrowLeft :size="16" />
+					<ArrowLeft :size="20" />
 				</template>
 			</NcButton>
 			<span :class="$style.pageIndicator">
 				{{ t('sheetmusic', 'Page {page} of {total}', { page: pageNum, total: totalPages }, { escape: false }) }}
 			</span>
 			<NcButton
-				size="small"
 				variant="secondary"
 				:disabled="pageNum >= totalPages"
 				:title="t('sheetmusic', 'Next page')"
 				:aria-label="t('sheetmusic', 'Next page')"
 				@click="emit('change-page', pageNum + 1)">
 				<template #icon>
-					<ArrowRight :size="16" />
+					<ArrowRight :size="20" />
 				</template>
 			</NcButton>
 		</div>
@@ -69,7 +67,6 @@ const emit = defineEmits<{
 		<!-- Zoom & Pan Controls -->
 		<div :class="$style.zoomControls">
 			<NcButton
-				size="small"
 				variant="secondary"
 				:disabled="zoomLevel <= minZoom"
 				:title="t('sheetmusic', 'Zoom out')"
@@ -77,14 +74,13 @@ const emit = defineEmits<{
 				data-test="crop-zoom-out"
 				@click="emit('zoom-out')">
 				<template #icon>
-					<MagnifyMinus :size="16" />
+					<MagnifyMinus :size="20" />
 				</template>
 			</NcButton>
 			<span :class="$style.zoomIndicator" data-test="crop-zoom-level">
 				{{ Math.round(zoomLevel * 100) }}%
 			</span>
 			<NcButton
-				size="small"
 				variant="secondary"
 				:disabled="zoomLevel >= maxZoom"
 				:title="t('sheetmusic', 'Zoom in')"
@@ -92,11 +88,10 @@ const emit = defineEmits<{
 				data-test="crop-zoom-in"
 				@click="emit('zoom-in')">
 				<template #icon>
-					<MagnifyPlus :size="16" />
+					<MagnifyPlus :size="20" />
 				</template>
 			</NcButton>
 			<NcButton
-				size="small"
 				variant="tertiary"
 				:disabled="zoomLevel === 1"
 				:title="t('sheetmusic', 'Fit to screen')"
@@ -104,7 +99,7 @@ const emit = defineEmits<{
 				data-test="crop-zoom-fit"
 				@click="emit('zoom-reset')">
 				<template #icon>
-					<FitToScreenOutline :size="16" />
+					<FitToScreenOutline :size="20" />
 				</template>
 				{{ t('sheetmusic', 'Fit') }}
 			</NcButton>
@@ -113,28 +108,25 @@ const emit = defineEmits<{
 		<!-- Crop Margin Presets & Reset -->
 		<div :class="$style.toolActions">
 			<NcButton
-				size="small"
 				variant="secondary"
 				:title="t('sheetmusic', 'Trim 5% margin from all edges')"
 				@click="emit('apply-preset', 5)">
 				{{ t('sheetmusic', 'Trim 5%') }}
 			</NcButton>
 			<NcButton
-				size="small"
 				variant="secondary"
 				:title="t('sheetmusic', 'Trim 10% margin from all edges')"
 				@click="emit('apply-preset', 10)">
 				{{ t('sheetmusic', 'Trim 10%') }}
 			</NcButton>
 			<NcButton
-				size="small"
 				variant="tertiary"
 				:disabled="!isCustomCropped"
 				:title="t('sheetmusic', 'Reset to full page')"
 				:aria-label="t('sheetmusic', 'Reset to full page')"
 				@click="emit('reset-crop')">
 				<template #icon>
-					<RestoreIcon :size="16" />
+					<RestoreIcon :size="20" />
 				</template>
 				{{ t('sheetmusic', 'Reset to Full Page') }}
 			</NcButton>
