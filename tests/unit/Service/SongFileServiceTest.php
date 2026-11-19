@@ -654,4 +654,125 @@ final class SongFileServiceTest extends TestCase {
 		self::assertFalse($this->libraryFolder->nodeExists('Songs/Chopin/001 Chopin - Prelude.pdf'));
 		self::assertTrue($this->libraryFolder->nodeExists('Songs/Chopin/Chopin - Prelude.pdf'));
 	}
+
+	public function testDetachSongFileRegeneratesRemainingFilePath(): void {
+		$this->libraryMapper->setSettingsForUser('admin', $this->libraryId, autoPaths: true, namingRulePreset: SongPathNamingRule::PRESET_COMPOSER);
+
+		$song = $this->songMapper->insert(new InternalSong(
+			id: null,
+			uuid: 's-detach-regen',
+			libraryId: $this->libraryId,
+			title: 'Etude',
+		));
+		$composer = $this->entityMapper->insert(new InternalEntity(
+			id: null,
+			uuid: 'e-composer-liszt',
+			libraryId: $this->libraryId,
+			type: 'composer',
+			name: 'Liszt',
+		));
+		$this->entityMapper->setSongEntitiesForType((int)$song->id, 'composer', [(int)$composer->id]);
+
+		$tmp1 = tempnam(sys_get_temp_dir(), 'test_det_1_');
+		$tmp2 = tempnam(sys_get_temp_dir(), 'test_det_2_');
+		file_put_contents($tmp1, 'ETUDE_1');
+		file_put_contents($tmp2, 'ETUDE_2');
+
+		try {
+			$this->service->uploadSongFile($this->user, $this->libraryId, (int)$song->id, ['tmp_name' => $tmp1, 'name' => 'e1.pdf']);
+			$this->service->uploadSongFile($this->user, $this->libraryId, (int)$song->id, ['tmp_name' => $tmp2, 'name' => 'e2.pdf']);
+		} finally {
+			unlink($tmp1);
+			unlink($tmp2);
+		}
+
+		$files = $this->songFileMapper->findAllForSong((int)$song->id);
+		self::assertCount(2, $files);
+		self::assertTrue($this->libraryFolder->nodeExists('Songs/Liszt/001 Liszt - Etude.pdf'));
+		self::assertTrue($this->libraryFolder->nodeExists('Songs/Liszt/002 Liszt - Etude.pdf'));
+
+		// Detach second file: detached physical file stays on disk, remaining file drops 001 prefix
+		$this->service->detachSongFile($this->user, $this->libraryId, (int)$song->id, (int)$files[1]->id);
+
+		self::assertTrue($this->libraryFolder->nodeExists('Songs/Liszt/002 Liszt - Etude.pdf'));
+		self::assertFalse($this->libraryFolder->nodeExists('Songs/Liszt/001 Liszt - Etude.pdf'));
+		self::assertTrue($this->libraryFolder->nodeExists('Songs/Liszt/Liszt - Etude.pdf'));
+	}
+
+	public function testAttachNextcloudFileStaysInLibraryRootWhenAutoPathsDisabled(): void {
+		$this->libraryMapper->setSettingsForUser('admin', $this->libraryId, autoPaths: false, namingRulePreset: SongPathNamingRule::PRESET_COMPOSER);
+
+		$song = $this->songMapper->insert(new InternalSong(
+			id: null,
+			uuid: 's-attach-no-auto',
+			libraryId: $this->libraryId,
+			title: 'Nocturne',
+		));
+		$composer = $this->entityMapper->insert(new InternalEntity(
+			id: null,
+			uuid: 'e-composer-no-auto',
+			libraryId: $this->libraryId,
+			type: 'composer',
+			name: 'Debussy',
+		));
+		$this->entityMapper->setSongEntitiesForType((int)$song->id, 'composer', [(int)$composer->id]);
+
+		$uploadsDir = $this->userFolder->newFolder('Uploads_noauto_' . bin2hex(random_bytes(4)));
+		$this->createdUserNodes[] = $uploadsDir;
+		$sourceFile = $uploadsDir->newFile('nocturne_raw.pdf');
+		$sourceFile->putContent('NOCTURNE_PDF');
+		$this->createdUserNodes[] = $sourceFile;
+
+		$result = $this->service->attachNextcloudFile(
+			$this->user,
+			$this->libraryId,
+			(int)$song->id,
+			$uploadsDir->getName() . '/nocturne_raw.pdf',
+			'copy',
+		);
+
+		self::assertNotNull($result);
+		self::assertTrue($this->libraryFolder->nodeExists('nocturne_raw.pdf'));
+		self::assertFalse($this->libraryFolder->nodeExists('Songs'));
+	}
+
+	public function testSyncMultipleSongFilesAppliesSelectedNamingRulePreset(): void {
+		$this->libraryMapper->setSettingsForUser('admin', $this->libraryId, autoPaths: false, namingRulePreset: SongPathNamingRule::PRESET_COMPOSER);
+
+		$composer = $this->entityMapper->insert(new InternalEntity(
+			id: null,
+			uuid: 'e-composer-batch-sync',
+			libraryId: $this->libraryId,
+			type: 'composer',
+			name: 'Schubert',
+		));
+
+		$songIds = [];
+		foreach (['Ave Maria', 'Serenade'] as $idx => $title) {
+			$song = $this->songMapper->insert(new InternalSong(
+				id: null,
+				uuid: 's-batch-sync-' . $idx,
+				libraryId: $this->libraryId,
+				title: $title,
+			));
+			$this->entityMapper->setSongEntitiesForType((int)$song->id, 'composer', [(int)$composer->id]);
+			$fileNode = $this->libraryFolder->newFile('raw_' . $idx . '.pdf');
+			$fileNode->putContent('PDF_' . $idx);
+			$this->createdUserNodes[] = $fileNode;
+			$this->songFileMapper->insert(new InternalSongFile(
+				id: null,
+				uuid: 'sf-batch-sync-' . $idx,
+				songId: (int)$song->id,
+				fileId: (int)$fileNode->getId(),
+			));
+			$songIds[] = (int)$song->id;
+		}
+
+		// Enable autoPaths and sync both songs together
+		$this->libraryMapper->setSettingsForUser('admin', $this->libraryId, autoPaths: true, namingRulePreset: SongPathNamingRule::PRESET_COMPOSER);
+		$this->service->syncMultipleSongFiles($this->user, $songIds, $this->libraryId);
+
+		self::assertTrue($this->libraryFolder->nodeExists('Songs/Schubert/Schubert - Ave Maria.pdf'));
+		self::assertTrue($this->libraryFolder->nodeExists('Songs/Schubert/Schubert - Serenade.pdf'));
+	}
 }

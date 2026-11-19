@@ -264,4 +264,46 @@ final class InternalSongMapperTest extends TestCase {
 		self::assertNotEmpty($data->songs[0]->files);
 		self::assertSame('/remote.php/dav/files/carol/SharedOrgan/Score1.pdf', $data->songs[0]->files[0]->path);
 	}
+
+	public function testFindSongAndFindLibraryDataReturnIdenticalSongMetadata(): void {
+		$song = $this->mapper->insert(new InternalSong(
+			id: null,
+			uuid: 'parity-uuid',
+			libraryId: $this->libraryId,
+			title: 'Goldberg Variations',
+			sortTitle: 'Goldberg Variations',
+			rating: 5,
+			difficulty: 5,
+			duration: 2400,
+			keywords: 'baroque, harpsichord',
+			notes: 'Urtext edition',
+			opus: 'BWV 988',
+			catalogNumber: 'LIB-988',
+			songNumber: '1',
+		));
+
+		$composer = $this->entityMapper->insert(new \OCA\SheetMusic\Db\InternalEntity(
+			id: null,
+			uuid: 'parity-comp',
+			libraryId: $this->libraryId,
+			type: 'composer',
+			name: 'J.S. Bach',
+		));
+		$instrument = $this->entityMapper->insert(new \OCA\SheetMusic\Db\InternalEntity(
+			id: null,
+			uuid: 'parity-inst',
+			libraryId: $this->libraryId,
+			type: 'instrument',
+			name: 'Piano',
+		));
+		$this->entityMapper->linkSongEntity((int)$song->id, (int)$composer->id);
+		$this->entityMapper->linkSongEntity((int)$song->id, (int)$instrument->id);
+
+		$single = $this->mapper->findSong((int)$song->id);
+		$libraryData = $this->mapper->findLibraryData($this->libraryId);
+
+		self::assertNotNull($single);
+		self::assertCount(1, $libraryData->songs);
+		self::assertEquals($single, $libraryData->songs[0]);
+	}
 }

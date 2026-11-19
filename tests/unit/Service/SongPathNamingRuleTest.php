@@ -320,4 +320,13 @@ final class SongPathNamingRuleTest extends TestCase {
 		self::assertSame('Songs/Taylor/Taylor - Dancing in December in D.pdf', SongPathNamingRule::createTargetPath($songDecember, '.pdf'));
 		self::assertSame('Songs/Talking Heads/Talking Heads - Once in a Lifetime in A.pdf', SongPathNamingRule::createTargetPath($songLifetime, '.pdf'));
 	}
+
+	public function testIsDisabledPreset(): void {
+		self::assertTrue(SongPathNamingRule::isDisabledPreset(SongPathNamingRule::PRESET_DISABLED));
+		self::assertTrue(SongPathNamingRule::isDisabledPreset('none'));
+		self::assertFalse(SongPathNamingRule::isDisabledPreset(SongPathNamingRule::PRESET_AUTO));
+		self::assertFalse(SongPathNamingRule::isDisabledPreset(SongPathNamingRule::PRESET_COMPOSER));
+		self::assertFalse(SongPathNamingRule::isDisabledPreset(SongPathNamingRule::PRESET_ARTIST));
+		self::assertFalse(SongPathNamingRule::isDisabledPreset(SongPathNamingRule::PRESET_COLLECTION));
+	}
 }

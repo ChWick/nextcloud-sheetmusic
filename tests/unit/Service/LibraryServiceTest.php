@@ -261,4 +261,14 @@ final class LibraryServiceTest extends TestCase {
 	public function testUpdateSettingsReturnsNullWhenLibraryNotFound(): void {
 		self::assertNull($this->service->updateSettings('admin', 999999, true));
 	}
+
+	public function testSettingsResolveParentLibraryForNonOwnerUser(): void {
+		$lib = $this->createTestLibrary('/Noten/shared_settings.db', 'admin');
+		$this->libraryMapper->setSettingsForUser('admin', (int)$lib->id, autoPaths: false, autoPdfMetadata: false, namingRulePreset: 'composer');
+
+		// A shared-library recipient (not the owner) should still read the library's actual settings
+		self::assertFalse($this->service->isAutoPathsEnabled('recipient_user', (int)$lib->id));
+		self::assertFalse($this->service->isAutoPdfMetadataEnabled('recipient_user', (int)$lib->id));
+		self::assertSame('composer', $this->service->getNamingRulePreset('recipient_user', (int)$lib->id));
+	}
 }

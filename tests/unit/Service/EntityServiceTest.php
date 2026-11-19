@@ -8,6 +8,7 @@ use OCA\SheetMusic\Db\InternalSong;
 use OCA\SheetMusic\Db\LibraryData;
 use OCA\SheetMusic\Service\EntityService;
 use OCA\SheetMusic\Service\LibraryService;
+use OCA\SheetMusic\Service\SongService;
 use OCP\IUser;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
@@ -174,5 +175,40 @@ final class EntityServiceTest extends TestCase {
 		$reloaded = $this->entityMapper->findById((int)$first['id']);
 		self::assertNotNull($reloaded);
 		self::assertSame('Johann Sebastian Bach', $reloaded->name);
+	}
+
+	public function testUpdateEntitySyncsLinkedSongFilesViaSongService(): void {
+		$song1 = $this->songMapper->insert(new InternalSong(id: null, uuid: 'es-sync-1', libraryId: $this->libraryId, title: 'Fugue 1'));
+		$song2 = $this->songMapper->insert(new InternalSong(id: null, uuid: 'es-sync-2', libraryId: $this->libraryId, title: 'Fugue 2'));
+		$composer = $this->service->createEntity($this->user, $this->libraryId, 'composers', 'Bach');
+		self::assertNotNull($composer);
+
+		$this->entityMapper->linkSongEntity((int)$song1->id, (int)$composer['id']);
+		$this->entityMapper->linkSongEntity((int)$song2->id, (int)$composer['id']);
+
+		$songService = $this->createMock(SongService::class);
+		$songService->expects(self::once())
+			->method('syncMultipleSongFilesAfterUpdate')
+			->with(
+				$this->user,
+				self::callback(static fn (array $ids): bool => count($ids) === 2
+					&& in_array((int)$song1->id, $ids, true)
+					&& in_array((int)$song2->id, $ids, true)),
+				$this->libraryId,
+			);
+
+		$libraryService = new LibraryService($this->libraryMapper, $this->rootFolder, new NullLogger());
+		$serviceWithSongSync = new EntityService(
+			$libraryService,
+			new NullLogger(),
+			$this->entityMapper,
+			$this->songMapper,
+			$this->libraryMapper,
+			null,
+			$songService,
+		);
+
+		$result = $serviceWithSongSync->updateEntity($this->user, $this->libraryId, 'composers', (int)$composer['id'], 'J. S. Bach');
+		self::assertInstanceOf(LibraryData::class, $result);
 	}
 }
