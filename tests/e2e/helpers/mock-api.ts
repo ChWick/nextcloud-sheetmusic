@@ -347,8 +347,8 @@ export async function setupMockApi(page: Page) {
 		})
 	})
 
-	// Mock integrity audit endpoint
-	await page.route('**/api/libraries/*/integrity', async (route) => {
+	// Mock integrity audit endpoint (match with or without query params such as ?autoMatchOrphans=1)
+	await page.route(/\/api\/libraries\/\d+\/integrity(\?.*)?$/, async (route) => {
 		await route.fulfill({
 			status: 200,
 			contentType: 'application/json',
