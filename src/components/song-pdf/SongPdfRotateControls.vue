@@ -23,6 +23,26 @@ const sliderExpanded = ref(false)
 const sliderMin = computed(() => (sliderExpanded.value ? -180 : -45))
 const sliderMax = computed(() => (sliderExpanded.value ? 180 : 45))
 
+const FINE_NEG_STEPS = [
+	{ delta: -5, label: '-5°', testId: 'fine-btn-m5' },
+	{ delta: -1, label: '-1°', testId: 'fine-btn-m1' },
+	{ delta: -0.5, label: '-0.5°', testId: 'fine-btn-m05' },
+	{ delta: -0.1, label: '-0.1°', testId: 'fine-btn-m01' },
+]
+
+const FINE_POS_STEPS = [
+	{ delta: 0.1, label: '+0.1°', testId: 'fine-btn-p01' },
+	{ delta: 0.5, label: '+0.5°', testId: 'fine-btn-p05' },
+	{ delta: 1, label: '+1°', testId: 'fine-btn-p1' },
+	{ delta: 5, label: '+5°', testId: 'fine-btn-p5' },
+]
+
+const TURN_PRESETS = [
+	{ delta: -90, label: '-90°', testId: 'turn-m90', icon: RotateLeft },
+	{ delta: 90, label: '+90°', testId: 'turn-p90', icon: RotateRight },
+	{ delta: 180, label: '180°', testId: 'turn-180', icon: null },
+]
+
 function onNumberInput(e: Event) {
 	const val = Number((e.target as HTMLInputElement).value) || 0
 	emit('update:angle', Math.round(val * 10) / 10)
@@ -91,33 +111,40 @@ function onCheckboxChange(e: Event) {
 		<div :class="$style.quickButtonsGroup">
 			<div :class="$style.fineTuneSubgroup">
 				<span :class="$style.subgroupTitle">{{ t('sheetmusic', 'Fine deskew:') }}</span>
-				<NcButton size="small" variant="secondary" data-test="fine-btn-m5" @click="emit('adjustAngle', -5)">-5°</NcButton>
-				<NcButton size="small" variant="secondary" data-test="fine-btn-m1" @click="emit('adjustAngle', -1)">-1°</NcButton>
-				<NcButton size="small" variant="secondary" data-test="fine-btn-m05" @click="emit('adjustAngle', -0.5)">-0.5°</NcButton>
-				<NcButton size="small" variant="secondary" data-test="fine-btn-m01" @click="emit('adjustAngle', -0.1)">-0.1°</NcButton>
+				<NcButton
+					v-for="step in FINE_NEG_STEPS"
+					:key="step.testId"
+					size="small"
+					variant="secondary"
+					:data-test="step.testId"
+					@click="emit('adjustAngle', step.delta)">
+					{{ step.label }}
+				</NcButton>
 				<NcButton size="small" variant="tertiary" :disabled="angle === 0" data-test="reset-angle-btn" @click="emit('resetAngle')">0°</NcButton>
-				<NcButton size="small" variant="secondary" data-test="fine-btn-p01" @click="emit('adjustAngle', 0.1)">+0.1°</NcButton>
-				<NcButton size="small" variant="secondary" data-test="fine-btn-p05" @click="emit('adjustAngle', 0.5)">+0.5°</NcButton>
-				<NcButton size="small" variant="secondary" data-test="fine-btn-p1" @click="emit('adjustAngle', 1)">+1°</NcButton>
-				<NcButton size="small" variant="secondary" data-test="fine-btn-p5" @click="emit('adjustAngle', 5)">+5°</NcButton>
+				<NcButton
+					v-for="step in FINE_POS_STEPS"
+					:key="step.testId"
+					size="small"
+					variant="secondary"
+					:data-test="step.testId"
+					@click="emit('adjustAngle', step.delta)">
+					{{ step.label }}
+				</NcButton>
 			</div>
 
 			<div :class="$style.standardTurnsSubgroup">
 				<span :class="$style.subgroupTitle">{{ t('sheetmusic', '90° turns:') }}</span>
-				<NcButton size="small" variant="secondary" data-test="turn-m90" @click="emit('adjustAngle', -90)">
-					<template #icon>
-						<RotateLeft :size="16" />
+				<NcButton
+					v-for="turn in TURN_PRESETS"
+					:key="turn.testId"
+					size="small"
+					variant="secondary"
+					:data-test="turn.testId"
+					@click="emit('adjustAngle', turn.delta)">
+					<template v-if="turn.icon" #icon>
+						<component :is="turn.icon" :size="16" />
 					</template>
-					-90°
-				</NcButton>
-				<NcButton size="small" variant="secondary" data-test="turn-p90" @click="emit('adjustAngle', 90)">
-					<template #icon>
-						<RotateRight :size="16" />
-					</template>
-					+90°
-				</NcButton>
-				<NcButton size="small" variant="secondary" data-test="turn-180" @click="emit('adjustAngle', 180)">
-					180°
+					{{ turn.label }}
 				</NcButton>
 			</div>
 		</div>

@@ -1,23 +1,23 @@
 <template>
   <template v-if="isEditInUrl && openSong">
-    <NcButton
+    <ResponsiveNcButton
       variant="secondary"
-      :title="t('sheetmusic', 'Save without closing')"
-      :aria-label="t('sheetmusic', 'Save without closing')"
+      icon-only
+      :label="t('sheetmusic', 'Save without closing')"
       @click="$emit('saveEdit', false)">
       <template #icon>
         <ContentSaveOutlineIcon :size="20" />
       </template>
-    </NcButton>
-    <NcButton
+    </ResponsiveNcButton>
+    <ResponsiveNcButton
       variant="primary"
-      :title="t('sheetmusic', 'Save and close')"
-      :aria-label="t('sheetmusic', 'Save and close')"
+      icon-only
+      :label="t('sheetmusic', 'Save and close')"
       @click="$emit('saveEdit', true)">
       <template #icon>
         <CheckIcon :size="20" />
       </template>
-    </NcButton>
+    </ResponsiveNcButton>
     <NcActions :aria-label="t('sheetmusic', 'More song actions')">
       <NcActionButton :close-after-click="true" @click="$emit('openHistory')">
         <template #icon>
@@ -34,36 +34,36 @@
     </NcActions>
   </template>
   <template v-else-if="standaloneCreate">
-    <NcButton
+    <ResponsiveNcButton
       variant="secondary"
-      :title="t('sheetmusic', 'Cancel')"
-      :aria-label="t('sheetmusic', 'Cancel')"
+      icon-only
+      :label="t('sheetmusic', 'Cancel')"
       @click="$emit('cancelCreate')">
       <template #icon>
         <CloseIcon :size="20" />
       </template>
-    </NcButton>
-    <NcButton
+    </ResponsiveNcButton>
+    <ResponsiveNcButton
       variant="primary"
-      :title="t('sheetmusic', 'Create song')"
-      :aria-label="t('sheetmusic', 'Create song')"
+      icon-only
+      :label="t('sheetmusic', 'Create song')"
       @click="$emit('saveCreate')">
       <template #icon>
         <CheckIcon :size="20" />
       </template>
-    </NcButton>
+    </ResponsiveNcButton>
   </template>
   <template v-else-if="!standaloneCreate && !isEditInUrl && !isModifyPdfInUrl">
-    <NcButton
+    <ResponsiveNcButton
       v-if="canWrite"
       variant="secondary"
-      :title="t('sheetmusic', 'Edit song')"
-      :aria-label="t('sheetmusic', 'Edit song')"
+      icon-only
+      :label="t('sheetmusic', 'Edit song')"
       @click="$emit('edit')">
       <template #icon>
         <PencilIcon :size="20" />
       </template>
-    </NcButton>
+    </ResponsiveNcButton>
     <NcActions
       v-if="canWrite"
       :aria-label="t('sheetmusic', 'More song actions')">
@@ -93,7 +93,7 @@
 import { t } from '@nextcloud/l10n'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
-import NcButton from '@nextcloud/vue/components/NcButton'
+import ResponsiveNcButton from '../ResponsiveNcButton.vue'
 import CheckIcon from 'vue-material-design-icons/Check.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 import ContentSaveOutlineIcon from 'vue-material-design-icons/ContentSaveOutline.vue'
