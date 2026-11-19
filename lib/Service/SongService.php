@@ -131,11 +131,10 @@ class SongService {
 			return null;
 		}
 
-		if (!$this->libraryService->canWriteLibrary($user->getUID(), $libraryId)) {
+		$targetLibraryId = $this->resolveWritableLibraryId($user, $libraryId);
+		if ($targetLibraryId === null) {
 			return null;
 		}
-
-		$targetLibraryId = $this->libraryService->getTargetLibraryId($libraryId);
 		$sublibrary = null;
 		if ($libraryId >= LibraryShareService::SUBLIBRARY_ID_OFFSET && $this->sublibraryService !== null) {
 			$sublibrary = $this->sublibraryService->getSublibrary($libraryId - LibraryShareService::SUBLIBRARY_ID_OFFSET);
@@ -182,7 +181,7 @@ class SongService {
 
 			$this->songHistoryService?->recordSnapshot($createdSong, InternalSongHistory::ACTION_CREATED, $user->getUID());
 
-			$data = $this->getSongs($user, $libraryId) ?? $this->internalSongMapper->findLibraryData($targetLibraryId, $user);
+			$data = $this->getLibraryDataForResponse($user, $libraryId, $targetLibraryId);
 			$data->createdSongId = $songId;
 
 			return $data;
@@ -230,11 +229,10 @@ class SongService {
 			return null;
 		}
 
-		if (!$this->libraryService->canWriteLibrary($user->getUID(), $libraryId)) {
+		$targetLibraryId = $this->resolveWritableLibraryId($user, $libraryId);
+		if ($targetLibraryId === null) {
 			return null;
 		}
-
-		$targetLibraryId = $this->libraryService->getTargetLibraryId($libraryId);
 
 		try {
 			$song = $this->internalSongMapper->findById($songId);
@@ -270,7 +268,7 @@ class SongService {
 
 				$this->songHistoryService?->recordSnapshot($song, InternalSongHistory::ACTION_UPDATED, $user->getUID());
 
-				return $this->getSongs($user, $libraryId) ?? $this->internalSongMapper->findLibraryData($targetLibraryId, $user);
+				return $this->getLibraryDataForResponse($user, $libraryId, $targetLibraryId);
 			}
 
 			return null;
@@ -307,11 +305,10 @@ class SongService {
 			return null;
 		}
 
-		if (!$this->libraryService->canWriteLibrary($user->getUID(), $libraryId)) {
+		$targetLibraryId = $this->resolveWritableLibraryId($user, $libraryId);
+		if ($targetLibraryId === null) {
 			return null;
 		}
-
-		$targetLibraryId = $this->libraryService->getTargetLibraryId($libraryId);
 		$total = count($songIds);
 		if ($progressId !== null) {
 			$this->libraryService->startProgress($progressId, 'Updating songs…');
@@ -364,7 +361,7 @@ class SongService {
 				$this->libraryService->updateProgress($progressId, 'finalizing', $total, $total, 'Finalizing…');
 			}
 
-			$data = $this->getSongs($user, $libraryId) ?? $this->internalSongMapper->findLibraryData($targetLibraryId, $user);
+			$data = $this->getLibraryDataForResponse($user, $libraryId, $targetLibraryId);
 			if ($progressId !== null) {
 				$this->libraryService->completeProgress($progressId, 'Batch update complete');
 			}
@@ -495,10 +492,10 @@ class SongService {
 	}
 
 	public function deleteSong(IUser $user, int $songId, int $libraryId, bool $deleteFiles = true): ?LibraryData {
-		if (!$this->libraryService->canWriteLibrary($user->getUID(), $libraryId)) {
+		$targetLibraryId = $this->resolveWritableLibraryId($user, $libraryId);
+		if ($targetLibraryId === null) {
 			return null;
 		}
-		$targetLibraryId = $this->libraryService->getTargetLibraryId($libraryId);
 		$song = $this->internalSongMapper->findById($songId);
 		if ($song === null || $song->libraryId !== $targetLibraryId) {
 			return null;
@@ -511,12 +508,12 @@ class SongService {
 	 * @return array<string, mixed>|null
 	 */
 	public function batchDeleteSongs(IUser $user, int $libraryId, array $songIds, bool $deleteFiles = true): ?LibraryData {
-		if (!$this->libraryService->canWriteLibrary($user->getUID(), $libraryId)) {
+		$targetLibraryId = $this->resolveWritableLibraryId($user, $libraryId);
+		if ($targetLibraryId === null) {
 			return null;
 		}
-		$targetLibraryId = $this->libraryService->getTargetLibraryId($libraryId);
 		if ($songIds === []) {
-			return $this->getSongs($user, $libraryId) ?? $this->internalSongMapper->findLibraryData($targetLibraryId, $user);
+			return $this->getLibraryDataForResponse($user, $libraryId, $targetLibraryId);
 		}
 
 		try {
@@ -549,7 +546,7 @@ class SongService {
 			}
 			$this->libraryMapper->touch($targetLibraryId);
 
-			return $this->getSongs($user, $libraryId) ?? $this->internalSongMapper->findLibraryData($targetLibraryId, $user);
+			return $this->getLibraryDataForResponse($user, $libraryId, $targetLibraryId);
 		} catch (\Throwable $e) {
 			$this->logger->error('Could not batch delete songs from SheetMusic library', [
 				'exception' => $e,
@@ -591,10 +588,10 @@ class SongService {
 	 * } $merged
 	 */
 	public function mergeSong(IUser $user, int $libraryId, int $keepId, int $droppedId, array $merged): ?LibraryData {
-		if (!$this->libraryService->canWriteLibrary($user->getUID(), $libraryId)) {
+		$targetLibraryId = $this->resolveWritableLibraryId($user, $libraryId);
+		if ($targetLibraryId === null) {
 			return null;
 		}
-		$targetLibraryId = $this->libraryService->getTargetLibraryId($libraryId);
 		try {
 			$this->internalSongMapper->mergeSongs($targetLibraryId, $keepId, $droppedId);
 			if (!empty($merged['title'])) {
@@ -604,7 +601,7 @@ class SongService {
 			}
 			$this->libraryMapper->touch($targetLibraryId);
 
-			return $this->getSongs($user, $libraryId) ?? $this->internalSongMapper->findLibraryData($targetLibraryId, $user);
+			return $this->getLibraryDataForResponse($user, $libraryId, $targetLibraryId);
 		} catch (\Throwable $e) {
 			$this->logger->error('Could not merge songs in SheetMusic library', [
 				'exception' => $e,
@@ -778,5 +775,17 @@ class SongService {
 				$this->internalEntityMapper->setSongEntitiesForType($songId, $typeStr, array_map('intval', (array)$spec));
 			}
 		}
+	}
+
+	private function resolveWritableLibraryId(IUser $user, int $libraryId): ?int {
+		if (!$this->libraryService->canWriteLibrary($user->getUID(), $libraryId)) {
+			return null;
+		}
+		return $this->libraryService->getTargetLibraryId($libraryId);
+	}
+
+	private function getLibraryDataForResponse(IUser $user, int $libraryId, int $targetLibraryId): LibraryData {
+		return $this->getSongs($user, $libraryId)
+			?? $this->internalSongMapper->findLibraryData($targetLibraryId, $user);
 	}
 }
