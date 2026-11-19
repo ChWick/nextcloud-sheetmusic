@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { SongFile } from '../../types/song'
+import type { Bookmark, SongFile } from '../../types/song'
 import type { PdfPageResolutionSummary } from '../song-pdf/pdf-enhance-engine'
 
 import { computed } from 'vue'
@@ -17,6 +17,7 @@ import FullscreenExitIcon from 'vue-material-design-icons/FullscreenExit.vue'
 import History from 'vue-material-design-icons/History.vue'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import PdfInfoPopover from '../song-pdf/PdfInfoPopover.vue'
+import SongViewerBookmarksBar from './SongViewerBookmarksBar.vue'
 import { getFileName } from '../../utils/file'
 import { formatByteSize } from '../song-pdf/pdf-enhance-engine'
 
@@ -33,6 +34,8 @@ const props = withDefaults(
 		isEditingAnnotations?: boolean
 		isFullscreen?: boolean
 		canWrite?: boolean
+		bookmarks?: Bookmark[]
+		activeBookmarkPage?: number
 	}>(),
 	{
 		files: () => [],
@@ -44,6 +47,8 @@ const props = withDefaults(
 		isEditingAnnotations: false,
 		isFullscreen: false,
 		canWrite: true,
+		bookmarks: () => [],
+		activeBookmarkPage: undefined,
 	},
 )
 
@@ -55,6 +60,8 @@ const emit = defineEmits<{
 	'toggle-annotations': []
 	'toggle-edit-annotations': []
 	'toggle-fullscreen': []
+	'jump-to-bookmark': [pageNum: number]
+	'edit-bookmarks': []
 }>()
 
 const effectiveSizeBytes = computed(() => props.fileSizeBytes ?? props.file?.fileSize ?? null)
@@ -118,6 +125,13 @@ const activePageResolution = computed<PdfPageResolutionSummary | null>(() => {
 		</div>
 
 		<div :class="$style.fileActions">
+			<SongViewerBookmarksBar
+				v-if="isPdf"
+				:bookmarks="bookmarks"
+				:active-bookmark-page="activeBookmarkPage"
+				:can-write="canWrite"
+				@jump="emit('jump-to-bookmark', $event)"
+				@edit="emit('edit-bookmarks')" />
 			<NcButton
 				v-if="isPdf && canWrite !== false"
 				:variant="isEditingAnnotations ? 'primary' : 'secondary'"

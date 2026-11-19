@@ -18,7 +18,6 @@ import AnnotatableFilePreview from './file-preview/AnnotatableFilePreview.vue'
 import SongPdfVersionsModal from './song-pdf/SongPdfVersionsModal.vue'
 import { useFileVersions } from './song-pdf/useFileVersions'
 import SongViewerMetadata from './song-viewer/SongViewerMetadata.vue'
-import SongViewerBookmarksBar from './song-viewer/SongViewerBookmarksBar.vue'
 import SongViewerFileToolbar from './song-viewer/SongViewerFileToolbar.vue'
 import { extractEntityLists } from './songs/song-view-columns'
 import { fetchSongAnnotations } from '../api/annotations'
@@ -65,7 +64,7 @@ const props = withDefaults(
 
 const emit = defineEmits<{
 	back: []
-	'modify-pdf': [song: Song, fileId?: string | number]
+	'modify-pdf': [song: Song, fileId?: string | number, mode?: string]
 	saved: [data: LibraryData, songId?: number]
 	updated: [data: LibraryData]
 	/** The song was deleted; its files went to the trash bin or stayed, per the chosen option. */
@@ -353,13 +352,17 @@ defineExpose({
 				:is-editing-annotations="isEditingAnnotations"
 				:is-fullscreen="isAnnotationFullscreen"
 				:can-write="canWrite"
+				:bookmarks="songBookmarks"
+				:active-bookmark-page="activeBookmarkPage"
 				@select-file="selectFile"
 				@open-external="openInExternalViewer"
 				@modify-pdf="song && emit('modify-pdf', song, selectedFile.id)"
 				@open-versions="openVersionsModal"
 				@toggle-annotations="filePreviewerRef?.toggleAnnotations()"
 				@toggle-edit-annotations="toggleAnnotationEditMode"
-				@toggle-fullscreen="toggleAnnotationFullscreen" />
+				@toggle-fullscreen="toggleAnnotationFullscreen"
+				@jump-to-bookmark="jumpToBookmark"
+				@edit-bookmarks="song && emit('modify-pdf', song, selectedFile?.id, 'bookmarks')" />
 
 			<AnnotatableFilePreview
 				v-if="selectedFile?.path"
@@ -373,14 +376,7 @@ defineExpose({
 				:annotation-context="annotationContext"
 				:can-annotate="isSelectedFilePdf && canWrite !== false"
 				@update:annotations="annotations = $event"
-				@update:is-editing="onEditingAnnotationsChange">
-				<template #betweenToolbarAndPreview>
-					<SongViewerBookmarksBar
-						:bookmarks="songBookmarks"
-						:active-bookmark-page="activeBookmarkPage"
-						@jump="jumpToBookmark" />
-				</template>
-			</AnnotatableFilePreview>
+				@update:is-editing="onEditingAnnotationsChange" />
 			<div v-else :class="$style.error">
 				{{ songFiles.length === 0 ? t('sheetmusic', 'No files attached to this song.') : t('sheetmusic', 'Missing file: The file does not exist on the file system.') }}
 			</div>

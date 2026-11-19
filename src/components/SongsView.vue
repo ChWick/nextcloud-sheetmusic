@@ -60,6 +60,7 @@
       :song="openSong"
       :file-id="route.query.fileId as string"
       :library-id="selectedLibrary"
+      :initial-mode="(route.query.pdfMode as 'rotate' | 'split' | 'crop' | 'enhance' | 'bookmarks' | undefined)"
       :auto-pdf-metadata="autoPdfMetadata"
       v-bind="entityListsProps"
       @saved="handlePdfModifierSaved"
@@ -665,7 +666,7 @@ function openSongEdit(song: Song) {
 }
 
 /** Open the PDF modifier for a song. */
-function openModifyPdf(song: Song, fileId?: string | number) {
+function openModifyPdf(song: Song, fileId?: string | number, mode?: string) {
   isCreatingSong.value = false;
   router.push({
     name: 'LibraryView',
@@ -675,6 +676,7 @@ function openModifyPdf(song: Song, fileId?: string | number) {
       song: String(song.id),
       modifyPdf: '1',
       ...(fileId ? { fileId: String(fileId) } : {}),
+      ...(mode ? { pdfMode: mode } : {}),
     },
   });
 }
@@ -723,6 +725,7 @@ function queryWithoutOpenSong() {
   delete query.duplicate;
   delete query.modifyPdf;
   delete query.fileId;
+  delete query.pdfMode;
   return query;
 }
 

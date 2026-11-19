@@ -561,7 +561,7 @@ describe('SongViewer.vue', () => {
 		expect(wrapper.text()).toContain('Revert to this version')
 	})
 
-	it('renders bookmarks bar and updates target page when clicking a bookmark', async () => {
+	it('renders bookmarks dropdown and updates target page or opens bookmark editor', async () => {
 		const songWithBookmarks: Song = {
 			...mockSong,
 			bookmarks: [
@@ -577,18 +577,31 @@ describe('SongViewer.vue', () => {
 
 		await settle()
 
-		// Bookmarks bar should be visible with formatted ranges
-		expect(wrapper.text()).toContain('Bookmarks:')
-		expect(wrapper.text()).toContain('I. Allegro (pp. 1–4)')
-		expect(wrapper.text()).toContain('II. Adagio (pp. 5–8)')
+		// Open Bookmarks dropdown
+		const trigger = wrapper.find('[data-test="bookmarks-menu-trigger"]')
+		expect(trigger.exists()).toBe(true)
+		expect(trigger.text()).toContain('Bookmarks (2)')
+		await trigger.trigger('click')
+		await settle()
 
-		// Find bookmark button and click it
-		const bookmarkBtns = wrapper.findAll('button').filter((b) => b.text().includes('II. Adagio'))
+		const dropdown = wrapper.find('[data-test="bookmarks-dropdown"]')
+		expect(dropdown.exists()).toBe(true)
+		expect(dropdown.text()).toContain('I. Allegro (pp. 1–4)')
+		expect(dropdown.text()).toContain('II. Adagio (pp. 5–8)')
+
+		// Click a bookmark item
+		const bookmarkBtns = dropdown.findAll('button').filter((b) => b.text().includes('II. Adagio'))
 		expect(bookmarkBtns.length).toBeGreaterThan(0)
 		await bookmarkBtns[0].trigger('click')
 		await settle()
 
 		expect((wrapper.vm as any).activeBookmarkPage).toBe(5)
+
+		// Re-open and click Edit bookmarks…
+		await trigger.trigger('click')
+		await settle()
+		await wrapper.find('[data-test="edit-bookmarks-button"]').trigger('click')
+		expect(wrapper.emitted('modify-pdf')?.[0]).toEqual([songWithBookmarks, 100, 'bookmarks'])
 	})
 
 	it('fetches annotations using fileId when present', async () => {

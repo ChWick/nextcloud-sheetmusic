@@ -55,6 +55,7 @@ const props = withDefaults(
 		fileId?: string | number
 		libraryId: number
 		autoPdfMetadata?: boolean
+		initialMode?: 'rotate' | 'split' | 'crop' | 'enhance' | 'bookmarks'
 		books?: Book[]
 		composers?: Composer[]
 		collections?: Collection[]
@@ -102,7 +103,10 @@ const targetFile = computed<SongFile | undefined>(() => {
 
 // State
 type Mode = 'rotate' | 'split' | 'crop' | 'enhance' | 'bookmarks'
-const activeMode = ref<Mode>('rotate')
+const activeMode = ref<Mode>(props.initialMode ?? 'rotate')
+watch(() => props.initialMode, (mode) => {
+	if (mode) activeMode.value = mode
+})
 const thumbnailSize = ref<'small' | 'medium' | 'large'>('medium')
 
 const isLoading = ref(false)
