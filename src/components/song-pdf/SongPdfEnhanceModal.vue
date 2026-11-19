@@ -5,14 +5,12 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import PageNavControls from '../PageNavControls.vue'
+import ZoomControls from '../ZoomControls.vue'
 import Undo from 'vue-material-design-icons/Undo.vue'
 import Redo from 'vue-material-design-icons/Redo.vue'
 import EyeOutline from 'vue-material-design-icons/EyeOutline.vue'
 import EyeOffOutline from 'vue-material-design-icons/EyeOffOutline.vue'
 import RestoreIcon from 'vue-material-design-icons/Restore.vue'
-import MagnifyPlus from 'vue-material-design-icons/MagnifyPlus.vue'
-import MagnifyMinus from 'vue-material-design-icons/MagnifyMinus.vue'
-import FitToScreenOutline from 'vue-material-design-icons/FitToScreenOutline.vue'
 
 import SongPdfEnhanceStack from './SongPdfEnhanceStack.vue'
 import type { ImageBuffer, ScanOperation, ScanOpType } from './scan-types'
@@ -519,44 +517,19 @@ watch(
 				</PageNavControls>
 
 				<!-- Zoom & Pan Controls -->
-				<div :class="$style.zoomControls">
-					<NcButton
-						variant="secondary"
-						:disabled="zoomLevel <= MIN_ZOOM"
-						:title="t('sheetmusic', 'Zoom out')"
-						:aria-label="t('sheetmusic', 'Zoom out')"
-						data-test="enhance-zoom-out"
-						@click="zoomOut">
-						<template #icon>
-							<MagnifyMinus :size="20" />
-						</template>
-					</NcButton>
-					<span :class="$style.zoomIndicator" data-test="enhance-zoom-level">
-						{{ Math.round(zoomLevel * 100) }}%
-					</span>
-					<NcButton
-						variant="secondary"
-						:disabled="zoomLevel >= MAX_ZOOM"
-						:title="t('sheetmusic', 'Zoom in')"
-						:aria-label="t('sheetmusic', 'Zoom in')"
-						data-test="enhance-zoom-in"
-						@click="zoomIn">
-						<template #icon>
-							<MagnifyPlus :size="20" />
-						</template>
-					</NcButton>
-					<NcButton
-						variant="tertiary"
-						:disabled="zoomLevel === 1 && panX === 0 && panY === 0"
-						:title="t('sheetmusic', 'Reset zoom and pan')"
-						data-test="enhance-zoom-reset"
-						@click="resetZoom">
-						<template #icon>
-							<FitToScreenOutline :size="20" />
-						</template>
-						{{ t('sheetmusic', 'Fit') }}
-					</NcButton>
-				</div>
+				<ZoomControls
+					:zoom-level="zoomLevel"
+					:min-zoom="MIN_ZOOM"
+					:max-zoom="MAX_ZOOM"
+					:fit-disabled="zoomLevel === 1 && panX === 0 && panY === 0"
+					:fit-title="t('sheetmusic', 'Reset zoom and pan')"
+					zoom-out-test-id="enhance-zoom-out"
+					zoom-level-test-id="enhance-zoom-level"
+					zoom-in-test-id="enhance-zoom-in"
+					fit-test-id="enhance-zoom-reset"
+					@zoom-out="zoomOut"
+					@zoom-in="zoomIn"
+					@zoom-reset="resetZoom" />
 
 				<div :class="$style.toolActions">
 					<NcButton
