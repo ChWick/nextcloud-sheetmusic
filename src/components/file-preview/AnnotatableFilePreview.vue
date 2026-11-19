@@ -154,8 +154,6 @@ defineExpose({
 			@clear-page="clearPage(currentPage - 1)"
 			@done="exitEditMode" />
 
-		<slot name="betweenToolbarAndPreview" :current-page="currentPage" />
-
 		<FilePreviewer
 			ref="filePreviewerRef"
 			:key="previewKey"
