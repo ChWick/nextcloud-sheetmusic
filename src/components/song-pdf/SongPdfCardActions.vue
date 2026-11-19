@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import ResponsiveNcButton from '../ResponsiveNcButton.vue'
 
 // Icons
 import RotateRight from 'vue-material-design-icons/RotateRight.vue'
@@ -108,17 +109,18 @@ const emit = defineEmits<{
 		</template>
 
 		<template v-else-if="activeMode === 'crop'">
-			<NcButton
+			<ResponsiveNcButton
 				v-if="!isDeleted"
 				size="small"
+				collapse-at="480"
 				:variant="isCropped ? 'primary' : 'tertiary'"
+				:label="t('sheetmusic', 'Crop')"
 				:title="t('sheetmusic', 'Crop page {page}', { page: pageNum }, { escape: false })"
 				@click.stop="emit('open-crop-modal')">
 				<template #icon>
 					<CropIcon :size="16" />
 				</template>
-				{{ t('sheetmusic', 'Crop') }}
-			</NcButton>
+			</ResponsiveNcButton>
 			<NcButton
 				v-if="pageNum < totalPages && !isDeleted"
 				size="small"
@@ -132,17 +134,18 @@ const emit = defineEmits<{
 			</NcButton>
 		</template>
 
-		<NcButton
+		<ResponsiveNcButton
 			v-else-if="!isDeleted"
 			size="small"
+			collapse-at="480"
 			:variant="isEnhanced ? 'primary' : 'tertiary'"
+			:label="t('sheetmusic', 'Enhance')"
 			:title="t('sheetmusic', 'Enhance page {page}', { page: pageNum }, { escape: false })"
 			@click.stop="emit('open-enhance-modal')">
 			<template #icon>
 				<Tune :size="16" />
 			</template>
-			{{ t('sheetmusic', 'Enhance') }}
-		</NcButton>
+		</ResponsiveNcButton>
 
 		<NcButton
 			size="small"
@@ -190,10 +193,6 @@ const emit = defineEmits<{
 		margin-left: 0;
 		justify-content: flex-end;
 		flex-wrap: wrap;
-	}
-
-	.cardActions :global(.button-vue__text) {
-		display: none;
 	}
 
 	.cardActions :global(.button-vue) {

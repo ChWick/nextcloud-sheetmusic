@@ -1,6 +1,9 @@
 <script setup lang="ts">
+import type { Component } from 'vue'
+import { computed } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import ResponsiveNcButton from '../ResponsiveNcButton.vue'
 
 // Icons
 import RotateRight from 'vue-material-design-icons/RotateRight.vue'
@@ -16,6 +19,17 @@ import CheckboxMultipleMarkedOutline from 'vue-material-design-icons/CheckboxMul
 import DeleteSweepOutline from 'vue-material-design-icons/DeleteSweepOutline.vue'
 import MagnifyMinusOutline from 'vue-material-design-icons/MagnifyMinusOutline.vue'
 import MagnifyPlusOutline from 'vue-material-design-icons/MagnifyPlusOutline.vue'
+
+interface ToolbarActionButton {
+	id: string
+	label: string
+	title?: string
+	ariaLabel?: string
+	variant: 'secondary' | 'tertiary'
+	disabled?: boolean
+	icon: Component
+	onClick: () => void
+}
 
 const props = withDefaults(
 	defineProps<{
@@ -51,6 +65,146 @@ const emit = defineEmits<{
 	'update:thumbnailSize': [size: 'small' | 'medium' | 'large']
 }>()
 
+const isEditMode = computed(() =>
+	props.activeMode === 'rotate' || props.activeMode === 'crop' || props.activeMode === 'enhance',
+)
+
+const isSelectionMode = computed(() =>
+	props.activeMode === 'split' || props.activeMode === 'bookmarks' || props.activeMode === 'movements',
+)
+
+const modeToolbar = computed<{ title: string; buttons: ToolbarActionButton[] } | null>(() => {
+	if (props.activeMode === 'rotate') {
+		return {
+			title: t('sheetmusic', 'Quick Actions:'),
+			buttons: [
+				{
+					id: 'rotate-cw',
+					label: t('sheetmusic', 'Rotate All 90° CW'),
+					variant: 'secondary',
+					icon: RotateRight,
+					onClick: () => emit('rotate-all', 90),
+				},
+				{
+					id: 'rotate-ccw',
+					label: t('sheetmusic', 'Rotate All 90° CCW'),
+					variant: 'secondary',
+					icon: RotateLeft,
+					onClick: () => emit('rotate-all', -90),
+				},
+				{
+					id: 'rotate-180',
+					label: t('sheetmusic', 'Flip All 180°'),
+					variant: 'secondary',
+					icon: Autorenew,
+					onClick: () => emit('rotate-all', 180),
+				},
+				{
+					id: 'rotate-angle',
+					label: t('sheetmusic', 'Rotate by Angle…'),
+					title: t('sheetmusic', 'Rotate by custom angle / fine deskew'),
+					variant: 'secondary',
+					icon: Rotate360,
+					onClick: () => emit('open-rotate-modal'),
+				},
+				{
+					id: 'reset-rotations',
+					label: t('sheetmusic', 'Reset All'),
+					title: t('sheetmusic', 'Reset all page rotations'),
+					ariaLabel: t('sheetmusic', 'Reset all page rotations'),
+					variant: 'tertiary',
+					disabled: !props.hasAnyRotation,
+					icon: RestoreIcon,
+					onClick: () => emit('reset-rotations'),
+				},
+			],
+		}
+	}
+
+	if (props.activeMode === 'crop') {
+		return {
+			title: t('sheetmusic', 'Click on any page or "Crop" button to adjust crop margins:'),
+			buttons: [
+				{
+					id: 'crop-all',
+					label: t('sheetmusic', 'Crop All Pages…'),
+					title: t('sheetmusic', 'Crop first page and apply to all'),
+					variant: 'secondary',
+					icon: CropIcon,
+					onClick: () => emit('open-crop-modal'),
+				},
+				{
+					id: 'reset-crops',
+					label: t('sheetmusic', 'Reset All Crops'),
+					title: t('sheetmusic', 'Reset all page crops to full page'),
+					variant: 'tertiary',
+					disabled: !props.hasAnyCrop,
+					icon: RestoreIcon,
+					onClick: () => emit('reset-all-crops'),
+				},
+			],
+		}
+	}
+
+	if (props.activeMode === 'enhance') {
+		return {
+			title: t('sheetmusic', 'Enhance scan quality (Gaussian filter, thresholding, gray level mapping):'),
+			buttons: [
+				{
+					id: 'enhance-all',
+					label: t('sheetmusic', 'Enhance All Pages…'),
+					title: t('sheetmusic', 'Configure scan enhancement and apply to all pages'),
+					variant: 'secondary',
+					icon: Tune,
+					onClick: () => emit('open-enhance-modal'),
+				},
+				{
+					id: 'reset-enhancements',
+					label: t('sheetmusic', 'Reset All Enhancements'),
+					title: t('sheetmusic', 'Reset all page enhancements'),
+					variant: 'tertiary',
+					disabled: !props.hasAnyEnhance,
+					icon: RestoreIcon,
+					onClick: () => emit('reset-all-enhancements'),
+				},
+			],
+		}
+	}
+
+	if (isSelectionMode.value) {
+		const buttons: ToolbarActionButton[] = []
+		if (props.totalPages > 0 && props.selectedPagesCount < props.totalPages) {
+			buttons.push({
+				id: 'select-all',
+				label: t('sheetmusic', 'Select All'),
+				title: t('sheetmusic', 'Select all pages'),
+				ariaLabel: t('sheetmusic', 'Select all pages'),
+				variant: 'secondary',
+				icon: CheckboxMultipleMarkedOutline,
+				onClick: () => emit('select-all-pages'),
+			})
+		}
+		if (props.selectedPagesCount > 0) {
+			const clearCountLabel = t('sheetmusic', 'Clear Selection ({count})', { count: props.selectedPagesCount }, { escape: false })
+			buttons.push({
+				id: 'clear-selection',
+				label: props.activeMode === 'split' ? t('sheetmusic', 'Clear Selection') : clearCountLabel,
+				title: props.activeMode === 'split' ? t('sheetmusic', 'Clear selection') : clearCountLabel,
+				ariaLabel: props.activeMode === 'split' ? t('sheetmusic', 'Clear selection') : clearCountLabel,
+				variant: 'tertiary',
+				icon: CloseIcon,
+				onClick: () => emit('clear-selection'),
+			})
+		}
+		return {
+			title: t('sheetmusic', 'Click pages to select (Shift+Click for range):'),
+			buttons,
+		}
+	}
+
+	return null
+})
+
 function stepThumbnailSize(direction: -1 | 1) {
 	const order: Array<'small' | 'medium' | 'large'> = ['small', 'medium', 'large']
 	const idx = order.indexOf(props.thumbnailSize ?? 'medium')
@@ -64,184 +218,48 @@ function stepThumbnailSize(direction: -1 | 1) {
 		:class="$style.toolbar"
 		role="toolbar"
 		:aria-label="t('sheetmusic', 'PDF modifier toolbar')">
-		<!-- Rotate Toolbar -->
-		<template v-if="activeMode === 'rotate'">
-			<div :class="$style.toolbarGroup">
-				<span :class="$style.toolbarTitle">{{ t('sheetmusic', 'Quick Actions:') }}</span>
-				<NcButton
-					variant="secondary"
-					:title="t('sheetmusic', 'Rotate All 90° CW')"
-					:aria-label="t('sheetmusic', 'Rotate All 90° CW')"
-					@click="emit('rotate-all', 90)">
-					<template #icon>
-						<RotateRight :size="20" />
-					</template>
-					<span :class="$style.btnText">{{ t('sheetmusic', 'Rotate All 90° CW') }}</span>
-				</NcButton>
-				<NcButton
-					variant="secondary"
-					:title="t('sheetmusic', 'Rotate All 90° CCW')"
-					:aria-label="t('sheetmusic', 'Rotate All 90° CCW')"
-					@click="emit('rotate-all', -90)">
-					<template #icon>
-						<RotateLeft :size="20" />
-					</template>
-					<span :class="$style.btnText">{{ t('sheetmusic', 'Rotate All 90° CCW') }}</span>
-				</NcButton>
-				<NcButton
-					variant="secondary"
-					:title="t('sheetmusic', 'Flip All 180°')"
-					:aria-label="t('sheetmusic', 'Flip All 180°')"
-					@click="emit('rotate-all', 180)">
-					<template #icon>
-						<Autorenew :size="20" />
-					</template>
-					<span :class="$style.btnText">{{ t('sheetmusic', 'Flip All 180°') }}</span>
-				</NcButton>
-				<NcButton
-					variant="secondary"
-					:title="t('sheetmusic', 'Rotate by custom angle / fine deskew')"
-					:aria-label="t('sheetmusic', 'Rotate by Angle…')"
-					@click="emit('open-rotate-modal')">
-					<template #icon>
-						<Rotate360 :size="20" />
-					</template>
-					<span :class="$style.btnText">{{ t('sheetmusic', 'Rotate by Angle…') }}</span>
-				</NcButton>
-				<NcButton
-					variant="tertiary"
-					:disabled="!hasAnyRotation"
-					:title="t('sheetmusic', 'Reset all page rotations')"
-					:aria-label="t('sheetmusic', 'Reset all page rotations')"
-					@click="emit('reset-rotations')">
-					<template #icon>
-						<RestoreIcon :size="20" />
-					</template>
-					<span :class="$style.btnText">{{ t('sheetmusic', 'Reset All') }}</span>
-				</NcButton>
-			</div>
-		</template>
-
-		<!-- Crop Toolbar -->
-		<template v-else-if="activeMode === 'crop'">
-			<div :class="$style.toolbarGroup">
-				<span :class="$style.toolbarTitle">
-					{{ t('sheetmusic', 'Click on any page or "Crop" button to adjust crop margins:') }}
-				</span>
-				<NcButton
-					variant="secondary"
-					:title="t('sheetmusic', 'Crop first page and apply to all')"
-					:aria-label="t('sheetmusic', 'Crop All Pages…')"
-					@click="emit('open-crop-modal')">
-					<template #icon>
-						<CropIcon :size="20" />
-					</template>
-					<span :class="$style.btnText">{{ t('sheetmusic', 'Crop All Pages…') }}</span>
-				</NcButton>
-				<NcButton
-					variant="tertiary"
-					:disabled="!hasAnyCrop"
-					:title="t('sheetmusic', 'Reset all page crops to full page')"
-					:aria-label="t('sheetmusic', 'Reset All Crops')"
-					@click="emit('reset-all-crops')">
-					<template #icon>
-						<RestoreIcon :size="20" />
-					</template>
-					<span :class="$style.btnText">{{ t('sheetmusic', 'Reset All Crops') }}</span>
-				</NcButton>
-			</div>
-		</template>
-
-		<!-- Enhance Toolbar -->
-		<template v-else-if="activeMode === 'enhance'">
-			<div :class="$style.toolbarGroup">
-				<span :class="$style.toolbarTitle">
-					{{ t('sheetmusic', 'Enhance scan quality (Gaussian filter, thresholding, gray level mapping):') }}
-				</span>
-				<NcButton
-					variant="secondary"
-					:title="t('sheetmusic', 'Configure scan enhancement and apply to all pages')"
-					:aria-label="t('sheetmusic', 'Enhance All Pages…')"
-					@click="emit('open-enhance-modal')">
-					<template #icon>
-						<Tune :size="20" />
-					</template>
-					<span :class="$style.btnText">{{ t('sheetmusic', 'Enhance All Pages…') }}</span>
-				</NcButton>
-				<NcButton
-					variant="tertiary"
-					:disabled="!hasAnyEnhance"
-					:title="t('sheetmusic', 'Reset all page enhancements')"
-					:aria-label="t('sheetmusic', 'Reset All Enhancements')"
-					@click="emit('reset-all-enhancements')">
-					<template #icon>
-						<RestoreIcon :size="20" />
-					</template>
-					<span :class="$style.btnText">{{ t('sheetmusic', 'Reset All Enhancements') }}</span>
-				</NcButton>
-			</div>
-		</template>
-
-		<!-- Split & Bookmarks Selection Toolbar -->
-		<template v-else-if="activeMode === 'split' || activeMode === 'bookmarks' || activeMode === 'movements'">
-			<div :class="$style.toolbarGroup">
-				<span :class="$style.toolbarTitle">
-					{{ t('sheetmusic', 'Click pages to select (Shift+Click for range):') }}
-				</span>
-				<span v-if="selectedPagesCount > 0" :class="$style.selectionBadge">
-					{{ t('sheetmusic', '{count} pages selected', { count: selectedPagesCount }, { escape: false }) }}
-				</span>
-				<NcButton
-					v-if="totalPages > 0 && selectedPagesCount < totalPages"
-					variant="secondary"
-					:title="t('sheetmusic', 'Select all pages')"
-					:aria-label="t('sheetmusic', 'Select all pages')"
-					@click="emit('select-all-pages')">
-					<template #icon>
-						<CheckboxMultipleMarkedOutline :size="20" />
-					</template>
-					<span :class="$style.btnText">{{ t('sheetmusic', 'Select All') }}</span>
-				</NcButton>
-				<NcButton
-					v-if="selectedPagesCount > 0"
-					variant="tertiary"
-					:title="activeMode === 'split' ? t('sheetmusic', 'Clear selection') : t('sheetmusic', 'Clear Selection ({count})', { count: selectedPagesCount }, { escape: false })"
-					:aria-label="activeMode === 'split' ? t('sheetmusic', 'Clear selection') : t('sheetmusic', 'Clear Selection ({count})', { count: selectedPagesCount }, { escape: false })"
-					@click="emit('clear-selection')">
-					<template #icon>
-						<CloseIcon :size="20" />
-					</template>
-					<span :class="$style.btnText">
-						{{ activeMode === 'split' ? t('sheetmusic', 'Clear Selection') : t('sheetmusic', 'Clear Selection ({count})', { count: selectedPagesCount }, { escape: false }) }}
-					</span>
-				</NcButton>
-			</div>
-		</template>
+		<div v-if="modeToolbar" :class="$style.toolbarGroup">
+			<span :class="$style.toolbarTitle">{{ modeToolbar.title }}</span>
+			<span v-if="isSelectionMode && selectedPagesCount > 0" :class="$style.selectionBadge">
+				{{ t('sheetmusic', '{count} pages selected', { count: selectedPagesCount }, { escape: false }) }}
+			</span>
+			<ResponsiveNcButton
+				v-for="btn in modeToolbar.buttons"
+				:key="btn.id"
+				:variant="btn.variant"
+				:disabled="btn.disabled"
+				:label="btn.label"
+				:title="btn.title"
+				:aria-label="btn.ariaLabel"
+				@click="btn.onClick">
+				<template #icon>
+					<component :is="btn.icon" :size="20" />
+				</template>
+			</ResponsiveNcButton>
+		</div>
 
 		<!-- Right-aligned Global Controls: Restore Deleted, Discard All & Thumbnail Zoom -->
 		<div :class="$style.toolbarRightControls">
-			<NcButton
-				v-if="hasAnyDeletion && (activeMode === 'rotate' || activeMode === 'crop' || activeMode === 'enhance')"
+			<ResponsiveNcButton
+				v-if="hasAnyDeletion && isEditMode"
 				variant="tertiary"
+				:label="t('sheetmusic', 'Restore Deleted ({count})', { count: deletedPagesCount }, { escape: false })"
 				:title="t('sheetmusic', 'Restore all deleted pages')"
-				:aria-label="t('sheetmusic', 'Restore Deleted ({count})', { count: deletedPagesCount }, { escape: false })"
 				@click="emit('restore-all-pages')">
 				<template #icon>
 					<DeleteRestore :size="20" />
 				</template>
-				<span :class="$style.btnText">{{ t('sheetmusic', 'Restore Deleted ({count})', { count: deletedPagesCount }, { escape: false }) }}</span>
-			</NcButton>
-			<NcButton
-				v-if="hasAnyChange && (activeMode === 'rotate' || activeMode === 'crop' || activeMode === 'enhance')"
+			</ResponsiveNcButton>
+			<ResponsiveNcButton
+				v-if="hasAnyChange && isEditMode"
 				variant="tertiary"
+				:label="t('sheetmusic', 'Discard All')"
 				:title="t('sheetmusic', 'Discard all unsaved edits')"
-				:aria-label="t('sheetmusic', 'Discard All')"
 				@click="emit('discard-all-edits')">
 				<template #icon>
 					<DeleteSweepOutline :size="20" />
 				</template>
-				<span :class="$style.btnText">{{ t('sheetmusic', 'Discard All') }}</span>
-			</NcButton>
+			</ResponsiveNcButton>
 
 			<div
 				:class="$style.zoomSwitcher"
@@ -300,10 +318,6 @@ function stepThumbnailSize(direction: -1 | 1) {
 	margin-right: 4px;
 }
 
-.btnText {
-	display: inline;
-}
-
 .selectionBadge {
 	display: inline-flex;
 	align-items: center;
@@ -356,35 +370,6 @@ function stepThumbnailSize(direction: -1 | 1) {
 	/* Flattens the group wrappers so buttons flow continuously horizontally */
 	.toolbarGroup {
 		display: contents;
-	}
-
-	/* On mobile screens, hide button text so buttons flow horizontally as compact icon buttons until space runs out */
-	.btnText {
-		display: none;
-	}
-
-	.toolbar :global(.button-vue__text) {
-		display: none !important;
-	}
-
-	.toolbar :global(.button-vue) {
-		--button-padding: 0;
-		line-height: 1;
-		width: var(--button-size, var(--default-clickable-area, 44px)) !important;
-		min-width: var(--button-size, var(--default-clickable-area, 44px)) !important;
-		min-height: var(--button-size, var(--default-clickable-area, 44px)) !important;
-		padding: 0 !important;
-		padding-inline: 0 !important;
-		justify-content: center !important;
-	}
-
-	.toolbar :global(.button-vue__wrapper) {
-		justify-content: center !important;
-		width: 100% !important;
-	}
-
-	.toolbar :global(.button-vue__icon) {
-		margin: 0 !important;
 	}
 }
 </style>

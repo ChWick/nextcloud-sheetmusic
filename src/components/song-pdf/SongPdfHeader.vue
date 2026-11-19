@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import ResponsiveNcButton from '../ResponsiveNcButton.vue'
 import type { Song, SongFile } from '../../types/song'
 import { getFileName } from '../../utils/file'
 import { formatByteSize, type PdfPageResolutionSummary } from './pdf-enhance-engine'
@@ -155,16 +156,17 @@ const modeTabItems = computed(() => [
 	<header :class="$style.header">
 		<!-- Left: Cancel Button, Song Title, File Details & Resolution Info -->
 		<div :class="$style.headerLeft">
-			<NcButton
+			<ResponsiveNcButton
 				variant="secondary"
+				collapse-at="600"
+				:label="t('sheetmusic', 'Cancel')"
 				:title="t('sheetmusic', 'Back to song')"
 				:aria-label="t('sheetmusic', 'Back to song')"
 				@click="emit('cancel')">
 				<template #icon>
 					<CloseIcon :size="20" />
 				</template>
-				<span :class="$style.cancelBtnText">{{ t('sheetmusic', 'Cancel') }}</span>
-			</NcButton>
+			</ResponsiveNcButton>
 			<div :class="$style.fileMeta">
 				<span v-if="isFullscreen" :class="$style.songTitle" :title="song.title">{{ song.title }}</span>
 				<span v-if="targetFile" :class="$style.fileName">
@@ -277,18 +279,18 @@ const modeTabItems = computed(() => [
 
 		<!-- Right: Save / Split & Fullscreen Buttons -->
 		<div :class="$style.headerRight">
-			<NcButton
+			<ResponsiveNcButton
 				variant="primary"
+				collapse-at="480"
 				:disabled="saveButtonDisabled"
+				:label="saveButtonText"
 				:title="saveButtonTitle"
-				:aria-label="saveButtonText"
 				@click="emit('save')">
 				<template #icon>
 					<CallSplit v-if="activeMode === 'split'" :size="20" />
 					<ContentSaveOutlineIcon v-else :size="20" />
 				</template>
-				<span :class="$style.saveBtnText">{{ saveButtonText }}</span>
-			</NcButton>
+			</ResponsiveNcButton>
 			<NcButton
 				variant="tertiary"
 				:disabled="isSaving || isLoading"
@@ -334,10 +336,6 @@ const modeTabItems = computed(() => [
 	flex: 1 1 0;
 	overflow: hidden;
 	padding-bottom: 8px;
-}
-
-.cancelBtnText {
-	display: inline;
 }
 
 .fileMeta {
@@ -563,10 +561,6 @@ button.tabButton:disabled {
 	cursor: not-allowed;
 }
 
-.saveBtnText {
-	display: inline;
-}
-
 .tabDirtyDot {
 	width: 7px;
 	height: 7px;
@@ -715,26 +709,6 @@ button.tabButton:disabled {
 		display: none;
 	}
 
-	.cancelBtnText,
-	.headerLeft :global(.button-vue__text) {
-		display: none !important;
-	}
-
-	.headerLeft :global(.button-vue) {
-		--button-padding: 0;
-		padding: 0 !important;
-		padding-inline: 0 !important;
-		line-height: 1;
-		width: var(--button-size, var(--default-clickable-area, 44px)) !important;
-		min-width: var(--button-size, var(--default-clickable-area, 44px)) !important;
-		justify-content: center !important;
-	}
-
-	.headerLeft :global(.button-vue__wrapper) {
-		justify-content: center !important;
-		width: 100% !important;
-	}
-
 	.songTitle {
 		max-width: 150px;
 		font-size: 14px;
@@ -742,26 +716,6 @@ button.tabButton:disabled {
 }
 
 @media (max-width: 480px) {
-	.saveBtnText,
-	.headerRight :global(.button-vue__text) {
-		display: none !important;
-	}
-
-	.headerRight :global(.button-vue) {
-		--button-padding: 0;
-		padding: 0 !important;
-		padding-inline: 0 !important;
-		line-height: 1;
-		width: var(--button-size, var(--default-clickable-area, 44px)) !important;
-		min-width: var(--button-size, var(--default-clickable-area, 44px)) !important;
-		justify-content: center !important;
-	}
-
-	.headerRight :global(.button-vue__wrapper) {
-		justify-content: center !important;
-		width: 100% !important;
-	}
-
 	.songTitle {
 		max-width: 140px;
 	}

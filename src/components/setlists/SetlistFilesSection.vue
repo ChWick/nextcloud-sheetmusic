@@ -14,28 +14,26 @@
 					multiple
 					:class="$style.hiddenInput"
 					@change="onFileSelected">
-				<NcButton
+				<ResponsiveNcButton
 					variant="tertiary"
+					collapse-at="container-560"
 					:disabled="isUploading"
-					:aria-label="isUploading ? t('sheetmusic', 'Uploading…') : t('sheetmusic', 'Upload File')"
-					:title="isUploading ? t('sheetmusic', 'Uploading…') : t('sheetmusic', 'Upload File')"
+					:label="isUploading ? t('sheetmusic', 'Uploading…') : t('sheetmusic', 'Upload File')"
 					@click="triggerFilePicker">
 					<template #icon>
 						<UploadIcon :size="18" />
 					</template>
-					{{ isUploading ? t('sheetmusic', 'Uploading…') : t('sheetmusic', 'Upload File') }}
-				</NcButton>
-				<NcButton
+				</ResponsiveNcButton>
+				<ResponsiveNcButton
 					variant="tertiary"
+					collapse-at="container-560"
 					:disabled="isUploading"
-					:aria-label="t('sheetmusic', 'Choose from Nextcloud')"
-					:title="t('sheetmusic', 'Choose from Nextcloud')"
+					:label="t('sheetmusic', 'Choose from Nextcloud')"
 					@click="openNextcloudPicker">
 					<template #icon>
 						<FolderOutlineIcon :size="18" />
 					</template>
-					{{ t('sheetmusic', 'Choose from Nextcloud') }}
-				</NcButton>
+				</ResponsiveNcButton>
 			</div>
 		</div>
 
@@ -119,6 +117,7 @@ import FileDocumentOutlineIcon from 'vue-material-design-icons/FileDocumentOutli
 import FolderOutlineIcon from 'vue-material-design-icons/FolderOutline.vue'
 import PaperclipIcon from 'vue-material-design-icons/Paperclip.vue'
 import UploadIcon from 'vue-material-design-icons/Upload.vue'
+import ResponsiveNcButton from '../ResponsiveNcButton.vue'
 import type { SetlistFile } from '../../types/song'
 
 const ALLOWED_EXTENSIONS = ['.pdf', '.docx', '.xlsx']
@@ -271,18 +270,6 @@ function formatFileSize(bytes: number): string {
 	align-items: center;
 	flex-shrink: 0;
 	gap: 8px;
-}
-
-@container (max-width: 560px) {
-	.uploadActions :global(.button-vue__text) {
-		display: none;
-	}
-
-	.uploadActions :global(.button-vue) {
-		--button-padding: var(--button-radius);
-		line-height: 1;
-		width: var(--button-size, var(--default-clickable-area, 44px)) !important;
-	}
 }
 
 .attachDialogBody {

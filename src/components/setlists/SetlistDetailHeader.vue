@@ -8,43 +8,40 @@
       </span>
     </div>
     <div :class="$style.actions">
-      <NcButton
+      <ResponsiveNcButton
         v-if="itemCount > 0"
         variant="primary"
-        :aria-label="t('sheetmusic', 'Play Setlist')"
-        :title="t('sheetmusic', 'Play Setlist')"
+        collapse-at="container-560"
+        :label="t('sheetmusic', 'Play Setlist')"
         @click="emit('play')">
         <template #icon>
           <PlayIcon :size="20" />
         </template>
-        {{ t('sheetmusic', 'Play Setlist') }}
-      </NcButton>
-      <NcButton
+      </ResponsiveNcButton>
+      <ResponsiveNcButton
         v-if="offlineSupported"
         :variant="isOffline ? 'secondary' : 'tertiary'"
+        collapse-at="container-560"
         :disabled="isSyncingOffline"
         :aria-pressed="isOffline"
-        :aria-label="offlineButtonLabel"
-        :title="offlineButtonLabel"
+        :label="offlineButtonLabel"
         @click="emit('toggle-offline')">
         <template #icon>
           <NcLoadingIcon v-if="isSyncingOffline" :size="18" />
           <CloudCheckOutline v-else-if="isOffline" :size="20" />
           <CloudDownloadOutline v-else :size="20" />
         </template>
-        {{ offlineButtonLabel }}
-      </NcButton>
-      <NcButton
+      </ResponsiveNcButton>
+      <ResponsiveNcButton
         v-if="canWrite !== false"
         :variant="itemCount > 0 ? 'secondary' : 'primary'"
-        :aria-label="t('sheetmusic', 'Add Song / Bookmark')"
-        :title="t('sheetmusic', 'Add Song / Bookmark')"
+        collapse-at="container-560"
+        :label="t('sheetmusic', 'Add Song / Bookmark')"
         @click="emit('add-item')">
         <template #icon>
           <PlusIcon :size="20" />
         </template>
-        {{ t('sheetmusic', 'Add Song / Bookmark') }}
-      </NcButton>
+      </ResponsiveNcButton>
     </div>
   </div>
 </template>
@@ -52,8 +49,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
-import NcButton from '@nextcloud/vue/components/NcButton'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
+import ResponsiveNcButton from '../ResponsiveNcButton.vue'
 import CloudCheckOutline from 'vue-material-design-icons/CloudCheckOutline.vue'
 import CloudDownloadOutline from 'vue-material-design-icons/CloudDownloadOutline.vue'
 import PlayIcon from 'vue-material-design-icons/Play.vue'
@@ -114,18 +111,6 @@ const offlineButtonLabel = computed(() => {
   gap: 8px;
   flex-shrink: 0;
   margin-left: auto;
-}
-
-@container (max-width: 560px) {
-  .actions :global(.button-vue__text) {
-    display: none;
-  }
-
-  .actions :global(.button-vue) {
-    --button-padding: var(--button-radius);
-    line-height: 1;
-    width: var(--button-size, var(--default-clickable-area, 44px)) !important;
-  }
 }
 
 .detailTitleArea {
