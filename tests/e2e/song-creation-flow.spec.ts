@@ -37,6 +37,130 @@ test.describe('Song Creation & End-to-End Editing Flow', () => {
 		await expect(page.getByRole('heading', { name: 'Songs' })).toBeVisible()
 	})
 
+	test('creates a song with opus, catalog number, and uploaded PDF and receives naming-rule path', async ({ page }) => {
+		let createPayload: any = null
+		let uploadSongId: string | null = null
+
+		await page.route(/\/api\/songs$/, async (route) => {
+			if (route.request().method() === 'POST') {
+				createPayload = route.request().postDataJSON()
+				await route.fulfill({
+					status: 200,
+					contentType: 'application/json',
+					body: JSON.stringify({
+						ocs: {
+							meta: { status: 'ok', statuscode: 200 },
+							data: {
+								createdSongId: 99,
+								songs: [
+									{
+										id: 99,
+										title: createPayload.title,
+										opus: createPayload.opus,
+										catalogNumber: createPayload.catalogNumber,
+										files: [],
+										composers: [],
+										books: [],
+										collections: [],
+										artists: [],
+										genres: [],
+										keys: [],
+										customGroups: [],
+										years: [],
+										signatures: [],
+										sourceTypes: [],
+										instruments: [],
+										arrangers: [],
+										bookmarks: [],
+									},
+								],
+							},
+						},
+					}),
+				})
+				return
+			}
+			await route.fallback()
+		})
+
+		await page.route('**/api/libraries/*/songs/*/file/upload**', async (route) => {
+			if (route.request().method() === 'POST') {
+				const match = route.request().url().match(/\/api\/libraries\/\d+\/songs\/(\d+)\/file\/upload/)
+				uploadSongId = match ? match[1] : null
+				await route.fulfill({
+					status: 200,
+					contentType: 'application/json',
+					body: JSON.stringify({
+						ocs: {
+							meta: { status: 'ok', statuscode: 200 },
+							data: {
+								songs: [
+									{
+										id: 99,
+										title: 'Moonlight Sonata',
+										opus: 'Op. 27 No. 2',
+										catalogNumber: 'LIB-14',
+										files: [
+											{
+												id: 9901,
+												path: '/dav/files/admin/Noten/Songs/Beethoven/Beethoven - Moonlight Sonata (Op. 27 No. 2).pdf',
+												pageCount: 1,
+												fileId: 9901,
+											},
+										],
+										composers: [],
+										books: [],
+										collections: [],
+										artists: [],
+										genres: [],
+										keys: [],
+										customGroups: [],
+										years: [],
+										signatures: [],
+										sourceTypes: [],
+										instruments: [],
+										arrangers: [],
+										bookmarks: [],
+									},
+								],
+							},
+						},
+					}),
+				})
+				return
+			}
+			await route.fallback()
+		})
+
+		await page.goto('/#/library/1/new-song')
+		await expect(page.locator('#song-title-input')).toBeVisible()
+		await page.locator('#song-title-input').fill('Moonlight Sonata')
+		await page.locator('#song-opus-input').fill('Op. 27 No. 2')
+		await page.locator('#song-catalog-number-input').fill('LIB-14')
+
+		// Stage a PDF file upload in SongFileSection
+		const fileInput = page.locator('input[type="file"]').last()
+		await fileInput.setInputFiles({
+			name: 'raw_scan.pdf',
+			mimeType: 'application/pdf',
+			buffer: Buffer.from('%PDF-1.4\n%%EOF'),
+		})
+		await expect(page.getByText('raw_scan.pdf')).toBeVisible()
+
+		await page.getByRole('button', { name: 'Create song' }).click()
+
+		await expect.poll(() => createPayload).toBeTruthy()
+		expect(createPayload).toMatchObject({
+			libraryId: 1,
+			title: 'Moonlight Sonata',
+			opus: 'Op. 27 No. 2',
+			catalogNumber: 'LIB-14',
+		})
+		await expect.poll(() => uploadSongId).toBe('99')
+		await expect(page).toHaveURL(/#\/library\/1\/songs/)
+		await expect(page.getByText('Beethoven - Moonlight Sonata (Op. 27 No. 2).pdf')).toBeVisible()
+	})
+
 	test('stages file deletion and restores it via pending notice', async ({ page }) => {
 		// Open existing song in editor
 		await page.goto('/#/library/1/songs?song=5')

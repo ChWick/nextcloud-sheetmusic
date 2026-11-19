@@ -122,4 +122,44 @@ test.describe('Navigation & Library Management', () => {
 		await expect.poll(() => capturedBody).toEqual({ mobilesheetsSyncEnabled: true })
 		await expect(syncCheckbox).toBeChecked()
 	})
+
+	test('updates naming rule preset in Library Settings dialog', async ({ page }) => {
+		let capturedBody: Record<string, unknown> | null = null
+		await page.route('**/api/libraries/1/settings**', async (route) => {
+			if (route.request().method() === 'PUT') {
+				capturedBody = route.request().postDataJSON()
+				await route.fulfill({
+					status: 200,
+					contentType: 'application/json',
+					body: JSON.stringify({
+						ocs: {
+							meta: { status: 'ok', statuscode: 200 },
+							data: {
+								library: {
+									id: 1,
+									path: '/dav/files/admin/Noten/MobileSheets.db',
+									autoPaths: true,
+									autoPdfMetadata: true,
+									namingRulePreset: capturedBody?.namingRulePreset ?? 'auto',
+									mobilesheetsSyncEnabled: false,
+								},
+							},
+						},
+					}),
+				})
+				return
+			}
+			await route.fallback()
+		})
+
+		await page.getByRole('button', { name: 'Library settings' }).click()
+		const dialog = page.getByRole('dialog', { name: 'Library Settings' })
+		await expect(dialog).toBeVisible()
+
+		const presetSelect = dialog.getByRole('combobox')
+		await presetSelect.click()
+		await page.getByRole('listbox', { name: 'Options' }).getByRole('option').nth(1).click()
+
+		await expect.poll(() => capturedBody).toEqual({ namingRulePreset: 'composer' })
+	})
 })
