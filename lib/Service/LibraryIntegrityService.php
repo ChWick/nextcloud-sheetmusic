@@ -161,7 +161,7 @@ class LibraryIntegrityService {
 						);
 					} catch (NoNamingRuleException) {
 						// Song missing composer, artist, or collection - still ensure it lives under Songs/
-						if ($preset !== SongPathNamingRule::PRESET_DISABLED && $preset !== 'none' && $relativeToTarget !== null) {
+						if (!SongPathNamingRule::isDisabledPreset($preset) && $relativeToTarget !== null) {
 							$normalizedRel = ltrim($relativeToTarget, '/');
 							$songsPrefix = strtolower(SongPathNamingRule::SONGS_DIR . '/');
 							if (!str_starts_with(strtolower($normalizedRel), $songsPrefix)) {

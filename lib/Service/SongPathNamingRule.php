@@ -28,6 +28,10 @@ class SongPathNamingRule {
 		self::PRESET_DISABLED,
 	];
 
+	public static function isDisabledPreset(string $preset): bool {
+		return $preset === self::PRESET_DISABLED || $preset === 'none';
+	}
+
 	public static function getFileExtension(string $filename): string {
 		$extension = pathinfo($filename, PATHINFO_EXTENSION);
 
@@ -525,7 +529,7 @@ class SongPathNamingRule {
 
 		$songTitlePart = self::buildSongTitlePart($song);
 
-		if ($preset === self::PRESET_DISABLED || $preset === 'none') {
+		if (self::isDisabledPreset($preset)) {
 			throw new NoNamingRuleException('Naming rule is disabled for this library');
 		}
 

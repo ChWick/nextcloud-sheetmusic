@@ -173,7 +173,7 @@ class FilePathRegenerator {
 				$preset,
 			);
 		} catch (NoNamingRuleException $e) {
-			if ($preset === SongPathNamingRule::PRESET_DISABLED || $preset === 'none') {
+			if (SongPathNamingRule::isDisabledPreset($preset)) {
 				throw $e;
 			}
 			$validTargetPaths = [SongPathNamingRule::SONGS_DIR . '/' . SongPathNamingRule::normalizeGeneratedPathSegment(basename($file->path))];

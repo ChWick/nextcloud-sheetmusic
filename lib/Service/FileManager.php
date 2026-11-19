@@ -195,7 +195,7 @@ class FileManager {
 	 */
 	public function regenerateFilePaths(int $libraryId, IUser $user): array {
 		$library = $this->libraryMapper->findById($libraryId);
-		if ($library !== null && (!$library->autoPaths || $library->namingRulePreset === SongPathNamingRule::PRESET_DISABLED || $library->namingRulePreset === 'none')) {
+		if ($library !== null && (!$library->autoPaths || SongPathNamingRule::isDisabledPreset($library->namingRulePreset))) {
 			return [];
 		}
 
