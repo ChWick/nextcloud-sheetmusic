@@ -18,6 +18,7 @@ import ShapeOutline from 'vue-material-design-icons/ShapeOutline.vue'
 import Undo from 'vue-material-design-icons/Undo.vue'
 import SongAnnotationStampPicker from './SongAnnotationStampPicker.vue'
 import SongAnnotationStyleBar from './SongAnnotationStyleBar.vue'
+import ViewportPopover from '../ViewportPopover.vue'
 
 const props = withDefaults(
 	defineProps<{
@@ -138,30 +139,33 @@ function pickStamp(symbol: string) {
 				</button>
 
 				<!-- Shapes Dropdown -->
-				<div :class="$style.popoverWrap">
-					<button
-						type="button"
-						:class="[$style.toolBtn, isShapeActive && $style.active]"
-						:title="activeShapeLabel"
-						:aria-label="activeShapeLabel"
-						data-test="tool-shapes"
-						@click="toggleShapeMenu">
-						<span v-if="activeShapeOption" :class="$style.shapeGlyph">{{ activeShapeOption.glyph }}</span>
-						<ShapeOutline v-else :size="18" />
-					</button>
-					<div v-if="showShapeMenu" :class="$style.dropdownMenu" data-test="shapes-menu">
+				<ViewportPopover
+					v-model:open="showShapeMenu"
+					pane-test-id="shapes-menu"
+					:pane-class="$style.dropdownMenu">
+					<template #trigger>
 						<button
-							v-for="shape in SHAPE_TOOLS"
-							:key="shape.id"
 							type="button"
-							:class="[$style.menuItem, activeTool === shape.id && $style.active]"
-							:data-test="`tool-${shape.id}`"
-							@click="selectTool(shape.id)">
-							<span :class="$style.shapeGlyph">{{ shape.glyph }}</span>
-							<span>{{ shape.label }}</span>
+							:class="[$style.toolBtn, isShapeActive && $style.active]"
+							:title="activeShapeLabel"
+							:aria-label="activeShapeLabel"
+							data-test="tool-shapes"
+							@click="toggleShapeMenu">
+							<span v-if="activeShapeOption" :class="$style.shapeGlyph">{{ activeShapeOption.glyph }}</span>
+							<ShapeOutline v-else :size="18" />
 						</button>
-					</div>
-				</div>
+					</template>
+					<button
+						v-for="shape in SHAPE_TOOLS"
+						:key="shape.id"
+						type="button"
+						:class="[$style.menuItem, activeTool === shape.id && $style.active]"
+						:data-test="`tool-${shape.id}`"
+						@click="selectTool(shape.id)">
+						<span :class="$style.shapeGlyph">{{ shape.glyph }}</span>
+						<span>{{ shape.label }}</span>
+					</button>
+				</ViewportPopover>
 
 				<button
 					type="button"
@@ -323,21 +327,8 @@ function pickStamp(symbol: string) {
 	font-weight: 600;
 }
 
-.popoverWrap {
-	position: relative;
-	display: inline-flex;
-}
-
 .dropdownMenu {
-	position: absolute;
-	top: calc(100% + 4px);
-	left: 0;
-	z-index: 200;
 	min-width: 170px;
-	background: var(--color-main-background);
-	border: 1px solid var(--color-border-dark);
-	border-radius: var(--border-radius-large, 8px);
-	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
 	padding: 4px;
 	display: flex;
 	flex-direction: column;
