@@ -83,4 +83,24 @@ describe('MemoryFileBinaryCache', () => {
 	it('provides a default singleton cache instance', () => {
 		expect(defaultFileBinaryCache).toBeInstanceOf(MemoryFileBinaryCache)
 	})
+
+	it('evicts oldest entries when byte budget is exceeded and skips oversized payloads', () => {
+		const cache = new MemoryFileBinaryCache(10, 10)
+		cache.set('a', new Uint8Array(4))
+		cache.set('b', new Uint8Array(4))
+		expect(cache.byteSize()).toBe(8)
+
+		// Adding 4 more bytes (total 12 > 10) should evict 'a'
+		cache.set('c', new Uint8Array(4))
+		expect(cache.has('a')).toBe(false)
+		expect(cache.has('b')).toBe(true)
+		expect(cache.has('c')).toBe(true)
+		expect(cache.byteSize()).toBe(8)
+
+		// Payload larger than maxBytes (12 > 10) is not cached and does not wipe existing entries
+		cache.set('huge', new Uint8Array(12))
+		expect(cache.has('huge')).toBe(false)
+		expect(cache.has('b')).toBe(true)
+		expect(cache.has('c')).toBe(true)
+	})
 })
