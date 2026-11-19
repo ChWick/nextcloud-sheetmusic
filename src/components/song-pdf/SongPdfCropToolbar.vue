@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
-import ArrowLeft from 'vue-material-design-icons/ArrowLeft.vue'
-import ArrowRight from 'vue-material-design-icons/ArrowRight.vue'
+import PageNavControls from '../PageNavControls.vue'
 import RestoreIcon from 'vue-material-design-icons/Restore.vue'
 import MagnifyPlus from 'vue-material-design-icons/MagnifyPlus.vue'
 import MagnifyMinus from 'vue-material-design-icons/MagnifyMinus.vue'
@@ -38,31 +37,12 @@ const emit = defineEmits<{
 <template>
 	<div :class="$style.toolBar">
 		<!-- Page Navigation -->
-		<div :class="$style.pageNav">
-			<NcButton
-				variant="secondary"
-				:disabled="pageNum <= 1"
-				:title="t('sheetmusic', 'Previous page')"
-				:aria-label="t('sheetmusic', 'Previous page')"
-				@click="emit('change-page', pageNum - 1)">
-				<template #icon>
-					<ArrowLeft :size="20" />
-				</template>
-			</NcButton>
-			<span :class="$style.pageIndicator">
-				{{ t('sheetmusic', 'Page {page} of {total}', { page: pageNum, total: totalPages }, { escape: false }) }}
-			</span>
-			<NcButton
-				variant="secondary"
-				:disabled="pageNum >= totalPages"
-				:title="t('sheetmusic', 'Next page')"
-				:aria-label="t('sheetmusic', 'Next page')"
-				@click="emit('change-page', pageNum + 1)">
-				<template #icon>
-					<ArrowRight :size="20" />
-				</template>
-			</NcButton>
-		</div>
+		<PageNavControls
+			:current-page="pageNum"
+			:total-pages="totalPages"
+			icon-style="arrow"
+			@prev="emit('change-page', pageNum - 1)"
+			@next="emit('change-page', pageNum + 1)" />
 
 		<!-- Zoom & Pan Controls -->
 		<div :class="$style.zoomControls">

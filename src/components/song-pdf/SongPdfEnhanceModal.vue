@@ -4,8 +4,7 @@ import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
-import ArrowLeft from 'vue-material-design-icons/ArrowLeft.vue'
-import ArrowRight from 'vue-material-design-icons/ArrowRight.vue'
+import PageNavControls from '../PageNavControls.vue'
 import Undo from 'vue-material-design-icons/Undo.vue'
 import Redo from 'vue-material-design-icons/Redo.vue'
 import EyeOutline from 'vue-material-design-icons/EyeOutline.vue'
@@ -505,37 +504,19 @@ watch(
 		<div :class="$style.dialogBody">
 			<!-- Header Toolbar -->
 			<div :class="$style.toolBar">
-				<div :class="$style.pageNav">
-					<NcButton
-						variant="secondary"
-						:disabled="pageNum <= 1"
-						:title="t('sheetmusic', 'Previous page')"
-						:aria-label="t('sheetmusic', 'Previous page')"
-						@click="prevPage">
-						<template #icon>
-							<ArrowLeft :size="20" />
-						</template>
-					</NcButton>
-					<span :class="$style.pageIndicator">
-						{{ t('sheetmusic', 'Page {page} of {total}', { page: pageNum, total: totalPages }, { escape: false }) }}
-					</span>
-					<NcButton
-						variant="secondary"
-						:disabled="pageNum >= totalPages"
-						:title="t('sheetmusic', 'Next page')"
-						:aria-label="t('sheetmusic', 'Next page')"
-						@click="nextPage">
-						<template #icon>
-							<ArrowRight :size="20" />
-						</template>
-					</NcButton>
+				<PageNavControls
+					:current-page="pageNum"
+					:total-pages="totalPages"
+					icon-style="arrow"
+					@prev="prevPage"
+					@next="nextPage">
 					<span
 						v-if="pageDpi > 0 && canvasWidth > 0 && canvasHeight > 0"
 						:class="$style.dpiBadge"
 						data-test="enhance-dpi-badge">
 						{{ pageDpi }} DPI · {{ canvasWidth }}×{{ canvasHeight }} px
 					</span>
-				</div>
+				</PageNavControls>
 
 				<!-- Zoom & Pan Controls -->
 				<div :class="$style.zoomControls">

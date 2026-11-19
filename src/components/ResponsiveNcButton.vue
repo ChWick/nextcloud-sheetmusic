@@ -14,11 +14,14 @@ const props = withDefaults(
 		ariaLabel?: string
 		/** Breakpoint at which the label collapses to an icon-only centered button. */
 		collapseAt?: ResponsiveCollapseAt
+		/** When true, omits the default slot so NcButton renders natively as icon-only. */
+		iconOnly?: boolean
 	}>(),
 	{
 		title: undefined,
 		ariaLabel: undefined,
 		collapseAt: '768',
+		iconOnly: false,
 	},
 )
 
@@ -42,13 +45,15 @@ const collapseClass = computed(() => {
 
 <template>
 	<NcButton
-		:class="collapseClass"
+		:class="iconOnly ? undefined : collapseClass"
 		:title="title ?? label"
 		:aria-label="ariaLabel ?? label">
 		<template v-if="$slots.icon" #icon>
 			<slot name="icon" />
 		</template>
-		<slot>{{ label }}</slot>
+		<template v-if="!iconOnly" #default>
+			<slot>{{ label }}</slot>
+		</template>
 	</NcButton>
 </template>
 

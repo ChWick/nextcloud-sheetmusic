@@ -46,6 +46,7 @@ import SongPdfBookmarksSidebar from './SongPdfBookmarksSidebar.vue'
 import { usePdfBookmarks } from './usePdfBookmarks'
 import { usePdfPageEdits } from './usePdfPageEdits'
 import { useFullscreenBody } from '../../composables/useFullscreenBody'
+import FullscreenShell from '../FullscreenShell.vue'
 
 GlobalWorkerOptions.workerSrc = pdfWorker
 
@@ -783,7 +784,7 @@ const {
 	isFullscreen,
 	toggleFullscreen,
 	preserveFullscreenOnUnmount,
-} = useFullscreenBody('sheetmusic-pdf-editor-fullscreen', () => Boolean(props.initialFullscreen))
+} = useFullscreenBody(() => Boolean(props.initialFullscreen))
 
 function finishAndReturn(fn: () => void) {
 	if (isFullscreen.value) {
@@ -930,7 +931,8 @@ watch(() => targetFile.value?.path, () => {
 </script>
 
 <template>
-	<div :class="[$style.container, isFullscreen && $style.fullscreenContainer]">
+	<FullscreenShell :active="isFullscreen">
+		<div :class="$style.container">
 		<!-- Top Bar / Sub-header -->
 		<SongPdfHeader
 			:song="song"
@@ -1145,7 +1147,8 @@ watch(() => targetFile.value?.path, () => {
 			:rotation-deg="pageRotations[zoomPageNum - 1] || 0"
 			@prev="goToZoomPage(zoomPageNum - 1)"
 			@next="goToZoomPage(zoomPageNum + 1)" />
-	</div>
+		</div>
+	</FullscreenShell>
 </template>
 
 <style module>
@@ -1160,36 +1163,6 @@ watch(() => targetFile.value?.path, () => {
 	min-height: 420px;
 	background-color: var(--color-main-background);
 	overflow: hidden;
-}
-
-.fullscreenContainer {
-	position: fixed;
-	inset: 0;
-	width: 100vw;
-	height: 100vh;
-	height: 100dvh;
-	max-height: 100vh;
-	max-height: 100dvh;
-	z-index: 100000;
-}
-
-:global(body.sheetmusic-pdf-editor-fullscreen #header),
-:global(body.sheetmusic-pdf-editor-fullscreen #app-navigation),
-:global(body.sheetmusic-pdf-editor-fullscreen .app-navigation) {
-	display: none !important;
-}
-
-:global(body.sheetmusic-pdf-editor-fullscreen #content),
-:global(body.sheetmusic-pdf-editor-fullscreen #app-content),
-:global(body.sheetmusic-pdf-editor-fullscreen #app-content-vue) {
-	margin: 0 !important;
-	padding: 0 !important;
-	top: 0 !important;
-	left: 0 !important;
-	width: 100vw !important;
-	height: 100vh !important;
-	max-height: 100vh !important;
-	z-index: 100000 !important;
 }
 
 .errorBanner {

@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
-import ChevronLeft from 'vue-material-design-icons/ChevronLeft.vue'
-import ChevronRight from 'vue-material-design-icons/ChevronRight.vue'
 import EyeOffOutline from 'vue-material-design-icons/EyeOffOutline.vue'
 import EyeOutline from 'vue-material-design-icons/EyeOutline.vue'
 import FitToScreenOutline from 'vue-material-design-icons/FitToScreenOutline.vue'
@@ -13,6 +11,7 @@ import RotateRight from 'vue-material-design-icons/RotateRight.vue'
 import ViewColumn from 'vue-material-design-icons/ViewColumn.vue'
 import ViewDay from 'vue-material-design-icons/ViewDay.vue'
 import ViewStream from 'vue-material-design-icons/ViewStream.vue'
+import PageNavControls from '../PageNavControls.vue'
 import DoublePageTurnModeSelector from './DoublePageTurnModeSelector.vue'
 import type { DoublePageTurnMode } from '../../utils/page-turn'
 
@@ -58,27 +57,15 @@ const emit = defineEmits<{
 <template>
 	<div :class="$style.toolbar">
 		<div :class="$style.toolbarGroup">
-			<template v-if="isPdf">
-				<NcButton
-					variant="secondary"
-					:disabled="pageLayout === 'continuous' || (canGoPrev !== undefined ? !canGoPrev : currentPage <= 1)"
-					:title="t('sheetmusic', 'Previous page')"
-					:aria-label="t('sheetmusic', 'Previous page')"
-					@click="emit('previousPage')">
-					<template #icon><ChevronLeft :size="20" /></template>
-				</NcButton>
-				<span :class="$style.pageIndicator">
-					{{ t('sheetmusic', 'Page {current} of {total}', { current: currentPageDisplay, total: totalPages || 1 }, { escape: false }) }}
-				</span>
-				<NcButton
-					variant="secondary"
-					:disabled="pageLayout === 'continuous' || (canGoNext !== undefined ? !canGoNext : currentPage >= totalPages)"
-					:title="t('sheetmusic', 'Next page')"
-					:aria-label="t('sheetmusic', 'Next page')"
-					@click="emit('nextPage')">
-					<template #icon><ChevronRight :size="20" /></template>
-				</NcButton>
-			</template>
+			<PageNavControls
+				v-if="isPdf"
+				:current-page="currentPage"
+				:total-pages="totalPages"
+				:current-page-display="currentPageDisplay"
+				:prev-disabled="pageLayout === 'continuous' || (canGoPrev !== undefined ? !canGoPrev : currentPage <= 1)"
+				:next-disabled="pageLayout === 'continuous' || (canGoNext !== undefined ? !canGoNext : currentPage >= totalPages)"
+				@prev="emit('previousPage')"
+				@next="emit('nextPage')" />
 		</div>
 
 		<div v-if="isPdf" :class="$style.toolbarGroup">

@@ -19,6 +19,7 @@ import SongPdfVersionsModal from './song-pdf/SongPdfVersionsModal.vue'
 import { useFileVersions } from './song-pdf/useFileVersions'
 import SongViewerMetadata from './song-viewer/SongViewerMetadata.vue'
 import SongViewerFileToolbar from './song-viewer/SongViewerFileToolbar.vue'
+import FullscreenShell from './FullscreenShell.vue'
 import { extractEntityLists } from './songs/song-view-columns'
 import { fetchSongAnnotations } from '../api/annotations'
 import { useFullscreenBody } from '../composables/useFullscreenBody'
@@ -205,7 +206,7 @@ const {
 	isFullscreen: isAnnotationFullscreen,
 	toggleFullscreen: toggleAnnotationFullscreen,
 	preserveFullscreenOnUnmount,
-} = useFullscreenBody('sheetmusic-annotation-editor-fullscreen', () => Boolean(props.initialFullscreen))
+} = useFullscreenBody(() => Boolean(props.initialFullscreen))
 
 function openPdfModifier(mode?: string) {
 	if (!props.song) return
@@ -258,7 +259,8 @@ defineExpose({
 </script>
 
 <template>
-	<div :class="[$style.container, isAnnotationFullscreen && $style.fullscreenContainer]">
+	<FullscreenShell :active="isAnnotationFullscreen">
+		<div :class="$style.container">
 		<header v-if="song && !hideHeader && !isAnnotationFullscreen" :class="$style.header">
 			<div :class="$style.headerTop">
 				<NcButton
@@ -370,7 +372,8 @@ defineExpose({
 			:is-loading="isLoadingVersions"
 			:is-reverting="isRevertingVersion"
 			@revert="revertToVersion" />
-	</div>
+		</div>
+	</FullscreenShell>
 </template>
 
 <style module>
@@ -381,35 +384,6 @@ defineExpose({
 	height: 100%;
 	min-width: 0;
 	min-height: 0;
-}
-
-.fullscreenContainer {
-	position: fixed;
-	inset: 0;
-	width: 100vw;
-	height: 100vh;
-	max-height: 100vh;
-	background-color: var(--color-main-background);
-	z-index: 100000;
-}
-
-:global(body.sheetmusic-annotation-editor-fullscreen #header),
-:global(body.sheetmusic-annotation-editor-fullscreen #app-navigation),
-:global(body.sheetmusic-annotation-editor-fullscreen .app-navigation) {
-	display: none !important;
-}
-
-:global(body.sheetmusic-annotation-editor-fullscreen #content),
-:global(body.sheetmusic-annotation-editor-fullscreen #app-content),
-:global(body.sheetmusic-annotation-editor-fullscreen #app-content-vue) {
-	margin: 0 !important;
-	padding: 0 !important;
-	top: 0 !important;
-	left: 0 !important;
-	width: 100vw !important;
-	height: 100vh !important;
-	max-height: 100vh !important;
-	z-index: 100000 !important;
 }
 
 .header {

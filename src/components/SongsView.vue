@@ -687,7 +687,7 @@ function openModifyPdf(song: Song, fileId?: string | number, mode?: string, full
 function isEditorFullscreenActive(): boolean {
   return (typeof document !== 'undefined' && (
     Boolean(document.fullscreenElement)
-    || document.body.classList.contains('sheetmusic-pdf-editor-fullscreen')
+    || document.body.classList.contains('sheetmusic-fullscreen-active')
   )) || route.query.fullscreen === '1';
 }
 

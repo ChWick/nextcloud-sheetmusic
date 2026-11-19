@@ -1,10 +1,15 @@
 import { onMounted, onUnmounted, ref } from 'vue'
 
+export const FULLSCREEN_BODY_CLASS = 'sheetmusic-fullscreen-active'
+
 /**
  * Manages fullscreen state, `document.body` CSS class, and `fullscreenchange` syncing
  * for full-screen editor/viewer views, with optional handoff across view transitions.
  */
-export function useFullscreenBody(bodyClass: string, initialFullscreen?: () => boolean) {
+export function useFullscreenBody(
+	initialFullscreen?: () => boolean,
+	bodyClass = FULLSCREEN_BODY_CLASS,
+) {
 	const isFullscreen = ref(false)
 	let keepFullscreenOnUnmount = false
 
