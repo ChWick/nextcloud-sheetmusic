@@ -103,7 +103,6 @@ function handlePageSizeChange(e: Event) {
 		<div v-if="totalPages > 1" :class="$style.controls">
 			<!-- First Page -->
 			<NcButton
-				size="small"
 				variant="tertiary"
 				:disabled="currentPage <= 1"
 				:title="t('sheetmusic', 'First page')"
@@ -111,13 +110,12 @@ function handlePageSizeChange(e: Event) {
 				data-test="pagination-first"
 				@click="goToPage(1)">
 				<template #icon>
-					<ChevronDoubleLeft :size="18" />
+					<ChevronDoubleLeft :size="20" />
 				</template>
 			</NcButton>
 
 			<!-- Previous Page -->
 			<NcButton
-				size="small"
 				variant="tertiary"
 				:disabled="currentPage <= 1"
 				:title="t('sheetmusic', 'Previous page')"
@@ -125,7 +123,7 @@ function handlePageSizeChange(e: Event) {
 				data-test="pagination-prev"
 				@click="goToPage(currentPage - 1)">
 				<template #icon>
-					<ChevronLeft :size="18" />
+					<ChevronLeft :size="20" />
 				</template>
 			</NcButton>
 
@@ -157,7 +155,6 @@ function handlePageSizeChange(e: Event) {
 
 			<!-- Next Page -->
 			<NcButton
-				size="small"
 				variant="tertiary"
 				:disabled="currentPage >= totalPages"
 				:title="t('sheetmusic', 'Next page')"
@@ -165,13 +162,12 @@ function handlePageSizeChange(e: Event) {
 				data-test="pagination-next"
 				@click="goToPage(currentPage + 1)">
 				<template #icon>
-					<ChevronRight :size="18" />
+					<ChevronRight :size="20" />
 				</template>
 			</NcButton>
 
 			<!-- Last Page -->
 			<NcButton
-				size="small"
 				variant="tertiary"
 				:disabled="currentPage >= totalPages"
 				:title="t('sheetmusic', 'Last page')"
@@ -179,7 +175,7 @@ function handlePageSizeChange(e: Event) {
 				data-test="pagination-last"
 				@click="goToPage(totalPages)">
 				<template #icon>
-					<ChevronDoubleRight :size="18" />
+					<ChevronDoubleRight :size="20" />
 				</template>
 			</NcButton>
 		</div>

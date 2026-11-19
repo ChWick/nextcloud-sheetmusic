@@ -264,18 +264,16 @@ async function handleSave() {
 				<div :class="$style.zoomControls">
 					<span :class="$style.zoomLabel">{{ t('sheetmusic', 'Preview Size:') }}</span>
 					<NcButton
-						size="small"
 						variant="secondary"
 						:disabled="cardWidth <= MIN_CARD_WIDTH"
 						:title="t('sheetmusic', 'Smaller preview')"
 						:aria-label="t('sheetmusic', 'Smaller preview')"
 						@click="zoomOut">
 						<template #icon>
-							<MagnifyMinus :size="16" />
+							<MagnifyMinus :size="20" />
 						</template>
 					</NcButton>
 					<NcButton
-						size="small"
 						variant="secondary"
 						:title="t('sheetmusic', 'Reset preview size')"
 						:aria-label="t('sheetmusic', 'Reset preview size')"
@@ -283,14 +281,13 @@ async function handleSave() {
 						{{ cardWidth }}px
 					</NcButton>
 					<NcButton
-						size="small"
 						variant="secondary"
 						:disabled="cardWidth >= MAX_CARD_WIDTH"
 						:title="t('sheetmusic', 'Larger preview')"
 						:aria-label="t('sheetmusic', 'Larger preview')"
 						@click="zoomIn">
 						<template #icon>
-							<MagnifyPlus :size="16" />
+							<MagnifyPlus :size="20" />
 						</template>
 					</NcButton>
 				</div>
