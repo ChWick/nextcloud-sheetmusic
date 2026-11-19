@@ -691,46 +691,41 @@ function isEditorFullscreenActive(): boolean {
   )) || route.query.fullscreen === '1';
 }
 
+function returnToSongFromModifier(songId: number, fullscreen: boolean) {
+  router.push({
+    name: 'LibraryView',
+    params: { library: props.selectedLibrary, view: 'songs' },
+    query: {
+      ...queryWithoutOpenSong(),
+      song: String(songId),
+      ...(fullscreen ? { fullscreen: '1' } : {}),
+    },
+  });
+}
+
 /** Close the PDF modifier and return to viewing the song. */
 function closeModifyPdf() {
-  if (openSong.value) {
-    const fullscreen = isEditorFullscreenActive();
-    router.push({
-      name: 'LibraryView',
-      params: { library: props.selectedLibrary, view: 'songs' },
-      query: {
-        ...queryWithoutOpenSong(),
-        song: String(openSong.value.id),
-        ...(fullscreen ? { fullscreen: '1' } : {}),
-      },
-    });
-  } else {
+  if (!openSong.value) {
     goBackToSongs();
+    return;
   }
+  returnToSongFromModifier(openSong.value.id, isEditorFullscreenActive());
 }
 
 function handlePdfModifierSaved(data: LibraryData, songId?: number) {
   const fullscreen = isEditorFullscreenActive();
   handleLibraryDataUpdate(data);
-  if (songId) {
-    const targetSong = songs.value.find(s => s.id === songId)
-      ?? data.songs?.find(s => s.id === songId);
-    if (targetSong && !fullscreen) {
-      openSongView(targetSong);
-      return;
-    }
-    router.push({
-      name: 'LibraryView',
-      params: { library: props.selectedLibrary, view: 'songs' },
-      query: {
-        ...queryWithoutOpenSong(),
-        song: String(songId),
-        ...(fullscreen ? { fullscreen: '1' } : {}),
-      },
-    });
-  } else {
+  if (!songId) {
     goBackToSongs();
+    return;
   }
+  const targetSong = songs.value.find(s => s.id === songId)
+    ?? data.songs?.find(s => s.id === songId);
+  if (targetSong && !fullscreen) {
+    openSongView(targetSong);
+    return;
+  }
+  returnToSongFromModifier(songId, fullscreen);
 }
 
 const isViewingSong = computed(() =>
