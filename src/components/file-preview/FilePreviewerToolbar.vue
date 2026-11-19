@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import type { Component } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
-import NcButton from '@nextcloud/vue/components/NcButton'
+import ResponsiveNcButton from '../ResponsiveNcButton.vue'
 import EyeOffOutline from 'vue-material-design-icons/EyeOffOutline.vue'
 import EyeOutline from 'vue-material-design-icons/EyeOutline.vue'
 import FitToScreenOutline from 'vue-material-design-icons/FitToScreenOutline.vue'
@@ -52,6 +53,12 @@ const emit = defineEmits<{
 	openExternal: []
 	toggleAnnotations: []
 }>()
+
+const PAGE_LAYOUT_OPTIONS: Array<{ mode: PageLayoutMode; label: string; icon: Component }> = [
+	{ mode: 'continuous', label: t('sheetmusic', 'Continuous scroll (All pages)'), icon: ViewStream },
+	{ mode: 'single', label: t('sheetmusic', 'Single page'), icon: ViewDay },
+	{ mode: 'double', label: t('sheetmusic', 'Two pages side-by-side'), icon: ViewColumn },
+]
 </script>
 
 <template>
@@ -70,27 +77,15 @@ const emit = defineEmits<{
 
 		<div v-if="isPdf" :class="$style.toolbarGroup">
 			<div :class="$style.segmentedGroup">
-				<NcButton
-					:variant="pageLayout === 'continuous' ? 'primary' : 'secondary'"
-					:title="t('sheetmusic', 'Continuous scroll (All pages)')"
-					:aria-label="t('sheetmusic', 'Continuous scroll (All pages)')"
-					@click="emit('pageLayout', 'continuous')">
-					<template #icon><ViewStream :size="20" /></template>
-				</NcButton>
-				<NcButton
-					:variant="pageLayout === 'single' ? 'primary' : 'secondary'"
-					:title="t('sheetmusic', 'Single page')"
-					:aria-label="t('sheetmusic', 'Single page')"
-					@click="emit('pageLayout', 'single')">
-					<template #icon><ViewDay :size="20" /></template>
-				</NcButton>
-				<NcButton
-					:variant="pageLayout === 'double' ? 'primary' : 'secondary'"
-					:title="t('sheetmusic', 'Two pages side-by-side')"
-					:aria-label="t('sheetmusic', 'Two pages side-by-side')"
-					@click="emit('pageLayout', 'double')">
-					<template #icon><ViewColumn :size="20" /></template>
-				</NcButton>
+				<ResponsiveNcButton
+					v-for="opt in PAGE_LAYOUT_OPTIONS"
+					:key="opt.mode"
+					icon-only
+					:variant="pageLayout === opt.mode ? 'primary' : 'secondary'"
+					:label="opt.label"
+					@click="emit('pageLayout', opt.mode)">
+					<template #icon><component :is="opt.icon" :size="20" /></template>
+				</ResponsiveNcButton>
 			</div>
 
 			<DoublePageTurnModeSelector
@@ -100,13 +95,13 @@ const emit = defineEmits<{
 		</div>
 
 		<div :class="$style.toolbarGroup">
-			<NcButton
+			<ResponsiveNcButton
 				variant="secondary"
-				:title="t('sheetmusic', 'Zoom out')"
-				:aria-label="t('sheetmusic', 'Zoom out')"
+				icon-only
+				:label="t('sheetmusic', 'Zoom out')"
 				@click="emit('zoomOut')">
 				<template #icon><MagnifyMinus :size="20" /></template>
-			</NcButton>
+			</ResponsiveNcButton>
 
 			<div :class="$style.zoomSelector">
 				<select
@@ -128,51 +123,51 @@ const emit = defineEmits<{
 				</select>
 			</div>
 
-			<NcButton
+			<ResponsiveNcButton
 				variant="secondary"
-				:title="t('sheetmusic', 'Zoom in')"
-				:aria-label="t('sheetmusic', 'Zoom in')"
+				icon-only
+				:label="t('sheetmusic', 'Zoom in')"
 				@click="emit('zoomIn')">
 				<template #icon><MagnifyPlus :size="20" /></template>
-			</NcButton>
+			</ResponsiveNcButton>
 
-			<NcButton
+			<ResponsiveNcButton
 				variant="secondary"
-				:title="t('sheetmusic', 'Fit to width')"
-				:aria-label="t('sheetmusic', 'Fit to width')"
+				icon-only
+				:label="t('sheetmusic', 'Fit to width')"
 				@click="emit('fitWidth')">
 				<template #icon><FitToScreenOutline :size="20" /></template>
-			</NcButton>
+			</ResponsiveNcButton>
 
-			<NcButton
+			<ResponsiveNcButton
 				variant="secondary"
-				:title="t('sheetmusic', 'Rotate clockwise')"
-				:aria-label="t('sheetmusic', 'Rotate clockwise')"
+				icon-only
+				:label="t('sheetmusic', 'Rotate clockwise')"
 				@click="emit('rotate')">
 				<template #icon><RotateRight :size="20" /></template>
-			</NcButton>
+			</ResponsiveNcButton>
 
-			<NcButton
+			<ResponsiveNcButton
 				v-if="isPdf"
 				variant="secondary"
-				:title="showAnnotations ? t('sheetmusic', 'Hide annotations') : t('sheetmusic', 'Show annotations')"
-				:aria-label="showAnnotations ? t('sheetmusic', 'Hide annotations') : t('sheetmusic', 'Show annotations')"
+				icon-only
+				:label="showAnnotations ? t('sheetmusic', 'Hide annotations') : t('sheetmusic', 'Show annotations')"
 				data-test="toggle-annotations-button"
 				@click="emit('toggleAnnotations')">
 				<template #icon>
 					<EyeOutline v-if="showAnnotations" :size="20" />
 					<EyeOffOutline v-else :size="20" />
 				</template>
-			</NcButton>
+			</ResponsiveNcButton>
 
-			<NcButton
+			<ResponsiveNcButton
 				v-if="showExternalButton"
 				variant="secondary"
-				:title="t('sheetmusic', 'Open in external viewer')"
-				:aria-label="t('sheetmusic', 'Open in external viewer')"
+				icon-only
+				:label="t('sheetmusic', 'Open in external viewer')"
 				@click="emit('openExternal')">
 				<template #icon><OpenInNewIcon :size="20" /></template>
-			</NcButton>
+			</ResponsiveNcButton>
 		</div>
 	</div>
 </template>
