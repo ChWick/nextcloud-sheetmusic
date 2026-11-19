@@ -61,6 +61,7 @@
       :file-id="route.query.fileId as string"
       :library-id="selectedLibrary"
       :initial-mode="(route.query.pdfMode as 'rotate' | 'split' | 'crop' | 'enhance' | 'bookmarks' | undefined)"
+      :initial-fullscreen="route.query.fullscreen === '1'"
       :auto-pdf-metadata="autoPdfMetadata"
       v-bind="entityListsProps"
       @saved="handlePdfModifierSaved"
@@ -73,6 +74,7 @@
       :song="openSong"
       :library-id="selectedLibrary"
       :can-write="canWrite"
+      :initial-fullscreen="route.query.fullscreen === '1'"
       v-bind="entityListsProps"
       @back="goBackToSongs"
       @modify-pdf="openModifyPdf"
@@ -666,7 +668,7 @@ function openSongEdit(song: Song) {
 }
 
 /** Open the PDF modifier for a song. */
-function openModifyPdf(song: Song, fileId?: string | number, mode?: string) {
+function openModifyPdf(song: Song, fileId?: string | number, mode?: string, fullscreen?: boolean) {
   isCreatingSong.value = false;
   router.push({
     name: 'LibraryView',
@@ -677,17 +679,30 @@ function openModifyPdf(song: Song, fileId?: string | number, mode?: string) {
       modifyPdf: '1',
       ...(fileId ? { fileId: String(fileId) } : {}),
       ...(mode ? { pdfMode: mode } : {}),
+      ...(fullscreen ? { fullscreen: '1' } : {}),
     },
   });
+}
+
+function isEditorFullscreenActive(): boolean {
+  return (typeof document !== 'undefined' && (
+    Boolean(document.fullscreenElement)
+    || document.body.classList.contains('sheetmusic-pdf-editor-fullscreen')
+  )) || route.query.fullscreen === '1';
 }
 
 /** Close the PDF modifier and return to viewing the song. */
 function closeModifyPdf() {
   if (openSong.value) {
+    const fullscreen = isEditorFullscreenActive();
     router.push({
       name: 'LibraryView',
       params: { library: props.selectedLibrary, view: 'songs' },
-      query: { ...queryWithoutOpenSong(), song: String(openSong.value.id) },
+      query: {
+        ...queryWithoutOpenSong(),
+        song: String(openSong.value.id),
+        ...(fullscreen ? { fullscreen: '1' } : {}),
+      },
     });
   } else {
     goBackToSongs();
@@ -695,18 +710,23 @@ function closeModifyPdf() {
 }
 
 function handlePdfModifierSaved(data: LibraryData, songId?: number) {
+  const fullscreen = isEditorFullscreenActive();
   handleLibraryDataUpdate(data);
   if (songId) {
     const targetSong = songs.value.find(s => s.id === songId)
       ?? data.songs?.find(s => s.id === songId);
-    if (targetSong) {
+    if (targetSong && !fullscreen) {
       openSongView(targetSong);
       return;
     }
     router.push({
       name: 'LibraryView',
       params: { library: props.selectedLibrary, view: 'songs' },
-      query: { ...queryWithoutOpenSong(), song: String(songId) },
+      query: {
+        ...queryWithoutOpenSong(),
+        song: String(songId),
+        ...(fullscreen ? { fullscreen: '1' } : {}),
+      },
     });
   } else {
     goBackToSongs();
@@ -726,6 +746,7 @@ function queryWithoutOpenSong() {
   delete query.modifyPdf;
   delete query.fileId;
   delete query.pdfMode;
+  delete query.fullscreen;
   return query;
 }
 

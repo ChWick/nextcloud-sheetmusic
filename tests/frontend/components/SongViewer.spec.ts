@@ -601,7 +601,15 @@ describe('SongViewer.vue', () => {
 		await trigger.trigger('click')
 		await settle()
 		await wrapper.find('[data-test="edit-bookmarks-button"]').trigger('click')
-		expect(wrapper.emitted('modify-pdf')?.[0]).toEqual([songWithBookmarks, 100, 'bookmarks'])
+		expect(wrapper.emitted('modify-pdf')?.[0]).toEqual([songWithBookmarks, 100, 'bookmarks', undefined])
+
+		// Toggle fullscreen, re-open and click Edit bookmarks… -> preserves fullscreen
+		await wrapper.find('[data-test="viewer-fullscreen-button"]').trigger('click')
+		await settle()
+		await wrapper.find('[data-test="bookmarks-menu-trigger"]').trigger('click')
+		await settle()
+		await wrapper.find('[data-test="edit-bookmarks-button"]').trigger('click')
+		expect(wrapper.emitted('modify-pdf')?.[1]).toEqual([songWithBookmarks, 100, 'bookmarks', true])
 	})
 
 	it('fetches annotations using fileId when present', async () => {

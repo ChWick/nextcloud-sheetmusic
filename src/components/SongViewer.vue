@@ -10,7 +10,7 @@ import { getFileVersionToken, getVersionedFileUrl } from '../utils/file-version'
 import ArrowLeftIcon from 'vue-material-design-icons/ArrowLeft.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import SongEditor from './SongEditor.vue'
 import DeleteSongDialog from './DeleteSongDialog.vue'
@@ -21,6 +21,7 @@ import SongViewerMetadata from './song-viewer/SongViewerMetadata.vue'
 import SongViewerFileToolbar from './song-viewer/SongViewerFileToolbar.vue'
 import { extractEntityLists } from './songs/song-view-columns'
 import { fetchSongAnnotations } from '../api/annotations'
+import { useFullscreenBody } from '../composables/useFullscreenBody'
 import type { SheetAnnotation } from '../types/annotation'
 
 const props = withDefaults(
@@ -41,6 +42,7 @@ const props = withDefaults(
 		arrangers?: Arranger[]
 		hideHeader?: boolean
 		canWrite?: boolean
+		initialFullscreen?: boolean
 	}>(),
 	{
 		song: null,
@@ -59,12 +61,13 @@ const props = withDefaults(
 		arrangers: () => [],
 		hideHeader: false,
 		canWrite: true,
+		initialFullscreen: false,
 	},
 )
 
 const emit = defineEmits<{
 	back: []
-	'modify-pdf': [song: Song, fileId?: string | number, mode?: string]
+	'modify-pdf': [song: Song, fileId?: string | number, mode?: string, fullscreen?: boolean]
 	saved: [data: LibraryData, songId?: number]
 	updated: [data: LibraryData]
 	/** The song was deleted; its files went to the trash bin or stayed, per the chosen option. */
@@ -198,47 +201,19 @@ const annotationContext = computed(() => ({
 	fileId: Number(selectedFile.value?.fileId ?? selectedFile.value?.id ?? 0),
 }))
 
-const FULLSCREEN_BODY_CLASS = 'sheetmusic-annotation-editor-fullscreen'
-const isAnnotationFullscreen = ref(false)
+const {
+	isFullscreen: isAnnotationFullscreen,
+	toggleFullscreen: toggleAnnotationFullscreen,
+	preserveFullscreenOnUnmount,
+} = useFullscreenBody('sheetmusic-annotation-editor-fullscreen', () => Boolean(props.initialFullscreen))
 
-function syncFullscreenBodyClass(active: boolean) {
-	if (typeof document !== 'undefined') {
-		document.body.classList.toggle(FULLSCREEN_BODY_CLASS, active)
+function openPdfModifier(mode?: string) {
+	if (!props.song) return
+	if (isAnnotationFullscreen.value) {
+		preserveFullscreenOnUnmount()
 	}
+	emit('modify-pdf', props.song, selectedFile.value?.id, mode, isAnnotationFullscreen.value || undefined)
 }
-
-async function toggleAnnotationFullscreen() {
-	const next = !isAnnotationFullscreen.value
-	isAnnotationFullscreen.value = next
-	syncFullscreenBodyClass(next)
-	try {
-		if (next && !document.fullscreenElement && document.documentElement.requestFullscreen) {
-			await document.documentElement.requestFullscreen()
-		} else if (!next && document.fullscreenElement && document.exitFullscreen) {
-			await document.exitFullscreen()
-		}
-	} catch {
-		// Fullscreen API may be blocked by browser policy; CSS fullscreen still applies
-	}
-}
-
-function handleFullscreenChange() {
-	const active = Boolean(document.fullscreenElement)
-	isAnnotationFullscreen.value = active
-	syncFullscreenBodyClass(active)
-}
-
-onMounted(() => {
-	document.addEventListener('fullscreenchange', handleFullscreenChange)
-})
-
-onUnmounted(() => {
-	document.removeEventListener('fullscreenchange', handleFullscreenChange)
-	syncFullscreenBodyClass(false)
-	if (document.fullscreenElement && document.exitFullscreen) {
-		document.exitFullscreen().catch(() => {})
-	}
-})
 
 function toggleAnnotationEditMode() {
 	filePreviewerRef.value?.toggleEditMode()
@@ -356,13 +331,13 @@ defineExpose({
 				:active-bookmark-page="activeBookmarkPage"
 				@select-file="selectFile"
 				@open-external="openInExternalViewer"
-				@modify-pdf="song && emit('modify-pdf', song, selectedFile.id)"
+				@modify-pdf="openPdfModifier()"
 				@open-versions="openVersionsModal"
 				@toggle-annotations="filePreviewerRef?.toggleAnnotations()"
 				@toggle-edit-annotations="toggleAnnotationEditMode"
 				@toggle-fullscreen="toggleAnnotationFullscreen"
 				@jump-to-bookmark="jumpToBookmark"
-				@edit-bookmarks="song && emit('modify-pdf', song, selectedFile?.id, 'bookmarks')" />
+				@edit-bookmarks="openPdfModifier('bookmarks')" />
 
 			<AnnotatableFilePreview
 				v-if="selectedFile?.path"

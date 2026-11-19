@@ -45,6 +45,7 @@ import { usePdfSplit } from './usePdfSplit'
 import SongPdfBookmarksSidebar from './SongPdfBookmarksSidebar.vue'
 import { usePdfBookmarks } from './usePdfBookmarks'
 import { usePdfPageEdits } from './usePdfPageEdits'
+import { useFullscreenBody } from '../../composables/useFullscreenBody'
 
 GlobalWorkerOptions.workerSrc = pdfWorker
 
@@ -56,6 +57,7 @@ const props = withDefaults(
 		libraryId: number
 		autoPdfMetadata?: boolean
 		initialMode?: 'rotate' | 'split' | 'crop' | 'enhance' | 'bookmarks'
+		initialFullscreen?: boolean
 		books?: Book[]
 		composers?: Composer[]
 		collections?: Collection[]
@@ -71,6 +73,7 @@ const props = withDefaults(
 	}>(),
 	{
 		autoPdfMetadata: true,
+		initialFullscreen: false,
 		books: () => [],
 		composers: () => [],
 		collections: () => [],
@@ -144,7 +147,7 @@ async function refreshPageResolutions(pdf: any) {
 const isPageOrderModalOpen = ref(false)
 
 function handlePageOrderSaved(data: LibraryData) {
-	emit('saved', data, props.song.id)
+	finishAndReturn(() => emit('saved', data, props.song.id))
 }
 
 // Join modal state
@@ -229,8 +232,8 @@ const {
 	pageRotations,
 	originalPdfBytes,
 	targetFile,
-	onSaved: (data, targetSongId) => emit('saved', data, targetSongId),
-	onCancel: () => emit('cancel'),
+	onSaved: (data, targetSongId) => finishAndReturn(() => emit('saved', data, targetSongId)),
+	onCancel: () => finishAndReturn(() => emit('cancel')),
 })
 
 // Bookmarks state & operations
@@ -256,8 +259,8 @@ const {
 	onPdfUpdated: async (bytes: Uint8Array) => {
 		originalPdfBytes.value = bytes
 	},
-	onSaved: (data, targetSongId) => emit('saved', data, targetSongId),
-	onCancel: () => emit('cancel'),
+	onSaved: (data, targetSongId) => finishAndReturn(() => emit('saved', data, targetSongId)),
+	onCancel: () => finishAndReturn(() => emit('cancel')),
 })
 
 function getPageBookmarksSummary(pageNum: number): BookmarkPageSummary[] {
@@ -398,7 +401,7 @@ const {
 	songId: () => props.song.id,
 	fileId: () => targetFile.value?.id,
 	onReverted: async (data) => {
-		emit('saved', data, props.song.id)
+		finishAndReturn(() => emit('saved', data, props.song.id))
 		await loadPdf()
 	},
 })
@@ -755,7 +758,7 @@ async function saveRotationsAndCrops() {
 						? t('sheetmusic', 'Rotated PDF saved successfully for "{title}".', { title: songTitle }, { escape: false })
 						: t('sheetmusic', 'Cropped PDF saved successfully for "{title}".', { title: songTitle }, { escape: false })
 		showSuccess(successMsg)
-		emit('saved', data, props.song.id)
+		finishAndReturn(() => emit('saved', data, props.song.id))
 	} catch (err: any) {
 		console.error('Failed to save modified PDF:', err)
 		const detail = describeRequestFailure(err, err?.message ?? String(err))
@@ -776,35 +779,17 @@ const saveRotations = saveRotationsAndCrops
 const saveCrops = saveRotationsAndCrops
 const saveEnhancements = saveRotationsAndCrops
 
-const isFullscreen = ref(false)
+const {
+	isFullscreen,
+	toggleFullscreen,
+	preserveFullscreenOnUnmount,
+} = useFullscreenBody('sheetmusic-pdf-editor-fullscreen', () => Boolean(props.initialFullscreen))
 
-const FULLSCREEN_BODY_CLASS = 'sheetmusic-pdf-editor-fullscreen'
-
-function syncFullscreenBodyClass(active: boolean) {
-	if (typeof document !== 'undefined') {
-		document.body.classList.toggle(FULLSCREEN_BODY_CLASS, active)
+function finishAndReturn(fn: () => void) {
+	if (isFullscreen.value) {
+		preserveFullscreenOnUnmount()
 	}
-}
-
-async function toggleFullscreen() {
-	const next = !isFullscreen.value
-	isFullscreen.value = next
-	syncFullscreenBodyClass(next)
-	try {
-		if (next && !document.fullscreenElement && document.documentElement.requestFullscreen) {
-			await document.documentElement.requestFullscreen()
-		} else if (!next && document.fullscreenElement && document.exitFullscreen) {
-			await document.exitFullscreen()
-		}
-	} catch {
-		// Fullscreen API may be blocked by browser policy; CSS fullscreen still applies
-	}
-}
-
-function handleFullscreenChange() {
-	const active = Boolean(document.fullscreenElement)
-	isFullscreen.value = active
-	syncFullscreenBodyClass(active)
+	fn()
 }
 
 function selectAllPages() {
@@ -822,7 +807,7 @@ function handleCancel() {
 	if (hasAnyChange.value && !confirmDiscard(t('sheetmusic', 'You have unsaved PDF changes. Discard all changes and leave?'))) {
 		return
 	}
-	emit('cancel')
+	finishAndReturn(() => emit('cancel'))
 }
 
 function handleDiscardAllEdits() {
@@ -932,17 +917,11 @@ function handleKeyDown(event: KeyboardEvent) {
 
 onMounted(() => {
 	loadPdf()
-	document.addEventListener('fullscreenchange', handleFullscreenChange)
 	window.addEventListener('keydown', handleKeyDown)
 })
 
 onUnmounted(() => {
-	document.removeEventListener('fullscreenchange', handleFullscreenChange)
 	window.removeEventListener('keydown', handleKeyDown)
-	syncFullscreenBodyClass(false)
-	if (document.fullscreenElement && document.exitFullscreen) {
-		document.exitFullscreen().catch(() => {})
-	}
 })
 
 watch(() => targetFile.value?.path, () => {
