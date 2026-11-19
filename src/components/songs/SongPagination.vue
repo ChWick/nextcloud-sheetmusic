@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
-import NcButton from '@nextcloud/vue/components/NcButton'
+import ResponsiveNcButton from '../ResponsiveNcButton.vue'
 import ChevronLeft from 'vue-material-design-icons/ChevronLeft.vue'
 import ChevronRight from 'vue-material-design-icons/ChevronRight.vue'
 import ChevronDoubleLeft from 'vue-material-design-icons/ChevronDoubleLeft.vue'
@@ -101,31 +101,25 @@ function handlePageSizeChange(e: Event) {
 
 		<!-- Navigation Controls -->
 		<div v-if="totalPages > 1" :class="$style.controls">
-			<!-- First Page -->
-			<NcButton
+			<ResponsiveNcButton
 				variant="tertiary"
+				icon-only
 				:disabled="currentPage <= 1"
-				:title="t('sheetmusic', 'First page')"
-				:aria-label="t('sheetmusic', 'First page')"
+				:label="t('sheetmusic', 'First page')"
 				data-test="pagination-first"
 				@click="goToPage(1)">
-				<template #icon>
-					<ChevronDoubleLeft :size="20" />
-				</template>
-			</NcButton>
+				<template #icon><ChevronDoubleLeft :size="20" /></template>
+			</ResponsiveNcButton>
 
-			<!-- Previous Page -->
-			<NcButton
+			<ResponsiveNcButton
 				variant="tertiary"
+				icon-only
 				:disabled="currentPage <= 1"
-				:title="t('sheetmusic', 'Previous page')"
-				:aria-label="t('sheetmusic', 'Previous page')"
+				:label="t('sheetmusic', 'Previous page')"
 				data-test="pagination-prev"
 				@click="goToPage(currentPage - 1)">
-				<template #icon>
-					<ChevronLeft :size="20" />
-				</template>
-			</NcButton>
+				<template #icon><ChevronLeft :size="20" /></template>
+			</ResponsiveNcButton>
 
 			<!-- Desktop Page Buttons -->
 			<div :class="$style.pageButtons">
@@ -153,31 +147,25 @@ function handlePageSizeChange(e: Event) {
 				{{ t('sheetmusic', '{current} / {total}', { current: currentPage, total: totalPages }, { escape: false }) }}
 			</span>
 
-			<!-- Next Page -->
-			<NcButton
+			<ResponsiveNcButton
 				variant="tertiary"
+				icon-only
 				:disabled="currentPage >= totalPages"
-				:title="t('sheetmusic', 'Next page')"
-				:aria-label="t('sheetmusic', 'Next page')"
+				:label="t('sheetmusic', 'Next page')"
 				data-test="pagination-next"
 				@click="goToPage(currentPage + 1)">
-				<template #icon>
-					<ChevronRight :size="20" />
-				</template>
-			</NcButton>
+				<template #icon><ChevronRight :size="20" /></template>
+			</ResponsiveNcButton>
 
-			<!-- Last Page -->
-			<NcButton
+			<ResponsiveNcButton
 				variant="tertiary"
+				icon-only
 				:disabled="currentPage >= totalPages"
-				:title="t('sheetmusic', 'Last page')"
-				:aria-label="t('sheetmusic', 'Last page')"
+				:label="t('sheetmusic', 'Last page')"
 				data-test="pagination-last"
 				@click="goToPage(totalPages)">
-				<template #icon>
-					<ChevronDoubleRight :size="20" />
-				</template>
-			</NcButton>
+				<template #icon><ChevronDoubleRight :size="20" /></template>
+			</ResponsiveNcButton>
 		</div>
 
 		<!-- Page Size Selector -->
