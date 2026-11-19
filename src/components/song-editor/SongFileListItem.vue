@@ -2,10 +2,8 @@
 import type { SongFile } from '../../types/song'
 import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
-import { generateFilePath } from '@nextcloud/router'
 import NcButton from '@nextcloud/vue/components/NcButton'
-import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist'
-import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+import { cleanupPdfJsPage, destroyPdfJsDocument, loadPdfJsDocument, releaseCanvas } from '../../utils/pdfjs'
 import { downsampleImageBuffer, imageBufferToImageData, imageDataToImageBuffer } from '../song-pdf/scan-enhance-engine'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import EjectIcon from 'vue-material-design-icons/Eject.vue'
@@ -15,8 +13,6 @@ import MusicIcon from 'vue-material-design-icons/Music.vue'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { getCacheBustedFileUrl, getFileName } from '../../utils/file'
-
-GlobalWorkerOptions.workerSrc = pdfWorker
 
 const props = defineProps<{
 	file: SongFile
@@ -48,6 +44,9 @@ async function loadPdfThumbnail() {
 
 	thumbnailContainer.value.replaceChildren()
 
+	let pdf: any = null
+	let page: any = null
+	let srcCanvas: HTMLCanvasElement | null = null
 	try {
 		const targetUrl = getCacheBustedFileUrl(props.file.path, props.file.id)
 		const response = await axios.get(targetUrl, {
@@ -55,23 +54,13 @@ async function loadPdfThumbnail() {
 		})
 
 		const pdfData = response.data instanceof ArrayBuffer ? new Uint8Array(response.data) : response.data
-		const wasmUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/wasm/') : new URL('pdfjs-dist/wasm/', import.meta.url).href
-		const cMapUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/cmaps/') : new URL('pdfjs-dist/cmaps/', import.meta.url).href
-		const standardFontDataUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/standard_fonts/') : new URL('pdfjs-dist/standard_fonts/', import.meta.url).href
-
-		const pdf = await getDocument({
-			data: pdfData,
-			cMapUrl,
-			cMapPacked: true,
-			standardFontDataUrl,
-			wasmUrl,
-		}).promise
+		pdf = await loadPdfJsDocument(pdfData)
 
 		if (pdf.numPages < 1) {
 			return
 		}
 
-		const page = await pdf.getPage(1)
+		page = await pdf.getPage(1)
 		const unscaledViewport = page.getViewport({ scale: 1.0 })
 		// Supersample at 6x (264px) and area-average downsample to 88px (2x HiDPI for 44px CSS width)
 		const renderScale = 264 / Math.max(1, unscaledViewport.width)
@@ -83,7 +72,7 @@ async function loadPdfThumbnail() {
 		const thumbW = 88
 		const thumbH = Math.max(1, Math.round(renderH * (thumbW / renderW)))
 
-		const srcCanvas = document.createElement('canvas')
+		srcCanvas = document.createElement('canvas')
 		srcCanvas.width = renderW
 		srcCanvas.height = renderH
 
@@ -115,6 +104,12 @@ async function loadPdfThumbnail() {
 		}
 	} catch {
 		// If thumbnail rendering fails, fallback icon stays visible
+	} finally {
+		releaseCanvas(srcCanvas)
+		cleanupPdfJsPage(page)
+		if (pdf) {
+			void destroyPdfJsDocument(pdf)
+		}
 	}
 }
 

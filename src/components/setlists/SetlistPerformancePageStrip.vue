@@ -2,14 +2,10 @@
 import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
 import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
-import { generateFilePath } from '@nextcloud/router'
-import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist'
-import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 import { defaultFileBinaryCache } from '../../utils/file-cache'
 import { parsePageOrder } from '../../utils/page-order'
-
-GlobalWorkerOptions.workerSrc = pdfWorker
+import { cleanupPdfJsPage, destroyPdfJsDocument, loadPdfJsDocument, releaseChildCanvases } from '../../utils/pdfjs'
 
 export interface SetlistStripSong {
 	itemIndex: number
@@ -123,16 +119,7 @@ function getPdfDocument(filePath: string): Promise<any | null> {
 				}
 			}
 			if (!data) return null
-			const wasmUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/wasm/') : new URL('pdfjs-dist/wasm/', import.meta.url).href
-			const cMapUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/cmaps/') : new URL('pdfjs-dist/cmaps/', import.meta.url).href
-			const standardFontDataUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/standard_fonts/') : new URL('pdfjs-dist/standard_fonts/', import.meta.url).href
-			return await getDocument({
-				data: data.slice(),
-				cMapUrl,
-				cMapPacked: true,
-				standardFontDataUrl,
-				wasmUrl,
-			}).promise
+			return await loadPdfJsDocument(data.slice())
 		} catch {
 			return null
 		}
@@ -160,8 +147,9 @@ async function renderThumbnailForCanvas(canvas: HTMLCanvasElement, song: Setlist
 
 	const idx = Math.min(Math.max(1, logicalPage), ordered.length) - 1
 	const physicalPage = ordered[idx] || 1
+	let page: any = null
 	try {
-		const page = await pdf.getPage(physicalPage)
+		page = await pdf.getPage(physicalPage)
 		const baseViewport = page.getViewport({ scale: 1.0 })
 		const scale = 88 / Math.max(1, baseViewport.width)
 		const viewport = page.getViewport({ scale })
@@ -178,6 +166,8 @@ async function renderThumbnailForCanvas(canvas: HTMLCanvasElement, song: Setlist
 		}).promise
 	} catch {
 		// Ignore thumbnail render error
+	} finally {
+		cleanupPdfJsPage(page)
 	}
 }
 
@@ -243,6 +233,7 @@ watch(
 			setupStripObserver()
 		} else {
 			cleanupObserver()
+			releaseChildCanvases(stripRef.value)
 		}
 	},
 	{ immediate: true },
@@ -250,7 +241,14 @@ watch(
 
 onUnmounted(() => {
 	cleanupObserver()
+	releaseChildCanvases(stripRef.value)
 	onStripPointerUp()
+	for (const promise of pdfCache.values()) {
+		void promise.then((pdf) => {
+			if (pdf) return destroyPdfJsDocument(pdf)
+		})
+	}
+	pdfCache.clear()
 })
 </script>
 

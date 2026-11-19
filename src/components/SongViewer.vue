@@ -3,8 +3,7 @@ import type { Arranger, Artist, Book, Collection, Composer, CustomGroup, Genre, 
 
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
-import { GlobalWorkerOptions } from 'pdfjs-dist'
-import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+import { ensurePdfJsWorker } from '../utils/pdfjs'
 import { openFileExternally } from '../utils/file'
 import { getFileVersionToken, getVersionedFileUrl } from '../utils/file-version'
 import ArrowLeftIcon from 'vue-material-design-icons/ArrowLeft.vue'
@@ -75,7 +74,7 @@ const emit = defineEmits<{
 	deleted: [data: LibraryData | undefined, songId: number]
 }>()
 
-GlobalWorkerOptions.workerSrc = pdfWorker
+ensurePdfJsWorker()
 
 const isEditing = ref(false)
 const isDeleteDialogOpen = ref(false)

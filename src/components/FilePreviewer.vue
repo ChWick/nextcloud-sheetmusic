@@ -2,11 +2,9 @@
 import { computed, getCurrentInstance, h, nextTick, onMounted, onUnmounted, ref, render, shallowRef, watch } from 'vue'
 import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
-import { generateFilePath } from '@nextcloud/router'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
-import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist'
-import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+import { cleanupPdfJsPage, destroyPdfJsDocument, loadPdfJsDocument, releaseCanvas, releaseChildCanvases } from '../utils/pdfjs'
 import { openFileExternally } from '../utils/file'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import FilePreviewerToolbar from './file-preview/FilePreviewerToolbar.vue'
@@ -14,7 +12,7 @@ import SongAnnotationOverlay from './song-viewer/SongAnnotationOverlay.vue'
 import { usePdfTouchZoom } from '../composables/usePdfTouchZoom'
 import { isEffectivelyOffline } from '../composables/useOnlineStatus'
 import { readOfflineCachedBinary } from '../utils/offlineSetlists'
-import { inspectPdfPageResolution, type PdfPageResolutionSummary } from './song-pdf/pdf-enhance-engine'
+import { inspectPdfDocumentResolutions, type PdfPageResolutionSummary } from './song-pdf/pdf-enhance-engine'
 import { parsePageOrder } from '../utils/page-order'
 import type { SheetAnnotation } from '../types/annotation'
 import type { EditorTool, EditorToolStyle } from '../composables/useAnnotationEditor'
@@ -88,8 +86,6 @@ const emit = defineEmits<{
 
 const appContext = getCurrentInstance()?.appContext ?? null
 
-GlobalWorkerOptions.workerSrc = pdfWorker
-
 const pdfContainer = ref<HTMLElement>()
 const pdfStage = ref<HTMLElement>()
 const docxContainer = ref<HTMLElement>()
@@ -124,16 +120,19 @@ function detectResponsiveLayout(): PageLayoutMode {
 
 async function isLogicalPageLandscape(logicalPage: number): Promise<boolean> {
 	if (!loadedPdf.value) return false
+	let page: any = null
 	try {
 		const ordered = parsePageOrder(props.pageOrder, loadedPdf.value.numPages)
 		const idx = Math.min(Math.max(1, logicalPage), ordered.length) - 1
 		const pageNum = ordered[idx] || 1
-		const page = await loadedPdf.value.getPage(pageNum)
+		page = await loadedPdf.value.getPage(pageNum)
 		const pageRotation = (((page.rotate ?? 0) + rotation.value) % 360 + 360) % 360
 		const viewport = page.getViewport({ scale: 1.0, rotation: pageRotation })
 		return viewport.width > viewport.height
 	} catch {
 		return false
+	} finally {
+		cleanupPdfJsPage(page)
 	}
 }
 
@@ -395,11 +394,12 @@ function goToPage(targetPage: number) {
 async function renderPageThumbnail(logicalPage: number, canvas: HTMLCanvasElement, targetWidth = 110): Promise<void> {
 	const pdf = loadedPdf.value
 	if (!pdf) return
+	let page: any = null
 	try {
 		const ordered = parsePageOrder(props.pageOrder, pdf.numPages)
 		const idx = Math.min(Math.max(1, logicalPage), ordered.length) - 1
 		const physicalPage = ordered[idx] || 1
-		const page = await pdf.getPage(physicalPage)
+		page = await pdf.getPage(physicalPage)
 		const pageRotation = (((page.rotate ?? 0) + rotation.value) % 360 + 360) % 360
 		const baseViewport = page.getViewport({ scale: 1.0, rotation: pageRotation })
 		const scale = targetWidth / Math.max(1, baseViewport.width)
@@ -417,6 +417,8 @@ async function renderPageThumbnail(logicalPage: number, canvas: HTMLCanvasElemen
 		}).promise
 	} catch {
 		// Ignore thumbnail render errors
+	} finally {
+		cleanupPdfJsPage(page)
 	}
 }
 
@@ -577,8 +579,9 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 
 	// Calculate base scale using first page
 	let scale = 1.25
+	let firstPage: any = null
 	try {
-		const firstPage = await pdf.getPage(pagesToRender[0]?.pageNum || 1)
+		firstPage = await pdf.getPage(pagesToRender[0]?.pageNum || 1)
 		const pageRotation = (((firstPage.rotate ?? 0) + rotation.value) % 360 + 360) % 360
 		const unscaledViewport = firstPage.getViewport({ scale: 1.0, rotation: pageRotation })
 
@@ -603,6 +606,8 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 		}
 	} catch {
 		scale = 1.25
+	} finally {
+		cleanupPdfJsPage(firstPage)
 	}
 	scale = Math.max(0.2, Math.min(scale, 4.0))
 	effectiveScale.value = scale
@@ -617,26 +622,24 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 		}
 		const binaryData = await fetchBinaryData(props.nextFilePath, currentLoadId)
 		if (!binaryData) return null
-		const wasmUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/wasm/') : new URL('pdfjs-dist/wasm/', import.meta.url).href
-		const cMapUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/cmaps/') : new URL('pdfjs-dist/cmaps/', import.meta.url).href
-		const standardFontDataUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/standard_fonts/') : new URL('pdfjs-dist/standard_fonts/', import.meta.url).href
-		const nextPdf = await getDocument({
-			data: binaryData.slice(),
-			cMapUrl,
-			cMapPacked: true,
-			standardFontDataUrl,
-			wasmUrl,
-		}).promise
+		const nextPdf = await loadPdfJsDocument(binaryData.slice())
 		loadedNextPdf.value = nextPdf
 		loadedNextPdfPath = props.nextFilePath
 		return nextPdf
 	}
 
 	// Helper to render a specific page into its placeholder
-	const renderPage = async (pageNumber: number, placeholder: HTMLElement, isNextFile = false) => {
+	const renderPage = async (
+		pageNumber: number,
+		placeholder: HTMLElement,
+		isNextFile = false,
+		onRenderTask?: (task: { cancel?: () => void } | null) => void,
+	) => {
 		if (renderId !== currentRenderId || renderedPlaceholders.has(placeholder)) return
 		renderedPlaceholders.add(placeholder)
 
+		let page: any = null
+		let canvas: HTMLCanvasElement | null = null
 		try {
 			let targetPdf = pdf
 			let resolvedPageNum = pageNumber
@@ -648,13 +651,13 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 				const idx = Math.min(Math.max(1, pageNumber), nextOrdered.length) - 1
 				resolvedPageNum = nextOrdered[idx] || 1
 			}
-			const page = await targetPdf.getPage(resolvedPageNum)
+			page = await targetPdf.getPage(resolvedPageNum)
 			if (renderId !== currentRenderId) return
 
 			const pageRotation = (((page.rotate ?? 0) + rotation.value) % 360 + 360) % 360
 			const viewport = page.getViewport({ scale: effectiveScale.value, rotation: pageRotation })
 
-			const canvas = document.createElement('canvas')
+			canvas = document.createElement('canvas')
 			canvas.width = Math.floor(viewport.width)
 			canvas.height = Math.floor(viewport.height)
 			canvas.className = 'sheetmusic-pdf-page'
@@ -665,15 +668,19 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 			if (canvasContext) {
 				canvasContext.fillStyle = '#ffffff'
 				canvasContext.fillRect(0, 0, canvas.width, canvas.height)
-				await page.render({
+				const renderTask = page.render({
 					canvasContext,
 					viewport,
 					background: 'rgb(255, 255, 255)',
-				}).promise
+				})
+				onRenderTask?.(renderTask)
+				await renderTask.promise
+				onRenderTask?.(null)
 			}
 
 			if (renderId === currentRenderId) {
 				placeholder.replaceChildren(canvas)
+				canvas = null
 				placeholder.style.position = 'relative'
 				placeholder.style.minHeight = ''
 				placeholder.style.minWidth = ''
@@ -683,8 +690,16 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 					mountAnnotationOverlay(placeholder, resolvedPageNum, viewport.width, viewport.height)
 				}
 			}
-		} catch (err) {
+		} catch (err: any) {
+			if (err?.name === 'RenderingCancelledException') {
+				renderedPlaceholders.delete(placeholder)
+				return
+			}
 			console.warn(`Could not render page ${pageNumber}:`, err)
+		} finally {
+			onRenderTask?.(null)
+			releaseCanvas(canvas)
+			cleanupPdfJsPage(page)
 		}
 	}
 
@@ -692,6 +707,7 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 		if (!pdfStage.value) return
 		cleanupObserver()
 		unmountAnnotationOverlays()
+		releaseChildCanvases(pdfStage.value)
 		onBeforeSwap?.()
 		pdfStage.value.style.gap = nextStageGap
 		pdfStage.value.replaceChildren(...children)
@@ -746,15 +762,103 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 
 		swapStageContent(placeholders)
 
+		const MAX_CONTINUOUS_RENDERED_PAGES = 16
+		const MAX_CONCURRENT_CONTINUOUS_RENDERS = 3
+		const visiblePlaceholders = new Set<HTMLElement>()
+		const renderedOrder = new Set<HTMLElement>()
+		const pendingQueue: HTMLElement[] = []
+		const pendingSet = new Set<HTMLElement>()
+		const activeTasks = new Map<HTMLElement, { cancel?: () => void }>()
+		let activeWorkers = 0
+
+		for (const idx of preRenderIndices) {
+			const el = placeholders[idx]
+			if (el && renderedPlaceholders.has(el)) {
+				renderedOrder.add(el)
+			}
+		}
+
+		const evictOffscreenPlaceholders = () => {
+			if (renderedOrder.size <= MAX_CONTINUOUS_RENDERED_PAGES) return
+			for (const el of renderedOrder) {
+				if (renderedOrder.size <= MAX_CONTINUOUS_RENDERED_PAGES) break
+				if (visiblePlaceholders.has(el)) continue
+				renderedOrder.delete(el)
+				renderedPlaceholders.delete(el)
+				if (el.dataset.pageHeight) {
+					el.style.minHeight = `${el.dataset.pageHeight}px`
+				}
+				if (el.dataset.pageWidth) {
+					el.style.minWidth = `${el.dataset.pageWidth}px`
+				}
+				const mountEl = el.querySelector<HTMLElement>('.sheetmusic-annotation-mount')
+				if (mountEl) {
+					render(null, mountEl)
+				}
+				releaseChildCanvases(el)
+				el.replaceChildren()
+			}
+		}
+
+		const pumpContinuousQueue = () => {
+			while (activeWorkers < MAX_CONCURRENT_CONTINUOUS_RENDERS && pendingQueue.length > 0) {
+				const targetEl = pendingQueue.shift()!
+				pendingSet.delete(targetEl)
+				if (renderId !== currentRenderId || renderedPlaceholders.has(targetEl) || !visiblePlaceholders.has(targetEl)) {
+					continue
+				}
+				const pageNum = Number(targetEl.dataset.pageNum)
+				if (!pageNum) continue
+				activeWorkers++
+				void renderPage(pageNum, targetEl, false, (task) => {
+					if (task) {
+						activeTasks.set(targetEl, task)
+					} else {
+						activeTasks.delete(targetEl)
+					}
+				}).finally(() => {
+					activeWorkers--
+					if (renderId !== currentRenderId) return
+					if (renderedPlaceholders.has(targetEl)) {
+						renderedOrder.delete(targetEl)
+						renderedOrder.add(targetEl)
+						evictOffscreenPlaceholders()
+					}
+					pumpContinuousQueue()
+				})
+			}
+		}
+
 		intersectionObserver = new IntersectionObserver(
 			(entries) => {
 				for (const entry of entries) {
+					const targetEl = entry.target as HTMLElement
 					if (entry.isIntersecting) {
-						const targetEl = entry.target as HTMLElement
-						const pageNum = Number(targetEl.dataset.pageNum)
-						if (pageNum && !renderedPlaceholders.has(targetEl)) {
-							renderPage(pageNum, targetEl)
+						visiblePlaceholders.add(targetEl)
+						if (renderedPlaceholders.has(targetEl)) {
+							renderedOrder.delete(targetEl)
+							renderedOrder.add(targetEl)
+						} else if (!pendingSet.has(targetEl)) {
+							pendingSet.add(targetEl)
+							pendingQueue.push(targetEl)
+							pumpContinuousQueue()
 						}
+					} else {
+						visiblePlaceholders.delete(targetEl)
+						if (pendingSet.has(targetEl)) {
+							pendingSet.delete(targetEl)
+							const idx = pendingQueue.indexOf(targetEl)
+							if (idx >= 0) pendingQueue.splice(idx, 1)
+						}
+						const activeTask = activeTasks.get(targetEl)
+						if (activeTask) {
+							try {
+								activeTask.cancel?.()
+							} catch {
+								// Ignore cancel errors
+							}
+						}
+						evictOffscreenPlaceholders()
 					}
 				}
 			},
@@ -830,7 +934,15 @@ async function fetchBinaryData(cacheKey: string, loadId: number): Promise<Uint8A
 async function loadAndRenderFile() {
 	const loadId = ++currentLoadId
 	errorMessage.value = ''
-	loadedPdf.value = null
+	if (loadedPdf.value) {
+		void destroyPdfJsDocument(loadedPdf.value)
+		loadedPdf.value = null
+	}
+	if (loadedNextPdf.value) {
+		void destroyPdfJsDocument(loadedNextPdf.value)
+		loadedNextPdf.value = null
+		loadedNextPdfPath = ''
+	}
 	totalPages.value = 1
 	currentPage.value = 1
 	rotation.value = 0
@@ -842,6 +954,7 @@ async function loadAndRenderFile() {
 	await nextTick()
 	cleanupObserver()
 	if (pdfStage.value) {
+		releaseChildCanvases(pdfStage.value)
 		pdfStage.value.replaceChildren()
 	} else if (pdfContainer.value) {
 		pdfContainer.value.replaceChildren()
@@ -904,17 +1017,7 @@ async function loadAndRenderFile() {
 		}
 
 		const pdfData = binaryData
-		const wasmUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/wasm/') : new URL('pdfjs-dist/wasm/', import.meta.url).href
-		const cMapUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/cmaps/') : new URL('pdfjs-dist/cmaps/', import.meta.url).href
-		const standardFontDataUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/standard_fonts/') : new URL('pdfjs-dist/standard_fonts/', import.meta.url).href
-
-		const pdf = await getDocument({
-			data: pdfData ? pdfData.slice() : pdfData,
-			cMapUrl,
-			cMapPacked: true,
-			standardFontDataUrl,
-			wasmUrl,
-		}).promise
+		const pdf = await loadPdfJsDocument(pdfData ? pdfData.slice() : pdfData)
 
 		if (loadId !== currentLoadId) return
 
@@ -932,12 +1035,7 @@ async function loadAndRenderFile() {
 
 		// Collect page resolution summaries (up to first 25 pages for responsiveness)
 		try {
-			const maxInspect = Math.min(pdf.numPages, 25)
-			const summaries: PdfPageResolutionSummary[] = []
-			for (let p = 1; p <= maxInspect; p++) {
-				const pg = await pdf.getPage(p)
-				summaries.push(await inspectPdfPageResolution(pg, p))
-			}
+			const summaries = await inspectPdfDocumentResolutions(pdf, 25)
 			if (loadId === currentLoadId) {
 				pageResolutions.value = summaries
 			}
@@ -1031,6 +1129,16 @@ onMounted(() => {
 onUnmounted(() => {
 	unmountAnnotationOverlays()
 	cleanupObserver()
+	releaseChildCanvases(pdfStage.value)
+	if (loadedPdf.value) {
+		void destroyPdfJsDocument(loadedPdf.value)
+		loadedPdf.value = null
+	}
+	if (loadedNextPdf.value) {
+		void destroyPdfJsDocument(loadedNextPdf.value)
+		loadedNextPdf.value = null
+		loadedNextPdfPath = ''
+	}
 	window.removeEventListener('resize', handleResize)
 	if (resizeDebounceTimer !== null) {
 		clearTimeout(resizeDebounceTimer)
