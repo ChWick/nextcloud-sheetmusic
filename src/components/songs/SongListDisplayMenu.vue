@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
-import { useClickOutside } from '../../composables/useClickOutside'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import ViewportPopover from '../ViewportPopover.vue'
 import SortAscendingIcon from 'vue-material-design-icons/SortAscending.vue'
 import SortDescendingIcon from 'vue-material-design-icons/SortDescending.vue'
 import TableIcon from 'vue-material-design-icons/Table.vue'
@@ -28,7 +28,6 @@ const emit = defineEmits<{
 }>()
 
 const isOpen = ref(false)
-const rootRef = ref<HTMLElement | null>(null)
 
 const viewOptions: { value: ViewMode; label: string; icon: typeof TableIcon }[] = [
 	{ value: 'table', label: t('sheetmusic', 'Table'), icon: TableIcon },
@@ -42,24 +41,25 @@ const columnOptions = getSongColumnOptions()
 function toggleColumn(key: SongColumn) {
 	emit('update:visibleColumns', toggleVisibleColumn(props.visibleColumns, key, columnOptions))
 }
-
-useClickOutside(rootRef, isOpen)
 </script>
 
 <template>
-	<div ref="rootRef" :class="$style.wrapper">
-		<NcButton
-			:aria-expanded="isOpen"
-			:title="t('sheetmusic', 'View options')"
-			:aria-label="t('sheetmusic', 'View options')"
-			data-test="song-list-display-trigger"
-			@click="isOpen = !isOpen">
-			<template #icon>
-				<TuneIcon :size="20" />
-			</template>
-		</NcButton>
-
-		<div v-if="isOpen" :class="$style.popover" data-test="song-list-display-popover">
+	<ViewportPopover
+		v-model:open="isOpen"
+		pane-test-id="song-list-display-popover"
+		:pane-class="$style.popover">
+		<template #trigger="{ toggle }">
+			<NcButton
+				:aria-expanded="isOpen"
+				:title="t('sheetmusic', 'View options')"
+				:aria-label="t('sheetmusic', 'View options')"
+				data-test="song-list-display-trigger"
+				@click="toggle">
+				<template #icon>
+					<TuneIcon :size="20" />
+				</template>
+			</NcButton>
+		</template>
 			<div :class="$style.section">
 				<div :class="$style.sectionLabel">{{ t('sheetmusic', 'Layout') }}</div>
 				<div :class="$style.viewRow">
@@ -117,31 +117,15 @@ useClickOutside(rootRef, isOpen)
 					</label>
 				</div>
 			</div>
-		</div>
-	</div>
+	</ViewportPopover>
 </template>
 
 <style module>
-.wrapper {
-	position: relative;
-	display: inline-flex;
-	align-items: center;
-}
-
 .popover {
-	position: absolute;
-	top: calc(100% + 6px);
-	right: 0;
-	z-index: 200;
-	width: 340px;
-	max-width: 90vw;
+	width: min(340px, calc(100vw - 24px));
 	max-height: 75vh;
 	overflow-y: auto;
 	padding: 12px;
-	background: var(--color-main-background);
-	border: 1px solid var(--color-border);
-	border-radius: var(--border-radius-large, 8px);
-	box-shadow: 0 4px 16px var(--color-box-shadow, rgba(0, 0, 0, 0.16));
 	display: flex;
 	flex-direction: column;
 	gap: 12px;

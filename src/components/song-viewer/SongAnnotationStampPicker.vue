@@ -3,7 +3,7 @@ import type { StampCategory } from '../../types/annotation'
 import { computed, ref } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import MusicNote from 'vue-material-design-icons/MusicNote.vue'
-import { useViewportPopoverClamp } from '../../composables/useViewportPopoverClamp'
+import ViewportPopover from '../ViewportPopover.vue'
 import {
 	getMusicStampFontFamily,
 	MUSIC_STAMPS,
@@ -22,13 +22,6 @@ const emit = defineEmits<{
 }>()
 
 const activeStampCategory = ref<StampCategory>('dynamic')
-const wrapRef = ref<HTMLElement | null>(null)
-const popoverRef = ref<HTMLElement | null>(null)
-const { popoverPositionStyle } = useViewportPopoverClamp(
-	wrapRef,
-	popoverRef,
-	() => props.open,
-)
 
 const CATEGORY_EXAMPLE_SYMBOLS: Record<StampCategory, [string, string]> = {
 	dynamic: ['𝆑', '𝆏'],
@@ -50,26 +43,26 @@ const filteredStamps = computed(() =>
 </script>
 
 <template>
-	<div ref="wrapRef" :class="$style.popoverWrap">
-		<button
-			type="button"
-			:class="[$style.toolBtn, props.active && $style.active]"
-			:title="t('sheetmusic', 'Music Symbols & Fingerings (M, 0–5, F, B, N, #)')"
-			:aria-label="t('sheetmusic', 'Music Symbols & Fingerings (M, 0–5, F, B, N, #)')"
-			data-test="tool-stamp"
-			@click="emit('toggle')">
-			<MusicNote :size="18" />
-			<span :class="$style.stampPreview" :style="{ fontFamily: getMusicStampFontFamily(props.stampSymbol) }">
-				{{ props.stampSymbol }}
-			</span>
-		</button>
-
-		<div
-			v-if="props.open"
-			ref="popoverRef"
-			:class="$style.stampPopover"
-			:style="popoverPositionStyle"
-			data-test="stamp-picker">
+	<ViewportPopover
+		:open="props.open"
+		pane-test-id="stamp-picker"
+		:pane-class="$style.stampPopover"
+		:gap="4"
+		@update:open="!$event && props.open && emit('toggle')">
+		<template #trigger>
+			<button
+				type="button"
+				:class="[$style.toolBtn, props.active && $style.active]"
+				:title="t('sheetmusic', 'Music Symbols & Fingerings (M, 0–5, F, B, N, #)')"
+				:aria-label="t('sheetmusic', 'Music Symbols & Fingerings (M, 0–5, F, B, N, #)')"
+				data-test="tool-stamp"
+				@click="emit('toggle')">
+				<MusicNote :size="18" />
+				<span :class="$style.stampPreview" :style="{ fontFamily: getMusicStampFontFamily(props.stampSymbol) }">
+					{{ props.stampSymbol }}
+				</span>
+			</button>
+		</template>
 			<div :class="$style.stampTabs" role="tablist">
 				<button
 					v-for="cat in STAMP_CATEGORIES"
@@ -144,16 +137,10 @@ const filteredStamps = computed(() =>
 					</span>
 				</button>
 			</div>
-		</div>
-	</div>
+	</ViewportPopover>
 </template>
 
 <style module>
-.popoverWrap {
-	position: relative;
-	display: inline-flex;
-}
-
 .toolBtn {
 	display: inline-flex;
 	align-items: center;
@@ -185,18 +172,8 @@ const filteredStamps = computed(() =>
 }
 
 .stampPopover {
-	position: absolute;
-	top: calc(100% + 4px);
-	left: 0;
-	z-index: 200;
 	width: max-content;
 	min-width: min(340px, calc(100vw - 24px));
-	max-width: calc(100vw - 24px);
-	box-sizing: border-box;
-	background: var(--color-main-background);
-	border: 1px solid var(--color-border-dark);
-	border-radius: var(--border-radius-large, 8px);
-	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
 	padding: 8px;
 }
 
