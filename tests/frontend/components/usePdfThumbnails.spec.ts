@@ -95,4 +95,89 @@ describe('usePdfThumbnails', () => {
 		cleanupThumbnailObserver()
 		expect(renderedThumbnails.size).toBe(0)
 	})
+
+	it('calls page.cleanup() after rendering a thumbnail', async () => {
+		const cleanupSpy = vi.fn()
+		const mockPdf = {
+			numPages: 1,
+			getPage: vi.fn(() => Promise.resolve({
+				getViewport: vi.fn(() => ({ width: 280, height: 380 })),
+				render: vi.fn(() => ({ promise: Promise.resolve() })),
+				cleanup: cleanupSpy,
+			})),
+		}
+		const activePdfDoc = ref(mockPdf)
+		const pageEnhancements = ref({})
+		const { renderSingleThumbnail } = usePdfThumbnails(activePdfDoc, pageEnhancements)
+
+		await renderSingleThumbnail(mockPdf, 1)
+
+		expect(cleanupSpy).toHaveBeenCalledTimes(1)
+	})
+
+	it('evicts off-screen cached canvases beyond the LRU limit on large PDFs', async () => {
+		const totalPages = 70
+		const mockPdf = {
+			numPages: totalPages,
+			getPage: vi.fn(() => Promise.resolve({
+				getViewport: vi.fn(() => ({ width: 280, height: 380 })),
+				render: vi.fn(() => ({ promise: Promise.resolve() })),
+				cleanup: vi.fn(),
+			})),
+		}
+
+		let observerCallback: ((entries: any[]) => void) | null = null
+		const observeSpy = vi.fn()
+		const disconnectSpy = vi.fn()
+		const OriginalIO = globalThis.IntersectionObserver
+
+		globalThis.IntersectionObserver = class {
+			constructor(cb: (entries: any[]) => void) {
+				observerCallback = cb
+			}
+
+			observe = observeSpy
+			disconnect = disconnectSpy
+			unobserve = vi.fn()
+			takeRecords = vi.fn(() => [])
+			root = null
+			rootMargin = ''
+			thresholds = []
+		} as any
+
+		try {
+			const activePdfDoc = ref(mockPdf)
+			const pageEnhancements = ref({})
+			const { setContainerRef, initThumbnailObserver, thumbnailCanvases, cleanupThumbnailObserver } = usePdfThumbnails(activePdfDoc, pageEnhancements)
+
+			const containers: HTMLElement[] = []
+			for (let p = 1; p <= totalPages; p++) {
+				const el = document.createElement('div')
+				setContainerRef(p, el)
+				containers.push(el)
+			}
+
+			initThumbnailObserver(mockPdf)
+			expect(observerCallback).not.toBeNull()
+
+			// Simulate scrolling through all 70 pages, leaving earlier pages off-screen
+			for (let p = 1; p <= totalPages; p++) {
+				observerCallback!([{ target: containers[p - 1], isIntersecting: true }])
+				await new Promise((r) => setTimeout(r, 0))
+				observerCallback!([{ target: containers[p - 1], isIntersecting: false }])
+			}
+
+			// Wait for queued renders to drain
+			await new Promise((r) => setTimeout(r, 20))
+
+			expect(Object.keys(thumbnailCanvases.value).length).toBeLessThanOrEqual(60)
+			// Earliest pages should have been evicted while latest pages remain cached
+			expect(thumbnailCanvases.value[1]).toBeUndefined()
+			expect(thumbnailCanvases.value[totalPages]).toBeDefined()
+
+			cleanupThumbnailObserver()
+		} finally {
+			globalThis.IntersectionObserver = OriginalIO
+		}
+	})
 })

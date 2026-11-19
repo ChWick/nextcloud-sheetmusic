@@ -216,6 +216,8 @@ const formattedRotation = computed(() => `${Math.round(props.rotationDeg * 10) /
 	transition: all 0.15s ease-in-out;
 	cursor: pointer;
 	position: relative;
+	content-visibility: auto;
+	contain-intrinsic-size: auto 256px;
 }
 
 .pageCard:hover {

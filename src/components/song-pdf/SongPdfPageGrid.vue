@@ -1,8 +1,9 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import SongPdfPageCard, { type BookmarkPageSummary, type SplitSegmentSummary } from './SongPdfPageCard.vue'
 import type { PageCrop } from './crop-types'
 
-withDefaults(
+const props = withDefaults(
 	defineProps<{
 		totalPages: number
 		activeMode: 'rotate' | 'crop' | 'enhance' | 'split' | 'bookmarks'
@@ -26,6 +27,10 @@ withDefaults(
 		thumbnailSize: 'medium',
 	},
 )
+
+const selectedPageSet = computed(() => new Set(props.selectedPages))
+const EMPTY_SEGMENTS: SplitSegmentSummary[] = []
+const EMPTY_BOOKMARKS: BookmarkPageSummary[] = []
 
 const emit = defineEmits<{
 	'card-click': [pageNum: number]
@@ -54,7 +59,7 @@ const emit = defineEmits<{
 			:key="pageNum"
 			:page-num="pageNum"
 			:active-mode="activeMode"
-			:is-selected="selectedPages.includes(pageNum)"
+			:is-selected="selectedPageSet.has(pageNum)"
 			:is-cropped="isPageCropped(pageNum)"
 			:is-enhanced="isPageEnhanced(pageNum)"
 			:is-deleted="isPageDeleted(pageNum)"
@@ -63,8 +68,8 @@ const emit = defineEmits<{
 			:thumbnail-size="thumbnailSize"
 			:crop-indicator-text="getCropIndicatorText(pageNum)"
 			:enhance-indicator-text="getEnhanceIndicatorText(pageNum)"
-			:page-segments="getPageSegmentsSummary(pageNum)"
-			:page-bookmarks="getPageBookmarksSummary ? getPageBookmarksSummary(pageNum) : []"
+			:page-segments="activeMode === 'split' ? getPageSegmentsSummary(pageNum) : EMPTY_SEGMENTS"
+			:page-bookmarks="activeMode === 'bookmarks' && getPageBookmarksSummary ? getPageBookmarksSummary(pageNum) : EMPTY_BOOKMARKS"
 			:total-pages="totalPages"
 			:can-delete="remainingPagesCount > 1"
 			@card-click="emit('card-click', pageNum)"
