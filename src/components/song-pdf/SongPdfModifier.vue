@@ -206,6 +206,7 @@ const {
 	originalSongAction,
 	attachedFilesCount,
 	hasExactlyOneFile,
+	canRemoveExtractedPages,
 	splitSegments,
 	selectedPages,
 	initSplitSegments,
@@ -1028,6 +1029,7 @@ watch(() => targetFile.value?.path, () => {
 				v-model:original-song-action="originalSongAction"
 				:segments="splitSegments"
 				:attached-files-count="attachedFilesCount"
+				:can-remove-pages="canRemoveExtractedPages"
 				:total-pages="totalPages"
 				:selected-pages="selectedPages"
 				@add-segment="addSegment"

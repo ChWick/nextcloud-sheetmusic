@@ -4,11 +4,38 @@ import { showError, showSuccess } from '@nextcloud/dialogs'
 import { PDFDocument, degrees } from 'pdf-lib'
 import { apiDelete, apiPost } from '../../api/client'
 import { describeRequestFailure } from '../../utils/api'
+import { getFileName } from '../../utils/file'
 import type { LibraryData, Song, SongFile } from '../../types/song'
 import { ENTITY_COLUMNS, SONG_SCALAR_FIELDS } from '../songs/song-view-columns'
 import type { OriginalSongAction } from './OriginalSongActionSelector.vue'
 import { getSegmentColor, type SplitSegment } from './SongPdfSplitSidebar.vue'
 import type { SplitSegmentSummary } from './SongPdfPageCard.vue'
+import { pruneUnreferencedPdfObjects } from './pdf-enhance-engine'
+
+export function getExtractedPageNumbers(segments: SplitSegment[], totalPages: number): Set<number> {
+	const extracted = new Set<number>()
+	if (totalPages <= 0) return extracted
+	for (const seg of segments) {
+		if (!Number.isFinite(seg.startPage) || !Number.isFinite(seg.endPage)) continue
+		const start = Math.max(1, Math.min(totalPages, seg.startPage))
+		const end = Math.max(1, Math.min(totalPages, seg.endPage))
+		for (let p = start; p <= end; p++) {
+			extracted.add(p)
+		}
+	}
+	return extracted
+}
+
+export function getRemainingPageNumbers(segments: SplitSegment[], totalPages: number): number[] {
+	const extracted = getExtractedPageNumbers(segments, totalPages)
+	const remaining: number[] = []
+	for (let p = 1; p <= totalPages; p++) {
+		if (!extracted.has(p)) {
+			remaining.push(p)
+		}
+	}
+	return remaining
+}
 
 export function usePdfSplit(options: {
 	song: ComputedRef<Song> | Ref<Song>
@@ -36,6 +63,9 @@ export function usePdfSplit(options: {
 	const hasExactlyOneFile = computed(() => attachedFilesCount.value === 1)
 	const splitSegments = ref<SplitSegment[]>([])
 	const selectedPages = ref<number[]>([])
+	const canRemoveExtractedPages = computed(
+		() => getRemainingPageNumbers(splitSegments.value, totalPages.value).length > 0,
+	)
 	let segmentCounter = 0
 
 	function initSplitSegments(numPages: number, songTitle: string) {
@@ -119,6 +149,89 @@ export function usePdfSplit(options: {
 			}))
 	}
 
+	async function applyOriginalSongAction(
+		action: OriginalSongAction,
+		srcPdfDoc: PDFDocument,
+		currentSong: Song,
+		file: SongFile,
+		fallbackLibraryData: LibraryData | null,
+		onProgress?: (percent: number, text: string, current?: number, total?: number) => Promise<void> | void,
+	): Promise<{ libraryData: LibraryData | null; successMessage: string }> {
+		const count = splitSegments.value.length
+		const title = currentSong.title
+
+		if (action === 'delete-song' && hasExactlyOneFile.value) {
+			await onProgress?.(95, t('sheetmusic', 'Finalizing split songs…'), count, count)
+			const delSongRes = await apiDelete('/api/songs/{id}', {
+				pathParams: { id: currentSong.id },
+				queryParams: { libraryId: libraryId.value, deleteFiles: true },
+			})
+			return {
+				libraryData: (delSongRes.data?.ocs?.data as LibraryData) ?? fallbackLibraryData,
+				successMessage: t('sheetmusic', 'Successfully split "{title}" into {count} songs and deleted original song.', {
+					title,
+					count,
+				}, { escape: false }),
+			}
+		}
+
+		if (action === 'delete-file') {
+			await onProgress?.(95, t('sheetmusic', 'Finalizing split songs…'), count, count)
+			const delRes = await apiPost('/api/songs/{id}/file/{fileId}/delete', {
+				libraryId: libraryId.value,
+			}, {
+				pathParams: { id: currentSong.id, fileId: file.id },
+			})
+			return {
+				libraryData: (delRes.data?.ocs?.data as LibraryData) ?? fallbackLibraryData,
+				successMessage: t('sheetmusic', 'Successfully split "{title}" into {count} songs.', {
+					title,
+					count,
+				}, { escape: false }),
+			}
+		}
+
+		if (action === 'remove-pages') {
+			await onProgress?.(95, t('sheetmusic', 'Removing extracted pages from original PDF…'), count, count)
+			const extractedPages = getExtractedPageNumbers(splitSegments.value, totalPages.value)
+			const indicesToRemove = Array.from(extractedPages)
+				.map((p) => p - 1)
+				.sort((a, b) => b - a)
+
+			for (const idx of indicesToRemove) {
+				if (idx >= 0 && idx < srcPdfDoc.getPageCount()) {
+					srcPdfDoc.removePage(idx)
+				}
+			}
+
+			await pruneUnreferencedPdfObjects(srcPdfDoc)
+			const updatedBytes = await srcPdfDoc.save()
+			const fileName = getFileName(file.path) || 'modified.pdf'
+			const updatedFile = new File([updatedBytes as Uint8Array<ArrayBuffer>], fileName, { type: 'application/pdf' })
+			const formData = new FormData()
+			formData.append('file', updatedFile)
+			const updateRes = await (apiPost as any)('/api/libraries/{libraryId}/songs/{id}/file/{fileId}/update', formData, {
+				pathParams: { libraryId: libraryId.value, id: currentSong.id, fileId: file.id },
+			})
+			return {
+				libraryData: (updateRes.data?.ocs?.data as LibraryData) ?? fallbackLibraryData,
+				successMessage: t('sheetmusic', 'Successfully split "{title}" into {count} songs and removed extracted pages from original PDF.', {
+					title,
+					count,
+				}, { escape: false }),
+			}
+		}
+
+		await onProgress?.(95, t('sheetmusic', 'Finalizing split songs…'), count, count)
+		return {
+			libraryData: fallbackLibraryData,
+			successMessage: t('sheetmusic', 'Successfully split "{title}" into {count} songs.', {
+				title,
+				count,
+			}, { escape: false }),
+		}
+	}
+
 	async function saveSplits(
 		setIsSaving: (saving: boolean) => void,
 		setErrorMessage: (msg: string) => void,
@@ -150,6 +263,13 @@ export function usePdfSplit(options: {
 				showError(msg)
 				return
 			}
+		}
+
+		if (originalSongAction.value === 'remove-pages' && !canRemoveExtractedPages.value) {
+			const msg = t('sheetmusic', 'Cannot remove all pages from the original PDF. Leave at least one page unassigned or choose another action.')
+			setErrorMessage(msg)
+			showError(msg)
+			return
 		}
 
 		setIsSaving(true)
@@ -253,43 +373,19 @@ export function usePdfSplit(options: {
 				lastLibraryData = uploadRes.data.ocs.data as LibraryData
 			}
 
-			await onProgress?.(95, t('sheetmusic', 'Finalizing split songs…'), totalSegments, totalSegments)
-
-			// Target song to open after splitting: the first newly created split song
-			const targetOpenSongId = firstCreatedSongId
-
 			// Handle chosen action for original song / file
-			if (originalSongAction.value === 'delete-song' && hasExactlyOneFile.value) {
-				const delSongRes = await apiDelete('/api/songs/{id}', {
-					pathParams: { id: currentSong.id },
-					queryParams: { libraryId: libraryId.value, deleteFiles: true },
-				})
-				lastLibraryData = (delSongRes.data?.ocs?.data as LibraryData) ?? lastLibraryData
-				showSuccess(t('sheetmusic', 'Successfully split "{title}" into {count} songs and deleted original song.', {
-					title: currentSong.title,
-					count: splitSegments.value.length,
-				}, { escape: false }))
-				if (lastLibraryData) {
-					onSaved(lastLibraryData, targetOpenSongId)
-				} else {
-					onCancel()
-				}
-				return
-			} else if (originalSongAction.value === 'delete-file' && targetFile.value) {
-				const delRes = await apiPost('/api/songs/{id}/file/{fileId}/delete', {
-					libraryId: libraryId.value,
-				}, {
-					pathParams: { id: currentSong.id, fileId: targetFile.value.id },
-				})
-				lastLibraryData = (delRes.data?.ocs?.data as LibraryData) ?? lastLibraryData
-			}
+			const { libraryData, successMessage } = await applyOriginalSongAction(
+				originalSongAction.value,
+				srcPdfDoc,
+				currentSong,
+				targetFile.value,
+				lastLibraryData,
+				onProgress,
+			)
 
-			showSuccess(t('sheetmusic', 'Successfully split "{title}" into {count} songs.', {
-				title: currentSong.title,
-				count: splitSegments.value.length,
-			}, { escape: false }))
-			if (lastLibraryData) {
-				onSaved(lastLibraryData, targetOpenSongId)
+			showSuccess(successMessage)
+			if (libraryData) {
+				onSaved(libraryData, firstCreatedSongId)
 			} else {
 				onCancel()
 			}
@@ -308,6 +404,7 @@ export function usePdfSplit(options: {
 		originalSongAction,
 		attachedFilesCount,
 		hasExactlyOneFile,
+		canRemoveExtractedPages,
 		splitSegments,
 		selectedPages,
 		initSplitSegments,

@@ -42,9 +42,11 @@ const props = withDefaults(
 		attachedFilesCount: number
 		totalPages: number
 		selectedPages?: number[]
+		canRemovePages?: boolean
 	}>(),
 	{
 		selectedPages: () => [],
+		canRemovePages: true,
 	},
 )
 
@@ -176,6 +178,7 @@ watch(
 		<OriginalSongActionSelector
 			:model-value="originalSongAction"
 			:attached-files-count="attachedFilesCount"
+			:can-remove-pages="canRemovePages"
 			@update:model-value="emit('update:originalSongAction', $event)" />
 	</aside>
 </template>

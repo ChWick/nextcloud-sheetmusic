@@ -6,12 +6,26 @@ import InformationOutlineIcon from 'vue-material-design-icons/InformationOutline
 import RadioboxMarked from 'vue-material-design-icons/RadioboxMarked.vue'
 import RadioboxBlank from 'vue-material-design-icons/RadioboxBlank.vue'
 
-export type OriginalSongAction = 'delete-song' | 'delete-file' | 'keep'
+export type OriginalSongAction = 'keep' | 'remove-pages' | 'delete-file' | 'delete-song'
 
-const props = defineProps<{
-	modelValue: OriginalSongAction
-	attachedFilesCount: number
-}>()
+interface ActionOption {
+	value: OriginalSongAction
+	label: string
+	infoAriaLabel: string
+	infoText: string
+	disabled: boolean
+}
+
+const props = withDefaults(
+	defineProps<{
+		modelValue: OriginalSongAction
+		attachedFilesCount: number
+		canRemovePages?: boolean
+	}>(),
+	{
+		canRemovePages: true,
+	},
+)
 
 const emit = defineEmits<{
 	'update:modelValue': [val: OriginalSongAction]
@@ -19,8 +33,44 @@ const emit = defineEmits<{
 
 const hasExactlyOneFile = computed(() => props.attachedFilesCount === 1)
 
+const options = computed<ActionOption[]>(() => [
+	{
+		value: 'keep',
+		label: t('sheetmusic', 'Do nothing (default)'),
+		infoAriaLabel: t('sheetmusic', 'Info about keeping original song'),
+		infoText: t('sheetmusic', 'Keep original song and its PDF file untouched.'),
+		disabled: false,
+	},
+	{
+		value: 'remove-pages',
+		label: t('sheetmusic', 'Remove extracted pages from original PDF'),
+		infoAriaLabel: t('sheetmusic', 'Info about removing extracted pages from original PDF'),
+		infoText: props.canRemovePages
+			? t('sheetmusic', 'The extracted pages will be removed from the original PDF, keeping the remaining pages.')
+			: t('sheetmusic', 'Only possible if at least one page remains in the original PDF.'),
+		disabled: !props.canRemovePages,
+	},
+	{
+		value: 'delete-file',
+		label: t('sheetmusic', 'Delete PDF from original song'),
+		infoAriaLabel: t('sheetmusic', 'Info about deleting PDF file'),
+		infoText: t('sheetmusic', 'The PDF file will be removed from the original song, but the song itself is kept.'),
+		disabled: false,
+	},
+	{
+		value: 'delete-song',
+		label: t('sheetmusic', 'Delete original song and attached files'),
+		infoAriaLabel: t('sheetmusic', 'Info about deleting original song'),
+		infoText: hasExactlyOneFile.value
+			? t('sheetmusic', 'The original song and its file will be completely deleted.')
+			: t('sheetmusic', 'Only possible if the song has exactly one attached file ({count} files currently).', { count: props.attachedFilesCount }, { escape: false }),
+		disabled: !hasExactlyOneFile.value,
+	},
+])
+
 function select(val: OriginalSongAction) {
-	if (val === 'delete-song' && !hasExactlyOneFile.value) {
+	const option = options.value.find((o) => o.value === val)
+	if (!option || option.disabled) {
 		return
 	}
 	emit('update:modelValue', val)
@@ -34,126 +84,37 @@ function select(val: OriginalSongAction) {
 		</h5>
 
 		<div :class="$style.optionsList" role="radiogroup" :aria-label="t('sheetmusic', 'Original song action')">
-			<!-- Option c: Keep original song and PDF (default) -->
 			<div
-				:class="[$style.optionRow, modelValue === 'keep' && $style.optionRowActive]"
-				role="radio"
-				:aria-checked="modelValue === 'keep'"
-				tabindex="0"
-				@click="select('keep')"
-				@keydown.enter.prevent="select('keep')"
-				@keydown.space.prevent="select('keep')">
-				<input
-					type="radio"
-					name="originalSongAction"
-					value="keep"
-					:checked="modelValue === 'keep'"
-					:class="$style.hiddenRadio"
-					tabindex="-1"
-					aria-hidden="true"
-					@change="select('keep')">
-				<div :class="$style.radioIndicator">
-					<RadioboxMarked v-if="modelValue === 'keep'" :size="18" :class="$style.checkedIcon" />
-					<RadioboxBlank v-else :size="18" :class="$style.uncheckedIcon" />
-				</div>
-				<span :class="$style.optionLabel">
-					{{ t('sheetmusic', 'Do nothing (default)') }}
-				</span>
-				<NcPopover
-					:triggers="['hover', 'focus']"
-					placement="top"
-					no-focus-trap
-					:class="$style.infoPopover">
-					<template #trigger>
-						<button
-							type="button"
-							:class="$style.infoBtn"
-							:aria-label="t('sheetmusic', 'Info about keeping original song')"
-							@click.stop>
-							<InformationOutlineIcon :size="16" />
-						</button>
-					</template>
-					<div :class="$style.infoPopoverContent">
-						{{ t('sheetmusic', 'Keep original song and its PDF file untouched.') }}
-					</div>
-				</NcPopover>
-			</div>
-
-			<!-- Option b: Delete the PDF file from the original song but keep the song -->
-			<div
-				:class="[$style.optionRow, modelValue === 'delete-file' && $style.optionRowActive]"
-				role="radio"
-				:aria-checked="modelValue === 'delete-file'"
-				tabindex="0"
-				@click="select('delete-file')"
-				@keydown.enter.prevent="select('delete-file')"
-				@keydown.space.prevent="select('delete-file')">
-				<input
-					type="radio"
-					name="originalSongAction"
-					value="delete-file"
-					:checked="modelValue === 'delete-file'"
-					:class="$style.hiddenRadio"
-					tabindex="-1"
-					aria-hidden="true"
-					@change="select('delete-file')">
-				<div :class="$style.radioIndicator">
-					<RadioboxMarked v-if="modelValue === 'delete-file'" :size="18" :class="$style.checkedIcon" />
-					<RadioboxBlank v-else :size="18" :class="$style.uncheckedIcon" />
-				</div>
-				<span :class="$style.optionLabel">
-					{{ t('sheetmusic', 'Delete PDF from original song') }}
-				</span>
-				<NcPopover
-					:triggers="['hover', 'focus']"
-					placement="top"
-					no-focus-trap
-					:class="$style.infoPopover">
-					<template #trigger>
-						<button
-							type="button"
-							:class="$style.infoBtn"
-							:aria-label="t('sheetmusic', 'Info about deleting PDF file')"
-							@click.stop>
-							<InformationOutlineIcon :size="16" />
-						</button>
-					</template>
-					<div :class="$style.infoPopoverContent">
-						{{ t('sheetmusic', 'The PDF file will be removed from the original song, but the song itself is kept.') }}
-					</div>
-				</NcPopover>
-			</div>
-
-			<!-- Option a: Delete original song and all its attached files -->
-			<div
+				v-for="opt in options"
+				:key="opt.value"
 				:class="[
 					$style.optionRow,
-					modelValue === 'delete-song' && $style.optionRowActive,
-					!hasExactlyOneFile && $style.optionRowDisabled,
+					modelValue === opt.value && $style.optionRowActive,
+					opt.disabled && $style.optionRowDisabled,
 				]"
 				role="radio"
-				:aria-checked="modelValue === 'delete-song'"
-				:aria-disabled="!hasExactlyOneFile"
-				:tabindex="hasExactlyOneFile ? 0 : -1"
-				@click="select('delete-song')"
-				@keydown.enter.prevent="select('delete-song')"
-				@keydown.space.prevent="select('delete-song')">
+				:aria-checked="modelValue === opt.value"
+				:aria-disabled="opt.disabled ? 'true' : 'false'"
+				:tabindex="opt.disabled ? -1 : 0"
+				@click="select(opt.value)"
+				@keydown.enter.prevent="select(opt.value)"
+				@keydown.space.prevent="select(opt.value)">
 				<input
 					type="radio"
 					name="originalSongAction"
-					value="delete-song"
-					:disabled="!hasExactlyOneFile"
-					:checked="modelValue === 'delete-song'"
+					:value="opt.value"
+					:disabled="opt.disabled"
+					:checked="modelValue === opt.value"
 					:class="$style.hiddenRadio"
 					tabindex="-1"
 					aria-hidden="true"
-					@change="select('delete-song')">
+					@change="select(opt.value)">
 				<div :class="$style.radioIndicator">
-					<RadioboxMarked v-if="modelValue === 'delete-song'" :size="18" :class="$style.checkedIcon" />
+					<RadioboxMarked v-if="modelValue === opt.value" :size="18" :class="$style.checkedIcon" />
 					<RadioboxBlank v-else :size="18" :class="$style.uncheckedIcon" />
 				</div>
 				<span :class="$style.optionLabel">
-					{{ t('sheetmusic', 'Delete original song and attached files') }}
+					{{ opt.label }}
 				</span>
 				<NcPopover
 					:triggers="['hover', 'focus']"
@@ -164,16 +125,13 @@ function select(val: OriginalSongAction) {
 						<button
 							type="button"
 							:class="$style.infoBtn"
-							:aria-label="t('sheetmusic', 'Info about deleting original song')"
+							:aria-label="opt.infoAriaLabel"
 							@click.stop>
 							<InformationOutlineIcon :size="16" />
 						</button>
 					</template>
 					<div :class="$style.infoPopoverContent">
-						{{ hasExactlyOneFile
-							? t('sheetmusic', 'The original song and its file will be completely deleted.')
-							: t('sheetmusic', 'Only possible if the song has exactly one attached file ({count} files currently).', { count: attachedFilesCount }, { escape: false })
-						}}
+						{{ opt.infoText }}
 					</div>
 				</NcPopover>
 			</div>
