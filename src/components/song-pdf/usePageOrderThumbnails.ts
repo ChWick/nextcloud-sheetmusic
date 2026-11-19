@@ -3,14 +3,15 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import { ref, type Ref, watch } from 'vue'
+import { getCurrentInstance, onUnmounted, ref, type Ref, watch } from 'vue'
 import axios from '@nextcloud/axios'
-import { generateFilePath } from '@nextcloud/router'
-import { getDocument } from 'pdfjs-dist'
+import { cleanupPdfJsPage, destroyPdfJsDocument, loadPdfJsDocument, releaseCanvas, setBoundedRecordEntry } from '../../utils/pdfjs'
 
 export async function renderPageImage(pdf: any, pageNum: number, maxDim = 340): Promise<string> {
+	let page: any = null
+	let canvas: HTMLCanvasElement | null = null
 	try {
-		const page = await pdf.getPage(pageNum)
+		page = await pdf.getPage(pageNum)
 		const unscaledViewport = page.getViewport({ scale: 1.0 })
 		const scale = Math.min(
 			maxDim / Math.max(1, unscaledViewport.width),
@@ -18,7 +19,7 @@ export async function renderPageImage(pdf: any, pageNum: number, maxDim = 340): 
 		)
 		const viewport = page.getViewport({ scale })
 
-		const canvas = document.createElement('canvas')
+		canvas = document.createElement('canvas')
 		canvas.width = Math.max(1, Math.round(viewport.width))
 		canvas.height = Math.max(1, Math.round(viewport.height))
 
@@ -47,6 +48,9 @@ export async function renderPageImage(pdf: any, pageNum: number, maxDim = 340): 
 		return dataUrl
 	} catch {
 		return ''
+	} finally {
+		releaseCanvas(canvas)
+		cleanupPdfJsPage(page)
 	}
 }
 
@@ -57,6 +61,7 @@ export function usePageOrderThumbnails(
 ) {
 	const thumbnails = ref<Record<number, string>>({})
 	const highResCache = ref<Record<number, string>>({})
+	const highResOrder = new Set<number>()
 	const isLoading = ref(false)
 	const isLoadingHighRes = ref(false)
 	const internalPdf = ref<any>(null)
@@ -76,23 +81,7 @@ export function usePageOrderThumbnails(
 		try {
 			const response = await axios.get(path, { responseType: 'arraybuffer' })
 			const pdfData = response.data instanceof ArrayBuffer ? new Uint8Array(response.data) : response.data
-			const wasmUrl = typeof generateFilePath === 'function'
-				? generateFilePath('sheetmusic', 'js', 'pdfjs/wasm/')
-				: new URL('pdfjs-dist/wasm/', import.meta.url).href
-			const cMapUrl = typeof generateFilePath === 'function'
-				? generateFilePath('sheetmusic', 'js', 'pdfjs/cmaps/')
-				: new URL('pdfjs-dist/cmaps/', import.meta.url).href
-			const standardFontDataUrl = typeof generateFilePath === 'function'
-				? generateFilePath('sheetmusic', 'js', 'pdfjs/standard_fonts/')
-				: new URL('pdfjs-dist/standard_fonts/', import.meta.url).href
-
-			const doc = await getDocument({
-				data: pdfData,
-				cMapUrl,
-				cMapPacked: true,
-				standardFontDataUrl,
-				wasmUrl,
-			}).promise
+			const doc = await loadPdfJsDocument(pdfData)
 
 			internalPdf.value = doc
 			return doc
@@ -113,10 +102,7 @@ export function usePageOrderThumbnails(
 
 			const url = await renderPageImage(pdf, pageNum, 1600)
 			if (url) {
-				highResCache.value = {
-					...highResCache.value,
-					[pageNum]: url,
-				}
+				highResCache.value = setBoundedRecordEntry(highResCache.value, highResOrder, pageNum, url)
 			}
 			return url
 		} finally {
@@ -135,7 +121,6 @@ export function usePageOrderThumbnails(
 			}
 
 			const count = totalPages.value || pdf.numPages || 1
-			const results: Record<number, string> = {}
 
 			// Render thumbnails sequentially to keep memory usage smooth
 			for (let p = 1; p <= count; p++) {
@@ -143,8 +128,7 @@ export function usePageOrderThumbnails(
 				const url = await renderPageImage(pdf, p, 340)
 				if (sessionId !== activeSessionId) return
 				if (url) {
-					results[p] = url
-					thumbnails.value = { ...results }
+					thumbnails.value[p] = url
 				}
 			}
 		} finally {
@@ -157,13 +141,27 @@ export function usePageOrderThumbnails(
 	watch(
 		() => [pdfProp.value, filePath.value, totalPages.value],
 		() => {
-			internalPdf.value = null
+			if (internalPdf.value) {
+				void destroyPdfJsDocument(internalPdf.value)
+				internalPdf.value = null
+			}
 			thumbnails.value = {}
 			highResCache.value = {}
+			highResOrder.clear()
 			loadThumbnails()
 		},
 		{ immediate: true },
 	)
+
+	if (getCurrentInstance()) {
+		onUnmounted(() => {
+			activeSessionId++
+			if (internalPdf.value) {
+				void destroyPdfJsDocument(internalPdf.value)
+				internalPdf.value = null
+			}
+		})
+	}
 
 	return {
 		thumbnails,

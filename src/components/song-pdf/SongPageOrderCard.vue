@@ -189,6 +189,8 @@ const cardStyle = computed(() => ({
 	transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
 	box-sizing: border-box;
 	user-select: none;
+	content-visibility: auto;
+	contain-intrinsic-size: auto 240px;
 }
 
 .card:hover {

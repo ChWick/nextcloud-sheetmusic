@@ -8,10 +8,8 @@ import type { Song, SongFile, Book, Composer, Collection, Artist, Genre, Instrum
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
-import { generateFilePath } from '@nextcloud/router'
-import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist'
-import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { PDFDocument, degrees } from 'pdf-lib'
+import { cleanupPdfJsPage, destroyPdfJsDocument, loadPdfJsDocument, releaseCanvas, setBoundedRecordEntry } from '../../utils/pdfjs'
 import { apiDelete, apiPost } from '../../api/client'
 import { showError, showInfo, showSuccess } from '@nextcloud/dialogs'
 import { getCacheBustedFileUrl, getFileName } from '../../utils/file'
@@ -39,7 +37,7 @@ import { executeJoinTwoPages, type JoinLayout } from './pdf-join-engine'
 import { executeRotatePage } from './pdf-rotate-engine'
 import type { ScanOperation } from './scan-types'
 import { applyPipeline, createImageBuffer, imageDataToImageBuffer, imageBufferToImageData } from './scan-enhance-engine'
-import { executeEnhancePage, inspectPdfPageResolution, type PdfPageResolutionSummary, pruneUnreferencedPdfObjects, resolvePageRenderScale } from './pdf-enhance-engine'
+import { executeEnhancePage, inspectPdfDocumentResolutions, type PdfPageResolutionSummary, pruneUnreferencedPdfObjects, resolvePageRenderScale } from './pdf-enhance-engine'
 import { usePdfThumbnails } from './usePdfThumbnails'
 import { usePdfSplit } from './usePdfSplit'
 import SongPdfBookmarksSidebar from './SongPdfBookmarksSidebar.vue'
@@ -47,8 +45,6 @@ import { usePdfBookmarks } from './usePdfBookmarks'
 import { usePdfPageEdits } from './usePdfPageEdits'
 import { useFullscreenBody } from '../../composables/useFullscreenBody'
 import FullscreenShell from '../FullscreenShell.vue'
-
-GlobalWorkerOptions.workerSrc = pdfWorker
 
 
 const props = withDefaults(
@@ -131,13 +127,7 @@ async function refreshPageResolutions(pdf: any) {
 		return
 	}
 	try {
-		const maxInspect = Math.min(pdf.numPages ?? 0, 25)
-		const list: PdfPageResolutionSummary[] = []
-		for (let p = 1; p <= maxInspect; p++) {
-			const pg = await pdf.getPage(p)
-			list.push(await inspectPdfPageResolution(pg, p))
-		}
-		pageResolutions.value = list
+		pageResolutions.value = await inspectPdfDocumentResolutions(pdf, 25)
 	} catch {
 		pageResolutions.value = []
 	}
@@ -342,6 +332,12 @@ async function loadPdf() {
 	selectedPages.value = []
 
 	try {
+		cleanupThumbnailObserver()
+		if (activePdfDoc.value) {
+			await destroyPdfJsDocument(activePdfDoc.value)
+			activePdfDoc.value = null
+		}
+
 		const targetUrl = getCacheBustedFileUrl(targetFile.value.path, `${targetFile.value.id}-${props.song.lastModified ?? ''}-${Date.now()}`)
 		const response = await axios.get(targetUrl, {
 			responseType: 'arraybuffer',
@@ -351,20 +347,10 @@ async function loadPdf() {
 			},
 		})
 		const bytes = response.data instanceof ArrayBuffer ? new Uint8Array(response.data) : new Uint8Array(response.data)
-		// Store an independent clone of bytes so pdfjs worker transfer does not detach the array buffer
-		originalPdfBytes.value = bytes.slice()
+		originalPdfBytes.value = bytes
 
-		const wasmUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/wasm/') : new URL('pdfjs-dist/wasm/', import.meta.url).href
-		const cMapUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/cmaps/') : new URL('pdfjs-dist/cmaps/', import.meta.url).href
-		const standardFontDataUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/standard_fonts/') : new URL('pdfjs-dist/standard_fonts/', import.meta.url).href
-
-		const pdf = await getDocument({
-			data: bytes.slice(),
-			cMapUrl,
-			cMapPacked: true,
-			standardFontDataUrl,
-			wasmUrl,
-		}).promise
+		// Pass an independent clone to pdf.js because its worker transfers/detaches the ArrayBuffer
+		const pdf = await loadPdfJsDocument(bytes.slice())
 
 		activePdfDoc.value = pdf
 		totalPages.value = pdf.numPages
@@ -524,24 +510,19 @@ async function handleExecuteJoin(options: {
 		}
 		deletedPages.value = newDeleted
 
-		// Re-render PDF with pdfjs
-		const wasmUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/wasm/') : new URL('pdfjs-dist/wasm/', import.meta.url).href
-		const cMapUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/cmaps/') : new URL('pdfjs-dist/cmaps/', import.meta.url).href
-		const standardFontDataUrl = typeof generateFilePath === 'function' ? generateFilePath('sheetmusic', 'js', 'pdfjs/standard_fonts/') : new URL('pdfjs-dist/standard_fonts/', import.meta.url).href
+		cleanupThumbnailObserver()
+		if (activePdfDoc.value) {
+			await destroyPdfJsDocument(activePdfDoc.value)
+			activePdfDoc.value = null
+		}
 
-		const pdf = await getDocument({
-			data: newBytes.slice(),
-			cMapUrl,
-			cMapPacked: true,
-			standardFontDataUrl,
-			wasmUrl,
-		}).promise
+		// Re-render PDF with pdfjs
+		const pdf = await loadPdfJsDocument(newBytes.slice())
 
 		activePdfDoc.value = pdf
 		totalPages.value = pdfDoc.getPageCount()
 		void refreshPageResolutions(pdf)
 
-		cleanupThumbnailObserver()
 		thumbnailCanvases.value = {}
 		await nextTick()
 		initThumbnailObserver(pdf)
@@ -603,8 +584,10 @@ async function saveRotationsAndCrops() {
 
 			// 1. Scan Enhancement (if configured for page)
 			if (pageIsEnhanced && activePdfDoc.value) {
+				let pageToRender: any = null
+				let enhanceCanvas: HTMLCanvasElement | null = null
 				try {
-					const pageToRender = await activePdfDoc.value.getPage(pageNum)
+					pageToRender = await activePdfDoc.value.getPage(pageNum)
 					const origPage = pdfDoc.getPage(i)
 					const origSize = origPage.getSize()
 					const scale = await resolvePageRenderScale(pageToRender, origPage)
@@ -617,20 +600,20 @@ async function saveRotationsAndCrops() {
 					const targetH = vpScaled
 						? Math.max(1, Math.round(vp.height))
 						: Math.max(1, Math.round(origSize.height * scale))
-					const canvas = document.createElement('canvas')
-					canvas.width = targetW
-					canvas.height = targetH
-					const ctx = canvas.getContext('2d')
+					enhanceCanvas = document.createElement('canvas')
+					enhanceCanvas.width = targetW
+					enhanceCanvas.height = targetH
+					const ctx = enhanceCanvas.getContext('2d')
 					let rawBuffer: any = null
 					if (ctx) {
 						ctx.fillStyle = '#ffffff'
-						ctx.fillRect(0, 0, canvas.width, canvas.height)
+						ctx.fillRect(0, 0, enhanceCanvas.width, enhanceCanvas.height)
 						await pageToRender.render({
 							canvasContext: ctx,
 							viewport: vp,
 							background: 'rgb(255, 255, 255)',
 						}).promise
-						const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+						const imgData = ctx.getImageData(0, 0, enhanceCanvas.width, enhanceCanvas.height)
 						rawBuffer = imageDataToImageBuffer(imgData)
 					} else {
 						// Headless / test environment fallback when 2D canvas context is unavailable
@@ -653,6 +636,9 @@ async function saveRotationsAndCrops() {
 					}
 				} catch (enhErr) {
 					console.warn(`Could not enhance page ${pageNum}`, enhErr)
+				} finally {
+					releaseCanvas(enhanceCanvas)
+					cleanupPdfJsPage(pageToRender)
 				}
 			}
 
@@ -823,6 +809,7 @@ function handleDiscardAllEdits() {
 const isZoomModalOpen = ref(false)
 const zoomPageNum = ref(1)
 const zoomHighResCache = ref<Record<number, string>>({})
+const zoomHighResOrder = new Set<number>()
 const isLoadingZoomHighRes = ref(false)
 
 const isAnyModalOpen = computed(() =>
@@ -837,6 +824,7 @@ const isAnyModalOpen = computed(() =>
 
 watch(activePdfDoc, () => {
 	zoomHighResCache.value = {}
+	zoomHighResOrder.clear()
 })
 
 const zoomThumbnailUrl = computed(() => {
@@ -855,10 +843,7 @@ async function loadZoomHighResPage(pageNum: number) {
 	try {
 		const url = await renderPageImage(activePdfDoc.value, pageNum, 1600)
 		if (url) {
-			zoomHighResCache.value = {
-				...zoomHighResCache.value,
-				[pageNum]: url,
-			}
+			zoomHighResCache.value = setBoundedRecordEntry(zoomHighResCache.value, zoomHighResOrder, pageNum, url)
 		}
 	} finally {
 		isLoadingZoomHighRes.value = false
@@ -923,6 +908,12 @@ onMounted(() => {
 
 onUnmounted(() => {
 	window.removeEventListener('keydown', handleKeyDown)
+	cleanupThumbnailObserver()
+	if (activePdfDoc.value) {
+		void destroyPdfJsDocument(activePdfDoc.value)
+		activePdfDoc.value = null
+	}
+	originalPdfBytes.value = null
 })
 
 watch(() => targetFile.value?.path, () => {

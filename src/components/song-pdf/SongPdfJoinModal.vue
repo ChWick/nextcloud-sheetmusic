@@ -7,6 +7,7 @@ import CloseIcon from 'vue-material-design-icons/Close.vue'
 import TableMergeCells from 'vue-material-design-icons/TableMergeCells.vue'
 import SongPdfJoinControls from './SongPdfJoinControls.vue'
 import type { PageCrop } from './crop-types'
+import { cleanupPdfJsPage, releaseCanvas } from '../../utils/pdfjs'
 import {
 	computeJoinFitInfo,
 	getEffectivePageDimensions,
@@ -147,9 +148,13 @@ async function renderThumbnails() {
 	if (!props.pdf || !props.open) return
 	isRenderingPreview.value = true
 
+	let pdfPageA: any = null
+	let pdfPageB: any = null
+	let offCanvasA: HTMLCanvasElement | null = null
+	let offCanvasB: HTMLCanvasElement | null = null
 	try {
 		// Load dimensions and render Page A
-		const pdfPageA = await props.pdf.getPage(pageA.value)
+		pdfPageA = await props.pdf.getPage(pageA.value)
 		const effectiveRotA = (((pdfPageA.rotate ?? 0) + (rotA.value || 0)) % 360 + 360) % 360
 		const vpA = pdfPageA.getViewport({ scale: 1.0, rotation: effectiveRotA })
 		pageDimA.value = { width: vpA.width, height: vpA.height }
@@ -162,11 +167,11 @@ async function renderThumbnails() {
 			const renderVpA = pdfPageA.getViewport({ scale: renderScale, rotation: effectiveRotA })
 			const cA = cropA.value
 			if (cA && (cA.left > 0.005 || cA.top > 0.005 || cA.width < 0.995 || cA.height < 0.995)) {
-				const offCanvas = typeof document !== 'undefined' ? document.createElement('canvas') : null
-				const offCtx = offCanvas?.getContext('2d')
-				if (offCtx && offCanvas) {
-					offCanvas.width = renderVpA.width
-					offCanvas.height = renderVpA.height
+				offCanvasA = typeof document !== 'undefined' ? document.createElement('canvas') : null
+				const offCtx = offCanvasA?.getContext('2d')
+				if (offCtx && offCanvasA) {
+					offCanvasA.width = renderVpA.width
+					offCanvasA.height = renderVpA.height
 					await pdfPageA.render({ canvasContext: offCtx, viewport: renderVpA }).promise
 					const sx = Math.round(cA.left * renderVpA.width)
 					const sy = Math.round(cA.top * renderVpA.height)
@@ -175,7 +180,7 @@ async function renderThumbnails() {
 					canvasARef.value.width = sw
 					canvasARef.value.height = sh
 					const ctxA = canvasARef.value.getContext('2d')
-					ctxA?.drawImage(offCanvas, sx, sy, sw, sh, 0, 0, sw, sh)
+					ctxA?.drawImage(offCanvasA, sx, sy, sw, sh, 0, 0, sw, sh)
 				} else {
 					canvasARef.value.width = renderVpA.width
 					canvasARef.value.height = renderVpA.height
@@ -197,7 +202,7 @@ async function renderThumbnails() {
 		}
 
 		// Load dimensions and render Page B
-		const pdfPageB = await props.pdf.getPage(pageB.value)
+		pdfPageB = await props.pdf.getPage(pageB.value)
 		const effectiveRotB = (((pdfPageB.rotate ?? 0) + (rotB.value || 0)) % 360 + 360) % 360
 		const vpB = pdfPageB.getViewport({ scale: 1.0, rotation: effectiveRotB })
 		pageDimB.value = { width: vpB.width, height: vpB.height }
@@ -207,11 +212,11 @@ async function renderThumbnails() {
 			const renderVpB = pdfPageB.getViewport({ scale: renderScale, rotation: effectiveRotB })
 			const cB = cropB.value
 			if (cB && (cB.left > 0.005 || cB.top > 0.005 || cB.width < 0.995 || cB.height < 0.995)) {
-				const offCanvas = typeof document !== 'undefined' ? document.createElement('canvas') : null
-				const offCtx = offCanvas?.getContext('2d')
-				if (offCtx && offCanvas) {
-					offCanvas.width = renderVpB.width
-					offCanvas.height = renderVpB.height
+				offCanvasB = typeof document !== 'undefined' ? document.createElement('canvas') : null
+				const offCtx = offCanvasB?.getContext('2d')
+				if (offCtx && offCanvasB) {
+					offCanvasB.width = renderVpB.width
+					offCanvasB.height = renderVpB.height
 					await pdfPageB.render({ canvasContext: offCtx, viewport: renderVpB }).promise
 					const sx = Math.round(cB.left * renderVpB.width)
 					const sy = Math.round(cB.top * renderVpB.height)
@@ -220,7 +225,7 @@ async function renderThumbnails() {
 					canvasBRef.value.width = sw
 					canvasBRef.value.height = sh
 					const ctxB = canvasBRef.value.getContext('2d')
-					ctxB?.drawImage(offCanvas, sx, sy, sw, sh, 0, 0, sw, sh)
+					ctxB?.drawImage(offCanvasB, sx, sy, sw, sh, 0, 0, sw, sh)
 				} else {
 					canvasBRef.value.width = renderVpB.width
 					canvasBRef.value.height = renderVpB.height
@@ -243,6 +248,10 @@ async function renderThumbnails() {
 	} catch (err) {
 		console.warn('Failed to render join preview thumbnails:', err)
 	} finally {
+		releaseCanvas(offCanvasA)
+		releaseCanvas(offCanvasB)
+		cleanupPdfJsPage(pdfPageA)
+		cleanupPdfJsPage(pdfPageB)
 		isRenderingPreview.value = false
 	}
 }

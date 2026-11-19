@@ -6,6 +6,7 @@ import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import PageNavControls from '../PageNavControls.vue'
 import ZoomControls from '../ZoomControls.vue'
+import { cleanupPdfJsPage, releaseCanvas } from '../../utils/pdfjs'
 import Undo from 'vue-material-design-icons/Undo.vue'
 import Redo from 'vue-material-design-icons/Redo.vue'
 import EyeOutline from 'vue-material-design-icons/EyeOutline.vue'
@@ -287,8 +288,10 @@ async function renderPage() {
 	isLoadingPage.value = true
 	measurePreviewPane()
 
+	let page: any = null
+	let srcCanvas: HTMLCanvasElement | null = null
 	try {
-		const page = await props.pdf.getPage(props.pageNum)
+		page = await props.pdf.getPage(props.pageNum)
 		const effectiveRotation = (((page.rotate ?? 0) + (props.rotation || 0)) % 360 + 360) % 360
 		const scale = await resolvePageRenderScale(page)
 		const unscaledViewport = page.getViewport({ scale: 1.0, rotation: effectiveRotation })
@@ -313,7 +316,7 @@ async function renderPage() {
 
 		measurePreviewPane()
 
-		const srcCanvas = document.createElement('canvas')
+		srcCanvas = document.createElement('canvas')
 		srcCanvas.width = targetW
 		srcCanvas.height = targetH
 		const srcCtx = srcCanvas.getContext('2d')
@@ -335,6 +338,8 @@ async function renderPage() {
 	} catch (e) {
 		console.warn(`Failed to render enhance preview for page ${props.pageNum}:`, e)
 	} finally {
+		releaseCanvas(srcCanvas)
+		cleanupPdfJsPage(page)
 		isLoadingPage.value = false
 	}
 }

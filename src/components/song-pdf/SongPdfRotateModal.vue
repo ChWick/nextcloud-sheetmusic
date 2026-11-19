@@ -4,6 +4,7 @@ import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
+import { cleanupPdfJsPage } from '../../utils/pdfjs'
 import CheckIcon from 'vue-material-design-icons/Check.vue'
 import ArrowLeft from 'vue-material-design-icons/ArrowLeft.vue'
 import ArrowRight from 'vue-material-design-icons/ArrowRight.vue'
@@ -75,8 +76,9 @@ async function renderPage() {
 	if (!props.pdf || !canvasRef.value) return
 	isLoadingPage.value = true
 
+	let page: any = null
 	try {
-		const page = await props.pdf.getPage(props.pageNum)
+		page = await props.pdf.getPage(props.pageNum)
 		// Render unrotated page scaled to fit the preview stage (up to 480x380)
 		const unscaledViewport = page.getViewport({ scale: 1.0 })
 		const maxWidth = 480
@@ -106,6 +108,7 @@ async function renderPage() {
 	} catch (err) {
 		console.error('Failed to render page for rotation preview:', err)
 	} finally {
+		cleanupPdfJsPage(page)
 		isLoadingPage.value = false
 	}
 }
