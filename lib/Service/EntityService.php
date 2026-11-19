@@ -104,11 +104,7 @@ class EntityService {
 				if ($this->songService !== null) {
 					$songIds = $this->internalEntityMapper->findSongIdsForEntity($id);
 					if ($songIds !== []) {
-						$autoPaths = $this->libraryService->isAutoPathsEnabled($user->getUID(), $targetLibraryId);
-						$preset = $autoPaths ? $this->libraryService->getNamingRulePreset($user->getUID(), $targetLibraryId) : null;
-						foreach ($songIds as $songId) {
-							$this->songService->syncSongFilesAfterUpdate($user, $songId, $targetLibraryId, $autoPaths, $preset);
-						}
+						$this->songService->syncMultipleSongFilesAfterUpdate($user, $songIds, $targetLibraryId);
 					}
 				}
 			}

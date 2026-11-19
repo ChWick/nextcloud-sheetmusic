@@ -318,19 +318,7 @@ class SongService {
 		}
 
 		try {
-			$autoPaths = $this->libraryService->isAutoPathsEnabled($user->getUID(), $targetLibraryId);
-			$preset = null;
-			$targetFolder = null;
-			if ($autoPaths) {
-				$preset = $this->libraryService->getNamingRulePreset($user->getUID(), $targetLibraryId);
-				if (!SongPathNamingRule::isDisabledPreset($preset)) {
-					try {
-						$targetFolder = $this->fileManager->libraryFolder($targetLibraryId, $user);
-					} catch (\Throwable) {
-						$targetFolder = null;
-					}
-				}
-			}
+			['autoPaths' => $autoPaths, 'preset' => $preset, 'targetFolder' => $targetFolder] = $this->songFileService->resolveSyncContext($user, $targetLibraryId);
 
 			foreach (array_values($songIds) as $index => $songId) {
 				$current = $index + 1;
@@ -457,6 +445,19 @@ class SongService {
 		?Folder $targetFolder = null,
 	): void {
 		$this->songFileService->syncSongFiles($user, $songId, $targetLibraryId, $autoPaths, $preset, $targetFolder);
+	}
+
+	/**
+	 * Regenerate file paths and sync PDF metadata for multiple songs using a shared library context.
+	 *
+	 * @param list<int> $songIds
+	 */
+	public function syncMultipleSongFilesAfterUpdate(
+		IUser $user,
+		array $songIds,
+		int $targetLibraryId,
+	): void {
+		$this->songFileService->syncMultipleSongFiles($user, $songIds, $targetLibraryId);
 	}
 
 	/**

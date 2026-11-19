@@ -129,7 +129,7 @@ class SongFileService {
 
 		$autoPaths = $this->libraryService->isAutoPathsEnabled($user->getUID(), $libraryId);
 		$targetRelative = $this->resolveDestinationPath($userFolder, $libraryDir, $fileName, $autoPaths);
-		$this->ensureParentFolder($userFolder, $targetRelative);
+		$this->fileManager->ensureParentFolder($userFolder, $targetRelative);
 		// Create the file with its content in one step, suppressing the file event
 		// listener so it does not parse the PDF and create a redundant stub song.
 		$targetFile = SheetMusicFileEventListener::runWithoutListener(
@@ -184,22 +184,7 @@ class SongFileService {
 		$targetLibraryId = $this->libraryService->getTargetLibraryId($libraryId);
 		$this->libraryMapper->touch($targetLibraryId);
 		$this->syncSongFileMetadata($user, '', $songId, $targetLibraryId);
-
-		if ($songId > 0) {
-			$song = $this->internalSongMapper->findById($songId);
-			if ($song !== null) {
-				$song->updatedAt = time();
-				$this->internalSongMapper->update($song);
-				if ($this->songHistoryService !== null) {
-					$this->songHistoryService->recordSnapshot(
-						$song,
-						InternalSongHistory::ACTION_UPDATED,
-						$user->getUID(),
-						'Modified attached PDF: ' . $targetNode->getName()
-					);
-				}
-			}
-		}
+		$this->recordSongFileHistory($songId, $user, 'Modified attached PDF: ' . $targetNode->getName(), touchSong: true);
 
 		return $this->findLibraryDataForResponse($user, $libraryId);
 	}
@@ -372,23 +357,13 @@ class SongFileService {
 		$targetLibraryId = $this->libraryService->getTargetLibraryId($libraryId);
 		$this->libraryMapper->touch($targetLibraryId);
 		$this->syncSongFileMetadata($user, '', $songId, $targetLibraryId);
-
-		$targetSongId = $fileRecord->songId;
-		if ($targetSongId > 0) {
-			$song = $this->internalSongMapper->findById($targetSongId);
-			if ($song !== null) {
-				$song->updatedAt = time();
-				$this->internalSongMapper->update($song);
-				if ($this->songHistoryService !== null) {
-					$this->songHistoryService->recordSnapshot(
-						$song,
-						InternalSongHistory::ACTION_REVERTED,
-						$user->getUID(),
-						'Reverted file to revision ' . $revision . ': ' . $targetNode->getName()
-					);
-				}
-			}
-		}
+		$this->recordSongFileHistory(
+			$fileRecord->songId,
+			$user,
+			'Reverted file to revision ' . $revision . ': ' . $targetNode->getName(),
+			action: InternalSongHistory::ACTION_REVERTED,
+			touchSong: true,
+		);
 
 		return $this->findLibraryDataForResponse($user, $libraryId);
 	}
@@ -530,22 +505,13 @@ class SongFileService {
 			$fileRecord->updatedAt = $now;
 			$this->internalSongFileMapper->update($fileRecord);
 
-			$targetSongId = $fileRecord->songId;
-			if ($targetSongId > 0) {
-				$song = $this->internalSongMapper->findById($targetSongId);
-				if ($song !== null) {
-					$song->updatedAt = $now;
-					$this->internalSongMapper->update($song);
-					if ($this->songHistoryService !== null) {
-						$this->songHistoryService->recordSnapshot(
-							$song,
-							InternalSongHistory::ACTION_UPDATED,
-							$user->getUID(),
-							'Updated page order to ' . ($normalized ?? 'default')
-						);
-					}
-				}
-			}
+			$this->recordSongFileHistory(
+				$fileRecord->songId,
+				$user,
+				'Updated page order to ' . ($normalized ?? 'default'),
+				touchSong: true,
+				timestamp: $now,
+			);
 
 			$targetLibraryId = $this->libraryService->getTargetLibraryId($libraryId);
 			$this->libraryMapper->touch($targetLibraryId);
@@ -660,24 +626,6 @@ class SongFileService {
 		return $this->fileManager->uniqueRelativePath($userFolder, $targetRelative);
 	}
 
-	private function ensureParentFolder(Folder $userFolder, string $targetRelative): void {
-		$parent = str_replace(DIRECTORY_SEPARATOR, '/', dirname($targetRelative));
-		if ($parent === '' || $parent === '.' || $parent === '/') {
-			return;
-		}
-
-		$current = '';
-		foreach (explode('/', $parent) as $segment) {
-			if ($segment === '') {
-				continue;
-			}
-			$current = $current === '' ? $segment : "$current/$segment";
-			if (!$userFolder->nodeExists($current)) {
-				$userFolder->newFolder($current);
-			}
-		}
-	}
-
 	private function cleanupAutoIndexedStubForNewUpload(int $targetSongId, int $physicalFileId): void {
 		$existingForFile = $this->internalSongFileMapper->findByFileId($physicalFileId, includeDeleted: false);
 		foreach ($existingForFile as $sf) {
@@ -772,6 +720,49 @@ class SongFileService {
 	}
 
 	/**
+	 * Pre-resolve library auto-path settings and folder once for batch song syncs.
+	 *
+	 * @return array{autoPaths: bool, preset: ?string, targetFolder: ?Folder}
+	 */
+	public function resolveSyncContext(IUser $user, int $targetLibraryId): array {
+		$autoPaths = $this->libraryService->isAutoPathsEnabled($user->getUID(), $targetLibraryId);
+		$preset = null;
+		$targetFolder = null;
+		if ($autoPaths) {
+			$preset = $this->libraryService->getNamingRulePreset($user->getUID(), $targetLibraryId);
+			if (!SongPathNamingRule::isDisabledPreset($preset)) {
+				try {
+					$targetFolder = $this->fileManager->libraryFolder($targetLibraryId, $user);
+				} catch (\Throwable) {
+					$targetFolder = null;
+				}
+			}
+		}
+
+		return [
+			'autoPaths' => $autoPaths,
+			'preset' => $preset,
+			'targetFolder' => $targetFolder,
+		];
+	}
+
+	/**
+	 * Regenerate file paths and sync PDF metadata for multiple songs using a shared library context.
+	 *
+	 * @param list<int> $songIds
+	 */
+	public function syncMultipleSongFiles(IUser $user, array $songIds, int $targetLibraryId): void {
+		if ($songIds === []) {
+			return;
+		}
+
+		['autoPaths' => $autoPaths, 'preset' => $preset, 'targetFolder' => $targetFolder] = $this->resolveSyncContext($user, $targetLibraryId);
+		foreach ($songIds as $songId) {
+			$this->syncSongFiles($user, (int)$songId, $targetLibraryId, $autoPaths, $preset, $targetFolder);
+		}
+	}
+
+	/**
 	 * Regenerate file paths (when autoPaths is enabled and a naming rule is active)
 	 * and sync PDF metadata (when autoPdfMetadata is enabled) for a song.
 	 */
@@ -833,20 +824,34 @@ class SongFileService {
 		}
 	}
 
-	private function recordSongFileHistory(int $songId, IUser $user, string $summary): void {
-		if ($songId <= 0 || $this->songHistoryService === null) {
+	private function recordSongFileHistory(
+		int $songId,
+		IUser $user,
+		string $summary,
+		string $action = InternalSongHistory::ACTION_UPDATED,
+		bool $touchSong = false,
+		?int $timestamp = null,
+	): void {
+		if ($songId <= 0 || (!$touchSong && $this->songHistoryService === null)) {
 			return;
 		}
 
 		$song = $this->internalSongMapper->findById($songId);
-		if ($song !== null) {
-			$this->songHistoryService->recordSnapshot(
-				$song,
-				InternalSongHistory::ACTION_UPDATED,
-				$user->getUID(),
-				$summary,
-			);
+		if ($song === null) {
+			return;
 		}
+
+		if ($touchSong) {
+			$song->updatedAt = $timestamp ?? time();
+			$this->internalSongMapper->update($song);
+		}
+
+		$this->songHistoryService?->recordSnapshot(
+			$song,
+			$action,
+			$user->getUID(),
+			$summary,
+		);
 	}
 
 	private function readUploadedFileContent(?array $fileInfo): string {
