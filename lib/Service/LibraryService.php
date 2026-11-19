@@ -403,20 +403,22 @@ class LibraryService {
 		}
 	}
 
+	private function resolveLibraryForSettings(string $userId, int $libraryId): ?InternalLibrary {
+		$targetLibraryId = $this->getTargetLibraryId($libraryId);
+		return $this->libraryMapper->findForUser($userId, $targetLibraryId)
+			?? $this->libraryMapper->findById($targetLibraryId);
+	}
+
 	public function isAutoPathsEnabled(string $userId, int $libraryId): bool {
-		$library = $this->libraryMapper->findForUser($userId, $libraryId);
-		return $library?->autoPaths ?? true;
+		return $this->resolveLibraryForSettings($userId, $libraryId)?->autoPaths ?? true;
 	}
 
 	public function isAutoPdfMetadataEnabled(string $userId, int $libraryId): bool {
-		$library = $this->libraryMapper->findForUser($userId, $libraryId);
-		return $library?->autoPdfMetadata ?? true;
+		return $this->resolveLibraryForSettings($userId, $libraryId)?->autoPdfMetadata ?? true;
 	}
 
 	public function getNamingRulePreset(string $userId, int $libraryId): string {
-		$targetLibraryId = $this->getTargetLibraryId($libraryId);
-		$library = $this->libraryMapper->findById($targetLibraryId);
-		return $library?->namingRulePreset ?? SongPathNamingRule::PRESET_AUTO;
+		return $this->resolveLibraryForSettings($userId, $libraryId)?->namingRulePreset ?? SongPathNamingRule::PRESET_AUTO;
 	}
 
 	public function updateSettings(
