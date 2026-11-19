@@ -29,19 +29,19 @@
         <template #icon>
           <PlusIcon :size="20" />
         </template>
-        <NcActionButton v-if="createLabel" @click="emit('create')">
+        <NcActionButton v-if="createLabel" :close-after-click="true" @click="emit('create')">
           <template #icon>
             <PlusIcon :size="20" />
           </template>
           {{ createLabel }}
         </NcActionButton>
-        <NcActionButton v-if="importLabel" @click="emit('import')">
+        <NcActionButton v-if="importLabel" :close-after-click="true" @click="emit('import')">
           <template #icon>
             <UploadIcon :size="20" />
           </template>
           {{ importLabel }}
         </NcActionButton>
-        <NcActionButton v-if="importNextcloudLabel" @click="emit('import-nextcloud')">
+        <NcActionButton v-if="importNextcloudLabel" :close-after-click="true" @click="emit('import-nextcloud')">
           <template #icon>
             <FolderIcon :size="20" />
           </template>

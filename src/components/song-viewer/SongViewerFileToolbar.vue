@@ -159,6 +159,7 @@ const activePageResolution = computed<PdfPageResolutionSummary | null>(() => {
 				data-test="pdf-actions-menu">
 				<NcActionButton
 					v-if="isPdf"
+					:close-after-click="true"
 					:title="showAnnotationsLabel"
 					data-test="toggle-annotations-button"
 					@click="emit('toggle-annotations')">
@@ -170,6 +171,7 @@ const activePageResolution = computed<PdfPageResolutionSummary | null>(() => {
 				</NcActionButton>
 				<NcActionButton
 					v-if="isPdf && canWrite !== false"
+					:close-after-click="true"
 					:title="t('sheetmusic', 'Modify PDF')"
 					@click="emit('modify-pdf')">
 					<template #icon>
@@ -179,6 +181,7 @@ const activePageResolution = computed<PdfPageResolutionSummary | null>(() => {
 				</NcActionButton>
 				<NcActionButton
 					v-if="isPdf && canWrite !== false"
+					:close-after-click="true"
 					:title="t('sheetmusic', 'PDF version history')"
 					@click="emit('open-versions')">
 					<template #icon>
@@ -187,6 +190,7 @@ const activePageResolution = computed<PdfPageResolutionSummary | null>(() => {
 					{{ t('sheetmusic', 'PDF version history') }}
 				</NcActionButton>
 				<NcActionButton
+					:close-after-click="true"
 					:title="t('sheetmusic', 'Open in external viewer')"
 					@click="emit('open-external')">
 					<template #icon>

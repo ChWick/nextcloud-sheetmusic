@@ -19,13 +19,13 @@
       </template>
     </NcButton>
     <NcActions :aria-label="t('sheetmusic', 'More song actions')">
-      <NcActionButton @click="$emit('openHistory')">
+      <NcActionButton :close-after-click="true" @click="$emit('openHistory')">
         <template #icon>
           <History :size="20" />
         </template>
         {{ t('sheetmusic', 'Song history & revisions') }}
       </NcActionButton>
-      <NcActionButton @click="$emit('deleteEdit')">
+      <NcActionButton :close-after-click="true" @click="$emit('deleteEdit')">
         <template #icon>
           <DeleteIcon :size="20" />
         </template>
@@ -67,19 +67,19 @@
     <NcActions
       v-if="canWrite"
       :aria-label="t('sheetmusic', 'More song actions')">
-      <NcActionButton v-if="openSong" @click="$emit('openHistory')">
+      <NcActionButton v-if="openSong" :close-after-click="true" @click="$emit('openHistory')">
         <template #icon>
           <History :size="20" />
         </template>
         {{ t('sheetmusic', 'Song history & revisions') }}
       </NcActionButton>
-      <NcActionButton v-if="openSong" @click="$emit('duplicate')">
+      <NcActionButton v-if="openSong" :close-after-click="true" @click="$emit('duplicate')">
         <template #icon>
           <ContentCopyIcon :size="20" />
         </template>
         {{ t('sheetmusic', 'Duplicate song') }}
       </NcActionButton>
-      <NcActionButton @click="$emit('deleteView')">
+      <NcActionButton :close-after-click="true" @click="$emit('deleteView')">
         <template #icon>
           <DeleteIcon :size="20" />
         </template>

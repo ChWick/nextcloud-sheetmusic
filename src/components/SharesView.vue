@@ -182,6 +182,7 @@ watch(
 				<NcActionButton
 					v-for="sub in overview.sublibraries"
 					:key="sub.id"
+					:close-after-click="true"
 					@click="openSublibraryShare(sub)">
 					<template #icon>
 						<ShareVariantOutline :size="20" />
