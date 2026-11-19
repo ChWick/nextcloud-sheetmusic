@@ -23,8 +23,11 @@ use OCA\SheetMusic\Service\FileManager;
 use OCA\SheetMusic\Service\IntegrityIssue;
 use OCA\SheetMusic\Service\LibraryIntegrityService;
 use OCA\SheetMusic\Service\LibraryService;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsComposer;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsCustomGroup;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPathResolver;
 use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsPdfMetadata;
+use OCA\SheetMusic\Sync\MobileSheets\MobileSheetsSong;
 use OCA\SheetMusic\Sync\MobileSheets\SongFileMapper;
 use OCP\Files\File;
 use OCP\Files\Folder;
@@ -33,6 +36,7 @@ use OCP\Files\IUserFolder;
 use OCP\Files\Node;
 use OCP\Files\NotFoundException;
 use OCP\Files\Storage\IStorage;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
@@ -448,6 +452,147 @@ final class LibraryIntegrityServiceTest extends TestCase {
 		} finally {
 			unlink($databasePath);
 		}
+	}
+
+	/**
+	 * @return array<string, array{0: array<string, mixed>, 1: array<string, mixed>}>
+	 */
+	public static function distinctSongMetadataProvider(): array {
+		return [
+			'opus' => [['opus' => 'Op. 27 No. 1'], ['opus' => 'Op. 27 No. 2']],
+			'catalogNumber' => [['catalogNumber' => 'BWV 1001'], ['catalogNumber' => 'BWV 1002']],
+			'songNumber' => [['songNumber' => '101'], ['songNumber' => '102']],
+			'sortTitle' => [['sortTitle' => 'Sonata 01'], ['sortTitle' => 'Sonata 02']],
+			'stars' => [['stars' => 4], ['stars' => 5]],
+			'difficulty' => [['difficulty' => 2], ['difficulty' => 4]],
+			'duration' => [['duration' => 180], ['duration' => 240]],
+			'keywords' => [['keywords' => 'classical, piano'], ['keywords' => 'romantic, piano']],
+			'custom' => [['custom' => 'Edition A'], ['custom' => 'Edition B']],
+			'custom2' => [['custom2' => 'Folder 1'], ['custom2' => 'Folder 2']],
+			'instruments' => [
+				['instruments' => [new MobileSheetsCustomGroup(1, 'Piano')]],
+				['instruments' => [new MobileSheetsCustomGroup(2, 'Violin')]],
+			],
+			'arrangers' => [
+				['arrangers' => [new MobileSheetsCustomGroup(1, 'Liszt')]],
+				['arrangers' => [new MobileSheetsCustomGroup(2, 'Busoni')]],
+			],
+		];
+	}
+
+	/**
+	 * @param array<string, mixed> $overridesA
+	 * @param array<string, mixed> $overridesB
+	 */
+	#[DataProvider('distinctSongMetadataProvider')]
+	public function testCheckIntegrityDoesNotFlagIdenticalSongsWhenAnyFieldDiffers(array $overridesA, array $overridesB): void {
+		$libraryService = $this->createLibraryService();
+		$targetFolder = $this->createMock(Folder::class);
+		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
+		$targetFolder->method('nodeExists')->willReturn(false);
+		$targetFolder->method('getDirectoryListing')->willReturn([]);
+		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager('/tmp/unused.db', $targetFolder);
+
+		$baseArgs = [
+			'title' => 'Sonata',
+			'composers' => [new MobileSheetsComposer(1, 'Beethoven')],
+			'opus' => 'Op. 27',
+			'catalogNumber' => 'WoO 1',
+			'songNumber' => '12',
+			'sortTitle' => 'Sonata',
+			'stars' => 3,
+			'difficulty' => 3,
+			'duration' => 200,
+			'keywords' => 'piano',
+			'custom' => 'notes',
+			'custom2' => 'extra',
+			'instruments' => [new MobileSheetsCustomGroup(1, 'Piano')],
+			'arrangers' => [new MobileSheetsCustomGroup(1, 'Original')],
+		];
+
+		$songA = new MobileSheetsSong(...array_merge(['id' => 1], $baseArgs, $overridesA));
+		$songB = new MobileSheetsSong(...array_merge(['id' => 2], $baseArgs, $overridesB));
+
+		$mockSongMapper = $this->createMock(InternalSongMapper::class);
+		$mockSongMapper->method('findLibraryData')->willReturn(new LibraryData(songs: [$songA, $songB]));
+
+		$service = $this->createIntegrityService(
+			$libraryService,
+			$fileManager,
+			$rootFolder,
+			$pathResolver,
+			internalSongMapper: $mockSongMapper,
+		);
+
+		$issues = array_values(array_filter(
+			$service->checkIntegrity(1, 'user1'),
+			static fn (IntegrityIssue $issue): bool => $issue->type === IntegrityIssue::TYPE_IDENTICAL_SONG,
+		));
+
+		self::assertCount(0, $issues);
+	}
+
+	public function testCheckIntegrityFlagsIdenticalSongsWhenAllFieldsMatch(): void {
+		$libraryService = $this->createLibraryService();
+		$targetFolder = $this->createMock(Folder::class);
+		$targetFolder->method('getPath')->willReturn('/user1/files/Noten');
+		$targetFolder->method('nodeExists')->willReturn(false);
+		$targetFolder->method('getDirectoryListing')->willReturn([]);
+		[$fileManager, $rootFolder, $pathResolver] = $this->createIntegrityFileManager('/tmp/unused.db', $targetFolder);
+
+		$songA = new MobileSheetsSong(
+			id: 1,
+			title: 'Sonata',
+			composers: [new MobileSheetsComposer(1, 'Beethoven')],
+			stars: 5,
+			difficulty: 4,
+			duration: 300,
+			keywords: 'Classical',
+			custom: 'Henle',
+			custom2: 'Shelf A',
+			sortTitle: 'Sonata',
+			opus: 'Op. 27 No. 2',
+			catalogNumber: 'LIB-42',
+			songNumber: '12',
+			instruments: [new MobileSheetsCustomGroup(1, 'Piano')],
+			arrangers: [new MobileSheetsCustomGroup(1, 'Urtext')],
+		);
+		$songB = new MobileSheetsSong(
+			id: 2,
+			title: ' sonata ',
+			composers: [new MobileSheetsComposer(2, 'beethoven')],
+			stars: 5,
+			difficulty: 4,
+			duration: 300,
+			keywords: ' classical ',
+			custom: 'henle',
+			custom2: 'shelf a',
+			sortTitle: 'sonata',
+			opus: 'op. 27 no. 2',
+			catalogNumber: 'lib-42',
+			songNumber: ' 12 ',
+			instruments: [new MobileSheetsCustomGroup(2, 'piano')],
+			arrangers: [new MobileSheetsCustomGroup(2, 'urtext')],
+		);
+
+		$mockSongMapper = $this->createMock(InternalSongMapper::class);
+		$mockSongMapper->method('findLibraryData')->willReturn(new LibraryData(songs: [$songA, $songB]));
+
+		$service = $this->createIntegrityService(
+			$libraryService,
+			$fileManager,
+			$rootFolder,
+			$pathResolver,
+			internalSongMapper: $mockSongMapper,
+		);
+
+		$issues = array_values(array_filter(
+			$service->checkIntegrity(1, 'user1'),
+			static fn (IntegrityIssue $issue): bool => $issue->type === IntegrityIssue::TYPE_IDENTICAL_SONG,
+		));
+
+		self::assertCount(1, $issues);
+		self::assertEquals([1, 2], $issues[0]->details['songIds']);
 	}
 
 	public function testCheckIntegrityReportsAndFixesDuplicateEntityAssignments(): void {

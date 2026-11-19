@@ -764,14 +764,20 @@ class LibraryIntegrityService {
 	 * Computes a canonical metadata string for a song to detect identical metadata duplicates.
 	 */
 	private function getCanonicalSongMetadataKey(MobileSheetsSong $song): string {
-		$extractNames = static function (array $entities): array {
-			$names = array_map(static fn ($e) => $e->name ?? $e->title ?? (string)($e->id ?? ''), $entities);
+		$normalizeString = static fn (string $value): string => mb_strtolower(trim($value), 'UTF-8');
+		$normalizePositiveInt = static fn (?int $value): ?int => ($value !== null && $value > 0) ? $value : null;
+		$extractNames = static function (array $entities) use ($normalizeString): array {
+			$names = array_map(
+				static fn ($e): string => $normalizeString((string)($e->name ?? $e->title ?? $e->id ?? '')),
+				$entities,
+			);
 			sort($names, SORT_STRING);
 			return $names;
 		};
 
 		$parts = [
-			'title:' => trim(strtolower($song->title)),
+			'title:' => $normalizeString($song->title),
+			'sortTitle:' => $normalizeString($song->sortTitle),
 			'composers:' => implode('|', $extractNames($song->composers)),
 			'artists:' => implode('|', $extractNames($song->artists)),
 			'books:' => implode('|', $extractNames($song->books)),
@@ -782,9 +788,20 @@ class LibraryIntegrityService {
 			'years:' => implode('|', $extractNames($song->years)),
 			'signatures:' => implode('|', $extractNames($song->signatures)),
 			'sourceTypes:' => implode('|', $extractNames($song->sourceTypes)),
+			'instruments:' => implode('|', $extractNames($song->instruments)),
+			'arrangers:' => implode('|', $extractNames($song->arrangers)),
+			'opus:' => $normalizeString($song->opus),
+			'catalogNumber:' => $normalizeString($song->catalogNumber),
+			'songNumber:' => $normalizeString($song->songNumber),
+			'stars:' => $normalizePositiveInt($song->stars),
+			'difficulty:' => $normalizePositiveInt($song->difficulty),
+			'duration:' => $normalizePositiveInt($song->duration),
+			'keywords:' => $normalizeString($song->keywords),
+			'custom:' => $normalizeString($song->custom),
+			'custom2:' => $normalizeString($song->custom2),
 		];
 
-		return json_encode($parts);
+		return (string)json_encode($parts);
 	}
 
 	/**
