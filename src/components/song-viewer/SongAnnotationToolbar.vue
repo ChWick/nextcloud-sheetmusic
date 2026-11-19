@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import type { EditorTool, EditorToolStyle } from '../../composables/useAnnotationEditor'
 import type { SheetAnnotation } from '../../types/annotation'
-import { computed, ref } from 'vue'
+import { computed, ref, type Component } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
-import NcButton from '@nextcloud/vue/components/NcButton'
+import ResponsiveNcButton from '../ResponsiveNcButton.vue'
 import Check from 'vue-material-design-icons/Check.vue'
 import CursorDefaultOutline from 'vue-material-design-icons/CursorDefaultOutline.vue'
 import DeleteOutline from 'vue-material-design-icons/DeleteOutline.vue'
@@ -65,6 +65,67 @@ const SHAPE_TOOLS: Array<{ id: EditorTool; label: string; glyph: string }> = [
 	{ id: 'ellipse', label: 'Circle / Ellipse', glyph: '○' },
 ]
 
+const PRIMARY_DRAW_TOOLS: Array<{ id: EditorTool; label: string; icon: Component }> = [
+	{ id: 'select', label: t('sheetmusic', 'Select / Move / Resize (V)'), icon: CursorDefaultOutline },
+	{ id: 'drawing', label: t('sheetmusic', 'Freehand Pen (P)'), icon: Pencil },
+	{ id: 'highlight', label: t('sheetmusic', 'Highlighter (H)'), icon: Marker },
+]
+
+const TRAILING_TOOLS: Array<{ id: EditorTool; label: string; icon: Component }> = [
+	{ id: 'link', label: t('sheetmusic', 'Page Jump Link (L)'), icon: LinkVariant },
+	{ id: 'eraser', label: t('sheetmusic', 'Eraser (E)'), icon: Eraser },
+]
+
+const actionButtons = computed(() => [
+	{
+		id: 'undo',
+		variant: 'secondary' as const,
+		disabled: !props.canUndo,
+		label: t('sheetmusic', 'Undo (Ctrl+Z)'),
+		testId: 'annotation-undo',
+		icon: Undo,
+		onClick: () => emit('undo'),
+	},
+	{
+		id: 'redo',
+		variant: 'secondary' as const,
+		disabled: !props.canRedo,
+		label: t('sheetmusic', 'Redo (Ctrl+Y)'),
+		testId: 'annotation-redo',
+		icon: Redo,
+		onClick: () => emit('redo'),
+	},
+	...(props.selectedAnnotation
+		? [{
+			id: 'delete-selected',
+			variant: 'secondary' as const,
+			disabled: false,
+			label: t('sheetmusic', 'Delete selected annotation (Del)'),
+			testId: 'annotation-delete-selected',
+			icon: DeleteOutline,
+			onClick: () => emit('delete-selected'),
+		}]
+		: []),
+	{
+		id: 'clear-page',
+		variant: 'secondary' as const,
+		disabled: false,
+		label: t('sheetmusic', 'Clear annotations on page {page}', { page: props.currentPage }),
+		testId: 'annotation-clear-page',
+		icon: DeleteSweepOutline,
+		onClick: () => emit('clear-page'),
+	},
+	{
+		id: 'done',
+		variant: 'primary' as const,
+		disabled: false,
+		label: t('sheetmusic', 'Done'),
+		testId: 'annotation-done',
+		icon: Check,
+		onClick: () => emit('done'),
+	},
+])
+
 const isShapeActive = computed(() => SHAPE_TOOLS.some((s) => s.id === props.activeTool))
 const activeShapeOption = computed(() => SHAPE_TOOLS.find((s) => s.id === props.activeTool) ?? null)
 const activeShapeLabel = computed(() =>
@@ -109,33 +170,15 @@ function pickStamp(symbol: string) {
 		<div :class="$style.row">
 			<div :class="$style.toolGroup">
 				<button
+					v-for="tool in PRIMARY_DRAW_TOOLS"
+					:key="tool.id"
 					type="button"
-					:class="[$style.toolBtn, activeTool === 'select' && $style.active]"
-					:title="t('sheetmusic', 'Select / Move / Resize (V)')"
-					:aria-label="t('sheetmusic', 'Select / Move / Resize (V)')"
-					data-test="tool-select"
-					@click="selectTool('select')">
-					<CursorDefaultOutline :size="18" />
-				</button>
-
-				<button
-					type="button"
-					:class="[$style.toolBtn, activeTool === 'drawing' && $style.active]"
-					:title="t('sheetmusic', 'Freehand Pen (P)')"
-					:aria-label="t('sheetmusic', 'Freehand Pen (P)')"
-					data-test="tool-drawing"
-					@click="selectTool('drawing')">
-					<Pencil :size="18" />
-				</button>
-
-				<button
-					type="button"
-					:class="[$style.toolBtn, activeTool === 'highlight' && $style.active]"
-					:title="t('sheetmusic', 'Highlighter (H)')"
-					:aria-label="t('sheetmusic', 'Highlighter (H)')"
-					data-test="tool-highlight"
-					@click="selectTool('highlight')">
-					<Marker :size="18" />
+					:class="[$style.toolBtn, activeTool === tool.id && $style.active]"
+					:title="tool.label"
+					:aria-label="tool.label"
+					:data-test="`tool-${tool.id}`"
+					@click="selectTool(tool.id)">
+					<component :is="tool.icon" :size="18" />
 				</button>
 
 				<!-- Shapes Dropdown -->
@@ -185,23 +228,15 @@ function pickStamp(symbol: string) {
 					@select="pickStamp" />
 
 				<button
+					v-for="tool in TRAILING_TOOLS"
+					:key="tool.id"
 					type="button"
-					:class="[$style.toolBtn, activeTool === 'link' && $style.active]"
-					:title="t('sheetmusic', 'Page Jump Link (L)')"
-					:aria-label="t('sheetmusic', 'Page Jump Link (L)')"
-					data-test="tool-link"
-					@click="selectTool('link')">
-					<LinkVariant :size="18" />
-				</button>
-
-				<button
-					type="button"
-					:class="[$style.toolBtn, activeTool === 'eraser' && $style.active]"
-					:title="t('sheetmusic', 'Eraser (E)')"
-					:aria-label="t('sheetmusic', 'Eraser (E)')"
-					data-test="tool-eraser"
-					@click="selectTool('eraser')">
-					<Eraser :size="18" />
+					:class="[$style.toolBtn, activeTool === tool.id && $style.active]"
+					:title="tool.label"
+					:aria-label="tool.label"
+					:data-test="`tool-${tool.id}`"
+					@click="selectTool(tool.id)">
+					<component :is="tool.icon" :size="18" />
 				</button>
 			</div>
 
@@ -217,53 +252,17 @@ function pickStamp(symbol: string) {
 			<div :class="$style.actionGroup">
 				<span v-if="isSaving" :class="$style.savingBadge">{{ t('sheetmusic', 'Saving...') }}</span>
 
-				<NcButton
-					variant="secondary"
-					:disabled="!canUndo"
-					:title="t('sheetmusic', 'Undo (Ctrl+Z)')"
-					:aria-label="t('sheetmusic', 'Undo (Ctrl+Z)')"
-					data-test="annotation-undo"
-					@click="emit('undo')">
-					<template #icon><Undo :size="20" /></template>
-				</NcButton>
-
-				<NcButton
-					variant="secondary"
-					:disabled="!canRedo"
-					:title="t('sheetmusic', 'Redo (Ctrl+Y)')"
-					:aria-label="t('sheetmusic', 'Redo (Ctrl+Y)')"
-					data-test="annotation-redo"
-					@click="emit('redo')">
-					<template #icon><Redo :size="20" /></template>
-				</NcButton>
-
-				<NcButton
-					v-if="selectedAnnotation"
-					variant="secondary"
-					:title="t('sheetmusic', 'Delete selected annotation (Del)')"
-					:aria-label="t('sheetmusic', 'Delete selected annotation (Del)')"
-					data-test="annotation-delete-selected"
-					@click="emit('delete-selected')">
-					<template #icon><DeleteOutline :size="20" /></template>
-				</NcButton>
-
-				<NcButton
-					variant="secondary"
-					:title="t('sheetmusic', 'Clear annotations on page {page}', { page: currentPage })"
-					:aria-label="t('sheetmusic', 'Clear annotations on page {page}', { page: currentPage })"
-					data-test="annotation-clear-page"
-					@click="emit('clear-page')">
-					<template #icon><DeleteSweepOutline :size="20" /></template>
-				</NcButton>
-
-				<NcButton
-					variant="primary"
-					:title="t('sheetmusic', 'Done')"
-					:aria-label="t('sheetmusic', 'Done')"
-					data-test="annotation-done"
-					@click="emit('done')">
-					<template #icon><Check :size="20" /></template>
-				</NcButton>
+				<ResponsiveNcButton
+					v-for="btn in actionButtons"
+					:key="btn.id"
+					icon-only
+					:variant="btn.variant"
+					:disabled="btn.disabled"
+					:label="btn.label"
+					:data-test="btn.testId"
+					@click="btn.onClick">
+					<template #icon><component :is="btn.icon" :size="20" /></template>
+				</ResponsiveNcButton>
 			</div>
 		</div>
 	</div>

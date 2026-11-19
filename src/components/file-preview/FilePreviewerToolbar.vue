@@ -195,13 +195,6 @@ const emit = defineEmits<{
 	gap: 6px;
 }
 
-.pageIndicator {
-	font-size: 0.9rem;
-	font-weight: 500;
-	color: var(--color-text-maxcontrast);
-	padding: 0 6px;
-}
-
 .segmentedGroup {
 	display: flex;
 	border: 1px solid var(--color-border);

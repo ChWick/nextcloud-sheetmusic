@@ -688,19 +688,6 @@ watch(
 	min-width: 0;
 }
 
-.pageNav {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-}
-
-.pageIndicator {
-	font-weight: 600;
-	font-size: 13px;
-	color: var(--color-main-text);
-	white-space: nowrap;
-}
-
 .dpiBadge {
 	display: inline-flex;
 	align-items: center;
@@ -713,20 +700,6 @@ watch(
 	font-size: 11px;
 	font-weight: 500;
 	white-space: nowrap;
-}
-
-.zoomControls {
-	display: flex;
-	align-items: center;
-	gap: 4px;
-}
-
-.zoomIndicator {
-	font-size: 12px;
-	font-weight: 600;
-	min-width: 42px;
-	text-align: center;
-	color: var(--color-main-text);
 }
 
 .toolActions {
