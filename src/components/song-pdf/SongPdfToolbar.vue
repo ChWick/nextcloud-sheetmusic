@@ -364,18 +364,27 @@ function stepThumbnailSize(direction: -1 | 1) {
 	}
 
 	.toolbar :global(.button-vue__text) {
-		display: none;
+		display: none !important;
 	}
 
 	.toolbar :global(.button-vue) {
-		--button-padding: var(--button-radius, 8px);
+		--button-padding: 0;
 		line-height: 1;
 		width: var(--button-size, var(--default-clickable-area, 44px)) !important;
-		min-width: var(--button-size, var(--default-clickable-area, 44px));
-		min-height: var(--button-size, var(--default-clickable-area, 44px));
-		padding: 0;
-		padding-inline: 0;
-		justify-content: center;
+		min-width: var(--button-size, var(--default-clickable-area, 44px)) !important;
+		min-height: var(--button-size, var(--default-clickable-area, 44px)) !important;
+		padding: 0 !important;
+		padding-inline: 0 !important;
+		justify-content: center !important;
+	}
+
+	.toolbar :global(.button-vue__wrapper) {
+		justify-content: center !important;
+		width: 100% !important;
+	}
+
+	.toolbar :global(.button-vue__icon) {
+		margin: 0 !important;
 	}
 }
 </style>

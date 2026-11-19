@@ -717,15 +717,22 @@ button.tabButton:disabled {
 
 	.cancelBtnText,
 	.headerLeft :global(.button-vue__text) {
-		display: none;
+		display: none !important;
 	}
 
 	.headerLeft :global(.button-vue) {
-		--button-padding: var(--button-radius);
-		padding-inline: var(--button-padding);
+		--button-padding: 0;
+		padding: 0 !important;
+		padding-inline: 0 !important;
 		line-height: 1;
 		width: var(--button-size, var(--default-clickable-area, 44px)) !important;
-		justify-content: center;
+		min-width: var(--button-size, var(--default-clickable-area, 44px)) !important;
+		justify-content: center !important;
+	}
+
+	.headerLeft :global(.button-vue__wrapper) {
+		justify-content: center !important;
+		width: 100% !important;
 	}
 
 	.songTitle {
@@ -737,15 +744,22 @@ button.tabButton:disabled {
 @media (max-width: 480px) {
 	.saveBtnText,
 	.headerRight :global(.button-vue__text) {
-		display: none;
+		display: none !important;
 	}
 
 	.headerRight :global(.button-vue) {
-		--button-padding: var(--button-radius);
-		padding-inline: var(--button-padding);
+		--button-padding: 0;
+		padding: 0 !important;
+		padding-inline: 0 !important;
 		line-height: 1;
 		width: var(--button-size, var(--default-clickable-area, 44px)) !important;
-		justify-content: center;
+		min-width: var(--button-size, var(--default-clickable-area, 44px)) !important;
+		justify-content: center !important;
+	}
+
+	.headerRight :global(.button-vue__wrapper) {
+		justify-content: center !important;
+		width: 100% !important;
 	}
 
 	.songTitle {
