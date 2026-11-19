@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { ref } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import ChevronDown from 'vue-material-design-icons/ChevronDown.vue'
-import { useViewportPopoverClamp } from '../../composables/useViewportPopoverClamp'
+import ViewportPopover from '../ViewportPopover.vue'
 
 export interface ColorSwatch {
 	color: string
@@ -26,17 +26,6 @@ const emit = defineEmits<{
 }>()
 
 const isOpen = ref(false)
-const rootRef = ref<HTMLElement | null>(null)
-const popoverRef = ref<HTMLElement | null>(null)
-const { popoverPositionStyle } = useViewportPopoverClamp(
-	rootRef,
-	popoverRef,
-	() => isOpen.value,
-)
-
-function toggle() {
-	isOpen.value = !isOpen.value
-}
 
 function selectSwatch(color: string) {
 	emit('update:modelValue', color)
@@ -52,46 +41,29 @@ function onOpacityInput(e: Event) {
 	const value = Number((e.target as HTMLInputElement).value)
 	emit('update:opacity', Math.round(value * 100) / 100)
 }
-
-function onDocumentPointerDown(e: PointerEvent) {
-	if (!isOpen.value) return
-	const target = e.target as Node | null
-	if (rootRef.value && target && !rootRef.value.contains(target)) {
-		isOpen.value = false
-	}
-}
-
-onMounted(() => {
-	window.addEventListener('pointerdown', onDocumentPointerDown)
-})
-
-onUnmounted(() => {
-	window.removeEventListener('pointerdown', onDocumentPointerDown)
-})
 </script>
 
 <template>
-	<div ref="rootRef" :class="$style.colorPickerWrap">
-		<button
-			type="button"
-			:class="$style.triggerBtn"
-			:title="t('sheetmusic', 'Color: {color}', { color: props.modelValue })"
-			:aria-label="t('sheetmusic', 'Choose color')"
-			:aria-expanded="isOpen"
-			data-test="annotation-color-trigger"
-			@click="toggle">
-			<span :class="$style.triggerSwatchWrap">
-				<span :class="$style.triggerSwatch" :style="{ backgroundColor: props.modelValue, opacity: props.opacity }" />
-			</span>
-			<ChevronDown :size="16" :class="$style.chevron" />
-		</button>
-
-		<div
-			v-if="isOpen"
-			ref="popoverRef"
-			:class="$style.popover"
-			:style="popoverPositionStyle"
-			data-test="annotation-color-popover">
+	<ViewportPopover
+		v-model:open="isOpen"
+		pane-test-id="annotation-color-popover"
+		:pane-class="$style.popover"
+		:gap="4">
+		<template #trigger="{ toggle }">
+			<button
+				type="button"
+				:class="$style.triggerBtn"
+				:title="t('sheetmusic', 'Color: {color}', { color: props.modelValue })"
+				:aria-label="t('sheetmusic', 'Choose color')"
+				:aria-expanded="isOpen"
+				data-test="annotation-color-trigger"
+				@click="toggle">
+				<span :class="$style.triggerSwatchWrap">
+					<span :class="$style.triggerSwatch" :style="{ backgroundColor: props.modelValue, opacity: props.opacity }" />
+				</span>
+				<ChevronDown :size="16" :class="$style.chevron" />
+			</button>
+		</template>
 			<div :class="$style.swatchGrid">
 				<button
 					v-for="s in props.swatches"
@@ -129,17 +101,10 @@ onUnmounted(() => {
 					@input="onOpacityInput" />
 				<span :class="$style.opacityVal">{{ Math.round(props.opacity * 100) }}%</span>
 			</label>
-		</div>
-	</div>
+	</ViewportPopover>
 </template>
 
 <style module>
-.colorPickerWrap {
-	position: relative;
-	display: inline-flex;
-	align-items: center;
-}
-
 .triggerBtn {
 	display: inline-flex;
 	align-items: center;
@@ -186,18 +151,8 @@ onUnmounted(() => {
 }
 
 .popover {
-	position: absolute;
-	top: calc(100% + 4px);
-	left: 0;
-	z-index: 120;
 	min-width: 176px;
-	max-width: calc(100vw - 24px);
-	box-sizing: border-box;
 	padding: 10px;
-	background: var(--color-main-background);
-	border: 1px solid var(--color-border-dark, var(--color-border));
-	border-radius: var(--border-radius-large, 8px);
-	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
 }
 
 .swatchGrid {
