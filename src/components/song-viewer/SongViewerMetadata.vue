@@ -4,19 +4,6 @@
       <span :class="$style.metaLabel">{{ item.label }}</span>
       <span>{{ item.value }}</span>
     </div>
-    <div v-if="effectiveBookmarks.length > 0" :class="$style.metaItem">
-      <span :class="$style.metaLabel">{{ t('sheetmusic', 'Bookmarks:') }}</span>
-      <div :class="$style.metaLinkList">
-        <button
-          v-for="(bm, idx) in effectiveBookmarks"
-          :key="bm.id ?? `meta-bm-${idx}`"
-          type="button"
-          :class="$style.metaLinkBtn"
-          @click="emit('jump-to-bookmark', bm.pageNum)">
-          {{ formatBookmarkLabel(bm) }}
-        </button>
-      </div>
-    </div>
     <div v-if="effectiveAudioFiles.length > 0" :class="$style.metaItem">
       <span :class="$style.metaLabel">{{ t('sheetmusic', 'Audio Files:') }}</span>
       <span>{{ effectiveAudioFiles.map((a) => a.title || a.file).join(', ') }}</span>
@@ -31,18 +18,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
-import type { AudioFile, Bookmark, Song, SongEntityLists } from '../../types/song'
+import type { AudioFile, Song, SongEntityLists } from '../../types/song'
 import { ENTITY_COLUMNS, SONG_SCALAR_FIELDS } from '../songs/song-view-columns'
-import { formatBookmarkLabel } from '../../utils/song-formatter'
 
 const props = defineProps<SongEntityLists & {
   song: Song
-  bookmarks?: Bookmark[]
   audioFiles?: AudioFile[]
-}>()
-
-const emit = defineEmits<{
-  'jump-to-bookmark': [pageNum: number]
 }>()
 
 const entityItems = computed(() =>
@@ -55,7 +36,6 @@ const entityItems = computed(() =>
   }),
 )
 
-const effectiveBookmarks = computed(() => props.bookmarks ?? props.song.bookmarks ?? [])
 const effectiveAudioFiles = computed(() => props.audioFiles ?? props.song.audioFiles ?? [])
 
 const scalarItems = computed(() =>
@@ -68,7 +48,6 @@ const scalarItems = computed(() =>
 
 const hasMetadata = computed(() =>
   entityItems.value.length > 0
-  || effectiveBookmarks.value.length > 0
   || effectiveAudioFiles.value.length > 0
   || scalarItems.value.length > 0,
 )
@@ -94,25 +73,5 @@ const hasMetadata = computed(() =>
 .metaLabel {
   font-weight: 600;
   color: var(--color-text-maxcontrast);
-}
-
-.metaLinkList {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.metaLinkBtn {
-  background: none;
-  border: none;
-  padding: 0;
-  color: var(--color-primary-element);
-  cursor: pointer;
-  font-size: inherit;
-  text-decoration: underline;
-}
-
-.metaLinkBtn:hover {
-  opacity: 0.8;
 }
 </style>

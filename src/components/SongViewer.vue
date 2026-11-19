@@ -320,15 +320,13 @@ defineExpose({
 
 			<SongViewerMetadata
 				v-if="!isEditing"
-				:song="song"
-				@jump-to-bookmark="jumpToBookmark" />
+				:song="song" />
 		</header>
 
 		<!-- Metadata bar when header is integrated into top bar -->
 		<SongViewerMetadata
 			v-if="song && hideHeader && !isEditing && !isAnnotationFullscreen"
-			:song="song"
-			@jump-to-bookmark="jumpToBookmark" />
+			:song="song" />
 
 		<!-- Song Editor View -->
 		<SongEditor
