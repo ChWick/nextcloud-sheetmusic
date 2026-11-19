@@ -562,10 +562,21 @@ final class SongServiceTest extends TestCase {
 			->method('regenerateSongFilePaths')
 			->with((int)$song->id, $this->user, $targetFolder, '', null, SongPathNamingRule::PRESET_AUTO);
 
-		$songFileService = $this->createMock(SongFileService::class);
+		$songFileService = $this->getMockBuilder(SongFileService::class)
+			->setConstructorArgs([
+				$libraryService,
+				$fileManager,
+				$this->rootFolder,
+				new NullLogger(),
+				$this->songFileMapper,
+				$this->songMapper,
+				$this->libraryMapper,
+			])
+			->onlyMethods(['syncSongFileMetadata'])
+			->getMock();
 		$songFileService->expects(self::once())
 			->method('syncSongFileMetadata')
-			->with($this->user, '', (int)$song->id, $this->libraryId);
+			->with($this->user, '', (int)$song->id, $this->libraryId, null);
 
 		$service = new SongService(
 			$libraryService,
@@ -599,10 +610,21 @@ final class SongServiceTest extends TestCase {
 		$fileManager = $this->createMock(FileManager::class);
 		$fileManager->expects(self::never())->method('regenerateSongFilePaths');
 
-		$songFileService = $this->createMock(SongFileService::class);
+		$songFileService = $this->getMockBuilder(SongFileService::class)
+			->setConstructorArgs([
+				$libraryService,
+				$fileManager,
+				$this->rootFolder,
+				new NullLogger(),
+				$this->songFileMapper,
+				$this->songMapper,
+				$this->libraryMapper,
+			])
+			->onlyMethods(['syncSongFileMetadata'])
+			->getMock();
 		$songFileService->expects(self::once())
 			->method('syncSongFileMetadata')
-			->with($this->user, '', (int)$song->id, $this->libraryId);
+			->with($this->user, '', (int)$song->id, $this->libraryId, null);
 
 		$service = new SongService(
 			$libraryService,

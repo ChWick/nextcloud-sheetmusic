@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Service;
 
+use OCA\SheetMusic\Db\InternalEntity;
 use OCA\SheetMusic\Db\InternalSong;
 use OCA\SheetMusic\Db\InternalSongFile;
 use OCA\SheetMusic\Db\InternalSongHistoryMapper;
@@ -12,6 +13,7 @@ use OCA\SheetMusic\Service\FileManager;
 use OCA\SheetMusic\Service\LibraryService;
 use OCA\SheetMusic\Service\SongFileService;
 use OCA\SheetMusic\Service\SongHistoryService;
+use OCA\SheetMusic\Service\SongPathNamingRule;
 use OCP\Files\Folder;
 use OCP\Files\IUserFolder;
 use OCP\IUser;
@@ -118,8 +120,8 @@ final class SongFileServiceTest extends TestCase {
 		self::assertTrue($this->libraryFolder->nodeExists('score.pdf'));
 		self::assertSame('EXISTING_DESTINATION', $this->libraryFolder->get('score.pdf')->getContent(), 'Existing destination file must NOT be overwritten');
 
-		self::assertTrue($this->libraryFolder->nodeExists('score (2).pdf'));
-		self::assertSame('NEW_ATTACHMENT', $this->libraryFolder->get('score (2).pdf')->getContent(), 'New attachment must be copied to non-conflicting unique name');
+		self::assertTrue($this->libraryFolder->nodeExists('Songs/score (2).pdf'));
+		self::assertSame('NEW_ATTACHMENT', $this->libraryFolder->get('Songs/score (2).pdf')->getContent(), 'New attachment must be copied to non-conflicting unique name under Songs/');
 	}
 
 	public function testAttachNextcloudFileMovesWithoutOverwritingExistingFile(): void {
@@ -154,8 +156,8 @@ final class SongFileServiceTest extends TestCase {
 		self::assertTrue($this->libraryFolder->nodeExists('score.pdf'));
 		self::assertSame('EXISTING_DESTINATION', $this->libraryFolder->get('score.pdf')->getContent(), 'Existing destination file must NOT be overwritten');
 
-		self::assertTrue($this->libraryFolder->nodeExists('score (2).pdf'));
-		self::assertSame('NEW_ATTACHMENT', $this->libraryFolder->get('score (2).pdf')->getContent(), 'New attachment must be moved to non-conflicting unique name');
+		self::assertTrue($this->libraryFolder->nodeExists('Songs/score (2).pdf'));
+		self::assertSame('NEW_ATTACHMENT', $this->libraryFolder->get('Songs/score (2).pdf')->getContent(), 'New attachment must be moved to non-conflicting unique name under Songs/');
 
 		self::assertFalse($uploadsDir->nodeExists('score.pdf'), 'Source file must be moved');
 	}
@@ -196,8 +198,8 @@ final class SongFileServiceTest extends TestCase {
 		self::assertTrue($this->libraryFolder->nodeExists('uploaded.pdf'));
 		self::assertSame('EXISTING_FILE', $this->libraryFolder->get('uploaded.pdf')->getContent(), 'Existing file must NOT be overwritten');
 
-		self::assertTrue($this->libraryFolder->nodeExists('uploaded (2).pdf'));
-		self::assertSame('UPLOADED_CONTENT', $this->libraryFolder->get('uploaded (2).pdf')->getContent());
+		self::assertTrue($this->libraryFolder->nodeExists('Songs/uploaded (2).pdf'));
+		self::assertSame('UPLOADED_CONTENT', $this->libraryFolder->get('Songs/uploaded (2).pdf')->getContent());
 	}
 
 	public function testDetachSongFileKeepsThePhysicalFile(): void {
@@ -482,5 +484,174 @@ final class SongFileServiceTest extends TestCase {
 		self::assertGreaterThanOrEqual(2, count($timeline));
 		self::assertSame('reverted', $timeline[0]['action']);
 		self::assertStringContainsString('Reverted file', $timeline[0]['summary']);
+	}
+
+	public function testUploadSongFileAppliesSelectedNamingRulePreset(): void {
+		$this->libraryMapper->setSettingsForUser('admin', $this->libraryId, autoPaths: true, namingRulePreset: SongPathNamingRule::PRESET_COMPOSER);
+
+		$song = $this->songMapper->insert(new InternalSong(
+			id: null,
+			uuid: 's-upload-rule-1',
+			libraryId: $this->libraryId,
+			title: 'Moonlight Sonata',
+		));
+		$composer = $this->entityMapper->insert(new InternalEntity(
+			id: null,
+			uuid: 'e-composer-beethoven',
+			libraryId: $this->libraryId,
+			type: 'composer',
+			name: 'Beethoven',
+		));
+		$artist = $this->entityMapper->insert(new InternalEntity(
+			id: null,
+			uuid: 'e-artist-band',
+			libraryId: $this->libraryId,
+			type: 'artist',
+			name: 'Some Orchestra',
+		));
+		$this->entityMapper->setSongEntitiesForType((int)$song->id, 'composer', [(int)$composer->id]);
+		$this->entityMapper->setSongEntitiesForType((int)$song->id, 'artist', [(int)$artist->id]);
+
+		$tmpFile = tempnam(sys_get_temp_dir(), 'test_upload_rule_');
+		file_put_contents($tmpFile, 'MOONLIGHT_PDF');
+
+		try {
+			$result = $this->service->uploadSongFile($this->user, $this->libraryId, (int)$song->id, [
+				'tmp_name' => $tmpFile,
+				'name' => 'raw_scan.pdf',
+			]);
+			self::assertNotNull($result);
+		} finally {
+			unlink($tmpFile);
+		}
+
+		self::assertFalse($this->libraryFolder->nodeExists('raw_scan.pdf'));
+		self::assertTrue($this->libraryFolder->nodeExists('Songs/Beethoven/Beethoven - Moonlight Sonata.pdf'));
+		self::assertSame('MOONLIGHT_PDF', $this->libraryFolder->get('Songs/Beethoven/Beethoven - Moonlight Sonata.pdf')->getContent());
+	}
+
+	public function testAttachNextcloudFileAppliesSelectedNamingRulePreset(): void {
+		$this->libraryMapper->setSettingsForUser('admin', $this->libraryId, autoPaths: true, namingRulePreset: SongPathNamingRule::PRESET_ARTIST);
+
+		$song = $this->songMapper->insert(new InternalSong(
+			id: null,
+			uuid: 's-attach-rule-1',
+			libraryId: $this->libraryId,
+			title: 'Yesterday',
+		));
+		$composer = $this->entityMapper->insert(new InternalEntity(
+			id: null,
+			uuid: 'e-composer-lennon',
+			libraryId: $this->libraryId,
+			type: 'composer',
+			name: 'Lennon',
+		));
+		$artist = $this->entityMapper->insert(new InternalEntity(
+			id: null,
+			uuid: 'e-artist-beatles',
+			libraryId: $this->libraryId,
+			type: 'artist',
+			name: 'The Beatles',
+		));
+		$this->entityMapper->setSongEntitiesForType((int)$song->id, 'composer', [(int)$composer->id]);
+		$this->entityMapper->setSongEntitiesForType((int)$song->id, 'artist', [(int)$artist->id]);
+
+		$uploadsDir = $this->userFolder->newFolder('Uploads_rule_' . bin2hex(random_bytes(4)));
+		$this->createdUserNodes[] = $uploadsDir;
+		$sourceFile = $uploadsDir->newFile('scan_123.pdf');
+		$sourceFile->putContent('YESTERDAY_PDF');
+		$this->createdUserNodes[] = $sourceFile;
+
+		$result = $this->service->attachNextcloudFile(
+			$this->user,
+			$this->libraryId,
+			(int)$song->id,
+			$uploadsDir->getName() . '/scan_123.pdf',
+			'copy',
+		);
+
+		self::assertNotNull($result);
+		self::assertFalse($this->libraryFolder->nodeExists('scan_123.pdf'));
+		self::assertTrue($this->libraryFolder->nodeExists('Songs/The Beatles/The Beatles - Yesterday.pdf'));
+		self::assertSame('YESTERDAY_PDF', $this->libraryFolder->get('Songs/The Beatles/The Beatles - Yesterday.pdf')->getContent());
+	}
+
+	public function testUploadSongFileStaysInLibraryRootWhenNamingRulePresetIsDisabled(): void {
+		$this->libraryMapper->setSettingsForUser('admin', $this->libraryId, autoPaths: true, namingRulePreset: SongPathNamingRule::PRESET_DISABLED);
+
+		$song = $this->songMapper->insert(new InternalSong(
+			id: null,
+			uuid: 's-upload-disabled-rule',
+			libraryId: $this->libraryId,
+			title: 'Flat Song',
+		));
+		$composer = $this->entityMapper->insert(new InternalEntity(
+			id: null,
+			uuid: 'e-composer-flat',
+			libraryId: $this->libraryId,
+			type: 'composer',
+			name: 'Bach',
+		));
+		$this->entityMapper->setSongEntitiesForType((int)$song->id, 'composer', [(int)$composer->id]);
+
+		$tmpFile = tempnam(sys_get_temp_dir(), 'test_upload_flat_');
+		file_put_contents($tmpFile, 'FLAT_PDF');
+
+		try {
+			$result = $this->service->uploadSongFile($this->user, $this->libraryId, (int)$song->id, [
+				'tmp_name' => $tmpFile,
+				'name' => 'keep_in_root.pdf',
+			]);
+			self::assertNotNull($result);
+		} finally {
+			unlink($tmpFile);
+		}
+
+		self::assertTrue($this->libraryFolder->nodeExists('keep_in_root.pdf'));
+		self::assertFalse($this->libraryFolder->nodeExists('Songs'));
+	}
+
+	public function testDeleteSongFileRegeneratesRemainingFilePath(): void {
+		$this->libraryMapper->setSettingsForUser('admin', $this->libraryId, autoPaths: true, namingRulePreset: SongPathNamingRule::PRESET_COMPOSER);
+
+		$song = $this->songMapper->insert(new InternalSong(
+			id: null,
+			uuid: 's-delete-regen',
+			libraryId: $this->libraryId,
+			title: 'Prelude',
+		));
+		$composer = $this->entityMapper->insert(new InternalEntity(
+			id: null,
+			uuid: 'e-composer-chopin',
+			libraryId: $this->libraryId,
+			type: 'composer',
+			name: 'Chopin',
+		));
+		$this->entityMapper->setSongEntitiesForType((int)$song->id, 'composer', [(int)$composer->id]);
+
+		$tmp1 = tempnam(sys_get_temp_dir(), 'test_del_1_');
+		$tmp2 = tempnam(sys_get_temp_dir(), 'test_del_2_');
+		file_put_contents($tmp1, 'PART_1');
+		file_put_contents($tmp2, 'PART_2');
+
+		try {
+			$this->service->uploadSongFile($this->user, $this->libraryId, (int)$song->id, ['tmp_name' => $tmp1, 'name' => 'part1.pdf']);
+			$this->service->uploadSongFile($this->user, $this->libraryId, (int)$song->id, ['tmp_name' => $tmp2, 'name' => 'part2.pdf']);
+		} finally {
+			unlink($tmp1);
+			unlink($tmp2);
+		}
+
+		$files = $this->songFileMapper->findAllForSong((int)$song->id);
+		self::assertCount(2, $files);
+		self::assertTrue($this->libraryFolder->nodeExists('Songs/Chopin/001 Chopin - Prelude.pdf'));
+		self::assertTrue($this->libraryFolder->nodeExists('Songs/Chopin/002 Chopin - Prelude.pdf'));
+
+		// Delete second file; remaining file should lose the 001 prefix
+		$this->service->deleteSongFile($this->user, $this->libraryId, (int)$song->id, (int)$files[1]->id);
+
+		self::assertFalse($this->libraryFolder->nodeExists('Songs/Chopin/002 Chopin - Prelude.pdf'));
+		self::assertFalse($this->libraryFolder->nodeExists('Songs/Chopin/001 Chopin - Prelude.pdf'));
+		self::assertTrue($this->libraryFolder->nodeExists('Songs/Chopin/Chopin - Prelude.pdf'));
 	}
 }

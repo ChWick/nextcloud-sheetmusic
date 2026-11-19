@@ -323,7 +323,7 @@ class SongService {
 			$targetFolder = null;
 			if ($autoPaths) {
 				$preset = $this->libraryService->getNamingRulePreset($user->getUID(), $targetLibraryId);
-				if ($preset !== SongPathNamingRule::PRESET_DISABLED && $preset !== 'none') {
+				if (!SongPathNamingRule::isDisabledPreset($preset)) {
 					try {
 						$targetFolder = $this->fileManager->libraryFolder($targetLibraryId, $user);
 					} catch (\Throwable) {
@@ -456,29 +456,7 @@ class SongService {
 		?string $preset = null,
 		?Folder $targetFolder = null,
 	): void {
-		$resolvedSong = null;
-		$autoPaths ??= $this->libraryService->isAutoPathsEnabled($user->getUID(), $targetLibraryId);
-		if ($autoPaths) {
-			$preset ??= $this->libraryService->getNamingRulePreset($user->getUID(), $targetLibraryId);
-			if ($preset !== SongPathNamingRule::PRESET_DISABLED && $preset !== 'none') {
-				try {
-					$targetFolder ??= $this->fileManager->libraryFolder($targetLibraryId, $user);
-					$resolvedSong = $this->fileManager->regenerateSongFilePaths($songId, $user, $targetFolder, '', null, $preset);
-				} catch (\Throwable $e) {
-					$this->logger->debug('Could not regenerate file paths after updating song', [
-						'exception' => $e,
-						'libraryId' => $targetLibraryId,
-						'songId' => $songId,
-					]);
-				}
-			}
-		}
-
-		if ($resolvedSong !== null) {
-			$this->songFileService->syncSongFileMetadata($user, '', $songId, $targetLibraryId, $resolvedSong);
-		} else {
-			$this->songFileService->syncSongFileMetadata($user, '', $songId, $targetLibraryId);
-		}
+		$this->songFileService->syncSongFiles($user, $songId, $targetLibraryId, $autoPaths, $preset, $targetFolder);
 	}
 
 	/**

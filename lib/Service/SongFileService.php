@@ -438,18 +438,7 @@ class SongFileService {
 		$attachedFile = $targetFolder->get($targetName);
 		$targetLibraryId = $this->libraryService->getTargetLibraryId($libraryId);
 		$this->recordSongFile($songId, $user, $attachedFile, $targetLibraryId);
-
-		if ($songId > 0 && $this->songHistoryService !== null) {
-			$song = $this->internalSongMapper->findById($songId);
-			if ($song !== null) {
-				$this->songHistoryService->recordSnapshot(
-					$song,
-					InternalSongHistory::ACTION_UPDATED,
-					$user->getUID(),
-					'Attached file: ' . $targetName
-				);
-			}
-		}
+		$this->recordSongFileHistory($songId, $user, 'Attached file: ' . $targetName);
 
 		return $this->findLibraryDataForResponse($user, $libraryId);
 	}
@@ -483,16 +472,13 @@ class SongFileService {
 				}
 			}
 
-			if ($targetSongId > 0 && $this->songHistoryService !== null) {
-				$song = $this->internalSongMapper->findById($targetSongId);
-				if ($song !== null) {
-					$this->songHistoryService->recordSnapshot(
-						$song,
-						InternalSongHistory::ACTION_UPDATED,
-						$user->getUID(),
-						'Deleted attached file' . ($fileName !== '' ? ': ' . $fileName : '')
-					);
-				}
+			if ($targetSongId > 0) {
+				$this->regenerateSongFilePathsIfEnabled($user, $targetSongId, $targetLibraryId);
+				$this->recordSongFileHistory(
+					$targetSongId,
+					$user,
+					'Deleted attached file' . ($fileName !== '' ? ': ' . $fileName : ''),
+				);
 			}
 
 			return $this->findLibraryDataForResponse($user, $libraryId);
@@ -513,16 +499,9 @@ class SongFileService {
 			$targetLibraryId = $this->libraryService->getTargetLibraryId($libraryId);
 			$this->libraryMapper->touch($targetLibraryId);
 
-			if ($targetSongId > 0 && $this->songHistoryService !== null) {
-				$song = $this->internalSongMapper->findById($targetSongId);
-				if ($song !== null) {
-					$this->songHistoryService->recordSnapshot(
-						$song,
-						InternalSongHistory::ACTION_UPDATED,
-						$user->getUID(),
-						'Detached attached file'
-					);
-				}
+			if ($targetSongId > 0) {
+				$this->regenerateSongFilePathsIfEnabled($user, $targetSongId, $targetLibraryId);
+				$this->recordSongFileHistory($targetSongId, $user, 'Detached attached file');
 			}
 
 			return $this->findLibraryDataForResponse($user, $libraryId);
@@ -759,6 +738,7 @@ class SongFileService {
 		}
 
 		$existingFiles = $this->internalSongFileMapper->findAllForSong($songId);
+		$updatedExisting = false;
 		foreach ($existingFiles as $existing) {
 			if ($existing->fileId === (int)$file->getId()) {
 				$existing->fileSize = $fileSize;
@@ -767,27 +747,106 @@ class SongFileService {
 				$existing->pageCount = $pageCount;
 				$existing->updatedAt = time();
 				$this->internalSongFileMapper->update($existing);
-				$this->libraryMapper->touch($libraryId);
-				$this->syncSongFileMetadata($user, '', $songId, $libraryId);
-				return;
+				$updatedExisting = true;
+				break;
 			}
 		}
 
-		$internalSongFile = new InternalSongFile(
-			id: null,
-			uuid: InternalEntity::generateUuid(),
-			songId: $songId,
-			fileId: (int)$file->getId(),
-			pageOrder: $pageOrder,
-			pageCount: $pageCount,
-			fileSize: $fileSize,
-			fileHash: $fileHash,
-			type: InternalSongFile::determineFileType($fileName),
-		);
-		$this->internalSongFileMapper->insert($internalSongFile);
-		$this->libraryMapper->touch($libraryId);
+		if (!$updatedExisting) {
+			$internalSongFile = new InternalSongFile(
+				id: null,
+				uuid: InternalEntity::generateUuid(),
+				songId: $songId,
+				fileId: (int)$file->getId(),
+				pageOrder: $pageOrder,
+				pageCount: $pageCount,
+				fileSize: $fileSize,
+				fileHash: $fileHash,
+				type: InternalSongFile::determineFileType($fileName),
+			);
+			$this->internalSongFileMapper->insert($internalSongFile);
+		}
 
-		$this->syncSongFileMetadata($user, '', $songId, $libraryId);
+		$this->libraryMapper->touch($libraryId);
+		$this->syncSongFiles($user, $songId, $libraryId);
+	}
+
+	/**
+	 * Regenerate file paths (when autoPaths is enabled and a naming rule is active)
+	 * and sync PDF metadata (when autoPdfMetadata is enabled) for a song.
+	 */
+	public function syncSongFiles(
+		IUser $user,
+		int $songId,
+		int $targetLibraryId,
+		?bool $autoPaths = null,
+		?string $preset = null,
+		?Folder $targetFolder = null,
+	): void {
+		$resolvedSong = $this->regenerateSongFilePathsIfEnabled(
+			$user,
+			$songId,
+			$targetLibraryId,
+			$autoPaths,
+			$preset,
+			$targetFolder,
+		);
+		$this->syncSongFileMetadata($user, '', $songId, $targetLibraryId, $resolvedSong);
+	}
+
+	/**
+	 * Move a song's files to their naming-rule paths when autoPaths is enabled
+	 * and a naming rule preset is active in the library settings.
+	 */
+	private function regenerateSongFilePathsIfEnabled(
+		IUser $user,
+		int $songId,
+		int $targetLibraryId,
+		?bool $autoPaths = null,
+		?string $preset = null,
+		?Folder $targetFolder = null,
+	): ?MobileSheetsSong {
+		if ($songId <= 0) {
+			return null;
+		}
+
+		$autoPaths ??= $this->libraryService->isAutoPathsEnabled($user->getUID(), $targetLibraryId);
+		if (!$autoPaths) {
+			return null;
+		}
+
+		$preset ??= $this->libraryService->getNamingRulePreset($user->getUID(), $targetLibraryId);
+		if (SongPathNamingRule::isDisabledPreset($preset)) {
+			return null;
+		}
+
+		try {
+			$targetFolder ??= $this->fileManager->libraryFolder($targetLibraryId, $user);
+			return $this->fileManager->regenerateSongFilePaths($songId, $user, $targetFolder, '', null, $preset);
+		} catch (\Throwable $e) {
+			$this->logger->debug('Could not regenerate file paths for song', [
+				'exception' => $e,
+				'libraryId' => $targetLibraryId,
+				'songId' => $songId,
+			]);
+			return null;
+		}
+	}
+
+	private function recordSongFileHistory(int $songId, IUser $user, string $summary): void {
+		if ($songId <= 0 || $this->songHistoryService === null) {
+			return;
+		}
+
+		$song = $this->internalSongMapper->findById($songId);
+		if ($song !== null) {
+			$this->songHistoryService->recordSnapshot(
+				$song,
+				InternalSongHistory::ACTION_UPDATED,
+				$user->getUID(),
+				$summary,
+			);
+		}
 	}
 
 	private function readUploadedFileContent(?array $fileInfo): string {
