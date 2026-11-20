@@ -107,6 +107,129 @@ export function releaseChildCanvases(container: ParentNode | null | undefined): 
 }
 
 /**
+ * Default maximum devicePixelRatio multiplier for HiDPI PDF canvas rendering.
+ */
+export const DEFAULT_MAX_PDF_DPR = 3
+
+/**
+ * Default maximum backing-store pixel area (4096 × 4096) to prevent GPU/memory blowup on large zooms or mobile.
+ */
+export const DEFAULT_MAX_PDF_CANVAS_PIXELS = 16_777_216
+
+export interface PdfOutputScaleOptions {
+	maxDpr?: number
+	maxCanvasPixels?: number
+}
+
+/**
+ * Compute the HiDPI backing-store output scale for a PDF canvas, respecting
+ * `window.devicePixelRatio`, an upper DPR cap, and a safe maximum pixel budget.
+ */
+export function getPdfOutputScale(
+	cssWidth?: number,
+	cssHeight?: number,
+	options: PdfOutputScaleOptions = {},
+): number {
+	const maxDpr = options.maxDpr ?? DEFAULT_MAX_PDF_DPR
+	const maxCanvasPixels = options.maxCanvasPixels ?? DEFAULT_MAX_PDF_CANVAS_PIXELS
+	const rawDpr = (typeof window !== 'undefined' && Number.isFinite(window.devicePixelRatio) && window.devicePixelRatio > 0)
+		? window.devicePixelRatio
+		: 1
+	const dpr = Math.max(1, Math.min(rawDpr, maxDpr))
+
+	if (cssWidth && cssHeight && cssWidth > 0 && cssHeight > 0) {
+		const cssPixels = cssWidth * cssHeight
+		if (cssPixels * dpr * dpr > maxCanvasPixels) {
+			const maxScaleForArea = Math.sqrt(maxCanvasPixels / cssPixels)
+			return Math.max(1, Math.min(dpr, maxScaleForArea))
+		}
+	}
+
+	return dpr
+}
+
+export interface RenderPdfPageOptions extends PdfOutputScaleOptions {
+	/** Explicit backing-store multiplier (defaults to `getPdfOutputScale(viewport.width, viewport.height)`) */
+	outputScale?: number
+	/** Override CSS display width in pixels (defaults to `Math.round(viewport.width)`) */
+	cssWidth?: number
+	/** Override CSS display height in pixels (defaults to `Math.round(viewport.height)`) */
+	cssHeight?: number
+	/** Set `canvas.style.width` and `canvas.style.height` in CSS pixels (default: true) */
+	applyCssSize?: boolean
+	/** Fill background color before rendering; pass `null` to clearRect instead (default: '#ffffff') */
+	backgroundColor?: string | null
+	/** Optional callback to track/cancel the active pdf.js renderTask */
+	onRenderTask?: (task: { cancel?: () => void } | null) => void
+}
+
+export interface RenderedPdfPageDimensions {
+	cssWidth: number
+	cssHeight: number
+	pixelWidth: number
+	pixelHeight: number
+	outputScale: number
+}
+
+/**
+ * Render a pdf.js page onto a canvas with HiDPI (`devicePixelRatio`) backing-store scaling
+ * while keeping CSS layout dimensions equal to `viewport.width × viewport.height`.
+ */
+export async function renderPdfPageToCanvas(
+	page: any,
+	canvas: HTMLCanvasElement,
+	viewport: { width: number; height: number },
+	options: RenderPdfPageOptions = {},
+): Promise<RenderedPdfPageDimensions> {
+	const cssWidth = Math.max(1, Math.round(options.cssWidth ?? viewport.width))
+	const cssHeight = Math.max(1, Math.round(options.cssHeight ?? viewport.height))
+	const outputScale = options.outputScale ?? getPdfOutputScale(cssWidth, cssHeight, {
+		maxDpr: options.maxDpr,
+		maxCanvasPixels: options.maxCanvasPixels,
+	})
+	const pixelWidth = Math.max(1, Math.round(cssWidth * outputScale))
+	const pixelHeight = Math.max(1, Math.round(cssHeight * outputScale))
+
+	canvas.width = pixelWidth
+	canvas.height = pixelHeight
+	if (options.applyCssSize !== false) {
+		canvas.style.width = `${cssWidth}px`
+		canvas.style.height = `${cssHeight}px`
+	}
+
+	const canvasContext = canvas.getContext('2d')
+	if (canvasContext) {
+		canvasContext.imageSmoothingEnabled = true
+		canvasContext.imageSmoothingQuality = 'high'
+		if (options.backgroundColor === null) {
+			canvasContext.clearRect(0, 0, pixelWidth, pixelHeight)
+		} else {
+			canvasContext.fillStyle = options.backgroundColor ?? '#ffffff'
+			canvasContext.fillRect(0, 0, pixelWidth, pixelHeight)
+		}
+
+		const renderParams: Record<string, unknown> = {
+			canvasContext,
+			viewport,
+			background: 'rgb(255, 255, 255)',
+		}
+		if (outputScale !== 1) {
+			renderParams.transform = [outputScale, 0, 0, outputScale, 0, 0]
+		}
+
+		const renderTask = page.render(renderParams)
+		options.onRenderTask?.(renderTask)
+		try {
+			await renderTask.promise
+		} finally {
+			options.onRenderTask?.(null)
+		}
+	}
+
+	return { cssWidth, cssHeight, pixelWidth, pixelHeight, outputScale }
+}
+
+/**
  * Default maximum number of high-resolution zoomed page images to keep cached in memory.
  */
 export const MAX_ZOOM_HIGH_RES_CACHE = 12
