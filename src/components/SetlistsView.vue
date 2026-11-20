@@ -57,6 +57,14 @@
           @add-item="openAddItemDialog" />
       </template>
 
+      <NotFoundState
+        v-else-if="isSetlistNotFound"
+        :title="t('sheetmusic', 'Setlist not found')"
+        :description="t('sheetmusic', 'The requested setlist does not exist or may have been deleted.')"
+        :action-label="t('sheetmusic', 'Show all setlists')"
+        test-id="setlist-not-found"
+        @action="clearSetlistQuery" />
+
       <div v-else :class="$style.noSelectionArea">
         <PlaylistMusic :size="64" :class="$style.noSelectionIcon" />
         <p>{{ t('sheetmusic', 'Select a setlist to view and manage its contents.') }}</p>
@@ -129,6 +137,7 @@ import {
 } from '../utils/offlineSetlists'
 import PlaylistMusic from 'vue-material-design-icons/PlaylistMusic.vue'
 import ViewHeader from './ViewHeader.vue'
+import NotFoundState from './NotFoundState.vue'
 import SetlistsSidebar from './setlists/SetlistsSidebar.vue'
 import SetlistDetailHeader from './setlists/SetlistDetailHeader.vue'
 import SetlistFilesSection from './setlists/SetlistFilesSection.vue'
@@ -456,6 +465,32 @@ function openItemSong(item: SetlistItem) {
   })
 }
 
+const hasLoadedSetlists = ref(false)
+
+const hasSetlistParamInUrl = computed(() => {
+  const raw = route.query?.setlist
+  const value = Array.isArray(raw) ? raw[0] : raw
+  return value !== undefined && value !== null && value !== ''
+})
+
+const isSetlistNotFound = computed(() =>
+  hasSetlistParamInUrl.value
+  && !selectedSetlist.value
+  && hasLoadedSetlists.value
+  && !isLoading.value
+  && !errorMessage.value,
+)
+
+function clearSetlistQuery() {
+  if (typeof router.replace === 'function') {
+    const nextQuery = { ...route.query }
+    delete nextQuery.setlist
+    delete nextQuery.play
+    delete nextQuery.item
+    void router.replace({ query: nextQuery })
+  }
+}
+
 async function restoreSetlistFromRouteQuery() {
   const targetId = Number(route.query?.setlist)
   if (!Number.isFinite(targetId) || targetId <= 0) {
@@ -480,8 +515,10 @@ async function restoreSetlistFromRouteQuery() {
 }
 
 async function loadLibraryAndSetlists(libraryId: number) {
+  hasLoadedSetlists.value = false
   loadLibraryData(libraryId)
   await loadSetlists()
+  hasLoadedSetlists.value = true
   await restoreSetlistFromRouteQuery()
 }
 

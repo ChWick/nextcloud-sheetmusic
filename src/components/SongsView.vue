@@ -2,18 +2,18 @@
   <div :class="isViewingSong && $style.viewerShell">
   <ViewHeader
     :title="headerTitle"
-    :show-back="songIdInUrl !== null || standaloneCreate"
-    :create-label="songIdInUrl === null && !standaloneCreate && canWrite ? t('sheetmusic', 'New song') : undefined"
-    :import-label="songIdInUrl === null && !standaloneCreate && canWrite ? t('sheetmusic', 'Import') : undefined"
-    :import-nextcloud-label="songIdInUrl === null && !standaloneCreate && canWrite ? t('sheetmusic', 'Import from Nextcloud') : undefined"
-    :filter-bar-visible="songIdInUrl === null && !standaloneCreate ? filterBarVisible : undefined"
-    :show-filter-toggle="songIdInUrl === null && !standaloneCreate"
+    :show-back="hasSongParamInUrl || standaloneCreate"
+    :create-label="!hasSongParamInUrl && !standaloneCreate && canWrite ? t('sheetmusic', 'New song') : undefined"
+    :import-label="!hasSongParamInUrl && !standaloneCreate && canWrite ? t('sheetmusic', 'Import') : undefined"
+    :import-nextcloud-label="!hasSongParamInUrl && !standaloneCreate && canWrite ? t('sheetmusic', 'Import from Nextcloud') : undefined"
+    :filter-bar-visible="!hasSongParamInUrl && !standaloneCreate ? filterBarVisible : undefined"
+    :show-filter-toggle="!hasSongParamInUrl && !standaloneCreate"
     @back="goBackToSongs"
     @create="startNewSong"
     @import="startImport"
     @import-nextcloud="startImportNextcloud"
     @toggle-filters="toggleFilterBar">
-    <div v-if="songIdInUrl === null && !standaloneCreate" :class="$style.headerControls">
+    <div v-if="!hasSongParamInUrl && !standaloneCreate" :class="$style.headerControls">
       <SongListDisplayMenu
         v-model:visible-columns="visibleColumns"
         v-model:sort-key="sortKey"
@@ -45,11 +45,18 @@
     @change="handleImportFile">
   <!-- The URL opens one song full screen ("?song=12"), for viewing it or - with the
        edit flag - for editing it; without a song the list is shown. -->
-  <div v-if="songIdInUrl !== null" :class="[$style.fullscreenArea, isViewingSong && $style.fullscreenAreaViewer]">
-    <div v-if="isLoading && !openSong" :class="$style.songLoadingState" data-test="song-loading-state">
+  <div v-if="hasSongParamInUrl" :class="[$style.fullscreenArea, isViewingSong && $style.fullscreenAreaViewer]">
+    <div v-if="(isLoading || !hasLoaded) && songIdInUrl !== null && !openSong" :class="$style.songLoadingState" data-test="song-loading-state">
       <NcLoadingIcon :size="36" />
       <span>{{ t('sheetmusic', 'Loading song…') }}</span>
     </div>
+    <NotFoundState
+      v-else-if="isSongNotFound"
+      :title="t('sheetmusic', 'Song not found')"
+      :description="t('sheetmusic', 'The requested song does not exist or may have been deleted.')"
+      :action-label="t('sheetmusic', 'Back to songs')"
+      test-id="song-not-found"
+      @action="goBackToSongs" />
     <SongEditor v-else-if="isEditInUrl"
                 ref="songEditorRef"
                 :song="openSong"
@@ -273,6 +280,7 @@ import SongFilterBar from '../components/SongFilterBar.vue';
 import SongViewer from '../components/SongViewer.vue';
 import SongPdfModifier from '../components/song-pdf/SongPdfModifier.vue';
 import ViewHeader from '../components/ViewHeader.vue';
+import NotFoundState from '../components/NotFoundState.vue';
 import SongViewHeaderButtons from './songs/SongViewHeaderButtons.vue';
 import BatchSongEditorDialog, { type BatchUpdatePayload } from '../components/song-editor/BatchSongEditorDialog.vue';
 import BatchDeleteSongsDialog from '../components/BatchDeleteSongsDialog.vue';
@@ -380,6 +388,7 @@ const {
   sublibraries,
   fileError,
   isLoading,
+  hasLoaded,
   handleLibraryDataUpdate,
   loadLibraryData,
 } = useLibraryData();
@@ -389,7 +398,14 @@ const {
 const route = useRoute();
 const router = useRouter();
 
-/** Id of the song the URL opens; null while the song list is shown. */
+/** True when a `?song=...` query parameter is present in the URL (valid or invalid). */
+const hasSongParamInUrl = computed(() => {
+  const raw = route.query.song;
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  return value !== undefined && value !== null && value !== '';
+});
+
+/** Id of the song the URL opens; null while the song list is shown or when param is invalid. */
 const songIdInUrl = computed(() => {
   const raw = route.query.song;
   const value = Array.isArray(raw) ? raw[0] : raw;
@@ -399,6 +415,13 @@ const songIdInUrl = computed(() => {
 
 /** The open song, resolved against the loaded library data. */
 const openSong = computed(() => songs.value.find(song => song.id === songIdInUrl.value) ?? null);
+
+/** True when the URL targets a song that does not exist (invalid ID or absent after library load). */
+const isSongNotFound = computed(() => {
+  if (!hasSongParamInUrl.value || openSong.value) return false;
+  if (songIdInUrl.value === null) return true;
+  return hasLoaded.value && !isLoading.value && !fileError.value;
+});
 
 const duplicateSourceId = computed(() => {
   const raw = route.query.duplicate;
@@ -423,6 +446,9 @@ const headerTitle = computed(() => {
     return duplicateSourceSong.value
       ? t('sheetmusic', 'Duplicate: {title}', { title: duplicateSourceSong.value.title }, { escape: false })
       : t('sheetmusic', 'Create Song');
+  }
+  if (isSongNotFound.value) {
+    return t('sheetmusic', 'Song not found');
   }
   if (songIdInUrl.value !== null) {
     if (isModifyPdfInUrl.value) {

@@ -57,6 +57,7 @@ import LibrarySettingsDialog from './components/LibrarySettingsDialog.vue'
 import ShareDialog from './components/ShareDialog.vue'
 import ShareTargetDialog, { type ShareImportResult } from './components/ShareTargetDialog.vue'
 import OfflineSetlistsView from './components/setlists/OfflineSetlistsView.vue'
+import NotFoundState from './components/NotFoundState.vue'
 import { consumeOfflineReturnState, useOnlineStatus } from './composables/useOnlineStatus'
 import { useProgressPolling } from './composables/useProgressPolling'
 import { clearShareTargetParam, consumePendingShare, getShareTokenParam, hasShareTargetParam } from './utils/shareTarget'
@@ -96,6 +97,7 @@ const publicSharingToken = loadState('sheetmusic', 'publicSharingToken', '')
 const publicLibrary = loadState('sheetmusic', 'publicLibrary', null) as Library | null
 
 const libraries = ref<Library[]>([])
+const hasLoadedLibraries = ref(false)
 const selectedLibrary = ref<number>(-1)
 const selectedView = ref<ViewName>('songs')
 const fileError = ref('') // used for dialogs and library load errors
@@ -140,6 +142,27 @@ function handleOpenSublibraries() {
   goToView('sublibraries')
 }
 
+const isUnknownRoute = computed(() =>
+  route.name === 'NotFound'
+  || (route.name === 'LibraryView' && Boolean(route.params.view) && !(VIEW_NAMES as string[]).includes(String(route.params.view))),
+)
+
+const isLibraryNotFound = computed(() => {
+  if (route.name !== 'LibraryView') return false
+  if (!Number.isInteger(selectedLibrary.value) || selectedLibrary.value <= 0) return true
+  return hasLoadedLibraries.value && !fileError.value && !currentLibrary.value
+})
+
+function navigateHome() {
+  if (currentLibrary.value) {
+    navigateToLibrary(currentLibrary.value.id)
+  } else if (libraries.value.length > 0) {
+    navigateToLibrary(libraries.value[0].id)
+  } else {
+    router.push({ name: 'Home' })
+  }
+}
+
 /*** Route watcher – sync state with URL ***/
 watch(
   () => route.params,
@@ -164,6 +187,7 @@ import { apiDelete, apiGet, apiPost } from './api/client'
 async function loadLibraries() {
   if (isPublicShare && publicLibrary) {
     libraries.value = [publicLibrary]
+    hasLoadedLibraries.value = true
     return
   }
   if (!isOnline.value) {
@@ -175,6 +199,8 @@ async function loadLibraries() {
   } catch (error) {
     fileError.value = describeRequestFailure(error, t('sheetmusic', 'Could not load your MobileSheets libraries.'))
     showError(fileError.value)
+  } finally {
+    hasLoadedLibraries.value = true
   }
 }
 
@@ -215,7 +241,7 @@ onMounted(async () => {
     if (!activeRouteLibrary || activeRouteLibrary !== String(publicLibrary.id)) {
       navigateToLibrary(publicLibrary.id)
     }
-  } else if (libraries.value.length > 0 && !activeRouteLibrary) {
+  } else if (libraries.value.length > 0 && !activeRouteLibrary && route.name !== 'NotFound') {
     // Only set a default if the user landed on the root page matching no library
     navigateToLibrary(libraries.value[0].id)
   }
@@ -657,6 +683,20 @@ async function deleteLibrary() {
       <!-- Main content -->
       <NcAppContent>
         <OfflineSetlistsView v-if="!isOnline && !isPublicShare" :libraries="libraries" />
+        <NotFoundState
+          v-else-if="isUnknownRoute"
+          :title="t('sheetmusic', 'Page not found')"
+          :description="t('sheetmusic', 'The page you are looking for does not exist.')"
+          :action-label="libraries.length > 0 ? t('sheetmusic', 'Back to songs') : undefined"
+          test-id="page-not-found"
+          @action="navigateHome" />
+        <NotFoundState
+          v-else-if="isLibraryNotFound"
+          :title="t('sheetmusic', 'Library not found')"
+          :description="t('sheetmusic', 'The requested library does not exist or you do not have access to it.')"
+          :action-label="libraries.length > 0 ? t('sheetmusic', 'Go to library') : undefined"
+          test-id="library-not-found"
+          @action="navigateHome" />
         <template v-else-if="selectedLibrary >= 0">
           <SongsView v-if="selectedView === 'songs' || selectedView === 'new-song'"
                      :selectedLibrary="selectedLibrary"
