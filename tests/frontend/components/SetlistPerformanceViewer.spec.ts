@@ -256,4 +256,43 @@ describe('SetlistPerformanceViewer', () => {
 
 		wrapper.unmount()
 	})
+
+	it('supports single-song mode with preferredFileId and hides setlist-only controls', async () => {
+		const multiFileSong: Song = {
+			id: 30,
+			title: 'Violin Concerto',
+			files: [
+				{ id: 301, path: '/dav/files/admin/score.pdf' },
+				{ id: 302, path: '/dav/files/admin/violin.pdf' },
+			],
+		}
+		const wrapper = mount(SetlistPerformanceViewer, {
+			props: {
+				items: [{ id: 30, setlistId: 0, songId: 30, position: 0, songTitle: 'Violin Concerto', pageNum: 2 }],
+				songs: [multiFileSong],
+				libraryId: 1,
+				preferredFileId: 302,
+			},
+			attachTo: document.body,
+		})
+
+		expect(document.body.textContent).toContain('Violin Concerto')
+		expect(document.body.textContent).not.toContain('1 / 1')
+
+		const previewerEl = document.body.querySelector('.mock-file-previewer')
+		expect(previewerEl?.getAttribute('data-file-path')).toContain('violin.pdf')
+		expect(previewerEl?.getAttribute('data-target-page')).toBe('2')
+
+		// Setlist-only controls are hidden in single-song mode
+		expect(document.body.querySelector('button[aria-label="Previous song"]')).toBeNull()
+		expect(document.body.querySelector('button[aria-label="Next song"]')).toBeNull()
+		expect(document.body.querySelector('button[aria-label="Setlist items"]')).toBeNull()
+		expect(document.body.querySelector('button[aria-label="Viewer settings & defaults"]')).toBeNull()
+
+		// Page navigation controls remain available
+		expect(document.body.querySelector('button[aria-label="Previous page"]')).not.toBeNull()
+		expect(document.body.querySelector('button[aria-label="Next page"]')).not.toBeNull()
+
+		wrapper.unmount()
+	})
 })

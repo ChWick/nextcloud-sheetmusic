@@ -688,4 +688,51 @@ describe('SongViewer.vue', () => {
 		)
 		expect(annCalls.some((c) => c[1]?.params?.fileId === 1702)).toBe(true)
 	})
+
+	it('opens SetlistPerformanceViewer when clicking Play song and passes selected file', async () => {
+		const multiFileSong: Song = {
+			...mockSong,
+			files: [
+				{ id: 101, path: '/dav/files/admin/Noten/Part1.pdf' },
+				{ id: 102, path: '/dav/files/admin/Noten/Part2.pdf' },
+			],
+		}
+
+		const wrapper = mount(SongViewer, {
+			props: { song: multiFileSong, libraryId: 7, canWrite: false },
+			global: {
+				stubs: {
+					...globalStubs.global.stubs,
+					SetlistPerformanceViewer: {
+						name: 'SetlistPerformanceViewer',
+						props: ['items', 'songs', 'libraryId', 'preferredFileId'],
+						emits: ['close'],
+						template: '<div data-test="performance-viewer-stub"></div>',
+					},
+				},
+			},
+		})
+
+		await settle()
+		await (wrapper.vm as any).selectFile('102')
+		await nextTick()
+
+		const playBtn = wrapper.find('[data-test="play-song-button"]')
+		expect(playBtn.exists()).toBe(true)
+		await playBtn.trigger('click')
+		await nextTick()
+
+		const perfViewer = wrapper.findComponent({ name: 'SetlistPerformanceViewer' })
+		expect(perfViewer.exists()).toBe(true)
+		expect(perfViewer.props('libraryId')).toBe(7)
+		expect(perfViewer.props('preferredFileId')).toBe(102)
+		expect(perfViewer.props('songs')).toEqual([multiFileSong])
+		expect(perfViewer.props('items')).toEqual([
+			expect.objectContaining({ songId: 42, songTitle: 'Test Sonata', pageNum: 1 }),
+		])
+
+		perfViewer.vm.$emit('close')
+		await nextTick()
+		expect(wrapper.findComponent({ name: 'SetlistPerformanceViewer' }).exists()).toBe(false)
+	})
 })
