@@ -107,6 +107,49 @@ export function releaseChildCanvases(container: ParentNode | null | undefined): 
 }
 
 /**
+ * Compute the normalized effective rotation (0..359°) for a pdf.js page combined with an optional UI rotation delta.
+ */
+export function getEffectivePageRotation(
+	page: { rotate?: number } | null | undefined,
+	extraRotation = 0,
+): number {
+	return ((((page?.rotate ?? 0) + (extraRotation || 0)) % 360) + 360) % 360
+}
+
+/**
+ * Subscribe to `window.devicePixelRatio` changes (e.g., dragging a window between 1× and 2× displays)
+ * and return a cleanup function.
+ */
+export function watchDevicePixelRatio(onChange: () => void): () => void {
+	if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+		return () => {}
+	}
+	let currentMql: MediaQueryList | null = null
+	let disposed = false
+
+	const handleChange = () => {
+		if (disposed) return
+		subscribe()
+		onChange()
+	}
+
+	const subscribe = () => {
+		currentMql?.removeEventListener?.('change', handleChange)
+		const dpr = window.devicePixelRatio || 1
+		currentMql = window.matchMedia(`(resolution: ${dpr}dppx)`)
+		currentMql?.addEventListener?.('change', handleChange, { once: true })
+	}
+
+	subscribe()
+
+	return () => {
+		disposed = true
+		currentMql?.removeEventListener?.('change', handleChange)
+		currentMql = null
+	}
+}
+
+/**
  * Default maximum devicePixelRatio multiplier for HiDPI PDF canvas rendering.
  */
 export const DEFAULT_MAX_PDF_DPR = 3

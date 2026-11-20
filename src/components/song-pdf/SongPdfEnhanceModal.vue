@@ -6,7 +6,7 @@ import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import PageNavControls from '../PageNavControls.vue'
 import ZoomControls from '../ZoomControls.vue'
-import { cleanupPdfJsPage, getPdfOutputScale, releaseCanvas } from '../../utils/pdfjs'
+import { cleanupPdfJsPage, getEffectivePageRotation, getPdfOutputScale, releaseCanvas } from '../../utils/pdfjs'
 import Undo from 'vue-material-design-icons/Undo.vue'
 import Redo from 'vue-material-design-icons/Redo.vue'
 import EyeOutline from 'vue-material-design-icons/EyeOutline.vue'
@@ -292,7 +292,7 @@ async function renderPage() {
 	let srcCanvas: HTMLCanvasElement | null = null
 	try {
 		page = await props.pdf.getPage(props.pageNum)
-		const effectiveRotation = (((page.rotate ?? 0) + (props.rotation || 0)) % 360 + 360) % 360
+		const effectiveRotation = getEffectivePageRotation(page, props.rotation)
 		const scale = await resolvePageRenderScale(page)
 		const unscaledViewport = page.getViewport({ scale: 1.0, rotation: effectiveRotation })
 		const viewport = page.getViewport({ scale, rotation: effectiveRotation })

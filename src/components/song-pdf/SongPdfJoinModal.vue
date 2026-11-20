@@ -7,7 +7,7 @@ import CloseIcon from 'vue-material-design-icons/Close.vue'
 import TableMergeCells from 'vue-material-design-icons/TableMergeCells.vue'
 import SongPdfJoinControls from './SongPdfJoinControls.vue'
 import type { PageCrop } from './crop-types'
-import { cleanupPdfJsPage, releaseCanvas, renderPdfPageToCanvas } from '../../utils/pdfjs'
+import { cleanupPdfJsPage, getEffectivePageRotation, releaseCanvas, renderPdfPageToCanvas } from '../../utils/pdfjs'
 import {
 	computeJoinFitInfo,
 	getEffectivePageDimensions,
@@ -192,7 +192,7 @@ async function renderThumbnails() {
 	try {
 		// Load dimensions and render Page A
 		pdfPageA = await props.pdf.getPage(pageA.value)
-		const effectiveRotA = (((pdfPageA.rotate ?? 0) + (rotA.value || 0)) % 360 + 360) % 360
+		const effectiveRotA = getEffectivePageRotation(pdfPageA, rotA.value)
 		const vpA = pdfPageA.getViewport({ scale: 1.0, rotation: effectiveRotA })
 		pageDimA.value = { width: vpA.width, height: vpA.height }
 		if (pageA.value === 1) {
@@ -204,7 +204,7 @@ async function renderThumbnails() {
 
 		// Load dimensions and render Page B
 		pdfPageB = await props.pdf.getPage(pageB.value)
-		const effectiveRotB = (((pdfPageB.rotate ?? 0) + (rotB.value || 0)) % 360 + 360) % 360
+		const effectiveRotB = getEffectivePageRotation(pdfPageB, rotB.value)
 		const vpB = pdfPageB.getViewport({ scale: 1.0, rotation: effectiveRotB })
 		pageDimB.value = { width: vpB.width, height: vpB.height }
 		if (canvasBRef.value) {

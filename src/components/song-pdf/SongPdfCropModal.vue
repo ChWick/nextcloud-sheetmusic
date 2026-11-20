@@ -6,7 +6,7 @@ import SongPdfCropToolbar from './SongPdfCropToolbar.vue'
 import SongPdfCropWorkspace from './SongPdfCropWorkspace.vue'
 import SongPdfCropFooter from './SongPdfCropFooter.vue'
 import type { PageCrop } from './crop-types'
-import { cleanupPdfJsPage, renderPdfPageToCanvas } from '../../utils/pdfjs'
+import { cleanupPdfJsPage, getEffectivePageRotation, renderPdfPageToCanvas } from '../../utils/pdfjs'
 
 const props = defineProps<{
 	open: boolean
@@ -77,7 +77,7 @@ async function renderPage() {
 	try {
 		page = await props.pdf.getPage(props.pageNum)
 		// We use a high resolution viewport to ensure clear text when cropping
-		const effectiveRotation = (((page.rotate ?? 0) + (props.rotation || 0)) % 360 + 360) % 360
+		const effectiveRotation = getEffectivePageRotation(page, props.rotation)
 		const unscaledViewport = page.getViewport({ scale: 1.0, rotation: effectiveRotation })
 
 		// Dynamic bounds based on available workspace area to make the preview large and clear

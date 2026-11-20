@@ -4,7 +4,7 @@ import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
-import { cleanupPdfJsPage, destroyPdfJsDocument, loadPdfJsDocument, releaseCanvas, releaseChildCanvases, renderPdfPageToCanvas } from '../utils/pdfjs'
+import { cleanupPdfJsPage, destroyPdfJsDocument, getEffectivePageRotation, loadPdfJsDocument, releaseCanvas, releaseChildCanvases, renderPdfPageToCanvas, watchDevicePixelRatio } from '../utils/pdfjs'
 import { openFileExternally } from '../utils/file'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import FilePreviewerToolbar from './file-preview/FilePreviewerToolbar.vue'
@@ -126,7 +126,7 @@ async function isLogicalPageLandscape(logicalPage: number): Promise<boolean> {
 		const idx = Math.min(Math.max(1, logicalPage), ordered.length) - 1
 		const pageNum = ordered[idx] || 1
 		page = await loadedPdf.value.getPage(pageNum)
-		const pageRotation = (((page.rotate ?? 0) + rotation.value) % 360 + 360) % 360
+		const pageRotation = getEffectivePageRotation(page, rotation.value)
 		const viewport = page.getViewport({ scale: 1.0, rotation: pageRotation })
 		return viewport.width > viewport.height
 	} catch {
@@ -400,7 +400,7 @@ async function renderPageThumbnail(logicalPage: number, canvas: HTMLCanvasElemen
 		const idx = Math.min(Math.max(1, logicalPage), ordered.length) - 1
 		const physicalPage = ordered[idx] || 1
 		page = await pdf.getPage(physicalPage)
-		const pageRotation = (((page.rotate ?? 0) + rotation.value) % 360 + 360) % 360
+		const pageRotation = getEffectivePageRotation(page, rotation.value)
 		const baseViewport = page.getViewport({ scale: 1.0, rotation: pageRotation })
 		const scale = targetWidth / Math.max(1, baseViewport.width)
 		const viewport = page.getViewport({ scale, rotation: pageRotation })
@@ -572,7 +572,7 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 	let firstPage: any = null
 	try {
 		firstPage = await pdf.getPage(pagesToRender[0]?.pageNum || 1)
-		const pageRotation = (((firstPage.rotate ?? 0) + rotation.value) % 360 + 360) % 360
+		const pageRotation = getEffectivePageRotation(firstPage, rotation.value)
 		const unscaledViewport = firstPage.getViewport({ scale: 1.0, rotation: pageRotation })
 
 		const pad = props.noPadding ? 0 : 48
@@ -644,7 +644,7 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 			page = await targetPdf.getPage(resolvedPageNum)
 			if (renderId !== currentRenderId) return
 
-			const pageRotation = (((page.rotate ?? 0) + rotation.value) % 360 + 360) % 360
+			const pageRotation = getEffectivePageRotation(page, rotation.value)
 			const viewport = page.getViewport({ scale: effectiveScale.value, rotation: pageRotation })
 
 			canvas = document.createElement('canvas')
@@ -1090,8 +1090,15 @@ function handleResize() {
 	}, 150)
 }
 
+let stopWatchingDpr: (() => void) | null = null
+
 onMounted(() => {
 	window.addEventListener('resize', handleResize)
+	stopWatchingDpr = watchDevicePixelRatio(() => {
+		if (loadedPdf.value) {
+			renderCurrentView()
+		}
+	})
 	if (typeof ResizeObserver !== 'undefined' && pdfContainer.value) {
 		lastObservedWidth = pdfContainer.value.clientWidth
 		lastObservedHeight = pdfContainer.value.clientHeight
@@ -1103,6 +1110,8 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+	stopWatchingDpr?.()
+	stopWatchingDpr = null
 	unmountAnnotationOverlays()
 	cleanupObserver()
 	releaseChildCanvases(pdfStage.value)

@@ -322,7 +322,8 @@ export function usePdfSplit(options: {
 					const srcPageNum = seg.startPage + i
 					const rot = pageRotations.value[srcPageNum - 1] ?? 0
 					if (rot !== 0) {
-						copiedPages[i].setRotation(degrees((copiedPages[i].getRotation().angle + rot) % 360))
+						const netAngle = (((copiedPages[i].getRotation().angle + rot) % 360) + 360) % 360
+						copiedPages[i].setRotation(degrees(netAngle))
 					}
 					newPdfDoc.addPage(copiedPages[i])
 				}
