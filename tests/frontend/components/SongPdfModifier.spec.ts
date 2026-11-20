@@ -430,6 +430,47 @@ describe('SongPdfModifier.vue (Real PDF parsing & operations)', () => {
 		expect(wrapper.emitted('saved')?.[0]?.[1]).toBe(101)
 	})
 
+	it('removes pages from multiple non-contiguous split segments in original PDF', async () => {
+		const wrapper = mount(SongPdfModifier, {
+			props: {
+				song: mockSong, // 8-page real PDF
+				libraryId: 1,
+			},
+		})
+
+		await flushPromises()
+
+		const splitTab = wrapper.findAll('button').find((b) => b.text().includes('Split PDF'))
+		await splitTab?.trigger('click')
+
+		// Add a second segment: Part 1 = pages 2-3, Part 2 = pages 6-7 (leaving pages 1, 4, 5, 8)
+		const addPartBtn = wrapper.findAll('button').find((b) => b.text().includes('Add Part'))
+		await addPartBtn?.trigger('click')
+
+		const numberInputs = wrapper.findAll('[data-test="split-segment-list"] input[type="number"]')
+		expect(numberInputs).toHaveLength(4)
+		await numberInputs[0].setValue('2')
+		await numberInputs[1].setValue('3')
+		await numberInputs[2].setValue('6')
+		await numberInputs[3].setValue('7')
+
+		const removePagesRadio = wrapper.find('input[value="remove-pages"]')
+		expect(removePagesRadio.attributes('disabled')).toBeUndefined()
+		await removePagesRadio.setValue(true)
+		await removePagesRadio.trigger('change')
+
+		const splitSubmitBtn = wrapper.findAll('button').find((b) => b.text().includes('Split & Create Songs'))
+		await splitSubmitBtn?.trigger('click')
+		await flushPromises()
+		await vi.waitFor(() => expect(wrapper.emitted('saved')).toBeTruthy(), { timeout: 5000 })
+		await flushPromises()
+
+		expect(createdSongs).toHaveLength(2)
+		expect(updatedFiles).toHaveLength(1)
+		const updatedOriginalPdf = await PDFDocument.load(new Uint8Array(await updatedFiles[0].file.arrayBuffer()))
+		expect(updatedOriginalPdf.getPageCount()).toBe(4)
+	})
+
 	it('disables delete-song option when song has multiple attached files', async () => {
 		const multiFileSong: Song = {
 			...mockSong,

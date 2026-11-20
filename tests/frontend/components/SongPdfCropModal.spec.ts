@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { config, mount } from '@vue/test-utils'
+import { config, flushPromises, mount } from '@vue/test-utils'
 import SongPdfCropModal from '../../../src/components/song-pdf/SongPdfCropModal.vue'
 import type { PageCrop } from '../../../src/components/song-pdf/crop-types'
 
@@ -210,6 +210,40 @@ describe('SongPdfCropModal.vue (Minimal mocks component interaction)', () => {
 		const zoomFitBtn = wrapper.find('[data-test="crop-zoom-fit"]')
 		await zoomFitBtn.trigger('click')
 		expect(wrapper.find('[data-test="crop-zoom-level"]').text()).toBe('100%')
+	})
+
+	it('scales canvas backing pixels for HiDPI while keeping crop workspace overlay dimensions in CSS pixels', async () => {
+		const originalDpr = Object.getOwnPropertyDescriptor(window, 'devicePixelRatio')
+		Object.defineProperty(window, 'devicePixelRatio', { value: 2, configurable: true, writable: true })
+
+		try {
+			const wrapper = mount(SongPdfCropModal, {
+				props: {
+					open: true,
+					pageNum: 1,
+					totalPages: 3,
+					allPagesCount: 3,
+					pdf: createMockPdf(),
+				},
+			})
+
+			await flushPromises()
+
+			const canvas = wrapper.find('canvas').element as HTMLCanvasElement
+			const workspace = wrapper.findComponent({ name: 'SongPdfCropWorkspace' })
+			expect(canvas.width).toBe(800)
+			expect(canvas.height).toBe(1200)
+			expect(canvas.style.width).toBe('400px')
+			expect(canvas.style.height).toBe('600px')
+			expect(workspace.props('canvasWidth')).toBe(400)
+			expect(workspace.props('canvasHeight')).toBe(600)
+		} finally {
+			if (originalDpr) {
+				Object.defineProperty(window, 'devicePixelRatio', originalDpr)
+			} else {
+				Object.defineProperty(window, 'devicePixelRatio', { value: 1, configurable: true, writable: true })
+			}
+		}
 	})
 })
 

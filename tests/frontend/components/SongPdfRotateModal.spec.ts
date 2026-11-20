@@ -184,4 +184,37 @@ describe('SongPdfRotateModal.vue', () => {
 		await prevBtn?.trigger('click')
 		expect(wrapper.emitted('change-page')![1]).toEqual([1])
 	})
+
+	it('scales canvas backing pixels for HiDPI while keeping CSS dimensions at 1x', async () => {
+		const originalDpr = Object.getOwnPropertyDescriptor(window, 'devicePixelRatio')
+		Object.defineProperty(window, 'devicePixelRatio', { value: 2, configurable: true, writable: true })
+
+		try {
+			const wrapper = mount(SongPdfRotateModal, {
+				props: {
+					open: true,
+					pageNum: 1,
+					totalPages: 5,
+					pdf: mockPdf,
+					initialAngle: 0,
+					allPagesCount: 5,
+				},
+			})
+
+			await flushPromises()
+
+			const canvas = wrapper.find('canvas').element as HTMLCanvasElement
+			// 400x600 scaled to fit 480x380 -> scale = 380/600 -> css 253x380, backing 506x760
+			expect(canvas.style.width).toBe('253px')
+			expect(canvas.style.height).toBe('380px')
+			expect(canvas.width).toBe(506)
+			expect(canvas.height).toBe(760)
+		} finally {
+			if (originalDpr) {
+				Object.defineProperty(window, 'devicePixelRatio', originalDpr)
+			} else {
+				Object.defineProperty(window, 'devicePixelRatio', { value: 1, configurable: true, writable: true })
+			}
+		}
+	})
 })

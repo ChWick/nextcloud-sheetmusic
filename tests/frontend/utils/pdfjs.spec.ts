@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getPdfOutputScale, renderPdfPageToCanvas } from '../../../src/utils/pdfjs'
+import { getEffectivePageRotation, getPdfOutputScale, renderPdfPageToCanvas, watchDevicePixelRatio } from '../../../src/utils/pdfjs'
 
 describe('utils/pdfjs.ts HiDPI helpers', () => {
 	const originalDpr = Object.getOwnPropertyDescriptor(window, 'devicePixelRatio')
@@ -114,5 +114,48 @@ describe('utils/pdfjs.ts HiDPI helpers', () => {
 		expect(fillRect).not.toHaveBeenCalled()
 		const renderArg = page.render.mock.calls[0][0]
 		expect(renderArg.transform).toBeUndefined()
+	})
+
+	it('getEffectivePageRotation normalizes positive, negative, and wrapped rotations', () => {
+		expect(getEffectivePageRotation({ rotate: 90 }, 0)).toBe(90)
+		expect(getEffectivePageRotation({ rotate: 270 }, 180)).toBe(90)
+		expect(getEffectivePageRotation({ rotate: 0 }, -90)).toBe(270)
+		expect(getEffectivePageRotation(undefined, 450)).toBe(90)
+	})
+
+	it('watchDevicePixelRatio triggers callback on media query change and cleans up on dispose', () => {
+		setDpr(1)
+		const listeners: Array<() => void> = []
+		const removeSpy = vi.fn()
+		const matchMediaSpy = vi.spyOn(window, 'matchMedia').mockImplementation((query: string) => ({
+			matches: true,
+			media: query,
+			addEventListener: vi.fn((_event: string, cb: () => void) => {
+				listeners.push(cb)
+			}),
+			removeEventListener: removeSpy,
+		} as unknown as MediaQueryList))
+
+		try {
+			const onChange = vi.fn()
+			const stop = watchDevicePixelRatio(onChange)
+
+			expect(matchMediaSpy).toHaveBeenCalledWith('(resolution: 1dppx)')
+			expect(listeners).toHaveLength(1)
+
+			// Simulate moving window to 2x display
+			setDpr(2)
+			listeners[0]()
+			expect(onChange).toHaveBeenCalledTimes(1)
+			expect(matchMediaSpy).toHaveBeenCalledWith('(resolution: 2dppx)')
+
+			// Disposing removes listener and ignores subsequent notifications
+			stop()
+			expect(removeSpy).toHaveBeenCalled()
+			listeners[1]?.()
+			expect(onChange).toHaveBeenCalledTimes(1)
+		} finally {
+			matchMediaSpy.mockRestore()
+		}
 	})
 })

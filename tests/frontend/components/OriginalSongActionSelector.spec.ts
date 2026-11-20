@@ -127,5 +127,34 @@ describe('OriginalSongActionSelector.vue', () => {
 		expect(wrapper.emitted('update:modelValue')).toBeTruthy()
 		expect(wrapper.emitted('update:modelValue')?.[0]?.[0]).toBe('delete-song')
 	})
+
+	it('supports keyboard activation on enabled remove-pages and ignores keyboard when disabled', async () => {
+		const enabledWrapper = mount(OriginalSongActionSelector, {
+			props: {
+				modelValue: 'keep',
+				attachedFilesCount: 1,
+				canRemovePages: true,
+			},
+		})
+		const enabledRemoveOption = enabledWrapper.findAll('[role="radio"]')[1]
+		await enabledRemoveOption.trigger('keydown.enter')
+		await enabledRemoveOption.trigger('keydown.space')
+		expect(enabledWrapper.emitted('update:modelValue')).toEqual([
+			['remove-pages'],
+			['remove-pages'],
+		])
+
+		const disabledWrapper = mount(OriginalSongActionSelector, {
+			props: {
+				modelValue: 'keep',
+				attachedFilesCount: 1,
+				canRemovePages: false,
+			},
+		})
+		const disabledRemoveOption = disabledWrapper.findAll('[role="radio"]')[1]
+		await disabledRemoveOption.trigger('keydown.enter')
+		await disabledRemoveOption.trigger('keydown.space')
+		expect(disabledWrapper.emitted('update:modelValue')).toBeFalsy()
+	})
 })
 
