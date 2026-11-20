@@ -411,6 +411,7 @@ defineExpose({
 			:songs="[song]"
 			:library-id="libraryId"
 			:preferred-file-id="selectedFile.id"
+			:initial-annotations="annotations"
 			@close="isPerformanceMode = false" />
 		</div>
 	</FullscreenShell>

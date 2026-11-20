@@ -705,7 +705,7 @@ describe('SongViewer.vue', () => {
 					...globalStubs.global.stubs,
 					SetlistPerformanceViewer: {
 						name: 'SetlistPerformanceViewer',
-						props: ['items', 'songs', 'libraryId', 'preferredFileId'],
+						props: ['items', 'songs', 'libraryId', 'preferredFileId', 'initialAnnotations'],
 						emits: ['close'],
 						template: '<div data-test="performance-viewer-stub"></div>',
 					},
@@ -726,6 +726,7 @@ describe('SongViewer.vue', () => {
 		expect(perfViewer.exists()).toBe(true)
 		expect(perfViewer.props('libraryId')).toBe(7)
 		expect(perfViewer.props('preferredFileId')).toBe(102)
+		expect(perfViewer.props('initialAnnotations')).toEqual([])
 		expect(perfViewer.props('songs')).toEqual([multiFileSong])
 		expect(perfViewer.props('items')).toEqual([
 			expect.objectContaining({ songId: 42, songTitle: 'Test Sonata', pageNum: 1 }),

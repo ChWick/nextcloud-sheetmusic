@@ -37,12 +37,14 @@ const props = withDefaults(defineProps<{
 	libraryId: number
 	initialIndex?: number
 	preferredFileId?: string | number
+	initialAnnotations?: SheetAnnotation[]
 }>(), {
 	setlistId: undefined,
 	setlistName: '',
 	files: () => [],
 	initialIndex: 0,
 	preferredFileId: undefined,
+	initialAnnotations: undefined,
 })
 
 const emit = defineEmits<{
@@ -288,6 +290,10 @@ watch([currentSong, currentFile], async ([song, file]) => {
 	const reqId = ++annotationRequestId
 	if (!song || props.libraryId <= 0) {
 		annotations.value = []
+		return
+	}
+	if (isSingleSongMode.value && props.initialAnnotations !== undefined) {
+		annotations.value = props.initialAnnotations
 		return
 	}
 	try {

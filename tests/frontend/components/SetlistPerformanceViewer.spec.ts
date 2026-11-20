@@ -295,4 +295,23 @@ describe('SetlistPerformanceViewer', () => {
 
 		wrapper.unmount()
 	})
+
+	it('reuses initialAnnotations in single-song mode without re-fetching annotations', async () => {
+		const { fetchSongAnnotations } = await import('../../../src/api/annotations')
+		vi.mocked(fetchSongAnnotations).mockClear()
+
+		const wrapper = mount(SetlistPerformanceViewer, {
+			props: {
+				items: [{ id: 10, setlistId: 0, songId: 10, position: 0, songTitle: 'Song One', pageNum: 1 }],
+				songs: [sampleSongs[0]],
+				libraryId: 1,
+				initialAnnotations: [],
+			},
+			attachTo: document.body,
+		})
+		await wrapper.vm.$nextTick()
+
+		expect(fetchSongAnnotations).not.toHaveBeenCalled()
+		wrapper.unmount()
+	})
 })
