@@ -240,4 +240,57 @@ describe('FilePreviewer.vue', () => {
 		await img.trigger('error')
 		expect(wrapper.text()).toContain('Missing file: The file does not exist on the file system.')
 	})
+
+	it('renders PDF page canvas at HiDPI backing resolution when devicePixelRatio > 1', async () => {
+		const originalDpr = Object.getOwnPropertyDescriptor(window, 'devicePixelRatio')
+		Object.defineProperty(window, 'devicePixelRatio', { value: 2, configurable: true, writable: true })
+
+		const mockCtx = {
+			fillStyle: '',
+			imageSmoothingEnabled: false,
+			imageSmoothingQuality: 'low',
+			fillRect: vi.fn(),
+		} as unknown as CanvasRenderingContext2D
+		const getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(mockCtx)
+
+		try {
+			const pdfjs = await import('pdfjs-dist')
+			const mockRender = vi.fn().mockReturnValue({ promise: Promise.resolve() })
+			vi.mocked(pdfjs.getDocument).mockReturnValueOnce({
+				promise: Promise.resolve({
+					numPages: 1,
+					getPage: vi.fn().mockResolvedValue({
+						rotate: 0,
+						getViewport: vi.fn().mockReturnValue({ width: 600, height: 800 }),
+						render: mockRender,
+					}),
+				}),
+			} as any)
+
+			const wrapper = mount(FilePreviewer, {
+				props: {
+					filePath: '/files/scores/HiDpi.pdf',
+					initialLayout: 'single',
+				},
+			})
+			await flushPromises()
+
+			const canvas = wrapper.find('canvas.sheetmusic-pdf-page').element as HTMLCanvasElement
+			expect(canvas).toBeDefined()
+			expect(canvas.width).toBe(1200)
+			expect(canvas.height).toBe(1600)
+			expect(canvas.style.width).toBe('600px')
+			expect(canvas.style.height).toBe('800px')
+			expect(mockRender).toHaveBeenCalledWith(expect.objectContaining({
+				transform: [2, 0, 0, 2, 0, 0],
+			}))
+		} finally {
+			getContextSpy.mockRestore()
+			if (originalDpr) {
+				Object.defineProperty(window, 'devicePixelRatio', originalDpr)
+			} else {
+				Object.defineProperty(window, 'devicePixelRatio', { value: 1, configurable: true, writable: true })
+			}
+		}
+	})
 })
