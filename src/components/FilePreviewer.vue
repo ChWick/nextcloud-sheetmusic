@@ -652,7 +652,10 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 			canvas.style.display = 'block'
 			canvas.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.2)'
 
-			await renderPdfPageToCanvas(page, canvas, viewport, { onRenderTask })
+			await renderPdfPageToCanvas(page, canvas, viewport, {
+				onRenderTask,
+				maxDpr: pageLayout.value === 'continuous' ? 2 : undefined,
+			})
 
 			if (renderId === currentRenderId) {
 				placeholder.replaceChildren(canvas)
@@ -1067,27 +1070,40 @@ let resizeDebounceTimer: ReturnType<typeof setTimeout> | null = null
 let lastObservedWidth = 0
 let lastObservedHeight = 0
 
-function handleResize() {
-	if (!(autoLayout.value || zoomMode.value === 'fit-width' || zoomMode.value === 'fit-page')) {
+let forceNextResizeRerender = false
+
+function scheduleRerender(force = false) {
+	if (!force && !(autoLayout.value || zoomMode.value === 'fit-width' || zoomMode.value === 'fit-page')) {
 		return
+	}
+	if (force) {
+		forceNextResizeRerender = true
 	}
 	if (resizeDebounceTimer !== null) {
 		clearTimeout(resizeDebounceTimer)
 	}
 	resizeDebounceTimer = setTimeout(() => {
+		const shouldForce = forceNextResizeRerender
+		forceNextResizeRerender = false
 		resizeDebounceTimer = null
 		const el = pdfContainer.value
 		if (el) {
 			const w = el.clientWidth
 			const h = el.clientHeight
-			if (w === lastObservedWidth && h === lastObservedHeight) {
+			if (!shouldForce && w === lastObservedWidth && h === lastObservedHeight) {
 				return
 			}
 			lastObservedWidth = w
 			lastObservedHeight = h
 		}
-		renderCurrentView()
+		if (loadedPdf.value) {
+			renderCurrentView()
+		}
 	}, 150)
+}
+
+function handleResize() {
+	scheduleRerender(false)
 }
 
 let stopWatchingDpr: (() => void) | null = null
@@ -1095,9 +1111,7 @@ let stopWatchingDpr: (() => void) | null = null
 onMounted(() => {
 	window.addEventListener('resize', handleResize)
 	stopWatchingDpr = watchDevicePixelRatio(() => {
-		if (loadedPdf.value) {
-			renderCurrentView()
-		}
+		scheduleRerender(true)
 	})
 	if (typeof ResizeObserver !== 'undefined' && pdfContainer.value) {
 		lastObservedWidth = pdfContainer.value.clientWidth

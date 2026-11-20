@@ -293,4 +293,59 @@ describe('FilePreviewer.vue', () => {
 			}
 		}
 	})
+
+	it('caps HiDPI scaling to 2x in continuous scroll mode at 3x DPR to bound canvas memory', async () => {
+		const originalDpr = Object.getOwnPropertyDescriptor(window, 'devicePixelRatio')
+		const originalIO = globalThis.IntersectionObserver
+		Object.defineProperty(window, 'devicePixelRatio', { value: 3, configurable: true, writable: true })
+		// Disable IntersectionObserver so continuous mode renders synchronously
+		;(globalThis as any).IntersectionObserver = undefined
+
+		const mockCtx = {
+			fillStyle: '',
+			imageSmoothingEnabled: false,
+			imageSmoothingQuality: 'low',
+			fillRect: vi.fn(),
+		} as unknown as CanvasRenderingContext2D
+		const getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(mockCtx)
+
+		try {
+			const pdfjs = await import('pdfjs-dist')
+			const mockRender = vi.fn().mockReturnValue({ promise: Promise.resolve() })
+			vi.mocked(pdfjs.getDocument).mockReturnValueOnce({
+				promise: Promise.resolve({
+					numPages: 1,
+					getPage: vi.fn().mockResolvedValue({
+						rotate: 0,
+						getViewport: vi.fn().mockReturnValue({ width: 600, height: 800 }),
+						render: mockRender,
+					}),
+				}),
+			} as any)
+
+			const wrapper = mount(FilePreviewer, {
+				props: {
+					filePath: '/files/scores/ContinuousHiDpi.pdf',
+					initialPageLayout: 'continuous',
+				},
+			})
+			await flushPromises()
+
+			const canvas = wrapper.find('canvas.sheetmusic-pdf-page').element as HTMLCanvasElement
+			expect(canvas).toBeDefined()
+			expect(canvas.width).toBe(1200)
+			expect(canvas.height).toBe(1600)
+			expect(mockRender).toHaveBeenCalledWith(expect.objectContaining({
+				transform: [2, 0, 0, 2, 0, 0],
+			}))
+		} finally {
+			;(globalThis as any).IntersectionObserver = originalIO
+			getContextSpy.mockRestore()
+			if (originalDpr) {
+				Object.defineProperty(window, 'devicePixelRatio', originalDpr)
+			} else {
+				Object.defineProperty(window, 'devicePixelRatio', { value: 1, configurable: true, writable: true })
+			}
+		}
+	})
 })
