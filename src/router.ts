@@ -16,5 +16,10 @@ export const router = createRouter({
       name: 'Home',
       component: App,
     },
+    {
+      path: '/:pathMatch(.*)*',
+      name: 'NotFound',
+      component: App,
+    },
   ],
 })

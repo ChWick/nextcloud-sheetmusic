@@ -25,6 +25,7 @@ export function useLibraryData() {
 	const sublibraries = ref<Sublibrary[]>([])
 	const fileError = ref('')
 	const isLoading = ref(false)
+	const hasLoaded = ref(false)
 
 	function handleLibraryDataUpdate(data: LibraryData) {
 		songs.value = data.songs ?? []
@@ -55,6 +56,7 @@ export function useLibraryData() {
 
 	async function loadLibraryData(id: number) {
 		isLoading.value = true
+		hasLoaded.value = false
 		fileError.value = ''
 		try {
 			const [response] = await Promise.all([
@@ -67,6 +69,7 @@ export function useLibraryData() {
 			showError(fileError.value)
 		} finally {
 			isLoading.value = false
+			hasLoaded.value = true
 		}
 	}
 
@@ -87,6 +90,7 @@ export function useLibraryData() {
 		sublibraries,
 		fileError,
 		isLoading,
+		hasLoaded,
 		handleLibraryDataUpdate,
 		loadLibraryData,
 		loadSublibraries,
