@@ -4,7 +4,7 @@ import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
-import { cleanupPdfJsPage } from '../../utils/pdfjs'
+import { cleanupPdfJsPage, renderPdfPageToCanvas } from '../../utils/pdfjs'
 import CheckIcon from 'vue-material-design-icons/Check.vue'
 import ArrowLeft from 'vue-material-design-icons/ArrowLeft.vue'
 import ArrowRight from 'vue-material-design-icons/ArrowRight.vue'
@@ -87,24 +87,9 @@ async function renderPage() {
 		const viewport = page.getViewport({ scale })
 
 		const canvas = canvasRef.value
-		canvas.width = Math.floor(viewport.width)
-		canvas.height = Math.floor(viewport.height)
-		canvasWidth.value = canvas.width
-		canvasHeight.value = canvas.height
-
-		const context = canvas.getContext('2d')
-		if (!context) return
-
-		context.imageSmoothingEnabled = true
-		context.imageSmoothingQuality = 'high'
-		context.fillStyle = '#ffffff'
-		context.fillRect(0, 0, canvas.width, canvas.height)
-
-		await page.render({
-			canvasContext: context,
-			viewport,
-			background: 'rgb(255, 255, 255)',
-		}).promise
+		const { cssWidth, cssHeight } = await renderPdfPageToCanvas(page, canvas, viewport)
+		canvasWidth.value = cssWidth
+		canvasHeight.value = cssHeight
 	} catch (err) {
 		console.error('Failed to render page for rotation preview:', err)
 	} finally {

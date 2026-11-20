@@ -6,7 +6,7 @@ import SongPdfCropToolbar from './SongPdfCropToolbar.vue'
 import SongPdfCropWorkspace from './SongPdfCropWorkspace.vue'
 import SongPdfCropFooter from './SongPdfCropFooter.vue'
 import type { PageCrop } from './crop-types'
-import { cleanupPdfJsPage } from '../../utils/pdfjs'
+import { cleanupPdfJsPage, renderPdfPageToCanvas } from '../../utils/pdfjs'
 
 const props = defineProps<{
 	open: boolean
@@ -102,23 +102,9 @@ async function renderPage() {
 
 		const canvas = workspaceCompRef.value?.canvasRef
 		if (canvas) {
-			canvas.width = Math.floor(viewport.width)
-			canvas.height = Math.floor(viewport.height)
-			canvasWidth.value = canvas.width
-			canvasHeight.value = canvas.height
-
-			const canvasContext = canvas.getContext('2d')
-			if (canvasContext) {
-				canvasContext.imageSmoothingEnabled = true
-				canvasContext.imageSmoothingQuality = 'high'
-				canvasContext.fillStyle = '#ffffff'
-				canvasContext.fillRect(0, 0, canvas.width, canvas.height)
-				await page.render({
-					canvasContext,
-					viewport,
-					background: 'rgb(255, 255, 255)',
-				}).promise
-			}
+			const { cssWidth, cssHeight } = await renderPdfPageToCanvas(page, canvas, viewport)
+			canvasWidth.value = cssWidth
+			canvasHeight.value = cssHeight
 		}
 	} catch (e) {
 		console.warn(`Failed to render crop preview for page ${props.pageNum}:`, e)

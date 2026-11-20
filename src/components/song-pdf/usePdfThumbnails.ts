@@ -1,5 +1,5 @@
 import { getCurrentInstance, onUnmounted, ref, type Ref } from 'vue'
-import { cleanupPdfJsPage, releaseCanvas } from '../../utils/pdfjs'
+import { cleanupPdfJsPage, getPdfOutputScale, releaseCanvas, renderPdfPageToCanvas } from '../../utils/pdfjs'
 import type { ScanOperation } from './scan-types'
 import {
 	applyPipeline,
@@ -98,39 +98,31 @@ export function usePdfThumbnails(
 			)
 			const displayW = Math.max(1, Math.round(unscaledViewport.width * displayScale))
 			const displayH = Math.max(1, Math.round(unscaledViewport.height * displayScale))
-
-			const thumbW = displayW * 2 // 2x HiDPI backing store
-			const thumbH = displayH * 2
+			const thumbOutputScale = Math.max(2, Math.ceil(getPdfOutputScale(displayW, displayH)))
+			const thumbW = displayW * thumbOutputScale
+			const thumbH = displayH * thumbOutputScale
 
 			const canvas = document.createElement('canvas')
-			canvas.width = thumbW
-			canvas.height = thumbH
-			canvas.style.width = `${displayW}px`
-			canvas.style.height = `${displayH}px`
 			canvas.className = 'sheetmusic-pdf-thumbnail-canvas'
 
 			const enhanced = isPageEnhanced(pageNum)
 
 			if (!enhanced) {
-				// Fast path: render directly at 2x thumbnail size without 4x supersampling or CPU readback
-				const dstContext = canvas.getContext('2d')
-				if (dstContext) {
-					dstContext.imageSmoothingEnabled = true
-					dstContext.imageSmoothingQuality = 'high'
-					dstContext.fillStyle = '#ffffff'
-					dstContext.fillRect(0, 0, canvas.width, canvas.height)
-					const thumbViewport = page.getViewport({ scale: displayScale * 2 })
-					const renderTask = page.render({
-						canvasContext: dstContext,
-						viewport: thumbViewport,
-						background: 'rgb(255, 255, 255)',
-					})
-					onRenderTask?.(renderTask)
-					await renderTask.promise
-					onRenderTask?.(null)
-				}
+				// Fast path: render directly at HiDPI thumbnail size without 4x supersampling or CPU readback
+				const displayViewport = page.getViewport({ scale: displayScale })
+				await renderPdfPageToCanvas(page, canvas, displayViewport, {
+					cssWidth: displayW,
+					cssHeight: displayH,
+					outputScale: thumbOutputScale,
+					onRenderTask,
+				})
 				return canvas
 			}
+
+			canvas.width = thumbW
+			canvas.height = thumbH
+			canvas.style.width = `${displayW}px`
+			canvas.style.height = `${displayH}px`
 
 			// Enhanced path: render at 4x intermediate resolution so scan filters operate cleanly before downsampling
 			const renderScale = displayScale * 4

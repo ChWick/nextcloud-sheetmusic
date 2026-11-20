@@ -5,7 +5,7 @@
 
 import { getCurrentInstance, onUnmounted, ref, type Ref, watch } from 'vue'
 import axios from '@nextcloud/axios'
-import { cleanupPdfJsPage, destroyPdfJsDocument, loadPdfJsDocument, releaseCanvas, setBoundedRecordEntry } from '../../utils/pdfjs'
+import { cleanupPdfJsPage, destroyPdfJsDocument, getPdfOutputScale, loadPdfJsDocument, releaseCanvas, renderPdfPageToCanvas, setBoundedRecordEntry } from '../../utils/pdfjs'
 
 export async function renderPageImage(pdf: any, pageNum: number, maxDim = 340): Promise<string> {
 	let page: any = null
@@ -18,21 +18,16 @@ export async function renderPageImage(pdf: any, pageNum: number, maxDim = 340): 
 			maxDim / Math.max(1, unscaledViewport.height),
 		)
 		const viewport = page.getViewport({ scale })
+		const outputScale = getPdfOutputScale(viewport.width, viewport.height, {
+			maxDpr: maxDim > 500 ? 2 : 3,
+			maxCanvasPixels: maxDim > 500 ? 6_250_000 : 2_000_000,
+		})
 
 		canvas = document.createElement('canvas')
-		canvas.width = Math.max(1, Math.round(viewport.width))
-		canvas.height = Math.max(1, Math.round(viewport.height))
-
-		const ctx = canvas.getContext('2d')
-		if (ctx) {
-			ctx.fillStyle = '#ffffff'
-			ctx.fillRect(0, 0, canvas.width, canvas.height)
-
-			await page.render({
-				canvasContext: ctx,
-				viewport,
-			}).promise
-		}
+		await renderPdfPageToCanvas(page, canvas, viewport, {
+			outputScale,
+			applyCssSize: false,
+		})
 
 		let dataUrl = ''
 		try {

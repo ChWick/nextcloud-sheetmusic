@@ -6,7 +6,7 @@ import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import PageNavControls from '../PageNavControls.vue'
 import ZoomControls from '../ZoomControls.vue'
-import { cleanupPdfJsPage, releaseCanvas } from '../../utils/pdfjs'
+import { cleanupPdfJsPage, getPdfOutputScale, releaseCanvas } from '../../utils/pdfjs'
 import Undo from 'vue-material-design-icons/Undo.vue'
 import Redo from 'vue-material-design-icons/Redo.vue'
 import EyeOutline from 'vue-material-design-icons/EyeOutline.vue'
@@ -355,7 +355,7 @@ function paintDisplayCanvas() {
 		? originalBuffer
 		: (enhancedBuffer ?? originalBuffer)
 
-	const dpr = typeof window !== 'undefined' ? Math.min(2, Math.max(1, window.devicePixelRatio || 1)) : 1
+	const dpr = getPdfOutputScale(undefined, undefined, { maxDpr: 2 })
 	const targetDisplayW = Math.max(1, Math.round(baseDisplayDimensions.value.width * zoomLevel.value * dpr))
 	const targetDisplayH = Math.max(1, Math.round(baseDisplayDimensions.value.height * zoomLevel.value * dpr))
 
