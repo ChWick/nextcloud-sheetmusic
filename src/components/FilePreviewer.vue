@@ -1327,8 +1327,13 @@ defineExpose({
 }
 
 .error {
-	padding: 16px;
-	color: var(--color-error);
+	margin: 16px;
+	padding: 14px 16px;
+	border: 1px solid var(--color-error);
+	border-left-width: 4px;
+	border-radius: var(--border-radius-large, 8px);
+	background-color: var(--color-background-hover);
+	color: var(--color-main-text);
 }
 
 .imageViewer {

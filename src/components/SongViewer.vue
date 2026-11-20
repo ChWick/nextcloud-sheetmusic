@@ -3,6 +3,7 @@ import type { Arranger, Artist, Book, Collection, Composer, CustomGroup, Genre, 
 
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import { ensurePdfJsWorker } from '../utils/pdfjs'
 import { openFileExternally } from '../utils/file'
 import { getFileVersionToken, getVersionedFileUrl } from '../utils/file-version'
@@ -325,9 +326,15 @@ defineExpose({
 			v-if="song && hideHeader && !isEditing && !isAnnotationFullscreen"
 			:song="song" />
 
+		<!-- Loading State while song is not yet resolved -->
+		<div v-if="!song" :class="$style.loadingState" data-test="song-viewer-loading">
+			<NcLoadingIcon :size="36" />
+			<span>{{ t('sheetmusic', 'Loading song…') }}</span>
+		</div>
+
 		<!-- Song Editor View -->
 		<SongEditor
-			v-if="song && isEditing"
+			v-else-if="isEditing"
 			:song="song"
 			:library-id="libraryId"
 			v-bind="entityListsProps"
@@ -376,8 +383,11 @@ defineExpose({
 				:can-annotate="isSelectedFilePdf && canWrite !== false"
 				@update:annotations="annotations = $event"
 				@update:is-editing="onEditingAnnotationsChange" />
-			<div v-else :class="$style.error">
-				{{ songFiles.length === 0 ? t('sheetmusic', 'No files attached to this song.') : t('sheetmusic', 'Missing file: The file does not exist on the file system.') }}
+			<div v-else-if="songFiles.length === 0" :class="$style.emptyNotice">
+				{{ t('sheetmusic', 'No files attached to this song.') }}
+			</div>
+			<div v-else :class="$style.errorNotice" role="alert">
+				{{ t('sheetmusic', 'Missing file: The file does not exist on the file system.') }}
 			</div>
 		</template>
 
@@ -446,8 +456,33 @@ defineExpose({
 	white-space: nowrap;
 }
 
-.error {
-	color: var(--color-error);
+.loadingState {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 12px;
+	flex: 1;
+	min-height: 240px;
+	color: var(--color-text-maxcontrast);
+}
+
+.emptyNotice {
 	margin: 16px 0;
+	padding: 14px 16px;
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius-large, 8px);
+	background-color: var(--color-background-hover);
+	color: var(--color-text-maxcontrast);
+}
+
+.errorNotice {
+	margin: 16px 0;
+	padding: 14px 16px;
+	border: 1px solid var(--color-error);
+	border-left-width: 4px;
+	border-radius: var(--border-radius-large, 8px);
+	background-color: var(--color-background-hover);
+	color: var(--color-main-text);
 }
 </style>

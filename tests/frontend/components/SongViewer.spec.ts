@@ -735,4 +735,17 @@ describe('SongViewer.vue', () => {
 		await nextTick()
 		expect(wrapper.findComponent({ name: 'SetlistPerformanceViewer' }).exists()).toBe(false)
 	})
+
+	it('shows loading state instead of no-files notice when song is not yet loaded', async () => {
+		const wrapper = mount(SongViewer, {
+			props: { song: null, libraryId: 1 },
+			...globalStubs,
+		})
+
+		await nextTick()
+
+		expect(wrapper.find('[data-test="song-viewer-loading"]').exists()).toBe(true)
+		expect(wrapper.text()).toContain('Loading song…')
+		expect(wrapper.text()).not.toContain('No files attached to this song.')
+	})
 })

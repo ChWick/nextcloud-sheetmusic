@@ -46,7 +46,11 @@
   <!-- The URL opens one song full screen ("?song=12"), for viewing it or - with the
        edit flag - for editing it; without a song the list is shown. -->
   <div v-if="songIdInUrl !== null" :class="[$style.fullscreenArea, isViewingSong && $style.fullscreenAreaViewer]">
-    <SongEditor v-if="isEditInUrl"
+    <div v-if="isLoading && !openSong" :class="$style.songLoadingState" data-test="song-loading-state">
+      <NcLoadingIcon :size="36" />
+      <span>{{ t('sheetmusic', 'Loading song…') }}</span>
+    </div>
+    <SongEditor v-else-if="isEditInUrl"
                 ref="songEditorRef"
                 :song="openSong"
                 :library-id="selectedLibrary"
@@ -259,6 +263,7 @@ import { describeRequestFailure } from '../utils/api';
 import { ref, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import NcButton from '@nextcloud/vue/components/NcButton';
+import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon';
 import CloseIcon from 'vue-material-design-icons/Close.vue';
 import DeleteIcon from 'vue-material-design-icons/Delete.vue';
 import MergeIcon from 'vue-material-design-icons/Merge.vue';
@@ -953,5 +958,16 @@ async function handleDeleted(data: LibraryData | undefined, songId: number) {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.songLoadingState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex: 1;
+  min-height: 240px;
+  color: var(--color-text-maxcontrast);
 }
 </style>
