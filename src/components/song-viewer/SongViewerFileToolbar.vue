@@ -16,6 +16,7 @@ import FullscreenIcon from 'vue-material-design-icons/Fullscreen.vue'
 import FullscreenExitIcon from 'vue-material-design-icons/FullscreenExit.vue'
 import History from 'vue-material-design-icons/History.vue'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
+import PlayIcon from 'vue-material-design-icons/Play.vue'
 import PdfInfoPopover from '../song-pdf/PdfInfoPopover.vue'
 import SongViewerBookmarksBar from './SongViewerBookmarksBar.vue'
 import { getFileName } from '../../utils/file'
@@ -54,6 +55,7 @@ const props = withDefaults(
 
 const emit = defineEmits<{
 	'select-file': [fileId: string]
+	play: []
 	'open-external': []
 	'modify-pdf': []
 	'open-versions': []
@@ -132,6 +134,17 @@ const activePageResolution = computed<PdfPageResolutionSummary | null>(() => {
 				:can-write="canWrite"
 				@jump="emit('jump-to-bookmark', $event)"
 				@edit="emit('edit-bookmarks')" />
+			<NcButton
+				v-if="file?.path"
+				variant="primary"
+				:title="t('sheetmusic', 'Play song')"
+				:aria-label="t('sheetmusic', 'Play song')"
+				data-test="play-song-button"
+				@click="emit('play')">
+				<template #icon>
+					<PlayIcon :size="20" />
+				</template>
+			</NcButton>
 			<NcButton
 				v-if="isPdf && canWrite !== false"
 				:variant="isEditingAnnotations ? 'primary' : 'secondary'"

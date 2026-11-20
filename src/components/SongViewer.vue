@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Arranger, Artist, Book, Collection, Composer, CustomGroup, Genre, Instrument, Key, LibraryData, Signature, Song, SongFile, SourceType, Year } from '../types/song'
+import type { Arranger, Artist, Book, Collection, Composer, CustomGroup, Genre, Instrument, Key, LibraryData, SetlistItem, Signature, Song, SongFile, SourceType, Year } from '../types/song'
 
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
@@ -18,6 +18,7 @@ import SongPdfVersionsModal from './song-pdf/SongPdfVersionsModal.vue'
 import { useFileVersions } from './song-pdf/useFileVersions'
 import SongViewerMetadata from './song-viewer/SongViewerMetadata.vue'
 import SongViewerFileToolbar from './song-viewer/SongViewerFileToolbar.vue'
+import SetlistPerformanceViewer from './setlists/SetlistPerformanceViewer.vue'
 import FullscreenShell from './FullscreenShell.vue'
 import { extractEntityLists } from './songs/song-view-columns'
 import { fetchSongAnnotations } from '../api/annotations'
@@ -78,8 +79,28 @@ ensurePdfJsWorker()
 
 const isEditing = ref(false)
 const isDeleteDialogOpen = ref(false)
+const isPerformanceMode = ref(false)
+const performanceStartPage = ref(1)
 const selectedFileId = ref('')
 const filePreviewerRef = ref<InstanceType<typeof AnnotatableFilePreview> | null>(null)
+
+const performanceItems = computed<SetlistItem[]>(() => {
+	if (!props.song) return []
+	return [{
+		id: props.song.id,
+		setlistId: 0,
+		songId: props.song.id,
+		position: 0,
+		songTitle: props.song.title,
+		pageNum: performanceStartPage.value,
+	}]
+})
+
+function startPerformanceMode() {
+	if (!props.song || !selectedFile.value?.path) return
+	performanceStartPage.value = filePreviewerRef.value?.currentPage ?? activeBookmarkPage.value ?? 1
+	isPerformanceMode.value = true
+}
 
 const isSelectedFilePdf = computed(() => {
 	const path = selectedFile.value?.path?.toLowerCase() ?? ''
@@ -162,6 +183,7 @@ watch(
 	(newSongId, previousSongId) => {
 		if (newSongId !== previousSongId) {
 			isEditing.value = false
+			isPerformanceMode.value = false
 		}
 	},
 )
@@ -331,6 +353,7 @@ defineExpose({
 				:bookmarks="songBookmarks"
 				:active-bookmark-page="activeBookmarkPage"
 				@select-file="selectFile"
+				@play="startPerformanceMode"
 				@open-external="openInExternalViewer"
 				@modify-pdf="openPdfModifier()"
 				@open-versions="openVersionsModal"
@@ -371,6 +394,14 @@ defineExpose({
 			:is-loading="isLoadingVersions"
 			:is-reverting="isRevertingVersion"
 			@revert="revertToVersion" />
+
+		<SetlistPerformanceViewer
+			v-if="isPerformanceMode && song && selectedFile?.path"
+			:items="performanceItems"
+			:songs="[song]"
+			:library-id="libraryId"
+			:preferred-file-id="selectedFile.id"
+			@close="isPerformanceMode = false" />
 		</div>
 	</FullscreenShell>
 </template>
