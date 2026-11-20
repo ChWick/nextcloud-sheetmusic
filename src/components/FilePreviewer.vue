@@ -4,7 +4,7 @@ import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
-import { cleanupPdfJsPage, destroyPdfJsDocument, loadPdfJsDocument, releaseCanvas, releaseChildCanvases } from '../utils/pdfjs'
+import { cleanupPdfJsPage, destroyPdfJsDocument, loadPdfJsDocument, releaseCanvas, releaseChildCanvases, renderPdfPageToCanvas } from '../utils/pdfjs'
 import { openFileExternally } from '../utils/file'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import FilePreviewerToolbar from './file-preview/FilePreviewerToolbar.vue'
@@ -404,17 +404,7 @@ async function renderPageThumbnail(logicalPage: number, canvas: HTMLCanvasElemen
 		const baseViewport = page.getViewport({ scale: 1.0, rotation: pageRotation })
 		const scale = targetWidth / Math.max(1, baseViewport.width)
 		const viewport = page.getViewport({ scale, rotation: pageRotation })
-		canvas.width = Math.floor(viewport.width)
-		canvas.height = Math.floor(viewport.height)
-		const ctx = canvas.getContext('2d')
-		if (!ctx) return
-		ctx.fillStyle = '#ffffff'
-		ctx.fillRect(0, 0, canvas.width, canvas.height)
-		await page.render({
-			canvasContext: ctx,
-			viewport,
-			background: 'rgb(255, 255, 255)',
-		}).promise
+		await renderPdfPageToCanvas(page, canvas, viewport, { applyCssSize: false })
 	} catch {
 		// Ignore thumbnail render errors
 	} finally {
@@ -658,25 +648,11 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 			const viewport = page.getViewport({ scale: effectiveScale.value, rotation: pageRotation })
 
 			canvas = document.createElement('canvas')
-			canvas.width = Math.floor(viewport.width)
-			canvas.height = Math.floor(viewport.height)
 			canvas.className = 'sheetmusic-pdf-page'
 			canvas.style.display = 'block'
 			canvas.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.2)'
 
-			const canvasContext = canvas.getContext('2d')
-			if (canvasContext) {
-				canvasContext.fillStyle = '#ffffff'
-				canvasContext.fillRect(0, 0, canvas.width, canvas.height)
-				const renderTask = page.render({
-					canvasContext,
-					viewport,
-					background: 'rgb(255, 255, 255)',
-				})
-				onRenderTask?.(renderTask)
-				await renderTask.promise
-				onRenderTask?.(null)
-			}
+			await renderPdfPageToCanvas(page, canvas, viewport, { onRenderTask })
 
 			if (renderId === currentRenderId) {
 				placeholder.replaceChildren(canvas)

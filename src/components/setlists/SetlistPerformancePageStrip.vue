@@ -5,7 +5,7 @@ import { translate as t } from '@nextcloud/l10n'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 import { defaultFileBinaryCache } from '../../utils/file-cache'
 import { parsePageOrder } from '../../utils/page-order'
-import { cleanupPdfJsPage, destroyPdfJsDocument, loadPdfJsDocument, releaseChildCanvases } from '../../utils/pdfjs'
+import { cleanupPdfJsPage, destroyPdfJsDocument, loadPdfJsDocument, releaseChildCanvases, renderPdfPageToCanvas } from '../../utils/pdfjs'
 
 export interface SetlistStripSong {
 	itemIndex: number
@@ -153,17 +153,7 @@ async function renderThumbnailForCanvas(canvas: HTMLCanvasElement, song: Setlist
 		const baseViewport = page.getViewport({ scale: 1.0 })
 		const scale = 88 / Math.max(1, baseViewport.width)
 		const viewport = page.getViewport({ scale })
-		canvas.width = Math.floor(viewport.width)
-		canvas.height = Math.floor(viewport.height)
-		const ctx = canvas.getContext('2d')
-		if (!ctx) return
-		ctx.fillStyle = '#ffffff'
-		ctx.fillRect(0, 0, canvas.width, canvas.height)
-		await page.render({
-			canvasContext: ctx,
-			viewport,
-			background: 'rgb(255, 255, 255)',
-		}).promise
+		await renderPdfPageToCanvas(page, canvas, viewport, { applyCssSize: false })
 	} catch {
 		// Ignore thumbnail render error
 	} finally {
