@@ -863,7 +863,15 @@ async function deleteLibrary() {
   border-top: 1px solid var(--color-border);
   margin: 4px 8px;
 }
-.contentError { margin: 16px; color: var(--color-error); }
+.contentError {
+  margin: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--color-error);
+  border-left-width: 4px;
+  border-radius: var(--border-radius-large, 8px);
+  background-color: var(--color-background-hover);
+  color: var(--color-main-text);
+}
 .loadingLibraries { display: flex; align-items: center; justify-content: center; min-height: 240px; }
 .songArea { display: grid; grid-template-columns: minmax(220px, 320px) minmax(0, 1fr); gap: 24px; align-items: start; }
 .songList { margin: 0; padding: 0; list-style: none; }

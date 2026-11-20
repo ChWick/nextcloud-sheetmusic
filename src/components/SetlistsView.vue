@@ -346,6 +346,9 @@ async function handleDeleteSetlist() {
     const deletedId = setlistToDelete.value.id
     await deleteSetlist(deletedId)
     await removeSetlistOffline(props.selectedLibrary, deletedId)
+    if (Number(route.query?.setlist) === deletedId) {
+      clearSetlistQuery()
+    }
     refreshOfflineMap()
     closeDeleteDialog()
   } catch (err: unknown) {
@@ -492,12 +495,17 @@ function clearSetlistQuery() {
 }
 
 async function restoreSetlistFromRouteQuery() {
+  if (!hasSetlistParamInUrl.value) {
+    return
+  }
   const targetId = Number(route.query?.setlist)
   if (!Number.isFinite(targetId) || targetId <= 0) {
+    selectedSetlist.value = null
     return
   }
   const match = setlists.value.find(s => s.id === targetId)
   if (!match) {
+    selectedSetlist.value = null
     return
   }
   await selectSetlist(match)
