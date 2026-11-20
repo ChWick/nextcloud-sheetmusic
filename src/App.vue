@@ -16,6 +16,7 @@ import NcAppContent from '@nextcloud/vue/components/NcAppContent'
 import NcAppNavigationItem from '@nextcloud/vue/components/NcAppNavigationItem'
 import NcContent from '@nextcloud/vue/components/NcContent'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
@@ -697,7 +698,10 @@ async function deleteLibrary() {
           :action-label="libraries.length > 0 ? t('sheetmusic', 'Go to library') : undefined"
           test-id="library-not-found"
           @action="navigateHome" />
-        <template v-else-if="selectedLibrary >= 0">
+        <div v-else-if="selectedLibrary >= 0 && !hasLoadedLibraries" :class="$style.loadingLibraries" data-test="library-loading-state">
+          <NcLoadingIcon :size="36" />
+        </div>
+        <template v-else-if="selectedLibrary >= 0 && currentLibrary">
           <SongsView v-if="selectedView === 'songs' || selectedView === 'new-song'"
                      :selectedLibrary="selectedLibrary"
                      :libraries="libraries"
@@ -860,6 +864,7 @@ async function deleteLibrary() {
   margin: 4px 8px;
 }
 .contentError { margin: 16px; color: var(--color-error); }
+.loadingLibraries { display: flex; align-items: center; justify-content: center; min-height: 240px; }
 .songArea { display: grid; grid-template-columns: minmax(220px, 320px) minmax(0, 1fr); gap: 24px; align-items: start; }
 .songList { margin: 0; padding: 0; list-style: none; }
 .songList li { border-bottom: 1px solid var(--color-border); }
