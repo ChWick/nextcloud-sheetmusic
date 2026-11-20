@@ -8,19 +8,23 @@ import EyeOutlineIcon from 'vue-material-design-icons/EyeOutline.vue'
 import FullscreenIcon from 'vue-material-design-icons/Fullscreen.vue'
 import FullscreenExitIcon from 'vue-material-design-icons/FullscreenExit.vue'
 
-defineProps<{
+withDefaults(defineProps<{
 	visible: boolean
-	setlistName: string
+	setlistName?: string
 	songTitle: string
 	bookmarkName?: string | null
 	itemIndex: number
 	itemCount: number
+	showItemCounter?: boolean
 	showAnnotations: boolean
 	isFullscreen: boolean
 	showSettingsButton: boolean
 	isSettingsOpen: boolean
 	isSetlistOverride: boolean
-}>()
+}>(), {
+	setlistName: '',
+	showItemCounter: true,
+})
 
 const emit = defineEmits<{
 	exit: []
@@ -52,13 +56,13 @@ const emit = defineEmits<{
 
 			<div :class="$style.titleBlock">
 				<div :class="$style.songTitleRow">
-					<span :class="$style.itemCounter">{{ itemIndex + 1 }} / {{ itemCount }}</span>
+					<span v-if="showItemCounter" :class="$style.itemCounter">{{ itemIndex + 1 }} / {{ itemCount }}</span>
 					<strong :class="$style.songTitle">{{ songTitle }}</strong>
 					<span v-if="bookmarkName" :class="$style.bookmarkBadge">
 						{{ bookmarkName }}
 					</span>
 				</div>
-				<span :class="$style.setlistSubtitle">{{ setlistName }}</span>
+				<span v-if="setlistName" :class="$style.setlistSubtitle">{{ setlistName }}</span>
 			</div>
 		</div>
 

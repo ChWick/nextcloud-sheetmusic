@@ -30,16 +30,19 @@ import {
 
 const props = withDefaults(defineProps<{
 	setlistId?: number
-	setlistName: string
+	setlistName?: string
 	items: SetlistItem[]
 	files?: SetlistFile[]
 	songs: Song[]
 	libraryId: number
 	initialIndex?: number
+	preferredFileId?: string | number
 }>(), {
 	setlistId: undefined,
+	setlistName: '',
 	files: () => [],
 	initialIndex: 0,
+	preferredFileId: undefined,
 })
 
 const emit = defineEmits<{
@@ -186,10 +189,16 @@ const currentSongTitle = computed(() => {
 	return currentSong.value?.title || currentItem.value?.songTitle || t('sheetmusic', 'Unknown Song')
 })
 
-function pickPrimaryFile(song: Song | null): SongFile | null {
+const isSingleSongMode = computed(() => !props.setlistId && props.items.length === 1)
+
+function pickPrimaryFile(song: Song | null, preferredFileId?: string | number | null): SongFile | null {
 	if (!song) return null
 	const files = song.files ?? []
 	if (files.length === 0) return null
+	if (preferredFileId !== undefined && preferredFileId !== null && preferredFileId !== '') {
+		const matched = files.find(f => String(f.id) === String(preferredFileId))
+		if (matched) return matched
+	}
 	return files.find(f => f.path?.toLowerCase().endsWith('.pdf'))
 		?? files.find(f => f.isPrimary)
 		?? files[0]
@@ -201,7 +210,7 @@ function buildVersionedPath(file: SongFile | null): string {
 	return getVersionedFileUrl(file.path, getFileVersionToken(file))
 }
 
-const currentFile = computed(() => pickPrimaryFile(currentSong.value))
+const currentFile = computed(() => pickPrimaryFile(currentSong.value, isSingleSongMode.value ? props.preferredFileId : undefined))
 const currentFilePath = computed(() => buildVersionedPath(currentFile.value))
 const currentPageOrder = computed(() => currentFile.value?.pageOrder ?? null)
 const currentTargetPage = computed(() => {
@@ -216,7 +225,7 @@ const currentTargetPage = computed(() => {
 const setlistStripSongs = computed<SetlistStripSong[]>(() => {
 	return props.items.map((item, idx) => {
 		const song = songsById.value.get(item.songId) ?? null
-		const file = pickPrimaryFile(song)
+		const file = pickPrimaryFile(song, isSingleSongMode.value && idx === 0 ? props.preferredFileId : undefined)
 		const filePath = buildVersionedPath(file)
 		const title = song?.title || item.songTitle || t('sheetmusic', 'Unknown Song')
 		const pageCount = file?.pageCount && file.pageCount > 0 ? file.pageCount : 1
@@ -275,14 +284,14 @@ function preloadNextSong() {
 		})
 }
 
-watch(currentSong, async (song) => {
+watch([currentSong, currentFile], async ([song, file]) => {
 	const reqId = ++annotationRequestId
 	if (!song || props.libraryId <= 0) {
 		annotations.value = []
 		return
 	}
 	try {
-		const targetFileId = song.files?.[0]?.fileId ?? song.files?.[0]?.id
+		const targetFileId = file?.fileId ?? file?.id ?? song.files?.[0]?.fileId ?? song.files?.[0]?.id
 		const list = await fetchSongAnnotations(song.id, targetFileId)
 		if (reqId === annotationRequestId) {
 			annotations.value = list
@@ -423,7 +432,7 @@ onUnmounted(() => {
 
 <template>
 	<Teleport to="body">
-		<div ref="rootRef" :class="$style.overlay" role="dialog" aria-modal="true" :aria-label="setlistName">
+		<div ref="rootRef" :class="$style.overlay" role="dialog" aria-modal="true" :aria-label="setlistName || currentSongTitle">
 			<SetlistPerformanceTopBar
 				:visible="isHudVisible"
 				:setlist-name="setlistName"
@@ -431,6 +440,7 @@ onUnmounted(() => {
 				:bookmark-name="currentItem?.bookmarkName"
 				:item-index="currentIndex"
 				:item-count="items.length"
+				:show-item-counter="!isSingleSongMode"
 				:show-annotations="showAnnotations"
 				:is-fullscreen="isFullscreen"
 				:show-settings-button="Boolean(setlistId && setlistId > 0)"
@@ -510,6 +520,7 @@ onUnmounted(() => {
 				:interleave-songs="interleaveSongs"
 				:is-page-picker-open="isPagePickerOpen"
 				:is-drawer-open="isDrawerOpen"
+				:show-setlist-controls="!isSingleSongMode"
 				@prev-song="goToSong(currentIndex - 1, false)"
 				@prev-page="handlePrevPage"
 				@next-page="handleNextPage"
@@ -524,6 +535,7 @@ onUnmounted(() => {
 				@resume-auto-hide="resumeHudAutoHide" />
 
 			<SetlistPerformanceDrawer
+				v-if="!isSingleSongMode"
 				:open="isDrawerOpen"
 				:setlist-name="setlistName"
 				:items="items"

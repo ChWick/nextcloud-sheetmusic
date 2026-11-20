@@ -29,10 +29,12 @@ withDefaults(defineProps<{
 	interleaveSongs?: boolean
 	isPagePickerOpen?: boolean
 	isDrawerOpen?: boolean
+	showSetlistControls?: boolean
 }>(), {
 	interleaveSongs: false,
 	isPagePickerOpen: false,
 	isDrawerOpen: false,
+	showSetlistControls: true,
 })
 
 const emit = defineEmits<{
@@ -61,6 +63,7 @@ const emit = defineEmits<{
 		@focusout="emit('resumeAutoHide')">
 		<div :class="$style.navGroup">
 			<NcButton
+				v-if="showSetlistControls"
 				variant="secondary"
 				size="small"
 				:disabled="!hasPrevSong"
@@ -91,6 +94,7 @@ const emit = defineEmits<{
 				<template #icon><ChevronRightIcon :size="20" /></template>
 			</NcButton>
 			<NcButton
+				v-if="showSetlistControls"
 				variant="secondary"
 				size="small"
 				:disabled="!hasNextSong"
@@ -110,6 +114,7 @@ const emit = defineEmits<{
 				<template #icon><ViewGridOutlineIcon :size="18" /></template>
 			</NcButton>
 			<NcButton
+				v-if="showSetlistControls"
 				:variant="isDrawerOpen ? 'primary' : 'secondary'"
 				size="small"
 				:aria-pressed="isDrawerOpen"
@@ -146,7 +151,7 @@ const emit = defineEmits<{
 				@update:model-value="emit('changeDoublePageTurnMode', $event)" />
 
 			<NcButton
-				v-if="layoutChoice === 'auto' || effectiveLayout === 'double'"
+				v-if="showSetlistControls && (layoutChoice === 'auto' || effectiveLayout === 'double')"
 				:variant="interleaveSongs ? 'primary' : 'secondary'"
 				size="small"
 				:aria-pressed="interleaveSongs"
