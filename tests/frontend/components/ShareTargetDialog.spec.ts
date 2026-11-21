@@ -20,10 +20,12 @@ vi.mock('@nextcloud/dialogs', () => ({
 vi.mock('../../../src/api/client', () => ({
 	apiGet: (...args: unknown[]) => mockApiGet(...args),
 	apiPost: (...args: unknown[]) => mockApiPost(...args),
+	apiDelete: vi.fn().mockResolvedValue({}),
 }))
 
 vi.mock('../../../src/api/setlists', () => ({
 	createSetlist: (...args: unknown[]) => mockCreateSetlist(...args),
+	deleteSetlist: vi.fn().mockResolvedValue(undefined),
 	fetchSetlists: (...args: unknown[]) => mockFetchSetlists(...args),
 	uploadSetlistFile: (...args: unknown[]) => mockUploadSetlistFile(...args),
 }))
