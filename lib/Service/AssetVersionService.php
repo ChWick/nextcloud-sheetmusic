@@ -14,6 +14,7 @@ class AssetVersionService {
 		'js/sheetmusic-main.mjs',
 		'js/sheetmusic-pwa.mjs',
 		'css/sheetmusic-main.css',
+		'css/sheetmusic-pwa.css',
 		'templates/index.php',
 		'resources/pwa-sw.js',
 	];

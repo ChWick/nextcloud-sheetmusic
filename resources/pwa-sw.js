@@ -54,6 +54,7 @@ function isCacheableAppShellRequest(request, url) {
 		url.pathname.includes('/apps/sheetmusic/')
 		|| url.pathname.includes('/apps-extra/sheetmusic/')
 		|| url.pathname.includes('/custom_apps/sheetmusic/')
+		|| url.pathname.includes('/css/sheetmusic/')
 		|| url.pathname.startsWith('/ocs/v2.php/apps/sheetmusic/')
 		|| url.pathname.includes('/apps/theming/')
 		|| url.pathname.includes('/core/')
@@ -70,10 +71,14 @@ function shouldRevalidateEntryRequest(request, url) {
 	if (request.mode === 'navigate') {
 		return true
 	}
+	if (request.destination === 'style' && !url.pathname.includes('.chunk.css')) {
+		return true
+	}
 	return (
 		url.pathname.endsWith('/js/sheetmusic-main.mjs')
 		|| url.pathname.endsWith('/js/sheetmusic-pwa.mjs')
 		|| url.pathname.endsWith('/css/sheetmusic-main.css')
+		|| url.pathname.endsWith('/css/sheetmusic-pwa.css')
 	)
 }
 
@@ -149,6 +154,46 @@ function extractAppShellAssetUrls(html, baseUrl) {
 	return Array.from(urls)
 }
 
+function extractCssImportUrls(cssText, baseUrl) {
+	const urls = new Set()
+	const importRegex = /@import\s+(?:url\(\s*)?["']([^"']+)["']\s*\)?/gi
+	let match
+	while ((match = importRegex.exec(cssText)) !== null) {
+		try {
+			const resolved = new URL(match[1], baseUrl)
+			if (resolved.origin === self.location.origin) {
+				urls.add(resolved.toString())
+			}
+		} catch {
+			// Ignore malformed URLs
+		}
+	}
+	return Array.from(urls)
+}
+
+async function precacheAssetWithCssImports(cache, assetUrl) {
+	const assetRes = await fetch(assetUrl, { credentials: 'include', cache: 'reload' })
+	if (!assetRes || !assetRes.ok) {
+		return
+	}
+	const contentType = assetRes.headers.get('content-type') || ''
+	const isCss = contentType.includes('text/css') || new URL(assetUrl).pathname.endsWith('.css')
+	const cssClone = isCss ? assetRes.clone() : null
+	await cache.put(assetUrl, assetRes)
+
+	if (cssClone) {
+		const importedUrls = extractCssImportUrls(await cssClone.text(), assetUrl)
+		await Promise.allSettled(
+			importedUrls.map(async (importUrl) => {
+				const importRes = await fetch(importUrl, { credentials: 'include', cache: 'reload' })
+				if (importRes && importRes.ok) {
+					await cache.put(importUrl, importRes)
+				}
+			}),
+		)
+	}
+}
+
 async function handleOfflineAwareGet(request, url) {
 	// Versioned PDFs/files pinned in offline setlists can be served cache-first immediately
 	if (isVersionedBinaryUrl(url)) {
@@ -200,12 +245,7 @@ self.addEventListener('install', (event) => {
 				const html = await htmlClone.text()
 				const assetUrls = extractAppShellAssetUrls(html, shellUrl)
 				await Promise.allSettled(
-					assetUrls.map(async (assetUrl) => {
-						const assetRes = await fetch(assetUrl, { credentials: 'include', cache: 'reload' })
-						if (assetRes && assetRes.ok) {
-							await cache.put(assetUrl, assetRes)
-						}
-					}),
+					assetUrls.map((assetUrl) => precacheAssetWithCssImports(cache, assetUrl)),
 				)
 			}
 		} catch {

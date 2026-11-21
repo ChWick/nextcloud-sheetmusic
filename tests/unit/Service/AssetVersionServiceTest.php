@@ -13,6 +13,7 @@ final class AssetVersionServiceTest extends TestCase {
 	protected function setUp(): void {
 		$this->tempDir = sys_get_temp_dir() . '/sheetmusic-asset-version-' . bin2hex(random_bytes(6));
 		mkdir($this->tempDir . '/js', 0755, true);
+		mkdir($this->tempDir . '/css', 0755, true);
 		mkdir($this->tempDir . '/templates', 0755, true);
 	}
 
@@ -43,6 +44,11 @@ final class AssetVersionServiceTest extends TestCase {
 		file_put_contents($this->tempDir . '/templates/index.php', '<div id="sheetmusic" class="updated"></div>');
 		$v3 = (new AssetVersionService($this->tempDir))->getVersion();
 		self::assertNotSame($v2, $v3);
+
+		// Updating CSS entry point also changes the version string
+		file_put_contents($this->tempDir . '/css/sheetmusic-main.css', "@import './main-new.chunk.css';");
+		$v4 = (new AssetVersionService($this->tempDir))->getVersion();
+		self::assertNotSame($v3, $v4);
 	}
 
 	private function removeDirectory(string $dir): void {
