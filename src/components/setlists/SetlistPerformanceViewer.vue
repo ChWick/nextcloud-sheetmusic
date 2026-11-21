@@ -17,6 +17,7 @@ import { useWakeLock } from '../../composables/useWakeLock'
 import type { SheetAnnotation } from '../../types/annotation'
 import type { SetlistFile, SetlistItem, Song, SongFile } from '../../types/song'
 import { defaultFileBinaryCache } from '../../utils/file-cache'
+import { isPdfFile, pickPrimarySongFile } from '../../utils/file'
 import { getFileVersionToken, getVersionedFileUrl } from '../../utils/file-version'
 import type { DoublePageTurnMode } from '../../utils/page-turn'
 import {
@@ -194,17 +195,7 @@ const currentSongTitle = computed(() => {
 const isSingleSongMode = computed(() => !props.setlistId && props.items.length === 1)
 
 function pickPrimaryFile(song: Song | null, preferredFileId?: string | number | null): SongFile | null {
-	if (!song) return null
-	const files = song.files ?? []
-	if (files.length === 0) return null
-	if (preferredFileId !== undefined && preferredFileId !== null && preferredFileId !== '') {
-		const matched = files.find(f => String(f.id) === String(preferredFileId))
-		if (matched) return matched
-	}
-	return files.find(f => f.path?.toLowerCase().endsWith('.pdf'))
-		?? files.find(f => f.isPrimary)
-		?? files[0]
-		?? null
+	return pickPrimarySongFile(song?.files, preferredFileId)
 }
 
 function buildVersionedPath(file: SongFile | null): string {
@@ -269,7 +260,7 @@ function preloadNextSong() {
 	const nextSong = songsById.value.get(nextItem.songId) ?? null
 	const nextFile = pickPrimaryFile(nextSong)
 	const nextPath = buildVersionedPath(nextFile)
-	if (!nextPath || !nextPath.toLowerCase().split('?')[0].endsWith('.pdf')) return
+	if (!nextPath || !isPdfFile(nextPath)) return
 	if (defaultFileBinaryCache.has(nextPath)) return
 
 	axios.get(nextPath, { responseType: 'arraybuffer' })

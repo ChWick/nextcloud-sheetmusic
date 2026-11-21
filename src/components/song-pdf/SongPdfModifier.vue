@@ -13,7 +13,7 @@ import { cleanupPdfJsPage, destroyPdfJsDocument, loadPdfJsDocument, releaseCanva
 import { apiDelete, apiPost } from '../../api/client'
 import { updateSongFile } from '../../api/songFiles'
 import { showError, showInfo, showSuccess } from '@nextcloud/dialogs'
-import { getCacheBustedFileUrl, getFileName } from '../../utils/file'
+import { getCacheBustedFileUrl, getFileName, pickPrimarySongFile } from '../../utils/file'
 import { describeRequestFailure } from '../../utils/api'
 import type { OriginalSongAction } from './OriginalSongActionSelector.vue'
 
@@ -93,14 +93,9 @@ const emit = defineEmits<{
 }>()
 
 // Target PDF file
-const targetFile = computed<SongFile | undefined>(() => {
-	const files = props.song.files ?? []
-	if (props.fileId) {
-		const found = files.find((f) => String(f.id) === String(props.fileId))
-		if (found) return found
-	}
-	return files.find((f) => f.path.toLowerCase().endsWith('.pdf')) ?? files[0]
-})
+const targetFile = computed<SongFile | undefined>(() =>
+	pickPrimarySongFile(props.song.files, props.fileId) ?? undefined,
+)
 
 // State
 type Mode = 'rotate' | 'split' | 'crop' | 'enhance' | 'bookmarks'

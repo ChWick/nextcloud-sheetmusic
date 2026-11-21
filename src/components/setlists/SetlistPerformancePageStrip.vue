@@ -4,6 +4,7 @@ import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 import { defaultFileBinaryCache } from '../../utils/file-cache'
+import { isPdfFile } from '../../utils/file'
 import { parsePageOrder } from '../../utils/page-order'
 import { cleanupPdfJsPage, destroyPdfJsDocument, loadPdfJsDocument, releaseChildCanvases, renderPdfPageToCanvas } from '../../utils/pdfjs'
 
@@ -102,7 +103,7 @@ function getSongPageCount(song: SetlistStripSong): number {
 }
 
 function getPdfDocument(filePath: string): Promise<any | null> {
-	if (!filePath || !filePath.split('?')[0].toLowerCase().endsWith('.pdf')) {
+	if (!isPdfFile(filePath)) {
 		return Promise.resolve(null)
 	}
 	const existing = pdfCache.get(filePath)

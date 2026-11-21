@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { getCacheBustedFileUrl, getFileName, openFileExternally } from '../../../src/utils/file'
+import { formatFileSize, getCacheBustedFileUrl, getFileName, isPdfFile, openFileExternally, pickPrimarySongFile } from '../../../src/utils/file'
 
 describe('file utils', () => {
 	describe('getFileName', () => {
@@ -46,6 +46,39 @@ describe('file utils', () => {
 
 		it('handles empty string gracefully', () => {
 			expect(getCacheBustedFileUrl('')).toBe('')
+		})
+	})
+
+	describe('isPdfFile', () => {
+		it('matches .pdf extensions with or without query parameters and mime types', () => {
+			expect(isPdfFile('/dav/files/admin/Score.PDF')).toBe(true)
+			expect(isPdfFile('/dav/files/admin/Score.pdf?v=123')).toBe(true)
+			expect(isPdfFile('unnamed', 'application/pdf')).toBe(true)
+			expect(isPdfFile('/dav/files/admin/Notes.docx')).toBe(false)
+			expect(isPdfFile(null)).toBe(false)
+		})
+	})
+
+	describe('formatFileSize', () => {
+		it('formats bytes, kilobytes, and megabytes', () => {
+			expect(formatFileSize(500)).toBe('500 B')
+			expect(formatFileSize(1536)).toBe('1.5 KB')
+			expect(formatFileSize(2621440)).toBe('2.5 MB')
+		})
+	})
+
+	describe('pickPrimarySongFile', () => {
+		it('prefers matching fileId, then PDF, then primary, then first', () => {
+			const files = [
+				{ id: 1, path: '/img.png', isPrimary: false },
+				{ id: 2, path: '/score.pdf', isPrimary: false },
+				{ id: 3, path: '/notes.txt', isPrimary: true },
+			] as any[]
+			expect(pickPrimarySongFile(files, 3)?.id).toBe(3)
+			expect(pickPrimarySongFile(files)?.id).toBe(2)
+			expect(pickPrimarySongFile([files[0], files[2]])?.id).toBe(3)
+			expect(pickPrimarySongFile([files[0]])?.id).toBe(1)
+			expect(pickPrimarySongFile([])).toBeNull()
 		})
 	})
 })

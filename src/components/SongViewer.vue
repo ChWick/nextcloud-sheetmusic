@@ -5,7 +5,7 @@ import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import { ensurePdfJsWorker } from '../utils/pdfjs'
-import { openFileExternally } from '../utils/file'
+import { isPdfFile, openFileExternally } from '../utils/file'
 import { getFileVersionToken, getVersionedFileUrl } from '../utils/file-version'
 import ArrowLeftIcon from 'vue-material-design-icons/ArrowLeft.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
@@ -103,10 +103,7 @@ function startPerformanceMode() {
 	isPerformanceMode.value = true
 }
 
-const isSelectedFilePdf = computed(() => {
-	const path = selectedFile.value?.path?.toLowerCase() ?? ''
-	return path.endsWith('.pdf')
-})
+const isSelectedFilePdf = computed(() => isPdfFile(selectedFile.value?.path))
 
 const entityListsProps = computed(() => extractEntityLists(props))
 const songBookmarks = computed(() => props.song?.bookmarks ?? [])

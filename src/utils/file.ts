@@ -1,3 +1,5 @@
+import type { SongFile } from '../types/song'
+
 export function getFileName(filePath: string): string {
 	const clean = filePath.split('?')[0]
 	const raw = clean.split('/').pop() ?? clean
@@ -25,7 +27,23 @@ export function getCacheBustedFileUrl(filePath: string, version?: number | strin
 }
 
 export function isPdfFile(filename?: string | null, mimeType?: string | null): boolean {
-	return Boolean(filename?.toLowerCase().endsWith('.pdf') || mimeType === 'application/pdf')
+	const clean = filename?.split('?')[0].toLowerCase() ?? ''
+	return Boolean(clean.endsWith('.pdf') || mimeType === 'application/pdf')
+}
+
+export function pickPrimarySongFile(
+	files?: SongFile[] | null,
+	preferredFileId?: string | number | null,
+): SongFile | null {
+	if (!files || files.length === 0) return null
+	if (preferredFileId !== undefined && preferredFileId !== null && preferredFileId !== '') {
+		const matched = files.find((f) => String(f.id) === String(preferredFileId))
+		if (matched) return matched
+	}
+	return files.find((f) => isPdfFile(f.path))
+		?? files.find((f) => f.isPrimary)
+		?? files[0]
+		?? null
 }
 
 export function formatFileSize(bytes: number): string {
