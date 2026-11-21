@@ -8,6 +8,7 @@ import Check from 'vue-material-design-icons/Check.vue'
 import CursorDefaultOutline from 'vue-material-design-icons/CursorDefaultOutline.vue'
 import DeleteOutline from 'vue-material-design-icons/DeleteOutline.vue'
 import DeleteSweepOutline from 'vue-material-design-icons/DeleteSweepOutline.vue'
+import DrawPen from 'vue-material-design-icons/DrawPen.vue'
 import Eraser from 'vue-material-design-icons/Eraser.vue'
 import FormatText from 'vue-material-design-icons/FormatText.vue'
 import LinkVariant from 'vue-material-design-icons/LinkVariant.vue'
@@ -18,7 +19,9 @@ import ShapeOutline from 'vue-material-design-icons/ShapeOutline.vue'
 import Undo from 'vue-material-design-icons/Undo.vue'
 import SongAnnotationStampPicker from './SongAnnotationStampPicker.vue'
 import SongAnnotationStyleBar from './SongAnnotationStyleBar.vue'
+import SongAnnotationStylusDialog from './SongAnnotationStylusDialog.vue'
 import ViewportPopover from '../ViewportPopover.vue'
+import { useStylusSettings } from '../../composables/useStylusSettings'
 
 const props = withDefaults(
 	defineProps<{
@@ -53,6 +56,8 @@ const emit = defineEmits<{
 
 const showShapeMenu = ref(false)
 const showStampMenu = ref(false)
+const showStylusDialog = ref(false)
+const { hasCustomCalibration, isTouchDrawingBlocked } = useStylusSettings()
 
 const SHAPE_TOOLS: Array<{ id: EditorTool; label: string; glyph: string }> = [
 	{ id: 'line', label: 'Line', glyph: '╱' },
@@ -252,6 +257,16 @@ function pickStamp(symbol: string) {
 			<div :class="$style.actionGroup">
 				<span v-if="isSaving" :class="$style.savingBadge">{{ t('sheetmusic', 'Saving...') }}</span>
 
+				<button
+					type="button"
+					:class="[$style.toolBtn, (hasCustomCalibration || isTouchDrawingBlocked) && $style.active]"
+					:title="t('sheetmusic', 'Stylus & Pressure Calibration')"
+					:aria-label="t('sheetmusic', 'Stylus & Pressure Calibration')"
+					data-test="annotation-stylus-settings"
+					@click="showStylusDialog = true">
+					<DrawPen :size="18" />
+				</button>
+
 				<ResponsiveNcButton
 					v-for="btn in actionButtons"
 					:key="btn.id"
@@ -265,6 +280,10 @@ function pickStamp(symbol: string) {
 				</ResponsiveNcButton>
 			</div>
 		</div>
+
+		<SongAnnotationStylusDialog
+			v-if="showStylusDialog"
+			@close="showStylusDialog = false" />
 	</div>
 </template>
 

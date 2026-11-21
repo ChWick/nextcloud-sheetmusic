@@ -4,11 +4,15 @@
  */
 
 import { mount } from '@vue/test-utils'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import SongAnnotationOverlay from '../../../src/components/song-viewer/SongAnnotationOverlay.vue'
+import { resetStylusSettingsStateForTests, useStylusSettings } from '../../../src/composables/useStylusSettings'
 import type { SheetAnnotation } from '../../../src/types/annotation'
 
 describe('SongAnnotationOverlay.vue', () => {
+	beforeEach(() => {
+		resetStylusSettingsStateForTests()
+	})
 	const sampleAnnotations: SheetAnnotation[] = [
 		{
 			id: 1,
@@ -460,5 +464,153 @@ describe('SongAnnotationOverlay.vue', () => {
 		const updated = wrapper.emitted('update-annotation')
 		expect(updated).toBeTruthy()
 		expect((updated?.[0]?.[1] as SheetAnnotation).data.aperture).toBe(45)
+	})
+
+	it('renders variable-width filled path for pressure-bearing drawing annotations', () => {
+		const pressureAnn: SheetAnnotation = {
+			id: 12,
+			uuid: 'ann-pressure-1',
+			songId: 10,
+			fileId: 20,
+			pageNumber: 0,
+			type: 'drawing',
+			x: 0.1,
+			y: 0.1,
+			width: 0.3,
+			height: 0.1,
+			style: { stroke: '#1e88e5', strokeWidth: 4, lineStyle: 'solid' },
+			data: {
+				points: [
+					{ x: 0.1, y: 0.1, p: 0.2 },
+					{ x: 0.25, y: 0.15, p: 0.9 },
+					{ x: 0.4, y: 0.12, p: 0.3 },
+				],
+			},
+		}
+
+		const wrapper = mount(SongAnnotationOverlay, {
+			props: {
+				annotations: [pressureAnn],
+				pageNumber: 1,
+				pageWidth: 1000,
+				pageHeight: 1000,
+				visible: true,
+			},
+		})
+
+		const path = wrapper.find('[data-pressure-stroke="true"]')
+		expect(path.exists()).toBe(true)
+		expect(path.attributes('fill')).toBe('#1e88e5')
+		expect(path.attributes('stroke')).toBe('none')
+		expect(path.attributes('d')?.endsWith(' Z')).toBe(true)
+	})
+
+	it('applies calibrated tip offset and captures pen hardware pressure', async () => {
+		const { updateSettings } = useStylusSettings()
+		updateSettings({ offsetX: 10, offsetY: -20, pressureMode: 'hardware', pressureSensitivity: 1 })
+
+		const wrapper = mount(SongAnnotationOverlay, {
+			props: {
+				annotations: [],
+				pageNumber: 1,
+				pageWidth: 1000,
+				pageHeight: 1000,
+				visible: true,
+				editable: true,
+				activeTool: 'drawing',
+			},
+		})
+
+		const svg = wrapper.find('[data-test="annotation-overlay"]')
+		vi.spyOn(svg.element, 'getBoundingClientRect').mockReturnValue({
+			left: 0,
+			top: 0,
+			width: 1000,
+			height: 1000,
+			right: 1000,
+			bottom: 1000,
+			x: 0,
+			y: 0,
+			toJSON: () => ({}),
+		})
+
+		await svg.trigger('pointerdown', {
+			button: 0,
+			pointerType: 'pen',
+			pressure: 0.2,
+			clientX: 100,
+			clientY: 200,
+			pointerId: 1,
+		})
+		await svg.trigger('pointermove', {
+			button: 0,
+			pointerType: 'pen',
+			pressure: 0.8,
+			clientX: 300,
+			clientY: 250,
+			pointerId: 1,
+		})
+		await svg.trigger('pointerup', {
+			button: 0,
+			pointerType: 'pen',
+			pressure: 0.8,
+			clientX: 300,
+			clientY: 250,
+			pointerId: 1,
+		})
+
+		const created = wrapper.emitted('create-annotation')?.[0]?.[0] as SheetAnnotation
+		expect(created).toBeTruthy()
+		expect(created.data.points?.[0].x).toBe(0.11) // (100 + 10) / 1000
+		expect(created.data.points?.[0].y).toBe(0.18) // (200 - 20) / 1000
+		expect(created.data.points?.[0].p).toBeLessThan(created.data.points?.[1].p ?? 0)
+	})
+
+	it('blocks touch drawing when stylus-only palm rejection is enabled', async () => {
+		const { updateSettings } = useStylusSettings()
+		updateSettings({ stylusOnlyDrawing: true })
+
+		const wrapper = mount(SongAnnotationOverlay, {
+			props: {
+				annotations: [],
+				pageNumber: 1,
+				pageWidth: 1000,
+				pageHeight: 1000,
+				visible: true,
+				editable: true,
+				activeTool: 'drawing',
+			},
+		})
+
+		const svg = wrapper.find('[data-test="annotation-overlay"]')
+		expect(svg.classes()).toContain('is-stylus-only')
+
+		await svg.trigger('pointerdown', { button: 0, pointerType: 'touch', clientX: 100, clientY: 100, pointerId: 1 })
+		await svg.trigger('pointermove', { button: 0, pointerType: 'touch', clientX: 200, clientY: 200, pointerId: 1 })
+		await svg.trigger('pointerup', { button: 0, pointerType: 'touch', clientX: 200, clientY: 200, pointerId: 1 })
+
+		expect(wrapper.emitted('create-annotation')).toBeFalsy()
+	})
+
+	it('erases an annotation when using the stylus hardware eraser end', async () => {
+		const wrapper = mount(SongAnnotationOverlay, {
+			props: {
+				annotations: sampleAnnotations,
+				pageNumber: 1,
+				visible: true,
+				editable: true,
+				activeTool: 'drawing',
+			},
+		})
+
+		const stampEl = wrapper.find('[data-test="annotation-stamp"]')
+		await stampEl.trigger('pointerdown', {
+			pointerType: 'pen',
+			button: 5,
+			buttons: 32,
+			pointerId: 1,
+		})
+
+		expect(wrapper.emitted('delete-annotation')?.[0]?.[0]).toMatchObject({ uuid: 'ann-stamp-1' })
 	})
 })

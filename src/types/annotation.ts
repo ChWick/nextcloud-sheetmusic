@@ -30,6 +30,8 @@ export type StampFontKind = 'music' | 'fingering' | 'text'
 export interface NormalizedPoint {
 	x: number
 	y: number
+	/** Optional effective pressure [0..1] for variable-width strokes */
+	p?: number
 }
 
 /**

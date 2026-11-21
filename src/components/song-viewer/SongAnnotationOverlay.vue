@@ -4,6 +4,7 @@ import type { EditorTool, EditorToolStyle } from '../../composables/useAnnotatio
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { getViewBoxHeight, VIEWBOX_WIDTH } from '../../utils/annotation'
 import { useAnnotationPointerInteraction } from '../../composables/useAnnotationPointerInteraction'
+import { useStylusSettings } from '../../composables/useStylusSettings'
 import SongAnnotationItem from './SongAnnotationItem.vue'
 import SongAnnotationSelectionBox from './SongAnnotationSelectionBox.vue'
 import SongAnnotationInlinePopovers from './SongAnnotationInlinePopovers.vue'
@@ -59,6 +60,7 @@ const emit = defineEmits<{
 }>()
 
 const svgRef = ref<SVGSVGElement | null>(null)
+const { isTouchDrawingBlocked } = useStylusSettings()
 
 const vbHeight = computed(() => getViewBoxHeight(props.pageWidth, props.pageHeight))
 const pageIndex = computed(() => Math.max(0, props.pageNumber - 1))
@@ -169,7 +171,7 @@ const cursorClass = computed(() => {
 		<svg
 			ref="svgRef"
 			class="sheetmusic-annotation-overlay"
-			:class="[{ 'is-editable': editable }, cursorClass]"
+			:class="[{ 'is-editable': editable, 'is-stylus-only': editable && isTouchDrawingBlocked }, cursorClass]"
 			data-test="annotation-overlay"
 			:viewBox="`0 0 ${VIEWBOX_WIDTH} ${vbHeight}`"
 			preserveAspectRatio="xMidYMid meet"
@@ -233,6 +235,10 @@ const cursorClass = computed(() => {
 .sheetmusic-annotation-overlay.is-editable {
 	pointer-events: auto;
 	touch-action: none;
+}
+
+.sheetmusic-annotation-overlay.is-stylus-only {
+	touch-action: pan-x pan-y pinch-zoom;
 }
 
 .cursor-crosshair {

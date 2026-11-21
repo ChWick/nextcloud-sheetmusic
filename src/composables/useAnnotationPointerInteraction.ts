@@ -8,14 +8,22 @@ import type { EditorTool, EditorToolStyle } from './useAnnotationEditor'
 import type { PendingLinkEdit, PendingTextEdit } from '../components/song-viewer/SongAnnotationInlinePopovers.vue'
 import { ref } from 'vue'
 import { isShapeTool } from './useAnnotationEditor'
+import { useStylusSettings } from './useStylusSettings'
 import {
 	computeBoundingBoxFromPoints,
 	translateAnnotation,
 	VIEWBOX_WIDTH,
 } from '../utils/annotation'
+import {
+	applyPressureSensitivity,
+	computeVelocityPressure,
+	isStylusEraserEvent,
+	isVaryingHardwarePressureEvent,
+	mapRawPressure,
+} from '../utils/stylus-settings'
 import { getStampDefinition } from '../utils/musicSymbols'
 
-type InteractionKind = 'draw' | 'move' | 'resize' | 'endpoint' | 'height'
+type InteractionKind = 'draw' | 'move' | 'resize' | 'endpoint' | 'height' | 'stylus-erase'
 
 interface InteractionState {
 	kind: InteractionKind
@@ -25,6 +33,13 @@ interface InteractionState {
 	targetBefore?: SheetAnnotation
 	handle?: string
 	moved?: boolean
+	pointerType?: string
+	hasHardwarePressure?: boolean
+	lastClientX?: number
+	lastClientY?: number
+	lastTimeStamp?: number
+	lastPressure?: number
+	erasedUuids?: Set<string>
 }
 
 export interface UseAnnotationPointerInteractionOptions {
@@ -121,6 +136,12 @@ function applyHeightMove(b: SheetAnnotation, pt: NormalizedPoint, vbHeight: numb
  * and inline text/link creation popovers for SongAnnotationOverlay.
  */
 export function useAnnotationPointerInteraction(opts: UseAnnotationPointerInteractionOptions) {
+	const {
+		settings: stylusSettings,
+		isTouchDrawingBlocked,
+		markPenDetected,
+	} = useStylusSettings()
+
 	const interaction = ref<InteractionState | null>(null)
 	const previewAnnotation = ref<SheetAnnotation | null>(null)
 	const hoveredUuid = ref<string | null>(null)
@@ -146,24 +167,96 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 		releaseCapturedPointer(pointerId)
 	}
 
-	function clientToNorm(clientX: number, clientY: number): NormalizedPoint {
+	function adjustClientPoint(clientX: number, clientY: number, pointerType?: string): { x: number; y: number } {
+		if (pointerType === 'pen') {
+			return {
+				x: clientX + stylusSettings.value.offsetX,
+				y: clientY + stylusSettings.value.offsetY,
+			}
+		}
+		return { x: clientX, y: clientY }
+	}
+
+	function clientToNorm(clientX: number, clientY: number, pointerType?: string): NormalizedPoint {
 		const el = opts.svgRef.value
 		if (!el) return { x: 0, y: 0 }
 		const rect = el.getBoundingClientRect()
 		if (rect.width <= 0 || rect.height <= 0) return { x: 0, y: 0 }
-		const x = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width))
-		const y = Math.min(1, Math.max(0, (clientY - rect.top) / rect.height))
+		const adj = adjustClientPoint(clientX, clientY, pointerType)
+		const x = Math.min(1, Math.max(0, (adj.x - rect.left) / rect.width))
+		const y = Math.min(1, Math.max(0, (adj.y - rect.top) / rect.height))
 		return { x: roundNorm(x), y: roundNorm(y) }
 	}
 
-	function findAnnotationUuidFromEvent(e: PointerEvent | MouseEvent): string | null {
-		let target = e.target as HTMLElement | SVGElement | null
+	function shouldCapturePressure(): boolean {
+		if (opts.activeTool.value !== 'drawing') return false
+		if (opts.toolStyle.value.lineStyle !== 'solid') return false
+		return stylusSettings.value.pressureMode !== 'off' && stylusSettings.value.pressureSensitivity > 0
+	}
+
+	function computePointPressure(
+		ev: PointerEvent,
+		state: InteractionState | null,
+	): number | undefined {
+		if (!shouldCapturePressure()) return undefined
+		const cfg = stylusSettings.value
+		const pType = ev.pointerType || state?.pointerType || ''
+		const rawP = typeof ev.pressure === 'number' ? ev.pressure : 0.5
+		const isHardwareVarying = isVaryingHardwarePressureEvent(pType, rawP)
+		if (state && isHardwareVarying) {
+			state.hasHardwarePressure = true
+		}
+		const useHardware = cfg.pressureMode === 'hardware'
+			|| (cfg.pressureMode === 'auto' && pType === 'pen' && (isHardwareVarying || state?.hasHardwarePressure))
+
+		if (useHardware) {
+			if (pType !== 'pen' && cfg.pressureMode === 'hardware') {
+				return undefined
+			}
+			const mapped = mapRawPressure(rawP, cfg)
+			if (state) state.lastPressure = mapped
+			return applyPressureSensitivity(mapped, cfg.pressureSensitivity)
+		}
+
+		if (cfg.pressureMode === 'hardware') {
+			return undefined
+		}
+
+		// Velocity-based simulated pressure ('velocity' mode or 'auto' fallback)
+		if (!state || state.lastClientX === undefined || state.lastClientY === undefined || state.lastTimeStamp === undefined) {
+			const initial = 0.5
+			if (state) state.lastPressure = initial
+			return applyPressureSensitivity(initial, cfg.pressureSensitivity)
+		}
+		const distPx = Math.hypot(ev.clientX - state.lastClientX, ev.clientY - state.lastClientY)
+		const dtMs = Math.max(1, (ev.timeStamp || Date.now()) - state.lastTimeStamp)
+		const velP = computeVelocityPressure(distPx, dtMs, state.lastPressure ?? 0.5)
+		state.lastPressure = velP
+		return applyPressureSensitivity(velP, cfg.pressureSensitivity)
+	}
+
+	function findAnnotationUuidFromElement(el: Element | null): string | null {
+		let target = el as HTMLElement | SVGElement | null
 		while (target && target !== opts.svgRef.value) {
 			const uuid = target.getAttribute?.('data-ann-uuid')
 			if (uuid) return uuid
 			target = target.parentElement
 		}
 		return null
+	}
+
+	function findAnnotationUuidFromEvent(e: PointerEvent | MouseEvent): string | null {
+		return findAnnotationUuidFromElement(e.target as Element | null)
+	}
+
+	function eraseAnnotationByUuid(uuid: string | null, erasedSet?: Set<string>) {
+		if (!uuid) return
+		if (erasedSet?.has(uuid)) return
+		const ann = opts.activeAnnotations.value.find((a) => a.uuid === uuid)
+		if (ann) {
+			erasedSet?.add(uuid)
+			opts.onDelete(ann)
+		}
 	}
 
 	function buildDraftFromTool(
@@ -267,8 +360,19 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 	}
 
 	function onPointerDown(e: PointerEvent) {
-		if (!opts.editable.value || e.button !== 0 || e.ctrlKey || e.metaKey) return
+		if (!opts.editable.value || e.ctrlKey || e.metaKey) return
+
+		if (e.pointerType === 'pen') {
+			markPenDetected()
+		}
+
+		const isHardwareErase = stylusSettings.value.hardwareEraser && isStylusEraserEvent(e)
+		if (e.button !== 0 && !isHardwareErase) return
+
 		if (e.pointerType === 'touch') {
+			if (isTouchDrawingBlocked.value) {
+				return
+			}
 			activeTouchPointers.add(e.pointerId)
 			if (activeTouchPointers.size >= 2) {
 				isMultiTouchGesture = true
@@ -279,7 +383,29 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 		if (isMultiTouchGesture) return
 		if (pendingText.value || pendingLink.value) return
 
-		const pt = clientToNorm(e.clientX, e.clientY)
+		const pt = clientToNorm(e.clientX, e.clientY, e.pointerType)
+
+		if (isHardwareErase) {
+			const adj = adjustClientPoint(e.clientX, e.clientY, e.pointerType)
+			const hitEl = typeof document.elementFromPoint === 'function'
+				? document.elementFromPoint(adj.x, adj.y)
+				: null
+			const hitUuid = findAnnotationUuidFromElement(hitEl) ?? findAnnotationUuidFromEvent(e)
+			const erasedUuids = new Set<string>()
+			eraseAnnotationByUuid(hitUuid, erasedUuids)
+			opts.svgRef.value?.setPointerCapture?.(e.pointerId)
+			capturedPointerId = e.pointerId
+			interaction.value = {
+				kind: 'stylus-erase',
+				startNorm: pt,
+				currentNorm: pt,
+				points: [pt],
+				pointerType: e.pointerType,
+				erasedUuids,
+			}
+			return
+		}
+
 		const targetEl = e.target as HTMLElement | SVGElement | null
 		const handle = targetEl?.getAttribute?.('data-resize-handle')
 
@@ -299,6 +425,7 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 				points: [pt],
 				targetBefore: JSON.parse(JSON.stringify(opts.selectedItem.value)),
 				moved: false,
+				pointerType: e.pointerType,
 			}
 			return
 		}
@@ -306,10 +433,7 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 		const hitUuid = findAnnotationUuidFromEvent(e)
 
 		if (opts.activeTool.value === 'eraser') {
-			if (hitUuid) {
-				const ann = opts.activeAnnotations.value.find((a) => a.uuid === hitUuid)
-				if (ann) opts.onDelete(ann)
-			}
+			eraseAnnotationByUuid(hitUuid)
 			return
 		}
 
@@ -326,6 +450,7 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 						points: [pt],
 						targetBefore: JSON.parse(JSON.stringify(ann)),
 						moved: false,
+						pointerType: e.pointerType,
 					}
 				}
 			} else {
@@ -336,21 +461,35 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 
 		opts.svgRef.value?.setPointerCapture?.(e.pointerId)
 		capturedPointerId = e.pointerId
-		interaction.value = {
+		const state: InteractionState = {
 			kind: 'draw',
 			startNorm: pt,
 			currentNorm: pt,
-			points: [pt],
+			points: [],
 			moved: false,
+			pointerType: e.pointerType,
+			hasHardwarePressure: isVaryingHardwarePressureEvent(e.pointerType, e.pressure),
+			lastClientX: e.clientX,
+			lastClientY: e.clientY,
+			lastTimeStamp: e.timeStamp || Date.now(),
 		}
+		const initialPressure = computePointPressure(e, state)
+		const startPoint: NormalizedPoint = initialPressure !== undefined ? { ...pt, p: initialPressure } : pt
+		state.startNorm = startPoint
+		state.currentNorm = startPoint
+		state.points.push(startPoint)
+		interaction.value = state
 
-		const draft = buildDraftFromTool(pt, pt, [pt])
+		const draft = buildDraftFromTool(startPoint, startPoint, state.points)
 		if (draft) {
 			previewAnnotation.value = { ...draft, uuid: '__draft__', songId: 0, fileId: 0 }
 		}
 	}
 
 	function onPointerMove(e: PointerEvent) {
+		if (e.pointerType === 'pen') {
+			markPenDetected()
+		}
 		if (isMultiTouchGesture) return
 		const state = interaction.value
 		if (!state) {
@@ -362,7 +501,17 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 			return
 		}
 
-		const pt = clientToNorm(e.clientX, e.clientY)
+		if (state.kind === 'stylus-erase') {
+			const adj = adjustClientPoint(e.clientX, e.clientY, e.pointerType)
+			const hitEl = typeof document.elementFromPoint === 'function'
+				? document.elementFromPoint(adj.x, adj.y)
+				: null
+			const hitUuid = findAnnotationUuidFromElement(hitEl) ?? findAnnotationUuidFromEvent(e)
+			eraseAnnotationByUuid(hitUuid, state.erasedUuids)
+			return
+		}
+
+		const pt = clientToNorm(e.clientX, e.clientY, e.pointerType)
 		state.currentNorm = pt
 		if (Math.hypot(pt.x - state.startNorm.x, pt.y - state.startNorm.y) > 0.002) {
 			state.moved = true
@@ -397,9 +546,18 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 		if (state.kind === 'draw') {
 			const tool = opts.activeTool.value
 			if (tool === 'drawing' || tool === 'highlight') {
-				const last = state.points[state.points.length - 1]
-				if (!last || Math.hypot(pt.x - last.x, pt.y - last.y) > 0.002) {
-					state.points.push(pt)
+				const coalesced = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : []
+				const events = coalesced.length > 0 ? coalesced : [e]
+				for (const ev of events) {
+					const evPt = clientToNorm(ev.clientX, ev.clientY, ev.pointerType || e.pointerType)
+					const last = state.points[state.points.length - 1]
+					if (!last || Math.hypot(evPt.x - last.x, evPt.y - last.y) > 0.002) {
+						const p = computePointPressure(ev, state)
+						state.points.push(p !== undefined ? { ...evPt, p } : evPt)
+						state.lastClientX = ev.clientX
+						state.lastClientY = ev.clientY
+						state.lastTimeStamp = ev.timeStamp || Date.now()
+					}
 				}
 			}
 			const draft = buildDraftFromTool(state.startNorm, pt, state.points)
@@ -426,7 +584,11 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 		interaction.value = null
 		releaseCapturedPointer(e.pointerId)
 
-		const pt = clientToNorm(e.clientX, e.clientY)
+		if (state.kind === 'stylus-erase') {
+			return
+		}
+
+		const pt = clientToNorm(e.clientX, e.clientY, e.pointerType)
 		const preview = previewAnnotation.value
 		previewAnnotation.value = null
 

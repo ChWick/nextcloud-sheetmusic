@@ -4,9 +4,11 @@ import {
 	getAnnotationDashArray,
 	getAnnotationDisplaySymbol,
 	getAnnotationPath,
+	getAnnotationPressurePath,
 	getAnnotationTextLayout,
 	getStampFontFamily,
 	getStampRenderPosition,
+	hasPressurePoints,
 	isPathShape,
 	isStampBold,
 	isStampItalic,
@@ -37,6 +39,17 @@ const emit = defineEmits<{
 		<!-- Freehand drawing, highlight (path), or path-based shape (line, arrow, hairpin, slur, bracket) -->
 		<template v-if="item.type === 'drawing' || (item.type === 'highlight' && !item.data?.rect) || isPathShape(item)">
 			<path
+				v-if="hasPressurePoints(item)"
+				:d="getAnnotationPressurePath(item, vbHeight)"
+				:fill="item.style?.stroke || '#e53935'"
+				stroke="none"
+				:opacity="item.style?.opacity ?? 1.0"
+				:style="{ mixBlendMode: item.style?.blendMode || 'normal' }"
+				:data-ann-uuid="item.uuid"
+				data-test="annotation-drawing"
+				data-pressure-stroke="true" />
+			<path
+				v-else
 				:d="getAnnotationPath(item, vbHeight)"
 				:stroke="item.style?.stroke || '#e53935'"
 				:stroke-width="item.style?.strokeWidth || 2.5"
