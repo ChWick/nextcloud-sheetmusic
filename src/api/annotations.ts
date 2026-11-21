@@ -4,10 +4,26 @@
  */
 
 import axios from '@nextcloud/axios'
-import { generateOcsUrl } from '@nextcloud/router'
 import type { SheetAnnotation } from '../types/annotation'
 import { isEffectivelyOffline } from '../composables/useOnlineStatus'
 import { readOfflineCachedJson } from '../utils/offlineSetlists'
+import { ocsDelete, ocsPost, ocsUrl } from './ocs'
+
+interface BatchAnnotationsPayload {
+	upsert?: Array<Partial<SheetAnnotation>>
+	deleteIds?: number[]
+}
+
+interface BatchAnnotationsResult {
+	saved: SheetAnnotation[]
+	deletedIds: number[]
+}
+
+const EMPTY_BATCH_RESULT: BatchAnnotationsResult = { saved: [], deletedIds: [] }
+
+function setlistFileAnnotationsPath(libraryId: number, setlistId: number, fileId: number): string {
+	return `/api/libraries/${libraryId}/setlists/${setlistId}/files/${fileId}/annotations`
+}
 
 async function fetchAnnotationsWithOfflineCache(
 	requestUrl: string,
@@ -34,29 +50,24 @@ async function fetchAnnotationsWithOfflineCache(
 }
 
 export async function fetchSongAnnotations(songId: number, fileId?: number | null): Promise<SheetAnnotation[]> {
-	const baseUrl = generateOcsUrl('/apps/sheetmusic/api/songs/' + songId + '/annotations')
+	const baseUrl = ocsUrl(`/api/songs/${songId}/annotations`)
 	const cacheUrl = fileId ? `${baseUrl}?fileId=${fileId}` : baseUrl
 	return fetchAnnotationsWithOfflineCache(baseUrl, cacheUrl, fileId ? { fileId } : undefined)
 }
 
 export async function saveSongAnnotation(songId: number, annotation: Partial<SheetAnnotation>): Promise<SheetAnnotation> {
-	const url = generateOcsUrl('/apps/sheetmusic/api/songs/' + songId + '/annotations')
-	const response = await axios.post(url, annotation)
-	return response.data?.ocs?.data
+	return (await ocsPost<SheetAnnotation>(`/api/songs/${songId}/annotations`, annotation)) as SheetAnnotation
 }
 
 export async function batchSongAnnotations(
 	songId: number,
-	payload: { upsert?: Array<Partial<SheetAnnotation>>; deleteIds?: number[] },
-): Promise<{ saved: SheetAnnotation[]; deletedIds: number[] }> {
-	const url = generateOcsUrl('/apps/sheetmusic/api/songs/' + songId + '/annotations/batch')
-	const response = await axios.post(url, payload)
-	return response.data?.ocs?.data ?? { saved: [], deletedIds: [] }
+	payload: BatchAnnotationsPayload,
+): Promise<BatchAnnotationsResult> {
+	return (await ocsPost<BatchAnnotationsResult>(`/api/songs/${songId}/annotations/batch`, payload)) ?? { ...EMPTY_BATCH_RESULT }
 }
 
 export async function deleteSongAnnotation(annotationId: number): Promise<void> {
-	const url = generateOcsUrl('/apps/sheetmusic/api/annotations/' + annotationId)
-	await axios.delete(url)
+	await ocsDelete(`/api/annotations/${annotationId}`)
 }
 
 export async function fetchSetlistFileAnnotations(
@@ -64,9 +75,7 @@ export async function fetchSetlistFileAnnotations(
 	setlistId: number,
 	fileId: number,
 ): Promise<SheetAnnotation[]> {
-	const url = generateOcsUrl(
-		`/apps/sheetmusic/api/libraries/${libraryId}/setlists/${setlistId}/files/${fileId}/annotations`,
-	)
+	const url = ocsUrl(setlistFileAnnotationsPath(libraryId, setlistId, fileId))
 	return fetchAnnotationsWithOfflineCache(url, url)
 }
 
@@ -76,22 +85,14 @@ export async function saveSetlistFileAnnotation(
 	fileId: number,
 	annotation: Partial<SheetAnnotation>,
 ): Promise<SheetAnnotation> {
-	const url = generateOcsUrl(
-		`/apps/sheetmusic/api/libraries/${libraryId}/setlists/${setlistId}/files/${fileId}/annotations`,
-	)
-	const response = await axios.post(url, annotation)
-	return response.data?.ocs?.data
+	return (await ocsPost<SheetAnnotation>(setlistFileAnnotationsPath(libraryId, setlistId, fileId), annotation)) as SheetAnnotation
 }
 
 export async function batchSetlistFileAnnotations(
 	libraryId: number,
 	setlistId: number,
 	fileId: number,
-	payload: { upsert?: Array<Partial<SheetAnnotation>>; deleteIds?: number[] },
-): Promise<{ saved: SheetAnnotation[]; deletedIds: number[] }> {
-	const url = generateOcsUrl(
-		`/apps/sheetmusic/api/libraries/${libraryId}/setlists/${setlistId}/files/${fileId}/annotations/batch`,
-	)
-	const response = await axios.post(url, payload)
-	return response.data?.ocs?.data ?? { saved: [], deletedIds: [] }
+	payload: BatchAnnotationsPayload,
+): Promise<BatchAnnotationsResult> {
+	return (await ocsPost<BatchAnnotationsResult>(`${setlistFileAnnotationsPath(libraryId, setlistId, fileId)}/batch`, payload)) ?? { ...EMPTY_BATCH_RESULT }
 }
