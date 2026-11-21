@@ -1,12 +1,6 @@
 import { mount } from '@vue/test-utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import ConfirmDeleteDialog from '../../../src/components/ConfirmDeleteDialog.vue'
-
-vi.mock('@nextcloud/l10n', () => ({
-	translate: (_app: string, text: string) => text,
-	getLanguage: () => 'en',
-	isRTL: () => false,
-}))
 
 describe('ConfirmDeleteDialog.vue', () => {
 	beforeEach(() => {

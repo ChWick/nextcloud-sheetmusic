@@ -1,23 +1,8 @@
 import type { SongFile } from '../../../src/types/song'
 
 import { mount } from '@vue/test-utils'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import SongFileSection from '../../../src/components/song-editor/SongFileSection.vue'
-
-vi.mock('@nextcloud/l10n', () => ({
-	translate: (_app: string, text: string) => text,
-}))
-
-vi.mock('../../../src/components/song-editor/SongFileListItem.vue', () => ({
-	default: {
-		template: '<li>{{ file.path }}</li>',
-		props: ['file', 'disabled'],
-	},
-}))
-
-vi.mock('../../../src/components/song-editor/SongPendingNotice.vue', () => ({
-	default: { template: '<div />' },
-}))
 
 describe('SongFileSection.vue', () => {
 	const props = {

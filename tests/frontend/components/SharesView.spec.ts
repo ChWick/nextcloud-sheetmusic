@@ -20,10 +20,6 @@ vi.mock('@nextcloud/dialogs', () => ({
 	showError: vi.fn(),
 }))
 
-vi.mock('@nextcloud/l10n', () => ({
-	translate: vi.fn((_app: string, text: string) => text),
-}))
-
 vi.mock('@nextcloud/vue/components/NcButton', () => ({
 	default: {
 		name: 'NcButton',
@@ -45,21 +41,6 @@ vi.mock('@nextcloud/vue/components/NcActionButton', () => ({
 		name: 'NcActionButton',
 		emits: ['click'],
 		template: '<button type="button" class="nc-action-button" @click="$emit(\'click\')"><slot /><slot name="icon" /></button>',
-	},
-}))
-
-vi.mock('@nextcloud/vue/components/NcLoadingIcon', () => ({
-	default: {
-		name: 'NcLoadingIcon',
-		template: '<div class="nc-loading-icon" />',
-	},
-}))
-
-vi.mock('../../../src/components/ViewHeader.vue', () => ({
-	default: {
-		name: 'ViewHeader',
-		props: ['title'],
-		template: '<header><h1>{{ title }}</h1><slot /></header>',
 	},
 }))
 

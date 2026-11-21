@@ -1,33 +1,20 @@
+import axios from '@nextcloud/axios'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import ShareTargetDialog from '../../../src/components/ShareTargetDialog.vue'
 
-const mockApiGet = vi.fn()
-const mockApiPost = vi.fn()
-const mockCreateSetlist = vi.fn()
-const mockFetchSetlists = vi.fn()
-const mockUploadSetlistFile = vi.fn()
 const mockShowSuccess = vi.fn()
 
-vi.mock('@nextcloud/l10n', () => ({
-	translate: (_app: string, text: string) => text,
+vi.mock('@nextcloud/axios', () => ({
+	default: {
+		get: vi.fn(),
+		post: vi.fn(),
+		delete: vi.fn(),
+	},
 }))
 
 vi.mock('@nextcloud/dialogs', () => ({
 	showSuccess: (...args: unknown[]) => mockShowSuccess(...args),
-}))
-
-vi.mock('../../../src/api/client', () => ({
-	apiGet: (...args: unknown[]) => mockApiGet(...args),
-	apiPost: (...args: unknown[]) => mockApiPost(...args),
-	apiDelete: vi.fn().mockResolvedValue({}),
-}))
-
-vi.mock('../../../src/api/setlists', () => ({
-	createSetlist: (...args: unknown[]) => mockCreateSetlist(...args),
-	deleteSetlist: vi.fn().mockResolvedValue(undefined),
-	fetchSetlists: (...args: unknown[]) => mockFetchSetlists(...args),
-	uploadSetlistFile: (...args: unknown[]) => mockUploadSetlistFile(...args),
 }))
 
 vi.mock('@nextcloud/vue', () => ({
@@ -72,30 +59,42 @@ function findButton(wrapper: ReturnType<typeof mount>, text: string) {
 describe('ShareTargetDialog.vue', () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
-		mockApiGet.mockResolvedValue({
-			data: {
-				ocs: {
+		vi.mocked(axios.get).mockImplementation(async (url: string) => {
+			if (url.includes('/setlists')) {
+				return {
 					data: {
-						songs: [
-							{ id: 42, title: 'Existing Piece', composers: [{ id: 1, name: 'Debussy' }] },
-							{ id: 43, title: 'Another Song', composers: [] },
-						],
+						ocs: {
+							data: [
+								{ id: 7, name: 'Sunday Service' },
+								{ id: 8, name: 'Christmas Concert' },
+							],
+						},
+					},
+				} as any
+			}
+			return {
+				data: {
+					ocs: {
+						data: {
+							songs: [
+								{ id: 42, title: 'Existing Piece', composers: [{ id: 1, name: 'Debussy' }] },
+								{ id: 43, title: 'Another Song', composers: [] },
+							],
+						},
 					},
 				},
-			},
+			} as any
 		})
-		mockFetchSetlists.mockResolvedValue([
-			{ id: 7, name: 'Sunday Service' },
-			{ id: 8, name: 'Christmas Concert' },
-		])
-		mockCreateSetlist.mockResolvedValue({ id: 55, name: 'Order of Service' })
-		mockApiPost.mockImplementation((path: string) => {
-			if (path === '/api/songs') {
-				return Promise.resolve({ data: { ocs: { data: { createdSongId: 99 } } } })
+		vi.mocked(axios.post).mockImplementation(async (url: string) => {
+			if (url.endsWith('/api/songs')) {
+				return { data: { ocs: { data: { createdSongId: 99 } } } } as any
 			}
-			return Promise.resolve({ data: { ocs: { data: {} } } })
+			if (url.endsWith('/api/setlists')) {
+				return { data: { ocs: { data: { id: 55, name: 'Order of Service' } } } } as any
+			}
+			return { data: { ocs: { data: { id: 12 } } } } as any
 		})
-		mockUploadSetlistFile.mockResolvedValue({ id: 12 })
+		vi.mocked(axios.delete).mockResolvedValue({ data: { ocs: { data: {} } } } as any)
 	})
 
 	it('displays library paths on step 1, preselects single library, and creates a new song', async () => {
@@ -124,14 +123,13 @@ describe('ShareTargetDialog.vue', () => {
 		await findButton(wrapper, 'Import').trigger('click')
 		await flushPromises()
 
-		expect(mockApiPost).toHaveBeenCalledWith('/api/songs', {
-			libraryId: 1,
-			title: 'Clair de Lune',
-		})
-		expect(mockApiPost).toHaveBeenCalledWith(
-			'/api/libraries/{libraryId}/songs/{id}/file/upload',
+		expect(axios.post).toHaveBeenCalledWith(
+			expect.stringContaining('/api/songs'),
+			{ libraryId: 1, title: 'Clair de Lune' },
+		)
+		expect(axios.post).toHaveBeenCalledWith(
+			expect.stringContaining('/api/libraries/1/songs/99/file/upload'),
 			expect.any(FormData),
-			{ pathParams: { libraryId: 1, id: 99 } },
 		)
 		expect(wrapper.emitted('imported')?.[0]).toEqual([
 			{ targetType: 'new-song', libraryId: 1, songId: 99 },
@@ -169,10 +167,9 @@ describe('ShareTargetDialog.vue', () => {
 		await findButton(wrapper, 'Import').trigger('click')
 		await flushPromises()
 
-		expect(mockApiPost).toHaveBeenCalledWith(
-			'/api/libraries/{libraryId}/songs/{id}/file/upload',
+		expect(axios.post).toHaveBeenCalledWith(
+			expect.stringContaining('/api/libraries/2/songs/43/file/upload'),
 			expect.any(FormData),
-			{ pathParams: { libraryId: 2, id: 43 } },
 		)
 		expect(wrapper.emitted('imported')?.[0]).toEqual([
 			{ targetType: 'existing-song', libraryId: 2, songId: 43 },
@@ -205,7 +202,11 @@ describe('ShareTargetDialog.vue', () => {
 		await findButton(wrapper, 'Import').trigger('click')
 		await flushPromises()
 
-		expect(mockUploadSetlistFile).toHaveBeenCalledWith(1, 8, docxFile)
+		expect(axios.post).toHaveBeenCalledWith(
+			expect.stringContaining('/api/libraries/1/setlists/8/files'),
+			expect.any(FormData),
+			expect.objectContaining({ headers: { 'Content-Type': 'multipart/form-data' } }),
+		)
 		expect(wrapper.emitted('imported')?.[0]).toEqual([
 			{ targetType: 'setlist-file', libraryId: 1, setlistId: 8 },
 		])
@@ -235,8 +236,15 @@ describe('ShareTargetDialog.vue', () => {
 		await findButton(wrapper, 'Import').trigger('click')
 		await flushPromises()
 
-		expect(mockCreateSetlist).toHaveBeenCalledWith(1, 'Order of Service')
-		expect(mockUploadSetlistFile).toHaveBeenCalledWith(1, 55, docxFile)
+		expect(axios.post).toHaveBeenCalledWith(
+			expect.stringContaining('/api/setlists'),
+			{ libraryId: 1, name: 'Order of Service' },
+		)
+		expect(axios.post).toHaveBeenCalledWith(
+			expect.stringContaining('/api/libraries/1/setlists/55/files'),
+			expect.any(FormData),
+			expect.objectContaining({ headers: { 'Content-Type': 'multipart/form-data' } }),
+		)
 		expect(wrapper.emitted('imported')?.[0]).toEqual([
 			{ targetType: 'new-setlist', libraryId: 1, setlistId: 55 },
 		])

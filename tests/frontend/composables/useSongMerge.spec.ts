@@ -2,14 +2,10 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { ref } from 'vue'
 import { useSongMerge } from '../../../src/composables/useSongMerge'
 import axios from '@nextcloud/axios'
-import * as client from '../../../src/api/client'
 import * as dialogs from '@nextcloud/dialogs'
 import type { Song } from '../../../src/types/song'
 
 vi.mock('@nextcloud/axios')
-vi.mock('../../../src/api/client', () => ({
-	apiPost: vi.fn(),
-}))
 vi.mock('@nextcloud/dialogs', () => ({
 	showSuccess: vi.fn(),
 	showError: vi.fn(),
@@ -95,7 +91,7 @@ describe('useSongMerge composable', () => {
 
 	it('executes resolveBoth successfully', async () => {
 		const mockUpdatedData = { songs: [{ id: 10, title: 'Song 1' }, { id: 20, title: 'Song 2' }] }
-		vi.mocked(client.apiPost).mockResolvedValueOnce({
+		vi.mocked(axios.post).mockResolvedValueOnce({
 			data: { ocs: { data: mockUpdatedData } },
 		} as any)
 

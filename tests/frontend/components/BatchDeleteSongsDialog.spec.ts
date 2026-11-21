@@ -4,19 +4,6 @@ import { showError } from '@nextcloud/dialogs'
 import BatchDeleteSongsDialog from '../../../src/components/BatchDeleteSongsDialog.vue'
 import * as client from '../../../src/api/client'
 
-vi.mock('@nextcloud/l10n', () => ({
-	translate: (_app: string, text: string, vars?: Record<string, any>) => {
-		if (!vars) return text
-		let res = text
-		for (const [k, v] of Object.entries(vars)) {
-			res = res.replace(`{${k}}`, String(v))
-		}
-		return res
-	},
-	getLanguage: () => 'en',
-	isRTL: () => false,
-}))
-
 vi.mock('@nextcloud/dialogs', () => ({
 	showError: vi.fn(),
 	showSuccess: vi.fn(),

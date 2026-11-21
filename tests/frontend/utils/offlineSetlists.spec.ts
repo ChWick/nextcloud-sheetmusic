@@ -1,4 +1,6 @@
+import axios from '@nextcloud/axios'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { ocsUrl } from '../../../src/api/ocs'
 import {
 	getOfflineSetlistMap,
 	isOfflineSetlistsSupported,
@@ -9,23 +11,10 @@ import {
 	syncSetlistOffline,
 } from '../../../src/utils/offlineSetlists'
 
-const mockFetchSetlist = vi.fn()
-const mockFetchSetlistFiles = vi.fn()
-const mockApiGet = vi.fn()
-
-vi.mock('../../../src/api/client', () => ({
-	apiGet: (...args: unknown[]) => mockApiGet(...args),
-}))
-
-vi.mock('@nextcloud/router', () => ({
-	generateOcsUrl: (path: string) => `/ocs/v2.php${path}`,
-}))
-
-vi.mock('../../../src/api/setlists', () => ({
-	fetchSetlist: (...args: unknown[]) => mockFetchSetlist(...args),
-	fetchSetlistFiles: (...args: unknown[]) => mockFetchSetlistFiles(...args),
-	getSetlistFileContentUrl: (_libId: number, setlistId: number, fileId: number, version?: number) =>
-		`/ocs/v2.php/apps/sheetmusic/api/libraries/1/setlists/${setlistId}/files/${fileId}/content${version ? `?v=${version}` : ''}`,
+vi.mock('@nextcloud/axios', () => ({
+	default: {
+		get: vi.fn(),
+	},
 }))
 
 describe('offlineSetlists', () => {
@@ -71,14 +60,27 @@ describe('offlineSetlists', () => {
 	})
 
 	it('caches all song PDFs, song annotations, setlist files, and setlist file annotations', async () => {
-		mockFetchSetlist.mockResolvedValue({
-			id: 7,
-			name: 'Sunday Service',
-			items: [{ id: 1, songId: 42, position: 0 }],
+		vi.mocked(axios.get).mockImplementation(async (url: string) => {
+			if (url.endsWith('/api/libraries/1/setlists/7')) {
+				return {
+					data: {
+						ocs: {
+							data: {
+								id: 7,
+								name: 'Sunday Service',
+								items: [{ id: 1, songId: 42, position: 0 }],
+							},
+						},
+					},
+				} as any
+			}
+			if (url.endsWith('/api/libraries/1/setlists/7/files')) {
+				return {
+					data: { ocs: { data: [{ id: 9, filename: 'Notes.pdf', updatedAt: 123 }] } },
+				} as any
+			}
+			return { data: { ocs: { data: {} } } } as any
 		})
-		mockFetchSetlistFiles.mockResolvedValue([
-			{ id: 9, filename: 'Notes.pdf', updatedAt: 123 },
-		])
 
 		const songs = [
 			{
@@ -99,20 +101,27 @@ describe('offlineSetlists', () => {
 		expect(record.fileCount).toBe(2)
 		expect(isSetlistAvailableOffline(1, 7)).toBe(true)
 		expect(cacheStore.has('/remote.php/dav/files/admin/Sonata.pdf?v=100%40456')).toBe(true)
-		expect(cacheStore.has('/ocs/v2.php/apps/sheetmusic/api/songs/42/annotations?fileId=100')).toBe(true)
-		expect(cacheStore.has('/ocs/v2.php/apps/sheetmusic/api/libraries/1/setlists/7/files/9/content?v=123')).toBe(true)
-		expect(cacheStore.has('/ocs/v2.php/apps/sheetmusic/api/libraries/1/setlists/7/files/9/annotations')).toBe(true)
+		expect(cacheStore.has(`${ocsUrl('/api/songs/42/annotations')}?fileId=100`)).toBe(true)
+		expect(cacheStore.has(`${ocsUrl('/api/libraries/1/setlists/7/files/9/content')}?v=123`)).toBe(true)
+		expect(cacheStore.has(ocsUrl('/api/libraries/1/setlists/7/files/9/annotations'))).toBe(true)
 		expect(progressCalls[0][0]).toBe(0)
 		expect(progressCalls[progressCalls.length - 1][0]).toBe(progressCalls[progressCalls.length - 1][1])
 	})
 
 	it('preserves shared URLs when removing one of two offline setlists', async () => {
-		mockFetchSetlist.mockResolvedValue({
-			id: 7,
-			name: 'Setlist A',
-			items: [{ id: 1, songId: 42, position: 0 }],
+		vi.mocked(axios.get).mockImplementation(async (url: string) => {
+			if (url.endsWith('/api/libraries/1/setlists/7')) {
+				return {
+					data: { ocs: { data: { id: 7, name: 'Setlist A', items: [{ id: 1, songId: 42, position: 0 }] } } },
+				} as any
+			}
+			if (url.endsWith('/api/libraries/1/setlists/8')) {
+				return {
+					data: { ocs: { data: { id: 8, name: 'Setlist B', items: [{ id: 2, songId: 42, position: 0 }] } } },
+				} as any
+			}
+			return { data: { ocs: { data: [] } } } as any
 		})
-		mockFetchSetlistFiles.mockResolvedValue([])
 
 		const songs = [
 			{
@@ -123,11 +132,6 @@ describe('offlineSetlists', () => {
 		] as any[]
 
 		await syncSetlistOffline({ libraryId: 1, setlistId: 7, songs })
-		mockFetchSetlist.mockResolvedValue({
-			id: 8,
-			name: 'Setlist B',
-			items: [{ id: 2, songId: 42, position: 0 }],
-		})
 		await syncSetlistOffline({ libraryId: 1, setlistId: 8, songs })
 
 		await removeSetlistOffline(1, 7)
@@ -149,25 +153,27 @@ describe('offlineSetlists', () => {
 			},
 		] as any[]
 
-		mockFetchSetlist.mockResolvedValue({
-			id: 7,
-			name: 'Sunday Service',
-			items: [{ id: 1, songId: 42, position: 0 }],
+		vi.mocked(axios.get).mockImplementation(async (url: string) => {
+			if (url.endsWith('/api/libraries/1/setlists/7')) {
+				return {
+					data: { ocs: { data: { id: 7, name: 'Sunday Service', items: [{ id: 1, songId: 42, position: 0 }] } } },
+				} as any
+			}
+			if (url.endsWith('/api/libraries/1/setlists/7/files')) {
+				return { data: { ocs: { data: [] } } } as any
+			}
+			return { data: { ocs: { data: { songs } } } } as any
 		})
-		mockFetchSetlistFiles.mockResolvedValue([])
+
 		await syncSetlistOffline({ libraryId: 1, setlistId: 7, songs })
 
 		const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>
 		fetchMock.mockClear()
 
-		mockApiGet.mockResolvedValue({
-			data: { ocs: { data: { songs } } },
-		})
-
 		await syncAllOfflineSetlists()
 
 		const fetchedUrls = fetchMock.mock.calls.map(c => c[0] as string)
 		expect(fetchedUrls).not.toContain('/remote.php/dav/files/admin/Sonata.pdf?v=100%40456')
-		expect(fetchedUrls).toContain('/ocs/v2.php/apps/sheetmusic/api/songs/42/annotations?fileId=100')
+		expect(fetchedUrls).toContain(`${ocsUrl('/api/songs/42/annotations')}?fileId=100`)
 	})
 })
