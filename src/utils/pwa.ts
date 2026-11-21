@@ -1,5 +1,6 @@
 import { generateUrl } from '@nextcloud/router'
 import {
+	attachServiceWorkerUpdateChecks,
 	getAppShellCacheName,
 	syncAppVersionAndReloadIfNeeded,
 	watchServiceWorkerUpdate,
@@ -151,9 +152,13 @@ export async function registerPwaServiceWorker(): Promise<ServiceWorkerRegistrat
 	try {
 		watchServiceWorkerUpdate()
 		const swUrl = generateUrl('/apps/sheetmusic/sw.js')
-		const reg = await navigator.serviceWorker.register(swUrl, { scope: '/' })
+		const reg = await navigator.serviceWorker.register(swUrl, {
+			scope: '/',
+			updateViaCache: 'none',
+		})
 		if (typeof reg.update === 'function') {
 			void reg.update().catch(() => {})
+			attachServiceWorkerUpdateChecks(reg)
 		}
 		const reloaded = await syncAppVersionAndReloadIfNeeded()
 		if (!reloaded) {

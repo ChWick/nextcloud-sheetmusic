@@ -1,6 +1,7 @@
 export const APP_SHELL_CACHE_PREFIX = 'sheetmusic-app-shell-'
 export const APP_VERSION_STORAGE_KEY = 'sheetmusic_app_version'
 export const APP_RELOAD_GUARD_KEY = 'sheetmusic_reloaded_version'
+export const SW_UPDATE_THROTTLE_MS = 5 * 60 * 1000
 
 /**
  * Reads the server-injected asset version hash from the mount element.
@@ -116,4 +117,45 @@ export function watchServiceWorkerUpdate(
 
 export function resetServiceWorkerWatcherForTest(): void {
 	swControllerListenerAttached = false
+}
+
+/**
+ * Periodically re-checks for a newer Service Worker when a long-lived tab or
+ * installed PWA returns to the foreground (throttled) or comes back online.
+ */
+export function attachServiceWorkerUpdateChecks(
+	reg: Pick<ServiceWorkerRegistration, 'update'>,
+	throttleMs = SW_UPDATE_THROTTLE_MS,
+): () => void {
+	if (typeof reg.update !== 'function' || typeof window === 'undefined' || typeof document === 'undefined') {
+		return () => {}
+	}
+
+	let lastCheckedAt = Date.now()
+	const checkForUpdate = (force = false) => {
+		if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+			return
+		}
+		const now = Date.now()
+		if (!force && now - lastCheckedAt < throttleMs) {
+			return
+		}
+		lastCheckedAt = now
+		void reg.update().catch(() => {})
+	}
+
+	const onVisibilityChange = () => {
+		if (document.visibilityState === 'visible') {
+			checkForUpdate(false)
+		}
+	}
+	const onOnline = () => checkForUpdate(true)
+
+	document.addEventListener('visibilitychange', onVisibilityChange)
+	window.addEventListener('online', onOnline)
+
+	return () => {
+		document.removeEventListener('visibilitychange', onVisibilityChange)
+		window.removeEventListener('online', onOnline)
+	}
 }

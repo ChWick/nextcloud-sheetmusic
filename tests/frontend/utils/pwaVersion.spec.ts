@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
 	APP_RELOAD_GUARD_KEY,
 	APP_VERSION_STORAGE_KEY,
+	attachServiceWorkerUpdateChecks,
 	getAppAssetVersion,
 	getAppShellCacheName,
 	purgeStaleAppShellCaches,
@@ -107,5 +108,38 @@ describe('pwaVersion utils', () => {
 		controllerChangeCb?.()
 
 		expect(reload).toHaveBeenCalledTimes(1)
+	})
+
+	it('triggers throttled SW update checks on visibilitychange and immediate checks on online', () => {
+		vi.useFakeTimers()
+		const update = vi.fn().mockResolvedValue(undefined)
+		const cleanup = attachServiceWorkerUpdateChecks({ update }, 60_000)
+
+		Object.defineProperty(document, 'visibilityState', {
+			configurable: true,
+			value: 'visible',
+		})
+
+		// Within throttle window: skipped
+		document.dispatchEvent(new Event('visibilitychange'))
+		expect(update).not.toHaveBeenCalled()
+
+		// After throttle window: triggers update
+		vi.advanceTimersByTime(60_000)
+		document.dispatchEvent(new Event('visibilitychange'))
+		expect(update).toHaveBeenCalledTimes(1)
+
+		// Online event triggers immediately regardless of throttle
+		window.dispatchEvent(new Event('online'))
+		expect(update).toHaveBeenCalledTimes(2)
+
+		// Cleanup removes listeners
+		cleanup()
+		vi.advanceTimersByTime(60_000)
+		document.dispatchEvent(new Event('visibilitychange'))
+		window.dispatchEvent(new Event('online'))
+		expect(update).toHaveBeenCalledTimes(2)
+
+		vi.useRealTimers()
 	})
 })

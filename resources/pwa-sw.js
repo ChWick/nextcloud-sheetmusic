@@ -66,6 +66,17 @@ function isVersionedBinaryUrl(url) {
 		&& url.searchParams.has('v')
 }
 
+function shouldRevalidateEntryRequest(request, url) {
+	if (request.mode === 'navigate') {
+		return true
+	}
+	return (
+		url.pathname.endsWith('/js/sheetmusic-main.mjs')
+		|| url.pathname.endsWith('/js/sheetmusic-pwa.mjs')
+		|| url.pathname.endsWith('/css/sheetmusic-main.css')
+	)
+}
+
 function toCleanNavigationResponse(response) {
 	if (!response || !response.redirected) {
 		return response
@@ -149,7 +160,9 @@ async function handleOfflineAwareGet(request, url) {
 	}
 
 	try {
-		const networkResponse = await fetch(request)
+		const networkResponse = shouldRevalidateEntryRequest(request, url)
+			? await fetch(request, { cache: 'no-cache' })
+			: await fetch(request)
 		if (networkResponse && networkResponse.ok && !networkResponse.url.includes('/login')) {
 			if (isCacheableAppShellRequest(request, url)) {
 				const shellCache = await caches.open(APP_SHELL_CACHE)

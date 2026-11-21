@@ -107,6 +107,7 @@ describe('pwa utils', () => {
 		const result = await registerPwaServiceWorker()
 		expect(register).toHaveBeenCalledWith('/index.php/apps/sheetmusic/sw.js', {
 			scope: '/',
+			updateViaCache: 'none',
 		})
 		expect(result).toBe(fakeReg)
 	})
