@@ -12,7 +12,7 @@ import FormatListNumbered from 'vue-material-design-icons/FormatListNumbered.vue
 import MusicIcon from 'vue-material-design-icons/Music.vue'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import { getCacheBustedFileUrl, getFileName, isPdfFile } from '../../utils/file'
+import { getCacheBustedFileUrl, getFileName, isImageFile, isPdfFile } from '../../utils/file'
 
 const props = defineProps<{
 	file: SongFile
@@ -28,10 +28,7 @@ const emit = defineEmits<{
 
 const thumbnailContainer = ref<HTMLElement>()
 const isPdf = computed(() => isPdfFile(props.file.path))
-const isImage = computed(() => {
-	const path = props.file.path.toLowerCase()
-	return path.endsWith('.png') || path.endsWith('.jpg') || path.endsWith('.jpeg') || path.endsWith('.webp') || path.endsWith('.gif') || path.endsWith('.svg') || path.endsWith('.bmp')
-})
+const isImage = computed(() => isImageFile(props.file.path))
 const isAudio = computed(() => {
 	const path = props.file.path.toLowerCase()
 	return path.endsWith('.mp3') || path.endsWith('.wav') || path.endsWith('.ogg') || path.endsWith('.flac') || path.endsWith('.mid') || path.endsWith('.midi')

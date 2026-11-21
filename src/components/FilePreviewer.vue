@@ -5,7 +5,7 @@ import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import { cleanupPdfJsPage, destroyPdfJsDocument, getEffectivePageRotation, loadPdfJsDocument, releaseCanvas, releaseChildCanvases, renderPdfPageToCanvas, watchDevicePixelRatio } from '../utils/pdfjs'
-import { openFileExternally } from '../utils/file'
+import { isImageFile as checkIsImageFile, isPdfFile as checkIsPdfFile, openFileExternally } from '../utils/file'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import FilePreviewerToolbar from './file-preview/FilePreviewerToolbar.vue'
 import SongAnnotationOverlay from './song-viewer/SongAnnotationOverlay.vue'
@@ -243,14 +243,9 @@ const zoomSteps = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 4.0]
 
 const fileExtTarget = computed(() => (props.fileName || props.filePath).split('?')[0].toLowerCase())
 
-const isPdfFile = computed(() => {
-	return fileExtTarget.value.endsWith('.pdf')
-})
+const isPdfFile = computed(() => checkIsPdfFile(fileExtTarget.value))
 
-const isImageFile = computed(() => {
-	const path = fileExtTarget.value
-	return path.endsWith('.png') || path.endsWith('.jpg') || path.endsWith('.jpeg') || path.endsWith('.webp') || path.endsWith('.gif') || path.endsWith('.svg') || path.endsWith('.bmp')
-})
+const isImageFile = computed(() => checkIsImageFile(fileExtTarget.value))
 
 const isDocxFile = computed(() => {
 	return fileExtTarget.value.endsWith('.docx')
@@ -266,7 +261,7 @@ const isUnsupportedFile = computed(() => {
 })
 
 const canInterleaveWithNext = computed(() => {
-	return Boolean(props.interleaveSongs && props.nextFilePath && props.nextFilePath.split('?')[0].toLowerCase().endsWith('.pdf'))
+	return Boolean(props.interleaveSongs && checkIsPdfFile(props.nextFilePath))
 })
 
 const effectiveDoubleTotalPages = computed(() => {

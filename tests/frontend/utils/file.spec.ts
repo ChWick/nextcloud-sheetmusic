@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { formatFileSize, getCacheBustedFileUrl, getFileName, isPdfFile, openFileExternally, pickPrimarySongFile } from '../../../src/utils/file'
+import { formatFileSize, getCacheBustedFileUrl, getFileName, isImageFile, isPdfFile, openFileExternally, pickPrimarySongFile } from '../../../src/utils/file'
 
 describe('file utils', () => {
 	describe('getFileName', () => {
@@ -56,6 +56,16 @@ describe('file utils', () => {
 			expect(isPdfFile('unnamed', 'application/pdf')).toBe(true)
 			expect(isPdfFile('/dav/files/admin/Notes.docx')).toBe(false)
 			expect(isPdfFile(null)).toBe(false)
+		})
+	})
+
+	describe('isImageFile', () => {
+		it('matches supported image extensions with or without query parameters', () => {
+			expect(isImageFile('/dav/files/admin/cover.PNG')).toBe(true)
+			expect(isImageFile('/dav/files/admin/page.jpg?v=2')).toBe(true)
+			expect(isImageFile('/dav/files/admin/diagram.svg')).toBe(true)
+			expect(isImageFile('/dav/files/admin/score.pdf')).toBe(false)
+			expect(isImageFile(undefined)).toBe(false)
 		})
 	})
 

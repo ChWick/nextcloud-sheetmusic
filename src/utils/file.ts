@@ -26,9 +26,16 @@ export function getCacheBustedFileUrl(filePath: string, version?: number | strin
 	return `${filePath}${separator}t=${v}`
 }
 
+const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg', '.bmp']
+
 export function isPdfFile(filename?: string | null, mimeType?: string | null): boolean {
 	const clean = filename?.split('?')[0].toLowerCase() ?? ''
 	return Boolean(clean.endsWith('.pdf') || mimeType === 'application/pdf')
+}
+
+export function isImageFile(filename?: string | null): boolean {
+	const clean = filename?.split('?')[0].toLowerCase() ?? ''
+	return IMAGE_EXTENSIONS.some((ext) => clean.endsWith(ext))
 }
 
 export function pickPrimarySongFile(
