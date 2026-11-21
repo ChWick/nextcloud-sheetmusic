@@ -81,6 +81,28 @@ class MobileSheetsPdf {
 	}
 
 	/**
+	 * Extract content hash, page count, and default page order from PDF bytes.
+	 *
+	 * @return array{fileHash: ?int, pageCount: int, pageOrder: string}
+	 */
+	public static function extractFacts(string $content): array {
+		if ($content === '') {
+			return [
+				'fileHash' => null,
+				'pageCount' => 1,
+				'pageOrder' => self::pageOrder(1),
+			];
+		}
+
+		$pageCount = self::pageCount($content);
+		return [
+			'fileHash' => self::contentHash($content),
+			'pageCount' => $pageCount,
+			'pageOrder' => self::pageOrder($pageCount),
+		];
+	}
+
+	/**
 	 * Extract bookmarks (document outline) from the PDF.
 	 *
 	 * @return list<array{name: string, pageNum: int, endPage: ?int}>

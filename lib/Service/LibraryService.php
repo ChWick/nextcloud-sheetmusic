@@ -76,6 +76,13 @@ class LibraryService {
 		return $libraryId;
 	}
 
+	public function resolveWritableLibraryId(string $userId, int $libraryId): ?int {
+		if (!$this->canWriteLibrary($userId, $libraryId)) {
+			return null;
+		}
+		return $this->getTargetLibraryId($libraryId);
+	}
+
 	/**
 	 * @return array{0: string, 1: string}|null array of [libraryPath, databasePath], or null if library is missing or invalid
 	 */

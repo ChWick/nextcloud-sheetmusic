@@ -243,7 +243,7 @@ class FilePathRegenerator {
 					);
 					$hashCodes?->updatePath($source->webdav, $candTarget->webdav);
 
-					return $this->logEntry(
+					return MobileSheetsFileLogEntry::forSongFile(
 						$song,
 						$file,
 						sprintf('Linked to existing target file at "%s"', $candRel),
@@ -311,7 +311,7 @@ class FilePathRegenerator {
 			]);
 
 			$existingNodeId = (int)$existingNode->getId();
-			return $this->logEntry(
+			return MobileSheetsFileLogEntry::forSongFile(
 				$song,
 				$file,
 				'Already at its regenerated path',
@@ -381,7 +381,7 @@ class FilePathRegenerator {
 			'removedEmptyFolders' => $removedFolders,
 		]);
 
-		return $this->logEntry(
+		return MobileSheetsFileLogEntry::forSongFile(
 			$song,
 			$file,
 			sprintf('Moved to "%s"', $targetRelative),
@@ -619,32 +619,13 @@ class FilePathRegenerator {
 		);
 		$hashCodes?->updatePath($sourceWebdav, $copiedTarget->webdav);
 
-		return $this->logEntry(
+		return MobileSheetsFileLogEntry::forSongFile(
 			$song,
 			$file,
 			sprintf('Copied file for separate song to "%s"', $targetRelative),
 			MobileSheetsFileLogEntry::LEVEL_INFO,
 			MobileSheetsFileLogEntry::CODE_PATH_MOVED,
 			$copiedNodeId > 0 ? $copiedNodeId : $this->nodeIdOfStoredFile($copiedTarget->webdav, $user),
-		);
-	}
-
-	private function logEntry(
-		MobileSheetsSong $song,
-		MobileSheetsFile $file,
-		string $message,
-		string $level,
-		string $code = '',
-		?int $fileId = null,
-	): MobileSheetsFileLogEntry {
-		return new MobileSheetsFileLogEntry(
-			$song->id,
-			$song->title,
-			$file->path,
-			$message,
-			$level,
-			$code,
-			$fileId,
 		);
 	}
 }

@@ -388,13 +388,8 @@ class LibraryReconciler {
 	 */
 	private function extractPdfFacts(File $fileNode): array {
 		try {
-			$content = MobileSheetsFileFacts::readFileContent($fileNode);
-			if ($content !== '') {
-				$hash = MobileSheetsPdf::contentHash($content);
-				$pageCount = MobileSheetsPdf::pageCount($content);
-				$pageOrder = MobileSheetsPdf::pageOrder($pageCount);
-				return [$hash, $pageCount, $pageOrder];
-			}
+			$facts = MobileSheetsPdf::extractFacts(MobileSheetsFileFacts::readFileContent($fileNode));
+			return [$facts['fileHash'], $facts['pageCount'], $facts['pageOrder']];
 		} catch (\Throwable $e) {
 			$this->logger->warning('Failed to compute PDF metadata: ' . $fileNode->getName(), ['exception' => $e]);
 		}

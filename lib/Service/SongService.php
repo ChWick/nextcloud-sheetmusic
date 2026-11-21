@@ -131,7 +131,7 @@ class SongService {
 			return null;
 		}
 
-		$targetLibraryId = $this->resolveWritableLibraryId($user, $libraryId);
+		$targetLibraryId = $this->libraryService->resolveWritableLibraryId($user->getUID(), $libraryId);
 		if ($targetLibraryId === null) {
 			return null;
 		}
@@ -229,7 +229,7 @@ class SongService {
 			return null;
 		}
 
-		$targetLibraryId = $this->resolveWritableLibraryId($user, $libraryId);
+		$targetLibraryId = $this->libraryService->resolveWritableLibraryId($user->getUID(), $libraryId);
 		if ($targetLibraryId === null) {
 			return null;
 		}
@@ -305,7 +305,7 @@ class SongService {
 			return null;
 		}
 
-		$targetLibraryId = $this->resolveWritableLibraryId($user, $libraryId);
+		$targetLibraryId = $this->libraryService->resolveWritableLibraryId($user->getUID(), $libraryId);
 		if ($targetLibraryId === null) {
 			return null;
 		}
@@ -492,7 +492,7 @@ class SongService {
 	}
 
 	public function deleteSong(IUser $user, int $songId, int $libraryId, bool $deleteFiles = true): ?LibraryData {
-		$targetLibraryId = $this->resolveWritableLibraryId($user, $libraryId);
+		$targetLibraryId = $this->libraryService->resolveWritableLibraryId($user->getUID(), $libraryId);
 		if ($targetLibraryId === null) {
 			return null;
 		}
@@ -508,7 +508,7 @@ class SongService {
 	 * @return array<string, mixed>|null
 	 */
 	public function batchDeleteSongs(IUser $user, int $libraryId, array $songIds, bool $deleteFiles = true): ?LibraryData {
-		$targetLibraryId = $this->resolveWritableLibraryId($user, $libraryId);
+		$targetLibraryId = $this->libraryService->resolveWritableLibraryId($user->getUID(), $libraryId);
 		if ($targetLibraryId === null) {
 			return null;
 		}
@@ -588,7 +588,7 @@ class SongService {
 	 * } $merged
 	 */
 	public function mergeSong(IUser $user, int $libraryId, int $keepId, int $droppedId, array $merged): ?LibraryData {
-		$targetLibraryId = $this->resolveWritableLibraryId($user, $libraryId);
+		$targetLibraryId = $this->libraryService->resolveWritableLibraryId($user->getUID(), $libraryId);
 		if ($targetLibraryId === null) {
 			return null;
 		}
@@ -775,13 +775,6 @@ class SongService {
 				$this->internalEntityMapper->setSongEntitiesForType($songId, $typeStr, array_map('intval', (array)$spec));
 			}
 		}
-	}
-
-	private function resolveWritableLibraryId(IUser $user, int $libraryId): ?int {
-		if (!$this->libraryService->canWriteLibrary($user->getUID(), $libraryId)) {
-			return null;
-		}
-		return $this->libraryService->getTargetLibraryId($libraryId);
 	}
 
 	private function getLibraryDataForResponse(IUser $user, int $libraryId, int $targetLibraryId): LibraryData {

@@ -135,4 +135,24 @@ final class MobileSheetsPdfTest extends TestCase {
 		self::assertSame('1-1', MobileSheetsPdf::pageOrder(1));
 		self::assertSame('1-7', MobileSheetsPdf::pageOrder(7));
 	}
+
+	public function testExtractFactsReturnsHashPageCountAndPageOrder(): void {
+		$pdf = "<< /Type /Pages /Count 2 /Kids [3 0 R 4 0 R] >>\n"
+			. "3 0 obj << /Type /Page /Parent 2 0 R >> endobj\n"
+			. "4 0 obj << /Type /Page /Parent 2 0 R >> endobj\n";
+
+		self::assertSame([
+			'fileHash' => MobileSheetsPdf::contentHash($pdf),
+			'pageCount' => 2,
+			'pageOrder' => '1-2',
+		], MobileSheetsPdf::extractFacts($pdf));
+	}
+
+	public function testExtractFactsReturnsDefaultsForEmptyContent(): void {
+		self::assertSame([
+			'fileHash' => null,
+			'pageCount' => 1,
+			'pageOrder' => '1-1',
+		], MobileSheetsPdf::extractFacts(''));
+	}
 }

@@ -129,6 +129,25 @@ class MobileSheetsFileLogEntry {
 		return self::LEVEL_BY_CODE[$code] ?? self::LEVEL_ERROR;
 	}
 
+	public static function forSongFile(
+		MobileSheetsSong $song,
+		MobileSheetsFile $file,
+		string $message,
+		string $level,
+		string $code = '',
+		?int $fileId = null,
+	): self {
+		return new self(
+			$song->id,
+			$song->title,
+			$file->path,
+			$message,
+			$level,
+			$code,
+			$fileId,
+		);
+	}
+
 	public function __construct(
 		public readonly int $songId,
 		public readonly string $songTitle,

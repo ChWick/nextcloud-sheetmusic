@@ -547,8 +547,7 @@ final class SongServiceTest extends TestCase {
 		));
 
 		$libraryService = $this->createMock(LibraryService::class);
-		$libraryService->method('canWriteLibrary')->willReturn(true);
-		$libraryService->method('getTargetLibraryId')->with($this->libraryId)->willReturn($this->libraryId);
+		$libraryService->method('resolveWritableLibraryId')->with($this->user->getUID(), $this->libraryId)->willReturn($this->libraryId);
 		$libraryService->method('isAutoPathsEnabled')->with($this->user->getUID(), $this->libraryId)->willReturn(true);
 		$libraryService->method('getNamingRulePreset')->with($this->user->getUID(), $this->libraryId)->willReturn(SongPathNamingRule::PRESET_AUTO);
 
@@ -603,8 +602,7 @@ final class SongServiceTest extends TestCase {
 		));
 
 		$libraryService = $this->createMock(LibraryService::class);
-		$libraryService->method('canWriteLibrary')->willReturn(true);
-		$libraryService->method('getTargetLibraryId')->with($this->libraryId)->willReturn($this->libraryId);
+		$libraryService->method('resolveWritableLibraryId')->with($this->user->getUID(), $this->libraryId)->willReturn($this->libraryId);
 		$libraryService->method('isAutoPathsEnabled')->with($this->user->getUID(), $this->libraryId)->willReturn(false);
 
 		$fileManager = $this->createMock(FileManager::class);

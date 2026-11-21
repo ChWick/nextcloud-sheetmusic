@@ -907,28 +907,17 @@ class SongFileService {
 	}
 
 	/**
-	 * @return array{fileHash: ?string, pageCount: int, pageOrder: string}
+	 * @return array{fileHash: ?int, pageCount: int, pageOrder: string}
 	 */
 	private function extractPdfFacts(string $content, string $fileName): array {
 		try {
-			if ($content !== '') {
-				$pageCount = MobileSheetsPdf::pageCount($content);
-				return [
-					'fileHash' => MobileSheetsPdf::contentHash($content),
-					'pageCount' => $pageCount,
-					'pageOrder' => MobileSheetsPdf::pageOrder($pageCount),
-				];
-			}
+			return MobileSheetsPdf::extractFacts($content);
 		} catch (\Throwable $e) {
 			$this->logger->warning('Failed to compute PDF metadata for song file: ' . $fileName, [
 				'exception' => $e,
 			]);
 		}
 
-		return [
-			'fileHash' => null,
-			'pageCount' => 1,
-			'pageOrder' => MobileSheetsPdf::pageOrder(1),
-		];
+		return MobileSheetsPdf::extractFacts('');
 	}
 }

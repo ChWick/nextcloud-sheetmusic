@@ -390,7 +390,7 @@ class FileManager {
 				$code = $exception instanceof SyncException
 					? $exception->errorCode()
 					: MobileSheetsFileLogEntry::CODE_PATH_FAILED;
-				$log[] = $this->logEntry(
+				$log[] = MobileSheetsFileLogEntry::forSongFile(
 					$song,
 					$file,
 					$exception->getMessage(),
@@ -402,35 +402,6 @@ class FileManager {
 		}
 
 		return $anyMoved;
-	}
-
-	/**
-	 * Build one line of the run's log.
-	 *
-	 * Lines are shown to the user in the report, so they are deliberately not
-	 * written to the Nextcloud log as well: a per-file entry there would only
-	 * restate what the user already sees, and logging the exception would repeat
-	 * the whole accumulated report in its arguments for every single file.
-	 * Genuine recovery problems are still logged where they happen, i.e. when a
-	 * move is reverted.
-	 */
-	private function logEntry(
-		MobileSheetsSong $song,
-		MobileSheetsFile $file,
-		string $message,
-		string $level,
-		string $code = '',
-		?int $fileId = null,
-	): MobileSheetsFileLogEntry {
-		return new MobileSheetsFileLogEntry(
-			$song->id,
-			$song->title,
-			$file->path,
-			$message,
-			$level,
-			$code,
-			$fileId,
-		);
 	}
 
 	/**
