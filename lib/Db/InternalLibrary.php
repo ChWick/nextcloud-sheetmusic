@@ -32,6 +32,26 @@ class InternalLibrary implements \JsonSerializable {
 	}
 
 	/**
+	 * Normalize a library path to its clean relative folder path (no leading/trailing slashes;
+	 * if pointing to a .db file, returns its containing directory or '' for root).
+	 */
+	public static function normalizeFolderPath(string $path): string {
+		$clean = trim($path, '/');
+		if ($clean === '' || $clean === '.') {
+			return '';
+		}
+		if (str_ends_with(strtolower($clean), '.db')) {
+			$directory = dirname($clean);
+			return ($directory === '' || $directory === '.') ? '' : $directory;
+		}
+		return $clean;
+	}
+
+	public function folderPath(): string {
+		return self::normalizeFolderPath($this->path);
+	}
+
+	/**
 	 * @param array<string, mixed> $row
 	 */
 	public static function fromRow(array $row): self {

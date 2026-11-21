@@ -70,13 +70,7 @@ class LibraryReconciler {
 		}
 
 		$userFolder = $this->rootFolder->getUserFolder($user->getUID());
-		$cleanLibPath = ltrim($lib->path, '/');
-		if (str_ends_with(strtolower($cleanLibPath), '.db')) {
-			$cleanLibPath = dirname($cleanLibPath);
-			if ($cleanLibPath === '.') {
-				$cleanLibPath = '';
-			}
-		}
+		$cleanLibPath = $lib->folderPath();
 
 		if ($cleanLibPath === '') {
 			$libFolderNode = $userFolder;

@@ -1045,13 +1045,7 @@ class MobileSheetsSqliteImporter {
 			} catch (\Throwable) {
 			}
 
-			$libPath = trim($library->path, '/');
-			if (str_ends_with(strtolower($libPath), '.db')) {
-				$libFolder = dirname($libPath);
-				$cleanLibFolder = $libFolder === '.' ? '' : $libFolder;
-			} else {
-				$cleanLibFolder = $libPath;
-			}
+			$cleanLibFolder = $library->folderPath();
 
 			$libRel = $cleanLibFolder !== '' ? $cleanLibFolder . '/' . $clean : $clean;
 			try {
@@ -1099,13 +1093,7 @@ class MobileSheetsSqliteImporter {
 	}
 
 	private function isPathInsideLibrary(string $relPath, InternalLibrary $library): bool {
-		$libPath = trim($library->path, '/');
-		if (str_ends_with(strtolower($libPath), '.db')) {
-			$libFolder = dirname($libPath);
-			$cleanLibFolder = $libFolder === '.' ? '' : $libFolder;
-		} else {
-			$cleanLibFolder = $libPath;
-		}
+		$cleanLibFolder = $library->folderPath();
 
 		if ($cleanLibFolder === '') {
 			return false;

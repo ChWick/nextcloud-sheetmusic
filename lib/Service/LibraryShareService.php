@@ -123,11 +123,7 @@ class LibraryShareService {
 
 		try {
 			$userFolder = $this->rootFolder->getUserFolder($library->userId);
-			$libPath = trim($library->path, '/');
-			if (str_ends_with(strtolower($libPath), '.db')) {
-				$libFolder = dirname($libPath);
-				$libPath = ($libFolder === '.' ? '' : $libFolder);
-			}
+			$libPath = $library->folderPath();
 
 			$node = null;
 			if ($libPath === '') {
@@ -747,12 +743,8 @@ class LibraryShareService {
 			}
 		}
 
-		$cleanPath = trim($lib->path, '/');
-		$libName = basename($cleanPath);
-		if (str_ends_with(strtolower($cleanPath), '.db')) {
-			$parentDir = dirname($cleanPath);
-			$libName = $parentDir !== '.' ? basename($parentDir) : $libName;
-		}
+		$folderPath = $lib->folderPath();
+		$libName = $folderPath !== '' ? basename($folderPath) : basename(trim($lib->path, '/'));
 
 		return [
 			'library' => [
@@ -1056,11 +1048,7 @@ class LibraryShareService {
 	private function getLibraryFolderNode(InternalLibrary $lib): ?Folder {
 		try {
 			$userFolder = $this->rootFolder->getUserFolder($lib->userId);
-			$libPath = trim($lib->path, '/');
-			if (str_ends_with(strtolower($libPath), '.db')) {
-				$libFolder = dirname($libPath);
-				$libPath = ($libFolder === '.' ? '' : $libFolder);
-			}
+			$libPath = $lib->folderPath();
 
 			if ($libPath === '') {
 				return $userFolder;

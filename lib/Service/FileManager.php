@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OCA\SheetMusic\Service;
 
+use OCA\SheetMusic\Db\InternalLibrary;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongMapper;
 use OCA\SheetMusic\Db\LibraryMapper;
@@ -253,11 +254,7 @@ class FileManager {
 			return $node->getParent();
 		} catch (\Throwable $e) {
 			// Purely virtual: resolve folder
-			$folderPath = rtrim($path, '/');
-			if (str_ends_with(strtolower($folderPath), '.db')) {
-				$folderPath = dirname($folderPath);
-			}
-			$folderNode = $userFolder->get(ltrim($folderPath, '/'));
+			$folderNode = $userFolder->get(InternalLibrary::normalizeFolderPath($path));
 			if ($folderNode instanceof Folder) {
 				return $folderNode;
 			}

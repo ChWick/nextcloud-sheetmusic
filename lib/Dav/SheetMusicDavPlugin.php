@@ -566,11 +566,7 @@ class SheetMusicDavPlugin extends ServerPlugin {
 			$parentLibId = $this->libraryShareService->getParentLibraryId((int)$library->id);
 			$parentLib = $this->libraryMapper->findById($parentLibId);
 			$ownerLib = $parentLib ?? $library;
-			$libPath = trim($ownerLib->path, '/');
-			if (str_ends_with(strtolower($libPath), '.db')) {
-				$libPath = dirname($libPath);
-				$libPath = ($libPath === '.' ? '' : $libPath);
-			}
+			$libPath = $ownerLib->folderPath();
 			$targetPath = $libPath === '' ? $fileName : $libPath . '/' . $fileName;
 
 			return [
@@ -616,11 +612,7 @@ class SheetMusicDavPlugin extends ServerPlugin {
 				$parentLibId = $this->libraryShareService->getParentLibraryId((int)$sharedLib->id);
 				$parentLib = $this->libraryMapper->findById($parentLibId);
 				$ownerLib = $parentLib ?? $sharedLib;
-				$ownerLibPath = trim($ownerLib->path, '/');
-				if (str_ends_with(strtolower($ownerLibPath), '.db')) {
-					$ownerLibPath = dirname($ownerLibPath);
-					$ownerLibPath = ($ownerLibPath === '.' ? '' : $ownerLibPath);
-				}
+				$ownerLibPath = $ownerLib->folderPath();
 				$targetPath = $ownerLibPath === '' ? $subPath : $ownerLibPath . '/' . $subPath;
 
 				return [
@@ -859,12 +851,7 @@ class SheetMusicDavPlugin extends ServerPlugin {
 	}
 
 	private function cleanLibraryFolder(InternalLibrary $lib): string {
-		$libPath = trim($lib->path, '/');
-		if (str_ends_with(strtolower($libPath), '.db')) {
-			$libFolder = dirname($libPath);
-			return $libFolder === '.' ? '' : $libFolder;
-		}
-		return $libPath;
+		return $lib->folderPath();
 	}
 
 	private function ensureSongsFolder(InternalLibrary $library): void {

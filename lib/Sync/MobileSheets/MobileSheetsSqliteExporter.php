@@ -863,11 +863,7 @@ class MobileSheetsSqliteExporter {
 				if (!empty($rootNodes)) {
 					$node = $rootNodes[0];
 					$ownerFolder = $this->rootFolder->getUserFolder($library->userId);
-					$libPath = trim($library->path, '/');
-					if (str_ends_with(strtolower($libPath), '.db')) {
-						$libPath = dirname($libPath);
-						$libPath = ($libPath === '.' ? '' : $libPath);
-					}
+					$libPath = $library->folderPath();
 					$baseNode = $libPath === '' ? $ownerFolder : $ownerFolder->get($libPath);
 					$rel = $baseNode->getRelativePath($node->getPath());
 					if ($rel !== null && $rel !== false) {

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\SheetMusic\Service;
 
 use OCA\SheetMusic\Db\InternalEntity;
+use OCA\SheetMusic\Db\InternalLibrary;
 use OCA\SheetMusic\Db\InternalSongFile;
 use OCA\SheetMusic\Db\InternalSongFileMapper;
 use OCA\SheetMusic\Db\InternalSongHistory;
@@ -574,16 +575,7 @@ class SongFileService {
 	}
 
 	private function libraryFolderPath(string $libraryPath): string {
-		$clean = trim($libraryPath, '/');
-		if ($clean === '' || $clean === '.') {
-			return '';
-		}
-		if (str_ends_with(strtolower($clean), '.db')) {
-			$directory = dirname($clean);
-			return ($directory === '' || $directory === '.') ? '' : $directory;
-		}
-
-		return $clean;
+		return InternalLibrary::normalizeFolderPath($libraryPath);
 	}
 
 	/**

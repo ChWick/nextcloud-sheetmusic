@@ -176,11 +176,7 @@ class InternalSongMapper {
 				$parts = explode(' / ', $parentPath, 2);
 				$parentPath = $parts[0];
 			}
-			$libPath = trim($parentPath, '/');
-			if (str_ends_with(strtolower($libPath), '.db')) {
-				$libPath = dirname($libPath);
-				$libPath = ($libPath === '.' ? '' : $libPath);
-			}
+			$libPath = InternalLibrary::normalizeFolderPath($parentPath);
 			$baseNode = $libPath === '' ? $ownerFolder : $ownerFolder->get($libPath);
 
 			$prefix = $publicToken !== null
