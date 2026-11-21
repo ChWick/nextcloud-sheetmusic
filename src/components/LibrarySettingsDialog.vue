@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
+import { OCS_JSON_HEADERS, ocsPut } from '../api/ocs'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
@@ -109,17 +109,12 @@ async function updateSetting(settings: { autoPaths?: boolean; autoPdfMetadata?: 
 	isSaving.value = true
 	saveError.value = ''
 	try {
-		const response = await axios.put(
-			`/ocs/v2.php/apps/sheetmusic/api/libraries/${props.selectedLibrary}/settings`,
+		const data = await ocsPut<{ library?: Library }>(
+			`/api/libraries/${props.selectedLibrary}/settings`,
 			settings,
-			{
-				headers: {
-					'OCS-APIREQUEST': 'true',
-					Accept: 'application/json',
-				},
-			},
+			{ headers: OCS_JSON_HEADERS },
 		)
-		const updatedLibrary = response.data?.ocs?.data?.library as Library | undefined
+		const updatedLibrary = data?.library
 		if (updatedLibrary) {
 			const updatedList = props.libraries.map(lib =>
 				lib.id === updatedLibrary.id ? { ...lib, ...updatedLibrary } : lib,

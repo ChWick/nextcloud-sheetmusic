@@ -13,6 +13,10 @@ vi.mock('@nextcloud/axios', () => ({
 	},
 }))
 
+vi.mock('@nextcloud/router', () => ({
+	generateOcsUrl: (path: string) => `/ocs/v2.php${path}`,
+}))
+
 vi.mock('@nextcloud/l10n', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('@nextcloud/l10n')>()
 	return {
@@ -141,11 +145,10 @@ describe('ShareDialog.vue', () => {
 				'/ocs/v2.php/apps/sheetmusic/api/libraries/1/shares',
 				expect.anything(),
 			)
+			expect(wrapper.text()).toContain('Alice Wonderland')
 		})
 
-		await wrapper.vm.$nextTick()
 		expect(wrapper.text()).toContain('Share library: Choir Noten')
-		expect(wrapper.text()).toContain('Alice Wonderland')
 		expect(wrapper.text()).toContain('https://cloud.test/s/token123')
 	})
 
@@ -163,11 +166,10 @@ describe('ShareDialog.vue', () => {
 				'/ocs/v2.php/apps/sheetmusic/api/libraries/1/sublibraries/5/shares',
 				expect.anything(),
 			)
+			expect(wrapper.text()).toContain('Alice Wonderland')
 		})
 
-		await wrapper.vm.$nextTick()
 		expect(wrapper.text()).toContain('Share sub-library: Chamber Music')
-		expect(wrapper.text()).toContain('Alice Wonderland')
 	})
 
 	it('can delete a share on the correct endpoint', async () => {

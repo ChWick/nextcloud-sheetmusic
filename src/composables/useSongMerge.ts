@@ -1,8 +1,9 @@
 import { ref, type Ref } from 'vue'
 import { t } from '@nextcloud/l10n'
-import axios from '@nextcloud/axios'
 import { showError, showSuccess } from '@nextcloud/dialogs'
 import { apiPost } from '../api/client'
+import { OCS_JSON_HEADERS, ocsPost } from '../api/ocs'
+import { extractApiErrorMessage } from '../utils/api'
 import type { IntegrityIssue, LibraryData, Song } from '../types/song'
 import type { MergedSongData, ResolveBothSongData } from '../components/song-editor/SongMergeDialog.vue'
 
@@ -43,6 +44,17 @@ export function useSongMerge(options: UseSongMergeOptions) {
 		isMergeDialogOpen.value = true
 	}
 
+	async function finishMergeSuccess(data?: LibraryData) {
+		isMergeDialogOpen.value = false
+		mergeIssue.value = null
+		options.onClearSelection?.()
+		if (data) {
+			options.onMerged?.(data)
+		} else {
+			await options.reloadLibrary?.(options.selectedLibrary.value)
+		}
+	}
+
 	async function executeMerge(payload: {
 		keepId: number
 		droppedId: number
@@ -52,25 +64,18 @@ export function useSongMerge(options: UseSongMergeOptions) {
 		isMerging.value = true
 		mergeError.value = ''
 		try {
-			const response = await axios.post(
-				`/ocs/v2.php/apps/sheetmusic/api/songs/merge`,
+			const data = await ocsPost<LibraryData>(
+				'/api/songs/merge',
 				{
 					libraryId: options.selectedLibrary.value,
 					keepId: payload.keepId,
 					droppedId: payload.droppedId,
 					merged: payload.merged,
 				},
-				{ headers: { 'OCS-APIREQUEST': 'true', Accept: 'application/json' } },
+				{ headers: OCS_JSON_HEADERS },
 			)
 			const targetSong = options.songs.value.find(s => s.id === (payload.targetSongId ?? payload.keepId))
-			isMergeDialogOpen.value = false
-			mergeIssue.value = null
-			options.onClearSelection?.()
-			if (response.data?.ocs?.data) {
-				options.onMerged?.(response.data.ocs.data)
-			} else {
-				await options.reloadLibrary?.(options.selectedLibrary.value)
-			}
+			await finishMergeSuccess(data)
 			const targetTitle = targetSong?.title ?? ''
 			if (targetTitle) {
 				showSuccess(t('sheetmusic', 'Songs merged successfully into "{title}".', { title: targetTitle }, { escape: false }))
@@ -79,11 +84,7 @@ export function useSongMerge(options: UseSongMergeOptions) {
 			}
 		} catch (error) {
 			console.error('Failed to merge songs:', error)
-			const serverMessage = axios.isAxiosError(error)
-				? error.response?.data?.ocs?.data?.message ?? error.response?.data?.message
-				: undefined
-			mergeError.value = serverMessage
-				?? t('sheetmusic', 'Failed to merge songs. Please try again.')
+			mergeError.value = extractApiErrorMessage(error, t('sheetmusic', 'Failed to merge songs. Please try again.'))
 			showError(mergeError.value)
 		} finally {
 			isMerging.value = false
@@ -105,22 +106,11 @@ export function useSongMerge(options: UseSongMergeOptions) {
 				songB: payload.songB,
 			})
 
-			isMergeDialogOpen.value = false
-			mergeIssue.value = null
-			options.onClearSelection?.()
-			if (response.data?.ocs?.data) {
-				options.onMerged?.(response.data.ocs.data)
-			} else {
-				await options.reloadLibrary?.(options.selectedLibrary.value)
-			}
+			await finishMergeSuccess(response.data?.ocs?.data)
 			showSuccess(t('sheetmusic', 'Both songs saved successfully.'))
-		} catch (error: any) {
+		} catch (error: unknown) {
 			console.error('Failed to resolve both songs:', error)
-			const serverMessage = error?.response?.data?.ocs?.data?.message
-				?? error?.response?.data?.message
-				?? error?.message
-			mergeError.value = serverMessage
-				?? t('sheetmusic', 'Failed to save updated songs. Please try again.')
+			mergeError.value = extractApiErrorMessage(error, t('sheetmusic', 'Failed to save updated songs. Please try again.'))
 			showError(mergeError.value)
 		} finally {
 			isMerging.value = false

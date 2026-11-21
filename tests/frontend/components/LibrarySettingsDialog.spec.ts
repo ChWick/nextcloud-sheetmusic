@@ -13,6 +13,10 @@ vi.mock('@nextcloud/axios', () => ({
 	},
 }))
 
+vi.mock('@nextcloud/router', () => ({
+	generateOcsUrl: (path: string) => `/ocs/v2.php${path}`,
+}))
+
 vi.mock('@nextcloud/l10n', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('@nextcloud/l10n')>()
 	return {

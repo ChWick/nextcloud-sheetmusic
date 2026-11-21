@@ -14,6 +14,7 @@ import ContentCopy from 'vue-material-design-icons/ContentCopy.vue'
 import Check from 'vue-material-design-icons/Check.vue'
 import DeleteOutline from 'vue-material-design-icons/DeleteOutline.vue'
 import { describeRequestFailure } from '../utils/api'
+import { OCS_JSON_HEADERS, ocsDelete, ocsGet, ocsPost, ocsPut } from '../api/ocs'
 import { useCopyToClipboard } from '../composables/useCopyToClipboard'
 import type { Sublibrary, LibraryShare } from '../types/library'
 
@@ -61,11 +62,11 @@ const infoText = computed(() => {
 	return t('sheetmusic', 'Share this library with other Nextcloud users or create an external public link for MobileSheets sync.')
 })
 
-const sharesEndpoint = computed(() => {
+const sharesPath = computed(() => {
 	if (isSublibrary.value && props.sublibrary?.id) {
-		return `/ocs/v2.php/apps/sheetmusic/api/libraries/${props.libraryId}/sublibraries/${props.sublibrary.id}/shares`
+		return `/api/libraries/${props.libraryId}/sublibraries/${props.sublibrary.id}/shares`
 	}
-	return `/ocs/v2.php/apps/sheetmusic/api/libraries/${props.libraryId}/shares`
+	return `/api/libraries/${props.libraryId}/shares`
 })
 
 const shares = ref<LibraryShare[]>([])
@@ -88,13 +89,10 @@ async function loadShares() {
 	isLoadingShares.value = true
 	shareError.value = ''
 	try {
-		const response = await axios.get(sharesEndpoint.value, {
-			headers: {
-				'OCS-APIREQUEST': 'true',
-				Accept: 'application/json',
-			},
+		const data = await ocsGet<{ shares?: LibraryShare[] }>(sharesPath.value, {
+			headers: OCS_JSON_HEADERS,
 		})
-		shares.value = response.data?.ocs?.data?.shares ?? []
+		shares.value = data?.shares ?? []
 		await searchSharees(currentShareSearch.value)
 	} catch (error) {
 		console.error('Failed to load shares:', error)
@@ -114,10 +112,7 @@ async function searchSharees(search: string = '') {
 				search,
 				perPage: 25,
 			},
-			headers: {
-				'OCS-APIREQUEST': 'true',
-				Accept: 'application/json',
-			},
+			headers: OCS_JSON_HEADERS,
 		})
 		const data = response.data?.ocs?.data ?? {}
 		const rawUsers: any[] = [
@@ -227,24 +222,17 @@ async function addShare(shareType: 'user_or_group' | 'link' = 'user_or_group') {
 			shareType: actualShareType,
 			permission: newSharePermission.value,
 		}
-		const response = await axios.post(sharesEndpoint.value, payload, {
-			headers: {
-				'OCS-APIREQUEST': 'true',
-				Accept: 'application/json',
-			},
+		const created = await ocsPost<LibraryShare>(sharesPath.value, payload, {
+			headers: OCS_JSON_HEADERS,
 		})
-		const created = response.data?.ocs?.data as LibraryShare | undefined
 		if (created) {
 			shares.value = [...shares.value, created]
-			selectedSharee.value = null
-			currentShareSearch.value = ''
-			await searchSharees('')
 		} else {
 			await loadShares()
-			selectedSharee.value = null
-			currentShareSearch.value = ''
-			await searchSharees('')
 		}
+		selectedSharee.value = null
+		currentShareSearch.value = ''
+		await searchSharees('')
 	} catch (error) {
 		console.error('Failed to create share:', error)
 		shareError.value = describeRequestFailure(error, t('sheetmusic', 'Could not share.'))
@@ -255,17 +243,11 @@ async function addShare(shareType: 'user_or_group' | 'link' = 'user_or_group') {
 
 async function updateSharePermission(share: LibraryShare, newPerm: 'read' | 'write') {
 	try {
-		const response = await axios.put(
-			`${sharesEndpoint.value}/${encodeURIComponent(share.id)}`,
+		const updated = await ocsPut<LibraryShare>(
+			`${sharesPath.value}/${encodeURIComponent(share.id)}`,
 			{ permission: newPerm },
-			{
-				headers: {
-					'OCS-APIREQUEST': 'true',
-					Accept: 'application/json',
-				},
-			},
+			{ headers: OCS_JSON_HEADERS },
 		)
-		const updated = response.data?.ocs?.data as LibraryShare | undefined
 		if (updated) {
 			shares.value = shares.value.map(s => (s.id === share.id ? { ...s, ...updated } : s))
 		} else {
@@ -281,11 +263,8 @@ async function updateSharePermission(share: LibraryShare, newPerm: 'read' | 'wri
 
 async function deleteShare(share: LibraryShare) {
 	try {
-		await axios.delete(`${sharesEndpoint.value}/${encodeURIComponent(share.id)}`, {
-			headers: {
-				'OCS-APIREQUEST': 'true',
-				Accept: 'application/json',
-			},
+		await ocsDelete(`${sharesPath.value}/${encodeURIComponent(share.id)}`, {
+			headers: OCS_JSON_HEADERS,
 		})
 		shares.value = shares.value.filter(s => s.id !== share.id)
 		await searchSharees(currentShareSearch.value)

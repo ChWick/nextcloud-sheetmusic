@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
 import { showError, showSuccess } from '@nextcloud/dialogs'
-import { OCS_JSON_HEADERS, ocsGet } from '../api/ocs'
+import { OCS_JSON_HEADERS, ocsDelete, ocsGet } from '../api/ocs'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
@@ -110,16 +109,11 @@ async function copyToClipboard(text: string, token: string) {
 async function deleteShare(share: LibraryShare, sublibraryId?: number) {
 	deletingShareId.value = share.id
 	try {
-		const endpoint = sublibraryId !== undefined
-			? `/ocs/v2.php/apps/sheetmusic/api/libraries/${props.selectedLibrary}/sublibraries/${sublibraryId}/shares/${share.id}`
-			: `/ocs/v2.php/apps/sheetmusic/api/libraries/${props.selectedLibrary}/shares/${share.id}`
+		const path = sublibraryId !== undefined
+			? `/api/libraries/${props.selectedLibrary}/sublibraries/${sublibraryId}/shares/${share.id}`
+			: `/api/libraries/${props.selectedLibrary}/shares/${share.id}`
 
-		await axios.delete(endpoint, {
-			headers: {
-				'OCS-APIREQUEST': 'true',
-				Accept: 'application/json',
-			},
-		})
+		await ocsDelete(path, { headers: OCS_JSON_HEADERS })
 		showSuccess(t('sheetmusic', 'Share removed.'))
 		await fetchSharesOverview()
 	} catch (err) {
