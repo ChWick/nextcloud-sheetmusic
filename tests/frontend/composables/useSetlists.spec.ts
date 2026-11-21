@@ -4,9 +4,6 @@ import axios from '@nextcloud/axios'
 import { useSetlists } from '../../../src/composables/useSetlists'
 
 vi.mock('@nextcloud/axios')
-vi.mock('@nextcloud/l10n', () => ({
-  translate: (_app: string, text: string) => text,
-}))
 
 describe('useSetlists composable', () => {
   beforeEach(() => {

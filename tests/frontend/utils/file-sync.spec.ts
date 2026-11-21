@@ -1,24 +1,7 @@
 import type { FileLogEntry } from '../../../src/types/song'
 
-import { generateUrl } from '@nextcloud/router'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { badgeFor, computeSyncStats, CODE_MESSAGES, displayPath, fileLink, messageFor, relativeFromStored } from '../../../src/utils/file-sync'
-
-vi.mock('@nextcloud/router', () => ({
-	generateUrl: vi.fn((path: string, params?: Record<string, any>) => {
-		if (path === '/f/{fileId}' && params?.fileId) {
-			return `/f/${params.fileId}`
-		}
-		if (path === '/apps/files') {
-			return '/apps/files'
-		}
-		return path
-	}),
-}))
-
-vi.mock('@nextcloud/l10n', () => ({
-	translate: vi.fn((app: string, text: string) => text),
-}))
 
 describe('file-sync utility functions', () => {
 	it('messageFor returns localized message when code matches', () => {
@@ -79,8 +62,7 @@ describe('file-sync utility functions', () => {
 			fileId: 456,
 		}
 
-		expect(fileLink(entry)).toBe('/f/456')
-		expect(generateUrl).toHaveBeenCalledWith('/f/{fileId}', { fileId: '456' })
+		expect(fileLink(entry)).toMatch(/\/f\/456$/)
 	})
 
 	it('fileLink returns folder URL in Files app when fileId is null', () => {
@@ -94,7 +76,7 @@ describe('file-sync utility functions', () => {
 			fileId: null,
 		}
 
-		expect(fileLink(entry)).toBe('/apps/files?dir=%2FNoten%2FMiles')
+		expect(fileLink(entry)).toContain('/apps/files?dir=%2FNoten%2FMiles')
 	})
 
 	it('computeSyncStats aggregates stats accurately', () => {

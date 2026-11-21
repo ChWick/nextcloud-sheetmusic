@@ -1,23 +1,6 @@
 import { mount } from '@vue/test-utils'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import FilePreviewerToolbar from '../../../src/components/file-preview/FilePreviewerToolbar.vue'
-
-vi.mock('@nextcloud/l10n', () => ({
-	translate: (_app: string, text: string, values?: Record<string, unknown>) => {
-		if (!values) {
-			return text
-		}
-		return Object.entries(values).reduce((result, [key, value]) => result.replace(`{${key}}`, String(value)), text)
-	},
-}))
-
-vi.mock('@nextcloud/vue/components/NcButton', () => ({
-	default: {
-		template: '<button :aria-label="ariaLabel" :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
-		props: ['ariaLabel', 'disabled', 'title', 'variant', 'size'],
-		emits: ['click'],
-	},
-}))
 
 describe('FilePreviewerToolbar.vue', () => {
 	const props = {

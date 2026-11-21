@@ -2,21 +2,6 @@ import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import OriginalSongActionSelector from '../../../src/components/song-pdf/OriginalSongActionSelector.vue'
 
-vi.mock('@nextcloud/l10n', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('@nextcloud/l10n')>()
-	return {
-		...actual,
-		translate: vi.fn((_app: string, text: string, vars?: Record<string, any>) => {
-			if (!vars) return text
-			let res = text
-			for (const [k, v] of Object.entries(vars)) {
-				res = res.replace(`{${k}}`, String(v))
-			}
-			return res
-		}),
-	}
-})
-
 vi.mock('@nextcloud/vue/components/NcPopover', () => ({
 	default: {
 		name: 'NcPopover',

@@ -3,14 +3,6 @@ import { useLibraryData } from '../../../src/composables/useLibraryData'
 import axios from '@nextcloud/axios'
 
 vi.mock('@nextcloud/axios')
-vi.mock('@nextcloud/router', () => ({
-	generateOcsUrl: (path: string) => path,
-}))
-vi.mock('@nextcloud/l10n', () => ({
-	translate: (_app: string, text: string) => text,
-	getLanguage: () => 'en',
-	isRTL: () => false,
-}))
 
 describe('useLibraryData composable', () => {
 	beforeEach(() => {

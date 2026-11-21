@@ -1,18 +1,6 @@
 import { mount } from '@vue/test-utils'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import SongPagination from '../../../src/components/songs/SongPagination.vue'
-
-vi.mock('@nextcloud/l10n', () => ({
-	translate: (_app: string, text: string, vars?: Record<string, any>) => {
-		let res = text
-		if (vars) {
-			for (const [k, v] of Object.entries(vars)) {
-				res = res.replace(`{${k}}`, String(v))
-			}
-		}
-		return res
-	},
-}))
 
 describe('SongPagination.vue', () => {
 	it('renders summary correctly for paginated list', () => {

@@ -2,10 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { isMobileViewport, noneEntryOf, resetFilterBarState, UNASSIGNED_ID, useSongFilters } from '../../../src/composables/useSongFilters'
 import type { Song } from '../../../src/types/song'
 
-vi.mock('@nextcloud/l10n', () => ({
-	translate: (_app: string, text: string) => text,
-}))
-
 const mockRoute = { query: {} as Record<string, any> }
 const mockRouter = { push: vi.fn() }
 

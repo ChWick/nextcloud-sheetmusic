@@ -1,9 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { describeRequestFailure } from '../../../src/utils/api'
-
-vi.mock('@nextcloud/l10n', () => ({
-	translate: (_app: string, text: string) => text,
-}))
 
 describe('api utils', () => {
 	describe('describeRequestFailure', () => {
@@ -38,13 +34,13 @@ describe('api utils', () => {
 		it('returns special message for HTTP 404', () => {
 			const error = { response: { status: 404 } }
 			const result = describeRequestFailure(error, 'Fallback message')
-			expect(result).toContain('HTTP {status}')
+			expect(result).toContain('HTTP 404')
 		})
 
 		it('returns special message for HTTP 405', () => {
 			const error = { response: { status: 405 } }
 			const result = describeRequestFailure(error, 'Fallback message')
-			expect(result).toContain('HTTP {status}')
+			expect(result).toContain('HTTP 405')
 		})
 
 		it('returns the server error field from an OCS error response', () => {
