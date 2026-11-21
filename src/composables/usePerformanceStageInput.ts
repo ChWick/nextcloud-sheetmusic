@@ -2,7 +2,10 @@ import { onMounted, onUnmounted } from 'vue'
 
 export interface PerformanceStageInputOptions {
 	isScrollMode: () => boolean
+	/** True while (or just after) an active pinch-zoom or drag-pan gesture; suppresses both taps and swipes. */
 	isPanningOrPinching?: () => boolean
+	/** True when zoomed content can scroll horizontally; suppresses horizontal touch swipes but NOT container click zones. */
+	canPanHorizontally?: () => boolean
 	onNextPage: () => void
 	onPrevPage: () => void
 	onToggleHud: () => void
@@ -37,7 +40,7 @@ export function usePerformanceStageInput(options: PerformanceStageInputOptions) 
 			}
 			return
 		}
-		if (options.isScrollMode() || options.isPanningOrPinching?.()) return
+		if (options.isScrollMode() || options.isPanningOrPinching?.() || options.canPanHorizontally?.()) return
 		if (event.changedTouches.length !== 1) return
 		const dx = event.changedTouches[0].clientX - touchStartX
 		const dy = event.changedTouches[0].clientY - touchStartY

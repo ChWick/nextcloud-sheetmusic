@@ -55,6 +55,8 @@ export function usePdfTouchZoom(options: PdfTouchZoomOptions) {
 
 	// Mouse pan state
 	let isMousePanning = false
+	let hasDragged = false
+	let lastDragEndTime = 0
 	let mouseStartX = 0
 	let mouseStartY = 0
 	let mouseStartScrollLeft = 0
@@ -326,6 +328,7 @@ export function usePdfTouchZoom(options: PdfTouchZoomOptions) {
 
 		event.preventDefault()
 		isMousePanning = true
+		hasDragged = false
 		mouseStartX = event.clientX
 		mouseStartY = event.clientY
 		mouseStartScrollLeft = container.scrollLeft
@@ -341,12 +344,18 @@ export function usePdfTouchZoom(options: PdfTouchZoomOptions) {
 		const container = options.containerRef.value
 		if (!container) return
 
+		const dx = event.clientX - mouseStartX
+		const dy = event.clientY - mouseStartY
+		if (!hasDragged && Math.hypot(dx, dy) > 5) {
+			hasDragged = true
+		}
+
 		applyContainerPan(
 			container,
 			mouseStartScrollLeft,
 			mouseStartScrollTop,
-			event.clientX - mouseStartX,
-			event.clientY - mouseStartY,
+			dx,
+			dy,
 		)
 		applyStageTransform(1, livePanX, livePanY)
 	}
@@ -354,6 +363,10 @@ export function usePdfTouchZoom(options: PdfTouchZoomOptions) {
 	function stopMousePan() {
 		if (!isMousePanning) return
 		isMousePanning = false
+		if (hasDragged) {
+			lastDragEndTime = Date.now()
+			hasDragged = false
+		}
 		committedPanX = livePanX
 		committedPanY = livePanY
 		resetStageTransform()
@@ -424,6 +437,7 @@ export function usePdfTouchZoom(options: PdfTouchZoomOptions) {
 
 	return {
 		wasRecentlyPinching: () => isPinching || Date.now() - lastPinchEndTime < 350,
+		wasRecentlyDragging: () => hasDragged || Date.now() - lastDragEndTime < 350,
 		resetPan,
 	}
 }

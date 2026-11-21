@@ -405,8 +405,9 @@ function handleFullscreenChange() {
 const { onStageTouchStart, onStageTouchEnd, onStageClick } = usePerformanceStageInput({
 	isScrollMode: () => effectiveLayout.value === 'continuous',
 	isPanningOrPinching: () => Boolean(
-		previewerRef.value?.wasRecentlyPinching?.() || previewerRef.value?.canPanHorizontally?.(),
+		previewerRef.value?.wasRecentlyPinching?.() || previewerRef.value?.wasRecentlyDragging?.(),
 	),
+	canPanHorizontally: () => Boolean(previewerRef.value?.canPanHorizontally?.()),
 	onNextPage: handleNextPage,
 	onPrevPage: handlePrevPage,
 	onToggleHud: toggleHud,

@@ -1173,7 +1173,7 @@ watch(
 	},
 )
 
-const { wasRecentlyPinching, resetPan } = usePdfTouchZoom({
+const { wasRecentlyPinching, wasRecentlyDragging, resetPan } = usePdfTouchZoom({
 	containerRef: pdfContainer,
 	stageRef: pdfStage,
 	getCurrentScale: () => effectiveScale.value,
@@ -1206,6 +1206,7 @@ defineExpose({
 	setDoublePageTurnMode,
 	setZoomMode,
 	wasRecentlyPinching,
+	wasRecentlyDragging,
 	canPanHorizontally,
 	currentPage,
 	totalPages,
