@@ -1,12 +1,14 @@
+import axios from '@nextcloud/axios'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { computed, ref, shallowRef } from 'vue'
 import { usePdfMovements } from '../../../src/components/song-pdf/usePdfMovements'
 import type { Song, SongFile } from '../../../src/types/song'
-import { apiPost } from '../../../src/api/client'
 import { PDFDocument } from 'pdf-lib'
 
-vi.mock('../../../src/api/client', () => ({
-	apiPost: vi.fn(),
+vi.mock('@nextcloud/axios', () => ({
+	default: {
+		post: vi.fn(),
+	},
 }))
 
 vi.mock('@nextcloud/dialogs', () => ({
@@ -162,7 +164,7 @@ describe('usePdfMovements.ts', () => {
 			endPage: 5,
 		})
 
-		vi.mocked(apiPost).mockResolvedValueOnce({
+		vi.mocked(axios.post).mockResolvedValueOnce({
 			data: {
 				ocs: {
 					data: { id: 42, title: 'Piano Sonata No. 14' },
@@ -172,8 +174,8 @@ describe('usePdfMovements.ts', () => {
 
 		await movements.executeSaveMovements()
 
-		expect(apiPost).toHaveBeenCalledWith(
-			'/api/songs/{id}',
+		expect(axios.post).toHaveBeenCalledWith(
+			expect.stringContaining('/api/songs/42'),
 			expect.objectContaining({
 				bookmarks: [
 					{
@@ -185,7 +187,6 @@ describe('usePdfMovements.ts', () => {
 					},
 				],
 			}),
-			{ pathParams: { id: 42 } },
 		)
 		expect(onSaved).toHaveBeenCalledWith({ id: 42, title: 'Piano Sonata No. 14' }, 42)
 	})
@@ -222,29 +223,27 @@ describe('usePdfMovements.ts', () => {
 		movements.updateMovement(movements.movements.value[0].id, { name: 'I. Allegro' })
 
 		// Mock song update
-		vi.mocked(apiPost).mockResolvedValueOnce({
+		vi.mocked(axios.post).mockResolvedValueOnce({
 			data: { ocs: { data: { id: 42, title: 'Piano Sonata No. 14' } } },
 		} as any)
 
 		// Mock file update
-		vi.mocked(apiPost).mockResolvedValueOnce({
+		vi.mocked(axios.post).mockResolvedValueOnce({
 			data: { ocs: { data: { id: 42, title: 'Piano Sonata No. 14 with updated PDF' } } },
 		} as any)
 
 		await movements.executeSaveMovements()
 
 		// Should have called song metadata update
-		expect(apiPost).toHaveBeenCalledWith(
-			'/api/songs/{id}',
+		expect(axios.post).toHaveBeenCalledWith(
+			expect.stringContaining('/api/songs/42'),
 			expect.any(Object),
-			{ pathParams: { id: 42 } },
 		)
 
 		// Should have called file update with FormData
-		expect(apiPost).toHaveBeenCalledWith(
-			'/api/libraries/{libraryId}/songs/{id}/file/{fileId}/update',
+		expect(axios.post).toHaveBeenCalledWith(
+			expect.stringContaining('/api/libraries/1/songs/42/file/99/update'),
 			expect.any(FormData),
-			{ pathParams: { libraryId: 1, id: 42, fileId: 99 } },
 		)
 
 		expect(onPdfUpdated).toHaveBeenCalled()
@@ -268,17 +267,16 @@ describe('usePdfMovements.ts', () => {
 		movements.initMovementsFromSong([])
 		movements.addMovement()
 
-		vi.mocked(apiPost).mockResolvedValueOnce({
+		vi.mocked(axios.post).mockResolvedValueOnce({
 			data: { ocs: { data: { id: 42, title: 'Piano Sonata No. 14' } } },
 		} as any)
 
 		await movements.executeSaveMovements()
 
-		expect(apiPost).toHaveBeenCalledTimes(1)
-		expect(apiPost).toHaveBeenCalledWith(
-			'/api/songs/{id}',
+		expect(axios.post).toHaveBeenCalledTimes(1)
+		expect(axios.post).toHaveBeenCalledWith(
+			expect.stringContaining('/api/songs/42'),
 			expect.any(Object),
-			{ pathParams: { id: 42 } },
 		)
 		expect(onPdfUpdated).not.toHaveBeenCalled()
 		expect(onSaved).toHaveBeenCalledWith({ id: 42, title: 'Piano Sonata No. 14' }, 42)

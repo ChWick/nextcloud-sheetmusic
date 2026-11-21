@@ -1,12 +1,14 @@
+import axios from '@nextcloud/axios'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { ref } from 'vue'
 import { useFileVersions } from '../../../src/components/song-pdf/useFileVersions'
-import * as client from '../../../src/api/client'
 import * as dialogs from '@nextcloud/dialogs'
 
-vi.mock('../../../src/api/client', () => ({
-	apiGet: vi.fn(),
-	apiPost: vi.fn(),
+vi.mock('@nextcloud/axios', () => ({
+	default: {
+		get: vi.fn(),
+		post: vi.fn(),
+	},
 }))
 
 vi.mock('@nextcloud/dialogs', () => ({
@@ -41,7 +43,7 @@ describe('useFileVersions.ts', () => {
 		})
 
 		await openVersionsModal()
-		expect(client.apiGet).not.toHaveBeenCalled()
+		expect(axios.get).not.toHaveBeenCalled()
 	})
 
 	it('fetches versions, sorts by timestamp descending, and updates state', async () => {
@@ -51,7 +53,7 @@ describe('useFileVersions.ts', () => {
 			{ revision: 3, timestamp: 2000, size: 3072 },
 		]
 
-		vi.mocked(client.apiGet).mockResolvedValueOnce({
+		vi.mocked(axios.get).mockResolvedValueOnce({
 			data: { ocs: { data: { versions: mockVersions } } },
 		} as any)
 
@@ -68,15 +70,8 @@ describe('useFileVersions.ts', () => {
 		await promise
 
 		expect(isLoadingVersions.value).toBe(false)
-		expect(client.apiGet).toHaveBeenCalledWith(
-			'/api/libraries/{libraryId}/songs/{id}/file/{fileId}/versions',
-			{
-				pathParams: {
-					libraryId: 1,
-					id: 10,
-					fileId: 101,
-				},
-			},
+		expect(axios.get).toHaveBeenCalledWith(
+			expect.stringContaining('/api/libraries/1/songs/10/file/101/versions'),
 		)
 		expect(fileVersions.value.map((v) => v.revision)).toEqual([2, 3, 1])
 	})
@@ -87,7 +82,7 @@ describe('useFileVersions.ts', () => {
 			{ version: '3000', revision: 3000, timestamp: 3000, size: 4096, name: 'score.pdf' },
 		]
 
-		vi.mocked(client.apiGet).mockResolvedValueOnce({
+		vi.mocked(axios.get).mockResolvedValueOnce({
 			data: { ocs: { data: rawBackendVersions } },
 		} as any)
 
@@ -109,7 +104,7 @@ describe('useFileVersions.ts', () => {
 		const rawVersions = [{ version: '500', timestamp: 500, size: 1024 }]
 
 		// Direct data array
-		vi.mocked(client.apiGet).mockResolvedValueOnce({
+		vi.mocked(axios.get).mockResolvedValueOnce({
 			data: rawVersions,
 		} as any)
 
@@ -123,7 +118,7 @@ describe('useFileVersions.ts', () => {
 		expect(fileVersions.value).toEqual([{ revision: 500, timestamp: 500, size: 1024 }])
 
 		// Nested data.data
-		vi.mocked(client.apiGet).mockResolvedValueOnce({
+		vi.mocked(axios.get).mockResolvedValueOnce({
 			data: { data: rawVersions },
 		} as any)
 
@@ -132,7 +127,7 @@ describe('useFileVersions.ts', () => {
 	})
 
 	it('handles fetch error gracefully and shows error message', async () => {
-		vi.mocked(client.apiGet).mockRejectedValueOnce(new Error('Network error'))
+		vi.mocked(axios.get).mockRejectedValueOnce(new Error('Network error'))
 
 		const { isVersionsModalOpen, isLoadingVersions, openVersionsModal } = useFileVersions({
 			libraryId: 1,
@@ -149,7 +144,7 @@ describe('useFileVersions.ts', () => {
 
 	it('reverts version successfully, calls onReverted callback and shows success toast', async () => {
 		const mockLibraryData = { songs: [{ id: 10, title: 'Updated Song' }] }
-		vi.mocked(client.apiPost).mockResolvedValueOnce({
+		vi.mocked(axios.post).mockResolvedValueOnce({
 			data: { ocs: { data: mockLibraryData } },
 		} as any)
 
@@ -169,24 +164,16 @@ describe('useFileVersions.ts', () => {
 
 		expect(isRevertingVersion.value).toBe(false)
 		expect(isVersionsModalOpen.value).toBe(false)
-		expect(client.apiPost).toHaveBeenCalledWith(
-			'/api/libraries/{libraryId}/songs/{id}/file/{fileId}/versions/{revision}/revert',
+		expect(axios.post).toHaveBeenCalledWith(
+			expect.stringContaining('/api/libraries/1/songs/10/file/101/versions/2/revert'),
 			{},
-			{
-				pathParams: {
-					libraryId: 1,
-					id: 10,
-					fileId: 101,
-					revision: 2,
-				},
-			},
 		)
 		expect(dialogs.showSuccess).toHaveBeenCalledWith('Reverted PDF to earlier version successfully.')
 		expect(onReverted).toHaveBeenCalledWith(mockLibraryData)
 	})
 
 	it('handles revert error gracefully and shows error toast', async () => {
-		vi.mocked(client.apiPost).mockRejectedValueOnce(new Error('Permission denied'))
+		vi.mocked(axios.post).mockRejectedValueOnce(new Error('Permission denied'))
 
 		const onReverted = vi.fn()
 		const { isVersionsModalOpen, isRevertingVersion, revertToVersion } = useFileVersions({

@@ -3,33 +3,41 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
+import axios from '@nextcloud/axios'
+import { flushPromises } from '@vue/test-utils'
 import { ref } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAnnotationEditor } from '../../../src/composables/useAnnotationEditor'
 import type { SheetAnnotation } from '../../../src/types/annotation'
 
-const mocks = vi.hoisted(() => ({
-	saveSongAnnotation: vi.fn(),
-	deleteSongAnnotation: vi.fn(),
-	batchSongAnnotations: vi.fn(),
-}))
-
-vi.mock('../../../src/api/annotations', () => ({
-	saveSongAnnotation: mocks.saveSongAnnotation,
-	deleteSongAnnotation: mocks.deleteSongAnnotation,
-	batchSongAnnotations: mocks.batchSongAnnotations,
+vi.mock('@nextcloud/axios', () => ({
+	default: {
+		get: vi.fn(),
+		post: vi.fn(),
+		delete: vi.fn(),
+	},
 }))
 
 describe('useAnnotationEditor', () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
 		let nextId = 100
-		mocks.saveSongAnnotation.mockImplementation(async (_songId: number, ann: Partial<SheetAnnotation>) => ({
-			...ann,
-			id: ann.id ?? nextId++,
-		}))
-		mocks.deleteSongAnnotation.mockResolvedValue(undefined)
-		mocks.batchSongAnnotations.mockResolvedValue({ saved: [], deletedIds: [] })
+		vi.mocked(axios.post).mockImplementation(async (url: string, body: any) => {
+			if (url.endsWith('/annotations/batch')) {
+				return { data: { ocs: { data: { saved: [], deletedIds: [] } } } } as any
+			}
+			return {
+				data: {
+					ocs: {
+						data: {
+							...body,
+							id: body?.id ?? nextId++,
+						},
+					},
+				},
+			} as any
+		})
+		vi.mocked(axios.delete).mockResolvedValue({ data: { ocs: { data: {} } } } as any)
 	})
 
 	it('creates, updates, deletes, undoes, and redoes annotations', async () => {
@@ -115,12 +123,21 @@ describe('useAnnotationEditor', () => {
 
 		expect(annotations.value).toHaveLength(1)
 		expect(annotations.value[0].uuid).toBe('p1-a')
-		expect(mocks.batchSongAnnotations).toHaveBeenCalledWith(7, { deleteIds: [1] })
+		expect(axios.post).toHaveBeenCalledWith(
+			expect.stringContaining('/api/songs/7/annotations/batch'),
+			{ deleteIds: [1] },
+		)
 
-		mocks.batchSongAnnotations.mockResolvedValueOnce({
-			saved: [{ ...annotations.value[0], id: 99, uuid: 'p0-a', pageNumber: 0 }],
-			deletedIds: [],
-		})
+		vi.mocked(axios.post).mockResolvedValueOnce({
+			data: {
+				ocs: {
+					data: {
+						saved: [{ ...annotations.value[0], id: 99, uuid: 'p0-a', pageNumber: 0 }],
+						deletedIds: [],
+					},
+				},
+			},
+		} as any)
 		await editor.undo()
 		expect(annotations.value).toHaveLength(2)
 	})
@@ -163,7 +180,7 @@ describe('useAnnotationEditor', () => {
 		// Delete key removes selected annotation
 		editor.selectAnnotation('shape-1')
 		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete' }))
-		await Promise.resolve()
+		await flushPromises()
 		expect(annotations.value).toHaveLength(0)
 
 		editor.exitEditMode()
@@ -207,22 +224,22 @@ describe('useAnnotationEditor', () => {
 		// Increase stamp fontSize with '+' (no bounding box, just center & fontSize)
 		editor.selectAnnotation('stamp-1')
 		window.dispatchEvent(new KeyboardEvent('keydown', { key: '+' }))
-		await Promise.resolve()
+		await flushPromises()
 		expect(annotations.value[0].style.fontSize).toBe(44)
 
 		// Move stamp with ArrowRight & ArrowUp
 		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }))
-		await Promise.resolve()
+		await flushPromises()
 		expect(annotations.value[0].x).toBe(0.503)
 
 		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', shiftKey: true }))
-		await Promise.resolve()
+		await flushPromises()
 		expect(annotations.value[0].y).toBe(0.485)
 
 		// Decrease shape thickness with '-'
 		editor.selectAnnotation('shape-2')
 		window.dispatchEvent(new KeyboardEvent('keydown', { key: '-' }))
-		await Promise.resolve()
+		await flushPromises()
 		expect(annotations.value[1].style.strokeWidth).toBe(3.5)
 
 		editor.exitEditMode()

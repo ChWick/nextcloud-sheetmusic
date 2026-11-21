@@ -3,14 +3,16 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
+import axios from '@nextcloud/axios'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import PageOrderResetTool from '../../../src/components/tools/PageOrderResetTool.vue'
-import { apiGet, apiPost } from '../../../src/api/client'
 
-vi.mock('../../../src/api/client', () => ({
-	apiGet: vi.fn(),
-	apiPost: vi.fn(),
+vi.mock('@nextcloud/axios', () => ({
+	default: {
+		get: vi.fn(),
+		post: vi.fn(),
+	},
 }))
 
 vi.mock('vue-router', () => ({
@@ -87,10 +89,10 @@ describe('PageOrderResetTool', () => {
 
 	beforeEach(() => {
 		vi.clearAllMocks()
-		vi.mocked(apiGet).mockResolvedValue({
+		vi.mocked(axios.get).mockResolvedValue({
 			data: { ocs: { data: structuredClone(mockAuditData) } },
 		} as any)
-		vi.mocked(apiPost).mockResolvedValue({
+		vi.mocked(axios.post).mockResolvedValue({
 			data: { ocs: { data: { success: true, resetCount: 1 } } },
 		} as any)
 	})
@@ -114,7 +116,7 @@ describe('PageOrderResetTool', () => {
 		})
 
 		await vi.waitFor(() => {
-			expect(apiGet).toHaveBeenCalledWith('/api/libraries/1/tools/page-order-audit')
+			expect(axios.get).toHaveBeenCalledWith(expect.stringContaining('/api/libraries/1/tools/page-order-audit'))
 		})
 
 		expect(wrapper.find('[data-test="page-order-reset-tool"]').exists()).toBe(true)
@@ -141,14 +143,14 @@ describe('PageOrderResetTool', () => {
 		})
 
 		await vi.waitFor(() => {
-			expect(apiGet).toHaveBeenCalled()
+			expect(axios.get).toHaveBeenCalled()
 		})
 
 		const resetAllBtn = wrapper.find('[data-test="reset-all-filtered-btn"]')
 		await resetAllBtn.trigger('click')
 
-		expect(apiPost).toHaveBeenCalledWith(
-			'/api/libraries/1/tools/reset-page-orders',
+		expect(axios.post).toHaveBeenCalledWith(
+			expect.stringContaining('/api/libraries/1/tools/reset-page-orders'),
 			expect.objectContaining({
 				fileIds: [1],
 				mode: 'stuck',
@@ -179,7 +181,7 @@ describe('PageOrderResetTool', () => {
 		})
 
 		await vi.waitFor(() => {
-			expect(apiGet).toHaveBeenCalled()
+			expect(axios.get).toHaveBeenCalled()
 		})
 
 		expect(wrapper.find('[data-test="page-order-row-1"]').exists()).toBe(true)
@@ -187,8 +189,8 @@ describe('PageOrderResetTool', () => {
 		const resetBtn = wrapper.find('[data-test="reset-row-btn-1"]')
 		await resetBtn.trigger('click')
 
-		expect(apiPost).toHaveBeenCalledWith(
-			'/api/libraries/1/tools/reset-page-orders',
+		expect(axios.post).toHaveBeenCalledWith(
+			expect.stringContaining('/api/libraries/1/tools/reset-page-orders'),
 			expect.objectContaining({
 				fileIds: [1],
 				mode: 'stuck',
@@ -223,7 +225,7 @@ describe('PageOrderResetTool', () => {
 		})
 
 		await vi.waitFor(() => {
-			expect(apiGet).toHaveBeenCalled()
+			expect(axios.get).toHaveBeenCalled()
 		})
 
 		const editBtn = wrapper.find('[data-test="edit-row-btn-1"]')
@@ -254,7 +256,7 @@ describe('PageOrderResetTool', () => {
 		})
 
 		await vi.waitFor(() => {
-			expect(apiGet).toHaveBeenCalled()
+			expect(axios.get).toHaveBeenCalled()
 		})
 
 		// Switch to all-1-1 tab

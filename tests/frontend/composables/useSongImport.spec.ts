@@ -1,9 +1,11 @@
+import axios from '@nextcloud/axios'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { useSongImport } from '../../../src/composables/useSongImport'
-import * as client from '../../../src/api/client'
 
-vi.mock('../../../src/api/client', () => ({
-	apiPost: vi.fn(),
+vi.mock('@nextcloud/axios', () => ({
+	default: {
+		post: vi.fn(),
+	},
 }))
 
 describe('useSongImport composable', () => {
@@ -34,7 +36,7 @@ describe('useSongImport composable', () => {
 	})
 
 	it('parses file metadata and notifies onSongReady when handling imported file', async () => {
-		vi.mocked(client.apiPost).mockResolvedValueOnce({
+		vi.mocked(axios.post).mockResolvedValueOnce({
 			data: { ocs: { data: { title: 'Imported Title', composers: ['Bach'] } } },
 		} as any)
 
