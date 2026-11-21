@@ -516,7 +516,7 @@ function cleanupObserver() {
 	renderedPages.clear()
 }
 
-const MIN_FIT_SCALE = 0.05
+const MIN_FIT_SCALE = 0.01
 const MAX_FIT_SCALE = 6.0
 const MIN_CUSTOM_SCALE = 0.2
 const MAX_CUSTOM_SCALE = 4.0
@@ -720,6 +720,19 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 		releaseChildCanvases(pdfStage.value)
 		onBeforeSwap?.()
 		pdfStage.value.style.gap = nextStageGap
+		if (isDoubleLayout && children.length === 2) {
+			pdfStage.value.style.display = 'grid'
+			pdfStage.value.style.gridTemplateColumns = 'repeat(2, minmax(0, 1fr))'
+			pdfStage.value.style.alignItems = 'center'
+			pdfStage.value.style.justifyItems = 'center'
+			pdfStage.value.style.width = zoomMode.value === 'custom' ? 'max-content' : '100%'
+		} else {
+			pdfStage.value.style.display = ''
+			pdfStage.value.style.gridTemplateColumns = ''
+			pdfStage.value.style.alignItems = ''
+			pdfStage.value.style.justifyItems = ''
+			pdfStage.value.style.width = ''
+		}
 		pdfStage.value.replaceChildren(...children)
 	}
 
@@ -882,10 +895,11 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 			intersectionObserver.observe(placeholder)
 		}
 	} else if (isDoubleLayout) {
-		// Double page mode: wrap each page in a fixed half-width slot so each page
-		// occupies exactly half the stage and stays identical in size and position across turns.
+		// Double page mode: wrap each page in an equal 50% slot so each page
+		// strictly occupies half the stage and never crosses the midline or shifts across turns.
 		const newSlots: HTMLElement[] = []
 		const newPlaceholders: HTMLElement[] = []
+		const isTwoPageSpread = pagesToRender.length === 2
 		for (const item of pagesToRender) {
 			const slot = document.createElement('div')
 			slot.className = 'sheetmusic-double-slot'
@@ -893,12 +907,21 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 			slot.style.justifyContent = 'center'
 			slot.style.alignItems = 'center'
 			slot.style.boxSizing = 'border-box'
-			if (zoomMode.value === 'custom') {
+			slot.style.minWidth = '0'
+			if (isTwoPageSpread) {
+				slot.style.width = '100%'
+				if (zoomMode.value !== 'custom') {
+					slot.style.maxWidth = `${doubleSlotW}px`
+					slot.style.overflow = 'hidden'
+				}
+			} else if (zoomMode.value === 'custom') {
 				slot.style.minWidth = `${doubleSlotW}px`
 				slot.style.flex = '0 0 auto'
 			} else {
 				slot.style.width = `${doubleSlotW}px`
+				slot.style.maxWidth = `${doubleSlotW}px`
 				slot.style.flex = `0 0 ${doubleSlotW}px`
+				slot.style.overflow = 'hidden'
 			}
 
 			const placeholder = document.createElement('div')

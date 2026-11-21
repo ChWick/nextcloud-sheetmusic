@@ -389,8 +389,12 @@ describe('FilePreviewer.vue', () => {
 		const expectedSlotW = 398
 		const slotsBefore = wrapper.findAll('.sheetmusic-double-slot')
 		expect(slotsBefore).toHaveLength(2)
-		expect((slotsBefore[0].element as HTMLElement).style.width).toBe(`${expectedSlotW}px`)
-		expect((slotsBefore[1].element as HTMLElement).style.width).toBe(`${expectedSlotW}px`)
+		const stageEl = slotsBefore[0].element.parentElement as HTMLElement
+		expect(stageEl.style.display).toBe('grid')
+		expect(stageEl.style.gridTemplateColumns).toBe('repeat(2, minmax(0, 1fr))')
+		expect(stageEl.style.width).toBe('100%')
+		expect((slotsBefore[0].element as HTMLElement).style.maxWidth).toBe(`${expectedSlotW}px`)
+		expect((slotsBefore[1].element as HTMLElement).style.maxWidth).toBe(`${expectedSlotW}px`)
 
 		const getRenderedSize = (pageNum: number) => {
 			const placeholder = wrapper.find(`[data-page-num="${pageNum}"]`)
@@ -416,8 +420,8 @@ describe('FilePreviewer.vue', () => {
 
 		const slotsAfterHalf = wrapper.findAll('.sheetmusic-double-slot')
 		expect(slotsAfterHalf).toHaveLength(2)
-		expect((slotsAfterHalf[0].element as HTMLElement).style.width).toBe(`${expectedSlotW}px`)
-		expect((slotsAfterHalf[1].element as HTMLElement).style.width).toBe(`${expectedSlotW}px`)
+		expect((slotsAfterHalf[0].element as HTMLElement).style.maxWidth).toBe(`${expectedSlotW}px`)
+		expect((slotsAfterHalf[1].element as HTMLElement).style.maxWidth).toBe(`${expectedSlotW}px`)
 
 		const page3Size = getRenderedSize(3)
 		const page2SizeAfterHalf = getRenderedSize(2)
@@ -483,5 +487,58 @@ describe('FilePreviewer.vue', () => {
 
 		const canvas = wrapper.find('[data-page-num="3"] canvas.sheetmusic-pdf-page').element as HTMLCanvasElement
 		expect(canvas.style.width).toBe('398px')
+	})
+
+	it('strictly enforces 50/50 grid columns when a cropped horizontal page is paired with a portrait page', async () => {
+		const pageDims: Record<number, { width: number; height: number }> = {
+			1: { width: 1400, height: 600 }, // cropped horizontal page
+			2: { width: 500, height: 900 }, // portrait page
+		}
+
+		const pdfjs = await import('pdfjs-dist')
+		vi.mocked(pdfjs.getDocument).mockReturnValueOnce({
+			promise: Promise.resolve({
+				numPages: 2,
+				getPage: vi.fn().mockImplementation((pageNum: number) => {
+					const dims = pageDims[pageNum] ?? { width: 600, height: 800 }
+					return Promise.resolve({
+						rotate: 0,
+						getViewport: vi.fn(({ scale }: { scale: number }) => ({
+							width: dims.width * scale,
+							height: dims.height * scale,
+						})),
+						render: vi.fn().mockReturnValue({ promise: Promise.resolve() }),
+					})
+				}),
+			}),
+		} as any)
+
+		const wrapper = mount(FilePreviewer, {
+			props: {
+				filePath: '/files/scores/CroppedHorizontalPair.pdf',
+				initialPageLayout: 'double',
+				initialZoomMode: 'fit-page',
+				noPadding: true,
+			},
+		})
+		await flushPromises()
+
+		const slots = wrapper.findAll('.sheetmusic-double-slot')
+		expect(slots).toHaveLength(2)
+		const stageEl = slots[0].element.parentElement as HTMLElement
+		expect(stageEl.style.display).toBe('grid')
+		expect(stageEl.style.gridTemplateColumns).toBe('repeat(2, minmax(0, 1fr))')
+		expect(stageEl.style.width).toBe('100%')
+
+		const leftCanvas = wrapper.find('[data-page-num="1"] canvas.sheetmusic-pdf-page').element as HTMLCanvasElement
+		const rightCanvas = wrapper.find('[data-page-num="2"] canvas.sheetmusic-pdf-page').element as HTMLCanvasElement
+		expect(Number.parseInt(leftCanvas.style.width, 10)).toBeLessThanOrEqual(398)
+		expect(Number.parseInt(rightCanvas.style.width, 10)).toBeLessThanOrEqual(398)
+
+		// Even in custom zoom mode, both columns remain an equal 50/50 grid
+		;(wrapper.vm as any).setZoomMode('custom')
+		await flushPromises()
+		expect(stageEl.style.display).toBe('grid')
+		expect(stageEl.style.gridTemplateColumns).toBe('repeat(2, minmax(0, 1fr))')
 	})
 })
