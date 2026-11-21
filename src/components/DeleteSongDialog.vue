@@ -1,11 +1,9 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
-import NcDialog from '@nextcloud/vue/components/NcDialog'
-import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
-import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import { showError } from '@nextcloud/dialogs'
+import ConfirmDeleteDialog from './ConfirmDeleteDialog.vue'
 import type { LibraryData, Song } from '../types/song'
 import { apiDelete } from '../api/client'
 import { describeRequestFailure } from '../utils/api'
@@ -47,19 +45,17 @@ async function confirmDeleteSong() {
 		isDeletingSong.value = false
 	}
 }
-
-function handleClose() {
-	if (isDeletingSong.value) return
-	emit('update:open', false)
-}
 </script>
 
 <template>
-	<NcDialog
-		v-if="open"
-		:name="t('sheetmusic', 'Delete song')"
-		size="normal"
-		@close="handleClose">
+	<ConfirmDeleteDialog
+		:open="open"
+		:title="t('sheetmusic', 'Delete song')"
+		:confirm-label="t('sheetmusic', 'Delete song')"
+		:is-deleting="isDeletingSong"
+		:error="deleteError"
+		@close="emit('update:open', false)"
+		@confirm="confirmDeleteSong">
 		<p>{{ t('sheetmusic', 'Delete "{title}" from this library?', { title: song?.title ?? '' }, { escape: false }) }}</p>
 		<p>{{ t('sheetmusic', 'The song and everything pointing at it is removed from the MobileSheets database.') }}</p>
 		<NcCheckboxRadioSwitch v-model="deleteFiles" type="checkbox">
@@ -71,27 +67,5 @@ function handleClose() {
 		<p v-else>
 			{{ t('sheetmusic', 'The {count} attached file(s) are kept in your Nextcloud files.', { count: fileCount ?? song?.files?.length ?? 0 }, { escape: false }) }}
 		</p>
-		<p v-if="deleteError" :class="$style.error" role="alert">{{ deleteError }}</p>
-		<template #actions>
-			<NcButton @click="handleClose">
-				{{ t('sheetmusic', 'Cancel') }}
-			</NcButton>
-			<NcButton
-				variant="error"
-				:disabled="isDeletingSong"
-				@click="confirmDeleteSong">
-				<template v-if="isDeletingSong">
-					<NcLoadingIcon :size="16" />
-				</template>
-				{{ t('sheetmusic', 'Delete song') }}
-			</NcButton>
-		</template>
-	</NcDialog>
+	</ConfirmDeleteDialog>
 </template>
-
-<style module>
-.error {
-	color: var(--color-error);
-	margin: 8px 0;
-}
-</style>
