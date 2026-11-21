@@ -1,3 +1,4 @@
+import axios from '@nextcloud/axios'
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { reactive } from 'vue'
@@ -29,17 +30,11 @@ vi.mock('vue-router', async (importOriginal) => {
 	}
 })
 
-const mockApiGet = vi.fn()
-vi.mock('../../../src/api/client', () => ({
-	apiGet: (...args: any[]) => mockApiGet(...args),
-	apiPost: vi.fn(),
-	apiDelete: vi.fn(),
-}))
-
 vi.mock('@nextcloud/axios', () => ({
 	default: {
-		get: vi.fn().mockResolvedValue({ data: { ocs: { data: { sublibraries: [] } } } }),
+		get: vi.fn(),
 		post: vi.fn(),
+		delete: vi.fn(),
 	},
 }))
 
@@ -52,26 +47,31 @@ describe('SongsView.vue not-found and loading states', () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
 		mockRoute.query = {}
-		mockApiGet.mockResolvedValue({
-			data: {
-				ocs: {
-					data: {
-						songs: [{ id: 1, title: 'Existing Song', files: [] }],
-						composers: [],
-						books: [],
-						collections: [],
-						artists: [],
-						genres: [],
-						keys: [],
-						customGroups: [],
-						years: [],
-						signatures: [],
-						sourceTypes: [],
-						instruments: [],
-						arrangers: [],
+		vi.mocked(axios.get).mockImplementation(async (url: string) => {
+			if (url.includes('/sublibraries')) {
+				return { data: { ocs: { data: { sublibraries: [] } } } } as any
+			}
+			return {
+				data: {
+					ocs: {
+						data: {
+							songs: [{ id: 1, title: 'Existing Song', files: [] }],
+							composers: [],
+							books: [],
+							collections: [],
+							artists: [],
+							genres: [],
+							keys: [],
+							customGroups: [],
+							years: [],
+							signatures: [],
+							sourceTypes: [],
+							instruments: [],
+							arrangers: [],
+						},
 					},
 				},
-			},
+			} as any
 		})
 	})
 
@@ -92,7 +92,12 @@ describe('SongsView.vue not-found and loading states', () => {
 
 	it('shows loading state while library loads and then Song not found for a missing song ID', async () => {
 		let resolveSongs!: (val: any) => void
-		mockApiGet.mockImplementationOnce(() => new Promise((resolve) => { resolveSongs = resolve }))
+		vi.mocked(axios.get).mockImplementation((url: string) => {
+			if (url.includes('/sublibraries')) {
+				return Promise.resolve({ data: { ocs: { data: { sublibraries: [] } } } } as any)
+			}
+			return new Promise((resolve) => { resolveSongs = resolve })
+		})
 		mockRoute.query = { song: '999' }
 
 		const wrapper = mount(SongsView, {

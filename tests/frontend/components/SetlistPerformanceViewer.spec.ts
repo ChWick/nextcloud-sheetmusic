@@ -3,13 +3,14 @@ import { describe, expect, it, vi } from 'vitest'
 import SetlistPerformanceViewer from '../../../src/components/setlists/SetlistPerformanceViewer.vue'
 import type { SetlistItem, Song } from '../../../src/types/song'
 
-vi.mock('../../../src/api/annotations', () => ({
-	fetchSongAnnotations: vi.fn().mockResolvedValue([]),
-}))
-
 vi.mock('@nextcloud/axios', () => ({
 	default: {
-		get: vi.fn().mockResolvedValue({ data: new ArrayBuffer(0) }),
+		get: vi.fn().mockImplementation(async (url: string) => {
+			if (url.includes('/annotations')) {
+				return { data: { ocs: { data: [] } } }
+			}
+			return { data: new ArrayBuffer(0) }
+		}),
 	},
 }))
 
@@ -297,8 +298,8 @@ describe('SetlistPerformanceViewer', () => {
 	})
 
 	it('reuses initialAnnotations in single-song mode without re-fetching annotations', async () => {
-		const { fetchSongAnnotations } = await import('../../../src/api/annotations')
-		vi.mocked(fetchSongAnnotations).mockClear()
+		const { default: axios } = await import('@nextcloud/axios')
+		vi.mocked(axios.get).mockClear()
 
 		const wrapper = mount(SetlistPerformanceViewer, {
 			props: {
@@ -311,7 +312,8 @@ describe('SetlistPerformanceViewer', () => {
 		})
 		await wrapper.vm.$nextTick()
 
-		expect(fetchSongAnnotations).not.toHaveBeenCalled()
+		const annotationCalls = vi.mocked(axios.get).mock.calls.filter(([url]) => String(url).includes('/annotations'))
+		expect(annotationCalls).toHaveLength(0)
 		wrapper.unmount()
 	})
 })

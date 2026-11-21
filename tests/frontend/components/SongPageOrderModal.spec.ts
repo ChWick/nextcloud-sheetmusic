@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
+import axios from '@nextcloud/axios'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { config, mount } from '@vue/test-utils'
 import SongPageOrderModal from '../../../src/components/song-pdf/SongPageOrderModal.vue'
@@ -11,8 +12,10 @@ import type { SongFile } from '../../../src/types/song'
 // Avoid teleporting NcDialog to body so wrapper.find queries work without mocks
 config.global.stubs = { teleport: true }
 
-vi.mock('../../../src/api/client', () => ({
-	apiPost: vi.fn(),
+vi.mock('@nextcloud/axios', () => ({
+	default: {
+		post: vi.fn(),
+	},
 }))
 
 vi.mock('@nextcloud/dialogs', () => ({
@@ -250,8 +253,7 @@ describe('SongPageOrderModal.vue', () => {
 	})
 
 	it('calls apiPost and emits saved event upon saving valid page order', async () => {
-		const { apiPost } = await import('../../../src/api/client')
-		vi.mocked(apiPost).mockResolvedValue({
+		vi.mocked(axios.post).mockResolvedValue({
 			data: {
 				ocs: {
 					data: { songs: [] },
@@ -272,17 +274,11 @@ describe('SongPageOrderModal.vue', () => {
 		expect(saveBtn).toBeDefined()
 		await saveBtn!.trigger('click')
 
-		expect(apiPost).toHaveBeenCalledWith(
-			'/api/songs/{id}/file/{fileId}/page-order',
+		expect(axios.post).toHaveBeenCalledWith(
+			expect.stringContaining('/api/songs/42/file/10/page-order'),
 			{
 				libraryId: 99,
 				pageOrder: '1-4',
-			},
-			{
-				pathParams: {
-					id: 42,
-					fileId: 10,
-				},
 			},
 		)
 		expect(wrapper.emitted('saved')).toBeTruthy()

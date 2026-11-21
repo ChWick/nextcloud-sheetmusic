@@ -1,28 +1,30 @@
+import axios from '@nextcloud/axios'
 import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import OrphanFileFixer from '../../../src/components/OrphanFileFixer.vue'
-import * as apiClient from '../../../src/api/client'
 
-vi.mock('../../../src/api/client', () => ({
-	apiGet: vi.fn().mockResolvedValue({
-		data: {
-			ocs: {
-				data: {
-					songs: [
-						{ id: 1, title: 'Joshua', files: [] },
-						{ id: 2, title: 'Hallelujah', files: [] },
-					],
-					composers: [],
-					books: [],
-					collections: [],
-					artists: [],
+vi.mock('@nextcloud/axios', () => ({
+	default: {
+		get: vi.fn().mockResolvedValue({
+			data: {
+				ocs: {
+					data: {
+						songs: [
+							{ id: 1, title: 'Joshua', files: [] },
+							{ id: 2, title: 'Hallelujah', files: [] },
+						],
+						composers: [],
+						books: [],
+						collections: [],
+						artists: [],
+					},
 				},
 			},
-		},
-	}),
-	apiPost: vi.fn().mockResolvedValue({
-		data: { ocs: { data: { success: true } } },
-	}),
+		}),
+		post: vi.fn().mockResolvedValue({
+			data: { ocs: { data: { success: true } } },
+		}),
+	},
 }))
 
 vi.mock('../../../src/components/SongEditor.vue', () => ({
@@ -113,6 +115,9 @@ describe('OrphanFileFixer.vue', () => {
 		const findBtn = wrapper.findAll('button').find(b => b.text().includes('Find Existing Song'))
 		await findBtn?.trigger('click')
 
-		expect(apiClient.apiGet).toHaveBeenCalledWith('/api/songs', { queryParams: { id: '1' } })
+		expect(axios.get).toHaveBeenCalledWith(
+			expect.stringContaining('/api/songs'),
+			expect.objectContaining({ params: { id: '1' } }),
+		)
 	})
 })
