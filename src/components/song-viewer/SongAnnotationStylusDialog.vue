@@ -13,14 +13,14 @@ import { useStylusSettings } from '../../composables/useStylusSettings'
 import type { NormalizedPoint } from '../../types/annotation'
 import { generatePressureStrokePath, generateSmoothSvgPath } from '../../utils/annotation'
 import {
-	applyPressureSensitivity,
+	applyPenTipOffset,
 	computePressureCalibrationRange,
 	computeTipCalibrationOffset,
-	computeVelocityPressure,
-	isVaryingHardwarePressureEvent,
-	mapRawPressure,
+	createStrokePressureTracker,
+	getCoalescedPointerEvents,
 	type CalibrationSample,
 	type PressureMode,
+	type StrokePressureTracker,
 } from '../../utils/stylus-settings'
 
 const emit = defineEmits<{
@@ -125,11 +125,7 @@ const lastMappedPressure = ref<number>(0)
 const recordedRawHardwareSamples = ref<number[]>([])
 const pressureCalibrationMessage = ref('')
 
-let padLastClientX = 0
-let padLastClientY = 0
-let padLastTime = 0
-let padLastPressure = 0.5
-let padHasHardwarePressure = false
+let padPressureTracker: StrokePressureTracker | null = null
 
 const canAutoCalibratePressure = computed(() =>
 	recordedRawHardwareSamples.value.length >= 4,
@@ -140,67 +136,24 @@ function padEventToNorm(ev: PointerEvent): NormalizedPoint {
 	if (!el) return { x: 0, y: 0 }
 	const rect = el.getBoundingClientRect()
 	if (rect.width <= 0 || rect.height <= 0) return { x: 0, y: 0 }
-	const dx = ev.pointerType === 'pen' ? settings.value.offsetX : 0
-	const dy = ev.pointerType === 'pen' ? settings.value.offsetY : 0
-	const x = Math.min(1, Math.max(0, (ev.clientX + dx - rect.left) / rect.width))
-	const y = Math.min(1, Math.max(0, (ev.clientY + dy - rect.top) / rect.height))
+	const adj = applyPenTipOffset(ev.clientX, ev.clientY, ev.pointerType, settings.value)
+	const x = Math.min(1, Math.max(0, (adj.x - rect.left) / rect.width))
+	const y = Math.min(1, Math.max(0, (adj.y - rect.top) / rect.height))
 	return {
 		x: Math.round(x * 10000) / 10000,
 		y: Math.round(y * 10000) / 10000,
 	}
 }
 
-function computePadPressure(ev: PointerEvent, isStart: boolean): number | undefined {
-	const cfg = settings.value
-	const rawP = typeof ev.pressure === 'number' ? ev.pressure : 0.5
+function samplePadPressure(ev: PointerEvent): number | undefined {
+	const result = padPressureTracker?.sample(ev, settings.value)
 	lastInputType.value = ev.pointerType || 'mouse'
-	lastRawPressure.value = Math.round(rawP * 100) / 100
-
-	const isHwVarying = isVaryingHardwarePressureEvent(ev.pointerType, rawP)
-	if (isHwVarying) {
-		padHasHardwarePressure = true
-		recordedRawHardwareSamples.value.push(rawP)
+	lastRawPressure.value = Math.round((result?.rawPressure ?? 0.5) * 100) / 100
+	if (result?.isHardwareVarying) {
+		recordedRawHardwareSamples.value.push(result.rawPressure)
 	}
-
-	if (cfg.pressureMode === 'off' || cfg.pressureSensitivity <= 0) {
-		lastMappedPressure.value = 0.5
-		return undefined
-	}
-
-	const useHardware = cfg.pressureMode === 'hardware'
-		|| (cfg.pressureMode === 'auto' && ev.pointerType === 'pen' && padHasHardwarePressure)
-
-	if (useHardware) {
-		if (ev.pointerType !== 'pen' && cfg.pressureMode === 'hardware') {
-			lastMappedPressure.value = 0.5
-			return undefined
-		}
-		const mapped = mapRawPressure(rawP, cfg)
-		padLastPressure = mapped
-		const effective = applyPressureSensitivity(mapped, cfg.pressureSensitivity)
-		lastMappedPressure.value = effective
-		return effective
-	}
-
-	if (cfg.pressureMode === 'hardware') {
-		lastMappedPressure.value = 0.5
-		return undefined
-	}
-
-	if (isStart) {
-		padLastPressure = 0.5
-		const effective = applyPressureSensitivity(0.5, cfg.pressureSensitivity)
-		lastMappedPressure.value = effective
-		return effective
-	}
-
-	const distPx = Math.hypot(ev.clientX - padLastClientX, ev.clientY - padLastClientY)
-	const dtMs = Math.max(1, (ev.timeStamp || Date.now()) - padLastTime)
-	const velP = computeVelocityPressure(distPx, dtMs, padLastPressure)
-	padLastPressure = velP
-	const effective = applyPressureSensitivity(velP, cfg.pressureSensitivity)
-	lastMappedPressure.value = effective
-	return effective
+	lastMappedPressure.value = result?.effectivePressure ?? 0.5
+	return result?.effectivePressure
 }
 
 function onPadPointerDown(e: PointerEvent) {
@@ -209,35 +162,25 @@ function onPadPointerDown(e: PointerEvent) {
 		markPenDetected()
 	}
 	scratchpadRef.value?.setPointerCapture?.(e.pointerId)
-	padHasHardwarePressure = isVaryingHardwarePressureEvent(e.pointerType, e.pressure)
-	padLastClientX = e.clientX
-	padLastClientY = e.clientY
-	padLastTime = e.timeStamp || Date.now()
-	padLastPressure = 0.5
+	padPressureTracker = createStrokePressureTracker(e.pointerType)
 
 	const pt = padEventToNorm(e)
-	const p = computePadPressure(e, true)
-	const stroke: PadStroke = {
+	const p = samplePadPressure(e)
+	activeStroke.value = {
 		points: [p !== undefined ? { ...pt, p } : pt],
 		usePressure: p !== undefined,
 	}
-	activeStroke.value = stroke
 }
 
 function onPadPointerMove(e: PointerEvent) {
 	const stroke = activeStroke.value
 	if (!stroke) return
-	const coalesced = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : []
-	const events = coalesced.length > 0 ? coalesced : [e]
-	for (const ev of events) {
+	for (const ev of getCoalescedPointerEvents(e)) {
 		const pt = padEventToNorm(ev)
 		const last = stroke.points[stroke.points.length - 1]
 		if (!last || Math.hypot(pt.x - last.x, pt.y - last.y) > 0.002) {
-			const p = computePadPressure(ev, false)
+			const p = samplePadPressure(ev)
 			stroke.points.push(p !== undefined ? { ...pt, p } : pt)
-			padLastClientX = ev.clientX
-			padLastClientY = ev.clientY
-			padLastTime = ev.timeStamp || Date.now()
 		}
 	}
 }
@@ -250,6 +193,7 @@ function onPadPointerUp(e: PointerEvent) {
 	}
 	strokes.value = [...strokes.value, stroke]
 	activeStroke.value = null
+	padPressureTracker = null
 }
 
 function clearScratchpad() {

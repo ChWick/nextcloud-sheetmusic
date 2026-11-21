@@ -6,10 +6,12 @@
 import { describe, expect, it } from 'vitest'
 import { MemoryStorageAdapter } from '../../../src/utils/settings-store'
 import {
+	applyPenTipOffset,
 	applyPressureSensitivity,
 	computePressureCalibrationRange,
 	computeTipCalibrationOffset,
 	computeVelocityPressure,
+	createStrokePressureTracker,
 	createStylusSettingsStore,
 	DEFAULT_STYLUS_SETTINGS,
 	isStylusEraserEvent,
@@ -148,5 +150,21 @@ describe('stylus-settings utilities', () => {
 		const moved = translateAnnotation(ann, 0.05, -0.02)
 		expect(moved.data.points?.[0].p).toBe(0.2)
 		expect(moved.data.points?.[1].p).toBe(0.8)
+	})
+
+	it('applies tip offset only to pen events and tracks hardware vs velocity pressure', () => {
+		expect(applyPenTipOffset(100, 200, 'pen', { offsetX: 5, offsetY: -3 })).toEqual({ x: 105, y: 197 })
+		expect(applyPenTipOffset(100, 200, 'mouse', { offsetX: 5, offsetY: -3 })).toEqual({ x: 100, y: 200 })
+
+		const penTracker = createStrokePressureTracker('pen')
+		const hwSettings = { ...DEFAULT_STYLUS_SETTINGS, pressureMode: 'auto' as const, pressureSensitivity: 1 }
+		const s1 = penTracker.sample({ pointerType: 'pen', pressure: 0.2, clientX: 0, clientY: 0, timeStamp: 10 }, hwSettings)
+		const s2 = penTracker.sample({ pointerType: 'pen', pressure: 0.8, clientX: 20, clientY: 0, timeStamp: 26 }, hwSettings)
+		expect(s1.isHardwareVarying).toBe(true)
+		expect(s2.effectivePressure).toBeGreaterThan(s1.effectivePressure ?? 0)
+
+		const mouseTracker = createStrokePressureTracker('mouse')
+		const offSettings = { ...DEFAULT_STYLUS_SETTINGS, pressureMode: 'off' as const }
+		expect(mouseTracker.sample({ pointerType: 'mouse', pressure: 0.5, clientX: 0, clientY: 0, timeStamp: 10 }, offSettings).effectivePressure).toBeUndefined()
 	})
 })

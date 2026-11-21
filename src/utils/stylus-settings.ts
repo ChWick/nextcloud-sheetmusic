@@ -122,6 +122,9 @@ export function createStylusSettingsStore(storage?: StorageAdapter): SettingsSto
 
 /**
  * Map a raw PointerEvent pressure [0..1] using calibrated min/max thresholds and gamma curve.
+ *
+ * @param rawPressure Raw PointerEvent pressure value
+ * @param settings Active stylus settings
  */
 export function mapRawPressure(rawPressure: number, settings: StylusSettings): number {
 	if (!Number.isFinite(rawPressure)) return 0.5
@@ -134,6 +137,9 @@ export function mapRawPressure(rawPressure: number, settings: StylusSettings): n
 
 /**
  * Apply pressureSensitivity to blend a normalized pressure [0..1] toward neutral 0.5.
+ *
+ * @param pressure Mapped pressure in [0..1]
+ * @param sensitivity Sensitivity weight in [0..1]
  */
 export function applyPressureSensitivity(pressure: number, sensitivity: number): number {
 	const s = clamp(sensitivity, 0, 1)
@@ -144,6 +150,10 @@ export function applyPressureSensitivity(pressure: number, sensitivity: number):
 /**
  * Estimate simulated pressure [0..1] from pointer movement velocity.
  * Slower strokes produce higher pressure (thicker), faster strokes produce lower pressure (thinner).
+ *
+ * @param distPx Distance moved in CSS pixels
+ * @param dtMs Elapsed time in milliseconds
+ * @param prevPressure Previous smoothed pressure value
  */
 export function computeVelocityPressure(
 	distPx: number,
@@ -162,6 +172,9 @@ export function computeVelocityPressure(
 
 /**
  * Detect whether a PointerEvent reports real hardware pressure (vs constant synthetic 0 / 0.5 / 1).
+ *
+ * @param pointerType PointerEvent pointerType string
+ * @param pressure Raw PointerEvent pressure value
  */
 export function isVaryingHardwarePressureEvent(pointerType: string, pressure: number): boolean {
 	if (pointerType !== 'pen') return false
@@ -171,6 +184,8 @@ export function isVaryingHardwarePressureEvent(pointerType: string, pressure: nu
 
 /**
  * Detect whether a PointerEvent comes from the hardware eraser end of a stylus.
+ *
+ * @param e Pointer event fields to inspect
  */
 export function isStylusEraserEvent(e: Pick<PointerEvent, 'pointerType' | 'button' | 'buttons'>): boolean {
 	if (e.pointerType !== 'pen') return false
@@ -178,8 +193,133 @@ export function isStylusEraserEvent(e: Pick<PointerEvent, 'pointerType' | 'butto
 }
 
 /**
+ * Apply calibrated tip offset (in CSS px) to pen coordinates; non-pen input is unchanged.
+ *
+ * @param clientX Raw clientX coordinate
+ * @param clientY Raw clientY coordinate
+ * @param pointerType PointerEvent pointerType string
+ * @param settings Active stylus settings
+ */
+export function applyPenTipOffset(
+	clientX: number,
+	clientY: number,
+	pointerType: string | undefined,
+	settings: Pick<StylusSettings, 'offsetX' | 'offsetY'>,
+): { x: number; y: number } {
+	if (pointerType === 'pen') {
+		return {
+			x: clientX + settings.offsetX,
+			y: clientY + settings.offsetY,
+		}
+	}
+	return { x: clientX, y: clientY }
+}
+
+/**
+ * Return coalesced high-frequency pointer events when supported, falling back to [e].
+ *
+ * @param e PointerEvent to expand
+ */
+export function getCoalescedPointerEvents(e: PointerEvent): PointerEvent[] {
+	const coalesced = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : []
+	return coalesced.length > 0 ? coalesced : [e]
+}
+
+export interface PressureSampleResult {
+	rawPressure: number
+	effectivePressure: number | undefined
+	isHardwareVarying: boolean
+}
+
+export interface StrokePressureTracker {
+	sample(
+		ev: Pick<PointerEvent, 'pointerType' | 'pressure' | 'clientX' | 'clientY' | 'timeStamp'>,
+		settings: StylusSettings,
+	): PressureSampleResult
+}
+
+/**
+ * Create a per-stroke tracker that resolves hardware or velocity-simulated pressure
+ * consistently across both the annotation overlay and the calibration scratchpad.
+ *
+ * @param initialPointerType Pointer type that started the stroke
+ */
+export function createStrokePressureTracker(initialPointerType = ''): StrokePressureTracker {
+	let hasHardwarePressure = false
+	let lastClientX: number | undefined
+	let lastClientY: number | undefined
+	let lastTimeStamp: number | undefined
+	let lastPressure = 0.5
+
+	return {
+		sample(ev, settings) {
+			const pType = ev.pointerType || initialPointerType
+			const rawPressure = typeof ev.pressure === 'number' && Number.isFinite(ev.pressure) ? ev.pressure : 0.5
+			const isHardwareVarying = isVaryingHardwarePressureEvent(pType, rawPressure)
+			if (isHardwareVarying) {
+				hasHardwarePressure = true
+			}
+
+			const now = ev.timeStamp || Date.now()
+			const prevX = lastClientX
+			const prevY = lastClientY
+			const prevTime = lastTimeStamp
+			lastClientX = ev.clientX
+			lastClientY = ev.clientY
+			lastTimeStamp = now
+
+			if (settings.pressureMode === 'off' || settings.pressureSensitivity <= 0) {
+				return { rawPressure, effectivePressure: undefined, isHardwareVarying }
+			}
+
+			const useHardware = settings.pressureMode === 'hardware'
+				|| (settings.pressureMode === 'auto' && pType === 'pen' && hasHardwarePressure)
+
+			if (useHardware) {
+				if (pType !== 'pen' && settings.pressureMode === 'hardware') {
+					return { rawPressure, effectivePressure: undefined, isHardwareVarying }
+				}
+				const mapped = mapRawPressure(rawPressure, settings)
+				lastPressure = mapped
+				return {
+					rawPressure,
+					effectivePressure: applyPressureSensitivity(mapped, settings.pressureSensitivity),
+					isHardwareVarying,
+				}
+			}
+
+			if (settings.pressureMode === 'hardware') {
+				return { rawPressure, effectivePressure: undefined, isHardwareVarying }
+			}
+
+			// Velocity-simulated pressure ('velocity' mode or 'auto' fallback)
+			if (prevX === undefined || prevY === undefined || prevTime === undefined) {
+				lastPressure = 0.5
+				return {
+					rawPressure,
+					effectivePressure: applyPressureSensitivity(0.5, settings.pressureSensitivity),
+					isHardwareVarying,
+				}
+			}
+
+			const distPx = Math.hypot(ev.clientX - prevX, ev.clientY - prevY)
+			const dtMs = Math.max(1, now - prevTime)
+			const velP = computeVelocityPressure(distPx, dtMs, lastPressure)
+			lastPressure = velP
+			return {
+				rawPressure,
+				effectivePressure: applyPressureSensitivity(velP, settings.pressureSensitivity),
+				isHardwareVarying,
+			}
+		},
+	}
+}
+
+/**
  * Compute mean tip offset (in CSS px) from calibration target taps.
  * Offset is added to raw pen clientX/clientY so ink lands on the visual target.
+ *
+ * @param samples Recorded target and tap coordinates
  */
 export function computeTipCalibrationOffset(samples: CalibrationSample[]): { offsetX: number; offsetY: number } {
 	if (samples.length === 0) {
@@ -199,6 +339,8 @@ export function computeTipCalibrationOffset(samples: CalibrationSample[]): { off
 
 /**
  * Compute calibrated pressureMin / pressureMax from recorded raw hardware pressure samples.
+ *
+ * @param rawSamples Raw hardware pressure values collected during testing
  */
 export function computePressureCalibrationRange(
 	rawSamples: number[],

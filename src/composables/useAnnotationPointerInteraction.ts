@@ -15,11 +15,11 @@ import {
 	VIEWBOX_WIDTH,
 } from '../utils/annotation'
 import {
-	applyPressureSensitivity,
-	computeVelocityPressure,
+	applyPenTipOffset,
+	createStrokePressureTracker,
+	getCoalescedPointerEvents,
 	isStylusEraserEvent,
-	isVaryingHardwarePressureEvent,
-	mapRawPressure,
+	type StrokePressureTracker,
 } from '../utils/stylus-settings'
 import { getStampDefinition } from '../utils/musicSymbols'
 
@@ -34,11 +34,7 @@ interface InteractionState {
 	handle?: string
 	moved?: boolean
 	pointerType?: string
-	hasHardwarePressure?: boolean
-	lastClientX?: number
-	lastClientY?: number
-	lastTimeStamp?: number
-	lastPressure?: number
+	pressureTracker?: StrokePressureTracker
 	erasedUuids?: Set<string>
 }
 
@@ -167,72 +163,27 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 		releaseCapturedPointer(pointerId)
 	}
 
-	function adjustClientPoint(clientX: number, clientY: number, pointerType?: string): { x: number; y: number } {
-		if (pointerType === 'pen') {
-			return {
-				x: clientX + stylusSettings.value.offsetX,
-				y: clientY + stylusSettings.value.offsetY,
-			}
-		}
-		return { x: clientX, y: clientY }
-	}
-
 	function clientToNorm(clientX: number, clientY: number, pointerType?: string): NormalizedPoint {
 		const el = opts.svgRef.value
 		if (!el) return { x: 0, y: 0 }
 		const rect = el.getBoundingClientRect()
 		if (rect.width <= 0 || rect.height <= 0) return { x: 0, y: 0 }
-		const adj = adjustClientPoint(clientX, clientY, pointerType)
+		const adj = applyPenTipOffset(clientX, clientY, pointerType, stylusSettings.value)
 		const x = Math.min(1, Math.max(0, (adj.x - rect.left) / rect.width))
 		const y = Math.min(1, Math.max(0, (adj.y - rect.top) / rect.height))
 		return { x: roundNorm(x), y: roundNorm(y) }
 	}
 
 	function shouldCapturePressure(): boolean {
-		if (opts.activeTool.value !== 'drawing') return false
-		if (opts.toolStyle.value.lineStyle !== 'solid') return false
-		return stylusSettings.value.pressureMode !== 'off' && stylusSettings.value.pressureSensitivity > 0
+		return opts.activeTool.value === 'drawing'
+			&& opts.toolStyle.value.lineStyle === 'solid'
+			&& stylusSettings.value.pressureMode !== 'off'
+			&& stylusSettings.value.pressureSensitivity > 0
 	}
 
-	function computePointPressure(
-		ev: PointerEvent,
-		state: InteractionState | null,
-	): number | undefined {
-		if (!shouldCapturePressure()) return undefined
-		const cfg = stylusSettings.value
-		const pType = ev.pointerType || state?.pointerType || ''
-		const rawP = typeof ev.pressure === 'number' ? ev.pressure : 0.5
-		const isHardwareVarying = isVaryingHardwarePressureEvent(pType, rawP)
-		if (state && isHardwareVarying) {
-			state.hasHardwarePressure = true
-		}
-		const useHardware = cfg.pressureMode === 'hardware'
-			|| (cfg.pressureMode === 'auto' && pType === 'pen' && (isHardwareVarying || state?.hasHardwarePressure))
-
-		if (useHardware) {
-			if (pType !== 'pen' && cfg.pressureMode === 'hardware') {
-				return undefined
-			}
-			const mapped = mapRawPressure(rawP, cfg)
-			if (state) state.lastPressure = mapped
-			return applyPressureSensitivity(mapped, cfg.pressureSensitivity)
-		}
-
-		if (cfg.pressureMode === 'hardware') {
-			return undefined
-		}
-
-		// Velocity-based simulated pressure ('velocity' mode or 'auto' fallback)
-		if (!state || state.lastClientX === undefined || state.lastClientY === undefined || state.lastTimeStamp === undefined) {
-			const initial = 0.5
-			if (state) state.lastPressure = initial
-			return applyPressureSensitivity(initial, cfg.pressureSensitivity)
-		}
-		const distPx = Math.hypot(ev.clientX - state.lastClientX, ev.clientY - state.lastClientY)
-		const dtMs = Math.max(1, (ev.timeStamp || Date.now()) - state.lastTimeStamp)
-		const velP = computeVelocityPressure(distPx, dtMs, state.lastPressure ?? 0.5)
-		state.lastPressure = velP
-		return applyPressureSensitivity(velP, cfg.pressureSensitivity)
+	function sampleStrokePressure(ev: PointerEvent, state: InteractionState): number | undefined {
+		if (!shouldCapturePressure() || !state.pressureTracker) return undefined
+		return state.pressureTracker.sample(ev, stylusSettings.value).effectivePressure
 	}
 
 	function findAnnotationUuidFromElement(el: Element | null): string | null {
@@ -386,7 +337,7 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 		const pt = clientToNorm(e.clientX, e.clientY, e.pointerType)
 
 		if (isHardwareErase) {
-			const adj = adjustClientPoint(e.clientX, e.clientY, e.pointerType)
+			const adj = applyPenTipOffset(e.clientX, e.clientY, e.pointerType, stylusSettings.value)
 			const hitEl = typeof document.elementFromPoint === 'function'
 				? document.elementFromPoint(adj.x, adj.y)
 				: null
@@ -468,12 +419,9 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 			points: [],
 			moved: false,
 			pointerType: e.pointerType,
-			hasHardwarePressure: isVaryingHardwarePressureEvent(e.pointerType, e.pressure),
-			lastClientX: e.clientX,
-			lastClientY: e.clientY,
-			lastTimeStamp: e.timeStamp || Date.now(),
+			pressureTracker: createStrokePressureTracker(e.pointerType),
 		}
-		const initialPressure = computePointPressure(e, state)
+		const initialPressure = sampleStrokePressure(e, state)
 		const startPoint: NormalizedPoint = initialPressure !== undefined ? { ...pt, p: initialPressure } : pt
 		state.startNorm = startPoint
 		state.currentNorm = startPoint
@@ -502,7 +450,7 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 		}
 
 		if (state.kind === 'stylus-erase') {
-			const adj = adjustClientPoint(e.clientX, e.clientY, e.pointerType)
+			const adj = applyPenTipOffset(e.clientX, e.clientY, e.pointerType, stylusSettings.value)
 			const hitEl = typeof document.elementFromPoint === 'function'
 				? document.elementFromPoint(adj.x, adj.y)
 				: null
@@ -546,17 +494,12 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 		if (state.kind === 'draw') {
 			const tool = opts.activeTool.value
 			if (tool === 'drawing' || tool === 'highlight') {
-				const coalesced = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : []
-				const events = coalesced.length > 0 ? coalesced : [e]
-				for (const ev of events) {
+				for (const ev of getCoalescedPointerEvents(e)) {
 					const evPt = clientToNorm(ev.clientX, ev.clientY, ev.pointerType || e.pointerType)
 					const last = state.points[state.points.length - 1]
 					if (!last || Math.hypot(evPt.x - last.x, evPt.y - last.y) > 0.002) {
-						const p = computePointPressure(ev, state)
+						const p = sampleStrokePressure(ev, state)
 						state.points.push(p !== undefined ? { ...evPt, p } : evPt)
-						state.lastClientX = ev.clientX
-						state.lastClientY = ev.clientY
-						state.lastTimeStamp = ev.timeStamp || Date.now()
 					}
 				}
 			}
