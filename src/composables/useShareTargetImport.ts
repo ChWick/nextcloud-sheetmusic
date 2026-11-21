@@ -1,8 +1,8 @@
 import { ref } from 'vue'
 import { showSuccess } from '@nextcloud/dialogs'
 import { translate as t } from '@nextcloud/l10n'
-import { apiGet, apiPost } from '../api/client'
-import { createSetlist, fetchSetlists, uploadSetlistFile } from '../api/setlists'
+import { apiDelete, apiGet, apiPost } from '../api/client'
+import { createSetlist, deleteSetlist, fetchSetlists, uploadSetlistFile } from '../api/setlists'
 import type { Setlist, Song } from '../types/song'
 
 export type ShareTargetMode = 'new-song' | 'existing-song' | 'setlist-file' | 'new-setlist'
@@ -95,12 +95,22 @@ export function useShareTargetImport() {
 				const targetSongId = mode === 'new-song'
 					? await createTargetSong(libraryId, newSongTitle)
 					: songId
-				for (const file of files) {
-					const formData = new FormData()
-					formData.append('file', file)
-					await apiPost('/api/libraries/{libraryId}/songs/{id}/file/upload', formData as any, {
-						pathParams: { libraryId, id: targetSongId },
-					})
+				try {
+					for (const file of files) {
+						const formData = new FormData()
+						formData.append('file', file)
+						await apiPost('/api/libraries/{libraryId}/songs/{id}/file/upload', formData as any, {
+							pathParams: { libraryId, id: targetSongId },
+						})
+					}
+				} catch (uploadError) {
+					if (mode === 'new-song') {
+						await apiDelete('/api/songs/{id}', {
+							pathParams: { id: targetSongId },
+							queryParams: { libraryId },
+						}).catch(() => {})
+					}
+					throw uploadError
 				}
 				showSuccess(mode === 'new-song'
 					? t('sheetmusic', 'Imported shared file into new song.')
@@ -111,8 +121,15 @@ export function useShareTargetImport() {
 			const targetSetlistId = mode === 'new-setlist'
 				? await createTargetSetlist(libraryId, newSetlistName)
 				: setlistId
-			for (const file of files) {
-				await uploadSetlistFile(libraryId, targetSetlistId, file)
+			try {
+				for (const file of files) {
+					await uploadSetlistFile(libraryId, targetSetlistId, file)
+				}
+			} catch (uploadError) {
+				if (mode === 'new-setlist') {
+					await deleteSetlist(libraryId, targetSetlistId).catch(() => {})
+				}
+				throw uploadError
 			}
 			showSuccess(mode === 'new-setlist'
 				? t('sheetmusic', 'Created setlist and attached shared file.')

@@ -222,6 +222,12 @@ watch(() => props.open, (isOpen) => {
 	}
 }, { immediate: true })
 
+watch(targetLibraryId, () => {
+	resetTargets()
+	selectedSongId.value = -1
+	selectedSetlistId.value = -1
+})
+
 function goBack() {
 	errorMessage.value = ''
 	if (step.value === 3) step.value = 2

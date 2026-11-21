@@ -75,6 +75,7 @@ const isImportDialogOpen = ref(false)
 const isShareTargetDialogOpen = ref(false)
 const pendingShareFiles = ref<File[]>([])
 const pendingShareTitle = ref('')
+const shareImportRefreshKey = ref(0)
 const isSettingsDialogOpen = ref(false)
 const isShareDialogOpen = ref(false)
 const importPdfMetadata = ref(true)
@@ -271,6 +272,7 @@ function closeShareTargetDialog() {
 
 function handleShareTargetImported(result: ShareImportResult) {
   closeShareTargetDialog()
+  shareImportRefreshKey.value += 1
   if (result.targetType === 'setlist-file' || result.targetType === 'new-setlist') {
     router.push({
       name: 'LibraryView',
@@ -703,10 +705,12 @@ async function deleteLibrary() {
         </div>
         <template v-else-if="selectedLibrary >= 0 && currentLibrary">
           <SongsView v-if="selectedView === 'songs' || selectedView === 'new-song'"
+                     :key="`songs-${shareImportRefreshKey}`"
                      :selectedLibrary="selectedLibrary"
                      :libraries="libraries"
                      :standalone-create="selectedView === 'new-song'" />
           <SetlistsView v-else-if="selectedView === 'setlists'"
+                        :key="`setlists-${shareImportRefreshKey}`"
                         :selected-library="selectedLibrary"
                         :can-write="!isPublicShare && (currentLibrary?.canWrite ?? true)" />
           <SublibrariesView v-else-if="selectedView === 'sublibraries'"
