@@ -4,7 +4,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { usePerformanceStageInput } from '../../../src/composables/usePerformanceStageInput'
 
 describe('usePerformanceStageInput', () => {
-	function setupHarness(isScrollMode = () => false) {
+	function setupHarness(
+		isScrollMode = () => false,
+		extra: Partial<Parameters<typeof usePerformanceStageInput>[0]> = {},
+	) {
 		const onNextPage = vi.fn()
 		const onPrevPage = vi.fn()
 		const onToggleHud = vi.fn()
@@ -19,6 +22,7 @@ describe('usePerformanceStageInput', () => {
 					onPrevPage,
 					onToggleHud,
 					onEscape,
+					...extra,
 				})
 				return { ...api }
 			},
@@ -89,6 +93,52 @@ describe('usePerformanceStageInput', () => {
 		expect(onNextPage).not.toHaveBeenCalled()
 		expect(onPrevPage).not.toHaveBeenCalled()
 		expect(onToggleHud).not.toHaveBeenCalled()
+
+		wrapper.unmount()
+	})
+
+	it('keeps container left/center/right click zones active when zoomed in (canPanHorizontally=true) while suppressing horizontal swipes', () => {
+		const { wrapper, api, onNextPage, onPrevPage, onToggleHud } = setupHarness(() => false, {
+			isPanningOrPinching: () => false,
+			canPanHorizontally: () => true,
+		})
+		const mockEl = {
+			getBoundingClientRect: () => ({ left: 100, width: 400 }),
+		} as unknown as HTMLElement
+
+		// Clicks relative to the container still work when zoomed in
+		api.onStageClick({ currentTarget: mockEl, clientX: 150 } as unknown as MouseEvent)
+		expect(onPrevPage).toHaveBeenCalledTimes(1)
+
+		api.onStageClick({ currentTarget: mockEl, clientX: 300 } as unknown as MouseEvent)
+		expect(onToggleHud).toHaveBeenCalledTimes(1)
+
+		api.onStageClick({ currentTarget: mockEl, clientX: 450 } as unknown as MouseEvent)
+		expect(onNextPage).toHaveBeenCalledTimes(1)
+
+		// Horizontal touch swipe is suppressed when content pans horizontally
+		api.onStageTouchStart({ touches: [{ clientX: 300, clientY: 200 }] } as unknown as TouchEvent)
+		api.onStageTouchEnd({ changedTouches: [{ clientX: 150, clientY: 200 }] } as unknown as TouchEvent)
+		expect(onNextPage).toHaveBeenCalledTimes(1)
+
+		wrapper.unmount()
+	})
+
+	it('suppresses clicks while actively panning or pinching', () => {
+		const { wrapper, api, onNextPage, onPrevPage, onToggleHud } = setupHarness(() => false, {
+			isPanningOrPinching: () => true,
+		})
+		const mockEl = {
+			getBoundingClientRect: () => ({ left: 0, width: 400 }),
+		} as unknown as HTMLElement
+
+		api.onStageClick({ currentTarget: mockEl, clientX: 50 } as unknown as MouseEvent)
+		api.onStageClick({ currentTarget: mockEl, clientX: 200 } as unknown as MouseEvent)
+		api.onStageClick({ currentTarget: mockEl, clientX: 350 } as unknown as MouseEvent)
+
+		expect(onPrevPage).not.toHaveBeenCalled()
+		expect(onToggleHud).not.toHaveBeenCalled()
+		expect(onNextPage).not.toHaveBeenCalled()
 
 		wrapper.unmount()
 	})

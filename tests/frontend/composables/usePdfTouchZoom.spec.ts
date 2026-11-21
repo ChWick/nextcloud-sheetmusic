@@ -211,4 +211,38 @@ describe('usePdfTouchZoom', () => {
 		window.dispatchEvent(new Event('blur'))
 		expect(container.classList.contains('sheetmusic-pan-ready')).toBe(false)
 	})
+
+	it('marks wasRecentlyDragging only when mouse moves past drag threshold, not on plain click', () => {
+		const container = document.createElement('div')
+		const stage = document.createElement('div')
+		let api!: ReturnType<typeof usePdfTouchZoom>
+
+		const Comp = defineComponent({
+			setup() {
+				api = usePdfTouchZoom({
+					containerRef: ref<HTMLElement | undefined>(container),
+					stageRef: ref<HTMLElement | undefined>(stage),
+					getCurrentScale: () => 2.0,
+					isEnabled: () => true,
+					onCommitZoom: vi.fn(),
+				})
+				return {}
+			},
+			template: '<div />',
+		})
+
+		mount(Comp)
+
+		// Plain click (no movement) should NOT mark wasRecentlyDragging
+		container.dispatchEvent(new MouseEvent('mousedown', { button: 0, clientX: 100, clientY: 100 }))
+		window.dispatchEvent(new MouseEvent('mouseup'))
+		expect(api.wasRecentlyDragging()).toBe(false)
+
+		// Dragging > 5px SHOULD mark wasRecentlyDragging
+		container.dispatchEvent(new MouseEvent('mousedown', { button: 0, clientX: 100, clientY: 100 }))
+		window.dispatchEvent(new MouseEvent('mousemove', { clientX: 130, clientY: 100 }))
+		expect(api.wasRecentlyDragging()).toBe(true)
+		window.dispatchEvent(new MouseEvent('mouseup'))
+		expect(api.wasRecentlyDragging()).toBe(true)
+	})
 })
