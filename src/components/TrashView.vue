@@ -3,6 +3,7 @@ import { onMounted, ref, watch } from 'vue'
 import axios from '@nextcloud/axios'
 import { generateOcsUrl } from '@nextcloud/router'
 import { showError, showSuccess } from '@nextcloud/dialogs'
+import { extractApiErrorMessage } from '../utils/api'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
@@ -67,8 +68,8 @@ async function restoreSong(song: DeletedSong) {
 		deletedSongs.value = deletedSongs.value.filter((s) => s.id !== song.id)
 		showSuccess(t('sheetmusic', 'Song "{title}" restored successfully', { title: song.title }, { escape: false }))
 		emit('restored', data)
-	} catch (e: any) {
-		showError(e?.response?.data?.ocs?.data?.error || t('sheetmusic', 'Failed to restore song'))
+	} catch (e: unknown) {
+		showError(extractApiErrorMessage(e, t('sheetmusic', 'Failed to restore song')))
 	} finally {
 		restoringId.value = null
 	}

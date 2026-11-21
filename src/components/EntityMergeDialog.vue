@@ -84,6 +84,7 @@ import type { EntityType, FilterEntity } from '../types/song'
 import { computed, ref, watch } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import { showError, showSuccess } from '@nextcloud/dialogs'
+import { extractApiErrorMessage } from '../utils/api'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
@@ -232,8 +233,8 @@ async function submitMerge() {
       }, { escape: false }),
     )
     emit('close')
-  } catch (err: any) {
-    const msg = err?.response?.data?.ocs?.data?.error || err?.message || t('sheetmusic', 'Could not merge {entities}.', { entities: props.plural.toLowerCase() }, { escape: false })
+  } catch (err: unknown) {
+    const msg = extractApiErrorMessage(err, t('sheetmusic', 'Could not merge {entities}.', { entities: props.plural.toLowerCase() }, { escape: false }))
     errorMessage.value = msg
     showError(msg)
   } finally {

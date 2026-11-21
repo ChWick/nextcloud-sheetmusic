@@ -1,5 +1,31 @@
 import { translate as t } from '@nextcloud/l10n'
 
+function extractServerErrorMessage(error: unknown): string | null {
+	const response = record(record(error)?.response)
+	const responseData = record(response?.data)
+	const ocs = record(responseData?.ocs)
+	const ocsData = record(ocs?.data)
+	const ocsMeta = record(ocs?.meta)
+	const message = ocsData?.message ?? ocsData?.error ?? ocsMeta?.message ?? responseData?.message ?? responseData?.error
+	return typeof message === 'string' && message !== '' ? message : null
+}
+
+/**
+ * Extracts a human-readable error message from a Nextcloud OCS / Axios error,
+ * falling back to `error.message` or the provided fallback string.
+ */
+export function extractApiErrorMessage(error: unknown, fallback: string): string {
+	const serverMessage = extractServerErrorMessage(error)
+	if (serverMessage !== null) {
+		return serverMessage
+	}
+	const errMessage = record(error)?.message
+	if (typeof errMessage === 'string' && errMessage !== '') {
+		return errMessage
+	}
+	return fallback
+}
+
 /**
  * Turn a failed Axios request into a localized message. A 404/405 is
  * surfaced explicitly because it usually means the server has not loaded
@@ -16,16 +42,7 @@ export function describeRequestFailure(error: unknown, fallback: string): string
 		)
 	}
 
-	const responseData = record(response?.data)
-	const ocs = record(responseData?.ocs)
-	const ocsData = record(ocs?.data)
-	const ocsMeta = record(ocs?.meta)
-	const message = ocsData?.message ?? ocsData?.error ?? ocsMeta?.message ?? responseData?.message ?? responseData?.error
-	if (typeof message === 'string' && message !== '') {
-		return message
-	}
-
-	return fallback
+	return extractServerErrorMessage(error) ?? fallback
 }
 
 function record(value: unknown): Record<string, unknown> | null {

@@ -4,6 +4,7 @@ import { FilePickerClosed, getFilePickerBuilder, showError, showInfo } from '@ne
 import { translate as t } from '@nextcloud/l10n'
 import { computed, ref } from 'vue'
 import { apiPost } from '../../api/client'
+import { uploadSongFile } from '../../api/songFiles'
 import { openFileExternally } from '../../utils/file'
 
 export interface UseSongEditorFilesOptions {
@@ -257,13 +258,7 @@ export function useSongEditorFiles(options: UseSongEditorFilesOptions) {
 		}
 
 		for (const upload of uploads) {
-			requests.push(() => {
-				const formData = new FormData()
-				formData.append('file', upload.file)
-				return apiPost('/api/libraries/{libraryId}/songs/{id}/file/upload', formData as any, {
-					pathParams: { libraryId, id: songId },
-				})
-			})
+			requests.push(() => uploadSongFile(libraryId, songId, upload.file))
 		}
 
 		return requests

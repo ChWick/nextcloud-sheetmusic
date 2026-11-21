@@ -3,6 +3,7 @@ import { translate as t } from '@nextcloud/l10n'
 import { showError, showSuccess } from '@nextcloud/dialogs'
 import { PDFDocument, degrees } from 'pdf-lib'
 import { apiDelete, apiPost } from '../../api/client'
+import { updateSongFile, uploadSongFile } from '../../api/songFiles'
 import { describeRequestFailure } from '../../utils/api'
 import { getFileName } from '../../utils/file'
 import type { LibraryData, Song, SongFile } from '../../types/song'
@@ -208,11 +209,7 @@ export function usePdfSplit(options: {
 			const updatedBytes = await srcPdfDoc.save()
 			const fileName = getFileName(file.path) || 'modified.pdf'
 			const updatedFile = new File([updatedBytes as Uint8Array<ArrayBuffer>], fileName, { type: 'application/pdf' })
-			const formData = new FormData()
-			formData.append('file', updatedFile)
-			const updateRes = await (apiPost as any)('/api/libraries/{libraryId}/songs/{id}/file/{fileId}/update', formData, {
-				pathParams: { libraryId: libraryId.value, id: currentSong.id, fileId: file.id },
-			})
+			const updateRes = await updateSongFile(libraryId.value, currentSong.id, file.id, updatedFile)
 			return {
 				libraryData: (updateRes.data?.ocs?.data as LibraryData) ?? fallbackLibraryData,
 				successMessage: t('sheetmusic', 'Successfully split "{title}" into {count} songs and removed extracted pages from original PDF.', {
@@ -363,12 +360,9 @@ export function usePdfSplit(options: {
 					totalSegments,
 				)
 				const segPageCount = seg.endPage - seg.startPage + 1
-				const formData = new FormData()
-				formData.append('file', splitFile)
-				formData.append('pageCount', String(segPageCount))
-				formData.append('pageOrder', `1-${segPageCount}`)
-				const uploadRes = await apiPost('/api/libraries/{libraryId}/songs/{id}/file/upload', formData as any, {
-					pathParams: { libraryId: libraryId.value, id: newSongId },
+				const uploadRes = await uploadSongFile(libraryId.value, newSongId, splitFile, {
+					pageCount: segPageCount,
+					pageOrder: `1-${segPageCount}`,
 				})
 
 				lastLibraryData = uploadRes.data.ocs.data as LibraryData

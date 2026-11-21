@@ -2,6 +2,7 @@ import { computed, ref, type ComputedRef, type Ref, type ShallowRef } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import { showError, showSuccess } from '@nextcloud/dialogs'
 import { apiPost } from '../../api/client'
+import { updateSongFile } from '../../api/songFiles'
 import { describeRequestFailure } from '../../utils/api'
 import { getFileName } from '../../utils/file'
 import type { Bookmark, LibraryData, Song, SongFile } from '../../types/song'
@@ -251,12 +252,7 @@ export function usePdfBookmarks(options: {
 				onProgress?.(90, t('sheetmusic', 'Uploading PDF to server…'))
 				const fileName = getFileName(targetFile.value.path) || 'song.pdf'
 				const modifiedFile = new File([updatedBytes as Uint8Array<ArrayBuffer>], fileName, { type: 'application/pdf' })
-				const formData = new FormData()
-				formData.append('file', modifiedFile)
-
-				const uploadRes = await (apiPost as any)('/api/libraries/{libraryId}/songs/{id}/file/{fileId}/update', formData, {
-					pathParams: { libraryId: libraryId.value, id: currentSong.id, fileId: targetFile.value.id },
-				})
+				const uploadRes = await updateSongFile(libraryId.value, currentSong.id, targetFile.value.id, modifiedFile)
 				data = uploadRes.data.ocs.data as LibraryData
 
 				if (onPdfUpdated) {

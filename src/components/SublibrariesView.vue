@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import axios from '@nextcloud/axios'
 import { generateOcsUrl } from '@nextcloud/router'
 import { showError, showSuccess } from '@nextcloud/dialogs'
+import { extractApiErrorMessage } from '../utils/api'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
@@ -173,9 +174,9 @@ async function handleSaveSublibrary(payload: { name: string; slug: string; filte
 
 		isModalOpen.value = false
 		await fetchSublibraries()
-	} catch (e: any) {
+	} catch (e: unknown) {
 		console.error('Failed to save sub-library:', e)
-		formError.value = e?.response?.data?.ocs?.data?.error || e?.message || t('sheetmusic', 'Failed to save sub-library.')
+		formError.value = extractApiErrorMessage(e, t('sheetmusic', 'Failed to save sub-library.'))
 	} finally {
 		isSaving.value = false
 	}

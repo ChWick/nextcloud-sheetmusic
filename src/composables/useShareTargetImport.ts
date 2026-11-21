@@ -3,7 +3,9 @@ import { showSuccess } from '@nextcloud/dialogs'
 import { translate as t } from '@nextcloud/l10n'
 import { apiDelete, apiGet, apiPost } from '../api/client'
 import { createSetlist, deleteSetlist, fetchSetlists, uploadSetlistFile } from '../api/setlists'
+import { uploadSongFile } from '../api/songFiles'
 import type { Setlist, Song } from '../types/song'
+import { extractApiErrorMessage } from '../utils/api'
 
 export type ShareTargetMode = 'new-song' | 'existing-song' | 'setlist-file' | 'new-setlist'
 
@@ -114,13 +116,7 @@ export function useShareTargetImport() {
 					: songId
 				await uploadFilesWithRollback(
 					files,
-					(file) => {
-						const formData = new FormData()
-						formData.append('file', file)
-						return apiPost('/api/libraries/{libraryId}/songs/{id}/file/upload', formData as any, {
-							pathParams: { libraryId, id: targetSongId },
-						})
-					},
+					(file) => uploadSongFile(libraryId, targetSongId, file),
 					mode === 'new-song'
 						? () => apiDelete('/api/songs/{id}', { pathParams: { id: targetSongId }, queryParams: { libraryId } })
 						: undefined,
@@ -143,10 +139,8 @@ export function useShareTargetImport() {
 				? t('sheetmusic', 'Created setlist and attached shared file.')
 				: t('sheetmusic', 'Attached shared file to setlist.'))
 			return { targetType: mode, libraryId, setlistId: targetSetlistId }
-		} catch (error: any) {
-			errorMessage.value = error?.response?.data?.ocs?.meta?.message
-				|| error?.message
-				|| t('sheetmusic', 'Failed to import shared file.')
+		} catch (error: unknown) {
+			errorMessage.value = extractApiErrorMessage(error, t('sheetmusic', 'Failed to import shared file.'))
 			return null
 		} finally {
 			isSubmitting.value = false

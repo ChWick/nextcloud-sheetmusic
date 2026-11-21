@@ -11,6 +11,7 @@ import { translate as t } from '@nextcloud/l10n'
 import { PDFDocument, degrees } from 'pdf-lib'
 import { cleanupPdfJsPage, destroyPdfJsDocument, loadPdfJsDocument, releaseCanvas, setBoundedRecordEntry } from '../../utils/pdfjs'
 import { apiDelete, apiPost } from '../../api/client'
+import { updateSongFile } from '../../api/songFiles'
 import { showError, showInfo, showSuccess } from '@nextcloud/dialogs'
 import { getCacheBustedFileUrl, getFileName } from '../../utils/file'
 import { describeRequestFailure } from '../../utils/api'
@@ -726,11 +727,7 @@ async function saveRotationsAndCrops() {
 
 		// Update existing file in-place, preserving file ID and triggering Nextcloud file versioning
 		await updateSaveProgress(92, t('sheetmusic', 'Uploading PDF to server…'), activeTotal, activeTotal, modifiedEnhancements)
-		const formData = new FormData()
-		formData.append('file', modifiedFile)
-		const uploadRes = await (apiPost as any)('/api/libraries/{libraryId}/songs/{id}/file/{fileId}/update', formData, {
-			pathParams: { libraryId: props.libraryId, id: props.song.id, fileId: targetFile.value.id },
-		})
+		const uploadRes = await updateSongFile(props.libraryId, props.song.id, targetFile.value.id, modifiedFile)
 
 		await updateSaveProgress(100, t('sheetmusic', 'Saved!'), activeTotal, activeTotal, false)
 		const data = uploadRes.data.ocs.data as LibraryData
