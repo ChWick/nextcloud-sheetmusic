@@ -58,3 +58,9 @@ export function formatFileSize(bytes: number): string {
 	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
 	return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
+
+export function toUint8Array(data: unknown): Uint8Array {
+	if (data instanceof Uint8Array) return data
+	if (data instanceof ArrayBuffer) return new Uint8Array(data)
+	return data as Uint8Array
+}

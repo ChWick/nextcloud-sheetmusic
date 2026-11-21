@@ -4,7 +4,7 @@ import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 import { defaultFileBinaryCache } from '../../utils/file-cache'
-import { isPdfFile } from '../../utils/file'
+import { isPdfFile, toUint8Array } from '../../utils/file'
 import { parsePageOrder } from '../../utils/page-order'
 import { cleanupPdfJsPage, destroyPdfJsDocument, loadPdfJsDocument, releaseChildCanvases, renderPdfPageToCanvas } from '../../utils/pdfjs'
 
@@ -114,7 +114,7 @@ function getPdfDocument(filePath: string): Promise<any | null> {
 			let data = defaultFileBinaryCache.get(filePath)
 			if (!data) {
 				const response = await axios.get(filePath, { responseType: 'arraybuffer' })
-				data = response.data instanceof ArrayBuffer ? new Uint8Array(response.data) : response.data
+				data = toUint8Array(response.data)
 				if (data) {
 					defaultFileBinaryCache.set(filePath, data)
 				}

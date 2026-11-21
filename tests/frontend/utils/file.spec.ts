@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { formatFileSize, getCacheBustedFileUrl, getFileName, isImageFile, isPdfFile, openFileExternally, pickPrimarySongFile } from '../../../src/utils/file'
+import { formatFileSize, getCacheBustedFileUrl, getFileName, isImageFile, isPdfFile, openFileExternally, pickPrimarySongFile, toUint8Array } from '../../../src/utils/file'
 
 describe('file utils', () => {
 	describe('getFileName', () => {
@@ -89,6 +89,19 @@ describe('file utils', () => {
 			expect(pickPrimarySongFile([files[0], files[2]])?.id).toBe(3)
 			expect(pickPrimarySongFile([files[0]])?.id).toBe(1)
 			expect(pickPrimarySongFile([])).toBeNull()
+		})
+	})
+
+	describe('toUint8Array', () => {
+		it('wraps ArrayBuffer and returns existing Uint8Array as-is', () => {
+			const buf = new ArrayBuffer(3)
+			new Uint8Array(buf).set([1, 2, 3])
+			const wrapped = toUint8Array(buf)
+			expect(wrapped).toBeInstanceOf(Uint8Array)
+			expect(Array.from(wrapped)).toEqual([1, 2, 3])
+
+			const existing = new Uint8Array([4, 5])
+			expect(toUint8Array(existing)).toBe(existing)
 		})
 	})
 })

@@ -5,7 +5,7 @@ import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import { cleanupPdfJsPage, destroyPdfJsDocument, getEffectivePageRotation, loadPdfJsDocument, releaseCanvas, releaseChildCanvases, renderPdfPageToCanvas, watchDevicePixelRatio } from '../utils/pdfjs'
-import { isImageFile as checkIsImageFile, isPdfFile as checkIsPdfFile, openFileExternally } from '../utils/file'
+import { isImageFile as checkIsImageFile, isPdfFile as checkIsPdfFile, openFileExternally, toUint8Array } from '../utils/file'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import FilePreviewerToolbar from './file-preview/FilePreviewerToolbar.vue'
 import SongAnnotationOverlay from './song-viewer/SongAnnotationOverlay.vue'
@@ -888,7 +888,7 @@ async function fetchBinaryData(cacheKey: string, loadId: number): Promise<Uint8A
 
 			if (loadId !== currentLoadId) return null
 
-			const raw = response.data instanceof ArrayBuffer ? new Uint8Array(response.data) : response.data
+			const raw = toUint8Array(response.data)
 			data = raw
 		} catch (err) {
 			const offlineData = await readOfflineCachedBinary(cacheKey)

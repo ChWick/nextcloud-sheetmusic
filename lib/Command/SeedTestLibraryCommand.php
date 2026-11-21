@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace OCA\SheetMusic\Command;
 
+use OCA\SheetMusic\Db\InternalEntity;
 use OCA\SheetMusic\Db\InternalSong;
 use OCA\SheetMusic\Db\InternalSongBookmark;
 use OCA\SheetMusic\Db\InternalSongBookmarkMapper;
@@ -165,7 +166,7 @@ class SeedTestLibraryCommand extends Command {
 			}
 			if ($song === null) {
 				$song = $this->songMapper->insert(new InternalSong(
-					uuid: $this->generateUuid(),
+					uuid: InternalEntity::generateUuid(),
 					libraryId: $libraryId,
 					title: $spec['title'],
 					sortTitle: $spec['title'],
@@ -181,7 +182,7 @@ class SeedTestLibraryCommand extends Command {
 			$existingFiles = $this->songFileMapper->findAllForSong($songId);
 			if (count($existingFiles) === 0) {
 				$this->songFileMapper->insert(new InternalSongFile(
-					uuid: $this->generateUuid(),
+					uuid: InternalEntity::generateUuid(),
 					songId: $songId,
 					fileId: $fileNode->getId(),
 					pageOrder: '1-' . $spec['pages'],
@@ -241,13 +242,6 @@ class SeedTestLibraryCommand extends Command {
 
 		$output->writeln("<info>Test library '{$libraryPath}' (ID: {$libraryId}) for user '{$userId}' is ready with " . count($songIds) . " songs and setlist '{$setlistName}' (ID: {$setlistId}).</info>");
 		return Command::SUCCESS;
-	}
-
-	private function generateUuid(): string {
-		$data = random_bytes(16);
-		$data[6] = chr((ord($data[6]) & 0x0f) | 0x40);
-		$data[8] = chr((ord($data[8]) & 0x3f) | 0x80);
-		return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($data), 4));
 	}
 
 	/**

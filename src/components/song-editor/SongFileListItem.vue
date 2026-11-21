@@ -12,7 +12,7 @@ import FormatListNumbered from 'vue-material-design-icons/FormatListNumbered.vue
 import MusicIcon from 'vue-material-design-icons/Music.vue'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import { getCacheBustedFileUrl, getFileName, isImageFile, isPdfFile } from '../../utils/file'
+import { getCacheBustedFileUrl, getFileName, isImageFile, isPdfFile, toUint8Array } from '../../utils/file'
 
 const props = defineProps<{
 	file: SongFile
@@ -50,7 +50,7 @@ async function loadPdfThumbnail() {
 			responseType: 'arraybuffer',
 		})
 
-		const pdfData = response.data instanceof ArrayBuffer ? new Uint8Array(response.data) : response.data
+		const pdfData = toUint8Array(response.data)
 		pdf = await loadPdfJsDocument(pdfData)
 
 		if (pdf.numPages < 1) {

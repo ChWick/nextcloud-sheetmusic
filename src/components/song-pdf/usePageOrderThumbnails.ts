@@ -5,6 +5,7 @@
 
 import { getCurrentInstance, onUnmounted, ref, type Ref, watch } from 'vue'
 import axios from '@nextcloud/axios'
+import { toUint8Array } from '../../utils/file'
 import { cleanupPdfJsPage, destroyPdfJsDocument, getPdfOutputScale, loadPdfJsDocument, releaseCanvas, renderPdfPageToCanvas, setBoundedRecordEntry } from '../../utils/pdfjs'
 
 export async function renderPageImage(pdf: any, pageNum: number, maxDim = 340): Promise<string> {
@@ -75,7 +76,7 @@ export function usePageOrderThumbnails(
 
 		try {
 			const response = await axios.get(path, { responseType: 'arraybuffer' })
-			const pdfData = response.data instanceof ArrayBuffer ? new Uint8Array(response.data) : response.data
+			const pdfData = toUint8Array(response.data)
 			const doc = await loadPdfJsDocument(pdfData)
 
 			internalPdf.value = doc

@@ -13,7 +13,7 @@ import { cleanupPdfJsPage, destroyPdfJsDocument, loadPdfJsDocument, releaseCanva
 import { apiDelete, apiPost } from '../../api/client'
 import { updateSongFile } from '../../api/songFiles'
 import { showError, showInfo, showSuccess } from '@nextcloud/dialogs'
-import { getCacheBustedFileUrl, getFileName, pickPrimarySongFile } from '../../utils/file'
+import { getCacheBustedFileUrl, getFileName, pickPrimarySongFile, toUint8Array } from '../../utils/file'
 import { describeRequestFailure } from '../../utils/api'
 import type { OriginalSongAction } from './OriginalSongActionSelector.vue'
 
@@ -343,7 +343,7 @@ async function loadPdf() {
 				'Pragma': 'no-cache',
 			},
 		})
-		const bytes = response.data instanceof ArrayBuffer ? new Uint8Array(response.data) : new Uint8Array(response.data)
+		const bytes = toUint8Array(response.data)
 		originalPdfBytes.value = bytes
 
 		// Pass an independent clone to pdf.js because its worker transfers/detaches the ArrayBuffer
