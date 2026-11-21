@@ -27,3 +27,9 @@ export function getCacheBustedFileUrl(filePath: string, version?: number | strin
 export function isPdfFile(filename?: string | null, mimeType?: string | null): boolean {
 	return Boolean(filename?.toLowerCase().endsWith('.pdf') || mimeType === 'application/pdf')
 }
+
+export function formatFileSize(bytes: number): string {
+	if (bytes < 1024) return `${bytes} B`
+	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+	return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}

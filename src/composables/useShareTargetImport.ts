@@ -77,6 +77,23 @@ export function useShareTargetImport() {
 		return createdSetlist.id
 	}
 
+	async function uploadFilesWithRollback(
+		files: File[],
+		uploadFile: (file: File) => Promise<unknown>,
+		rollback?: () => Promise<unknown>,
+	): Promise<void> {
+		try {
+			for (const file of files) {
+				await uploadFile(file)
+			}
+		} catch (uploadError) {
+			if (rollback) {
+				await rollback().catch(() => {})
+			}
+			throw uploadError
+		}
+	}
+
 	async function executeImport(params: {
 		mode: ShareTargetMode
 		libraryId: number
@@ -95,23 +112,19 @@ export function useShareTargetImport() {
 				const targetSongId = mode === 'new-song'
 					? await createTargetSong(libraryId, newSongTitle)
 					: songId
-				try {
-					for (const file of files) {
+				await uploadFilesWithRollback(
+					files,
+					(file) => {
 						const formData = new FormData()
 						formData.append('file', file)
-						await apiPost('/api/libraries/{libraryId}/songs/{id}/file/upload', formData as any, {
+						return apiPost('/api/libraries/{libraryId}/songs/{id}/file/upload', formData as any, {
 							pathParams: { libraryId, id: targetSongId },
 						})
-					}
-				} catch (uploadError) {
-					if (mode === 'new-song') {
-						await apiDelete('/api/songs/{id}', {
-							pathParams: { id: targetSongId },
-							queryParams: { libraryId },
-						}).catch(() => {})
-					}
-					throw uploadError
-				}
+					},
+					mode === 'new-song'
+						? () => apiDelete('/api/songs/{id}', { pathParams: { id: targetSongId }, queryParams: { libraryId } })
+						: undefined,
+				)
 				showSuccess(mode === 'new-song'
 					? t('sheetmusic', 'Imported shared file into new song.')
 					: t('sheetmusic', 'Added shared file to song.'))
@@ -121,16 +134,11 @@ export function useShareTargetImport() {
 			const targetSetlistId = mode === 'new-setlist'
 				? await createTargetSetlist(libraryId, newSetlistName)
 				: setlistId
-			try {
-				for (const file of files) {
-					await uploadSetlistFile(libraryId, targetSetlistId, file)
-				}
-			} catch (uploadError) {
-				if (mode === 'new-setlist') {
-					await deleteSetlist(libraryId, targetSetlistId).catch(() => {})
-				}
-				throw uploadError
-			}
+			await uploadFilesWithRollback(
+				files,
+				(file) => uploadSetlistFile(libraryId, targetSetlistId, file),
+				mode === 'new-setlist' ? () => deleteSetlist(libraryId, targetSetlistId) : undefined,
+			)
 			showSuccess(mode === 'new-setlist'
 				? t('sheetmusic', 'Created setlist and attached shared file.')
 				: t('sheetmusic', 'Attached shared file to setlist.'))

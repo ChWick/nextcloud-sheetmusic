@@ -1,14 +1,12 @@
 <script lang="ts">
+import { formatFileSize } from '../../utils/file'
+
+export { formatFileSize }
+
 export interface FileVersionInfo {
 	revision: number
 	timestamp: number
 	size: number
-}
-
-export function formatFileSize(bytes: number): string {
-	if (bytes < 1024) return `${bytes} B`
-	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-	return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
 export function formatTimestamp(timestamp: number): string {

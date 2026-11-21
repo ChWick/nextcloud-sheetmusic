@@ -119,6 +119,7 @@ import PaperclipIcon from 'vue-material-design-icons/Paperclip.vue'
 import UploadIcon from 'vue-material-design-icons/Upload.vue'
 import ResponsiveNcButton from '../ResponsiveNcButton.vue'
 import type { SetlistFile } from '../../types/song'
+import { formatFileSize } from '../../utils/file'
 
 const ALLOWED_EXTENSIONS = ['.pdf', '.docx', '.xlsx']
 
@@ -209,12 +210,6 @@ function onFileSelected(event: Event) {
 		emit('upload', selected)
 	}
 	input.value = ''
-}
-
-function formatFileSize(bytes: number): string {
-	if (bytes < 1024) return `${bytes} B`
-	if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
-	return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 </script>
 

@@ -125,6 +125,7 @@ import {
 	type ShareTargetMode,
 } from '../composables/useShareTargetImport'
 import type { Library } from '../types/song'
+import { formatFileSize } from '../utils/file'
 import { defaultTitleFromFilename } from '../utils/shareTarget'
 import FilterableOptionList, { type FilterableOptionItem } from './share-target/FilterableOptionList.vue'
 
@@ -196,12 +197,6 @@ const canSubmit = computed(() => {
 	if (mode.value === 'existing-song') return selectedSongId.value > 0
 	return selectedSetlistId.value > 0
 })
-
-function formatFileSize(bytes: number): string {
-	if (bytes < 1024) return `${bytes} B`
-	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-	return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
 
 watch(() => props.open, (isOpen) => {
 	if (!isOpen) return
