@@ -60,4 +60,4 @@ Util::addStyle(OCA\SheetMusic\AppInfo\Application::APP_ID, OCA\SheetMusic\AppInf
 }
 </style>
 
-<div id="sheetmusic"></div>
+<div id="sheetmusic" data-asset-version="<?php p($_['assetVersion'] ?? ''); ?>"></div>

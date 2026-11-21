@@ -1,4 +1,9 @@
 import { generateUrl } from '@nextcloud/router'
+import {
+	getAppShellCacheName,
+	syncAppVersionAndReloadIfNeeded,
+	watchServiceWorkerUpdate,
+} from './pwaVersion'
 
 export const STANDALONE_MEDIA_QUERY =
 	'(display-mode: standalone), (display-mode: fullscreen), (display-mode: minimal-ui), (display-mode: window-controls-overlay)'
@@ -61,8 +66,6 @@ export function initPwaStandaloneMode(): () => void {
 	return () => {}
 }
 
-export const APP_SHELL_CACHE = 'sheetmusic-app-shell-v1'
-
 /**
  * Best-effort fetches and caches a same-origin URL into the app-shell Cache Storage.
  */
@@ -71,11 +74,14 @@ export async function cacheIntoAppShell(targetUrl: string, forceRefresh = false)
 		return
 	}
 	try {
-		const cache = await caches.open(APP_SHELL_CACHE)
+		const cache = await caches.open(getAppShellCacheName())
 		if (!forceRefresh && await cache.match(targetUrl, { ignoreVary: true })) {
 			return
 		}
-		const res = await fetch(targetUrl, { credentials: 'include' })
+		const res = await fetch(targetUrl, {
+			credentials: 'include',
+			cache: forceRefresh ? 'reload' : 'default',
+		})
 		if (res.ok && !res.url.includes('/login')) {
 			const clean = res.redirected
 				? new Response(res.body, {
@@ -143,12 +149,16 @@ export async function registerPwaServiceWorker(): Promise<ServiceWorkerRegistrat
 	}
 
 	try {
+		watchServiceWorkerUpdate()
 		const swUrl = generateUrl('/apps/sheetmusic/sw.js')
 		const reg = await navigator.serviceWorker.register(swUrl, { scope: '/' })
 		if (typeof reg.update === 'function') {
 			void reg.update().catch(() => {})
 		}
-		void precacheAppShell()
+		const reloaded = await syncAppVersionAndReloadIfNeeded()
+		if (!reloaded) {
+			void precacheAppShell()
+		}
 		return reg
 	} catch (error) {
 		console.warn('Sheet Music: failed to register PWA service worker', error)

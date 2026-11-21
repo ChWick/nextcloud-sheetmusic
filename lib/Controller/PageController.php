@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\SheetMusic\Controller;
 
 use OCA\SheetMusic\AppInfo\Application;
+use OCA\SheetMusic\Service\AssetVersionService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\FrontpageRoute;
@@ -28,13 +29,17 @@ use OCP\IUserSession;
 class PageController extends Controller {
 	private const SHARE_TTL_SECONDS = 600;
 
+	private AssetVersionService $assetVersionService;
+
 	public function __construct(
 		string $appName,
 		IRequest $request,
 		private IUserSession $userSession,
 		private IURLGenerator $urlGenerator,
+		?AssetVersionService $assetVersionService = null,
 	) {
 		parent::__construct($appName, $request);
+		$this->assetVersionService = $assetVersionService ?? new AssetVersionService();
 	}
 
 	#[NoCSRFRequired]
@@ -45,7 +50,11 @@ class PageController extends Controller {
 		$response = new TemplateResponse(
 			Application::APP_ID,
 			'index',
+			[
+				'assetVersion' => $this->assetVersionService->getVersion(),
+			],
 		);
+		$response->addHeader('Cache-Control', 'no-cache');
 		$csp = new ContentSecurityPolicy();
 		$csp->addAllowedWorkerSrcDomain('\'self\'');
 		$csp->addAllowedWorkerSrcDomain('blob:');
@@ -144,7 +153,8 @@ class PageController extends Controller {
 	#[FrontpageRoute(verb: 'GET', url: '/sw.js')]
 	public function serviceWorker(): DataDisplayResponse {
 		$swPath = dirname(__DIR__, 2) . '/resources/pwa-sw.js';
-		$content = is_file($swPath) ? (string)file_get_contents($swPath) : '';
+		$raw = is_file($swPath) ? (string)file_get_contents($swPath) : '';
+		$content = str_replace('__APP_VERSION__', $this->assetVersionService->getVersion(), $raw);
 
 		$response = new DataDisplayResponse(
 			$content,

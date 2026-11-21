@@ -4,7 +4,9 @@ const SHARE_DB_VERSION = 1
 const SHARE_STORE_NAME = 'pendingShares'
 const SHARE_KEY = 'latest'
 
-const APP_SHELL_CACHE = 'sheetmusic-app-shell-v1'
+const APP_VERSION = '__APP_VERSION__'
+const APP_SHELL_CACHE_PREFIX = 'sheetmusic-app-shell-'
+const APP_SHELL_CACHE = APP_SHELL_CACHE_PREFIX + APP_VERSION
 const OFFLINE_SETLIST_CACHE = 'sheetmusic-offline-setlists-v1'
 
 function openShareDb() {
@@ -177,7 +179,7 @@ self.addEventListener('install', (event) => {
 	event.waitUntil((async () => {
 		try {
 			const shellUrl = new URL('./', self.location.href).toString()
-			const res = await fetch(shellUrl, { credentials: 'include' })
+			const res = await fetch(shellUrl, { credentials: 'include', cache: 'reload' })
 			if (res && res.ok && !res.url.includes('/login')) {
 				const cache = await caches.open(APP_SHELL_CACHE)
 				const htmlClone = res.clone()
@@ -186,7 +188,7 @@ self.addEventListener('install', (event) => {
 				const assetUrls = extractAppShellAssetUrls(html, shellUrl)
 				await Promise.allSettled(
 					assetUrls.map(async (assetUrl) => {
-						const assetRes = await fetch(assetUrl, { credentials: 'include' })
+						const assetRes = await fetch(assetUrl, { credentials: 'include', cache: 'reload' })
 						if (assetRes && assetRes.ok) {
 							await cache.put(assetUrl, assetRes)
 						}
@@ -201,7 +203,19 @@ self.addEventListener('install', (event) => {
 })
 
 self.addEventListener('activate', (event) => {
-	event.waitUntil(self.clients.claim())
+	event.waitUntil((async () => {
+		try {
+			const keys = await caches.keys()
+			await Promise.all(
+				keys
+					.filter((key) => key.startsWith(APP_SHELL_CACHE_PREFIX) && key !== APP_SHELL_CACHE)
+					.map((key) => caches.delete(key)),
+			)
+		} catch {
+			// Best-effort cleanup of stale app-shell caches
+		}
+		await self.clients.claim()
+	})())
 })
 
 self.addEventListener('fetch', (event) => {
