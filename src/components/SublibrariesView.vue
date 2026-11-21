@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, unref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from '@nextcloud/axios'
-import { generateOcsUrl } from '@nextcloud/router'
 import { showError, showSuccess } from '@nextcloud/dialogs'
+import { OCS_JSON_HEADERS, ocsDelete, ocsGet, ocsPost, ocsPut } from '../api/ocs'
 import { extractApiErrorMessage } from '../utils/api'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
@@ -109,11 +108,11 @@ async function fetchSublibraries() {
 	isLoading.value = true
 	error.value = ''
 	try {
-		const url = generateOcsUrl(`/apps/sheetmusic/api/libraries/${props.selectedLibrary}/sublibraries`)
-		const response = await axios.get(url, {
-			headers: { 'OCS-APIREQUEST': 'true', Accept: 'application/json' },
-		})
-		sublibraries.value = response.data?.ocs?.data?.sublibraries ?? []
+		const data = await ocsGet<{ sublibraries?: Sublibrary[] }>(
+			`/api/libraries/${props.selectedLibrary}/sublibraries`,
+			{ headers: OCS_JSON_HEADERS },
+		)
+		sublibraries.value = data?.sublibraries ?? []
 	} catch (e: any) {
 		console.error('Failed to load sub-libraries:', e)
 		error.value = e?.message || t('sheetmusic', 'Failed to load sub-libraries.')
@@ -159,16 +158,18 @@ async function handleSaveSublibrary(payload: { name: string; slug: string; filte
 	formError.value = ''
 	try {
 		if (editingSub.value?.id) {
-			const url = generateOcsUrl(`/apps/sheetmusic/api/libraries/${props.selectedLibrary}/sublibraries/${editingSub.value.id}`)
-			await axios.put(url, payload, {
-				headers: { 'OCS-APIREQUEST': 'true', Accept: 'application/json' },
-			})
+			await ocsPut(
+				`/api/libraries/${props.selectedLibrary}/sublibraries/${editingSub.value.id}`,
+				payload,
+				{ headers: OCS_JSON_HEADERS },
+			)
 			showSuccess(t('sheetmusic', 'Sub-library "{name}" updated.', { name: payload.name }, { escape: false }))
 		} else {
-			const url = generateOcsUrl(`/apps/sheetmusic/api/libraries/${props.selectedLibrary}/sublibraries`)
-			await axios.post(url, payload, {
-				headers: { 'OCS-APIREQUEST': 'true', Accept: 'application/json' },
-			})
+			await ocsPost(
+				`/api/libraries/${props.selectedLibrary}/sublibraries`,
+				payload,
+				{ headers: OCS_JSON_HEADERS },
+			)
 			showSuccess(t('sheetmusic', 'Sub-library "{name}" created.', { name: payload.name }, { escape: false }))
 		}
 
@@ -191,10 +192,10 @@ async function confirmDelete() {
 	if (!deletingSub.value?.id) return
 	isDeleting.value = true
 	try {
-		const url = generateOcsUrl(`/apps/sheetmusic/api/libraries/${props.selectedLibrary}/sublibraries/${deletingSub.value.id}`)
-		await axios.delete(url, {
-			headers: { 'OCS-APIREQUEST': 'true', Accept: 'application/json' },
-		})
+		await ocsDelete(
+			`/api/libraries/${props.selectedLibrary}/sublibraries/${deletingSub.value.id}`,
+			{ headers: OCS_JSON_HEADERS },
+		)
 		showSuccess(t('sheetmusic', 'Sub-library "{name}" deleted.', { name: deletingSub.value.name }, { escape: false }))
 		isDeleteConfirmOpen.value = false
 		deletingSub.value = null

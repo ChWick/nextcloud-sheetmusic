@@ -1,6 +1,5 @@
-import axios from '@nextcloud/axios'
-import { generateOcsUrl } from '@nextcloud/router'
 import { onBeforeUnmount, ref, type Ref } from 'vue'
+import { ocsGet } from '../api/ocs'
 
 export interface ProgressSnapshot {
 	status: 'running' | 'completed' | 'error'
@@ -26,9 +25,7 @@ export interface UseProgressPollingReturn {
 }
 
 async function defaultFetchProgress(progressId: string): Promise<Record<string, unknown> | undefined> {
-	const url = generateOcsUrl('/apps/sheetmusic/api/libraries/progress/' + encodeURIComponent(progressId))
-	const res = await axios.get(url)
-	const data = res?.data?.ocs?.data
+	const data = await ocsGet<unknown>(`/api/libraries/progress/${encodeURIComponent(progressId)}`)
 	return data && typeof data === 'object' ? data as Record<string, unknown> : undefined
 }
 

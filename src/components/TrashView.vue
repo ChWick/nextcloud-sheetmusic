@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
-import axios from '@nextcloud/axios'
-import { generateOcsUrl } from '@nextcloud/router'
 import { showError, showSuccess } from '@nextcloud/dialogs'
+import { ocsGet, ocsPost } from '../api/ocs'
 import { extractApiErrorMessage } from '../utils/api'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
@@ -41,9 +40,7 @@ async function fetchDeletedSongs() {
 	isLoading.value = true
 	error.value = ''
 	try {
-		const url = generateOcsUrl('/apps/sheetmusic/api/libraries/' + props.selectedLibrary + '/deleted-songs')
-		const response = await axios.get(url)
-		deletedSongs.value = response.data?.ocs?.data ?? []
+		deletedSongs.value = (await ocsGet<DeletedSong[]>(`/api/libraries/${props.selectedLibrary}/deleted-songs`)) ?? []
 	} catch (e: any) {
 		error.value = e?.message || t('sheetmusic', 'Failed to load deleted songs')
 	} finally {
@@ -62,9 +59,7 @@ watch(
 async function restoreSong(song: DeletedSong) {
 	restoringId.value = song.id
 	try {
-		const url = generateOcsUrl('/apps/sheetmusic/api/songs/' + song.id + '/restore')
-		const response = await axios.post(url)
-		const data = response.data?.ocs?.data as LibraryData
+		const data = (await ocsPost<LibraryData>(`/api/songs/${song.id}/restore`)) as LibraryData
 		deletedSongs.value = deletedSongs.value.filter((s) => s.id !== song.id)
 		showSuccess(t('sheetmusic', 'Song "{title}" restored successfully', { title: song.title }, { escape: false }))
 		emit('restored', data)

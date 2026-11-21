@@ -1,6 +1,6 @@
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
-import { generateOcsUrl } from '@nextcloud/router'
 import { apiGet } from '../api/client'
+import { OCS_JSON_HEADERS, ocsUrl } from '../api/ocs'
 import { fetchSetlist, fetchSetlistFiles, getSetlistFileContentUrl } from '../api/setlists'
 import type { Song } from '../types/song'
 import { getFileVersionToken, getVersionedFileUrl } from './file-version'
@@ -77,7 +77,7 @@ async function cacheUrl(cache: Cache, url: string): Promise<void> {
 	const response = await fetch(url, {
 		credentials: 'include',
 		headers: isOcs
-			? { 'OCS-APIREQUEST': 'true', Accept: 'application/json' }
+			? OCS_JSON_HEADERS
 			: undefined,
 	})
 	if (!response.ok) {
@@ -101,10 +101,10 @@ export async function syncSetlistOffline(params: {
 
 	const urls = new Set<string>()
 
-	urls.add(`${generateOcsUrl('/apps/sheetmusic/api/songs')}?id=${libraryId}`)
-	urls.add(generateOcsUrl(`/apps/sheetmusic/api/libraries/${libraryId}/setlists`))
-	urls.add(generateOcsUrl(`/apps/sheetmusic/api/libraries/${libraryId}/setlists/${setlistId}`))
-	urls.add(generateOcsUrl(`/apps/sheetmusic/api/libraries/${libraryId}/setlists/${setlistId}/files`))
+	urls.add(`${ocsUrl('/api/songs')}?id=${libraryId}`)
+	urls.add(ocsUrl(`/api/libraries/${libraryId}/setlists`))
+	urls.add(ocsUrl(`/api/libraries/${libraryId}/setlists/${setlistId}`))
+	urls.add(ocsUrl(`/api/libraries/${libraryId}/setlists/${setlistId}/files`))
 
 	const songById = new Map<number, Song>()
 	for (const song of songs) {
@@ -121,7 +121,7 @@ export async function syncSetlistOffline(params: {
 
 		const files = song.files ?? []
 		if (files.length === 0) {
-			urls.add(generateOcsUrl(`/apps/sheetmusic/api/songs/${song.id}/annotations`))
+			urls.add(ocsUrl(`/api/songs/${song.id}/annotations`))
 			continue
 		}
 
@@ -131,14 +131,14 @@ export async function syncSetlistOffline(params: {
 				fileCount++
 			}
 			const targetFileId = file.fileId ?? file.id
-			const annBase = generateOcsUrl(`/apps/sheetmusic/api/songs/${song.id}/annotations`)
+			const annBase = ocsUrl(`/api/songs/${song.id}/annotations`)
 			urls.add(targetFileId ? `${annBase}?fileId=${targetFileId}` : annBase)
 		}
 	}
 
 	for (const sf of setlistFiles) {
 		urls.add(getSetlistFileContentUrl(libraryId, setlistId, sf.id, sf.updatedAt))
-		urls.add(generateOcsUrl(`/apps/sheetmusic/api/libraries/${libraryId}/setlists/${setlistId}/files/${sf.id}/annotations`))
+		urls.add(ocsUrl(`/api/libraries/${libraryId}/setlists/${setlistId}/files/${sf.id}/annotations`))
 		fileCount++
 	}
 

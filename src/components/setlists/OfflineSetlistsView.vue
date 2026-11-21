@@ -101,12 +101,12 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { generateOcsUrl } from '@nextcloud/router'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import { translate as t } from '@nextcloud/l10n'
 import CloudOffOutline from 'vue-material-design-icons/CloudOffOutline.vue'
 import PlaylistMusic from 'vue-material-design-icons/PlaylistMusic.vue'
 import { apiGet } from '../../api/client'
+import { ocsUrl } from '../../api/ocs'
 import { fetchSetlist, fetchSetlistFiles, fetchSetlists } from '../../api/setlists'
 import { setOfflineReturnState, useOnlineStatus } from '../../composables/useOnlineStatus'
 import type { Library } from '../../types/library'
@@ -173,7 +173,7 @@ async function loadLibrarySetlistsWithFallback(libraryId: number, records: Offli
 		itemCount: r.itemCount ?? 0,
 	} as Setlist))
 	return readCachedOrFetch(
-		generateOcsUrl(`/apps/sheetmusic/api/libraries/${libraryId}/setlists`),
+		ocsUrl(`/api/libraries/${libraryId}/setlists`),
 		raw => raw.ocs?.data as Setlist[] | undefined,
 		() => fetchSetlists(libraryId),
 		fallback,
@@ -182,7 +182,7 @@ async function loadLibrarySetlistsWithFallback(libraryId: number, records: Offli
 
 async function loadLibrarySongsWithFallback(libraryId: number): Promise<Song[]> {
 	return readCachedOrFetch(
-		`${generateOcsUrl('/apps/sheetmusic/api/songs')}?id=${libraryId}`,
+		`${ocsUrl('/api/songs')}?id=${libraryId}`,
 		raw => (raw.ocs?.data as { songs?: Song[] } | undefined)?.songs,
 		async () => {
 			const res = await apiGet('/api/songs', { queryParams: { id: libraryId } })
@@ -243,13 +243,13 @@ async function selectOfflineSetlist(libraryId: number, setlist: Setlist) {
 	try {
 		const [detail, files] = await Promise.all([
 			readCachedOrFetch(
-				generateOcsUrl(`/apps/sheetmusic/api/libraries/${libraryId}/setlists/${setlist.id}`),
+				ocsUrl(`/api/libraries/${libraryId}/setlists/${setlist.id}`),
 				raw => raw.ocs?.data as Setlist | undefined,
 				() => fetchSetlist(libraryId, setlist.id),
 				{ ...setlist, items: [] },
 			),
 			readCachedOrFetch(
-				generateOcsUrl(`/apps/sheetmusic/api/libraries/${libraryId}/setlists/${setlist.id}/files`),
+				ocsUrl(`/api/libraries/${libraryId}/setlists/${setlist.id}/files`),
 				raw => raw.ocs?.data as SetlistFile[] | undefined,
 				() => fetchSetlistFiles(libraryId, setlist.id),
 				[],

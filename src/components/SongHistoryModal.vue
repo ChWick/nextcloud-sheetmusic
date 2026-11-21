@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import axios from '@nextcloud/axios'
-import { generateOcsUrl } from '@nextcloud/router'
 import { showError, showSuccess } from '@nextcloud/dialogs'
+import { ocsGet, ocsPost } from '../api/ocs'
 import { extractApiErrorMessage } from '../utils/api'
 import { translate as t } from '@nextcloud/l10n'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
@@ -60,9 +59,7 @@ async function fetchHistory() {
 	isLoading.value = true
 	error.value = ''
 	try {
-		const url = generateOcsUrl('/apps/sheetmusic/api/songs/' + props.songId + '/history')
-		const response = await axios.get(url)
-		historyList.value = response.data?.ocs?.data ?? []
+		historyList.value = (await ocsGet<HistoryEntry[]>(`/api/songs/${props.songId}/history`)) ?? []
 	} catch (e: any) {
 		error.value = e?.message || t('sheetmusic', 'Failed to load song history')
 	} finally {
@@ -165,9 +162,7 @@ async function executeRevert() {
 	const entry = pendingRevertEntry.value
 	isReverting.value = true
 	try {
-		const url = generateOcsUrl('/apps/sheetmusic/api/songs/' + props.songId + '/revert/' + entry.id)
-		const response = await axios.post(url)
-		const data = response.data?.ocs?.data as LibraryData
+		const data = (await ocsPost<LibraryData>(`/api/songs/${props.songId}/revert/${entry.id}`)) as LibraryData
 		showSuccess(t('sheetmusic', 'Song reverted to revision from {date}', { date: formatDate(entry.createdAt) }, { escape: false }))
 		emit('reverted', data)
 		pendingRevertEntry.value = null

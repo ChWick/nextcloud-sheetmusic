@@ -154,11 +154,10 @@ describe('SharesView.vue', () => {
 		// Wait for initial load
 		await vi.waitFor(() => {
 			expect(axios.get).toHaveBeenCalledWith('/ocs/v2.php/apps/sheetmusic/api/libraries/1/shares/overview', expect.any(Object))
+			expect(wrapper.find('[data-test="main-library-shares"]').exists()).toBe(true)
 		})
-		await wrapper.vm.$nextTick()
 
 		// Verify main library section
-		expect(wrapper.find('[data-test="main-library-shares"]').exists()).toBe(true)
 		expect(wrapper.text()).toContain('Bob Singer')
 		expect(wrapper.text()).toContain('Public Link')
 

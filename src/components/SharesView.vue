@@ -2,8 +2,8 @@
 import { computed, ref, watch } from 'vue'
 import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
-import { generateOcsUrl } from '@nextcloud/router'
 import { showError, showSuccess } from '@nextcloud/dialogs'
+import { OCS_JSON_HEADERS, ocsGet } from '../api/ocs'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
@@ -72,14 +72,10 @@ async function fetchSharesOverview() {
 	isLoading.value = true
 	error.value = ''
 	try {
-		const url = generateOcsUrl(`/apps/sheetmusic/api/libraries/${props.selectedLibrary}/shares/overview`)
-		const response = await axios.get(url, {
-			headers: {
-				'OCS-APIREQUEST': 'true',
-				Accept: 'application/json',
-			},
-		})
-		overview.value = response.data?.ocs?.data ?? null
+		overview.value = (await ocsGet<SharesOverview>(
+			`/api/libraries/${props.selectedLibrary}/shares/overview`,
+			{ headers: OCS_JSON_HEADERS },
+		)) ?? null
 	} catch (err) {
 		console.error('Failed to load shares overview:', err)
 		error.value = describeRequestFailure(err, t('sheetmusic', 'Could not load shares overview.'))
