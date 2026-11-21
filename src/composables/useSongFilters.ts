@@ -5,6 +5,7 @@ import { computed, ref } from 'vue'
 import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
 import { ENTITY_COLUMNS } from '../components/songs/song-view-columns'
 import { normalizeSearchString } from '../utils/string'
+import { firstQueryValue } from '../utils/route'
 import { matchesSublibraryFilters } from '../utils/sublibrary'
 
 /** The entries the filters can select; they resolve the ids stored in the URL. */
@@ -112,14 +113,11 @@ export function useSongFilters(options: () => FilterOptions) {
 	const router = useRouter()
 
 	function titleFilterOf(): string {
-		const raw = route.query.title ?? route.query.search ?? ''
-		const value = Array.isArray(raw) ? raw[0] : raw
-		return typeof value === 'string' ? value : ''
+		return firstQueryValue(route.query.title ?? route.query.search) ?? ''
 	}
 
 	function withoutFilesFilterOf(): boolean {
-		const raw = route.query.withoutFiles ?? route.query.without_files ?? route.query.noFiles ?? route.query.no_files
-		const value = Array.isArray(raw) ? raw[0] : raw
+		const value = firstQueryValue(route.query.withoutFiles ?? route.query.without_files ?? route.query.noFiles ?? route.query.no_files)
 		return value === 'true' || value === '1' || value === 'yes'
 	}
 

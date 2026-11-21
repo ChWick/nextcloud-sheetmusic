@@ -127,6 +127,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { hasQueryParam, parsePositiveIntQueryParam } from '../utils/route'
 import { showError, showSuccess } from '@nextcloud/dialogs'
 import { translate as t } from '@nextcloud/l10n'
 import {
@@ -470,11 +471,7 @@ function openItemSong(item: SetlistItem) {
 
 const hasLoadedSetlists = ref(false)
 
-const hasSetlistParamInUrl = computed(() => {
-  const raw = route.query?.setlist
-  const value = Array.isArray(raw) ? raw[0] : raw
-  return value !== undefined && value !== null && value !== ''
-})
+const hasSetlistParamInUrl = computed(() => hasQueryParam(route.query?.setlist))
 
 const isSetlistNotFound = computed(() =>
   hasSetlistParamInUrl.value
@@ -498,8 +495,8 @@ async function restoreSetlistFromRouteQuery() {
   if (!hasSetlistParamInUrl.value) {
     return
   }
-  const targetId = Number(route.query?.setlist)
-  if (!Number.isFinite(targetId) || targetId <= 0) {
+  const targetId = parsePositiveIntQueryParam(route.query?.setlist)
+  if (targetId === null) {
     selectedSetlist.value = null
     return
   }

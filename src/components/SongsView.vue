@@ -269,6 +269,7 @@ import { loadState } from '@nextcloud/initial-state';
 import { describeRequestFailure } from '../utils/api';
 import { ref, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { hasQueryParam, parsePositiveIntQueryParam } from '../utils/route';
 import NcButton from '@nextcloud/vue/components/NcButton';
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon';
 import CloseIcon from 'vue-material-design-icons/Close.vue';
@@ -399,19 +400,10 @@ const route = useRoute();
 const router = useRouter();
 
 /** True when a `?song=...` query parameter is present in the URL (valid or invalid). */
-const hasSongParamInUrl = computed(() => {
-  const raw = route.query.song;
-  const value = Array.isArray(raw) ? raw[0] : raw;
-  return value !== undefined && value !== null && value !== '';
-});
+const hasSongParamInUrl = computed(() => hasQueryParam(route.query.song));
 
 /** Id of the song the URL opens; null while the song list is shown or when param is invalid. */
-const songIdInUrl = computed(() => {
-  const raw = route.query.song;
-  const value = Array.isArray(raw) ? raw[0] : raw;
-  const id = Number(value);
-  return value === undefined || value === null || !Number.isInteger(id) || id <= 0 ? null : id;
-});
+const songIdInUrl = computed(() => parsePositiveIntQueryParam(route.query.song));
 
 /** The open song, resolved against the loaded library data. */
 const openSong = computed(() => songs.value.find(song => song.id === songIdInUrl.value) ?? null);
@@ -423,12 +415,7 @@ const isSongNotFound = computed(() => {
   return hasLoaded.value && !isLoading.value && !fileError.value;
 });
 
-const duplicateSourceId = computed(() => {
-  const raw = route.query.duplicate;
-  const value = Array.isArray(raw) ? raw[0] : raw;
-  const id = Number(value);
-  return value === undefined || value === null || !Number.isInteger(id) || id <= 0 ? null : id;
-});
+const duplicateSourceId = computed(() => parsePositiveIntQueryParam(route.query.duplicate));
 const duplicateSourceSong = computed(() =>
   props.standaloneCreate && duplicateSourceId.value !== null
     ? songs.value.find(song => song.id === duplicateSourceId.value) ?? null
