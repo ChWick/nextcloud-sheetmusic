@@ -516,6 +516,26 @@ function cleanupObserver() {
 	renderedPages.clear()
 }
 
+const MIN_FIT_SCALE = 0.05
+const MAX_FIT_SCALE = 6.0
+const MIN_CUSTOM_SCALE = 0.2
+const MAX_CUSTOM_SCALE = 4.0
+
+function computeFitScale(
+	unscaledWidth: number,
+	unscaledHeight: number,
+	targetW: number,
+	targetH: number,
+	mode: 'fit-width' | 'fit-page',
+): number {
+	const safeW = Math.max(1, unscaledWidth)
+	const safeH = Math.max(1, unscaledHeight)
+	const raw = mode === 'fit-width'
+		? targetW / safeW
+		: Math.min(targetW / safeW, targetH / safeH)
+	return Math.max(MIN_FIT_SCALE, Math.min(raw, MAX_FIT_SCALE))
+}
+
 async function renderCurrentView(onBeforeSwap?: () => void) {
 	if (!loadedPdf.value || !pdfContainer.value || !pdfStage.value) return
 
@@ -562,41 +582,46 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 		pagesToRender = ordered.map((p, idx) => ({ pageNum: p, index: idx + 1 }))
 	}
 
-	// Calculate base scale using first page
+	const pad = props.noPadding ? 0 : 48
+	const doubleGap = props.noPadding ? 4 : 24
+	const containerW = (pdfContainer.value?.clientWidth && pdfContainer.value.clientWidth > 100)
+		? pdfContainer.value.clientWidth - pad
+		: 800
+	const containerH = (pdfContainer.value?.clientHeight && pdfContainer.value.clientHeight > 100)
+		? pdfContainer.value.clientHeight - pad
+		: 700
+	const isDoubleLayout = pageLayout.value === 'double'
+	const doubleSlotW = Math.max(1, Math.floor((containerW - doubleGap) / 2))
+	const targetW = isDoubleLayout ? doubleSlotW : containerW
+
+	// Calculate base scale (for double layout, anchor reference scale to the document's first page
+	// so custom zoom ratios and effectiveScale stay stable across page turns even when pages differ in size)
 	let scale = 1.25
-	let firstPage: any = null
+	let docRefFitScale = 1.0
+	let refPage: any = null
 	try {
-		firstPage = await pdf.getPage(pagesToRender[0]?.pageNum || 1)
-		const pageRotation = getEffectivePageRotation(firstPage, rotation.value)
-		const unscaledViewport = firstPage.getViewport({ scale: 1.0, rotation: pageRotation })
+		const refPageNum = isDoubleLayout ? (ordered[0] || 1) : (pagesToRender[0]?.pageNum || 1)
+		refPage = await pdf.getPage(refPageNum)
+		const pageRotation = getEffectivePageRotation(refPage, rotation.value)
+		const unscaledViewport = refPage.getViewport({ scale: 1.0, rotation: pageRotation })
 
-		const pad = props.noPadding ? 0 : 48
-		const doubleGap = props.noPadding ? 4 : 24
-		const containerW = (pdfContainer.value?.clientWidth && pdfContainer.value.clientWidth > 100)
-			? pdfContainer.value.clientWidth - pad
-			: 800
-		const containerH = (pdfContainer.value?.clientHeight && pdfContainer.value.clientHeight > 100)
-			? pdfContainer.value.clientHeight - pad
-			: 700
-		const targetW = pageLayout.value === 'double' && pagesToRender.length > 1
-			? (containerW - doubleGap) / 2
-			: containerW
-
-		if (zoomMode.value === 'fit-width') {
-			scale = targetW / unscaledViewport.width
-		} else if (zoomMode.value === 'fit-page') {
-			scale = Math.min(targetW / unscaledViewport.width, containerH / unscaledViewport.height)
+		if (zoomMode.value === 'fit-width' || zoomMode.value === 'fit-page') {
+			scale = computeFitScale(unscaledViewport.width, unscaledViewport.height, targetW, containerH, zoomMode.value)
+			docRefFitScale = scale
 		} else {
-			scale = customScale.value
+			docRefFitScale = computeFitScale(unscaledViewport.width, unscaledViewport.height, targetW, containerH, 'fit-page')
+			scale = Math.max(MIN_CUSTOM_SCALE, Math.min(customScale.value, MAX_CUSTOM_SCALE))
 		}
 	} catch {
 		scale = 1.25
+		docRefFitScale = 1.0
 	} finally {
-		cleanupPdfJsPage(firstPage)
+		cleanupPdfJsPage(refPage)
 	}
-	scale = Math.max(0.2, Math.min(scale, 4.0))
 	effectiveScale.value = scale
-	const nextStageGap = `${Math.round((props.noPadding ? 4 : 16) * scale)}px`
+	const nextStageGap = isDoubleLayout
+		? `${doubleGap}px`
+		: `${Math.round((props.noPadding ? 4 : 16) * scale)}px`
 
 	const renderedPlaceholders = new Set<HTMLElement>()
 
@@ -640,7 +665,18 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 			if (renderId !== currentRenderId) return
 
 			const pageRotation = getEffectivePageRotation(page, rotation.value)
-			const viewport = page.getViewport({ scale: effectiveScale.value, rotation: pageRotation })
+			let pageScale = effectiveScale.value
+			if (isDoubleLayout) {
+				const unscaledViewport = page.getViewport({ scale: 1.0, rotation: pageRotation })
+				if (zoomMode.value === 'fit-width' || zoomMode.value === 'fit-page') {
+					pageScale = computeFitScale(unscaledViewport.width, unscaledViewport.height, doubleSlotW, containerH, zoomMode.value)
+				} else {
+					const pageFit = computeFitScale(unscaledViewport.width, unscaledViewport.height, doubleSlotW, containerH, 'fit-page')
+					const ratio = docRefFitScale > 0 ? pageFit / docRefFitScale : 1
+					pageScale = Math.max(MIN_FIT_SCALE, Math.min(effectiveScale.value * ratio, MAX_FIT_SCALE))
+				}
+			}
+			const viewport = page.getViewport({ scale: pageScale, rotation: pageRotation })
 
 			canvas = document.createElement('canvas')
 			canvas.className = 'sheetmusic-pdf-page'
@@ -845,8 +881,43 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 		for (const placeholder of placeholders) {
 			intersectionObserver.observe(placeholder)
 		}
+	} else if (isDoubleLayout) {
+		// Double page mode: wrap each page in a fixed half-width slot so each page
+		// occupies exactly half the stage and stays identical in size and position across turns.
+		const newSlots: HTMLElement[] = []
+		const newPlaceholders: HTMLElement[] = []
+		for (const item of pagesToRender) {
+			const slot = document.createElement('div')
+			slot.className = 'sheetmusic-double-slot'
+			slot.style.display = 'flex'
+			slot.style.justifyContent = 'center'
+			slot.style.alignItems = 'center'
+			slot.style.boxSizing = 'border-box'
+			if (zoomMode.value === 'custom') {
+				slot.style.minWidth = `${doubleSlotW}px`
+				slot.style.flex = '0 0 auto'
+			} else {
+				slot.style.width = `${doubleSlotW}px`
+				slot.style.flex = `0 0 ${doubleSlotW}px`
+			}
+
+			const placeholder = document.createElement('div')
+			placeholder.dataset.pageNum = String(item.pageNum)
+			placeholder.dataset.pageIndex = String(item.index)
+			slot.appendChild(placeholder)
+
+			newSlots.push(slot)
+			newPlaceholders.push(placeholder)
+		}
+		await Promise.all(
+			pagesToRender.map((item, idx) => renderPage(item.pageNum, newPlaceholders[idx], Boolean(item.isNextFile))),
+		)
+		if (renderId !== currentRenderId || !pdfContainer.value || !pdfStage.value) {
+			return
+		}
+		swapStageContent(newSlots)
 	} else {
-		// Single or double page mode: render off-DOM first, then swap atomically to avoid flicker
+		// Single page mode: render off-DOM first, then swap atomically to avoid flicker
 		const newPlaceholders = pagesToRender.map((item) => {
 			const placeholder = document.createElement('div')
 			placeholder.dataset.pageNum = String(item.pageNum)

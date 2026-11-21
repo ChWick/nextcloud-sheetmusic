@@ -348,4 +348,140 @@ describe('FilePreviewer.vue', () => {
 			}
 		}
 	})
+
+	it('renders mixed-size photographed pages in equal half-width slots without resizing on page turns', async () => {
+		const pageDims: Record<number, { width: number; height: number }> = {
+			1: { width: 3000, height: 4000 },
+			2: { width: 1500, height: 2100 },
+			3: { width: 2400, height: 3000 },
+		}
+
+		const pdfjs = await import('pdfjs-dist')
+		vi.mocked(pdfjs.getDocument).mockReturnValueOnce({
+			promise: Promise.resolve({
+				numPages: 3,
+				getPage: vi.fn().mockImplementation((pageNum: number) => {
+					const dims = pageDims[pageNum] ?? { width: 600, height: 800 }
+					return Promise.resolve({
+						rotate: 0,
+						getViewport: vi.fn(({ scale }: { scale: number }) => ({
+							width: dims.width * scale,
+							height: dims.height * scale,
+						})),
+						render: vi.fn().mockReturnValue({ promise: Promise.resolve() }),
+					})
+				}),
+			}),
+		} as any)
+
+		const wrapper = mount(FilePreviewer, {
+			props: {
+				filePath: '/files/scores/PhotographedMixed.pdf',
+				initialPageLayout: 'double',
+				initialDoublePageTurnMode: 'half',
+				initialZoomMode: 'fit-page',
+				noPadding: true,
+			},
+		})
+		await flushPromises()
+
+		// Default fallback container size in happy-dom (clientWidth === 0) is 800x700, doubleGap = 4 => slotW = 398
+		const expectedSlotW = 398
+		const slotsBefore = wrapper.findAll('.sheetmusic-double-slot')
+		expect(slotsBefore).toHaveLength(2)
+		expect((slotsBefore[0].element as HTMLElement).style.width).toBe(`${expectedSlotW}px`)
+		expect((slotsBefore[1].element as HTMLElement).style.width).toBe(`${expectedSlotW}px`)
+
+		const getRenderedSize = (pageNum: number) => {
+			const placeholder = wrapper.find(`[data-page-num="${pageNum}"]`)
+			const canvas = placeholder.find('canvas.sheetmusic-pdf-page').element as HTMLCanvasElement
+			return {
+				width: Number.parseInt(canvas.style.width, 10),
+				height: Number.parseInt(canvas.style.height, 10),
+			}
+		}
+
+		const page1Size = getRenderedSize(1)
+		const page2SizeBefore = getRenderedSize(2)
+
+		// Page 1 (3000x4000) needs scale ~0.1327 (< 0.2) and must fit within 398x700 without being clamped to 0.2
+		expect(page1Size.width).toBe(expectedSlotW)
+		expect(page1Size.height).toBeLessThanOrEqual(700)
+		expect(page2SizeBefore.width).toBe(expectedSlotW)
+		expect(page2SizeBefore.height).toBeLessThanOrEqual(700)
+
+		// Half-page turn: [1, 2] -> [3, 2]. Page 2 stays on the right and must NOT change size.
+		;(wrapper.vm as any).nextPage()
+		await flushPromises()
+
+		const slotsAfterHalf = wrapper.findAll('.sheetmusic-double-slot')
+		expect(slotsAfterHalf).toHaveLength(2)
+		expect((slotsAfterHalf[0].element as HTMLElement).style.width).toBe(`${expectedSlotW}px`)
+		expect((slotsAfterHalf[1].element as HTMLElement).style.width).toBe(`${expectedSlotW}px`)
+
+		const page3Size = getRenderedSize(3)
+		const page2SizeAfterHalf = getRenderedSize(2)
+		expect(page3Size.width).toBe(expectedSlotW)
+		expect(page2SizeAfterHalf).toEqual(page2SizeBefore)
+
+		// Step turn: switch to step mode [1, 2] -> [2, 3]. Page 2 moves to left slot and must keep exact same size.
+		;(wrapper.vm as any).setDoublePageTurnMode('step')
+		;(wrapper.vm as any).goToPage(1)
+		await flushPromises()
+		const page2InStepBefore = getRenderedSize(2)
+		expect(page2InStepBefore).toEqual(page2SizeBefore)
+
+		;(wrapper.vm as any).nextPage()
+		await flushPromises()
+		const page2InStepAfter = getRenderedSize(2)
+		expect(page2InStepAfter).toEqual(page2SizeBefore)
+	})
+
+	it('keeps trailing single page in double spread mode at half-width slot size', async () => {
+		const pageDims: Record<number, { width: number; height: number }> = {
+			1: { width: 2000, height: 2800 },
+			2: { width: 1200, height: 1600 },
+			3: { width: 2400, height: 3200 },
+		}
+
+		const pdfjs = await import('pdfjs-dist')
+		vi.mocked(pdfjs.getDocument).mockReturnValueOnce({
+			promise: Promise.resolve({
+				numPages: 3,
+				getPage: vi.fn().mockImplementation((pageNum: number) => {
+					const dims = pageDims[pageNum] ?? { width: 600, height: 800 }
+					return Promise.resolve({
+						rotate: 0,
+						getViewport: vi.fn(({ scale }: { scale: number }) => ({
+							width: dims.width * scale,
+							height: dims.height * scale,
+						})),
+						render: vi.fn().mockReturnValue({ promise: Promise.resolve() }),
+					})
+				}),
+			}),
+		} as any)
+
+		const wrapper = mount(FilePreviewer, {
+			props: {
+				filePath: '/files/scores/OddPhotographed.pdf',
+				initialPageLayout: 'double',
+				initialDoublePageTurnMode: 'spread',
+				initialZoomMode: 'fit-width',
+				noPadding: true,
+			},
+		})
+		await flushPromises()
+
+		// Advance from [1, 2] -> [3, null]
+		;(wrapper.vm as any).nextPage()
+		await flushPromises()
+
+		const slots = wrapper.findAll('.sheetmusic-double-slot')
+		expect(slots).toHaveLength(1)
+		expect((slots[0].element as HTMLElement).style.width).toBe('398px')
+
+		const canvas = wrapper.find('[data-page-num="3"] canvas.sheetmusic-pdf-page').element as HTMLCanvasElement
+		expect(canvas.style.width).toBe('398px')
+	})
 })
