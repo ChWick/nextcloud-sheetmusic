@@ -32,7 +32,7 @@ const emit = defineEmits<{
 				{{ t('sheetmusic', 'This only removes the virtual WebDAV folder definition. All score files in Nextcloud and master database songs remain untouched.') }}
 			</p>
 		</div>
-		<template #confirm-icon>
+		<template #confirmIcon>
 			<TrashCanOutline :size="18" />
 		</template>
 	</ConfirmDeleteDialog>

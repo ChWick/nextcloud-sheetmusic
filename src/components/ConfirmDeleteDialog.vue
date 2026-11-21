@@ -53,8 +53,8 @@ function handleClose() {
 				<template v-if="showLoadingIcon && isDeleting" #icon>
 					<NcLoadingIcon :size="16" />
 				</template>
-				<template v-else-if="$slots['confirm-icon']" #icon>
-					<slot name="confirm-icon" />
+				<template v-else-if="$slots.confirmIcon" #icon>
+					<slot name="confirmIcon" />
 				</template>
 				{{ confirmLabel }}
 			</NcButton>
