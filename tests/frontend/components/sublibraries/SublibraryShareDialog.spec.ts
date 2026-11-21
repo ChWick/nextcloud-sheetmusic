@@ -13,6 +13,10 @@ vi.mock('@nextcloud/axios', () => ({
 	},
 }))
 
+vi.mock('@nextcloud/router', () => ({
+	generateOcsUrl: (path: string) => `/ocs/v2.php${path}`,
+}))
+
 vi.mock('@nextcloud/l10n', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('@nextcloud/l10n')>()
 	return {
@@ -141,10 +145,9 @@ describe('SublibraryShareDialog.vue', () => {
 				'/ocs/v2.php/apps/sheetmusic/api/libraries/1/sublibraries/5/shares',
 				expect.anything(),
 			)
+			expect(wrapper.text()).toContain('Alice Wonderland')
 		})
 
-		await wrapper.vm.$nextTick()
-		expect(wrapper.text()).toContain('Alice Wonderland')
 		expect(wrapper.text()).toContain('Public Link Share')
 		expect(wrapper.text()).toContain('https://cloud.test/s/subToken123')
 		expect(wrapper.text()).toContain('https://cloud.test/public.php/dav/files/subToken123')
