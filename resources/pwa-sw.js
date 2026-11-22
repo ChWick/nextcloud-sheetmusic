@@ -95,6 +95,13 @@ function isVersionedBinaryUrl(url) {
 		&& url.searchParams.has('v')
 }
 
+const ENTRY_ASSET_SUFFIXES = [
+	'/js/sheetmusic-main.mjs',
+	'/js/sheetmusic-pwa.mjs',
+	'/css/sheetmusic-main.css',
+	'/css/sheetmusic-pwa.css',
+]
+
 function shouldRevalidateEntryRequest(request, url) {
 	if (request.mode === 'navigate') {
 		return true
@@ -102,12 +109,7 @@ function shouldRevalidateEntryRequest(request, url) {
 	if (request.destination === 'style' && !url.pathname.includes('.chunk.css')) {
 		return true
 	}
-	return (
-		url.pathname.endsWith('/js/sheetmusic-main.mjs')
-		|| url.pathname.endsWith('/js/sheetmusic-pwa.mjs')
-		|| url.pathname.endsWith('/css/sheetmusic-main.css')
-		|| url.pathname.endsWith('/css/sheetmusic-pwa.css')
-	)
+	return ENTRY_ASSET_SUFFIXES.some((suffix) => url.pathname.endsWith(suffix))
 }
 
 function isImmutableHashedAsset(url) {
@@ -182,67 +184,51 @@ async function serveCachedOfflineResponse(request) {
 	return null
 }
 
-function extractAppShellAssetUrls(html, baseUrl) {
-	const urls = new Set()
-	const attrRegex = /<(?:script|link)\b[^>]*(?:src|href)=["']([^"']+)["'][^>]*>/gi
+function collectSameOriginUrls(text, regex, baseUrl, targetSet, transformPath = (p) => p, filter = null) {
 	let match
-	while ((match = attrRegex.exec(html)) !== null) {
+	while ((match = regex.exec(text)) !== null) {
 		try {
-			const resolved = new URL(match[1], baseUrl)
-			if (resolved.origin === self.location.origin && isCacheableAppShellRequest({ mode: 'no-cors' }, resolved)) {
-				urls.add(resolved.toString())
+			const resolved = new URL(transformPath(match[1]), baseUrl)
+			if (resolved.origin === self.location.origin && (!filter || filter(resolved))) {
+				targetSet.add(resolved.toString())
 			}
 		} catch {
 			// Ignore malformed URLs
 		}
 	}
+}
+
+function extractAppShellAssetUrls(html, baseUrl) {
+	const urls = new Set()
+	collectSameOriginUrls(
+		html,
+		/<(?:script|link)\b[^>]*(?:src|href)=["']([^"']+)["'][^>]*>/gi,
+		baseUrl,
+		urls,
+		(p) => p,
+		(resolved) => isCacheableAppShellRequest({ mode: 'no-cors' }, resolved),
+	)
 	return Array.from(urls)
 }
 
 function extractCssImportUrls(cssText, baseUrl) {
 	const urls = new Set()
-	const importRegex = /@import\s+(?:url\(\s*)?["']([^"']+)["']\s*\)?/gi
-	let match
-	while ((match = importRegex.exec(cssText)) !== null) {
-		try {
-			const resolved = new URL(match[1], baseUrl)
-			if (resolved.origin === self.location.origin) {
-				urls.add(resolved.toString())
-			}
-		} catch {
-			// Ignore malformed URLs
-		}
-	}
+	collectSameOriginUrls(cssText, /@import\s+(?:url\(\s*)?["']([^"']+)["']\s*\)?/gi, baseUrl, urls)
 	return Array.from(urls)
 }
 
 function extractJsImportUrls(jsText, baseUrl) {
 	const urls = new Set()
 	// Static ES module imports from relative chunk files (e.g. from "./pdfjs-xxx.chunk.mjs")
-	const staticImportRegex = /\b(?:from|import)\s*["'](\.\/[^"']+\.m?js)["']/g
-	let match
-	while ((match = staticImportRegex.exec(jsText)) !== null) {
-		try {
-			const resolved = new URL(match[1], baseUrl)
-			if (resolved.origin === self.location.origin) {
-				urls.add(resolved.toString())
-			}
-		} catch {
-			// Ignore malformed URLs
-		}
-	}
+	collectSameOriginUrls(jsText, /\b(?:from|import)\s*["'](\.\/[^"']+\.m?js)["']/g, baseUrl, urls)
 	// Vite __vite__mapDeps chunk references & PDF.js worker bundle
-	const mapDepRegex = /["']((?:js|css)\/[^"']+\.chunk\.(?:m?js|css)|dist\/pdf\.worker[^"']+\.m?js)["']/g
-	while ((match = mapDepRegex.exec(jsText)) !== null) {
-		try {
-			const resolved = new URL('../' + match[1], baseUrl)
-			if (resolved.origin === self.location.origin) {
-				urls.add(resolved.toString())
-			}
-		} catch {
-			// Ignore malformed URLs
-		}
-	}
+	collectSameOriginUrls(
+		jsText,
+		/["']((?:js|css)\/[^"']+\.chunk\.(?:m?js|css)|dist\/pdf\.worker[^"']+\.m?js)["']/g,
+		baseUrl,
+		urls,
+		(p) => '../' + p,
+	)
 	return Array.from(urls)
 }
 
@@ -267,38 +253,32 @@ async function fetchResponseWithProgress(url, onBytes) {
 	cleanHeaders.delete('content-encoding')
 	cleanHeaders.delete('content-length')
 
+	let blob
 	if (!res.body || typeof res.body.getReader !== 'function') {
-		const blob = await res.blob()
+		blob = await res.blob()
 		onBytes(blob.size, 0)
-		const reconstructed = new Response(blob, {
-			status: res.status,
-			statusText: res.statusText,
-			headers: cleanHeaders,
-		})
-		return { response: reconstructed, blob }
+	} else {
+		const reader = res.body.getReader()
+		const chunks = []
+		while (true) {
+			const { done, value } = await reader.read()
+			if (done) {
+				break
+			}
+			if (value && value.byteLength > 0) {
+				chunks.push(value)
+				onBytes(value.byteLength, 0)
+			}
+		}
+		blob = new Blob(chunks, { type: cleanHeaders.get('content-type') || '' })
 	}
 
-	const reader = res.body.getReader()
-	const chunks = []
-	while (true) {
-		const { done, value } = await reader.read()
-		if (done) {
-			break
-		}
-		if (value && value.byteLength > 0) {
-			chunks.push(value)
-			onBytes(value.byteLength, 0)
-		}
-	}
-
-	const contentType = cleanHeaders.get('content-type') || ''
-	const blob = new Blob(chunks, { type: contentType })
-	const reconstructed = new Response(blob, {
+	const response = new Response(blob, {
 		status: res.status,
 		statusText: res.statusText,
 		headers: cleanHeaders,
 	})
-	return { response: reconstructed, blob }
+	return { response, blob }
 }
 
 async function precacheAppShellWithProgress() {

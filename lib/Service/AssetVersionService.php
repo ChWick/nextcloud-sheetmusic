@@ -34,6 +34,8 @@ class AssetVersionService {
 	private ?string $cachedReleaseDate = null;
 	private bool $buildDateResolved = false;
 	private ?string $cachedBuildDate = null;
+	private bool $latestBuildMtimeResolved = false;
+	private ?int $cachedLatestBuildMtime = null;
 
 	public function __construct(?string $appRoot = null) {
 		$this->appRoot = rtrim($appRoot ?? dirname(__DIR__, 2), '/');
@@ -125,6 +127,11 @@ class AssetVersionService {
 	}
 
 	private function getLatestBuildAssetMtime(): ?int {
+		if ($this->latestBuildMtimeResolved) {
+			return $this->cachedLatestBuildMtime;
+		}
+		$this->latestBuildMtimeResolved = true;
+
 		$maxMtime = null;
 		foreach (self::BUILD_ASSET_FILES as $relPath) {
 			$fullPath = $this->appRoot . '/' . $relPath;
@@ -135,6 +142,7 @@ class AssetVersionService {
 				}
 			}
 		}
-		return $maxMtime;
+		$this->cachedLatestBuildMtime = $maxMtime;
+		return $this->cachedLatestBuildMtime;
 	}
 }

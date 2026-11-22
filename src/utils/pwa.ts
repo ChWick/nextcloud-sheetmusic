@@ -138,23 +138,10 @@ export async function precacheAppShell(): Promise<void> {
 		}
 	}
 
-	const isEntryAssetUrl = (targetUrl: string): boolean => {
-		if (targetUrl === shellUrl) return true
-		try {
-			const pathname = new URL(targetUrl).pathname
-			return (
-				pathname.endsWith('/js/sheetmusic-main.mjs')
-				|| pathname.endsWith('/js/sheetmusic-pwa.mjs')
-				|| pathname.endsWith('/css/sheetmusic-main.css')
-				|| pathname.endsWith('/css/sheetmusic-pwa.css')
-			)
-		} catch {
-			return false
-		}
-	}
-
+	// APP_SHELL_CACHE is already keyed by assetVersion; only fetch entries missing from
+	// the current version's cache so routine page loads do not re-download multi-MB bundles.
 	await Promise.allSettled(
-		Array.from(urls).map(targetUrl => cacheIntoAppShell(targetUrl, isEntryAssetUrl(targetUrl))),
+		Array.from(urls).map(targetUrl => cacheIntoAppShell(targetUrl, false)),
 	)
 }
 
