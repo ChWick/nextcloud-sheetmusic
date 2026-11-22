@@ -10,6 +10,7 @@ import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import FilePreviewerToolbar from './file-preview/FilePreviewerToolbar.vue'
 import SongAnnotationOverlay from './song-viewer/SongAnnotationOverlay.vue'
 import { usePdfTouchZoom } from '../composables/usePdfTouchZoom'
+import { useStylusSettings } from '../composables/useStylusSettings'
 import { isEffectivelyOffline } from '../composables/useOnlineStatus'
 import { readOfflineCachedBinary } from '../utils/offlineSetlists'
 import { inspectPdfDocumentResolutions, type PdfPageResolutionSummary } from './song-pdf/pdf-enhance-engine'
@@ -1262,12 +1263,15 @@ watch(
 	},
 )
 
+const { settings: stylusSettings } = useStylusSettings()
+
 const { wasRecentlyPinching, wasRecentlyDragging, resetPan } = usePdfTouchZoom({
 	containerRef: pdfContainer,
 	stageRef: pdfStage,
 	getCurrentScale: () => effectiveScale.value,
 	isEnabled: () => isPdfFile.value && !isLoading.value && !errorMessage.value,
 	isAnnotating: () => props.editableAnnotations,
+	isTouchZoomLocked: () => stylusSettings.value.lockTouchZoomWhileAnnotating,
 	onCommitZoom: async (scale, onBeforeSwap) => {
 		zoomMode.value = 'custom'
 		customScale.value = scale

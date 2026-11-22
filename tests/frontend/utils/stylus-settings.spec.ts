@@ -14,6 +14,8 @@ import {
 	createStrokePressureTracker,
 	createStylusSettingsStore,
 	DEFAULT_STYLUS_SETTINGS,
+	isLikelyPalmPointerEvent,
+	isLikelyPalmTouch,
 	isStylusEraserEvent,
 	isVaryingHardwarePressureEvent,
 	mapRawPressure,
@@ -166,5 +168,10 @@ describe('stylus-settings utilities', () => {
 		const mouseTracker = createStrokePressureTracker('mouse')
 		const offSettings = { ...DEFAULT_STYLUS_SETTINGS, pressureMode: 'off' as const }
 		expect(mouseTracker.sample({ pointerType: 'mouse', pressure: 0.5, clientX: 0, clientY: 0, timeStamp: 10 }, offSettings).effectivePressure).toBeUndefined()
+
+		expect(isLikelyPalmTouch({ radiusX: 12, radiusY: 12 })).toBe(false)
+		expect(isLikelyPalmTouch({ radiusX: 35, radiusY: 14 })).toBe(true)
+		expect(isLikelyPalmPointerEvent({ pointerType: 'touch', width: 45, height: 20 })).toBe(true)
+		expect(isLikelyPalmPointerEvent({ pointerType: 'pen', width: 45, height: 45 })).toBe(false)
 	})
 })

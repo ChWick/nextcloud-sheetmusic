@@ -28,6 +28,8 @@ export interface StylusSettings {
 	autoPalmRejection: boolean
 	/** Allow stylus eraser end (button 5 / buttons & 32) to erase */
 	hardwareEraser: boolean
+	/** Lock two-finger touch zoom/pan while annotating to prevent palm jitter */
+	lockTouchZoomWhileAnnotating: boolean
 }
 
 export interface CalibrationSample {
@@ -50,7 +52,11 @@ export const DEFAULT_STYLUS_SETTINGS: StylusSettings = {
 	stylusOnlyDrawing: false,
 	autoPalmRejection: true,
 	hardwareEraser: true,
+	lockTouchZoomWhileAnnotating: false,
 }
+
+export const PALM_TOUCH_RADIUS_THRESHOLD_PX = 28
+export const PALM_POINTER_SIZE_THRESHOLD_PX = 36
 
 const VALID_PRESSURE_MODES = new Set<PressureMode>(['auto', 'hardware', 'velocity', 'off'])
 
@@ -108,6 +114,9 @@ export function validateStylusSettings(raw: unknown): StylusSettings {
 		hardwareEraser: typeof obj.hardwareEraser === 'boolean'
 			? obj.hardwareEraser
 			: DEFAULT_STYLUS_SETTINGS.hardwareEraser,
+		lockTouchZoomWhileAnnotating: typeof obj.lockTouchZoomWhileAnnotating === 'boolean'
+			? obj.lockTouchZoomWhileAnnotating
+			: DEFAULT_STYLUS_SETTINGS.lockTouchZoomWhileAnnotating,
 	}
 }
 
@@ -190,6 +199,29 @@ export function isVaryingHardwarePressureEvent(pointerType: string, pressure: nu
 export function isStylusEraserEvent(e: Pick<PointerEvent, 'pointerType' | 'button' | 'buttons'>): boolean {
 	if (e.pointerType !== 'pen') return false
 	return e.button === 5 || (e.buttons & 32) !== 0
+}
+
+/**
+ * Heuristic check for whether a Touch contact is likely a palm/hand rather than a fingertip.
+ *
+ * @param touch Touch object with optional radiusX/radiusY
+ */
+export function isLikelyPalmTouch(touch: Partial<Pick<Touch, 'radiusX' | 'radiusY'>>): boolean {
+	const rx = typeof touch.radiusX === 'number' && Number.isFinite(touch.radiusX) ? touch.radiusX : 0
+	const ry = typeof touch.radiusY === 'number' && Number.isFinite(touch.radiusY) ? touch.radiusY : 0
+	return rx > PALM_TOUCH_RADIUS_THRESHOLD_PX || ry > PALM_TOUCH_RADIUS_THRESHOLD_PX
+}
+
+/**
+ * Heuristic check for whether a touch PointerEvent has a palm-sized contact area.
+ *
+ * @param e Pointer event fields to inspect
+ */
+export function isLikelyPalmPointerEvent(e: Pick<PointerEvent, 'pointerType' | 'width' | 'height'>): boolean {
+	if (e.pointerType !== 'touch') return false
+	const w = typeof e.width === 'number' && Number.isFinite(e.width) ? e.width : 0
+	const h = typeof e.height === 'number' && Number.isFinite(e.height) ? e.height : 0
+	return w > PALM_POINTER_SIZE_THRESHOLD_PX || h > PALM_POINTER_SIZE_THRESHOLD_PX
 }
 
 /**

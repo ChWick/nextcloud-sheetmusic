@@ -1,4 +1,5 @@
 import { onMounted, onUnmounted, type Ref } from 'vue'
+import { isLikelyPalmTouch } from '../utils/stylus-settings'
 
 export interface PdfTouchZoomOptions {
 	containerRef: Ref<HTMLElement | undefined>
@@ -6,10 +7,16 @@ export interface PdfTouchZoomOptions {
 	getCurrentScale: () => number
 	isEnabled: () => boolean
 	isAnnotating?: () => boolean
+	/** When true, touch pinch-zoom and two-finger pan are ignored (e.g. stylus palm-lock mode). */
+	isTouchZoomLocked?: () => boolean
 	onCommitZoom: (scale: number, onBeforeSwap?: () => void) => Promise<void> | void
 	minScale?: number
 	maxScale?: number
 }
+
+const PINCH_DIST_DEADZONE_PX = 14
+const PINCH_PAN_DEADZONE_PX = 16
+const PEN_PROXIMITY_COOLDOWN_MS = 500
 
 function getTouchDistance(t0: Touch, t1: Touch): number {
 	return Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY)
@@ -36,6 +43,7 @@ export function usePdfTouchZoom(options: PdfTouchZoomOptions) {
 	const maxScale = options.maxScale ?? 4.0
 
 	let isPinching = false
+	let hasExceededPinchDeadzone = false
 	let startDist = 0
 	let startScale = 1
 	let liveScale = 1
@@ -52,6 +60,7 @@ export function usePdfTouchZoom(options: PdfTouchZoomOptions) {
 	let livePanX = 0
 	let livePanY = 0
 	let lastPinchEndTime = 0
+	let lastPenEventTime = 0
 
 	// Mouse pan state
 	let isMousePanning = false
@@ -106,8 +115,30 @@ export function usePdfTouchZoom(options: PdfTouchZoomOptions) {
 		}
 	}
 
+	function cancelActivePinch() {
+		if (!isPinching) return
+		isPinching = false
+		hasExceededPinchDeadzone = false
+		liveScale = startScale
+		livePanX = committedPanX
+		livePanY = committedPanY
+		resetStageTransform()
+	}
+
+	function handlePenPointerActivity(event: PointerEvent) {
+		if (event.pointerType !== 'pen') return
+		lastPenEventTime = Date.now()
+		cancelActivePinch()
+	}
+
 	function handleTouchStart(event: TouchEvent) {
 		if (!options.isEnabled() || event.touches.length !== 2) {
+			return
+		}
+		if (options.isAnnotating?.() && options.isTouchZoomLocked?.()) {
+			return
+		}
+		if (lastPenEventTime > 0 && Date.now() - lastPenEventTime < PEN_PROXIMITY_COOLDOWN_MS) {
 			return
 		}
 		const container = options.containerRef.value
@@ -117,6 +148,9 @@ export function usePdfTouchZoom(options: PdfTouchZoomOptions) {
 
 		const t0 = event.touches[0]
 		const t1 = event.touches[1]
+		if (isLikelyPalmTouch(t0) || isLikelyPalmTouch(t1)) {
+			return
+		}
 		const dist = getTouchDistance(t0, t1)
 		if (dist <= 0) {
 			return
@@ -136,6 +170,7 @@ export function usePdfTouchZoom(options: PdfTouchZoomOptions) {
 		focalContentY = focal.contentY
 
 		isPinching = true
+		hasExceededPinchDeadzone = false
 		startDist = dist
 		startScale = Math.max(minScale, options.getCurrentScale())
 		liveScale = startScale
@@ -180,15 +215,29 @@ export function usePdfTouchZoom(options: PdfTouchZoomOptions) {
 		if (!isPinching || event.touches.length !== 2) {
 			return
 		}
-		event.preventDefault()
-
 		const t0 = event.touches[0]
 		const t1 = event.touches[1]
+		if (isLikelyPalmTouch(t0) || isLikelyPalmTouch(t1)) {
+			cancelActivePinch()
+			return
+		}
+
 		const dist = getTouchDistance(t0, t1)
+		const mid = getTouchMidpoint(t0, t1)
+		if (!hasExceededPinchDeadzone) {
+			const distDelta = Math.abs(dist - startDist)
+			const midDelta = Math.hypot(mid.x - startMidClientX, mid.y - startMidClientY)
+			if (distDelta < PINCH_DIST_DEADZONE_PX && midDelta < PINCH_PAN_DEADZONE_PX) {
+				return
+			}
+			hasExceededPinchDeadzone = true
+		}
+
+		event.preventDefault()
+
 		const ratio = dist / Math.max(1, startDist)
 		liveScale = clamp(+(startScale * ratio).toFixed(3), minScale, maxScale)
 
-		const mid = getTouchMidpoint(t0, t1)
 		const container = options.containerRef.value
 		if (container) {
 			applyContainerPan(container, startScrollLeft, startScrollTop, mid.x - startMidClientX, mid.y - startMidClientY)
@@ -242,7 +291,14 @@ export function usePdfTouchZoom(options: PdfTouchZoomOptions) {
 			return
 		}
 
+		const didPinch = hasExceededPinchDeadzone
 		isPinching = false
+		hasExceededPinchDeadzone = false
+		if (!didPinch) {
+			resetStageTransform()
+			return
+		}
+
 		lastPinchEndTime = Date.now()
 		const targetScale = liveScale
 		committedPanX = livePanX
@@ -264,6 +320,7 @@ export function usePdfTouchZoom(options: PdfTouchZoomOptions) {
 			return
 		}
 		isPinching = false
+		hasExceededPinchDeadzone = false
 		lastPinchEndTime = Date.now()
 		resetStageTransform()
 	}
@@ -395,6 +452,8 @@ export function usePdfTouchZoom(options: PdfTouchZoomOptions) {
 		el.addEventListener('touchmove', handleTouchMove, { passive: false })
 		el.addEventListener('touchend', handleTouchEnd, { passive: true })
 		el.addEventListener('touchcancel', handleTouchCancel, { passive: true })
+		el.addEventListener('pointerdown', handlePenPointerActivity, { passive: true })
+		el.addEventListener('pointermove', handlePenPointerActivity, { passive: true })
 		el.addEventListener('wheel', handleWheel, { passive: false })
 		el.addEventListener('mousedown', handleMouseDown)
 		window.addEventListener('mousemove', handleMouseMove)
@@ -415,6 +474,8 @@ export function usePdfTouchZoom(options: PdfTouchZoomOptions) {
 			el.removeEventListener('touchmove', handleTouchMove)
 			el.removeEventListener('touchend', handleTouchEnd)
 			el.removeEventListener('touchcancel', handleTouchCancel)
+			el.removeEventListener('pointerdown', handlePenPointerActivity)
+			el.removeEventListener('pointermove', handlePenPointerActivity)
 			el.removeEventListener('wheel', handleWheel)
 			el.removeEventListener('mousedown', handleMouseDown)
 			el.classList.remove('sheetmusic-pan-ready')

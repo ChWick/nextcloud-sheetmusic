@@ -281,6 +281,14 @@ function handleResetAll() {
 						@update:checked="updateSettings({ hardwareEraser: $event })">
 						{{ t('sheetmusic', 'Use stylus eraser end to erase annotations') }}
 					</NcCheckboxRadioSwitch>
+
+					<NcCheckboxRadioSwitch
+						type="switch"
+						:checked="settings.lockTouchZoomWhileAnnotating"
+						data-test="lock-touch-zoom-switch"
+						@update:checked="updateSettings({ lockTouchZoomWhileAnnotating: $event })">
+						{{ t('sheetmusic', 'Lock touch zoom & pan while annotating (prevents palm jitter)') }}
+					</NcCheckboxRadioSwitch>
 				</div>
 			</section>
 

@@ -14,6 +14,7 @@ import {
 const store = createStylusSettingsStore()
 const sharedSettings = ref<StylusSettings>(store.get())
 const penDetected = ref(false)
+let lastPenActivityTime = 0
 
 export function useStylusSettings() {
 	function updateSettings(patch: Partial<StylusSettings>) {
@@ -29,9 +30,14 @@ export function useStylusSettings() {
 	}
 
 	function markPenDetected() {
+		lastPenActivityTime = Date.now()
 		if (!penDetected.value) {
 			penDetected.value = true
 		}
+	}
+
+	function isPenRecentlyActive(cooldownMs = 500): boolean {
+		return lastPenActivityTime > 0 && Date.now() - lastPenActivityTime < cooldownMs
 	}
 
 	const isTouchDrawingBlocked = computed(() =>
@@ -42,7 +48,8 @@ export function useStylusSettings() {
 	const hasCustomCalibration = computed(() =>
 		sharedSettings.value.offsetX !== 0
 		|| sharedSettings.value.offsetY !== 0
-		|| sharedSettings.value.stylusOnlyDrawing,
+		|| sharedSettings.value.stylusOnlyDrawing
+		|| sharedSettings.value.lockTouchZoomWhileAnnotating,
 	)
 
 	return {
@@ -53,6 +60,7 @@ export function useStylusSettings() {
 		updateSettings,
 		resetSettings,
 		markPenDetected,
+		isPenRecentlyActive,
 	}
 }
 
@@ -63,4 +71,5 @@ export function resetStylusSettingsStateForTests() {
 	store.reset()
 	sharedSettings.value = { ...DEFAULT_STYLUS_SETTINGS }
 	penDetected.value = false
+	lastPenActivityTime = 0
 }

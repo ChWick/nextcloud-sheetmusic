@@ -245,4 +245,81 @@ describe('usePdfTouchZoom', () => {
 		window.dispatchEvent(new MouseEvent('mouseup'))
 		expect(api.wasRecentlyDragging()).toBe(true)
 	})
+
+	it('ignores palm-sized touch contacts and sub-deadzone jitter', async () => {
+		const container = document.createElement('div')
+		const stage = document.createElement('div')
+		container.getBoundingClientRect = () => ({ left: 0, top: 0, width: 400, height: 600 } as DOMRect)
+
+		const onCommitZoom = vi.fn()
+		const Comp = defineComponent({
+			setup() {
+				usePdfTouchZoom({
+					containerRef: ref<HTMLElement | undefined>(container),
+					stageRef: ref<HTMLElement | undefined>(stage),
+					getCurrentScale: () => 1.0,
+					isEnabled: () => true,
+					onCommitZoom,
+				})
+				return {}
+			},
+			template: '<div />',
+		})
+
+		mount(Comp)
+
+		// Palm-sized contact (radiusX > 28) is ignored
+		const palmTouch = { clientX: 100, clientY: 100, radiusX: 40, radiusY: 35 } as Touch
+		container.dispatchEvent(makeTouchEvent('touchstart', [palmTouch, makeTouch(200, 100)]))
+		container.dispatchEvent(makeTouchEvent('touchmove', [{ clientX: 50, clientY: 100, radiusX: 40, radiusY: 35 } as Touch, makeTouch(250, 100)]))
+		expect(stage.style.transform).toBe('')
+
+		// Small jitter below deadzone (< 14px dist, < 16px pan) does not transform stage
+		container.dispatchEvent(makeTouchEvent('touchstart', [makeTouch(100, 100), makeTouch(200, 100)]))
+		container.dispatchEvent(makeTouchEvent('touchmove', [makeTouch(96, 102), makeTouch(204, 102)]))
+		expect(stage.style.transform).toBe('')
+		container.dispatchEvent(makeTouchEvent('touchend', []))
+		await Promise.resolve()
+		expect(onCommitZoom).not.toHaveBeenCalled()
+	})
+
+	it('cancels active pinch on pen proximity and respects isTouchZoomLocked while annotating', () => {
+		const container = document.createElement('div')
+		const stage = document.createElement('div')
+		container.getBoundingClientRect = () => ({ left: 0, top: 0, width: 400, height: 600 } as DOMRect)
+
+		let locked = false
+		const Comp = defineComponent({
+			setup() {
+				usePdfTouchZoom({
+					containerRef: ref<HTMLElement | undefined>(container),
+					stageRef: ref<HTMLElement | undefined>(stage),
+					getCurrentScale: () => 1.0,
+					isEnabled: () => true,
+					isAnnotating: () => true,
+					isTouchZoomLocked: () => locked,
+					onCommitZoom: vi.fn(),
+				})
+				return {}
+			},
+			template: '<div />',
+		})
+
+		mount(Comp)
+
+		// Active pinch gets cancelled immediately when a pen hovers/moves over the container
+		container.dispatchEvent(makeTouchEvent('touchstart', [makeTouch(100, 100), makeTouch(200, 100)]))
+		container.dispatchEvent(makeTouchEvent('touchmove', [makeTouch(50, 100), makeTouch(250, 100)]))
+		expect(stage.style.transform).toBe('scale(2)')
+
+		const penMove = Object.assign(new Event('pointermove'), { pointerType: 'pen' })
+		container.dispatchEvent(penMove)
+		expect(stage.style.transform).toBe('')
+
+		// Locked touch zoom while annotating ignores pinch entirely
+		locked = true
+		container.dispatchEvent(makeTouchEvent('touchstart', [makeTouch(100, 100), makeTouch(200, 100)]))
+		container.dispatchEvent(makeTouchEvent('touchmove', [makeTouch(50, 100), makeTouch(250, 100)]))
+		expect(stage.style.transform).toBe('')
+	})
 })

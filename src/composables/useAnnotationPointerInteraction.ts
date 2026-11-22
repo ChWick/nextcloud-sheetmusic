@@ -18,6 +18,7 @@ import {
 	applyPenTipOffset,
 	createStrokePressureTracker,
 	getCoalescedPointerEvents,
+	isLikelyPalmPointerEvent,
 	isStylusEraserEvent,
 	type StrokePressureTracker,
 } from '../utils/stylus-settings'
@@ -137,6 +138,7 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 		settings: stylusSettings,
 		isTouchDrawingBlocked,
 		markPenDetected,
+		isPenRecentlyActive,
 	} = useStylusSettings()
 
 	const interaction = ref<InteractionState | null>(null)
@@ -322,7 +324,12 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 		if (e.button !== 0 && !isHardwareErase) return
 
 		if (e.pointerType === 'touch') {
-			if (isTouchDrawingBlocked.value || interaction.value?.pointerType === 'pen') {
+			if (
+				isTouchDrawingBlocked.value
+				|| interaction.value?.pointerType === 'pen'
+				|| isLikelyPalmPointerEvent(e)
+				|| isPenRecentlyActive()
+			) {
 				return
 			}
 			activeTouchPointers.add(e.pointerId)
