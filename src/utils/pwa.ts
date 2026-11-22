@@ -2,7 +2,10 @@ import { generateUrl } from '@nextcloud/router'
 import {
 	attachServiceWorkerUpdateChecks,
 	getAppShellCacheName,
+	setActiveServiceWorkerRegistration,
 	syncAppVersionAndReloadIfNeeded,
+	watchRegistrationForUpdates,
+	watchServiceWorkerProgress,
 	watchServiceWorkerUpdate,
 } from './pwaVersion'
 
@@ -135,8 +138,23 @@ export async function precacheAppShell(): Promise<void> {
 		}
 	}
 
+	const isEntryAssetUrl = (targetUrl: string): boolean => {
+		if (targetUrl === shellUrl) return true
+		try {
+			const pathname = new URL(targetUrl).pathname
+			return (
+				pathname.endsWith('/js/sheetmusic-main.mjs')
+				|| pathname.endsWith('/js/sheetmusic-pwa.mjs')
+				|| pathname.endsWith('/css/sheetmusic-main.css')
+				|| pathname.endsWith('/css/sheetmusic-pwa.css')
+			)
+		} catch {
+			return false
+		}
+	}
+
 	await Promise.allSettled(
-		Array.from(urls).map(targetUrl => cacheIntoAppShell(targetUrl, targetUrl === shellUrl)),
+		Array.from(urls).map(targetUrl => cacheIntoAppShell(targetUrl, isEntryAssetUrl(targetUrl))),
 	)
 }
 
@@ -151,11 +169,14 @@ export async function registerPwaServiceWorker(): Promise<ServiceWorkerRegistrat
 
 	try {
 		watchServiceWorkerUpdate()
+		watchServiceWorkerProgress()
 		const swUrl = generateUrl('/apps/sheetmusic/sw.js')
 		const reg = await navigator.serviceWorker.register(swUrl, {
 			scope: '/',
 			updateViaCache: 'none',
 		})
+		setActiveServiceWorkerRegistration(reg)
+		watchRegistrationForUpdates(reg)
 		if (typeof reg.update === 'function') {
 			void reg.update().catch(() => {})
 			attachServiceWorkerUpdateChecks(reg)

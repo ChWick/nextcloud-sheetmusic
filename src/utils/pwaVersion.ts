@@ -1,7 +1,75 @@
+import { generateUrl } from '@nextcloud/router'
+
 export const APP_SHELL_CACHE_PREFIX = 'sheetmusic-app-shell-'
 export const APP_VERSION_STORAGE_KEY = 'sheetmusic_app_version'
 export const APP_RELOAD_GUARD_KEY = 'sheetmusic_reloaded_version'
-export const SW_UPDATE_THROTTLE_MS = 5 * 60 * 1000
+export const SW_UPDATE_THROTTLE_MS = 60 * 1000
+
+export interface AppVersionMetadata {
+	appVersion: string
+	assetVersion: string
+	releaseDate: string | null
+	buildDate: string | null
+}
+
+export type AppUpdateStage = 'idle' | 'checking' | 'downloading' | 'installing' | 'waiting' | 'reloading'
+
+export interface AppUpdateProgress {
+	active: boolean
+	dismissed: boolean
+	stage: AppUpdateStage
+	version: string | null
+	percent: number
+	completedFiles: number
+	totalFiles: number
+	loadedBytes: number
+	totalBytes: number
+}
+
+export type UpdateCheckResult = 'up-to-date' | 'updating' | 'ready' | 'offline' | 'error'
+
+type ProgressListener = (progress: AppUpdateProgress) => void
+
+const progressListeners = new Set<ProgressListener>()
+
+let currentProgress: AppUpdateProgress = {
+	active: false,
+	dismissed: false,
+	stage: 'idle',
+	version: null,
+	percent: 0,
+	completedFiles: 0,
+	totalFiles: 0,
+	loadedBytes: 0,
+	totalBytes: 0,
+}
+
+let activeRegistration: ServiceWorkerRegistration | null = null
+let swMessageListenerAttached = false
+let preloadErrorListenerAttached = false
+
+function setUpdateProgress(next: Partial<AppUpdateProgress>): void {
+	currentProgress = { ...currentProgress, ...next }
+	for (const listener of progressListeners) {
+		listener(currentProgress)
+	}
+}
+
+export function getAppUpdateProgress(): AppUpdateProgress {
+	return { ...currentProgress }
+}
+
+export function subscribeAppUpdateProgress(listener: ProgressListener): () => void {
+	progressListeners.add(listener)
+	listener(getAppUpdateProgress())
+	return () => {
+		progressListeners.delete(listener)
+	}
+}
+
+export function setActiveServiceWorkerRegistration(reg: ServiceWorkerRegistration | null): void {
+	activeRegistration = reg
+}
 
 /**
  * Reads the server-injected asset version hash from the mount element.
@@ -12,6 +80,31 @@ export function getAppAssetVersion(): string {
 	}
 	const version = document.getElementById('sheetmusic')?.dataset.assetVersion?.trim()
 	return version || 'v1'
+}
+
+/**
+ * Reads app version, release date, build date, and asset hash from the mount element.
+ */
+export function getAppVersionMetadata(): AppVersionMetadata {
+	if (typeof document === 'undefined') {
+		return {
+			appVersion: 'dev',
+			assetVersion: 'v1',
+			releaseDate: null,
+			buildDate: null,
+		}
+	}
+	const el = document.getElementById('sheetmusic')
+	const appVersion = el?.dataset.appVersion?.trim() || 'dev'
+	const assetVersion = el?.dataset.assetVersion?.trim() || 'v1'
+	const releaseDate = el?.dataset.releaseDate?.trim() || null
+	const buildDate = el?.dataset.buildDate?.trim() || null
+	return {
+		appVersion,
+		assetVersion,
+		releaseDate,
+		buildDate,
+	}
 }
 
 export function getAppShellCacheName(version = getAppAssetVersion()): string {
@@ -49,6 +142,12 @@ function triggerOneShotReload(version: string, reloadFn?: () => void): boolean {
 	} catch {
 		// Ignore storage access errors
 	}
+
+	setUpdateProgress({
+		active: true,
+		stage: 'reloading',
+		percent: 100,
+	})
 
 	if (reloadFn) {
 		reloadFn()
@@ -106,17 +205,304 @@ export function watchServiceWorkerUpdate(
 		return
 	}
 
-	const hadController = Boolean(sw.controller)
+	let hadController = Boolean(sw.controller)
 	swControllerListenerAttached = true
 	sw.addEventListener('controllerchange', () => {
-		if (hadController) {
-			triggerOneShotReload(`sw:${currentVersion}`, reloadFn)
+		if (!hadController) {
+			hadController = true
+			return
 		}
+		const targetVersion = currentProgress.version || currentVersion
+		triggerOneShotReload(`sw:${targetVersion}`, reloadFn)
 	})
+}
+
+/**
+ * Subscribes to SW_UPDATE_PROGRESS messages sent by an installing/activating Service Worker.
+ */
+export function watchServiceWorkerProgress(): void {
+	if (swMessageListenerAttached || typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
+		return
+	}
+	const sw = navigator.serviceWorker
+	if (typeof sw.addEventListener !== 'function') {
+		return
+	}
+
+	swMessageListenerAttached = true
+	sw.addEventListener('message', (event: MessageEvent) => {
+		const data = event.data
+		if (!data || typeof data !== 'object' || data.type !== 'SW_UPDATE_PROGRESS') {
+			return
+		}
+		// Only show update progress when installing a different version than the running page
+		// (ignores initial first-time SW install/claim for the same version).
+		const currentVersion = getAppAssetVersion()
+		const incomingVersion = typeof data.version === 'string' ? data.version : null
+		if (!incomingVersion || incomingVersion === currentVersion) {
+			return
+		}
+
+		if (data.stage === 'activated') {
+			setUpdateProgress({
+				active: true,
+				dismissed: false,
+				stage: 'reloading',
+				version: incomingVersion,
+				percent: 100,
+			})
+			return
+		}
+
+		const stage: AppUpdateStage = data.stage === 'waiting'
+			? 'waiting'
+			: data.stage === 'installing'
+				? 'installing'
+				: 'downloading'
+		setUpdateProgress({
+			active: true,
+			dismissed: stage === 'waiting' ? false : currentProgress.dismissed,
+			stage,
+			version: incomingVersion,
+			percent: typeof data.percent === 'number' ? Math.max(0, Math.min(100, Math.round(data.percent))) : currentProgress.percent,
+			completedFiles: typeof data.completedFiles === 'number' ? data.completedFiles : currentProgress.completedFiles,
+			totalFiles: typeof data.totalFiles === 'number' ? data.totalFiles : currentProgress.totalFiles,
+			loadedBytes: typeof data.loadedBytes === 'number' ? data.loadedBytes : currentProgress.loadedBytes,
+			totalBytes: typeof data.totalBytes === 'number' ? data.totalBytes : currentProgress.totalBytes,
+		})
+	})
+}
+
+/**
+ * Watches a ServiceWorkerRegistration's `updatefound` and `waiting` lifecycle so
+ * the UI shows download progress and a reload prompt when an update is ready.
+ */
+export function watchRegistrationForUpdates(reg: ServiceWorkerRegistration): void {
+	if (reg.waiting && navigator.serviceWorker?.controller) {
+		setUpdateProgress({
+			active: true,
+			dismissed: false,
+			stage: 'waiting',
+			percent: 100,
+		})
+	}
+
+	if (typeof reg.addEventListener !== 'function') {
+		return
+	}
+
+	const trackInstallingWorker = (worker: ServiceWorker | null) => {
+		if (!worker || !navigator.serviceWorker?.controller) {
+			return
+		}
+		setUpdateProgress({
+			active: true,
+			dismissed: false,
+			stage: 'downloading',
+			percent: Math.max(currentProgress.percent, 0),
+		})
+		if (typeof worker.addEventListener === 'function') {
+			worker.addEventListener('statechange', () => {
+				if (worker.state === 'installed' && navigator.serviceWorker?.controller) {
+					setUpdateProgress({
+						active: true,
+						dismissed: false,
+						stage: 'waiting',
+						percent: 100,
+					})
+				} else if (worker.state === 'redundant' && currentProgress.stage !== 'reloading') {
+					setUpdateProgress({
+						active: false,
+						dismissed: false,
+						stage: 'idle',
+						percent: 0,
+					})
+				}
+			})
+		}
+	}
+
+	if (reg.installing) {
+		trackInstallingWorker(reg.installing)
+	}
+	reg.addEventListener('updatefound', () => {
+		trackInstallingWorker(reg.installing)
+	})
+}
+
+/**
+ * Activates a waiting Service Worker (or triggers a guarded reload when no SW
+ * is waiting) so the user controls when the page reloads.
+ */
+export async function applyPendingAppUpdate(reloadFn?: () => void): Promise<boolean> {
+	const reg = activeRegistration
+		?? (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && typeof navigator.serviceWorker.getRegistration === 'function'
+			? (await navigator.serviceWorker.getRegistration('/')) ?? null
+			: null)
+
+	if (reg?.waiting) {
+		setUpdateProgress({
+			active: true,
+			dismissed: false,
+			stage: 'reloading',
+			percent: 100,
+		})
+		reg.waiting.postMessage({ type: 'SKIP_WAITING' })
+		return true
+	}
+
+	const targetVersion = currentProgress.version || getAppAssetVersion()
+	await purgeStaleAppShellCaches(targetVersion)
+	return triggerOneShotReload(targetVersion, reloadFn)
+}
+
+/**
+ * Hides the floating update banner until the next update or manual check in Settings.
+ */
+export function dismissAppUpdateBanner(): void {
+	if (currentProgress.stage === 'waiting') {
+		setUpdateProgress({ dismissed: true })
+	}
+}
+
+/**
+ * Recovers gracefully when a dynamic Vite chunk fails to load mid-session after
+ * a server deployment removes older hashed chunks.
+ */
+export function attachPreloadErrorRecovery(reloadFn?: () => void): () => void {
+	if (preloadErrorListenerAttached || typeof window === 'undefined') {
+		return () => {}
+	}
+	preloadErrorListenerAttached = true
+	const onPreloadError = (event: Event) => {
+		event.preventDefault()
+		void (async () => {
+			const serverMeta = await fetchServerAppVersion().catch(() => null)
+			const targetVersion = serverMeta?.assetVersion || `preload:${getAppAssetVersion()}`
+			await purgeStaleAppShellCaches(targetVersion)
+			triggerOneShotReload(targetVersion, reloadFn)
+		})()
+	}
+	window.addEventListener('vite:preloadError', onPreloadError)
+	return () => {
+		preloadErrorListenerAttached = false
+		window.removeEventListener('vite:preloadError', onPreloadError)
+	}
+}
+
+/**
+ * Fetches the current version metadata from the server (bypassing all caches).
+ */
+export async function fetchServerAppVersion(): Promise<AppVersionMetadata | null> {
+	if (typeof fetch !== 'function') {
+		return null
+	}
+	const url = generateUrl('/apps/sheetmusic/app-version')
+	const res = await fetch(url, {
+		credentials: 'include',
+		cache: 'no-store',
+		headers: {
+			Accept: 'application/json',
+		},
+	})
+	if (!res.ok) {
+		return null
+	}
+	const data = await res.json()
+	if (!data || typeof data !== 'object' || typeof data.assetVersion !== 'string') {
+		return null
+	}
+	return {
+		appVersion: typeof data.appVersion === 'string' ? data.appVersion : 'dev',
+		assetVersion: data.assetVersion,
+		releaseDate: typeof data.releaseDate === 'string' && data.releaseDate ? data.releaseDate : null,
+		buildDate: typeof data.buildDate === 'string' && data.buildDate ? data.buildDate : null,
+	}
+}
+
+/**
+ * Actively checks for a newer frontend version via both Service Worker update
+ * and the lightweight `/app-version` endpoint.
+ */
+export async function checkForAppUpdate(reloadFn?: () => void): Promise<UpdateCheckResult> {
+	if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+		return 'offline'
+	}
+
+	try {
+		const reg = activeRegistration
+			?? (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && typeof navigator.serviceWorker.getRegistration === 'function'
+				? (await navigator.serviceWorker.getRegistration('/')) ?? null
+				: null)
+
+		const [serverMeta] = await Promise.all([
+			fetchServerAppVersion().catch(() => null),
+			reg && typeof reg.update === 'function' ? reg.update().catch(() => {}) : Promise.resolve(),
+		])
+
+		const currentAssetVersion = getAppAssetVersion()
+		const hasNewVersion = Boolean(serverMeta && serverMeta.assetVersion && serverMeta.assetVersion !== currentAssetVersion)
+
+		if (reg?.waiting || currentProgress.stage === 'waiting') {
+			setUpdateProgress({
+				active: true,
+				dismissed: false,
+				stage: 'waiting',
+				version: serverMeta?.assetVersion ?? currentProgress.version,
+				percent: 100,
+			})
+			return 'ready'
+		}
+
+		if (reg?.installing || currentProgress.active) {
+			if (!currentProgress.active) {
+				setUpdateProgress({
+					active: true,
+					dismissed: false,
+					stage: 'downloading',
+					version: serverMeta?.assetVersion ?? null,
+					percent: 0,
+				})
+			}
+			return 'updating'
+		}
+
+		if (hasNewVersion && serverMeta) {
+			// Server has a newer version without an active SW update (e.g. SW disabled/blocked).
+			// Surface the "Update ready — Reload" prompt rather than interrupting the user.
+			setUpdateProgress({
+				active: true,
+				dismissed: false,
+				stage: 'waiting',
+				version: serverMeta.assetVersion,
+				percent: 100,
+			})
+			return 'ready'
+		}
+
+		return 'up-to-date'
+	} catch {
+		return 'error'
+	}
 }
 
 export function resetServiceWorkerWatcherForTest(): void {
 	swControllerListenerAttached = false
+	swMessageListenerAttached = false
+	preloadErrorListenerAttached = false
+	activeRegistration = null
+	progressListeners.clear()
+	currentProgress = {
+		active: false,
+		dismissed: false,
+		stage: 'idle',
+		version: null,
+		percent: 0,
+		completedFiles: 0,
+		totalFiles: 0,
+		loadedBytes: 0,
+		totalBytes: 0,
+	}
 }
 
 /**

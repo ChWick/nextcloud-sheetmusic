@@ -1,4 +1,4 @@
-/* global self, indexedDB, caches, fetch, Response, URL, File */
+/* global self, indexedDB, caches, fetch, Response, Blob, URL, File */
 const SHARE_DB_NAME = 'sheetmusic-pwa-share'
 const SHARE_DB_VERSION = 1
 const SHARE_STORE_NAME = 'pendingShares'
@@ -8,6 +8,7 @@ const APP_VERSION = '__APP_VERSION__'
 const APP_SHELL_CACHE_PREFIX = 'sheetmusic-app-shell-'
 const APP_SHELL_CACHE = APP_SHELL_CACHE_PREFIX + APP_VERSION
 const OFFLINE_SETLIST_CACHE = 'sheetmusic-offline-setlists-v1'
+const PROGRESS_BROADCAST_INTERVAL_MS = 60
 
 function openShareDb() {
 	return new Promise((resolve, reject) => {
@@ -40,11 +41,35 @@ async function storePendingShare(payload) {
 	})
 }
 
+async function broadcastUpdateProgress(payload) {
+	try {
+		const clients = await self.clients.matchAll({
+			includeUncontrolled: true,
+			type: 'window',
+		})
+		const message = {
+			type: 'SW_UPDATE_PROGRESS',
+			version: APP_VERSION,
+			...payload,
+		}
+		for (const client of clients) {
+			client.postMessage(message)
+		}
+	} catch {
+		// Best-effort progress reporting
+	}
+}
+
 function isCacheableAppShellRequest(request, url) {
 	if (url.origin !== self.location.origin) {
 		return false
 	}
-	if (url.pathname.endsWith('/sw.js') || url.pathname.endsWith('/pwa-manifest') || url.pathname.includes('/share-target/')) {
+	if (
+		url.pathname.endsWith('/sw.js')
+		|| url.pathname.endsWith('/pwa-manifest')
+		|| url.pathname.endsWith('/app-version')
+		|| url.pathname.includes('/share-target/')
+	) {
 		return false
 	}
 	if (request.mode === 'navigate' && url.pathname.includes('/apps/sheetmusic')) {
@@ -55,7 +80,7 @@ function isCacheableAppShellRequest(request, url) {
 		|| url.pathname.includes('/apps-extra/sheetmusic/')
 		|| url.pathname.includes('/custom_apps/sheetmusic/')
 		|| url.pathname.includes('/css/sheetmusic/')
-		|| url.pathname.startsWith('/ocs/v2.php/apps/sheetmusic/')
+		|| url.pathname.includes('/ocs/v2.php/apps/sheetmusic/')
 		|| url.pathname.includes('/apps/theming/')
 		|| url.pathname.includes('/core/')
 		|| url.pathname.includes('/dist/')
@@ -79,6 +104,14 @@ function shouldRevalidateEntryRequest(request, url) {
 		|| url.pathname.endsWith('/js/sheetmusic-pwa.mjs')
 		|| url.pathname.endsWith('/css/sheetmusic-main.css')
 		|| url.pathname.endsWith('/css/sheetmusic-pwa.css')
+	)
+}
+
+function isSheetmusicEntryJs(url) {
+	return (
+		url.pathname.endsWith('/js/sheetmusic-main.mjs')
+		|| url.pathname.endsWith('/js/sheetmusic-pwa.mjs')
+		|| /\/js\/pdfjs-[^/]+\.chunk\.mjs$/.test(url.pathname)
 	)
 }
 
@@ -171,27 +204,233 @@ function extractCssImportUrls(cssText, baseUrl) {
 	return Array.from(urls)
 }
 
-async function precacheAssetWithCssImports(cache, assetUrl) {
-	const assetRes = await fetch(assetUrl, { credentials: 'include', cache: 'reload' })
-	if (!assetRes || !assetRes.ok) {
+function extractJsImportUrls(jsText, baseUrl) {
+	const urls = new Set()
+	// Static ES module imports from relative chunk files (e.g. from "./pdfjs-xxx.chunk.mjs")
+	const staticImportRegex = /\b(?:from|import)\s*["'](\.\/[^"']+\.m?js)["']/g
+	let match
+	while ((match = staticImportRegex.exec(jsText)) !== null) {
+		try {
+			const resolved = new URL(match[1], baseUrl)
+			if (resolved.origin === self.location.origin) {
+				urls.add(resolved.toString())
+			}
+		} catch {
+			// Ignore malformed URLs
+		}
+	}
+	// Vite __vite__mapDeps chunk references & PDF.js worker bundle
+	const mapDepRegex = /["']((?:js|css)\/[^"']+\.chunk\.(?:m?js|css)|dist\/pdf\.worker[^"']+\.m?js)["']/g
+	while ((match = mapDepRegex.exec(jsText)) !== null) {
+		try {
+			const resolved = new URL('../' + match[1], baseUrl)
+			if (resolved.origin === self.location.origin) {
+				urls.add(resolved.toString())
+			}
+		} catch {
+			// Ignore malformed URLs
+		}
+	}
+	return Array.from(urls)
+}
+
+async function fetchResponseWithProgress(url, onBytes) {
+	const res = await fetch(url, { credentials: 'include', cache: 'reload' })
+	if (!res || !res.ok) {
+		return { response: null, text: null }
+	}
+
+	const contentLengthHeader = res.headers.get('content-length')
+	const contentLength = contentLengthHeader ? parseInt(contentLengthHeader, 10) : 0
+	const knownLength = Number.isFinite(contentLength) && contentLength > 0 ? contentLength : 0
+	if (knownLength > 0) {
+		onBytes(0, knownLength)
+	}
+
+	if (!res.body || typeof res.body.getReader !== 'function') {
+		const blob = await res.blob()
+		onBytes(blob.size, knownLength > 0 ? 0 : blob.size)
+		const reconstructed = new Response(blob, {
+			status: res.status,
+			statusText: res.statusText,
+			headers: res.headers,
+		})
+		return { response: reconstructed, blob }
+	}
+
+	const reader = res.body.getReader()
+	const chunks = []
+	let received = 0
+	while (true) {
+		const { done, value } = await reader.read()
+		if (done) {
+			break
+		}
+		if (value && value.byteLength > 0) {
+			chunks.push(value)
+			received += value.byteLength
+			onBytes(value.byteLength, 0)
+		}
+	}
+	if (knownLength === 0 && received > 0) {
+		onBytes(0, received)
+	}
+
+	const contentType = res.headers.get('content-type') || ''
+	const blob = new Blob(chunks, { type: contentType })
+	const reconstructed = new Response(blob, {
+		status: res.status,
+		statusText: res.statusText,
+		headers: res.headers,
+	})
+	return { response: reconstructed, blob }
+}
+
+async function precacheAppShellWithProgress() {
+	const state = {
+		completedFiles: 0,
+		totalFiles: 1,
+		loadedBytes: 0,
+		totalBytes: 0,
+		lastPercent: 0,
+		lastBroadcastAt: 0,
+	}
+
+	const emitProgress = async (stage, force = false) => {
+		const now = Date.now()
+		if (!force && now - state.lastBroadcastAt < PROGRESS_BROADCAST_INTERVAL_MS) {
+			return
+		}
+		state.lastBroadcastAt = now
+
+		let rawPercent = 0
+		if (stage === 'installing' || stage === 'waiting' || stage === 'activated') {
+			rawPercent = 100
+		} else if (state.totalFiles > 0) {
+			const fileRatio = state.completedFiles / state.totalFiles
+			const byteRatio = state.totalBytes > 0 ? Math.min(1, state.loadedBytes / state.totalBytes) : fileRatio
+			// Blend byte progress (when available) with file progress so the bar moves smoothly
+			// even while a single large bundle like sheetmusic-main.mjs is streaming.
+			const blended = state.totalBytes > 0 ? (byteRatio * 0.7 + fileRatio * 0.3) : fileRatio
+			rawPercent = Math.min(99, Math.round(blended * 100))
+		}
+
+		const percent = Math.max(state.lastPercent, rawPercent)
+		state.lastPercent = percent
+
+		await broadcastUpdateProgress({
+			stage,
+			percent,
+			completedFiles: state.completedFiles,
+			totalFiles: state.totalFiles,
+			loadedBytes: state.loadedBytes,
+			totalBytes: state.totalBytes,
+		})
+	}
+
+	await emitProgress('downloading', true)
+
+	const shellUrl = new URL('./', self.location.href).toString()
+	const res = await fetch(shellUrl, { credentials: 'include', cache: 'reload' })
+	if (!res || !res.ok || res.url.includes('/login')) {
 		return
 	}
-	const contentType = assetRes.headers.get('content-type') || ''
-	const isCss = contentType.includes('text/css') || new URL(assetUrl).pathname.endsWith('.css')
-	const cssClone = isCss ? assetRes.clone() : null
-	await cache.put(assetUrl, assetRes)
 
-	if (cssClone) {
-		const importedUrls = extractCssImportUrls(await cssClone.text(), assetUrl)
-		await Promise.allSettled(
-			importedUrls.map(async (importUrl) => {
-				const importRes = await fetch(importUrl, { credentials: 'include', cache: 'reload' })
-				if (importRes && importRes.ok) {
-					await cache.put(importUrl, importRes)
-				}
-			}),
-		)
+	const cache = await caches.open(APP_SHELL_CACHE)
+	const htmlClone = res.clone()
+	await cache.put(shellUrl, toCleanNavigationResponse(res))
+	const html = await htmlClone.text()
+
+	const seenUrls = new Set([shellUrl])
+	const queue = extractAppShellAssetUrls(html, shellUrl).filter((u) => !seenUrls.has(u))
+	for (const u of queue) {
+		seenUrls.add(u)
 	}
+
+	state.completedFiles = 1
+	state.totalFiles = 1 + queue.length
+	await emitProgress('downloading', true)
+
+	const enqueue = (urls) => {
+		let added = 0
+		for (const u of urls) {
+			if (!seenUrls.has(u)) {
+				seenUrls.add(u)
+				queue.push(u)
+				added++
+			}
+		}
+		if (added > 0) {
+			state.totalFiles += added
+		}
+	}
+
+	const processAsset = async (assetUrl) => {
+		try {
+			const { response, blob } = await fetchResponseWithProgress(assetUrl, (deltaLoaded, deltaTotal) => {
+				state.loadedBytes += deltaLoaded
+				state.totalBytes += deltaTotal
+				void emitProgress('downloading', false)
+			})
+			if (!response) {
+				return
+			}
+
+			const parsedUrl = new URL(assetUrl)
+			const contentType = response.headers.get('content-type') || ''
+			const isCss = contentType.includes('text/css') || parsedUrl.pathname.endsWith('.css')
+			const isEntryJs = isSheetmusicEntryJs(parsedUrl)
+
+			await cache.put(assetUrl, response)
+
+			if (blob && isCss) {
+				const cssText = await blob.text()
+				enqueue(extractCssImportUrls(cssText, assetUrl))
+			} else if (blob && isEntryJs) {
+				const jsText = await blob.text()
+				enqueue(extractJsImportUrls(jsText, assetUrl))
+			}
+		} catch {
+			// Best-effort individual asset caching
+		} finally {
+			state.completedFiles++
+			await emitProgress('downloading', true)
+		}
+	}
+
+	const concurrency = 4
+	const workers = []
+	const runWorker = async () => {
+		while (queue.length > 0) {
+			const nextUrl = queue.shift()
+			if (nextUrl) {
+				await processAsset(nextUrl)
+			}
+		}
+	}
+	for (let i = 0; i < concurrency; i++) {
+		workers.push(runWorker())
+	}
+	await Promise.all(workers)
+
+	const hasActiveWorker = Boolean(self.registration && self.registration.active)
+	await emitProgress(hasActiveWorker ? 'waiting' : 'installing', true)
+}
+
+async function fetchRevalidatedRequest(request) {
+	if (request.mode === 'navigate') {
+		return fetch(request.url, {
+			credentials: 'include',
+			cache: 'no-cache',
+			headers: {
+				Accept: request.headers.get('Accept') || 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+			},
+		})
+	}
+	return fetch(request.url, {
+		credentials: 'include',
+		cache: 'no-cache',
+	})
 }
 
 async function handleOfflineAwareGet(request, url) {
@@ -206,7 +445,7 @@ async function handleOfflineAwareGet(request, url) {
 
 	try {
 		const networkResponse = shouldRevalidateEntryRequest(request, url)
-			? await fetch(request, { cache: 'no-cache' })
+			? await fetchRevalidatedRequest(request)
 			: await fetch(request)
 		if (networkResponse && networkResponse.ok && !networkResponse.url.includes('/login')) {
 			if (isCacheableAppShellRequest(request, url)) {
@@ -233,25 +472,30 @@ async function handleOfflineAwareGet(request, url) {
 	}
 }
 
+self.addEventListener('message', (event) => {
+	const data = event.data
+	if (!data || typeof data !== 'object') {
+		return
+	}
+	if (data.type === 'SKIP_WAITING') {
+		void self.skipWaiting()
+	} else if (data.type === 'GET_SW_VERSION' && event.ports && event.ports[0]) {
+		event.ports[0].postMessage({ type: 'SW_VERSION', version: APP_VERSION })
+	}
+})
+
 self.addEventListener('install', (event) => {
 	event.waitUntil((async () => {
 		try {
-			const shellUrl = new URL('./', self.location.href).toString()
-			const res = await fetch(shellUrl, { credentials: 'include', cache: 'reload' })
-			if (res && res.ok && !res.url.includes('/login')) {
-				const cache = await caches.open(APP_SHELL_CACHE)
-				const htmlClone = res.clone()
-				await cache.put(shellUrl, toCleanNavigationResponse(res))
-				const html = await htmlClone.text()
-				const assetUrls = extractAppShellAssetUrls(html, shellUrl)
-				await Promise.allSettled(
-					assetUrls.map((assetUrl) => precacheAssetWithCssImports(cache, assetUrl)),
-				)
-			}
+			await precacheAppShellWithProgress()
 		} catch {
 			// Best-effort pre-cache on install
 		}
-		await self.skipWaiting()
+		// Activate immediately only on initial install; on updates, wait for user
+		// confirmation (SKIP_WAITING) so we never interrupt performance mode or unsaved edits.
+		if (!self.registration || !self.registration.active) {
+			await self.skipWaiting()
+		}
 	})())
 })
 
@@ -268,6 +512,10 @@ self.addEventListener('activate', (event) => {
 			// Best-effort cleanup of stale app-shell caches
 		}
 		await self.clients.claim()
+		await broadcastUpdateProgress({
+			stage: 'activated',
+			percent: 100,
+		})
 	})())
 })
 

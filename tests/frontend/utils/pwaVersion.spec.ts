@@ -2,14 +2,26 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
 	APP_RELOAD_GUARD_KEY,
 	APP_VERSION_STORAGE_KEY,
+	applyPendingAppUpdate,
+	attachPreloadErrorRecovery,
 	attachServiceWorkerUpdateChecks,
+	checkForAppUpdate,
 	getAppAssetVersion,
 	getAppShellCacheName,
+	getAppUpdateProgress,
+	getAppVersionMetadata,
 	purgeStaleAppShellCaches,
 	resetServiceWorkerWatcherForTest,
+	setActiveServiceWorkerRegistration,
+	subscribeAppUpdateProgress,
 	syncAppVersionAndReloadIfNeeded,
+	watchServiceWorkerProgress,
 	watchServiceWorkerUpdate,
 } from '../../../src/utils/pwaVersion'
+
+vi.mock('@nextcloud/router', () => ({
+	generateUrl: (path: string) => `/index.php${path}`,
+}))
 
 describe('pwaVersion utils', () => {
 	beforeEach(() => {
@@ -141,5 +153,196 @@ describe('pwaVersion utils', () => {
 		expect(update).toHaveBeenCalledTimes(2)
 
 		vi.useRealTimers()
+	})
+
+	it('reads full app version metadata from #sheetmusic dataset', () => {
+		document.body.innerHTML = '<div id="sheetmusic" data-asset-version="abc123def456" data-app-version="0.0.3-rc6" data-release-date="2026-11-17" data-build-date="2026-11-21T20:35:35Z"></div>'
+		expect(getAppVersionMetadata()).toEqual({
+			appVersion: '0.0.3-rc6',
+			assetVersion: 'abc123def456',
+			releaseDate: '2026-11-17',
+			buildDate: '2026-11-21T20:35:35Z',
+		})
+	})
+
+	it('ignores initial SW claim when uncontrolled, then reloads on subsequent controllerchange', () => {
+		let controllerChangeCb: (() => void) | undefined
+		Object.defineProperty(window.navigator, 'serviceWorker', {
+			configurable: true,
+			value: {
+				controller: null,
+				addEventListener: (event: string, cb: () => void) => {
+					if (event === 'controllerchange') {
+						controllerChangeCb = cb
+					}
+				},
+			},
+		})
+
+		const reload = vi.fn()
+		watchServiceWorkerUpdate('ver1', reload)
+
+		// First controllerchange is the initial SW claiming an uncontrolled page -> no reload
+		controllerChangeCb?.()
+		expect(reload).not.toHaveBeenCalled()
+
+		// Second controllerchange is a real update -> triggers reload
+		controllerChangeCb?.()
+		expect(reload).toHaveBeenCalledTimes(1)
+	})
+
+	it('tracks SW_UPDATE_PROGRESS messages from an installing service worker', () => {
+		let messageCb: ((event: MessageEvent) => void) | undefined
+		Object.defineProperty(window.navigator, 'serviceWorker', {
+			configurable: true,
+			value: {
+				controller: { scriptURL: '/apps/sheetmusic/sw.js' },
+				addEventListener: (event: string, cb: (ev: MessageEvent) => void) => {
+					if (event === 'message') {
+						messageCb = cb
+					}
+				},
+			},
+		})
+
+		document.body.innerHTML = '<div id="sheetmusic" data-asset-version="ver1"></div>'
+		const updates: number[] = []
+		const unsubscribe = subscribeAppUpdateProgress((p) => {
+			if (p.active) updates.push(p.percent)
+		})
+		watchServiceWorkerProgress()
+
+		// Same-version progress (e.g. initial SW install/claim) must be ignored
+		messageCb?.({
+			data: {
+				type: 'SW_UPDATE_PROGRESS',
+				version: 'ver1',
+				stage: 'activated',
+				percent: 100,
+			},
+		} as MessageEvent)
+		expect(getAppUpdateProgress().active).toBe(false)
+
+		messageCb?.({
+			data: {
+				type: 'SW_UPDATE_PROGRESS',
+				version: 'ver2',
+				stage: 'downloading',
+				percent: 45,
+				completedFiles: 3,
+				totalFiles: 8,
+				loadedBytes: 1_500_000,
+				totalBytes: 3_500_000,
+			},
+		} as MessageEvent)
+
+		expect(getAppUpdateProgress()).toEqual({
+			active: true,
+			dismissed: false,
+			stage: 'downloading',
+			version: 'ver2',
+			percent: 45,
+			completedFiles: 3,
+			totalFiles: 8,
+			loadedBytes: 1_500_000,
+			totalBytes: 3_500_000,
+		})
+
+		messageCb?.({
+			data: {
+				type: 'SW_UPDATE_PROGRESS',
+				version: 'ver2',
+				stage: 'activated',
+				percent: 100,
+			},
+		} as MessageEvent)
+
+		expect(getAppUpdateProgress().stage).toBe('reloading')
+		expect(getAppUpdateProgress().percent).toBe(100)
+		expect(updates).toEqual([45, 100])
+		unsubscribe()
+	})
+
+	it('detects server version change in checkForAppUpdate even without active SW update', async () => {
+		document.body.innerHTML = '<div id="sheetmusic" data-asset-version="ver1"></div>'
+		Object.defineProperty(window.navigator, 'onLine', { configurable: true, value: true })
+		Object.defineProperty(window.navigator, 'serviceWorker', {
+			configurable: true,
+			value: {
+				getRegistration: vi.fn().mockResolvedValue(null),
+			},
+		})
+		Object.defineProperty(globalThis, 'caches', {
+			configurable: true,
+			value: {
+				keys: vi.fn().mockResolvedValue([]),
+				delete: vi.fn().mockResolvedValue(true),
+			},
+		})
+		const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+			ok: true,
+			json: async () => ({
+				appVersion: '0.0.4',
+				assetVersion: 'ver2',
+				releaseDate: '2026-11-22',
+				buildDate: '2026-11-22T12:00:00Z',
+			}),
+		} as Response)
+
+		const reload = vi.fn()
+		const result = await checkForAppUpdate(reload)
+
+		// Surfaces a non-interrupting "ready" prompt instead of force-reloading immediately
+		expect(result).toBe('ready')
+		expect(getAppUpdateProgress().stage).toBe('waiting')
+		expect(reload).not.toHaveBeenCalled()
+
+		// Applying the pending update triggers the guarded reload
+		await applyPendingAppUpdate(reload)
+		expect(reload).toHaveBeenCalledTimes(1)
+		fetchSpy.mockRestore()
+	})
+
+	it('posts SKIP_WAITING to a waiting service worker when applying a pending update', async () => {
+		const postMessage = vi.fn()
+		setActiveServiceWorkerRegistration({ waiting: { postMessage } } as unknown as ServiceWorkerRegistration)
+
+		const applied = await applyPendingAppUpdate()
+		expect(applied).toBe(true)
+		expect(postMessage).toHaveBeenCalledWith({ type: 'SKIP_WAITING' })
+		expect(getAppUpdateProgress().stage).toBe('reloading')
+	})
+
+	it('recovers from vite:preloadError by purging stale caches and triggering a one-shot reload', async () => {
+		document.body.innerHTML = '<div id="sheetmusic" data-asset-version="ver1"></div>'
+		Object.defineProperty(globalThis, 'caches', {
+			configurable: true,
+			value: {
+				keys: vi.fn().mockResolvedValue([]),
+				delete: vi.fn().mockResolvedValue(true),
+			},
+		})
+		const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+			ok: true,
+			json: async () => ({
+				appVersion: '0.0.4',
+				assetVersion: 'ver2',
+				releaseDate: '2026-11-22',
+				buildDate: null,
+			}),
+		} as Response)
+
+		const reload = vi.fn()
+		const cleanup = attachPreloadErrorRecovery(reload)
+		const ev = new Event('vite:preloadError', { cancelable: true })
+		window.dispatchEvent(ev)
+
+		await vi.waitFor(() => {
+			expect(reload).toHaveBeenCalledTimes(1)
+		})
+		expect(ev.defaultPrevented).toBe(true)
+
+		cleanup()
+		fetchSpy.mockRestore()
 	})
 })
