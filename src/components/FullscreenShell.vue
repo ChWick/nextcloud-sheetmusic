@@ -47,4 +47,10 @@ defineProps<{
 	max-height: 100vh !important;
 	z-index: 100000 !important;
 }
+
+:global(body.sheetmusic-fullscreen-active .modal-mask),
+:global(body.sheetmusic-fullscreen-active .nc-select__dropdown.vs__dropdown-menu),
+:global(body.sheetmusic-fullscreen-active .v-popper__popper) {
+	z-index: 100010 !important;
+}
 </style>

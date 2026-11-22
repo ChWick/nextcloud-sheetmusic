@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref } from 'vue'
-import NcSelect from '@nextcloud/vue/components/NcSelect'
-import { clampNcSelectDropdown } from '../../composables/useViewportPopoverClamp'
+import { computed, ref } from 'vue'
+import ChevronDown from 'vue-material-design-icons/ChevronDown.vue'
+import ViewportPopover from '../ViewportPopover.vue'
 
 const props = withDefaults(
 	defineProps<{
@@ -28,43 +28,19 @@ const emit = defineEmits<{
 	'update:modelValue': [value: number]
 }>()
 
-const selectRef = ref<InstanceType<typeof NcSelect> | null>(null)
-const isDragging = ref(false)
+const open = ref(false)
 
 const minLog = computed(() => Math.log2(Math.max(1, props.minValue)))
 const maxLog = computed(() => Math.log2(Math.max(props.minValue + 1, props.maxValue)))
-
-const options = computed(() => props.presets.map((value) => ({ value, label: String(value) })))
-
-const currentOption = computed(() => {
-	return options.value.find((o) => o.value === props.modelValue) ?? {
-		value: props.modelValue,
-		label: String(props.modelValue),
-	}
-})
 
 const sliderPos = computed(() => {
 	const clamped = Math.max(props.minValue, Math.min(props.maxValue, Number(props.modelValue) || props.minValue))
 	return Math.log2(clamped)
 })
 
-function dropdownShouldOpen({ noDrop, open }: { noDrop: boolean; open: boolean }): boolean {
-	return (open || isDragging.value) && !noDrop
-}
-
-function finishDrag() {
-	if (!isDragging.value) return
-	isDragging.value = false
-	window.removeEventListener('pointerup', finishDrag)
-	window.removeEventListener('mouseup', finishDrag)
-	const input = selectRef.value?.$el?.querySelector?.('input') as HTMLInputElement | null
-	input?.focus()
-}
-
-function onSliderStart() {
-	isDragging.value = true
-	window.addEventListener('pointerup', finishDrag, { once: true })
-	window.addEventListener('mouseup', finishDrag, { once: true })
+function pickPreset(value: number) {
+	emit('update:modelValue', value)
+	open.value = false
 }
 
 function onSliderInput(pos: number) {
@@ -75,86 +51,141 @@ function onSliderInput(pos: number) {
 		: Math.round(raw)
 	emit('update:modelValue', Math.max(props.minValue, Math.min(props.maxValue, rounded)))
 }
-
-onUnmounted(() => {
-	window.removeEventListener('pointerup', finishDrag)
-	window.removeEventListener('mouseup', finishDrag)
-})
 </script>
 
 <template>
-	<NcSelect
-		ref="selectRef"
-		:model-value="currentOption"
-		:options="options"
-		:clearable="false"
-		:searchable="false"
-		:append-to-body="false"
-		:dropdown-should-open="dropdownShouldOpen"
-		:input-label="inputLabel"
-		label="label"
-		track-by="value"
-		:class="$style.ncSelect"
-		:data-test="selectTestId"
-		@open="clampNcSelectDropdown(selectRef)"
-		@update:model-value="$event && emit('update:modelValue', $event.value)">
-		<template #list-footer>
-			<div
-				:class="$style.sliderFooter"
-				@mousedown.stop="onSliderStart"
-				@pointerdown.stop="onSliderStart"
-				@click.stop>
-				<input
-					type="range"
-					:min="minLog"
-					:max="maxLog"
-					step="0.05"
-					:value="sliderPos"
-					:title="sliderLabel"
-					:aria-label="sliderLabel"
-					:class="$style.slider"
-					:data-test="sliderTestId"
-					@input="onSliderInput(Number(($event.target as HTMLInputElement).value))">
-			</div>
+	<ViewportPopover
+		v-model:open="open"
+		:pane-class="$style.menuPane">
+		<template #trigger="{ toggle }">
+			<button
+				type="button"
+				:class="[$style.triggerBtn, open && $style.open]"
+				:title="inputLabel"
+				:aria-label="`${inputLabel}: ${modelValue}`"
+				:aria-expanded="open"
+				:data-test="selectTestId"
+				@click="toggle">
+				<span :class="$style.triggerLabel">{{ inputLabel }}</span>
+				<span :class="$style.triggerValue">{{ modelValue }}</span>
+				<ChevronDown :size="16" :class="$style.chevron" />
+			</button>
 		</template>
-	</NcSelect>
+
+		<div :class="$style.optionList">
+			<button
+				v-for="val in presets"
+				:key="val"
+				type="button"
+				:class="[$style.optionBtn, modelValue === val && $style.optionActive]"
+				:data-test="selectTestId ? `${selectTestId}-option-${val}` : undefined"
+				@click="pickPreset(val)">
+				{{ val }}
+			</button>
+		</div>
+
+		<div :class="$style.sliderFooter" @click.stop>
+			<input
+				type="range"
+				:min="minLog"
+				:max="maxLog"
+				step="0.05"
+				:value="sliderPos"
+				:title="sliderLabel"
+				:aria-label="sliderLabel"
+				:class="$style.slider"
+				:data-test="sliderTestId"
+				@input="onSliderInput(Number(($event.target as HTMLInputElement).value))">
+		</div>
+	</ViewportPopover>
 </template>
 
 <style module>
-.ncSelect:global(.nc-select.v-select.select) {
-	width: 84px;
-	min-width: 84px;
-	max-width: 84px;
+.triggerBtn {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	min-height: var(--default-clickable-area, 44px);
+	padding: 4px 8px 4px 10px;
+	border: 1px solid var(--color-border-dark, var(--color-border));
+	border-radius: var(--border-radius, 4px);
+	background: var(--color-main-background);
+	color: var(--color-main-text);
+	font-size: 0.82rem;
+	cursor: pointer;
+	white-space: nowrap;
 }
 
-.ncSelect:global(.nc-select.v-select.select) :global(.vs__search) {
-	--input-padding-end: 26px;
-	--input-padding-start: 10px;
+.triggerBtn:hover {
+	background: var(--color-background-hover);
 }
 
-.ncSelect:global(.nc-select.v-select.select.vs--single) :global(.vs__selected) {
-	padding-inline: 10px 26px;
+.triggerBtn.open {
+	border-color: var(--color-primary-element, #0082c9);
 }
 
-.ncSelect:global(.nc-select.v-select.select) :global(.vs__actions) {
-	--vs-actions-padding: 0 4px 0 0;
+.triggerLabel {
+	font-size: 0.75rem;
+	color: var(--color-text-maxcontrast);
 }
 
-.ncSelect :global(.vs__dropdown-menu) {
-	width: max-content;
-	min-width: 0;
+.triggerValue {
+	font-weight: 600;
+	min-width: 22px;
+	text-align: right;
+}
+
+.chevron {
+	display: inline-flex;
+	color: var(--color-text-maxcontrast);
+}
+
+.menuPane {
+	min-width: 156px;
+	padding: 4px 0;
+}
+
+.optionList {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding: 0 4px 4px;
+}
+
+.optionBtn {
+	display: flex;
+	align-items: center;
+	width: 100%;
+	padding: 6px 10px;
+	border: none;
+	border-radius: 4px;
+	background: transparent;
+	color: var(--color-main-text);
+	font-size: 0.85rem;
+	text-align: left;
+	cursor: pointer;
+}
+
+.optionBtn:hover {
+	background: var(--color-background-hover);
+}
+
+.optionActive {
+	background: var(--color-primary-light, #e6f4fa);
+	color: var(--color-primary-element, #0082c9);
+	font-weight: 600;
 }
 
 .sliderFooter {
 	display: flex;
 	align-items: center;
-	padding: 6px 10px;
+	padding: 6px 10px 4px;
 	border-top: 1px solid var(--color-border);
 }
 
 .slider {
-	width: 132px;
-	min-width: 132px;
+	width: 136px;
+	min-width: 136px;
 	accent-color: var(--color-primary-element, #0082c9);
 	cursor: pointer;
 }

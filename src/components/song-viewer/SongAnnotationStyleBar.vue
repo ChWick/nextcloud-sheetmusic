@@ -3,13 +3,13 @@ import type { EditorTool, EditorToolStyle } from '../../composables/useAnnotatio
 import type { LineStyle, SheetAnnotation, TextAlign } from '../../types/annotation'
 import { computed, ref } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
-import NcSelect from '@nextcloud/vue/components/NcSelect'
+import ChevronDown from 'vue-material-design-icons/ChevronDown.vue'
 import FormatAlignCenter from 'vue-material-design-icons/FormatAlignCenter.vue'
 import FormatAlignLeft from 'vue-material-design-icons/FormatAlignLeft.vue'
 import FormatAlignRight from 'vue-material-design-icons/FormatAlignRight.vue'
 import SongAnnotationColorPicker, { type ColorSwatch } from './SongAnnotationColorPicker.vue'
 import SongAnnotationLogSelect from './SongAnnotationLogSelect.vue'
-import { clampNcSelectDropdown } from '../../composables/useViewportPopoverClamp'
+import ViewportPopover from '../ViewportPopover.vue'
 
 const props = withDefaults(
 	defineProps<{
@@ -29,7 +29,7 @@ const emit = defineEmits<{
 	'update-selected-data': [patch: Partial<SheetAnnotation['data']>]
 }>()
 
-const lineStyleSelectRef = ref<InstanceType<typeof NcSelect> | null>(null)
+const showLineStyleMenu = ref(false)
 
 const COLOR_SWATCHES: ColorSwatch[] = [
 	{ color: '#000000', label: 'Black' },
@@ -164,6 +164,7 @@ function updateStrokeWidth(val: number) {
 }
 
 function updateLineStyle(lineStyle: LineStyle) {
+	showLineStyleMenu.value = false
 	if (props.selectedAnnotation && (props.selectedAnnotation.type === 'drawing' || props.selectedAnnotation.type === 'shape')) {
 		emit('update-selected-style', { lineStyle })
 		return
@@ -262,21 +263,42 @@ function updateShapeHeight(height: number) {
 		<div
 			v-if="activeTool === 'drawing' || isShapeActive || (selectedAnnotation && (selectedAnnotation.type === 'drawing' || selectedAnnotation.type === 'shape'))"
 			:class="$style.styleGroup">
-			<NcSelect
-				ref="lineStyleSelectRef"
-				:model-value="currentLineStyleOption"
-				:options="lineStyleOptions"
-				:clearable="false"
-				:searchable="false"
-				:append-to-body="false"
-				:input-label="t('sheetmusic', 'Line')"
-				label="label"
-				track-by="value"
-				:class="$style.ncSelectWide"
-				data-test="annotation-line-style-select"
-				@open="clampNcSelectDropdown(lineStyleSelectRef)"
-				@update:model-value="$event && updateLineStyle($event.value)">
-				<template #selected-option="{ label, value }">
+			<ViewportPopover
+				v-model:open="showLineStyleMenu"
+				:pane-class="$style.lineMenuPane">
+				<template #trigger="{ toggle }">
+					<button
+						type="button"
+						:class="[$style.selectTriggerBtn, showLineStyleMenu && $style.selectTriggerOpen]"
+						:title="t('sheetmusic', 'Line')"
+						:aria-label="`${t('sheetmusic', 'Line')}: ${currentLineStyleOption.label}`"
+						:aria-expanded="showLineStyleMenu"
+						data-test="annotation-line-style-select"
+						@click="toggle">
+						<span :class="$style.lineOption">
+							<svg width="22" height="10" viewBox="0 0 22 10" aria-hidden="true">
+								<line
+									x1="1"
+									y1="5"
+									x2="21"
+									y2="5"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									:stroke-dasharray="currentLineStyleOption.value === 'dashed' ? '5, 3' : currentLineStyleOption.value === 'dotted' ? '1, 4' : undefined" />
+							</svg>
+							<span>{{ currentLineStyleOption.label }}</span>
+						</span>
+						<ChevronDown :size="16" :class="$style.chevron" />
+					</button>
+				</template>
+				<button
+					v-for="opt in lineStyleOptions"
+					:key="opt.value"
+					type="button"
+					:class="[$style.lineMenuItem, currentLineStyleOption.value === opt.value && $style.lineMenuItemActive]"
+					:data-test="`annotation-line-style-option-${opt.value}`"
+					@click="updateLineStyle(opt.value)">
 					<span :class="$style.lineOption">
 						<svg width="22" height="10" viewBox="0 0 22 10" aria-hidden="true">
 							<line
@@ -287,28 +309,12 @@ function updateShapeHeight(height: number) {
 								stroke="currentColor"
 								stroke-width="2"
 								stroke-linecap="round"
-								:stroke-dasharray="value === 'dashed' ? '5, 3' : value === 'dotted' ? '1, 4' : undefined" />
+								:stroke-dasharray="opt.value === 'dashed' ? '5, 3' : opt.value === 'dotted' ? '1, 4' : undefined" />
 						</svg>
-						<span>{{ label }}</span>
+						<span>{{ opt.label }}</span>
 					</span>
-				</template>
-				<template #option="{ label, value }">
-					<span :class="$style.lineOption">
-						<svg width="22" height="10" viewBox="0 0 22 10" aria-hidden="true">
-							<line
-								x1="1"
-								y1="5"
-								x2="21"
-								y2="5"
-								stroke="currentColor"
-								stroke-width="2"
-								stroke-linecap="round"
-								:stroke-dasharray="value === 'dashed' ? '5, 3' : value === 'dotted' ? '1, 4' : undefined" />
-						</svg>
-						<span>{{ label }}</span>
-					</span>
-				</template>
-			</NcSelect>
+				</button>
+			</ViewportPopover>
 		</div>
 
 		<!-- Shape Height (for Hairpins, Slurs, Brackets) -->
@@ -435,28 +441,64 @@ function updateShapeHeight(height: number) {
 	font-weight: 600;
 }
 
-.styleGroup .ncSelectWide:global(.nc-select.v-select.select) {
-	width: 116px;
-	min-width: 116px;
-	max-width: 116px;
+.selectTriggerBtn {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-height: var(--default-clickable-area, 44px);
+	padding: 4px 8px 4px 10px;
+	border: 1px solid var(--color-border-dark, var(--color-border));
+	border-radius: var(--border-radius, 4px);
+	background: var(--color-main-background);
+	color: var(--color-main-text);
+	font-size: 0.82rem;
+	cursor: pointer;
+	white-space: nowrap;
 }
 
-.styleGroup .ncSelectWide:global(.nc-select.v-select.select) :global(.vs__search) {
-	--input-padding-end: 26px;
-	--input-padding-start: 10px;
+.selectTriggerBtn:hover {
+	background: var(--color-background-hover);
 }
 
-.styleGroup .ncSelectWide:global(.nc-select.v-select.select.vs--single) :global(.vs__selected) {
-	padding-inline: 10px 26px;
+.selectTriggerOpen {
+	border-color: var(--color-primary-element, #0082c9);
 }
 
-.styleGroup .ncSelectWide:global(.nc-select.v-select.select) :global(.vs__actions) {
-	--vs-actions-padding: 0 4px 0 0;
+.chevron {
+	display: inline-flex;
+	color: var(--color-text-maxcontrast);
 }
 
-.ncSelectWide :global(.vs__dropdown-menu) {
-	width: max-content;
-	min-width: 124px;
+.lineMenuPane {
+	min-width: 132px;
+	padding: 4px;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.lineMenuItem {
+	display: flex;
+	align-items: center;
+	width: 100%;
+	padding: 6px 10px;
+	border: none;
+	border-radius: 4px;
+	background: transparent;
+	color: var(--color-main-text);
+	font-size: 0.85rem;
+	text-align: left;
+	cursor: pointer;
+}
+
+.lineMenuItem:hover {
+	background: var(--color-background-hover);
+}
+
+.lineMenuItemActive {
+	background: var(--color-primary-light, #e6f4fa);
+	color: var(--color-primary-element, #0082c9);
+	font-weight: 600;
 }
 
 .lineOption {

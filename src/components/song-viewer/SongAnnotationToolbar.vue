@@ -5,10 +5,10 @@ import { computed, ref, type Component } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import ResponsiveNcButton from '../ResponsiveNcButton.vue'
 import Check from 'vue-material-design-icons/Check.vue'
+import CogOutline from 'vue-material-design-icons/CogOutline.vue'
 import CursorDefaultOutline from 'vue-material-design-icons/CursorDefaultOutline.vue'
 import DeleteOutline from 'vue-material-design-icons/DeleteOutline.vue'
 import DeleteSweepOutline from 'vue-material-design-icons/DeleteSweepOutline.vue'
-import DrawPen from 'vue-material-design-icons/DrawPen.vue'
 import Eraser from 'vue-material-design-icons/Eraser.vue'
 import FormatText from 'vue-material-design-icons/FormatText.vue'
 import LinkVariant from 'vue-material-design-icons/LinkVariant.vue'
@@ -264,7 +264,7 @@ function pickStamp(symbol: string) {
 					:aria-label="t('sheetmusic', 'Stylus & Pressure Calibration')"
 					data-test="annotation-stylus-settings"
 					@click="showStylusDialog = true">
-					<DrawPen :size="18" />
+					<CogOutline :size="18" />
 				</button>
 
 				<ResponsiveNcButton

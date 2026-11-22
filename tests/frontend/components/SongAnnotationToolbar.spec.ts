@@ -4,7 +4,6 @@
  */
 
 import { mount } from '@vue/test-utils'
-import NcSelect from '@nextcloud/vue/components/NcSelect'
 import { describe, expect, it } from 'vitest'
 import SongAnnotationToolbar from '../../../src/components/song-viewer/SongAnnotationToolbar.vue'
 import type { EditorToolStyle } from '../../../src/composables/useAnnotationEditor'
@@ -69,7 +68,7 @@ describe('SongAnnotationToolbar.vue', () => {
 		expect(wrapper.emitted('done')).toBeTruthy()
 	})
 
-	it('renders shape height, width, and line style NcSelect dropdowns and updates values', async () => {
+	it('renders shape height, width, and line style dropdowns and updates values', async () => {
 		const wrapper = mount(SongAnnotationToolbar, {
 			attachTo: document.body,
 			props: {
@@ -79,21 +78,20 @@ describe('SongAnnotationToolbar.vue', () => {
 		})
 
 		expect(wrapper.find('[data-test="shape-height-control"]').exists()).toBe(true)
-		const selects = wrapper.findAllComponents(NcSelect)
-		expect(selects.length).toBe(3)
 
-		selects[0].vm.$emit('update:modelValue', { value: 4, label: '4' })
+		await wrapper.find('[data-test="annotation-width-select"]').trigger('click')
+		await wrapper.find('[data-test="annotation-width-select-option-4"]').trigger('click')
 		expect(wrapper.emitted('update:toolStyle')?.[0]?.[0]).toMatchObject({ strokeWidth: 4 })
 
-		selects[1].vm.$emit('update:modelValue', { value: 'dashed', label: 'Dashed' })
+		await wrapper.find('[data-test="annotation-line-style-select"]').trigger('click')
+		await wrapper.find('[data-test="annotation-line-style-option-dashed"]').trigger('click')
 		expect(wrapper.emitted('update:toolStyle')?.[1]?.[0]).toMatchObject({ lineStyle: 'dashed' })
 
-		selects[2].vm.$emit('update:modelValue', { value: 45, label: '45' })
+		await wrapper.find('[data-test="shape-height-select"]').trigger('click')
+		await wrapper.find('[data-test="shape-height-select-option-45"]').trigger('click')
 		expect(wrapper.emitted('update:toolStyle')?.[2]?.[0]).toMatchObject({ shapeHeight: 45 })
 
-		const vSelect = selects[0].findComponent({ name: 'VueSelect' })
-		;(vSelect.vm as any).open = true
-		await wrapper.vm.$nextTick()
+		await wrapper.find('[data-test="annotation-width-select"]').trigger('click')
 		const slider = wrapper.find('[data-test="annotation-width-slider"]')
 		expect(slider.exists()).toBe(true)
 		// Logarithmic slider: pos 3 -> 2^3 = 8, pos 6 -> 2^6 = 64
@@ -127,7 +125,7 @@ describe('SongAnnotationToolbar.vue', () => {
 		expect(wrapper.emitted('update:toolStyle')?.[2]?.[0]).toMatchObject({ opacity: 0.45 })
 	})
 
-	it('renders size NcSelect dropdown for text and stamp tools', async () => {
+	it('renders size dropdown for text and stamp tools', async () => {
 		const wrapper = mount(SongAnnotationToolbar, {
 			props: {
 				activeTool: 'stamp',
@@ -135,9 +133,8 @@ describe('SongAnnotationToolbar.vue', () => {
 			},
 		})
 
-		const sizeSelect = wrapper.findComponent(NcSelect)
-		expect(sizeSelect.exists()).toBe(true)
-		sizeSelect.vm.$emit('update:modelValue', { value: 48, label: '48' })
+		await wrapper.find('[data-test="annotation-size-select"]').trigger('click')
+		await wrapper.find('[data-test="annotation-size-select-option-48"]').trigger('click')
 		expect(wrapper.emitted('update:toolStyle')?.[0]?.[0]).toMatchObject({ stampSize: 48 })
 	})
 
