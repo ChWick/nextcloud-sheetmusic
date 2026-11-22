@@ -27,6 +27,7 @@ type InteractionKind = 'draw' | 'move' | 'resize' | 'endpoint' | 'height' | 'sty
 
 interface InteractionState {
 	kind: InteractionKind
+	pointerId?: number
 	startNorm: NormalizedPoint
 	currentNorm: NormalizedPoint
 	points: NormalizedPoint[]
@@ -321,7 +322,7 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 		if (e.button !== 0 && !isHardwareErase) return
 
 		if (e.pointerType === 'touch') {
-			if (isTouchDrawingBlocked.value) {
+			if (isTouchDrawingBlocked.value || interaction.value?.pointerType === 'pen') {
 				return
 			}
 			activeTouchPointers.add(e.pointerId)
@@ -337,6 +338,7 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 		const pt = clientToNorm(e.clientX, e.clientY, e.pointerType)
 
 		if (isHardwareErase) {
+			e.preventDefault()
 			const adj = applyPenTipOffset(e.clientX, e.clientY, e.pointerType, stylusSettings.value)
 			const hitEl = typeof document.elementFromPoint === 'function'
 				? document.elementFromPoint(adj.x, adj.y)
@@ -348,6 +350,7 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 			capturedPointerId = e.pointerId
 			interaction.value = {
 				kind: 'stylus-erase',
+				pointerId: e.pointerId,
 				startNorm: pt,
 				currentNorm: pt,
 				points: [pt],
@@ -361,8 +364,10 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 		const handle = targetEl?.getAttribute?.('data-resize-handle')
 
 		if (opts.activeTool.value === 'select' && handle && opts.selectedItem.value) {
+			e.preventDefault()
 			e.stopPropagation()
 			opts.svgRef.value?.setPointerCapture?.(e.pointerId)
+			capturedPointerId = e.pointerId
 			const kind: InteractionKind = handle === 'height'
 				? 'height'
 				: handle === 'p0' || handle === 'p1'
@@ -370,6 +375,7 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 					: 'resize'
 			interaction.value = {
 				kind,
+				pointerId: e.pointerId,
 				handle,
 				startNorm: pt,
 				currentNorm: pt,
@@ -393,9 +399,12 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 				const ann = opts.activeAnnotations.value.find((a) => a.uuid === hitUuid)
 				opts.onSelect(hitUuid)
 				if (ann) {
+					e.preventDefault()
 					opts.svgRef.value?.setPointerCapture?.(e.pointerId)
+					capturedPointerId = e.pointerId
 					interaction.value = {
 						kind: 'move',
+						pointerId: e.pointerId,
 						startNorm: pt,
 						currentNorm: pt,
 						points: [pt],
@@ -410,10 +419,12 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 			return
 		}
 
+		e.preventDefault()
 		opts.svgRef.value?.setPointerCapture?.(e.pointerId)
 		capturedPointerId = e.pointerId
 		const state: InteractionState = {
 			kind: 'draw',
+			pointerId: e.pointerId,
 			startNorm: pt,
 			currentNorm: pt,
 			points: [],
@@ -446,6 +457,9 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 			} else if (hoveredUuid.value !== null) {
 				hoveredUuid.value = null
 			}
+			return
+		}
+		if (state.pointerId !== undefined && e.pointerId !== state.pointerId) {
 			return
 		}
 
@@ -524,6 +538,9 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 
 		const state = interaction.value
 		if (!state) return
+		if (state.pointerId !== undefined && e.pointerId !== state.pointerId) {
+			return
+		}
 		interaction.value = null
 		releaseCapturedPointer(e.pointerId)
 
@@ -580,6 +597,10 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 			if (activeTouchPointers.size === 0) {
 				isMultiTouchGesture = false
 			}
+		}
+		const state = interaction.value
+		if (state && state.pointerId !== undefined && e.pointerId !== state.pointerId) {
+			return
 		}
 		cancelInteraction(e.pointerId)
 	}

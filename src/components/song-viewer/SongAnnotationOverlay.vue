@@ -237,10 +237,6 @@ const cursorClass = computed(() => {
 	touch-action: none;
 }
 
-.sheetmusic-annotation-overlay.is-stylus-only {
-	touch-action: pan-x pan-y pinch-zoom;
-}
-
 .cursor-crosshair {
 	cursor: crosshair;
 }

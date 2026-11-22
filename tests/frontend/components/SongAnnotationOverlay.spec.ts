@@ -613,4 +613,82 @@ describe('SongAnnotationOverlay.vue', () => {
 
 		expect(wrapper.emitted('delete-annotation')?.[0]?.[0]).toMatchObject({ uuid: 'ann-stamp-1' })
 	})
+
+	it('ignores palm touch move/cancel events while an active pen stroke is in progress', async () => {
+		const wrapper = mount(SongAnnotationOverlay, {
+			props: {
+				annotations: [],
+				pageNumber: 1,
+				pageWidth: 1000,
+				pageHeight: 1000,
+				visible: true,
+				editable: true,
+				activeTool: 'drawing',
+			},
+		})
+
+		const svg = wrapper.find('[data-test="annotation-overlay"]')
+		vi.spyOn(svg.element, 'getBoundingClientRect').mockReturnValue({
+			left: 0,
+			top: 0,
+			width: 1000,
+			height: 1000,
+			right: 1000,
+			bottom: 1000,
+			x: 0,
+			y: 0,
+			toJSON: () => ({}),
+		})
+
+		await svg.trigger('pointerdown', {
+			button: 0,
+			pointerType: 'pen',
+			pressure: 0.4,
+			clientX: 100,
+			clientY: 100,
+			pointerId: 10,
+		})
+		// Palm touches and gets cancelled by the OS mid-stroke
+		await svg.trigger('pointerdown', {
+			button: 0,
+			pointerType: 'touch',
+			clientX: 600,
+			clientY: 600,
+			pointerId: 20,
+		})
+		await svg.trigger('pointermove', {
+			button: 0,
+			pointerType: 'touch',
+			clientX: 620,
+			clientY: 620,
+			pointerId: 20,
+		})
+		await svg.trigger('pointercancel', {
+			pointerType: 'touch',
+			pointerId: 20,
+		})
+		// Pen continues and finishes the stroke
+		await svg.trigger('pointermove', {
+			button: 0,
+			pointerType: 'pen',
+			pressure: 0.6,
+			clientX: 300,
+			clientY: 200,
+			pointerId: 10,
+		})
+		await svg.trigger('pointerup', {
+			button: 0,
+			pointerType: 'pen',
+			pressure: 0.6,
+			clientX: 300,
+			clientY: 200,
+			pointerId: 10,
+		})
+
+		const created = wrapper.emitted('create-annotation')?.[0]?.[0] as SheetAnnotation
+		expect(created).toBeTruthy()
+		expect(created.data.points?.length).toBe(2)
+		expect(created.data.points?.[1].x).toBe(0.3)
+		expect(created.data.points?.[1].y).toBe(0.2)
+	})
 })
