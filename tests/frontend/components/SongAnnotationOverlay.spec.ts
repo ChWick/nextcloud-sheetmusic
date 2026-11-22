@@ -691,4 +691,57 @@ describe('SongAnnotationOverlay.vue', () => {
 		expect(created.data.points?.[1].x).toBe(0.3)
 		expect(created.data.points?.[1].y).toBe(0.2)
 	})
+
+	it('cancels an in-progress palm touch stroke when a pen hovers or touches down', async () => {
+		const wrapper = mount(SongAnnotationOverlay, {
+			props: {
+				annotations: [],
+				pageNumber: 1,
+				pageWidth: 1000,
+				pageHeight: 1000,
+				visible: true,
+				editable: true,
+				activeTool: 'drawing',
+			},
+		})
+
+		const svg = wrapper.find('[data-test="annotation-overlay"]')
+		vi.spyOn(svg.element, 'getBoundingClientRect').mockReturnValue({
+			left: 0,
+			top: 0,
+			width: 1000,
+			height: 1000,
+			right: 1000,
+			bottom: 1000,
+			x: 0,
+			y: 0,
+			toJSON: () => ({}),
+		})
+
+		// Palm hits the screen before pen has ever been detected
+		await svg.trigger('pointerdown', {
+			button: 0,
+			pointerType: 'touch',
+			clientX: 400,
+			clientY: 400,
+			pointerId: 30,
+		})
+		// Pen approaches and hovers over the canvas -> cancels the palm's touch stroke
+		await svg.trigger('pointermove', {
+			pointerType: 'pen',
+			clientX: 200,
+			clientY: 200,
+			pointerId: 40,
+		})
+		// Palm lifts -> should NOT commit a 1-dot line
+		await svg.trigger('pointerup', {
+			button: 0,
+			pointerType: 'touch',
+			clientX: 400,
+			clientY: 400,
+			pointerId: 30,
+		})
+
+		expect(wrapper.emitted('create-annotation')).toBeFalsy()
+	})
 })

@@ -4,6 +4,7 @@
  */
 
 import { computed, ref } from 'vue'
+import { LocalStorageAdapter } from '../utils/settings-store'
 import {
 	createStylusSettingsStore,
 	DEFAULT_STYLUS_SETTINGS,
@@ -11,9 +12,11 @@ import {
 	type StylusSettings,
 } from '../utils/stylus-settings'
 
+const PEN_DETECTED_STORAGE_KEY = 'sheetmusic:stylus-pen-detected:v1'
+const penFlagStorage = new LocalStorageAdapter()
 const store = createStylusSettingsStore()
 const sharedSettings = ref<StylusSettings>(store.get())
-const penDetected = ref(false)
+const penDetected = ref(penFlagStorage.getItem(PEN_DETECTED_STORAGE_KEY) === '1')
 let lastPenActivityTime = 0
 
 export function useStylusSettings() {
@@ -27,12 +30,15 @@ export function useStylusSettings() {
 		const defaults = { ...DEFAULT_STYLUS_SETTINGS }
 		sharedSettings.value = defaults
 		store.reset()
+		penDetected.value = false
+		penFlagStorage.removeItem(PEN_DETECTED_STORAGE_KEY)
 	}
 
 	function markPenDetected() {
 		lastPenActivityTime = Date.now()
 		if (!penDetected.value) {
 			penDetected.value = true
+			penFlagStorage.setItem(PEN_DETECTED_STORAGE_KEY, '1')
 		}
 	}
 
@@ -69,6 +75,7 @@ export function useStylusSettings() {
  */
 export function resetStylusSettingsStateForTests() {
 	store.reset()
+	penFlagStorage.removeItem(PEN_DETECTED_STORAGE_KEY)
 	sharedSettings.value = { ...DEFAULT_STYLUS_SETTINGS }
 	penDetected.value = false
 	lastPenActivityTime = 0

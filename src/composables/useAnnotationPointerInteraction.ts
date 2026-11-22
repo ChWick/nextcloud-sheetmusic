@@ -318,6 +318,9 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 
 		if (e.pointerType === 'pen') {
 			markPenDetected()
+			if (interaction.value?.pointerType === 'touch') {
+				cancelInteraction()
+			}
 		}
 
 		const isHardwareErase = stylusSettings.value.hardwareEraser && isStylusEraserEvent(e)
@@ -455,6 +458,9 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 	function onPointerMove(e: PointerEvent) {
 		if (e.pointerType === 'pen') {
 			markPenDetected()
+			if (interaction.value?.pointerType === 'touch') {
+				cancelInteraction()
+			}
 		}
 		if (isMultiTouchGesture) return
 		const state = interaction.value
