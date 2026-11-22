@@ -1,6 +1,15 @@
 import { createAppConfig } from '@nextcloud/vite-config'
 import { join, resolve } from 'path'
-import { cpSync } from 'fs'
+import { cpSync, existsSync, readdirSync, rmSync } from 'fs'
+
+function cleanMatchingFiles(dir: string, pattern: RegExp): void {
+	if (!existsSync(dir)) return
+	for (const entry of readdirSync(dir)) {
+		if (pattern.test(entry)) {
+			rmSync(join(dir, entry), { force: true })
+		}
+	}
+}
 
 export default createAppConfig(
 	{
@@ -33,6 +42,14 @@ export default createAppConfig(
 				},
 			},
 			plugins: [
+				{
+					name: 'clean-old-chunks',
+					buildStart() {
+						cleanMatchingFiles('js', /\.chunk\.mjs$/)
+						cleanMatchingFiles('css', /\.chunk\.css$/)
+						cleanMatchingFiles('dist', /^pdf\.worker\.min-.*\.mjs$/)
+					},
+				},
 				{
 					name: 'copy-pdfjs-assets',
 					closeBundle() {
