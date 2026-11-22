@@ -8,7 +8,7 @@ export default createAppConfig(
 		pwa: resolve(join('src', 'pwa-init.ts')),
 	},
 	{
-		minify: false,
+		minify: true,
 		createEmptyCSSEntryPoints: true,
 		extractLicenseInformation: false,
 		thirdPartyLicense: false,
