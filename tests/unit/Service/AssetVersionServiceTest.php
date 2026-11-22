@@ -51,6 +51,34 @@ final class AssetVersionServiceTest extends TestCase {
 		self::assertNotSame($v3, $v4);
 	}
 
+	public function testReadsAppVersionReleaseDateFromChangelogAndBuildDate(): void {
+		mkdir($this->tempDir . '/appinfo', 0755, true);
+		file_put_contents($this->tempDir . '/appinfo/info.xml', '<info><id>sheetmusic</id><version>1.2.3-rc1</version></info>');
+		file_put_contents($this->tempDir . '/CHANGELOG.md', "# Changelog\n\n## [1.2.3-rc1] - 2026-11-20\n\n- Changes\n");
+		file_put_contents($this->tempDir . '/js/sheetmusic-main.mjs', 'console.log("built");');
+
+		$service = new AssetVersionService($this->tempDir);
+		$meta = $service->getMetadata();
+
+		self::assertSame('1.2.3-rc1', $meta['appVersion']);
+		self::assertSame('2026-11-20', $meta['releaseDate']);
+		self::assertMatchesRegularExpression('/^[a-f0-9]{12}$/', $meta['assetVersion']);
+		self::assertNotNull($meta['buildDate']);
+		self::assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/', $meta['buildDate']);
+	}
+
+	public function testFallsBackToAssetMtimeWhenChangelogHasNoMatchingVersion(): void {
+		mkdir($this->tempDir . '/appinfo', 0755, true);
+		file_put_contents($this->tempDir . '/appinfo/info.xml', '<info><id>sheetmusic</id><version>9.9.9</version></info>');
+		$jsFile = $this->tempDir . '/js/sheetmusic-main.mjs';
+		file_put_contents($jsFile, 'console.log("built");');
+		touch($jsFile, gmmktime(10, 0, 0, 11, 15, 2026));
+
+		$service = new AssetVersionService($this->tempDir);
+		self::assertSame('9.9.9', $service->getAppVersion());
+		self::assertSame('2026-11-15', $service->getReleaseDate());
+	}
+
 	private function removeDirectory(string $dir): void {
 		if (!is_dir($dir)) {
 			return;

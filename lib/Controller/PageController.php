@@ -47,19 +47,33 @@ class PageController extends Controller {
 	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[FrontpageRoute(verb: 'GET', url: '/')]
 	public function index(): TemplateResponse {
+		$metadata = $this->assetVersionService->getMetadata();
 		$response = new TemplateResponse(
 			Application::APP_ID,
 			'index',
 			[
-				'assetVersion' => $this->assetVersionService->getVersion(),
+				'assetVersion' => $metadata['assetVersion'],
+				'appVersion' => $metadata['appVersion'],
+				'releaseDate' => $metadata['releaseDate'] ?? '',
+				'buildDate' => $metadata['buildDate'] ?? '',
 			],
 		);
-		$response->addHeader('Cache-Control', 'no-cache');
+		$response->addHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
 		$csp = new ContentSecurityPolicy();
 		$csp->addAllowedWorkerSrcDomain('\'self\'');
 		$csp->addAllowedWorkerSrcDomain('blob:');
 		$response->setContentSecurityPolicy($csp);
 
+		return $response;
+	}
+
+	#[NoCSRFRequired]
+	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
+	#[FrontpageRoute(verb: 'GET', url: '/app-version')]
+	public function appVersion(): JSONResponse {
+		$response = new JSONResponse($this->assetVersionService->getMetadata());
+		$response->addHeader('Cache-Control', 'no-store, no-cache');
 		return $response;
 	}
 
