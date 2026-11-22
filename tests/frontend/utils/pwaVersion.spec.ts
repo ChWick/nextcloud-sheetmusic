@@ -290,7 +290,7 @@ describe('pwaVersion utils', () => {
 		} as Response)
 
 		const reload = vi.fn()
-		const result = await checkForAppUpdate(reload)
+		const result = await checkForAppUpdate()
 
 		// Surfaces a non-interrupting "ready" prompt instead of force-reloading immediately
 		expect(result).toBe('ready')

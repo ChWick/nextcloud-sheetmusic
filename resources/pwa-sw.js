@@ -269,7 +269,7 @@ async function fetchResponseWithProgress(url, onBytes) {
 
 	if (!res.body || typeof res.body.getReader !== 'function') {
 		const blob = await res.blob()
-		onBytes(blob.size, knownLength > 0 ? 0 : 0)
+		onBytes(blob.size, 0)
 		const reconstructed = new Response(blob, {
 			status: res.status,
 			statusText: res.statusText,

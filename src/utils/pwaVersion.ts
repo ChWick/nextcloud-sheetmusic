@@ -32,7 +32,7 @@ type ProgressListener = (progress: AppUpdateProgress) => void
 
 const progressListeners = new Set<ProgressListener>()
 
-let currentProgress: AppUpdateProgress = {
+const INITIAL_PROGRESS: AppUpdateProgress = {
 	active: false,
 	dismissed: false,
 	stage: 'idle',
@@ -44,6 +44,8 @@ let currentProgress: AppUpdateProgress = {
 	totalBytes: 0,
 }
 
+let currentProgress: AppUpdateProgress = { ...INITIAL_PROGRESS }
+
 let activeRegistration: ServiceWorkerRegistration | null = null
 let swMessageListenerAttached = false
 let preloadErrorListenerAttached = false
@@ -53,6 +55,37 @@ function setUpdateProgress(next: Partial<AppUpdateProgress>): void {
 	for (const listener of progressListeners) {
 		listener(currentProgress)
 	}
+}
+
+function markUpdateReady(version?: string | null): void {
+	setUpdateProgress({
+		active: true,
+		dismissed: false,
+		stage: 'waiting',
+		version: version ?? currentProgress.version,
+		percent: 100,
+	})
+}
+
+function persistAppVersion(version: string | null): void {
+	if (!version || typeof localStorage === 'undefined') {
+		return
+	}
+	try {
+		localStorage.setItem(APP_VERSION_STORAGE_KEY, version)
+	} catch {
+		// Ignore storage access errors
+	}
+}
+
+async function resolveServiceWorkerRegistration(): Promise<ServiceWorkerRegistration | null> {
+	if (activeRegistration) {
+		return activeRegistration
+	}
+	if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && typeof navigator.serviceWorker.getRegistration === 'function') {
+		return (await navigator.serviceWorker.getRegistration('/')) ?? null
+	}
+	return null
 }
 
 export function getAppUpdateProgress(): AppUpdateProgress {
@@ -213,13 +246,7 @@ export function watchServiceWorkerUpdate(
 			return
 		}
 		const targetVersion = currentProgress.version || currentVersion
-		try {
-			if (typeof localStorage !== 'undefined' && currentProgress.version) {
-				localStorage.setItem(APP_VERSION_STORAGE_KEY, currentProgress.version)
-			}
-		} catch {
-			// Ignore storage access errors
-		}
+		persistAppVersion(currentProgress.version)
 		triggerOneShotReload(`sw:${targetVersion}`, reloadFn)
 	})
 }
@@ -286,12 +313,7 @@ export function watchServiceWorkerProgress(): void {
  */
 export function watchRegistrationForUpdates(reg: ServiceWorkerRegistration): void {
 	if (reg.waiting && navigator.serviceWorker?.controller) {
-		setUpdateProgress({
-			active: true,
-			dismissed: false,
-			stage: 'waiting',
-			percent: 100,
-		})
+		markUpdateReady()
 	}
 
 	if (typeof reg.addEventListener !== 'function') {
@@ -311,19 +333,9 @@ export function watchRegistrationForUpdates(reg: ServiceWorkerRegistration): voi
 		if (typeof worker.addEventListener === 'function') {
 			worker.addEventListener('statechange', () => {
 				if (worker.state === 'installed' && navigator.serviceWorker?.controller) {
-					setUpdateProgress({
-						active: true,
-						dismissed: false,
-						stage: 'waiting',
-						percent: 100,
-					})
+					markUpdateReady()
 				} else if (worker.state === 'redundant' && currentProgress.stage !== 'reloading') {
-					setUpdateProgress({
-						active: false,
-						dismissed: false,
-						stage: 'idle',
-						percent: 0,
-					})
+					setUpdateProgress({ ...INITIAL_PROGRESS })
 				}
 			})
 		}
@@ -342,10 +354,7 @@ export function watchRegistrationForUpdates(reg: ServiceWorkerRegistration): voi
  * is waiting) so the user controls when the page reloads.
  */
 export async function applyPendingAppUpdate(reloadFn?: () => void): Promise<boolean> {
-	const reg = activeRegistration
-		?? (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && typeof navigator.serviceWorker.getRegistration === 'function'
-			? (await navigator.serviceWorker.getRegistration('/')) ?? null
-			: null)
+	const reg = await resolveServiceWorkerRegistration()
 
 	if (reg?.waiting) {
 		setUpdateProgress({
@@ -354,13 +363,7 @@ export async function applyPendingAppUpdate(reloadFn?: () => void): Promise<bool
 			stage: 'reloading',
 			percent: 100,
 		})
-		try {
-			if (typeof localStorage !== 'undefined' && currentProgress.version) {
-				localStorage.setItem(APP_VERSION_STORAGE_KEY, currentProgress.version)
-			}
-		} catch {
-			// Ignore storage access errors
-		}
+		persistAppVersion(currentProgress.version)
 		reg.waiting.postMessage({ type: 'SKIP_WAITING' })
 		// Fallback reload in case controllerchange does not fire promptly
 		if (typeof window !== 'undefined' && typeof window.setTimeout === 'function') {
@@ -444,16 +447,13 @@ export async function fetchServerAppVersion(): Promise<AppVersionMetadata | null
  * Actively checks for a newer frontend version via both Service Worker update
  * and the lightweight `/app-version` endpoint.
  */
-export async function checkForAppUpdate(reloadFn?: () => void): Promise<UpdateCheckResult> {
+export async function checkForAppUpdate(): Promise<UpdateCheckResult> {
 	if (typeof navigator !== 'undefined' && navigator.onLine === false) {
 		return 'offline'
 	}
 
 	try {
-		const reg = activeRegistration
-			?? (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && typeof navigator.serviceWorker.getRegistration === 'function'
-				? (await navigator.serviceWorker.getRegistration('/')) ?? null
-				: null)
+		const reg = await resolveServiceWorkerRegistration()
 
 		const [serverMeta] = await Promise.all([
 			fetchServerAppVersion().catch(() => null),
@@ -464,13 +464,7 @@ export async function checkForAppUpdate(reloadFn?: () => void): Promise<UpdateCh
 		const hasNewVersion = Boolean(serverMeta && serverMeta.assetVersion && serverMeta.assetVersion !== currentAssetVersion)
 
 		if (reg?.waiting || currentProgress.stage === 'waiting') {
-			setUpdateProgress({
-				active: true,
-				dismissed: false,
-				stage: 'waiting',
-				version: serverMeta?.assetVersion ?? currentProgress.version,
-				percent: 100,
-			})
+			markUpdateReady(serverMeta?.assetVersion)
 			return 'ready'
 		}
 
@@ -490,13 +484,7 @@ export async function checkForAppUpdate(reloadFn?: () => void): Promise<UpdateCh
 		if (hasNewVersion && serverMeta) {
 			// Server has a newer version without an active SW update (e.g. SW disabled/blocked).
 			// Surface the "Update ready — Reload" prompt rather than interrupting the user.
-			setUpdateProgress({
-				active: true,
-				dismissed: false,
-				stage: 'waiting',
-				version: serverMeta.assetVersion,
-				percent: 100,
-			})
+			markUpdateReady(serverMeta.assetVersion)
 			return 'ready'
 		}
 
@@ -512,17 +500,7 @@ export function resetServiceWorkerWatcherForTest(): void {
 	preloadErrorListenerAttached = false
 	activeRegistration = null
 	progressListeners.clear()
-	currentProgress = {
-		active: false,
-		dismissed: false,
-		stage: 'idle',
-		version: null,
-		percent: 0,
-		completedFiles: 0,
-		totalFiles: 0,
-		loadedBytes: 0,
-		totalBytes: 0,
-	}
+	currentProgress = { ...INITIAL_PROGRESS }
 }
 
 /**

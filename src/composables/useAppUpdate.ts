@@ -1,5 +1,6 @@
 import { computed, onUnmounted, ref } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
+import { formatFileSize } from '../utils/file'
 import {
 	applyPendingAppUpdate,
 	checkForAppUpdate,
@@ -12,21 +13,6 @@ import {
 	type AppVersionMetadata,
 	type UpdateCheckResult,
 } from '../utils/pwaVersion'
-
-export function formatBytes(bytes: number): string {
-	if (!Number.isFinite(bytes) || bytes <= 0) {
-		return '0 B'
-	}
-	if (bytes < 1024) {
-		return `${Math.round(bytes)} B`
-	}
-	const kb = bytes / 1024
-	if (kb < 1024) {
-		return `${kb.toFixed(kb >= 100 ? 0 : 1)} KB`
-	}
-	const mb = kb / 1024
-	return `${mb.toFixed(1)} MB`
-}
 
 export function useAppUpdate() {
 	watchServiceWorkerProgress()
@@ -63,9 +49,9 @@ export function useAppUpdate() {
 		const { loadedBytes, totalBytes, completedFiles, totalFiles } = updateProgress.value
 		const parts: string[] = []
 		if (totalBytes > 0 && loadedBytes <= totalBytes) {
-			parts.push(`${formatBytes(loadedBytes)} / ${formatBytes(totalBytes)}`)
+			parts.push(`${formatFileSize(loadedBytes)} / ${formatFileSize(totalBytes)}`)
 		} else if (loadedBytes > 0) {
-			parts.push(formatBytes(loadedBytes))
+			parts.push(formatFileSize(loadedBytes))
 		}
 		if (totalFiles > 0) {
 			parts.push(`${completedFiles}/${totalFiles}`)
