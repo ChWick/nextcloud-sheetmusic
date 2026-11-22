@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.3-rc7] - 2026-11-22
+
+### Added
+
+- **Offline Setlists & Simulated Offline Mode**: Save setlists for offline use with per-setlist sync indicators, instant offline playback from Cache Storage, automatic re-sync on app open/reconnect, and a simulated offline mode toggle in the sidebar.
+- **PWA Update Progress & App Version in Settings**: Automatic asset-hash cache versioning, streaming frontend update progress banner with a deferred non-interrupting **Reload** prompt, `/app-version` endpoint, `vite:preloadError` recovery, and an **App Version** section (version, release date, build hash, manual update check) in Settings.
+- **Stylus Calibration, Pressure Sensitivity & Palm Rejection**: Added stylus offset calibration, pressure-sensitive annotation strokes, hardware eraser support, and automatic palm rejection.
+- **Zoom, Panning & Single-Song Performance Mode**: Added touch pinch-to-zoom and panning (including in annotation mode), Ctrl+wheel zoom and mouse drag panning, and single-song playback via the performance viewer.
+- **UI Refinements & Per-Library Sync Control**: Consolidated Songs view/sort/column controls, added progressive disclosure for secondary filters, reusable not-found states for missing routes/entities, and per-library MobileSheets WebDAV sync gating.
+
+### Fixed
+
+- **Double-Page PDF Layout**: Enforced strict 50/50 CSS grid columns and independent per-page sizing for mixed-size and cropped horizontal PDFs.
+- **PWA Caching & Build Hygiene**: Fixed Service Worker entry revalidation, precached JS/CSS and PDF.js worker chunks, enabled production Vite minification, and cleaned stale generated chunks before builds.
+- **Share Target & Viewer Fixes**: Refreshed active views after share imports with upload rollback on failure, kept stage click zones active when zoomed in, and improved HiDPI PDF rendering performance.
+
 ## [0.0.3-rc6] - 2026-11-17
 
 ### Fixed
