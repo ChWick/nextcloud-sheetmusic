@@ -10,6 +10,7 @@ import HelpCircleOutline from 'vue-material-design-icons/HelpCircleOutline.vue'
 import TrashCanOutline from 'vue-material-design-icons/TrashCanOutline.vue'
 import FolderSyncOutline from 'vue-material-design-icons/FolderSyncOutline.vue'
 import ShareVariantOutline from 'vue-material-design-icons/ShareVariantOutline.vue'
+import AppVersionSection from './AppVersionSection.vue'
 import ShareDialog from './ShareDialog.vue'
 import { describeRequestFailure } from '../utils/api'
 import type { Library } from '../types/library'
@@ -136,12 +137,12 @@ function handleDelete() {
 
 <template>
 	<NcDialog
-		:name="t('sheetmusic', 'Library Settings')"
+		:name="currentLibrary ? t('sheetmusic', 'Library Settings') : t('sheetmusic', 'Settings')"
 		size="normal"
 		@close="emit('close')">
 		<div :class="$style.dialogBody">
 			<!-- Shared library banner if current user is not the owner -->
-			<div v-if="isSharedLibrary" :class="$style.sharedBanner">
+			<div v-if="currentLibrary && isSharedLibrary" :class="$style.sharedBanner">
 				<div :class="$style.sharedHeader">
 					<ShareVariantOutline :size="20" />
 					<strong>{{ t('sheetmusic', 'Shared Library') }}</strong>
@@ -157,7 +158,7 @@ function handleDelete() {
 			</div>
 
 			<!-- Owner Settings -->
-			<template v-if="!isSharedLibrary">
+			<template v-if="currentLibrary && !isSharedLibrary">
 				<h4 :class="$style.sectionTitle">
 					{{ t('sheetmusic', 'Library Settings') }}
 				</h4>
@@ -327,6 +328,8 @@ function handleDelete() {
 			<p v-if="saveError" :class="$style.error" role="alert">
 				{{ saveError }}
 			</p>
+
+			<AppVersionSection />
 		</div>
 
 		<!-- Reusable Share Dialog for full library -->

@@ -58,6 +58,7 @@ import ShareDialog from './components/ShareDialog.vue'
 import ShareTargetDialog, { type ShareImportResult } from './components/ShareTargetDialog.vue'
 import OfflineSetlistsView from './components/setlists/OfflineSetlistsView.vue'
 import NotFoundState from './components/NotFoundState.vue'
+import AppUpdateBanner from './components/AppUpdateBanner.vue'
 import { consumeOfflineReturnState, useOnlineStatus } from './composables/useOnlineStatus'
 import { useProgressPolling } from './composables/useProgressPolling'
 import { clearShareTargetParam, consumePendingShare, getShareTokenParam, hasShareTargetParam } from './utils/shareTarget'
@@ -499,7 +500,7 @@ async function deleteLibrary() {
 </script>
 
 <template>
-  <div id="sheetmusic">
+  <div class="sheetmusic-app">
     <NcContent app-name="sheetmusic">
       <!-- Sidebar (navigation) -->
       <NcAppNavigation v-if="isOnline" :aria-label="t('sheetmusic', 'Sheet Music libraries')">
@@ -666,11 +667,10 @@ async function deleteLibrary() {
                   <ShareVariantOutline :size="20" />
                 </template>
               </NcButton>
-              <NcButton v-if="selectedLibrary >= 0"
-                        type="button"
+              <NcButton type="button"
                         variant="tertiary"
-                        :title="t('sheetmusic', 'Library Settings')"
-                        :aria-label="t('sheetmusic', 'Library Settings')"
+                        :title="selectedLibrary >= 0 ? t('sheetmusic', 'Library Settings') : t('sheetmusic', 'Settings')"
+                        :aria-label="selectedLibrary >= 0 ? t('sheetmusic', 'Library Settings') : t('sheetmusic', 'Settings')"
                         :class="$style.settingsButton"
                         @click="isSettingsDialogOpen = true">
                 <template #icon>
@@ -805,7 +805,7 @@ async function deleteLibrary() {
     </NcDialog>
 
     <LibrarySettingsDialog
-      v-if="isSettingsDialogOpen && selectedLibrary >= 0"
+      v-if="isSettingsDialogOpen"
       :selected-library="selectedLibrary"
       :libraries="libraries"
       @close="isSettingsDialogOpen = false"
@@ -828,6 +828,8 @@ async function deleteLibrary() {
       :selected-library-id="selectedLibrary"
       @close="closeShareTargetDialog"
       @imported="handleShareTargetImported" />
+
+    <AppUpdateBanner />
   </div>
 </template>
 

@@ -15,13 +15,17 @@ vi.mock('@nextcloud/axios', () => ({
 
 vi.mock('@nextcloud/router', () => ({
 	generateOcsUrl: (path: string) => `/ocs/v2.php${path}`,
+	generateUrl: (path: string) => `/index.php${path}`,
 }))
 
 vi.mock('@nextcloud/l10n', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('@nextcloud/l10n')>()
 	return {
 		...actual,
-		translate: vi.fn((_app: string, text: string) => text),
+		translate: vi.fn((_app: string, text: string, vars?: Record<string, unknown>) => {
+			if (!vars) return text
+			return text.replace(/\{(\w+)\}/g, (_, key: string) => String(vars[key] ?? `{${key}}`))
+		}),
 	}
 })
 
@@ -70,6 +74,14 @@ vi.mock('@nextcloud/vue/components/NcLoadingIcon', () => ({
 	default: {
 		name: 'NcLoadingIcon',
 		template: '<span class="loading-icon" />',
+	},
+}))
+
+vi.mock('@nextcloud/vue/components/NcProgressBar', () => ({
+	default: {
+		name: 'NcProgressBar',
+		props: ['value', 'size', 'showValue'],
+		template: '<progress :value="value" max="100" />',
 	},
 }))
 
@@ -368,6 +380,40 @@ describe('LibrarySettingsDialog.vue', () => {
 		await manageButton!.trigger('click')
 
 		expect(wrapper.emitted('open-sublibraries')).toBeTruthy()
+	})
+
+	it('displays current app version, release date, and build hash in settings', () => {
+		document.body.innerHTML = '<div id="sheetmusic" data-app-version="0.0.3-rc6" data-release-date="2026-11-17" data-asset-version="18ef4f34a72c"></div>'
+
+		const wrapper = mount(LibrarySettingsDialog, {
+			props: {
+				selectedLibrary: 1,
+				libraries: mockLibraries,
+			},
+		})
+
+		expect(wrapper.find('[data-test="app-version-value"]').text()).toBe('v0.0.3-rc6')
+		expect(wrapper.find('[data-test="app-release-date"]').text()).toContain('2026-11-17')
+		expect(wrapper.find('[data-test="app-asset-version"]').text()).toContain('18ef4f34a72c')
+		expect(wrapper.find('[data-test="check-updates-btn"]').exists()).toBe(true)
+
+		document.body.innerHTML = ''
+	})
+
+	it('still renders app version section when no library is selected', () => {
+		document.body.innerHTML = '<div id="sheetmusic" data-app-version="0.0.3-rc6" data-release-date="2026-11-17" data-asset-version="18ef4f34a72c"></div>'
+
+		const wrapper = mount(LibrarySettingsDialog, {
+			props: {
+				selectedLibrary: -1,
+				libraries: [],
+			},
+		})
+
+		expect(wrapper.findAll('input[type="checkbox"]')).toHaveLength(0)
+		expect(wrapper.find('[data-test="app-version-value"]').text()).toBe('v0.0.3-rc6')
+
+		document.body.innerHTML = ''
 	})
 })
 
