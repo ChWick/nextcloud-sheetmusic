@@ -74,14 +74,6 @@ export function useAppUpdate() {
 		}
 	}
 
-	async function applyUpdate(): Promise<void> {
-		await applyPendingAppUpdate()
-	}
-
-	function dismissUpdate(): void {
-		dismissAppUpdateBanner()
-	}
-
 	return {
 		versionMetadata,
 		updateProgress,
@@ -91,7 +83,7 @@ export function useAppUpdate() {
 		lastCheckResult,
 		progressDetail,
 		checkForUpdate,
-		applyUpdate,
-		dismissUpdate,
+		applyUpdate: applyPendingAppUpdate,
+		dismissUpdate: dismissAppUpdateBanner,
 	}
 }

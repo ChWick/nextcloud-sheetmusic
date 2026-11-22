@@ -339,15 +339,7 @@ async function precacheAppShellWithProgress() {
 	const html = await htmlClone.text()
 
 	const seenUrls = new Set([shellUrl])
-	const queue = extractAppShellAssetUrls(html, shellUrl).filter((u) => !seenUrls.has(u))
-	for (const u of queue) {
-		seenUrls.add(u)
-	}
-
-	state.completedFiles = 1
-	state.totalFiles = 1 + queue.length
-	await emitProgress('downloading', true)
-
+	const queue = []
 	const enqueue = (urls) => {
 		let added = 0
 		for (const u of urls) {
@@ -361,6 +353,10 @@ async function precacheAppShellWithProgress() {
 			state.totalFiles += added
 		}
 	}
+
+	state.completedFiles = 1
+	enqueue(extractAppShellAssetUrls(html, shellUrl))
+	await emitProgress('downloading', true)
 
 	const processAsset = async (assetUrl) => {
 		try {
@@ -415,19 +411,16 @@ async function precacheAppShellWithProgress() {
 }
 
 async function fetchRevalidatedRequest(request) {
-	if (request.mode === 'navigate') {
-		return fetch(request.url, {
-			credentials: 'include',
-			cache: 'no-cache',
-			headers: {
-				Accept: request.headers.get('Accept') || 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-			},
-		})
-	}
-	return fetch(request.url, {
+	const init = {
 		credentials: 'include',
 		cache: 'no-cache',
-	})
+	}
+	if (request.mode === 'navigate') {
+		init.headers = {
+			Accept: request.headers.get('Accept') || 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+		}
+	}
+	return fetch(request.url, init)
 }
 
 async function handleOfflineAwareGet(request, url) {

@@ -310,7 +310,9 @@ export function watchServiceWorkerProgress(): void {
  * the UI shows download progress and a reload prompt when an update is ready.
  */
 export function watchRegistrationForUpdates(reg: ServiceWorkerRegistration): void {
-	if (reg.waiting && navigator.serviceWorker?.controller) {
+	const hasController = () => Boolean(getServiceWorkerContainer()?.controller)
+
+	if (reg.waiting && hasController()) {
 		markUpdateReady()
 	}
 
@@ -319,7 +321,7 @@ export function watchRegistrationForUpdates(reg: ServiceWorkerRegistration): voi
 	}
 
 	const trackInstallingWorker = (worker: ServiceWorker | null) => {
-		if (!worker || !navigator.serviceWorker?.controller) {
+		if (!worker || !hasController()) {
 			return
 		}
 		setUpdateProgress({
@@ -330,7 +332,7 @@ export function watchRegistrationForUpdates(reg: ServiceWorkerRegistration): voi
 		})
 		if (typeof worker.addEventListener === 'function') {
 			worker.addEventListener('statechange', () => {
-				if (worker.state === 'installed' && navigator.serviceWorker?.controller) {
+				if (worker.state === 'installed' && hasController()) {
 					markUpdateReady()
 				} else if (worker.state === 'redundant' && currentProgress.stage !== 'reloading') {
 					setUpdateProgress({ ...INITIAL_PROGRESS })
