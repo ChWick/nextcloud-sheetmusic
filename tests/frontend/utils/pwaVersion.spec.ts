@@ -304,13 +304,21 @@ describe('pwaVersion utils', () => {
 	})
 
 	it('posts SKIP_WAITING to a waiting service worker when applying a pending update', async () => {
+		vi.useFakeTimers()
 		const postMessage = vi.fn()
 		setActiveServiceWorkerRegistration({ waiting: { postMessage } } as unknown as ServiceWorkerRegistration)
 
-		const applied = await applyPendingAppUpdate()
+		const reload = vi.fn()
+		const applied = await applyPendingAppUpdate(reload)
 		expect(applied).toBe(true)
 		expect(postMessage).toHaveBeenCalledWith({ type: 'SKIP_WAITING' })
 		expect(getAppUpdateProgress().stage).toBe('reloading')
+		expect(reload).not.toHaveBeenCalled()
+
+		// Fallback reload fires if controllerchange never arrives
+		vi.advanceTimersByTime(2500)
+		expect(reload).toHaveBeenCalledTimes(1)
+		vi.useRealTimers()
 	})
 
 	it('recovers from vite:preloadError by purging stale caches and triggering a one-shot reload', async () => {

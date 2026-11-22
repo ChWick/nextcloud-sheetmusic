@@ -62,7 +62,7 @@ export function useAppUpdate() {
 	const progressDetail = computed(() => {
 		const { loadedBytes, totalBytes, completedFiles, totalFiles } = updateProgress.value
 		const parts: string[] = []
-		if (totalBytes > 0) {
+		if (totalBytes > 0 && loadedBytes <= totalBytes) {
 			parts.push(`${formatBytes(loadedBytes)} / ${formatBytes(totalBytes)}`)
 		} else if (loadedBytes > 0) {
 			parts.push(formatBytes(loadedBytes))

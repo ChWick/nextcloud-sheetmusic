@@ -213,6 +213,13 @@ export function watchServiceWorkerUpdate(
 			return
 		}
 		const targetVersion = currentProgress.version || currentVersion
+		try {
+			if (typeof localStorage !== 'undefined' && currentProgress.version) {
+				localStorage.setItem(APP_VERSION_STORAGE_KEY, currentProgress.version)
+			}
+		} catch {
+			// Ignore storage access errors
+		}
 		triggerOneShotReload(`sw:${targetVersion}`, reloadFn)
 	})
 }
@@ -347,7 +354,20 @@ export async function applyPendingAppUpdate(reloadFn?: () => void): Promise<bool
 			stage: 'reloading',
 			percent: 100,
 		})
+		try {
+			if (typeof localStorage !== 'undefined' && currentProgress.version) {
+				localStorage.setItem(APP_VERSION_STORAGE_KEY, currentProgress.version)
+			}
+		} catch {
+			// Ignore storage access errors
+		}
 		reg.waiting.postMessage({ type: 'SKIP_WAITING' })
+		// Fallback reload in case controllerchange does not fire promptly
+		if (typeof window !== 'undefined' && typeof window.setTimeout === 'function') {
+			window.setTimeout(() => {
+				triggerOneShotReload(`sw:${currentProgress.version || getAppAssetVersion()}`, reloadFn)
+			}, 2500)
+		}
 		return true
 	}
 

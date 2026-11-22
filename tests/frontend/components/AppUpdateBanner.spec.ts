@@ -78,6 +78,24 @@ describe('AppUpdateBanner.vue', () => {
 		expect(banner.text()).toContain('2.0 MB / 4.0 MB · 5/8')
 		expect(banner.find('progress').attributes('value')).toBe('62')
 
+		// When loadedBytes exceeds totalBytes (e.g. gzipped response), omit mismatched total
+		messageCb?.({
+			data: {
+				type: 'SW_UPDATE_PROGRESS',
+				version: 'ver2',
+				stage: 'downloading',
+				percent: 80,
+				completedFiles: 6,
+				totalFiles: 8,
+				loadedBytes: 5 * 1024 * 1024,
+				totalBytes: 2 * 1024 * 1024,
+			},
+		} as MessageEvent)
+		await nextTick()
+
+		expect(banner.text()).toContain('5.0 MB · 6/8')
+		expect(banner.text()).not.toContain('5.0 MB / 2.0 MB')
+
 		messageCb?.({
 			data: {
 				type: 'SW_UPDATE_PROGRESS',

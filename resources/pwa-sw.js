@@ -1,4 +1,4 @@
-/* global self, indexedDB, caches, fetch, Response, Blob, URL, File */
+/* global self, indexedDB, caches, fetch, Response, Blob, Headers, URL, File */
 const SHARE_DB_NAME = 'sheetmusic-pwa-share'
 const SHARE_DB_VERSION = 1
 const SHARE_STORE_NAME = 'pendingShares'
@@ -9,6 +9,9 @@ const APP_SHELL_CACHE_PREFIX = 'sheetmusic-app-shell-'
 const APP_SHELL_CACHE = APP_SHELL_CACHE_PREFIX + APP_VERSION
 const OFFLINE_SETLIST_CACHE = 'sheetmusic-offline-setlists-v1'
 const PROGRESS_BROADCAST_INTERVAL_MS = 60
+const FRESH_ACTIVATE_CACHE_WINDOW_MS = 15 * 1000
+
+let activatedAt = 0
 
 function openShareDb() {
 	return new Promise((resolve, reject) => {
@@ -104,6 +107,15 @@ function shouldRevalidateEntryRequest(request, url) {
 		|| url.pathname.endsWith('/js/sheetmusic-pwa.mjs')
 		|| url.pathname.endsWith('/css/sheetmusic-main.css')
 		|| url.pathname.endsWith('/css/sheetmusic-pwa.css')
+	)
+}
+
+function isImmutableHashedAsset(url) {
+	return (
+		url.pathname.includes('.chunk.mjs')
+		|| url.pathname.includes('.chunk.css')
+		|| /\/dist\/pdf\.worker\.min-[^/]+\.mjs$/.test(url.pathname)
+		|| url.pathname.includes('/css/fonts/')
 	)
 }
 
@@ -237,30 +249,37 @@ function extractJsImportUrls(jsText, baseUrl) {
 async function fetchResponseWithProgress(url, onBytes) {
 	const res = await fetch(url, { credentials: 'include', cache: 'reload' })
 	if (!res || !res.ok) {
-		return { response: null, text: null }
+		return { response: null, blob: null }
 	}
 
+	// When HTTP compression (gzip/br) is active, Content-Length is the compressed wire size
+	// while res.body.getReader() yields decompressed bytes. Only trust Content-Length as the
+	// total byte size when the response is not content-encoded.
+	const isContentEncoded = Boolean(res.headers.get('content-encoding'))
 	const contentLengthHeader = res.headers.get('content-length')
 	const contentLength = contentLengthHeader ? parseInt(contentLengthHeader, 10) : 0
-	const knownLength = Number.isFinite(contentLength) && contentLength > 0 ? contentLength : 0
+	const knownLength = !isContentEncoded && Number.isFinite(contentLength) && contentLength > 0 ? contentLength : 0
 	if (knownLength > 0) {
 		onBytes(0, knownLength)
 	}
 
+	const cleanHeaders = new Headers(res.headers)
+	cleanHeaders.delete('content-encoding')
+	cleanHeaders.delete('content-length')
+
 	if (!res.body || typeof res.body.getReader !== 'function') {
 		const blob = await res.blob()
-		onBytes(blob.size, knownLength > 0 ? 0 : blob.size)
+		onBytes(blob.size, knownLength > 0 ? 0 : 0)
 		const reconstructed = new Response(blob, {
 			status: res.status,
 			statusText: res.statusText,
-			headers: res.headers,
+			headers: cleanHeaders,
 		})
 		return { response: reconstructed, blob }
 	}
 
 	const reader = res.body.getReader()
 	const chunks = []
-	let received = 0
 	while (true) {
 		const { done, value } = await reader.read()
 		if (done) {
@@ -268,20 +287,16 @@ async function fetchResponseWithProgress(url, onBytes) {
 		}
 		if (value && value.byteLength > 0) {
 			chunks.push(value)
-			received += value.byteLength
 			onBytes(value.byteLength, 0)
 		}
 	}
-	if (knownLength === 0 && received > 0) {
-		onBytes(0, received)
-	}
 
-	const contentType = res.headers.get('content-type') || ''
+	const contentType = cleanHeaders.get('content-type') || ''
 	const blob = new Blob(chunks, { type: contentType })
 	const reconstructed = new Response(blob, {
 		status: res.status,
 		statusText: res.statusText,
-		headers: res.headers,
+		headers: cleanHeaders,
 	})
 	return { response: reconstructed, blob }
 }
@@ -308,15 +323,16 @@ async function precacheAppShellWithProgress() {
 			rawPercent = 100
 		} else if (state.totalFiles > 0) {
 			const fileRatio = state.completedFiles / state.totalFiles
-			const byteRatio = state.totalBytes > 0 ? Math.min(1, state.loadedBytes / state.totalBytes) : fileRatio
-			// Blend byte progress (when available) with file progress so the bar moves smoothly
-			// even while a single large bundle like sheetmusic-main.mjs is streaming.
-			const blended = state.totalBytes > 0 ? (byteRatio * 0.7 + fileRatio * 0.3) : fileRatio
+			const hasExactTotals = state.totalBytes > 0 && state.loadedBytes <= state.totalBytes
+			const byteRatio = hasExactTotals ? Math.min(1, state.loadedBytes / state.totalBytes) : fileRatio
+			// Blend byte progress (only when exact uncompressed Content-Length totals exist) with file progress
+			const blended = hasExactTotals ? (byteRatio * 0.7 + fileRatio * 0.3) : fileRatio
 			rawPercent = Math.min(99, Math.round(blended * 100))
 		}
 
 		const percent = Math.max(state.lastPercent, rawPercent)
 		state.lastPercent = percent
+		const safeTotalBytes = state.totalBytes >= state.loadedBytes ? state.totalBytes : 0
 
 		await broadcastUpdateProgress({
 			stage,
@@ -324,7 +340,7 @@ async function precacheAppShellWithProgress() {
 			completedFiles: state.completedFiles,
 			totalFiles: state.totalFiles,
 			loadedBytes: state.loadedBytes,
-			totalBytes: state.totalBytes,
+			totalBytes: safeTotalBytes,
 		})
 	}
 
@@ -443,6 +459,20 @@ async function handleOfflineAwareGet(request, url) {
 		}
 	}
 
+	// Content-hashed chunks & fonts (and freshly precached non-navigation assets right after
+	// activating an update) can be served immediately from APP_SHELL_CACHE without re-downloading.
+	if (
+		request.mode !== 'navigate'
+		&& isCacheableAppShellRequest(request, url)
+		&& (isImmutableHashedAsset(url) || (activatedAt > 0 && Date.now() - activatedAt < FRESH_ACTIVATE_CACHE_WINDOW_MS))
+	) {
+		const shellCache = await caches.open(APP_SHELL_CACHE)
+		const cached = await shellCache.match(request, { ignoreVary: true })
+		if (cached) {
+			return cached
+		}
+	}
+
 	try {
 		const networkResponse = shouldRevalidateEntryRequest(request, url)
 			? await fetchRevalidatedRequest(request)
@@ -501,6 +531,7 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('activate', (event) => {
 	event.waitUntil((async () => {
+		activatedAt = Date.now()
 		try {
 			const keys = await caches.keys()
 			await Promise.all(
