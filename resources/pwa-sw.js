@@ -63,31 +63,32 @@ async function broadcastUpdateProgress(payload) {
 	}
 }
 
+const NON_CACHEABLE_SUFFIXES = ['/sw.js', '/pwa-manifest', '/app-version']
+const CACHEABLE_PATH_SEGMENTS = [
+	'/apps/sheetmusic/',
+	'/apps-extra/sheetmusic/',
+	'/custom_apps/sheetmusic/',
+	'/css/sheetmusic/',
+	'/ocs/v2.php/apps/sheetmusic/',
+	'/apps/theming/',
+	'/core/',
+	'/dist/',
+]
+
 function isCacheableAppShellRequest(request, url) {
 	if (url.origin !== self.location.origin) {
 		return false
 	}
 	if (
-		url.pathname.endsWith('/sw.js')
-		|| url.pathname.endsWith('/pwa-manifest')
-		|| url.pathname.endsWith('/app-version')
-		|| url.pathname.includes('/share-target/')
+		url.pathname.includes('/share-target/')
+		|| NON_CACHEABLE_SUFFIXES.some((suffix) => url.pathname.endsWith(suffix))
 	) {
 		return false
 	}
 	if (request.mode === 'navigate' && url.pathname.includes('/apps/sheetmusic')) {
 		return true
 	}
-	return (
-		url.pathname.includes('/apps/sheetmusic/')
-		|| url.pathname.includes('/apps-extra/sheetmusic/')
-		|| url.pathname.includes('/custom_apps/sheetmusic/')
-		|| url.pathname.includes('/css/sheetmusic/')
-		|| url.pathname.includes('/ocs/v2.php/apps/sheetmusic/')
-		|| url.pathname.includes('/apps/theming/')
-		|| url.pathname.includes('/core/')
-		|| url.pathname.includes('/dist/')
-	)
+	return CACHEABLE_PATH_SEGMENTS.some((segment) => url.pathname.includes(segment))
 }
 
 function isVersionedBinaryUrl(url) {
@@ -483,14 +484,8 @@ async function handleOfflineAwareGet(request, url) {
 }
 
 self.addEventListener('message', (event) => {
-	const data = event.data
-	if (!data || typeof data !== 'object') {
-		return
-	}
-	if (data.type === 'SKIP_WAITING') {
+	if (event.data && event.data.type === 'SKIP_WAITING') {
 		void self.skipWaiting()
-	} else if (data.type === 'GET_SW_VERSION' && event.ports && event.ports[0]) {
-		event.ports[0].postMessage({ type: 'SW_VERSION', version: APP_VERSION })
 	}
 })
 

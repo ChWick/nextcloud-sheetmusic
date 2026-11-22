@@ -67,6 +67,23 @@ function markUpdateReady(version?: string | null): void {
 	})
 }
 
+function markReloading(version?: string | null): void {
+	setUpdateProgress({
+		active: true,
+		dismissed: false,
+		stage: 'reloading',
+		version: version ?? currentProgress.version,
+		percent: 100,
+	})
+}
+
+function getServiceWorkerContainer(): ServiceWorkerContainer | null {
+	if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
+		return null
+	}
+	return navigator.serviceWorker
+}
+
 function persistAppVersion(version: string | null): void {
 	if (!version || typeof localStorage === 'undefined') {
 		return
@@ -82,8 +99,9 @@ async function resolveServiceWorkerRegistration(): Promise<ServiceWorkerRegistra
 	if (activeRegistration) {
 		return activeRegistration
 	}
-	if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && typeof navigator.serviceWorker.getRegistration === 'function') {
-		return (await navigator.serviceWorker.getRegistration('/')) ?? null
+	const sw = getServiceWorkerContainer()
+	if (sw && typeof sw.getRegistration === 'function') {
+		return (await sw.getRegistration('/')) ?? null
 	}
 	return null
 }
@@ -108,11 +126,7 @@ export function setActiveServiceWorkerRegistration(reg: ServiceWorkerRegistratio
  * Reads the server-injected asset version hash from the mount element.
  */
 export function getAppAssetVersion(): string {
-	if (typeof document === 'undefined') {
-		return 'v1'
-	}
-	const version = document.getElementById('sheetmusic')?.dataset.assetVersion?.trim()
-	return version || 'v1'
+	return getAppVersionMetadata().assetVersion
 }
 
 /**
@@ -176,11 +190,7 @@ function triggerOneShotReload(version: string, reloadFn?: () => void): boolean {
 		// Ignore storage access errors
 	}
 
-	setUpdateProgress({
-		active: true,
-		stage: 'reloading',
-		percent: 100,
-	})
+	markReloading()
 
 	if (reloadFn) {
 		reloadFn()
@@ -230,11 +240,8 @@ export function watchServiceWorkerUpdate(
 	currentVersion = getAppAssetVersion(),
 	reloadFn?: () => void,
 ): void {
-	if (swControllerListenerAttached || typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
-		return
-	}
-	const sw = navigator.serviceWorker
-	if (typeof sw.addEventListener !== 'function') {
+	const sw = getServiceWorkerContainer()
+	if (swControllerListenerAttached || !sw || typeof sw.addEventListener !== 'function') {
 		return
 	}
 
@@ -255,11 +262,8 @@ export function watchServiceWorkerUpdate(
  * Subscribes to SW_UPDATE_PROGRESS messages sent by an installing/activating Service Worker.
  */
 export function watchServiceWorkerProgress(): void {
-	if (swMessageListenerAttached || typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
-		return
-	}
-	const sw = navigator.serviceWorker
-	if (typeof sw.addEventListener !== 'function') {
+	const sw = getServiceWorkerContainer()
+	if (swMessageListenerAttached || !sw || typeof sw.addEventListener !== 'function') {
 		return
 	}
 
@@ -278,13 +282,7 @@ export function watchServiceWorkerProgress(): void {
 		}
 
 		if (data.stage === 'activated') {
-			setUpdateProgress({
-				active: true,
-				dismissed: false,
-				stage: 'reloading',
-				version: incomingVersion,
-				percent: 100,
-			})
+			markReloading(incomingVersion)
 			return
 		}
 
@@ -357,12 +355,7 @@ export async function applyPendingAppUpdate(reloadFn?: () => void): Promise<bool
 	const reg = await resolveServiceWorkerRegistration()
 
 	if (reg?.waiting) {
-		setUpdateProgress({
-			active: true,
-			dismissed: false,
-			stage: 'reloading',
-			percent: 100,
-		})
+		markReloading()
 		persistAppVersion(currentProgress.version)
 		reg.waiting.postMessage({ type: 'SKIP_WAITING' })
 		// Fallback reload in case controllerchange does not fire promptly
