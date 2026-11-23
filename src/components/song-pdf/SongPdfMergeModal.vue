@@ -29,7 +29,8 @@ import RotateRight from 'vue-material-design-icons/RotateRight.vue'
 import { mergeSongFiles } from '../../api/songFiles'
 import { describeRequestFailure } from '../../utils/api'
 import { getCacheBustedFileUrl, getFileName, toUint8Array } from '../../utils/file'
-import { cleanupPdfJsPage, destroyPdfJsDocument, loadPdfJsDocument, releaseCanvas, renderPdfPageToCanvas } from '../../utils/pdfjs'
+import { destroyPdfJsDocument, loadPdfJsDocument, setBoundedRecordEntry } from '../../utils/pdfjs'
+import { renderPageImage } from './usePageOrderThumbnails'
 import SongPageOrderZoomModal from './SongPageOrderZoomModal.vue'
 import SongPdfSaveProgress from './SongPdfSaveProgress.vue'
 import {
@@ -105,6 +106,7 @@ const dropIndicatorSide = ref<'left' | 'right' | null>(null)
 const isZoomModalOpen = ref(false)
 const zoomSequenceIndex = ref(0)
 const highResCache = ref<Record<string, string>>({})
+const highResOrder = new Set<string>()
 const isLoadingHighRes = ref(false)
 
 let activeLoadToken = 0
@@ -170,24 +172,9 @@ async function renderThumbnailsForSources(token: number) {
 			const key = thumbKey(source.fileId, p)
 			if (thumbnails.value[key]) continue
 
-			let page: any = null
-			let canvas: HTMLCanvasElement | null = null
-			try {
-				page = await doc.getPage(p)
-				const baseVp = page.getViewport({ scale: 1.0 })
-				const scale = Math.min(1.0, 280 / Math.max(1, baseVp.width, baseVp.height))
-				const vp = page.getViewport({ scale })
-				canvas = document.createElement('canvas')
-				await renderPdfPageToCanvas(page, canvas, vp, { applyCssSize: false })
-				const dataUrl = canvas.toDataURL('image/png')
-				if (token === activeLoadToken) {
-					thumbnails.value = { ...thumbnails.value, [key]: dataUrl }
-				}
-			} catch {
-				// Leave fallback placeholder
-			} finally {
-				releaseCanvas(canvas)
-				cleanupPdfJsPage(page)
+			const dataUrl = await renderPageImage(doc, p, 340)
+			if (dataUrl && token === activeLoadToken) {
+				thumbnails.value = { ...thumbnails.value, [key]: dataUrl }
 			}
 		}
 	}
@@ -201,6 +188,7 @@ async function loadAllPdfs() {
 	mergePages.value = []
 	thumbnails.value = {}
 	highResCache.value = {}
+	highResOrder.clear()
 	originalsAction.value = 'delete-originals'
 
 	await disposeLoadedDocs()
@@ -402,21 +390,12 @@ async function ensureHighResForEntry(entry: MergePageEntry) {
 	if (!doc) return
 
 	isLoadingHighRes.value = true
-	let page: any = null
-	let canvas: HTMLCanvasElement | null = null
 	try {
-		page = await doc.getPage(entry.sourcePageNum)
-		const baseVp = page.getViewport({ scale: 1.0 })
-		const scale = Math.min(2.0, 1200 / Math.max(1, baseVp.width, baseVp.height))
-		const vp = page.getViewport({ scale })
-		canvas = document.createElement('canvas')
-		await renderPdfPageToCanvas(page, canvas, vp, { applyCssSize: false })
-		highResCache.value = { ...highResCache.value, [key]: canvas.toDataURL('image/png') }
-	} catch {
-		// Fall back to thumbnail
+		const url = await renderPageImage(doc, entry.sourcePageNum, 1600)
+		if (url) {
+			highResCache.value = setBoundedRecordEntry(highResCache.value, highResOrder, key, url)
+		}
 	} finally {
-		releaseCanvas(canvas)
-		cleanupPdfJsPage(page)
 		isLoadingHighRes.value = false
 	}
 }

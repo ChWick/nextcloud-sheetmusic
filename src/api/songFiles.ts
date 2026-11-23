@@ -5,6 +5,18 @@ export interface UploadSongFileOptions {
 	pageOrder?: string
 }
 
+function buildSongFileFormData(file: File, options?: UploadSongFileOptions): FormData {
+	const formData = new FormData()
+	formData.append('file', file)
+	if (options?.pageCount !== undefined) {
+		formData.append('pageCount', String(options.pageCount))
+	}
+	if (options?.pageOrder !== undefined) {
+		formData.append('pageOrder', options.pageOrder)
+	}
+	return formData
+}
+
 /**
  * Uploads a new file (PDF, image, etc.) to a song via the Sheet Music OCS API.
  */
@@ -14,14 +26,7 @@ export function uploadSongFile(
 	file: File,
 	options?: UploadSongFileOptions,
 ) {
-	const formData = new FormData()
-	formData.append('file', file)
-	if (options?.pageCount !== undefined) {
-		formData.append('pageCount', String(options.pageCount))
-	}
-	if (options?.pageOrder !== undefined) {
-		formData.append('pageOrder', options.pageOrder)
-	}
+	const formData = buildSongFileFormData(file, options)
 	return apiPost('/api/libraries/{libraryId}/songs/{id}/file/upload', formData as any, {
 		pathParams: { libraryId, id: songId },
 	})
@@ -40,8 +45,7 @@ export function updateSongFile(
 	fileId: number | string,
 	file: File,
 ) {
-	const formData = new FormData()
-	formData.append('file', file)
+	const formData = buildSongFileFormData(file)
 	return (apiPost as any)('/api/libraries/{libraryId}/songs/{id}/file/{fileId}/update', formData, {
 		pathParams: { libraryId, id: songId, fileId },
 	})
@@ -57,16 +61,9 @@ export function mergeSongFiles(
 	file: File,
 	options?: MergeSongFilesOptions,
 ) {
-	const formData = new FormData()
-	formData.append('file', file)
+	const formData = buildSongFileFormData(file, options)
 	if (options?.deleteFileIds && options.deleteFileIds.length > 0) {
 		formData.append('deleteFileIds', JSON.stringify(options.deleteFileIds.map((id) => Number(id))))
-	}
-	if (options?.pageCount !== undefined) {
-		formData.append('pageCount', String(options.pageCount))
-	}
-	if (options?.pageOrder !== undefined) {
-		formData.append('pageOrder', options.pageOrder)
 	}
 	return (apiPost as any)('/api/libraries/{libraryId}/songs/{id}/file/merge', formData, {
 		pathParams: { libraryId, id: songId },

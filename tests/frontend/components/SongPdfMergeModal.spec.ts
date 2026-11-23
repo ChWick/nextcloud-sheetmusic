@@ -37,14 +37,18 @@ vi.mock('@nextcloud/l10n', async (importOriginal) => {
 
 const mockLoadPdfJsDocument = vi.fn()
 const mockDestroyPdfJsDocument = vi.fn(() => Promise.resolve())
-const mockRenderPdfPageToCanvas = vi.fn(() => Promise.resolve({ pixelWidth: 100, pixelHeight: 140 }))
 
-vi.mock('../../../src/utils/pdfjs', () => ({
-	loadPdfJsDocument: (...args: any[]) => mockLoadPdfJsDocument(...args),
-	destroyPdfJsDocument: (...args: any[]) => mockDestroyPdfJsDocument(...args),
-	renderPdfPageToCanvas: (...args: any[]) => mockRenderPdfPageToCanvas(...args),
-	cleanupPdfJsPage: vi.fn(),
-	releaseCanvas: vi.fn(),
+vi.mock('../../../src/utils/pdfjs', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('../../../src/utils/pdfjs')>()
+	return {
+		...actual,
+		loadPdfJsDocument: (...args: any[]) => mockLoadPdfJsDocument(...args),
+		destroyPdfJsDocument: (...args: any[]) => mockDestroyPdfJsDocument(...args),
+	}
+})
+
+vi.mock('../../../src/components/song-pdf/usePageOrderThumbnails', () => ({
+	renderPageImage: vi.fn(() => Promise.resolve('data:image/jpeg;base64,fake')),
 }))
 
 vi.mock('../../../src/api/songFiles', () => ({
