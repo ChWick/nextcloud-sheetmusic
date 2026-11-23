@@ -4,8 +4,8 @@ import type {
 	SheetAnnotation,
 } from '../types/annotation'
 import type { EditorTool, EditorToolStyle } from './useAnnotationEditor'
-import type { PendingLinkEdit, PendingTextEdit } from '../components/song-viewer/SongAnnotationInlinePopovers.vue'
 import { ref } from 'vue'
+import { useAnnotationInlineEditors } from './useAnnotationInlineEditors'
 import { useStylusSettings } from './useStylusSettings'
 import { translateAnnotation } from '../utils/annotation'
 import {
@@ -72,8 +72,27 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 	const interaction = ref<InteractionState | null>(null)
 	const previewAnnotation = ref<SheetAnnotation | null>(null)
 	const hoveredUuid = ref<string | null>(null)
-	const pendingText = ref<PendingTextEdit | null>(null)
-	const pendingLink = ref<PendingLinkEdit | null>(null)
+	const {
+		pendingText,
+		pendingLink,
+		openCreateText,
+		openCreateLink,
+		onAnnotationDblClick,
+		commitPendingText,
+		cancelPendingText,
+		commitPendingLink,
+		cancelPendingLink,
+	} = useAnnotationInlineEditors({
+		pageIndex: opts.pageIndex,
+		pageNumber: opts.pageNumber,
+		totalPages: opts.totalPages,
+		editable: opts.editable,
+		activeTool: opts.activeTool,
+		toolStyle: opts.toolStyle,
+		onCreate: opts.onCreate,
+		onUpdate: opts.onUpdate,
+		onDelete: opts.onDelete,
+	})
 	const activeTouchPointers = new Set<number>()
 	let capturedPointerId: number | null = null
 	let isMultiTouchGesture = false
@@ -417,26 +436,12 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 
 		if (state.kind === 'draw') {
 			if (opts.activeTool.value === 'text') {
-				pendingText.value = {
-					mode: 'create',
-					x: Math.min(0.85, Math.min(state.startNorm.x, pt.x)),
-					y: Math.min(0.92, Math.min(state.startNorm.y, pt.y)),
-					width: state.moved ? Math.max(0.15, Math.abs(pt.x - state.startNorm.x)) : 0.25,
-					height: state.moved ? Math.max(0.04, Math.abs(pt.y - state.startNorm.y)) : 0.06,
-					text: '',
-				}
+				openCreateText(state.startNorm, pt, Boolean(state.moved))
 				return
 			}
 
 			if (opts.activeTool.value === 'link') {
-				pendingLink.value = {
-					x: Math.min(0.9, Math.min(state.startNorm.x, pt.x)),
-					y: Math.min(0.94, Math.min(state.startNorm.y, pt.y)),
-					width: state.moved ? Math.max(0.05, Math.abs(pt.x - state.startNorm.x)) : 0.1,
-					height: state.moved ? Math.max(0.04, Math.abs(pt.y - state.startNorm.y)) : 0.06,
-					targetPageOneIndexed: Math.min(opts.totalPages.value, opts.pageNumber.value + 1),
-					label: '',
-				}
+				openCreateLink(state.startNorm, pt, Boolean(state.moved))
 				return
 			}
 
@@ -459,111 +464,6 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 			return
 		}
 		cancelInteraction(e.pointerId)
-	}
-
-	function onAnnotationDblClick(ann: SheetAnnotation) {
-		if (!opts.editable.value || opts.activeTool.value !== 'select') return
-		if (ann.type === 'text') {
-			pendingText.value = {
-				mode: 'edit',
-				x: ann.x,
-				y: ann.y,
-				width: ann.width || 0.25,
-				height: ann.height || 0.06,
-				text: ann.data?.text ?? '',
-				existing: ann,
-			}
-		} else if (ann.type === 'link') {
-			pendingLink.value = {
-				mode: 'edit',
-				x: ann.x,
-				y: ann.y,
-				width: ann.width || 0.1,
-				height: ann.height || 0.06,
-				targetPageOneIndexed: (ann.data?.targetPage ?? 0) + 1,
-				label: ann.data?.label ?? '',
-				existing: ann,
-			}
-		}
-	}
-
-	function commitPendingText() {
-		const pending = pendingText.value
-		if (!pending) return
-		pendingText.value = null
-		const trimmed = pending.text.trim()
-		if (!trimmed) {
-			if (pending.mode === 'edit' && pending.existing) {
-				opts.onDelete(pending.existing)
-			}
-			return
-		}
-
-		if (pending.mode === 'edit' && pending.existing) {
-			opts.onUpdate(pending.existing, {
-				...pending.existing,
-				data: { ...pending.existing.data, text: trimmed },
-			})
-			return
-		}
-
-		const s = opts.toolStyle.value
-		opts.onCreate({
-			pageNumber: opts.pageIndex.value,
-			layerIndex: 0,
-			type: 'text',
-			x: roundNorm(pending.x),
-			y: roundNorm(pending.y),
-			width: roundNorm(pending.width),
-			height: roundNorm(pending.height),
-			style: {
-				color: s.color,
-				fontSize: s.fontSize,
-				fontFamily: s.fontFamily,
-				textAlign: s.textAlign,
-				opacity: s.opacity,
-			},
-			data: { text: trimmed },
-		})
-	}
-
-	function cancelPendingText() {
-		pendingText.value = null
-	}
-
-	function commitPendingLink() {
-		const pending = pendingLink.value
-		if (!pending) return
-		pendingLink.value = null
-		const targetZeroIndexed = Math.max(0, Math.min(opts.totalPages.value - 1, pending.targetPageOneIndexed - 1))
-		const label = pending.label.trim() || `→ p. ${targetZeroIndexed + 1}`
-
-		if (pending.mode === 'edit' && pending.existing) {
-			opts.onUpdate(pending.existing, {
-				...pending.existing,
-				data: { ...pending.existing.data, targetPage: targetZeroIndexed, label },
-			})
-			return
-		}
-
-		opts.onCreate({
-			pageNumber: opts.pageIndex.value,
-			layerIndex: 0,
-			type: 'link',
-			x: roundNorm(pending.x),
-			y: roundNorm(pending.y),
-			width: roundNorm(pending.width),
-			height: roundNorm(pending.height),
-			style: {
-				opacity: 1,
-				fontSize: opts.toolStyle.value.fontSize,
-			},
-			data: { targetPage: targetZeroIndexed, label },
-		})
-	}
-
-	function cancelPendingLink() {
-		pendingLink.value = null
 	}
 
 	return {
