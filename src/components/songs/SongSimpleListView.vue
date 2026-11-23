@@ -172,8 +172,11 @@ const {
 	background-color: var(--color-background-hover);
 }
 
-.songRow:hover :global(.sheetmusic-inline-edit-trigger) {
-	opacity: 0.75;
+@media (hover: hover) {
+	.songRow:hover :global(.sheetmusic-inline-edit-trigger) {
+		opacity: 0.75;
+		pointer-events: auto;
+	}
 }
 
 .songMain {

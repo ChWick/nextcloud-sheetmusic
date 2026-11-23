@@ -179,8 +179,11 @@ const {
 	border-color: var(--color-primary-element);
 }
 
-.songCard:hover :global(.sheetmusic-inline-edit-trigger) {
-	opacity: 0.75;
+@media (hover: hover) {
+	.songCard:hover :global(.sheetmusic-inline-edit-trigger) {
+		opacity: 0.75;
+		pointer-events: auto;
+	}
 }
 
 .selectedCard {

@@ -96,6 +96,14 @@ function areEntitiesEqual(a: any[], b: any[], labelKey: string): boolean {
 	return true
 }
 
+function handleTriggerClick(event: MouseEvent) {
+	if ('pointerType' in event && (event as PointerEvent).pointerType === 'touch') {
+		return
+	}
+	event.stopPropagation()
+	void startEdit()
+}
+
 async function startEdit() {
 	if (props.canWrite === false) return
 	if (isEditing.value) return
@@ -304,7 +312,7 @@ defineExpose({
 				:data-test="`inline-edit-${field}-btn`"
 				:title="editTitle"
 				:aria-label="editTitle"
-				@click.stop="startEdit">
+				@click="handleTriggerClick">
 				<PencilIcon :size="14" />
 			</button>
 		</div>
@@ -357,21 +365,36 @@ defineExpose({
 	color: var(--color-text-maxcontrast);
 	cursor: pointer;
 	opacity: 0;
+	pointer-events: none;
 	flex-shrink: 0;
 	transition: opacity 0.15s ease, color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
 }
 
-.editableCellContent:hover .inlineEditTrigger,
 .inlineEditTrigger:focus,
 .inlineEditTrigger:focus-visible {
 	opacity: 0.75;
+	pointer-events: auto;
 }
 
-.inlineEditTrigger:hover {
-	opacity: 1 !important;
-	color: var(--color-primary-element);
-	background-color: var(--color-main-background);
-	border-color: var(--color-border);
+@media (hover: hover) {
+	.editableCellContent:hover .inlineEditTrigger {
+		opacity: 0.75;
+		pointer-events: auto;
+	}
+
+	.inlineEditTrigger:hover {
+		opacity: 1 !important;
+		pointer-events: auto;
+		color: var(--color-primary-element);
+		background-color: var(--color-main-background);
+		border-color: var(--color-border);
+	}
+}
+
+@media (hover: none) {
+	.inlineEditTrigger {
+		display: none;
+	}
 }
 
 .inlineEditContainer {
