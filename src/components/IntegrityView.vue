@@ -4,7 +4,6 @@ import { useRouter } from 'vue-router'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
-import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcProgressBar from '@nextcloud/vue/components/NcProgressBar'
 import { showError, showSuccess, showWarning } from '@nextcloud/dialogs'
@@ -16,6 +15,7 @@ import { apiGet, apiPost } from '../api/client'
 import { describeRequestFailure } from '../utils/api'
 import type { IntegrityIssue, LibraryData } from '../types/song'
 import ViewHeader from './ViewHeader.vue'
+import ProgressDialog from './ProgressDialog.vue'
 import FilesIntegrityIssueItem from './files/FilesIntegrityIssueItem.vue'
 import SongMergeDialog, { type ResolveBothSongData } from './song-editor/SongMergeDialog.vue'
 import OrphanFileFixer from './OrphanFileFixer.vue'
@@ -527,41 +527,17 @@ function openSong(songId: number) {
 			@merge="executeMerge"
 			@resolve-both="executeResolveBoth" />
 
-		<NcDialog
-			v-if="isBatchFixing"
-			:name="t('sheetmusic', 'Fixing issues…')"
-			size="normal">
-			<div :class="$style.progressContainer">
-				<NcProgressBar
-					:value="fixProgress ? fixProgress.percent : 0"
-					size="medium"
-					:show-value="true"
-					:error="fixProgress?.status === 'error'" />
-				<p :class="$style.progressMessage">
-					{{ fixProgress?.message || t('sheetmusic', 'Fixing integrity issues in library…') }}
-				</p>
-			</div>
-		</NcDialog>
+		<ProgressDialog
+			:open="isBatchFixing"
+			:title="t('sheetmusic', 'Fixing issues…')"
+			:percent="fixProgress ? fixProgress.percent : 0"
+			:message="fixProgress?.message ?? ''"
+			:fallback-message="t('sheetmusic', 'Fixing integrity issues in library…')"
+			:error="fixProgress?.status === 'error'" />
 	</div>
 </template>
 
 <style module>
-.progressContainer {
-	display: flex;
-	flex-direction: column;
-	gap: 12px;
-	padding: 16px 8px;
-	width: 100%;
-	box-sizing: border-box;
-}
-
-.progressMessage {
-	margin: 0;
-	font-size: 0.9em;
-	color: var(--color-text-maxcontrast);
-	text-align: center;
-}
-
 .dialogLoading {
 	display: flex;
 	flex-direction: column;
