@@ -6,7 +6,6 @@
 
 import type { LibraryData, Song, SongFile } from '../../types/song'
 import { computed, nextTick, onUnmounted, ref, shallowRef, watch } from 'vue'
-import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
 import { showError, showSuccess } from '@nextcloud/dialogs'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
@@ -28,7 +27,8 @@ import RotateLeft from 'vue-material-design-icons/RotateLeft.vue'
 import RotateRight from 'vue-material-design-icons/RotateRight.vue'
 import { mergeSongFiles } from '../../api/songFiles'
 import { describeRequestFailure } from '../../utils/api'
-import { getCacheBustedFileUrl, getFileName, toUint8Array } from '../../utils/file'
+import { getFileName } from '../../utils/file'
+import { fetchUncachedBinaryFile } from '../../utils/file-binary'
 import { destroyPdfJsDocument, loadPdfJsDocument, setBoundedRecordEntry } from '../../utils/pdfjs'
 import { usePageOrderDragDrop } from './usePageOrderDragDrop'
 import { renderPageImage } from './usePageOrderThumbnails'
@@ -215,15 +215,7 @@ async function loadAllPdfs() {
 
 		for (const file of props.pdfFiles) {
 			if (token !== activeLoadToken) return
-			const targetUrl = getCacheBustedFileUrl(file.path, `${file.id}-${props.song.lastModified ?? ''}-${Date.now()}`)
-			const response = await axios.get(targetUrl, {
-				responseType: 'arraybuffer',
-				headers: {
-					'Cache-Control': 'no-cache',
-					'Pragma': 'no-cache',
-				},
-			})
-			const bytes = toUint8Array(response.data)
+			const bytes = await fetchUncachedBinaryFile(file.path, `${file.id}-${props.song.lastModified ?? ''}-${Date.now()}`)
 			const doc = await loadPdfJsDocument(bytes.slice())
 			nextDocs.set(file.id, doc)
 			nextSources.push({

@@ -5,9 +5,27 @@
 
 import axios from '@nextcloud/axios'
 import { isEffectivelyOffline } from '../composables/useOnlineStatus'
-import { toUint8Array } from './file'
+import { getCacheBustedFileUrl, toUint8Array } from './file'
 import { defaultFileBinaryCache, type FileBinaryCache } from './file-cache'
 import { readOfflineCachedBinary } from './offlineSetlists'
+
+/**
+ * Fetch fresh, uncached binary bytes for a file (used before modifying or merging PDFs).
+ */
+export async function fetchUncachedBinaryFile(
+	filePath: string,
+	versionToken?: number | string | null,
+): Promise<Uint8Array> {
+	const url = getCacheBustedFileUrl(filePath, versionToken)
+	const response = await axios.get(url, {
+		responseType: 'arraybuffer',
+		headers: {
+			'Cache-Control': 'no-cache',
+			'Pragma': 'no-cache',
+		},
+	})
+	return toUint8Array(response.data)
+}
 
 /**
  * Fetch a binary file payload with in-memory LRU caching and offline Cache API fallback.

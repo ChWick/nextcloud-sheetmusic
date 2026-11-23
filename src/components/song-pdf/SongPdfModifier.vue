@@ -6,13 +6,13 @@ export type { OriginalSongAction } from './OriginalSongActionSelector.vue'
 <script setup lang="ts">
 import type { Song, SongFile, Book, Composer, Collection, Artist, Genre, Instrument, Arranger, Key, CustomGroup, Year, Signature, SourceType, LibraryData } from '../../types/song'
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
-import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
 import { PDFDocument } from 'pdf-lib'
 import { destroyPdfJsDocument, loadPdfJsDocument } from '../../utils/pdfjs'
 import { updateSongFile } from '../../api/songFiles'
 import { showError, showSuccess } from '@nextcloud/dialogs'
-import { getCacheBustedFileUrl, getFileName, getPdfFiles, pickPrimarySongFile, toUint8Array } from '../../utils/file'
+import { getFileName, getPdfFiles, pickPrimarySongFile } from '../../utils/file'
+import { fetchUncachedBinaryFile } from '../../utils/file-binary'
 import { describeRequestFailure } from '../../utils/api'
 
 import SongPdfHeader from './SongPdfHeader.vue'
@@ -346,15 +346,10 @@ async function loadPdf() {
 	try {
 		await disposeActivePdfDoc()
 
-		const targetUrl = getCacheBustedFileUrl(targetFile.value.path, `${targetFile.value.id}-${props.song.lastModified ?? ''}-${Date.now()}`)
-		const response = await axios.get(targetUrl, {
-			responseType: 'arraybuffer',
-			headers: {
-				'Cache-Control': 'no-cache',
-				'Pragma': 'no-cache',
-			},
-		})
-		const bytes = toUint8Array(response.data)
+		const bytes = await fetchUncachedBinaryFile(
+			targetFile.value.path,
+			`${targetFile.value.id}-${props.song.lastModified ?? ''}-${Date.now()}`,
+		)
 		originalPdfBytes.value = bytes
 
 		// Pass an independent clone to pdf.js because its worker transfers/detaches the ArrayBuffer
