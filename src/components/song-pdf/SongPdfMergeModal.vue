@@ -30,6 +30,7 @@ import { mergeSongFiles } from '../../api/songFiles'
 import { describeRequestFailure } from '../../utils/api'
 import { getCacheBustedFileUrl, getFileName, toUint8Array } from '../../utils/file'
 import { destroyPdfJsDocument, loadPdfJsDocument, setBoundedRecordEntry } from '../../utils/pdfjs'
+import { usePageOrderDragDrop } from './usePageOrderDragDrop'
 import { renderPageImage } from './usePageOrderThumbnails'
 import SongPageOrderZoomModal from './SongPageOrderZoomModal.vue'
 import SongPdfSaveProgress from './SongPdfSaveProgress.vue'
@@ -97,10 +98,26 @@ function resetZoom() {
 	cardWidth.value = DEFAULT_CARD_WIDTH
 }
 
-// Drag & drop state
-const draggedIndex = ref<number | null>(null)
-const dropTargetIndex = ref<number | null>(null)
-const dropIndicatorSide = ref<'left' | 'right' | null>(null)
+// Drag & drop state (reused from page-order editor)
+const {
+	draggedItem,
+	dropTargetIndex,
+	dropIndicatorSide,
+	handleSequenceDragStart,
+	handleCardDragOver,
+	handleCardDragLeave,
+	handleCardDrop,
+	handleDragEnd,
+} = usePageOrderDragDrop()
+
+function handlePageCardDrop(event: DragEvent, targetIndex: number) {
+	handleCardDrop(event, targetIndex, {
+		onInsert: () => {},
+		onReorder: (from, to) => {
+			mergePages.value = reorderMergePages(mergePages.value, from, to)
+		},
+	})
+}
 
 // Zoom lightbox state
 const isZoomModalOpen = ref(false)
@@ -314,67 +331,6 @@ function duplicatePage(index: number) {
 
 function removePage(index: number) {
 	mergePages.value = removeMergePage(mergePages.value, index)
-}
-
-// Drag & Drop handlers
-function handleDragStart(event: DragEvent, index: number) {
-	draggedIndex.value = index
-	if (event.dataTransfer) {
-		event.dataTransfer.effectAllowed = 'move'
-		event.dataTransfer.setData('text/plain', String(index))
-	}
-}
-
-function handleDragOver(event: DragEvent, index: number) {
-	event.preventDefault()
-	if (event.dataTransfer) {
-		event.dataTransfer.dropEffect = 'move'
-	}
-	const target = event.currentTarget as HTMLElement | null
-	let side: 'left' | 'right' = 'left'
-	if (target) {
-		const rect = target.getBoundingClientRect()
-		if (rect.width > 0) {
-			side = event.clientX < rect.left + rect.width / 2 ? 'left' : 'right'
-		}
-	}
-	dropTargetIndex.value = index
-	dropIndicatorSide.value = side
-}
-
-function handleDragLeave(event: DragEvent, index: number) {
-	if (dropTargetIndex.value === index) {
-		const related = event.relatedTarget as Node | null
-		const current = event.currentTarget as Node | null
-		if (!current || !related || !current.contains(related)) {
-			dropTargetIndex.value = null
-			dropIndicatorSide.value = null
-		}
-	}
-}
-
-function handleDrop(event: DragEvent, targetIndex: number) {
-	event.preventDefault()
-	let from = draggedIndex.value
-	if (from === null && event.dataTransfer) {
-		const parsed = Number.parseInt(event.dataTransfer.getData('text/plain'), 10)
-		if (Number.isFinite(parsed)) from = parsed
-	}
-	if (from !== null) {
-		const side = dropIndicatorSide.value ?? 'left'
-		const desiredPos = side === 'left' ? targetIndex : targetIndex + 1
-		const finalIndex = from < desiredPos ? desiredPos - 1 : desiredPos
-		if (from !== finalIndex) {
-			mergePages.value = reorderMergePages(mergePages.value, from, finalIndex)
-		}
-	}
-	resetDragState()
-}
-
-function resetDragState() {
-	draggedIndex.value = null
-	dropTargetIndex.value = null
-	dropIndicatorSide.value = null
 }
 
 // Zoom Lightbox
@@ -666,16 +622,16 @@ async function handleMerge() {
 						:draggable="!isSaving"
 						:class="[
 							$style.pageCard,
-							draggedIndex === index && $style.pageCardDragging,
+							draggedItem?.type === 'sequence-card' && draggedItem.fromIndex === index && $style.pageCardDragging,
 							dropTargetIndex === index && dropIndicatorSide === 'left' && $style.dropIndicatorLeft,
 							dropTargetIndex === index && dropIndicatorSide === 'right' && $style.dropIndicatorRight,
 						]"
 						:data-test="`merge-page-card-${index}`"
-						@dragstart="handleDragStart($event, index)"
-						@dragover="handleDragOver($event, index)"
-						@dragleave="handleDragLeave($event, index)"
-						@drop="handleDrop($event, index)"
-						@dragend="resetDragState">
+						@dragstart="handleSequenceDragStart($event, index, entry.sourcePageNum)"
+						@dragover="handleCardDragOver($event, index)"
+						@dragleave="handleCardDragLeave($event, index)"
+						@drop="handlePageCardDrop($event, index)"
+						@dragend="handleDragEnd">
 						<div :class="$style.cardHeader">
 							<span :class="$style.outputPageBadge">#{{ index + 1 }}</span>
 							<span
