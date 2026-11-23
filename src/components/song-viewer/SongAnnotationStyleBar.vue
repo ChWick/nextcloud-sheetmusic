@@ -1,15 +1,14 @@
 <script setup lang="ts">
 import type { EditorTool, EditorToolStyle } from '../../composables/useAnnotationEditor'
 import type { LineStyle, SheetAnnotation, TextAlign } from '../../types/annotation'
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
-import ChevronDown from 'vue-material-design-icons/ChevronDown.vue'
 import FormatAlignCenter from 'vue-material-design-icons/FormatAlignCenter.vue'
 import FormatAlignLeft from 'vue-material-design-icons/FormatAlignLeft.vue'
 import FormatAlignRight from 'vue-material-design-icons/FormatAlignRight.vue'
 import SongAnnotationColorPicker, { type ColorSwatch } from './SongAnnotationColorPicker.vue'
+import SongAnnotationLineStylePicker from './SongAnnotationLineStylePicker.vue'
 import SongAnnotationLogSelect from './SongAnnotationLogSelect.vue'
-import ViewportPopover from '../ViewportPopover.vue'
 
 const props = withDefaults(
 	defineProps<{
@@ -28,8 +27,6 @@ const emit = defineEmits<{
 	'update-selected-style': [patch: Partial<SheetAnnotation['style']>]
 	'update-selected-data': [patch: Partial<SheetAnnotation['data']>]
 }>()
-
-const showLineStyleMenu = ref(false)
 
 const COLOR_SWATCHES: ColorSwatch[] = [
 	{ color: '#000000', label: 'Black' },
@@ -99,20 +96,9 @@ const currentStrokeWidth = computed(() =>
 	props.selectedAnnotation?.style?.strokeWidth ?? (isHighlightContext.value ? props.toolStyle.highlightWidth : props.toolStyle.strokeWidth),
 )
 
-const lineStyleOptions = computed(() => [
-	{ value: 'solid' as LineStyle, label: t('sheetmusic', 'Solid') },
-	{ value: 'dashed' as LineStyle, label: t('sheetmusic', 'Dashed') },
-	{ value: 'dotted' as LineStyle, label: t('sheetmusic', 'Dotted') },
-])
-
-function lineDashArray(style: LineStyle): string | undefined {
-	return style === 'dashed' ? '5, 3' : style === 'dotted' ? '1, 4' : undefined
-}
-
-const currentLineStyleOption = computed(() => {
-	const val = props.selectedAnnotation?.style?.lineStyle ?? props.toolStyle.lineStyle
-	return lineStyleOptions.value.find((o) => o.value === val) ?? lineStyleOptions.value[0]
-})
+const currentLineStyle = computed<LineStyle>(
+	() => props.selectedAnnotation?.style?.lineStyle ?? props.toolStyle.lineStyle,
+)
 
 const fontSizePresets = computed(() => (isStampContext.value ? [26, 36, 48, 64] : [16, 22, 30, 42]))
 
@@ -167,7 +153,6 @@ function updateStrokeWidth(val: number) {
 }
 
 function updateLineStyle(lineStyle: LineStyle) {
-	showLineStyleMenu.value = false
 	if (props.selectedAnnotation && (props.selectedAnnotation.type === 'drawing' || props.selectedAnnotation.type === 'shape')) {
 		emit('update-selected-style', { lineStyle })
 		return
@@ -256,58 +241,9 @@ function updateShapeHeight(height: number) {
 
 		<!-- Line Style (for Pen & Shapes) -->
 		<div v-if="showLineStyle" :class="$style.styleGroup">
-			<ViewportPopover
-				v-model:open="showLineStyleMenu"
-				:pane-class="$style.lineMenuPane">
-				<template #trigger="{ toggle }">
-					<button
-						type="button"
-						:class="[$style.selectTriggerBtn, showLineStyleMenu && $style.selectTriggerOpen]"
-						:title="t('sheetmusic', 'Line')"
-						:aria-label="`${t('sheetmusic', 'Line')}: ${currentLineStyleOption.label}`"
-						:aria-expanded="showLineStyleMenu"
-						data-test="annotation-line-style-select"
-						@click="toggle">
-						<span :class="$style.lineOption">
-							<svg width="22" height="10" viewBox="0 0 22 10" aria-hidden="true">
-								<line
-									x1="1"
-									y1="5"
-									x2="21"
-									y2="5"
-									stroke="currentColor"
-									stroke-width="2"
-									stroke-linecap="round"
-									:stroke-dasharray="lineDashArray(currentLineStyleOption.value)" />
-							</svg>
-							<span>{{ currentLineStyleOption.label }}</span>
-						</span>
-						<ChevronDown :size="16" :class="$style.chevron" />
-					</button>
-				</template>
-				<button
-					v-for="opt in lineStyleOptions"
-					:key="opt.value"
-					type="button"
-					:class="[$style.lineMenuItem, currentLineStyleOption.value === opt.value && $style.lineMenuItemActive]"
-					:data-test="`annotation-line-style-option-${opt.value}`"
-					@click="updateLineStyle(opt.value)">
-					<span :class="$style.lineOption">
-						<svg width="22" height="10" viewBox="0 0 22 10" aria-hidden="true">
-							<line
-								x1="1"
-								y1="5"
-								x2="21"
-								y2="5"
-								stroke="currentColor"
-								stroke-width="2"
-								stroke-linecap="round"
-								:stroke-dasharray="lineDashArray(opt.value)" />
-						</svg>
-						<span>{{ opt.label }}</span>
-					</span>
-				</button>
-			</ViewportPopover>
+			<SongAnnotationLineStylePicker
+				:model-value="currentLineStyle"
+				@update:model-value="updateLineStyle" />
 		</div>
 
 		<!-- Shape Height (for Hairpins, Slurs, Brackets) -->
@@ -426,72 +362,6 @@ function updateShapeHeight(height: number) {
 	border-color: var(--color-primary-element, #0082c9);
 	color: var(--color-primary-element, #0082c9);
 	font-weight: 600;
-}
-
-.selectTriggerBtn {
-	display: inline-flex;
-	align-items: center;
-	gap: 6px;
-	min-height: var(--default-clickable-area, 44px);
-	padding: 4px 8px 4px 10px;
-	border: 1px solid var(--color-border-dark, var(--color-border));
-	border-radius: var(--border-radius, 4px);
-	background: var(--color-main-background);
-	color: var(--color-main-text);
-	font-size: 0.82rem;
-	cursor: pointer;
-	white-space: nowrap;
-}
-
-.selectTriggerBtn:hover {
-	background: var(--color-background-hover);
-}
-
-.selectTriggerOpen {
-	border-color: var(--color-primary-element, #0082c9);
-}
-
-.chevron {
-	display: inline-flex;
-	color: var(--color-text-maxcontrast);
-}
-
-.lineMenuPane {
-	min-width: 132px;
-	padding: 4px;
-	display: flex;
-	flex-direction: column;
-	gap: 2px;
-}
-
-.lineMenuItem {
-	display: flex;
-	align-items: center;
-	width: 100%;
-	padding: 6px 10px;
-	border: none;
-	border-radius: 4px;
-	background: transparent;
-	color: var(--color-main-text);
-	font-size: 0.85rem;
-	text-align: left;
-	cursor: pointer;
-}
-
-.lineMenuItem:hover {
-	background: var(--color-background-hover);
-}
-
-.lineMenuItemActive {
-	background: var(--color-primary-light, #e6f4fa);
-	color: var(--color-primary-element, #0082c9);
-	font-weight: 600;
-}
-
-.lineOption {
-	display: inline-flex;
-	align-items: center;
-	gap: 6px;
 }
 
 .textEditInput {
