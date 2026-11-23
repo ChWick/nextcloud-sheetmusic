@@ -80,7 +80,7 @@ const props = withDefaults(
 		binaryCache: () => defaultFileBinaryCache,
 		initialPageLayout: 'continuous',
 		initialDoublePageTurnMode: 'half',
-		initialZoomMode: 'fit-width',
+		initialZoomMode: 'fit-page',
 		startAtEnd: false,
 		noPadding: false,
 		nextFilePath: undefined,
