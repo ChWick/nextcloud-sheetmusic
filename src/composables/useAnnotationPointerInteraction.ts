@@ -373,7 +373,7 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 		const targetEl = e.target as HTMLElement | SVGElement | null
 		const handle = targetEl?.getAttribute?.('data-resize-handle')
 
-		if (opts.activeTool.value === 'select' && handle && opts.selectedItem.value) {
+		if (opts.activeTool.value !== 'eraser' && handle && opts.selectedItem.value) {
 			e.preventDefault()
 			e.stopPropagation()
 			opts.svgRef.value?.setPointerCapture?.(e.pointerId)

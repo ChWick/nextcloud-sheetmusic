@@ -299,4 +299,55 @@ describe('useAnnotationEditor', () => {
 
 		editor.exitEditMode()
 	})
+
+	it('auto-selects newly created annotations so style changes apply immediately', async () => {
+		const annotations = ref<SheetAnnotation[]>([])
+		const editor = useAnnotationEditor(annotations, () => ({ songId: 7, fileId: 42 }))
+		editor.enterEditMode()
+		editor.setTool('stamp')
+
+		const createdStamp = await editor.createAnnotation({
+			pageNumber: 0,
+			type: 'stamp',
+			x: 0.4,
+			y: 0.5,
+			width: 0,
+			height: 0,
+			style: { color: '#e53935', fontSize: 40, opacity: 1 },
+			data: { symbol: '𝆏𝆏', category: 'dynamic', fontKind: 'music' },
+		})
+
+		expect(editor.selectedUuid.value).toBe(createdStamp.uuid)
+		editor.updateSelectedStyle({ fontSize: 56, color: '#1e88e5' })
+		await flushPromises()
+		expect(annotations.value[0].style.fontSize).toBe(56)
+		expect(annotations.value[0].style.color).toBe('#1e88e5')
+		expect(editor.toolStyle.value.stampSize).toBe(56)
+		expect(editor.toolStyle.value.color).toBe('#1e88e5')
+
+		// Creating a line shape also auto-selects it for immediate stroke/color edits
+		editor.setTool('line')
+		const createdLine = await editor.createAnnotation({
+			pageNumber: 0,
+			type: 'shape',
+			x: 0.1,
+			y: 0.2,
+			width: 0.3,
+			height: 0.05,
+			style: { stroke: '#1e88e5', strokeWidth: 2.5, lineStyle: 'solid', opacity: 1 },
+			data: { shapeType: 'line', points: [{ x: 0.1, y: 0.2 }, { x: 0.4, y: 0.25 }] },
+		})
+
+		expect(editor.selectedUuid.value).toBe(createdLine.uuid)
+		editor.updateSelectedStyle({ strokeWidth: 6, stroke: '#43a047', lineStyle: 'dashed' })
+		await flushPromises()
+		expect(annotations.value[1].style.strokeWidth).toBe(6)
+		expect(annotations.value[1].style.stroke).toBe('#43a047')
+		expect(annotations.value[1].style.lineStyle).toBe('dashed')
+		expect(editor.toolStyle.value.strokeWidth).toBe(6)
+		expect(editor.toolStyle.value.color).toBe('#43a047')
+		expect(editor.toolStyle.value.lineStyle).toBe('dashed')
+
+		editor.exitEditMode()
+	})
 })

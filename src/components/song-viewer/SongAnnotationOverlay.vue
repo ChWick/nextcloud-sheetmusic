@@ -192,7 +192,7 @@ const cursorClass = computed(() => {
 				@jump-to-page="emit('jump-to-page', $event)" />
 
 			<SongAnnotationSelectionBox
-				v-if="selectedItem && activeTool === 'select'"
+				v-if="selectedItem && activeTool !== 'eraser'"
 				:item="selectedItem"
 				:vb-height="vbHeight"
 				:ui-scale="uiScale" />
