@@ -26,6 +26,7 @@ import {
 	MIN_CUSTOM_SCALE,
 	resolvePagesToRender,
 } from '../utils/pdf-layout'
+import { observeContinuousPdfPages } from '../utils/pdf-continuous-renderer'
 import {
 	type DoublePageTurnMode,
 	getDoubleSpreadForPage,
@@ -222,14 +223,12 @@ async function renderPageThumbnail(logicalPage: number, canvas: HTMLCanvasElemen
 }
 
 let intersectionObserver: IntersectionObserver | null = null
-const renderedPages = new Set<number>()
 
 function cleanupObserver() {
 	if (intersectionObserver) {
 		intersectionObserver.disconnect()
 		intersectionObserver = null
 	}
-	renderedPages.clear()
 }
 
 async function renderCurrentView(onBeforeSwap?: () => void) {
@@ -467,112 +466,20 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 
 		swapStageContent(placeholders)
 
-		const MAX_CONTINUOUS_RENDERED_PAGES = 16
-		const MAX_CONCURRENT_CONTINUOUS_RENDERS = 3
-		const visiblePlaceholders = new Set<HTMLElement>()
-		const renderedOrder = new Set<HTMLElement>()
-		const pendingQueue: HTMLElement[] = []
-		const pendingSet = new Set<HTMLElement>()
-		const activeTasks = new Map<HTMLElement, { cancel?: () => void }>()
-		let activeWorkers = 0
-
-		for (const idx of preRenderIndices) {
-			const el = placeholders[idx]
-			if (el && renderedPlaceholders.has(el)) {
-				renderedOrder.add(el)
-			}
-		}
-
-		const evictOffscreenPlaceholders = () => {
-			if (renderedOrder.size <= MAX_CONTINUOUS_RENDERED_PAGES) return
-			for (const el of renderedOrder) {
-				if (renderedOrder.size <= MAX_CONTINUOUS_RENDERED_PAGES) break
-				if (visiblePlaceholders.has(el)) continue
-				renderedOrder.delete(el)
-				renderedPlaceholders.delete(el)
-				if (el.dataset.pageHeight) {
-					el.style.minHeight = `${el.dataset.pageHeight}px`
-				}
-				if (el.dataset.pageWidth) {
-					el.style.minWidth = `${el.dataset.pageWidth}px`
-				}
+		intersectionObserver = observeContinuousPdfPages({
+			root: pdfContainer.value,
+			placeholders,
+			preRenderedPlaceholders: Array.from(preRenderIndices)
+				.map((idx) => placeholders[idx])
+				.filter((el): el is HTMLElement => Boolean(el)),
+			renderedPlaceholders,
+			isStale: () => renderId !== currentRenderId,
+			renderPage: (pageNum, targetEl, onRenderTask) => renderPage(pageNum, targetEl, false, onRenderTask),
+			onEvict: (el) => {
 				unmountAnnotationOverlay(el)
 				releaseChildCanvases(el)
-				el.replaceChildren()
-			}
-		}
-
-		const pumpContinuousQueue = () => {
-			while (activeWorkers < MAX_CONCURRENT_CONTINUOUS_RENDERS && pendingQueue.length > 0) {
-				const targetEl = pendingQueue.shift()!
-				pendingSet.delete(targetEl)
-				if (renderId !== currentRenderId || renderedPlaceholders.has(targetEl) || !visiblePlaceholders.has(targetEl)) {
-					continue
-				}
-				const pageNum = Number(targetEl.dataset.pageNum)
-				if (!pageNum) continue
-				activeWorkers++
-				void renderPage(pageNum, targetEl, false, (task) => {
-					if (task) {
-						activeTasks.set(targetEl, task)
-					} else {
-						activeTasks.delete(targetEl)
-					}
-				}).finally(() => {
-					activeWorkers--
-					if (renderId !== currentRenderId) return
-					if (renderedPlaceholders.has(targetEl)) {
-						renderedOrder.delete(targetEl)
-						renderedOrder.add(targetEl)
-						evictOffscreenPlaceholders()
-					}
-					pumpContinuousQueue()
-				})
-			}
-		}
-
-		intersectionObserver = new IntersectionObserver(
-			(entries) => {
-				for (const entry of entries) {
-					const targetEl = entry.target as HTMLElement
-					if (entry.isIntersecting) {
-						visiblePlaceholders.add(targetEl)
-						if (renderedPlaceholders.has(targetEl)) {
-							renderedOrder.delete(targetEl)
-							renderedOrder.add(targetEl)
-						} else if (!pendingSet.has(targetEl)) {
-							pendingSet.add(targetEl)
-							pendingQueue.push(targetEl)
-							pumpContinuousQueue()
-						}
-					} else {
-						visiblePlaceholders.delete(targetEl)
-						if (pendingSet.has(targetEl)) {
-							pendingSet.delete(targetEl)
-							const idx = pendingQueue.indexOf(targetEl)
-							if (idx >= 0) pendingQueue.splice(idx, 1)
-						}
-						const activeTask = activeTasks.get(targetEl)
-						if (activeTask) {
-							try {
-								activeTask.cancel?.()
-							} catch {
-								// Ignore cancel errors
-							}
-						}
-						evictOffscreenPlaceholders()
-					}
-				}
 			},
-			{
-				root: pdfContainer.value,
-				rootMargin: '600px 0px 600px 0px', // Preload pages within 600px of scroll view
-			},
-		)
-
-		for (const placeholder of placeholders) {
-			intersectionObserver.observe(placeholder)
-		}
+		})
 	} else if (isDoubleLayout) {
 		// Double page mode: wrap each page in an equal 50% slot so each page
 		// strictly occupies half the stage and never crosses the midline or shifts across turns.
