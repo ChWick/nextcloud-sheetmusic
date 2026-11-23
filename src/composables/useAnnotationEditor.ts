@@ -18,6 +18,7 @@ import type {
 	TextAlign,
 } from '../types/annotation'
 import { translateAnnotation } from '../utils/annotation'
+import { handleAnnotationEditorKeydown } from '../utils/annotationShortcuts'
 import {
 	createDefaultToolStyle,
 	mergeAnnotationStyleIntoToolStyle,
@@ -422,120 +423,17 @@ export function useAnnotationEditor(
 
 	function handleKeydown(e: KeyboardEvent): void {
 		if (!isEditing.value) return
-
-		const target = e.target as HTMLElement | null
-		if (
-			target &&
-			(target.tagName === 'INPUT' ||
-				target.tagName === 'TEXTAREA' ||
-				target.tagName === 'SELECT' ||
-				target.isContentEditable)
-		) {
-			return
-		}
-
-		// Undo / Redo
-		if ((e.ctrlKey || e.metaKey) && !e.altKey) {
-			const k = e.key.toLowerCase()
-			if (k === 'z' && !e.shiftKey) {
-				e.preventDefault()
-				undo()
-				return
-			}
-			if ((k === 'z' && e.shiftKey) || k === 'y') {
-				e.preventDefault()
-				redo()
-				return
-			}
-			return
-		}
-
-		if (e.altKey || e.ctrlKey || e.metaKey) return
-
-		// Delete / Backspace removes selected annotation
-		if (e.key === 'Delete' || e.key === 'Backspace') {
-			if (selectedAnnotation.value) {
-				e.preventDefault()
-				deleteSelected()
-			}
-			return
-		}
-
-		if (e.key === 'Escape') {
-			if (selectedUuid.value) {
-				selectedUuid.value = null
-			} else {
-				setTool('select')
-			}
-			return
-		}
-
-		// Arrow keys move selected annotation
-		if (selectedAnnotation.value && (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
-			e.preventDefault()
-			const step = e.shiftKey ? 0.015 : 0.003
-			const dx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0
-			const dy = e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0
-			nudgeSelected(dx, dy)
-			return
-		}
-
-		// '+' / '=' increases and '-' decreases symbol size or shape thickness
-		if (e.key === '+' || e.key === '=') {
-			e.preventDefault()
-			adjustSizeOrThickness(1)
-			return
-		}
-		if (e.key === '-' || e.key === '_') {
-			e.preventDefault()
-			adjustSizeOrThickness(-1)
-			return
-		}
-
-		// Fingerings 0..5
-		if (/^[0-5]$/.test(e.key) && !e.shiftKey) {
-			e.preventDefault()
-			selectStampSymbol(e.key)
-			return
-		}
-
-		// Musical symbols & tool shortcuts
-		if (e.key === '#' || (e.shiftKey && e.key === '3')) {
-			e.preventDefault()
-			selectStampSymbol('♯')
-			return
-		}
-
-		const lower = e.key.toLowerCase()
-		if (e.shiftKey && lower === 'p') {
-			e.preventDefault()
-			selectStampSymbol('𝆏')
-			return
-		}
-
-		if (e.shiftKey) return
-
-		const TOOL_SHORTCUTS: Record<string, EditorTool> = {
-			v: 'select',
-			p: 'drawing',
-			h: 'highlight',
-			s: 'line',
-			t: 'text',
-			m: 'stamp',
-			l: 'link',
-			e: 'eraser',
-		}
-		const STAMP_SHORTCUTS: Record<string, string> = {
-			f: '𝆑',
-			b: '♭',
-			n: '♮',
-		}
-
-		if (TOOL_SHORTCUTS[lower]) {
-			setTool(TOOL_SHORTCUTS[lower])
-		} else if (STAMP_SHORTCUTS[lower]) {
-			selectStampSymbol(STAMP_SHORTCUTS[lower])
-		}
+		handleAnnotationEditorKeydown(e, {
+			hasSelection: () => Boolean(selectedAnnotation.value || selectedUuid.value),
+			undo,
+			redo,
+			deleteSelected,
+			clearSelection: () => { selectedUuid.value = null },
+			setTool,
+			nudgeSelected,
+			adjustSizeOrThickness,
+			selectStampSymbol,
+		})
 	}
 
 	if (typeof window !== 'undefined') {
