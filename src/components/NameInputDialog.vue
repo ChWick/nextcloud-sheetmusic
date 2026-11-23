@@ -7,7 +7,7 @@
 		<p>{{ prompt }}</p>
 		<NcTextField
 			:model-value="name"
-			:label="t('sheetmusic', 'Name')"
+			:label="fieldLabel"
 			:placeholder="placeholder"
 			@update:model-value="emit('update:name', $event)"
 			@keyup.enter="handleSubmit" />
@@ -39,8 +39,10 @@ const props = withDefaults(defineProps<{
 	isSubmitting: boolean
 	error: string
 	placeholder?: string
+	fieldLabel?: string
 }>(), {
 	placeholder: '',
+	fieldLabel: '',
 })
 
 const emit = defineEmits<{

@@ -5,7 +5,7 @@
 
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
-import SetlistNameDialog from '../../../src/components/setlists/SetlistNameDialog.vue'
+import NameInputDialog from '../../../src/components/NameInputDialog.vue'
 
 const stubs = {
 	NcDialog: {
@@ -18,18 +18,19 @@ const stubs = {
 		name: 'NcTextField',
 		props: ['modelValue', 'label', 'placeholder'],
 		emits: ['update:modelValue', 'keyup'],
-		template: '<input data-test="name-input" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" @keyup="$emit(\'keyup\', $event)" />',
+		template: '<input data-test="name-input" :value="modelValue" :placeholder="placeholder" @input="$emit(\'update:modelValue\', $event.target.value)" @keyup="$emit(\'keyup\', $event)" />',
 	},
 }
 
-describe('SetlistNameDialog.vue', () => {
-	it('does not render when closed and renders title, prompt, and submit button when open', async () => {
-		const wrapper = mount(SetlistNameDialog, {
+describe('NameInputDialog.vue', () => {
+	it('does not render when closed and renders title, prompt, placeholder, and submit button when open', async () => {
+		const wrapper = mount(NameInputDialog, {
 			props: {
 				open: false,
-				title: 'New setlist',
+				title: 'New composer',
 				prompt: 'Enter a name:',
-				submitLabel: 'Create setlist',
+				submitLabel: 'Create composer',
+				placeholder: 'e.g. Bach',
 				name: '',
 				isSubmitting: false,
 				error: '',
@@ -38,14 +39,15 @@ describe('SetlistNameDialog.vue', () => {
 		})
 		expect(wrapper.find('[data-test="dialog"]').exists()).toBe(false)
 
-		await wrapper.setProps({ open: true, name: 'Concert' })
-		expect(wrapper.find('[data-test="dialog"]').attributes('data-title')).toBe('New setlist')
+		await wrapper.setProps({ open: true, name: 'Mozart' })
+		expect(wrapper.find('[data-test="dialog"]').attributes('data-title')).toBe('New composer')
 		expect(wrapper.text()).toContain('Enter a name:')
-		expect(wrapper.text()).toContain('Create setlist')
+		expect(wrapper.text()).toContain('Create composer')
+		expect(wrapper.find('[data-test="name-input"]').attributes('placeholder')).toBe('e.g. Bach')
 	})
 
-	it('emits update:name, submit when valid, and blocks submit when blank or submitting', async () => {
-		const wrapper = mount(SetlistNameDialog, {
+	it('emits submit when valid and blocks submit when blank or submitting', async () => {
+		const wrapper = mount(NameInputDialog, {
 			props: {
 				open: true,
 				title: 'Rename setlist',
@@ -71,7 +73,7 @@ describe('SetlistNameDialog.vue', () => {
 	})
 
 	it('renders error alert and emits close on cancel', async () => {
-		const wrapper = mount(SetlistNameDialog, {
+		const wrapper = mount(NameInputDialog, {
 			props: {
 				open: true,
 				title: 'New setlist',
