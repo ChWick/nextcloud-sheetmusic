@@ -119,141 +119,20 @@ export function getAnnotationDashArray(item: SheetAnnotation): string | undefine
 	return undefined
 }
 
-/**
- * Generate an SVG path for a crescendo (<) or decrescendo (>) hairpin.
- */
-export function generateHairpinPath(
-	p1: NormalizedPoint,
-	p2: NormalizedPoint,
-	isDecrescendo = false,
-	aperture?: number,
-	vbHeight: number = VIEWBOX_WIDTH,
-): string {
-	const x1 = p1.x * VIEWBOX_WIDTH
-	const y1 = p1.y * vbHeight
-	const x2 = p2.x * VIEWBOX_WIDTH
-	const y2 = p2.y * vbHeight
+import {
+	generateArrowPath,
+	generateBracketPath,
+	generateHairpinPath,
+	generateSlurPath,
+	getShapeHeightHandle,
+} from './annotationShapes'
 
-	const dx = x2 - x1
-	const dy = y2 - y1
-	const len = Math.hypot(dx, dy) || 1.0
-
-	const nx = -dy / len
-	const ny = dx / len
-
-	const h = aperture && aperture > 0
-		? Math.min(120, Math.max(4, aperture))
-		: Math.min(20, Math.max(9, len * 0.06))
-
-	if (!isDecrescendo) {
-		const topX = (x2 + nx * h).toFixed(1)
-		const topY = (y2 + ny * h).toFixed(1)
-		const botX = (x2 - nx * h).toFixed(1)
-		const botY = (y2 - ny * h).toFixed(1)
-		return `M ${topX} ${topY} L ${x1.toFixed(1)} ${y1.toFixed(1)} L ${botX} ${botY}`
-	}
-
-	const topX = (x1 + nx * h).toFixed(1)
-	const topY = (y1 + ny * h).toFixed(1)
-	const botX = (x1 - nx * h).toFixed(1)
-	const botY = (y1 - ny * h).toFixed(1)
-	return `M ${topX} ${topY} L ${x2.toFixed(1)} ${y2.toFixed(1)} L ${botX} ${botY}`
-}
-
-/**
- * Generate an SVG path for an arrow with arrowhead pointing at p2.
- */
-export function generateArrowPath(
-	p1: NormalizedPoint,
-	p2: NormalizedPoint,
-	strokeWidth?: number,
-	vbHeight: number = VIEWBOX_WIDTH,
-): string {
-	const x1 = p1.x * VIEWBOX_WIDTH
-	const y1 = p1.y * vbHeight
-	const x2 = p2.x * VIEWBOX_WIDTH
-	const y2 = p2.y * vbHeight
-
-	const dx = x2 - x1
-	const dy = y2 - y1
-	const len = Math.hypot(dx, dy) || 1.0
-
-	const ux = dx / len
-	const uy = dy / len
-	const nx = -uy
-	const ny = ux
-
-	const sw = typeof strokeWidth === 'number' && strokeWidth > 0 ? strokeWidth : 2.5
-	const headLen = Math.min(len * 0.4, Math.max(14.0, 8.0 + sw * 2.8))
-	const headWidth = headLen * 0.45
-
-	const baseX = x2 - ux * headLen
-	const baseY = y2 - uy * headLen
-
-	return `M ${x1.toFixed(1)} ${y1.toFixed(1)} L ${x2.toFixed(1)} ${y2.toFixed(1)} M ${(baseX + nx * headWidth).toFixed(1)} ${(baseY + ny * headWidth).toFixed(1)} L ${x2.toFixed(1)} ${y2.toFixed(1)} L ${(baseX - nx * headWidth).toFixed(1)} ${(baseY - ny * headWidth).toFixed(1)}`
-}
-
-/**
- * Generate a musical slur / tie quadratic Bezier path between p1 and p2.
- */
-export function generateSlurPath(
-	p1: NormalizedPoint,
-	p2: NormalizedPoint,
-	curvature?: number,
-	vbHeight: number = VIEWBOX_WIDTH,
-): string {
-	const x1 = p1.x * VIEWBOX_WIDTH
-	const y1 = p1.y * vbHeight
-	const x2 = p2.x * VIEWBOX_WIDTH
-	const y2 = p2.y * vbHeight
-
-	const dx = x2 - x1
-	const dy = y2 - y1
-	const len = Math.hypot(dx, dy) || 1.0
-
-	const nx = -dy / len
-	const ny = dx / len
-
-	// Default upward arch (-curvature in screen Y)
-	const offset = typeof curvature === 'number' && curvature !== 0
-		? curvature
-		: -Math.min(48, Math.max(14, len * 0.22))
-
-	const mx = (x1 + x2) / 2 + nx * offset
-	const my = (y1 + y2) / 2 + ny * offset
-
-	return `M ${x1.toFixed(1)} ${y1.toFixed(1)} Q ${mx.toFixed(1)} ${my.toFixed(1)}, ${x2.toFixed(1)} ${y2.toFixed(1)}`
-}
-
-/**
- * Generate a musical bracket (e.g. pedal/ottava/measure bracket) between p1 and p2.
- */
-export function generateBracketPath(
-	p1: NormalizedPoint,
-	p2: NormalizedPoint,
-	vbHeight: number = VIEWBOX_WIDTH,
-	hookHeight?: number,
-): string {
-	const x1 = p1.x * VIEWBOX_WIDTH
-	const y1 = p1.y * vbHeight
-	const x2 = p2.x * VIEWBOX_WIDTH
-	const y2 = p2.y * vbHeight
-
-	const dx = x2 - x1
-	const dy = y2 - y1
-	const len = Math.hypot(dx, dy) || 1.0
-	const nx = -dy / len
-	const ny = dx / len
-	const hook = typeof hookHeight === 'number' && hookHeight !== 0
-		? Math.max(-120, Math.min(120, hookHeight))
-		: Math.min(18, Math.max(8, len * 0.08))
-
-	const h1x = (x1 + nx * hook).toFixed(1)
-	const h1y = (y1 + ny * hook).toFixed(1)
-	const h2x = (x2 + nx * hook).toFixed(1)
-	const h2y = (y2 + ny * hook).toFixed(1)
-
-	return `M ${h1x} ${h1y} L ${x1.toFixed(1)} ${y1.toFixed(1)} L ${x2.toFixed(1)} ${y2.toFixed(1)} L ${h2x} ${h2y}`
+export {
+	generateArrowPath,
+	generateBracketPath,
+	generateHairpinPath,
+	generateSlurPath,
+	getShapeHeightHandle,
 }
 
 /**
@@ -522,68 +401,4 @@ export function translateAnnotation(
 		)
 	}
 	return next
-}
-
-/**
- * Compute the SVG coordinates of the height/arch handle for 2-point shapes
- * (crescendo, decrescendo, slur, bracket), or null if not applicable.
- */
-export function getShapeHeightHandle(
-	item: SheetAnnotation,
-	vbHeight: number = VIEWBOX_WIDTH,
-): { x: number; y: number } | null {
-	if (item.type !== 'shape') return null
-	const shapeType = item.data?.shapeType
-	const points = item.data?.points
-	if (!points || points.length < 2) return null
-
-	const x1 = points[0].x * VIEWBOX_WIDTH
-	const y1 = points[0].y * vbHeight
-	const x2 = points[1].x * VIEWBOX_WIDTH
-	const y2 = points[1].y * vbHeight
-
-	const dx = x2 - x1
-	const dy = y2 - y1
-	const len = Math.hypot(dx, dy) || 1.0
-	const nx = -dy / len
-	const ny = dx / len
-
-	if (shapeType === 'crescendo' || shapeType === 'decrescendo') {
-		const aperture = item.data?.aperture
-		const h = aperture && aperture > 0
-			? Math.min(120, Math.max(4, aperture))
-			: Math.min(20, Math.max(9, len * 0.06))
-		const baseX = shapeType === 'crescendo' ? x2 : x1
-		const baseY = shapeType === 'crescendo' ? y2 : y1
-		return {
-			x: Math.round((baseX + nx * h) * 10) / 10,
-			y: Math.round((baseY + ny * h) * 10) / 10,
-		}
-	}
-
-	if (shapeType === 'slur') {
-		const curvature = item.data?.curvature
-		const offset = typeof curvature === 'number' && curvature !== 0
-			? curvature
-			: -Math.min(48, Math.max(14, len * 0.22))
-		const midX = (x1 + x2) / 2
-		const midY = (y1 + y2) / 2
-		return {
-			x: Math.round((midX + nx * (offset * 0.5)) * 10) / 10,
-			y: Math.round((midY + ny * (offset * 0.5)) * 10) / 10,
-		}
-	}
-
-	if (shapeType === 'bracket') {
-		const aperture = item.data?.aperture
-		const hook = typeof aperture === 'number' && aperture !== 0
-			? Math.max(-120, Math.min(120, aperture))
-			: Math.min(18, Math.max(8, len * 0.08))
-		return {
-			x: Math.round((x1 + nx * hook) * 10) / 10,
-			y: Math.round((y1 + ny * hook) * 10) / 10,
-		}
-	}
-
-	return null
 }
