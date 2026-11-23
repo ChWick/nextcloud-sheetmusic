@@ -3,7 +3,6 @@ import type { IntegrityIssue, LibraryData } from '../types/song'
 import { computed, onMounted, ref } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
-import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import ArrowLeftIcon from 'vue-material-design-icons/ArrowLeft.vue'
 import ContentSaveOutlineIcon from 'vue-material-design-icons/ContentSaveOutline.vue'
@@ -14,6 +13,7 @@ import { showError } from '@nextcloud/dialogs'
 import { apiGet, apiPost } from '../api/client'
 import { describeRequestFailure } from '../utils/api'
 import { getFileName } from '../utils/file'
+import ConfirmDeleteDialog from './ConfirmDeleteDialog.vue'
 import FilePreviewer from './FilePreviewer.vue'
 import SongEditor from './SongEditor.vue'
 import SelectSongDialog from './song-editor/SelectSongDialog.vue'
@@ -274,25 +274,17 @@ onMounted(() => {
 			@select-song="handleAttachToSong" />
 
 		<!-- Dialog for confirming orphan file deletion -->
-		<NcDialog
-			v-if="isConfirmDeleteDialogOpen"
-			:name="t('sheetmusic', 'Delete Orphan File')"
-			size="normal"
-			@close="isConfirmDeleteDialogOpen = false">
+		<ConfirmDeleteDialog
+			:open="isConfirmDeleteDialogOpen"
+			:title="t('sheetmusic', 'Delete Orphan File')"
+			:confirm-label="isDeleting ? t('sheetmusic', 'Deleting…') : t('sheetmusic', 'Delete File')"
+			:is-deleting="isDeleting"
+			:show-loading-icon="false"
+			@close="isConfirmDeleteDialogOpen = false"
+			@confirm="handleConfirmDelete">
 			<p>{{ t('sheetmusic', 'Are you sure you want to permanently delete "{filename}" from library storage?', { filename }, { escape: false }) }}</p>
 			<p>{{ t('sheetmusic', 'This file is not linked to any song. Once deleted, it cannot be recovered.') }}</p>
-			<template #actions>
-				<NcButton @click="isConfirmDeleteDialogOpen = false">
-					{{ t('sheetmusic', 'Cancel') }}
-				</NcButton>
-				<NcButton
-					variant="error"
-					:disabled="isDeleting"
-					@click="handleConfirmDelete">
-					{{ isDeleting ? t('sheetmusic', 'Deleting…') : t('sheetmusic', 'Delete File') }}
-				</NcButton>
-			</template>
-		</NcDialog>
+		</ConfirmDeleteDialog>
 	</div>
 </template>
 
