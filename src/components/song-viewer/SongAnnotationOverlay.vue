@@ -3,6 +3,7 @@ import type { SheetAnnotation } from '../../types/annotation'
 import type { EditorTool, EditorToolStyle } from '../../composables/useAnnotationEditor'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { getViewBoxHeight, VIEWBOX_WIDTH } from '../../utils/annotation'
+import { createDefaultToolStyle } from '../../utils/annotationToolStyle'
 import { useAnnotationPointerInteraction } from '../../composables/useAnnotationPointerInteraction'
 import { useStylusSettings } from '../../composables/useStylusSettings'
 import SongAnnotationItem from './SongAnnotationItem.vue'
@@ -31,22 +32,7 @@ const props = withDefaults(
 		totalPages: 1,
 		editable: false,
 		activeTool: 'select',
-		toolStyle: () => ({
-			color: '#e53935',
-			highlightColor: '#ffeb3b',
-			strokeWidth: 2.5,
-			highlightWidth: 18,
-			opacity: 1.0,
-			highlightOpacity: 0.4,
-			lineStyle: 'solid',
-			fontSize: 22,
-			fontFamily: 'sans-serif',
-			textAlign: 'left',
-			fill: 'transparent',
-			shapeHeight: 18,
-			stampSymbol: '𝆑𝆑',
-			stampSize: 40,
-		}),
+		toolStyle: createDefaultToolStyle,
 		selectedUuid: null,
 	},
 )
