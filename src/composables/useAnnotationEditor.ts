@@ -214,6 +214,26 @@ export function useAnnotationEditor(
 		return JSON.parse(JSON.stringify(ann)) as SheetAnnotation
 	}
 
+	function toRestorableCopy(ann: SheetAnnotation): SheetAnnotation {
+		return { ...cloneAnn(ann), id: undefined, deletedAt: null }
+	}
+
+	async function withSaving<T>(fn: () => Promise<T>, fallbackMessage?: string, rethrow = true): Promise<T | undefined> {
+		isSaving.value = true
+		if (fallbackMessage) saveError.value = null
+		try {
+			return await fn()
+		} catch (err) {
+			if (fallbackMessage) {
+				saveError.value = err instanceof Error ? err.message : fallbackMessage
+			}
+			if (rethrow) throw err
+			return undefined
+		} finally {
+			isSaving.value = false
+		}
+	}
+
 	function upsertLocal(saved: SheetAnnotation) {
 		const idx = annotations.value.findIndex((a) => a.uuid === saved.uuid)
 		if (idx >= 0) {
@@ -237,36 +257,37 @@ export function useAnnotationEditor(
 	async function persistSave(ann: SheetAnnotation): Promise<SheetAnnotation> {
 		const ctx = getContext()
 		const songId = isSetlistContext(ctx) ? 0 : ctx.songId
-		isSaving.value = true
-		saveError.value = null
-		try {
-			const saved = await saveContextAnnotation(ctx, {
+		const saved = await withSaving(async () => {
+			const res = await saveContextAnnotation(ctx, {
 				...ann,
 				songId,
 				fileId: ann.fileId || ctx.fileId,
 			})
-			upsertLocal(saved)
-			return saved
-		} catch (err) {
-			saveError.value = err instanceof Error ? err.message : 'Failed to save annotation'
-			throw err
-		} finally {
-			isSaving.value = false
-		}
+			upsertLocal(res)
+			return res
+		}, 'Failed to save annotation')
+		return saved!
 	}
 
 	async function persistDelete(ann: SheetAnnotation): Promise<void> {
 		removeLocal(ann.uuid)
 		if (!ann.id) return
-		isSaving.value = true
-		saveError.value = null
-		try {
-			await deleteSongAnnotation(ann.id)
-		} catch (err) {
-			saveError.value = err instanceof Error ? err.message : 'Failed to delete annotation'
-			throw err
-		} finally {
-			isSaving.value = false
+		await withSaving(() => deleteSongAnnotation(ann.id!), 'Failed to delete annotation')
+	}
+
+	async function batchDeleteLocalAndRemote(anns: SheetAnnotation[], swallowError = false): Promise<void> {
+		const idsToDelete = anns.map((a) => a.id).filter((id): id is number => typeof id === 'number')
+		const uuidsToDelete = new Set(anns.map((a) => a.uuid))
+		annotations.value = annotations.value.filter((a) => !uuidsToDelete.has(a.uuid))
+		if (selectedUuid.value && uuidsToDelete.has(selectedUuid.value)) {
+			selectedUuid.value = null
+		}
+		if (idsToDelete.length > 0) {
+			await withSaving(
+				() => batchContextAnnotations(getContext(), { deleteIds: idsToDelete }),
+				swallowError ? 'Failed to clear page annotations' : undefined,
+				!swallowError,
+			)
 		}
 	}
 
@@ -321,29 +342,14 @@ export function useAnnotationEditor(
 	}
 
 	async function clearPage(pageNumberZeroIndexed: number): Promise<void> {
-		const ctx = getContext()
 		const pageAnns = annotations.value.filter(
 			(a) => !a.deletedAt && a.pageNumber === pageNumberZeroIndexed,
 		)
 		if (pageAnns.length === 0) return
 
 		const snapshots = pageAnns.map(cloneAnn)
-		const idsToDelete = pageAnns.map((a) => a.id).filter((id): id is number => typeof id === 'number')
-		const uuidsToDelete = new Set(pageAnns.map((a) => a.uuid))
-		annotations.value = annotations.value.filter((a) => !uuidsToDelete.has(a.uuid))
 		selectedUuid.value = null
-
-		if (idsToDelete.length > 0) {
-			isSaving.value = true
-			saveError.value = null
-			try {
-				await batchContextAnnotations(ctx, { deleteIds: idsToDelete })
-			} catch (err) {
-				saveError.value = err instanceof Error ? err.message : 'Failed to clear page annotations'
-			} finally {
-				isSaving.value = false
-			}
-		}
+		await batchDeleteLocalAndRemote(pageAnns, true)
 
 		undoStack.value = [...undoStack.value, { kind: 'batch-delete', annotations: snapshots }]
 		redoStack.value = []
@@ -365,27 +371,18 @@ export function useAnnotationEditor(
 				{ kind: 'update', before: restored, after: action.after },
 			]
 		} else if (action.kind === 'delete') {
-			const toRestore = { ...cloneAnn(action.annotation), id: undefined, deletedAt: null }
-			const saved = await persistSave(toRestore)
+			const saved = await persistSave(toRestorableCopy(action.annotation))
 			redoStack.value = [...redoStack.value, { kind: 'delete', annotation: saved }]
 		} else if (action.kind === 'batch-delete') {
-			const ctx = getContext()
 			const restoredList: SheetAnnotation[] = []
-			const upsertPayload = action.annotations.map((a) => ({
-				...cloneAnn(a),
-				id: undefined,
-				deletedAt: null,
-			}))
-			isSaving.value = true
-			try {
-				const res = await batchContextAnnotations(ctx, { upsert: upsertPayload })
+			const upsertPayload = action.annotations.map(toRestorableCopy)
+			await withSaving(async () => {
+				const res = await batchContextAnnotations(getContext(), { upsert: upsertPayload })
 				for (const s of res.saved) {
 					upsertLocal(s)
 					restoredList.push(s)
 				}
-			} finally {
-				isSaving.value = false
-			}
+			})
 			redoStack.value = [
 				...redoStack.value,
 				{ kind: 'batch-delete', annotations: restoredList },
@@ -399,8 +396,7 @@ export function useAnnotationEditor(
 		redoStack.value = redoStack.value.slice(0, -1)
 
 		if (action.kind === 'create') {
-			const toCreate = { ...cloneAnn(action.annotation), id: undefined, deletedAt: null }
-			const saved = await persistSave(toCreate)
+			const saved = await persistSave(toRestorableCopy(action.annotation))
 			undoStack.value = [...undoStack.value, { kind: 'create', annotation: saved }]
 		} else if (action.kind === 'update') {
 			upsertLocal(action.after)
@@ -413,20 +409,7 @@ export function useAnnotationEditor(
 			await persistDelete(action.annotation)
 			undoStack.value = [...undoStack.value, action]
 		} else if (action.kind === 'batch-delete') {
-			const ctx = getContext()
-			const idsToDelete = action.annotations
-				.map((a) => a.id)
-				.filter((id): id is number => typeof id === 'number')
-			const uuids = new Set(action.annotations.map((a) => a.uuid))
-			annotations.value = annotations.value.filter((a) => !uuids.has(a.uuid))
-			if (idsToDelete.length > 0) {
-				isSaving.value = true
-				try {
-					await batchContextAnnotations(ctx, { deleteIds: idsToDelete })
-				} finally {
-					isSaving.value = false
-				}
-			}
+			await batchDeleteLocalAndRemote(action.annotations)
 			undoStack.value = [...undoStack.value, action]
 		}
 	}
@@ -579,40 +562,26 @@ export function useAnnotationEditor(
 
 		if (e.shiftKey) return
 
-		switch (lower) {
-			case 'v':
-				setTool('select')
-				break
-			case 'p':
-				setTool('drawing')
-				break
-			case 'h':
-				setTool('highlight')
-				break
-			case 's':
-				setTool('line')
-				break
-			case 't':
-				setTool('text')
-				break
-			case 'm':
-				setTool('stamp')
-				break
-			case 'l':
-				setTool('link')
-				break
-			case 'e':
-				setTool('eraser')
-				break
-			case 'f':
-				selectStampSymbol('𝆑')
-				break
-			case 'b':
-				selectStampSymbol('♭')
-				break
-			case 'n':
-				selectStampSymbol('♮')
-				break
+		const TOOL_SHORTCUTS: Record<string, EditorTool> = {
+			v: 'select',
+			p: 'drawing',
+			h: 'highlight',
+			s: 'line',
+			t: 'text',
+			m: 'stamp',
+			l: 'link',
+			e: 'eraser',
+		}
+		const STAMP_SHORTCUTS: Record<string, string> = {
+			f: '𝆑',
+			b: '♭',
+			n: '♮',
+		}
+
+		if (TOOL_SHORTCUTS[lower]) {
+			setTool(TOOL_SHORTCUTS[lower])
+		} else if (STAMP_SHORTCUTS[lower]) {
+			selectStampSymbol(STAMP_SHORTCUTS[lower])
 		}
 	}
 
