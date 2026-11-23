@@ -9,6 +9,7 @@ import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import FilePreviewerToolbar from './file-preview/FilePreviewerToolbar.vue'
 import XlsxPreviewPane, { type XlsxSheet } from './file-preview/XlsxPreviewPane.vue'
 import { useAnnotationOverlayHost } from '../composables/useAnnotationOverlayHost'
+import { useFilePreviewZoom, type ZoomMode } from '../composables/useFilePreviewZoom'
 import { usePdfTouchZoom } from '../composables/usePdfTouchZoom'
 import { useStylusSettings } from '../composables/useStylusSettings'
 import { fetchCachedBinaryFile } from '../utils/file-binary'
@@ -102,7 +103,6 @@ const fileSizeBytes = ref<number | null>(null)
 const pageResolutions = ref<PdfPageResolutionSummary[]>([])
 
 type PageLayoutMode = 'continuous' | 'single' | 'double'
-type ZoomMode = 'fit-width' | 'fit-page' | 'custom'
 
 function isContainerLandscape(): boolean {
 	if (typeof window === 'undefined') return false
@@ -145,11 +145,41 @@ const pageLayout = ref<PageLayoutMode>(
 )
 const doublePageTurnMode = ref<DoublePageTurnMode>(props.initialDoublePageTurnMode)
 const doubleSpread = ref<DoubleSpread>([1, null])
-const zoomMode = ref<ZoomMode>(props.initialZoomMode)
-const customScale = ref(1.0)
-const effectiveScale = ref(1.0)
-const rotation = ref(0)
-const imageScale = ref(1.0)
+
+const fileExtTarget = computed(() => (props.fileName || props.filePath).split('?')[0].toLowerCase())
+const isPdfFile = computed(() => checkIsPdfFile(fileExtTarget.value))
+const isImageFile = computed(() => checkIsImageFile(fileExtTarget.value))
+const isDocxFile = computed(() => fileExtTarget.value.endsWith('.docx'))
+const isXlsxFile = computed(() => {
+	const path = fileExtTarget.value
+	return path.endsWith('.xlsx') || path.endsWith('.xls')
+})
+const isUnsupportedFile = computed(() =>
+	!isPdfFile.value && !isImageFile.value && !isDocxFile.value && !isXlsxFile.value,
+)
+
+const {
+	zoomMode,
+	customScale,
+	effectiveScale,
+	rotation,
+	imageScale,
+	zoomSelectValue,
+	isCustomZoom,
+	imageStyle,
+	setZoomMode,
+	onZoomSelect,
+	zoomIn,
+	zoomOut,
+	rotateClockwise,
+} = useFilePreviewZoom({
+	initialZoomMode: props.initialZoomMode,
+	pdfContainer,
+	isPdfFile,
+	isImageFile,
+	onResetPan: () => resetPan(),
+	onRerender: () => renderCurrentView(),
+})
 
 const {
 	showAnnotationsState,
@@ -171,27 +201,6 @@ const {
 	onCreate: (draft) => emit('create-annotation', draft),
 	onUpdate: (before, after) => emit('update-annotation', before, after),
 	onDelete: (ann) => emit('delete-annotation', ann),
-})
-
-const zoomSteps = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 4.0]
-
-const fileExtTarget = computed(() => (props.fileName || props.filePath).split('?')[0].toLowerCase())
-
-const isPdfFile = computed(() => checkIsPdfFile(fileExtTarget.value))
-
-const isImageFile = computed(() => checkIsImageFile(fileExtTarget.value))
-
-const isDocxFile = computed(() => {
-	return fileExtTarget.value.endsWith('.docx')
-})
-
-const isXlsxFile = computed(() => {
-	const path = fileExtTarget.value
-	return path.endsWith('.xlsx') || path.endsWith('.xls')
-})
-
-const isUnsupportedFile = computed(() => {
-	return !isPdfFile.value && !isImageFile.value && !isDocxFile.value && !isXlsxFile.value
 })
 
 const canInterleaveWithNext = computed(() => {
@@ -242,24 +251,6 @@ const canGoNext = computed(() => {
 	}
 	return currentPage.value < totalPages.value
 })
-
-const zoomSelectValue = computed(() => {
-	if (zoomMode.value === 'fit-width') return 'fit-width'
-	if (zoomMode.value === 'fit-page') return 'fit-page'
-	const matches = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0].some((val) => Math.abs(val - customScale.value) < 0.01)
-	return matches ? String(customScale.value) : 'custom'
-})
-
-const isCustomZoom = computed(() => {
-	if (zoomMode.value === 'fit-width' || zoomMode.value === 'fit-page') return false
-	return ![0.5, 0.75, 1.0, 1.25, 1.5, 2.0].some((val) => Math.abs(val - customScale.value) < 0.01)
-})
-
-const imageStyle = computed(() => ({
-	transform: `rotate(${rotation.value}deg) scale(${imageScale.value})`,
-	transformOrigin: 'center center',
-	transition: 'transform 0.15s ease-out',
-}))
 
 function openInExternalViewer() {
 	if (!props.filePath) return
@@ -370,71 +361,6 @@ function setDoublePageTurnMode(mode: DoublePageTurnMode) {
 	doublePageTurnMode.value = mode
 	doubleSpread.value = getDoubleSpreadForPage(currentPage.value, totalPages.value, mode)
 	if (pageLayout.value === 'double') {
-		renderCurrentView()
-	}
-}
-
-function setZoomMode(mode: ZoomMode) {
-	zoomMode.value = mode
-	if (mode === 'fit-width' || mode === 'fit-page') {
-		resetPan()
-		if (pdfContainer.value) {
-			pdfContainer.value.scrollLeft = 0
-			pdfContainer.value.scrollTop = 0
-		}
-	}
-	if (isImageFile.value) {
-		imageScale.value = mode === 'fit-width' ? 1.0 : 0.75
-		return
-	}
-	renderCurrentView()
-}
-
-function onZoomSelect(event: Event) {
-	const val = (event.target as HTMLSelectElement).value
-	if (val === 'fit-width' || val === 'fit-page') {
-		setZoomMode(val)
-	} else if (val !== 'custom') {
-		const scale = parseFloat(val)
-		if (!Number.isNaN(scale) && scale > 0) {
-			zoomMode.value = 'custom'
-			customScale.value = scale
-			if (isImageFile.value) {
-				imageScale.value = scale
-			} else {
-				renderCurrentView()
-			}
-		}
-	}
-}
-
-function zoomIn() {
-	if (isImageFile.value) {
-		imageScale.value = Math.min(4.0, +(imageScale.value + 0.25).toFixed(2))
-		return
-	}
-	const current = effectiveScale.value
-	const next = zoomSteps.find((s) => s > current + 0.05) ?? Math.min(4.0, +(current + 0.25).toFixed(2))
-	zoomMode.value = 'custom'
-	customScale.value = next
-	renderCurrentView()
-}
-
-function zoomOut() {
-	if (isImageFile.value) {
-		imageScale.value = Math.max(0.25, +(imageScale.value - 0.25).toFixed(2))
-		return
-	}
-	const current = effectiveScale.value
-	const prev = [...zoomSteps].reverse().find((s) => s < current - 0.05) ?? Math.max(0.25, +(current - 0.25).toFixed(2))
-	zoomMode.value = 'custom'
-	customScale.value = prev
-	renderCurrentView()
-}
-
-function rotateClockwise() {
-	rotation.value = (rotation.value + 90) % 360
-	if (isPdfFile.value) {
 		renderCurrentView()
 	}
 }
