@@ -31,7 +31,6 @@ import { usePdfZoomLightbox } from './usePdfZoomLightbox'
 import SongPdfJoinModal from './SongPdfJoinModal.vue'
 import SongPdfRotateModal from './SongPdfRotateModal.vue'
 import SongPdfEnhanceModal from './SongPdfEnhanceModal.vue'
-import type { PageCrop } from './crop-types'
 import { executeJoinTwoPages, type JoinLayout } from './pdf-join-engine'
 import { inspectPdfDocumentResolutions, type PdfPageResolutionSummary, pruneUnreferencedPdfObjects } from './pdf-enhance-engine'
 import { applyPdfPageEdits, formatPdfSaveSuccessMessage } from './pdf-save-pipeline'
@@ -159,6 +158,7 @@ const {
 	hasAnyEnhance,
 	hasAnyChange,
 	resetEditsForPageCount,
+	reindexEditsAfterJoin,
 	rotatePage,
 	rotateAll,
 	resetRotations,
@@ -466,42 +466,7 @@ async function handleExecuteJoin(options: {
 		await pruneUnreferencedPdfObjects(pdfDoc)
 		const newBytes = await pdfDoc.save()
 		originalPdfBytes.value = newBytes
-		hasAnyJoin.value = true
-
-		// Re-index / shift state for remaining pages
-		const lowerPage = Math.min(options.pageA, options.pageB)
-		const higherPage = Math.max(options.pageA, options.pageB)
-
-		// pageRotations: lowerPage - 1 becomes 0, higherPage - 1 is removed
-		const newRots = [...pageRotations.value]
-		newRots[lowerPage - 1] = 0
-		newRots.splice(higherPage - 1, 1)
-		pageRotations.value = newRots
-
-		// pageCrops: lowerPage crop is baked in, higherPage is removed, subsequent shift down
-		const newCrops: Record<number, PageCrop> = {}
-		for (const [kStr, crop] of Object.entries(pageCrops.value)) {
-			const k = Number(kStr)
-			if (k === lowerPage || k === higherPage) continue
-			if (k > higherPage) {
-				newCrops[k - 1] = crop
-			} else {
-				newCrops[k] = crop
-			}
-		}
-		pageCrops.value = newCrops
-
-		// deletedPages: shift down if needed
-		const newDeleted = new Set<number>()
-		for (const p of deletedPages.value) {
-			if (p === higherPage || p === lowerPage) continue
-			if (p > higherPage) {
-				newDeleted.add(p - 1)
-			} else {
-				newDeleted.add(p)
-			}
-		}
-		deletedPages.value = newDeleted
+		reindexEditsAfterJoin(options.pageA, options.pageB)
 
 		cleanupThumbnailObserver()
 		if (activePdfDoc.value) {

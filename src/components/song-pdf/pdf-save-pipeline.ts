@@ -6,7 +6,7 @@
 import { degrees, type PDFDocument } from 'pdf-lib'
 import { translate as t } from '@nextcloud/l10n'
 import { cleanupPdfJsPage, releaseCanvas } from '../../utils/pdfjs'
-import { computeCropBoxForRotation, type PageCrop } from './crop-types'
+import { computeCropBoxForRotation, isCropEffective, type PageCrop } from './crop-types'
 import { executeRotatePage } from './pdf-rotate-engine'
 import type { ScanOperation } from './scan-types'
 import { applyPipeline, createImageBuffer, imageDataToImageBuffer } from './scan-enhance-engine'
@@ -144,7 +144,7 @@ export async function applyPdfPageEdits(options: ApplyPdfPageEditsOptions): Prom
 		// 2. Calculate net rotation & crop
 		const rotDelta = pageRotations[i] ?? 0
 		const crop = pageCrops[pageNum]
-		const hasCrop = Boolean(crop && (crop.left > 0.005 || crop.top > 0.005 || crop.width < 0.995 || crop.height < 0.995))
+		const hasCrop = isCropEffective(crop)
 
 		const page = pdfDoc.getPage(i)
 		const currentAngle = page.getRotation()?.angle ?? 0

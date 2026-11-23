@@ -17,6 +17,19 @@ export interface CropBox {
 }
 
 /**
+ * Returns true when a PageCrop meaningfully trims at least one edge beyond 0.5%.
+ */
+export function isCropEffective(crop?: PageCrop | null): crop is PageCrop {
+	if (!crop) return false
+	return (
+		crop.left > 0.005
+		|| crop.top > 0.005
+		|| crop.width < 0.995
+		|| crop.height < 0.995
+	)
+}
+
+/**
  * Computes the PDF user space CropBox for a given screen-space PageCrop
  * based on the net rotation angle of the page (0, 90, 180, 270 degrees).
  *

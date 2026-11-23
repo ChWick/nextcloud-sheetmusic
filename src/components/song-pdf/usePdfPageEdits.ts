@@ -1,7 +1,7 @@
 import { computed, ref, type Ref } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import { showError, showInfo } from '@nextcloud/dialogs'
-import type { PageCrop } from './crop-types'
+import { isCropEffective, type PageCrop } from './crop-types'
 import type { ScanOperation } from './scan-types'
 
 export interface UsePdfPageEditsOptions {
@@ -109,23 +109,11 @@ export function usePdfPageEdits(options: UsePdfPageEditsOptions) {
 	}
 
 	function isPageCropped(pageNum: number): boolean {
-		const c = pageCrops.value[pageNum]
-		if (!c) return false
-		return (
-			c.left > 0.005 ||
-			c.top > 0.005 ||
-			c.width < 0.995 ||
-			c.height < 0.995
-		)
+		return isCropEffective(pageCrops.value[pageNum])
 	}
 
 	const hasAnyCrop = computed(() => {
-		return Object.values(pageCrops.value).some((c) => (
-			c.left > 0.005 ||
-			c.top > 0.005 ||
-			c.width < 0.995 ||
-			c.height < 0.995
-		))
+		return Object.values(pageCrops.value).some((c) => isCropEffective(c))
 	})
 
 	function getCropIndicatorText(pageNum: number): string {
@@ -212,6 +200,35 @@ export function usePdfPageEdits(options: UsePdfPageEditsOptions) {
 		return `${active.length} ${active.length === 1 ? 'filter' : 'filters'}`
 	}
 
+	function reindexEditsAfterJoin(pageA: number, pageB: number) {
+		const lowerPage = Math.min(pageA, pageB)
+		const higherPage = Math.max(pageA, pageB)
+
+		// pageRotations: lowerPage - 1 becomes 0, higherPage - 1 is removed
+		const newRots = [...pageRotations.value]
+		newRots[lowerPage - 1] = 0
+		newRots.splice(higherPage - 1, 1)
+		pageRotations.value = newRots
+
+		// pageCrops: lowerPage crop is baked in, higherPage is removed, subsequent shift down
+		const newCrops: Record<number, PageCrop> = {}
+		for (const [kStr, crop] of Object.entries(pageCrops.value)) {
+			const k = Number(kStr)
+			if (k === lowerPage || k === higherPage) continue
+			newCrops[k > higherPage ? k - 1 : k] = crop
+		}
+		pageCrops.value = newCrops
+
+		// deletedPages: shift down if needed
+		const newDeleted = new Set<number>()
+		for (const p of deletedPages.value) {
+			if (p === higherPage || p === lowerPage) continue
+			newDeleted.add(p > higherPage ? p - 1 : p)
+		}
+		deletedPages.value = newDeleted
+		hasAnyJoin.value = true
+	}
+
 	const hasAnyChange = computed(() => {
 		return hasAnyRotation.value || hasAnyCrop.value || hasAnyDeletion.value || hasAnyJoin.value || hasAnyEnhance.value
 	})
@@ -236,6 +253,7 @@ export function usePdfPageEdits(options: UsePdfPageEditsOptions) {
 		hasAnyEnhance,
 		hasAnyChange,
 		resetEditsForPageCount,
+		reindexEditsAfterJoin,
 		rotatePage,
 		rotateAll,
 		resetRotations,
