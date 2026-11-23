@@ -9,7 +9,8 @@ import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import FilePreviewerToolbar from './file-preview/FilePreviewerToolbar.vue'
 import XlsxPreviewPane, { type XlsxSheet } from './file-preview/XlsxPreviewPane.vue'
 import { useAnnotationOverlayHost } from '../composables/useAnnotationOverlayHost'
-import { useFilePreviewZoom, type ZoomMode } from '../composables/useFilePreviewZoom'
+import { useFilePreviewZoom } from '../composables/useFilePreviewZoom'
+import { usePdfPageNavigation } from '../composables/usePdfPageNavigation'
 import { usePdfTouchZoom } from '../composables/usePdfTouchZoom'
 import { useStylusSettings } from '../composables/useStylusSettings'
 import { fetchCachedBinaryFile } from '../utils/file-binary'
@@ -23,17 +24,12 @@ import {
 	computeFitScale,
 	MAX_CUSTOM_SCALE,
 	MIN_CUSTOM_SCALE,
-	type PageLayoutMode,
 	resolvePagesToRender,
 } from '../utils/pdf-layout'
 import {
 	type DoublePageTurnMode,
-	type DoubleSpread,
-	formatDoubleSpreadDisplay,
 	getDoubleSpreadForPage,
 	getInitialDoubleSpread,
-	nextDoubleSpread,
-	prevDoubleSpread,
 } from '../utils/page-turn'
 
 const props = withDefaults(
@@ -110,48 +106,6 @@ const currentPage = ref(1)
 const fileSizeBytes = ref<number | null>(null)
 const pageResolutions = ref<PdfPageResolutionSummary[]>([])
 
-function isContainerLandscape(): boolean {
-	if (typeof window === 'undefined') return false
-	const containerW = pdfContainer.value?.clientWidth || window.innerWidth
-	const containerH = pdfContainer.value?.clientHeight || window.innerHeight
-	return containerW >= containerH && containerW >= 700
-}
-
-function detectResponsiveLayout(): PageLayoutMode {
-	return isContainerLandscape() ? 'double' : 'single'
-}
-
-async function isLogicalPageLandscape(logicalPage: number): Promise<boolean> {
-	if (!loadedPdf.value) return false
-	let page: any = null
-	try {
-		const ordered = parsePageOrder(props.pageOrder, loadedPdf.value.numPages)
-		const idx = Math.min(Math.max(1, logicalPage), ordered.length) - 1
-		const pageNum = ordered[idx] || 1
-		page = await loadedPdf.value.getPage(pageNum)
-		const pageRotation = getEffectivePageRotation(page, rotation.value)
-		const viewport = page.getViewport({ scale: 1.0, rotation: pageRotation })
-		return viewport.width > viewport.height
-	} catch {
-		return false
-	} finally {
-		cleanupPdfJsPage(page)
-	}
-}
-
-async function resolveAutoLayoutForPage(logicalPage: number): Promise<PageLayoutMode> {
-	if (!isContainerLandscape()) return 'single'
-	if (await isLogicalPageLandscape(logicalPage)) return 'single'
-	return 'double'
-}
-
-const autoLayout = ref(props.initialPageLayout === 'auto')
-const pageLayout = ref<PageLayoutMode>(
-	props.initialPageLayout === 'auto' ? detectResponsiveLayout() : props.initialPageLayout,
-)
-const doublePageTurnMode = ref<DoublePageTurnMode>(props.initialDoublePageTurnMode)
-const doubleSpread = ref<DoubleSpread>([1, null])
-
 const fileExtTarget = computed(() => (props.fileName || props.filePath).split('?')[0].toLowerCase())
 const isPdfFile = computed(() => checkIsPdfFile(fileExtTarget.value))
 const isImageFile = computed(() => checkIsImageFile(fileExtTarget.value))
@@ -209,112 +163,41 @@ const {
 	onDelete: (ann) => emit('delete-annotation', ann),
 })
 
-const canInterleaveWithNext = computed(() => {
-	return Boolean(props.interleaveSongs && checkIsPdfFile(props.nextFilePath))
-})
-
-const effectiveDoubleTotalPages = computed(() => {
-	if (!canInterleaveWithNext.value) {
-		return totalPages.value
-	}
-	if (doublePageTurnMode.value === 'step') {
-		return totalPages.value + 1
-	}
-	return totalPages.value % 2 === 1 ? totalPages.value + 1 : totalPages.value
-})
-
-const isShowingNextSongFirstPage = computed(() => {
-	return pageLayout.value === 'double'
-		&& canInterleaveWithNext.value
-		&& doubleSpread.value[1] === totalPages.value + 1
-})
-
-const currentPageDisplay = computed(() => {
-	if (pageLayout.value === 'double') {
-		if (isShowingNextSongFirstPage.value) {
-			return `${doubleSpread.value[0]} / →1`
-		}
-		return formatDoubleSpreadDisplay(doubleSpread.value)
-	}
-	if (pageLayout.value === 'continuous') {
-		return `1–${totalPages.value || 1}`
-	}
-	return `${currentPage.value}`
-})
-
-const canGoPrev = computed(() => {
-	if (pageLayout.value === 'continuous') return false
-	if (pageLayout.value === 'double') {
-		return prevDoubleSpread(doubleSpread.value, effectiveDoubleTotalPages.value, doublePageTurnMode.value) !== null
-	}
-	return currentPage.value > 1
-})
-
-const canGoNext = computed(() => {
-	if (pageLayout.value === 'continuous') return false
-	if (pageLayout.value === 'double') {
-		return nextDoubleSpread(doubleSpread.value, effectiveDoubleTotalPages.value, doublePageTurnMode.value) !== null
-	}
-	return currentPage.value < totalPages.value
+const {
+	autoLayout,
+	pageLayout,
+	doublePageTurnMode,
+	doubleSpread,
+	canInterleaveWithNext,
+	effectiveDoubleTotalPages,
+	isShowingNextSongFirstPage,
+	currentPageDisplay,
+	canGoPrev,
+	canGoNext,
+	resolveAutoLayoutForPage,
+	prevPage,
+	nextPage,
+	goToPage,
+	setPageLayout,
+	setAutoLayout,
+	setDoublePageTurnMode,
+} = usePdfPageNavigation({
+	pdfContainer,
+	loadedPdf,
+	totalPages,
+	currentPage,
+	rotation,
+	pageOrder: computed(() => props.pageOrder),
+	initialPageLayout: props.initialPageLayout,
+	initialDoublePageTurnMode: props.initialDoublePageTurnMode,
+	interleaveSongs: computed(() => props.interleaveSongs),
+	nextFilePath: computed(() => props.nextFilePath),
+	onRerender: () => renderCurrentView(),
 })
 
 function openInExternalViewer() {
 	if (!props.filePath) return
 	openFileExternally(props.filePath)
-}
-
-function prevPage(): boolean {
-	if (pageLayout.value === 'double') {
-		const prev = prevDoubleSpread(doubleSpread.value, effectiveDoubleTotalPages.value, doublePageTurnMode.value)
-		if (!prev) return false
-		doubleSpread.value = prev
-		currentPage.value = prev[0]
-		renderCurrentView()
-		return true
-	}
-	if (pageLayout.value === 'single') {
-		if (currentPage.value <= 1) return false
-		currentPage.value -= 1
-		renderCurrentView()
-		return true
-	}
-	return false
-}
-
-function nextPage(): boolean {
-	if (pageLayout.value === 'double') {
-		const next = nextDoubleSpread(doubleSpread.value, effectiveDoubleTotalPages.value, doublePageTurnMode.value)
-		if (!next) return false
-		doubleSpread.value = next
-		currentPage.value = next[0]
-		renderCurrentView()
-		return true
-	}
-	if (pageLayout.value === 'single') {
-		if (currentPage.value >= totalPages.value) return false
-		currentPage.value += 1
-		renderCurrentView()
-		return true
-	}
-	return false
-}
-
-function goToPage(targetPage: number) {
-	if (targetPage < 1) targetPage = 1
-	if (totalPages.value > 0 && targetPage > totalPages.value) {
-		targetPage = totalPages.value
-	}
-	currentPage.value = targetPage
-	doubleSpread.value = getDoubleSpreadForPage(targetPage, totalPages.value, doublePageTurnMode.value)
-	if (pageLayout.value === 'continuous') {
-		const placeholder = (pdfContainer.value?.querySelector(`[data-page-index="${targetPage}"]`) as HTMLElement | null)
-			?? (pdfContainer.value?.querySelector(`[data-page-num="${targetPage}"]`) as HTMLElement | null)
-		if (placeholder) {
-			placeholder.scrollIntoView({ behavior: 'smooth', block: 'start' })
-		}
-	} else {
-		renderCurrentView()
-	}
 }
 
 async function renderPageThumbnail(logicalPage: number, canvas: HTMLCanvasElement, targetWidth = 110): Promise<void> {
@@ -335,39 +218,6 @@ async function renderPageThumbnail(logicalPage: number, canvas: HTMLCanvasElemen
 		// Ignore thumbnail render errors
 	} finally {
 		cleanupPdfJsPage(page)
-	}
-}
-
-function setPageLayout(mode: PageLayoutMode) {
-	autoLayout.value = false
-	if (pageLayout.value === mode) return
-	pageLayout.value = mode
-	if (mode === 'double') {
-		doubleSpread.value = getDoubleSpreadForPage(currentPage.value, totalPages.value, doublePageTurnMode.value)
-	}
-	renderCurrentView()
-}
-
-async function setAutoLayout(enabled: boolean) {
-	autoLayout.value = enabled
-	if (enabled) {
-		const detected = await resolveAutoLayoutForPage(currentPage.value)
-		if (pageLayout.value !== detected) {
-			pageLayout.value = detected
-			if (detected === 'double') {
-				doubleSpread.value = getDoubleSpreadForPage(currentPage.value, totalPages.value, doublePageTurnMode.value)
-			}
-			renderCurrentView()
-		}
-	}
-}
-
-function setDoublePageTurnMode(mode: DoublePageTurnMode) {
-	if (doublePageTurnMode.value === mode) return
-	doublePageTurnMode.value = mode
-	doubleSpread.value = getDoubleSpreadForPage(currentPage.value, totalPages.value, mode)
-	if (pageLayout.value === 'double') {
-		renderCurrentView()
 	}
 }
 
