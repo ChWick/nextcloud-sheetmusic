@@ -37,6 +37,28 @@ export function computeFitScale(
 }
 
 /**
+ * Computes the per-page scale in double-page layout so each page fits its half-slot
+ * or scales proportionally relative to the document reference fit scale in custom zoom.
+ */
+export function computeDoublePageScale(opts: {
+	unscaledWidth: number
+	unscaledHeight: number
+	doubleSlotW: number
+	containerH: number
+	zoomMode: 'fit-width' | 'fit-page' | 'custom'
+	effectiveScale: number
+	docRefFitScale: number
+}): number {
+	const { unscaledWidth, unscaledHeight, doubleSlotW, containerH, zoomMode, effectiveScale, docRefFitScale } = opts
+	if (zoomMode === 'fit-width' || zoomMode === 'fit-page') {
+		return computeFitScale(unscaledWidth, unscaledHeight, doubleSlotW, containerH, zoomMode)
+	}
+	const pageFit = computeFitScale(unscaledWidth, unscaledHeight, doubleSlotW, containerH, 'fit-page')
+	const ratio = docRefFitScale > 0 ? pageFit / docRefFitScale : 1
+	return Math.max(MIN_FIT_SCALE, Math.min(effectiveScale * ratio, MAX_FIT_SCALE))
+}
+
+/**
  * Resolves the list of logical/physical pages to render for the current layout mode,
  * including optional interleaved first page of the next song in double-page mode.
  */

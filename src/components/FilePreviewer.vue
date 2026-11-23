@@ -19,6 +19,7 @@ import type { SheetAnnotation } from '../types/annotation'
 import type { EditorTool, EditorToolStyle } from '../composables/useAnnotationEditor'
 import { defaultFileBinaryCache, type FileBinaryCache } from '../utils/file-cache'
 import {
+	computeDoublePageScale,
 	computeFitScale,
 	MAX_CUSTOM_SCALE,
 	MIN_CUSTOM_SCALE,
@@ -387,7 +388,6 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 	const renderId = ++currentRenderId
 	const pdf = loadedPdf.value
 	const ordered = parsePageOrder(props.pageOrder, pdf.numPages)
-	const total = ordered.length
 
 	await nextTick()
 	if (!pdfContainer.value || !pdfStage.value || renderId !== currentRenderId) return
@@ -498,13 +498,15 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 			let pageScale = effectiveScale.value
 			if (isDoubleLayout) {
 				const unscaledViewport = page.getViewport({ scale: 1.0, rotation: pageRotation })
-				if (zoomMode.value === 'fit-width' || zoomMode.value === 'fit-page') {
-					pageScale = computeFitScale(unscaledViewport.width, unscaledViewport.height, doubleSlotW, containerH, zoomMode.value)
-				} else {
-					const pageFit = computeFitScale(unscaledViewport.width, unscaledViewport.height, doubleSlotW, containerH, 'fit-page')
-					const ratio = docRefFitScale > 0 ? pageFit / docRefFitScale : 1
-					pageScale = Math.max(MIN_FIT_SCALE, Math.min(effectiveScale.value * ratio, MAX_FIT_SCALE))
-				}
+				pageScale = computeDoublePageScale({
+					unscaledWidth: unscaledViewport.width,
+					unscaledHeight: unscaledViewport.height,
+					doubleSlotW,
+					containerH,
+					zoomMode: zoomMode.value,
+					effectiveScale: effectiveScale.value,
+					docRefFitScale,
+				})
 			}
 			const viewport = page.getViewport({ scale: pageScale, rotation: pageRotation })
 
