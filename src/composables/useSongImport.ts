@@ -1,8 +1,8 @@
 import { ref } from 'vue'
 import { t } from '@nextcloud/l10n'
-import { FilePickerClosed, getFilePickerBuilder } from '@nextcloud/dialogs'
 import { apiPost } from '../api/client'
 import type { SongPrefill } from '../types/song'
+import { pickSingleNextcloudNode } from '../utils/nextcloudFilePicker'
 
 export interface UseSongImportOptions {
 	onSongReady?: () => void
@@ -25,21 +25,13 @@ export function useSongImport(options: UseSongImportOptions = {}) {
 	}
 
 	async function startImportNextcloud() {
-		const picker = getFilePickerBuilder(t('sheetmusic', 'Select a file from Nextcloud'))
-			.setMultiSelect(false)
-			.setCanPick((node) => node.type === 'file')
-			.setButtonFactory(([node]) => [{
-				label: node
-					? t('sheetmusic', 'Import {file}', { file: node.basename }, { escape: false })
-					: t('sheetmusic', 'Import a file'),
-				callback: () => {},
-				disabled: !node || node.type !== 'file',
-				variant: 'primary',
-			}])
-			.build()
-
 		try {
-			const [picked] = await picker.pickNodes()
+			const picked = await pickSingleNextcloudNode({
+				title: t('sheetmusic', 'Select a file from Nextcloud'),
+				canPick: (node) => node.type === 'file',
+				selectLabel: (node) => t('sheetmusic', 'Import {file}', { file: node.basename }, { escape: false }),
+				emptyLabel: t('sheetmusic', 'Import a file'),
+			})
 			if (!picked) return
 
 			let prefill: SongPrefill | null = null
@@ -55,9 +47,7 @@ export function useSongImport(options: UseSongImportOptions = {}) {
 			importedNextcloudNode.value = { path: picked.path, name: picked.basename }
 			options.onSongReady?.()
 		} catch (error) {
-			if (!(error instanceof FilePickerClosed)) {
-				console.error('Failed to import file from Nextcloud:', error)
-			}
+			console.error('Failed to import file from Nextcloud:', error)
 		}
 	}
 

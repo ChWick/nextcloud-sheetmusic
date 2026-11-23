@@ -3,7 +3,8 @@ import type { INode } from '@nextcloud/files'
 import type { Book, Collection, Composer, EntityType, LibraryData, Song } from './types/song'
 import type { Library } from './types/library.ts'
 
-import { FilePickerClosed, getFilePickerBuilder, showError, showSuccess } from '@nextcloud/dialogs'
+import { showError, showSuccess } from '@nextcloud/dialogs'
+import { pickSingleNextcloudNode } from './utils/nextcloudFilePicker'
 import { loadState } from '@nextcloud/initial-state'
 import { translate as t } from '@nextcloud/l10n'
 import { generateUrl } from '@nextcloud/router'
@@ -310,48 +311,40 @@ function openImportDialog(event?: Event) {
 
 async function openFolderPicker() {
   addError.value = ''
-  const picker = getFilePickerBuilder(t('sheetmusic', 'Select a folder for your sheet music library'))
-    .setMultiSelect(false)
-    .allowDirectories(true)
-    .setFilter(node => node.type === 'folder')
-    .setCanPick(node => node.type === 'folder')
-    .setButtonFactory(([node]) => [{
-      label: node ? t('sheetmusic', 'Select folder {name}', { name: node.basename }, { escape: false }) : t('sheetmusic', 'Select folder'),
-      callback: () => {},
-      disabled: !node || node.type !== 'folder',
-      variant: 'primary',
-    }])
-    .build()
   try {
-    ;[selectedFolder.value] = await picker.pickNodes()
-  } catch (error) {
-    if (!(error instanceof FilePickerClosed)) {
-      addError.value = t('sheetmusic', 'Could not select a folder.')
-      showError(addError.value)
+    const picked = await pickSingleNextcloudNode({
+      title: t('sheetmusic', 'Select a folder for your sheet music library'),
+      allowDirectories: true,
+      filter: node => node.type === 'folder',
+      canPick: node => node.type === 'folder',
+      selectLabel: node => t('sheetmusic', 'Select folder {name}', { name: node.basename }, { escape: false }),
+      emptyLabel: t('sheetmusic', 'Select folder'),
+    })
+    if (picked) {
+      selectedFolder.value = picked
     }
+  } catch {
+    addError.value = t('sheetmusic', 'Could not select a folder.')
+    showError(addError.value)
   }
 }
 
 async function openDbPicker() {
   importError.value = ''
-  const picker = getFilePickerBuilder(t('sheetmusic', 'Select a MobileSheets database file'))
-    .setMultiSelect(false)
-    .setFilter(node => node.type === 'folder' || node.basename.toLowerCase().endsWith('.db'))
-    .setCanPick(node => node.type === 'file' && node.basename.toLowerCase().endsWith('.db'))
-    .setButtonFactory(([node]) => [{
-      label: node ? t('sheetmusic', 'Select {name}', { name: node.basename }, { escape: false }) : t('sheetmusic', 'Select .db file'),
-      callback: () => {},
-      disabled: !node || node.type !== 'file' || !node.basename.toLowerCase().endsWith('.db'),
-      variant: 'primary',
-    }])
-    .build()
   try {
-    ;[selectedDbFile.value] = await picker.pickNodes()
-  } catch (error) {
-    if (!(error instanceof FilePickerClosed)) {
-      importError.value = t('sheetmusic', 'Could not select a database file.')
-      showError(importError.value)
+    const picked = await pickSingleNextcloudNode({
+      title: t('sheetmusic', 'Select a MobileSheets database file'),
+      filter: node => node.type === 'folder' || node.basename.toLowerCase().endsWith('.db'),
+      canPick: node => node.type === 'file' && node.basename.toLowerCase().endsWith('.db'),
+      selectLabel: node => t('sheetmusic', 'Select {name}', { name: node.basename }, { escape: false }),
+      emptyLabel: t('sheetmusic', 'Select .db file'),
+    })
+    if (picked) {
+      selectedDbFile.value = picked
     }
+  } catch {
+    importError.value = t('sheetmusic', 'Could not select a database file.')
+    showError(importError.value)
   }
 }
 

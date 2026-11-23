@@ -1,6 +1,7 @@
 import type { INode } from '@nextcloud/files'
 import type { LibraryData, PendingAddition, PendingAttachment, PendingUpload, Song, SongFile } from '../../types/song'
-import { FilePickerClosed, getFilePickerBuilder, showError, showInfo } from '@nextcloud/dialogs'
+import { showError, showInfo } from '@nextcloud/dialogs'
+import { pickSingleNextcloudNode } from '../../utils/nextcloudFilePicker'
 import { translate as t } from '@nextcloud/l10n'
 import { computed, ref } from 'vue'
 import { apiPost } from '../../api/client'
@@ -165,32 +166,22 @@ export function useSongEditorFiles(options: UseSongEditorFilesOptions) {
 
 	async function openNextcloudPicker() {
 		options.onError('')
-		const picker = getFilePickerBuilder(t('sheetmusic', 'Select a file for this song'))
-			.setMultiSelect(false)
-			.setCanPick((node) => node.type === 'file')
-			.setButtonFactory(([node]) => [{
-				label: node
-					? t('sheetmusic', 'Select {file}', { file: node.basename }, { escape: false })
-					: t('sheetmusic', 'Select a file'),
-				callback: () => {},
-				disabled: !node || node.type !== 'file',
-				variant: 'primary',
-			}])
-			.build()
-
 		try {
-			const [picked] = await picker.pickNodes()
+			const picked = await pickSingleNextcloudNode({
+				title: t('sheetmusic', 'Select a file for this song'),
+				canPick: (node) => node.type === 'file',
+				selectLabel: (node) => t('sheetmusic', 'Select {file}', { file: node.basename }, { escape: false }),
+				emptyLabel: t('sheetmusic', 'Select a file'),
+			})
 			if (picked) {
 				selectedNextcloudNode.value = picked
 				attachAction.value = 'copy'
 				isAttachDialogOpen.value = true
 			}
-		} catch (error) {
-			if (!(error instanceof FilePickerClosed)) {
-				const msg = t('sheetmusic', 'Could not select a file from Nextcloud.')
-				options.onError(msg)
-				showError(msg)
-			}
+		} catch {
+			const msg = t('sheetmusic', 'Could not select a file from Nextcloud.')
+			options.onError(msg)
+			showError(msg)
 		}
 	}
 

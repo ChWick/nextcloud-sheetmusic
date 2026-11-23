@@ -84,7 +84,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { FilePickerClosed, getFilePickerBuilder, showError } from '@nextcloud/dialogs'
+import { showError } from '@nextcloud/dialogs'
 import { translate as t } from '@nextcloud/l10n'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 import FileDocumentOutlineIcon from 'vue-material-design-icons/FileDocumentOutline.vue'
@@ -95,6 +95,7 @@ import ResponsiveNcButton from '../ResponsiveNcButton.vue'
 import AttachNextcloudFileDialog from '../song-editor/AttachNextcloudFileDialog.vue'
 import type { SetlistFile } from '../../types/song'
 import { formatFileSize } from '../../utils/file'
+import { pickSingleNextcloudNode } from '../../utils/nextcloudFilePicker'
 
 const ALLOWED_EXTENSIONS = ['.pdf', '.docx', '.xlsx']
 
@@ -135,31 +136,21 @@ function isAllowedFilename(filename: string): boolean {
 }
 
 async function openNextcloudPicker() {
-	const picker = getFilePickerBuilder(t('sheetmusic', 'Select a file from Nextcloud'))
-		.setMultiSelect(false)
-		.setCanPick((node) => node.type === 'file' && isAllowedFilename(node.basename))
-		.setButtonFactory(([node]) => [{
-			label: node
-				? t('sheetmusic', 'Select {file}', { file: node.basename }, { escape: false })
-				: t('sheetmusic', 'Select a file'),
-			callback: () => {},
-			disabled: !node || node.type !== 'file' || !isAllowedFilename(node.basename),
-			variant: 'primary',
-		}])
-		.build()
-
 	try {
-		const [picked] = await picker.pickNodes()
+		const picked = await pickSingleNextcloudNode({
+			title: t('sheetmusic', 'Select a file from Nextcloud'),
+			canPick: (node) => node.type === 'file' && isAllowedFilename(node.basename),
+			selectLabel: (node) => t('sheetmusic', 'Select {file}', { file: node.basename }, { escape: false }),
+			emptyLabel: t('sheetmusic', 'Select a file'),
+		})
 		if (picked) {
 			selectedNodePath.value = picked.path
 			selectedNodeName.value = picked.basename
 			attachAction.value = 'copy'
 			isAttachDialogOpen.value = true
 		}
-	} catch (error) {
-		if (!(error instanceof FilePickerClosed)) {
-			showError(t('sheetmusic', 'Could not select a file from Nextcloud.'))
-		}
+	} catch {
+		showError(t('sheetmusic', 'Could not select a file from Nextcloud.'))
 	}
 }
 
