@@ -71,6 +71,35 @@ class SongFileService {
 		return null;
 	}
 
+	/**
+	 * Resolve a song file DB record and its backing Nextcloud File node.
+	 *
+	 * @return array{fileRecord: InternalSongFile, userFolder: Folder, node: File}
+	 */
+	private function resolveSongFileNode(IUser $user, int $fileId, int $songId = 0): array {
+		$fileRecord = $this->resolveSongFileRecord($fileId, $songId);
+		if ($fileRecord === null) {
+			throw new \InvalidArgumentException('Song file record not found');
+		}
+
+		$userFolder = $this->rootFolder->getUserFolder($user->getUID());
+		$nodes = $userFolder->getById($fileRecord->fileId);
+		if (empty($nodes) || !($nodes[0] instanceof Node)) {
+			throw new \RuntimeException('Nextcloud file node not found');
+		}
+
+		$targetNode = $nodes[0];
+		if (!($targetNode instanceof File)) {
+			throw new \RuntimeException('Target node is not a file');
+		}
+
+		return [
+			'fileRecord' => $fileRecord,
+			'userFolder' => $userFolder,
+			'node' => $targetNode,
+		];
+	}
+
 	public function importSongMetadata(?array $fileInfo, ?string $path, IUser $user): array {
 		$content = null;
 
@@ -140,22 +169,7 @@ class SongFileService {
 
 	public function updateSongFile(IUser $user, int $libraryId, int $songId, int $fileId, ?array $fileInfo): ?LibraryData {
 		$content = $this->readUploadedFileContent($fileInfo);
-
-		$fileRecord = $this->resolveSongFileRecord($fileId, $songId);
-		if ($fileRecord === null) {
-			throw new \InvalidArgumentException('Song file record not found');
-		}
-
-		$userFolder = $this->rootFolder->getUserFolder($user->getUID());
-		$nodes = $userFolder->getById($fileRecord->fileId);
-		if (empty($nodes) || !($nodes[0] instanceof Node)) {
-			throw new \RuntimeException('Nextcloud file node not found');
-		}
-
-		$targetNode = $nodes[0];
-		if (!($targetNode instanceof File)) {
-			throw new \RuntimeException('Target node is not a file');
-		}
+		['fileRecord' => $fileRecord, 'userFolder' => $userFolder, 'node' => $targetNode] = $this->resolveSongFileNode($user, $fileId, $songId);
 
 		$this->captureFileVersion($user, $userFolder, $targetNode, $fileId);
 
@@ -280,19 +294,9 @@ class SongFileService {
 	 * @return list<array{version: string, revision: int, timestamp: int, humanReadableTimestamp: string, size: int, name: string}>
 	 */
 	public function getSongFileVersions(IUser $user, int $fileId): array {
-		$fileRecord = $this->resolveSongFileRecord($fileId);
-		if ($fileRecord === null) {
-			return [];
-		}
-
-		$userFolder = $this->rootFolder->getUserFolder($user->getUID());
-		$nodes = $userFolder->getById($fileRecord->fileId);
-		if (empty($nodes) || !($nodes[0] instanceof Node)) {
-			return [];
-		}
-
-		$targetNode = $nodes[0];
-		if (!($targetNode instanceof \OCP\Files\File)) {
+		try {
+			['userFolder' => $userFolder, 'node' => $targetNode] = $this->resolveSongFileNode($user, $fileId);
+		} catch (\InvalidArgumentException|\RuntimeException) {
 			return [];
 		}
 
@@ -365,18 +369,7 @@ class SongFileService {
 	}
 
 	public function revertSongFileVersion(IUser $user, int $libraryId, int $songId, int $fileId, string|int $revision): ?LibraryData {
-		$fileRecord = $this->resolveSongFileRecord($fileId, $songId);
-		if ($fileRecord === null) {
-			throw new \InvalidArgumentException('Song file record not found');
-		}
-
-		$userFolder = $this->rootFolder->getUserFolder($user->getUID());
-		$nodes = $userFolder->getById($fileRecord->fileId);
-		if (empty($nodes) || !($nodes[0] instanceof Node)) {
-			throw new \RuntimeException('Nextcloud file node not found');
-		}
-
-		$targetNode = $nodes[0];
+		['fileRecord' => $fileRecord, 'userFolder' => $userFolder, 'node' => $targetNode] = $this->resolveSongFileNode($user, $fileId, $songId);
 		$relativePath = $userFolder->getRelativePath($targetNode->getPath());
 		if ($relativePath === null || $relativePath === false) {
 			throw new \RuntimeException('Cannot determine relative path for file');
