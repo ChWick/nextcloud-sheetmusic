@@ -191,6 +191,88 @@ class SongFileService {
 	}
 
 	/**
+	 * Save a merged PDF for a song, optionally delete the merged source PDFs,
+	 * and recompute all song file paths according to the library naming rules.
+	 *
+	 * @param list<int> $deleteFileIds
+	 */
+	public function mergeSongFiles(
+		IUser $user,
+		int $libraryId,
+		int $songId,
+		?array $fileInfo,
+		array $deleteFileIds = [],
+		?int $explicitPageCount = null,
+		?string $explicitPageOrder = null,
+	): ?LibraryData {
+		$content = $this->readUploadedFileContent($fileInfo);
+		$fileName = basename((string)($fileInfo['name'] ?? 'merged.pdf'));
+
+		$target = $this->resolveLibraryTarget($user, $libraryId);
+		if ($target === null) {
+			return null;
+		}
+		['userFolder' => $userFolder, 'libraryDir' => $libraryDir] = $target;
+
+		$desiredRelative = ($libraryDir === '' ? '' : $libraryDir . '/') . $fileName;
+		$targetRelative = $this->fileManager->uniqueRelativePath($userFolder, $desiredRelative);
+		$this->fileManager->ensureParentFolder($userFolder, $targetRelative);
+
+		$mergedFile = SheetMusicFileEventListener::runWithoutListener(
+			static fn () => $userFolder->newFile($targetRelative, $content)
+		);
+		$mergedPhysicalId = (int)$mergedFile->getId();
+
+		$targetLibraryId = $this->libraryService->getTargetLibraryId($libraryId);
+		$this->cleanupAutoIndexedStubForNewUpload($songId, $mergedPhysicalId);
+		$this->recordSongFile(
+			$songId,
+			$user,
+			$mergedFile,
+			$targetLibraryId,
+			$explicitPageCount,
+			$explicitPageOrder,
+			$content,
+			syncAfter: false,
+		);
+
+		foreach (array_unique($deleteFileIds) as $deleteId) {
+			$fileRecord = $this->resolveSongFileRecord($deleteId, $songId);
+			if ($fileRecord === null || $fileRecord->fileId === $mergedPhysicalId) {
+				continue;
+			}
+
+			$physicalId = $fileRecord->fileId;
+			$this->internalSongFileMapper->delete($fileRecord->id);
+
+			$others = $this->internalSongFileMapper->findByFileId($physicalId);
+			$activeOthers = array_filter(
+				$others,
+				fn (InternalSongFile $f) => $f->id !== $fileRecord->id && $f->deletedAt === null,
+			);
+			if (empty($activeOthers)) {
+				try {
+					$nodes = $userFolder->getById($physicalId);
+					if (!empty($nodes) && $nodes[0] instanceof Node) {
+						$nodes[0]->delete();
+					}
+				} catch (\Throwable $e) {
+					$this->logger->warning('Could not delete merged source physical file node', [
+						'fileId' => $physicalId,
+						'exception' => $e,
+					]);
+				}
+			}
+		}
+
+		$this->libraryMapper->touch($targetLibraryId);
+		$this->syncSongFiles($user, $songId, $targetLibraryId);
+		$this->recordSongFileHistory($songId, $user, 'Merged PDFs into: ' . $mergedFile->getName(), touchSong: true);
+
+		return $this->findLibraryDataForResponse($user, $libraryId);
+	}
+
+	/**
 	 * @return list<array{version: string, revision: int, timestamp: int, humanReadableTimestamp: string, size: int, name: string}>
 	 */
 	public function getSongFileVersions(IUser $user, int $fileId): array {
@@ -643,6 +725,7 @@ class SongFileService {
 		?int $explicitPageCount = null,
 		?string $explicitPageOrder = null,
 		?string $uploadedContent = null,
+		bool $syncAfter = true,
 	): void {
 		$fileSize = (int)$file->getSize();
 		$fileHash = null;
@@ -707,8 +790,10 @@ class SongFileService {
 			$this->internalSongFileMapper->insert($internalSongFile);
 		}
 
-		$this->libraryMapper->touch($libraryId);
-		$this->syncSongFiles($user, $songId, $libraryId);
+		if ($syncAfter) {
+			$this->libraryMapper->touch($libraryId);
+			$this->syncSongFiles($user, $songId, $libraryId);
+		}
 	}
 
 	/**

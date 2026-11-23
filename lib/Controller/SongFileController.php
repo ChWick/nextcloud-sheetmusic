@@ -122,6 +122,77 @@ class SongFileController extends OCSController {
 	}
 
 	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/libraries/{libraryId}/songs/{id}/file/merge')]
+	public function mergeSongFiles(int $id, int $libraryId): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		[$fileInfo, $errorResponse] = $this->validateUploadedFile('file');
+		if ($errorResponse !== null) {
+			return $errorResponse;
+		}
+
+		$pageCountParam = $this->request->getParam('pageCount');
+		$pageCount = $pageCountParam !== null && is_numeric($pageCountParam) ? (int)$pageCountParam : null;
+		$pageOrder = $this->request->getParam('pageOrder');
+		$pageOrder = is_string($pageOrder) && trim($pageOrder) !== '' ? trim($pageOrder) : null;
+
+		$rawDeleteIds = $this->request->getParam('deleteFileIds');
+		$deleteFileIds = [];
+		if (is_array($rawDeleteIds)) {
+			foreach ($rawDeleteIds as $rawId) {
+				if (is_numeric($rawId) && (int)$rawId > 0) {
+					$deleteFileIds[] = (int)$rawId;
+				}
+			}
+		} elseif (is_string($rawDeleteIds) && trim($rawDeleteIds) !== '') {
+			$decoded = json_decode($rawDeleteIds, true);
+			if (is_array($decoded)) {
+				foreach ($decoded as $rawId) {
+					if (is_numeric($rawId) && (int)$rawId > 0) {
+						$deleteFileIds[] = (int)$rawId;
+					}
+				}
+			} else {
+				foreach (explode(',', $rawDeleteIds) as $part) {
+					$part = trim($part);
+					if (is_numeric($part) && (int)$part > 0) {
+						$deleteFileIds[] = (int)$part;
+					}
+				}
+			}
+		}
+
+		try {
+			$result = $this->songFileService->mergeSongFiles(
+				$user,
+				$libraryId,
+				$id,
+				$fileInfo,
+				$deleteFileIds,
+				$pageCount,
+				$pageOrder,
+			);
+			if ($result === null) {
+				return new DataResponse([], Http::STATUS_NOT_FOUND);
+			}
+
+			return new DataResponse($result);
+		} catch (\InvalidArgumentException $e) {
+			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_BAD_REQUEST);
+		} catch (\Throwable $e) {
+			$this->songFileService->getLogger()->error('Failed to merge song files', [
+				'exception' => $e,
+				'songId' => $id,
+				'libraryId' => $libraryId,
+			]);
+			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	#[NoAdminRequired]
 	#[ApiRoute(verb: 'GET', url: '/api/libraries/{libraryId}/songs/{id}/file/{fileId}/versions')]
 	public function getSongFileVersions(int $id, int $fileId, int $libraryId): DataResponse {
 		$user = $this->userSession->getUser();

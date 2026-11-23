@@ -72,6 +72,11 @@ return [
 			'verb' => 'POST',
 		],
 		[
+			'name' => 'Api#mergeSongFiles',
+			'url' => '/api/libraries/{libraryId}/songs/{id}/file/merge',
+			'verb' => 'POST',
+		],
+		[
 			'name' => 'Api#getSongFileVersions',
 			'url' => '/api/libraries/{libraryId}/songs/{id}/file/{fileId}/versions',
 			'verb' => 'GET',

@@ -393,6 +393,13 @@ class ApiController extends OCSController {
 
 	#[NoAdminRequired]
 	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
+	#[ApiRoute(verb: 'POST', url: '/api/libraries/{libraryId}/songs/{id}/file/merge')]
+	public function mergeSongFiles(int $id, int $libraryId): DataResponse {
+		return $this->songFileController->mergeSongFiles($id, $libraryId);
+	}
+
+	#[NoAdminRequired]
+	#[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 	#[ApiRoute(verb: 'GET', url: '/api/libraries/{libraryId}/songs/{id}/file/{fileId}/versions')]
 	public function getSongFileVersions(int $id, int $fileId, int $libraryId): DataResponse {
 		return $this->songFileController->getSongFileVersions($id, $fileId, $libraryId);

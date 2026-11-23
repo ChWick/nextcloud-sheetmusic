@@ -775,4 +775,133 @@ final class SongFileServiceTest extends TestCase {
 		self::assertTrue($this->libraryFolder->nodeExists('Songs/Schubert/Schubert - Ave Maria.pdf'));
 		self::assertTrue($this->libraryFolder->nodeExists('Songs/Schubert/Schubert - Serenade.pdf'));
 	}
+
+	public function testMergeSongFilesDeletesOriginalsAndRecomputesPaths(): void {
+		$this->libraryMapper->setSettingsForUser('admin', $this->libraryId, autoPaths: true, namingRulePreset: SongPathNamingRule::PRESET_COMPOSER);
+
+		$composer = $this->entityMapper->insert(new InternalEntity(
+			id: null,
+			uuid: 'e-composer-merge-1',
+			libraryId: $this->libraryId,
+			type: 'composer',
+			name: 'Beethoven',
+		));
+		$song = $this->songMapper->insert(new InternalSong(
+			id: null,
+			uuid: 's-merge-1',
+			libraryId: $this->libraryId,
+			title: 'Moonlight Sonata',
+		));
+		$this->entityMapper->setSongEntitiesForType((int)$song->id, 'composer', [(int)$composer->id]);
+
+		$file1 = $this->libraryFolder->newFile('part1.pdf');
+		$file1->putContent('PDF_PART_1');
+		$this->createdUserNodes[] = $file1;
+		$sf1 = $this->songFileMapper->insert(new InternalSongFile(
+			id: null,
+			uuid: 'sf-merge-1',
+			songId: (int)$song->id,
+			fileId: (int)$file1->getId(),
+		));
+
+		$file2 = $this->libraryFolder->newFile('part2.pdf');
+		$file2->putContent('PDF_PART_2');
+		$this->createdUserNodes[] = $file2;
+		$sf2 = $this->songFileMapper->insert(new InternalSongFile(
+			id: null,
+			uuid: 'sf-merge-2',
+			songId: (int)$song->id,
+			fileId: (int)$file2->getId(),
+		));
+
+		$tmpPath = tempnam(sys_get_temp_dir(), 'merged_pdf_');
+		self::assertIsString($tmpPath);
+		file_put_contents($tmpPath, 'MERGED_PDF_CONTENT');
+
+		try {
+			$result = $this->service->mergeSongFiles(
+				$this->user,
+				$this->libraryId,
+				(int)$song->id,
+				['name' => 'Moonlight Sonata.pdf', 'tmp_name' => $tmpPath],
+				[(int)$sf1->id, (int)$sf2->id],
+				3,
+				'1-3',
+			);
+		} finally {
+			@unlink($tmpPath);
+		}
+
+		self::assertNotNull($result);
+		$remainingFiles = $this->songFileMapper->findAllForSong((int)$song->id);
+		self::assertCount(1, $remainingFiles);
+		self::assertFalse($this->libraryFolder->nodeExists('part1.pdf'));
+		self::assertFalse($this->libraryFolder->nodeExists('part2.pdf'));
+		self::assertTrue($this->libraryFolder->nodeExists('Songs/Beethoven/Beethoven - Moonlight Sonata.pdf'));
+		self::assertSame('MERGED_PDF_CONTENT', $this->libraryFolder->get('Songs/Beethoven/Beethoven - Moonlight Sonata.pdf')->getContent());
+	}
+
+	public function testMergeSongFilesKeepsOriginalsAndRecomputesAllPaths(): void {
+		$this->libraryMapper->setSettingsForUser('admin', $this->libraryId, autoPaths: true, namingRulePreset: SongPathNamingRule::PRESET_COMPOSER);
+
+		$composer = $this->entityMapper->insert(new InternalEntity(
+			id: null,
+			uuid: 'e-composer-merge-2',
+			libraryId: $this->libraryId,
+			type: 'composer',
+			name: 'Chopin',
+		));
+		$song = $this->songMapper->insert(new InternalSong(
+			id: null,
+			uuid: 's-merge-2',
+			libraryId: $this->libraryId,
+			title: 'Nocturne',
+		));
+		$this->entityMapper->setSongEntitiesForType((int)$song->id, 'composer', [(int)$composer->id]);
+
+		$file1 = $this->libraryFolder->newFile('raw1.pdf');
+		$file1->putContent('PDF_RAW_1');
+		$this->createdUserNodes[] = $file1;
+		$this->songFileMapper->insert(new InternalSongFile(
+			id: null,
+			uuid: 'sf-merge-k1',
+			songId: (int)$song->id,
+			fileId: (int)$file1->getId(),
+		));
+
+		$file2 = $this->libraryFolder->newFile('raw2.pdf');
+		$file2->putContent('PDF_RAW_2');
+		$this->createdUserNodes[] = $file2;
+		$this->songFileMapper->insert(new InternalSongFile(
+			id: null,
+			uuid: 'sf-merge-k2',
+			songId: (int)$song->id,
+			fileId: (int)$file2->getId(),
+		));
+
+		$tmpPath = tempnam(sys_get_temp_dir(), 'merged_keep_');
+		self::assertIsString($tmpPath);
+		file_put_contents($tmpPath, 'MERGED_KEEP_CONTENT');
+
+		try {
+			$result = $this->service->mergeSongFiles(
+				$this->user,
+				$this->libraryId,
+				(int)$song->id,
+				['name' => 'Nocturne.pdf', 'tmp_name' => $tmpPath],
+				[],
+				4,
+				'1-4',
+			);
+		} finally {
+			@unlink($tmpPath);
+		}
+
+		self::assertNotNull($result);
+		$allFiles = $this->songFileMapper->findAllForSong((int)$song->id);
+		self::assertCount(3, $allFiles);
+		self::assertTrue($this->libraryFolder->nodeExists('Songs/Chopin/001 Chopin - Nocturne.pdf'));
+		self::assertTrue($this->libraryFolder->nodeExists('Songs/Chopin/002 Chopin - Nocturne.pdf'));
+		self::assertTrue($this->libraryFolder->nodeExists('Songs/Chopin/003 Chopin - Nocturne.pdf'));
+	}
 }
