@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
+import { computed, nextTick, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
-import { cleanupPdfJsPage, destroyPdfJsDocument, getEffectivePageRotation, loadPdfJsDocument, releaseCanvas, releaseChildCanvases, renderPdfPageToCanvas, watchDevicePixelRatio } from '../utils/pdfjs'
+import { cleanupPdfJsPage, destroyPdfJsDocument, getEffectivePageRotation, loadPdfJsDocument, releaseCanvas, releaseChildCanvases, renderPdfPageToCanvas } from '../utils/pdfjs'
 import { isImageFile as checkIsImageFile, isPdfFile as checkIsPdfFile, openFileExternally } from '../utils/file'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import FilePreviewerToolbar from './file-preview/FilePreviewerToolbar.vue'
@@ -11,6 +11,7 @@ import XlsxPreviewPane, { type XlsxSheet } from './file-preview/XlsxPreviewPane.
 import { useAnnotationOverlayHost } from '../composables/useAnnotationOverlayHost'
 import { useFilePreviewZoom } from '../composables/useFilePreviewZoom'
 import { usePdfPageNavigation } from '../composables/usePdfPageNavigation'
+import { usePdfResizeObserver } from '../composables/usePdfResizeObserver'
 import { usePdfTouchZoom } from '../composables/usePdfTouchZoom'
 import { useStylusSettings } from '../composables/useStylusSettings'
 import { fetchCachedBinaryFile } from '../utils/file-binary'
@@ -665,10 +666,7 @@ async function loadAndRenderFile() {
 		await nextTick()
 		if (loadId !== currentLoadId) return
 
-		if (pdfContainer.value) {
-			lastObservedWidth = pdfContainer.value.clientWidth
-			lastObservedHeight = pdfContainer.value.clientHeight
-		}
+		syncObservedSize()
 
 		// If the document is large (>30 pages) and caller didn't specify a paged/auto layout, default to single page
 		if (pdf.numPages > 30 && props.initialPageLayout === 'continuous') {
@@ -703,67 +701,16 @@ function handleImageError() {
 	errorMessage.value = t('sheetmusic', 'Missing file: The file does not exist on the file system.')
 }
 
-let resizeObserver: ResizeObserver | null = null
-let resizeDebounceTimer: ReturnType<typeof setTimeout> | null = null
-let lastObservedWidth = 0
-let lastObservedHeight = 0
-
-let forceNextResizeRerender = false
-
-function scheduleRerender(force = false) {
-	if (!force && !(autoLayout.value || zoomMode.value === 'fit-width' || zoomMode.value === 'fit-page')) {
-		return
-	}
-	if (force) {
-		forceNextResizeRerender = true
-	}
-	if (resizeDebounceTimer !== null) {
-		clearTimeout(resizeDebounceTimer)
-	}
-	resizeDebounceTimer = setTimeout(() => {
-		const shouldForce = forceNextResizeRerender
-		forceNextResizeRerender = false
-		resizeDebounceTimer = null
-		const el = pdfContainer.value
-		if (el) {
-			const w = el.clientWidth
-			const h = el.clientHeight
-			if (!shouldForce && w === lastObservedWidth && h === lastObservedHeight) {
-				return
-			}
-			lastObservedWidth = w
-			lastObservedHeight = h
-		}
-		if (loadedPdf.value) {
-			renderCurrentView()
-		}
-	}, 150)
-}
-
-function handleResize() {
-	scheduleRerender(false)
-}
-
-let stopWatchingDpr: (() => void) | null = null
-
-onMounted(() => {
-	window.addEventListener('resize', handleResize)
-	stopWatchingDpr = watchDevicePixelRatio(() => {
-		scheduleRerender(true)
-	})
-	if (typeof ResizeObserver !== 'undefined' && pdfContainer.value) {
-		lastObservedWidth = pdfContainer.value.clientWidth
-		lastObservedHeight = pdfContainer.value.clientHeight
-		resizeObserver = new ResizeObserver(() => {
-			handleResize()
-		})
-		resizeObserver.observe(pdfContainer.value)
-	}
+const { syncObservedSize } = usePdfResizeObserver({
+	containerRef: pdfContainer,
+	shouldRerenderOnResize: () => autoLayout.value || zoomMode.value === 'fit-width' || zoomMode.value === 'fit-page',
+	canRerender: () => Boolean(loadedPdf.value),
+	onRerender: () => {
+		renderCurrentView()
+	},
 })
 
 onUnmounted(() => {
-	stopWatchingDpr?.()
-	stopWatchingDpr = null
 	unmountAnnotationOverlays()
 	cleanupObserver()
 	releaseChildCanvases(pdfStage.value)
@@ -775,15 +722,6 @@ onUnmounted(() => {
 		void destroyPdfJsDocument(loadedNextPdf.value)
 		loadedNextPdf.value = null
 		loadedNextPdfPath = ''
-	}
-	window.removeEventListener('resize', handleResize)
-	if (resizeDebounceTimer !== null) {
-		clearTimeout(resizeDebounceTimer)
-		resizeDebounceTimer = null
-	}
-	if (resizeObserver) {
-		resizeObserver.disconnect()
-		resizeObserver = null
 	}
 })
 
