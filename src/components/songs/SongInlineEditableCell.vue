@@ -1,3 +1,21 @@
+<script lang="ts">
+import { ref as vueRef } from 'vue'
+
+const TOUCH_PRIMARY_QUERY = '(hover: none), (pointer: coarse)'
+const isTouchPrimary = vueRef(false)
+
+if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+	const mql = window.matchMedia(TOUCH_PRIMARY_QUERY)
+	isTouchPrimary.value = mql.matches
+	const onMediaChange = (event: MediaQueryListEvent) => {
+		isTouchPrimary.value = event.matches
+	}
+	if (typeof mql.addEventListener === 'function') {
+		mql.addEventListener('change', onMediaChange)
+	}
+}
+</script>
+
 <script setup lang="ts">
 import { translate as t } from '@nextcloud/l10n'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
@@ -132,7 +150,7 @@ function handleDblClick(event: MouseEvent) {
 }
 
 async function startEdit() {
-	if (props.canWrite === false) return
+	if (props.canWrite === false || isTouchPrimary.value) return
 	if (isEditing.value) return
 	isEditing.value = true
 	if (props.mode === 'select') {
@@ -335,7 +353,7 @@ defineExpose({
 				</span>
 			</slot>
 			<button
-				v-if="canWrite !== false"
+				v-if="canWrite !== false && !isTouchPrimary"
 				type="button"
 				:class="[$style.inlineEditTrigger, 'sheetmusic-inline-edit-trigger']"
 				:data-test="`inline-edit-${field}-btn`"
@@ -421,7 +439,8 @@ defineExpose({
 
 @media (hover: none), (pointer: coarse) {
 	.inlineEditTrigger {
-		display: none;
+		/* stylelint-disable-next-line declaration-no-important -- ensure Nextcloud global button styles cannot override */
+		display: none !important;
 	}
 }
 
