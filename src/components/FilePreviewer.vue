@@ -29,6 +29,12 @@ import {
 } from '../utils/pdf-layout'
 import { observeContinuousPdfPages } from '../utils/pdf-continuous-renderer'
 import {
+	applyStageLayoutStyles,
+	createContinuousPagePlaceholder,
+	createDoublePageSlot,
+	createPagePlaceholder,
+} from '../utils/pdf-stage-dom'
+import {
 	type DoublePageTurnMode,
 	getDoubleSpreadForPage,
 	getInitialDoubleSpread,
@@ -401,20 +407,11 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 		unmountAnnotationOverlays()
 		releaseChildCanvases(pdfStage.value)
 		onBeforeSwap?.()
-		pdfStage.value.style.gap = nextStageGap
-		if (isDoubleLayout && children.length === 2) {
-			pdfStage.value.style.display = 'grid'
-			pdfStage.value.style.gridTemplateColumns = 'repeat(2, minmax(0, 1fr))'
-			pdfStage.value.style.alignItems = 'center'
-			pdfStage.value.style.justifyItems = 'center'
-			pdfStage.value.style.width = zoomMode.value === 'custom' ? 'max-content' : '100%'
-		} else {
-			pdfStage.value.style.display = ''
-			pdfStage.value.style.gridTemplateColumns = ''
-			pdfStage.value.style.alignItems = ''
-			pdfStage.value.style.justifyItems = ''
-			pdfStage.value.style.width = ''
-		}
+		applyStageLayoutStyles(pdfStage.value, {
+			gap: nextStageGap,
+			isDoubleTwoPage: isDoubleLayout && children.length === 2,
+			isCustomZoom: zoomMode.value === 'custom',
+		})
 		pdfStage.value.replaceChildren(...children)
 	}
 
@@ -422,31 +419,14 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 		if (typeof IntersectionObserver === 'undefined') {
 			swapStageContent([])
 			for (const item of pagesToRender) {
-				const placeholder = document.createElement('div')
-				placeholder.className = 'sheetmusic-page-placeholder'
-				placeholder.dataset.pageNum = String(item.pageNum)
-				placeholder.dataset.pageIndex = String(item.index)
+				const placeholder = createPagePlaceholder(item, 'sheetmusic-page-placeholder')
 				pdfStage.value.append(placeholder)
 				await renderPage(item.pageNum, placeholder)
 			}
 			return
 		}
 
-		const placeholders = pagesToRender.map((item) => {
-			const placeholder = document.createElement('div')
-			placeholder.className = 'sheetmusic-page-placeholder'
-			placeholder.dataset.pageNum = String(item.pageNum)
-			placeholder.dataset.pageIndex = String(item.index)
-			// Estimated placeholder size to stabilize scroll bar
-			placeholder.style.minWidth = '200px'
-			placeholder.style.minHeight = `${Math.round(800 * (effectiveScale.value / 1.25))}px`
-			placeholder.style.display = 'flex'
-			placeholder.style.justifyContent = 'center'
-			placeholder.style.alignItems = 'center'
-			placeholder.style.backgroundColor = '#ffffff'
-			placeholder.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.15)'
-			return placeholder
-		})
+		const placeholders = pagesToRender.map((item) => createContinuousPagePlaceholder(item, effectiveScale.value))
 
 		// Render the first page and pages around currentPage off-DOM so visible pages have
 		// real dimensions before the atomic DOM swap (avoiding placeholder->canvas flicker).
@@ -482,58 +462,22 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 			},
 		})
 	} else if (isDoubleLayout) {
-		// Double page mode: wrap each page in an equal 50% slot so each page
-		// strictly occupies half the stage and never crosses the midline or shifts across turns.
-		const newSlots: HTMLElement[] = []
-		const newPlaceholders: HTMLElement[] = []
 		const isTwoPageSpread = pagesToRender.length === 2
-		for (const item of pagesToRender) {
-			const slot = document.createElement('div')
-			slot.className = 'sheetmusic-double-slot'
-			slot.style.display = 'flex'
-			slot.style.justifyContent = 'center'
-			slot.style.alignItems = 'center'
-			slot.style.boxSizing = 'border-box'
-			slot.style.minWidth = '0'
-			if (isTwoPageSpread) {
-				slot.style.width = '100%'
-				if (zoomMode.value !== 'custom') {
-					slot.style.maxWidth = `${doubleSlotW}px`
-					slot.style.overflow = 'hidden'
-				}
-			} else if (zoomMode.value === 'custom') {
-				slot.style.minWidth = `${doubleSlotW}px`
-				slot.style.flex = '0 0 auto'
-			} else {
-				slot.style.width = `${doubleSlotW}px`
-				slot.style.maxWidth = `${doubleSlotW}px`
-				slot.style.flex = `0 0 ${doubleSlotW}px`
-				slot.style.overflow = 'hidden'
-			}
-
-			const placeholder = document.createElement('div')
-			placeholder.dataset.pageNum = String(item.pageNum)
-			placeholder.dataset.pageIndex = String(item.index)
-			slot.appendChild(placeholder)
-
-			newSlots.push(slot)
-			newPlaceholders.push(placeholder)
-		}
+		const slotPairs = pagesToRender.map((item) => createDoublePageSlot(item, {
+			doubleSlotW,
+			isTwoPageSpread,
+			isCustomZoom: zoomMode.value === 'custom',
+		}))
 		await Promise.all(
-			pagesToRender.map((item, idx) => renderPage(item.pageNum, newPlaceholders[idx], Boolean(item.isNextFile))),
+			pagesToRender.map((item, idx) => renderPage(item.pageNum, slotPairs[idx].placeholder, Boolean(item.isNextFile))),
 		)
 		if (renderId !== currentRenderId || !pdfContainer.value || !pdfStage.value) {
 			return
 		}
-		swapStageContent(newSlots)
+		swapStageContent(slotPairs.map((pair) => pair.slot))
 	} else {
 		// Single page mode: render off-DOM first, then swap atomically to avoid flicker
-		const newPlaceholders = pagesToRender.map((item) => {
-			const placeholder = document.createElement('div')
-			placeholder.dataset.pageNum = String(item.pageNum)
-			placeholder.dataset.pageIndex = String(item.index)
-			return placeholder
-		})
+		const newPlaceholders = pagesToRender.map((item) => createPagePlaceholder(item))
 		await Promise.all(
 			pagesToRender.map((item, idx) => renderPage(item.pageNum, newPlaceholders[idx], Boolean(item.isNextFile))),
 		)
