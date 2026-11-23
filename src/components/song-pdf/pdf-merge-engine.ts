@@ -21,7 +21,7 @@ export interface MergePageEntry {
 	rotation: number
 }
 
-export type MergeOriginalsAction = 'replace-and-delete' | 'replace-and-detach' | 'keep-all-new-file'
+export type MergeOriginalsAction = 'delete-originals' | 'keep-originals'
 
 export const SOURCE_FILE_COLORS = [
 	'#0082c9',
@@ -182,7 +182,7 @@ export function buildMergedFileName(songTitle: string, fallbackName = 'merged.pd
 	if (!sanitized) {
 		return fallbackName
 	}
-	return `${sanitized} (merged).pdf`
+	return `${sanitized}.pdf`
 }
 
 /**

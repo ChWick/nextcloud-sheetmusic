@@ -27,6 +27,10 @@ export function uploadSongFile(
 	})
 }
 
+export interface MergeSongFilesOptions extends UploadSongFileOptions {
+	deleteFileIds?: Array<number | string>
+}
+
 /**
  * Replaces an existing song file in-place (triggering Nextcloud file versioning).
  */
@@ -40,5 +44,31 @@ export function updateSongFile(
 	formData.append('file', file)
 	return (apiPost as any)('/api/libraries/{libraryId}/songs/{id}/file/{fileId}/update', formData, {
 		pathParams: { libraryId, id: songId, fileId },
+	})
+}
+
+/**
+ * Saves a merged PDF for a song, optionally deletes the merged source PDFs,
+ * and recomputes all song file paths according to library naming rules.
+ */
+export function mergeSongFiles(
+	libraryId: number,
+	songId: number,
+	file: File,
+	options?: MergeSongFilesOptions,
+) {
+	const formData = new FormData()
+	formData.append('file', file)
+	if (options?.deleteFileIds && options.deleteFileIds.length > 0) {
+		formData.append('deleteFileIds', JSON.stringify(options.deleteFileIds.map((id) => Number(id))))
+	}
+	if (options?.pageCount !== undefined) {
+		formData.append('pageCount', String(options.pageCount))
+	}
+	if (options?.pageOrder !== undefined) {
+		formData.append('pageOrder', options.pageOrder)
+	}
+	return (apiPost as any)('/api/libraries/{libraryId}/songs/{id}/file/merge', formData, {
+		pathParams: { libraryId, id: songId },
 	})
 }

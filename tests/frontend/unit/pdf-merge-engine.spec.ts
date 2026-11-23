@@ -91,7 +91,7 @@ describe('pdf-merge-engine', () => {
 	})
 
 	it('builds sanitized merged file names and deterministic source colors', () => {
-		expect(buildMergedFileName('Sonata / No. 1?')).toBe('Sonata - No. 1- (merged).pdf')
+		expect(buildMergedFileName('Sonata / No. 1?')).toBe('Sonata - No. 1-.pdf')
 		expect(buildMergedFileName('   ')).toBe('merged.pdf')
 		expect(getSourceFileColor(0)).toMatch(/^#/)
 		expect(getSourceFileColor(8)).toBe(getSourceFileColor(0))

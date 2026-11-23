@@ -12,7 +12,6 @@ import { showError, showSuccess } from '@nextcloud/dialogs'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
-import NcTextField from '@nextcloud/vue/components/NcTextField'
 import ArrowDown from 'vue-material-design-icons/ArrowDown.vue'
 import ArrowLeft from 'vue-material-design-icons/ArrowLeft.vue'
 import ArrowRight from 'vue-material-design-icons/ArrowRight.vue'
@@ -27,8 +26,7 @@ import MergeIcon from 'vue-material-design-icons/Merge.vue'
 import Restore from 'vue-material-design-icons/Restore.vue'
 import RotateLeft from 'vue-material-design-icons/RotateLeft.vue'
 import RotateRight from 'vue-material-design-icons/RotateRight.vue'
-import { apiPost } from '../../api/client'
-import { updateSongFile, uploadSongFile } from '../../api/songFiles'
+import { mergeSongFiles } from '../../api/songFiles'
 import { describeRequestFailure } from '../../utils/api'
 import { getCacheBustedFileUrl, getFileName, toUint8Array } from '../../utils/file'
 import { cleanupPdfJsPage, destroyPdfJsDocument, loadPdfJsDocument, releaseCanvas, renderPdfPageToCanvas } from '../../utils/pdfjs'
@@ -78,8 +76,7 @@ const pdfJsDocs = shallowRef<Map<number | string, any>>(new Map())
 const mergePages = ref<MergePageEntry[]>([])
 const thumbnails = ref<Record<string, string>>({})
 
-const originalsAction = ref<MergeOriginalsAction>('replace-and-delete')
-const outputFileName = ref('')
+const originalsAction = ref<MergeOriginalsAction>('delete-originals')
 
 // Card width zoom controls
 const DEFAULT_CARD_WIDTH = 156
@@ -118,13 +115,10 @@ function thumbKey(fileId: number | string, pageNum: number): string {
 
 const includedSources = computed(() => loadedSources.value.filter((s) => s.included))
 
-const firstIncludedSource = computed(() => includedSources.value[0] ?? null)
-
 const canSubmit = computed(() => {
 	if (isLoading.value || isSaving.value) return false
 	if (includedSources.value.length < 2) return false
 	if (mergePages.value.length === 0) return false
-	if (originalsAction.value === 'keep-all-new-file' && !outputFileName.value.trim()) return false
 	return true
 })
 
@@ -207,8 +201,7 @@ async function loadAllPdfs() {
 	mergePages.value = []
 	thumbnails.value = {}
 	highResCache.value = {}
-	outputFileName.value = buildMergedFileName(props.song.title)
-	originalsAction.value = 'replace-and-delete'
+	originalsAction.value = 'delete-originals'
 
 	await disposeLoadedDocs()
 
@@ -471,55 +464,21 @@ async function handleMerge() {
 		)
 
 		const pageCount = mergePages.value.length
-		let finalLibraryData: LibraryData | null = null
+		const fileName = buildMergedFileName(props.song.title)
+		const mergedFile = new File([mergedBytes as Uint8Array<ArrayBuffer>], fileName, { type: 'application/pdf' })
+		const deleteFileIds = originalsAction.value === 'delete-originals'
+			? includedSources.value.map((s) => s.fileId)
+			: []
 
-		if (originalsAction.value === 'keep-all-new-file') {
-			let fileName = outputFileName.value.trim() || buildMergedFileName(props.song.title)
-			if (!fileName.toLowerCase().endsWith('.pdf')) {
-				fileName += '.pdf'
-			}
-			const mergedFile = new File([mergedBytes as Uint8Array<ArrayBuffer>], fileName, { type: 'application/pdf' })
-			saveProgressPercent.value = 80
-			saveProgressText.value = t('sheetmusic', 'Uploading merged PDF…')
-			const uploadRes = await uploadSongFile(props.libraryId, props.song.id, mergedFile, {
-				pageCount,
-				pageOrder: pageCount === 1 ? '1' : `1-${pageCount}`,
-			})
-			finalLibraryData = uploadRes.data.ocs.data as LibraryData
-		} else {
-			const primary = firstIncludedSource.value
-			if (!primary) {
-				throw new Error(t('sheetmusic', 'No target PDF selected.'))
-			}
-			const others = includedSources.value.slice(1)
-			const targetFileName = primary.fileName || 'merged.pdf'
-			const mergedFile = new File([mergedBytes as Uint8Array<ArrayBuffer>], targetFileName, { type: 'application/pdf' })
+		saveProgressPercent.value = 80
+		saveProgressText.value = t('sheetmusic', 'Saving merged PDF and updating file paths…')
 
-			saveProgressPercent.value = 75
-			saveProgressText.value = t('sheetmusic', 'Updating {file}…', { file: targetFileName }, { escape: false })
-			const updateRes = await updateSongFile(props.libraryId, props.song.id, primary.fileId, mergedFile)
-			finalLibraryData = updateRes.data.ocs.data as LibraryData
-
-			const cleanupEndpoint = originalsAction.value === 'replace-and-delete'
-				? '/api/songs/{id}/file/{fileId}/delete'
-				: '/api/songs/{id}/file/{fileId}/detach'
-
-			for (let i = 0; i < others.length; i++) {
-				const other = others[i]
-				saveProgressPercent.value = Math.round(80 + ((i + 1) / Math.max(1, others.length)) * 18)
-				saveProgressText.value = originalsAction.value === 'replace-and-delete'
-					? t('sheetmusic', 'Deleting {file}…', { file: other.fileName }, { escape: false })
-					: t('sheetmusic', 'Detaching {file}…', { file: other.fileName }, { escape: false })
-				const res = await apiPost(cleanupEndpoint, {
-					libraryId: props.libraryId,
-				}, {
-					pathParams: { id: props.song.id, fileId: Number(other.fileId) },
-				})
-				if (res.data?.ocs?.data) {
-					finalLibraryData = res.data.ocs.data as LibraryData
-				}
-			}
-		}
+		const mergeRes = await mergeSongFiles(props.libraryId, props.song.id, mergedFile, {
+			deleteFileIds,
+			pageCount,
+			pageOrder: pageCount === 1 ? '1' : `1-${pageCount}`,
+		})
+		const finalLibraryData = (mergeRes.data?.ocs?.data as LibraryData) ?? null
 
 		saveProgressPercent.value = 100
 		saveProgressText.value = t('sheetmusic', 'Done!')
@@ -847,64 +806,38 @@ async function handleMerge() {
 						{{ t('sheetmusic', 'Original PDF files') }}
 					</div>
 					<div :class="$style.radioGroup" role="radiogroup" :aria-label="t('sheetmusic', 'Original PDF files handling')">
-						<label :class="[$style.radioOption, originalsAction === 'replace-and-delete' && $style.radioOptionActive]">
+						<label :class="[$style.radioOption, originalsAction === 'delete-originals' && $style.radioOptionActive]">
 							<input
 								v-model="originalsAction"
 								type="radio"
 								name="mergeOriginalsAction"
-								value="replace-and-delete"
+								value="delete-originals"
 								:disabled="isSaving"
-								data-test="merge-action-replace-delete">
+								data-test="merge-action-delete-originals">
 							<div>
 								<div :class="$style.radioLabel">
-									{{ t('sheetmusic', 'Replace "{file}" and delete other merged PDFs', { file: firstIncludedSource?.fileName ?? 'PDF' }, { escape: false }) }}
+									{{ t('sheetmusic', 'Delete original merged PDFs') }}
 								</div>
 								<div :class="$style.radioHint">
-									{{ t('sheetmusic', 'Updates the first selected PDF in-place (preserving file history) and moves the other merged PDFs to trash.') }}
+									{{ t('sheetmusic', 'Saves the merged PDF, deletes the selected original PDFs, and updates file paths according to library naming rules.') }}
 								</div>
 							</div>
 						</label>
 
-						<label :class="[$style.radioOption, originalsAction === 'replace-and-detach' && $style.radioOptionActive]">
+						<label :class="[$style.radioOption, originalsAction === 'keep-originals' && $style.radioOptionActive]">
 							<input
 								v-model="originalsAction"
 								type="radio"
 								name="mergeOriginalsAction"
-								value="replace-and-detach"
+								value="keep-originals"
 								:disabled="isSaving"
-								data-test="merge-action-replace-detach">
+								data-test="merge-action-keep-originals">
 							<div>
 								<div :class="$style.radioLabel">
-									{{ t('sheetmusic', 'Replace "{file}" and detach other merged PDFs', { file: firstIncludedSource?.fileName ?? 'PDF' }, { escape: false }) }}
+									{{ t('sheetmusic', 'Keep original PDFs') }}
 								</div>
 								<div :class="$style.radioHint">
-									{{ t('sheetmusic', 'Updates the first selected PDF in-place and detaches the other merged PDFs (keeping them in Nextcloud storage).') }}
-								</div>
-							</div>
-						</label>
-
-						<label :class="[$style.radioOption, originalsAction === 'keep-all-new-file' && $style.radioOptionActive]">
-							<input
-								v-model="originalsAction"
-								type="radio"
-								name="mergeOriginalsAction"
-								value="keep-all-new-file"
-								:disabled="isSaving"
-								data-test="merge-action-keep-new">
-							<div :class="$style.radioOptionBody">
-								<div :class="$style.radioLabel">
-									{{ t('sheetmusic', 'Save as a new PDF file and keep all originals') }}
-								</div>
-								<div :class="$style.radioHint">
-									{{ t('sheetmusic', 'Adds the merged PDF as a new attached file without modifying or removing existing files.') }}
-								</div>
-								<div v-if="originalsAction === 'keep-all-new-file'" :class="$style.fileNameInputWrap" @click.stop>
-									<NcTextField
-										v-model="outputFileName"
-										:label="t('sheetmusic', 'Merged PDF filename')"
-										:placeholder="t('sheetmusic', 'e.g. Song (merged).pdf')"
-										:disabled="isSaving"
-										data-test="merge-output-filename" />
+									{{ t('sheetmusic', 'Adds the merged PDF alongside the original PDFs and updates file paths according to library naming rules.') }}
 								</div>
 							</div>
 						</label>
@@ -1309,11 +1242,6 @@ async function handleMerge() {
 	background: var(--color-background-hover);
 }
 
-.radioOptionBody {
-	flex: 1 1 0;
-	min-width: 0;
-}
-
 .radioLabel {
 	font-size: 0.875rem;
 	font-weight: 600;
@@ -1324,10 +1252,5 @@ async function handleMerge() {
 	font-size: 0.78rem;
 	color: var(--color-text-maxcontrast);
 	margin-top: 2px;
-}
-
-.fileNameInputWrap {
-	margin-top: 8px;
-	max-width: 380px;
 }
 </style>

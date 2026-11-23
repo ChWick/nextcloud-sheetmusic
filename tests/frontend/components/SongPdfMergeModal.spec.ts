@@ -4,7 +4,6 @@ import { PDFDocument } from 'pdf-lib'
 import axios from '@nextcloud/axios'
 import SongPdfMergeModal from '../../../src/components/song-pdf/SongPdfMergeModal.vue'
 import * as songFilesApi from '../../../src/api/songFiles'
-import * as apiClient from '../../../src/api/client'
 import type { LibraryData, Song, SongFile } from '../../../src/types/song'
 
 vi.mock('@nextcloud/axios', () => ({
@@ -49,12 +48,7 @@ vi.mock('../../../src/utils/pdfjs', () => ({
 }))
 
 vi.mock('../../../src/api/songFiles', () => ({
-	updateSongFile: vi.fn(),
-	uploadSongFile: vi.fn(),
-}))
-
-vi.mock('../../../src/api/client', () => ({
-	apiPost: vi.fn(),
+	mergeSongFiles: vi.fn(),
 }))
 
 async function makePdfBytes(pageCount: number): Promise<Uint8Array> {
@@ -131,13 +125,7 @@ describe('SongPdfMergeModal.vue', () => {
 			.mockResolvedValueOnce(makeFakePdfJsDoc(2))
 			.mockResolvedValueOnce(makeFakePdfJsDoc(1))
 
-		vi.mocked(songFilesApi.updateSongFile).mockResolvedValue({
-			data: { ocs: { data: mockLibraryData } },
-		} as any)
-		vi.mocked(songFilesApi.uploadSongFile).mockResolvedValue({
-			data: { ocs: { data: mockLibraryData } },
-		} as any)
-		vi.mocked(apiClient.apiPost).mockResolvedValue({
+		vi.mocked(songFilesApi.mergeSongFiles).mockResolvedValue({
 			data: { ocs: { data: mockLibraryData } },
 		} as any)
 	})
@@ -182,7 +170,7 @@ describe('SongPdfMergeModal.vue', () => {
 		expect(wrapper.find('[data-test="merge-source-102"]').text()).toContain('Part2.pdf')
 	})
 
-	it('merges by replacing first PDF and deleting other merged PDFs by default', async () => {
+	it('merges and deletes all selected original PDFs by default', async () => {
 		const wrapper = mount(SongPdfMergeModal, {
 			props: {
 				open: true,
@@ -198,25 +186,23 @@ describe('SongPdfMergeModal.vue', () => {
 		await wrapper.find('[data-test="merge-pdfs-submit"]').trigger('click')
 		await flushPromises()
 
-		expect(songFilesApi.updateSongFile).toHaveBeenCalledTimes(1)
-		expect(songFilesApi.updateSongFile).toHaveBeenCalledWith(
+		expect(songFilesApi.mergeSongFiles).toHaveBeenCalledTimes(1)
+		expect(songFilesApi.mergeSongFiles).toHaveBeenCalledWith(
 			3,
 			7,
-			101,
 			expect.any(File),
-		)
-
-		expect(apiClient.apiPost).toHaveBeenCalledWith(
-			'/api/songs/{id}/file/{fileId}/delete',
-			{ libraryId: 3 },
-			{ pathParams: { id: 7, fileId: 102 } },
+			{
+				deleteFileIds: [101, 102],
+				pageCount: 3,
+				pageOrder: '1-3',
+			},
 		)
 
 		expect(wrapper.emitted('merged')?.[0]).toEqual([mockLibraryData])
 		expect(wrapper.emitted('update:open')?.[0]).toEqual([false])
 	})
 
-	it('supports replace-and-detach mode', async () => {
+	it('supports keep-originals mode without deleting original PDFs', async () => {
 		const wrapper = mount(SongPdfMergeModal, {
 			props: {
 				open: true,
@@ -229,42 +215,20 @@ describe('SongPdfMergeModal.vue', () => {
 
 		await flushPromises()
 
-		await wrapper.find('[data-test="merge-action-replace-detach"]').setValue(true)
+		await wrapper.find('[data-test="merge-action-keep-originals"]').setValue(true)
 		await wrapper.find('[data-test="merge-pdfs-submit"]').trigger('click')
 		await flushPromises()
 
-		expect(songFilesApi.updateSongFile).toHaveBeenCalledTimes(1)
-		expect(apiClient.apiPost).toHaveBeenCalledWith(
-			'/api/songs/{id}/file/{fileId}/detach',
-			{ libraryId: 3 },
-			{ pathParams: { id: 7, fileId: 102 } },
-		)
-	})
-
-	it('supports keep-all-new-file mode by uploading a new PDF', async () => {
-		const wrapper = mount(SongPdfMergeModal, {
-			props: {
-				open: true,
-				song: mockSong,
-				libraryId: 3,
-				pdfFiles: [pdfFile1, pdfFile2],
-			},
-			global: { stubs },
-		})
-
-		await flushPromises()
-
-		await wrapper.find('[data-test="merge-action-keep-new"]').setValue(true)
-		await wrapper.find('[data-test="merge-pdfs-submit"]').trigger('click')
-		await flushPromises()
-
-		expect(songFilesApi.updateSongFile).not.toHaveBeenCalled()
-		expect(apiClient.apiPost).not.toHaveBeenCalled()
-		expect(songFilesApi.uploadSongFile).toHaveBeenCalledWith(
+		expect(songFilesApi.mergeSongFiles).toHaveBeenCalledTimes(1)
+		expect(songFilesApi.mergeSongFiles).toHaveBeenCalledWith(
 			3,
 			7,
 			expect.any(File),
-			{ pageCount: 3, pageOrder: '1-3' },
+			{
+				deleteFileIds: [],
+				pageCount: 3,
+				pageOrder: '1-3',
+			},
 		)
 	})
 
