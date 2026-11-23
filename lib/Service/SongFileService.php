@@ -165,16 +165,7 @@ class SongFileService {
 			$targetNode->putContent($content);
 		});
 
-		$fileRecord->fileSize = strlen($content);
-		$ext = strtolower(pathinfo($targetNode->getName(), PATHINFO_EXTENSION));
-		if ($ext === 'pdf') {
-			$facts = $this->extractPdfFacts($content, $targetNode->getName());
-			$fileRecord->fileHash = $facts['fileHash'];
-			$fileRecord->pageCount = $facts['pageCount'];
-			$fileRecord->pageOrder = $facts['pageOrder'];
-		}
-		$fileRecord->updatedAt = time();
-		$this->internalSongFileMapper->update($fileRecord);
+		$this->refreshSongFileRecordFacts($fileRecord, $targetNode->getName(), $content);
 
 		$targetLibraryId = $this->libraryService->getTargetLibraryId($libraryId);
 		$this->libraryMapper->touch($targetLibraryId);
@@ -437,16 +428,7 @@ class SongFileService {
 		if ($targetNode instanceof \OCP\Files\File) {
 			$revertedContent = MobileSheetsFileFacts::readFileContent($targetNode);
 			if ($revertedContent !== '') {
-				$fileRecord->fileSize = strlen($revertedContent);
-				$ext = strtolower(pathinfo($targetNode->getName(), PATHINFO_EXTENSION));
-				if ($ext === 'pdf') {
-					$facts = $this->extractPdfFacts($revertedContent, $targetNode->getName());
-					$fileRecord->fileHash = $facts['fileHash'];
-					$fileRecord->pageCount = $facts['pageCount'];
-					$fileRecord->pageOrder = $facts['pageOrder'];
-				}
-				$fileRecord->updatedAt = time();
-				$this->internalSongFileMapper->update($fileRecord);
+				$this->refreshSongFileRecordFacts($fileRecord, $targetNode->getName(), $revertedContent);
 			}
 		}
 
@@ -1011,6 +993,19 @@ class SongFileService {
 				}
 			}
 		}
+	}
+
+	private function refreshSongFileRecordFacts(InternalSongFile $fileRecord, string $fileName, string $content): void {
+		$fileRecord->fileSize = strlen($content);
+		$ext = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+		if ($ext === 'pdf') {
+			$facts = $this->extractPdfFacts($content, $fileName);
+			$fileRecord->fileHash = $facts['fileHash'];
+			$fileRecord->pageCount = $facts['pageCount'];
+			$fileRecord->pageOrder = $facts['pageOrder'];
+		}
+		$fileRecord->updatedAt = time();
+		$this->internalSongFileMapper->update($fileRecord);
 	}
 
 	/**
