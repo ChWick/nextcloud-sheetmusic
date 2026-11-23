@@ -52,113 +52,46 @@ class SongFileController extends OCSController {
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'POST', url: '/api/libraries/{libraryId}/songs/{id}/file/upload')]
 	public function uploadSongFile(int $id, int $libraryId): DataResponse {
-		$user = $this->userSession->getUser();
-		if ($user === null) {
-			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
-		}
-
-		[$fileInfo, $errorResponse] = $this->validateUploadedFile('file');
-		if ($errorResponse !== null) {
-			return $errorResponse;
-		}
-
-		[$pageCount, $pageOrder] = $this->extractPageMetadataParams();
-
-		try {
-			$result = $this->songFileService->uploadSongFile($user, $libraryId, $id, $fileInfo, $pageCount, $pageOrder);
-			if ($result === null) {
-				return new DataResponse([], Http::STATUS_NOT_FOUND);
-			}
-
-			return new DataResponse($result);
-		} catch (\OCA\SheetMusic\Service\FileAlreadyExistsException $e) {
-			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_CONFLICT);
-		} catch (\InvalidArgumentException $e) {
-			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_BAD_REQUEST);
-		} catch (\Throwable $e) {
-			$this->songFileService->getLogger()->error('Failed to upload song file', [
-				'exception' => $e,
-				'songId' => $id,
-				'libraryId' => $libraryId,
-			]);
-			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
-		}
+		return $this->handleUploadedFileAction(
+			'Failed to upload song file',
+			['songId' => $id, 'libraryId' => $libraryId],
+			function (IUser $user, array $fileInfo) use ($id, $libraryId): ?LibraryData {
+				[$pageCount, $pageOrder] = $this->extractPageMetadataParams();
+				return $this->songFileService->uploadSongFile($user, $libraryId, $id, $fileInfo, $pageCount, $pageOrder);
+			},
+		);
 	}
 
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'POST', url: '/api/libraries/{libraryId}/songs/{id}/file/{fileId}/update')]
 	public function updateSongFile(int $id, int $fileId, int $libraryId): DataResponse {
-		$user = $this->userSession->getUser();
-		if ($user === null) {
-			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
-		}
-
-		[$fileInfo, $errorResponse] = $this->validateUploadedFile('file');
-		if ($errorResponse !== null) {
-			return $errorResponse;
-		}
-
-		try {
-			$result = $this->songFileService->updateSongFile($user, $libraryId, $id, $fileId, $fileInfo);
-			if ($result === null) {
-				return new DataResponse([], Http::STATUS_NOT_FOUND);
-			}
-
-			return new DataResponse($result);
-		} catch (\InvalidArgumentException $e) {
-			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_BAD_REQUEST);
-		} catch (\Throwable $e) {
-			$this->songFileService->getLogger()->error('Failed to update song file', [
-				'exception' => $e,
-				'songId' => $id,
-				'fileId' => $fileId,
-				'libraryId' => $libraryId,
-			]);
-			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
-		}
+		return $this->handleUploadedFileAction(
+			'Failed to update song file',
+			['songId' => $id, 'fileId' => $fileId, 'libraryId' => $libraryId],
+			fn (IUser $user, array $fileInfo): ?LibraryData => $this->songFileService->updateSongFile($user, $libraryId, $id, $fileId, $fileInfo),
+		);
 	}
 
 	#[NoAdminRequired]
 	#[ApiRoute(verb: 'POST', url: '/api/libraries/{libraryId}/songs/{id}/file/merge')]
 	public function mergeSongFiles(int $id, int $libraryId): DataResponse {
-		$user = $this->userSession->getUser();
-		if ($user === null) {
-			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
-		}
-
-		[$fileInfo, $errorResponse] = $this->validateUploadedFile('file');
-		if ($errorResponse !== null) {
-			return $errorResponse;
-		}
-
-		[$pageCount, $pageOrder] = $this->extractPageMetadataParams();
-		$deleteFileIds = $this->parseIntListParam('deleteFileIds');
-
-		try {
-			$result = $this->songFileService->mergeSongFiles(
-				$user,
-				$libraryId,
-				$id,
-				$fileInfo,
-				$deleteFileIds,
-				$pageCount,
-				$pageOrder,
-			);
-			if ($result === null) {
-				return new DataResponse([], Http::STATUS_NOT_FOUND);
-			}
-
-			return new DataResponse($result);
-		} catch (\InvalidArgumentException $e) {
-			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_BAD_REQUEST);
-		} catch (\Throwable $e) {
-			$this->songFileService->getLogger()->error('Failed to merge song files', [
-				'exception' => $e,
-				'songId' => $id,
-				'libraryId' => $libraryId,
-			]);
-			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
-		}
+		return $this->handleUploadedFileAction(
+			'Failed to merge song files',
+			['songId' => $id, 'libraryId' => $libraryId],
+			function (IUser $user, array $fileInfo) use ($id, $libraryId): ?LibraryData {
+				[$pageCount, $pageOrder] = $this->extractPageMetadataParams();
+				$deleteFileIds = $this->parseIntListParam('deleteFileIds');
+				return $this->songFileService->mergeSongFiles(
+					$user,
+					$libraryId,
+					$id,
+					$fileInfo,
+					$deleteFileIds,
+					$pageCount,
+					$pageOrder,
+				);
+			},
+		);
 	}
 
 	#[NoAdminRequired]
@@ -318,6 +251,41 @@ class SongFileController extends OCSController {
 			$libraryId,
 			fn (IUser $user, int $libId): ?LibraryData => $this->songFileService->updateSongFilePageOrder($user, $libId, $id, $fileId, $pageOrder),
 		);
+	}
+
+	/**
+	 * @param array<string, mixed> $logContext
+	 * @param callable(IUser, array<string, mixed>): ?LibraryData $action
+	 */
+	private function handleUploadedFileAction(string $errorLogMessage, array $logContext, callable $action): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+
+		[$fileInfo, $errorResponse] = $this->validateUploadedFile('file');
+		if ($errorResponse !== null || $fileInfo === null) {
+			return $errorResponse ?? new DataResponse(['message' => 'No file uploaded'], Http::STATUS_BAD_REQUEST);
+		}
+
+		try {
+			$result = $action($user, $fileInfo);
+			if ($result === null) {
+				return new DataResponse([], Http::STATUS_NOT_FOUND);
+			}
+
+			return new DataResponse($result);
+		} catch (\OCA\SheetMusic\Service\FileAlreadyExistsException $e) {
+			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_CONFLICT);
+		} catch (\InvalidArgumentException $e) {
+			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_BAD_REQUEST);
+		} catch (\Throwable $e) {
+			$this->songFileService->getLogger()->error($errorLogMessage, [
+				'exception' => $e,
+				...$logContext,
+			]);
+			return new DataResponse(['message' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
 	}
 
 	/**
