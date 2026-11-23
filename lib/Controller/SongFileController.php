@@ -62,10 +62,7 @@ class SongFileController extends OCSController {
 			return $errorResponse;
 		}
 
-		$pageCountParam = $this->request->getParam('pageCount');
-		$pageCount = $pageCountParam !== null && is_numeric($pageCountParam) ? (int)$pageCountParam : null;
-		$pageOrder = $this->request->getParam('pageOrder');
-		$pageOrder = is_string($pageOrder) && trim($pageOrder) !== '' ? trim($pageOrder) : null;
+		[$pageCount, $pageOrder] = $this->extractPageMetadataParams();
 
 		try {
 			$result = $this->songFileService->uploadSongFile($user, $libraryId, $id, $fileInfo, $pageCount, $pageOrder);
@@ -134,36 +131,8 @@ class SongFileController extends OCSController {
 			return $errorResponse;
 		}
 
-		$pageCountParam = $this->request->getParam('pageCount');
-		$pageCount = $pageCountParam !== null && is_numeric($pageCountParam) ? (int)$pageCountParam : null;
-		$pageOrder = $this->request->getParam('pageOrder');
-		$pageOrder = is_string($pageOrder) && trim($pageOrder) !== '' ? trim($pageOrder) : null;
-
-		$rawDeleteIds = $this->request->getParam('deleteFileIds');
-		$deleteFileIds = [];
-		if (is_array($rawDeleteIds)) {
-			foreach ($rawDeleteIds as $rawId) {
-				if (is_numeric($rawId) && (int)$rawId > 0) {
-					$deleteFileIds[] = (int)$rawId;
-				}
-			}
-		} elseif (is_string($rawDeleteIds) && trim($rawDeleteIds) !== '') {
-			$decoded = json_decode($rawDeleteIds, true);
-			if (is_array($decoded)) {
-				foreach ($decoded as $rawId) {
-					if (is_numeric($rawId) && (int)$rawId > 0) {
-						$deleteFileIds[] = (int)$rawId;
-					}
-				}
-			} else {
-				foreach (explode(',', $rawDeleteIds) as $part) {
-					$part = trim($part);
-					if (is_numeric($part) && (int)$part > 0) {
-						$deleteFileIds[] = (int)$part;
-					}
-				}
-			}
-		}
+		[$pageCount, $pageOrder] = $this->extractPageMetadataParams();
+		$deleteFileIds = $this->parseIntListParam('deleteFileIds');
 
 		try {
 			$result = $this->songFileService->mergeSongFiles(
@@ -404,6 +373,41 @@ class SongFileController extends OCSController {
 		}
 
 		return [$fileInfo, null];
+	}
+
+	/**
+	 * @return array{?int, ?string}
+	 */
+	private function extractPageMetadataParams(): array {
+		$pageCountParam = $this->request->getParam('pageCount');
+		$pageCount = $pageCountParam !== null && is_numeric($pageCountParam) ? (int)$pageCountParam : null;
+		$pageOrderParam = $this->request->getParam('pageOrder');
+		$pageOrder = is_string($pageOrderParam) && trim($pageOrderParam) !== '' ? trim($pageOrderParam) : null;
+
+		return [$pageCount, $pageOrder];
+	}
+
+	/**
+	 * @return list<int>
+	 */
+	private function parseIntListParam(string $key): array {
+		$raw = $this->request->getParam($key);
+		if (is_string($raw) && trim($raw) !== '') {
+			$decoded = json_decode($raw, true);
+			$raw = is_array($decoded) ? $decoded : explode(',', $raw);
+		}
+		if (!is_array($raw)) {
+			return [];
+		}
+
+		$ids = [];
+		foreach ($raw as $item) {
+			$trimmed = is_string($item) ? trim($item) : $item;
+			if (is_numeric($trimmed) && (int)$trimmed > 0) {
+				$ids[] = (int)$trimmed;
+			}
+		}
+		return $ids;
 	}
 
 	/**

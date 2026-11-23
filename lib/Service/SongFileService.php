@@ -242,27 +242,7 @@ class SongFileService {
 				continue;
 			}
 
-			$physicalId = $fileRecord->fileId;
-			$this->internalSongFileMapper->delete($fileRecord->id);
-
-			$others = $this->internalSongFileMapper->findByFileId($physicalId);
-			$activeOthers = array_filter(
-				$others,
-				fn (InternalSongFile $f) => $f->id !== $fileRecord->id && $f->deletedAt === null,
-			);
-			if (empty($activeOthers)) {
-				try {
-					$nodes = $userFolder->getById($physicalId);
-					if (!empty($nodes) && $nodes[0] instanceof Node) {
-						$nodes[0]->delete();
-					}
-				} catch (\Throwable $e) {
-					$this->logger->warning('Could not delete merged source physical file node', [
-						'fileId' => $physicalId,
-						'exception' => $e,
-					]);
-				}
-			}
+			$this->removeSongFileRecordAndPhysicalNode($fileRecord, $user, $userFolder);
 		}
 
 		$this->libraryMapper->touch($targetLibraryId);
@@ -504,31 +484,10 @@ class SongFileService {
 	public function deleteSongFile(IUser $user, int $libraryId, int $songId, int $fileId): ?LibraryData {
 		$fileRecord = $this->resolveSongFileRecord($fileId, $songId);
 		if ($fileRecord !== null) {
-			$targetFileId = $fileRecord->fileId;
 			$targetSongId = $fileRecord->songId;
-			$this->internalSongFileMapper->delete($fileRecord->id);
+			$fileName = $this->removeSongFileRecordAndPhysicalNode($fileRecord, $user);
 			$targetLibraryId = $this->libraryService->getTargetLibraryId($libraryId);
 			$this->libraryMapper->touch($targetLibraryId);
-
-			$others = $this->internalSongFileMapper->findByFileId($targetFileId);
-			$activeOthers = array_filter($others, fn (InternalSongFile $f) => $f->id !== $fileRecord->id && $f->deletedAt === null);
-
-			$fileName = '';
-			if (empty($activeOthers)) {
-				try {
-					$userFolder = $this->rootFolder->getUserFolder($user->getUID());
-					$node = $userFolder->getById($targetFileId);
-					if (!empty($node) && $node[0] instanceof Node) {
-						$fileName = $node[0]->getName();
-						$node[0]->delete();
-					}
-				} catch (\Throwable $e) {
-					$this->logger->warning('Could not delete physical file node', [
-						'fileId' => $targetFileId,
-						'exception' => $e,
-					]);
-				}
-			}
 
 			if ($targetSongId > 0) {
 				$this->regenerateSongFilePathsIfEnabled($user, $targetSongId, $targetLibraryId);
@@ -543,6 +502,44 @@ class SongFileService {
 		}
 
 		return null;
+	}
+
+	/**
+	 * Delete a song file DB record and remove the underlying Nextcloud file node
+	 * when no other active song references it. Returns the deleted file's name, if any.
+	 */
+	private function removeSongFileRecordAndPhysicalNode(
+		InternalSongFile $fileRecord,
+		IUser $user,
+		?Folder $userFolder = null,
+	): string {
+		$physicalId = $fileRecord->fileId;
+		$this->internalSongFileMapper->delete($fileRecord->id);
+
+		$others = $this->internalSongFileMapper->findByFileId($physicalId);
+		$activeOthers = array_filter(
+			$others,
+			fn (InternalSongFile $f) => $f->id !== $fileRecord->id && $f->deletedAt === null,
+		);
+
+		$fileName = '';
+		if (empty($activeOthers)) {
+			try {
+				$userFolder ??= $this->rootFolder->getUserFolder($user->getUID());
+				$nodes = $userFolder->getById($physicalId);
+				if (!empty($nodes) && $nodes[0] instanceof Node) {
+					$fileName = $nodes[0]->getName();
+					$nodes[0]->delete();
+				}
+			} catch (\Throwable $e) {
+				$this->logger->warning('Could not delete physical file node', [
+					'fileId' => $physicalId,
+					'exception' => $e,
+				]);
+			}
+		}
+
+		return $fileName;
 	}
 
 	public function detachSongFile(IUser $user, int $libraryId, int $songId, int $fileId): ?LibraryData {
