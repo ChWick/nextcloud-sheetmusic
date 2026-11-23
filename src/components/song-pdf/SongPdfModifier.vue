@@ -9,7 +9,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } fr
 import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
 import { PDFDocument } from 'pdf-lib'
-import { destroyPdfJsDocument, loadPdfJsDocument, setBoundedRecordEntry } from '../../utils/pdfjs'
+import { destroyPdfJsDocument, loadPdfJsDocument } from '../../utils/pdfjs'
 import { updateSongFile } from '../../api/songFiles'
 import { showError, showSuccess } from '@nextcloud/dialogs'
 import { getCacheBustedFileUrl, getFileName, pickPrimarySongFile, toUint8Array } from '../../utils/file'
@@ -27,7 +27,7 @@ import { useFileVersions } from './useFileVersions'
 import SongPdfCropModal from './SongPdfCropModal.vue'
 import SongPageOrderModal from './SongPageOrderModal.vue'
 import SongPageOrderZoomModal from './SongPageOrderZoomModal.vue'
-import { renderPageImage } from './usePageOrderThumbnails'
+import { usePdfZoomLightbox } from './usePdfZoomLightbox'
 import SongPdfJoinModal from './SongPdfJoinModal.vue'
 import SongPdfRotateModal from './SongPdfRotateModal.vue'
 import SongPdfEnhanceModal from './SongPdfEnhanceModal.vue'
@@ -657,11 +657,19 @@ function handleDiscardAllEdits() {
 }
 
 // Page Zoom Lightbox Modal state (reuses SongPageOrderZoomModal)
-const isZoomModalOpen = ref(false)
-const zoomPageNum = ref(1)
-const zoomHighResCache = ref<Record<number, string>>({})
-const zoomHighResOrder = new Set<number>()
-const isLoadingZoomHighRes = ref(false)
+const {
+	isZoomModalOpen,
+	zoomPageNum,
+	zoomHighResCache,
+	isLoadingZoomHighRes,
+	zoomThumbnailUrl,
+	goToZoomPage,
+	openPageZoom,
+} = usePdfZoomLightbox({
+	activePdfDoc,
+	totalPages,
+	thumbnailCanvases,
+})
 
 const isAnyModalOpen = computed(() =>
 	isCropModalOpen.value
@@ -672,45 +680,6 @@ const isAnyModalOpen = computed(() =>
 	|| isPageOrderModalOpen.value
 	|| isZoomModalOpen.value,
 )
-
-watch(activePdfDoc, () => {
-	zoomHighResCache.value = {}
-	zoomHighResOrder.clear()
-})
-
-const zoomThumbnailUrl = computed(() => {
-	const canvas = thumbnailCanvases.value?.[zoomPageNum.value]
-	if (!canvas || typeof canvas.toDataURL !== 'function') return ''
-	try {
-		return canvas.toDataURL('image/jpeg', 0.85)
-	} catch {
-		return ''
-	}
-})
-
-async function loadZoomHighResPage(pageNum: number) {
-	if (zoomHighResCache.value[pageNum] || !activePdfDoc.value) return
-	isLoadingZoomHighRes.value = true
-	try {
-		const url = await renderPageImage(activePdfDoc.value, pageNum, 1600)
-		if (url) {
-			zoomHighResCache.value = setBoundedRecordEntry(zoomHighResCache.value, zoomHighResOrder, pageNum, url)
-		}
-	} finally {
-		isLoadingZoomHighRes.value = false
-	}
-}
-
-function goToZoomPage(pageNum: number) {
-	if (pageNum < 1 || pageNum > totalPages.value) return
-	zoomPageNum.value = pageNum
-	loadZoomHighResPage(pageNum)
-}
-
-function openPageZoom(pageNum: number) {
-	isZoomModalOpen.value = true
-	goToZoomPage(pageNum)
-}
 
 function handleKeyDown(event: KeyboardEvent) {
 	if (isAnyModalOpen.value || isSaving.value || isLoading.value) return
