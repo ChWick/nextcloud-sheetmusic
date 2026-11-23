@@ -105,7 +105,7 @@ describe('FileViewerContent.vue', () => {
 				annotationContext: { songId: 1, fileId: 0 },
 			},
 			slots: {
-				'missing-file': '<div data-test="missing-slot">File missing</div>',
+				missingFile: '<div data-test="missing-slot">File missing</div>',
 			},
 			global: {
 				stubs: {

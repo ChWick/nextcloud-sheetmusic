@@ -133,7 +133,7 @@ defineExpose({
 			:can-annotate="isPdf && canWrite !== false"
 			@update:annotations="emit('update:annotations', $event)"
 			@update:is-editing="onEditingChange" />
-		<slot v-else name="missing-file" />
+		<slot v-else name="missingFile" />
 	</div>
 </template>
 

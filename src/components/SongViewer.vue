@@ -359,7 +359,7 @@ defineExpose({
 				@toggle-fullscreen="toggleAnnotationFullscreen"
 				@jump-to-bookmark="jumpToBookmark"
 				@edit-bookmarks="openPdfModifier('bookmarks')">
-				<template #missing-file>
+				<template #missingFile>
 					<div :class="$style.errorNotice" role="alert">
 						{{ t('sheetmusic', 'Missing file: The file does not exist on the file system.') }}
 					</div>
