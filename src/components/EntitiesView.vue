@@ -118,40 +118,30 @@
       <p v-if="fileError" :class="$style.error" role="alert">{{ fileError }}</p>
     </div>
 
-    <NcDialog v-if="isCreateDialogOpen"
-              :name="t('sheetmusic', 'New {entity}', { entity: config.singular }, { escape: false })"
-              size="normal"
-              @close="closeCreateDialog">
-      <p>{{ t('sheetmusic', 'The new {entity} can be assigned to songs right afterwards.', { entity: config.singular }, { escape: false }) }}</p>
-      <NcTextField
-        v-model="newEntityName"
-        :placeholder="namePlaceholder"
-        @keyup.enter="createEntity" />
-      <p v-if="createError" :class="$style.error" role="alert">{{ createError }}</p>
-      <template #actions>
-        <NcButton @click="closeCreateDialog">{{ t('sheetmusic', 'Cancel') }}</NcButton>
-        <NcButton variant="primary"
-                  :disabled="isCreating || !newEntityName.trim()"
-                  @click="createEntity">
-          {{ t('sheetmusic', 'Create {entity}', { entity: config.singular }, { escape: false }) }}
-        </NcButton>
-      </template>
-    </NcDialog>
+    <NameInputDialog
+      v-model:name="newEntityName"
+      :open="isCreateDialogOpen"
+      :title="t('sheetmusic', 'New {entity}', { entity: config.singular }, { escape: false })"
+      :prompt="t('sheetmusic', 'The new {entity} can be assigned to songs right afterwards.', { entity: config.singular }, { escape: false })"
+      :placeholder="namePlaceholder"
+      :submit-label="t('sheetmusic', 'Create {entity}', { entity: config.singular }, { escape: false })"
+      :is-submitting="isCreating"
+      :error="createError"
+      @close="closeCreateDialog"
+      @submit="createEntity" />
 
-    <NcDialog v-if="isDeleteDialogOpen"
-              :name="t('sheetmusic', 'Delete {entity}', { entity: config.singular }, { escape: false })"
-              size="normal"
-              @close="closeDeleteDialog">
+    <ConfirmDeleteDialog
+      :open="isDeleteDialogOpen"
+      :title="t('sheetmusic', 'Delete {entity}', { entity: config.singular }, { escape: false })"
+      :confirm-label="t('sheetmusic', 'Delete {entity}', { entity: config.singular }, { escape: false })"
+      :is-deleting="isDeleting"
+      :error="deleteError"
+      :show-loading-icon="false"
+      @close="closeDeleteDialog"
+      @confirm="deleteEntity">
       <p>{{ t('sheetmusic', 'Delete "{name}"?', { name: entityToDelete ? entityLabel(entityToDelete) : '' }, { escape: false }) }}</p>
       <p>{{ t('sheetmusic', 'All songs stay in the library. Only the {entity} entry is removed from them.', { entity: config.singular }, { escape: false }) }}</p>
-      <p v-if="deleteError" :class="$style.error" role="alert">{{ deleteError }}</p>
-      <template #actions>
-        <NcButton @click="closeDeleteDialog">{{ t('sheetmusic', 'Cancel') }}</NcButton>
-        <NcButton variant="error" :disabled="isDeleting" @click="deleteEntity">
-          {{ t('sheetmusic', 'Delete {entity}', { entity: config.singular }, { escape: false }) }}
-        </NcButton>
-      </template>
-    </NcDialog>
+    </ConfirmDeleteDialog>
 
     <EntityMergeDialog
       :open="isMergeDialogOpen"
@@ -175,13 +165,14 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { loadState } from '@nextcloud/initial-state'
 import NcButton from '@nextcloud/vue/components/NcButton'
-import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import CheckIcon from 'vue-material-design-icons/Check.vue'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import MergeIcon from 'vue-material-design-icons/Merge.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
+import ConfirmDeleteDialog from './ConfirmDeleteDialog.vue'
+import NameInputDialog from './NameInputDialog.vue'
 import ViewHeader from './ViewHeader.vue'
 import EntityMergeDialog from './EntityMergeDialog.vue'
 import { ENTITY_COLUMNS, type SongEntityProp } from './songs/song-view-columns'
