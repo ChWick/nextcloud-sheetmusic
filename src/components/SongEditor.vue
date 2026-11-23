@@ -7,7 +7,7 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import { apiPost } from '../api/client'
 import { describeRequestFailure } from '../utils/api'
-import { isPdfFile } from '../utils/file'
+import { getPdfFiles } from '../utils/file'
 import { createEntityTag, createNamedTag, matchSelected, prefillByName, resolveSongEntityIds } from './song-editor/entity-utils'
 import { useSongEditorFiles } from './song-editor/useSongEditorFiles'
 import { ENTITY_COLUMNS, type SongEntityProp } from './songs/song-view-columns'
@@ -192,7 +192,7 @@ const {
 	onSuccess: (msg) => { successMessage.value = msg },
 })
 
-const currentPdfFiles = computed(() => currentFiles.value.filter((f) => isPdfFile(f.path)))
+const currentPdfFiles = computed(() => getPdfFiles(currentFiles.value))
 const canMergePdfs = computed(() => !isNewSong.value && currentPdfFiles.value.length >= 2)
 
 function openPageOrderModal(file: SongFile) {

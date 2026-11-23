@@ -12,7 +12,7 @@ import { PDFDocument } from 'pdf-lib'
 import { destroyPdfJsDocument, loadPdfJsDocument } from '../../utils/pdfjs'
 import { updateSongFile } from '../../api/songFiles'
 import { showError, showSuccess } from '@nextcloud/dialogs'
-import { getCacheBustedFileUrl, getFileName, isPdfFile, pickPrimarySongFile, toUint8Array } from '../../utils/file'
+import { getCacheBustedFileUrl, getFileName, getPdfFiles, pickPrimarySongFile, toUint8Array } from '../../utils/file'
 import { describeRequestFailure } from '../../utils/api'
 
 import SongPdfHeader from './SongPdfHeader.vue'
@@ -92,9 +92,7 @@ const emit = defineEmits<{
 const targetFile = computed<SongFile | undefined>(() =>
 	pickPrimarySongFile(props.song.files, props.fileId) ?? undefined,
 )
-const songPdfFiles = computed<SongFile[]>(() =>
-	(props.song.files ?? []).filter((f) => isPdfFile(f.path)),
-)
+const songPdfFiles = computed<SongFile[]>(() => getPdfFiles(props.song.files))
 
 // State
 type Mode = 'rotate' | 'split' | 'crop' | 'enhance' | 'bookmarks'

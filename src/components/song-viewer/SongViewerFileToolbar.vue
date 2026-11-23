@@ -20,7 +20,7 @@ import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import PlayIcon from 'vue-material-design-icons/Play.vue'
 import PdfInfoPopover from '../song-pdf/PdfInfoPopover.vue'
 import SongViewerBookmarksBar from './SongViewerBookmarksBar.vue'
-import { getFileName, isPdfFile } from '../../utils/file'
+import { getFileName, getPdfFiles } from '../../utils/file'
 import { formatByteSize } from '../song-pdf/pdf-enhance-engine'
 
 const props = withDefaults(
@@ -68,7 +68,7 @@ const emit = defineEmits<{
 	'edit-bookmarks': []
 }>()
 
-const hasMultiplePdfs = computed(() => props.files.filter((f) => isPdfFile(f.path)).length >= 2)
+const hasMultiplePdfs = computed(() => getPdfFiles(props.files).length >= 2)
 
 const effectiveSizeBytes = computed(() => props.fileSizeBytes ?? props.file?.fileSize ?? null)
 const formattedFileSize = computed(() => formatByteSize(effectiveSizeBytes.value))

@@ -33,6 +33,10 @@ export function isPdfFile(filename?: string | null, mimeType?: string | null): b
 	return Boolean(clean.endsWith('.pdf') || mimeType === 'application/pdf')
 }
 
+export function getPdfFiles(files?: SongFile[] | null): SongFile[] {
+	return (files ?? []).filter((f) => isPdfFile(f.path))
+}
+
 export function isImageFile(filename?: string | null): boolean {
 	const clean = filename?.split('?')[0].toLowerCase() ?? ''
 	return IMAGE_EXTENSIONS.some((ext) => clean.endsWith(ext))

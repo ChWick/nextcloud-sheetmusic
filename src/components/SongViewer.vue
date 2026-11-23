@@ -5,7 +5,7 @@ import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import { ensurePdfJsWorker } from '../utils/pdfjs'
-import { isPdfFile, openFileExternally } from '../utils/file'
+import { getPdfFiles, isPdfFile, openFileExternally } from '../utils/file'
 import { getFileVersionToken, getVersionedFileUrl } from '../utils/file-version'
 import ArrowLeftIcon from 'vue-material-design-icons/ArrowLeft.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
@@ -110,7 +110,7 @@ const isSelectedFilePdf = computed(() => isPdfFile(selectedFile.value?.path))
 const entityListsProps = computed(() => extractEntityLists(props))
 const songBookmarks = computed(() => props.song?.bookmarks ?? [])
 const songFiles = computed(() => props.song?.files ?? [])
-const songPdfFiles = computed(() => songFiles.value.filter((f) => isPdfFile(f.path)))
+const songPdfFiles = computed(() => getPdfFiles(songFiles.value))
 
 /** The file of the active tab, falling back to the first file of the song. */
 const selectedFile = computed<SongFile | null>(() => {
