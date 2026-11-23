@@ -287,15 +287,27 @@ async function updateSaveProgress(
 	}
 }
 
+function resetSaveProgress() {
+	saveProgressPercent.value = 0
+	saveProgressText.value = ''
+	saveProgressCurrent.value = 0
+	saveProgressTotal.value = 0
+}
+
+async function disposeActivePdfDoc() {
+	cleanupThumbnailObserver()
+	if (activePdfDoc.value) {
+		await destroyPdfJsDocument(activePdfDoc.value)
+		activePdfDoc.value = null
+	}
+}
+
 async function saveSplits() {
 	await executeSaveSplits(
 		(v) => {
 			isSaving.value = v
 			if (!v) {
-				saveProgressPercent.value = 0
-				saveProgressText.value = ''
-				saveProgressCurrent.value = 0
-				saveProgressTotal.value = 0
+				resetSaveProgress()
 			}
 		},
 		(msg) => { errorMessage.value = msg },
@@ -325,11 +337,7 @@ async function loadPdf() {
 	selectedPages.value = []
 
 	try {
-		cleanupThumbnailObserver()
-		if (activePdfDoc.value) {
-			await destroyPdfJsDocument(activePdfDoc.value)
-			activePdfDoc.value = null
-		}
+		await disposeActivePdfDoc()
 
 		const targetUrl = getCacheBustedFileUrl(targetFile.value.path, `${targetFile.value.id}-${props.song.lastModified ?? ''}-${Date.now()}`)
 		const response = await axios.get(targetUrl, {
@@ -402,8 +410,7 @@ async function saveBookmarks() {
 		})
 	} finally {
 		isSaving.value = false
-		saveProgressPercent.value = 0
-		saveProgressText.value = ''
+		resetSaveProgress()
 	}
 }
 
@@ -468,11 +475,7 @@ async function handleExecuteJoin(options: {
 		originalPdfBytes.value = newBytes
 		reindexEditsAfterJoin(options.pageA, options.pageB)
 
-		cleanupThumbnailObserver()
-		if (activePdfDoc.value) {
-			await destroyPdfJsDocument(activePdfDoc.value)
-			activePdfDoc.value = null
-		}
+		await disposeActivePdfDoc()
 
 		// Re-render PDF with pdfjs
 		const pdf = await loadPdfJsDocument(newBytes.slice())
@@ -571,10 +574,7 @@ async function saveRotationsAndCrops() {
 		showError(errorMessage.value)
 	} finally {
 		isSaving.value = false
-		saveProgressPercent.value = 0
-		saveProgressText.value = ''
-		saveProgressCurrent.value = 0
-		saveProgressTotal.value = 0
+		resetSaveProgress()
 	}
 }
 
@@ -693,11 +693,7 @@ onMounted(() => {
 
 onUnmounted(() => {
 	window.removeEventListener('keydown', handleKeyDown)
-	cleanupThumbnailObserver()
-	if (activePdfDoc.value) {
-		void destroyPdfJsDocument(activePdfDoc.value)
-		activePdfDoc.value = null
-	}
+	void disposeActivePdfDoc()
 	originalPdfBytes.value = null
 })
 
