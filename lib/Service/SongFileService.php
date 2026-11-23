@@ -119,27 +119,21 @@ class SongFileService {
 		?int $explicitPageCount = null,
 		?string $explicitPageOrder = null,
 	): ?LibraryData {
-		$content = $this->readUploadedFileContent($fileInfo);
-		$fileName = basename((string)($fileInfo['name'] ?? 'song.file'));
-
-		$target = $this->resolveLibraryTarget($user, $libraryId);
-		if ($target === null) {
+		$autoPaths = $this->libraryService->isAutoPathsEnabled($user->getUID(), $libraryId);
+		$stored = $this->storeUploadedSongFile(
+			$user,
+			$libraryId,
+			$songId,
+			$fileInfo,
+			defaultName: 'song.file',
+			alwaysUniquePath: $autoPaths,
+			explicitPageCount: $explicitPageCount,
+			explicitPageOrder: $explicitPageOrder,
+			syncAfter: true,
+		);
+		if ($stored === null) {
 			return null;
 		}
-		['userFolder' => $userFolder, 'targetFolder' => $targetFolder, 'libraryDir' => $libraryDir] = $target;
-
-		$autoPaths = $this->libraryService->isAutoPathsEnabled($user->getUID(), $libraryId);
-		$targetRelative = $this->resolveDestinationPath($userFolder, $libraryDir, $fileName, $autoPaths);
-		$this->fileManager->ensureParentFolder($userFolder, $targetRelative);
-		// Create the file with its content in one step, suppressing the file event
-		// listener so it does not parse the PDF and create a redundant stub song.
-		$targetFile = SheetMusicFileEventListener::runWithoutListener(
-			static fn () => $userFolder->newFile($targetRelative, $content)
-		);
-
-		$targetLibraryId = $this->libraryService->getTargetLibraryId($libraryId);
-		$this->cleanupAutoIndexedStubForNewUpload($songId, (int)$targetFile->getId());
-		$this->recordSongFile($songId, $user, $targetFile, $targetLibraryId, $explicitPageCount, $explicitPageOrder, $content);
 
 		return $this->findLibraryDataForResponse($user, $libraryId);
 	}
@@ -205,36 +199,22 @@ class SongFileService {
 		?int $explicitPageCount = null,
 		?string $explicitPageOrder = null,
 	): ?LibraryData {
-		$content = $this->readUploadedFileContent($fileInfo);
-		$fileName = basename((string)($fileInfo['name'] ?? 'merged.pdf'));
-
-		$target = $this->resolveLibraryTarget($user, $libraryId);
-		if ($target === null) {
-			return null;
-		}
-		['userFolder' => $userFolder, 'libraryDir' => $libraryDir] = $target;
-
-		$desiredRelative = ($libraryDir === '' ? '' : $libraryDir . '/') . $fileName;
-		$targetRelative = $this->fileManager->uniqueRelativePath($userFolder, $desiredRelative);
-		$this->fileManager->ensureParentFolder($userFolder, $targetRelative);
-
-		$mergedFile = SheetMusicFileEventListener::runWithoutListener(
-			static fn () => $userFolder->newFile($targetRelative, $content)
-		);
-		$mergedPhysicalId = (int)$mergedFile->getId();
-
-		$targetLibraryId = $this->libraryService->getTargetLibraryId($libraryId);
-		$this->cleanupAutoIndexedStubForNewUpload($songId, $mergedPhysicalId);
-		$this->recordSongFile(
-			$songId,
+		$stored = $this->storeUploadedSongFile(
 			$user,
-			$mergedFile,
-			$targetLibraryId,
-			$explicitPageCount,
-			$explicitPageOrder,
-			$content,
+			$libraryId,
+			$songId,
+			$fileInfo,
+			defaultName: 'merged.pdf',
+			alwaysUniquePath: true,
+			explicitPageCount: $explicitPageCount,
+			explicitPageOrder: $explicitPageOrder,
 			syncAfter: false,
 		);
+		if ($stored === null) {
+			return null;
+		}
+		['file' => $mergedFile, 'userFolder' => $userFolder, 'targetLibraryId' => $targetLibraryId] = $stored;
+		$mergedPhysicalId = (int)$mergedFile->getId();
 
 		foreach (array_unique($deleteFileIds) as $deleteId) {
 			$fileRecord = $this->resolveSongFileRecord($deleteId, $songId);
@@ -250,6 +230,59 @@ class SongFileService {
 		$this->recordSongFileHistory($songId, $user, 'Merged PDFs into: ' . $mergedFile->getName(), touchSong: true);
 
 		return $this->findLibraryDataForResponse($user, $libraryId);
+	}
+
+	/**
+	 * Store an uploaded file node in the library folder and record it on the song.
+	 *
+	 * @return array{file: File, userFolder: Folder, targetLibraryId: int}|null
+	 */
+	private function storeUploadedSongFile(
+		IUser $user,
+		int $libraryId,
+		int $songId,
+		?array $fileInfo,
+		string $defaultName,
+		bool $alwaysUniquePath,
+		?int $explicitPageCount,
+		?string $explicitPageOrder,
+		bool $syncAfter,
+	): ?array {
+		$content = $this->readUploadedFileContent($fileInfo);
+		$fileName = basename((string)($fileInfo['name'] ?? $defaultName));
+
+		$target = $this->resolveLibraryTarget($user, $libraryId);
+		if ($target === null) {
+			return null;
+		}
+		['userFolder' => $userFolder, 'libraryDir' => $libraryDir] = $target;
+
+		$targetRelative = $this->resolveDestinationPath($userFolder, $libraryDir, $fileName, $alwaysUniquePath);
+		$this->fileManager->ensureParentFolder($userFolder, $targetRelative);
+		// Create the file with its content in one step, suppressing the file event
+		// listener so it does not parse the PDF and create a redundant stub song.
+		$targetFile = SheetMusicFileEventListener::runWithoutListener(
+			static fn () => $userFolder->newFile($targetRelative, $content)
+		);
+
+		$targetLibraryId = $this->libraryService->getTargetLibraryId($libraryId);
+		$this->cleanupAutoIndexedStubForNewUpload($songId, (int)$targetFile->getId());
+		$this->recordSongFile(
+			$songId,
+			$user,
+			$targetFile,
+			$targetLibraryId,
+			$explicitPageCount,
+			$explicitPageOrder,
+			$content,
+			syncAfter: $syncAfter,
+		);
+
+		return [
+			'file' => $targetFile,
+			'userFolder' => $userFolder,
+			'targetLibraryId' => $targetLibraryId,
+		];
 	}
 
 	/**
