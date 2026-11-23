@@ -17,11 +17,11 @@ import NcAppNavigationItem from '@nextcloud/vue/components/NcAppNavigationItem'
 import NcContent from '@nextcloud/vue/components/NcContent'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
-import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
-import NcProgressBar from '@nextcloud/vue/components/NcProgressBar'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
+import ConfirmDeleteDialog from './components/ConfirmDeleteDialog.vue'
+import LibraryPickerDialog from './components/LibraryPickerDialog.vue'
 import CogIcon from 'vue-material-design-icons/Cog.vue'
 import Plus from 'vue-material-design-icons/Plus.vue'
 import FolderPlusOutline from 'vue-material-design-icons/FolderPlusOutline.vue'
@@ -348,6 +348,61 @@ async function openDbPicker() {
   }
 }
 
+async function submitLibraryCreation(params: {
+  addedPath: string
+  importMobilesheets: boolean
+  importPdfMetadata?: boolean
+  fallbackTargetPath: string
+  onSuccessReset: () => void
+  onError: (msg: string) => void
+  onBusyChange: (busy: boolean) => void
+  successMessage: string
+  errorFallback: string
+}) {
+  params.onBusyChange(true)
+  params.onError('')
+  const progressId = 'import-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9)
+  startProgressPolling(progressId)
+  try {
+    const response = await apiPost('/api/libraries' as any, {
+      path: params.addedPath,
+      import_mobilesheets: params.importMobilesheets,
+      ...(params.importPdfMetadata !== undefined ? { importPdfMetadata: params.importPdfMetadata } : {}),
+      progressId,
+    } as any)
+    stopProgressPolling()
+    params.onSuccessReset()
+    importProgress.value = null
+
+    const prevIds = new Set(libraries.value.map(library => library.id))
+    await loadLibraries()
+
+    const targetPath = (response as any)?.data?.ocs?.data?.path ?? params.fallbackTargetPath
+    const normalizedTargetPath = targetPath !== '/' ? targetPath.replace(/\/+$/, '') : targetPath
+    const normalizedAddedPath = params.addedPath !== '/' ? params.addedPath.replace(/\/+$/, '') : params.addedPath
+    const newlyAdded = libraries.value.find(library => !prevIds.has(library.id))
+    const addedLibrary = newlyAdded ?? libraries.value.find(library =>
+      library.path === targetPath ||
+      library.path === normalizedTargetPath ||
+      library.path === params.addedPath ||
+      library.path === normalizedAddedPath ||
+      (library.path && normalizedTargetPath && library.path.toLowerCase() === normalizedTargetPath.toLowerCase())
+    )
+    if (addedLibrary) {
+      navigateToLibrary(addedLibrary.id)
+    }
+    showSuccess(params.successMessage)
+  } catch (error) {
+    stopProgressPolling()
+    const msg = describeRequestFailure(error, params.errorFallback)
+    params.onError(msg)
+    showError(msg)
+  } finally {
+    params.onBusyChange(false)
+    stopProgressPolling()
+  }
+}
+
 async function addLibrary() {
   if (!selectedFolder.value) {
     addError.value = t('sheetmusic', 'Please select a folder first.')
@@ -355,48 +410,20 @@ async function addLibrary() {
     return
   }
   const addedPath = selectedFolder.value.path
-  isAddingLibrary.value = true
-  addError.value = ''
-  const progressId = 'import-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9)
-  startProgressPolling(progressId)
-  try {
-    const response = await apiPost('/api/libraries' as any, {
-      path: addedPath,
-      import_mobilesheets: false,
-      importPdfMetadata: importPdfMetadata.value,
-      progressId,
-    } as any)
-    stopProgressPolling()
-    selectedFolder.value = undefined
-    isAddDialogOpen.value = false
-    importProgress.value = null
-
-    const prevIds = new Set(libraries.value.map(library => library.id))
-    await loadLibraries()
-
-    const targetPath = (response as any)?.data?.ocs?.data?.path ?? addedPath
-    const normalizedTargetPath = targetPath !== '/' ? targetPath.replace(/\/+$/, '') : targetPath
-    const normalizedAddedPath = addedPath !== '/' ? addedPath.replace(/\/+$/, '') : addedPath
-    const newlyAdded = libraries.value.find(library => !prevIds.has(library.id))
-    const addedLibrary = newlyAdded ?? libraries.value.find(library =>
-      library.path === targetPath ||
-      library.path === normalizedTargetPath ||
-      library.path === addedPath ||
-      library.path === normalizedAddedPath ||
-      (library.path && normalizedTargetPath && library.path.toLowerCase() === normalizedTargetPath.toLowerCase())
-    )
-    if (addedLibrary) {
-      navigateToLibrary(addedLibrary.id)
-    }
-    showSuccess(t('sheetmusic', 'Library added successfully.'))
-  } catch (error) {
-    stopProgressPolling()
-    addError.value = describeRequestFailure(error, t('sheetmusic', 'Could not save the library.'))
-    showError(addError.value)
-  } finally {
-    isAddingLibrary.value = false
-    stopProgressPolling()
-  }
+  await submitLibraryCreation({
+    addedPath,
+    importMobilesheets: false,
+    importPdfMetadata: importPdfMetadata.value,
+    fallbackTargetPath: addedPath,
+    onSuccessReset: () => {
+      selectedFolder.value = undefined
+      isAddDialogOpen.value = false
+    },
+    onError: (msg) => { addError.value = msg },
+    onBusyChange: (busy) => { isAddingLibrary.value = busy },
+    successMessage: t('sheetmusic', 'Library added successfully.'),
+    errorFallback: t('sheetmusic', 'Could not save the library.'),
+  })
 }
 
 async function importLibrary() {
@@ -406,47 +433,19 @@ async function importLibrary() {
     return
   }
   const addedPath = selectedDbFile.value.path
-  isImportingLibrary.value = true
-  importError.value = ''
-  const progressId = 'import-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9)
-  startProgressPolling(progressId)
-  try {
-    const response = await apiPost('/api/libraries' as any, {
-      path: addedPath,
-      import_mobilesheets: true,
-      progressId,
-    } as any)
-    stopProgressPolling()
-    selectedDbFile.value = undefined
-    isImportDialogOpen.value = false
-    importProgress.value = null
-
-    const prevIds = new Set(libraries.value.map(library => library.id))
-    await loadLibraries()
-
-    const targetPath = (response as any)?.data?.ocs?.data?.path ?? (addedPath.includes('/') ? addedPath.substring(0, addedPath.lastIndexOf('/')) || '/' : addedPath)
-    const normalizedTargetPath = targetPath !== '/' ? targetPath.replace(/\/+$/, '') : targetPath
-    const normalizedAddedPath = addedPath !== '/' ? addedPath.replace(/\/+$/, '') : addedPath
-    const newlyAdded = libraries.value.find(library => !prevIds.has(library.id))
-    const addedLibrary = newlyAdded ?? libraries.value.find(library =>
-      library.path === targetPath ||
-      library.path === normalizedTargetPath ||
-      library.path === addedPath ||
-      library.path === normalizedAddedPath ||
-      (library.path && normalizedTargetPath && library.path.toLowerCase() === normalizedTargetPath.toLowerCase())
-    )
-    if (addedLibrary) {
-      navigateToLibrary(addedLibrary.id)
-    }
-    showSuccess(t('sheetmusic', 'MobileSheets library imported successfully.'))
-  } catch (error) {
-    stopProgressPolling()
-    importError.value = describeRequestFailure(error, t('sheetmusic', 'Could not import the MobileSheets library.'))
-    showError(importError.value)
-  } finally {
-    isImportingLibrary.value = false
-    stopProgressPolling()
-  }
+  await submitLibraryCreation({
+    addedPath,
+    importMobilesheets: true,
+    fallbackTargetPath: addedPath.includes('/') ? addedPath.substring(0, addedPath.lastIndexOf('/')) || '/' : addedPath,
+    onSuccessReset: () => {
+      selectedDbFile.value = undefined
+      isImportDialogOpen.value = false
+    },
+    onError: (msg) => { importError.value = msg },
+    onBusyChange: (busy) => { isImportingLibrary.value = busy },
+    successMessage: t('sheetmusic', 'MobileSheets library imported successfully.'),
+    errorFallback: t('sheetmusic', 'Could not import the MobileSheets library.'),
+  })
 }
 
 /*** Deleting a library ***/
@@ -726,14 +725,19 @@ async function deleteLibrary() {
       </NcAppContent>
     </NcContent>
 
-    <NcDialog v-if="isAddDialogOpen"
-              :name="t('sheetmusic', 'Add Sheet Music Library')"
-              size="normal"
-              @close="!isAddingLibrary && (isAddDialogOpen = false)">
-      <p>{{ t('sheetmusic', 'Select a folder from your Nextcloud files. Sheet music files will be imported.') }}</p>
-      <NcButton variant="primary" :disabled="isAddingLibrary" @click="openFolderPicker">
-        {{ selectedFolder?.path ?? t('sheetmusic', 'Choose folder from Nextcloud') }}
-      </NcButton>
+    <LibraryPickerDialog
+      :open="isAddDialogOpen"
+      :title="t('sheetmusic', 'Add Sheet Music Library')"
+      :description="t('sheetmusic', 'Select a folder from your Nextcloud files. Sheet music files will be imported.')"
+      :selected-path="selectedFolder?.path"
+      :picker-label="t('sheetmusic', 'Choose folder from Nextcloud')"
+      :submit-label="t('sheetmusic', 'Add library')"
+      :is-submitting="isAddingLibrary"
+      :progress="importProgress"
+      :error="addError"
+      @close="isAddDialogOpen = false"
+      @pick="openFolderPicker"
+      @submit="addLibrary">
       <div :class="$style.dialogOptionRow">
         <NcCheckboxRadioSwitch
           v-model="importPdfMetadata"
@@ -742,60 +746,34 @@ async function deleteLibrary() {
           {{ t('sheetmusic', 'Import metadata from PDF files') }}
         </NcCheckboxRadioSwitch>
       </div>
-      <div v-if="isAddingLibrary && importProgress" :class="$style.progressContainer">
-        <NcProgressBar :value="importProgress.percent"
-                       size="medium"
-                       :show-value="true"
-                       :error="importProgress.status === 'error'" />
-        <p :class="$style.progressMessage">{{ importProgress.message }}</p>
-      </div>
-      <p v-if="addError" :class="$style.error" role="alert">{{ addError }}</p>
-      <template #actions>
-        <NcButton :disabled="isAddingLibrary" @click="isAddDialogOpen = false">{{ t('sheetmusic', 'Cancel') }}</NcButton>
-        <NcButton variant="primary" :disabled="!selectedFolder || isAddingLibrary" @click="addLibrary">
-          {{ t('sheetmusic', 'Add library') }}
-        </NcButton>
-      </template>
-    </NcDialog>
+    </LibraryPickerDialog>
 
-    <NcDialog v-if="isImportDialogOpen"
-              :name="t('sheetmusic', 'Import MobileSheets Library')"
-              size="normal"
-              @close="!isImportingLibrary && (isImportDialogOpen = false)">
-      <p>{{ t('sheetmusic', 'Select a mobilesheets.db file from your Nextcloud files to import your existing songs and metadata.') }}</p>
-      <NcButton variant="primary" :disabled="isImportingLibrary" @click="openDbPicker">
-        {{ selectedDbFile?.path ?? t('sheetmusic', 'Choose mobilesheets.db from Nextcloud') }}
-      </NcButton>
-      <div v-if="isImportingLibrary && importProgress" :class="$style.progressContainer">
-        <NcProgressBar :value="importProgress.percent"
-                       size="medium"
-                       :show-value="true"
-                       :error="importProgress.status === 'error'" />
-        <p :class="$style.progressMessage">{{ importProgress.message }}</p>
-      </div>
-      <p v-if="importError" :class="$style.error" role="alert">{{ importError }}</p>
-      <template #actions>
-        <NcButton :disabled="isImportingLibrary" @click="isImportDialogOpen = false">{{ t('sheetmusic', 'Cancel') }}</NcButton>
-        <NcButton variant="primary" :disabled="!selectedDbFile || isImportingLibrary" @click="importLibrary">
-          {{ t('sheetmusic', 'Import library') }}
-        </NcButton>
-      </template>
-    </NcDialog>
+    <LibraryPickerDialog
+      :open="isImportDialogOpen"
+      :title="t('sheetmusic', 'Import MobileSheets Library')"
+      :description="t('sheetmusic', 'Select a mobilesheets.db file from your Nextcloud files to import your existing songs and metadata.')"
+      :selected-path="selectedDbFile?.path"
+      :picker-label="t('sheetmusic', 'Choose mobilesheets.db from Nextcloud')"
+      :submit-label="t('sheetmusic', 'Import library')"
+      :is-submitting="isImportingLibrary"
+      :progress="importProgress"
+      :error="importError"
+      @close="isImportDialogOpen = false"
+      @pick="openDbPicker"
+      @submit="importLibrary" />
 
-    <NcDialog v-if="isDeleteDialogOpen"
-              :name="t('sheetmusic', 'Delete library')"
-              size="normal"
-              @close="closeDeleteDialog">
+    <ConfirmDeleteDialog
+      :open="isDeleteDialogOpen"
+      :title="t('sheetmusic', 'Delete library')"
+      :confirm-label="t('sheetmusic', 'Delete library')"
+      :is-deleting="isDeletingLibrary"
+      :error="deleteError"
+      :show-loading-icon="false"
+      @close="closeDeleteDialog"
+      @confirm="deleteLibrary">
       <p>{{ t('sheetmusic', 'Remove "{path}" from your libraries?', { path: selectedLibraryPath }, { escape: false }) }}</p>
       <p>{{ t('sheetmusic', 'Only the library entry is removed. The MobileSheets database and all files it references stay in your Nextcloud files, so you can add the library again whenever you want.') }}</p>
-      <p v-if="deleteError" :class="$style.error" role="alert">{{ deleteError }}</p>
-      <template #actions>
-        <NcButton @click="closeDeleteDialog">{{ t('sheetmusic', 'Cancel') }}</NcButton>
-        <NcButton variant="error" :disabled="isDeletingLibrary" @click="deleteLibrary">
-          {{ t('sheetmusic', 'Delete library') }}
-        </NcButton>
-      </template>
-    </NcDialog>
+    </ConfirmDeleteDialog>
 
     <LibrarySettingsDialog
       v-if="isSettingsDialogOpen"
@@ -880,18 +858,9 @@ async function deleteLibrary() {
 .dialogActions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; }
 .error { color: var(--color-error); }
 .viewToggle { display: flex; gap: 8px; margin: 12px 0; }
-.progressContainer {
-  margin-top: 16px;
-  width: 100%;
-}
 .dialogOptionRow {
   margin-top: 16px;
   display: flex;
   align-items: center;
-}
-.progressMessage {
-  margin-top: 8px;
-  font-size: 0.9em;
-  color: var(--color-text-maxcontrast);
 }
 </style>
