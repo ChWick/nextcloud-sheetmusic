@@ -15,7 +15,7 @@ import type { SongFile } from '../../types/song'
 import PageOrderAuditSummary from './PageOrderAuditSummary.vue'
 import PageOrderFilterBar from './PageOrderFilterBar.vue'
 import PageOrderTable from './PageOrderTable.vue'
-import PageOrderProgressDialog from './PageOrderProgressDialog.vue'
+import ProgressDialog from '../ProgressDialog.vue'
 import SongPageOrderModal from '../song-pdf/SongPageOrderModal.vue'
 
 const props = defineProps<{
@@ -397,10 +397,13 @@ watch(() => props.selectedLibrary, (newLib) => {
 			@edit-item="openEditItem"
 			@open-song="openSong" />
 
-		<PageOrderProgressDialog
+		<ProgressDialog
 			:open="isBatchResetting"
+			:title="t('sheetmusic', 'Resetting Page Ordering…')"
 			:percent="batchProgress ? batchProgress.percent : 0"
-			:message="batchProgress ? batchProgress.message : ''" />
+			:message="batchProgress ? batchProgress.message : ''"
+			:fallback-message="t('sheetmusic', 'Processing files…')"
+			test-id="page-order-progress" />
 
 		<SongPageOrderModal
 			v-if="isEditModalOpen"
