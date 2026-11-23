@@ -72,21 +72,28 @@
     </div>
   </div>
 
-  <CreateSetlistDialog
+  <SetlistNameDialog
     v-model:name="newSetlistName"
     :open="isCreateDialogOpen"
-    :is-creating="isCreating"
+    :title="t('sheetmusic', 'New setlist')"
+    :prompt="t('sheetmusic', 'Enter a name for the new setlist:')"
+    :placeholder="t('sheetmusic', 'e.g. Autumn Recital 2026')"
+    :submit-label="t('sheetmusic', 'Create setlist')"
+    :is-submitting="isCreating"
     :error="createError"
     @close="closeCreateDialog"
-    @create="handleCreateSetlist" />
+    @submit="handleCreateSetlist" />
 
-  <RenameSetlistDialog
+  <SetlistNameDialog
     v-model:name="renameSetlistName"
     :open="isRenameDialogOpen"
-    :is-renaming="isRenaming"
+    :title="t('sheetmusic', 'Rename setlist')"
+    :prompt="t('sheetmusic', 'Enter a new name for this setlist:')"
+    :submit-label="t('sheetmusic', 'Save')"
+    :is-submitting="isRenaming"
     :error="renameError"
     @close="closeRenameDialog"
-    @rename="handleRenameSetlist" />
+    @submit="handleRenameSetlist" />
 
   <DeleteSetlistDialog
     :open="isDeleteDialogOpen"
@@ -144,8 +151,7 @@ import SetlistDetailHeader from './setlists/SetlistDetailHeader.vue'
 import SetlistFilesSection from './setlists/SetlistFilesSection.vue'
 import SetlistFilePreviewDialog from './setlists/SetlistFilePreviewDialog.vue'
 import SetlistItemsTable from './setlists/SetlistItemsTable.vue'
-import CreateSetlistDialog from './setlists/CreateSetlistDialog.vue'
-import RenameSetlistDialog from './setlists/RenameSetlistDialog.vue'
+import SetlistNameDialog from './setlists/SetlistNameDialog.vue'
 import DeleteSetlistDialog from './setlists/DeleteSetlistDialog.vue'
 import AddSetlistItemDialog from './setlists/AddSetlistItemDialog.vue'
 import SetlistPerformanceViewer from './setlists/SetlistPerformanceViewer.vue'
