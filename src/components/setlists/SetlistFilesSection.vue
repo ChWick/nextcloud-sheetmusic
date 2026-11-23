@@ -67,41 +67,18 @@
 			</div>
 		</div>
 
-		<NcDialog
-			v-if="isAttachDialogOpen"
-			:open="true"
-			:name="t('sheetmusic', 'Attach File from Nextcloud')"
-			@closing="closeAttachDialog">
-			<div :class="$style.attachDialogBody">
-				<p :class="$style.attachPrompt">
-					{{ t('sheetmusic', 'How would you like to add "{file}" to this setlist?', { file: selectedNodeName }) }}
-				</p>
-				<div :class="$style.attachOptions">
-					<NcCheckboxRadioSwitch
-						v-model="attachAction"
-						type="radio"
-						name="setlist-attach-action"
-						value="copy">
-						{{ t('sheetmusic', 'Copy file into setlist folder (keep original)') }}
-					</NcCheckboxRadioSwitch>
-					<NcCheckboxRadioSwitch
-						v-model="attachAction"
-						type="radio"
-						name="setlist-attach-action"
-						value="move">
-						{{ t('sheetmusic', 'Move file into setlist folder') }}
-					</NcCheckboxRadioSwitch>
-				</div>
-			</div>
-			<template #actions>
-				<NcButton @click="closeAttachDialog">
-					{{ t('sheetmusic', 'Cancel') }}
-				</NcButton>
-				<NcButton variant="primary" @click="confirmAttach">
-					{{ t('sheetmusic', 'Attach') }}
-				</NcButton>
-			</template>
-		</NcDialog>
+		<AttachNextcloudFileDialog
+			v-model:open="isAttachDialogOpen"
+			v-model:action="attachAction"
+			:filename="selectedNodeName"
+			:title="t('sheetmusic', 'Attach File from Nextcloud')"
+			:prompt="t('sheetmusic', 'How would you like to add &quot;{file}&quot; to this setlist?', { file: selectedNodeName })"
+			:copy-label="t('sheetmusic', 'Copy file into setlist folder (keep original)')"
+			:move-label="t('sheetmusic', 'Move file into setlist folder')"
+			:hint="null"
+			:confirm-label="t('sheetmusic', 'Attach')"
+			@cancel="closeAttachDialog"
+			@confirm="confirmAttach" />
 	</div>
 </template>
 
@@ -109,15 +86,13 @@
 import { ref } from 'vue'
 import { FilePickerClosed, getFilePickerBuilder, showError } from '@nextcloud/dialogs'
 import { translate as t } from '@nextcloud/l10n'
-import NcButton from '@nextcloud/vue/components/NcButton'
-import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
-import NcDialog from '@nextcloud/vue/components/NcDialog'
 import CloseIcon from 'vue-material-design-icons/Close.vue'
 import FileDocumentOutlineIcon from 'vue-material-design-icons/FileDocumentOutline.vue'
 import FolderOutlineIcon from 'vue-material-design-icons/FolderOutline.vue'
 import PaperclipIcon from 'vue-material-design-icons/Paperclip.vue'
 import UploadIcon from 'vue-material-design-icons/Upload.vue'
 import ResponsiveNcButton from '../ResponsiveNcButton.vue'
+import AttachNextcloudFileDialog from '../song-editor/AttachNextcloudFileDialog.vue'
 import type { SetlistFile } from '../../types/song'
 import { formatFileSize } from '../../utils/file'
 
@@ -264,23 +239,6 @@ function onFileSelected(event: Event) {
 	display: flex;
 	align-items: center;
 	flex-shrink: 0;
-	gap: 8px;
-}
-
-.attachDialogBody {
-	padding: 16px;
-	display: flex;
-	flex-direction: column;
-	gap: 12px;
-}
-
-.attachPrompt {
-	margin: 0;
-}
-
-.attachOptions {
-	display: flex;
-	flex-direction: column;
 	gap: 8px;
 }
 

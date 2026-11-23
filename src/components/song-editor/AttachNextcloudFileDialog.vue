@@ -3,11 +3,25 @@ import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 
-defineProps<{
+withDefaults(defineProps<{
 	open: boolean
 	filename?: string
 	action: 'copy' | 'move'
-}>()
+	title?: string
+	prompt?: string
+	copyLabel?: string
+	moveLabel?: string
+	hint?: string | null
+	confirmLabel?: string
+}>(), {
+	filename: '',
+	title: undefined,
+	prompt: undefined,
+	copyLabel: undefined,
+	moveLabel: undefined,
+	hint: undefined,
+	confirmLabel: undefined,
+})
 
 const emit = defineEmits<{
 	'update:open': [value: boolean]
@@ -25,10 +39,10 @@ function onActionChange(event: Event) {
 <template>
 	<NcDialog
 		v-if="open"
-		:name="t('sheetmusic', 'Attach Nextcloud PDF')"
+		:name="title || t('sheetmusic', 'Attach Nextcloud PDF')"
 		@close="emit('update:open', false); emit('cancel')">
 		<p>
-			{{ t('sheetmusic', 'Attach {file} to this song?', { file: filename }, { escape: false }) }}
+			{{ prompt || t('sheetmusic', 'Attach {file} to this song?', { file: filename }, { escape: false }) }}
 		</p>
 		<div :class="$style.radioGroup">
 			<label :class="$style.radioLabel">
@@ -38,7 +52,7 @@ function onActionChange(event: Event) {
 					value="copy"
 					:checked="action === 'copy'"
 					@change="onActionChange">
-				{{ t('sheetmusic', 'Copy file to library folder (default)') }}
+				{{ copyLabel || t('sheetmusic', 'Copy file to library folder (default)') }}
 			</label>
 			<label :class="$style.radioLabel">
 				<input
@@ -47,10 +61,10 @@ function onActionChange(event: Event) {
 					value="move"
 					:checked="action === 'move'"
 					@change="onActionChange">
-				{{ t('sheetmusic', 'Move file to library folder') }}
+				{{ moveLabel || t('sheetmusic', 'Move file to library folder') }}
 			</label>
 		</div>
-		<p>{{ t('sheetmusic', 'The file is added to the song when you save it.') }}</p>
+		<p v-if="hint !== null">{{ hint || t('sheetmusic', 'The file is added to the song when you save it.') }}</p>
 		<div :class="$style.dialogActions">
 			<NcButton @click="emit('update:open', false); emit('cancel')">
 				{{ t('sheetmusic', 'Cancel') }}
@@ -58,7 +72,7 @@ function onActionChange(event: Event) {
 			<NcButton
 				variant="primary"
 				@click="emit('confirm')">
-				{{ t('sheetmusic', 'Attach File') }}
+				{{ confirmLabel || t('sheetmusic', 'Attach File') }}
 			</NcButton>
 		</div>
 	</NcDialog>
