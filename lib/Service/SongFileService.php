@@ -296,7 +296,9 @@ class SongFileService {
 	public function getSongFileVersions(IUser $user, int $fileId): array {
 		try {
 			['userFolder' => $userFolder, 'node' => $targetNode] = $this->resolveSongFileNode($user, $fileId);
-		} catch (\InvalidArgumentException|\RuntimeException) {
+		} catch (\InvalidArgumentException) {
+			return [];
+		} catch (\RuntimeException) {
 			return [];
 		}
 
