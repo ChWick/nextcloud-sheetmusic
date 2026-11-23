@@ -8,6 +8,7 @@ import { cleanupPdfJsPage, destroyPdfJsDocument, getEffectivePageRotation, loadP
 import { isImageFile as checkIsImageFile, isPdfFile as checkIsPdfFile, openFileExternally, toUint8Array } from '../utils/file'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import FilePreviewerToolbar from './file-preview/FilePreviewerToolbar.vue'
+import XlsxPreviewPane, { type XlsxSheet } from './file-preview/XlsxPreviewPane.vue'
 import { useAnnotationOverlayHost } from '../composables/useAnnotationOverlayHost'
 import { usePdfTouchZoom } from '../composables/usePdfTouchZoom'
 import { useStylusSettings } from '../composables/useStylusSettings'
@@ -88,8 +89,7 @@ const emit = defineEmits<{
 const pdfContainer = ref<HTMLElement>()
 const pdfStage = ref<HTMLElement>()
 const docxContainer = ref<HTMLElement>()
-const xlsxSheets = ref<Array<{ name: string; html: string }>>([])
-const activeXlsxSheetIndex = ref(0)
+const xlsxSheets = ref<XlsxSheet[]>([])
 const isLoading = ref(false)
 const errorMessage = ref('')
 let currentLoadId = 0
@@ -950,7 +950,6 @@ async function loadAndRenderFile() {
 	fileSizeBytes.value = null
 	pageResolutions.value = []
 	xlsxSheets.value = []
-	activeXlsxSheetIndex.value = 0
 
 	await nextTick()
 	cleanupObserver()
@@ -1013,7 +1012,6 @@ async function loadAndRenderFile() {
 				name,
 				html: XLSX.utils.sheet_to_html(workbook.Sheets[name], { editable: false }),
 			}))
-			activeXlsxSheetIndex.value = 0
 			return
 		}
 
@@ -1284,27 +1282,9 @@ defineExpose({
 			ref="docxContainer"
 			:class="$style.docxContainer" />
 
-		<div
+		<XlsxPreviewPane
 			v-if="!isLoading && !errorMessage && isXlsxFile"
-			:class="$style.xlsxContainer">
-			<div v-if="xlsxSheets.length > 1" :class="$style.xlsxTabs" role="tablist">
-				<button
-					v-for="(sheet, idx) in xlsxSheets"
-					:key="sheet.name"
-					type="button"
-					role="tab"
-					:aria-selected="activeXlsxSheetIndex === idx"
-					:class="[$style.xlsxTab, activeXlsxSheetIndex === idx && $style.xlsxTabActive]"
-					@click="activeXlsxSheetIndex = idx">
-					{{ sheet.name }}
-				</button>
-			</div>
-			<!-- eslint-disable-next-line vue/no-v-html -->
-			<div
-				v-if="xlsxSheets[activeXlsxSheetIndex]"
-				:class="$style.xlsxSheetContent"
-				v-html="xlsxSheets[activeXlsxSheetIndex].html" />
-		</div>
+			:sheets="xlsxSheets" />
 
 		<div v-if="!isLoading && !errorMessage && isUnsupportedFile" :class="$style.unsupported">
 			<p>{{ t('sheetmusic', 'Preview is not available for this file type.') }}</p>
@@ -1462,68 +1442,6 @@ defineExpose({
 .docxContainer :global(.docx-wrapper > section.docx) {
 	margin-bottom: 16px;
 	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-}
-
-.xlsxContainer {
-	display: flex;
-	flex-direction: column;
-	flex: 1;
-	min-height: 0;
-	overflow: hidden;
-	background-color: var(--color-main-background);
-}
-
-.xlsxTabs {
-	display: flex;
-	gap: 4px;
-	padding: 8px 12px;
-	border-bottom: 1px solid var(--color-border);
-	background-color: var(--color-background-hover);
-	overflow-x: auto;
-	flex-shrink: 0;
-}
-
-.xlsxTab {
-	border: 1px solid var(--color-border);
-	border-radius: var(--border-radius);
-	background: var(--color-main-background);
-	color: var(--color-main-text);
-	padding: 4px 12px;
-	font-size: 0.85rem;
-	cursor: pointer;
-	white-space: nowrap;
-}
-
-.xlsxTabActive {
-	background-color: var(--color-primary-element);
-	color: var(--color-primary-element-text);
-	border-color: var(--color-primary-element);
-	font-weight: 600;
-}
-
-.xlsxSheetContent {
-	flex: 1;
-	min-height: 0;
-	overflow: auto;
-	padding: 16px;
-}
-
-.xlsxSheetContent :global(table) {
-	border-collapse: collapse;
-	width: 100%;
-	font-size: 0.9rem;
-}
-
-.xlsxSheetContent :global(td),
-.xlsxSheetContent :global(th) {
-	border: 1px solid var(--color-border);
-	padding: 6px 10px;
-	text-align: left;
-	vertical-align: top;
-}
-
-.xlsxSheetContent :global(tr:nth-child(even)) {
-	background-color: var(--color-background-hover);
 }
 
 .unsupported {
