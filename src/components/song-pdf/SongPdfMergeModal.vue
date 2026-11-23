@@ -38,7 +38,6 @@ import {
 	buildInitialMergePages,
 	buildMergedFileName,
 	buildMergedPdf,
-	createMergePageEntry,
 	duplicateMergePage,
 	getSourceFileColor,
 	removeMergePage,
@@ -288,11 +287,8 @@ function toggleSourceIncluded(index: number) {
 	if (!source.included) {
 		mergePages.value = mergePages.value.filter((p) => p.fileId !== source.fileId)
 	} else {
-		const addedPages: MergePageEntry[] = []
-		for (let p = 1; p <= source.pageCount; p++) {
-			addedPages.push(createMergePageEntry(source.fileId, index, p, 0))
-		}
-		const orderedIds = loadedSources.value.filter((s) => s.included).map((s) => s.fileId)
+		const addedPages = buildInitialMergePages(loadedSources.value, new Set([source.fileId]))
+		const orderedIds = includedSources.value.map((s) => s.fileId)
 		mergePages.value = reorderPagesByFileOrder([...mergePages.value, ...addedPages], orderedIds)
 	}
 }
@@ -357,12 +353,8 @@ async function ensureHighResForEntry(entry: MergePageEntry) {
 }
 
 function openPageZoom(index: number) {
-	zoomSequenceIndex.value = index
 	isZoomModalOpen.value = true
-	const entry = mergePages.value[index]
-	if (entry) {
-		void ensureHighResForEntry(entry)
-	}
+	goToZoomIndex(index)
 }
 
 function goToZoomIndex(nextIndex: number) {
