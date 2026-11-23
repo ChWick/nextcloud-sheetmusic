@@ -11,11 +11,12 @@ import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import FolderSyncOutline from 'vue-material-design-icons/FolderSyncOutline.vue'
 import Plus from 'vue-material-design-icons/Plus.vue'
 import InformationOutline from 'vue-material-design-icons/InformationOutline.vue'
+import TrashCanOutline from 'vue-material-design-icons/TrashCanOutline.vue'
 
 import ViewHeader from './ViewHeader.vue'
+import ConfirmDeleteDialog from './ConfirmDeleteDialog.vue'
 import SublibraryCard from './sublibraries/SublibraryCard.vue'
 import SublibraryModal from './sublibraries/SublibraryModal.vue'
-import DeleteSublibraryDialog from './sublibraries/DeleteSublibraryDialog.vue'
 import ShareDialog from './ShareDialog.vue'
 
 import { useLibraryData } from '../composables/useLibraryData'
@@ -316,12 +317,23 @@ watch(
 			@close="isModalOpen = false" />
 
 		<!-- Delete Confirmation Modal -->
-		<DeleteSublibraryDialog
-			:is-open="isDeleteConfirmOpen"
-			:sub="deletingSub"
+		<ConfirmDeleteDialog
+			:open="isDeleteConfirmOpen && Boolean(deletingSub)"
+			:title="t('sheetmusic', 'Delete Sub-Library')"
+			:confirm-label="t('sheetmusic', 'Delete Sub-Library')"
 			:is-deleting="isDeleting"
 			@confirm="confirmDelete"
-			@close="isDeleteConfirmOpen = false" />
+			@close="isDeleteConfirmOpen = false">
+			<p>
+				{{ t('sheetmusic', 'Are you sure you want to delete the sub-library "{name}"?', { name: deletingSub?.name ?? '' }, { escape: false }) }}
+			</p>
+			<p :class="$style.dangerNote">
+				{{ t('sheetmusic', 'This only removes the virtual WebDAV folder definition. All score files in Nextcloud and master database songs remain untouched.') }}
+			</p>
+			<template #confirmIcon>
+				<TrashCanOutline :size="18" />
+			</template>
+		</ConfirmDeleteDialog>
 
 		<!-- Share Modal -->
 		<ShareDialog
@@ -444,5 +456,10 @@ watch(
 	padding: 16px;
 	background-color: var(--color-error-background, rgba(233, 50, 45, 0.1));
 	border-radius: var(--border-radius, 6px);
+}
+.dangerNote {
+	margin-top: 10px;
+	font-size: 0.85rem;
+	color: var(--color-text-maxcontrast);
 }
 </style>
