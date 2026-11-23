@@ -284,6 +284,7 @@ import ViewHeader from '../components/ViewHeader.vue';
 import NotFoundState from '../components/NotFoundState.vue';
 import SongViewHeaderButtons from './songs/SongViewHeaderButtons.vue';
 import BatchSongEditorDialog, { type BatchUpdatePayload } from '../components/song-editor/BatchSongEditorDialog.vue';
+import { resolveSongEntityIds } from '../components/song-editor/entity-utils';
 import BatchDeleteSongsDialog from '../components/BatchDeleteSongsDialog.vue';
 import SongMergeDialog from '../components/song-editor/SongMergeDialog.vue';
 import SongHistoryModal from '../components/SongHistoryModal.vue';
@@ -541,11 +542,44 @@ async function handleApplyBatchUpdate(payload: BatchUpdatePayload) {
   isApplyingBatchUpdate.value = true;
   startBatchProgressPolling(progressId, count);
   try {
+    const resolvedPayload: BatchUpdatePayload = { ...payload };
+    const selectionsToCreate = ENTITY_COLUMNS
+      .filter((col) => (payload[col.songProp]?.newLabels?.length ?? 0) > 0)
+      .map((col) => ({
+        idField: col.idField,
+        endpoint: col.endpoint,
+        labelField: col.nameKey,
+        selected: (payload[col.songProp]?.newLabels ?? []).map((label) => ({ [col.nameKey]: label })),
+        options: ((entityListsProps.value as any)[col.songProp] ?? []) as Array<{ id: number; name?: string; title?: string }>,
+      }));
+
+    if (selectionsToCreate.length > 0) {
+      const createdByField = await resolveSongEntityIds(
+        selectionsToCreate,
+        async (endpoint, labelField, label) => {
+          const res = await apiPost(endpoint as any, {
+            libraryId: props.selectedLibrary,
+            [labelField]: label,
+          } as any);
+          return res.data.ocs.data.id;
+        },
+      );
+      for (const col of ENTITY_COLUMNS) {
+        const update = payload[col.songProp];
+        if (update?.newLabels?.length) {
+          resolvedPayload[col.songProp] = {
+            action: update.action,
+            ids: Array.from(new Set([...update.ids, ...(createdByField[col.idField] ?? [])])),
+          };
+        }
+      }
+    }
+
     const response = await apiPost('/api/songs-batch-update', {
       libraryId: props.selectedLibrary,
       songIds: selectedSongIds.value,
       progressId,
-      ...payload,
+      ...resolvedPayload,
     } as any);
     batchUpdateProgressPercent.value = 100;
     isBatchEditorOpen.value = false;

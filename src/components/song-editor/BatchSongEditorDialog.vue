@@ -9,6 +9,7 @@ import NcProgressBar from '@nextcloud/vue/components/NcProgressBar'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import { computed, reactive, watch } from 'vue'
+import { createEntityTag } from './entity-utils'
 import {
 	ENTITY_COLUMNS,
 	SONG_SCALAR_FIELDS,
@@ -24,6 +25,7 @@ export type BatchAction = 'add' | 'replace' | 'remove'
 export interface CategoryBatchUpdate {
 	action: BatchAction
 	ids: number[]
+	newLabels?: string[]
 }
 
 export type BatchScalarUpdates = Partial<Record<SongScalarProp, string | number | null>>
@@ -33,11 +35,12 @@ export type BatchUpdatePayload = Partial<Record<SongEntityProp, CategoryBatchUpd
 }
 
 type CategoryKey = SongEntityProp
+type SelectableEntity = { id?: number; name?: string; title?: string }
 
 interface CategoryState {
 	enabled: boolean
 	action: BatchAction
-	selected: Array<{ id: number }>
+	selected: SelectableEntity[]
 }
 
 interface ScalarFieldState {
@@ -93,15 +96,29 @@ watch(() => props.open, (isOpen) => {
 })
 
 const categories = computed(() =>
-	ENTITY_COLUMNS.map((col) => ({
-		key: col.songProp,
-		label: col.pluralLabel(),
-		placeholder: col.selectPlaceholder(),
-		optionLabel: col.nameKey,
-		radioName: `${col.col.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}-action`,
-		options: (props[col.songProp] ?? []) as Array<{ id: number }>,
-	})),
+	ENTITY_COLUMNS.map((col) => {
+		const options = (props[col.songProp] ?? []) as Array<{ id: number; name?: string; title?: string }>
+		return {
+			key: col.songProp,
+			label: col.pluralLabel(),
+			placeholder: col.selectPlaceholder(),
+			optionLabel: col.nameKey,
+			radioName: `${col.col.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}-action`,
+			options,
+			createOption: createEntityTag(
+				options,
+				(entity) => String(entity[col.nameKey] ?? ''),
+				(label) => ({ [col.nameKey]: label }),
+			),
+		}
+	}),
 )
+
+function handleActionChange(key: CategoryKey, action: BatchAction) {
+	if (action === 'remove') {
+		state[key].selected = state[key].selected.filter((item) => typeof item.id === 'number')
+	}
+}
 
 const isAnythingEnabled = computed(() =>
 	CATEGORY_KEYS.some((key) => state[key].enabled)
@@ -120,12 +137,24 @@ function handleApply() {
 	if (!isAnythingEnabled.value || props.isApplying) return
 
 	const payload: BatchUpdatePayload = {}
-	for (const key of CATEGORY_KEYS) {
+	for (const col of ENTITY_COLUMNS) {
+		const key = col.songProp
 		if (state[key].enabled) {
-			payload[key] = {
-				action: state[key].action,
-				ids: state[key].selected.map((item) => item.id),
+			const ids: number[] = []
+			const newLabels: string[] = []
+			for (const item of state[key].selected) {
+				if (typeof item.id === 'number') {
+					ids.push(item.id)
+				} else if (state[key].action !== 'remove') {
+					const label = String(item[col.nameKey] ?? '').trim()
+					if (label !== '') {
+						newLabels.push(label)
+					}
+				}
 			}
+			payload[key] = newLabels.length > 0
+				? { action: state[key].action, ids, newLabels }
+				: { action: state[key].action, ids }
 		}
 	}
 
@@ -184,7 +213,8 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 								:disabled="isApplying"
 								type="radio"
 								:name="cat.radioName"
-								:value="opt.value">
+								:value="opt.value"
+								@change="handleActionChange(cat.key, opt.value)">
 							{{ opt.label }}
 						</label>
 					</div>
@@ -193,11 +223,13 @@ const actionOptions: { value: BatchAction; label: string }[] = [
 						:disabled="isApplying"
 						:options="cat.options"
 						:multiple="true"
+						:taggable="state[cat.key].action !== 'remove'"
+						:create-option="cat.createOption"
 						:close-on-select="false"
 						:input-label="cat.label"
 						:placeholder="cat.placeholder"
 						:label="cat.optionLabel"
-						track-by="id" />
+						:track-by="cat.optionLabel" />
 				</div>
 			</div>
 

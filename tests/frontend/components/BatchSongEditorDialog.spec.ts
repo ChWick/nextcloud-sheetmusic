@@ -159,4 +159,68 @@ describe('BatchSongEditorDialog.vue', () => {
 		expect(cancelButton?.props('disabled')).toBe(true)
 		wrapper.unmount()
 	})
+
+	it('allows tagging new entities for add/replace and strips unsaved tags when switching to remove', async () => {
+		const wrapper = mount(BatchSongEditorDialog, {
+			props: {
+				open: true,
+				selectedCount: 2,
+				composers,
+				books,
+				collections,
+				artists,
+			},
+			attachTo: document.body,
+		})
+
+		const checkboxes = wrapper.findAllComponents({ name: 'NcCheckboxRadioSwitch' })
+		await checkboxes[0].setValue(true) // composers
+		await checkboxes[1].setValue(true) // books
+		await wrapper.vm.$nextTick()
+
+		const selects = wrapper.findAllComponents({ name: 'NcSelect' })
+		expect(selects).toHaveLength(2)
+		expect(selects[0].props('taggable')).toBe(true)
+		expect(selects[1].props('taggable')).toBe(true)
+
+		const createComposer = selects[0].props('createOption') as (label: string) => any
+		const createBook = selects[1].props('createOption') as (label: string) => any
+
+		// Existing entity (case-insensitive) reuses existing object with id
+		expect(createComposer('mozart')).toEqual({ id: 1, name: 'Mozart' })
+		// New entity creates tag object without id
+		const newComposer = createComposer('Chopin')
+		const newBook = createBook('New Fake Book')
+		expect(newComposer).toEqual({ name: 'Chopin' })
+		expect(newBook).toEqual({ title: 'New Fake Book' })
+
+		// Select both existing and newly created tags
+		await selects[0].vm.$emit('update:modelValue', [composers[0], newComposer])
+		await selects[1].vm.$emit('update:modelValue', [newBook])
+		await wrapper.vm.$nextTick()
+
+		const applyButton = wrapper.findAllComponents({ name: 'NcButton' }).find(b => b.text().includes('Apply to 2 songs'))
+		await applyButton?.trigger('click')
+
+		expect(wrapper.emitted('apply')?.[0]).toEqual([{
+			composers: { action: 'add', ids: [1], newLabels: ['Chopin'] },
+			books: { action: 'add', ids: [], newLabels: ['New Fake Book'] },
+		}])
+
+		// Switching composers action to 'remove' disables taggable and drops unsaved tags
+		const removeRadio = document.body.querySelector('input[type="radio"][value="remove"]') as HTMLInputElement
+		expect(removeRadio).toBeTruthy()
+		removeRadio.checked = true
+		removeRadio.dispatchEvent(new Event('change', { bubbles: true }))
+		await wrapper.vm.$nextTick()
+
+		expect(selects[0].props('taggable')).toBe(false)
+		await applyButton?.trigger('click')
+		expect(wrapper.emitted('apply')?.[1]).toEqual([{
+			composers: { action: 'remove', ids: [1] },
+			books: { action: 'add', ids: [], newLabels: ['New Fake Book'] },
+		}])
+
+		wrapper.unmount()
+	})
 })
