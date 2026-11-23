@@ -1,19 +1,17 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
-import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import { cleanupPdfJsPage, destroyPdfJsDocument, getEffectivePageRotation, loadPdfJsDocument, releaseCanvas, releaseChildCanvases, renderPdfPageToCanvas, watchDevicePixelRatio } from '../utils/pdfjs'
-import { isImageFile as checkIsImageFile, isPdfFile as checkIsPdfFile, openFileExternally, toUint8Array } from '../utils/file'
+import { isImageFile as checkIsImageFile, isPdfFile as checkIsPdfFile, openFileExternally } from '../utils/file'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import FilePreviewerToolbar from './file-preview/FilePreviewerToolbar.vue'
 import XlsxPreviewPane, { type XlsxSheet } from './file-preview/XlsxPreviewPane.vue'
 import { useAnnotationOverlayHost } from '../composables/useAnnotationOverlayHost'
 import { usePdfTouchZoom } from '../composables/usePdfTouchZoom'
 import { useStylusSettings } from '../composables/useStylusSettings'
-import { isEffectivelyOffline } from '../composables/useOnlineStatus'
-import { readOfflineCachedBinary } from '../utils/offlineSetlists'
+import { fetchCachedBinaryFile } from '../utils/file-binary'
 import { inspectPdfDocumentResolutions, type PdfPageResolutionSummary } from './song-pdf/pdf-enhance-engine'
 import { parsePageOrder } from '../utils/page-order'
 import type { SheetAnnotation } from '../types/annotation'
@@ -891,45 +889,10 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 }
 
 async function fetchBinaryData(cacheKey: string, loadId: number): Promise<Uint8Array | null> {
-	const cache = props.binaryCache ?? defaultFileBinaryCache
-	let data: Uint8Array | null = cache.get(cacheKey)
-	if (!data && isEffectivelyOffline()) {
-		data = await readOfflineCachedBinary(cacheKey)
-		if (!data) {
-			throw new Error('File is not available offline')
-		}
-		if (loadId !== currentLoadId) return null
-	}
-	if (!data) {
-		const hasVersionParam = cacheKey.includes('v=') || cacheKey.includes('t=')
-		try {
-			const response = await axios.get(cacheKey, {
-				responseType: 'arraybuffer',
-				...(hasVersionParam ? {} : {
-					headers: {
-						'Cache-Control': 'no-cache',
-						'Pragma': 'no-cache',
-					},
-				}),
-			})
-
-			if (loadId !== currentLoadId) return null
-
-			const raw = toUint8Array(response.data)
-			data = raw
-		} catch (err) {
-			const offlineData = await readOfflineCachedBinary(cacheKey)
-			if (!offlineData) {
-				throw err
-			}
-			if (loadId !== currentLoadId) return null
-			data = offlineData
-		}
-		if (data) {
-			cache.set(cacheKey, data)
-		}
-	}
-	return data
+	return fetchCachedBinaryFile(cacheKey, {
+		cache: props.binaryCache ?? defaultFileBinaryCache,
+		isStale: () => loadId !== currentLoadId,
+	})
 }
 
 async function loadAndRenderFile() {
