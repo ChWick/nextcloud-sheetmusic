@@ -53,35 +53,51 @@ const HIGHLIGHT_SWATCHES: ColorSwatch[] = [
 	{ color: '#ff8a65', label: 'Coral' },
 ]
 
+const isHighlightContext = computed(() =>
+	props.selectedAnnotation ? props.selectedAnnotation.type === 'highlight' : props.activeTool === 'highlight',
+)
+const isStampContext = computed(() =>
+	props.selectedAnnotation ? props.selectedAnnotation.type === 'stamp' : props.activeTool === 'stamp',
+)
+
+const showStrokeWidth = computed(() => {
+	const t = props.selectedAnnotation?.type
+	return props.activeTool === 'drawing' || props.activeTool === 'highlight' || props.isShapeActive
+		|| t === 'drawing' || t === 'highlight' || t === 'shape'
+})
+
+const showLineStyle = computed(() => {
+	const t = props.selectedAnnotation?.type
+	return props.activeTool === 'drawing' || props.isShapeActive || t === 'drawing' || t === 'shape'
+})
+
+const showFontSize = computed(() => {
+	const t = props.selectedAnnotation?.type
+	return props.activeTool === 'text' || props.activeTool === 'stamp' || props.activeTool === 'link'
+		|| t === 'text' || t === 'stamp' || t === 'link'
+})
+
+const showTextAlign = computed(() => props.activeTool === 'text' || props.selectedAnnotation?.type === 'text')
+const showSelectedText = computed(() => props.selectedAnnotation?.type === 'text' || props.selectedAnnotation?.type === 'link')
+
 const activeColor = computed(() => {
 	if (props.selectedAnnotation) {
 		return props.selectedAnnotation.style?.stroke || props.selectedAnnotation.style?.color || props.toolStyle.color
 	}
-	return props.activeTool === 'highlight' ? props.toolStyle.highlightColor : props.toolStyle.color
+	return isHighlightContext.value ? props.toolStyle.highlightColor : props.toolStyle.color
 })
 
 const activeOpacity = computed(() => {
-	if (props.selectedAnnotation) {
-		return props.selectedAnnotation.style?.opacity ?? (props.selectedAnnotation.type === 'highlight' ? props.toolStyle.highlightOpacity : props.toolStyle.opacity)
-	}
-	return props.activeTool === 'highlight' ? props.toolStyle.highlightOpacity : props.toolStyle.opacity
+	const fallback = isHighlightContext.value ? props.toolStyle.highlightOpacity : props.toolStyle.opacity
+	return props.selectedAnnotation?.style?.opacity ?? fallback
 })
 
-const currentSwatches = computed(() =>
-	props.activeTool === 'highlight' || props.selectedAnnotation?.type === 'highlight'
-		? HIGHLIGHT_SWATCHES
-		: COLOR_SWATCHES,
+const currentSwatches = computed(() => (isHighlightContext.value ? HIGHLIGHT_SWATCHES : COLOR_SWATCHES))
+const strokeWidthPresets = computed(() => (isHighlightContext.value ? [10, 18, 28, 38] : [1.5, 2.5, 4, 6.5]))
+
+const currentStrokeWidth = computed(() =>
+	props.selectedAnnotation?.style?.strokeWidth ?? (isHighlightContext.value ? props.toolStyle.highlightWidth : props.toolStyle.strokeWidth),
 )
-
-const strokeWidthPresets = computed(() => {
-	const isHighlight = props.activeTool === 'highlight' || props.selectedAnnotation?.type === 'highlight'
-	return isHighlight ? [10, 18, 28, 38] : [1.5, 2.5, 4, 6.5]
-})
-
-const currentStrokeWidth = computed(() => {
-	const isHighlight = props.activeTool === 'highlight' || props.selectedAnnotation?.type === 'highlight'
-	return props.selectedAnnotation?.style?.strokeWidth ?? (isHighlight ? props.toolStyle.highlightWidth : props.toolStyle.strokeWidth)
-})
 
 const lineStyleOptions = computed(() => [
 	{ value: 'solid' as LineStyle, label: t('sheetmusic', 'Solid') },
@@ -89,20 +105,20 @@ const lineStyleOptions = computed(() => [
 	{ value: 'dotted' as LineStyle, label: t('sheetmusic', 'Dotted') },
 ])
 
+function lineDashArray(style: LineStyle): string | undefined {
+	return style === 'dashed' ? '5, 3' : style === 'dotted' ? '1, 4' : undefined
+}
+
 const currentLineStyleOption = computed(() => {
 	const val = props.selectedAnnotation?.style?.lineStyle ?? props.toolStyle.lineStyle
 	return lineStyleOptions.value.find((o) => o.value === val) ?? lineStyleOptions.value[0]
 })
 
-const fontSizePresets = computed(() => {
-	const isStamp = props.activeTool === 'stamp' || props.selectedAnnotation?.type === 'stamp'
-	return isStamp ? [26, 36, 48, 64] : [16, 22, 30, 42]
-})
+const fontSizePresets = computed(() => (isStampContext.value ? [26, 36, 48, 64] : [16, 22, 30, 42]))
 
-const currentFontSize = computed(() => {
-	const isStamp = props.activeTool === 'stamp' || props.selectedAnnotation?.type === 'stamp'
-	return props.selectedAnnotation?.style?.fontSize ?? (isStamp ? props.toolStyle.stampSize : props.toolStyle.fontSize)
-})
+const currentFontSize = computed(() =>
+	props.selectedAnnotation?.style?.fontSize ?? (isStampContext.value ? props.toolStyle.stampSize : props.toolStyle.fontSize),
+)
 
 const isHeightAdjustableShape = computed(() => {
 	const selShape = props.selectedAnnotation?.type === 'shape' ? props.selectedAnnotation.data?.shapeType : null
@@ -113,30 +129,25 @@ const isHeightAdjustableShape = computed(() => {
 const currentShapeHeight = computed(() => {
 	const sel = props.selectedAnnotation
 	if (sel?.type === 'shape') {
-		if (sel.data?.shapeType === 'slur') {
-			return Math.abs(sel.data?.curvature ?? props.toolStyle.shapeHeight ?? 18)
-		}
-		return Math.abs(sel.data?.aperture ?? props.toolStyle.shapeHeight ?? 18)
+		const raw = sel.data?.shapeType === 'slur' ? sel.data?.curvature : sel.data?.aperture
+		return Math.abs(raw ?? props.toolStyle.shapeHeight ?? 18)
 	}
 	return props.toolStyle.shapeHeight ?? 18
 })
 
 const shapeHeightPresets = [10, 18, 28, 45, 65]
 
+function patchToolStyle(patch: Partial<EditorToolStyle>) {
+	emit('update:toolStyle', { ...props.toolStyle, ...patch })
+}
+
 function pickColor(color: string) {
 	if (props.selectedAnnotation) {
-		if (props.selectedAnnotation.type === 'text' || props.selectedAnnotation.type === 'stamp') {
-			emit('update-selected-style', { color })
-		} else {
-			emit('update-selected-style', { stroke: color })
-		}
+		const isFillText = props.selectedAnnotation.type === 'text' || props.selectedAnnotation.type === 'stamp'
+		emit('update-selected-style', isFillText ? { color } : { stroke: color })
 		return
 	}
-	if (props.activeTool === 'highlight') {
-		emit('update:toolStyle', { ...props.toolStyle, highlightColor: color })
-	} else {
-		emit('update:toolStyle', { ...props.toolStyle, color })
-	}
+	patchToolStyle(isHighlightContext.value ? { highlightColor: color } : { color })
 }
 
 function updateOpacity(opacity: number) {
@@ -144,11 +155,7 @@ function updateOpacity(opacity: number) {
 		emit('update-selected-style', { opacity })
 		return
 	}
-	if (props.activeTool === 'highlight') {
-		emit('update:toolStyle', { ...props.toolStyle, highlightOpacity: opacity })
-	} else {
-		emit('update:toolStyle', { ...props.toolStyle, opacity })
-	}
+	patchToolStyle(isHighlightContext.value ? { highlightOpacity: opacity } : { opacity })
 }
 
 function updateStrokeWidth(val: number) {
@@ -156,11 +163,7 @@ function updateStrokeWidth(val: number) {
 		emit('update-selected-style', { strokeWidth: val })
 		return
 	}
-	if (props.activeTool === 'highlight') {
-		emit('update:toolStyle', { ...props.toolStyle, highlightWidth: val })
-	} else {
-		emit('update:toolStyle', { ...props.toolStyle, strokeWidth: val })
-	}
+	patchToolStyle(isHighlightContext.value ? { highlightWidth: val } : { strokeWidth: val })
 }
 
 function updateLineStyle(lineStyle: LineStyle) {
@@ -169,30 +172,24 @@ function updateLineStyle(lineStyle: LineStyle) {
 		emit('update-selected-style', { lineStyle })
 		return
 	}
-	emit('update:toolStyle', { ...props.toolStyle, lineStyle })
+	patchToolStyle({ lineStyle })
 }
 
 function updateFontSize(fontSize: number) {
-	if (
-		props.selectedAnnotation &&
-		(props.selectedAnnotation.type === 'text' || props.selectedAnnotation.type === 'stamp' || props.selectedAnnotation.type === 'link')
-	) {
+	const t = props.selectedAnnotation?.type
+	if (t === 'text' || t === 'stamp' || t === 'link') {
 		emit('update-selected-style', { fontSize })
 		return
 	}
-	if (props.activeTool === 'stamp') {
-		emit('update:toolStyle', { ...props.toolStyle, stampSize: fontSize })
-	} else {
-		emit('update:toolStyle', { ...props.toolStyle, fontSize })
-	}
+	patchToolStyle(isStampContext.value ? { stampSize: fontSize } : { fontSize })
 }
 
 function updateTextAlign(textAlign: TextAlign) {
-	if (props.selectedAnnotation && props.selectedAnnotation.type === 'text') {
+	if (props.selectedAnnotation?.type === 'text') {
 		emit('update-selected-style', { textAlign })
 		return
 	}
-	emit('update:toolStyle', { ...props.toolStyle, textAlign })
+	patchToolStyle({ textAlign })
 }
 
 const selectedTextValue = computed(() => {
@@ -229,7 +226,7 @@ function updateShapeHeight(height: number) {
 		}
 		return
 	}
-	emit('update:toolStyle', { ...props.toolStyle, shapeHeight: height })
+	patchToolStyle({ shapeHeight: height })
 }
 </script>
 
@@ -243,9 +240,7 @@ function updateShapeHeight(height: number) {
 			@update:opacity="updateOpacity" />
 
 		<!-- Stroke Width (for Pen, Highlighter, Shapes) -->
-		<div
-			v-if="activeTool === 'drawing' || activeTool === 'highlight' || isShapeActive || (selectedAnnotation && (selectedAnnotation.type === 'drawing' || selectedAnnotation.type === 'highlight' || selectedAnnotation.type === 'shape'))"
-			:class="$style.styleGroup">
+		<div v-if="showStrokeWidth" :class="$style.styleGroup">
 			<SongAnnotationLogSelect
 				:model-value="currentStrokeWidth"
 				:presets="strokeWidthPresets"
@@ -260,9 +255,7 @@ function updateShapeHeight(height: number) {
 		</div>
 
 		<!-- Line Style (for Pen & Shapes) -->
-		<div
-			v-if="activeTool === 'drawing' || isShapeActive || (selectedAnnotation && (selectedAnnotation.type === 'drawing' || selectedAnnotation.type === 'shape'))"
-			:class="$style.styleGroup">
+		<div v-if="showLineStyle" :class="$style.styleGroup">
 			<ViewportPopover
 				v-model:open="showLineStyleMenu"
 				:pane-class="$style.lineMenuPane">
@@ -285,7 +278,7 @@ function updateShapeHeight(height: number) {
 									stroke="currentColor"
 									stroke-width="2"
 									stroke-linecap="round"
-									:stroke-dasharray="currentLineStyleOption.value === 'dashed' ? '5, 3' : currentLineStyleOption.value === 'dotted' ? '1, 4' : undefined" />
+									:stroke-dasharray="lineDashArray(currentLineStyleOption.value)" />
 							</svg>
 							<span>{{ currentLineStyleOption.label }}</span>
 						</span>
@@ -309,7 +302,7 @@ function updateShapeHeight(height: number) {
 								stroke="currentColor"
 								stroke-width="2"
 								stroke-linecap="round"
-								:stroke-dasharray="opt.value === 'dashed' ? '5, 3' : opt.value === 'dotted' ? '1, 4' : undefined" />
+								:stroke-dasharray="lineDashArray(opt.value)" />
 						</svg>
 						<span>{{ opt.label }}</span>
 					</span>
@@ -335,9 +328,7 @@ function updateShapeHeight(height: number) {
 		</div>
 
 		<!-- Font / Stamp / Link Size -->
-		<div
-			v-if="activeTool === 'text' || activeTool === 'stamp' || activeTool === 'link' || selectedAnnotation?.type === 'text' || selectedAnnotation?.type === 'stamp' || selectedAnnotation?.type === 'link'"
-			:class="$style.styleGroup">
+		<div v-if="showFontSize" :class="$style.styleGroup">
 			<SongAnnotationLogSelect
 				:model-value="currentFontSize"
 				:presets="fontSizePresets"
@@ -351,9 +342,7 @@ function updateShapeHeight(height: number) {
 		</div>
 
 		<!-- Text Align -->
-		<div
-			v-if="activeTool === 'text' || selectedAnnotation?.type === 'text'"
-			:class="$style.styleGroup">
+		<div v-if="showTextAlign" :class="$style.styleGroup">
 			<span :class="$style.styleLabel">{{ t('sheetmusic', 'Align') }}</span>
 			<button
 				type="button"
@@ -376,9 +365,7 @@ function updateShapeHeight(height: number) {
 		</div>
 
 		<!-- Selected Text / Link Label -->
-		<div
-			v-if="selectedAnnotation?.type === 'text' || selectedAnnotation?.type === 'link'"
-			:class="$style.styleGroup">
+		<div v-if="showSelectedText" :class="$style.styleGroup">
 			<span :class="$style.styleLabel">
 				{{ selectedAnnotation.type === 'link' ? t('sheetmusic', 'Label') : t('sheetmusic', 'Text') }}
 			</span>

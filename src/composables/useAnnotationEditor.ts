@@ -436,6 +436,11 @@ export function useAnnotationEditor(
 		setTool('stamp')
 	}
 
+	function stepStrokeWidth(cur: number, deltaSign: 1 | -1): number {
+		const step = cur < 4 || (deltaSign < 0 && cur <= 4) ? 0.5 : 1
+		return Math.max(1, Math.min(64, Math.round((cur + deltaSign * step) * 2) / 2))
+	}
+
 	function adjustSizeOrThickness(deltaSign: 1 | -1) {
 		const sel = selectedAnnotation.value
 		if (sel) {
@@ -444,24 +449,17 @@ export function useAnnotationEditor(
 				const cur = Number(sel.style?.fontSize) || fallback
 				const step = sel.type === 'stamp' ? 4 : 2
 				const nextSize = Math.max(8, Math.min(120, cur + deltaSign * step))
-				if (nextSize === cur) return
-				const updated: SheetAnnotation = {
-					...sel,
-					style: { ...sel.style, fontSize: nextSize },
+				if (nextSize !== cur) {
+					updateSelectedStyle({ fontSize: nextSize })
 				}
-				updateAnnotation(sel, updated)
 				return
 			}
 			if (sel.type === 'drawing' || sel.type === 'highlight' || sel.type === 'shape') {
 				const cur = Number(sel.style?.strokeWidth) || (sel.type === 'highlight' ? toolStyle.value.highlightWidth : toolStyle.value.strokeWidth)
-				const step = cur < 4 || (deltaSign < 0 && cur <= 4) ? 0.5 : 1
-				const nextWidth = Math.max(1, Math.min(64, Math.round((cur + deltaSign * step) * 2) / 2))
-				if (nextWidth === cur) return
-				const updated: SheetAnnotation = {
-					...sel,
-					style: { ...sel.style, strokeWidth: nextWidth },
+				const nextWidth = stepStrokeWidth(cur, deltaSign)
+				if (nextWidth !== cur) {
+					updateSelectedStyle({ strokeWidth: nextWidth })
 				}
-				updateAnnotation(sel, updated)
 				return
 			}
 			return
@@ -469,20 +467,13 @@ export function useAnnotationEditor(
 
 		// No selection: adjust active tool style
 		if (activeTool.value === 'stamp') {
-			const next = Math.max(12, Math.min(120, toolStyle.value.stampSize + deltaSign * 4))
-			toolStyle.value = { ...toolStyle.value, stampSize: next }
+			toolStyle.value = { ...toolStyle.value, stampSize: Math.max(12, Math.min(120, toolStyle.value.stampSize + deltaSign * 4)) }
 		} else if (activeTool.value === 'text' || activeTool.value === 'link') {
-			const next = Math.max(10, Math.min(96, toolStyle.value.fontSize + deltaSign * 2))
-			toolStyle.value = { ...toolStyle.value, fontSize: next }
+			toolStyle.value = { ...toolStyle.value, fontSize: Math.max(10, Math.min(96, toolStyle.value.fontSize + deltaSign * 2)) }
 		} else if (activeTool.value === 'highlight') {
-			const cur = toolStyle.value.highlightWidth
-			const next = Math.max(1, Math.min(64, cur + deltaSign * 2))
-			toolStyle.value = { ...toolStyle.value, highlightWidth: next }
+			toolStyle.value = { ...toolStyle.value, highlightWidth: Math.max(1, Math.min(64, toolStyle.value.highlightWidth + deltaSign * 2)) }
 		} else if (activeTool.value === 'drawing' || isShapeTool(activeTool.value)) {
-			const cur = toolStyle.value.strokeWidth
-			const step = cur < 4 || (deltaSign < 0 && cur <= 4) ? 0.5 : 1
-			const next = Math.max(1, Math.min(64, Math.round((cur + deltaSign * step) * 2) / 2))
-			toolStyle.value = { ...toolStyle.value, strokeWidth: next }
+			toolStyle.value = { ...toolStyle.value, strokeWidth: stepStrokeWidth(toolStyle.value.strokeWidth, deltaSign) }
 		}
 	}
 
