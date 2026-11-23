@@ -299,7 +299,7 @@ import { useSongMerge } from '../composables/useSongMerge';
 import { useProgressPolling } from '../composables/useProgressPolling';
 import { apiGet, apiPost } from '../api/client';
 import SongListDisplayMenu from './songs/SongListDisplayMenu.vue';
-import type { ViewMode } from './songs/song-view-columns';
+import { ENTITY_COLUMNS, type ViewMode } from './songs/song-view-columns';
 import SongTableView from './songs/SongTableView.vue';
 import SongCardView from './songs/SongCardView.vue';
 import SongSimpleListView from './songs/SongSimpleListView.vue';
@@ -581,7 +581,6 @@ async function handleApplyBatchUpdate(payload: BatchUpdatePayload) {
       progressId,
       ...resolvedPayload,
     } as any);
-    batchUpdateProgressPercent.value = 100;
     isBatchEditorOpen.value = false;
     clearSelection();
     if (response.data?.ocs?.data) {
