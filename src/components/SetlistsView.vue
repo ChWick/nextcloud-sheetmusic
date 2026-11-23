@@ -97,13 +97,20 @@
     @close="closeRenameDialog"
     @submit="handleRenameSetlist" />
 
-  <DeleteSetlistDialog
+  <ConfirmDeleteDialog
     :open="isDeleteDialogOpen"
-    :setlist-name="setlistToDelete?.name ?? ''"
+    :title="t('sheetmusic', 'Delete setlist')"
+    :confirm-label="t('sheetmusic', 'Delete setlist')"
     :is-deleting="isDeleting"
     :error="deleteError"
+    :show-loading-icon="false"
     @close="closeDeleteDialog"
-    @delete="handleDeleteSetlist" />
+    @confirm="handleDeleteSetlist">
+    <p>
+      {{ t('sheetmusic', 'Are you sure you want to delete "{name}"?', { name: setlistToDelete?.name ?? '' }, { escape: false }) }}
+    </p>
+    <p>{{ t('sheetmusic', 'Songs and bookmarks in your library will not be deleted.') }}</p>
+  </ConfirmDeleteDialog>
 
   <AddSetlistItemDialog
     :open="isAddItemDialogOpen"
@@ -147,7 +154,7 @@ import SetlistFilesSection from './setlists/SetlistFilesSection.vue'
 import SetlistFilePreviewDialog from './setlists/SetlistFilePreviewDialog.vue'
 import SetlistItemsTable from './setlists/SetlistItemsTable.vue'
 import NameInputDialog from './NameInputDialog.vue'
-import DeleteSetlistDialog from './setlists/DeleteSetlistDialog.vue'
+import ConfirmDeleteDialog from './ConfirmDeleteDialog.vue'
 import AddSetlistItemDialog from './setlists/AddSetlistItemDialog.vue'
 import SetlistPerformanceViewer from './setlists/SetlistPerformanceViewer.vue'
 import type { Setlist, SetlistFile, SetlistItem } from '../types/song'
