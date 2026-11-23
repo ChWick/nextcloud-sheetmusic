@@ -179,7 +179,7 @@ const {
 	border-color: var(--color-primary-element);
 }
 
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
 	.songCard:hover :global(.sheetmusic-inline-edit-trigger) {
 		opacity: 0.75;
 		pointer-events: auto;

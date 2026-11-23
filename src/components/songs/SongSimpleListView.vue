@@ -172,7 +172,7 @@ const {
 	background-color: var(--color-background-hover);
 }
 
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
 	.songRow:hover :global(.sheetmusic-inline-edit-trigger) {
 		opacity: 0.75;
 		pointer-events: auto;

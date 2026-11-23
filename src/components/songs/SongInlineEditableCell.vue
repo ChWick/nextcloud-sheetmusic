@@ -96,8 +96,35 @@ function areEntitiesEqual(a: any[], b: any[], labelKey: string): boolean {
 	return true
 }
 
+let lastPointerWasTouch = false
+
+function handlePointerDown(event: PointerEvent) {
+	lastPointerWasTouch = event.pointerType === 'touch'
+}
+
+function handleTouchStart() {
+	lastPointerWasTouch = true
+}
+
+function isTouchEvent(event: MouseEvent): boolean {
+	if (lastPointerWasTouch) {
+		return true
+	}
+	return 'pointerType' in event && (event as PointerEvent).pointerType === 'touch'
+}
+
 function handleTriggerClick(event: MouseEvent) {
-	if ('pointerType' in event && (event as PointerEvent).pointerType === 'touch') {
+	if (isTouchEvent(event)) {
+		lastPointerWasTouch = false
+		return
+	}
+	event.stopPropagation()
+	void startEdit()
+}
+
+function handleDblClick(event: MouseEvent) {
+	if (isTouchEvent(event)) {
+		lastPointerWasTouch = false
 		return
 	}
 	event.stopPropagation()
@@ -208,7 +235,9 @@ defineExpose({
 <template>
 	<component
 		:is="tag"
-		@dblclick.stop="startEdit">
+		@pointerdown="handlePointerDown"
+		@touchstart.passive="handleTouchStart"
+		@dblclick="handleDblClick">
 		<div
 			v-if="isEditing"
 			:class="[$style.inlineEditContainer, mode === 'entity' && $style.inlineEditEntityContainer]"
@@ -370,13 +399,12 @@ defineExpose({
 	transition: opacity 0.15s ease, color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
 }
 
-.inlineEditTrigger:focus,
 .inlineEditTrigger:focus-visible {
 	opacity: 0.75;
 	pointer-events: auto;
 }
 
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
 	.editableCellContent:hover .inlineEditTrigger {
 		opacity: 0.75;
 		pointer-events: auto;
@@ -391,7 +419,7 @@ defineExpose({
 	}
 }
 
-@media (hover: none) {
+@media (hover: none), (pointer: coarse) {
 	.inlineEditTrigger {
 		display: none;
 	}
