@@ -14,12 +14,11 @@ import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import SongEditor from './SongEditor.vue'
 import DeleteSongDialog from './DeleteSongDialog.vue'
-import AnnotatableFilePreview from './file-preview/AnnotatableFilePreview.vue'
+import FileViewerContent from './file-preview/FileViewerContent.vue'
 import SongPdfMergeModal from './song-pdf/SongPdfMergeModal.vue'
 import SongPdfVersionsModal from './song-pdf/SongPdfVersionsModal.vue'
 import { useFileVersions } from './song-pdf/useFileVersions'
 import SongViewerMetadata from './song-viewer/SongViewerMetadata.vue'
-import SongViewerFileToolbar from './song-viewer/SongViewerFileToolbar.vue'
 import SetlistPerformanceViewer from './setlists/SetlistPerformanceViewer.vue'
 import FullscreenShell from './FullscreenShell.vue'
 import { extractEntityLists } from './songs/song-view-columns'
@@ -85,7 +84,7 @@ const isMergePdfsModalOpen = ref(false)
 const isPerformanceMode = ref(false)
 const performanceStartPage = ref(1)
 const selectedFileId = ref('')
-const filePreviewerRef = ref<InstanceType<typeof AnnotatableFilePreview> | null>(null)
+const filePreviewerRef = ref<InstanceType<typeof FileViewerContent> | null>(null)
 
 const performanceItems = computed<SetlistItem[]>(() => {
 	if (!props.song) return []
@@ -217,8 +216,6 @@ const {
 
 const annotations = ref<SheetAnnotation[]>([])
 
-const isEditingAnnotations = ref(false)
-
 const annotationContext = computed(() => ({
 	songId: props.song?.id ?? 0,
 	fileId: Number(selectedFile.value?.fileId ?? selectedFile.value?.id ?? 0),
@@ -236,14 +233,6 @@ function openPdfModifier(mode?: string) {
 		preserveFullscreenOnUnmount()
 	}
 	emit('modify-pdf', props.song, selectedFile.value?.id, mode, isAnnotationFullscreen.value || undefined)
-}
-
-function toggleAnnotationEditMode() {
-	filePreviewerRef.value?.toggleEditMode()
-}
-
-function onEditingAnnotationsChange(editing: boolean) {
-	isEditingAnnotations.value = editing
 }
 
 async function loadAnnotations() {
@@ -344,51 +333,40 @@ defineExpose({
 
 		<!-- PDF / File Viewer View -->
 		<template v-else>
-			<SongViewerFileToolbar
+			<FileViewerContent
 				v-if="selectedFile"
+				ref="filePreviewerRef"
 				:file="selectedFile"
 				:files="songFiles"
+				:file-path="selectedFile.path ? previewFilePath : ''"
 				:is-pdf="isSelectedFilePdf"
-				:current-page="filePreviewerRef?.currentPage ?? 1"
-				:total-pages="filePreviewerRef?.totalPages ?? 1"
-				:file-size-bytes="filePreviewerRef?.fileSizeBytes ?? null"
-				:page-resolutions="filePreviewerRef?.pageResolutions ?? []"
-				:show-annotations="filePreviewerRef?.showAnnotationsState ?? true"
-				:is-editing-annotations="isEditingAnnotations"
-				:is-fullscreen="isAnnotationFullscreen"
+				:page-order="selectedFile.pageOrder"
+				:target-page="activeBookmarkPage"
+				:preview-key="`${selectedFile.id}-${fileVersionToken}`"
+				:annotations="annotations"
+				:annotation-context="annotationContext"
 				:can-write="canWrite"
+				:is-fullscreen="isAnnotationFullscreen"
 				:bookmarks="songBookmarks"
 				:active-bookmark-page="activeBookmarkPage"
+				@update:annotations="annotations = $event"
 				@select-file="selectFile"
 				@play="startPerformanceMode"
 				@open-external="openInExternalViewer"
 				@modify-pdf="openPdfModifier()"
 				@merge-pdfs="isMergePdfsModalOpen = true"
 				@open-versions="openVersionsModal"
-				@toggle-annotations="filePreviewerRef?.toggleAnnotations()"
-				@toggle-edit-annotations="toggleAnnotationEditMode"
 				@toggle-fullscreen="toggleAnnotationFullscreen"
 				@jump-to-bookmark="jumpToBookmark"
-				@edit-bookmarks="openPdfModifier('bookmarks')" />
-
-			<AnnotatableFilePreview
-				v-if="selectedFile?.path"
-				ref="filePreviewerRef"
-				:preview-key="`${selectedFile.id}-${fileVersionToken}`"
-				:file-path="previewFilePath"
-				:page-order="selectedFile?.pageOrder"
-				:target-page="activeBookmarkPage"
-				:show-external-button="false"
-				:annotations="annotations"
-				:annotation-context="annotationContext"
-				:can-annotate="isSelectedFilePdf && canWrite !== false"
-				@update:annotations="annotations = $event"
-				@update:is-editing="onEditingAnnotationsChange" />
-			<div v-else-if="songFiles.length === 0" :class="$style.emptyNotice">
+				@edit-bookmarks="openPdfModifier('bookmarks')">
+				<template #missing-file>
+					<div :class="$style.errorNotice" role="alert">
+						{{ t('sheetmusic', 'Missing file: The file does not exist on the file system.') }}
+					</div>
+				</template>
+			</FileViewerContent>
+			<div v-else :class="$style.emptyNotice">
 				{{ t('sheetmusic', 'No files attached to this song.') }}
-			</div>
-			<div v-else :class="$style.errorNotice" role="alert">
-				{{ t('sheetmusic', 'Missing file: The file does not exist on the file system.') }}
 			</div>
 		</template>
 

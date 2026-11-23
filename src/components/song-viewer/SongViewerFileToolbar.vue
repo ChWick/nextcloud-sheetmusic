@@ -7,6 +7,7 @@ import { translate as t } from '@nextcloud/l10n'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import ArrowLeftIcon from 'vue-material-design-icons/ArrowLeft.vue'
 import DrawIcon from 'vue-material-design-icons/Draw.vue'
 import EyeOffOutline from 'vue-material-design-icons/EyeOffOutline.vue'
 import EyeOutline from 'vue-material-design-icons/EyeOutline.vue'
@@ -25,7 +26,7 @@ import { formatByteSize } from '../song-pdf/pdf-enhance-engine'
 
 const props = withDefaults(
 	defineProps<{
-		file: SongFile
+		file: Pick<SongFile, 'id' | 'path'> & { fileSize?: number | null }
 		files?: SongFile[]
 		isPdf: boolean
 		currentPage?: number
@@ -38,6 +39,13 @@ const props = withDefaults(
 		canWrite?: boolean
 		bookmarks?: Bookmark[]
 		activeBookmarkPage?: number
+		showPlay?: boolean
+		showBookmarks?: boolean
+		showModifyPdf?: boolean
+		showVersions?: boolean
+		showExternal?: boolean
+		showBack?: boolean
+		backLabel?: string
 	}>(),
 	{
 		files: () => [],
@@ -51,10 +59,18 @@ const props = withDefaults(
 		canWrite: true,
 		bookmarks: () => [],
 		activeBookmarkPage: undefined,
+		showPlay: true,
+		showBookmarks: true,
+		showModifyPdf: true,
+		showVersions: true,
+		showExternal: true,
+		showBack: false,
+		backLabel: undefined,
 	},
 )
 
 const emit = defineEmits<{
+	back: []
 	'select-file': [fileId: string]
 	play: []
 	'open-external': []
@@ -69,6 +85,11 @@ const emit = defineEmits<{
 }>()
 
 const hasMultiplePdfs = computed(() => getPdfFiles(props.files).length >= 2)
+const hasMenuActions = computed(() =>
+	props.isPdf
+	|| (hasMultiplePdfs.value && props.canWrite !== false)
+	|| props.showExternal,
+)
 
 const effectiveSizeBytes = computed(() => props.fileSizeBytes ?? props.file?.fileSize ?? null)
 const formattedFileSize = computed(() => formatByteSize(effectiveSizeBytes.value))
@@ -96,6 +117,17 @@ const activePageResolution = computed<PdfPageResolutionSummary | null>(() => {
 <template>
 	<div :class="$style.fileToolbar" data-test="song-file-toolbar">
 		<div :class="$style.fileInfoSection">
+			<NcButton
+				v-if="showBack"
+				variant="tertiary"
+				:title="backLabel || t('sheetmusic', 'Back')"
+				:aria-label="backLabel || t('sheetmusic', 'Back')"
+				data-test="viewer-back-button"
+				@click="emit('back')">
+				<template #icon>
+					<ArrowLeftIcon :size="20" />
+				</template>
+			</NcButton>
 			<div v-if="files.length > 1" :class="$style.fileSelectWrap">
 				<FileDocumentOutline :size="18" :class="$style.fileIcon" />
 				<select
@@ -132,14 +164,14 @@ const activePageResolution = computed<PdfPageResolutionSummary | null>(() => {
 
 		<div :class="$style.fileActions">
 			<SongViewerBookmarksBar
-				v-if="isPdf"
+				v-if="showBookmarks && isPdf"
 				:bookmarks="bookmarks"
 				:active-bookmark-page="activeBookmarkPage"
 				:can-write="canWrite"
 				@jump="emit('jump-to-bookmark', $event)"
 				@edit="emit('edit-bookmarks')" />
 			<NcButton
-				v-if="file?.path"
+				v-if="showPlay && file?.path"
 				variant="primary"
 				:title="t('sheetmusic', 'Play song')"
 				:aria-label="t('sheetmusic', 'Play song')"
@@ -172,6 +204,7 @@ const activePageResolution = computed<PdfPageResolutionSummary | null>(() => {
 				</template>
 			</NcButton>
 			<NcActions
+				v-if="hasMenuActions"
 				:aria-label="t('sheetmusic', 'More file actions')"
 				data-test="pdf-actions-menu">
 				<NcActionButton
@@ -187,7 +220,7 @@ const activePageResolution = computed<PdfPageResolutionSummary | null>(() => {
 					{{ showAnnotationsLabel }}
 				</NcActionButton>
 				<NcActionButton
-					v-if="isPdf && canWrite !== false"
+					v-if="showModifyPdf && isPdf && canWrite !== false"
 					:close-after-click="true"
 					:title="t('sheetmusic', 'Modify PDF')"
 					@click="emit('modify-pdf')">
@@ -208,7 +241,7 @@ const activePageResolution = computed<PdfPageResolutionSummary | null>(() => {
 					{{ t('sheetmusic', 'Merge PDFs') }}
 				</NcActionButton>
 				<NcActionButton
-					v-if="isPdf && canWrite !== false"
+					v-if="showVersions && isPdf && canWrite !== false"
 					:close-after-click="true"
 					:title="t('sheetmusic', 'PDF version history')"
 					@click="emit('open-versions')">
@@ -218,6 +251,7 @@ const activePageResolution = computed<PdfPageResolutionSummary | null>(() => {
 					{{ t('sheetmusic', 'PDF version history') }}
 				</NcActionButton>
 				<NcActionButton
+					v-if="showExternal"
 					:close-after-click="true"
 					:title="t('sheetmusic', 'Open in external viewer')"
 					@click="emit('open-external')">
@@ -243,6 +277,7 @@ const activePageResolution = computed<PdfPageResolutionSummary | null>(() => {
 	border: 1px solid var(--color-border);
 	border-radius: var(--border-radius-large, 8px);
 	flex-wrap: wrap;
+	flex-shrink: 0;
 	box-sizing: border-box;
 }
 

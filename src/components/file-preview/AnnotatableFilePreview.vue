@@ -1,8 +1,5 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { translate as t } from '@nextcloud/l10n'
-import NcButton from '@nextcloud/vue/components/NcButton'
-import DrawIcon from 'vue-material-design-icons/Draw.vue'
 import FilePreviewer from '../FilePreviewer.vue'
 import SongAnnotationToolbar from '../song-viewer/SongAnnotationToolbar.vue'
 import { type AnnotationEditorContext, useAnnotationEditor } from '../../composables/useAnnotationEditor'
@@ -18,7 +15,6 @@ const props = withDefaults(defineProps<{
 	annotations?: SheetAnnotation[]
 	annotationContext: AnnotationEditorContext
 	canAnnotate?: boolean
-	showAnnotateButton?: boolean
 }>(), {
 	fileName: undefined,
 	pageOrder: undefined,
@@ -27,7 +23,6 @@ const props = withDefaults(defineProps<{
 	previewKey: undefined,
 	annotations: () => [],
 	canAnnotate: true,
-	showAnnotateButton: false,
 })
 
 const emit = defineEmits<{
@@ -122,19 +117,6 @@ defineExpose({
 
 <template>
 	<div :class="$style.container">
-		<div
-			v-if="showAnnotateButton && canAnnotate && !isEditing"
-			:class="$style.actionsBar">
-			<NcButton
-				variant="secondary"
-				@click="enterEditMode">
-				<template #icon>
-					<DrawIcon :size="20" />
-				</template>
-				{{ t('sheetmusic', 'Annotate') }}
-			</NcButton>
-		</div>
-
 		<SongAnnotationToolbar
 			v-if="canAnnotate && isEditing"
 			:active-tool="activeTool"
@@ -181,13 +163,5 @@ defineExpose({
 	flex: 1;
 	min-height: 0;
 	overflow: hidden;
-}
-
-.actionsBar {
-	display: flex;
-	justify-content: flex-end;
-	padding: 6px 12px;
-	border-bottom: 1px solid var(--color-border);
-	flex-shrink: 0;
 }
 </style>
