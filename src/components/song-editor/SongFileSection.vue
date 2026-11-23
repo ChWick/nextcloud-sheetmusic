@@ -3,6 +3,7 @@ import type { PendingAddition, SongFile } from '../../types/song'
 import { ref } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import FolderIcon from 'vue-material-design-icons/Folder.vue'
+import MergeIcon from 'vue-material-design-icons/Merge.vue'
 import UploadIcon from 'vue-material-design-icons/Upload.vue'
 import SongFileListItem from './SongFileListItem.vue'
 import SongPendingNotice from './SongPendingNotice.vue'
@@ -14,11 +15,13 @@ defineProps<{
 	pendingAdditions: PendingAddition[]
 	saveActionLabel: string
 	isSaving: boolean
+	canMergePdfs?: boolean
 }>()
 
 const emit = defineEmits<{
 	uploadFile: [file: File]
 	chooseNextcloudFile: []
+	mergePdfs: []
 	openExternal: [file: SongFile]
 	detach: [file: SongFile]
 	delete: [file: SongFile]
@@ -76,6 +79,19 @@ defineExpose({ openUploadPicker })
 					@click="emit('chooseNextcloudFile')">
 					<FolderIcon :size="20" aria-hidden="true" />
 					{{ t('sheetmusic', 'Choose from Nextcloud') }}
+				</button>
+
+				<button
+					v-if="canMergePdfs"
+					type="button"
+					:class="$style.fileActionButton"
+					:disabled="isSaving"
+					:title="t('sheetmusic', 'Merge multiple PDFs into one')"
+					:aria-label="t('sheetmusic', 'Merge PDFs')"
+					data-test="merge-pdfs-button"
+					@click="emit('mergePdfs')">
+					<MergeIcon :size="20" aria-hidden="true" />
+					{{ t('sheetmusic', 'Merge PDFs') }}
 				</button>
 			</div>
 		</div>

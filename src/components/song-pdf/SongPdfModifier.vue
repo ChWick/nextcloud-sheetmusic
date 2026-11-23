@@ -12,7 +12,7 @@ import { PDFDocument } from 'pdf-lib'
 import { destroyPdfJsDocument, loadPdfJsDocument } from '../../utils/pdfjs'
 import { updateSongFile } from '../../api/songFiles'
 import { showError, showSuccess } from '@nextcloud/dialogs'
-import { getCacheBustedFileUrl, getFileName, pickPrimarySongFile, toUint8Array } from '../../utils/file'
+import { getCacheBustedFileUrl, getFileName, isPdfFile, pickPrimarySongFile, toUint8Array } from '../../utils/file'
 import { describeRequestFailure } from '../../utils/api'
 
 import SongPdfHeader from './SongPdfHeader.vue'
@@ -29,6 +29,7 @@ import SongPageOrderModal from './SongPageOrderModal.vue'
 import SongPageOrderZoomModal from './SongPageOrderZoomModal.vue'
 import { usePdfZoomLightbox } from './usePdfZoomLightbox'
 import SongPdfJoinModal from './SongPdfJoinModal.vue'
+import SongPdfMergeModal from './SongPdfMergeModal.vue'
 import SongPdfRotateModal from './SongPdfRotateModal.vue'
 import SongPdfEnhanceModal from './SongPdfEnhanceModal.vue'
 import { executeJoinTwoPages, type JoinLayout } from './pdf-join-engine'
@@ -91,6 +92,9 @@ const emit = defineEmits<{
 const targetFile = computed<SongFile | undefined>(() =>
 	pickPrimarySongFile(props.song.files, props.fileId) ?? undefined,
 )
+const songPdfFiles = computed<SongFile[]>(() =>
+	(props.song.files ?? []).filter((f) => isPdfFile(f.path)),
+)
 
 // State
 type Mode = 'rotate' | 'split' | 'crop' | 'enhance' | 'bookmarks'
@@ -127,8 +131,13 @@ async function refreshPageResolutions(pdf: any) {
 // Page-specific state (1-indexed, size totalPages)
 // Page Order modal state
 const isPageOrderModalOpen = ref(false)
+const isMergePdfsModalOpen = ref(false)
 
 function handlePageOrderSaved(data: LibraryData) {
+	finishAndReturn(() => emit('saved', data, props.song.id))
+}
+
+function handlePdfsMerged(data: LibraryData) {
 	finishAndReturn(() => emit('saved', data, props.song.id))
 }
 
@@ -643,6 +652,7 @@ const isAnyModalOpen = computed(() =>
 	|| isJoinModalOpen.value
 	|| isVersionsModalOpen.value
 	|| isPageOrderModalOpen.value
+	|| isMergePdfsModalOpen.value
 	|| isZoomModalOpen.value,
 )
 
@@ -726,10 +736,12 @@ watch(() => targetFile.value?.path, () => {
 			:file-size-bytes="originalPdfBytes?.byteLength ?? targetFile?.fileSize ?? null"
 			:page-resolutions="pageResolutions"
 			:is-fullscreen="isFullscreen"
+			:pdf-files-count="songPdfFiles.length"
 			@update:active-mode="activeMode = $event"
 			@cancel="handleCancel"
 			@open-page-order-modal="isPageOrderModalOpen = true"
 			@open-join-modal="openJoinModal(1, 2)"
+			@open-merge-pdfs-modal="isMergePdfsModalOpen = true"
 			@open-versions-modal="openVersionsModal"
 			@toggle-fullscreen="toggleFullscreen"
 			@save="handleHeaderSave" />
@@ -907,6 +919,15 @@ watch(() => targetFile.value?.path, () => {
 			:library-id="libraryId"
 			:pdf="activePdfDoc"
 			@saved="handlePageOrderSaved" />
+
+		<!-- Merge PDFs Modal -->
+		<SongPdfMergeModal
+			v-if="isMergePdfsModalOpen"
+			v-model:open="isMergePdfsModalOpen"
+			:song="song"
+			:library-id="libraryId"
+			:pdf-files="songPdfFiles"
+			@merged="handlePdfsMerged" />
 
 		<!-- Page Zoom Lightbox Modal -->
 		<SongPageOrderZoomModal

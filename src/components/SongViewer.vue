@@ -15,6 +15,7 @@ import { useRoute } from 'vue-router'
 import SongEditor from './SongEditor.vue'
 import DeleteSongDialog from './DeleteSongDialog.vue'
 import AnnotatableFilePreview from './file-preview/AnnotatableFilePreview.vue'
+import SongPdfMergeModal from './song-pdf/SongPdfMergeModal.vue'
 import SongPdfVersionsModal from './song-pdf/SongPdfVersionsModal.vue'
 import { useFileVersions } from './song-pdf/useFileVersions'
 import SongViewerMetadata from './song-viewer/SongViewerMetadata.vue'
@@ -80,6 +81,7 @@ ensurePdfJsWorker()
 
 const isEditing = ref(false)
 const isDeleteDialogOpen = ref(false)
+const isMergePdfsModalOpen = ref(false)
 const isPerformanceMode = ref(false)
 const performanceStartPage = ref(1)
 const selectedFileId = ref('')
@@ -108,6 +110,7 @@ const isSelectedFilePdf = computed(() => isPdfFile(selectedFile.value?.path))
 const entityListsProps = computed(() => extractEntityLists(props))
 const songBookmarks = computed(() => props.song?.bookmarks ?? [])
 const songFiles = computed(() => props.song?.files ?? [])
+const songPdfFiles = computed(() => songFiles.value.filter((f) => isPdfFile(f.path)))
 
 /** The file of the active tab, falling back to the first file of the song. */
 const selectedFile = computed<SongFile | null>(() => {
@@ -360,6 +363,7 @@ defineExpose({
 				@play="startPerformanceMode"
 				@open-external="openInExternalViewer"
 				@modify-pdf="openPdfModifier()"
+				@merge-pdfs="isMergePdfsModalOpen = true"
 				@open-versions="openVersionsModal"
 				@toggle-annotations="filePreviewerRef?.toggleAnnotations()"
 				@toggle-edit-annotations="toggleAnnotationEditMode"
@@ -401,6 +405,14 @@ defineExpose({
 			:is-loading="isLoadingVersions"
 			:is-reverting="isRevertingVersion"
 			@revert="revertToVersion" />
+
+		<SongPdfMergeModal
+			v-if="song && isMergePdfsModalOpen"
+			v-model:open="isMergePdfsModalOpen"
+			:song="song"
+			:library-id="libraryId ?? -1"
+			:pdf-files="songPdfFiles"
+			@merged="handleUpdated" />
 
 		<SetlistPerformanceViewer
 			v-if="isPerformanceMode && song && selectedFile?.path"

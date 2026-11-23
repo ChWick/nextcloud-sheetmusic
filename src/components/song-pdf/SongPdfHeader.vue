@@ -17,6 +17,7 @@ import CallSplit from 'vue-material-design-icons/CallSplit.vue'
 import BookmarkMusicOutline from 'vue-material-design-icons/BookmarkMusicOutline.vue'
 import ContentSaveOutlineIcon from 'vue-material-design-icons/ContentSaveOutline.vue'
 import FormatListNumbered from 'vue-material-design-icons/FormatListNumbered.vue'
+import MergeIcon from 'vue-material-design-icons/Merge.vue'
 import TableMergeCells from 'vue-material-design-icons/TableMergeCells.vue'
 import History from 'vue-material-design-icons/History.vue'
 import FullscreenIcon from 'vue-material-design-icons/Fullscreen.vue'
@@ -44,6 +45,7 @@ const props = defineProps<{
 	fileSizeBytes?: number | null
 	pageResolutions?: PdfPageResolutionSummary[]
 	isFullscreen?: boolean
+	pdfFilesCount?: number
 }>()
 
 const formattedFileSize = computed(() => {
@@ -61,6 +63,7 @@ const emit = defineEmits<{
 	'save': []
 	'open-page-order-modal': []
 	'open-join-modal': []
+	'open-merge-pdfs-modal': []
 	'open-versions-modal': []
 	'toggle-fullscreen': []
 }>()
@@ -219,6 +222,18 @@ const modeTabItems = computed(() => [
 				@click="emit('open-join-modal')">
 				<TableMergeCells :size="18" />
 				<span :class="$style.tabLabel">{{ t('sheetmusic', 'Join Pages…') }}</span>
+			</button>
+			<button
+				v-if="(pdfFilesCount ?? 0) >= 2"
+				type="button"
+				:class="$style.toolActionBtn"
+				:disabled="isSaving || isLoading"
+				:title="t('sheetmusic', 'Merge multiple PDFs of this song into one')"
+				:aria-label="t('sheetmusic', 'Merge PDFs…')"
+				data-test="header-merge-pdfs-btn"
+				@click="emit('open-merge-pdfs-modal')">
+				<MergeIcon :size="18" />
+				<span :class="$style.tabLabel">{{ t('sheetmusic', 'Merge PDFs…') }}</span>
 			</button>
 		</nav>
 

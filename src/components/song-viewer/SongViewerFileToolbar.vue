@@ -15,11 +15,12 @@ import FileDocumentOutline from 'vue-material-design-icons/FileDocumentOutline.v
 import FullscreenIcon from 'vue-material-design-icons/Fullscreen.vue'
 import FullscreenExitIcon from 'vue-material-design-icons/FullscreenExit.vue'
 import History from 'vue-material-design-icons/History.vue'
+import MergeIcon from 'vue-material-design-icons/Merge.vue'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import PlayIcon from 'vue-material-design-icons/Play.vue'
 import PdfInfoPopover from '../song-pdf/PdfInfoPopover.vue'
 import SongViewerBookmarksBar from './SongViewerBookmarksBar.vue'
-import { getFileName } from '../../utils/file'
+import { getFileName, isPdfFile } from '../../utils/file'
 import { formatByteSize } from '../song-pdf/pdf-enhance-engine'
 
 const props = withDefaults(
@@ -58,6 +59,7 @@ const emit = defineEmits<{
 	play: []
 	'open-external': []
 	'modify-pdf': []
+	'merge-pdfs': []
 	'open-versions': []
 	'toggle-annotations': []
 	'toggle-edit-annotations': []
@@ -65,6 +67,8 @@ const emit = defineEmits<{
 	'jump-to-bookmark': [pageNum: number]
 	'edit-bookmarks': []
 }>()
+
+const hasMultiplePdfs = computed(() => props.files.filter((f) => isPdfFile(f.path)).length >= 2)
 
 const effectiveSizeBytes = computed(() => props.fileSizeBytes ?? props.file?.fileSize ?? null)
 const formattedFileSize = computed(() => formatByteSize(effectiveSizeBytes.value))
@@ -191,6 +195,17 @@ const activePageResolution = computed<PdfPageResolutionSummary | null>(() => {
 						<FileDocumentEditOutline :size="18" />
 					</template>
 					{{ t('sheetmusic', 'Modify PDF') }}
+				</NcActionButton>
+				<NcActionButton
+					v-if="hasMultiplePdfs && canWrite !== false"
+					:close-after-click="true"
+					:title="t('sheetmusic', 'Merge PDFs')"
+					data-test="merge-pdfs-action"
+					@click="emit('merge-pdfs')">
+					<template #icon>
+						<MergeIcon :size="18" />
+					</template>
+					{{ t('sheetmusic', 'Merge PDFs') }}
 				</NcActionButton>
 				<NcActionButton
 					v-if="isPdf && canWrite !== false"

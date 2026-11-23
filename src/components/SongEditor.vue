@@ -7,6 +7,7 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import { apiPost } from '../api/client'
 import { describeRequestFailure } from '../utils/api'
+import { isPdfFile } from '../utils/file'
 import { createEntityTag, createNamedTag, matchSelected, prefillByName, resolveSongEntityIds } from './song-editor/entity-utils'
 import { useSongEditorFiles } from './song-editor/useSongEditorFiles'
 import { ENTITY_COLUMNS, type SongEntityProp } from './songs/song-view-columns'
@@ -22,6 +23,7 @@ import SongMetadataFields from './song-editor/SongMetadataFields.vue'
 import DeleteSongDialog from './DeleteSongDialog.vue'
 import SongHistoryModal from './SongHistoryModal.vue'
 import SongPageOrderModal from './song-pdf/SongPageOrderModal.vue'
+import SongPdfMergeModal from './song-pdf/SongPdfMergeModal.vue'
 
 const props = withDefaults(
 	defineProps<{
@@ -157,6 +159,7 @@ const fileSection = ref<{ openUploadPicker: () => void }>()
 const isHistoryOpen = ref(false)
 const isPageOrderModalOpen = ref(false)
 const selectedPageOrderFile = ref<SongFile | null>(null)
+const isMergePdfsModalOpen = ref(false)
 const isDeleteDialogOpen = ref(false)
 
 const {
@@ -189,6 +192,9 @@ const {
 	onSuccess: (msg) => { successMessage.value = msg },
 })
 
+const currentPdfFiles = computed(() => currentFiles.value.filter((f) => isPdfFile(f.path)))
+const canMergePdfs = computed(() => !isNewSong.value && currentPdfFiles.value.length >= 2)
+
 function openPageOrderModal(file: SongFile) {
 	selectedPageOrderFile.value = file
 	isPageOrderModalOpen.value = true
@@ -196,6 +202,10 @@ function openPageOrderModal(file: SongFile) {
 
 function handlePageOrderSaved(data: LibraryData, updatedFile: SongFile) {
 	updateFilePageOrder(updatedFile)
+	emit('updated', data)
+}
+
+function handlePdfsMerged(data: LibraryData) {
 	emit('updated', data)
 }
 
@@ -460,8 +470,10 @@ defineExpose({
 				:pending-additions="pendingAdditions"
 				:save-action-label="saveActionLabel"
 				:is-saving="isSaving"
+				:can-merge-pdfs="canMergePdfs"
 				@upload-file="handleFileUpload"
 				@choose-nextcloud-file="openNextcloudPicker"
+				@merge-pdfs="isMergePdfsModalOpen = true"
 				@open-external="openInExternalViewer"
 				@detach="stageDetachFile"
 				@delete="stageDeleteFile"
@@ -544,6 +556,15 @@ defineExpose({
 			:song-id="song.id"
 			:library-id="libraryId"
 			@saved="handlePageOrderSaved" />
+
+		<!-- Merge PDFs Modal -->
+		<SongPdfMergeModal
+			v-if="song && isMergePdfsModalOpen"
+			v-model:open="isMergePdfsModalOpen"
+			:song="song"
+			:library-id="libraryId"
+			:pdf-files="currentPdfFiles"
+			@merged="handlePdfsMerged" />
 	</div>
 </template>
 
