@@ -8,22 +8,20 @@ import type { Song, SongFile, Book, Composer, Collection, Artist, Genre, Instrum
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
-import { PDFDocument, degrees } from 'pdf-lib'
-import { cleanupPdfJsPage, destroyPdfJsDocument, loadPdfJsDocument, releaseCanvas, setBoundedRecordEntry } from '../../utils/pdfjs'
-import { apiDelete, apiPost } from '../../api/client'
+import { PDFDocument } from 'pdf-lib'
+import { destroyPdfJsDocument, loadPdfJsDocument, setBoundedRecordEntry } from '../../utils/pdfjs'
 import { updateSongFile } from '../../api/songFiles'
-import { showError, showInfo, showSuccess } from '@nextcloud/dialogs'
+import { showError, showSuccess } from '@nextcloud/dialogs'
 import { getCacheBustedFileUrl, getFileName, pickPrimarySongFile, toUint8Array } from '../../utils/file'
 import { describeRequestFailure } from '../../utils/api'
-import type { OriginalSongAction } from './OriginalSongActionSelector.vue'
 
 import SongPdfHeader from './SongPdfHeader.vue'
 import SongPdfToolbar from './SongPdfToolbar.vue'
 import SongPdfSaveProgress from './SongPdfSaveProgress.vue'
 import SongPdfLoadingState from './SongPdfLoadingState.vue'
-import SongPdfPageCard, { type BookmarkPageSummary } from './SongPdfPageCard.vue'
+import { type BookmarkPageSummary } from './SongPdfPageCard.vue'
 import SongPdfPageGrid from './SongPdfPageGrid.vue'
-import SongPdfSplitSidebar, { getSegmentColor, type SplitSegment } from './SongPdfSplitSidebar.vue'
+import SongPdfSplitSidebar from './SongPdfSplitSidebar.vue'
 import SongPdfVersionsModal from './SongPdfVersionsModal.vue'
 import { useFileVersions } from './useFileVersions'
 import SongPdfCropModal from './SongPdfCropModal.vue'
@@ -33,12 +31,10 @@ import { renderPageImage } from './usePageOrderThumbnails'
 import SongPdfJoinModal from './SongPdfJoinModal.vue'
 import SongPdfRotateModal from './SongPdfRotateModal.vue'
 import SongPdfEnhanceModal from './SongPdfEnhanceModal.vue'
-import { computeCropBoxForRotation, type PageCrop } from './crop-types'
+import type { PageCrop } from './crop-types'
 import { executeJoinTwoPages, type JoinLayout } from './pdf-join-engine'
-import { executeRotatePage } from './pdf-rotate-engine'
-import type { ScanOperation } from './scan-types'
-import { applyPipeline, createImageBuffer, imageDataToImageBuffer, imageBufferToImageData } from './scan-enhance-engine'
-import { executeEnhancePage, inspectPdfDocumentResolutions, type PdfPageResolutionSummary, pruneUnreferencedPdfObjects, resolvePageRenderScale } from './pdf-enhance-engine'
+import { inspectPdfDocumentResolutions, type PdfPageResolutionSummary, pruneUnreferencedPdfObjects } from './pdf-enhance-engine'
+import { applyPdfPageEdits, formatPdfSaveSuccessMessage } from './pdf-save-pipeline'
 import { usePdfThumbnails } from './usePdfThumbnails'
 import { usePdfSplit } from './usePdfSplit'
 import SongPdfBookmarksSidebar from './SongPdfBookmarksSidebar.vue'
@@ -551,158 +547,24 @@ async function saveRotationsAndCrops() {
 
 	try {
 		const pdfDoc = await PDFDocument.load(originalPdfBytes.value)
-		const pages = pdfDoc.getPages()
-
-		let modifiedRotations = false
-		let modifiedCrops = false
-		let modifiedEnhancements = false
-		let processedCount = 0
-		for (let i = 0; i < pages.length; i++) {
-			const pageNum = i + 1
-			// Skip deleted pages from modifications
-			if (deletedPages.value.has(pageNum)) {
-				continue
-			}
-
-			processedCount++
-			const pageIsEnhanced = Boolean(isPageEnhanced(pageNum) && activePdfDoc.value)
-			const startPct = 5 + ((processedCount - 1) / activeTotal) * 75
-			const endPct = 5 + (processedCount / activeTotal) * 75
-
-			await updateSaveProgress(
-				startPct,
-				pageIsEnhanced
-					? t('sheetmusic', 'Enhancing page {current} of {total}…', { current: processedCount, total: activeTotal }, { escape: false })
-					: t('sheetmusic', 'Processing page {current} of {total}…', { current: processedCount, total: activeTotal }, { escape: false }),
-				processedCount,
-				activeTotal,
-				pageIsEnhanced,
-			)
-
-			// 1. Scan Enhancement (if configured for page)
-			if (pageIsEnhanced && activePdfDoc.value) {
-				let pageToRender: any = null
-				let enhanceCanvas: HTMLCanvasElement | null = null
-				try {
-					pageToRender = await activePdfDoc.value.getPage(pageNum)
-					const origPage = pdfDoc.getPage(i)
-					const origSize = origPage.getSize()
-					const scale = await resolvePageRenderScale(pageToRender, origPage)
-					const unscaled = pageToRender.getViewport({ scale: 1.0, rotation: 0 })
-					const vp = pageToRender.getViewport({ scale, rotation: 0 })
-					const vpScaled = Math.abs(vp.width - unscaled.width * scale) < 2
-					const targetW = vpScaled
-						? Math.max(1, Math.round(vp.width))
-						: Math.max(1, Math.round(origSize.width * scale))
-					const targetH = vpScaled
-						? Math.max(1, Math.round(vp.height))
-						: Math.max(1, Math.round(origSize.height * scale))
-					enhanceCanvas = document.createElement('canvas')
-					enhanceCanvas.width = targetW
-					enhanceCanvas.height = targetH
-					const ctx = enhanceCanvas.getContext('2d')
-					let rawBuffer: any = null
-					if (ctx) {
-						ctx.fillStyle = '#ffffff'
-						ctx.fillRect(0, 0, enhanceCanvas.width, enhanceCanvas.height)
-						await pageToRender.render({
-							canvasContext: ctx,
-							viewport: vp,
-							background: 'rgb(255, 255, 255)',
-						}).promise
-						const imgData = ctx.getImageData(0, 0, enhanceCanvas.width, enhanceCanvas.height)
-						rawBuffer = imageDataToImageBuffer(imgData)
-					} else {
-						// Headless / test environment fallback when 2D canvas context is unavailable
-						rawBuffer = createImageBuffer(targetW, targetH, 4)
-						rawBuffer.data.fill(255)
-					}
-
-					if (rawBuffer) {
-						await yieldToBrowser()
-						const enhancedBuffer = applyPipeline(rawBuffer, pageEnhancements.value[pageNum], {
-							skipJpegSimulation: true,
-						})
-						await yieldToBrowser()
-						await executeEnhancePage(pdfDoc, {
-							pageIndex: i,
-							enhancedImageBuffer: enhancedBuffer,
-							operations: pageEnhancements.value[pageNum],
-						})
-						modifiedEnhancements = true
-					}
-				} catch (enhErr) {
-					console.warn(`Could not enhance page ${pageNum}`, enhErr)
-				} finally {
-					releaseCanvas(enhanceCanvas)
-					cleanupPdfJsPage(pageToRender)
-				}
-			}
-
-			// 2. Calculate net rotation
-			const rotDelta = pageRotations.value[i] ?? 0
-			const crop = pageCrops.value[pageNum]
-			const hasCrop = crop && (crop.left > 0.005 || crop.top > 0.005 || crop.width < 0.995 || crop.height < 0.995)
-
-			const page = pdfDoc.getPage(i)
-			const currentAngle = page.getRotation()?.angle ?? 0
-			const netAngle = ((currentAngle + rotDelta) % 360 + 360) % 360
-
-			const isMultipleOf90 = Math.abs(netAngle % 90) < 0.001 || Math.abs((netAngle % 90) - 90) < 0.001
-
-			if (!isMultipleOf90) {
-				const cropToOriginal = pageRotateCropToOriginal.value[pageNum] ?? false
-				// Arbitrary angle rotation via Form XObject embedding & transformation
-				await executeRotatePage(pdfDoc, {
-					pageIndex: i,
-					angleDegrees: rotDelta,
-					crop: hasCrop ? crop : undefined,
-					cropToOriginalSize: cropToOriginal,
-				})
-				modifiedRotations = true
-				if (hasCrop) {
-					modifiedCrops = true
-				}
-			} else {
-				if (rotDelta !== 0) {
-					page.setRotation(degrees(Math.round(netAngle / 90) * 90 % 360))
-					modifiedRotations = true
-				}
-
-				// 3. Apply Crop if any, taking the net rotation into account
-				if (hasCrop) {
-					const { x: origX, y: origY, width: origW, height: origH } = page.getCropBox() ?? page.getMediaBox()
-					const box = computeCropBoxForRotation(origX, origY, origW, origH, crop, netAngle)
-					page.setCropBox(box.x, box.y, box.width, box.height)
-					modifiedCrops = true
-				}
-			}
-
-			await updateSaveProgress(
-				endPct,
-				pageIsEnhanced
-					? t('sheetmusic', 'Enhanced page {current} of {total}', { current: processedCount, total: activeTotal }, { escape: false })
-					: t('sheetmusic', 'Processed page {current} of {total}', { current: processedCount, total: activeTotal }, { escape: false }),
-				processedCount,
-				activeTotal,
-				false,
-			)
-		}
-
-		// 4. Remove deleted pages in descending order to avoid index shifts
-		let modifiedDeletions = false
-		if (deletedPages.value.size > 0) {
-			const indicesToDelete = Array.from(deletedPages.value)
-				.map((p) => p - 1)
-				.sort((a, b) => b - a)
-
-			for (const idx of indicesToDelete) {
-				if (idx >= 0 && idx < pdfDoc.getPageCount()) {
-					pdfDoc.removePage(idx)
-					modifiedDeletions = true
-				}
-			}
-		}
+		const {
+			modifiedRotations,
+			modifiedCrops,
+			modifiedDeletions,
+			modifiedEnhancements,
+		} = await applyPdfPageEdits({
+			pdfDoc,
+			activePdfDoc: activePdfDoc.value,
+			totalPages: totalPages.value,
+			pageRotations: pageRotations.value,
+			pageRotateCropToOriginal: pageRotateCropToOriginal.value,
+			pageCrops: pageCrops.value,
+			pageEnhancements: pageEnhancements.value,
+			deletedPages: deletedPages.value,
+			isPageEnhanced,
+			yieldToBrowser,
+			onProgress: updateSaveProgress,
+		})
 
 		if (pdfDoc.getPageCount() === 0) {
 			throw new Error(t('sheetmusic', 'Cannot save a PDF with no pages.'))
@@ -727,17 +589,13 @@ async function saveRotationsAndCrops() {
 		await updateSaveProgress(100, t('sheetmusic', 'Saved!'), activeTotal, activeTotal, false)
 		const data = uploadRes.data.ocs.data as LibraryData
 		const songTitle = props.song.title || t('sheetmusic', 'Song')
-		const hasMultipleTypes = [modifiedRotations, modifiedCrops, modifiedDeletions, modifiedEnhancements, hasAnyJoin.value].filter(Boolean).length > 1
-		const successMsg = hasMultipleTypes || hasAnyJoin.value
-			? t('sheetmusic', 'PDF changes saved successfully for "{title}".', { title: songTitle }, { escape: false })
-			: modifiedEnhancements
-				? t('sheetmusic', 'Enhanced scan PDF saved successfully for "{title}".', { title: songTitle }, { escape: false })
-				: modifiedDeletions
-					? t('sheetmusic', 'Pages deleted and PDF saved successfully for "{title}".', { title: songTitle }, { escape: false })
-					: modifiedRotations
-						? t('sheetmusic', 'Rotated PDF saved successfully for "{title}".', { title: songTitle }, { escape: false })
-						: t('sheetmusic', 'Cropped PDF saved successfully for "{title}".', { title: songTitle }, { escape: false })
-		showSuccess(successMsg)
+		showSuccess(formatPdfSaveSuccessMessage(songTitle, {
+			modifiedRotations,
+			modifiedCrops,
+			modifiedDeletions,
+			modifiedEnhancements,
+			hasAnyJoin: hasAnyJoin.value,
+		}))
 		finishAndReturn(() => emit('saved', data, props.song.id))
 	} catch (err: any) {
 		console.error('Failed to save modified PDF:', err)
