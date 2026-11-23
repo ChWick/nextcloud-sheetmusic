@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, getCurrentInstance, h, nextTick, onMounted, onUnmounted, ref, render, shallowRef, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import axios from '@nextcloud/axios'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
@@ -8,7 +8,7 @@ import { cleanupPdfJsPage, destroyPdfJsDocument, getEffectivePageRotation, loadP
 import { isImageFile as checkIsImageFile, isPdfFile as checkIsPdfFile, openFileExternally, toUint8Array } from '../utils/file'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import FilePreviewerToolbar from './file-preview/FilePreviewerToolbar.vue'
-import SongAnnotationOverlay from './song-viewer/SongAnnotationOverlay.vue'
+import { useAnnotationOverlayHost } from '../composables/useAnnotationOverlayHost'
 import { usePdfTouchZoom } from '../composables/usePdfTouchZoom'
 import { useStylusSettings } from '../composables/useStylusSettings'
 import { isEffectivelyOffline } from '../composables/useOnlineStatus'
@@ -85,8 +85,6 @@ const emit = defineEmits<{
 	'delete-annotation': [annotation: SheetAnnotation]
 }>()
 
-const appContext = getCurrentInstance()?.appContext ?? null
-
 const pdfContainer = ref<HTMLElement>()
 const pdfStage = ref<HTMLElement>()
 const docxContainer = ref<HTMLElement>()
@@ -154,91 +152,28 @@ const customScale = ref(1.0)
 const effectiveScale = ref(1.0)
 const rotation = ref(0)
 const imageScale = ref(1.0)
-const showAnnotationsState = ref(props.showAnnotations ?? true)
 
-function toggleAnnotations() {
-	showAnnotationsState.value = !showAnnotationsState.value
-	refreshAnnotationOverlays()
-}
-
-function unmountAnnotationOverlays() {
-	if (!pdfContainer.value) return
-	const mounts = pdfContainer.value.querySelectorAll<HTMLElement>('.sheetmusic-annotation-mount')
-	mounts.forEach((el) => {
-		render(null, el)
-	})
-}
-
-function mountAnnotationOverlay(placeholder: HTMLElement, pageNum: number, pageWidth: number, pageHeight: number) {
-	let mountEl = placeholder.querySelector<HTMLElement>('.sheetmusic-annotation-mount')
-	if (!mountEl) {
-		mountEl = document.createElement('div')
-		mountEl.className = 'sheetmusic-annotation-mount'
-		mountEl.style.position = 'absolute'
-		mountEl.style.inset = '0'
-		mountEl.style.pointerEvents = 'none'
-		placeholder.appendChild(mountEl)
-	}
-
-	const vnode = h(SongAnnotationOverlay, {
-		annotations: props.annotations,
-		pageNumber: pageNum,
-		visible: showAnnotationsState.value || props.editableAnnotations,
-		pageWidth,
-		pageHeight,
-		totalPages: totalPages.value,
-		editable: props.editableAnnotations,
-		activeTool: props.activeAnnotationTool,
-		toolStyle: props.annotationToolStyle,
-		selectedUuid: props.selectedAnnotationUuid,
-		onJumpToPage: (targetZeroIdx: number) => goToPage(targetZeroIdx + 1),
-		onSelect: (uuid: string | null) => emit('select-annotation', uuid),
-		onCreateAnnotation: (draft: Omit<SheetAnnotation, 'songId' | 'fileId' | 'uuid'>) => emit('create-annotation', draft),
-		onUpdateAnnotation: (before: SheetAnnotation, after: SheetAnnotation) => emit('update-annotation', before, after),
-		onDeleteAnnotation: (ann: SheetAnnotation) => emit('delete-annotation', ann),
-	})
-	if (appContext) {
-		vnode.appContext = appContext
-	}
-	render(vnode, mountEl)
-}
-
-function refreshAnnotationOverlays() {
-	if (!pdfContainer.value) return
-	const placeholders = pdfContainer.value.querySelectorAll<HTMLElement>('[data-page-num]')
-	placeholders.forEach((el) => {
-		const pageNum = Number(el.dataset.pageNum)
-		const canvas = el.querySelector('canvas')
-		if (pageNum && canvas) {
-			const pw = Number(el.dataset.pageWidth) || canvas.width || 595
-			const ph = Number(el.dataset.pageHeight) || canvas.height || 842
-			mountAnnotationOverlay(el, pageNum, pw, ph)
-		}
-	})
-}
-
-watch(
-	() => [
-		props.annotations,
-		showAnnotationsState.value,
-		props.editableAnnotations,
-		props.activeAnnotationTool,
-		props.annotationToolStyle,
-		props.selectedAnnotationUuid,
-	],
-	() => {
-		refreshAnnotationOverlays()
-	},
-	{ deep: true },
-)
-
-watch(
-	() => props.showAnnotations,
-	(val) => {
-		showAnnotationsState.value = val ?? true
-		refreshAnnotationOverlays()
-	},
-)
+const {
+	showAnnotationsState,
+	toggleAnnotations,
+	mountAnnotationOverlay,
+	unmountAnnotationOverlay,
+	unmountAnnotationOverlays,
+} = useAnnotationOverlayHost({
+	pdfContainer,
+	totalPages,
+	annotations: computed(() => props.annotations),
+	showAnnotations: computed(() => props.showAnnotations),
+	editableAnnotations: computed(() => props.editableAnnotations),
+	activeAnnotationTool: computed(() => props.activeAnnotationTool),
+	annotationToolStyle: computed(() => props.annotationToolStyle),
+	selectedAnnotationUuid: computed(() => props.selectedAnnotationUuid),
+	onJumpToPage: (page) => goToPage(page),
+	onSelect: (uuid) => emit('select-annotation', uuid),
+	onCreate: (draft) => emit('create-annotation', draft),
+	onUpdate: (before, after) => emit('update-annotation', before, after),
+	onDelete: (ann) => emit('delete-annotation', ann),
+})
 
 const zoomSteps = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 4.0]
 
@@ -815,10 +750,7 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 				if (el.dataset.pageWidth) {
 					el.style.minWidth = `${el.dataset.pageWidth}px`
 				}
-				const mountEl = el.querySelector<HTMLElement>('.sheetmusic-annotation-mount')
-				if (mountEl) {
-					render(null, mountEl)
-				}
+				unmountAnnotationOverlay(el)
 				releaseChildCanvases(el)
 				el.replaceChildren()
 			}
