@@ -19,6 +19,13 @@ import type { SheetAnnotation } from '../types/annotation'
 import type { EditorTool, EditorToolStyle } from '../composables/useAnnotationEditor'
 import { defaultFileBinaryCache, type FileBinaryCache } from '../utils/file-cache'
 import {
+	computeFitScale,
+	MAX_CUSTOM_SCALE,
+	MIN_CUSTOM_SCALE,
+	type PageLayoutMode,
+	resolvePagesToRender,
+} from '../utils/pdf-layout'
+import {
 	type DoublePageTurnMode,
 	type DoubleSpread,
 	formatDoubleSpreadDisplay,
@@ -101,8 +108,6 @@ const totalPages = ref(1)
 const currentPage = ref(1)
 const fileSizeBytes = ref<number | null>(null)
 const pageResolutions = ref<PdfPageResolutionSummary[]>([])
-
-type PageLayoutMode = 'continuous' | 'single' | 'double'
 
 function isContainerLandscape(): boolean {
 	if (typeof window === 'undefined') return false
@@ -376,26 +381,6 @@ function cleanupObserver() {
 	renderedPages.clear()
 }
 
-const MIN_FIT_SCALE = 0.01
-const MAX_FIT_SCALE = 6.0
-const MIN_CUSTOM_SCALE = 0.2
-const MAX_CUSTOM_SCALE = 4.0
-
-function computeFitScale(
-	unscaledWidth: number,
-	unscaledHeight: number,
-	targetW: number,
-	targetH: number,
-	mode: 'fit-width' | 'fit-page',
-): number {
-	const safeW = Math.max(1, unscaledWidth)
-	const safeH = Math.max(1, unscaledHeight)
-	const raw = mode === 'fit-width'
-		? targetW / safeW
-		: Math.min(targetW / safeW, targetH / safeH)
-	return Math.max(MIN_FIT_SCALE, Math.min(raw, MAX_FIT_SCALE))
-}
-
 async function renderCurrentView(onBeforeSwap?: () => void) {
 	if (!loadedPdf.value || !pdfContainer.value || !pdfStage.value) return
 
@@ -418,29 +403,14 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 		}
 	}
 
-	let pagesToRender: Array<{ pageNum: number; index: number; isNextFile?: boolean }> = []
-	if (pageLayout.value === 'single') {
-		const idx = Math.min(Math.max(1, currentPage.value), total) - 1
-		pagesToRender = [{ pageNum: ordered[idx] || 1, index: idx + 1 }]
-	} else if (pageLayout.value === 'double') {
-		const [leftLogical, rightLogical] = doubleSpread.value
-		const leftIdx = Math.min(Math.max(1, leftLogical), total) - 1
-		pagesToRender = [{ pageNum: ordered[leftIdx] || 1, index: leftIdx + 1 }]
-		if (rightLogical !== null && rightLogical >= 1) {
-			if (rightLogical <= total) {
-				const rightIdx = rightLogical - 1
-				pagesToRender.push({ pageNum: ordered[rightIdx] || 1, index: rightIdx + 1 })
-			} else if (rightLogical === total + 1 && canInterleaveWithNext.value) {
-				pagesToRender.push({
-					pageNum: props.nextTargetPage && props.nextTargetPage >= 1 ? props.nextTargetPage : 1,
-					index: total + 1,
-					isNextFile: true,
-				})
-			}
-		}
-	} else {
-		pagesToRender = ordered.map((p, idx) => ({ pageNum: p, index: idx + 1 }))
-	}
+	const pagesToRender = resolvePagesToRender({
+		layout: pageLayout.value,
+		currentPage: currentPage.value,
+		doubleSpread: doubleSpread.value,
+		orderedPages: ordered,
+		canInterleaveWithNext: canInterleaveWithNext.value,
+		nextTargetPage: props.nextTargetPage,
+	})
 
 	const pad = props.noPadding ? 0 : 48
 	const doubleGap = props.noPadding ? 4 : 24

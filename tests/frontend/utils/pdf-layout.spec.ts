@@ -1,0 +1,49 @@
+/**
+ * SPDX-FileCopyrightText: 2026 Nextcloud GmbH and Nextcloud contributors
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ */
+
+import { describe, expect, it } from 'vitest'
+import { computeFitScale, MAX_FIT_SCALE, MIN_FIT_SCALE, resolvePagesToRender } from '../../../src/utils/pdf-layout'
+
+describe('pdf-layout', () => {
+	it('computes fit-width and fit-page scales clamped to bounds', () => {
+		expect(computeFitScale(600, 800, 1200, 800, 'fit-width')).toBe(2)
+		expect(computeFitScale(600, 800, 1200, 800, 'fit-page')).toBe(1)
+		expect(computeFitScale(10, 10, 1000, 1000, 'fit-width')).toBe(MAX_FIT_SCALE)
+		expect(computeFitScale(100000, 100000, 1, 1, 'fit-page')).toBe(MIN_FIT_SCALE)
+	})
+
+	it('resolves pages for single, continuous, double, and interleaved next-song layouts', () => {
+		expect(resolvePagesToRender({
+			layout: 'single',
+			currentPage: 2,
+			doubleSpread: [1, 2],
+			orderedPages: [3, 1, 2],
+			canInterleaveWithNext: false,
+		})).toEqual([{ pageNum: 1, index: 2 }])
+
+		expect(resolvePagesToRender({
+			layout: 'continuous',
+			currentPage: 1,
+			doubleSpread: [1, 2],
+			orderedPages: [2, 1],
+			canInterleaveWithNext: false,
+		})).toEqual([
+			{ pageNum: 2, index: 1 },
+			{ pageNum: 1, index: 2 },
+		])
+
+		expect(resolvePagesToRender({
+			layout: 'double',
+			currentPage: 2,
+			doubleSpread: [2, 3],
+			orderedPages: [1, 2],
+			canInterleaveWithNext: true,
+			nextTargetPage: 4,
+		})).toEqual([
+			{ pageNum: 2, index: 2 },
+			{ pageNum: 4, index: 3, isNextFile: true },
+		])
+	})
+})
