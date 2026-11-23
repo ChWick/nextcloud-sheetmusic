@@ -97,6 +97,11 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 	let capturedPointerId: number | null = null
 	let isMultiTouchGesture = false
 
+	function capturePointer(pointerId: number) {
+		opts.svgRef.value?.setPointerCapture?.(pointerId)
+		capturedPointerId = pointerId
+	}
+
 	function releaseCapturedPointer(pointerId?: number) {
 		const idToRelease = pointerId ?? capturedPointerId
 		if (idToRelease !== null && opts.svgRef.value?.hasPointerCapture?.(idToRelease)) {
@@ -111,6 +116,24 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 		interaction.value = null
 		previewAnnotation.value = null
 		releaseCapturedPointer(pointerId)
+	}
+
+	function handlePenTakeover(e: PointerEvent) {
+		if (e.pointerType !== 'pen') return
+		markPenDetected()
+		if (interaction.value?.pointerType === 'touch') {
+			cancelInteraction()
+		}
+	}
+
+	function cloneAnnotation(ann: SheetAnnotation): SheetAnnotation {
+		return JSON.parse(JSON.stringify(ann))
+	}
+
+	function setDraftPreview(draft: Omit<SheetAnnotation, 'songId' | 'fileId' | 'uuid'> | null) {
+		if (draft) {
+			previewAnnotation.value = { ...draft, uuid: '__draft__', songId: 0, fileId: 0 }
+		}
 	}
 
 	function clientToNorm(clientX: number, clientY: number, pointerType?: string): NormalizedPoint {
@@ -150,6 +173,14 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 		return findAnnotationUuidFromElement(e.target as Element | null)
 	}
 
+	function findAnnotationUuidAtStylusPoint(e: PointerEvent): string | null {
+		const adj = applyPenTipOffset(e.clientX, e.clientY, e.pointerType, stylusSettings.value)
+		const hitEl = typeof document.elementFromPoint === 'function'
+			? document.elementFromPoint(adj.x, adj.y)
+			: null
+		return findAnnotationUuidFromElement(hitEl) ?? findAnnotationUuidFromEvent(e)
+	}
+
 	function eraseAnnotationByUuid(uuid: string | null, erasedSet?: Set<string>) {
 		if (!uuid) return
 		if (erasedSet?.has(uuid)) return
@@ -178,12 +209,7 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 	function onPointerDown(e: PointerEvent) {
 		if (!opts.editable.value || e.ctrlKey || e.metaKey) return
 
-		if (e.pointerType === 'pen') {
-			markPenDetected()
-			if (interaction.value?.pointerType === 'touch') {
-				cancelInteraction()
-			}
-		}
+		handlePenTakeover(e)
 
 		const isHardwareErase = stylusSettings.value.hardwareEraser && isStylusEraserEvent(e)
 		if (e.button !== 0 && !isHardwareErase) return
@@ -211,15 +237,9 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 
 		if (isHardwareErase) {
 			e.preventDefault()
-			const adj = applyPenTipOffset(e.clientX, e.clientY, e.pointerType, stylusSettings.value)
-			const hitEl = typeof document.elementFromPoint === 'function'
-				? document.elementFromPoint(adj.x, adj.y)
-				: null
-			const hitUuid = findAnnotationUuidFromElement(hitEl) ?? findAnnotationUuidFromEvent(e)
 			const erasedUuids = new Set<string>()
-			eraseAnnotationByUuid(hitUuid, erasedUuids)
-			opts.svgRef.value?.setPointerCapture?.(e.pointerId)
-			capturedPointerId = e.pointerId
+			eraseAnnotationByUuid(findAnnotationUuidAtStylusPoint(e), erasedUuids)
+			capturePointer(e.pointerId)
 			interaction.value = {
 				kind: 'stylus-erase',
 				pointerId: e.pointerId,
@@ -238,8 +258,7 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 		if (opts.activeTool.value !== 'eraser' && handle && opts.selectedItem.value) {
 			e.preventDefault()
 			e.stopPropagation()
-			opts.svgRef.value?.setPointerCapture?.(e.pointerId)
-			capturedPointerId = e.pointerId
+			capturePointer(e.pointerId)
 			const kind: InteractionKind = handle === 'height'
 				? 'height'
 				: handle === 'p0' || handle === 'p1'
@@ -252,7 +271,7 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 				startNorm: pt,
 				currentNorm: pt,
 				points: [pt],
-				targetBefore: JSON.parse(JSON.stringify(opts.selectedItem.value)),
+				targetBefore: cloneAnnotation(opts.selectedItem.value),
 				moved: false,
 				pointerType: e.pointerType,
 			}
@@ -272,15 +291,14 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 				opts.onSelect(hitUuid)
 				if (ann) {
 					e.preventDefault()
-					opts.svgRef.value?.setPointerCapture?.(e.pointerId)
-					capturedPointerId = e.pointerId
+					capturePointer(e.pointerId)
 					interaction.value = {
 						kind: 'move',
 						pointerId: e.pointerId,
 						startNorm: pt,
 						currentNorm: pt,
 						points: [pt],
-						targetBefore: JSON.parse(JSON.stringify(ann)),
+						targetBefore: cloneAnnotation(ann),
 						moved: false,
 						pointerType: e.pointerType,
 					}
@@ -292,8 +310,7 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 		}
 
 		e.preventDefault()
-		opts.svgRef.value?.setPointerCapture?.(e.pointerId)
-		capturedPointerId = e.pointerId
+		capturePointer(e.pointerId)
 		const state: InteractionState = {
 			kind: 'draw',
 			pointerId: e.pointerId,
@@ -311,19 +328,11 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 		state.points.push(startPoint)
 		interaction.value = state
 
-		const draft = buildDraftFromTool(startPoint, startPoint, state.points)
-		if (draft) {
-			previewAnnotation.value = { ...draft, uuid: '__draft__', songId: 0, fileId: 0 }
-		}
+		setDraftPreview(buildDraftFromTool(startPoint, startPoint, state.points))
 	}
 
 	function onPointerMove(e: PointerEvent) {
-		if (e.pointerType === 'pen') {
-			markPenDetected()
-			if (interaction.value?.pointerType === 'touch') {
-				cancelInteraction()
-			}
-		}
+		handlePenTakeover(e)
 		if (isMultiTouchGesture) return
 		const state = interaction.value
 		if (!state) {
@@ -339,12 +348,7 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 		}
 
 		if (state.kind === 'stylus-erase') {
-			const adj = applyPenTipOffset(e.clientX, e.clientY, e.pointerType, stylusSettings.value)
-			const hitEl = typeof document.elementFromPoint === 'function'
-				? document.elementFromPoint(adj.x, adj.y)
-				: null
-			const hitUuid = findAnnotationUuidFromElement(hitEl) ?? findAnnotationUuidFromEvent(e)
-			eraseAnnotationByUuid(hitUuid, state.erasedUuids)
+			eraseAnnotationByUuid(findAnnotationUuidAtStylusPoint(e), state.erasedUuids)
 			return
 		}
 
@@ -392,10 +396,7 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 					}
 				}
 			}
-			const draft = buildDraftFromTool(state.startNorm, pt, state.points)
-			if (draft) {
-				previewAnnotation.value = { ...draft, uuid: '__draft__', songId: 0, fileId: 0 }
-			}
+			setDraftPreview(buildDraftFromTool(state.startNorm, pt, state.points))
 		}
 	}
 
