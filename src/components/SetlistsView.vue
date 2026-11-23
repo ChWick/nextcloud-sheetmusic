@@ -135,14 +135,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { hasQueryParam, parsePositiveIntQueryParam } from '../utils/route'
-import { showError, showSuccess } from '@nextcloud/dialogs'
 import { translate as t } from '@nextcloud/l10n'
-import {
-  getOfflineSetlistMap,
-  isOfflineSetlistsSupported,
-  removeSetlistOffline,
-  syncSetlistOffline,
-} from '../utils/offlineSetlists'
 import PlaylistMusic from 'vue-material-design-icons/PlaylistMusic.vue'
 import ViewHeader from './ViewHeader.vue'
 import NotFoundState from './NotFoundState.vue'
@@ -157,6 +150,7 @@ import AddSetlistItemDialog from './setlists/AddSetlistItemDialog.vue'
 import SetlistPerformanceViewer from './setlists/SetlistPerformanceViewer.vue'
 import type { Setlist, SetlistFile, SetlistItem } from '../types/song'
 import { useLibraryData } from '../composables/useLibraryData'
+import { useSetlistOfflineSync } from '../composables/useSetlistOfflineSync'
 import { useSetlists } from '../composables/useSetlists'
 
 const props = withDefaults(
@@ -352,11 +346,10 @@ async function handleDeleteSetlist() {
   try {
     const deletedId = setlistToDelete.value.id
     await deleteSetlist(deletedId)
-    await removeSetlistOffline(props.selectedLibrary, deletedId)
+    await removeOffline(deletedId)
     if (Number(route.query?.setlist) === deletedId) {
       clearSetlistQuery()
     }
-    refreshOfflineMap()
     closeDeleteDialog()
   } catch (err: unknown) {
     deleteError.value = err instanceof Error ? err.message : t('sheetmusic', 'Could not delete setlist')
@@ -365,75 +358,20 @@ async function handleDeleteSetlist() {
   }
 }
 
-// Offline setlist availability
-const offlineSupported = isOfflineSetlistsSupported()
-const offlineMap = ref(getOfflineSetlistMap())
-const syncingProgressBySetlistId = ref<Record<number, string>>({})
-
-function refreshOfflineMap() {
-  offlineMap.value = getOfflineSetlistMap()
-}
-
-const offlineSetlistIds = computed(() =>
-  Object.values(offlineMap.value)
-    .filter((entry) => entry.libraryId === props.selectedLibrary)
-    .map((entry) => entry.setlistId),
-)
-
-const syncingOfflineSetlistIds = computed(() =>
-  Object.keys(syncingProgressBySetlistId.value).map(Number),
-)
-
-const isSelectedSetlistOffline = computed(() =>
-  Boolean(selectedSetlist.value && offlineSetlistIds.value.includes(selectedSetlist.value.id)),
-)
-
-const isSelectedSetlistSyncingOffline = computed(() =>
-  Boolean(selectedSetlist.value && selectedSetlist.value.id in syncingProgressBySetlistId.value),
-)
-
-const selectedSetlistOfflineProgressText = computed(() =>
-  selectedSetlist.value ? (syncingProgressBySetlistId.value[selectedSetlist.value.id] ?? '') : '',
-)
-
-async function toggleSelectedSetlistOffline() {
-  if (!selectedSetlist.value) return
-  const setlistId = selectedSetlist.value.id
-  if (setlistId in syncingProgressBySetlistId.value) return
-
-  if (offlineSetlistIds.value.includes(setlistId)) {
-    await removeSetlistOffline(props.selectedLibrary, setlistId)
-    refreshOfflineMap()
-    showSuccess(t('sheetmusic', 'Removed setlist from offline storage.'))
-    return
-  }
-
-  syncingProgressBySetlistId.value = {
-    ...syncingProgressBySetlistId.value,
-    [setlistId]: t('sheetmusic', 'Saving offline…'),
-  }
-  try {
-    await syncSetlistOffline({
-      libraryId: props.selectedLibrary,
-      setlistId,
-      songs: songs.value,
-      onProgress: (done, total) => {
-        syncingProgressBySetlistId.value = {
-          ...syncingProgressBySetlistId.value,
-          [setlistId]: `${done}/${total}`,
-        }
-      },
-    })
-    refreshOfflineMap()
-    showSuccess(t('sheetmusic', 'Setlist is now available offline.'))
-  } catch {
-    showError(t('sheetmusic', 'Could not cache all setlist files for offline use.'))
-  } finally {
-    const next = { ...syncingProgressBySetlistId.value }
-    delete next[setlistId]
-    syncingProgressBySetlistId.value = next
-  }
-}
+const {
+  offlineSupported,
+  offlineSetlistIds,
+  syncingOfflineSetlistIds,
+  isSelectedSetlistOffline,
+  isSelectedSetlistSyncingOffline,
+  selectedSetlistOfflineProgressText,
+  removeOffline,
+  toggleSelectedSetlistOffline,
+} = useSetlistOfflineSync({
+  getLibraryId: () => props.selectedLibrary,
+  selectedSetlist,
+  songs,
+})
 
 // Add Item Dialog
 const isAddItemDialogOpen = ref(false)
