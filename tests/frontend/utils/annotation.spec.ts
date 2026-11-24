@@ -239,6 +239,32 @@ describe('annotation utils', () => {
 				dominantBaseline: 'central',
 			})
 		})
+
+		it('uses uniform Musical Symbols block notes and anchors noteheads at center', () => {
+			expect(normalizeMusicSymbol('♩')).toBe('𝅘𝅥')
+			expect(normalizeMusicSymbol('♪')).toBe('𝅘𝅥𝅮')
+
+			const quarter = makeAnn({ type: 'stamp', x: 0.5, y: 0.5, width: 0, height: 0, style: { fontSize: 40 }, data: { symbol: '𝅘𝅥' } })
+			const eighth = makeAnn({ type: 'stamp', x: 0.5, y: 0.5, width: 0, height: 0, style: { fontSize: 40 }, data: { symbol: '𝅘𝅥𝅮' } })
+			const beamed = makeAnn({ type: 'stamp', x: 0.5, y: 0.5, width: 0, height: 0, style: { fontSize: 40 }, data: { symbol: '♫' } })
+
+			expect(getStampRenderFontSize(quarter)).toBe(40)
+			expect(getStampRenderFontSize(eighth)).toBe(40)
+			expect(getStampRenderFontSize(beamed)).toBe(68) // 40 * 1.7
+
+			// Quarter notehead centered at (500, 500) -> baseline shifted down by 0.14 * 40 = 5.6
+			expect(getStampRenderPosition(quarter, 1000)).toEqual({
+				x: 500,
+				y: 505.6,
+				dominantBaseline: 'alphabetic',
+			})
+			// Eighth notehead centered at (500, 500) -> shifted right by 0.125 * 40 = 5 to offset flag
+			expect(getStampRenderPosition(eighth, 1000)).toEqual({
+				x: 505,
+				y: 505.6,
+				dominantBaseline: 'alphabetic',
+			})
+		})
 	})
 
 	describe('text layout & geometry helpers', () => {

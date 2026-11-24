@@ -30,7 +30,7 @@ const CATEGORY_EXAMPLE_SYMBOLS: Record<StampCategory, [string, string]> = {
 	articulation: ['𝅻', '𝅼'],
 	navigation: ['𝄋', '𝄌'],
 	fingering: ['1', '2'],
-	rhythm: ['♩', '𝄽'],
+	rhythm: ['𝅘𝅥', '𝄽'],
 }
 
 function getStampDef(sym: string) {

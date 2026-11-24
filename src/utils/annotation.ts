@@ -260,12 +260,19 @@ export function getStampFontFamily(item: SheetAnnotation): string {
  */
 export function getStampRenderFontSize(item: SheetAnnotation): number {
 	const base = Number(item.style?.fontSize) || 40
-	return isNumericStamp(item) ? Math.round(base * FINGERING_FONT_SCALE * 10) / 10 : base
+	if (isNumericStamp(item)) {
+		return Math.round(base * FINGERING_FONT_SCALE * 10) / 10
+	}
+	const def = getStampDefinition(getAnnotationDisplaySymbol(item))
+	if (def?.fontScale) {
+		return Math.round(base * def.fontScale * 10) / 10
+	}
+	return base
 }
 
 /**
  * Compute exact SVG <text> (x, y) and dominant-baseline so the glyph's ink
- * bounding box is centered at the stamp's target center (x + width/2, y + height/2).
+ * bounding box (or notehead anchor via canvasOffset) is centered at the stamp's target center.
  */
 export function getStampRenderPosition(
 	item: SheetAnnotation,
@@ -276,11 +283,12 @@ export function getStampRenderPosition(
 	const fontSize = getStampRenderFontSize(item)
 	const sym = getAnnotationDisplaySymbol(item)
 	const def = getStampDefinition(sym)
+	const offset = def?.canvasOffset ?? def?.inkOffset
 
-	if (def?.inkOffset) {
+	if (offset) {
 		return {
-			x: Math.round((cx + def.inkOffset.ox * fontSize) * 10) / 10,
-			y: Math.round((cy + def.inkOffset.oy * fontSize) * 10) / 10,
+			x: Math.round((cx + offset.ox * fontSize) * 10) / 10,
+			y: Math.round((cy + offset.oy * fontSize) * 10) / 10,
 			dominantBaseline: 'alphabetic',
 		}
 	}

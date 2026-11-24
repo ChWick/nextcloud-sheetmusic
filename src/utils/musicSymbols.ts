@@ -27,6 +27,16 @@ export interface MusicStampDefinition {
 	 * to shift the glyph's ink bounding-box center onto the target (cx, cy).
 	 */
 	inkOffset?: { ox: number; oy: number }
+	/**
+	 * Optional override offset in em units for canvas placement (e.g. centering a note's
+	 * notehead on (cx, cy) instead of the stem+head midpoint used in picker thumbnails).
+	 */
+	canvasOffset?: { ox: number; oy: number }
+	/**
+	 * Optional font-size multiplier when a Unicode glyph's native em-height differs from
+	 * the U+1D1xx Musical Symbols block (e.g. U+266B beamed eighth notes).
+	 */
+	fontScale?: number
 }
 
 export const MUSIC_FONT_FAMILY = "'Noto Music', 'Segoe UI Symbol', 'Apple Symbols', sans-serif"
@@ -104,13 +114,13 @@ export const MUSIC_STAMPS: MusicStampDefinition[] = [
 	{ symbol: '4', label: 'Fingering 4', category: 'fingering', fontKind: 'fingering', shortcut: '4' },
 	{ symbol: '5', label: 'Fingering 5', category: 'fingering', fontKind: 'fingering', shortcut: '5' },
 
-	// Rhythm (Notes & Rests)
+	// Rhythm (Notes & Rests — U+1D15D..U+1D161 share identical notehead metrics in Noto Music)
 	{ symbol: '𝅝', label: 'Whole note', category: 'rhythm', fontKind: 'music', aliases: ['w'], inkOffset: { ox: 0, oy: 0.134 } },
-	{ symbol: '𝅗𝅥', label: 'Half note', category: 'rhythm', fontKind: 'music', aliases: ['h'], inkOffset: { ox: 0, oy: 0.504 } },
-	{ symbol: '♩', label: 'Quarter note', category: 'rhythm', fontKind: 'music', aliases: ['q', '𝅘𝅥'], inkOffset: { ox: 0, oy: 0.289 } },
-	{ symbol: '♪', label: 'Eighth note', category: 'rhythm', fontKind: 'music', aliases: ['e', '𝅘𝅥𝅮'], inkOffset: { ox: 0, oy: 0.289 } },
-	{ symbol: '♫', label: 'Beamed eighth notes', category: 'rhythm', fontKind: 'music', aliases: ['ee'], inkOffset: { ox: 0, oy: 0.273 } },
-	{ symbol: '𝅘𝅥𝅯', label: 'Sixteenth note', category: 'rhythm', fontKind: 'music', aliases: ['s'], inkOffset: { ox: 0, oy: 0.51 } },
+	{ symbol: '𝅗𝅥', label: 'Half note', category: 'rhythm', fontKind: 'music', aliases: ['h'], inkOffset: { ox: 0, oy: 0.504 }, canvasOffset: { ox: 0, oy: 0.134 } },
+	{ symbol: '𝅘𝅥', label: 'Quarter note', category: 'rhythm', fontKind: 'music', aliases: ['q', '♩'], inkOffset: { ox: 0, oy: 0.51 }, canvasOffset: { ox: 0, oy: 0.14 } },
+	{ symbol: '𝅘𝅥𝅮', label: 'Eighth note', category: 'rhythm', fontKind: 'music', aliases: ['e', '♪'], inkOffset: { ox: 0, oy: 0.51 }, canvasOffset: { ox: 0.125, oy: 0.14 } },
+	{ symbol: '♫', label: 'Beamed eighth notes', category: 'rhythm', fontKind: 'music', aliases: ['ee'], fontScale: 1.7, inkOffset: { ox: 0, oy: 0.273 }, canvasOffset: { ox: 0, oy: 0.08 } },
+	{ symbol: '𝅘𝅥𝅯', label: 'Sixteenth note', category: 'rhythm', fontKind: 'music', aliases: ['s'], inkOffset: { ox: 0, oy: 0.51 }, canvasOffset: { ox: 0.129, oy: 0.14 } },
 	{ symbol: '𝄻', label: 'Whole rest', category: 'rhythm', fontKind: 'music', inkOffset: { ox: 0, oy: 0.445 } },
 	{ symbol: '𝄼', label: 'Half rest', category: 'rhythm', fontKind: 'music', inkOffset: { ox: 0, oy: 0.311 } },
 	{ symbol: '𝄽', label: 'Quarter rest', category: 'rhythm', fontKind: 'music', inkOffset: { ox: 0, oy: 0.501 } },

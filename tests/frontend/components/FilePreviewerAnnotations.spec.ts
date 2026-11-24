@@ -248,7 +248,7 @@ describe('FilePreviewer.vue Annotation Rendering & Reactivity', () => {
 		const stampText = overlay.find('[data-test="annotation-stamp"]')
 		expect(stampText.exists()).toBe(true)
 		expect(stampText.element.tagName.toLowerCase()).toBe('text')
-		expect(stampText.text()).toBe('♩')
+		expect(stampText.text()).toBe('𝅘𝅥')
 		expect(stampText.attributes('font-family')).toContain('Noto Music')
 	})
 
