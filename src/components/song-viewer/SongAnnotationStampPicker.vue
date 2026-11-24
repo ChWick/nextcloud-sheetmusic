@@ -266,7 +266,6 @@ button[type='button'].toolBtn {
 }
 
 .fingeringGlyph {
-	font-style: italic;
 	font-weight: 700;
 	font-size: 18px;
 }
