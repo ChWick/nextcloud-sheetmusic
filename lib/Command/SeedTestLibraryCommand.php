@@ -42,14 +42,16 @@ class SeedTestLibraryCommand extends Command {
 	protected function configure(): void {
 		$this
 			->setName('sheetmusic:seed-test-library')
-			->setDescription('Ensure a valid test sheet music library with multiple songs and a setlist exists')
+			->setDescription('Ensure a valid test sheet music library with real public-domain scores and a setlist exists')
 			->addOption('user', 'u', InputOption::VALUE_OPTIONAL, 'Target Nextcloud user ID', 'admin')
-			->addOption('path', 'p', InputOption::VALUE_OPTIONAL, 'Library folder path in user files', '/SheetMusicTest');
+			->addOption('path', 'p', InputOption::VALUE_OPTIONAL, 'Library folder path in user files', '/SheetMusicTest')
+			->addOption('force', 'f', InputOption::VALUE_NONE, 'Overwrite existing PDF files in the test library');
 	}
 
 	protected function execute(InputInterface $input, OutputInterface $output): int {
 		$userId = (string)$input->getOption('user');
 		$rawPath = (string)$input->getOption('path');
+		$force = (bool)$input->getOption('force');
 		$libraryPath = '/' . ltrim($rawPath, '/');
 		if ($libraryPath !== '/') {
 			$libraryPath = rtrim($libraryPath, '/');
@@ -92,43 +94,42 @@ class SeedTestLibraryCommand extends Command {
 		$libraryId = (int)$library->id;
 		$now = time();
 
+		$fixturesDir = dirname(__DIR__, 2) . '/tests/fixtures/scores';
 		$seedSongs = [
 			[
-				'title' => 'Autumn Leaves',
-				'filename' => 'autumn-leaves.pdf',
+				'title' => 'Prelude in C Major, BWV 846',
+				'filename' => 'bach-prelude-c-major-bwv846.pdf',
+				'pages' => 2,
+				'duration' => 135,
+				'bookmark' => null,
+			],
+			[
+				'title' => 'Für Elise, WoO 59',
+				'filename' => 'beethoven-fur-elise-woo59.pdf',
+				'pages' => 3,
+				'duration' => 175,
+				'bookmark' => ['name' => 'Episode in F Major', 'page' => 2],
+			],
+			[
+				'title' => 'The Entertainer',
+				'filename' => 'joplin-the-entertainer.pdf',
 				'pages' => 4,
 				'duration' => 210,
-				'bookmark' => null,
+				'bookmark' => ['name' => 'Trio', 'page' => 3],
 			],
 			[
-				'title' => 'Blue Bossa',
-				'filename' => 'blue-bossa.pdf',
+				'title' => 'Rondo Alla Turca, K. 331',
+				'filename' => 'mozart-rondo-alla-turca-kv331.pdf',
 				'pages' => 5,
+				'duration' => 215,
+				'bookmark' => ['name' => 'Coda', 'page' => 4],
+			],
+			[
+				'title' => 'Gymnopédie No. 1',
+				'filename' => 'satie-gymnopedie-no1.pdf',
+				'pages' => 2,
 				'duration' => 195,
 				'bookmark' => null,
-			],
-			[
-				'title' => 'Fly Me to the Moon',
-				'filename' => 'fly-me-to-the-moon.pdf',
-				'pages' => 4,
-				'duration' => 180,
-				'bookmark' => ['name' => 'Bridge & Coda', 'page' => 3],
-			],
-			[
-				'title' => 'Take Five',
-				'filename' => 'take-five.pdf',
-				'pages' => 6,
-				'duration' => 324,
-				'bookmark' => null,
-				'landscape' => false,
-			],
-			[
-				'title' => 'All Blues (Landscape)',
-				'filename' => 'all-blues-landscape.pdf',
-				'pages' => 3,
-				'duration' => 245,
-				'bookmark' => null,
-				'landscape' => true,
 			],
 		];
 
@@ -137,12 +138,14 @@ class SeedTestLibraryCommand extends Command {
 
 		foreach ($seedSongs as $spec) {
 			$filename = $spec['filename'];
-			$isLandscape = (bool)($spec['landscape'] ?? false);
-			$pdfBytes = $this->buildMultiPagePdf($spec['title'], $spec['pages'], $isLandscape);
+			$fixturePath = $fixturesDir . '/' . $filename;
+			$pdfBytes = is_file($fixturePath)
+				? (string)file_get_contents($fixturePath)
+				: $this->buildMultiPagePdf($spec['title'], $spec['pages']);
 
 			if ($libraryFolder->nodeExists($filename)) {
 				$fileNode = $libraryFolder->get($filename);
-				if ($fileNode instanceof \OCP\Files\File && $fileNode->getSize() === 0) {
+				if ($fileNode instanceof \OCP\Files\File && ($force || $fileNode->getSize() === 0)) {
 					$fileNode->putContent($pdfBytes);
 				}
 			} else {
@@ -213,7 +216,7 @@ class SeedTestLibraryCommand extends Command {
 			}
 		}
 
-		$setlistName = 'Weekend Gig Setlist';
+		$setlistName = 'Classical & Ragtime Test Setlist';
 		$existingSetlists = $this->setlistService->getSetlists($user, $libraryId) ?? [];
 		$testSetlist = null;
 		foreach ($existingSetlists as $sl) {
