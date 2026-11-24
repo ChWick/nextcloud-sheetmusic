@@ -94,52 +94,14 @@
       @deleted="handleDeleted" />
   </div>
   <div v-else :class="[$style.songArea, standaloneCreate && $style.createSongArea]">
-    <div v-if="!standaloneCreate && selectedCount > 0" :class="$style.selectionBanner">
-      <span :class="$style.selectionCount">{{ t('sheetmusic', '{count} songs selected', { count: selectedCount }, { escape: false }) }}</span>
-      <NcButton
-        v-if="canWrite && selectedCount === 2"
-        size="small"
-        variant="secondary"
-        :title="t('sheetmusic', 'Compare & Merge selected 2 songs')"
-        :aria-label="t('sheetmusic', 'Compare & Merge selected 2 songs')"
-        @click="openCompareMergeDialog">
-        <template #icon>
-          <MergeIcon :size="18" />
-        </template>
-        {{ t('sheetmusic', 'Compare / Merge') }}
-      </NcButton>
-      <NcButton
-        v-if="canWrite"
-        size="small"
-        variant="primary"
-        :title="t('sheetmusic', 'Edit selected ({count})', { count: selectedCount }, { escape: false })"
-        :aria-label="t('sheetmusic', 'Edit selected ({count})', { count: selectedCount }, { escape: false })"
-        @click="isBatchEditorOpen = true">
-        <template #icon>
-          <PencilIcon :size="18" />
-        </template>
-      </NcButton>
-      <NcButton
-        v-if="canWrite"
-        size="small"
-        variant="error"
-        :title="t('sheetmusic', 'Delete selected ({count})', { count: selectedCount }, { escape: false })"
-        :aria-label="t('sheetmusic', 'Delete selected ({count})', { count: selectedCount }, { escape: false })"
-        @click="isBatchDeleteDialogOpen = true">
-        <template #icon>
-          <DeleteIcon :size="18" />
-        </template>
-      </NcButton>
-      <NcButton
-        size="small"
-        :title="t('sheetmusic', 'Clear selection')"
-        :aria-label="t('sheetmusic', 'Clear selection')"
-        @click="clearSelection">
-        <template #icon>
-          <CloseIcon :size="18" />
-        </template>
-      </NcButton>
-    </div>
+    <SongSelectionBanner
+      v-if="!standaloneCreate && selectedCount > 0"
+      :selected-count="selectedCount"
+      :can-write="canWrite"
+      @compare-merge="openCompareMergeDialog"
+      @edit-selected="isBatchEditorOpen = true"
+      @delete-selected="isBatchDeleteDialogOpen = true"
+      @clear-selection="clearSelection" />
 
     <div v-if="!standaloneCreate && filterBarVisible" :class="$style.filterBarWrapper"><SongFilterBar
       v-model:search-title="searchTitle"
@@ -264,18 +226,12 @@
 
 <script setup lang="ts">
 import { t } from '@nextcloud/l10n';
-import { showError, showSuccess } from '@nextcloud/dialogs';
+import { showSuccess } from '@nextcloud/dialogs';
 import { loadState } from '@nextcloud/initial-state';
-import { describeRequestFailure } from '../utils/api';
 import { ref, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { hasQueryParam, parsePositiveIntQueryParam } from '../utils/route';
-import NcButton from '@nextcloud/vue/components/NcButton';
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon';
-import CloseIcon from 'vue-material-design-icons/Close.vue';
-import DeleteIcon from 'vue-material-design-icons/Delete.vue';
-import MergeIcon from 'vue-material-design-icons/Merge.vue';
-import PencilIcon from 'vue-material-design-icons/Pencil.vue';
 import SongEditor from '../components/SongEditor.vue';
 import SongFilterBar from '../components/SongFilterBar.vue';
 import SongViewer from '../components/SongViewer.vue';
@@ -283,27 +239,25 @@ import SongPdfModifier from '../components/song-pdf/SongPdfModifier.vue';
 import ViewHeader from '../components/ViewHeader.vue';
 import NotFoundState from '../components/NotFoundState.vue';
 import SongViewHeaderButtons from './songs/SongViewHeaderButtons.vue';
-import BatchSongEditorDialog, { type BatchUpdatePayload } from '../components/song-editor/BatchSongEditorDialog.vue';
-import { resolveSongEntityIds } from '../components/song-editor/entity-utils';
+import SongSelectionBanner from './songs/SongSelectionBanner.vue';
+import BatchSongEditorDialog from '../components/song-editor/BatchSongEditorDialog.vue';
 import BatchDeleteSongsDialog from '../components/BatchDeleteSongsDialog.vue';
 import SongMergeDialog from '../components/song-editor/SongMergeDialog.vue';
 import SongHistoryModal from '../components/SongHistoryModal.vue';
-import type { Song, LibraryData, SongPrefill } from '../types/song';
-import { DEFAULT_VISIBLE_COLUMNS, type SongColumn } from '../types/song';
-import { sortSongs, type SortKey, type SortOrder } from '../utils/song-formatter';
+import type { Song, LibraryData } from '../types/song';
+import { sortSongs } from '../utils/song-formatter';
 import { useSongFilters } from '../composables/useSongFilters';
 import { useSongSelection } from '../composables/useSongSelection';
 import { useLibraryData } from '../composables/useLibraryData';
 import { useSongImport } from '../composables/useSongImport';
 import { useSongMerge } from '../composables/useSongMerge';
-import { useProgressPolling } from '../composables/useProgressPolling';
-import { apiGet, apiPost } from '../api/client';
+import { useSongListPreferences } from '../composables/useSongListPreferences';
+import { useSongBatchUpdate } from '../composables/useSongBatchUpdate';
 import SongListDisplayMenu from './songs/SongListDisplayMenu.vue';
-import { ENTITY_COLUMNS, type ViewMode } from './songs/song-view-columns';
 import SongTableView from './songs/SongTableView.vue';
 import SongCardView from './songs/SongCardView.vue';
 import SongSimpleListView from './songs/SongSimpleListView.vue';
-import SongPagination, { type PageSize } from './songs/SongPagination.vue';
+import SongPagination from './songs/SongPagination.vue';
 import { executeInlineSongUpdate } from './songs/song-inline-update';
 import type { Library } from '../types/library';
 
@@ -331,47 +285,13 @@ const songViewerRef = ref<InstanceType<typeof SongViewer> | null>(null);
 const songEditorRef = ref<InstanceType<typeof SongEditor> | null>(null);
 const createSongEditorRef = ref<InstanceType<typeof SongEditor> | null>(null);
 
-const viewMode = ref<ViewMode>(
-  (localStorage.getItem('sheetmusic_song_view_mode') ?? localStorage.getItem('mobilesheetsmanager_song_view_mode')) as ViewMode || 'table'
-);
-
-watch(viewMode, (newMode) => {
-  localStorage.setItem('sheetmusic_song_view_mode', newMode);
-});
-
-const sortKey = ref<SortKey>(
-  (localStorage.getItem('sheetmusic_song_sort_key') ?? localStorage.getItem('mobilesheetsmanager_song_sort_key')) as SortKey || 'title'
-);
-
-const sortOrder = ref<SortOrder>(
-  (localStorage.getItem('sheetmusic_song_sort_order') ?? localStorage.getItem('mobilesheetsmanager_song_sort_order')) as SortOrder || 'asc'
-);
-
-watch(sortKey, (newKey) => {
-  localStorage.setItem('sheetmusic_song_sort_key', newKey);
-});
-
-watch(sortOrder, (newOrder) => {
-  localStorage.setItem('sheetmusic_song_sort_order', newOrder);
-});
-
-const visibleColumns = ref<SongColumn[]>(
-  (() => {
-    const stored = localStorage.getItem('sheetmusic_song_visible_columns') ?? localStorage.getItem('mobilesheetsmanager_song_visible_columns');
-    if (!stored) return DEFAULT_VISIBLE_COLUMNS;
-    try {
-      const parsed = JSON.parse(stored);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-    } catch {
-      // fallback
-    }
-    return DEFAULT_VISIBLE_COLUMNS;
-  })()
-);
-
-watch(visibleColumns, (newCols) => {
-  localStorage.setItem('sheetmusic_song_visible_columns', JSON.stringify(newCols));
-}, { deep: true });
+const {
+  viewMode,
+  sortKey,
+  sortOrder,
+  visibleColumns,
+  pageSize,
+} = useSongListPreferences();
 
 const {
   songs,
@@ -475,29 +395,21 @@ const entityListsProps = computed(() => ({
 const { searchTitle, withoutFiles, selectedComposers, selectedBooks, selectedCollections, selectedArtists, selectedGenres, selectedKeys, selectedCustomGroups, selectedYears, selectedSignatures, selectedSourceTypes, selectedInstruments, selectedArrangers, selectedSublibraries, filterSongs, clearFilters, filterBarVisible, toggleFilterBar, isFiltered, toggleFilter } =
   useSongFilters(() => entityListsProps.value);
 
-const { selectedSongIds, selectedCount, isSelected, toggleSelect, selectAll, isAllSelected, clearSelection } = useSongSelection();
-const isBatchEditorOpen = ref(false);
-const isApplyingBatchUpdate = ref(false);
+const { selectedSongIds, selectedCount, toggleSelect, selectAll, clearSelection } = useSongSelection();
+
 const {
-  progress: batchProgress,
-  start: startBatchPolling,
-  stop: stopBatchProgressPolling,
-} = useProgressPolling({
-  preserveEmptyMessage: true,
-  fetchProgress: async (progressId) => {
-    const res = await apiGet('/api/libraries/progress/{progressId}', {
-      pathParams: { progressId },
-    });
-    return res?.data?.ocs?.data as Record<string, unknown> | undefined;
-  },
+  isBatchEditorOpen,
+  isApplyingBatchUpdate,
+  batchUpdateProgressPercent,
+  batchUpdateProgressMessage,
+  handleApplyBatchUpdate,
+} = useSongBatchUpdate({
+  selectedLibrary: computed(() => props.selectedLibrary),
+  selectedSongIds,
+  entityListsProps,
+  onUpdated: handleLibraryDataUpdate,
+  onClearSelection: clearSelection,
 });
-
-const batchUpdateProgressPercent = computed(() => batchProgress.value?.percent ?? 0);
-const batchUpdateProgressMessage = computed(() => batchProgress.value?.message ?? '');
-
-function startBatchProgressPolling(progressId: string, count: number) {
-  startBatchPolling(progressId, t('sheetmusic', 'Updating {count} songs…', { count }, { escape: false }));
-}
 
 const isBatchDeleteDialogOpen = ref(false);
 
@@ -533,67 +445,6 @@ async function handleInlineUpdateSong(song: Song, updates: Record<string, any>) 
     currentLibraryData.value,
     handleLibraryDataUpdate,
   );
-}
-
-async function handleApplyBatchUpdate(payload: BatchUpdatePayload) {
-  if (selectedSongIds.value.length === 0 || isApplyingBatchUpdate.value) return;
-  const count = selectedSongIds.value.length;
-  const progressId = `batch-edit-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-  isApplyingBatchUpdate.value = true;
-  startBatchProgressPolling(progressId, count);
-  try {
-    const resolvedPayload: BatchUpdatePayload = { ...payload };
-    const selectionsToCreate = ENTITY_COLUMNS
-      .filter((col) => (payload[col.songProp]?.newLabels?.length ?? 0) > 0)
-      .map((col) => ({
-        idField: col.idField,
-        endpoint: col.endpoint,
-        labelField: col.nameKey,
-        selected: (payload[col.songProp]?.newLabels ?? []).map((label) => ({ [col.nameKey]: label })),
-        options: ((entityListsProps.value as any)[col.songProp] ?? []) as Array<{ id: number; name?: string; title?: string }>,
-      }));
-
-    if (selectionsToCreate.length > 0) {
-      const createdByField = await resolveSongEntityIds(
-        selectionsToCreate,
-        async (endpoint, labelField, label) => {
-          const res = await apiPost(endpoint as any, {
-            libraryId: props.selectedLibrary,
-            [labelField]: label,
-          } as any);
-          return res.data.ocs.data.id;
-        },
-      );
-      for (const col of ENTITY_COLUMNS) {
-        const update = payload[col.songProp];
-        if (update?.newLabels?.length) {
-          resolvedPayload[col.songProp] = {
-            action: update.action,
-            ids: Array.from(new Set([...update.ids, ...(createdByField[col.idField] ?? [])])),
-          };
-        }
-      }
-    }
-
-    const response = await apiPost('/api/songs-batch-update', {
-      libraryId: props.selectedLibrary,
-      songIds: selectedSongIds.value,
-      progressId,
-      ...resolvedPayload,
-    } as any);
-    isBatchEditorOpen.value = false;
-    clearSelection();
-    if (response.data?.ocs?.data) {
-      handleLibraryDataUpdate(response.data.ocs.data);
-    }
-    showSuccess(t('sheetmusic', 'Successfully updated {count} songs.', { count }, { escape: false }));
-  } catch (error) {
-    console.error('Failed to batch update songs:', error);
-    showError(describeRequestFailure(error, t('sheetmusic', 'Failed to update selected songs.')));
-  } finally {
-    stopBatchProgressPolling();
-    isApplyingBatchUpdate.value = false;
-  }
 }
 
 function handleBatchDeleted(data: LibraryData | undefined, payload: number[] | number) {
@@ -632,30 +483,6 @@ const {
 // Computed filtered list
 const filteredSongs = computed(() => filterSongs(songs.value));
 const sortedSongs = computed(() => sortSongs(filteredSongs.value, sortKey.value, sortOrder.value));
-
-const DEFAULT_PAGE_SIZE: PageSize = 50;
-
-const pageSize = ref<PageSize>((() => {
-  try {
-    const saved = localStorage.getItem('sheetmusic_songs_page_size');
-    if (saved === 'all') return 'all';
-    if (saved) {
-      const num = parseInt(saved, 10);
-      if (!isNaN(num) && num > 0) return num;
-    }
-  } catch {
-    // fallback
-  }
-  return DEFAULT_PAGE_SIZE;
-})());
-
-watch(pageSize, (newSize) => {
-  try {
-    localStorage.setItem('sheetmusic_songs_page_size', String(newSize));
-  } catch {
-    // ignore
-  }
-});
 
 const currentPage = ref(1);
 
@@ -920,33 +747,6 @@ async function handleDeleted(data: LibraryData | undefined, songId: number) {
 .createSongArea {
   display: block;
 }
-.songList {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.songList li {
-  border-bottom: 1px solid var(--color-border);
-}
-.songRow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.songButton {
-  flex: 1;
-  min-width: 0;
-  padding: 10px 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  text-align: start;
-  cursor: pointer;
-}
-.songButton:hover {
-  background: var(--color-background-hover);
-}
 .filterBarWrapper {
   margin-bottom: 12px;
 }
@@ -977,27 +777,6 @@ async function handleDeleted(data: LibraryData | undefined, songId: number) {
   min-height: 0;
   overflow: hidden;
   padding-bottom: 0;
-}
-
-.fullscreenHeader {
-  display: flex;
-}
-
-.selectionBanner {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 16px;
-  background-color: var(--color-background-hover);
-  border: 1px solid var(--color-primary-element);
-  border-radius: var(--border-radius-large, 8px);
-}
-
-.selectionCount {
-  font-weight: 600;
-  font-size: 0.9rem;
-  color: var(--color-main-text);
-  margin-right: auto;
 }
 
 .headerControls {
