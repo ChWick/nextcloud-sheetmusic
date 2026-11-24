@@ -130,14 +130,29 @@ function isSheetmusicEntryJs(url) {
 	)
 }
 
-function toCleanNavigationResponse(response) {
-	if (!response || !response.redirected) {
+function withNoCacheHeaders(response) {
+	if (!response) {
 		return response
 	}
+	const headers = new Headers(response.headers)
+	headers.set('cache-control', 'no-cache')
 	return new Response(response.body, {
 		status: response.status,
 		statusText: response.statusText,
-		headers: response.headers,
+		headers,
+	})
+}
+
+function toCleanNavigationResponse(response) {
+	if (!response) {
+		return response
+	}
+	const headers = new Headers(response.headers)
+	headers.set('cache-control', 'no-cache')
+	return new Response(response.body, {
+		status: response.status,
+		statusText: response.statusText,
+		headers,
 	})
 }
 
@@ -253,6 +268,13 @@ async function fetchResponseWithProgress(url, onBytes) {
 	const cleanHeaders = new Headers(res.headers)
 	cleanHeaders.delete('content-encoding')
 	cleanHeaders.delete('content-length')
+	try {
+		if (!isImmutableHashedAsset(new URL(url))) {
+			cleanHeaders.set('cache-control', 'no-cache')
+		}
+	} catch {
+		// Ignore URL parse errors
+	}
 
 	let blob
 	if (!res.body || typeof res.body.getReader !== 'function') {
@@ -413,7 +435,7 @@ async function precacheAppShellWithProgress() {
 async function fetchRevalidatedRequest(request) {
 	const init = {
 		credentials: 'include',
-		cache: 'no-cache',
+		cache: 'reload',
 	}
 	if (request.mode === 'navigate') {
 		init.headers = {
@@ -424,6 +446,8 @@ async function fetchRevalidatedRequest(request) {
 }
 
 async function handleOfflineAwareGet(request, url) {
+	const isEntryRequest = shouldRevalidateEntryRequest(request, url)
+
 	// Versioned PDFs/files pinned in offline setlists can be served cache-first immediately
 	if (isVersionedBinaryUrl(url)) {
 		const offlineCache = await caches.open(OFFLINE_SETLIST_CACHE)
@@ -443,22 +467,25 @@ async function handleOfflineAwareGet(request, url) {
 		const shellCache = await caches.open(APP_SHELL_CACHE)
 		const cached = await shellCache.match(request, { ignoreVary: true })
 		if (cached) {
-			return cached
+			return isEntryRequest ? withNoCacheHeaders(cached) : cached
 		}
 	}
 
 	try {
-		const networkResponse = shouldRevalidateEntryRequest(request, url)
+		const networkResponse = isEntryRequest
 			? await fetchRevalidatedRequest(request)
 			: await fetch(request)
 		if (networkResponse && networkResponse.ok && !networkResponse.url.includes('/login')) {
+			const responseToReturn = isEntryRequest
+				? (request.mode === 'navigate'
+					? toCleanNavigationResponse(networkResponse)
+					: withNoCacheHeaders(networkResponse))
+				: networkResponse
 			if (isCacheableAppShellRequest(request, url)) {
 				const shellCache = await caches.open(APP_SHELL_CACHE)
-				const toCache = request.mode === 'navigate'
-					? toCleanNavigationResponse(networkResponse.clone())
-					: networkResponse.clone()
-				shellCache.put(request, toCache).catch(() => {})
+				shellCache.put(request, responseToReturn.clone()).catch(() => {})
 			}
+			return responseToReturn
 		} else if (networkResponse && networkResponse.status >= 500 && request.mode === 'navigate') {
 			const cachedFallback = await serveCachedOfflineResponse(request)
 			if (cachedFallback) {
