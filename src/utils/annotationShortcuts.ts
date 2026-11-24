@@ -12,6 +12,7 @@ const TOOL_SHORTCUTS: Record<string, EditorTool> = {
 	s: 'line',
 	t: 'text',
 	m: 'stamp',
+	w: 'handwriting',
 	l: 'link',
 	e: 'eraser',
 }

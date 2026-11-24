@@ -2,13 +2,14 @@
 import type { SheetAnnotation } from '../../types/annotation'
 import type { EditorTool, EditorToolStyle } from '../../composables/useAnnotationEditor'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { getViewBoxHeight, VIEWBOX_WIDTH } from '../../utils/annotation'
+import { generateSmoothSvgPath, getViewBoxHeight, VIEWBOX_WIDTH } from '../../utils/annotation'
 import { createDefaultToolStyle } from '../../utils/annotationToolStyle'
 import { useAnnotationPointerInteraction } from '../../composables/useAnnotationPointerInteraction'
 import { useStylusSettings } from '../../composables/useStylusSettings'
 import SongAnnotationItem from './SongAnnotationItem.vue'
 import SongAnnotationSelectionBox from './SongAnnotationSelectionBox.vue'
 import SongAnnotationInlinePopovers from './SongAnnotationInlinePopovers.vue'
+import SongAnnotationHandwritingPill from './SongAnnotationHandwritingPill.vue'
 
 const props = withDefaults(
 	defineProps<{
@@ -40,7 +41,7 @@ const props = withDefaults(
 const emit = defineEmits<{
 	'jump-to-page': [pageNumber: number]
 	select: [uuid: string | null]
-	'create-annotation': [draft: Omit<SheetAnnotation, 'songId' | 'fileId' | 'uuid'>]
+	'create-annotation': [draft: Omit<SheetAnnotation, 'songId' | 'fileId' | 'uuid'> & { uuid?: string }]
 	'update-annotation': [before: SheetAnnotation, after: SheetAnnotation]
 	'delete-annotation': [annotation: SheetAnnotation]
 }>()
@@ -97,6 +98,12 @@ const {
 	hoveredUuid,
 	pendingText,
 	pendingLink,
+	handwritingPendingStrokes,
+	activeHandwritingStroke,
+	handwritingSwapState,
+	selectHandwritingCandidate,
+	keepHandwritingInk,
+	dismissHandwritingSwapPill,
 	onPointerDown,
 	onPointerMove,
 	onPointerUp,
@@ -133,6 +140,18 @@ const displayedAnnotations = computed(() => {
 		list.push(previewAnnotation.value)
 	}
 	return list
+})
+
+const handwritingPreviewPath = computed(() => {
+	const strokes = [
+		...handwritingPendingStrokes.value,
+		...(activeHandwritingStroke.value.length > 0 ? [activeHandwritingStroke.value] : []),
+	]
+	if (strokes.length === 0) return ''
+	return strokes
+		.map((s) => generateSmoothSvgPath(s, true, vbHeight.value))
+		.filter(Boolean)
+		.join(' ')
 })
 
 const cursorClass = computed(() => {
@@ -177,12 +196,30 @@ const cursorClass = computed(() => {
 				@dblclick-text="onAnnotationDblClick"
 				@jump-to-page="emit('jump-to-page', $event)" />
 
+			<path
+				v-if="handwritingPreviewPath"
+				:d="handwritingPreviewPath"
+				:stroke="toolStyle.color || '#000000'"
+				:stroke-width="Math.max(2, toolStyle.strokeWidth || 2.5)"
+				opacity="0.72"
+				fill="none"
+				stroke-linecap="round"
+				stroke-linejoin="round"
+				pointer-events="none"
+				data-test="handwriting-ink-preview" />
+
 			<SongAnnotationSelectionBox
 				v-if="selectedItem && activeTool !== 'eraser'"
 				:item="selectedItem"
 				:vb-height="vbHeight"
 				:ui-scale="uiScale" />
 		</svg>
+
+		<SongAnnotationHandwritingPill
+			:swap-state="handwritingSwapState"
+			@select="selectHandwritingCandidate"
+			@keep-ink="keepHandwritingInk"
+			@dismiss="dismissHandwritingSwapPill" />
 
 		<SongAnnotationInlinePopovers
 			:pending-text="pendingText"

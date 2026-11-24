@@ -39,6 +39,7 @@ export type EditorTool =
 	| 'bracket'
 	| 'text'
 	| 'stamp'
+	| 'handwriting'
 	| 'link'
 	| 'eraser'
 
@@ -469,7 +470,7 @@ export function useAnnotationEditor(
 		}
 
 		// No selection: adjust active tool style
-		if (activeTool.value === 'stamp') {
+		if (activeTool.value === 'stamp' || activeTool.value === 'handwriting') {
 			toolStyle.value = { ...toolStyle.value, stampSize: Math.max(12, Math.min(120, toolStyle.value.stampSize + deltaSign * 4)) }
 		} else if (activeTool.value === 'text' || activeTool.value === 'link') {
 			toolStyle.value = { ...toolStyle.value, fontSize: Math.max(10, Math.min(96, toolStyle.value.fontSize + deltaSign * 2)) }

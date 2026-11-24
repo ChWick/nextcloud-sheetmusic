@@ -54,7 +54,9 @@ const isHighlightContext = computed(() =>
 	props.selectedAnnotation ? props.selectedAnnotation.type === 'highlight' : props.activeTool === 'highlight',
 )
 const isStampContext = computed(() =>
-	props.selectedAnnotation ? props.selectedAnnotation.type === 'stamp' : props.activeTool === 'stamp',
+	props.selectedAnnotation
+		? props.selectedAnnotation.type === 'stamp'
+		: props.activeTool === 'stamp' || props.activeTool === 'handwriting',
 )
 
 const showStrokeWidth = computed(() => {
@@ -70,7 +72,7 @@ const showLineStyle = computed(() => {
 
 const showFontSize = computed(() => {
 	const t = props.selectedAnnotation?.type
-	return props.activeTool === 'text' || props.activeTool === 'stamp' || props.activeTool === 'link'
+	return props.activeTool === 'text' || props.activeTool === 'stamp' || props.activeTool === 'handwriting' || props.activeTool === 'link'
 		|| t === 'text' || t === 'stamp' || t === 'link'
 })
 

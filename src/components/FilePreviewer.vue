@@ -92,7 +92,7 @@ const props = withDefaults(
 
 const emit = defineEmits<{
 	'select-annotation': [uuid: string | null]
-	'create-annotation': [draft: Omit<SheetAnnotation, 'songId' | 'fileId' | 'uuid'>]
+	'create-annotation': [draft: Omit<SheetAnnotation, 'songId' | 'fileId' | 'uuid'> & { uuid?: string }]
 	'update-annotation': [before: SheetAnnotation, after: SheetAnnotation]
 	'delete-annotation': [annotation: SheetAnnotation]
 }>()

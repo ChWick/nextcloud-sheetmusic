@@ -20,7 +20,7 @@ export interface UseAnnotationOverlayHostOptions {
 	selectedAnnotationUuid: ComputedRef<string | null>
 	onJumpToPage: (targetOneIndexed: number) => void
 	onSelect: (uuid: string | null) => void
-	onCreate: (draft: Omit<SheetAnnotation, 'songId' | 'fileId' | 'uuid'>) => void
+	onCreate: (draft: Omit<SheetAnnotation, 'songId' | 'fileId' | 'uuid'> & { uuid?: string }) => void
 	onUpdate: (before: SheetAnnotation, after: SheetAnnotation) => void
 	onDelete: (ann: SheetAnnotation) => void
 }

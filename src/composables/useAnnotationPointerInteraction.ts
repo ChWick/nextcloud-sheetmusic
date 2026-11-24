@@ -6,6 +6,7 @@ import type {
 import type { EditorTool, EditorToolStyle } from './useAnnotationEditor'
 import { ref } from 'vue'
 import { useAnnotationInlineEditors } from './useAnnotationInlineEditors'
+import { useHandwritingInput } from './useHandwritingInput'
 import { useStylusSettings } from './useStylusSettings'
 import { translateAnnotation } from '../utils/annotation'
 import {
@@ -52,7 +53,7 @@ export interface UseAnnotationPointerInteractionOptions {
 	activeAnnotations: ComputedRef<SheetAnnotation[]>
 	selectedItem: ComputedRef<SheetAnnotation | null>
 	onSelect: (uuid: string | null) => void
-	onCreate: (draft: Omit<SheetAnnotation, 'songId' | 'fileId' | 'uuid'>) => void
+	onCreate: (draft: Omit<SheetAnnotation, 'songId' | 'fileId' | 'uuid'> & { uuid?: string }) => void
 	onUpdate: (before: SheetAnnotation, after: SheetAnnotation) => void
 	onDelete: (annotation: SheetAnnotation) => void
 }
@@ -93,6 +94,18 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 		onUpdate: opts.onUpdate,
 		onDelete: opts.onDelete,
 	})
+	const handwriting = useHandwritingInput({
+		vbHeight: opts.vbHeight,
+		pageIndex: opts.pageIndex,
+		editable: opts.editable,
+		activeTool: opts.activeTool,
+		toolStyle: opts.toolStyle,
+		activeAnnotations: opts.activeAnnotations,
+		onCreate: opts.onCreate,
+		onUpdate: opts.onUpdate,
+		onDelete: opts.onDelete,
+	})
+	const activeHandwritingStroke = ref<NormalizedPoint[]>([])
 	const activeTouchPointers = new Set<number>()
 	let capturedPointerId: number | null = null
 	let isMultiTouchGesture = false
@@ -115,6 +128,7 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 	function cancelInteraction(pointerId?: number) {
 		interaction.value = null
 		previewAnnotation.value = null
+		activeHandwritingStroke.value = []
 		releaseCapturedPointer(pointerId)
 	}
 
@@ -285,8 +299,9 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 			return
 		}
 
-		if (opts.activeTool.value === 'select' || hitUuid) {
+		if (opts.activeTool.value === 'select' || (hitUuid && !(opts.activeTool.value === 'handwriting' && handwriting.pendingStrokes.value.length > 0))) {
 			if (hitUuid) {
+				handwriting.dismissSwapPill()
 				const ann = opts.activeAnnotations.value.find((a) => a.uuid === hitUuid)
 				opts.onSelect(hitUuid)
 				if (ann) {
@@ -328,7 +343,12 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 		state.points.push(startPoint)
 		interaction.value = state
 
-		setDraftPreview(buildDraftFromTool(startPoint, startPoint, state.points))
+		if (opts.activeTool.value === 'handwriting') {
+			handwriting.beginStroke(startPoint)
+			activeHandwritingStroke.value = [startPoint]
+		} else {
+			setDraftPreview(buildDraftFromTool(startPoint, startPoint, state.points))
+		}
 	}
 
 	function onPointerMove(e: PointerEvent) {
@@ -386,7 +406,7 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 
 		if (state.kind === 'draw') {
 			const tool = opts.activeTool.value
-			if (tool === 'drawing' || tool === 'highlight') {
+			if (tool === 'drawing' || tool === 'highlight' || tool === 'handwriting') {
 				for (const ev of getCoalescedPointerEvents(e)) {
 					const evPt = clientToNorm(ev.clientX, ev.clientY, ev.pointerType || e.pointerType)
 					const last = state.points[state.points.length - 1]
@@ -396,7 +416,11 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 					}
 				}
 			}
-			setDraftPreview(buildDraftFromTool(state.startNorm, pt, state.points))
+			if (tool === 'handwriting') {
+				activeHandwritingStroke.value = [...state.points]
+			} else {
+				setDraftPreview(buildDraftFromTool(state.startNorm, pt, state.points))
+			}
 		}
 	}
 
@@ -436,6 +460,12 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 		}
 
 		if (state.kind === 'draw') {
+			if (opts.activeTool.value === 'handwriting') {
+				activeHandwritingStroke.value = []
+				handwriting.endStroke(state.points)
+				return
+			}
+
 			if (opts.activeTool.value === 'text') {
 				openCreateText(state.startNorm, pt, Boolean(state.moved))
 				return
@@ -472,6 +502,12 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 		hoveredUuid,
 		pendingText,
 		pendingLink,
+		handwritingPendingStrokes: handwriting.pendingStrokes,
+		activeHandwritingStroke,
+		handwritingSwapState: handwriting.swapState,
+		selectHandwritingCandidate: handwriting.selectCandidate,
+		keepHandwritingInk: handwriting.keepInk,
+		dismissHandwritingSwapPill: handwriting.dismissSwapPill,
 		onPointerDown,
 		onPointerMove,
 		onPointerUp,

@@ -1,0 +1,385 @@
+/**
+ * SPDX-FileCopyrightText: 2026 Nextcloud GmbH and Nextcloud contributors
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ */
+
+export interface Point2D {
+	x: number
+	y: number
+}
+
+export interface HandwritingTemplate {
+	/** Canonical Unicode symbol from MUSIC_STAMPS, or internal letter token for multi-letter dynamics */
+	symbol: string
+	/** If true, this template is only used for multi-glyph dynamic/ornament assembly (e.g. m, s, r, z, t) */
+	clusterOnly?: boolean
+	/** Strokes in normalized [0..1] screen coordinates (y increases downward) */
+	strokes: Point2D[][]
+}
+
+function arcPoints(
+	cx: number,
+	cy: number,
+	rx: number,
+	ry: number,
+	startDeg: number,
+	endDeg: number,
+	steps = 12,
+): Point2D[] {
+	const pts: Point2D[] = []
+	for (let i = 0; i <= steps; i++) {
+		const a = ((startDeg + ((endDeg - startDeg) * i) / steps) * Math.PI) / 180
+		pts.push({
+			x: cx + Math.cos(a) * rx,
+			y: cy + Math.sin(a) * ry,
+		})
+	}
+	return pts
+}
+
+/**
+ * Known multi-letter sequences (written left-to-right as separate horizontal clusters)
+ * mapped to their canonical Unicode music symbols.
+ */
+export const MULTI_GLYPH_SEQUENCES: Record<string, string> = {
+	pp: '𝆏𝆏',
+	ppp: '𝆏𝆏𝆏',
+	mp: '𝆐𝆏',
+	mf: '𝆐𝆑',
+	ff: '𝆑𝆑',
+	fff: '𝆑𝆑𝆑',
+	fp: '𝆑𝆏',
+	sf: '𝆍𝆑',
+	sfz: '𝆍𝆑𝆎',
+	rfz: '𝆌𝆑𝆎',
+	tr: '𝆖',
+}
+
+/**
+ * Map canonical dynamic symbols back to their primitive letter token for multi-glyph assembly.
+ */
+export const CLUSTER_TOKEN_MAP: Record<string, string> = {
+	'𝆏': 'p',
+	'𝆑': 'f',
+	m: 'm',
+	s: 's',
+	r: 'r',
+	z: 'z',
+	t: 't',
+}
+
+/**
+ * Hand-crafted stroke templates covering fingerings (0-5) and common music symbols
+ * (accidentals, dynamics, articulations, fermatas, breath/caesura, turn, trill, coda, pedal-up).
+ */
+export const HANDWRITING_TEMPLATES: HandwritingTemplate[] = [
+	// --- Fingerings (0–5) ---
+	{
+		symbol: '0',
+		strokes: [arcPoints(0.5, 0.5, 0.34, 0.48, -90, 270, 18)],
+	},
+	{
+		symbol: '0',
+		strokes: [arcPoints(0.5, 0.5, 0.34, 0.48, -90, -450, 18)],
+	},
+	{
+		symbol: '1',
+		strokes: [[{ x: 0.5, y: 0.05 }, { x: 0.5, y: 0.95 }]],
+	},
+	{
+		symbol: '1',
+		strokes: [[{ x: 0.25, y: 0.28 }, { x: 0.52, y: 0.05 }, { x: 0.52, y: 0.95 }]],
+	},
+	{
+		symbol: '2',
+		strokes: [[
+			...arcPoints(0.48, 0.26, 0.32, 0.24, -160, 25, 10),
+			{ x: 0.14, y: 0.95 },
+			{ x: 0.88, y: 0.95 },
+		]],
+	},
+	{
+		symbol: '3',
+		strokes: [[
+			...arcPoints(0.46, 0.26, 0.32, 0.23, -150, 85, 9),
+			...arcPoints(0.48, 0.74, 0.35, 0.24, -85, 155, 10),
+		]],
+	},
+	{
+		// 4: 2-stroke open
+		symbol: '4',
+		strokes: [
+			[{ x: 0.32, y: 0.05 }, { x: 0.12, y: 0.62 }, { x: 0.88, y: 0.62 }],
+			[{ x: 0.68, y: 0.08 }, { x: 0.68, y: 0.95 }],
+		],
+	},
+	{
+		// 4: 2-stroke closed top
+		symbol: '4',
+		strokes: [
+			[{ x: 0.68, y: 0.05 }, { x: 0.12, y: 0.64 }, { x: 0.88, y: 0.64 }],
+			[{ x: 0.68, y: 0.05 }, { x: 0.68, y: 0.95 }],
+		],
+	},
+	{
+		// 4: 1-stroke continuous
+		symbol: '4',
+		strokes: [[
+			{ x: 0.68, y: 0.95 },
+			{ x: 0.68, y: 0.05 },
+			{ x: 0.12, y: 0.64 },
+			{ x: 0.88, y: 0.64 },
+		]],
+	},
+	{
+		// 5: 1-stroke
+		symbol: '5',
+		strokes: [[
+			{ x: 0.82, y: 0.06 },
+			{ x: 0.22, y: 0.06 },
+			{ x: 0.18, y: 0.45 },
+			...arcPoints(0.48, 0.68, 0.34, 0.26, -125, 145, 10),
+		]],
+	},
+	{
+		// 5: 2-stroke (body first, then top bar)
+		symbol: '5',
+		strokes: [
+			[
+				{ x: 0.22, y: 0.08 },
+				{ x: 0.18, y: 0.45 },
+				...arcPoints(0.48, 0.68, 0.34, 0.26, -125, 145, 10),
+			],
+			[{ x: 0.22, y: 0.08 }, { x: 0.82, y: 0.08 }],
+		],
+	},
+
+	// --- Accidentals ---
+	{
+		// Sharp (#): 4 strokes
+		symbol: '♯',
+		strokes: [
+			[{ x: 0.32, y: 0.05 }, { x: 0.26, y: 0.95 }],
+			[{ x: 0.74, y: 0.05 }, { x: 0.68, y: 0.95 }],
+			[{ x: 0.06, y: 0.36 }, { x: 0.94, y: 0.28 }],
+			[{ x: 0.06, y: 0.72 }, { x: 0.94, y: 0.64 }],
+		],
+	},
+	{
+		// Flat (b): 1-stroke
+		symbol: '♭',
+		strokes: [[
+			{ x: 0.22, y: 0.05 },
+			{ x: 0.22, y: 0.95 },
+			...arcPoints(0.44, 0.72, 0.34, 0.22, 110, -135, 10),
+		]],
+	},
+	{
+		// Flat (b): 2-stroke
+		symbol: '♭',
+		strokes: [
+			[{ x: 0.22, y: 0.05 }, { x: 0.22, y: 0.95 }],
+			arcPoints(0.44, 0.72, 0.34, 0.22, -135, 125, 10),
+		],
+	},
+	{
+		// Natural (♮): 2-stroke
+		symbol: '♮',
+		strokes: [
+			[{ x: 0.26, y: 0.05 }, { x: 0.26, y: 0.68 }, { x: 0.76, y: 0.6 }],
+			[{ x: 0.26, y: 0.38 }, { x: 0.76, y: 0.3 }, { x: 0.76, y: 0.95 }],
+		],
+	},
+	{
+		// Double sharp (x): 2 crossing diagonals
+		symbol: '𝄪',
+		strokes: [
+			[{ x: 0.12, y: 0.12 }, { x: 0.88, y: 0.88 }],
+			[{ x: 0.88, y: 0.12 }, { x: 0.12, y: 0.88 }],
+		],
+	},
+
+	// --- Dynamics (single-glyph + cluster tokens) ---
+	{
+		// p: 1-stroke (down then up into loop)
+		symbol: '𝆏',
+		strokes: [[
+			{ x: 0.24, y: 0.95 },
+			{ x: 0.24, y: 0.08 },
+			...arcPoints(0.48, 0.3, 0.32, 0.22, -135, 145, 10),
+		]],
+	},
+	{
+		// p: 2-stroke
+		symbol: '𝆏',
+		strokes: [
+			[{ x: 0.24, y: 0.08 }, { x: 0.24, y: 0.95 }],
+			arcPoints(0.48, 0.3, 0.32, 0.22, -135, 145, 10),
+		],
+	},
+	{
+		// f: 2-stroke
+		symbol: '𝆑',
+		strokes: [
+			[
+				{ x: 0.8, y: 0.1 },
+				{ x: 0.6, y: 0.04 },
+				{ x: 0.44, y: 0.2 },
+				{ x: 0.36, y: 0.92 },
+				{ x: 0.18, y: 0.96 },
+			],
+			[{ x: 0.16, y: 0.46 }, { x: 0.74, y: 0.46 }],
+		],
+	},
+	{
+		// f: 1-stroke cursive
+		symbol: '𝆑',
+		strokes: [[
+			{ x: 0.78, y: 0.1 },
+			{ x: 0.58, y: 0.04 },
+			{ x: 0.42, y: 0.22 },
+			{ x: 0.35, y: 0.95 },
+			{ x: 0.56, y: 0.66 },
+			{ x: 0.16, y: 0.46 },
+			{ x: 0.76, y: 0.46 },
+		]],
+	},
+	// Cluster-only letters for multi-letter dynamics (mp, mf, sf, sfz, rfz) and tr
+	{
+		symbol: 'm',
+		clusterOnly: true,
+		strokes: [[
+			{ x: 0.06, y: 0.88 },
+			{ x: 0.12, y: 0.2 },
+			{ x: 0.28, y: 0.14 },
+			{ x: 0.44, y: 0.85 },
+			{ x: 0.56, y: 0.2 },
+			{ x: 0.72, y: 0.14 },
+			{ x: 0.92, y: 0.88 },
+		]],
+	},
+	{
+		symbol: 's',
+		clusterOnly: true,
+		strokes: [[
+			{ x: 0.78, y: 0.16 },
+			{ x: 0.48, y: 0.05 },
+			{ x: 0.18, y: 0.24 },
+			{ x: 0.5, y: 0.5 },
+			{ x: 0.82, y: 0.76 },
+			{ x: 0.5, y: 0.95 },
+			{ x: 0.18, y: 0.84 },
+		]],
+	},
+	{
+		symbol: 'r',
+		clusterOnly: true,
+		strokes: [[
+			{ x: 0.22, y: 0.16 },
+			{ x: 0.22, y: 0.92 },
+			{ x: 0.22, y: 0.36 },
+			{ x: 0.5, y: 0.15 },
+			{ x: 0.84, y: 0.22 },
+		]],
+	},
+	{
+		symbol: 'z',
+		clusterOnly: true,
+		strokes: [[
+			{ x: 0.12, y: 0.16 },
+			{ x: 0.88, y: 0.16 },
+			{ x: 0.12, y: 0.84 },
+			{ x: 0.88, y: 0.84 },
+		]],
+	},
+	{
+		symbol: 't',
+		clusterOnly: true,
+		strokes: [
+			[{ x: 0.46, y: 0.06 }, { x: 0.46, y: 0.88 }, { x: 0.74, y: 0.92 }],
+			[{ x: 0.16, y: 0.36 }, { x: 0.8, y: 0.36 }],
+		],
+	},
+
+	// --- Articulations ---
+	{
+		// Accent (>)
+		symbol: '𝅻',
+		strokes: [[{ x: 0.1, y: 0.18 }, { x: 0.9, y: 0.5 }, { x: 0.1, y: 0.82 }]],
+	},
+	{
+		// Marcato (^)
+		symbol: '𝅿',
+		strokes: [[{ x: 0.14, y: 0.88 }, { x: 0.5, y: 0.12 }, { x: 0.86, y: 0.88 }]],
+	},
+	{
+		// Tenuto (-)
+		symbol: '𝅽',
+		strokes: [[{ x: 0.08, y: 0.5 }, { x: 0.92, y: 0.5 }]],
+	},
+
+	// --- Ornaments & Navigation ---
+	{
+		// Fermata above: upward arch + dot below
+		symbol: '𝄐',
+		strokes: [
+			arcPoints(0.5, 0.75, 0.44, 0.55, 180, 360, 12),
+			[{ x: 0.48, y: 0.76 }, { x: 0.52, y: 0.8 }],
+		],
+	},
+	{
+		// Fermata below: downward U-arch + dot above
+		symbol: '𝄑',
+		strokes: [
+			arcPoints(0.5, 0.25, 0.44, 0.55, 0, 180, 12),
+			[{ x: 0.48, y: 0.2 }, { x: 0.52, y: 0.24 }],
+		],
+	},
+	{
+		// Breath mark (comma)
+		symbol: '𝄒',
+		strokes: [[
+			{ x: 0.56, y: 0.14 },
+			{ x: 0.62, y: 0.44 },
+			{ x: 0.48, y: 0.76 },
+			{ x: 0.28, y: 0.94 },
+		]],
+	},
+	{
+		// Caesura (//)
+		symbol: '𝄓',
+		strokes: [
+			[{ x: 0.14, y: 0.9 }, { x: 0.46, y: 0.1 }],
+			[{ x: 0.54, y: 0.9 }, { x: 0.86, y: 0.1 }],
+		],
+	},
+	{
+		// Turn (~)
+		symbol: '𝆗',
+		strokes: [[
+			{ x: 0.06, y: 0.66 },
+			{ x: 0.24, y: 0.22 },
+			{ x: 0.5, y: 0.5 },
+			{ x: 0.76, y: 0.78 },
+			{ x: 0.94, y: 0.34 },
+		]],
+	},
+	{
+		// Coda (circle + crosshairs)
+		symbol: '𝄌',
+		strokes: [
+			arcPoints(0.5, 0.5, 0.34, 0.38, -90, 270, 14),
+			[{ x: 0.5, y: 0.04 }, { x: 0.5, y: 0.96 }],
+			[{ x: 0.06, y: 0.5 }, { x: 0.94, y: 0.5 }],
+		],
+	},
+	{
+		// Pedal up (*)
+		symbol: '𝆯',
+		strokes: [
+			[{ x: 0.5, y: 0.08 }, { x: 0.5, y: 0.92 }],
+			[{ x: 0.14, y: 0.26 }, { x: 0.86, y: 0.74 }],
+			[{ x: 0.86, y: 0.26 }, { x: 0.14, y: 0.74 }],
+		],
+	},
+]

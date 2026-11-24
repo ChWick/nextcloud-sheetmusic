@@ -10,6 +10,7 @@ import CogOutline from 'vue-material-design-icons/CogOutline.vue'
 import CursorDefaultOutline from 'vue-material-design-icons/CursorDefaultOutline.vue'
 import DeleteOutline from 'vue-material-design-icons/DeleteOutline.vue'
 import DeleteSweepOutline from 'vue-material-design-icons/DeleteSweepOutline.vue'
+import DrawPen from 'vue-material-design-icons/DrawPen.vue'
 import Eraser from 'vue-material-design-icons/Eraser.vue'
 import FormatText from 'vue-material-design-icons/FormatText.vue'
 import LinkVariant from 'vue-material-design-icons/LinkVariant.vue'
@@ -191,6 +192,16 @@ function pickStamp(symbol: string) {
 					:stamp-symbol="toolStyle.stampSymbol"
 					@toggle="toggleStampMenu"
 					@select="pickStamp" />
+
+				<button
+					type="button"
+					:class="[$style.toolBtn, activeTool === 'handwriting' && $style.active]"
+					:title="t('sheetmusic', 'Handwrite Symbols & Fingerings (W)')"
+					:aria-label="t('sheetmusic', 'Handwrite Symbols & Fingerings (W)')"
+					data-test="tool-handwriting"
+					@click="selectTool('handwriting')">
+					<DrawPen :size="18" />
+				</button>
 
 				<button
 					v-for="tool in TRAILING_TOOLS"
