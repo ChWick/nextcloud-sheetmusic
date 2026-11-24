@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+	cacheIntoAppShell,
 	initPwaManifestLink,
 	initPwaStandaloneMode,
 	isStandaloneDisplayMode,
@@ -117,5 +118,65 @@ describe('pwa utils', () => {
 		initPwaManifestLink()
 		const link = document.head.querySelector<HTMLLinkElement>('link[rel="manifest"]')
 		expect(link?.getAttribute('href')).toBe('/index.php/apps/sheetmusic/pwa-manifest')
+	})
+
+	it('bypasses HTTP cache and strips immutable Cache-Control for unhashed entry assets', async () => {
+		const put = vi.fn().mockResolvedValue(undefined)
+		const match = vi.fn().mockResolvedValue(undefined)
+		Object.defineProperty(globalThis, 'caches', {
+			configurable: true,
+			value: {
+				open: vi.fn().mockResolvedValue({ match, put }),
+			},
+		})
+		const fetchMock = vi.fn().mockResolvedValue(
+			new Response('@import "./main-abc.chunk.css";', {
+				status: 200,
+				headers: { 'cache-control': 'max-age=15778463, immutable' },
+			}),
+		)
+		vi.stubGlobal('fetch', fetchMock)
+
+		await cacheIntoAppShell('https://cloud.test/apps-extra/sheetmusic/css/sheetmusic-main.css?v=123', false)
+
+		expect(fetchMock).toHaveBeenCalledWith(
+			'https://cloud.test/apps-extra/sheetmusic/css/sheetmusic-main.css?v=123',
+			expect.objectContaining({ cache: 'reload' }),
+		)
+		expect(put).toHaveBeenCalledTimes(1)
+		const cachedResponse = put.mock.calls[0][1] as Response
+		expect(cachedResponse.headers.get('cache-control')).toBe('no-cache')
+
+		vi.unstubAllGlobals()
+	})
+
+	it('uses default HTTP cache for content-hashed chunk assets', async () => {
+		const put = vi.fn().mockResolvedValue(undefined)
+		const match = vi.fn().mockResolvedValue(undefined)
+		Object.defineProperty(globalThis, 'caches', {
+			configurable: true,
+			value: {
+				open: vi.fn().mockResolvedValue({ match, put }),
+			},
+		})
+		const fetchMock = vi.fn().mockResolvedValue(
+			new Response('body{}', {
+				status: 200,
+				headers: { 'cache-control': 'max-age=15778463, immutable' },
+			}),
+		)
+		vi.stubGlobal('fetch', fetchMock)
+
+		await cacheIntoAppShell('https://cloud.test/apps-extra/sheetmusic/css/main-BHvG0wtP.chunk.css', false)
+
+		expect(fetchMock).toHaveBeenCalledWith(
+			'https://cloud.test/apps-extra/sheetmusic/css/main-BHvG0wtP.chunk.css',
+			expect.objectContaining({ cache: 'default' }),
+		)
+		expect(put).toHaveBeenCalledTimes(1)
+		const cachedResponse = put.mock.calls[0][1] as Response
+		expect(cachedResponse.headers.get('cache-control')).toBe('max-age=15778463, immutable')
+
+		vi.unstubAllGlobals()
 	})
 })

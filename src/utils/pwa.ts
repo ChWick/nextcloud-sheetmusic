@@ -70,6 +70,18 @@ export function initPwaStandaloneMode(): () => void {
 	return () => {}
 }
 
+function isImmutableHashedAssetUrl(targetUrl: string): boolean {
+	try {
+		const { pathname } = new URL(targetUrl, window.location.href)
+		return pathname.includes('.chunk.mjs')
+			|| pathname.includes('.chunk.css')
+			|| /\/dist\/pdf\.worker\.min-[^/]+\.mjs$/.test(pathname)
+			|| pathname.includes('/css/fonts/')
+	} catch {
+		return false
+	}
+}
+
 /**
  * Best-effort fetches and caches a same-origin URL into the app-shell Cache Storage.
  */
@@ -82,16 +94,21 @@ export async function cacheIntoAppShell(targetUrl: string, forceRefresh = false)
 		if (!forceRefresh && await cache.match(targetUrl, { ignoreVary: true })) {
 			return
 		}
+		const isImmutable = isImmutableHashedAssetUrl(targetUrl)
 		const res = await fetch(targetUrl, {
 			credentials: 'include',
-			cache: forceRefresh ? 'reload' : 'default',
+			cache: (forceRefresh || !isImmutable) ? 'reload' : 'default',
 		})
 		if (res.ok && !res.url.includes('/login')) {
-			const clean = res.redirected
+			const headers = new Headers(res.headers)
+			if (!isImmutable) {
+				headers.set('cache-control', 'no-cache')
+			}
+			const clean = (!isImmutable || res.redirected)
 				? new Response(res.body, {
 					status: res.status,
 					statusText: res.statusText,
-					headers: res.headers,
+					headers,
 				})
 				: res
 			await cache.put(targetUrl, clean)
