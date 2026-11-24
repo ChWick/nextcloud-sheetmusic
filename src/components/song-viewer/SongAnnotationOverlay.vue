@@ -172,7 +172,7 @@ const cursorClass = computed(() => {
 				:item="item"
 				:vb-height="vbHeight"
 				:editable="editable"
-				:hovered-select="editable && activeTool === 'select' && hoveredUuid === item.uuid"
+				:hovered-select="editable && activeTool !== 'eraser' && hoveredUuid === item.uuid"
 				:hovered-eraser="editable && activeTool === 'eraser' && hoveredUuid === item.uuid"
 				@dblclick-text="onAnnotationDblClick"
 				@jump-to-page="emit('jump-to-page', $event)" />

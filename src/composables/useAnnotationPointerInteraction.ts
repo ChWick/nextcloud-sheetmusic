@@ -285,7 +285,7 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 			return
 		}
 
-		if (opts.activeTool.value === 'select') {
+		if (opts.activeTool.value === 'select' || hitUuid) {
 			if (hitUuid) {
 				const ann = opts.activeAnnotations.value.find((a) => a.uuid === hitUuid)
 				opts.onSelect(hitUuid)
@@ -336,7 +336,7 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 		if (isMultiTouchGesture) return
 		const state = interaction.value
 		if (!state) {
-			if (opts.editable.value && (opts.activeTool.value === 'select' || opts.activeTool.value === 'eraser')) {
+			if (opts.editable.value) {
 				hoveredUuid.value = findAnnotationUuidFromEvent(e)
 			} else if (hoveredUuid.value !== null) {
 				hoveredUuid.value = null

@@ -52,7 +52,7 @@ export function useAnnotationInlineEditors(opts: UseAnnotationInlineEditorsOptio
 	}
 
 	function onAnnotationDblClick(ann: SheetAnnotation) {
-		if (!opts.editable.value || opts.activeTool.value !== 'select') return
+		if (!opts.editable.value || opts.activeTool.value === 'eraser') return
 		if (ann.type === 'text') {
 			pendingText.value = {
 				mode: 'edit',

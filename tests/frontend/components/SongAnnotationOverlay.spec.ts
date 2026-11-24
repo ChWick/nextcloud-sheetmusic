@@ -744,4 +744,106 @@ describe('SongAnnotationOverlay.vue', () => {
 
 		expect(wrapper.emitted('create-annotation')).toBeFalsy()
 	})
+
+	it('highlights on hover, selects on click, and moves on drag over existing annotations in add/insert mode', async () => {
+		const existingStamp: SheetAnnotation = {
+			id: 50,
+			uuid: 'stamp-existing',
+			songId: 10,
+			fileId: 20,
+			pageNumber: 0,
+			type: 'stamp',
+			x: 0.4,
+			y: 0.4,
+			width: 0,
+			height: 0,
+			style: { color: '#000000', fontSize: 40, opacity: 1 },
+			data: { symbol: '𝆑', category: 'dynamic', fontKind: 'music' },
+		}
+
+		const wrapper = mount(SongAnnotationOverlay, {
+			props: {
+				annotations: [existingStamp],
+				pageNumber: 1,
+				pageWidth: 1000,
+				pageHeight: 1000,
+				visible: true,
+				editable: true,
+				activeTool: 'stamp',
+			},
+		})
+
+		const svg = wrapper.find('[data-test="annotation-overlay"]')
+		vi.spyOn(svg.element, 'getBoundingClientRect').mockReturnValue({
+			left: 0,
+			top: 0,
+			width: 1000,
+			height: 1000,
+			right: 1000,
+			bottom: 1000,
+			x: 0,
+			y: 0,
+			toJSON: () => ({}),
+		})
+
+		const stampEl = wrapper.find('[data-test="annotation-stamp"]')
+		expect(stampEl.exists()).toBe(true)
+
+		// Hovering in insert mode highlights with the same select hover class
+		await stampEl.trigger('pointermove', {
+			pointerType: 'mouse',
+			clientX: 400,
+			clientY: 400,
+		})
+		expect(wrapper.find('g[data-ann-uuid="stamp-existing"]').classes()).toContain('is-hovered-select')
+		expect(wrapper.find('g[data-ann-uuid="stamp-existing"]').classes()).not.toContain('is-hovered-eraser')
+
+		// Click/tap on existing annotation selects it without creating a duplicate
+		await stampEl.trigger('pointerdown', {
+			button: 0,
+			pointerType: 'mouse',
+			clientX: 400,
+			clientY: 400,
+			pointerId: 1,
+		})
+		await svg.trigger('pointerup', {
+			button: 0,
+			pointerType: 'mouse',
+			clientX: 400,
+			clientY: 400,
+			pointerId: 1,
+		})
+		expect(wrapper.emitted('select')?.[0]).toEqual(['stamp-existing'])
+		expect(wrapper.emitted('create-annotation')).toBeFalsy()
+		expect(wrapper.emitted('update-annotation')).toBeFalsy()
+
+		// Click/tap and drag on existing annotation moves it
+		await stampEl.trigger('pointerdown', {
+			button: 0,
+			pointerType: 'mouse',
+			clientX: 400,
+			clientY: 400,
+			pointerId: 2,
+		})
+		await svg.trigger('pointermove', {
+			button: 0,
+			pointerType: 'mouse',
+			clientX: 550,
+			clientY: 500,
+			pointerId: 2,
+		})
+		await svg.trigger('pointerup', {
+			button: 0,
+			pointerType: 'mouse',
+			clientX: 550,
+			clientY: 500,
+			pointerId: 2,
+		})
+
+		expect(wrapper.emitted('create-annotation')).toBeFalsy()
+		const updated = wrapper.emitted('update-annotation')?.[0]
+		expect(updated).toBeTruthy()
+		expect((updated?.[1] as SheetAnnotation).x).toBeCloseTo(0.55, 2)
+		expect((updated?.[1] as SheetAnnotation).y).toBeCloseTo(0.5, 2)
+	})
 })
