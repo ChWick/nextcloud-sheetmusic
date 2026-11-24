@@ -103,6 +103,8 @@ const {
 	handwritingSwapState,
 	selectHandwritingCandidate,
 	keepHandwritingInk,
+	deleteHandwritingPlaced,
+	extendHandwritingPillTimeout,
 	dismissHandwritingSwapPill,
 	onPointerDown,
 	onPointerMove,
@@ -219,6 +221,8 @@ const cursorClass = computed(() => {
 			:swap-state="handwritingSwapState"
 			@select="selectHandwritingCandidate"
 			@keep-ink="keepHandwritingInk"
+			@delete="deleteHandwritingPlaced"
+			@extend-timeout="extendHandwritingPillTimeout"
 			@dismiss="dismissHandwritingSwapPill" />
 
 		<SongAnnotationInlinePopovers

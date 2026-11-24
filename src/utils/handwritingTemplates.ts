@@ -87,15 +87,87 @@ export const HANDWRITING_TEMPLATES: HandwritingTemplate[] = [
 		strokes: [[{ x: 0.5, y: 0.05 }, { x: 0.5, y: 0.95 }]],
 	},
 	{
+		// 1: slightly slanted straight downstroke (common fast handwriting)
 		symbol: '1',
-		strokes: [[{ x: 0.25, y: 0.28 }, { x: 0.52, y: 0.05 }, { x: 0.52, y: 0.95 }]],
+		strokes: [[{ x: 0.62, y: 0.05 }, { x: 0.38, y: 0.95 }]],
 	},
 	{
+		// 1: short top hook
+		symbol: '1',
+		strokes: [[{ x: 0.25, y: 0.28 }, { x: 0.55, y: 0.05 }, { x: 0.55, y: 0.95 }]],
+	},
+	{
+		// 1: long European/German diagonal up-stroke + vertical stem
+		symbol: '1',
+		strokes: [[{ x: 0.12, y: 0.46 }, { x: 0.64, y: 0.05 }, { x: 0.64, y: 0.95 }]],
+	},
+	{
+		// 1: slanted European 1
+		symbol: '1',
+		strokes: [[{ x: 0.14, y: 0.42 }, { x: 0.72, y: 0.05 }, { x: 0.48, y: 0.95 }]],
+	},
+	{
+		// 1: serif top + base
+		symbol: '1',
+		strokes: [
+			[{ x: 0.22, y: 0.3 }, { x: 0.54, y: 0.05 }, { x: 0.54, y: 0.94 }],
+			[{ x: 0.22, y: 0.94 }, { x: 0.8, y: 0.94 }],
+		],
+	},
+	{
+		// 2: standard
 		symbol: '2',
 		strokes: [[
 			...arcPoints(0.48, 0.26, 0.32, 0.24, -160, 25, 10),
 			{ x: 0.14, y: 0.95 },
 			{ x: 0.88, y: 0.95 },
+		]],
+	},
+	{
+		// 2: narrow/tall fast 2
+		symbol: '2',
+		strokes: [[
+			...arcPoints(0.48, 0.22, 0.24, 0.18, -155, 25, 9),
+			{ x: 0.22, y: 0.95 },
+			{ x: 0.78, y: 0.95 },
+		]],
+	},
+	{
+		// 2: soft/rounded quick 2 with curved base
+		symbol: '2',
+		strokes: [[
+			{ x: 0.2, y: 0.24 },
+			{ x: 0.45, y: 0.06 },
+			{ x: 0.76, y: 0.18 },
+			{ x: 0.72, y: 0.42 },
+			{ x: 0.42, y: 0.68 },
+			{ x: 0.16, y: 0.9 },
+			{ x: 0.48, y: 0.94 },
+			{ x: 0.86, y: 0.88 },
+		]],
+	},
+	{
+		// 2: angular / Z-like 2
+		symbol: '2',
+		strokes: [[
+			{ x: 0.18, y: 0.14 },
+			{ x: 0.8, y: 0.14 },
+			{ x: 0.76, y: 0.34 },
+			{ x: 0.14, y: 0.94 },
+			{ x: 0.88, y: 0.94 },
+		]],
+	},
+	{
+		// 2: looped bottom
+		symbol: '2',
+		strokes: [[
+			...arcPoints(0.48, 0.24, 0.3, 0.22, -160, 20, 9),
+			{ x: 0.2, y: 0.86 },
+			{ x: 0.16, y: 0.95 },
+			{ x: 0.32, y: 0.95 },
+			{ x: 0.28, y: 0.82 },
+			{ x: 0.5, y: 0.94 },
+			{ x: 0.88, y: 0.92 },
 		]],
 	},
 	{
@@ -106,11 +178,45 @@ export const HANDWRITING_TEMPLATES: HandwritingTemplate[] = [
 		]],
 	},
 	{
-		// 4: 2-stroke open
+		// 3: flat-top European 3
+		symbol: '3',
+		strokes: [[
+			{ x: 0.16, y: 0.08 },
+			{ x: 0.82, y: 0.08 },
+			{ x: 0.44, y: 0.46 },
+			...arcPoints(0.48, 0.72, 0.35, 0.24, -85, 160, 10),
+		]],
+	},
+	{
+		// 4: 2-stroke open (slanted L + full vertical stem)
 		symbol: '4',
 		strokes: [
 			[{ x: 0.32, y: 0.05 }, { x: 0.12, y: 0.62 }, { x: 0.88, y: 0.62 }],
 			[{ x: 0.68, y: 0.08 }, { x: 0.68, y: 0.95 }],
+		],
+	},
+	{
+		// 4: 2-stroke European open (slanted down + right, short lower vertical stem)
+		symbol: '4',
+		strokes: [
+			[{ x: 0.42, y: 0.05 }, { x: 0.12, y: 0.62 }, { x: 0.88, y: 0.62 }],
+			[{ x: 0.64, y: 0.34 }, { x: 0.64, y: 0.95 }],
+		],
+	},
+	{
+		// 4: 2-stroke vertical L + lower vertical stem
+		symbol: '4',
+		strokes: [
+			[{ x: 0.2, y: 0.05 }, { x: 0.18, y: 0.6 }, { x: 0.86, y: 0.6 }],
+			[{ x: 0.64, y: 0.32 }, { x: 0.64, y: 0.95 }],
+		],
+	},
+	{
+		// 4: 2-stroke vertical L + full vertical stem
+		symbol: '4',
+		strokes: [
+			[{ x: 0.2, y: 0.05 }, { x: 0.2, y: 0.6 }, { x: 0.86, y: 0.6 }],
+			[{ x: 0.72, y: 0.06 }, { x: 0.72, y: 0.95 }],
 		],
 	},
 	{
@@ -122,13 +228,24 @@ export const HANDWRITING_TEMPLATES: HandwritingTemplate[] = [
 		],
 	},
 	{
-		// 4: 1-stroke continuous
+		// 4: 1-stroke continuous (bottom-up then triangle)
 		symbol: '4',
 		strokes: [[
 			{ x: 0.68, y: 0.95 },
 			{ x: 0.68, y: 0.05 },
 			{ x: 0.12, y: 0.64 },
 			{ x: 0.88, y: 0.64 },
+		]],
+	},
+	{
+		// 4: 1-stroke top-down (down-left, right, up, down)
+		symbol: '4',
+		strokes: [[
+			{ x: 0.34, y: 0.05 },
+			{ x: 0.12, y: 0.62 },
+			{ x: 0.86, y: 0.62 },
+			{ x: 0.66, y: 0.28 },
+			{ x: 0.66, y: 0.95 },
 		]],
 	},
 	{
@@ -206,6 +323,16 @@ export const HANDWRITING_TEMPLATES: HandwritingTemplate[] = [
 		strokes: [[
 			{ x: 0.24, y: 0.95 },
 			{ x: 0.24, y: 0.08 },
+			...arcPoints(0.48, 0.3, 0.32, 0.22, -135, 145, 10),
+		]],
+	},
+	{
+		// p: 1-stroke top-down (down, back up, loop)
+		symbol: '𝆏',
+		strokes: [[
+			{ x: 0.24, y: 0.08 },
+			{ x: 0.24, y: 0.95 },
+			{ x: 0.24, y: 0.2 },
 			...arcPoints(0.48, 0.3, 0.32, 0.22, -135, 145, 10),
 		]],
 	},
@@ -303,14 +430,24 @@ export const HANDWRITING_TEMPLATES: HandwritingTemplate[] = [
 
 	// --- Articulations ---
 	{
-		// Accent (>)
+		// Accent (>): top-to-bottom
 		symbol: '𝅻',
 		strokes: [[{ x: 0.1, y: 0.18 }, { x: 0.9, y: 0.5 }, { x: 0.1, y: 0.82 }]],
 	},
 	{
-		// Marcato (^)
+		// Accent (>): bottom-to-top
+		symbol: '𝅻',
+		strokes: [[{ x: 0.1, y: 0.82 }, { x: 0.9, y: 0.5 }, { x: 0.1, y: 0.18 }]],
+	},
+	{
+		// Marcato (^): left-to-right
 		symbol: '𝅿',
 		strokes: [[{ x: 0.14, y: 0.88 }, { x: 0.5, y: 0.12 }, { x: 0.86, y: 0.88 }]],
+	},
+	{
+		// Marcato (^): right-to-left
+		symbol: '𝅿',
+		strokes: [[{ x: 0.86, y: 0.88 }, { x: 0.5, y: 0.12 }, { x: 0.14, y: 0.88 }]],
 	},
 	{
 		// Tenuto (-)

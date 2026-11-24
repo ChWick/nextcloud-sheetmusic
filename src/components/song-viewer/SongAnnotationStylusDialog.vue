@@ -9,6 +9,7 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import { useStylusSettings } from '../../composables/useStylusSettings'
+import { getLearnedSampleCount, resetLearnedHandwritingModel } from '../../utils/handwritingModel'
 import type { PressureMode } from '../../utils/stylus-settings'
 import StylusPressureScratchpad from './StylusPressureScratchpad.vue'
 import StylusTipCalibrationSection from './StylusTipCalibrationSection.vue'
@@ -27,6 +28,12 @@ const {
 
 const tipCalibrationRef = ref<InstanceType<typeof StylusTipCalibrationSection> | null>(null)
 const scratchpadRef = ref<InstanceType<typeof StylusPressureScratchpad> | null>(null)
+const learnedSamplesCount = ref(getLearnedSampleCount())
+
+function handleResetHandwritingModel() {
+	resetLearnedHandwritingModel()
+	learnedSamplesCount.value = 0
+}
 
 const PRESSURE_MODES = computed<Array<{ value: PressureMode; label: string }>>(() => [
 	{ value: 'auto', label: t('sheetmusic', 'Auto') },
@@ -196,6 +203,25 @@ function handleResetAll() {
 					@update-settings="updateSettings"
 					@pen-detected="markPenDetected" />
 			</section>
+
+			<!-- Section 4: Adaptive Handwriting Model -->
+			<section :class="$style.section">
+				<h3 :class="$style.sectionTitle">
+					{{ t('sheetmusic', 'Handwriting Recognition') }}
+				</h3>
+				<div :class="$style.handwritingRow">
+					<span>
+						{{ t('sheetmusic', 'Adapts automatically when you accept or correct recognized symbols ({count} learned).', { count: learnedSamplesCount }) }}
+					</span>
+					<NcButton
+						variant="tertiary"
+						:disabled="learnedSamplesCount === 0"
+						data-test="handwriting-reset-model"
+						@click="handleResetHandwritingModel">
+						{{ t('sheetmusic', 'Reset learned') }}
+					</NcButton>
+				</div>
+			</section>
 		</div>
 
 		<template #actions>
@@ -234,6 +260,15 @@ function handleResetAll() {
 	font-size: 0.95rem;
 	font-weight: 600;
 	color: var(--color-main-text);
+}
+
+.handwritingRow {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	font-size: 0.84rem;
+	color: var(--color-text-maxcontrast);
 }
 
 .toggles {

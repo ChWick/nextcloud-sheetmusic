@@ -3,8 +3,13 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import type { NormalizedPoint } from '../../../src/types/annotation'
+import {
+	getLearnedSampleCount,
+	learnHandwritingSample,
+	resetLearnedHandwritingModel,
+} from '../../../src/utils/handwritingModel'
 import { recognizeHandwriting } from '../../../src/utils/handwritingRecognizer'
 
 const VB_HEIGHT = 1414
@@ -50,21 +55,36 @@ describe('handwritingRecognizer', () => {
 			expect(res.best?.symbol).toBe('0')
 		})
 
-		it('recognizes 1 (vertical line) with staccatissimo as runner-up', () => {
-			const strokes = placeGlyph([[[0.5, 0.05], [0.5, 0.95]]])
-			const res = recognizeHandwriting(strokes, VB_HEIGHT)
-			expect(res.best?.symbol).toBe('1')
-			expect(res.candidates.map((c) => c.symbol)).toContain('𝅾')
+		it('recognizes 1 (vertical, slanted, and European hooked variants)', () => {
+			const straight = placeGlyph([[[0.5, 0.05], [0.5, 0.95]]])
+			const resStraight = recognizeHandwriting(straight, VB_HEIGHT)
+			expect(resStraight.best?.symbol).toBe('1')
+			expect(resStraight.candidates.map((c) => c.symbol)).toContain('𝅾')
+
+			const slanted = placeGlyph([[[0.65, 0.05], [0.35, 0.95]]], 400, 400, 32, 44)
+			expect(recognizeHandwriting(slanted, VB_HEIGHT).best?.symbol).toBe('1')
+
+			const europeanHook = placeGlyph([[[0.12, 0.45], [0.62, 0.05], [0.62, 0.95]]], 400, 400, 30, 46)
+			expect(recognizeHandwriting(europeanHook, VB_HEIGHT).best?.symbol).toBe('1')
 		})
 
-		it('recognizes 2', () => {
-			const strokes = placeGlyph([[
+		it('recognizes 2 (standard, soft/rounded, narrow, and angular variants)', () => {
+			const standard = placeGlyph([[
 				...arc(0.48, 0.26, 0.32, 0.24, -155, 25, 10),
 				[0.14, 0.95],
 				[0.88, 0.95],
 			]])
-			const res = recognizeHandwriting(strokes, VB_HEIGHT)
-			expect(res.best?.symbol).toBe('2')
+			expect(recognizeHandwriting(standard, VB_HEIGHT).best?.symbol).toBe('2')
+
+			const softQuick = placeGlyph([[
+				[0.22, 0.25], [0.46, 0.08], [0.75, 0.2], [0.7, 0.44], [0.4, 0.7], [0.18, 0.9], [0.52, 0.93], [0.85, 0.87],
+			]], 400, 400, 32, 42)
+			expect(recognizeHandwriting(softQuick, VB_HEIGHT).best?.symbol).toBe('2')
+
+			const angular = placeGlyph([[
+				[0.16, 0.16], [0.8, 0.14], [0.14, 0.92], [0.88, 0.92],
+			]], 400, 400, 32, 42)
+			expect(recognizeHandwriting(angular, VB_HEIGHT).best?.symbol).toBe('2')
 		})
 
 		it('recognizes 3', () => {
@@ -76,13 +96,29 @@ describe('handwritingRecognizer', () => {
 			expect(res.best?.symbol).toBe('3')
 		})
 
-		it('recognizes 2-stroke 4', () => {
-			const strokes = placeGlyph([
+		it('recognizes 4 (open, European short-stem, vertical-L, and 1-stroke variants)', () => {
+			const open = placeGlyph([
 				[[0.32, 0.05], [0.12, 0.62], [0.88, 0.62]],
 				[[0.68, 0.08], [0.68, 0.95]],
 			])
-			const res = recognizeHandwriting(strokes, VB_HEIGHT)
-			expect(res.best?.symbol).toBe('4')
+			expect(recognizeHandwriting(open, VB_HEIGHT).best?.symbol).toBe('4')
+
+			const europeanShortStem = placeGlyph([
+				[[0.4, 0.06], [0.12, 0.6], [0.88, 0.6]],
+				[[0.64, 0.36], [0.64, 0.95]],
+			])
+			expect(recognizeHandwriting(europeanShortStem, VB_HEIGHT).best?.symbol).toBe('4')
+
+			const verticalL = placeGlyph([
+				[[0.2, 0.06], [0.2, 0.6], [0.86, 0.6]],
+				[[0.66, 0.34], [0.66, 0.95]],
+			])
+			expect(recognizeHandwriting(verticalL, VB_HEIGHT).best?.symbol).toBe('4')
+
+			const oneStrokeTopDown = placeGlyph([[
+				[0.34, 0.06], [0.12, 0.62], [0.86, 0.62], [0.66, 0.3], [0.66, 0.95],
+			]])
+			expect(recognizeHandwriting(oneStrokeTopDown, VB_HEIGHT).best?.symbol).toBe('4')
 		})
 
 		it('recognizes 1-stroke 5', () => {
@@ -233,6 +269,34 @@ describe('handwritingRecognizer', () => {
 			}
 			const res = recognizeHandwriting(placeGlyph([scribble, scribble, scribble, scribble, scribble], 200, 200, 120, 120), VB_HEIGHT)
 			expect(res.best).toBeNull()
+		})
+	})
+
+	describe('active learning', () => {
+		afterEach(() => {
+			resetLearnedHandwritingModel()
+		})
+
+		it('adapts to a user-corrected personal glyph style and persists prototypes', () => {
+			// A distinctive custom zigzag-hook stroke that isn't a built-in trill template
+			const customTrill = placeGlyph([[
+				[0.1, 0.7], [0.3, 0.2], [0.45, 0.75], [0.65, 0.2], [0.85, 0.7],
+			]], 400, 400, 46, 30)
+
+			expect(getLearnedSampleCount()).toBe(0)
+			learnHandwritingSample(customTrill, VB_HEIGHT, '𝆖', { isCorrection: true })
+			expect(getLearnedSampleCount()).toBe(1)
+
+			// Re-drawing a slightly noisy version of the same personal gesture now recognizes as trill
+			const noisyTrill = placeGlyph([[
+				[0.12, 0.68], [0.29, 0.22], [0.47, 0.73], [0.64, 0.23], [0.84, 0.68],
+			]], 520, 600, 44, 32)
+			const res = recognizeHandwriting(noisyTrill, VB_HEIGHT)
+			expect(res.best?.symbol).toBe('𝆖')
+
+			// Teaching a near-duplicate merges/reinforces instead of duplicating
+			learnHandwritingSample(noisyTrill, VB_HEIGHT, '𝆖', { isCorrection: false })
+			expect(getLearnedSampleCount()).toBe(1)
 		})
 	})
 })

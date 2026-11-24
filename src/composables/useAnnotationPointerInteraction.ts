@@ -507,6 +507,8 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 		handwritingSwapState: handwriting.swapState,
 		selectHandwritingCandidate: handwriting.selectCandidate,
 		keepHandwritingInk: handwriting.keepInk,
+		deleteHandwritingPlaced: handwriting.deletePlaced,
+		extendHandwritingPillTimeout: handwriting.extendSwapPillTimeout,
 		dismissHandwritingSwapPill: handwriting.dismissSwapPill,
 		onPointerDown,
 		onPointerMove,

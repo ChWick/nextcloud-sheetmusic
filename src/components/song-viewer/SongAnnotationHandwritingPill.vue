@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import type { HandwritingSwapState } from '../../composables/useHandwritingInput'
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
+import DeleteOutline from 'vue-material-design-icons/DeleteOutline.vue'
+import DotsHorizontal from 'vue-material-design-icons/DotsHorizontal.vue'
 import Pencil from 'vue-material-design-icons/Pencil.vue'
 import { getMusicStampFontFamily, getStampDefinition } from '../../utils/musicSymbols'
 
@@ -12,15 +14,42 @@ const props = defineProps<{
 const emit = defineEmits<{
 	select: [symbol: string]
 	'keep-ink': []
+	delete: []
+	'extend-timeout': []
 	dismiss: []
 }>()
+
+const showMore = ref(false)
+
+watch(
+	() => props.swapState?.uuid,
+	() => {
+		showMore.value = false
+	},
+)
+
+const primaryCandidates = computed(() => props.swapState?.candidates.slice(0, 3) ?? [])
+const overflowCandidates = computed(() => props.swapState?.candidates.slice(3, 7) ?? [])
+const isOverflowActive = computed(() => {
+	const active = props.swapState?.activeSymbol
+	return Boolean(active && overflowCandidates.value.some((c) => c.symbol === active))
+})
+
+function toggleMore() {
+	showMore.value = !showMore.value
+	emit('extend-timeout')
+}
+
+function selectSymbol(symbol: string) {
+	emit('select', symbol)
+}
 
 const positionStyle = computed(() => {
 	const s = props.swapState
 	if (!s) return {}
-	const showBelow = s.y < 0.1
+	const showBelow = s.y < 0.14
 	return {
-		left: `clamp(8px, ${s.x * 100}%, calc(100% - 170px))`,
+		left: `clamp(120px, ${s.x * 100}%, calc(100% - 120px))`,
 		top: showBelow
 			? `calc(${s.y * 100}% + 20px)`
 			: `max(8px, calc(${s.y * 100}% - 48px))`,
@@ -31,64 +60,137 @@ const positionStyle = computed(() => {
 <template>
 	<div
 		v-if="swapState"
-		:class="$style.pill"
+		:class="$style.wrapper"
 		:style="positionStyle"
 		role="toolbar"
 		:aria-label="t('sheetmusic', 'Handwriting suggestions')"
 		data-test="handwriting-swap-pill"
 		@pointerdown.stop>
-		<button
-			v-for="cand in swapState.candidates"
-			:key="cand.symbol"
-			type="button"
-			:class="[$style.candBtn, swapState.activeSymbol === cand.symbol && $style.active]"
-			:title="cand.label"
-			:aria-label="cand.label"
-			:data-test="`handwriting-candidate-${cand.symbol}`"
-			@click="emit('select', cand.symbol)">
-			<svg
-				v-if="getStampDefinition(cand.symbol)?.inkOffset"
-				width="22"
-				height="22"
-				viewBox="0 0 22 22"
-				aria-hidden="true">
-				<text
-					:x="11 + getStampDefinition(cand.symbol)!.inkOffset!.ox * 16"
-					:y="11 + getStampDefinition(cand.symbol)!.inkOffset!.oy * 16"
-					font-size="16"
-					text-anchor="middle"
-					dominant-baseline="alphabetic"
-					fill="currentColor"
-					:font-family="getMusicStampFontFamily(cand.symbol, getStampDefinition(cand.symbol)?.fontKind)">
+		<div :class="$style.pill">
+			<button
+				v-for="cand in primaryCandidates"
+				:key="cand.symbol"
+				type="button"
+				:class="[$style.candBtn, swapState.activeSymbol === cand.symbol && $style.active]"
+				:title="cand.label"
+				:aria-label="cand.label"
+				:data-test="`handwriting-candidate-${cand.symbol}`"
+				@click="selectSymbol(cand.symbol)">
+				<svg
+					v-if="getStampDefinition(cand.symbol)?.inkOffset"
+					width="22"
+					height="22"
+					viewBox="0 0 22 22"
+					aria-hidden="true">
+					<text
+						:x="11 + getStampDefinition(cand.symbol)!.inkOffset!.ox * 16"
+						:y="11 + getStampDefinition(cand.symbol)!.inkOffset!.oy * 16"
+						font-size="16"
+						text-anchor="middle"
+						dominant-baseline="alphabetic"
+						fill="currentColor"
+						:font-family="getMusicStampFontFamily(cand.symbol, getStampDefinition(cand.symbol)?.fontKind)">
+						{{ cand.symbol }}
+					</text>
+				</svg>
+				<span
+					v-else
+					:class="$style.fingeringGlyph"
+					:style="{ fontFamily: getMusicStampFontFamily(cand.symbol, getStampDefinition(cand.symbol)?.fontKind) }">
 					{{ cand.symbol }}
-				</text>
-			</svg>
-			<span
-				v-else
-				:class="$style.fingeringGlyph"
-				:style="{ fontFamily: getMusicStampFontFamily(cand.symbol, getStampDefinition(cand.symbol)?.fontKind) }">
-				{{ cand.symbol }}
-			</span>
-		</button>
+				</span>
+			</button>
 
-		<span :class="$style.divider" aria-hidden="true" />
+			<button
+				v-if="overflowCandidates.length > 0"
+				type="button"
+				:class="[$style.actionBtn, (showMore || isOverflowActive) && $style.active]"
+				:title="t('sheetmusic', 'More symbol suggestions')"
+				:aria-label="t('sheetmusic', 'More symbol suggestions')"
+				:aria-expanded="showMore"
+				data-test="handwriting-more"
+				@click="toggleMore">
+				<DotsHorizontal :size="16" />
+			</button>
 
-		<button
-			type="button"
-			:class="$style.keepInkBtn"
-			:title="t('sheetmusic', 'Keep ink as freehand drawing')"
-			:aria-label="t('sheetmusic', 'Keep ink as freehand drawing')"
-			data-test="handwriting-keep-ink"
-			@click="emit('keep-ink')">
-			<Pencil :size="15" />
-		</button>
+			<span :class="$style.divider" aria-hidden="true" />
+
+			<button
+				type="button"
+				:class="$style.actionBtn"
+				:title="t('sheetmusic', 'Keep as handwriting')"
+				:aria-label="t('sheetmusic', 'Keep as handwriting')"
+				data-test="handwriting-keep-ink"
+				@click="emit('keep-ink')">
+				<Pencil :size="15" />
+			</button>
+
+			<button
+				type="button"
+				:class="[$style.actionBtn, $style.deleteBtn]"
+				:title="t('sheetmusic', 'Delete')"
+				:aria-label="t('sheetmusic', 'Delete')"
+				data-test="handwriting-delete"
+				@click="emit('delete')">
+				<DeleteOutline :size="16" />
+			</button>
+		</div>
+
+		<div
+			v-if="showMore && overflowCandidates.length > 0"
+			:class="$style.moreRow"
+			data-test="handwriting-more-menu">
+			<button
+				v-for="cand in overflowCandidates"
+				:key="cand.symbol"
+				type="button"
+				:class="[$style.candBtn, swapState.activeSymbol === cand.symbol && $style.active]"
+				:title="cand.label"
+				:aria-label="cand.label"
+				:data-test="`handwriting-candidate-${cand.symbol}`"
+				@click="selectSymbol(cand.symbol)">
+				<svg
+					v-if="getStampDefinition(cand.symbol)?.inkOffset"
+					width="22"
+					height="22"
+					viewBox="0 0 22 22"
+					aria-hidden="true">
+					<text
+						:x="11 + getStampDefinition(cand.symbol)!.inkOffset!.ox * 16"
+						:y="11 + getStampDefinition(cand.symbol)!.inkOffset!.oy * 16"
+						font-size="16"
+						text-anchor="middle"
+						dominant-baseline="alphabetic"
+						fill="currentColor"
+						:font-family="getMusicStampFontFamily(cand.symbol, getStampDefinition(cand.symbol)?.fontKind)">
+						{{ cand.symbol }}
+					</text>
+				</svg>
+				<span
+					v-else
+					:class="$style.fingeringGlyph"
+					:style="{ fontFamily: getMusicStampFontFamily(cand.symbol, getStampDefinition(cand.symbol)?.fontKind) }">
+					{{ cand.symbol }}
+				</span>
+			</button>
+		</div>
 	</div>
 </template>
 
 <style module>
-.pill {
+.wrapper {
 	position: absolute;
 	z-index: 25;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 4px;
+	pointer-events: auto;
+	transform: translateX(-50%);
+}
+
+.pill,
+.moreRow {
 	display: inline-flex;
 	align-items: center;
 	gap: 3px;
@@ -98,12 +200,10 @@ const positionStyle = computed(() => {
 	border: 1px solid var(--color-border-dark, #cccccc);
 	border-radius: 999px;
 	box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
-	pointer-events: auto;
-	transform: translateX(-50%);
 }
 
 button[type='button'].candBtn,
-button[type='button'].keepInkBtn {
+button[type='button'].actionBtn {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
@@ -118,18 +218,23 @@ button[type='button'].keepInkBtn {
 	background: transparent;
 	color: var(--color-main-text, #222222);
 	cursor: pointer;
-	transition: background-color 0.12s, border-color 0.12s;
+	transition: background-color 0.12s, border-color 0.12s, color 0.12s;
 }
 
 button[type='button'].candBtn:hover,
-button[type='button'].keepInkBtn:hover {
+button[type='button'].actionBtn:hover {
 	background: var(--color-background-hover, #f0f0f0);
 }
 
-button[type='button'].candBtn.active {
+button[type='button'].candBtn.active,
+button[type='button'].actionBtn.active {
 	background: var(--color-primary-light, #e6f4fa);
 	border-color: var(--color-primary-element, #0082c9);
 	color: var(--color-primary-element, #0082c9);
+}
+
+button[type='button'].deleteBtn:hover {
+	color: var(--color-error, #e53935);
 }
 
 .fingeringGlyph {

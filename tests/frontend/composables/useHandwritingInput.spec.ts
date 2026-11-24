@@ -9,14 +9,17 @@ import type { EditorTool } from '../../../src/composables/useAnnotationEditor'
 import { useHandwritingInput } from '../../../src/composables/useHandwritingInput'
 import type { SheetAnnotation } from '../../../src/types/annotation'
 import { createDefaultToolStyle } from '../../../src/utils/annotationToolStyle'
+import { getLearnedSampleCount, resetLearnedHandwritingModel } from '../../../src/utils/handwritingModel'
 
 describe('useHandwritingInput', () => {
 	beforeEach(() => {
 		vi.useFakeTimers()
+		resetLearnedHandwritingModel()
 	})
 
 	afterEach(() => {
 		vi.useRealTimers()
+		resetLearnedHandwritingModel()
 	})
 
 	function setup() {
@@ -152,5 +155,56 @@ describe('useHandwritingInput', () => {
 
 		expect(created).toHaveLength(1)
 		expect(created[0].data.symbol).toBe('4')
+	})
+
+	it('deletes the placed stamp when deletePlaced is called', () => {
+		const { hw, created, deleted, activeAnnotations } = setup()
+
+		const stroke = [
+			{ x: 0.4, y: 0.3 },
+			{ x: 0.4, y: 0.34 },
+		]
+		hw.beginStroke(stroke[0])
+		hw.endStroke(stroke)
+		vi.advanceTimersByTime(450)
+
+		expect(created).toHaveLength(1)
+		expect(activeAnnotations.value).toHaveLength(1)
+
+		hw.deletePlaced()
+
+		expect(deleted).toHaveLength(1)
+		expect(activeAnnotations.value).toHaveLength(0)
+		expect(hw.swapState.value).toBeNull()
+		// Deleted strokes must NOT be learned
+		expect(getLearnedSampleCount()).toBe(0)
+	})
+
+	it('learns on implicit accept (timeout) and explicit correction, but not on keepInk', () => {
+		const { hw } = setup()
+
+		// 1. Implicit accept after timeout learns 1 sample
+		const stroke1 = [{ x: 0.4, y: 0.3 }, { x: 0.4, y: 0.34 }]
+		hw.beginStroke(stroke1[0])
+		hw.endStroke(stroke1)
+		vi.advanceTimersByTime(450)
+		expect(getLearnedSampleCount()).toBe(0)
+		vi.advanceTimersByTime(6000)
+		expect(getLearnedSampleCount()).toBe(1)
+
+		// 2. Explicit correction to runner-up '𝅾' learns when pill closes
+		hw.beginStroke(stroke1[0])
+		hw.endStroke(stroke1)
+		vi.advanceTimersByTime(450)
+		hw.selectCandidate('𝅾')
+		hw.dismissSwapPill()
+		expect(getLearnedSampleCount()).toBe(2)
+
+		// 3. Keep ink does NOT add a learned sample
+		hw.beginStroke(stroke1[0])
+		hw.endStroke(stroke1)
+		vi.advanceTimersByTime(450)
+		hw.keepInk()
+		expect(getLearnedSampleCount()).toBe(2)
 	})
 })

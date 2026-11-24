@@ -6,6 +6,14 @@
 import type { NormalizedPoint } from '../types/annotation'
 import { VIEWBOX_WIDTH } from './annotation'
 import {
+	computeNormalizedCloudDistance,
+	dist2D,
+	getLearnedSamples,
+	prepareCloud,
+	strokePathLength,
+	type PreparedCloud,
+} from './handwritingModel'
+import {
 	CLUSTER_TOKEN_MAP,
 	HANDWRITING_TEMPLATES,
 	MULTI_GLYPH_SEQUENCES,
@@ -25,39 +33,15 @@ export interface HandwritingRecognitionResult {
 	candidates: HandwritingCandidate[]
 }
 
-interface CloudPoint {
-	x: number
-	y: number
-	strokeId: number
-}
-
-interface PreparedCloud {
-	points: CloudPoint[]
-	strokeCount: number
-	aspectRatio: number
-}
-
 interface PreparedTemplate {
 	symbol: string
 	clusterOnly: boolean
 	cloud: PreparedCloud
 }
 
-const SAMPLE_COUNT = 32
 const MIN_CONFIDENCE = 0.5
-const MAX_CANDIDATES = 3
-
-function dist(a: Point2D, b: Point2D): number {
-	return Math.hypot(a.x - b.x, a.y - b.y)
-}
-
-function strokePathLength(stroke: Point2D[]): number {
-	let len = 0
-	for (let i = 1; i < stroke.length; i++) {
-		len += dist(stroke[i - 1], stroke[i])
-	}
-	return len
-}
+const MIN_ALT_CONFIDENCE = 0.2
+const MAX_CANDIDATES = 7
 
 function boundingBox(strokes: Point2D[][]): { minX: number; minY: number; maxX: number; maxY: number; w: number; h: number } {
 	let minX = Infinity
@@ -82,153 +66,6 @@ function boundingBox(strokes: Point2D[][]): { minX: number; minY: number; maxX: 
 	}
 }
 
-function resampleSingleStroke(stroke: Point2D[], count: number, strokeId: number): CloudPoint[] {
-	if (stroke.length === 0) return []
-	if (count <= 1 || stroke.length === 1) {
-		return [{ x: stroke[0].x, y: stroke[0].y, strokeId }]
-	}
-	const totalLen = strokePathLength(stroke)
-	if (totalLen < 1e-6) {
-		const out: CloudPoint[] = []
-		for (let i = 0; i < count; i++) {
-			out.push({ x: stroke[0].x, y: stroke[0].y, strokeId })
-		}
-		return out
-	}
-
-	const interval = totalLen / (count - 1)
-	const pts: Point2D[] = stroke.map((p) => ({ x: p.x, y: p.y }))
-	const out: CloudPoint[] = [{ x: pts[0].x, y: pts[0].y, strokeId }]
-	let acc = 0
-
-	for (let i = 1; i < pts.length; i++) {
-		const d = dist(pts[i - 1], pts[i])
-		if (acc + d >= interval) {
-			const t = (interval - acc) / Math.max(d, 1e-6)
-			const nx = pts[i - 1].x + t * (pts[i].x - pts[i - 1].x)
-			const ny = pts[i - 1].y + t * (pts[i].y - pts[i - 1].y)
-			out.push({ x: nx, y: ny, strokeId })
-			pts.splice(i, 0, { x: nx, y: ny })
-			acc = 0
-		} else {
-			acc += d
-		}
-	}
-
-	while (out.length < count) {
-		const last = stroke[stroke.length - 1]
-		out.push({ x: last.x, y: last.y, strokeId })
-	}
-	return out.slice(0, count)
-}
-
-function prepareCloud(strokes: Point2D[][]): PreparedCloud {
-	const lengths = strokes.map((s) => Math.max(1e-3, strokePathLength(s)))
-	const totalLen = lengths.reduce((sum, l) => sum + l, 0)
-
-	// Allocate sample points proportionally to each stroke's length (at least 2 per stroke)
-	const counts = lengths.map((l) => Math.max(2, Math.round((l / totalLen) * SAMPLE_COUNT)))
-	let diff = counts.reduce((a, b) => a + b, 0) - SAMPLE_COUNT
-	while (diff !== 0) {
-		let bestIdx = 0
-		for (let i = 1; i < counts.length; i++) {
-			if (diff > 0 && counts[i] > counts[bestIdx]) bestIdx = i
-			if (diff < 0 && lengths[i] > lengths[bestIdx]) bestIdx = i
-		}
-		if (diff > 0 && counts[bestIdx] > 2) {
-			counts[bestIdx]--
-			diff--
-		} else if (diff < 0) {
-			counts[bestIdx]++
-			diff++
-		} else {
-			break
-		}
-	}
-
-	const raw: CloudPoint[] = []
-	for (let i = 0; i < strokes.length; i++) {
-		raw.push(...resampleSingleStroke(strokes[i], counts[i], i))
-	}
-
-	// Isotropic scale to [0..1] preserving true aspect ratio
-	let minX = Infinity
-	let minY = Infinity
-	let maxX = -Infinity
-	let maxY = -Infinity
-	for (const p of raw) {
-		if (p.x < minX) minX = p.x
-		if (p.y < minY) minY = p.y
-		if (p.x > maxX) maxX = p.x
-		if (p.y > maxY) maxY = p.y
-	}
-	const w = maxX - minX
-	const h = maxY - minY
-	const scale = Math.max(w, h, 1e-6)
-	const aspectRatio = w / Math.max(h, 1e-3)
-
-	const scaled = raw.map((p) => ({
-		x: (p.x - minX) / scale,
-		y: (p.y - minY) / scale,
-		strokeId: p.strokeId,
-	}))
-
-	// Translate centroid to origin
-	let cx = 0
-	let cy = 0
-	for (const p of scaled) {
-		cx += p.x
-		cy += p.y
-	}
-	cx /= Math.max(1, scaled.length)
-	cy /= Math.max(1, scaled.length)
-
-	return {
-		points: scaled.map((p) => ({ x: p.x - cx, y: p.y - cy, strokeId: p.strokeId })),
-		strokeCount: strokes.length,
-		aspectRatio,
-	}
-}
-
-function cloudDistance(a: CloudPoint[], b: CloudPoint[], startIndex: number): number {
-	const n = a.length
-	const matched = new Uint8Array(b.length)
-	let sum = 0
-	let i = startIndex
-	do {
-		let bestIdx = -1
-		let bestDist = Infinity
-		for (let j = 0; j < b.length; j++) {
-			if (matched[j]) continue
-			const d = Math.hypot(a[i].x - b[j].x, a[i].y - b[j].y)
-			if (d < bestDist) {
-				bestDist = d
-				bestIdx = j
-			}
-		}
-		if (bestIdx >= 0) {
-			matched[bestIdx] = 1
-			const weight = 1 - ((i - startIndex + n) % n) / n
-			sum += weight * bestDist
-		}
-		i = (i + 1) % n
-	} while (i !== startIndex)
-	return sum
-}
-
-function greedyCloudMatch(a: PreparedCloud, b: PreparedCloud): number {
-	const n = a.points.length
-	const step = Math.max(1, Math.floor(Math.pow(n, 0.5)))
-	let minDist = Infinity
-	for (let i = 0; i < n; i += step) {
-		const d1 = cloudDistance(a.points, b.points, i)
-		const d2 = cloudDistance(b.points, a.points, i)
-		const m = Math.min(d1, d2)
-		if (m < minDist) minDist = m
-	}
-	return minDist
-}
-
 let preparedTemplatesCache: PreparedTemplate[] | null = null
 
 function getPreparedTemplates(): PreparedTemplate[] {
@@ -251,6 +88,21 @@ function makeCandidate(symbol: string, score: number): HandwritingCandidate {
 	}
 }
 
+function scoreSinglePair(cloud: PreparedCloud, ref: PreparedCloud, bonus = 0): number {
+	const strokeDiff = Math.abs(cloud.strokeCount - ref.strokeCount)
+	if (strokeDiff > 2) return 0
+
+	const normDist = computeNormalizedCloudDistance(cloud, ref)
+
+	// Aspect ratio penalty so thin vertical lines don't match wide shapes
+	const arA = Math.max(0.15, Math.min(6, cloud.aspectRatio))
+	const arB = Math.max(0.15, Math.min(6, ref.aspectRatio))
+	const arPenalty = Math.abs(Math.log(arA / arB)) * 0.08
+
+	const strokePenalty = strokeDiff * 0.055
+	return Math.max(0, Math.min(0.99, 1 - normDist * 1.38 - arPenalty - strokePenalty + bonus))
+}
+
 function scoreCloudAgainstTemplates(
 	cloud: PreparedCloud,
 	includeClusterOnly: boolean,
@@ -262,24 +114,23 @@ function scoreCloudAgainstTemplates(
 		if (!includeClusterOnly && tpl.clusterOnly) continue
 		if (includeClusterOnly && !(tpl.symbol in CLUSTER_TOKEN_MAP)) continue
 
-		const strokeDiff = Math.abs(cloud.strokeCount - tpl.cloud.strokeCount)
-		if (strokeDiff > 2) continue
-
-		const rawDist = greedyCloudMatch(cloud, tpl.cloud)
-		// Normalize distance by average weight sum (~n/2)
-		const normDist = rawDist / (cloud.points.length * 0.5)
-
-		// Aspect ratio penalty so thin vertical lines don't match wide shapes
-		const arA = Math.max(0.15, Math.min(6, cloud.aspectRatio))
-		const arB = Math.max(0.15, Math.min(6, tpl.cloud.aspectRatio))
-		const arPenalty = Math.abs(Math.log(arA / arB)) * 0.08
-
-		const strokePenalty = strokeDiff * 0.055
-		const score = Math.max(0, 1 - normDist * 1.45 - arPenalty - strokePenalty)
-
+		const score = scoreSinglePair(cloud, tpl.cloud)
 		const prev = bestBySymbol.get(tpl.symbol) ?? 0
 		if (score > prev) {
 			bestBySymbol.set(tpl.symbol, score)
+		}
+	}
+
+	// Score against user's active-learning prototypes
+	if (!includeClusterOnly) {
+		const learned = getLearnedSamples()
+		for (const sample of learned) {
+			const bonus = 0.06 * Math.min(1, (sample.weight || 1) / 1.5)
+			const score = scoreSinglePair(cloud, sample, bonus)
+			const prev = bestBySymbol.get(sample.symbol) ?? 0
+			if (score > prev) {
+				bestBySymbol.set(sample.symbol, score)
+			}
 		}
 	}
 
@@ -294,7 +145,7 @@ function clusterStrokesHorizontally(strokes: Point2D[][]): Point2D[][][] {
 
 	const items = strokes.map((s) => {
 		const box = boundingBox([s])
-		return { stroke: s, minX: box.minX, maxX: box.maxX, cx: (box.minX + box.maxX) / 2 }
+		return { stroke: s, minX: box.minX, maxX: box.maxX }
 	})
 	items.sort((a, b) => a.minX - b.minX)
 
@@ -307,7 +158,6 @@ function clusterStrokesHorizontally(strokes: Point2D[][]): Point2D[][][] {
 		}
 		const overlap = Math.min(last.maxX, item.maxX) - Math.max(last.minX, item.minX)
 		const minWidth = Math.max(1, Math.min(last.maxX - last.minX, item.maxX - item.minX))
-		// Merge if strokes overlap horizontally by > 15% of the narrower stroke
 		if (overlap / minWidth > 0.15) {
 			last.strokes.push(item.stroke)
 			last.minX = Math.min(last.minX, item.minX)
@@ -326,7 +176,7 @@ function tryGeometricPrimitives(svgStrokes: Point2D[][]): HandwritingCandidate[]
 	if (svgStrokes.length === 1) {
 		const s = svgStrokes[0]
 		const len = strokePathLength(s)
-		const chord = dist(s[0], s[s.length - 1])
+		const chord = dist2D(s[0], s[s.length - 1])
 		const straightness = len > 1e-3 ? chord / len : 1
 
 		// Staccato dot: tiny tap or tight dot
@@ -339,8 +189,10 @@ function tryGeometricPrimitives(svgStrokes: Point2D[][]): HandwritingCandidate[]
 			return [makeCandidate('𝅽', 0.9), makeCandidate('1', 0.45)]
 		}
 
-		// Vertical straight line: Fingering 1 (runner-up: staccatissimo)
-		if (box.h > 10 && box.w / box.h < 0.28 && straightness > 0.9) {
+		// Vertical or slightly slanted straight line (up to ~28°): Fingering 1 (runner-up: staccatissimo)
+		const dy = Math.abs(s[s.length - 1].y - s[0].y)
+		const dx = Math.abs(s[s.length - 1].x - s[0].x)
+		if (box.h > 10 && straightness > 0.9 && (box.w / box.h < 0.28 || (dy > 10 && dy / Math.max(dx, 0.1) > 1.85))) {
 			return [makeCandidate('1', 0.92), makeCandidate('𝅾', 0.72), makeCandidate('𝄒', 0.48)]
 		}
 	}
@@ -351,8 +203,8 @@ function tryGeometricPrimitives(svgStrokes: Point2D[][]): HandwritingCandidate[]
 		const s1 = svgStrokes[1]
 		const l0 = strokePathLength(s0)
 		const l1 = strokePathLength(s1)
-		const c0 = dist(s0[0], s0[s0.length - 1])
-		const c1 = dist(s1[0], s1[s1.length - 1])
+		const c0 = dist2D(s0[0], s0[s0.length - 1])
+		const c1 = dist2D(s1[0], s1[s1.length - 1])
 		if (l0 > 10 && l1 > 10 && c0 / l0 > 0.88 && c1 / l1 > 0.88) {
 			const v0 = { x: s0[s0.length - 1].x - s0[0].x, y: s0[s0.length - 1].y - s0[0].y }
 			const v1 = { x: s1[s1.length - 1].x - s1[0].x, y: s1[s1.length - 1].y - s1[0].y }
@@ -397,19 +249,30 @@ export function recognizeHandwriting(
 		return { best: null, candidates: [] }
 	}
 
-	// 1. Exact geometric primitives (dots, dashes, straight vertical 1, parallel //)
-	const primitiveMatches = tryGeometricPrimitives(svgStrokes)
-	if (primitiveMatches) {
-		const filtered = primitiveMatches.filter((c) => c.score >= MIN_CONFIDENCE).slice(0, MAX_CANDIDATES)
-		return {
-			best: filtered[0] ?? null,
-			candidates: filtered,
-		}
-	}
-
-	// 2. Single-glyph point-cloud match against all standalone templates
+	// 1. Score point-cloud against built-in templates + user's learned prototypes
 	const fullCloud = prepareCloud(svgStrokes)
 	const combinedScores = scoreCloudAgainstTemplates(fullCloud, false)
+
+	// 2. Merge exact geometric primitives (dots, dashes, straight vertical 1, parallel //)
+	const primitiveMatches = tryGeometricPrimitives(svgStrokes)
+	if (primitiveMatches) {
+		for (const prim of primitiveMatches) {
+			const prev = combinedScores.get(prim.symbol) ?? 0
+			if (prim.score > prev) {
+				combinedScores.set(prim.symbol, prim.score)
+			}
+		}
+		const ranked = Array.from(combinedScores.entries())
+			.filter(([, score]) => score >= MIN_ALT_CONFIDENCE)
+			.sort((a, b) => b[1] - a[1])
+			.slice(0, MAX_CANDIDATES)
+			.map(([symbol, score]) => makeCandidate(symbol, score))
+		const best = ranked[0] && ranked[0].score >= MIN_CONFIDENCE ? ranked[0] : null
+		return {
+			best,
+			candidates: best ? ranked : [],
+		}
+	}
 
 	// 3. Multi-glyph horizontal clustering for compound dynamics (pp, mf, mp, sfz, etc.) and tr
 	const clusters = clusterStrokesHorizontally(svgStrokes)
@@ -425,7 +288,6 @@ export function recognizeHandwriting(
 		})
 
 		if (clusterTopTokens.every((list) => list.length > 0)) {
-			// Evaluate combinations of top-2 tokens per cluster
 			const combos: Array<{ seq: string; score: number }> = [{ seq: '', score: 0 }]
 			for (const list of clusterTopTokens) {
 				const next: Array<{ seq: string; score: number }> = []
@@ -442,7 +304,6 @@ export function recognizeHandwriting(
 				const mappedSymbol = MULTI_GLYPH_SEQUENCES[combo.seq]
 				if (!mappedSymbol) continue
 				const avgScore = combo.score / clusters.length
-				// Slight boost for valid multi-letter dynamic sequence
 				const boosted = Math.min(0.98, avgScore + 0.04)
 				const prev = combinedScores.get(mappedSymbol) ?? 0
 				if (boosted > prev) {
@@ -453,13 +314,14 @@ export function recognizeHandwriting(
 	}
 
 	const ranked = Array.from(combinedScores.entries())
-		.filter(([, score]) => score >= MIN_CONFIDENCE)
+		.filter(([, score]) => score >= MIN_ALT_CONFIDENCE)
 		.sort((a, b) => b[1] - a[1])
 		.slice(0, MAX_CANDIDATES)
 		.map(([symbol, score]) => makeCandidate(symbol, score))
 
+	const best = ranked[0] && ranked[0].score >= MIN_CONFIDENCE ? ranked[0] : null
 	return {
-		best: ranked[0] ?? null,
-		candidates: ranked,
+		best,
+		candidates: best ? ranked : [],
 	}
 }

@@ -10,6 +10,7 @@ import { getCurrentScope, onScopeDispose, ref, watch } from 'vue'
 import { createUuid } from './useAnnotationEditor'
 import { computeBoundingBoxFromPoints, VIEWBOX_WIDTH } from '../utils/annotation'
 import { roundNorm } from '../utils/annotationTransform'
+import { learnHandwritingSample } from '../utils/handwritingModel'
 import {
 	recognizeHandwriting,
 	type HandwritingCandidate,
@@ -20,9 +21,11 @@ export interface HandwritingSwapState {
 	uuid: string
 	x: number
 	y: number
+	initialSymbol: string
 	activeSymbol: string
 	candidates: HandwritingCandidate[]
 	rawStrokes: NormalizedPoint[][]
+	vbHeight: number
 }
 
 export interface UseHandwritingInputOptions {
@@ -65,17 +68,30 @@ export function useHandwritingInput(opts: UseHandwritingInputOptions) {
 		}
 	}
 
+	function finalizeSwapPill(learnIfAccepted: boolean) {
+		clearDismissTimer()
+		const current = swapState.value
+		swapState.value = null
+		if (!current || !learnIfAccepted) return
+
+		// Only learn if the placed annotation still exists (wasn't deleted or undone)
+		const stillPresent = opts.activeAnnotations.value.some((a) => a.uuid === current.uuid)
+		if (!stillPresent) return
+
+		learnHandwritingSample(current.rawStrokes, current.vbHeight, current.activeSymbol, {
+			isCorrection: current.activeSymbol !== current.initialSymbol,
+		})
+	}
+
 	function scheduleDismissPill() {
 		clearDismissTimer()
 		dismissTimer = setTimeout(() => {
-			swapState.value = null
-			dismissTimer = null
+			finalizeSwapPill(true)
 		}, SWAP_PILL_TIMEOUT_MS)
 	}
 
 	function dismissSwapPill() {
-		clearDismissTimer()
-		swapState.value = null
+		finalizeSwapPill(true)
 	}
 
 	function isNearPendingStrokes(pt: NormalizedPoint): boolean {
@@ -156,9 +172,11 @@ export function useHandwritingInput(opts: UseHandwritingInputOptions) {
 			uuid,
 			x: cx,
 			y: cy,
+			initialSymbol: result.best.symbol,
 			activeSymbol: result.best.symbol,
 			candidates: result.candidates,
 			rawStrokes: strokes.map((s) => s.map((p) => ({ ...p }))),
+			vbHeight: opts.vbHeight.value,
 		}
 		scheduleDismissPill()
 	}
@@ -239,7 +257,23 @@ export function useHandwritingInput(opts: UseHandwritingInputOptions) {
 				smooth: true,
 			},
 		})
-		dismissSwapPill()
+		finalizeSwapPill(false)
+	}
+
+	function deletePlaced() {
+		const current = swapState.value
+		if (!current) return
+		const ann = opts.activeAnnotations.value.find((a) => a.uuid === current.uuid)
+		if (ann) {
+			opts.onDelete(ann)
+		}
+		finalizeSwapPill(false)
+	}
+
+	function extendSwapPillTimeout() {
+		if (swapState.value) {
+			scheduleDismissPill()
+		}
 	}
 
 	function cancelPending() {
@@ -274,6 +308,8 @@ export function useHandwritingInput(opts: UseHandwritingInputOptions) {
 		flushPendingStrokes,
 		selectCandidate,
 		keepInk,
+		deletePlaced,
+		extendSwapPillTimeout,
 		dismissSwapPill,
 		cancelPending,
 	}
