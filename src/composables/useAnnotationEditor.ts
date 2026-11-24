@@ -19,6 +19,7 @@ import type {
 } from '../types/annotation'
 import { translateAnnotation } from '../utils/annotation'
 import { handleAnnotationEditorKeydown } from '../utils/annotationShortcuts'
+import { hydrateHandwritingModelFromServer } from '../utils/handwritingModel'
 import {
 	createDefaultToolStyle,
 	mergeAnnotationStyleIntoToolStyle,
@@ -142,6 +143,7 @@ export function useAnnotationEditor(
 	function enterEditMode() {
 		isEditing.value = true
 		saveError.value = null
+		void hydrateHandwritingModelFromServer()
 	}
 
 	function exitEditMode() {

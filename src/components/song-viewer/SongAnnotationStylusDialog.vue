@@ -3,13 +3,17 @@
   - SPDX-License-Identifier: AGPL-3.0-or-later
   -->
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import { useStylusSettings } from '../../composables/useStylusSettings'
-import { getLearnedSampleCount, resetLearnedHandwritingModel } from '../../utils/handwritingModel'
+import {
+	getLearnedSampleCount,
+	hydrateHandwritingModelFromServer,
+	resetLearnedHandwritingModel,
+} from '../../utils/handwritingModel'
 import type { PressureMode } from '../../utils/stylus-settings'
 import StylusPressureScratchpad from './StylusPressureScratchpad.vue'
 import StylusTipCalibrationSection from './StylusTipCalibrationSection.vue'
@@ -30,8 +34,14 @@ const tipCalibrationRef = ref<InstanceType<typeof StylusTipCalibrationSection> |
 const scratchpadRef = ref<InstanceType<typeof StylusPressureScratchpad> | null>(null)
 const learnedSamplesCount = ref(getLearnedSampleCount())
 
+onMounted(() => {
+	void hydrateHandwritingModelFromServer().then((count) => {
+		learnedSamplesCount.value = count
+	})
+})
+
 function handleResetHandwritingModel() {
-	resetLearnedHandwritingModel()
+	resetLearnedHandwritingModel({ syncRemote: true })
 	learnedSamplesCount.value = 0
 }
 

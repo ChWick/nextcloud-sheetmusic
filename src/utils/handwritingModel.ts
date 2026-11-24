@@ -4,6 +4,12 @@
  */
 
 import type { NormalizedPoint } from '../types/annotation'
+import {
+	deleteHandwritingModel,
+	fetchHandwritingModel,
+	saveHandwritingModel,
+} from '../api/annotations'
+import { isEffectivelyOffline } from '../composables/useOnlineStatus'
 import { VIEWBOX_WIDTH } from './annotation'
 import type { Point2D } from './handwritingTemplates'
 
@@ -37,8 +43,12 @@ const STORAGE_KEY = 'sheetmusic:handwriting-model:v1'
 const MAX_SAMPLES_PER_SYMBOL = 12
 const MAX_TOTAL_SAMPLES = 300
 const MERGE_DISTANCE_THRESHOLD = 0.14
+const REMOTE_SYNC_DEBOUNCE_MS = 1500
 
 let cachedSamples: LearnedHandwritingSample[] | null = null
+let hydratedFromServer = false
+let hydrationPromise: Promise<number> | null = null
+let remoteSyncTimer: ReturnType<typeof setTimeout> | null = null
 
 export function dist2D(a: Point2D, b: Point2D): number {
 	return Math.hypot(a.x - b.x, a.y - b.y)
@@ -379,15 +389,128 @@ export function learnHandwritingSample(
 
 	cachedSamples = samples
 	writeStorage(samples)
+	scheduleRemoteSync()
 }
 
-export function resetLearnedHandwritingModel(): void {
+function scheduleRemoteSync(): void {
+	if (remoteSyncTimer !== null) {
+		clearTimeout(remoteSyncTimer)
+	}
+	remoteSyncTimer = setTimeout(() => {
+		remoteSyncTimer = null
+		if (isEffectivelyOffline()) return
+		void saveHandwritingModel(getLearnedSamples()).catch(() => {
+			// Offline or unauthenticated (e.g. public share): keep local cache
+		})
+	}, REMOTE_SYNC_DEBOUNCE_MS)
+}
+
+function mergeSampleLists(
+	local: LearnedHandwritingSample[],
+	remote: LearnedHandwritingSample[],
+): { merged: LearnedHandwritingSample[]; localHadExtras: boolean } {
+	const merged = [...remote]
+	let localHadExtras = false
+
+	for (const sample of local) {
+		let matchIdx = -1
+		let matchDist = Infinity
+		for (let i = 0; i < merged.length; i++) {
+			const existing = merged[i]
+			if (existing.symbol !== sample.symbol || existing.strokeCount !== sample.strokeCount) continue
+			const d = computeNormalizedCloudDistance(sample, existing)
+			if (d < matchDist) {
+				matchDist = d
+				matchIdx = i
+			}
+		}
+
+		if (matchIdx >= 0 && matchDist < MERGE_DISTANCE_THRESHOLD) {
+			if ((sample.updatedAt || 0) > (merged[matchIdx].updatedAt || 0)) {
+				merged[matchIdx] = sample
+				localHadExtras = true
+			}
+		} else {
+			merged.push(sample)
+			localHadExtras = true
+		}
+	}
+
+	// Enforce per-symbol and global caps keeping highest-weight / newest entries
+	const bySymbol = new Map<string, LearnedHandwritingSample[]>()
+	for (const s of merged) {
+		const list = bySymbol.get(s.symbol) ?? []
+		list.push(s)
+		bySymbol.set(s.symbol, list)
+	}
+	const pruned: LearnedHandwritingSample[] = []
+	for (const list of bySymbol.values()) {
+		list.sort((a, b) => (b.weight - a.weight) || (b.updatedAt - a.updatedAt))
+		pruned.push(...list.slice(0, MAX_SAMPLES_PER_SYMBOL))
+	}
+	if (pruned.length > MAX_TOTAL_SAMPLES) {
+		pruned.sort((a, b) => (b.weight - a.weight) || (b.updatedAt - a.updatedAt))
+		pruned.length = MAX_TOTAL_SAMPLES
+	}
+
+	return { merged: pruned, localHadExtras }
+}
+
+/**
+ * Hydrate the per-user handwriting model from Nextcloud once per session,
+ * merging any offline-learned local prototypes and syncing them back if needed.
+ */
+export async function hydrateHandwritingModelFromServer(force = false): Promise<number> {
+	if (hydratedFromServer && !force) {
+		return getLearnedSampleCount()
+	}
+	if (hydrationPromise && !force) {
+		return hydrationPromise
+	}
+	if (isEffectivelyOffline()) {
+		return getLearnedSampleCount()
+	}
+
+	hydrationPromise = (async () => {
+		try {
+			const remote = await fetchHandwritingModel()
+			const local = getLearnedSamples()
+			const { merged, localHadExtras } = mergeSampleLists(local, remote)
+			cachedSamples = merged
+			writeStorage(merged)
+			hydratedFromServer = true
+			if (localHadExtras && merged.length > 0) {
+				scheduleRemoteSync()
+			}
+		} catch {
+			// Offline or public share: continue with local cache
+		} finally {
+			hydrationPromise = null
+		}
+		return getLearnedSampleCount()
+	})()
+
+	return hydrationPromise
+}
+
+export function resetLearnedHandwritingModel(options: { syncRemote?: boolean } = {}): void {
+	if (remoteSyncTimer !== null) {
+		clearTimeout(remoteSyncTimer)
+		remoteSyncTimer = null
+	}
 	cachedSamples = []
+	hydratedFromServer = false
+	hydrationPromise = null
 	if (typeof localStorage !== 'undefined') {
 		try {
 			localStorage.removeItem(STORAGE_KEY)
 		} catch {
 			// Ignore storage errors
 		}
+	}
+	if (options.syncRemote && !isEffectivelyOffline()) {
+		void deleteHandwritingModel().catch(() => {
+			// Ignore network errors on reset
+		})
 	}
 }

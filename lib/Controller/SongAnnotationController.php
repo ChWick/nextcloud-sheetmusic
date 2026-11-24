@@ -21,11 +21,16 @@ use OCP\AppFramework\Http\Attribute\OpenAPI;
 use OCP\AppFramework\Http\Attribute\PublicPage;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\OCSController;
+use OCP\IConfig;
 use OCP\IRequest;
 use OCP\IUserSession;
 
 #[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 class SongAnnotationController extends OCSController {
+	private const HANDWRITING_MODEL_CONFIG_KEY = 'handwriting_model';
+	private const MAX_HANDWRITING_SAMPLES = 300;
+	private const MAX_HANDWRITING_JSON_BYTES = 524288;
+
 	public function __construct(
 		string $appName,
 		IRequest $request,
@@ -33,6 +38,7 @@ class SongAnnotationController extends OCSController {
 		private IUserSession $userSession,
 		private ?SetlistService $setlistService = null,
 		private ?ShareService $shareService = null,
+		private ?IConfig $config = null,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -244,5 +250,111 @@ class SongAnnotationController extends OCSController {
 
 		$this->annotationService->deleteAnnotation($id);
 		return new DataResponse(['success' => true]);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'GET', url: '/api/user/handwriting-model')]
+	public function getHandwritingModel(): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+		if ($this->config === null) {
+			return new DataResponse(['samples' => []]);
+		}
+
+		$raw = $this->config->getUserValue($user->getUID(), $this->appName, self::HANDWRITING_MODEL_CONFIG_KEY, '');
+		if ($raw === '') {
+			return new DataResponse(['samples' => []]);
+		}
+
+		$decoded = json_decode($raw, true);
+		$samples = is_array($decoded) ? $this->sanitizeHandwritingSamples($decoded) : [];
+		return new DataResponse(['samples' => $samples]);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'PUT', url: '/api/user/handwriting-model')]
+	public function saveHandwritingModel(): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+		if ($this->config === null) {
+			return new DataResponse(['saved' => 0], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+
+		$rawSamples = $this->request->getParam('samples');
+		if (!is_array($rawSamples)) {
+			return new DataResponse(['error' => 'Invalid samples payload'], Http::STATUS_BAD_REQUEST);
+		}
+
+		$sanitized = $this->sanitizeHandwritingSamples($rawSamples);
+		$encoded = json_encode($sanitized);
+		if ($encoded === false || strlen($encoded) > self::MAX_HANDWRITING_JSON_BYTES) {
+			return new DataResponse(['error' => 'Handwriting model payload too large'], Http::STATUS_BAD_REQUEST);
+		}
+
+		$this->config->setUserValue($user->getUID(), $this->appName, self::HANDWRITING_MODEL_CONFIG_KEY, $encoded);
+		return new DataResponse(['saved' => count($sanitized)]);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'DELETE', url: '/api/user/handwriting-model')]
+	public function deleteHandwritingModel(): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+		$this->config?->deleteUserValue($user->getUID(), $this->appName, self::HANDWRITING_MODEL_CONFIG_KEY);
+		return new DataResponse(['success' => true]);
+	}
+
+	/**
+	 * @param array<mixed> $rawSamples
+	 * @return list<array<string, mixed>>
+	 */
+	private function sanitizeHandwritingSamples(array $rawSamples): array {
+		$sanitized = [];
+		foreach ($rawSamples as $item) {
+			if (count($sanitized) >= self::MAX_HANDWRITING_SAMPLES) {
+				break;
+			}
+			if (!is_array($item)) {
+				continue;
+			}
+			$symbol = isset($item['symbol']) && is_string($item['symbol']) ? trim($item['symbol']) : '';
+			$points = $item['points'] ?? null;
+			if ($symbol === '' || !is_array($points) || count($points) === 0 || count($points) > 64) {
+				continue;
+			}
+
+			$cleanPoints = [];
+			foreach ($points as $pt) {
+				if (!is_array($pt) || !is_numeric($pt['x'] ?? null) || !is_numeric($pt['y'] ?? null)) {
+					continue;
+				}
+				$cleanPoints[] = [
+					'x' => round((float)$pt['x'], 4),
+					'y' => round((float)$pt['y'], 4),
+					'tx' => is_numeric($pt['tx'] ?? null) ? round((float)$pt['tx'], 3) : 0.0,
+					'ty' => is_numeric($pt['ty'] ?? null) ? round((float)$pt['ty'], 3) : 0.0,
+					'strokeId' => is_numeric($pt['strokeId'] ?? null) ? max(0, (int)$pt['strokeId']) : 0,
+				];
+			}
+			if (count($cleanPoints) === 0) {
+				continue;
+			}
+
+			$sanitized[] = [
+				'symbol' => $symbol,
+				'points' => $cleanPoints,
+				'strokeCount' => is_numeric($item['strokeCount'] ?? null) ? max(1, (int)$item['strokeCount']) : 1,
+				'aspectRatio' => is_numeric($item['aspectRatio'] ?? null) ? round((float)$item['aspectRatio'], 3) : 1.0,
+				'weight' => is_numeric($item['weight'] ?? null) ? max(0.5, min(2.0, round((float)$item['weight'], 2))) : 1.0,
+				'updatedAt' => is_numeric($item['updatedAt'] ?? null) ? (int)$item['updatedAt'] : 0,
+			];
+		}
+		return $sanitized;
 	}
 }

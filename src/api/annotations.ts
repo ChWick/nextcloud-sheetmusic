@@ -5,9 +5,10 @@
 
 import axios from '@nextcloud/axios'
 import type { SheetAnnotation } from '../types/annotation'
+import type { LearnedHandwritingSample } from '../utils/handwritingModel'
 import { isEffectivelyOffline } from '../composables/useOnlineStatus'
 import { readOfflineCachedJson } from '../utils/offlineSetlists'
-import { ocsDelete, ocsPost, ocsUrl } from './ocs'
+import { ocsDelete, ocsGet, ocsPost, ocsPut, ocsUrl } from './ocs'
 
 interface BatchAnnotationsPayload {
 	upsert?: Array<Partial<SheetAnnotation>>
@@ -95,4 +96,17 @@ export async function batchSetlistFileAnnotations(
 	payload: BatchAnnotationsPayload,
 ): Promise<BatchAnnotationsResult> {
 	return (await ocsPost<BatchAnnotationsResult>(`${setlistFileAnnotationsPath(libraryId, setlistId, fileId)}/batch`, payload)) ?? { ...EMPTY_BATCH_RESULT }
+}
+
+export async function fetchHandwritingModel(): Promise<LearnedHandwritingSample[]> {
+	const res = await ocsGet<{ samples?: LearnedHandwritingSample[] }>('/api/user/handwriting-model')
+	return Array.isArray(res?.samples) ? res.samples : []
+}
+
+export async function saveHandwritingModel(samples: LearnedHandwritingSample[]): Promise<void> {
+	await ocsPut('/api/user/handwriting-model', { samples })
+}
+
+export async function deleteHandwritingModel(): Promise<void> {
+	await ocsDelete('/api/user/handwriting-model')
 }
