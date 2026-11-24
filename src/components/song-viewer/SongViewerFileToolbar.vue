@@ -268,9 +268,11 @@ const activePageResolution = computed<PdfPageResolutionSummary | null>(() => {
 <style module>
 .fileToolbar {
 	display: flex;
+	flex-direction: row;
 	align-items: center;
 	justify-content: space-between;
 	gap: 12px;
+	width: 100%;
 	padding: 6px 12px;
 	margin-bottom: 8px;
 	background: var(--color-main-background);
@@ -283,10 +285,12 @@ const activePageResolution = computed<PdfPageResolutionSummary | null>(() => {
 
 .fileInfoSection {
 	display: flex;
+	flex-direction: row;
 	align-items: center;
 	gap: 8px;
+	flex: 1 1 auto;
 	min-width: 0;
-	flex-wrap: wrap;
+	flex-wrap: nowrap;
 }
 
 .fileName {
@@ -318,8 +322,11 @@ const activePageResolution = computed<PdfPageResolutionSummary | null>(() => {
 }
 
 .fileSelect {
+	width: auto;
 	height: 32px;
+	min-height: 32px;
 	max-width: 260px;
+	margin: 0;
 	padding: 0 8px;
 	border: 1px solid var(--color-border);
 	border-radius: var(--border-radius, 4px);
@@ -332,8 +339,15 @@ const activePageResolution = computed<PdfPageResolutionSummary | null>(() => {
 
 .fileActions {
 	display: flex;
+	flex-direction: row;
+	flex-wrap: nowrap;
 	align-items: center;
 	gap: 6px;
+	flex-shrink: 0;
+	max-width: 100%;
+}
+
+.fileActions > * {
 	flex-shrink: 0;
 }
 </style>

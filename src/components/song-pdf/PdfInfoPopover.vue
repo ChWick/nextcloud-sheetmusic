@@ -101,10 +101,14 @@ const displayedPages = computed(() => props.pageLabel ?? String(props.totalPages
 	width: min(310px, calc(100vw - 24px));
 }
 
-.infoBadgeBtn {
+button[type='button'].infoBadgeBtn {
 	display: inline-flex;
 	align-items: center;
 	gap: 4px;
+	width: auto;
+	min-width: 0;
+	min-height: 28px;
+	margin: 0;
 	padding: 3px 9px;
 	border-radius: 12px;
 	border: 1px solid var(--color-border);
