@@ -105,12 +105,16 @@ function onOpacityInput(e: Event) {
 </template>
 
 <style module>
-.triggerBtn {
+button[type='button'].triggerBtn {
 	display: inline-flex;
 	align-items: center;
 	gap: 4px;
-	height: 32px;
-	padding: 0 6px;
+	width: auto;
+	min-width: 0;
+	min-height: var(--default-clickable-area, 44px);
+	height: var(--default-clickable-area, 44px);
+	margin: 0;
+	padding: 0 8px;
 	border: 1px solid var(--color-border-dark, var(--color-border));
 	border-radius: var(--border-radius-large, 8px);
 	background: var(--color-main-background);
@@ -161,9 +165,12 @@ function onOpacityInput(e: Event) {
 	gap: 8px;
 }
 
-.swatchBtn {
+button[type='button'].swatchBtn {
 	width: 26px;
+	min-width: 26px;
 	height: 26px;
+	min-height: 26px;
+	margin: 0;
 	border-radius: 50%;
 	border: 2px solid rgba(0, 0, 0, 0.15);
 	cursor: pointer;

@@ -321,17 +321,20 @@ function updateShapeHeight(height: number) {
 <style module>
 .styleRow {
 	display: flex;
+	flex-direction: row;
 	align-items: center;
-	gap: 12px;
+	gap: 8px;
 	flex-wrap: wrap;
 	position: relative;
 	z-index: 10;
 }
 
 .styleGroup {
-	display: flex;
+	display: inline-flex;
+	flex-direction: row;
 	align-items: center;
 	gap: 5px;
+	flex-shrink: 0;
 }
 
 .styleLabel {
@@ -340,10 +343,15 @@ function updateShapeHeight(height: number) {
 	margin-right: 2px;
 }
 
-.chipBtn {
+button[type='button'].chipBtn {
 	display: inline-flex;
 	align-items: center;
+	justify-content: center;
 	gap: 3px;
+	width: auto;
+	min-width: 32px;
+	min-height: 32px;
+	margin: 0;
 	padding: 2px 8px;
 	font-size: 0.78rem;
 	border: 1px solid var(--color-border);

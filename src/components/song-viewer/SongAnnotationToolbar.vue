@@ -261,6 +261,7 @@ function pickStamp(symbol: string) {
 
 .row {
 	display: flex;
+	flex-direction: row;
 	align-items: center;
 	justify-content: space-between;
 	gap: 8px;
@@ -272,18 +273,21 @@ function pickStamp(symbol: string) {
 .toolGroup,
 .actionGroup {
 	display: flex;
+	flex-direction: row;
 	align-items: center;
 	gap: 4px;
 	flex-wrap: wrap;
 }
 
-.toolBtn {
+button[type='button'].toolBtn {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
 	gap: 5px;
+	width: auto;
 	min-width: var(--default-clickable-area, 44px);
 	min-height: var(--default-clickable-area, 44px);
+	margin: 0;
 	padding: 6px 10px;
 	border: 1px solid var(--color-border);
 	border-radius: var(--border-radius, 4px);

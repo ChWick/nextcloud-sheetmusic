@@ -101,11 +101,14 @@ function onSliderInput(pos: number) {
 </template>
 
 <style module>
-.triggerBtn {
+button[type='button'].triggerBtn {
 	display: inline-flex;
 	align-items: center;
 	gap: 5px;
+	width: auto;
+	min-width: 0;
 	min-height: var(--default-clickable-area, 44px);
+	margin: 0;
 	padding: 4px 8px 4px 10px;
 	border: 1px solid var(--color-border-dark, var(--color-border));
 	border-radius: var(--border-radius, 4px);
