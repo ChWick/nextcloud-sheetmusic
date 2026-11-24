@@ -1,7 +1,7 @@
 import axios from '@nextcloud/axios'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { computed, ref, shallowRef } from 'vue'
-import { usePdfMovements } from '../../../src/components/song-pdf/usePdfMovements'
+import { usePdfBookmarks } from '../../../src/components/song-pdf/usePdfBookmarks'
 import type { Song, SongFile } from '../../../src/types/song'
 import { PDFDocument } from 'pdf-lib'
 
@@ -16,7 +16,7 @@ vi.mock('@nextcloud/dialogs', () => ({
 	showSuccess: vi.fn(),
 }))
 
-describe('usePdfMovements.ts', () => {
+describe('usePdfBookmarks.ts', () => {
 	function setupTest(numPages = 10, options: {
 		originalPdfBytes?: Uint8Array | null
 		targetFile?: SongFile
@@ -40,7 +40,7 @@ describe('usePdfMovements.ts', () => {
 		const onSaved = vi.fn()
 		const onCancel = vi.fn()
 
-		const movements = usePdfMovements({
+		const pdfBookmarks = usePdfBookmarks({
 			song,
 			libraryId,
 			totalPages,
@@ -54,7 +54,7 @@ describe('usePdfMovements.ts', () => {
 		})
 
 		return {
-			movements,
+			pdfBookmarks,
 			song,
 			totalPages,
 			activePdfDoc,
@@ -71,12 +71,12 @@ describe('usePdfMovements.ts', () => {
 		vi.clearAllMocks()
 	})
 
-	it('initializes movements from existing bookmarks', () => {
-		const { movements, song } = setupTest()
-		movements.initMovementsFromSong(song.value.bookmarks)
+	it('initializes bookmarks from existing song bookmarks', () => {
+		const { pdfBookmarks, song } = setupTest()
+		pdfBookmarks.initBookmarksFromSong(song.value.bookmarks)
 
-		expect(movements.movements.value).toHaveLength(1)
-		expect(movements.movements.value[0]).toEqual({
+		expect(pdfBookmarks.bookmarks.value).toHaveLength(1)
+		expect(pdfBookmarks.bookmarks.value[0]).toEqual({
 			id: 'bm-1',
 			name: 'I. Adagio sostenuto',
 			pageNum: 1,
@@ -84,52 +84,52 @@ describe('usePdfMovements.ts', () => {
 		})
 	})
 
-	it('adds a new movement with sequential start page', () => {
-		const { movements, song } = setupTest(12)
-		movements.initMovementsFromSong(song.value.bookmarks)
-		movements.addMovement()
+	it('adds a new bookmark with sequential start page', () => {
+		const { pdfBookmarks, song } = setupTest(12)
+		pdfBookmarks.initBookmarksFromSong(song.value.bookmarks)
+		pdfBookmarks.addBookmark()
 
-		expect(movements.movements.value).toHaveLength(2)
-		expect(movements.movements.value[1].pageNum).toBe(5)
-		expect(movements.movements.value[1].endPage).toBe(12)
+		expect(pdfBookmarks.bookmarks.value).toHaveLength(2)
+		expect(pdfBookmarks.bookmarks.value[1].pageNum).toBe(5)
+		expect(pdfBookmarks.bookmarks.value[1].endPage).toBe(12)
 	})
 
-	it('removes and updates movement boundaries cleanly', () => {
-		const { movements } = setupTest(15)
-		movements.initMovementsFromSong([])
-		movements.addMovement()
-		movements.addMovement()
+	it('removes and updates bookmark boundaries cleanly', () => {
+		const { pdfBookmarks } = setupTest(15)
+		pdfBookmarks.initBookmarksFromSong([])
+		pdfBookmarks.addBookmark()
+		pdfBookmarks.addBookmark()
 
-		const firstId = movements.movements.value[0].id
-		movements.updateMovement(firstId, { name: 'I. Allegro', pageNum: 1, endPage: 6 })
+		const firstId = pdfBookmarks.bookmarks.value[0].id
+		pdfBookmarks.updateBookmark(firstId, { name: 'I. Allegro', pageNum: 1, endPage: 6 })
 
-		expect(movements.movements.value[0].name).toBe('I. Allegro')
-		expect(movements.movements.value[0].pageNum).toBe(1)
-		expect(movements.movements.value[0].endPage).toBe(6)
+		expect(pdfBookmarks.bookmarks.value[0].name).toBe('I. Allegro')
+		expect(pdfBookmarks.bookmarks.value[0].pageNum).toBe(1)
+		expect(pdfBookmarks.bookmarks.value[0].endPage).toBe(6)
 
 		// Clamps endPage if less than pageNum
-		movements.updateMovement(firstId, { endPage: 0 })
-		expect(movements.movements.value[0].endPage).toBe(1)
+		pdfBookmarks.updateBookmark(firstId, { endPage: 0 })
+		expect(pdfBookmarks.bookmarks.value[0].endPage).toBe(1)
 
-		// Remove second movement
-		const secondId = movements.movements.value[1].id
-		movements.removeMovement(secondId)
-		expect(movements.movements.value).toHaveLength(1)
+		// Remove second bookmark
+		const secondId = pdfBookmarks.bookmarks.value[1].id
+		pdfBookmarks.removeBookmark(secondId)
+		expect(pdfBookmarks.bookmarks.value).toHaveLength(1)
 	})
 
-	it('assignPagesToMovement sets start and end page', () => {
-		const { movements } = setupTest(20)
-		movements.initMovementsFromSong([])
-		movements.addMovement()
-		const id = movements.movements.value[0].id
+	it('assignPagesToBookmark sets start and end page', () => {
+		const { pdfBookmarks } = setupTest(20)
+		pdfBookmarks.initBookmarksFromSong([])
+		pdfBookmarks.addBookmark()
+		const id = pdfBookmarks.bookmarks.value[0].id
 
-		movements.assignPagesToMovement(id, 3, 7)
-		expect(movements.movements.value[0].pageNum).toBe(3)
-		expect(movements.movements.value[0].endPage).toBe(7)
+		pdfBookmarks.assignPagesToBookmark(id, 3, 7)
+		expect(pdfBookmarks.bookmarks.value[0].pageNum).toBe(3)
+		expect(pdfBookmarks.bookmarks.value[0].endPage).toBe(7)
 	})
 
-	it('extracts movements from PDF outline', async () => {
-		const { movements, activePdfDoc } = setupTest(15)
+	it('extracts bookmarks from PDF outline', async () => {
+		const { pdfBookmarks, activePdfDoc } = setupTest(15)
 
 		activePdfDoc.value = {
 			getOutline: vi.fn().mockResolvedValue([
@@ -145,20 +145,20 @@ describe('usePdfMovements.ts', () => {
 			}),
 		}
 
-		const count = await movements.extractFromPdfOutline()
+		const count = await pdfBookmarks.extractFromPdfOutline()
 		expect(count).toBe(3)
-		expect(movements.movements.value).toEqual([
+		expect(pdfBookmarks.bookmarks.value).toEqual([
 			{ id: 'bm-1', name: 'I. Allegro', pageNum: 1, endPage: 4 },
 			{ id: 'bm-2', name: 'II. Adagio', pageNum: 5, endPage: 9 },
 			{ id: 'bm-3', name: 'III. Presto', pageNum: 10, endPage: 15 },
 		])
 	})
 
-	it('saves movements via API and triggers onSaved', async () => {
-		const { movements, onSaved } = setupTest(10)
-		movements.initMovementsFromSong([])
-		movements.addMovement()
-		movements.updateMovement(movements.movements.value[0].id, {
+	it('saves bookmarks via API and triggers onSaved', async () => {
+		const { pdfBookmarks, onSaved } = setupTest(10)
+		pdfBookmarks.initBookmarksFromSong([])
+		pdfBookmarks.addBookmark()
+		pdfBookmarks.updateBookmark(pdfBookmarks.bookmarks.value[0].id, {
 			name: 'I. Moderato',
 			pageNum: 1,
 			endPage: 5,
@@ -172,7 +172,7 @@ describe('usePdfMovements.ts', () => {
 			},
 		} as any)
 
-		await movements.executeSaveMovements()
+		await pdfBookmarks.executeSaveBookmarks()
 
 		expect(axios.post).toHaveBeenCalledWith(
 			expect.stringContaining('/api/songs/42'),
@@ -191,13 +191,13 @@ describe('usePdfMovements.ts', () => {
 		expect(onSaved).toHaveBeenCalledWith({ id: 42, title: 'Piano Sonata No. 14' }, 42)
 	})
 
-	it('adds a new movement from page selection', () => {
-		const { movements } = setupTest(10)
-		movements.initMovementsFromSong([])
-		movements.addMovementFromSelection(3, 7)
+	it('adds a new bookmark from page selection', () => {
+		const { pdfBookmarks } = setupTest(10)
+		pdfBookmarks.initBookmarksFromSong([])
+		pdfBookmarks.addBookmarkFromSelection(3, 7)
 
-		expect(movements.movements.value).toHaveLength(1)
-		expect(movements.movements.value[0]).toEqual({
+		expect(pdfBookmarks.bookmarks.value).toHaveLength(1)
+		expect(pdfBookmarks.bookmarks.value[0]).toEqual({
 			id: 'bm-1',
 			name: 'Bookmark 1',
 			pageNum: 3,
@@ -212,15 +212,15 @@ describe('usePdfMovements.ts', () => {
 		doc.addPage([200, 200])
 		const pdfBytes = await doc.save()
 
-		const { movements, onSaved, onPdfUpdated } = setupTest(3, {
+		const { pdfBookmarks, onSaved, onPdfUpdated } = setupTest(3, {
 			originalPdfBytes: pdfBytes,
 			targetFile: { id: 99, path: '/library/sonata.pdf' } as unknown as SongFile,
 			autoPdfMetadata: true,
 		})
 
-		movements.initMovementsFromSong([])
-		movements.addMovementFromSelection(1, 2)
-		movements.updateMovement(movements.movements.value[0].id, { name: 'I. Allegro' })
+		pdfBookmarks.initBookmarksFromSong([])
+		pdfBookmarks.addBookmarkFromSelection(1, 2)
+		pdfBookmarks.updateBookmark(pdfBookmarks.bookmarks.value[0].id, { name: 'I. Allegro' })
 
 		// Mock song update
 		vi.mocked(axios.post).mockResolvedValueOnce({
@@ -232,7 +232,7 @@ describe('usePdfMovements.ts', () => {
 			data: { ocs: { data: { id: 42, title: 'Piano Sonata No. 14 with updated PDF' } } },
 		} as any)
 
-		await movements.executeSaveMovements()
+		await pdfBookmarks.executeSaveBookmarks()
 
 		// Should have called song metadata update
 		expect(axios.post).toHaveBeenCalledWith(
@@ -258,20 +258,20 @@ describe('usePdfMovements.ts', () => {
 		doc.addPage([200, 200])
 		const pdfBytes = await doc.save()
 
-		const { movements, onSaved, onPdfUpdated } = setupTest(1, {
+		const { pdfBookmarks, onSaved, onPdfUpdated } = setupTest(1, {
 			originalPdfBytes: pdfBytes,
 			targetFile: { id: 99, path: '/library/sonata.pdf' } as unknown as SongFile,
 			autoPdfMetadata: false,
 		})
 
-		movements.initMovementsFromSong([])
-		movements.addMovement()
+		pdfBookmarks.initBookmarksFromSong([])
+		pdfBookmarks.addBookmark()
 
 		vi.mocked(axios.post).mockResolvedValueOnce({
 			data: { ocs: { data: { id: 42, title: 'Piano Sonata No. 14' } } },
 		} as any)
 
-		await movements.executeSaveMovements()
+		await pdfBookmarks.executeSaveBookmarks()
 
 		expect(axios.post).toHaveBeenCalledTimes(1)
 		expect(axios.post).toHaveBeenCalledWith(

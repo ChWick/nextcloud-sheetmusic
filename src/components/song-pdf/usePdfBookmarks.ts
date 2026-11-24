@@ -15,7 +15,6 @@ export type BookmarkSegment = {
 	pageNum: number
 	endPage?: number | null
 }
-export type MovementSegment = BookmarkSegment
 
 export function usePdfBookmarks(options: {
 	song: ComputedRef<Song> | Ref<Song>
@@ -279,16 +278,5 @@ export function usePdfBookmarks(options: {
 		assignPagesToBookmark,
 		extractFromPdfOutline,
 		executeSaveBookmarks,
-		// Aliases for compatibility
-		movements: bookmarks,
-		initMovementsFromSong: initBookmarksFromSong,
-		addMovement: addBookmark,
-		addMovementFromSelection: addBookmarkFromSelection,
-		removeMovement: removeBookmark,
-		updateMovement: updateBookmark,
-		assignPagesToMovement: assignPagesToBookmark,
-		executeSaveMovements: executeSaveBookmarks,
 	}
 }
-
-export const usePdfMovements = usePdfBookmarks

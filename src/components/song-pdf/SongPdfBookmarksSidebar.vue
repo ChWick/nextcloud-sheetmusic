@@ -14,7 +14,6 @@ import type { BookmarkSegment } from './usePdfBookmarks'
 const props = withDefaults(
 	defineProps<{
 		bookmarks?: BookmarkSegment[]
-		movements?: BookmarkSegment[]
 		totalPages: number
 		selectedPages?: number[]
 		isExtractingOutline?: boolean
@@ -22,17 +21,13 @@ const props = withDefaults(
 	}>(),
 	{
 		bookmarks: () => [],
-		movements: () => [],
 		selectedPages: () => [],
 		isExtractingOutline: false,
 		autoPdfMetadata: true,
 	},
 )
 
-const activeBookmarks = computed<BookmarkSegment[]>(() => {
-	if (props.bookmarks && props.bookmarks.length > 0) return props.bookmarks
-	return props.movements || []
-})
+const activeBookmarks = computed<BookmarkSegment[]>(() => props.bookmarks)
 
 const emit = defineEmits<{
 	'add-bookmark': []
@@ -41,31 +36,22 @@ const emit = defineEmits<{
 	'update-bookmark': [id: string, updates: Partial<BookmarkSegment>]
 	'assign-selected': [id: string]
 	'extract-outline': []
-	// Aliases
-	'add-movement': []
-	'add-movement-from-selection': []
-	'remove-movement': [id: string]
-	'update-movement': [id: string, updates: Partial<BookmarkSegment>]
 }>()
 
 function onAddBookmark() {
 	emit('add-bookmark')
-	emit('add-movement')
 }
 
 function onAddBookmarkFromSelection() {
 	emit('add-bookmark-from-selection')
-	emit('add-movement-from-selection')
 }
 
 function onRemoveBookmark(id: string) {
 	emit('remove-bookmark', id)
-	emit('remove-movement', id)
 }
 
 function onUpdateBookmark(id: string, updates: Partial<BookmarkSegment>) {
 	emit('update-bookmark', id, updates)
-	emit('update-movement', id, updates)
 }
 
 const selectedRange = computed<{ start: number; end: number } | null>(() => {
