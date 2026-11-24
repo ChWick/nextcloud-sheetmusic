@@ -215,8 +215,6 @@ function pickStamp(symbol: string) {
 				@update-selected-data="emit('update-selected-data', $event)" />
 
 			<div :class="$style.actionGroup">
-				<span v-if="isSaving" :class="$style.savingBadge">{{ t('sheetmusic', 'Saving...') }}</span>
-
 				<button
 					type="button"
 					:class="[$style.toolBtn, (hasCustomCalibration || isTouchDrawingBlocked) && $style.active]"
@@ -240,6 +238,8 @@ function pickStamp(symbol: string) {
 				</ResponsiveNcButton>
 			</div>
 		</div>
+
+		<span v-if="isSaving" :class="$style.savingBadge" aria-live="polite">{{ t('sheetmusic', 'Saving...') }}</span>
 
 		<SongAnnotationStylusDialog
 			v-if="showStylusDialog"
@@ -310,8 +310,16 @@ button[type='button'].toolBtn {
 }
 
 .savingBadge {
-	font-size: 0.78rem;
+	position: absolute;
+	right: 12px;
+	bottom: 2px;
+	z-index: 45;
+	padding: 1px 6px;
+	border-radius: 4px;
+	background: var(--color-main-background);
+	font-size: 0.72rem;
+	line-height: 1.2;
 	color: var(--color-text-maxcontrast);
-	margin-right: 4px;
+	pointer-events: none;
 }
 </style>

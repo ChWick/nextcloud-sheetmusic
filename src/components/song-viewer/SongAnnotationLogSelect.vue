@@ -134,8 +134,9 @@ button[type='button'].triggerBtn {
 
 .triggerValue {
 	font-weight: 600;
-	min-width: 22px;
+	min-width: 28px;
 	text-align: right;
+	font-variant-numeric: tabular-nums;
 }
 
 .chevron {
