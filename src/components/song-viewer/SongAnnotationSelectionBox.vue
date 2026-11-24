@@ -38,7 +38,7 @@ const shapeHeightHandle = computed(() => getShapeHeightHandle(props.item, props.
 			v-if="item.type === 'stamp'"
 			:cx="Math.round((item.x + (item.width || 0) / 2) * VIEWBOX_WIDTH * 10) / 10"
 			:cy="Math.round((item.y + (item.height || 0) / 2) * vbHeight * 10) / 10"
-			:r="Math.max(14 * scale, getStampRenderFontSize(item) * 0.6 + boxPad)"
+			:r="Math.max(9 * scale, getStampRenderFontSize(item) * 0.4 + boxPad * 0.75)"
 			fill="none"
 			stroke="#0082c9"
 			:stroke-width="boxStrokeWidth"

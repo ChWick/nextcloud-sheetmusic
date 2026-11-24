@@ -97,7 +97,20 @@ describe('SongAnnotationSelectionBox.vue', () => {
 			props: { item, vbHeight: 1414, uiScale: 1 },
 		})
 
-		expect(wrapper.find('circle').exists()).toBe(true)
+		const circle = wrapper.find('circle')
+		expect(circle.exists()).toBe(true)
+		expect(Number(circle.attributes('r'))).toBeCloseTo(19, 5) // 40 * 0.4 + 4 * 0.75
 		expect(wrapper.findAll('[data-resize-handle]')).toHaveLength(0)
+
+		const fingeringItem: SheetAnnotation = {
+			...item,
+			id: 4,
+			uuid: 'stamp-2',
+			data: { symbol: '3', category: 'fingering', fontKind: 'fingering' },
+		}
+		const fingeringWrapper = mount(SongAnnotationSelectionBox, {
+			props: { item: fingeringItem, vbHeight: 1414, uiScale: 1 },
+		})
+		expect(Number(fingeringWrapper.find('circle').attributes('r'))).toBeCloseTo(9, 5)
 	})
 })
