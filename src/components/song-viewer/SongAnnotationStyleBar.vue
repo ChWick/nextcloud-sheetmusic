@@ -111,7 +111,7 @@ const currentFontSize = computed(() =>
 const isHeightAdjustableShape = computed(() => {
 	const selShape = props.selectedAnnotation?.type === 'shape' ? props.selectedAnnotation.data?.shapeType : null
 	const active = selShape ?? props.activeTool
-	return active === 'crescendo' || active === 'decrescendo' || active === 'slur' || active === 'bracket'
+	return active === 'crescendo' || active === 'decrescendo' || active === 'slur' || active === 'bracket' || active === 'bracket-up'
 })
 
 const currentShapeHeight = computed(() => {

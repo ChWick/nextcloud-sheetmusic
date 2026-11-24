@@ -30,6 +30,8 @@ import {
 	VIEWBOX_WIDTH,
 } from '../../../src/utils/annotation'
 import { normalizeMusicSymbol } from '../../../src/utils/musicSymbols'
+import { buildAnnotationDraft } from '../../../src/utils/annotationTransform'
+import { createDefaultToolStyle } from '../../../src/utils/annotationToolStyle'
 
 function makeAnn(overrides: Partial<SheetAnnotation> = {}): SheetAnnotation {
 	return {
@@ -138,9 +140,16 @@ describe('annotation utils', () => {
 			expect(path).toBe('M 100.0 500.0 Q 300.0 470.0, 500.0 500.0')
 		})
 
-		it('generates bracket path with optional hookHeight', () => {
+		it('generates bracket path with optional hookHeight (down and flipped up)', () => {
 			const path = generateBracketPath({ x: 0.1, y: 0.5 }, { x: 0.5, y: 0.5 }, 1000, 35)
 			expect(path).toBe('M 100.0 535.0 L 100.0 500.0 L 500.0 500.0 L 500.0 535.0')
+
+			const flippedPath = generateBracketPath({ x: 0.1, y: 0.5 }, { x: 0.5, y: 0.5 }, 1000, -35)
+			expect(flippedPath).toBe('M 100.0 465.0 L 100.0 500.0 L 500.0 500.0 L 500.0 465.0')
+
+			const upDraft = buildAnnotationDraft('bracket-up', createDefaultToolStyle(), 0, { x: 0.1, y: 0.5 }, { x: 0.5, y: 0.5 }, [])
+			expect(upDraft?.data.shapeType).toBe('bracket')
+			expect(upDraft?.data.aperture).toBeLessThan(0)
 		})
 
 		it('computes shape height handle for hairpins, slurs, and brackets', () => {

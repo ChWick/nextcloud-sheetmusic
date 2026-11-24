@@ -15,6 +15,7 @@ import {
 	isStampItalic,
 	VIEWBOX_WIDTH,
 } from '../../utils/annotation'
+import { getStampDefinition } from '../../utils/musicSymbols'
 
 defineProps<{
 	item: SheetAnnotation
@@ -157,7 +158,20 @@ const emit = defineEmits<{
 				fill="transparent"
 				:data-ann-uuid="item.uuid"
 				data-test="annotation-hit-target" />
+			<path
+				v-if="getStampDefinition(getAnnotationDisplaySymbol(item))?.svgPath"
+				:d="getStampDefinition(getAnnotationDisplaySymbol(item))!.svgPath"
+				:transform="`translate(${getStampRenderPosition(item, vbHeight).x} ${getStampRenderPosition(item, vbHeight).y}) scale(${getStampRenderFontSize(item)})`"
+				fill="none"
+				:stroke="item.style?.color || '#000000'"
+				stroke-width="0.11"
+				stroke-linecap="round"
+				stroke-linejoin="round"
+				:opacity="item.style?.opacity ?? 1.0"
+				:data-ann-uuid="item.uuid"
+				data-test="annotation-stamp" />
 			<text
+				v-else
 				:x="getStampRenderPosition(item, vbHeight).x"
 				:y="getStampRenderPosition(item, vbHeight).y"
 				:fill="item.style?.color || '#000000'"

@@ -428,6 +428,65 @@ export const HANDWRITING_TEMPLATES: HandwritingTemplate[] = [
 		],
 	},
 
+	// --- Organ Pedaling (Heel ∪, Toe ∧) ---
+	{
+		// ∪ (Heel / U): left-to-right U
+		symbol: '∪',
+		strokes: [[
+			{ x: 0.16, y: 0.1 },
+			{ x: 0.16, y: 0.56 },
+			...arcPoints(0.5, 0.58, 0.34, 0.34, 180, 0, 10),
+			{ x: 0.84, y: 0.1 },
+		]],
+	},
+	{
+		// ∪ (Heel / U): wide rounded bowl
+		symbol: '∪',
+		strokes: [arcPoints(0.5, 0.25, 0.38, 0.65, 180, 0, 12)],
+	},
+	{
+		// ∧ (Toe / inverted V): left-to-right (wider angle)
+		symbol: '∧',
+		strokes: [[{ x: 0.08, y: 0.86 }, { x: 0.5, y: 0.14 }, { x: 0.92, y: 0.86 }]],
+	},
+	{
+		// ∧ (Toe / inverted V): right-to-left
+		symbol: '∧',
+		strokes: [[{ x: 0.92, y: 0.86 }, { x: 0.5, y: 0.14 }, { x: 0.08, y: 0.86 }]],
+	},
+
+	// --- String Marks (Down bow 𝆪, Up bow 𝆫) ---
+	{
+		// Down bow (⊓): left-to-right square arch
+		symbol: '𝆪',
+		strokes: [[
+			{ x: 0.16, y: 0.9 },
+			{ x: 0.16, y: 0.16 },
+			{ x: 0.84, y: 0.16 },
+			{ x: 0.84, y: 0.9 },
+		]],
+	},
+	{
+		// Down bow (⊓): right-to-left
+		symbol: '𝆪',
+		strokes: [[
+			{ x: 0.84, y: 0.9 },
+			{ x: 0.84, y: 0.16 },
+			{ x: 0.16, y: 0.16 },
+			{ x: 0.16, y: 0.9 },
+		]],
+	},
+	{
+		// Up bow (V): left-to-right
+		symbol: '𝆫',
+		strokes: [[{ x: 0.14, y: 0.12 }, { x: 0.5, y: 0.9 }, { x: 0.86, y: 0.12 }]],
+	},
+	{
+		// Up bow (V): right-to-left
+		symbol: '𝆫',
+		strokes: [[{ x: 0.86, y: 0.12 }, { x: 0.5, y: 0.9 }, { x: 0.14, y: 0.12 }]],
+	},
+
 	// --- Articulations ---
 	{
 		// Accent (>): top-to-bottom
@@ -440,14 +499,14 @@ export const HANDWRITING_TEMPLATES: HandwritingTemplate[] = [
 		strokes: [[{ x: 0.1, y: 0.82 }, { x: 0.9, y: 0.5 }, { x: 0.1, y: 0.18 }]],
 	},
 	{
-		// Marcato (^): left-to-right
+		// Marcato (^): left-to-right (taller/narrower peak)
 		symbol: '𝅿',
-		strokes: [[{ x: 0.14, y: 0.88 }, { x: 0.5, y: 0.12 }, { x: 0.86, y: 0.88 }]],
+		strokes: [[{ x: 0.2, y: 0.9 }, { x: 0.5, y: 0.08 }, { x: 0.8, y: 0.9 }]],
 	},
 	{
 		// Marcato (^): right-to-left
 		symbol: '𝅿',
-		strokes: [[{ x: 0.86, y: 0.88 }, { x: 0.5, y: 0.12 }, { x: 0.14, y: 0.88 }]],
+		strokes: [[{ x: 0.8, y: 0.9 }, { x: 0.5, y: 0.08 }, { x: 0.2, y: 0.9 }]],
 	},
 	{
 		// Tenuto (-)

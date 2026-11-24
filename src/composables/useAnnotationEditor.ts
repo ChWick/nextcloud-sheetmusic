@@ -38,6 +38,7 @@ export type EditorTool =
 	| 'rect'
 	| 'ellipse'
 	| 'bracket'
+	| 'bracket-up'
 	| 'text'
 	| 'stamp'
 	| 'handwriting'
@@ -74,7 +75,7 @@ export function createUuid(): string {
 	return 'ann-' + Math.random().toString(36).slice(2, 10) + '-' + Date.now().toString(36)
 }
 
-export function isShapeTool(tool: EditorTool): tool is ShapeType {
+export function isShapeTool(tool: EditorTool): boolean {
 	return (
 		tool === 'line' ||
 		tool === 'arrow' ||
@@ -83,7 +84,8 @@ export function isShapeTool(tool: EditorTool): tool is ShapeType {
 		tool === 'slur' ||
 		tool === 'rect' ||
 		tool === 'ellipse' ||
-		tool === 'bracket'
+		tool === 'bracket' ||
+		tool === 'bracket-up'
 	)
 }
 

@@ -37,6 +37,11 @@ export interface MusicStampDefinition {
 	 * the U+1D1xx Musical Symbols block (e.g. U+266B beamed eighth notes).
 	 */
 	fontScale?: number
+	/**
+	 * Optional vector SVG path in normalized [-0.5..0.5] em coordinates (centered at 0,0)
+	 * for symbols not present in bundled Noto Music / TeX Gyre Schola (e.g. organ pedaling ∪ ∩ ∨ ∧).
+	 */
+	svgPath?: string
 }
 
 export const MUSIC_FONT_FAMILY = "'Noto Music', 'Segoe UI Symbol', 'Apple Symbols', sans-serif"
@@ -48,7 +53,7 @@ export const STAMP_CATEGORIES: Array<{ id: StampCategory; label: string }> = [
 	{ id: 'ornament', label: 'Ornaments' },
 	{ id: 'articulation', label: 'Articulations' },
 	{ id: 'navigation', label: 'Navigation' },
-	{ id: 'fingering', label: 'Fingerings' },
+	{ id: 'fingering', label: 'Fingerings, Pedaling & Strings' },
 	{ id: 'rhythm', label: 'Notes & Rests' },
 ]
 
@@ -106,13 +111,19 @@ export const MUSIC_STAMPS: MusicStampDefinition[] = [
 	{ symbol: '𝆮', label: 'Pedal (Ped.)', category: 'navigation', fontKind: 'music', aliases: ['ped', 'Ped.'], inkOffset: { ox: 0, oy: 0.5 } },
 	{ symbol: '𝆯', label: 'Pedal up (*)', category: 'navigation', fontKind: 'music', aliases: ['pedup'], inkOffset: { ox: 0, oy: 0.499 } },
 
-	// Fingerings (Century Schoolbook)
+	// Fingerings (Century Schoolbook), Organ Pedaling (Toe / Heel), & String Marks
 	{ symbol: '0', label: 'Fingering 0', category: 'fingering', fontKind: 'fingering', shortcut: '0' },
 	{ symbol: '1', label: 'Fingering 1', category: 'fingering', fontKind: 'fingering', shortcut: '1' },
 	{ symbol: '2', label: 'Fingering 2', category: 'fingering', fontKind: 'fingering', shortcut: '2' },
 	{ symbol: '3', label: 'Fingering 3', category: 'fingering', fontKind: 'fingering', shortcut: '3' },
 	{ symbol: '4', label: 'Fingering 4', category: 'fingering', fontKind: 'fingering', shortcut: '4' },
 	{ symbol: '5', label: 'Fingering 5', category: 'fingering', fontKind: 'fingering', shortcut: '5' },
+	{ symbol: '∪', label: 'Organ heel (U)', category: 'fingering', fontKind: 'text', fontScale: 0.55, svgPath: 'M -0.32 -0.34 L -0.32 0.04 A 0.32 0.32 0 0 0 0.32 0.04 L 0.32 -0.34', aliases: ['U', 'u', 'heel'] },
+	{ symbol: '∧', label: 'Organ toe (∧)', category: 'fingering', fontKind: 'text', fontScale: 0.55, svgPath: 'M -0.3 0.34 L 0 -0.34 L 0.3 0.34', aliases: ['^', 'toe'] },
+	{ symbol: '𝆪', label: 'Down bow', category: 'fingering', fontKind: 'music', aliases: ['downbow'], inkOffset: { ox: -0.169, oy: 0.884 } },
+	{ symbol: '𝆫', label: 'Up bow', category: 'fingering', fontKind: 'music', aliases: ['upbow'], inkOffset: { ox: -0.128, oy: 0.865 } },
+	{ symbol: '𝆬', label: 'Harmonic / Open string', category: 'fingering', fontKind: 'music', aliases: ['harmonic'], inkOffset: { ox: -0.114, oy: 0.88 } },
+	{ symbol: '𝆭', label: 'Snap pizzicato', category: 'fingering', fontKind: 'music', aliases: ['snap', 'bartok'], inkOffset: { ox: -0.171, oy: 0.999 } },
 
 	// Rhythm (Notes & Rests — U+1D15D..U+1D161 share identical notehead metrics in Noto Music)
 	{ symbol: '𝅝', label: 'Whole note', category: 'rhythm', fontKind: 'music', aliases: ['w'], inkOffset: { ox: 0, oy: 0.134 } },
@@ -161,7 +172,9 @@ export function getMusicStampFontFamily(symbol: string, fontKind?: StampFontKind
 		return FINGERING_FONT_FAMILY
 	}
 	if (fontKind === 'text') {
-		return "'Century Schoolbook', 'TeX Gyre Schola', serif"
+		// Use symbol/math fonts directly so ∪, ∩, ∨, ∧ all resolve from the same font
+		// (serif fonts often contain ∩ from WGL4/MacRoman at a smaller size while falling back for ∪)
+		return "'Apple Symbols', 'Segoe UI Symbol', 'Cambria Math', 'DejaVu Sans', 'Noto Sans Math', sans-serif"
 	}
 	return MUSIC_FONT_FAMILY
 }

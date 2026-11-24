@@ -143,11 +143,14 @@ export function buildAnnotationDraft(
 		}
 
 		const box = computeBoundingBoxFromPoints([p1, p2], 0.01)
+		const shapeType: ShapeType = tool === 'bracket-up' ? 'bracket' : (tool as ShapeType)
 		const shapeData: SheetAnnotation['data'] = {
-			shapeType: tool as ShapeType,
+			shapeType,
 			points: [p1, p2],
 		}
-		if ((tool === 'crescendo' || tool === 'decrescendo' || tool === 'bracket') && s.shapeHeight) {
+		if (tool === 'bracket-up') {
+			shapeData.aperture = -Math.abs(s.shapeHeight || 18)
+		} else if ((tool === 'crescendo' || tool === 'decrescendo' || tool === 'bracket') && s.shapeHeight) {
 			shapeData.aperture = s.shapeHeight
 		} else if (tool === 'slur' && s.shapeHeight) {
 			shapeData.curvature = -Math.abs(s.shapeHeight)

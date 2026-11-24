@@ -26,7 +26,8 @@ const SHAPE_TOOLS: Array<{ id: EditorTool; label: string; glyph: string }> = [
 	{ id: 'crescendo', label: 'Crescendo (<)', glyph: '<' },
 	{ id: 'decrescendo', label: 'Decrescendo (>)', glyph: '>' },
 	{ id: 'slur', label: 'Slur / Tie', glyph: '⌒' },
-	{ id: 'bracket', label: 'Bracket', glyph: '┌┐' },
+	{ id: 'bracket', label: 'Bracket (down)', glyph: '┌┐' },
+	{ id: 'bracket-up', label: 'Bracket (up)', glyph: '└┘' },
 	{ id: 'rect', label: 'Rectangle', glyph: '□' },
 	{ id: 'ellipse', label: 'Circle / Ellipse', glyph: '○' },
 ]

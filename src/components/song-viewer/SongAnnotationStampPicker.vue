@@ -58,7 +58,21 @@ const filteredStamps = computed(() =>
 				data-test="tool-stamp"
 				@click="emit('toggle')">
 				<MusicNote :size="18" />
-				<span :class="$style.stampPreview" :style="{ fontFamily: getMusicStampFontFamily(props.stampSymbol) }">
+				<svg
+					v-if="getStampDef(props.stampSymbol)?.svgPath"
+					width="16"
+					height="16"
+					viewBox="-0.6 -0.6 1.2 1.2"
+					aria-hidden="true">
+					<path
+						:d="getStampDef(props.stampSymbol)!.svgPath"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="0.14"
+						stroke-linecap="round"
+						stroke-linejoin="round" />
+				</svg>
+				<span v-else :class="$style.stampPreview" :style="{ fontFamily: getMusicStampFontFamily(props.stampSymbol) }">
 					{{ props.stampSymbol }}
 				</span>
 			</button>
@@ -113,7 +127,21 @@ const filteredStamps = computed(() =>
 					:data-test="`stamp-option-${st.symbol}`"
 					@click="emit('select', st.symbol)">
 					<svg
-						v-if="st.inkOffset"
+						v-if="st.svgPath"
+						width="24"
+						height="24"
+						viewBox="-0.6 -0.6 1.2 1.2"
+						aria-hidden="true">
+						<path
+							:d="st.svgPath"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="0.12"
+							stroke-linecap="round"
+							stroke-linejoin="round" />
+					</svg>
+					<svg
+						v-else-if="st.inkOffset"
 						width="28"
 						height="28"
 						viewBox="0 0 28 28"

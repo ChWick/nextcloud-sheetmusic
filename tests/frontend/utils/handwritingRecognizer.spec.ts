@@ -214,6 +214,30 @@ describe('handwritingRecognizer', () => {
 		})
 	})
 
+	describe('organ pedaling symbols', () => {
+		it('recognizes heel (∪) and toe (∧)', () => {
+			const unionU = placeGlyph([[
+				[0.16, 0.1], [0.16, 0.56], ...arc(0.5, 0.58, 0.34, 0.34, 180, 0, 10), [0.84, 0.1],
+			]], 400, 400, 34, 34)
+			expect(recognizeHandwriting(unionU, VB_HEIGHT).best?.symbol).toBe('∪')
+
+			const toeInvV = placeGlyph([[[0.08, 0.86], [0.5, 0.14], [0.92, 0.86]]], 400, 400, 36, 30)
+			const invRes = recognizeHandwriting(toeInvV, VB_HEIGHT)
+			expect(invRes.best?.symbol).toBe('∧')
+			expect(invRes.candidates.map((c) => c.symbol)).toContain('𝅿')
+		})
+
+		it('recognizes string bowing marks (down bow 𝆪 and up bow 𝆫)', () => {
+			const downBow = placeGlyph([[
+				[0.16, 0.9], [0.16, 0.16], [0.84, 0.16], [0.84, 0.9],
+			]], 400, 400, 34, 34)
+			expect(recognizeHandwriting(downBow, VB_HEIGHT).best?.symbol).toBe('𝆪')
+
+			const upBow = placeGlyph([[[0.14, 0.12], [0.5, 0.9], [0.86, 0.12]]], 400, 400, 30, 34)
+			expect(recognizeHandwriting(upBow, VB_HEIGHT).best?.symbol).toBe('𝆫')
+		})
+	})
+
 	describe('articulations and ornaments', () => {
 		it('recognizes staccato dot, tenuto dash, accent, and marcato', () => {
 			const dot = placeGlyph([[[0.5, 0.5], [0.52, 0.52]]], 400, 400, 6, 6)
@@ -225,7 +249,7 @@ describe('handwritingRecognizer', () => {
 			const accent = placeGlyph([[[0.1, 0.18], [0.9, 0.5], [0.1, 0.82]]], 400, 400, 36, 26)
 			expect(recognizeHandwriting(accent, VB_HEIGHT).best?.symbol).toBe('𝅻')
 
-			const marcato = placeGlyph([[[0.14, 0.88], [0.5, 0.12], [0.86, 0.88]]], 400, 400, 30, 32)
+			const marcato = placeGlyph([[[0.2, 0.9], [0.5, 0.08], [0.8, 0.9]]], 400, 400, 26, 36)
 			expect(recognizeHandwriting(marcato, VB_HEIGHT).best?.symbol).toBe('𝅿')
 		})
 

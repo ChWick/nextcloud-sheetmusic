@@ -77,7 +77,21 @@ const positionStyle = computed(() => {
 				:data-test="`handwriting-candidate-${cand.symbol}`"
 				@click="selectSymbol(cand.symbol)">
 				<svg
-					v-if="getStampDefinition(cand.symbol)?.inkOffset"
+					v-if="getStampDefinition(cand.symbol)?.svgPath"
+					width="20"
+					height="20"
+					viewBox="-0.6 -0.6 1.2 1.2"
+					aria-hidden="true">
+					<path
+						:d="getStampDefinition(cand.symbol)!.svgPath"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="0.12"
+						stroke-linecap="round"
+						stroke-linejoin="round" />
+				</svg>
+				<svg
+					v-else-if="getStampDefinition(cand.symbol)?.inkOffset"
 					width="22"
 					height="22"
 					viewBox="0 0 22 22"
@@ -150,7 +164,21 @@ const positionStyle = computed(() => {
 				:data-test="`handwriting-candidate-${cand.symbol}`"
 				@click="selectSymbol(cand.symbol)">
 				<svg
-					v-if="getStampDefinition(cand.symbol)?.inkOffset"
+					v-if="getStampDefinition(cand.symbol)?.svgPath"
+					width="20"
+					height="20"
+					viewBox="-0.6 -0.6 1.2 1.2"
+					aria-hidden="true">
+					<path
+						:d="getStampDefinition(cand.symbol)!.svgPath"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="0.12"
+						stroke-linecap="round"
+						stroke-linejoin="round" />
+				</svg>
+				<svg
+					v-else-if="getStampDefinition(cand.symbol)?.inkOffset"
 					width="22"
 					height="22"
 					viewBox="0 0 22 22"
