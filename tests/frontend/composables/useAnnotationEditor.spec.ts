@@ -350,4 +350,53 @@ describe('useAnnotationEditor', () => {
 
 		editor.exitEditMode()
 	})
+
+	it('coalesces rapid style slider updates into a single save and undo step', async () => {
+		vi.useFakeTimers()
+		try {
+			const annotations = ref<SheetAnnotation[]>([
+				{
+					id: 10,
+					uuid: 'stamp-1',
+					songId: 7,
+					fileId: 42,
+					pageNumber: 0,
+					type: 'stamp',
+					x: 0.4,
+					y: 0.5,
+					width: 0,
+					height: 0,
+					style: { color: '#e53935', fontSize: 30, opacity: 1 },
+					data: { symbol: '𝆏', category: 'dynamic', fontKind: 'music' },
+				},
+			])
+
+			const editor = useAnnotationEditor(annotations, () => ({ songId: 7, fileId: 42 }))
+			editor.enterEditMode()
+			editor.selectAnnotation('stamp-1')
+			vi.mocked(axios.post).mockClear()
+
+			editor.updateSelectedStyle({ fontSize: 36 })
+			editor.updateSelectedStyle({ fontSize: 42 })
+			editor.updateSelectedStyle({ fontSize: 48 })
+			editor.updateSelectedStyle({ fontSize: 54 })
+
+			// Local state updates immediately without firing API requests mid-drag
+			expect(annotations.value[0].style.fontSize).toBe(54)
+			expect(axios.post).not.toHaveBeenCalled()
+
+			// After debounce settles, a single save persists the final value
+			await vi.advanceTimersByTimeAsync(250)
+			expect(axios.post).toHaveBeenCalledTimes(1)
+			expect((vi.mocked(axios.post).mock.calls[0][1] as any).style.fontSize).toBe(54)
+
+			// A single undo reverts back to the pre-drag size (30)
+			await editor.undo()
+			expect(annotations.value[0].style.fontSize).toBe(30)
+
+			editor.exitEditMode()
+		} finally {
+			vi.useRealTimers()
+		}
+	})
 })

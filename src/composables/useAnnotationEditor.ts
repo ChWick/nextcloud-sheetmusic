@@ -144,6 +144,7 @@ export function useAnnotationEditor(
 	}
 
 	function exitEditMode() {
+		void flushPendingUpdate()
 		isEditing.value = false
 		selectedUuid.value = null
 	}
@@ -151,6 +152,7 @@ export function useAnnotationEditor(
 	function setTool(tool: EditorTool) {
 		activeTool.value = tool
 		if (tool !== 'select') {
+			void flushPendingUpdate()
 			selectedUuid.value = null
 		}
 	}
@@ -160,6 +162,9 @@ export function useAnnotationEditor(
 	}
 
 	function selectAnnotation(uuid: string | null) {
+		if (pendingUpdate && pendingUpdate.after.uuid !== uuid) {
+			void flushPendingUpdate()
+		}
 		selectedUuid.value = uuid
 		if (uuid) {
 			const ann = annotations.value.find((a) => a.uuid === uuid && !a.deletedAt)
@@ -177,7 +182,17 @@ export function useAnnotationEditor(
 		return { ...cloneAnn(ann), id: undefined, deletedAt: null }
 	}
 
+	let activeSaveCount = 0
+	const localRevisions = new Map<string, number>()
+
+	function bumpLocalRevision(uuid: string): number {
+		const next = (localRevisions.get(uuid) ?? 0) + 1
+		localRevisions.set(uuid, next)
+		return next
+	}
+
 	async function withSaving<T>(fn: () => Promise<T>, fallbackMessage?: string, rethrow = true): Promise<T | undefined> {
+		activeSaveCount++
 		isSaving.value = true
 		if (fallbackMessage) saveError.value = null
 		try {
@@ -189,7 +204,8 @@ export function useAnnotationEditor(
 			if (rethrow) throw err
 			return undefined
 		} finally {
-			isSaving.value = false
+			activeSaveCount = Math.max(0, activeSaveCount - 1)
+			isSaving.value = activeSaveCount > 0
 		}
 	}
 
@@ -216,16 +232,59 @@ export function useAnnotationEditor(
 	async function persistSave(ann: SheetAnnotation): Promise<SheetAnnotation> {
 		const ctx = getContext()
 		const songId = isSetlistContext(ctx) ? 0 : ctx.songId
+		const revisionAtStart = localRevisions.get(ann.uuid) ?? 0
 		const saved = await withSaving(async () => {
 			const res = await saveContextAnnotation(ctx, {
 				...ann,
 				songId,
 				fileId: ann.fileId || ctx.fileId,
 			})
-			upsertLocal(res)
+			// Avoid overwriting newer local slider/drag edits with an older in-flight response
+			if ((localRevisions.get(ann.uuid) ?? 0) === revisionAtStart) {
+				upsertLocal(res)
+			} else if (res.id) {
+				const latest = annotations.value.find((a) => a.uuid === ann.uuid)
+				if (latest && !latest.id) {
+					upsertLocal({ ...latest, id: res.id })
+				}
+			}
 			return res
 		}, 'Failed to save annotation')
 		return saved!
+	}
+
+	const STYLE_SAVE_DEBOUNCE_MS = 200
+	let pendingUpdate: { before: SheetAnnotation; after: SheetAnnotation; timer: ReturnType<typeof setTimeout> | null } | null = null
+
+	async function flushPendingUpdate(): Promise<void> {
+		if (!pendingUpdate) return
+		const { before, after, timer } = pendingUpdate
+		pendingUpdate = null
+		if (timer !== null) {
+			clearTimeout(timer)
+		}
+		await updateAnnotation(before, after, true)
+	}
+
+	function scheduleCoalescedUpdate(before: SheetAnnotation, after: SheetAnnotation): void {
+		bumpLocalRevision(after.uuid)
+		upsertLocal(after)
+		if (selectedUuid.value === after.uuid) {
+			syncToolStyleFromAnnotation(after)
+		}
+
+		if (pendingUpdate && pendingUpdate.after.uuid !== after.uuid) {
+			void flushPendingUpdate()
+		}
+
+		const initialBefore = pendingUpdate ? pendingUpdate.before : cloneAnn(before)
+		if (pendingUpdate?.timer !== null && pendingUpdate?.timer !== undefined) {
+			clearTimeout(pendingUpdate.timer)
+		}
+		const timer = setTimeout(() => {
+			void flushPendingUpdate()
+		}, STYLE_SAVE_DEBOUNCE_MS)
+		pendingUpdate = { before: initialBefore, after: cloneAnn(after), timer }
 	}
 
 	async function persistDelete(ann: SheetAnnotation): Promise<void> {
@@ -287,6 +346,10 @@ export function useAnnotationEditor(
 	}
 
 	async function deleteAnnotation(ann: SheetAnnotation, recordHistory = true): Promise<void> {
+		if (pendingUpdate?.after.uuid === ann.uuid) {
+			if (pendingUpdate.timer !== null) clearTimeout(pendingUpdate.timer)
+			pendingUpdate = null
+		}
 		const snapshot = cloneAnn(ann)
 		await persistDelete(ann)
 		if (recordHistory) {
@@ -301,6 +364,7 @@ export function useAnnotationEditor(
 	}
 
 	async function clearPage(pageNumberZeroIndexed: number): Promise<void> {
+		await flushPendingUpdate()
 		const pageAnns = annotations.value.filter(
 			(a) => !a.deletedAt && a.pageNumber === pageNumberZeroIndexed,
 		)
@@ -315,6 +379,7 @@ export function useAnnotationEditor(
 	}
 
 	async function undo(): Promise<void> {
+		await flushPendingUpdate()
 		const action = undoStack.value[undoStack.value.length - 1]
 		if (!action) return
 		undoStack.value = undoStack.value.slice(0, -1)
@@ -350,6 +415,7 @@ export function useAnnotationEditor(
 	}
 
 	async function redo(): Promise<void> {
+		await flushPendingUpdate()
 		const action = redoStack.value[redoStack.value.length - 1]
 		if (!action) return
 		redoStack.value = redoStack.value.slice(0, -1)
@@ -447,6 +513,7 @@ export function useAnnotationEditor(
 
 		if (getCurrentScope()) {
 			onUnmounted(() => {
+				void flushPendingUpdate()
 				window.removeEventListener('keydown', handleKeydown)
 			})
 		}
@@ -462,7 +529,7 @@ export function useAnnotationEditor(
 				...patch,
 			},
 		}
-		updateAnnotation(current, updated)
+		scheduleCoalescedUpdate(current, updated)
 	}
 
 	function updateSelectedData(patch: Partial<SheetAnnotation['data']>) {
@@ -475,7 +542,7 @@ export function useAnnotationEditor(
 				...patch,
 			},
 		}
-		updateAnnotation(current, updated)
+		scheduleCoalescedUpdate(current, updated)
 	}
 
 	return {
