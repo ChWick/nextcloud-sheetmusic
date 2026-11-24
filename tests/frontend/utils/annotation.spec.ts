@@ -20,6 +20,7 @@ import {
 	getAnnotationTextLayout,
 	getShapeHeightHandle,
 	getStampFontFamily,
+	getStampRenderFontSize,
 	getStampRenderPosition,
 	getViewBoxHeight,
 	isPathShape,
@@ -196,6 +197,16 @@ describe('annotation utils', () => {
 			expect(getStampFontFamily(fingering)).toContain('Century Schoolbook')
 			expect(isStampItalic(fingering)).toBe(true)
 			expect(isStampBold(fingering)).toBe(true)
+		})
+
+		it('scales numeric fingering stamps to 50% so they match musical symbols at the same Size', () => {
+			const dyn = makeAnn({ type: 'stamp', style: { fontSize: 36 }, data: { symbol: '𝆑', category: 'dynamic', fontKind: 'music' } })
+			const fingering = makeAnn({ type: 'stamp', style: { fontSize: 36 }, data: { symbol: '3', category: 'fingering', fontKind: 'fingering' } })
+			const defaultFingering = makeAnn({ type: 'stamp', style: {}, data: { symbol: '0', category: 'fingering', fontKind: 'fingering' } })
+
+			expect(getStampRenderFontSize(dyn)).toBe(36)
+			expect(getStampRenderFontSize(fingering)).toBe(18)
+			expect(getStampRenderFontSize(defaultFingering)).toBe(20)
 		})
 
 		it('computes ink-centered render position for combining articulations and fermatas', () => {

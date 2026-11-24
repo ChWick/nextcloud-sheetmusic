@@ -7,6 +7,7 @@ import {
 	getAnnotationPressurePath,
 	getAnnotationTextLayout,
 	getStampFontFamily,
+	getStampRenderFontSize,
 	getStampRenderPosition,
 	hasPressurePoints,
 	isPathShape,
@@ -152,7 +153,7 @@ const emit = defineEmits<{
 				v-if="editable"
 				:cx="Math.round((item.x + (item.width || 0) / 2) * VIEWBOX_WIDTH * 10) / 10"
 				:cy="Math.round((item.y + (item.height || 0) / 2) * vbHeight * 10) / 10"
-				:r="Math.max(16, (Number(item.style?.fontSize) || 40) * 0.65)"
+				:r="Math.max(14, getStampRenderFontSize(item) * 0.65)"
 				fill="transparent"
 				:data-ann-uuid="item.uuid"
 				data-test="annotation-hit-target" />
@@ -161,7 +162,7 @@ const emit = defineEmits<{
 				:y="getStampRenderPosition(item, vbHeight).y"
 				:fill="item.style?.color || '#000000'"
 				:opacity="item.style?.opacity ?? 1.0"
-				:font-size="item.style?.fontSize || 40"
+				:font-size="getStampRenderFontSize(item)"
 				:font-style="isStampItalic(item) ? 'italic' : undefined"
 				:font-weight="isStampBold(item) ? 'bold' : undefined"
 				text-anchor="middle"

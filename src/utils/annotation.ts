@@ -244,10 +244,23 @@ export function isStampBold(item: SheetAnnotation): boolean {
 	return isNumericStamp(item)
 }
 
+export const FINGERING_FONT_SCALE = 0.5
+
 export function getStampFontFamily(item: SheetAnnotation): string {
 	const sym = getAnnotationDisplaySymbol(item)
 	const def = getStampDefinition(sym)
 	return getMusicStampFontFamily(sym, item.data?.fontKind ?? def?.fontKind)
+}
+
+/**
+ * Compute the effective SVG font-size for a stamp annotation.
+ * Fingerings render in a serif text font whose digits fill ~72% of the em-square,
+ * while Noto Music glyphs have large ascender/descender headroom (~35-50% visual height).
+ * Scaling numeric fingerings by 0.5 keeps all symbols visually matched at the same Size.
+ */
+export function getStampRenderFontSize(item: SheetAnnotation): number {
+	const base = Number(item.style?.fontSize) || 40
+	return isNumericStamp(item) ? Math.round(base * FINGERING_FONT_SCALE * 10) / 10 : base
 }
 
 /**
@@ -260,7 +273,7 @@ export function getStampRenderPosition(
 ): { x: number; y: number; dominantBaseline: 'alphabetic' | 'central' } {
 	const cx = (item.x + (item.width || 0) / 2) * VIEWBOX_WIDTH
 	const cy = (item.y + (item.height || 0) / 2) * vbHeight
-	const fontSize = Number(item.style?.fontSize) || 40
+	const fontSize = getStampRenderFontSize(item)
 	const sym = getAnnotationDisplaySymbol(item)
 	const def = getStampDefinition(sym)
 
