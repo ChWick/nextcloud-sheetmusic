@@ -300,7 +300,7 @@ describe('useAnnotationEditor', () => {
 		editor.exitEditMode()
 	})
 
-	it('auto-selects newly created annotations so style changes apply immediately', async () => {
+	it('does not auto-select newly created annotations and applies style edits after explicit selection', async () => {
 		const annotations = ref<SheetAnnotation[]>([])
 		const editor = useAnnotationEditor(annotations, () => ({ songId: 7, fileId: 42 }))
 		editor.enterEditMode()
@@ -314,9 +314,11 @@ describe('useAnnotationEditor', () => {
 			width: 0,
 			height: 0,
 			style: { color: '#e53935', fontSize: 40, opacity: 1 },
-			data: { symbol: '𝆏𝆏', category: 'dynamic', fontKind: 'music' },
+			data: { symbol: '\uE52B', category: 'dynamic' },
 		})
 
+		expect(editor.selectedUuid.value).toBeNull()
+		editor.selectAnnotation(createdStamp.uuid)
 		expect(editor.selectedUuid.value).toBe(createdStamp.uuid)
 		editor.updateSelectedStyle({ fontSize: 56, color: '#1e88e5' })
 		await flushPromises()
@@ -325,7 +327,7 @@ describe('useAnnotationEditor', () => {
 		expect(editor.toolStyle.value.stampSize).toBe(56)
 		expect(editor.toolStyle.value.color).toBe('#1e88e5')
 
-		// Creating a line shape also auto-selects it for immediate stroke/color edits
+		// Creating a line shape also leaves nothing selected until tapped
 		editor.setTool('line')
 		const createdLine = await editor.createAnnotation({
 			pageNumber: 0,
@@ -338,7 +340,8 @@ describe('useAnnotationEditor', () => {
 			data: { shapeType: 'line', points: [{ x: 0.1, y: 0.2 }, { x: 0.4, y: 0.25 }] },
 		})
 
-		expect(editor.selectedUuid.value).toBe(createdLine.uuid)
+		expect(editor.selectedUuid.value).toBeNull()
+		editor.selectAnnotation(createdLine.uuid)
 		editor.updateSelectedStyle({ strokeWidth: 6, stroke: '#43a047', lineStyle: 'dashed' })
 		await flushPromises()
 		expect(annotations.value[1].style.strokeWidth).toBe(6)

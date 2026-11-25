@@ -361,6 +361,46 @@ describe('SongAnnotationOverlay.vue', () => {
 		})
 	})
 
+	it('deselects on blank-page tap before inserting a new symbol when an annotation is selected', async () => {
+		const wrapper = mount(SongAnnotationOverlay, {
+			props: {
+				annotations: sampleAnnotations,
+				pageNumber: 1,
+				pageWidth: 595,
+				pageHeight: 842,
+				visible: true,
+				editable: true,
+				activeTool: 'stamp',
+				selectedUuid: 'ann-stamp-1',
+			},
+		})
+
+		const svg = wrapper.find('[data-test="annotation-overlay"]')
+		vi.spyOn(svg.element, 'getBoundingClientRect').mockReturnValue({
+			left: 0,
+			top: 0,
+			width: 595,
+			height: 842,
+			right: 595,
+			bottom: 842,
+			x: 0,
+			y: 0,
+			toJSON: () => ({}),
+		})
+
+		// First tap on blank page deselects without creating a new stamp
+		await svg.trigger('pointerdown', { button: 0, clientX: 100, clientY: 100, pointerId: 1 })
+		await svg.trigger('pointerup', { button: 0, clientX: 100, clientY: 100, pointerId: 1 })
+		expect(wrapper.emitted('select')).toEqual([[null]])
+		expect(wrapper.emitted('create-annotation')).toBeFalsy()
+
+		// Once deselected, tapping blank page inserts the stamp
+		await wrapper.setProps({ selectedUuid: null })
+		await svg.trigger('pointerdown', { button: 0, clientX: 100, clientY: 100, pointerId: 2 })
+		await svg.trigger('pointerup', { button: 0, clientX: 100, clientY: 100, pointerId: 2 })
+		expect(wrapper.emitted('create-annotation')).toHaveLength(1)
+	})
+
 	it('deletes an annotation when clicked with the eraser tool', async () => {
 		const wrapper = mount(SongAnnotationOverlay, {
 			props: {

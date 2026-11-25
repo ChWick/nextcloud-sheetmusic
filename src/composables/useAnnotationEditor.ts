@@ -323,7 +323,6 @@ export function useAnnotationEditor(
 			fileId: ctx.fileId,
 		}
 		upsertLocal(ann)
-		selectedUuid.value = ann.uuid
 		const saved = await persistSave(ann)
 		undoStack.value = [...undoStack.value, { kind: 'create', annotation: cloneAnn(saved) }]
 		redoStack.value = []
