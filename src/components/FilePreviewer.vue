@@ -33,7 +33,9 @@ import {
 	detectPdfPageCropBox,
 	FULL_PAGE_CROP,
 	getCachedPdfPageCropBox,
+	hydratePdfCropCache,
 	isCropped,
+	scheduleSaveFileCropBox,
 	type NormalizedCropBox,
 } from '../utils/pdfCrop'
 import { observeContinuousPdfPages } from '../utils/pdf-continuous-renderer'
@@ -77,6 +79,10 @@ const props = withDefaults(
 		interleaveSongs?: boolean
 		backgroundColor?: string
 		tightCrop?: boolean
+		fileId?: number
+		initialCropBoxes?: Record<string, NormalizedCropBox> | null
+		nextFileId?: number
+		nextInitialCropBoxes?: Record<string, NormalizedCropBox> | null
 	}>(),
 	{
 		fileName: undefined,
@@ -104,6 +110,10 @@ const props = withDefaults(
 		interleaveSongs: false,
 		backgroundColor: '',
 		tightCrop: false,
+		fileId: undefined,
+		initialCropBoxes: null,
+		nextFileId: undefined,
+		nextInitialCropBoxes: null,
 	},
 )
 
@@ -323,7 +333,11 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 				refPage,
 				pageRotation,
 				buildCropCacheKey(props.filePath, refPageNum, pageRotation),
-				{ fileKey: props.filePath, pageNum: refPageNum },
+				{
+					fileKey: props.filePath,
+					pageNum: refPageNum,
+					onComputed: (box) => scheduleSaveFileCropBox(props.fileId, refPageNum, box),
+				},
 			)
 			: FULL_PAGE_CROP
 		const refW = unscaledViewport.width * (refCrop.right - refCrop.left)
@@ -405,12 +419,17 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 			const pageRotation = getEffectivePageRotation(page, rotation.value)
 			const unscaledViewport = page.getViewport({ scale: 1.0, rotation: pageRotation })
 			const cachePath = isNextFile ? (props.nextFilePath || '') : props.filePath
+			const targetFileId = isNextFile ? props.nextFileId : props.fileId
 			const cropBox: NormalizedCropBox = props.tightCrop
 				? await detectPdfPageCropBox(
 					page,
 					pageRotation,
 					buildCropCacheKey(cachePath, resolvedPageNum, pageRotation),
-					{ fileKey: cachePath, pageNum: resolvedPageNum },
+					{
+						fileKey: cachePath,
+						pageNum: resolvedPageNum,
+						onComputed: (box) => scheduleSaveFileCropBox(targetFileId, resolvedPageNum, box),
+					},
 				)
 				: FULL_PAGE_CROP
 			if (renderId !== currentRenderId) return
@@ -607,7 +626,11 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 							const rot = getEffectivePageRotation(p, rotation.value)
 							const key = buildCropCacheKey(props.filePath, nextPageNum, rot)
 							if (!getCachedPdfPageCropBox(key)) {
-								await detectPdfPageCropBox(p, rot, key, { fileKey: props.filePath, pageNum: nextPageNum })
+								await detectPdfPageCropBox(p, rot, key, {
+									fileKey: props.filePath,
+									pageNum: nextPageNum,
+									onComputed: (box) => scheduleSaveFileCropBox(props.fileId, nextPageNum, box),
+								})
 							}
 						} catch {
 							// Best-effort prefetch
@@ -803,6 +826,26 @@ onUnmounted(() => {
 })
 
 watch(() => props.filePath, loadAndRenderFile, { immediate: true })
+
+watch(
+	() => [props.filePath, props.initialCropBoxes] as const,
+	([filePath, boxes]) => {
+		if (filePath && boxes) {
+			hydratePdfCropCache(filePath, boxes)
+		}
+	},
+	{ immediate: true },
+)
+
+watch(
+	() => [props.nextFilePath, props.nextInitialCropBoxes] as const,
+	([filePath, boxes]) => {
+		if (filePath && boxes) {
+			hydratePdfCropCache(filePath, boxes)
+		}
+	},
+	{ immediate: true },
+)
 
 watch(
 	() => props.tightCrop,

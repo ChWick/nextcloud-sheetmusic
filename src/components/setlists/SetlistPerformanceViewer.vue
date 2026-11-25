@@ -549,7 +549,11 @@ onUnmounted(() => {
 					:next-page-order="nextPageOrder"
 					:interleave-songs="interleaveSongs"
 					:background-color="backgroundColor"
-					:tight-crop="tightCrop" />
+					:tight-crop="tightCrop"
+					:file-id="currentFile?.fileId"
+					:initial-crop-boxes="(currentFile as any)?.cropBoxes ?? null"
+					:next-file-id="nextFile?.fileId"
+					:next-initial-crop-boxes="(nextFile as any)?.cropBoxes ?? null" />
 				<div v-else :class="$style.emptyFile">
 					{{ t('sheetmusic', 'No score file attached to this song.') }}
 				</div>

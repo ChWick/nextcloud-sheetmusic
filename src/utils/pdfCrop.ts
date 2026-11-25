@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
+import axios from '@nextcloud/axios'
+import { generateOcsUrl } from '@nextcloud/router'
 import { releaseCanvas, renderPdfPageToCanvas } from './pdfjs'
 
 export interface NormalizedCropBox {
@@ -306,6 +308,10 @@ export function clearPdfCropCache(): void {
 		clearTimeout(persistTimer)
 		persistTimer = null
 	}
+	for (const pending of pendingServerSaves.values()) {
+		if (pending.timer !== null) clearTimeout(pending.timer)
+	}
+	pendingServerSaves.clear()
 	if (typeof localStorage !== 'undefined') {
 		try {
 			localStorage.removeItem(CROP_STORAGE_KEY)
@@ -313,4 +319,42 @@ export function clearPdfCropCache(): void {
 			// ignore
 		}
 	}
+}
+
+const SERVER_SAVE_DEBOUNCE_MS = 600
+const pendingServerSaves = new Map<number, {
+	boxes: Record<string, NormalizedCropBox>
+	timer: ReturnType<typeof setTimeout> | null
+}>()
+
+/**
+ * Queue a newly computed unrotated crop box for debounced write-back to the Nextcloud server.
+ * Multiple pages computed for the same file within the debounce window are merged into one POST.
+ */
+export function scheduleSaveFileCropBox(
+	fileId: number | null | undefined,
+	pageNum: number,
+	box: NormalizedCropBox,
+): void {
+	if (!fileId || fileId <= 0 || !Number.isInteger(pageNum) || pageNum < 1) return
+
+	let entry = pendingServerSaves.get(fileId)
+	if (!entry) {
+		entry = { boxes: {}, timer: null }
+		pendingServerSaves.set(fileId, entry)
+	}
+	entry.boxes[String(pageNum)] = box
+
+	if (entry.timer !== null) {
+		clearTimeout(entry.timer)
+	}
+	entry.timer = setTimeout(() => {
+		const current = pendingServerSaves.get(fileId)
+		pendingServerSaves.delete(fileId)
+		if (!current || Object.keys(current.boxes).length === 0) return
+		const url = generateOcsUrl('/apps/sheetmusic/api/files/{fileId}/crop-boxes', { fileId })
+		void axios.post(url, { cropBoxes: current.boxes }).catch(() => {
+			// Best-effort write-back; ignore offline or read-only errors
+		})
+	}, SERVER_SAVE_DEBOUNCE_MS)
 }

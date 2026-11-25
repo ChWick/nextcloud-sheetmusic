@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import { beforeEach, describe, expect, it } from 'vitest'
+import axios from '@nextcloud/axios'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
 	buildCropCacheKey,
 	clearPdfCropCache,
@@ -13,7 +14,14 @@ import {
 	hydratePdfCropCache,
 	isCropped,
 	rotateCropBox,
+	scheduleSaveFileCropBox,
 } from '../../../src/utils/pdfCrop'
+
+vi.mock('@nextcloud/axios', () => ({
+	default: {
+		post: vi.fn().mockResolvedValue({ data: {} }),
+	},
+}))
 
 function createRgbaPage(
 	width: number,
@@ -94,5 +102,28 @@ describe('pdfCrop', () => {
 			right: 0.85,
 			bottom: 0.8,
 		})
+	})
+
+	it('batches debounced server crop-box write-backs per file', async () => {
+		vi.useFakeTimers()
+		vi.mocked(axios.post).mockClear()
+		try {
+			scheduleSaveFileCropBox(42, 1, { left: 0.1, top: 0.1, right: 0.9, bottom: 0.9 })
+			scheduleSaveFileCropBox(42, 2, { left: 0.12, top: 0.15, right: 0.88, bottom: 0.85 })
+			expect(axios.post).not.toHaveBeenCalled()
+
+			await vi.advanceTimersByTimeAsync(700)
+			expect(axios.post).toHaveBeenCalledTimes(1)
+			const [url, body] = vi.mocked(axios.post).mock.calls[0]
+			expect(String(url)).toContain('/api/files/42/crop-boxes')
+			expect(body).toEqual({
+				cropBoxes: {
+					1: { left: 0.1, top: 0.1, right: 0.9, bottom: 0.9 },
+					2: { left: 0.12, top: 0.15, right: 0.88, bottom: 0.85 },
+				},
+			})
+		} finally {
+			vi.useRealTimers()
+		}
 	})
 })
