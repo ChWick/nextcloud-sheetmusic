@@ -29,7 +29,9 @@ use OCP\IUserSession;
 class SongAnnotationController extends OCSController {
 	private const HANDWRITING_MODEL_CONFIG_KEY = 'handwriting_model';
 	private const FILE_MUSIC_FONT_CONFIG_PREFIX = 'file_music_font_';
+	private const FILE_ANNOTATION_LAYERS_CONFIG_PREFIX = 'file_annotation_layers_';
 	private const ALLOWED_MUSIC_FONTS = ['bravura', 'leland', 'petaluma'];
+	private const MAX_ANNOTATION_LAYERS = 32;
 	private const MAX_HANDWRITING_SAMPLES = 300;
 	private const MAX_HANDWRITING_JSON_BYTES = 524288;
 
@@ -342,6 +344,93 @@ class SongAnnotationController extends OCSController {
 		}
 		$this->config->setAppValue($this->appName, self::FILE_MUSIC_FONT_CONFIG_PREFIX . $fileId, $font);
 		return new DataResponse(['font' => $font]);
+	}
+
+	#[PublicPage]
+	#[NoCSRFRequired]
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'GET', url: '/api/files/{fileId}/annotation-layers')]
+	public function getFileAnnotationLayers(int $fileId): DataResponse {
+		if ($fileId <= 0 || $this->config === null) {
+			return new DataResponse(['layers' => $this->sanitizeAnnotationLayers([])]);
+		}
+		$raw = $this->config->getAppValue($this->appName, self::FILE_ANNOTATION_LAYERS_CONFIG_PREFIX . $fileId, '');
+		if ($raw === '') {
+			return new DataResponse(['layers' => $this->sanitizeAnnotationLayers([])]);
+		}
+		$decoded = json_decode($raw, true);
+		$layers = is_array($decoded) ? $this->sanitizeAnnotationLayers($decoded) : $this->sanitizeAnnotationLayers([]);
+		return new DataResponse(['layers' => $layers]);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'PUT', url: '/api/files/{fileId}/annotation-layers')]
+	public function saveFileAnnotationLayers(int $fileId): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+		if ($fileId <= 0 || $this->config === null) {
+			return new DataResponse(['error' => 'Invalid file ID'], Http::STATUS_BAD_REQUEST);
+		}
+		$rawLayers = $this->request->getParam('layers');
+		if (!is_array($rawLayers)) {
+			return new DataResponse(['error' => 'Invalid layers payload'], Http::STATUS_BAD_REQUEST);
+		}
+		$sanitized = $this->sanitizeAnnotationLayers($rawLayers);
+		$encoded = json_encode($sanitized);
+		if ($encoded === false) {
+			return new DataResponse(['error' => 'Failed to encode layers'], Http::STATUS_BAD_REQUEST);
+		}
+		$this->config->setAppValue($this->appName, self::FILE_ANNOTATION_LAYERS_CONFIG_PREFIX . $fileId, $encoded);
+		return new DataResponse(['layers' => $sanitized]);
+	}
+
+	/**
+	 * @param array<mixed> $rawLayers
+	 * @return list<array{id: int, name: string, visible: bool, order: int}>
+	 */
+	private function sanitizeAnnotationLayers(array $rawLayers): array {
+		$byId = [];
+		foreach ($rawLayers as $item) {
+			if (count($byId) >= self::MAX_ANNOTATION_LAYERS) {
+				break;
+			}
+			if (!is_array($item) || !is_numeric($item['id'] ?? null)) {
+				continue;
+			}
+			$id = max(0, (int)$item['id']);
+			if (isset($byId[$id])) {
+				continue;
+			}
+			$rawName = isset($item['name']) && is_string($item['name']) ? trim($item['name']) : '';
+			$name = $rawName !== '' ? mb_substr($rawName, 0, 80) : ($id === 0 ? 'Default' : 'Layer ' . $id);
+			$visible = array_key_exists('visible', $item) ? (bool)$item['visible'] : true;
+			$order = is_numeric($item['order'] ?? null) ? (int)$item['order'] : count($byId);
+			$byId[$id] = [
+				'id' => $id,
+				'name' => $name,
+				'visible' => $visible,
+				'order' => $order,
+			];
+		}
+
+		if (!isset($byId[0])) {
+			$byId[0] = [
+				'id' => 0,
+				'name' => 'Default',
+				'visible' => true,
+				'order' => -1,
+			];
+		}
+
+		$list = array_values($byId);
+		usort($list, static fn (array $a, array $b): int => ($a['order'] <=> $b['order']) ?: ($a['id'] <=> $b['id']));
+		foreach ($list as $idx => $layer) {
+			$list[$idx]['order'] = $idx;
+		}
+
+		return $list;
 	}
 
 	/**

@@ -4,7 +4,7 @@
  */
 
 import axios from '@nextcloud/axios'
-import type { SheetAnnotation } from '../types/annotation'
+import type { AnnotationLayer, SheetAnnotation } from '../types/annotation'
 import type { LearnedHandwritingSample } from '../utils/handwritingModel'
 import type { MusicFontId } from '../utils/musicFont'
 import { isEffectivelyOffline } from '../composables/useOnlineStatus'
@@ -119,4 +119,14 @@ export async function fetchFileMusicFont(fileId: number): Promise<MusicFontId> {
 
 export async function saveFileMusicFont(fileId: number, font: MusicFontId): Promise<void> {
 	await ocsPut(`/api/files/${fileId}/music-font`, { font })
+}
+
+export async function fetchFileAnnotationLayers(fileId: number): Promise<AnnotationLayer[]> {
+	const res = await ocsGet<{ layers?: AnnotationLayer[] }>(`/api/files/${fileId}/annotation-layers`)
+	return Array.isArray(res?.layers) ? res.layers : []
+}
+
+export async function saveFileAnnotationLayers(fileId: number, layers: AnnotationLayer[]): Promise<AnnotationLayer[]> {
+	const res = await ocsPut<{ layers?: AnnotationLayer[] }>(`/api/files/${fileId}/annotation-layers`, { layers })
+	return Array.isArray(res?.layers) ? res.layers : layers
 }

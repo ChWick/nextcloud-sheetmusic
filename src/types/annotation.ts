@@ -86,6 +86,15 @@ export interface AnnotationData {
 	label?: string
 	/** Optional pre-computed SVG path fallback */
 	path?: string
+	/** One or more layer IDs this annotation belongs to (defaults to [layerIndex ?? 0]) */
+	layerIds?: number[]
+}
+
+export interface AnnotationLayer {
+	id: number
+	name: string
+	visible: boolean
+	order: number
 }
 
 export interface SheetAnnotation {

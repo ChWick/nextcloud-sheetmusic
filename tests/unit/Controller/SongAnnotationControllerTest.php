@@ -309,4 +309,55 @@ final class SongAnnotationControllerTest extends TestCase {
 		self::assertSame(Http::STATUS_OK, $resDel->getStatus());
 		self::assertSame(['samples' => []], $controller->getHandwritingModel()->getData());
 	}
+
+	public function testFileAnnotationLayersGetAndSave(): void {
+		$store = [];
+		$config = $this->createMock(IConfig::class);
+		$config->method('getAppValue')
+			->willReturnCallback(static function (string $app, string $key, string $default = '') use (&$store): string {
+				return $store[$key] ?? $default;
+			});
+		$config->method('setAppValue')
+			->willReturnCallback(static function (string $app, string $key, string $value) use (&$store): void {
+				$store[$key] = $value;
+			});
+
+		$controller = new SongAnnotationController(
+			'sheetmusic',
+			$this->request,
+			$this->annotationService,
+			$this->userSession,
+			null,
+			null,
+			$config,
+		);
+
+		// Default has single Default layer
+		$resDefault = $controller->getFileAnnotationLayers(4455);
+		self::assertSame(Http::STATUS_OK, $resDefault->getStatus());
+		self::assertSame([
+			['id' => 0, 'name' => 'Default', 'visible' => true, 'order' => 0],
+		], $resDefault->getData()['layers']);
+
+		// Save custom layers (even if default omitted, sanitizer restores id 0 and normalizes order)
+		$this->request->setParam('layers', [
+			['id' => 2, 'name' => 'Organ', 'visible' => false, 'order' => 5],
+			['id' => 1, 'name' => 'Fingerings', 'visible' => true, 'order' => 1],
+		]);
+		$resSave = $controller->saveFileAnnotationLayers(4455);
+		self::assertSame(Http::STATUS_OK, $resSave->getStatus());
+		self::assertSame([
+			['id' => 0, 'name' => 'Default', 'visible' => true, 'order' => 0],
+			['id' => 1, 'name' => 'Fingerings', 'visible' => true, 'order' => 1],
+			['id' => 2, 'name' => 'Organ', 'visible' => false, 'order' => 2],
+		], $resSave->getData()['layers']);
+
+		$resGet = $controller->getFileAnnotationLayers(4455);
+		self::assertCount(3, $resGet->getData()['layers']);
+
+		// Unauthorized save rejected
+		$this->userSession->setUser(null);
+		$resUnauth = $controller->saveFileAnnotationLayers(4455);
+		self::assertSame(Http::STATUS_UNAUTHORIZED, $resUnauth->getStatus());
+	}
 }
