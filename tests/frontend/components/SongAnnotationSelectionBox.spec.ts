@@ -77,7 +77,7 @@ describe('SongAnnotationSelectionBox.vue', () => {
 		expect(Number(p0.attributes('stroke-width'))).toBeCloseTo(3, 5) // 2 * 1.5
 	})
 
-	it('renders a circular selection outline with no resize handles for stamp annotations', () => {
+	it('renders a tight ink-hugging rectangular selection border with no resize handles for stamp annotations', () => {
 		const item: SheetAnnotation = {
 			id: 3,
 			uuid: 'stamp-1',
@@ -90,27 +90,30 @@ describe('SongAnnotationSelectionBox.vue', () => {
 			width: 0,
 			height: 0,
 			style: { fontSize: 40 },
-			data: { symbol: '𝆑' },
+			data: { symbol: '\uE522' }, // forte
 		}
 
 		const wrapper = mount(SongAnnotationSelectionBox, {
 			props: { item, vbHeight: 1414, uiScale: 1 },
 		})
 
-		const circle = wrapper.find('circle')
-		expect(circle.exists()).toBe(true)
-		expect(Number(circle.attributes('r'))).toBeCloseTo(19, 5) // 40 * 0.4 + 4 * 0.75
+		expect(wrapper.find('circle').exists()).toBe(false)
+		const rect = wrapper.find('rect')
+		expect(rect.exists()).toBe(true)
+		expect(Number(rect.attributes('width'))).toBeGreaterThan(10)
+		expect(Number(rect.attributes('height'))).toBeGreaterThan(10)
 		expect(wrapper.findAll('[data-resize-handle]')).toHaveLength(0)
 
 		const fingeringItem: SheetAnnotation = {
 			...item,
 			id: 4,
 			uuid: 'stamp-2',
-			data: { symbol: '\uED13', category: 'fingering' },
+			data: { symbol: '\uED11', category: 'fingering' }, // narrow fingering 1
 		}
 		const fingeringWrapper = mount(SongAnnotationSelectionBox, {
 			props: { item: fingeringItem, vbHeight: 1414, uiScale: 1 },
 		})
-		expect(Number(fingeringWrapper.find('circle').attributes('r'))).toBeCloseTo(11, 5) // 40 * 0.2 + 4 * 0.75
+		const fRect = fingeringWrapper.find('rect')
+		expect(Number(fRect.attributes('width'))).toBeLessThan(Number(rect.attributes('width')))
 	})
 })

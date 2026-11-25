@@ -7,9 +7,9 @@ import {
 	getAnnotationPath,
 	getAnnotationPressurePath,
 	getAnnotationTextLayout,
+	getStampInkBounds,
 	getStampRenderFontSize,
 	getStampRenderPosition,
-	getStampSelectionRadius,
 	hasPressurePoints,
 	isPathShape,
 	VIEWBOX_WIDTH,
@@ -47,14 +47,8 @@ const dashArray = computed(() => getAnnotationDashArray(props.item))
 const stampPos = computed(() =>
 	props.item.type === 'stamp' ? getStampRenderPosition(props.item, props.vbHeight) : null,
 )
-const stampCenterX = computed(() =>
-	Math.round((props.item.x + (props.item.width || 0) / 2) * VIEWBOX_WIDTH * 10) / 10,
-)
-const stampCenterY = computed(() =>
-	Math.round((props.item.y + (props.item.height || 0) / 2) * props.vbHeight * 10) / 10,
-)
-const stampRadius = computed(() =>
-	props.item.type === 'stamp' ? getStampSelectionRadius(props.item, props.uiScale) : 0,
+const stampBounds = computed(() =>
+	props.item.type === 'stamp' ? getStampInkBounds(props.item, props.vbHeight, props.uiScale) : null,
 )
 const stampFontSize = computed(() => getStampRenderFontSize(props.item))
 const stampSymbol = computed(() => getAnnotationDisplaySymbol(props.item))
@@ -185,12 +179,14 @@ const textLayout = computed(() =>
 		</template>
 
 		<!-- Stamp Annotation: SMuFL music glyph centered at (x, y) with fontSize -->
-		<template v-else-if="item.type === 'stamp' && stampPos">
-			<circle
+		<template v-else-if="item.type === 'stamp' && stampPos && stampBounds">
+			<rect
 				v-if="editable"
-				:cx="stampCenterX"
-				:cy="stampCenterY"
-				:r="stampRadius"
+				:x="stampBounds.x"
+				:y="stampBounds.y"
+				:width="stampBounds.width"
+				:height="stampBounds.height"
+				rx="2"
 				fill="transparent"
 				:data-ann-uuid="item.uuid"
 				data-test="annotation-hit-target" />

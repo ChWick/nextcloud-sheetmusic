@@ -21,7 +21,7 @@ import {
 	getShapeHeightHandle,
 	getStampRenderFontSize,
 	getStampRenderPosition,
-	getStampVisualRadius,
+	getStampInkBounds,
 	getViewBoxHeight,
 	isPathShape,
 	translateAnnotation,
@@ -197,8 +197,10 @@ describe('annotation utils', () => {
 			expect(MUSIC_FONT_FAMILY).toContain('Bravura')
 
 			const fingering = makeAnn({ type: 'stamp', data: { symbol: '\uED13', category: 'fingering' } })
-			expect(getStampVisualRadius(dyn)).toBe(16)
-			expect(getStampVisualRadius(fingering)).toBe(8)
+			const dynBounds = getStampInkBounds(dyn, 1000, 1)
+			const fingBounds = getStampInkBounds(fingering, 1000, 1)
+			expect(fingBounds.width).toBeLessThan(dynBounds.width)
+			expect(fingBounds.height).toBeLessThan(dynBounds.height)
 		})
 
 		it('uses unified SMuFL font size across musical symbols and fingerings', () => {

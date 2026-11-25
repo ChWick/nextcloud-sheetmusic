@@ -11,7 +11,7 @@ import {
 	generateSlurPath,
 	getShapeHeightHandle,
 } from './annotationShapes'
-import { getStampDefinition, isFingeringDigit } from './musicSymbols'
+import { getStampDefinition } from './musicSymbols'
 
 export const VIEWBOX_WIDTH = 1000
 export const DEFAULT_VIEWBOX_HEIGHT = 1414.21 // A4 portrait aspect ratio (sqrt(2) * 1000)
@@ -231,21 +231,39 @@ export function getStampRenderFontSize(item: SheetAnnotation): number {
 	return Number(item.style?.fontSize) || 40
 }
 
-/**
- * Compute a proportional visual radius (in SVG units) for stamp selection circles and hit targets.
- */
-export function getStampVisualRadius(item: SheetAnnotation): number {
-	const fontSize = getStampRenderFontSize(item)
-	return isFingeringDigit(getAnnotationDisplaySymbol(item)) ? fontSize * 0.2 : fontSize * 0.4
+export interface StampInkBounds {
+	x: number
+	y: number
+	width: number
+	height: number
 }
 
 /**
- * Shared radius for both the visible stamp selection circle and its clickable hit-target circle,
- * ensuring the selectable area matches the blue dashed circle 1-to-1 at any zoom level.
+ * Compute a tight SVG bounding rectangle around a stamp's actual glyph ink plus a small
+ * zoom-independent margin, used 1-to-1 for both the clickable/touchable hit target and
+ * the selection border.
  */
-export function getStampSelectionRadius(item: SheetAnnotation, uiScale = 1): number {
-	const scale = Math.max(0.1, uiScale)
-	return Math.max(9 * scale, getStampVisualRadius(item) + 3 * scale)
+export function getStampInkBounds(
+	item: SheetAnnotation,
+	vbHeight: number = VIEWBOX_WIDTH,
+	uiScale = 1,
+): StampInkBounds {
+	const cx = (item.x + (item.width || 0) / 2) * VIEWBOX_WIDTH
+	const cy = (item.y + (item.height || 0) / 2) * vbHeight
+	const fontSize = getStampRenderFontSize(item)
+	const def = getStampDefinition(getAnnotationDisplaySymbol(item))
+	const inkCx = def?.canvasOffset ? cx + (def.canvasOffset.ox - def.inkOffset.ox) * fontSize : cx
+	const inkCy = def?.canvasOffset ? cy + (def.canvasOffset.oy - def.inkOffset.oy) * fontSize : cy
+	const inkW = (def?.inkSize.w ?? 0.4) * fontSize
+	const inkH = (def?.inkSize.h ?? 0.4) * fontSize
+	const pad = 4 * Math.max(0.1, uiScale)
+	const round1 = (v: number) => Math.round(v * 10) / 10
+	return {
+		x: round1(inkCx - inkW / 2 - pad),
+		y: round1(inkCy - inkH / 2 - pad),
+		width: round1(inkW + pad * 2),
+		height: round1(inkH + pad * 2),
+	}
 }
 
 /**

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { SheetAnnotation } from '../../types/annotation'
 import { computed } from 'vue'
-import { getShapeHeightHandle, getStampSelectionRadius, VIEWBOX_WIDTH } from '../../utils/annotation'
+import { getShapeHeightHandle, getStampInkBounds, VIEWBOX_WIDTH } from '../../utils/annotation'
 
 const props = withDefaults(defineProps<{
 	item: SheetAnnotation
@@ -30,15 +30,20 @@ const isTwoPointShape = computed(() => {
 })
 
 const shapeHeightHandle = computed(() => getShapeHeightHandle(props.item, props.vbHeight))
+const stampBounds = computed(() =>
+	props.item.type === 'stamp' ? getStampInkBounds(props.item, props.vbHeight, scale.value) : null,
+)
 </script>
 
 <template>
 	<g class="sheetmusic-selection-box">
-		<circle
-			v-if="item.type === 'stamp'"
-			:cx="Math.round((item.x + (item.width || 0) / 2) * VIEWBOX_WIDTH * 10) / 10"
-			:cy="Math.round((item.y + (item.height || 0) / 2) * vbHeight * 10) / 10"
-			:r="getStampSelectionRadius(item, scale)"
+		<rect
+			v-if="item.type === 'stamp' && stampBounds"
+			:x="stampBounds.x"
+			:y="stampBounds.y"
+			:width="stampBounds.width"
+			:height="stampBounds.height"
+			rx="2"
 			fill="none"
 			stroke="#0082c9"
 			:stroke-width="boxStrokeWidth"
