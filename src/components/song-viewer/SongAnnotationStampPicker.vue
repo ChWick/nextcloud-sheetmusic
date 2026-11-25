@@ -5,6 +5,7 @@ import { translate as t } from '@nextcloud/l10n'
 import MusicNote from 'vue-material-design-icons/MusicNote.vue'
 import ViewportPopover from '../ViewportPopover.vue'
 import {
+	isFingeringDigit,
 	MUSIC_FONT_FAMILY,
 	MUSIC_STAMPS,
 	STAMP_CATEGORIES,
@@ -37,8 +38,8 @@ function getStampDef(sym: string) {
 	return MUSIC_STAMPS.find((s) => s.symbol === sym)
 }
 
-function pickerFontSize(fontKind?: string, base = 22): number {
-	return fontKind === 'fingering' ? Math.round(base * 1.65) : base
+function pickerFontSize(symbol: string, base = 22): number {
+	return isFingeringDigit(symbol) ? Math.round(base * 1.65) : base
 }
 
 const filteredStamps = computed(() =>
@@ -69,9 +70,9 @@ const filteredStamps = computed(() =>
 					viewBox="0 0 20 20"
 					aria-hidden="true">
 					<text
-						:x="10 + getStampDef(props.stampSymbol)!.inkOffset.ox * pickerFontSize(getStampDef(props.stampSymbol)?.fontKind, 18)"
-						:y="10 + getStampDef(props.stampSymbol)!.inkOffset.oy * pickerFontSize(getStampDef(props.stampSymbol)?.fontKind, 18)"
-						:font-size="pickerFontSize(getStampDef(props.stampSymbol)?.fontKind, 18)"
+						:x="10 + getStampDef(props.stampSymbol)!.inkOffset.ox * pickerFontSize(props.stampSymbol, 18)"
+						:y="10 + getStampDef(props.stampSymbol)!.inkOffset.oy * pickerFontSize(props.stampSymbol, 18)"
+						:font-size="pickerFontSize(props.stampSymbol, 18)"
 						text-anchor="middle"
 						dominant-baseline="alphabetic"
 						fill="currentColor"
@@ -104,9 +105,9 @@ const filteredStamps = computed(() =>
 							viewBox="0 0 20 24"
 							aria-hidden="true">
 							<text
-								:x="10 + getStampDef(sym)!.inkOffset.ox * pickerFontSize(getStampDef(sym)?.fontKind, 18)"
-								:y="12 + getStampDef(sym)!.inkOffset.oy * pickerFontSize(getStampDef(sym)?.fontKind, 18)"
-								:font-size="pickerFontSize(getStampDef(sym)?.fontKind, 18)"
+								:x="10 + getStampDef(sym)!.inkOffset.ox * pickerFontSize(sym, 18)"
+								:y="12 + getStampDef(sym)!.inkOffset.oy * pickerFontSize(sym, 18)"
+								:font-size="pickerFontSize(sym, 18)"
 								text-anchor="middle"
 								dominant-baseline="alphabetic"
 								fill="currentColor"
@@ -133,9 +134,9 @@ const filteredStamps = computed(() =>
 						viewBox="0 0 28 28"
 						aria-hidden="true">
 						<text
-							:x="14 + st.inkOffset.ox * pickerFontSize(st.fontKind, 22)"
-							:y="14 + st.inkOffset.oy * pickerFontSize(st.fontKind, 22)"
-							:font-size="pickerFontSize(st.fontKind, 22)"
+							:x="14 + st.inkOffset.ox * pickerFontSize(st.symbol, 22)"
+							:y="14 + st.inkOffset.oy * pickerFontSize(st.symbol, 22)"
+							:font-size="pickerFontSize(st.symbol, 22)"
 							text-anchor="middle"
 							dominant-baseline="alphabetic"
 							fill="currentColor"

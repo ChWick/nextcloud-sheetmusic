@@ -5,7 +5,7 @@ import { translate as t } from '@nextcloud/l10n'
 import DeleteOutline from 'vue-material-design-icons/DeleteOutline.vue'
 import DotsHorizontal from 'vue-material-design-icons/DotsHorizontal.vue'
 import Pencil from 'vue-material-design-icons/Pencil.vue'
-import { getStampDefinition, MUSIC_FONT_FAMILY } from '../../utils/musicSymbols'
+import { getStampDefinition, isFingeringDigit, MUSIC_FONT_FAMILY } from '../../utils/musicSymbols'
 
 const props = defineProps<{
 	swapState: HandwritingSwapState | null
@@ -36,7 +36,7 @@ const isOverflowActive = computed(() => {
 })
 
 function pillFontSize(symbol: string): number {
-	return getStampDefinition(symbol)?.fontKind === 'fingering' ? 30 : 18
+	return isFingeringDigit(symbol) ? 30 : 18
 }
 
 function toggleMore() {

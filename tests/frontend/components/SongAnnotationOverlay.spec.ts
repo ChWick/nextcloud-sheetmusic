@@ -137,7 +137,7 @@ describe('SongAnnotationOverlay.vue', () => {
 			width: 0.05,
 			height: 0.05,
 			style: { color: '#d32f2f', fontSize: 36 },
-			data: { symbol: '\uE52F', category: 'dynamic', fontKind: 'music' },
+			data: { symbol: '\uE52F', category: 'dynamic' },
 		},
 		{
 			id: 7,
@@ -357,7 +357,6 @@ describe('SongAnnotationOverlay.vue', () => {
 			data: {
 				symbol: '\uE52F',
 				category: 'dynamic',
-				fontKind: 'music',
 			},
 		})
 	})
@@ -758,7 +757,7 @@ describe('SongAnnotationOverlay.vue', () => {
 			width: 0,
 			height: 0,
 			style: { color: '#000000', fontSize: 40, opacity: 1 },
-			data: { symbol: '𝆑', category: 'dynamic', fontKind: 'music' },
+			data: { symbol: '\uE522', category: 'dynamic' },
 		}
 
 		const wrapper = mount(SongAnnotationOverlay, {

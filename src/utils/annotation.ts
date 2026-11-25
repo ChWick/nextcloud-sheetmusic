@@ -4,7 +4,7 @@
  */
 
 import type { NormalizedPoint, SheetAnnotation } from '../types/annotation'
-import { getStampDefinition } from './musicSymbols'
+import { getStampDefinition, isFingeringDigit } from './musicSymbols'
 
 export const VIEWBOX_WIDTH = 1000
 export const DEFAULT_VIEWBOX_HEIGHT = 1414.21 // A4 portrait aspect ratio (sqrt(2) * 1000)
@@ -213,9 +213,6 @@ export function getAnnotationFontFamily(family?: string | null): string {
 	if (family === 'monospace') {
 		return 'monospace'
 	}
-	if (family === 'Century Schoolbook') {
-		return "'Century Schoolbook', 'TeX Gyre Schola', 'Times New Roman', serif"
-	}
 	return family
 }
 
@@ -240,8 +237,7 @@ export function getStampRenderFontSize(item: SheetAnnotation): number {
  */
 export function getStampVisualRadius(item: SheetAnnotation): number {
 	const fontSize = getStampRenderFontSize(item)
-	const isFingering = getStampDefinition(getAnnotationDisplaySymbol(item))?.fontKind === 'fingering'
-	return isFingering ? fontSize * 0.2 : fontSize * 0.4
+	return isFingeringDigit(getAnnotationDisplaySymbol(item)) ? fontSize * 0.2 : fontSize * 0.4
 }
 
 /**

@@ -106,7 +106,7 @@ describe('SongAnnotationSelectionBox.vue', () => {
 			...item,
 			id: 4,
 			uuid: 'stamp-2',
-			data: { symbol: '\uED13', category: 'fingering', fontKind: 'fingering' },
+			data: { symbol: '\uED13', category: 'fingering' },
 		}
 		const fingeringWrapper = mount(SongAnnotationSelectionBox, {
 			props: { item: fingeringItem, vbHeight: 1414, uiScale: 1 },

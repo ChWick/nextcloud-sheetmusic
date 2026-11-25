@@ -1,5 +1,4 @@
 import './fonts/bravura.css'
-import './fonts/century-schoolbook.css'
 import './styles/pwa.css'
 import { createApp } from 'vue'
 import App from './App.vue'

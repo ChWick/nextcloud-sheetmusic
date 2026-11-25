@@ -143,7 +143,6 @@ export function useHandwritingInput(opts: UseHandwritingInputOptions) {
 			data: {
 				symbol: def?.symbol ?? symbol,
 				category: def?.category,
-				fontKind: def?.fontKind ?? 'music',
 			},
 		}
 	}
@@ -216,7 +215,6 @@ export function useHandwritingInput(opts: UseHandwritingInputOptions) {
 				...ann.data,
 				symbol: def?.symbol ?? symbol,
 				category: def?.category,
-				fontKind: def?.fontKind ?? 'music',
 			},
 		}
 		opts.onUpdate(ann, next)

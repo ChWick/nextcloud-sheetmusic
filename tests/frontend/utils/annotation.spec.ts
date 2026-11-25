@@ -196,15 +196,15 @@ describe('annotation utils', () => {
 			expect(getAnnotationDisplaySymbol(dyn)).toBe('\uE52F')
 			expect(MUSIC_FONT_FAMILY).toContain('Bravura')
 
-			const fingering = makeAnn({ type: 'stamp', data: { symbol: '\uED13', category: 'fingering', fontKind: 'fingering' } })
+			const fingering = makeAnn({ type: 'stamp', data: { symbol: '\uED13', category: 'fingering' } })
 			expect(getStampVisualRadius(dyn)).toBe(16)
 			expect(getStampVisualRadius(fingering)).toBe(8)
 		})
 
 		it('uses unified SMuFL font size across musical symbols and fingerings', () => {
-			const dyn = makeAnn({ type: 'stamp', style: { fontSize: 36 }, data: { symbol: '\uE522', category: 'dynamic', fontKind: 'music' } })
-			const fingering = makeAnn({ type: 'stamp', style: { fontSize: 36 }, data: { symbol: '\uED13', category: 'fingering', fontKind: 'fingering' } })
-			const defaultFingering = makeAnn({ type: 'stamp', style: {}, data: { symbol: '\uED10', category: 'fingering', fontKind: 'fingering' } })
+			const dyn = makeAnn({ type: 'stamp', style: { fontSize: 36 }, data: { symbol: '\uE522', category: 'dynamic' } })
+			const fingering = makeAnn({ type: 'stamp', style: { fontSize: 36 }, data: { symbol: '\uED13', category: 'fingering' } })
+			const defaultFingering = makeAnn({ type: 'stamp', style: {}, data: { symbol: '\uED10', category: 'fingering' } })
 
 			expect(getStampRenderFontSize(dyn)).toBe(36)
 			expect(getStampRenderFontSize(fingering)).toBe(36)
@@ -281,8 +281,9 @@ describe('annotation utils', () => {
 			expect(layout.lines).toEqual(['Allegro', 'vivace'])
 		})
 
-		it('maps Century Schoolbook font stack cleanly', () => {
-			expect(getAnnotationFontFamily('Century Schoolbook')).toContain('Century Schoolbook')
+		it('maps standard text font families cleanly', () => {
+			expect(getAnnotationFontFamily('serif')).toBe('serif')
+			expect(getAnnotationFontFamily('monospace')).toBe('monospace')
 			expect(getAnnotationFontFamily(null)).toBe('sans-serif')
 		})
 

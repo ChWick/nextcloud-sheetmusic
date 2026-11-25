@@ -188,7 +188,6 @@ export function buildAnnotationDraft(
 			data: {
 				symbol: def?.symbol ?? s.stampSymbol,
 				category: def?.category,
-				fontKind: def?.fontKind ?? 'music',
 			},
 		}
 	}

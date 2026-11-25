@@ -25,7 +25,6 @@ export type StampCategory =
 	| 'navigation'
 	| 'rhythm'
 	| 'fingering'
-export type StampFontKind = 'music' | 'fingering'
 
 export interface NormalizedPoint {
 	x: number
@@ -81,8 +80,6 @@ export interface AnnotationData {
 	symbol?: string
 	/** Semantic stamp category */
 	category?: StampCategory
-	/** Font family kind for stamps */
-	fontKind?: StampFontKind
 	/** 0-indexed target page when type === 'link' */
 	targetPage?: number
 	/** Optional display label for links */
