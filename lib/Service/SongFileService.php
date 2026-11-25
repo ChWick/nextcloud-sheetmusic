@@ -36,6 +36,7 @@ class SongFileService {
 		private LibraryMapper $libraryMapper,
 		private ?SongHistoryService $songHistoryService = null,
 		private ?SublibraryService $sublibraryService = null,
+		private ?PdfCropService $pdfCropService = null,
 	) {
 	}
 
@@ -1003,6 +1004,13 @@ class SongFileService {
 		$fileRecord->invalidateCropBoxes();
 		$fileRecord->updatedAt = time();
 		$this->internalSongFileMapper->update($fileRecord);
+		if ($ext === 'pdf' && $fileRecord->fileId > 0) {
+			$song = $this->internalSongMapper->findById($fileRecord->songId);
+			$lib = $song !== null ? $this->libraryMapper->findById($song->libraryId) : null;
+			if ($lib !== null && $lib->userId !== '') {
+				$this->pdfCropService?->enqueueCropJob($lib->userId, $fileRecord->fileId);
+			}
+		}
 	}
 
 	/**

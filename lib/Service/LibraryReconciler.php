@@ -46,6 +46,7 @@ class LibraryReconciler {
 		private LoggerInterface $logger,
 		private ?InternalEntityMapper $entityMapper = null,
 		private ?InternalSongBookmarkMapper $bookmarkMapper = null,
+		private ?PdfCropService $pdfCropService = null,
 	) {
 	}
 
@@ -188,6 +189,9 @@ class LibraryReconciler {
 			}
 			$songFile->updatedAt = $nodeMtime ?: time();
 			$this->songFileMapper->update($songFile);
+			if ($contentChanged && $ext === 'pdf') {
+				$this->pdfCropService?->enqueueCropJob($library->userId, $songFile->fileId);
+			}
 			return true;
 		}
 
@@ -274,6 +278,10 @@ class LibraryReconciler {
 		);
 
 		$this->songFileMapper->insert($songFile);
+
+		if ($songFile->type === InternalSongFile::FILE_TYPE_PDF) {
+			$this->pdfCropService?->enqueueCropJob($library->userId, $songFile->fileId);
+		}
 
 		if ($importPdfMetadata && $pdfMetadata !== null && $this->entityMapper !== null && $song->id !== null) {
 			$this->assignPdfEntitiesToSong($library->id, $song->id, $pdfMetadata, $entityCache);

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\SheetMusic\Controller;
 
 use OCA\SheetMusic\Db\LibraryData;
+use OCA\SheetMusic\Service\PdfCropService;
 use OCA\SheetMusic\Service\SongFileService;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\ApiRoute;
@@ -23,6 +24,7 @@ class SongFileController extends OCSController {
 		IRequest $request,
 		private SongFileService $songFileService,
 		private IUserSession $userSession,
+		private ?PdfCropService $pdfCropService = null,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -341,6 +343,34 @@ class SongFileController extends OCSController {
 		}
 
 		return [$fileInfo, null];
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'POST', url: '/api/files/{fileId}/crop-boxes')]
+	public function saveFileCropBoxes(int $fileId): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+		if ($this->pdfCropService === null) {
+			return new DataResponse(['message' => 'Crop service unavailable'], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+
+		$raw = $this->request->getParam('cropBoxes');
+		if (is_string($raw)) {
+			$decoded = json_decode($raw, true);
+			$raw = is_array($decoded) ? $decoded : [];
+		}
+		if (!is_array($raw)) {
+			return new DataResponse(['message' => 'Invalid cropBoxes payload'], Http::STATUS_BAD_REQUEST);
+		}
+
+		$saved = $this->pdfCropService->saveCropBoxesForFile($user, $fileId, $raw, true);
+		if ($saved === null) {
+			return new DataResponse(['message' => 'File not found or invalid crop boxes'], Http::STATUS_NOT_FOUND);
+		}
+
+		return new DataResponse(['cropBoxes' => $saved]);
 	}
 
 	/**

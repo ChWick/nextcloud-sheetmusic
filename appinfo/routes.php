@@ -107,6 +107,12 @@ return [
 			'verb' => 'POST',
 		],
 		[
+			'name' => 'SongFile#saveFileCropBoxes',
+			'url' => '/api/files/{fileId}/crop-boxes',
+			'verb' => 'POST',
+			'requirements' => ['fileId' => '\d+'],
+		],
+		[
 			'name' => 'Api#createComposer',
 			'url' => '/api/composers',
 			'verb' => 'POST',
