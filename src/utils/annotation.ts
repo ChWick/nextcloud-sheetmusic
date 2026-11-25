@@ -4,11 +4,7 @@
  */
 
 import type { NormalizedPoint, SheetAnnotation } from '../types/annotation'
-import {
-	getMusicStampFontFamily,
-	getStampDefinition,
-	normalizeMusicSymbol,
-} from './musicSymbols'
+import { getStampDefinition } from './musicSymbols'
 
 export const VIEWBOX_WIDTH = 1000
 export const DEFAULT_VIEWBOX_HEIGHT = 1414.21 // A4 portrait aspect ratio (sqrt(2) * 1000)
@@ -224,50 +220,28 @@ export function getAnnotationFontFamily(family?: string | null): string {
 }
 
 /**
- * Get the canonical Unicode display symbol for a stamp annotation.
+ * Get the SMuFL display symbol for a stamp annotation.
  */
 export function getAnnotationDisplaySymbol(item: SheetAnnotation): string {
-	const raw = item.data?.symbol || ''
-	return normalizeMusicSymbol(raw)
-}
-
-export function isNumericStamp(item: SheetAnnotation): boolean {
-	const symbol = getAnnotationDisplaySymbol(item)
-	return /^\d+$/.test(symbol.trim())
-}
-
-export function isStampItalic(_item: SheetAnnotation): boolean {
-	return false
-}
-
-export function isStampBold(item: SheetAnnotation): boolean {
-	return isNumericStamp(item)
-}
-
-export const FINGERING_FONT_SCALE = 11 / 30
-
-export function getStampFontFamily(item: SheetAnnotation): string {
-	const sym = getAnnotationDisplaySymbol(item)
-	const def = getStampDefinition(sym)
-	return getMusicStampFontFamily(sym, item.data?.fontKind ?? def?.fontKind)
+	return (item.data?.symbol || '').trim()
 }
 
 /**
  * Compute the effective SVG font-size for a stamp annotation.
- * Fingerings render in a serif text font whose digits fill ~72% of the em-square,
- * while Noto Music glyphs have large ascender/descender headroom (~35-50% visual height).
- * Scaling numeric fingerings by 11/30 (~36.7%) keeps them compact and proportionate to musical symbols.
+ * In SMuFL (Bravura), all glyphs — including fingerings (U+ED10..ED15), organ pedals,
+ * string bowings, dynamics, and notes — are engraved at unified proportional scale.
  */
 export function getStampRenderFontSize(item: SheetAnnotation): number {
-	const base = Number(item.style?.fontSize) || 40
-	if (isNumericStamp(item)) {
-		return Math.round(base * FINGERING_FONT_SCALE * 10) / 10
-	}
-	const def = getStampDefinition(getAnnotationDisplaySymbol(item))
-	if (def?.fontScale) {
-		return Math.round(base * def.fontScale * 10) / 10
-	}
-	return base
+	return Number(item.style?.fontSize) || 40
+}
+
+/**
+ * Compute a proportional visual radius (in SVG units) for selection circles and hit targets.
+ */
+export function getStampVisualRadius(item: SheetAnnotation): number {
+	const fontSize = getStampRenderFontSize(item)
+	const isFingering = getStampDefinition(getAnnotationDisplaySymbol(item))?.fontKind === 'fingering'
+	return isFingering ? fontSize * 0.2 : fontSize * 0.4
 }
 
 /**

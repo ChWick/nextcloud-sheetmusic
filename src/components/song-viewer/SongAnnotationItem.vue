@@ -6,16 +6,14 @@ import {
 	getAnnotationPath,
 	getAnnotationPressurePath,
 	getAnnotationTextLayout,
-	getStampFontFamily,
 	getStampRenderFontSize,
 	getStampRenderPosition,
+	getStampVisualRadius,
 	hasPressurePoints,
 	isPathShape,
-	isStampBold,
-	isStampItalic,
 	VIEWBOX_WIDTH,
 } from '../../utils/annotation'
-import { getStampDefinition } from '../../utils/musicSymbols'
+import { MUSIC_FONT_FAMILY } from '../../utils/musicSymbols'
 
 defineProps<{
 	item: SheetAnnotation
@@ -148,40 +146,25 @@ const emit = defineEmits<{
 				data-test="annotation-hit-target" />
 		</template>
 
-		<!-- Stamp Annotation: Unicode music glyph centered at (x, y) with fontSize -->
+		<!-- Stamp Annotation: SMuFL music glyph centered at (x, y) with fontSize -->
 		<template v-else-if="item.type === 'stamp'">
 			<circle
 				v-if="editable"
 				:cx="Math.round((item.x + (item.width || 0) / 2) * VIEWBOX_WIDTH * 10) / 10"
 				:cy="Math.round((item.y + (item.height || 0) / 2) * vbHeight * 10) / 10"
-				:r="Math.max(10, getStampRenderFontSize(item) * 0.5)"
+				:r="Math.max(10, getStampVisualRadius(item) * 1.25)"
 				fill="transparent"
 				:data-ann-uuid="item.uuid"
 				data-test="annotation-hit-target" />
-			<path
-				v-if="getStampDefinition(getAnnotationDisplaySymbol(item))?.svgPath"
-				:d="getStampDefinition(getAnnotationDisplaySymbol(item))!.svgPath"
-				:transform="`translate(${getStampRenderPosition(item, vbHeight).x} ${getStampRenderPosition(item, vbHeight).y}) scale(${getStampRenderFontSize(item)})`"
-				fill="none"
-				:stroke="item.style?.color || '#000000'"
-				stroke-width="0.11"
-				stroke-linecap="round"
-				stroke-linejoin="round"
-				:opacity="item.style?.opacity ?? 1.0"
-				:data-ann-uuid="item.uuid"
-				data-test="annotation-stamp" />
 			<text
-				v-else
 				:x="getStampRenderPosition(item, vbHeight).x"
 				:y="getStampRenderPosition(item, vbHeight).y"
 				:fill="item.style?.color || '#000000'"
 				:opacity="item.style?.opacity ?? 1.0"
 				:font-size="getStampRenderFontSize(item)"
-				:font-style="isStampItalic(item) ? 'italic' : undefined"
-				:font-weight="isStampBold(item) ? 'bold' : undefined"
 				text-anchor="middle"
 				:dominant-baseline="getStampRenderPosition(item, vbHeight).dominantBaseline"
-				:font-family="getStampFontFamily(item)"
+				:font-family="MUSIC_FONT_FAMILY"
 				:data-ann-uuid="item.uuid"
 				data-test="annotation-stamp">
 				{{ getAnnotationDisplaySymbol(item) }}

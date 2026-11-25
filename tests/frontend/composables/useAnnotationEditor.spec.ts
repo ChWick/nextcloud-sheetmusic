@@ -163,15 +163,15 @@ describe('useAnnotationEditor', () => {
 		const editor = useAnnotationEditor(annotations, () => ({ songId: 7, fileId: 42 }))
 		editor.enterEditMode()
 
-		// Fingering shortcut '3'
+		// Fingering shortcut '3' -> SMuFL U+ED13
 		window.dispatchEvent(new KeyboardEvent('keydown', { key: '3' }))
 		expect(editor.activeTool.value).toBe('stamp')
-		expect(editor.toolStyle.value.stampSymbol).toBe('3')
+		expect(editor.toolStyle.value.stampSymbol).toBe('\uED13')
 
-		// Accidental shortcut 'b' -> flat
+		// Accidental shortcut 'b' -> SMuFL flat U+E260
 		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'b' }))
 		expect(editor.activeTool.value).toBe('stamp')
-		expect(editor.toolStyle.value.stampSymbol).toBe('♭')
+		expect(editor.toolStyle.value.stampSymbol).toBe('\uE260')
 
 		// Tool shortcut 'v' -> select
 		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'v' }))
@@ -259,7 +259,7 @@ describe('useAnnotationEditor', () => {
 				width: 0,
 				height: 0,
 				style: { color: '#43a047', fontSize: 64, opacity: 0.8 },
-				data: { symbol: '𝆑𝆑' },
+				data: { symbol: '\uE52F' },
 			},
 			{
 				id: 21,
@@ -284,7 +284,7 @@ describe('useAnnotationEditor', () => {
 		editor.selectAnnotation('green-stamp')
 		window.dispatchEvent(new KeyboardEvent('keydown', { key: '1' }))
 		expect(editor.activeTool.value).toBe('stamp')
-		expect(editor.toolStyle.value.stampSymbol).toBe('1')
+		expect(editor.toolStyle.value.stampSymbol).toBe('\uED11')
 		expect(editor.toolStyle.value.color).toBe('#43a047')
 		expect(editor.toolStyle.value.stampSize).toBe(64)
 		expect(editor.toolStyle.value.opacity).toBe(0.8)

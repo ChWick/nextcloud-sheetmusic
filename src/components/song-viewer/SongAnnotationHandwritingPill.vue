@@ -5,7 +5,7 @@ import { translate as t } from '@nextcloud/l10n'
 import DeleteOutline from 'vue-material-design-icons/DeleteOutline.vue'
 import DotsHorizontal from 'vue-material-design-icons/DotsHorizontal.vue'
 import Pencil from 'vue-material-design-icons/Pencil.vue'
-import { getMusicStampFontFamily, getStampDefinition } from '../../utils/musicSymbols'
+import { getStampDefinition, MUSIC_FONT_FAMILY } from '../../utils/musicSymbols'
 
 const props = defineProps<{
 	swapState: HandwritingSwapState | null
@@ -34,6 +34,10 @@ const isOverflowActive = computed(() => {
 	const active = props.swapState?.activeSymbol
 	return Boolean(active && overflowCandidates.value.some((c) => c.symbol === active))
 })
+
+function pillFontSize(symbol: string): number {
+	return getStampDefinition(symbol)?.fontKind === 'fingering' ? 30 : 18
+}
 
 function toggleMore() {
 	showMore.value = !showMore.value
@@ -77,40 +81,26 @@ const positionStyle = computed(() => {
 				:data-test="`handwriting-candidate-${cand.symbol}`"
 				@click="selectSymbol(cand.symbol)">
 				<svg
-					v-if="getStampDefinition(cand.symbol)?.svgPath"
-					width="20"
-					height="20"
-					viewBox="-0.6 -0.6 1.2 1.2"
-					aria-hidden="true">
-					<path
-						:d="getStampDefinition(cand.symbol)!.svgPath"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="0.12"
-						stroke-linecap="round"
-						stroke-linejoin="round" />
-				</svg>
-				<svg
-					v-else-if="getStampDefinition(cand.symbol)?.inkOffset"
-					width="22"
-					height="22"
-					viewBox="0 0 22 22"
+					v-if="getStampDefinition(cand.symbol)"
+					width="24"
+					height="24"
+					viewBox="0 0 24 24"
 					aria-hidden="true">
 					<text
-						:x="11 + getStampDefinition(cand.symbol)!.inkOffset!.ox * 16"
-						:y="11 + getStampDefinition(cand.symbol)!.inkOffset!.oy * 16"
-						font-size="16"
+						:x="12 + getStampDefinition(cand.symbol)!.inkOffset.ox * pillFontSize(cand.symbol)"
+						:y="12 + getStampDefinition(cand.symbol)!.inkOffset.oy * pillFontSize(cand.symbol)"
+						:font-size="pillFontSize(cand.symbol)"
 						text-anchor="middle"
 						dominant-baseline="alphabetic"
 						fill="currentColor"
-						:font-family="getMusicStampFontFamily(cand.symbol, getStampDefinition(cand.symbol)?.fontKind)">
+						:font-family="MUSIC_FONT_FAMILY">
 						{{ cand.symbol }}
 					</text>
 				</svg>
 				<span
 					v-else
 					:class="$style.fingeringGlyph"
-					:style="{ fontFamily: getMusicStampFontFamily(cand.symbol, getStampDefinition(cand.symbol)?.fontKind) }">
+					:style="{ fontFamily: MUSIC_FONT_FAMILY }">
 					{{ cand.symbol }}
 				</span>
 			</button>
@@ -164,40 +154,26 @@ const positionStyle = computed(() => {
 				:data-test="`handwriting-candidate-${cand.symbol}`"
 				@click="selectSymbol(cand.symbol)">
 				<svg
-					v-if="getStampDefinition(cand.symbol)?.svgPath"
-					width="20"
-					height="20"
-					viewBox="-0.6 -0.6 1.2 1.2"
-					aria-hidden="true">
-					<path
-						:d="getStampDefinition(cand.symbol)!.svgPath"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="0.12"
-						stroke-linecap="round"
-						stroke-linejoin="round" />
-				</svg>
-				<svg
-					v-else-if="getStampDefinition(cand.symbol)?.inkOffset"
-					width="22"
-					height="22"
-					viewBox="0 0 22 22"
+					v-if="getStampDefinition(cand.symbol)"
+					width="24"
+					height="24"
+					viewBox="0 0 24 24"
 					aria-hidden="true">
 					<text
-						:x="11 + getStampDefinition(cand.symbol)!.inkOffset!.ox * 16"
-						:y="11 + getStampDefinition(cand.symbol)!.inkOffset!.oy * 16"
-						font-size="16"
+						:x="12 + getStampDefinition(cand.symbol)!.inkOffset.ox * pillFontSize(cand.symbol)"
+						:y="12 + getStampDefinition(cand.symbol)!.inkOffset.oy * pillFontSize(cand.symbol)"
+						:font-size="pillFontSize(cand.symbol)"
 						text-anchor="middle"
 						dominant-baseline="alphabetic"
 						fill="currentColor"
-						:font-family="getMusicStampFontFamily(cand.symbol, getStampDefinition(cand.symbol)?.fontKind)">
+						:font-family="MUSIC_FONT_FAMILY">
 						{{ cand.symbol }}
 					</text>
 				</svg>
 				<span
 					v-else
 					:class="$style.fingeringGlyph"
-					:style="{ fontFamily: getMusicStampFontFamily(cand.symbol, getStampDefinition(cand.symbol)?.fontKind) }">
+					:style="{ fontFamily: MUSIC_FONT_FAMILY }">
 					{{ cand.symbol }}
 				</span>
 			</button>

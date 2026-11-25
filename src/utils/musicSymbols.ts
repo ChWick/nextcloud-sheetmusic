@@ -6,7 +6,7 @@
 import type { StampCategory, StampFontKind } from '../types/annotation'
 
 export interface MusicStampDefinition {
-	/** Canonical Unicode glyph string */
+	/** Canonical SMuFL (Standard Music Font Layout) codepoint string */
 	symbol: string
 	/** Human-readable name */
 	label: string
@@ -14,38 +14,21 @@ export interface MusicStampDefinition {
 	category: StampCategory
 	/** Font rendering kind */
 	fontKind: StampFontKind
-	/** ASCII / legacy aliases that map to this canonical Unicode symbol */
-	aliases?: string[]
-	/** Default normalized width relative to page width */
-	defaultWidth?: number
-	/** Default normalized height relative to page width */
-	defaultHeight?: number
 	/** Optional keyboard shortcut hint */
 	shortcut?: string
 	/**
-	 * Offset in em units (for Noto Music with text-anchor="middle", dominant-baseline="alphabetic")
+	 * Offset in em units (for Bravura with text-anchor="middle", dominant-baseline="alphabetic")
 	 * to shift the glyph's ink bounding-box center onto the target (cx, cy).
 	 */
-	inkOffset?: { ox: number; oy: number }
+	inkOffset: { ox: number; oy: number }
 	/**
 	 * Optional override offset in em units for canvas placement (e.g. centering a note's
 	 * notehead on (cx, cy) instead of the stem+head midpoint used in picker thumbnails).
 	 */
 	canvasOffset?: { ox: number; oy: number }
-	/**
-	 * Optional font-size multiplier when a Unicode glyph's native em-height differs from
-	 * the U+1D1xx Musical Symbols block (e.g. U+266B beamed eighth notes).
-	 */
-	fontScale?: number
-	/**
-	 * Optional vector SVG path in normalized [-0.5..0.5] em coordinates (centered at 0,0)
-	 * for symbols not present in bundled Noto Music / TeX Gyre Schola (e.g. organ pedaling ∪ ∩ ∨ ∧).
-	 */
-	svgPath?: string
 }
 
-export const MUSIC_FONT_FAMILY = "'Noto Music', 'Segoe UI Symbol', 'Apple Symbols', sans-serif"
-export const FINGERING_FONT_FAMILY = "'Century Schoolbook', 'TeX Gyre Schola', 'Baskerville', 'Times New Roman', serif"
+export const MUSIC_FONT_FAMILY = "'Bravura', serif"
 
 export const STAMP_CATEGORIES: Array<{ id: StampCategory; label: string }> = [
 	{ id: 'dynamic', label: 'Dynamics' },
@@ -58,123 +41,94 @@ export const STAMP_CATEGORIES: Array<{ id: StampCategory; label: string }> = [
 ]
 
 /**
- * Canonical Unicode music stamps backed by Noto Music (U+2669..U+266F, U+1D100..U+1D1FF)
- * and Century Schoolbook / TeX Gyre Schola for fingerings.
+ * Canonical SMuFL (Standard Music Font Layout) music stamps rendered with a single
+ * bundled engraving font (Bravura, SIL OFL). All offsets are computed directly from
+ * Bravura's OTF glyph bounding boxes.
  */
 export const MUSIC_STAMPS: MusicStampDefinition[] = [
-	// Dynamics
-	{ symbol: '𝆏𝆏𝆏', label: 'ppp (pianississimo)', category: 'dynamic', fontKind: 'music', aliases: ['ppp'], inkOffset: { ox: 0.056, oy: 0.414 } },
-	{ symbol: '𝆏𝆏', label: 'pp (pianissimo)', category: 'dynamic', fontKind: 'music', aliases: ['pp', 'π', '\\pi'], inkOffset: { ox: 0.056, oy: 0.414 } },
-	{ symbol: '𝆏', label: 'p (piano)', category: 'dynamic', fontKind: 'music', aliases: ['p'], shortcut: 'Shift+P', inkOffset: { ox: 0.056, oy: 0.414 } },
-	{ symbol: '𝆐𝆏', label: 'mp (mezzo-piano)', category: 'dynamic', fontKind: 'music', aliases: ['mp'], inkOffset: { ox: -0.02, oy: 0.414 } },
-	{ symbol: '𝆐𝆑', label: 'mf (mezzo-forte)', category: 'dynamic', fontKind: 'music', aliases: ['mf'], inkOffset: { ox: -0.031, oy: 0.489 } },
-	{ symbol: '𝆑', label: 'f (forte)', category: 'dynamic', fontKind: 'music', aliases: ['f'], shortcut: 'F', inkOffset: { ox: 0.023, oy: 0.489 } },
-	{ symbol: '𝆑𝆑', label: 'ff (fortissimo)', category: 'dynamic', fontKind: 'music', aliases: ['ff'], inkOffset: { ox: 0.023, oy: 0.489 } },
-	{ symbol: '𝆑𝆑𝆑', label: 'fff (fortississimo)', category: 'dynamic', fontKind: 'music', aliases: ['fff'], inkOffset: { ox: 0.023, oy: 0.489 } },
-	{ symbol: '𝆑𝆏', label: 'fp (forte-piano)', category: 'dynamic', fontKind: 'music', aliases: ['fp'], inkOffset: { ox: 0.023, oy: 0.489 } },
-	{ symbol: '𝆍𝆑', label: 'sf (sforzando)', category: 'dynamic', fontKind: 'music', aliases: ['sf'], inkOffset: { ox: 0, oy: 0.489 } },
-	{ symbol: '𝆍𝆑𝆎', label: 'sfz (sforzato)', category: 'dynamic', fontKind: 'music', aliases: ['sfz'], inkOffset: { ox: 0, oy: 0.489 } },
-	{ symbol: '𝆌𝆑𝆎', label: 'rfz (rinforzando)', category: 'dynamic', fontKind: 'music', aliases: ['rfz'], inkOffset: { ox: 0, oy: 0.489 } },
+	// Dynamics (SMuFL U+E520..U+E54F)
+	{ symbol: '\uE52A', label: 'ppp (pianississimo)', category: 'dynamic', fontKind: 'music', inkOffset: { ox: 0.045, oy: 0.066 } },
+	{ symbol: '\uE52B', label: 'pp (pianissimo)', category: 'dynamic', fontKind: 'music', inkOffset: { ox: 0.041, oy: 0.066 } },
+	{ symbol: '\uE520', label: 'p (piano)', category: 'dynamic', fontKind: 'music', shortcut: 'Shift+P', inkOffset: { ox: 0.044, oy: 0.066 } },
+	{ symbol: '\uE52C', label: 'mp (mezzo-piano)', category: 'dynamic', fontKind: 'music', inkOffset: { ox: 0.011, oy: 0.066 } },
+	{ symbol: '\uE52D', label: 'mf (mezzo-forte)', category: 'dynamic', fontKind: 'music', inkOffset: { ox: -0.001, oy: 0.133 } },
+	{ symbol: '\uE522', label: 'f (forte)', category: 'dynamic', fontKind: 'music', shortcut: 'F', inkOffset: { ox: 0.07, oy: 0.146 } },
+	{ symbol: '\uE52F', label: 'ff (fortissimo)', category: 'dynamic', fontKind: 'music', inkOffset: { ox: 0.067, oy: 0.146 } },
+	{ symbol: '\uE530', label: 'fff (fortississimo)', category: 'dynamic', fontKind: 'music', inkOffset: { ox: 0.078, oy: 0.146 } },
+	{ symbol: '\uE534', label: 'fp (forte-piano)', category: 'dynamic', fontKind: 'music', inkOffset: { ox: 0.07, oy: 0.146 } },
+	{ symbol: '\uE536', label: 'sf (sforzando)', category: 'dynamic', fontKind: 'music', inkOffset: { ox: 0, oy: 0.146 } },
+	{ symbol: '\uE539', label: 'sfz (sforzato)', category: 'dynamic', fontKind: 'music', inkOffset: { ox: -0.001, oy: 0.146 } },
+	{ symbol: '\uE53D', label: 'rfz (rinforzando)', category: 'dynamic', fontKind: 'music', inkOffset: { ox: 0.01, oy: 0.146 } },
 
-	// Accidentals
-	{ symbol: '♯', label: 'Sharp', category: 'accidental', fontKind: 'music', aliases: ['#', 'sharp'], shortcut: '#', inkOffset: { ox: 0, oy: 0.131 } },
-	{ symbol: '♭', label: 'Flat', category: 'accidental', fontKind: 'music', aliases: ['b', 'flat'], shortcut: 'B', inkOffset: { ox: 0, oy: 0.28 } },
-	{ symbol: '♮', label: 'Natural', category: 'accidental', fontKind: 'music', aliases: ['n', 'natural'], shortcut: 'N', inkOffset: { ox: 0, oy: 0.133 } },
-	{ symbol: '𝄪', label: 'Double sharp', category: 'accidental', fontKind: 'music', aliases: ['##', 'x', 'X'], inkOffset: { ox: 0, oy: 0.131 } },
-	{ symbol: '𝄫', label: 'Double flat', category: 'accidental', fontKind: 'music', aliases: ['bb', 'BB', '♭♭'], inkOffset: { ox: 0, oy: 0.28 } },
+	// Accidentals (SMuFL U+E260..U+E264)
+	{ symbol: '\uE262', label: 'Sharp', category: 'accidental', fontKind: 'music', shortcut: '#', inkOffset: { ox: 0, oy: 0.001 } },
+	{ symbol: '\uE260', label: 'Flat', category: 'accidental', fontKind: 'music', shortcut: 'B', inkOffset: { ox: 0, oy: 0.132 } },
+	{ symbol: '\uE261', label: 'Natural', category: 'accidental', fontKind: 'music', shortcut: 'N', inkOffset: { ox: 0, oy: 0.003 } },
+	{ symbol: '\uE263', label: 'Double sharp', category: 'accidental', fontKind: 'music', inkOffset: { ox: 0.002, oy: 0.001 } },
+	{ symbol: '\uE264', label: 'Double flat', category: 'accidental', fontKind: 'music', inkOffset: { ox: 0.001, oy: 0.131 } },
 
-	// Ornaments & Fermatas
-	{ symbol: '𝄐', label: 'Fermata (above)', category: 'ornament', fontKind: 'music', aliases: ['fermata'], inkOffset: { ox: 0, oy: 0.824 } },
-	{ symbol: '𝄑', label: 'Fermata (below)', category: 'ornament', fontKind: 'music', inkOffset: { ox: 0, oy: -0.177 } },
-	{ symbol: '𝆖', label: 'Trill (tr)', category: 'ornament', fontKind: 'music', aliases: ['tr', 'm'], inkOffset: { ox: 0, oy: 0.552 } },
-	{ symbol: '𝆗', label: 'Turn', category: 'ornament', fontKind: 'music', aliases: ['turn'], inkOffset: { ox: 0, oy: 0.499 } },
-	{ symbol: '𝆘', label: 'Inverted turn', category: 'ornament', fontKind: 'music', inkOffset: { ox: 0, oy: 0.501 } },
-	{ symbol: '𝆚', label: 'Mordent', category: 'ornament', fontKind: 'music', aliases: ['mordent'], inkOffset: { ox: 0, oy: 0.492 } },
-	{ symbol: '𝆛', label: 'Inverted mordent', category: 'ornament', fontKind: 'music', inkOffset: { ox: 0.002, oy: 0.627 } },
-	{ symbol: '𝄒', label: 'Breath mark', category: 'ornament', fontKind: 'music', aliases: ['breath'], inkOffset: { ox: 0, oy: 0.85 } },
-	{ symbol: '𝄓', label: 'Caesura', category: 'ornament', fontKind: 'music', aliases: ['caesura'], inkOffset: { ox: 0, oy: 0.5 } },
+	// Ornaments & Fermatas (SMuFL)
+	{ symbol: '\uE4C0', label: 'Fermata (above)', category: 'ornament', fontKind: 'music', inkOffset: { ox: -0.002, oy: 0.163 } },
+	{ symbol: '\uE4C1', label: 'Fermata (below)', category: 'ornament', fontKind: 'music', inkOffset: { ox: -0.002, oy: -0.166 } },
+	{ symbol: '\uE566', label: 'Trill (tr)', category: 'ornament', fontKind: 'music', inkOffset: { ox: 0, oy: 0.19 } },
+	{ symbol: '\uE567', label: 'Turn', category: 'ornament', fontKind: 'music', inkOffset: { ox: 0, oy: 0.109 } },
+	{ symbol: '\uE568', label: 'Inverted turn', category: 'ornament', fontKind: 'music', inkOffset: { ox: 0.002, oy: 0.109 } },
+	{ symbol: '\uE56C', label: 'Mordent', category: 'ornament', fontKind: 'music', inkOffset: { ox: 0.003, oy: 0.122 } },
+	{ symbol: '\uE56D', label: 'Inverted mordent', category: 'ornament', fontKind: 'music', inkOffset: { ox: -0.001, oy: 0.123 } },
+	{ symbol: '\uE4CE', label: 'Breath mark', category: 'ornament', fontKind: 'music', inkOffset: { ox: 0, oy: 0.127 } },
+	{ symbol: '\uE4D1', label: 'Caesura', category: 'ornament', fontKind: 'music', inkOffset: { ox: 0.001, oy: 0.266 } },
 
-	// Articulations (Noto Music combining glyphs have advanceWidth=0 and negative Y; inkOffset centers them)
-	{ symbol: '𝅻', label: 'Accent', category: 'articulation', fontKind: 'music', inkOffset: { ox: -0.258, oy: -0.146 } },
-	{ symbol: '𝅼', label: 'Staccato', category: 'articulation', fontKind: 'music', inkOffset: { ox: -0.097, oy: -0.067 } },
-	{ symbol: '𝅽', label: 'Tenuto', category: 'articulation', fontKind: 'music', inkOffset: { ox: -0.199, oy: -0.039 } },
-	{ symbol: '𝅾', label: 'Staccatissimo', category: 'articulation', fontKind: 'music', inkOffset: { ox: -0.101, oy: -0.104 } },
-	{ symbol: '𝅿', label: 'Marcato', category: 'articulation', fontKind: 'music', inkOffset: { ox: -0.206, oy: -0.158 } },
+	// Articulations (SMuFL U+E4A0..U+E4AC)
+	{ symbol: '\uE4A0', label: 'Accent', category: 'articulation', fontKind: 'music', inkOffset: { ox: 0, oy: 0.123 } },
+	{ symbol: '\uE4A2', label: 'Staccato', category: 'articulation', fontKind: 'music', inkOffset: { ox: 0, oy: 0.042 } },
+	{ symbol: '\uE4A4', label: 'Tenuto', category: 'articulation', fontKind: 'music', inkOffset: { ox: 0.001, oy: 0.024 } },
+	{ symbol: '\uE4A6', label: 'Staccatissimo', category: 'articulation', fontKind: 'music', inkOffset: { ox: 0.001, oy: 0.145 } },
+	{ symbol: '\uE4AC', label: 'Marcato', category: 'articulation', fontKind: 'music', inkOffset: { ox: 0.001, oy: 0.126 } },
 
-	// Navigation & Pedal
-	{ symbol: '𝄋', label: 'Segno', category: 'navigation', fontKind: 'music', aliases: ['segno'], inkOffset: { ox: 0, oy: 0.501 } },
-	{ symbol: '𝄌', label: 'Coda', category: 'navigation', fontKind: 'music', aliases: ['coda'], inkOffset: { ox: 0, oy: 0.5 } },
-	{ symbol: '𝄉', label: 'Dal Segno (D.S.)', category: 'navigation', fontKind: 'music', aliases: ['ds', 'D.S.'], inkOffset: { ox: 0, oy: 0.502 } },
-	{ symbol: '𝄊', label: 'Da Capo (D.C.)', category: 'navigation', fontKind: 'music', aliases: ['dc', 'D.C.'], inkOffset: { ox: 0, oy: 0.504 } },
-	{ symbol: '𝄆', label: 'Repeat start', category: 'navigation', fontKind: 'music', inkOffset: { ox: 0, oy: 0.5 } },
-	{ symbol: '𝄇', label: 'Repeat end', category: 'navigation', fontKind: 'music', inkOffset: { ox: 0, oy: 0.5 } },
-	{ symbol: '𝆮', label: 'Pedal (Ped.)', category: 'navigation', fontKind: 'music', aliases: ['ped', 'Ped.'], inkOffset: { ox: 0, oy: 0.5 } },
-	{ symbol: '𝆯', label: 'Pedal up (*)', category: 'navigation', fontKind: 'music', aliases: ['pedup'], inkOffset: { ox: 0, oy: 0.499 } },
+	// Navigation & Pedal (SMuFL)
+	{ symbol: '\uE047', label: 'Segno', category: 'navigation', fontKind: 'music', inkOffset: { ox: 0.002, oy: 0.366 } },
+	{ symbol: '\uE048', label: 'Coda', category: 'navigation', fontKind: 'music', inkOffset: { ox: 0.002, oy: 0.37 } },
+	{ symbol: '\uE045', label: 'Dal Segno (D.S.)', category: 'navigation', fontKind: 'music', inkOffset: { ox: -0.005, oy: 0.216 } },
+	{ symbol: '\uE046', label: 'Da Capo (D.C.)', category: 'navigation', fontKind: 'music', inkOffset: { ox: -0.005, oy: 0.216 } },
+	{ symbol: '\uE040', label: 'Repeat start', category: 'navigation', fontKind: 'music', inkOffset: { ox: 0.001, oy: 0.5 } },
+	{ symbol: '\uE041', label: 'Repeat end', category: 'navigation', fontKind: 'music', inkOffset: { ox: -0.001, oy: 0.5 } },
+	{ symbol: '\uE650', label: 'Pedal (Ped.)', category: 'navigation', fontKind: 'music', inkOffset: { ox: 0, oy: 0.274 } },
+	{ symbol: '\uE655', label: 'Pedal up (*)', category: 'navigation', fontKind: 'music', inkOffset: { ox: 0, oy: 0.225 } },
 
-	// Fingerings (Century Schoolbook), Organ Pedaling (Toe / Heel), & String Marks
-	{ symbol: '0', label: 'Fingering 0', category: 'fingering', fontKind: 'fingering', shortcut: '0' },
-	{ symbol: '1', label: 'Fingering 1', category: 'fingering', fontKind: 'fingering', shortcut: '1' },
-	{ symbol: '2', label: 'Fingering 2', category: 'fingering', fontKind: 'fingering', shortcut: '2' },
-	{ symbol: '3', label: 'Fingering 3', category: 'fingering', fontKind: 'fingering', shortcut: '3' },
-	{ symbol: '4', label: 'Fingering 4', category: 'fingering', fontKind: 'fingering', shortcut: '4' },
-	{ symbol: '5', label: 'Fingering 5', category: 'fingering', fontKind: 'fingering', shortcut: '5' },
-	{ symbol: '∪', label: 'Organ heel (U)', category: 'fingering', fontKind: 'text', fontScale: 0.55, svgPath: 'M -0.32 -0.34 L -0.32 0.04 A 0.32 0.32 0 0 0 0.32 0.04 L 0.32 -0.34', aliases: ['U', 'u', 'heel'] },
-	{ symbol: '∧', label: 'Organ toe (∧)', category: 'fingering', fontKind: 'text', fontScale: 0.55, svgPath: 'M -0.3 0.34 L 0 -0.34 L 0.3 0.34', aliases: ['^', 'toe'] },
-	{ symbol: '𝆪', label: 'Down bow', category: 'fingering', fontKind: 'music', aliases: ['downbow'], inkOffset: { ox: -0.169, oy: 0.884 } },
-	{ symbol: '𝆫', label: 'Up bow', category: 'fingering', fontKind: 'music', aliases: ['upbow'], inkOffset: { ox: -0.128, oy: 0.865 } },
-	{ symbol: '𝆬', label: 'Harmonic / Open string', category: 'fingering', fontKind: 'music', aliases: ['harmonic'], inkOffset: { ox: -0.114, oy: 0.88 } },
-	{ symbol: '𝆭', label: 'Snap pizzicato', category: 'fingering', fontKind: 'music', aliases: ['snap', 'bartok'], inkOffset: { ox: -0.171, oy: 0.999 } },
+	// Fingerings (SMuFL U+ED10..U+ED15), Organ Pedaling (U+E661/E664), & String Marks (U+E610..E631)
+	{ symbol: '\uED10', label: 'Fingering 0', category: 'fingering', fontKind: 'fingering', shortcut: '0', inkOffset: { ox: 0, oy: 0.125 } },
+	{ symbol: '\uED11', label: 'Fingering 1', category: 'fingering', fontKind: 'fingering', shortcut: '1', inkOffset: { ox: 0, oy: 0.127 } },
+	{ symbol: '\uED12', label: 'Fingering 2', category: 'fingering', fontKind: 'fingering', shortcut: '2', inkOffset: { ox: 0, oy: 0.125 } },
+	{ symbol: '\uED13', label: 'Fingering 3', category: 'fingering', fontKind: 'fingering', shortcut: '3', inkOffset: { ox: 0, oy: 0.126 } },
+	{ symbol: '\uED14', label: 'Fingering 4', category: 'fingering', fontKind: 'fingering', shortcut: '4', inkOffset: { ox: 0, oy: 0.127 } },
+	{ symbol: '\uED15', label: 'Fingering 5', category: 'fingering', fontKind: 'fingering', shortcut: '5', inkOffset: { ox: 0, oy: 0.129 } },
+	{ symbol: '\uE661', label: 'Organ heel (U)', category: 'fingering', fontKind: 'music', inkOffset: { ox: 0, oy: 0.266 } },
+	{ symbol: '\uE664', label: 'Organ toe (∧)', category: 'fingering', fontKind: 'music', inkOffset: { ox: 0, oy: 0.266 } },
+	{ symbol: '\uE610', label: 'Down bow', category: 'fingering', fontKind: 'music', inkOffset: { ox: 0, oy: 0.159 } },
+	{ symbol: '\uE612', label: 'Up bow', category: 'fingering', fontKind: 'music', inkOffset: { ox: 0, oy: 0.248 } },
+	{ symbol: '\uE614', label: 'Harmonic / Open string', category: 'fingering', fontKind: 'music', inkOffset: { ox: 0, oy: 0.1 } },
+	{ symbol: '\uE631', label: 'Snap pizzicato', category: 'fingering', fontKind: 'music', inkOffset: { ox: 0, oy: 0.15 } },
 
-	// Rhythm (Notes & Rests — U+1D15D..U+1D161 share identical notehead metrics in Noto Music)
-	{ symbol: '𝅝', label: 'Whole note', category: 'rhythm', fontKind: 'music', aliases: ['w'], inkOffset: { ox: 0, oy: 0.134 } },
-	{ symbol: '𝅗𝅥', label: 'Half note', category: 'rhythm', fontKind: 'music', aliases: ['h'], inkOffset: { ox: 0, oy: 0.504 }, canvasOffset: { ox: 0, oy: 0.134 } },
-	{ symbol: '𝅘𝅥', label: 'Quarter note', category: 'rhythm', fontKind: 'music', aliases: ['q', '♩'], inkOffset: { ox: 0, oy: 0.51 }, canvasOffset: { ox: 0, oy: 0.14 } },
-	{ symbol: '𝅘𝅥𝅮', label: 'Eighth note', category: 'rhythm', fontKind: 'music', aliases: ['e', '♪'], inkOffset: { ox: 0, oy: 0.51 }, canvasOffset: { ox: 0.125, oy: 0.14 } },
-	{ symbol: '♫', label: 'Beamed eighth notes', category: 'rhythm', fontKind: 'music', aliases: ['ee'], fontScale: 1.7, inkOffset: { ox: 0, oy: 0.273 }, canvasOffset: { ox: 0, oy: 0.08 } },
-	{ symbol: '𝅘𝅥𝅯', label: 'Sixteenth note', category: 'rhythm', fontKind: 'music', aliases: ['s'], inkOffset: { ox: 0, oy: 0.51 }, canvasOffset: { ox: 0.129, oy: 0.14 } },
-	{ symbol: '𝄻', label: 'Whole rest', category: 'rhythm', fontKind: 'music', inkOffset: { ox: 0, oy: 0.445 } },
-	{ symbol: '𝄼', label: 'Half rest', category: 'rhythm', fontKind: 'music', inkOffset: { ox: 0, oy: 0.311 } },
-	{ symbol: '𝄽', label: 'Quarter rest', category: 'rhythm', fontKind: 'music', inkOffset: { ox: 0, oy: 0.501 } },
-	{ symbol: '𝄾', label: 'Eighth rest', category: 'rhythm', fontKind: 'music', inkOffset: { ox: 0, oy: 0.5 } },
-	{ symbol: '𝄿', label: 'Sixteenth rest', category: 'rhythm', fontKind: 'music', inkOffset: { ox: 0, oy: 0.5 } },
+	// Rhythm (Notes & Rests — SMuFL U+E1D2..E1D9, U+E4E3..E4E7; noteheads sit on baseline y=0)
+	{ symbol: '\uE1D2', label: 'Whole note', category: 'rhythm', fontKind: 'music', inkOffset: { ox: 0, oy: -0.001 }, canvasOffset: { ox: 0, oy: 0 } },
+	{ symbol: '\uE1D3', label: 'Half note', category: 'rhythm', fontKind: 'music', inkOffset: { ox: 0, oy: 0.365 }, canvasOffset: { ox: 0, oy: 0 } },
+	{ symbol: '\uE1D5', label: 'Quarter note', category: 'rhythm', fontKind: 'music', inkOffset: { ox: 0, oy: 0.367 }, canvasOffset: { ox: 0, oy: 0 } },
+	{ symbol: '\uE1D7', label: 'Eighth note', category: 'rhythm', fontKind: 'music', inkOffset: { ox: 0, oy: 0.367 }, canvasOffset: { ox: 0.117, oy: 0 } },
+	{ symbol: '\uE1D9', label: 'Sixteenth note', category: 'rhythm', fontKind: 'music', inkOffset: { ox: 0, oy: 0.367 }, canvasOffset: { ox: 0.125, oy: 0 } },
+	{ symbol: '\uE4E3', label: 'Whole rest', category: 'rhythm', fontKind: 'music', inkOffset: { ox: 0.001, oy: -0.063 } },
+	{ symbol: '\uE4E4', label: 'Half rest', category: 'rhythm', fontKind: 'music', inkOffset: { ox: 0.001, oy: 0.07 } },
+	{ symbol: '\uE4E5', label: 'Quarter rest', category: 'rhythm', fontKind: 'music', inkOffset: { ox: -0.001, oy: -0.001 } },
+	{ symbol: '\uE4E6', label: 'Eighth rest', category: 'rhythm', fontKind: 'music', inkOffset: { ox: 0.002, oy: -0.038 } },
+	{ symbol: '\uE4E7', label: 'Sixteenth rest', category: 'rhythm', fontKind: 'music', inkOffset: { ox: 0, oy: -0.161 } },
 ]
 
-const ALIAS_TO_UNICODE = new Map<string, MusicStampDefinition>()
-for (const def of MUSIC_STAMPS) {
-	ALIAS_TO_UNICODE.set(def.symbol, def)
-	if (def.aliases) {
-		for (const alias of def.aliases) {
-			ALIAS_TO_UNICODE.set(alias, def)
-		}
-	}
-}
+const STAMP_BY_SYMBOL = new Map<string, MusicStampDefinition>(
+	MUSIC_STAMPS.map((def) => [def.symbol, def]),
+)
 
 /**
- * Normalize any ASCII, legacy, or Unicode music symbol into its canonical Unicode string.
+ * Look up stamp metadata by its SMuFL codepoint string.
  */
-export function normalizeMusicSymbol(raw: string): string {
-	const trimmed = raw.trim()
-	return ALIAS_TO_UNICODE.get(trimmed)?.symbol ?? trimmed
-}
-
-/**
- * Look up stamp metadata for a Unicode or legacy symbol.
- */
-export function getStampDefinition(raw: string): MusicStampDefinition | undefined {
-	return ALIAS_TO_UNICODE.get(raw.trim())
-}
-
-/**
- * Determine the CSS font-family stack for a stamp symbol.
- */
-export function getMusicStampFontFamily(symbol: string, fontKind?: StampFontKind): string {
-	if (fontKind === 'fingering' || /^\d+$/.test(symbol.trim())) {
-		return FINGERING_FONT_FAMILY
-	}
-	if (fontKind === 'text') {
-		// Use symbol/math fonts directly so ∪, ∩, ∨, ∧ all resolve from the same font
-		// (serif fonts often contain ∩ from WGL4/MacRoman at a smaller size while falling back for ∪)
-		return "'Apple Symbols', 'Segoe UI Symbol', 'Cambria Math', 'DejaVu Sans', 'Noto Sans Math', sans-serif"
-	}
-	return MUSIC_FONT_FAMILY
+export function getStampDefinition(symbol: string): MusicStampDefinition | undefined {
+	return STAMP_BY_SYMBOL.get(symbol.trim())
 }

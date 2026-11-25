@@ -106,11 +106,11 @@ describe('SongAnnotationSelectionBox.vue', () => {
 			...item,
 			id: 4,
 			uuid: 'stamp-2',
-			data: { symbol: '3', category: 'fingering', fontKind: 'fingering' },
+			data: { symbol: '\uED13', category: 'fingering', fontKind: 'fingering' },
 		}
 		const fingeringWrapper = mount(SongAnnotationSelectionBox, {
 			props: { item: fingeringItem, vbHeight: 1414, uiScale: 1 },
 		})
-		expect(Number(fingeringWrapper.find('circle').attributes('r'))).toBeCloseTo(9, 5)
+		expect(Number(fingeringWrapper.find('circle').attributes('r'))).toBeCloseTo(11, 5) // 40 * 0.2 + 4 * 0.75
 	})
 })

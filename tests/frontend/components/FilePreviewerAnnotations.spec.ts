@@ -221,7 +221,7 @@ describe('FilePreviewer.vue Annotation Rendering & Reactivity', () => {
 				height: 0.05,
 				style: { color: '#000000', fontSize: 40 },
 				data: {
-					symbol: '♩',
+					symbol: '\uE1D5',
 					category: 'rhythm',
 					fontKind: 'music',
 				},
@@ -248,8 +248,8 @@ describe('FilePreviewer.vue Annotation Rendering & Reactivity', () => {
 		const stampText = overlay.find('[data-test="annotation-stamp"]')
 		expect(stampText.exists()).toBe(true)
 		expect(stampText.element.tagName.toLowerCase()).toBe('text')
-		expect(stampText.text()).toBe('𝅘𝅥')
-		expect(stampText.attributes('font-family')).toContain('Noto Music')
+		expect(stampText.text()).toBe('\uE1D5')
+		expect(stampText.attributes('font-family')).toContain('Bravura')
 	})
 
 	it('renders text annotations and crescendo hairpins', async () => {

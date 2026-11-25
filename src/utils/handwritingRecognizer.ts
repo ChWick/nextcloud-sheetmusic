@@ -39,8 +39,8 @@ interface PreparedTemplate {
 	cloud: PreparedCloud
 }
 
-const MIN_CONFIDENCE = 0.5
-const MIN_ALT_CONFIDENCE = 0.2
+const MIN_CONFIDENCE = 0.3
+const MIN_ALT_CONFIDENCE = 0.1
 const MAX_CANDIDATES = 7
 
 function boundingBox(strokes: Point2D[][]): { minX: number; minY: number; maxX: number; maxY: number; w: number; h: number } {
@@ -100,7 +100,7 @@ function scoreSinglePair(cloud: PreparedCloud, ref: PreparedCloud, bonus = 0): n
 	const arPenalty = Math.abs(Math.log(arA / arB)) * 0.08
 
 	const strokePenalty = strokeDiff * 0.055
-	return Math.max(0, Math.min(0.99, 1 - normDist * 1.38 - arPenalty - strokePenalty + bonus))
+	return Math.max(0, Math.min(0.99, 1 - normDist * 1.15 - arPenalty - strokePenalty + bonus))
 }
 
 function scoreCloudAgainstTemplates(
@@ -181,19 +181,19 @@ function tryGeometricPrimitives(svgStrokes: Point2D[][]): HandwritingCandidate[]
 
 		// Staccato dot: tiny tap or tight dot
 		if (Math.max(box.w, box.h) < 8 || len < 10) {
-			return [makeCandidate('𝅼', 0.92), makeCandidate('𝄒', 0.5)]
+			return [makeCandidate('\uE4A2', 0.92), makeCandidate('\uE4CE', 0.5)]
 		}
 
 		// Tenuto: nearly horizontal straight dash
 		if (box.w > 12 && box.h / box.w < 0.24 && straightness > 0.88) {
-			return [makeCandidate('𝅽', 0.9), makeCandidate('1', 0.45)]
+			return [makeCandidate('\uE4A4', 0.9), makeCandidate('\uED11', 0.45)]
 		}
 
 		// Vertical or slightly slanted straight line (up to ~28°): Fingering 1 (runner-up: staccatissimo)
 		const dy = Math.abs(s[s.length - 1].y - s[0].y)
 		const dx = Math.abs(s[s.length - 1].x - s[0].x)
 		if (box.h > 10 && straightness > 0.9 && (box.w / box.h < 0.28 || (dy > 10 && dy / Math.max(dx, 0.1) > 1.85))) {
-			return [makeCandidate('1', 0.92), makeCandidate('𝅾', 0.72), makeCandidate('𝄒', 0.48)]
+			return [makeCandidate('\uED11', 0.92), makeCandidate('\uE4A6', 0.72), makeCandidate('\uE4CE', 0.48)]
 		}
 	}
 
@@ -214,7 +214,7 @@ function tryGeometricPrimitives(svgStrokes: Point2D[][]): HandwritingCandidate[]
 			const b1 = boundingBox([s1])
 			const centerDist = Math.abs((b0.minX + b0.maxX) / 2 - (b1.minX + b1.maxX) / 2)
 			if (dot > 0.92 && slope0 > 0.15 && slope0 < 1.3 && centerDist > 4) {
-				return [makeCandidate('𝄓', 0.9), makeCandidate('1', 0.45)]
+				return [makeCandidate('\uE4D1', 0.9), makeCandidate('\uED11', 0.45)]
 			}
 		}
 	}

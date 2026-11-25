@@ -137,7 +137,7 @@ describe('SongAnnotationOverlay.vue', () => {
 			width: 0.05,
 			height: 0.05,
 			style: { color: '#d32f2f', fontSize: 36 },
-			data: { symbol: '𝆑𝆑', category: 'dynamic', fontKind: 'music' },
+			data: { symbol: '\uE52F', category: 'dynamic', fontKind: 'music' },
 		},
 		{
 			id: 7,
@@ -187,11 +187,11 @@ describe('SongAnnotationOverlay.vue', () => {
 		expect(textEl.exists()).toBe(true)
 		expect(textEl.text()).toContain('Allegro vivace')
 
-		// Unicode music stamp rendered with Noto Music
+		// SMuFL music stamp rendered with Bravura
 		const stamp = wrapper.find('[data-test="annotation-stamp"]')
 		expect(stamp.exists()).toBe(true)
-		expect(stamp.text()).toBe('𝆑𝆑')
-		expect(stamp.attributes('font-family')).toContain('Noto Music')
+		expect(stamp.text()).toBe('\uE52F')
+		expect(stamp.attributes('font-family')).toContain('Bravura')
 
 		// Link
 		const link = wrapper.find('[data-test="annotation-link"]')
@@ -355,7 +355,7 @@ describe('SongAnnotationOverlay.vue', () => {
 			pageNumber: 0,
 			type: 'stamp',
 			data: {
-				symbol: '𝆑𝆑',
+				symbol: '\uE52F',
 				category: 'dynamic',
 				fontKind: 'music',
 			},

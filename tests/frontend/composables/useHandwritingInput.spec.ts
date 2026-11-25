@@ -82,15 +82,15 @@ describe('useHandwritingInput', () => {
 
 		expect(created).toHaveLength(1)
 		expect(created[0].type).toBe('stamp')
-		expect(created[0].data.symbol).toBe('1')
-		expect(hw.swapState.value?.activeSymbol).toBe('1')
-		expect(hw.swapState.value?.candidates.map((c) => c.symbol)).toContain('𝅾')
+		expect(created[0].data.symbol).toBe('\uED11')
+		expect(hw.swapState.value?.activeSymbol).toBe('\uED11')
+		expect(hw.swapState.value?.candidates.map((c) => c.symbol)).toContain('\uE4A6')
 
 		// Tap runner-up candidate in swap pill
-		hw.selectCandidate('𝅾')
+		hw.selectCandidate('\uE4A6')
 		expect(updated).toHaveLength(1)
-		expect(updated[0].after.data.symbol).toBe('𝅾')
-		expect(hw.swapState.value?.activeSymbol).toBe('𝅾')
+		expect(updated[0].after.data.symbol).toBe('\uE4A6')
+		expect(hw.swapState.value?.activeSymbol).toBe('\uE4A6')
 	})
 
 	it('replaces placed stamp with freehand drawing when Keep ink is clicked', () => {
@@ -128,7 +128,7 @@ describe('useHandwritingInput', () => {
 		// Second symbol far away at x=0.8 -> immediately flushes first without waiting 450ms
 		hw.beginStroke({ x: 0.8, y: 0.2 })
 		expect(created).toHaveLength(1)
-		expect(created[0].data.symbol).toBe('1')
+		expect(created[0].data.symbol).toBe('\uED11')
 	})
 
 	it('combines nearby strokes into a multi-stroke symbol (e.g. 2-stroke 4)', () => {
@@ -154,7 +154,7 @@ describe('useHandwritingInput', () => {
 		vi.advanceTimersByTime(450)
 
 		expect(created).toHaveLength(1)
-		expect(created[0].data.symbol).toBe('4')
+		expect(created[0].data.symbol).toBe('\uED14')
 	})
 
 	it('deletes the placed stamp when deletePlaced is called', () => {

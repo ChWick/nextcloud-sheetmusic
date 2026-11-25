@@ -104,8 +104,19 @@ function resampleSingleStroke(stroke: Point2D[], count: number, strokeId: number
 
 function computeTangents(pts: Array<{ x: number; y: number; strokeId: number }>): CloudPoint[] {
 	return pts.map((p, i) => {
-		const prev = i > 0 && pts[i - 1].strokeId === p.strokeId ? pts[i - 1] : p
-		const next = i + 1 < pts.length && pts[i + 1].strokeId === p.strokeId ? pts[i + 1] : p
+		// Use a 2-step window when available to smooth out stylus hand-tremor jitter
+		const prevIdx = i >= 2 && pts[i - 2].strokeId === p.strokeId
+			? i - 2
+			: i >= 1 && pts[i - 1].strokeId === p.strokeId
+				? i - 1
+				: i
+		const nextIdx = i + 2 < pts.length && pts[i + 2].strokeId === p.strokeId
+			? i + 2
+			: i + 1 < pts.length && pts[i + 1].strokeId === p.strokeId
+				? i + 1
+				: i
+		const prev = pts[prevIdx]
+		const next = pts[nextIdx]
 		const dx = next.x - prev.x
 		const dy = next.y - prev.y
 		const len = Math.hypot(dx, dy)
@@ -197,10 +208,10 @@ export function prepareCloud(strokes: Point2D[][]): PreparedCloud {
 
 function pointPairDistance(a: CloudPoint, b: CloudPoint): number {
 	const posDist = Math.hypot(a.x - b.x, a.y - b.y)
-	// Undirected tangent alignment (handles strokes drawn in opposite direction cleanly)
+	// Undirected tangent alignment (gentle weight so stylus jitter doesn't over-penalize)
 	const dot = Math.abs(a.tx * b.tx + a.ty * b.ty)
 	const dirDist = 1 - Math.min(1, dot)
-	return posDist + 0.22 * dirDist
+	return posDist + 0.12 * dirDist
 }
 
 function cloudDistance(a: CloudPoint[], b: CloudPoint[], startIndex: number): number {
@@ -241,9 +252,14 @@ function orderedSingleStrokeDistance(a: CloudPoint[], b: CloudPoint[]): number {
 	return Math.min(fwd, rev) / n
 }
 
+function isClosedLoop(pts: CloudPoint[]): boolean {
+	if (pts.length < 4) return false
+	return Math.hypot(pts[0].x - pts[pts.length - 1].x, pts[0].y - pts[pts.length - 1].y) < 0.28
+}
+
 /**
  * Normalized similarity distance (lower is better; ~0 = identical, ~0.5+ = unrelated).
- * Blends $P+ tangent-aware cloud distance with ordered path distance for single-stroke glyphs.
+ * Blends $P+ tangent-aware cloud distance with ordered path distance for open single-stroke glyphs.
  */
 export function computeNormalizedCloudDistance(a: PreparedCloud, b: PreparedCloud): number {
 	const n = a.points.length
@@ -257,9 +273,15 @@ export function computeNormalizedCloudDistance(a: PreparedCloud, b: PreparedClou
 	}
 	const cloudNorm = minRaw / (n * 0.5)
 
-	if (a.strokeCount === 1 && b.strokeCount === 1 && a.points.length === b.points.length) {
+	if (
+		a.strokeCount === 1
+		&& b.strokeCount === 1
+		&& a.points.length === b.points.length
+		&& !isClosedLoop(a.points)
+		&& !isClosedLoop(b.points)
+	) {
 		const ordered = orderedSingleStrokeDistance(a.points, b.points)
-		return cloudNorm * 0.65 + ordered * 0.35
+		return cloudNorm * 0.82 + ordered * 0.18
 	}
 	return cloudNorm
 }
@@ -317,6 +339,7 @@ export function learnHandwritingSample(
 ): void {
 	const nonEmpty = strokes.filter((s) => s.length > 0)
 	if (nonEmpty.length === 0 || !symbol) return
+	const canonicalSymbol = symbol.trim()
 
 	const svgStrokes: Point2D[][] = nonEmpty.map((s) =>
 		s.map((pt) => ({ x: pt.x * VIEWBOX_WIDTH, y: pt.y * vbHeight })),
@@ -330,7 +353,7 @@ export function learnHandwritingSample(
 	let closestDist = Infinity
 	for (let i = 0; i < samples.length; i++) {
 		const existing = samples[i]
-		if (existing.symbol !== symbol || existing.strokeCount !== cloud.strokeCount) continue
+		if (existing.symbol !== canonicalSymbol || existing.strokeCount !== cloud.strokeCount) continue
 		const d = computeNormalizedCloudDistance(cloud, existing)
 		if (d < closestDist) {
 			closestDist = d
@@ -355,7 +378,7 @@ export function learnHandwritingSample(
 		}
 	} else {
 		samples.push({
-			symbol,
+			symbol: canonicalSymbol,
 			points: cloud.points,
 			strokeCount: cloud.strokeCount,
 			aspectRatio: cloud.aspectRatio,
@@ -366,7 +389,7 @@ export function learnHandwritingSample(
 		// Enforce per-symbol cap (evict lowest-weight / oldest sample for this symbol)
 		const sameSymbolIndices = samples
 			.map((s, idx) => ({ s, idx }))
-			.filter(({ s }) => s.symbol === symbol)
+			.filter(({ s }) => s.symbol === canonicalSymbol)
 		if (sameSymbolIndices.length > MAX_SAMPLES_PER_SYMBOL) {
 			sameSymbolIndices.sort((a, b) => (a.s.weight - b.s.weight) || (a.s.updatedAt - b.s.updatedAt))
 			samples.splice(sameSymbolIndices[0].idx, 1)
@@ -499,7 +522,7 @@ export function resetLearnedHandwritingModel(options: { syncRemote?: boolean } =
 		remoteSyncTimer = null
 	}
 	cachedSamples = []
-	hydratedFromServer = false
+	hydratedFromServer = Boolean(options.syncRemote)
 	hydrationPromise = null
 	if (typeof localStorage !== 'undefined') {
 		try {

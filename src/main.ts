@@ -1,4 +1,4 @@
-import '@fontsource/noto-music'
+import './fonts/bravura.css'
 import './fonts/century-schoolbook.css'
 import './styles/pwa.css'
 import { createApp } from 'vue'

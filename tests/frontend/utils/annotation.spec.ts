@@ -19,17 +19,15 @@ import {
 	getAnnotationPath,
 	getAnnotationTextLayout,
 	getShapeHeightHandle,
-	getStampFontFamily,
 	getStampRenderFontSize,
 	getStampRenderPosition,
+	getStampVisualRadius,
 	getViewBoxHeight,
 	isPathShape,
-	isStampBold,
-	isStampItalic,
 	translateAnnotation,
 	VIEWBOX_WIDTH,
 } from '../../../src/utils/annotation'
-import { normalizeMusicSymbol } from '../../../src/utils/musicSymbols'
+import { getStampDefinition, MUSIC_FONT_FAMILY } from '../../../src/utils/musicSymbols'
 import { buildAnnotationDraft } from '../../../src/utils/annotationTransform'
 import { createDefaultToolStyle } from '../../../src/utils/annotationToolStyle'
 
@@ -185,40 +183,35 @@ describe('annotation utils', () => {
 		})
 	})
 
-	describe('Unicode music symbols & fonts', () => {
-		it('normalizes legacy ASCII aliases to canonical Unicode', () => {
-			expect(normalizeMusicSymbol('ff')).toBe('𝆑𝆑')
-			expect(normalizeMusicSymbol('pp')).toBe('𝆏𝆏')
-			expect(normalizeMusicSymbol('mf')).toBe('𝆐𝆑')
-			expect(normalizeMusicSymbol('#')).toBe('♯')
-			expect(normalizeMusicSymbol('b')).toBe('♭')
-			expect(normalizeMusicSymbol('fermata')).toBe('𝄐')
-			expect(normalizeMusicSymbol('tr')).toBe('𝆖')
+	describe('SMuFL music symbols & fonts', () => {
+		it('looks up canonical SMuFL stamp definitions directly', () => {
+			expect(getStampDefinition('\uE52F')?.label).toContain('ff')
+			expect(getStampDefinition('\uE262')?.label).toBe('Sharp')
+			expect(getStampDefinition('\uED13')?.category).toBe('fingering')
+			expect(getStampDefinition('\uE661')?.label).toContain('Organ heel')
 		})
 
-		it('uses Noto Music for music stamps and Century Schoolbook for fingerings', () => {
-			const dyn = makeAnn({ type: 'stamp', data: { symbol: '𝆑𝆑' } })
-			expect(getAnnotationDisplaySymbol(dyn)).toBe('𝆑𝆑')
-			expect(getStampFontFamily(dyn)).toContain('Noto Music')
-			expect(isStampItalic(dyn)).toBe(false)
+		it('uses single bundled Bravura SMuFL font for all stamps', () => {
+			const dyn = makeAnn({ type: 'stamp', data: { symbol: '\uE52F' } })
+			expect(getAnnotationDisplaySymbol(dyn)).toBe('\uE52F')
+			expect(MUSIC_FONT_FAMILY).toContain('Bravura')
 
-			const fingering = makeAnn({ type: 'stamp', data: { symbol: '3', category: 'fingering', fontKind: 'fingering' } })
-			expect(getStampFontFamily(fingering)).toContain('Century Schoolbook')
-			expect(isStampItalic(fingering)).toBe(false)
-			expect(isStampBold(fingering)).toBe(true)
+			const fingering = makeAnn({ type: 'stamp', data: { symbol: '\uED13', category: 'fingering', fontKind: 'fingering' } })
+			expect(getStampVisualRadius(dyn)).toBe(16)
+			expect(getStampVisualRadius(fingering)).toBe(8)
 		})
 
-		it('scales numeric fingering stamps by 11/30 so they remain compact relative to musical symbols', () => {
-			const dyn = makeAnn({ type: 'stamp', style: { fontSize: 36 }, data: { symbol: '𝆑', category: 'dynamic', fontKind: 'music' } })
-			const fingering = makeAnn({ type: 'stamp', style: { fontSize: 36 }, data: { symbol: '3', category: 'fingering', fontKind: 'fingering' } })
-			const defaultFingering = makeAnn({ type: 'stamp', style: {}, data: { symbol: '0', category: 'fingering', fontKind: 'fingering' } })
+		it('uses unified SMuFL font size across musical symbols and fingerings', () => {
+			const dyn = makeAnn({ type: 'stamp', style: { fontSize: 36 }, data: { symbol: '\uE522', category: 'dynamic', fontKind: 'music' } })
+			const fingering = makeAnn({ type: 'stamp', style: { fontSize: 36 }, data: { symbol: '\uED13', category: 'fingering', fontKind: 'fingering' } })
+			const defaultFingering = makeAnn({ type: 'stamp', style: {}, data: { symbol: '\uED10', category: 'fingering', fontKind: 'fingering' } })
 
 			expect(getStampRenderFontSize(dyn)).toBe(36)
-			expect(getStampRenderFontSize(fingering)).toBe(13.2)
-			expect(getStampRenderFontSize(defaultFingering)).toBe(14.7)
+			expect(getStampRenderFontSize(fingering)).toBe(36)
+			expect(getStampRenderFontSize(defaultFingering)).toBe(40)
 		})
 
-		it('computes ink-centered render position for combining articulations and fermatas', () => {
+		it('computes ink-centered render position from Bravura SMuFL metrics', () => {
 			const accent = makeAnn({
 				type: 'stamp',
 				x: 0.5,
@@ -226,12 +219,12 @@ describe('annotation utils', () => {
 				width: 0,
 				height: 0,
 				style: { fontSize: 40 },
-				data: { symbol: '𝅻' },
+				data: { symbol: '\uE4A0' },
 			})
 			const pos = getStampRenderPosition(accent, 1000)
 			expect(pos.dominantBaseline).toBe('alphabetic')
-			expect(pos.x).toBeCloseTo(500 - 0.258 * 40, 1)
-			expect(pos.y).toBeCloseTo(500 - 0.146 * 40, 1)
+			expect(pos.x).toBeCloseTo(500, 1)
+			expect(pos.y).toBeCloseTo(500 + 0.123 * 40, 1)
 
 			const fingering = makeAnn({
 				type: 'stamp',
@@ -240,37 +233,31 @@ describe('annotation utils', () => {
 				width: 0,
 				height: 0,
 				style: { fontSize: 40 },
-				data: { symbol: '2' },
+				data: { symbol: '\uED12' },
 			})
 			expect(getStampRenderPosition(fingering, 1000)).toEqual({
 				x: 500,
-				y: 500,
-				dominantBaseline: 'central',
+				y: 505,
+				dominantBaseline: 'alphabetic',
 			})
 		})
 
-		it('uses uniform Musical Symbols block notes and anchors noteheads at center', () => {
-			expect(normalizeMusicSymbol('♩')).toBe('𝅘𝅥')
-			expect(normalizeMusicSymbol('♪')).toBe('𝅘𝅥𝅮')
-
-			const quarter = makeAnn({ type: 'stamp', x: 0.5, y: 0.5, width: 0, height: 0, style: { fontSize: 40 }, data: { symbol: '𝅘𝅥' } })
-			const eighth = makeAnn({ type: 'stamp', x: 0.5, y: 0.5, width: 0, height: 0, style: { fontSize: 40 }, data: { symbol: '𝅘𝅥𝅮' } })
-			const beamed = makeAnn({ type: 'stamp', x: 0.5, y: 0.5, width: 0, height: 0, style: { fontSize: 40 }, data: { symbol: '♫' } })
+		it('anchors SMuFL noteheads at center (baseline y=0) with flag horizontal compensation', () => {
+			const quarter = makeAnn({ type: 'stamp', x: 0.5, y: 0.5, width: 0, height: 0, style: { fontSize: 40 }, data: { symbol: '\uE1D5' } })
+			const eighth = makeAnn({ type: 'stamp', x: 0.5, y: 0.5, width: 0, height: 0, style: { fontSize: 40 }, data: { symbol: '\uE1D7' } })
 
 			expect(getStampRenderFontSize(quarter)).toBe(40)
 			expect(getStampRenderFontSize(eighth)).toBe(40)
-			expect(getStampRenderFontSize(beamed)).toBe(68) // 40 * 1.7
 
-			// Quarter notehead centered at (500, 500) -> baseline shifted down by 0.14 * 40 = 5.6
 			expect(getStampRenderPosition(quarter, 1000)).toEqual({
 				x: 500,
-				y: 505.6,
+				y: 500,
 				dominantBaseline: 'alphabetic',
 			})
-			// Eighth notehead centered at (500, 500) -> shifted right by 0.125 * 40 = 5 to offset flag
+			// Eighth notehead centered at (500, 500) -> shifted right by 0.117 * 40 = 4.7 to offset flag
 			expect(getStampRenderPosition(eighth, 1000)).toEqual({
-				x: 505,
-				y: 505.6,
+				x: 504.7,
+				y: 500,
 				dominantBaseline: 'alphabetic',
 			})
 		})

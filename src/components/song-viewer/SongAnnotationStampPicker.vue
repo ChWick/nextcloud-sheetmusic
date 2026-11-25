@@ -5,7 +5,7 @@ import { translate as t } from '@nextcloud/l10n'
 import MusicNote from 'vue-material-design-icons/MusicNote.vue'
 import ViewportPopover from '../ViewportPopover.vue'
 import {
-	getMusicStampFontFamily,
+	MUSIC_FONT_FAMILY,
 	MUSIC_STAMPS,
 	STAMP_CATEGORIES,
 } from '../../utils/musicSymbols'
@@ -24,17 +24,21 @@ const emit = defineEmits<{
 const activeStampCategory = ref<StampCategory>('dynamic')
 
 const CATEGORY_EXAMPLE_SYMBOLS: Record<StampCategory, [string, string]> = {
-	dynamic: ['𝆑', '𝆏'],
-	accidental: ['♯', '♭'],
-	ornament: ['𝄐', '𝆖'],
-	articulation: ['𝅻', '𝅼'],
-	navigation: ['𝄋', '𝄌'],
-	fingering: ['1', '2'],
-	rhythm: ['𝅘𝅥', '𝄽'],
+	dynamic: ['\uE522', '\uE520'],
+	accidental: ['\uE262', '\uE260'],
+	ornament: ['\uE4C0', '\uE566'],
+	articulation: ['\uE4A0', '\uE4A2'],
+	navigation: ['\uE047', '\uE048'],
+	fingering: ['\uED11', '\uED12'],
+	rhythm: ['\uE1D5', '\uE4E5'],
 }
 
 function getStampDef(sym: string) {
 	return MUSIC_STAMPS.find((s) => s.symbol === sym)
+}
+
+function pickerFontSize(fontKind?: string, base = 22): number {
+	return fontKind === 'fingering' ? Math.round(base * 1.65) : base
 }
 
 const filteredStamps = computed(() =>
@@ -59,20 +63,23 @@ const filteredStamps = computed(() =>
 				@click="emit('toggle')">
 				<MusicNote :size="18" />
 				<svg
-					v-if="getStampDef(props.stampSymbol)?.svgPath"
-					width="16"
-					height="16"
-					viewBox="-0.6 -0.6 1.2 1.2"
+					v-if="getStampDef(props.stampSymbol)"
+					width="20"
+					height="20"
+					viewBox="0 0 20 20"
 					aria-hidden="true">
-					<path
-						:d="getStampDef(props.stampSymbol)!.svgPath"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="0.14"
-						stroke-linecap="round"
-						stroke-linejoin="round" />
+					<text
+						:x="10 + getStampDef(props.stampSymbol)!.inkOffset.ox * pickerFontSize(getStampDef(props.stampSymbol)?.fontKind, 18)"
+						:y="10 + getStampDef(props.stampSymbol)!.inkOffset.oy * pickerFontSize(getStampDef(props.stampSymbol)?.fontKind, 18)"
+						:font-size="pickerFontSize(getStampDef(props.stampSymbol)?.fontKind, 18)"
+						text-anchor="middle"
+						dominant-baseline="alphabetic"
+						fill="currentColor"
+						:font-family="MUSIC_FONT_FAMILY">
+						{{ props.stampSymbol }}
+					</text>
 				</svg>
-				<span v-else :class="$style.stampPreview" :style="{ fontFamily: getMusicStampFontFamily(props.stampSymbol) }">
+				<span v-else :class="$style.stampPreview" :style="{ fontFamily: MUSIC_FONT_FAMILY }">
 					{{ props.stampSymbol }}
 				</span>
 			</button>
@@ -91,28 +98,22 @@ const filteredStamps = computed(() =>
 					@click="activeStampCategory = cat.id">
 					<template v-for="sym in CATEGORY_EXAMPLE_SYMBOLS[cat.id]" :key="sym">
 						<svg
-							v-if="getStampDef(sym)?.inkOffset"
+							v-if="getStampDef(sym)"
 							width="20"
 							height="24"
 							viewBox="0 0 20 24"
 							aria-hidden="true">
 							<text
-								:x="10 + getStampDef(sym)!.inkOffset!.ox * 18"
-								:y="12 + getStampDef(sym)!.inkOffset!.oy * 18"
-								font-size="18"
+								:x="10 + getStampDef(sym)!.inkOffset.ox * pickerFontSize(getStampDef(sym)?.fontKind, 18)"
+								:y="12 + getStampDef(sym)!.inkOffset.oy * pickerFontSize(getStampDef(sym)?.fontKind, 18)"
+								:font-size="pickerFontSize(getStampDef(sym)?.fontKind, 18)"
 								text-anchor="middle"
 								dominant-baseline="alphabetic"
 								fill="currentColor"
-								:font-family="getMusicStampFontFamily(sym, getStampDef(sym)?.fontKind)">
+								:font-family="MUSIC_FONT_FAMILY">
 								{{ sym }}
 							</text>
 						</svg>
-						<span
-							v-else
-							:class="[$style.tabGlyph, getStampDef(sym)?.fontKind === 'fingering' && $style.fingeringGlyph]"
-							:style="{ fontFamily: getMusicStampFontFamily(sym, getStampDef(sym)?.fontKind) }">
-							{{ sym }}
-						</span>
 					</template>
 				</button>
 			</div>
@@ -127,42 +128,21 @@ const filteredStamps = computed(() =>
 					:data-test="`stamp-option-${st.symbol}`"
 					@click="emit('select', st.symbol)">
 					<svg
-						v-if="st.svgPath"
-						width="24"
-						height="24"
-						viewBox="-0.6 -0.6 1.2 1.2"
-						aria-hidden="true">
-						<path
-							:d="st.svgPath"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="0.12"
-							stroke-linecap="round"
-							stroke-linejoin="round" />
-					</svg>
-					<svg
-						v-else-if="st.inkOffset"
 						width="28"
 						height="28"
 						viewBox="0 0 28 28"
 						aria-hidden="true">
 						<text
-							:x="14 + st.inkOffset.ox * 20"
-							:y="14 + st.inkOffset.oy * 20"
-							font-size="20"
+							:x="14 + st.inkOffset.ox * pickerFontSize(st.fontKind, 22)"
+							:y="14 + st.inkOffset.oy * pickerFontSize(st.fontKind, 22)"
+							:font-size="pickerFontSize(st.fontKind, 22)"
 							text-anchor="middle"
 							dominant-baseline="alphabetic"
 							fill="currentColor"
-							:font-family="getMusicStampFontFamily(st.symbol, st.fontKind)">
+							:font-family="MUSIC_FONT_FAMILY">
 							{{ st.symbol }}
 						</text>
 					</svg>
-					<span
-						v-else
-						:class="[$style.stampGlyph, st.fontKind === 'fingering' && $style.fingeringGlyph]"
-						:style="{ fontFamily: getMusicStampFontFamily(st.symbol, st.fontKind) }">
-						{{ st.symbol }}
-					</span>
 				</button>
 			</div>
 	</ViewportPopover>
@@ -253,11 +233,6 @@ button[type='button'].toolBtn {
 	border-bottom-color: var(--color-main-background);
 }
 
-.tabGlyph {
-	font-size: 18px;
-	line-height: 1;
-}
-
 .stampGrid {
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(46px, 1fr));
@@ -286,15 +261,5 @@ button[type='button'].toolBtn {
 .stampCell.active {
 	border-color: var(--color-primary-element, #0082c9);
 	background: var(--color-primary-light, #e6f4fa);
-}
-
-.stampGlyph {
-	font-size: 1.45rem;
-	line-height: 1;
-}
-
-.fingeringGlyph {
-	font-weight: 700;
-	font-size: 18px;
 }
 </style>

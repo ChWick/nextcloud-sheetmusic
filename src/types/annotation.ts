@@ -25,7 +25,7 @@ export type StampCategory =
 	| 'navigation'
 	| 'rhythm'
 	| 'fingering'
-export type StampFontKind = 'music' | 'fingering' | 'text'
+export type StampFontKind = 'music' | 'fingering'
 
 export interface NormalizedPoint {
 	x: number

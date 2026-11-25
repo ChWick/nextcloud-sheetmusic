@@ -18,9 +18,9 @@ const TOOL_SHORTCUTS: Record<string, EditorTool> = {
 }
 
 const STAMP_SHORTCUTS: Record<string, string> = {
-	f: '𝆑',
-	b: '♭',
-	n: '♮',
+	f: '\uE522',
+	b: '\uE260',
+	n: '\uE261',
 }
 
 export interface AnnotationShortcutActions {
@@ -112,20 +112,20 @@ export function handleAnnotationEditorKeydown(
 
 	if (/^[0-5]$/.test(e.key) && !e.shiftKey) {
 		e.preventDefault()
-		actions.selectStampSymbol(e.key)
+		actions.selectStampSymbol(String.fromCodePoint(0xED10 + Number(e.key)))
 		return
 	}
 
 	if (e.key === '#' || (e.shiftKey && e.key === '3')) {
 		e.preventDefault()
-		actions.selectStampSymbol('♯')
+		actions.selectStampSymbol('\uE262')
 		return
 	}
 
 	const lower = e.key.toLowerCase()
 	if (e.shiftKey && lower === 'p') {
 		e.preventDefault()
-		actions.selectStampSymbol('𝆏')
+		actions.selectStampSymbol('\uE520')
 		return
 	}
 
