@@ -4,6 +4,13 @@
  */
 
 import type { NormalizedPoint, SheetAnnotation } from '../types/annotation'
+import {
+	generateArrowPath,
+	generateBracketPath,
+	generateHairpinPath,
+	generateSlurPath,
+	getShapeHeightHandle,
+} from './annotationShapes'
 import { getStampDefinition, isFingeringDigit } from './musicSymbols'
 
 export const VIEWBOX_WIDTH = 1000
@@ -114,14 +121,6 @@ export function getAnnotationDashArray(item: SheetAnnotation): string | undefine
 
 	return undefined
 }
-
-import {
-	generateArrowPath,
-	generateBracketPath,
-	generateHairpinPath,
-	generateSlurPath,
-	getShapeHeightHandle,
-} from './annotationShapes'
 
 export {
 	generateArrowPath,
@@ -369,6 +368,14 @@ export function computeBoundingBoxFromPoints(
 	}
 }
 
+function shiftPoint(pt: NormalizedPoint, dx: number, dy: number): NormalizedPoint {
+	return {
+		x: Math.round((pt.x + dx) * 10000) / 10000,
+		y: Math.round((pt.y + dy) * 10000) / 10000,
+		...(typeof pt.p === 'number' ? { p: pt.p } : {}),
+	}
+}
+
 /**
  * Translate an annotation by (dx, dy) in normalized [0..1] coordinates.
  */
@@ -385,20 +392,10 @@ export function translateAnnotation(
 		data: { ...ann.data },
 	}
 	if (Array.isArray(ann.data?.points)) {
-		next.data.points = ann.data.points.map((pt) => ({
-			x: Math.round((pt.x + dx) * 10000) / 10000,
-			y: Math.round((pt.y + dy) * 10000) / 10000,
-			...(typeof pt.p === 'number' ? { p: pt.p } : {}),
-		}))
+		next.data.points = ann.data.points.map((pt) => shiftPoint(pt, dx, dy))
 	}
 	if (Array.isArray(ann.data?.strokes)) {
-		next.data.strokes = ann.data.strokes.map((stroke) =>
-			stroke.map((pt) => ({
-				x: Math.round((pt.x + dx) * 10000) / 10000,
-				y: Math.round((pt.y + dy) * 10000) / 10000,
-				...(typeof pt.p === 'number' ? { p: pt.p } : {}),
-			})),
-		)
+		next.data.strokes = ann.data.strokes.map((stroke) => stroke.map((pt) => shiftPoint(pt, dx, dy)))
 	}
 	return next
 }
