@@ -280,6 +280,67 @@ describe('handwritingRecognizer', () => {
 		})
 	})
 
+	describe('notes and rests', () => {
+		it('recognizes whole, half, quarter, eighth, and sixteenth notes', () => {
+			const wholeNote = placeGlyph([arc(0.5, 0.5, 0.46, 0.28, -90, 270, 16)], 400, 400, 44, 26)
+			expect(recognizeHandwriting(wholeNote, VB_HEIGHT).best?.symbol).toBe('\uE1D2')
+
+			const halfNote = placeGlyph([
+				arc(0.36, 0.8, 0.26, 0.16, 0, 360, 12),
+				[[0.62, 0.8], [0.62, 0.06]],
+			], 400, 400, 28, 48)
+			expect(recognizeHandwriting(halfNote, VB_HEIGHT).best?.symbol).toBe('\uE1D3')
+
+			const quarterNote = placeGlyph([
+				[[0.16, 0.86], [0.58, 0.72], [0.24, 0.92], [0.62, 0.8]],
+				[[0.62, 0.8], [0.62, 0.06]],
+			], 400, 400, 28, 48)
+			expect(recognizeHandwriting(quarterNote, VB_HEIGHT).best?.symbol).toBe('\uE1D5')
+
+			const eighthNote = placeGlyph([[
+				[0.12, 0.86], [0.48, 0.76], [0.48, 0.06], [0.78, 0.2], [0.88, 0.4], [0.74, 0.56],
+			]], 400, 400, 32, 48)
+			expect(recognizeHandwriting(eighthNote, VB_HEIGHT).best?.symbol).toBe('\uE1D7')
+
+			const sixteenthNote = placeGlyph([
+				[[0.12, 0.86], [0.48, 0.76], [0.48, 0.06], [0.82, 0.18], [0.88, 0.36]],
+				[[0.48, 0.26], [0.82, 0.38], [0.88, 0.56]],
+			], 400, 400, 32, 48)
+			expect(recognizeHandwriting(sixteenthNote, VB_HEIGHT).best?.symbol).toBe('\uE1D9')
+		})
+
+		it('recognizes whole, half, quarter, eighth, and sixteenth rests', () => {
+			const wholeRest = placeGlyph([
+				[[0.06, 0.34], [0.94, 0.34]],
+				[[0.3, 0.34], [0.3, 0.72], [0.7, 0.72], [0.7, 0.34]],
+			], 400, 400, 42, 26)
+			expect(recognizeHandwriting(wholeRest, VB_HEIGHT).best?.symbol).toBe('\uE4E3')
+
+			const halfRest = placeGlyph([
+				[[0.06, 0.68], [0.94, 0.68]],
+				[[0.3, 0.68], [0.3, 0.3], [0.7, 0.3], [0.7, 0.68]],
+			], 400, 400, 42, 26)
+			expect(recognizeHandwriting(halfRest, VB_HEIGHT).best?.symbol).toBe('\uE4E4')
+
+			const quarterRest = placeGlyph([[
+				[0.32, 0.06], [0.68, 0.28], [0.26, 0.5], [0.7, 0.72],
+				...arc(0.46, 0.82, 0.22, 0.14, -40, 175, 7),
+			]], 400, 400, 26, 48)
+			expect(recognizeHandwriting(quarterRest, VB_HEIGHT).best?.symbol).toBe('\uE4E5')
+
+			const eighthRest = placeGlyph([[
+				[0.18, 0.16], [0.14, 0.3], [0.36, 0.36], [0.64, 0.26], [0.86, 0.08], [0.34, 0.94],
+			]], 400, 400, 34, 44)
+			expect(recognizeHandwriting(eighthRest, VB_HEIGHT).best?.symbol).toBe('\uE4E6')
+
+			const sixteenthRest = placeGlyph([
+				[[0.24, 0.2], [0.5, 0.24], [0.8, 0.08], [0.38, 0.94]],
+				[[0.16, 0.5], [0.42, 0.54], [0.66, 0.4]],
+			], 400, 400, 28, 46)
+			expect(recognizeHandwriting(sixteenthRest, VB_HEIGHT).best?.symbol).toBe('\uE4E7')
+		})
+	})
+
 	describe('unrecognized input', () => {
 		it('returns null for empty strokes or chaotic scribbles', () => {
 			expect(recognizeHandwriting([], VB_HEIGHT).best).toBeNull()

@@ -69,7 +69,7 @@ export const CLUSTER_TOKEN_MAP: Record<string, string> = {
 }
 
 /**
- * Hand-crafted stroke templates covering fingerings (0-5) and common music symbols
+ * Hand-crafted stroke templates covering fingerings (0-5), notes & rests, and common music symbols
  * (accidentals, dynamics, articulations, fermatas, breath/caesura, turn, trill, coda, pedal-up).
  */
 export const HANDWRITING_TEMPLATES: HandwritingTemplate[] = [
@@ -577,5 +577,245 @@ export const HANDWRITING_TEMPLATES: HandwritingTemplate[] = [
 			[{ x: 0.14, y: 0.26 }, { x: 0.86, y: 0.74 }],
 			[{ x: 0.86, y: 0.26 }, { x: 0.14, y: 0.74 }],
 		],
+	},
+
+	// --- Notes (Whole, Half, Quarter, Eighth, Sixteenth) ---
+	{
+		// Whole note: wide horizontal oval (CW) — aspect ratio distinguishes it from tall '0'
+		symbol: '\uE1D2',
+		strokes: [arcPoints(0.5, 0.5, 0.46, 0.28, -90, 270, 16)],
+	},
+	{
+		// Whole note: wide horizontal oval (CCW)
+		symbol: '\uE1D2',
+		strokes: [arcPoints(0.5, 0.5, 0.46, 0.28, -90, -450, 16)],
+	},
+	{
+		// Half note: 2-stroke (open oval notehead at bottom-left + upward stem on right)
+		symbol: '\uE1D3',
+		strokes: [
+			arcPoints(0.36, 0.8, 0.26, 0.16, 0, 360, 12),
+			[{ x: 0.62, y: 0.8 }, { x: 0.62, y: 0.06 }],
+		],
+	},
+	{
+		// Half note: 1-stroke (open oval notehead continuing up into right stem)
+		symbol: '\uE1D3',
+		strokes: [[
+			...arcPoints(0.36, 0.8, 0.26, 0.16, 0, 360, 12),
+			{ x: 0.62, y: 0.06 },
+		]],
+	},
+	{
+		// Quarter note: 2-stroke (filled/scribbled notehead at bottom-left + upward stem)
+		symbol: '\uE1D5',
+		strokes: [
+			[
+				{ x: 0.16, y: 0.86 },
+				{ x: 0.58, y: 0.72 },
+				{ x: 0.24, y: 0.92 },
+				{ x: 0.62, y: 0.8 },
+			],
+			[{ x: 0.62, y: 0.8 }, { x: 0.62, y: 0.06 }],
+		],
+	},
+	{
+		// Quarter note: 1-stroke (filled slash/hook at bottom-left + stem up)
+		symbol: '\uE1D5',
+		strokes: [[
+			{ x: 0.16, y: 0.86 },
+			{ x: 0.56, y: 0.72 },
+			{ x: 0.24, y: 0.92 },
+			{ x: 0.62, y: 0.8 },
+			{ x: 0.62, y: 0.06 },
+		]],
+	},
+	{
+		// Eighth note: 2-stroke (notehead + upward stem with 1 flag curving down-right)
+		symbol: '\uE1D7',
+		strokes: [
+			arcPoints(0.28, 0.82, 0.2, 0.14, 0, 360, 10),
+			[
+				{ x: 0.48, y: 0.82 },
+				{ x: 0.48, y: 0.06 },
+				{ x: 0.78, y: 0.2 },
+				{ x: 0.88, y: 0.4 },
+				{ x: 0.74, y: 0.56 },
+			],
+		],
+	},
+	{
+		// Eighth note: 1-stroke (notehead slash -> stem up -> 1 flag down-right)
+		symbol: '\uE1D7',
+		strokes: [[
+			{ x: 0.12, y: 0.86 },
+			{ x: 0.48, y: 0.76 },
+			{ x: 0.48, y: 0.06 },
+			{ x: 0.78, y: 0.2 },
+			{ x: 0.88, y: 0.4 },
+			{ x: 0.74, y: 0.56 },
+		]],
+	},
+	{
+		// Sixteenth note: 2-stroke (notehead + stem + first flag, then second flag)
+		symbol: '\uE1D9',
+		strokes: [
+			[
+				{ x: 0.12, y: 0.86 },
+				{ x: 0.48, y: 0.76 },
+				{ x: 0.48, y: 0.06 },
+				{ x: 0.82, y: 0.18 },
+				{ x: 0.88, y: 0.36 },
+			],
+			[
+				{ x: 0.48, y: 0.26 },
+				{ x: 0.82, y: 0.38 },
+				{ x: 0.88, y: 0.56 },
+			],
+		],
+	},
+	{
+		// Sixteenth note: 3-stroke (notehead, stem + flag 1, flag 2)
+		symbol: '\uE1D9',
+		strokes: [
+			arcPoints(0.28, 0.82, 0.2, 0.14, 0, 360, 10),
+			[
+				{ x: 0.48, y: 0.82 },
+				{ x: 0.48, y: 0.06 },
+				{ x: 0.82, y: 0.18 },
+				{ x: 0.88, y: 0.36 },
+			],
+			[
+				{ x: 0.48, y: 0.26 },
+				{ x: 0.82, y: 0.38 },
+				{ x: 0.88, y: 0.56 },
+			],
+		],
+	},
+
+	// --- Rests (Whole, Half, Quarter, Eighth, Sixteenth) ---
+	{
+		// Whole rest: 2-stroke (horizontal line + hanging box below)
+		symbol: '\uE4E3',
+		strokes: [
+			[{ x: 0.06, y: 0.34 }, { x: 0.94, y: 0.34 }],
+			[
+				{ x: 0.3, y: 0.34 },
+				{ x: 0.3, y: 0.72 },
+				{ x: 0.7, y: 0.72 },
+				{ x: 0.7, y: 0.34 },
+			],
+		],
+	},
+	{
+		// Whole rest: 1-stroke (line + hanging box)
+		symbol: '\uE4E3',
+		strokes: [[
+			{ x: 0.06, y: 0.34 },
+			{ x: 0.3, y: 0.34 },
+			{ x: 0.3, y: 0.72 },
+			{ x: 0.7, y: 0.72 },
+			{ x: 0.7, y: 0.34 },
+			{ x: 0.94, y: 0.34 },
+		]],
+	},
+	{
+		// Half rest: 2-stroke (horizontal line + sitting "hat" box above)
+		symbol: '\uE4E4',
+		strokes: [
+			[{ x: 0.06, y: 0.68 }, { x: 0.94, y: 0.68 }],
+			[
+				{ x: 0.3, y: 0.68 },
+				{ x: 0.3, y: 0.3 },
+				{ x: 0.7, y: 0.3 },
+				{ x: 0.7, y: 0.68 },
+			],
+		],
+	},
+	{
+		// Half rest: 1-stroke (line + sitting "hat" box)
+		symbol: '\uE4E4',
+		strokes: [[
+			{ x: 0.06, y: 0.68 },
+			{ x: 0.3, y: 0.68 },
+			{ x: 0.3, y: 0.3 },
+			{ x: 0.7, y: 0.3 },
+			{ x: 0.7, y: 0.68 },
+			{ x: 0.94, y: 0.68 },
+		]],
+	},
+	{
+		// Quarter rest: classic lightning-bolt squiggle with bottom C-hook
+		symbol: '\uE4E5',
+		strokes: [[
+			{ x: 0.32, y: 0.06 },
+			{ x: 0.68, y: 0.28 },
+			{ x: 0.26, y: 0.5 },
+			{ x: 0.7, y: 0.72 },
+			...arcPoints(0.46, 0.82, 0.22, 0.14, -40, 175, 7),
+		]],
+	},
+	{
+		// Quarter rest: simplified fast Z-hook
+		symbol: '\uE4E5',
+		strokes: [[
+			{ x: 0.26, y: 0.06 },
+			{ x: 0.72, y: 0.26 },
+			{ x: 0.26, y: 0.54 },
+			{ x: 0.7, y: 0.74 },
+			{ x: 0.34, y: 0.94 },
+		]],
+	},
+	{
+		// Eighth rest: top-left bulb/loop curving right then slanted down-left stem
+		symbol: '\uE4E6',
+		strokes: [[
+			...arcPoints(0.28, 0.22, 0.14, 0.11, 180, 450, 7),
+			{ x: 0.58, y: 0.3 },
+			{ x: 0.86, y: 0.1 },
+			{ x: 0.34, y: 0.94 },
+		]],
+	},
+	{
+		// Eighth rest: curved cup/hook at top-left sweeping up-right then slanted down-left stem
+		symbol: '\uE4E6',
+		strokes: [[
+			{ x: 0.18, y: 0.16 },
+			{ x: 0.14, y: 0.3 },
+			{ x: 0.36, y: 0.36 },
+			{ x: 0.64, y: 0.26 },
+			{ x: 0.86, y: 0.08 },
+			{ x: 0.34, y: 0.94 },
+		]],
+	},
+	{
+		// Sixteenth rest: 2-stroke (eighth-rest body + lower second flag hook)
+		symbol: '\uE4E7',
+		strokes: [
+			[
+				{ x: 0.24, y: 0.2 },
+				{ x: 0.5, y: 0.24 },
+				{ x: 0.8, y: 0.08 },
+				{ x: 0.38, y: 0.94 },
+			],
+			[
+				{ x: 0.16, y: 0.5 },
+				{ x: 0.42, y: 0.54 },
+				{ x: 0.66, y: 0.4 },
+			],
+		],
+	},
+	{
+		// Sixteenth rest: 1-stroke continuous double-flag
+		symbol: '\uE4E7',
+		strokes: [[
+			{ x: 0.24, y: 0.2 },
+			{ x: 0.5, y: 0.24 },
+			{ x: 0.8, y: 0.08 },
+			{ x: 0.62, y: 0.44 },
+			{ x: 0.18, y: 0.52 },
+			{ x: 0.58, y: 0.46 },
+			{ x: 0.36, y: 0.94 },
+		]],
 	},
 ]
