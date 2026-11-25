@@ -222,6 +222,20 @@ function tryGeometricPrimitives(svgStrokes: Point2D[][]): HandwritingCandidate[]
 	return null
 }
 
+function rankCandidates(scores: Map<string, number>): HandwritingRecognitionResult {
+	const ranked = Array.from(scores.entries())
+		.filter(([, score]) => score >= MIN_ALT_CONFIDENCE)
+		.sort((a, b) => b[1] - a[1])
+		.slice(0, MAX_CANDIDATES)
+		.map(([symbol, score]) => makeCandidate(symbol, score))
+
+	const best = ranked[0] && ranked[0].score >= MIN_CONFIDENCE ? ranked[0] : null
+	return {
+		best,
+		candidates: best ? ranked : [],
+	}
+}
+
 /**
  * Recognize hand-drawn strokes (in normalized [0..1] page coordinates) into ranked music stamp candidates.
  */
@@ -262,16 +276,7 @@ export function recognizeHandwriting(
 				combinedScores.set(prim.symbol, prim.score)
 			}
 		}
-		const ranked = Array.from(combinedScores.entries())
-			.filter(([, score]) => score >= MIN_ALT_CONFIDENCE)
-			.sort((a, b) => b[1] - a[1])
-			.slice(0, MAX_CANDIDATES)
-			.map(([symbol, score]) => makeCandidate(symbol, score))
-		const best = ranked[0] && ranked[0].score >= MIN_CONFIDENCE ? ranked[0] : null
-		return {
-			best,
-			candidates: best ? ranked : [],
-		}
+		return rankCandidates(combinedScores)
 	}
 
 	// 3. Multi-glyph horizontal clustering for compound dynamics (pp, mf, mp, sfz, etc.) and tr
@@ -313,15 +318,5 @@ export function recognizeHandwriting(
 		}
 	}
 
-	const ranked = Array.from(combinedScores.entries())
-		.filter(([, score]) => score >= MIN_ALT_CONFIDENCE)
-		.sort((a, b) => b[1] - a[1])
-		.slice(0, MAX_CANDIDATES)
-		.map(([symbol, score]) => makeCandidate(symbol, score))
-
-	const best = ranked[0] && ranked[0].score >= MIN_CONFIDENCE ? ranked[0] : null
-	return {
-		best,
-		candidates: best ? ranked : [],
-	}
+	return rankCandidates(combinedScores)
 }
