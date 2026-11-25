@@ -223,7 +223,7 @@ describe('handwritingRecognizer', () => {
 
 			const toeInvV = placeGlyph([[[0.08, 0.86], [0.5, 0.14], [0.92, 0.86]]], 400, 400, 36, 30)
 			const invRes = recognizeHandwriting(toeInvV, VB_HEIGHT)
-			expect(invRes.best?.symbol).toBe('\uE664')
+			expect(invRes.best?.symbol).toBe('\uE665')
 			expect(invRes.candidates.map((c) => c.symbol)).toContain('\uE4AC')
 		})
 

@@ -446,12 +446,12 @@ export const HANDWRITING_TEMPLATES: HandwritingTemplate[] = [
 	},
 	{
 		// ∧ (Toe / inverted V): left-to-right (wider angle)
-		symbol: '\uE664',
+		symbol: '\uE665',
 		strokes: [[{ x: 0.08, y: 0.86 }, { x: 0.5, y: 0.14 }, { x: 0.92, y: 0.86 }]],
 	},
 	{
 		// ∧ (Toe / inverted V): right-to-left
-		symbol: '\uE664',
+		symbol: '\uE665',
 		strokes: [[{ x: 0.92, y: 0.86 }, { x: 0.5, y: 0.14 }, { x: 0.08, y: 0.86 }]],
 	},
 

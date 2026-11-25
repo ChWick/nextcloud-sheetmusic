@@ -101,7 +101,7 @@ export const MUSIC_STAMPS: MusicStampDefinition[] = [
 	{ symbol: '\uED14', label: 'Fingering 4', category: 'fingering', shortcut: '4', inkOffset: { ox: 0, oy: 0.127 } },
 	{ symbol: '\uED15', label: 'Fingering 5', category: 'fingering', shortcut: '5', inkOffset: { ox: 0, oy: 0.129 } },
 	{ symbol: '\uE661', label: 'Organ heel (U)', category: 'fingering', inkOffset: { ox: 0, oy: 0.266 } },
-	{ symbol: '\uE664', label: 'Organ toe (∧)', category: 'fingering', inkOffset: { ox: 0, oy: 0.266 } },
+	{ symbol: '\uE665', label: 'Organ toe (∧)', category: 'fingering', inkOffset: { ox: 0, oy: 0.266 } },
 	{ symbol: '\uE610', label: 'Down bow', category: 'fingering', inkOffset: { ox: 0, oy: 0.159 } },
 	{ symbol: '\uE612', label: 'Up bow', category: 'fingering', inkOffset: { ox: 0, oy: 0.248 } },
 	{ symbol: '\uE614', label: 'Harmonic / Open string', category: 'fingering', inkOffset: { ox: 0, oy: 0.1 } },
