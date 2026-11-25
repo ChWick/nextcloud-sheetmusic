@@ -655,6 +655,8 @@ onUnmounted(() => {
 
 .stage {
 	position: relative;
+	z-index: 1;
+	isolation: isolate;
 	flex: 1;
 	min-height: 0;
 	display: flex;

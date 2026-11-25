@@ -197,7 +197,7 @@ const emit = defineEmits<{
 	bottom: 0;
 	left: 0;
 	right: 0;
-	z-index: 2;
+	z-index: 30;
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
