@@ -4,12 +4,12 @@ import { computed, ref } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import MusicNote from 'vue-material-design-icons/MusicNote.vue'
 import ViewportPopover from '../ViewportPopover.vue'
+import MusicGlyphIcon from './MusicGlyphIcon.vue'
 import {
-	isFingeringDigit,
 	MUSIC_STAMPS,
 	STAMP_CATEGORIES,
 } from '../../utils/musicSymbols'
-import { getMusicFontFamily, type MusicFontId } from '../../utils/musicFont'
+import type { MusicFontId } from '../../utils/musicFont'
 
 const props = withDefaults(defineProps<{
 	active: boolean
@@ -37,14 +37,6 @@ const CATEGORY_EXAMPLE_SYMBOLS: Record<StampCategory, [string, string]> = {
 	rhythm: ['\uE1D5', '\uE4E5'],
 }
 
-function getStampDef(sym: string) {
-	return MUSIC_STAMPS.find((s) => s.symbol === sym)
-}
-
-function pickerFontSize(symbol: string, base = 22): number {
-	return isFingeringDigit(symbol) ? Math.round(base * 1.65) : base
-}
-
 const filteredStamps = computed(() =>
 	MUSIC_STAMPS.filter((s) => s.category === activeStampCategory.value),
 )
@@ -66,26 +58,12 @@ const filteredStamps = computed(() =>
 				data-test="tool-stamp"
 				@click="emit('toggle')">
 				<MusicNote :size="18" />
-				<svg
-					v-if="getStampDef(props.stampSymbol)"
-					width="20"
-					height="20"
-					viewBox="0 0 20 20"
-					aria-hidden="true">
-					<text
-						:x="10 + getStampDef(props.stampSymbol)!.inkOffset.ox * pickerFontSize(props.stampSymbol, 18)"
-						:y="10 + getStampDef(props.stampSymbol)!.inkOffset.oy * pickerFontSize(props.stampSymbol, 18)"
-						:font-size="pickerFontSize(props.stampSymbol, 18)"
-						text-anchor="middle"
-						dominant-baseline="alphabetic"
-						fill="currentColor"
-						:font-family="getMusicFontFamily(props.musicFont)">
-						{{ props.stampSymbol }}
-					</text>
-				</svg>
-				<span v-else :class="$style.stampPreview" :style="{ fontFamily: getMusicFontFamily(props.musicFont) }">
-					{{ props.stampSymbol }}
-				</span>
+				<MusicGlyphIcon
+					:symbol="props.stampSymbol"
+					:music-font="props.musicFont"
+					:width="20"
+					:height="20"
+					:base-font-size="18" />
 			</button>
 		</template>
 			<div :class="$style.stampTabs" role="tablist">
@@ -100,25 +78,14 @@ const filteredStamps = computed(() =>
 					:class="[$style.stampTab, activeStampCategory === cat.id && $style.active]"
 					:data-test="`stamp-tab-${cat.id}`"
 					@click="activeStampCategory = cat.id">
-					<template v-for="sym in CATEGORY_EXAMPLE_SYMBOLS[cat.id]" :key="sym">
-						<svg
-							v-if="getStampDef(sym)"
-							width="20"
-							height="24"
-							viewBox="0 0 20 24"
-							aria-hidden="true">
-							<text
-								:x="10 + getStampDef(sym)!.inkOffset.ox * pickerFontSize(sym, 18)"
-								:y="12 + getStampDef(sym)!.inkOffset.oy * pickerFontSize(sym, 18)"
-								:font-size="pickerFontSize(sym, 18)"
-								text-anchor="middle"
-								dominant-baseline="alphabetic"
-								fill="currentColor"
-								:font-family="getMusicFontFamily(props.musicFont)">
-								{{ sym }}
-							</text>
-						</svg>
-					</template>
+					<MusicGlyphIcon
+						v-for="sym in CATEGORY_EXAMPLE_SYMBOLS[cat.id]"
+						:key="sym"
+						:symbol="sym"
+						:music-font="props.musicFont"
+						:width="20"
+						:height="24"
+						:base-font-size="18" />
 				</button>
 			</div>
 
@@ -131,22 +98,12 @@ const filteredStamps = computed(() =>
 					:title="st.shortcut ? `${st.label} (${st.shortcut})` : st.label"
 					:data-test="`stamp-option-${st.symbol}`"
 					@click="emit('select', st.symbol)">
-					<svg
-						width="28"
-						height="28"
-						viewBox="0 0 28 28"
-						aria-hidden="true">
-						<text
-							:x="14 + st.inkOffset.ox * pickerFontSize(st.symbol, 22)"
-							:y="14 + st.inkOffset.oy * pickerFontSize(st.symbol, 22)"
-							:font-size="pickerFontSize(st.symbol, 22)"
-							text-anchor="middle"
-							dominant-baseline="alphabetic"
-							fill="currentColor"
-							:font-family="getMusicFontFamily(props.musicFont)">
-							{{ st.symbol }}
-						</text>
-					</svg>
+					<MusicGlyphIcon
+						:symbol="st.symbol"
+						:music-font="props.musicFont"
+						:width="28"
+						:height="28"
+						:base-font-size="22" />
 				</button>
 			</div>
 	</ViewportPopover>
@@ -181,11 +138,6 @@ button[type='button'].toolBtn {
 	border-color: var(--color-primary-element, #0082c9);
 	color: var(--color-primary-element, #0082c9);
 	font-weight: 600;
-}
-
-.stampPreview {
-	font-size: 1.05rem;
-	line-height: 1;
 }
 
 .stampPopover {

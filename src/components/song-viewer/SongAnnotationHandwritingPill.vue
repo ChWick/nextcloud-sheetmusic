@@ -5,8 +5,8 @@ import { translate as t } from '@nextcloud/l10n'
 import DeleteOutline from 'vue-material-design-icons/DeleteOutline.vue'
 import DotsHorizontal from 'vue-material-design-icons/DotsHorizontal.vue'
 import Pencil from 'vue-material-design-icons/Pencil.vue'
-import { getStampDefinition, isFingeringDigit } from '../../utils/musicSymbols'
-import { getMusicFontFamily, type MusicFontId } from '../../utils/musicFont'
+import MusicGlyphIcon from './MusicGlyphIcon.vue'
+import type { MusicFontId } from '../../utils/musicFont'
 
 const props = withDefaults(defineProps<{
 	swapState: HandwritingSwapState | null
@@ -38,10 +38,6 @@ const isOverflowActive = computed(() => {
 	const active = props.swapState?.activeSymbol
 	return Boolean(active && overflowCandidates.value.some((c) => c.symbol === active))
 })
-
-function pillFontSize(symbol: string): number {
-	return isFingeringDigit(symbol) ? 30 : 18
-}
 
 function toggleMore() {
 	showMore.value = !showMore.value
@@ -84,29 +80,12 @@ const positionStyle = computed(() => {
 				:aria-label="cand.label"
 				:data-test="`handwriting-candidate-${cand.symbol}`"
 				@click="selectSymbol(cand.symbol)">
-				<svg
-					v-if="getStampDefinition(cand.symbol)"
-					width="24"
-					height="24"
-					viewBox="0 0 24 24"
-					aria-hidden="true">
-					<text
-						:x="12 + getStampDefinition(cand.symbol)!.inkOffset.ox * pillFontSize(cand.symbol)"
-						:y="12 + getStampDefinition(cand.symbol)!.inkOffset.oy * pillFontSize(cand.symbol)"
-						:font-size="pillFontSize(cand.symbol)"
-						text-anchor="middle"
-						dominant-baseline="alphabetic"
-						fill="currentColor"
-						:font-family="getMusicFontFamily(props.musicFont)">
-						{{ cand.symbol }}
-					</text>
-				</svg>
-				<span
-					v-else
-					:class="$style.fingeringGlyph"
-					:style="{ fontFamily: getMusicFontFamily(props.musicFont) }">
-					{{ cand.symbol }}
-				</span>
+				<MusicGlyphIcon
+					:symbol="cand.symbol"
+					:music-font="props.musicFont"
+					:width="24"
+					:height="24"
+					:base-font-size="18" />
 			</button>
 
 			<button
@@ -157,29 +136,12 @@ const positionStyle = computed(() => {
 				:aria-label="cand.label"
 				:data-test="`handwriting-candidate-${cand.symbol}`"
 				@click="selectSymbol(cand.symbol)">
-				<svg
-					v-if="getStampDefinition(cand.symbol)"
-					width="24"
-					height="24"
-					viewBox="0 0 24 24"
-					aria-hidden="true">
-					<text
-						:x="12 + getStampDefinition(cand.symbol)!.inkOffset.ox * pillFontSize(cand.symbol)"
-						:y="12 + getStampDefinition(cand.symbol)!.inkOffset.oy * pillFontSize(cand.symbol)"
-						:font-size="pillFontSize(cand.symbol)"
-						text-anchor="middle"
-						dominant-baseline="alphabetic"
-						fill="currentColor"
-						:font-family="getMusicFontFamily(props.musicFont)">
-						{{ cand.symbol }}
-					</text>
-				</svg>
-				<span
-					v-else
-					:class="$style.fingeringGlyph"
-					:style="{ fontFamily: getMusicFontFamily(props.musicFont) }">
-					{{ cand.symbol }}
-				</span>
+				<MusicGlyphIcon
+					:symbol="cand.symbol"
+					:music-font="props.musicFont"
+					:width="24"
+					:height="24"
+					:base-font-size="18" />
 			</button>
 		</div>
 	</div>
@@ -243,12 +205,6 @@ button[type='button'].actionBtn.active {
 
 button[type='button'].deleteBtn:hover {
 	color: var(--color-error, #e53935);
-}
-
-.fingeringGlyph {
-	font-size: 16px;
-	font-weight: 700;
-	line-height: 1;
 }
 
 .divider {
