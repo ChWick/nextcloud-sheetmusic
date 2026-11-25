@@ -17,6 +17,7 @@ use OCA\SheetMusic\Db\InternalSongFile;
 use OCA\SheetMusic\Service\SetlistService;
 use OCA\SheetMusic\Service\SongAnnotationService;
 use OCP\AppFramework\Http;
+use OCP\IConfig;
 use OCP\IUser;
 use PHPUnit\Framework\TestCase;
 use TestSupport\FakeRequest;
@@ -203,5 +204,109 @@ final class SongAnnotationControllerTest extends TestCase {
 
 		$resAfter = $controller->getSetlistFileAnnotations(1, 10, 5);
 		self::assertEmpty($resAfter->getData());
+	}
+
+	public function testFileMusicFontGetAndSave(): void {
+		$store = [];
+		$config = $this->createMock(IConfig::class);
+		$config->method('getAppValue')
+			->willReturnCallback(static function (string $app, string $key, string $default = '') use (&$store): string {
+				return $store[$key] ?? $default;
+			});
+		$config->method('setAppValue')
+			->willReturnCallback(static function (string $app, string $key, string $value) use (&$store): void {
+				$store[$key] = $value;
+			});
+
+		$controller = new SongAnnotationController(
+			'sheetmusic',
+			$this->request,
+			$this->annotationService,
+			$this->userSession,
+			null,
+			null,
+			$config,
+		);
+
+		// Default is bravura
+		$resDefault = $controller->getFileMusicFont(4455);
+		self::assertSame(Http::STATUS_OK, $resDefault->getStatus());
+		self::assertSame(['font' => 'bravura'], $resDefault->getData());
+
+		// Invalid font rejected
+		$this->request->setParam('font', 'comic-sans');
+		$resInvalid = $controller->saveFileMusicFont(4455);
+		self::assertSame(Http::STATUS_BAD_REQUEST, $resInvalid->getStatus());
+
+		// Valid font saved and persisted
+		$this->request->setParam('font', 'petaluma');
+		$resSave = $controller->saveFileMusicFont(4455);
+		self::assertSame(Http::STATUS_OK, $resSave->getStatus());
+		self::assertSame(['font' => 'petaluma'], $resSave->getData());
+
+		$resGet = $controller->getFileMusicFont(4455);
+		self::assertSame(['font' => 'petaluma'], $resGet->getData());
+
+		// Unauthorized save rejected
+		$this->userSession->setUser(null);
+		$resUnauth = $controller->saveFileMusicFont(4455);
+		self::assertSame(Http::STATUS_UNAUTHORIZED, $resUnauth->getStatus());
+	}
+
+	public function testHandwritingModelLifecycle(): void {
+		$userStore = [];
+		$config = $this->createMock(IConfig::class);
+		$config->method('getUserValue')
+			->willReturnCallback(static function (string $uid, string $app, string $key, string $default = '') use (&$userStore): string {
+				return $userStore["$uid:$key"] ?? $default;
+			});
+		$config->method('setUserValue')
+			->willReturnCallback(static function (string $uid, string $app, string $key, string $value) use (&$userStore): void {
+				$userStore["$uid:$key"] = $value;
+			});
+		$config->method('deleteUserValue')
+			->willReturnCallback(static function (string $uid, string $app, string $key) use (&$userStore): void {
+				unset($userStore["$uid:$key"]);
+			});
+
+		$controller = new SongAnnotationController(
+			'sheetmusic',
+			$this->request,
+			$this->annotationService,
+			$this->userSession,
+			null,
+			null,
+			$config,
+		);
+
+		// Initially empty
+		$resEmpty = $controller->getHandwritingModel();
+		self::assertSame(Http::STATUS_OK, $resEmpty->getStatus());
+		self::assertSame(['samples' => []], $resEmpty->getData());
+
+		// Save valid + invalid entries; sanitizer keeps only valid ones
+		$this->request->setParam('samples', [
+			[
+				'symbol' => "\u{ED11}",
+				'points' => [['x' => 0.123456, 'y' => -0.25, 'tx' => 0, 'ty' => 1, 'strokeId' => 0]],
+				'strokeCount' => 1,
+				'aspectRatio' => 0.2,
+				'weight' => 1.5,
+				'updatedAt' => 12345,
+			],
+			['symbol' => '', 'points' => []],
+		]);
+		$resSave = $controller->saveHandwritingModel();
+		self::assertSame(Http::STATUS_OK, $resSave->getStatus());
+		self::assertSame(['saved' => 1], $resSave->getData());
+
+		$resGet = $controller->getHandwritingModel();
+		self::assertCount(1, $resGet->getData()['samples']);
+		self::assertSame("\u{ED11}", $resGet->getData()['samples'][0]['symbol']);
+
+		// Delete clears stored model
+		$resDel = $controller->deleteHandwritingModel();
+		self::assertSame(Http::STATUS_OK, $resDel->getStatus());
+		self::assertSame(['samples' => []], $controller->getHandwritingModel()->getData());
 	}
 }
