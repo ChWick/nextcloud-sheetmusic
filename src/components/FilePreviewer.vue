@@ -28,6 +28,12 @@ import {
 	MIN_CUSTOM_SCALE,
 	resolvePagesToRender,
 } from '../utils/pdf-layout'
+import {
+	detectPdfPageCropBox,
+	FULL_PAGE_CROP,
+	isCropped,
+	type NormalizedCropBox,
+} from '../utils/pdfCrop'
 import { observeContinuousPdfPages } from '../utils/pdf-continuous-renderer'
 import {
 	applyStageLayoutStyles,
@@ -66,6 +72,8 @@ const props = withDefaults(
 		nextTargetPage?: number
 		nextPageOrder?: string | null
 		interleaveSongs?: boolean
+		backgroundColor?: string
+		tightCrop?: boolean
 	}>(),
 	{
 		fileName: undefined,
@@ -90,6 +98,8 @@ const props = withDefaults(
 		nextTargetPage: undefined,
 		nextPageOrder: undefined,
 		interleaveSongs: false,
+		backgroundColor: '',
+		tightCrop: false,
 	},
 )
 
@@ -294,12 +304,17 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 		refPage = await pdf.getPage(refPageNum)
 		const pageRotation = getEffectivePageRotation(refPage, rotation.value)
 		const unscaledViewport = refPage.getViewport({ scale: 1.0, rotation: pageRotation })
+		const refCrop = props.tightCrop
+			? await detectPdfPageCropBox(refPage, pageRotation, `${props.filePath}:${refPageNum}:${pageRotation}`)
+			: FULL_PAGE_CROP
+		const refW = unscaledViewport.width * (refCrop.right - refCrop.left)
+		const refH = unscaledViewport.height * (refCrop.bottom - refCrop.top)
 
 		if (zoomMode.value === 'fit-width' || zoomMode.value === 'fit-page') {
-			scale = computeFitScale(unscaledViewport.width, unscaledViewport.height, targetW, containerH, zoomMode.value)
+			scale = computeFitScale(refW, refH, targetW, containerH, zoomMode.value)
 			docRefFitScale = scale
 		} else {
-			docRefFitScale = computeFitScale(unscaledViewport.width, unscaledViewport.height, targetW, containerH, 'fit-page')
+			docRefFitScale = computeFitScale(refW, refH, targetW, containerH, 'fit-page')
 			scale = Math.max(MIN_CUSTOM_SCALE, Math.min(customScale.value, MAX_CUSTOM_SCALE))
 		}
 	} catch {
@@ -355,20 +370,36 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 			if (renderId !== currentRenderId) return
 
 			const pageRotation = getEffectivePageRotation(page, rotation.value)
+			const unscaledViewport = page.getViewport({ scale: 1.0, rotation: pageRotation })
+			const cachePath = isNextFile ? (props.nextFilePath || '') : props.filePath
+			const cropBox: NormalizedCropBox = props.tightCrop
+				? await detectPdfPageCropBox(page, pageRotation, `${cachePath}:${resolvedPageNum}:${pageRotation}`)
+				: FULL_PAGE_CROP
+			if (renderId !== currentRenderId) return
+
+			const cropped = isCropped(cropBox)
+			const cropW = cropBox.right - cropBox.left
+			const cropH = cropBox.bottom - cropBox.top
+			const effUnscaledW = unscaledViewport.width * cropW
+			const effUnscaledH = unscaledViewport.height * cropH
+
 			let pageScale = effectiveScale.value
 			if (isDoubleLayout) {
-				const unscaledViewport = page.getViewport({ scale: 1.0, rotation: pageRotation })
 				pageScale = computeDoublePageScale({
-					unscaledWidth: unscaledViewport.width,
-					unscaledHeight: unscaledViewport.height,
+					unscaledWidth: effUnscaledW,
+					unscaledHeight: effUnscaledH,
 					doubleSlotW,
 					containerH,
 					zoomMode: zoomMode.value,
 					effectiveScale: effectiveScale.value,
 					docRefFitScale,
 				})
+			} else if (cropped && (zoomMode.value === 'fit-width' || zoomMode.value === 'fit-page')) {
+				pageScale = computeFitScale(effUnscaledW, effUnscaledH, targetW, containerH, zoomMode.value)
 			}
 			const viewport = page.getViewport({ scale: pageScale, rotation: pageRotation })
+			const displayW = cropped ? viewport.width * cropW : viewport.width
+			const displayH = cropped ? viewport.height * cropH : viewport.height
 
 			canvas = document.createElement('canvas')
 			canvas.className = 'sheetmusic-pdf-page'
@@ -378,6 +409,10 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 			await renderPdfPageToCanvas(page, canvas, viewport, {
 				onRenderTask,
 				maxDpr: pageLayout.value === 'continuous' ? 2 : undefined,
+				cssWidth: cropped ? displayW : undefined,
+				cssHeight: cropped ? displayH : undefined,
+				offsetX: cropped ? -cropBox.left * viewport.width : 0,
+				offsetY: cropped ? -cropBox.top * viewport.height : 0,
 			})
 
 			if (renderId === currentRenderId) {
@@ -388,8 +423,19 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 				placeholder.style.minWidth = ''
 				placeholder.dataset.pageWidth = String(viewport.width)
 				placeholder.dataset.pageHeight = String(viewport.height)
+				if (cropped) {
+					placeholder.dataset.cropLeft = String(cropBox.left)
+					placeholder.dataset.cropTop = String(cropBox.top)
+					placeholder.dataset.cropRight = String(cropBox.right)
+					placeholder.dataset.cropBottom = String(cropBox.bottom)
+				} else {
+					delete placeholder.dataset.cropLeft
+					delete placeholder.dataset.cropTop
+					delete placeholder.dataset.cropRight
+					delete placeholder.dataset.cropBottom
+				}
 				if (!isNextFile) {
-					mountAnnotationOverlay(placeholder, resolvedPageNum, viewport.width, viewport.height)
+					mountAnnotationOverlay(placeholder, resolvedPageNum, viewport.width, viewport.height, cropped ? cropBox : undefined)
 				}
 			}
 		} catch (err: any) {
@@ -676,6 +722,15 @@ onUnmounted(() => {
 watch(() => props.filePath, loadAndRenderFile, { immediate: true })
 
 watch(
+	() => props.tightCrop,
+	() => {
+		if (loadedPdf.value) {
+			renderCurrentView()
+		}
+	},
+)
+
+watch(
 	() => props.pageOrder,
 	() => {
 		if (loadedPdf.value) {
@@ -775,6 +830,7 @@ defineExpose({
 		<div
 			v-show="!isLoading && !errorMessage && isPdfFile"
 			ref="pdfContainer"
+			:style="backgroundColor ? { backgroundColor } : undefined"
 			:class="[$style.pdfContainer, !editableAnnotations && $style.pdfContainerGrabbable]">
 			<div
 				ref="pdfStage"

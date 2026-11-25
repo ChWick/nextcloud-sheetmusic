@@ -198,6 +198,9 @@ export interface RenderPdfPageOptions extends PdfOutputScaleOptions {
 	cssWidth?: number
 	/** Override CSS display height in pixels (defaults to `Math.round(viewport.height)`) */
 	cssHeight?: number
+	/** Optional CSS-pixel X/Y translation before rendering (used for on-the-fly cropping) */
+	offsetX?: number
+	offsetY?: number
 	/** Set `canvas.style.width` and `canvas.style.height` in CSS pixels (default: true) */
 	applyCssSize?: boolean
 	/** Fill background color before rendering; pass `null` to clearRect instead (default: '#ffffff') */
@@ -256,8 +259,10 @@ export async function renderPdfPageToCanvas(
 			viewport,
 			background: 'rgb(255, 255, 255)',
 		}
-		if (outputScale !== 1) {
-			renderParams.transform = [outputScale, 0, 0, outputScale, 0, 0]
+		const tx = (options.offsetX ?? 0) * outputScale
+		const ty = (options.offsetY ?? 0) * outputScale
+		if (outputScale !== 1 || tx !== 0 || ty !== 0) {
+			renderParams.transform = [outputScale, 0, 0, outputScale, tx, ty]
 		}
 
 		const renderTask = page.render(renderParams)

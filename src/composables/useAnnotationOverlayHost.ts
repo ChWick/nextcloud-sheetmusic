@@ -7,6 +7,7 @@ import type { ComputedRef, Ref } from 'vue'
 import { getCurrentInstance, h, ref, render, watch } from 'vue'
 import type { SheetAnnotation } from '../types/annotation'
 import type { MusicFontId } from '../utils/musicFont'
+import { isCropped, type NormalizedCropBox } from '../utils/pdfCrop'
 import type { EditorTool, EditorToolStyle } from './useAnnotationEditor'
 import SongAnnotationOverlay from '../components/song-viewer/SongAnnotationOverlay.vue'
 
@@ -60,15 +61,33 @@ export function useAnnotationOverlayHost(opts: UseAnnotationOverlayHostOptions) 
 		pageNum: number,
 		pageWidth: number,
 		pageHeight: number,
+		cropBox?: NormalizedCropBox,
 	) {
 		let mountEl = placeholder.querySelector<HTMLElement>('.sheetmusic-annotation-mount')
 		if (!mountEl) {
 			mountEl = document.createElement('div')
 			mountEl.className = 'sheetmusic-annotation-mount'
 			mountEl.style.position = 'absolute'
-			mountEl.style.inset = '0'
 			mountEl.style.pointerEvents = 'none'
 			placeholder.appendChild(mountEl)
+		}
+
+		if (cropBox && isCropped(cropBox)) {
+			const cropW = Math.max(0.05, cropBox.right - cropBox.left)
+			const cropH = Math.max(0.05, cropBox.bottom - cropBox.top)
+			placeholder.style.overflow = 'hidden'
+			mountEl.style.inset = ''
+			mountEl.style.width = `${100 / cropW}%`
+			mountEl.style.height = `${100 / cropH}%`
+			mountEl.style.left = `${-(cropBox.left / cropW) * 100}%`
+			mountEl.style.top = `${-(cropBox.top / cropH) * 100}%`
+		} else {
+			placeholder.style.overflow = ''
+			mountEl.style.width = ''
+			mountEl.style.height = ''
+			mountEl.style.left = ''
+			mountEl.style.top = ''
+			mountEl.style.inset = '0'
 		}
 
 		const vnode = h(SongAnnotationOverlay, {
@@ -104,7 +123,15 @@ export function useAnnotationOverlayHost(opts: UseAnnotationOverlayHostOptions) 
 			if (pageNum && canvas) {
 				const pw = Number(el.dataset.pageWidth) || canvas.width || 595
 				const ph = Number(el.dataset.pageHeight) || canvas.height || 842
-				mountAnnotationOverlay(el, pageNum, pw, ph)
+				const cropBox: NormalizedCropBox | undefined = el.dataset.cropLeft !== undefined
+					? {
+						left: Number(el.dataset.cropLeft) || 0,
+						top: Number(el.dataset.cropTop) || 0,
+						right: Number(el.dataset.cropRight) || 1,
+						bottom: Number(el.dataset.cropBottom) || 1,
+					}
+					: undefined
+				mountAnnotationOverlay(el, pageNum, pw, ph, cropBox)
 			}
 		})
 	}
