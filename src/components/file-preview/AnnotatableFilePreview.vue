@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import FilePreviewer from '../FilePreviewer.vue'
 import SongAnnotationToolbar from '../song-viewer/SongAnnotationToolbar.vue'
 import { type AnnotationEditorContext, useAnnotationEditor } from '../../composables/useAnnotationEditor'
+import { useAnnotationLayers } from '../../composables/useAnnotationLayers'
 import type { SheetAnnotation } from '../../types/annotation'
 import {
 	getCachedFileMusicFont,
@@ -92,6 +93,26 @@ const {
 	redo,
 } = useAnnotationEditor(localAnnotations, () => props.annotationContext)
 
+const {
+	layers: annotationLayers,
+	activeLayerId,
+	visibleAnnotations,
+	addLayer: handleAddLayer,
+	renameLayer: handleRenameLayer,
+	toggleLayerVisibility: handleToggleLayerVisibility,
+	reorderLayer: handleReorderLayer,
+	deleteLayer: handleDeleteLayer,
+	updateSelectedLayers: handleUpdateSelectedLayers,
+	createAnnotationOnActiveLayer: handleCreateAnnotation,
+} = useAnnotationLayers({
+	fileId: () => props.annotationContext.fileId,
+	annotations: localAnnotations,
+	selectedAnnotation,
+	onClearSelection: () => selectAnnotation(null),
+	onCreateAnnotation: createAnnotation,
+	onUpdateAnnotation: updateAnnotation,
+})
+
 watch(isEditing, (editing) => {
 	emit('update:isEditing', editing)
 })
@@ -152,9 +173,18 @@ defineExpose({
 			:is-saving="isSaving"
 			:current-page="currentPage"
 			:music-font="musicFont"
+			:layers="annotationLayers"
+			:active-layer-id="activeLayerId"
 			@update:active-tool="setTool"
 			@update:tool-style="toolStyle = $event"
 			@update:music-font="updateMusicFont"
+			@update:active-layer-id="activeLayerId = $event"
+			@add-layer="handleAddLayer"
+			@rename-layer="handleRenameLayer"
+			@toggle-layer-visibility="handleToggleLayerVisibility"
+			@reorder-layer="handleReorderLayer"
+			@delete-layer="handleDeleteLayer"
+			@update-selected-layers="handleUpdateSelectedLayers"
 			@update-selected-style="updateSelectedStyle"
 			@update-selected-data="updateSelectedData"
 			@undo="undo"
@@ -171,14 +201,14 @@ defineExpose({
 			:page-order="pageOrder"
 			:target-page="targetPage"
 			:show-external-button="showExternalButton"
-			:annotations="localAnnotations"
+			:annotations="visibleAnnotations"
 			:editable-annotations="canAnnotate && isEditing"
 			:active-annotation-tool="activeTool"
 			:annotation-tool-style="toolStyle"
 			:selected-annotation-uuid="selectedUuid"
 			:music-font="musicFont"
 			@select-annotation="selectAnnotation"
-			@create-annotation="createAnnotation"
+			@create-annotation="handleCreateAnnotation"
 			@update-annotation="updateAnnotation"
 			@delete-annotation="deleteAnnotation" />
 	</div>

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { EditorTool, EditorToolStyle } from '../../composables/useAnnotationEditor'
 import { isShapeTool } from '../../composables/useAnnotationEditor'
-import type { SheetAnnotation } from '../../types/annotation'
+import type { AnnotationLayer, SheetAnnotation } from '../../types/annotation'
+import { DEFAULT_LAYER_ID, createDefaultAnnotationLayers } from '../../utils/annotationLayers'
 import { MUSIC_FONT_OPTIONS, type MusicFontId } from '../../utils/musicFont'
 import { computed, ref, type Component } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
@@ -19,6 +20,7 @@ import Marker from 'vue-material-design-icons/Marker.vue'
 import Pencil from 'vue-material-design-icons/Pencil.vue'
 import Redo from 'vue-material-design-icons/Redo.vue'
 import Undo from 'vue-material-design-icons/Undo.vue'
+import SongAnnotationLayerPicker from './SongAnnotationLayerPicker.vue'
 import SongAnnotationShapePicker from './SongAnnotationShapePicker.vue'
 import SongAnnotationStampPicker from './SongAnnotationStampPicker.vue'
 import SongAnnotationStyleBar from './SongAnnotationStyleBar.vue'
@@ -35,6 +37,8 @@ const props = withDefaults(
 		isSaving?: boolean
 		currentPage?: number
 		musicFont?: MusicFontId
+		layers?: AnnotationLayer[]
+		activeLayerId?: number
 	}>(),
 	{
 		selectedAnnotation: null,
@@ -43,6 +47,8 @@ const props = withDefaults(
 		isSaving: false,
 		currentPage: 1,
 		musicFont: 'bravura',
+		layers: createDefaultAnnotationLayers,
+		activeLayerId: DEFAULT_LAYER_ID,
 	},
 )
 
@@ -50,6 +56,13 @@ const emit = defineEmits<{
 	'update:activeTool': [tool: EditorTool]
 	'update:toolStyle': [style: EditorToolStyle]
 	'update:musicFont': [font: MusicFontId]
+	'update:activeLayerId': [id: number]
+	'add-layer': [name: string]
+	'rename-layer': [id: number, name: string]
+	'toggle-layer-visibility': [id: number]
+	'reorder-layer': [id: number, direction: 'up' | 'down']
+	'delete-layer': [id: number]
+	'update-selected-layers': [layerIds: number[]]
 	'update-selected-style': [patch: Partial<SheetAnnotation['style']>]
 	'update-selected-data': [patch: Partial<SheetAnnotation['data']>]
 	undo: []
@@ -231,6 +244,18 @@ function pickStamp(symbol: string) {
 				@update-selected-data="emit('update-selected-data', $event)" />
 
 			<div :class="$style.actionGroup">
+				<SongAnnotationLayerPicker
+					:layers="layers"
+					:active-layer-id="activeLayerId"
+					:selected-annotation="selectedAnnotation"
+					@update:active-layer-id="emit('update:activeLayerId', $event)"
+					@add-layer="emit('add-layer', $event)"
+					@rename-layer="(id, name) => emit('rename-layer', id, name)"
+					@toggle-visibility="emit('toggle-layer-visibility', $event)"
+					@reorder-layer="(id, dir) => emit('reorder-layer', id, dir)"
+					@delete-layer="emit('delete-layer', $event)"
+					@update-selected-layers="emit('update-selected-layers', $event)" />
+
 				<select
 					:value="musicFont"
 					:class="$style.fontSelect"
