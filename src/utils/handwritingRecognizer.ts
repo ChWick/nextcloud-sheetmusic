@@ -232,7 +232,7 @@ function rankCandidates(scores: Map<string, number>): HandwritingRecognitionResu
 	const best = ranked[0] && ranked[0].score >= MIN_CONFIDENCE ? ranked[0] : null
 	return {
 		best,
-		candidates: best ? ranked : [],
+		candidates: ranked,
 	}
 }
 
@@ -259,7 +259,7 @@ export function recognizeHandwriting(
 	const fullBox = boundingBox(svgStrokes)
 	const diag = Math.hypot(fullBox.w, fullBox.h)
 	const totalLen = svgStrokes.reduce((sum, s) => sum + strokePathLength(s), 0)
-	if (diag > 8 && totalLen / diag > 7.5) {
+	if (diag > 8 && totalLen / diag > 12) {
 		return { best: null, candidates: [] }
 	}
 

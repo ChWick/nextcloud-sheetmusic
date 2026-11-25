@@ -72,7 +72,7 @@ export function useHandwritingInput(opts: UseHandwritingInputOptions) {
 		clearDismissTimer()
 		const current = swapState.value
 		swapState.value = null
-		if (!current || !learnIfAccepted) return
+		if (!current || !learnIfAccepted || !current.activeSymbol) return
 
 		// Only learn if the placed annotation still exists (wasn't deleted or undone)
 		const stillPresent = opts.activeAnnotations.value.some((a) => a.uuid === current.uuid)
@@ -147,23 +147,66 @@ export function useHandwritingInput(opts: UseHandwritingInputOptions) {
 		}
 	}
 
+	function buildInkDrawingDraft(rawStrokes: NormalizedPoint[][], uuid?: string) {
+		const strokes = rawStrokes.map((s) =>
+			s.length >= 2 ? s : [s[0], { x: Math.min(1, s[0].x + 0.002), y: s[0].y }],
+		)
+		const box = computeBoundingBoxFromPoints(strokes.flat())
+		const s = opts.toolStyle.value
+		return {
+			...(uuid ? { uuid } : {}),
+			pageNumber: opts.pageIndex.value,
+			layerIndex: 0,
+			type: 'drawing' as const,
+			...box,
+			style: {
+				stroke: s.color,
+				strokeWidth: s.strokeWidth,
+				opacity: s.opacity,
+				blendMode: 'normal' as const,
+				lineStyle: 'solid' as const,
+			},
+			data: {
+				strokes,
+				smooth: true,
+			},
+		}
+	}
+
 	function flushPendingStrokes() {
 		clearRecognizeTimer()
 		const strokes = pendingStrokes.value
 		pendingStrokes.value = []
 		if (strokes.length === 0) return
 
-		const result = recognizeHandwriting(strokes, opts.vbHeight.value)
-		if (!result.best) {
-			// Unrecognized stroke: discard cleanly
-			return
-		}
-
 		const allPts = strokes.flat()
+		if (allPts.length === 0) return
+
 		const box = computeBoundingBoxFromPoints(allPts, 0)
 		const cx = roundNorm(box.x + box.width / 2)
 		const cy = roundNorm(box.y + box.height / 2)
 		const uuid = createUuid()
+		const result = recognizeHandwriting(strokes, opts.vbHeight.value)
+
+		if (!result.best) {
+			// Never discard strokes into thin air: keep them as freehand ink,
+			// and still offer low-confidence candidates in the swap pill if any exist.
+			opts.onCreate(buildInkDrawingDraft(strokes, uuid))
+			if (result.candidates.length > 0) {
+				swapState.value = {
+					uuid,
+					x: cx,
+					y: cy,
+					initialSymbol: '',
+					activeSymbol: '',
+					candidates: result.candidates,
+					rawStrokes: strokes.map((s) => s.map((p) => ({ ...p }))),
+					vbHeight: opts.vbHeight.value,
+				}
+				scheduleDismissPill()
+			}
+			return
+		}
 
 		opts.onCreate(buildStampDraft(result.best.symbol, cx, cy, uuid))
 
@@ -210,7 +253,15 @@ export function useHandwritingInput(opts: UseHandwritingInputOptions) {
 		}
 		const def = getStampDefinition(symbol)
 		const resolvedSymbol = def?.symbol ?? symbol
-		if (resolvedSymbol !== current.activeSymbol) {
+		if (ann.type === 'drawing') {
+			// Convert fallback freehand ink into the chosen stamp symbol
+			opts.onDelete(ann)
+			opts.onCreate(buildStampDraft(resolvedSymbol, current.x, current.y, current.uuid))
+			swapState.value = {
+				...current,
+				activeSymbol: resolvedSymbol,
+			}
+		} else if (resolvedSymbol !== current.activeSymbol) {
 			const next: SheetAnnotation = {
 				...JSON.parse(JSON.stringify(ann)),
 				data: {
@@ -232,32 +283,16 @@ export function useHandwritingInput(opts: UseHandwritingInputOptions) {
 		const current = swapState.value
 		if (!current) return
 		const ann = opts.activeAnnotations.value.find((a) => a.uuid === current.uuid)
+		if (ann?.type === 'drawing') {
+			// Already kept as freehand ink
+			finalizeSwapPill(false)
+			return
+		}
 		if (ann) {
 			opts.onDelete(ann)
 		}
 
-		const strokes = current.rawStrokes.map((s) =>
-			s.length >= 2 ? s : [s[0], { x: Math.min(1, s[0].x + 0.002), y: s[0].y }],
-		)
-		const box = computeBoundingBoxFromPoints(strokes.flat())
-		const s = opts.toolStyle.value
-		opts.onCreate({
-			pageNumber: opts.pageIndex.value,
-			layerIndex: 0,
-			type: 'drawing',
-			...box,
-			style: {
-				stroke: s.color,
-				strokeWidth: s.strokeWidth,
-				opacity: s.opacity,
-				blendMode: 'normal',
-				lineStyle: 'solid',
-			},
-			data: {
-				strokes,
-				smooth: true,
-			},
-		})
+		opts.onCreate(buildInkDrawingDraft(current.rawStrokes))
 		finalizeSwapPill(false)
 	}
 
@@ -274,6 +309,14 @@ export function useHandwritingInput(opts: UseHandwritingInputOptions) {
 	function extendSwapPillTimeout() {
 		if (swapState.value) {
 			scheduleDismissPill()
+		}
+	}
+
+	function resumeRecognizeTimerIfPending() {
+		if (pendingStrokes.value.length > 0 && recognizeTimer === null) {
+			recognizeTimer = setTimeout(() => {
+				flushPendingStrokes()
+			}, RECOGNITION_DELAY_MS)
 		}
 	}
 
@@ -312,6 +355,7 @@ export function useHandwritingInput(opts: UseHandwritingInputOptions) {
 		deletePlaced,
 		extendSwapPillTimeout,
 		dismissSwapPill,
+		resumeRecognizeTimerIfPending,
 		cancelPending,
 	}
 }

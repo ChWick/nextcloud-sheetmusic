@@ -214,4 +214,32 @@ describe('useHandwritingInput', () => {
 		hw.keepInk()
 		expect(getLearnedSampleCount()).toBe(2)
 	})
+
+	it('falls back to freehand ink instead of discarding unrecognized strokes and resumes timer after cancel', () => {
+		const { hw, created } = setup()
+
+		// 6-stroke scribble (unrecognized) must fall back to a freehand drawing instead of disappearing
+		const seg = [{ x: 0.2, y: 0.2 }, { x: 0.25, y: 0.25 }]
+		for (let i = 0; i < 6; i++) {
+			hw.beginStroke(seg[0])
+			hw.endStroke(seg)
+		}
+		vi.advanceTimersByTime(450)
+
+		expect(created).toHaveLength(1)
+		expect(created[0].type).toBe('drawing')
+		expect(created[0].data.strokes).toHaveLength(6)
+
+		// If a second stroke starts (clearing the timer) and is cancelled mid-flight,
+		// resumeRecognizeTimerIfPending() ensures the first stroke still flushes instead of getting stuck
+		const vLine = [{ x: 0.5, y: 0.3 }, { x: 0.5, y: 0.34 }]
+		hw.beginStroke(vLine[0])
+		hw.endStroke(vLine)
+		hw.beginStroke({ x: 0.51, y: 0.31 }) // clears timer
+		hw.resumeRecognizeTimerIfPending() // simulates pointercancel recovery
+		vi.advanceTimersByTime(450)
+
+		expect(created).toHaveLength(2)
+		expect(created[1].type).toBe('stamp')
+	})
 })

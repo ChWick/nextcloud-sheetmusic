@@ -129,6 +129,7 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 		interaction.value = null
 		previewAnnotation.value = null
 		activeHandwritingStroke.value = []
+		handwriting.resumeRecognizeTimerIfPending()
 		releaseCapturedPointer(pointerId)
 	}
 
