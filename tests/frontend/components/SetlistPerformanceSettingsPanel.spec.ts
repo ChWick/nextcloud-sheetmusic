@@ -43,4 +43,29 @@ describe('SetlistPerformanceSettingsPanel', () => {
 
 		expect(wrapper.find('aside').exists()).toBe(false)
 	})
+
+	it('emits background color and tight crop updates', async () => {
+		const wrapper = mount(SetlistPerformanceSettingsPanel, {
+			props: {
+				open: true,
+				setlistName: '',
+				showSetlistScope: false,
+				isSetlistOverride: false,
+				backgroundColor: '',
+				tightCrop: false,
+			},
+		})
+
+		// Setlist scope section is hidden in single-song mode
+		expect(wrapper.find('button[data-settings-scope="setlist"]').exists()).toBe(false)
+
+		await wrapper.find('[data-test="performance-bg-preset-#000000"]').trigger('click')
+		expect(wrapper.emitted('update:backgroundColor')?.[0]).toEqual(['#000000'])
+
+		await wrapper.find('[data-test="performance-bg-custom"]').setValue('#123456')
+		expect(wrapper.emitted('update:backgroundColor')?.[1]).toEqual(['#123456'])
+
+		await wrapper.find('[data-test="performance-tight-crop-toggle"]').trigger('click')
+		expect(wrapper.emitted('update:tightCrop')?.[0]).toEqual([true])
+	})
 })

@@ -79,6 +79,8 @@ let keepFullscreenOnUnmount = false
 const isSetlistOverride = ref(initialSettings.overrideEnabled)
 const showAnnotations = ref(initialSettings.settings.showAnnotations)
 const interleaveSongs = ref(initialSettings.settings.interleaveSongs)
+const backgroundColor = ref(initialSettings.settings.backgroundColor)
+const tightCrop = ref(initialSettings.settings.tightCrop)
 
 const layoutChoice = ref<PerformanceLayoutChoice>(initialSettings.settings.layoutChoice)
 const doublePageTurnMode = ref<DoublePageTurnMode>(initialSettings.settings.doublePageTurnMode)
@@ -102,6 +104,8 @@ function currentViewerSettings(): PerformanceViewerSettings {
 		zoomChoice: zoomChoice.value,
 		showAnnotations: showAnnotations.value,
 		interleaveSongs: interleaveSongs.value,
+		backgroundColor: backgroundColor.value,
+		tightCrop: tightCrop.value,
 	}
 }
 
@@ -133,6 +137,9 @@ function applySettingsToPreviewer(settings: PerformanceViewerSettings) {
 		showAnnotations.value = settings.showAnnotations
 		previewerRef.value?.toggleAnnotations()
 	}
+	interleaveSongs.value = settings.interleaveSongs
+	backgroundColor.value = settings.backgroundColor
+	tightCrop.value = settings.tightCrop
 }
 
 function toggleSetlistOverride(enabled: boolean) {
@@ -386,6 +393,16 @@ function onToggleInterleave() {
 	persistCurrentSettings()
 }
 
+function onUpdateBackgroundColor(color: string) {
+	backgroundColor.value = color
+	persistCurrentSettings()
+}
+
+function onUpdateTightCrop(enabled: boolean) {
+	tightCrop.value = enabled
+	persistCurrentSettings()
+}
+
 function onZoomToggle() {
 	const next = zoomChoice.value === 'fit-page' ? 'fit-width' : 'fit-page'
 	zoomChoice.value = next
@@ -476,7 +493,13 @@ onUnmounted(() => {
 
 <template>
 	<Teleport to="body">
-		<div ref="rootRef" :class="$style.overlay" role="dialog" aria-modal="true" :aria-label="setlistName || currentSongTitle">
+		<div
+			ref="rootRef"
+			:class="$style.overlay"
+			:style="backgroundColor ? { backgroundColor } : undefined"
+			role="dialog"
+			aria-modal="true"
+			:aria-label="setlistName || currentSongTitle">
 			<SetlistPerformanceTopBar
 				:visible="isHudVisible"
 				:setlist-name="setlistName"
@@ -488,7 +511,7 @@ onUnmounted(() => {
 				:show-annotations="showAnnotations"
 				:annotation-layers="annotationLayers"
 				:is-fullscreen="isFullscreen"
-				:show-settings-button="Boolean(setlistId && setlistId > 0)"
+				:show-settings-button="true"
 				:is-settings-open="isSettingsOpen"
 				:is-setlist-override="isSetlistOverride"
 				@exit="emit('close')"
@@ -524,7 +547,9 @@ onUnmounted(() => {
 					:next-file-path="nextFilePath"
 					:next-target-page="nextTargetPage"
 					:next-page-order="nextPageOrder"
-					:interleave-songs="interleaveSongs" />
+					:interleave-songs="interleaveSongs"
+					:background-color="backgroundColor"
+					:tight-crop="tightCrop" />
 				<div v-else :class="$style.emptyFile">
 					{{ t('sheetmusic', 'No score file attached to this song.') }}
 				</div>
@@ -565,6 +590,7 @@ onUnmounted(() => {
 				:double-page-turn-mode="doublePageTurnMode"
 				:zoom-choice="zoomChoice"
 				:interleave-songs="interleaveSongs"
+				:tight-crop="tightCrop"
 				:is-page-picker-open="isPagePickerOpen"
 				:is-drawer-open="isDrawerOpen"
 				:show-setlist-controls="!isSingleSongMode"
@@ -576,6 +602,7 @@ onUnmounted(() => {
 				@change-double-page-turn-mode="onDoublePageTurnModeChange"
 				@toggle-zoom="onZoomToggle"
 				@toggle-interleave="onToggleInterleave"
+				@toggle-tight-crop="onUpdateTightCrop(!tightCrop)"
 				@toggle-page-picker="isPagePickerOpen = !isPagePickerOpen"
 				@toggle-drawer="toggleDrawer"
 				@pause-auto-hide="pauseHudAutoHide"
@@ -593,9 +620,14 @@ onUnmounted(() => {
 			<SetlistPerformanceSettingsPanel
 				:open="isSettingsOpen"
 				:setlist-name="setlistName"
+				:show-setlist-scope="Boolean(setlistId && setlistId > 0)"
 				:is-setlist-override="isSetlistOverride"
+				:background-color="backgroundColor"
+				:tight-crop="tightCrop"
 				@close="toggleSettingsPanel"
 				@update:is-setlist-override="toggleSetlistOverride"
+				@update:background-color="onUpdateBackgroundColor"
+				@update:tight-crop="onUpdateTightCrop"
 				@save-as-library-default="saveCurrentAsLibraryDefault" />
 
 			<SetlistPerformanceSupplementalDrawer

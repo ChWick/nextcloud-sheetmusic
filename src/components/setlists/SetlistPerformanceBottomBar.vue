@@ -5,6 +5,7 @@ import ArrowExpandHorizontalIcon from 'vue-material-design-icons/ArrowExpandHori
 import ChevronLeftIcon from 'vue-material-design-icons/ChevronLeft.vue'
 import ChevronRightIcon from 'vue-material-design-icons/ChevronRight.vue'
 import CompareHorizontalIcon from 'vue-material-design-icons/CompareHorizontal.vue'
+import CropIcon from 'vue-material-design-icons/Crop.vue'
 import FitToPageOutlineIcon from 'vue-material-design-icons/FitToPageOutline.vue'
 import FormatListBulletedIcon from 'vue-material-design-icons/FormatListBulleted.vue'
 import SkipNextIcon from 'vue-material-design-icons/SkipNext.vue'
@@ -27,11 +28,13 @@ withDefaults(defineProps<{
 	doublePageTurnMode: DoublePageTurnMode
 	zoomChoice: PerformanceZoomChoice
 	interleaveSongs?: boolean
+	tightCrop?: boolean
 	isPagePickerOpen?: boolean
 	isDrawerOpen?: boolean
 	showSetlistControls?: boolean
 }>(), {
 	interleaveSongs: false,
+	tightCrop: false,
 	isPagePickerOpen: false,
 	isDrawerOpen: false,
 	showSetlistControls: true,
@@ -46,6 +49,7 @@ const emit = defineEmits<{
 	changeDoublePageTurnMode: [mode: DoublePageTurnMode]
 	toggleZoom: []
 	toggleInterleave: []
+	toggleTightCrop: []
 	togglePagePicker: []
 	toggleDrawer: []
 	pauseAutoHide: []
@@ -159,6 +163,17 @@ const emit = defineEmits<{
 				:title="t('sheetmusic', 'Interleave last page of current song with first page of next song')"
 				@click="emit('toggleInterleave')">
 				<template #icon><CompareHorizontalIcon :size="18" /></template>
+			</NcButton>
+
+			<NcButton
+				:variant="tightCrop ? 'primary' : 'secondary'"
+				size="small"
+				:aria-pressed="tightCrop"
+				:aria-label="t('sheetmusic', 'Tight on-the-fly crop')"
+				:title="t('sheetmusic', 'Tight on-the-fly crop')"
+				data-test="performance-bottom-crop-toggle"
+				@click="emit('toggleTightCrop')">
+				<template #icon><CropIcon :size="18" /></template>
 			</NcButton>
 
 			<NcButton

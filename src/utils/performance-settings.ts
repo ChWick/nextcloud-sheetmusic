@@ -10,11 +10,30 @@ export interface PerformanceViewerSettings {
 	zoomChoice: PerformanceZoomChoice
 	showAnnotations: boolean
 	interleaveSongs: boolean
+	/** Custom stage background color ('', '#ffffff', '#000000', etc.); empty string uses theme default */
+	backgroundColor: string
+	/** On-the-fly whitespace cropping of PDF pages to maximize note area */
+	tightCrop: boolean
 }
 
 export interface SetlistPerformanceOverride extends PerformanceViewerSettings {
 	overrideEnabled: boolean
 }
+
+export interface PerformanceBackgroundPreset {
+	value: string
+	label: string
+	previewColor: string
+}
+
+export const PERFORMANCE_BACKGROUND_PRESETS: PerformanceBackgroundPreset[] = [
+	{ value: '', label: 'Theme default', previewColor: 'var(--color-main-background, #ffffff)' },
+	{ value: '#ffffff', label: 'White', previewColor: '#ffffff' },
+	{ value: '#f5f0e6', label: 'Warm paper', previewColor: '#f5f0e6' },
+	{ value: '#e8e8e8', label: 'Light gray', previewColor: '#e8e8e8' },
+	{ value: '#1e1e1e', label: 'Dark charcoal', previewColor: '#1e1e1e' },
+	{ value: '#000000', label: 'Black', previewColor: '#000000' },
+]
 
 export const DEFAULT_PERFORMANCE_SETTINGS: PerformanceViewerSettings = {
 	layoutChoice: 'auto',
@@ -22,11 +41,20 @@ export const DEFAULT_PERFORMANCE_SETTINGS: PerformanceViewerSettings = {
 	zoomChoice: 'fit-page',
 	showAnnotations: true,
 	interleaveSongs: false,
+	backgroundColor: '',
+	tightCrop: false,
 }
 
 const VALID_LAYOUTS = new Set<PerformanceLayoutChoice>(['auto', 'single', 'double', 'continuous'])
 const VALID_TURN_MODES = new Set<DoublePageTurnMode>(['half', 'step', 'spread'])
 const VALID_ZOOMS = new Set<PerformanceZoomChoice>(['fit-page', 'fit-width'])
+const HEX_COLOR_RE = /^#[0-9a-f]{6}$/i
+
+export function sanitizeBackgroundColor(raw: unknown): string {
+	if (typeof raw !== 'string') return ''
+	const trimmed = raw.trim()
+	return HEX_COLOR_RE.test(trimmed) ? trimmed.toLowerCase() : ''
+}
 
 export function validatePerformanceSettings(raw: unknown): PerformanceViewerSettings {
 	const obj = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
@@ -46,6 +74,10 @@ export function validatePerformanceSettings(raw: unknown): PerformanceViewerSett
 		interleaveSongs: typeof obj.interleaveSongs === 'boolean'
 			? obj.interleaveSongs
 			: DEFAULT_PERFORMANCE_SETTINGS.interleaveSongs,
+		backgroundColor: sanitizeBackgroundColor(obj.backgroundColor),
+		tightCrop: typeof obj.tightCrop === 'boolean'
+			? obj.tightCrop
+			: DEFAULT_PERFORMANCE_SETTINGS.tightCrop,
 	}
 }
 
@@ -98,6 +130,8 @@ export function loadEffectivePerformanceSettings(
 					zoomChoice: setlistOverride.zoomChoice,
 					showAnnotations: setlistOverride.showAnnotations,
 					interleaveSongs: setlistOverride.interleaveSongs,
+					backgroundColor: setlistOverride.backgroundColor,
+					tightCrop: setlistOverride.tightCrop,
 				},
 				overrideEnabled: true,
 			}

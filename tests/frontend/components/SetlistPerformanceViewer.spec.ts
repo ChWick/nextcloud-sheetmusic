@@ -284,11 +284,11 @@ describe('SetlistPerformanceViewer', () => {
 		expect(previewerEl?.getAttribute('data-file-path')).toContain('violin.pdf')
 		expect(previewerEl?.getAttribute('data-target-page')).toBe('2')
 
-		// Setlist-only controls are hidden in single-song mode
+		// Setlist-only controls are hidden in single-song mode, while Viewer Settings remains available for display options
 		expect(document.body.querySelector('button[aria-label="Previous song"]')).toBeNull()
 		expect(document.body.querySelector('button[aria-label="Next song"]')).toBeNull()
 		expect(document.body.querySelector('button[aria-label="Setlist items"]')).toBeNull()
-		expect(document.body.querySelector('button[aria-label="Viewer settings & defaults"]')).toBeNull()
+		expect(document.body.querySelector('button[aria-label="Viewer settings & defaults"]')).not.toBeNull()
 
 		// Page navigation controls remain available
 		expect(document.body.querySelector('button[aria-label="Previous page"]')).not.toBeNull()
