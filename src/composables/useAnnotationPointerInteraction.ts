@@ -324,9 +324,8 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 			return
 		}
 
-		if (!hitUuid && opts.selectedItem.value) {
+		if (opts.selectedItem.value) {
 			opts.onSelect(null)
-			return
 		}
 
 		e.preventDefault()

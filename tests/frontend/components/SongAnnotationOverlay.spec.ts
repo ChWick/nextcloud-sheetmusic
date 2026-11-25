@@ -302,7 +302,8 @@ describe('SongAnnotationOverlay.vue', () => {
 			},
 		})
 
-		expect(stampWrapper.find('.sheetmusic-selection-box circle').exists()).toBe(true)
+		expect(stampWrapper.find('.sheetmusic-selection-box rect').exists()).toBe(true)
+		expect(stampWrapper.find('.sheetmusic-selection-box circle').exists()).toBe(false)
 		expect(stampWrapper.findAll('[data-resize-handle]').length).toBe(0)
 
 		const rectWrapper = mount(SongAnnotationOverlay, {
@@ -361,7 +362,7 @@ describe('SongAnnotationOverlay.vue', () => {
 		})
 	})
 
-	it('deselects on blank-page tap before inserting a new symbol when an annotation is selected', async () => {
+	it('clears selection and immediately inserts a new symbol on blank-page tap', async () => {
 		const wrapper = mount(SongAnnotationOverlay, {
 			props: {
 				annotations: sampleAnnotations,
@@ -388,16 +389,10 @@ describe('SongAnnotationOverlay.vue', () => {
 			toJSON: () => ({}),
 		})
 
-		// First tap on blank page deselects without creating a new stamp
+		// Tapping blank page clears the old selection and inserts the new stamp immediately
 		await svg.trigger('pointerdown', { button: 0, clientX: 100, clientY: 100, pointerId: 1 })
 		await svg.trigger('pointerup', { button: 0, clientX: 100, clientY: 100, pointerId: 1 })
 		expect(wrapper.emitted('select')).toEqual([[null]])
-		expect(wrapper.emitted('create-annotation')).toBeFalsy()
-
-		// Once deselected, tapping blank page inserts the stamp
-		await wrapper.setProps({ selectedUuid: null })
-		await svg.trigger('pointerdown', { button: 0, clientX: 100, clientY: 100, pointerId: 2 })
-		await svg.trigger('pointerup', { button: 0, clientX: 100, clientY: 100, pointerId: 2 })
 		expect(wrapper.emitted('create-annotation')).toHaveLength(1)
 	})
 
