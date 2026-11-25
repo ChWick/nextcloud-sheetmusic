@@ -26,6 +26,8 @@ describe('performance-settings', () => {
 			zoomChoice: 'fit-width',
 			showAnnotations: true,
 			interleaveSongs: true,
+			backgroundColor: '#1e1e1e',
+			tightCrop: true,
 		})
 
 		const setlistStore = createSetlistPerformanceStore(10, 5, storage)
@@ -35,6 +37,8 @@ describe('performance-settings', () => {
 			zoomChoice: 'fit-page',
 			showAnnotations: false,
 			interleaveSongs: false,
+			backgroundColor: '#f5f0e6',
+			tightCrop: false,
 			overrideEnabled: false,
 		})
 
@@ -46,6 +50,8 @@ describe('performance-settings', () => {
 				zoomChoice: 'fit-width',
 				showAnnotations: true,
 				interleaveSongs: true,
+				backgroundColor: '#1e1e1e',
+				tightCrop: true,
 			},
 			overrideEnabled: false,
 		})
@@ -57,6 +63,8 @@ describe('performance-settings', () => {
 			zoomChoice: 'fit-page',
 			showAnnotations: false,
 			interleaveSongs: false,
+			backgroundColor: '#f5f0e6',
+			tightCrop: false,
 			overrideEnabled: true,
 		})
 
@@ -67,6 +75,8 @@ describe('performance-settings', () => {
 				zoomChoice: 'fit-page',
 				showAnnotations: false,
 				interleaveSongs: false,
+				backgroundColor: '#f5f0e6',
+				tightCrop: false,
 			},
 			overrideEnabled: true,
 		})
@@ -79,6 +89,8 @@ describe('performance-settings', () => {
 				zoomChoice: 'fit-width',
 				showAnnotations: true,
 				interleaveSongs: true,
+				backgroundColor: '#1e1e1e',
+				tightCrop: true,
 			},
 			overrideEnabled: false,
 		})
