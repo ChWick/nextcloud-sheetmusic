@@ -316,4 +316,32 @@ describe('SetlistPerformanceViewer', () => {
 		expect(annotationCalls).toHaveLength(0)
 		wrapper.unmount()
 	})
+
+	it('preserves fullscreen on unmount when exiting via the Stop button', async () => {
+		const exitFullscreenMock = vi.fn().mockResolvedValue(undefined)
+		Object.defineProperty(document, 'fullscreenElement', { configurable: true, value: document.documentElement })
+		Object.defineProperty(document, 'exitFullscreen', { configurable: true, value: exitFullscreenMock })
+
+		try {
+			const wrapper = mount(SetlistPerformanceViewer, {
+				props: {
+					items: sampleItems,
+					songs: sampleSongs,
+					libraryId: 1,
+				},
+				attachTo: document.body,
+			})
+
+			const stopBtn = document.body.querySelector('[data-test="stop-performance-button"]') as HTMLButtonElement | null
+			expect(stopBtn).not.toBeNull()
+			stopBtn!.click()
+			await wrapper.vm.$nextTick()
+
+			expect(wrapper.emitted('close')).toHaveLength(1)
+			wrapper.unmount()
+			expect(exitFullscreenMock).not.toHaveBeenCalled()
+		} finally {
+			Object.defineProperty(document, 'fullscreenElement', { configurable: true, value: null })
+		}
+	})
 })

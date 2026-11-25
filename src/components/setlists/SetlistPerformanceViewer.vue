@@ -66,7 +66,8 @@ const isDrawerOpen = ref(false)
 const isSettingsOpen = ref(false)
 const isSupplementalDrawerOpen = ref(false)
 const isPagePickerOpen = ref(false)
-const isFullscreen = ref(false)
+const isFullscreen = ref(typeof document !== 'undefined' && Boolean(document.fullscreenElement))
+let keepFullscreenOnUnmount = false
 const isSetlistOverride = ref(initialSettings.overrideEnabled)
 const showAnnotations = ref(initialSettings.settings.showAnnotations)
 const interleaveSongs = ref(initialSettings.settings.interleaveSongs)
@@ -379,14 +380,20 @@ function onToggleAnnotations() {
 
 async function toggleFullscreen() {
 	try {
-		if (!document.fullscreenElement && rootRef.value?.requestFullscreen) {
-			await rootRef.value.requestFullscreen()
+		const target = document.documentElement?.requestFullscreen ? document.documentElement : rootRef.value
+		if (!document.fullscreenElement && target?.requestFullscreen) {
+			await target.requestFullscreen()
 		} else if (document.fullscreenElement && document.exitFullscreen) {
 			await document.exitFullscreen()
 		}
 	} catch {
 		// Fullscreen API may be blocked by browser policy
 	}
+}
+
+function handleStop() {
+	keepFullscreenOnUnmount = true
+	emit('close')
 }
 
 function handleFullscreenChange() {
@@ -417,12 +424,13 @@ const { onStageTouchStart, onStageTouchEnd, onStageClick } = usePerformanceStage
 
 onMounted(() => {
 	document.addEventListener('fullscreenchange', handleFullscreenChange)
+	handleFullscreenChange()
 	scheduleHudAutoHide()
 })
 
 onUnmounted(() => {
 	document.removeEventListener('fullscreenchange', handleFullscreenChange)
-	if (document.fullscreenElement && document.exitFullscreen) {
+	if (!keepFullscreenOnUnmount && document.fullscreenElement && document.exitFullscreen) {
 		document.exitFullscreen().catch(() => {})
 	}
 })
@@ -445,6 +453,7 @@ onUnmounted(() => {
 				:is-settings-open="isSettingsOpen"
 				:is-setlist-override="isSetlistOverride"
 				@exit="emit('close')"
+				@stop="handleStop"
 				@toggle-annotations="onToggleAnnotations"
 				@toggle-settings="toggleSettingsPanel"
 				@toggle-fullscreen="toggleFullscreen"

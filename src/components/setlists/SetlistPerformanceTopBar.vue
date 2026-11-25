@@ -7,6 +7,7 @@ import EyeOffOutlineIcon from 'vue-material-design-icons/EyeOffOutline.vue'
 import EyeOutlineIcon from 'vue-material-design-icons/EyeOutline.vue'
 import FullscreenIcon from 'vue-material-design-icons/Fullscreen.vue'
 import FullscreenExitIcon from 'vue-material-design-icons/FullscreenExit.vue'
+import StopIcon from 'vue-material-design-icons/Stop.vue'
 
 withDefaults(defineProps<{
 	visible: boolean
@@ -28,6 +29,7 @@ withDefaults(defineProps<{
 
 const emit = defineEmits<{
 	exit: []
+	stop: []
 	toggleAnnotations: []
 	toggleSettings: []
 	toggleFullscreen: []
@@ -67,6 +69,14 @@ const emit = defineEmits<{
 		</div>
 
 		<div :class="$style.topRight">
+			<NcButton
+				variant="primary"
+				:title="t('sheetmusic', 'Stop playing and return to editor')"
+				:aria-label="t('sheetmusic', 'Stop playing')"
+				data-test="stop-performance-button"
+				@click="emit('stop')">
+				<template #icon><StopIcon :size="20" /></template>
+			</NcButton>
 			<NcButton
 				:variant="showAnnotations ? 'primary' : 'tertiary'"
 				:title="t('sheetmusic', 'Toggle annotations')"
