@@ -86,11 +86,11 @@ describe('useHandwritingInput', () => {
 		expect(hw.swapState.value?.activeSymbol).toBe('\uED11')
 		expect(hw.swapState.value?.candidates.map((c) => c.symbol)).toContain('\uE4A6')
 
-		// Tap runner-up candidate in swap pill
+		// Tap runner-up candidate in swap pill -> updates stamp and closes pill automatically
 		hw.selectCandidate('\uE4A6')
 		expect(updated).toHaveLength(1)
 		expect(updated[0].after.data.symbol).toBe('\uE4A6')
-		expect(hw.swapState.value?.activeSymbol).toBe('\uE4A6')
+		expect(hw.swapState.value).toBeNull()
 	})
 
 	it('replaces placed stamp with freehand drawing when Keep ink is clicked', () => {
@@ -192,15 +192,22 @@ describe('useHandwritingInput', () => {
 		vi.advanceTimersByTime(6000)
 		expect(getLearnedSampleCount()).toBe(1)
 
-		// 2. Explicit correction to runner-up '𝅾' learns when pill closes
+		// 2. Explicit correction to runner-up closes pill and learns immediately
 		hw.beginStroke(stroke1[0])
 		hw.endStroke(stroke1)
 		vi.advanceTimersByTime(450)
-		hw.selectCandidate('𝅾')
-		hw.dismissSwapPill()
+		hw.selectCandidate('\uE4A6')
+		expect(hw.swapState.value).toBeNull()
 		expect(getLearnedSampleCount()).toBe(2)
 
-		// 3. Keep ink does NOT add a learned sample
+		// 3. Clicking the already-active symbol confirms it, closes pill, and does not emit redundant update
+		hw.beginStroke(stroke1[0])
+		hw.endStroke(stroke1)
+		vi.advanceTimersByTime(450)
+		hw.selectCandidate('\uED11')
+		expect(hw.swapState.value).toBeNull()
+
+		// 4. Keep ink does NOT add a learned sample
 		hw.beginStroke(stroke1[0])
 		hw.endStroke(stroke1)
 		vi.advanceTimersByTime(450)

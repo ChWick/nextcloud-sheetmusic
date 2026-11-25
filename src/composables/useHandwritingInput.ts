@@ -209,20 +209,23 @@ export function useHandwritingInput(opts: UseHandwritingInputOptions) {
 			return
 		}
 		const def = getStampDefinition(symbol)
-		const next: SheetAnnotation = {
-			...JSON.parse(JSON.stringify(ann)),
-			data: {
-				...ann.data,
-				symbol: def?.symbol ?? symbol,
-				category: def?.category,
-			},
+		const resolvedSymbol = def?.symbol ?? symbol
+		if (resolvedSymbol !== current.activeSymbol) {
+			const next: SheetAnnotation = {
+				...JSON.parse(JSON.stringify(ann)),
+				data: {
+					...ann.data,
+					symbol: resolvedSymbol,
+					category: def?.category,
+				},
+			}
+			opts.onUpdate(ann, next)
+			swapState.value = {
+				...current,
+				activeSymbol: resolvedSymbol,
+			}
 		}
-		opts.onUpdate(ann, next)
-		swapState.value = {
-			...current,
-			activeSymbol: def?.symbol ?? symbol,
-		}
-		scheduleDismissPill()
+		finalizeSwapPill(true)
 	}
 
 	function keepInk() {
