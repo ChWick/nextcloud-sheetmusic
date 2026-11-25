@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { SheetAnnotation } from '../../types/annotation'
+import { computed } from 'vue'
 import {
 	getAnnotationDashArray,
 	getAnnotationDisplaySymbol,
@@ -15,7 +16,7 @@ import {
 } from '../../utils/annotation'
 import { getMusicFontFamily, type MusicFontId } from '../../utils/musicFont'
 
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
 	item: SheetAnnotation
 	vbHeight: number
 	uiScale?: number
@@ -32,6 +33,38 @@ const emit = defineEmits<{
 	'jump-to-page': [pageNumber: number]
 	'dblclick-text': [item: SheetAnnotation]
 }>()
+
+const isPathItem = computed(() =>
+	props.item.type === 'drawing'
+	|| (props.item.type === 'highlight' && !props.item.data?.rect)
+	|| isPathShape(props.item),
+)
+const usePressurePath = computed(() => isPathItem.value && hasPressurePoints(props.item))
+const pathD = computed(() => (isPathItem.value ? getAnnotationPath(props.item, props.vbHeight) : ''))
+const pressurePathD = computed(() => (usePressurePath.value ? getAnnotationPressurePath(props.item, props.vbHeight) : ''))
+const dashArray = computed(() => getAnnotationDashArray(props.item))
+
+const stampPos = computed(() =>
+	props.item.type === 'stamp' ? getStampRenderPosition(props.item, props.vbHeight) : null,
+)
+const stampCenterX = computed(() =>
+	Math.round((props.item.x + (props.item.width || 0) / 2) * VIEWBOX_WIDTH * 10) / 10,
+)
+const stampCenterY = computed(() =>
+	Math.round((props.item.y + (props.item.height || 0) / 2) * props.vbHeight * 10) / 10,
+)
+const stampRadius = computed(() =>
+	props.item.type === 'stamp' ? getStampSelectionRadius(props.item, props.uiScale) : 0,
+)
+const stampFontSize = computed(() => getStampRenderFontSize(props.item))
+const stampSymbol = computed(() => getAnnotationDisplaySymbol(props.item))
+const musicFontFamily = computed(() => getMusicFontFamily(props.musicFont))
+
+const textLayout = computed(() =>
+	props.item.type === 'text' && props.item.data?.text
+		? getAnnotationTextLayout(props.item, props.vbHeight)
+		: null,
+)
 </script>
 
 <template>
@@ -42,10 +75,10 @@ const emit = defineEmits<{
 			'is-hovered-eraser': hoveredEraser,
 		}">
 		<!-- Freehand drawing, highlight (path), or path-based shape (line, arrow, hairpin, slur, bracket) -->
-		<template v-if="item.type === 'drawing' || (item.type === 'highlight' && !item.data?.rect) || isPathShape(item)">
+		<template v-if="isPathItem">
 			<path
-				v-if="hasPressurePoints(item)"
-				:d="getAnnotationPressurePath(item, vbHeight)"
+				v-if="usePressurePath"
+				:d="pressurePathD"
 				:fill="item.style?.stroke || '#e53935'"
 				stroke="none"
 				:opacity="item.style?.opacity ?? 1.0"
@@ -55,10 +88,10 @@ const emit = defineEmits<{
 				data-pressure-stroke="true" />
 			<path
 				v-else
-				:d="getAnnotationPath(item, vbHeight)"
+				:d="pathD"
 				:stroke="item.style?.stroke || '#e53935'"
 				:stroke-width="item.style?.strokeWidth || 2.5"
-				:stroke-dasharray="getAnnotationDashArray(item)"
+				:stroke-dasharray="dashArray"
 				:opacity="item.style?.opacity ?? 1.0"
 				:style="{ mixBlendMode: item.style?.blendMode || (item.type === 'highlight' ? 'multiply' : 'normal') }"
 				fill="none"
@@ -68,7 +101,7 @@ const emit = defineEmits<{
 				:data-test="item.type === 'shape' ? 'annotation-shape' : 'annotation-drawing'" />
 			<path
 				v-if="editable"
-				:d="getAnnotationPath(item, vbHeight)"
+				:d="pathD"
 				stroke="transparent"
 				stroke-width="14"
 				vector-effect="non-scaling-stroke"
@@ -102,7 +135,7 @@ const emit = defineEmits<{
 				:ry="Math.max(1, (item.height / 2) * vbHeight)"
 				:stroke="item.style?.stroke || '#e53935'"
 				:stroke-width="item.style?.strokeWidth || 2.5"
-				:stroke-dasharray="getAnnotationDashArray(item)"
+				:stroke-dasharray="dashArray"
 				:opacity="item.style?.opacity ?? 1.0"
 				:fill="item.style?.fill || 'transparent'"
 				:data-ann-uuid="item.uuid"
@@ -131,7 +164,7 @@ const emit = defineEmits<{
 				:height="item.height * vbHeight"
 				:stroke="item.style?.stroke || '#e53935'"
 				:stroke-width="item.style?.strokeWidth || 2.5"
-				:stroke-dasharray="getAnnotationDashArray(item)"
+				:stroke-dasharray="dashArray"
 				:opacity="item.style?.opacity ?? 1.0"
 				:fill="item.style?.fill || 'transparent'"
 				:data-ann-uuid="item.uuid"
@@ -152,42 +185,42 @@ const emit = defineEmits<{
 		</template>
 
 		<!-- Stamp Annotation: SMuFL music glyph centered at (x, y) with fontSize -->
-		<template v-else-if="item.type === 'stamp'">
+		<template v-else-if="item.type === 'stamp' && stampPos">
 			<circle
 				v-if="editable"
-				:cx="Math.round((item.x + (item.width || 0) / 2) * VIEWBOX_WIDTH * 10) / 10"
-				:cy="Math.round((item.y + (item.height || 0) / 2) * vbHeight * 10) / 10"
-				:r="getStampSelectionRadius(item, uiScale)"
+				:cx="stampCenterX"
+				:cy="stampCenterY"
+				:r="stampRadius"
 				fill="transparent"
 				:data-ann-uuid="item.uuid"
 				data-test="annotation-hit-target" />
 			<text
-				:x="getStampRenderPosition(item, vbHeight).x"
-				:y="getStampRenderPosition(item, vbHeight).y"
+				:x="stampPos.x"
+				:y="stampPos.y"
 				:fill="item.style?.color || '#000000'"
 				:opacity="item.style?.opacity ?? 1.0"
-				:font-size="getStampRenderFontSize(item)"
+				:font-size="stampFontSize"
 				text-anchor="middle"
-				:dominant-baseline="getStampRenderPosition(item, vbHeight).dominantBaseline"
-				:font-family="getMusicFontFamily(musicFont)"
+				:dominant-baseline="stampPos.dominantBaseline"
+				:font-family="musicFontFamily"
 				pointer-events="none"
 				:data-ann-uuid="item.uuid"
 				data-test="annotation-stamp">
-				{{ getAnnotationDisplaySymbol(item) }}
+				{{ stampSymbol }}
 			</text>
 		</template>
 
 		<!-- Text Annotation -->
 		<g
-			v-else-if="item.type === 'text' && item.data?.text"
+			v-else-if="textLayout"
 			:data-ann-uuid="item.uuid"
 			@dblclick.stop="emit('dblclick-text', item)">
 			<rect
 				v-if="editable || (item.style?.backgroundColor && item.style.backgroundColor !== 'transparent') || item.style?.borderColor"
-				:x="getAnnotationTextLayout(item, vbHeight).boxX"
-				:y="getAnnotationTextLayout(item, vbHeight).boxY"
-				:width="getAnnotationTextLayout(item, vbHeight).boxWidth"
-				:height="getAnnotationTextLayout(item, vbHeight).boxHeight"
+				:x="textLayout.boxX"
+				:y="textLayout.boxY"
+				:width="textLayout.boxWidth"
+				:height="textLayout.boxHeight"
 				:fill="item.style?.backgroundColor || 'transparent'"
 				:stroke="item.style?.borderColor || 'transparent'"
 				:stroke-width="item.style?.borderColor ? 1.5 : 10"
@@ -195,22 +228,22 @@ const emit = defineEmits<{
 				rx="4"
 				:data-ann-uuid="item.uuid" />
 			<text
-				:x="getAnnotationTextLayout(item, vbHeight).x"
-				:y="getAnnotationTextLayout(item, vbHeight).y"
+				:x="textLayout.x"
+				:y="textLayout.y"
 				:fill="item.style?.color || '#000000'"
 				:opacity="item.style?.opacity ?? 1.0"
-				:font-size="getAnnotationTextLayout(item, vbHeight).fontSize"
-				:font-family="getAnnotationTextLayout(item, vbHeight).fontFamily"
+				:font-size="textLayout.fontSize"
+				:font-family="textLayout.fontFamily"
 				:font-weight="item.style?.fontWeight || 'normal'"
 				:font-style="item.style?.fontStyle || 'normal'"
-				:text-anchor="getAnnotationTextLayout(item, vbHeight).textAnchor"
+				:text-anchor="textLayout.textAnchor"
 				:data-ann-uuid="item.uuid"
 				data-test="annotation-text">
 				<tspan
-					v-for="(line, lineIdx) in getAnnotationTextLayout(item, vbHeight).lines"
+					v-for="(line, lineIdx) in textLayout.lines"
 					:key="lineIdx"
-					:x="getAnnotationTextLayout(item, vbHeight).x"
-					:dy="lineIdx === 0 ? 0 : getAnnotationTextLayout(item, vbHeight).lineHeight">
+					:x="textLayout.x"
+					:dy="lineIdx === 0 ? 0 : textLayout.lineHeight">
 					{{ line }}
 				</tspan>
 			</text>
