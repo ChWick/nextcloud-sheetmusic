@@ -174,9 +174,15 @@ class LibraryReconciler {
 		}
 
 		if ($needsUpdate) {
+			$contentChanged = $songFile->fileSize !== $fileSize
+				|| ($hash !== null && $songFile->fileHash !== null && $songFile->fileHash !== $hash)
+				|| $songFile->pageCount !== $pageCount;
 			$songFile->fileSize = $fileSize;
 			$songFile->fileHash = $hash;
 			$songFile->pageCount = $pageCount;
+			if ($contentChanged) {
+				$songFile->invalidateCropBoxes();
+			}
 			if (!empty($pageOrder)) {
 				$songFile->pageOrder = $pageOrder;
 			}

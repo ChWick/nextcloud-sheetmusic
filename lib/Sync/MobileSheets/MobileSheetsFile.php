@@ -10,6 +10,9 @@ declare(strict_types=1);
 namespace OCA\SheetMusic\Sync\MobileSheets;
 
 class MobileSheetsFile {
+	/**
+	 * @param ?array<string, array{left: float, top: float, right: float, bottom: float}> $cropBoxes
+	 */
 	public function __construct(
 		public readonly int $id,
 		public readonly string $path,
@@ -17,6 +20,7 @@ class MobileSheetsFile {
 		public readonly int $pageCount = 0,
 		public readonly int $fileId = 0,
 		public readonly ?int $updatedAt = null,
+		public readonly ?array $cropBoxes = null,
 	) {
 	}
 }

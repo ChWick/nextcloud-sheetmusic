@@ -775,6 +775,7 @@ class SongFileService {
 				$existing->fileHash = $fileHash;
 				$existing->pageOrder = InternalSongFile::refreshPageOrder($existing->pageOrder, $existing->pageCount, $pageCount);
 				$existing->pageCount = $pageCount;
+				$existing->invalidateCropBoxes();
 				$existing->updatedAt = time();
 				$this->internalSongFileMapper->update($existing);
 				$updatedExisting = true;
@@ -999,6 +1000,7 @@ class SongFileService {
 			$fileRecord->pageCount = $facts['pageCount'];
 			$fileRecord->pageOrder = $facts['pageOrder'];
 		}
+		$fileRecord->invalidateCropBoxes();
 		$fileRecord->updatedAt = time();
 		$this->internalSongFileMapper->update($fileRecord);
 	}

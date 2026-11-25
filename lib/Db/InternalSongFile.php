@@ -43,7 +43,54 @@ class InternalSongFile {
 		public int $createdAt = 0,
 		public int $updatedAt = 0,
 		public ?int $deletedAt = null,
+		public ?string $cropBoxes = null,
+		public ?int $cropBoxesHash = null,
 	) {
+	}
+
+	/**
+	 * Decode cached per-page tight crop boxes if present and matching the current file hash.
+	 *
+	 * @return ?array<string, array{left: float, top: float, right: float, bottom: float}>
+	 */
+	public function getCropBoxesMap(): ?array {
+		if ($this->cropBoxes === null || $this->cropBoxes === '') {
+			return null;
+		}
+		if ($this->fileHash !== null && $this->cropBoxesHash !== null && $this->cropBoxesHash !== $this->fileHash) {
+			return null;
+		}
+		$decoded = json_decode($this->cropBoxes, true);
+		if (!is_array($decoded) || $decoded === []) {
+			return null;
+		}
+		$valid = [];
+		foreach ($decoded as $pageKey => $box) {
+			if (!is_array($box)) {
+				continue;
+			}
+			$left = isset($box['left']) ? (float)$box['left'] : null;
+			$top = isset($box['top']) ? (float)$box['top'] : null;
+			$right = isset($box['right']) ? (float)$box['right'] : null;
+			$bottom = isset($box['bottom']) ? (float)$box['bottom'] : null;
+			if ($left === null || $top === null || $right === null || $bottom === null) {
+				continue;
+			}
+			if ($left >= 0.0 && $top >= 0.0 && $right <= 1.0 && $bottom <= 1.0 && $right > $left && $bottom > $top) {
+				$valid[(string)$pageKey] = [
+					'left' => $left,
+					'top' => $top,
+					'right' => $right,
+					'bottom' => $bottom,
+				];
+			}
+		}
+		return $valid !== [] ? $valid : null;
+	}
+
+	public function invalidateCropBoxes(): void {
+		$this->cropBoxes = null;
+		$this->cropBoxesHash = null;
 	}
 
 	/**
@@ -103,6 +150,8 @@ class InternalSongFile {
 			createdAt: isset($row['created_at']) ? (int)$row['created_at'] : 0,
 			updatedAt: isset($row['updated_at']) ? (int)$row['updated_at'] : 0,
 			deletedAt: isset($row['deleted_at']) && $row['deleted_at'] !== null ? (int)$row['deleted_at'] : null,
+			cropBoxes: isset($row['crop_boxes']) && $row['crop_boxes'] !== null ? (string)$row['crop_boxes'] : null,
+			cropBoxesHash: isset($row['crop_boxes_hash']) && $row['crop_boxes_hash'] !== null ? (int)$row['crop_boxes_hash'] : null,
 		);
 	}
 
@@ -124,6 +173,8 @@ class InternalSongFile {
 			'created_at' => $this->createdAt,
 			'updated_at' => $this->updatedAt,
 			'deleted_at' => $this->deletedAt,
+			'crop_boxes' => $this->cropBoxes,
+			'crop_boxes_hash' => $this->cropBoxesHash,
 		];
 	}
 }

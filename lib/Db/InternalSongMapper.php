@@ -823,6 +823,7 @@ class InternalSongMapper {
 			pageCount: (int)$file->pageCount,
 			fileId: (int)$file->fileId,
 			updatedAt: self::toMilliseconds($file->updatedAt),
+			cropBoxes: $file->getCropBoxesMap(),
 		);
 	}
 

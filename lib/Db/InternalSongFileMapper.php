@@ -127,6 +127,8 @@ class InternalSongFileMapper {
 				'created_at' => $qb->createNamedParameter($file->createdAt, IQueryBuilder::PARAM_INT),
 				'updated_at' => $qb->createNamedParameter($file->updatedAt, IQueryBuilder::PARAM_INT),
 				'deleted_at' => $qb->createNamedParameter($file->deletedAt, IQueryBuilder::PARAM_INT),
+				'crop_boxes' => $qb->createNamedParameter($file->cropBoxes, IQueryBuilder::PARAM_STR),
+				'crop_boxes_hash' => $qb->createNamedParameter($file->cropBoxesHash, IQueryBuilder::PARAM_INT),
 			]);
 
 		$qb->executeStatement();
@@ -157,11 +159,28 @@ class InternalSongFileMapper {
 			->set('client_id', $qb->createNamedParameter($file->clientId, IQueryBuilder::PARAM_INT))
 			->set('updated_at', $qb->createNamedParameter($file->updatedAt, IQueryBuilder::PARAM_INT))
 			->set('deleted_at', $qb->createNamedParameter($file->deletedAt, IQueryBuilder::PARAM_INT))
+			->set('crop_boxes', $qb->createNamedParameter($file->cropBoxes, IQueryBuilder::PARAM_STR))
+			->set('crop_boxes_hash', $qb->createNamedParameter($file->cropBoxesHash, IQueryBuilder::PARAM_INT))
 			->where($qb->expr()->eq('id', $qb->createNamedParameter($file->id, IQueryBuilder::PARAM_INT)));
 
 		$qb->executeStatement();
 
 		return $file;
+	}
+
+	public function updateCropBoxesByFileId(int $fileId, ?string $cropBoxesJson, ?int $cropBoxesHash): int {
+		$qb = $this->db->getQueryBuilder();
+		$qb->update(self::TABLE_NAME)
+			->set('crop_boxes', $qb->createNamedParameter($cropBoxesJson, IQueryBuilder::PARAM_STR))
+			->set('crop_boxes_hash', $qb->createNamedParameter($cropBoxesHash, IQueryBuilder::PARAM_INT))
+			->where($qb->expr()->eq('file_id', $qb->createNamedParameter($fileId, IQueryBuilder::PARAM_INT)))
+			->andWhere($qb->expr()->isNull('deleted_at'));
+
+		return $qb->executeStatement();
+	}
+
+	public function invalidateCropBoxesByFileId(int $fileId): int {
+		return $this->updateCropBoxesByFileId($fileId, null, null);
 	}
 
 	public function delete(int $id, bool $hardDelete = false): bool {
