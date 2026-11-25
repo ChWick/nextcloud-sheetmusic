@@ -256,7 +256,7 @@ export function getStampInkBounds(
 	const inkCy = def?.canvasOffset ? cy + (def.canvasOffset.oy - def.inkOffset.oy) * fontSize : cy
 	const inkW = (def?.inkSize.w ?? 0.4) * fontSize
 	const inkH = (def?.inkSize.h ?? 0.4) * fontSize
-	const pad = 4 * Math.max(0.1, uiScale)
+	const pad = 1.5 * Math.max(0.1, uiScale)
 	const round1 = (v: number) => Math.round(v * 10) / 10
 	return {
 		x: round1(inkCx - inkW / 2 - pad),

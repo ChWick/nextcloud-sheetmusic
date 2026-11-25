@@ -14,7 +14,7 @@ const props = withDefaults(defineProps<{
 const scale = computed(() => Math.max(0.1, props.uiScale))
 const boxStrokeWidth = computed(() => 1.5 * scale.value)
 const boxDashArray = computed(() => `${4 * scale.value}, ${3 * scale.value}`)
-const boxPad = computed(() => 4 * scale.value)
+const boxPad = computed(() => 2 * scale.value)
 const handleRadius = computed(() => 6 * scale.value)
 const handleSize = computed(() => 9 * scale.value)
 const handleStrokeWidth = computed(() => 2 * scale.value)
