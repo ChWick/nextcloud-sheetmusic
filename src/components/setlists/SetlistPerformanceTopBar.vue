@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed, ref, watch } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import ArrowLeftIcon from 'vue-material-design-icons/ArrowLeft.vue'
@@ -7,9 +8,12 @@ import EyeOffOutlineIcon from 'vue-material-design-icons/EyeOffOutline.vue'
 import EyeOutlineIcon from 'vue-material-design-icons/EyeOutline.vue'
 import FullscreenIcon from 'vue-material-design-icons/Fullscreen.vue'
 import FullscreenExitIcon from 'vue-material-design-icons/FullscreenExit.vue'
+import LayersOutlineIcon from 'vue-material-design-icons/LayersOutline.vue'
 import StopIcon from 'vue-material-design-icons/Stop.vue'
+import ViewportPopover from '../ViewportPopover.vue'
+import type { AnnotationLayer } from '../../types/annotation'
 
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
 	visible: boolean
 	setlistName?: string
 	songTitle: string
@@ -18,6 +22,7 @@ withDefaults(defineProps<{
 	itemCount: number
 	showItemCounter?: boolean
 	showAnnotations: boolean
+	annotationLayers?: AnnotationLayer[]
 	isFullscreen: boolean
 	showSettingsButton: boolean
 	isSettingsOpen: boolean
@@ -25,17 +30,30 @@ withDefaults(defineProps<{
 }>(), {
 	setlistName: '',
 	showItemCounter: true,
+	annotationLayers: () => [],
 })
 
 const emit = defineEmits<{
 	exit: []
 	stop: []
 	toggleAnnotations: []
+	toggleLayerVisibility: [layerId: number]
 	toggleSettings: []
 	toggleFullscreen: []
 	pauseAutoHide: []
 	resumeAutoHide: []
 }>()
+
+const isLayersOpen = ref(false)
+const visibleLayerCount = computed(() => props.annotationLayers.filter((l) => l.visible).length)
+
+watch(isLayersOpen, (open) => {
+	if (open) {
+		emit('pauseAutoHide')
+	} else {
+		emit('resumeAutoHide')
+	}
+})
 </script>
 
 <template>
@@ -87,6 +105,42 @@ const emit = defineEmits<{
 					<EyeOffOutlineIcon v-else :size="20" />
 				</template>
 			</NcButton>
+			<ViewportPopover
+				v-if="annotationLayers.length > 1"
+				v-model:open="isLayersOpen"
+				pane-test-id="performance-layers-popover"
+				:pane-class="$style.layersPopover"
+				:gap="6">
+				<template #trigger="{ toggle }">
+					<NcButton
+						:variant="isLayersOpen ? 'primary' : 'tertiary'"
+						:title="t('sheetmusic', 'Toggle annotation layers')"
+						:aria-label="t('sheetmusic', 'Toggle annotation layers')"
+						data-test="performance-layers-button"
+						@click="toggle">
+						<template #icon><LayersOutlineIcon :size="20" /></template>
+						{{ visibleLayerCount }}/{{ annotationLayers.length }}
+					</NcButton>
+				</template>
+
+				<div :class="$style.layersTitle">
+					{{ t('sheetmusic', 'Annotation layers') }}
+				</div>
+				<div :class="$style.layersList">
+					<button
+						v-for="layer in annotationLayers"
+						:key="layer.id"
+						type="button"
+						:class="[$style.layerItem, !layer.visible && $style.layerItemHidden]"
+						:aria-pressed="layer.visible"
+						:data-test="`performance-layer-toggle-${layer.id}`"
+						@click="emit('toggleLayerVisibility', layer.id)">
+						<EyeOutlineIcon v-if="layer.visible" :size="18" />
+						<EyeOffOutlineIcon v-else :size="18" />
+						<span :class="$style.layerName">{{ layer.name }}</span>
+					</button>
+				</div>
+			</ViewportPopover>
 			<NcButton
 				v-if="showSettingsButton"
 				:variant="isSettingsOpen || isSetlistOverride ? 'primary' : 'tertiary'"
@@ -182,5 +236,58 @@ const emit = defineEmits<{
 	align-items: center;
 	gap: 6px;
 	flex-shrink: 0;
+}
+
+.layersPopover {
+	min-width: 210px;
+	max-width: min(280px, calc(100vw - 24px));
+	padding: 8px;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.layersTitle {
+	font-size: 0.78rem;
+	font-weight: 600;
+	color: var(--color-text-maxcontrast);
+	padding: 0 4px;
+}
+
+.layersList {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+}
+
+button[type='button'].layerItem {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	min-height: 36px;
+	margin: 0;
+	padding: 4px 8px;
+	border: 1px solid transparent;
+	border-radius: var(--border-radius, 4px);
+	background: transparent;
+	color: var(--color-main-text);
+	font-size: 0.86rem;
+	text-align: left;
+	cursor: pointer;
+}
+
+button[type='button'].layerItem:hover {
+	background: var(--color-background-hover);
+}
+
+.layerItemHidden {
+	opacity: 0.55;
+}
+
+.layerName {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 </style>

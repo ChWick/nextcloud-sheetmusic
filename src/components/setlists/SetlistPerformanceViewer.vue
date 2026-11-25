@@ -14,7 +14,15 @@ import { fetchSongAnnotations } from '../../api/annotations'
 import { useHudAutoHide } from '../../composables/useHudAutoHide'
 import { usePerformanceStageInput } from '../../composables/usePerformanceStageInput'
 import { useWakeLock } from '../../composables/useWakeLock'
-import type { SheetAnnotation } from '../../types/annotation'
+import type { AnnotationLayer, SheetAnnotation } from '../../types/annotation'
+import {
+	createDefaultAnnotationLayers,
+	filterAndSortAnnotationsForLayers,
+	getCachedFileAnnotationLayers,
+	loadFileAnnotationLayers,
+	persistFileAnnotationLayers,
+	toggleAnnotationLayerVisibility,
+} from '../../utils/annotationLayers'
 import type { SetlistFile, SetlistItem, Song, SongFile } from '../../types/song'
 import { defaultFileBinaryCache } from '../../utils/file-cache'
 import { isPdfFile, pickPrimarySongFile } from '../../utils/file'
@@ -172,7 +180,12 @@ function toggleDrawer() {
 }
 
 const annotations = ref<SheetAnnotation[]>([])
+const annotationLayers = ref<AnnotationLayer[]>(createDefaultAnnotationLayers())
 let annotationRequestId = 0
+
+const visibleAnnotations = computed(() =>
+	filterAndSortAnnotationsForLayers(annotations.value, annotationLayers.value),
+)
 
 const songsById = computed(() => {
 	const map = new Map<number, Song>()
@@ -280,6 +293,15 @@ function preloadNextSong() {
 
 watch([currentSong, currentFile], async ([song, file]) => {
 	const reqId = ++annotationRequestId
+	const targetFileId = Number(file?.fileId ?? file?.id ?? song?.files?.[0]?.fileId ?? song?.files?.[0]?.id ?? 0)
+	annotationLayers.value = getCachedFileAnnotationLayers(targetFileId)
+	if (targetFileId > 0) {
+		void loadFileAnnotationLayers(targetFileId).then((loaded) => {
+			if (reqId === annotationRequestId) {
+				annotationLayers.value = loaded
+			}
+		})
+	}
 	if (!song || props.libraryId <= 0) {
 		annotations.value = []
 		return
@@ -289,8 +311,7 @@ watch([currentSong, currentFile], async ([song, file]) => {
 		return
 	}
 	try {
-		const targetFileId = file?.fileId ?? file?.id ?? song.files?.[0]?.fileId ?? song.files?.[0]?.id
-		const list = await fetchSongAnnotations(song.id, targetFileId)
+		const list = await fetchSongAnnotations(song.id, targetFileId || undefined)
 		if (reqId === annotationRequestId) {
 			annotations.value = list
 		}
@@ -378,6 +399,23 @@ function onToggleAnnotations() {
 	persistCurrentSettings()
 }
 
+function onToggleLayerVisibility(layerId: number) {
+	const next = toggleAnnotationLayerVisibility(annotationLayers.value, layerId)
+	annotationLayers.value = next
+	const targetFileId = Number(
+		currentFile.value?.fileId ?? currentFile.value?.id
+		?? currentSong.value?.files?.[0]?.fileId ?? currentSong.value?.files?.[0]?.id ?? 0,
+	)
+	if (targetFileId > 0) {
+		void persistFileAnnotationLayers(targetFileId, next)
+	}
+	const toggled = next.find((l) => l.id === layerId)
+	if (toggled?.visible && !showAnnotations.value) {
+		showAnnotations.value = true
+		previewerRef.value?.toggleAnnotations()
+	}
+}
+
 async function toggleFullscreen() {
 	try {
 		const target = document.documentElement?.requestFullscreen ? document.documentElement : rootRef.value
@@ -448,6 +486,7 @@ onUnmounted(() => {
 				:item-count="items.length"
 				:show-item-counter="!isSingleSongMode"
 				:show-annotations="showAnnotations"
+				:annotation-layers="annotationLayers"
 				:is-fullscreen="isFullscreen"
 				:show-settings-button="Boolean(setlistId && setlistId > 0)"
 				:is-settings-open="isSettingsOpen"
@@ -455,6 +494,7 @@ onUnmounted(() => {
 				@exit="emit('close')"
 				@stop="handleStop"
 				@toggle-annotations="onToggleAnnotations"
+				@toggle-layer-visibility="onToggleLayerVisibility"
 				@toggle-settings="toggleSettingsPanel"
 				@toggle-fullscreen="toggleFullscreen"
 				@pause-auto-hide="pauseHudAutoHide"
@@ -473,7 +513,7 @@ onUnmounted(() => {
 					:page-order="currentPageOrder"
 					:target-page="currentTargetPage"
 					:start-at-end="startAtEnd"
-					:annotations="annotations"
+					:annotations="visibleAnnotations"
 					:show-annotations="showAnnotations"
 					:hide-toolbar="true"
 					:show-external-button="false"
