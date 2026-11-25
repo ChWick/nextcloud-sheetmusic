@@ -28,6 +28,7 @@ import {
 
 export type EditorTool =
 	| 'select'
+	| 'box-select'
 	| 'drawing'
 	| 'highlight'
 	| 'line'
@@ -65,6 +66,7 @@ export interface EditorToolStyle {
 type HistoryAction =
 	| { kind: 'create'; annotation: SheetAnnotation }
 	| { kind: 'update'; before: SheetAnnotation; after: SheetAnnotation }
+	| { kind: 'batch-update'; before: SheetAnnotation[]; after: SheetAnnotation[] }
 	| { kind: 'delete'; annotation: SheetAnnotation }
 	| { kind: 'batch-delete'; annotations: SheetAnnotation[] }
 
@@ -125,7 +127,13 @@ export function useAnnotationEditor(
 ) {
 	const isEditing = ref(false)
 	const activeTool = ref<EditorTool>('drawing')
-	const selectedUuid = ref<string | null>(null)
+	const selectedUuids = ref<string[]>([])
+	const selectedUuid = computed<string | null>({
+		get: () => selectedUuids.value[0] ?? null,
+		set: (uuid) => {
+			selectedUuids.value = uuid ? [uuid] : []
+		},
+	})
 	const isSaving = ref(false)
 	const saveError = ref<string | null>(null)
 
@@ -137,9 +145,15 @@ export function useAnnotationEditor(
 	const canUndo = computed(() => undoStack.value.length > 0)
 	const canRedo = computed(() => redoStack.value.length > 0)
 
+	const selectedAnnotations = computed<SheetAnnotation[]>(() => {
+		if (selectedUuids.value.length === 0) return []
+		const idSet = new Set(selectedUuids.value)
+		return annotations.value.filter((a) => !a.deletedAt && idSet.has(a.uuid))
+	})
+
 	const selectedAnnotation = computed<SheetAnnotation | null>(() => {
-		if (!selectedUuid.value) return null
-		return annotations.value.find((a) => a.uuid === selectedUuid.value && !a.deletedAt) ?? null
+		if (selectedAnnotations.value.length !== 1) return null
+		return selectedAnnotations.value[0]
 	})
 
 	function enterEditMode() {
@@ -151,14 +165,14 @@ export function useAnnotationEditor(
 	function exitEditMode() {
 		void flushPendingUpdate()
 		isEditing.value = false
-		selectedUuid.value = null
+		selectedUuids.value = []
 	}
 
 	function setTool(tool: EditorTool) {
 		activeTool.value = tool
-		if (tool !== 'select') {
+		if (tool !== 'select' && tool !== 'box-select') {
 			void flushPendingUpdate()
-			selectedUuid.value = null
+			selectedUuids.value = []
 		}
 	}
 
@@ -170,11 +184,26 @@ export function useAnnotationEditor(
 		if (pendingUpdate && pendingUpdate.after.uuid !== uuid) {
 			void flushPendingUpdate()
 		}
-		selectedUuid.value = uuid
+		if (pendingBatchUpdate) {
+			void flushPendingUpdate()
+		}
+		selectedUuids.value = uuid ? [uuid] : []
 		if (uuid) {
 			const ann = annotations.value.find((a) => a.uuid === uuid && !a.deletedAt)
 			if (ann) {
 				syncToolStyleFromAnnotation(ann)
+			}
+		}
+	}
+
+	function selectAnnotations(uuids: string[]) {
+		const unique = Array.from(new Set(uuids.filter(Boolean)))
+		void flushPendingUpdate()
+		selectedUuids.value = unique
+		if (unique.length > 0) {
+			const first = annotations.value.find((a) => a.uuid === unique[0] && !a.deletedAt)
+			if (first) {
+				syncToolStyleFromAnnotation(first)
 			}
 		}
 	}
@@ -229,8 +258,8 @@ export function useAnnotationEditor(
 
 	function removeLocal(uuid: string) {
 		annotations.value = annotations.value.filter((a) => a.uuid !== uuid)
-		if (selectedUuid.value === uuid) {
-			selectedUuid.value = null
+		if (selectedUuids.value.includes(uuid)) {
+			selectedUuids.value = selectedUuids.value.filter((id) => id !== uuid)
 		}
 	}
 
@@ -260,25 +289,52 @@ export function useAnnotationEditor(
 
 	const STYLE_SAVE_DEBOUNCE_MS = 200
 	let pendingUpdate: { before: SheetAnnotation; after: SheetAnnotation; timer: ReturnType<typeof setTimeout> | null } | null = null
+	let pendingBatchUpdate: {
+		key: string
+		beforeByUuid: Map<string, SheetAnnotation>
+		afterByUuid: Map<string, SheetAnnotation>
+		timer: ReturnType<typeof setTimeout> | null
+	} | null = null
 
 	async function flushPendingUpdate(): Promise<void> {
-		if (!pendingUpdate) return
-		const { before, after, timer } = pendingUpdate
-		pendingUpdate = null
-		if (timer !== null) {
-			clearTimeout(timer)
+		if (pendingUpdate) {
+			const { before, after, timer } = pendingUpdate
+			pendingUpdate = null
+			if (timer !== null) {
+				clearTimeout(timer)
+			}
+			await updateAnnotation(before, after, true)
 		}
-		await updateAnnotation(before, after, true)
+		if (pendingBatchUpdate) {
+			const { beforeByUuid, afterByUuid, timer } = pendingBatchUpdate
+			pendingBatchUpdate = null
+			if (timer !== null) {
+				clearTimeout(timer)
+			}
+			const pairs: Array<{ before: SheetAnnotation; after: SheetAnnotation }> = []
+			for (const [uuid, after] of afterByUuid.entries()) {
+				const before = beforeByUuid.get(uuid)
+				if (before) {
+					pairs.push({ before, after })
+				}
+			}
+			if (pairs.length > 0) {
+				await batchUpdateAnnotations(pairs, true)
+			}
+		}
 	}
 
 	function scheduleCoalescedUpdate(before: SheetAnnotation, after: SheetAnnotation): void {
 		bumpLocalRevision(after.uuid)
 		upsertLocal(after)
-		if (selectedUuid.value === after.uuid) {
+		if (selectedUuids.value.length === 1 && selectedUuids.value[0] === after.uuid) {
 			syncToolStyleFromAnnotation(after)
 		}
 
 		if (pendingUpdate && pendingUpdate.after.uuid !== after.uuid) {
+			void flushPendingUpdate()
+		}
+		if (pendingBatchUpdate) {
 			void flushPendingUpdate()
 		}
 
@@ -292,6 +348,41 @@ export function useAnnotationEditor(
 		pendingUpdate = { before: initialBefore, after: cloneAnn(after), timer }
 	}
 
+	function scheduleCoalescedBatchUpdate(
+		pairs: Array<{ before: SheetAnnotation; after: SheetAnnotation }>,
+	): void {
+		if (pairs.length === 0) return
+		if (pairs.length === 1) {
+			scheduleCoalescedUpdate(pairs[0].before, pairs[0].after)
+			return
+		}
+		for (const { after } of pairs) {
+			bumpLocalRevision(after.uuid)
+			upsertLocal(after)
+		}
+
+		const key = pairs.map((p) => p.after.uuid).sort().join(',')
+		if (pendingUpdate || (pendingBatchUpdate && pendingBatchUpdate.key !== key)) {
+			void flushPendingUpdate()
+		}
+
+		const beforeByUuid = pendingBatchUpdate?.beforeByUuid ?? new Map<string, SheetAnnotation>()
+		const afterByUuid = pendingBatchUpdate?.afterByUuid ?? new Map<string, SheetAnnotation>()
+		for (const { before, after } of pairs) {
+			if (!beforeByUuid.has(after.uuid)) {
+				beforeByUuid.set(after.uuid, cloneAnn(before))
+			}
+			afterByUuid.set(after.uuid, cloneAnn(after))
+		}
+		if (pendingBatchUpdate?.timer !== null && pendingBatchUpdate?.timer !== undefined) {
+			clearTimeout(pendingBatchUpdate.timer)
+		}
+		const timer = setTimeout(() => {
+			void flushPendingUpdate()
+		}, STYLE_SAVE_DEBOUNCE_MS)
+		pendingBatchUpdate = { key, beforeByUuid, afterByUuid, timer }
+	}
+
 	async function persistDelete(ann: SheetAnnotation): Promise<void> {
 		removeLocal(ann.uuid)
 		if (!ann.id) return
@@ -302,8 +393,8 @@ export function useAnnotationEditor(
 		const idsToDelete = anns.map((a) => a.id).filter((id): id is number => typeof id === 'number')
 		const uuidsToDelete = new Set(anns.map((a) => a.uuid))
 		annotations.value = annotations.value.filter((a) => !uuidsToDelete.has(a.uuid))
-		if (selectedUuid.value && uuidsToDelete.has(selectedUuid.value)) {
-			selectedUuid.value = null
+		if (selectedUuids.value.some((id) => uuidsToDelete.has(id))) {
+			selectedUuids.value = selectedUuids.value.filter((id) => !uuidsToDelete.has(id))
 		}
 		if (idsToDelete.length > 0) {
 			await withSaving(
@@ -312,6 +403,65 @@ export function useAnnotationEditor(
 				!swallowError,
 			)
 		}
+	}
+
+	async function persistBatchUpsert(anns: SheetAnnotation[]): Promise<SheetAnnotation[]> {
+		if (anns.length === 0) return []
+		const ctx = getContext()
+		const songId = isSetlistContext(ctx) ? 0 : ctx.songId
+		const revisions = new Map<string, number>()
+		for (const ann of anns) {
+			revisions.set(ann.uuid, localRevisions.get(ann.uuid) ?? 0)
+		}
+		const payload = anns.map((ann) => ({
+			...ann,
+			songId,
+			fileId: ann.fileId || ctx.fileId,
+		}))
+		const saved = await withSaving(async () => {
+			const res = await batchContextAnnotations(ctx, { upsert: payload })
+			for (const s of res.saved) {
+				const startRev = revisions.get(s.uuid) ?? 0
+				if ((localRevisions.get(s.uuid) ?? 0) === startRev) {
+					upsertLocal(s)
+				} else if (s.id) {
+					const latest = annotations.value.find((a) => a.uuid === s.uuid)
+					if (latest && !latest.id) {
+						upsertLocal({ ...latest, id: s.id })
+					}
+				}
+			}
+			return res.saved
+		}, 'Failed to save annotations')
+		return saved ?? anns
+	}
+
+	async function batchUpdateAnnotations(
+		pairs: Array<{ before: SheetAnnotation; after: SheetAnnotation }>,
+		recordHistory = true,
+	): Promise<SheetAnnotation[]> {
+		if (pairs.length === 0) return []
+		if (pairs.length === 1) {
+			const saved = await updateAnnotation(pairs[0].before, pairs[0].after, recordHistory)
+			return [saved]
+		}
+		for (const { after } of pairs) {
+			upsertLocal(after)
+		}
+		const saved = await persistBatchUpsert(pairs.map((p) => p.after))
+		if (recordHistory) {
+			const savedByUuid = new Map(saved.map((s) => [s.uuid, s]))
+			undoStack.value = [
+				...undoStack.value,
+				{
+					kind: 'batch-update',
+					before: pairs.map((p) => cloneAnn(p.before)),
+					after: pairs.map((p) => cloneAnn(savedByUuid.get(p.after.uuid) ?? p.after)),
+				},
+			]
+			redoStack.value = []
+		}
+		return saved
 	}
 
 	async function createAnnotation(draft: Omit<SheetAnnotation, 'songId' | 'fileId' | 'uuid'> & { uuid?: string }): Promise<SheetAnnotation> {
@@ -363,8 +513,18 @@ export function useAnnotationEditor(
 	}
 
 	async function deleteSelected(): Promise<void> {
-		if (!selectedAnnotation.value) return
-		await deleteAnnotation(selectedAnnotation.value)
+		const selected = selectedAnnotations.value
+		if (selected.length === 0) return
+		if (selected.length === 1) {
+			await deleteAnnotation(selected[0])
+			return
+		}
+		await flushPendingUpdate()
+		const snapshots = selected.map(cloneAnn)
+		selectedUuids.value = []
+		await batchDeleteLocalAndRemote(selected)
+		undoStack.value = [...undoStack.value, { kind: 'batch-delete', annotations: snapshots }]
+		redoStack.value = []
 	}
 
 	async function clearPage(pageNumberZeroIndexed: number): Promise<void> {
@@ -375,7 +535,7 @@ export function useAnnotationEditor(
 		if (pageAnns.length === 0) return
 
 		const snapshots = pageAnns.map(cloneAnn)
-		selectedUuid.value = null
+		selectedUuids.value = []
 		await batchDeleteLocalAndRemote(pageAnns, true)
 
 		undoStack.value = [...undoStack.value, { kind: 'batch-delete', annotations: snapshots }]
@@ -397,6 +557,13 @@ export function useAnnotationEditor(
 			redoStack.value = [
 				...redoStack.value,
 				{ kind: 'update', before: restored, after: action.after },
+			]
+		} else if (action.kind === 'batch-update') {
+			for (const b of action.before) upsertLocal(b)
+			const restored = await persistBatchUpsert(action.before)
+			redoStack.value = [
+				...redoStack.value,
+				{ kind: 'batch-update', before: restored, after: action.after },
 			]
 		} else if (action.kind === 'delete') {
 			const saved = await persistSave(toRestorableCopy(action.annotation))
@@ -434,6 +601,13 @@ export function useAnnotationEditor(
 				...undoStack.value,
 				{ kind: 'update', before: action.before, after: restored },
 			]
+		} else if (action.kind === 'batch-update') {
+			for (const a of action.after) upsertLocal(a)
+			const restored = await persistBatchUpsert(action.after)
+			undoStack.value = [
+				...undoStack.value,
+				{ kind: 'batch-update', before: action.before, after: restored },
+			]
 		} else if (action.kind === 'delete') {
 			await persistDelete(action.annotation)
 			undoStack.value = [...undoStack.value, action]
@@ -449,25 +623,28 @@ export function useAnnotationEditor(
 	}
 
 	function adjustSizeOrThickness(deltaSign: 1 | -1) {
-		const sel = selectedAnnotation.value
-		if (sel) {
-			if (sel.type === 'stamp' || sel.type === 'text' || sel.type === 'link') {
-				const fallback = sel.type === 'stamp' ? toolStyle.value.stampSize : sel.type === 'link' ? 14 : toolStyle.value.fontSize
-				const cur = Number(sel.style?.fontSize) || fallback
-				const step = sel.type === 'stamp' ? 4 : 2
-				const nextSize = Math.max(8, Math.min(120, cur + deltaSign * step))
-				if (nextSize !== cur) {
-					updateSelectedStyle({ fontSize: nextSize })
+		const selected = selectedAnnotations.value
+		if (selected.length > 0) {
+			const pairs: Array<{ before: SheetAnnotation; after: SheetAnnotation }> = []
+			for (const sel of selected) {
+				if (sel.type === 'stamp' || sel.type === 'text' || sel.type === 'link') {
+					const fallback = sel.type === 'stamp' ? toolStyle.value.stampSize : sel.type === 'link' ? 14 : toolStyle.value.fontSize
+					const cur = Number(sel.style?.fontSize) || fallback
+					const step = sel.type === 'stamp' ? 4 : 2
+					const nextSize = Math.max(8, Math.min(120, cur + deltaSign * step))
+					if (nextSize !== cur) {
+						pairs.push({ before: sel, after: { ...sel, style: { ...sel.style, fontSize: nextSize } } })
+					}
+				} else if (sel.type === 'drawing' || sel.type === 'highlight' || sel.type === 'shape') {
+					const cur = Number(sel.style?.strokeWidth) || (sel.type === 'highlight' ? toolStyle.value.highlightWidth : toolStyle.value.strokeWidth)
+					const nextWidth = stepStrokeWidth(cur, deltaSign)
+					if (nextWidth !== cur) {
+						pairs.push({ before: sel, after: { ...sel, style: { ...sel.style, strokeWidth: nextWidth } } })
+					}
 				}
-				return
 			}
-			if (sel.type === 'drawing' || sel.type === 'highlight' || sel.type === 'shape') {
-				const cur = Number(sel.style?.strokeWidth) || (sel.type === 'highlight' ? toolStyle.value.highlightWidth : toolStyle.value.strokeWidth)
-				const nextWidth = stepStrokeWidth(cur, deltaSign)
-				if (nextWidth !== cur) {
-					updateSelectedStyle({ strokeWidth: nextWidth })
-				}
-				return
+			if (pairs.length > 0) {
+				scheduleCoalescedBatchUpdate(pairs)
 			}
 			return
 		}
@@ -485,20 +662,26 @@ export function useAnnotationEditor(
 	}
 
 	function nudgeSelected(dx: number, dy: number) {
-		const sel = selectedAnnotation.value
-		if (!sel) return
-		const moved = translateAnnotation(sel, dx, dy)
-		updateAnnotation(sel, moved)
+		const selected = selectedAnnotations.value
+		if (selected.length === 0) return
+		if (selected.length === 1) {
+			const moved = translateAnnotation(selected[0], dx, dy)
+			void updateAnnotation(selected[0], moved)
+			return
+		}
+		void batchUpdateAnnotations(
+			selected.map((ann) => ({ before: ann, after: translateAnnotation(ann, dx, dy) })),
+		)
 	}
 
 	function handleKeydown(e: KeyboardEvent): void {
 		if (!isEditing.value) return
 		handleAnnotationEditorKeydown(e, {
-			hasSelection: () => Boolean(selectedAnnotation.value || selectedUuid.value),
+			hasSelection: () => selectedUuids.value.length > 0,
 			undo,
 			redo,
 			deleteSelected,
-			clearSelection: () => { selectedUuid.value = null },
+			clearSelection: () => { selectedUuids.value = [] },
 			setTool,
 			nudgeSelected,
 			adjustSizeOrThickness,
@@ -523,37 +706,166 @@ export function useAnnotationEditor(
 		}
 	}
 
-	function updateSelectedStyle(patch: Partial<SheetAnnotation['style']>) {
-		const current = selectedAnnotation.value
-		if (!current) return
-		const updated: SheetAnnotation = {
-			...current,
-			style: {
-				...current.style,
-				...patch,
-			},
+	function buildStylePatchForAnnotation(
+		ann: SheetAnnotation,
+		patch: Partial<SheetAnnotation['style']>,
+	): Partial<SheetAnnotation['style']> | null {
+		const next: Partial<SheetAnnotation['style']> = {}
+		let hasChange = false
+
+		const chosenColor = patch.color ?? patch.stroke
+		if (chosenColor !== undefined) {
+			if (ann.type === 'text' || ann.type === 'stamp') {
+				next.color = chosenColor
+				hasChange = true
+			} else if (ann.type === 'drawing' || ann.type === 'highlight' || ann.type === 'shape') {
+				next.stroke = chosenColor
+				hasChange = true
+			} else if (ann.type === 'link') {
+				next.color = chosenColor
+				next.stroke = chosenColor
+				hasChange = true
+			}
 		}
-		scheduleCoalescedUpdate(current, updated)
+
+		if (patch.opacity !== undefined) {
+			next.opacity = patch.opacity
+			hasChange = true
+		}
+
+		if (patch.fontSize !== undefined && (ann.type === 'text' || ann.type === 'stamp' || ann.type === 'link')) {
+			next.fontSize = patch.fontSize
+			hasChange = true
+		}
+
+		if (patch.strokeWidth !== undefined && (ann.type === 'drawing' || ann.type === 'highlight' || ann.type === 'shape')) {
+			next.strokeWidth = patch.strokeWidth
+			hasChange = true
+		}
+
+		if (patch.lineStyle !== undefined && (ann.type === 'drawing' || ann.type === 'shape')) {
+			next.lineStyle = patch.lineStyle
+			hasChange = true
+		}
+
+		if (patch.textAlign !== undefined && ann.type === 'text') {
+			next.textAlign = patch.textAlign
+			hasChange = true
+		}
+
+		for (const [k, v] of Object.entries(patch)) {
+			if (
+				k !== 'color'
+				&& k !== 'stroke'
+				&& k !== 'opacity'
+				&& k !== 'fontSize'
+				&& k !== 'strokeWidth'
+				&& k !== 'lineStyle'
+				&& k !== 'textAlign'
+				&& v !== undefined
+			) {
+				;(next as Record<string, unknown>)[k] = v
+				hasChange = true
+			}
+		}
+
+		return hasChange ? next : null
+	}
+
+	function updateSelectedStyle(patch: Partial<SheetAnnotation['style']>) {
+		const selected = selectedAnnotations.value
+		if (selected.length === 0) return
+		if (selected.length === 1) {
+			const current = selected[0]
+			const updated: SheetAnnotation = {
+				...current,
+				style: {
+					...current.style,
+					...patch,
+				},
+			}
+			scheduleCoalescedUpdate(current, updated)
+			return
+		}
+
+		const pairs: Array<{ before: SheetAnnotation; after: SheetAnnotation }> = []
+		for (const ann of selected) {
+			const applicable = buildStylePatchForAnnotation(ann, patch)
+			if (!applicable) continue
+			pairs.push({
+				before: ann,
+				after: {
+					...ann,
+					style: {
+						...ann.style,
+						...applicable,
+					},
+				},
+			})
+		}
+		if (pairs.length > 0) {
+			scheduleCoalescedBatchUpdate(pairs)
+			syncToolStyleFromAnnotation(pairs[0].after)
+		}
 	}
 
 	function updateSelectedData(patch: Partial<SheetAnnotation['data']>) {
-		const current = selectedAnnotation.value
-		if (!current) return
-		const updated: SheetAnnotation = {
-			...current,
-			data: {
-				...current.data,
-				...patch,
-			},
+		const selected = selectedAnnotations.value
+		if (selected.length === 0) return
+		if (selected.length === 1) {
+			const current = selected[0]
+			const updated: SheetAnnotation = {
+				...current,
+				data: {
+					...current.data,
+					...patch,
+				},
+			}
+			scheduleCoalescedUpdate(current, updated)
+			return
 		}
-		scheduleCoalescedUpdate(current, updated)
+
+		const pairs: Array<{ before: SheetAnnotation; after: SheetAnnotation }> = []
+		for (const ann of selected) {
+			if (ann.type === 'shape' && (patch.aperture !== undefined || patch.curvature !== undefined)) {
+				const st = ann.data?.shapeType
+				if (st === 'slur') {
+					const raw = Math.abs(patch.curvature ?? patch.aperture ?? 18)
+					const sign = (ann.data?.curvature ?? -1) < 0 ? -1 : 1
+					pairs.push({ before: ann, after: { ...ann, data: { ...ann.data, curvature: sign * raw } } })
+				} else if (st === 'bracket') {
+					const raw = Math.abs(patch.aperture ?? patch.curvature ?? 18)
+					const sign = (ann.data?.aperture ?? 1) < 0 ? -1 : 1
+					pairs.push({ before: ann, after: { ...ann, data: { ...ann.data, aperture: sign * raw } } })
+				} else if (st === 'crescendo' || st === 'decrescendo') {
+					const raw = Math.abs(patch.aperture ?? patch.curvature ?? 18)
+					pairs.push({ before: ann, after: { ...ann, data: { ...ann.data, aperture: raw } } })
+				}
+			} else {
+				pairs.push({
+					before: ann,
+					after: {
+						...ann,
+						data: {
+							...ann.data,
+							...patch,
+						},
+					},
+				})
+			}
+		}
+		if (pairs.length > 0) {
+			scheduleCoalescedBatchUpdate(pairs)
+		}
 	}
 
 	return {
 		isEditing,
 		activeTool,
 		selectedUuid,
+		selectedUuids,
 		selectedAnnotation,
+		selectedAnnotations,
 		toolStyle,
 		isSaving,
 		saveError,
@@ -563,10 +875,12 @@ export function useAnnotationEditor(
 		exitEditMode,
 		setTool,
 		selectAnnotation,
+		selectAnnotations,
 		selectStampSymbol,
 		handleKeydown,
 		createAnnotation,
 		updateAnnotation,
+		batchUpdateAnnotations,
 		updateSelectedStyle,
 		updateSelectedData,
 		deleteAnnotation,

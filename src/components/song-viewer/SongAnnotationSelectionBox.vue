@@ -7,8 +7,10 @@ const props = withDefaults(defineProps<{
 	item: SheetAnnotation
 	vbHeight: number
 	uiScale?: number
+	showHandles?: boolean
 }>(), {
 	uiScale: 1,
+	showHandles: true,
 })
 
 const scale = computed(() => Math.max(0.1, props.uiScale))
@@ -62,7 +64,7 @@ const stampBounds = computed(() =>
 			pointer-events="none" />
 
 		<!-- Endpoint & height handles for 2-point shapes -->
-		<template v-if="isTwoPointShape && item.data?.points">
+		<template v-if="showHandles && isTwoPointShape && item.data?.points">
 			<circle
 				:cx="item.data.points[0].x * VIEWBOX_WIDTH"
 				:cy="item.data.points[0].y * vbHeight"
@@ -88,7 +90,7 @@ const stampBounds = computed(() =>
 		</template>
 
 		<!-- Corner resize handles for box annotations -->
-		<template v-else-if="item.type !== 'drawing' && item.type !== 'highlight' && item.type !== 'stamp'">
+		<template v-else-if="showHandles && item.type !== 'drawing' && item.type !== 'highlight' && item.type !== 'stamp'">
 			<rect
 				:x="item.x * VIEWBOX_WIDTH - boxPad - handleSize / 2"
 				:y="item.y * vbHeight - boxPad - handleSize / 2"

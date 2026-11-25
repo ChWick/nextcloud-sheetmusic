@@ -8,7 +8,12 @@ import { ref } from 'vue'
 import { useAnnotationInlineEditors } from './useAnnotationInlineEditors'
 import { useHandwritingInput } from './useHandwritingInput'
 import { useStylusSettings } from './useStylusSettings'
-import { getStampInkBounds, translateAnnotation, VIEWBOX_WIDTH } from '../utils/annotation'
+import {
+	findAnnotationsInBox,
+	getStampInkBounds,
+	translateAnnotation,
+	VIEWBOX_WIDTH,
+} from '../utils/annotation'
 import {
 	applyEndpointMove,
 	applyHeightMove,
@@ -25,7 +30,7 @@ import {
 	type StrokePressureTracker,
 } from '../utils/stylus-settings'
 
-type InteractionKind = 'draw' | 'move' | 'resize' | 'endpoint' | 'height' | 'stylus-erase'
+type InteractionKind = 'draw' | 'move' | 'move-multi' | 'marquee' | 'resize' | 'endpoint' | 'height' | 'stylus-erase'
 
 interface InteractionState {
 	kind: InteractionKind
@@ -34,6 +39,9 @@ interface InteractionState {
 	currentNorm: NormalizedPoint
 	points: NormalizedPoint[]
 	targetBefore?: SheetAnnotation
+	targetsBefore?: SheetAnnotation[]
+	initialHitUuid?: string | null
+	shiftKey?: boolean
 	handle?: string
 	moved?: boolean
 	pointerType?: string
@@ -53,9 +61,12 @@ export interface UseAnnotationPointerInteractionOptions {
 	toolStyle: ComputedRef<EditorToolStyle>
 	activeAnnotations: ComputedRef<SheetAnnotation[]>
 	selectedItem: ComputedRef<SheetAnnotation | null>
+	selectedItems?: ComputedRef<SheetAnnotation[]>
 	onSelect: (uuid: string | null) => void
+	onSelectMany?: (uuids: string[]) => void
 	onCreate: (draft: Omit<SheetAnnotation, 'songId' | 'fileId' | 'uuid'> & { uuid?: string }) => void
 	onUpdate: (before: SheetAnnotation, after: SheetAnnotation) => void
+	onBatchUpdate?: (pairs: Array<{ before: SheetAnnotation; after: SheetAnnotation }>) => void
 	onDelete: (annotation: SheetAnnotation) => void
 }
 
@@ -73,6 +84,8 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 
 	const interaction = ref<InteractionState | null>(null)
 	const previewAnnotation = ref<SheetAnnotation | null>(null)
+	const previewAnnotations = ref<Map<string, SheetAnnotation>>(new Map())
+	const marqueeBox = ref<{ x: number; y: number; width: number; height: number } | null>(null)
 	const hoveredUuid = ref<string | null>(null)
 	const {
 		pendingText,
@@ -126,9 +139,24 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 		}
 	}
 
+	function emitSelection(uuids: string[]) {
+		const unique = Array.from(new Set(uuids.filter(Boolean)))
+		if (unique.length === 0) {
+			opts.onSelect(null)
+		} else if (unique.length === 1) {
+			opts.onSelect(unique[0])
+		} else if (opts.onSelectMany) {
+			opts.onSelectMany(unique)
+		} else {
+			opts.onSelect(unique[0])
+		}
+	}
+
 	function cancelInteraction(pointerId?: number) {
 		interaction.value = null
 		previewAnnotation.value = null
+		previewAnnotations.value = new Map()
+		marqueeBox.value = null
 		activeHandwritingStroke.value = []
 		handwriting.resumeRecognizeTimerIfPending()
 		releaseCapturedPointer(pointerId)
@@ -320,9 +348,82 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 			return
 		}
 
+		const currentSelectedItems = opts.selectedItems?.value ?? (opts.selectedItem.value ? [opts.selectedItem.value] : [])
+		const selectedUuidSet = new Set(currentSelectedItems.map((a) => a.uuid))
+
+		if (opts.activeTool.value === 'box-select') {
+			handwriting.dismissSwapPill()
+			if (hitUuid && selectedUuidSet.has(hitUuid) && !e.shiftKey) {
+				e.preventDefault()
+				capturePointer(e.pointerId)
+				if (currentSelectedItems.length > 1) {
+					interaction.value = {
+						kind: 'move-multi',
+						pointerId: e.pointerId,
+						startNorm: pt,
+						currentNorm: pt,
+						points: [pt],
+						targetsBefore: currentSelectedItems.map(cloneAnnotation),
+						moved: false,
+						pointerType: e.pointerType,
+					}
+				} else {
+					interaction.value = {
+						kind: 'move',
+						pointerId: e.pointerId,
+						startNorm: pt,
+						currentNorm: pt,
+						points: [pt],
+						targetBefore: cloneAnnotation(currentSelectedItems[0]),
+						moved: false,
+						pointerType: e.pointerType,
+					}
+				}
+				return
+			}
+
+			e.preventDefault()
+			capturePointer(e.pointerId)
+			marqueeBox.value = { x: pt.x, y: pt.y, width: 0, height: 0 }
+			interaction.value = {
+				kind: 'marquee',
+				pointerId: e.pointerId,
+				startNorm: pt,
+				currentNorm: pt,
+				points: [pt],
+				initialHitUuid: hitUuid,
+				shiftKey: e.shiftKey,
+				moved: false,
+				pointerType: e.pointerType,
+			}
+			return
+		}
+
 		if (opts.activeTool.value === 'select' || (hitUuid && !(opts.activeTool.value === 'handwriting' && handwriting.pendingStrokes.value.length > 0))) {
 			if (hitUuid) {
 				handwriting.dismissSwapPill()
+				if (e.shiftKey && opts.onSelectMany) {
+					const next = selectedUuidSet.has(hitUuid)
+						? currentSelectedItems.filter((a) => a.uuid !== hitUuid).map((a) => a.uuid)
+						: [...currentSelectedItems.map((a) => a.uuid), hitUuid]
+					emitSelection(next)
+					return
+				}
+				if (currentSelectedItems.length > 1 && selectedUuidSet.has(hitUuid)) {
+					e.preventDefault()
+					capturePointer(e.pointerId)
+					interaction.value = {
+						kind: 'move-multi',
+						pointerId: e.pointerId,
+						startNorm: pt,
+						currentNorm: pt,
+						points: [pt],
+						targetsBefore: currentSelectedItems.map(cloneAnnotation),
+						moved: false,
+						pointerType: e.pointerType,
+					}
+					return
+				}
 				const ann = opts.activeAnnotations.value.find((a) => a.uuid === hitUuid)
 				opts.onSelect(hitUuid)
 				if (ann) {
@@ -340,13 +441,30 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 					}
 				}
 			} else {
-				opts.onSelect(null)
+				// Empty space drag in select mode starts a marquee box; clear selection immediately unless Shift-adding.
+				if (!e.shiftKey) {
+					emitSelection([])
+				}
+				e.preventDefault()
+				capturePointer(e.pointerId)
+				marqueeBox.value = { x: pt.x, y: pt.y, width: 0, height: 0 }
+				interaction.value = {
+					kind: 'marquee',
+					pointerId: e.pointerId,
+					startNorm: pt,
+					currentNorm: pt,
+					points: [pt],
+					initialHitUuid: null,
+					shiftKey: e.shiftKey,
+					moved: false,
+					pointerType: e.pointerType,
+				}
 			}
 			return
 		}
 
-		if (opts.selectedItem.value) {
-			opts.onSelect(null)
+		if (currentSelectedItems.length > 0) {
+			emitSelection([])
 		}
 
 		e.preventDefault()
@@ -401,6 +519,27 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 		state.currentNorm = pt
 		if (Math.hypot(pt.x - state.startNorm.x, pt.y - state.startNorm.y) > 0.002) {
 			state.moved = true
+		}
+
+		if (state.kind === 'marquee') {
+			marqueeBox.value = {
+				x: Math.min(state.startNorm.x, pt.x),
+				y: Math.min(state.startNorm.y, pt.y),
+				width: Math.abs(pt.x - state.startNorm.x),
+				height: Math.abs(pt.y - state.startNorm.y),
+			}
+			return
+		}
+
+		if (state.kind === 'move-multi' && state.targetsBefore) {
+			const dx = pt.x - state.startNorm.x
+			const dy = pt.y - state.startNorm.y
+			const nextMap = new Map<string, SheetAnnotation>()
+			for (const ann of state.targetsBefore) {
+				nextMap.set(ann.uuid, translateAnnotation(ann, dx, dy))
+			}
+			previewAnnotations.value = nextMap
+			return
 		}
 
 		if (state.kind === 'move' && state.targetBefore) {
@@ -475,7 +614,58 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 
 		const pt = clientToNorm(e.clientX, e.clientY, e.pointerType)
 		const preview = previewAnnotation.value
+		const multiPreview = previewAnnotations.value
+		const finalMarquee = marqueeBox.value
 		previewAnnotation.value = null
+		previewAnnotations.value = new Map()
+		marqueeBox.value = null
+
+		if (state.kind === 'marquee') {
+			const existingIds = (opts.selectedItems?.value ?? (opts.selectedItem.value ? [opts.selectedItem.value] : [])).map((a) => a.uuid)
+			if (state.moved && finalMarquee && (finalMarquee.width > 0.002 || finalMarquee.height > 0.002)) {
+				const matched = findAnnotationsInBox(
+					opts.activeAnnotations.value,
+					finalMarquee,
+					opts.vbHeight.value,
+					opts.uiScale?.value ?? 1,
+				)
+				const nextIds = state.shiftKey ? Array.from(new Set([...existingIds, ...matched])) : matched
+				emitSelection(nextIds)
+			} else if (state.initialHitUuid) {
+				if (state.shiftKey && opts.onSelectMany) {
+					const has = existingIds.includes(state.initialHitUuid)
+					emitSelection(
+						has ? existingIds.filter((id) => id !== state.initialHitUuid) : [...existingIds, state.initialHitUuid],
+					)
+				} else {
+					opts.onSelect(state.initialHitUuid)
+				}
+			} else if (!state.shiftKey) {
+				emitSelection([])
+			}
+			return
+		}
+
+		if (state.kind === 'move-multi' && state.targetsBefore) {
+			if (state.moved && multiPreview.size > 0) {
+				const pairs = state.targetsBefore
+					.map((before) => {
+						const after = multiPreview.get(before.uuid)
+						return after ? { before, after } : null
+					})
+					.filter((p): p is { before: SheetAnnotation; after: SheetAnnotation } => p !== null)
+				if (pairs.length > 0) {
+					if (opts.onBatchUpdate) {
+						opts.onBatchUpdate(pairs)
+					} else {
+						for (const p of pairs) {
+							opts.onUpdate(p.before, p.after)
+						}
+					}
+				}
+			}
+			return
+		}
 
 		if (state.kind !== 'draw' && state.targetBefore) {
 			if (state.moved && preview) {
@@ -524,6 +714,8 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 
 	return {
 		previewAnnotation,
+		previewAnnotations,
+		marqueeBox,
 		hoveredUuid,
 		pendingText,
 		pendingLink,

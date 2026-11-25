@@ -51,12 +51,12 @@ function selectSymbol(symbol: string) {
 const positionStyle = computed(() => {
 	const s = props.swapState
 	if (!s) return {}
-	const showBelow = s.y < 0.14
+	const showBelow = s.y < 0.18
 	return {
 		left: `clamp(120px, ${s.x * 100}%, calc(100% - 120px))`,
 		top: showBelow
-			? `calc(${s.y * 100}% + 20px)`
-			: `max(8px, calc(${s.y * 100}% - 48px))`,
+			? `min(calc(100% - 48px), calc(${s.y * 100}% + 64px))`
+			: `max(8px, calc(${s.y * 100}% - 104px))`,
 	}
 })
 </script>
@@ -165,11 +165,12 @@ const positionStyle = computed(() => {
 	align-items: center;
 	gap: 3px;
 	padding: 3px 5px;
-	background: var(--color-main-background, #ffffff);
+	background: rgba(255, 255, 255, 0.5);
+	background: color-mix(in srgb, var(--color-main-background, #ffffff) 50%, transparent);
 	color: var(--color-main-text, #222222);
-	border: 1px solid var(--color-border-dark, #cccccc);
+	border: 1px solid color-mix(in srgb, var(--color-border-dark, #cccccc) 65%, transparent);
 	border-radius: 999px;
-	box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+	box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16);
 }
 
 button[type='button'].candBtn,

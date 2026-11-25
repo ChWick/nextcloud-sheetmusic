@@ -417,3 +417,91 @@ export function translateAnnotation(
 	}
 	return next
 }
+
+export interface ViewBoxRect {
+	x: number
+	y: number
+	width: number
+	height: number
+}
+
+/**
+ * Compute an annotation's bounding box in SVG viewBox coordinates.
+ */
+export function getAnnotationViewBoxBounds(
+	ann: SheetAnnotation,
+	vbHeight: number = VIEWBOX_WIDTH,
+	uiScale = 1,
+): ViewBoxRect {
+	if (ann.type === 'stamp') {
+		return getStampInkBounds(ann, vbHeight, uiScale)
+	}
+	const x = ann.x * VIEWBOX_WIDTH
+	const y = ann.y * vbHeight
+	const width = ann.width * VIEWBOX_WIDTH
+	const height = ann.height * vbHeight
+	if (width > 0 || height > 0) {
+		return {
+			x,
+			y,
+			width: Math.max(4, width),
+			height: Math.max(4, height),
+		}
+	}
+	// Fallback for 2-point shapes or strokes with zero stored width/height
+	const pts: NormalizedPoint[] = []
+	if (Array.isArray(ann.data?.points)) pts.push(...ann.data.points)
+	if (Array.isArray(ann.data?.strokes)) {
+		for (const s of ann.data.strokes) pts.push(...s)
+	}
+	if (pts.length > 0) {
+		let minX = Infinity
+		let minY = Infinity
+		let maxX = -Infinity
+		let maxY = -Infinity
+		for (const pt of pts) {
+			const sx = pt.x * VIEWBOX_WIDTH
+			const sy = pt.y * vbHeight
+			if (sx < minX) minX = sx
+			if (sy < minY) minY = sy
+			if (sx > maxX) maxX = sx
+			if (sy > maxY) maxY = sy
+		}
+		return {
+			x: minX,
+			y: minY,
+			width: Math.max(4, maxX - minX),
+			height: Math.max(4, maxY - minY),
+		}
+	}
+	return { x, y, width: 4, height: 4 }
+}
+
+/**
+ * Return UUIDs of all annotations whose bounding box intersects a normalized marquee rectangle.
+ */
+export function findAnnotationsInBox(
+	annotations: SheetAnnotation[],
+	boxNorm: { x: number; y: number; width: number; height: number },
+	vbHeight: number = VIEWBOX_WIDTH,
+	uiScale = 1,
+): string[] {
+	const bx1 = boxNorm.x * VIEWBOX_WIDTH
+	const by1 = boxNorm.y * vbHeight
+	const bx2 = (boxNorm.x + boxNorm.width) * VIEWBOX_WIDTH
+	const by2 = (boxNorm.y + boxNorm.height) * vbHeight
+
+	const result: string[] = []
+	for (const ann of annotations) {
+		if (ann.deletedAt) continue
+		const bounds = getAnnotationViewBoxBounds(ann, vbHeight, uiScale)
+		const ax1 = bounds.x
+		const ay1 = bounds.y
+		const ax2 = bounds.x + bounds.width
+		const ay2 = bounds.y + bounds.height
+		if (ax1 <= bx2 && ax2 >= bx1 && ay1 <= by2 && ay2 >= by1) {
+			result.push(ann.uuid)
+		}
+	}
+	return result
+}

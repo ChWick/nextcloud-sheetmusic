@@ -24,7 +24,10 @@ describe('useAnnotationEditor', () => {
 		let nextId = 100
 		vi.mocked(axios.post).mockImplementation(async (url: string, body: any) => {
 			if (url.endsWith('/annotations/batch')) {
-				return { data: { ocs: { data: { saved: [], deletedIds: [] } } } } as any
+				const saved = Array.isArray(body?.upsert)
+					? body.upsert.map((item: any) => ({ ...item, id: item?.id ?? nextId++ }))
+					: []
+				return { data: { ocs: { data: { saved, deletedIds: body?.deleteIds ?? [] } } } } as any
 			}
 			return {
 				data: {
@@ -396,6 +399,80 @@ describe('useAnnotationEditor', () => {
 			// A single undo reverts back to the pre-drag size (30)
 			await editor.undo()
 			expect(annotations.value[0].style.fontSize).toBe(30)
+
+			editor.exitEditMode()
+		} finally {
+			vi.useRealTimers()
+		}
+	})
+
+	it('applies color, size, strokeWidth, delete, and undo across multiple selected annotations', async () => {
+		vi.useFakeTimers()
+		try {
+			const annotations = ref<SheetAnnotation[]>([
+				{
+					id: 30,
+					uuid: 'multi-stamp',
+					songId: 7,
+					fileId: 42,
+					pageNumber: 0,
+					type: 'stamp',
+					x: 0.2,
+					y: 0.2,
+					width: 0,
+					height: 0,
+					style: { color: '#000000', fontSize: 32, opacity: 1 },
+					data: { symbol: '\uED11', category: 'fingering' },
+				},
+				{
+					id: 31,
+					uuid: 'multi-shape',
+					songId: 7,
+					fileId: 42,
+					pageNumber: 0,
+					type: 'shape',
+					x: 0.25,
+					y: 0.25,
+					width: 0.1,
+					height: 0.05,
+					style: { stroke: '#000000', strokeWidth: 2.5, opacity: 1 },
+					data: { shapeType: 'rect' },
+				},
+			])
+
+			const editor = useAnnotationEditor(annotations, () => ({ songId: 7, fileId: 42 }))
+			editor.enterEditMode()
+			editor.setTool('box-select')
+			editor.selectAnnotations(['multi-stamp', 'multi-shape'])
+
+			expect(editor.selectedAnnotations.value).toHaveLength(2)
+			expect(editor.selectedAnnotation.value).toBeNull()
+
+			// Change color -> applies to stamp.style.color and shape.style.stroke
+			editor.updateSelectedStyle({ color: '#1e88e5' })
+			expect(annotations.value[0].style.color).toBe('#1e88e5')
+			expect(annotations.value[1].style.stroke).toBe('#1e88e5')
+
+			await vi.advanceTimersByTimeAsync(250)
+			await flushPromises()
+
+			// Undo restores both in a single step
+			await editor.undo()
+			expect(annotations.value[0].style.color).toBe('#000000')
+			expect(annotations.value[1].style.stroke).toBe('#000000')
+
+			// Redo reapplies both
+			await editor.redo()
+			expect(annotations.value[0].style.color).toBe('#1e88e5')
+			expect(annotations.value[1].style.stroke).toBe('#1e88e5')
+
+			// Delete selected removes both in a single batch
+			await editor.deleteSelected()
+			expect(annotations.value).toHaveLength(0)
+
+			// Undo restores both deleted annotations
+			await editor.undo()
+			expect(annotations.value).toHaveLength(2)
 
 			editor.exitEditMode()
 		} finally {

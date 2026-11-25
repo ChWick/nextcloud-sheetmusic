@@ -15,10 +15,12 @@ const props = withDefaults(
 		activeTool: EditorTool
 		toolStyle: EditorToolStyle
 		selectedAnnotation?: SheetAnnotation | null
+		selectedAnnotations?: SheetAnnotation[]
 		isShapeActive: boolean
 	}>(),
 	{
 		selectedAnnotation: null,
+		selectedAnnotations: () => [],
 	},
 )
 
@@ -50,72 +52,105 @@ const HIGHLIGHT_SWATCHES: ColorSwatch[] = [
 	{ color: '#ff8a65', label: 'Coral' },
 ]
 
+const effectiveSelection = computed<SheetAnnotation[]>(() => {
+	if (props.selectedAnnotations && props.selectedAnnotations.length > 0) {
+		return props.selectedAnnotations
+	}
+	return props.selectedAnnotation ? [props.selectedAnnotation] : []
+})
+
+const hasSelection = computed(() => effectiveSelection.value.length > 0)
+const singleSelected = computed(() => (effectiveSelection.value.length === 1 ? effectiveSelection.value[0] : null))
+const primarySelected = computed(() => effectiveSelection.value[0] ?? null)
+
 const isHighlightContext = computed(() =>
-	props.selectedAnnotation ? props.selectedAnnotation.type === 'highlight' : props.activeTool === 'highlight',
+	hasSelection.value
+		? effectiveSelection.value.every((a) => a.type === 'highlight')
+		: props.activeTool === 'highlight',
 )
 const isStampContext = computed(() =>
-	props.selectedAnnotation
-		? props.selectedAnnotation.type === 'stamp'
+	hasSelection.value
+		? effectiveSelection.value.some((a) => a.type === 'stamp')
 		: props.activeTool === 'stamp' || props.activeTool === 'handwriting',
 )
 
-const showStrokeWidth = computed(() => {
-	const t = props.selectedAnnotation?.type
-	return props.activeTool === 'drawing' || props.activeTool === 'highlight' || props.isShapeActive
-		|| t === 'drawing' || t === 'highlight' || t === 'shape'
-})
+const hasStrokeSelected = computed(() =>
+	effectiveSelection.value.some((a) => a.type === 'drawing' || a.type === 'highlight' || a.type === 'shape'),
+)
+const hasLineStyleSelected = computed(() =>
+	effectiveSelection.value.some((a) => a.type === 'drawing' || a.type === 'shape'),
+)
+const hasFontSizeSelected = computed(() =>
+	effectiveSelection.value.some((a) => a.type === 'text' || a.type === 'stamp' || a.type === 'link'),
+)
+const hasTextSelected = computed(() =>
+	effectiveSelection.value.some((a) => a.type === 'text'),
+)
 
-const showLineStyle = computed(() => {
-	const t = props.selectedAnnotation?.type
-	return props.activeTool === 'drawing' || props.isShapeActive || t === 'drawing' || t === 'shape'
-})
+const showStrokeWidth = computed(() =>
+	props.activeTool === 'drawing' || props.activeTool === 'highlight' || props.isShapeActive || hasStrokeSelected.value,
+)
 
-const showFontSize = computed(() => {
-	const t = props.selectedAnnotation?.type
-	return props.activeTool === 'text' || props.activeTool === 'stamp' || props.activeTool === 'handwriting' || props.activeTool === 'link'
-		|| t === 'text' || t === 'stamp' || t === 'link'
-})
+const showLineStyle = computed(() =>
+	props.activeTool === 'drawing' || props.isShapeActive || hasLineStyleSelected.value,
+)
 
-const showTextAlign = computed(() => props.activeTool === 'text' || props.selectedAnnotation?.type === 'text')
-const showSelectedText = computed(() => props.selectedAnnotation?.type === 'text' || props.selectedAnnotation?.type === 'link')
+const showFontSize = computed(() =>
+	props.activeTool === 'text' || props.activeTool === 'stamp' || props.activeTool === 'handwriting' || props.activeTool === 'link'
+	|| hasFontSizeSelected.value,
+)
+
+const showTextAlign = computed(() => props.activeTool === 'text' || hasTextSelected.value)
+const showSelectedText = computed(() => singleSelected.value?.type === 'text' || singleSelected.value?.type === 'link')
 
 const activeColor = computed(() => {
-	if (props.selectedAnnotation) {
-		return props.selectedAnnotation.style?.stroke || props.selectedAnnotation.style?.color || props.toolStyle.color
+	const sel = primarySelected.value
+	if (sel) {
+		return sel.style?.stroke || sel.style?.color || props.toolStyle.color
 	}
 	return isHighlightContext.value ? props.toolStyle.highlightColor : props.toolStyle.color
 })
 
 const activeOpacity = computed(() => {
 	const fallback = isHighlightContext.value ? props.toolStyle.highlightOpacity : props.toolStyle.opacity
-	return props.selectedAnnotation?.style?.opacity ?? fallback
+	return primarySelected.value?.style?.opacity ?? fallback
 })
 
 const currentSwatches = computed(() => (isHighlightContext.value ? HIGHLIGHT_SWATCHES : COLOR_SWATCHES))
 const strokeWidthPresets = computed(() => (isHighlightContext.value ? [10, 18, 28, 38] : [1.5, 2.5, 4, 6.5]))
 
-const currentStrokeWidth = computed(() =>
-	props.selectedAnnotation?.style?.strokeWidth ?? (isHighlightContext.value ? props.toolStyle.highlightWidth : props.toolStyle.strokeWidth),
-)
+const currentStrokeWidth = computed(() => {
+	const strokeItem = effectiveSelection.value.find((a) => a.type === 'drawing' || a.type === 'highlight' || a.type === 'shape')
+	return strokeItem?.style?.strokeWidth ?? (isHighlightContext.value ? props.toolStyle.highlightWidth : props.toolStyle.strokeWidth)
+})
 
-const currentLineStyle = computed<LineStyle>(
-	() => props.selectedAnnotation?.style?.lineStyle ?? props.toolStyle.lineStyle,
-)
+const currentLineStyle = computed<LineStyle>(() => {
+	const lineItem = effectiveSelection.value.find((a) => a.type === 'drawing' || a.type === 'shape')
+	return lineItem?.style?.lineStyle ?? props.toolStyle.lineStyle
+})
 
 const fontSizePresets = computed(() => (isStampContext.value ? [26, 36, 48, 64] : [16, 22, 30, 42]))
 
-const currentFontSize = computed(() =>
-	props.selectedAnnotation?.style?.fontSize ?? (isStampContext.value ? props.toolStyle.stampSize : props.toolStyle.fontSize),
+const currentFontSize = computed(() => {
+	const fontItem = effectiveSelection.value.find((a) => a.type === 'text' || a.type === 'stamp' || a.type === 'link')
+	return fontItem?.style?.fontSize ?? (isStampContext.value ? props.toolStyle.stampSize : props.toolStyle.fontSize)
+})
+
+function isHeightAdjustableType(shapeType?: string | null): boolean {
+	return shapeType === 'crescendo' || shapeType === 'decrescendo' || shapeType === 'slur' || shapeType === 'bracket' || shapeType === 'bracket-up'
+}
+
+const firstHeightAdjustableSelected = computed(() =>
+	effectiveSelection.value.find((a) => a.type === 'shape' && isHeightAdjustableType(a.data?.shapeType)) ?? null,
 )
 
 const isHeightAdjustableShape = computed(() => {
-	const selShape = props.selectedAnnotation?.type === 'shape' ? props.selectedAnnotation.data?.shapeType : null
-	const active = selShape ?? props.activeTool
-	return active === 'crescendo' || active === 'decrescendo' || active === 'slur' || active === 'bracket' || active === 'bracket-up'
+	if (firstHeightAdjustableSelected.value) return true
+	return isHeightAdjustableType(props.activeTool)
 })
 
 const currentShapeHeight = computed(() => {
-	const sel = props.selectedAnnotation
+	const sel = firstHeightAdjustableSelected.value
 	if (sel?.type === 'shape') {
 		const raw = sel.data?.shapeType === 'slur' ? sel.data?.curvature : sel.data?.aperture
 		return Math.abs(raw ?? props.toolStyle.shapeHeight ?? 18)
@@ -130,16 +165,20 @@ function patchToolStyle(patch: Partial<EditorToolStyle>) {
 }
 
 function pickColor(color: string) {
-	if (props.selectedAnnotation) {
-		const isFillText = props.selectedAnnotation.type === 'text' || props.selectedAnnotation.type === 'stamp'
+	if (singleSelected.value) {
+		const isFillText = singleSelected.value.type === 'text' || singleSelected.value.type === 'stamp'
 		emit('update-selected-style', isFillText ? { color } : { stroke: color })
+		return
+	}
+	if (hasSelection.value) {
+		emit('update-selected-style', { color })
 		return
 	}
 	patchToolStyle(isHighlightContext.value ? { highlightColor: color } : { color })
 }
 
 function updateOpacity(opacity: number) {
-	if (props.selectedAnnotation) {
+	if (hasSelection.value) {
 		emit('update-selected-style', { opacity })
 		return
 	}
@@ -147,7 +186,7 @@ function updateOpacity(opacity: number) {
 }
 
 function updateStrokeWidth(val: number) {
-	if (props.selectedAnnotation && props.selectedAnnotation.type !== 'text' && props.selectedAnnotation.type !== 'stamp') {
+	if (hasStrokeSelected.value) {
 		emit('update-selected-style', { strokeWidth: val })
 		return
 	}
@@ -155,7 +194,7 @@ function updateStrokeWidth(val: number) {
 }
 
 function updateLineStyle(lineStyle: LineStyle) {
-	if (props.selectedAnnotation && (props.selectedAnnotation.type === 'drawing' || props.selectedAnnotation.type === 'shape')) {
+	if (hasLineStyleSelected.value) {
 		emit('update-selected-style', { lineStyle })
 		return
 	}
@@ -163,8 +202,7 @@ function updateLineStyle(lineStyle: LineStyle) {
 }
 
 function updateFontSize(fontSize: number) {
-	const t = props.selectedAnnotation?.type
-	if (t === 'text' || t === 'stamp' || t === 'link') {
+	if (hasFontSizeSelected.value) {
 		emit('update-selected-style', { fontSize })
 		return
 	}
@@ -172,7 +210,7 @@ function updateFontSize(fontSize: number) {
 }
 
 function updateTextAlign(textAlign: TextAlign) {
-	if (props.selectedAnnotation?.type === 'text') {
+	if (hasTextSelected.value) {
 		emit('update-selected-style', { textAlign })
 		return
 	}
@@ -180,7 +218,7 @@ function updateTextAlign(textAlign: TextAlign) {
 }
 
 const selectedTextValue = computed(() => {
-	const sel = props.selectedAnnotation
+	const sel = singleSelected.value
 	if (!sel) return ''
 	if (sel.type === 'link') return sel.data?.label ?? ''
 	if (sel.type === 'text') return sel.data?.text ?? ''
@@ -188,7 +226,7 @@ const selectedTextValue = computed(() => {
 })
 
 function commitSelectedText(rawValue: string) {
-	const sel = props.selectedAnnotation
+	const sel = singleSelected.value
 	if (!sel) return
 	const trimmed = rawValue.trim()
 	if (!trimmed) return
@@ -200,7 +238,7 @@ function commitSelectedText(rawValue: string) {
 }
 
 function updateShapeHeight(height: number) {
-	const sel = props.selectedAnnotation
+	const sel = firstHeightAdjustableSelected.value
 	if (sel?.type === 'shape') {
 		if (sel.data?.shapeType === 'slur') {
 			const sign = (sel.data?.curvature ?? -1) < 0 ? -1 : 1
@@ -303,15 +341,15 @@ function updateShapeHeight(height: number) {
 		</div>
 
 		<!-- Selected Text / Link Label -->
-		<div v-if="showSelectedText" :class="$style.styleGroup">
+		<div v-if="showSelectedText && singleSelected" :class="$style.styleGroup">
 			<span :class="$style.styleLabel">
-				{{ selectedAnnotation.type === 'link' ? t('sheetmusic', 'Label') : t('sheetmusic', 'Text') }}
+				{{ singleSelected.type === 'link' ? t('sheetmusic', 'Label') : t('sheetmusic', 'Text') }}
 			</span>
 			<input
 				type="text"
 				:value="selectedTextValue"
-				:placeholder="selectedAnnotation.type === 'link' ? t('sheetmusic', 'Link label...') : t('sheetmusic', 'Annotation text...')"
-				:aria-label="selectedAnnotation.type === 'link' ? t('sheetmusic', 'Link label') : t('sheetmusic', 'Annotation text')"
+				:placeholder="singleSelected.type === 'link' ? t('sheetmusic', 'Link label...') : t('sheetmusic', 'Annotation text...')"
+				:aria-label="singleSelected.type === 'link' ? t('sheetmusic', 'Link label') : t('sheetmusic', 'Annotation text')"
 				:class="$style.textEditInput"
 				data-test="selected-annotation-text-input"
 				@change="commitSelectedText(($event.target as HTMLInputElement).value)"

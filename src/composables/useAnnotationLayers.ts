@@ -9,6 +9,7 @@ import {
 	addAnnotationLayer,
 	DEFAULT_LAYER_ID,
 	filterAndSortAnnotationsForLayers,
+	getAnnotationLayerIds,
 	getCachedFileAnnotationLayers,
 	loadFileAnnotationLayers,
 	persistFileAnnotationLayers,
@@ -23,9 +24,12 @@ export interface UseAnnotationLayersOptions {
 	fileId: () => number
 	annotations: Ref<SheetAnnotation[]>
 	selectedAnnotation: ComputedRef<SheetAnnotation | null>
+	selectedAnnotations?: ComputedRef<SheetAnnotation[]>
 	onClearSelection: () => void
+	onSelectAnnotations?: (uuids: string[]) => void
 	onCreateAnnotation: (draft: Omit<SheetAnnotation, 'songId' | 'fileId' | 'uuid'> & { uuid?: string }) => Promise<SheetAnnotation> | void
 	onUpdateAnnotation: (before: SheetAnnotation, after: SheetAnnotation, recordHistory?: boolean) => Promise<SheetAnnotation> | void
+	onBatchUpdateAnnotations?: (pairs: Array<{ before: SheetAnnotation; after: SheetAnnotation }>, recordHistory?: boolean) => Promise<SheetAnnotation[]> | void
 }
 
 /**
@@ -68,11 +72,22 @@ export function useAnnotationLayers(opts: UseAnnotationLayersOptions) {
 		saveLayers(renameAnnotationLayer(layers.value, id, name))
 	}
 
+	const activeSelectedAnnotations = computed<SheetAnnotation[]>(() => {
+		if (opts.selectedAnnotations) return opts.selectedAnnotations.value
+		return opts.selectedAnnotation.value ? [opts.selectedAnnotation.value] : []
+	})
+
 	function toggleLayerVisibility(id: number) {
 		const next = toggleAnnotationLayerVisibility(layers.value, id)
 		saveLayers(next)
-		if (opts.selectedAnnotation.value && !filterAndSortAnnotationsForLayers([opts.selectedAnnotation.value], next).length) {
-			opts.onClearSelection()
+		const selected = activeSelectedAnnotations.value
+		if (selected.length > 0) {
+			const stillVisible = filterAndSortAnnotationsForLayers(selected, next)
+			if (stillVisible.length === 0) {
+				opts.onClearSelection()
+			} else if (stillVisible.length < selected.length && opts.onSelectAnnotations) {
+				opts.onSelectAnnotations(stillVisible.map((a) => a.uuid))
+			}
 		}
 	}
 
@@ -104,17 +119,70 @@ export function useAnnotationLayers(opts: UseAnnotationLayersOptions) {
 	}
 
 	function updateSelectedLayers(layerIds: number[]) {
-		const sel = opts.selectedAnnotation.value
-		if (!sel || layerIds.length === 0) return
+		const selected = activeSelectedAnnotations.value
+		if (selected.length === 0 || layerIds.length === 0) return
 		const cleanIds = Array.from(new Set(layerIds))
-		void opts.onUpdateAnnotation(sel, {
-			...sel,
-			layerIndex: cleanIds[0] ?? DEFAULT_LAYER_ID,
-			data: {
-				...sel.data,
-				layerIds: cleanIds,
+		const pairs = selected.map((sel) => ({
+			before: sel,
+			after: {
+				...sel,
+				layerIndex: cleanIds[0] ?? DEFAULT_LAYER_ID,
+				data: {
+					...sel.data,
+					layerIds: cleanIds,
+				},
 			},
-		})
+		}))
+		if (pairs.length === 1) {
+			void opts.onUpdateAnnotation(pairs[0].before, pairs[0].after)
+		} else if (opts.onBatchUpdateAnnotations) {
+			void opts.onBatchUpdateAnnotations(pairs)
+		} else {
+			for (const p of pairs) {
+				void opts.onUpdateAnnotation(p.before, p.after)
+			}
+		}
+	}
+
+	function toggleSelectedLayer(layerId: number) {
+		const selected = activeSelectedAnnotations.value
+		if (selected.length === 0) return
+		const allHaveLayer = selected.every((ann) => getAnnotationLayerIds(ann).includes(layerId))
+		const pairs: Array<{ before: SheetAnnotation; after: SheetAnnotation }> = []
+
+		for (const ann of selected) {
+			const currentIds = getAnnotationLayerIds(ann)
+			let nextIds: number[]
+			if (allHaveLayer) {
+				if (currentIds.length <= 1) continue
+				nextIds = currentIds.filter((id) => id !== layerId)
+			} else {
+				if (currentIds.includes(layerId)) continue
+				nextIds = [...currentIds, layerId]
+			}
+			pairs.push({
+				before: ann,
+				after: {
+					...ann,
+					layerIndex: nextIds[0] ?? DEFAULT_LAYER_ID,
+					data: {
+						...ann.data,
+						layerIds: nextIds,
+					},
+				},
+			})
+		}
+
+		if (pairs.length === 0) return
+		if (pairs.length === 1) {
+			void opts.onUpdateAnnotation(pairs[0].before, pairs[0].after)
+		} else if (opts.onBatchUpdateAnnotations) {
+			void opts.onBatchUpdateAnnotations(pairs)
+		} else {
+			for (const p of pairs) {
+				void opts.onUpdateAnnotation(p.before, p.after)
+			}
+		}
 	}
 
 	function createAnnotationOnActiveLayer(
@@ -151,6 +219,7 @@ export function useAnnotationLayers(opts: UseAnnotationLayersOptions) {
 		reorderLayer,
 		deleteLayer,
 		updateSelectedLayers,
+		toggleSelectedLayer,
 		createAnnotationOnActiveLayer,
 	}
 }

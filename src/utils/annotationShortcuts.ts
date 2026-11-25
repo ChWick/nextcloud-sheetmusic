@@ -8,6 +8,7 @@ import { FINGERING_DIGIT_SYMBOLS } from './musicSymbols'
 
 const TOOL_SHORTCUTS: Record<string, EditorTool> = {
 	v: 'select',
+	r: 'box-select',
 	p: 'drawing',
 	h: 'highlight',
 	s: 'line',

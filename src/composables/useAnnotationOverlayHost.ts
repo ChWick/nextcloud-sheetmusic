@@ -20,11 +20,14 @@ export interface UseAnnotationOverlayHostOptions {
 	activeAnnotationTool: ComputedRef<EditorTool>
 	annotationToolStyle: ComputedRef<EditorToolStyle | undefined>
 	selectedAnnotationUuid: ComputedRef<string | null>
+	selectedAnnotationUuids?: ComputedRef<string[]>
 	musicFont?: ComputedRef<MusicFontId | undefined>
 	onJumpToPage: (targetOneIndexed: number) => void
 	onSelect: (uuid: string | null) => void
+	onSelectMany?: (uuids: string[]) => void
 	onCreate: (draft: Omit<SheetAnnotation, 'songId' | 'fileId' | 'uuid'> & { uuid?: string }) => void
 	onUpdate: (before: SheetAnnotation, after: SheetAnnotation) => void
+	onBatchUpdate?: (pairs: Array<{ before: SheetAnnotation; after: SheetAnnotation }>) => void
 	onDelete: (ann: SheetAnnotation) => void
 }
 
@@ -101,11 +104,14 @@ export function useAnnotationOverlayHost(opts: UseAnnotationOverlayHostOptions) 
 			activeTool: opts.activeAnnotationTool.value,
 			toolStyle: opts.annotationToolStyle.value,
 			selectedUuid: opts.selectedAnnotationUuid.value,
+			selectedUuids: opts.selectedAnnotationUuids?.value ?? [],
 			musicFont: opts.musicFont?.value ?? 'bravura',
 			onJumpToPage: (targetZeroIdx: number) => opts.onJumpToPage(targetZeroIdx + 1),
 			onSelect: opts.onSelect,
+			onSelectMany: opts.onSelectMany,
 			onCreateAnnotation: opts.onCreate,
 			onUpdateAnnotation: opts.onUpdate,
+			onBatchUpdateAnnotations: opts.onBatchUpdate,
 			onDeleteAnnotation: opts.onDelete,
 		})
 		if (appContext) {
@@ -144,6 +150,7 @@ export function useAnnotationOverlayHost(opts: UseAnnotationOverlayHostOptions) 
 			opts.activeAnnotationTool.value,
 			opts.annotationToolStyle.value,
 			opts.selectedAnnotationUuid.value,
+			opts.selectedAnnotationUuids?.value,
 			opts.musicFont?.value,
 		],
 		() => {

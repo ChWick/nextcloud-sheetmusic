@@ -98,4 +98,33 @@ describe('SongAnnotationLayerPicker.vue', () => {
 		await cb1.trigger('change')
 		expect(wrapper.emitted('update-selected-layers')).toEqual([[[0, 1]]])
 	})
+
+	it('emits toggle-selected-layer when multiple annotations are selected', async () => {
+		const secondAnn: SheetAnnotation = {
+			...selectedAnn,
+			id: 2,
+			uuid: 'a2',
+			layerIndex: 1,
+			data: { symbol: '\uED12', layerIds: [1] },
+		}
+		const wrapper = mount(SongAnnotationLayerPicker, {
+			props: {
+				layers: sampleLayers,
+				activeLayerId: 0,
+				selectedAnnotations: [selectedAnn, secondAnn],
+			},
+		})
+
+		await wrapper.find('[data-test="annotation-layers-trigger"]').trigger('click')
+		expect(wrapper.find('[data-test="selected-annotation-layers"]').exists()).toBe(true)
+
+		// Layer 0 is on 1 of 2 selected -> indeterminate, not disabled
+		const cb0 = wrapper.find('[data-test="selected-layer-checkbox-0"]')
+		expect((cb0.element as HTMLInputElement).checked).toBe(false)
+		expect((cb0.element as HTMLInputElement).indeterminate).toBe(true)
+		expect((cb0.element as HTMLInputElement).disabled).toBe(false)
+
+		await cb0.trigger('change')
+		expect(wrapper.emitted('toggle-selected-layer')).toEqual([[0]])
+	})
 })

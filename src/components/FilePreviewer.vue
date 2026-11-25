@@ -61,6 +61,7 @@ const props = withDefaults(
 		activeAnnotationTool?: EditorTool
 		annotationToolStyle?: EditorToolStyle
 		selectedAnnotationUuid?: string | null
+		selectedAnnotationUuids?: string[]
 		musicFont?: MusicFontId
 		binaryCache?: FileBinaryCache
 		initialPageLayout?: 'continuous' | 'single' | 'double' | 'auto'
@@ -87,6 +88,7 @@ const props = withDefaults(
 		activeAnnotationTool: 'select',
 		annotationToolStyle: undefined,
 		selectedAnnotationUuid: null,
+		selectedAnnotationUuids: () => [],
 		musicFont: 'bravura',
 		binaryCache: () => defaultFileBinaryCache,
 		initialPageLayout: 'continuous',
@@ -105,8 +107,10 @@ const props = withDefaults(
 
 const emit = defineEmits<{
 	'select-annotation': [uuid: string | null]
+	'select-annotations': [uuids: string[]]
 	'create-annotation': [draft: Omit<SheetAnnotation, 'songId' | 'fileId' | 'uuid'> & { uuid?: string }]
 	'update-annotation': [before: SheetAnnotation, after: SheetAnnotation]
+	'batch-update-annotations': [pairs: Array<{ before: SheetAnnotation; after: SheetAnnotation }>]
 	'delete-annotation': [annotation: SheetAnnotation]
 }>()
 
@@ -177,11 +181,14 @@ const {
 	activeAnnotationTool: computed(() => props.activeAnnotationTool),
 	annotationToolStyle: computed(() => props.annotationToolStyle),
 	selectedAnnotationUuid: computed(() => props.selectedAnnotationUuid),
+	selectedAnnotationUuids: computed(() => props.selectedAnnotationUuids),
 	musicFont: computed(() => props.musicFont),
 	onJumpToPage: (page) => goToPage(page),
 	onSelect: (uuid) => emit('select-annotation', uuid),
+	onSelectMany: (uuids) => emit('select-annotations', uuids),
 	onCreate: (draft) => emit('create-annotation', draft),
 	onUpdate: (before, after) => emit('update-annotation', before, after),
+	onBatchUpdate: (pairs) => emit('batch-update-annotations', pairs),
 	onDelete: (ann) => emit('delete-annotation', ann),
 })
 

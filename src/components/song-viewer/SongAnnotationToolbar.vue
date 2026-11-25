@@ -21,6 +21,7 @@ import LinkVariant from 'vue-material-design-icons/LinkVariant.vue'
 import Marker from 'vue-material-design-icons/Marker.vue'
 import Pencil from 'vue-material-design-icons/Pencil.vue'
 import Redo from 'vue-material-design-icons/Redo.vue'
+import SelectDrag from 'vue-material-design-icons/SelectDrag.vue'
 import Undo from 'vue-material-design-icons/Undo.vue'
 import SongAnnotationLayerPicker from './SongAnnotationLayerPicker.vue'
 import SongAnnotationShapePicker from './SongAnnotationShapePicker.vue'
@@ -34,6 +35,7 @@ const props = withDefaults(
 		activeTool: EditorTool
 		toolStyle: EditorToolStyle
 		selectedAnnotation?: SheetAnnotation | null
+		selectedAnnotations?: SheetAnnotation[]
 		canUndo?: boolean
 		canRedo?: boolean
 		isSaving?: boolean
@@ -44,6 +46,7 @@ const props = withDefaults(
 	}>(),
 	{
 		selectedAnnotation: null,
+		selectedAnnotations: () => [],
 		canUndo: false,
 		canRedo: false,
 		isSaving: false,
@@ -65,6 +68,7 @@ const emit = defineEmits<{
 	'reorder-layer': [id: number, direction: 'up' | 'down']
 	'delete-layer': [id: number]
 	'update-selected-layers': [layerIds: number[]]
+	'toggle-selected-layer': [layerId: number]
 	'update-selected-style': [patch: Partial<SheetAnnotation['style']>]
 	'update-selected-data': [patch: Partial<SheetAnnotation['data']>]
 	undo: []
@@ -113,9 +117,17 @@ const hasOverflowItems = computed(() => overflowSecondary.value || overflowLayer
 
 const PRIMARY_DRAW_TOOLS: Array<{ id: EditorTool; label: string; icon: Component }> = [
 	{ id: 'select', label: t('sheetmusic', 'Select / Move / Resize (V)'), icon: CursorDefaultOutline },
+	{ id: 'box-select', label: t('sheetmusic', 'Box Select / Multi-Select (R)'), icon: SelectDrag },
 	{ id: 'drawing', label: t('sheetmusic', 'Freehand Pen (P)'), icon: Pencil },
 	{ id: 'highlight', label: t('sheetmusic', 'Highlighter (H)'), icon: Marker },
 ]
+
+const effectiveSelectedAnnotations = computed<SheetAnnotation[]>(() => {
+	if (props.selectedAnnotations && props.selectedAnnotations.length > 0) {
+		return props.selectedAnnotations
+	}
+	return props.selectedAnnotation ? [props.selectedAnnotation] : []
+})
 
 const TRAILING_TOOLS: Array<{ id: EditorTool; label: string; icon: Component }> = [
 	{ id: 'link', label: t('sheetmusic', 'Page Jump Link (L)'), icon: LinkVariant },
@@ -144,8 +156,10 @@ const actionButtons = computed(() => [
 	{
 		id: 'delete-selected',
 		variant: 'secondary' as const,
-		disabled: !props.selectedAnnotation,
-		label: t('sheetmusic', 'Delete selected annotation (Del)'),
+		disabled: effectiveSelectedAnnotations.value.length === 0,
+		label: effectiveSelectedAnnotations.value.length > 1
+			? t('sheetmusic', 'Delete {count} selected annotations (Del)', { count: effectiveSelectedAnnotations.value.length })
+			: t('sheetmusic', 'Delete selected annotation (Del)'),
 		testId: 'annotation-delete-selected',
 		icon: DeleteOutline,
 		onClick: () => emit('delete-selected'),
@@ -273,6 +287,7 @@ function pickStamp(symbol: string) {
 				:active-tool="activeTool"
 				:tool-style="toolStyle"
 				:selected-annotation="selectedAnnotation"
+				:selected-annotations="effectiveSelectedAnnotations"
 				:is-shape-active="isShapeActive"
 				@update:tool-style="emit('update:toolStyle', $event)"
 				@update-selected-style="emit('update-selected-style', $event)"
@@ -284,13 +299,15 @@ function pickStamp(symbol: string) {
 					:layers="layers"
 					:active-layer-id="activeLayerId"
 					:selected-annotation="selectedAnnotation"
+					:selected-annotations="effectiveSelectedAnnotations"
 					@update:active-layer-id="emit('update:activeLayerId', $event)"
 					@add-layer="emit('add-layer', $event)"
 					@rename-layer="(id, name) => emit('rename-layer', id, name)"
 					@toggle-visibility="emit('toggle-layer-visibility', $event)"
 					@reorder-layer="(id, dir) => emit('reorder-layer', id, dir)"
 					@delete-layer="emit('delete-layer', $event)"
-					@update-selected-layers="emit('update-selected-layers', $event)" />
+					@update-selected-layers="emit('update-selected-layers', $event)"
+					@toggle-selected-layer="emit('toggle-selected-layer', $event)" />
 
 				<select
 					v-if="!overflowSecondary"
@@ -343,6 +360,7 @@ function pickStamp(symbol: string) {
 							:active-tool="activeTool"
 							:tool-style="toolStyle"
 							:selected-annotation="selectedAnnotation"
+							:selected-annotations="effectiveSelectedAnnotations"
 							:is-shape-active="isShapeActive"
 							@update:tool-style="emit('update:toolStyle', $event)"
 							@update-selected-style="emit('update-selected-style', $event)"
@@ -354,13 +372,15 @@ function pickStamp(symbol: string) {
 							:layers="layers"
 							:active-layer-id="activeLayerId"
 							:selected-annotation="selectedAnnotation"
+							:selected-annotations="effectiveSelectedAnnotations"
 							@update:active-layer-id="emit('update:activeLayerId', $event)"
 							@add-layer="emit('add-layer', $event)"
 							@rename-layer="(id, name) => emit('rename-layer', id, name)"
 							@toggle-visibility="emit('toggle-layer-visibility', $event)"
 							@reorder-layer="(id, dir) => emit('reorder-layer', id, dir)"
 							@delete-layer="emit('delete-layer', $event)"
-							@update-selected-layers="emit('update-selected-layers', $event)" />
+							@update-selected-layers="emit('update-selected-layers', $event)"
+							@toggle-selected-layer="emit('toggle-selected-layer', $event)" />
 					</div>
 
 					<div v-if="overflowSecondary" :class="$style.overflowRow">

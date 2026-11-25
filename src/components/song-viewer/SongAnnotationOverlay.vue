@@ -25,6 +25,7 @@ const props = withDefaults(
 		activeTool?: EditorTool
 		toolStyle?: EditorToolStyle
 		selectedUuid?: string | null
+		selectedUuids?: string[]
 		musicFont?: MusicFontId
 	}>(),
 	{
@@ -37,6 +38,7 @@ const props = withDefaults(
 		activeTool: 'select',
 		toolStyle: createDefaultToolStyle,
 		selectedUuid: null,
+		selectedUuids: () => [],
 		musicFont: 'bravura',
 	},
 )
@@ -44,8 +46,10 @@ const props = withDefaults(
 const emit = defineEmits<{
 	'jump-to-page': [pageNumber: number]
 	select: [uuid: string | null]
+	'select-many': [uuids: string[]]
 	'create-annotation': [draft: Omit<SheetAnnotation, 'songId' | 'fileId' | 'uuid'> & { uuid?: string }]
 	'update-annotation': [before: SheetAnnotation, after: SheetAnnotation]
+	'batch-update-annotations': [pairs: Array<{ before: SheetAnnotation; after: SheetAnnotation }>]
 	'delete-annotation': [annotation: SheetAnnotation]
 }>()
 
@@ -91,13 +95,27 @@ const uiScale = computed(() => {
 	return VIEWBOX_WIDTH / Math.max(1, renderedWidth)
 })
 
+const effectiveSelectedUuids = computed<string[]>(() => {
+	if (!props.editable) return []
+	if (props.selectedUuids && props.selectedUuids.length > 0) return props.selectedUuids
+	return props.selectedUuid ? [props.selectedUuid] : []
+})
+
+const selectedItems = computed<SheetAnnotation[]>(() => {
+	if (effectiveSelectedUuids.value.length === 0) return []
+	const idSet = new Set(effectiveSelectedUuids.value)
+	return displayedAnnotations.value.filter((a) => idSet.has(a.uuid))
+})
+
 const selectedItem = computed(() => {
-	if (!props.editable || !props.selectedUuid) return null
-	return displayedAnnotations.value.find((a) => a.uuid === props.selectedUuid) ?? null
+	if (selectedItems.value.length !== 1) return null
+	return selectedItems.value[0]
 })
 
 const {
 	previewAnnotation,
+	previewAnnotations,
+	marqueeBox,
 	hoveredUuid,
 	pendingText,
 	pendingLink,
@@ -130,18 +148,25 @@ const {
 	toolStyle: computed(() => props.toolStyle),
 	activeAnnotations,
 	selectedItem,
+	selectedItems,
 	onSelect: (uuid) => emit('select', uuid),
+	onSelectMany: (uuids) => emit('select-many', uuids),
 	onCreate: (draft) => emit('create-annotation', draft),
 	onUpdate: (before, after) => emit('update-annotation', before, after),
+	onBatchUpdate: (pairs) => emit('batch-update-annotations', pairs),
 	onDelete: (ann) => emit('delete-annotation', ann),
 })
 
 const displayedAnnotations = computed(() => {
-	const list = activeAnnotations.value.map((ann) =>
-		previewAnnotation.value && previewAnnotation.value.uuid === ann.uuid
-			? previewAnnotation.value
-			: ann,
-	)
+	const multiMap = previewAnnotations.value
+	const list = activeAnnotations.value.map((ann) => {
+		const multiPreview = multiMap.get(ann.uuid)
+		if (multiPreview) return multiPreview
+		if (previewAnnotation.value && previewAnnotation.value.uuid === ann.uuid) {
+			return previewAnnotation.value
+		}
+		return ann
+	})
 	if (previewAnnotation.value && previewAnnotation.value.uuid === '__draft__') {
 		list.push(previewAnnotation.value)
 	}
@@ -216,11 +241,26 @@ const cursorClass = computed(() => {
 				pointer-events="none"
 				data-test="handwriting-ink-preview" />
 
+			<rect
+				v-if="marqueeBox"
+				:x="marqueeBox.x * VIEWBOX_WIDTH"
+				:y="marqueeBox.y * vbHeight"
+				:width="marqueeBox.width * VIEWBOX_WIDTH"
+				:height="marqueeBox.height * vbHeight"
+				fill="rgba(0, 130, 201, 0.12)"
+				stroke="#0082c9"
+				:stroke-width="1.5 * uiScale"
+				:stroke-dasharray="`${4 * uiScale}, ${3 * uiScale}`"
+				pointer-events="none"
+				data-test="annotation-marquee-box" />
+
 			<SongAnnotationSelectionBox
-				v-if="selectedItem && activeTool !== 'eraser'"
-				:item="selectedItem"
+				v-for="sel in (activeTool !== 'eraser' ? selectedItems : [])"
+				:key="`sel-${sel.uuid}`"
+				:item="sel"
 				:vb-height="vbHeight"
-				:ui-scale="uiScale" />
+				:ui-scale="uiScale"
+				:show-handles="selectedItems.length === 1" />
 		</svg>
 
 		<SongAnnotationHandwritingPill

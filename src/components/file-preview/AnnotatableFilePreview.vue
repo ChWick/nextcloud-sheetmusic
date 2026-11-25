@@ -74,7 +74,9 @@ const {
 	activeTool,
 	toolStyle,
 	selectedUuid,
+	selectedUuids,
 	selectedAnnotation,
+	selectedAnnotations,
 	isSaving,
 	canUndo,
 	canRedo,
@@ -82,8 +84,10 @@ const {
 	exitEditMode: rawExitEditMode,
 	setTool,
 	selectAnnotation,
+	selectAnnotations,
 	createAnnotation,
 	updateAnnotation,
+	batchUpdateAnnotations,
 	updateSelectedStyle,
 	updateSelectedData,
 	deleteAnnotation,
@@ -103,14 +107,18 @@ const {
 	reorderLayer: handleReorderLayer,
 	deleteLayer: handleDeleteLayer,
 	updateSelectedLayers: handleUpdateSelectedLayers,
+	toggleSelectedLayer: handleToggleSelectedLayer,
 	createAnnotationOnActiveLayer: handleCreateAnnotation,
 } = useAnnotationLayers({
 	fileId: () => props.annotationContext.fileId,
 	annotations: localAnnotations,
 	selectedAnnotation,
+	selectedAnnotations,
 	onClearSelection: () => selectAnnotation(null),
+	onSelectAnnotations: selectAnnotations,
 	onCreateAnnotation: createAnnotation,
 	onUpdateAnnotation: updateAnnotation,
+	onBatchUpdateAnnotations: batchUpdateAnnotations,
 })
 
 watch(isEditing, (editing) => {
@@ -168,6 +176,7 @@ defineExpose({
 			:active-tool="activeTool"
 			:tool-style="toolStyle"
 			:selected-annotation="selectedAnnotation"
+			:selected-annotations="selectedAnnotations"
 			:can-undo="canUndo"
 			:can-redo="canRedo"
 			:is-saving="isSaving"
@@ -185,6 +194,7 @@ defineExpose({
 			@reorder-layer="handleReorderLayer"
 			@delete-layer="handleDeleteLayer"
 			@update-selected-layers="handleUpdateSelectedLayers"
+			@toggle-selected-layer="handleToggleSelectedLayer"
 			@update-selected-style="updateSelectedStyle"
 			@update-selected-data="updateSelectedData"
 			@undo="undo"
@@ -206,10 +216,13 @@ defineExpose({
 			:active-annotation-tool="activeTool"
 			:annotation-tool-style="toolStyle"
 			:selected-annotation-uuid="selectedUuid"
+			:selected-annotation-uuids="selectedUuids"
 			:music-font="musicFont"
 			@select-annotation="selectAnnotation"
+			@select-annotations="selectAnnotations"
 			@create-annotation="handleCreateAnnotation"
 			@update-annotation="updateAnnotation"
+			@batch-update-annotations="batchUpdateAnnotations"
 			@delete-annotation="deleteAnnotation" />
 	</div>
 </template>

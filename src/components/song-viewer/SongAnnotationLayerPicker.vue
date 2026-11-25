@@ -22,9 +22,11 @@ const props = withDefaults(
 		layers: AnnotationLayer[]
 		activeLayerId: number
 		selectedAnnotation?: SheetAnnotation | null
+		selectedAnnotations?: SheetAnnotation[]
 	}>(),
 	{
 		selectedAnnotation: null,
+		selectedAnnotations: () => [],
 	},
 )
 
@@ -36,6 +38,7 @@ const emit = defineEmits<{
 	'reorder-layer': [id: number, direction: 'up' | 'down']
 	'delete-layer': [id: number]
 	'update-selected-layers': [layerIds: number[]]
+	'toggle-selected-layer': [layerId: number]
 }>()
 
 const open = ref(false)
@@ -49,9 +52,31 @@ const activeLayer = computed(() =>
 
 const visibleCount = computed(() => props.layers.filter((l) => l.visible).length)
 
-const selectedLayerIds = computed<number[]>(() =>
-	props.selectedAnnotation ? getAnnotationLayerIds(props.selectedAnnotation) : [],
-)
+const effectiveSelected = computed<SheetAnnotation[]>(() => {
+	if (props.selectedAnnotations && props.selectedAnnotations.length > 0) {
+		return props.selectedAnnotations
+	}
+	return props.selectedAnnotation ? [props.selectedAnnotation] : []
+})
+
+function getLayerMembershipState(layerId: number): 'all' | 'some' | 'none' {
+	const selected = effectiveSelected.value
+	if (selected.length === 0) return 'none'
+	let count = 0
+	for (const ann of selected) {
+		if (getAnnotationLayerIds(ann).includes(layerId)) {
+			count++
+		}
+	}
+	if (count === 0) return 'none'
+	if (count === selected.length) return 'all'
+	return 'some'
+}
+
+function isLayerCheckboxDisabled(layerId: number): boolean {
+	if (getLayerMembershipState(layerId) !== 'all') return false
+	return effectiveSelected.value.every((ann) => getAnnotationLayerIds(ann).length <= 1)
+}
 
 function startRename(layer: AnnotationLayer) {
 	editingLayerId.value = layer.id
@@ -80,15 +105,20 @@ function submitNewLayer() {
 }
 
 function toggleSelectedLayerMembership(layerId: number) {
-	if (!props.selectedAnnotation) return
-	const current = selectedLayerIds.value
-	const has = current.includes(layerId)
-	if (has) {
-		if (current.length <= 1) return
-		emit('update-selected-layers', current.filter((id) => id !== layerId))
-	} else {
-		emit('update-selected-layers', [...current, layerId])
+	const selected = effectiveSelected.value
+	if (selected.length === 0) return
+	if (selected.length === 1) {
+		const current = getAnnotationLayerIds(selected[0])
+		const has = current.includes(layerId)
+		if (has) {
+			if (current.length <= 1) return
+			emit('update-selected-layers', current.filter((id) => id !== layerId))
+		} else {
+			emit('update-selected-layers', [...current, layerId])
+		}
+		return
 	}
+	emit('toggle-selected-layer', layerId)
 }
 </script>
 
@@ -120,11 +150,15 @@ function toggleSelectedLayerMembership(layerId: number) {
 
 		<!-- Selected Annotation Layer Assignment (multi-layer membership) -->
 		<div
-			v-if="selectedAnnotation"
+			v-if="effectiveSelected.length > 0"
 			:class="$style.section"
 			data-test="selected-annotation-layers">
 			<div :class="$style.sectionTitle">
-				{{ t('sheetmusic', 'Selected annotation layers') }}
+				{{
+					effectiveSelected.length > 1
+						? t('sheetmusic', 'Selected annotations ({count}) layers', { count: effectiveSelected.length })
+						: t('sheetmusic', 'Selected annotation layers')
+				}}
 			</div>
 			<div :class="$style.checkboxList">
 				<label
@@ -133,8 +167,9 @@ function toggleSelectedLayerMembership(layerId: number) {
 					:class="$style.checkboxRow">
 					<input
 						type="checkbox"
-						:checked="selectedLayerIds.includes(layer.id)"
-						:disabled="selectedLayerIds.includes(layer.id) && selectedLayerIds.length <= 1"
+						:checked="getLayerMembershipState(layer.id) === 'all'"
+						:indeterminate.prop="getLayerMembershipState(layer.id) === 'some'"
+						:disabled="isLayerCheckboxDisabled(layer.id)"
 						:data-test="`selected-layer-checkbox-${layer.id}`"
 						@change="toggleSelectedLayerMembership(layer.id)">
 					<span :class="$style.checkboxLabel">{{ layer.name }}</span>
