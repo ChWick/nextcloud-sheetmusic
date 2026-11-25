@@ -1,4 +1,4 @@
-import './fonts/bravura.css'
+import './fonts/smufl.css'
 import './styles/pwa.css'
 import { createApp } from 'vue'
 import App from './App.vue'

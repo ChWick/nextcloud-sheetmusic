@@ -1,8 +1,0 @@
-/* Bravura SMuFL (Standard Music Font Layout) reference music engraving font (SIL OFL) */
-@font-face {
-	font-family: 'Bravura';
-	font-style: normal;
-	font-weight: 400;
-	font-display: swap;
-	src: url('./Bravura.woff2') format('woff2');
-}

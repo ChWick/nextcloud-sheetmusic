@@ -6,6 +6,7 @@
 import axios from '@nextcloud/axios'
 import type { SheetAnnotation } from '../types/annotation'
 import type { LearnedHandwritingSample } from '../utils/handwritingModel'
+import type { MusicFontId } from '../utils/musicFont'
 import { isEffectivelyOffline } from '../composables/useOnlineStatus'
 import { readOfflineCachedJson } from '../utils/offlineSetlists'
 import { ocsDelete, ocsGet, ocsPost, ocsPut, ocsUrl } from './ocs'
@@ -109,4 +110,13 @@ export async function saveHandwritingModel(samples: LearnedHandwritingSample[]):
 
 export async function deleteHandwritingModel(): Promise<void> {
 	await ocsDelete('/api/user/handwriting-model')
+}
+
+export async function fetchFileMusicFont(fileId: number): Promise<MusicFontId> {
+	const res = await ocsGet<{ font?: MusicFontId }>(`/api/files/${fileId}/music-font`)
+	return res?.font ?? 'bravura'
+}
+
+export async function saveFileMusicFont(fileId: number, font: MusicFontId): Promise<void> {
+	await ocsPut(`/api/files/${fileId}/music-font`, { font })
 }

@@ -28,6 +28,8 @@ use OCP\IUserSession;
 #[OpenAPI(OpenAPI::SCOPE_IGNORE)]
 class SongAnnotationController extends OCSController {
 	private const HANDWRITING_MODEL_CONFIG_KEY = 'handwriting_model';
+	private const FILE_MUSIC_FONT_CONFIG_PREFIX = 'file_music_font_';
+	private const ALLOWED_MUSIC_FONTS = ['bravura', 'leland', 'petaluma'];
 	private const MAX_HANDWRITING_SAMPLES = 300;
 	private const MAX_HANDWRITING_JSON_BYTES = 524288;
 
@@ -308,6 +310,38 @@ class SongAnnotationController extends OCSController {
 		}
 		$this->config?->deleteUserValue($user->getUID(), $this->appName, self::HANDWRITING_MODEL_CONFIG_KEY);
 		return new DataResponse(['success' => true]);
+	}
+
+	#[PublicPage]
+	#[NoCSRFRequired]
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'GET', url: '/api/files/{fileId}/music-font')]
+	public function getFileMusicFont(int $fileId): DataResponse {
+		if ($fileId <= 0 || $this->config === null) {
+			return new DataResponse(['font' => 'bravura']);
+		}
+		$stored = $this->config->getAppValue($this->appName, self::FILE_MUSIC_FONT_CONFIG_PREFIX . $fileId, 'bravura');
+		$font = in_array($stored, self::ALLOWED_MUSIC_FONTS, true) ? $stored : 'bravura';
+		return new DataResponse(['font' => $font]);
+	}
+
+	#[NoAdminRequired]
+	#[ApiRoute(verb: 'PUT', url: '/api/files/{fileId}/music-font')]
+	public function saveFileMusicFont(int $fileId): DataResponse {
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return new DataResponse([], Http::STATUS_UNAUTHORIZED);
+		}
+		if ($fileId <= 0 || $this->config === null) {
+			return new DataResponse(['error' => 'Invalid file ID'], Http::STATUS_BAD_REQUEST);
+		}
+		$rawFont = $this->request->getParam('font');
+		$font = is_string($rawFont) ? trim($rawFont) : '';
+		if (!in_array($font, self::ALLOWED_MUSIC_FONTS, true)) {
+			return new DataResponse(['error' => 'Invalid music font'], Http::STATUS_BAD_REQUEST);
+		}
+		$this->config->setAppValue($this->appName, self::FILE_MUSIC_FONT_CONFIG_PREFIX . $fileId, $font);
+		return new DataResponse(['font' => $font]);
 	}
 
 	/**
