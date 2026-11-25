@@ -325,10 +325,11 @@ function updateShapeHeight(height: number) {
 	display: flex;
 	flex-direction: row;
 	align-items: center;
-	gap: 8px;
-	flex-wrap: wrap;
+	gap: 6px;
+	flex-wrap: nowrap;
 	position: relative;
 	z-index: 10;
+	min-width: 0;
 }
 
 .styleGroup {

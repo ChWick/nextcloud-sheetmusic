@@ -4,14 +4,16 @@ import { isShapeTool } from '../../composables/useAnnotationEditor'
 import type { AnnotationLayer, SheetAnnotation } from '../../types/annotation'
 import { DEFAULT_LAYER_ID, createDefaultAnnotationLayers } from '../../utils/annotationLayers'
 import { MUSIC_FONT_OPTIONS, type MusicFontId } from '../../utils/musicFont'
-import { computed, ref, type Component } from 'vue'
+import { computed, onMounted, onUnmounted, ref, type Component } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import ResponsiveNcButton from '../ResponsiveNcButton.vue'
+import ViewportPopover from '../ViewportPopover.vue'
 import Check from 'vue-material-design-icons/Check.vue'
 import CogOutline from 'vue-material-design-icons/CogOutline.vue'
 import CursorDefaultOutline from 'vue-material-design-icons/CursorDefaultOutline.vue'
 import DeleteOutline from 'vue-material-design-icons/DeleteOutline.vue'
 import DeleteSweepOutline from 'vue-material-design-icons/DeleteSweepOutline.vue'
+import DotsHorizontal from 'vue-material-design-icons/DotsHorizontal.vue'
 import DrawPen from 'vue-material-design-icons/DrawPen.vue'
 import Eraser from 'vue-material-design-icons/Eraser.vue'
 import FormatText from 'vue-material-design-icons/FormatText.vue'
@@ -75,7 +77,39 @@ const emit = defineEmits<{
 const showShapeMenu = ref(false)
 const showStampMenu = ref(false)
 const showStylusDialog = ref(false)
+const showOverflowMenu = ref(false)
+const toolbarRef = ref<HTMLElement | null>(null)
+const toolbarWidth = ref(0)
 const { hasCustomCalibration, isTouchDrawingBlocked } = useStylusSettings()
+
+let resizeObserver: ResizeObserver | null = null
+
+function updateToolbarWidth() {
+	const w = toolbarRef.value?.getBoundingClientRect?.().width ?? 0
+	if (w > 0) {
+		toolbarWidth.value = w
+	}
+}
+
+onMounted(() => {
+	updateToolbarWidth()
+	if (toolbarRef.value && typeof ResizeObserver !== 'undefined') {
+		resizeObserver = new ResizeObserver(() => updateToolbarWidth())
+		resizeObserver.observe(toolbarRef.value)
+	}
+})
+
+onUnmounted(() => {
+	resizeObserver?.disconnect()
+	resizeObserver = null
+})
+
+// Progressive single-row overflow tiers based on toolbar container width.
+// When unmeasured (width === 0, e.g. SSR/tests), keep all controls inline.
+const overflowSecondary = computed(() => toolbarWidth.value > 0 && toolbarWidth.value < 1320)
+const overflowLayers = computed(() => toolbarWidth.value > 0 && toolbarWidth.value < 1060)
+const overflowStyleBar = computed(() => toolbarWidth.value > 0 && toolbarWidth.value < 880)
+const hasOverflowItems = computed(() => overflowSecondary.value || overflowLayers.value || overflowStyleBar.value)
 
 const PRIMARY_DRAW_TOOLS: Array<{ id: EditorTool; label: string; icon: Component }> = [
 	{ id: 'select', label: t('sheetmusic', 'Select / Move / Resize (V)'), icon: CursorDefaultOutline },
@@ -107,26 +141,26 @@ const actionButtons = computed(() => [
 		icon: Redo,
 		onClick: () => emit('redo'),
 	},
-	...(props.selectedAnnotation
+	{
+		id: 'delete-selected',
+		variant: 'secondary' as const,
+		disabled: !props.selectedAnnotation,
+		label: t('sheetmusic', 'Delete selected annotation (Del)'),
+		testId: 'annotation-delete-selected',
+		icon: DeleteOutline,
+		onClick: () => emit('delete-selected'),
+	},
+	...(!overflowSecondary.value
 		? [{
-			id: 'delete-selected',
+			id: 'clear-page',
 			variant: 'secondary' as const,
 			disabled: false,
-			label: t('sheetmusic', 'Delete selected annotation (Del)'),
-			testId: 'annotation-delete-selected',
-			icon: DeleteOutline,
-			onClick: () => emit('delete-selected'),
+			label: t('sheetmusic', 'Clear annotations on page {page}', { page: props.currentPage }),
+			testId: 'annotation-clear-page',
+			icon: DeleteSweepOutline,
+			onClick: () => emit('clear-page'),
 		}]
 		: []),
-	{
-		id: 'clear-page',
-		variant: 'secondary' as const,
-		disabled: false,
-		label: t('sheetmusic', 'Clear annotations on page {page}', { page: props.currentPage }),
-		testId: 'annotation-clear-page',
-		icon: DeleteSweepOutline,
-		onClick: () => emit('clear-page'),
-	},
 	{
 		id: 'done',
 		variant: 'primary' as const,
@@ -171,8 +205,8 @@ function pickStamp(symbol: string) {
 </script>
 
 <template>
-	<div :class="$style.annotationToolbar" data-test="annotation-editor-toolbar">
-		<!-- Row 1: Primary Tools & History -->
+	<div ref="toolbarRef" :class="$style.annotationToolbar" data-test="annotation-editor-toolbar">
+		<!-- Single non-wrapping row so toolbar height never shifts the PDF during editing/dragging -->
 		<div :class="$style.row">
 			<div :class="$style.toolGroup">
 				<button
@@ -235,6 +269,7 @@ function pickStamp(symbol: string) {
 			</div>
 
 			<SongAnnotationStyleBar
+				v-if="!overflowStyleBar"
 				:active-tool="activeTool"
 				:tool-style="toolStyle"
 				:selected-annotation="selectedAnnotation"
@@ -245,6 +280,7 @@ function pickStamp(symbol: string) {
 
 			<div :class="$style.actionGroup">
 				<SongAnnotationLayerPicker
+					v-if="!overflowLayers"
 					:layers="layers"
 					:active-layer-id="activeLayerId"
 					:selected-annotation="selectedAnnotation"
@@ -257,6 +293,7 @@ function pickStamp(symbol: string) {
 					@update-selected-layers="emit('update-selected-layers', $event)" />
 
 				<select
+					v-if="!overflowSecondary"
 					:value="musicFont"
 					:class="$style.fontSelect"
 					:title="t('sheetmusic', 'Music symbol font for this PDF')"
@@ -272,6 +309,7 @@ function pickStamp(symbol: string) {
 				</select>
 
 				<button
+					v-if="!overflowSecondary"
 					type="button"
 					:class="[$style.toolBtn, (hasCustomCalibration || isTouchDrawingBlocked) && $style.active]"
 					:title="t('sheetmusic', 'Stylus & Pressure Calibration')"
@@ -280,6 +318,87 @@ function pickStamp(symbol: string) {
 					@click="showStylusDialog = true">
 					<CogOutline :size="18" />
 				</button>
+
+				<ViewportPopover
+					v-if="hasOverflowItems"
+					v-model:open="showOverflowMenu"
+					pane-test-id="annotation-toolbar-overflow-menu"
+					:pane-class="$style.overflowPane"
+					:gap="4">
+					<template #trigger="{ toggle }">
+						<button
+							type="button"
+							:class="[$style.toolBtn, showOverflowMenu && $style.active]"
+							:title="t('sheetmusic', 'More annotation tools')"
+							:aria-label="t('sheetmusic', 'More annotation tools')"
+							:aria-expanded="showOverflowMenu"
+							data-test="annotation-toolbar-overflow"
+							@click="toggle">
+							<DotsHorizontal :size="18" />
+						</button>
+					</template>
+
+					<div v-if="overflowStyleBar" :class="$style.overflowSection">
+						<SongAnnotationStyleBar
+							:active-tool="activeTool"
+							:tool-style="toolStyle"
+							:selected-annotation="selectedAnnotation"
+							:is-shape-active="isShapeActive"
+							@update:tool-style="emit('update:toolStyle', $event)"
+							@update-selected-style="emit('update-selected-style', $event)"
+							@update-selected-data="emit('update-selected-data', $event)" />
+					</div>
+
+					<div v-if="overflowLayers" :class="$style.overflowRow">
+						<SongAnnotationLayerPicker
+							:layers="layers"
+							:active-layer-id="activeLayerId"
+							:selected-annotation="selectedAnnotation"
+							@update:active-layer-id="emit('update:activeLayerId', $event)"
+							@add-layer="emit('add-layer', $event)"
+							@rename-layer="(id, name) => emit('rename-layer', id, name)"
+							@toggle-visibility="emit('toggle-layer-visibility', $event)"
+							@reorder-layer="(id, dir) => emit('reorder-layer', id, dir)"
+							@delete-layer="emit('delete-layer', $event)"
+							@update-selected-layers="emit('update-selected-layers', $event)" />
+					</div>
+
+					<div v-if="overflowSecondary" :class="$style.overflowRow">
+						<select
+							:value="musicFont"
+							:class="[$style.fontSelect, $style.overflowSelect]"
+							:title="t('sheetmusic', 'Music symbol font for this PDF')"
+							:aria-label="t('sheetmusic', 'Music symbol font for this PDF')"
+							data-test="annotation-music-font-select"
+							@change="emit('update:musicFont', ($event.target as HTMLSelectElement).value as MusicFontId)">
+							<option
+								v-for="opt in MUSIC_FONT_OPTIONS"
+								:key="opt.id"
+								:value="opt.id">
+								{{ opt.label }}
+							</option>
+						</select>
+					</div>
+
+					<div v-if="overflowSecondary" :class="$style.overflowActions">
+						<button
+							type="button"
+							:class="[$style.overflowActionBtn, (hasCustomCalibration || isTouchDrawingBlocked) && $style.active]"
+							data-test="annotation-stylus-settings"
+							@click="showOverflowMenu = false; showStylusDialog = true">
+							<CogOutline :size="18" />
+							<span>{{ t('sheetmusic', 'Stylus & Pressure Calibration') }}</span>
+						</button>
+						<button
+							type="button"
+							:class="$style.overflowActionBtn"
+							data-test="annotation-clear-page"
+							@click="showOverflowMenu = false; emit('clear-page')">
+							<DeleteSweepOutline :size="18" />
+							<span>{{ t('sheetmusic', 'Clear annotations on page {page}', { page: currentPage }) }}</span>
+						</button>
+					</div>
+				</ViewportPopover>
 
 				<ResponsiveNcButton
 					v-for="btn in actionButtons"
@@ -321,7 +440,8 @@ function pickStamp(symbol: string) {
 	align-items: center;
 	justify-content: space-between;
 	gap: 8px;
-	flex-wrap: wrap;
+	flex-wrap: nowrap;
+	min-height: var(--default-clickable-area, 44px);
 	position: relative;
 	z-index: 40;
 }
@@ -332,11 +452,65 @@ function pickStamp(symbol: string) {
 	flex-direction: row;
 	align-items: center;
 	gap: 4px;
-	flex-wrap: wrap;
+	flex-wrap: nowrap;
+	flex-shrink: 0;
 }
 
 .actionGroup {
 	margin-left: auto;
+}
+
+.overflowPane {
+	min-width: 240px;
+	max-width: min(360px, calc(100vw - 24px));
+	padding: 8px;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.overflowSection :global(div) {
+	flex-wrap: wrap;
+}
+
+.overflowRow {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.overflowSelect {
+	width: 100%;
+	height: 36px;
+}
+
+.overflowActions {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding-top: 6px;
+	border-top: 1px solid var(--color-border);
+}
+
+button[type='button'].overflowActionBtn {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	min-height: 36px;
+	margin: 0;
+	padding: 6px 8px;
+	border: none;
+	border-radius: var(--border-radius, 4px);
+	background: transparent;
+	color: var(--color-main-text);
+	font-size: 0.84rem;
+	text-align: left;
+	cursor: pointer;
+}
+
+button[type='button'].overflowActionBtn:hover {
+	background: var(--color-background-hover);
 }
 
 select.fontSelect {

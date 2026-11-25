@@ -257,4 +257,42 @@ describe('SongAnnotationToolbar.vue', () => {
 		await textInput.setValue('Andante')
 		expect(wrapper.emitted('update-selected-data')?.at(-1)?.[0]).toEqual({ text: 'Andante' })
 	})
+
+	it('moves secondary controls into an ellipsis overflow popover on narrow toolbars', async () => {
+		const origGetRect = HTMLElement.prototype.getBoundingClientRect
+		HTMLElement.prototype.getBoundingClientRect = () => ({
+			left: 0,
+			top: 0,
+			right: 800,
+			bottom: 56,
+			width: 800,
+			height: 56,
+			x: 0,
+			y: 0,
+			toJSON: () => ({}),
+		})
+
+		try {
+			const wrapper = mount(SongAnnotationToolbar, {
+				props: {
+					activeTool: 'drawing',
+					toolStyle: defaultStyle,
+					musicFont: 'bravura',
+				},
+			})
+			await wrapper.vm.$nextTick()
+
+			const overflowBtn = wrapper.find('[data-test="annotation-toolbar-overflow"]')
+			expect(overflowBtn.exists()).toBe(true)
+			expect(wrapper.find('[data-test="annotation-music-font-select"]').exists()).toBe(false)
+
+			await overflowBtn.trigger('click')
+			expect(wrapper.find('[data-test="annotation-toolbar-overflow-menu"]').exists()).toBe(true)
+			expect(wrapper.find('[data-test="annotation-music-font-select"]').exists()).toBe(true)
+			expect(wrapper.find('[data-test="annotation-layers-trigger"]').exists()).toBe(true)
+			expect(wrapper.find('[data-test="annotation-clear-page"]').exists()).toBe(true)
+		} finally {
+			HTMLElement.prototype.getBoundingClientRect = origGetRect
+		}
+	})
 })
