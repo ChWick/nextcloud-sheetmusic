@@ -3,11 +3,16 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import {
+	buildCropCacheKey,
+	clearPdfCropCache,
 	detectInkBoundsFromRgba,
 	FULL_PAGE_CROP,
+	getCachedPdfPageCropBox,
+	hydratePdfCropCache,
 	isCropped,
+	rotateCropBox,
 } from '../../../src/utils/pdfCrop'
 
 function createRgbaPage(
@@ -32,6 +37,10 @@ function createRgbaPage(
 }
 
 describe('pdfCrop', () => {
+	beforeEach(() => {
+		clearPdfCropCache()
+	})
+
 	it('returns full-page crop for blank white pages', () => {
 		const blank = createRgbaPage(100, 140)
 		const box = detectInkBoundsFromRgba(blank, 100, 140)
@@ -56,5 +65,34 @@ describe('pdfCrop', () => {
 		const box = detectInkBoundsFromRgba(fullInk, 100, 140)
 		expect(box).toEqual(FULL_PAGE_CROP)
 		expect(isCropped(box)).toBe(false)
+	})
+
+	it('rotates normalized crop boxes accurately for 90, 180, and 270 degrees', () => {
+		const box = { left: 0.1, top: 0.2, right: 0.7, bottom: 0.9 }
+		expect(rotateCropBox(box, 0)).toEqual(box)
+		expect(rotateCropBox(box, 90)).toEqual({ left: 0.1, top: 0.1, right: 0.8, bottom: 0.7 })
+		expect(rotateCropBox(box, 180)).toEqual({ left: 0.3, top: 0.1, right: 0.9, bottom: 0.8 })
+		expect(rotateCropBox(box, 270)).toEqual({ left: 0.2, top: 0.3, right: 0.9, bottom: 0.9 })
+		// Rotating 90 then 270 returns original
+		expect(rotateCropBox(rotateCropBox(box, 90), 270)).toEqual(box)
+	})
+
+	it('hydrates and retrieves cached crop boxes by file key and page', () => {
+		hydratePdfCropCache('/score.pdf', {
+			1: { left: 0.1, top: 0.1, right: 0.9, bottom: 0.9 },
+			2: { left: 0.15, top: 0.2, right: 0.85, bottom: 0.8 },
+		})
+		expect(getCachedPdfPageCropBox(buildCropCacheKey('/score.pdf', 1, 0))).toEqual({
+			left: 0.1,
+			top: 0.1,
+			right: 0.9,
+			bottom: 0.9,
+		})
+		expect(getCachedPdfPageCropBox(buildCropCacheKey('/score.pdf', 2, 0))).toEqual({
+			left: 0.15,
+			top: 0.2,
+			right: 0.85,
+			bottom: 0.8,
+		})
 	})
 })

@@ -29,8 +29,10 @@ import {
 	resolvePagesToRender,
 } from '../utils/pdf-layout'
 import {
+	buildCropCacheKey,
 	detectPdfPageCropBox,
 	FULL_PAGE_CROP,
+	getCachedPdfPageCropBox,
 	isCropped,
 	type NormalizedCropBox,
 } from '../utils/pdfCrop'
@@ -301,18 +303,28 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 	const doubleSlotW = Math.max(1, Math.floor((containerW - doubleGap) / 2))
 	const targetW = isDoubleLayout ? doubleSlotW : containerW
 
-	// Calculate base scale (for double layout, anchor reference scale to the document's first page
-	// so custom zoom ratios and effectiveScale stay stable across page turns even when pages differ in size)
+	// Calculate base scale. When tightCrop is enabled, anchor to the active page so we never
+	// probe non-active pages on startup, and retain the loaded PDFPageProxy for reuse by renderPage
+	// so PDF.js does not decode the same page twice.
 	let scale = 1.25
 	let docRefFitScale = 1.0
+	const preloadedPages = new Map<number, any>()
 	let refPage: any = null
+	let refPageNum = 1
 	try {
-		const refPageNum = isDoubleLayout ? (ordered[0] || 1) : (pagesToRender[0]?.pageNum || 1)
+		refPageNum = (isDoubleLayout && !props.tightCrop)
+			? (ordered[0] || 1)
+			: (pagesToRender[0]?.pageNum || ordered[0] || 1)
 		refPage = await pdf.getPage(refPageNum)
 		const pageRotation = getEffectivePageRotation(refPage, rotation.value)
 		const unscaledViewport = refPage.getViewport({ scale: 1.0, rotation: pageRotation })
 		const refCrop = props.tightCrop
-			? await detectPdfPageCropBox(refPage, pageRotation, `${props.filePath}:${refPageNum}:${pageRotation}`)
+			? await detectPdfPageCropBox(
+				refPage,
+				pageRotation,
+				buildCropCacheKey(props.filePath, refPageNum, pageRotation),
+				{ fileKey: props.filePath, pageNum: refPageNum },
+			)
 			: FULL_PAGE_CROP
 		const refW = unscaledViewport.width * (refCrop.right - refCrop.left)
 		const refH = unscaledViewport.height * (refCrop.bottom - refCrop.top)
@@ -324,11 +336,20 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 			docRefFitScale = computeFitScale(refW, refH, targetW, containerH, 'fit-page')
 			scale = Math.max(MIN_CUSTOM_SCALE, Math.min(customScale.value, MAX_CUSTOM_SCALE))
 		}
+
+		// Keep refPage warm if it will be rendered immediately in this pass
+		const willRenderRef = pagesToRender.some((p) => !p.isNextFile && p.pageNum === refPageNum)
+		if (willRenderRef && refPage) {
+			preloadedPages.set(refPageNum, refPage)
+			refPage = null
+		}
 	} catch {
 		scale = 1.25
 		docRefFitScale = 1.0
 	} finally {
-		cleanupPdfJsPage(refPage)
+		if (refPage) {
+			cleanupPdfJsPage(refPage)
+		}
 	}
 	effectiveScale.value = scale
 	const nextStageGap = isDoubleLayout
@@ -373,14 +394,24 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 				const idx = Math.min(Math.max(1, pageNumber), nextOrdered.length) - 1
 				resolvedPageNum = nextOrdered[idx] || 1
 			}
-			page = await targetPdf.getPage(resolvedPageNum)
+			if (!isNextFile && preloadedPages.has(resolvedPageNum)) {
+				page = preloadedPages.get(resolvedPageNum)
+				preloadedPages.delete(resolvedPageNum)
+			} else {
+				page = await targetPdf.getPage(resolvedPageNum)
+			}
 			if (renderId !== currentRenderId) return
 
 			const pageRotation = getEffectivePageRotation(page, rotation.value)
 			const unscaledViewport = page.getViewport({ scale: 1.0, rotation: pageRotation })
 			const cachePath = isNextFile ? (props.nextFilePath || '') : props.filePath
 			const cropBox: NormalizedCropBox = props.tightCrop
-				? await detectPdfPageCropBox(page, pageRotation, `${cachePath}:${resolvedPageNum}:${pageRotation}`)
+				? await detectPdfPageCropBox(
+					page,
+					pageRotation,
+					buildCropCacheKey(cachePath, resolvedPageNum, pageRotation),
+					{ fileKey: cachePath, pageNum: resolvedPageNum },
+				)
 				: FULL_PAGE_CROP
 			if (renderId !== currentRenderId) return
 
@@ -485,14 +516,18 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 
 		const placeholders = pagesToRender.map((item) => createContinuousPagePlaceholder(item, effectiveScale.value))
 
-		// Render the first page and pages around currentPage off-DOM so visible pages have
-		// real dimensions before the atomic DOM swap (avoiding placeholder->canvas flicker).
-		const preRenderIndices = new Set<number>([0])
+		// Render the active page(s) off-DOM before the atomic DOM swap.
+		// When tightCrop is enabled, only pre-render the active page to keep startup fast.
+		const preRenderIndices = new Set<number>()
 		pagesToRender.forEach((item, idx) => {
-			if (Math.abs(item.index - currentPage.value) <= 1) {
+			const radius = props.tightCrop ? 0 : 1
+			if (Math.abs(item.index - currentPage.value) <= radius) {
 				preRenderIndices.add(idx)
 			}
 		})
+		if (preRenderIndices.size === 0 && pagesToRender.length > 0) {
+			preRenderIndices.add(0)
+		}
 		await Promise.all(
 			Array.from(preRenderIndices)
 				.filter((idx) => placeholders[idx] && pagesToRender[idx])
@@ -542,6 +577,47 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 			return
 		}
 		swapStageContent(newPlaceholders)
+	}
+
+	// Clean up any unused preloaded pages (e.g. if render was aborted early)
+	for (const leftover of preloadedPages.values()) {
+		cleanupPdfJsPage(leftover)
+	}
+	preloadedPages.clear()
+
+	// Lazily prefetch crop boxes for the next 1-2 upcoming pages during idle time
+	// so page flipping stays instant without slowing initial startup.
+	if (props.tightCrop && pageLayout.value !== 'continuous') {
+		const activeNums = new Set(pagesToRender.filter((p) => !p.isNextFile).map((p) => p.pageNum))
+		const lastActiveIdx = ordered.findIndex((n) => n === pagesToRender[pagesToRender.length - 1]?.pageNum)
+		const upcoming = (lastActiveIdx >= 0 ? ordered.slice(lastActiveIdx + 1, lastActiveIdx + 3) : [])
+			.filter((n) => !activeNums.has(n))
+		if (upcoming.length > 0) {
+			const scheduleIdle = typeof window !== 'undefined' && 'requestIdleCallback' in window
+				? (cb: () => void) => (window as any).requestIdleCallback(cb, { timeout: 600 })
+				: (cb: () => void) => setTimeout(cb, 150)
+			scheduleIdle(() => {
+				void (async () => {
+					for (const nextPageNum of upcoming) {
+						if (renderId !== currentRenderId || loadedPdf.value !== pdf) return
+						let p: any = null
+						try {
+							p = await pdf.getPage(nextPageNum)
+							if (renderId !== currentRenderId) return
+							const rot = getEffectivePageRotation(p, rotation.value)
+							const key = buildCropCacheKey(props.filePath, nextPageNum, rot)
+							if (!getCachedPdfPageCropBox(key)) {
+								await detectPdfPageCropBox(p, rot, key, { fileKey: props.filePath, pageNum: nextPageNum })
+							}
+						} catch {
+							// Best-effort prefetch
+						} finally {
+							cleanupPdfJsPage(p)
+						}
+					}
+				})()
+			})
+		}
 	}
 }
 
