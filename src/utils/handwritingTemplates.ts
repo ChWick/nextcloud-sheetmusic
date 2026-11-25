@@ -270,6 +270,68 @@ export const HANDWRITING_TEMPLATES: HandwritingTemplate[] = [
 			[{ x: 0.22, y: 0.08 }, { x: 0.82, y: 0.08 }],
 		],
 	},
+	{
+		// 6: continuous top-down spiral into bottom loop
+		symbol: '\uED24',
+		strokes: [[
+			{ x: 0.72, y: 0.06 },
+			{ x: 0.36, y: 0.18 },
+			{ x: 0.16, y: 0.48 },
+			...arcPoints(0.5, 0.72, 0.34, 0.23, 180, -180, 14),
+		]],
+	},
+	{
+		// 7: 1-stroke top bar + diagonal down-left
+		symbol: '\uED25',
+		strokes: [[
+			{ x: 0.12, y: 0.08 },
+			{ x: 0.88, y: 0.08 },
+			{ x: 0.34, y: 0.94 },
+		]],
+	},
+	{
+		// 7: 2-stroke European crossed 7
+		symbol: '\uED25',
+		strokes: [
+			[{ x: 0.12, y: 0.08 }, { x: 0.88, y: 0.08 }, { x: 0.34, y: 0.94 }],
+			[{ x: 0.28, y: 0.5 }, { x: 0.8, y: 0.5 }],
+		],
+	},
+	{
+		// 8: 1-stroke figure-8 S-loop
+		symbol: '\uED26',
+		strokes: [[
+			...arcPoints(0.5, 0.27, 0.28, 0.21, -70, -290, 9),
+			...arcPoints(0.5, 0.73, 0.32, 0.22, -110, 230, 10),
+			...arcPoints(0.5, 0.27, 0.28, 0.21, 70, -70, 5),
+		]],
+	},
+	{
+		// 8: 2-stroke stacked ovals
+		symbol: '\uED26',
+		strokes: [
+			arcPoints(0.5, 0.27, 0.28, 0.21, -90, 270, 12),
+			arcPoints(0.5, 0.73, 0.32, 0.22, -90, 270, 12),
+		],
+	},
+	{
+		// 9: 1-stroke top oval + curved tail down-left
+		symbol: '\uED27',
+		strokes: [[
+			...arcPoints(0.48, 0.28, 0.32, 0.22, 0, -360, 12),
+			{ x: 0.8, y: 0.56 },
+			{ x: 0.66, y: 0.84 },
+			{ x: 0.28, y: 0.94 },
+		]],
+	},
+	{
+		// 9: 1-stroke top oval + straight right stem down
+		symbol: '\uED27',
+		strokes: [[
+			...arcPoints(0.48, 0.28, 0.32, 0.22, 0, -360, 12),
+			{ x: 0.8, y: 0.94 },
+		]],
+	},
 
 	// --- Accidentals ---
 	{

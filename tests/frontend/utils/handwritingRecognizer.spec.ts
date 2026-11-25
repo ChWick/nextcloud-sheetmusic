@@ -131,6 +131,35 @@ describe('handwritingRecognizer', () => {
 			const res = recognizeHandwriting(strokes, VB_HEIGHT)
 			expect(res.best?.symbol).toBe('\uED15')
 		})
+
+		it('recognizes 6, 7 (plain and crossed), 8, and 9', () => {
+			const six = placeGlyph([[
+				[0.72, 0.06], [0.36, 0.18], [0.16, 0.48],
+				...arc(0.5, 0.72, 0.34, 0.23, 180, -180, 14),
+			]])
+			expect(recognizeHandwriting(six, VB_HEIGHT).best?.symbol).toBe('\uED24')
+
+			const seven = placeGlyph([[[0.12, 0.08], [0.88, 0.08], [0.34, 0.94]]])
+			expect(recognizeHandwriting(seven, VB_HEIGHT).best?.symbol).toBe('\uED25')
+
+			const sevenCrossed = placeGlyph([
+				[[0.12, 0.08], [0.88, 0.08], [0.34, 0.94]],
+				[[0.28, 0.5], [0.8, 0.5]],
+			])
+			expect(recognizeHandwriting(sevenCrossed, VB_HEIGHT).best?.symbol).toBe('\uED25')
+
+			const eight = placeGlyph([
+				arc(0.5, 0.27, 0.28, 0.21, -90, 270, 12),
+				arc(0.5, 0.73, 0.32, 0.22, -90, 270, 12),
+			])
+			expect(recognizeHandwriting(eight, VB_HEIGHT).best?.symbol).toBe('\uED26')
+
+			const nine = placeGlyph([[
+				...arc(0.48, 0.28, 0.32, 0.22, 0, -360, 12),
+				[0.8, 0.94],
+			]])
+			expect(recognizeHandwriting(nine, VB_HEIGHT).best?.symbol).toBe('\uED27')
+		})
 	})
 
 	describe('accidentals', () => {

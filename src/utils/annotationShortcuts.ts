@@ -4,6 +4,7 @@
  */
 
 import type { EditorTool } from '../composables/useAnnotationEditor'
+import { FINGERING_DIGIT_SYMBOLS } from './musicSymbols'
 
 const TOOL_SHORTCUTS: Record<string, EditorTool> = {
 	v: 'select',
@@ -110,9 +111,9 @@ export function handleAnnotationEditorKeydown(
 		return
 	}
 
-	if (/^[0-5]$/.test(e.key) && !e.shiftKey) {
+	if (/^[0-9]$/.test(e.key) && !e.shiftKey) {
 		e.preventDefault()
-		actions.selectStampSymbol(String.fromCodePoint(0xED10 + Number(e.key)))
+		actions.selectStampSymbol(FINGERING_DIGIT_SYMBOLS[Number(e.key)])
 		return
 	}
 

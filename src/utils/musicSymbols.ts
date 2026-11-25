@@ -95,13 +95,17 @@ export const MUSIC_STAMPS: MusicStampDefinition[] = [
 	{ symbol: '\uE650', label: 'Pedal (Ped.)', category: 'navigation', inkOffset: { ox: 0, oy: 0.274 }, inkSize: { w: 1.019, h: 0.563 } },
 	{ symbol: '\uE655', label: 'Pedal up (*)', category: 'navigation', inkOffset: { ox: 0, oy: 0.225 }, inkSize: { w: 0.45, h: 0.45 } },
 
-	// Fingerings (SMuFL U+ED10..U+ED15), Organ Pedaling (U+E661/E664), & String Marks (U+E610..E631)
+	// Fingerings (SMuFL U+ED10..U+ED15, U+ED24..U+ED27), Organ Pedaling (U+E661/E665), & String Marks (U+E610..E631)
 	{ symbol: '\uED10', label: 'Fingering 0', category: 'fingering', shortcut: '0', inkOffset: { ox: 0, oy: 0.125 }, inkSize: { w: 0.215, h: 0.252 } },
 	{ symbol: '\uED11', label: 'Fingering 1', category: 'fingering', shortcut: '1', inkOffset: { ox: 0, oy: 0.127 }, inkSize: { w: 0.117, h: 0.254 } },
 	{ symbol: '\uED12', label: 'Fingering 2', category: 'fingering', shortcut: '2', inkOffset: { ox: 0, oy: 0.125 }, inkSize: { w: 0.202, h: 0.256 } },
 	{ symbol: '\uED13', label: 'Fingering 3', category: 'fingering', shortcut: '3', inkOffset: { ox: 0, oy: 0.126 }, inkSize: { w: 0.185, h: 0.252 } },
 	{ symbol: '\uED14', label: 'Fingering 4', category: 'fingering', shortcut: '4', inkOffset: { ox: 0, oy: 0.127 }, inkSize: { w: 0.196, h: 0.252 } },
 	{ symbol: '\uED15', label: 'Fingering 5', category: 'fingering', shortcut: '5', inkOffset: { ox: 0, oy: 0.129 }, inkSize: { w: 0.185, h: 0.258 } },
+	{ symbol: '\uED24', label: 'Fingering 6', category: 'fingering', shortcut: '6', inkOffset: { ox: 0.001, oy: 0.125 }, inkSize: { w: 0.196, h: 0.25 } },
+	{ symbol: '\uED25', label: 'Fingering 7', category: 'fingering', shortcut: '7', inkOffset: { ox: 0.003, oy: 0.123 }, inkSize: { w: 0.197, h: 0.245 } },
+	{ symbol: '\uED26', label: 'Fingering 8', category: 'fingering', shortcut: '8', inkOffset: { ox: 0, oy: 0.126 }, inkSize: { w: 0.192, h: 0.251 } },
+	{ symbol: '\uED27', label: 'Fingering 9', category: 'fingering', shortcut: '9', inkOffset: { ox: 0, oy: 0.125 }, inkSize: { w: 0.196, h: 0.25 } },
 	{ symbol: '\uE661', label: 'Organ heel (U)', category: 'fingering', inkOffset: { ox: 0, oy: 0.266 }, inkSize: { w: 0.426, h: 0.531 } },
 	{ symbol: '\uE665', label: 'Organ toe (∧)', category: 'fingering', inkOffset: { ox: 0, oy: 0.266 }, inkSize: { w: 0.438, h: 0.532 } },
 	{ symbol: '\uE610', label: 'Down bow', category: 'fingering', inkOffset: { ox: 0, oy: 0.159 }, inkSize: { w: 0.312, h: 0.318 } },
@@ -133,10 +137,23 @@ export function getStampDefinition(symbol: string): MusicStampDefinition | undef
 	return STAMP_BY_SYMBOL.get(symbol.trim())
 }
 
+export const FINGERING_DIGIT_SYMBOLS = [
+	'\uED10',
+	'\uED11',
+	'\uED12',
+	'\uED13',
+	'\uED14',
+	'\uED15',
+	'\uED24',
+	'\uED25',
+	'\uED26',
+	'\uED27',
+] as const
+
 /**
- * Check whether a SMuFL symbol is a numeric fingering digit (U+ED10..U+ED15).
+ * Check whether a SMuFL symbol is a numeric fingering digit (0-5: U+ED10..U+ED15, 6-9: U+ED24..U+ED27).
  */
 export function isFingeringDigit(symbol: string): boolean {
 	const cp = symbol.trim().codePointAt(0)
-	return cp !== undefined && cp >= 0xED10 && cp <= 0xED15
+	return cp !== undefined && ((cp >= 0xED10 && cp <= 0xED15) || (cp >= 0xED24 && cp <= 0xED27))
 }

@@ -53,8 +53,8 @@ const filteredStamps = computed(() =>
 			<button
 				type="button"
 				:class="[$style.toolBtn, props.active && $style.active]"
-				:title="t('sheetmusic', 'Music Symbols & Fingerings (M, 0–5, F, B, N, #)')"
-				:aria-label="t('sheetmusic', 'Music Symbols & Fingerings (M, 0–5, F, B, N, #)')"
+				:title="t('sheetmusic', 'Music Symbols & Fingerings (M, 0–9, F, B, N, #)')"
+				:aria-label="t('sheetmusic', 'Music Symbols & Fingerings (M, 0–9, F, B, N, #)')"
 				data-test="tool-stamp"
 				@click="emit('toggle')">
 				<MusicNote :size="18" />
