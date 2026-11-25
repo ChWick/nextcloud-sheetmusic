@@ -6,6 +6,7 @@
 import type { ComputedRef, Ref } from 'vue'
 import { getCurrentInstance, h, ref, render, watch } from 'vue'
 import type { SheetAnnotation } from '../types/annotation'
+import type { MusicFontId } from '../utils/musicFont'
 import type { EditorTool, EditorToolStyle } from './useAnnotationEditor'
 import SongAnnotationOverlay from '../components/song-viewer/SongAnnotationOverlay.vue'
 
@@ -18,6 +19,7 @@ export interface UseAnnotationOverlayHostOptions {
 	activeAnnotationTool: ComputedRef<EditorTool>
 	annotationToolStyle: ComputedRef<EditorToolStyle | undefined>
 	selectedAnnotationUuid: ComputedRef<string | null>
+	musicFont?: ComputedRef<MusicFontId | undefined>
 	onJumpToPage: (targetOneIndexed: number) => void
 	onSelect: (uuid: string | null) => void
 	onCreate: (draft: Omit<SheetAnnotation, 'songId' | 'fileId' | 'uuid'> & { uuid?: string }) => void
@@ -80,6 +82,7 @@ export function useAnnotationOverlayHost(opts: UseAnnotationOverlayHostOptions) 
 			activeTool: opts.activeAnnotationTool.value,
 			toolStyle: opts.annotationToolStyle.value,
 			selectedUuid: opts.selectedAnnotationUuid.value,
+			musicFont: opts.musicFont?.value ?? 'bravura',
 			onJumpToPage: (targetZeroIdx: number) => opts.onJumpToPage(targetZeroIdx + 1),
 			onSelect: opts.onSelect,
 			onCreateAnnotation: opts.onCreate,
@@ -114,6 +117,7 @@ export function useAnnotationOverlayHost(opts: UseAnnotationOverlayHostOptions) 
 			opts.activeAnnotationTool.value,
 			opts.annotationToolStyle.value,
 			opts.selectedAnnotationUuid.value,
+			opts.musicFont?.value,
 		],
 		() => {
 			refreshAnnotationOverlays()

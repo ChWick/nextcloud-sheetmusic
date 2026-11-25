@@ -2,6 +2,7 @@
 import type { EditorTool, EditorToolStyle } from '../../composables/useAnnotationEditor'
 import { isShapeTool } from '../../composables/useAnnotationEditor'
 import type { SheetAnnotation } from '../../types/annotation'
+import { MUSIC_FONT_OPTIONS, type MusicFontId } from '../../utils/musicFont'
 import { computed, ref, type Component } from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 import ResponsiveNcButton from '../ResponsiveNcButton.vue'
@@ -33,6 +34,7 @@ const props = withDefaults(
 		canRedo?: boolean
 		isSaving?: boolean
 		currentPage?: number
+		musicFont?: MusicFontId
 	}>(),
 	{
 		selectedAnnotation: null,
@@ -40,12 +42,14 @@ const props = withDefaults(
 		canRedo: false,
 		isSaving: false,
 		currentPage: 1,
+		musicFont: 'bravura',
 	},
 )
 
 const emit = defineEmits<{
 	'update:activeTool': [tool: EditorTool]
 	'update:toolStyle': [style: EditorToolStyle]
+	'update:musicFont': [font: MusicFontId]
 	'update-selected-style': [patch: Partial<SheetAnnotation['style']>]
 	'update-selected-data': [patch: Partial<SheetAnnotation['data']>]
 	undo: []
@@ -190,6 +194,7 @@ function pickStamp(symbol: string) {
 					:active="activeTool === 'stamp'"
 					:open="showStampMenu"
 					:stamp-symbol="toolStyle.stampSymbol"
+					:music-font="musicFont"
 					@toggle="toggleStampMenu"
 					@select="pickStamp" />
 
@@ -226,6 +231,21 @@ function pickStamp(symbol: string) {
 				@update-selected-data="emit('update-selected-data', $event)" />
 
 			<div :class="$style.actionGroup">
+				<select
+					:value="musicFont"
+					:class="$style.fontSelect"
+					:title="t('sheetmusic', 'Music symbol font for this PDF')"
+					:aria-label="t('sheetmusic', 'Music symbol font for this PDF')"
+					data-test="annotation-music-font-select"
+					@change="emit('update:musicFont', ($event.target as HTMLSelectElement).value as MusicFontId)">
+					<option
+						v-for="opt in MUSIC_FONT_OPTIONS"
+						:key="opt.id"
+						:value="opt.id">
+						{{ opt.label }}
+					</option>
+				</select>
+
 				<button
 					type="button"
 					:class="[$style.toolBtn, (hasCustomCalibration || isTouchDrawingBlocked) && $style.active]"
@@ -288,6 +308,23 @@ function pickStamp(symbol: string) {
 	align-items: center;
 	gap: 4px;
 	flex-wrap: wrap;
+}
+
+.actionGroup {
+	margin-left: auto;
+}
+
+select.fontSelect {
+	width: auto;
+	height: var(--default-clickable-area, 44px);
+	margin: 0;
+	padding: 0 10px;
+	border: 1px solid var(--color-border-dark, var(--color-border));
+	border-radius: var(--border-radius, 4px);
+	background: var(--color-main-background);
+	color: var(--color-main-text);
+	font-size: 0.82rem;
+	cursor: pointer;
 }
 
 button[type='button'].toolBtn {

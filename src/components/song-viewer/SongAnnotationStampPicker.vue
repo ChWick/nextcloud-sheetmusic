@@ -6,16 +6,19 @@ import MusicNote from 'vue-material-design-icons/MusicNote.vue'
 import ViewportPopover from '../ViewportPopover.vue'
 import {
 	isFingeringDigit,
-	MUSIC_FONT_FAMILY,
 	MUSIC_STAMPS,
 	STAMP_CATEGORIES,
 } from '../../utils/musicSymbols'
+import { getMusicFontFamily, type MusicFontId } from '../../utils/musicFont'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
 	active: boolean
 	open: boolean
 	stampSymbol: string
-}>()
+	musicFont?: MusicFontId
+}>(), {
+	musicFont: 'bravura',
+})
 
 const emit = defineEmits<{
 	toggle: []
@@ -76,11 +79,11 @@ const filteredStamps = computed(() =>
 						text-anchor="middle"
 						dominant-baseline="alphabetic"
 						fill="currentColor"
-						:font-family="MUSIC_FONT_FAMILY">
+						:font-family="getMusicFontFamily(props.musicFont)">
 						{{ props.stampSymbol }}
 					</text>
 				</svg>
-				<span v-else :class="$style.stampPreview" :style="{ fontFamily: MUSIC_FONT_FAMILY }">
+				<span v-else :class="$style.stampPreview" :style="{ fontFamily: getMusicFontFamily(props.musicFont) }">
 					{{ props.stampSymbol }}
 				</span>
 			</button>
@@ -111,7 +114,7 @@ const filteredStamps = computed(() =>
 								text-anchor="middle"
 								dominant-baseline="alphabetic"
 								fill="currentColor"
-								:font-family="MUSIC_FONT_FAMILY">
+								:font-family="getMusicFontFamily(props.musicFont)">
 								{{ sym }}
 							</text>
 						</svg>
@@ -140,7 +143,7 @@ const filteredStamps = computed(() =>
 							text-anchor="middle"
 							dominant-baseline="alphabetic"
 							fill="currentColor"
-							:font-family="MUSIC_FONT_FAMILY">
+							:font-family="getMusicFontFamily(props.musicFont)">
 							{{ st.symbol }}
 						</text>
 					</svg>

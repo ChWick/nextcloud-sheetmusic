@@ -22,11 +22,11 @@ describe('SongAnnotationToolbar.vue', () => {
 		textAlign: 'left',
 		fill: 'transparent',
 		shapeHeight: 18,
-		stampSymbol: '𝆑𝆑',
+		stampSymbol: '\uE52F',
 		stampSize: 40,
 	}
 
-	it('emits tool changes and opens Unicode music stamp picker', async () => {
+	it('emits tool changes and opens SMuFL music stamp picker', async () => {
 		const wrapper = mount(SongAnnotationToolbar, {
 			props: {
 				activeTool: 'drawing',
@@ -40,9 +40,26 @@ describe('SongAnnotationToolbar.vue', () => {
 		await wrapper.find('[data-test="tool-stamp"]').trigger('click')
 		expect(wrapper.find('[data-test="stamp-picker"]').exists()).toBe(true)
 
-		await wrapper.find('[data-test="stamp-option-𝆏𝆏"]').trigger('click')
+		await wrapper.find('[data-test="stamp-option-\uE52B"]').trigger('click')
 		const styleUpdates = wrapper.emitted('update:toolStyle')
-		expect(styleUpdates?.[0]?.[0]).toMatchObject({ stampSymbol: '𝆏𝆏' })
+		expect(styleUpdates?.[0]?.[0]).toMatchObject({ stampSymbol: '\uE52B' })
+	})
+
+	it('always renders the music font selector and emits updates', async () => {
+		const wrapper = mount(SongAnnotationToolbar, {
+			props: {
+				activeTool: 'drawing',
+				toolStyle: defaultStyle,
+				musicFont: 'bravura',
+			},
+		})
+
+		const select = wrapper.find('[data-test="annotation-music-font-select"]')
+		expect(select.exists()).toBe(true)
+		expect((select.element as HTMLSelectElement).value).toBe('bravura')
+
+		await select.setValue('petaluma')
+		expect(wrapper.emitted('update:musicFont')?.[0]).toEqual(['petaluma'])
 	})
 
 	it('emits undo, redo, clear-page, and done actions', async () => {

@@ -13,17 +13,19 @@ import {
 	isPathShape,
 	VIEWBOX_WIDTH,
 } from '../../utils/annotation'
-import { MUSIC_FONT_FAMILY } from '../../utils/musicSymbols'
+import { getMusicFontFamily, type MusicFontId } from '../../utils/musicFont'
 
 withDefaults(defineProps<{
 	item: SheetAnnotation
 	vbHeight: number
 	uiScale?: number
+	musicFont?: MusicFontId
 	editable: boolean
 	hoveredSelect: boolean
 	hoveredEraser: boolean
 }>(), {
 	uiScale: 1,
+	musicFont: 'bravura',
 })
 
 const emit = defineEmits<{
@@ -167,7 +169,7 @@ const emit = defineEmits<{
 				:font-size="getStampRenderFontSize(item)"
 				text-anchor="middle"
 				:dominant-baseline="getStampRenderPosition(item, vbHeight).dominantBaseline"
-				:font-family="MUSIC_FONT_FAMILY"
+				:font-family="getMusicFontFamily(musicFont)"
 				pointer-events="none"
 				:data-ann-uuid="item.uuid"
 				data-test="annotation-stamp">

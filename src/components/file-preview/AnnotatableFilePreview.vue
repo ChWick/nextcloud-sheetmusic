@@ -4,6 +4,12 @@ import FilePreviewer from '../FilePreviewer.vue'
 import SongAnnotationToolbar from '../song-viewer/SongAnnotationToolbar.vue'
 import { type AnnotationEditorContext, useAnnotationEditor } from '../../composables/useAnnotationEditor'
 import type { SheetAnnotation } from '../../types/annotation'
+import {
+	getCachedFileMusicFont,
+	loadFileMusicFont,
+	persistFileMusicFont,
+	type MusicFontId,
+} from '../../utils/musicFont'
 
 const props = withDefaults(defineProps<{
 	filePath: string
@@ -32,6 +38,25 @@ const emit = defineEmits<{
 
 const filePreviewerRef = ref<InstanceType<typeof FilePreviewer> | null>(null)
 const localAnnotations = ref<SheetAnnotation[]>([...props.annotations])
+const musicFont = ref<MusicFontId>(getCachedFileMusicFont(props.annotationContext.fileId))
+
+watch(
+	() => props.annotationContext.fileId,
+	(fileId) => {
+		musicFont.value = getCachedFileMusicFont(fileId)
+		void loadFileMusicFont(fileId).then((loaded) => {
+			if (props.annotationContext.fileId === fileId) {
+				musicFont.value = loaded
+			}
+		})
+	},
+	{ immediate: true },
+)
+
+function updateMusicFont(font: MusicFontId) {
+	musicFont.value = font
+	void persistFileMusicFont(props.annotationContext.fileId, font)
+}
 
 watch(() => props.annotations, (next) => {
 	if (next !== localAnnotations.value) {
@@ -126,8 +151,10 @@ defineExpose({
 			:can-redo="canRedo"
 			:is-saving="isSaving"
 			:current-page="currentPage"
+			:music-font="musicFont"
 			@update:active-tool="setTool"
 			@update:tool-style="toolStyle = $event"
+			@update:music-font="updateMusicFont"
 			@update-selected-style="updateSelectedStyle"
 			@update-selected-data="updateSelectedData"
 			@undo="undo"
@@ -149,6 +176,7 @@ defineExpose({
 			:active-annotation-tool="activeTool"
 			:annotation-tool-style="toolStyle"
 			:selected-annotation-uuid="selectedUuid"
+			:music-font="musicFont"
 			@select-annotation="selectAnnotation"
 			@create-annotation="createAnnotation"
 			@update-annotation="updateAnnotation"

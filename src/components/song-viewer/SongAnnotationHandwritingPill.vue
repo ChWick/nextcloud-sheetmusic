@@ -5,11 +5,15 @@ import { translate as t } from '@nextcloud/l10n'
 import DeleteOutline from 'vue-material-design-icons/DeleteOutline.vue'
 import DotsHorizontal from 'vue-material-design-icons/DotsHorizontal.vue'
 import Pencil from 'vue-material-design-icons/Pencil.vue'
-import { getStampDefinition, isFingeringDigit, MUSIC_FONT_FAMILY } from '../../utils/musicSymbols'
+import { getStampDefinition, isFingeringDigit } from '../../utils/musicSymbols'
+import { getMusicFontFamily, type MusicFontId } from '../../utils/musicFont'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
 	swapState: HandwritingSwapState | null
-}>()
+	musicFont?: MusicFontId
+}>(), {
+	musicFont: 'bravura',
+})
 
 const emit = defineEmits<{
 	select: [symbol: string]
@@ -93,14 +97,14 @@ const positionStyle = computed(() => {
 						text-anchor="middle"
 						dominant-baseline="alphabetic"
 						fill="currentColor"
-						:font-family="MUSIC_FONT_FAMILY">
+						:font-family="getMusicFontFamily(props.musicFont)">
 						{{ cand.symbol }}
 					</text>
 				</svg>
 				<span
 					v-else
 					:class="$style.fingeringGlyph"
-					:style="{ fontFamily: MUSIC_FONT_FAMILY }">
+					:style="{ fontFamily: getMusicFontFamily(props.musicFont) }">
 					{{ cand.symbol }}
 				</span>
 			</button>
@@ -166,14 +170,14 @@ const positionStyle = computed(() => {
 						text-anchor="middle"
 						dominant-baseline="alphabetic"
 						fill="currentColor"
-						:font-family="MUSIC_FONT_FAMILY">
+						:font-family="getMusicFontFamily(props.musicFont)">
 						{{ cand.symbol }}
 					</text>
 				</svg>
 				<span
 					v-else
 					:class="$style.fingeringGlyph"
-					:style="{ fontFamily: MUSIC_FONT_FAMILY }">
+					:style="{ fontFamily: getMusicFontFamily(props.musicFont) }">
 					{{ cand.symbol }}
 				</span>
 			</button>

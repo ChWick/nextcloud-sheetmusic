@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { SheetAnnotation } from '../../types/annotation'
 import type { EditorTool, EditorToolStyle } from '../../composables/useAnnotationEditor'
+import type { MusicFontId } from '../../utils/musicFont'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { generateSmoothSvgPath, getViewBoxHeight, VIEWBOX_WIDTH } from '../../utils/annotation'
 import { createDefaultToolStyle } from '../../utils/annotationToolStyle'
@@ -24,6 +25,7 @@ const props = withDefaults(
 		activeTool?: EditorTool
 		toolStyle?: EditorToolStyle
 		selectedUuid?: string | null
+		musicFont?: MusicFontId
 	}>(),
 	{
 		annotations: () => [],
@@ -35,6 +37,7 @@ const props = withDefaults(
 		activeTool: 'select',
 		toolStyle: createDefaultToolStyle,
 		selectedUuid: null,
+		musicFont: 'bravura',
 	},
 )
 
@@ -193,6 +196,7 @@ const cursorClass = computed(() => {
 				:item="item"
 				:vb-height="vbHeight"
 				:ui-scale="uiScale"
+				:music-font="musicFont"
 				:editable="editable"
 				:hovered-select="editable && activeTool !== 'eraser' && hoveredUuid === item.uuid"
 				:hovered-eraser="editable && activeTool === 'eraser' && hoveredUuid === item.uuid"
@@ -220,6 +224,7 @@ const cursorClass = computed(() => {
 
 		<SongAnnotationHandwritingPill
 			:swap-state="handwritingSwapState"
+			:music-font="musicFont"
 			@select="selectHandwritingCandidate"
 			@keep-ink="keepHandwritingInk"
 			@delete="deleteHandwritingPlaced"

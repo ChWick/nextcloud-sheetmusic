@@ -18,6 +18,7 @@ import { fetchCachedBinaryFile } from '../utils/file-binary'
 import { inspectPdfDocumentResolutions, type PdfPageResolutionSummary } from './song-pdf/pdf-enhance-engine'
 import { parsePageOrder } from '../utils/page-order'
 import type { SheetAnnotation } from '../types/annotation'
+import type { MusicFontId } from '../utils/musicFont'
 import type { EditorTool, EditorToolStyle } from '../composables/useAnnotationEditor'
 import { defaultFileBinaryCache, type FileBinaryCache } from '../utils/file-cache'
 import {
@@ -54,6 +55,7 @@ const props = withDefaults(
 		activeAnnotationTool?: EditorTool
 		annotationToolStyle?: EditorToolStyle
 		selectedAnnotationUuid?: string | null
+		musicFont?: MusicFontId
 		binaryCache?: FileBinaryCache
 		initialPageLayout?: 'continuous' | 'single' | 'double' | 'auto'
 		initialDoublePageTurnMode?: DoublePageTurnMode
@@ -77,6 +79,7 @@ const props = withDefaults(
 		activeAnnotationTool: 'select',
 		annotationToolStyle: undefined,
 		selectedAnnotationUuid: null,
+		musicFont: 'bravura',
 		binaryCache: () => defaultFileBinaryCache,
 		initialPageLayout: 'continuous',
 		initialDoublePageTurnMode: 'half',
@@ -164,6 +167,7 @@ const {
 	activeAnnotationTool: computed(() => props.activeAnnotationTool),
 	annotationToolStyle: computed(() => props.annotationToolStyle),
 	selectedAnnotationUuid: computed(() => props.selectedAnnotationUuid),
+	musicFont: computed(() => props.musicFont),
 	onJumpToPage: (page) => goToPage(page),
 	onSelect: (uuid) => emit('select-annotation', uuid),
 	onCreate: (draft) => emit('create-annotation', draft),
