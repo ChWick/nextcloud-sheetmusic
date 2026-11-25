@@ -8,20 +8,23 @@ import {
 	getAnnotationTextLayout,
 	getStampRenderFontSize,
 	getStampRenderPosition,
-	getStampVisualRadius,
+	getStampSelectionRadius,
 	hasPressurePoints,
 	isPathShape,
 	VIEWBOX_WIDTH,
 } from '../../utils/annotation'
 import { MUSIC_FONT_FAMILY } from '../../utils/musicSymbols'
 
-defineProps<{
+withDefaults(defineProps<{
 	item: SheetAnnotation
 	vbHeight: number
+	uiScale?: number
 	editable: boolean
 	hoveredSelect: boolean
 	hoveredEraser: boolean
-}>()
+}>(), {
+	uiScale: 1,
+})
 
 const emit = defineEmits<{
 	'jump-to-page': [pageNumber: number]
@@ -152,7 +155,7 @@ const emit = defineEmits<{
 				v-if="editable"
 				:cx="Math.round((item.x + (item.width || 0) / 2) * VIEWBOX_WIDTH * 10) / 10"
 				:cy="Math.round((item.y + (item.height || 0) / 2) * vbHeight * 10) / 10"
-				:r="Math.max(10, getStampVisualRadius(item) * 1.25)"
+				:r="getStampSelectionRadius(item, uiScale)"
 				fill="transparent"
 				:data-ann-uuid="item.uuid"
 				data-test="annotation-hit-target" />
@@ -165,6 +168,7 @@ const emit = defineEmits<{
 				text-anchor="middle"
 				:dominant-baseline="getStampRenderPosition(item, vbHeight).dominantBaseline"
 				:font-family="MUSIC_FONT_FAMILY"
+				pointer-events="none"
 				:data-ann-uuid="item.uuid"
 				data-test="annotation-stamp">
 				{{ getAnnotationDisplaySymbol(item) }}

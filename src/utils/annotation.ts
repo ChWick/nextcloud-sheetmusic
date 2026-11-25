@@ -233,11 +233,20 @@ export function getStampRenderFontSize(item: SheetAnnotation): number {
 }
 
 /**
- * Compute a proportional visual radius (in SVG units) for selection circles and hit targets.
+ * Compute a proportional visual radius (in SVG units) for stamp selection circles and hit targets.
  */
 export function getStampVisualRadius(item: SheetAnnotation): number {
 	const fontSize = getStampRenderFontSize(item)
 	return isFingeringDigit(getAnnotationDisplaySymbol(item)) ? fontSize * 0.2 : fontSize * 0.4
+}
+
+/**
+ * Shared radius for both the visible stamp selection circle and its clickable hit-target circle,
+ * ensuring the selectable area matches the blue dashed circle 1-to-1 at any zoom level.
+ */
+export function getStampSelectionRadius(item: SheetAnnotation, uiScale = 1): number {
+	const scale = Math.max(0.1, uiScale)
+	return Math.max(9 * scale, getStampVisualRadius(item) + 3 * scale)
 }
 
 /**

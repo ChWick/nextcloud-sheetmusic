@@ -192,6 +192,7 @@ const cursorClass = computed(() => {
 				:key="item.uuid || item.id"
 				:item="item"
 				:vb-height="vbHeight"
+				:ui-scale="uiScale"
 				:editable="editable"
 				:hovered-select="editable && activeTool !== 'eraser' && hoveredUuid === item.uuid"
 				:hovered-eraser="editable && activeTool === 'eraser' && hoveredUuid === item.uuid"
