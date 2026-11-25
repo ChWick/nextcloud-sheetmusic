@@ -8,7 +8,7 @@ import { ref } from 'vue'
 import { useAnnotationInlineEditors } from './useAnnotationInlineEditors'
 import { useHandwritingInput } from './useHandwritingInput'
 import { useStylusSettings } from './useStylusSettings'
-import { translateAnnotation } from '../utils/annotation'
+import { getStampInkBounds, translateAnnotation, VIEWBOX_WIDTH } from '../utils/annotation'
 import {
 	applyEndpointMove,
 	applyHeightMove,
@@ -44,6 +44,7 @@ interface InteractionState {
 export interface UseAnnotationPointerInteractionOptions {
 	svgRef: Ref<SVGSVGElement | null>
 	vbHeight: ComputedRef<number>
+	uiScale?: ComputedRef<number>
 	pageIndex: ComputedRef<number>
 	pageNumber: ComputedRef<number>
 	totalPages: ComputedRef<number>
@@ -185,7 +186,26 @@ export function useAnnotationPointerInteraction(opts: UseAnnotationPointerIntera
 	}
 
 	function findAnnotationUuidFromEvent(e: PointerEvent | MouseEvent): string | null {
-		return findAnnotationUuidFromElement(e.target as Element | null)
+		const rawUuid = findAnnotationUuidFromElement(e.target as Element | null)
+		if (!rawUuid) return null
+		const ann = opts.activeAnnotations.value.find((a) => a.uuid === rawUuid)
+		if (!ann || ann.type !== 'stamp') return rawUuid
+
+		// Guard against tablet/stylus browser touch-adjustment fuzzing that snaps e.target
+		// onto nearby stamp elements even when the exact pointer coordinate is outside the box.
+		const el = opts.svgRef.value
+		const rect = el?.getBoundingClientRect?.()
+		if (!rect || rect.width <= 0 || rect.height <= 0) return rawUuid
+
+		const pt = clientToNorm(e.clientX, e.clientY, (e as PointerEvent).pointerType)
+		const svgX = pt.x * VIEWBOX_WIDTH
+		const svgY = pt.y * opts.vbHeight.value
+		const bounds = getStampInkBounds(ann, opts.vbHeight.value, opts.uiScale?.value ?? 1)
+		const inside = svgX >= bounds.x
+			&& svgX <= bounds.x + bounds.width
+			&& svgY >= bounds.y
+			&& svgY <= bounds.y + bounds.height
+		return inside ? rawUuid : null
 	}
 
 	function findAnnotationUuidAtStylusPoint(e: PointerEvent): string | null {

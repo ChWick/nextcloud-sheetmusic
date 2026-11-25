@@ -121,6 +121,7 @@ const {
 } = useAnnotationPointerInteraction({
 	svgRef,
 	vbHeight,
+	uiScale,
 	pageIndex,
 	pageNumber: computed(() => props.pageNumber),
 	totalPages: computed(() => props.totalPages),

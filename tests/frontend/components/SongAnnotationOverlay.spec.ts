@@ -396,6 +396,56 @@ describe('SongAnnotationOverlay.vue', () => {
 		expect(wrapper.emitted('create-annotation')).toHaveLength(1)
 	})
 
+	it('ignores fuzzy tablet/stylus e.target hits when exact pointer coordinates are outside a stamp bounding box', async () => {
+		const wrapper = mount(SongAnnotationOverlay, {
+			props: {
+				annotations: sampleAnnotations,
+				pageNumber: 1,
+				pageWidth: 1000,
+				pageHeight: 1000,
+				visible: true,
+				editable: true,
+				activeTool: 'select',
+			},
+		})
+
+		const svg = wrapper.find('[data-test="annotation-overlay"]')
+		vi.spyOn(svg.element, 'getBoundingClientRect').mockReturnValue({
+			left: 0,
+			top: 0,
+			width: 1000,
+			height: 1000,
+			right: 1000,
+			bottom: 1000,
+			x: 0,
+			y: 0,
+			toJSON: () => ({}),
+		})
+
+		// ann-stamp-1 is centered at (525, 325). Simulate browser touch-adjustment snapping e.target
+		// to the stamp hit target even though the stylus coordinate is 30px outside at (560, 325).
+		const stampHit = wrapper.find('rect[data-ann-uuid="ann-stamp-1"][data-test="annotation-hit-target"]')
+		expect(stampHit.exists()).toBe(true)
+		await stampHit.trigger('pointerdown', {
+			button: 0,
+			pointerType: 'pen',
+			clientX: 560,
+			clientY: 325,
+			pointerId: 1,
+		})
+		expect(wrapper.emitted('select')?.at(-1)).toEqual([null])
+
+		// Tapping directly inside the stamp's ink box (525, 325) selects it
+		await stampHit.trigger('pointerdown', {
+			button: 0,
+			pointerType: 'pen',
+			clientX: 525,
+			clientY: 325,
+			pointerId: 2,
+		})
+		expect(wrapper.emitted('select')?.at(-1)).toEqual(['ann-stamp-1'])
+	})
+
 	it('deletes an annotation when clicked with the eraser tool', async () => {
 		const wrapper = mount(SongAnnotationOverlay, {
 			props: {
