@@ -228,6 +228,7 @@ describe('SongAnnotationToolbar.vue', () => {
 			},
 		})
 
+		await wrapper.get('[data-test="selected-link-edit-button"]').trigger('click')
 		const input = wrapper.find('[data-test="selected-annotation-text-input"]')
 		expect(input.exists()).toBe(true)
 		expect((input.element as HTMLInputElement).value).toBe('Coda')
