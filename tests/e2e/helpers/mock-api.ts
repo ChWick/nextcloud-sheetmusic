@@ -196,6 +196,34 @@ export async function setupMockApi(page: Page) {
 		})
 	})
 
+	// Mock song annotations endpoint (registered after **/api/songs** so it takes precedence)
+	await page.route('**/api/songs/*/annotations**', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				ocs: {
+					meta: { status: 'ok', statuscode: 200 },
+					data: [],
+				},
+			}),
+		})
+	})
+
+	// Mock file annotation layers endpoint
+	await page.route('**/api/files/*/annotation-layers**', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				ocs: {
+					meta: { status: 'ok', statuscode: 200 },
+					data: { layers: [] },
+				},
+			}),
+		})
+	})
+
 	// Mock batch update songs endpoint
 	await page.route('**/api/batch-update-songs', async (route) => {
 		await route.fulfill({
