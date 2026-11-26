@@ -9,6 +9,7 @@ import CloseIcon from 'vue-material-design-icons/Close.vue'
 import type { Bookmark } from '../../types/song'
 import {
 	LINK_LABEL_PRESETS,
+	resolveLinkLabel,
 	type LinkMarkerStyle,
 } from '../../utils/annotationLinks'
 import { fetchCachedBinaryFile } from '../../utils/file-binary'
@@ -75,6 +76,10 @@ const sourceCanvasRef = ref<HTMLCanvasElement | null>(null)
 const targetCanvasRef = ref<HTMLCanvasElement | null>(null)
 const pdfDoc = shallowRef<PDFDocumentProxy | null>(null)
 const effectiveTotalPages = computed(() => Math.max(1, pdfDoc.value?.numPages ?? props.totalPages))
+const previewSourceLabel = computed(() => resolveLinkLabel(label.value, targetPageIdx.value, linkStyle.value))
+const previewReverseLabel = computed(() =>
+	createReverse.value && linkStyle.value === 'box' ? `← p. ${sourcePageIdx.value + 1}` : '',
+)
 
 async function renderPane(canvas: HTMLCanvasElement | null, pageIdx: number) {
 	const doc = pdfDoc.value
@@ -251,9 +256,12 @@ function handleSave() {
 							@click="onPaneClick('source', $event)">
 							<canvas ref="sourceCanvasRef" :class="$style.canvas" width="360" height="480" />
 							<span
-								:class="$style.sourcePin"
+								:class="[$style.sourcePin, linkStyle === 'box' ? $style.pinBox : $style.pinCircle]"
 								:style="{ left: `${sourceX * 100}%`, top: `${sourceY * 100}%` }"
-								data-test="link-picker-source-pin" />
+								:data-pin-style="linkStyle"
+								data-test="link-picker-source-pin">
+								{{ previewSourceLabel }}
+							</span>
 						</div>
 					</section>
 
@@ -305,9 +313,12 @@ function handleSave() {
 							@click="onPaneClick('target', $event)">
 							<canvas ref="targetCanvasRef" :class="$style.canvas" width="360" height="480" />
 							<span
-								:class="$style.targetPin"
+								:class="[$style.targetPin, createReverse && linkStyle === 'box' ? $style.pinBox : $style.pinCircle]"
 								:style="{ left: `${targetX * 100}%`, top: `${targetY * 100}%` }"
-								data-test="link-picker-target-pin" />
+								:data-pin-style="createReverse && linkStyle === 'box' ? 'box' : 'circle'"
+								data-test="link-picker-target-pin">
+								{{ previewReverseLabel }}
+							</span>
 						</div>
 					</section>
 				</div>
@@ -509,22 +520,43 @@ button[type='button'].pageBtn {
 .sourcePin,
 .targetPin {
 	position: absolute;
-	width: 20px;
-	height: 20px;
-	border-radius: 50%;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
 	transform: translate(-50%, -50%);
 	pointer-events: none;
 	box-sizing: border-box;
+	font-size: 10px;
+	font-weight: 700;
+	line-height: 1;
+	white-space: nowrap;
+	transition: border-radius 0.12s ease, padding 0.12s ease;
+}
+
+.pinCircle {
+	min-width: 22px;
+	height: 22px;
+	padding: 0 4px;
+	border-radius: 999px;
+}
+
+.pinBox {
+	min-width: 44px;
+	height: 22px;
+	padding: 0 6px;
+	border-radius: 4px;
 }
 
 .sourcePin {
-	border: 3px solid #0082c9;
-	background: rgba(0, 130, 201, 0.28);
+	border: 2px solid #0082c9;
+	background: rgba(0, 130, 201, 0.22);
+	color: #0052cc;
 }
 
 .targetPin {
-	border: 3px solid #e65100;
-	background: rgba(230, 81, 0, 0.28);
+	border: 2px solid #e65100;
+	background: rgba(230, 81, 0, 0.22);
+	color: #bf360c;
 }
 
 .footer {

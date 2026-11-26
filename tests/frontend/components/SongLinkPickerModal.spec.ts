@@ -23,10 +23,16 @@ describe('SongLinkPickerModal', () => {
 		const modal = document.body.querySelector('[data-test="link-picker-modal"]')
 		expect(modal).not.toBeNull()
 
+		// Default Box style shows rounded box pin with fallback label
+		const sourcePin = modal!.querySelector('[data-test="link-picker-source-pin"]')!
+		expect(sourcePin.getAttribute('data-pin-style')).toBe('box')
+		expect(sourcePin.textContent?.trim()).toBe('→ p. 2')
+
 		// Step target page forward (2 -> 3)
 		;(modal!.querySelector('[data-test="link-picker-target-next"]') as HTMLButtonElement).click()
 		await wrapper.vm.$nextTick()
 		expect(modal!.querySelector('[data-test="link-picker-target-page"]')?.textContent).toContain('Page 3 / 4')
+		expect(sourcePin.textContent?.trim()).toBe('→ p. 3')
 
 		// Select bookmark -> jumps to page 4 and fills label
 		const bmSelect = modal!.querySelector('[data-test="link-picker-bookmark-select"]') as HTMLSelectElement
@@ -34,13 +40,15 @@ describe('SongLinkPickerModal', () => {
 		bmSelect.dispatchEvent(new Event('change'))
 		await wrapper.vm.$nextTick()
 		expect(modal!.querySelector('[data-test="link-picker-target-page"]')?.textContent).toContain('Page 4 / 4')
+		expect(sourcePin.textContent?.trim()).toBe('Coda')
 
-		// Choose circle style + reverse link and save
+		// Choose circle style + reverse link -> source pin switches to circle
 		;(modal!.querySelector('[data-test="link-picker-style-circle"]') as HTMLButtonElement).click()
 		const revCheckbox = modal!.querySelector('[data-test="link-picker-reverse-checkbox"]') as HTMLInputElement
 		revCheckbox.checked = true
 		revCheckbox.dispatchEvent(new Event('change'))
 		await wrapper.vm.$nextTick()
+		expect(sourcePin.getAttribute('data-pin-style')).toBe('circle')
 
 		;(modal!.querySelector('[data-test="link-picker-save"]') as HTMLButtonElement).click()
 		await wrapper.vm.$nextTick()
