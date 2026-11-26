@@ -10,10 +10,18 @@ import SetlistPerformancePageStrip, { type SetlistStripSong } from './SetlistPer
 import SetlistPerformanceSettingsPanel from './SetlistPerformanceSettingsPanel.vue'
 import SetlistPerformanceSupplementalDrawer from './SetlistPerformanceSupplementalDrawer.vue'
 import SetlistPerformanceTopBar from './SetlistPerformanceTopBar.vue'
+import PerformanceToolsButtons from './PerformanceToolsButtons.vue'
 import { fetchSongAnnotations } from '../../api/annotations'
 import { useHudAutoHide } from '../../composables/useHudAutoHide'
+import { useMetronome } from '../../composables/useMetronome'
 import { usePerformanceStageInput } from '../../composables/usePerformanceStageInput'
+import { usePitchPipe } from '../../composables/usePitchPipe'
 import { useWakeLock } from '../../composables/useWakeLock'
+import {
+	extractSongKeyPitchClass,
+	extractSongTempo,
+	extractSongTimeSignature,
+} from '../../utils/music-tools'
 import type { AnnotationLayer, SheetAnnotation } from '../../types/annotation'
 import {
 	createDefaultAnnotationLayers,
@@ -63,6 +71,7 @@ const emit = defineEmits<{
 
 const rootRef = ref<HTMLElement | null>(null)
 const previewerRef = ref<InstanceType<typeof FilePreviewer> | null>(null)
+const toolsButtonsRef = ref<InstanceType<typeof PerformanceToolsButtons> | null>(null)
 
 const initialSettings = loadEffectivePerformanceSettings(props.libraryId, props.setlistId)
 
@@ -74,6 +83,7 @@ const isDrawerOpen = ref(false)
 const isSettingsOpen = ref(false)
 const isSupplementalDrawerOpen = ref(false)
 const isPagePickerOpen = ref(false)
+const isToolsPopoverOpen = ref(false)
 const isFullscreen = ref(typeof document !== 'undefined' && Boolean(document.fullscreenElement))
 let keepFullscreenOnUnmount = false
 const isSetlistOverride = ref(initialSettings.overrideEnabled)
@@ -86,6 +96,9 @@ const layoutChoice = ref<PerformanceLayoutChoice>(initialSettings.settings.layou
 const doublePageTurnMode = ref<DoublePageTurnMode>(initialSettings.settings.doublePageTurnMode)
 const zoomChoice = ref<PerformanceZoomChoice>(initialSettings.settings.zoomChoice)
 
+const metronome = useMetronome()
+const pitchPipe = usePitchPipe()
+
 const {
 	isHudVisible,
 	clearHudTimer,
@@ -93,7 +106,13 @@ const {
 	toggleHud,
 	pauseHudAutoHide,
 	resumeHudAutoHide,
-} = useHudAutoHide(3000, () => isDrawerOpen.value || isSettingsOpen.value || isSupplementalDrawerOpen.value || isPagePickerOpen.value)
+} = useHudAutoHide(3000, () =>
+	isDrawerOpen.value
+	|| isSettingsOpen.value
+	|| isSupplementalDrawerOpen.value
+	|| isPagePickerOpen.value
+	|| isToolsPopoverOpen.value,
+)
 
 useWakeLock()
 
@@ -212,6 +231,18 @@ const currentSong = computed<Song | null>(() => {
 const currentSongTitle = computed(() => {
 	return currentSong.value?.title || currentItem.value?.songTitle || t('sheetmusic', 'Unknown Song')
 })
+
+const currentSongTempo = computed(() => extractSongTempo(currentSong.value))
+const currentSongTimeSignature = computed(() => extractSongTimeSignature(currentSong.value))
+const currentSongKeyPitchClass = computed(() => extractSongKeyPitchClass(currentSong.value))
+const currentSongKeyLabel = computed(() => currentSong.value?.keys?.[0]?.name ?? null)
+const metronomeBeatIndices = computed(() =>
+	Array.from({ length: metronome.timeSignature.value.beats }, (_, i) => i),
+)
+
+watch(currentSong, (song) => {
+	metronome.syncFromSong(song)
+}, { immediate: true })
 
 const isSingleSongMode = computed(() => !props.setlistId && props.items.length === 1)
 
@@ -465,7 +496,9 @@ const { onStageTouchStart, onStageTouchEnd, onStageClick } = usePerformanceStage
 	onPrevPage: handlePrevPage,
 	onToggleHud: toggleHud,
 	onEscape: () => {
-		if (isSettingsOpen.value) {
+		if (toolsButtonsRef.value?.closeOpenPopover()) {
+			scheduleHudAutoHide()
+		} else if (isSettingsOpen.value) {
 			isSettingsOpen.value = false
 			scheduleHudAutoHide()
 		} else if (isDrawerOpen.value) {
@@ -521,7 +554,61 @@ onUnmounted(() => {
 				@toggle-settings="toggleSettingsPanel"
 				@toggle-fullscreen="toggleFullscreen"
 				@pause-auto-hide="pauseHudAutoHide"
-				@resume-auto-hide="resumeHudAutoHide" />
+				@resume-auto-hide="resumeHudAutoHide">
+				<template #tools>
+					<PerformanceToolsButtons
+						ref="toolsButtonsRef"
+						:bpm="metronome.bpm.value"
+						:time-signature="metronome.timeSignature.value"
+						:is-metronome-running="metronome.isRunning.value"
+						:current-beat="metronome.currentBeat.value"
+						:accent-first-beat="metronome.accentFirstBeat.value"
+						:sound-enabled="metronome.soundEnabled.value"
+						:visual-flash-enabled="metronome.visualFlashEnabled.value"
+						:song-tempo="currentSongTempo"
+						:song-time-signature="currentSongTimeSignature"
+						:active-pitch-class="pitchPipe.activePitchClass.value"
+						:active-note-label="pitchPipe.activeNoteLabel.value"
+						:active-frequency="pitchPipe.activeFrequency.value"
+						:octave="pitchPipe.octave.value"
+						:a4-hz="pitchPipe.a4Hz.value"
+						:waveform="pitchPipe.waveform.value"
+						:song-key-pitch-class="currentSongKeyPitchClass"
+						:song-key-label="currentSongKeyLabel"
+						@toggle-metronome="metronome.toggle()"
+						@update:bpm="metronome.setBpm($event)"
+						@adjust-bpm="metronome.adjustBpm($event)"
+						@update:time-signature="metronome.setTimeSignature($event)"
+						@tap-tempo="metronome.tapTempo()"
+						@update:accent-first-beat="metronome.accentFirstBeat.value = $event"
+						@update:sound-enabled="metronome.soundEnabled.value = $event"
+						@update:visual-flash-enabled="metronome.visualFlashEnabled.value = $event"
+						@sync-song-tempo="metronome.syncFromSong(currentSong)"
+						@toggle-note="pitchPipe.toggleNote($event)"
+						@stop-pitch="pitchPipe.stop()"
+						@update:octave="pitchPipe.setOctave($event)"
+						@update:a4-hz="pitchPipe.setA4Hz($event)"
+						@update:waveform="pitchPipe.setWaveform($event)"
+						@update:any-open="isToolsPopoverOpen = $event"
+						@pause-auto-hide="pauseHudAutoHide"
+						@resume-auto-hide="resumeHudAutoHide" />
+				</template>
+			</SetlistPerformanceTopBar>
+
+			<div
+				v-if="metronome.isRunning.value && metronome.visualFlashEnabled.value"
+				:class="[$style.metronomePulseOverlay, isHudVisible && $style.metronomePulseBelowHud]"
+				aria-hidden="true"
+				data-test="performance-metronome-pulse">
+				<span
+					v-for="idx in metronomeBeatIndices"
+					:key="idx"
+					:class="[
+						$style.pulseDot,
+						idx === 0 && metronome.accentFirstBeat.value && $style.pulseDotAccent,
+						metronome.currentBeat.value === idx && $style.pulseDotActive,
+					]" />
+			</div>
 
 			<div
 				:class="$style.stage"
@@ -700,5 +787,45 @@ onUnmounted(() => {
 .supplementalEdgeButton:hover {
 	opacity: 1;
 	background-color: var(--color-background-hover);
+}
+
+.metronomePulseOverlay {
+	position: fixed;
+	top: 12px;
+	left: 50%;
+	transform: translateX(-50%);
+	z-index: 25;
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 12px;
+	border-radius: 999px;
+	background: rgba(0, 0, 0, 0.55);
+	pointer-events: none;
+	transition: top 0.15s ease;
+}
+
+.metronomePulseBelowHud {
+	top: 64px;
+}
+
+.pulseDot {
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	background: rgba(255, 255, 255, 0.35);
+	transition: transform 0.08s ease, background-color 0.08s ease;
+}
+
+.pulseDotAccent {
+	width: 12px;
+	height: 12px;
+	border: 2px solid #ffffff;
+	box-sizing: border-box;
+}
+
+.pulseDotActive {
+	background: var(--color-primary-element, #0082c9);
+	transform: scale(1.3);
 }
 </style>

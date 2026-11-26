@@ -87,6 +87,7 @@ watch(isLayersOpen, (open) => {
 		</div>
 
 		<div :class="$style.topRight">
+			<slot name="tools" />
 			<NcButton
 				variant="primary"
 				:title="t('sheetmusic', 'Stop playing and return to editor')"
