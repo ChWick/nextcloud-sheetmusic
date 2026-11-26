@@ -1,6 +1,24 @@
 import type { SheetAnnotation } from '../types/annotation'
+import { VIEWBOX_WIDTH } from './annotation'
 
 export type LinkMarkerStyle = 'box' | 'circle'
+
+export interface LinkCircleGeometry {
+	cx: number
+	cy: number
+	r: number
+}
+
+/**
+ * Compute exact SVG viewBox circle geometry for a circle-style link annotation.
+ */
+export function getLinkCircleGeometry(item: Pick<SheetAnnotation, 'x' | 'y' | 'width' | 'height'>, vbHeight: number): LinkCircleGeometry {
+	return {
+		cx: (item.x + item.width / 2) * VIEWBOX_WIDTH,
+		cy: (item.y + item.height / 2) * vbHeight,
+		r: Math.max(14, Math.min(item.width * VIEWBOX_WIDTH, item.height * vbHeight) / 2),
+	}
+}
 
 export const LINK_LABEL_PRESETS = [
 	'D.C.',

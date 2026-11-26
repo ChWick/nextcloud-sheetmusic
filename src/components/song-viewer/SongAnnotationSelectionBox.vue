@@ -2,6 +2,7 @@
 import type { SheetAnnotation } from '../../types/annotation'
 import { computed } from 'vue'
 import { getShapeHeightHandle, getStampInkBounds, VIEWBOX_WIDTH } from '../../utils/annotation'
+import { getLinkCircleGeometry } from '../../utils/annotationLinks'
 
 const props = withDefaults(defineProps<{
 	item: SheetAnnotation
@@ -35,12 +36,46 @@ const shapeHeightHandle = computed(() => getShapeHeightHandle(props.item, props.
 const stampBounds = computed(() =>
 	props.item.type === 'stamp' ? getStampInkBounds(props.item, props.vbHeight, scale.value) : null,
 )
+const isLinkCircle = computed(() =>
+	props.item.type === 'link' && props.item.data?.linkStyle === 'circle',
+)
+const isLinkBox = computed(() =>
+	props.item.type === 'link' && props.item.data?.linkStyle !== 'circle',
+)
+const linkCircle = computed(() =>
+	isLinkCircle.value ? getLinkCircleGeometry(props.item, props.vbHeight) : null,
+)
+const linkCircleDiag = computed(() => (linkCircle.value ? linkCircle.value.r * Math.SQRT1_2 : 0))
 </script>
 
 <template>
 	<g class="sheetmusic-selection-box">
+		<!-- Circle link: hug the actual circle directly (no dashed box) -->
+		<circle
+			v-if="linkCircle"
+			:cx="linkCircle.cx"
+			:cy="linkCircle.cy"
+			:r="linkCircle.r"
+			fill="none"
+			stroke="#0082c9"
+			:stroke-width="2.5 * scale"
+			pointer-events="none"
+			data-test="selection-link-circle" />
+		<!-- Box link: highlight the actual rounded box directly (no dashed box) -->
 		<rect
-			v-if="item.type === 'stamp' && stampBounds"
+			v-else-if="isLinkBox"
+			:x="item.x * VIEWBOX_WIDTH"
+			:y="item.y * vbHeight"
+			:width="item.width * VIEWBOX_WIDTH"
+			:height="item.height * vbHeight"
+			rx="4"
+			fill="none"
+			stroke="#0082c9"
+			:stroke-width="2.5 * scale"
+			pointer-events="none"
+			data-test="selection-link-box" />
+		<rect
+			v-else-if="item.type === 'stamp' && stampBounds"
 			:x="stampBounds.x"
 			:y="stampBounds.y"
 			:width="stampBounds.width"
@@ -89,7 +124,75 @@ const stampBounds = computed(() =>
 				data-resize-handle="height" />
 		</template>
 
-		<!-- Corner resize handles for box annotations -->
+		<!-- Perimeter resize handles for circle links -->
+		<template v-else-if="showHandles && linkCircle">
+			<circle
+				:cx="linkCircle.cx - linkCircleDiag"
+				:cy="linkCircle.cy - linkCircleDiag"
+				:r="handleSize / 2"
+				:stroke-width="handleStrokeWidth"
+				class="sheetmusic-resize-handle"
+				data-resize-handle="nw" />
+			<circle
+				:cx="linkCircle.cx + linkCircleDiag"
+				:cy="linkCircle.cy - linkCircleDiag"
+				:r="handleSize / 2"
+				:stroke-width="handleStrokeWidth"
+				class="sheetmusic-resize-handle"
+				data-resize-handle="ne" />
+			<circle
+				:cx="linkCircle.cx - linkCircleDiag"
+				:cy="linkCircle.cy + linkCircleDiag"
+				:r="handleSize / 2"
+				:stroke-width="handleStrokeWidth"
+				class="sheetmusic-resize-handle"
+				data-resize-handle="sw" />
+			<circle
+				:cx="linkCircle.cx + linkCircleDiag"
+				:cy="linkCircle.cy + linkCircleDiag"
+				:r="handleSize / 2"
+				:stroke-width="handleStrokeWidth"
+				class="sheetmusic-resize-handle"
+				data-resize-handle="se" />
+		</template>
+
+		<!-- Corner resize handles for box links (directly on actual box corners) -->
+		<template v-else-if="showHandles && isLinkBox">
+			<rect
+				:x="item.x * VIEWBOX_WIDTH - handleSize / 2"
+				:y="item.y * vbHeight - handleSize / 2"
+				:width="handleSize"
+				:height="handleSize"
+				:stroke-width="handleStrokeWidth"
+				class="sheetmusic-resize-handle"
+				data-resize-handle="nw" />
+			<rect
+				:x="(item.x + item.width) * VIEWBOX_WIDTH - handleSize / 2"
+				:y="item.y * vbHeight - handleSize / 2"
+				:width="handleSize"
+				:height="handleSize"
+				:stroke-width="handleStrokeWidth"
+				class="sheetmusic-resize-handle"
+				data-resize-handle="ne" />
+			<rect
+				:x="item.x * VIEWBOX_WIDTH - handleSize / 2"
+				:y="(item.y + item.height) * vbHeight - handleSize / 2"
+				:width="handleSize"
+				:height="handleSize"
+				:stroke-width="handleStrokeWidth"
+				class="sheetmusic-resize-handle"
+				data-resize-handle="sw" />
+			<rect
+				:x="(item.x + item.width) * VIEWBOX_WIDTH - handleSize / 2"
+				:y="(item.y + item.height) * vbHeight - handleSize / 2"
+				:width="handleSize"
+				:height="handleSize"
+				:stroke-width="handleStrokeWidth"
+				class="sheetmusic-resize-handle"
+				data-resize-handle="se" />
+		</template>
+
+		<!-- Corner resize handles for other box annotations -->
 		<template v-else-if="showHandles && item.type !== 'drawing' && item.type !== 'highlight' && item.type !== 'stamp'">
 			<rect
 				:x="item.x * VIEWBOX_WIDTH - boxPad - handleSize / 2"

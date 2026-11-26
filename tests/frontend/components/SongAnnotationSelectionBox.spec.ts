@@ -116,4 +116,44 @@ describe('SongAnnotationSelectionBox.vue', () => {
 		const fRect = fingeringWrapper.find('rect')
 		expect(Number(fRect.attributes('width'))).toBeLessThan(Number(rect.attributes('width')))
 	})
+
+	it('uses the actual circle or rounded box shape without a dashed selection box for link annotations', () => {
+		const circleLink: SheetAnnotation = {
+			id: 5,
+			uuid: 'link-circle-1',
+			songId: 1,
+			fileId: 10,
+			pageNumber: 0,
+			type: 'link',
+			x: 0.2,
+			y: 0.3,
+			width: 0.1,
+			height: 0.06,
+			style: {},
+			data: { targetPage: 2, linkStyle: 'circle', label: 'D.S.' },
+		}
+
+		const circleWrapper = mount(SongAnnotationSelectionBox, {
+			props: { item: circleLink, vbHeight: 1414, uiScale: 1 },
+		})
+		const circleOutline = circleWrapper.find('[data-test="selection-link-circle"]')
+		expect(circleOutline.exists()).toBe(true)
+		expect(circleOutline.attributes('stroke-dasharray')).toBeUndefined()
+		expect(circleWrapper.findAll('circle[data-resize-handle]')).toHaveLength(4)
+
+		const boxLink: SheetAnnotation = {
+			...circleLink,
+			id: 6,
+			uuid: 'link-box-1',
+			data: { targetPage: 2, linkStyle: 'box', label: 'To Coda' },
+		}
+		const boxWrapper = mount(SongAnnotationSelectionBox, {
+			props: { item: boxLink, vbHeight: 1414, uiScale: 1 },
+		})
+		const boxOutline = boxWrapper.find('[data-test="selection-link-box"]')
+		expect(boxOutline.exists()).toBe(true)
+		expect(boxOutline.attributes('stroke-dasharray')).toBeUndefined()
+		expect(boxOutline.attributes('rx')).toBe('4')
+		expect(boxWrapper.findAll('rect[data-resize-handle]')).toHaveLength(4)
+	})
 })

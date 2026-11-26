@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { SheetAnnotation } from '../../types/annotation'
-import { resolveLinkColors, type LinkJumpPayload } from '../../utils/annotationLinks'
+import { getLinkCircleGeometry, resolveLinkColors, type LinkJumpPayload } from '../../utils/annotationLinks'
 import { computed } from 'vue'
 import {
 	getAnnotationDashArray,
@@ -37,6 +37,11 @@ const emit = defineEmits<{
 
 const linkColors = computed(() =>
 	props.item.type === 'link' ? resolveLinkColors(props.item.style?.color) : null,
+)
+const linkCircle = computed(() =>
+	props.item.type === 'link' && props.item.data?.linkStyle === 'circle'
+		? getLinkCircleGeometry(props.item, props.vbHeight)
+		: null,
 )
 
 function onLinkClick(event: MouseEvent) {
@@ -271,10 +276,10 @@ const textLayout = computed(() =>
 			@click="onLinkClick"
 			@dblclick="editable && emit('dblclick-text', item)">
 			<circle
-				v-if="item.data?.linkStyle === 'circle'"
-				:cx="(item.x + item.width / 2) * VIEWBOX_WIDTH"
-				:cy="(item.y + item.height / 2) * vbHeight"
-				:r="Math.max(14, Math.min(item.width * VIEWBOX_WIDTH, item.height * vbHeight) / 2)"
+				v-if="linkCircle"
+				:cx="linkCircle.cx"
+				:cy="linkCircle.cy"
+				:r="linkCircle.r"
 				class="sheetmusic-annotation-link sheetmusic-annotation-link-circle"
 				:style="linkColors ? { fill: linkColors.fill, stroke: linkColors.stroke } : undefined"
 				:data-ann-uuid="item.uuid"
