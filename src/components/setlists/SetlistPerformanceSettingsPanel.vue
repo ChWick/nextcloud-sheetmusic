@@ -7,6 +7,8 @@ import {
 	SCORE_BRIGHTNESS_MAX,
 	SCORE_BRIGHTNESS_MIN,
 	SCORE_COLOR_PRESETS,
+	SCORE_SEPIA_MAX,
+	SCORE_SEPIA_MIN,
 	type ScoreColorMode,
 } from '../../utils/performance-settings'
 
@@ -19,6 +21,7 @@ withDefaults(defineProps<{
 	tightCrop?: boolean
 	scoreColorMode?: ScoreColorMode
 	scoreBrightness?: number
+	scoreSepia?: number
 }>(), {
 	setlistName: '',
 	showSetlistScope: true,
@@ -26,6 +29,7 @@ withDefaults(defineProps<{
 	tightCrop: false,
 	scoreColorMode: 'normal',
 	scoreBrightness: SCORE_BRIGHTNESS_MAX,
+	scoreSepia: SCORE_SEPIA_MIN,
 })
 
 const emit = defineEmits<{
@@ -35,6 +39,7 @@ const emit = defineEmits<{
 	'update:tightCrop': [enabled: boolean]
 	'update:scoreColorMode': [mode: ScoreColorMode]
 	'update:scoreBrightness': [brightness: number]
+	'update:scoreSepia': [sepia: number]
 	saveAsLibraryDefault: []
 }>()
 </script>
@@ -87,6 +92,23 @@ const emit = defineEmits<{
 							@input="emit('update:scoreBrightness', Number(($event.target as HTMLInputElement).value))">
 						<span :class="$style.brightnessValue" data-test="performance-score-brightness-value">
 							{{ scoreBrightness }}%
+						</span>
+					</div>
+				</label>
+				<label :class="$style.brightnessRow">
+					<span>{{ t('sheetmusic', 'Sepia tint') }}</span>
+					<div :class="$style.brightnessControls">
+						<input
+							type="range"
+							:min="SCORE_SEPIA_MIN"
+							:max="SCORE_SEPIA_MAX"
+							step="5"
+							:value="scoreSepia"
+							:aria-label="t('sheetmusic', 'Sepia tint')"
+							data-test="performance-score-sepia"
+							@input="emit('update:scoreSepia', Number(($event.target as HTMLInputElement).value))">
+						<span :class="$style.brightnessValue" data-test="performance-score-sepia-value">
+							{{ scoreSepia }}%
 						</span>
 					</div>
 				</label>

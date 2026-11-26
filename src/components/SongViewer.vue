@@ -25,6 +25,13 @@ import { extractEntityLists } from './songs/song-view-columns'
 import { fetchSongAnnotations } from '../api/annotations'
 import { useFullscreenBody } from '../composables/useFullscreenBody'
 import type { SheetAnnotation } from '../types/annotation'
+import {
+	createLibraryPerformanceStore,
+	DEFAULT_PERFORMANCE_SETTINGS,
+	getDefaultSepiaForMode,
+	isNightScoreMode,
+	type ScoreColorMode,
+} from '../utils/performance-settings'
 
 const props = withDefaults(
 	defineProps<{
@@ -85,6 +92,32 @@ const isPerformanceMode = ref(false)
 const performanceStartPage = ref(1)
 const selectedFileId = ref('')
 const filePreviewerRef = ref<InstanceType<typeof FileViewerContent> | null>(null)
+const scoreColorMode = ref<ScoreColorMode>(DEFAULT_PERFORMANCE_SETTINGS.scoreColorMode)
+const scoreBrightness = ref<number>(DEFAULT_PERFORMANCE_SETTINGS.scoreBrightness)
+const scoreSepia = ref<number>(DEFAULT_PERFORMANCE_SETTINGS.scoreSepia)
+
+function loadScoreAppearance() {
+	if (props.libraryId <= 0) return
+	const s = createLibraryPerformanceStore(props.libraryId).get()
+	scoreColorMode.value = s.scoreColorMode
+	scoreBrightness.value = s.scoreBrightness
+	scoreSepia.value = s.scoreSepia
+}
+
+function toggleViewerNightMode() {
+	const nextMode: ScoreColorMode = isNightScoreMode(scoreColorMode.value) ? 'normal' : 'night'
+	scoreColorMode.value = nextMode
+	scoreSepia.value = getDefaultSepiaForMode(nextMode)
+	if (props.libraryId > 0) {
+		const store = createLibraryPerformanceStore(props.libraryId)
+		store.save({ ...store.get(), scoreColorMode: nextMode, scoreSepia: scoreSepia.value })
+	}
+}
+
+watch(() => props.libraryId, loadScoreAppearance, { immediate: true })
+watch(isPerformanceMode, (open) => {
+	if (!open) loadScoreAppearance()
+})
 
 const performanceItems = computed<SetlistItem[]>(() => {
 	if (!props.song) return []
@@ -349,6 +382,9 @@ defineExpose({
 				:is-fullscreen="isAnnotationFullscreen"
 				:bookmarks="songBookmarks"
 				:active-bookmark-page="activeBookmarkPage"
+				:score-color-mode="scoreColorMode"
+				:score-brightness="scoreBrightness"
+				:score-sepia="scoreSepia"
 				@update:annotations="annotations = $event"
 				@select-file="selectFile"
 				@play="startPerformanceMode"
@@ -356,6 +392,7 @@ defineExpose({
 				@modify-pdf="openPdfModifier()"
 				@merge-pdfs="isMergePdfsModalOpen = true"
 				@open-versions="openVersionsModal"
+				@toggle-night-mode="toggleViewerNightMode"
 				@toggle-fullscreen="toggleAnnotationFullscreen"
 				@jump-to-bookmark="jumpToBookmark"
 				@edit-bookmarks="openPdfModifier('bookmarks')">

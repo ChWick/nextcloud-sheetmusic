@@ -39,6 +39,7 @@ const props = withDefaults(
 		bookmarks?: Bookmark[]
 		linkBeacon?: LinkArrivalBeacon | null
 		pickingLinkTarget?: boolean
+		nightMode?: boolean
 	}>(),
 	{
 		annotations: () => [],
@@ -55,6 +56,7 @@ const props = withDefaults(
 		bookmarks: () => [],
 		linkBeacon: null,
 		pickingLinkTarget: false,
+		nightMode: false,
 	},
 )
 
@@ -306,6 +308,7 @@ function handleOpenLinkPicker() {
 				:ui-scale="uiScale"
 				:music-font="musicFont"
 				:editable="editable"
+				:night-mode="nightMode"
 				:hovered-select="editable && activeTool !== 'eraser' && hoveredUuid === item.uuid"
 				:hovered-eraser="editable && activeTool === 'eraser' && hoveredUuid === item.uuid"
 				@dblclick-text="onAnnotationDblClick"

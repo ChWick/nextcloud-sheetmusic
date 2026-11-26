@@ -7,6 +7,8 @@ export type ScoreColorMode = 'normal' | 'sepia' | 'night' | 'night-sepia'
 
 export const SCORE_BRIGHTNESS_MIN = 40
 export const SCORE_BRIGHTNESS_MAX = 100
+export const SCORE_SEPIA_MIN = 0
+export const SCORE_SEPIA_MAX = 100
 
 export interface PerformanceViewerSettings {
 	layoutChoice: PerformanceLayoutChoice
@@ -22,6 +24,8 @@ export interface PerformanceViewerSettings {
 	scoreColorMode: ScoreColorMode
 	/** Score dimming percentage (40..100) for dark stages / pit orchestras */
 	scoreBrightness: number
+	/** Continuous sepia tint percentage (0..100) */
+	scoreSepia: number
 }
 
 export interface SetlistPerformanceOverride extends PerformanceViewerSettings {
@@ -67,6 +71,7 @@ export const DEFAULT_PERFORMANCE_SETTINGS: PerformanceViewerSettings = {
 	tightCrop: false,
 	scoreColorMode: 'normal',
 	scoreBrightness: SCORE_BRIGHTNESS_MAX,
+	scoreSepia: 0,
 }
 
 const VALID_LAYOUTS = new Set<PerformanceLayoutChoice>(['auto', 'single', 'double', 'continuous'])
@@ -74,6 +79,7 @@ const VALID_TURN_MODES = new Set<DoublePageTurnMode>(['half', 'step', 'spread'])
 const VALID_ZOOMS = new Set<PerformanceZoomChoice>(['fit-page', 'fit-width'])
 const VALID_SCORE_COLOR_MODES = new Set<ScoreColorMode>(['normal', 'sepia', 'night', 'night-sepia'])
 const HEX_COLOR_RE = /^#[0-9a-f]{6}$/i
+const HEX_SHORT_RE = /^#[0-9a-f]{3}$/i
 
 export function sanitizeScoreBrightness(raw: unknown): number {
 	if (typeof raw !== 'number' || !Number.isFinite(raw)) {
@@ -82,18 +88,38 @@ export function sanitizeScoreBrightness(raw: unknown): number {
 	return Math.min(SCORE_BRIGHTNESS_MAX, Math.max(SCORE_BRIGHTNESS_MIN, Math.round(raw)))
 }
 
+export function sanitizeScoreSepia(raw: unknown): number {
+	if (typeof raw !== 'number' || !Number.isFinite(raw)) {
+		return SCORE_SEPIA_MIN
+	}
+	return Math.min(SCORE_SEPIA_MAX, Math.max(SCORE_SEPIA_MIN, Math.round(raw)))
+}
+
+export function getDefaultSepiaForMode(mode: ScoreColorMode): number {
+	if (mode === 'sepia') return 45
+	if (mode === 'night-sepia') return 35
+	return 0
+}
+
 export function isNightScoreMode(mode: ScoreColorMode): boolean {
 	return mode === 'night' || mode === 'night-sepia'
 }
 
-export function getScoreFilterCss(mode: ScoreColorMode, brightness = SCORE_BRIGHTNESS_MAX): string {
+export function getScoreFilterCss(
+	mode: ScoreColorMode,
+	brightness = SCORE_BRIGHTNESS_MAX,
+	sepia?: number,
+): string {
 	const parts: string[] = []
-	if (mode === 'sepia') {
-		parts.push('sepia(0.45)', 'contrast(0.95)')
-	} else if (mode === 'night') {
-		parts.push('invert(0.92)', 'hue-rotate(180deg)')
-	} else if (mode === 'night-sepia') {
-		parts.push('invert(0.9)', 'sepia(0.35)', 'hue-rotate(180deg)')
+	const sepiaPct = sepia !== undefined ? sanitizeScoreSepia(sepia) : getDefaultSepiaForMode(mode)
+	if (isNightScoreMode(mode)) {
+		parts.push(sepiaPct > 0 ? 'invert(0.9)' : 'invert(0.92)')
+		if (sepiaPct > 0) {
+			parts.push(`sepia(${(sepiaPct / 100).toFixed(2)})`)
+		}
+		parts.push('hue-rotate(180deg)')
+	} else if (sepiaPct > 0) {
+		parts.push(`sepia(${(sepiaPct / 100).toFixed(2)})`, 'contrast(0.95)')
 	}
 	const clamped = sanitizeScoreBrightness(brightness)
 	if (clamped < SCORE_BRIGHTNESS_MAX) {
@@ -102,11 +128,51 @@ export function getScoreFilterCss(mode: ScoreColorMode, brightness = SCORE_BRIGH
 	return parts.join(' ')
 }
 
-export function getEffectiveStageBackground(backgroundColor: string, mode: ScoreColorMode): string {
+export function getEffectiveStageBackground(backgroundColor: string, mode: ScoreColorMode, sepia = 0): string {
 	if (backgroundColor) return backgroundColor
 	if (isNightScoreMode(mode)) return '#0f0f10'
-	if (mode === 'sepia') return '#ede4d3'
+	if (mode === 'sepia' || sanitizeScoreSepia(sepia) > 0) return '#ede4d3'
 	return ''
+}
+
+/**
+ * In Night Mode, flip near-black / dark-gray annotation ink so black pencil,
+ * text, and SMuFL stamps stay legible on dark inverted pages while colored
+ * markings (red, blue, yellow, etc.) keep their original hues.
+ */
+export function adaptAnnotationColorForNight(
+	rawColor: string | undefined,
+	isNight: boolean,
+	fallback = '#000000',
+): string {
+	const color = (rawColor || fallback).trim()
+	if (!isNight) return color
+	const lower = color.toLowerCase()
+	let r: number
+	let g: number
+	let b: number
+	if (lower === 'black') {
+		r = 0; g = 0; b = 0
+	} else if (HEX_COLOR_RE.test(lower)) {
+		r = Number.parseInt(lower.slice(1, 3), 16)
+		g = Number.parseInt(lower.slice(3, 5), 16)
+		b = Number.parseInt(lower.slice(5, 7), 16)
+	} else if (HEX_SHORT_RE.test(lower)) {
+		r = Number.parseInt(lower[1] + lower[1], 16)
+		g = Number.parseInt(lower[2] + lower[2], 16)
+		b = Number.parseInt(lower[3] + lower[3], 16)
+	} else {
+		return color
+	}
+	const spread = Math.max(r, g, b) - Math.min(r, g, b)
+	const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+	if (spread < 35 && luminance < 0.28) {
+		const invR = Math.min(240, 255 - r)
+		const invG = Math.min(240, 255 - g)
+		const invB = Math.min(240, 255 - b)
+		return `#${invR.toString(16).padStart(2, '0')}${invG.toString(16).padStart(2, '0')}${invB.toString(16).padStart(2, '0')}`
+	}
+	return color
 }
 
 export function sanitizeBackgroundColor(raw: unknown): string {
@@ -141,6 +207,13 @@ export function validatePerformanceSettings(raw: unknown): PerformanceViewerSett
 			? (obj.scoreColorMode as ScoreColorMode)
 			: DEFAULT_PERFORMANCE_SETTINGS.scoreColorMode,
 		scoreBrightness: sanitizeScoreBrightness(obj.scoreBrightness),
+		scoreSepia: typeof obj.scoreSepia === 'number'
+			? sanitizeScoreSepia(obj.scoreSepia)
+			: getDefaultSepiaForMode(
+				VALID_SCORE_COLOR_MODES.has(obj.scoreColorMode as ScoreColorMode)
+					? (obj.scoreColorMode as ScoreColorMode)
+					: DEFAULT_PERFORMANCE_SETTINGS.scoreColorMode,
+			),
 	}
 }
 
@@ -197,6 +270,7 @@ export function loadEffectivePerformanceSettings(
 					tightCrop: setlistOverride.tightCrop,
 					scoreColorMode: setlistOverride.scoreColorMode,
 					scoreBrightness: setlistOverride.scoreBrightness,
+					scoreSepia: setlistOverride.scoreSepia,
 				},
 				overrideEnabled: true,
 			}

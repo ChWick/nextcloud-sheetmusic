@@ -39,6 +39,7 @@ import type { DoublePageTurnMode } from '../../utils/page-turn'
 import {
 	createLibraryPerformanceStore,
 	createSetlistPerformanceStore,
+	getDefaultSepiaForMode,
 	getEffectiveStageBackground,
 	isNightScoreMode,
 	loadEffectivePerformanceSettings,
@@ -96,8 +97,10 @@ const backgroundColor = ref(initialSettings.settings.backgroundColor)
 const tightCrop = ref(initialSettings.settings.tightCrop)
 const scoreColorMode = ref<ScoreColorMode>(initialSettings.settings.scoreColorMode)
 const scoreBrightness = ref(initialSettings.settings.scoreBrightness)
+const scoreSepia = ref(initialSettings.settings.scoreSepia)
+const isNightMode = computed(() => isNightScoreMode(scoreColorMode.value))
 const effectiveOverlayBackground = computed(() =>
-	getEffectiveStageBackground(backgroundColor.value, scoreColorMode.value),
+	getEffectiveStageBackground(backgroundColor.value, scoreColorMode.value, scoreSepia.value),
 )
 
 const layoutChoice = ref<PerformanceLayoutChoice>(initialSettings.settings.layoutChoice)
@@ -135,6 +138,7 @@ function currentViewerSettings(): PerformanceViewerSettings {
 		tightCrop: tightCrop.value,
 		scoreColorMode: scoreColorMode.value,
 		scoreBrightness: scoreBrightness.value,
+		scoreSepia: scoreSepia.value,
 	}
 }
 
@@ -171,6 +175,7 @@ function applySettingsToPreviewer(settings: PerformanceViewerSettings) {
 	tightCrop.value = settings.tightCrop
 	scoreColorMode.value = settings.scoreColorMode
 	scoreBrightness.value = settings.scoreBrightness
+	scoreSepia.value = settings.scoreSepia
 }
 
 function toggleSetlistOverride(enabled: boolean) {
@@ -448,6 +453,7 @@ function onUpdateTightCrop(enabled: boolean) {
 
 function onUpdateScoreColorMode(mode: ScoreColorMode) {
 	scoreColorMode.value = mode
+	scoreSepia.value = getDefaultSepiaForMode(mode)
 	persistCurrentSettings()
 }
 
@@ -457,6 +463,16 @@ function onToggleNightMode() {
 
 function onUpdateScoreBrightness(brightness: number) {
 	scoreBrightness.value = brightness
+	persistCurrentSettings()
+}
+
+function onUpdateScoreSepia(sepia: number) {
+	scoreSepia.value = sepia
+	if (isNightScoreMode(scoreColorMode.value)) {
+		scoreColorMode.value = sepia > 0 ? 'night-sepia' : 'night'
+	} else {
+		scoreColorMode.value = sepia > 0 ? 'sepia' : 'normal'
+	}
 	persistCurrentSettings()
 }
 
@@ -554,8 +570,9 @@ onUnmounted(() => {
 	<Teleport to="body">
 		<div
 			ref="rootRef"
-			:class="$style.overlay"
+			:class="[$style.overlay, isNightMode && $style.nightChrome]"
 			:style="effectiveOverlayBackground ? { backgroundColor: effectiveOverlayBackground } : undefined"
+			:data-night-chrome="isNightMode ? 'true' : 'false'"
 			role="dialog"
 			aria-modal="true"
 			:aria-label="setlistName || currentSongTitle">
@@ -665,6 +682,7 @@ onUnmounted(() => {
 					:tight-crop="tightCrop"
 					:score-color-mode="scoreColorMode"
 					:score-brightness="scoreBrightness"
+					:score-sepia="scoreSepia"
 					:file-id="currentFile?.fileId"
 					:initial-crop-boxes="currentFile?.cropBoxes ?? null"
 					:next-file-id="nextFile?.fileId"
@@ -747,12 +765,14 @@ onUnmounted(() => {
 				:tight-crop="tightCrop"
 				:score-color-mode="scoreColorMode"
 				:score-brightness="scoreBrightness"
+				:score-sepia="scoreSepia"
 				@close="toggleSettingsPanel"
 				@update:is-setlist-override="toggleSetlistOverride"
 				@update:background-color="onUpdateBackgroundColor"
 				@update:tight-crop="onUpdateTightCrop"
 				@update:score-color-mode="onUpdateScoreColorMode"
 				@update:score-brightness="onUpdateScoreBrightness"
+				@update:score-sepia="onUpdateScoreSepia"
 				@save-as-library-default="saveCurrentAsLibraryDefault" />
 
 			<SetlistPerformanceSupplementalDrawer
@@ -776,6 +796,17 @@ onUnmounted(() => {
 	flex-direction: column;
 	background-color: var(--color-main-background);
 	color: var(--color-main-text);
+}
+
+.nightChrome {
+	--color-main-background: #141416;
+	--color-background-hover: #222226;
+	--color-background-dark: #26262b;
+	--color-main-text: #e8e8ec;
+	--color-text-maxcontrast: #a4a4b0;
+	--color-border: #2e2e35;
+	--color-border-dark: #44444e;
+	--color-primary-light: rgba(0, 130, 201, 0.25);
 }
 
 .stage {

@@ -5,6 +5,7 @@ import SongViewerFileToolbar from '../song-viewer/SongViewerFileToolbar.vue'
 import type { AnnotationEditorContext } from '../../composables/useAnnotationEditor'
 import type { SheetAnnotation } from '../../types/annotation'
 import type { Bookmark, SongFile } from '../../types/song'
+import { isNightScoreMode, type ScoreColorMode } from '../../utils/performance-settings'
 
 const props = withDefaults(defineProps<{
 	file: Pick<SongFile, 'id' | 'path'> & { fileSize?: number | null }
@@ -21,6 +22,9 @@ const props = withDefaults(defineProps<{
 	isFullscreen?: boolean
 	bookmarks?: Bookmark[]
 	activeBookmarkPage?: number
+	scoreColorMode?: ScoreColorMode
+	scoreBrightness?: number
+	scoreSepia?: number
 	showPlay?: boolean
 	showBookmarks?: boolean
 	showModifyPdf?: boolean
@@ -39,6 +43,9 @@ const props = withDefaults(defineProps<{
 	isFullscreen: false,
 	bookmarks: () => [],
 	activeBookmarkPage: undefined,
+	scoreColorMode: 'normal',
+	scoreBrightness: 100,
+	scoreSepia: 0,
 	showPlay: true,
 	showBookmarks: true,
 	showModifyPdf: true,
@@ -58,6 +65,7 @@ const emit = defineEmits<{
 	'modify-pdf': []
 	'merge-pdfs': []
 	'open-versions': []
+	'toggle-night-mode': []
 	'toggle-fullscreen': []
 	'jump-to-bookmark': [pageNum: number]
 	'edit-bookmarks': []
@@ -95,6 +103,7 @@ defineExpose({
 			:page-resolutions="previewRef?.pageResolutions ?? []"
 			:show-annotations="previewRef?.showAnnotationsState ?? true"
 			:is-editing-annotations="isEditingAnnotations"
+			:is-night-mode="isNightScoreMode(scoreColorMode)"
 			:is-fullscreen="isFullscreen"
 			:can-write="canWrite"
 			:bookmarks="bookmarks"
@@ -115,6 +124,7 @@ defineExpose({
 			@open-versions="emit('open-versions')"
 			@toggle-annotations="previewRef?.toggleAnnotations()"
 			@toggle-edit-annotations="previewRef?.toggleEditMode()"
+			@toggle-night-mode="emit('toggle-night-mode')"
 			@toggle-fullscreen="emit('toggle-fullscreen')"
 			@jump-to-bookmark="emit('jump-to-bookmark', $event)"
 			@edit-bookmarks="emit('edit-bookmarks')" />
@@ -132,6 +142,9 @@ defineExpose({
 			:annotation-context="annotationContext"
 			:can-annotate="isPdf && canWrite !== false"
 			:bookmarks="bookmarks"
+			:score-color-mode="scoreColorMode"
+			:score-brightness="scoreBrightness"
+			:score-sepia="scoreSepia"
 			@update:annotations="emit('update:annotations', $event)"
 			@update:is-editing="onEditingChange" />
 		<slot v-else name="missingFile" />

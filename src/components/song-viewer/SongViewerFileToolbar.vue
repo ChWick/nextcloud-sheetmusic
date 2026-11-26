@@ -19,6 +19,7 @@ import History from 'vue-material-design-icons/History.vue'
 import MergeIcon from 'vue-material-design-icons/Merge.vue'
 import OpenInNewIcon from 'vue-material-design-icons/OpenInNew.vue'
 import PlayIcon from 'vue-material-design-icons/Play.vue'
+import WeatherNightIcon from 'vue-material-design-icons/WeatherNight.vue'
 import PdfInfoPopover from '../song-pdf/PdfInfoPopover.vue'
 import SongViewerBookmarksBar from './SongViewerBookmarksBar.vue'
 import { getFileName, getPdfFiles } from '../../utils/file'
@@ -35,6 +36,7 @@ const props = withDefaults(
 		pageResolutions?: PdfPageResolutionSummary[]
 		showAnnotations?: boolean
 		isEditingAnnotations?: boolean
+		isNightMode?: boolean
 		isFullscreen?: boolean
 		canWrite?: boolean
 		bookmarks?: Bookmark[]
@@ -55,6 +57,7 @@ const props = withDefaults(
 		pageResolutions: () => [],
 		showAnnotations: true,
 		isEditingAnnotations: false,
+		isNightMode: false,
 		isFullscreen: false,
 		canWrite: true,
 		bookmarks: () => [],
@@ -79,6 +82,7 @@ const emit = defineEmits<{
 	'open-versions': []
 	'toggle-annotations': []
 	'toggle-edit-annotations': []
+	'toggle-night-mode': []
 	'toggle-fullscreen': []
 	'jump-to-bookmark': [pageNum: number]
 	'edit-bookmarks': []
@@ -190,6 +194,18 @@ const activePageResolution = computed<PdfPageResolutionSummary | null>(() => {
 				@click="emit('toggle-edit-annotations')">
 				<template #icon>
 					<DrawIcon :size="20" />
+				</template>
+			</NcButton>
+			<NcButton
+				v-if="isPdf"
+				:variant="isNightMode ? 'primary' : 'secondary'"
+				:aria-pressed="isNightMode"
+				:title="t('sheetmusic', 'Toggle night score inversion')"
+				:aria-label="t('sheetmusic', 'Night score mode')"
+				data-test="viewer-night-mode-button"
+				@click="emit('toggle-night-mode')">
+				<template #icon>
+					<WeatherNightIcon :size="20" />
 				</template>
 			</NcButton>
 			<NcButton

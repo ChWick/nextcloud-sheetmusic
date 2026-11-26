@@ -46,6 +46,7 @@ import { observeContinuousPdfPages } from '../utils/pdf-continuous-renderer'
 import {
 	getEffectiveStageBackground,
 	getScoreFilterCss,
+	isNightScoreMode,
 	sanitizeScoreBrightness,
 	SCORE_BRIGHTNESS_MAX,
 	type ScoreColorMode,
@@ -94,6 +95,7 @@ const props = withDefaults(
 		tightCrop?: boolean
 		scoreColorMode?: ScoreColorMode
 		scoreBrightness?: number
+		scoreSepia?: number
 		fileId?: number
 		initialCropBoxes?: Record<string, NormalizedCropBox> | null
 		nextFileId?: number
@@ -129,6 +131,7 @@ const props = withDefaults(
 		tightCrop: false,
 		scoreColorMode: 'normal',
 		scoreBrightness: SCORE_BRIGHTNESS_MAX,
+		scoreSepia: 0,
 		fileId: undefined,
 		initialCropBoxes: null,
 		nextFileId: undefined,
@@ -229,6 +232,7 @@ const {
 	bookmarks: computed(() => props.bookmarks),
 	linkBeacon,
 	pickingLinkTarget: computed(() => props.pickingLinkTarget),
+	nightMode: computed(() => isNightScoreMode(props.scoreColorMode)),
 	onJumpToPage: jumpFromLink,
 	onStartPickLinkTarget: (req) => emit('start-pick-link-target', req),
 	onCompletePickLinkTarget: (res) => emit('complete-pick-link-target', res),
@@ -984,7 +988,7 @@ defineExpose({
 })
 
 const effectiveStageBackground = computed(() =>
-	getEffectiveStageBackground(props.backgroundColor, props.scoreColorMode),
+	getEffectiveStageBackground(props.backgroundColor, props.scoreColorMode, props.scoreSepia),
 )
 
 const scoreStageStyle = computed<Record<string, string>>(() => {
@@ -992,7 +996,7 @@ const scoreStageStyle = computed<Record<string, string>>(() => {
 	if (effectiveStageBackground.value) {
 		style.backgroundColor = effectiveStageBackground.value
 	}
-	const filterCss = getScoreFilterCss(props.scoreColorMode, props.scoreBrightness)
+	const filterCss = getScoreFilterCss(props.scoreColorMode, props.scoreBrightness, props.scoreSepia)
 	if (filterCss) {
 		style['--sheetmusic-score-filter'] = filterCss
 	}
@@ -1019,7 +1023,8 @@ const scoreStageStyle = computed<Record<string, string>>(() => {
 			:class="$style.imageViewer"
 			:style="scoreStageStyle"
 			:data-score-color-mode="scoreColorMode"
-			:data-score-brightness="scoreBrightness">
+			:data-score-brightness="scoreBrightness"
+			:data-score-sepia="scoreSepia">
 			<img
 				:src="filePath"
 				:alt="filePath"
@@ -1034,6 +1039,7 @@ const scoreStageStyle = computed<Record<string, string>>(() => {
 			:style="scoreStageStyle"
 			:data-score-color-mode="scoreColorMode"
 			:data-score-brightness="scoreBrightness"
+			:data-score-sepia="scoreSepia"
 			data-test="pdf-viewer-container"
 			:class="[$style.pdfContainer, !editableAnnotations && $style.pdfContainerGrabbable]">
 			<div

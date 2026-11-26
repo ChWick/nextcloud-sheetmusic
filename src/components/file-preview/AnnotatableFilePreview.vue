@@ -16,6 +16,8 @@ import {
 	type MusicFontId,
 } from '../../utils/musicFont'
 
+import type { ScoreColorMode } from '../../utils/performance-settings'
+
 const props = withDefaults(defineProps<{
 	filePath: string
 	fileName?: string
@@ -27,6 +29,9 @@ const props = withDefaults(defineProps<{
 	annotationContext: AnnotationEditorContext
 	canAnnotate?: boolean
 	bookmarks?: Bookmark[]
+	scoreColorMode?: ScoreColorMode
+	scoreBrightness?: number
+	scoreSepia?: number
 }>(), {
 	fileName: undefined,
 	pageOrder: undefined,
@@ -36,6 +41,9 @@ const props = withDefaults(defineProps<{
 	annotations: () => [],
 	canAnnotate: true,
 	bookmarks: () => [],
+	scoreColorMode: 'normal',
+	scoreBrightness: 100,
+	scoreSepia: 0,
 })
 
 const emit = defineEmits<{
@@ -263,6 +271,9 @@ defineExpose({
 			:music-font="musicFont"
 			:bookmarks="bookmarks"
 			:picking-link-target="linkTargetPick !== null"
+			:score-color-mode="scoreColorMode"
+			:score-brightness="scoreBrightness"
+			:score-sepia="scoreSepia"
 			@select-annotation="selectAnnotation"
 			@select-annotations="selectAnnotations"
 			@create-annotation="handleCreateAnnotation"

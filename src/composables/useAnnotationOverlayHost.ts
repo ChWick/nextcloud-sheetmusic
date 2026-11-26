@@ -27,6 +27,7 @@ export interface UseAnnotationOverlayHostOptions {
 	bookmarks?: ComputedRef<Bookmark[] | undefined>
 	linkBeacon?: Ref<LinkArrivalBeacon | null>
 	pickingLinkTarget?: ComputedRef<boolean>
+	nightMode?: ComputedRef<boolean>
 	onJumpToPage: (payload: LinkJumpPayload) => void
 	onStartPickLinkTarget?: (req: LinkTargetPickRequest) => void
 	onCompletePickLinkTarget?: (res: LinkTargetPickResult) => void
@@ -117,6 +118,7 @@ export function useAnnotationOverlayHost(opts: UseAnnotationOverlayHostOptions) 
 			bookmarks: opts.bookmarks?.value ?? [],
 			linkBeacon: opts.linkBeacon?.value ?? null,
 			pickingLinkTarget: opts.pickingLinkTarget?.value ?? false,
+			nightMode: opts.nightMode?.value ?? false,
 			onJumpToPage: (payload: LinkJumpPayload) => opts.onJumpToPage(payload),
 			onStartPickLinkTarget: opts.onStartPickLinkTarget,
 			onCompletePickLinkTarget: opts.onCompletePickLinkTarget,
@@ -169,6 +171,7 @@ export function useAnnotationOverlayHost(opts: UseAnnotationOverlayHostOptions) 
 			opts.bookmarks?.value,
 			opts.linkBeacon?.value,
 			opts.pickingLinkTarget?.value,
+			opts.nightMode?.value,
 		],
 		() => {
 			refreshAnnotationOverlays()

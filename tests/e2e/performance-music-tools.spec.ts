@@ -95,13 +95,14 @@ test.describe('Performance Mode Metronome & Pitch Pipe', () => {
 		const pdfContainer = dialog.locator('[data-test="pdf-viewer-container"]')
 		await expect(pdfContainer).toHaveAttribute('data-score-color-mode', 'normal')
 
-		// 1-tap Night Mode toggle in bottom bar activates dark stage + inverted score
+		// 1-tap Night Mode toggle in bottom bar activates dark HUD chrome + inverted score
 		const nightToggle = dialog.locator('[data-test="performance-bottom-night-toggle"]')
 		await nightToggle.click()
 		await expect(nightToggle).toHaveAttribute('aria-pressed', 'true')
+		await expect(dialog).toHaveAttribute('data-night-chrome', 'true')
 		await expect(pdfContainer).toHaveAttribute('data-score-color-mode', 'night')
 
-		// Open Viewer Settings to switch to Warm Night and dim brightness to 70%
+		// Open Viewer Settings to switch to Warm Night, dim brightness to 70%, and dial sepia to 60%
 		await dialog.getByRole('button', { name: 'Viewer settings' }).click()
 		await dialog.locator('[data-test="performance-score-mode-night-sepia"]').click()
 		await expect(pdfContainer).toHaveAttribute('data-score-color-mode', 'night-sepia')
@@ -111,13 +112,24 @@ test.describe('Performance Mode Metronome & Pitch Pipe', () => {
 		await expect(dialog.locator('[data-test="performance-score-brightness-value"]')).toHaveText('70%')
 		await expect(pdfContainer).toHaveAttribute('data-score-brightness', '70')
 
-		// Close settings panel, then exit and reopen performance mode -> settings persist
+		const sepiaSlider = dialog.locator('[data-test="performance-score-sepia"]')
+		await sepiaSlider.fill('60')
+		await expect(dialog.locator('[data-test="performance-score-sepia-value"]')).toHaveText('60%')
+		await expect(pdfContainer).toHaveAttribute('data-score-sepia', '60')
+
+		// Close settings panel and exit -> regular Song Viewer reflects the persisted night appearance
 		await dialog.getByRole('region', { name: 'Viewer settings' }).getByRole('button', { name: 'Close' }).click()
 		await dialog.locator('[data-test="stop-performance-button"]').click()
+		const viewerNightBtn = page.locator('[data-test="viewer-night-mode-button"]')
+		await expect(viewerNightBtn).toHaveAttribute('aria-pressed', 'true')
+
+		// Reopen performance mode -> settings persist
 		await page.locator('[data-test="play-song-button"]').click()
 		const reopenedDialog = page.getByRole('dialog', { name: 'Symphony No. 5' })
 		const reopenedContainer = reopenedDialog.locator('[data-test="pdf-viewer-container"]')
+		await expect(reopenedDialog).toHaveAttribute('data-night-chrome', 'true')
 		await expect(reopenedContainer).toHaveAttribute('data-score-color-mode', 'night-sepia')
 		await expect(reopenedContainer).toHaveAttribute('data-score-brightness', '70')
+		await expect(reopenedContainer).toHaveAttribute('data-score-sepia', '60')
 	})
 })

@@ -76,5 +76,8 @@ describe('SetlistPerformanceSettingsPanel', () => {
 
 		await wrapper.find('[data-test="performance-score-brightness"]').setValue('70')
 		expect(wrapper.emitted('update:scoreBrightness')?.[0]).toEqual([70])
+
+		await wrapper.find('[data-test="performance-score-sepia"]').setValue('60')
+		expect(wrapper.emitted('update:scoreSepia')?.[0]).toEqual([60])
 	})
 })

@@ -16,6 +16,7 @@ import {
 	VIEWBOX_WIDTH,
 } from '../../utils/annotation'
 import { getMusicFontFamily, type MusicFontId } from '../../utils/musicFont'
+import { adaptAnnotationColorForNight } from '../../utils/performance-settings'
 
 const props = withDefaults(defineProps<{
 	item: SheetAnnotation
@@ -23,12 +24,26 @@ const props = withDefaults(defineProps<{
 	uiScale?: number
 	musicFont?: MusicFontId
 	editable: boolean
+	nightMode?: boolean
 	hoveredSelect: boolean
 	hoveredEraser: boolean
 }>(), {
 	uiScale: 1,
 	musicFont: 'bravura',
+	nightMode: false,
 })
+
+const strokeColor = computed(() =>
+	adaptAnnotationColorForNight(props.item.style?.stroke, props.nightMode, '#e53935'),
+)
+const inkColor = computed(() =>
+	adaptAnnotationColorForNight(props.item.style?.color, props.nightMode, '#000000'),
+)
+const borderColor = computed(() =>
+	props.item.style?.borderColor
+		? adaptAnnotationColorForNight(props.item.style.borderColor, props.nightMode, '#000000')
+		: 'transparent',
+)
 
 const emit = defineEmits<{
 	'jump-to-page': [payload: LinkJumpPayload]
@@ -95,7 +110,7 @@ const textLayout = computed(() =>
 			<path
 				v-if="usePressurePath"
 				:d="pressurePathD"
-				:fill="item.style?.stroke || '#e53935'"
+				:fill="strokeColor"
 				stroke="none"
 				:opacity="item.style?.opacity ?? 1.0"
 				:style="{ mixBlendMode: item.style?.blendMode || 'normal' }"
@@ -105,7 +120,7 @@ const textLayout = computed(() =>
 			<path
 				v-else
 				:d="pathD"
-				:stroke="item.style?.stroke || '#e53935'"
+				:stroke="strokeColor"
 				:stroke-width="item.style?.strokeWidth || 2.5"
 				:stroke-dasharray="dashArray"
 				:opacity="item.style?.opacity ?? 1.0"
@@ -149,7 +164,7 @@ const textLayout = computed(() =>
 				:cy="(item.y + item.height / 2) * vbHeight"
 				:rx="Math.max(1, (item.width / 2) * VIEWBOX_WIDTH)"
 				:ry="Math.max(1, (item.height / 2) * vbHeight)"
-				:stroke="item.style?.stroke || '#e53935'"
+				:stroke="strokeColor"
 				:stroke-width="item.style?.strokeWidth || 2.5"
 				:stroke-dasharray="dashArray"
 				:opacity="item.style?.opacity ?? 1.0"
@@ -178,7 +193,7 @@ const textLayout = computed(() =>
 				:y="item.y * vbHeight"
 				:width="item.width * VIEWBOX_WIDTH"
 				:height="item.height * vbHeight"
-				:stroke="item.style?.stroke || '#e53935'"
+				:stroke="strokeColor"
 				:stroke-width="item.style?.strokeWidth || 2.5"
 				:stroke-dasharray="dashArray"
 				:opacity="item.style?.opacity ?? 1.0"
@@ -215,7 +230,7 @@ const textLayout = computed(() =>
 			<text
 				:x="stampPos.x"
 				:y="stampPos.y"
-				:fill="item.style?.color || '#000000'"
+				:fill="inkColor"
 				:opacity="item.style?.opacity ?? 1.0"
 				:font-size="stampFontSize"
 				text-anchor="middle"
@@ -240,7 +255,7 @@ const textLayout = computed(() =>
 				:width="textLayout.boxWidth"
 				:height="textLayout.boxHeight"
 				:fill="item.style?.backgroundColor || 'transparent'"
-				:stroke="item.style?.borderColor || 'transparent'"
+				:stroke="borderColor"
 				:stroke-width="item.style?.borderColor ? 1.5 : 10"
 				:vector-effect="item.style?.borderColor ? undefined : 'non-scaling-stroke'"
 				rx="4"
@@ -248,7 +263,7 @@ const textLayout = computed(() =>
 			<text
 				:x="textLayout.x"
 				:y="textLayout.y"
-				:fill="item.style?.color || '#000000'"
+				:fill="inkColor"
 				:opacity="item.style?.opacity ?? 1.0"
 				:font-size="textLayout.fontSize"
 				:font-family="textLayout.fontFamily"
