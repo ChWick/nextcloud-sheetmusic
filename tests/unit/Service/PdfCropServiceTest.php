@@ -164,12 +164,9 @@ class PdfCropServiceTest extends TestCase {
 				$enqueued[] = [$class, $args];
 			});
 
-		$service = new class (
-			$mapper,
-			$this->createMock(IRootFolder::class),
-			$jobList,
-			$this->createMock(LoggerInterface::class),
-		) extends PdfCropService {
+		$rootFolder = $this->createMock(IRootFolder::class);
+		$logger = $this->createMock(LoggerInterface::class);
+		$service = new class($mapper, $rootFolder, $jobList, $logger) extends PdfCropService {
 			public function hasServerRasterTool(): bool {
 				return true;
 			}
