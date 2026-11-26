@@ -551,9 +551,9 @@ onUnmounted(() => {
 					:background-color="backgroundColor"
 					:tight-crop="tightCrop"
 					:file-id="currentFile?.fileId"
-					:initial-crop-boxes="(currentFile as any)?.cropBoxes ?? null"
+					:initial-crop-boxes="currentFile?.cropBoxes ?? null"
 					:next-file-id="nextFile?.fileId"
-					:next-initial-crop-boxes="(nextFile as any)?.cropBoxes ?? null" />
+					:next-initial-crop-boxes="nextFile?.cropBoxes ?? null" />
 				<div v-else :class="$style.emptyFile">
 					{{ t('sheetmusic', 'No score file attached to this song.') }}
 				</div>

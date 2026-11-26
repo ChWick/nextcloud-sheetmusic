@@ -100,37 +100,7 @@ class PdfCropService {
 	 * @return array<string, array{left: float, top: float, right: float, bottom: float}>
 	 */
 	public static function sanitizeCropBoxes(array $raw): array {
-		$clean = [];
-		foreach ($raw as $pageKey => $box) {
-			if (!is_numeric($pageKey)) {
-				continue;
-			}
-			$pageNum = (int)$pageKey;
-			if ($pageNum < 1 || $pageNum > 5000 || !is_array($box)) {
-				continue;
-			}
-			$left = isset($box['left']) && is_numeric($box['left']) ? (float)$box['left'] : null;
-			$top = isset($box['top']) && is_numeric($box['top']) ? (float)$box['top'] : null;
-			$right = isset($box['right']) && is_numeric($box['right']) ? (float)$box['right'] : null;
-			$bottom = isset($box['bottom']) && is_numeric($box['bottom']) ? (float)$box['bottom'] : null;
-			if ($left === null || $top === null || $right === null || $bottom === null) {
-				continue;
-			}
-			$left = max(0.0, min(1.0, round($left, 4)));
-			$top = max(0.0, min(1.0, round($top, 4)));
-			$right = max(0.0, min(1.0, round($right, 4)));
-			$bottom = max(0.0, min(1.0, round($bottom, 4)));
-			if ($right <= $left || $bottom <= $top) {
-				continue;
-			}
-			$clean[(string)$pageNum] = [
-				'left' => $left,
-				'top' => $top,
-				'right' => $right,
-				'bottom' => $bottom,
-			];
-		}
-		return $clean;
+		return InternalSongFile::sanitizeCropBoxes($raw);
 	}
 
 	/**

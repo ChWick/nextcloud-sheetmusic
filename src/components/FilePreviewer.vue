@@ -271,9 +271,38 @@ function cleanupObserver() {
 	}
 }
 
+let idlePrefetchCancel: (() => void) | null = null
+
+function cancelIdleCropPrefetch() {
+	if (idlePrefetchCancel) {
+		idlePrefetchCancel()
+		idlePrefetchCancel = null
+	}
+}
+
+function resolvePageCropBox(
+	page: any,
+	pageRotation: number,
+	filePath: string,
+	pageNum: number,
+	fileId?: number,
+): Promise<NormalizedCropBox> {
+	return detectPdfPageCropBox(
+		page,
+		pageRotation,
+		buildCropCacheKey(filePath, pageNum, pageRotation),
+		{
+			fileKey: filePath,
+			pageNum,
+			onComputed: (box) => scheduleSaveFileCropBox(fileId, pageNum, box),
+		},
+	)
+}
+
 async function renderCurrentView(onBeforeSwap?: () => void) {
 	if (!loadedPdf.value || !pdfContainer.value || !pdfStage.value) return
 
+	cancelIdleCropPrefetch()
 	const renderId = ++currentRenderId
 	const pdf = loadedPdf.value
 	const ordered = parsePageOrder(props.pageOrder, pdf.numPages)
@@ -329,16 +358,7 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 		const pageRotation = getEffectivePageRotation(refPage, rotation.value)
 		const unscaledViewport = refPage.getViewport({ scale: 1.0, rotation: pageRotation })
 		const refCrop = props.tightCrop
-			? await detectPdfPageCropBox(
-				refPage,
-				pageRotation,
-				buildCropCacheKey(props.filePath, refPageNum, pageRotation),
-				{
-					fileKey: props.filePath,
-					pageNum: refPageNum,
-					onComputed: (box) => scheduleSaveFileCropBox(props.fileId, refPageNum, box),
-				},
-			)
+			? await resolvePageCropBox(refPage, pageRotation, props.filePath, refPageNum, props.fileId)
 			: FULL_PAGE_CROP
 		const refW = unscaledViewport.width * (refCrop.right - refCrop.left)
 		const refH = unscaledViewport.height * (refCrop.bottom - refCrop.top)
@@ -421,16 +441,7 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 			const cachePath = isNextFile ? (props.nextFilePath || '') : props.filePath
 			const targetFileId = isNextFile ? props.nextFileId : props.fileId
 			const cropBox: NormalizedCropBox = props.tightCrop
-				? await detectPdfPageCropBox(
-					page,
-					pageRotation,
-					buildCropCacheKey(cachePath, resolvedPageNum, pageRotation),
-					{
-						fileKey: cachePath,
-						pageNum: resolvedPageNum,
-						onComputed: (box) => scheduleSaveFileCropBox(targetFileId, resolvedPageNum, box),
-					},
-				)
+				? await resolvePageCropBox(page, pageRotation, cachePath, resolvedPageNum, targetFileId)
 				: FULL_PAGE_CROP
 			if (renderId !== currentRenderId) return
 
@@ -612,10 +623,8 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 		const upcoming = (lastActiveIdx >= 0 ? ordered.slice(lastActiveIdx + 1, lastActiveIdx + 3) : [])
 			.filter((n) => !activeNums.has(n))
 		if (upcoming.length > 0) {
-			const scheduleIdle = typeof window !== 'undefined' && 'requestIdleCallback' in window
-				? (cb: () => void) => (window as any).requestIdleCallback(cb, { timeout: 600 })
-				: (cb: () => void) => setTimeout(cb, 150)
-			scheduleIdle(() => {
+			const runPrefetch = () => {
+				idlePrefetchCancel = null
 				void (async () => {
 					for (const nextPageNum of upcoming) {
 						if (renderId !== currentRenderId || loadedPdf.value !== pdf) return
@@ -626,11 +635,7 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 							const rot = getEffectivePageRotation(p, rotation.value)
 							const key = buildCropCacheKey(props.filePath, nextPageNum, rot)
 							if (!getCachedPdfPageCropBox(key)) {
-								await detectPdfPageCropBox(p, rot, key, {
-									fileKey: props.filePath,
-									pageNum: nextPageNum,
-									onComputed: (box) => scheduleSaveFileCropBox(props.fileId, nextPageNum, box),
-								})
+								await resolvePageCropBox(p, rot, props.filePath, nextPageNum, props.fileId)
 							}
 						} catch {
 							// Best-effort prefetch
@@ -639,7 +644,14 @@ async function renderCurrentView(onBeforeSwap?: () => void) {
 						}
 					}
 				})()
-			})
+			}
+			if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+				const handle = (window as any).requestIdleCallback(runPrefetch, { timeout: 600 })
+				idlePrefetchCancel = () => (window as any).cancelIdleCallback?.(handle)
+			} else {
+				const handle = setTimeout(runPrefetch, 150)
+				idlePrefetchCancel = () => clearTimeout(handle)
+			}
 		}
 	}
 }
@@ -811,6 +823,7 @@ const { syncObservedSize } = usePdfResizeObserver({
 })
 
 onUnmounted(() => {
+	cancelIdleCropPrefetch()
 	unmountAnnotationOverlays()
 	cleanupObserver()
 	releaseChildCanvases(pdfStage.value)

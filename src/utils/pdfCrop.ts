@@ -27,6 +27,34 @@ const cropBoxCache = new Map<string, NormalizedCropBox>()
 const inFlightProbes = new Map<string, Promise<NormalizedCropBox>>()
 let storageLoaded = false
 let persistTimer: ReturnType<typeof setTimeout> | null = null
+let pageHideListenerAttached = false
+
+function flushPersistStorage(): void {
+	if (persistTimer !== null) {
+		clearTimeout(persistTimer)
+		persistTimer = null
+	}
+	if (typeof localStorage === 'undefined' || cropBoxCache.size === 0) return
+	try {
+		const obj: Record<string, NormalizedCropBox> = {}
+		for (const [k, v] of cropBoxCache.entries()) {
+			obj[k] = v
+		}
+		localStorage.setItem(CROP_STORAGE_KEY, JSON.stringify(obj))
+	} catch {
+		// Ignore quota errors
+	}
+}
+
+function schedulePersistStorage(): void {
+	if (typeof localStorage === 'undefined') return
+	if (!pageHideListenerAttached && typeof window !== 'undefined') {
+		pageHideListenerAttached = true
+		window.addEventListener('pagehide', flushPersistStorage)
+	}
+	if (persistTimer !== null) return
+	persistTimer = setTimeout(flushPersistStorage, 250)
+}
 
 function isValidCropBox(val: unknown): val is NormalizedCropBox {
 	if (!val || typeof val !== 'object') return false
@@ -56,23 +84,6 @@ function ensureStorageLoaded(): void {
 	} catch {
 		// Ignore corrupt or inaccessible localStorage
 	}
-}
-
-function schedulePersistStorage(): void {
-	if (typeof localStorage === 'undefined') return
-	if (persistTimer !== null) return
-	persistTimer = setTimeout(() => {
-		persistTimer = null
-		try {
-			const obj: Record<string, NormalizedCropBox> = {}
-			for (const [k, v] of cropBoxCache.entries()) {
-				obj[k] = v
-			}
-			localStorage.setItem(CROP_STORAGE_KEY, JSON.stringify(obj))
-		} catch {
-			// Ignore quota errors
-		}
-	}, 250)
 }
 
 export function buildCropCacheKey(fileKey: string, pageNum: number, rotation = 0): string {

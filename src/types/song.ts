@@ -1,4 +1,5 @@
 import type { components } from './api.generated'
+import type { NormalizedCropBox } from '../utils/pdfCrop'
 
 export type Composer = components['schemas']['Composer']
 export type Book = components['schemas']['Book']
@@ -22,7 +23,11 @@ export type Bookmark = {
 	showInLibrary?: number
 }
 export type AudioFile = { id: number; songId: number; title: string; file: string }
-export type SongFile = components['schemas']['SongFile'] & { fileId?: number; updatedAt?: number | null }
+export type SongFile = components['schemas']['SongFile'] & {
+	fileId?: number
+	updatedAt?: number | null
+	cropBoxes?: Record<string, NormalizedCropBox> | null
+}
 
 export interface SongEntityLists {
 	composers?: Composer[]
