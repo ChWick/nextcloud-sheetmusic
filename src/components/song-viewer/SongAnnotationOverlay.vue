@@ -55,6 +55,7 @@ const emit = defineEmits<{
 	'jump-to-page': [payload: LinkJumpPayload]
 	'start-pick-link-target': [req: LinkTargetPickRequest]
 	'complete-pick-link-target': [res: LinkTargetPickResult]
+	'open-link-picker': [req: LinkTargetPickRequest]
 	select: [uuid: string | null]
 	'select-many': [uuids: string[]]
 	'create-annotation': [draft: Omit<SheetAnnotation, 'songId' | 'fileId' | 'uuid'> & { uuid?: string }]
@@ -225,11 +226,11 @@ function handleOverlayPointerDown(e: PointerEvent) {
 	onPointerDown(e)
 }
 
-function handleStartPickLinkTarget() {
+function buildLinkPickRequest(): LinkTargetPickRequest | null {
 	const pending = pendingLink.value
-	if (!pending) return
+	if (!pending) return null
 	pendingLink.value = null
-	emit('start-pick-link-target', {
+	return {
 		mode: pending.mode ?? 'create',
 		sourcePageIndex: pageIndex.value,
 		x: pending.x,
@@ -237,8 +238,20 @@ function handleStartPickLinkTarget() {
 		width: pending.width,
 		height: pending.height,
 		label: pending.label,
+		linkStyle: pending.linkStyle,
+		createReverse: pending.createReverse,
 		existing: pending.existing,
-	})
+	}
+}
+
+function handleStartPickLinkTarget() {
+	const req = buildLinkPickRequest()
+	if (req) emit('start-pick-link-target', req)
+}
+
+function handleOpenLinkPicker() {
+	const req = buildLinkPickRequest()
+	if (req) emit('open-link-picker', req)
 }
 </script>
 
@@ -340,7 +353,10 @@ function handleStartPickLinkTarget() {
 			@update:pending-text-text="pendingText && (pendingText.text = $event)"
 			@update:pending-link-page="pendingLink && (pendingLink.targetPageOneIndexed = $event)"
 			@update:pending-link-label="pendingLink && (pendingLink.label = $event)"
+			@update:pending-link-style="pendingLink && (pendingLink.linkStyle = $event)"
+			@update:pending-link-reverse="pendingLink && (pendingLink.createReverse = $event)"
 			@pick-link-target="handleStartPickLinkTarget"
+			@open-link-picker="handleOpenLinkPicker"
 			@commit-text="commitPendingText"
 			@cancel-text="cancelPendingText"
 			@commit-link="commitPendingLink"
@@ -411,6 +427,26 @@ function handleStartPickLinkTarget() {
 
 :deep(.sheetmusic-annotation-link:hover) {
 	fill: rgba(0, 120, 255, 0.32);
+}
+
+:deep(.sheetmusic-annotation-link-circle) {
+	stroke-width: 2.2;
+}
+
+:deep(.sheetmusic-annotation-link-shimmer) {
+	animation: sheetmusic-link-shimmer 0.75s ease-in-out 2;
+}
+
+@keyframes sheetmusic-link-shimmer {
+	0%,
+	100% {
+		opacity: 1;
+	}
+
+	50% {
+		opacity: 0.4;
+		filter: drop-shadow(0 0 6px rgba(0, 130, 201, 0.75));
+	}
 }
 
 :deep(.sheetmusic-resize-handle) {

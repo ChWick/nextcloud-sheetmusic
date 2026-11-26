@@ -122,7 +122,7 @@ describe('useAnnotationInlineEditors', () => {
 		api.pendingLink.value!.label = 'Coda'
 		api.commitPendingLink()
 		expect(onUpdate).toHaveBeenCalledWith(existingLink, expect.objectContaining({
-			data: { targetPage: 4, label: 'Coda' },
+			data: { targetPage: 4, label: 'Coda', linkStyle: 'box' },
 		}))
 	})
 })

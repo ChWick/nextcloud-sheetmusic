@@ -88,6 +88,8 @@ export interface AnnotationData {
 	targetY?: number
 	/** Optional display label for links */
 	label?: string
+	/** Visual marker style for links ('box' default, or forScore-style 'circle') */
+	linkStyle?: 'box' | 'circle'
 	/** Optional pre-computed SVG path fallback */
 	path?: string
 	/** One or more layer IDs this annotation belongs to (defaults to [layerIndex ?? 0]) */

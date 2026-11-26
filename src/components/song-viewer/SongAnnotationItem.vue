@@ -266,10 +266,21 @@ const textLayout = computed(() =>
 		<g
 			v-else-if="item.type === 'link'"
 			:data-ann-uuid="item.uuid"
-			class="sheetmusic-annotation-link-group"
+			:class="['sheetmusic-annotation-link-group', !editable && 'sheetmusic-annotation-link-shimmer']"
+			:data-link-style="item.data?.linkStyle === 'circle' ? 'circle' : 'box'"
 			@click="onLinkClick"
 			@dblclick="editable && emit('dblclick-text', item)">
+			<circle
+				v-if="item.data?.linkStyle === 'circle'"
+				:cx="(item.x + item.width / 2) * VIEWBOX_WIDTH"
+				:cy="(item.y + item.height / 2) * vbHeight"
+				:r="Math.max(14, Math.min(item.width * VIEWBOX_WIDTH, item.height * vbHeight) / 2)"
+				class="sheetmusic-annotation-link sheetmusic-annotation-link-circle"
+				:style="linkColors ? { fill: linkColors.fill, stroke: linkColors.stroke } : undefined"
+				:data-ann-uuid="item.uuid"
+				data-test="annotation-link" />
 			<rect
+				v-else
 				:x="item.x * VIEWBOX_WIDTH"
 				:y="item.y * vbHeight"
 				:width="item.width * VIEWBOX_WIDTH"

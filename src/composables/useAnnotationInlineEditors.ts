@@ -9,6 +9,7 @@ import type { EditorTool, EditorToolStyle } from './useAnnotationEditor'
 import type { PendingLinkEdit, PendingTextEdit } from '../components/song-viewer/SongAnnotationInlinePopovers.vue'
 import { ref } from 'vue'
 import { roundNorm } from '../utils/annotationTransform'
+import { buildReverseLinkDraft } from '../utils/annotationLinks'
 
 export interface UseAnnotationInlineEditorsOptions {
 	pageIndex: ComputedRef<number>
@@ -48,6 +49,8 @@ export function useAnnotationInlineEditors(opts: UseAnnotationInlineEditorsOptio
 			height: moved ? Math.max(0.04, Math.abs(end.y - start.y)) : 0.06,
 			targetPageOneIndexed: Math.min(opts.totalPages.value, opts.pageNumber.value + 1),
 			label: '',
+			linkStyle: 'box',
+			createReverse: false,
 		}
 	}
 
@@ -74,6 +77,8 @@ export function useAnnotationInlineEditors(opts: UseAnnotationInlineEditorsOptio
 				targetX: ann.data?.targetX,
 				targetY: ann.data?.targetY,
 				label: ann.data?.label ?? '',
+				linkStyle: ann.data?.linkStyle === 'circle' ? 'circle' : 'box',
+				createReverse: false,
 				existing: ann,
 			}
 		}
@@ -128,7 +133,8 @@ export function useAnnotationInlineEditors(opts: UseAnnotationInlineEditorsOptio
 		if (!pending) return
 		pendingLink.value = null
 		const targetZeroIndexed = Math.max(0, Math.min(opts.totalPages.value - 1, pending.targetPageOneIndexed - 1))
-		const label = pending.label.trim() || `→ p. ${targetZeroIndexed + 1}`
+		const linkStyle = pending.linkStyle === 'circle' ? 'circle' : 'box'
+		const label = pending.label.trim() || (linkStyle === 'circle' ? '' : `→ p. ${targetZeroIndexed + 1}`)
 		const targetCoords = pending.targetX !== undefined && pending.targetY !== undefined
 			? { targetX: roundNorm(pending.targetX), targetY: roundNorm(pending.targetY) }
 			: {}
@@ -136,12 +142,12 @@ export function useAnnotationInlineEditors(opts: UseAnnotationInlineEditorsOptio
 		if (pending.mode === 'edit' && pending.existing) {
 			opts.onUpdate(pending.existing, {
 				...pending.existing,
-				data: { ...pending.existing.data, targetPage: targetZeroIndexed, label, ...targetCoords },
+				data: { ...pending.existing.data, targetPage: targetZeroIndexed, label, linkStyle, ...targetCoords },
 			})
 			return
 		}
 
-		opts.onCreate({
+		const forwardDraft: Omit<SheetAnnotation, 'songId' | 'fileId' | 'uuid'> = {
 			pageNumber: opts.pageIndex.value,
 			layerIndex: 0,
 			type: 'link',
@@ -154,8 +160,15 @@ export function useAnnotationInlineEditors(opts: UseAnnotationInlineEditorsOptio
 				opacity: 1,
 				fontSize: opts.toolStyle.value.fontSize,
 			},
-			data: { targetPage: targetZeroIndexed, label, ...targetCoords },
-		})
+			data: { targetPage: targetZeroIndexed, label, ...(linkStyle === 'circle' ? { linkStyle } : {}), ...targetCoords },
+		}
+		opts.onCreate(forwardDraft)
+		if (pending.createReverse) {
+			const reverseDraft = buildReverseLinkDraft(forwardDraft)
+			if (reverseDraft) {
+				opts.onCreate(reverseDraft)
+			}
+		}
 	}
 
 	function cancelPendingLink() {
